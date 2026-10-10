@@ -5,8 +5,9 @@ import burgos from "../data/openmeteo-2026-08-12-burgos.json";
 // PLAN-METEO W7, PLAN-CIEL C1: the real weather. "Real" chosen by a real click in the Weather panel, the craft
 // at Le Bourget, the game's date now: its station's METAR fetched (metar.vatsim.net — answered here by the
 // page's own stand-in, a fog report, no network needed), decoded, in force for the flight and the image; the
-// panel shows it. Another day, at Burgos: Open-Meteo's model (its answer saved for the 2026 eclipse); in 2067,
-// out of its reach: a plausible draw, said so.
+// panel shows it. Another day, at Burgos: Open-Meteo's model (its answer saved for the 2026 eclipse) and the
+// clouds of that day over the whole Earth (C2: GIBS's mosaic, a stand-in here); in 2067, out of their reach:
+// a plausible draw and the fixed map, said so.
 
 const REPORT = "LFPB 080600Z 03003KT 0300 FG VV002 08/08 Q1025 NOSIG";
 
@@ -26,6 +27,14 @@ describe.skipIf(!E2E)("the real weather: an airfield's METAR", () => {
           if (url.startsWith("https://metar.vatsim.net/")) {
             globalThis.__metarAsked.push(url);
             return Promise.resolve(new Response(${JSON.stringify(`${REPORT}\n`)}, { status: 200, headers: { "content-type": "text/plain" } }));
+          }
+          // (the satellites' mosaic of the day — PLAN-CIEL C2: a stand-in, clouds over the north, clear below)
+          if (url.startsWith("https://gibs.earthdata.nasa.gov/wms/")) {
+            globalThis.__gibsAsked = (globalThis.__gibsAsked ?? []).concat(url);
+            const c = new OffscreenCanvas(256, 128), g = c.getContext("2d");
+            g.fillStyle = "#1a2a4a"; g.fillRect(0, 0, 256, 128);
+            g.fillStyle = "#f4f4f4"; g.fillRect(0, 0, 256, 40);
+            return c.convertToBlob({ type: "image/jpeg" }).then((b) => new Response(b, { status: 200, headers: { "content-type": "image/jpeg" } }));
           }
           if (url.includes("open-meteo.com/")) {
             globalThis.__modelAsked.push(url);
@@ -83,11 +92,19 @@ describe.skipIf(!E2E)("the real weather: an airfield's METAR", () => {
     expect(st.why).toBe("model");
     expect(st.layers).toBe(0);
     expect(st.T).toBeGreaterThan(30);
+    // (C2: the clouds of that day over the whole Earth — the mosaic fetched, made, read by the tracer)
+    await app.waitFor(`__bh.renderer.dayCloudsOf?.date === "2026-08-12"`, 30_000);
+    expect((await app.js<string[]>("globalThis.__gibsAsked")).some((u) => u.includes("TIME=2026-08-12"))).toBe(true);
+    await Bun.sleep(500);
+    expect(await app.js<number>("__bh.renderer.paramsF[58 * 4]")).toBe(2);
     await app.click("[data-testid=hud-weather]");
     await app.waitFor(`document.querySelector(".wx-says")?.textContent.includes("Open-Meteo")`, 5000);
     await app.press("Escape");
     await app.js(`(__bh.game.setDate("2067-06-01T12:00:00Z"), true)`);
     await app.waitFor(`__bh.camera.weatherRealInfo?.why === "out-of-range" && __bh.camera.weatherReal?.source === "random"`, 10_000);
+    // (no mosaic in 2067: the fixed map of clouds)
+    await Bun.sleep(500);
+    expect(await app.js<number>("__bh.renderer.paramsF[58 * 4]")).toBe(1);
     await app.click("[data-testid=hud-weather]");
     await app.waitFor(`/1940/.test(document.querySelector(".wx-says")?.textContent ?? "")`, 5000);
     await app.press("Escape");

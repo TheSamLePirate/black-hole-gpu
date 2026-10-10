@@ -3646,7 +3646,9 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
 // Frame: the Earth's own axes (x Greenwich, y 90° E, z north), lengths in its radii.
 // ---------------------------------------------------------------------------------------------
 @group(0) @binding(19) var earthCube: texture_cube<f32>;  // day colour (sRGB), cloud cover (alpha)
-@group(0) @binding(20) var earthNight: texture_cube<f32>; // city lights (r)
+// city lights (r); the clouds of the day (g: PLAN-CIEL C2, system/day-clouds.ts — the real weather's cover
+// in the fixed map's units, read instead of the day cube's alpha when P.earth.x is 2; held still: no drift)
+@group(0) @binding(20) var earthNight: texture_cube<f32>;
 @group(0) @binding(21) var earthElev: texture_2d<f32>;    // the height above the sea [m] (ETOPO 2022), the oceans
 // the terrain tiles' levels (rg32uint, 1024²): their heights' float bits [m]; up to z 8 their imagery
 // (rgba8: the day's sRGB, the night's lights; 0: none)
@@ -3873,6 +3875,20 @@ fn phaseM(g: vec3f, mu: f32) -> vec3f {
 }
 
 fn earthOn() -> bool { return P.earth.x > 0.5; }
+fn dayClouds() -> bool { return P.earth.x > 1.5; }
+// the cloud map's raw cover at a direction of the cube (its alpha, or the day's), with the footprint's
+// gradients, or at a level
+fn cloudRawGrad(c: vec3f, gx: vec3f, gy: vec3f) -> f32 {
+  if (dayClouds()) { return textureSampleGrad(earthNight, bgSamp, c, gx, gy).g; }
+  return textureSampleGrad(earthCube, bgSamp, c, gx, gy).a;
+}
+fn cloudRawLevel(c: vec3f, lod: f32) -> f32 {
+  if (dayClouds()) {
+    let below = log2(f32(textureDimensions(earthCube).x) / f32(textureDimensions(earthNight).x));
+    return textureSampleLevel(earthNight, bgSamp, c, max(lod - below, 0.0)).g;
+  }
+  return textureSampleLevel(earthCube, bgSamp, c, lod).a;
+}
 fn isEarth(k: u32) -> bool { return bodyKind(k) != 0u && u32(bodies[BV * k + 2u].z) == EARTH_SURF; }
 // its axes → the cube map's direction
 fn eCube(q: vec3f) -> vec3f { return vec3f(q.y, q.z, q.x); }
@@ -5072,7 +5088,7 @@ fn earthOct(fx: vec3f, fy: vec3f) -> f32 { return clamp(log2(earthTexel() / max(
 // relief lit from the sun (Ls): denser towards it, this side in the shade.
 fn earthCloud(q0: vec3f, fx: vec3f, fy: vec3f, Ls: vec3f) -> vec2f {
   let q = rotZ(geoQ(q0), P.earth.y);
-  let base = textureSampleGrad(earthCube, bgSamp, eCube(q), eCube(rotZ(fx, P.earth.y)), eCube(rotZ(fy, P.earth.y))).a;
+  let base = cloudRawGrad(eCube(q), eCube(rotZ(fx, P.earth.y)), eCube(rotZ(fy, P.earth.y)));
   var a = clamp((base - 0.06) * 1.25, 0.0, 1.0);
   var lit = 1.0;
   let o = earthOct(fx, fy);
@@ -5634,7 +5650,7 @@ fn cirrusLight(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f) -> vec3f {
 // The cloud cover smoothed at a map level (lod), on the clouds' drift — the long shadows' heights
 fn cloudCoverAt(q0: vec3f, lod: f32) -> f32 {
   let q = rotZ(geoQ(q0), P.earth.y);
-  return clamp((textureSampleLevel(earthCube, bgSamp, eCube(q), lod).a - 0.06) * 1.25, 0.0, 1.0);
+  return clamp((cloudRawLevel(eCube(q), lod) - 0.06) * 1.25, 0.0, 1.0);
 }
 // Seen from orbit near the terminator: the tops' long shadows — the cover taken for height (up to 8 km
 // for a thick deck), the sun's slant from the tops 8, 25 and 60 km towards it: a taller cloud between
@@ -5722,7 +5738,7 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
     // (the tops follow the cover smoothed over ~16 texels — tens of km —: gentle domes where the map's
     // cover ends sharply, not walls rising from its edge)
     let qc = rotZ(geoQ(q), P.earth.y);
-    let soft = clamp((textureSampleGrad(earthCube, bgSamp, eCube(qc), eCube(rotZ(fx, P.earth.y)) * 16.0, eCube(rotZ(fy, P.earth.y)) * 16.0).a - 0.06) * 1.25, 0.0, 1.0);
+    let soft = clamp((cloudRawGrad(eCube(qc), eCube(rotZ(fx, P.earth.y)) * 16.0, eCube(rotZ(fy, P.earth.y)) * 16.0) - 0.06) * 1.25, 0.0, 1.0);
     let top = (0.15 + 0.85 * soft) * (0.7 + 0.6 * sh);
     let hp = smoothstep(0.0, 0.05 + 0.12 * sh, hn) * (1.0 - smoothstep(0.45 * top, top, hn));
     let c = a;

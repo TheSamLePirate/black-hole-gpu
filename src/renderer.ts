@@ -12,7 +12,9 @@ import {
   solarState,
   sunShare,
   type MapName,
+  utcOf,
 } from "./system/solar";
+import { buildDayClouds, dayCloudsFor, dayCloudsUrl } from "./system/day-clouds";
 import { HD_SETS, hdColorFormat, loadHdMap, placeholderHd, type HdMap } from "./system/hd-maps";
 import { bakeNoise3d } from "./noise3d";
 import { AsyncResource, CompileQueue } from "./util/async-resource";
@@ -457,6 +459,16 @@ export class Renderer {
   private mapsRequested = false;
   /** the Earth's maps (placeholders until loaded; the finer ones when the camera comes near it) */
   private earthMaps: EarthMaps;
+  /** the clouds of the day over the Earth (PLAN-CIEL C2, system/day-clouds.ts): the real weather's, in
+   *  the night cube's green — the day they are of (its date, its satellite layer), null: none in */
+  dayCloudsOf: { date: string; layer: string } | null = null;
+  /** the day's mosaic kept (new maps of the Earth: made again without fetching it again) */
+  private dayCloudsImage: { date: string; layer: string; img: ImageBitmap } | null = null;
+  /** the day being fetched, and a failure's (retried five minutes on) */
+  private dayCloudsJob: string | null = null;
+  private dayCloudsFail: { date: string; at: number } | null = null;
+  /** off: the fixed map of clouds even with the real weather (a script's switch, an A/B) */
+  dayCloudsOn = true;
   /** the Earth's real ground near the camera, streamed (src/system/earth-tiles.ts) */
   readonly earthTiles: EarthTiles;
   private earthWant: EarthTier | null = null;
@@ -980,6 +992,8 @@ export class Renderer {
         }
         const old = this.earthMaps;
         this.earthMaps = maps;
+        // (a new night cube: the day's clouds made in it again)
+        this.dayCloudsOf = null;
         // (the ground the ship stands on: the heights drawn — the terrain tiles over the map; the maps'
         // tier, hence the hardware's on a weak one, deliberately: quality-policy.ts, earthMapQuality)
         if (maps.heights) {
@@ -1006,6 +1020,53 @@ export class Renderer {
       .catch((e) => console.warn("Earth maps unavailable:", e));
   }
 
+  /**
+   * The clouds of the day wanted now (the real weather chosen, the Earth's maps in, a mosaic that day): the
+   * day's fetched and made if it is not here; true when they are in (the tracer reads them).
+   */
+  private dayCloudsWanted(s: Settings, time: number): boolean {
+    if (s.weather !== "real" || !this.dayCloudsOn || !this.earthMaps.tier) return false;
+    const w = dayCloudsFor(utcOf(time), Date.now());
+    if (!w) return false;
+    if (this.dayCloudsOf?.date === w.date) return true;
+    const failed = this.dayCloudsFail?.date === w.date && Date.now() - this.dayCloudsFail.at < 5 * 60e3;
+    if (this.dayCloudsJob !== w.date && !failed) this.loadDayClouds(w);
+    return false;
+  }
+
+  /** The satellites' mosaic of the day in force (the map's weather layer), or null. */
+  dayCloudsMosaic(): { img: ImageBitmap; date: string; layer: string } | null {
+    return this.dayCloudsOf && this.dayCloudsImage?.date === this.dayCloudsOf.date ? this.dayCloudsImage : null;
+  }
+
+  private loadDayClouds(w: { date: string; layer: string }) {
+    this.dayCloudsJob = w.date;
+    const kept = this.dayCloudsImage?.date === w.date ? Promise.resolve(this.dayCloudsImage.img) : null;
+    (
+      kept ??
+      fetch(dayCloudsUrl(w.layer, w.date))
+        .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(`${r.status}`))))
+        .then((b) => createImageBitmap(b, { colorSpaceConversion: "none", premultiplyAlpha: "none" }))
+    )
+      .then((img) => {
+        if (img !== this.dayCloudsImage?.img) {
+          this.dayCloudsImage?.img.close();
+          this.dayCloudsImage = { ...w, img };
+        }
+        // (another day asked meanwhile, or the maps gone: not used)
+        if (this.dayCloudsJob !== w.date || !this.earthMaps.tier) return;
+        buildDayClouds(this.device, img, this.earthMaps.cube, this.earthMaps.night);
+        this.dayCloudsOf = { date: w.date, layer: w.layer };
+        this.dayCloudsJob = null;
+        this.invalidate();
+      })
+      .catch((e) => {
+        console.warn(`The clouds of ${w.date} unavailable:`, e);
+        this.dayCloudsFail = { date: w.date, at: Date.now() };
+        if (this.dayCloudsJob === w.date) this.dayCloudsJob = null;
+      });
+  }
+
   /** Frees the Earth's maps (it is a few pixels across, or out of the scene): the placeholder back. */
   private releaseEarthMaps() {
     this.earthWant = null;
@@ -1013,6 +1074,7 @@ export class Renderer {
     const old = this.earthMaps;
     if (!old.tier) return;
     this.earthMaps = placeholderEarth(this.device);
+    this.dayCloudsOf = null;
     if (this.live) this.bindTarget(this.live);
     if (this.offline) this.bindTarget(this.offline.target);
     void this.device.queue.onSubmittedWorkDone().then(() => [old.cube, old.night, old.elev].forEach((t) => t.destroy()));
@@ -2130,7 +2192,9 @@ export class Renderer {
     // twentieth: seen from below, lit areas would glare like a sunlit field)
     const altKm = earthSurface ? (earthSurface.h * EARTH_RM) / 1e3 : 1e4;
     const lights = 0.6 * 20 ** Math.min(Math.max(Math.log10(Math.max(altKm, 1) / 300) / Math.log10(300 / 5), -1), 0);
-    set(58, this.earthMaps.tier ? 1 : 0, drift, lights, 4);
+    // (the real weather: the clouds of the day, held still — each region as the satellite saw it)
+    const dayOn = this.dayCloudsWanted(s, time);
+    set(58, this.earthMaps.tier ? (dayOn ? 2 : 1) : 0, dayOn ? 0 : drift, lights, 4);
     // (the night sky's light on the ground: as drawn from the ground; from orbit a quarter — the night
     // side dark round its cities)
     set(

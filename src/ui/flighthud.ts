@@ -33,6 +33,7 @@ import { blinkOn } from "./clock";
 import { cpuProf } from "../perf";
 import { drawSymbology } from "./hud/symbology";
 import { Map3D } from "./map3d/map3d";
+import type { WeatherState } from "../weather";
 import { GroundTrack } from "./groundtrack";
 import { AMBER, COL, CYAN, FONT, fmtDist, fmtDur, fmtShort, GREEN, marker, MONO, OUR_COLOURS, RED } from "./hudkit";
 import { AU_M, C_MPS, G0, M_METRES, M_SECONDS } from "../units";
@@ -364,6 +365,12 @@ export class FlightHud {
   private map3d!: Map3D;
   /** the ground track (a globe, a planisphere) of the world the ship orbits; the tab shown and its buttons */
   private ground!: GroundTrack;
+  /** the real weather for the map's weather layer (main.ts: the camera's, the renderer's mosaic, the model's) */
+  mapWeather: {
+    real: () => WeatherState | null;
+    mosaic: () => { img: ImageBitmap; date: string; layer: string } | null;
+    at: (lat: number, lon: number) => WeatherState | null;
+  } = { real: () => null, mosaic: () => null, at: () => null };
   private mapTab: "orbit" | "globe" | "map" = "orbit";
   private tabBtns: Record<string, HTMLButtonElement> = {};
   private mapBody: HTMLElement | null = null;
@@ -1265,6 +1272,9 @@ export class FlightHud {
     const tab = store.get("kerr.map-tab");
     if (tab === "globe" || tab === "map") this.mapTab = tab;
     this.ground = new GroundTrack(this.s);
+    this.ground.realWeather = () => this.mapWeather.real();
+    this.ground.dayMosaic = () => this.mapWeather.mosaic();
+    this.ground.realAt = (lat, lon) => this.mapWeather.at(lat, lon);
     this.ground.weatherLayer = store.get("kerr.map-weather") === "1";
     const tabs = h("div", "fl-maptabs");
     for (const [id, label, tip] of [

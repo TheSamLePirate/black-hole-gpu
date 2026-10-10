@@ -6,7 +6,9 @@
 //   · each landing site as a station marker (HTML: crisp at any scale): its flight category's dot, its
 //     name, the category and the visibility; on hover, its report in full (wind, gusts, visibility,
 //     ceiling and decks, precipitation);
-//   · a legend: the radar's scale, the categories, the wind's.
+//   · a legend: the radar's scale, the categories, the wind's;
+//   · the real weather (PLAN-CIEL C2): the satellites' mosaic of the day under it all — the day's clouds as
+//     they were —, each station its own real weather (Open-Meteo at its place), no wind field invented.
 // The radar is computed once a day into a small image laid over smoothed; the particles run on their own
 // canvas while the layer is shown; the markers are placed at each draw of the map.
 
@@ -94,11 +96,31 @@ export class WeatherMapLayer {
     days: number,
     real: WeatherState | null,
     sites: { name: string; lat: number; lon: number }[],
+    live: {
+      /** the satellites' mosaic of the day (the real weather's clouds), or null */
+      mosaic?: { img: ImageBitmap; date: string; layer: string } | null;
+      /** the real weather at a place (its own, the model's), or null: not in yet */
+      at?: (lat: number, lon: number) => WeatherState | null;
+    } = {},
   ) {
     this.rect = R;
     this.dpr = dpr;
     const varying = s.weather === "random";
-    const at = (lat: number, lon: number) => weatherAt(s, { body, lat, lon }, days, real);
+    const realHere = s.weather === "real" && body === "earth";
+    const at = (lat: number, lon: number) => (realHere ? live.at?.(lat, lon) : null) ?? weatherAt(s, { body, lat, lon }, days, real);
+    // ---- the satellites' mosaic of the day (the real weather)
+    const mosaic = realHere ? (live.mosaic ?? null) : null;
+    if (mosaic) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(R.x0, R.y0, R.mw, R.mh);
+      ctx.clip();
+      ctx.globalAlpha = 0.92;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(mosaic.img, R.x0, R.y0, R.mw, R.mh);
+      ctx.restore();
+    }
     // ---- the radar (a draw)
     if (varying) {
       const key = `${body}|${Math.floor(days)}`;
@@ -114,7 +136,8 @@ export class WeatherMapLayer {
     }
     // ---- the wind's field (a 10° grid, a day's), for the particles
     const wkey = `${body}|${s.weather}|${s.wind}|${Math.floor(days)}`;
-    if (!this.wind || this.wind.key !== wkey) {
+    if (realHere) this.wind = { key: wkey, u: new Float32Array(37 * 19), v: new Float32Array(37 * 19) };
+    else if (!this.wind || this.wind.key !== wkey) {
       const u = new Float32Array(37 * 19),
         v = new Float32Array(37 * 19);
       for (let j = 0; j < 19; j++)
@@ -190,16 +213,23 @@ export class WeatherMapLayer {
       }
     this.declutter(R, dpr);
     // ---- the legend
-    const lkey = `${varying}|${s.weather}`;
+    const lkey = `${varying}|${s.weather}|${mosaic?.date ?? ""}`;
     if (this.legendKey !== lkey) {
       this.legendKey = lkey;
       const rampCss = RAMP.slice(1)
         .map(([x, c]) => `rgba(${c[0]},${c[1]},${c[2]},${Math.min(1, c[3] + 0.2)}) ${((x / 1.3) * 100).toFixed(0)}%`)
         .join(", ");
       this.legend.innerHTML =
+        (mosaic
+          ? `<div class="lg-row"><span class="lg-k">${tr({ fr: "Nuages du jour", en: "The day's clouds" })}</span><span class="lg-ends"><i>${mosaic.date} · ${mosaic.layer.split("_").slice(0, 2).join(" ")} · NASA GIBS</i></span></div>`
+          : realHere
+            ? `<div class="lg-row"><span class="lg-k">${tr({ fr: "Météo réelle", en: "Real weather" })}</span><span class="lg-ends"><i>${tr({ fr: "pas d'image satellite ce jour-là", en: "no satellite image that day" })}</i></span></div>`
+            : "") +
         (varying
           ? `<div class="lg-row"><span class="lg-k">${tr({ fr: "Précipitations", en: "Precipitation" })}</span><span class="lg-ramp" style="background:linear-gradient(90deg, ${rampCss})"></span><span class="lg-ends"><i>${tr({ fr: "faibles", en: "light" })}</i><i>${tr({ fr: "fortes", en: "heavy" })}</i><i>${tr({ fr: "orage", en: "storm" })}</i></span></div>`
-          : `<div class="lg-row"><span class="lg-k">${tr({ fr: "Le même temps partout", en: "The same weather everywhere" })}</span></div>`) +
+          : realHere
+            ? ""
+            : `<div class="lg-row"><span class="lg-k">${tr({ fr: "Le même temps partout", en: "The same weather everywhere" })}</span></div>`) +
         `<div class="lg-row lg-cats">${CATS.map((c) => `<span class="lg-cat ${c.toLowerCase()}"><i></i>${c}</span>`).join("")}</div>` +
         `<div class="lg-row"><span class="lg-k">${tr({ fr: "Vent", en: "Wind" })}</span><span class="lg-wind"></span><span class="lg-ends"><i>0</i><i>10</i><i>20 m/s</i></span></div>`;
     }

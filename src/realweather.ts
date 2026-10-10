@@ -41,6 +41,15 @@ export class RealWeather {
     private now: () => number = () => Date.now(),
   ) {}
 
+  /** The model's weather at another place, the same game's day (the map's stations): fetched when not in;
+   *  null meanwhile, or out of its reach. */
+  modelAt(lat: number, lon: number, days: number): WeatherState | null {
+    const t = Math.round(msOfDays(days) / 600e3) * 600e3;
+    const m = this.model.peek(lat, lon, t);
+    m.fetched?.then(() => this.onUpdate());
+    return m.state;
+  }
+
   /** A state this gave (not one set by a script). */
   owns(w: WeatherState | null): boolean {
     return !!w && this.made.has(w);

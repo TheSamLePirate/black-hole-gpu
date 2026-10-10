@@ -118,6 +118,8 @@ export interface GameHost {
   subagents(tasks: SubTask[], signal: AbortSignal): Promise<SubResult[]>;
   /** wall time [ms] (the waits) */
   now(): number;
+  /** the clouds of the day drawn over the Earth (the real weather's satellite mosaic: its date, its layer), or null */
+  dayClouds?(): { date: string; layer: string } | null;
 }
 
 export const SCREENS = [
@@ -376,13 +378,14 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "get_weather",
       description:
-        "The weather where the ship is (wind, visibility, clouds, rain) and the weather setting; with 'real': the real weather and where it comes from (realSource.why: metar — a runway's report, the game's date now —, model — Open-Meteo at the game's date —, out-of-range — a plausible draw —, pending, other-world, high).",
+        "The weather where the ship is (wind, visibility, clouds, rain) and the weather setting; with 'real': the real weather and where it comes from (realSource.why: metar — a runway's report, the game's date now —, model — Open-Meteo at the game's date —, out-of-range — a plausible draw —, pending, other-world, high), and the clouds of that day drawn over the whole Earth (dayClouds: the satellites' mosaic's date and layer; null: the fixed map — before 2000, a future date, not in yet).",
       run: () => ({
         setting: settings.weather,
         wind: settings.wind,
         now: camera.weatherNow ?? null,
         real: camera.weatherReal ?? null,
         realSource: camera.weatherRealInfo ?? null,
+        dayClouds: h.dayClouds?.() ?? null,
       }),
     },
     {

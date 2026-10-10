@@ -1,7 +1,7 @@
 // The Earth's maps for the tracer (assets/earth), packed on the GPU:
 //   cube (rgba8, a cube map): the day colour (sRGB) and the cloud cover (alpha)
-//   night (r8, a cube map): the city lights (the night map's red channel — its dark blue ground has
-//     almost none)
+//   night (rg8, a cube map): the city lights (r: the night map's red channel — its dark blue ground has
+//     almost none); g: the clouds of the day, the real weather's (PLAN-CIEL C2: day-clouds.ts), 0 till then
 //   elev (rg16float, equirectangular): the height above the sea [m] (NOAA's ETOPO 2022:
 //     scripts/build-earth-relief.py), the oceans (1) — the relief's normals taken from the heights by the
 //     tracer
@@ -187,6 +187,10 @@ struct V { @builtin(position) p: vec4f, @location(0) uv: vec2f };
 @fragment fn face(v: V) -> @location(0) vec4f {
   return vec4f(textureSampleLevel(a, s, v.uv, 0.0).rgb, textureSampleLevel(b, s, v.uv, 0.0).r);
 }
+// the city lights (r), no clouds of the day yet (g)
+@fragment fn lights(v: V) -> @location(0) vec4f {
+  return vec4f(textureLoad(a, vec2u(v.p.xy), 0).r, 0.0, 0.0, 1.0);
+}
 // the heights [m], from their whole metres (r16sint), and the oceans (b)
 @group(0) @binding(4) var m: texture_2d<i32>;
 @fragment fn elev(v: V) -> @location(0) vec4f {
@@ -226,7 +230,7 @@ export function placeholderEarth(device: GPUDevice): EarthMaps {
   };
   return {
     cube: mk("rgba8unorm", 6, new Uint8Array([40, 60, 90, 0])),
-    night: mk("r8unorm", 6, new Uint8Array([0])),
+    night: mk("rg8unorm", 6, new Uint8Array([0, 0])),
     elev: mk("rg16float", 1, new Uint8Array([0, 0, 0, 0])),
     heights: null,
     tier: null,
@@ -314,7 +318,7 @@ export async function loadEarthMaps(device: GPUDevice, tier: EarthTier, fetcher?
   const set = SETS[tier];
   const pk = new Packer(device);
   const usage = GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC;
-  const night = device.createTexture({ size: [NIGHT_SIZE, NIGHT_SIZE, 6], format: "r8unorm", mipLevelCount: levels(NIGHT_SIZE), usage });
+  const night = device.createTexture({ size: [NIGHT_SIZE, NIGHT_SIZE, 6], format: "rg8unorm", mipLevelCount: levels(NIGHT_SIZE), usage });
   let cube = await compressedCube(device, tier);
   if (!cube) {
     cube = device.createTexture({
@@ -335,9 +339,7 @@ export async function loadEarthMaps(device: GPUDevice, tier: EarthTier, fetcher?
   }
   for (let f = 0; f < 6; f++) {
     const lights = await upload(device, NIGHT[f]!, "r8unorm");
-    const enc = device.createCommandEncoder();
-    enc.copyTextureToTexture({ texture: lights }, { texture: night, origin: [0, 0, f] }, [NIGHT_SIZE, NIGHT_SIZE]);
-    device.queue.submit([enc.finish()]);
+    pk.draw("lights", night, f, 0, [lights.createView()]);
     pk.mips(night, f, false);
     lights.destroy();
   }

@@ -112,6 +112,9 @@ export class GroundTrack {
   private wxShown = false;
   /** the airfields' real weather when it came in (the "real" setting's), from the page */
   realWeather: () => WeatherState | null = () => null;
+  /** the real weather's map: the satellites' mosaic of the day, the real weather at a place (PLAN-CIEL C2) */
+  dayMosaic: () => { img: ImageBitmap; date: string; layer: string } | null = () => null;
+  realAt: (lat: number, lon: number) => WeatherState | null = () => null;
   /** the scene's day [days past J2000] when last drawn (the weather's) */
   private wxDays = 0;
   private tex = new Map<string, Tex | "loading" | "none">();
@@ -787,6 +790,7 @@ export class GroundTrack {
         this.wxDays,
         this.realWeather(),
         sitesOf(sc.id).map((st) => ({ name: st.name, lat: st.lat, lon: st.lon })),
+        { mosaic: this.dayMosaic(), at: this.realAt },
       );
     }
     // the graticule, the frame

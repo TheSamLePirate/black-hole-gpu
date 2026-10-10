@@ -2836,6 +2836,7 @@ async function main() {
     say: (text) => voice.say({ text, speaker: "tars", priority: 2 }),
     memory: tarsMemory,
     now: () => performance.now(),
+    dayClouds: () => renderer.dayCloudsOf,
     display: tarsDisplay,
     screen: (name, slot = 0) => {
       const map = (tab?: "orbit" | "globe" | "map") => {
@@ -2911,6 +2912,15 @@ async function main() {
     touch();
   };
   realWeather.onUpdate = metarTick;
+  // (the map's weather layer: the real weather's own — the day's clouds, each station's)
+  flightHud.mapWeather = {
+    real: () => camera.weatherReal,
+    mosaic: () => renderer.dayCloudsMosaic(),
+    at: (lat, lon) => {
+      const p = camera.weatherPlace();
+      return p ? realWeather.modelAt(lat, lon, p.days) : null;
+    },
+  };
   window.setInterval(metarTick, 3000);
   // the Kerr Bench (bench/runner.ts): __bh.bench, and its screen on …/#bench
   const bench = new KerrBench({
