@@ -366,10 +366,36 @@ export function sunHidden(lat: number, lon: number, hM: number, ms: number): num
   return 1 - diskShare(d.rFar, d.rNear, d.sep);
 }
 
+/** What eclipse is under way at a place (lat, lon [rad], height [m]) at a UTC time, as seen there: the Sun
+ *  partly hidden by the Moon, wholly (total), ringed by it (annular) — the Sun up —; the Moon in the Earth's
+ *  umbra, partly or wholly — the Moon up; "" none. With the Sun's share hidden and the Moon's in the umbra. */
+export function eclipseNow(
+  lat: number,
+  lon: number,
+  hM: number,
+  ms: number,
+  sunAltDeg: number,
+  moonAltDeg: number,
+): {
+  phase: "" | "solar_partial" | "solar_total" | "solar_annular" | "lunar_partial" | "lunar_total";
+  sunHidden: number;
+  moonInUmbra: number;
+} {
+  const d = discsAt(earthPointKm(lat, lon, hM, ms), "moon", "sun", ms);
+  const hidden = d.sep < d.rFar + d.rNear ? 1 - diskShare(d.rFar, d.rNear, d.sep) : 0;
+  const umbra = moonInUmbra(ms);
+  let phase: ReturnType<typeof eclipseNow>["phase"] = "";
+  if (sunAltDeg > -0.8 && hidden > 5e-4)
+    phase = d.sep < d.rNear - d.rFar ? "solar_total" : d.sep < d.rFar - d.rNear ? "solar_annular" : "solar_partial";
+  else if (moonAltDeg > -0.8 && umbra > 0) phase = umbra > 0.9999 ? "lunar_total" : "lunar_partial";
+  return { phase, sunHidden: hidden, moonInUmbra: umbra };
+}
+
 /** The share of the Moon's disc inside the Earth's umbra (Danjon's) at a UTC time. */
 export function moonInUmbra(ms: number): number {
   const s = shadowAt("earth", "moon", ms, DANJON, DANJON_R);
-  return s.umbra > 0 ? 1 - diskShare(s.R, s.umbra, s.d) : 0;
+  // (behind the Earth only: a new Moon, on the Sun's side, is near the axis too)
+  return s.umbra > 0 && s.z > 0 ? 1 - diskShare(s.R, s.umbra, s.d) : 0;
 }
 
 /** The lunar eclipses in [a, b] (UTC ms). */

@@ -29,7 +29,7 @@ Rédigée le 2026-10-10.
 | `src/ai/budget.ts` | 42 | `Budget` : ce que ses initiatives coûtent sur l'heure glissante, le plafond (réglage), 20 s entre deux réveils |
 | `src/ai/subagents.ts` | 105 | `runSubagents` : jusqu'à 4 copies de lui en parallèle, outils de lecture et de calcul seulement |
 | `src/ai/commands.ts` | 229 | Pur : les 26 commandes « / » de l'agent, les modes, les savoir-faire, les mentions @ ; `complete`, `parseCommand`, `unmention`, `helpLines` |
-| `src/ai/game-commands.ts` | 462 | Pur : les 67 commandes de jeu (`/target`, `/cockpit`, `/teleport`…) traduites en appels d'outils ; arguments par position ou `clé=valeur` ; `completeGame` ; `/tool` |
+| `src/ai/game-commands.ts` | 462 | Pur : les 76 commandes de jeu (`/target`, `/cockpit`, `/teleport`…) traduites en appels d'outils ; arguments par position ou `clé=valeur` ; `completeGame` ; `/tool` |
 | `src/ai/tars-commands.ts` | 241 | `runCommand` : ce que fait chaque commande de l'agent (une ligne ou une fiche dans la console) |
 | `src/ai/offline-orders.ts` | 101 | Pur : les ordres compris sans modèle (FR / EN), traduits en appels des mêmes outils |
 | `src/ai/listen.ts` | 128 | Le push-to-talk : la reconnaissance vocale du navigateur, F6 tenu |

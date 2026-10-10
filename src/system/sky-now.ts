@@ -8,7 +8,8 @@ import { altAzOf, horizonAt } from "../skychart";
 import { cameraHome } from "../targeting";
 import { cartToGeodetic, flatteningOf } from "./ellipsoid";
 import { apparentAltitude, bending } from "./refraction";
-import { bodyAxes, M_METRES, seenFrom, solarBody } from "./solar";
+import { bodyAxes, M_METRES, seenFrom, solarBody, utcOf } from "./solar";
+import { eclipseNow } from "../eclipse/earth-moon";
 
 const D = Math.PI / 180;
 const r1 = (x: number) => Math.round(x * 10) / 10;
@@ -33,6 +34,8 @@ export interface SkyNow {
   refraction: { refractivity: number; horizonArcmin: number } | null;
   sun: SkyBody;
   moon?: SkyBody;
+  /** the eclipse under way here (PLAN-CIEL C11): its phase, the Sun's share hidden, the Moon's share in the umbra [%] */
+  eclipse?: { phase: string; sunHiddenPct: number; moonInUmbraPct: number };
 }
 
 /** The sky now at the camera (null: not over a world of ours). n0: the air's sea-level refractivity drawn. */
@@ -71,13 +74,19 @@ export function skyNow(s: Settings, t: number, n0: number): SkyNow | null {
     const [alt, az] = altAzOf(local, [v[0]! / l, v[1]! / l, v[2]! / l]);
     return { altDeg: r3(alt), apparentAltDeg: r3(air ? apparentAltitude(alt * D, h, n0) / D : alt), azDeg: r1(az) };
   };
+  const sun = body("sun");
+  const moon = hz.body === "earth" ? body("moon") : undefined;
+  const ecl = moon ? eclipseNow(g.lat, g.lon, h, utcOf(t), sun.altDeg, moon.altDeg) : null;
   return {
     over: hz.body,
     latDeg: r3((g.lat * 180) / Math.PI),
     lonDeg: r3((g.lon * 180) / Math.PI),
     heightM: Math.round(h),
     refraction: air ? { refractivity: Number(n0.toPrecision(4)), horizonArcmin: r1(bending(0, h, n0) / (D / 60)) } : null,
-    sun: body("sun"),
-    ...(hz.body === "earth" ? { moon: body("moon") } : {}),
+    sun,
+    ...(moon ? { moon } : {}),
+    ...(ecl && (ecl.phase || ecl.sunHidden > 0 || ecl.moonInUmbra > 0)
+      ? { eclipse: { phase: ecl.phase || "none", sunHiddenPct: r1(ecl.sunHidden * 100), moonInUmbraPct: r1(ecl.moonInUmbra * 100) } }
+      : {}),
   };
 }

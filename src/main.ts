@@ -717,6 +717,7 @@ async function main() {
     docked: boolean;
     off: string;
     papi: string;
+    eclipse: string;
   } | null = null;
   let tarsSpentSeen = 0;
   setInterval(() => {
@@ -756,6 +757,10 @@ async function main() {
         const r = camera.runwayView?.();
         return r?.final && (r.papi === 0 || r.papi === 4) ? (r.papi === 0 ? "low" : "high") : "";
       })(),
+      // (an eclipse at the camera's place: its phase — PLAN-CIEL C11)
+      eclipse:
+        (camera as unknown as { skyInfo?: () => { eclipse?: { phase: string } } | null }).skyInfo?.()?.eclipse?.phase.replace("none", "") ??
+        "",
     };
     const was = tarsSeen;
     tarsSeen = now;
@@ -768,6 +773,13 @@ async function main() {
       if (now.landed && !was.landed) tarsEvent({ kind: "landed", to: st.soi });
       if (now.docked && !was.docked) tarsEvent({ kind: "docked" });
       if (now.off && now.off !== was.off) tarsEvent({ kind: "deviation", to: now.off, detail: hub?.graph?.fix ?? hub?.graph?.about });
+      if (now.eclipse !== was.eclipse)
+        tarsEvent({
+          kind: "eclipse",
+          from: was.eclipse || "none",
+          to: now.eclipse || "end",
+          detail: now.eclipse ? `an eclipse phase here: ${now.eclipse}` : `the eclipse here is over (${was.eclipse})`,
+        });
       if (now.papi && now.papi !== was.papi)
         tarsEvent({ kind: "deviation", to: "approach", detail: `PAPI ${now.papi === "low" ? "all red: too low" : "all white: too high"}` });
     }

@@ -390,3 +390,24 @@ test("the ISS's passes for TARS (PLAN-CIEL C10): iss_passes, a read tool, /isspa
   expect(READ_TOOLS.has("iss_passes")).toBe(true);
   expect(gameCall("/isspasses", tools)).toEqual({ tool: "iss_passes", args: {} });
 });
+
+test("an eclipse at the camera's place for TARS (PLAN-CIEL C11): its phase in the sky's telemetry, its waking", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { addEphemeris } = await import("../src/system/de440");
+  const b = readFileSync("assets/ephemeris/de440.bin");
+  addEphemeris(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
+  const { eclipseNow } = await import("../src/eclipse/earth-moon");
+  const D = Math.PI / 180;
+  // (Burgos, 12 August 2026: partial at 18:00, total at 18:29; the Moon of 3 March 2026 from the Kansas: total at 11:33)
+  expect(eclipseNow(42.34 * D, -3.7 * D, 0, Date.UTC(2026, 7, 12, 18, 0), 12, -10).phase).toBe("solar_partial");
+  const tot = eclipseNow(42.34 * D, -3.7 * D, 0, Date.UTC(2026, 7, 12, 18, 29, 15), 8, -10);
+  expect(tot.phase).toBe("solar_total");
+  expect(tot.sunHidden).toBe(1);
+  // (a new Moon: never in the Earth's shadow)
+  expect(tot.moonInUmbra).toBe(0);
+  expect(eclipseNow(35 * D, -100 * D, 0, Date.UTC(2026, 2, 3, 11, 33), -20, 18).phase).toBe("lunar_total");
+  expect(eclipseNow(35 * D, -100 * D, 0, Date.UTC(2026, 2, 3, 11, 33), -20, -5).phase).toBe("");
+  const { Triggers } = await import("../src/ai/triggers");
+  const T = new Triggers({ get: () => null, set: () => true, clear: () => {} });
+  expect(T.match({ kind: "eclipse", to: "solar_total" }).map((r) => r.id)).toEqual(["reflex-eclipse"]);
+});

@@ -16,6 +16,7 @@ export type TriggerKind =
   | "docked"
   | "report"
   | "deviation"
+  | "eclipse"
   | "every"
   | "at"
   | "in";
@@ -31,6 +32,7 @@ export const EVENT_KINDS: TriggerKind[] = [
   "docked",
   "report",
   "deviation",
+  "eclipse",
 ];
 
 export interface TriggerOn {
@@ -107,6 +109,14 @@ export const REFLEXES: Omit<Trigger, "createdAt">[] = [
     on: { kind: "deviation" },
     prompt:
       "A flight's deviation went out of its tolerance. Read the telemetry, say it briefly and correct it if you can (an autopilot, a burn, a go-around).",
+  },
+  {
+    id: "reflex-eclipse",
+    reflex: true,
+    enabled: true,
+    on: { kind: "eclipse" },
+    prompt:
+      "An eclipse phase just began or ended where the player stands (the event's 'to': solar_partial, solar_total, solar_annular, lunar_partial, lunar_total, end). In one or two sentences say what they see now and what comes next (eclipse_local gives the contacts); at a totality, tell them to look — and offer a multiple exposure of it.",
   },
   {
     id: "reflex-landed",
