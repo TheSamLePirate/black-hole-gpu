@@ -101,16 +101,18 @@ import { TarsOnline } from "./ai/tars-online";
 import { TarsAgent, runOrders } from "./ai/tars-agent";
 import { orderReply, parseOrders } from "./ai/offline-orders";
 import { TarsMemory, TARS_MEMORY_KEY, type MemoryData } from "./ai/memory";
-import type { Tool } from "./ai/agent";
-import { gameTools, SCREENS } from "./ai/game-tools";
+import { actionLine, resultShort, type Action, type Tool } from "./ai/agent";
+import { checkArgs } from "./ai/tool-schema";
+import { gameTools, keyCatalog, SCREENS } from "./ai/game-tools";
 import { TarsDisplay } from "./ui/tars/display";
 import { PushToTalk } from "./ai/listen";
 import { Triggers, TARS_TRIGGERS_KEY, wakeText, type GameEvent, type Trigger } from "./ai/triggers";
 import { Budget } from "./ai/budget";
-import { runSubagents } from "./ai/subagents";
+import { READ_TOOLS, runSubagents } from "./ai/subagents";
 import { AttitudeSampler } from "./ai/telemetry";
 import { complete, MODES, parseCommand, TARS_MODE_KEY, TARS_SKILLS_KEY, unmention, type Mode, type Skill } from "./ai/commands";
 import { runCommand } from "./ai/tars-commands";
+import { gameCall, type GameCtx } from "./ai/game-commands";
 import { closeTop } from "./ui/keys";
 import { RUNWAY_DH } from "./game/procedures";
 import { Simulation } from "./sim";
@@ -790,6 +792,7 @@ async function main() {
         settings: SCHEMA.map((d) => ({ key: d.key, label: t(d.label) })),
         notes: tarsMemory.notes,
         skills: tarsSkills,
+        game: tarsGameCtx(),
       }),
     mode: () => tarsMode,
     cycleMode: () => {
@@ -858,6 +861,15 @@ async function main() {
     // (a "/" command, or one of the pilot's skills — C1, C5)
     const cmd = parseCommand(q, tarsSkills);
     if (cmd) return tarsCommand(cmd, q);
+    // (a game command: his tool run at once, no model — C6)
+    const g = q.startsWith("/")
+      ? gameCall(
+          q,
+          tarsTools,
+          SITES.map((x) => x.name),
+        )
+      : null;
+    if (g) return void tarsGameCommand(g, q);
     if (q.startsWith("/")) {
       tarsPanel.exchange(q);
       return tarsPanel.answer(tr({ fr: "Commande inconnue — /help les liste.", en: "Unknown command — /help lists them." }));
@@ -907,6 +919,64 @@ async function main() {
     // (an autopilot he engaged, or a plan: followed to its end)
     tarsFollowStart();
   }
+  // the game's "/" commands (C6: ai/game-commands.ts): their values, their run
+  const tarsGameCtx = (): GameCtx => ({
+    bodies: tools.targets().map((id) => {
+      const name = (BODY_NAMES as Record<string, string>)[id] ?? id;
+      return { value: name, hint: name === id ? undefined : id };
+    }),
+    sites: SITES.map((x) => ({ value: x.name, hint: x.body })),
+    mounts: (Object.keys(MOUNTS) as Mount[]).map((m) => ({ value: m, hint: MOUNTS[m].short })),
+    screens: [...SCREENS],
+    scenes: Object.keys(presets),
+    saves: tools.saves().map((x) => x.name),
+    settings: SCHEMA.map((d) => ({
+      key: d.key,
+      label: t(d.label),
+      values: d.type === "choice" ? d.options.map((o) => String(o.value)) : d.type === "toggle" ? ["true", "false"] : undefined,
+    })),
+    sky: [...CONSTELLATIONS.map((c) => c.name), ...NAMED_STARS.map((x) => x.name)],
+    keys: keyCatalog().map((k) => ({ value: k.id, hint: k.key })),
+    tools: tarsTools,
+  });
+  const tarsGameCommand = async (g: { tool: string; args: Record<string, unknown> } | { error: string }, typed: string) => {
+    tarsPanel.exchange(typed);
+    if ("error" in g) return tarsPanel.answer(g.error);
+    const tool = tarsTools.find((x) => x.name === g.tool);
+    if (!tool) return tarsPanel.answer(g.tool);
+    tarsPanel.begin(g.tool, g.args);
+    const chk = checkArgs(tool, g.args);
+    let a: Action;
+    if (!chk.ok) a = { tool: g.tool, args: g.args, ok: false, result: chk.error };
+    else
+      try {
+        a = { tool: g.tool, args: chk.args, ok: true, result: (await tool.run(chk.args, new AbortController().signal)) ?? "done" };
+      } catch (e) {
+        a = { tool: g.tool, args: chk.args, ok: false, result: e instanceof Error ? e.message : String(e) };
+      }
+    const short = resultShort(a);
+    tarsPanel.action(short, a.ok, actionLine(a), a.tool);
+    tarsPanel.answer(a.ok ? short || tr({ fr: "Fait.", en: "Done." }) : String(a.result));
+    // (a reading: its result on a card)
+    if (a.ok && READ_TOOLS.has(a.tool) && a.result && typeof a.result === "object") {
+      const rows = (Array.isArray(a.result) ? a.result : Object.entries(a.result as object).map(([k, v]) => ({ k, v })))
+        .slice(0, 16)
+        .map((r: Record<string, unknown>) =>
+          "k" in r
+            ? { label: String(r.k), value: typeof r.v === "object" ? JSON.stringify(r.v) : String(r.v) }
+            : {
+                label: String(r.name ?? r.id ?? Object.values(r)[0]),
+                value: Object.entries(r)
+                  .filter(([k]) => k !== "name")
+                  .map(([k, v]) => `${k} ${typeof v === "object" ? JSON.stringify(v) : v}`)
+                  .join(" · "),
+              },
+        );
+      tarsDisplay.show({ kind: "data", title: typed, rows });
+    }
+    refreshGui();
+    tarsFollowStart();
+  };
   // the "/" commands (C1, C5: ai/tars-commands.ts)
   let tarsLastAsked = "";
   const tarsCommand = (c: { name: string; arg: string; skill?: Skill }, typed: string) => {

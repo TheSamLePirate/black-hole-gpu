@@ -152,6 +152,7 @@ Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A7). Par OpenRouter, TAR
 ### Phase 3 : ce qu'ont les grands agents
 
 - **Les commandes « / »**, complétées en tapant (↑ ↓, Tab, Entrée) : /help, /clear, /compact, /model, /mode, /plan, /cost, /budget, /status, /telemetry, /show, /stop, /undo, /retry, /export, /memory, /forget, /agents, /wakes, /reflexes, /voice, /skill, /dock, /login, /key, /logout.
+- **Tout le jeu en commandes**, exécutées sans le modèle (sans coût), leurs arguments complétés : /target, /view (et /cockpit, /chase, /shipview…), /autopilot, /land, /entry, /takeoff, /dock, /hold, /throttle, /gear, /flaps, /brake, /sas, /mission, /maneuver, /teleport, /warp, /pause, /date, /map, /panel, /sky, /save, /load, /scene, /set, /quality, /press, /places, /weather… et /tool pour n'importe lequel de ses outils (« /tool place_ship mode=orbit body=mars altKm=300 »).
 - **@** complète un corps, un site, un écran, un réglage ; **↑ ↓** rappellent les questions passées.
 - **Ses modes** (Maj+Tab, /mode) : Agir (sans confirmation), Proposer (il propose chaque plan avant d'agir), Observer (il lit et montre, n'agit pas).
 - **Sa liste de tâches** pour une tâche en plusieurs étapes, cochée en direct.

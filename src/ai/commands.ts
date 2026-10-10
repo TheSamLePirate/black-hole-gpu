@@ -5,6 +5,7 @@
 // command out; main.ts runs them.
 
 import type { Text } from "../i18n";
+import { completeGame, GAME_COMMANDS, type GameCtx } from "./game-commands";
 
 export interface Command {
   name: string;
@@ -45,6 +46,8 @@ export interface CompleteCtx {
   settings: { key: string; label: string }[];
   notes: readonly string[];
   skills: readonly Skill[];
+  /** the game commands' values (C6) */
+  game?: GameCtx;
 }
 
 const onOff = () => [{ value: "on" }, { value: "off" }];
@@ -154,6 +157,8 @@ export function complete(input: string, ctx: CompleteCtx, max = 12): Suggestion[
   const cmd = /^\/([\w-]+)\s+(.*)$/s.exec(input);
   if (cmd) {
     const c = COMMANDS.find((x) => x.name === cmd[1]!.toLowerCase());
+    // (a game command's arguments — C6)
+    if (!c && ctx.game) return (completeGame(input, ctx.game, max) ?? []).map((g) => ({ ...g, kind: "value" as const }));
     if (!c?.values) return [];
     const q = fold(cmd[2]!);
     return c
@@ -171,6 +176,12 @@ export function complete(input: string, ctx: CompleteCtx, max = 12): Suggestion[
       ...COMMANDS.map((c) => ({
         text: `/${c.name}${c.args ? " " : ""}`,
         label: `/${c.name}${c.args ? ` ${c.args}` : ""}`,
+        hint: c.desc[ctx.lang ?? "en"] as string | undefined,
+        kind: "command" as const,
+      })),
+      ...GAME_COMMANDS.map((c) => ({
+        text: `/${c.name}${c.args?.length || c.name === "tool" ? " " : ""}`,
+        label: `/${c.name}${c.args?.length ? ` ${c.args.map((a) => `<${a.param}>`).join(" ")}` : c.name === "tool" ? " <outil> clé=valeur" : ""}`,
         hint: c.desc[ctx.lang ?? "en"] as string | undefined,
         kind: "command" as const,
       })),
@@ -209,6 +220,10 @@ export const unmention = (q: string) => q.replace(/@"([^"]+)"/g, "$1").replace(/
 export function helpLines(lang: "fr" | "en", skills: readonly Skill[]): { label: string; value: string }[] {
   return [
     ...COMMANDS.map((c) => ({ label: `/${c.name}${c.args ? ` ${c.args}` : ""}`, value: c.desc[lang] })),
+    ...GAME_COMMANDS.map((c) => ({
+      label: `/${c.name}${c.args?.length ? ` ${c.args.map((a) => `<${a.param}>`).join(" ")}` : ""}`,
+      value: c.desc[lang],
+    })),
     ...skills.map((s) => ({ label: `/${s.name}`, value: `★ ${s.description}` })),
   ];
 }

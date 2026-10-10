@@ -416,4 +416,49 @@ describe.skipIf(!E2E)("TARS the agent", () => {
       15_000,
     );
   }, 90_000);
+
+  test("every game action as a / command, run at once, completed as typed (C6)", async () => {
+    if (await app.js<boolean>(`document.querySelector("[data-testid=tars-panel]").hidden`)) await app.press("F6", "F6");
+    const sug = () => app.js<string[]>(`[...document.querySelectorAll("[data-testid=tars-suggest] li b")].map((b) => b.textContent)`);
+    const value = () => app.js<string>(`document.querySelector("[data-testid=tars-input]").value`);
+    const run = async (line: string) => {
+      await app.js(`(document.querySelector("[data-testid=tars-input]").value = "", true)`);
+      await app.type(line);
+      // (a whole line: Enter sends it, its completion already as typed)
+      await app.press("Enter");
+      await Bun.sleep(400);
+    };
+    const calls = await app.js<number>(`window.__or.length`);
+    // (the view, by its own command)
+    await run("/cockpit");
+    expect(await app.js<string>(`__bh.settings.shipMount`)).toBe("cockpit");
+    // (the target: completed, then run)
+    await app.js(`(document.querySelector("[data-testid=tars-input]").value = "", true)`);
+    await app.type("/target Ma");
+    expect(await sug()).toContain("Mars");
+    await app.press("Tab", "Tab");
+    expect(await value()).toBe("/target Mars ");
+    await app.press("Enter");
+    await app.waitFor(`String(__bh.settings.target) === "mars"`, 3_000);
+    // (a teleport: its mode and place completed)
+    await app.js(`(document.querySelector("[data-testid=tars-input]").value = "", true)`);
+    await app.type("/teleport orbit Lu");
+    expect(await sug()).toContain("Lune");
+    await run("/teleport orbit Lune 100");
+    await app.waitFor(`__bh.game.status().soi === "moon"`, 5_000);
+    // (a setting, the time, any tool by name)
+    await run("/set music off");
+    expect(await app.js<boolean>(`__bh.settings.music`)).toBe(false);
+    await run("/warp 100");
+    expect(Math.round(await app.js<number>(`__bh.settings.timeSpeed * 4.925490947e-6 * __bh.settings.massSolar`))).toBe(100);
+    await run("/tool camera shipView=true mount=chase");
+    expect(await app.js<string>(`__bh.settings.shipMount`)).toBe("chase");
+    // (a reading: its card)
+    await run("/places Lune");
+    expect(
+      await app.js<boolean>(`[...document.querySelectorAll("[data-testid=tars-card] h3")].some((h) => h.textContent === "/places Lune")`),
+    ).toBe(true);
+    // (none of them asked the model)
+    expect(await app.js<number>(`window.__or.length`)).toBe(calls);
+  }, 60_000);
 });

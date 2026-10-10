@@ -113,3 +113,76 @@ test("commands, skills and mentions: parsed and completed as typed (C1–C2, C5)
   expect(parseCommand("vise Mars")).toBeNull();
   expect(unmention('pose-nous au @"Le Bourget" puis vise @Mars')).toBe("pose-nous au Le Bourget puis vise Mars");
 });
+
+test("every game action as a / command: read by position or by name, completed as typed (C6)", async () => {
+  const { gameCall, completeGame } = await import("../src/ai/game-commands");
+  const tools: import("../src/ai/tool-schema").ToolSpec[] = [
+    { name: "set_target", description: "", params: { name: { type: "string" as const } } },
+    {
+      name: "camera",
+      description: "",
+      params: {
+        mount: { type: "string" as const, enum: ["cockpit", "chase"] },
+        shipView: { type: "boolean" as const },
+        spectator: { type: "boolean" as const },
+      },
+    },
+    {
+      name: "place_ship",
+      description: "",
+      params: {
+        mode: { type: "string" as const, enum: ["orbit", "ground", "glide"] },
+        body: { type: "string" as const },
+        site: { type: "string" as const },
+        altKm: { type: "number" as const },
+      },
+    },
+    { name: "controls", description: "", params: { gear: { type: "boolean" as const }, throttle: { type: "number" as const } } },
+    { name: "set_settings", description: "", params: { changes: { type: "array" as const, items: { type: "string" as const } } } },
+    {
+      name: "set_date",
+      description: "",
+      params: { date: { type: "string" as const }, hours: { type: "number" as const }, now: { type: "boolean" as const } },
+    },
+  ];
+  const sites = ["Edwards Air Force Base", "Paris - Le Bourget"];
+  expect(gameCall("/target Lune", tools)).toEqual({ tool: "set_target", args: { name: "Lune" } });
+  expect(gameCall("/cockpit", tools)).toEqual({ tool: "camera", args: { mount: "cockpit" } });
+  expect(gameCall("/teleport orbit Lune 100", tools, sites)).toEqual({
+    tool: "place_ship",
+    args: { mode: "orbit", body: "Lune", altKm: 100 },
+  });
+  expect(gameCall("/teleport glide edwards", tools, sites)).toEqual({ tool: "place_ship", args: { mode: "glide", site: "edwards" } });
+  expect(gameCall("/teleport orbit body=mars altKm=300", tools, sites)).toEqual({
+    tool: "place_ship",
+    args: { mode: "orbit", body: "mars", altKm: 300 },
+  });
+  expect(gameCall("/gear up", tools)).toEqual({ tool: "controls", args: { gear: false } });
+  expect(gameCall("/throttle 0,5", tools)).toEqual({ tool: "controls", args: { throttle: 0.5 } });
+  expect(gameCall("/set music off", tools)).toEqual({ tool: "set_settings", args: { changes: [{ key: "music", value: "off" }] } });
+  expect(gameCall("/date +24", tools)).toEqual({ tool: "set_date", args: { hours: 24 } });
+  expect(gameCall("/tool camera shipView=true", tools)).toEqual({ tool: "camera", args: { shipView: true } });
+  expect(gameCall("/gear up down", tools)).toEqual({ error: 'too many arguments: "down"' });
+  expect(gameCall("/help", tools)).toBeNull();
+  const ctx = {
+    bodies: [{ value: "Lune" }, { value: "Mars" }],
+    sites: sites.map((value) => ({ value })),
+    mounts: [{ value: "cockpit" }, { value: "chase" }],
+    screens: [],
+    scenes: [],
+    saves: [],
+    settings: [{ key: "music", label: "Musique", values: ["true", "false"] }],
+    sky: [],
+    keys: [],
+    tools,
+  };
+  expect(completeGame("/teleport ", ctx)!.map((s) => s.label)).toEqual(["orbit", "ground", "glide"]);
+  expect(completeGame("/teleport orbit Lu", ctx)!.map((s) => s.text)).toEqual(["/teleport orbit Lune "]);
+  expect(completeGame("/teleport glide bou", ctx)!.map((s) => s.text)).toEqual(['/teleport glide "Paris - Le Bourget" ']);
+  expect(completeGame("/view ch", ctx)!.map((s) => s.label)).toEqual(["chase"]);
+  expect(completeGame("/set music ", ctx)!.map((s) => s.label)).toEqual(["true", "false"]);
+  expect(completeGame("/tool cam", ctx)!.map((s) => s.label)).toEqual(["camera"]);
+  expect(completeGame("/tool camera sh", ctx)!.map((s) => s.label)).toEqual(["shipView="]);
+  expect(completeGame("/tool camera mount=co", ctx)!.map((s) => s.label)).toEqual(["mount=cockpit"]);
+  expect(completeGame("/cockpit x", ctx)).toEqual([]);
+});
