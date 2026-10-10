@@ -124,6 +124,8 @@ export interface GameHost {
   utcNow?(): number;
   /** a multiple exposure made (PLAN-CIEL C8–C10: its dialog opened, the series run): how many exposures, or null */
   multiExposure?(r: import("../ui/multiexposure").MxRequest): Promise<{ rendered: number } | null>;
+  /** the ISS's visible passes from a place over days from a date (photo/iss-pass.ts) */
+  issPasses?(lat: number, lon: number, from: number, days: number): import("../photo/iss-pass").IssPass[];
   /** taken to see an eclipse (PLAN-CIEL C7): the one of that kind nearest a date (within 3 days), from a place
    *  if it is seen there, else from where it is best; its id, or null: none */
   seeEclipse?(kind: "solar" | "lunar" | "transit", t: number, place: { lat: number; lon: number } | null): Promise<string | null>;
@@ -471,9 +473,28 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "multiple_exposure",
       description:
-        "Make a multiple-exposure photograph (several renders from one fixed tripod blended into one image, shown to the player with a Download button). 'analemma': the Sun at the same UTC time every N days for a year from a place, its figure-eight over the landscape. 'eclipse': a solar or lunar eclipse seen from a place — `before` phases, the central one (totality, ring or greatest), `after` phases, each disc taken through a telephoto and laid where it was in the sky, over the landscape (the totality's own twilight, or dusk) or black; the eclipse nearest `date` that is seen from there (find_eclipses gives them). It takes from seconds to a few minutes; the player sees its progress. Place: lat/lon or a site; default the player's.",
+        "Make a multiple-exposure photograph (several renders from one fixed tripod blended into one image, shown to the player with a Download button). 'trails': star trails over hours of a dark night (`date` its evening, `hours`, `count` frames 40–160, `toward` the pole or a quarter, `fov`, `comet`). 'moon': the Moon's way — `mode` night (every `step` min, `span` h about its highest), daily (each day at `time` UTC for `days`), lunar (each lunar day: the lunar analemma). 'iss': the ISS's trail on its visible pass nearest `date` (iss_passes lists them; `dashes` for an interval shooting's gaps). 'analemma': the Sun at the same UTC time every N days for a year from a place, its figure-eight over the landscape. 'eclipse': a solar or lunar eclipse seen from a place — `before` phases, the central one (totality, ring or greatest), `after` phases, each disc taken through a telephoto and laid where it was in the sky, over the landscape (the totality's own twilight, or dusk) or black; the eclipse nearest `date` that is seen from there (find_eclipses gives them). It takes from seconds to a few minutes; the player sees its progress. Place: lat/lon or a site; default the player's.",
       params: {
-        kind: { type: "string", enum: ["analemma", "eclipse"] },
+        kind: { type: "string", enum: ["analemma", "eclipse", "trails", "moon", "iss"] },
+        hours: { type: "number", description: "trails: hours of the night (default 3)" },
+        count: { type: "number", description: "trails: frames, 40–160 (default 80)" },
+        toward: {
+          type: "string",
+          enum: ["pole", "north", "east", "south", "west"],
+          description: "trails: where the tripod looks (default the pole)",
+        },
+        fov: { type: "number", description: "trails: the vertical field [°], 40–120 (default 70)" },
+        comet: { type: "boolean", description: "trails: a comet's tail (older frames dimmer)" },
+        mode: {
+          type: "string",
+          enum: ["night", "daily", "lunar"],
+          description: "moon: through a night (default), each day at a time, each lunar day",
+        },
+        step: { type: "number", description: "moon night: minutes between frames (default 60)" },
+        span: { type: "number", description: "moon night: hours about its highest (default 6)" },
+        days: { type: "number", description: "moon daily/lunar: days (default 30)" },
+        lit: { type: "boolean", description: "moon: each disc's lit share written (default true)" },
+        dashes: { type: "boolean", description: "iss: the trail in dashes (an interval shooting)" },
         lat: { type: "number" },
         lon: { type: "number" },
         site: { type: "string" },
@@ -518,7 +539,62 @@ export function gameTools(h: GameHost): Tool[] {
         const now = h.utcNow?.() ?? Date.now();
         const clamp = (v: unknown, d: number, lo: number, hi: number) => Math.min(Math.max(Number(v ?? d), lo), hi);
         let r: { rendered: number } | null;
-        if (a.kind === "eclipse") {
+        const dateOf = (d: unknown) => (d ? Date.parse(String(d)) : now);
+        const common = {
+          lat,
+          lon,
+          width: 1920,
+          height: 1080,
+          framing: a.framing === "sky" ? ("sky" as const) : ("landscape" as const),
+          sky: a.sky === "game" ? ("game" as const) : ("clear" as const),
+        };
+        if (a.kind === "trails" || a.kind === "moon" || a.kind === "iss") {
+          const date = dateOf(a.date);
+          if (!Number.isFinite(date)) return { error: `not a date: ${a.date}` };
+          const [hh, mm] = String(a.time ?? "21:00")
+            .split(":")
+            .map(Number);
+          r =
+            a.kind === "trails"
+              ? await h.multiExposure({
+                  kind: "trails",
+                  ...common,
+                  date,
+                  hours: clamp(a.hours, 3, 0.5, 10),
+                  count: clamp(a.count, 80, 20, 200),
+                  toward: (a.toward as "pole") ?? "pole",
+                  fov: clamp(a.fov, 70, 30, 120),
+                  comet: a.comet === true,
+                  caption: a.caption !== false,
+                  spp: 2,
+                })
+              : a.kind === "moon"
+                ? await h.multiExposure({
+                    kind: "moon",
+                    ...common,
+                    mode: (a.mode as "night" | "daily" | "lunar") ?? "night",
+                    date,
+                    step: clamp(a.step, 60, 5, 240),
+                    span: clamp(a.span, 6, 1, 14),
+                    days: clamp(a.days, 30, 3, 60),
+                    minutesUtc: (hh ?? 21) * 60 + (mm ?? 0),
+                    lit: a.lit !== false,
+                    times: a.times !== false,
+                    position: a.position === true,
+                    caption: a.caption !== false,
+                    spp: 4,
+                  })
+                : await h.multiExposure({
+                    kind: "iss",
+                    ...common,
+                    date,
+                    dashes: a.dashes === true,
+                    times: a.times !== false,
+                    position: a.position === true,
+                    caption: a.caption !== false,
+                    spp: 4,
+                  });
+        } else if (a.kind === "eclipse") {
           const date = a.date ? Date.parse(String(a.date)) : now;
           if (!Number.isFinite(date)) return { error: `not a date: ${a.date}` };
           r = await h.multiExposure({
@@ -562,6 +638,39 @@ export function gameTools(h: GameHost): Tool[] {
         return r
           ? { ok: true, exposures: r.rendered, shown: "the image is in the Multiple exposure dialog (Download PNG)" }
           : { error: "stopped, failed, or no such eclipse seen from there (see the dialog's message)" };
+      },
+    },
+    {
+      name: "iss_passes",
+      description:
+        "The ISS's passes seen from a place over the next days (SGP4 on its latest elements): the station over 10°, lit by the Sun, the sky dark there — each with its times (rising into view, highest, leaving), its highest altitude and its brightest magnitude. Use it to tell the player when to look up, or to pick one for multiple_exposure kind 'iss'.",
+      params: {
+        lat: { type: "number" },
+        lon: { type: "number" },
+        site: { type: "string" },
+        from: { type: "string", description: "the first day (ISO; default the game's date)" },
+        days: { type: "number", description: "how many days, 1–15 (default 7)" },
+      },
+      run: async (a) => {
+        if (!h.issPasses) return { error: "not available" };
+        const site = a.site ? resolveSite(String(a.site), "earth") : null;
+        const here = camera.weatherPlace?.();
+        const lat = site?.lat ?? (a.lat !== undefined ? Number(a.lat) : here?.body === "earth" ? here.lat : 48.86);
+        const lon = site?.lon ?? (a.lon !== undefined ? Number(a.lon) : here?.body === "earth" ? here.lon : 2.35);
+        const from = a.from ? Date.parse(String(a.from)) : (h.utcNow?.() ?? Date.now());
+        if (!Number.isFinite(from)) return { error: `not a date: ${a.from}` };
+        const iso = (ms: number) => new Date(ms).toISOString().slice(0, 19) + "Z";
+        const passes = h.issPasses(lat, lon, from, Math.min(Math.max(Number(a.days ?? 7), 1), 15));
+        return {
+          place: { lat, lon },
+          passes: passes.map((p) => ({
+            from: iso(p.seenFrom),
+            highest: iso(p.top),
+            to: iso(p.seenTo),
+            maxAltDeg: Math.round(p.maxAlt),
+            magnitude: +p.mag.toFixed(1),
+          })),
+        };
       },
     },
     {

@@ -61,9 +61,9 @@ export function analemmaSuns(o: Pick<AnalemmaOptions, "lat" | "lon" | "minutesUt
 
 /** A view framing points of the sky (their azimuth and altitude [°]): their middle, wide enough with a margin, for an image of `aspect`. */
 export function frame(points: { az: number; alt: number }[], aspect: number, margin = 6): Framing {
-  // (the azimuths' middle, the circle's: the mean of their unit vectors)
-  const sx = points.reduce((s, p) => s + Math.sin(p.az * D), 0),
-    cx = points.reduce((s, p) => s + Math.cos(p.az * D), 0);
+  // (their directions' mean seen from above: a point near the zenith says little of where to turn)
+  const sx = points.reduce((s, p) => s + Math.cos(p.alt * D) * Math.sin(p.az * D), 0),
+    cx = points.reduce((s, p) => s + Math.cos(p.alt * D) * Math.cos(p.az * D), 0);
   const az = (((Math.atan2(sx, cx) / D) % 360) + 360) % 360;
   const alts = points.map((p) => p.alt);
   const lo = Math.min(...alts),
@@ -71,15 +71,24 @@ export function frame(points: { az: number; alt: number }[], aspect: number, mar
   const alt = (lo + hi) / 2;
   const span = (p: { az: number }) => Math.abs(((((p.az - az) % 360) + 540) % 360) - 180);
   const wide = 2 * Math.max(...points.map((p) => span(p) * Math.cos(p.alt * D)));
-  const fov = Math.min(Math.max(hi - lo + 2 * margin, (wide + 2 * margin) / aspect, 10), 120);
+  let fov = Math.min(Math.max(hi - lo + 2 * margin, (wide + 2 * margin) / aspect, 10), 120);
+  // (then checked through the pinhole itself: a way high in the sky spans more than its azimuths say —
+  // the field widened until every point stands inside, its margin kept, to 140°)
+  const inside = (f: number) =>
+    points.every((p) => {
+      const q = projectSky({ az, alt, fov: f }, p.az, p.alt, 1000 * aspect, 1000);
+      const m = (margin / f) * 1000 * 0.5;
+      return !!q && q[0] >= m && q[0] <= 1000 * aspect - m && q[1] >= m && q[1] <= 1000 - m;
+    });
+  while (fov < 140 && !inside(fov)) fov = Math.min(fov * 1.04, 140);
   return { az, alt, fov };
 }
 
 /** The frames, the base last (lighten keeps the brightest whatever the order). */
-const baseLast = (f: Exposure[]) => [...f.filter((x) => x.blend !== "base"), ...f.filter((x) => x.blend === "base")];
+export const baseLast = (f: Exposure[]) => [...f.filter((x) => x.blend !== "base"), ...f.filter((x) => x.blend === "base")];
 
 /** When the Sun stands at an altitude [°], going down, after a moment [ms] (within a day), at a place [°]. */
-function sunDown(lat: number, lon: number, after: number, alt: number): number {
+export function sunDown(lat: number, lon: number, after: number, alt: number): number {
   const f = (t: number) => azAltAt("sun", lat * D, lon * D, 0, t).alt - alt;
   let a = after;
   // (step an hour until it crosses going down)
@@ -349,17 +358,8 @@ export function eclipsePlan(
   // frame the wide view's, laid by its disc)
   // (aimed where the disc is seen — raised by the air, as the marks place it: aimed at the body itself, a low
   // Moon's refraction carried it out of so close a field)
-  const close = (m: SeqMoment, k: number): Pick<Exposure, "preset" | "inset"> => {
-    // (its field: k radii and the sky's ring about the disc — 1.6 at least — with a margin)
-    const fov = (2 * Math.atan(Math.max(k, 1.6) * Math.tan(DISC_DEG * D) * 1.15)) / D;
-    const seen = apparentAltitude(m.alt * D, 0, seaRefractivity()) / D;
-    return o.insets === false
-      ? { preset: scene(m.ms) }
-      : {
-          preset: { ...scene(m.ms), fov, pose: { at: [o.lat, o.lon], heading: m.az, off: [0, seen] } },
-          inset: { x: 0, y: 0, r: 0, k, fov },
-        };
-  };
+  const close = (m: SeqMoment, k: number): Pick<Exposure, "preset" | "inset"> =>
+    o.insets === false ? { preset: scene(m.ms) } : closeFrame(scene(m.ms), m, o.lat, o.lon, k);
   for (const m of moments) {
     if (m.central && centralBase) continue;
     // (a totality's — the corona, the red Moon —: the meter's; a phase: the Sun's through the filter, the Moon's the meter's)
@@ -374,8 +374,25 @@ export function eclipsePlan(
   return { frames: baseLast(frames), view, moments, eclipse: e };
 }
 
+/**
+ * A disc's close frame (a telephoto's): its field `k` radii and the sky's ring about it (1.6 at least) with a
+ * margin, aimed where the disc is seen — raised by the air, as the marks place it (aimed at the body itself,
+ * a low Moon's refraction carried it out of so close a field); the inset to lay it at its place.
+ */
+export function closeFrame(
+  scene: Preset,
+  m: { az: number; alt: number },
+  lat: number,
+  lon: number,
+  k: number,
+): Pick<Exposure, "preset" | "inset"> {
+  const fov = (2 * Math.atan(Math.max(k, 1.6) * Math.tan(DISC_DEG * D) * 1.15)) / D;
+  const seen = apparentAltitude(m.alt * D, 0, seaRefractivity()) / D;
+  return { preset: { ...scene, fov, pose: { at: [lat, lon], heading: m.az, off: [0, seen] } }, inset: { x: 0, y: 0, r: 0, k, fov } };
+}
+
 /** The dusk (the Sun at −2°, going down) after a moment at a place [°]; the Sun already down: that moment. */
-function sunDownAfter(lat: number, lon: number, t: number): number {
+export function sunDownAfter(lat: number, lon: number, t: number): number {
   return azAltAt("sun", lat * D, lon * D, 0, t).alt <= -2 ? t : sunDown(lat, lon, t, -2);
 }
 

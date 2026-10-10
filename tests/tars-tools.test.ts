@@ -97,8 +97,8 @@ test("commands, skills and mentions: parsed and completed as typed (C1–C2, C5)
     notes: ["Le pilote s'appelle Cooper"],
     skills: [{ name: "retour", description: "Rentrer au Bourget", prompt: "Ramène-nous au Bourget", at: 0 }],
   };
-  // ("/": the commands and his skills; "/mo": model, mode)
-  expect(complete("/mo", ctx).map((s) => s.label)).toEqual(["/model <modèle>", "/mode act|plan|watch"]);
+  // ("/": the commands and his skills; "/mo": model, mode, the Moon's way)
+  expect(complete("/mo", ctx).map((s) => s.label)).toEqual(["/model <modèle>", "/mode act|plan|watch", "/moonpath <mode> <date>"]);
   expect(complete("/re", ctx).map((s) => s.label)).toContain("/retour");
   // (an argument's values, by value or hint)
   expect(complete("/model hai", ctx).map((s) => s.text)).toEqual(["/model anthropic/claude-haiku-5.5"]);
@@ -277,6 +277,17 @@ test("the multiple exposure for TARS (PLAN-CIEL C8): multiple_exposure, its labe
     tools: {},
     utcNow: () => Date.UTC(2026, 0, 1),
     multiExposure: async (r: import("../src/ui/multiexposure").MxRequest) => (asked.push(r), { rendered: 54 }),
+    issPasses: (lat: number, lon: number, from: number, days: number) => [
+      {
+        start: from,
+        top: from + 120e3,
+        end: from + 300e3,
+        maxAlt: 66 + lat * 0 + lon * 0 + days * 0,
+        mag: -3.7,
+        seenFrom: from + 10e3,
+        seenTo: from + 290e3,
+      },
+    ],
   } as unknown as import("../src/ai/game-tools").GameHost;
   const tools = gameTools(host);
   const mx = tools.find((t) => t.name === "multiple_exposure")!;
@@ -316,6 +327,32 @@ test("the multiple exposure for TARS (PLAN-CIEL C8): multiple_exposure, its labe
     share: true,
     caption: true,
   });
+  await mx.run({ kind: "trails", date: "2026-10-10", hours: 4, count: 500, comet: true }, new AbortController().signal);
+  expect(asked[3]).toMatchObject({
+    kind: "trails",
+    date: Date.UTC(2026, 9, 10),
+    hours: 4,
+    count: 200,
+    toward: "pole",
+    fov: 70,
+    comet: true,
+  });
+  await mx.run({ kind: "moon", mode: "lunar", date: "2026-10-01", days: 29 }, new AbortController().signal);
+  expect(asked[4]).toMatchObject({ kind: "moon", mode: "lunar", days: 29, lit: true });
+  await mx.run({ kind: "iss", date: "2026-10-18T05:20:00Z", dashes: true }, new AbortController().signal);
+  expect(asked[5]).toMatchObject({ kind: "iss", date: Date.UTC(2026, 9, 18, 5, 20), dashes: true });
+  expect(gameCall("/startrails 2026-10-10 4 south comet=true", tools)).toEqual({
+    tool: "multiple_exposure",
+    args: { kind: "trails", date: "2026-10-10", hours: 4, toward: "south", comet: true },
+  });
+  expect(gameCall("/moonpath lunar 2026-10-01", tools)).toEqual({
+    tool: "multiple_exposure",
+    args: { kind: "moon", mode: "lunar", date: "2026-10-01" },
+  });
+  expect(gameCall("/issphoto 2026-10-18T05:20Z", tools)).toEqual({
+    tool: "multiple_exposure",
+    args: { kind: "iss", date: "2026-10-18T05:20Z" },
+  });
   expect(gameCall("/eclipsephoto solar 2026-08-12 lat=42.34 lon=-3.7 framing=sky", tools)).toEqual({
     tool: "multiple_exposure",
     args: { kind: "eclipse", eclipse: "solar", date: "2026-08-12", lat: 42.34, lon: -3.7, framing: "sky" },
@@ -324,4 +361,27 @@ test("the multiple exposure for TARS (PLAN-CIEL C8): multiple_exposure, its labe
     tool: "multiple_exposure",
     args: { kind: "analemma", site: "Paris - Le Bourget", time: "12:00", cadence: 7, position: true },
   });
+});
+
+test("the ISS's passes for TARS (PLAN-CIEL C10): iss_passes, a read tool, /isspasses", async () => {
+  const { gameTools } = await import("../src/ai/game-tools");
+  const { gameCall } = await import("../src/ai/game-commands");
+  const { READ_TOOLS } = await import("../src/ai/subagents");
+  const host = {
+    camera: { weatherPlace: () => ({ body: "earth", lat: 48.86, lon: 2.35 }) },
+    settings: {},
+    tools: {},
+    utcNow: () => Date.UTC(2026, 9, 10),
+  } as unknown as import("../src/ai/game-tools").GameHost;
+  const real = await import("../src/photo/iss-pass");
+  (host as { issPasses?: unknown }).issPasses = real.issPasses;
+  const tools = gameTools(host);
+  const t = tools.find((x) => x.name === "iss_passes")!;
+  const r = (await t.run({ days: 10 }, new AbortController().signal)) as {
+    passes: { from: string; maxAltDeg: number; magnitude: number }[];
+  };
+  expect(r.passes.length).toBeGreaterThan(2);
+  expect(r.passes.some((p) => p.magnitude < -2.5)).toBe(true);
+  expect(READ_TOOLS.has("iss_passes")).toBe(true);
+  expect(gameCall("/isspasses", tools)).toEqual({ tool: "iss_passes", args: {} });
 });

@@ -22,6 +22,10 @@ export interface Exposure {
   mask?: { x: number; y: number; r: number };
   /** the moment it shows [ms UTC] (its disc's mask found by it) */
   ms?: number;
+  /** lighten: its light scaled first (a star trail's comet tail: the older frames dimmer) */
+  gain?: number;
+  /** after it is laid: more drawn from it into the image (a star trail's arcs run on to the next frame) */
+  after?: (out: Uint8ClampedArray, px: Uint8Array, W: number, H: number) => void;
   /**
    * a disc's frame taken close — a telephoto's: its own field `fov` [°] on the Sun or the Moon, its own
    * meter (a wide view's would not open for a red Moon) — then laid at its place in the image: its disc of
@@ -217,7 +221,11 @@ export async function runExposures(
         const under = Uint8ClampedArray.from(px.subarray(0, out.length));
         lighten(under, out, o.width, o.height);
         out.set(under);
-      } else lighten(out, px, o.width, o.height, f.mask);
+      } else {
+        if (f.gain !== undefined && f.gain !== 1) for (let k = 0; k < px.length; k++) if ((k & 3) !== 3) px[k] = px[k]! * f.gain;
+        lighten(out, px, o.width, o.height, f.mask);
+        f.after?.(out, px, o.width, o.height);
+      }
       rendered++;
     }
     progress({ done: rendered, total: frames.length, label: "" });

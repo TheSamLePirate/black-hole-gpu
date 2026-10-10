@@ -288,7 +288,14 @@ export function altitudeAt(id: string, lat: number, lon: number, hM: number, ms:
 /** A body's azimuth (from the north, eastwards) and geometric altitude [°] from a place (lat, lon [rad], h [m]) at a UTC time. */
 export function azAltAt(id: string, lat: number, lon: number, hM: number, ms: number): { az: number; alt: number } {
   const p = earthPointKm(lat, lon, hM, ms);
-  const v = sub(seenKm(id, ms, p), p);
+  return azAltOfKm(seenKm(id, ms, p), lat, lon, hM, ms);
+}
+
+/** A point's azimuth (from the north, eastwards) and geometric altitude [°] from a place (lat, lon [rad], h
+ *  [m]) at a UTC time, the point given in the home frame [km] (a satellite's: no light time to speak of). */
+export function azAltOfKm(P: Vec3, lat: number, lon: number, hM: number, ms: number): { az: number; alt: number } {
+  const p = earthPointKm(lat, lon, hM, ms);
+  const v = sub(P, p);
   const A = bodyAxes(solarBody("earth")!, tOf(ms));
   const z = zenithAt(lat, lon, ms);
   // (east: the pole × up; north: up × east)

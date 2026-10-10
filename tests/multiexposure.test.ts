@@ -192,3 +192,88 @@ test("a close frame laid at its place, its disc's mean; a disc behind the ground
   expect(placeInset(out, disc(22, 20), 40, 40, N, { x: 5, y: 5, r: 4, k: 1.12, fov })).toBe(false);
   expect(out[(5 * 40 + 5) * 4]).toBe(0);
 });
+
+// PLAN-CIEL C10: the night's series — star trails, the Moon's way, the ISS's pass
+import { drawIssTrail, issPasses, issSight } from "../src/photo/iss-pass";
+import { LUNAR_DAY, moonLit, moonMoments, nightOf, starArcs, trailsPlan } from "../src/photo/sky-series";
+
+test("the night and the Moon: Paris's dark hours in January, the full Moon of 3 Jan 2026, the lunar day's loop", () => {
+  const n = nightOf(48.86, 2.35, Date.UTC(2026, 0, 10), -16)!;
+  expect(new Date(n.from).toISOString().slice(11, 13)).toBe("17");
+  expect((n.to - n.from) / 3600e3).toBeGreaterThan(11);
+  // (a summer near the pole: no dark night)
+  expect(nightOf(70, 20, Date.UTC(2026, 5, 21), -16)).toBeNull();
+  expect(moonLit(Date.UTC(2026, 0, 3, 10))).toBeGreaterThan(0.99);
+  expect(moonLit(Date.UTC(2026, 0, 18, 19))).toBeLessThan(0.02);
+  const night = moonMoments({ mode: "night", lat: 48.86, lon: 2.35, date: Date.UTC(2026, 0, 3), step: 60, span: 6 });
+  expect(night.length).toBeGreaterThanOrEqual(5);
+  expect(night.length).toBeLessThanOrEqual(7);
+  for (const m of night) expect(m.alt).toBeGreaterThan(1);
+  const loop = moonMoments({ mode: "lunar", lat: 48.86, lon: 2.35, date: Date.UTC(2026, 9, 1), days: 30 });
+  // (each lunar day near the meridian: the azimuths within a few tens of degrees of the south)
+  for (const m of loop) expect(Math.abs(m.az - 180)).toBeLessThan(45);
+  expect(loop[1]!.ms - loop[0]!.ms).toBe(LUNAR_DAY);
+});
+
+test("the star trails' frames: the pole in the field, a comet's tail, each star's arc run on", () => {
+  const p = trailsPlan({
+    lat: 48.86,
+    lon: 2.35,
+    date: Date.UTC(2026, 0, 10),
+    hours: 3,
+    count: 40,
+    toward: "pole",
+    fov: 70,
+    aspect: 16 / 9,
+    template: {} as Preset,
+    comp: -1,
+    comet: true,
+  })!;
+  expect(p.frames.length).toBe(40);
+  expect((p.to - p.from) / 3600e3).toBeCloseTo(3, 3);
+  const pole = projectSky(p.view, 0, 48.86, 1600, 900)!;
+  expect(pole[1]).toBeGreaterThan(0);
+  expect(p.frames[0]!.gain).toBeCloseTo(0.3, 6);
+  expect(p.frames.at(-1)!.gain).toBeCloseTo(1, 6);
+  expect(p.frames.at(-1)!.after).toBeUndefined();
+  // (one star west of the pole: its arc drawn on, downwards; a lamp under the horizon not)
+  const W = 400,
+    H = 225;
+  const px = new Uint8Array(W * H * 4);
+  const view = { az: 0, alt: 25, fov: 60 };
+  const star = projectSky(view, 330, 40, W, H)!;
+  const k = (Math.floor(star[1]) * W + Math.floor(star[0])) * 4;
+  px[k] = px[k + 1] = px[k + 2] = 200;
+  const lamp = projectSky(view, 10, -2, W, H)!;
+  const kl = (Math.floor(lamp[1]) * W + Math.floor(lamp[0])) * 4;
+  px[kl] = px[kl + 1] = px[kl + 2] = 200;
+  const out = new Uint8ClampedArray(W * H * 4);
+  starArcs(view, 48.86, 30 * 60e3)(out, px, W, H);
+  let lit = 0;
+  for (let i = 0; i < out.length; i += 4) if (out[i]! > 100) lit++;
+  // (half an hour: 7.5° of turn — at 40° from the pole some 5°, ~15 px of arc here)
+  expect(lit).toBeGreaterThan(8);
+  expect(out[kl]).toBe(0);
+});
+
+test("the ISS's passes over Paris in mid-October 2026: morning ones, bright, its trail drawn", () => {
+  const passes = issPasses(48.86, 2.35, Date.UTC(2026, 9, 10), 10);
+  expect(passes.length).toBeGreaterThan(2);
+  for (const p of passes) {
+    expect(p.maxAlt).toBeGreaterThan(10);
+    expect(p.seenTo).toBeGreaterThan(p.seenFrom);
+    expect(p.mag).toBeLessThan(1);
+  }
+  const best = passes.reduce((a, b) => (b.mag < a.mag ? b : a));
+  expect(best.mag).toBeLessThan(-2.5);
+  const s = issSight(48.86, 2.35, best.top)!;
+  expect(s.range).toBeGreaterThan(400);
+  expect(s.range).toBeLessThan(1000);
+  const track = [];
+  for (let t = best.seenFrom; t <= best.seenTo; t += 500) track.push(issSight(48.86, 2.35, t)!);
+  const out = new Uint8ClampedArray(320 * 180 * 4);
+  drawIssTrail(out, 320, 180, { az: s.az, alt: s.alt, fov: 100 }, track);
+  let lit = 0;
+  for (let i = 0; i < out.length; i += 4) if (out[i]! > 120) lit++;
+  expect(lit).toBeGreaterThan(100);
+});

@@ -20,7 +20,7 @@ export interface MxRequest {
   start?: number;
   cadence?: number;
   /** under the series: the landscape at dusk, at that hour, the eclipse's central phase's; none (black) */
-  base?: "dusk" | "same" | "central" | "none";
+  base?: "dusk" | "same" | "central" | "middle" | "none";
   /** the dates written beside the Suns: every one, one a month, none */
   dates?: "all" | "monthly" | "none";
   /** the Sun's place in the sky (azimuth, altitude) beside its label, and the place and hour in a corner */
@@ -38,6 +38,22 @@ export interface MxRequest {
   times?: boolean;
   share?: boolean;
   caption?: boolean;
+  /** star trails: hours of the night, frames, where the tripod looks, its vertical field [°], a comet's tail */
+  hours?: number;
+  count?: number;
+  toward?: "pole" | "north" | "east" | "south" | "west";
+  fov?: number;
+  comet?: boolean;
+  /** the Moon's way: over a night (a frame every `step` min, `span` h about its highest), each day at `minutesUtc`, each lunar day; for `days` */
+  mode?: "night" | "daily" | "lunar";
+  step?: number;
+  span?: number;
+  days?: number;
+  /** the Moon's lit share written beside each disc */
+  lit?: boolean;
+  /** the ISS: an interval shooting's dashes (frames of `exposure` s, a second's gap) */
+  dashes?: boolean;
+  exposure?: number;
   width: number;
   height: number;
   spp: number;
@@ -51,6 +67,15 @@ export interface MxEclipse {
   magnitude?: number;
 }
 
+/** An ISS pass the dialog offers: seen from the place. */
+export interface MxPass {
+  top: number;
+  seenFrom: number;
+  seenTo: number;
+  maxAlt: number;
+  mag: number;
+}
+
 /** A series' outcome: its image, the discs' places, those behind the ground, the eclipse it shows. */
 export interface MxResult {
   data: Uint8ClampedArray;
@@ -60,6 +85,9 @@ export interface MxResult {
   marks?: SunMark[];
   hidden?: number[];
   eclipse?: { kind: "solar" | "lunar"; type: string; t: number; saros: number; magnitude: number };
+  /** the star trails' night span [ms UTC]; the ISS pass shown */
+  span?: { from: number; to: number };
+  pass?: MxPass;
 }
 
 export interface MxDialogHost {
@@ -70,6 +98,8 @@ export interface MxDialogHost {
   run(r: MxRequest, progress: (p: { done: number; total: number; label: string }) => void, signal: { stop: boolean }): Promise<MxResult>;
   /** the eclipses seen from a place over the years about a date (the calculator's worker) */
   eclipses?(kind: "solar" | "lunar", lat: number, lon: number, around: number): Promise<MxEclipse[]>;
+  /** the ISS's passes seen from a place over ten days from a date */
+  issPasses?(lat: number, lon: number, from: number): Promise<MxPass[]>;
   /** an image saved (a download) */
   download(blob: Blob, name: string): void;
 }
@@ -96,20 +126,29 @@ const KINDS: { id: MxKind; name: Text; hint: Text; ready: boolean }[] = [
   {
     id: "trails",
     name: { fr: "Filé d'étoiles", en: "Star trails" },
-    hint: { fr: "Les étoiles tournant autour du pôle sur une nuit", en: "The stars turning round the pole over a night" },
-    ready: false,
+    hint: {
+      fr: "Les étoiles tournant autour du pôle pendant des heures d'une nuit noire — chaque étoile prolongée sur son arc jusqu'à la pose suivante",
+      en: "The stars turning round the pole over hours of a dark night — each star run on along its arc to the next frame",
+    },
+    ready: true,
   },
   {
     id: "moon",
     name: { fr: "Trajet de la Lune", en: "The Moon's way" },
-    hint: { fr: "La Lune toutes les heures d'une nuit", en: "The Moon every hour of a night" },
-    ready: false,
+    hint: {
+      fr: "La Lune au fil d'une nuit, à la même heure jour après jour (ses phases), ou chaque jour lunaire (sa boucle : l'analemme lunaire)",
+      en: "The Moon through a night, at the same time day after day (its phases), or each lunar day (its loop: the lunar analemma)",
+    },
+    ready: true,
   },
   {
     id: "iss",
     name: { fr: "Passage de l'ISS", en: "The ISS's pass" },
-    hint: { fr: "La station traversant le ciel du soir", en: "The station crossing the evening sky" },
-    ready: false,
+    hint: {
+      fr: "La station éclairée par le Soleil traversant le ciel de nuit — sa traînée, plus vive à son plus haut, rougissant en entrant dans l'ombre de la Terre",
+      en: "The station lit by the Sun crossing the night sky — its trail, brightest at its highest, reddening into the Earth's shadow",
+    },
+    ready: true,
   },
 ];
 
@@ -160,6 +199,8 @@ export interface LabelOptions {
   hidden?: number[];
   /** the central disc's word (an eclipse's): its totality, its ring, its greatest */
   central?: string;
+  /** the share's word before its figure (the Moon's: lit) */
+  shareWord?: string;
 }
 
 /**
@@ -173,8 +214,15 @@ export function drawLabels(g: CanvasRenderingContext2D, marks: SunMark[], o: Lab
   const day = new Intl.DateTimeFormat(lang, { day: "numeric", month: "short", timeZone: "UTC" });
   const deg = (v: number) => `${v.toLocaleString(lang, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}°`;
   const px = Math.max(11, Math.round(Math.max(W, H) / 150));
+  // (the boxes written so far: a label over another is left out — the loops' crowded turns)
+  const boxes: [number, number, number, number][] = [];
   const write = (text: string, x: number, y: number, align: CanvasTextAlign, size = px, weight = 600) => {
     g.font = `${weight} ${size}px Inter, system-ui, sans-serif`;
+    const w = g.measureText(text).width;
+    const x0 = align === "right" ? x - w : align === "center" ? x - w / 2 : x;
+    const box: [number, number, number, number] = [x0 - 2, y - size * 0.6, x0 + w + 2, y + size * 0.6];
+    if (boxes.some((b) => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1])) return;
+    boxes.push(box);
     g.textAlign = align;
     g.textBaseline = "middle";
     g.lineWidth = Math.max(2, size / 4);
@@ -196,7 +244,11 @@ export function drawLabels(g: CanvasRenderingContext2D, marks: SunMark[], o: Lab
       if (o.date === "day") parts.push(day.format(m.ms));
       if (o.date === "time") parts.push(`${new Date(m.ms).toISOString().slice(11, 16)} UTC`);
       if (o.share && m.hidden !== undefined)
-        parts.push(m.central ? (o.central ?? tr({ fr: "maximum", en: "greatest" })) : `${Math.round(m.hidden * 100)} %`);
+        parts.push(
+          m.central
+            ? (o.central ?? tr({ fr: "maximum", en: "greatest" }))
+            : `${o.shareWord ? `${o.shareWord} ` : ""}${Math.round(m.hidden * 100)} %`,
+        );
       if (o.position) parts.push(tr({ fr: `az ${deg(m.az)} · h ${deg(m.alt)}`, en: `az ${deg(m.az)} · alt ${deg(m.alt)}` }));
       if (!parts.length) continue;
       const text = parts.join("  ·  ");
@@ -280,11 +332,12 @@ export class MultiExposureDialog {
     const lon = num({ fr: "Longitude (°)", en: "Longitude (°)" }, Math.round(place.lon * 100) / 100, "0.01", -180, 180, "mx-lon");
     const size = h("select", { "data-testid": "mx-size" }) as HTMLSelectElement;
     SIZES.forEach((s, i) => size.append(h("option", { value: String(i) }, s.label)));
-    const sizeFor = (k: MxKind) => (size.value = k === "eclipse" ? "1" : "0");
+    const sizeFor = (k: MxKind) => (size.value = k === "analemma" ? "0" : "1");
     sizeFor(kind);
     const spp = h("select", {}) as HTMLSelectElement;
     for (const v of [2, 4, 8]) spp.append(h("option", { value: String(v) }, `${v} spp`));
-    spp.value = kind === "eclipse" ? "4" : "2";
+    const sppFor = (k: MxKind) => (spp.value = k === "eclipse" || k === "moon" || k === "iss" ? "4" : "2");
+    sppFor(kind);
     // the analemma's
     const timeIn = h("input", {
       type: "time",
@@ -370,6 +423,137 @@ export class MultiExposureDialog {
     const share = check({ fr: "Part cachée", en: "Share hidden" }, !!run.share, "mx-share");
     const ePos = check({ fr: "Position", en: "Position" }, !!run.position, "mx-ecl-position");
     const caption = check({ fr: "Légende", en: "Caption" }, run.caption ?? true, "mx-caption");
+    // the night's: the star trails', the Moon's, the station's
+    const nightDate = h("input", {
+      type: "date",
+      value: new Date(run.date ?? this.host.now()).toISOString().slice(0, 10),
+      "data-testid": "mx-night",
+    }) as HTMLInputElement;
+    const hours = num({ fr: "Durée (h)", en: "Length (h)" }, run.hours ?? 3, "0.5", 0.5, 10, "mx-hours");
+    const count = select(
+      [
+        ["40", { fr: "40 poses (rapide)", en: "40 frames (quick)" }],
+        ["80", { fr: "80 poses", en: "80 frames" }],
+        ["160", { fr: "160 poses (fin)", en: "160 frames (fine)" }],
+      ],
+      String(run.count ?? 80),
+      "mx-count",
+    );
+    const toward = select(
+      [
+        ["pole", { fr: "Le pôle céleste", en: "The celestial pole" }],
+        ["north", { fr: "Le nord", en: "The north" }],
+        ["east", { fr: "L'est", en: "The east" }],
+        ["south", { fr: "Le sud", en: "The south" }],
+        ["west", { fr: "L'ouest", en: "The west" }],
+      ],
+      run.toward,
+      "mx-toward",
+    );
+    const fovSel = select(
+      [
+        ["50", { fr: "50° (normal)", en: "50° (normal)" }],
+        ["70", { fr: "70° (grand-angle)", en: "70° (wide)" }],
+        ["90", { fr: "90°", en: "90°" }],
+        ["110", { fr: "110° (très grand-angle)", en: "110° (ultra-wide)" }],
+      ],
+      String(run.fov ?? 70),
+      "mx-fov",
+    );
+    const comet = check({ fr: "Queue de comète", en: "Comet tail" }, !!run.comet, "mx-comet");
+    const mode = select(
+      [
+        ["night", { fr: "Au fil d'une nuit", en: "Through a night" }],
+        ["daily", { fr: "Chaque jour à la même heure", en: "Each day at the same time" }],
+        ["lunar", { fr: "Chaque jour lunaire (sa boucle)", en: "Each lunar day (its loop)" }],
+      ],
+      run.mode,
+      "mx-moon-mode",
+    );
+    const step = select(
+      [
+        ["15", { fr: "toutes les 15 min", en: "every 15 min" }],
+        ["30", { fr: "toutes les 30 min", en: "every 30 min" }],
+        ["60", { fr: "toutes les heures", en: "every hour" }],
+        ["120", { fr: "toutes les 2 h", en: "every 2 h" }],
+      ],
+      String(run.step ?? 60),
+      "mx-step",
+    );
+    const span = num({ fr: "Autour du plus haut (h)", en: "About its highest (h)" }, run.span ?? 6, "1", 2, 12, "mx-span");
+    const days = num({ fr: "Jours", en: "Days" }, run.days ?? 30, "1", 3, 60, "mx-days");
+    const mBase = select(
+      [
+        ["middle", { fr: "Le paysage sous la Lune", en: "The landscape under the Moon" }],
+        ["dusk", { fr: "Le paysage au crépuscule", en: "The landscape at dusk" }],
+        ["none", { fr: "Aucun (fond noir)", en: "None (black)" }],
+      ],
+      kind === "moon" ? run.base : undefined,
+      "mx-moon-base",
+    );
+    const litChk = check({ fr: "Part éclairée", en: "Share lit" }, run.lit ?? true, "mx-lit");
+    const issList = h("select", { "data-testid": "mx-iss-list" }) as HTMLSelectElement;
+    const issNote = el("p", "mx-hint", "");
+    const dashes = check({ fr: "En pointillés (poses de", en: "Dashed (frames of" }, !!run.dashes, "mx-dashes");
+    const expSel = select(
+      [
+        ["10", { fr: "10 s)", en: "10 s)" }],
+        ["15", { fr: "15 s)", en: "15 s)" }],
+        ["20", { fr: "20 s)", en: "20 s)" }],
+        ["30", { fr: "30 s)", en: "30 s)" }],
+      ],
+      String(run.exposure ?? 15),
+      "mx-exposure",
+    );
+    let passesFor = "";
+    const fillPasses = async () => {
+      const key = `${lat.get()} ${lon.get()} ${nightDate.value}`;
+      if (key === passesFor || !this.host.issPasses) return;
+      passesFor = key;
+      issList.replaceChildren(h("option", {}, tr({ fr: "Recherche…", en: "Searching…" })));
+      issList.disabled = true;
+      try {
+        const list = await this.host.issPasses(lat.get(), lon.get(), Date.parse(`${nightDate.value}T00:00:00Z`));
+        if (key !== passesFor) return;
+        const fmt = new Intl.DateTimeFormat(tr({ fr: "fr-FR", en: "en-GB" }), {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+          timeZone: "UTC",
+        });
+        issList.replaceChildren(
+          ...list.map((p) =>
+            h(
+              "option",
+              { value: String(p.top) },
+              `${fmt.format(p.top)} ${new Date(p.seenFrom).toISOString().slice(11, 16)}–${new Date(p.seenTo).toISOString().slice(11, 16)} UTC · ${Math.round(p.maxAlt)}° · mag ${p.mag.toFixed(1)}`,
+            ),
+          ),
+        );
+        // (the one asked, else the brightest)
+        const pick =
+          run.date !== undefined
+            ? list.reduce((a, b) => (Math.abs(b.top - run.date!) < Math.abs(a.top - run.date!) ? b : a), list[0]!)
+            : list.reduce((a, b) => (b.mag < a.mag ? b : a), list[0]!);
+        if (pick) issList.value = String(pick.top);
+        issNote.textContent = list.length
+          ? ""
+          : tr({ fr: "Aucun passage visible d'ici ces dix jours-là.", en: "No pass seen from here over those ten days." });
+      } catch (e) {
+        issList.replaceChildren(h("option", {}, `⚠ ${String(e)}`));
+      } finally {
+        issList.disabled = false;
+      }
+    };
+    nightDate.addEventListener("change", () => kind === "iss" && void fillPasses());
+    for (const i of [lat.input, lon.input]) i.addEventListener("change", () => kind === "iss" && void fillPasses());
+    // (a night's base: the landscape under the Moon; the days' — some in daylight —: the black)
+    const syncMoonBase = () => run.base === undefined && (mBase.value = mode.value === "night" ? "middle" : "none");
+    syncMoonBase();
+    mode.addEventListener("change", () => {
+      syncMoonBase();
+      drawForm();
+    });
     let found: MxEclipse[] = [];
     let listFor = "";
     const fillList = async () => {
@@ -474,6 +658,61 @@ export class MultiExposureDialog {
           h("div", { class: "mx-grid" }, field({ fr: "Taille", en: "Size" }, size), field({ fr: "Qualité", en: "Quality" }, spp)),
         );
         void fillList();
+      } else if (kind === "trails")
+        form.append(
+          h("div", { class: "mx-grid" }, lat.el, lon.el),
+          h("div", { class: "mx-grid" }, field({ fr: "La nuit du", en: "The night of" }, nightDate), hours.el),
+          h(
+            "div",
+            { class: "mx-grid" },
+            field({ fr: "Poses", en: "Frames" }, count),
+            field({ fr: "Vers", en: "Toward" }, toward),
+            field({ fr: "Champ", en: "Field" }, fovSel),
+          ),
+          h(
+            "div",
+            { class: "mx-grid" },
+            field({ fr: "Ciel", en: "Sky" }, sky),
+            field({ fr: "Effet", en: "Effect" }, h("div", { class: "mx-checks" }, comet.el, caption.el)),
+          ),
+          h("div", { class: "mx-grid" }, field({ fr: "Taille", en: "Size" }, size), field({ fr: "Qualité", en: "Quality" }, spp)),
+        );
+      else if (kind === "moon") {
+        const m = mode.value;
+        form.append(
+          h("div", { class: "mx-grid" }, lat.el, lon.el),
+          h(
+            "div",
+            { class: "mx-grid mx-grid-wide" },
+            field({ fr: "Date", en: "Date" }, nightDate),
+            field({ fr: "Suivre", en: "Follow" }, mode),
+          ),
+          m === "night"
+            ? h("div", { class: "mx-grid" }, field({ fr: "Cadence", en: "Cadence" }, step), span.el)
+            : m === "daily"
+              ? h("div", { class: "mx-grid" }, field({ fr: "Heure (UTC)", en: "Time (UTC)" }, timeIn), days.el)
+              : h("div", { class: "mx-grid" }, days.el),
+          h(
+            "div",
+            { class: "mx-grid" },
+            field({ fr: "Cadrage", en: "Framing" }, framing),
+            field({ fr: "Fond", en: "Base" }, mBase),
+            field({ fr: "Ciel", en: "Sky" }, sky),
+          ),
+          field({ fr: "Étiquettes", en: "Labels" }, h("div", { class: "mx-checks" }, times.el, litChk.el, ePos.el, caption.el)),
+          h("div", { class: "mx-grid" }, field({ fr: "Taille", en: "Size" }, size), field({ fr: "Qualité", en: "Quality" }, spp)),
+        );
+      } else if (kind === "iss") {
+        form.append(
+          h("div", { class: "mx-grid" }, lat.el, lon.el, field({ fr: "À partir du", en: "From" }, nightDate)),
+          field({ fr: "Passage (dix jours)", en: "Pass (ten days)" }, issList),
+          issNote,
+          h("div", { class: "mx-grid" }, field({ fr: "Cadrage", en: "Framing" }, framing), field({ fr: "Ciel", en: "Sky" }, sky)),
+          field({ fr: "Traînée", en: "Trail" }, h("div", { class: "mx-checks" }, dashes.el, expSel)),
+          field({ fr: "Étiquettes", en: "Labels" }, h("div", { class: "mx-checks" }, times.el, ePos.el, caption.el)),
+          h("div", { class: "mx-grid" }, field({ fr: "Taille", en: "Size" }, size), field({ fr: "Qualité", en: "Quality" }, spp)),
+        );
+        void fillPasses();
       }
     };
     for (const k of KINDS) {
@@ -483,7 +722,7 @@ export class MultiExposureDialog {
         kind = k.id;
         for (const x of cards.querySelectorAll<HTMLElement>(".mx-kind")) x.classList.toggle("on", x === b);
         sizeFor(kind);
-        spp.value = kind === "eclipse" ? "4" : "2";
+        sppFor(kind);
         drawForm();
       });
       if (k.id === kind) b.classList.add("on");
@@ -511,6 +750,48 @@ export class MultiExposureDialog {
           ...o.run,
         };
       const [hh, mm] = timeIn.value.split(":").map(Number);
+      const night = Date.parse(`${nightDate.value}T00:00:00Z`);
+      const labels = { times: times.input.checked, position: ePos.input.checked, caption: caption.input.checked };
+      if (kind === "trails")
+        return {
+          ...common,
+          date: night,
+          hours: hours.get(),
+          count: Number(count.value),
+          toward: toward.value as MxRequest["toward"],
+          fov: Number(fovSel.value),
+          comet: comet.input.checked,
+          sky: sky.value as MxRequest["sky"],
+          caption: caption.input.checked,
+          ...o.run,
+        };
+      if (kind === "moon")
+        return {
+          ...common,
+          mode: mode.value as MxRequest["mode"],
+          date: night,
+          step: Number(step.value),
+          span: span.get(),
+          days: days.get(),
+          minutesUtc: (hh ?? 21) * 60 + (mm ?? 0),
+          framing: framing.value as MxRequest["framing"],
+          base: mBase.value as MxRequest["base"],
+          sky: sky.value as MxRequest["sky"],
+          lit: litChk.input.checked,
+          ...labels,
+          ...o.run,
+        };
+      if (kind === "iss")
+        return {
+          ...common,
+          date: issList.value && Number.isFinite(Number(issList.value)) ? Number(issList.value) : (run.date ?? night),
+          dashes: dashes.input.checked,
+          exposure: Number(expSel.value),
+          framing: framing.value as MxRequest["framing"],
+          sky: sky.value as MxRequest["sky"],
+          ...labels,
+          ...o.run,
+        };
       return {
         ...common,
         minutesUtc: (hh ?? 12) * 60 + (mm ?? 0),
@@ -609,8 +890,68 @@ export class MultiExposureDialog {
   }
 }
 
-/** A request's labels: an analemma's dates beside its Suns; an eclipse's times along its path, its caption. */
-export function labelsOf(req: MxRequest, r: Pick<MxResult, "hidden" | "eclipse">): LabelOptions {
+/** A request's labels: an analemma's dates beside its Suns; an eclipse's times along its path, its caption;
+ *  the star trails' caption; the Moon's times or days and lit shares; the station's times at its ends and highest. */
+export function labelsOf(req: MxRequest, r: Pick<MxResult, "hidden" | "eclipse" | "span" | "pass">): LabelOptions {
+  const long = new Intl.DateTimeFormat(tr({ fr: "fr-FR", en: "en-GB" }), {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  const hm = (ms: number) => new Date(ms).toISOString().slice(11, 16);
+  if (req.kind === "trails") {
+    const sp = r.span;
+    return {
+      which: "none",
+      date: null,
+      side: "path",
+      caption:
+        req.caption === false || !sp
+          ? undefined
+          : tr({
+              fr: `Filé d'étoiles  ·  nuit du ${long.format(req.date ?? sp.from)}  ·  ${hm(sp.from)}–${hm(sp.to)} UTC  ·  ${placeText(req.lat, req.lon)}`,
+              en: `Star trails  ·  the night of ${long.format(req.date ?? sp.from)}  ·  ${hm(sp.from)}–${hm(sp.to)} UTC  ·  ${placeText(req.lat, req.lon)}`,
+            }),
+    };
+  }
+  if (req.kind === "moon") {
+    const what =
+      req.mode === "lunar"
+        ? tr({ fr: "L'analemme lunaire", en: "The lunar analemma" })
+        : req.mode === "daily"
+          ? tr({
+              fr: `La Lune chaque jour à ${hm((req.minutesUtc ?? 1260) * 60e3)} UTC`,
+              en: `The Moon each day at ${hm((req.minutesUtc ?? 1260) * 60e3)} UTC`,
+            })
+          : tr({ fr: "La Lune au fil de la nuit", en: "The Moon through the night" });
+    return {
+      which: "all",
+      date: req.times === false ? null : req.mode === "night" ? "time" : "day",
+      share: req.lit !== false,
+      shareWord: "☾",
+      position: !!req.position,
+      side: "path",
+      hidden: r.hidden,
+      caption: req.caption === false ? undefined : `${what}  ·  ${long.format(req.date ?? 0)}  ·  ${placeText(req.lat, req.lon)}`,
+    };
+  }
+  if (req.kind === "iss") {
+    const p = r.pass;
+    return {
+      which: "all",
+      date: req.times === false ? null : "time",
+      position: !!req.position,
+      side: "path",
+      caption:
+        req.caption === false || !p
+          ? undefined
+          : tr({
+              fr: `Passage de l'ISS  ·  ${long.format(p.top)}  ·  ${Math.round(p.maxAlt)}° au plus haut  ·  magnitude ${p.mag.toFixed(1)}  ·  ${placeText(req.lat, req.lon)}`,
+              en: `ISS pass  ·  ${long.format(p.top)}  ·  ${Math.round(p.maxAlt)}° at its highest  ·  magnitude ${p.mag.toFixed(1)}  ·  ${placeText(req.lat, req.lon)}`,
+            }),
+    };
+  }
   if (req.kind === "eclipse") {
     const e = r.eclipse;
     const fmt = new Intl.DateTimeFormat(tr({ fr: "fr-FR", en: "en-GB" }), {

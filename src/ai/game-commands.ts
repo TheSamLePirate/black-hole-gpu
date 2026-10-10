@@ -338,6 +338,42 @@ export const GAME_COMMANDS: GameCommand[] = [
       en: "An eclipse as a multiple exposure: /eclipsephoto solar 2026-08-12 — lat=42.34 lon=-3.7 before=5 after=5 framing=sky",
     },
   },
+  {
+    name: "startrails",
+    tool: "multiple_exposure",
+    fixed: { kind: "trails" },
+    args: [{ param: "date" }, { param: "hours" }, { param: "toward" }],
+    desc: {
+      fr: "Un filé d'étoiles : /startrails 2026-10-10 4 pole — count=160 comet=true fov=90",
+      en: "Star trails: /startrails 2026-10-10 4 pole — count=160 comet=true fov=90",
+    },
+  },
+  {
+    name: "moonpath",
+    tool: "multiple_exposure",
+    fixed: { kind: "moon" },
+    args: [{ param: "mode" }, { param: "date" }],
+    desc: {
+      fr: "Le trajet de la Lune : /moonpath night 2026-10-24 — aussi daily (time=21:00 days=14), lunar (l'analemme lunaire)",
+      en: "The Moon's way: /moonpath night 2026-10-24 — also daily (time=21:00 days=14), lunar (the lunar analemma)",
+    },
+  },
+  {
+    name: "isspasses",
+    tool: "iss_passes",
+    args: [{ param: "site", from: "site", rest: true }],
+    desc: { fr: "Les passages visibles de l'ISS d'ici (7 jours)", en: "The ISS's visible passes from here (7 days)" },
+  },
+  {
+    name: "issphoto",
+    tool: "multiple_exposure",
+    fixed: { kind: "iss" },
+    args: [{ param: "date" }],
+    desc: {
+      fr: "La traînée de l'ISS sur son passage le plus proche : /issphoto 2026-10-18T05:20Z — dashes=true",
+      en: "The ISS's trail on its nearest pass: /issphoto 2026-10-18T05:20Z — dashes=true",
+    },
+  },
   { name: "report", tool: "get_flight_report", desc: { fr: "Le dernier rapport de vol", en: "The last flight report" } },
   {
     name: "tool",

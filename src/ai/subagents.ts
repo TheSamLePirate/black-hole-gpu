@@ -16,6 +16,7 @@ export const READ_TOOLS = new Set([
   "weather_at",
   "find_eclipses",
   "eclipse_local",
+  "iss_passes",
   "find_settings",
   "list_saves_and_scenes",
   "get_log",

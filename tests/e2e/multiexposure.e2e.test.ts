@@ -89,4 +89,34 @@ describe.skipIf(!E2E)("the multiple exposure", () => {
     expect(await app.js<string>(`document.querySelector(".mx-status").textContent`)).toMatch(/poses fusionnées/);
     await app.press("Escape");
   }, 400_000);
+
+  test("the night's series from the dialog: an ISS pass (its list, its trail) and the lunar analemma (its loop, its labels)", async () => {
+    await app.js(
+      `(__bh.game.setDate("2026-10-10T12:00:00Z"), void __bh.mx.dialog.open({ kind: "iss", fill: { lat: 48.86, lon: 2.35 } }), true)`,
+    );
+    await app.waitFor(`document.querySelector("[data-testid=mx-iss-list]")?.options.length > 1`, 60_000);
+    // (the brightest offered first)
+    expect(await app.js<string>(`document.querySelector("[data-testid=mx-iss-list]").selectedOptions[0].textContent`)).toMatch(
+      /mag −?-?\d/,
+    );
+    await app.click("[data-testid=mx-start]");
+    await app.waitFor(`!!document.querySelector("[data-testid=mx-image]")`, 120_000);
+    const trail = await app.js<number>(`(() => {
+      const c = document.querySelector("[data-testid=mx-image]"), d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+      let n = 0;
+      for (let k = 0; k < d.length; k += 4) if (d[k] > 150 && d[k + 1] > 140 && d[k + 2] > 120) n++;
+      return n;
+    })()`);
+    // (a line of light across the frame, its labels)
+    expect(trail).toBeGreaterThan(1500);
+    await app.press("Escape");
+    await app.js(
+      `(void __bh.mx.dialog.open({ kind: "moon", fill: { lat: 48.86, lon: 2.35, date: Date.UTC(2026, 9, 1), mode: "lunar", framing: "sky", days: 20 } }), true)`,
+    );
+    expect(await app.js<string>(`document.querySelector("[data-testid=mx-moon-base]").value`)).toBe("none");
+    await app.click("[data-testid=mx-start]");
+    await app.waitFor(`!!document.querySelector("[data-testid=mx-image]")`, 300_000);
+    expect(await app.js<string>(`document.querySelector(".mx-status").textContent`)).toMatch(/poses fusionnées/);
+    await app.press("Escape");
+  }, 500_000);
 });

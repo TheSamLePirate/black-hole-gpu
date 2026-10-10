@@ -32,6 +32,8 @@ import { RealWeather } from "./realweather";
 import { EclipsePage } from "./ui/eclipses";
 import { type MxHost, runExposures } from "./photo/multiexposure";
 import { analemmaMarks, analemmaPlan, eclipsePlan, type EclipseSeqOptions, MX_EV, placeFrames, skyMarks } from "./photo/plans";
+import { type MoonPathOptions, moonPathPlan, type TrailsOptions, trailsPlan } from "./photo/sky-series";
+import { drawIssTrail, issPasses, issPhotoPlan } from "./photo/iss-pass";
 import { MultiExposureDialog } from "./ui/multiexposure";
 import { bestPlace } from "./eclipse/details";
 import type { EclipseEvent } from "./eclipse/search";
@@ -2830,7 +2832,7 @@ async function main() {
       // (the meter's: come to its reading — eased, a totality's twilight ten stops under the day the game was
       // in takes seconds; frames drawn meanwhile: a still view draws none, and the meter reads only what is drawn)
       if (settings.autoExposure)
-        for (let i = 0, calm = 0; i < 200 && (i < 10 || calm < 5); i++) {
+        for (let i = 0, calm = 0; i < 200 && (i < (first ? 10 : 2) || calm < (first ? 5 : 2)); i++) {
           touch();
           await new Promise((r) => setTimeout(r, 100));
           calm = renderer.meterSettled ? calm + 1 : 0;
@@ -2962,6 +2964,110 @@ async function main() {
       marks,
     }));
   };
+  /** The star trails made (PLAN-CIEL C10): hours of a night's frames from the tripod. */
+  const runTrails = (
+    o: Partial<Omit<TrailsOptions, "template" | "aspect">> & { width?: number; height?: number; spp?: number; sky?: "game" | "clear" },
+    progress: (p: { done: number; total: number; label: string }) => void = () => {},
+    signal = { stop: false },
+  ) => {
+    const p = camera.weatherPlace();
+    const width = o.width ?? 1920,
+      height = o.height ?? 1080;
+    const plan = trailsPlan({
+      lat: o.lat ?? (p?.body === "earth" ? p.lat : 48.86),
+      lon: o.lon ?? (p?.body === "earth" ? p.lon : 2.35),
+      date: o.date ?? utcOf(sim.time),
+      hours: o.hours ?? 3,
+      count: o.count ?? 240,
+      toward: o.toward ?? "pole",
+      fov: o.fov ?? 70,
+      aspect: width / height,
+      template: mxTemplate(o.sky ?? "clear"),
+      comp: o.comp ?? -1.5,
+      comet: o.comet ?? false,
+    });
+    if (!plan) return Promise.reject(new Error("No dark night there then (the Sun never goes 12° under the horizon)"));
+    return runExposures(mxHost, plan.frames, { width, height, spp: o.spp ?? 2 }, progress, signal).then((r) => ({
+      ...r,
+      view: plan.view,
+      span: { from: plan.from, to: plan.to },
+    }));
+  };
+  /** The Moon's way made (PLAN-CIEL C10): over a night, at the same time each day, each lunar day. */
+  const runMoonPath = (
+    o: Partial<Omit<MoonPathOptions, "template" | "aspect">> & { width?: number; height?: number; spp?: number; sky?: "game" | "clear" },
+    progress: (p: { done: number; total: number; label: string }) => void = () => {},
+    signal = { stop: false },
+  ) => {
+    const p = camera.weatherPlace();
+    const width = o.width ?? 1920,
+      height = o.height ?? 1080;
+    const plan = moonPathPlan({
+      mode: o.mode ?? "night",
+      lat: o.lat ?? (p?.body === "earth" ? p.lat : 48.86),
+      lon: o.lon ?? (p?.body === "earth" ? p.lon : 2.35),
+      date: o.date ?? utcOf(sim.time),
+      step: o.step,
+      span: o.span,
+      days: o.days,
+      minutesUtc: o.minutesUtc,
+      framing: o.framing ?? "landscape",
+      base: o.base ?? ((o.mode ?? "night") === "night" ? "middle" : "none"),
+      aspect: width / height,
+      template: mxTemplate(o.sky ?? "clear"),
+      comp: o.comp ?? 0,
+    });
+    if (!plan) return Promise.reject(new Error("The Moon is not up then"));
+    const marks = skyMarks(plan.moments, plan.view, width, height).map(({ of, ...m }) => ({ ...m, hidden: of.lit }));
+    return runExposures(mxHost, placeFrames(plan.frames, marks), { width, height, spp: o.spp ?? 4, baseSpp: 32 }, progress, signal).then(
+      (r) => ({ ...r, view: plan.view, marks }),
+    );
+  };
+  /** The station's passes seen from a place over days (PLAN-CIEL C10). */
+  const issPassesHere = (lat: number, lon: number, from: number, days = 10) => issPasses(lat, lon, from, days);
+  /** An ISS pass photographed: the landscape at its middle, its trail laid over it. */
+  const runIss = async (
+    o: {
+      lat?: number;
+      lon?: number;
+      date?: number;
+      framing?: "landscape" | "sky";
+      dashes?: boolean;
+      exposure?: number;
+      width?: number;
+      height?: number;
+      spp?: number;
+      sky?: "game" | "clear";
+    },
+    progress: (p: { done: number; total: number; label: string }) => void = () => {},
+    signal = { stop: false },
+  ) => {
+    const p = camera.weatherPlace();
+    const width = o.width ?? 1920,
+      height = o.height ?? 1080;
+    const lat = o.lat ?? (p?.body === "earth" ? p.lat : 48.86),
+      lon = o.lon ?? (p?.body === "earth" ? p.lon : 2.35);
+    const at = o.date ?? utcOf(sim.time);
+    // (the pass nearest the date asked: those of the day before to ten days on)
+    const passes = issPasses(lat, lon, at - 86400e3, 11);
+    if (!passes.length) throw new Error("No ISS pass seen from there in those days");
+    const pass = passes.reduce((a, b) => (Math.abs(b.top - at) < Math.abs(a.top - at) ? b : a));
+    const plan = issPhotoPlan({
+      lat,
+      lon,
+      pass,
+      framing: o.framing ?? "landscape",
+      aspect: width / height,
+      template: mxTemplate(o.sky ?? "clear"),
+      comp: -2,
+    });
+    const r = await runExposures(mxHost, plan.frames, { width, height, spp: o.spp ?? 4, baseSpp: 32 }, progress, signal);
+    drawIssTrail(r.data, width, height, plan.view, plan.track, { dashes: o.dashes, exposure: o.exposure });
+    // (its ends and its highest, for the labels)
+    const pick = [plan.track[0]!, plan.track.reduce((a, b) => (b.alt > a.alt ? b : a)), plan.track.at(-1)!];
+    const marks = skyMarks(pick, plan.view, width, height).map(({ of: _, ...m }) => ({ ...m, r: 3 }));
+    return { ...r, view: plan.view, marks, pass };
+  };
   const mxDialog = new MultiExposureDialog({
     place: () => {
       const p = camera.weatherPlace();
@@ -2969,7 +3075,8 @@ async function main() {
     },
     now: () => utcOf(sim.time),
     run: (r, progress, signal) => {
-      if (r.kind === "analemma") return runAnalemma({ ...r, base: r.base === "central" ? "dusk" : r.base }, progress, signal);
+      if (r.kind === "analemma")
+        return runAnalemma({ ...r, base: r.base === "central" || r.base === "middle" ? "dusk" : r.base }, progress, signal);
       if (r.kind === "eclipse")
         return runEclipse(
           {
@@ -2980,7 +3087,64 @@ async function main() {
             before: r.before,
             after: r.after,
             framing: r.framing,
-            base: r.base === "same" ? "dusk" : r.base,
+            base: r.base === "same" ? "dusk" : r.base === "middle" ? "central" : r.base,
+            sky: r.sky,
+            width: r.width,
+            height: r.height,
+            spp: r.spp,
+          },
+          progress,
+          signal,
+        );
+      if (r.kind === "trails")
+        return runTrails(
+          {
+            lat: r.lat,
+            lon: r.lon,
+            date: r.date,
+            hours: r.hours,
+            count: r.count,
+            toward: r.toward,
+            fov: r.fov,
+            comet: r.comet,
+            sky: r.sky,
+            width: r.width,
+            height: r.height,
+            spp: r.spp,
+          },
+          progress,
+          signal,
+        );
+      if (r.kind === "moon")
+        return runMoonPath(
+          {
+            mode: r.mode,
+            lat: r.lat,
+            lon: r.lon,
+            date: r.date,
+            step: r.step,
+            span: r.span,
+            days: r.days,
+            minutesUtc: r.minutesUtc,
+            framing: r.framing,
+            base: r.base === "middle" || r.base === "dusk" || r.base === "none" ? r.base : "middle",
+            sky: r.sky,
+            width: r.width,
+            height: r.height,
+            spp: r.spp,
+          },
+          progress,
+          signal,
+        );
+      if (r.kind === "iss")
+        return runIss(
+          {
+            lat: r.lat,
+            lon: r.lon,
+            date: r.date,
+            framing: r.framing,
+            dashes: r.dashes,
+            exposure: r.exposure,
             sky: r.sky,
             width: r.width,
             height: r.height,
@@ -2991,6 +3155,7 @@ async function main() {
         );
       return Promise.reject(new Error(`${r.kind}: not yet`));
     },
+    issPasses: async (lat, lon, from) => issPasses(lat, lon, from, 10),
     eclipses: async (kind, lat, lon, around) => {
       const YEAR = 365.25 * 86400e3;
       const r = (await plan({
@@ -3128,6 +3293,7 @@ async function main() {
     dayClouds: () => renderer.dayCloudsOf,
     utcNow: () => utcOf(sim.time),
     multiExposure: (r) => mxDialog.open({ kind: r.kind, run: r }),
+    issPasses: (lat, lon, from, days) => issPasses(lat, lon, from, days),
     seeEclipse: async (kind, t, place) => {
       const r = await plan<{ events: EclipseEvent[] } | { error: string }>({
         kind: "eclipses",
@@ -3328,7 +3494,7 @@ async function main() {
     music,
     tars: { agent: tarsAgent, memory: tarsMemory, tools: () => tarsTools, spent: () => openRouter.spent },
     skyLoading,
-    mx: { runAnalemma, runEclipse, planEclipse, host: mxHost, dialog: mxDialog },
+    mx: { runAnalemma, runEclipse, runTrails, runMoonPath, runIss, issPasses: issPassesHere, planEclipse, host: mxHost, dialog: mxDialog },
     touch,
     resize,
     refreshGui,
