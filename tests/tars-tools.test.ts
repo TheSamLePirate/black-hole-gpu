@@ -411,3 +411,18 @@ test("an eclipse at the camera's place for TARS (PLAN-CIEL C11): its phase in th
   const T = new Triggers({ get: () => null, set: () => true, clear: () => {} });
   expect(T.match({ kind: "eclipse", to: "solar_total" }).map((r) => r.id)).toEqual(["reflex-eclipse"]);
 });
+
+test("his voice and ear in the settings, for TARS too (set_settings): checked against their choices, found by their words", async () => {
+  const { checkSetting, findSettings } = await import("../src/ai/settings-tools");
+  const { defaultSettings } = await import("../src/settings");
+  const s = defaultSettings();
+  expect(checkSetting("tarsVoiceEngine", "deepgram", s)).toEqual({ ok: true, value: "deepgram" });
+  expect(checkSetting("tarsVoiceFr", "aura-2-agathe-fr", s)).toEqual({ ok: true, value: "aura-2-agathe-fr" });
+  expect(checkSetting("tarsVoiceEn", "aura-2-hector-fr", s).ok).toBe(false);
+  expect(checkSetting("tarsVoiceEffect", "radio", s)).toEqual({ ok: true, value: "radio" });
+  expect(checkSetting("tarsEarModel", "nova-2", s)).toEqual({ ok: true, value: "nova-2" });
+  expect(checkSetting("tarsEarLang", "multi", s)).toEqual({ ok: true, value: "multi" });
+  expect(checkSetting("tarsTalkMode", "toggle", s)).toEqual({ ok: true, value: "toggle" });
+  expect(checkSetting("radioVoiceEngine", "system", s)).toEqual({ ok: true, value: "system" });
+  expect(findSettings("deepgram voice", s).some((r) => r.key === "tarsVoiceFr" || r.key === "tarsVoiceEngine")).toBe(true);
+});

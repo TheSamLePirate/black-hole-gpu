@@ -141,6 +141,16 @@ export class SettingsPanel {
   }
 
   // ---------------------------------------------------------------------------------- public
+  /** A value set from outside the panel's own controls (TARS's settings tab): its history, its keeping, its effects. */
+  setValue(key: Key, value: unknown) {
+    this.set(key, value);
+  }
+
+  /** The controls drawn again (a choice's options changed: the system's voices, listed late). */
+  redraw() {
+    this.renderBody();
+  }
+
   /** Re-reads every visible control from `settings` (after camera moves, shortcuts, …). */
   refresh() {
     this.updateSceneCard();

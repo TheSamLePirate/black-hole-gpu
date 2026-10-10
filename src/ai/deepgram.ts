@@ -85,20 +85,30 @@ export interface EarTarget {
 
 let relay: boolean | null = null;
 
-/** The way in, if any: the key pasted, else the relay when the server has one (asked once). */
-export async function earTarget(lang: "fr" | "en"): Promise<EarTarget | null> {
+/** the words it is told to expect (Deepgram's key terms: his name, the ship's, the places of the film) */
+export const KEY_TERMS = ["TARS", "Cooper", "Gargantua", "Miller", "Endurance", "Ranger", "Kerr"];
+
+/** The way in, if any: the key pasted, else the relay when the server has one (asked once) — for a model and
+ *  a language (the game's: "fr", "en"; "multi": both mixed, Nova-3). */
+export async function earTarget(o: {
+  lang: "fr" | "en";
+  model?: "nova-3" | "nova-2";
+  language?: "game" | "fr" | "en" | "multi";
+}): Promise<EarTarget | null> {
+  const model = o.model ?? "nova-3";
+  const language = !o.language || o.language === "game" ? o.lang : o.language === "multi" && model !== "nova-3" ? o.lang : o.language;
   const q = new URLSearchParams({
-    model: "nova-3",
-    language: lang,
+    model,
+    language,
     encoding: "linear16",
     sample_rate: "16000",
     channels: "1",
     interim_results: "true",
     smart_format: "true",
     endpointing: "300",
-    // (his name, which it heard as "Tar")
-    keyterm: "TARS",
-  }).toString();
+  });
+  // (his name, which it heard as "Tar"; the key terms are Nova-3's)
+  if (model === "nova-3") for (const k of KEY_TERMS) q.append("keyterm", k);
   const key = deepgramKey.get();
   if (key) return { url: `wss://api.deepgram.com/v1/listen?${q}`, protocols: ["token", key] };
   return (await probeRelay()) ? { url: `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/__deepgram?${q}` } : null;
@@ -111,6 +121,8 @@ export interface EarHooks {
   error(code: string): void;
   /** a line for the diagnosis (the console's trail) */
   note?(what: string): void;
+  /** the microphone's level now (0…1: its loudest sample, a meter's) */
+  level?(v: number): void;
 }
 
 /** The samples brought down to a lower rate (a box average over each output sample's span). */
@@ -158,13 +170,17 @@ export class DeepgramEar {
   private ended = false;
   private closed: Promise<void> = Promise.resolve();
 
-  constructor(private target: EarTarget) {}
+  /** `mic`: the microphone chosen ("": the default) */
+  constructor(
+    private target: EarTarget,
+    private mic = "",
+  ) {}
 
   async start(hooks: EarHooks) {
     // (the microphone first: its refusal said as such)
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, ...(this.mic ? { deviceId: { exact: this.mic } } : {}) },
       });
     } catch (e) {
       hooks.error((e as { name?: string }).name === "NotAllowedError" ? "not-allowed" : "audio-capture");
@@ -209,7 +225,13 @@ export class DeepgramEar {
     const rate = this.ctx.sampleRate;
     this.node.onaudioprocess = (e) => {
       if (this.ended) return;
-      const b = pcm16(downsample(e.inputBuffer.getChannelData(0), rate, 16000));
+      const raw = e.inputBuffer.getChannelData(0);
+      if (hooks.level) {
+        let p = 0;
+        for (const v of raw) p = Math.max(p, Math.abs(v));
+        hooks.level(p);
+      }
+      const b = pcm16(downsample(raw, rate, 16000));
       if (sent++ === 0) hooks.note?.("first audio");
       if (ws.readyState === WebSocket.OPEN) ws.send(b);
       else if (ws.readyState === WebSocket.CONNECTING) this.queue.push(b);

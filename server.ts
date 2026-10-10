@@ -17,7 +17,23 @@ const dev = process.env.NODE_ENV !== "production";
 // server (a temporary token needs a key of a member's rights; a relay needs none)
 // (and in a test's run — KERR_EAR_RELAY=1 —: its server runs as production)
 const DEEPGRAM = dev || process.env.KERR_EAR_RELAY === "1" ? process.env.DEEPGRAM_API_KEY : undefined;
-type Relay = { query: string; up?: WebSocket; queue: (string | ArrayBuffer | Uint8Array)[] };
+type Relay = { path: "listen" | "speak"; query: string; up?: WebSocket; queue: (string | ArrayBuffer | Uint8Array)[] };
+/** The relay to Deepgram's listen (TARS's ear) or speak (his voice, the radio's: Aura-2): the page's own
+ *  settings passed on — these names only, each value a word —, nothing else. */
+function deepgramRelay(path: "listen" | "speak", names: string[]) {
+  return (req: Request, srv: { upgrade(r: Request, o: { data: unknown }): boolean }) => {
+    if (!DEEPGRAM) return new Response("disabled", { status: 404 });
+    const url = new URL(req.url);
+    if (req.headers.get("upgrade")?.toLowerCase() !== "websocket") return Response.json({ ok: true });
+    const origin = req.headers.get("origin");
+    if (origin && new URL(origin).host !== url.host) return new Response("forbidden", { status: 403 });
+    const q = new URLSearchParams();
+    for (const k of names) for (const v of url.searchParams.getAll(k).slice(0, 12)) if (/^[\w.-]{1,32}$/.test(v)) q.append(k, v);
+    return srv.upgrade(req, { data: { path, query: q.toString(), queue: [] } })
+      ? undefined
+      : new Response("upgrade failed", { status: 400 });
+  };
+}
 
 const server = Bun.serve({
   port,
@@ -79,33 +95,19 @@ const server = Bun.serve({
       new Response(Bun.file("vendor/basis/basis_transcoder.wasm"), { headers: { "content-type": "application/wasm" } }),
     // Dev only: read back files from snapshots/ (e.g. reference data for the precision probe).
     // Dev only: whether the relay to Deepgram is there (GET), the relay itself (a WebSocket)
-    "/__deepgram": (req, srv) => {
-      if (!DEEPGRAM) return new Response("disabled", { status: 404 });
-      const url = new URL(req.url);
-      if (req.headers.get("upgrade")?.toLowerCase() !== "websocket") return Response.json({ ok: true });
-      // (its own page only; the listening's settings passed on, nothing else)
-      const origin = req.headers.get("origin");
-      if (origin && new URL(origin).host !== url.host) return new Response("forbidden", { status: 403 });
-      const q = new URLSearchParams();
-      for (const k of [
-        "model",
-        "language",
-        "encoding",
-        "sample_rate",
-        "channels",
-        "interim_results",
-        "smart_format",
-        "punctuate",
-        "endpointing",
-        "keyterm",
-      ]) {
-        const v = url.searchParams.get(k);
-        if (v && /^[\w.-]{1,24}$/.test(v)) q.set(k, v);
-      }
-      return srv.upgrade(req, { data: { query: q.toString(), queue: [] } as never })
-        ? undefined
-        : new Response("upgrade failed", { status: 400 });
-    },
+    "/__deepgram": deepgramRelay("listen", [
+      "model",
+      "language",
+      "encoding",
+      "sample_rate",
+      "channels",
+      "interim_results",
+      "smart_format",
+      "punctuate",
+      "endpointing",
+      "keyterm",
+    ]) as never,
+    "/__deepgram/speak": deepgramRelay("speak", ["model", "encoding", "sample_rate"]) as never,
     "/__snapshots/:name": {
       GET: (req) => {
         const file = Bun.file(`snapshots/${req.params.name.replace(/[^\w.-]/g, "")}`);
@@ -118,7 +120,9 @@ const server = Bun.serve({
     // the page's side opened: Deepgram's opened with the key, what came before it queued
     open(ws) {
       const r = ws.data as unknown as Relay;
-      const up = new WebSocket(`wss://api.deepgram.com/v1/listen?${r.query}`, { headers: { Authorization: `Token ${DEEPGRAM}` } } as never);
+      const up = new WebSocket(`wss://api.deepgram.com/v1/${r.path}?${r.query}`, {
+        headers: { Authorization: `Token ${DEEPGRAM}` },
+      } as never);
       up.binaryType = "arraybuffer";
       r.up = up;
       up.onopen = () => {

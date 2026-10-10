@@ -438,6 +438,19 @@ export interface Settings {
   tarsModel: string; // the model TARS thinks with through OpenRouter (PLAN-TARS-AGENT; ai/openrouter.ts AGENT_MODELS)
   tarsWake: boolean; // his reflexes and rules wake him (B1); off: he speaks only when asked
   tarsEar: "auto" | "deepgram" | "browser"; // what hears the pilot's words: Deepgram when within reach (a key, the dev relay), or the browser's recognition
+  tarsEarModel: "nova-3" | "nova-2"; // Deepgram's recognition model
+  tarsEarLang: "game" | "fr" | "en" | "multi"; // the language heard (the game's, one, or both mixed: nova-3's multilingual)
+  tarsTalkMode: "hold" | "toggle"; // his key: held while speaking, or pressed to start and again to end
+  tarsVoiceEngine: "auto" | "deepgram" | "robot" | "system"; // his voice: Deepgram's (Aura-2), the game's robot (English), the system's
+  tarsVoiceFr: string; // his Deepgram voice in French (aura-2-…-fr)
+  tarsVoiceEn: string; // his Deepgram voice in English (aura-2-…-en)
+  tarsVoiceEffect: "robot" | "clean" | "radio"; // what his Deepgram voice goes through: TARS's grit, nothing, a radio's band
+  tarsSystemVoice: string; // the system voice he speaks with ("": the best for the language)
+  tarsVoiceRate: number; // a system voice's pace (1: its own)
+  tarsVoicePitch: number; // a system voice's pitch (1: its own)
+  radioVoiceEngine: "auto" | "deepgram" | "system"; // mission control's and the tower's voices
+  radioVoiceFr: string; // their Deepgram voice in French
+  radioVoiceEn: string; // their Deepgram voice in English
   tarsBudget: number; // what his own initiatives may cost an hour [USD] (B1)
   haptics: number; // the controllers' vibrations, 0 (none) … 1
   dynamicResolution: boolean; // lower the render scale when the GPU cannot keep the frame budget
@@ -687,6 +700,19 @@ export function defaultSettings(): Settings {
     tarsModel: "z-ai/glm-5.3-flash",
     tarsWake: true,
     tarsEar: "auto",
+    tarsEarModel: "nova-3",
+    tarsEarLang: "game",
+    tarsTalkMode: "hold",
+    tarsVoiceEngine: "auto",
+    tarsVoiceFr: "aura-2-hector-fr",
+    tarsVoiceEn: "aura-2-zeus-en",
+    tarsVoiceEffect: "robot",
+    tarsSystemVoice: "",
+    tarsVoiceRate: 1,
+    tarsVoicePitch: 0.8,
+    radioVoiceEngine: "auto",
+    radioVoiceFr: "aura-2-agathe-fr",
+    radioVoiceEn: "aura-2-orpheus-en",
     tarsBudget: 0.05,
     haptics: 0.6,
     dynamicResolution: false,
@@ -1900,6 +1926,19 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   tarsModel: "pref",
   tarsWake: "pref",
   tarsEar: "pref",
+  tarsEarModel: "pref",
+  tarsEarLang: "pref",
+  tarsTalkMode: "pref",
+  tarsVoiceEngine: "pref",
+  tarsVoiceFr: "pref",
+  tarsVoiceEn: "pref",
+  tarsVoiceEffect: "pref",
+  tarsSystemVoice: "pref",
+  tarsVoiceRate: "pref",
+  tarsVoicePitch: "pref",
+  radioVoiceEngine: "pref",
+  radioVoiceFr: "pref",
+  radioVoiceEn: "pref",
   tarsBudget: "pref",
   haptics: "pref",
   dynamicResolution: "pref",

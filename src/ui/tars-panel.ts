@@ -21,10 +21,13 @@ import type { Proposal } from "../ai/game-tools";
 import { MODE_WORDS, type Mode, type Suggestion } from "../ai/commands";
 import { checkDeepgramKey, deepgramKey } from "../ai/deepgram";
 import { earKeyLine } from "./ear-key";
+import { type SettingsTabHost, TarsSettingsTab } from "./tars/settings-tab";
 
 export interface TarsPanelHost {
   /** a question asked */
   ask(q: string): void;
+  /** his settings, for their tab (none: no tab's content) */
+  settingsTab?: SettingsTabHost;
   /** the link: the key's end (null: none), whether online is on, what the session has cost [USD], the model */
   link(): { hint: string | null; online: boolean; spent: number; busy: boolean; model?: string };
   connect(): void;
@@ -67,13 +70,14 @@ export interface WakeRow {
   firedAt?: number;
 }
 
-type Tab = "talk" | "agents" | "wakes" | "memory";
+type Tab = "talk" | "agents" | "wakes" | "memory" | "settings";
 
 const TABS: [Tab, Text][] = [
   ["talk", { fr: "Échange", en: "Exchange" }],
   ["agents", { fr: "Agents", en: "Agents" }],
   ["wakes", { fr: "Réveils", en: "Wakings" }],
   ["memory", { fr: "Mémoire", en: "Memory" }],
+  ["settings", { fr: "Réglages", en: "Settings" }],
 ];
 
 const KIND_WORDS: Record<string, Text> = {
@@ -212,6 +216,8 @@ export class TarsPanel {
   private proposalEl = el("section", "tp-proposal");
   /** the field taking a key, hidden (OpenRouter's, Deepgram's) — none: a question */
   private keyMode: "" | "openrouter" | "deepgram" = "";
+  /** his settings' tab (ui/tars/settings-tab.ts) */
+  private settingsTab: TarsSettingsTab | null = null;
   /** his ear's key line (ui/ear-key.ts) */
   private ear: (HTMLElement & { update(): void }) | null = null;
   private state: EmblemState = "idle";
@@ -241,6 +247,7 @@ export class TarsPanel {
   ) {
     this.el.dataset.testid = "tars-panel";
     this.el.hidden = true;
+    if (host.settingsTab) this.settingsTab = new TarsSettingsTab(host.settingsTab);
     // (the head: his emblem, his name, what he is doing)
     const head = el("div", "tp-head");
     const who = el("div", "tp-who");
@@ -354,6 +361,7 @@ export class TarsPanel {
       ["agents", wrap(this.agentsEl)],
       ["wakes", wrap(this.wakesEl)],
       ["memory", wrap(this.memoryEl)],
+      ["settings", wrap(this.settingsTab?.el ?? el("div"))],
     ] as const)
       this.panes.set(id, pane);
     const body = el("div", "tp-body");
@@ -565,6 +573,18 @@ export class TarsPanel {
     if (id === "wakes") this.drawWakes();
     if (id === "memory") this.drawMemory();
     if (id === "talk") this.drawHistory();
+    if (id === "settings") this.settingsTab?.update();
+    else this.settingsTab?.leave();
+  }
+
+  /** His settings changed (here or elsewhere): the tab's controls read them again. */
+  settingsChanged() {
+    if (this.tab === "settings") this.settingsTab?.update();
+  }
+
+  /** The tab drawn again (a choice's options came late: the system's voices). */
+  redrawSettings() {
+    this.settingsTab?.draw();
   }
 
   /** Its look: moved to (x, y), larger, folded — kept for the next visit. */

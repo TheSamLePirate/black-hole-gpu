@@ -197,3 +197,51 @@ test("an ear of our own: its words shown as they come, the last ones in before t
   await Bun.sleep(0);
   expect(log.failed.at(-1)).toBe("other:unsupported");
 });
+
+// His voices by Deepgram (audio/deepgram-voice.ts): the sound sent back, the same line not asked twice
+import { DeepgramVoice, fromPcm16 } from "../src/audio/deepgram-voice";
+
+test("a Deepgram voice: its PCM read, a line's sound kept for the next time it is said", async () => {
+  const s = fromPcm16(new Uint8Array([0xff, 0x7f, 0x00, 0x80, 0, 0]));
+  expect(s[0]).toBeCloseTo(32767 / 32768, 6);
+  expect(s[1]).toBe(-1);
+  expect(s[2]).toBe(0);
+  // (a fake Deepgram: the line's sound in two parts, then "Flushed")
+  const asked: string[] = [];
+  class WS {
+    binaryType = "";
+    onopen: (() => void) | null = null;
+    onmessage: ((m: { data: unknown }) => void) | null = null;
+    onclose: (() => void) | null = null;
+    constructor(public url: string) {
+      setTimeout(() => this.onopen?.(), 0);
+    }
+    send(m: string) {
+      asked.push(m);
+      if (m.includes("Flush"))
+        setTimeout(() => {
+          this.onmessage?.({ data: new Uint8Array([0, 0x40, 0, 0x40]).buffer });
+          this.onmessage?.({ data: new Uint8Array([0, 0xc0]).buffer });
+          this.onmessage?.({ data: '{"type":"Flushed","sequence_id":0}' });
+        }, 0);
+    }
+    close() {
+      this.onclose?.();
+    }
+  }
+  const real = globalThis.WebSocket;
+  globalThis.WebSocket = WS as never;
+  try {
+    let targets = 0;
+    const v = new DeepgramVoice(async () => (targets++, { url: "wss://fake" }));
+    const a = await v.synth("Orbite stable.", "aura-2-hector-fr");
+    expect([...(a ?? [])]).toEqual([0.5, 0.5, -0.5]);
+    expect(asked[0]).toBe(JSON.stringify({ type: "Speak", text: "Orbite stable." }));
+    // (said again: kept, not asked)
+    const b = await v.synth("Orbite stable.", "aura-2-hector-fr");
+    expect(b).toBe(a);
+    expect(targets).toBe(1);
+  } finally {
+    globalThis.WebSocket = real;
+  }
+});

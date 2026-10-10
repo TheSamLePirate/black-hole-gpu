@@ -1493,10 +1493,18 @@ export class SoundEngine {
    * behind the pilot on the right in the cabin (his seat), ahead from outside; on the voice bus. Resolves
    * when it has been said (null: the sound not running).
    */
-  playRobot(samples: Float32Array, sampleRate: number, inside: boolean): Promise<void> | null {
+  playRobot(
+    samples: Float32Array,
+    sampleRate: number,
+    inside: boolean,
+    effect: "robot" | "clean" | "radio" = "robot",
+  ): Promise<void> | null {
     if (!this.running || !this.enabled || !this.ctx) return null;
     const ctx = this.ctx;
-    const src = robotVoice(ctx, samples, sampleRate, this.busses.voice, inside, this.hrtf);
+    const src =
+      effect === "robot"
+        ? robotVoice(ctx, samples, sampleRate, this.busses.voice, inside, this.hrtf)
+        : plainVoice(ctx, samples, sampleRate, this.busses.voice, inside, this.hrtf, effect === "radio");
     this.robotSrc = src;
     return new Promise((done) => {
       src.onended = () => {
@@ -1584,6 +1592,44 @@ export function robotVoice(
   pres.connect(comb).connect(fb).connect(comb);
   comb.connect(wet).connect(shape);
   shape.connect(pan).connect(out);
+  src.start();
+  src.addEventListener("ended", () => setTimeout(() => pan.disconnect(), 300));
+  return src;
+}
+
+/**
+ * A natural voice played (Deepgram's): as it is — its low rumble cut, its presence a touch lifted —, or through a
+ * radio's band (300–3 400 Hz, a little clipping: mission control, the tower); placed beside the pilot in the
+ * cockpit, before him outside.
+ */
+export function plainVoice(
+  ctx: BaseAudioContext,
+  samples: Float32Array,
+  sampleRate: number,
+  out: AudioNode,
+  inside: boolean,
+  hrtf: boolean,
+  radio: boolean,
+): AudioBufferSourceNode {
+  const buf = ctx.createBuffer(1, samples.length, sampleRate);
+  buf.copyToChannel(samples as Float32Array<ArrayBuffer>, 0);
+  const src = new AudioBufferSourceNode(ctx, { buffer: buf });
+  const hp = new BiquadFilterNode(ctx, { type: "highpass", frequency: radio ? 320 : 90, Q: 0.7 });
+  const lp = new BiquadFilterNode(ctx, { type: "lowpass", frequency: radio ? 3400 : 16000, Q: radio ? 0.9 : 0.5 });
+  const pres = new BiquadFilterNode(ctx, { type: "peaking", frequency: radio ? 1800 : 3000, Q: 1, gain: radio ? 6 : 2 });
+  const gain = new GainNode(ctx, { gain: radio ? 0.9 : 1 });
+  const pan = new PannerNode(ctx, {
+    panningModel: hrtf ? "HRTF" : "equalpower",
+    distanceModel: "inverse",
+    refDistance: 1,
+    rolloffFactor: 0.2,
+    positionX: inside && !radio ? 0.7 : 0,
+    positionY: inside && !radio ? -0.1 : 0,
+    positionZ: inside && !radio ? 0.5 : -1,
+  });
+  let chain: AudioNode = src.connect(hp).connect(lp).connect(pres);
+  if (radio) chain = chain.connect(new WaveShaperNode(ctx, { curve: robotCurve() }));
+  chain.connect(gain).connect(pan).connect(out);
   src.start();
   src.addEventListener("ended", () => setTimeout(() => pan.disconnect(), 300));
   return src;

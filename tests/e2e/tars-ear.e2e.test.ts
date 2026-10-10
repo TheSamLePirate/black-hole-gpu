@@ -53,4 +53,35 @@ describe.skipIf(!E2E || !KEY)("TARS's ear (Deepgram)", () => {
     await app.waitFor(`document.querySelector("[data-testid=tars-panel]").textContent.toLowerCase().includes("vise mars")`, 10_000);
     expect(await app.js<boolean>(`document.querySelector("[data-testid=tars-panel]").classList.contains("listening")`)).toBe(false);
   }, 60_000);
+
+  test("his settings' tab: the sections, a Deepgram voice through the relay, the ear's test with the microphone", async () => {
+    if (await app.js<boolean>(`document.querySelector("[data-testid=tars-panel]").hidden`)) await app.press("F6", "F6");
+    await app.click(".tp-tab:nth-child(5)");
+    // (a control scrolled into the tab's view, then clicked as a hand would)
+    const go = async (sel: string) => {
+      await app.js(`(document.querySelector(${JSON.stringify(sel)}).scrollIntoView({ block: "center" }), true)`);
+      await Bun.sleep(150);
+      await app.click(sel);
+    };
+    expect(await app.js<string[]>(`[...document.querySelectorAll(".ts-title")].map((x) => x.textContent)`)).toEqual([
+      "Son esprit",
+      "Sa voix",
+      "La radio",
+      "Son oreille",
+    ]);
+    // (a line's sound by Hector, through the relay: some seconds at 24 kHz)
+    const n = await app.js<number>(`__bh.tars.voiceSynth("Orbite stable, Cooper.", "aura-2-hector-fr")`);
+    expect(n).toBeGreaterThan(24000);
+    // (his voice tried: what speaks it said)
+    await app.js(`(__bh.settings.voice = true, true)`);
+    await go("[data-testid=ts-try-tars]");
+    await app.waitFor(`document.querySelector(".ts-try .ts-now").textContent.includes("Deepgram · Hector")`, 10_000);
+    // (a setting set here: the settings' own value)
+    await go("[data-testid=ts-tarsEarModel-nova-2]");
+    expect(await app.js<string>(`__bh.settings.tarsEarModel`)).toBe("nova-2");
+    await go("[data-testid=ts-tarsEarModel-nova-3]");
+    // (the ear's test: the fake microphone's phrase heard, shown)
+    await go("[data-testid=ts-test-ear]");
+    await app.waitFor(`/orbite autour de la lune/i.test(document.querySelector("[data-testid=ts-heard]").textContent)`, 15_000);
+  }, 60_000);
 });

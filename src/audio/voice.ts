@@ -126,6 +126,9 @@ export interface SpeechHost {
   robot?(l: VoiceLine): Promise<void> | null;
   /** that voice stopped (a more urgent line) */
   stopRobot?(): void;
+  /** a system voice of one's choice for a line (its name: "" the best for the language), its pace and pitch
+   *  (the speaker's own style otherwise) */
+  systemVoice?(l: VoiceLine): { name?: string; rate?: number; pitch?: number } | null;
 }
 
 /** The voices said by Web Speech: the queue drained one line at a time. Without speechSynthesis (or the
@@ -205,17 +208,19 @@ export class Speech {
     const u = new SpeechSynthesisUtterance(l.text);
     const want = this.host.lang();
     const voices = synth.getVoices();
-    let best: SpeechSynthesisVoice | null = null,
+    const pick = this.host.systemVoice?.(l) ?? null;
+    let best: SpeechSynthesisVoice | null = (pick?.name && voices.find((v) => v.name === pick.name)) || null,
       bs = -1;
-    for (const v of voices) {
-      const s = voiceScore(v, want);
-      if (s > bs) (bs = s), (best = v);
-    }
+    if (!best)
+      for (const v of voices) {
+        const s = voiceScore(v, want);
+        if (s > bs) (bs = s), (best = v);
+      }
     if (best) u.voice = best;
     u.lang = best?.lang ?? (want === "fr" ? "fr-FR" : "en-US");
     const st = SPEAKER_STYLE[l.speaker];
-    u.rate = st.rate;
-    u.pitch = st.pitch;
+    u.rate = pick?.rate ?? st.rate;
+    u.pitch = pick?.pitch ?? st.pitch;
     u.volume = Math.min(Math.max(this.host.volume(), 0), 1);
     u.onend = u.onerror = finish;
     this.utter = u;

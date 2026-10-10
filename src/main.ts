@@ -85,7 +85,7 @@ import { drawChartLabels } from "./ui/skylabels";
 import { SkyPanel } from "./ui/skypanel";
 import { defaultSettings, presets, QUALITY, settingKeys, type Preset, type Settings, type Target } from "./settings";
 import { SettingsPanel } from "./ui/panel";
-import { SCHEMA, SCHEMA_BY_KEY } from "./ui/schema";
+import { type ChoiceDef, SCHEMA, SCHEMA_BY_KEY } from "./ui/schema";
 import { loadFromUrl } from "./urlstate";
 import { setupRenderDialog } from "./renderdialog";
 import { fmtDate, GameTools } from "./game/tools";
@@ -105,7 +105,7 @@ import { Splash } from "./ui/splash";
 import { SceneGallery } from "./ui/scenes";
 import { SoundDirector } from "./audio/director";
 import { sound } from "./audio/engine";
-import { Speech } from "./audio/voice";
+import { Speech, voiceScore } from "./audio/voice";
 import { synthesize } from "./audio/formant";
 import { phonemes } from "./audio/g2p";
 import { Subtitles } from "./ui/subtitles";
@@ -125,7 +125,9 @@ import { checkArgs } from "./ai/tool-schema";
 import { gameTools, keyCatalog, SCREENS } from "./ai/game-tools";
 import { TarsDisplay } from "./ui/tars/display";
 import { PushToTalk } from "./ai/listen";
-import { DeepgramEar, earTarget, probeRelay } from "./ai/deepgram";
+import { DeepgramEar, earState, earTarget, probeRelay } from "./ai/deepgram";
+import { DeepgramVoice, VOICE_RATE } from "./audio/deepgram-voice";
+import { AURA_VOICES } from "./audio/aura-voices";
 import { earKeyLine } from "./ui/ear-key";
 import { Triggers, TARS_TRIGGERS_KEY, wakeText, type GameEvent, type Trigger } from "./ai/triggers";
 import { Budget } from "./ai/budget";
@@ -488,8 +490,11 @@ async function main() {
   }
   applyAccess();
 
+  /** TARS's settings tab told of a change (set once his console is made) */
+  let tarsSettingsChanged: (() => void) | null = null;
   /** Routes a settings change to what it affects (re-trace, resolve only, resize, nothing). */
   function onSettingsChange(keys: (keyof Settings)[]) {
+    tarsSettingsChanged?.();
     if (keys.some((k) => k === "uiScale" || k === "hudPalette" || k === "reduceMotion")) applyAccess();
     let scene = false;
     let resized = false;
@@ -818,6 +823,36 @@ async function main() {
   const tarsPanelAsk = (q: string, shown?: string) => void tarsAsk(q, shown);
   const tarsPanelHost: TarsPanelHost = {
     ask: (q) => tarsPanelAsk(q),
+    // (his settings' tab: the settings panel's own values, set through it)
+    settingsTab: {
+      settings,
+      set: (key, value) => panel.setValue(key, value),
+      tryVoice: async (who) => {
+        const text =
+          who === "tars"
+            ? tr({
+                fr: "Ici TARS. Honnêteté à quatre-vingt-dix pour cent, Cooper.",
+                en: "This is TARS. Honesty setting ninety percent, Cooper.",
+              })
+            : tr({ fr: "Ranger, ici Houston. Nous vous recevons cinq sur cinq.", en: "Ranger, Houston. We read you loud and clear." });
+        voice.say({
+          id: `try-${who}-${Date.now()}`,
+          text,
+          speaker: who === "tars" ? "tars" : "mission",
+          priority: 1,
+          radio: who === "radio",
+        });
+        return voiceNow(who);
+      },
+      voiceNow: (who) => voiceNow(who),
+      mics: async () =>
+        (await navigator.mediaDevices.enumerateDevices())
+          .filter((d) => d.kind === "audioinput" && d.deviceId !== "default")
+          .map((d) => ({ id: d.deviceId, label: d.label })),
+      mic: () => store.get(MIC_KEY) ?? "",
+      setMic: (id) => (id ? store.set(MIC_KEY, id) : store.remove(MIC_KEY)),
+      testEar: (h) => earTest(h),
+    },
     complete: (input) =>
       complete(input, {
         lang,
@@ -885,6 +920,27 @@ async function main() {
     talkKey: (e) => tarsKey(e),
   };
   const tarsPanel = new TarsPanel(tarsPanelHost);
+  tarsSettingsChanged = () => tarsPanel.settingsChanged();
+  // (the system's voices, listed by the browser late: the choice of TARS's filled with them — the language's first)
+  const fillSystemVoices = () => {
+    if (typeof speechSynthesis === "undefined") return;
+    const list = speechSynthesis.getVoices().filter((v) => /^(fr|en)/i.test(v.lang));
+    if (!list.length) return;
+    const mine = (v: SpeechSynthesisVoice) => (v.lang.toLowerCase().startsWith(lang) ? 0 : 1);
+    list.sort((a, b) => mine(a) - mine(b) || voiceScore(b, lang) - voiceScore(a, lang) || a.name.localeCompare(b.name));
+    const def = SCHEMA_BY_KEY.get("tarsSystemVoice") as ChoiceDef | undefined;
+    if (!def) return;
+    def.options = [
+      { value: "", label: "Automatic", hint: "The best for the language" },
+      ...list.map((v) => ({ value: v.name, label: v.name, hint: v.lang })),
+    ];
+    tarsPanel.redrawSettings();
+    panel.redraw();
+  };
+  if (typeof speechSynthesis !== "undefined") {
+    fillSystemVoices();
+    speechSynthesis.addEventListener?.("voiceschanged", fillSystemVoices);
+  }
   // (his ear's way known early: the dev server's relay, said in his console)
   void probeRelay().then((r) => r && tarsPanel.refresh());
   /** A question to TARS (typed, or spoken): the agent online; offline the orders, else his written answers. */
@@ -1066,6 +1122,9 @@ async function main() {
     },
     () => settings.reduceMotion || matchMedia("(prefers-reduced-motion: reduce)").matches,
   );
+  // his voices by Deepgram (Aura-2) and the microphone chosen for his ear (this browser's)
+  const deepgramVoice = new DeepgramVoice();
+  const MIC_KEY = "kerr.tars.mic";
   // speaking to TARS (PLAN-TARS-AGENT A5): his key held listens, released sends; a tap is his field
   const tarsTalk = new PushToTalk(
     {
@@ -1106,16 +1165,18 @@ async function main() {
     // (Deepgram's ear when it is within reach: a key pasted, or the dev server's relay)
     async () => {
       if (settings.tarsEar === "browser") return null;
-      const target = await earTarget(lang);
+      const target = await earTarget({ lang, model: settings.tarsEarModel, language: settings.tarsEarLang });
       if (!target && settings.tarsEar === "deepgram") throw new Error("deepgram-none");
-      return target ? new DeepgramEar(target) : null;
+      return target ? new DeepgramEar(target, store.get(MIC_KEY) ?? "") : null;
     },
   );
-  /** his key (F6, or as bound) pressed: held, it listens; tapped, his field */
+  /** his key (F6, or as bound) pressed: held, it listens; tapped, his field — or (the setting) pressed to start
+   *  listening and again to end */
   function tarsKey(e: KeyboardEvent) {
     // (a controller's button — no key up to wait for —, or no recognition here: the field)
     if (!e.code || !PushToTalk.supported) return tarsPanel.toggle();
     if (e.repeat) return;
+    if (settings.tarsTalkMode === "toggle") return void (tarsTalk.listening ? tarsTalk.stop() : tarsTalk.start());
     tarsTalk.down();
     const code = e.code;
     const up = (u: KeyboardEvent) => {
@@ -1145,14 +1206,106 @@ async function main() {
         tarsPanel.setState(tarsBusy ? "thinking" : tarsFollow ? "acting" : "idle");
       if (l.radio && settings.sound) sound.radio(false);
     },
-    // (TARS in English: his own robot voice, synthesized here — PLAN-TARS T5a; in French the system's, the
-    // owner's choice: the home-made French was not understood)
-    robot: (l) =>
-      l.speaker === "tars" && lang === "en" && settings.voice
-        ? sound.playRobot(synthesize(phonemes(l.text)), 22050, settings.shipMount === "cockpit" || settings.shipMount === "cabin")
-        : null,
+    // (the game's own voices, played by its audio: Deepgram's Aura-2 — TARS's through his grit, the radio's
+    // through its band —, or TARS's robot in English — PLAN-TARS T5a; null: the system's speaks it)
+    robot: (l) => ownVoice(l),
     stopRobot: () => sound.stopRobot(),
+    // (TARS's system voice as chosen, its pace and pitch)
+    systemVoice: (l) =>
+      l.speaker === "tars"
+        ? { name: settings.tarsSystemVoice || undefined, rate: settings.tarsVoiceRate, pitch: settings.tarsVoicePitch }
+        : null,
   });
+  /** what speaks a line, of the game's own (null: the system's): Deepgram when chosen and within reach, the robot (English) */
+  function ownVoice(l: import("./audio/voice").VoiceLine): Promise<void> | null {
+    if (!settings.voice || /[?&]e2e=/.test(location.search)) return null;
+    const inside = settings.shipMount === "cockpit" || settings.shipMount === "cabin";
+    const reach = earState().by !== "browser";
+    if (l.speaker === "tars") {
+      const e = settings.tarsVoiceEngine;
+      if (e === "deepgram" || (e === "auto" && reach))
+        return deepgramSay(l.text, lang === "fr" ? settings.tarsVoiceFr : settings.tarsVoiceEn, inside, settings.tarsVoiceEffect, () =>
+          lang === "en" ? sound.playRobot(synthesize(phonemes(l.text)), 22050, inside) : null,
+        );
+      if ((e === "robot" || e === "auto") && lang === "en") return sound.playRobot(synthesize(phonemes(l.text)), 22050, inside);
+      return null;
+    }
+    if (l.speaker === "mission" || l.speaker === "tower") {
+      const e = settings.radioVoiceEngine;
+      if (e === "deepgram" || (e === "auto" && reach))
+        return deepgramSay(l.text, lang === "fr" ? settings.radioVoiceFr : settings.radioVoiceEn, false, "radio", () => null);
+    }
+    return null;
+  }
+  /** a line said by a Deepgram voice (its sound asked, then played by the game's audio); out of reach or
+   *  refused: the fallback's, else said silently (its subtitle) */
+  /** What speaks his lines now (or the radio's), in words — the settings' tab. */
+  function voiceNow(who: "tars" | "radio"): string {
+    const reach = earState().by !== "browser";
+    const aura = (id: string) => AURA_VOICES.find((v) => v.id === id)?.name ?? id;
+    if (who === "radio") {
+      const e = settings.radioVoiceEngine;
+      return e === "deepgram" || (e === "auto" && reach)
+        ? tf("Deepgram · {0} · radio", aura(lang === "fr" ? settings.radioVoiceFr : settings.radioVoiceEn))
+        : t("The system's voice, by radio");
+    }
+    const e = settings.tarsVoiceEngine;
+    if (e === "deepgram" || (e === "auto" && reach)) {
+      const fx = { robot: t("Robot"), clean: t("Clean"), radio: t("Radio") }[settings.tarsVoiceEffect];
+      return reach
+        ? tf("Deepgram · {0} · {1}", aura(lang === "fr" ? settings.tarsVoiceFr : settings.tarsVoiceEn), fx)
+        : t("Deepgram is out of reach: paste a key below");
+    }
+    if ((e === "robot" || e === "auto") && lang === "en") return t("The game's robot");
+    const sys = typeof speechSynthesis !== "undefined" ? speechSynthesis.getVoices() : [];
+    const name = settings.tarsSystemVoice || [...sys].sort((a, b) => voiceScore(b, lang) - voiceScore(a, lang))[0]?.name || "—";
+    return tf("System voice · {0}", name);
+  }
+  /** His ear tried (the settings' tab): Deepgram's, the level and the words as they come, 6 s at most. */
+  function earTest(h: { level(v: number): void; words(text: string): void; done(note: string): void }): () => void {
+    let ear: DeepgramEar | null = null;
+    let finals = "",
+      over = false;
+    const finish = (note: string) => {
+      if (over) return;
+      over = true;
+      clearTimeout(timer);
+      void ear?.end().then(() => h.done(note || (finals ? "" : t("Nothing heard."))));
+      if (!ear) h.done(note);
+    };
+    const timer = setTimeout(() => finish(""), 6000);
+    void (async () => {
+      const target =
+        settings.tarsEar === "browser" ? null : await earTarget({ lang, model: settings.tarsEarModel, language: settings.tarsEarLang });
+      if (over) return;
+      if (!target) return finish(t("The test listens through Deepgram: paste a key (or hold F6 to try the browser's ear)."));
+      ear = new DeepgramEar(target, store.get(MIC_KEY) ?? "");
+      await ear.start({
+        level: h.level,
+        interim: (x) => h.words(`${finals}${x}`.trim()),
+        final: (x) => {
+          finals += `${x} `;
+          h.words(finals.trim());
+        },
+        error: (code) =>
+          finish(
+            code === "not-allowed" ? t("The microphone is not allowed (the browser's site settings).") : tf("The ear failed ({0}).", code),
+          ),
+      });
+    })();
+    return () => finish("");
+  }
+  async function deepgramSay(
+    text: string,
+    model: string,
+    inside: boolean,
+    effect: "robot" | "clean" | "radio",
+    fallback: () => Promise<void> | null,
+  ): Promise<void> {
+    const pcm = await deepgramVoice.synth(text, model);
+    if (!pcm) return (await fallback()) ?? undefined;
+    return (await sound.playRobot(pcm, VOICE_RATE, inside, effect)) ?? undefined;
+  }
   const scenes = new SceneGallery({ names: Object.keys(presets), apply: (name) => panel.applyScene(name), current: () => currentScene });
   panel.holdToasts = splash.gone.then(() => void (panel.holdToasts = null));
   const refreshGui = () => {
@@ -3594,7 +3747,15 @@ async function main() {
     voice,
     capcom,
     music,
-    tars: { agent: tarsAgent, memory: tarsMemory, tools: () => tarsTools, spent: () => openRouter.spent, earTrail: () => tarsTalk.trail },
+    tars: {
+      agent: tarsAgent,
+      memory: tarsMemory,
+      tools: () => tarsTools,
+      spent: () => openRouter.spent,
+      earTrail: () => tarsTalk.trail,
+      // (a line's Deepgram sound asked: its length in samples — the tests)
+      voiceSynth: async (text: string, model: string) => (await deepgramVoice.synth(text, model))?.length ?? 0,
+    },
     skyLoading,
     mx: { runAnalemma, runEclipse, runTrails, runMoonPath, runIss, issPasses: issPassesHere, planEclipse, host: mxHost, dialog: mxDialog },
     touch,
