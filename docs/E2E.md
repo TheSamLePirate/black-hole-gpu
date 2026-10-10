@@ -360,6 +360,11 @@ command line. The page is for people, the commands are for agents.
 
 Keys: `1`–`8` switch views, `/` focuses the search. Light or dark follows the system (◐ to force one).
 
+Live data never blinks: lists already shown are fetched again behind them and repainted only when they
+changed, by a keyed DOM morph (nothing reloads — a picture, a chart, a field being typed in stay). Working
+on the page itself: `E2E_DASH_DEV=1 bun run dashboard` (rebuilt and reloaded on change); otherwise it is a
+production bundle built once.
+
 Its parts: `scripts/dashboard/server.ts` (Bun.serve: the API, the WebSocket, the HTML import),
 `runs.ts` (runs started through `scripts/e2e.ts`, streamed and kept; the history), `probe.ts` (the live
 page), `lab.ts` (both Macs through `lab-monitor.ts --json`), `parse-log.ts` (bun test's output, line by

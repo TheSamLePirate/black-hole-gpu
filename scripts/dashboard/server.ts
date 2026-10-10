@@ -165,7 +165,9 @@ const guard = async (fn: () => Promise<Response> | Response) => {
 const server = Bun.serve<{ frames: boolean }>({
   hostname: HOSTNAME,
   port: PORT,
-  development: process.env.NODE_ENV !== "production" ? { hmr: true, console: false } : false,
+  // (a production bundle, built once: the page never reloads under its viewers. E2E_DASH_DEV=1 while working on
+  // the page itself: rebuilt on change, reloaded)
+  development: process.env.E2E_DASH_DEV === "1" ? { hmr: true, console: false } : false,
   routes: {
     "/": index,
     "/api/state": () =>

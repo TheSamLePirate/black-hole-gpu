@@ -266,6 +266,70 @@ async function api<T>(path: string, body?: unknown): Promise<T> {
   if (!r.ok || (j && typeof j === "object" && "error" in j && Object.keys(j).length === 1)) throw new Error((j as { error: string }).error);
   return j as T;
 }
+/**
+ * Stale-while-revalidate: every list already loaded fetched again behind what is shown; the page repainted
+ * (morphed: nothing reloads, nothing blinks) only when one of them changed. One at a time.
+ */
+let revalidating: Promise<void> | null = null;
+let revalidateAgain = false;
+function revalidate(): Promise<void> {
+  if (revalidating) {
+    revalidateAgain = true;
+    return revalidating;
+  }
+  revalidating = (async () => {
+    const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+    const swap = async <T>(had: T | null, url: string, set: (v: T) => void) => {
+      if (had === null) return false;
+      const v = await api<T>(url).catch(() => had);
+      if (same(v, had)) return false;
+      set(v);
+      return true;
+    };
+    const jobs: Promise<boolean>[] = [
+      swap(S.history, "/api/history", (v) => (S.history = v)),
+      swap(S.files, "/api/files", (v) => (S.files = v)),
+      swap(S.shots, "/api/shots", (v) => (S.shots = v)),
+      swap(FL.campaigns, "/api/flight/campaigns", (v) => (FL.campaigns = v)),
+      swap(FL.scenarios, "/api/flight/scenarios", (v) => (FL.scenarios = v)),
+    ];
+    if (detailCache) {
+      const id = detailCache.id;
+      jobs.push(
+        api<Detail>(`/api/runs/${encodeURIComponent(id)}`)
+          .then((d) => {
+            if (detailCache?.id !== id || (detailCache.d.log.length === d.log.length && same(detailCache.d.run, d.run))) return false;
+            detailCache = { id, d };
+            return true;
+          })
+          .catch(() => false),
+      );
+    }
+    for (const id of runReports.keys()) jobs.push(refreshReports(id, false));
+    if ((await Promise.all(jobs)).some(Boolean)) schedule();
+  })().finally(() => {
+    revalidating = null;
+    if (revalidateAgain) {
+      revalidateAgain = false;
+      void revalidate();
+    }
+  });
+  return revalidating;
+}
+
+/** A run's recorded tests fetched again, the known ones shown meanwhile; repainted if they changed. */
+async function refreshReports(runId: string, paintIt = true): Promise<boolean> {
+  const had = runReports.get(runId);
+  if (had === "loading") return false;
+  const r = await api<{ root: string | null; files: Record<string, { k: number; dir: string }[]> }>(
+    `/api/runs/${encodeURIComponent(runId)}/reports`,
+  ).catch(() => null);
+  if (!r || (had && JSON.stringify(had) === JSON.stringify(r))) return false;
+  runReports.set(runId, r);
+  if (paintIt) schedule();
+  return true;
+}
+
 const load = {
   history: async () => (S.history = await api<Run[]>("/api/history")),
   files: async () => (S.files = await api<FileInfo[]>("/api/files")),
@@ -346,7 +410,7 @@ function onMsg(m: Record<string, unknown>) {
           `${r.title} — ${v === "ok" ? "passed" : r.state === "cancelled" ? "cancelled" : "failed"} (${r.counts.pass} ✓ ${r.counts.fail} ✗)`,
           v === "ok" ? "ok" : "bad",
         );
-        S.files = null;
+        void revalidate();
       }
       schedule();
       break;
@@ -366,13 +430,8 @@ function onMsg(m: Record<string, unknown>) {
       break;
     }
     case "history":
-      FL.campaigns = null;
-      FL.scenarios = null;
-      S.history = null;
-      S.shots = null;
-      S.files = null;
-      detailCache = null;
-      if (["overview", "history", "captures", "run"].includes(view())) schedule();
+      // (new on disk: what is shown kept, its fresh version fetched behind it, repainted only if it changed)
+      void revalidate();
       break;
     case "probe":
       S.probe = (m.state ?? m.probe) as Probe;
@@ -421,8 +480,8 @@ function applyEv(l: LiveRun, ev: LogEvent) {
     const f = l.files.get(ev.file) ?? { file: ev.file, tests: [] };
     f.tests.push(ev.test);
     l.files.set(ev.file, f);
-    // (its record now written: the run's reports read again)
-    runReports.delete(l.run.id);
+    // (its record now written: the run's reports read again — the ones known kept meanwhile)
+    void refreshReports(l.run.id);
   }
 }
 
@@ -493,7 +552,7 @@ function morph(old: Node, next: Node): Node {
     if (old.nodeValue !== next.nodeValue) old.nodeValue = next.nodeValue;
     return old;
   }
-  if (!(old instanceof HTMLElement) || !(next instanceof HTMLElement)) return old;
+  if (!(old instanceof Element) || !(next instanceof Element)) return old;
   // (a <details>' open or closed is the user's once shown)
   const mine = (name: string) => name === "open" && old instanceof HTMLDetailsElement;
   for (const a of [...old.attributes]) if (!next.hasAttribute(a.name) && !mine(a.name)) old.removeAttribute(a.name);
@@ -509,6 +568,24 @@ function morph(old: Node, next: Node): Node {
   }
   const oc = [...old.childNodes],
     nc = [...next.childNodes];
+  const key = (n: Node) => (n instanceof Element ? n.getAttribute("data-key") : null);
+  if (nc.length && nc.every((n) => key(n) !== null)) {
+    // (a keyed list — runs, files, pictures —: each item kept by its key, wherever it moved; an item added on
+    // top no longer shifts the others into each other's place, a picture never loads again)
+    const byKey = new Map<string, Node>();
+    for (const o of oc) if (key(o) !== null) byKey.set(key(o)!, o);
+    const want = nc.map((n) => {
+      const o = byKey.get(key(n)!);
+      if (!o) return n;
+      byKey.delete(key(n)!);
+      return morph(o, n);
+    });
+    for (const o of oc) if (!want.includes(o)) o.remove();
+    want.forEach((n, i) => {
+      if (old.childNodes[i] !== n) old.insertBefore(n, old.childNodes[i] ?? null);
+    });
+    return old;
+  }
   for (let i = 0; i < nc.length; i++) {
     if (i < oc.length) morph(oc[i]!, nc[i]!);
     else old.append(nc[i]!);
@@ -852,6 +929,7 @@ function runTable(runs: Run[]) {
             "tr",
             {
               class: "click",
+              "data-key": r.id,
               onclick: () => (location.hash = r.state === "running" && r.source === "dash" ? `live/${r.id}` : `history/${r.id}`),
             },
             h("td", {}, vBadge(r)),
@@ -998,7 +1076,7 @@ function runPage() {
             fs.map((f) =>
               h(
                 "div",
-                { class: `file ${S.pick.has(f.name) ? "sel" : ""}`, onclick: () => toggle(f), title: f.comment },
+                { class: `file ${S.pick.has(f.name) ? "sel" : ""}`, onclick: () => toggle(f), title: f.comment, "data-key": f.name },
                 h("input", {
                   type: "checkbox",
                   checked: S.pick.has(f.name),
@@ -1168,7 +1246,7 @@ function liveFiles(l: LiveRun) {
     const cur = l.current === f.file && l.run.state === "running";
     return h(
       "div",
-      { class: `tf ${cur ? "cur" : fail ? "bad" : f.tests.length ? "ok" : ""}` },
+      { class: `tf ${cur ? "cur" : fail ? "bad" : f.tests.length ? "ok" : ""}`, "data-key": f.file },
       h(
         "div",
         { class: "fn" },
@@ -1280,6 +1358,7 @@ function livePage() {
 
 const histFilter = { q: "", where: "", status: "", source: "" };
 let detailCache: { id: string; d: Detail } | null = null;
+let detailAt = 0;
 interface Detail {
   run: Run;
   log: string;
@@ -1375,7 +1454,9 @@ function runDetailPage(id: string) {
     location.replace(`#campaign/${encodeURIComponent(`flight-results/${id.slice(7)}`)}`);
     return h("div", { class: "page" });
   }
-  if (!detailCache || detailCache.id !== id || S.live.get(id)?.run.state === "running") {
+  // (a running run's page fetched again at most every two seconds, what it showed kept meanwhile)
+  if (!detailCache || detailCache.id !== id || (S.live.get(id)?.run.state === "running" && Date.now() - detailAt > 2000)) {
+    detailAt = Date.now();
     api<Detail>(`/api/runs/${encodeURIComponent(id)}`)
       .then((d) => {
         const changed =
@@ -1614,7 +1695,7 @@ function shotsGrid(list: Shot[]) {
       .map((s, i) =>
         h(
           "div",
-          { class: "shot", onclick: () => openLightbox(list, i), title: s.path },
+          { class: "shot", onclick: () => openLightbox(list, i), title: s.path, "data-key": s.url },
           h("img", { src: s.url, loading: "lazy", alt: s.name }),
           h("div", { class: "cap" }, h("b", {}, s.name), h("br"), `${s.run} · ${ago(s.mtime)}`),
         ),
@@ -1672,7 +1753,7 @@ function capturesPage() {
     { class: "page wide" },
     h(
       "div",
-      { class: "head" },
+      { class: "head", "data-key": "head" },
       h(
         "div",
         {},
@@ -1703,7 +1784,7 @@ function capturesPage() {
       const ss = list.filter((s) => s.run === run);
       return h(
         "div",
-        { style: { marginBottom: "22px" } },
+        { style: { marginBottom: "22px" }, "data-key": run },
         h(
           "div",
           { class: "row", style: { marginBottom: "8px" } },
@@ -1864,7 +1945,7 @@ function paintProbeBar() {
               onclick: async () => {
                 const r = await api<{ url: string }>("/api/probe/shot", {});
                 toast("Screenshot kept", "ok");
-                S.shots = null;
+                void revalidate();
                 openLightbox(
                   [
                     {
@@ -3033,7 +3114,7 @@ function flightPage() {
               };
               return h(
                 "div",
-                { class: `file ${FL.pick.has(s.id) ? "sel" : ""}`, onclick: toggle, title: s.title },
+                { class: `file ${FL.pick.has(s.id) ? "sel" : ""}`, onclick: toggle, title: s.title, "data-key": s.id },
                 h("input", { type: "checkbox", checked: FL.pick.has(s.id), onclick: (e: Event) => e.stopPropagation(), onchange: toggle }),
                 h("span", {
                   class: `dot ${last ? vClass(last.verdict) : ""}`,
@@ -3178,7 +3259,7 @@ function flightPage() {
                 const n = (v: string) => c.rows.filter((r) => r.verdict === v).length;
                 return h(
                   "tr",
-                  { class: "click", onclick: () => (location.hash = `campaign/${encodeURIComponent(c.dir)}`) },
+                  { class: "click", "data-key": c.dir, onclick: () => (location.hash = `campaign/${encodeURIComponent(c.dir)}`) },
                   h("td", { class: "muted", style: { whiteSpace: "nowrap" } }, when(c.at)),
                   h(
                     "td",
