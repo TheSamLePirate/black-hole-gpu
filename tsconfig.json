@@ -18,5 +18,5 @@
     "noUnusedLocals": true,
     "noImplicitReturns": true
   },
-  "include": ["src", "tests", "server.ts"]
+  "include": ["src", "tests", "server.ts", "scripts/dashboard", "scripts/e2e.ts", "scripts/bh-api.ts"]
 }

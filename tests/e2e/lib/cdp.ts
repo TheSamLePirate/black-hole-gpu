@@ -4,7 +4,8 @@
 // scripts/lib/chrome-lock.ts, labConfig) — the lab's: headless on the main Mac, full screen (kiosk: no tabs, no
 // address bar) on kerr-mini, so who sits at it sees it is in use. E2E_HEADED=1 forces kiosk, E2E_HEADED=0
 // headless (the remote runner's --headless). A window is to watch a test, not to measure one (its frames
-// follow the display's); the viewport is the emulated one either way. docs/E2E.md.
+// follow the display's). In kiosk the page is the screen's size at 1:1; headless or in a window, the size
+// the test asked. docs/E2E.md.
 // E2E_HOLD=<s>: each Chrome left open <s> seconds at its close, to see where the test left it.
 import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -112,32 +113,8 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
     else if (d.method === "Runtime.consoleAPICalled" && d.params.type === "error")
       errors.push(d.params.args.map((a: { value?: unknown; description?: string }) => a.value ?? a.description).join(" "));
   };
-  // (on a screen — kiosk, window —: the emulated viewport drawn scaled to fill it, else a 640 × 400 test sat
-  // small in a corner of the full-screen window; its CSS size, its pixels' count and the input's coordinates
-  // are the emulated ones still — only the picture on the display is scaled)
-  let screen: { w: number; h: number } | null = null;
-  // (the scale in force: the input's points, in the page's CSS px, are sent in the display's)
-  let scale = 1;
-  const fit = (params: Record<string, unknown>) => {
-    if (!screen || typeof params.width !== "number" || typeof params.height !== "number") return params;
-    scale = typeof params.scale === "number" ? params.scale : Math.max(0.1, Math.min(screen.w / params.width, screen.h / params.height));
-    return { ...params, scale };
-  };
-  const scaled = (method: string, params: Record<string, unknown>) => {
-    if (scale === 1) return params;
-    if (method === "Input.dispatchMouseEvent" || method === "Input.synthesizeTapGesture")
-      return { ...params, x: (params.x as number) * scale, y: (params.y as number) * scale };
-    if (method === "Input.dispatchTouchEvent")
-      return {
-        ...params,
-        touchPoints: (params.touchPoints as { x: number; y: number }[]).map((p) => ({ ...p, x: p.x * scale, y: p.y * scale })),
-      };
-    return params;
-  };
   const send = <T>(method: string, params: object = {}, timeoutS = CDP_TIMEOUT_S) =>
     new Promise<T>((ok, fail) => {
-      if (method === "Emulation.setDeviceMetricsOverride") params = fit(params as Record<string, unknown>);
-      else if (method.startsWith("Input.")) params = scaled(method, params as Record<string, unknown>);
       if (gone) return fail(new Error(gone));
       const k = ++id;
       const timer = setTimeout(() => {
@@ -149,16 +126,26 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
     });
   await send("Runtime.enable");
   await send("Page.enable");
-  if (SHOW !== "headless") {
-    // (the window's own size before any emulation: the screen, in kiosk)
+  // (full screen — kiosk —: the page is the display's own size at 1:1, whatever size the test asked — the
+  // lab's choice: a test seen on the mini fills its screen; a test that resizes the page itself mid-run, to
+  // try a narrow window, still does. Headless or in a window: the size asked, 1440 × 900 by default)
+  let vw = W,
+    vh = H;
+  if (SHOW === "kiosk") {
+    // (the display's size — not the window's: kiosk goes full screen a moment after the start)
     const r = await send<{ result: { value: [number, number] } }>("Runtime.evaluate", {
-      expression: "[innerWidth, innerHeight]",
+      expression: "[screen.width, screen.height]",
       returnByValue: true,
     });
     const [w, h] = r.result.value;
-    if (w > 0 && h > 0) screen = { w, h };
+    if (w > 0 && h > 0) [vw, vh] = [w, h];
   }
-  await send("Emulation.setDeviceMetricsOverride", { width: W, height: H, deviceScaleFactor: o.dpr ?? 1, mobile: false });
+  await send("Emulation.setDeviceMetricsOverride", {
+    width: vw,
+    height: vh,
+    deviceScaleFactor: SHOW === "kiosk" ? 1 : (o.dpr ?? 1),
+    mobile: false,
+  });
   return {
     send,
     errors,

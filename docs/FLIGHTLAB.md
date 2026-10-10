@@ -18,6 +18,15 @@ bun scripts/remote.ts doctor                                # le mini : joignabl
 - **Répartition :** les scénarios sont répartis par durée estimée, du plus long au plus court. La répartition est identique sur chaque machine, donc `1/2` ici et `2/2` là-bas couvrent tout une seule fois.
 - **Chrome :** il tourne en headless sur ce Mac et en plein écran sur le mini (le choix habituel de `remote.ts`).
 
+## Dans le tableau de bord e2e
+
+`bun run dashboard` (http://localhost:4700, vue **Flight lab**) fait tout ce qui suit sans la ligne de
+commande : choisir les scénarios (familles, tags), les lancer ici, sur le mini ou réparti sur les deux,
+suivre les campagnes en vol (scénario, échantillon courant, carte du hub, événements), les piloter (pause,
+reprise, passer, arrêter, note, capture, code évalué dans la page), et lire chaque rapport de façon
+interactive (couloirs, consigne contre réel, télémétrie, mesures de qualité). Les tests e2e enregistrent
+la même télémétrie, au même format (docs/E2E.md §4).
+
 ## Piloter pendant le vol
 
 Pendant une campagne, le lanceur écoute sur `127.0.0.1:4711` (option `--port`). La commande `ctl` l'interroge, ici ou sur le mini via SSH avec `--host kerr-mini` :

@@ -10,12 +10,14 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import type { ServerWebSocket } from "bun";
 import index from "./ui/index.html";
-import { doctor, lab, pollHere, pollMini } from "./lab";
+import { doctor, flightCtl, lab, pollHere, pollMini } from "./lab";
+import { campaigns, e2eReports, report, reportRootOf, safeDir, scenarios } from "./reports";
 import { evalProbe, inputProbe, probeErrors, probeState, sceneProbe, shotProbe, startProbe, stopProbe } from "./probe";
 import {
   attachRun,
   cancelRun,
   FLIGHTS,
+  type FlightRequest,
   fileStats,
   history,
   liveLines,
@@ -24,8 +26,13 @@ import {
   type RunRequest,
   runDetail,
   shots,
+  startFlight,
   startRun,
+  testTimes,
 } from "./runs";
+
+/** a route's request: its path parameters with it */
+type Req = Request & { params: { id: string; job: string; name: string } };
 
 const PORT = Number(process.env.E2E_DASH_PORT || 4700);
 
@@ -167,18 +174,41 @@ const server = Bun.serve<{ frames: boolean }>({
         dirty: Bun.spawnSync(["git", "status", "--porcelain"]).stdout.toString().trim() !== "",
       }),
     "/api/history": () => json(history()),
-    "/api/runs/:id": (req) => {
+    "/api/runs/:id": (req: Req) => {
       const d = runDetail(req.params.id);
       return d ? json(d) : json({ error: "no such run" }, 404);
     },
-    "/api/runs/:id/lines": (req) => json(liveLines(req.params.id) ?? []),
-    "/api/runs": { POST: (req) => guard(async () => json(startRun(await body<RunRequest>(req), emit))) },
-    "/api/attach/:job": { POST: (req) => guard(() => json(attachRun(req.params.job, emit))) },
-    "/api/runs/:id/cancel": { POST: (req) => guard(async () => json({ ok: await cancelRun(req.params.id) })) },
+    "/api/runs/:id/lines": (req: Req) => json(liveLines(req.params.id) ?? []),
+    "/api/runs": { POST: (req: Req) => guard(async () => json(startRun(await body<RunRequest>(req), emit))) },
+    "/api/attach/:job": { POST: (req: Req) => guard(() => json(attachRun(req.params.job, emit))) },
+    "/api/runs/:id/cancel": { POST: (req: Req) => guard(async () => json({ ok: await cancelRun(req.params.id) })) },
     "/api/files": () => json(files()),
+    // (the reports: one recorded flight — an e2e test's or a scenario's —; a run's recorded tests)
+    "/api/report": (req: Req) => {
+      const dir = safeDir(new URL(req.url).searchParams.get("dir") ?? "");
+      return dir ? json(report(dir)) : json({ error: "no such report" }, 404);
+    },
+    "/api/runs/:id/reports": (req: Req) => {
+      const d = runDetail(req.params.id);
+      if (!d) return json({ error: "no such run" }, 404);
+      const root = reportRootOf(d.log, d.run.remoteJob ?? (d.run.source === "remote" ? d.run.id : undefined));
+      return json({ root, files: root ? e2eReports(root) : {} });
+    },
+    "/api/test-times": () => json(Object.fromEntries(testTimes())),
+    // (the flight lab: its scenarios, its campaigns, a campaign started, a running one steered)
+    "/api/flight/scenarios": () => json(scenarios()),
+    "/api/flight/campaigns": () => json(campaigns()),
+    "/api/flight/run": { POST: (req: Req) => guard(async () => json(startFlight(await body<FlightRequest>(req), emit))) },
+    "/api/flight/ctl": {
+      POST: (req: Req) =>
+        guard(async () => {
+          const b = await body<{ where: "here" | "mini"; port: number; verb: string; body?: string }>(req);
+          return json(await flightCtl(b.where, b.port, b.verb, b.body));
+        }),
+    },
     "/api/shots": () => json(shots()),
     "/api/bh": () => json(bhEntries()),
-    "/api/docs/:name": (req) => {
+    "/api/docs/:name": (req: Req) => {
       const d = doc(req.params.name);
       return d === null
         ? json({ error: "no such doc" }, 404)
@@ -193,7 +223,7 @@ const server = Bun.serve<{ frames: boolean }>({
     },
     "/api/lab/doctor": { POST: () => guard(async () => json(await doctor())) },
     "/api/probe/start": {
-      POST: (req) =>
+      POST: (req: Req) =>
         guard(async () => {
           const o = await body<{ scene?: string; width?: number; height?: number }>(req);
           void startProbe(emit, o);
@@ -201,12 +231,12 @@ const server = Bun.serve<{ frames: boolean }>({
         }),
     },
     "/api/probe/stop": { POST: () => guard(async () => (await stopProbe(emit), json(probeState()))) },
-    "/api/probe/eval": { POST: (req) => guard(async () => json(await evalProbe((await body<{ expr: string }>(req)).expr))) },
-    "/api/probe/input": { POST: (req) => guard(async () => (await inputProbe(await body(req)), json({ ok: true }))) },
+    "/api/probe/eval": { POST: (req: Req) => guard(async () => json(await evalProbe((await body<{ expr: string }>(req)).expr))) },
+    "/api/probe/input": { POST: (req: Req) => guard(async () => (await inputProbe(await body(req)), json({ ok: true }))) },
     "/api/probe/scene": {
-      POST: (req) => guard(async () => (await sceneProbe(emit, (await body<{ scene: string }>(req)).scene), json(probeState()))),
+      POST: (req: Req) => guard(async () => (await sceneProbe(emit, (await body<{ scene: string }>(req)).scene), json(probeState()))),
     },
-    "/api/probe/shot": { POST: (req) => guard(async () => json({ url: await shotProbe((await body<{ name?: string }>(req)).name) })) },
+    "/api/probe/shot": { POST: (req: Req) => guard(async () => json({ url: await shotProbe((await body<{ name?: string }>(req)).name) })) },
     "/api/probe/errors": () => json(probeErrors()),
   },
   fetch(req, srv) {

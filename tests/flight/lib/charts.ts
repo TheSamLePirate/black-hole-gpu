@@ -10,8 +10,8 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import type { Sample } from "./lab";
 
-type Pt = [number, number];
-interface Series {
+export type Pt = [number, number];
+export interface Series {
   name: string;
   pts: Pt[];
   /** a categorical slot (1…3), or a status for verdict points */
@@ -19,7 +19,7 @@ interface Series {
   dash?: boolean;
   dots?: boolean;
 }
-interface Chart {
+export interface Chart {
   title: string;
   unit: string;
   xLabel: string;
@@ -175,12 +175,13 @@ function timeAxis(T: Sample[]) {
 const ser = (T: Sample[], x: (S: Sample) => number, f: (S: Sample) => unknown): Pt[] =>
   T.map((S) => [x(S), f(S)] as [number, unknown]).filter((p): p is Pt => typeof p[1] === "number" && Number.isFinite(p[1]));
 
-/** Writes <dir>/report.html; returns its charts' count. */
-export function scenarioReport(dir: string): number {
-  const T = readJsonl(`${dir}/telemetry.jsonl`);
-  const ev = readJsonl(`${dir}/events.jsonl`) as unknown as { t: number; kind: string; text: string }[];
-  const sum = existsSync(`${dir}/summary.json`) ? JSON.parse(readFileSync(`${dir}/summary.json`, "utf8")) : {};
-  const G = existsSync(`${dir}/graphs.json`) ? JSON.parse(readFileSync(`${dir}/graphs.json`, "utf8")) : { graphs: {}, on: {} };
+/** The flight's graphs, by section — the report pages' (report.html here, the e2e dashboard's interactive one). */
+export function buildCharts(
+  T: Sample[],
+  ev: { t: number; kind: string; text: string }[],
+  // biome-ignore lint/suspicious/noExplicitAny: graphs.json as the sampler wrote it
+  G: { graphs?: Record<string, any>; on?: Record<string, [number, number, number, string][]> },
+) {
   const ax = timeAxis(T);
   const marks = ev
     .filter((e) => e.kind === "phase" && !/^label|^soi/.test(e.text))
@@ -310,6 +311,57 @@ export function scenarioReport(dir: string): number {
       marks,
     });
   }
+  // (what was asked against what was flown: the entry's bank, the approach's slope and line, the guidance's
+  // predicted miss — each the commanded value and the flown one on one chart, their gap the deviation)
+  const commanded: Chart[] = [];
+  const pair = (title: string, unit: string, cmd: [string, (S: Sample) => unknown], flown: [string, (S: Sample) => unknown]) => {
+    const series = [
+      { name: flown[0], pts: ser(T, ax.x, flown[1]), slot: 2 as const },
+      { name: cmd[0], pts: ser(T, ax.x, cmd[1]), slot: 1 as const, dash: true },
+    ].filter((x) => x.pts.length > 1);
+    if (series.length === 2) commanded.push({ title, unit, xLabel: ax.label, series, marks });
+  };
+  pair(
+    "Bank — commanded vs flown",
+    "°",
+    ["commanded (entry guidance)", (S) => S.bankCmd],
+    ["flown", (S) => (inAir(S) ? S.att?.bank : null)],
+  );
+  pair("Glide slope — aimed vs flown", "°", ["aimed (gRef)", (S) => S.entry?.app?.gRef], ["flown (γ)", (S) => S.entry?.app?.gam]);
+  pair(
+    "Approach line — axis vs flown",
+    "m across the runway's axis",
+    ["the axis", (S) => (S.entry?.app ? 0 : null)],
+    ["flown", (S) => S.entry?.app?.across],
+  );
+  pair(
+    "Entry guidance — predicted miss (along)",
+    "km",
+    ["the site", (S) => (S.entry?.miss ? 0 : null)],
+    ["predicted miss", (S) => S.entry?.miss?.along],
+  );
+  pair(
+    "Entry guidance — predicted miss (across)",
+    "km",
+    ["the site", (S) => (S.entry?.miss ? 0 : null)],
+    ["predicted miss", (S) => S.entry?.miss?.across],
+  );
+  pair(
+    "Docking — lateral offset vs the port's axis",
+    "m",
+    ["the axis", (S) => (S.dockInfo ? 0 : null)],
+    ["flown", (S) => S.dockInfo?.lateral],
+  );
+  return { corridors, commanded, approach, docking, telemetry: charts, marks };
+}
+
+/** Writes <dir>/report.html; returns its charts' count. */
+export function scenarioReport(dir: string): number {
+  const T = readJsonl(`${dir}/telemetry.jsonl`);
+  const ev = readJsonl(`${dir}/events.jsonl`) as unknown as { t: number; kind: string; text: string }[];
+  const sum = existsSync(`${dir}/summary.json`) ? JSON.parse(readFileSync(`${dir}/summary.json`, "utf8")) : {};
+  const G = existsSync(`${dir}/graphs.json`) ? JSON.parse(readFileSync(`${dir}/graphs.json`, "utf8")) : { graphs: {}, on: {} };
+  const { corridors, approach, docking, telemetry: charts, commanded } = buildCharts(T, ev, G);
   const shots = existsSync(`${dir}/shots`)
     ? readdirSync(`${dir}/shots`)
         .filter((f) => f.endsWith(".png"))
@@ -324,7 +376,7 @@ export function scenarioReport(dir: string): number {
 <body><div class="viz-root"><h1>${esc(sum.title ?? sum.id ?? dir)} <span class="verdict ${verdict === "PASS" ? "pass" : verdict === "FAIL" ? "fail" : "other"}">${esc(verdict)}</span></h1>
 <div style="color:var(--text-secondary)">${esc(sum.why ?? "")} · ${esc(String(sum.wallS ?? "?"))} s wall · ${T.length} samples</div>
 ${metrics ? `<h2>Measures</h2><table>${metrics}</table>` : ""}
-${section("Corridors (the assistants' graphs)", corridors)}${section("Approach", approach)}${section("Docking", docking)}${section("Telemetry", charts)}
+${section("Corridors (the assistants' graphs)", corridors)}${section("Commanded against flown", commanded)}${section("Approach", approach)}${section("Docking", docking)}${section("Telemetry", charts)}
 ${shots.length ? `<h2>Moments</h2><div class="shots">${shots.map((f) => `<figure><a href="shots/${f}"><img loading="lazy" src="shots/${f}" alt="${esc(f)}"></a><figcaption>${esc(f.replace(/\.png$/, ""))}</figcaption></figure>`).join("")}</div>` : ""}
 <h2>Events</h2><div class="ev">${ev
     .filter((e) => e.kind !== "shot")
@@ -332,7 +384,7 @@ ${shots.length ? `<h2>Moments</h2><div class="shots">${shots.map((f) => `<figure
     .join("<br>")}</div>
 </div><script>${HOVER}</script></body></html>`;
   writeFileSync(`${dir}/report.html`, html);
-  return corridors.length + approach.length + docking.length + charts.length;
+  return corridors.length + commanded.length + approach.length + docking.length + charts.length;
 }
 
 /** The campaign's index: every scenario's verdict, measures and its report. */

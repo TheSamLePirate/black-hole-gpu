@@ -1,7 +1,9 @@
 // The e2e dashboard's page (scripts/dashboard/server.ts serves it): one socket for everything live (the lab,
 // runs' lines and results, the live page's frames), the rest asked of /api. Views by the URL's hash.
 import { renderMarkdown, slug } from "../markdown";
+import type { Chart, Pt } from "../../../tests/flight/lib/charts";
 import type { FileResult, LogEvent, LogSummary, TestResult } from "../parse-log";
+import { chartEl, fmt } from "./charts";
 
 // ------------------------------------------------------------------------------------------- types
 
@@ -19,6 +21,9 @@ interface Run {
   counts: { pass: number; fail: number; skip: number; files: number };
   hasLog: boolean;
   report?: string;
+  /** what the dashboard asked (its runs: run again, rerun the failed) */
+  request?: { files: string[]; where: string } & Record<string, unknown>;
+  flight?: Record<string, unknown>;
 }
 interface Mac {
   host: string;
@@ -130,6 +135,7 @@ function localStorageSet(k: string, v: string) {
 
 // ------------------------------------------------------------------------------------------- dom
 
+const valued = new WeakSet<Element>();
 type Child = Node | string | number | null | undefined | false | Child[];
 function h(tag: string, attrs: Record<string, unknown> = {}, ...kids: Child[]): HTMLElement {
   const el = document.createElement(tag);
@@ -144,6 +150,8 @@ function h(tag: string, attrs: Record<string, unknown> = {}, ...kids: Child[]): 
     else if (typeof v === "boolean" && k !== "checked" && k !== "selected") el.setAttribute(k, "");
     else if (k in el && typeof v !== "string") (el as unknown as Record<string, unknown>)[k] = v;
     else el.setAttribute(k, v === true ? "" : String(v));
+    // (a field whose value the page sets: a repaint brings it; one it leaves to the user keeps what they typed)
+    if (k === "value") valued.add(el);
   }
   const add = (c: Child) => {
     if (c === null || c === undefined || c === false) return;
@@ -153,6 +161,8 @@ function h(tag: string, attrs: Record<string, unknown> = {}, ...kids: Child[]): 
   kids.forEach(add);
   return el;
 }
+/** children without the absent ones (a conditional left null) */
+const nodes = (...xs: (Node | string | null | undefined | false)[]) => xs.filter((x): x is Node | string => !!x);
 const $ = (sel: string, root: ParentNode = document) => root.querySelector(sel) as HTMLElement | null;
 
 function toast(msg: string, kind: "ok" | "bad" | "" = "") {
@@ -324,7 +334,7 @@ function onMsg(m: Record<string, unknown>) {
     case "lab":
       S.lab = m.lab as typeof S.lab;
       paintSide();
-      if (view() === "overview") schedule();
+      if (view() === "overview" || view() === "flight") schedule();
       break;
     case "run": {
       const r = m.run as Run;
@@ -356,6 +366,8 @@ function onMsg(m: Record<string, unknown>) {
       break;
     }
     case "history":
+      FL.campaigns = null;
+      FL.scenarios = null;
       S.history = null;
       S.shots = null;
       S.files = null;
@@ -409,6 +421,8 @@ function applyEv(l: LiveRun, ev: LogEvent) {
     const f = l.files.get(ev.file) ?? { file: ev.file, tests: [] };
     f.tests.push(ev.test);
     l.files.set(ev.file, f);
+    // (its record now written: the run's reports read again)
+    runReports.delete(l.run.id);
   }
 }
 
@@ -420,6 +434,7 @@ const VIEWS: [string, string, string][] = [
   ["live", "≋", "Live"],
   ["history", "☰", "History"],
   ["captures", "▣", "Captures"],
+  ["flight", "✈", "Flight lab"],
   ["page", "◈", "Live page · __bh"],
   ["api", "ƒ", "__bh API"],
   ["doc", "¶", "Docs"],
@@ -443,7 +458,7 @@ function paint(fresh = true) {
   const v = view();
   const main = $("#main")!;
   // (the live page is painted once: frames and its console update in place, the REPL keeps its text)
-  if (v === "page" && lastView === "page" && !fresh) return;
+  if ((v === "page" || v === "report") && lastView === v && !fresh) return;
   const sameView = v === lastView && `${v}/${arg()}` === lastKey;
   const page = (PAGES[v] ?? PAGES.overview!)();
   if (sameView && main.firstElementChild) {
@@ -488,7 +503,8 @@ function morph(old: Node, next: Node): Node {
   for (const k of HANDLERS) if (o[k] !== n[k]) o[k] = n[k];
   // (a field's own state: its text kept while it has the focus)
   if (old instanceof HTMLInputElement || old instanceof HTMLTextAreaElement || old instanceof HTMLSelectElement) {
-    if (document.activeElement !== old && old.value !== (next as HTMLInputElement).value) old.value = (next as HTMLInputElement).value;
+    if (valued.has(next) && document.activeElement !== old && old.value !== (next as HTMLInputElement).value)
+      old.value = (next as HTMLInputElement).value;
     if (old instanceof HTMLInputElement) old.checked = (next as HTMLInputElement).checked;
   }
   const oc = [...old.childNodes],
@@ -789,6 +805,13 @@ const recentDots = (r: ("pass" | "fail")[]) =>
     "span",
     { class: "row", style: { gap: "3px" }, title: "last results, newest on the left" },
     r.map((x) => h("span", { class: `dot ${x === "pass" ? "ok" : "bad"}`, style: { boxShadow: "none", width: "6px", height: "6px" } })),
+  );
+/** a key–value grid: each key and value its own cell (adjacent text would merge into one) */
+const kv = (...xs: (string | Node)[]) =>
+  h(
+    "div",
+    { class: "kv" },
+    xs.map((x) => (typeof x === "string" ? h("span", {}, x) : x)),
   );
 const kpi = (v: string, l: string, kind = "") =>
   h(
@@ -1152,8 +1175,10 @@ function liveFiles(l: LiveRun) {
         cur ? h("span", { class: "spinner" }) : h("span", { class: fail ? "bad-t" : "ok-t" }, fail ? "✗" : "✓"),
         f.file.replace(/^tests\/e2e\//, ""),
       ),
-      f.tests.map((t) =>
-        h(
+      f.tests.map((t) => {
+        // (a finished test's report, as soon as its record is written — on the mini, once the run is back)
+        const rep = testReportDir(l.run.id, f as unknown as FileResult, t);
+        return h(
           "div",
           { class: "tl" },
           h(
@@ -1162,9 +1187,12 @@ function liveFiles(l: LiveRun) {
             t.status === "pass" ? "✓" : t.status === "fail" ? "✗" : "○",
           ),
           h("span", {}, t.name),
+          rep
+            ? h("a", { class: "btn sm", href: reportHref(rep, { name: t.name, status: t.status, file: f.file, run: l.run.id }) }, "▸")
+            : null,
           h("span", { class: "ms" }, t.ms !== undefined ? dur(t.ms / 1000) : ""),
-        ),
-      ),
+        );
+      }),
     );
   });
 }
@@ -1344,19 +1372,8 @@ function historyPage() {
 
 function runDetailPage(id: string) {
   if (id.startsWith("flight:")) {
-    const r = S.history?.find((x) => x.id === id);
-    return h(
-      "div",
-      { class: "page" },
-      h("div", { class: "head" }, h("a", { href: "#history", class: "btn ghost" }, "←"), h("h1", {}, r?.title ?? id)),
-      r?.report
-        ? h("iframe", {
-            src: r.report,
-            style: { width: "100%", height: "80vh", border: "1px solid var(--line)", borderRadius: "10px", background: "#fff" },
-          })
-        : h("div", { class: "card empty" }, "No report.html in this campaign."),
-      shotsGrid((S.shots ?? []).filter((s) => `flight:${s.run}` === id && s.root === "flight-results")),
-    );
+    location.replace(`#campaign/${encodeURIComponent(`flight-results/${id.slice(7)}`)}`);
+    return h("div", { class: "page" });
   }
   if (!detailCache || detailCache.id !== id || S.live.get(id)?.run.state === "running") {
     api<Detail>(`/api/runs/${encodeURIComponent(id)}`)
@@ -1515,8 +1532,9 @@ function runDetailPage(id: string) {
               h(
                 "div",
                 { style: { paddingLeft: "18px" } },
-                f.tests.map((t) =>
-                  h(
+                f.tests.map((t) => {
+                  const rep = testReportDir(r.id, f, t);
+                  return h(
                     "div",
                     { class: "tl" },
                     h(
@@ -1525,9 +1543,16 @@ function runDetailPage(id: string) {
                       t.status === "pass" ? "✓" : t.status === "fail" ? "✗" : "○",
                     ),
                     h("span", {}, t.name),
+                    rep
+                      ? h(
+                          "a",
+                          { class: "btn sm", href: reportHref(rep, { name: t.name, status: t.status, file: f.file, run: r.id }) },
+                          "Report ▸",
+                        )
+                      : null,
                     h("span", { class: "ms" }, t.ms !== undefined ? dur(t.ms / 1000) : ""),
-                  ),
-                ),
+                  );
+                }),
               ),
             ),
           ),
@@ -1823,44 +1848,46 @@ function paintProbeBar() {
     (scenes.length ? scenes : [p.scene ?? "game:artemis"]).map((s) => h("option", { value: s, selected: s === p.scene }, s)),
   );
   bar.replaceChildren(
-    h(
-      "span",
-      { class: `badge ${on ? "ok" : p.state === "off" ? "" : "acc"}` },
-      h("span", { class: `dot ${on ? "ok" : p.state === "off" ? "" : "run"}` }),
-      p.state,
-    ),
-    sceneSel,
-    on
-      ? h(
-          "button",
-          {
-            class: "btn",
-            onclick: async () => {
-              const r = await api<{ url: string }>("/api/probe/shot", {});
-              toast("Screenshot kept", "ok");
-              S.shots = null;
-              openLightbox(
-                [
-                  {
-                    url: r.url,
-                    root: "remote-results",
-                    run: "dash",
-                    name: r.url.split("/").pop()!,
-                    path: r.url.slice(7),
-                    mtime: Date.now(),
-                    size: 0,
-                  },
-                ],
-                0,
-              );
+    ...nodes(
+      h(
+        "span",
+        { class: `badge ${on ? "ok" : p.state === "off" ? "" : "acc"}` },
+        h("span", { class: `dot ${on ? "ok" : p.state === "off" ? "" : "run"}` }),
+        p.state,
+      ),
+      sceneSel,
+      on
+        ? h(
+            "button",
+            {
+              class: "btn",
+              onclick: async () => {
+                const r = await api<{ url: string }>("/api/probe/shot", {});
+                toast("Screenshot kept", "ok");
+                S.shots = null;
+                openLightbox(
+                  [
+                    {
+                      url: r.url,
+                      root: "remote-results",
+                      run: "dash",
+                      name: r.url.split("/").pop()!,
+                      path: r.url.slice(7),
+                      mtime: Date.now(),
+                      size: 0,
+                    },
+                  ],
+                  0,
+                );
+              },
             },
-          },
-          "📷 Screenshot",
-        )
-      : null,
-    p.state === "off"
-      ? h("button", { class: "btn primary", onclick: () => startProbe() }, "▶ Start")
-      : h("button", { class: "btn danger", disabled: p.state !== "on", onclick: () => api("/api/probe/stop", {}) }, "■ Stop"),
+            "📷 Screenshot",
+          )
+        : null,
+      p.state === "off"
+        ? h("button", { class: "btn primary", onclick: () => startProbe() }, "▶ Start")
+        : h("button", { class: "btn danger", disabled: p.state !== "on", onclick: () => api("/api/probe/stop", {}) }, "■ Stop"),
+    ),
   );
   if (on && !scenes.length)
     api<{ ok: boolean; value: string[] }>("/api/probe/eval", { expr: "__bh.scenes()" }).then((r) => {
@@ -1956,20 +1983,22 @@ function wireRepl(ta: HTMLTextAreaElement) {
     const box = acBox();
     if (!box) return;
     box.replaceChildren(
-      acList.length
-        ? h(
-            "div",
-            { class: "acs", style: { bottom: "100%", left: 0 } },
-            acList.map((e, i) =>
-              h(
-                "div",
-                { class: i === acIdx ? "on" : "", onmousedown: (ev: Event) => (ev.preventDefault(), pick(e)) },
-                e.path,
-                h("span", {}, e.section.replace(/ —.*$/, "")),
+      ...nodes(
+        acList.length
+          ? h(
+              "div",
+              { class: "acs", style: { bottom: "100%", left: 0 } },
+              acList.map((e, i) =>
+                h(
+                  "div",
+                  { class: i === acIdx ? "on" : "", onmousedown: (ev: Event) => (ev.preventDefault(), pick(e)) },
+                  e.path,
+                  h("span", {}, e.section.replace(/ —.*$/, "")),
+                ),
               ),
-            ),
-          )
-        : null,
+            )
+          : null,
+      ),
     );
   };
   const pick = (e: BhEntry) => {
@@ -2296,6 +2325,942 @@ function docPage() {
   );
 }
 
+// ------------------------------------------------------------------------------------------- reports
+
+interface Report {
+  dir: string;
+  kind: "test" | "scenario";
+  // biome-ignore lint/suspicious/noExplicitAny: summary.json as written (an e2e test's, a scenario's)
+  summary: Record<string, any>;
+  scenario: { id: string; title: string; tags: string[]; minutes: number } | null;
+  samples: number;
+  sim: { t0: number; t1: number } | null;
+  fps: { wall: number; fps: number; worstMs: number }[];
+  events: { t: number; kind: string; text: string; wall?: number }[];
+  sections: { corridors: Chart[]; commanded: Chart[]; approach: Chart[]; docking: Chart[]; telemetry: Chart[] };
+  hub: { t: number; title: string; phase: string; next: string | null; rows: [string, string, string?][]; say: string | null }[];
+  quality: Record<string, number | null>;
+  shots: { name: string; url: string }[];
+  raw: { name: string; url: string }[];
+  // biome-ignore lint/suspicious/noExplicitAny: the first and last samples
+  first: Record<string, any> | null;
+  // biome-ignore lint/suspicious/noExplicitAny: the first and last samples
+  last: Record<string, any> | null;
+}
+interface ReportCtx {
+  name?: string;
+  status?: string;
+  file?: string;
+  run?: string;
+}
+
+// (a run's recorded tests: fetched once a run, matched to the log's tests in order)
+const runReports = new Map<string, { root: string | null; files: Record<string, { k: number; dir: string }[]> } | "loading">();
+function testReportDir(runId: string, f: FileResult, t: TestResult): string | null {
+  const got = runReports.get(runId);
+  if (!got) {
+    runReports.set(runId, "loading");
+    api<{ root: string | null; files: Record<string, { k: number; dir: string }[]> }>(`/api/runs/${encodeURIComponent(runId)}/reports`)
+      .then((r) => {
+        runReports.set(runId, r);
+        schedule();
+      })
+      .catch(() => runReports.delete(runId));
+    return null;
+  }
+  if (got === "loading" || !got.root) return null;
+  const base = f.file.replace(/^.*\//, "");
+  const dirs = got.files[base];
+  if (!dirs) return null;
+  // (the tests whose hooks ran — not the skipped, not a failed setup's "(unnamed)" — in the log's order)
+  const ran = f.tests.filter((x) => x.status !== "skip" && x.status !== "todo" && !/\(unnamed\)$/.test(x.name));
+  const k = ran.indexOf(t) + 1;
+  return dirs.find((d) => d.k === k)?.dir ?? null;
+}
+
+const reportHref = (dir: string, c: ReportCtx = {}) =>
+  `#report/${[dir, c.name ?? "", c.status ?? "", c.file ?? "", c.run ?? ""].map(encodeURIComponent).join("|")}`;
+const reportArgs = (): [string, ReportCtx] => {
+  const raw = location.hash.slice(1).split("/").slice(1).join("/");
+  const [dir, name, status, file, run] = raw.split("|").map((x) => decodeURIComponent(x ?? ""));
+  return [dir ?? "", { name: name || undefined, status: status || undefined, file: file || undefined, run: run || undefined }];
+};
+
+const reportCache = new Map<string, Report>();
+let testTimesCache: Record<string, { ms: number; at: number; status: string; where: string; run: string }[]> | null = null;
+let evFilter = "";
+
+function zoomChart(c: Chart) {
+  showModal(c.title, chartEl(c, { big: true }));
+}
+const chartGrid = (cs: Chart[]) =>
+  h(
+    "div",
+    { class: "vgrid" },
+    cs.map((c) => chartEl(c, { onZoom: zoomChart })),
+  );
+
+function reportPage() {
+  const [dir, ctx] = reportArgs();
+  const rep = reportCache.get(dir);
+  if (!rep) {
+    api<Report>(`/api/report?dir=${encodeURIComponent(dir)}`)
+      .then((r) => {
+        reportCache.set(dir, r);
+        paint(true);
+      })
+      .catch((e) => toast(String(e), "bad"));
+    if (!testTimesCache)
+      api<NonNullable<typeof testTimesCache>>("/api/test-times").then((t) => {
+        testTimesCache = t;
+        if (view() === "report") paint(true);
+      });
+    return h("div", { class: "page" }, h("div", { class: "empty" }, h("span", { class: "spinner" }), " Reading the flight…"));
+  }
+  if (!S.files) load.files().then(() => paint(true));
+  const sum = rep.summary;
+  const isScenario = rep.kind === "scenario";
+  const file = (ctx.file ?? sum.file ?? "").replace(/^.*\//, "");
+  const fi = S.files?.find((f) => f.file === file);
+  const title = isScenario ? (sum.title ?? sum.id) : (ctx.name ?? `${file} · test ${sum.k ?? ""}`);
+  const status = isScenario ? String(sum.verdict ?? "?").toLowerCase() : (ctx.status ?? "");
+  const ok = status === "pass";
+  // (the estimate: this test's past durations, the median; a scenario's own estimate)
+  const past = !isScenario && file && ctx.name ? (testTimesCache?.[`${file}::${ctx.name}`] ?? []) : [];
+  const done = past.filter((p) => !ctx.run || p.run !== ctx.run).map((p) => p.ms / 1000);
+  const est = isScenario
+    ? (rep.scenario?.minutes ?? 0) * 60
+    : done.length
+      ? [...done].sort((a, b) => a - b)[Math.floor(done.length / 2)]!
+      : null;
+  const took = sum.wallS ?? null;
+  const delta = est && took ? Math.round(((took - est) / est) * 100) : null;
+  const fpsV = rep.fps.map((f) => f.fps);
+  const fs =
+    sum.fps ?? (fpsV.length ? { median: [...fpsV].sort((a, b) => a - b)[Math.floor(fpsV.length / 2)], min: Math.min(...fpsV) } : null);
+  const errors = rep.events.filter((e) => e.kind === "page-error");
+  const err = ctx.run && detailCache?.id === ctx.run ? findError(ctx) : null;
+  const commanded = [...rep.sections.corridors, ...rep.sections.commanded, ...rep.sections.approach, ...rep.sections.docking];
+  const fpsCharts: Chart[] = rep.fps.length
+    ? [
+        {
+          title: "Frame rate",
+          unit: "fps",
+          xLabel: "test time [s]",
+          series: [{ name: "fps", pts: rep.fps.map((f) => [f.wall / 1000, f.fps] as Pt) }],
+        },
+        {
+          title: "Worst frame each second",
+          unit: "ms",
+          xLabel: "test time [s]",
+          series: [{ name: "frame", pts: rep.fps.map((f) => [f.wall / 1000, f.worstMs] as Pt), slot: 2 }],
+        },
+      ]
+    : [];
+  const kinds = [...new Set(rep.events.map((e) => e.kind.split(":")[0]!))];
+  const evs = rep.events.filter((e) => !evFilter || e.kind.startsWith(evFilter));
+  const q = Object.entries(rep.quality).filter(([, v]) => v !== null && v !== undefined);
+  const metrics = Object.entries(sum.metrics ?? {}).filter(([k]) => !k.startsWith("q_"));
+  return h(
+    "div",
+    { class: "page" },
+    h(
+      "div",
+      { class: "head" },
+      h("button", { class: "btn ghost", onclick: () => history.back() }, "←"),
+      h(
+        "div",
+        {},
+        h("h1", {}, title),
+        h(
+          "div",
+          { class: "sub mono" },
+          isScenario
+            ? `${sum.id} · ${sum.machine ?? ""} · attempt ${sum.attempt ?? 1}`
+            : `${file} · test ${sum.k} · ${sum.host ?? ""}${sum.start ? ` · ${when(sum.start)}` : ""}`,
+        ),
+      ),
+      h("span", { class: "grow" }),
+      status
+        ? h(
+            "span",
+            { class: `badge ${ok ? "ok" : status === "fail" ? "bad" : "warn"}` },
+            ok ? "✓ passed" : status === "fail" ? "✗ failed" : status,
+          )
+        : null,
+      ...rep.raw.map((r) => h("a", { class: "btn sm", href: r.url, target: "_blank", title: "the raw record" }, r.name)),
+    ),
+    h(
+      "div",
+      { class: "grid g4", style: { marginBottom: "16px" } },
+      kpi(
+        took !== null ? dur(took) : "—",
+        est ? `took · estimate ${dur(est)}${delta !== null ? ` (${delta > 0 ? "+" : ""}${delta} %)` : ""}` : "took · no estimate yet",
+        delta !== null && delta > 50 ? "warn" : "",
+      ),
+      kpi(
+        fs ? `${fs.median} fps` : "—",
+        fs ? `median · p5 ${fs.p5 ?? "—"} · min ${fs.min}` : "frame rate not recorded",
+        fs && fs.median < 30 ? "warn" : "",
+      ),
+      kpi(String(rep.samples), rep.sim ? `samples · ${dur(rep.sim.t1 - rep.sim.t0)} of simulated time` : "samples"),
+      kpi(
+        String(errors.length),
+        `page errors · ${rep.events.filter((e) => e.kind === "pilot").length} pilot messages · ${rep.events.filter((e) => e.kind === "phase").length} moments`,
+        errors.length ? "bad" : "ok",
+      ),
+    ),
+    h(
+      "div",
+      { class: "grid g2", style: { marginBottom: "16px" } },
+      h(
+        "div",
+        { class: "card" },
+        h("h3", {}, "What it tests"),
+        isScenario
+          ? h(
+              "div",
+              {},
+              h("div", {}, sum.title),
+              h(
+                "div",
+                { class: "row", style: { marginTop: "8px" } },
+                (sum.tags ?? []).map((t: string) => h("span", { class: "badge" }, t)),
+              ),
+              h("div", { class: "muted", style: { marginTop: "8px" } }, `Verdict: ${sum.why ?? ""}`),
+            )
+          : h(
+              "div",
+              { class: "col", style: { gap: "6px" } },
+              ctx.name
+                ? h(
+                    "div",
+                    {},
+                    h("b", {}, ctx.name.split(" > ").slice(-1)[0]),
+                    h("div", { class: "faint" }, ctx.name.split(" > ").slice(0, -1).join(" › ")),
+                  )
+                : null,
+              fi ? h("div", { class: "muted" }, fi.what || fi.comment) : null,
+              fi?.scenes ? h("div", { class: "faint" }, `Scene: ${fi.scenes}`) : null,
+              fi?.comment && fi.what
+                ? h(
+                    "details",
+                    {},
+                    h("summary", { class: "faint", style: { cursor: "pointer" } }, "the file's own words"),
+                    h("div", { class: "muted pre-wrap" }, fi.comment),
+                  )
+                : null,
+            ),
+      ),
+      h(
+        "div",
+        { class: "card" },
+        h("h3", {}, "Where it ended"),
+        rep.last
+          ? kv(
+              "Status",
+              String(rep.last.label ?? "—"),
+              "Autopilot",
+              `${rep.last.auto ?? "none"}${rep.last.assist ? " (assisted)" : ""} · hold ${rep.last.hold ?? "none"}`,
+              "Height · speed",
+              `${rep.last.alt !== null && rep.last.alt !== undefined ? `${fmt(rep.last.alt)} km` : "—"} · ${rep.last.v !== null && rep.last.v !== undefined ? `${fmt(rep.last.v)} m/s` : "—"}`,
+              "Orbit",
+              rep.last.orbit ? `${fmt(rep.last.orbit.pe)} × ${fmt(rep.last.orbit.ap)} km, ${fmt(rep.last.orbit.inc)}°` : "—",
+              "Hub",
+              rep.last.hub ? `${rep.last.hub.title} — ${rep.last.hub.phase ?? ""}` : "—",
+              "Landed · docked",
+              `${rep.last.landed ? `on ${rep.last.landedOn}` : "no"} · ${rep.last.docked ? "yes" : "no"}`,
+            )
+          : h("div", { class: "faint" }, "No sample: this test drove no page (or its telemetry was off)."),
+      ),
+    ),
+    err
+      ? h(
+          "div",
+          { class: "card", style: { marginBottom: "16px", borderColor: "var(--bad)" } },
+          h("h3", {}, h("span", { class: "bad-t" }, "✗"), "The failure"),
+          h("div", { class: "err" }, err),
+        )
+      : null,
+    commanded.length
+      ? h(
+          "div",
+          { class: "section" },
+          h(
+            "h2",
+            {},
+            "Commanded against flown",
+            h("small", {}, " — the assistants' corridors and optimum, the guidance's aims, and what was flown"),
+          ),
+          chartGrid(commanded),
+        )
+      : rep.samples
+        ? h(
+            "div",
+            { class: "card faint", style: { marginBottom: "16px" } },
+            "No guidance in this test: no assistant's corridor, no commanded bank, slope or docking axis was recorded.",
+          )
+        : null,
+    rep.hub.length
+      ? h(
+          "div",
+          { class: "section" },
+          h(
+            "h2",
+            {},
+            "The hub's card, as it changed",
+            h("small", {}, ` — ${rep.hub.length} states: each figure as the pilot read it, its warning colour`),
+          ),
+          h(
+            "div",
+            { class: "card", style: { padding: "6px 10px", maxHeight: "420px", overflow: "auto" } },
+            h(
+              "table",
+              { class: "t" },
+              h("thead", {}, h("tr", {}, h("th", {}, "t"), h("th", {}, "Card"), h("th", {}, "Figures"), h("th", {}, "Says"))),
+              h(
+                "tbody",
+                {},
+                rep.hub.map((c) =>
+                  h(
+                    "tr",
+                    {},
+                    h("td", { class: "mono faint", style: { whiteSpace: "nowrap" } }, rep.sim ? `+${dur(c.t - rep.sim.t0)}` : ""),
+                    h(
+                      "td",
+                      {},
+                      h("b", {}, c.title),
+                      h("div", { class: "faint" }, c.phase ?? ""),
+                      c.next ? h("div", { class: "faint" }, `next: ${c.next}`) : null,
+                    ),
+                    h(
+                      "td",
+                      {},
+                      (c.rows ?? []).map((r) =>
+                        h(
+                          "span",
+                          { class: `hubrow ${r[2] === "bad" ? "bad-t" : r[2] === "warn" ? "warn-t" : ""}` },
+                          h("span", { class: "faint" }, `${r[0]} `),
+                          String(r[1] ?? ""),
+                        ),
+                      ),
+                    ),
+                    h("td", { class: "muted" }, c.say ?? ""),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        )
+      : null,
+    q.length || metrics.length
+      ? h(
+          "div",
+          { class: "section" },
+          h("h2", {}, "Measures", h("small", {}, " — how hard, how calm, how long in the corridor, what was spent")),
+          h(
+            "div",
+            { class: "card" },
+            h(
+              "div",
+              { class: "measures" },
+              [...metrics, ...q].map(([k, v]) =>
+                h(
+                  "div",
+                  { class: "m" },
+                  h("span", { class: "faint" }, k.replace(/^q_/, "")),
+                  h("b", {}, typeof v === "number" ? fmt(v) : JSON.stringify(v)),
+                ),
+              ),
+            ),
+          ),
+        )
+      : null,
+    fpsCharts.length ? h("div", { class: "section" }, h("h2", {}, "Frame rate during the test"), chartGrid(fpsCharts)) : null,
+    rep.sections.telemetry.length ? h("div", { class: "section" }, h("h2", {}, "Telemetry"), chartGrid(rep.sections.telemetry)) : null,
+    rep.shots.length
+      ? h(
+          "div",
+          { class: "section" },
+          h("h2", {}, "Pictures"),
+          shotsGrid(
+            rep.shots.map((s) => ({
+              url: s.url,
+              root: "",
+              run: title,
+              name: s.name,
+              path: s.url.slice(7),
+              mtime: sum.end ?? Date.now(),
+              size: 0,
+            })),
+          ),
+        )
+      : null,
+    rep.events.length
+      ? h(
+          "div",
+          { class: "section" },
+          h(
+            "h2",
+            {},
+            "Events",
+            h(
+              "span",
+              { class: "row", style: { display: "inline-flex", marginLeft: "12px", gap: "4px" } },
+              ["", ...kinds].map((k) =>
+                h(
+                  "button",
+                  {
+                    class: `badge ${evFilter === k ? "acc" : ""}`,
+                    style: { cursor: "pointer" },
+                    onclick: () => {
+                      evFilter = k;
+                      paint(true);
+                    },
+                  },
+                  k || "all",
+                ),
+              ),
+            ),
+          ),
+          h(
+            "div",
+            { class: "log", style: { maxHeight: "420px" } },
+            evs.map((e) =>
+              h(
+                "div",
+                { class: e.kind === "page-error" ? "f" : e.kind === "phase" ? "h" : e.kind === "pilot" ? "p" : "" },
+                `${e.wall !== undefined ? `${(e.wall / 1000).toFixed(1).padStart(6)} s  ` : ""}${e.kind.padEnd(12)} ${e.text}`,
+              ),
+            ),
+          ),
+        )
+      : null,
+  );
+}
+
+function findError(ctx: ReportCtx) {
+  const d = detailCache?.d;
+  const f = d?.parsed?.files.find((x) => x.file.replace(/^.*\//, "") === (ctx.file ?? "").replace(/^.*\//, ""));
+  return f?.tests.find((t) => t.name === ctx.name)?.error ?? null;
+}
+
+// ------------------------------------------------------------------------------------------- the flight lab
+
+interface Scenario {
+  id: string;
+  title: string;
+  tags: string[];
+  minutes: number;
+  runs: { verdict: string; why: string; wallS: number; at: number; dir: string; machine: string }[];
+}
+interface Campaign {
+  id: string;
+  dir: string;
+  machine: string;
+  at: number;
+  rows: { id: string; title: string; verdict: string; why: string; wallS: number; machine?: string; tags: string[] }[];
+  notes: string[];
+  complete: boolean;
+}
+const FL = {
+  scenarios: null as Scenario[] | null,
+  campaigns: null as Campaign[] | null,
+  pick: new Set<string>(),
+  where: "both" as "here" | "mini" | "both",
+  tags: new Set<string>(),
+  q: "",
+  retries: 0,
+  over: 3,
+  evalOut: "" as string,
+};
+const vClass = (v: string) => (v === "PASS" ? "ok" : v === "FAIL" ? "bad" : "warn");
+
+function liveCampaigns() {
+  const out: {
+    where: "here" | "mini";
+    c: Mac["campaigns"][number] & { port?: number; since?: number; status?: Record<string, unknown> | null };
+  }[] = [];
+  for (const c of S.lab.here?.campaigns ?? []) out.push({ where: "here", c });
+  for (const c of S.lab.mini?.campaigns ?? []) out.push({ where: "mini", c });
+  return out;
+}
+
+async function ctl(where: "here" | "mini", port: number, verb: string, body?: string) {
+  try {
+    const r = await api<Record<string, unknown>>("/api/flight/ctl", { where, port, verb, body });
+    if (verb === "shot" && typeof r.url === "string")
+      openLightbox([{ url: r.url, root: "", run: "flight", name: "now", path: r.url, mtime: Date.now(), size: 0 }], 0);
+    else if (verb === "eval") {
+      FL.evalOut = JSON.stringify(r.value ?? r.error ?? r, null, 2);
+      paint(true);
+    } else toast(`${verb}: ${JSON.stringify(r).slice(0, 120)}`, "ok");
+  } catch (e) {
+    toast(String(e), "bad");
+  }
+}
+
+function campaignCard(where: "here" | "mini", c: ReturnType<typeof liveCampaigns>[number]["c"]) {
+  // biome-ignore lint/suspicious/noExplicitAny: the campaign's /status as lab-monitor relays it
+  const st = (c.status ?? {}) as any;
+  const T = st.T ?? {};
+  const port = (c as { port?: number }).port ?? 0;
+  const btn = (label: string, verb: string, cls = "") =>
+    h("button", { class: `btn sm ${cls}`, onclick: () => ctl(where, port, verb) }, label);
+  return h(
+    "div",
+    { class: "card", style: { marginBottom: "16px", borderColor: "var(--accent)" } },
+    h(
+      "div",
+      { class: "row", style: { marginBottom: "10px" } },
+      h("span", { class: "dot run" }),
+      h("b", {}, st.scenario?.id ?? "between scenarios"),
+      h("span", { class: "badge" }, where === "mini" ? "kerr-mini" : "this Mac"),
+      h("span", { class: `badge ${st.control === "run" ? "ok" : "warn"}` }, st.control ?? "?"),
+      h(
+        "span",
+        { class: "faint" },
+        `${st.scenario ? `${dur(st.scenario.wallS)} in · ` : ""}${(st.done ?? []).length} done · ${st.left ?? "?"} left`,
+      ),
+      h("span", { class: "grow" }),
+      btn("⏸ Pause", "pause"),
+      btn("▶ Resume", "resume"),
+      btn("⏭ Skip", "skip"),
+      btn("■ Abort", "abort", "danger"),
+      btn("📷 Shot", "shot"),
+    ),
+    h(
+      "div",
+      { class: "grid g4", style: { marginBottom: "10px" } },
+      kpi(T.label ?? "—", "status"),
+      kpi(typeof T.alt === "number" ? `${fmt(T.alt)} km` : "—", "height"),
+      kpi(typeof T.v === "number" ? `${fmt(T.v)} m/s` : "—", "speed"),
+      kpi(T.auto ?? "none", `autopilot${T.assist ? " (assisted)" : ""} · hold ${T.hold ?? "none"}`),
+    ),
+    T.hub
+      ? h(
+          "div",
+          { class: "card", style: { boxShadow: "none", marginBottom: "10px" } },
+          h(
+            "div",
+            { class: "row" },
+            h("b", {}, T.hub.title),
+            h("span", { class: "faint" }, T.hub.phase ?? ""),
+            T.hub.next ? h("span", { class: "faint" }, `→ ${T.hub.next}`) : null,
+          ),
+          h(
+            "div",
+            { class: "measures", style: { marginTop: "6px" } },
+            (T.hub.rows ?? []).map((r: [string, string, string?]) =>
+              h(
+                "div",
+                { class: "m" },
+                h("span", { class: "faint" }, r[0]),
+                h("b", { class: r[2] === "bad" ? "bad-t" : r[2] === "warn" ? "warn-t" : "" }, String(r[1])),
+              ),
+            ),
+          ),
+          T.hub.say ? h("div", { class: "muted", style: { marginTop: "6px" } }, T.hub.say) : null,
+        )
+      : null,
+    h(
+      "div",
+      { class: "grid g2" },
+      h(
+        "div",
+        { class: "log", style: { maxHeight: "180px" } },
+        (st.events ?? []).map((e: string) => h("div", {}, e)),
+      ),
+      h(
+        "div",
+        { class: "col" },
+        h(
+          "div",
+          { class: "row" },
+          h("input", { class: "input grow", placeholder: "A note in the report…", id: `note-${where}` }),
+          h(
+            "button",
+            {
+              class: "btn sm",
+              onclick: () => {
+                const i = $(`#note-${where}`) as HTMLInputElement;
+                if (i.value) ctl(where, port, "note", i.value).then(() => (i.value = ""));
+              },
+            },
+            "Note",
+          ),
+        ),
+        h(
+          "div",
+          { class: "row" },
+          h("input", { class: "input grow mono", placeholder: "Page code, e.g. __bh.game.status()", id: `eval-${where}` }),
+          h(
+            "button",
+            {
+              class: "btn sm",
+              onclick: () => {
+                const i = $(`#eval-${where}`) as HTMLInputElement;
+                if (i.value) ctl(where, port, "eval", i.value);
+              },
+            },
+            "Eval",
+          ),
+        ),
+        FL.evalOut ? h("div", { class: "log", style: { maxHeight: "140px" } }, FL.evalOut) : null,
+        (st.done ?? []).length
+          ? h("div", { class: "faint", style: { fontSize: "12px" } }, (st.done as string[]).slice(-6).join(" · "))
+          : null,
+      ),
+    ),
+  );
+}
+
+function flightPage() {
+  if (!FL.scenarios) api<Scenario[]>("/api/flight/scenarios").then((s) => ((FL.scenarios = s), schedule()));
+  if (!FL.campaigns) api<Campaign[]>("/api/flight/campaigns").then((c) => ((FL.campaigns = c), schedule()));
+  const live = liveCampaigns();
+  const all = FL.scenarios ?? [];
+  const tags = [...new Set(all.flatMap((s) => s.tags))].sort();
+  const q = FL.q.toLowerCase();
+  const shown = all.filter(
+    (s) => (!q || `${s.id} ${s.title}`.toLowerCase().includes(q)) && (!FL.tags.size || s.tags.some((t) => FL.tags.has(t))),
+  );
+  const sel = all.filter((s) => FL.pick.has(s.id));
+  const target = sel.length ? sel : shown;
+  const mins = target.reduce((a, s) => a + s.minutes, 0);
+  const launch = async () => {
+    try {
+      const runs = await api<Run[]>("/api/flight/run", {
+        where: FL.where,
+        ids: sel.length ? sel.map((s) => s.id) : shown.length < all.length ? shown.map((s) => s.id) : undefined,
+        retries: FL.retries || undefined,
+        over: FL.over,
+      });
+      for (const r of runs) liveOf(r);
+      toast(`Flight lab started: ${runs.map((r) => r.where).join(" + ")}`, "ok");
+      location.hash = `live/${runs[0]!.id}`;
+    } catch (e) {
+      toast(String(e), "bad");
+    }
+  };
+  const groups = new Map<string, Scenario[]>();
+  for (const s of shown) groups.set(s.tags[0] ?? "other", [...(groups.get(s.tags[0] ?? "other") ?? []), s]);
+  return h(
+    "div",
+    { class: "page" },
+    h(
+      "div",
+      { class: "head" },
+      h(
+        "div",
+        {},
+        h("h1", {}, "Flight lab"),
+        h(
+          "div",
+          { class: "sub" },
+          `${all.length} scenarios flown in the real app, judged, scored — their telemetry, corridors and reports`,
+        ),
+      ),
+      h("span", { class: "grow" }),
+      h("input", {
+        class: "input",
+        placeholder: "Filter scenarios…",
+        value: FL.q,
+        id: "flq",
+        style: { width: "260px" },
+        oninput: (e: Event) => {
+          FL.q = (e.target as HTMLInputElement).value;
+          paint(false);
+        },
+      }),
+    ),
+    live.length
+      ? h(
+          "div",
+          {},
+          h("h2", { class: "sec" }, "In flight now"),
+          live.map((l) => campaignCard(l.where, l.c)),
+        )
+      : null,
+    h(
+      "div",
+      { class: "row", style: { marginBottom: "12px", gap: "6px" } },
+      h("span", { class: "muted" }, "Tags:"),
+      tags.map((t) =>
+        h(
+          "button",
+          {
+            class: `badge ${FL.tags.has(t) ? "acc" : ""}`,
+            style: { cursor: "pointer" },
+            onclick: () => {
+              FL.tags.has(t) ? FL.tags.delete(t) : FL.tags.add(t);
+              paint(false);
+            },
+          },
+          t,
+        ),
+      ),
+    ),
+    h(
+      "div",
+      { class: "picker" },
+      h(
+        "div",
+        { class: "card", style: { padding: "10px" } },
+        !FL.scenarios ? h("div", { class: "empty" }, h("span", { class: "spinner" })) : null,
+        [...groups].map(([g, ss]) =>
+          h(
+            "div",
+            { class: "group" },
+            h(
+              "div",
+              {
+                class: "gh",
+                onclick: () => {
+                  const allIn = ss.every((s) => FL.pick.has(s.id));
+                  for (const s of ss) allIn ? FL.pick.delete(s.id) : FL.pick.add(s.id);
+                  paint(false);
+                },
+              },
+              g,
+              h("span", { class: "faint" }, String(ss.length)),
+            ),
+            ss.map((s) => {
+              const last = s.runs[0];
+              const toggle = () => {
+                FL.pick.has(s.id) ? FL.pick.delete(s.id) : FL.pick.add(s.id);
+                paint(false);
+              };
+              return h(
+                "div",
+                { class: `file ${FL.pick.has(s.id) ? "sel" : ""}`, onclick: toggle, title: s.title },
+                h("input", { type: "checkbox", checked: FL.pick.has(s.id), onclick: (e: Event) => e.stopPropagation(), onchange: toggle }),
+                h("span", {
+                  class: `dot ${last ? vClass(last.verdict) : ""}`,
+                  title: last ? `${last.verdict} — ${last.why}` : "never flown",
+                }),
+                h("span", { class: "n" }, s.id),
+                h("span", { class: "w" }, s.title),
+                h(
+                  "span",
+                  { class: "row", style: { gap: "3px" } },
+                  s.runs.slice(0, 6).map((r) =>
+                    h("a", {
+                      class: `dot ${vClass(r.verdict)}`,
+                      style: { boxShadow: "none" },
+                      href: reportHref(r.dir),
+                      title: `${r.verdict} ${when(r.at)} on ${r.machine} — ${r.why}`,
+                      onclick: (e: Event) => e.stopPropagation(),
+                    }),
+                  ),
+                ),
+                h("span", { class: "s" }, `~${s.minutes} min`),
+              );
+            }),
+          ),
+        ),
+      ),
+      h(
+        "div",
+        { class: "card launch" },
+        h("h3", {}, "Fly"),
+        h(
+          "div",
+          { class: "total" },
+          sel.length
+            ? `${sel.length} scenario${sel.length > 1 ? "s" : ""}`
+            : shown.length < all.length
+              ? `${shown.length} shown`
+              : `All ${all.length}`,
+        ),
+        h("div", { class: "muted" }, `≈ ${mins} min of flight${FL.where === "both" ? ` — ≈ ${Math.ceil(mins / 2)} min on two Macs` : ""}`),
+        h(
+          "div",
+          { class: "opt" },
+          h("label", { class: "l" }, "Where"),
+          h(
+            "div",
+            { class: "seg" },
+            (["both", "here", "mini"] as const).map((w) =>
+              h(
+                "button",
+                {
+                  class: FL.where === w ? "on" : "",
+                  onclick: () => {
+                    FL.where = w;
+                    paint(false);
+                  },
+                },
+                w === "both" ? "Both Macs" : w === "here" ? "This Mac" : "kerr-mini",
+              ),
+            ),
+          ),
+          h(
+            "div",
+            { class: "faint", style: { fontSize: "12px" } },
+            FL.where === "both"
+              ? "Dealt by estimated time: half here (headless), half on the mini (full screen)."
+              : macLine(FL.where === "here" ? S.lab.here : S.lab.mini),
+          ),
+        ),
+        h(
+          "div",
+          { class: "opt" },
+          h("label", { class: "l" }, "Options"),
+          h(
+            "label",
+            { class: "check" },
+            "Retries",
+            h("input", {
+              class: "input",
+              type: "number",
+              min: 0,
+              max: 5,
+              value: FL.retries,
+              style: { width: "64px" },
+              onchange: (e: Event) => (FL.retries = Number((e.target as HTMLInputElement).value)),
+            }),
+          ),
+          h(
+            "label",
+            { class: "check" },
+            "Stop a scenario past",
+            h("input", {
+              class: "input",
+              type: "number",
+              min: 1,
+              max: 10,
+              value: FL.over,
+              style: { width: "64px" },
+              onchange: (e: Event) => (FL.over = Number((e.target as HTMLInputElement).value)),
+            }),
+            "× its estimate",
+          ),
+        ),
+        h(
+          "div",
+          { style: { marginTop: "18px" } },
+          h(
+            "button",
+            { class: "btn primary", style: { width: "100%", justifyContent: "center", padding: "11px" }, onclick: launch },
+            "✈ Fly the campaign",
+          ),
+        ),
+      ),
+    ),
+    h("h2", { class: "sec" }, "Campaigns"),
+    h(
+      "div",
+      { class: "card", style: { padding: "4px 8px" } },
+      !FL.campaigns?.length
+        ? h("div", { class: "empty" }, "No campaign yet.")
+        : h(
+            "table",
+            { class: "t" },
+            h(
+              "thead",
+              {},
+              h(
+                "tr",
+                {},
+                h("th", {}, "When"),
+                h("th", {}, "Campaign"),
+                h("th", {}, "Where"),
+                h("th", { class: "num" }, "Pass"),
+                h("th", { class: "num" }, "Fail"),
+                h("th", { class: "num" }, "Other"),
+              ),
+            ),
+            h(
+              "tbody",
+              {},
+              FL.campaigns.map((c) => {
+                const n = (v: string) => c.rows.filter((r) => r.verdict === v).length;
+                return h(
+                  "tr",
+                  { class: "click", onclick: () => (location.hash = `campaign/${encodeURIComponent(c.dir)}`) },
+                  h("td", { class: "muted", style: { whiteSpace: "nowrap" } }, when(c.at)),
+                  h(
+                    "td",
+                    {},
+                    h("span", { class: "mono" }, c.id),
+                    c.complete ? null : h("span", { class: "badge warn", style: { marginLeft: "6px" } }, "cut short"),
+                  ),
+                  h("td", {}, h("span", { class: "badge" }, c.machine)),
+                  h("td", { class: "num ok-t" }, n("PASS") || ""),
+                  h("td", { class: "num bad-t" }, n("FAIL") || ""),
+                  h("td", { class: "num warn-t" }, c.rows.length - n("PASS") - n("FAIL") || ""),
+                );
+              }),
+            ),
+          ),
+    ),
+  );
+}
+
+function campaignPage() {
+  const dir = arg();
+  if (!FL.campaigns) {
+    api<Campaign[]>("/api/flight/campaigns").then((c) => ((FL.campaigns = c), paint(true)));
+    return h("div", { class: "page" }, h("div", { class: "empty" }, h("span", { class: "spinner" })));
+  }
+  const c = FL.campaigns.find((x) => x.dir === dir);
+  if (!c) return h("div", { class: "page" }, h("div", { class: "card empty" }, `No campaign at ${dir}.`));
+  const n = (v: string) => c.rows.filter((r) => r.verdict === v).length;
+  return h(
+    "div",
+    { class: "page" },
+    h(
+      "div",
+      { class: "head" },
+      h("a", { href: "#flight", class: "btn ghost" }, "←"),
+      h("div", {}, h("h1", {}, `Campaign ${c.id}`), h("div", { class: "sub mono" }, c.dir)),
+      h("span", { class: "grow" }),
+      h("span", { class: "badge" }, c.machine),
+      c.complete ? null : h("span", { class: "badge warn" }, "cut short"),
+    ),
+    h(
+      "div",
+      { class: "grid g4", style: { marginBottom: "16px" } },
+      kpi(String(n("PASS")), "passed", "ok"),
+      kpi(String(n("FAIL")), "failed", n("FAIL") ? "bad" : ""),
+      kpi(String(c.rows.length - n("PASS") - n("FAIL")), "skipped or other"),
+      kpi(dur(c.rows.reduce((a, r) => a + (r.wallS ?? 0), 0)), "of flight"),
+    ),
+    h(
+      "div",
+      { class: "card", style: { padding: "4px 8px" } },
+      h(
+        "table",
+        { class: "t" },
+        h("thead", {}, h("tr", {}, h("th", {}, ""), h("th", {}, "Scenario"), h("th", {}, "Why"), h("th", { class: "num" }, "Time"))),
+        h(
+          "tbody",
+          {},
+          c.rows.map((r) =>
+            h(
+              "tr",
+              { class: "click", onclick: () => (location.hash = reportHref(`${c.dir}/${r.id}`).slice(1)) },
+              h("td", {}, h("span", { class: `badge ${vClass(r.verdict)}` }, r.verdict)),
+              h("td", {}, h("b", {}, r.title), h("div", { class: "faint mono" }, r.id)),
+              h("td", { class: "muted" }, r.why),
+              h("td", { class: "num muted" }, dur(r.wallS)),
+            ),
+          ),
+        ),
+      ),
+    ),
+    c.notes.length
+      ? h(
+          "div",
+          { class: "card", style: { marginTop: "16px" } },
+          h("h3", {}, "Notes"),
+          c.notes.map((x) => h("div", {}, x)),
+        )
+      : null,
+  );
+}
+
 // ------------------------------------------------------------------------------------------- modal
 
 function showModal(title: string, content: Node) {
@@ -2327,6 +3292,9 @@ const PAGES: Record<string, () => HTMLElement> = {
   live: livePage,
   history: historyPage,
   captures: capturesPage,
+  flight: flightPage,
+  campaign: campaignPage,
+  report: reportPage,
   page: probePage,
   api: apiPage,
   doc: docPage,

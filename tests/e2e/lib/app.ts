@@ -1,7 +1,8 @@
 // The app under test, driven as a player would: a production server of its own (no hot reload), real
 // key and mouse events by the DevTools protocol — and every click proven to land on its element
 // (an invisible overlay once swallowed the pointer while scripted .click() calls kept passing).
-import { type Cdp, launch } from "./cdp";
+import { type Cdp, launch, SHOW } from "./cdp";
+import { recorder } from "./telemetry";
 
 const KEYCODES: Record<string, number> = {
   Escape: 27,
@@ -101,8 +102,12 @@ export class App {
       startupFailure?: boolean;
       /** Chrome's own flags for this run (a fake microphone: --use-file-for-fake-audio-capture…) */
       args?: string[];
+      /** false: this page not recorded (tests/e2e/lib/telemetry.ts — on by default under `bun run e2e`) */
+      telemetry?: boolean;
     } = {},
   ) {
+    // (the test file booting it, for its report's folder: E2E_FILE when one file runs, else the caller's frame)
+    const file = process.env.E2E_FILE ?? new Error().stack?.match(/tests\/e2e\/([\w.-]+\.e2e\.test\.ts)/)?.[1] ?? "unknown.e2e.test.ts";
     const s = await serve();
     const cdp = await launch(o);
     const app = new App(cdp, s.url);
@@ -119,12 +124,18 @@ export class App {
     });
     if (o.initScript) await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: o.initScript });
     app.sw = !!o.sw;
+    app.file = file;
+    app.recorded = o.telemetry !== false;
     await app.load(o.hash ?? "", !!o.startupFailure);
     return app;
   }
 
   /** the Service Worker wanted (`sw=1`: the page registers it despite the e2e flag) */
   sw = false;
+
+  /** the test file that booted it, and whether its telemetry is recorded */
+  file = "";
+  recorded = true;
 
   /** the last load's navigation → splash-lifted wall time [ms] */
   lastLoadMs = 0;
@@ -139,10 +150,15 @@ export class App {
       180_000,
     );
     this.lastLoadMs = performance.now() - t0;
+    // (on the mini's screen — kiosk —: the frame rate shown in its corner, the game's own meter: who watches
+    // sees how the test runs; a player's preference, kept across scenes. Not when the page failed to start)
+    if (SHOW === "kiosk" && !startupFailure) await this.js("(__bh.settings.showFps = true, true)").catch(() => {});
+    if (this.recorded && !startupFailure) await recorder.attach(this, this.file).catch((e) => console.error(`e2e telemetry: ${e}`));
     await Bun.sleep(1500);
   }
 
   close() {
+    recorder.detach(this);
     this.cdp.close();
   }
 

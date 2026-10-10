@@ -85,3 +85,41 @@ export async function doctor() {
   const r = await run(["bun", "scripts/remote.ts", "doctor"], 60_000);
   return { code: r.code, text: (r.out + r.err).trim() };
 }
+
+/**
+ * A flight-lab campaign's control (scripts/flightlab.ts's server, on its Mac's loopback): status, shot, eval,
+ * pause, resume, skip, abort, note — here by fetch, on the mini by curl over ssh. A shot's PNG kept in
+ * remote-results/dash/flight-shots/ (its path returned).
+ */
+export async function flightCtl(where: "here" | "mini", port: number, verb: string, body?: string) {
+  if (!/^(status|shot|eval|pause|resume|skip|abort|note)$/.test(verb)) throw new Error(`no such control: ${verb}`);
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error("a campaign's port");
+  const url = `http://127.0.0.1:${port}/${verb}`;
+  let bytes: Uint8Array;
+  if (where === "mini") {
+    const p = Bun.spawn(["ssh", ...SSH, HOST, `curl -s --max-time 60 ${body !== undefined ? "--data-binary @-" : ""} '${url}'`], {
+      stdin: body !== undefined ? new TextEncoder().encode(body) : "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    bytes = new Uint8Array(await new Response(p.stdout).arrayBuffer());
+    if ((await p.exited) !== 0) throw new Error(`the mini's campaign did not answer (${(await new Response(p.stderr).text()).trim()})`);
+  } else {
+    const r = await fetch(url, body !== undefined ? { method: "POST", body } : undefined).catch(() => null);
+    if (!r) throw new Error(`nothing listens on ${url}`);
+    bytes = new Uint8Array(await r.arrayBuffer());
+  }
+  if (verb === "shot") {
+    const dir = "remote-results/dash/flight-shots";
+    await Bun.$`mkdir -p ${dir}`.quiet();
+    const file = `${dir}/${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}-${where}.png`;
+    await Bun.write(file, bytes);
+    return { url: `/files/${file}` };
+  }
+  const text = new TextDecoder().decode(bytes);
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { text };
+  }
+}

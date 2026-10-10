@@ -30,9 +30,12 @@ describe.skipIf(!E2E)("photo mode, frame rate", () => {
   }, 30_000);
 
   test("the frame rate: hidden, then shown when asked", async () => {
-    expect(await app.js<boolean>(`document.querySelector("[data-testid=fps-meter]").hidden`)).toBe(true);
+    // (off first: on the mini's screen the harness shows it from the start — tests/e2e/lib/app.ts)
+    await app.js(`(__bh.settings.showFps = false, true)`);
+    await app.waitFor(`document.querySelector("[data-testid=fps-meter]").hidden`, 3_000);
     await app.js(`(__bh.settings.showFps = true, true)`);
     await app.waitFor(`/\\d+ fps · [\\d.]+ ms/.test(document.querySelector("[data-testid=fps-meter]").textContent)`, 3_000);
     await app.js(`(__bh.settings.showFps = false, true)`);
+    await app.waitFor(`document.querySelector("[data-testid=fps-meter]").hidden`, 3_000);
   }, 30_000);
 });

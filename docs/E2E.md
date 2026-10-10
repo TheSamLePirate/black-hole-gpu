@@ -34,7 +34,7 @@ sets `E2E=1`.
 | | this Mac (the main one) | kerr-mini (Mac mini M1, 8 GPU cores) |
 |---|---|---|
 | reached as | here | ssh alias `kerr-mini` (`bun scripts/remote.ts doctor` checks it) |
-| Chrome shows | **headless** | **full screen (kiosk)** — whoever sits at it sees a test is running |
+| Chrome shows | **headless**, the test's own viewport | **full screen (kiosk)**, the page at the screen's size 1:1 — whoever sits at it sees a test is running |
 | set by | `~/.kerr-lab/config.json` `{"chrome": "headless"}` | `~/.kerr-lab/config.json` `{"chrome": "kiosk"}` |
 | use it for | quick checks, debugging a test, perf figures meant for this machine | suites, long flights, queues of jobs — while this Mac keeps working |
 
@@ -51,11 +51,13 @@ Macs: one batch here, one there.
 
 How it shows, and how to override it:
 
-- On a screen (kiosk, window) the test's page keeps **its own size** (1440×900 by default; some tests ask
-  640×400 or 1280×800, or change it mid-test), drawn **scaled to fill the display**: the DevTools emulation's
-  `scale`, the mouse and touch points scaled with it by `tests/e2e/lib/cdp.ts`. What the test measures
-  (CSS size, pixels, clicks) is the same headless or full screen.
-
+- **Full screen (kiosk, the mini): the page is the screen's own size at 1:1** (1920×1080 there), whatever
+  size the test asked — the user's choice: a test on the mini fills its screen. Headless (here) or in a
+  window: the size the test asked (1440×900 by default; some ask 1280×800, 640×400…). A test that resizes
+  the page itself mid-run (`s5`, `hub-card`: narrow windows on purpose) still does. So a test must not
+  depend on its boot size unless it sets it itself with `Emulation.setDeviceMetricsOverride`.
+- In kiosk the game's frame-rate meter is on (`__bh.settings.showFps = true` after each load, by
+  `App.load`), so whoever watches the mini sees how each test runs. A test about that meter sets it itself.
 - `E2E_HEADED=1` forces full screen, `E2E_HEADED=0` headless (`remote.ts run --headless` sets 0).
 - `E2E_HOLD=<s>` keeps each Chrome open `<s>` seconds after its test, to see where it ended
   (`remote.ts run --hold 20` / `bun run e2e --remote --hold 20 …`).
@@ -190,6 +192,32 @@ page** — a unit test, faster, for autopilot logic.
 | `TARS_LIVE=1` (+ `OPENROUTER_API_KEY` in `.env`), `TARS_MODEL`, `TARS_LONG=1` | the live-model TARS tests (paid: only when asked) |
 | `DEEPGRAM_API_KEY` in `.env` | `tars-ear.e2e.test.ts` (the microphone through Deepgram) runs |
 
+### Every test is recorded
+
+Under `bun run e2e` (its preload, `tests/e2e/lib/preload.ts`) every page the harness loads gets the flight
+lab's sampler (`tests/flight/lib/sampler.ts`) and every test leaves a record, written as a flight-lab
+scenario's (`tests/e2e/lib/telemetry.ts`):
+
+```
+remote-results/e2e-reports/<time>-<host>/<file>/<NN>/     (NN: the test's place in its file; 00: its setup)
+  telemetry.jsonl   a sample each ½ s of stepped time (__bh.step is wrapped) or of the page's frames:
+                    the craft, orbit, autopilot/hold/assist, the hub's card, the entry and its guidance
+                    (commanded bank, predicted miss, aimed and flown slopes), air, attitude, rollout,
+                    docking, nodes, propellant, the frame rate
+  events.jsonl      moments (autopilot, hold, hub, entry phase, docking, landing…), pilot messages, the
+                    game's log, the page's errors
+  fps.jsonl         the frame rate each second and its worst frame
+  graphs.json       the assistants' graphs (optimum, corridor, flown) and the craft's points on them
+  summary.json      the file, the test's index, start, end, wall time, samples, frame-rate statistics
+  shots/end.jpg     the page at the test's end
+```
+
+The run's line `e2e reports: <root>` says where (a mini run's come back in its artifacts). The test's name
+and verdict are matched from bun test's output, in order. `E2E_REPORT_ROOT` chooses the root,
+`E2E_TELEMETRY=0` or `App.boot({ telemetry: false })` turns it off. The sampler only observes: it keeps
+the hub's caches (recomputing them mid-flight changed the flight — a landing failed until it did not).
+Plain `E2E=1 bun test …` (no preload) records nothing.
+
 ### Rules that keep tests honest
 
 1. **Real input for UI.** Use `app.click`/`app.press`/`app.mouse`/`app.touch`, never `element.click()` in
@@ -322,6 +350,8 @@ command line. The page is for people, the commands are for agents.
 | **Run tests** | every e2e file by theme (the catalogue's), its last result, its history (passed / runs), its usual time; quick picks (smoke, failed last time, flaky lately, never run); **where** (this Mac headless, kerr-mini full screen), `--each`, `-t`, `UPDATE=1`, `--hold`; the estimated time; Launch |
 | **Live** | a run as it goes: files and tests ticking, pass/fail counters, progress, the coloured log following; Cancel (the process group here, the job on the mini) |
 | **History** | every run on disk: the dashboard's (`remote-results/dash/<id>/`), the remote runner's jobs, the `--each` summaries, the flight-lab campaigns (their `report.html`); filters; a run's page: failures with their error blocks, per-file table, every test, its pictures, the log (search, errors only), **Run again** / **Rerun the failed files** |
+| **Test report** (a test's *Report ▸*, in a run or live) | what it tests (its file's words, the catalogue), how long it took against its estimate (the median of its past runs), its frame rate (median, p5, min, and the chart), samples, moments, errors; **commanded against flown**: the assistants' corridors with the optimum and the flown track (each point in or out), the entry's commanded bank against the flown one, the approach's aimed slope against the flown one, the line against the runway's axis, the guidance's predicted miss, the docking's axis; the approach, rollout and docking charts; the hub's card each time it changed (its figures and their warning colours); the quality measures (q_…: loads, α swings, bank reversals, throttle chatter, time in the corridors, propellant, Δv); every telemetry chart; the events (filtered by kind); the pictures; the raw files. Charts: hover for every series' value, the crosshair follows on every chart of the same time axis, ⤢ enlarges |
+| **Flight lab** | every scenario of `scripts/flightlab.ts` (by family and tags, its estimate, its last verdicts — each a link to its report), flown **here, on the mini, or both** (dealt in two by estimated time: `--shard 1/2` here, `2/2` there), retries, the time limit; the campaigns **in flight now** on either Mac: the scenario, its progress, the latest sample (status, height, speed, autopilot, the hub's card live), its events, and its controls — pause, resume, skip, abort, a note, a picture now, page code evaluated; every campaign on disk (here and brought back from the mini) and each scenario's report |
 | **Captures** | every picture the runs left (`remote-results/`, `flight-results/`, the live page's), by run, in a lightbox (← →, Esc) |
 | **Live page · __bh** | the app booted in this Mac's test Chrome (it takes the lock like any e2e): its picture streamed (DevTools screencast, ~30 fps); clicks, wheel and keys sent to it as real input (click the picture, then type; Esc twice to leave); a scene picker; screenshots kept in `remote-results/dash/shots/`; a REPL on the page (`let`, `await`, the last value back as JSON), `__bh` paths completed (Tab), history (↑↓), snippets; the page's console |
 | **__bh API** | docs/BH-API.md, searchable, entry by entry: *Try the example* / *Inspect* send it to the live page's REPL |

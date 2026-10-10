@@ -9,9 +9,17 @@
 //                                            and remote-results/e2e-summary-<time>.json (with --remote: made there)
 //   bun run e2e --list                       the e2e files
 //
+// Every test is recorded (tests/e2e/lib/telemetry.ts): remote-results/e2e-reports/<time>-<host>/<file>/<NN>/
+// (E2E_REPORT_ROOT to choose; E2E_TELEMETRY=0: none) — its line "e2e reports: <root>" says where.
+//
 // (it replaces `E2E=1 bun test tests/e2e …`, whose tests/e2e filter added to a file named after it: every e2e ran)
 import { readdirSync } from "node:fs";
+import { reportRoot } from "../tests/e2e/lib/telemetry";
 import { shellJoin } from "./lib/shell";
+
+// (every test recorded — its telemetry, frame rate, moments, a picture — under one root per run:
+// tests/e2e/lib/telemetry.ts; the dashboard reads them)
+const PRELOAD = ["--preload", "./tests/e2e/lib/preload.ts"];
 
 const DIR = "tests/e2e";
 const files = readdirSync(DIR)
@@ -70,7 +78,7 @@ if (remote) {
   // (on the mini, this same script: --each's summary is written there and brought back with the artifacts)
   const there = each
     ? ["bun", "scripts/e2e.ts", "--each", ...chosen, ...testArgs]
-    : ["bun", "test", ...(chosen.length ? chosen : [DIR]), "--timeout", "600000", ...testArgs];
+    : ["bun", "test", ...PRELOAD, ...(chosen.length ? chosen : [DIR]), "--timeout", "600000", ...testArgs];
   const p = Bun.spawn(["bun", "scripts/remote.ts", "run", ...remoteArgs, "--", `E2E=1 ${shellJoin(there)}`], {
     stdio: ["inherit", "inherit", "inherit"],
   });
@@ -78,9 +86,9 @@ if (remote) {
 }
 
 if (!each) {
-  const p = Bun.spawn(["bun", "test", ...(chosen.length ? chosen : [DIR]), "--timeout", "600000", ...testArgs], {
+  const p = Bun.spawn(["bun", "test", ...PRELOAD, ...(chosen.length ? chosen : [DIR]), "--timeout", "600000", ...testArgs], {
     stdio: ["inherit", "inherit", "inherit"],
-    env: { ...process.env, E2E: "1" },
+    env: { ...process.env, E2E: "1", E2E_REPORT_ROOT: reportRoot() },
   });
   process.exit(await p.exited);
 }
@@ -99,14 +107,14 @@ const rows: Row[] = [];
 const t0 = Date.now();
 for (const file of targets) {
   const t = Date.now();
-  const p = Bun.spawn(["bun", "test", file, "--timeout", "600000", ...testArgs], {
+  const p = Bun.spawn(["bun", "test", ...PRELOAD, file, "--timeout", "600000", ...testArgs], {
     stdout: "pipe",
     stderr: "pipe",
-    env: { ...process.env, E2E: "1" },
+    env: { ...process.env, E2E: "1", E2E_REPORT_ROOT: reportRoot(), E2E_FILE: file.slice(DIR.length + 1) },
   });
   let out = "";
   const pump = async (s: ReadableStream<Uint8Array>, to: NodeJS.WriteStream) => {
-    for await (const chunk of s) {
+    for await (const chunk of s as unknown as AsyncIterable<Uint8Array>) {
       const txt = new TextDecoder().decode(chunk);
       out += txt;
       to.write(txt);
@@ -133,6 +141,7 @@ const summary = {
   host: (await Bun.$`hostname -s`.text()).trim(),
   commit: (await Bun.$`git rev-parse --short HEAD`.nothrow().text()).trim(),
   dirty: (await Bun.$`git status --porcelain`.nothrow().text()).trim() !== "",
+  reports: reportRoot(),
   at: new Date().toISOString(),
   seconds: Math.round((Date.now() - t0) / 1000),
   files: rows.length,

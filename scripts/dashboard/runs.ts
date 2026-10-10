@@ -2,6 +2,7 @@
 // on disk in remote-results/dash/<id>/ (run.json, log) — and the history beside them: the remote runner's
 // jobs (remote-results/<job>/), the --each summaries, the flight lab's campaigns (flight-results/).
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { hostname } from "node:os";
 import { join } from "node:path";
 import { type LogEvent, LogParser, type LogSummary, parseLog } from "./parse-log";
 
@@ -42,6 +43,8 @@ export interface Run {
   /** a flight lab campaign's report page */
   report?: string;
   request?: RunRequest;
+  /** a flight-lab campaign's request */
+  flight?: FlightRequest;
 }
 
 const ENV_ALLOWED = new Set(["UPDATE", "RATCHET", "SHOT", "HUD_BOXES", "TARS_LIVE", "TARS_LONG", "TARS_MODEL", "E2E_CDP_TIMEOUT"]);
@@ -158,7 +161,7 @@ function launch(run: Run, args: string[], env: Record<string, string>, emit: Emi
   const pump = async (s: ReadableStream<Uint8Array>) => {
     let rest = "";
     const dec = new TextDecoder();
-    for await (const chunk of s) {
+    for await (const chunk of s as unknown as AsyncIterable<Uint8Array>) {
       rest += dec.decode(chunk, { stream: true });
       const parts = rest.split(/\r?\n/);
       rest = parts.pop() ?? "";
@@ -430,4 +433,74 @@ export function fileStats() {
     }
   }
   return stats;
+}
+
+// ------------------------------------------------------------------------------------------- the flight lab
+
+export interface FlightRequest {
+  /** "both": the selection dealt in two by estimated time, half here, half on the mini (--shard 1/2, 2/2) */
+  where: "here" | "mini" | "both";
+  /** scenario ids (none: all, or by tags) */
+  ids?: string[];
+  tags?: string[];
+  retries?: number;
+  /** a scenario stopped past this many times its estimate */
+  over?: number;
+}
+
+/** A flight-lab campaign started (two with "both"), streamed like any run. */
+export function startFlight(req: FlightRequest, emit: Emit): Run[] {
+  const sel: string[] = [];
+  if (req.ids?.length) sel.push("--only", `^(${req.ids.map((i) => i.replace(/[^\w-]/g, "")).join("|")})$`);
+  if (req.tags?.length) sel.push("--tags", req.tags.map((t) => t.replace(/[^\w-]/g, "")).join(","));
+  if (req.retries) sel.push("--retries", String(Math.min(5, Math.max(0, req.retries))));
+  if (req.over) sel.push("--over", String(Math.min(10, Math.max(1, req.over))));
+  const one = (where: "here" | "mini", shard?: string): Run => {
+    const id = `${stamp()}-${where}-flight${shard ? `-${shard.replace("/", "of")}` : ""}`;
+    mkdirSync(join(DASH, id), { recursive: true });
+    const lab = ["bun", "scripts/flightlab.ts", "run", ...sel, ...(shard ? ["--shard", shard] : [])];
+    const args =
+      where === "mini"
+        ? ["bun", "scripts/remote.ts", "run", "--name", `lab-${id.slice(9, 15)}`, "--", ...lab]
+        : [...lab, "--out", join(FLIGHTS, `${id}-${hostname().replace(/\.local$/, "")}`)];
+    const run: Run = {
+      id,
+      source: "dash",
+      title: `flight lab${req.ids?.length ? `: ${req.ids.length === 1 ? req.ids[0] : `${req.ids.length} scenarios`}` : req.tags?.length ? `: ${req.tags.join(", ")}` : ": all"}${shard ? ` (${shard})` : ""}`,
+      where: where === "mini" ? "kerr-mini" : "here",
+      cmd: args.join(" "),
+      state: "running",
+      started: Date.now(),
+      counts: { pass: 0, fail: 0, skip: 0, files: 0 },
+      hasLog: true,
+      flight: req,
+    };
+    return launch(run, args, {}, emit);
+  };
+  if (req.where === "both") return [one("here", "1/2"), one("mini", "2/2")];
+  return [one(req.where)];
+}
+
+// ------------------------------------------------------------------------------------------- test durations
+
+let timesCache: { at: number; map: Map<string, { ms: number; at: number; status: string; where: string; run: string }[]> } | null = null;
+/** Every e2e test's past runs (file::name → its durations, newest first): the estimate of the next. */
+export function testTimes() {
+  if (timesCache && Date.now() - timesCache.at < 15_000) return timesCache.map;
+  const map = new Map<string, { ms: number; at: number; status: string; where: string; run: string }[]>();
+  for (const r of history()) {
+    if (r.source !== "dash" && r.source !== "remote") continue;
+    const logPath = r.source === "dash" ? join(DASH, r.id, "log") : join(RESULTS, r.id, "log");
+    if (!existsSync(logPath) || live.has(r.id)) continue;
+    for (const f of summaryOf(logPath).files)
+      for (const t of f.tests) {
+        if (t.ms === undefined || t.status === "skip") continue;
+        const key = `${f.file.replace(/^.*\//, "")}::${t.name}`;
+        const l = map.get(key) ?? [];
+        l.push({ ms: t.ms, at: r.started, status: t.status, where: r.where, run: r.id });
+        map.set(key, l);
+      }
+  }
+  timesCache = { at: Date.now(), map };
+  return map;
 }
