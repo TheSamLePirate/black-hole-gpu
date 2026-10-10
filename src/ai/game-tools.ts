@@ -23,6 +23,8 @@ import type { TarsMemory } from "./memory";
 import type { Tool } from "./agent";
 import type { Args } from "./tool-schema";
 import { SITES, type Site } from "../game/sites";
+import { OpenMeteoFeed, modelWeatherAt } from "../openmeteo";
+import { msOfDays } from "../realweather";
 import { MISSIONS } from "../game/missions";
 import { KEYMAP, type KeyAction } from "../input/keymap";
 import { MOUNTS, type Mount } from "../mounts";
@@ -262,6 +264,9 @@ const opText = (r: OpResult) =>
       }
     : { ok: false, note: r.note };
 
+/** the weather_at tool's own requests (the game's feed is the real weather's) */
+const toolFeed = new OpenMeteoFeed();
+
 export function gameTools(h: GameHost): Tool[] {
   const { camera, settings, tools } = h;
   /** what the game said since a mark (its journal's toasts and events) */
@@ -370,8 +375,34 @@ export function gameTools(h: GameHost): Tool[] {
     },
     {
       name: "get_weather",
-      description: "The weather where the ship is (wind, visibility, clouds, rain; the real METAR when 'real') and the weather setting.",
-      run: () => ({ setting: settings.weather, wind: settings.wind, now: camera.weatherNow ?? null, real: camera.weatherReal ?? null }),
+      description:
+        "The weather where the ship is (wind, visibility, clouds, rain) and the weather setting; with 'real': the real weather and where it comes from (realSource.why: metar — a runway's report, the game's date now —, model — Open-Meteo at the game's date —, out-of-range — a plausible draw —, pending, other-world, high).",
+      run: () => ({
+        setting: settings.weather,
+        wind: settings.wind,
+        now: camera.weatherNow ?? null,
+        real: camera.weatherReal ?? null,
+        realSource: camera.weatherRealInfo ?? null,
+      }),
+    },
+    {
+      name: "weather_at",
+      description:
+        "The real weather anywhere on the Earth at a date (Open-Meteo: its archive since 1940, its forecast up to 15 days ahead): the cloud layers, visibility, rain, wind, temperature and pressure, decoded as the game would fly it. Use it to answer what the weather was or will be somewhere (an eclipse's sky, a landing site's) — not only where the ship is. The date defaults to the game's.",
+      params: {
+        lat: { type: "number", description: "latitude [°], north +" },
+        lon: { type: "number", description: "longitude [°], east +" },
+        date: { type: "string", description: "ISO date-time, UTC (e.g. 2026-08-12T18:30:00Z); default: the game's" },
+      },
+      required: ["lat", "lon"],
+      run: async (a) => {
+        const p = camera.weatherPlace();
+        const ms = a.date ? Date.parse(String(a.date)) : p ? msOfDays(p.days) : Date.now();
+        if (!Number.isFinite(ms)) return { error: "bad date" };
+        const r = await modelWeatherAt(toolFeed, Number(a.lat), Number(a.lon), ms);
+        if (!r.reachable) return { reachable: false, why: "before 1940 or beyond the 15-day forecast", date: new Date(ms).toISOString() };
+        return r.state ? { reachable: true, weather: r.state } : { reachable: true, error: "no answer (network)" };
+      },
     },
     {
       name: "find_settings",

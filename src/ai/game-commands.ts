@@ -291,6 +291,15 @@ export const GAME_COMMANDS: GameCommand[] = [
     desc: { fr: "Les sites et pistes", en: "The sites and runways" },
   },
   { name: "weather", tool: "get_weather", desc: { fr: "La météo ici", en: "The weather here" } },
+  {
+    name: "weatherat",
+    tool: "weather_at",
+    args: [{ param: "lat" }, { param: "lon" }, { param: "date" }],
+    desc: {
+      fr: "La météo réelle d'un lieu à une date : /weatherat 42.5 -2.5 2026-08-12T18:30Z",
+      en: "The real weather of a place at a date: /weatherat 42.5 -2.5 2026-08-12T18:30Z",
+    },
+  },
   { name: "report", tool: "get_flight_report", desc: { fr: "Le dernier rapport de vol", en: "The last flight report" } },
   {
     name: "tool",

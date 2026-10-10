@@ -13,6 +13,7 @@ export const READ_TOOLS = new Set([
   "list_places",
   "list_bodies",
   "get_weather",
+  "weather_at",
   "find_settings",
   "list_saves_and_scenes",
   "get_log",

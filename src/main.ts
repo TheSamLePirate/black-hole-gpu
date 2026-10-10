@@ -28,7 +28,7 @@ import { MissionSelect } from "./ui/missions";
 import { PlacePanel } from "./ui/placepanel";
 import { TimePanel } from "./ui/timepanel";
 import { WeatherPanel } from "./ui/weatherpanel";
-import { MetarFeed, nearestStation } from "./metar";
+import { RealWeather } from "./realweather";
 import { MISSIONS } from "./game/missions";
 import { KeyHints } from "./ui/keyhints";
 import { MenuPad } from "./ui/padnav";
@@ -2761,6 +2761,7 @@ async function main() {
     settings,
     place: () => camera.weatherPlace(),
     real: () => camera.weatherReal,
+    realInfo: () => realWeather.last.info,
     changed: () => {
       metarTick();
       touch();
@@ -2892,28 +2893,25 @@ async function main() {
       });
     },
   });
-  // the real weather (metar.ts, PLAN-METEO W7): with "Real" chosen, the METAR of the runway's station nearest
-  // the camera over the Earth (within 600 km), checked every 15 s, fetched each half hour; none, no network:
-  // the fair weather
-  const metarFeed = new MetarFeed();
+  // the real weather (realweather.ts, PLAN-METEO W7, PLAN-CIEL C1): with "Real" chosen, at the camera's place and
+  // the game's date — the METAR of a runway's station within 60 km when the date is now, else Open-Meteo's model
+  // anywhere on the Earth (its forecast, its archive since 1940), out of their reach a plausible draw; checked
+  // every 3 s (the requests cached: one per cell and day), redrawn when it changes
+  const realWeather = new RealWeather();
   const metarTick = () => {
     if (settings.weather !== "real") return;
-    // (a state with no report — set by a script: the flight lab's, an e2e's — kept: the feed replaced it
-    // with the station's real METAR within 15 s, the fog or the storm asked flown in the day's weather)
-    if (camera.weatherReal && camera.weatherReal.report === undefined) return;
+    // (a state set by a script — the flight lab's, an e2e's — kept: the fog or the storm asked flown as it is)
+    if (camera.weatherReal && !realWeather.owns(camera.weatherReal)) return;
     const p = camera.weatherPlace();
-    const st = p && p.body === "earth" ? nearestStation(p) : null;
-    if (!st) {
-      camera.weatherReal = renderer.weatherReal = null;
-      return;
-    }
-    void metarFeed.weather(st.icao).then((w) => {
-      if (settings.weather !== "real" || camera.weatherReal?.report === w?.report) return;
-      camera.weatherReal = renderer.weatherReal = w;
-      touch();
-    });
+    if (!p) return;
+    const { state, info } = realWeather.at(p, settings.wind);
+    camera.weatherRealInfo = info;
+    if (state === camera.weatherReal) return;
+    camera.weatherReal = renderer.weatherReal = state;
+    touch();
   };
-  window.setInterval(metarTick, 15000);
+  realWeather.onUpdate = metarTick;
+  window.setInterval(metarTick, 3000);
   // the Kerr Bench (bench/runner.ts): __bh.bench, and its screen on …/#bench
   const bench = new KerrBench({
     settings,

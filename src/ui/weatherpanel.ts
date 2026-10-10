@@ -4,7 +4,7 @@
 // coloured by the categories' marks, the precipitation, the flight category and what it means), and the
 // place's vertical cut alive under them (weather-section.ts).
 
-import { nearestStation } from "../metar";
+import type { RealInfo } from "../realweather";
 import "./weather.css";
 import type { Settings } from "../settings";
 import { tr } from "../i18n";
@@ -26,8 +26,10 @@ export interface WeatherHost {
   settings: Settings;
   /** the place whose weather it is (the controller's weatherPlace), or null: no air there */
   place(): { body: string; lat: number; lon: number; days: number; h: number } | null;
-  /** the airfields' real weather when it came in, or null */
+  /** the real weather when it came in, or null */
   real(): WeatherState | null;
+  /** where the real weather comes from (realweather.ts) */
+  realInfo?(): RealInfo;
   /** the setting changed: the scene redrawn */
   changed(): void;
 }
@@ -58,7 +60,10 @@ const HINTS: Record<WeatherPreset, { fr: string; en: string }> = {
     en: "A Martian dust storm: an orange sky, 2 km visibility",
   },
   random: { fr: "Des systèmes météo tirés pour le lieu et le jour", en: "Weather systems drawn for the place and the day" },
-  real: { fr: "Le METAR de l'aérodrome le plus proche (réseau)", en: "The nearest airfield's METAR (network)" },
+  real: {
+    fr: "La météo réelle à la date du jeu : le METAR d'une piste, le modèle Open-Meteo partout (1940 → J+15)",
+    en: "The real weather at the game's date: a runway's METAR, Open-Meteo's model anywhere (1940 → today + 15 d)",
+  },
 };
 
 /** What a flight category means. */
@@ -107,6 +112,47 @@ function gauge(value: number | null, bounds: [number, number, number]): string {
   const [a, b, c] = bounds.map(at) as [number, number, number];
   const mark = value === null ? 100 : at(value);
   return `<div class="wx-gauge"><i class="lifr" style="width:${a}%"></i><i class="ifr" style="width:${b - a}%"></i><i class="mvfr" style="width:${c - b}%"></i><i class="vfr" style="width:${100 - c}%"></i><b style="left:${mark}%"></b></div>`;
+}
+
+/** What the real weather is said to be: its source, its time, its report. */
+function realSays(w: WeatherState | null, info: RealInfo | undefined): string {
+  const when = info ? new Date(info.t).toISOString().slice(0, 16).replace("T", " ") + " UTC" : "";
+  if (!info) return w?.report ?? "";
+  switch (info.why) {
+    case "metar":
+      return `${tr({ fr: "METAR de", en: "METAR of" })} ${info.station?.name} (${info.station?.icao}), ${Math.round(info.station?.km ?? 0)} km — ${w?.report ?? ""}`;
+    case "model": {
+      const m = w?.model;
+      const src =
+        m?.kind === "archive" ? tr({ fr: "l'archive ERA5", en: "the ERA5 archive" }) : tr({ fr: "la prévision", en: "the forecast" });
+      return m
+        ? tr({
+            fr: `Open-Meteo, ${src} — ${when}, maille ${m.lat.toFixed(2)}°, ${m.lon.toFixed(2)}° : ${m.T.toFixed(1)} °C (rosée ${m.Td.toFixed(1)} °C), ${Math.round(m.p)} hPa, ${m.precip.toFixed(1)} mm/h, nuages hauts ${Math.round(m.high * 100)} %.`,
+            en: `Open-Meteo, ${src} — ${when}, cell ${m.lat.toFixed(2)}°, ${m.lon.toFixed(2)}°: ${m.T.toFixed(1)} °C (dew point ${m.Td.toFixed(1)} °C), ${Math.round(m.p)} hPa, ${m.precip.toFixed(1)} mm/h, high clouds ${Math.round(m.high * 100)} %.`,
+          })
+        : (w?.report ?? "");
+    }
+    case "pending":
+      return tr({
+        fr: `La météo réelle du ${when} arrive (Open-Meteo) : beau temps en attendant.`,
+        en: `The real weather of ${when} is coming in (Open-Meteo): fair weather meanwhile.`,
+      });
+    case "out-of-range":
+      return tr({
+        fr: `Pas de météo réelle le ${when.slice(0, 10)} (les mesures commencent en 1940, la prévision s'arrête à J+15) : un temps plausible tiré pour le lieu et le jour.`,
+        en: `No real weather on ${when.slice(0, 10)} (the records start in 1940, the forecast ends 15 days ahead): a plausible weather drawn for the place and the day.`,
+      });
+    case "other-world":
+      return tr({
+        fr: "Pas de météo réelle sur ce monde : un temps plausible tiré pour le lieu et le jour.",
+        en: "No real weather on this world: a plausible weather drawn for the place and the day.",
+      });
+    case "high":
+      return tr({
+        fr: "Trop haut pour la météo (au-delà de 40 km) : elle sera lue en descendant.",
+        en: "Too high for the weather (above 40 km): it is read on the way down.",
+      });
+  }
 }
 
 export class WeatherPanel {
@@ -211,36 +257,25 @@ export class WeatherPanel {
       where.innerHTML = place
         ? `<b>${name}</b><span>${Math.abs(at.lat).toFixed(2)}° ${at.lat >= 0 ? "N" : "S"} · ${Math.abs(at.lon).toFixed(2)}° ${at.lon >= 0 ? "E" : "W"}</span>`
         : `<b>${tr({ fr: "Pas d'air ici", en: "No air here" })}</b><span>${tr({ fr: "le temps choisi vaudra pour le prochain monde à atmosphère", en: "the weather chosen holds for the next world with an atmosphere" })}</span>`;
-      const st = s.weather === "real" && at.body === "earth" ? nearestStation(at) : null;
       says.textContent =
-        s.weather === "real" && !H.real()
-          ? st
+        s.weather === "real"
+          ? realSays(H.real(), H.realInfo?.())
+          : s.weather === "dust" && at.body !== "mars"
             ? tr({
-                fr: `La météo réelle de ${st.site.name.split(",")[0]} (${st.icao}) n'est pas encore arrivée : beau temps en attendant.`,
-                en: `The real weather of ${st.site.name.split(",")[0]} (${st.icao}) has not come in yet: fair weather meanwhile.`,
+                fr: "La poussière, c'est Mars ; ici, du vent et une visibilité réduite.",
+                en: "Dust is Mars's; here, wind and a shorter visibility.",
               })
-            : tr({
-                fr: "Pas de station à moins de 600 km (les METAR des pistes terrestres) : beau temps.",
-                en: "No station within 600 km (the Earth's runways' METARs): fair weather.",
-              })
-          : s.weather === "real" && st && H.real()?.report
-            ? `${tr({ fr: "METAR de", en: "METAR of" })} ${st.site.name.split(",")[0]}, ${Math.round(st.km)} km — ${H.real()!.report}`
-            : s.weather === "dust" && at.body !== "mars"
+            : at.body === "mars" && (s.weather === "rain" || s.weather === "storm")
               ? tr({
-                  fr: "La poussière, c'est Mars ; ici, du vent et une visibilité réduite.",
-                  en: "Dust is Mars's; here, wind and a shorter visibility.",
+                  fr: "Pas de pluie sur Mars : son air trop mince et trop froid pour l'eau liquide — des nuages de glace, du vent.",
+                  en: "No rain on Mars: its air too thin and cold for liquid water — ice clouds, wind.",
                 })
-              : at.body === "mars" && (s.weather === "rain" || s.weather === "storm")
+              : at.body === "mars" && s.weather === "dust"
                 ? tr({
-                    fr: "Pas de pluie sur Mars : son air trop mince et trop froid pour l'eau liquide — des nuages de glace, du vent.",
-                    en: "No rain on Mars: its air too thin and cold for liquid water — ice clouds, wind.",
+                    fr: "Tempête de poussière : le ciel ocre et opaque, le soleil un disque pâle, l'horizon effacé.",
+                    en: "A dust storm: the sky an opaque ochre, the sun a pale disc, the horizon gone.",
                   })
-                : at.body === "mars" && s.weather === "dust"
-                  ? tr({
-                      fr: "Tempête de poussière : le ciel ocre et opaque, le soleil un disque pâle, l'horizon effacé.",
-                      en: "A dust storm: the sky an opaque ochre, the sun a pale disc, the horizon gone.",
-                    })
-                  : tr(HINTS[s.weather]);
+                : tr(HINTS[s.weather]);
       // the wind: a compass, its arrow where it blows to; the speed large; the gusts
       const gust = w.wind.gust > 0 ? `${(w.wind.u10 + w.wind.gust).toFixed(0)}` : "—";
       tWind.innerHTML = `<div class="wx-k">${tr({ fr: "Vent", en: "Wind" })}</div><div class="wx-wind">

@@ -87,7 +87,7 @@ describe.skipIf(!E2E)("the weather's panel", () => {
     const wx = () =>
       app.js<{ p: number[]; key: number }>(`(() => {
         const r = __bh.renderer, f = r.paramsF;
-        return { p: Array.from(f.slice(f.length - 20)), key: r.featureKey };
+        return { p: Array.from(f.slice(f.length - 24)), key: r.featureKey };
       })()`);
     await app.js(`(__bh.settings.weather = "fair", __bh.game.land("earth", 28.573, -80.649), true)`);
     await app.waitFor(`!!__bh.renderer.earthMaps?.tier`, 90_000);

@@ -1,6 +1,7 @@
 import type { MlsReading } from "./game/mls";
 import type { CockpitInput } from "./cockpit/input";
 import type { cameraFrame } from "./camera";
+import type { RealInfo } from "./realweather";
 import type { WeatherState } from "./weather";
 import type { FlightReport } from "./game/report";
 import { Weather } from "./wind";
@@ -863,8 +864,10 @@ export class CameraController {
   readonly weather = new Weather();
   /** the weather over the place flown now (weather.ts), or null (no air under the craft) */
   weatherNow: WeatherState | null = null;
-  /** the airfields' real weather, when it came in (W7: METAR) — the "real" setting's */
+  /** the real weather, when it came in (W7: METAR; PLAN-CIEL C1: Open-Meteo, a draw) — the "real" setting's */
   weatherReal: WeatherState | null = null;
+  /** where it comes from (realweather.ts) */
+  weatherRealInfo: RealInfo | null = null;
   windHome: [number, number, number] | null = null;
   /** the wind now: its speed [m/s] and where it blows from [° from north] — for the displays */
   windNow: { speed: number; from: number } | null = null;

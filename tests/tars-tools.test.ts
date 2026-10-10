@@ -186,3 +186,35 @@ test("every game action as a / command: read by position or by name, completed a
   expect(completeGame("/tool camera mount=co", ctx)!.map((s) => s.label)).toEqual(["mount=cockpit"]);
   expect(completeGame("/cockpit x", ctx)).toEqual([]);
 });
+
+test("the real weather anywhere at a date (PLAN-CIEL C1): weather_at, its / command", async () => {
+  const { gameTools } = await import("../src/ai/game-tools");
+  const { gameCall } = await import("../src/ai/game-commands");
+  const burgos = (await import("./data/openmeteo-2026-08-12-burgos.json")).default;
+  const host = { camera: { weatherPlace: () => null }, settings: {}, tools: {} } as unknown as import("../src/ai/game-tools").GameHost;
+  const tool = gameTools(host).find((t) => t.name === "weather_at")!;
+  const asked: string[] = [];
+  const fetch0 = globalThis.fetch;
+  globalThis.fetch = (async (url: string) => {
+    asked.push(String(url));
+    return new Response(JSON.stringify(burgos), { status: 200 });
+  }) as unknown as typeof fetch;
+  try {
+    const r = (await tool.run({ lat: 42.5, lon: -2.5, date: "2026-08-12T18:30:00Z" }, new AbortController().signal)) as {
+      reachable: boolean;
+      weather: { source: string; layers: unknown[] };
+    };
+    expect(r.reachable).toBe(true);
+    expect(r.weather.source).toBe("model");
+    expect(r.weather.layers).toEqual([]);
+    expect(asked[0]).toContain("latitude=42.50&longitude=-2.50");
+    const far = (await tool.run({ lat: 0, lon: 0, date: "2067-01-01T00:00:00Z" }, new AbortController().signal)) as { reachable: boolean };
+    expect(far.reachable).toBe(false);
+  } finally {
+    globalThis.fetch = fetch0;
+  }
+  expect(gameCall("/weatherat 42.5 -2.5 2026-08-12T18:30Z", [tool])).toEqual({
+    tool: "weather_at",
+    args: { lat: 42.5, lon: -2.5, date: "2026-08-12T18:30Z" },
+  });
+});

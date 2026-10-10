@@ -8,6 +8,7 @@
 // turning with the place and the day, the clouds of the Earth's real map — the flights flown before are
 // flown the same.
 
+import type { ModelFacts } from "./openmeteo";
 import { WIND_10M, windFrom, type WindLevel } from "./wind";
 
 export type WeatherPreset = "fair" | "cloudy" | "overcast" | "fog" | "rain" | "storm" | "windy" | "dust" | "random" | "real";
@@ -38,7 +39,7 @@ export interface WindSpec {
 
 export interface WeatherState {
   /** where it comes from: a preset, a draw, an airfield's report */
-  source: "preset" | "random" | "metar";
+  source: "preset" | "random" | "metar" | "model";
   /** the preset it is (or the one drawn) */
   kind: Exclude<WeatherPreset, "random" | "real">;
   wind: WindSpec;
@@ -52,8 +53,10 @@ export interface WeatherState {
   rain: number;
   /** a dust storm (0 … 1: Mars) */
   dust: number;
-  /** the report it was read from (METAR), raw */
+  /** the report it was read from (METAR), raw — or the model's hour, summed up */
   report?: string;
+  /** the model's own facts (Open-Meteo: openmeteo.ts), when it came from there */
+  model?: ModelFacts;
 }
 
 /** The fair weather's wind: the player's own setting, as before. */
