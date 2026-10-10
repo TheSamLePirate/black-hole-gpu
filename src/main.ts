@@ -29,6 +29,9 @@ import { PlacePanel } from "./ui/placepanel";
 import { TimePanel } from "./ui/timepanel";
 import { WeatherPanel } from "./ui/weatherpanel";
 import { RealWeather } from "./realweather";
+import { EclipsePage } from "./ui/eclipses";
+import { bestPlace } from "./eclipse/details";
+import type { EclipseEvent } from "./eclipse/search";
 import { skyNow } from "./system/sky-now";
 import { MISSIONS } from "./game/missions";
 import { KeyHints } from "./ui/keyhints";
@@ -65,7 +68,7 @@ import {
 } from "./skychart";
 import { drawChartLabels } from "./ui/skylabels";
 import { SkyPanel } from "./ui/skypanel";
-import { defaultSettings, presets, QUALITY, settingKeys, type Settings, type Target } from "./settings";
+import { defaultSettings, presets, QUALITY, settingKeys, type Preset, type Settings, type Target } from "./settings";
 import { SettingsPanel } from "./ui/panel";
 import { SCHEMA, SCHEMA_BY_KEY } from "./ui/schema";
 import { loadFromUrl } from "./urlstate";
@@ -121,7 +124,8 @@ import { TransportBar } from "./ui/transport";
 import { Take, type TakeState } from "./take";
 import { BODY_COLOURS, CameraPanel, fmtHeight, VIEW_HELP, VIEW_LABEL, VIEWS, type View } from "./ui/camerapanel";
 import { defaultAltKm, ourMouthPose, ourOrbitPose } from "./game/place";
-import { solarBody, M_METRES, utcOf } from "./system/solar";
+import { EPOCH_DATE, solarBody, solarState, M_METRES, utcOf } from "./system/solar";
+import { plan } from "./system/plan-client";
 import { C_MPS, M_SECONDS } from "./units";
 import { mouth, setSceneTime } from "./wormhole";
 import { fmtWarp, realTimeSpeed, stepWarp, warpLadder } from "./clock";
@@ -2265,6 +2269,7 @@ async function main() {
       place: () => placePanel.open(),
       time: () => timePanel.open(),
       weather: () => weatherPanel.open(),
+      eclipses: () => eclipses.open(),
       titleScreen: () => titleScreen?.open(),
       toast: (t) => panel.toast(t),
     });
@@ -2770,6 +2775,68 @@ async function main() {
     },
   });
   flightHud.onWeather = () => weatherPanel.open();
+  // the eclipse calculator (ui/eclipses.ts, PLAN-CIEL C7): the HUD's Eclipses button, the pause menu, TARS
+  const eclipses = new EclipsePage({
+    now: () => utcOf(sim.time),
+    place: () => {
+      const p = camera.weatherPlace();
+      return p && p.body === "earth" ? { lat: p.lat, lon: p.lon } : null;
+    },
+    search: (q) => plan({ kind: "eclipses", q }),
+    detail: (e, place) => plan({ kind: "eclipseDetail", e, place }),
+    moonsView: (planet, t) => plan({ kind: "moonsView", planet, t }),
+    goSee: (e, place) => goSeeEclipse(e, place),
+    ask: (q) => {
+      tarsPanel.show();
+      tarsPanelAsk(q);
+    },
+  });
+  flightHud.onEclipses = () => eclipses.open();
+  /**
+   * Taken to see an eclipse (PLAN-CIEL C7): a scene made for it — a solar or a lunar one from the place
+   * asked if it is seen there, else from where it is best (the greatest point, the Moon at the zenith), a
+   * few minutes before its greatest there, looking at the Sun or the Moon; a transit from where the Sun is
+   * high; a moon's phenomenon or another world's eclipse from that world's sky in orbit, when it is there
+   * (the light's delay from the Earth taken off).
+   */
+  function goSeeEclipse(e: EclipseEvent, place: { lat: number; lon: number } | null) {
+    const base = presets["Earth: total eclipse over Burgos, 12 Aug 2026"]!;
+    const tOfMs = (ms: number) => (ms - EPOCH_DATE) / 1000 / M_SECONDS;
+    let preset: Preset;
+    if (e.kind === "solar" || e.kind === "lunar") {
+      const seen = e.here?.seen && place ? place : null;
+      const where = seen ?? bestPlace(e);
+      const lunar = e.kind === "lunar";
+      const at = lunar ? e.t - 3 * 60e3 : (e.here?.seen ? e.t : e.t) - 2 * 60e3;
+      preset = {
+        ...base,
+        target: lunar ? "moon" : "sun",
+        fov: lunar ? 2.5 : 8,
+        earthClouds: settings.weather === "real" ? settings.earthClouds : 0,
+        time: tOfMs(at),
+        pose: { at: [where.lat, where.lon], look: lunar ? "moon" : "sun", off: [0, 0] },
+      };
+    } else if (e.kind === "transit") {
+      preset = { ...base, target: "sun", fov: 1.2, time: tOfMs(e.t), pose: { at: [0, 0], look: "sun", off: [0, 0] } };
+    } else {
+      const world = e.kind === "phenomenon" ? e.planet : (e as { world: string }).world;
+      const t = e.kind === "phenomenon" ? (Number.isFinite(e.start) ? e.start : e.end) + 60e3 : (e as { t: number }).t;
+      const delay =
+        (Math.hypot(...solarState(world, tOfMs(t)).pos.map((x, i) => x - solarState("earth", tOfMs(t)).pos[i]!)) * M_METRES) / 299792458;
+      const R = (solarBody(world)!.radius * M_METRES) / 1000;
+      preset = {
+        ...presets["Jupiter: from orbit"]!,
+        target: world as Target,
+        fov: 30,
+        time: tOfMs(t - (e.kind === "phenomenon" ? delay * 1000 : 0)),
+        pose: { tilt: 20, body: world, altKm: Math.max(R * 4, 2000), phase: 10, look: world },
+      };
+    }
+    presets["Eclipse"] = preset;
+    eclipses.hide();
+    applyPreset("Eclipse");
+    touch();
+  }
   // TARS's tools (PLAN-TARS-AGENT A2): the whole game — the closures above, the panels, every key
   tarsTools = gameTools({
     settings,
@@ -2815,6 +2882,7 @@ async function main() {
         place: () => placePanel.open(),
         time: () => timePanel.open(),
         weather: () => weatherPanel.open(),
+        eclipses: () => eclipses.open(),
         scenes: () => scenes.open(),
         photo: () => openPhoto(),
         controls: () => controlsScreen.open(),
@@ -2839,6 +2907,16 @@ async function main() {
     now: () => performance.now(),
     dayClouds: () => renderer.dayCloudsOf,
     utcNow: () => utcOf(sim.time),
+    seeEclipse: async (kind, t, place) => {
+      const r = await plan<{ events: EclipseEvent[] } | { error: string }>({
+        kind: "eclipses",
+        q: { from: t - 3 * 86400e3, to: t + 3 * 86400e3, kinds: [kind], place },
+      });
+      const e = "error" in r ? undefined : r.events[0];
+      if (!e) return null;
+      goSeeEclipse(e, place);
+      return e.id;
+    },
     display: tarsDisplay,
     screen: (name, slot = 0) => {
       const map = (tab?: "orbit" | "globe" | "map") => {
@@ -2862,6 +2940,10 @@ async function main() {
         tablet.setPage(page);
         if (page === "computer") flightComputer.show(true);
         return `tablet: ${page}`;
+      }
+      if (name === "eclipses") {
+        eclipses.open();
+        return "the eclipse calculator";
       }
       if (name === "flight_report") {
         if (!lastReport) throw new Error("no flight report yet (a landing or a docking makes one)");

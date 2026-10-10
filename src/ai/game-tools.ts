@@ -122,6 +122,9 @@ export interface GameHost {
   now(): number;
   /** the game's date now [ms UTC] */
   utcNow?(): number;
+  /** taken to see an eclipse (PLAN-CIEL C7): the one of that kind nearest a date (within 3 days), from a place
+   *  if it is seen there, else from where it is best; its id, or null: none */
+  seeEclipse?(kind: "solar" | "lunar" | "transit", t: number, place: { lat: number; lon: number } | null): Promise<string | null>;
   /** the clouds of the day drawn over the Earth (the real weather's satellite mosaic: its date, its layer), or null */
   dayClouds?(): { date: string; layer: string } | null;
 }
@@ -136,6 +139,7 @@ export const SCREENS = [
   "ship",
   "log",
   "flight_report",
+  "eclipses",
   "cockpit_pfd",
   "cockpit_orbit",
   "cockpit_nav",
@@ -164,6 +168,7 @@ export const PANELS = [
   "place",
   "time",
   "weather",
+  "eclipses",
   "scenes",
   "photo",
   "controls",
@@ -459,6 +464,31 @@ export function gameTools(h: GameHost): Tool[] {
         if ("error" in r) return r;
         const limit = Math.max(1, Math.min(Number(a.limit ?? 40), 200));
         return { count: r.events.length, clipped: r.clipped, events: r.events.slice(0, limit).map(eclipseBrief) };
+      },
+    },
+    {
+      name: "go_see_eclipse",
+      description:
+        "Take the player to see an eclipse: the scene set at its date, a few minutes before its greatest, from the place given if it is seen there (else from where it is best: the greatest point of a solar one, under the Moon for a lunar one), the view on the Sun or the Moon. For a moon's phenomenon or another world's, use set_date and place_ship near that world instead. Give its date (from find_eclipses).",
+      params: {
+        kind: { type: "string", enum: ["solar", "lunar", "transit"] },
+        date: { type: "string", description: "its greatest moment or its day (ISO)" },
+        lat: { type: "number" },
+        lon: { type: "number" },
+        site: { type: "string", description: "a site's name instead of lat/lon" },
+      },
+      required: ["kind", "date"],
+      run: async (a) => {
+        const t = Date.parse(String(a.date));
+        if (!Number.isFinite(t)) return { error: "bad date" };
+        const site = a.site ? resolveSite(String(a.site), "earth") : null;
+        const place = site
+          ? { lat: site.lat, lon: site.lon }
+          : Number.isFinite(Number(a.lat)) && Number.isFinite(Number(a.lon)) && a.lat !== undefined
+            ? { lat: Number(a.lat), lon: Number(a.lon) }
+            : null;
+        const id = (await h.seeEclipse?.(a.kind as "solar" | "lunar" | "transit", t, place)) ?? null;
+        return id ? { ok: true, eclipse: id } : { error: "no such eclipse within 3 days of that date" };
       },
     },
     {
@@ -957,7 +987,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "interface",
       description:
-        "The interface: open a panel (settings, place, time, weather, scenes, photo, controls, help, pause, planner: the flight computer's MISSION tab over the map, sky, camera) or close the one on top; the map (open, tab: orbit/globe/map); HUD density 0 full, 1 minimal, 2 clean; a screenshot (PNG download).",
+        "The interface: open a panel (settings, place, time, weather, eclipses — the eclipse calculator's page —, scenes, photo, controls, help, pause, planner: the flight computer's MISSION tab over the map, sky, camera) or close the one on top; the map (open, tab: orbit/globe/map); HUD density 0 full, 1 minimal, 2 clean; a screenshot (PNG download).",
       params: {
         open: { type: "string", enum: PANELS },
         close: { type: "boolean" },

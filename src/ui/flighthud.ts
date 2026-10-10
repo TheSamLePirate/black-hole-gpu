@@ -86,6 +86,7 @@ const ICONS: Record<string, string> = {
   place: '<path d="M12 21s-6-5.6-6-10.5a6 6 0 0 1 12 0C18 15.4 12 21 12 21z" /><circle cx="12" cy="10.5" r="2.2" />',
   weather:
     '<path d="M7 17h10a4 4 0 0 0 .6-7.96A5.5 5.5 0 0 0 7.1 9.6 3.75 3.75 0 0 0 7 17z" /><path d="M9 20l-1 2M13 20l-1 2M17 20l-1 2" />',
+  eclipse: '<circle cx="12" cy="12" r="7.5" /><path d="M14.6 5.2a7.5 7.5 0 0 1 0 13.6A7.5 7.5 0 0 0 14.6 5.2z" class="f" />',
   ship: '<path d="M12 3.5l2.2 6.5 6.3 3.2-6.3 1.6L12 20.5l-2.2-5.7-6.3-1.6 6.3-3.2z" /><circle cx="12" cy="12" r="1.3" class="f" />',
 };
 const icon = (name: string, cls = "fl-ic") => {
@@ -318,6 +319,8 @@ export class FlightHud {
   onPlace: (() => void) | null = null;
   /** the weather (ui/weatherpanel.ts) */
   onWeather: (() => void) | null = null;
+  /** the eclipse calculator (PLAN-CIEL C7) */
+  onEclipses: (() => void) | null = null;
   private veff = h("canvas", "fl-veff");
   private orbitEls: Record<string, HTMLElement> = {};
   private cockpit = h("div", "fl-cockpit");
@@ -791,6 +794,11 @@ export class FlightHud {
     weatherBtn.title = t("The weather: fair, cloudy, fog, rain, storm, wind, Mars's dust, a draw, the real one (METAR)");
     weatherBtn.dataset.testid = "hud-weather";
     weatherBtn.onclick = () => this.onWeather?.();
+    const eclipseBtn = h("button", "fl-tools fl-placebtn fl-eclipsebtn") as HTMLButtonElement;
+    eclipseBtn.append(icon("eclipse"), h("span", "", t("Eclipses")));
+    eclipseBtn.title = t("The eclipse calculator: the Sun's and the Moon's, the transits, the planets' moons, from any world");
+    eclipseBtn.dataset.testid = "hud-eclipses";
+    eclipseBtn.onclick = () => this.onEclipses?.();
     const pathBtn = iconBtn("path", t("Future path in the view (the cyan tube)"), () => act.pathInView(), "fl-pathbtn");
     this.missionEls.pathBtn = pathBtn;
     const soundBtn = iconBtn("sound", t("Sound on / off (Settings › Game › Sound: the mix)"), () => act.sound(), "fl-soundbtn");
@@ -949,7 +957,7 @@ export class FlightHud {
           ),
         ),
       ),
-      group("fl-mg-acts", craftBox, planBtn, placeBtn, weatherBtn, viewBox, pathBtn, soundBtn, toolsBtn, dens, tools),
+      group("fl-mg-acts", craftBox, planBtn, placeBtn, weatherBtn, eclipseBtn, viewBox, pathBtn, soundBtn, toolsBtn, dens, tools),
     );
 
     // ---- target: its name (the ball's target mark) and range; the rest as tiles

@@ -17,6 +17,7 @@ const T = {
   place: { fr: "Placer le vaisseau", en: "Place the ship" },
   time: { fr: "Date et heure", en: "Date and time" },
   weather: { fr: "Météo", en: "Weather" },
+  eclipses: { fr: "Éclipses", en: "Eclipses" },
   release: { fr: "Rendre les commandes", en: "Release the controls" },
   releaseHint: { fr: "coupe l'autopilote, le maintien, la mission", en: "stops the autopilot, the hold, the mission" },
   settings: { fr: "Réglages", en: "Settings" },
@@ -54,6 +55,8 @@ export interface PauseDeps {
   time(): void;
   /** the weather (ui/weatherpanel.ts) */
   weather(): void;
+  /** the eclipse calculator (ui/eclipses.ts) */
+  eclipses?(): void;
   titleScreen(): void;
   toast(text: string): void;
 }
@@ -125,6 +128,7 @@ export class PauseMenu {
       this.item(tr(T.place), () => this.leaveFor(this.d.place), { testid: "pause-place" }),
       this.item(tr(T.time), () => this.leaveFor(this.d.time), { testid: "pause-time" }),
       this.item(tr(T.weather), () => this.leaveFor(this.d.weather), { testid: "pause-weather" }),
+      this.item(tr(T.eclipses), () => this.leaveFor(() => this.d.eclipses?.()), { testid: "pause-eclipses" }),
       this.d.engaged()
         ? this.item(
             tr(T.release),

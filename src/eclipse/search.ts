@@ -18,9 +18,22 @@ export interface EclipseQuery {
   planets?: string[];
   /** the world the Sun's eclipses are seen from (world): its planet's and its moons' shadows on it */
   world?: string;
+  /** a place on the Earth [°]: each solar and lunar eclipse's look from there (`here`) */
+  place?: { lat: number; lon: number } | null;
 }
 
-export type EclipseEvent = (SolarEclipse | LunarEclipse | Transit | Phenomenon | WorldEclipse) & { id: string; at: number };
+/** An eclipse from the query's place, in brief: solar — its type and magnitude there, the Sun's height at
+ *  the greatest; lunar — the Moon's height at the greatest and whether it is up the whole time. */
+export interface Here {
+  type?: string;
+  magnitude?: number;
+  sunAlt?: number;
+  moonAlt?: number;
+  /** seen at all from there (the Sun or the Moon up during it) */
+  seen: boolean;
+}
+
+export type EclipseEvent = (SolarEclipse | LunarEclipse | Transit | Phenomenon | WorldEclipse) & { id: string; at: number; here?: Here };
 
 /** The longest windows a request covers (the work's bound): decades for the Earth's eclipses, a year of phenomena. */
 export const SPAN = { solar: 50 * YEAR, lunar: 50 * YEAR, transit: 150 * YEAR, phenomena: YEAR, world: 2 * YEAR } as const;
@@ -37,8 +50,25 @@ export function searchEclipses(q: EclipseQuery): { events: EclipseEvent[]; clipp
     return q.from + SPAN[k];
   };
   for (const k of q.kinds) {
-    if (k === "solar") for (const e of solarEclipses(q.from, end(k))) events.push({ ...e, id: `solar:${day(e.t)}`, at: e.t });
-    if (k === "lunar") for (const e of lunarEclipses(q.from, end(k))) events.push({ ...e, id: `lunar:${day(e.t)}`, at: e.t });
+    if (k === "solar")
+      for (const e of solarEclipses(q.from, end(k))) {
+        let here: Here | undefined;
+        if (q.place) {
+          const l = solarLocal(q.place.lat * (Math.PI / 180), q.place.lon * (Math.PI / 180), 0, e.t);
+          here = { type: l.type, magnitude: l.magnitude, sunAlt: l.sunAlt, seen: l.type !== "none" && l.sunAltMax > -0.8 };
+        }
+        events.push({ ...e, id: `solar:${day(e.t)}`, at: e.t, here });
+      }
+    if (k === "lunar")
+      for (const e of lunarEclipses(q.from, end(k))) {
+        let here: Here | undefined;
+        if (q.place) {
+          const l = lunarLocal(e, q.place.lat * (Math.PI / 180), q.place.lon * (Math.PI / 180), 0);
+          const mx = l.find((c) => c.name === "max")!;
+          here = { moonAlt: mx.moonAlt, seen: l.some((c) => c.moonAlt > -0.8) };
+        }
+        events.push({ ...e, id: `lunar:${day(e.t)}`, at: e.t, here });
+      }
     if (k === "transit")
       for (const p of ["mercury", "venus"] as const)
         for (const e of transits(p, q.from, end(k))) events.push({ ...e, id: `transit:${p}:${day(e.t)}`, at: e.t });
