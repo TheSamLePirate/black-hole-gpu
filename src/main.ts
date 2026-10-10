@@ -125,6 +125,7 @@ import { checkArgs } from "./ai/tool-schema";
 import { gameTools, keyCatalog, SCREENS } from "./ai/game-tools";
 import { TarsDisplay } from "./ui/tars/display";
 import { PushToTalk } from "./ai/listen";
+import { DeepgramEar, deepgramKey, earTarget } from "./ai/deepgram";
 import { Triggers, TARS_TRIGGERS_KEY, wakeText, type GameEvent, type Trigger } from "./ai/triggers";
 import { Budget } from "./ai/budget";
 import { READ_TOOLS, runSubagents } from "./ai/subagents";
@@ -844,6 +845,7 @@ async function main() {
         if (k) voice.say({ text: t("Connected. I'm told I'll be smarter now. We'll see."), speaker: "tars", priority: 2 });
       }),
     paste: (k) => openRouterKey.set(k),
+    pasteDeepgram: (k) => deepgramKey.set(k),
     disconnect: () => openRouterKey.clear(),
     memory: () => ({ turns: tarsMemory.turns.length, notes: tarsMemory.notes.length }),
     clearMemory: () => {
@@ -1044,7 +1046,7 @@ async function main() {
         history: () => tarsPanel.drawHistory(),
         dock: () => tarsPanel.setLook({ dock: true } as never),
         connect: () => tarsPanelHost.connect(),
-        pasteKey: () => tarsPanel.pasteMode(),
+        pasteKey: (which) => tarsPanel.pasteMode(which),
         refresh: () => tarsPanel.refresh(),
       },
       c,
@@ -1061,31 +1063,50 @@ async function main() {
     () => settings.reduceMotion || matchMedia("(prefers-reduced-motion: reduce)").matches,
   );
   // speaking to TARS (PLAN-TARS-AGENT A5): his key held listens, released sends; a tap is his field
-  const tarsTalk = new PushToTalk({
-    lang: () => lang,
-    hearing: (text) => tarsPanel.hearing(text),
-    heard: (text) => {
-      if (!text) return tarsPanel.refresh(t("Nothing heard."));
-      tarsPanel.hearing("");
-      tarsPanelAsk(text);
+  const tarsTalk = new PushToTalk(
+    {
+      lang: () => lang,
+      hearing: (text) => tarsPanel.hearing(text),
+      heard: (text) => {
+        if (!text) return tarsPanel.refresh(t("Nothing heard."));
+        tarsPanel.hearing("");
+        tarsPanelAsk(text);
+      },
+      failed: (why, code) => (
+        console.warn("[TARS microphone]", why, code, tarsTalk.trail.join(" · ")),
+        tarsPanel.refresh(
+          why === "denied"
+            ? t("The microphone is not allowed (the browser's site settings).")
+            : code === "unsupported"
+              ? t("No speech recognition in this browser: paste a Deepgram key (/deepgram), or use Chrome or Safari.")
+              : code === "deepgram-none"
+                ? t("TARS's ear is set to Deepgram: paste a Deepgram key (/deepgram).")
+                : code === "deepgram-key"
+                  ? t("Deepgram refused the key (/deepgram to paste another).")
+                  : why === "network"
+                    ? t(
+                        "This browser's speech recognition does not work (Arc, Brave, Opera): paste a Deepgram key (/deepgram), or use Chrome or Safari.",
+                      )
+                    : why === "none"
+                      ? t("Nothing heard.")
+                      : `${t("Speech recognition failed.")}${code ? ` (${code})` : ""}`,
+        )
+      ),
+      state: (on) => {
+        tarsPanel.listening(on);
+        tarsPanel.setState(on ? "listening" : tarsBusy ? "thinking" : "idle");
+      },
     },
-    failed: (why, code) => (
-      console.warn("[TARS microphone]", why, code, tarsTalk.trail.join(" · ")),
-      tarsPanel.refresh(
-        why === "denied"
-          ? t("The microphone is not allowed (the browser's site settings).")
-          : why === "network"
-            ? t("Speech recognition needs the network.")
-            : why === "none"
-              ? t("Nothing heard.")
-              : `${t("Speech recognition failed.")}${code ? ` (${code})` : ""}`,
-      )
-    ),
-    state: (on) => {
-      tarsPanel.listening(on);
-      tarsPanel.setState(on ? "listening" : tarsBusy ? "thinking" : "idle");
+    undefined,
+    undefined,
+    // (Deepgram's ear when it is within reach: a key pasted, or the dev server's relay)
+    async () => {
+      if (settings.tarsEar === "browser") return null;
+      const target = await earTarget(lang);
+      if (!target && settings.tarsEar === "deepgram") throw new Error("deepgram-none");
+      return target ? new DeepgramEar(target) : null;
     },
-  });
+  );
   /** his key (F6, or as bound) pressed: held, it listens; tapped, his field */
   function tarsKey(e: KeyboardEvent) {
     // (a controller's button — no key up to wait for —, or no recognition here: the field)
@@ -3569,7 +3590,7 @@ async function main() {
     voice,
     capcom,
     music,
-    tars: { agent: tarsAgent, memory: tarsMemory, tools: () => tarsTools, spent: () => openRouter.spent },
+    tars: { agent: tarsAgent, memory: tarsMemory, tools: () => tarsTools, spent: () => openRouter.spent, earTrail: () => tarsTalk.trail },
     skyLoading,
     mx: { runAnalemma, runEclipse, runTrails, runMoonPath, runIss, issPasses: issPassesHere, planEclipse, host: mxHost, dialog: mxDialog },
     touch,

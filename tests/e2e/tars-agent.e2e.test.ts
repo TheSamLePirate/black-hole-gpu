@@ -209,6 +209,8 @@ describe.skipIf(!E2E)("TARS the agent", () => {
   }, 240_000);
 
   test("push-to-talk: F6 held listens, the words shown, released they are asked; tapped, the field", async () => {
+    // (the browser's recognition, faked here — not Deepgram's ear, which a key in .env would bring: tars-ear.e2e)
+    await app.js(`(__bh.settings.tarsEar = "browser", true)`);
     if (!(await app.js<boolean>(`document.querySelector("[data-testid=tars-panel]").hidden`))) await app.press("F6", "F6");
     await app.hold("F6", 600, async () => {
       expect(
@@ -334,8 +336,9 @@ describe.skipIf(!E2E)("TARS the agent", () => {
     await app.waitFor(`__bh.tars.agent.lastText === "Réglé."`, 15_000);
     await app.click("[data-testid=tars-tab-wakes]");
     const rules = await app.js<string[]>(`[...document.querySelectorAll("[data-testid=tars-rule]")].map((r) => r.dataset.id)`);
-    expect(rules.filter((r) => r.startsWith("reflex-")).length).toBe(5);
-    expect(rules.length).toBe(6);
+    // (his reflexes: the autopilot's end, the entry, a warning, a deviation, an eclipse, a report)
+    expect(rules.filter((r) => r.startsWith("reflex-")).length).toBe(6);
+    expect(rules.length).toBe(7);
     // (sub-agents, in parallel, shown at work then done)
     await app.click("[data-testid=tars-tab-talk]");
     await app.type("Analyse le carburant et Mars en parallèle.");
@@ -360,9 +363,9 @@ describe.skipIf(!E2E)("TARS the agent", () => {
     if (await app.js<boolean>(`document.querySelector("[data-testid=tars-panel]").hidden`)) await app.press("F6", "F6");
     await app.click("[data-testid=tars-tab-talk]");
     const sug = () => app.js<string[]>(`[...document.querySelectorAll("[data-testid=tars-suggest] li b")].map((b) => b.textContent)`);
-    // ("/mo": model, mode; ↓ then Tab takes mode; its values; Enter on "plan")
+    // ("/mo": model, mode, the Moon's way; ↓ then Tab takes mode; its values; Enter on "plan")
     await app.type("/mo");
-    expect(await sug()).toEqual(["/model <modèle>", "/mode act|plan|watch"]);
+    expect(await sug()).toEqual(["/model <modèle>", "/mode act|plan|watch", "/moonpath <mode> <date>"]);
     await app.press("ArrowDown", "ArrowDown");
     await app.press("Tab", "Tab");
     expect(await app.js<string>(`document.querySelector("[data-testid=tars-input]").value`)).toBe("/mode ");

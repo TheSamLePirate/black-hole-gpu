@@ -68,7 +68,7 @@ export interface BhContext {
   /** the score (PLAN-TARS T4): the moment playing, the notes and ticks started */
   music: Music;
   /** TARS the agent (PLAN-TARS-AGENT): his turns, his memory, his tools */
-  tars: { agent: TarsAgent; memory: TarsMemory; tools: () => Tool[]; spent: () => number };
+  tars: { agent: TarsAgent; memory: TarsMemory; tools: () => Tool[]; spent: () => number; earTrail?: () => string[] };
   skyLoading: Promise<unknown>;
   /** multiple exposures (PLAN-CIEL C8): the analemma's runner */
   mx?: unknown;

@@ -3029,6 +3029,22 @@ export const SCHEMA: ControlDef[] = [
     keywords: "tars model llm ai openrouter glm claude gpt gemini deepseek agent",
   },
   {
+    key: "tarsEar",
+    type: "choice",
+    section: "game",
+    group: "TARS",
+    label: "TARS's ear",
+    style: "select",
+    effect: "none",
+    options: [
+      { value: "auto", label: "Automatic", hint: "Deepgram when within reach, else the browser's" },
+      { value: "deepgram", label: "Deepgram", hint: "A Deepgram key (F6: /deepgram), in any browser" },
+      { value: "browser", label: "The browser's", hint: "Chrome's (through Google) or Safari's (on the device)" },
+    ],
+    help: "What hears you when you hold F6 (or click his microphone). Deepgram hears the same in every browser and shows your words as you say them: paste your own key in his console (/deepgram — kept in this browser only). The browser's own recognition works in Chrome and Safari, not in Arc, Brave, Opera or Firefox. Automatic: Deepgram when a key is there, else the browser's.",
+    keywords: "tars voice speech microphone push to talk deepgram recognition ear dictation",
+  },
+  {
     key: "tarsWake",
     type: "toggle",
     section: "game",

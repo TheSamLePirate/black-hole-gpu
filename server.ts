@@ -13,6 +13,11 @@ if (parent)
     }
   }, 2000);
 const dev = process.env.NODE_ENV !== "production";
+// TARS's ear (dev): the page's microphone relayed to Deepgram with the key of .env — the key never leaves this
+// server (a temporary token needs a key of a member's rights; a relay needs none)
+// (and in a test's run — KERR_EAR_RELAY=1 —: its server runs as production)
+const DEEPGRAM = dev || process.env.KERR_EAR_RELAY === "1" ? process.env.DEEPGRAM_API_KEY : undefined;
+type Relay = { query: string; up?: WebSocket; queue: (string | ArrayBuffer | Uint8Array)[] };
 
 const server = Bun.serve({
   port,
@@ -73,6 +78,34 @@ const server = Bun.serve({
     "/basis_transcoder.wasm": () =>
       new Response(Bun.file("vendor/basis/basis_transcoder.wasm"), { headers: { "content-type": "application/wasm" } }),
     // Dev only: read back files from snapshots/ (e.g. reference data for the precision probe).
+    // Dev only: whether the relay to Deepgram is there (GET), the relay itself (a WebSocket)
+    "/__deepgram": (req, srv) => {
+      if (!DEEPGRAM) return new Response("disabled", { status: 404 });
+      const url = new URL(req.url);
+      if (req.headers.get("upgrade")?.toLowerCase() !== "websocket") return Response.json({ ok: true });
+      // (its own page only; the listening's settings passed on, nothing else)
+      const origin = req.headers.get("origin");
+      if (origin && new URL(origin).host !== url.host) return new Response("forbidden", { status: 403 });
+      const q = new URLSearchParams();
+      for (const k of [
+        "model",
+        "language",
+        "encoding",
+        "sample_rate",
+        "channels",
+        "interim_results",
+        "smart_format",
+        "punctuate",
+        "endpointing",
+        "keyterm",
+      ]) {
+        const v = url.searchParams.get(k);
+        if (v && /^[\w.-]{1,24}$/.test(v)) q.set(k, v);
+      }
+      return srv.upgrade(req, { data: { query: q.toString(), queue: [] } as never })
+        ? undefined
+        : new Response("upgrade failed", { status: 400 });
+    },
     "/__snapshots/:name": {
       GET: (req) => {
         const file = Bun.file(`snapshots/${req.params.name.replace(/[^\w.-]/g, "")}`);
@@ -81,6 +114,31 @@ const server = Bun.serve({
     },
   },
   development: dev && { hmr: true, console: true },
+  websocket: {
+    // the page's side opened: Deepgram's opened with the key, what came before it queued
+    open(ws) {
+      const r = ws.data as unknown as Relay;
+      const up = new WebSocket(`wss://api.deepgram.com/v1/listen?${r.query}`, { headers: { Authorization: `Token ${DEEPGRAM}` } } as never);
+      up.binaryType = "arraybuffer";
+      r.up = up;
+      up.onopen = () => {
+        for (const m of r.queue) up.send(m);
+        r.queue = [];
+      };
+      up.onmessage = (m) => ws.send(typeof m.data === "string" ? m.data : new Uint8Array(m.data as ArrayBuffer));
+      up.onclose = (e) => ws.close(e.code === 1005 ? 1000 : e.code, e.reason);
+      up.onerror = () => ws.close(1011, "deepgram");
+    },
+    message(ws, m) {
+      const r = ws.data as unknown as Relay;
+      if (r.up?.readyState === WebSocket.OPEN) r.up.send(m);
+      else r.queue.push(m);
+    },
+    close(ws) {
+      const r = ws.data as unknown as Relay;
+      if (r.up && r.up.readyState <= WebSocket.OPEN) r.up.close();
+    },
+  },
 });
 
 console.log(`Black hole simulator → ${server.url}`);

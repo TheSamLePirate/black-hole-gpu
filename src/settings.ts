@@ -437,6 +437,7 @@ export interface Settings {
   tarsOnline: boolean; // TARS through OpenRouter when a key is there (T6); off: his written lines
   tarsModel: string; // the model TARS thinks with through OpenRouter (PLAN-TARS-AGENT; ai/openrouter.ts AGENT_MODELS)
   tarsWake: boolean; // his reflexes and rules wake him (B1); off: he speaks only when asked
+  tarsEar: "auto" | "deepgram" | "browser"; // what hears the pilot's words: Deepgram when within reach (a key, the dev relay), or the browser's recognition
   tarsBudget: number; // what his own initiatives may cost an hour [USD] (B1)
   haptics: number; // the controllers' vibrations, 0 (none) … 1
   dynamicResolution: boolean; // lower the render scale when the GPU cannot keep the frame budget
@@ -685,6 +686,7 @@ export function defaultSettings(): Settings {
     tarsOnline: true,
     tarsModel: "z-ai/glm-5.3-flash",
     tarsWake: true,
+    tarsEar: "auto",
     tarsBudget: 0.05,
     haptics: 0.6,
     dynamicResolution: false,
@@ -1897,6 +1899,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   tarsOnline: "pref",
   tarsModel: "pref",
   tarsWake: "pref",
+  tarsEar: "pref",
   tarsBudget: "pref",
   haptics: "pref",
   dynamicResolution: "pref",

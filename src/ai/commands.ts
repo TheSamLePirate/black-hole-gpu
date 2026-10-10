@@ -125,6 +125,15 @@ export const COMMANDS: Command[] = [
   { name: "login", desc: { fr: "Se connecter avec OpenRouter", en: "Sign in with OpenRouter" } },
   { name: "key", desc: { fr: "Coller une clé OpenRouter", en: "Paste an OpenRouter key" } },
   { name: "logout", desc: { fr: "Oublier la clé OpenRouter", en: "Forget the OpenRouter key" } },
+  {
+    name: "deepgram",
+    args: "off",
+    desc: {
+      fr: "Coller une clé Deepgram (lui parler dans tout navigateur) — off : l'oublier",
+      en: "Paste a Deepgram key (speak to him in any browser) — off: forget it",
+    },
+    values: () => [{ value: "off" }],
+  },
 ];
 
 const fold = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");

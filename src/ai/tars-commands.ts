@@ -6,6 +6,7 @@
 
 import { tr } from "../i18n";
 import { AGENT_MODELS, openRouterKey, type OpenRouter } from "./openrouter";
+import { deepgramKey } from "./deepgram";
 import { helpLines, MODE_WORDS, MODES, type Mode, type Skill } from "./commands";
 import { summaryPrompt, type TarsMemory } from "./memory";
 import { telemetry } from "./telemetry";
@@ -39,7 +40,7 @@ export interface CommandHost {
   history(): void;
   dock(): void;
   connect(): void;
-  pasteKey(): void;
+  pasteKey(which?: "openrouter" | "deepgram"): void;
   refresh(): void;
 }
 
@@ -237,5 +238,11 @@ export async function runCommand(h: CommandHost, c: { name: string; arg: string;
       openRouterKey.clear();
       h.refresh();
       return say("Clé oubliée.", "Key forgotten.");
+    case "deepgram":
+      if (/^(off|non|no)$/i.test(c.arg.trim())) {
+        deepgramKey.clear();
+        return say("Clé Deepgram oubliée.", "Deepgram key forgotten.");
+      }
+      return h.pasteKey("deepgram");
   }
 }

@@ -28,6 +28,8 @@ export interface TarsPanelHost {
   connect(): void;
   /** a key pasted: kept (false: not an OpenRouter key) */
   paste(k: string): boolean;
+  /** a Deepgram key pasted (his ear in any browser): kept */
+  pasteDeepgram?(k: string): boolean;
   disconnect(): void;
   /** his memory: its exchanges and notes */
   memory(): { turns: number; notes: number };
@@ -208,7 +210,8 @@ export class TarsPanel {
   private waitLine = el("div", "tp-wait");
   private presenceText = el("span", "tp-presence-text");
   private proposalEl = el("section", "tp-proposal");
-  private keyMode = false;
+  /** the field taking a key, hidden (OpenRouter's, Deepgram's) — none: a question */
+  private keyMode: "" | "openrouter" | "deepgram" = "";
   private state: EmblemState = "idle";
   private running: HTMLLIElement | null = null;
   private tab: Tab = "talk";
@@ -423,7 +426,7 @@ export class TarsPanel {
         return;
       }
       if (e.key === "Escape") {
-        if (this.keyMode) return this.setKeyMode(false);
+        if (this.keyMode) return this.setKeyMode("");
         // (a turn running: Escape stops it first)
         if (this.host.link().busy) return this.host.stop();
         return this.close();
@@ -442,9 +445,15 @@ export class TarsPanel {
     this.input.value = "";
     this.closeSuggest();
     this.askedAt = -1;
+    if (this.keyMode === "deepgram") {
+      const ok = q ? !!this.host.pasteDeepgram?.(q) : false;
+      this.setKeyMode("");
+      this.refresh(ok ? t("Deepgram key kept in this browser only: hold F6 to speak.") : q ? t("That is not a Deepgram key.") : "");
+      return;
+    }
     if (this.keyMode) {
       const ok = q ? this.host.paste(q) : false;
-      this.setKeyMode(false);
+      this.setKeyMode("");
       this.refresh(ok ? t("Key kept in this browser only.") : q ? t("That is not an OpenRouter key (sk-or-…).") : "");
       return;
     }
@@ -514,7 +523,7 @@ export class TarsPanel {
   }
 
   show() {
-    this.setKeyMode(false);
+    this.setKeyMode("");
     this.el.hidden = false;
     this.syncPresence();
     this.refresh();
@@ -988,18 +997,21 @@ export class TarsPanel {
   }
 
   /** The field ready for a key (/key). */
-  pasteMode() {
+  pasteMode(which: "openrouter" | "deepgram" = "openrouter") {
     if (!this.open) this.show();
-    this.setKeyMode(true);
+    this.setKeyMode(which);
   }
 
-  private setKeyMode(on: boolean) {
-    this.keyMode = on;
-    this.input.type = on ? "password" : "text";
+  private setKeyMode(which: "" | "openrouter" | "deepgram") {
+    this.keyMode = which;
+    this.input.type = which ? "password" : "text";
     this.input.value = "";
-    this.input.placeholder = on
-      ? t("Paste your OpenRouter key (sk-or-…) — Enter")
-      : t("Ask TARS — where are we, the fuel, what now… (Enter)");
+    this.input.placeholder =
+      which === "openrouter"
+        ? t("Paste your OpenRouter key (sk-or-…) — Enter")
+        : which === "deepgram"
+          ? t("Paste your Deepgram key — Enter")
+          : t("Ask TARS — where are we, the fuel, what now… (Enter)");
     this.input.focus();
   }
 
@@ -1037,7 +1049,7 @@ export class TarsPanel {
       this.status.append(
         text,
         btn(t("Sign in with OpenRouter"), "tars-connect", () => this.host.connect()),
-        btn(t("paste a key"), "tars-paste", () => this.setKeyMode(true)),
+        btn(t("paste a key"), "tars-paste", () => this.setKeyMode("openrouter")),
       );
     }
     // (his memory: what he keeps of you, and its eraser)

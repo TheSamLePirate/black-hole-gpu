@@ -212,8 +212,28 @@ export default {
   "Nothing heard.": "Rien entendu.",
   "The microphone is not allowed (the browser's site settings).": "Le micro n'est pas autorisé (les réglages du site dans le navigateur).",
   "Speech recognition needs the network.": "La reconnaissance vocale a besoin du réseau.",
+  "No speech recognition in this browser: paste a Deepgram key (/deepgram), or use Chrome or Safari.":
+    "Pas de reconnaissance vocale dans ce navigateur : collez une clé Deepgram (/deepgram), ou utilisez Chrome ou Safari.",
+  "Deepgram refused the key (/deepgram to paste another).": "Deepgram a refusé la clé (/deepgram pour en coller une autre).",
+  "This browser's speech recognition does not work (Arc, Brave, Opera): paste a Deepgram key (/deepgram), or use Chrome or Safari.":
+    "La reconnaissance vocale de ce navigateur ne fonctionne pas (Arc, Brave, Opera) : collez une clé Deepgram (/deepgram), ou utilisez Chrome ou Safari.",
+  "Paste your Deepgram key — Enter": "Collez votre clé Deepgram — Entrée",
+  "Deepgram key kept in this browser only: hold F6 to speak.":
+    "Clé Deepgram gardée dans ce navigateur seulement : maintenez F6 pour parler.",
+  "That is not a Deepgram key.": "Ce n'est pas une clé Deepgram.",
+  "TARS's ear is set to Deepgram: paste a Deepgram key (/deepgram).":
+    "L'oreille de TARS est réglée sur Deepgram : collez une clé Deepgram (/deepgram).",
   "Speech recognition failed.": "La reconnaissance vocale a échoué.",
   "TARS's reflexes and rules": "Réflexes et réveils de TARS",
+  "TARS's ear": "L'oreille de TARS",
+  Deepgram: "Deepgram",
+  Automatic: "Automatique",
+  "Deepgram when within reach, else the browser's": "Deepgram s'il est là, sinon celle du navigateur",
+  "A Deepgram key (F6: /deepgram), in any browser": "Une clé Deepgram (F6 : /deepgram), dans tout navigateur",
+  "The browser's": "Celle du navigateur",
+  "Chrome's (through Google) or Safari's (on the device)": "Celle de Chrome (par Google) ou de Safari (sur l'appareil)",
+  "What hears you when you hold F6 (or click his microphone). Deepgram hears the same in every browser and shows your words as you say them: paste your own key in his console (/deepgram — kept in this browser only). The browser's own recognition works in Chrome and Safari, not in Arc, Brave, Opera or Firefox. Automatic: Deepgram when a key is there, else the browser's.":
+    "Ce qui vous entend quand vous maintenez F6 (ou cliquez son micro). Deepgram entend de même dans tout navigateur et affiche vos mots à mesure que vous les dites : collez votre propre clé dans sa console (/deepgram — gardée dans ce navigateur seulement). La reconnaissance du navigateur marche dans Chrome et Safari, pas dans Arc, Brave, Opera ni Firefox. Automatique : Deepgram si une clé est là, sinon celle du navigateur.",
   'TARS wakes by himself — at the key moments (an autopilot\'s end, the entry\'s phases, a warning, a deviation, a report) and on the rules you ask him for ("every 10 minutes check the fuel", "at each burn, call it out"). Listed in his console (F6), each to switch off. Off: he speaks only when asked.':
     "TARS se réveille de lui-même — aux moments clés (la fin d'un autopilote, les phases de la rentrée, une alerte grave, un écart, un rapport) et sur les règles que vous lui demandez (« toutes les 10 minutes, vérifie le carburant », « à chaque poussée, annonce-la »). Listés dans sa console (F6), chacun désactivable. Désactivé : il ne parle que si on lui parle.",
   "TARS's budget per hour": "Budget de TARS par heure",

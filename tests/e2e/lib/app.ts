@@ -83,6 +83,8 @@ export class App {
       sw?: boolean;
       initScript?: string;
       startupFailure?: boolean;
+      /** Chrome's own flags for this run (a fake microphone: --use-file-for-fake-audio-capture…) */
+      args?: string[];
     } = {},
   ) {
     const s = await serve();

@@ -119,3 +119,81 @@ test("the microphone open a second at a time and nothing heard, no error said: g
   expect(log.states).toEqual([true, false]);
   expect(ptt.trail.some((l) => l.includes("end (0 results)"))).toBe(true);
 });
+
+// Deepgram's ear (deepgram.ts): its words as they come, its last ones before the end, its failures said
+import { downsample, pcm16, readResult } from "../src/ai/deepgram";
+
+test("Deepgram's messages and the audio sent: its words final or interim, 16-bit PCM at 16 kHz", () => {
+  expect(readResult(JSON.stringify({ type: "Results", is_final: false, channel: { alternatives: [{ transcript: "emmène" }] } }))).toEqual({
+    text: "emmène",
+    final: false,
+  });
+  expect(readResult(JSON.stringify({ type: "Metadata" }))).toBeNull();
+  expect(readResult("not json")).toBeNull();
+  const x = new Float32Array(4800).fill(0.5);
+  const d = downsample(x, 48000, 16000);
+  expect(d.length).toBe(1600);
+  expect(d[10]).toBeCloseTo(0.5, 6);
+  const b = pcm16(new Float32Array([1, -1, 0]));
+  expect(new DataView(b.buffer).getInt16(0, true)).toBe(32767);
+  expect(new DataView(b.buffer).getInt16(2, true)).toBe(-32767);
+});
+
+test("an ear of our own: its words shown as they come, the last ones in before the question; its failure said; none: the browser's", async () => {
+  const shown: string[] = [];
+  const log = { heard: [] as string[], failed: [] as string[], states: [] as boolean[] };
+  let hooks: { interim(t: string): void; final(t: string): void; error(c: string): void } | null = null;
+  let ended = false;
+  const ear = {
+    start: async (h: typeof hooks) => void (hooks = h),
+    end: async () => {
+      // (its last words come before it resolves)
+      hooks!.final("puis vise Mars.");
+      ended = true;
+    },
+  };
+  const host = {
+    lang: () => "fr" as const,
+    hearing: (t: string) => shown.push(t),
+    heard: (t: string) => log.heard.push(t),
+    failed: (w: string, c?: string) => log.failed.push(`${w}:${c}`),
+    state: (on: boolean) => log.states.push(on),
+  };
+  const ptt = new PushToTalk(
+    host,
+    () => null,
+    () => 0,
+    async () => ear,
+  );
+  ptt.start();
+  await Bun.sleep(0);
+  hooks!.interim("TARS, emmène-nous");
+  hooks!.final("TARS, emmène-nous en orbite autour de la Lune,");
+  ptt.stop();
+  await Bun.sleep(0);
+  expect(ended).toBe(true);
+  expect(shown[0]).toBe("TARS, emmène-nous");
+  expect(log.heard).toEqual(["TARS, emmène-nous en orbite autour de la Lune, puis vise Mars."]);
+  expect(log.states).toEqual([true, false]);
+  // (its key refused: said)
+  const p2 = new PushToTalk(
+    host,
+    () => null,
+    () => 0,
+    async () => ear,
+  );
+  p2.start();
+  await Bun.sleep(0);
+  hooks!.error("deepgram-key");
+  expect(log.failed).toEqual(["other:deepgram-key"]);
+  // (none within reach, no recognition either: said)
+  const p3 = new PushToTalk(
+    host,
+    () => null,
+    () => 0,
+    async () => null,
+  );
+  p3.start();
+  await Bun.sleep(0);
+  expect(log.failed.at(-1)).toBe("other:unsupported");
+});

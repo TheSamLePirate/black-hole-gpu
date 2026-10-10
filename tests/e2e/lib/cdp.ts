@@ -26,7 +26,7 @@ const GPU =
     ? ["--no-sandbox", "--enable-unsafe-webgpu", "--enable-features=Vulkan", "--use-vulkan=swiftshader", "--use-webgpu-adapter=swiftshader"]
     : ["--enable-unsafe-webgpu", "--enable-gpu", "--ignore-gpu-blocklist"];
 
-export async function launch(o: { width?: number; height?: number; dpr?: number } = {}): Promise<Cdp> {
+export async function launch(o: { width?: number; height?: number; dpr?: number; args?: string[] } = {}): Promise<Cdp> {
   const W = o.width ?? 1440,
     H = o.height ?? 900;
   // (one Chrome at a time on this machine: scripts/lib/chrome-lock.ts — waits its turn here)
@@ -55,6 +55,8 @@ export async function launch(o: { width?: number; height?: number; dpr?: number 
       "--disable-background-timer-throttling",
       "--disable-renderer-backgrounding",
       "--disable-backgrounding-occluded-windows",
+      // (a test's own: a fake microphone playing a file, …)
+      ...(o.args ?? []),
       "about:blank",
     ],
     { stdout: "ignore", stderr: "ignore" },

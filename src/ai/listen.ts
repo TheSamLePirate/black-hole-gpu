@@ -1,5 +1,6 @@
-// Speaking to TARS (PLAN-TARS-AGENT A5): push-to-talk by the browser's speech recognition — Chrome's goes
-// through Google's servers, Safari's stays on the device (the owner's choice, said in the settings' help).
+// Speaking to TARS (PLAN-TARS-AGENT A5): push-to-talk — by Deepgram when it is within reach (deepgram.ts: a
+// key pasted, or the dev server's relay; the same in every browser), else by the browser's own recognition —
+// Chrome's goes through Google's servers, Safari's stays on the device (none in Arc, Brave, Firefox).
 // A key held listens (its words shown as they come), released sends what was heard; a tap is the field.
 // Without recognition (Firefox), the field alone.
 
@@ -19,6 +20,12 @@ const Ctor = (): (new () => Recognition) | null => {
   const w = globalThis as unknown as { SpeechRecognition?: new () => Recognition; webkitSpeechRecognition?: new () => Recognition };
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 };
+
+/** An ear of our own (Deepgram's): the words as they come, until end() — its last ones before it resolves. */
+export interface Ear {
+  start(h: { interim(text: string): void; final(text: string): void; error(code: string): void; note?(what: string): void }): Promise<void>;
+  end(): Promise<void>;
+}
 
 export interface ListenHost {
   lang(): "fr" | "en";
@@ -49,16 +56,22 @@ export class PushToTalk {
   /** what the last recognitions did (start, its events, its end — kept for the diagnosis: the console) */
   readonly trail: string[] = [];
   private startedAt = 0;
+  /** the ear of our own listening now (Deepgram's), and one being found */
+  private earNow: Ear | null = null;
+  private earPending = false;
   listening = false;
 
   constructor(
     private host: ListenHost,
     private ctor: () => (new () => Recognition) | null = Ctor,
     private now: () => number = () => performance.now(),
+    /** an ear of our own for this turn, if one is within reach (null: the browser's recognition) */
+    private ear: (() => Promise<Ear | null>) | null = null,
   ) {}
 
+  /** a way to listen: the browser's recognition, or a microphone (for an ear of our own) */
   static get supported() {
-    return !!Ctor();
+    return !!Ctor() || !!globalThis.navigator?.mediaDevices?.getUserMedia;
   }
 
   /** The key down: a hold starts listening after HOLD_MS. */
@@ -86,7 +99,7 @@ export class PushToTalk {
 
   /** Listening on, until stop(): the words so far kept across the recognition's own ends. */
   start() {
-    if (!this.ctor() || this.listening) return;
+    if (this.listening) return;
     this.finals = "";
     this.interim = "";
     this.error = "";
@@ -94,7 +107,68 @@ export class PushToTalk {
     this.wanted = true;
     this.listening = true;
     this.host.state(true);
-    this.run();
+    if (this.ear) void this.startEar(this.ear);
+    else this.recognise();
+  }
+
+  /** The browser's recognition — none here: said. */
+  private recognise() {
+    if (this.ctor()) return this.run();
+    this.error = "unsupported";
+    this.fail();
+    this.finish();
+  }
+
+  /** An ear of our own, if one is within reach (else the browser's recognition): the words as they come. */
+  private async startEar(find: () => Promise<Ear | null>) {
+    this.earPending = true;
+    let ear: Ear | null = null;
+    try {
+      ear = await find();
+    } catch (e) {
+      // (an ear asked for and none within reach: said, not the browser's in its place)
+      this.earPending = false;
+      this.error = e instanceof Error ? e.message : "ear";
+      this.fail();
+      return this.finish();
+    }
+    this.earPending = false;
+    if (!ear) return this.wanted ? this.recognise() : this.finish();
+    if (!this.wanted) return this.finish();
+    this.earNow = ear;
+    this.trail.push("ear start");
+    await ear.start({
+      interim: (t) => {
+        this.interim = t;
+        if (t) this.quickEnds = 0;
+        this.host.hearing(this.text());
+      },
+      final: (t) => {
+        this.finals += `${t} `;
+        this.interim = "";
+        this.host.hearing(this.text());
+      },
+      note: (what) => {
+        this.trail.push(`ear ${what}`);
+        if (this.trail.length > 60) this.trail.splice(0, this.trail.length - 60);
+      },
+      error: (code) => {
+        if (this.earNow !== ear) return;
+        this.trail.push(`ear error ${code}`);
+        this.earNow = null;
+        this.error = code;
+        this.fail();
+        this.finish();
+      },
+    });
+  }
+
+  /** Our ear's turn ended: its last words waited for, then sent. */
+  private async endEar() {
+    const ear = this.earNow;
+    this.earNow = null;
+    await ear?.end();
+    this.finish();
   }
 
   /**
@@ -194,7 +268,8 @@ export class PushToTalk {
   /** The words ended: the last results come, then `heard`. */
   stop() {
     this.wanted = false;
-    if (this.rec) this.rec.stop();
-    else this.finish();
+    if (this.earNow) void this.endEar();
+    else if (this.rec) this.rec.stop();
+    else if (!this.earPending) this.finish();
   }
 }
