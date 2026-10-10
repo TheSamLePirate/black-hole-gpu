@@ -14,8 +14,8 @@ export type Pt = [number, number];
 export interface Series {
   name: string;
   pts: Pt[];
-  /** a categorical slot (1…3), or a status for verdict points */
-  slot?: 1 | 2 | 3;
+  /** a categorical slot (1…6: the report pages draw 3, the dashboard 6), or a status for verdict points */
+  slot?: 1 | 2 | 3 | 4 | 5 | 6;
   dash?: boolean;
   dots?: boolean;
 }
@@ -165,7 +165,7 @@ const readJsonl = (f: string): Sample[] =>
     : [];
 
 /** The time axis: seconds, minutes, hours or days of simulated time, from the flight's start. */
-function timeAxis(T: Sample[]) {
+export function timeAxis(T: Sample[]) {
   const t0 = T[0]?.t ?? 0,
     span = (T[T.length - 1]?.t ?? 0) - t0;
   const [k, u] = span > 3 * 86400 ? [86400, "d"] : span > 3 * 3600 ? [3600, "h"] : span > 600 ? [60, "min"] : [1, "s"];

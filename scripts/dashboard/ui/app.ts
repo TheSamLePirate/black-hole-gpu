@@ -3,7 +3,7 @@
 import { renderMarkdown, slug } from "../markdown";
 import type { Chart, Pt } from "../../../tests/flight/lib/charts";
 import type { FileResult, LogEvent, LogSummary, TestResult } from "../parse-log";
-import { chartEl, fmt } from "./charts";
+import { chartEl, clearZooms, fmt, setZoomListener, type Timeline, timelineEl } from "./charts";
 
 // ------------------------------------------------------------------------------------------- types
 
@@ -2418,7 +2418,18 @@ interface Report {
   sim: { t0: number; t1: number } | null;
   fps: { wall: number; fps: number; worstMs: number }[];
   events: { t: number; kind: string; text: string; wall?: number }[];
-  sections: { corridors: Chart[]; commanded: Chart[]; approach: Chart[]; docking: Chart[]; telemetry: Chart[] };
+  sections: {
+    corridors: Chart[];
+    commanded: Chart[];
+    approach: Chart[];
+    docking: Chart[];
+    telemetry: Chart[];
+    where: Chart[];
+    perf: Chart[];
+  };
+  /** every numeric path the samples took (state.*, tel.*, perf.*, …), its count and range */
+  channels: { path: string; group: string; n: number; min: number; max: number; flat: boolean }[];
+  timeline: Timeline;
   hub: { t: number; title: string; phase: string; next: string | null; rows: [string, string, string?][]; say: string | null }[];
   quality: Record<string, number | null>;
   shots: { name: string; url: string }[];
@@ -2481,8 +2492,226 @@ const chartGrid = (cs: Chart[]) =>
     cs.map((c) => chartEl(c, { onZoom: zoomChart })),
   );
 
+// ------------------------------------------------------------------------------------------- the explorer
+
+const PRESETS: [string, RegExp][] = [
+  ["Attitude", /^tel\.attitude\./],
+  ["Air", /^tel\.air\.(heightM|airspeedMs|mach|qPa|heatWm2|g|shieldK|hullK)$/],
+  ["Controls", /^tel\.controls\./],
+  ["Autopilot", /^tel\.autopilot\./],
+  ["Entry", /^tel\.entry\./],
+  ["Approach", /^tel\.approach\./],
+  ["Orbit", /^state\.status\.orbit\.|^orbit\./],
+  ["Machine", /^perf\.(loopFps|renderFps|gpuFrameMs|gpuPassesMs|worstLoopMs|renderScale)$|^heapMB$/],
+  ["Sound", /^audio\./],
+];
+const EX = {
+  sel: ((): string[] => {
+    try {
+      return JSON.parse(localStorageGet("dash.explore") ?? "[]");
+    } catch {
+      return [];
+    }
+  })(),
+  q: "",
+  hideFlat: true,
+  overlay: false,
+  open: new Set<string>(),
+  data: new Map<string, { xLabel: string; pts: Pt[] }>(),
+  asked: new Set<string>(),
+};
+const saveSel = () => localStorageSet("dash.explore", JSON.stringify(EX.sel));
+function toggleChannel(p: string) {
+  EX.sel = EX.sel.includes(p) ? EX.sel.filter((x) => x !== p) : [...EX.sel, p].slice(-24);
+  saveSel();
+  paint(true);
+}
+
+/** Every channel the samples took: a searchable list by group, any of them charted — alone or overlaid. */
+function explorer(dir: string, rep: Report) {
+  const q = EX.q.toLowerCase();
+  const have = new Set(rep.channels.map((c) => c.path));
+  const sel = EX.sel.filter((p) => have.has(p));
+  // (the selected channels' series, fetched once a flight)
+  const missing = sel.filter((p) => !EX.data.has(`${dir}|${p}`) && !EX.asked.has(`${dir}|${p}`));
+  if (missing.length) {
+    for (const p of missing) EX.asked.add(`${dir}|${p}`);
+    api<{ xLabel: string; series: { path: string; pts: Pt[] }[] }>(
+      `/api/report/series?dir=${encodeURIComponent(dir)}&${missing.map((p) => `p=${encodeURIComponent(p)}`).join("&")}`,
+    )
+      .then((r) => {
+        for (const s of r.series) EX.data.set(`${dir}|${s.path}`, { xLabel: r.xLabel, pts: s.pts });
+        paint(true);
+      })
+      .catch((e) => toast(String(e), "bad"));
+  }
+  const shown = rep.channels.filter((c) => (!EX.hideFlat || !c.flat) && (!q || c.path.toLowerCase().includes(q)));
+  const groups = new Map<string, typeof shown>();
+  for (const c of shown) groups.set(c.group, [...(groups.get(c.group) ?? []), c]);
+  const ready = sel.map((p) => ({ p, d: EX.data.get(`${dir}|${p}`) })).filter((x) => x.d);
+  const short = (p: string) => p.split(".").slice(-2).join(".");
+  const charts: Chart[] = !ready.length
+    ? []
+    : EX.overlay
+      ? [
+          {
+            title: ready.map((x) => short(x.p)).join(" · "),
+            unit: "overlaid",
+            xLabel: ready[0]!.d!.xLabel,
+            series: ready.slice(0, 6).map((x, i) => ({ name: short(x.p), pts: x.d!.pts, slot: (i + 1) as 1 | 2 | 3 | 4 | 5 | 6 })),
+          },
+        ]
+      : ready.map((x) => ({ title: x.p, unit: "", xLabel: x.d!.xLabel, series: [{ name: short(x.p), pts: x.d!.pts }] }));
+  const flag = (label: string, on: boolean, set: (v: boolean) => void) =>
+    h(
+      "label",
+      { class: "check" },
+      h("input", {
+        type: "checkbox",
+        checked: on,
+        onchange: (e: Event) => {
+          set((e.target as HTMLInputElement).checked);
+          paint(true);
+        },
+      }),
+      label,
+    );
+  return h(
+    "div",
+    { class: "section" },
+    h(
+      "h2",
+      {},
+      "Every channel",
+      h(
+        "small",
+        {},
+        ` — ${rep.channels.length} figures recorded at every sample (the game's state and telemetry, the machine): pick any to chart it`,
+      ),
+    ),
+    h(
+      "div",
+      { class: "explorer" },
+      h(
+        "div",
+        { class: "card exlist" },
+        h("input", {
+          class: "input",
+          placeholder: "Search a channel: mach, bank, gpu…",
+          value: EX.q,
+          id: "exq",
+          oninput: (e: Event) => {
+            EX.q = (e.target as HTMLInputElement).value;
+            paint(true);
+            const i = $("#exq") as HTMLInputElement;
+            i.focus();
+            i.setSelectionRange(i.value.length, i.value.length);
+          },
+        }),
+        h(
+          "div",
+          { class: "row", style: { gap: "4px", margin: "8px 0" } },
+          PRESETS.filter(([, re]) => rep.channels.some((c) => re.test(c.path) && !c.flat)).map(([name, re]) =>
+            h(
+              "button",
+              {
+                class: "badge",
+                style: { cursor: "pointer" },
+                onclick: () => {
+                  EX.sel = rep.channels
+                    .filter((c) => re.test(c.path) && !c.flat)
+                    .map((c) => c.path)
+                    .slice(0, 12);
+                  saveSel();
+                  paint(true);
+                },
+              },
+              name,
+            ),
+          ),
+          sel.length
+            ? h(
+                "button",
+                {
+                  class: "badge warn",
+                  style: { cursor: "pointer" },
+                  onclick: () => {
+                    EX.sel = [];
+                    saveSel();
+                    paint(true);
+                  },
+                },
+                "clear",
+              )
+            : null,
+        ),
+        h(
+          "div",
+          { class: "row", style: { gap: "12px", marginBottom: "6px" } },
+          flag("hide constants", EX.hideFlat, (v) => (EX.hideFlat = v)),
+          flag("overlay (6 at most)", EX.overlay, (v) => (EX.overlay = v)),
+        ),
+        h(
+          "div",
+          { class: "exgroups" },
+          [...groups].map(([g, cs]) => {
+            const open = EX.open.has(g) || !!q || cs.some((c) => sel.includes(c.path));
+            return h(
+              "div",
+              { class: "exg", "data-key": g },
+              h(
+                "div",
+                {
+                  class: "exgh",
+                  onclick: () => {
+                    EX.open.has(g) ? EX.open.delete(g) : EX.open.add(g);
+                    paint(true);
+                  },
+                },
+                h("span", { class: "faint" }, open ? "▾" : "▸"),
+                h("b", {}, g),
+                h("span", { class: "faint" }, String(cs.length)),
+              ),
+              open
+                ? cs.map((c) =>
+                    h(
+                      "label",
+                      { class: `exi ${sel.includes(c.path) ? "on" : ""}`, title: c.path },
+                      h("input", { type: "checkbox", checked: sel.includes(c.path), onchange: () => toggleChannel(c.path) }),
+                      h("span", { class: "mono" }, c.path.slice(g.length + 1) || c.path),
+                      h("span", { class: "faint" }, c.flat ? fmt(c.min) : `${fmt(c.min)} … ${fmt(c.max)}`),
+                    ),
+                  )
+                : null,
+            );
+          }),
+        ),
+      ),
+      h(
+        "div",
+        {},
+        !sel.length
+          ? h(
+              "div",
+              { class: "card empty" },
+              "Pick channels on the left, or a preset: each is charted on the flight's time axis, linked to every other chart.",
+            )
+          : !charts.length
+            ? h("div", { class: "card empty" }, h("span", { class: "spinner" }), " Reading the channels…")
+            : chartGrid(charts),
+      ),
+    ),
+  );
+}
+
+let reportShown = "";
 function reportPage() {
   const [dir, ctx] = reportArgs();
+  // (another flight: its charts start whole, not zoomed where the last one was)
+  if (dir !== reportShown) {
+    reportShown = dir;
+    clearZooms();
+  }
   const rep = reportCache.get(dir);
   if (!rep) {
     api<Report>(`/api/report?dir=${encodeURIComponent(dir)}`)
@@ -2655,6 +2884,19 @@ function reportPage() {
           : h("div", { class: "faint" }, "No sample: this test drove no page (or its telemetry was off)."),
       ),
     ),
+    rep.timeline?.rows.length
+      ? h(
+          "div",
+          { class: "section" },
+          h(
+            "h2",
+            {},
+            "What it was doing",
+            h("small", {}, " — drag across the bands or any chart to zoom them all; double-click to see the whole flight"),
+          ),
+          h("div", { class: "tlwrap" }, timelineEl(rep.timeline)),
+        )
+      : null,
     err
       ? h(
           "div",
@@ -2757,8 +2999,17 @@ function reportPage() {
           ),
         )
       : null,
-    fpsCharts.length ? h("div", { class: "section" }, h("h2", {}, "Frame rate during the test"), chartGrid(fpsCharts)) : null,
+    rep.sections.where?.length ? h("div", { class: "section" }, h("h2", {}, "Where it went"), chartGrid(rep.sections.where)) : null,
+    fpsCharts.length || rep.sections.perf?.length
+      ? h(
+          "div",
+          { class: "section" },
+          h("h2", {}, "The machine", h("small", {}, " — frame rate, the GPU's frame, the worst loop, the render's scale, the heap")),
+          chartGrid([...fpsCharts, ...(rep.sections.perf ?? [])]),
+        )
+      : null,
     rep.sections.telemetry.length ? h("div", { class: "section" }, h("h2", {}, "Telemetry"), chartGrid(rep.sections.telemetry)) : null,
+    rep.channels?.length ? explorer(dir, rep) : null,
     rep.shots.length
       ? h(
           "div",
@@ -3421,6 +3672,10 @@ api<{ host: string; commit: string; dirty: boolean; live: Run[] }>("/api/state")
   schedule();
 });
 connect();
+// (a chart zoomed: every chart of the report drawn again on that span)
+setZoomListener(() => {
+  if (view() === "report") paint(true);
+});
 paint(true);
 // (times like "3 min ago" and elapsed counters move on)
 setInterval(() => {

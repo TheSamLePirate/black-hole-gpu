@@ -12,7 +12,7 @@ import { extname, join, normalize } from "node:path";
 import type { ServerWebSocket } from "bun";
 import index from "./ui/index.html";
 import { doctor, flightCtl, lab, pollHere, pollMini } from "./lab";
-import { campaigns, e2eReports, report, reportRootOf, safeDir, scenarios } from "./reports";
+import { campaigns, e2eReports, report, reportRootOf, safeDir, scenarios, series } from "./reports";
 import { evalProbe, inputProbe, probeErrors, probeState, sceneProbe, shotProbe, startProbe, stopProbe } from "./probe";
 import {
   attachRun,
@@ -193,6 +193,11 @@ const server = Bun.serve<{ frames: boolean }>({
     "/api/report": (req: Req) => {
       const dir = safeDir(new URL(req.url).searchParams.get("dir") ?? "");
       return dir ? json(report(dir)) : json({ error: "no such report" }, 404);
+    },
+    "/api/report/series": (req: Req) => {
+      const u = new URL(req.url);
+      const dir = safeDir(u.searchParams.get("dir") ?? "");
+      return dir ? json(series(dir, u.searchParams.getAll("p"))) : json({ error: "no such report" }, 404);
     },
     "/api/runs/:id/reports": (req: Req) => {
       const d = runDetail(req.params.id);

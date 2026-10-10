@@ -23,6 +23,15 @@ export const LAB_PAGE = `(() => {
   const graphs = {}, onGraph = {};
   // (light: the hub's and the runway's caches kept — cheaper, sampled every half second of a test's stepped
   // flight; their caches are keyed on the autopilot and the wheels, so a read never returns a state before's)
+  // (TARS's two readers, found once: get_state and get_telemetry — read-only, observers)
+  let tools = null;
+  const TOOLS = () => {
+    if (!tools) {
+      const T = safe(() => __bh.tars.tools()) ?? [];
+      tools = { state: T.find((t) => t.name === "get_state"), tel: T.find((t) => t.name === "get_telemetry"), sig: new AbortController().signal };
+    }
+    return tools;
+  };
   const sample = (light = false) => {
     const c = __bh.camera, p = c.pilot, s = __bh.settings, st = safe(() => __bh.game.status()) ?? {};
     // (the hub's card and the runway's view anew: their caches last a fraction of a wall second — at fixed
@@ -67,6 +76,19 @@ export const LAB_PAGE = `(() => {
       fuel: r(i.engine?.fuel?.fraction, 1000), spent: r(c.spent * 299792458, 10),
       mission: safe(() => __bh.mission?.active ? __bh.mission.phase : null),
       animate: s.animate, frozen: safe(() => __bh.frozen ?? null),
+      // (everything TARS reads — the whole situation, every telemetry group: attitude, air, controls,
+      // autopilot, hub, entry, approach, descent, burn, dock, sky — the same readers his tools use)
+      state: safe(() => TOOLS().state?.run({}, TOOLS().sig) ?? null),
+      tel: safe(() => TOOLS().tel?.run({}, TOOLS().sig) ?? null),
+      geo: safe(() => { const g = __bh.sys.geodetic(); return g ? { body: g.body, lat: r(g.lat, 1e4), lon: r(g.lon, 1e4), altM: r(g.altM) } : null; }),
+      // (the machine: frame rates, the GPU's frame and passes, the render's scale and quality, the CPU's
+      // sections, the device's generation, the heap, the sound's buses)
+      perf: safe(() => { const q = __bh.game.perf(); return { loopFps: q.loopFps, renderFps: q.renderFps, worstLoopMs: q.worstLoopMs, gpuFrameMs: q.gpuFrameMs,
+        gpuPassesMs: q.gpuPassesMs, renderScale: q.renderScale, quality: q.quality, tier: q.tier?.level ?? null, image: q.image,
+        cpu: Object.fromEntries((q.cpu ?? []).slice(0, 12).map((x) => [x.section, x.ms])) }; }),
+      gpu: safe(() => ({ generation: __bh.gpu.generation(), lost: __bh.gpu.lost() })),
+      heapMB: safe(() => (performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e5) / 10 : null)),
+      audio: safe(() => (typeof __sound !== "undefined" && __sound.busLevels ? __sound.busLevels() : null)),
     };
   };
   // (the flight waiting on the planner's worker — a node's re-aim, the entry's next bank: a player's

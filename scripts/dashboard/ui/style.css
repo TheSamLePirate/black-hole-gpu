@@ -356,3 +356,34 @@ table.t td.num, table.t th.num { text-align: right; font-variant-numeric: tabula
 .measures .m { display: flex; flex-direction: column; font-size: 12px; }
 .measures .m b { font-size: 15px; font-variant-numeric: tabular-nums; }
 .hubrow { display: inline-block; margin: 0 14px 2px 0; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+
+/* ---------------------------------------------------------------- timeline, explorer, more series */
+.vchart .s4 { stroke: #c792ea; fill: #c792ea; }
+.vchart .s5 { stroke: #f7c948; fill: #f7c948; }
+.vchart .s6 { stroke: #5fd0ff; fill: #5fd0ff; }
+.vchart .ln.s4, .vchart .ln.s5, .vchart .ln.s6 { fill: none; }
+.vchart .sw.s4 { background: #c792ea; }
+.vchart .sw.s5 { background: #f7c948; }
+.vchart .sw.s6 { background: #5fd0ff; }
+.vchart .tip .k.s4 { color: #c792ea; }
+.vchart .tip .k.s5 { color: #f7c948; }
+.vchart .tip .k.s6 { color: #5fd0ff; }
+.vchart .lg small { color: var(--faint); font-variant-numeric: tabular-nums; margin-left: 4px; }
+.vchart .brush { fill: color-mix(in srgb, var(--accent) 18%, transparent); stroke: var(--accent); stroke-width: 1; pointer-events: none; }
+.vchart svg { cursor: crosshair; }
+.vtimeline .tlk { fill: var(--muted); font-size: 12px; font-family: var(--sans); }
+.vtimeline .seg { fill: hsl(var(--h) 55% 52% / 0.75); stroke: hsl(var(--h) 60% 62%); stroke-width: 0.6; }
+.vtimeline .segt { fill: #fff; font-size: 11px; font-family: var(--sans); pointer-events: none; font-weight: 600; }
+:root[data-theme="light"] .vtimeline .segt { fill: #0b0d12; }
+.explorer { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 1000px) { .explorer { grid-template-columns: 1fr; } }
+.exlist { position: sticky; top: 12px; max-height: calc(100vh - 40px); display: flex; flex-direction: column; padding: 12px; }
+.exgroups { overflow: auto; min-height: 0; flex: 1; margin-top: 4px; }
+.exgh { display: flex; gap: 8px; align-items: center; padding: 5px 4px; cursor: pointer; border-radius: 6px; font-size: 12.5px; }
+.exgh:hover { background: var(--panel2); }
+.exi { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 3px 4px 3px 18px; font-size: 12px; cursor: pointer; border-radius: 6px; }
+.exi:hover { background: var(--panel2); }
+.exi.on { background: var(--accbg); }
+.exi .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; }
+.exi .faint { font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.exi input { accent-color: var(--accent); margin: 0; }
