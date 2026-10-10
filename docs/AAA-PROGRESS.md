@@ -525,6 +525,8 @@ Par ordre de gain :
 
 ## Journal
 
+- **10/10/2026 — PLAN-PLUIE terminé (P1–P6) : une pluie AAA** (signalé par le propriétaire : « la pluie est mal faite, en général et sur le pare-brise ; elle doit se mettre en pause »). Elle suit le temps du jeu (figée en pause, dans l'air et sur le verre) ; elle tombe en gouttes variées, en rideaux poussés par le vent, brillante autour des feux, cachée derrière le vaisseau ; sur le pare-brise, des gouttelettes, des gouttes qui glissent et leurs traînées, que le vent relatif fait remonter ; quelques gouttes sur l'objectif dehors (décision) ; la piste mouillée, ses flaques et les ronds des gouttes (le traceur inchangé en coût) ; son bruit, tambouriné sur la verrière. Trouvé en route : la pluie suivait le vaisseau et non la vue (un spectateur en orbite la gardait).
+
 - **10/10/2026 — Aéroports A8 : l'horizon en vue rasante.** Au-dessus de l'horizon, une bande de « terre » déformée et un mirage de la piste : la marche du relief manquait de pas pour les rayons rasants (256 pour ~580 nécessaires par décade de distance) et dessinait leur dernier point comme le sol — démontré par un test du shader (ces rayons en magenta). Les pas suivent maintenant l'écart au sol (sa chute prédit la rencontre ; un rayon qui s'éloigne avance de 5 % de la distance et, à court de pas, voit le ciel) : plus aucun rayon perdu, et le relief 4 à 27 % moins cher.
 
   Leçon : **un artefact se voit d'abord dans le shader** — peindre la branche suspecte d'une couleur franche a tranché en une image ce que des captures comparées laissaient deviner.

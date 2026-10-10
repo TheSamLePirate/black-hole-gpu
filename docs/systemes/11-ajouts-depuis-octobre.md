@@ -78,6 +78,11 @@ Guides : [HUD.md](../HUD.md), [PLAN-HUB.md](../PLAN-HUB.md), [PLAN-ASSISTANT.md]
 | `ui/weatherpanel.ts`, `ui/weather-map.ts`, `ui/weather-section.ts` | Le panneau Météo ; la météo sur le planisphère (radar, nuages, vent) ; la coupe verticale de l'air |
 | `ui/charts-page.ts` | La page CARTES de la tablette : la carte d'approche du site |
 
+La pluie (PLAN-PLUIE) : dans `display.wgsl`, la pluie qui tombe (`rainStreaks` : sept couches, rideaux, voile, cachée derrière
+le vaisseau) et l'eau sur le verre (`wetGlass` : gouttelettes, gouttes qui glissent, l'objectif dehors) ; dans `trace.wgsl
+earthGround`, le sol mouillé (`P.wx[5]` : humidité, flaques, ronds) ; dans `audio/engine.ts buildRain`, son bruit ; son
+horloge `renderer.rainClock`, arrêtée avec le temps ; calculée où est la vue (`rainView` sur le contrôleur de la vue).
+
 Le sol des terrains d'aviation (`game/sites.ts runwayGrade`, et la même fonction dans `trace.wgsl`) : chaque piste a
 son niveau (`Site.elev`) ; la piste, ses bouts et son aire y sont nivelés, raccordés au relief par un talus, le
 détail dessiné ôté — le CPU (le train) et le GPU (l'image) lisent le même sol. Le marquage de la piste se calcule

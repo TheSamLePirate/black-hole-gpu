@@ -47,6 +47,7 @@ interface (clics) ────────────────────�
 | Le bang | là où le cône de Mach balaie un auditeur immobile (spectateur, survol) : une onde en N | la place et la vitesse de l'appareil vues de l'auditeur, Mach |
 | À bord, Mach 1 | les secousses transsoniques (jamais son propre bang) | Mach |
 | La rentrée | le plasma qui gronde, secoué, et le flux ionisé qui siffle | le flux thermique |
+| La pluie (PLAN-PLUIE P5) | dehors, son souffle et les gouttes au sol ; en cabine, la verrière tambourinée (plus dense et plus forte avec la vitesse), le souffle à travers la coque ; muette en pause | la pluie où est la vue (`rainView`), la vue (cabine ou dehors), la vitesse |
 
 ## Le mix mesuré (S8)
 
