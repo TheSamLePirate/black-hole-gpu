@@ -1276,7 +1276,20 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
     let perp = c - b * d;
     let pd = length(perp);
     let px = max(beam() * (travel + b), 1e-30);
-    let cov = clamp((R - pd) / px + 0.5, 0.0, 1.0);
+    var cov3 = vec3f(clamp((R - pd) / px + 0.5, 0.0, 1.0));
+    // (PLAN-CIEL C4 — through the Earth's air each colour bent its own amount (Edlén's dispersion: red
+    // 0.36 % less than the green traced, blue 0.78 % more): the disc seen a little lower in red, higher in
+    // blue — at the horizon its top rim green and blue, the blue scattered away by the air: the green flash)
+    // (only near its rim, where the colours part: a turn of the direction by ε along the vertical moves the
+    // disc's offset by b ε)
+    if (REFR_DELTA > 0.0 && abs(R - pd) < px + b * REFR_DELTA * 0.008 && P.near0.w > 0.5) {
+      let up = -normalize(bodies[BV * u32(P.near1.w)].xyz - o);
+      let w = up - d * dot(up, d);
+      let sh = w * (b * REFR_DELTA / max(length(w), 1e-12));
+      cov3.x = clamp((R - length(perp - sh * 0.00361)) / px + 0.5, 0.0, 1.0);
+      cov3.z = clamp((R - length(perp + sh * 0.0078)) / px + 0.5, 0.0, 1.0);
+    }
+    let cov = max(cov3.x, max(cov3.y, cov3.z));
     if (cov <= 0.0) { continue; }
     var vis = 1.0;
     for (var j = ourStart(); j < bodyCount(); j++) {
@@ -1295,7 +1308,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
     // (where the ray meets it, or — passing just outside — its limb's nearest point)
     var X = c - perp * (R / max(pd, 1e-30));
     if (pd < R) { X = d * (b - sqrt(R * R - pd * pd)); }
-    (*out).glow += (*out).tint * shadeStar(k, X, c, gObs, d, P.time.x) * (cov * vis);
+    (*out).glow += (*out).tint * shadeStar(k, X, c, gObs, d, P.time.x) * (cov3 * vis);
   }
   if (!hit) { return false; }
   let k = kBest;
@@ -3008,6 +3021,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   var T = vec3f(1.0);
   var veil = 1.0; // (the sky's glow hiding the stars behind it)
   var lookSky = look; // (the direction beyond the near body's air: bent by it — airBend)
+  REFR_DELTA = 0.0;
   if (HAS_BODIES && P.near0.w > 0.5) {
     let k = u32(P.near1.w);
     let air = hasAir(k);
@@ -5972,6 +5986,8 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
 // setting Sun squashed). The CPU's constants for the camera's height (refraction.ts): P.sky = (N₀, N at
 // the camera, the Earth's radius and the camera's distance from its centre in scale heights). The
 // direction beyond: the look turned down by it in its vertical plane.
+// (the bending of the ray traced now — green light's —, for the Sun's disc in each colour: PLAN-CIEL C4)
+var<private> REFR_DELTA: f32 = 0.0;
 fn airBend(look: vec3f) -> vec3f {
   let up = normalize(nearCam());
   let rd = toBody(look);
@@ -5987,6 +6003,7 @@ fn airBend(look: vec3f) -> vec3f {
     delta = 2.0 * P.sky.x * sqrt(1.5707963 * x0) * exp(min(P.sky.z - x0, 0.0)) - P.sky.y * c / ((c - 1.0) * -mu + 1.0);
   }
   delta = clamp(delta, 0.0, 0.03);
+  REFR_DELTA = delta;
   return fromBody(rd * cos(delta) - w * (sin(delta) / max(wl, 1e-6)));
 }
 
