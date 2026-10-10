@@ -106,3 +106,16 @@ test("the key held: listening after the hold, released: sent; a tap: the field",
   ptt.down();
   expect(ptt.up()).toBe(true);
 });
+
+test("the microphone open a second at a time and nothing heard, no error said: given up after three, not begun again forever", () => {
+  const { ptt, made, log, tick } = setup();
+  ptt.start();
+  for (let i = 0; i < 3; i++) {
+    tick(1000);
+    made[i]!.end();
+  }
+  expect(made.length).toBe(3);
+  expect(log.failed).toEqual(["other:ended-without-results"]);
+  expect(log.states).toEqual([true, false]);
+  expect(ptt.trail.some((l) => l.includes("end (0 results)"))).toBe(true);
+});

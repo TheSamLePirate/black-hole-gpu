@@ -43,9 +43,11 @@ export class PushToTalk {
   private held = false;
   /** listening asked for — the key held, the microphone switched on — until released or switched off */
   private wanted = false;
-  /** the recognition's last error, and how many times running it ended right after it began */
+  /** the recognition's last error, and how many times running it ended having heard nothing */
   private error = "";
   private quickEnds = 0;
+  /** what the last recognitions did (start, its events, its end — kept for the diagnosis: the console) */
+  readonly trail: string[] = [];
   private startedAt = 0;
   listening = false;
 
@@ -105,6 +107,15 @@ export class PushToTalk {
     const C = this.ctor();
     if (!C) return this.finish();
     const r = new C();
+    let heard = 0;
+    const note = (what: string) => {
+      this.trail.push(`${Math.round(this.now() - this.startedAt)} ms ${what}`);
+      if (this.trail.length > 60) this.trail.splice(0, this.trail.length - 60);
+    };
+    // (its own events, for the diagnosis: the microphone's sound reaching it or not)
+    const on = r as unknown as { addEventListener?: (k: string, f: () => void) => void };
+    for (const k of ["audiostart", "soundstart", "speechstart", "speechend", "soundend", "audioend", "nomatch"])
+      on.addEventListener?.(k, () => note(k));
     r.lang = this.host.lang() === "fr" ? "fr-FR" : "en-US";
     r.continuous = true;
     r.interimResults = true;
@@ -116,11 +127,13 @@ export class PushToTalk {
         else interim += res[0]!.transcript;
       }
       this.interim = interim;
+      heard++;
       this.quickEnds = 0;
       this.host.hearing(this.text());
     };
     r.onerror = (e) => {
       this.error = e.error;
+      note(`error ${e.error}`);
     };
     r.onend = () => {
       if (this.rec !== r) return;
@@ -131,7 +144,10 @@ export class PushToTalk {
         this.interim = "";
       }
       const fatal = this.error === "not-allowed" || this.error === "service-not-allowed" || this.error === "audio-capture";
-      this.quickEnds = this.now() - this.startedAt < 400 ? this.quickEnds + 1 : 0;
+      note(`end (${heard} result${heard === 1 ? "" : "s"})`);
+      // (an end having heard nothing — at once, or a second in with the microphone open — counts; three
+      // running: the recognition does not work here, said rather than begun again forever)
+      this.quickEnds = heard ? 0 : this.quickEnds + 1;
       if (this.wanted && !fatal && this.quickEnds < 3) {
         this.error = "";
         this.run();
@@ -142,6 +158,7 @@ export class PushToTalk {
     };
     this.rec = r;
     this.startedAt = this.now();
+    note(`start ${r.lang}`);
     try {
       r.start();
     } catch {
@@ -157,7 +174,7 @@ export class PushToTalk {
   }
 
   private fail() {
-    const e = this.error;
+    const e = this.error || "ended-without-results";
     this.host.failed(
       e === "not-allowed" || e === "service-not-allowed" ? "denied" : e === "network" ? "network" : e === "no-speech" ? "none" : "other",
       e,

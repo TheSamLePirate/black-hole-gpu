@@ -1069,7 +1069,8 @@ async function main() {
       tarsPanel.hearing("");
       tarsPanelAsk(text);
     },
-    failed: (why, code) =>
+    failed: (why, code) => (
+      console.warn("[TARS microphone]", why, code, tarsTalk.trail.join(" · ")),
       tarsPanel.refresh(
         why === "denied"
           ? t("The microphone is not allowed (the browser's site settings).")
@@ -1078,7 +1079,8 @@ async function main() {
             : why === "none"
               ? t("Nothing heard.")
               : `${t("Speech recognition failed.")}${code ? ` (${code})` : ""}`,
-      ),
+      )
+    ),
     state: (on) => {
       tarsPanel.listening(on);
       tarsPanel.setState(on ? "listening" : tarsBusy ? "thinking" : "idle");
