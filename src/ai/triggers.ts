@@ -17,6 +17,7 @@ export type TriggerKind =
   | "report"
   | "deviation"
   | "eclipse"
+  | "surface"
   | "every"
   | "at"
   | "in";
@@ -33,6 +34,7 @@ export const EVENT_KINDS: TriggerKind[] = [
   "report",
   "deviation",
   "eclipse",
+  "surface",
 ];
 
 export interface TriggerOn {

@@ -9,6 +9,8 @@ Tout est synthétisé ou tiré du système : rien à télécharger. TARS peut au
 
 ## Les fichiers
 
+Le sol satellite régional est accessible par `set_settings` (`earthSurface=off|satellite|materials`) et la commande `/surface`, avec complétion. TARS peut afficher le panneau des réglages, lire `get_state.surface` ou `get_telemetry({groups:["surface"]})`, attendre `wait({until:"surface_ready"})` et recevoir un événement `surface` lors d'un changement de région ou de statut. L'attente retourne aussi les erreurs et le repli éventuel : « terminé » ne signifie pas que toutes les pages sont disponibles. Détails et budgets : [PLAN-TERRE-PHOTOREALISTE.md](PLAN-TERRE-PHOTOREALISTE.md).
+
 | Fichier | Rôle |
 |---|---|
 | `src/audio/voice.ts` | pur pour sa file : qui parle, dans quel ordre (la plus urgente coupe les autres, une même ligne pas deux fois, une ligne périmée abandonnée) ; `Speech` : les voix Web Speech du système, choisies par langue, ou la voix de TARS |

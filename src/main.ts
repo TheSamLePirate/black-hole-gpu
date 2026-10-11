@@ -727,6 +727,7 @@ async function main() {
     off: string;
     papi: string;
     eclipse: string;
+    surface: string;
   } | null = null;
   let tarsSpentSeen = 0;
   setInterval(() => {
@@ -759,6 +760,7 @@ async function main() {
       soi: st.soi,
       landed: camera.landed && !camera.rolling,
       docked: camera.docked,
+      surface: `${renderer.earthSurface.stats().region ?? "none"}:${renderer.earthSurface.stats().status}`,
       // (the deviations: the hub's graph out of its corridor, the entry out of its own, the approach's PAPI all
       // white or all red on final)
       off: hub?.graph?.state === "off" ? `${hub.graph.kind}` : camera.entryRun?.inCorr === false ? "entry" : "",
@@ -781,6 +783,7 @@ async function main() {
       if (now.soi !== was.soi) tarsEvent({ kind: "soi", from: was.soi, to: now.soi });
       if (now.landed && !was.landed) tarsEvent({ kind: "landed", to: st.soi });
       if (now.docked && !was.docked) tarsEvent({ kind: "docked" });
+      if (now.surface !== was.surface) tarsEvent({ kind: "surface", from: was.surface, to: now.surface });
       if (now.off && now.off !== was.off) tarsEvent({ kind: "deviation", to: now.off, detail: hub?.graph?.fix ?? hub?.graph?.about });
       if (now.eclipse !== was.eclipse)
         tarsEvent({

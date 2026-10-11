@@ -132,6 +132,8 @@ struct Params {
   // modulo the noise's period]; [5] the rain (PLAN-PLUIE P4): the ground's wetness (0…1), the rain now (0…1.3),
   // its clock [s] (held while the time is), unused
   wx: array<vec4f, 6>,
+  // regional Sentinel-2 / WorldCover: bounds and residency, page grid and gutter, materials and metre scale
+  surface: array<vec4f, 7>,
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -152,6 +154,7 @@ override HAS_THICK: bool = true;  // the volumetric (thick) disk
 override HAS_BODIES: bool = true; // planets, moons, stars as bodies (and the near body's ground)
 override HAS_RWY: bool = true;    // runways near the camera (their grading and drawing: out of the kernel elsewhere)
 override HAS_SHADE: bool = true;  // a body's shadow falling on another now (P.shade, PLAN-CIEL C6: out of the kernel when none)
+override HAS_SURFACE: bool = true;
 override HAS_WX: bool = true;     // the weather near the camera (P.wx: its haze, fog, layers — out of the kernel in fair weather)
 // the hole's and the mouth's metrics (O13): off in our universe from afar — the camera beyond the mouth's
 // Dneg region, the region under a pixel —, every ray straight through our bodies to our sky, the Kerr and
@@ -3754,6 +3757,9 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
 // the terrain tiles' levels (rg32uint, 1024²): their heights' float bits [m]; up to z 8 their imagery
 // (rgba8: the day's sRGB, the night's lights; 0: none)
 @group(0) @binding(28) var earthTiles: texture_2d_array<u32>;
+@group(0) @binding(29) var surfaceColour: texture_2d_array<f32>;
+@group(0) @binding(30) var surfaceCover: texture_2d_array<u32>;
+@group(0) @binding(31) var surfaceSamp: sampler;
 // the body near the camera: its finer colour map and relief (src/system/hd-maps.ts; P.hd)
 @group(0) @binding(22) var hdColor: texture_2d<f32>;
 @group(0) @binding(23) var hdRelief: texture_2d<f32>;    // normal (east, south), ocean, height
@@ -5489,6 +5495,55 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   return mix(sea, foam, W);
 }
 
+struct SurfaceImage { c: vec3f, w: f32, cover: u32 }
+fn surfaceImage(q: vec3f, fx: vec3f, fy: vec3f) -> SurfaceImage {
+  var out = SurfaceImage(vec3f(0.0), 0.0, 0u);
+  if (!HAS_SURFACE || P.surface[2].w < 0.5) { return out; }
+  let grid = vec2f(atan2(q.y, q.x) - P.surface[0].x, P.surface[0].y - asin(clamp(q.z, -1.0, 1.0))) * P.surface[0].z;
+  let dims = vec2i(P.surface[1].xy);
+  let at = vec2i(floor(grid));
+  if (any(at < vec2i(0)) || any(at >= dims)) { return out; }
+  let layer = at.y * dims.x + at.x;
+  let valid = u32(P.surface[0].w);
+  if ((valid & (1u << u32(layer))) == 0u) { return out; }
+  let local = fract(grid);
+  let uv = local * P.surface[1].w + P.surface[1].z;
+  let rho2 = max(dot(q.xy, q.xy), 1e-6);
+  let east = vec3f(-q.y, q.x, 0.0) / rho2;
+  let latScale = inverseSqrt(max(1.0 - q.z*q.z, 1e-6));
+  let gradX = vec2f(dot(east, fx), -fx.z * latScale) * P.surface[0].z * P.surface[1].w;
+  let gradY = vec2f(dot(east, fy), -fy.z * latScale) * P.surface[0].z * P.surface[1].w;
+  let c = textureSampleGrad(surfaceColour, surfaceSamp, uv, layer, gradX, gradY);
+  // Fade across an unresident neighbour; no per-page fade once adjacent pages are resident.
+  var edge = 1.0;
+  let blend = 2.0 / (P.surface[2].x * P.surface[1].w);
+  if (at.x == 0 || (valid & (1u << u32(max(layer-1, 0)))) == 0u) { edge *= smoothstep(0.0, blend, local.x); }
+  if (at.x == dims.x-1 || (valid & (1u << u32(layer+1))) == 0u) { edge *= smoothstep(0.0, blend, 1.0-local.x); }
+  if (at.y == 0 || (valid & (1u << u32(max(layer-dims.x, 0)))) == 0u) { edge *= smoothstep(0.0, blend, local.y); }
+  if (at.y == dims.y-1 || (valid & (1u << u32(layer+dims.x))) == 0u) { edge *= smoothstep(0.0, blend, 1.0-local.y); }
+  let rim = min(min(grid.x, grid.y), min(f32(dims.x)-grid.x, f32(dims.y)-grid.y));
+  edge *= smoothstep(0.0, 0.025, rim);
+  out.c = c.rgb;
+  out.cover = textureLoad(surfaceCover, vec2i(uv * P.surface[2].x), layer, 0).r;
+  let age = P.surface[2].w - 1.0 - P.surface[3u + u32(layer)/4u][u32(layer)%4u];
+  out.w = edge * smoothstep(0.0, 0.35, age) * c.a * select(0.0, 1.0, out.cover > 0u);
+  return out;
+}
+
+fn surfaceMaterial(q: vec3f, cover: u32, footM: f32) -> vec3f {
+  if (P.surface[2].y < 0.5 || footM > 20.0) { return vec3f(1.0); }
+  // Class-guided small detail only: preserve the real parcel/road layout in the satellite colour.
+  let fine = smoothstep(8.0, 1.0, footM);
+  var amplitude = 0.0;
+  var scaleM = 2.0;
+  if (cover == 10u || cover == 20u || cover == 95u) { amplitude = 0.12; scaleM = 12.0; }
+  if (cover == 30u || cover == 40u || cover == 90u || cover == 100u) { amplitude = 0.04 * fine; }
+  if (cover == 60u || cover == 70u) { amplitude = 0.07 * fine; }
+  if (amplitude == 0.0) { return vec3f(1.0); }
+  let filtered = smoothstep(scaleM * 2.0, scaleM * 0.5, footM);
+  return vec3f(1.0 + amplitude * filtered * (gnoise(q * (EARTH_RM / scaleM)) * 2.0 - 1.0));
+}
+
 fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, hG: f32) -> vec3f {
   // (the maps at the geodetic latitude — q the squashed space's —, the geometry at q)
   let gq = geoQ(q);
@@ -5504,6 +5559,8 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   let img = earthImagery(gq, max(length(fx), length(fy)) * EARTH_RM);
   var A = mix(day.rgb, img.c.rgb, img.w) * P.earth2.z;
   A = mix(A, vec3f(0.11, 0.12, 0.065) * P.earth2.z, sea0 * lvl);
+  let surface = surfaceImage(gq, fx, fy);
+  A = mix(A, surface.c * P.earth2.z, surface.w);
   // (the relief: east and north components; the map's is faint — strengthened, P.earth.w)
   var east = vec3f(-q.y, q.x, 0.0);
   east = select(normalize(east), vec3f(0.0, 1.0, 0.0), dot(east, east) < 1e-10);
@@ -5521,8 +5578,8 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   // (near: the ground's own materials from its height and slope — snow above the snow line (lower towards
   // the poles, ragged), bare rock on the steep faces of the mountains; blended in as the map's texel
   // grows under the pixel)
-  if (footM < texelM && ocean < 1.0) {
-    let k = smoothstep(texelM, 0.3 * texelM, footM) * (1.0 - ocean);
+  if (footM < texelM && ocean < 1.0 && surface.w < 0.999) {
+    let k = smoothstep(texelM, 0.3 * texelM, footM) * (1.0 - ocean) * (1.0 - surface.w);
     let slope = 1.0 - clamp(dot(n, q), 0.0, 1.0);
     let lat = abs(asin(clamp(gq.z, -1.0, 1.0))) * 57.29578;
     let snowLine = snowLineAt(lat) + 300.0 * gnoise(q * 3000.0);
@@ -5532,6 +5589,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
     A = mix(A, vec3f(0.16, 0.145, 0.13) * (0.8 + 0.4 * gnoise(q * 40000.0)), rock * k);
     A = mix(A, vec3f(0.82, 0.84, 0.88), snow * k);
   }
+  if (surface.w > 0.0) { A *= mix(vec3f(1.0), surfaceMaterial(gq, surface.cover, footM), surface.w); }
   // (a runway: its pavement and markings over the ground, flat; its lights added below)
   var rwyLamps = vec3f(0.0);
   // (the paving's cover here and its coordinates on its runway [m, along and across]: the rain's puddles

@@ -33,6 +33,8 @@ export function classify(url: string, scope: string, method = "GET", dirs: reado
     if (path.startsWith("__")) return "pass";
     const dir = path.includes("/") ? path.slice(0, path.indexOf("/")) : null;
     if (dirs && dir !== null && !dirs.includes(dir)) return "pass";
+    // Regional pages obey the shared tile LRU, including versioned/hashed page names.
+    if (path.startsWith("earth-surface/")) return "tile";
     return HASHED.test(u.pathname) ? "immutable" : "shell";
   }
   if (u.hostname === "s3.amazonaws.com" && u.pathname.startsWith("/elevation-tiles-prod/")) return "tile";

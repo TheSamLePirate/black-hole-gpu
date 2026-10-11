@@ -37,7 +37,9 @@ async function handle(q: KtxRequest) {
     const m = await mod;
     const [name, num] = FORMAT[q.target];
     const format = m.transcoder_texture_format?.[name]?.value ?? num;
-    const data = new Uint8Array(await (await fetch(q.url)).arrayBuffer());
+    const response = await fetch(q.url, { signal: AbortSignal.timeout(30_000) });
+    if (!response.ok) throw new Error(`KTX2 HTTP ${response.status}: ${q.url}`);
+    const data = new Uint8Array(await response.arrayBuffer());
     const f = new m.KTX2File(data);
     try {
       if (!f.isValid() || !f.startTranscoding()) throw new Error(`not a valid KTX2 file: ${q.url}`);

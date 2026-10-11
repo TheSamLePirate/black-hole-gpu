@@ -101,3 +101,9 @@ test("a legacy shell: the site's older build is the site's to drop, never the pr
   expect(ownsLegacyShell(test, TEST)).toBe(true);
   expect(ownsLegacyShell(test, SITE)).toBe(false);
 });
+test("regional surface pages are bounded tiles within their own scope", () => {
+  const base = "https://example.org/";
+  expect(classify(`${base}earth-surface/v1/bourget/1-2-aabbccdd.ktx2`, base)).toBe("tile");
+  expect(classify(`${base}test/earth-surface/v1/bourget/1-2-aabbccdd.classes.gz`, `${base}test/`)).toBe("tile");
+  expect(classify(`${base}test/earth-surface/v1/bourget/1-2-aabbccdd.ktx2`, base, "GET", ["earth-surface", "docs"])).toBe("pass");
+});

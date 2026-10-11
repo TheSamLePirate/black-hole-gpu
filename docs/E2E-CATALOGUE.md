@@ -2,6 +2,12 @@
 
 Every e2e file (`tests/e2e/*.e2e.test.ts`), by theme: what it proves, the scene it boots, its usual time on kerr-mini, what it needs beyond Chrome and the production server. Guide: [E2E.md](E2E.md). Times: the sum of the tests' own times in the last full run (2026-10-09, 58 files, 1137 s wall); a file's boot (about 5–15 s) comes on top. `bun run e2e --each` measures whole files. `?`: not in that run. A new e2e file gets its row here.
 
+### Regional satellite ground
+
+| file | what it proves | scene(s) booted | ~s on the mini | needs |
+|---|---|---|---|---|
+| earth-surface.e2e.test.ts | Both real Sentinel-2/WorldCover packs, region switch/release, airplane capture, realtime A/B timings at blocks 1 and 2, RGBA fallback, 16-texture adapter, unavailable class worker. Writes captures and perf JSON in remote-results/. Set SURFACE_LIVE_TERRAIN=1 to also load the real DEM. | Earth: the Blue Marble; regional camera views; Le Bourget glide | ~165 s locally with DEM | committed regional packs; native WebGPU for meaningful GPU timings |
+
 ### Harness & startup
 
 | file | what it proves | scene(s) booted | ~s on the mini | needs |

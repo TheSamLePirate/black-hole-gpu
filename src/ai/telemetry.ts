@@ -24,17 +24,19 @@ export const TELEMETRY_GROUPS = [
   "burn",
   "dock",
   "sky",
+  "surface",
 ] as const;
 export type TelemetryGroup = (typeof TELEMETRY_GROUPS)[number];
 
 // biome-ignore lint/suspicious/noExplicitAny: the controller's state, read loosely (each piece optional)
 type Loose = any;
 
-export function telemetry(camera: CameraController, groups: readonly TelemetryGroup[] = TELEMETRY_GROUPS) {
+export function telemetry(camera: CameraController, groups: readonly TelemetryGroup[] = TELEMETRY_GROUPS, surface?: unknown) {
   const c = camera as Loose;
   const air: Loose = c.airInfo?.() ?? null;
   const out: Record<string, unknown> = {};
   const want = new Set(groups);
+  if (want.has("surface") && surface !== undefined) out.surface = surface;
   if (want.has("attitude") && air)
     out.attitude = {
       pitchDeg: deg(air.pitch),

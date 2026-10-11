@@ -278,6 +278,13 @@ export const GAME_COMMANDS: GameCommand[] = [
     desc: { fr: "La qualité (low … game)", en: "The quality (low … game)" },
   },
   {
+    name: "surface",
+    tool: "set_settings",
+    fixed: { key: "earthSurface" },
+    args: [{ param: "value", from: "settingValue" }],
+    desc: { fr: "Le sol satellite (off, satellite, materials)", en: "Satellite ground (off, satellite, materials)" },
+  },
+  {
     name: "press",
     tool: "press_key",
     args: [{ param: "id", from: "key" }],

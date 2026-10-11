@@ -336,7 +336,8 @@ The renderer (`src/renderer.ts`). The members the tests read:
 | `generation` | number | the renderer's generation (see `gpu.generation`) |
 | `pipelineStatus` | object | the compile states: `general`, `quality`, `qualityError`, `lut`, `lutQuality` (`"pending"`, `"ready"`… ) |
 | `variantReady` | boolean | the scene's specialised tracer compiled (or none needed) |
-| `earthSettled` | boolean | the Earth's maps and terrain tiles are in and nothing is loading |
+| `earthSettled` | boolean | the Earth's maps, terrain and requested surface pages are settled (a failed surface page uses fallback) |
+| `earthSurface.stats()` | object | Regional Sentinel-2/WorldCover: `mode`, `supported`, `region`, `year`, `sourceResolutionM`, `format`, `loaded`, `pages`, `pending`, `inflight`, `failed`, `lastError`, `status`, `gpuBytes`, cumulative `uploadedBytes` and `uploadCpuMs`, `credit`. `settings.earthSurface`: `off`, `satellite`, `materials`; see [PLAN-TERRE-PHOTOREALISTE.md](PLAN-TERRE-PHOTOREALISTE.md). |
 | `tier` | `{ level, capMpx, label }` | the hardware tier and its pixel budget |
 | `adapter` | object \| null | the GPU adapter: `vendor`, `architecture`, `device`, `description`, `fallback`, `features` (sorted), `limits` |
 | `device` | GPUDevice | the WebGPU device (private in the source; read at run time: `device.features.has(…)`, `device.limits`) |

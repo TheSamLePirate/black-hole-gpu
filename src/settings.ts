@@ -301,6 +301,7 @@ export interface Settings {
   refraction: boolean; // the Earth's air bends the light from beyond it (PLAN-CIEL C3): the Sun, the Moon, the stars raised at the horizon
   autoWarp: boolean; // hub/manoeuvre sets warp; off: user's choice below its ceiling
   earthTerrain: boolean; // the Earth's real ground near the camera: elevation tiles streamed in (else the global map)
+  earthSurface: "off" | "satellite" | "materials"; // regional Sentinel-2 / WorldCover pilot; independent of physical relief
   realtimeEps: number;
   realtimeSteps: number;
   qualityEps: number;
@@ -571,6 +572,7 @@ export function defaultSettings(): Settings {
     refraction: true,
     autoWarp: true,
     earthTerrain: true,
+    earthSurface: "satellite",
     realtimeEps: 0.07,
     realtimeSteps: 600,
     qualityEps: 0.02,
@@ -1798,6 +1800,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   refraction: "pref",
   autoWarp: "scene",
   earthTerrain: "scene",
+  earthSurface: "scene",
   realtimeEps: "pref",
   realtimeSteps: "pref",
   qualityEps: "pref",

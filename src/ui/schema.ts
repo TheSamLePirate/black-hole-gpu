@@ -1973,6 +1973,21 @@ export const SCHEMA: ControlDef[] = [
     keywords: "terrain relief elevation dem srtm mountains tiles earth ground",
   },
   {
+    key: "earthSurface",
+    type: "choice",
+    section: "sky",
+    group: "The Earth",
+    label: "Satellite ground",
+    effect: "scene",
+    options: [
+      { value: "off", label: "Off" },
+      { value: "satellite", label: "Satellite" },
+      { value: "materials", label: "Satellite + materials" },
+    ],
+    help: "Sentinel-2 annual composite and WorldCover 2021 at about 10 m, streamed below 20 km in two pilot regions: Le Bourget and Cévennes. Satellite preserves the real fields and roads; materials adds subtle class-guided detail near the ground. One regional GPU pack at a time (37.3 MiB compressed, 101.3 MiB RGBA fallback). © ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), processed by ESA WorldCover consortium. CC BY 4.0. Terrain elevation and aircraft contacts use their own height data.",
+    keywords: "sentinel worldcover satellite sol photorealiste sol satellite bourget cevennes surface materials",
+  },
+  {
     key: "refraction",
     type: "toggle",
     section: "sky",

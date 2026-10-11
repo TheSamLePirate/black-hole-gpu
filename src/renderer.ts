@@ -74,6 +74,7 @@ import {
 } from "./system/earth-maps";
 import { gpuDiagnostics } from "./gpu-diagnostics";
 import { EarthTiles, TILE_PARAM_VEC4S } from "./system/earth-tiles";
+import { EarthSurface, SURFACE_VEC4S, SURFACE_TEXTURE_LIMIT, surfaceShader } from "./system/earth-surface";
 import { altitudeOver, bodyFixedOf, groundRelief, setGroundHeights, setGroundRelief } from "./system/our-surface";
 import { EARTH_RM, earthHeightSampler, mapHeightSampler, tileFallbackSampler } from "./terrain";
 import { figureDiskShare, figureSourceElevation, flatteningOf, geodeticNormal, rayFigure, WGS84_A, WGS84_F } from "./system/ellipsoid";
@@ -118,7 +119,7 @@ const srgbView = (t: GPUTexture, dimension: GPUTextureViewDimension) =>
   t.createView({ dimension, ...(t.format === "rgba8unorm" ? { format: SRGB } : {}) });
 const BLOCKS = [1, 2, 3, 4, 6, 8];
 /** every feature of the tracer kept (the general pipelines) */
-const FEATURES_ALL = 4095;
+const FEATURES_ALL = 8191;
 /** how long a block size's measured frame time is remembered [ms] (then tried again) */
 const BLOCK_MEMORY = 20000;
 /** the camera held after moving: the refinement's full passes over which the history hands over to it (at most its samples) */
@@ -133,7 +134,8 @@ const WX_VEC4S = 6;
 const DANJON_SCALE = 0.99834 * (1 + 1 / 85);
 /** the weather's clouds drift on a noise of this period [m] (trace.wgsl: wxAt) */
 const WX_DRIFT_PERIOD = 204800;
-const PARAM_VEC4S = 69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S + SEA_VEC4S + 1 + 1 + SHADE_VEC4S + WX_VEC4S;
+const BASE_PARAM_VEC4S = 69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S + SEA_VEC4S + 1 + 1 + SHADE_VEC4S + WX_VEC4S;
+const PARAM_VEC4S = BASE_PARAM_VEC4S + SURFACE_VEC4S;
 /**
  * The sea's twelve wave trains near the camera (trace.wgsl: seaWaves): wavenumbers in whole units of
  * 2π/1024 m on the wind's axes (along, across) — exact from an anchor of whole kilometres, in float32 —,
@@ -354,6 +356,7 @@ interface OfflineJob {
   shown: boolean;
   /** the terrain tiles drawn when it started (EarthTiles.stamp): restarted when more come in */
   tiles: number;
+  surface: number;
   /** the quality kernel failed: the error control off, the fixed steps for the whole job (no mix) */
   fixedSteps?: string;
 }
@@ -478,6 +481,8 @@ export class Renderer {
   moonLight = 1;
   /** the Earth's real ground near the camera, streamed (src/system/earth-tiles.ts) */
   readonly earthTiles: EarthTiles;
+  readonly earthSurface: EarthSurface;
+  private surfaceSampler: GPUSampler;
   private earthWant: EarthTier | null = null;
   /** the finest Earth tier this GPU's memory held (lowered when one ran out) */
   private earthCap: EarthTier | "none" = "high";
@@ -684,6 +689,13 @@ export class Renderer {
         { binding: 25, visibility: C, sampler: { type: "filtering" } },
         { binding: 26, visibility: C, texture: { sampleType: "depth" } },
         { binding: 28, visibility: C, texture: { sampleType: "uint", viewDimension: "2d-array" } },
+        ...(device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT
+          ? [
+              { binding: 29, visibility: C, texture: { sampleType: "float", viewDimension: "2d-array" } as GPUTextureBindingLayout },
+              { binding: 30, visibility: C, texture: { sampleType: "uint", viewDimension: "2d-array" } as GPUTextureBindingLayout },
+              { binding: 31, visibility: C, sampler: { type: "filtering" } as GPUSamplerBindingLayout },
+            ]
+          : []),
       ],
     });
     // (the disk's turbulence: a tiling noise baked once)
@@ -817,6 +829,16 @@ export class Renderer {
     this.endurance.onLoaded = () => this.invalidate();
     this.earthTiles = new EarthTiles(device);
     this.earthTiles.onChange = () => {
+      if (!this.offline) this.invalidate();
+    };
+    this.earthSurface = new EarthSurface(device, undefined, device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT);
+    this.surfaceSampler = device.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", maxAnisotropy: 4 });
+    this.earthSurface.onChange = () => {
+      if (this.live) this.bindTarget(this.live);
+      if (this.offline) this.bindTarget(this.offline.target);
+      if (!this.offline) this.invalidate();
+    };
+    this.earthSurface.onContent = () => {
       if (!this.offline) this.invalidate();
     };
     this.prof = new GpuProfiler(device);
@@ -1097,6 +1119,7 @@ export class Renderer {
 
   /** Frees the GPU at once (the page going away). */
   release() {
+    this.earthSurface.dispose();
     this.device.destroy();
   }
 
@@ -1224,6 +1247,7 @@ export class Renderer {
         maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
         maxBufferSize: adapter.limits.maxBufferSize,
         maxTextureDimension2D: adapter.limits.maxTextureDimension2D,
+        maxSampledTexturesPerShaderStage: Math.min(SURFACE_TEXTURE_LIMIT, adapter.limits.maxSampledTexturesPerShaderStage),
       },
     });
     onDevice(device);
@@ -1247,7 +1271,7 @@ export class Renderer {
     loading.done("gpu");
     gpuDiagnostics.enter("shader-download");
     const src = {
-      trace: await wgsl(traceWGSL),
+      trace: surfaceShader(await wgsl(traceWGSL), device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT),
       display: await wgsl(displayWGSL),
       post: await wgsl(postWGSL),
       sky: await wgsl(skyWGSL),
@@ -1289,6 +1313,7 @@ export class Renderer {
     const remembered = rememberedLevel(adapterId(r.adapter));
     if (remembered !== null && remembered !== r.tier.level) r.tier = tierAt(remembered, `${r.tier.label} · remembered`);
     void lost.then((info) => {
+      r.earthSurface.dispose();
       // (a loss simulated — the e2e's, __bh.gpu.lose(): the device destroyed — told as a real one)
       r.lost = r.simulatedLoss ? "simulated" : info.reason === "destroyed" ? "released" : info.message || t("the GPU was reset");
       if (r.offline) r.offline.error = r.lost;
@@ -1625,6 +1650,13 @@ export class Renderer {
         { binding: 25, resource: this.noiseSampler },
         { binding: 26, resource: this.ship.shadowView },
         { binding: 28, resource: this.earthTiles.texture.createView({ dimension: "2d-array" }) },
+        ...(this.earthSurface.supported
+          ? [
+              { binding: 29, resource: this.earthSurface.colorView() },
+              { binding: 30, resource: this.earthSurface.cover.createView({ dimension: "2d-array" }) },
+              { binding: 31, resource: this.surfaceSampler },
+            ]
+          : []),
       ],
     });
     t.probeBind = d.createBindGroup({
@@ -1655,6 +1687,13 @@ export class Renderer {
         { binding: 25, resource: this.noiseSampler },
         { binding: 26, resource: this.ship.shadowView },
         { binding: 28, resource: this.earthTiles.texture.createView({ dimension: "2d-array" }) },
+        ...(this.earthSurface.supported
+          ? [
+              { binding: 29, resource: this.earthSurface.colorView() },
+              { binding: 30, resource: this.earthSurface.cover.createView({ dimension: "2d-array" }) },
+              { binding: 31, resource: this.surfaceSampler },
+            ]
+          : []),
       ],
     });
     t.polGridPass = d.createBindGroup({
@@ -2323,12 +2362,12 @@ export class Renderer {
     }
     f.set(runways, (69 + TILE_PARAM_VEC4S) * 4);
     f.set(this.seaParams(near, bodies, earthK, altKm, time, tSec, s), (69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S) * 4);
-    f.set(this.weatherParams(earthSurface, altKm, time, tSec, s, !o.probe), (PARAM_VEC4S - WX_VEC4S) * 4);
+    f.set(this.weatherParams(earthSurface, altKm, time, tSec, s, !o.probe), (BASE_PARAM_VEC4S - WX_VEC4S) * 4);
     // the shadows our bodies cast on one another (PLAN-CIEL C6): the pairs where one falls now
     // (a receiver under two pixels across left out: Io in Jupiter's shadow seen from the Earth would keep the
     // shadows' code in the kernel for a dot)
     const shade = shadowParams(bodies, ourStart(bodies), homePosition(s) ?? origin, (s.fov * Math.PI) / 180 / Math.max(t.height, 1));
-    f.set(shade, (PARAM_VEC4S - WX_VEC4S - SHADE_VEC4S) * 4);
+    f.set(shade, (BASE_PARAM_VEC4S - WX_VEC4S - SHADE_VEC4S) * 4);
     // (a shadow falling: 2048 — none, its code out of the kernel: the kernel is register-bound, a pair's loop
     // cost 6–12 % over the Earth where no shadow ever fell)
     if (shade[8]! > 0) this.featureKey |= 2048;
@@ -2336,7 +2375,7 @@ export class Renderer {
     // air when it is in (cold air bends more), else the standard atmosphere's
     f.set(
       earthSurface && s.refraction ? refractionParams(this.refractivity(s), earthSurface.h * EARTH_RM, EARTH_RM) : [0, 0, 0, 0],
-      (PARAM_VEC4S - WX_VEC4S - SHADE_VEC4S - 1) * 4,
+      (BASE_PARAM_VEC4S - WX_VEC4S - SHADE_VEC4S - 1) * 4,
     );
     // the Earth's terrain tiles round the camera (on its own maps, the camera near it)
     if (!o.probe) {
@@ -2344,16 +2383,23 @@ export class Renderer {
       // (the ship low over the Earth, the view away: the tiles round the ship — its ground)
       const F = this.shipFocus;
       const shipLow = s.earthTerrain && F?.body === "earth" && F.altKm < 60 && !!this.earthMaps.tier;
-      this.earthTiles.update(
-        shipLow
-          ? F!.c
-          : onEarth
-            ? (near!.axes.map((a) => -(a[0] * near!.centre[0] + a[1] * near!.centre[1] + a[2] * near!.centre[2])) as Vec3)
-            : null,
-        pixelAngle,
-      );
+      const focus = shipLow
+        ? F!.c
+        : onEarth
+          ? (near!.axes.map((a) => -(a[0] * near!.centre[0] + a[1] * near!.centre[1] + a[2] * near!.centre[2])) as Vec3)
+          : null;
+      this.earthTiles.update(focus, pixelAngle);
+      const surfaceFocus =
+        F?.body === "earth" && F.altKm < 30
+          ? F.c
+          : near?.index === earthK && this.earthMaps.tier
+            ? (near.axes.map((a) => -(a[0] * near.centre[0] + a[1] * near.centre[1] + a[2] * near.centre[2])) as Vec3)
+            : null;
+      this.earthSurface.update(surfaceFocus, s.earthSurface);
     }
     f.set(this.earthTiles.params(), 69 * 4);
+    f.set(this.earthSurface.params(), BASE_PARAM_VEC4S * 4);
+    if (this.earthSurface.active) this.featureKey |= 4096;
     f[61 * 4 + 1] = sunAng; // (earth4.y)
     f[61 * 4 + 2] = this.marsDust(s, near, bodies, time); // (earth4.z)
     if (!o.probe) this.marsDustNow = f[61 * 4 + 2]!;
@@ -2995,6 +3041,7 @@ export class Renderer {
           HAS_KERR: has(512),
           HAS_WX: has(1024),
           HAS_SHADE: has(2048),
+          HAS_SURFACE: has(4096),
           QUALITY_PIPELINE: quality ? 1 : 0,
         },
       },
@@ -4270,6 +4317,7 @@ export class Renderer {
   /** The device lost on purpose — its recovery tested (PLAN-MONDE M2): destroyed, told as a reset. */
   simulateLoss() {
     this.simulatedLoss = true;
+    this.earthSurface.dispose();
     this.device.destroy();
   }
 
@@ -4578,7 +4626,10 @@ export class Renderer {
   /** The Earth's maps and terrain tiles the view wants are in (none loading). */
   get earthSettled() {
     return (
-      !this.earthTiles.pending && !(this.earthWant && this.earthWant !== this.earthMaps.tier) && !(this.earthIsNear && !this.earthMaps.tier)
+      !this.earthTiles.pending &&
+      !this.earthSurface.pending &&
+      !(this.earthWant && this.earthWant !== this.earthMaps.tier) &&
+      !(this.earthIsNear && !this.earthMaps.tier)
     );
   }
   /** the camera in the Earth's local patch (its maps wanted, whether or not asked for yet) */
@@ -4601,6 +4652,7 @@ export class Renderer {
       done: false,
       shown: false,
       tiles: this.earthTiles.stamp,
+      surface: this.earthSurface.stamp,
     };
   }
 
@@ -4684,8 +4736,9 @@ export class Renderer {
     const enc = this.device.createCommandEncoder();
     let rows = 0;
     // (the terrain tiles come in while it renders: started again on them)
-    if (job.tiles !== this.earthTiles.stamp) {
+    if (job.tiles !== this.earthTiles.stamp || job.surface !== this.earthSurface.stamp) {
       job.tiles = this.earthTiles.stamp;
+      job.surface = this.earthSurface.stamp;
       job.sampleIndex = 0;
       job.bandY = 0;
       job.done = false;
