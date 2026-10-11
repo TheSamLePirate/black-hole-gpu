@@ -107,10 +107,16 @@ Sans la variable, le test isole les packs régionaux et n'exige pas de serveur d
 
 ## Jalon B — bosquet 3D, puis densité
 
-À engager après validation visuelle et performance de A. L'objet de la première preuve est un bosquet correctement intégré, avant la quantité.
+Une première implémentation mondiale est maintenant disponible : forêts guidées par WorldCover,
+volumes OpenStreetMap, routes/rails, eaux et ponts 3D, ombres solaires locales, préparation en worker et deux BVH intégrés au ray tracer, avec un buffer plafonné
+à 16 MiB. Elle suit la caméra au-delà des deux packs pilotes. Le choix de volumes analytiques
+permet de partager directement profondeur et atmosphère ; les LOD de maillages et le rendu hybride
+restent à comparer pour les véritables assets de feuillage. [État, couverture, limites et mesures](FORETS-BATIMENTS-WORLDWIDE.md).
 
-1. Définir une profondeur commune en mètres et le repère local partagé avec le terrain ; traiter explicitement les pixels de ciel et les pixels reconstruits par le temporal.
-2. Intégrer un petit lot d'arbres avec LOD de silhouette, masque d'exclusion piste/eau/sol bâti et atmosphère jusqu'à l'objet, puis vérifier crêtes, soleil bas et brume depuis le cockpit.
+Les travaux suivants restent nécessaires pour la qualité AAA et les validations de vols longs :
+
+1. Réutiliser la profondeur en mètres et le repère local établis par le décor actuel pour comparer une passe de maillages instanciés ; traiter explicitement les pixels de ciel et les pixels reconstruits par le temporal.
+2. Intégrer un petit lot d'arbres avec LOD de silhouette, masque d'exclusion piste/eau/routes/sol bâti et atmosphère jusqu'à l'objet, puis vérifier crêtes, soleil bas et brume depuis le cockpit.
 3. Préparer cellules et placement déterministes hors frame ; culling/compaction GPU et draw indirect, caps d'instances et d'ombres, canopée lointaine et imposteurs intermédiaires.
 4. Valider un vol de vingt minutes, virages, téléportations et cache froid sur les deux Macs. N'adopter un terrain proche raster que si le profil montre un gain net.
 

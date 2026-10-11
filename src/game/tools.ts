@@ -715,6 +715,7 @@ export class GameTools {
       quality: s.quality,
       budgetMs: s.realtimeBudget,
       earthSurface: r.earthSurface.stats(),
+      earthScenery: r.earthScenery.stats(),
       block: r.realtimeBlockNow,
       cpu: cpuProf.table().map((c) => ({ section: c.label, ms: r2(c.ms), worst: r2(c.max) })),
       gpu: r.prof.table().map((p) => ({ pass: p.label, ms: r2(p.ms), last: r2(p.last), frames: p.n })),

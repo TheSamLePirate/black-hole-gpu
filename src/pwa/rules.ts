@@ -39,6 +39,9 @@ export function classify(url: string, scope: string, method = "GET", dirs: reado
   }
   if (u.hostname === "s3.amazonaws.com" && u.pathname.startsWith("/elevation-tiles-prod/")) return "tile";
   if (u.hostname === "gibs.earthdata.nasa.gov") return "tile";
+  if (u.hostname === "tiles.openfreemap.org" && u.pathname.startsWith("/planet/")) return "tile";
+  if (u.hostname === "mapproxy.terrascope.be" && u.pathname === "/mapproxy/service" && u.searchParams.get("REQUEST") === "GetMap")
+    return "tile";
   if (u.hostname === "celestrak.org") return "elements";
   return "pass";
 }

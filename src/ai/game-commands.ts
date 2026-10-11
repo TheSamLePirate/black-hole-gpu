@@ -285,6 +285,20 @@ export const GAME_COMMANDS: GameCommand[] = [
     desc: { fr: "Le sol satellite (off, satellite, materials)", en: "Satellite ground (off, satellite, materials)" },
   },
   {
+    name: "scenery",
+    tool: "set_settings",
+    fixed: { key: "earthScenery" },
+    args: [{ param: "value", from: "settingValue" }],
+    desc: { fr: "Décor mondial OSM et forêts (off, balanced, high)", en: "Worldwide OSM scenery and forests (off, balanced, high)" },
+  },
+  {
+    name: "sceneryshadows",
+    tool: "set_settings",
+    fixed: { key: "earthSceneryShadows" },
+    args: [{ param: "value", from: "settingValue" }],
+    desc: { fr: "Ombres du décor (true, false)", en: "Scenery shadows (true, false)" },
+  },
+  {
     name: "press",
     tool: "press_key",
     args: [{ param: "id", from: "key" }],

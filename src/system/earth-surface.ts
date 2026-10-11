@@ -23,7 +23,7 @@ export function surfaceShader(code: string, supported: boolean): string {
     .replace(/^@group\(0\) @binding\((29|30|31)\).*\n/gm, "")
     .replace(
       /fn surfaceImage\([\s\S]*?(?=fn surfaceMaterial\()/,
-      "fn surfaceImage(q: vec3f, fx: vec3f, fy: vec3f) -> SurfaceImage { return SurfaceImage(vec3f(0.0), 0.0, 0u); }\n\n",
+      "fn surfaceImage(q: vec3f, fx: vec3f, fy: vec3f) -> SurfaceImage { return sceneryImage(q); }\n\n",
     );
 }
 const DEG = 180 / Math.PI;

@@ -11,7 +11,7 @@
   "scripts": {
     "dev": "bun --hot server.ts",
     "start": "bun server.ts",
-    "build": "bun build ./index.html --outdir dist --minify && bun build ./src/system/plan-worker.ts --outfile dist/plan-worker.js --minify --target browser && bun build ./src/system/ktx-worker.ts --outfile dist/ktx-worker.js --minify --target browser && bun build ./src/audio/engine-worklet.ts --outfile dist/audio-worklet.js --minify --target browser && bun build ./src/sw.ts --outfile dist/sw.js --minify --target browser --define __BUILD__=\"\\\"local\\\"\" && cp vendor/basis/basis_transcoder.wasm dist/basis_transcoder.wasm && cp pwa/manifest.webmanifest dist/ && mkdir -p dist/icons && cp pwa/icons/* dist/icons/ && bun build ./src/system/earth-surface-worker.ts --outfile dist/earth-surface-worker.js --minify --target browser && rm -rf dist/earth-surface && mkdir -p dist/earth-surface && cp -R assets/earth-surface/v1 dist/earth-surface/",
+    "build": "bun build ./index.html --outdir dist --minify && bun build ./src/system/plan-worker.ts --outfile dist/plan-worker.js --minify --target browser && bun build ./src/system/ktx-worker.ts --outfile dist/ktx-worker.js --minify --target browser && bun build ./src/audio/engine-worklet.ts --outfile dist/audio-worklet.js --minify --target browser && bun build ./src/sw.ts --outfile dist/sw.js --minify --target browser --define __BUILD__=\"\\\"local\\\"\" && cp vendor/basis/basis_transcoder.wasm dist/basis_transcoder.wasm && cp pwa/manifest.webmanifest dist/ && mkdir -p dist/icons && cp pwa/icons/* dist/icons/ && bun build ./src/system/earth-surface-worker.ts --outfile dist/earth-surface-worker.js --minify --target browser && rm -rf dist/earth-surface && mkdir -p dist/earth-surface && cp -R assets/earth-surface/v1 dist/earth-surface/ && bun scripts/build-scenery-worker.ts dist/scenery-worker.js",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "build:pages": "bun scripts/build-pages.ts",
@@ -24,5 +24,9 @@
     "dashboard": "bun scripts/dashboard/server.ts",
     "build:earth-surface": "bun scripts/build-earth-surface.ts"
   },
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@mapbox/vector-tile": "3.0.0",
+    "pbf": "5.1.2"
+  }
 }

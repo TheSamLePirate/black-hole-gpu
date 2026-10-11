@@ -1095,6 +1095,16 @@ export class SettingsPanel {
             ", ",
             h("a", { href: "https://creativecommons.org/licenses/by/4.0/", target: "_blank", rel: "noopener" }, "CC BY 4.0"),
           ),
+          h(
+            "span",
+            { class: "credit" },
+            " · Earth: © ESA WorldCover 2021 / modified Copernicus Sentinel data (2021), ",
+            h("a", { href: "https://creativecommons.org/licenses/by/4.0/", target: "_blank", rel: "noopener" }, "CC BY 4.0"),
+            " · © OpenMapTiles, Data from ",
+            h("a", { href: "https://www.openstreetmap.org/copyright", target: "_blank", rel: "noopener" }, "OpenStreetMap (ODbL)"),
+            ", served by ",
+            h("a", { href: "https://openfreemap.org", target: "_blank", rel: "noopener" }, "OpenFreeMap"),
+          ),
         ),
       ],
     });

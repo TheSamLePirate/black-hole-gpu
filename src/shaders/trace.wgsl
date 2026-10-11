@@ -134,6 +134,7 @@ struct Params {
   wx: array<vec4f, 6>,
   // regional Sentinel-2 / WorldCover: bounds and residency, page grid and gutter, materials and metre scale
   surface: array<vec4f, 7>,
+  scenery: array<vec4f, 6>,
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -154,6 +155,7 @@ override HAS_THICK: bool = true;  // the volumetric (thick) disk
 override HAS_BODIES: bool = true; // planets, moons, stars as bodies (and the near body's ground)
 override HAS_RWY: bool = true;    // runways near the camera (their grading and drawing: out of the kernel elsewhere)
 override HAS_SHADE: bool = true;  // a body's shadow falling on another now (P.shade, PLAN-CIEL C6: out of the kernel when none)
+override HAS_SCENERY: bool = true;
 override HAS_SURFACE: bool = true;
 override HAS_WX: bool = true;     // the weather near the camera (P.wx: its haze, fog, layers — out of the kernel in fair weather)
 // the hole's and the mouth's metrics (O13): off in our universe from afar — the camera beyond the mouth's
@@ -4773,7 +4775,7 @@ fn windsockShade(q: vec3f, Ls: vec3f, E: vec3f, h: f32) -> vec3f {
   let vl = wxVeil(h, wxNear(q), 3u);
   let Ts = sunThrough(h, mu0);
   let sky = E * max(vec3f(0.06, 0.1, 0.19) * smoothstep(-0.18, 0.25, mu0), nightFloor(1.0, mu0));
-  let lit = E * Ts * max(dot(WS.xyz, Lp), 0.0) * vl.x + sky * 0.6 * vl.x + E * Ts * max(mu0, 0.0) * (vl.y - vl.x) * 0.6;
+  let lit = E * Ts * max(dot(WS.xyz, Lp), 0.0) * vl.x * sceneryShadow(Lp,WS.xyz) + sky * 0.6 * vl.x + E * Ts * max(mu0, 0.0) * (vl.y - vl.x) * 0.6;
   return WS_A / PI * lit + WS_E * (luminance(E) / PI) * 30.0 * (1.0 - smoothstep(-0.12, 0.06, mu0));
 }
 
@@ -5496,8 +5498,188 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
 }
 
 struct SurfaceImage { c: vec3f, w: f32, cover: u32 }
+// BEGIN_WORLD_SCENERY
+var<private> SC_POINT:vec3f=vec3f(0.0);
+var<private> SC_DISTANCE:f32=1e9;
+var<private> SC_SAMPLE:f32=0.0;
+// Worldwide scenery: one bounded storage buffer, stackless BVH; all distances are local metres.
+@group(0) @binding(32) var<storage, read> scenery: array<vec4f>;
+fn sceneryLocal(d:vec3f)->vec3f { return vec3f(dot(d,P.scenery[0].xyz),dot(d,P.scenery[1].xyz),dot(d,P.scenery[2].xyz)); }
+fn sceneryGlobal(d:vec3f)->vec3f { return d.x*P.scenery[0].xyz+d.y*P.scenery[1].xyz+d.z*P.scenery[2].xyz; }
+fn sceneryColour(at:vec2i,n:u32)->vec3f {
+  let p=vec2u(clamp(at,vec2i(0),vec2i(i32(n)-1)));let idx=p.y*n+p.x;
+  let packed=bitcast<u32>(scenery[u32(scenery[0].z)+idx/4u][idx%4u]);
+  let c=vec3f(f32(packed&255u),f32((packed>>8u)&255u),f32((packed>>16u)&255u))/255.0;
+  return select(c/12.92,pow((c+0.055)/1.055,vec3f(2.4)),c>vec3f(0.04045));
+}
+fn sceneryImage(q:vec3f)->SurfaceImage {
+  var o=SurfaceImage(vec3f(0.0),0.0,0u);
+  if(!HAS_SCENERY || P.scenery[2].w<0.5 || P.scenery[5].y<0.5 || P.scenery[5].z<0.5){return o;}
+  let lon=atan2(q.y,q.x);
+  let delta=atan2(sin(lon-P.scenery[4].x),cos(lon-P.scenery[4].x));
+  let uv=vec2f(delta*P.scenery[4].z,(P.scenery[4].y-asin(clamp(q.z,-1.0,1.0)))*P.scenery[4].w);
+  if(any(uv<vec2f(0.0)) || any(uv>=vec2f(1.0))){return o;}
+  let n=u32(scenery[0].w);let at=vec2u(uv*f32(n));
+  let idx=at.y*n+at.x;let packed=bitcast<u32>(scenery[u32(scenery[0].z)+idx/4u][idx%4u]);
+  o.cover=packed>>24u;
+  if((packed&0xffffffu)==0u){return o;}
+  let grid=uv*f32(n)-.5;let a=vec2i(floor(grid));let w=fract(grid);
+  o.c=mix(mix(sceneryColour(a,n),sceneryColour(a+vec2i(1,0),n),w.x),mix(sceneryColour(a+vec2i(0,1),n),sceneryColour(a+vec2i(1,1),n),w.x),w.y);
+  let rim=min(min(uv.x,uv.y),min(1.0-uv.x,1.0-uv.y));
+  o.w=smoothstep(0.0,0.04,rim)*P.scenery[3].w;
+  return o;
+}
+struct SceneryHit { t:f32, normal:vec3f, albedo:vec3f, kind:f32, root:f32 };
+fn sceneryEllipsoid(o:vec3f,d:vec3f,c:vec3f,r:vec3f)->vec4f {
+  let p=(o-c)/r;let v=d/r;let a=dot(v,v);let b=dot(p,v);let det=b*b-a*(dot(p,p)-1.0);
+  if(det<0.0){return vec4f(-1.0);}
+  var t=(-b-sqrt(det))/a;if(t<0.001){t=(-b+sqrt(det))/a;}
+  if(t<0.001){return vec4f(-1.0);}
+  return vec4f(t,normalize((o+d*t-c)/(r*r)));
+}
+fn sceneryPolygon(p:vec2f,base:u32,count:u32)->bool {
+  var inside=false;
+  for(var i=0u;i<count;i++){
+    let e=scenery[base+3u+i];
+    if((e.y>p.y)!=(e.w>p.y)){
+      let x=e.x+(p.y-e.y)*(e.z-e.x)/(e.w-e.y);
+      if(p.x<x){inside=!inside;}
+    }
+  }
+  return inside;
+}
+fn sceneryQuery(o:vec3f,d:vec3f,limit:f32,shadow:bool)->SceneryHit {
+  var out=SceneryHit(limit,vec3f(0.0),vec3f(0.0),-1.0,0.0);
+  let inv=1.0/select(d,vec3f(1e-8),abs(d)<vec3f(1e-8));
+  let total=u32(scenery[0].x);var i=0u;
+  // Stackless escape indices make the CPU/GPU storage bound independent of density.
+  while(i<total){
+    let lo=scenery[4u+i*2u];let hi=scenery[5u+i*2u];
+    let a=(lo.xyz-o)*inv;let b=(hi.xyz-o)*inv;
+    let near=max(max(min(a,b).x,min(a,b).y),min(a,b).z);
+    let far=min(min(max(a,b).x,max(a,b).y),max(a,b).z);
+    if(far<max(near,0.0) || near>out.t){i=u32(lo.w);continue;}
+    if(hi.w<0.0){i++;continue;}
+    let base=u32(scenery[0].y+hi.w);let p=scenery[base];let size=scenery[base+1u];let alb=scenery[base+2u].xyz;
+    var h=vec4f(-1.0);
+    if(p.w<0.5){
+      // Solid trunk and five overlapping crowns, with stable species/size variation.
+      h=boxHit(o,d,p.xyz+vec3f(0.0,0.0,size.y*.32),vec3f(.22,.22,size.y*.32));
+      var best=select(out.t,h.x,h.x>0.0 && h.x<out.t);
+      for(var l=0u;l<5u;l++){
+        let phase=f32(l)*2.399963+size.z*TAU;
+        let reach=select(size.x*.38,0.0,l==0u);
+        let c=p.xyz+vec3f(cos(phase)*reach,sin(phase)*reach,size.y*(.6+.06*f32(l)));
+        let r=vec3f(size.x*(.65+.06*f32(l%3u)),size.x*(.65+.06*f32(l%3u)),size.y*(.22+.02*f32(l%3u)));
+        let hit=sceneryEllipsoid(o,d,c,r);
+        if(hit.x>0.0 && hit.x<best){h=hit;best=hit.x;}
+      }
+    }else{
+      let count=u32(p.z);var best=out.t;
+      if(abs(d.z)>1e-7){
+        for(var cap=0u;cap<2u;cap++){
+          let z=select(p.x,p.y,cap==1u);let t=(z-o.z)/d.z;
+          if(t>0.001 && t<best && sceneryPolygon((o+d*t).xy,base,count)){
+            best=t;h=vec4f(t,0.0,0.0,select(-1.0,1.0,cap==1u));
+          }
+        }
+      }
+      for(var e=0u;e<count;e++){
+        let line=scenery[base+3u+e];let v=line.zw-line.xy;let den=d.x*v.y-d.y*v.x;
+        if(abs(den)<1e-7){continue;}
+        let q=line.xy-o.xy;let t=(q.x*v.y-q.y*v.x)/den;let u=(q.x*d.y-q.y*d.x)/den;
+        let z=o.z+d.z*t;
+        if(t>0.001 && t<best && u>=0.0 && u<=1.0 && z>=p.x && z<=p.y){
+          let norm=normalize(vec3f(v.y,-v.x,0.0));best=t;h=vec4f(t,select(norm,-norm,dot(norm,d)>0.0));
+        }
+      }
+    }
+    if(h.x>0.0 && h.x<out.t){out=SceneryHit(h.x,h.yzw,alb,p.w,select(p.z,p.x,p.w>.5));if(shadow){return out;}}
+    i++;
+  }
+  return out;
+}
+fn worldScenery(dW:vec3f,tMax:f32,rnd:f32)->f32 {
+  SC_DISTANCE=1e9;
+  if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5){return tMax;}
+  let d=sceneryLocal(dW);let o=P.scenery[3].xyz;
+  SC_SAMPLE=rnd;SC_POINT=o+d*tMax;SC_DISTANCE=tMax;
+  let hit=sceneryQuery(o,d,min(tMax,P.scenery[1].w),false);
+  if(hit.kind<0.0){return tMax;}
+  let p=o+d*hit.t;
+  SC_POINT=p;SC_DISTANCE=hit.t;
+  let rough=0.85+0.15*gnoise(p*.65);
+  var alb=hit.albedo*rough;
+  if(hit.kind>.5 && hit.kind<1.5){
+    // Stable facade courses and recessed windows. Roofs keep their own dull surface.
+    let wall=abs(hit.normal.z)<.5;
+    let win=wall && p.z-hit.root>1.6 && fract((p.x+p.y)*.24)<.6 && fract((p.z-hit.root)/3.0)<.55;
+    alb=select(alb,vec3f(.045,.065,.075),win);
+    alb*=select(.72,1.0,wall);
+  }else if(hit.kind<.5){
+    alb*=mix(.45,1.0,smoothstep(hit.root,hit.root+12.0,p.z));
+    // Crown lobes hide their joints in a stable, fine leaf response.
+    alb*=.85+.15*gnoise(p*2.1);
+  }
+  WS=vec4f(normalize(sceneryGlobal(hit.normal)),1.0);WS_A=alb;WS_E=vec3f(0.0);
+  return hit.t;
+}
+
+// A ray to the finite solar disc: existing temporal accumulation integrates the penumbra.
+// Ambient skylight remains present in shadow. Any-hit traversal avoids finding the nearest blocker.
+fn sceneryShadow(light:vec3f,normal:vec3f)->f32 {
+  let reach=select(1200.0,2000.0,P.scenery[5].x>.5);
+  if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5 || P.scenery[5].w<.5 || SC_DISTANCE>reach || dot(light,P.scenery[2].xyz)<=.015){return 1.0;}
+  let sun=sceneryLocal(light);let n=sceneryLocal(normal);
+  let axis=normalize(cross(sun,select(vec3f(0.0,0.0,1.0),vec3f(0.0,1.0,0.0),abs(sun.z)>.9)));
+  let radius=.00465*sqrt(fract(SC_SAMPLE*7.31+.17));let phase=TAU*fract(SC_SAMPLE*13.73+.41);
+  let d=normalize(sun+radius*(axis*cos(phase)+cross(sun,axis)*sin(phase)));
+  let h=sceneryQuery(SC_POINT+n*.35+d*.15,d,select(500.0,900.0,P.scenery[5].x>.5),true);
+  let fade=smoothstep(reach-200.0,reach,SC_DISTANCE);
+  return mix(select(1.0,0.0,h.kind>=0.0),1.0,fade);
+}
+struct ScenerySurface { color:vec3f, cover:f32, kind:f32 };
+fn scenerySurface(foot:f32)->ScenerySurface {
+  var out=ScenerySurface(vec3f(0.0),0.0,0.0);
+  if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5 || SC_DISTANCE>P.scenery[1].w){return out;}
+  let point=SC_POINT.xy;let aa=max(.12,foot*.75);let header=scenery[1];let total=u32(header.y);var i=0u;var priority=0.0;var dryIsland=false;
+  while(i<total){
+    let lo=scenery[u32(header.x)+i*2u];let hi=scenery[u32(header.x)+i*2u+1u];
+    if(any(point<lo.xy-vec2f(aa)) || any(point>hi.xy+vec2f(aa))){i=u32(lo.w);continue;}
+    if(hi.w<0.0){i++;continue;}
+    let base=u32(header.z+hi.w);let p=scenery[base];let size=scenery[base+1u];var color=scenery[base+2u].xyz;
+    var kind=p.w;var cover=0.0;var rank=1.0;
+    if(scenery[base+2u].w>.5){
+      cover=select(0.0,1.0,sceneryPolygon(point,base,u32(p.z)));
+      if(kind==4.0 && cover==0.0 && sceneryPolygon(point,base,u32(scenery[base+2u].w))){dryIsland=true;}
+    }else{
+      kind=size.y;let line=p.zw-p.xy;let len=max(length(line),.001);let along=clamp(dot(point-p.xy,line)/(len*len),0.0,1.0);
+      let distance=length(point-p.xy-line*along);
+      cover=1.0-smoothstep(max(0.0,size.x-aa),size.x+aa,distance);
+      rank=select(2.0,3.0,kind==2.0);
+      if(kind==1.0 && size.x>=3.5 && foot<2.0){
+        let stripe=1.0-smoothstep(.09,.09+aa,distance);
+        let dash=1.0-smoothstep(3.0-aa,3.0+aa,(along*len)%9.0);
+        color=mix(color,vec3f(.65,.64,.56),stripe*dash);
+      }
+      if(kind==2.0 && foot<1.5){
+        let rail=1.0-smoothstep(.06,.06+aa,abs(distance-.72));
+        let sleeper=1.0-smoothstep(.18,.18+aa,(along*len)%.7);
+        color=mix(color,vec3f(.18,.15,.10),sleeper);color=mix(color,vec3f(.42),rail);
+      }
+    }
+    if(cover>0.0 && (rank>priority || (rank==priority && cover>out.cover))){priority=rank;out=ScenerySurface(color,cover,kind);}
+    i++;
+  }
+  if(dryIsland && out.kind==3.0){out.cover=0.0;}
+  out.cover*=P.scenery[3].w*smoothstep(P.scenery[1].w,P.scenery[1].w-300.0,SC_DISTANCE);
+  return out;
+}
+
+// END_WORLD_SCENERY
+
 fn surfaceImage(q: vec3f, fx: vec3f, fy: vec3f) -> SurfaceImage {
-  var out = SurfaceImage(vec3f(0.0), 0.0, 0u);
+  var out = sceneryImage(q);
   if (!HAS_SURFACE || P.surface[2].w < 0.5) { return out; }
   let grid = vec2f(atan2(q.y, q.x) - P.surface[0].x, P.surface[0].y - asin(clamp(q.z, -1.0, 1.0))) * P.surface[0].z;
   let dims = vec2i(P.surface[1].xy);
@@ -5554,7 +5736,9 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   var lvl = 0.0;
   if (HAS_RWY && RWY_HIT.w > 0.5) { lvl = runwayGrade(gq).y; }
   let sea0 = smoothstep(0.35, 0.65, rel.b);
-  let ocean = sea0 * (1.0 - lvl);
+  let osm=scenerySurface(max(length(fx),length(fy))*EARTH_RM);
+  let osmWater=select(0.0,osm.cover,osm.kind==3.0 || osm.kind==4.0);
+  let ocean = max(sea0,osmWater) * (1.0 - lvl);
   // (near, the tiles' imagery over the maps: four to eight times finer)
   let img = earthImagery(gq, max(length(fx), length(fy)) * EARTH_RM);
   var A = mix(day.rgb, img.c.rgb, img.w) * P.earth2.z;
@@ -5590,6 +5774,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
     A = mix(A, vec3f(0.82, 0.84, 0.88), snow * k);
   }
   if (surface.w > 0.0) { A *= mix(vec3f(1.0), surfaceMaterial(gq, surface.cover, footM), surface.w); }
+  A=mix(A,osm.color,osm.cover);
   // (a runway: its pavement and markings over the ground, flat; its lights added below)
   var rwyLamps = vec3f(0.0);
   // (the paving's cover here and its coordinates on its runway [m, along and across]: the rain's puddles
@@ -5695,6 +5880,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
     wxVl = wxVeil(hG, wg, 3u);
   }
   var Eg = E * sunThrough(hG, mu0) * shade * sunSeen(q * (1.0 + hG / (EARTH_RM * earthSq(q))), Ls);
+  Eg *= sceneryShadow(physicalLs,physicalNormal);
   // (near, the mountains' shadows: a peak between the sun and the valley)
   let footS = max(length(fx), length(fy)) * EARTH_RM;
   if (footS < 2.0 * EARTH_RM * TAU / f32(textureDimensions(earthElev).x) && mu0 > -0.05 && ocean < 1.0) {
@@ -6140,7 +6326,7 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
     let ph = ro + rd * tHit;
     let q = normalize(ph);
     let fp = fp0 + fpK * tHit;
-    if (HAS_RWY && WS.w > 0.5) {
+    if (WS.w > 0.5) {
       G = windsockShade(q, Ls, E, max(airHeight(ph), 0.0));
     } else if (earth) {
       G = earthGround(q, rd, Ls, E, earthFoot(q, rd, gx, fp), earthFoot(q, rd, gy, fp), max(airHeight(ph), 0.0));
@@ -6212,6 +6398,7 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
     let tm = airportScenery(dp / length(dp), select(1e7, t * kM, t > 0.0));
     if (WS.w > 0.5) { t = tm / kM; } else { WS = ws; WS_A = wa; }
   }
+  if (isEarth(k)) { let dp = vec3f(rd.xy, rd.z / ab); let kM = length(dp) * EARTH_RM; let tm = worldScenery(dp / length(dp), select(1e7, t * kM, t > 0.0),rnd); if (tm < select(1e7, t * kM, t > 0.0)) { t = tm / kM; } }
   if (HAS_RWY) { RWY_HIT = vec4f(vec3f(rd.xy, rd.z / ab) * (t * EARTH_RM), select(0.0, 1.0, isEarth(k) && t > 0.0 && rwyCount() > 0u && WS.w < 0.5)); }
   let lt = nearLight(k);
   SEA_ON = isEarth(k) && t > 0.0 && P.sea[1].w > 0.0 && WS.w < 0.5;

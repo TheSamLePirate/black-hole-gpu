@@ -7,6 +7,8 @@ Every e2e file (`tests/e2e/*.e2e.test.ts`), by theme: what it proves, the scene 
 | file | what it proves | scene(s) booted | ~s on the mini | needs |
 |---|---|---|---|---|
 | earth-surface.e2e.test.ts | Both real Sentinel-2/WorldCover packs, region switch/release, airplane capture, realtime A/B timings at blocks 1 and 2, RGBA fallback, 16-texture adapter, unavailable class worker. Writes captures and perf JSON in remote-results/. Set SURFACE_LIVE_TERRAIN=1 to also load the real DEM. | Earth: the Blue Marble; regional camera views; Le Bourget glide | ~165 s locally with DEM | committed regional packs; native WebGPU for meaningful GPU timings |
+| earth-scenery.e2e.test.ts | Live WorldCover/Sentinel-2 WMS + OpenStreetMap buildings, roads, water, bridges and rails in Paris, Cévennes, Tokyo and Sydney; captures after shader readiness and 60 profiled frames; image difference with/without cast shadows; high airplane mode; release and eight-storage-buffer fallback. | Earth: the Blue Marble; low, oblique geographic views | ~3–5 min locally, depends on network/compiler | live Terrascope, OpenFreeMap and Terrarium; native WebGPU |
+| scenery-bench.e2e.test.ts | Calibrated, isolated comparisons with networks/volumes off, on without cast shadows, and on with cast shadows: identical satellite colour, terrain, camera, buffer and kernel; per-frame GPU trace medians and p10/p90 over 180 samples, seven blocks per place. | Cévennes and Tokyo | depends on initial kernel compilation | `SCENERY_BENCH=1`; run without other CPU/build jobs; native WebGPU and live tiles |
 
 ### Harness & startup
 

@@ -302,6 +302,8 @@ export interface Settings {
   autoWarp: boolean; // hub/manoeuvre sets warp; off: user's choice below its ceiling
   earthTerrain: boolean; // the Earth's real ground near the camera: elevation tiles streamed in (else the global map)
   earthSurface: "off" | "satellite" | "materials"; // regional Sentinel-2 / WorldCover pilot; independent of physical relief
+  earthScenery: "off" | "balanced" | "high";
+  earthSceneryShadows: boolean;
   realtimeEps: number;
   realtimeSteps: number;
   qualityEps: number;
@@ -573,6 +575,8 @@ export function defaultSettings(): Settings {
     autoWarp: true,
     earthTerrain: true,
     earthSurface: "satellite",
+    earthScenery: "balanced",
+    earthSceneryShadows: true,
     realtimeEps: 0.07,
     realtimeSteps: 600,
     qualityEps: 0.02,
@@ -1801,6 +1805,8 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   autoWarp: "scene",
   earthTerrain: "scene",
   earthSurface: "scene",
+  earthScenery: "scene",
+  earthSceneryShadows: "scene",
   realtimeEps: "pref",
   realtimeSteps: "pref",
   qualityEps: "pref",

@@ -347,7 +347,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "get_state",
       description:
-        "The whole situation now: phase, status and orbit (km, m/s), fuel and Δv, target, next event, autopilot/hold/throttle, alerts, landing/runway state, mission, date, warp, view, craft, satellite surface region/availability/memory. Call it before acting when unsure.",
+        "The whole situation now: phase, status and orbit (km, m/s), fuel and Δv, target, next event, autopilot/hold/throttle, alerts, landing/runway state, mission, date, warp, view, craft, satellite surface region/availability/memory and worldwide 3D scenery availability, counts and memory. Call it before acting when unsure.",
       run: () => {
         const st = tools.status();
         const rw = camera.runwayView?.();
@@ -378,19 +378,21 @@ export function gameTools(h: GameHost): Tool[] {
           gear: { down: camera.gearDown, flaps: camera.airFlight?.cfg.flaps, airBrake: camera.airBrake },
           docked: camera.docked,
           surface: tools.perf({ gpu: false }).earthSurface,
+          scenery: tools.perf({ gpu: false }).earthScenery,
         };
       },
     },
     {
       name: "get_telemetry",
       description:
-        "Everything the cockpit and the hub know, now, in figures (degrees, metres, m/s, s): attitude (pitch, bank, heading, angle of attack, sideslip, stall AoA), air (height, airspeed, Mach, q, heat, load, skin temperatures and margins, wind), controls (throttle, thrust, surface deflections, flaps, air brake, gear, holds), autopilot (director, flight-computer command, launch goal), hub (its title, current step, rows, next, progress, cue: time to ignition and Δv left, callout, its graph's verdict on/off/wait and the fix), entry (phase, commanded bank and AoA, range and heading error to the site, miss, in corridor, planned peaks, reversal), approach (runway offset, height, PAPI whites 0–4, commanded vs flown ground path angle, height over the threshold, ground speed and airspeed, profile deviation, leg, flare, MLS, wind), descent (powered landing's command), burn (plan, cue), dock (offsets, signed actual and commanded closing rates in the rotating port frame), sky (the world under the camera, the Sun's and the Moon's altitude and azimuth — true and as seen through the Earth's air —, the refraction at the horizon and the air's refractivity). Ask only the groups you need.",
+        "Everything the cockpit and the hub know, now, in figures (degrees, metres, m/s, s): attitude (pitch, bank, heading, angle of attack, sideslip, stall AoA), air (height, airspeed, Mach, q, heat, load, skin temperatures and margins, wind), controls (throttle, thrust, surface deflections, flaps, air brake, gear, holds), autopilot (director, flight-computer command, launch goal), hub (its title, current step, rows, next, progress, cue: time to ignition and Δv left, callout, its graph's verdict on/off/wait and the fix), entry (phase, commanded bank and AoA, range and heading error to the site, miss, in corridor, planned peaks, reversal), approach (runway offset, height, PAPI whites 0–4, commanded vs flown ground path angle, height over the threshold, ground speed and airspeed, profile deviation, leg, flare, MLS, wind), descent (powered landing's command), burn (plan, cue), dock (offsets, signed actual and commanded closing rates in the rotating port frame), sky (the world under the camera, the Sun's and the Moon's altitude and azimuth — true and as seen through the Earth's air —, the refraction at the horizon and the air's refractivity). surface (regional satellite loading and memory), scenery (worldwide forests, OSM buildings/roads/railways/water/bridges, source layer/field inventory, cast-shadow state and ranges, counts, loading, memory and errors). Ask only the groups you need.",
       params: { groups: { type: "array", maxItems: TELEMETRY_GROUPS.length, items: { type: "string", enum: TELEMETRY_GROUPS } } },
       run: (a) =>
         telemetry(
           camera,
           (a.groups as TelemetryGroup[] | undefined)?.length ? (a.groups as TelemetryGroup[]) : TELEMETRY_GROUPS,
           tools.perf({ gpu: false }).earthSurface,
+          tools.perf({ gpu: false }).earthScenery,
         ),
     },
     {
@@ -1393,11 +1395,11 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "wait",
       description:
-        "Wait while the game runs (warp it with `time` first for long waits): until the autopilot is off (its job done), landed (stopped on the ground), in_orbit (about `body` if given — else any), docked, the plan executed, a phase stage (orbit, air, entry, approach, ground…), surface_ready (surface streaming settled; read returned surface status for fallback/unsupported), or just seconds. Returns whether it was met and the state then — read it before saying what happened. At most maxSeconds of real time (default 120, max 900).",
+        "Wait while the game runs (warp it with `time` first for long waits): until the autopilot is off (its job done), landed (stopped on the ground), in_orbit (about `body` if given — else any), docked, the plan executed, a phase stage (orbit, air, entry, approach, ground…), surface_ready (surface streaming settled; read returned surface status for fallback/unsupported), scenery_ready (worldwide 3D streaming and fade settled; read returned scenery status for degraded/unsupported), or just seconds. Returns whether it was met and the state then — read it before saying what happened. At most maxSeconds of real time (default 120, max 900).",
       params: {
         until: {
           type: "string",
-          enum: ["autopilot_off", "landed", "in_orbit", "docked", "plan_done", "stage", "surface_ready", "seconds"],
+          enum: ["autopilot_off", "landed", "in_orbit", "docked", "plan_done", "stage", "surface_ready", "scenery_ready", "seconds"],
         },
         stage: {
           type: "string",
@@ -1415,6 +1417,8 @@ export function gameTools(h: GameHost): Tool[] {
         const about = () => !on || tools.status().soi === on;
         const done = (): boolean => {
           switch (a.until) {
+            case "scenery_ready":
+              return !tools.perf({ gpu: false }).earthScenery.pending;
             case "surface_ready":
               return !tools.perf({ gpu: false }).earthSurface.pending;
             case "autopilot_off":
@@ -1442,6 +1446,7 @@ export function gameTools(h: GameHost): Tool[] {
           plan_done: { fr: "le plan exécuté", en: "the plan flown" },
           stage: { fr: "la phase", en: "the phase" },
           surface_ready: { fr: "le sol satellite chargé", en: "satellite ground settled" },
+          scenery_ready: { fr: "le paysage 3D chargé", en: "3D scenery settled" },
           seconds: { fr: "le temps", en: "the time" },
         };
         const what = `${tr(words[String(a.until)] ?? { fr: String(a.until), en: String(a.until) })}${a.stage ? ` ${a.stage}` : ""}${on ? ` · ${String(a.body)}` : ""}`;
@@ -1478,6 +1483,7 @@ export function gameTools(h: GameHost): Tool[] {
                 phase: h.phase(),
                 alerts: h.alerts(),
                 ...(a.until === "surface_ready" ? { surface: tools.perf({ gpu: false }).earthSurface } : {}),
+                ...(a.until === "scenery_ready" ? { scenery: tools.perf({ gpu: false }).earthScenery } : {}),
               });
             setTimeout(tick, 250);
           };

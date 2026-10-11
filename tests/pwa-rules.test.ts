@@ -105,5 +105,10 @@ test("regional surface pages are bounded tiles within their own scope", () => {
   const base = "https://example.org/";
   expect(classify(`${base}earth-surface/v1/bourget/1-2-aabbccdd.ktx2`, base)).toBe("tile");
   expect(classify(`${base}test/earth-surface/v1/bourget/1-2-aabbccdd.classes.gz`, `${base}test/`)).toBe("tile");
+  expect(classify("https://tiles.openfreemap.org/planet/latest/14/8298/5636.pbf", base)).toBe("tile");
+  expect(classify("https://mapproxy.terrascope.be/mapproxy/service?REQUEST=GetMap&LAYERS=esa-worldcover-map-10m-2021-v2_map", base)).toBe(
+    "tile",
+  );
+  expect(classify("https://mapproxy.terrascope.be/mapproxy/service?REQUEST=GetCapabilities", base)).toBe("pass");
   expect(classify(`${base}test/earth-surface/v1/bourget/1-2-aabbccdd.ktx2`, base, "GET", ["earth-surface", "docs"])).toBe("pass");
 });

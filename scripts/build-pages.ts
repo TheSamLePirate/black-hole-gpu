@@ -15,6 +15,7 @@ await $`bun build ./src/audio/engine-worklet.ts --outfile _site/audio-worklet.js
 // (the KTX2 transcoder's worker and its WebAssembly)
 await $`bun build ./src/system/ktx-worker.ts --outfile _site/ktx-worker.js --minify --target browser`;
 await $`bun build ./src/system/earth-surface-worker.ts --outfile _site/earth-surface-worker.js --minify --target browser`;
+await $`bun scripts/build-scenery-worker.ts _site/scenery-worker.js`;
 await $`mkdir -p _site/earth-surface && cp -R assets/earth-surface/v1 _site/earth-surface/`;
 await $`cp vendor/basis/basis_transcoder.wasm _site/basis_transcoder.wasm`;
 await $`mkdir -p _site/docs/video`;

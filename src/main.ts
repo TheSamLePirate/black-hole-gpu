@@ -728,6 +728,7 @@ async function main() {
     papi: string;
     eclipse: string;
     surface: string;
+    scenery: string;
   } | null = null;
   let tarsSpentSeen = 0;
   setInterval(() => {
@@ -761,6 +762,7 @@ async function main() {
       landed: camera.landed && !camera.rolling,
       docked: camera.docked,
       surface: `${renderer.earthSurface.stats().region ?? "none"}:${renderer.earthSurface.stats().status}`,
+      scenery: `${renderer.earthScenery.stats().lat ?? "none"}:${renderer.earthScenery.stats().lon ?? "none"}:${renderer.earthScenery.stats().status}:${settings.earthSceneryShadows}`,
       // (the deviations: the hub's graph out of its corridor, the entry out of its own, the approach's PAPI all
       // white or all red on final)
       off: hub?.graph?.state === "off" ? `${hub.graph.kind}` : camera.entryRun?.inCorr === false ? "entry" : "",
@@ -784,6 +786,7 @@ async function main() {
       if (now.landed && !was.landed) tarsEvent({ kind: "landed", to: st.soi });
       if (now.docked && !was.docked) tarsEvent({ kind: "docked" });
       if (now.surface !== was.surface) tarsEvent({ kind: "surface", from: was.surface, to: now.surface });
+      if (now.scenery !== was.scenery) tarsEvent({ kind: "scenery", from: was.scenery, to: now.scenery });
       if (now.off && now.off !== was.off) tarsEvent({ kind: "deviation", to: now.off, detail: hub?.graph?.fix ?? hub?.graph?.about });
       if (now.eclipse !== was.eclipse)
         tarsEvent({
@@ -3794,6 +3797,18 @@ async function main() {
   const fpsMeter = Object.assign(document.createElement("div"), { className: "fps-meter", hidden: true });
   fpsMeter.dataset.testid = "fps-meter";
   document.body.append(fpsMeter);
+  const sceneryCredit = Object.assign(document.createElement("div"), { className: "scenery-credit", hidden: true });
+  const creditLink = (label: string, href: string) =>
+    Object.assign(document.createElement("a"), { textContent: label, href, target: "_blank", rel: "noopener" });
+  sceneryCredit.append(
+    "© ESA WorldCover / Copernicus 2021 · ",
+    creditLink("CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/"),
+    " · © OpenMapTiles · ",
+    creditLink("© OpenStreetMap", "https://www.openstreetmap.org/copyright"),
+    " · ",
+    creditLink("OpenFreeMap", "https://openfreemap.org"),
+  );
+  document.body.append(sceneryCredit);
   let fpsAcc = 0;
   let fpsN = 0;
   let fps = 0;
@@ -4037,6 +4052,8 @@ async function main() {
       }
     }
     cpuProf.time("overlay (guide, marker)", () => viewOverlay.draw(chart && !renderer.offlineActive ? chart : null, chartKey));
+    const hideSceneryCredit = !renderer.earthScenery.active;
+    if (sceneryCredit.hidden !== hideSceneryCredit) sceneryCredit.hidden = hideSceneryCredit;
     applyTuning(settings);
     cpuProf.time("game tools window", () => toolsWin.tick());
     saveTimer += dt;

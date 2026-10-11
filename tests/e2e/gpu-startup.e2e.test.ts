@@ -30,6 +30,7 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
       width: 320,
       height: 240,
       initScript: `(() => {
+        Object.defineProperty(GPUSupportedLimits.prototype,"maxStorageBuffersPerShaderStage",{get(){return 8;},configurable:true});
         const original = GPUAdapter.prototype.requestDevice;
         GPUAdapter.prototype.requestDevice = function (desc) {
           globalThis.__asked = desc?.requiredLimits?.maxStorageBuffersPerShaderStage ?? null;

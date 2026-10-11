@@ -8,7 +8,7 @@ const scene = async (app: App, lat = 48.95, lon = 2.45, altKm = 2) =>
   __bh.game.setDate("2021-06-21T12:00:00Z");
   __bh.presets["Surface pilot"] = {...__bh.presets["Earth: the Blue Marble"], animate:false, ship:false,
     time:__bh.sim.time,
-    earthClouds:0, volumetricClouds:false, earthSurface:"satellite", dynamicResolution:false,
+    earthClouds:0, volumetricClouds:false, earthSurface:"satellite", earthScenery:"off", dynamicResolution:false,
     realtimeSubsampling:1, pixelRatio:1, temporalReprojection:true, fpsCap:0,
     pose:{body:"earth", at:[${lat},${lon}], altKm:${altKm}, look:"earth"}};
   __bh.preset("Surface pilot"); __bh.resize();

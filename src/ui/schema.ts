@@ -1988,6 +1988,32 @@ export const SCHEMA: ControlDef[] = [
     keywords: "sentinel worldcover satellite sol photorealiste sol satellite bourget cevennes surface materials",
   },
   {
+    key: "earthScenery",
+    type: "choice",
+    section: "sky",
+    group: "The Earth",
+    label: "World scenery",
+    effect: "scene",
+    options: [
+      { value: "off", label: "Off" },
+      { value: "balanced", label: "Balanced" },
+      { value: "high", label: "High" },
+    ],
+    help: "WorldCover forests, OSM buildings, roads, railways, rivers, lakes, paved airfields and 3D bridges through OpenFreeMap. Balanced: 2 km, up to 16,000 trees, 5,000 buildings, 16,000 surface features and 128 bridges; high: 3 km, 32,000 trees, 8,000 buildings, 24,000 surface features and 256 bridges. Shared 16 MiB GPU budget; worker preparation. Streamed below 12 km, between 84° S and 84° N. Enable terrain for volumes and networks. Building heights, road widths and bridge elevation/supports can be estimated. Source tiles simplify OSM and do not expose every tag. © ESA WorldCover / modified Copernicus Sentinel data (2021), CC BY 4.0. © OpenMapTiles, OpenStreetMap (ODbL), OpenFreeMap.",
+    keywords:
+      "forest trees buildings worldwide worldcover openstreetmap osm foret arbres batiments monde scenery roads rivers bridges routes fleuves rivieres ponts rail",
+  },
+  {
+    key: "earthSceneryShadows",
+    type: "toggle",
+    section: "sky",
+    group: "The Earth",
+    label: "Scenery shadows",
+    effect: "scene",
+    help: "Trees, buildings and bridges cast shadows on the terrain and each other. One occlusion ray samples the finite solar disc; temporal accumulation softens the penumbra. Skylight remains in shadow. Balanced: receivers within 1.2 km and rays up to 500 m; high: 2 km and 900 m. Fades at the limit to bound GPU cost. Requires world scenery and terrain.",
+    keywords: "shadow shadows shade scenery ombres arbres batiments ponts soleil",
+  },
+  {
     key: "refraction",
     type: "toggle",
     section: "sky",

@@ -72,6 +72,12 @@ const server = Bun.serve({
       if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
       return new Response(await r.outputs[0]!.text(), { headers: { "content-type": "text/javascript" } });
     },
+    "/scenery-worker.js": async () => {
+      const r = await Bun.build({ entrypoints: ["./src/system/scenery-worker.ts"], target: "browser", minify: !dev });
+      if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
+      const license = await Bun.file("vendor/scenery-LICENSE.txt").text();
+      return new Response("/*!\n" + license + "\n*/\n" + (await r.outputs[0]!.text()), { headers: { "content-type": "text/javascript" } });
+    },
     "/earth-surface/*": async (req) => {
       const path = new URL(req.url).pathname.slice("/earth-surface/".length);
       if (!/^v1\/[a-z]+\/[0-3]-[0-3]-[a-f0-9]{8}\.(ktx2|classes\.gz)$/.test(path)) return new Response("not found", { status: 404 });

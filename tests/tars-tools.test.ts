@@ -62,6 +62,11 @@ test("settings found by words in either language; values checked against the sch
   expect(findSettings("worldcover", s).map((d) => d.key)).toContain("earthSurface");
   expect(checkSetting("earthSurface", "materials", s)).toEqual({ ok: true, value: "materials" });
   expect(checkSetting("earthSurface", "ultra", s).ok).toBe(false);
+  expect(findSettings("openstreetmap", s).map((d) => d.key)).toContain("earthScenery");
+  expect(checkSetting("earthScenery", "high", s)).toEqual({ ok: true, value: "high" });
+  expect(checkSetting("earthScenery", "ultra", s).ok).toBe(false);
+  expect(checkSetting("earthSceneryShadows", false, s)).toEqual({ ok: true, value: false });
+  expect(checkSetting("earthSceneryShadows", "false", s)).toEqual({ ok: true, value: false });
 });
 
 test("offline: the common orders turned into the tools' calls (A4); questions are not orders", () => {
@@ -167,6 +172,14 @@ test("every game action as a / command: read by position or by name, completed a
     tool: "set_settings",
     args: { changes: [{ key: "earthSurface", value: "materials" }] },
   });
+  expect(gameCall("/scenery balanced", tools)).toEqual({
+    tool: "set_settings",
+    args: { changes: [{ key: "earthScenery", value: "balanced" }] },
+  });
+  expect(gameCall("/sceneryshadows false", tools)).toEqual({
+    tool: "set_settings",
+    args: { changes: [{ key: "earthSceneryShadows", value: "false" }] },
+  });
   expect(gameCall("/date +24", tools)).toEqual({ tool: "set_date", args: { hours: 24 } });
   expect(gameCall("/tool camera shipView=true", tools)).toEqual({ tool: "camera", args: { shipView: true } });
   expect(gameCall("/gear up down", tools)).toEqual({ error: 'too many arguments: "down"' });
@@ -181,6 +194,7 @@ test("every game action as a / command: read by position or by name, completed a
     settings: [
       { key: "music", label: "Musique", values: ["true", "false"] },
       { key: "earthSurface", label: "Sol satellite", values: ["off", "satellite", "materials"] },
+      { key: "earthScenery", label: "Forêts et bâtiments", values: ["off", "balanced", "high"] },
     ],
     sky: [],
     keys: [],
@@ -192,6 +206,7 @@ test("every game action as a / command: read by position or by name, completed a
   expect(completeGame("/view ch", ctx)!.map((s) => s.label)).toEqual(["chase"]);
   expect(completeGame("/set music ", ctx)!.map((s) => s.label)).toEqual(["true", "false"]);
   expect(completeGame("/surface m", ctx)!.map((s) => s.label)).toEqual(["materials"]);
+  expect(completeGame("/scenery h", ctx)!.map((s) => s.label)).toEqual(["high"]);
   expect(completeGame("/tool cam", ctx)!.map((s) => s.label)).toEqual(["camera"]);
   expect(completeGame("/tool camera sh", ctx)!.map((s) => s.label)).toEqual(["shipView="]);
   expect(completeGame("/tool camera mount=co", ctx)!.map((s) => s.label)).toEqual(["mount=cockpit"]);
@@ -246,11 +261,12 @@ test("TARS reads surface availability, waits for settled fallback, and can be wo
   const { gameTools } = await import("../src/ai/game-tools");
   const { EVENT_KINDS } = await import("../src/ai/triggers");
   const surface = { status: "degraded", loaded: 8, failed: 8, pending: false, gpuBytes: 39_000_000 };
+  const scenery = { status: "degraded", trees: 12000, buildings: 300, pending: false, gpuBytes: 16 * 1024 ** 2, lastError: "offline" };
   const host = {
     camera: {},
     settings: defaultSettings(),
     tools: {
-      perf: () => ({ earthSurface: surface }),
+      perf: () => ({ earthSurface: surface, earthScenery: scenery }),
       status: () => ({ soiName: "Earth", status: "air", altKm: 1, orbit: null }),
       pilotState: () => ({}),
     },
@@ -266,6 +282,9 @@ test("TARS reads surface availability, waits for settled fallback, and can be wo
   const waited = await tools.find((t) => t.name === "wait")!.run({ until: "surface_ready" }, signal);
   expect(waited).toMatchObject({ met: true, surface });
   expect(EVENT_KINDS).toContain("surface");
+  expect(await tools.find((t) => t.name === "get_telemetry")!.run({ groups: ["scenery"] }, signal)).toEqual({ scenery });
+  expect(await tools.find((t) => t.name === "wait")!.run({ until: "scenery_ready" }, signal)).toMatchObject({ met: true, scenery });
+  expect(EVENT_KINDS).toContain("scenery");
 });
 
 test("the eclipse calculator for TARS (PLAN-CIEL C5): find_eclipses, eclipse_local, their / commands", async () => {
