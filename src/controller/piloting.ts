@@ -159,6 +159,8 @@ function newFlight(this: CameraController) {
   this.onFlightReport?.(null);
   this.heightGoal = null;
   this.dockAuto = null;
+  this.sfCmd = this.sfFlown = null;
+  this.sfDirector = null;
   this.ourCirc = null;
   // (the warp: the scene's, nothing held back by the last flight's rails or ceilings, no crossing's)
   this.warpWant = this.hubWarpWant = this.hubWarpLimit = null;
@@ -902,7 +904,10 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
     this.landRun = null;
   }
   const entryAtt = this.pilot.auto === "entry" ? this.entryStep(cam, dtPilot) : this.pilot.auto === "burns" ? this.burnsStep(cam) : null;
-  if (mode !== "sf" || !sfCtx) this.sfCmd = null;
+  if (mode !== "sf" || !sfCtx) {
+    this.sfCmd = this.sfFlown = null;
+    this.sfDirector = null;
+  }
   const out = this.pilot.step(
     {
       air: airCtx,
@@ -1167,6 +1172,7 @@ function sfFrame(this: CameraController, cam: ReturnType<typeof cameraFrame>) {
       east,
       vRel,
       h,
+      wind: this.windHome ? lin(this.windHome, c, up, 0) : ([0, 0, 0] as Vec3),
       grav,
       air,
       g: Math.hypot(...grav),
@@ -1198,6 +1204,7 @@ function sfFrame(this: CameraController, cam: ReturnType<typeof cameraFrame>) {
     north,
     east,
     vRel: lin(L.w, c, up, 0),
+    wind: [0, 0, 0] as Vec3,
     h,
     grav,
     air,
@@ -1258,6 +1265,15 @@ function sfWant(this: CameraController, cam: ReturnType<typeof cameraFrame>, inp
   let free: Vec3 = [0, 0, 0];
   if (this.s.antigrav) [free, ff] = [ff, [0, 0, 0]];
   const o = fr.out(v, ff);
+  const effectiveUp = dot3(v, up);
+  const effectiveH = lin(v, 1, up, -effectiveUp);
+  this.sfFlown = {
+    speed: Math.hypot(...v),
+    gamma: Math.atan2(effectiveUp, Math.hypot(...effectiveH)),
+    heading: Math.hypot(...effectiveH) > 1e-6 ? Math.atan2(dot3(effectiveH, east), dot3(effectiveH, north)) : C.heading,
+  };
+  const airWanted = sub3(v, fr.wind);
+  this.sfDirector = Math.hypot(...airWanted) > 1e-6 ? fr.toLocal(airWanted) : null;
   // the attitude: the nose along the way (level when slow), banked into the turn
   const vl = Math.hypot(...v);
   const wv = smoothstep(clamp((vl - 3) / 9, 0, 1));

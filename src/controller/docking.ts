@@ -8,6 +8,7 @@ import { type Body, isCraft } from "../targeting";
 import type { MountPose } from "../mounts";
 import { fleet, type Pose } from "../fleet";
 import { dockedFrame, VESSEL_IDS, VESSELS, type VesselId } from "../vessels";
+import { nominalDockClosing } from "../docking-guidance";
 import { mouth } from "../wormhole";
 import { gravityHome, homeOf, ourState, repToHomeVec } from "../system/our-side";
 import { issAxes, issTrack, m34apply, m34unapply, partTransforms, station, stationAngles, type M34 } from "../system/iss";
@@ -673,7 +674,7 @@ function dockWant(
   D.corridor = along > -0.5 && lat < (D.corridor ? 1.5 : 1) * cone;
   let want: Vec3; // relative to the target's point [m/s]
   if (D.corridor) {
-    let vc = Math.min(3, 0.08 + 0.012 * Math.max(along, 0));
+    let vc = nominalDockClosing(along);
     // 10 m out: held until on the axis, the ports facing, the drift still (and kept so)
     const aligned = D.final ? lat < 0.2 && g.angle < 5 : lat < 0.1 && g.angle < 2 && g.lateralRate < 0.04;
     D.final = along < 12 && aligned;
@@ -723,6 +724,8 @@ function dockWant(
   // (the ring's motion is the ship's and its own turn's: turning with the tumbling Endurance, the Ranger's
   // ring, 1.1 m off its roll axis, circles — the ship's velocity is the ring's wanted less ω × r, its
   // acceleration less the circle's pull; without, held 10 m out, the ring stayed 1.3 m off the axis)
+  // The geometry measures against the target's rotating point at the ring, whereas Vp is on its axis.
+  D.askedClosing = -dot3(want, a) + dot3(cross(om, lin(latv, 1 / M_METRES, latv, 0)), a) * C;
   const wOwn = this.ownTurn(sh);
   const rr = sub3(g.ring, nav.X);
   return out(lin(lin(Vp, 1, want, 1 / C), 1, cross(wOwn, rr), -1), lin(ff, 1, cross(wOwn, cross(wOwn, rr)), -1));

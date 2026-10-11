@@ -143,12 +143,12 @@ the ring.
 | Phase | The director says |
 |---|---|
 | A burn (node, CIRC, Hohmann, plane, rendezvous, intercept, the FC's burns, the deorbit) | IGNITION IN … (large figures over its last 10 s), Δv LEFT and a gauge, CUT THE ENGINE (blinking) — the Δv counted along the burn as the pilot gives it, the burn lit by hand in its last half before its start, done once cut at the cue; the time no faster than real for the ignition's last seconds |
-| Take-off | PATH ° · HDG ° (asked), GRAVITY TURN IN, MAX-Q … kPa near it, MECO IN ~ |
+| Take-off | PATH ° · TRK ° (effective ground-relative command), GRAVITY TURN IN, MAX-Q … kPa near it, MECO IN ~ |
 | Entry | ENTRY INTERFACE IN, BANK ° LEFT/RIGHT, REVERSAL IN ~ |
-| Final | GLIDE ▲▼ °, FLARE IN |
-| Vertical descent, hold low | DESCENT flown → asked m/s, BURN IN / BURN NOW, DRIFT |
-| Approach | CLOSING flown → asked m/s, BRAKE IN / BRAKE NOW |
-| Docking | CLOSE flown → asked m/s, OFFSET · CONE, PORTS °, HOLD AT 10 m — ALIGN or CONTACT IN ~ |
+| Final | PROFILE ▲▼ ° (height off the profile), FLARE IN; the runway box uses PATH for the flight-path angle error |
+| Vertical descent, hold low | DESCENT flown m/s · ASKED target, or DOI BURN during the descent-orbit burn, BURN IN / BURN NOW, DRIFT |
+| Approach | CLOSING flown m/s · ASKED signed target, BRAKE IN / BRAKE NOW |
+| Docking | CLOSE flown m/s · ASKED signed target, OFFSET · CONE, PORTS °, HOLD AT 10 m — ALIGN or CONTACT IN ~ |
 
 - **The graph** under the hub's card (its title folds it; remembered), the same on the cockpit's PLAN screen:
   one figure against another, the autopilot's optimum (dashed), its corridor (filled), the trace flown, the

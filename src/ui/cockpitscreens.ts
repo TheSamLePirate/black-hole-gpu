@@ -910,7 +910,7 @@ export class CockpitScreens {
     g.lineWidth = 3;
     g.strokeRect(cx - Math.max(45 * k, 6), ty - L * k, Math.max(90 * k, 12), L * k);
     // the aim point
-    const ay = ty + 2000 * k;
+    const ay = ty - (rw.aimAlong ?? -2000) * k;
     g.strokeStyle = GREEN;
     g.beginPath();
     g.moveTo(cx, ay - 8);
@@ -1117,7 +1117,7 @@ export class CockpitScreens {
         [
           "CLOSING",
           `${dk.closing.toFixed(3)} m/s`,
-          dk.closing > Math.max(0.3, dk.range / 60) ? (dk.range < 20 ? RED : AMBER) : dk.closing > 0 ? GREEN : AMBER,
+          d.info.dockClosingMark === "bad" ? RED : d.info.dockClosingMark === "warn" ? AMBER : GREEN,
         ],
         ["OFFSET", `${dk.lateral.toFixed(2)} m`, dk.lateral < 0.3 ? GREEN : AMBER],
         ["AXES", `${dk.angle.toFixed(1)}°`, dk.angle < 10 ? GREEN : AMBER],

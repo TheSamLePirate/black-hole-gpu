@@ -78,6 +78,8 @@ export interface SymInfo {
     mode?: string;
     /** the flight computer's command: speed [m/s], flight path angle, heading [rad] */
     sf?: { speed: number; gamma: number; heading: number } | null;
+    /** Effective commanded direction through the air, in ship coordinates (as u). */
+    sfU?: V3 | null;
   } | null;
 }
 
@@ -414,7 +416,7 @@ export function drawSymbology(F: SymFrame) {
 
   // ---- in the air: the angle of attack, the energy, the sideslip, the load, the flight director
   const A = i.air;
-  if (A && A.u && A.q > 20 && pilotView) drawAir(F, A, pr, stroke, text, up, north, fpx);
+  if (A && A.u && A.q > 20 && pilotView) drawAir(F, A, pr, stroke, text, up, fpx);
 
   // ---- the orbital markers the view lacked: radial, normal
   if (s.hudMarkers && on(F, "markers")) {
@@ -503,16 +505,7 @@ const energy = { t: 0, v: NaN, a: 0 };
  * - the load in g, coloured against the craft's limit; STALL flashing;
  * - the flight director: where the flight computer wants the flight path (its climb angle, its heading).
  */
-function drawAir(
-  F: SymFrame,
-  A: NonNullable<SymInfo["air"]>,
-  pr: Proj,
-  stroke: Stroke,
-  text: Text,
-  up: V3 | null,
-  north: V3 | null,
-  fpx: number,
-) {
+function drawAir(F: SymFrame, A: NonNullable<SymInfo["air"]>, pr: Proj, stroke: Stroke, text: Text, up: V3 | null, fpx: number) {
   const { ctx, dpr, s, i } = F;
   const S = i.S;
   const u = A.u!;
@@ -658,11 +651,10 @@ function drawAir(
   }
 
   // ---- the flight director: where the flight computer wants the flight path
-  if (s.hudDirector && A.sf && up && north) {
-    const east = norm(crossW(north, up));
-    const { gamma, heading } = A.sf;
-    const h = comb(north, Math.cos(heading), east, Math.sin(heading));
-    const q = pr(comb(h, Math.cos(gamma), up, Math.sin(gamma)));
+  if (s.hudDirector && A.sf && A.sfU) {
+    // Same air-relative frame as the FPV, using the effective command after all corrections.
+    const u = A.sfU;
+    const q = pr(norm(S.map((row) => dot(row as V3, u)) as V3));
     if (q) {
       const col = "rgba(224, 123, 255, 0.95)";
       stroke(
@@ -1047,7 +1039,8 @@ function drawRunway(
   if (rw.gRef !== null && rw.gam !== null) {
     const e = ((rw.gam - rw.gRef) * 180) / Math.PI;
     text(
-      tf("GLIDE {0} {1}°", e >= 0 ? "▲" : "▼", Math.abs(e).toFixed(1)),
+      // (the flight path's angle against the one commanded — not the profile's position: the hub's PROFILE —)
+      tf("PATH {0} {1}°", e >= 0 ? "▲" : "▼", Math.abs(e).toFixed(1)),
       x,
       y + 35 * dpr,
       Math.abs(e) > 2 ? "#ffc85a" : "#78ffaa",

@@ -2207,7 +2207,7 @@ export class FlightHud {
     }
     // the throttle it asks, against the one set
     const want = Math.round(D.throttle * 100),
-      have = Math.round(i.throttle * 100);
+      have = Math.round((i.throttleLever ?? i.throttle) * 100);
     // (the autopilot fires only once its nose is on the burn: turning comes first)
     let say = D.nose && !on ? t("TURN TO THE CUE") : want > 0 ? tf("THROTTLE {0} %", want) : have > 2 ? t("CUT THE THROTTLE") : "";
     // a burn's cue (C1): its ignition counted down, the Δv left as it is flown, the cutoff
@@ -2483,7 +2483,8 @@ export class FlightHud {
       `<i class="fl-ad-bar${x > 0.85 ? " hot" : x > 0.6 ? " warm" : ""}"><b style="width:${Math.min(x, 1) * 100}%"></b></i>`;
     const flaps = A.flaps === 1 ? t("FULL") : A.flaps === 0.5 ? "½" : t("UP");
     const cmd = A.sf
-      ? `<span>CMD <b>${A.sf.speed.toFixed(0)} m/s</b> γ <b>${(A.sf.gamma * d).toFixed(0)}°</b> HDG <b>${((((A.sf.heading * d) % 360) + 360) % 360) | 0}°</b></span>`
+      ? // (the flight computer's command: a velocity over the ground — its speed, path angle and track, not the nose's heading)
+        `<span>CMD GS <b>${A.sf.speed.toFixed(0)} m/s</b> γ <b>${(A.sf.gamma * d).toFixed(0)}°</b> TRK <b>${((((A.sf.heading * d) % 360) + 360) % 360) | 0}°</b></span>`
       : "";
     // (short rows — a block beside the attitude ball, not a band across it: the flow, the attitude to the
     // air, the skin and the load, the configuration and the wind)
@@ -2600,7 +2601,15 @@ export class FlightHud {
     const i = { ...info, speed: sp.v };
     const wdt = 58 * dpr;
     const C = C_MPS;
-    const want = Number.isFinite(i.wantSpeed) ? i.wantSpeed : 0;
+    // (the target speed in the tape's own frame: over the ground in SRF, relative to the target in TGT)
+    const airborne = !(info.landed || info.surface?.landed) && info.air?.inAir && Number.isFinite(info.air.speed);
+    const w0 =
+      sp.mode === "SRF"
+        ? ((airborne ? info.wantAir : info.wantGround) ?? i.wantSpeed)
+        : sp.mode === "TGT"
+          ? (info.wantTarget ?? i.wantSpeed)
+          : i.wantSpeed;
+    const want = Number.isFinite(w0) ? w0 : 0;
     const need = Math.max(i.speed, want, 1e-9);
     // a round number (1, 2, 2.5, 5 × 10ⁿ) at or above x
     const nice = (x: number) => {

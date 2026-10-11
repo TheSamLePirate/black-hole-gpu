@@ -11,7 +11,10 @@ import { shipToCamera } from "../mounts";
 import { fleet } from "../fleet";
 import { VESSELS } from "../vessels";
 import { sphericalFrame } from "../wormhole";
-import { OUR_BODIES } from "../system/our-side";
+import { OUR_BODIES, repToHomeVec } from "../system/our-side";
+import { groundVelocity } from "../system/our-surface";
+import { dockClosingMark, nominalDockClosing } from "../docking-guidance";
+import { solarBody } from "../system/solar";
 import type { OurPath } from "../system/our-predict";
 import { station } from "../system/iss";
 import { M_METRES } from "../units";
@@ -64,11 +67,19 @@ export interface FlightInfo {
   photon: number;
   ergo: boolean;
   // ---- the engine and the pilot
-  /** the autopilot's target speed (relative to the ZAMO), if any; its remaining |ΔU| */
+  /** the autopilot's target speed, if any — in the frame the speed tape reads (our side: relative to the
+   *  reference body, like `speed`; Gargantua's: to the ZAMO); its remaining |ΔU| */
   wantSpeed: number;
+  /** our side: the target speed over the ground (the SRF tape's), and relative to the target (the TGT tape's) */
+  wantGround?: number;
+  /** our side: target airspeed through the local wind [c] */
+  wantAir?: number;
+  wantTarget?: number;
   dv: number;
   accel: number;
   throttle: number;
+  /** Throttle lever, independent of engine spool-down and RCS acceleration. */
+  throttleLever?: number;
   sas: boolean;
   /** what holds the rails' warp back ("": nothing) */
   railsNote: string;
@@ -172,6 +183,7 @@ export interface FlightInfo {
   // ---- docking and the fleet
   /** the docking aid (the station near), or null */
   dock: DockInfo | null;
+  dockClosingMark?: "warn" | "bad" | null;
   /** the docking's guide for the HUD: lateral offset and drift [m, m/s], the port's axis, gates
    *  along it (camera coordinates) */
   dockGuide: { lat: Vec3; latRate: Vec3; axis: Vec3; gates: { d: Vec3; r: number; k: number }[] } | null;
@@ -231,6 +243,7 @@ function flightInfo(this: CameraController): FlightInfo {
     photon: photonOrbits(a).pro,
     ergo: cam.region === "hole" && cam.r < 1 + Math.sqrt(Math.max(0, 1 - a * a * Math.cos(cam.theta) ** 2)),
     accel: this.pilot.accel,
+    throttleLever: this.pilot.throttle,
     // (the entry autopilot's own throttle — its burns, a missed approach's climb —: what fired)
     throttle:
       this.pilot.auto !== "none" && this.pilot.burn
@@ -421,6 +434,20 @@ function flightInfo(this: CameraController): FlightInfo {
     info.X = nav.X;
     info.V = nav.V;
     const T = ourTarget(s, s.target, nav.t);
+    // (the autopilot's wanted velocity — absolute, home frame — in the tape's own frames: relative to the
+    // reference body, over the ground, to the target. Its absolute size, the heliocentric ~30 km/s, once set
+    // the tape's bug next to a 7.8 km/s orbital speed)
+    if (this.lastWant && this.pilot.auto !== "none") {
+      const want = repToHomeVec(mouth(s, nav.t).w, cam.ell, cam.n, this.lastWant.beta);
+      info.wantSpeed = Math.hypot(...sub3(want, nav.refVel));
+      const b = solarBody(nav.ref);
+      if (b && nav.ref !== "sun") {
+        const ground = sub3(want, groundVelocity(nav.ref, nav.X, nav.t));
+        info.wantGround = Math.hypot(...ground);
+        info.wantAir = Math.hypot(...(this.windHome ? sub3(ground, this.windHome) : ground));
+      }
+      info.wantTarget = Math.hypot(...sub3(want, T.vel));
+    }
     const d = sub3(nav.X, T.pos);
     info.targetDist = Math.hypot(...d);
     const vr = sub3(nav.V, T.vel);
@@ -456,6 +483,11 @@ function flightInfo(this: CameraController): FlightInfo {
   const di = this.dockInfo;
   if (di && nav) {
     info.dock = di;
+    const D = this.pilot.auto === "dock" && this.dockAuto?.target === di.target && this.dockAuto?.port === di.port ? this.dockAuto : null;
+    info.dockClosingMark =
+      D && (!D.corridor || !Number.isFinite(D.askedClosing))
+        ? null
+        : dockClosingMark(di.closing, D?.askedClosing ?? nominalDockClosing(di.along));
     const vl = Math.hypot(...di.vrel);
     if (vl > 1e-4) {
       const u = nav.toRep(lin(di.vrel, 1 / vl, di.vrel, 0));

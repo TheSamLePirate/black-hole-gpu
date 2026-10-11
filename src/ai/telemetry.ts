@@ -85,7 +85,15 @@ export function telemetry(camera: CameraController, groups: readonly TelemetryGr
     out.autopilot = {
       mode: c.pilot?.auto,
       director: d ? { throttle: n(d.throttle, 2), align: n(d.align, 3), noseSet: !!d.nose } : null,
-      sfCommand: c.sfCmd ? { speedMs: n(c.sfCmd.speed), gammaDeg: deg(c.sfCmd.gamma), headingDeg: deg(c.sfCmd.heading) } : null,
+      // (the flight computer's command: a velocity over the ground — its speed, path angle and track)
+      sfCommand:
+        (c.sfFlown ?? c.sfCmd)
+          ? {
+              groundSpeedMs: n((c.sfFlown ?? c.sfCmd).speed),
+              pathDeg: deg((c.sfFlown ?? c.sfCmd).gamma),
+              trackDeg: deg((c.sfFlown ?? c.sfCmd).heading),
+            }
+          : null,
       launchGoal: c.launchGoal,
       transfer: c.transfer ? { stage: c.transfer.stage, note: c.transfer.note } : null,
     };
@@ -139,15 +147,20 @@ export function telemetry(camera: CameraController, groups: readonly TelemetryGr
           aglM: n(r.agl, 0),
           final: r.final,
           papiWhite: r.papi,
-          glidepathDeg: deg(r.gRef),
+          // (the path angle commanded — the profile's slope and its corrections — and the one flown, both over the ground)
+          commandedPathDeg: deg(r.gRef),
           flownPathDeg: deg(r.gam),
-          speedMs: n(r.speed),
+          groundSpeedMs: n(r.groundSpeed ?? r.speed),
+          airspeedMs: n(c.airFlight?.last?.speed),
+          heightOverThresholdM: n(r.hp, 0),
+          aimAlongM: n(r.aimAlong, 0),
           flareInS: n(r.flareIn),
           wind: r.wind,
           mls: r.mls,
           leg: e?.leg,
           profilePhase: e?.prof?.phase,
-          profileDeviationM: e?.app && e?.prof ? n(e.app.agl - e.prof.h, 0) : undefined,
+          // (the height flown against the profile's, on the height the profile reads: over the threshold)
+          profileDeviationM: e?.app && e?.prof ? n((e.app.hp ?? e.app.agl) - e.prof.h, 0) : undefined,
           goAround: e?.ga?.phase,
         }
       : null;
@@ -158,7 +171,17 @@ export function telemetry(camera: CameraController, groups: readonly TelemetryGr
     out.descent = {
       surface: s ? { altM: n(s.alt, 1), vVertMs: n(s.vVert, 2), vHorMs: n(s.vHor, 2), twr: n(s.twr, 2), landed: s.landed } : null,
       command: l?.cmd
-        ? { vhMs: n(l.cmd.vh, 2), downMs: n(l.cmd.down, 2), distM: n(l.cmd.dist, 0), tGoS: n(l.cmd.tGo), braking: l.braking }
+        ? {
+            // (the speed asked over the ground — cmd.vh is a vector —; the vertical speed asked, positive up as
+            // surface.vVertMs, and the same as a sink rate, positive down)
+            vHorMs: n(Math.hypot(...(l.cmd.vh as [number, number, number])), 2),
+            vVertMs: n(-l.cmd.down, 2),
+            sinkMs: n(l.cmd.down, 2),
+            distM: n(l.cmd.dist, 0),
+            tGoS: n(l.cmd.tGo),
+            braking: l.braking,
+            doi: !!l.cmd.doi,
+          }
         : null,
       site: l?.site?.name,
     };
@@ -189,6 +212,7 @@ export function telemetry(camera: CameraController, groups: readonly TelemetryGr
           alongM: n(d.along, 2),
           lateralM: n(d.lateral, 2),
           closingMs: n(d.closing, 3),
+          askedClosingMs: n(c.dockAuto?.askedClosing, 3),
           angleDeg: n(d.angle, 1),
           docked: d.docked,
           phase: c.dockAuto?.phase,
@@ -233,7 +257,7 @@ export class AttitudeSampler {
       velBank: deg(c.attitudeNow?.()?.velBank),
       cmdAoa: deg(e?.alpha),
       across: r ? n(r.across, 0) : undefined,
-      profile: r && e?.prof ? n(r.agl - e.prof.h, 0) : undefined,
+      profile: r && e?.prof ? n((r.hp ?? r.agl) - e.prof.h, 0) : undefined,
     };
     const last = this.samples.at(-1);
     if (last && t < last.t) this.samples = [];

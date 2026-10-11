@@ -110,3 +110,47 @@ describe.skipIf(!E2E)("landing: the Ranger glides onto Edwards and stops on the 
     for (const s of r) expect(s.warp).toBeLessThanOrEqual(1.001);
   }, 60_000);
 });
+
+describe.skipIf(!E2E)("the final's displayed height reference", () => {
+  let app: App;
+  beforeAll(async () => {
+    app = await App.boot({ hash: "scene=game:artemis" });
+    await app.waitFor("__bh.camera.piloting", 30_000);
+  }, 120_000);
+  afterAll(() => {
+    app?.close();
+    stopServer();
+  });
+
+  test("a 40 m terrain difference does not change PAPI or MLS against the threshold profile", async () => {
+    const r = await app.js<{
+      final: boolean;
+      papi: number;
+      papiChanged: number;
+      el: number;
+      elChanged: number;
+      hp: number;
+      hpChanged: number;
+      aim: number;
+      wantedAim: number;
+    }>(`(() => {
+      __bh.freeze(true); __bh.settings.wind = 0; __bh.game.glideTo("Edwards", 6, 0.25, 120);
+      const c = __bh.camera;
+      for (let i = 0; i < 60; i++) __bh.step(1/30);
+      const first = c.runwayCompute(), original = c.aglNow;
+      try {
+        c.aglNow = () => first.agl + 40;
+        const second = c.runwayCompute();
+        return { final: !!c.entryRun?.app?.final, papi: first.papi, papiChanged: second.papi,
+          el: first.mls?.el, elChanged: second.mls?.el, hp: first.hp, hpChanged: second.hp,
+          aim: second.aimAlong, wantedAim: c.entryRun?.prof?.aim };
+      } finally { c.aglNow = original; __bh.freeze(false); }
+    })()`);
+    expect(r.final).toBe(true);
+    expect(r.papiChanged).toBe(r.papi);
+    expect(r.hpChanged).toBe(r.hp);
+    expect(r.elChanged).toBe(r.el);
+    expect(r.aim).toBe(r.wantedAim);
+    expect(app.cdp.errors).toEqual([]);
+  }, 30_000);
+});

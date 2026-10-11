@@ -86,7 +86,7 @@ const MODEL = `(() => {
       return reply({ content: "Analyses faites." });
     }
     if (/Télémétrie/.test(q)) {
-      if (!tools.length) return reply({ content: null, tool_calls: [call("g1", "get_telemetry", { groups: ["attitude", "controls"] })] });
+      if (!tools.length) return reply({ content: null, tool_calls: [call("g1", "get_telemetry", { groups: ["attitude", "controls", "descent"] })] });
       window.__telemetry = JSON.parse(tools[0].content);
       return reply({ content: "Lue." });
     }
@@ -369,14 +369,22 @@ describe.skipIf(!E2E)("TARS the agent", () => {
     );
     expect(subs.length).toBe(2);
     expect(subs.every((s) => s.includes("done") && s.includes("Conclusion"))).toBe(true);
-    // (the telemetry: the attitude, the controls)
+    // The model reads the descent command's vector magnitude and consistent signs through the real tool.
+    await app.js(`(() => { __bh.freeze(true); window.__oldLand = __bh.camera.landRun;
+      __bh.camera.landRun = { cmd: { vh: [3, 4, 0], down: 2, doi: true } }; return true; })()`);
     await app.click("[data-testid=tars-tab-talk]");
     await app.type("Télémétrie ?");
     await app.press("Enter");
     await app.waitFor(`__bh.tars.agent.lastText === "Lue."`, 15_000);
-    const tm = await app.js<{ attitude?: { bankDeg?: number }; controls?: { sas?: boolean } }>(`window.__telemetry`);
+    const tm = await app.js<{
+      attitude?: { bankDeg?: number };
+      controls?: { sas?: boolean };
+      descent?: { command?: { vHorMs: number; vVertMs: number; sinkMs: number; doi: boolean } };
+    }>(`window.__telemetry`);
     expect(typeof tm.attitude?.bankDeg).toBe("number");
     expect(typeof tm.controls?.sas).toBe("boolean");
+    expect(tm.descent?.command).toMatchObject({ vHorMs: 5, vVertMs: -2, sinkMs: 2, doi: true });
+    await app.js(`(__bh.camera.landRun = window.__oldLand, __bh.freeze(false), true)`);
   }, 90_000);
 
   test("the field: / and @ completed, the mode (Shift+Tab, /mode), /help, ↑ the history, his task list, a skill kept and run (C1–C5)", async () => {

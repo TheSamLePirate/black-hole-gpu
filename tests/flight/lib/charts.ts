@@ -345,7 +345,7 @@ export function buildCharts(
         marks,
       });
   }
-  pair("Glide slope — aimed vs flown", "°", ["aimed (gRef)", (S) => S.entry?.app?.gRef], ["flown (γ)", (S) => S.entry?.app?.gam]);
+  pair("Path angle — commanded vs flown", "°", ["commanded (gRef)", (S) => S.entry?.app?.gRef], ["flown (γ)", (S) => S.entry?.app?.gam]);
   pair(
     "Approach line — axis vs flown",
     "m across the runway's axis",

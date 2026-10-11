@@ -426,3 +426,19 @@ test("his voice and ear in the settings, for TARS too (set_settings): checked ag
   expect(checkSetting("radioVoiceEngine", "system", s)).toEqual({ ok: true, value: "system" });
   expect(findSettings("deepgram voice", s).some((r) => r.key === "tarsVoiceFr" || r.key === "tarsVoiceEngine")).toBe(true);
 });
+
+test("TARS reads signed descent commands, threshold profile height and actual docking command", async () => {
+  const { telemetry } = await import("../src/ai/telemetry");
+  const cam = {
+    runwayView: () => ({ agl: 400, hp: 250, speed: 100, gRef: -0.1, gam: -0.12 }),
+    entryRun: { app: { agl: 400, hp: 250 }, prof: { h: 250 } },
+    landRun: { cmd: { vh: [3, 4, 0], down: 2, doi: true } },
+    airFlight: { last: { speed: 110 } },
+    flightInfo: () => ({ dock: { range: 8, along: 8, lateral: 0.3, closing: -0.1, angle: 10, docked: false } }),
+    dockAuto: { phase: "HOLD 10 m", askedClosing: -0.1 },
+  } as unknown as import("../src/controls").CameraController;
+  const tel = telemetry(cam, ["descent", "approach", "dock"]);
+  expect(tel.descent).toMatchObject({ command: { vHorMs: 5, vVertMs: -2, sinkMs: 2, doi: true } });
+  expect(tel.approach).toMatchObject({ heightOverThresholdM: 250, profileDeviationM: 0, groundSpeedMs: 100, airspeedMs: 110 });
+  expect(tel.dock).toMatchObject({ closingMs: -0.1, askedClosingMs: -0.1 });
+});

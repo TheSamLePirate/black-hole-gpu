@@ -1196,7 +1196,9 @@ function entryInfo(this: CameraController) {
     body: fr.body,
     site: R.site ? { name: R.site.name, X: toMap(fr.place(R.site)) } : null,
     path,
-    bank: R.bank,
+    // (the bank flown — the guidance's damped against the phugoid in the entry —; the guidance's own beside)
+    bank: R.phase === "entry" ? (R.bankFlown ?? R.bank) : R.bank,
+    guidanceBank: R.bank,
     miss: R.guid?.lastMiss ?? null,
     tBurn: R.phase === "wait" ? R.tBurn - fr.now : null,
     dv: R.dv,
@@ -1257,7 +1259,8 @@ function airInfo(this: CameraController) {
       (L?.speed ?? Infinity) < 150,
     // (the wind there: its speed [m/s], where it blows from [°])
     wind: this.windNow,
-    sf: this.sfCmd ? { ...this.sfCmd } : null,
+    sf: this.sfFlown ? { ...this.sfFlown } : this.sfCmd ? { ...this.sfCmd } : null,
+    sfU: this.sfDirector ? (this.shipAxesLocal(cameraFrame(this.s)).map((a) => dot3(a, this.sfDirector!)) as Vec3) : null,
     ...this.attitudeNow(),
     // (the wing's incidences, for the HUD's angle-of-attack cues: the stall; the best lift-to-drag —
     // where the induced drag equals the zero-lift one, C_L = √(C_D0 π AR e))

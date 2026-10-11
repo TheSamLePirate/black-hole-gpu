@@ -154,6 +154,7 @@ Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A9, B1–B7, C1–C6). L
 ### Phase 2 : le super-agent
 
 - **Il sait tout du vol** (`get_telemetry`) : l'attitude, l'air, les commandes, ce que chaque autopilote commande (l'inclinaison et l'incidence de la rentrée, le profil et le PAPI de l'approche, la poussée en cours), l'étape du hub et ses écarts.
+  Les consignes précisent leur référence : `sfCommand.groundSpeedMs`, `pathDeg`, `trackDeg` sont la vitesse sol, la pente et la route ; l'approche expose `heightOverThresholdM`, `commandedPathDeg`, `groundSpeedMs`, `airspeedMs` et `aimAlongM` (point visé le long de la piste, depuis le seuil). La descente expose `vHorMs` (norme du vecteur), `vVertMs` (positif vers le haut), `sinkMs` (positif vers le bas) et `doi`. L'amarrage expose `closingMs` et `askedClosingMs`, signés dans le même repère tournant du port cible : une valeur négative indique un recul.
 - **Il se réveille** : ses réflexes (fin d'un autopilote, phases de la rentrée, alerte grave, écart, rapport de vol) et les règles qu'on lui demande (« toutes les 10 minutes, vérifie le carburant », « à chaque étape, annonce-la »). Un réveil par événement ; il peut se taire. Réglages : Réflexes et réveils, Budget par heure (0,05 $). Onglet Réveils de sa console : chacun activable.
 - **Ses sous-agents** : jusqu'à 4 copies en parallèle, en lecture et en calcul seulement ; seul TARS agit.
 - **Il montre** le graphe du hub et le couloir de rentrée en direct, ses propres canaux (inclinaison, incidence…) ; « vue vaisseau » ramène la caméra au vaisseau.

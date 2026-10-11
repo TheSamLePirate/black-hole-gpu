@@ -136,9 +136,13 @@ export interface RunwayView {
   along: number;
   across: number;
   agl: number;
+  /** the height the final's profile reads: over the threshold on the autopilot's final, else agl [m] */
+  hp?: number;
   corners: { d: Vec3; r: number }[];
   line: { d: Vec3; r: number }[];
   aim: { d: Vec3; r: number };
+  /** Aim point along the runway, from the threshold [m]. */
+  aimAlong?: number;
   gRef: number | null;
   gam: number | null;
   final: boolean;
@@ -151,6 +155,8 @@ export interface RunwayView {
   fix: LandingFix | null;
   manual: boolean;
   speed: number;
+  /** Full ground-relative speed [m/s]; speed is its horizontal part for the profile. */
+  groundSpeed?: number;
   flareIn: number | null;
   /** the surface wind there (PLAN-METEO W4: the weather's, at 10 m): where from [°], its speed and gusts
    *  [m/s], along the runway (> 0: head wind) and across it (> 0: from the right) — null: no air */
@@ -746,6 +752,10 @@ export class CameraController {
 
   /** The sci-fi flight computer's commands: speed [m/s], flight path angle and heading [rad]. */
   sfCmd: { speed: number; gamma: number; heading: number } | null = null;
+  /** Effective ground command after translation and the ground sink limit. */
+  sfFlown: { speed: number; gamma: number; heading: number } | null = null;
+  /** Effective air-relative director direction in the pilot's local frame. */
+  sfDirector: Vec3 | null = null;
 
   /** Where the entry autopilot comes down (null: the nearest site under the track). */
   entrySite: Site | null = null;
@@ -942,6 +952,8 @@ export class CameraController {
     final: boolean;
     blocked: boolean;
     checked: number;
+    /** Commanded ring closing rate in the docking telemetry's rotating target frame [m/s]. */
+    askedClosing?: number;
   } | null = null;
 
   /** Warp the pilot asked for, while the rails (or a glide) hold it lower (null: none held back). */
@@ -1105,6 +1117,8 @@ export class CameraController {
   hubNote: {
     left?: number;
     closing?: number;
+    /** the closing rate the approach autopilot asks [m/s]: negative past the stand-off (backing off) */
+    asked?: number;
     ttg?: number;
     stand?: number;
     name?: string;
