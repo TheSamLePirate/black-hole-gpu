@@ -113,6 +113,10 @@ volumes OpenStreetMap, routes/rails, eaux et ponts 3D, ombres solaires locales, 
 permet de partager directement profondeur et atmosphère ; les LOD de maillages et le rendu hybride
 restent à comparer pour les véritables assets de feuillage. [État, couverture, limites et mesures](FORETS-BATIMENTS-WORLDWIDE.md).
 
+La marche sur les planètes et l'herbe interactive terrestre en troisième personne font l'objet d'un
+[plan distinct](PLAN-THIRD-PERSON-PLANETES-HERBE.md) : contrôleur dans le repère du corps, collisions de
+proximité, avatar animé et herbe GPU locale inspirée de false-earth, avec budgets et critères de passage.
+
 Les travaux suivants restent nécessaires pour la qualité AAA et les validations de vols longs :
 
 1. Réutiliser la profondeur en mètres et le repère local établis par le décor actuel pour comparer une passe de maillages instanciés ; traiter explicitement les pixels de ciel et les pixels reconstruits par le temporal.
