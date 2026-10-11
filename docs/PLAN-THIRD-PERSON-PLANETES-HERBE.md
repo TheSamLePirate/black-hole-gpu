@@ -230,6 +230,40 @@ ou au chargement d'une sauvegarde, invalider les anciennes requêtes et initiali
 contacts avant de relancer le mouvement. L'état à pied sera sauvegardé séparément et de façon compatible
 avec les anciennes sauvegardes ; les buffers d'herbe se reconstruisent et ne sont pas enregistrés.
 
+### Une même touche pour quitter et rejoindre le vaisseau
+
+Prévoir **Maj + K (`⇧K`) par défaut**, configurable, pour les deux directions. Ce raccourci existe
+déjà dans le contexte de vol sous `leaveShip` ; aujourd'hui il bascule le réglage `ship` via
+`btn-ship`, sans créer de personnage ni vérifier un point de sortie. Le plan doit donc remplacer
+cette action dans le contexte de pilotage et l'exposer aussi dans le nouveau contexte à pied.
+`E` est déjà utilisé pour le roulis en vol et le déplacement vertical de la caméra libre.
+La même action contextuelle sera disponible sur manette et via un bouton tactile.
+
+| Contexte | Action de `⇧K` | Conditions proposées |
+|---|---|---|
+| Aux commandes du vaisseau | Débarquer et prendre le contrôle du personnage en troisième personne | Vaisseau posé sur un support solide, vitesse relative au support < 0,5 m/s, sortie dégagée et données de contact prêtes |
+| À pied près de l'accès | Embarquer et reprendre les commandes | À moins de 2–3 m du point d'accès, chemin dégagé, vaisseau accessible et presque immobile |
+| Action indisponible | Rester dans le mode courant et afficher la raison | En vol, sortie obstruée, accès trop éloigné ou collisions encore indisponibles |
+
+Ces distances et vitesses sont des valeurs initiales à valider avec la taille des appareils.
+Chaque modèle doit déclarer un point d'accès et des candidats de sortie dans son repère local.
+Tester le volume de la capsule et le support sous ses pieds avant la transition ; ne pas faire
+apparaître le personnage dans une coque, sous un tablier, dans l'eau ou en chute libre. Les sorties
+en vol restent hors du premier lot, qui n'inclut pas l'EVA.
+
+Le vaisseau conserve sa pose, sa simulation et son identité pendant la marche ; quitter les commandes
+relâche les entrées maintenues. À l'embarquement, restaurer le dernier point de vue de pilotage.
+La caméra effectue une courte transition bornée, avec vérification des obstacles ; si la transition
+est interrompue, son état reste cohérent avec le contrôleur actif. Activer l'herbe uniquement une
+fois la vue du personnage active et l'arrêter dès la reprise du pilotage.
+
+Le HUD affiche « ⇧K — Quitter le vaisseau » ou « ⇧K — Entrer dans le vaisseau », avec le raccourci
+réel après remappage. Déclencher une seule transition sur le front d'appui, ignorer la répétition
+clavier et les nouvelles demandes pendant une transition. Aucun déclenchement dans un champ de
+texte ou un menu ; une perte de focus relâche les entrées. Une machine d'états explicite
+`piloting → disembarking → onFoot → boarding → piloting` valide l'action avant de changer de mode
+et revient à l'état de départ si la préparation échoue.
+
 ## Herbe terrestre : adaptation proposée
 
 ### Activation et choix des zones
@@ -387,12 +421,12 @@ Ne pas acheter de densité en rendant tout le reste plus flou sans l'indiquer da
 | Lot | Livrable concret | Critère de passage |
 |---|---|---|
 | **0 — Baseline au sol** | Scènes Terre/Lune/Mars à hauteur humaine, résolution native et bloc 2, HDR/profondeur et origine compensée contrôlés | Erreur de contact visible évaluée ; profil du fond et budget disponible connus |
-| **1 — Marche et caméra** | État indépendant, capsule de test, repères, terrain, marche/course/saut, caméra avec sol, clavier/pad/tactile | 30/60/120 Hz donnent le même déplacement ; pôles et date line sans flip ; solidaire du corps en rotation |
+| **1 — Marche et caméra** | État indépendant, capsule de test, repères, terrain, marche/course/saut, caméra avec sol, clavier/pad/tactile ; `⇧K` pour débarquer/embarquer depuis un appareil posé | 30/60/120 Hz donnent le même déplacement ; pôles et date line sans flip ; solidaire du corps en rotation ; aller-retour par la même touche sans double activation |
 | **2 — Obstacles et données** | Backend de collision comparé, proxies OSM proches, ponts, caméra contre façades, chargement et renouvellement de repère | Cour intérieure ouverte ; mur bloquant ; passage sous pont et marche sur tablier ; pas de chute lors d'un changement de données |
 | **3 — Avatar animé** | Asset distribuable ou modèle original ; format de mesh/rig, clips et skinning GPU ; ombre et exposition | Idle/marche/course/saut cohérents, pieds stables, avatar masqué par le terrain, budget réel textures inclus |
 | **4 — Herbe minimale** | Masque terrestre conservateur, racines stables, trois LOD, brins WGSL instanciés et activation stricte | Herbe seulement dans le contexte demandé ; aucun calcul en avion, sur Lune/Mars ou caméra libre ; caps mémoire respectés |
 | **5 — Interaction et finition** | Vent météo, poussée, transitions, éclairage partagé et ombre du personnage ; traces optionnelles | Contre-jour/pluie/nuit cohérents ; caméra mobile sans traces temporelles gênantes ; comparaison qualité/coût convaincante |
-| **6 — Intégration du jeu** | Débarquer/embarquer, sauvegardes, HUD, réglages, TARS, ressources et repli GPU | Parcours de 20 min, téléportations et cycles de mode sans croissance mémoire ; reprise de sauvegarde fiable |
+| **6 — Intégration du jeu** | Accès par modèle, transitions consolidées, sauvegardes, HUD contextuel, remappage, TARS, ressources et repli GPU | Parcours de 20 min, téléportations et cycles de mode sans croissance mémoire ; reprise de sauvegarde fiable ; dernier point de vue du vaisseau restauré |
 
 L'ordre recommandé est 0 → 1 → 2 → 3/4 → 5 → 6. Les raccords avec les réglages, états et outils sont
 ajoutés à chaque lot ; le dernier lot consolide les transitions et la campagne longue. Si le lot 0
@@ -408,12 +442,12 @@ false-earth n'est pas un prérequis pour les lots 0–2 et 4.
 Ces noms sont proposés, non encore exposés :
 
 - Mode de personnage et réglage de vue explicites ; réglage `earthGrass=off|balanced|high`.
-- Outil de personnage : entrer/quitter, avancer latéralement ou longitudinalement pendant une durée bornée, arrêter, courir, sauter et régler la vue.
-- Commandes `/walk` et `/grass`, avec arguments complétés et actions arrêtées par un watchdog.
-- `get_state.character` et groupe de télémétrie `character` : corps, pose, vitesse au sol, gravité, hauteur des pieds, contact, pente, état de chargement et erreurs.
+- Outil de personnage : débarquer/embarquer explicitement et de manière idempotente, avancer latéralement ou longitudinalement pendant une durée bornée, arrêter, courir, sauter et régler la vue. Même validation que la touche contextuelle, aussi accessible par `press_key`.
+- Commandes `/walk` (dont `disembark` et `board`) et `/grass`, avec arguments complétés et actions arrêtées par un watchdog ; échec expliqué si l'accès est indisponible.
+- `get_state.character` et groupe de télémétrie `character` : corps, pose, vitesse au sol, gravité, hauteur des pieds, contact, pente, état de chargement et erreurs ; vaisseau associé, phase de transition, distance à l'accès et raisons d'indisponibilité.
 - Groupe `grass` : activation et raison du repli, source du masque, candidats/instances visibles par LOD, octets résidents/transitoires, révision, temps CPU/GPU lorsqu'ils sont profilés.
-- Attentes pour le sol, les collisions et l'avatar prêts ; événements d'entrée/sortie, saut/atterrissage, changement de surface et indisponibilité. Pas d'événement à chaque cellule d'herbe.
-- Écran de réglages et informations HUD accessibles, ainsi qu'un handle `__bh` documenté pour les tests.
+- Attentes pour le sol, les collisions et l'avatar prêts, puis pour l'embarquement/débarquement terminé ; événements de débarquement/embarquement, saut/atterrissage, changement de surface et indisponibilité. Pas d'événement à chaque cellule d'herbe.
+- Écran de réglages et informations HUD accessibles, ainsi qu'un handle `__bh` documenté pour les tests. Mettre à jour l'aide clavier, les traductions, les bindings et la documentation TARS.
 
 ## Validation
 
@@ -429,7 +463,8 @@ Tests navigateur selon [E2E.md](E2E.md), [BH-API.md](BH-API.md) et [E2E-CATALOGU
 4. Pelouse, prairie, route, eau, toit, piste, neige, données absentes ; aucun brin sur les autres planètes ni hors troisième personne.
 5. Soleil bas, ombre d'un bâtiment, contre-jour, nuit, pluie ; pieds et herbe à la même échelle et exposition.
 6. Chargement froid, réseau indisponible, GPU à huit buffers, perte/recréation du device et renouvellement de terrain.
-7. Vol ↔ marche et restauration de sauvegarde ; 20 min de déplacement avec mémoire observée.
+7. Aller-retour vaisseau ↔ marche par la même touche, au clavier remappé et sur pad/tactile ; appui maintenu sans double transition, menus/focus, sortie obstruée et accès trop éloigné. Pose du vaisseau conservée, caméra de pilotage restaurée, herbe arrêtée à l'embarquement.
+8. Restauration de sauvegarde dans les deux modes ; 20 min de déplacement et cycles d'embarquement/débarquement avec mémoire observée.
 
 Pour le coût : séparer fond seul, avatar seul, avatar+herbe, puis ombres/traces. Mêmes chemins, entrées,
 soleil et résolution ; kernels prêts et échauffés ; ordre des blocs randomisé, plusieurs répétitions,
