@@ -2004,6 +2004,20 @@ export const SCHEMA: ControlDef[] = [
       "forest trees buildings worldwide worldcover openstreetmap osm foret arbres batiments monde scenery roads rivers bridges routes fleuves rivieres ponts rail",
   },
   {
+    key: "earthGrass",
+    type: "choice",
+    section: "sky",
+    group: "The Earth",
+    label: "Grass on foot",
+    effect: "scene",
+    options: [
+      { value: "off", label: "Off" },
+      { value: "balanced", label: "Balanced" },
+    ],
+    help: "Interactive grass only in third-person on Earth, in confirmed WorldCover grassland. GPU visibility, three LODs, local wind and character contact. Maximum 65,536 roots. Requires terrain and world scenery source coverage. No grass work in flight.",
+    keywords: "grass herbe marche third person personnage",
+  },
+  {
     key: "earthSceneryShadows",
     type: "toggle",
     section: "sky",

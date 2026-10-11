@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { PATH_CHUNK, PATH_MAX, TABLE_LUT, TABLE_PATH, TABLE_SH, TABLE_VEC4S } from "../src/gpu-tables";
+import { PATH_CHUNK, PATH_MAX, TABLE_LUT, TABLE_PATH, TABLE_SH, TABLE_WALK, TABLE_VEC4S } from "../src/gpu-tables";
 import { sceneryShader } from "../src/system/scenery";
 import { SCENERY_STORAGE_LIMIT } from "../src/system/scenery-data";
 
@@ -15,7 +15,8 @@ test("the tables' offsets: the renderer's and the shader's the same", () => {
   expect(constU("PATH_OFF")).toBe(TABLE_PATH);
   expect(constU("PATH_MAX")).toBe(PATH_MAX);
   expect(constU("PATH_CHUNK")).toBe(PATH_CHUNK);
-  expect(TABLE_VEC4S).toBe(TABLE_PATH + PATH_MAX + PATH_MAX / PATH_CHUNK);
+  expect(TABLE_WALK).toBe(TABLE_PATH + PATH_MAX + PATH_MAX / PATH_CHUNK);
+  expect(TABLE_VEC4S).toBe(TABLE_WALK + Math.ceil((65 * 65) / 4));
 });
 
 test("the trace stage retains eight-buffer compatibility and requires only one optional scenery buffer", () => {

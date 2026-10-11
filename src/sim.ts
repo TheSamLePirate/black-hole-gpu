@@ -78,6 +78,8 @@ export class Simulation {
     let changed = false;
     const path = c.gravity ? c.predictPath() : null;
     if (r.setCameraPath(s.showGeodesic && s.pathInView ? path : null)) changed = true;
+    r.character = c.character.active ? c.character : null;
+    if (c.character.active) changed = true;
     r.shipPose = s.ship ? c.shipPose() : null;
     // (a spectator out: the ship where it is in its view — moving: the view drawn afresh)
     r.shipPlace = c.spectating ? c.shipFromView() : null;

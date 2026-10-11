@@ -13,6 +13,15 @@ Le sol satellite régional est accessible par `set_settings` (`earthSurface=off|
 
 Le décor mondial (forêts, bâtiments, routes, voies ferrées, eaux et ponts) passe par `set_settings` (`earthScenery=off|balanced|high`) ou `/scenery`, avec complétion. Les ombres sont activables via `earthSceneryShadows` ou `/sceneryshadows true|false`. TARS lit `get_state.scenery`, `get_telemetry({groups:["scenery"]})`, les comptes d'objets et de réseaux, les couches/champs OSM effectivement reçus (`osmLayers`), la portée des ombres, la mémoire, les erreurs et la limitation par budget. `wait({until:"scenery_ready"})` attend le streaming et le fondu : lire le statut retourné, notamment `degraded` ou `unsupported-storage-limit`. L'événement `scenery` le réveille lors d'un changement de centre ou de statut ; le panneau des réglages affiche les options et leurs crédits. [Implémentation, couverture et mesures](FORETS-BATIMENTS-WORLDWIDE.md).
 
+L’exploration à pied passe par `character` (`start`, `disembark`, `board`, `move`, `jump`, `stop`, `orbit`, `status`) et `/walk`.
+`move` accepte `forward`, `right`, `seconds` (maximum 10) et `run` ; `stop` arrête la marche.
+`/grass off|balanced` ou `set_settings(earthGrass)` active l’herbe exclusivement dans les prairies terrestres en vue personnage.
+TARS lit `get_state.character`, `get_state.grass` et les groupes de télémétrie `character`/`grass`, y compris mémoire,
+coût CPU, racines et chargement du modèle. Il affiche `show_screen(character)`, attend `character_grounded`,
+`character_on_foot` ou `character_boarded` et reçoit les événements `character`/`grass`.
+Les captures de validation attendent aussi les shaders et toutes les données nécessaires : un streaming arrêté
+peut avoir échoué. [Détails, budgets et limites](THIRD-PERSON-IMPLEMENTATION.md).
+
 | Fichier | Rôle |
 |---|---|
 | `src/audio/voice.ts` | pur pour sa file : qui parle, dans quel ordre (la plus urgente coupe les autres, une même ligne pas deux fois, une ligne périmée abandonnée) ; `Speech` : les voix Web Speech du système, choisies par langue, ou la voix de TARS |

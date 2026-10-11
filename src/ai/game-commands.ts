@@ -98,6 +98,15 @@ export const GAME_COMMANDS: GameCommand[] = [
     args: [{ param: "cinematic" }],
     desc: { fr: "Une cinématique (orbit, dive, journey, none)", en: "A cinematic (orbit, dive, journey, none)" },
   },
+  {
+    name: "walk",
+    tool: "character",
+    args: [{ param: "action" }, { param: "body", from: "body" }, { param: "lat" }, { param: "lon" }],
+    desc: {
+      fr: "Marcher : start, disembark, board, move, stop, jump, orbit, status",
+      en: "Walk: start, disembark, board, move, stop, jump, orbit, status",
+    },
+  },
   // flying
   {
     name: "autopilot",
@@ -290,6 +299,13 @@ export const GAME_COMMANDS: GameCommand[] = [
     fixed: { key: "earthScenery" },
     args: [{ param: "value", from: "settingValue" }],
     desc: { fr: "Décor mondial OSM et forêts (off, balanced, high)", en: "Worldwide OSM scenery and forests (off, balanced, high)" },
+  },
+  {
+    name: "grass",
+    tool: "set_settings",
+    fixed: { key: "earthGrass" },
+    args: [{ param: "value", from: "settingValue" }],
+    desc: { fr: "Herbe à pied : off, balanced", en: "Grass on foot: off, balanced" },
   },
   {
     name: "sceneryshadows",

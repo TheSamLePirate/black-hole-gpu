@@ -143,6 +143,7 @@ function setPilot(this: CameraController, on: boolean) {
  * caches). Before, a second glide began as the first had ended — mid-approach, gear up, braking.
  */
 function newFlight(this: CameraController) {
+  this.character.stop();
   this.tunnelEntry = null;
   this.predictionContext = "";
   this.predictionGeneration++;

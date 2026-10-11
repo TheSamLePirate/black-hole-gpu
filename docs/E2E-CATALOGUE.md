@@ -123,6 +123,12 @@ Every e2e file (`tests/e2e/*.e2e.test.ts`), by theme: what it proves, the scene 
 | saves.e2e.test.ts | A saved flight reloads as it was whatever flew before: the craft, its docks, the entry site, a fall saved after a burn. | default (HUD-gallery states) | 1 | — |
 | pwa.e2e.test.ts | Service worker registers and caches the shell and manifest; the network cut reloads from cache and the scene plays; tiles kept under budget. | Earth: the Blue Marble, service worker and tiles | 6 | `sw=1`; `tiles: true`; network cut in the test |
 
+## Exploration planétaire
+
+| file | what it proves | scene(s) booted | ~s here | needs |
+|---|---|---|---|---|
+| character.e2e.test.ts | Real skinned astronaut on Moon/Earth/Mars; Shift+K disembark/board, save reload, local-gravity jump; Earth grass from actual WorldCover, roots bounded, no grass on Moon or in flight. Captures require satellite, terrain, scenery, render/lighting shaders and 120 settled frames; JSON readiness beside PNG. | Earth: the Blue Marble, 960×540 | ~50–90; cold network/compilation can take longer | live terrain/WorldCover/OSM for Earth capture; licensed astronaut assets in tree |
+
 ## Slow (> 60 s)
 
 On the m10 log (sum of test times per file):

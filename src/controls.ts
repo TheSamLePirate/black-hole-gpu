@@ -43,6 +43,7 @@ import { installRig } from "./controller/rig";
 import { installLowthrust } from "./controller/lowthrust";
 import { installJourney } from "./controller/journey";
 import { installTelemetry } from "./controller/telemetry";
+import { PlanetCharacter } from "./controller/character";
 import { installSpectator } from "./controller/spectator";
 import { isTyping } from "./controller/util";
 export { FLIGHT_KEYS, LANDING, TELE_MIN, finalGate, isTyping, landingProfile, wrapYaw } from "./controller/util";
@@ -360,6 +361,7 @@ export class CameraController {
    * the camera away from the ship, anywhere —, the ship flying on as it was; null: the view is the ship's.
    */
   spectator: CameraController | null = null;
+  readonly character = new PlanetCharacter(this);
   /** the spectator follows the ship (carried with it; its offset from it [m, world axes] and that offset's rate), or is free */
   spectatorFollow = true;
   specOff: [number, number, number] = [0, 0, 0];
@@ -435,6 +437,10 @@ export class CameraController {
     // fly mode: the mouse turns the camera like in a game (right = turn right, up = look up)
     document.addEventListener("mousemove", (e) => {
       if (!this.flyMode || !this.enabled) return;
+      if (this.character.active) {
+        this.character.orbit(e.movementX, e.movementY);
+        return;
+      }
       // (a spectator out: the mouse turns its view)
       const v = this.spectator ?? this;
       const k = 0.12 * Math.min(1, v.s.fov / 60);
@@ -451,6 +457,7 @@ export class CameraController {
       this.codes.delete(e.code);
     });
     addEventListener("blur", () => {
+      this.character.releaseInput();
       this.keys.clear();
       this.codes.clear();
     });
@@ -522,6 +529,10 @@ export class CameraController {
   }
 
   onDown = (e: PointerEvent) => {
+    if (this.character.active && this.enabled) {
+      this.character.pointer(e, "down");
+      return;
+    }
     // (a spectator out: the pointer is its)
     if (this.spectator) {
       this.spectator.onDown(e);
@@ -566,6 +577,10 @@ export class CameraController {
   };
 
   onUp = (e: PointerEvent) => {
+    if (this.character.active) {
+      this.character.pointer(e, "up");
+      return;
+    }
     // (a spectator out: the pointer is its)
     if (this.spectator) {
       this.spectator.onUp(e);
@@ -634,6 +649,10 @@ export class CameraController {
   };
 
   onMove = (e: PointerEvent) => {
+    if (this.character.active) {
+      if (this.enabled) this.character.pointer(e, "move");
+      return;
+    }
     // (a spectator out: the pointer is its)
     if (this.spectator) {
       this.spectator.onMove(e);
@@ -704,6 +723,11 @@ export class CameraController {
   };
 
   onWheel = (e: WheelEvent) => {
+    if (this.character.active) {
+      e.preventDefault();
+      if (this.enabled) this.character.zoom(e.deltaY);
+      return;
+    }
     // (a spectator out: the pointer is its — following the ship, the wheel sets its distance to it)
     if (this.spectator) {
       e.preventDefault();

@@ -584,6 +584,7 @@ export class GameTools {
       plan: c.plan.nodes.length
         ? { nodes: c.plan.nodes.map((n) => ({ ...n })), note: c.plan.note, mission: c.ourMission, universe: c.plan.universe }
         : null,
+      character: c.character.snapshot(),
       camera: { gravity: c.gravity && !c.piloting },
     };
   }
@@ -647,6 +648,7 @@ export class GameTools {
       if (c.gravity) [s.velR, s.velT, s.velP] = vel as [number, number, number];
     }
     c.sync();
+    if (save.character) c.character.restore(save.character);
     this.ctx.scene?.set(save.scene ?? null);
     this.ctx.refresh();
     if (!o.quiet) this.log.add("save", `Loaded "${save.name}" — ${save.summary}`, save.time);
@@ -716,6 +718,8 @@ export class GameTools {
       budgetMs: s.realtimeBudget,
       earthSurface: r.earthSurface.stats(),
       earthScenery: r.earthScenery.stats(),
+      character: this.ctx.camera.character.state(),
+      grass: r.characterRenderer.stats(),
       block: r.realtimeBlockNow,
       cpu: cpuProf.table().map((c) => ({ section: c.label, ms: r2(c.ms), worst: r2(c.max) })),
       gpu: r.prof.table().map((p) => ({ pass: p.label, ms: r2(p.ms), last: r2(p.last), frames: p.n })),

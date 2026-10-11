@@ -1,5 +1,16 @@
 // French for the settings, the scenes and the keyboard sheet (keyed by the English: see src/i18n.ts).
 export default {
+  "Grass on foot": "Herbe à pied",
+  "Interactive grass only in third-person on Earth, in confirmed WorldCover grassland. GPU visibility, three LODs, local wind and character contact. Maximum 65,536 roots. Requires terrain and world scenery source coverage. No grass work in flight.":
+    "Herbe interactive uniquement en vue à la troisième personne sur Terre, dans les prairies confirmées par WorldCover. Visibilité GPU, trois niveaux de détail, vent local et contact avec le personnage. Maximum de 65 536 brins. Nécessite le terrain et les données du décor mondial. Aucun calcul d’herbe en vol.",
+  "Disembark / board a landed craft (on foot: approach its access)": "Sortir / entrer dans un vaisseau posé (à pied : approcher son accès)",
+  "On foot": "À pied",
+  "W A S D · Shift": "W A S D · Maj",
+  "Walk relative to the camera · run (remappable free-camera movement keys)":
+    "Marcher par rapport à la caméra · courir (touches de caméra libre configurables)",
+  "Jump with the local gravity": "Sauter avec la gravité locale",
+  "Drag · wheel": "Glisser · molette",
+  "Orbit the character · camera distance": "Tourner autour du personnage · distance de la caméra",
   "World scenery": "Décor mondial",
   "Scenery shadows": "Ombres du décor",
   "WorldCover forests, OSM buildings, roads, railways, rivers, lakes, paved airfields and 3D bridges through OpenFreeMap. Balanced: 2 km, up to 16,000 trees, 5,000 buildings, 16,000 surface features and 128 bridges; high: 3 km, 32,000 trees, 8,000 buildings, 24,000 surface features and 256 bridges. Shared 16 MiB GPU budget; worker preparation. Streamed below 12 km, between 84° S and 84° N. Enable terrain for volumes and networks. Building heights, road widths and bridge elevation/supports can be estimated. Source tiles simplify OSM and do not expose every tag. © ESA WorldCover / modified Copernicus Sentinel data (2021), CC BY 4.0. © OpenMapTiles, OpenStreetMap (ODbL), OpenFreeMap.":

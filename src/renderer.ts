@@ -1,3 +1,7 @@
+import { CharacterRenderer } from "./character-renderer";
+import type { PlanetCharacter } from "./controller/character";
+import { dot as dot3 } from "./math/vec3";
+import { sphericalFrame } from "./wormhole";
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
 import { lampsOf } from "./cockpit/lights";
 import { EARTH_RUNWAYS, landingEnd, RUNWAY_HALF_WIDTH, RUNWAY_LENGTH, runwayGrade } from "./game/sites";
@@ -25,7 +29,7 @@ import { visibleTimeout } from "./util/visible-timeout";
 import { automaticQuality, effectiveQuality, earthMapQuality } from "./quality-policy";
 import { adapterId, guessTier, rememberedLevel, tierAt, type Tier } from "./tier";
 import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
-import { PATH_CHUNK, PATH_MAX, SH_VEC4S, TABLE_LUT, TABLE_PATH, TABLE_VEC4S } from "./gpu-tables";
+import { PATH_CHUNK, PATH_MAX, SH_VEC4S, TABLE_LUT, TABLE_PATH, TABLE_WALK, TABLE_VEC4S } from "./gpu-tables";
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
 import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
 import shipWGSL from "./shaders/ship.wgsl" with { type: "text" };
@@ -84,7 +88,7 @@ const SCENERY_EXCLUSIONS = EARTH_RUNWAYS.map((r) => ({
   length: RUNWAY_LENGTH,
   halfWidth: 340,
 }));
-import { altitudeOver, bodyFixedOf, groundRelief, setGroundHeights, setGroundRelief } from "./system/our-surface";
+import { altitudeOver, bodyFixedOf, groundRelief, toBodyFixed, setGroundHeights, setGroundRelief } from "./system/our-surface";
 import { EARTH_RM, earthHeightSampler, mapHeightSampler, tileFallbackSampler } from "./terrain";
 import { figureDiskShare, figureSourceElevation, flatteningOf, geodeticNormal, rayFigure, WGS84_A, WGS84_F } from "./system/ellipsoid";
 import { AIR_K, sunThroughY } from "./system/earth-air";
@@ -144,7 +148,7 @@ const DANJON_SCALE = 0.99834 * (1 + 1 / 85);
 /** the weather's clouds drift on a noise of this period [m] (trace.wgsl: wxAt) */
 const WX_DRIFT_PERIOD = 204800;
 const BASE_PARAM_VEC4S = 69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S + SEA_VEC4S + 1 + 1 + SHADE_VEC4S + WX_VEC4S;
-const PARAM_VEC4S = BASE_PARAM_VEC4S + SURFACE_VEC4S + SCENERY_VEC4S;
+const PARAM_VEC4S = BASE_PARAM_VEC4S + SURFACE_VEC4S + SCENERY_VEC4S + 5;
 /**
  * The sea's twelve wave trains near the camera (trace.wgsl: seaWaves): wavenumbers in whole units of
  * 2π/1024 m on the wind's axes (along, across) — exact from an anchor of whole kilometres, in float32 —,
@@ -410,8 +414,11 @@ export class Renderer {
   private enduranceLoading: Promise<void> | null = null;
   /** The International Space Station on its real orbit (station.ts, system/iss.ts). */
   readonly station: StationRenderer;
+  readonly characterRenderer: CharacterRenderer;
+  character: PlanetCharacter | null = null;
   private stationLoading: Promise<void> | null = null;
   /** the disk's reference luminance (log10 Y) of the last frame's parameters: the stars' scale */
+  private walkStamp = -1;
   private lastLogY = 0;
   /** the last frame's bodies (the stars' radius, temperature, brightness) */
   private lastBodies: GpuBody[] = [];
@@ -835,6 +842,7 @@ export class Renderer {
     );
     this.traceModule = traceModule;
     this.tracePipeLayout = layout;
+    this.characterRenderer = new CharacterRenderer(device);
     this.ship = new ShipRenderer(device, src.ship);
     this.endurance = new EnduranceRenderer(device, src.endurance);
     this.station = new StationRenderer(device, src.station);
@@ -1378,6 +1386,7 @@ export class Renderer {
       ["ship", r.ship.module],
       ["endurance", r.endurance.module],
       ["station", r.station.module],
+      ["character", r.characterRenderer.module],
       ["overlay", r.chart.module],
     ];
     let checked = 0;
@@ -2434,6 +2443,24 @@ export class Renderer {
     f.set(this.earthSurface.params(), BASE_PARAM_VEC4S * 4);
     if (this.earthSurface.active) this.featureKey |= 4096;
     f.set(this.earthScenery.params(), (BASE_PARAM_VEC4S + SURFACE_VEC4S) * 4);
+    if (!o.probe && this.character?.active && this.character.body === "earth")
+      this.character.groundPatch.build(this.character.q, this.character.up(), (q) => this.character!.rawHeight(q), this.earthTiles.stamp);
+    const walking = this.character?.active && this.character.ours && this.character.body === "earth" ? this.character.groundPatch : null;
+    const at = (BASE_PARAM_VEC4S + SURFACE_VEC4S + SCENERY_VEC4S) * 4;
+    f.fill(0, at, at + 20);
+    if (!o.probe && walking?.ready && near?.index === earthK) {
+      const eye = homePosition(s)!;
+      const q = toBodyFixed("earth", eye, time).map((v) => v * M_METRES) as Vec3;
+      const delta = q.map((v, i) => v - walking.origin[i]!) as Vec3;
+      f.set([dot3(delta, walking.right), dot3(delta, walking.up), dot3(delta, walking.forward), 1], at);
+      f.set([...walking.right, TABLE_WALK], at + 4);
+      f.set([...walking.up, walking.size], at + 8);
+      f.set([...walking.forward, walking.step], at + 12);
+      if (this.walkStamp !== walking.stamp) {
+        this.device.queue.writeBuffer(this.bodyBuf, TABLE_WALK * 16, walking.values);
+        this.walkStamp = walking.stamp;
+      }
+    }
     if (this.earthScenery.active) this.featureKey |= 8192;
     f[61 * 4 + 1] = sunAng; // (earth4.y)
     f[61 * 4 + 2] = this.marsDust(s, near, bodies, time); // (earth4.z)
@@ -3570,6 +3597,7 @@ export class Renderer {
       if (s && i === r0 && t === this.live && this.encodeTemporal(enc, t, s) && s.motionBlur > 0) this.encodeMotionBlur(enc, t);
       // the space station, where it is on its orbit (before the Ranger: its glass reflects it)
       if (s && i === r0) this.encodeStation(enc, t, s);
+      if (s && i === r0) this.encodeCharacter(enc, t, s);
       if (s && i === r0 && (s.ship || this.craftsShown) && this.ship.ready) {
         this.ship.encodeShip(
           enc,
@@ -3724,6 +3752,78 @@ export class Renderer {
    * in the shadow map those within 150 m of the flown one (docked, alongside). Their transforms: the craft's
    * axes on the camera's (rows: the camera's axes on the craft's), the origin [m].
    */
+  earthLandAt(q: Vec3): boolean | null {
+    const cover = this.earthScenery.contact?.cover(q) ?? 0;
+    if (cover) return cover !== 80;
+    const h = this.earthMaps.heights;
+    if (!h) return null;
+    const normal = geodeticNormal(WGS84_A, WGS84_F, q);
+    return mapHeightSampler(h.map, h.W, h.H)(normal) > 0;
+  }
+
+  private encodeCharacter(enc: GPUCommandEncoder, target: Target, s: Settings) {
+    const c = this.character,
+      frame = c?.frame();
+    if (!c || !frame) {
+      if (this.characterRenderer.stats().active) this.characterRenderer.reset();
+      return;
+    }
+    const sp = c.metres();
+    const planet = this.lastBodies.find((b) => b.id === frame.body);
+    const sunBody = frame.ours
+      ? this.lastBodies.find((b) => b.id === "sun")
+      : planet && planet.light >= 0
+        ? this.lastBodies[planet.light]
+        : this.lastBodies.find((b) => b.id === "star");
+    const sunWorld = frame.ours ? solarState("sun", this.lastTime).pos : ((sunBody?.pos ?? [0, 0, 0]) as Vec3);
+    const d = !frame.ours && planet?.lightDir ? planet.lightDir : (sunWorld.map((v, i) => v - frame.sunOrigin[i]!) as Vec3);
+    const dist = Math.hypot(...d) || 1;
+    // The camera-frame Sun agrees with the traced scene and the same radiance normalization.
+    const cam = this.lastCam;
+    if (!cam) return;
+    let L: Vec3;
+    if (frame.ours) {
+      const home = homeToRep(mouth(s).w, cam.ell, cam.n, d.map((v) => v / dist) as Vec3);
+      L = [dot3(home, cam.right), dot3(home, cam.up), dot3(home, cam.fwd)];
+    } else {
+      const sf = sphericalFrame(frame.sunOrigin);
+      const d0 = d.map((v) => v / dist) as Vec3;
+      const rep: Vec3 = [dot3(d0, sf.er), dot3(d0, sf.et), dot3(d0, sf.ep)];
+      L = [dot3(rep, cam.right), dot3(rep, cam.up), dot3(rep, cam.fwd)];
+    }
+    const elevation = dot3(L, frame.axes[1]);
+    const temp = (!frame.ours ? planet?.lightT : undefined) ?? sunBody?.temperature ?? 5772;
+    const E =
+      Math.PI *
+      10 ** (this.logYOf(Math.round(temp / 50) * 50) - this.lastLogY) *
+      (sunBody?.brightness ?? 1) *
+      (!frame.ours && planet ? planet.illum : ((sunBody?.radius ?? 0) / dist) ** 2);
+    const share = frame.ours ? sunShare(frame.sunOrigin, this.lastTime) : Math.max(0, Math.min(1, (elevation + 0.005) / 0.01));
+    const transmission = frame.body === "earth" ? Math.exp(-0.15 / Math.max(0.08, elevation)) : 0.98;
+    const daylight = Math.max(0, Math.min(1, (elevation + 0.08) / 0.2));
+    const e = E * share * transmission;
+    this.characterRenderer.encode(
+      enc,
+      target.hdr,
+      target.moments,
+      c,
+      frame,
+      {
+        sun: L,
+        irradiance: [e, e * (0.7 + 0.3 * daylight), e * (0.45 + 0.55 * daylight)],
+        sky: frame.body === "earth" ? [E * 0.045 * daylight, E * 0.07 * daylight, E * 0.11 * daylight] : [E * 0.007, E * 0.007, E * 0.007],
+        pre: preExposure(this.ev(s)),
+        metres: sp,
+        fov: s.fov,
+      },
+      s.earthTerrain ? this.earthScenery.contact : null,
+      this.earthScenery.stamp * 100000 + this.earthTiles.stamp + this.character!.groundPatch.stamp * 10000000,
+      s.earthGrass !== "off",
+      this.prof,
+      this.earthScenery.buffer,
+    );
+  }
+
   private shipOthers(s: Settings): ShipInstance[] {
     const cam = this.lastCam;
     if (!cam || s.system !== "gargantua" || !s.wormhole || cam.region !== "throat" || cam.ell >= 0) return [];

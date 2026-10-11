@@ -10,7 +10,7 @@
 // Flight keys go by physical position (KeyboardEvent.code: Z Q S D on AZERTY, W A S D on QWERTY); the
 // scene's letters by the character typed (KeyboardEvent.key), as their names say.
 
-export type KeyLayer = "system" | "flight" | "time" | "scene";
+export type KeyLayer = "system" | "flight" | "time" | "scene" | "character";
 
 export type KeyAction =
   // system
@@ -45,6 +45,7 @@ export type KeyAction =
   | "stopFlight"
   | "ack"
   | "leaveShip"
+  | "characterJump"
   // time
   | "playPause"
   | "warp"
@@ -328,7 +329,7 @@ export const KEYMAP: KeySection[] = [
         bind: [fly("Backspace", "stopFlight")],
       },
       { keys: "Enter", text: "Acknowledges the master caution: the lamp out, the warning silent", bind: [fly("Enter", "ack")] },
-      { keys: "⇧K", text: "Leave the Ranger", bind: [fly("KeyK", "leaveShip", on)] },
+      { keys: "⇧K", text: "Disembark / board a landed craft (on foot: approach its access)", bind: [fly("KeyK", "leaveShip", on)] },
       { keys: "Drag · double-click", text: "Look around from the attach point · look ahead" },
       {
         keys: "Pad",
@@ -379,6 +380,14 @@ export const KEYMAP: KeySection[] = [
 ];
 
 /** Every binding, in the table's order. */
+KEYMAP.push({
+  title: "On foot",
+  rows: [
+    { keys: "W A S D · Shift", text: "Walk relative to the camera · run (remappable free-camera movement keys)" },
+    { keys: "Space", text: "Jump with the local gravity", bind: [codes("character", "Space", "characterJump")] },
+    { keys: "Drag · wheel", text: "Orbit the character · camera distance" },
+  ],
+});
 export const BINDINGS: KeyBind[] = KEYMAP.flatMap((s) => s.rows.flatMap((r) => r.bind ?? []));
 
 type KeyLike = Pick<KeyboardEvent, "code" | "key" | "shiftKey">;
@@ -403,11 +412,29 @@ export function matchIn(layer: KeyLayer, e: KeyLike, flying = false, list: KeyBi
  * key (it flies, nothing in the scene layer). `list`: the bindings as the player set them
  * (input/bindings.ts effectiveBindings), the defaults otherwise.
  */
-export function matchKey(e: KeyLike, flying: boolean, flightKey: boolean, list: KeyBind[] = BINDINGS): KeyBind | undefined {
+export function matchKey(
+  e: KeyLike,
+  flying: boolean,
+  flightKey: boolean,
+  list: KeyBind[] = BINDINGS,
+  character = false,
+): KeyBind | undefined {
   return (
     matchIn("system", e, false, list) ??
-    (flying ? matchIn("flight", e, false, list) : undefined) ??
+    (character
+      ? (matchIn("character", e, false, list) ??
+        (matchIn("flight", e, false, list)?.do === "leaveShip" ? matchIn("flight", e, false, list) : undefined))
+      : flying
+        ? matchIn("flight", e, false, list)
+        : undefined) ??
     matchIn("time", e, false, list) ??
-    (flightKey ? undefined : matchIn("scene", e, flying, list))
+    (character
+      ? matchIn("scene", e, false, list) &&
+        ["help", "png", "fullscreen", "details", "toggleUi", "quality"].includes(matchIn("scene", e, false, list)!.do)
+        ? matchIn("scene", e, false, list)
+        : undefined
+      : flightKey
+        ? undefined
+        : matchIn("scene", e, flying, list))
   );
 }

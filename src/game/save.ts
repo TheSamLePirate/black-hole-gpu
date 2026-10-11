@@ -1,3 +1,4 @@
+import type { CharacterSave } from "../controller/character";
 // Saved games: the whole state of a flight (every setting at full precision, the scene's time, the
 // pilot's modes, the ground under the ship, the flight plan) — kept in the browser (an automatic save
 // resumed at the next visit, named slots), exported and imported as JSON files. The URL no longer
@@ -30,6 +31,7 @@ export interface GameSave {
   /** the game's settings: the scene and what it carried (not the player's own) */
   settings: Partial<Settings>;
   time: number;
+  character?: CharacterSave | null;
   ship: {
     piloting: boolean;
     sas: boolean;
@@ -152,6 +154,20 @@ export function checkSave(x: unknown): GameSave {
     }
   }
   if (repaired.length) caught("save", new Error(`settings repaired to their defaults: ${repaired.join(", ")}`));
+  if (g.character) {
+    const c = g.character;
+    if (
+      typeof c.body !== "string" ||
+      typeof c.ours !== "boolean" ||
+      !isVec(c.q) ||
+      !isVec(c.forward) ||
+      (c.heading !== undefined && !isVec(c.heading)) ||
+      ![c.yaw, c.pitch, c.distance, c.vertical].every(isNum) ||
+      c.distance < 0.3 ||
+      c.distance > 8
+    )
+      fault("character");
+  }
   const sh = g.ship;
   if (!sh || typeof sh !== "object") fault("ship");
   if (typeof sh.piloting !== "boolean" || typeof sh.hold !== "string" || typeof sh.auto !== "string") fault("ship's modes");

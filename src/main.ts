@@ -1,3 +1,4 @@
+import { CharacterHud } from "./ui/characterhud";
 import { poseData } from "./cockpit/controls";
 import { GEARS } from "./gear";
 import { ControlTravel, controlStates } from "./cockpit/state";
@@ -464,6 +465,7 @@ async function main() {
   });
   /** the scene's time and the step that moves everything (sim.ts: the live loop, the automation, the video) */
   const sim = new Simulation(settings, camera, renderer);
+  const characterHud = new CharacterHud(camera, (text) => panel.toast(text));
   /** the take recorder (take.ts): the live view recorded, rendered afterwards as a video */
   const take = new Take();
 
@@ -710,6 +712,10 @@ async function main() {
   const tarsWakesOn = () => online() && settings.tarsWake;
   // (one waking per event, every rule it woke in it; a waking left waiting more than 90 s let go: stale)
   const tarsWakeQueue: { rules: Trigger[]; e: GameEvent | null; at: number }[] = [];
+  camera.character.contact = () => (settings.earthTerrain && renderer.earthScenery.supported ? renderer.earthScenery.contact : null);
+  camera.character.terrainRevision = () => renderer.earthTiles.stamp;
+  camera.character.surface = (body, q) => body !== "earth" || renderer.earthLandAt(q);
+  camera.character.onEvent = (to, detail) => tarsEvent({ kind: "character", to, detail });
   const tarsEvent = (e: GameEvent) => {
     const rules = tarsTriggers.match(e);
     if (!rules.length) return;
@@ -729,6 +735,7 @@ async function main() {
     eclipse: string;
     surface: string;
     scenery: string;
+    grass: string;
   } | null = null;
   let tarsSpentSeen = 0;
   setInterval(() => {
@@ -762,6 +769,7 @@ async function main() {
       landed: camera.landed && !camera.rolling,
       docked: camera.docked,
       surface: `${renderer.earthSurface.stats().region ?? "none"}:${renderer.earthSurface.stats().status}`,
+      grass: renderer.characterRenderer.stats().reason,
       scenery: `${renderer.earthScenery.stats().lat ?? "none"}:${renderer.earthScenery.stats().lon ?? "none"}:${renderer.earthScenery.stats().status}:${settings.earthSceneryShadows}`,
       // (the deviations: the hub's graph out of its corridor, the entry out of its own, the approach's PAPI all
       // white or all red on final)
@@ -786,6 +794,7 @@ async function main() {
       if (now.landed && !was.landed) tarsEvent({ kind: "landed", to: st.soi });
       if (now.docked && !was.docked) tarsEvent({ kind: "docked" });
       if (now.surface !== was.surface) tarsEvent({ kind: "surface", from: was.surface, to: now.surface });
+      if (now.grass !== was.grass) tarsEvent({ kind: "grass", from: was.grass, to: now.grass });
       if (now.scenery !== was.scenery) tarsEvent({ kind: "scenery", from: was.scenery, to: now.scenery });
       if (now.off && now.off !== was.off) tarsEvent({ kind: "deviation", to: now.off, detail: hub?.graph?.fix ?? hub?.graph?.about });
       if (now.eclipse !== was.eclipse)
@@ -1909,6 +1918,13 @@ async function main() {
    * on — its autopilots, its plan; off: the view back on the ship as it was.
    */
   function setSpectator(on: boolean) {
+    if (camera.character.active) {
+      if (!on) {
+        const err = camera.character.board();
+        if (err) panel.toast(err);
+      }
+      return;
+    }
     if (on === camera.spectating) return;
     if (on && !camera.startSpectator()) {
       panel.toast(t("The spectator leaves a ship flown: fly one first (K)"));
@@ -2364,10 +2380,28 @@ async function main() {
     hudDensity = flightHud.density;
     flightHud.setDensity(2); // clean: the view, the captions, the warnings
   };
-  const flying = () => camera.piloting && !camera.cinematic && !renderer.offlineActive;
+  const flying = () => camera.piloting && !camera.cinematic && !renderer.offlineActive && !camera.character.active;
   panel.flightKeys = (e) => flying() && (e.key === "m" || e.key === "M") && !e.shiftKey;
   camera.onPadAction = (a) => {
     if (renderer.offlineActive) return;
+    if (camera.character.active) {
+      if (a === "focus") camera.character.jump();
+      else if (a === "rotation") {
+        const error = camera.character.board();
+        if (error) panel.toast(error);
+      } else if (a === "settings") (pauseMenu ??= makePauseMenu()).open();
+      else if (a === "recentre") camera.character.yaw = 0;
+      else if (a === "dpadUp") camera.character.zoom(-120);
+      else if (a === "dpadDown") camera.character.zoom(120);
+      touch();
+      return;
+    }
+    if (a === "rotation" && (camera.ourLanded || camera.landed)) {
+      const error = camera.character.disembark();
+      if (error) panel.toast(error);
+      touch();
+      return;
+    }
     if (flying()) {
       // in the Ranger: A SAS, B cut the engine, X prograde, Y retrograde, R3 look ahead
       const pa: Partial<Record<typeof a, () => void>> = {
@@ -2585,7 +2619,18 @@ async function main() {
     pause: () => (pauseMenu ??= makePauseMenu()).open(),
     quickSave: () => quickSave(),
     quickLoad: () => quickLoad(),
-    leaveShip: () => actions["btn-ship"]!(),
+    leaveShip: (e) => {
+      if (e.repeat || !camera.enabled) return;
+      const error = camera.character.toggle();
+      if (error) panel.toast(error);
+      else {
+        touch();
+        syncButtons();
+      }
+    },
+    characterJump: (e) => {
+      if (!e.repeat && camera.enabled) camera.character.jump();
+    },
     // time, in every mode
     playPause: () => playPause(),
     warp: (_, d) => warp(d === "1" ? 1 : -1),
@@ -2809,7 +2854,7 @@ async function main() {
     // (the keys as the player set them — input/bindings.ts)
     // (a spectator out: its keys move it — not the ship's flight keys)
     const camKey = e.code in freeCameraKeys();
-    const b = matchKey(e, flying() && !(camera.spectating && camKey), camKey, effectiveBindings());
+    const b = matchKey(e, flying() && !(camera.spectating && camKey), camKey, effectiveBindings(), camera.character.active);
     if (!b) return;
     e.preventDefault();
     keyActions[b.do](e, b.arg);
@@ -3572,6 +3617,10 @@ async function main() {
         if (!flightHud.mapView) flightHud.toggleMapView();
         if (tab) flightHud.setMapTab(tab);
       };
+      if (name === "character") {
+        characterHud.show();
+        return "character HUD";
+      }
       if (name.startsWith("map_")) {
         map(name === "map_3d" ? "orbit" : name === "map_globe" ? "globe" : "map");
         return `map: ${name.slice(4)}`;
@@ -3857,6 +3906,7 @@ async function main() {
     }
     // what the renderer draws of the flight (the ship, its flames, the predicted path) — an offline job
     // or a video holds its own
+    characterHud.update(now);
     const pil = flying();
     const info = pil ? cpuProf.time("flight figures (flightInfo)", () => camera.flightInfo()) : null;
     if (!renderer.offlineActive && cpuProf.time("free-fall prediction", () => sim.applyRender(info))) changed = true;
@@ -4106,7 +4156,11 @@ async function main() {
     );
     // (the keys that matter now: not over a menu, a clean HUD or a hidden interface)
     keyHints.update(
-      settings.keyHints && !paused && !document.body.classList.contains("hide-ui") && (!pil || flightHud.density < 2)
+      settings.keyHints &&
+        !camera.character.active &&
+        !paused &&
+        !document.body.classList.contains("hide-ui") &&
+        (!pil || flightHud.density < 2)
         ? phaseWatch.current
         : null,
       now,

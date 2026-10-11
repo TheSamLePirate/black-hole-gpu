@@ -135,6 +135,7 @@ struct Params {
   // regional Sentinel-2 / WorldCover: bounds and residency, page grid and gutter, materials and metre scale
   surface: array<vec4f, 7>,
   scenery: array<vec4f, 6>,
+  walk: array<vec4f,5>, // camera-relative shared walking heightfield, in the existing table buffer
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -5092,6 +5093,7 @@ fn earthHeightStepG(q: vec3f, foot: f32) -> f32 {
 }
 // the relief's own normal at q, no finer than the footprint
 fn earthNormalAt(q: vec3f, foot: f32) -> vec3f {
+  if(P.walk[0].w>.5 && dot(WALK_N,WALK_N)>.5){return WALK_N;}
   // (no finer than 10 m: a float32 point of the unit sphere is good to ~0.4 m — finer differences would
   // show its steps, a grid)
   let e = max(foot, 10.0) / EARTH_RM;
@@ -5135,7 +5137,26 @@ fn earthTerrainShadow(p: vec3f, Ls: vec3f, foot: f32) -> f32 {
 // The ray (its axes, radii) against the relief: marched from the relief's bounding shell, steps a
 // fraction of the height above the ground (and of the distance: the far horizon), then bisected; fpK:
 // the pixel's footprint per unit distance. < 0: missed.
+
+var<private> WALK_N:vec3f;
+// CPU and GPU share this local metre grid. No extra storage binding; no per-frame readback.
+fn walkDistance(rd:vec3f,t:f32)->vec2f {
+ WALK_N=vec3f(0);
+ if(P.walk[0].w<.5){return vec2f(0);}
+ let direction=vec3f(rd.xy,rd.z/EARTH_AB);
+ let d=P.walk[0].xyz+vec3f(dot(direction,P.walk[1].xyz),dot(direction,P.walk[2].xyz),dot(direction,P.walk[3].xyz))*(t*EARTH_RM);
+ if(max(abs(d.x),abs(d.z))>=32){return vec2f(0);}
+ let size=u32(P.walk[2].w);let step=P.walk[3].w;let q=(d.xz+32)/step;let cell=min(vec2u(floor(q)),vec2u(size-2u));let f=q-vec2f(cell);let at=cell.y*size+cell.x;let base=u32(P.walk[1].w);
+ let a=bodies[base+at/4u][at%4u];let b=bodies[base+(at+1u)/4u][(at+1u)%4u];let c=bodies[base+(at+size)/4u][(at+size)%4u];let e=bodies[base+(at+size+1u)/4u][(at+size+1u)%4u];
+ let h=mix(mix(a,b,f.x),mix(c,e,f.x),f.y);
+ let dx=mix(b-a,e-c,f.y)/step;let dz=mix(c-a,e-b,f.x)/step;
+ let normal=normalize(P.walk[2].xyz-P.walk[1].xyz*dx-P.walk[3].xyz*dz);
+ WALK_N=normalize(vec3f(normal.xy,normal.z/EARTH_AB));
+ return vec2f((d.y-h)/EARTH_RM,1-smoothstep(30.0,32.0,max(abs(d.x),abs(d.z))));
+}
+
 fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
+  WALK_N=vec3f(0);
   let Rs = 1.0 + 9600.0 / EARTH_RM;
   let b = dot(ro, rd);
   let off = ro - rd * b;
@@ -5170,11 +5191,13 @@ fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
     let foot = max(t * fpK * EARTH_RM, 0.05);
     let rad = (e + 2.0 * dot(A, v) + dot(v, v)) / (r + 1.0);
     var f = 0.0;
-    if (!band) {
+    let walk=walkDistance(rd,t);
+    if(walk.y>=.999){f=walk.x;band=true;}
+    else if (!band) {
       f = rad - (earthHeightStep(p / r, foot) + 9.0 * foot + 3.0) / EARTH_RM;
       band = f <= 0.0;
     }
-    if (band) { f = rad - earthHeight(p / r, foot) / EARTH_RM; }
+    if (band && walk.y<.999) { f = mix(rad - earthHeight(p / r, foot) / EARTH_RM,walk.x,walk.y); }
     if (f < 0.0) {
       // (between the last point above — its full height's f, or the margin's, a lower bound — and this one)
       var lo = tPrev;
@@ -5186,7 +5209,9 @@ fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
         let vm = o + rd * m;
         let pm = A + vm;
         let rm = length(pm);
-        let fm = (e + 2.0 * dot(A, vm) + dot(vm, vm)) / (rm + 1.0) - earthHeight(pm / rm, max(m * fpK * EARTH_RM, 0.05)) / EARTH_RM;
+        let walkM=walkDistance(rd,m);
+        var fm=walkM.x;
+        if(walkM.y<.999){fm=mix((e + 2.0 * dot(A, vm) + dot(vm, vm)) / (rm + 1.0) - earthHeight(pm / rm, max(m * fpK * EARTH_RM, 0.05)) / EARTH_RM,walkM.x,walkM.y);}
         if (fm < 0.0) { hi = m; fhi = fm; } else { lo = m; flo = fm; }
       }
       // (the root between the last two: the side above may have closed in on it, the one below not)

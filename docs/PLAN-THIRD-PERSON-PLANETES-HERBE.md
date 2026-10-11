@@ -3,7 +3,8 @@
 Analyse et plan du **12 octobre 2026**, sur la base du moteur au commit `b0c0065`.
 Référence examinée : [false-earth](https://github.com/momentchan/false-earth), commit
 [`468a0cfd71698400103198a8eb91d5176fe4f59e`](https://github.com/momentchan/false-earth/tree/468a0cfd71698400103198a8eb91d5176fe4f59e).
-**Document de conception : les fonctionnalités ci-dessous ne sont pas encore implémentées.**
+**Document de conception initial. L’implémentation, ses validations et ses limites sont décrites dans
+[THIRD-PERSON-IMPLEMENTATION.md](THIRD-PERSON-IMPLEMENTATION.md).**
 
 ## Recommandation
 

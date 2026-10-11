@@ -106,6 +106,12 @@ function stopSpectator(this: CameraController) {
 
 /** The settings the renderer draws: the spectator's, or the ship's. */
 function viewSettings(this: CameraController): Settings {
+  // On foot, a paused/frozen scene still applies material and quality edits without advancing physics.
+  if (this.character.active && this.spectator) {
+    const v = this.spectator.s as unknown as Record<string, unknown>;
+    const s = this.s as unknown as Record<string, unknown>;
+    for (const k of Object.keys(s)) if (!VIEW_KEYS.has(k as keyof Settings) && v[k] !== s[k]) v[k] = s[k];
+  }
   return this.spectator?.s ?? this.s;
 }
 /** The controller of the view: the spectator's, or this one. */

@@ -26,6 +26,8 @@ export const TELEMETRY_GROUPS = [
   "sky",
   "surface",
   "scenery",
+  "character",
+  "grass",
 ] as const;
 export type TelemetryGroup = (typeof TELEMETRY_GROUPS)[number];
 
@@ -37,11 +39,14 @@ export function telemetry(
   groups: readonly TelemetryGroup[] = TELEMETRY_GROUPS,
   surface?: unknown,
   scenery?: unknown,
+  grass?: unknown,
 ) {
   const c = camera as Loose;
   const air: Loose = c.airInfo?.() ?? null;
   const out: Record<string, unknown> = {};
   const want = new Set(groups);
+  if (want.has("grass") && grass !== undefined) out.grass = grass;
+  if (want.has("character")) out.character = camera.character?.state();
   if (want.has("surface") && surface !== undefined) out.surface = surface;
   if (want.has("scenery") && scenery !== undefined) out.scenery = scenery;
   if (want.has("attitude") && air)

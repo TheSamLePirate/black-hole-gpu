@@ -131,7 +131,11 @@ export function freeCameraKeys(): Record<string, [number, number, number, number
 
 /** The overrides' context: a key may serve once in each (flying, on foot — the system and the time in both). */
 const context = (layer: KeyLayer | "held-flight" | "held-free"): ("fly" | "foot")[] =>
-  layer === "flight" || layer === "held-flight" ? ["fly"] : layer === "scene" || layer === "held-free" ? ["foot"] : ["fly", "foot"];
+  layer === "flight" || layer === "held-flight"
+    ? ["fly"]
+    : layer === "scene" || layer === "character" || layer === "held-free"
+      ? ["foot"]
+      : ["fly", "foot"];
 
 export interface Remappable {
   id: string;
@@ -164,7 +168,7 @@ export function remappables(): Remappable[] {
     out.push({
       id: bindId(b),
       label: actionLabel(b),
-      group: b.layer === "flight" ? "fly" : b.layer,
+      group: b.layer === "flight" ? "fly" : b.layer === "character" ? "free" : b.layer,
       now: e.code ? { code: e.code[0] } : { key: e.key![0] },
       def: b.code ? { code: b.code[0] } : { key: b.key![0] },
       shift: b.shift,
@@ -260,6 +264,7 @@ const ACTION_LABELS: Partial<Record<KeyAction, Text>> = {
   missions: { fr: "Ordinateur de vol (missions)", en: "Flight computer (missions)" },
   stopFlight: { fr: "Rendre les commandes", en: "Release the controls" },
   ack: { fr: "Acquitter l'alarme", en: "Acknowledge the caution" },
+  characterJump: { fr: "Sauter", en: "Jump" },
   leaveShip: { fr: "Sortir du vaisseau", en: "Leave the ship" },
   playPause: { fr: "Lecture / pause du temps", en: "Run / pause time" },
   realTime: { fr: "Temps réel", en: "Real time" },

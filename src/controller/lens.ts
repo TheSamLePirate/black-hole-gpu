@@ -301,7 +301,11 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   // (tracking resumes from the orientation the flight left: offset recomputed, no jump)
   else this.offset = null;
   // the spectator, after the ship (its frame's pose): its own flight
-  const viewMoved = this.spectator ? this.advanceSpectator(dt, time, pad) : false;
+  const viewMoved = this.character.active
+    ? this.character.step(s.animate ? dt : 0, this.shipClock() ?? this.time + (s.animate ? dt * s.timeSpeed : 0), pad)
+    : this.spectator
+      ? this.advanceSpectator(dt, time, pad)
+      : false;
   return this.changedSince(before) || viewMoved;
 }
 

@@ -339,6 +339,8 @@ The renderer (`src/renderer.ts`). The members the tests read:
 | `earthSettled` | boolean | the Earth's maps, terrain, requested surface pages and worldwide scenery are settled (failed requests use fallback) |
 | `earthSurface.stats()` | object | Regional Sentinel-2/WorldCover: `mode`, `supported`, `region`, `year`, `sourceResolutionM`, `format`, `loaded`, `pages`, `pending`, `inflight`, `failed`, `lastError`, `status`, `gpuBytes`, cumulative `uploadedBytes` and `uploadCpuMs`, `credit`. `settings.earthSurface`: `off`, `satellite`, `materials`; see [PLAN-TERRE-PHOTOREALISTE.md](PLAN-TERRE-PHOTOREALISTE.md). |
 | `earthScenery.stats()` | object | Worldwide WorldCover forests and OpenStreetMap scenery: `mode`, `supported`, `status`, `pending`, `lat`, `lon`, `trees`, `buildings`, `footprintEdges`, `roads`, `railways`, `waterways` (segment counts), `waterPolygons`, `pavedPolygons`, `bridges`, `bridgePiers`, `osmLayers` (feature counts and field names), `shadows`, `shadowReceiverRangeM`, `shadowRayRangeM`, `budgetLimited`, `gpuBytes`, `retiringGpuBytes`, `coverPixels`, `rgbPixels`, `workerMs` (network included), `tileNetworkBytes` (all scenery responses), cumulative `uploadCpuMs`, `lastError`, `coverage`, `credit`, `sources`. `settings.earthScenery`: `off`, `balanced`, `high`; `settings.earthSceneryShadows`: boolean. Data readiness does not imply shader readiness: wait for `variantReady` and completed frames before capturing. See [FORETS-BATIMENTS-WORLDWIDE.md](FORETS-BATIMENTS-WORLDWIDE.md). |
+| `characterRenderer.stats()` | object | native skinned astronaut readiness/error, triangles, joints, mesh/texture bytes and CPU pose time; grass `active`, `reason`, `roots`, `maxRoots`, `pending`, resident buffers, depth/shadow bytes and CPU generation time. |
+| `calibrationReady` | boolean | requested resources settled and no pending shader compilation; failures can still use fallback. Capture tests additionally require successful source statuses, lighting shader and model readiness. |
 | `tier` | `{ level, capMpx, label }` | the hardware tier and its pixel budget |
 | `adapter` | object \| null | the GPU adapter: `vendor`, `architecture`, `device`, `description`, `fallback`, `features` (sorted), `limits` |
 | `device` | GPUDevice | the WebGPU device (private in the source; read at run time: `device.features.has(…)`, `device.limits`) |
@@ -1007,6 +1009,33 @@ src/system/solar.ts); **c** = C_MPS = 299792458 m/s. So a length in M × 1.47662
 a speed in c × 299792458 = m/s. Frames: the **home frame** is our universe (our side of the wormhole, its mouth at the
 origin): positions in M, velocities in c, times in M of the sim clock (`__bh.time()`). The **body-fixed** frame turns with a body.
 The **hole frame** is Gargantua's Cartesian frame (Boyer–Lindquist `r, θ, φ` in M on the hole's side).
+
+### `__bh.camera.character` → PlanetCharacter
+
+Independent explorer, in planet-fixed metres. Call after `__bh.freeze(true)` and advance with `__bh.step(dt)`.
+The piloted vessel stays in place on the surface; `camera.piloting` can remain true while the explorer owns the view.
+
+| member | meaning |
+|---|---|
+| `start(body, lat=0, lon=0)` | Explore a solid body's geodetic location, degrees north/east; returns null or refusal reason. Earth requires known dry ground. |
+| `disembark()` / `board()` / `toggle()` | Same physical action as the configurable Shift+K key: parked, slow craft, clear dry exit and access within 3 m for boarding. Null on success or reason. |
+| `move(forward, right, seconds=1, run=false)` | Camera-relative input −1…1, at most 10 real seconds; zero stops movement. |
+| `jump()` | Queues a jump, integrated with local gravity; Space invokes this only on foot. |
+| `orbit(dx, dy)` / `zoom(delta)` | Camera orbit input and wheel distance; `yaw`, `pitch` radians, `distance` metres. |
+| `stop()` / `releaseInput()` | End exploration and release view, or only stop held inputs. TARS `character(stop)` stops movement rather than ending the explorer. |
+| `state()` | `active`, `body`, `ours`, `positionM`, `speedMs`, `verticalMs`, `grounded`, `heightM`, `accessDistanceM`, `cpuMs`, `groundPatch` readiness/grid/bytes/CPU, `error`. Infinity access distance serializes to null when no landed craft is reachable. |
+| `snapshot()` / `restore(saved)` | Save/restore position, heading, orientation, camera distance and vertical velocity. |
+| `frame()` | Camera-relative origin/axes in metres and body-fixed position, speed, phase and time for the renderer. |
+| `groundPatch` | Shared CPU/GPU Earth heightfield; `ready`, `size` (17 coarse, 65 refined), `stamp`, `values`, `cpuMs`. |
+
+```js
+__bh.camera.character.start('moon', 0, 0);
+__bh.camera.character.move(1, 0, 2);
+__bh.step(1 / 60);
+__bh.camera.character.state();
+```
+
+*Used in:* `tests/e2e/character.e2e.test.ts`. [Implementation and strict capture protocol](THIRD-PERSON-IMPLEMENTATION.md).
 
 ### `__bh.camera` → CameraController (the flight controller)
 

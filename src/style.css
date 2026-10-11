@@ -2842,3 +2842,16 @@ body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right));
 }
 .scenery-credit[hidden] { display: none; }
 .scenery-credit a { color: inherit; text-decoration: underline; }
+
+/* On-foot exploration shares the game, with a compact context-specific HUD. */
+.on-foot .fl-root, .on-foot .kh { display: none !important; }
+.character-hud { position: fixed; z-index: 24; bottom: max(24px, env(safe-area-inset-bottom)); left: 24px; min-width: 280px; max-width: calc(100vw - 32px); padding: 14px 20px; border: 1px solid #b7ccdf38; border-radius: 14px; background: #080e18b5; backdrop-filter: blur(16px); color: #e8f0f7; text-align: center; box-shadow: 0 8px 32px #0005; font: 12px Inter, sans-serif; }
+.character-hud[hidden], .hide-ui .character-hud { display: none; }
+.character-status { font-size: 11px; font-weight: 600; letter-spacing: .14em; margin-bottom: 8px; }
+.character-controls { color: #b9c9d7; line-height: 1.7; margin-bottom: 8px; }
+.character-hud button { padding: 8px 14px; border: 1px solid #b7ccdf55; border-radius: 7px; background: #ffffff0d; color: inherit; cursor: pointer; }
+.character-hud button:disabled { opacity: .4; cursor: default; }
+.character-touch { display: none; gap: 6px; margin-top: 8px; touch-action: none; }
+@media (pointer: coarse) { .on-foot .character-touch { display: flex; justify-content: center; } .character-controls { display: none; } .character-hud { left: 12px; bottom: max(12px, env(safe-area-inset-bottom)); } }
+
+.on-foot .character-hud { bottom: auto; top: max(68px, env(safe-area-inset-top)); }

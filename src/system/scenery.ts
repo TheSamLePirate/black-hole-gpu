@@ -1,4 +1,5 @@
 import type { Vec3 } from "../physics";
+import { SceneryContact } from "./scenery-contact";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "./ellipsoid";
 import {
   D,
@@ -23,6 +24,7 @@ export function sceneryShader(code: string, supported: boolean) {
 }
 
 export class EarthScenery {
+  contact: SceneryContact | null = null;
   buffer: GPUBuffer;
   onChange: (() => void) | null = null;
   onContent: (() => void) | null = null;
@@ -70,6 +72,7 @@ export class EarthScenery {
     this.lastError = null;
     this.id++;
     this.data = null;
+    this.contact = null;
     if (this.allocated) {
       const old = this.buffer;
       this.allocated = false;
@@ -169,6 +172,7 @@ export class EarthScenery {
         }
         const t = performance.now();
         this.device.queue.writeBuffer(this.buffer, 0, r.buffer);
+        this.contact = new SceneryContact(r, r.buffer);
         this.uploaded += performance.now() - t;
         this.data = { ...r, buffer: undefined };
         this.started = performance.now();
@@ -235,6 +239,7 @@ export class EarthScenery {
     const d = this.data;
     return {
       mode: this.mode,
+      contactBytes: this.contact?.bytes ?? 0,
       supported: this.supported,
       status: d
         ? this.pending

@@ -498,3 +498,54 @@ test("TARS reads signed descent commands, threshold profile height and actual do
   expect(tel.approach).toMatchObject({ heightOverThresholdM: 250, profileDeviationM: 0, groundSpeedMs: 100, airspeedMs: 110 });
   expect(tel.dock).toMatchObject({ closingMs: -0.1, askedClosingMs: -0.1 });
 });
+
+test("planetary character actions, telemetry, waits, events and commands are reachable by TARS", async () => {
+  const { gameTools, SCREENS } = await import("../src/ai/game-tools");
+  const { EVENT_KINDS } = await import("../src/ai/triggers");
+  const { GAME_COMMANDS } = await import("../src/ai/game-commands");
+  const calls: string[] = [];
+  const character = {
+    active: true,
+    grounded: true,
+    state: () => ({ active: true, body: "moon", grounded: true }),
+    disembark: () => {
+      calls.push("disembark");
+      return null;
+    },
+    board: () => {
+      calls.push("board");
+      return null;
+    },
+    start: () => null,
+    move: () => null,
+    jump: () => calls.push("jump"),
+    yaw: 0,
+    pitch: 0,
+  };
+  const host = {
+    camera: { character, piloting: true },
+    settings: {},
+    tools: {
+      perf: () => ({ grass: { roots: 123 } }),
+      status: () => ({ soiName: "Moon", label: "ground", altKm: 0, orbit: null }),
+      pilotState: () => ({}),
+    },
+    changed: () => {},
+    now: () => 0,
+    progress: () => {},
+    phase: () => null,
+    alerts: () => [],
+  } as unknown as GameHost;
+  const tools = gameTools(host),
+    signal = new AbortController().signal;
+  expect(await tools.find((t) => t.name === "character")!.run({ action: "disembark" }, signal)).toMatchObject({ ok: true, body: "moon" });
+  expect(calls).toEqual(["disembark"]);
+  expect(await tools.find((t) => t.name === "get_telemetry")!.run({ groups: ["character", "grass"] }, signal)).toEqual({
+    character: character.state(),
+    grass: { roots: 123 },
+  });
+  expect(await tools.find((t) => t.name === "wait")!.run({ until: "character_grounded" }, signal)).toMatchObject({ met: true });
+  expect(EVENT_KINDS).toContain("character");
+  expect(SCREENS).toContain("character");
+  expect(GAME_COMMANDS.find((c) => c.name === "walk")?.tool).toBe("character");
+});

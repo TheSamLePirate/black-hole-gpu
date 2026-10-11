@@ -304,6 +304,7 @@ export interface Settings {
   earthSurface: "off" | "satellite" | "materials"; // regional Sentinel-2 / WorldCover pilot; independent of physical relief
   earthScenery: "off" | "balanced" | "high";
   earthSceneryShadows: boolean;
+  earthGrass: "off" | "balanced";
   realtimeEps: number;
   realtimeSteps: number;
   qualityEps: number;
@@ -577,6 +578,7 @@ export function defaultSettings(): Settings {
     earthSurface: "satellite",
     earthScenery: "balanced",
     earthSceneryShadows: true,
+    earthGrass: "balanced",
     realtimeEps: 0.07,
     realtimeSteps: 600,
     qualityEps: 0.02,
@@ -1807,6 +1809,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   earthSurface: "scene",
   earthScenery: "scene",
   earthSceneryShadows: "scene",
+  earthGrass: "pref",
   realtimeEps: "pref",
   realtimeSteps: "pref",
   qualityEps: "pref",

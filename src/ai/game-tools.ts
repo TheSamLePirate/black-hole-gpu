@@ -138,6 +138,7 @@ export const SCREENS = [
   "map_globe",
   "map_planisphere",
   "telemetry",
+  "character",
   "approach_chart",
   "flight_computer",
   "ship",
@@ -379,6 +380,8 @@ export function gameTools(h: GameHost): Tool[] {
           docked: camera.docked,
           surface: tools.perf({ gpu: false }).earthSurface,
           scenery: tools.perf({ gpu: false }).earthScenery,
+          character: camera.character.state(),
+          grass: tools.perf({ gpu: false }).grass,
         };
       },
     },
@@ -393,7 +396,56 @@ export function gameTools(h: GameHost): Tool[] {
           (a.groups as TelemetryGroup[] | undefined)?.length ? (a.groups as TelemetryGroup[]) : TELEMETRY_GROUPS,
           tools.perf({ gpu: false }).earthSurface,
           tools.perf({ gpu: false }).earthScenery,
+          tools.perf({ gpu: false }).grass,
         ),
+    },
+    {
+      name: "character",
+      description:
+        "Walk on solid planets. disembark/board use the same safety checks as Shift+K; start places an explorer at geodetic lat/lon; move lasts at most 10 seconds; jump, stop, orbit and status. Grass runs only on Earth on foot. Units metres, seconds and degrees.",
+      params: {
+        action: { type: "string", enum: ["disembark", "board", "start", "move", "stop", "jump", "orbit", "status"] },
+        body: { type: "string" },
+        lat: { type: "number", minimum: -90, maximum: 90 },
+        lon: { type: "number", minimum: -180, maximum: 180 },
+        forward: { type: "number", minimum: -1, maximum: 1 },
+        right: { type: "number", minimum: -1, maximum: 1 },
+        seconds: { type: "number", minimum: 0, maximum: 10 },
+        run: { type: "boolean" },
+        yaw: { type: "number", minimum: -180, maximum: 180 },
+        pitch: { type: "number", minimum: -8, maximum: 68 },
+      },
+      required: ["action"],
+      run: (a) => {
+        const c = camera.character;
+        let error: string | null = null;
+        switch (a.action) {
+          case "disembark":
+            error = c.disembark();
+            break;
+          case "board":
+            error = c.board();
+            break;
+          case "start":
+            error = c.start(body(a.body ?? "earth") ?? "earth", Number(a.lat ?? 0), Number(a.lon ?? 0));
+            break;
+          case "move":
+            error = c.move(Number(a.forward ?? 0), Number(a.right ?? 0), Number(a.seconds ?? 1), !!a.run);
+            break;
+          case "stop":
+            c.move(0, 0, 0);
+            break;
+          case "jump":
+            c.jump();
+            break;
+          case "orbit":
+            c.yaw = (Number(a.yaw ?? 0) * Math.PI) / 180;
+            c.pitch = (Number(a.pitch ?? 12) * Math.PI) / 180;
+            break;
+        }
+        h.changed([]);
+        return { ...c.state(), ok: !error, error };
+      },
     },
     {
       name: "list_places",
@@ -1395,11 +1447,24 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "wait",
       description:
-        "Wait while the game runs (warp it with `time` first for long waits): until the autopilot is off (its job done), landed (stopped on the ground), in_orbit (about `body` if given — else any), docked, the plan executed, a phase stage (orbit, air, entry, approach, ground…), surface_ready (surface streaming settled; read returned surface status for fallback/unsupported), scenery_ready (worldwide 3D streaming and fade settled; read returned scenery status for degraded/unsupported), or just seconds. Returns whether it was met and the state then — read it before saying what happened. At most maxSeconds of real time (default 120, max 900).",
+        "Wait while the game runs (warp it with `time` first for long waits): until the autopilot is off (its job done), landed (stopped on the ground), in_orbit (about `body` if given — else any), docked, the plan executed, a phase stage (orbit, air, entry, approach, ground…), surface_ready (surface streaming settled; read returned surface status for fallback/unsupported), scenery_ready (worldwide 3D streaming and fade settled; read returned scenery status for degraded/unsupported), character_grounded (on foot and touching ground), character_on_foot, character_boarded (back at the controls), or just seconds. Returns whether it was met and the state then — read it before saying what happened. At most maxSeconds of real time (default 120, max 900).",
       params: {
         until: {
           type: "string",
-          enum: ["autopilot_off", "landed", "in_orbit", "docked", "plan_done", "stage", "surface_ready", "scenery_ready", "seconds"],
+          enum: [
+            "autopilot_off",
+            "landed",
+            "in_orbit",
+            "docked",
+            "plan_done",
+            "stage",
+            "surface_ready",
+            "scenery_ready",
+            "character_grounded",
+            "character_on_foot",
+            "character_boarded",
+            "seconds",
+          ],
         },
         stage: {
           type: "string",
@@ -1417,6 +1482,12 @@ export function gameTools(h: GameHost): Tool[] {
         const about = () => !on || tools.status().soi === on;
         const done = (): boolean => {
           switch (a.until) {
+            case "character_grounded":
+              return camera.character.active && camera.character.grounded;
+            case "character_on_foot":
+              return camera.character.active;
+            case "character_boarded":
+              return !camera.character.active && camera.piloting;
             case "scenery_ready":
               return !tools.perf({ gpu: false }).earthScenery.pending;
             case "surface_ready":
@@ -1447,6 +1518,9 @@ export function gameTools(h: GameHost): Tool[] {
           stage: { fr: "la phase", en: "the phase" },
           surface_ready: { fr: "le sol satellite chargé", en: "satellite ground settled" },
           scenery_ready: { fr: "le paysage 3D chargé", en: "3D scenery settled" },
+          character_grounded: { fr: "le personnage au sol", en: "the character grounded" },
+          character_on_foot: { fr: "la sortie du vaisseau", en: "the character on foot" },
+          character_boarded: { fr: "le retour aux commandes", en: "the character boarded" },
           seconds: { fr: "le temps", en: "the time" },
         };
         const what = `${tr(words[String(a.until)] ?? { fr: String(a.until), en: String(a.until) })}${a.stage ? ` ${a.stage}` : ""}${on ? ` · ${String(a.body)}` : ""}`;
@@ -1481,6 +1555,7 @@ export function gameTools(h: GameHost): Tool[] {
                 },
                 pilot: tools.pilotState(),
                 phase: h.phase(),
+                ...(String(a.until).startsWith("character_") ? { character: camera.character.state() } : {}),
                 alerts: h.alerts(),
                 ...(a.until === "surface_ready" ? { surface: tools.perf({ gpu: false }).earthSurface } : {}),
                 ...(a.until === "scenery_ready" ? { scenery: tools.perf({ gpu: false }).earthScenery } : {}),
