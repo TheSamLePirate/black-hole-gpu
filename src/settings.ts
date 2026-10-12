@@ -305,6 +305,9 @@ export interface Settings {
   earthScenery: "off" | "balanced" | "high";
   earthSceneryShadows: boolean;
   earthGrass: "off" | "balanced";
+  earthGrassDensity: number; // the share of the grass blades drawn (0.25 … 1; 1 the authored density)
+  earthGrassReach: number; // the grass drawn out to this distance from the character [m] (8 … 28)
+  earthGrassWind: number; // the grass's sway (0 still … 2; 1 as authored)
   realtimeEps: number;
   realtimeSteps: number;
   qualityEps: number;
@@ -579,6 +582,9 @@ export function defaultSettings(): Settings {
     earthScenery: "balanced",
     earthSceneryShadows: true,
     earthGrass: "balanced",
+    earthGrassDensity: 1,
+    earthGrassReach: 28,
+    earthGrassWind: 1,
     realtimeEps: 0.07,
     realtimeSteps: 600,
     qualityEps: 0.02,
@@ -1810,6 +1816,9 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   earthScenery: "scene",
   earthSceneryShadows: "scene",
   earthGrass: "pref",
+  earthGrassDensity: "pref",
+  earthGrassReach: "pref",
+  earthGrassWind: "pref",
   realtimeEps: "pref",
   realtimeSteps: "pref",
   qualityEps: "pref",

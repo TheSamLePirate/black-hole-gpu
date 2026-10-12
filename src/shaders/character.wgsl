@@ -8,6 +8,8 @@ struct U {
   // Each ellipsoid: centre/material; radii/hinge angle. Joints animate on the GPU.
   parts:array<vec4f,64>,
   scene:array<vec4f,6>,
+  // tune: the grass's reach [m], its sway (1 as authored), the share of blades drawn (the renderer's settings).
+  tune:vec4f,
 };
 @group(0) @binding(0) var<uniform> u:U;
 @group(0) @binding(1) var<storage,read> moments:array<vec2f>;
@@ -48,7 +50,7 @@ fn avatarVertex(p:vec3f,k:u32)->V {
 
 @compute @workgroup_size(128) fn cull(@builtin(global_invocation_id) id:vec3u){
  if(id.x>=u32(u.grassOrigin.w)){return;}let r=roots[id.x];let p=grassCam(r.xyz);let delta=p-u.origin.xyz;let d=length(delta-u.up.xyz*dot(delta,u.up.xyz));
- if(d>28||p.z<.03||abs(p.x)>p.z*u.view.x+.6||abs(p.y)>p.z*u.view.y+.8){return;}
+ if(d>u.tune.x||p.z<.03||abs(p.x)>p.z*u.view.x+.6||abs(p.y)>p.z*u.view.y+.8){return;}
  let lod=select(select(0u,1u,d>6),2u,d>16);let at=atomicAdd(&commands[lod].instances,1u);let shade=u32(nearSceneryShadow(p+u.grassUp.xyz*.2)*255);culled[lod*65536u+at]=id.x|(shade<<16u);
 }
 @vertex fn grassVs(@builtin(vertex_index) v:u32,@builtin(instance_index) instance:u32)->V{
@@ -57,10 +59,10 @@ fn avatarVertex(p:vec3f,k:u32)->V {
  let c=corners[v%6u];let t=(f32(v/6u)+c.x)/f32(segments);let entry=visible[lod*65536u+instance];let r=roots[entry&65535u];
  let angle=r.w*6.283185;let h=.19+.25*fract(r.w*17.319);let width=(.008+.006*fract(r.w*71.79))*(1-t);
  let root=grassCam(r.xyz);let pixelWidth=max(root.z,.035)*u.view.y/u.image.y;let rasterWidth=max(width,pixelWidth*.7*(1-t));let side=u.grassRight.xyz*cos(angle)+u.grassForward.xyz*sin(angle);
- let g=r.xz+u.view.zw;let wind=sin(dot(g,vec2f(.37,.21))+u.up.w*1.7)+.4*sin(dot(g,vec2f(.13,-.33))+u.up.w*2.3);
+ let g=r.xz+u.view.zw;let wind=(sin(dot(g,vec2f(.37,.21))+u.up.w*1.7)+.4*sin(dot(g,vec2f(.13,-.33))+u.up.w*2.3))*u.tune.y;
  let delta=root-u.origin.xyz;let dist=length(delta-u.up.xyz*dot(delta,u.up.xyz));let push=normalize(delta+vec3f(.001));let influence=1-smoothstep(.15,.9,dist);
  let bend=(u.grassRight.xyz*.06*wind+u.grassForward.xyz*.045*wind+push*.35*influence)*t*t;
- var o:V;o.p=root+u.grassUp.xyz*h*t+side*(c.y*rasterWidth)+bend;o.n=normalize(cross(side,u.grassUp.xyz+bend*2));o.local=vec3f(c.y,t,f32(entry>>16u)/255);o.material=10;o.coverage=min(1.0,width/max(rasterWidth,1e-6))*(1-smoothstep(25.0,28.0,dist));o.tint=mix(vec3f(.018,.055,.009),vec3f(.075,.19,.018),t)*(.7+.6*fract(r.w*37.71));o.clip=project(o.p);return o;
+ var o:V;o.p=root+u.grassUp.xyz*h*t+side*(c.y*rasterWidth)+bend;o.n=normalize(cross(side,u.grassUp.xyz+bend*2));o.local=vec3f(c.y,t,f32(entry>>16u)/255);o.material=10;o.coverage=min(1.0,width/max(rasterWidth,1e-6))*(1-smoothstep(u.tune.x-3.0,u.tune.x,dist));o.tint=mix(vec3f(.018,.055,.009),vec3f(.075,.19,.018),t)*(.7+.6*fract(r.w*37.71));o.clip=project(o.p);return o;
 }
 fn ggx(N:vec3f,V:vec3f,L:vec3f,rough:f32,f0:vec3f)->vec3f{
  let H=normalize(V+L);let nh=max(dot(N,H),0);let nv=max(dot(N,V),.001);let nl=max(dot(N,L),.001);let a=rough*rough;let aa=a*a;let d=nh*nh*(aa-1)+1;

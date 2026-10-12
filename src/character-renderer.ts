@@ -17,6 +17,13 @@ export interface CharacterLight {
 }
 const MAX = 65536;
 
+/** The grass's settings: its reach [m], its sway (1 as authored), the share of its blades drawn. null: no grass pass. */
+export interface GrassTune {
+  density: number;
+  reach: number;
+  wind: number;
+}
+
 // One set of grass roots: generated in bounded chunks, drawn only once complete. Its origin and axes travel with it.
 interface RootSet {
   index: number;
@@ -67,7 +74,7 @@ export class CharacterRenderer {
     this.model = new AstronautModel(d);
     this.module = d.createShaderModule({ label: "character and grass", code: shader });
     const buffer = (size: number, usage: number) => d.createBuffer({ size, usage });
-    this.uniform = buffer(83 * 16, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+    this.uniform = buffer(84 * 16, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
     this.sets = [0, 1].map((index) => ({
       index,
       buffer: buffer(MAX * 16, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST),
@@ -186,7 +193,7 @@ export class CharacterRenderer {
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
     this.sampler = d.createSampler({ compare: "less-equal", magFilter: "linear", minFilter: "linear" });
-    for (let i = 0; i < 3; i++) this.lodUniform.push(buffer(83 * 16, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST));
+    for (let i = 0; i < 3; i++) this.lodUniform.push(buffer(84 * 16, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST));
   }
   stats() {
     return {
@@ -216,8 +223,8 @@ export class CharacterRenderer {
     this.binds = [];
     this.bound = null;
   }
-  private generate(c: PlanetCharacter, contact: SceneryContact | null, revision: number, on: boolean) {
-    this.reason = !on
+  private generate(c: PlanetCharacter, contact: SceneryContact | null, revision: number, grass: GrassTune | null) {
+    this.reason = !grass
       ? "off"
       : c.body !== "earth"
         ? "other-planet"
@@ -237,7 +244,8 @@ export class CharacterRenderer {
       right = unit(cross(Math.abs(up[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0], up)),
       forward = cross(up, right);
     const cell = [Math.round(dot(q, right) / 8), Math.round(dot(q, forward) / 8)];
-    const key = `${revision}:${cell.join(":")}`;
+    const tune = grass!;
+    const key = `${revision}:${cell.join(":")}:${tune.density}:${tune.reach}`;
     // The drawn set stays on screen until its replacement is complete: a rebuilt terrain patch or a crossed cell
     // no longer empties the grass for the frames the generation takes.
     if (this.drawn >= 0 && this.sets[this.drawn]?.key === key) return;
@@ -260,12 +268,12 @@ export class CharacterRenderer {
         x = (cellId % 64) - 32,
         z = Math.floor(cellId / 64) - 32,
         d = Math.hypot(x, z);
-      if (d > 29) continue;
+      if (d > tune.reach + 1) continue;
       const p = add(add(s.origin, s.axes[0], x), s.axes[2], z);
       if (!contact!.grass(p)) continue;
       const hx = x + s.lattice[0],
         hz = z + s.lattice[1];
-      const density = bladesInCell(grassDensity(d), hx, hz);
+      const density = bladesInCell(grassDensity(d) * tune.density, hx, hz);
       for (let n = 0; n < density && s.count < MAX; n++) {
         const a = seed(hx * 131 + n, hz),
           b = seed(hx, hz * 137 + n),
@@ -303,7 +311,7 @@ export class CharacterRenderer {
     light: CharacterLight,
     contact: SceneryContact | null,
     revision: number,
-    grassOn: boolean,
+    grass: GrassTune | null,
     prof: GpuProfiler,
     sceneryBuffer: GPUBuffer,
   ) {
@@ -311,7 +319,7 @@ export class CharacterRenderer {
     if (!this.model.ready && !this.model.error) void this.model.load();
     if (this.model.ready) this.model.evaluate(c.age, frame.speed);
     this.active = true;
-    this.generate(c, contact, revision, grassOn);
+    this.generate(c, contact, revision, grass);
     const width = target.width,
       height = target.height,
       key = `${width}:${height}`;
@@ -320,7 +328,7 @@ export class CharacterRenderer {
       this.depth = this.d.createTexture({ size: [width, height], format: "depth32float", usage: GPUTextureUsage.RENDER_ATTACHMENT });
       this.size = key;
     }
-    const u = new Float32Array(83 * 4);
+    const u = new Float32Array(84 * 4);
     const set = (i: number, v: number[]) => u.set(v, i * 4);
     const tan = Math.tan((light.fov * Math.PI) / 360);
     const roots = this.sets[this.drawn] ?? null;
@@ -384,6 +392,7 @@ export class CharacterRenderer {
       });
       set(80, [...contact.local(frame.q), 0]);
     }
+    set(83, [grass?.reach ?? 28, grass?.wind ?? 1, grass?.density ?? 1, 0]);
     this.d.queue.writeBuffer(this.uniform, 0, u);
     for (let i = 0; i < 3; i++) {
       u[23] = i;

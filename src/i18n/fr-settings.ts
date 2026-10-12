@@ -1,5 +1,14 @@
 // French for the settings, the scenes and the keyboard sheet (keyed by the English: see src/i18n.ts).
 export default {
+  "Grass density": "Densité de l'herbe",
+  "Share of the grass blades drawn, from a quarter to the authored density (the centre's 130 blades/m² falling smoothly to 8 at 16 m). Fewer blades run faster on a weak GPU; the field is regenerated at once, and the drawn one stays on screen meanwhile.":
+    "Part des brins d'herbe dessinés, du quart à la densité d'origine (130 brins/m² au centre, qui décroissent doucement jusqu'à 8 à 16 m). Moins de brins tournent plus vite sur un GPU faible ; le champ est régénéré aussitôt, l'ancien reste affiché entre-temps.",
+  "Grass reach": "Portée de l'herbe",
+  "How far from the character the grass is drawn, in metres: its fade ends at this distance. The field is at most 65,536 blades, so a shorter reach lets the density stay as authored.":
+    "Distance à laquelle l'herbe est dessinée autour du personnage, en mètres : son fondu s'achève à cette distance. Le champ compte au plus 65 536 brins : une portée plus courte permet de garder la densité d'origine.",
+  "Grass sway": "Balancement de l'herbe",
+  "How much the grass sways in the wind, and bends away from the character: 0 keeps it still, 1 is the authored sway, 2 doubles it.":
+    "Amplitude du balancement de l'herbe au vent, et son écartement devant le personnage : 0 la garde immobile, 1 est le balancement d'origine, 2 le double.",
   "Grass on foot": "Herbe à pied",
   "Interactive grass only in third-person on Earth, in confirmed WorldCover grassland. GPU visibility, three LODs, local wind and character contact. Maximum 65,536 roots. Requires terrain and world scenery source coverage. No grass work in flight.":
     "Herbe interactive uniquement en vue à la troisième personne sur Terre, dans les prairies confirmées par WorldCover. Visibilité GPU, trois niveaux de détail, vent local et contact avec le personnage. Maximum de 65 536 brins. Nécessite le terrain et les données du décor mondial. Aucun calcul d’herbe en vol.",

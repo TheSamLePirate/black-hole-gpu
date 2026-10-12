@@ -3818,7 +3818,7 @@ export class Renderer {
       },
       s.earthTerrain ? this.earthScenery.contact : null,
       this.earthScenery.stamp * 100000 + this.earthTiles.stamp + this.character!.groundPatch.stamp * 10000000,
-      s.earthGrass !== "off",
+      s.earthGrass !== "off" ? { density: s.earthGrassDensity, reach: s.earthGrassReach, wind: s.earthGrassWind } : null,
       this.prof,
       this.earthScenery.buffer,
     );
