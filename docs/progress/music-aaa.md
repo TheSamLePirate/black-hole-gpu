@@ -114,3 +114,109 @@ at AAA quality; a panel to manage, set up and listen to them; an AAA music syste
 6. **Adaptive.** In orbit: Orbit Drift. Interplanetary transfer: Deep Space. On foot (⇧K): New Worlds.
 7. **Miller.** The tick every 1.25 s, in time with the theme (48 BPM, a beat every 1.25 s).
 8. **iPad / Windows.** CPU load with the most demanding theme playing.
+
+## The orchestral pass: Hans Zimmer, John Williams, Max Richter
+
+The request: every theme in Hans Zimmer's or John Williams's manner, and one like Max Richter's *On the Nature of
+Daylight*; less of the 80s–90s; better synths; the pieces taken up as well as possible.
+
+**What "taken up" means here.** The films' melodies are protected works: the game does not transcribe them. Each
+theme is the game's own, written in the composer's manner:
+- **Zimmer:** the pipe organ and its pedal, minimal ostinatos, the ticking clock, braams, taikos, the rising Shepard
+  tone, the choir, suspended chords.
+- **Williams:** heroic brass melodies with their leaps, the Lydian brightness, the march's snare and timpani, the
+  strings' sixteenths, the fanfare's triplets, the harp's glissandi, the celesta.
+- **Richter:** a string elegy — a slow loop of chords, the viola's long melody, the violins over it later, the cellos
+  under, no percussion.
+
+### What changed
+
+| Part | What it is now |
+| --- | --- |
+| Themes (`themes.ts`) | The same 12 ids (preferences, cues and tests unchanged). Each has its manner, its orchestra and its **written melody**: phrases in scale degrees, fitted to its chords (≥ 80 % chord tones on the strong beats, tested). |
+| Composer (`composer.ts`) | The orchestra by energy: strings and organ first; then basses, harp and celesta, choir, ostinato, percussion, melody, brass, braams, the full percussion, the fanfare; then the melody doubled an octave away. Before a stronger section: a snare roll (march, action) or a timpani roll. At a build's end: a suspended cymbal swelling. At a drop: a clash, a boom and the timpani. A variation ornaments the written melody (neighbour notes, passing notes); it no longer invents a new one. |
+| Instruments (`instruments.ts`) | No more kick, hats, clap, supersaws, plucks, saw leads, ethereal guitar or sidechain pumping. See below. |
+| Engine (`engine.ts`) | One bus per orchestral section. No ducking. The glue compressor is gentle (orchestral dynamics kept). Reverbs: a 3.2 s hall, a 7 s cathedral, a 2.2 s plate. The delay only touches the harp and the celesta, lightly. |
+| Panel (`musicpanel.ts`) | Each theme shows its manner. The mixer lists the orchestra's sections. The sidechain fader is gone. |
+| Preferences | Kept ones from the old band (drums, guitar, pump) are dropped on load. |
+
+**The instruments:**
+
+- **Strings:** an ensemble of bows per note (3 voices, a few cents and milliseconds apart), a vibrato that comes in
+  late, the bow's noise at the attack, the body's resonances (air ~280 Hz, bridge ~2.8 kHz). Variants:
+  - held chords, tremolo;
+  - solo lines: violins, viola, cello, contrabass;
+  - the elegy's long bows that swell and ease.
+- **Brass:**
+  - a rich wave whose filter opens with the breath, a scoop into the pitch, a soft saturation;
+  - horns, horn chords, trumpets;
+  - the braam: low brass cluster, distorted, a sub under it.
+- **Rendered once per note, then played back:**
+  - piano: inharmonic partials, two strings beating, double decay, three hammer layers;
+  - celesta;
+  - timpani: the membrane's modes, the pitch settling, the mallet;
+  - harp and pizzicato: Karplus–Strong;
+  - spiccato;
+  - the fanfare's brass stabs;
+  - the organ's sixteenths;
+  - taikos, toms, bass drum, snare.
+- **Pipe organ:**
+  - principal chorus ranks as one wave, a second rank detuned (the pipes' beating);
+  - the pipes' chiff, the swell box, a 32' pedal;
+  - a tremulant for the organ melody.
+- **Others:**
+  - choir: "ah" or "oo" formants, three singers a voice;
+  - flute: breath and vibrato;
+  - Shepard tone: rising two semitones a bar, seamless;
+  - suspended cymbal, clash, snare roll, timpani roll, the clock's tick.
+
+**The themes:**
+
+| Theme | Manner | Plays at | Tempo, key | Orchestra |
+| --- | --- | --- | --- | --- |
+| Event Horizon | Zimmer | Gargantua | 60, A minor | organ melody and chords, 32' pedal, organ pendulum, high strings, horns, choir, booms |
+| Ascent | Williams | lift-off | 112, D Lydian | trumpet melody over horns, string sixteenths, march (snare, bass drum, timpani), fanfare, harp glissandi |
+| Re-entry Fire | Zimmer | re-entry | 92, D Phrygian | braams, taikos, low strings' eighths, tremolo, horn and cello half-step motif, choir |
+| Final Approach | Williams | final | 96, F Lydian | horn line doubled by violins, held strings, harp arpeggios, celesta, timpani |
+| Through the Throat | Zimmer | wormhole | 120, E minor | Shepard tone, organ sixteenths, high violins, horns, braams, choir, taikos |
+| Miller's Tide | Zimmer | Miller | 48, A minor | the 1.25 s tick, organ and pedal, strings, horns, braams, choir "oo", booms |
+| Earthlight | Richter | in orbit | 54, F minor | strings alone: viola melody, violins over it, cellos and basses |
+| Low Pass | Williams | low pass | 138, A harmonic minor | trumpet fanfare doubled by horns, stabs, string sixteenths, action toms and taikos |
+| Soft Capture | Zimmer | docking | 96, G minor | organ sixteenths building, clock eighths, strings, horn line |
+| Deep Space | Zimmer | deep space | 64, C♯ minor | sparse piano, organ, choir "oo", low strings, heartbeat |
+| Endurance | Zimmer and Williams | in the air | 96, E minor | horn melody doubled by trumpets, organ, string eighths, taikos, braams, choir |
+| New Worlds | Williams | landed, on foot | 84, D Lydian | flute and violins, celesta, harp, held strings, timpani |
+
+### Checks
+
+- **Unit tests (`tests/music-composer.test.ts`):**
+  - three manners present;
+  - each phrase is whole bars, fitted to its progression, with ≥ 80 % chord tones on the strong beats;
+  - 96 bars at three intensities: notes in time, in range and in the mode, all instruments orchestral;
+  - no synth-pop instrument left;
+  - the elegy uses strings alone;
+  - Williams's march, fanfare and glissando; Zimmer's organ, pedal, braams and Shepard tone;
+  - the roll, the cymbal swell, the drop's hits;
+  - deterministic; variations ornament the melody.
+- **Offline render (60 s per theme, intensity rising then easing):**
+  - all 12 pass, peaks −0.8 to −2 dBFS, RMS −11 to −17 dBFS;
+  - section balance per stem: the melody leads (about −20 dB), percussion about −18 dB;
+  - cost in the container: "Through the Throat" renders 40 s of music in 40.7 s, against 37.5 s for the old band.
+    The short notes (spiccato, stabs, organ sixteenths, drums) are rendered once per note, and the slow filters
+    are k-rate.
+
+### Tests to run on the Macs (manual)
+
+1. **Each theme**, from Toolbar › Music. Listen for:
+   - the strings' ensemble (no "synth pad"), the horns opening up as they get louder;
+   - the organ's chiff and size, the timpani's pitch;
+   - no crackle.
+2. **Earthlight:** strings only. The viola's melody first; the violins join it in the later sections.
+3. **Ascent and Low Pass:** the march and the fanfare's triplets at full intensity; the harp glissando into each
+   section.
+4. **Through the Throat:** the Shepard tone never seems to stop rising.
+5. **Intensity 0 → 1:** strings and organ alone, then the percussion, the melody, the brass, the doubling.
+6. **Another melody:** the same theme, its melody ornamented otherwise.
+7. **A saved mixer from before:** reload; no stale "Drums" or "Guitar" mute is left.
+8. **iPad:** CPU load with Through the Throat and Low Pass.
+

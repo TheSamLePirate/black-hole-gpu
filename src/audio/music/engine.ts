@@ -1,9 +1,9 @@
-// The music engine: themes (music/themes.ts) composed bar by bar (music/composer.ts) and played by the band
+// The music engine: themes (music/themes.ts) composed bar by bar (music/composer.ts) and played by the orchestra
 // (music/instruments.ts) a little ahead of the clock; a theme changed on the bar — the old one faded out as the
-// new one comes in —; the flight's intensity eased into the energy; the mixer: a bus per layer (its level, its
-// mute, a solo, a meter), the kick ducking the sub, the pads and the arpeggio (a sidechain's pump), the reverbs
-// (a hall, a plate, a cathedral — impulse responses made here), a ping-pong delay on the beat, a glue compressor
-// and a limiter, the spectrum. Any context: the game's (the music bus), or an offline one (a theme rendered).
+// new one comes in —; the flight's intensity eased into the energy; the mixer: a bus per section of the orchestra
+// (its level, its mute, a solo, a meter), the reverbs (a hall, a plate, a cathedral — impulse responses made here),
+// a ping-pong delay on the beat (the harp's and the celesta's only, lightly), a gentle glue compressor and a
+// limiter, the spectrum. Any context: the game's (the music bus), or an offline one (a theme rendered).
 
 import { type BarPlan, composeBar } from "./composer";
 import { impulseResponse, type Kit, makeKit, playNote } from "./instruments";
@@ -11,49 +11,48 @@ import { type Layer, LAYERS, type Theme, THEME_BY_ID } from "./themes";
 
 export type ReverbKind = "hall" | "plate" | "cathedral";
 
-/** The mixer's levels (0 … 1.5; 1: as mixed), the reverb's and the delay's returns, the sidechain's depth. */
+/** The mixer's levels (0 … 1.5; 1: as mixed), the reverb's and the delay's returns. */
 export interface MusicMix {
   master: number;
-  drums: number;
+  perc: number;
   bass: number;
-  pad: number;
-  arp: number;
-  lead: number;
-  guitar: number;
+  strings: number;
+  ostinato: number;
+  brass: number;
+  melody: number;
+  keys: number;
   organ: number;
   choir: number;
   reverb: number;
   delay: number;
-  pump: number;
 }
 export const DEFAULT_MIX: MusicMix = {
   master: 0.9,
-  drums: 1,
+  perc: 1,
   bass: 1,
-  pad: 1,
-  arp: 1,
-  lead: 1,
-  guitar: 1,
+  strings: 1,
+  ostinato: 1,
+  brass: 1,
+  melody: 1,
+  keys: 1,
   organ: 1,
   choir: 1,
   reverb: 1,
   delay: 1,
-  pump: 1,
 };
 
-/** Each layer's sends to the reverb and the delay (× the theme's own). */
+/** Each section's sends to the reverb and the delay (× the theme's own). */
 const SEND: Record<Layer, [number, number]> = {
-  drums: [0.18, 0],
-  bass: [0, 0],
-  pad: [0.55, 0.12],
-  arp: [0.45, 0.45],
-  lead: [0.35, 0.4],
-  guitar: [0.85, 0.7],
+  perc: [0.32, 0],
+  bass: [0.25, 0],
+  strings: [0.6, 0],
+  ostinato: [0.4, 0.05],
+  brass: [0.55, 0],
+  melody: [0.5, 0.05],
+  keys: [0.6, 0.35],
   organ: [0.75, 0],
-  choir: [0.8, 0.1],
+  choir: [0.8, 0],
 };
-/** How deep the kick ducks each layer (the sidechain). */
-const DUCK: Partial<Record<Layer, number>> = { bass: 0.6, pad: 0.35, arp: 0.25, guitar: 0.2, choir: 0.2 };
 
 interface Track {
   theme: Theme;
@@ -93,7 +92,7 @@ export class MusicEngine {
   readonly analyser: AnalyserNode;
   private input: GainNode;
   private master: GainNode;
-  private buses = {} as Record<Layer, { mix: GainNode; duck: GainNode; meter: AnalyserNode }>;
+  private buses = {} as Record<Layer, { mix: GainNode; meter: AnalyserNode }>;
   private reverbs = {} as Partial<Record<ReverbKind, { conv: ConvolverNode; ret: GainNode }>>;
   private delayIn: GainNode;
   private delayL: DelayNode;
@@ -117,19 +116,19 @@ export class MusicEngine {
   ) {
     this.kit = makeKit(ctx);
     this.input = new GainNode(ctx, { gain: 1 });
-    const glue = new DynamicsCompressorNode(ctx, { threshold: -16, knee: 8, ratio: 2.5, attack: 0.02, release: 0.25 });
+    // (an orchestra's dynamics kept: the glue gentle, the limiter only for the peaks)
+    const glue = new DynamicsCompressorNode(ctx, { threshold: -20, knee: 12, ratio: 1.8, attack: 0.03, release: 0.4 });
     const limit = new DynamicsCompressorNode(ctx, { threshold: -3, knee: 0, ratio: 20, attack: 0.002, release: 0.12 });
     this.master = new GainNode(ctx, { gain: this.mix.master });
     this.analyser = new AnalyserNode(ctx, { fftSize: 2048, smoothingTimeConstant: 0.8, minDecibels: -90, maxDecibels: -12 });
     this.input.connect(glue).connect(limit).connect(this.master).connect(this.analyser);
     this.master.connect(out);
     for (const l of LAYERS) {
-      const duck = new GainNode(ctx, { gain: 1 });
       const mix = new GainNode(ctx, { gain: 1 });
       const meter = new AnalyserNode(ctx, { fftSize: 256 });
-      duck.connect(mix).connect(this.input);
+      mix.connect(this.input);
       mix.connect(meter);
-      this.buses[l] = { mix, duck, meter };
+      this.buses[l] = { mix, meter };
     }
     // (the ping-pong delay: left into right into left, darkened each time round)
     this.delayIn = new GainNode(ctx, { gain: 1 });
@@ -151,7 +150,7 @@ export class MusicEngine {
   private reverb(kind: ReverbKind) {
     let r = this.reverbs[kind];
     if (!r) {
-      const [secs, bright] = kind === "cathedral" ? [6.5, 0.35] : kind === "plate" ? [2, 0.85] : [3.4, 0.55];
+      const [secs, bright] = kind === "cathedral" ? [7, 0.32] : kind === "plate" ? [2.2, 0.75] : [3.2, 0.5];
       const conv = new ConvolverNode(this.ctx, { buffer: impulseResponse(this.ctx, secs, bright) });
       const ret = new GainNode(this.ctx, { gain: this.mix.reverb });
       conv.connect(ret).connect(this.input);
@@ -196,7 +195,7 @@ export class MusicEngine {
       const g = new GainNode(ctx, { gain: 0 });
       g.gain.setValueAtTime(0, at);
       g.gain.linearRampToValueAtTime(1, at + Math.max(0.05, fade * 0.8));
-      g.connect(this.buses[l].duck);
+      g.connect(this.buses[l].mix);
       const [rs, ds] = SEND[l];
       if (rs > 0) {
         const s = new GainNode(ctx, { gain: rs * theme.fx.wet });
@@ -247,14 +246,13 @@ export class MusicEngine {
           const t = tr.at + e.beat * spb;
           playNote(this.kit, tr.layers[e.layer], e.inst, t, e.dur * spb, e.note, e.vel, e.pan ?? 0);
           this.notes++;
-          if (e.inst === "kick") this.duck(t, e.vel);
         }
         tr.bar++;
         tr.at += 4 * spb;
       }
       if (tr.theme.tick)
         while (tr.nextTick < now + ahead && tr.nextTick < tr.endAt - 3) {
-          playNote(this.kit, tr.layers.drums, "tick", tr.nextTick, 0.05, 0, 0.8);
+          playNote(this.kit, tr.layers.perc, "tick", tr.nextTick, 0.05, 0, 0.8);
           this.ticks++;
           tr.nextTick += tr.theme.tick;
         }
@@ -265,17 +263,6 @@ export class MusicEngine {
       for (const s of tr.sends) s.disconnect();
     }
     this.tracks = this.tracks.filter((x) => !(x.stopping && now > x.endAt));
-  }
-
-  /** The kick's sidechain: the sub, the pads, the arpeggio ducked and back over ~0.2 s. */
-  private duck(t: number, vel: number) {
-    const k = this.mix.pump;
-    if (k <= 0) return;
-    for (const [l, depth] of Object.entries(DUCK) as [Layer, number][]) {
-      const g = this.buses[l].duck.gain;
-      g.setValueAtTime(1 - Math.min(0.9, depth * k * vel), t);
-      g.setTargetAtTime(1, t + 0.012, 0.07);
-    }
   }
 
   /** What plays now (the panel). */

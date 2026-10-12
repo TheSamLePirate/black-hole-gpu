@@ -8,7 +8,7 @@
 
 import { type Context, type Moment, MOMENTS } from "./score";
 import { DEFAULT_MIX, MusicEngine, type MusicMix, type MusicState } from "./music/engine";
-import { type Layer, THEMES } from "./music/themes";
+import { type Layer, LAYERS, THEMES } from "./music/themes";
 import { store } from "../util/storage";
 
 export type MusicMode = "moments" | "adaptive" | "playlist";
@@ -79,7 +79,16 @@ export class Music {
   constructor(private out: () => { ctx: AudioContext; bus: GainNode } | null) {
     const p = store.getJSON<Partial<MusicPrefs>>(KEY, {});
     const d = DEFAULT_PREFS();
-    this.prefs = { ...d, ...p, map: { ...d.map, ...(p.map ?? {}) }, mix: { ...d.mix, ...(p.mix ?? {}) } };
+    // (kept preferences from the former band — its drums, its guitar, its pump — dropped: the orchestra's sections
+    // only)
+    const mix = Object.fromEntries(Object.entries(p.mix ?? {}).filter(([key]) => key in d.mix)) as Partial<MusicMix>;
+    this.prefs = {
+      ...d,
+      ...p,
+      map: { ...d.map, ...(p.map ?? {}) },
+      mix: { ...d.mix, ...mix },
+      muted: (p.muted ?? []).filter((l) => (LAYERS as string[]).includes(l)),
+    };
   }
 
   /** The notes played, the ticks (Miller's) — the tests'. */

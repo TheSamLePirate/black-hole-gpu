@@ -33,9 +33,9 @@ describe.skipIf(!E2E)("the music panel", () => {
     await app.shot("remote-results/music-panel.png");
   }, 40_000);
 
-  test("the mixer: the drums muted, kept in the browser", async () => {
-    await app.js(`(()=>{__bh.music.prefs.muted=["drums"];__bh.music.save();return true})()`);
-    expect(await app.js<string>(`localStorage.getItem("kerr.music")`)).toContain("drums");
+  test("the mixer: the percussion muted, kept in the browser", async () => {
+    await app.js(`(()=>{__bh.music.prefs.muted=["perc"];__bh.music.save();return true})()`);
+    expect(await app.js<string>(`localStorage.getItem("kerr.music")`)).toContain("perc");
     await app.js(`(()=>{__bh.music.prefs.muted=[];__bh.music.save();return true})()`);
   });
 

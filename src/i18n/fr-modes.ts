@@ -252,4 +252,41 @@ export default {
   "all shortcuts": "tous les raccourcis",
   "Tripod: the camera set down on the ground — on foot, where you stand, looking the same way":
     "Trépied : la caméra posée au sol — à pied, là où vous êtes, regardant du même côté",
+  // the orchestral score (music: Hans Zimmer, John Williams, Max Richter)
+  "Gargantua, in Hans Zimmer's manner: the pipe organ and its 32-foot pedal, a long melody rising on the organ, the strings and the choir swelling, booms far away":
+    "Gargantua, à la manière de Hans Zimmer : l'orgue et sa pédale de 32 pieds, une longue mélodie qui monte à l'orgue, les cordes et le chœur qui enflent, des coups sourds au loin",
+  "The lift-off, in John Williams's manner: a heroic trumpet melody leaping in D Lydian, the horns under it, string sixteenths, the snare's march, timpani and the harp's glissandi":
+    "Le décollage, à la manière de John Williams : une mélodie héroïque de trompettes qui bondit en ré lydien, les cors en dessous, les doubles croches des cordes, la marche de la caisse claire, les timbales et les glissandos de la harpe",
+  "The plasma, in Hans Zimmer's manner: braams of low brass on every chord, taikos, the low strings' eighths, a menacing half-step motif in D Phrygian, the choir":
+    "Le plasma, à la manière de Hans Zimmer : des braams de cuivres graves sur chaque accord, les taikos, les croches des cordes graves, un motif menaçant au demi-ton en ré phrygien, le chœur",
+  "The final, in John Williams's manner: a lyrical horn line in F Lydian, the strings held, the harp's arpeggios, soft timpani":
+    "La finale, à la manière de John Williams : une ligne lyrique de cor en fa lydien, les cordes tenues, les arpèges de la harpe, des timbales douces",
+  "The wormhole, in Hans Zimmer's manner: a Shepard tone rising without end, the organ's sixteenths, high violins, the choir and the taikos":
+    "Le trou de ver, à la manière de Hans Zimmer : un son de Shepard qui monte sans fin, les doubles croches de l'orgue, les violons aigus, le chœur et les taikos",
+  "Miller, in Hans Zimmer's manner: the 1.25 s tick, the organ low, the strings and the horns swelling like the wave, booms":
+    "Miller, à la manière de Hans Zimmer : le tic de 1,25 s, l'orgue grave, les cordes et les cors qui enflent comme la vague, des coups sourds",
+  "In orbit, in Max Richter's manner (On the Nature of Daylight): a string elegy — a slow loop of chords, the viola's long melody, the violins over it later, the cellos under":
+    "En orbite, à la manière de Max Richter (On the Nature of Daylight) : une élégie pour cordes — une lente boucle d'accords, la longue mélodie de l'alto, les violons au-dessus ensuite, les violoncelles en dessous",
+  "Flying low and fast, in John Williams's manner: trumpets' fanfare in A harmonic minor, brass stabs, the strings' driving sixteenths, toms and timpani":
+    "Vol bas et rapide, à la manière de John Williams : la fanfare des trompettes en la mineur harmonique, des attaques de cuivres, les doubles croches entraînantes des cordes, toms et timbales",
+  "Docking, in Hans Zimmer's manner: the organ's sixteenths building, a clock ticking in eighths, the strings held, a horn line at the height":
+    "L'amarrage, à la manière de Hans Zimmer : les doubles croches de l'orgue qui montent, une horloge qui bat les croches, les cordes tenues, une ligne de cor au sommet",
+  "Between the worlds, in Hans Zimmer's manner: a few piano notes in a vast hall, the organ and the choir held, the strings low":
+    "Entre les mondes, à la manière de Hans Zimmer : quelques notes de piano dans une vaste salle, l'orgue et le chœur tenus, les cordes graves",
+  "The ship's theme, in Hans Zimmer's manner with John Williams's horns: the organ and the strings' eighths, taikos, braams, a heroic horn melody in E minor, the choir":
+    "Le thème du vaisseau, à la manière de Hans Zimmer avec les cors de John Williams : l'orgue et les croches des cordes, les taikos, les braams, une mélodie héroïque de cor en mi mineur, le chœur",
+  "On foot on another world, in John Williams's manner: wonder in D Lydian — the flute and the violins, the celesta's sparkles, the harp, strings held":
+    "À pied sur un autre monde, à la manière de John Williams : l'émerveillement en ré lydien — la flûte et les violons, les étincelles du célesta, la harpe, les cordes tenues",
+  Percussion: "Percussions",
+  Basses: "Basses",
+  Strings: "Cordes",
+  Ostinato: "Ostinato",
+  Brass: "Cuivres",
+  Melody: "Mélodie",
+  "Harp, celesta": "Harpe, célesta",
+  "Hans Zimmer's manner": "À la manière de Hans Zimmer",
+  "John Williams's manner": "À la manière de John Williams",
+  "Max Richter's manner": "À la manière de Max Richter",
+  "Another variation of every theme: its melody ornamented otherwise, its piano's notes, its percussion's accents":
+    "Une autre variation de chaque thème : sa mélodie ornée autrement, les notes de son piano, les accents de ses percussions",
 } satisfies Record<string, string>;

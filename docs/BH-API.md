@@ -1541,9 +1541,10 @@ The music system (`src/audio/music.ts`; the themes, composer, instruments and en
 moments and contexts in `src/audio/score.ts`; its console in `src/ui/musicpanel.ts`). It is synthesized in the
 game's audio context on the music bus, so nothing is downloaded.
 
-**Themes.** Twelve themes, each in its own key, mode and tempo, composed bar by bar with a form (intro, verse,
-build, drop, break). The band: drums, sub bass, pads, arpeggio, lead, ethereal guitar, organ and choir. The energy
-comes from the section and the flight's intensity.
+**Themes.** Twelve orchestral themes in Hans Zimmer's, John Williams's and Max Richter's manners (their melodies
+the game's own), each in its own key, mode and tempo, composed bar by bar with a form (intro, verse, build, drop,
+break). The orchestra's sections, each a bus in the mixer: percussion, basses, strings, ostinato, brass, melody,
+harp and celesta (`keys`), organ and choir. The energy comes from the section and the flight's intensity.
 
 **What plays:**
 

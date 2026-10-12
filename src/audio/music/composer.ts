@@ -1,17 +1,24 @@
 // The composer: a theme (music/themes.ts) played bar by bar — where the bar falls in the form (its section, the
 // form looped from its verse once through), its chord (the section's progression, voiced near the last), its
-// energy (the section's, raised or lowered by the flight's intensity) and the band's notes for it: the drums by
-// their style (the hats and shakers first, the kick, the snare, fills before a stronger section, a crash and a
-// boom at a drop, a riser at the end of a build), the sub bass on the chord's root, the pads and the organ held,
-// the choir on the chord's top, the arpeggio, the ethereal guitar (an arpeggio in dotted eighths, swells, high
-// harmonics), the lead (a motif of two bars, answered, on the chord's tones at its strong beats). Pure and
-// deterministic: the same theme, bar, intensity and variation, the same notes.
+// energy (the section's, raised or lowered by the flight's intensity) and the orchestra's notes for it:
+//  - the percussion by its manner (a march's snare, action toms in 3-3-2, taikos, a heartbeat, a clock's
+//    eighths, booms, timpani), a roll before a stronger section, a suspended cymbal swelling at a build's end, a
+//    clash, a boom and the timpani at a drop;
+//  - the bass (the organ's pedal, the low strings' eighths, a march's root and fifth, a drone, the elegy's cellos);
+//  - the strings' chords held (tremolo, high, the elegy's), the organ's, the choir's;
+//  - the ostinato (a pendulum of two notes, spiccato sixteenths, the organ's sixteenths, the harp's triplets, a
+//    few piano notes);
+//  - the brass (the horns' chords, a braam on each chord, Williams's fanfare stabs);
+//  - the melody — the theme's own phrases, in the scale's degrees, fitted to its chords — doubled an octave away
+//    by another section in the strongest bars;
+//  - the harp's glissando into a section, the celesta's sparkles, the Shepard tone.
+// Pure and deterministic: the same theme, bar, intensity and variation, the same notes.
 
-import type { Layer, Section, Theme } from "./themes";
+import { type Layer, parsePhrase, type Section, type Theme } from "./themes";
 import { chordOn, degreeNote, Rng, seedOf, voiceLead } from "./theory";
 
 /** A note of the bar: its layer and instrument, its start and length [beats from the bar's start], its pitch (MIDI;
- *  the drums: none), its velocity 0 … 1, its place in the stereo field (−1 … 1). */
+ *  the unpitched percussion: none), its velocity 0 … 1, its place in the stereo field (−1 … 1). */
 export interface NoteEvent {
   layer: Layer;
   inst: string;
@@ -28,7 +35,7 @@ export interface BarPlan {
   /** the bar's place in its section, the section's index in the form */
   inSection: number;
   sectionIndex: number;
-  /** the bar's energy 0 … 1 and its chord (MIDI, root first) */
+  /** the bar's energy 0 … 1 and its chord (MIDI, voiced) */
   energy: number;
   chord: number[];
   /** the chord's root (its name's; the voicing may be inverted) */
@@ -36,20 +43,22 @@ export interface BarPlan {
   events: NoteEvent[];
 }
 
-/** Each layer's entry: the energy from which it plays. */
+/** Each part's entry: the energy from which it plays. */
 export const ENTRY: Record<string, number> = {
-  pad: 0,
+  strings: 0,
   organ: 0,
-  guitar: 0.1,
+  bass: 0.15,
+  keys: 0.2,
   choir: 0.3,
-  bass: 0.22,
-  shaker: 0.3,
-  hat: 0.42,
-  kick: 0.5,
-  snare: 0.6,
-  arp: 0.52,
-  lead: 0.72,
-  fill: 0.55,
+  ostinato: 0.32,
+  perc: 0.36,
+  melody: 0.4,
+  brass: 0.5,
+  braam: 0.55,
+  percFull: 0.62,
+  fill: 0.5,
+  fanfare: 0.72,
+  double: 0.78,
 };
 
 /** Where a bar falls in the form: the section, its index, the bar in it (the form looped from loopFrom). */
@@ -70,7 +79,7 @@ export function placeInForm(theme: Theme, bar: number): { section: Section; inde
   return { section: F[F.length - 1]!, index: F.length - 1, inSection: 0 };
 }
 
-/** The next section after one (its energy: a fill before a stronger one). */
+/** The next section after one (its energy: a roll before a stronger one). */
 function nextSection(theme: Theme, index: number): Section {
   return theme.form[index + 1] ?? theme.form[theme.loopFrom]!;
 }
@@ -80,10 +89,15 @@ export function barEnergy(section: Section, intensity: number): number {
   return Math.min(1, Math.max(0, section.energy * (0.45 + 1.1 * intensity)));
 }
 
+/** The progression a section plays. */
+export function progressionOf(theme: Theme, section: Section): string {
+  const key = section.prog ?? ((section.name === "build" || section.name === "drop") && theme.progressions.b ? "b" : "a");
+  return theme.progressions[key] ? key : "a";
+}
+
 /** The chord of a bar: its section's progression, its steps each so many bars, looped. */
 export function chordStepOf(theme: Theme, section: Section, inSection: number) {
-  const key = section.prog ?? ((section.name === "build" || section.name === "drop") && theme.progressions.b ? "b" : "a");
-  const prog = theme.progressions[key] ?? theme.progressions.a!;
+  const prog = theme.progressions[progressionOf(theme, section)]!;
   const len = prog.reduce((a, s) => a + (s.bars ?? 1), 0);
   let b = inSection % len;
   for (const s of prog) {
@@ -96,75 +110,57 @@ export function chordStepOf(theme: Theme, section: Section, inSection: number) {
 
 const pat = (s: string) => [...s].map((c, i) => (c === "x" ? i : c === "o" ? -i - 1 : null)).filter((x) => x !== null) as number[];
 
-/** The drums' patterns by style: per piece, the sixteenths struck ("x"; "o": a ghost note). */
-const DRUMS: Record<string, Record<string, string>> = {
-  four: {
-    kick: "x...x...x...x...",
-    snare: "....x.......x...",
-    hat: "..x...x...x...x.",
-    hat16: "x.xxx.xxx.xxx.xx",
-    shaker: "x.x.x.x.x.x.x.x.",
+/** The percussion's patterns by manner: per instrument, the sixteenths struck ("x"; "o": a softer one); `full`:
+ *  from the stronger energy only. */
+const PERC: Record<string, { light: Record<string, string>; full: Record<string, string> }> = {
+  march: {
+    light: { bassdrum: "x.......x.......", snare: "....x.......x..." },
+    full: { snare: "x.oox.o.x.oox.oo" },
   },
-  half: {
-    kick: "x.........x.....",
-    snare: "........x.......",
-    hat: "x.x.x.x.x.x.x.x.",
-    hat16: "x.xxx.xxx.xxx.xx",
-    shaker: "..x...x...x...x.",
+  action: {
+    light: { taiko: "x.......x.......", tom: "x..x..x.x..x..x." },
+    full: { snare: "....x.......x...", tom: "x..x..x.x..x.xxx" },
   },
-  break: {
-    kick: "x.....x...x.....",
-    snare: "....x..o....x..o",
-    hat: "x.x.x.x.x.x.x.x.",
-    hat16: "xxxxxxxxxxxxxxxx",
-    shaker: "x.x.x.x.x.x.x.x.",
+  taiko: {
+    light: { taiko: "x.....x.x......." },
+    full: { tom: "....x..o....x.xx", taiko: "x.....x.x...x..." },
   },
-  epic: {
-    kick: "x.......x.......",
-    snare: "....x.......x...",
-    tom: "......x.x.....xx",
-    hat: "x...x...x...x...",
-    hat16: "x.x.x.x.x.x.x.x.",
-    shaker: "x.x.x.x.x.x.x.x.",
-  },
-  pulse: {
-    kick: "x.......x.......",
-    snare: "............x...",
-    hat: "..x...x...x...x.",
-    hat16: "x.x.x.x.x.x.x.x.",
-    shaker: "x.x.x.x.x.x.x.x.",
-  },
-  tribal: {
-    kick: "x.......x.......",
-    snare: "....x.......x...",
-    tom: "x..x..x...x.x...",
-    hat: "x.x.x.x.x.x.x.x.",
-    hat16: "xxxxxxxxxxxxxxxx",
-    shaker: "xxxxxxxxxxxxxxxx",
-  },
-  booms: { kick: "", snare: "", hat: "", hat16: "", shaker: "" },
+  heartbeat: { light: { bassdrum: "x..o............" }, full: { bassdrum: "x..o....x..o...." } },
+  clock: { light: { tick: "x.o.x.o.x.o.x.o." }, full: { tick: "x.oox.oox.oox.oo", bassdrum: "x.......x......." } },
+  booms: { light: {}, full: {} },
+  timpani: { light: {}, full: {} },
 };
 
-/** The lead's motif for a theme and variation: two bars of (sixteenth, scale step from the chord's root, length). */
-export function leadMotif(theme: Theme, seed: number): { at: number; step: number; len: number }[] {
-  const r = new Rng(seedOf(theme.id, "motif", seed));
-  const n = Math.max(2, Math.min(10, Math.round((theme.lead?.density ?? 4) * 1.6 + r.int(-1, 1))));
-  // (its rhythm: n onsets among the 32 sixteenths of two bars, on the beat more often than not)
-  const slots = new Set<number>([0]);
-  while (slots.size < n) {
-    const beat = r.int(0, 7);
-    const off = r.pick([0, 0, 0, 2, 2, 3]);
-    slots.add(Math.min(31, beat * 4 + off));
-  }
-  const at = [...slots].sort((a, b) => a - b);
-  // (its contour: steps of the scale, mostly by step, a leap now and then, back towards the middle)
-  let step = r.pick([0, 2, 4]);
-  return at.map((a, i) => {
-    if (i > 0) step += r.pick([-2, -1, -1, 1, 1, 2, r.pick([-4, 3, 4])]);
-    step = Math.max(-3, Math.min(9, step));
-    const next = at[i + 1] ?? 32;
-    return { at: a, step, len: Math.max(1, Math.min(next - a, 8)) };
+/** The melody's notes in a bar: the phrase of its progression (varied by the seed), the bar's share of it. */
+export function melodyIn(theme: Theme, section: Section, inSection: number, seed: number): { beat: number; dur: number; deg: number }[] {
+  const M = theme.melody;
+  if (!M) return [];
+  const key = M.phrases[progressionOf(theme, section)] ? progressionOf(theme, section) : "a";
+  const { notes, beats } = parsePhrase(M.phrases[key]!);
+  const varied = varyPhrase(notes, theme.id, key, seed);
+  const bars = Math.max(1, Math.round(beats / 4));
+  const b0 = (inSection % bars) * 4;
+  return varied.filter((n) => n.deg !== null && n.at >= b0 && n.at < b0 + 4).map((n) => ({ beat: n.at - b0, dur: n.dur, deg: n.deg! }));
+}
+
+/** A variation of a phrase (seed 0: as written): its notes now and then turned into the note and a neighbour (its long
+ *  ones) or a note and the step to the next one (a passing note) — the same line, ornamented otherwise. */
+export function varyPhrase(notes: { at: number; dur: number; deg: number | null }[], id: string, key: string, seed: number) {
+  if (!seed) return notes;
+  const r = new Rng(seedOf(id, "phrase", key, seed));
+  const out: typeof notes = [];
+  notes.forEach((n, i) => {
+    const nextDeg = notes[i + 1]?.deg ?? null;
+    if (n.deg !== null && n.dur >= 2 && r.chance(0.6)) {
+      const lead = n.dur >= 3 ? 1 : 0.5;
+      out.push({ at: n.at, dur: n.dur - lead, deg: n.deg });
+      out.push({ at: n.at + n.dur - lead, dur: lead, deg: n.deg + r.pick([-1, 1, 2]) });
+    } else if (n.deg !== null && n.dur === 1 && nextDeg !== null && Math.abs(nextDeg - n.deg) >= 2 && r.chance(0.5)) {
+      out.push({ at: n.at, dur: 0.5, deg: n.deg });
+      out.push({ at: n.at + 0.5, dur: 0.5, deg: n.deg + Math.sign(nextDeg - n.deg) });
+    } else out.push(n);
   });
+  return out;
 }
 
 /**
@@ -182,171 +178,214 @@ export function composeBar(theme: Theme, bar: number, intensity: number, seed = 
   const push = (n: NoteEvent) => ev.push(n);
   const lastOfSection = inSection === section.bars - 1;
   const next = nextSection(theme, index);
-  const swing = theme.swing ?? 0;
-  const sx = (s: number) => s / 4 + (s % 2 === 1 ? swing / 4 : 0);
-  const rootLow = (() => {
-    let n = chord[0]!;
-    while (n > 45) n -= 12;
-    while (n < 33) n += 12;
-    return n;
-  })();
-
-  // ---- the drums
-  const D = theme.drums ? DRUMS[theme.drums]! : null;
-  if (D) {
-    const hit = (inst: string, s: number, vel: number, pan = 0) =>
-      push({ layer: "drums", inst, beat: sx(Math.abs(s < 0 ? -s - 1 : s)), dur: 0.25, note: 0, vel: (s < 0 ? 0.35 : 1) * vel, pan });
-    const fill = lastOfSection && e >= ENTRY.fill! && next.energy >= section.energy;
-    if (e >= ENTRY.shaker!) for (const s of pat(D.shaker!)) hit("shaker", s, 0.25 + 0.15 * r.next(), 0.3);
-    if (e >= ENTRY.hat!) {
-      const h = e > 0.85 ? D.hat16! : D.hat!;
-      for (const s of pat(h)) hit(e > 0.9 && s % 8 === 2 ? "openhat" : "hat", s, 0.35 + 0.35 * r.next() * (s % 4 === 0 ? 1 : 0.7), -0.25);
-    }
-    if (e >= ENTRY.kick!) for (const s of pat(D.kick!)) if (!(fill && s >= 12)) hit("kick", s, 0.9 + 0.1 * r.next());
-    if (e >= ENTRY.snare!) {
-      for (const s of pat(D.snare!))
-        if (!(fill && Math.abs(s) >= 8)) hit(theme.drums === "four" && e > 0.8 ? "clap" : "snare", s, 0.8 + 0.2 * r.next());
-      if (D.tom) for (const s of pat(D.tom)) hit("tom", s, 0.7 + 0.3 * r.next(), r.next() * 1.2 - 0.6);
-    }
-    if (fill) {
-      // (a roll into the stronger section: sixteenths on the last two beats, rising)
-      for (let s = 8; s < 16; s++) hit(s % 3 === 2 ? "tom" : "snare", s, 0.45 + (0.5 * (s - 8)) / 8, (s - 12) / 5);
-    }
-  }
-  // (a drop's first bar: a crash and a boom; a build's last two bars: a riser)
-  if (inSection === 0 && (section.name === "drop" || (section.name === "verse" && e > 0.6)) && theme.drums) {
-    push({ layer: "drums", inst: "crash", beat: 0, dur: 4, note: 0, vel: 0.8 });
-    push({ layer: "drums", inst: "boom", beat: 0, dur: 4, note: rootLow - 12, vel: 0.9 });
-  }
-  if (theme.drums === "booms" && first && e > 0.3)
-    push({ layer: "drums", inst: "boom", beat: 0, dur: 4, note: rootLow - 12, vel: 0.4 + 0.5 * e });
-  if (section.name === "build" && inSection === section.bars - 2 && e > 0.45)
-    push({ layer: "drums", inst: "riser", beat: 0, dur: 8, note: 0, vel: 0.6 + 0.3 * e });
-
-  // ---- the bass: on the chord's root, its style
-  if (theme.bass && e >= ENTRY.bass!) {
-    const b = theme.bass;
-    const note = (beat: number, dur: number, n = rootLow, vel = 0.85, inst = "sub") =>
-      push({ layer: "bass", inst, beat, dur, note: n, vel });
-    if (b === "sub") note(0, 3.9);
-    else if (b === "drone") {
-      if (first) note(0, 4 * (step.bars ?? 1) - 0.1, rootLow, 0.75);
-    } else if (b === "pulse") for (let i = 0; i < 8; i++) note(i / 2, 0.45, rootLow, i % 2 ? 0.6 : 0.85);
-    else if (b === "octave")
-      for (let i = 0; i < 8; i++) note(i / 2, 0.42, rootLow + (i % 2) * 12, i % 2 ? 0.65 : 0.9, i % 2 ? "growl" : "sub");
-    else if (b === "synco") for (const s of pat("x..x..x...x..x..")) note(s / 4, 0.6, rootLow, 0.85);
-    else if (b === "growl") {
-      note(0, 3.9, rootLow, 0.7);
-      for (const s of pat("x.xx.x.xx.x.x.xx"))
-        push({ layer: "bass", inst: "growl", beat: s / 4, dur: 0.22, note: rootLow + 12, vel: 0.55 + 0.3 * r.next() });
-    }
-  }
-
-  // ---- the pads, the organ, the choir: the chord held (its first bar: the whole step)
   const held = 4 * (step.bars ?? 1) - 0.05;
-  if (first) {
-    if (theme.pad) for (const n of voiced) push({ layer: "pad", inst: theme.pad, beat: 0, dur: held, note: n, vel: 0.5 + 0.3 * e });
-    if (theme.organ > 0) {
-      for (const n of voiced) push({ layer: "organ", inst: "organ", beat: 0, dur: held, note: n, vel: theme.organ * (0.5 + 0.4 * e) });
-      push({ layer: "organ", inst: "organ", beat: 0, dur: held, note: rootLow, vel: theme.organ * 0.7 });
+  const into = (n: number, lo: number, hi: number) => {
+    let m = n;
+    while (m < lo) m += 12;
+    while (m > hi) m -= 12;
+    return m;
+  };
+  const rootLow = into(chord[0]!, 33, 44);
+  // (the chord's diatonic fifth: in the mode, whatever the chord)
+  const fifth = degreeNote(theme.root, theme.scale, step.deg + 4);
+
+  // ---- the percussion
+  const P = theme.perc;
+  if (P) {
+    const S = PERC[P]!;
+    const hit = (inst: string, s: number, vel: number, pan = 0, note = 0) =>
+      push({ layer: "perc", inst, beat: Math.abs(s < 0 ? -s - 1 : s) / 4, dur: 0.5, note, vel: (s < 0 ? 0.45 : 1) * vel, pan });
+    const roll = lastOfSection && e >= ENTRY.fill! && next.energy > section.energy;
+    const parts = { ...(e >= ENTRY.perc! ? S.light : {}), ...(e >= ENTRY.percFull! ? S.full : {}) };
+    for (const [inst, p] of Object.entries(parts)) {
+      if (!p) continue;
+      for (const s of pat(p)) {
+        if (roll && Math.abs(s < 0 ? -s - 1 : s) >= 8 && inst !== "bassdrum") continue;
+        const accent = (Math.abs(s) % 4 === 0 ? 1 : 0.8) * (0.85 + 0.15 * r.next());
+        if (inst === "tom") hit("tom", s, 0.75 * accent, r.next() * 1.2 - 0.6, 0);
+        else if (inst === "tick") hit("tick", s, 0.55 * accent);
+        else hit(inst, s, (inst === "snare" ? 0.7 : 0.9) * accent * (0.7 + 0.3 * e));
+      }
     }
+    // (the timpani: the march's and the timpani's own — the root and the fifth on the beats)
+    if ((P === "march" || P === "timpani") && e >= (P === "timpani" ? ENTRY.percFull! : ENTRY.perc!) && first)
+      push({ layer: "perc", inst: "timpani", beat: 0, dur: 2, note: into(chord[0]!, 41, 52), vel: 0.55 + 0.35 * e });
+    if (P === "march" && e >= ENTRY.percFull!)
+      push({ layer: "perc", inst: "timpani", beat: 2, dur: 2, note: into(fifth, 41, 55), vel: 0.6 + 0.3 * e });
+    // (booms: on each chord, deep)
+    if ((P === "booms" || P === "taiko") && first && e > 0.3)
+      push({ layer: "perc", inst: "boom", beat: 0, dur: 4, note: rootLow - 12, vel: 0.35 + 0.55 * e });
+    // (a roll into a stronger section: the snare's for a march or action, else the timpani's on the root)
+    if (roll) {
+      if (P === "march" || P === "action") push({ layer: "perc", inst: "roll", beat: 2, dur: 2, note: 0, vel: 0.75 });
+      else push({ layer: "perc", inst: "timproll", beat: 2, dur: 2, note: into(chord[0]!, 41, 52), vel: 0.75 });
+    }
+  }
+  // (a build's last bar: the suspended cymbal swelling into the drop; a drop's first: a clash, a boom, the timpani)
+  if (section.name === "build" && lastOfSection && e > 0.45 && theme.manner !== "richter")
+    push({ layer: "perc", inst: "cymbal", beat: 0, dur: 4, note: 0, vel: 0.5 + 0.4 * e });
+  if (inSection === 0 && section.name === "drop" && theme.perc) {
+    push({ layer: "perc", inst: "crash", beat: 0, dur: 4, note: 0, vel: 0.75 });
+    push({ layer: "perc", inst: "boom", beat: 0, dur: 4, note: rootLow - 12, vel: 0.95 });
+    push({ layer: "perc", inst: "timpani", beat: 0, dur: 2, note: into(chord[0]!, 41, 52), vel: 1 });
+  }
+
+  // ---- the bass
+  if (theme.bass && e >= ENTRY.bass!) {
+    const B = theme.bass;
+    const note = (inst: string, beat: number, dur: number, n: number, vel: number) =>
+      push({ layer: "bass", inst, beat, dur, note: n, vel });
+    if (B === "pedal") {
+      if (first) {
+        note(theme.organ > 0 ? "pedal" : "contrabass", 0, held, rootLow, 0.7 + 0.2 * e);
+        if (e >= 0.55) note("sub", 0, held, rootLow, 0.45 + 0.4 * e);
+      }
+    } else if (B === "drone") {
+      if (first) note("contrabass", 0, held, rootLow + 12, 0.45 + 0.3 * e);
+      if (first && e >= 0.5) note("sub", 0, held, rootLow, 0.35 + 0.3 * e);
+    } else if (B === "pulse") {
+      // (the low strings' eighths, the first of each beat leaning)
+      for (let i = 0; i < 8; i++) note("lowspic", i / 2, 0.45, rootLow + 12, i % 2 ? 0.55 : 0.8);
+      if (first && e >= 0.6) note("sub", 0, held, rootLow, 0.4 + 0.4 * e);
+    } else if (B === "march") {
+      const inst = e >= ENTRY.percFull! ? "lowspic" : "pizz";
+      for (let i = 0; i < 4; i++) note(inst, i, 0.8, i % 2 ? into(fifth, rootLow + 12, rootLow + 23) : rootLow + 12, i % 2 ? 0.65 : 0.85);
+    } else if (B === "elegy") {
+      // (the cellos' whole notes on the root, the basses an octave under them once it grows)
+      if (first) note("cello", 0, held, into(chord[0]!, 41, 52), 0.5 + 0.35 * e);
+      if (first && e >= 0.5) note("contrabass", 0, held, into(chord[0]!, 29, 40), 0.4 + 0.35 * e);
+    }
+  }
+
+  // ---- the strings', the organ's and the choir's chords held (their first bar: the whole step)
+  if (first) {
+    const S = theme.strings;
+    if (S && e >= ENTRY.strings!) {
+      const notes = S === "high" ? voiced.map((n) => n + 12) : S === "elegy" ? voiced.filter((n) => n >= 55) : voiced;
+      const inst = S === "tremolo" ? "tremolo" : "strings";
+      for (const n of notes) push({ layer: "strings", inst, beat: 0, dur: held, note: n, vel: (S === "elegy" ? 0.4 : 0.35) + 0.45 * e });
+      // (the high strings' shimmer: the violins an octave over the top, quietly)
+      if (S === "high" && e >= 0.5)
+        push({ layer: "strings", inst: "strings", beat: 0, dur: held, note: notes[notes.length - 1]! + 12, vel: 0.3 + 0.3 * e });
+    }
+    if (theme.organ > 0)
+      for (const n of voiced) push({ layer: "organ", inst: "organ", beat: 0, dur: held, note: n, vel: theme.organ * (0.55 + 0.4 * e) });
     if (theme.choir > 0 && e >= ENTRY.choir!)
       for (const n of voiced.slice(-3))
-        push({ layer: "choir", inst: "choir", beat: 0, dur: held, note: n < 57 ? n + 12 : n, vel: theme.choir * (0.4 + 0.5 * e) });
-  }
-
-  // ---- the arpeggio
-  if (theme.arp && e >= ENTRY.arp!) {
-    const A = theme.arp;
-    const tones = [...voiced, ...(A.octaves === 2 ? voiced.map((n) => n + 12) : [])].map((n) => (n < 60 ? n + 12 : n));
-    const seq =
-      A.pattern === "up"
-        ? tones
-        : A.pattern === "cascade"
-          ? [...tones].reverse()
-          : A.pattern === "updown"
-            ? [...tones, ...tones.slice(1, -1).reverse()]
-            : tones.map(() => r.pick(tones));
-    const n = 4 * A.rate;
-    for (let i = 0; i < n; i++)
-      push({
-        layer: "arp",
-        inst: A.sound === "glass" ? "glassArp" : A.sound,
-        beat: i / A.rate,
-        dur: 1 / A.rate,
-        note: seq[i % seq.length]!,
-        vel: 0.45 + 0.25 * (i % A.rate === 0 ? 1 : r.next()),
-        pan: Math.sin(i * 1.3) * 0.5,
-      });
-  }
-
-  // ---- the ethereal guitar
-  if (theme.guitar && e >= ENTRY.guitar!) {
-    const g = theme.guitar.style;
-    const tones = voiceLead(null, chordOn(theme.root, theme.scale, step.deg, "add9"), 55, 81);
-    if (g === "arp") {
-      // (dotted eighths across the bar, the delay filling between them)
-      [0, 0.75, 1.5, 2.25, 3, 3.75].forEach((b, i) =>
         push({
-          layer: "guitar",
-          inst: "guitar",
-          beat: b,
-          dur: 1.5,
-          note: tones[(i * 2 + bar) % tones.length]!,
-          vel: 0.45 + 0.2 * r.next(),
-          pan: i % 2 ? 0.45 : -0.45,
-        }),
-      );
-    } else if (g === "swell") {
-      push({ layer: "guitar", inst: "swell", beat: 0, dur: 3.5, note: tones[tones.length - 1]!, vel: 0.55, pan: -0.3 });
-      if (r.chance(0.6))
-        push({ layer: "guitar", inst: "swell", beat: 2, dur: 2, note: tones[Math.max(0, tones.length - 2)]!, vel: 0.45, pan: 0.35 });
-    } else {
-      for (const b of [0, 1.5, 2.5])
-        if (b === 0 || r.chance(0.6))
-          push({ layer: "guitar", inst: "harmonic", beat: b, dur: 2, note: r.pick(tones) + 12, vel: 0.5, pan: r.next() - 0.5 });
+          layer: "choir",
+          inst: theme.vowel === "oo" ? "choiroo" : "choir",
+          beat: 0,
+          dur: held,
+          note: n < 57 ? n + 12 : n,
+          vel: theme.choir * (0.4 + 0.5 * e),
+        });
+  }
+
+  // ---- the ostinato
+  const O = theme.ostinato;
+  if (O && e >= ENTRY.ostinato!) {
+    const tones = voiceLead(null, chord, O.register - 7, O.register + 9);
+    const t = (i: number) => tones[((i % tones.length) + tones.length) % tones.length]!;
+    const inst = O.sound;
+    const play = (beat: number, dur: number, note: number, vel: number, pan = 0) =>
+      push({ layer: "ostinato", inst, beat, dur, note, vel, pan });
+    if (O.pattern === "pendulum") {
+      // (two notes rocking — the chord's root over its fifth —, the upper one on the beat)
+      const lo = t(0),
+        hi = tones.find((n) => n - lo >= 5) ?? lo + 7;
+      for (let i = 0; i < 8; i++) play(i / 2, 0.5, i % 2 ? lo : hi, i % 2 ? 0.55 : 0.75, i % 2 ? -0.3 : 0.3);
+    } else if (O.pattern === "spiccato") {
+      const shape = [0, 0, 2, 0, 1, 0, 2, 1, 0, 0, 2, 0, 1, 2, 3, 2];
+      for (let i = 0; i < 16; i++) play(i / 4, 0.25, t(shape[i]!), i % 4 === 0 ? 0.8 : 0.5 + 0.15 * r.next(), Math.sin(i) * 0.3);
+    } else if (O.pattern === "organ") {
+      // (sixteenths across the chord, the octave leaping in as it grows)
+      const up = [0, 1, 2, 3, 2, 1, 2, 3];
+      for (let i = 0; i < 16; i++) {
+        const leap = e > 0.75 && i % 8 === 6 ? 12 : 0;
+        play(i / 4, 0.24, t(up[i % 8]!) + leap, i % 4 === 0 ? 0.75 : 0.5, i % 2 ? 0.25 : -0.25);
+      }
+    } else if (O.pattern === "arpeggio") {
+      const up = [...tones, ...tones.map((n) => n + 12)];
+      const seq = [...up, ...up.slice(1, -1).reverse()];
+      for (let i = 0; i < 12; i++) play(i / 3, 0.6, seq[i % seq.length]!, i % 3 === 0 ? 0.65 : 0.45, Math.sin(i * 0.7) * 0.5);
+    } else if (O.pattern === "piano") {
+      // (a few notes, the beats left to the hall: one on the first beat, one on the third, now and then a third)
+      play(0, 2, t(r.int(0, tones.length - 1)) + 12, 0.5 + 0.2 * e);
+      play(2, 2, t(r.int(0, tones.length - 1)) + 12, 0.42 + 0.2 * e);
+      if (r.chance(0.35)) play(3, 1, t(r.int(0, tones.length - 1)) + 12, 0.35);
     }
   }
 
-  // ---- the lead: the motif on bars 1–2 of each four, its answer (a third up, the end changed) on 3–4; resting
-  // the last bar of eight
-  if (theme.lead && e >= ENTRY.lead! && !(bar % 8 === 7)) {
-    const M = leadMotif(theme, seed);
-    const half = bar % 2;
-    const answer = bar % 4 >= 2;
-    const centre = theme.lead.register;
-    let base = degreeNote(theme.root, theme.scale, step.deg);
-    while (base < centre - 7) base += 12;
-    while (base > centre + 5) base -= 12;
-    const degOfBase = (() => {
-      // (the chord's root as a scale degree in the register)
-      for (let d = -14; d < 28; d++) if (degreeNote(theme.root, theme.scale, d) === base) return d;
-      return step.deg;
-    })();
-    for (const m of M) {
-      if (Math.floor(m.at / 16) !== half) continue;
-      let s = m.step + (answer ? 2 : 0);
-      if (answer && m === M[M.length - 1]) s -= 3;
-      let note = degreeNote(theme.root, theme.scale, degOfBase + s);
-      const beatInBar = (m.at % 16) / 4;
-      // (on a strong beat: the nearest chord tone)
-      if (beatInBar % 1 === 0) {
-        const pcs = chord.map((n) => ((n % 12) + 12) % 12);
-        let best = note,
-          bd = 99;
-        for (let k = -3; k <= 3; k++)
-          if (pcs.includes((((note + k) % 12) + 12) % 12) && Math.abs(k) < bd) (bd = Math.abs(k)), (best = note + k);
-        note = best;
-      }
-      push({
-        layer: "lead",
-        inst: theme.lead.sound === "bell" ? "bell" : theme.lead.sound === "soft" ? "softlead" : "lead",
-        beat: beatInBar,
-        dur: m.len / 4,
-        note,
-        vel: 0.65 + 0.2 * r.next(),
-      });
+  // ---- the brass
+  const BR = theme.brass;
+  if (BR) {
+    if (BR.chords && first && e >= ENTRY.brass!)
+      for (const n of voiceLead(null, chord, 50, 69))
+        push({ layer: "brass", inst: "horns", beat: 0, dur: held, note: n, vel: 0.35 + 0.55 * e });
+    if (BR.braam && first && e >= ENTRY.braam!)
+      push({ layer: "brass", inst: "braam", beat: 0, dur: Math.min(held, 3), note: rootLow + 12, vel: 0.5 + 0.5 * e });
+    if (BR.fanfare && e >= ENTRY.fanfare!) {
+      // (Williams's stabs: a triplet on the third beat into a held fourth, the chord's top voices)
+      const top = voiceLead(null, chord, 62, 76).slice(-2);
+      for (const [b, d] of [
+        [2, 1 / 3],
+        [2 + 1 / 3, 1 / 3],
+        [2 + 2 / 3, 1 / 3],
+        [3, 0.9],
+      ] as const)
+        for (const n of top) push({ layer: "brass", inst: "trumpet", beat: b, dur: d, note: n, vel: b === 3 ? 0.85 : 0.65 });
     }
+  }
+
+  // ---- the melody, doubled an octave away in the strongest bars
+  const M = theme.melody;
+  if (M && e >= ENTRY.melody!) {
+    for (const m of melodyIn(theme, section, inSection, seed)) {
+      const note = degreeNote(theme.root, theme.scale, m.deg) + 12 * M.oct;
+      const vel = Math.min(1, 0.55 + 0.4 * e + (m.beat % 1 === 0 ? 0.05 : 0));
+      push({ layer: "melody", inst: M.sound, beat: m.beat, dur: m.dur, note, vel, pan: -0.1 });
+      if (M.double && e >= ENTRY.double!)
+        push({
+          layer: "melody",
+          inst: M.double.sound,
+          beat: m.beat,
+          dur: m.dur,
+          note: note + 12 * M.double.oct,
+          vel: vel * 0.85,
+          pan: 0.15,
+        });
+    }
+  }
+
+  // ---- the harp's glissando, the celesta, the Shepard tone
+  const K = theme.keys;
+  if (K && e >= ENTRY.keys!) {
+    if (K.gliss && inSection === 0 && section.name !== "intro") {
+      // (up the scale two octaves in the beat before the downbeat… here in the bar's first beat, landing on the chord)
+      for (let i = 0; i < 15; i++)
+        push({
+          layer: "keys",
+          inst: "harp",
+          beat: (i / 15) * 0.9,
+          dur: 1.5,
+          note: degreeNote(theme.root, theme.scale, i),
+          vel: 0.35 + (0.35 * i) / 14,
+          pan: -0.6 + (1.2 * i) / 14,
+        });
+    }
+    if (K.sparkle && bar % 2 === 1)
+      for (const [i, b] of [2.5, 3, 3.5].entries())
+        push({
+          layer: "keys",
+          inst: "celesta",
+          beat: b,
+          dur: 1,
+          note: voiced[(i + bar) % voiced.length]! + 24,
+          vel: 0.4 + 0.15 * e,
+          pan: 0.4,
+        });
+    if (K.shepard) push({ layer: "keys", inst: "shepard", beat: 0, dur: 4, note: 48 + ((bar * 2) % 12), vel: 0.4 + 0.5 * e });
   }
 
   ev.sort((a, b) => a.beat - b.beat);

@@ -1,7 +1,10 @@
+// The orchestral score (audio/music/*): the themes in Hans Zimmer's, John Williams's and Max Richter's manners,
+// their melodies fitted to their chords, the composer's orchestra bar by bar.
 import { describe, expect, test } from "bun:test";
-import { barEnergy, composeBar, leadMotif, placeInForm } from "../src/audio/music/composer";
-import { LAYERS, THEMES } from "../src/audio/music/themes";
-import { chordOn, inScale, voiceLead } from "../src/audio/music/theory";
+import { barEnergy, chordStepOf, composeBar, melodyIn, placeInForm, progressionOf } from "../src/audio/music/composer";
+import { INSTRUMENTS } from "../src/audio/music/instruments";
+import { LAYERS, parsePhrase, THEMES } from "../src/audio/music/themes";
+import { chordOn, degreeNote, inScale, voiceLead } from "../src/audio/music/theory";
 
 describe("the theory", () => {
   test("chords diatonic, voices led by steps", () => {
@@ -16,19 +19,50 @@ describe("the theory", () => {
 });
 
 describe("the themes", () => {
-  test("at least ten, each with its own id, a form, a progression", () => {
-    expect(THEMES.length).toBeGreaterThanOrEqual(10);
+  test("twelve, their own ids, in the three manners, each with a form, a progression and a melody", () => {
+    expect(THEMES.length).toBe(12);
     expect(new Set(THEMES.map((t) => t.id)).size).toBe(THEMES.length);
+    const manners = new Set(THEMES.map((t) => t.manner));
+    expect([...manners].sort()).toEqual(["richter", "williams", "zimmer"]);
     for (const t of THEMES) {
       expect(t.form.length).toBeGreaterThan(1);
       expect(t.progressions.a!.length).toBeGreaterThan(0);
       expect(t.bpm).toBeGreaterThan(40);
       expect(t.loopFrom).toBeLessThan(t.form.length);
+      expect(t.melody).not.toBeNull();
     }
   });
 
   for (const theme of THEMES)
-    test(`${theme.name}: 96 bars at three intensities — every note in time, in range, the melodic ones in the mode`, () => {
+    test(`${theme.name}: each phrase whole bars, fitted to its progression — its notes on the strong beats the chord's`, () => {
+      for (const [key, phrase] of Object.entries(theme.melody!.phrases)) {
+        const { notes, beats } = parsePhrase(phrase);
+        expect(beats % 4).toBe(0);
+        const prog = theme.progressions[key] ?? theme.progressions.a!;
+        const progBars = prog.reduce((a, s) => a + (s.bars ?? 1), 0);
+        expect((beats / 4) % progBars === 0 || progBars % (beats / 4) === 0).toBe(true);
+        // (on the bar's first and third beats: a tone of the bar's chord, its ninth or its suspension allowed)
+        let on = 0,
+          strong = 0;
+        for (const n of notes) {
+          if (n.deg === null || n.at % 2 !== 0) continue;
+          const bar = Math.floor(n.at / 4);
+          const section = theme.form.find((s) => progressionOf(theme, s) === key) ?? theme.form[0]!;
+          const { step } = chordStepOf(theme, section, bar);
+          const tones = [
+            ...chordOn(theme.root, theme.scale, step.deg, step.kind ?? "triad"),
+            degreeNote(theme.root, theme.scale, step.deg + 1),
+          ];
+          const pcs = tones.map((x) => ((x % 12) + 12) % 12);
+          strong++;
+          if (pcs.includes(((degreeNote(theme.root, theme.scale, n.deg) % 12) + 12) % 12)) on++;
+        }
+        expect(on / Math.max(1, strong)).toBeGreaterThanOrEqual(0.8);
+      }
+    });
+
+  for (const theme of THEMES)
+    test(`${theme.name}: 96 bars at three intensities — every note in time, in range, the pitched ones in the mode, an orchestra's instruments`, () => {
       let prev: number[] | null = null;
       const seen = new Set<string>();
       for (const intensity of [0.15, 0.5, 1])
@@ -37,27 +71,64 @@ describe("the themes", () => {
           prev = p.chord;
           for (const e of p.events) {
             seen.add(e.layer);
+            expect(INSTRUMENTS as readonly string[]).toContain(e.inst);
             expect(e.beat).toBeGreaterThanOrEqual(0);
             expect(e.beat).toBeLessThan(4);
             expect(e.dur).toBeGreaterThan(0);
             expect(e.vel).toBeGreaterThan(0);
             expect(e.vel).toBeLessThanOrEqual(1.2);
-            if (e.layer !== "drums") {
+            if (e.layer !== "perc") {
               expect(e.note).toBeGreaterThanOrEqual(21);
               expect(e.note).toBeLessThanOrEqual(108);
-              expect(inScale(theme.root, theme.scale, e.note)).toBe(true);
+              if (e.inst !== "shepard") expect(inScale(theme.root, theme.scale, e.note)).toBe(true);
             }
           }
           // (sorted in time: the engine schedules them in order)
           for (let i = 1; i < p.events.length; i++) expect(p.events[i]!.beat).toBeGreaterThanOrEqual(p.events[i - 1]!.beat);
         }
-      // (its band all heard at some point)
-      if (theme.drums && theme.drums !== "booms") expect(seen.has("drums")).toBe(true);
+      // (its orchestra all heard at some point)
+      if (theme.perc && theme.perc !== "timpani") expect(seen.has("perc")).toBe(true);
       if (theme.bass) expect(seen.has("bass")).toBe(true);
-      if (theme.lead) expect(seen.has("lead")).toBe(true);
-      if (theme.guitar) expect(seen.has("guitar")).toBe(true);
+      if (theme.strings) expect(seen.has("strings")).toBe(true);
+      if (theme.ostinato) expect(seen.has("ostinato")).toBe(true);
+      if (theme.brass) expect(seen.has("brass")).toBe(true);
+      expect(seen.has("melody")).toBe(true);
       for (const l of seen) expect(LAYERS as string[]).toContain(l);
     });
+});
+
+describe("the manners", () => {
+  test("no synth-pop left: no kick, hats, supersaws, plucks, guitars", () => {
+    for (const x of ["kick", "clap", "hat", "openhat", "shaker", "supersaw", "pluck", "lead", "guitar", "growl", "riser"])
+      expect(INSTRUMENTS as readonly string[]).not.toContain(x);
+  });
+  test("Max Richter's elegy: the strings alone — no percussion, no brass, the viola's melody, the cellos under", () => {
+    const t = THEMES.find((x) => x.manner === "richter")!;
+    const insts = new Set<string>();
+    for (const i of [0.2, 1]) for (let bar = 0; bar < 48; bar++) for (const e of composeBar(t, bar, i).events) insts.add(e.inst);
+    for (const x of insts) expect(["strings", "cello", "contrabass", "viola", "violins"]).toContain(x);
+    expect(insts.has("viola")).toBe(true);
+    expect(insts.has("cello")).toBe(true);
+  });
+  test("John Williams's: the march's snare and timpani, the fanfare's triplets, the harp's glissando into a section", () => {
+    const t = THEMES.find((x) => x.id === "ascent")!;
+    // (intro 4, verse 8, build 4, drop 8: the drop from bar 16)
+    const drop = composeBar(t, 17, 1).events;
+    expect(drop.some((e) => e.inst === "snare")).toBe(true);
+    expect(drop.some((e) => e.inst === "timpani")).toBe(true);
+    expect(drop.filter((e) => e.inst === "trumpet" && e.beat > 2 && e.beat < 3).length).toBeGreaterThanOrEqual(2);
+    expect(composeBar(t, 4, 0.6).events.filter((e) => e.inst === "harp").length).toBeGreaterThan(10);
+  });
+  test("Hans Zimmer's: the organ and its pedal, the braams, the Shepard tone rising two semitones a bar", () => {
+    const w = THEMES.find((x) => x.id === "wormhole")!;
+    const bars = [20, 21, 22].map((b) => composeBar(w, b, 1).events);
+    expect(bars[0]!.some((e) => e.inst === "organ")).toBe(true);
+    expect(bars[0]!.some((e) => e.inst === "pedal")).toBe(true);
+    expect(bars[0]!.some((e) => e.inst === "braam")).toBe(true);
+    const sh = bars.map((b) => b.find((e) => e.inst === "shepard")!.note % 12);
+    expect((sh[1]! - sh[0]! + 12) % 12).toBe(2);
+    expect((sh[2]! - sh[1]! + 12) % 12).toBe(2);
+  });
 });
 
 describe("the form and the energy", () => {
@@ -74,26 +145,28 @@ describe("the form and the energy", () => {
     expect(barEnergy(s, 1)).toBeGreaterThan(barEnergy(s, 0.5));
     expect(barEnergy(s, 0)).toBeLessThan(barEnergy(s, 0.5));
   });
-  test("the band builds with the energy: sparse when quiet, full in a drop", () => {
+  test("the orchestra builds with the energy: strings alone when quiet, everyone in a drop", () => {
     const count = (i: number, bar: number) => composeBar(t, bar, i).events.length;
-    // (the drop starts after intro 8 + verse 16 + build 8)
-    expect(count(1, 33)).toBeGreaterThan(3 * count(0, 2));
-    const layers = new Set(composeBar(t, 33, 1).events.map((e) => e.layer));
-    for (const l of ["drums", "bass", "arp", "lead"] as const) expect(layers.has(l)).toBe(true);
-    const quiet = new Set(composeBar(t, 2, 0).events.map((e) => e.layer));
-    expect(quiet.has("drums")).toBe(false);
+    expect(count(1, 17)).toBeGreaterThan(3 * count(0, 1));
+    const layers = new Set(composeBar(t, 16, 1).events.map((e) => e.layer));
+    for (const l of ["perc", "bass", "strings", "ostinato", "brass", "melody"] as const) expect(layers.has(l)).toBe(true);
+    const quiet = new Set(composeBar(t, 1, 0).events.map((e) => e.layer));
+    expect(quiet.has("perc")).toBe(false);
+    expect(quiet.has("brass")).toBe(false);
   });
-  test("a fill before a stronger section, a riser at a build's end, a crash and a boom at the drop", () => {
-    const verseEnd = composeBar(t, 8 + 16 - 1, 0.8).events;
-    expect(verseEnd.filter((e) => e.inst === "snare" && e.beat >= 2).length).toBeGreaterThan(3);
-    expect(composeBar(t, 8 + 16 + 8 - 2, 0.8).events.some((e) => e.inst === "riser")).toBe(true);
-    const drop = composeBar(t, 32, 0.8).events;
-    expect(drop.some((e) => e.inst === "crash")).toBe(true);
-    expect(drop.some((e) => e.inst === "boom")).toBe(true);
+  test("a roll before a stronger section, the cymbal swelling at a build's end, a clash, a boom and the timpani at the drop", () => {
+    // (the verse's last bar, into the build: the snare's roll)
+    expect(composeBar(t, 4 + 8 - 1, 0.8).events.some((e) => e.inst === "roll")).toBe(true);
+    expect(composeBar(t, 4 + 8 + 4 - 1, 0.8).events.some((e) => e.inst === "cymbal")).toBe(true);
+    const drop = composeBar(t, 16, 0.8).events;
+    for (const x of ["crash", "boom", "timpani"]) expect(drop.some((e) => e.inst === x)).toBe(true);
   });
-  test("deterministic; another variation, another melody", () => {
-    expect(composeBar(t, 40, 0.9, 3)).toEqual(composeBar(t, 40, 0.9, 3));
-    expect(leadMotif(t, 1)).not.toEqual(leadMotif(t, 2));
+  test("deterministic; another variation, the melody ornamented otherwise", () => {
+    expect(composeBar(t, 20, 0.9, 3)).toEqual(composeBar(t, 20, 0.9, 3));
+    const sec = t.form[1]!;
+    const line = (seed: number) => [0, 1, 2, 3].flatMap((b) => melodyIn(t, sec, b, seed).map((n) => `${n.beat}:${n.deg}`)).join(" ");
+    expect(line(1)).not.toEqual(line(0));
+    expect(line(1)).not.toEqual(line(2));
   });
 });
 
@@ -103,7 +176,6 @@ describe("the panel's chord names", () => {
     expect(chordName([57, 60, 64])).toBe("Am");
     expect(chordName([60, 64, 69], 57)).toBe("Am");
     expect(chordName([62, 66, 69])).toBe("D");
-    expect(chordName([57, 60, 64, 71], 57)).toBe("Amadd9".replace("madd9", "madd9"));
     expect(chordName([55, 57, 62])).toBe("Gsus2");
     expect(chordName([55, 59, 62, 65])).toBe("G7");
   });

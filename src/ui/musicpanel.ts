@@ -2,7 +2,7 @@
 // theme, its section, bar and chord, the energy and the intensity), its spectrum and its band's meters; listen
 // to any theme (the game's choice back after); the mode (the great moments only, adaptive, a playlist, off);
 // the intensity (the flight's, or the player's); the variation (another melody); the mixer — a fader, a mute
-// and a solo per section of the band, the reverb, the delay, the sidechain's pump, the master —; which theme
+// and a solo per section of the orchestra, the reverb, the delay, the master —; which theme
 // for each moment and context; the crossfade, the playlist's length. Opened by the toolbar's Music button and
 // the flight HUD's.
 
@@ -29,14 +29,20 @@ export function chordName(notes: number[], root?: number): string {
 }
 
 const LAYER_NAME: Record<Layer, () => string> = {
-  drums: () => t("Drums"),
-  bass: () => t("Sub bass"),
-  pad: () => t("Pads"),
-  arp: () => t("Arpeggio"),
-  lead: () => t("Lead"),
-  guitar: () => t("Ethereal guitar"),
+  perc: () => t("Percussion"),
+  bass: () => t("Basses"),
+  strings: () => t("Strings"),
+  ostinato: () => t("Ostinato"),
+  brass: () => t("Brass"),
+  melody: () => t("Melody"),
+  keys: () => t("Harp, celesta"),
   organ: () => t("Organ"),
   choir: () => t("Choir"),
+};
+const MANNER: Record<string, () => string> = {
+  zimmer: () => t("Hans Zimmer's manner"),
+  williams: () => t("John Williams's manner"),
+  richter: () => t("Max Richter's manner"),
 };
 const CUE_NAME: Record<string, () => string> = {
   liftoff: () => t("Lift-off"),
@@ -231,7 +237,7 @@ export class MusicPanel {
     const vlab = h("label", "", t("Variation"));
     const vval = h("span", "mp-meta", `#${P.seed}`);
     const dice = h("button", "", t("Another melody")) as HTMLButtonElement;
-    dice.title = t("Another variation of every theme: its lead's motif, its arpeggio's choices, its drums' accents");
+    dice.title = t("Another variation of every theme: its melody ornamented otherwise, its piano's notes, its percussion's accents");
     dice.onclick = () => {
       P.seed = (P.seed + 1 + Math.floor(Math.random() * 97)) % 1000;
       vval.textContent = `#${P.seed}`;
@@ -259,7 +265,11 @@ export class MusicPanel {
     for (const th of THEMES) {
       const b = h("button", "mp-theme") as HTMLButtonElement;
       const name = SCALE_NAME[th.scale]?.() ?? th.scale;
-      b.append(h("b", "", th.name), h("small", "", `${th.bpm} BPM · ${NOTE_NAMES[th.root % 12]} ${name}`), h("small", "", t(th.mood)));
+      b.append(
+        h("b", "", th.name),
+        h("small", "", `${MANNER[th.manner]!()} · ${th.bpm} BPM · ${NOTE_NAMES[th.root % 12]} ${name}`),
+        h("small", "", t(th.mood)),
+      );
       b.title = t(th.mood);
       const box = h("input") as HTMLInputElement;
       box.type = "checkbox";
@@ -317,7 +327,6 @@ export class MusicPanel {
     for (const [k, label, max] of [
       ["reverb", t("Reverb"), 2],
       ["delay", t("Delay"), 2],
-      ["pump", t("Sidechain pump"), 2],
       ["master", t("Master"), 1.5],
     ] as const)
       this.el.append(
