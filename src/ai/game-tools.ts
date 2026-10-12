@@ -91,6 +91,7 @@ export interface GameHost {
   standOn(b?: Target): string | null;
   skyGoTo(kind: "constellation" | "star", index: number): void;
   map(on: boolean, tab?: "orbit" | "globe" | "map"): void;
+  localMap?: { state(): unknown; zoom(value: number): number };
   hudDensity(n: 0 | 1 | 2): void;
   open(panel: Panel): void;
   close(): void;
@@ -380,15 +381,18 @@ export function gameTools(h: GameHost): Tool[] {
           docked: camera.docked,
           surface: tools.perf({ gpu: false }).earthSurface,
           scenery: tools.perf({ gpu: false }).earthScenery,
+          sceneryHitboxes: settings.sceneryHitboxes,
           character: camera.character.state(),
           grass: tools.perf({ gpu: false }).grass,
+          localMap: h.localMap?.state(),
+          streaming: tools.perf({ gpu: false }).streaming,
         };
       },
     },
     {
       name: "get_telemetry",
       description:
-        "Everything the cockpit and the hub know, now, in figures (degrees, metres, m/s, s): attitude (pitch, bank, heading, angle of attack, sideslip, stall AoA), air (height, airspeed, Mach, q, heat, load, skin temperatures and margins, wind), controls (throttle, thrust, surface deflections, flaps, air brake, gear, holds), autopilot (director, flight-computer command, launch goal), hub (its title, current step, rows, next, progress, cue: time to ignition and Δv left, callout, its graph's verdict on/off/wait and the fix), entry (phase, commanded bank and AoA, range and heading error to the site, miss, in corridor, planned peaks, reversal), approach (runway offset, height, PAPI whites 0–4, commanded vs flown ground path angle, height over the threshold, ground speed and airspeed, profile deviation, leg, flare, MLS, wind), descent (powered landing's command), burn (plan, cue), dock (offsets, signed actual and commanded closing rates in the rotating port frame), sky (the world under the camera, the Sun's and the Moon's altitude and azimuth — true and as seen through the Earth's air —, the refraction at the horizon and the air's refractivity). surface (regional satellite loading and memory), scenery (worldwide forests, OSM buildings/roads/railways/water/bridges, source layer/field inventory, cast-shadow state and ranges, counts, loading, memory and errors). Ask only the groups you need.",
+        "Everything the cockpit and the hub know, now, in figures (degrees, metres, m/s, s): attitude (pitch, bank, heading, angle of attack, sideslip, stall AoA), air (height, airspeed, Mach, q, heat, load, skin temperatures and margins, wind), controls (throttle, thrust, surface deflections, flaps, air brake, gear, holds), autopilot (director, flight-computer command, launch goal), hub (its title, current step, rows, next, progress, cue: time to ignition and Δv left, callout, its graph's verdict on/off/wait and the fix), entry (phase, commanded bank and AoA, range and heading error to the site, miss, in corridor, planned peaks, reversal), approach (runway offset, height, PAPI whites 0–4, commanded vs flown ground path angle, height over the threshold, ground speed and airspeed, profile deviation, leg, flare, MLS, wind), descent (powered landing's command), burn (plan, cue), dock (offsets, signed actual and commanded closing rates in the rotating port frame), sky (the world under the camera, the Sun's and the Moon's altitude and azimuth — true and as seen through the Earth's air —, the refraction at the horizon and the air's refractivity). surface (regional satellite loading and memory), scenery (worldwide forests, OSM buildings/roads/railways/water/bridges, source layer/field inventory, cast-shadow state and ranges, counts, loading, memory and errors). map (local position, zoom, source availability and CPU drawing cost), streaming (bounded prediction distance and look-ahead time). Ask only the groups you need.",
       params: { groups: { type: "array", maxItems: TELEMETRY_GROUPS.length, items: { type: "string", enum: TELEMETRY_GROUPS } } },
       run: (a) =>
         telemetry(
@@ -397,6 +401,8 @@ export function gameTools(h: GameHost): Tool[] {
           tools.perf({ gpu: false }).earthSurface,
           tools.perf({ gpu: false }).earthScenery,
           tools.perf({ gpu: false }).grass,
+          h.localMap?.state(),
+          tools.perf({ gpu: false }).streaming,
         ),
     },
     {
@@ -1267,12 +1273,18 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "interface",
       description:
-        "The interface: open a panel (settings, place, time, weather, eclipses — the eclipse calculator's page —, scenes, photo, controls, help, pause, planner: the flight computer's MISSION tab over the map, sky, camera) or close the one on top; the map (open, tab: orbit/globe/map); HUD density 0 full, 1 minimal, 2 clean; a screenshot (PNG download).",
+        "The interface: open a panel (settings, place, time, weather, eclipses — the eclipse calculator's page —, scenes, photo, controls, help, pause, planner: the flight computer's MISSION tab over the map, sky, camera) or close the one on top; the map (open, tab: orbit/globe/map; on the ground: local planisphere, mapZoom 0–21, default 18); HUD density 0 full, 1 minimal, 2 clean; a screenshot (PNG download).",
       params: {
         open: { type: "string", enum: PANELS },
         close: { type: "boolean" },
         map: { type: "boolean" },
         mapTab: { type: "string", enum: ["orbit", "globe", "map"] },
+        mapZoom: {
+          type: "number",
+          minimum: 0,
+          maximum: 21,
+          description: "Local ground planisphere zoom, default 18; on foot or a landed craft.",
+        },
         hudDensity: { type: "number", minimum: 0, maximum: 2, integer: true },
         screenshot: { type: "boolean" },
       },
@@ -1280,6 +1292,10 @@ export function gameTools(h: GameHost): Tool[] {
         if (a.close) h.close();
         if (a.open !== undefined) h.open(a.open as Panel);
         if (a.map !== undefined || a.mapTab !== undefined) h.map((a.map as boolean) ?? true, a.mapTab as never);
+        if (a.mapZoom !== undefined) {
+          h.map(true, "map");
+          h.localMap?.zoom(Number(a.mapZoom));
+        }
         if (a.hudDensity !== undefined) h.hudDensity(a.hudDensity as 0 | 1 | 2);
         if (a.screenshot) await h.screenshot();
         return "done";

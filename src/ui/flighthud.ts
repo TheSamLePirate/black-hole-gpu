@@ -367,13 +367,14 @@ export class FlightHud {
   /** the map (3D): the minimap in the right panel, over the whole screen with M */
   private map3d!: Map3D;
   /** the ground track (a globe, a planisphere) of the world the ship orbits; the tab shown and its buttons */
-  private ground!: GroundTrack;
+  readonly ground!: GroundTrack;
   /** the real weather for the map's weather layer (main.ts: the camera's, the renderer's mosaic, the model's) */
   mapWeather: {
     real: () => WeatherState | null;
     mosaic: () => { img: ImageBitmap; date: string; layer: string } | null;
     at: (lat: number, lon: number) => WeatherState | null;
   } = { real: () => null, mosaic: () => null, at: () => null };
+  private wasLocalGround = false;
   private mapTab: "orbit" | "globe" | "map" = "orbit";
   private tabBtns: Record<string, HTMLButtonElement> = {};
   private mapBody: HTMLElement | null = null;
@@ -404,6 +405,14 @@ export class FlightHud {
     this.root.append(el);
   }
   private unEscapeMap?: () => void;
+  drawLocalMap() {
+    const place = this.ground.localPlace();
+    if (!place) return;
+    if (!this.wasLocalGround) this.setMapTab("map");
+    this.wasLocalGround = true;
+    this.syncMapTab();
+    if (this.mapTab === "map") this.ground.drawLocal(place);
+  }
   toggleMapView() {
     this.mapView = !this.mapView;
     this.unEscapeMap?.();
@@ -719,7 +728,7 @@ export class FlightHud {
   /** What the map shows: the ground track needs a world under the ship — else the 3D map, the tab kept. */
   private syncMapTab() {
     const i = this.lastInfo;
-    const world = i ? this.ground.worldOf(i) : null;
+    const world = this.ground.localPlace()?.body ?? (i ? this.ground.worldOf(i) : null);
     const ground = this.mapTab !== "orbit" && !!world;
     this.mapBody?.classList.toggle("ground", ground);
     for (const [id, b] of Object.entries(this.tabBtns)) {
@@ -1730,6 +1739,9 @@ export class FlightHud {
     this.record(info, time);
     this.ground.observe(info, time);
     this.lastInfo = info;
+    const local = this.ground.localPlace();
+    if (local && !this.wasLocalGround) this.setMapTab("map");
+    this.wasLocalGround = !!local;
     const now = performance.now();
     // (the markers follow the view every frame; the instruments at their own pace — the map 20 times
     // a second, the ball 20, the plots 10: a full HUD redrawn 60 times a second cost ~6 ms a frame —,

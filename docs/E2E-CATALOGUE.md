@@ -76,7 +76,7 @@ Every e2e file (`tests/e2e/*.e2e.test.ts`), by theme: what it proves, the scene 
 | s5.e2e.test.ts | Text readable over the bright disc (WCAG AA), no leaks over 30 openings, layouts at every size, unlabelled-control ratchet. | game:artemis | 31 | `RATCHET=update` rewrites the ratchet |
 | touch.e2e.test.ts | The map under fingers: pinch zooms, two-finger pan without turning the view, 44 px controls. | game:artemis | 5 | touch emulation |
 | wormhole-map.e2e.test.ts | The tunnel map stays populated through the wormhole, also on a narrow screen with failing GPU pipelines. | Earth: the Blue Marble (1280×900 and default) | 18 | — |
-| place.e2e.test.ts | The Place panel from the HUD: asked first, then beside Mars at rest with the hover autopilot; Escape closes it. | game:artemis | 2 | — |
+| place.e2e.test.ts | The Place panel from the HUD: asked first, then beside Mars at rest with the hover autopilot; on foot — the ship landed and the astronaut out walking beside it (the Moon); Escape closes it. | game:artemis | 3 | — |
 | place-docked.e2e.test.ts | A craft docked to the station, placed elsewhere, lets go of its links and goes. | Earth: docking to the ISS, 1000×700 | ? | — |
 | time.e2e.test.ts | Date and time panel by clicks: thirty days on the ship keeps its orbit; back to the start; a date chosen in UTC. | Earth: the Blue Marble | 2 | — |
 | eclipses.e2e.test.ts | Eclipse calculator by clicks: the 12 Aug 2026 total eclipse from Paris, "Go and see", the moons tab. | game:artemis, 1440×900, lang fr | ? | — |
@@ -149,3 +149,12 @@ Every file runs only with `E2E=1` (the `bun run e2e` script sets it). Beyond tha
 - `golden.e2e.test.ts`: `UPDATE=1` re-records the golden states; without it, the recorded ones are checked.
 - `s5.e2e.test.ts`: `RATCHET=update` rewrites the unlabelled-control ratchet.
 - `hud-layout.e2e.test.ts`: `HUD_BOXES=1` prints the measured boxes; `approach-charts.e2e.test.ts`: `SHOT=<path>` saves a screenshot. Both optional.
+
+## Contacts et carte locale au sol
+
+| file | what it proves | scene | duration | needs |
+|---|---|---|---|---|
+| ground-details.e2e.test.ts | Loaded Earth: native character depth versus vessel, foreground depth-plane occlusion, hull shadow on Earth, local planisphere at zoom 18, wheel/buttons and M on foot. Readiness JSON with captures. | Earth: the Blue Marble, 960×540 | 16–70 s here, network/compile dependent | live terrain/scenery and licensed astronaut |
+| ground-planets.e2e.test.ts | Carte à pied Lune/Mars : atlas chargé, zoom 18, coordonnées, dézoom ; Mann : quadrillage sans atlas. Captures après chargement. | Lune, Mars, Mann, 960×540 | ~19 s ici | atlas locaux et astronaute licencié |
+| scenery-hitboxes.e2e.test.ts | Contours CPU roses des arbres/bâtiments réels ; activation et désactivation ; captures après chargement. | Terre, Le Bourget, 960×540 | ~36 s, réseau dépendant | terrain/décor et astronaute |
+| gargantua-ground.e2e.test.ts | Mann/Miller/Edmunds : posé avant sortie ⇧K, contact pieds/terrain, proximité du vaisseau, réembarquement et placement On foot. Captures chargées et diagnostics métriques. | game:interstellar, 960×540 | ~28–47 s ici | astronaute licencié ; aucune tuile réseau |

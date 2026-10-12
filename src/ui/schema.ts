@@ -2004,6 +2004,16 @@ export const SCHEMA: ControlDef[] = [
       "forest trees buildings worldwide worldcover openstreetmap osm foret arbres batiments monde scenery roads rivers bridges routes fleuves rivieres ponts rail",
   },
   {
+    key: "sceneryHitboxes",
+    type: "toggle",
+    section: "sky",
+    group: "The Earth",
+    label: "Pink collision hitboxes",
+    effect: "none",
+    help: "On foot: show the actual CPU tree trunks, crowns and building collision volumes in pink, including courtyard boundaries. X-ray wireframe within 60 m; diagnostic only, disable after checking alignment.",
+    keywords: "hitbox collision debug pink rose arbres trees buildings batiments",
+  },
+  {
     key: "earthGrass",
     type: "choice",
     section: "sky",

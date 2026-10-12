@@ -1763,3 +1763,26 @@ await app.js(`__bh.bench.vram()?.peakMiB ?? null`);
 
 ---
 
+
+### Ground exploration diagnostics
+
+`__bh.game.perf().streaming` gives `leadM` and `lookAheadSeconds` (maximum 6 seconds, 650 metres).
+`__bh.renderer.characterRenderer.depthTexture()` is the full image's retained reversed depth used by the vessel.
+`__bh.renderer.onFoot` disables predictive flight streaming in character view; `streamVelocity` is Earth-fixed m/s
+relative to rotating ground. TARS `get_state.localMap` and telemetry group `map` expose body, coordinates, zoom,
+source readiness, pan metres and last CPU draw time. `interface({mapZoom:18})` opens the local ground planisphere;
+`/mapzoom 18` is its positional command. See [corrections](CORRECTIONS-DETAILS-SOL-VOL.md).
+
+### `__bh.game.walk(body, lat = 0, lon = 0)` → string
+
+The placement panel's On foot mode: lands the current vessel, then disembarks next to it. Latitude and longitude
+are degrees. A refused exit throws while leaving the vessel landed. Uses the existing solid-ground/obstruction
+checks and the character controller. Retains the owner's recent placement implementation.
+
+### Placement au sol des mondes de Gargantua
+
+`__bh.game.land("mann", lat, lon)` (aussi `miller`, `edmunds`) initialise immédiatement
+`__bh.camera.local.L.landed` et les coordonnées propres de contact. **⇧K** peut sortir
+sans étape physique préalable. `__bh.game.walk(body, lat, lon)` pose le vaisseau puis sort.
+Miller autorise la marche sur son plan marin de contact, entre les vagues choisies par le placement.
+Les vagues restent visuelles ; les surfaces gazeuses restent refusées.

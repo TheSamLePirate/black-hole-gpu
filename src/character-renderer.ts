@@ -211,6 +211,9 @@ export class CharacterRenderer {
       generationMs: this.generationMs,
     };
   }
+  depthTexture() {
+    return this.active ? this.depth : null;
+  }
   reset() {
     this.active = false;
     this.reason = "off";
@@ -325,7 +328,11 @@ export class CharacterRenderer {
       key = `${width}:${height}`;
     if (key !== this.size) {
       this.depth?.destroy();
-      this.depth = this.d.createTexture({ size: [width, height], format: "depth32float", usage: GPUTextureUsage.RENDER_ATTACHMENT });
+      this.depth = this.d.createTexture({
+        size: [width, height],
+        format: "depth32float",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      });
       this.size = key;
     }
     const u = new Float32Array(84 * 4);
@@ -482,7 +489,7 @@ export class CharacterRenderer {
     const pass = enc.beginRenderPass({
       ...prof.pass("character and grass HDR"),
       colorAttachments: [{ view: target.createView({ baseMipLevel: 0, mipLevelCount: 1 }), loadOp: "load", storeOp: "store" }],
-      depthStencilAttachment: { view: this.depth!.createView(), depthClearValue: 0, depthLoadOp: "clear", depthStoreOp: "discard" },
+      depthStencilAttachment: { view: this.depth!.createView(), depthClearValue: 0, depthLoadOp: "clear", depthStoreOp: "store" },
     });
     if (this.model.ready) {
       pass.setPipeline(this.skinPipe);

@@ -254,6 +254,7 @@ fn envSH(@builtin(local_invocation_id) lid: vec3u) {
 @group(0) @binding(14) var normalMap: texture_2d<f32>; // its tangent-space normals (v down the image)
 @group(0) @binding(15) var lightsMap: texture_2d<f32>; // its lights' emission
 @group(0) @binding(16) var mapSamp: sampler;
+@group(1) @binding(1) var characterDepth: texture_depth_2d;
 @group(1) @binding(0) var stationDepth: texture_2d<f32>; // the station's box: distance [m], coverage
 
 struct VIn {
@@ -600,6 +601,11 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
       let st = textureLoad(stationDepth, q, 0);
       if (st.g > 0.5 && st.r / st.g < length(in.p) - 0.05) { discard; }
     }
+  }
+  if (textureDimensions(characterDepth).x > 1u) {
+    let px=vec2f(in.p.x/(in.p.z*S.proj.x)+1,1-in.p.y/(in.p.z*S.proj.y))*.5*S.img.xy;
+    let xy=vec2i(clamp(px,vec2f(0),S.img.xy-1));let depth=textureLoad(characterDepth,xy,0);
+    if(depth>0 && .035/depth < in.p.z-.015){discard;}
   }
   let I = inst[in.ii];
   let model = I.model;

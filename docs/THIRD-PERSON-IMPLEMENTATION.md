@@ -11,11 +11,14 @@ de le rejoindre à moins de 3 m d’un accès. La touche est configurable dans l
 à l’écran propose la même action ; les sticks et boutons A/Y permettent de marcher, sauter et embarquer
 à la manette. Sur écran tactile, des boutons directionnels et de saut complètent le bouton d’embarquement.
 
+Le panneau « Placer le vaisseau » propose le mode « À pied » : il pose le vaisseau au lieu choisi
+(latitudes et longitudes, clic sur le globe ou site) et fait aussitôt sortir l'astronaute à côté —
+sur tout corps marchable (les géantes gazeuses et le Soleil refusés), des deux univers.
 Les touches de déplacement de caméra libre, configurables selon le clavier, commandent la marche
 relative à la caméra. Maj fait courir, Espace saute, glisser orbite et la molette change la distance.
 Marche : 1,4 m/s ; course : 4 m/s ; intégration physique à 120 Hz, indépendante du débit des images.
 La gravité et la normale sont locales : WGS84 sur Terre, surfaces sphériques ailleurs, repère de longueur
-propre pour Mann et Edmunds. Les géantes gazeuses et Miller sont refusées. Les sauvegardes conservent
+propre pour Mann et Edmunds ; Miller utilise son plan de contact marin entre les vagues. Les géantes gazeuses sont refusées. Les sauvegardes conservent
 l’exploration et restent compatibles avec les anciennes sauvegardes.
 
 Les contacts proches utilisent le relief et les volumes OSM des bâtiments, ponts et troncs. Les cours

@@ -304,6 +304,7 @@ export interface Settings {
   earthSurface: "off" | "satellite" | "materials"; // regional Sentinel-2 / WorldCover pilot; independent of physical relief
   earthScenery: "off" | "balanced" | "high";
   earthSceneryShadows: boolean;
+  sceneryHitboxes: boolean; // CPU collision wireframes, on foot only (diagnostic)
   earthGrass: "off" | "balanced";
   earthGrassDensity: number; // the share of the grass blades drawn (0.25 … 1; 1 the authored density)
   earthGrassReach: number; // the grass drawn out to this distance from the character [m] (8 … 28)
@@ -585,6 +586,7 @@ export function defaultSettings(): Settings {
     earthSurface: "satellite",
     earthScenery: "balanced",
     earthSceneryShadows: true,
+    sceneryHitboxes: true,
     earthGrass: "balanced",
     earthGrassDensity: 1,
     earthGrassReach: 28,
@@ -1823,6 +1825,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   earthSurface: "scene",
   earthScenery: "scene",
   earthSceneryShadows: "scene",
+  sceneryHitboxes: "pref",
   earthGrass: "pref",
   earthGrassDensity: "pref",
   earthGrassReach: "pref",

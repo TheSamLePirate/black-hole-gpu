@@ -38,6 +38,8 @@ export interface ShipInstance {
 }
 
 export interface ShipView {
+  /** Camera translation near a walking observer needs a fresh map each frame. */
+  forceShadow?: boolean;
   /** the craft flown (its mesh, its thrusters) */
   vessel?: VesselId;
   /** the other craft in view */
@@ -176,7 +178,7 @@ interface ShipTargetRes {
   bindGen?: number;
   bindMoments?: GPUBuffer;
   /** the station's depth bound (group 1), and which texture it holds */
-  occBind?: { tex: GPUTexture; g: GPUBindGroup };
+  occBind?: { tex: GPUTexture; character: GPUTexture; g: GPUBindGroup };
 }
 
 export class ShipRenderer {
@@ -244,6 +246,7 @@ export class ShipRenderer {
   /** a craft flown this frame (else only the others are drawn) */
   private flown = true;
   /** the moments buffer bound into the per-target groups */
+  private characterDummy: GPUTexture | null = null;
   private momentsBuf: GPUBuffer | null = null;
   private shadowTex: GPUTexture;
   private pipes!: {
@@ -997,7 +1000,7 @@ export class ShipRenderer {
     const inCabin = !!(v.inside && this.flown && this.vessel === "ranger" && this.cockpit);
     this.inCabin = inCabin;
     const list: { id: VesselId; R: M3; t: V3; shadow: boolean; far: boolean }[] = this.flown
-      ? [{ id: this.vessel, R, t, shadow: true, far: false }]
+      ? [{ id: this.vessel, R, t, shadow: true, far: !!v.place }]
       : [];
     for (const o of v.others ?? [])
       if (list.length < MAX_INST && this.meshes[o.id]) list.push({ id: o.id, R: o.S, t: o.t, shadow: o.shadow, far: true });
@@ -1243,6 +1246,7 @@ export class ShipRenderer {
     v: ShipView,
     occluder?: { depth: GPUTexture; rect: [number, number, number, number] },
     moments?: GPUBuffer,
+    characterDepth?: GPUTexture | null,
   ) {
     if (!this.ready) return;
     // (none flown: only the others — the Ranger's mesh, always there, for the plumes' unused range)
@@ -1291,18 +1295,25 @@ export class ShipRenderer {
     const occTex =
       occ?.depth ??
       (this.occDummy ??= this.device.createTexture({ size: [1, 1], format: "rg16float", usage: GPUTextureUsage.TEXTURE_BINDING }));
-    if (res.occBind?.tex !== occTex) {
+    const charTex =
+      characterDepth ??
+      (this.characterDummy ??= this.device.createTexture({ size: [1, 1], format: "depth32float", usage: GPUTextureUsage.TEXTURE_BINDING }));
+    if (res.occBind?.tex !== occTex || res.occBind.character !== charTex) {
       res.occBind = {
         tex: occTex,
+        character: charTex,
         g: this.device.createBindGroup({
           layout: this.pipes!.ship.getBindGroupLayout(1),
-          entries: [{ binding: 0, resource: occTex.createView() }],
+          entries: [
+            { binding: 0, resource: occTex.createView() },
+            { binding: 1, resource: charTex.createView() },
+          ],
         }),
       };
     }
     res.rect = [x0, y0, bw, bh];
     // (the self-shadowing, every other frame: the light turns slowly against the ship)
-    if (this.shadowTick++ % 2 === 0) {
+    if (v.forceShadow || this.shadowTick++ % 2 === 0) {
       const sp = enc.beginRenderPass(
         this.pass("ship: shadow map", {
           colorAttachments: [],

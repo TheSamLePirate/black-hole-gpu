@@ -1,3 +1,8 @@
+import { SceneryHitboxes } from "./ui/scenery-hitboxes";
+import { planetFrame, toLocal } from "./landing";
+import { cartToGeodetic, WGS84_A, WGS84_F } from "./system/ellipsoid";
+import { bodyAxes } from "./system/solar";
+import { groundVelocity } from "./system/our-surface";
 import { CharacterHud } from "./ui/characterhud";
 import { poseData } from "./cockpit/controls";
 import { GEARS } from "./gear";
@@ -466,6 +471,7 @@ async function main() {
   /** the scene's time and the step that moves everything (sim.ts: the live loop, the automation, the video) */
   const sim = new Simulation(settings, camera, renderer);
   const characterHud = new CharacterHud(camera, (text) => panel.toast(text));
+  const sceneryHitboxes = new SceneryHitboxes();
   /** the take recorder (take.ts): the live view recorded, rendered afterwards as a video */
   const take = new Take();
 
@@ -737,11 +743,15 @@ async function main() {
     scenery: string;
     grass: string;
   } | null = null;
+  let tarsMapSeen: string | null = null;
   let tarsSpentSeen = 0;
   setInterval(() => {
     // (what OpenRouter cost since: the budget's)
     tarsBudget.add(openRouter.spent - tarsSpentSeen);
     tarsSpentSeen = openRouter.spent;
+    const mapKey = `${flightHud.mapView}:${flightHud.ground.localMap.zoom}`;
+    if (tarsMapSeen !== null && mapKey !== tarsMapSeen) tarsEvent({ kind: "map", from: tarsMapSeen, to: mapKey });
+    tarsMapSeen = mapKey;
     if (!camera.piloting) return void (tarsSeen = null);
     const st = tools.status();
     // (what he follows — B4: the hub's card mirrored on his console)
@@ -2202,6 +2212,33 @@ async function main() {
     tools: () => toolsWin.toggle(),
     execute: () => pilotAuto(camera.transfer || camera.pilot.auto === "transfer" ? "transfer" : "node"),
   });
+  flightHud.ground.localPlace = () => {
+    const ch = camera.character;
+    const body = ch.active ? ch.body : (camera.ourLanded?.body ?? (camera.landed ? camera.local?.F.id : null));
+    if (!body) return null;
+    const geo = (q: [number, number, number]) => {
+      const g = cartToGeodetic(WGS84_A, body === "earth" ? WGS84_F : 0, q);
+      return { lat: (g.lat * 180) / Math.PI, lon: (g.lon * 180) / Math.PI };
+    };
+    const sb = solarBody(body);
+    const frame = sb ? null : planetFrame(body, sim.time, settings.spin, settings.massSolar);
+    const pose = camera.activePoseNow();
+    const ship =
+      pose && (camera.ourLanded?.body === body || camera.local?.F.id === body)
+        ? geo(
+            frame
+              ? (toLocal(frame, pose.X, [0, 0, 0]).xi.map((v) => v * frame.mPerM) as [number, number, number])
+              : (toBodyFixed(body, pose.X, sim.time).map((v) => v * M_METRES) as [number, number, number]),
+          )
+        : null;
+    const radiusM = sb ? sb.radius * M_METRES : frame!.R * frame!.mPerM;
+    const point = ch.active ? geo(ch.q) : (ship ?? (camera.local ? geo(camera.local.L.xi) : null));
+    return point
+      ? { body, radiusM, ...point, vessel: ch.active ? ship : null, contact: body === "earth" ? renderer.earthScenery.contact : null }
+      : null;
+  };
+  let localMapAt = 0;
+
   // the flight computer, over the full-screen map (ui/fc/computer.ts)
   let openMissions = () => {};
   const flightComputer = new FlightComputer({
@@ -2381,7 +2418,7 @@ async function main() {
     flightHud.setDensity(2); // clean: the view, the captions, the warnings
   };
   const flying = () => camera.piloting && !camera.cinematic && !renderer.offlineActive && !camera.character.active;
-  panel.flightKeys = (e) => flying() && (e.key === "m" || e.key === "M") && !e.shiftKey;
+  panel.flightKeys = (e) => (flying() || camera.character.active) && (e.key === "m" || e.key === "M") && !e.shiftKey;
   camera.onPadAction = (a) => {
     if (renderer.offlineActive) return;
     if (camera.character.active) {
@@ -3567,6 +3604,14 @@ async function main() {
       if (flightHud.mapView !== on) flightHud.toggleMapView();
       if (on && tab) flightHud.setMapTab(tab);
     },
+    localMap: {
+      state: () => flightHud.ground.localMap.state(),
+      zoom: (value) => {
+        if (!flightHud.ground.localPlace()) throw new Error("The local map requires an explorer or a landed craft");
+        flightHud.drawLocalMap();
+        return flightHud.ground.localMap.setZoom(value);
+      },
+    },
     hudDensity: (n) => flightHud.setDensity(n),
     open: (p) => {
       const open: Record<typeof p, () => void> = {
@@ -3907,6 +3952,14 @@ async function main() {
     // what the renderer draws of the flight (the ship, its flames, the predicted path) — an offline job
     // or a video holds its own
     characterHud.update(now);
+    sceneryHitboxes.update(
+      now,
+      camera.character,
+      renderer.earthScenery.contact,
+      settings.fov,
+      settings.sceneryHitboxes && !flightHud.mapView,
+      canvas,
+    );
     const pil = flying();
     const info = pil ? cpuProf.time("flight figures (flightInfo)", () => camera.flightInfo()) : null;
     if (!renderer.offlineActive && cpuProf.time("free-fall prediction", () => sim.applyRender(info))) changed = true;
@@ -3932,7 +3985,16 @@ async function main() {
       settings.fpsCap > 0 && !renderer.offlineActive && now - renderedAt < 1000 / settings.fpsCap - 0.25 * (renderer.refreshMs || 4);
     if (!capped) cpuProf.time("sky chart", () => updateChart());
     skyPanel.refresh();
-    renderer.shipFocus = camera.spectating ? shipFocus() : null;
+    const groundFocus = camera.piloting && !camera.character.active ? shipFocus() : null;
+    renderer.shipFocus = groundFocus;
+    const pose = camera.activePoseNow();
+    if (groundFocus?.body === "earth" && pose) {
+      const ground = groundVelocity("earth", pose.X, sim.time);
+      renderer.streamVelocity = bodyAxes(solarBody("earth")!, sim.time).map((a) =>
+        a.reduce((sum, v, i) => sum + v * (pose.V[i]! - ground[i]!) * 299792458, 0),
+      ) as [number, number, number];
+    } else renderer.streamVelocity = null;
+    renderer.onFoot = camera.character.active;
     // (the rain where the view is: the spectator's camera away from the ship — in orbit, under another sky —
     // has its own, or none)
     const viewer = camera.viewController();
@@ -4115,9 +4177,14 @@ async function main() {
       cpuProf.time("autosave", () => tools.autosaveNow());
     }
     if (soon) saveSoon = false;
-    if (flightHud.visible !== pil) {
-      flightHud.show(pil);
+    const hudVisible = pil || (camera.character.active && flightHud.mapView);
+    if (flightHud.visible !== hudVisible) {
+      flightHud.show(hudVisible);
       transport!.mount(pil ? flightHud.transportSlot : tpDock, pil);
+    }
+    if (camera.character.active && flightHud.mapView && now - localMapAt > 50) {
+      flightHud.drawLocalMap();
+      localMapAt = now;
     }
     // (a touch screen: the stick, the throttle, roll — outside, free, the fingers move the camera; the
     // map open, they move the map — the stick would sit on the flight computer's panel)

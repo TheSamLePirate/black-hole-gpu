@@ -52,6 +52,12 @@ export interface GameCommand {
 const M = (name: string, desc: Text): GameCommand => ({ name, tool: "camera", fixed: { mount: name }, desc });
 
 export const GAME_COMMANDS: GameCommand[] = [
+  {
+    name: "mapzoom",
+    tool: "interface",
+    args: [{ param: "mapZoom" }],
+    desc: { fr: "Zoom de la carte locale (0–21, défaut 18)", en: "Local map zoom (0–21, default 18)" },
+  },
   // the target, the views
   {
     name: "target",

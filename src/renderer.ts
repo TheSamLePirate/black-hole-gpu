@@ -1,3 +1,4 @@
+import { streamingLead, aheadFocus } from "./system/streaming-focus";
 import { CharacterRenderer } from "./character-renderer";
 import type { PlanetCharacter } from "./controller/character";
 import { dot as dot3 } from "./math/vec3";
@@ -470,6 +471,10 @@ export class Renderer {
    * maps and terrain tiles, a world's finer maps: the ground under its gear is the heights drawn).
    */
   shipFocus: { body: string; c: Vec3; altKm: number } | null = null;
+  /** on foot: the view is the astronaut's — the ground and the scenery follow the view, not the vessel left on the ground */
+  onFoot = false;
+  streamVelocity: Vec3 | null = null;
+  streamingState = { leadM: 0, lookAheadSeconds: 6 };
   /** the spectator's view holds the flown ship (near enough to draw) */
   private get shipInView() {
     return !!this.shipPlace && this.shipPlace.dist < 2e4;
@@ -2090,6 +2095,7 @@ export class Renderer {
                 ? solarState(bodies[k]!.id, time).vel
                 : bodyVelocity(s, bodies[k]!.id as unknown as Body, time),
             dRdL,
+            { time, spin: s.spin, massSolar: s.massSolar },
           )
         : null;
     if (near) bodies[near.index]!.where = 3;
@@ -2145,7 +2151,7 @@ export class Renderer {
     if (!o.probe) this.lastBodies = bodies;
     if (bodies.length) this.featureKey |= 128;
     // (the Ranger's shadow on the near ground: its bounding sphere in the camera's axes; 0: none)
-    const sb = !o.probe && s.ship && this.ship.ready && near ? this.ship.shadowBound : null;
+    const sb = !o.probe && (s.ship || this.shipInView) && this.ship.ready && near ? this.ship.shadowBound : null;
     set(65, sb?.c[0] ?? 0, sb?.c[1] ?? 0, sb?.c[2] ?? 0, sb?.r ?? 0);
     // (the far field's LUT: the live view, a scene with nothing a ray between clean samples could meet —
     // and a block of 2 at most: coarser, the tracer's few rays cost less than the LUT's pass, audit O1)
@@ -2432,21 +2438,30 @@ export class Renderer {
       const onEarth = s.earthTerrain && !!near && near.index === earthK && !!this.earthMaps.tier;
       // (the ship low over the Earth, the view away: the tiles round the ship — its ground)
       const F = this.shipFocus;
-      const shipLow = s.earthTerrain && F?.body === "earth" && F.altKm < 60 && !!this.earthMaps.tier;
+      const shipLow = s.earthTerrain && !this.onFoot && F?.body === "earth" && F.altKm < 60 && !!this.earthMaps.tier;
       const focus = shipLow
         ? F!.c
         : onEarth
           ? (near!.axes.map((a) => -(a[0] * near!.centre[0] + a[1] * near!.centre[1] + a[2] * near!.centre[2])) as Vec3)
           : null;
-      this.earthTiles.update(focus, pixelAngle);
+      const lead = focus && !this.onFoot ? streamingLead(focus, this.streamVelocity) : ([0, 0, 0] as Vec3);
+      this.streamingState.leadM = Math.hypot(...lead) * 6378137;
+      this.earthTiles.update(focus, pixelAngle, lead);
       const surfaceFocus =
-        F?.body === "earth" && F.altKm < 30
+        !this.onFoot && F?.body === "earth" && F.altKm < 30
           ? F.c
           : near?.index === earthK && this.earthMaps.tier
             ? (near.axes.map((a) => -(a[0] * near.centre[0] + a[1] * near.centre[1] + a[2] * near.centre[2])) as Vec3)
             : null;
-      this.earthSurface.update(surfaceFocus, s.earthSurface);
-      this.earthScenery.update(surfaceFocus, s.earthScenery, s.earthSurface !== "off", s.earthTerrain, SCENERY_EXCLUSIONS);
+      this.earthSurface.update(surfaceFocus, s.earthSurface, lead);
+      this.earthScenery.update(
+        surfaceFocus,
+        s.earthScenery,
+        s.earthSurface !== "off",
+        s.earthTerrain,
+        SCENERY_EXCLUSIONS,
+        surfaceFocus ? aheadFocus(surfaceFocus, lead) : null,
+      );
       this.earthScenery.shadows = s.earthSceneryShadows;
     }
     f.set(this.earthTiles.params(), 69 * 4);
@@ -3629,6 +3644,7 @@ export class Renderer {
             place: !s.ship && this.shipInView ? this.shipPlace! : undefined,
             others: this.shipOthers(s),
             mPerM: 1476.625 * (s.massSolar || 1),
+            forceShadow: !!this.character?.active,
             inside: s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin"),
             dash: this.cockpitDash ?? undefined,
             controls: this.cockpitControls ?? undefined,
@@ -3654,6 +3670,7 @@ export class Renderer {
           },
           this.station.depthTexture() ? { depth: this.station.depthTexture()!, rect: this.station.rect } : undefined,
           t.moments,
+          this.character?.active ? this.characterRenderer.depthTexture() : null,
         );
         // (where it was drawn: the display reads its image there, the bloom too)
         const rect = new Float32Array(this.ship.rectFor(t.hdr));

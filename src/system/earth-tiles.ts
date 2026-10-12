@@ -181,7 +181,9 @@ export class EarthTiles {
    * Follows the camera: c, on the Earth's axes [its equatorial radii] (float64); pixAngle, a pixel's angle [rad] —
    * the levels wanted, those finer than the ground's footprint under the camera left as they are.
    */
-  update(c: Vec3 | null, pixAngle: number) {
+  private priorityLon = 0;
+  private prioritySinLat = 0;
+  update(c: Vec3 | null, pixAngle: number, lead: Vec3 = [0, 0, 0]) {
     if (!c) return this.clear();
     // (the camera's geodetic place: the tracer reads the tiles at the geodetic latitude)
     const g = cartToGeodetic(1, WGS84_F, c);
@@ -212,7 +214,10 @@ export class EarthTiles {
         this.complete(L);
       }
     }
-    this.request(cx0(this.lon), this.sinLat);
+    const ahead = cartToGeodetic(1, WGS84_F, c.map((v, i) => v + lead[i]!) as Vec3);
+    this.priorityLon = ahead.lon;
+    this.prioritySinLat = Math.sin(ahead.lat);
+    this.request(cx0(this.priorityLon), this.prioritySinLat);
   }
 
   /** Starts the loads: the coarse levels first, each from the camera outwards. */
@@ -263,7 +268,7 @@ export class EarthTiles {
       f.at = performance.now() + 3000 * f.n;
       this.failures.set(key, f);
       // (asked again once it may be: the image converged, no frame asks — the tile would wait for a move)
-      if (f.n < 2) setTimeout(() => this.request(cx0(this.lon), this.sinLat), 3000 * f.n + 10);
+      if (f.n < 2) setTimeout(() => this.request(cx0(this.priorityLon), this.prioritySinLat), 3000 * f.n + 10);
       // (twice failed: the global map's heights there, the level not held back)
       if (f.n >= 2) {
         h = this.fromFallback(L, x, y);
@@ -275,7 +280,7 @@ export class EarthTiles {
       if (this.inflight.get(key) === ctl) this.inflight.delete(key);
     }
     if (h) this.put(L.z, x, y, h, col);
-    this.request(cx0(this.lon), this.sinLat);
+    this.request(cx0(this.priorityLon), this.prioritySinLat);
   }
 
   /** A tile's heights in (z, x — unwrapped as its level's window has it —, y; 256² row by row [m]), with
