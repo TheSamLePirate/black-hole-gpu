@@ -114,7 +114,7 @@ describe.skipIf(!E2E)("s5: the interface for every eye, size and session", () =>
       await Bun.sleep(700);
       const r = await app.js<{ sideways: boolean; canvas: boolean; out: string[] }>(`(() => {
         const cv = document.querySelector("#view"), b = cv.getBoundingClientRect();
-        const out = [...document.querySelectorAll("#toolbar button, #tp-dock button")].filter((e) => e.getClientRects().length)
+        const out = [...document.querySelectorAll("#topbar button, .tb-handle")].filter((e) => e.getClientRects().length)
           .map((e) => e.getBoundingClientRect()).filter((q) => q.right > innerWidth + 1 || q.bottom > innerHeight + 1 || q.left < -1)
           .map((q) => Math.round(q.left) + "," + Math.round(q.top));
         return { sideways: document.documentElement.scrollWidth > innerWidth + 1, canvas: Math.abs(b.width - innerWidth) < 2 && Math.abs(b.height - innerHeight) < 2 && cv.width > 0, out };

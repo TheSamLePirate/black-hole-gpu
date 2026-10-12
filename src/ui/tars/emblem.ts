@@ -2,7 +2,8 @@
 // strip —, moving with what he does: still and dim at rest; listening, the strips rising with the voice
 // heard; thinking, a slow wave along the slabs; acting, a slab lit in turn for each action; speaking, the
 // strips the level of his voice. Drawn in SVG; animated only while not at rest, and not at all with reduced
-// motion (the state then shown by the colour alone).
+// motion (the state then shown by the colour alone). An ambient emblem (the top bar's, always on screen) breathes
+// at rest too — a slow wave, drawn a few times a second.
 
 export type EmblemState = "idle" | "listening" | "thinking" | "acting" | "speaking" | "error";
 
@@ -17,11 +18,14 @@ export class TarsEmblem {
   private raf = 0;
   private t0 = performance.now();
   private pulse = -1;
+  private painted = 0;
+  private readonly ambient: boolean;
   /** the voice's level now (0…1): heard (listening) or said (speaking); null: unknown (a system voice) */
   level: () => number | null = () => null;
   still: () => boolean = () => false;
 
-  constructor(size = 34) {
+  constructor(size = 34, o: { ambient?: boolean } = {}) {
+    this.ambient = !!o.ambient;
     const svg = document.createElementNS(NS, "svg");
     svg.setAttribute("viewBox", "0 0 40 44");
     svg.setAttribute("width", String(size));
@@ -48,13 +52,19 @@ export class TarsEmblem {
     }
     this.el = svg;
     this.paint(0);
+    if (this.ambient) this.raf = requestAnimationFrame(this.frame);
+  }
+
+  /** at rest and animated: the ambient emblem's breath */
+  private breathing() {
+    return this.ambient && !this.still();
   }
 
   set(s: EmblemState) {
     if (s === this.state) return;
     this.state = s;
     this.el.dataset.state = s;
-    if (s === "idle" || this.still()) {
+    if ((s === "idle" && !this.breathing()) || this.still()) {
       cancelAnimationFrame(this.raf);
       this.raf = 0;
       this.paint(0);
@@ -68,8 +78,13 @@ export class TarsEmblem {
   }
 
   private frame = (now: number) => {
-    this.paint((now - this.t0) / 1000);
-    this.raf = this.state === "idle" && now - this.pulse > 600 ? 0 : requestAnimationFrame(this.frame);
+    const rest = this.state === "idle" && now - this.pulse > 600;
+    // (the breath at rest: a few frames a second are enough for a slow wave)
+    if (!rest || now - this.painted > 70) {
+      this.painted = now;
+      this.paint((now - this.t0) / 1000);
+    }
+    this.raf = rest && !this.breathing() ? 0 : requestAnimationFrame(this.frame);
   };
 
   /** the strips' heights (0…1) and the slabs' offsets for a time */
@@ -79,6 +94,9 @@ export class TarsEmblem {
       let h = 0.22;
       let dy = 0;
       switch (this.state) {
+        case "idle":
+          if (this.breathing()) h = 0.2 + 0.14 * (0.5 + 0.5 * Math.sin(t * 1.4 - i * 0.85));
+          break;
         case "listening":
           h = 0.25 + 0.7 * Math.max(lv ?? 0.3 + 0.25 * Math.sin(t * 9 + i * 1.7), 0) * (0.6 + 0.4 * Math.sin(t * 13 + i * 2.3) ** 2);
           break;

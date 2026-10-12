@@ -63,5 +63,18 @@ test("AZERTY: the free-flight keys fly, M (by its character) is the map", () => 
   expect(matchKey(press("KeyQ", "a"), false, true)).toBeUndefined();
   expect(matchKey(press("Semicolon", "m"), true, false)?.do).toBe("map");
   expect(matchKey(press("Semicolon", "M", true), true, false)).toBeUndefined(); // (⇧M: the panel's)
-  expect(matchKey(press("F2", "F2"), true, false)?.do).toBe("tools");
+  expect(matchKey(press("F10", "F10"), true, false)?.do).toBe("tools");
+});
+
+test("F1–F4: the game's modes, in every mode; ⇧F4 the autopilot's assist while flying", () => {
+  const modes = ["ship", "foot", "free", "photo"];
+  for (const [i, m] of modes.entries())
+    for (const flying of [true, false]) {
+      const b = matchKey(press(`F${i + 1}`, `F${i + 1}`), flying, false);
+      expect(b?.do).toBe("gameMode");
+      expect(b?.arg).toBe(m);
+    }
+  expect(matchKey(press("F4", "F4", true), true, false)?.do).toBe("assist");
+  // (on foot, the modes too)
+  expect(matchKey(press("F3", "F3"), false, false, undefined, true)?.do).toBe("gameMode");
 });

@@ -60,6 +60,9 @@ import { MenuPad } from "./ui/padnav";
 import { RadialWheel, type WheelItem } from "./ui/wheel";
 import { Tablet } from "./ui/tablet";
 import { PhotoMode } from "./ui/photo";
+import { TB_ICONS, TopBar, modeName } from "./ui/topbar";
+import { GAME_MODES, baseMode, modeOf, planMode, type GameMode, type ModeState, type ModeStep } from "./game/modes";
+import { POSE_KEYS } from "./controller/util";
 import { readPrefs, writePrefs } from "./game/prefs";
 import { events } from "./game/events";
 import { phaseOf, phaseText, PhaseWatcher } from "./game/phase";
@@ -226,30 +229,6 @@ let firstFrameAt: number | null = null;
 /** the Kerr Bench's page (…/#bench): its GPU memory counted from the first allocation */
 const benchPage = /[#&]bench\b/.test(location.hash);
 if (benchPage) installVramHook();
-
-/**
- * A row that overflows sideways scrolls with a plain (vertical) mouse wheel too — Windows mice have
- * no horizontal wheel, and a hidden scroll bar leaves no other way.
- */
-function wheelScrollsSideways(el: HTMLElement) {
-  const edges = () => {
-    el.classList.toggle("more-l", el.scrollLeft > 1);
-    el.classList.toggle("more-r", el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
-  };
-  el.addEventListener("scroll", edges, { passive: true });
-  new ResizeObserver(edges).observe(el);
-  el.addEventListener(
-    "wheel",
-    (e) => {
-      if (e.ctrlKey || Math.abs(e.deltaX) >= Math.abs(e.deltaY) || el.scrollWidth <= el.clientWidth + 1) return;
-      const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? el.clientWidth : 1;
-      const before = el.scrollLeft;
-      el.scrollLeft += e.deltaY * k;
-      if (el.scrollLeft !== before) e.preventDefault();
-    },
-    { passive: false },
-  );
-}
 
 function fail(msg: string) {
   document.getElementById("loading")?.remove();
@@ -1565,14 +1544,12 @@ async function main() {
     "btn-full": () => fullscreen(),
     "btn-hide": () => toggleUi(),
     "hud-toggle": () => setHudOpen(!$("hud").classList.contains("open")),
-    "btn-photo": () => openPhoto(),
     "btn-help": () => panel.showShortcuts(),
     "btn-render": () => renderDialog.toggle(),
   };
   // (the dock's buttons — ui: Camera, Scenes, Sky, Photo, Help; the other actions are keys, the wheel's
   // sectors and the settings)
   for (const [id, fn] of Object.entries(actions)) document.getElementById(id)?.addEventListener("click", fn);
-  wheelScrollsSideways($("toolbar"));
   /** Next / previous target, named in a toast (or why there is nothing else to pick). */
   function nextTarget(dir: 1 | -1) {
     const list = camera.availableTargets();
@@ -1994,7 +1971,7 @@ async function main() {
     touch();
     panel.toast(
       on
-        ? t("Spectator — a free camera: W A S D · Q E to move (⇧ faster), drag to turn; the ship flies on (F3 or V: back)")
+        ? t("Spectator — a free camera: W A S D · Q E to move (⇧ faster), drag to turn; the ship flies on (F1 or V: back)")
         : t("Back on the ship"),
     );
   }
@@ -2025,8 +2002,8 @@ async function main() {
     else if (camera.pilot.auto !== "none") camera.pilot.hold = "none";
     panel.toast(
       camera.pilot.assist
-        ? t("Assisted: you fly — the director (the ring) shows where to point, the throttle to set; F4: the autopilot flies")
-        : t("The autopilots fly again (F4: assisted)"),
+        ? t("Assisted: you fly — the director (the ring) shows where to point, the throttle to set; ⇧F4: the autopilot flies")
+        : t("The autopilots fly again (⇧F4: assisted)"),
     );
   }
 
@@ -2384,10 +2361,14 @@ async function main() {
       return s ? { site: s.runway ? camera.runwayInUse(s) : s, craft: null } : null;
     },
   });
-  // the transport bar (ui/transport.ts): over the toolbar, in the mission bar while flying
-  const tpDock = document.createElement("div");
-  tpDock.id = "tp-dock";
-  document.body.append(tpDock);
+  // the top bar (ui/topbar.ts, PLAN-MODES-AAA M1): the app's one bar in every mode — the modes, the mode's
+  // group (the ship's: the flight HUD's chips, clocks, craft and views), the time, the actions, TARS
+  const topBar = new TopBar({ setMode: (m) => void setGameMode(m), tars: () => tarsPanel.toggle() });
+  for (const e of topBar.emblems) tarsPanel.mirror(e);
+  topBar.shipModes.append(flightHud.bar.modes);
+  topBar.shipClocks.append(flightHud.bar.clocks);
+  topBar.shipActs.append(flightHud.bar.acts);
+  // the transport bar (ui/transport.ts): the time, in the top bar (compact flying: the HUD's clocks beside it)
   transport = new TransportBar({
     settings,
     time: () => sim.time,
@@ -2402,7 +2383,7 @@ async function main() {
     toggleAutoWarp,
     openTime: () => timePanel.open(),
   });
-  transport.mount(tpDock, false);
+  transport.mount(topBar.time, false);
   /** Starts or stops recording a take (● on the time bar). */
   function toggleTake() {
     if (renderer.offlineActive) return panel.toast(t("A render is running"));
@@ -2624,6 +2605,9 @@ async function main() {
   // the keyboard: input/keymap.ts says which key does what (and draws the help); here, what it does
   const keyActions: Record<KeyAction, (e: KeyboardEvent, arg?: string) => void> = {
     tools: () => DEV_TOOLS && toolsWin.toggle(),
+    gameMode: (e, m) => {
+      if (!e.repeat) setGameMode(m as GameMode);
+    },
     // (held flight keys: translation, throttle — read each frame by the controller)
     held: () => {},
     throttleFull: () => {
@@ -2843,6 +2827,146 @@ async function main() {
       render: () => renderDialog.toggle(),
       multi: () => void mxDialog.open(),
     })).open();
+
+  // ---- the four modes (game/modes.ts, PLAN-MODES-AAA M1): the ship, on foot, the free camera, photo — read from
+  // the state each frame, changed by the top bar's tabs, F1–F4, TARS (set_mode) and __bh.mode
+  /** the mode the photo mode was opened over (it goes back to it) */
+  let photoOver: Exclude<GameMode, "photo"> | null = null;
+  function modeState(ground = false): ModeState {
+    const pil = camera.piloting;
+    return {
+      ship: settings.ship,
+      piloting: pil,
+      spectating: camera.spectating && !camera.character.active,
+      onFoot: camera.character.active,
+      photo: !!photoMode?.isOpen,
+      photoOver,
+      landedStill: pil && !!(camera.ourLanded || camera.landed) && (camera.airInfo?.()?.speed ?? 0) <= 0.5,
+      groundBelow: ground && !camera.character.active ? (camera.viewController().groundBelow()?.body ?? null) : null,
+      rendering: renderer.offlineActive,
+    };
+  }
+  const gameMode = (): GameMode => modeOf(modeState());
+  /** The walk left for the ship or the free camera: with a ship flown, the walker's camera stays out as the
+   *  spectator (carried back onto the ship for the Ship mode); without one, the free camera where it stood. */
+  function leaveWalk(to: "ship" | "free") {
+    const ch = camera.character;
+    if (camera.piloting) {
+      ch.stop({ keepView: true });
+      if (to === "ship") camera.stopSpectator();
+    } else {
+      const v = camera.spectator?.s;
+      if (v) {
+        for (const k of [...POSE_KEYS, "velR", "velT", "velP", "motion"] as const)
+          (settings as unknown as Record<string, unknown>)[k] = v[k];
+        settings.rotation = "free";
+        settings.lookAt = false;
+      }
+      ch.stop();
+      camera.sync();
+    }
+    syncButtons();
+    touch();
+  }
+  /** One step of a change of mode (`below`: the ground under the view when the change began); why it failed, or null. */
+  function runModeStep(step: ModeStep, from: ModeState, below: ReturnType<CameraController["groundBelow"]>): string | null {
+    switch (step) {
+      case "openPhoto":
+        photoOver = baseMode(from);
+        openPhoto();
+        return null;
+      case "closePhoto":
+        photoMode?.close();
+        photoOver = null;
+        return null;
+      case "startSpectator":
+        setSpectator(true);
+        return camera.spectating ? null : t("The spectator leaves a ship flown: fly one first (K)");
+      case "stopSpectator":
+        setSpectator(false);
+        return null;
+      case "board":
+        return camera.character.board();
+      case "stopWalking":
+        leaveWalk(planned === "ship" ? "ship" : "free");
+        return null;
+      case "disembark": {
+        if (camera.spectating) setSpectator(false);
+        const err = camera.character.disembark();
+        if (!err) touch(), syncButtons();
+        return err;
+      }
+      case "walkHere": {
+        // (a spectator out: its view becomes the walker's — character.ts prepare)
+        if (!below) return t("On foot: no ground near the camera — the Atlas puts the explorer anywhere");
+        const err = camera.character.start(below.body, below.lat, below.lon);
+        if (!err) touch(), syncButtons();
+        return err;
+      }
+      case "shipOn":
+      case "shipOff":
+        if (settings.ship !== (step === "shipOn")) actions["btn-ship"]!();
+        return null;
+    }
+  }
+  let planned: GameMode | null = null;
+  /** The game into a mode (the steps of game/modes.ts planMode); why not, or null. */
+  function setGameMode(to: GameMode, quiet = false): string | null {
+    const below = camera.character.active ? null : camera.viewController().groundBelow();
+    const from = { ...modeState(), groundBelow: below?.body ?? null };
+    const p = planMode(from, to, { hatch: camera.character.active && camera.character.accessDistance() <= 3 });
+    if ("refused" in p) {
+      const why = t(p.refused);
+      if (!quiet) panel.toast(why);
+      return why;
+    }
+    planned = to;
+    try {
+      for (const step of p.steps) {
+        const err = runModeStep(step, from, below);
+        if (err) {
+          if (!quiet) panel.toast(err);
+          return err;
+        }
+      }
+    } finally {
+      planned = null;
+    }
+    syncMode();
+    if (p.steps.length && !quiet && to !== "photo") panel.toast(tf("Mode: {0}", modeName(to)));
+    return null;
+  }
+  /** The top bar in the mode now: its tab, its groups, the time's bar (compact flying: the HUD's clocks). */
+  let shownMode: GameMode | null = null;
+  let modeLineAt = 0;
+  function syncMode(now = performance.now()) {
+    const m = gameMode();
+    if (m !== shownMode) {
+      shownMode = m;
+      topBar.setMode(m);
+      transport!.mount(topBar.time, m === "ship");
+      if (m !== "photo") photoOver = null;
+    }
+    if (now - modeLineAt < 250) return;
+    modeLineAt = now;
+    // (the mode's line: on foot, the world and the place; photo, the way back)
+    if (m === "foot") {
+      const p = flightHud.ground.localPlace?.();
+      const ns = (v: number, a: string, b: string) => `${Math.abs(v).toFixed(4)}° ${v >= 0 ? a : b}`;
+      topBar.setContext(
+        p ? (BODY_NAMES[p.body as Target] ?? p.body) : t("On foot"),
+        p ? `${ns(p.lat, t("N"), t("S"))} ${ns(p.lon, t("E"), t("W"))}` : "",
+      );
+    } else if (m === "photo") topBar.setContext(t("Photo"), tf("Esc: back to {0}", modeName(baseMode(modeState()))));
+    else topBar.setContext("");
+    topBar.setIcon("btn-sound", settings.sound ? TB_ICONS.sound : TB_ICONS.mute, !settings.sound);
+    // (the tabs a change would refuse now: dimmed, the reason in their tips)
+    const st = modeState(true);
+    for (const k of GAME_MODES) {
+      const p = k === m ? null : planMode(st, k, { hatch: camera.character.active && camera.character.accessDistance() <= 3 });
+      topBar.setAvailable(k, p && "refused" in p ? t(p.refused) : null);
+    }
+  }
 
   // the radial wheel (ui/wheel.ts): Tab held opens it, released does the sector pointed at; a tap is
   // still the next target
@@ -3163,6 +3287,76 @@ async function main() {
     },
   });
   flightHud.onMusic = () => musicPanel.toggle();
+  // the top bar's actions (ui/topbar.ts): the page's toolbar buttons moved in with their ids, the bar's own —
+  // the least used go first into its ⋯ menu when the window is narrow
+  {
+    const btn = (id: string) => document.getElementById(id) as HTMLButtonElement;
+    topBar.freeSlot.append(btn("btn-camera"));
+    topBar.add({
+      id: "btn-place",
+      label: t("Place: in orbit, on a ground, on foot, beside a body"),
+      icon: TB_ICONS.place,
+      run: () => placePanel.open(),
+      prio: 2,
+      testid: "hud-place",
+    });
+    topBar.add({ id: "btn-scenes", label: t("Scenes"), button: btn("btn-scenes"), prio: 4 });
+    topBar.add({
+      id: "btn-weather",
+      label: t("The weather"),
+      icon: TB_ICONS.weather,
+      run: () => weatherPanel.open(),
+      prio: 6,
+      testid: "hud-weather",
+    });
+    topBar.add({
+      id: "btn-eclipses",
+      label: t("Eclipses"),
+      icon: TB_ICONS.eclipse,
+      run: () => eclipses.open(),
+      prio: 6,
+      testid: "hud-eclipses",
+    });
+    topBar.add({ id: "btn-sky", label: t("Sky chart"), button: btn("btn-sky"), key: "N", prio: 5 });
+    topBar.add({ id: "btn-music", label: t("Music"), button: btn("btn-music"), prio: 3 });
+    topBar.add({
+      id: "btn-sound",
+      label: t("Sound on / off"),
+      icon: TB_ICONS.sound,
+      run: () => toggleSound(),
+      prio: 3,
+      testid: "topbar-sound",
+    });
+    topBar.add({
+      id: "btn-render",
+      label: t("Offline render: a picture or a video"),
+      icon: TB_ICONS.render,
+      run: () => renderDialog.toggle(),
+      prio: 5,
+    });
+    topBar.add({
+      id: "btn-info",
+      label: t("Details and physical readouts"),
+      icon: TB_ICONS.info,
+      key: "I",
+      run: () => actions["hud-toggle"]!(),
+      prio: 8,
+    });
+    topBar.add({ id: "btn-help", label: t("Keyboard & mouse"), button: btn("btn-help"), key: "?", prio: 7 });
+    topBar.add({
+      id: "btn-settings",
+      label: t("Settings"),
+      icon: TB_ICONS.settings,
+      key: "M",
+      run: () => panel.toggle(),
+      prio: 1,
+      testid: "topbar-settings",
+    });
+    if (DEV_TOOLS)
+      topBar.add({ id: "btn-tools", label: t("Game tools"), icon: TB_ICONS.tools, key: "F10", run: () => toolsWin.toggle(), prio: 9 });
+    // (the page's bar, emptied)
+    document.getElementById("toolbar")?.remove();
+  }
   // multiple exposures (photo/multiexposure.ts, PLAN-CIEL C8–C10): a tripod's series rendered offline and
   // blended — the analemma, an eclipse's phases, the stars' trails; the game put back after
   const mxSnapshot = () => ({
@@ -3710,6 +3904,7 @@ async function main() {
     memory: tarsMemory,
     now: () => performance.now(),
     dayClouds: () => renderer.dayCloudsOf,
+    mode: { get: () => gameMode(), set: (m) => setGameMode(m), hideBar: (on) => topBar.hide(on) },
     utcNow: () => utcOf(sim.time),
     multiExposure: (r) => mxDialog.open({ kind: r.kind, run: r }),
     issPasses: (lat, lon, from, days) => issPasses(lat, lon, from, days),
@@ -3941,6 +4136,13 @@ async function main() {
     spectate: (on: boolean) => {
       setSpectator(on);
       return camera.spectating;
+    },
+    mode: {
+      get: () => gameMode(),
+      set: (m: GameMode) => setGameMode(m, true),
+      state: () => modeState(true),
+      bar: () => ({ mode: topBar.mode, hidden: topBar.hidden }),
+      hideBar: (on: boolean) => topBar.hide(on),
     },
     pwa,
     forceScale: (x: number | null) => {
@@ -4245,10 +4447,9 @@ async function main() {
     }
     if (soon) saveSoon = false;
     const hudVisible = pil || (camera.character.active && flightHud.mapView);
-    if (flightHud.visible !== hudVisible) {
-      flightHud.show(hudVisible);
-      transport!.mount(pil ? flightHud.transportSlot : tpDock, pil);
-    }
+    if (flightHud.visible !== hudVisible) flightHud.show(hudVisible);
+    syncMode(now);
+    topBar.fit();
     if (camera.character.active && flightHud.mapView && now - localMapAt > 50) {
       flightHud.drawLocalMap();
       localMapAt = now;

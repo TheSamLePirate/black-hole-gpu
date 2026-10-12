@@ -66,7 +66,7 @@ describe.skipIf(!E2E)("accessibility and pointer", () => {
   test("accessibility settings: the interface scaled, the markers' palette, nothing blinking", async () => {
     await app.js(`(__bh.game.set("uiScale", 1.25), __bh.game.set("hudPalette", "okabe"), __bh.game.set("reduceMotion", true), 1)`);
     const r = await app.js<{ zoom: string; still: boolean; anim: string }>(`(() => {
-      const p = document.getElementById("toolbar");
+      const p = document.getElementById("topbar");
       return { zoom: getComputedStyle(p).zoom, still: document.body.classList.contains("reduce-motion"),
         anim: getComputedStyle(document.querySelector(".k-btn, button")).animationName };
     })()`);

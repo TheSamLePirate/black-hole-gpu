@@ -205,6 +205,8 @@ export class TarsPanel {
   readonly presence = el("button", "tars-presence");
   readonly emblem = new TarsEmblem(30);
   private miniEmblem = new TarsEmblem(20);
+  /** the emblems shown elsewhere (the top bar's), kept in his state */
+  private mirrors: TarsEmblem[] = [];
   private input = el("input");
   private status = el("div", "tars-link");
   private stateWord = el("span", "tp-state");
@@ -879,8 +881,7 @@ export class TarsPanel {
     this.state = s;
     this.el.dataset.state = s;
     this.presence.dataset.state = s;
-    this.emblem.set(s);
-    this.miniEmblem.set(s);
+    for (const e of [this.emblem, this.miniEmblem, ...this.mirrors]) e.set(s);
     this.stateWord.textContent = tr(STATE_WORD[s]);
     this.syncPresence();
   }
@@ -891,10 +892,22 @@ export class TarsPanel {
 
   /** the emblems' voice level (0…1, null: unknown) and whether motion is reduced */
   levels(level: () => number | null, still: () => boolean) {
-    for (const e of [this.emblem, this.miniEmblem]) {
+    this.levelFn = level;
+    this.stillFn = still;
+    for (const e of [this.emblem, this.miniEmblem, ...this.mirrors]) {
       e.level = level;
       e.still = still;
     }
+  }
+  private levelFn: () => number | null = () => null;
+  private stillFn: () => boolean = () => false;
+
+  /** An emblem shown elsewhere (the top bar's), in his state from now on. */
+  mirror(e: TarsEmblem) {
+    this.mirrors.push(e);
+    e.level = this.levelFn;
+    e.still = this.stillFn;
+    e.set(this.state);
   }
 
   private syncPresence() {

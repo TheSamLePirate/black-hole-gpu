@@ -435,13 +435,14 @@ export class PlanetCharacter {
   toggle() {
     return this.active ? this.board() : this.disembark();
   }
-  stop() {
+  /** The walk ended. `keepView`: the walker's camera stays out as the spectator (the Free camera mode, no cut). */
+  stop(o: { keepView?: boolean } = {}) {
     this.groundPatch.clear();
     this.active = false;
     this.drive = null;
     this.jumpBuffer = 0;
     this.drag = null;
-    this.c.spectator = null;
+    if (!o.keepView) this.c.spectator = null;
     this.c.keys.clear();
     this.c.codes.clear();
   }

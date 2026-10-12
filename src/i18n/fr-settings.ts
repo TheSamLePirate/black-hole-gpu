@@ -1037,8 +1037,8 @@ export default {
     "Au casque, les sources sont placées en 3D (HRTF) : le moteur derrière vous, un propulseur au-dessus, le vaisseau qui passe devant une caméra libre. Désactivé — enceintes —, un simple panoramique gauche–droite. L'effet Doppler d'un vaisseau qui passe s'entend dans les deux cas.",
   Interface: "Interface",
   Autosave: "Sauvegarde auto",
-  "Keeps the flight in this browser (every setting, the time, the pilot, the plan) and resumes it at the next visit. Named saves, files: the game tools (F2).":
-    "Conserve le vol dans ce navigateur (chaque réglage, l'heure, le pilote, le plan) et le reprend à la visite suivante. Sauvegardes nommées, fichiers : les outils de jeu (F2).",
+  "Keeps the flight in this browser (every setting, the time, the pilot, the plan) and resumes it at the next visit. Named saves, files: the game tools (F10).":
+    "Conserve le vol dans ce navigateur (chaque réglage, l'heure, le pilote, le plan) et le reprend à la visite suivante. Sauvegardes nommées, fichiers : les outils de jeu (F10).",
   "Saved games": "Parties sauvegardées",
   Every: "Toutes les",
   "Fly the Ranger: the film's journey, missions": "Pilotez le Ranger : le voyage du film, des missions",

@@ -312,7 +312,7 @@ kbd {
 #hint {
   position: fixed;
   left: 50%;
-  bottom: 86px;
+  bottom: 28px;
   transform: translateX(-50%);
   display: flex;
   flex-wrap: wrap;
@@ -678,98 +678,6 @@ body.map-open .asset-pill { top: auto; bottom: 138px; left: calc(50% + (var(--fc
 .ap-bar { flex: none; width: 60px; height: 2px; border-radius: 2px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
 .ap-bar i { display: block; height: 100%; background: var(--accent); transform-origin: left; transform: scaleX(0); transition: transform 0.3s; }
 
-/* ---------------------------------------------------------------- toolbar */
-#toolbar {
-  position: fixed;
-  left: 50%;
-  bottom: 14px;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 5px;
-  border-radius: 14px;
-  max-width: calc(100vw - 20px);
-  overflow-x: auto;
-  scrollbar-width: none;
-  z-index: 3;
-}
-
-#toolbar::-webkit-scrollbar {
-  display: none;
-}
-
-/* (it overflows: its edges fade where there is more to scroll to) */
-#toolbar.more-l { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px); mask-image: linear-gradient(90deg, transparent, #000 36px); }
-#toolbar.more-r { -webkit-mask-image: linear-gradient(270deg, transparent, #000 36px); mask-image: linear-gradient(270deg, transparent, #000 36px); }
-#toolbar.more-l.more-r {
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent);
-}
-
-/* icon buttons (the label is in the tooltip); the target chip keeps its name */
-#toolbar button {
-  all: unset;
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  cursor: pointer;
-  color: var(--dim);
-  font-size: 12px;
-  font-weight: 500;
-  transition: background 0.15s, color 0.15s;
-}
-
-#toolbar button > span {
-  display: none;
-}
-
-#toolbar button:focus-visible {
-  outline: 2px solid rgba(255, 179, 92, 0.6);
-  outline-offset: -2px;
-}
-
-#toolbar #btn-target {
-  width: auto;
-  padding: 0 12px 0 9px;
-  background: rgba(255, 255, 255, 0.05);
-}
-
-#toolbar #btn-target > span {
-  display: inline;
-  color: var(--text);
-}
-
-#toolbar button:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: var(--text);
-}
-
-#toolbar button.active {
-  color: var(--accent);
-  background: rgba(255, 179, 92, 0.12);
-}
-
-#toolbar svg {
-  width: 20px;
-  height: 20px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-#toolbar svg .fill {
-  fill: currentColor;
-  stroke: none;
-}
-
 /* rotation mode: one icon per mode; the target chip is tinted by its body */
 #btn-sound .ic-off,
 #btn-sound.muted .ic-on {
@@ -795,14 +703,6 @@ body.map-open .asset-pill { top: auto; bottom: 138px; left: calc(50% + (var(--fc
 #btn-target[data-body="star"] svg { color: #ffd98a; }
 #btn-target[data-body="wormhole"] svg { color: #9fb8ff; }
 #btn-target[data-body="barycentre"] svg { color: #ebf0ff; }
-
-#toolbar .sep {
-  flex: none;
-  width: 1px;
-  height: 24px;
-  margin: 0 5px;
-  background: var(--glass-border);
-}
 
 /* ---------------------------------------------------------------- offline render dialog */
 #render {
@@ -1029,7 +929,8 @@ body.hide-ui #cam-pop,
 body.hide-ui #sky-pop,
 body.hide-ui #sky-card,
 body.hide-ui .gt-root,
-body.hide-ui #toolbar {
+body.hide-ui #topbar,
+body.hide-ui .tb-handle {
   display: none;
 }
 
@@ -1042,34 +943,14 @@ body.hide-ui #toolbar {
   #btn-full,
   #btn-render,
   #btn-jet,
-  #btn-guide,
-  #toolbar .sep:nth-of-type(3) {
+  #btn-guide {
     display: none !important;
-  }
-
-  #toolbar #btn-target {
-    width: 34px;
-    padding: 0;
-    background: transparent;
-  }
-
-  #toolbar #btn-target > span {
-    display: none;
   }
 }
 
 @media (max-width: 800px) {
-  #toolbar button {
-    width: 34px;
-    height: 34px;
-  }
-
-  #toolbar .sep {
-    margin: 0 2px;
-  }
-
   #hint {
-    bottom: 76px;
+    bottom: 24px;
     border-radius: 14px;
   }
 }
@@ -1143,7 +1024,7 @@ body.gpu-lost .fl-root, body.gpu-lost canvas.fl-hud { display: none; }
   -webkit-backdrop-filter: blur(14px) saturate(140%);
 }
 @keyframes fl-in { from { opacity: 0; transform: translateY(4px); } }
-.fl-mission, .fl-cockpit { animation: none; }
+.fl-cockpit { animation: none; }
 
 /* a panel's header: a small label; a click folds the panel */
 .fl-title {
@@ -1173,21 +1054,13 @@ body.piloting #hint { display: none; }
 .fl-sub { margin: 8px 0 3px; font: 700 11px var(--hud-font); letter-spacing: 0.18em; text-transform: uppercase; color: rgba(176, 196, 222, 0.72); }
 .fl-label { font: 700 11px var(--hud-font); letter-spacing: 0.16em; text-transform: uppercase; color: var(--hud-dim); }
 
-/* the app's toolbar hides while flying (the ⋯ button brings it back, below the mission bar) */
-body.piloting #toolbar { display: none; }
-body.piloting.show-tools #toolbar { display: flex; top: 56px; bottom: auto; }
 body.piloting #btn-rotation, body.piloting #btn-orbit, body.piloting #btn-dive,
 body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey { display: none; }
 
-/* ---- the mission bar: one slim line across the top */
-.fl-mission {
-  top: 10px; left: 50%; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 0; padding: 3px 6px; white-space: nowrap; border-radius: 6px;
-}
-.fl-mgroup { display: flex; align-items: center; gap: 10px; padding: 0 10px; }
-.fl-mg-modes { gap: 2px; padding-left: 4px; }
-.fl-mgroup + .fl-mgroup { border-left: 1px solid rgba(160, 210, 255, 0.1); }
-.fl-mg-acts { gap: 2px; padding-right: 2px; }
+/* ---- the ship's groups of the top bar (ui/topbar.ts): the chips, the clocks, the craft and the views */
+.fl-mgroup { display: flex; align-items: center; gap: 10px; }
+.fl-mg-modes { gap: 2px; }
+.fl-mg-acts { gap: 2px; }
 .fl-chip {
   all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px; border-radius: 4px;
   font: 700 11.5px var(--hud-font); letter-spacing: 0.12em; color: rgba(214, 226, 242, 0.66); transition: color 0.2s, background 0.15s;
@@ -1198,26 +1071,23 @@ body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey {
 .fl-chip.on { color: #fff; }
 .fl-chip.on i { background: var(--hud-green); box-shadow: 0 0 8px var(--hud-green); }
 .fl-vsep { display: none; }
-.fl-warpbox { display: flex; align-items: center; gap: 3px; }
-.fl-warpbox span, .fl-clock span { font: 700 11px var(--hud-font); letter-spacing: 0.16em; text-transform: uppercase; color: rgba(176, 196, 222, 0.78); }
-.fl-warpbox b { font: 600 12px var(--mono); color: var(--hud-amber); min-width: 48px; text-align: center; }
-.fl-warpbox button, .fl-tools {
+.fl-clock span { font: 700 11px var(--hud-font); letter-spacing: 0.16em; text-transform: uppercase; color: rgba(176, 196, 222, 0.78); }
+.fl-tools {
   all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
   min-width: 26px; height: 26px; padding: 0 5px; border-radius: 5px; font: 700 13px var(--hud-font); color: rgba(214, 226, 242, 0.75);
   transition: background 0.15s, color 0.15s;
 }
-.fl-warpbox button { min-width: 18px; height: 20px; padding: 0; font-size: 15px; }
-.fl-warpbox button:hover, .fl-tools:hover { background: rgba(160, 210, 255, 0.12); color: #fff; }
+.fl-tools:hover { background: rgba(160, 210, 255, 0.12); color: #fff; }
 .fl-tools .fl-ic { display: grid; width: 16px; height: 16px; }
 .fl-pathbtn { color: var(--hud-cyan); }
-.fl-pathbtn.off, .fl-soundbtn.off { color: rgba(214, 226, 242, 0.32); }
-.fl-tools.fl-planbtn, .fl-tools.fl-placebtn, .fl-tools.fl-viewbtn { padding: 0 8px 0 6px; font: 700 11.5px var(--hud-font); letter-spacing: 0.14em; text-transform: uppercase; }
+.fl-pathbtn.off { color: rgba(214, 226, 242, 0.32); }
+.fl-tools.fl-planbtn, .fl-tools.fl-viewbtn { padding: 0 8px 0 6px; font: 700 11.5px var(--hud-font); letter-spacing: 0.14em; text-transform: uppercase; }
 .fl-tools.fl-planbtn.on { background: rgba(90, 216, 255, 0.2); color: #e6f8ff; }
 .fl-viewbtn .fl-caret { width: 11px; height: 11px; opacity: 0.55; }
 .fl-clock { display: flex; flex-direction: column; line-height: 1.05; }
 .fl-clock b { font: 500 12px var(--mono); color: #fff; }
 
-/* the camera's view: a menu from the mission bar */
+/* the camera's view: a menu from the top bar */
 .fl-menu {
   position: fixed; z-index: 7; min-width: 250px; padding: 5px; border-radius: 8px;
   background: rgba(8, 13, 24, 0.95); border: 1px solid rgba(160, 210, 255, 0.16); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
@@ -1903,18 +1773,19 @@ body.reduce-motion .tars-panel, body.reduce-motion .tars-presence { animation: n
 
 /* density: 1 minimal (tapes, cockpit, mission bar) · 2 clean (markers and warnings) */
 .fl-root[data-density="1"] .fl-tel, .fl-root[data-density="1"] .fl-orbit, .fl-root[data-density="1"] .fl-right, .fl-root[data-density="1"] .fl-target { display: none; }
-.fl-root[data-density="2"] > :not(.fl-warn):not(.fl-mission) { display: none; }
+.fl-root[data-density="2"] > :not(.fl-warn) { display: none; }
 body.hide-ui .fl-root > :not(.fl-warn) { display: none; }
 
 /* smaller screens: the least needed go first, the rest shrinks */
 .fl-cockpit { transform-origin: 50% 100%; }
-@media (max-width: 1440px) { .fl-mission .fl-clock:nth-child(4) { display: none; } }
-@media (max-width: 1280px) { .fl-mission .fl-clock:nth-child(3) { display: none; } .fl-tel .fl-sub, .fl-telc { display: none; } }
+@media (max-width: 1600px) { #topbar .fl-clock:nth-child(4) { display: none; } }
+@media (max-width: 1440px) { #topbar .fl-clock:nth-child(3) { display: none; } }
+@media (max-width: 1280px) { .fl-tel .fl-sub, .fl-telc { display: none; } }
 @media (max-width: 1100px) {
   .fl-cockpit { transform: translateX(-50%) scale(0.86); }
   .fl-orbit { width: 216px; } .fl-veff { height: 140px; }
   .fl-right { width: 222px; } .m3-stage { height: 160px; }
-  .fl-mission .fl-mg-clocks { display: none; }
+  #topbar .fl-mg-clocks { display: none; }
 }
 @media (max-width: 900px) {
   .fl-orbit, .fl-tel { display: none; }
@@ -2238,7 +2109,8 @@ html :focus-visible {
 }
 @keyframes cp-in { from { opacity: 0; transform: translate(-50%, 8px); } }
 #cam-pop[hidden] { display: none; }
-body.piloting #cam-pop { top: 64px; bottom: auto; }
+/* (below the top bar, in every mode) */
+body.has-topbar #cam-pop, body.piloting #cam-pop { top: 64px; bottom: auto; }
 #cam-pop .cp-head { margin: -8px -14px 0; }
 #cam-pop .cp-x { all: unset; cursor: pointer; width: 24px; height: 24px; display: grid; place-items: center; font: 500 18px var(--font); color: var(--hud-dim); clip-path: none; min-height: 0; padding: 0; border: none; background: none; }
 #cam-pop .cp-x:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
@@ -2283,28 +2155,7 @@ body.piloting #cam-pop { top: 64px; bottom: auto; }
 #cam-pop .cp-value { min-width: 56px; text-align: right; font: 600 13px var(--mono); color: var(--hud-amber); }
 @media (max-width: 640px) { #cam-pop .cp-tiles { grid-template-columns: repeat(2, 1fr); } }
 
-/* ---- the app's shell in the HUD's language: the toolbar (a dock with a lit edge), the status pill,
-   the settings button, toasts and tooltips */
-#toolbar.glass {
-  border-radius: 2px; padding: 5px 8px; gap: 2px;
-  background: var(--hud-bg); border: 1px solid var(--hud-edge);
-  clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 100%, 0 100%);
-  padding-left: 18px; padding-right: 18px;
-}
-#toolbar.glass::before {
-  content: ""; position: absolute; top: 0; left: 14px; right: 14px; height: 1px; pointer-events: none;
-  background: linear-gradient(90deg, transparent, var(--hud-edge-hi) 20%, var(--hud-edge-hi) 80%, transparent);
-}
-#toolbar button {
-  width: 40px; height: 40px; border-radius: 0; color: rgba(200, 216, 236, 0.66);
-  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
-}
-#toolbar button:hover { background: rgba(120, 200, 255, 0.12); color: #fff; }
-#toolbar button.active { color: var(--hud-amber); background: linear-gradient(180deg, rgba(255, 179, 92, 0.22), rgba(255, 179, 92, 0.06)); box-shadow: inset 0 -2px 0 var(--hud-amber); }
-#toolbar #btn-target, #toolbar #btn-rotation { width: auto; padding: 0 12px 0 10px; background: rgba(120, 200, 255, 0.06); }
-#toolbar #btn-target > span, #toolbar #btn-rotation > span { display: inline; font: 700 13px var(--hud-font); letter-spacing: 0.14em; text-transform: uppercase; color: var(--hud-text); }
-#toolbar .sep { width: 1px; height: 24px; margin: 0 6px; background: var(--hud-line); }
-
+/* ---- the app's shell in the HUD's language: the status pill, the settings button, toasts and tooltips */
 #hud.glass {
   border-radius: 2px; background: var(--hud-bg); border: 1px solid var(--hud-edge);
   clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
@@ -2321,7 +2172,7 @@ body .sp-opener {
 body .sp-opener:hover { border-color: var(--hud-edge-hi); background: linear-gradient(180deg, rgba(20, 34, 54, 0.9), rgba(10, 18, 30, 0.8)); }
 
 body .sp-toasts { top: 66px; }
-body:not(.piloting) .sp-toasts { top: 18px; }
+body.topbar-hidden:not(.piloting) .sp-toasts { top: 18px; }
 body .sp-toast {
   border-radius: 0; padding: 8px 18px 8px 14px;
   font: 600 13.5px var(--hud-font); letter-spacing: 0.08em; color: #f2f6fc;
@@ -2361,19 +2212,118 @@ body .sp-tooltip, #tip {
 .fl-instr { display: block; width: 100%; }
 .fl-target, .fl-tel { width: 256px; }
 
-/* ---- the transport bar: the scene's time in every mode (run / pause, warp, real time, clock, takes) —
-   over the toolbar without the ship, in the mission bar while flying */
-#tp-dock { position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); z-index: 3; }
-body.piloting #tp-dock:empty { display: none; }
-body.hide-ui #tp-dock { display: none; }
+/* ---- the top bar (ui/topbar.ts, PLAN-MODES-AAA M1): the app's one bar in every mode — TARS, the four modes,
+   the mode's group, the time, the actions; hidden, a slim handle (TARS in it) at the top brings it back.
+   No backdrop blur: always shown, the browser would re-blur the changing image under it every frame */
+#topbar {
+  position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 30;
+  display: flex; align-items: center; height: 44px; box-sizing: border-box; padding: 0 6px 0 4px;
+  max-width: calc(100vw - 16px); white-space: nowrap;
+  font-family: var(--hud-font); color: var(--hud-text);
+  background: linear-gradient(180deg, rgba(10, 17, 30, 0.9), rgba(6, 11, 20, 0.84));
+  border: 1px solid var(--hud-edge); border-radius: 3px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  animation: tb-in 0.25s ease-out both;
+}
+#topbar::before {
+  content: ""; position: absolute; left: 18px; right: 18px; bottom: -1px; height: 1px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--hud-edge-hi) 20%, var(--hud-edge-hi) 80%, transparent); opacity: 0.55;
+}
+@keyframes tb-in { from { opacity: 0; transform: translate(-50%, -8px); } }
+#topbar[hidden] { display: none; }
+#topbar button { font-family: var(--hud-font); }
+#topbar b { font-variant-numeric: tabular-nums; }
+.tb-group { display: flex; align-items: center; gap: 2px; height: 100%; padding: 0 8px; }
+.tb-group + .tb-group, .tb-more, .tb-hide { border-left: 1px solid rgba(160, 210, 255, 0.09); }
+.tb-group:empty, .tb-context.empty { display: none; }
+/* (the mode's groups: only the mode's own shown) */
+#topbar:not([data-mode="ship"]) .tb-ship, #topbar:not([data-mode="free"]) .tb-free { display: none; }
+.tb-ic { display: grid; place-items: center; width: 18px; height: 18px; flex: none; }
+.tb-ic svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.tb-ic svg .f { fill: currentColor; stroke: none; }
+
+/* TARS: his emblem, always there (breathing at rest), his name */
+.tb-tars {
+  all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 9px 0 6px;
+  border-radius: 3px; color: rgb(var(--tc)); --tc: 140, 255, 190; transition: background 0.15s;
+}
+.tb-tars:hover { background: rgba(var(--tc), 0.1); }
+.tb-tars .tars-emblem { filter: drop-shadow(0 0 4px rgba(var(--tc), 0.45)); }
+.tb-tars-name { font: 700 11.5px var(--hud-font); letter-spacing: 0.24em; }
+#topbar:has(.tars-emblem[data-state="listening"]) .tb-tars, .tb-handle:has(.tars-emblem[data-state="listening"]) { --tc: 255, 128, 112; }
+#topbar:has(.tars-emblem[data-state="thinking"]) .tb-tars, .tb-handle:has(.tars-emblem[data-state="thinking"]) { --tc: 124, 214, 255; }
+#topbar:has(.tars-emblem[data-state="acting"]) .tb-tars, .tb-handle:has(.tars-emblem[data-state="acting"]) { --tc: 255, 200, 90; }
+#topbar:has(.tars-emblem[data-state="error"]) .tb-tars, .tb-handle:has(.tars-emblem[data-state="error"]) { --tc: 255, 120, 110; }
+
+/* the four modes: the one on lit in amber, its name shown; the others their icon (a mode refused now: dimmed) */
+.tb-modes { gap: 1px; padding: 0 6px; }
+.tb-tab {
+  all: unset; box-sizing: border-box; cursor: pointer; position: relative; display: inline-flex; align-items: center; gap: 7px;
+  height: 32px; padding: 0 8px; border-radius: 3px; color: rgba(200, 216, 236, 0.62); transition: background 0.15s, color 0.15s;
+}
+.tb-tab:hover { background: rgba(120, 200, 255, 0.1); color: #fff; }
+.tb-tab-name { display: none; font: 700 12px var(--hud-font); letter-spacing: 0.16em; text-transform: uppercase; }
+.tb-tab.on { color: var(--hud-amber); background: linear-gradient(180deg, rgba(255, 179, 92, 0.2), rgba(255, 179, 92, 0.05)); }
+.tb-tab.on .tb-tab-name { display: inline; }
+.tb-tab.on::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -6px; height: 2px; background: var(--hud-amber); box-shadow: 0 0 8px rgba(255, 179, 92, 0.8); }
+.tb-tab.tb-na:not(.on) { opacity: 0.4; }
+@media (min-width: 1800px) { .tb-tab .tb-tab-name { display: inline; } }
+
+/* the mode's line (on foot: the world and the place; photo: the way back) */
+.tb-context { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; line-height: 1.1; min-width: 0; padding-right: 12px; }
+.tb-context b { font: 700 12px var(--hud-font); letter-spacing: 0.16em; text-transform: uppercase; color: #fff; }
+.tb-context span { font: 500 11.5px var(--mono); color: var(--hud-dim); overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+.tb-time .tp { padding: 0; }
+
+/* the actions (icons, their names in the tips; those that do not fit in the ⋯ menu) */
+.tb-btn {
+  all: unset; box-sizing: border-box; cursor: pointer; display: inline-grid; place-items: center; flex: none;
+  width: 32px; height: 32px; border-radius: 3px; color: rgba(200, 216, 236, 0.7); transition: background 0.15s, color 0.15s;
+}
+.tb-btn:hover { background: rgba(120, 200, 255, 0.12); color: #fff; }
+.tb-btn.active { color: var(--hud-amber); background: linear-gradient(180deg, rgba(255, 179, 92, 0.2), rgba(255, 179, 92, 0.05)); }
+.tb-btn.off { color: rgba(200, 216, 236, 0.34); }
+.tb-btn > span:not(.tb-ic) { display: none; }
+.tb-btn > svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.tb-btn > svg .fill { fill: currentColor; stroke: none; }
+.tb-btn.tb-off, .tb-btn.tb-over { display: none; }
+.tb-more, .tb-hide { margin-left: 2px; border-radius: 0; }
+.tb-hide { width: 26px; color: var(--hud-dim); }
+.tb-acts { gap: 1px; padding: 0 4px; }
+.tb-menu {
+  position: fixed; z-index: 45; width: 240px; padding: 4px; border-radius: 6px; display: flex; flex-direction: column; gap: 1px;
+  background: rgba(8, 13, 24, 0.96); border: 1px solid rgba(160, 210, 255, 0.16); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  font-family: var(--hud-font); color: var(--hud-text);
+}
+.tb-menu[hidden] { display: none; }
+.tb-mi { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 4px; }
+.tb-mi:hover, .tb-mi:focus-visible { background: rgba(160, 210, 255, 0.1); }
+.tb-mi .tb-ic svg { width: 17px; height: 17px; }
+.tb-mi-name { flex: 1; font: 600 13px var(--hud-font); letter-spacing: 0.04em; }
+.tb-mi kbd { font: 600 11px var(--mono); color: var(--hud-dim); }
+.tb-mi kbd:empty { display: none; }
+
+/* hidden: the handle — TARS breathing in it, a chevron —, a click brings the bar back */
+.tb-handle {
+  all: unset; box-sizing: border-box; cursor: pointer; position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 30;
+  display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 12px; border-radius: 0 0 6px 6px;
+  color: rgb(var(--tc)); --tc: 140, 255, 190;
+  background: rgba(8, 13, 24, 0.82); border: 1px solid var(--hud-edge); border-top: 0;
+}
+.tb-handle[hidden] { display: none; }
+.tb-handle .tb-ic { width: 14px; height: 14px; color: var(--hud-dim); }
+.tb-handle:hover { background: rgba(14, 24, 40, 0.95); }
+/* (the status pill under the bar, opened by the bar's ⓘ — I; shut, the bar says it all) */
+body.has-topbar:not(.topbar-hidden) #hud { top: 60px; }
+body.has-topbar #hud:not(.open) { visibility: hidden; }
+/* (the settings: the bar's ⚙ — the panel's own opener only when the bar is hidden) */
+body.has-topbar:not(.topbar-hidden) #panel.sp.collapsed { display: none; }
+
+/* ---- the transport bar: the scene's time in every mode (run / pause, warp, real time, clock, takes) — in the
+   top bar */
 .tp {
   display: flex; align-items: center; gap: 2px; padding: 4px 10px; white-space: nowrap;
   font-family: var(--hud-font); color: var(--hud-text);
-}
-#tp-dock > .tp {
-  background: var(--hud-bg); border: 1px solid var(--hud-edge); border-radius: 2px;
-  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 100%, 0 100%); padding: 4px 16px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 .tp.compact { padding: 0; }
 .tp.compact .tp-clock, .tp.compact .tp-sep:first-of-type { display: none; }
@@ -2429,11 +2379,6 @@ body.hide-ui #tp-dock { display: none; }
 .tp-mi.on b { color: var(--hud-amber); }
 /* (a narrow window, touch or not: the transport bar within the width, the settings opener a round button) */
 @media (max-width: 560px) {
-  #tp-dock { bottom: 64px; max-width: calc(100vw - 16px); }
-  #tp-dock > .tp { padding: 3px 10px; }
-  #tp-dock .tp-clock { min-width: 0; }
-  #tp-dock .tp-sep { margin: 0 4px; }
-  #tp-dock .tp-rectime { display: none; }
   body .sp-opener { padding: 0; width: 40px; height: 40px; justify-content: center; border-radius: 50%; }
   body .sp-opener span { display: none; }
   /* (the round opener top right, as on a phone: not over the transport bar's end) */
@@ -2468,15 +2413,17 @@ body.hide-ui #tp-dock { display: none; }
 #cam-pop .cp-value { min-width: 116px; }
 @media (max-width: 640px) { #cam-pop .cp-tiles-5 { grid-template-columns: repeat(3, 1fr); } }
 
-/* the toolbar's camera button: the view and the target (the dot: the target's colour; lit when the view
-   is locked on it) */
-#toolbar #btn-camera { width: auto; padding: 0 12px 0 9px; gap: 8px; background: rgba(255, 255, 255, 0.05); color: var(--text); }
-#toolbar #btn-camera > span { display: inline; }
-#toolbar #btn-camera .cam-mode { font: 700 11.5px var(--hud-font, system-ui); letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); }
-#toolbar #btn-camera .cam-target { display: inline-flex; align-items: center; gap: 6px; }
-#toolbar #btn-camera .cam-target::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--body, #ccc); opacity: 0.5; }
-#toolbar #btn-camera.locked .cam-target::before { opacity: 1; box-shadow: 0 0 6px var(--body, #ccc); }
-body:not(.piloting) #cam-pop { bottom: 122px; max-height: min(calc(100vh - 122px - 72px), 760px); } /* (the top below the toasts' line) */
+/* the top bar's camera button (the free camera's group): the view and the target (the dot: the target's
+   colour; lit when the view is locked on it) */
+#topbar #btn-camera { all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; height: 30px; padding: 0 12px 0 9px; gap: 8px; border-radius: 3px; background: rgba(120, 200, 255, 0.06); color: var(--hud-text); font-size: 12px; }
+#topbar #btn-camera:hover { background: rgba(120, 200, 255, 0.14); }
+#topbar #btn-camera.active { box-shadow: inset 0 -2px 0 var(--hud-amber); }
+#topbar #btn-camera svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+#topbar #btn-camera > span { display: inline; }
+#topbar #btn-camera .cam-mode { font: 700 11.5px var(--hud-font, system-ui); letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); }
+#topbar #btn-camera .cam-target { display: inline-flex; align-items: center; gap: 6px; }
+#topbar #btn-camera .cam-target::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--body, #ccc); opacity: 0.5; }
+#topbar #btn-camera.locked .cam-target::before { opacity: 1; box-shadow: 0 0 6px var(--body, #ccc); }
 
 /* the sky panel (skypanel.ts): the sky chart's switches, over the right of the view */
 #sky-pop {
@@ -2491,7 +2438,7 @@ body:not(.piloting) #cam-pop { bottom: 122px; max-height: min(calc(100vh - 122px
 }
 @keyframes sp-in { from { opacity: 0; transform: translateY(8px); } }
 #sky-pop[hidden] { display: none; }
-body.piloting #sky-pop { top: 64px; bottom: auto; }
+body.has-topbar #sky-pop, body.piloting #sky-pop { top: 64px; bottom: auto; }
 #sky-pop .skp-head { margin: -8px -14px 0; padding: 8px 8px 0 14px; }
 #sky-pop .fl-title::before { background: var(--hud-cyan); box-shadow: 0 0 6px var(--hud-cyan); }
 #sky-pop .skp-x { all: unset; cursor: pointer; width: 24px; height: 24px; display: grid; place-items: center; font: 500 18px var(--font); color: var(--hud-dim); }
@@ -2627,34 +2574,17 @@ body.mobile:has(#panel.sp:not(.collapsed)) .tf { display: none; }
 body.mobile:not(.portrait) .sp-shell { overflow-y: auto; overscroll-behavior: contain; }
 body.mobile:not(.portrait) .sp-body { flex: none; overflow: visible; min-height: auto; }
 
-/* the time bar and the toolbar */
+/* the top bar on a touch screen: the safe area, the names shortened, a second row for the time when upright */
 body.mobile .tp-rec, body.mobile .tp-sep:last-of-type { display: none; }
-body.mobile #tp-dock { bottom: calc(66px + env(safe-area-inset-bottom)); max-width: calc(100vw - 16px); }
-body.mobile #tp-dock > .tp { padding: 3px 10px; }
-body.mobile #tp-dock .tp-clock { min-width: 0; }
-body.mobile #toolbar { bottom: calc(8px + env(safe-area-inset-bottom)); max-width: calc(100vw - 16px); }
-body.mobile #toolbar #btn-camera { max-width: 150px; }
-body.mobile #toolbar #btn-camera .cam-target { overflow: hidden; text-overflow: ellipsis; }
-
-/* flying: the mission bar */
-body.mobile .fl-mission {
-  top: calc(6px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); right: calc(54px + env(safe-area-inset-right));
-  transform: none; flex-wrap: wrap; justify-content: center; row-gap: 2px; white-space: normal; padding: 2px 4px;
-}
-body.mobile .fl-mgroup { padding: 0 5px; gap: 6px; }
-body.mobile .fl-mgroup + .fl-mgroup { border-left: none; }
+body.mobile #topbar { top: calc(4px + env(safe-area-inset-top)); max-width: calc(100vw - 8px - env(safe-area-inset-left) - env(safe-area-inset-right)); }
+body.mobile #topbar .tb-tab-name, body.mobile #topbar .tb-tars-name, body.mobile .fl-viewname, body.mobile .fl-planbtn > span:not(.fl-ic) { display: none; }
+body.mobile #topbar #btn-camera { max-width: 150px; }
+body.mobile #topbar #btn-camera .cam-target { overflow: hidden; text-overflow: ellipsis; }
 body.mobile .fl-chip { padding: 5px 6px; font-size: 11px; letter-spacing: 0.08em; }
-body.mobile .fl-mission .fl-tools { min-width: 30px; height: 30px; }
-body.mobile .fl-mission .tp-btn { min-width: 28px; height: 28px; }
-body.mobile .fl-warpbox > span, body.mobile .fl-viewname, body.mobile .fl-planbtn > span:not(.fl-ic), body.mobile .fl-placebtn > span:not(.fl-ic) { display: none; }
-body.mobile.portrait .fl-mg-acts { order: 1; }
-body.mobile.portrait .fl-soundbtn { display: none; }
+body.mobile.portrait #topbar { flex-wrap: wrap; justify-content: center; row-gap: 2px; }
+body.mobile.portrait #topbar .tb-time { order: 9; flex-basis: 100%; justify-content: center; border-left: none; }
 body.mobile.portrait .fl-chip { padding: 5px 4px; gap: 4px; font-size: 11px; letter-spacing: 0.02em; }
 body.mobile.portrait .fl-viewbtn .fl-caret { display: none; }
-body.mobile.portrait .fl-mg-acts { gap: 0; }
-body.mobile.portrait .fl-mgroup { padding: 0 2px; }
-body.mobile.portrait .fl-mission .fl-tools { min-width: 28px; padding: 0 3px; }
-body.mobile.portrait .fl-mg-warp { order: 2; flex-basis: 100%; justify-content: center; }
 
 /* the attitude ball: between the stick and the throttle; upright, above them */
 body.mobile .fl-cockpit { transform: translateX(-50%) scale(0.72); bottom: calc(2px + env(safe-area-inset-bottom)); }
@@ -2720,10 +2650,9 @@ body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right));
 .fl-root.mapview { --fc-l: 384px; --fc-r: 360px; }
 @media (max-width: 1100px) { .fl-root.mapview { --fc-l: 326px; --fc-r: 300px; } }
 .fl-hud.mapview { display: none; }
-.fl-root.mapview > :not(.fl-warn):not(.fl-mission):not(.fl-right):not(.fl-mapstrip):not(.fc-root):not(.fl-menu):not(.fl-transport) { display: none !important; }
+.fl-root.mapview > :not(.fl-warn):not(.fl-right):not(.fl-mapstrip):not(.fc-root):not(.fl-menu) { display: none !important; }
 .fl-root[data-density].mapview > .fl-right, .fl-root[data-density].mapview > .fl-mapstrip { display: flex !important; }
 .fl-root[data-density].mapview > .fc-root:not([hidden]) { display: block !important; }
-.fl-root[data-density].mapview > .fl-mission { display: flex !important; }
 .fl-root.mapview .fl-right {
   inset: 0; width: auto; padding: 0; z-index: 0; border: none; border-radius: 0; clip-path: none;
   background: radial-gradient(120% 90% at 50% 40%, #0a1322 0%, #060b14 55%, #03060b 100%);
@@ -2753,7 +2682,7 @@ body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right));
 .fl-ms-read { display: flex; gap: 16px; flex: 1; min-width: 0; }
 .fl-ms-cell { display: flex; flex-direction: column; flex: none; }
 .fl-ms-read { overflow: hidden; }
-.fl-root.mapview .fl-mission, .fl-root.mapview .fl-warn { z-index: 5; }
+.fl-root.mapview .fl-warn { z-index: 5; }
 .fl-ms-cell small { font: 700 11px var(--hud-font); letter-spacing: 0.16em; color: var(--hud-dim); }
 .fl-ms-cell b { font: 600 14px var(--mono); color: #fff; white-space: nowrap; }
 .fl-ms-autos { display: flex; gap: 4px; flex: none; }

@@ -58,7 +58,7 @@
 .pm-save-acts { display: flex; gap: 6px; flex: none; }
 .pm-empty { margin: 8px 0; color: var(--k-dim); font: italic 500 12px var(--font); }
 /* paused: the HUD's clocks and the toolbar dim under the menu */
-body.paused .fl-root, body.paused #toolbar { filter: saturate(0.6) brightness(0.8); }
+body.paused .fl-root, body.paused #topbar { filter: saturate(0.6) brightness(0.8); }
 
 /* ---------------------------------------------------------------- the title screen */
 .ts-root {
@@ -107,8 +107,8 @@ body.paused .fl-root, body.paused #toolbar { filter: saturate(0.6) brightness(0.
 .ts-lang .k-btn { padding: 3px 8px; }
 .ts-version { margin-left: auto; }
 /* the title over the scene: the flight's instruments, the tools and the toasts out of sight */
-body.title-open .fl-root, body.title-open .fl-hud, body.title-open #toolbar, body.title-open #hud, body.title-open #panel,
-body.title-open #overlay, body.title-open .sp-toasts, body.title-open #hint, body.title-open .tp-root, body.title-open #tp-dock { display: none !important; }
+body.title-open .fl-root, body.title-open .fl-hud, body.title-open #topbar, body.title-open .tb-handle, body.title-open #hud, body.title-open #panel,
+body.title-open #overlay, body.title-open .sp-toasts, body.title-open #hint, body.title-open .tp-root { display: none !important; }
 
 /* ---------------------------------------------------------------- the mission selector */
 .ms-root {
@@ -260,32 +260,9 @@ body.hide-ui .kh, body.title-open .kh, body.paused .kh, body.mobile .kh, body.ma
 .tb-log-empty { color: var(--k-dim); font-style: italic; }
 
 /* ---------------------------------------------------------------- photo mode (ui/photo.ts) */
-body.photo :is(.fl-root, .fl-hud, #toolbar, #hud, #panel, #overlay, .kh, #cam-pop, #sky-pop, #sky-card, #tp-dock, #hint) { display: none !important; }
-.ph-bar {
-  position: fixed;
-  left: 50%;
-  bottom: 18px;
-  transform: translateX(-50%);
-  z-index: var(--z-popover);
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px 14px;
-  max-width: calc(100vw - 32px);
-  box-sizing: border-box;
-  padding: 10px 16px;
-  transition: opacity 0.25s, transform 0.25s;
-}
-.ph-bar.ph-hidden { opacity: 0; transform: translate(-50%, 12px); pointer-events: none; }
-.ph-title { font-size: 12px; margin-right: 4px; }
-.ph-ctl { display: flex; align-items: center; gap: 8px; }
-.ph-lab { font: 600 11px var(--hud-font); letter-spacing: 0.14em; text-transform: uppercase; color: var(--k-dim); }
-.ph-ctl input[type="range"] { width: 110px; accent-color: var(--k-on); }
-.ph-val { min-width: 58px; font: var(--k-font-value); color: #eef5ff; }
-.ph-keys { display: flex; align-items: center; gap: 4px; font: 500 11px var(--mono); color: var(--k-dim); }
-
-/* ---------------------------------------------------------------- photo mode (ui/photo.ts) */
-body.photo :is(.fl-root, .fl-hud, #toolbar, #hud, #panel, #overlay, .kh, #cam-pop, #sky-pop, #sky-card, #tp-dock, #hint) { display: none !important; }
+body.photo :is(.fl-root, .fl-hud, #hud, #panel, #overlay, .kh, #cam-pop, #sky-pop, #sky-card, #hint) { display: none !important; }
+/* (the photo bar hidden — H —: the top bar goes with it, the picture alone) */
+body.photo:has(.ph-bar.ph-hidden) :is(#topbar, .tb-handle) { display: none !important; }
 .ph-bar {
   position: fixed;
   left: 50%;

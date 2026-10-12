@@ -12,6 +12,7 @@
 // a load, a deletion, a teleport, the date, a scene — the game is saved as "Before TARS"; undo goes back.
 // Every result is short, and carries what the game said (its toasts) since the call.
 
+import type { GameMode } from "../game/modes";
 import type { Auto, Hold } from "../pilot";
 import type { CameraController } from "../controls";
 import type { Settings, Target } from "../settings";
@@ -132,6 +133,8 @@ export interface GameHost {
   seeEclipse?(kind: "solar" | "lunar" | "transit", t: number, place: { lat: number; lon: number } | null): Promise<string | null>;
   /** the clouds of the day drawn over the Earth (the real weather's satellite mosaic: its date, its layer), or null */
   dayClouds?(): { date: string; layer: string } | null;
+  /** the game's mode (game/modes.ts): now, into another (why not, or null), the top bar shown or hidden */
+  mode?: { get(): GameMode; set(m: GameMode): string | null; hideBar(on: boolean): void };
 }
 
 export const SCREENS = [
@@ -376,6 +379,7 @@ export function gameTools(h: GameHost): Tool[] {
           mission: h.mission(),
           date: tools.date(),
           warp: { running: settings.animate, timesRealTime: round(settings.timeSpeed / h.realTimeSpeed(), 2), autoWarp: settings.autoWarp },
+          mode: h.mode?.get() ?? null,
           view: { ship: settings.ship, mount: settings.shipMount, spectating: camera.spectating, vessel: settings.vessel },
           gear: { down: camera.gearDown, flaps: camera.airFlight?.cfg.flaps, airBrake: camera.airBrake },
           docked: camera.docked,
@@ -1299,6 +1303,21 @@ export function gameTools(h: GameHost): Tool[] {
         if (a.hudDensity !== undefined) h.hudDensity(a.hudDensity as 0 | 1 | 2);
         if (a.screenshot) await h.screenshot();
         return "done";
+      }),
+    },
+    {
+      name: "set_mode",
+      description:
+        "The game's mode, as the top bar's tabs and F1–F4: ship (fly the craft — back on board, back from the spectator), foot (on foot: out of the landed, still craft; else set down on the solid world under the camera — far from any, place_ship or character start first), free (the free camera anywhere in the system; a ship flown flies on, its autopilots and plan), photo (the photo mode over the current one: the view alone, renders). bar: show or hide the top bar. Returns the mode now, or why not.",
+      params: {
+        mode: { type: "string", enum: ["ship", "foot", "free", "photo"] },
+        bar: { type: "string", enum: ["show", "hide"] },
+      },
+      run: act((a) => {
+        if (!h.mode) return { ok: false, error: "no modes here" };
+        if (a.bar) h.mode.hideBar(a.bar === "hide");
+        const error = a.mode ? h.mode.set(a.mode as GameMode) : null;
+        return { ok: !error, error, mode: h.mode.get() };
       }),
     },
     // ------------------------------------------------------------------ teleporting, saves, scenes

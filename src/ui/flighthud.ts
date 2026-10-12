@@ -42,7 +42,6 @@ import { sub } from "../math/vec3";
 import { store } from "../util/storage";
 import { onEscape } from "./keys";
 import { el as h } from "./kit";
-import { DEV_TOOLS } from "../debug";
 import { alertsOf, MasterCaution } from "./hud/alerts";
 import { sound } from "../audio/engine";
 import { hudShown } from "./hud/declutter";
@@ -72,6 +71,14 @@ const HUD_GRAPH: GraphPalette = {
 /** (with the target planet's light probe, from the renderer: see system/planet-probe.ts) */
 export type Info = ReturnType<CameraController["flightInfo"]> & { probe?: PlanetProbe | null; status?: RangerStatus | null };
 type V3 = [number, number, number];
+
+/** The top bar's box on the screen (ui/topbar.ts), null when hidden: the HUD's panels keep below it. */
+const topBar = () => {
+  const e = typeof document === "undefined" ? null : document.getElementById("topbar");
+  if (!e || e.hidden) return null;
+  const r = e.getBoundingClientRect();
+  return r.height > 0 ? r : null;
+};
 
 /** The HUD's line icons (24 × 24, stroked with the text's colour). */
 const ICONS: Record<string, string> = {
@@ -271,13 +278,16 @@ export class FlightHud {
   /** the air data (in the air): the flight law, the flow, the load, the skin, the configuration */
   private airData = h("div", "fl-airdata");
   private airKey = "";
-  private mission = h("div", "fl-mission fl-panel");
+  /** the ship's groups of the top bar (ui/topbar.ts): the chips, the clocks, the craft and the views */
+  readonly bar = {
+    modes: h("div", "fl-mgroup fl-mg-modes"),
+    clocks: h("div", "fl-mgroup fl-mg-clocks"),
+    acts: h("div", "fl-mgroup fl-mg-acts"),
+  };
   /** the docking aid: the station's nearest port and the ship's ring against it */
   private dock = h("div", "fl-dock fl-panel");
   private dockKey = "";
   private missionEls: Record<string, HTMLElement> = {};
-  /** where the app's transport bar goes while flying (ui/transport.ts) */
-  readonly transportSlot = h("div", "fl-transport");
   private target = h("div", "fl-target fl-panel");
   private targetEls: Record<string, HTMLElement> = {};
   private tel = h("div", "fl-tel fl-panel");
@@ -521,7 +531,7 @@ export class FlightHud {
     const room = (sel: string) => this.root.querySelector<HTMLElement>(sel)?.getBoundingClientRect();
     const hubR = this.hubCard.hidden ? null : this.hubCard.getBoundingClientRect();
     const bez = room(".fl-bezel");
-    const bar = room(".fl-mission");
+    const bar = topBar();
     const floor = Math.min(hubR?.top ?? Infinity, bez?.top ?? Infinity, innerHeight) - 10;
     const ceil = (bar?.bottom ?? 50) + 8;
     const cvH = Math.max(140, Math.min(300, floor - ceil - (this.big.offsetHeight - this.bigCv.offsetHeight)));
@@ -574,8 +584,8 @@ export class FlightHud {
     // (the mode: the autopilot flies, or it assists — the pilot flies, its commands the HUD's director)
     const mode = i.assist ? t("ASSISTED") : t("AUTO");
     const tip = i.assist
-      ? t("Assisted: you fly, the director shows its commands — click: the autopilot flies (F4)")
-      : t("The autopilot flies — click: you fly it, assisted (F4)");
+      ? t("Assisted: you fly, the director shows its commands — click: the autopilot flies (⇧F4)")
+      : t("The autopilot flies — click: you fly it, assisted (⇧F4)");
     C.classList.toggle("assist", i.assist);
     this.drawHubGraph(H.graph ?? null);
     if (this.hubTitle.textContent !== H.title) this.hubTitle.textContent = H.title;
@@ -614,8 +624,7 @@ export class FlightHud {
   private boundHubCard() {
     const C = this.hubCard;
     if (C.hidden || typeof innerHeight !== "number") return;
-    const bar = document.querySelector(".fl-mission");
-    const br = bar && !(bar as HTMLElement).hidden ? bar.getBoundingClientRect() : null;
+    const br = topBar();
     const limit = Math.max(br && br.height > 0 ? br.bottom + 10 : 0, 56);
     const top = C.getBoundingClientRect().top;
     const GRAPH = 104; // (the small graph's height in the card, its gap)
@@ -782,8 +791,6 @@ export class FlightHud {
       this.missionEls[key] = v;
       return c;
     };
-    // (the time: the app's transport bar — run / pause, warp, real time, takes — mounted here while flying)
-    const warpBox = this.transportSlot;
     const iconBtn = (name: string, title: string, fn: () => void, cls = "") => {
       const b = h("button", `fl-tools ${cls}`) as HTMLButtonElement;
       b.append(icon(name));
@@ -791,35 +798,13 @@ export class FlightHud {
       b.onclick = fn;
       return b;
     };
-    const tools = iconBtn("more", t("The app's toolbar"), () => document.body.classList.toggle("show-tools"));
     const planBtn = h("button", "fl-tools fl-planbtn") as HTMLButtonElement;
     planBtn.append(icon("plan"), h("span", "", t("Plan")));
     planBtn.title = t("Flight planner: transfers, rendezvous, manoeuvre nodes");
     planBtn.onclick = () => this.onPlanner?.();
     this.missionEls.planBtn = planBtn;
-    const placeBtn = h("button", "fl-tools fl-placebtn") as HTMLButtonElement;
-    placeBtn.append(icon("place"), h("span", "", t("Place")));
-    placeBtn.title = t("Place the ship: in orbit, on a ground, beside a body, before the wormhole");
-    placeBtn.dataset.testid = "hud-place";
-    placeBtn.onclick = () => this.onPlace?.();
-    const weatherBtn = h("button", "fl-tools fl-placebtn fl-weatherbtn") as HTMLButtonElement;
-    weatherBtn.append(icon("weather"), h("span", "", t("Weather")));
-    weatherBtn.title = t("The weather: fair, cloudy, fog, rain, storm, wind, Mars's dust, a draw, the real one (METAR)");
-    weatherBtn.dataset.testid = "hud-weather";
-    weatherBtn.onclick = () => this.onWeather?.();
-    const eclipseBtn = h("button", "fl-tools fl-placebtn fl-eclipsebtn") as HTMLButtonElement;
-    eclipseBtn.append(icon("eclipse"), h("span", "", t("Eclipses")));
-    eclipseBtn.title = t("The eclipse calculator: the Sun's and the Moon's, the transits, the planets' moons, from any world");
-    eclipseBtn.dataset.testid = "hud-eclipses";
-    eclipseBtn.onclick = () => this.onEclipses?.();
     const pathBtn = iconBtn("path", t("Future path in the view (the cyan tube)"), () => act.pathInView(), "fl-pathbtn");
     this.missionEls.pathBtn = pathBtn;
-    const soundBtn = iconBtn("sound", t("Sound on / off (Settings › Game › Sound: the mix)"), () => act.sound(), "fl-soundbtn");
-    const musicBtn = iconBtn("music", t("Music: the themes, listen, the mode, the mixer"), () => this.onMusic?.(), "fl-musicbtn");
-    this.missionEls.soundBtn = soundBtn;
-    const toolsBtn = iconBtn("tools", t("Game tools: status, place, target, time, saves, audit, journal"), () => act.tools());
-    // (the game tools are the developers': a development build or ?dev)
-    toolsBtn.hidden = !DEV_TOOLS;
     const dens = iconBtn("density", t("HUD density: full · minimal · clean"), () => this.cycleDensity());
     // the camera's view on the Ranger: a menu (its attach points, outside: around it, free)
     const viewBox = h("div", "fl-viewbox");
@@ -850,7 +835,7 @@ export class FlightHud {
     // (the spectator: the camera away from the ship, anywhere — it flies on)
     viewMenu.append(h("div", "fl-menu-h", t("Free")));
     const spect = h("button", "fl-menu-i") as HTMLButtonElement;
-    spect.append(h("b", "", t("Spectator")), h("span", "", t("A free camera, anywhere — the ship flies on (F3)")));
+    spect.append(h("b", "", t("Spectator")), h("span", "", t("A free camera, anywhere — the ship flies on (F3: the Free camera mode)")));
     spect.dataset.testid = "view-spectator";
     spect.onclick = () => {
       act.spectator();
@@ -939,40 +924,32 @@ export class FlightHud {
     });
     craftBox.append(craftBtn);
     this.craftMenu = craftMenu;
-    const group = (cls: string, ...els: HTMLElement[]) => {
-      const g = h("div", `fl-mgroup ${cls}`);
-      g.append(...els);
-      return g;
-    };
-    this.mission.append(
-      group(
-        "fl-mg-modes",
-        chip("sas", t("Stability assist"), t("Holds the attitude, damps any rotation — click to toggle"), () => act.sas()),
-        chip("hold", t("Attitude hold"), t("The direction the nose is held along — click to release it"), () => {
-          const hd = this.lastInfo?.hold;
-          if (hd && hd !== "none") act.hold(hd);
-        }),
-        chip("auto", t("Autopilot"), t("What the autopilot flies — click to hand the controls back"), () => {
-          const a = this.lastInfo?.auto;
-          if (a && a !== "none") act.auto(a);
-        }),
-      ),
-      group("fl-mg-warp", warpBox),
-      group(
-        "fl-mg-clocks",
-        clock("tau", t("Ship τ"), t("Proper time on the ship since you took the controls")),
-        clock("t", t("Far t"), t("Coordinate time: the clocks of distant observers")),
-        clock("ratio", "τ / t", t("Time dilation: how fast the ship's clock runs")),
-        clock(
-          "lost",
-          t("Earth +"),
-          t(
-            "Time gained by the far-away clocks — the Earth's, through the wormhole — over the ship's since you took the controls: t − τ (the two mouths assumed in step)",
-          ),
+    // (the ship's groups, in the top bar: the place, the weather, the eclipses, the sound, the music and the
+    // tools are the bar's own actions, in every mode)
+    this.bar.modes.append(
+      chip("sas", t("Stability assist"), t("Holds the attitude, damps any rotation — click to toggle"), () => act.sas()),
+      chip("hold", t("Attitude hold"), t("The direction the nose is held along — click to release it"), () => {
+        const hd = this.lastInfo?.hold;
+        if (hd && hd !== "none") act.hold(hd);
+      }),
+      chip("auto", t("Autopilot"), t("What the autopilot flies — click to hand the controls back"), () => {
+        const a = this.lastInfo?.auto;
+        if (a && a !== "none") act.auto(a);
+      }),
+    );
+    this.bar.clocks.append(
+      clock("tau", t("Ship τ"), t("Proper time on the ship since you took the controls")),
+      clock("t", t("Far t"), t("Coordinate time: the clocks of distant observers")),
+      clock("ratio", "τ / t", t("Time dilation: how fast the ship's clock runs")),
+      clock(
+        "lost",
+        t("Earth +"),
+        t(
+          "Time gained by the far-away clocks — the Earth's, through the wormhole — over the ship's since you took the controls: t − τ (the two mouths assumed in step)",
         ),
       ),
-      group("fl-mg-acts", craftBox, planBtn, placeBtn, weatherBtn, eclipseBtn, viewBox, pathBtn, soundBtn, musicBtn, toolsBtn, dens, tools),
     );
+    this.bar.acts.append(craftBox, planBtn, viewBox, pathBtn, dens);
 
     // ---- target: its name (the ball's target mark) and range; the rest as tiles
     this.target.append(panelHead(this.target, "target", t("Target")).head);
@@ -1391,7 +1368,6 @@ export class FlightHud {
       this.airData,
       this.big,
       this.report,
-      this.mission,
       this.dock,
       this.target,
       this.tel,
@@ -1490,7 +1466,6 @@ export class FlightHud {
     this.root.hidden = !on;
     this.hud.hidden = !on;
     document.body.classList.toggle("piloting", on);
-    document.body.classList.remove("show-tools");
     this.applyDensity();
     if (!on) (this.trail = []), (this.samples = []), (this.start = null);
   }
@@ -1882,11 +1857,6 @@ export class FlightHud {
     };
     setChip("sas", i.sas, "SAS");
     M.pathBtn!.classList.toggle("off", !s.pathInView);
-    M.soundBtn!.classList.toggle("off", !s.sound);
-    if (M.soundBtn!.dataset.on !== String(s.sound)) {
-      M.soundBtn!.dataset.on = String(s.sound);
-      M.soundBtn!.replaceChildren(icon(s.sound ? "sound" : "mute"));
-    }
     M.viewName!.textContent = this.spectating ? t("Spectator") : (MOUNTS[s.shipMount as Mount]?.short ?? "");
     const cn = VESSELS[i.vessel].name;
     if (M.craftName!.textContent !== cn) M.craftName!.textContent = cn;
@@ -2523,10 +2493,10 @@ export class FlightHud {
       // (upright, the attitude ball stands above the touch controls: the tapes end above it)
       const ball = phone && innerHeight > innerWidth ? this.cockpitEl() : null;
       // (the key hints, shown, stand under the left tape: it ends above them)
-      const L = phone ? band([this.mission, this.target], [q(".tf-stick"), ball]) : band([this.target], [this.orbit, q(".kh.show")]);
+      const L = phone ? band([q("#topbar"), this.target], [q(".tf-stick"), ball]) : band([this.target], [this.orbit, q(".kh.show")]);
       const x = (phone ? 16 : 30) * dpr;
       if (L) this.speedTape(ctx, i, x, L.cy, L.h, u);
-      const R = phone ? band([this.mission, this.right], [q(".tf-right"), ball]) : band([this.tel], [this.right]);
+      const R = phone ? band([q("#topbar"), this.right], [q(".tf-right"), ball]) : band([this.tel], [this.right]);
       // (near a body — ours, or one of Gargantua's —: the height above its ground; else r near the hole)
       const st = i.status;
       if (R && (i.surface || (st && !st.kerr && Number.isFinite(st.altKm)))) this.bodyAltTape(ctx, i, W - x, R.cy, R.h, u);

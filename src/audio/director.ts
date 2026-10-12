@@ -138,7 +138,7 @@ export class SoundDirector {
       "pointerover",
       (e: PointerEvent) => {
         const t = e.target as HTMLElement | null;
-        const b = t?.closest?.("#toolbar button, .sg-card, .fl-btn");
+        const b = t?.closest?.("#topbar button, .tb-menu button, .sg-card, .fl-btn");
         if (b && !b.contains(e.relatedTarget as Node | null)) this.cue("hover");
       },
       { passive: true },

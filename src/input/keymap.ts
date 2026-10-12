@@ -15,6 +15,7 @@ export type KeyLayer = "system" | "flight" | "time" | "scene" | "character";
 export type KeyAction =
   // system
   | "tools"
+  | "gameMode"
   | "pause"
   | "quickSave"
   | "quickLoad"
@@ -283,9 +284,8 @@ export const KEYMAP: KeySection[] = [
         bind: [fly("KeyV", "mount")],
       },
       {
-        keys: "F3",
-        text: "Spectator: a free camera, anywhere — the ship flies on, its autopilots and plan (F3 or V: back to it)",
-        bind: [fly("F3", "spectator")],
+        keys: "V (last view)",
+        text: "Spectator: a free camera, anywhere — the ship flies on, its autopilots and plan (the Free camera mode, F3; F1 or V: back to it)",
       },
       {
         keys: "F6",
@@ -293,9 +293,9 @@ export const KEYMAP: KeySection[] = [
         bind: [fly("F6", "tars")],
       },
       {
-        keys: "F4",
+        keys: "⇧F4",
         text: "Autopilot: it flies, or it assists — you fly, its director on the HUD shows where to point, how much throttle",
-        bind: [fly("F4", "assist")],
+        bind: [fly("F4", "assist", on)],
       },
       {
         keys: "⇧R",
@@ -372,9 +372,19 @@ export const KEYMAP: KeySection[] = [
     rows: [
       { keys: "M · ⌘K", text: "Settings · search them (flying: ⇧M)" },
       {
-        keys: "F2",
+        keys: "F1 · F2 · F3 · F4",
+        text: "The game's modes: Ship · On foot · Free camera (anywhere in the system; a ship flies on) · Photo (renders, videos) — the top bar's tabs",
+        bind: [
+          codes("system", "F1", "gameMode", { arg: "ship", shift: false }),
+          codes("system", "F2", "gameMode", { arg: "foot", shift: false }),
+          codes("system", "F3", "gameMode", { arg: "free", shift: false }),
+          codes("system", "F4", "gameMode", { arg: "photo", shift: false }),
+        ],
+      },
+      {
+        keys: "F10",
         text: "Game tools (developers: a local build or ?dev) — status, placement, targets, time, performance",
-        bind: [codes("system", "F2", "tools")],
+        bind: [codes("system", "F10", "tools")],
       },
       { keys: "I", text: "Details & physical readouts", bind: [scene("i", "details")] },
       {

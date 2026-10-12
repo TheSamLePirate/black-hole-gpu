@@ -230,6 +230,57 @@ Holds the render scale for the image (0.25 … 1, values out of range are clampe
 
 Puts the camera out of the ship as a free spectator (`on: true`; the ship goes on flying) or back into it (`false`). Returns whether the spectator is out. Refused with a toast ("fly one first (K)") when no craft is being flown: the spectator starts only from a piloted ship (`startSpectator` in `controller/spectator.ts`). No e2e test calls it.
 
+### `__bh.mode` → object
+
+The game's four modes (`src/game/modes.ts`, the top bar `src/ui/topbar.ts`; PLAN-MODES-AAA M1):
+
+- `"ship"`: a craft flown, the view on it.
+- `"foot"`: walking (the third-person explorer).
+- `"free"`: the free camera anywhere in the system. With a ship flown it is the spectator, and the ship flies on.
+- `"photo"`: the photo mode, opened over one of the other three.
+
+The mode is read each frame from `settings.ship`, `camera.piloting`, `camera.spectating`, `camera.character.active`
+and the photo mode. The top bar's tabs, F1–F4, TARS's `set_mode` tool and `/play` change it through the same
+plan (`planMode`).
+
+### `__bh.mode.get()` → `"ship" | "foot" | "free" | "photo"`
+
+The mode now (`modeOf`).
+
+### `__bh.mode.set(m)` → string \| null
+
+Puts the game in a mode, without a toast. Returns why it was refused, or `null`. The steps:
+
+- **ship:**
+  - from the photo mode, it is closed;
+  - on foot, the explorer boards (at the hatch, within 3 m) or else stops walking, the view carried back onto the
+    craft;
+  - from the spectator, the view goes back on board;
+  - with no ship in the scene, the Ranger is put in.
+- **foot:**
+  - out of a landed craft at rest (`disembark`);
+  - else the explorer is set down on the solid world under the camera (`camera.groundBelow()`, within 2 radii).
+  - Refused far from any ground, or during an offline render.
+- **free:**
+  - with a ship flown, the spectator;
+  - from foot, the walker's camera stays out where it was (the spectator with a ship; the free camera without
+    one).
+- **photo:** the photo mode over the current mode. Leaving it (Esc, or any other mode) goes back to that mode.
+
+### `__bh.mode.state()` → `ModeState`
+
+What the mode is read from: `{ ship, piloting, spectating, onFoot, photo, photoOver, landedStill, groundBelow,
+rendering }`. `groundBelow` is the id of the solid world under the camera, or `null`.
+
+### `__bh.mode.bar()` → `{ mode, hidden }`
+
+The top bar: the mode its tabs show, and whether it is hidden (the slim handle with TARS shown instead).
+
+### `__bh.mode.hideBar(on: boolean)` → void
+
+Hides the top bar (`true`) or shows it again (`false`). The choice is remembered in the browser
+(`kerr.topbar.hidden`).
+
 ### `__bh.snapshot(name?: string)` → Promise<Response>
 
 Exports the current view as a PNG (`renderer.exportPNG(settings)`) and POSTs it to the dev server at `/__snapshot?name=…` (`snapshots/<name>.png`, default name `"snapshot"`). The POST goes to `server.ts`, which answers 404 `disabled` outside dev (the `fetch` does not throw). Run it in the dev server only.

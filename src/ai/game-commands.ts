@@ -58,6 +58,22 @@ export const GAME_COMMANDS: GameCommand[] = [
     args: [{ param: "mapZoom" }],
     desc: { fr: "Zoom de la carte locale (0–21, défaut 18)", en: "Local map zoom (0–21, default 18)" },
   },
+  // the game's modes (F1–F4) and its top bar
+  {
+    name: "play",
+    tool: "set_mode",
+    args: [{ param: "mode" }],
+    desc: {
+      fr: "Le mode de jeu : ship, foot (à pied), free (caméra libre), photo",
+      en: "The game's mode: ship, foot, free (camera), photo",
+    },
+  },
+  {
+    name: "bar",
+    tool: "set_mode",
+    args: [{ param: "bar" }],
+    desc: { fr: "La barre du haut : show, hide", en: "The top bar: show, hide" },
+  },
   // the target, the views
   {
     name: "target",

@@ -3874,7 +3874,7 @@ export const SCHEMA: ControlDef[] = [
     group: "Saved games",
     label: "Autosave",
     effect: "none",
-    help: "Keeps the flight in this browser (every setting, the time, the pilot, the plan) and resumes it at the next visit. Named saves, files: the game tools (F2).",
+    help: "Keeps the flight in this browser (every setting, the time, the pilot, the plan) and resumes it at the next visit. Named saves, files: the game tools (F10).",
     keywords: "save resume persist",
   },
   {

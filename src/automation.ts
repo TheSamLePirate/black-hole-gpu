@@ -50,6 +50,7 @@ import { setDateNow } from "./util/now";
 import { advanceFrameClock } from "./frameclock";
 import type { FlightPhase } from "./game/phase";
 import type { Pwa } from "./pwa";
+import type { GameMode, ModeState } from "./game/modes";
 
 export interface BhContext {
   settings: Settings;
@@ -100,6 +101,16 @@ export interface BhContext {
   spectate(on: boolean): boolean;
   /** the PWA (src/pwa.ts): the worker's state, the caches' figures */
   pwa: Pwa;
+  /** the game's mode (game/modes.ts, PLAN-MODES-AAA M1) */
+  mode: {
+    get(): GameMode;
+    /** into a mode: why not, or null */
+    set(m: GameMode): string | null;
+    state(): ModeState;
+    /** the top bar: the mode it shows, hidden or not */
+    bar(): { mode: GameMode; hidden: boolean };
+    hideBar(on: boolean): void;
+  };
 }
 
 export function installBh(c: BhContext) {
@@ -303,6 +314,9 @@ export function installBh(c: BhContext) {
       voice,
       capcom,
       music,
+      /** the game's mode (PLAN-MODES-AAA M1): __bh.mode.get() "ship" | "foot" | "free" | "photo", .set(m) (why not, or
+       *  null), .state() (what it is read from), .bar() (the top bar: its mode, hidden), .hideBar(on) */
+      mode: c.mode,
       /** TARS the agent: __bh.tars.agent.ask("…"), .agent.last (his actions), .memory, .tools(), .spent() (USD) */
       tars: c.tars,
       /** TARS's robot voice's parts (PLAN-TARS T5a): its measurement renders it offline */

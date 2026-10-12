@@ -12,6 +12,7 @@ import frSettings from "./i18n/fr-settings";
 import frCockpit from "./i18n/fr-cockpit";
 import frTars from "./i18n/fr-tars";
 import frVoices from "./i18n/fr-voices";
+import frModes from "./i18n/fr-modes";
 
 export type Lang = "fr" | "en";
 export type Text = Record<Lang, string>;
@@ -63,6 +64,7 @@ addFrench(frSettings);
 addFrench(frCockpit);
 addFrench(frTars);
 addFrench(frVoices);
+addFrench(frModes);
 addFrench(frMain);
 addFrench(frHud);
 addFrench(frPlace);

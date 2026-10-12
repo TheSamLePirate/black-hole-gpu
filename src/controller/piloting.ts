@@ -55,6 +55,7 @@ declare module "../controls" {
     newFlight: typeof newFlight;
     stepOffMount: typeof stepOffMount;
     standOn: typeof standOn;
+    groundBelow: typeof groundBelow;
     placeShipRep: typeof placeShipRep;
     moveOutside: typeof moveOutside;
     setLookRaw: typeof setLookRaw;
@@ -265,6 +266,31 @@ function standOn(this: CameraController, b?: Body): string | null {
   this.activity = performance.now();
   this.onCinematicChange(this.cinematic);
   return null;
+}
+
+/**
+ * The solid world under the camera, near enough to set the explorer down on it (within `radii` of its radius
+ * from its surface): its id and the point under the camera (latitude, longitude [°]: the Earth's geodetic,
+ * the others' on their sphere) — the On foot mode's "walk here". Null: none (the hole, deep space, a gas giant).
+ */
+function groundBelow(this: CameraController, radii = 2): { body: Body; lat: number; lon: number } | null {
+  const w = this.rigWorld();
+  if (!w) return null;
+  const t = this.nowTime();
+  const ref = this.rigNearest(w.ours, w.X, t);
+  if (!ref) return null;
+  const solid = w.ours ? solidBody(ref.id) : ["miller", "mann", "edmunds"].includes(ref.id);
+  if (!solid || (Math.hypot(...sub3(w.X, ref.C)) - ref.R) / ref.R > radii) return null;
+  const deg = 180 / Math.PI;
+  if (w.ours) {
+    const q = toBodyFixed(ref.id, w.X, t);
+    const g = cartToGeodetic(1, flatteningOf(ref.id), unitV(q));
+    return { body: ref.id, lat: g.lat * deg, lon: g.lon * deg };
+  }
+  const F = planetFrame(ref.id as "miller" | "mann" | "edmunds", t, this.s.spin, this.s.massSolar);
+  const xi = toLocal(F, w.X, F.V).xi;
+  const r = Math.hypot(...xi);
+  return { body: ref.id, lat: Math.asin(xi[2] / r) * deg, lon: Math.atan2(xi[1], xi[0]) * deg };
 }
 
 /**
@@ -1849,6 +1875,7 @@ export function installPiloting(C: { prototype: CameraController }) {
     newFlight,
     stepOffMount,
     standOn,
+    groundBelow,
     placeShipRep,
     moveOutside,
     setLookRaw,

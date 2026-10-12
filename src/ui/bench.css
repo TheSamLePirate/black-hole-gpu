@@ -272,10 +272,10 @@
   }
 }
 /* the game's interface out of the way while the bench runs its scenes */
-body.benching #toolbar,
+body.benching #topbar,
+body.benching .tb-handle,
 body.benching #hud,
 body.benching #panel,
-body.benching #tp-dock,
 body.benching .fl-root,
 body.benching .sp-toasts,
 body.benching #hint,
