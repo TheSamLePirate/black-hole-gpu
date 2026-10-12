@@ -4,6 +4,7 @@ import { cartToGeodetic, WGS84_A, WGS84_F } from "./system/ellipsoid";
 import { bodyAxes } from "./system/solar";
 import { groundVelocity } from "./system/our-surface";
 import { CharacterHud } from "./ui/characterhud";
+import { FootHud, type CompassMark } from "./ui/foothud";
 import { poseData } from "./cockpit/controls";
 import { GEARS } from "./gear";
 import { ControlTravel, controlStates } from "./cockpit/state";
@@ -2338,6 +2339,34 @@ async function main() {
       : null;
   };
   let localMapAt = 0;
+  // the on-foot HUD (ui/foothud.ts, PLAN-MODES-AAA M5): the compass, the place, the minimap
+  const footHud = new FootHud({
+    place: () => camera.character.place(),
+    craft: () => flightHud.ground.localPlace?.()?.vessel ?? null,
+    marks: () => {
+      const ch = camera.character;
+      const out: CompassMark[] = [];
+      const time = camera.nowTime();
+      const sky = (id: string, label: string, col: string) => {
+        if (id === ch.body || !solarBody(id)) return;
+        const a = ch.skyAzEl(ourState(id, time).pos);
+        if (a) out.push({ id, label, az: a.az, col, below: a.el < 0 });
+      };
+      sky("sun", t("SUN"), "#ffe08a");
+      if (ch.body === "earth") sky("moon", t("MOON"), "#dfe6f0");
+      if (settings.target !== "sun" && settings.target !== "moon")
+        sky(settings.target, (BODY_NAMES[settings.target] ?? settings.target).toUpperCase(), "#7cd6ff");
+      return out;
+    },
+    local: () => {
+      const p = flightHud.ground.localPlace?.();
+      return p ? { ...p, ...(p.body === "earth" && p.contact ? {} : flightHud.ground.atlas(p.body)) } : null;
+    },
+    bodyName: (id) => BODY_NAMES[id as Target] ?? id,
+    openMap: () => {
+      if (!flightHud.mapView) flightHud.toggleMapView();
+    },
+  });
 
   // the flight computer, over the full-screen map (ui/fc/computer.ts)
   let openMissions = () => {};
@@ -4332,6 +4361,8 @@ async function main() {
     // what the renderer draws of the flight (the ship, its flames, the predicted path) — an offline job
     // or a video holds its own
     characterHud.update(now);
+    footHud.show(camera.character.active && !flightHud.mapView);
+    footHud.update(now);
     sceneryHitboxes.update(
       now,
       camera.character,

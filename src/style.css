@@ -2787,7 +2787,62 @@ body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right));
 .character-touch { display: none; gap: 6px; margin-top: 8px; touch-action: none; }
 @media (pointer: coarse) { .on-foot .character-touch { display: flex; justify-content: center; } .character-controls { display: none; } .character-hud { left: 12px; bottom: max(12px, env(safe-area-inset-bottom)); } }
 
-.on-foot .character-hud { bottom: auto; top: max(68px, env(safe-area-inset-top)); }
+.on-foot .character-hud { bottom: auto; top: max(128px, env(safe-area-inset-top)); }
+
+/* ---- the on-foot HUD (ui/foothud.ts, PLAN-MODES-AAA M5): the compass under the top bar, the place bottom left,
+   the minimap bottom right */
+.fh { position: fixed; inset: 0; pointer-events: none; z-index: 23; font-family: var(--hud-font); color: var(--hud-text); }
+.fh[hidden], .hide-ui .fh, .map-open .fh, body.photo .fh { display: none; }
+.fh-compass { position: absolute; top: 62px; left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); height: 58px; }
+body.topbar-hidden .fh-compass { top: 26px; }
+.fh-card {
+  position: absolute; left: 24px; bottom: max(24px, env(safe-area-inset-bottom)); min-width: 250px; padding: 10px 14px 11px;
+  background: linear-gradient(180deg, rgba(9, 14, 25, 0.86), rgba(6, 10, 18, 0.8)); border: 1px solid var(--hud-edge); border-radius: 3px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+.fh-card::before { content: ""; position: absolute; top: 3px; right: 3px; width: 10px; height: 10px; border: 1px solid var(--hud-edge-hi); border-left: 0; border-bottom: 0; }
+.fh-row { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; line-height: 1.55; }
+.fh-row[hidden] { display: none; }
+.fh-row span { font: 700 10.5px var(--hud-font); letter-spacing: 0.18em; color: var(--hud-dim); }
+.fh-row b { font: 600 12.5px var(--mono); color: #fff; font-variant-numeric: tabular-nums; }
+.fh-world { margin-bottom: 4px; padding-bottom: 5px; border-bottom: 1px solid rgba(160, 210, 255, 0.12); }
+.fh-world b { font: 700 12px var(--hud-font); letter-spacing: 0.12em; color: var(--hud-amber); }
+.fh-craft b { color: #ffc85a; }
+.fh-mini {
+  position: absolute; right: 24px; bottom: max(24px, env(safe-area-inset-bottom)); width: 196px; height: 196px; border-radius: 50%;
+  overflow: hidden; pointer-events: auto; cursor: pointer; background: #182b2a;
+  border: 2px solid rgba(160, 210, 255, 0.35); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), inset 0 0 22px rgba(0, 0, 0, 0.55);
+}
+.fh-spin { position: absolute; left: 50%; top: 50%; width: 280px; height: 280px; margin: -140px 0 0 -140px; will-change: transform; }
+.fh-spin .local-ground-map { pointer-events: none; }
+.fh-spin .local-ground-map > div { display: none; }
+/* (the north on the rim: the spinning disc's top, kept upright) */
+.fh-north {
+  position: absolute; left: 50%; top: 50px; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%;
+  font: 700 11px var(--hud-font); color: #fff; background: rgba(220, 70, 50, 0.92); box-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
+}
+/* the walker: an arrow at the centre, the way one looks up */
+.fh-me {
+  position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform: translate(-50%, -60%);
+  border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 18px solid #63dce8;
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.8));
+}
+.fh-zoombtns { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 4px; }
+.fh-zb {
+  all: unset; box-sizing: border-box; cursor: pointer; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+  font: 700 15px var(--hud-font); color: #fff; background: rgba(6, 11, 20, 0.78); border: 1px solid rgba(160, 210, 255, 0.35);
+}
+.fh-zb:hover { background: rgba(20, 40, 64, 0.95); }
+.fh-zoom { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); font: 600 10px var(--mono); color: rgba(230, 240, 252, 0.8); text-shadow: 0 0 3px #000; }
+@media (max-width: 800px), (pointer: coarse) {
+  .fh-mini { width: 132px; height: 132px; right: 12px; }
+  .fh-spin { width: 188px; height: 188px; margin: -94px 0 0 -94px; }
+  .fh-north { top: 32px; }
+  .fh-card { left: 12px; min-width: 0; padding: 7px 10px; }
+  .fh-agl, .fh-speed { display: none; }
+}
+/* (walking, the old card's status says no more than the place: its keys and the board button stay) */
+.on-foot .character-status { display: none; }
 
 .local-ground-map { position:absolute; inset:0; overflow:hidden; background:#182b2a; }
 .local-ground-map[hidden] {display:none;}

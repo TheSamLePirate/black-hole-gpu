@@ -85,4 +85,15 @@ export default {
   "FLAPS UP": "VOLETS 0",
   "FLAPS ½": "VOLETS ½",
   "FLAPS FULL": "VOLETS PLEINS",
+  // the on-foot HUD (PLAN-MODES-AAA M5)
+  SUN: "SOLEIL",
+  MOON: "LUNE",
+  ALT: "ALT",
+  GROUND: "SOL",
+  HEADING: "CAP",
+  CRAFT: "APPAREIL",
+  "Zoom in": "Zoomer",
+  "Zoom out": "Dézoomer",
+  "The ground around you, the way you look upward — wheel: zoom · click: the full map (M)":
+    "Le sol autour de vous, la direction regardée vers le haut — molette : zoom · clic : la carte complète (M)",
 } satisfies Record<string, string>;

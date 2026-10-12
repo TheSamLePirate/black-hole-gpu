@@ -578,6 +578,22 @@ la densité 2 (`density < 2` dans `drawHud`).
     et les menus (`.fl-root[data-view="bare"]`) ;
   - les effets de vitesse restent dans toutes les vues.
 
+#### 6.3 ter Le HUD à pied (`ui/foothud.ts`, PLAN-MODES-AAA M5)
+
+Sur tout monde solide, quand on marche (et la carte complète fermée) :
+
+- **la boussole** sous la barre du haut : un ruban de cap de 120°, gradué tous les 5°, les points cardinaux
+  nommés ; l’appareil posé (or, avec sa distance), le Soleil, la Lune (sur Terre) et la cible à leurs azimuts
+  (`character.skyAzEl`), creux sous l’horizon, épinglés au bord quand ils sont hors du ruban ;
+- **la place**, en bas à gauche : le monde, la latitude et la longitude, l’altitude au-dessus du niveau de
+  référence et du sol, la vitesse, le cap, la distance et la direction de l’appareil (`character.place()`,
+  `game/geo.ts`) ;
+- **la minicarte**, en bas à droite : un disque de la carte locale (`LocalGroundMap` en mode `minimal` : le décor
+  de la Terre, le planisphère des autres mondes via `GroundTrack.atlas`), tourné avec la vue (la direction
+  regardée en haut), le nord sur son bord, l’appareil dessus ; la molette et ses + et − zooment (8 à 20), un
+  clic ouvre la carte complète (M). Son image n’est redessinée que si le marcheur bouge de quelques pixels ou
+  si elle zoome ; la rotation est celle du navigateur.
+
 #### 6.4 Les instruments
 
 - **Marqueurs dans la vue** (`drawHud`). La projection reprend celle de la caméra : x = d·x/(d·z ·

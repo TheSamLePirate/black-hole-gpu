@@ -8,7 +8,7 @@ The plan, the request and the user's choices: [PLAN-MODES-AAA.md](../PLAN-MODES-
 | M2 TARS everywhere | done |
 | M3 Pause → offline capture everywhere | done |
 | M4 Ship HUD in chase and dorsal, three HUDs | done |
-| M5 On-foot HUD | to do |
+| M5 On-foot HUD | done |
 | M6 The Atlas: maps, POIs, placement, geocoding | to do |
 | M7 Tripod and sky events from the view | to do |
 | M8 Photo mode: renders and animations | to do |
@@ -303,3 +303,48 @@ bun run e2e --remote modes a11y s5 photo-fps place eclipses metar music-panel bh
 7. **⇧²:** automatic → Atmosphere → Space → Approach → automatic, a toast each time. The chip is lit while forced.
 8. **Speed effects:** in the cockpit, a fast low pass still streaks.
 9. **TARS:** "mets le HUD d'approche", then "remets le HUD automatique".
+
+## M5. On-foot HUD
+
+### What changed
+
+- **`src/ui/foothud.ts`**, shown on every solid world while walking (the full map closed).
+- **The compass**, under the top bar:
+  - a 120° heading tape, ticks every 5°, the cardinal points named, the north in red;
+  - the view's heading boxed;
+  - the landed craft (gold, with its distance), the Sun, the Moon (on Earth) and the target at their azimuths,
+    hollow below the horizon, pinned at the tape's end when beyond it (`character.skyAzEl`).
+- **The place**, bottom left: the world, the latitude and longitude, the height above the datum and above the
+  ground, the speed (m/s and km/h), the heading, the craft's distance and direction.
+- **The minimap**, bottom right:
+  - a disc of the local map, heading-up: the Earth's scenery, the other worlds' planispheres;
+  - the north on its rim, the craft on it, the walker an arrow at its centre;
+  - the wheel and its + and − buttons zoom it (8 to 20); a click opens the full map (M);
+  - its picture is redrawn only when the walker moves a few pixels on it or it zooms.
+- **New:** `character.skyAzEl`, `LocalGroundMap.minimal` and `metresPerPixel()`, `GroundTrack.atlas(body)`.
+- **The old exploration card** keeps its keys and its board button, below the compass; its status line goes (the
+  place says it).
+- **Phones:** a smaller minimap, a shorter card.
+
+### Tests
+
+- **Unit:** `tests/foothud.test.ts` (the tape's ticks, the marks on it, the distances).
+- **e2e (Macs):** `modes.e2e.test.ts` on the Moon checks the HUD shown, the craft's distance, and the minimap's +.
+
+### Manual tests to do (on the Mac)
+
+1. **On the Moon, out of the Lander.**
+   - The compass: N, NE…, the CRAFT mark with its distance. Turn the view: the tape scrolls, the box reads the
+     heading.
+   - The Earth's mark where the Earth hangs in the sky, the Sun's where the Sun is (hollow when below the horizon).
+2. **The place.** MOON · latitude and longitude, ALT, SOL, the speed while running, CAP, the craft's distance
+   growing as you walk away and its direction pointing back to it.
+3. **The minimap.**
+   - Turn the view: the map turns, the N on the rim moves, the arrow stays up.
+   - Walk: the ground scrolls under the arrow.
+   - The + and − buttons and the wheel zoom.
+   - A click opens the full map; Esc closes it and the HUD comes back.
+4. **On Earth** (a forest, a city): the minimap shows the streamed scenery (buildings, roads, water) around you.
+5. **Mars, a Gargantua world:** the planisphere or the graticule. The Sun mark is absent on Gargantua's side.
+6. **H hides everything.** The photo mode hides the HUD.
+7. **A phone:** the smaller minimap, nothing over the touch controls.

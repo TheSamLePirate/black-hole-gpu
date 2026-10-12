@@ -179,6 +179,11 @@ export class GroundTrack {
     this.record(id, q, t);
   }
 
+  /** A body's planisphere for a map of its own (the on-foot minimap): the image, or why not yet. */
+  atlas(body: string): { surface: HTMLCanvasElement | null; surfaceStatus: "ready" | "loading" | "unavailable" } {
+    const tex = this.texture(body);
+    return { surface: tex?.img ?? null, surfaceStatus: tex ? "ready" : this.tex.get(body) === "loading" ? "loading" : "unavailable" };
+  }
   drawLocal(place: LocalPlace) {
     this.canvas.style.visibility = "hidden";
     this.read.hidden = this.tag.hidden = true;

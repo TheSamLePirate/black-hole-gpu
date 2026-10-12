@@ -22,6 +22,8 @@ export class LocalGroundMap {
   private ctx = this.canvas.getContext("2d")!;
   private label = document.createElement("div");
   zoom = 18;
+  /** a minimap's (the on-foot HUD's): no scale bar, the body change keeps the zoom it was given */
+  minimal = false;
   private cpuMs = 0;
   private pan = [0, 0];
   private body = "";
@@ -89,6 +91,10 @@ export class LocalGroundMap {
     this.draw();
     return this.zoom;
   }
+  /** the metres a CSS pixel covers now */
+  metresPerPixel() {
+    return metresPerMapPixel(this.place?.lat ?? 0, this.zoom, this.place?.radiusM);
+  }
   state() {
     return {
       active: !this.root.hidden && this.root.getClientRects().length > 0,
@@ -106,7 +112,7 @@ export class LocalGroundMap {
   update(place: LocalPlace) {
     if (place.body !== this.body) {
       this.body = place.body;
-      this.zoom = 18;
+      if (!this.minimal) this.zoom = 18;
       this.pan = [0, 0];
     }
     this.place = place;
@@ -285,12 +291,14 @@ export class LocalGroundMap {
     if (p.vessel) mark(p.vessel.lat, p.vessel.lon, "#e6b66b");
     mark(p.lat, p.lon, "#63dce8");
     const scale = 10 ** Math.floor(Math.log10(100 * mpp));
-    ctx.fillStyle = "rgba(8,21,27,.85)";
-    ctx.fillRect(12, H - 46, Math.max(155, scale / mpp + 16), 32);
-    ctx.fillStyle = "white";
-    ctx.font = "12px monospace";
-    ctx.fillText(`N ↑   ${scale >= 1000 ? `${scale / 1000} km` : `${scale} m`}`, 20, H - 30);
-    ctx.fillRect(20, H - 20, scale / mpp, 2);
+    if (!this.minimal) {
+      ctx.fillStyle = "rgba(8,21,27,.85)";
+      ctx.fillRect(12, H - 46, Math.max(155, scale / mpp + 16), 32);
+      ctx.fillStyle = "white";
+      ctx.font = "12px monospace";
+      ctx.fillText(`N ↑   ${scale >= 1000 ? `${scale / 1000} km` : `${scale} m`}`, 20, H - 30);
+      ctx.fillRect(20, H - 20, scale / mpp, 2);
+    }
     this.root.dataset.body = p.body;
     this.root.dataset.source = c || p.surface ? "ready" : (p.surfaceStatus ?? "unavailable");
     this.root.dataset.zoom = String(this.zoom);

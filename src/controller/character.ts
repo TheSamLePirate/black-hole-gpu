@@ -19,7 +19,7 @@ import { t } from "../i18n";
 import { capsuleInHull, hullDistance, outOfHull, placeHull, type VesselHull } from "./vessel-hull";
 import { damp, fbm, Spring3, type V3 } from "../cine/rig";
 import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
-import { azimuthDeg } from "../game/geo";
+import { azimuthDeg, localAxes } from "../game/geo";
 
 /** a jump asked this long before the feet touch down is still made on landing [s] */
 export const JUMP_BUFFER_S = 0.15;
@@ -814,6 +814,20 @@ export class PlanetCharacter {
       viewDeg: azimuthDeg(up, look),
       speedMs: this.speed,
     };
+  }
+  /**
+   * Where a point of our universe stands in the walker's sky (home frame, its position [M]): its azimuth from the
+   * north and its elevation above the local horizontal [°] — the compass's marks (the Sun, the Moon, the target).
+   * Null: walking on Gargantua's side (another sky), or not walking.
+   */
+  skyAzEl(P: Vec3): { az: number; el: number } | null {
+    if (!this.active || !this.ours) return null;
+    const up = this.up();
+    const { east, north } = localAxes(up);
+    const W = this.world(this.q);
+    const dir = unit(sub(P, W));
+    const [e, n, u] = [east, north, up].map((v) => dot(dir, this.worldVector(v as Vec3)));
+    return { az: ((Math.atan2(e!, n!) * 180) / Math.PI + 360) % 360, el: (Math.asin(Math.max(-1, Math.min(1, u!))) * 180) / Math.PI };
   }
   state() {
     return {

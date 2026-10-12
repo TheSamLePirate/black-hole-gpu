@@ -67,6 +67,12 @@ describe.skipIf(!E2E)("the four modes and the top bar", () => {
     expect(await mode()).toBe("foot");
     expect(await app.js<boolean>("__bh.camera.character.active")).toBe(true);
     await app.waitFor(`/°/.test(document.querySelector("[data-testid=topbar-context]")?.textContent ?? "")`, 5_000);
+    // (the on-foot HUD — M5: the compass, the place with the craft's distance, the minimap zoomed by its +)
+    await app.waitFor(`!document.querySelector("[data-testid=foot-hud]").hidden`, 3_000);
+    await app.waitFor(`/\\d+ m/.test(document.querySelector(".fh-craft b")?.textContent ?? "")`, 3_000);
+    const z0 = await app.js<string>(`document.querySelector(".fh-zoom").textContent`);
+    await app.click(".fh-zb");
+    expect(await app.js<string>(`document.querySelector(".fh-zoom").textContent`)).not.toBe(z0);
     // (TARS on foot — M2: F6 opens his console; his state has the walker's place and the craft's distance)
     await app.press("F6", "F6");
     await app.waitFor(`!!document.querySelector(".tars-panel:not([hidden])")`, 3_000);
