@@ -78,6 +78,8 @@ export class PlanetCharacter {
   surface: (body: string, q: Vec3) => boolean | null = () => true;
   /** the flown vessel's box in its own frame (x left, y up, z nose) [m]: the renderer's mesh, gear out; null: unknown */
   hullBounds: () => { lo: Vec3; hi: Vec3 } | null = () => null;
+  /** a stone of the living ground in the way of the capsule at q (radius [m]) — the renderer's (its boulders) */
+  obstacles: (q: Vec3, radius: number) => boolean = () => false;
   onEvent: (kind: string, detail: string) => void = () => {};
   lastError: string | null = null;
   cpuMs = 0;
@@ -551,7 +553,8 @@ export class PlanetCharacter {
     }
     let target = add(this.q, this.velocity, dt);
     const contact = this.ours && this.body === "earth" ? this.contact() : null;
-    const free = (q: Vec3) => !contact?.at(q).blocked && this.surface(this.body, q) !== false && !this.vesselBlocked(q);
+    const free = (q: Vec3) =>
+      !contact?.at(q).blocked && this.surface(this.body, q) !== false && !this.vesselBlocked(q) && !(contact && this.obstacles(q, 0.3));
     if (!free(target)) {
       // Slide along one tangent component when the full capsule step hits a facade, a trunk or the hull.
       target = this.q;

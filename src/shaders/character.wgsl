@@ -254,8 +254,12 @@ struct G {
   trample:vec4f,
   // the levels: until 0, until 1 [m], capacity 0, capacity 1; capacity 2, first instance 1, first instance 2, unused
   lods:vec4f, lods2:vec4f,
+  // the stones' lattice (ground-stones.ts): its first point (i, j: whole), its points a side, its spacing [m]
+  stone:vec4f,
   // per kind of vegetation five vec4 (grass-layout.ts packVegetation)
   kinds:array<vec4f,40>,
+  // per kind the stones lying there: (density, size, moss, 0) (ground-stones.ts packStones)
+  stoneKinds:array<vec4f,8>,
 };
 @group(0) @binding(13) var<uniform> g:G;
 @group(0) @binding(14) var<storage,read> grassCells:array<u32>;
@@ -517,4 +521,74 @@ fn bezierTangent(p0:vec3f,p1:vec3f,p2:vec3f,p3:vec3f,t:f32)->vec3f{let s=1-t;ret
  let ao=mix(.22,1.0,pow(t,.7));
  let ambient=albedo/PI*ambientIrradiance(n)*ao+envSpecular(reflect(-eye,n),.5)*.03*ao;
  var o:Out;o.color=vec4f((direct+ambient)*u.image.w*coverage,coverage);o.occluder=vec4f(length(v.p)*coverage,coverage,0,coverage);return o;
+}
+
+// ======================================================================== the stones
+// Stones on the living ground (ground-stones.ts): a world-fixed lattice round the astronaut, a stone kept by its
+// kind's density (more on steep ground), most of them pebbles; a squashed, turned, faceted lump sunk into the
+// ground, coloured from the satellite greyed towards rock, moss on the top of the damp ones. Drawn opaque
+// before the grass, lit as it is.
+// a stone: (its root in the camera's axes [m], radius [m]), (turn [rad], squash, seed, moss), (colour: rgb
+// linear, the trees' shade on it)
+struct Stone { a:vec4f, b:vec4f, c:vec4f };
+@group(0) @binding(21) var<storage,read_write> stonesOut:array<Stone>;
+@group(0) @binding(22) var<storage,read> stonesIn:array<Stone>;
+@compute @workgroup_size(8,8) fn stonesGrow(@builtin(global_invocation_id) id:vec3u){
+ let n=u32(g.stone.z);if(id.x>=n||id.y>=n||g.grid.w<.5){return;}
+ let gi=i32(g.stone.x)+i32(id.x);let gj=i32(g.stone.y)+i32(id.y);let sp=g.stone.w;
+ let x=(f32(gi)+hash2(gi,gj,31u))*sp;let z=(f32(gj)+hash2(gi,gj,32u))*sp;
+ if(length(vec2f(x,z)-g.walker.xz)>g.origin.w){return;}
+ let k=cellAt(x,z)>>24u;if(k==0u||k>7u){return;}
+ let S=g.stoneKinds[k];
+ // (steep ground: scree, outcrops)
+ let h0=groundHeight(x,z);
+ let slope=length(vec2f(groundHeight(x+.5,z)-groundHeight(x-.5,z),groundHeight(x,z+.5)-groundHeight(x,z-.5)));
+ if(hash2(gi,gj,33u)>=S.x*(1+4*smoothstep(.35,.9,slope))){return;}
+ // (the vessel's box: none under it)
+ if(g.hullAxis.w>.5){let q=vec2f(x,z)-g.hull.xy;let a=g.hullAxis.xy;if(abs(dot(q,a))<g.hull.z&&abs(q.x*a.y-q.y*a.x)<g.hull.w){return;}}
+ let r=S.y*(.04+.66*pow(hash2(gi,gj,34u),4.0));
+ let root=frameToCamera(x,h0-r*.35,z);
+ if(root.z<-r*2||abs(root.x)>root.z*u.view.x+r*2+.2||abs(root.y)>root.z*u.view.y+r*2+.2){return;}
+ // its colour: the ground's from the satellite, greyed towards a rock's, a stone's own shade
+ let ground=srgbLinear(vec3f(f32(cellAt(x,z)&255u),f32((cellAt(x,z)>>8u)&255u),f32((cellAt(x,z)>>16u)&255u))/255);
+ // (a rock's albedo, dark basalt to pale limestone, ~0.07 … 0.24; the soil's hue on it — the dust, the lichens)
+ let rock=vec3f(.13,.122,.112)*mix(.55,1.8,pow(hash2(gi,gj,35u),1.6));
+ // (not the green of the grass round it: a vegetated ground's hue left to the plants)
+ let hue=clamp(ground/max(luma(ground),1e-3),vec3f(.5),vec3f(1.6));
+ let green=smoothstep(0.0,.35,hue.g-max(hue.r,hue.b));
+ let colour=rock*mix(vec3f(1),hue,.45*(1-green));
+ let at=atomicAdd(&commands[3].instances,1u);if(at>=u32(g.lods2.w)){return;}
+ stonesOut[at]=Stone(vec4f(root,r),vec4f(hash2(gi,gj,36u)*6.28318,mix(.45,.85,hash2(gi,gj,37u)),hash2(gi,gj,38u),S.z*hash2(gi,gj,39u)),
+  vec4f(colour,sceneryShadeAt(x,z)));
+}
+// (the draw's count clamped to the capacity: the atomic counted past it)
+@compute @workgroup_size(1) fn stonesClamp(){
+ atomicMin(&commands[3].instances,u32(g.lods2.w));
+}
+struct SV { @builtin(position) clip:vec4f, @location(0) p:vec3f, @location(1) up:f32, @location(2) @interpolate(flat) i:u32 };
+@vertex fn stoneVs(@location(0) unit:vec3f,@builtin(instance_index) i:u32)->SV{
+ let s=stonesIn[i];
+ // a lump: the sphere pushed in and out by its own seed, squashed, turned about the frame's up
+ let seed=s.b.z*97.0;
+ let bump=1+.28*sin(unit.x*3.1+seed)*sin(unit.y*2.7+seed*1.7)*sin(unit.z*3.3+seed*2.3)+.12*sin(unit.x*7.0+unit.z*5.0+seed*3.1);
+ let q=unit*bump*vec3f(1,s.b.y,1);
+ let c=cos(s.b.x);let sn=sin(s.b.x);let l=vec3f(q.x*c-q.z*sn,q.y,q.x*sn+q.z*c)*s.a.w;
+ var o:SV;o.p=s.a.xyz+g.gright.xyz*l.x+g.gup.xyz*l.y+g.gforward.xyz*l.z;o.clip=project(o.p);o.up=q.y;o.i=i;
+ return o;
+}
+@fragment fn stoneFs(v:SV)->Out{
+ let pixel=vec2u(v.clip.xy);let at=min(pixel.y,u32(u.image.y)-1u)*u32(u.image.x)+min(pixel.x,u32(u.image.x)-1u);
+ if(moments[at].y*u.image.z<length(v.p)-.03){discard;}
+ let s=stonesIn[v.i];
+ // faceted: the face's own normal
+ var n=normalize(cross(dpdx(v.p),dpdy(v.p)));let eye=normalize(-v.p);if(dot(n,eye)<0){n=-n;}
+ let up=normalize(g.gup.xyz);
+ // moss on the top, where it is damp; the ground's dark line where it meets the soil
+ var albedo=mix(s.c.rgb,vec3f(.05,.075,.025),s.b.w*smoothstep(.15,.6,dot(n,up))*smoothstep(-.1,.4,v.up));
+ albedo*=mix(.55,1.0,smoothstep(-.35,.1,v.up));
+ let L=normalize(u.sun.xyz);let vis=shadowAt(v.p,n)*s.c.w*shipShadowAt(v.p);
+ let nl=max(dot(n,L),0);
+ let direct=(albedo/PI*nl+ggx(n,eye,L,.7,vec3f(.04))*nl)*keyIrradiance()*vis;
+ let ambient=albedo/PI*ambientIrradiance(n)*mix(.5,1.0,smoothstep(-.35,.3,v.up));
+ var o:Out;o.color=vec4f((direct+ambient)*u.image.w,1);o.occluder=vec4f(length(v.p),1,0,1);return o;
 }

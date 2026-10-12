@@ -56,6 +56,24 @@ export class GrassGround {
     return add(add(f.origin, f.right, x), f.forward, z);
   }
 
+  /** The cell nearest a frame point (kind << 24 | sRGB; 0 outside the grid) — character.wgsl cellAt's. */
+  cellAt(x: number, z: number): number {
+    const i = Math.floor(x + 0.5) - (this.centre[0] - HALF),
+      j = Math.floor(z + 0.5) - (this.centre[1] - HALF);
+    return i < 0 || j < 0 || i >= GRASS_GRID || j >= GRASS_GRID ? 0 : this.cells[j * GRASS_GRID + i]!;
+  }
+  /** The ground's height at a frame point [m along up], bilinear — character.wgsl groundHeight's. */
+  heightAt(x: number, z: number): number {
+    const qx = x - (this.centre[0] - HALF),
+      qz = z - (this.centre[1] - HALF);
+    const i = Math.min(Math.max(Math.floor(qx), 0), GRASS_GRID - 2),
+      j = Math.min(Math.max(Math.floor(qz), 0), GRASS_GRID - 2);
+    const fx = Math.min(Math.max(qx - i, 0), 1),
+      fz = Math.min(Math.max(qz - j, 0), 1);
+    const h = this.heights,
+      k = j * GRASS_GRID + i;
+    return (h[k]! * (1 - fx) + h[k + 1]! * fx) * (1 - fz) + (h[k + GRASS_GRID]! * (1 - fx) + h[k + GRASS_GRID + 1]! * fx) * fz;
+  }
   /**
    * One slice of the work round the astronaut at q (up: the body's there): a new frame far from the last,
    * a grid recentred when he leaves its middle, rebuilt when the ground's data change (revision).

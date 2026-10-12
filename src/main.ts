@@ -722,6 +722,7 @@ async function main() {
   camera.character.terrainRevision = () => renderer.earthTiles.stamp;
   camera.character.surface = (body, q) => body !== "earth" || renderer.earthLandAt(q);
   camera.character.hullBounds = () => renderer.ship.hullBound(settings.vessel);
+  camera.character.obstacles = (q, r) => renderer.characterRenderer.stoneBlocks(q, r);
   camera.character.onEvent = (to, detail) => tarsEvent({ kind: "character", to, detail });
   const tarsEvent = (e: GameEvent) => {
     const rules = tarsTriggers.match(e);

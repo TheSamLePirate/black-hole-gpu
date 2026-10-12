@@ -78,6 +78,12 @@ Légende : ✅ fait et vérifié ici (unitaires, typecheck, WGSL, validation Web
   réfléchi marché sur le vrai relief (montagnes, ~25 km) et à travers la forêt du rivage, éclairé et voilé
   par la distance, mêlé au ciel par Fresnel. `check-wgsl` compile aussi le traceur des petits appareils (sans
   décor, sans textures de surface).
+- **Pierres (D1)** : un réseau fixe dans le monde autour de l’astronaute (0,9 m, 24 m de rayon) pose des pierres
+  selon le type du sol (éboulis et sol nu le plus, sous-bois et mousse un peu, prairie quelques-unes, aucune sur
+  routes, eau, bâtiments ; davantage en pente) : surtout des cailloux, quelques blocs (taille à la puissance 4),
+  facettées, aplaties, tournées, enfoncées, grises teintées du sol, moussues sur le dessus en sous-bois ;
+  éclairées comme l’herbe (sonde, ombres), dessinées avant l’herbe. Les blocs de plus de 20 cm arrêtent la
+  marche (le CPU refait le choix du GPU, même hachage). Les arbustes (D2) restent à faire.
 
 ## Tests à faire sur les Macs
 
@@ -141,5 +147,8 @@ noter `withTrees` contre `without` (le coût du décor, arbres et ombres compris
 10. **Lacs** : Moraine Lake, le Riffelsee (le Cervin dans l’eau), le lac Kawaguchi (le Fuji), un lac des Vosges
     bordé de sapins : le relief et les arbres reflétés à leur place, plus nets par temps calme ; une rivière un
     peu plus ridée ; la mer inchangée (houle, moutons).
-11. **Réseau** : couper le Wi-Fi 2 s en survolant le Bourget à basse altitude puis le rétablir : les pages
+11. **Pierres** : marcher sur un éboulis (Alpes, Dolomites) et dans un sous-bois : pierres posées dans le sol, pas
+    flottantes, mousse sur le dessus des pierres du sous-bois, aucune sur une route ; buter contre un bloc
+    (arrêt net, contournement possible), enjamber les cailloux.
+12. **Réseau** : couper le Wi-Fi 2 s en survolant le Bourget à basse altitude puis le rétablir : les pages
    satellite manquantes reviennent seules (≤ 1 min).

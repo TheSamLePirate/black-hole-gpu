@@ -2,6 +2,7 @@ import type { GpuProfiler } from "./gpuprof";
 import { AstronautModel } from "./character-model";
 import shader from "./shaders/character.wgsl" with { type: "text" };
 import { withForest } from "./forest-shader";
+import { bouldersNear, packStones, STONE_CAPACITY, STONE_LATTICE, STONE_SPACING, STONE_VERTICES, stoneMesh } from "./ground-stones";
 import type { Vec3 } from "./physics";
 import type { CharacterFrame, PlanetCharacter } from "./controller/character";
 import type { SceneryContact } from "./system/scenery-contact";
@@ -66,8 +67,11 @@ const U_PARTS = 9,
   U_PROBE = 79,
   U_SHIP = 82;
 /** the grass's uniform's vec4s (character.wgsl G): 16 figures, then the kinds' table */
-const GRASS_FIGURES = 16;
-const GRASS_VEC4S = GRASS_FIGURES + VEGETATION.length * VEGETATION_VEC4S;
+const GRASS_FIGURES = 17;
+/** the figures, the kinds' table, the stones' table (character.wgsl G) */
+const GRASS_VEC4S = GRASS_FIGURES + VEGETATION.length * VEGETATION_VEC4S + VEGETATION.length;
+/** a stone's bytes (character.wgsl Stone: three vec4) */
+const STONE_BYTES = 48;
 /** the occluder's format: distance [m] × coverage, coverage (ship.wgsl reads it as the station's) */
 const OCCLUDER: GPUTextureFormat = "rg16float";
 /** the levels' first instances in the one blade buffer, and its capacity */
@@ -125,6 +129,13 @@ export class CharacterRenderer {
   private grassTrample: GPUComputePipeline;
   private grassBlades: GPUComputePipeline;
   private grassClamp: GPUComputePipeline;
+  // the stones (ground-stones.ts): grown each frame on the lattice, drawn before the grass
+  private stonesGrow: GPUComputePipeline;
+  private stonesClamp: GPUComputePipeline;
+  private stoneDraw: GPURenderPipeline;
+  private stones: GPUBuffer;
+  private stoneMesh: GPUBuffer;
+  private stoneCount = 0;
   private grassUniform: GPUBuffer;
   private grassCells: GPUBuffer;
   private grassHeights: GPUBuffer;
@@ -142,7 +153,7 @@ export class CharacterRenderer {
   /** the per-frame arrays, reused: the uniforms, the draws' reset, the kinds' table (constant) */
   private uData = new Float32Array(UNIFORM_VEC4S * 4);
   private gData = new Float32Array(GRASS_VEC4S * 4);
-  private drawReset = new Uint32Array(GRASS_LODS.flatMap((l) => [l.segments * 6, 0, 0, 0]));
+  private drawReset = new Uint32Array([...GRASS_LODS.flatMap((l) => [l.segments * 6, 0, 0, 0]), STONE_VERTICES, 0, 0, 0]);
   private bladeCounts = [0, 0, 0];
   private grassOn = false;
   /** the lattice's points a side this frame */
@@ -178,8 +189,12 @@ export class CharacterRenderer {
     this.blades = buffer(BLADE_CAPACITY * GRASS_INSTANCE_BYTES, S, "grass blades");
     this.shade = buffer(GRASS_LIGHT_GRID * GRASS_LIGHT_GRID * 4, S, "grass shade");
     this.trample = buffer(TRAMPLE_GRID * TRAMPLE_GRID * 16, S | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC, "grass footprints");
-    this.commands = buffer(48, S | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC, "grass draws");
-    this.countsStage = buffer(48, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
+    this.commands = buffer(64, S | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC, "grass and stones draws");
+    this.countsStage = buffer(64, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
+    this.stones = buffer(STONE_CAPACITY * STONE_BYTES, S, "stones");
+    const mesh = stoneMesh();
+    this.stoneMesh = buffer(mesh.byteLength, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST, "stone mesh");
+    d.queue.writeBuffer(this.stoneMesh, 0, mesh);
     GRASS_LODS.forEach((l, i) => {
       const b = buffer(16, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
       d.queue.writeBuffer(b, 0, new Uint32Array([i, l.segments, LOD_FIRST[i]!, 0]));
@@ -234,6 +249,13 @@ export class CharacterRenderer {
       });
     this.grassDraw = grassPipe(true);
     this.grassDrawFar = grassPipe(false);
+    this.stoneDraw = d.createRenderPipeline({
+      layout: "auto",
+      vertex: { module: this.module, entryPoint: "stoneVs", buffers: [vertex] },
+      fragment: { module: this.module, entryPoint: "stoneFs", targets: targets() },
+      primitive: { topology: "triangle-list", cullMode: "none" },
+      depthStencil,
+    });
     const skinVertex: GPUVertexBufferLayout = {
       arrayStride: 84,
       attributes: [
@@ -287,6 +309,8 @@ export class CharacterRenderer {
     this.grassTrample = compute("grassTrample");
     this.grassBlades = compute("grassBlades");
     this.grassClamp = compute("grassClamp");
+    this.stonesGrow = compute("stonesGrow");
+    this.stonesClamp = compute("stonesClamp");
     this.shadow = d.createTexture({
       size: [512, 512],
       format: "depth32float",
@@ -296,6 +320,17 @@ export class CharacterRenderer {
     this.shadowView = this.shadow.createView();
     this.envSampler = d.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", addressModeU: "repeat" });
     this.gData.set(packVegetation(), GRASS_FIGURES * 4);
+    this.gData.set(packStones(), (GRASS_FIGURES + VEGETATION.length * VEGETATION_VEC4S) * 4);
+  }
+  /** A boulder in the way of a capsule at q (radius [m], 1.8 m tall): one taller than a step above its feet, as
+   *  drawn (ground-stones.ts bouldersNear) — the stones exist only while the living ground is on. */
+  stoneBlocks(q: Vec3, radius = 0.3, step = 0.25): boolean {
+    const g = this.grassGround;
+    if (!this.grassOn || !g.ready || !g.frame) return false;
+    const [x, y, z] = g.local(q);
+    return bouldersNear(g, x, z, radius + 0.8).some(
+      (b) => Math.hypot(b.x - x, b.z - z) < 0.8 * b.r + radius && b.top > y + step && b.base < y + 1.8,
+    );
   }
   stats() {
     return {
@@ -305,6 +340,7 @@ export class CharacterRenderer {
       /** the blades drawn (the last count read back, a few times a second): near, middle, far */
       blades: [...this.bladeCounts],
       roots: this.bladeCounts.reduce((a, b) => a + b, 0),
+      stones: this.stoneCount,
       maxRoots: BLADE_CAPACITY,
       lodCapacity: GRASS_LODS.map((l) => l.capacity),
       lattice: this.lattice,
@@ -462,7 +498,13 @@ export class CharacterRenderer {
     set(12, [Math.round(walker[0] / GRASS_LIGHT_CELL) - lc, Math.round(walker[2] / GRASS_LIGHT_CELL) - lc, GRASS_LIGHT_GRID, 1]);
     set(13, [TRAMPLE_CELL, TRAMPLE_GRID, Math.exp(-dt / TRAMPLE_RECOVERY_S), 0]);
     set(14, [GRASS_LODS[0].until, GRASS_LODS[1].until, GRASS_LODS[0].capacity, GRASS_LODS[1].capacity]);
-    set(15, [GRASS_LODS[2].capacity, LOD_FIRST[1]!, LOD_FIRST[2]!, 0]);
+    set(15, [GRASS_LODS[2].capacity, LOD_FIRST[1]!, LOD_FIRST[2]!, STONE_CAPACITY]);
+    set(16, [
+      Math.round(walker[0] / STONE_SPACING) - STONE_LATTICE / 2,
+      Math.round(walker[2] / STONE_SPACING) - STONE_LATTICE / 2,
+      STONE_LATTICE,
+      STONE_SPACING,
+    ]);
     this.d.queue.writeBuffer(this.grassUniform, 0, u);
     this.lattice = N;
   }
@@ -576,6 +618,9 @@ export class CharacterRenderer {
           return { buffer: this.blades };
         case 18:
           return { buffer: this.shade };
+        case 21:
+        case 22:
+          return { buffer: this.stones };
         case 19:
           return { buffer: this.trample };
         default:
@@ -646,10 +691,16 @@ export class CharacterRenderer {
       pass.setPipeline(this.grassClamp);
       pass.setBindGroup(0, group(this.grassClamp, "grass-clamp", [4, 13]));
       pass.dispatchWorkgroups(1);
+      pass.setPipeline(this.stonesGrow);
+      pass.setBindGroup(0, group(this.stonesGrow, "stones-grow", [0, 4, 13, 14, 15, 18, 21]));
+      pass.dispatchWorkgroups(Math.ceil(STONE_LATTICE / 8), Math.ceil(STONE_LATTICE / 8));
+      pass.setPipeline(this.stonesClamp);
+      pass.setBindGroup(0, group(this.stonesClamp, "stones-clamp", [4, 13]));
+      pass.dispatchWorkgroups(1);
       pass.end();
       // (the blades drawn, read back a few times a second — never waited for)
       if (!this.countsBusy && performance.now() - this.countsAt > 250) {
-        enc.copyBufferToBuffer(this.commands, 0, this.countsStage, 0, 48);
+        enc.copyBufferToBuffer(this.commands, 0, this.countsStage, 0, 64);
         readCounts = true;
       }
     }
@@ -674,6 +725,13 @@ export class CharacterRenderer {
       pass.setVertexBuffer(0, this.vertices);
       pass.setIndexBuffer(this.indices, "uint32");
       pass.drawIndexed(this.count, PARTS.length);
+    }
+    if (this.grassOn) {
+      // the stones first (opaque, their depth written: the grass stands round them)
+      pass.setPipeline(this.stoneDraw);
+      pass.setBindGroup(0, group(this.stoneDraw, "stones-draw", [0, 1, 5, 6, 9, 12, 13, 22]));
+      pass.setVertexBuffer(0, this.stoneMesh);
+      pass.drawIndirect(this.commands, 48);
     }
     if (this.grassOn) {
       // (far to near: the near blades' soft edges blend over the far ones; only the nearest level writes depth —
@@ -701,6 +759,7 @@ export class CharacterRenderer {
           const n = new Uint32Array(this.countsStage.getMappedRange().slice(0));
           this.countsStage.unmap();
           this.bladeCounts = [n[1]!, n[5]!, n[9]!];
+          this.stoneCount = Math.min(n[13]!, STONE_CAPACITY);
           done();
         }, done),
       done,
