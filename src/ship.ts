@@ -38,6 +38,8 @@ export interface ShipInstance {
 }
 
 export interface ShipView {
+  /** Camera translation near a walking observer needs a fresh map each frame. */
+  forceShadow?: boolean;
   /** the craft flown (its mesh, its thrusters) */
   vessel?: VesselId;
   /** the other craft in view */
@@ -1321,7 +1323,7 @@ export class ShipRenderer {
     }
     res.rect = [x0, y0, bw, bh];
     // (the self-shadowing, every other frame: the light turns slowly against the ship)
-    if (this.shadowTick++ % 2 === 0) {
+    if (v.forceShadow || this.shadowTick++ % 2 === 0) {
       const sp = enc.beginRenderPass(
         this.pass("ship: shadow map", {
           colorAttachments: [],

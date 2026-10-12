@@ -185,7 +185,7 @@ export class EarthSurface {
   }
 
   /** Camera on the physical Earth axes [equatorial radii]. Enter below 20 km; release above 30 km. */
-  update(c: Vec3 | null, mode: SurfaceMode) {
+  update(c: Vec3 | null, mode: SurfaceMode, lead: Vec3 = [0, 0, 0]) {
     if (this.disposed) return;
     this.mode = mode;
     const geo = c ? cartToGeodetic(1, WGS84_F, c) : null;
@@ -213,8 +213,11 @@ export class EarthSurface {
       this.select(r);
     }
     if (!r) return;
-    const x = Math.max(0, Math.min(r.columns - 1, Math.floor((lon - r.west) / r.step)));
-    const y = Math.max(0, Math.min(r.rows - 1, Math.floor((r.north - lat) / r.step)));
+    const ahead = c ? cartToGeodetic(1, WGS84_F, c.map((v, i) => v + lead[i]!) as Vec3) : geo;
+    const aheadLon = ahead ? ahead.lon * DEG : lon,
+      aheadLat = ahead ? ahead.lat * DEG : lat;
+    const x = Math.max(0, Math.min(r.columns - 1, Math.floor((aheadLon - r.west) / r.step)));
+    const y = Math.max(0, Math.min(r.rows - 1, Math.floor((r.north - aheadLat) / r.step)));
     const centre = y * r.columns + x;
     // (a page failed — a network blip, the service unreachable for a while —: tried again once due, never given up)
     const now = performance.now();

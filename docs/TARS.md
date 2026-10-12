@@ -215,3 +215,17 @@ Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A9, B1–B7, C1–C6). L
   - 0,4 s de silence autour de chaque phrase ;
   - un décodage déterministe ;
   - la mesure validée d'abord sur les voix du système.
+
+La carte au sol est locale, au zoom 18 initial : `/mapzoom 18` ou `interface({mapZoom:18})` ouvre et règle
+le planisphère d’un personnage ou d’un vaisseau posé. `get_state.localMap` et `get_telemetry({groups:["map"]})`
+exposent coordonnées, zoom, source disponible, déplacement du centre et coût CPU. L’événement `map` suit
+l’ouverture et le zoom. Le groupe `streaming` indique l’avance des chargements dans la direction du vol,
+bornée à six secondes et 650 m. [Analyse et validation](CORRECTIONS-DETAILS-SOL-VOL.md).
+
+Le planisphère au sol fonctionne sur toutes les surfaces marchables. Le zoom va de 0 à 21 ; les atlas
+planétaires disponibles sont réutilisés, et les mondes sans atlas affichent un quadrillage explicite.
+L’état `map` indique aussi `radiusM` et `sourceStatus` (`ready`, `loading`, `unavailable`).
+
+Les volumes de collision des arbres et bâtiments se visualisent en rose à pied sur Terre :
+`/set sceneryHitboxes true` (désactiver avec `false`), ou `set_settings` avec la même clé.
+`find_settings("hitbox")` retrouve l’interrupteur et `get_state.sceneryHitboxes` indique son état.

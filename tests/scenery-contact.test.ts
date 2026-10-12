@@ -65,3 +65,41 @@ test("what grows: the class and the satellite's colour, bare under roads, buildi
     expect(new SceneryContact(reply, packScenery([], ground)).vegetation(point(0, 12)).cover).toBe(0);
   }
 });
+
+test("tree corners and low crowns match the rendered box and five ellipsoids", () => {
+  const tree = { min: [-6, -6, 0] as Vec3, max: [6, 6, 13] as Vec3, tree: true, data: [0, 0, 0, 0, 4, 12, 0, 0, 0.1, 0.2, 0.1, 0] };
+  const c = new SceneryContact(reply, packScenery([tree], pixels));
+  expect(c.at(point(0.4, 0.4), 0.3).blocked).toBe(true); // intersects square corner, misses the old cylinder
+  expect(c.at(point(0.6, 0.6), 0.3).blocked).toBe(false);
+  expect(c.at(point(1, 0, 5), 0.3).blocked).toBe(true); // crown, above the trunk's actual range
+  expect(c.at(point(0, 0, 14), 0.2, 0.1).blocked).toBe(false);
+  expect(c.at(point(2, 0, 6), 0.2, 0.1).blocked).toBe(true); // camera sphere must not pass through the crown
+});
+
+test("pink hitboxes use CPU local metres, polygon holes and actual vertical bounds", () => {
+  const building = polygonPrimitive([ring(5), ring(2)], 3, 9, 1, [1, 1, 1])!;
+  const c = new SceneryContact(reply, packScenery([building], pixels));
+  const debug = c.collisionLines(point(0, 0));
+  expect(debug.buildings).toBe(1);
+  expect(debug.trees).toBe(0);
+  const zs = Array.from(debug.vertices).filter((_, i) => i % 3 === 2);
+  expect(Math.min(...zs)).toBe(3);
+  expect(Math.max(...zs)).toBe(9);
+  expect(Array.from(debug.vertices).some((x, i) => i % 3 === 0 && x === 2)).toBe(true);
+  expect(c.collisionLines(point(1000, 1000)).vertices.length).toBe(0);
+  expect(c.collisionLines(point(0, 0), 60, 2).vertices.length).toBe(12);
+});
+test("pink tree hitboxes include the trunk corners and all crown extrema", () => {
+  const tree = { min: [-6, -6, 0] as Vec3, max: [6, 6, 13] as Vec3, tree: true, data: [0, 0, 0, 0, 4, 12, 0, 0, 0.1, 0.2, 0.1, 0] };
+  const c = new SceneryContact(reply, packScenery([tree], pixels)),
+    debug = c.collisionLines(point(0, 0));
+  expect(debug.trees).toBe(1);
+  expect(debug.vertices.length / 6).toBe(12 + 5 * 3 * 16);
+  expect(debug.vertices[0]).toBeCloseTo(-0.22, 6);
+  expect(debug.vertices[1]).toBeCloseTo(-0.22, 6);
+  expect(
+    Array.from(debug.vertices)
+      .filter((_, i) => i % 3 === 2)
+      .some((z) => z > 10),
+  ).toBe(true);
+});

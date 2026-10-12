@@ -9,6 +9,7 @@ import { defaultAltKm, THEIR_IDS } from "../game/place";
 import { SITES } from "../game/sites";
 import { M_METRES, SOLAR_BODIES } from "../system/solar";
 import { solidBody } from "../system/our-surface";
+import { body as systemBody, GARGANTUA_SYSTEM } from "../system/bodies";
 import { mouth } from "../wormhole";
 import { BODY_NAMES } from "../targeting";
 import type { Settings } from "../settings";
@@ -16,7 +17,7 @@ import { t, tf } from "../i18n";
 import { GroundTrack } from "./groundtrack";
 import { button, el as h, modal } from "./kit";
 
-type Where = "orbit" | "ground" | "near" | "wormhole";
+type Where = "orbit" | "ground" | "walk" | "near" | "wormhole";
 type Universe = "ours" | "gargantua";
 
 export interface PlaceHost {
@@ -79,6 +80,7 @@ export class PlacePanel {
     const WHERE: [Where, string, string][] = [
       ["orbit", t("In orbit"), t("On an orbit around the body")],
       ["ground", t("On the ground"), t("Landed, on its gear")],
+      ["walk", t("On foot"), t("Land the ship and step out: explore on foot")],
       ["near", t("Beside it"), t("At rest beside the body: the hover autopilot holds the ship there")],
       ["wormhole", t("Wormhole"), t("Before one of its two mouths, at rest")],
     ];
@@ -166,14 +168,26 @@ export class PlacePanel {
     const ours = () => this.uni === "ours";
     const isHole = () => !ours() && this.body === "gargantua";
     const canLand = (id: string) => (THEIR_IDS.includes(id) ? id !== "gargantua" : solidBody(id));
+    // walking: a solid body here; Gargantua's side, a surface that is neither gas nor ocean (Miller is
+    // refused, Mann and Edmunds are not)
+    const canWalk = (id: string) => {
+      if (!canLand(id)) return false;
+      if (!THEIR_IDS.includes(id)) return true;
+      try {
+        const s = systemBody(GARGANTUA_SYSTEM, id).surface;
+        return !!s && s.kind !== "gas" && (s.kind !== "ocean" || id === "miller");
+      } catch {
+        return false;
+      }
+    };
     const pickable = () => this.body !== "sun" && this.body !== "gargantua";
     const drawPick = () => {
-      const show = (this.where === "orbit" || this.where === "ground") && pickable();
+      const show = (this.where === "orbit" || this.where === "ground" || this.where === "walk") && pickable();
       pickBox.hidden = !show;
       if (!show) return;
       this.picker.drawWorld(this.body, T.now());
       pickNote.textContent =
-        this.where === "ground"
+        this.where === "ground" || this.where === "walk"
           ? this.at
             ? tf("Landing at {0}", fmtAt(this.at))
             : t("Click the world: the place to land")
@@ -196,7 +210,7 @@ export class PlacePanel {
 
     const fillSites = () => {
       sites.replaceChildren();
-      if (this.where !== "ground") return;
+      if (this.where !== "ground" && this.where !== "walk") return;
       for (const s of SITES.filter((x) => x.body === this.body)) {
         const b = button({ label: s.name, onClick: () => setAt(s.lat, s.lon, true) });
         b.classList.add("pp-site");
@@ -214,9 +228,11 @@ export class PlacePanel {
             ? tf("Beside {0}, at rest on its sunlit side: the body targeted, the hover autopilot holding the ship", n)
             : this.where === "ground"
               ? tf("On {0}'s ground, on the gear — the flight started afresh", n)
-              : isHole()
-                ? t("On a circular orbit around Gargantua (Kerr), in its equator")
-                : tf("On an orbit around {0} — the flight started afresh: engine off, no plan", n);
+              : this.where === "walk"
+                ? tf("On {0}'s ground, on foot — the ship landed beside you, the walk starts at once", n)
+                : isHole()
+                  ? t("On a circular orbit around Gargantua (Kerr), in its equator")
+                  : tf("On an orbit around {0} — the flight started afresh: engine off, no plan", n);
     };
     const layout = () => {
       for (const [w, b] of whereBtns) b.classList.toggle("on", w === this.where);
@@ -229,20 +245,21 @@ export class PlacePanel {
       bodies.replaceChildren();
       const list: string[] = ours() ? SOLAR_BODIES.map((b) => b.id) : THEIR_IDS;
       if (!list.includes(this.body)) this.body = ours() ? "earth" : "miller";
-      if (this.where === "ground" && !canLand(this.body)) this.body = ours() ? "earth" : "miller";
+      const walk = this.where === "walk";
+      if ((this.where === "ground" && !canLand(this.body)) || (walk && !canWalk(this.body))) this.body = ours() ? "earth" : "miller";
       for (const id of list) {
         const sb = SOLAR_BODIES.find((b) => b.id === id);
         const b = button({ label: nameOf(id), testid: `place-body-${id}`, onClick: () => pickBody(id) });
         b.classList.add("pp-body");
         if (sb?.parent && sb.parent !== "sun") b.classList.add("pp-moon");
         b.classList.toggle("on", id === this.body);
-        b.disabled = this.where === "ground" && !canLand(id);
-        if (b.disabled) b.title = t("No ground to land on");
+        b.disabled = (this.where === "ground" && !canLand(id)) || (walk && !canWalk(id));
+        if (b.disabled) b.title = t(walk ? "No ground to walk on" : "No ground to land on");
         bodies.append(b);
       }
       orbitBox.hidden = this.where !== "orbit" || isHole();
       holeBox.hidden = this.where !== "orbit" || !isHole();
-      groundBox.hidden = this.where !== "ground";
+      groundBox.hidden = !(this.where === "ground" || walk);
       nearBox.hidden = this.where !== "near" || isHole();
       nearHoleBox.hidden = this.where !== "near" || !isHole();
       mouthBox.hidden = !wh;
@@ -298,6 +315,8 @@ export class PlacePanel {
           return isHole() ? T.near("gargantua", { rM: Math.max(+nearM.value, 2) }) : T.near(id, { altKm: Math.max(+nearAlt.value, 0) });
         case "ground":
           return T.land(id, +lat.value, +lon.value);
+        case "walk":
+          return T.walk(id, +lat.value, +lon.value);
         default: {
           if (isHole()) return T.orbit("gargantua", { rM: Math.max(+rM.value, 2), retrograde: retro.checked });
           const o = { peKm: Math.max(+alt.value, 0), apKm: Math.max(+apo.value, +alt.value), inc: +inc.value, retrograde: retro.checked };

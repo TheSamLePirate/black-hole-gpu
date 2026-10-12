@@ -2,8 +2,9 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
 // Placing the ship (ui/placepanel.ts) by real clicks: from the HUD's Place button during a mission —
-// asked first, the mission ended —, beside a body at rest under the hover autopilot; before the far
-// mouth of the wormhole with no mission left to end; Escape closes it.
+// asked first, the mission ended —, beside a body at rest under the hover autopilot; on foot — the
+// ship landed and the astronaut out walking (the panel's On foot mode); before the far mouth of the
+// wormhole with no mission left to end; Escape closes it.
 
 describe.skipIf(!E2E)("placing the ship", () => {
   let app: App;
@@ -35,6 +36,25 @@ describe.skipIf(!E2E)("placing the ship", () => {
     await app.waitFor(`!${open}`);
     const s = await status();
     expect(s).toMatchObject({ side: "ours", soi: "mars", auto: "hover", target: "mars" });
+  });
+
+  test("on foot: land the ship and the astronaut steps out walking, anywhere on the body", async () => {
+    await app.click("[data-testid=hud-place]");
+    await app.waitFor(open);
+    await app.click("[data-testid=place-walk]");
+    await app.click("[data-testid=place-body-moon]");
+    await app.click("[data-testid=place-go]");
+    await app.waitFor(`!${open}`);
+    const w = await app.js<{ active: boolean; body: string; ours: boolean; grounded: boolean }>(
+      `(() => { const c = __bh.camera.character; return { active: c.active, body: c.body, ours: c.ours, grounded: c.grounded }; })()`,
+    );
+    expect(w).toMatchObject({ active: true, body: "moon", ours: true, grounded: true });
+    // (back at the controls: the ship stands beside the astronaut — boarding at once)
+    expect(await app.js<boolean>(`__bh.camera.piloting`)).toBe(true);
+    expect(await app.js<number>(`__bh.camera.character.accessDistance()`)).toBeLessThan(3);
+    // (boarded again: the flight HUD, and its Place button, back for the next placements)
+    await app.click("[data-testid=character-board]");
+    await app.waitFor(`!__bh.camera.character.active`);
   });
 
   test("no mission left: before the far mouth at once; Escape closes the panel", async () => {

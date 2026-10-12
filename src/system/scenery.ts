@@ -97,7 +97,14 @@ export class EarthScenery {
     }
     this.stamp++;
   }
-  update(camera: Vec3 | null, mode: SceneryMode, satellite: boolean, terrain: boolean, exclusions: SceneryRequest["exclusions"] = []) {
+  update(
+    camera: Vec3 | null,
+    mode: SceneryMode,
+    satellite: boolean,
+    terrain: boolean,
+    exclusions: SceneryRequest["exclusions"] = [],
+    priority: Vec3 | null = null,
+  ) {
     if (this.disposed) return;
     const changed = this.mode !== mode || this.satellite !== satellite;
     this.mode = mode;
@@ -122,7 +129,8 @@ export class EarthScenery {
       return;
     }
     if (!geo) return;
-    const c = sceneryCentre(geo.lat / D, geo.lon / D);
+    const wanted = priority ? cartToGeodetic(1, WGS84_F, priority) : geo;
+    const c = sceneryCentre(wanted.lat / D, wanted.lon / D);
     const distance = (v: { lat: number; lon: number }) =>
       Math.hypot((c.lat - v.lat) * 111320, wrapLon(c.lon - v.lon) * 111320 * Math.cos(c.lat * D));
     const dist = this.data ? distance(this.data) : Infinity;

@@ -5,8 +5,8 @@ import { cartToGeodetic, WGS84_A, WGS84_F } from "./ellipsoid";
 import { D, SCENERY_GRID, sceneryFrame, wrapLon, type SceneryReply } from "./scenery-data";
 
 export class SceneryContact {
-  private f: Float32Array;
-  private u: Uint32Array;
+  readonly f: Float32Array;
+  readonly u: Uint32Array;
   private frame: ReturnType<typeof sceneryFrame>;
   constructor(
     readonly reply: SceneryReply,
@@ -100,6 +100,78 @@ export class SceneryContact {
   grass(q: Vec3) {
     return this.cover(q) === 30 && !this.excluded(q);
   }
+  /** Diagnostic wireframe of the actual CPU colliders, in this cache's east/north/up metres. */
+  collisionLines(q: Vec3, range = 60, maxSegments = 16384) {
+    const p = this.local(q),
+      f = this.f,
+      bases: number[] = [],
+      lines: number[] = [];
+    this.visit(p, range, false, (b) => bases.push(b));
+    // Draw the closest objects first if a dense forest reaches the diagnostic budget.
+    const distance = (b: number) => {
+      const x = f[b + 3]! < 0.5 ? f[b]! : f[b + 12]!;
+      const y = f[b + 3]! < 0.5 ? f[b + 1]! : f[b + 13]!;
+      return (x - p[0]) ** 2 + (y - p[1]) ** 2;
+    };
+    bases.sort((a, b) => distance(a) - distance(b));
+    const line = (a: Vec3, b: Vec3) => {
+      if (lines.length < maxSegments * 6) lines.push(...a, ...b);
+    };
+    let trees = 0,
+      buildings = 0;
+    for (const b of bases) {
+      if (lines.length >= maxSegments * 6) break;
+      if (f[b + 3]! < 0.5) {
+        trees++;
+        const x = f[b]!,
+          y = f[b + 1]!,
+          z = f[b + 2]!,
+          h = f[b + 5]!;
+        const corners: Vec3[] = [
+          [x - 0.22, y - 0.22, z],
+          [x + 0.22, y - 0.22, z],
+          [x + 0.22, y + 0.22, z],
+          [x - 0.22, y + 0.22, z],
+        ];
+        for (let i = 0; i < 4; i++) {
+          const a = corners[i]!,
+            c = corners[(i + 1) % 4]!;
+          line(a, c);
+          line([a[0], a[1], z + h * 0.64], [c[0], c[1], z + h * 0.64]);
+          line(a, [a[0], a[1], z + h * 0.64]);
+        }
+        for (let l = 0; l < 5; l++) {
+          const phase = l * 2.399963 + f[b + 6]! * Math.PI * 2,
+            reach = l ? f[b + 4]! * 0.38 : 0;
+          const centre: Vec3 = [x + Math.cos(phase) * reach, y + Math.sin(phase) * reach, z + h * (0.6 + 0.06 * l)];
+          const r = f[b + 4]! * (0.65 + 0.06 * (l % 3)),
+            rz = h * (0.22 + 0.02 * (l % 3));
+          for (let plane = 0; plane < 3; plane++) {
+            const point = (a: number): Vec3 =>
+              plane === 0
+                ? [centre[0] + r * Math.cos(a), centre[1] + r * Math.sin(a), centre[2]]
+                : plane === 1
+                  ? [centre[0] + r * Math.cos(a), centre[1], centre[2] + rz * Math.sin(a)]
+                  : [centre[0], centre[1] + r * Math.cos(a), centre[2] + rz * Math.sin(a)];
+            for (let i = 0; i < 16; i++) line(point((i * Math.PI) / 8), point(((i + 1) * Math.PI) / 8));
+          }
+        }
+      } else {
+        buildings++;
+        for (let i = 0; i < f[b + 2]!; i++) {
+          const e = b + 12 + i * 4,
+            low = f[b]!,
+            high = f[b + 1]!;
+          const a: Vec3 = [f[e]!, f[e + 1]!, low],
+            c: Vec3 = [f[e + 2]!, f[e + 3]!, low];
+          line(a, c);
+          line([a[0], a[1], high], [c[0], c[1], high]);
+          line(a, [a[0], a[1], high]);
+        }
+      }
+    }
+    return { vertices: new Float32Array(lines), trees, buildings, truncated: lines.length >= maxSegments * 6 };
+  }
   /** Capsule occupancy and highest reachable support: preserves polygon holes and bridge undersides. */
   at(q: Vec3, radius = 0.3, height = 1.8, step = 0.25) {
     const p = this.local(q);
@@ -108,8 +180,37 @@ export class SceneryContact {
     this.visit(p, radius, false, (b) => {
       const f = this.f;
       if (f[b + 3]! < 0.5) {
-        blocked ||=
-          Math.hypot(p[0] - f[b]!, p[1] - f[b + 1]!) < radius + 0.22 && p[2] < f[b + 2]! + f[b + 5]! * 0.64 && p[2] + height > f[b + 2]!;
+        // The rendered trunk is a box, not a cylinder; use the capsule's closest XY distance.
+        const dx = Math.max(Math.abs(p[0] - f[b]!) - 0.22, 0);
+        const dy = Math.max(Math.abs(p[1] - f[b + 1]!) - 0.22, 0);
+        blocked ||= dx * dx + dy * dy < radius * radius && p[2] < f[b + 2]! + f[b + 5]! * 0.64 && p[2] + height > f[b + 2]!;
+        // Same five ellipsoids, centres and radii as sceneryQuery() in trace.wgsl.
+        for (let l = 0; l < 5 && !blocked; l++) {
+          const phase = l * 2.399963 + f[b + 6]! * Math.PI * 2,
+            reach = l ? f[b + 4]! * 0.38 : 0;
+          const cx = f[b]! + Math.cos(phase) * reach,
+            cy = f[b + 1]! + Math.sin(phase) * reach,
+            cz = f[b + 2]! + f[b + 5]! * (0.6 + 0.06 * l);
+          const rx = f[b + 4]! * (0.65 + 0.06 * (l % 3)),
+            rz = f[b + 5]! * (0.22 + 0.02 * (l % 3));
+          const low = p[2] + Math.min(radius, height / 2),
+            high = p[2] + Math.max(height - radius, height / 2);
+          const v = [p[0] - cx, p[1] - cy, Math.max(low, Math.min(high, cz)) - cz],
+            radii = [rx, rx, rz];
+          if (v.reduce((sum, x, i) => sum + (x / radii[i]!) ** 2, 0) <= 1) {
+            blocked = true;
+            break;
+          }
+          let lo = 0,
+            hi = Math.hypot(...v) * Math.max(...radii);
+          for (let k = 0; k < 20; k++) {
+            const m = (lo + hi) / 2;
+            const norm = v.reduce((sum, x, i) => sum + ((radii[i]! * x) / (m + radii[i]! ** 2)) ** 2, 0);
+            if (norm > 1) lo = m;
+            else hi = m;
+          }
+          blocked ||= v.reduce((sum, x, i) => sum + ((x * hi) / (hi + radii[i]! ** 2)) ** 2, 0) < radius * radius;
+        }
       } else if (this.polygon(p, b, radius)) {
         const bottom = f[b]!,
           top = f[b + 1]!;

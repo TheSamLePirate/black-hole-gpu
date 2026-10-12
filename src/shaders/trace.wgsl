@@ -5776,6 +5776,7 @@ fn surfaceMaterial(q: vec3f, cover: u32, footM: f32) -> vec3f {
   return vec3f(1.0 + amplitude * filtered * (gnoise(q * (EARTH_RM / scaleM)) * 2.0 - 1.0));
 }
 
+var<private> EARTH_SHADOW_POINT:vec3f;
 fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, hG: f32) -> vec3f {
   // (the maps at the geodetic latitude — q the squashed space's —, the geometry at q)
   let gq = geoQ(q);
@@ -5931,6 +5932,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   }
   var Eg = E * sunThrough(hG, mu0) * shade * sunSeen(q * (1.0 + hG / (EARTH_RM * earthSq(q))), Ls);
   Eg *= sceneryShadow(physicalLs,physicalNormal);
+  Eg *= shipShadow(EARTH_SHADOW_POINT);
   // (near, the mountains' shadows: a peak between the sun and the valley)
   let footS = max(length(fx), length(fy)) * EARTH_RM;
   if (footS < 2.0 * EARTH_RM * TAU / f32(textureDimensions(earthElev).x) && mu0 > -0.05 && ocean < 1.0) {
@@ -6455,6 +6457,7 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   SEA_D = toBody(look) * (t / m * P.near4.w);
   WX_W = select(0.0, P.wx[0].x, HAS_WX && isEarth(k) && earthOn());
   WX_Q = normalize(ro);
+  EARTH_SHADOW_POINT=look*(max(t,0.0)/m*P.near4.w);
   let e = earthLook(k, ro, rd, t, normalize(squashed(toBody(lt.dir), ab)), lt.e, squashed(toBody(P.camRight.xyz), ab), squashed(toBody(P.camUp.xyz), ab),
     0.0, pixFoot(), fract(rnd * 7.31 + 0.37), P.earth4.w > 0.5);
   SEA_ON = false;

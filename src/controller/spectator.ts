@@ -1,3 +1,5 @@
+import { planetFrame, toLocal } from "../landing";
+import { properBodyAxes } from "../system/local-patch";
 // The spectator: a free camera away from the ship — anywhere, to the planets, through the wormhole —
 // while the ship flies on exactly as it was (its physics, its autopilots, its plan, the warp: the
 // settings stay the ship's). A second, headless controller over its own settings (`view`): the main
@@ -9,7 +11,7 @@
 
 import { CameraController } from "../controls";
 import type { Settings } from "../settings";
-import { setHolePose, setHomePose } from "../camera";
+import { cameraFrame, setHolePose, setHomePose } from "../camera";
 import { M_METRES } from "../system/solar";
 import type { Vec3 } from "../physics";
 import type { M3 } from "../mounts";
@@ -212,6 +214,16 @@ function shipFromView(this: CameraController): { S: M3; t: Vec3; dist: number } 
   const viewW = [b.right, b.up, b.fwd];
   const dot = (p: Vec3, q: Vec3) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
   const S = viewW.map((c) => [dot(c, ax[0]!), dot(c, ax[1]!), dot(c, ax[2]!)]) as M3;
+  if (!a.ours && this.character.active && !this.character.ours) {
+    const F = planetFrame(this.character.body, this.nowTime(), this.s.spin, this.s.massSolar);
+    const ship = toLocal(F, a.X, [0, 0, 0]).xi,
+      eye = toLocal(F, b.X, [0, 0, 0]).xi;
+    const delta = ship.map((x, i) => (x - eye[i]!) * F.mPerM) as Vec3;
+    const cam = cameraFrame(sp.s),
+      axes = properBodyAxes(F, cam);
+    const z = [0, 1, 2].map((i) => axes.reduce((sum, axis, j) => sum + axis[i]! * delta[j]!, 0)) as Vec3;
+    return { S, t: [dot(z, cam.right), dot(z, cam.up), dot(z, cam.fwd)], dist: Math.hypot(...delta) };
+  }
   const d = [0, 1, 2].map((i) => (a.X[i]! - b.X[i]!) * M_METRES) as Vec3;
   const t = viewW.map((c) => dot(c, d)) as Vec3;
   return { S, t, dist: Math.hypot(...d) };

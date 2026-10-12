@@ -50,6 +50,7 @@ test("on Gargantua's worlds: at rest on the ground, Gargantua at the asked heigh
     ["edmunds", 3],
   ] as const) {
     const p = theirGroundPose(id, el, 0, t, a, M);
+    expect(p.localLanded?.body).toBe(id);
     const F = planetFrame(id, t, a, M);
     const L = toLocal(F, p.X, betaToCoord(p.X, zamoOf(p.X, p.vel), a));
     const r = Math.hypot(...L.xi);
@@ -72,3 +73,13 @@ function zamoOf(X: Vec3, v: Vec3): Vec3 {
   const f = sphericalFrame(X);
   return [dot(v, f.er), dot(v, f.et), dot(v, f.ep)];
 }
+
+test("Gargantua ground placement has a level, nonzero nose at the sub-primary point and antipode", () => {
+  for (const id of ["mann", "miller", "edmunds"])
+    for (const el of [-90, 90]) {
+      const p = theirGroundPose(id, el, 0, 109.6, 0.998, 1e8);
+      expect(Math.hypot(...p.fwd)).toBeCloseTo(1, 10);
+      expect(Math.hypot(...p.up)).toBeCloseTo(1, 10);
+      expect(Math.abs(dot(p.fwd, p.up))).toBeLessThan(1e-10);
+    }
+});

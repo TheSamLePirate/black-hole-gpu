@@ -8,14 +8,16 @@
 // hole's bending is negligible (Miller: < 10⁻⁴ rad at 300 R): rays are straight in the camera's rest
 // frame, and the body is where the camera sees it — its retarded place, with the aberration of their
 // relative motion (a co-moving ship: at its true place). The same body is then left out of the traced
-// spheres (where = 3).
+// spheres (where = 3). Near a surface at ordinary speeds, geometry instead uses the instantaneous
+// physical body frame shared by collisions and native meshes; only the far optical view is retarded.
 
 import { blToCartesian } from "../camera";
 import type { CameraFrame } from "../camera";
 import { coordToZamo, type Vec3 } from "../physics";
 import { sideToRep, sphericalFrame } from "../wormhole";
-import type { GpuBody } from "./scene-bodies";
-import { dot } from "../math/vec3";
+import { BODY_PLANET, type GpuBody } from "./scene-bodies";
+import { dot, cross, sub, scale } from "../math/vec3";
+import { planetFrame, toLocal, type PlanetFrame } from "../landing";
 import { cartToGeodetic } from "./ellipsoid";
 
 /** Within this many of its radii a body is drawn in the local patch. */
@@ -106,6 +108,16 @@ export function mapToRest(v: Vec3, cam: CameraFrame): Vec3 {
   const n = unit(b);
   const k = (g - 1) * dot(x, n);
   return [x[0] + k * n[0], x[1] + k * n[1], x[2] + k * n[2]];
+}
+
+/** Orthonormal proper body axes in the observer's rest frame, shared by terrain and native meshes. */
+export function properBodyAxes(F: PlanetFrame, cam: CameraFrame): [Vec3, Vec3, Vec3] {
+  const er = unit([F.C[0] - F.H[0], F.C[1] - F.H[1], 0]);
+  const x = unit(mapToRest(er, cam));
+  const y0 = mapToRest([-er[1], er[0], 0], cam);
+  const y = unit(sub(y0, scale(x, dot(x, y0))));
+  const z = cross(x, y);
+  return [x, y, z];
 }
 
 /**
@@ -201,9 +213,14 @@ export function ourPatch(
     const d = Math.hypot(C[0] - X[0], C[1] - X[1], C[2] - X[2]);
     if (d > LOCAL_RANGE * b.radius || (best && d / b.radius >= best.distance / best.radius)) return;
     blend = Math.min(Math.max((d / b.radius - 10) / 100, 0), 1);
-    // (seen from the moving camera with the body's own motion: standing on a turning Earth, both
-    // move together and the ground stays under the gear — not 20 ms of light time behind)
-    const rel = seenFrom(toRep([C[0] - X[0], C[1] - X[1], C[2] - X[2]]), toRep(velocity(k)), cam.beta);
+    // Surface geometry is simulated in the instantaneous body-fixed frame. Retarding the
+    // centre by R/c but leaving the rotating surface at the current spin translates the
+    // entire ground by omega*R^2/c (~10 m on Earth), including trees/buildings. At ordinary
+    // near-surface speeds use the same physical frame as contacts and native meshes.
+    // Distant views and relativistic observers retain the optical/retarded patch.
+    const physicalGround = b.kind === BODY_PLANET && d <= 1.02 * b.radius && dot(cam.beta, cam.beta) < 1e-6;
+    const displacement = toRep([C[0] - X[0], C[1] - X[1], C[2] - X[2]]);
+    const rel = physicalGround ? displacement : seenFrom(displacement, toRep(velocity(k)), cam.beta);
     const host = b.light >= 0 ? list[b.light]!.pos : ([C[0] + 1, C[1], C[2]] as Vec3);
     // (its own axes: its pole, turned by its rotation — the tracer's spunAxes)
     const pa = poleAxes(b.pole ?? [0, 0, 1]);
@@ -217,7 +234,7 @@ export function ourPatch(
     best = {
       index: k,
       centre: [rel[0] / b.radius, rel[1] / b.radius, rel[2] / b.radius],
-      axes: [unit(lorentz(toRep(ax[0]))), unit(lorentz(toRep(ax[1]))), unit(lorentz(toRep(ax[2])))],
+      axes: ax.map((a) => unit(physicalGround ? toRep(a) : lorentz(toRep(a)))) as [Vec3, Vec3, Vec3],
       light: aberrate(unit(toRep([host[0] - C[0], host[1] - C[1], host[2] - C[2]])), cam.beta),
       radius: b.radius,
       distance: d,
@@ -230,7 +247,13 @@ export function ourPatch(
  * The body to draw in the local patch, if the camera is near one (the nearest in its radii).
  * dRdL: our side, dr/dℓ of the wormhole's radius at the camera.
  */
-export function localPatch(cam: CameraFrame, list: GpuBody[], velocity: (k: number) => Vec3, dRdL = 1): LocalPatch | null {
+export function localPatch(
+  cam: CameraFrame,
+  list: GpuBody[],
+  velocity: (k: number) => Vec3,
+  dRdL = 1,
+  ground?: { time: number; spin: number; massSolar: number },
+): LocalPatch | null {
   if (cam.region === "throat" && cam.ell < 0) return ourPatch(cam, list, dRdL, velocity);
   if (cam.region !== "hole") return null;
   const X = blToCartesian(cam.r, cam.theta, cam.phi);
@@ -259,6 +282,15 @@ export function localPatch(cam: CameraFrame, list: GpuBody[], velocity: (k: numb
       radius: b.radius,
       distance: d,
     };
+    if (ground && b.kind === BODY_PLANET && d < 1.05 * b.radius) {
+      const F = planetFrame(b.id, ground.time, ground.spin, ground.massSolar);
+      const L = toLocal(F, X, [0, 0, 0]);
+      if (Math.hypot(...L.xi) < 1.02 * F.R) {
+        const axes = properBodyAxes(F, cam);
+        best.axes = axes;
+        best.centre = [0, 1, 2].map((i) => -axes.reduce((sum, a, j) => sum + (a[i]! * L.xi[j]!) / F.R, 0)) as Vec3;
+      }
+    }
   });
   return best;
 }

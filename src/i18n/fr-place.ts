@@ -7,6 +7,11 @@ export default {
   "In orbit": "En orbite",
   "On an orbit around the body": "Sur une orbite autour du corps",
   "Landed, on its gear": "Posé, sur son train",
+  "On foot": "À pied",
+  "Land the ship and step out: explore on foot": "Pose le vaisseau et sors : explore à pied",
+  "On {0}'s ground, on foot — the ship landed beside you, the walk starts at once":
+    "Au sol de {0}, à pied — le vaisseau posé à côté, la marche part tout de suite",
+  "No ground to walk on": "Pas de sol où marcher",
   "Beside it": "Auprès",
   "At rest beside the body: the hover autopilot holds the ship there":
     "Au repos auprès du corps : le maintien de position y garde le vaisseau",

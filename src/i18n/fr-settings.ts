@@ -1,5 +1,7 @@
 // French for the settings, the scenes and the keyboard sheet (keyed by the English: see src/i18n.ts).
 export default {
+  "Local source unavailable": "Source locale indisponible",
+  Centre: "Centrer",
   "Walking speed": "Vitesse de marche",
   "How fast the astronaut walks, in metres a second (1.4 by default, a brisk walk). The steps quicken with the pace; the stride stays that of the walking clip, so a much faster walk can slide the feet.":
     "Vitesse de l'astronaute à la marche, en mètres par seconde (1,4 par défaut, une marche soutenue). Les pas s'accélèrent avec l'allure ; l'enjambée reste celle du cycle de marche, donc une marche beaucoup plus rapide peut faire glisser les pieds.",
@@ -1309,4 +1311,13 @@ export default {
   "Show the frame rate": "Afficher les FPS",
   "A small counter in the top corner: the frames per second and the frame's time, refreshed twice a second.":
     "Un petit compteur dans le coin en haut : les images par seconde et le temps d'une image, mis à jour deux fois par seconde.",
+  "Planetary atlas": "Atlas planétaire",
+  "Loading planetary atlas…": "Chargement de l’atlas planétaire…",
+  "Reference grid — imagery unavailable": "Quadrillage de référence — imagerie indisponible",
+  "Pink collision hitboxes": "Volumes de collision roses",
+  "Collision hitboxes — waiting for scenery": "Collisions — chargement du décor",
+  trees: "arbres",
+  buildings: "bâtiments",
+  "On foot: show the actual CPU tree trunks, crowns and building collision volumes in pink, including courtyard boundaries. X-ray wireframe within 60 m; diagnostic only, disable after checking alignment.":
+    "À pied : affiche en rose les volumes réellement utilisés par les collisions CPU des troncs, couronnes et bâtiments, y compris les cours intérieures. Contours visibles à travers le décor dans un rayon de 60 m ; diagnostic à désactiver après vérification de l’alignement.",
 } satisfies Record<string, string>;

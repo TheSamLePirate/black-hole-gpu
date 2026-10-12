@@ -2855,3 +2855,19 @@ body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right));
 @media (pointer: coarse) { .on-foot .character-touch { display: flex; justify-content: center; } .character-controls { display: none; } .character-hud { left: 12px; bottom: max(12px, env(safe-area-inset-bottom)); } }
 
 .on-foot .character-hud { bottom: auto; top: max(68px, env(safe-area-inset-top)); }
+
+.local-ground-map { position:absolute; inset:0; overflow:hidden; background:#182b2a; }
+.local-ground-map[hidden] {display:none;}
+.local-ground-map canvas { width:100%;height:100%;display:block; }
+.local-ground-map > div:not(.local-map-controls) {position:absolute;bottom:0;left:0;right:0;padding:6px 12px;background:#08151bcc;color:#e0eeed;font:11px monospace;}
+.local-map-controls {position:absolute;top:24px;right:16px;display:flex;gap:8px;}
+.local-map-controls button {color:white;background:#122b36;border:1px solid #8ab3b6;padding:9px 14px;border-radius:6px;}
+.on-foot .fl-root.mapview {display:block!important;}
+.on-foot.map-open .character-hud {display:none;}
+
+.local-map-controls { top: 116px; }
+
+.scenery-hitboxes { position:fixed; pointer-events:none; z-index:25; overflow:hidden; }
+.scenery-hitboxes[hidden] { display:none; }
+.scenery-hitboxes canvas { width:100%; height:100%; display:block; }
+.scenery-hitboxes > div { position:absolute; top:185px; left:16px; color:#ff68c8; background:#07131ddd; padding:7px 10px; font:12px monospace; }

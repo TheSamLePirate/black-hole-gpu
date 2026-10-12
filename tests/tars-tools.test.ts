@@ -65,6 +65,8 @@ test("settings found by words in either language; values checked against the sch
   expect(findSettings("openstreetmap", s).map((d) => d.key)).toContain("earthScenery");
   expect(checkSetting("earthScenery", "high", s)).toEqual({ ok: true, value: "high" });
   expect(checkSetting("earthScenery", "ultra", s).ok).toBe(false);
+  expect(findSettings("hitbox", s).map((d) => d.key)).toContain("sceneryHitboxes");
+  expect(checkSetting("sceneryHitboxes", "false", s)).toEqual({ ok: true, value: false });
   expect(checkSetting("earthSceneryShadows", false, s)).toEqual({ ok: true, value: false });
   expect(checkSetting("earthSceneryShadows", "false", s)).toEqual({ ok: true, value: false });
 });
@@ -548,4 +550,30 @@ test("planetary character actions, telemetry, waits, events and commands are rea
   expect(EVENT_KINDS).toContain("character");
   expect(SCREENS).toContain("character");
   expect(GAME_COMMANDS.find((c) => c.name === "walk")?.tool).toBe("character");
+});
+
+test("TARS can zoom and read the local map and streaming priority", async () => {
+  const { gameTools } = await import("../src/ai/game-tools");
+  const { GAME_COMMANDS } = await import("../src/ai/game-commands");
+  const { EVENT_KINDS } = await import("../src/ai/triggers");
+  let zoom = 18;
+  const host = {
+    settings: {},
+    camera: { character: { state: () => ({}) } },
+    tools: { perf: () => ({ streaming: { leadM: 650 } }) },
+    localMap: { state: () => ({ zoom }), zoom: (v: number) => (zoom = v) },
+    map: () => {},
+    changed: () => {},
+    log: () => [],
+  } as unknown as import("../src/ai/game-tools").GameHost;
+  const tools = gameTools(host),
+    signal = new AbortController().signal;
+  await tools.find((t) => t.name === "interface")!.run({ mapZoom: 19 }, signal);
+  expect(zoom).toBe(19);
+  expect(await tools.find((t) => t.name === "get_telemetry")!.run({ groups: ["map", "streaming"] }, signal)).toEqual({
+    map: { zoom: 19 },
+    streaming: { leadM: 650 },
+  });
+  expect(GAME_COMMANDS.find((c) => c.name === "mapzoom")?.tool).toBe("interface");
+  expect(EVENT_KINDS).toContain("map");
 });

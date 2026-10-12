@@ -1,3 +1,7 @@
+import { localPatch } from "../src/system/local-patch";
+import type { GpuBody } from "../src/system/scene-bodies";
+import { cameraFrame } from "../src/camera";
+import { planetFrame, toLocal, toGlobal, betaToCoord } from "../src/landing";
 import { afterEach, expect, test } from "bun:test";
 import { CameraController } from "../src/controls";
 import { defaultSettings } from "../src/settings";
@@ -61,7 +65,7 @@ test("poles and date line produce finite camera frames and gas bodies are reject
   }
   const c = walker();
   expect(c.character.start("jupiter")).not.toBeNull();
-  expect(c.character.start("miller")).not.toBeNull();
+  expect(c.character.start("miller")).toBeNull();
 });
 test("disembark/board preserve a landed vessel and reject distant boarding", () => {
   const { c } = flight(ourGroundPose("moon", 0, 0, 0), false);
@@ -191,4 +195,73 @@ test("walking, running, jump and the camera distance on foot follow their settin
   };
   expect(peak(2) / peak(3.6)).toBeGreaterThan(0.25);
   expect(peak(2) / peak(3.6)).toBeLessThan(0.37);
+});
+
+test("jumping under a bridge stops the capsule's head and returns to the floor", async () => {
+  const { SceneryContact } = await import("../src/system/scenery-contact");
+  const { polygonPrimitive } = await import("../src/system/scenery-geometry");
+  const { packScenery, sceneryFrame } = await import("../src/system/scenery-data");
+  const c = walker("earth");
+  const ch = c.character,
+    frame = sceneryFrame(0, 0);
+  const base = ch.q[0] - frame.origin[0];
+  const ring: [
+    [number, number, number],
+    [number, number, number],
+    [number, number, number],
+    [number, number, number],
+    [number, number, number],
+  ] = [
+    [-5, -5, 0],
+    [5, -5, 0],
+    [5, 5, 0],
+    [-5, 5, 0],
+    [-5, -5, 0],
+  ];
+  const deck = polygonPrimitive([ring], base + 2, base + 2.3, 2, [0.1, 0.1, 0.1])!;
+  const contact = new SceneryContact({ id: 1, lat: 0, lon: 0 }, packScenery([deck], new Uint32Array(512 * 512)));
+  ch.contact = () => contact;
+  ch.jump();
+  let peak = 0;
+  for (let i = 0; i < 480; i++) {
+    ch.step(1 / 120, 0, null);
+    peak = Math.max(peak, ch.height());
+  }
+  expect(peak).toBeLessThan(0.3);
+  expect(ch.grounded).toBe(true);
+  expect(ch.height()).toBeCloseTo(0.012, 2);
+});
+
+test("Gargantua on-foot camera shares the world's orbital velocity instead of stopping in the hole frame", () => {
+  for (const body of ["mann", "miller", "edmunds"]) {
+    const c = walker(body, 15, 45),
+      sp = c.spectator!,
+      w = sp.rigWorld()!;
+    const F = planetFrame(body, 0, c.s.spin, c.s.massSolar),
+      L = toLocal(F, w.X, [0, 0, 0]);
+    const expected = toGlobal(F, { xi: L.xi, w: [0, 0, 0], landed: true }).V;
+    const actual = betaToCoord(w.X, cameraFrame(sp.s).beta, c.s.spin);
+    expect(len(sub(actual, expected)) * 299792458).toBeLessThan(0.1);
+    expect(Math.abs(c.character.height())).toBeLessThan(0.01);
+  }
+});
+
+test("Gargantua terrain floating origin uses the same proper local metres as the walker", () => {
+  for (const body of ["mann", "miller", "edmunds"]) {
+    const c = walker(body, 15, 45),
+      sp = c.spectator!,
+      cam = cameraFrame(sp.s),
+      w = sp.rigWorld()!;
+    const F = planetFrame(body, 0, c.s.spin, c.s.massSolar),
+      L = toLocal(F, w.X, [0, 0, 0]);
+    const b = { id: body, pos: F.C, radius: F.R, parent: -1, kind: 1, where: 0, light: -1 } as GpuBody;
+    const patch = localPatch(cam, [b], () => F.V, 1, { time: 0, spin: c.s.spin, massSolar: c.s.massSolar })!;
+    expect(patch).not.toBeNull();
+    for (let i = 0; i < 3; i++) {
+      const bodyEye = -patch.axes[i]!.reduce((sum, x, j) => sum + x * patch.centre[j]!, 0) * F.R;
+      expect(Math.abs(bodyEye - L.xi[i]!) * F.mPerM).toBeLessThan(0.01);
+    }
+    const frame = c.character.frame()!;
+    expect(Math.hypot(...frame.origin)).toBeLessThan(10);
+  }
 });

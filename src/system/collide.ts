@@ -1,3 +1,4 @@
+import { capsuleTriangle } from "../math/capsule-triangle";
 // Contact between rigid meshes, swept over a frame: a bounding volume hierarchy of triangles (median
 // split on the longest axis, four triangles a leaf), segments cast against it — the first crossing,
 // either face — and the vertices it holds within a sphere. The Ranger and the space station use it: the
@@ -198,6 +199,36 @@ export class TriBVH {
       }
     }
     return best;
+  }
+
+  /** A finite capsule against the actual hull triangles, broad-phased by the existing BVH. */
+  capsule(a: Vec3, b: Vec3, radius: number): boolean {
+    if (!this.nNodes) return false;
+    const stack = [0];
+    while (stack.length) {
+      const n = stack.pop()!;
+      if (
+        [0, 1, 2].some(
+          (k) => Math.max(a[k]!, b[k]!) + radius < this.box[n * 6 + k]! || Math.min(a[k]!, b[k]!) - radius > this.box[n * 6 + 3 + k]!,
+        )
+      )
+        continue;
+      const count = this.link[n * 2 + 1]!;
+      if (count >= 0) {
+        stack.push(this.link[n * 2]!, count);
+        continue;
+      }
+      const first = this.link[n * 2]!;
+      for (let i = first; i < first - count; i++) {
+        const index = this.order[i]!;
+        const v = (k: number): Vec3 => {
+          const at = this.tri[index * 3 + k]! * 3;
+          return [this.pos[at]!, this.pos[at + 1]!, this.pos[at + 2]!];
+        };
+        if (capsuleTriangle(a, b, radius, v(0), v(1), v(2))) return true;
+      }
+    }
+    return false;
   }
 
   /** The vertices of the triangles within the sphere's box (centre c, radius r): their indices. */

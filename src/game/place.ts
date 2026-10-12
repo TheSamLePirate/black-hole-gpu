@@ -1,3 +1,6 @@
+import type { CameraFrame } from "../camera";
+import { zamo } from "../physics";
+import { properBodyAxes } from "../system/local-patch";
 // Where to put the Ranger: in orbit around any body (ours: the solar system; Gargantua's side: Miller,
 // Mann, Edmunds, and Gargantua itself on a Kerr circular orbit), on the ground at a latitude and
 // longitude, or at a given state. Pure: returns poses (place, nose, top, velocity) in the frame the
@@ -34,6 +37,8 @@ export interface Pose {
   up: Vec3;
   /** landed on a body: its id and the place in its own (turning) coordinates */
   landed?: { body: string; q: Vec3 };
+  /** Landed proper local coordinates on a Gargantua world. */
+  localLanded?: { body: string; xi: Vec3 };
   /** a line for the log */
   note: string;
 }
@@ -300,7 +305,6 @@ export function theirGroundPose(body: string, el: number, az: number, t: number,
     ez: Vec3 = [0, 0, 1];
   // (its axes are proper lengths: S of the map's per unit)
   const S = F.S;
-  const toMap = (v: Vec3): Vec3 => [0, 1, 2].map((i) => (v[0] / S[0]) * ex[i]! + (v[1] / S[1]) * ey[i]! + (v[2] / S[2]) * ez[i]!) as Vec3;
   // Gargantua's direction from the world, on its axes; the place: from the point under it, 90° − el
   // away, towards the azimuth
   const g0 = unit([-F.C[0], -F.C[1], -F.C[2]]);
@@ -338,8 +342,25 @@ export function theirGroundPose(body: string, el: number, az: number, t: number,
   const b = zamoBeta(glob.X, glob.V, spin);
   const f = sphericalFrame(glob.X);
   const cart = (v: Vec3): Vec3 => [0, 1, 2].map((i) => v[0] * f.er[i]! + v[1] * f.et[i]! + v[2] * f.ep[i]!) as Vec3;
-  const h = unit(sub(g, q.map((c) => c * dot(g, q)) as Vec3));
-  return { frame: "hole", X: glob.X, vel: cart(b), fwd: toMap(h), up: toMap(q), note: `${def.name}: on the ground, Gargantua ${el}° up` };
+  const axes = properBodyAxes(F, { r: f.r, theta: f.th, phi: f.ph, zamo: zamo(f.r, f.th, spin), beta: b } as CameraFrame);
+  const direction = (v: Vec3): Vec3 => cart([0, 1, 2].map((i) => axes.reduce((sum, a, j) => sum + a[i]! * v[j]!, 0)) as Vec3);
+  let heading = sub(g, q.map((c) => c * dot(g, q)) as Vec3);
+  // At the sub-primary point (or its antipode), the projected primary direction vanishes.
+  // Keep a real tangent heading instead of handing a zero nose vector to the ship attitude.
+  if (Math.hypot(...heading) < 1e-6) {
+    const pole: Vec3 = Math.abs(q[2]) < 0.9 ? [0, 0, 1] : [0, 1, 0];
+    heading = sub(pole, q.map((c) => c * dot(pole, q)) as Vec3);
+  }
+  const h = unit(heading);
+  return {
+    frame: "hole",
+    X: glob.X,
+    vel: cart(b),
+    fwd: direction(h),
+    up: direction(q),
+    localLanded: { body, xi },
+    note: `${def.name}: on the ground, Gargantua ${el}° up`,
+  };
 }
 
 /**

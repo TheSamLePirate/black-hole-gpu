@@ -423,14 +423,14 @@ export function matchKey(
     matchIn("system", e, false, list) ??
     (character
       ? (matchIn("character", e, false, list) ??
-        (matchIn("flight", e, false, list)?.do === "leaveShip" ? matchIn("flight", e, false, list) : undefined))
+        (["leaveShip", "map"].includes(matchIn("flight", e, false, list)?.do ?? "") ? matchIn("flight", e, false, list) : undefined))
       : flying
         ? matchIn("flight", e, false, list)
         : undefined) ??
     matchIn("time", e, false, list) ??
     (character
       ? matchIn("scene", e, false, list) &&
-        ["help", "png", "fullscreen", "details", "toggleUi", "quality"].includes(matchIn("scene", e, false, list)!.do)
+        ["help", "png", "fullscreen", "details", "toggleUi", "quality", "map"].includes(matchIn("scene", e, false, list)!.do)
         ? matchIn("scene", e, false, list)
         : undefined
       : flightKey

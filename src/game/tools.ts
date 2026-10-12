@@ -101,6 +101,7 @@ export class GameTools {
       "soi()                         the sphere of influence the ship is in, and the chain of its primaries",
       "orbit(body, {altKm, peKm, apKm, inc, raan, argPe, nu, retrograde})   put the Ranger in orbit",
       "land(body, lat, lon)          put it on the ground (our solid bodies)",
+      "walk(body, lat, lon)          on foot: the ship landed there, the astronaut out beside it (third person)",
       "near(body, {altKm, rM})       beside a body at rest (the hover autopilot holds it there)",
       "hoverOver(body, lat, lon, altKm)   over a place of a ground, at rest over it, hovering (G lands it)",
       "wormhole('ours'|'gargantua', dM)   before a mouth of the wormhole, at rest",
@@ -222,6 +223,12 @@ export class GameTools {
     c.setPilot(true);
     c.newFlight();
     c.setOurLanded(p.landed ?? null);
+    if (p.localLanded) {
+      const F = planetFrame(p.localLanded.body, this.ctx.time(), s.spin, s.massSolar);
+      c.local = { F, L: { xi: [...p.localLanded.xi], w: [0, 0, 0], landed: true }, key: c.poseKeyNow() };
+      c.landed = true;
+      c.gearDown = true;
+    }
     c.sync();
     this.ctx.refresh();
     this.log.add("place", p.note, this.ctx.time());
@@ -348,6 +355,18 @@ export class GameTools {
       return this.placeAt(theirGroundAt(body, q, this.ctx.time(), s.spin, s.massSolar));
     }
     return this.placeAt(ourGroundPose(body, lat, lon, this.ctx.time()));
+  }
+
+  /**
+   * On foot at latitude and east longitude [°]: the ship landed there (as land()), then the astronaut
+   * steps out beside it, walking — the third-person controller. A spot refused (water, an obstruction)
+   * leaves the ship landed and says why: the astronaut is not put down.
+   */
+  walk(body: string, lat = 0, lon = 0) {
+    const note = this.land(body, lat, lon);
+    const refused = this.ctx.camera.character.disembark(body);
+    if (refused) throw new Error(`the ship landed, but no walk from it: ${refused}`);
+    return note;
   }
 
   /**
@@ -718,6 +737,7 @@ export class GameTools {
       budgetMs: s.realtimeBudget,
       earthSurface: r.earthSurface.stats(),
       earthScenery: r.earthScenery.stats(),
+      streaming: r.streamingState,
       character: this.ctx.camera.character.state(),
       grass: r.characterRenderer.stats(),
       block: r.realtimeBlockNow,

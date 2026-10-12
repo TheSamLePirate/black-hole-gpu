@@ -1,3 +1,7 @@
+import { cameraFrame } from "../camera";
+import { properBodyAxes } from "../system/local-patch";
+import { sphericalFrame } from "../wormhole";
+import { vesselHulls } from "../system/collide";
 // Planet-fixed walking. All contact arithmetic is float64 metres; the vessel remains the pilot.
 import { WalkingGround } from "./walking-ground";
 import type { CameraController } from "../controls";
@@ -132,7 +136,9 @@ export class PlanetCharacter {
       if (
         ours
           ? !solidBody(body)
-          : !systemBody(GARGANTUA_SYSTEM, body).surface || ["gas", "ocean"].includes(systemBody(GARGANTUA_SYSTEM, body).surface!.kind)
+          : !systemBody(GARGANTUA_SYSTEM, body).surface ||
+            systemBody(GARGANTUA_SYSTEM, body).surface!.kind === "gas" ||
+            (systemBody(GARGANTUA_SYSTEM, body).surface!.kind === "ocean" && body !== "miller")
       )
         return t("You cannot walk on this surface.");
     } catch {
@@ -154,7 +160,7 @@ export class PlanetCharacter {
       Object.assign(this, prev);
       return t("The exit is in the water.");
     }
-    if ((ours && body === "earth" && this.contact()?.at(foot).blocked) || this.inHull(foot)) {
+    if ((ours && body === "earth" && this.contact()?.at(foot).blocked) || this.vesselBlocked(foot)) {
       Object.assign(this, prev);
       return t("The exit is blocked.");
     }
@@ -217,12 +223,14 @@ export class PlanetCharacter {
       return t("This surface cannot be walked on.");
     }
   }
-  disembark() {
+  /** `forcedBody`: the body known from the placement (the panel's On foot mode) — a Gargantua-world
+   *  landing is a hole-frame pose without a landed state, the inference would fail. */
+  disembark(forcedBody?: string) {
     if (this.active) return null;
     const c = this.c,
       w = c.rigWorld();
     if (!w || !c.piloting) return this.fail(t("Fly a landed vessel first."));
-    const body = c.ourLanded?.body ?? (c.landed ? c.local?.F.id : undefined);
+    const body = forcedBody ?? c.ourLanded?.body ?? (c.landed ? c.local?.F.id : undefined);
     if (!body) return this.fail(t("Land the vessel before going out."));
     const h = c.airInfo?.();
     if (h && h.speed > 0.5) return this.fail(t("The vessel must be almost still."));
@@ -450,6 +458,29 @@ export class PlanetCharacter {
     this.cpuMs = performance.now() - began;
     return true;
   }
+  /**
+   * The astronaut standing at q would meet the landed vessel: a capsule against its hull's real triangles (its
+   * BVH), else — its mesh not read yet — against its box (vesselHull).
+   */
+  private vesselBlocked(q: Vec3, radius = 0.3, height = 1.8) {
+    const hull = vesselHulls[this.c.s.vessel],
+      pose = this.c.activePoseNow();
+    if (!this.c.piloting) return false;
+    if (!hull.bvh) return this.inHull(q, radius, height);
+    if (!pose) return false;
+    const w = this.c.rigWorld();
+    if (!w || w.ours !== this.ours) return false;
+    const S = shipToCamera(this.c.shipPose(), this.c.s.shipLookYaw, this.c.s.shipLookPitch).S;
+    const local = (p: Vec3): Vec3 => {
+      const d = scale(sub(this.world(p), pose.X), this.metres());
+      const cam = [dot(d, w.right), dot(d, w.up), dot(d, w.fwd)];
+      return [0, 1, 2].map((i) => S[0][i]! * cam[0]! + S[1][i]! * cam[1]! + S[2][i]! * cam[2]!) as Vec3;
+    };
+    const a = local(add(q, this.up(), Math.min(radius, height / 2))),
+      b = local(add(q, this.up(), Math.max(height - radius, height / 2)));
+    if ([0, 1, 2].some((k) => Math.max(a[k]!, b[k]!) + radius < hull.lo[k]! || Math.min(a[k]!, b[k]!) - radius > hull.hi[k]!)) return false;
+    return hull.bvh.capsule(a, b, radius);
+  }
   private integrate(dt: number, f: number, r: number, run: boolean) {
     const up = this.up(),
       cam = tangent(up, add(scale(this.heading, Math.cos(this.yaw)), cross(this.heading, up), Math.sin(this.yaw)));
@@ -465,7 +496,7 @@ export class PlanetCharacter {
     }
     let target = add(this.q, this.velocity, dt);
     const contact = this.ours && this.body === "earth" ? this.contact() : null;
-    const free = (q: Vec3) => !contact?.at(q).blocked && this.surface(this.body, q) !== false && !this.inHull(q);
+    const free = (q: Vec3) => !contact?.at(q).blocked && this.surface(this.body, q) !== false && !this.vesselBlocked(q);
     if (!free(target)) {
       // Slide along one tangent component when the full capsule step hits a facade, a trunk or the hull.
       target = this.q;
@@ -494,7 +525,25 @@ export class PlanetCharacter {
     }
     this.jumpBuffer = Math.max(0, this.jumpBuffer - dt);
     if (!this.grounded) this.vertical -= g * dt;
+    const horizontal = target;
     target = add(target, up, this.vertical * dt);
+    // A jump must stop at an underside/crown, not cross it after the horizontal collision query.
+    if (
+      (contact?.at(target).blocked || this.vesselBlocked(target)) &&
+      !contact?.at(horizontal).blocked &&
+      !this.vesselBlocked(horizontal)
+    ) {
+      let lo = 0,
+        hi = 1;
+      for (let i = 0; i < 10; i++) {
+        const mid = (lo + hi) / 2;
+        const q = add(horizontal, up, this.vertical * dt * mid);
+        if (contact?.at(q).blocked || this.vesselBlocked(q)) hi = mid;
+        else lo = mid;
+      }
+      target = add(horizontal, up, this.vertical * dt * lo);
+      this.vertical = 0;
+    }
     let above = this.height(target);
     const object = contact?.at(target, 0.3, 1.8, 0.25);
     if (object && Number.isFinite(object.support)) above = Math.min(above, -object.support);
@@ -531,11 +580,10 @@ export class PlanetCharacter {
     let reach = this.distance;
     for (let d = 0.25; d <= this.distance; d += 0.25) {
       const p = add(target, away, d);
-      const hull = this.hullNow();
       if (
         this.height(p) < 0.2 ||
         (this.ours && this.body === "earth" && this.contact()?.at(p, 0.2, 0.1, 0).blocked) ||
-        (hull && hullDistance(hull, p) < 0.25)
+        this.vesselBlocked(p, 0.2, 0.4)
       ) {
         reach = Math.max(0.3, d - 0.3);
         break;
@@ -546,7 +594,25 @@ export class PlanetCharacter {
       X = this.world(q, time),
       look = unit(sub(this.world(target, time), X)),
       U = this.worldVector(up, time);
-    sp.rigPlace(this.ours, X, look, U, this.ours ? groundVelocity(this.body, X, time) : [0, 0, 0]);
+    const velocity = this.ours
+      ? groundVelocity(this.body, X, time)
+      : toGlobal(planetFrame(this.body, time, this.c.s.spin, this.c.s.massSolar), {
+          xi: scale(q, 1 / this.metres()),
+          w: [0, 0, 0],
+          landed: true,
+        }).V;
+    sp.rigPlace(this.ours, X, look, U, velocity);
+    if (!this.ours) {
+      const cam = cameraFrame(sp.s),
+        F = planetFrame(this.body, time, this.c.s.spin, this.c.s.massSolar);
+      const axes = properBodyAxes(F, cam),
+        sf = sphericalFrame(X);
+      const world = (v: Vec3): Vec3 => {
+        const z = [0, 1, 2].map((i) => axes.reduce((sum, a, j) => sum + a[i]! * v[j]!, 0)) as Vec3;
+        return add(add(scale(sf.er, z[0]), sf.et, z[1]), sf.ep, z[2]);
+      };
+      sp.rigPlace(false, X, world(unit(sub(target, q))), world(up), velocity);
+    }
     sp.sync();
   }
   frame(): CharacterFrame | null {
@@ -554,12 +620,23 @@ export class PlanetCharacter {
     const v = this.c.spectator?.rigWorld();
     if (!v) return null;
     const project = (p: Vec3): Vec3 => [dot(v.right, p), dot(v.up, p), dot(v.fwd, p)];
-    const origin = project(scale(sub(this.world(this.q), v.X), this.metres()));
+    let origin = project(scale(sub(this.world(this.q), v.X), this.metres()));
+    let bodyProject = (p: Vec3) => project(this.worldVector(p));
+    if (!this.ours) {
+      const cam = cameraFrame(this.c.spectator!.s),
+        F = planetFrame(this.body, this.lastTime, this.c.s.spin, this.c.s.massSolar);
+      const axes = properBodyAxes(F, cam);
+      bodyProject = (p: Vec3): Vec3 => {
+        const z = [0, 1, 2].map((i) => axes.reduce((sum, a, j) => sum + a[i]! * p[j]!, 0)) as Vec3;
+        return [dot(z, cam.right), dot(z, cam.up), dot(z, cam.fwd)];
+      };
+      origin = bodyProject(sub(this.q, scale(toLocal(F, v.X, [0, 0, 0]).xi, F.mPerM)));
+    }
     const up = this.up(),
       right = unit(cross(this.forward, up));
     return {
       origin,
-      axes: [right, up, this.forward].map((p) => project(this.worldVector(p))) as [Vec3, Vec3, Vec3],
+      axes: [right, up, this.forward].map(bodyProject) as [Vec3, Vec3, Vec3],
       sunOrigin: this.world(this.q),
       q: this.q,
       body: this.body,
