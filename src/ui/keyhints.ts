@@ -17,12 +17,13 @@ const key = (code: string, qwerty: string) => {
 };
 
 const HINTS = {
+  // (the free camera, PLAN-MODES-AAA: its placements, the tripod and the sky's events, the Atlas, the other modes)
   free: (): Hint[] => [
     ["V", { fr: "vue suivante", en: "next view" }],
     ["Tab", { fr: "cible suivante", en: "next target" }],
-    ["C", { fr: "regarder la cible", en: "look at the target" }],
-    ["Y", { fr: "télescope", en: "telescope" }],
-    ["K", { fr: "piloter le Ranger", en: "fly the Ranger" }],
+    ["⇧T · ⇧F8", { fr: "trépied au sol · le ciel d'ici", en: "tripod on the ground · the sky from here" }],
+    ["F8", { fr: "Atlas : y aller", en: "Atlas: go there" }],
+    ["F1 · F2 · F4", { fr: "vaisseau · à pied · photo", en: "ship · on foot · photo" }],
   ],
   cinematic: (): Hint[] => [
     ["⌫", { fr: "arrêter la cinématique", en: "stop the cinematic" }],

@@ -12,7 +12,7 @@ The plan, the request and the user's choices: [PLAN-MODES-AAA.md](../PLAN-MODES-
 | M6 The Atlas: maps, POIs, placement, geocoding | done |
 | M7 Tripod and sky events from the view | done |
 | M8 Photo mode: renders and animations | done |
-| M9 Coherence | to do |
+| M9 Coherence | done |
 
 ## M1. The four modes, and the top bar always present
 
@@ -550,4 +550,55 @@ bun run e2e --remote modes a11y s5 photo-fps place eclipses metar music-panel bh
    - "/video dive";
    - "où en est la vidéo ?".
 8. **Narrow window and tablet:** the bar's rows wrap and stay usable.
+
+## M9. Coherence
+
+### What changed
+
+- **The wrong toasts.** "Leave the Ranger (⇧K)" pointed at the wrong key: ⇧K is the next view off a flight, and
+  disembarking once landed.
+  - The dive and the journey now say "K puts the Ranger away".
+  - The Ranger's tripod refusal now says: landed, ⇧K takes you out on foot and ⇧T sets the tripod there.
+  - Both messages are fixed in `main.ts` and `controller/piloting.ts`, with their French.
+- **⇧T from the spectator** sets its own camera on the ground (`viewController().standOn`), no longer refused while
+  a ship flies on.
+- **Key hints.**
+  - Free camera: V, Tab, ⇧T · ⇧F8 (tripod, the sky from here), F8 (Atlas), F1 · F2 · F4 (the other modes).
+  - On foot: the key line adds ⇧T (tripod here) and, on the Earth, ⇧F8.
+- **Tablet.** The top bar has a Tripod action on foot and in the free camera; it does what ⇧T does.
+- **The page's own buttons** moved into the top bar now have their tooltips in French: scenes, sky chart, music,
+  camera, details. The first-run hint is translated.
+- **Dead CSS** of the old toolbar removed: rotation, target, fly, gravity, orbit, dive and journey buttons, the sound
+  icons, and the phone rule's missing buttons.
+- **TARS:**
+  - he knows a video rendering (its shot, draft or final, frame, time left) and a capture lived (its exposures);
+  - his `render` waking tells a video's end only, not each of its frames;
+  - his tools table and his `/` commands are documented in full: `find_eclipses`, `eclipse_local`,
+    `go_see_eclipse`, `iss_passes`, `multiple_exposure`, `weather_at`, and the commands of the camera, flight, HUD
+    and saves.
+- **The `__bh` API:** `docs/BH-API.md` covers `__bh.mode` and its members, the only new ones from M1 to M8.
+
+### The e2e tests per mode (Macs)
+
+| Mode | Files |
+| --- | --- |
+| Ship | `modes`, `hud-kinds`, `hud-layout`, the flight files |
+| On foot | `modes` (out of a landed craft, the HUD, TARS), `atlas` (walked to Apollo 11), `sky-events` (the tripod) |
+| Free camera | `modes` (spectator and back, the capture), `atlas` (above Olympus Mons), `sky-events` (the sky's events) |
+| Photo | `modes` (F4 over the ship, the capture), `photo-video` (the draft, the preview, TARS's video) |
+
+### Manual tests to do (on the Mac)
+
+1. **In flight in the Ranger:** press ⇧C (dive). The toast says "K puts the Ranger away".
+2. **Landed:** press ⇧T. The toast names ⇧K then ⇧T. Press ⇧K, then ⇧T: the tripod stands where you stood.
+3. **F3 with the ship flying (spectator):** press ⇧T. The spectator's camera is set on the ground below, and the ship
+   flies on.
+4. **Key hints:** in the free camera the strip shows the tripod, the Atlas and the modes; on foot on the Earth the
+   key line ends with ⇧T and ⇧F8.
+5. **Tablet (or a narrow window, touch):**
+   - the Tripod action on foot and in the free camera;
+   - Atlas, the sky from here, capture: each reachable from the top bar or its ⋯ menu.
+6. **French browser:** the top bar's tooltips (scenes, sky chart, music, camera) and the first-run hint are in French.
+7. **TARS during a video:** ask "où en est la vidéo ?"; he answers with the frame and the time left. Set a rule "quand
+   le rendu est fini, préviens-moi": it fires once, at the video's end.
 

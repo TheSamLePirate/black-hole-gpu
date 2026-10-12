@@ -70,6 +70,8 @@ export class LiveCapture {
   private root: HTMLElement | null = null;
   private stop = false;
   running = false;
+  /** the capture lived now: its exposures done of how many (TARS's situation) */
+  private now: { title: string; done: number; total: number } | null = null;
 
   constructor(private d: LiveHost) {}
 
@@ -103,6 +105,7 @@ export class LiveCapture {
     let stack: ImageData | null = null;
     const ctx = canvas.getContext("2d")!;
     let done = 0;
+    this.now = { title: o.title, done: 0, total: o.times.length };
     // (the time-lapse: the stack after each exposure, a frame — when this browser encodes video)
     let lapse: VideoWriter | null = null;
     const fps = lapseFps(o.times.length);
@@ -136,6 +139,7 @@ export class LiveCapture {
         }
         await addLapse(stack);
         done = i + 1;
+        if (this.now) this.now.done = done;
         bar.style.width = `${((done / o.times.length) * 100).toFixed(1)}%`;
         line.textContent = tf(
           "Exposure {0} / {1} · {2} UTC",
@@ -149,6 +153,7 @@ export class LiveCapture {
     } finally {
       this.d.release(was);
       this.running = false;
+      this.now = null;
     }
     // the end: the stack kept, saved or rendered at full quality
     root.classList.add("done");
@@ -192,6 +197,11 @@ export class LiveCapture {
       );
     acts.append(button({ label: t("Close"), testid: "live-close", onClick: () => this.close() }));
     return done;
+  }
+
+  /** The capture being lived (null: none). */
+  state() {
+    return this.now ? { ...this.now } : null;
   }
 
   close() {

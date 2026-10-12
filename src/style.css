@@ -678,32 +678,6 @@ body.map-open .asset-pill { top: auto; bottom: 138px; left: calc(50% + (var(--fc
 .ap-bar { flex: none; width: 60px; height: 2px; border-radius: 2px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
 .ap-bar i { display: block; height: 100%; background: var(--accent); transform-origin: left; transform: scaleX(0); transition: transform 0.3s; }
 
-/* rotation mode: one icon per mode; the target chip is tinted by its body */
-#btn-sound .ic-off,
-#btn-sound.muted .ic-on {
-  display: none;
-}
-
-#btn-sound.muted .ic-off {
-  display: block;
-}
-
-#btn-rotation .ic-free,
-#btn-rotation.free .ic-around {
-  display: none;
-}
-#btn-rotation.free .ic-free {
-  display: block;
-}
-#btn-rotation,
-#btn-target {
-  color: var(--text);
-}
-#btn-target[data-body="hole"] svg { color: #ffb35c; }
-#btn-target[data-body="star"] svg { color: #ffd98a; }
-#btn-target[data-body="wormhole"] svg { color: #9fb8ff; }
-#btn-target[data-body="barycentre"] svg { color: #ebf0ff; }
-
 /* ---------------------------------------------------------------- offline render dialog */
 #render {
   position: fixed;
@@ -938,12 +912,8 @@ body.hide-ui .tb-handle {
 
 @media (max-width: 600px) {
   /* phones: touch-only or heavy tools stay in the settings */
-  #btn-fly,
   #btn-help,
-  #btn-full,
-  #btn-render,
-  #btn-jet,
-  #btn-guide {
+  #btn-render {
     display: none !important;
   }
 }
@@ -1054,8 +1024,6 @@ body.piloting #hint { display: none; }
 .fl-sub { margin: 8px 0 3px; font: 700 11px var(--hud-font); letter-spacing: 0.18em; text-transform: uppercase; color: rgba(176, 196, 222, 0.72); }
 .fl-label { font: 700 11px var(--hud-font); letter-spacing: 0.16em; text-transform: uppercase; color: var(--hud-dim); }
 
-body.piloting #btn-rotation, body.piloting #btn-orbit, body.piloting #btn-dive,
-body.piloting #btn-fly, body.piloting #btn-gravity, body.piloting #btn-journey { display: none; }
 
 /* ---- the ship's groups of the top bar (ui/topbar.ts): the chips, the clocks, the craft and the views */
 .fl-mgroup { display: flex; align-items: center; gap: 10px; }

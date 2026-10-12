@@ -59,8 +59,15 @@ export interface TarsState {
     cinematic: string | null;
     spectator: boolean;
   } | null;
-  /** the photo mode open (over which mode), an offline render running (0…1, its size) */
-  photo?: { open: boolean; over: string | null; render: { progress: number; width: number; height: number; done: boolean } | null } | null;
+  /** the photo mode open (over which mode), an offline render running (0…1, its size), a video rendering (its shot,
+   *  a draft or not, its frame of how many, the time left [s]), a capture lived (its exposures done of how many) */
+  photo?: {
+    open: boolean;
+    over: string | null;
+    render: { progress: number; width: number; height: number; done: boolean } | null;
+    video?: { shot: string; draft: boolean; frame: number; frames: number; leftS: number | null } | null;
+    live?: { title: string; done: number; total: number } | null;
+  } | null;
 }
 
 export interface Personality {

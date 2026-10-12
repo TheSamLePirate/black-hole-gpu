@@ -39,6 +39,7 @@ export const TB_ICONS = {
   sound: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" class="f"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
   mute: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" class="f"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>',
   atlas: '<path d="M3.5 6.5l5.5-2 6 2 5.5-2v13l-5.5 2-6-2-5.5 2z"/><path d="M9 4.5v13M15 6.5v13"/>',
+  tripod: '<path d="M12 4.5v5M12 9.5l-6 10M12 9.5l6 10M12 9.5v10"/><rect x="8.5" y="3" width="7" height="4" rx="1" class="f"/>',
   skyEvents:
     '<path d="M4.5 19a7.5 7.5 0 0 1 15 0M7.5 19a4.5 4.5 0 0 1 9 0"/><circle cx="12" cy="19" r="1.1" class="f"/><path d="M17.5 3.5l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z" class="f"/>',
   capture:
@@ -63,6 +64,8 @@ export interface TopBarAction {
   icon?: string;
   button?: HTMLButtonElement;
   key?: string;
+  /** its tooltip (else its label): a page's button's own, in English, replaced */
+  tip?: string;
   run?: () => void;
   /** how readily it goes into the ⋯ menu when the bar is too wide: 0 never, 1 … 9 (9 first) */
   prio: number;
@@ -226,7 +229,7 @@ export class TopBar {
       if (a.run) b.onclick = a.run;
     }
     b.classList.add("tb-btn", "tb-act");
-    b.dataset.tip ??= a.label;
+    b.dataset.tip = a.tip ?? a.label;
     if (a.key) b.dataset.key = a.key;
     if (a.testid) b.dataset.testid = a.testid;
     b.setAttribute("aria-label", a.label);

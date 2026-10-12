@@ -58,7 +58,8 @@ TARS est là en vaisseau, à pied, en caméra libre et en mode photo :
     le cap de la vue, la vitesse, la distance et le relèvement de l'appareil posé ;
   - en caméra libre (`view`) : le monde le plus proche et l'altitude au-dessus, la cible, la visée, le télescope,
     l'objectif, une cinématique, le spectateur ;
-  - en mode photo et pendant un rendu (`photo`) : le mode sous la photo, l'avancement du rendu.
+  - en mode photo et pendant un rendu (`photo`) : le mode sous la photo, l'avancement du rendu ; la vidéo en cours
+    (son plan, brouillon ou non, son image sur combien, le temps restant) ; la capture vécue (ses poses faites).
 - **Hors ligne**, ses réponses écrites savent aussi « où sommes-nous » et « à quelle vitesse » à pied et en caméra
   libre (`game/tars.ts`).
 - **Sa boucle d'une seconde** tourne dans tous les modes : le mode et la fin d'un rendu sont des événements, ses
@@ -113,9 +114,10 @@ flowchart LR
 | Lire | `get_state`, `get_telemetry`, `list_places`, `list_bodies`, `get_weather`, `find_settings`, `list_saves_and_scenes`, `get_log`, `get_flight_report`, `list_keys` |
 | Piloter | `autopilot`, `hold`, `controls`, `flight_action`, `set_craft` |
 | Naviguer | `set_target`, `plan_maneuver`, `plan_mission`, `manage_plan` |
-| Modes, temps, vues, interface | `set_mode` (vaisseau, à pied, caméra libre, photo ; la barre du haut affichée ou cachée), `time`, `set_date`, `camera`, `sky`, `interface` (panneaux, dont musique et rendu) |
+| Modes, temps, vues, interface | `set_mode` (vaisseau, à pied, caméra libre, photo ; la barre du haut affichée ou cachée), `time`, `set_date`, `camera`, `sky`, `interface` (panneaux, dont musique, rendu, Atlas et ciel d'ici) |
 | À pied | `character` (descendre, monter à bord, marcher, sauter, regarder) |
 | Atlas | `atlas` (chercher une destination, une piste, un point de vue, une adresse sur Terre ou des coordonnées ; y aller : en orbite, posé, à pied, caméra libre, trépied ; ouvrir la page), `/atlas`, `/visit` |
+| Ciel, éclipses, photo | `find_eclipses` (le calculateur : toutes les éclipses d'une période — solaires, lunaires, transits — et ce qu'on en voit d'un lieu), `eclipse_local` (une éclipse vue d'un lieu : contacts, maximum, magnitude, hauteurs), `go_see_eclipse` (y emmener le joueur : la date, le lieu, la vue), `iss_passes` (les passages visibles de l'ISS), `multiple_exposure` (une surimpression : filé, analemme, phases d'une éclipse, Lune, ISS), `weather_at` (la météo réelle d'un lieu à une date) |
 | Ciel d’ici | `sky_events` (lister les événements depuis là où l’on se tient sur Terre — filés, analemme, Lune, passage et transits de l’ISS, éclipses, sélénélion, transits de Mercure et Vénus — avec date, visée et objectif ; en prendre un : `go` y aller, `live` le vivre en poses empilées, `render` le rendu pleine qualité ; ouvrir la page), `/skyevents` |
 | Capture | `capture` (la vue de l'instant rendue hors ligne, convergée, enregistrée seule en PNG, PNG 16 bits ou EXR ; son avancement ; arrêt), `/capture` |
 | Vidéo | `video` (filmer la vue : `live`, `take`, `orbit`, `dive`, `journey`, `director` ; brouillon rapide 640×360 lu aussitôt, ou version finale à la taille et la qualité du rendu ; durée, cadence, MP4 ou WebM ; avancement ; arrêt ; les plans possibles maintenant), `/draft`, `/video` |
@@ -195,7 +197,7 @@ direct.
 
 - **Événements** : `autopilot`, `phase`, `hub_step`, `entry_phase`, `alert`, `soi`, `landed`, `docked`,
   `report`, `deviation`, `eclipse`, `surface`, `scenery`, `character`, `grass`, `map`, `mode` (le mode de jeu a
-  changé) et `render` (un rendu hors ligne s'est terminé ou a été arrêté). Les règles horaires : `every` (toutes les N min), `at` (une heure du jeu),
+  changé) et `render` (un rendu hors ligne s'est terminé ou a été arrêté ; une vidéo : sa seule fin, `from` `video`). Les règles horaires : `every` (toutes les N min), `at` (une heure du jeu),
   `in` (dans N s).
 - **5 réflexes**, désactivables mais jamais supprimés : fin d'un autopilote, phase de la rentrée, alerte
   grave, écart (graphe du hub hors couloir, rentrée hors couloir, PAPI tout rouge ou tout blanc en
@@ -227,7 +229,10 @@ les outils de `READ_TOOLS` (lecture, et les deux planificateurs). Les planificat
 - **`/` de jeu** (`game-commands.ts`) : les commandes exécutées par ses outils **sans le modèle** (donc
   sans coût, et hors ligne aussi). Leurs arguments se donnent par position (`/teleport orbit Lune 100`)
   ou par nom (`altKm=100`). `/tool <outil> clé=valeur` appelle n'importe lequel de ses outils. `/play ship|foot|free|photo`
-  change de mode, `/bar show|hide` montre ou cache la barre du haut.
+  change de mode, `/bar show|hide` montre ou cache la barre du haut. Les autres : la caméra (`/view`, `/shipview`,
+  `/spectator`, `/goto`, `/lookat`, `/cinematic`, `/constellations`), le vol (`/flightmode`, `/release`, `/autowarp`),
+  le HUD (`/density`), les parties (`/deletesave`), l'Atlas (`/atlas`, `/visit`), le ciel d'ici (`/skyevents`), les
+  images (`/capture`, `/draft`, `/video`) — `/help` les liste toutes avec leur ligne.
 - **La complétion** : `complete(texte, ctx)` propose, en tapant, les commandes par leur début, puis les
   valeurs de l'argument en cours (modèles, écrans, corps, sites, vues, scènes, sauvegardes, réglages et
   leurs valeurs, touches, constellations) ; `@` complète un corps, un site, un écran, un réglage. Le

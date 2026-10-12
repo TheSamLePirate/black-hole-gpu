@@ -111,6 +111,7 @@ import { type ChoiceDef, SCHEMA, SCHEMA_BY_KEY } from "./ui/schema";
 import { loadFromUrl } from "./urlstate";
 import { setupRenderDialog } from "./renderdialog";
 import { VideoPreview } from "./ui/videopreview";
+import { h } from "./ui/kit";
 import { SHOTS as SHOT_IDS, type Shot } from "./photo/videoplan";
 import { fmtDate, GameTools } from "./game/tools";
 import { rangerStatus, type RangerStatus } from "./game/status";
@@ -656,14 +657,26 @@ async function main() {
         spectator: camera.spectating,
       };
     }
-    if (mode === "photo" || renderer.offlineActive)
+    const video = renderDialog.videoState();
+    const live = liveCapture.state();
+    if (mode === "photo" || renderer.offlineActive || video || live)
       out.photo = {
         open: mode === "photo",
         over: mode === "photo" ? baseMode(modeState()) : null,
         render:
-          renderer.offlineActive && lastOffline
+          renderer.offlineActive && lastOffline && !video
             ? { progress: r1(lastOffline.progress, 3), width: lastOffline.width, height: lastOffline.height, done: lastOffline.done }
             : null,
+        video: video
+          ? {
+              shot: video.shot,
+              draft: video.draft,
+              frame: video.frame + 1,
+              frames: video.frames,
+              leftS: Number.isFinite(video.etaS) ? Math.round(video.etaS) : null,
+            }
+          : null,
+        live,
       };
     return out;
   }
@@ -815,6 +828,8 @@ async function main() {
   let tarsMapSeen: string | null = null;
   let tarsModeSeen: GameMode | null = null;
   let tarsRenderSeen = "";
+  /** the last video ended with its file (not stopped): its end told as done */
+  let tarsVideoDone = false;
   let tarsSpentSeen = 0;
   setInterval(() => {
     // (what OpenRouter cost since: the budget's)
@@ -827,9 +842,13 @@ async function main() {
     const modeNow = gameMode();
     if (tarsModeSeen !== null && modeNow !== tarsModeSeen) tarsEvent({ kind: "mode", from: tarsModeSeen, to: modeNow });
     tarsModeSeen = modeNow;
-    const renderNow = renderer.offlineActive ? (lastOffline?.done ? "done" : "running") : "";
+    // (a video's frames are renders each: its end alone is told — "video" to "done" or "stopped")
+    const renderNow = renderDialog.videoState() ? "video" : renderer.offlineActive ? (lastOffline?.done ? "done" : "running") : "";
     if (tarsRenderSeen === "running" && renderNow !== "running")
       tarsEvent({ kind: "render", from: "running", to: renderNow === "done" || lastOffline?.done ? "done" : "stopped" });
+    else if (tarsRenderSeen === "video" && renderNow !== "video")
+      tarsEvent({ kind: "render", from: "video", to: tarsVideoDone ? "done" : "stopped" });
+    if (renderNow === "video") tarsVideoDone = false;
     tarsRenderSeen = renderNow;
     // (the flight's own, while one is flown)
     if (!camera.piloting) {
@@ -1681,7 +1700,7 @@ async function main() {
   }
   /** A cinematic on or off (the dive and the journey are the free camera's). */
   function cinematic(c: "orbit" | "dive" | "journey") {
-    if (settings.ship && c !== "orbit") return panel.toast(t("The dive and the journey are the free camera's — leave the Ranger (⇧K)"));
+    if (settings.ship && c !== "orbit") return panel.toast(t("The dive and the journey are the free camera's — K puts the Ranger away"));
     camera.setCinematic(camera.cinematic === c ? null : c);
     if (camera.cinematic && !settings.animate) panel.toast(t("Cinematics run with the time — Space runs it"));
     refreshGui();
@@ -1844,10 +1863,13 @@ async function main() {
   }
   /** The camera set down on a world, on its tripod, looking at the horizon (⇧T; the camera panel). */
   function standOn(b?: Target): string | null {
-    if (settings.ship) return t("The Ranger lands itself (the autopilot) — leave it (⇧K) to set the camera down");
-    const why = camera.standOn(b as Parameters<typeof camera.standOn>[0]);
+    // (the spectator's camera stands where it is; the Ranger flown lands itself)
+    if (settings.ship && !camera.spectating)
+      return t("The Ranger lands itself (the autopilot: 7); landed, ⇧K takes you out on foot and ⇧T sets the tripod there");
+    const vc = camera.viewController();
+    const why = vc.standOn(b as Parameters<typeof vc.standOn>[0]);
     if (why) return why;
-    const on = camera.rigStatus()?.body;
+    const on = vc.rigStatus()?.body;
     panel.toast(
       tf("Tripod on {0} — drag to look around, the keys walk it, V another view", on ? BODY_NAMES[on as Target] : t("the ground")),
     );
@@ -3292,6 +3314,7 @@ async function main() {
     },
     // (a draft: seen at once; a final: saved, then seen)
     onVideo: (v) => {
+      tarsVideoDone = true;
       if (!v.draft) {
         download(v.blob, v.name);
         panel.toast(tf("Video saved · {0}", v.name));
@@ -3697,6 +3720,9 @@ async function main() {
   // the least used go first into its ⋯ menu when the window is narrow
   {
     const btn = (id: string) => document.getElementById(id) as HTMLButtonElement;
+    // (the page's buttons moved in: their tooltips in the interface's language)
+    btn("btn-camera").dataset.tip = t("Camera — placement, look at the target, lens & telescope, target, cinematics");
+    $("hud-toggle").dataset.tip = t("Details and physical readouts");
     topBar.freeSlot.append(btn("btn-camera"));
     topBar.add({
       id: "btn-atlas",
@@ -3706,6 +3732,16 @@ async function main() {
       run: () => atlas.open(),
       prio: 1,
       testid: "topbar-atlas",
+    });
+    topBar.add({
+      id: "btn-tripod",
+      label: t("Tripod: the camera set down on the ground — on foot, where you stand, looking the same way"),
+      icon: TB_ICONS.tripod,
+      key: "⇧T",
+      run: () => keyActions.standOn(new KeyboardEvent("keydown")),
+      modes: ["foot", "free"],
+      prio: 3,
+      testid: "topbar-tripod",
     });
     topBar.add({
       id: "btn-skyevents",
@@ -3724,7 +3760,13 @@ async function main() {
       prio: 2,
       testid: "hud-place",
     });
-    topBar.add({ id: "btn-scenes", label: t("Scenes"), button: btn("btn-scenes"), prio: 4 });
+    topBar.add({
+      id: "btn-scenes",
+      label: t("Scenes"),
+      tip: t("Scenes — every black hole, the wormhole, Gargantua and the game's missions"),
+      button: btn("btn-scenes"),
+      prio: 4,
+    });
     topBar.add({
       id: "btn-weather",
       label: t("The weather"),
@@ -3741,8 +3783,21 @@ async function main() {
       prio: 6,
       testid: "hud-eclipses",
     });
-    topBar.add({ id: "btn-sky", label: t("Sky chart"), button: btn("btn-sky"), key: "N", prio: 5 });
-    topBar.add({ id: "btn-music", label: t("Music"), button: btn("btn-music"), prio: 3 });
+    topBar.add({
+      id: "btn-sky",
+      label: t("Sky chart"),
+      tip: t("Sky chart — constellations, star names, equatorial & horizontal grids (U: grids)"),
+      button: btn("btn-sky"),
+      key: "N",
+      prio: 5,
+    });
+    topBar.add({
+      id: "btn-music",
+      label: t("Music"),
+      tip: t("Music — the themes, listen, the mode, the mixer, which theme when"),
+      button: btn("btn-music"),
+      prio: 3,
+    });
     topBar.add({
       id: "btn-sound",
       label: t("Sound on / off"),
@@ -5515,6 +5570,15 @@ async function main() {
   const hintSeen = store.get(HINT_KEY) === "1";
   if (!hintSeen && !matchMedia("(hover: none)").matches) {
     const hint = $("hint");
+    // (in the interface's language)
+    hint.replaceChildren(
+      ...[
+        [t("Drag"), t("to orbit")],
+        [t("Wheel"), t("to zoom")],
+        [t("Click"), t("a body to target it")],
+      ].map(([k, what]) => h("span", {}, h("b", {}, k!), ` ${what}`)),
+      h("span", {}, h("kbd", {}, "?"), ` ${t("all shortcuts")}`),
+    );
     const dismiss = () => {
       hint.classList.add("gone");
       setTimeout(() => (hint.hidden = true), 700);

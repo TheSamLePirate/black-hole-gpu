@@ -225,7 +225,7 @@ function stepOffMount(this: CameraController) {
 function standOn(this: CameraController, b?: Body): string | null {
   const s = this.s;
   // (tf: `t` is the time here)
-  if (this.piloting) return tf("The Ranger lands itself (the autopilot: 7) — leave it to set the camera down (⇧K)");
+  if (this.piloting) return tf("The Ranger lands itself (the autopilot: 7); landed, ⇧K takes you out on foot and ⇧T sets the tripod there");
   const w = this.rigWorld();
   if (!w) return tf("No world to stand on here");
   const t = this.nowTime();

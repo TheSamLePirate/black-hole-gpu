@@ -34,8 +34,8 @@ export default {
   "Target: {0}  ({1} / {2})": "Cible : {0}  ({1} / {2})",
   "Camera: {0} — {1}": "Caméra : {0} — {1}",
   "(paused: Space runs time)": "(en pause : Espace relance le temps)",
-  "The dive and the journey are the free camera's — leave the Ranger (⇧K)":
-    "La plongée et le voyage sont réservés à la caméra libre — quittez le Ranger (⇧K)",
+  "The dive and the journey are the free camera's — K puts the Ranger away":
+    "La plongée et le voyage sont ceux de la caméra libre — K range le Ranger",
   "Cinematics run with the time — Space runs it": "Les cinématiques avancent avec le temps — Espace le relance",
   "View locked on {0}": "Vue verrouillée sur {0}",
   "View free": "Vue libre",
@@ -56,8 +56,6 @@ export default {
   "The solar system lies through the wormhole of the Gargantua-system scenes":
     "Le système solaire se trouve de l'autre côté du trou de ver des scènes du système de Gargantua",
   "Camera: around {0}": "Caméra : autour de {0}",
-  "The Ranger lands itself (the autopilot) — leave it (⇧K) to set the camera down":
-    "Le Ranger se pose seul (le pilote automatique) — quittez-le (⇧K) pour poser la caméra",
   "Tripod on {0} — drag to look around, the keys walk it, V another view":
     "Trépied sur {0} — glisser pour regarder autour, les touches le déplacent, V pour une autre vue",
   "the ground": "le sol",

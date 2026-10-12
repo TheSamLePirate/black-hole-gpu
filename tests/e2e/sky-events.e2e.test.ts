@@ -2,10 +2,10 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
 // The tripod and the sky's events from the view (PLAN-MODES-AAA M7 — ui/skyevents.ts, ui/livecapture.ts,
-// photo/skyevents.ts): walking in Paris, ⇧T sets the tripod where one stands (the free camera on the ground); ⇧F8
-// opens the sky's events — the star trails at once, the eclipses from the worker after; "Go there" aims the tripod
-// (the field set); TARS's sky_events lists them and lives the analemma — its exposures taken in the game, stopped
-// after three, the stack offered as a PNG; no console error.
+// photo/skyevents.ts): walking in Paris, the top bar offers the tripod and ⇧T sets it where one stands (the free
+// camera on the ground); ⇧F8 opens the sky's events — the star trails at once, the eclipses from the worker after;
+// "Go there" aims the tripod (the field set); TARS's sky_events lists them and lives the analemma — its exposures
+// taken in the game, stopped after three, the stack offered as a PNG; no console error.
 
 describe.skipIf(!E2E)("the tripod and the sky's events", () => {
   let app: App;
@@ -26,6 +26,8 @@ describe.skipIf(!E2E)("the tripod and the sky's events", () => {
     );
     await settle();
     await app.waitFor("__bh.camera.character.active", 30_000);
+    // (the top bar offers the tripod on foot — a tablet has no ⇧T)
+    expect(await app.js<boolean>(`!document.querySelector("[data-testid=topbar-tripod]").classList.contains("tb-off")`)).toBe(true);
     await app.press("KeyT", "T", { shift: true });
     await settle();
     expect(await app.js<boolean>("__bh.camera.character.active")).toBe(false);

@@ -237,4 +237,19 @@ export default {
   "Draft video": "Vidéo brouillon",
   "The final: the same shot at {0}×{1}, with the render dialog's samples, integrator and motion blur":
     "La version finale : le même plan en {0}×{1}, avec les échantillons, l'intégrateur et le flou de mouvement du rendu",
+  // the page's buttons and the first-run hint, in the interface's language (M9)
+  "Camera — placement, look at the target, lens & telescope, target, cinematics":
+    "Caméra — placement, regarder la cible, objectif et télescope, cible, cinématiques",
+  "Scenes — every black hole, the wormhole, Gargantua and the game's missions":
+    "Scènes — chaque trou noir, le trou de ver, Gargantua et les missions du jeu",
+  "Sky chart — constellations, star names, equatorial & horizontal grids (U: grids)":
+    "Carte du ciel — constellations, noms des étoiles, grilles équatoriale et horizontale (U : grilles)",
+  "to orbit": "pour tourner autour",
+  Wheel: "Molette",
+  "to zoom": "pour zoomer",
+  Click: "Cliquer",
+  "a body to target it": "sur un corps pour le viser",
+  "all shortcuts": "tous les raccourcis",
+  "Tripod: the camera set down on the ground — on foot, where you stand, looking the same way":
+    "Trépied : la caméra posée au sol — à pied, là où vous êtes, regardant du même côté",
 } satisfies Record<string, string>;

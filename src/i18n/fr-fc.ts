@@ -514,8 +514,8 @@ export default {
   "Burn {0} done ({1} m/s)": "Poussée {0} terminée ({1} m/s)",
 
   // ---- piloting, the entry (controller/piloting.ts)
-  "The Ranger lands itself (the autopilot: 7) — leave it to set the camera down (⇧K)":
-    "Le Ranger se pose seul (le pilote automatique : 7) — quittez-le pour poser la caméra (⇧K)",
+  "The Ranger lands itself (the autopilot: 7); landed, ⇧K takes you out on foot and ⇧T sets the tripod there":
+    "Le Ranger se pose seul (le pilote automatique : 7) ; posé, ⇧K vous fait sortir à pied et ⇧T y plante le trépied",
   "No world to stand on here": "Aucun monde où se tenir ici",
   "Nothing solid to stand on — a planet or a moon on this side of the wormhole (Go to takes the camera through)":
     "Rien de solide où se tenir — une planète ou une lune de ce côté du trou de ver (Aller à y fait passer la caméra)",
