@@ -4,7 +4,7 @@ import { dot as dot3 } from "./math/vec3";
 import { sphericalFrame } from "./wormhole";
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
 import { lampsOf } from "./cockpit/lights";
-import { EARTH_RUNWAYS, landingEnd, RUNWAY_HALF_WIDTH, RUNWAY_LENGTH, runwayGrade } from "./game/sites";
+import { EARTH_RUNWAYS, landingEnd, RUNWAY_HALF_WIDTH, RUNWAY_LENGTH, runwayGrade, runwayPaved } from "./game/sites";
 import {
   bodyAxes,
   daysOf,
@@ -3897,7 +3897,8 @@ export class Renderer {
         fov: s.fov,
       },
       s.earthTerrain ? this.earthScenery.contact : null,
-      this.earthScenery.stamp * 100000 + this.earthTiles.stamp + this.character!.groundPatch.stamp * 10000000,
+      // (the ground's data: the scenery and the terrain tiles — the grass's grid made again when they change)
+      this.earthScenery.stamp * 100000 + this.earthTiles.stamp,
       s.earthGrass !== "off" ? { density: s.earthGrassDensity, reach: s.earthGrassReach, wind: s.earthGrassWind } : null,
       this.prof,
       this.earthScenery.buffer,
@@ -3910,6 +3911,7 @@ export class Renderer {
         axes: this.ship.ready && performance.now() - this.envAt < 500 ? this.shipProbeAxes : null,
         shipBound: (s.ship || this.shipInView) && this.ship.ready ? this.ship.shadowBound : null,
       },
+      { wind: c.wind(), paved: runwayPaved },
     );
   }
 

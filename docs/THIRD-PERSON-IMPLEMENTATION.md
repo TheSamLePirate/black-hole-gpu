@@ -41,7 +41,7 @@ ombres propres et au sol. Une carte d’ombre 512² et un filtre PCF adoucissent
 Les bâtiments et arbres occultent aussi son éclairage direct. L’éclairage ambiant et les reflets du
 casque restent approximés : ce n’est pas un éclairage global complet.
 
-## Herbe et contact au sol
+## Herbe et contact au sol (première version, remplacée : voir « Le sol vivant » plus bas)
 
 L’herbe s’active uniquement à pied, sur Terre, dans les prairies confirmées par la classe 30 de
 WorldCover. Les routes, voies ferrées, bâtiments, eaux et surfaces pavées du décor l’excluent.
@@ -169,3 +169,23 @@ Analyse puis corrections, toutes couvertes par des tests unitaires et par
 
 Restent hors de cette passe : IK des pieds sur les pentes, portes animées, assets de végétation
 photogrammétriques (les arbres restent analytiques).
+
+## Le sol vivant (herbe AAA, 12 octobre 2026)
+
+L’ancienne herbe (racines générées sur CPU par tranches, 65 536 au plus, un seul type, seulement en prairie
+WorldCover) est remplacée par une végétation entièrement créée sur GPU à chaque image, d’après l’herbe de
+[false-earth](https://github.com/momentchan/false-earth) (MIT) : réseau de points fixe dans le monde, touffes de
+Voronoï, brins en courbes de Bézier, inclinaison vers la caméra, LOD indirects. Réécrite en WGSL natif.
+
+| Élément | Comment |
+|---|---|
+| Réseau | ~750 × 750 points espacés de 7,5 cm autour de l’astronaute (≈ 178 brins/m² en prairie), chaque point décalé par son propre hash : le même brin au même endroit à chaque image. Repère fixe sur le corps pour 1,5 km. |
+| Sol | Grille CPU de 1 m (81 × 81, recentrée par pas de 8 m, cellules connues réutilisées, publiée entière) : hauteur, ce qui pousse (classe WorldCover, exclusions OSM routes/bâtiments/eau/revêtements, pistes) et couleur satellite. |
+| Végétation | Prairie (fleurs, épillets, brins secs, chaume couché), cultures en rangs avec épis, roseaux avec panicules, garrigue en touffes, sous-bois, sol nu clairsemé, mousse — table unique `grass-layout.ts`. Teinte tirée de l’image satellite. Bords de classes effilochés par un bruit. |
+| Distance | Tout jusqu’à 5 m, puis éclairci (18 % à 30 m) et élargi pour garder la couverture ; les brins s’enfoncent sur les 4 derniers mètres (pas de bord). 3 LOD (7, 4, 2 segments), capacités 36 864 / 90 112 / 98 304 (budget calculé et testé). |
+| Vie | Rafales du vent de la météo qui voyagent sur le champ, frémissement par brin, poussée autour des jambes, traces de pas persistantes (anneau 128² de 12,5 cm) qui se relèvent en ~9 s. Rien ne pousse sous la coque du vaisseau. |
+| Lumière | Sonde partagée (clé, ciel SH, reflets), translucidité (diffuse par la face arrière et lobe vers l’œil), normales arrondies, AO de profondeur, auto-ombrage de la canopée selon la hauteur du soleil, ombres du personnage (carte), des arbres/bâtiments (grille d’ombre 0,5 m calculée une fois par image) et du vaisseau. |
+| Coût | Un compute qui rejette d’abord (portée, distance, vue), un compute d’ombre 129², un de traces 128², 3 dessins indirects du plus loin au plus proche (profondeur écrite, bords mélangés). Aucune lecture GPU→CPU dans la boucle (les compteurs sont relus en asynchrone pour les stats). |
+
+Vérifié ici par rendu WebGPU headless (SwiftShader) de scènes synthétiques : prairie, champ, roseaux, garrigue,
+contre-jour, vue plongeante, marche. Reste à mesurer sur les Macs : `bun run e2e grass-aaa`.

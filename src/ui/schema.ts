@@ -2014,7 +2014,7 @@ export const SCHEMA: ControlDef[] = [
       { value: "off", label: "Off" },
       { value: "balanced", label: "Balanced" },
     ],
-    help: "Interactive grass only in third-person on Earth, in confirmed WorldCover grassland. GPU visibility, three LODs, local wind and character contact. Maximum 65,536 roots. Requires terrain and world scenery source coverage. No grass work in flight.",
+    help: "The living ground on foot on Earth: every blade made on the GPU each frame where WorldCover says something grows — meadows with flowers and seed heads, crops in rows with their ears, reeds in wetlands, tufts on scrub and bare ground, a forest floor, moss — coloured by the satellite's image, bare on roads, buildings, water and runways. The weather's wind travels over it, the astronaut pushes it aside and leaves footprints that rise again; lit like the suit, with the trees', the vessel's and the astronaut's shadows. Needs the terrain and the world scenery; nothing runs in flight.",
     keywords: "grass herbe marche third person personnage",
   },
   {
@@ -2030,7 +2030,7 @@ export const SCHEMA: ControlDef[] = [
     unit: "×",
     effect: "scene",
     enabled: (s) => s.earthGrass !== "off",
-    help: "Share of the grass blades drawn, from a quarter to the authored density (the centre's 130 blades/m² falling smoothly to 8 at 16 m). Fewer blades run faster on a weak GPU; the field is regenerated at once, and the drawn one stays on screen meanwhile.",
+    help: "Share of the blades drawn, from a quarter to all of them (about 180 a square metre near the astronaut in a meadow, thinned and widened with the distance). Fewer blades run faster on a weak GPU; the change shows at the next frame.",
     keywords: "grass herbe density densite brins blades",
   },
   {
@@ -2040,13 +2040,13 @@ export const SCHEMA: ControlDef[] = [
     group: "The Earth",
     label: "Grass reach",
     min: 8,
-    max: 28,
+    max: 30,
     step: 1,
     precision: 0,
     unit: "m",
     effect: "scene",
     enabled: (s) => s.earthGrass !== "off",
-    help: "How far from the character the grass is drawn, in metres: its fade ends at this distance. The field is at most 65,536 blades, so a shorter reach lets the density stay as authored.",
+    help: "How far from the astronaut the vegetation is drawn, in metres: the blades sink into the ground over its last 4 m. A shorter reach costs less; beyond it the satellite's ground carries on.",
     keywords: "grass herbe reach portee distance draw rayon",
   },
   {
@@ -2062,7 +2062,7 @@ export const SCHEMA: ControlDef[] = [
     unit: "×",
     effect: "scene",
     enabled: (s) => s.earthGrass !== "off",
-    help: "How much the grass sways in the wind, and bends away from the character: 0 keeps it still, 1 is the authored sway, 2 doubles it.",
+    help: "How much the vegetation leans and shivers in the weather's wind: 0 keeps it still, 1 is the wind as it blows, 2 doubles it. The astronaut's push and footprints stay.",
     keywords: "grass herbe wind vent sway balancement",
   },
   {

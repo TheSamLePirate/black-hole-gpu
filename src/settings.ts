@@ -306,7 +306,7 @@ export interface Settings {
   earthSceneryShadows: boolean;
   earthGrass: "off" | "balanced";
   earthGrassDensity: number; // the share of the grass blades drawn (0.25 … 1; 1 the authored density)
-  earthGrassReach: number; // the grass drawn out to this distance from the character [m] (8 … 28)
+  earthGrassReach: number; // the vegetation drawn out to this distance from the astronaut [m] (8 … 30)
   earthGrassWind: number; // the grass's sway (0 still … 2; 1 as authored)
   walkSpeed: number; // on foot: the walking speed [m/s] (the walk clip keeps its pace at 1.4)
   runSpeed: number; // on foot: the running speed [m/s] (held Shift)

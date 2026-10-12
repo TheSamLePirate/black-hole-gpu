@@ -309,6 +309,10 @@ export class PlanetCharacter {
     if (this.hullCache.at !== this.age) this.hullCache = { at: this.age, hull: this.vesselHull() };
     return this.hullCache.hull;
   }
+  /** The surface wind where he walks (the weather's at the landed vessel: speed [m/s], from [°]); null: unknown. */
+  wind(): { speed: number; from: number } | null {
+    return this.ours && this.body === "earth" ? this.c.windNow : null;
+  }
   /** How high the feet stand at p over the ground or what holds them (a bridge's deck, a roof) [m]. */
   private standing(p: Vec3) {
     const h = this.height(p);

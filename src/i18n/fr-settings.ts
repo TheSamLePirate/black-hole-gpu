@@ -13,17 +13,17 @@ export default {
   "How far the camera stands behind the astronaut when it starts walking, in metres (4.5 by default). The mouse wheel changes it while walking; a wall or the ground brings it closer.":
     "Distance de la caméra derrière l'astronaute au début de la marche, en mètres (4,5 par défaut). La molette la modifie à pied ; un mur ou le sol la rapproche.",
   "Grass density": "Densité de l'herbe",
-  "Share of the grass blades drawn, from a quarter to the authored density (the centre's 130 blades/m² falling smoothly to 8 at 16 m). Fewer blades run faster on a weak GPU; the field is regenerated at once, and the drawn one stays on screen meanwhile.":
-    "Part des brins d'herbe dessinés, du quart à la densité d'origine (130 brins/m² au centre, qui décroissent doucement jusqu'à 8 à 16 m). Moins de brins tournent plus vite sur un GPU faible ; le champ est régénéré aussitôt, l'ancien reste affiché entre-temps.",
+  "Share of the blades drawn, from a quarter to all of them (about 180 a square metre near the astronaut in a meadow, thinned and widened with the distance). Fewer blades run faster on a weak GPU; the change shows at the next frame.":
+    "Part des brins dessinés, d’un quart à tous (environ 180 par mètre carré près de l’astronaute dans une prairie, éclaircis et élargis avec la distance). Moins de brins vont plus vite sur un GPU modeste ; le changement se voit à l’image suivante.",
   "Grass reach": "Portée de l'herbe",
-  "How far from the character the grass is drawn, in metres: its fade ends at this distance. The field is at most 65,536 blades, so a shorter reach lets the density stay as authored.":
-    "Distance à laquelle l'herbe est dessinée autour du personnage, en mètres : son fondu s'achève à cette distance. Le champ compte au plus 65 536 brins : une portée plus courte permet de garder la densité d'origine.",
+  "How far from the astronaut the vegetation is drawn, in metres: the blades sink into the ground over its last 4 m. A shorter reach costs less; beyond it the satellite's ground carries on.":
+    "Jusqu’où la végétation est dessinée autour de l’astronaute, en mètres : les brins s’enfoncent dans le sol sur les 4 derniers mètres. Une portée plus courte coûte moins ; au-delà, le sol satellite prend le relais.",
   "Grass sway": "Balancement de l'herbe",
-  "How much the grass sways in the wind, and bends away from the character: 0 keeps it still, 1 is the authored sway, 2 doubles it.":
-    "Amplitude du balancement de l'herbe au vent, et son écartement devant le personnage : 0 la garde immobile, 1 est le balancement d'origine, 2 le double.",
+  "How much the vegetation leans and shivers in the weather's wind: 0 keeps it still, 1 is the wind as it blows, 2 doubles it. The astronaut's push and footprints stay.":
+    "L’inclinaison et le frémissement de la végétation dans le vent de la météo : 0 la garde immobile, 1 suit le vent tel qu’il souffle, 2 le double. La poussée et les traces de l’astronaute restent.",
   "Grass on foot": "Herbe à pied",
-  "Interactive grass only in third-person on Earth, in confirmed WorldCover grassland. GPU visibility, three LODs, local wind and character contact. Maximum 65,536 roots. Requires terrain and world scenery source coverage. No grass work in flight.":
-    "Herbe interactive uniquement en vue à la troisième personne sur Terre, dans les prairies confirmées par WorldCover. Visibilité GPU, trois niveaux de détail, vent local et contact avec le personnage. Maximum de 65 536 brins. Nécessite le terrain et les données du décor mondial. Aucun calcul d’herbe en vol.",
+  "The living ground on foot on Earth: every blade made on the GPU each frame where WorldCover says something grows — meadows with flowers and seed heads, crops in rows with their ears, reeds in wetlands, tufts on scrub and bare ground, a forest floor, moss — coloured by the satellite's image, bare on roads, buildings, water and runways. The weather's wind travels over it, the astronaut pushes it aside and leaves footprints that rise again; lit like the suit, with the trees', the vessel's and the astronaut's shadows. Needs the terrain and the world scenery; nothing runs in flight.":
+    "Le sol vivant à pied sur Terre : chaque brin créé sur le GPU à chaque image là où WorldCover dit que quelque chose pousse — prairies fleuries avec leurs épillets, cultures en rangs avec leurs épis, roseaux des zones humides, touffes sur la garrigue et les sols nus, sous-bois, mousse —, teinté par l’image satellite, nu sur les routes, les bâtiments, l’eau et les pistes. Le vent de la météo le parcourt, l’astronaute l’écarte et y laisse des traces de pas qui se relèvent ; éclairé comme la combinaison, avec les ombres des arbres, du vaisseau et de l’astronaute. Demande le relief et le décor mondial ; rien ne tourne en vol.",
   "Disembark / board a landed craft (on foot: approach its access)": "Sortir / entrer dans un vaisseau posé (à pied : approcher son accès)",
   "On foot": "À pied",
   "W A S D · Shift": "W A S D · Maj",

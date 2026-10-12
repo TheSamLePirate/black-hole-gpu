@@ -55,7 +55,8 @@ export class SceneryContact {
     }
     return inside || edge;
   }
-  cover(q: Vec3) {
+  /** The scenery raster's pixel under q (WorldCover class << 24 | satellite sRGB), 0 outside it. */
+  private pixel(q: Vec3) {
     const geo = cartToGeodetic(WGS84_A, WGS84_F, q),
       b = this.reply.bounds;
     if (!b) return 0;
@@ -63,25 +64,41 @@ export class SceneryContact {
     const x = Math.floor(((lon - b[0]) / (b[2] - b[0])) * SCENERY_GRID),
       y = Math.floor(((b[3] - geo.lat / D) / (b[3] - b[1])) * SCENERY_GRID);
     if (x < 0 || y < 0 || x >= SCENERY_GRID || y >= SCENERY_GRID) return 0;
-    return this.u[this.f[2]! * 4 + y * SCENERY_GRID + x]! >>> 24;
+    return this.u[this.f[2]! * 4 + y * SCENERY_GRID + x]!;
   }
-  grass(q: Vec3) {
-    if (this.cover(q) !== 30) return false;
+  cover(q: Vec3) {
+    return this.pixel(q) >>> 24;
+  }
+  /** Is q under a road, a railway, a paved or water surface, or a building's footprint (with margins [m])? */
+  excluded(q: Vec3, line = 0.25, area = 0.25, volume = 0.3) {
     const p = this.local(q);
-    let excluded = false;
-    this.visit(p, 0.15, true, (b) => {
+    let out = false;
+    this.visit(p, Math.max(line, area, 0.15), true, (b) => {
       const f = this.f;
       if (f[b + 11]! < 0.5) {
         const dx = f[b + 2]! - f[b]!,
           dy = f[b + 3]! - f[b + 1]!;
         const t = Math.max(0, Math.min(1, ((p[0] - f[b]!) * dx + (p[1] - f[b + 1]!) * dy) / (dx * dx + dy * dy || 1)));
-        excluded ||= Math.hypot(p[0] - f[b]! - t * dx, p[1] - f[b + 1]! - t * dy) < f[b + 4]! + 0.25;
-      } else excluded ||= this.polygon(p, b, 0.25);
+        out ||= Math.hypot(p[0] - f[b]! - t * dx, p[1] - f[b + 1]! - t * dy) < f[b + 4]! + line;
+      } else out ||= this.polygon(p, b, area);
     });
-    this.visit(p, 0.3, false, (b) => {
-      if (this.f[b + 3]! > 0.5 && this.polygon(p, b, 0.3)) excluded = true;
+    this.visit(p, volume, false, (b) => {
+      if (this.f[b + 3]! > 0.5 && this.polygon(p, b, volume)) out = true;
     });
-    return !excluded;
+    return out;
+  }
+  /**
+   * What grows at q: its WorldCover class (0: outside the raster or excluded — a road, a building, water,
+   * pavement), and the satellite's sRGB there (0xbbggrr; 0: none). The grass field's cells (grass-ground.ts).
+   */
+  vegetation(q: Vec3): { cover: number; rgb: number } {
+    const px = this.pixel(q),
+      cover = px >>> 24;
+    if (!cover || cover === 50 || cover === 70 || cover === 80 || this.excluded(q)) return { cover: 0, rgb: px & 0xffffff };
+    return { cover, rgb: this.reply.rgbPixels ? px & 0xffffff : 0 };
+  }
+  grass(q: Vec3) {
+    return this.cover(q) === 30 && !this.excluded(q);
   }
   /** Capsule occupancy and highest reachable support: preserves polygon holes and bridge undersides. */
   at(q: Vec3, radius = 0.3, height = 1.8, step = 0.25) {

@@ -46,3 +46,22 @@ test("roads and water exclude grass even when WorldCover says grassland", () => 
   expect(empty.grass(point(0, 0))).toBe(false);
   expect(a.cover(scale(point(0, 0), 1))).toBe(30);
 });
+test("what grows: the class and the satellite's colour, bare under roads, buildings and on built, snowy or water ground", () => {
+  const road = surfaceSegment([-10, 0, 0], [10, 0, 0], 4, 1, [0.1, 0.1, 0.1]);
+  const house = polygonPrimitive([ring(3)], 0, 6, 1, [0.5, 0.5, 0.5])!;
+  const field = new Uint32Array(SCENERY_GRID ** 2).fill(((40 << 24) | 0x3080c0) >>> 0);
+  const c = new SceneryContact({ ...reply, rgbPixels: 1 }, packScenery([house], field, [road]));
+  const crop = c.vegetation(point(0, 12));
+  expect(crop.cover).toBe(40);
+  expect(crop.rgb).toBe(0x3080c0);
+  expect(c.vegetation(point(0, 0)).cover).toBe(0);
+  expect(c.vegetation(point(0, 0, 0)).cover).toBe(0);
+  expect(c.excluded(point(0, 2.2))).toBe(true);
+  expect(c.excluded(point(0, 12))).toBe(false);
+  // (no satellite colour fetched: the class alone)
+  expect(new SceneryContact(reply, packScenery([], field)).vegetation(point(0, 12)).rgb).toBe(0);
+  for (const cls of [50, 70, 80]) {
+    const ground = new Uint32Array(SCENERY_GRID ** 2).fill((cls << 24) >>> 0);
+    expect(new SceneryContact(reply, packScenery([], ground)).vegetation(point(0, 12)).cover).toBe(0);
+  }
+});
