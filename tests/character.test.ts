@@ -158,3 +158,37 @@ test("on-foot rendering applies grass and quality edits without a physics step",
   expect(c.viewSettings().anchor).toBe(before.anchor);
   expect(c.viewSettings().distance).toBe(before.distance);
 });
+
+test("walking, running, jump and the camera distance on foot follow their settings", () => {
+  setSceneTime(0);
+  const s = defaultSettings();
+  s.walkSpeed = 2.5;
+  s.runSpeed = 6;
+  s.jumpSpeed = 2;
+  s.characterDistance = 6;
+  const c = new CameraController({} as HTMLCanvasElement, s, () => {}, true);
+  expect(c.character.start("earth", 0, 0)).toBeNull();
+  expect(c.character.distance).toBe(6);
+  c.character.move(1, 0, 3);
+  for (let i = 0; i < 240; i++) c.character.step(1 / 120, 0, null);
+  expect(len(c.character.velocity)).toBeGreaterThan(2.4);
+  expect(len(c.character.velocity)).toBeLessThan(2.6);
+  c.character.move(1, 0, 3, true);
+  for (let i = 0; i < 300; i++) c.character.step(1 / 120, 0, null);
+  expect(len(c.character.velocity)).toBeGreaterThan(5.8);
+  expect(len(c.character.velocity)).toBeLessThan(6.2);
+  // Launch speed v gives a height v²/2g: 2 m/s rises (2/3.6)² of the 3.6 m/s jump, about 31 %.
+  const peak = (speed: number) => {
+    const j = new CameraController({} as HTMLCanvasElement, { ...defaultSettings(), jumpSpeed: speed }, () => {}, true);
+    j.character.start("earth", 0, 0);
+    j.character.jump();
+    let top = 0;
+    for (let i = 0; i < 600; i++) {
+      j.character.step(1 / 120, 0, null);
+      top = Math.max(top, j.character.height());
+    }
+    return top;
+  };
+  expect(peak(2) / peak(3.6)).toBeGreaterThan(0.25);
+  expect(peak(2) / peak(3.6)).toBeLessThan(0.37);
+});

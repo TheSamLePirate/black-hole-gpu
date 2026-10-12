@@ -308,6 +308,10 @@ export interface Settings {
   earthGrassDensity: number; // the share of the grass blades drawn (0.25 … 1; 1 the authored density)
   earthGrassReach: number; // the grass drawn out to this distance from the character [m] (8 … 28)
   earthGrassWind: number; // the grass's sway (0 still … 2; 1 as authored)
+  walkSpeed: number; // on foot: the walking speed [m/s] (the walk clip keeps its pace at 1.4)
+  runSpeed: number; // on foot: the running speed [m/s] (held Shift)
+  jumpSpeed: number; // on foot: the jump's launch speed [m/s] (its height follows the local gravity)
+  characterDistance: number; // on foot: the camera's distance behind the character [m] (the wheel changes it; a wall shortens it)
   realtimeEps: number;
   realtimeSteps: number;
   qualityEps: number;
@@ -585,6 +589,10 @@ export function defaultSettings(): Settings {
     earthGrassDensity: 1,
     earthGrassReach: 28,
     earthGrassWind: 1,
+    walkSpeed: 1.4,
+    runSpeed: 4,
+    jumpSpeed: 3.6,
+    characterDistance: 4.5,
     realtimeEps: 0.07,
     realtimeSteps: 600,
     qualityEps: 0.02,
@@ -1819,6 +1827,10 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   earthGrassDensity: "pref",
   earthGrassReach: "pref",
   earthGrassWind: "pref",
+  walkSpeed: "pref",
+  runSpeed: "pref",
+  jumpSpeed: "pref",
+  characterDistance: "pref",
   realtimeEps: "pref",
   realtimeSteps: "pref",
   qualityEps: "pref",

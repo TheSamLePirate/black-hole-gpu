@@ -1,5 +1,16 @@
 // French for the settings, the scenes and the keyboard sheet (keyed by the English: see src/i18n.ts).
 export default {
+  "Walking speed": "Vitesse de marche",
+  "How fast the astronaut walks, in metres a second (1.4 by default, a brisk walk). The walking clip keeps its pace; a faster walk moves the feet faster on the ground than the clip was made for.":
+    "Vitesse de l'astronaute à la marche, en mètres par seconde (1,4 par défaut, une marche soutenue). Les pas s'accélèrent avec l'allure ; l'enjambée reste celle du cycle de marche, donc une marche beaucoup plus rapide peut faire glisser les pieds.",
+  "Running speed": "Vitesse de course",
+  "How fast the astronaut runs, held Shift, in metres a second (4 by default).": "Vitesse de l'astronaute en course, Maj maintenu, en mètres par seconde (4 par défaut).",
+  "Jump speed": "Vitesse de saut",
+  "The speed the astronaut leaves the ground with, in metres a second (3.6 by default). The height reached follows the local gravity: the Moon's jump is six times the Earth's at the same speed.":
+    "Vitesse de décollage de l'astronaute, en mètres par seconde (3,6 par défaut). La hauteur atteinte suit la gravité locale : à vitesse égale, le saut sur la Lune va six fois plus haut que sur la Terre.",
+  "Camera distance on foot": "Distance de la caméra à pied",
+  "How far the camera stands behind the astronaut when it starts walking, in metres (4.5 by default). The mouse wheel changes it while walking; a wall or the ground brings it closer.":
+    "Distance de la caméra derrière l'astronaute au début de la marche, en mètres (4,5 par défaut). La molette la modifie à pied ; un mur ou le sol la rapproche.",
   "Grass density": "Densité de l'herbe",
   "Share of the grass blades drawn, from a quarter to the authored density (the centre's 130 blades/m² falling smoothly to 8 at 16 m). Fewer blades run faster on a weak GPU; the field is regenerated at once, and the drawn one stays on screen meanwhile.":
     "Part des brins d'herbe dessinés, du quart à la densité d'origine (130 brins/m² au centre, qui décroissent doucement jusqu'à 8 à 16 m). Moins de brins tournent plus vite sur un GPU faible ; le champ est régénéré aussitôt, l'ancien reste affiché entre-temps.",

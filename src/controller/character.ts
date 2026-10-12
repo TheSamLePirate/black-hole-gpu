@@ -158,7 +158,7 @@ export class PlanetCharacter {
     this.grounded = true;
     this.yaw = 0;
     this.pitch = 0.2;
-    this.distance = this.camDistance = 4.5;
+    this.distance = this.camDistance = this.c.s.characterDistance;
     this.accumulator = 0;
     this.drive = null;
     this.c.keys.clear();
@@ -357,7 +357,8 @@ export class PlanetCharacter {
       cam = tangent(up, add(scale(this.heading, Math.cos(this.yaw)), cross(this.heading, up), Math.sin(this.yaw)));
     const right = unit(cross(cam, up)),
       n = Math.max(1, Math.hypot(f, r));
-    const desired = add(scale(cam, (f / n) * (run ? 4 : 1.4)), right, (r / n) * (run ? 4 : 1.4));
+    const pace = run ? this.c.s.runSpeed : this.c.s.walkSpeed;
+    const desired = add(scale(cam, (f / n) * pace), right, (r / n) * pace);
     this.velocity = add(this.velocity, sub(desired, this.velocity), 1 - Math.exp(-dt * 14));
     const speed = len(this.velocity);
     if (speed > 0.05) {
@@ -384,7 +385,7 @@ export class PlanetCharacter {
       : (planetFrame(this.body, this.lastTime, this.c.s.spin, this.c.s.massSolar).m / (len(this.q) / this.metres()) ** 2) *
         (299792458 ** 2 / this.metres());
     if (this.jumpPending && this.grounded) {
-      this.vertical = 3.6;
+      this.vertical = this.c.s.jumpSpeed;
       this.grounded = false;
       this.jumpPending = false;
       this.onEvent("jump", this.body);
