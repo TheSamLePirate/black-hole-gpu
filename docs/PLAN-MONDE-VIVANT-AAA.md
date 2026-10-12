@@ -201,7 +201,7 @@ scène n’est « parfaite » qu’une fois validée à l’œil sur Mac.
 | J2 | A2–A3 (données, espèces, saisons) | Landes, Vosges, Amazonie crédibles en captures |
 | J3 | A4–A5 (LOD tracés, couche de canopée, vent) | forêts d’avion à 10 km sans arbres individuels, transitions invisibles |
 | J4 | B1–B2 (océan FFT, littoral, lacs/rivières, reflets) | Maldives, Geiranger, Fuji validés |
-| J5 | C1–C6 (imagerie mondiale, bâtiments, relief fin) | vol à 250 m/s sans tuile visible, n’importe où |
+| J5 | C1–C6 (imagerie mondiale — C1 livrée : EOX z 9–13 —, bâtiments, relief fin) | vol à 250 m/s sans tuile visible, n’importe où |
 | J6 | D1–D5 (rochers, arbustes, cultures, vie) | Cévennes, Dolomites, Torres del Paine à pied validés |
 
 Chaque jalon : code + unitaires + e2e + captures de référence + mise à jour de `progress/on-foot-aaa.md`.

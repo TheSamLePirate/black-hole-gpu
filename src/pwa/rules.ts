@@ -5,7 +5,7 @@
  *  - `immutable`: a hashed build asset (index-a1b2c3d4.js, earth-3z05cvb5.ktx2…) — cache first, forever;
  *  - `shell`: the page and its unhashed files (/, index.html, version.json, the workers, the WASM, docs/) —
  *    network first, the cache when offline;
- *  - `tile`: the Earth's relief (S3 terrarium) and imagery (GIBS) — cache first, under a budget, LRU;
+ *  - `tile`: the Earth's relief (S3 terrarium) and imagery (GIBS, EOX) — cache first, under a budget, LRU;
  *  - `elements`: the station's orbital elements (CelesTrak) — network first, the cache when offline;
  *  - `pass`: anything else (POSTs, dev routes, other origins, the same origin outside this worker's own
  *    app) — straight to the network.
@@ -39,6 +39,7 @@ export function classify(url: string, scope: string, method = "GET", dirs: reado
   }
   if (u.hostname === "s3.amazonaws.com" && u.pathname.startsWith("/elevation-tiles-prod/")) return "tile";
   if (u.hostname === "gibs.earthdata.nasa.gov") return "tile";
+  if (u.hostname === "tiles.maps.eox.at" && u.pathname.startsWith("/wmts/")) return "tile";
   if (u.hostname === "tiles.openfreemap.org" && u.pathname.startsWith("/planet/")) return "tile";
   if (u.hostname === "mapproxy.terrascope.be" && u.pathname === "/mapproxy/service" && u.searchParams.get("REQUEST") === "GetMap")
     return "tile";

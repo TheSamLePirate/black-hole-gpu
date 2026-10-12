@@ -1098,7 +1098,11 @@ export class SettingsPanel {
           h(
             "span",
             { class: "credit" },
-            " · Earth: © ESA WorldCover 2021 / modified Copernicus Sentinel data (2021), ",
+            " · Earth: ",
+            h("a", { href: "https://s2maps.eu", target: "_blank", rel: "noopener" }, "Sentinel-2 cloudless 2021 by EOX IT Services GmbH"),
+            " (modified Copernicus Sentinel data 2021), ",
+            h("a", { href: "https://creativecommons.org/licenses/by-nc-sa/4.0/", target: "_blank", rel: "noopener" }, "CC BY-NC-SA 4.0"),
+            " · © ESA WorldCover 2021 / modified Copernicus Sentinel data (2021), ",
             h("a", { href: "https://creativecommons.org/licenses/by/4.0/", target: "_blank", rel: "noopener" }, "CC BY 4.0"),
             " · © OpenMapTiles, Data from ",
             h("a", { href: "https://www.openstreetmap.org/copyright", target: "_blank", rel: "noopener" }, "OpenStreetMap (ODbL)"),

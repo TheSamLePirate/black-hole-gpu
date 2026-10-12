@@ -143,3 +143,39 @@ test("tiles that will not load keep the ground: a runway's the same, no terrace 
   for (let k = 1; k < h.length; k++) expect(Math.abs(h[k]! - h[k - 1]!)).toBeLessThan(15);
   // (every wanted tile filled from the map: 3 s here, over the 5 s default on GitHub's runner)
 }, 30_000);
+
+test("the imagery: every level; EOX's colours brought into the Blue Marble's; finer nights from z 8's lights", async () => {
+  const { IMG_Z1, Z1, GIBS_Z1, eoxColour, EOX_FIT, nightOf, eoxUrl } = await import("../src/system/earth-tiles");
+  expect(IMG_Z1).toBe(Z1);
+  // black stays black; bright ground (snow, sand, rock) as it is — neutral, never tinted
+  expect(eoxColour(0, 0, 0)).toEqual([0, 0, 0]);
+  for (const v of [200, 240, 255]) for (const c of eoxColour(v, v, v)) expect(Math.abs(c - v)).toBeLessThanOrEqual(1);
+  for (const v of [60, 120, 160]) {
+    const [r, g, b] = eoxColour(v, v, v);
+    expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(26);
+  }
+  // the grey ramp stays a ramp (no channel turning back)
+  for (let c = 0; c < 3; c++) {
+    let last = -1;
+    for (let v = 0; v < 256; v += 5) {
+      const out = eoxColour(v, v, v)[c]!;
+      expect(out).toBeGreaterThanOrEqual(last - 2);
+      last = out;
+    }
+  }
+  expect(EOX_FIT.power[2]).toBeGreaterThan(EOX_FIT.power[0]);
+  // a forest's EOX green (the Vosges' z 8 tile's mean) lands near the Blue Marble's own
+  const lin = (v: number) => (v / 255 <= 0.04045 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4);
+  const toS = (l: number) => Math.round(255 * (l <= 0.0031308 ? l * 12.92 : 1.055 * l ** (1 / 2.4) - 0.055));
+  const forest = eoxColour(toS(0.0162), toS(0.0413), toS(0.0129)).map(lin);
+  expect(forest[0]).toBeCloseTo(0.0197, 2);
+  expect(forest[1]).toBeCloseTo(0.0331, 2);
+  expect(forest[2]).toBeCloseTo(0.0068, 2);
+  // the nights: own to z 8; beyond, the parent's square
+  expect(nightOf(GIBS_Z1, 10, 20)).toEqual({ z: GIBS_Z1, x: 10, y: 20, crop: null });
+  expect(nightOf(GIBS_Z1 + 1, 21, 41)).toEqual({ z: GIBS_Z1, x: 10, y: 20, crop: [128, 128, 128] });
+  expect(nightOf(13, 4266, 2924)).toEqual({ z: 8, x: 133, y: 91, crop: [80, 96, 8] });
+  expect(eoxUrl(13, 4266, 2924)).toBe(
+    "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2021_3857/default/GoogleMapsCompatible/13/2924/4266.jpg",
+  );
+});

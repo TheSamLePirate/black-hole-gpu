@@ -30,6 +30,9 @@ test("a request's kind: hashed assets, the shell, the tiles, the elements, the r
       SITE,
     ),
   ).toBe("tile");
+  expect(classify("https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2021_3857/default/GoogleMapsCompatible/13/2924/4266.jpg", SITE)).toBe(
+    "tile",
+  );
   expect(classify("https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=json", SITE)).toBe("elements");
   expect(classify("https://openrouter.ai/api/v1/chat/completions", SITE)).toBe("pass");
   expect(classify(`${O}/__snapshot?name=x`, `${O}/`)).toBe("pass");

@@ -68,6 +68,11 @@ Légende : ✅ fait et vérifié ici (unitaires, typecheck, WGSL, validation Web
 - **Saisons et translucidité (A2, A5)** : printemps, automne (couleurs arbre par arbre), hiver (feuillus nus en
   branches, neige sur les résineux en altitude), aucune saison sous les tropiques ; lumière à travers les
   feuilles en contre-jour. Le vent sur les couronnes est reporté (traînées avec la reprojection temporelle).
+- **Imagerie mondiale 10 m (C1)** : les niveaux de relief z 9 à 13 (jusqu’à 19 m) portent désormais l’image
+  Sentinel-2 cloudless 2021 d’EOX (CC BY-NC-SA, crédit dans le panneau), ramenée aux couleurs de la Blue
+  Marble sur les sols sombres (loi de puissance par canal ajustée sur neuf lieux ; sols clairs, neige, sable
+  inchangés) ; les lumières de nuit de z 8 agrandies. Les forêts lointaines, les champs, les villages se voient
+  d’avion — la « couche de canopée lointaine » (A4) vient de l’image elle-même.
 
 ## Tests à faire sur les Macs
 
@@ -125,5 +130,8 @@ noter `withTrees` contre `without` (le coût du décor, arbres et ombres compris
    la scène en avançant de 600 m : aucun arbre ne saute. Changer la date (`__bh.game.setDate`) : 15 octobre
    (couleurs), 15 janvier (branches nues, neige au-dessus de ~600 m dans les Vosges), 15 mai (vert tendre) ;
    regarder une lisière face au soleil bas : le bord des couronnes s’éclaire.
-9. **Réseau** : couper le Wi-Fi 2 s en survolant le Bourget à basse altitude puis le rétablir : les pages
+9. **Vol** : survoler les Vosges, la Beauce, les Alpes à 1, 3 et 8 km : champs, forêts, villages nets jusqu’à
+   l’horizon proche, aucune marche de couleur quand les niveaux se relaient (zoomer/dézoomer lentement), la
+   nuit les villes toujours éclairées ; noter les endroits où l’image EOX paraît trop sombre ou trop verte.
+10. **Réseau** : couper le Wi-Fi 2 s en survolant le Bourget à basse altitude puis le rétablir : les pages
    satellite manquantes reviennent seules (≤ 1 min).

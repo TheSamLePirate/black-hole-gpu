@@ -4957,8 +4957,8 @@ fn tileImage(l: u32, i: vec2i) -> u32 {
   let t = (vec2i(P.tileL[2u * l].zw) + i) & vec2i(1023);
   return textureLoad(earthTiles, t, l, 0).g;
 }
-const TILE_IMG_LEVELS = 3u; // (z 6 … 8: src/system/earth-tiles.ts, IMG_Z1)
-// The tiles' imagery at q for a footprint foot [m] (src/system/earth-tiles.ts: GIBS): the finest level
+const TILE_IMG_LEVELS = 8u; // (z 6 … 13: src/system/earth-tiles.ts, IMG_Z1)
+// The tiles' imagery at q for a footprint foot [m] (src/system/earth-tiles.ts: GIBS, EOX's Sentinel-2): the finest level
 // within the footprint and the next coarser, blended by the footprint and towards their windows' edges
 // (as earthH); rgb the day's colour (linear), a the night's lights; w its weight — the global maps' the rest
 // (none beyond the windows, nor where a tile's imagery did not come)
