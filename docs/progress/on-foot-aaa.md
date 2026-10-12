@@ -73,6 +73,11 @@ Légende : ✅ fait et vérifié ici (unitaires, typecheck, WGSL, validation Web
   Marble sur les sols sombres (loi de puissance par canal ajustée sur neuf lieux ; sols clairs, neige, sable
   inchangés) ; les lumières de nuit de z 8 agrandies. Les forêts lointaines, les champs, les villages se voient
   d’avion — la « couche de canopée lointaine » (A4) vient de l’image elle-même.
+- **Eau calme et miroir (B2)** : les lacs et rivières d’OSM (hors mer) ont un vent limité par leur fetch —
+  rides et « pattes de chat », pas de houle ni de moutons — et, de près, reflètent le monde : un rayon
+  réfléchi marché sur le vrai relief (montagnes, ~25 km) et à travers la forêt du rivage, éclairé et voilé
+  par la distance, mêlé au ciel par Fresnel. `check-wgsl` compile aussi le traceur des petits appareils (sans
+  décor, sans textures de surface).
 
 ## Tests à faire sur les Macs
 
@@ -133,5 +138,8 @@ noter `withTrees` contre `without` (le coût du décor, arbres et ombres compris
 9. **Vol** : survoler les Vosges, la Beauce, les Alpes à 1, 3 et 8 km : champs, forêts, villages nets jusqu’à
    l’horizon proche, aucune marche de couleur quand les niveaux se relaient (zoomer/dézoomer lentement), la
    nuit les villes toujours éclairées ; noter les endroits où l’image EOX paraît trop sombre ou trop verte.
-10. **Réseau** : couper le Wi-Fi 2 s en survolant le Bourget à basse altitude puis le rétablir : les pages
+10. **Lacs** : Moraine Lake, le Riffelsee (le Cervin dans l’eau), le lac Kawaguchi (le Fuji), un lac des Vosges
+    bordé de sapins : le relief et les arbres reflétés à leur place, plus nets par temps calme ; une rivière un
+    peu plus ridée ; la mer inchangée (houle, moutons).
+11. **Réseau** : couper le Wi-Fi 2 s en survolant le Bourget à basse altitude puis le rétablir : les pages
    satellite manquantes reviennent seules (≤ 1 min).

@@ -5491,7 +5491,9 @@ fn seaWaves(q: vec3f, tu: vec3f, tc: vec3f, footM: f32) -> SeaWaves {
   o.n = normalize(q - su * tu - sc * tc);
   return o;
 }
-fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: vec3f, footM: f32) -> vec3f {
+// calm: inland water (0 the open sea, 1 a sheltered lake: its fetch short — the wind's waves small, no swell,
+// no whitecaps); mirror: the world it reflects (waterMirror: rgb radiance, w its weight — the sky the rest)
+fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: vec3f, footM: f32, calm: f32, mirror: vec4f) -> vec3f {
   let normal = geoQ(q);
   let V = airPhysicalDirection(view);
   let Ls = airPhysicalDirection(light);
@@ -5509,11 +5511,15 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     U = mix(U, P.sea[0].w, b);
     tu = P.sea[0].xyz;
     let sw = seaWaves(normal, tu, P.sea[1].xyz, footM);
-    n = sw.n;
-    vu = sw.vu;
-    vc = sw.vc;
+    n = normalize(mix(sw.n, normal, calm));
+    vu = sw.vu * (1.0 - calm);
+    vc = sw.vc * (1.0 - calm);
     fine = 1.0 - 0.5 * b;
   }
+  // (a lake's wind: the fetch's — a few hundred metres to kilometres — keeps its waves a ripple; cat's paws
+  // over it, a breath of wind here and not there)
+  let paws = 0.5 + 0.5 * gnoise(q * (EARTH_RM / 40.0) + vec3f(P.time.x * P.near5.w * 0.02));
+  U = mix(U, min(U * 0.3, 2.2) * paws + 0.15, calm);
   let su2 = 0.00316 * U * fine + vu;
   let sc2 = (0.003 + 0.00192 * U) * fine + vc;
   let tun = normalize(tu - n * dot(n, tu));
@@ -5537,19 +5543,86 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   let Fv = 0.02 + 0.98 * pow(1.0 - nv, 5.0);
   // (grazing, capped — no sparks along the limb)
   let glint = Eg * min(D * G * F / (4.0 * nv), 8.0);
-  let sea = under * (1.0 - Fv) + glint + Fv * sky * 1.5 / PI;
+  let sea = under * (1.0 - Fv) + glint + Fv * mix(sky * 1.5 / PI, mirror.rgb, mirror.w);
   // (the foam lit as a diffuse white of reflectance 0.6, by the sun and the sky; near, in patches over
   // ~8 m — on the same anchor —, their mean the cover)
-  var W = clamp(3.84e-6 * pow(U, 3.41), 0.0, 0.1);
+  var W = clamp(3.84e-6 * pow(U, 3.41), 0.0, 0.1) * (1.0 - calm);
   if (SEA_ON) {
     let u = dot(SEA_D, P.sea[0].xyz) + P.sea[2].x;
     let c = dot(SEA_D, P.sea[1].xyz) + P.sea[2].y;
     let pn = gnoiseI(vec3i(i32(P.sea[2].z) * 32, i32(P.sea[2].w) * 32, 7), vec3f(u, c, 0.0) / 8.0);
     let spots = clamp(W * 5.0 * smoothstep(0.35, 0.8, pn), 0.0, 1.0);
-    W = mix(W, spots, smoothstep(16.0, 4.0, footM) * P.sea[1].w);
+    W = mix(W, spots, smoothstep(16.0, 4.0, footM) * P.sea[1].w) * (1.0 - calm);
   }
   let foam = 0.6 / PI * (Eg * nl + sky);
   return mix(sea, foam, W);
+}
+
+// The world mirrored in calm water at q (a unit point of the squashed space; rd the camera's ray there): the
+// reflected ray over the real relief — its own march from the water, on the Earth's axes (a float keeps
+// ~0.4 m of them: enough for a mountain kilometres off) — and the shore's trees (sceneryMirror), the nearer
+// of the two lit by the sun on its slope and the sky, hazed by the distance as the air does. w 1 where it
+// met something; 0 (the sky's reflection then) where it rose into the sky.
+fn waterMirror(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, sky: vec3f, footM: f32) -> vec4f {
+  let r = reflect(rd, q);
+  if (dot(r, q) <= 0.0005) { return vec4f(0.0); }
+  let rp = airPhysicalDirection(r);
+  let Lp = airPhysicalDirection(Ls);
+  // (the water's surface: the relief there, the ray started a few metres up from it)
+  let p0 = q * (1.0 + earthHeight(q, max(footM, 1.0)) / EARTH_RM);
+  let trees = sceneryMirror(rp, Ls, E, sky);
+  let tEnd = select(25000.0, trees.w, trees.w > 0.0) / EARTH_RM;
+  var t = 3.0 / EARTH_RM;
+  var tPrev = t;
+  var fPrev = 1.0;
+  var tHit = -1.0;
+  for (var i = 0; i < 64; i++) {
+    let p = p0 + r * t;
+    let rr = length(p);
+    let foot = max(footM, t * EARTH_RM * 0.003);
+    let f = rr - 1.0 - earthHeightStep(p / rr, foot) / EARTH_RM;
+    if (f < 0.0) {
+      // (bracketed: bisected on the full heights)
+      var lo = tPrev;
+      var hi = t;
+      for (var j = 0; j < 4; j++) {
+        let m = 0.5 * (lo + hi);
+        let pm = p0 + r * m;
+        let rm = length(pm);
+        if (rm - 1.0 - earthHeight(pm / rm, max(footM, m * EARTH_RM * 0.003)) / EARTH_RM < 0.0) { hi = m; } else { lo = m; }
+      }
+      tHit = 0.5 * (lo + hi);
+      break;
+    }
+    tPrev = t;
+    fPrev = f;
+    t += max(0.6 * f, 0.01 * t + 2.0 / EARTH_RM);
+    if (t > tEnd) { break; }
+  }
+  if (tHit < 0.0) {
+    // (no ridge before the trees: the trees, or the sky)
+    if (trees.w > 0.0) { return vec4f(mix(trees.rgb, sky * 1.5 / PI, 1.0 - exp(-trees.w / 20000.0)), 1.0); }
+    return vec4f(0.0);
+  }
+  let ph = p0 + r * tHit;
+  let qh = normalize(ph);
+  let gqh = geoQ(qh);
+  let dM = tHit * EARTH_RM;
+  let foot = max(footM, dM * 0.003);
+  // (its colour as the ground's: the day's map and, near, the tiles' imagery)
+  let day = textureSampleLevel(earthCube, bgSamp, eCube(gqh), 0.0);
+  let img = earthImagery(gqh, foot);
+  let A = mix(day.rgb, img.c.rgb, img.w) * P.earth2.z;
+  // (its slope: three heights, as earthNormalAt — not the walking grid's)
+  let e = max(foot, 10.0) / EARTH_RM;
+  let t1 = normalize(cross(qh, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(qh.z) > 0.9)));
+  let t2 = cross(qh, t1);
+  let h0 = earthHeight(qh, foot);
+  let n = normalize(qh - ((earthHeight(normalize(qh + t1 * e), foot) - h0) * t1 + (earthHeight(normalize(qh + t2 * e), foot) - h0) * t2) / (e * EARTH_RM));
+  let nP = airPhysicalNormal(n);
+  let mu = dot(gqh, Lp);
+  let L = A / PI * (E * sunThrough(max(h0, 0.0), mu) * max(dot(nP, Lp), 0.0) + sky * 0.5 * (1.0 + dot(nP, gqh)));
+  return vec4f(mix(L, sky * 1.5 / PI, 1.0 - exp(-dM / 20000.0)), 1.0);
 }
 
 struct SurfaceImage { c: vec3f, w: f32, cover: u32 }
@@ -5756,6 +5829,20 @@ fn scenerySurface(foot:f32)->ScenerySurface {
   return out;
 }
 
+// The shore's trees in calm water (waterMirror): the reflected ray (physical) from the water's point here
+// (SC_POINT) through the forest grid, near; their light (the sun on their leaves, the sky) and distance [m]
+// (−1: none)
+fn sceneryMirror(rp:vec3f,Ls:vec3f,E:vec3f,sky:vec3f)->vec4f {
+  if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5 || SC_DISTANCE>2500.0){return vec4f(0.0,0.0,0.0,-1.0);}
+  let d=sceneryLocal(rp);
+  let h=forestQuery(SC_POINT+vec3f(0.0,0.0,0.05),d,1500.0,false,0.0);
+  if(h.kind==0u){return vec4f(0.0,0.0,0.0,-1.0);}
+  let p=SC_POINT+d*h.t;
+  let look=forestLook(h,h.n,p,sceneryColourAt(h.base.xy));
+  let Lp=airPhysicalDirection(Ls);let nG=normalize(sceneryGlobal(h.n));let up=P.scenery[2].xyz;
+  let L=look.albedo/PI*(E*sunThrough(max(p.z,0.0),dot(up,Lp))*max(dot(nG,Lp),0.0)+sky*0.5*(1.0+dot(nG,up)));
+  return vec4f(L,h.t);
+}
 // END_WORLD_SCENERY
 
 fn surfaceImage(q: vec3f, fx: vec3f, fy: vec3f) -> SurfaceImage {
@@ -6013,7 +6100,12 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   }
   // the sea (seaShade): the sun's glint off its wind-roughened slopes, the sky mirrored, the whitecaps
   if (ocean > 0.0) {
-    col = mix(col, seaShade(q, V, Ls, Eg, sky, col, footM), ocean);
+    // (inland water — OSM's lakes and rivers off the sea's map —: calm, a lake more than a river; near, the
+    // world mirrored in it)
+    let calm = osmWater * (1.0 - sea0) * select(0.6, 0.92, osm.kind == 4.0);
+    var mirror = vec4f(0.0);
+    if (calm > 0.3 && footM < 40.0) { mirror = waterMirror(q, rd, Ls, E, sky, footM); }
+    col = mix(col, seaShade(q, V, Ls, Eg, sky, col, footM, calm, mirror), ocean);
   }
   // the cities at night (sodium's orange, whiter at their hearts), fading into the twilight
   let lights = mix(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r, img.c.a, img.w);

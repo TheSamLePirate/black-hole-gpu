@@ -1,7 +1,8 @@
 // Validates every WGSL shader with the browser's own WebGPU compiler (headless Chrome over the DevTools
 // protocol): getCompilationInfo on each module — an error here is a black screen for a player. The
 // shaders that include a module at load (the tracer and the near field: the forests, src/forest-shader.ts)
-// are checked alone (their stubs) and composed, as the app builds them.
+// are checked alone (their stubs) and composed, as the app builds them — the tracer also as the smaller
+// devices build it (no world scenery, no surface textures).
 //
 //   bun scripts/check-wgsl.ts        (CHROME=/path/to/chrome to choose the browser)
 //
@@ -9,11 +10,17 @@
 // says so and exits 0: nothing could be checked, nothing is known to be broken.
 import { Glob } from "bun";
 import { withForest } from "../src/forest-shader";
+import { surfaceShader } from "../src/system/earth-surface";
+import { sceneryShader } from "../src/system/scenery";
 import { CHROME, withGpuPage } from "./lib/headless-gpu";
 
 const shaders: Record<string, string> = {};
 for await (const f of new Glob("src/shaders/*.wgsl").scan(".")) shaders[f.split("/").pop()!] = await Bun.file(f).text();
 for (const host of ["trace.wgsl", "character.wgsl"]) shaders[`${host} + forest.wgsl`] = withForest(shaders[host]!, shaders["forest.wgsl"]!);
+// (the tracer as smaller devices build it: no world scenery — 8 storage buffers —, no surface textures)
+const traced = shaders["trace.wgsl + forest.wgsl"]!;
+shaders["trace.wgsl without scenery"] = sceneryShader(surfaceShader(traced, true), false);
+shaders["trace.wgsl without surface textures"] = sceneryShader(surfaceShader(traced, false), true);
 
 try {
   const v = await withGpuPage((evaluate) =>
