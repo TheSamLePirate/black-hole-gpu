@@ -20,8 +20,9 @@ l’exploration et restent compatibles avec les anciennes sauvegardes.
 
 Les contacts proches utilisent le relief et les volumes OSM des bâtiments, ponts et troncs. Les cours
 intérieures restent traversables et les ponts distinguent tablier et passage dessous. La caméra réduit
-sa distance devant un obstacle. Les accès du vaisseau sont des points estimés selon son type : ils ne
-constituent pas encore des portes animées ni une collision détaillée avec sa coque.
+sa distance devant un obstacle. Le vaisseau posé est un obstacle : la boîte de son maillage (train sorti),
+placée sur le corps, arrête la marche, la caméra et repousse hors de la coque un accès estimé à l’intérieur.
+Les accès restent des points estimés selon le type : pas encore de portes animées.
 
 ## Le modèle de false-earth
 
@@ -145,3 +146,26 @@ Résultats locaux, sur ce Mac (aucune campagne distante) :
 Les captures et leurs états de chargement sont dans `remote-results/character-grass*.png` et
 `remote-results/character-grass*-readiness.json`. Les réglages modifiés à pied s’appliquent aussi quand
 la simulation est figée, sans devoir avancer la physique. La caméra du personnage garde sa position.
+
+## Passe AAA (12 octobre 2026)
+
+Analyse puis corrections, toutes couvertes par des tests unitaires et par
+`tests/e2e/character-aaa.e2e.test.ts` (à lancer sur les Macs : `bun run e2e character-aaa`).
+
+| Défaut constaté | Correction |
+|---|---|
+| Le vaisseau, composité après le personnage, recouvrait l’astronaute placé devant lui (au moment même d’embarquer). | La passe du personnage écrit sa distance (`rg16float`, distance × couverture) ; `ship.wgsl` la lit comme l’occulteur de la station : la coque disparaît derrière l’astronaute et l’herbe. |
+| Le vaisseau vu à pied n’était caché par rien du décor tracé (arbres, bâtiments, relief devant lui). | Le vaisseau placé pour une vue extérieure est testé contre la profondeur tracée, comme les autres engins. |
+| L’ombre du vaisseau sur le sol disparaissait dès la sortie (spectateur, à pied). | Le traceur lit sa carte d’ombre dès que le vaisseau est dessiné. |
+| Éclairage du personnage et de l’herbe ad hoc : transmission `exp(-0,15/élévation)`, ciel constant, même ambiance sur Mars que sur la Lune, nuages ignorés, personnage noir la nuit. | La sonde de lumière du vaisseau (tracée autour de la caméra) tourne à pied : harmoniques sphériques pour l’ambiance, lumière clé (étoile à travers l’atmosphère, horizon, relief), réflexions GGX préfiltrées dans la visière et le métal (split-sum, occlusion spéculaire). Repli sur l’ancienne estimation si la sonde n’est pas fraîche. |
+| L’astronaute et l’herbe ne recevaient pas l’ombre du vaisseau. | Lecture de la carte d’ombre du vaisseau (comme `trace.wgsl shipShadow`) pour la peau, l’herbe (au tri GPU) et l’ombre portée au sol. |
+| Ombre portée au sol : facteur fixe 0,68, double assombrissement dans l’ombre d’un arbre. | Part physique de la lumière clé (clé·cos / (clé·cos + ciel)) : noire sur la Lune, douce sous le ciel terrestre, nulle la nuit ; pas d’ombre ajoutée là où le décor ou le vaisseau ombrent déjà ; occlusion de contact sous les pieds. |
+| Ombre du personnage coupée à 3,5 m par soleil bas. | Un récepteur au-delà de la profondeur de la carte est derrière tous les occulteurs. |
+| Sol de marche à facettes (normale bilinéaire discontinue par cellule de 1 m), normale calculée à chaque pas de la marche du rayon. | Normale lissée (pentes aux coins par différences centrées, interpolées), calculée seulement à l’ombrage, fondue au bord de la grille. |
+| Saut rigide : rien sans être au sol, contrôle total en l’air, vitesse d’animation incluant la chute, aucune réception. | Buffer de saut 0,15 s, coyote time 0,12 s, contrôle aérien 2,5/s (14/s au sol), vitesse de pas mesurée le long du sol, amorti de réception (ressort amorti, ≤ 15 cm), foulée figée en l’air. |
+| Messages de refus en français seulement, touche de saut écrite « Espace » en dur. | Messages anglais traduits par `t()`, touche lue dans les raccourcis. |
+| Décor OSM : `pending` faux pendant un téléport (capture d’une place vide), une reconstruction partielle effaçait les arbres, abandon définitif après 2 échecs. | `pending` tant que la scène voulue n’est ni dessinée ni en attente de nouvel essai ; scène dessinée gardée si la reconstruction a des erreurs ; nouvel essai à 30 s doublé jusqu’à 5 min. |
+| Pages satellite définitivement en échec après une coupure réseau d’une seconde ; `pending` vrai pour toujours après `dispose`. | Nouvel essai par page à 2 s doublé jusqu’à 1 min ; `dispose` vide les travaux. Le worker KTX n’est plus abandonné pour la session après un échec de chargement. |
+
+Restent hors de cette passe : IK des pieds sur les pentes, portes animées, assets de végétation
+photogrammétriques (les arbres restent analytiques).

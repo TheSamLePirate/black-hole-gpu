@@ -10,6 +10,11 @@ struct U {
   scene:array<vec4f,6>,
   // tune: the grass's reach [m], its sway (1 as authored), the share of blades drawn (the renderer's settings).
   tune:vec4f,
+  // The light probe round the camera (the ship's: trace.wgsl env, ship.wgsl envSH): the camera's axes in its axes.
+  // probeX.w: on (fresh this frame); probeY.w: its GGX mips − 1; probeZ.w: unused.
+  probeX:vec4f, probeY:vec4f, probeZ:vec4f,
+  // The vessel's shadow map: its bounding sphere in the camera's axes [m] (w: radius; 0: none) — trace.wgsl shipShadow.
+  shipBound:vec4f,
 };
 @group(0) @binding(0) var<uniform> u:U;
 @group(0) @binding(1) var<storage,read> moments:array<vec2f>;
@@ -20,6 +25,57 @@ struct Command {vertices:u32, instances:atomic<u32>, first:u32, base:u32};
 @group(0) @binding(7) var<storage,read_write> culled:array<u32>;
 @group(0) @binding(5) var shadow:texture_depth_2d;
 @group(0) @binding(6) var compare:sampler_comparison;
+// The probe: 9 × rgb harmonics, the dominant direction, the key light's direction and its irradiance (ship.wgsl envSH).
+@group(0) @binding(9) var<storage,read> sh:array<vec4f>;
+@group(0) @binding(10) var envTex:texture_2d<f32>;
+@group(0) @binding(11) var envSamp:sampler;
+@group(0) @binding(12) var shipShadowMap:texture_depth_2d;
+const PI=3.14159265358979;
+
+fn probeOn()->bool{return u.probeX.w>.5;}
+fn toProbe(v:vec3f)->vec3f{return v.x*u.probeX.xyz+v.y*u.probeY.xyz+v.z*u.probeZ.xyz;}
+fn fromProbe(d:vec3f)->vec3f{return vec3f(dot(d,u.probeX.xyz),dot(d,u.probeY.xyz),dot(d,u.probeZ.xyz));}
+fn shBasis(d:vec3f)->array<f32,9>{
+ return array<f32,9>(.282095,.488603*d.y,.488603*d.z,.488603*d.x,1.092548*d.x*d.y,1.092548*d.y*d.z,.315392*(3*d.z*d.z-1),1.092548*d.x*d.z,.546274*(d.x*d.x-d.y*d.y));
+}
+// The light falling on a surface facing n (camera axes) from everything but the key light: the probe's
+// harmonics (Ramamoorthi & Hanrahan), as the ship's hull receives it; without the probe, the sky estimate.
+fn ambientIrradiance(n:vec3f)->vec3f{
+ if(!probeOn()){return PI*u.sky.xyz*(.4+.6*max(dot(n,u.up.xyz),0));}
+ let b=shBasis(toProbe(n));let A=array<f32,9>(PI,2.094395,2.094395,2.094395,.785398,.785398,.785398,.785398,.785398);
+ var e=vec3f(0);for(var k=0u;k<9u;k++){e+=A[k]*b[k]*sh[k].rgb;}
+ return max(e,vec3f(0));
+}
+// The key light's irradiance (the near world's star through its air, its horizon and its relief): the probe's,
+// the same the ship receives; with the probe on and no key, its light is in the harmonics already.
+fn keyIrradiance()->vec3f{
+ if(!probeOn()){return u.irradiance.xyz;}
+ return select(vec3f(0),max(sh[11].rgb,vec3f(0)),sh[11].w>.5);
+}
+fn envUV(d:vec3f)->vec2f{return vec2f(atan2(d.x,d.z)/(2*PI)+.5,acos(clamp(d.y,-1.0,1.0))/PI);}
+// The surroundings reflected (GGX pre-filtered), else the sky estimate brighter above the horizon.
+fn envSpecular(r:vec3f,rough:f32)->vec3f{
+ if(!probeOn()){return u.sky.xyz*(.2+1.8*smoothstep(-.05,.25,dot(r,u.up.xyz)));}
+ return textureSampleLevel(envTex,envSamp,envUV(toProbe(r)),rough*u.probeY.w).rgb;
+}
+// Split-sum environment BRDF, scale and bias (Karis 2014, analytic fit): F0·x + y.
+fn envAB(rough:f32,nv:f32)->vec2f{
+ let r=rough*vec4f(-1,-.0275,-.572,.022)+vec4f(1,.0425,1.04,-.04);
+ let a=min(r.x*r.x,exp2(-9.28*nv))*r.x+r.y;return vec2f(-1.04,1.04)*a+r.zw;
+}
+// The vessel's shadow at p (camera axes): its own shadow map, seen from the probe's dominant light (ship.wgsl lightClip).
+fn shipShadowAt(p:vec3f)->f32{
+ let R=u.shipBound.w;if(R<=0||!probeOn()){return 1;}
+ let dl=sh[9].xyz;if(dot(dl,dl)<1e-12){return 1;}
+ let l=normalize(fromProbe(dl));
+ let e1=normalize(cross(l,select(vec3f(0,1,0),vec3f(1,0,0),abs(l.y)>.9)));let e2=cross(l,e1);
+ let q=p-u.shipBound.xyz;let c=vec3f(dot(q,e1)/R,dot(q,e2)/R,.5-.5*dot(q,l)/R);
+ if(abs(c.x)>=1||abs(c.y)>=1){return 1;}
+ let dims=vec2i(textureDimensions(shipShadowMap));let px=vec2i(vec2f(.5+.5*c.x,.5-.5*c.y)*vec2f(dims));
+ var lit=0.0;
+ for(var j=-1;j<=1;j++){for(var i=-1;i<=1;i++){let d=textureLoad(shipShadowMap,clamp(px+vec2i(i,j),vec2i(0),dims-1),0);lit+=select(0.0,1.0,d>=.9999||c.z<=d+.004);}}
+ return lit/9;
+}
 
 fn orient(v:vec3f)->vec3f {return u.right.xyz*v.x+u.up.xyz*v.y+u.forward.xyz*v.z;}
 fn grassCam(v:vec3f)->vec3f {return u.grassOrigin.xyz+u.grassRight.xyz*v.x+u.grassUp.xyz*v.y+u.grassForward.xyz*v.z;}
@@ -30,9 +86,12 @@ fn lightClip(q:vec3f)->vec3f {
 }
 fn shadowAt(q:vec3f,n:vec3f)->f32 {
  let c=lightClip(q+n*.009+u.sun.xyz*.004);let uv=vec2f(c.x*.5+.5,.5-c.y*.5);
- if(any(uv<vec2f(0))||any(uv>vec2f(1))||c.z<0||c.z>1){return 1;}
+ // (a receiver beyond the map's depth — the far end of a long evening shadow — is behind every occluder: its
+ // depth held at the far plane, so the astronaut's whole shadow falls, not only its first 3.5 m)
+ if(any(uv<vec2f(0))||any(uv>vec2f(1))||c.z<0){return 1;}
+ let z=min(c.z,.998);
  var value=0.0;
- for(var y=-1;y<=1;y++){for(var x=-1;x<=1;x++){value+=textureSampleCompareLevel(shadow,compare,uv+vec2f(f32(x),f32(y))/512.0,c.z-.001);}}
+ for(var y=-1;y<=1;y++){for(var x=-1;x<=1;x++){value+=textureSampleCompareLevel(shadow,compare,uv+vec2f(f32(x),f32(y))/512.0,z-.001);}}
  return value/9;
 }
 fn rotateX(v:vec3f,a:f32)->vec3f{return vec3f(v.x,cos(a)*v.y-sin(a)*v.z,sin(a)*v.y+cos(a)*v.z);}
@@ -51,7 +110,7 @@ fn avatarVertex(p:vec3f,k:u32)->V {
 @compute @workgroup_size(128) fn cull(@builtin(global_invocation_id) id:vec3u){
  if(id.x>=u32(u.grassOrigin.w)){return;}let r=roots[id.x];let p=grassCam(r.xyz);let delta=p-u.origin.xyz;let d=length(delta-u.up.xyz*dot(delta,u.up.xyz));
  if(d>u.tune.x||p.z<.03||abs(p.x)>p.z*u.view.x+.6||abs(p.y)>p.z*u.view.y+.8){return;}
- let lod=select(select(0u,1u,d>6),2u,d>16);let at=atomicAdd(&commands[lod].instances,1u);let shade=u32(nearSceneryShadow(p+u.grassUp.xyz*.2)*255);culled[lod*65536u+at]=id.x|(shade<<16u);
+ let lod=select(select(0u,1u,d>6),2u,d>16);let at=atomicAdd(&commands[lod].instances,1u);let tip=p+u.grassUp.xyz*.2;let shade=u32(nearSceneryShadow(tip)*shipShadowAt(tip)*255);culled[lod*65536u+at]=id.x|(shade<<16u);
 }
 @vertex fn grassVs(@builtin(vertex_index) v:u32,@builtin(instance_index) instance:u32)->V{
  let lod=u32(u.forward.w);let segments=select(select(6u,2u,lod==1u),1u,lod==2u);
@@ -69,7 +128,10 @@ fn ggx(N:vec3f,V:vec3f,L:vec3f,rough:f32,f0:vec3f)->vec3f{
  let D=aa/(3.141592*d*d);let G=.5/max(nl*sqrt(nv*nv*(1-aa)+aa)+nv*sqrt(nl*nl*(1-aa)+aa),.0001);
  return D*G*(f0+(vec3f(1)-f0)*pow(1-max(dot(V,H),0),5));
 }
-@fragment fn fs(v:V,@builtin(front_facing) front:bool)->@location(0) vec4f {
+// The colour, and for the vessel drawn after: the distance [m] × coverage and the coverage (ship.wgsl: its occluder).
+// (the occluder's alpha: the grass's blending reads it — the rg16float target keeps red and green)
+struct Out { @location(0) color:vec4f, @location(1) occluder:vec4f };
+@fragment fn fs(v:V,@builtin(front_facing) front:bool)->Out {
  let edgeWidth=max(fwidth(v.local.x),.001);let edgeCoverage=1-smoothstep(1-edgeWidth,1+edgeWidth,abs(v.local.x));
  let pixel=vec2u(v.clip.xy);let at=min(pixel.y,u32(u.image.y)-1u)*u32(u.image.x)+min(pixel.x,u32(u.image.x)-1u);
  if(moments[at].y*u.image.z<length(v.p)-.025){discard;}
@@ -83,21 +145,37 @@ fn ggx(N:vec3f,V:vec3f,L:vec3f,rough:f32,f0:vec3f)->vec3f{
  else if(v.material<3.5){color=vec3f(.25,.037,.012);rough=.7;}
  else if(v.material<4.5){color=vec3f(.21,.23,.25);rough=.3;f0=vec3f(.35);}
  else {color=v.tint;rough=.9;}
- let L=normalize(u.sun.xyz);let nl=max(dot(n,L),0);var vis=shadowAt(v.p,n);if(v.material>9){vis*=v.local.z;}else{vis*=nearSceneryShadow(v.p);}
- let sky=u.sky.xyz*(.4+.6*max(dot(n,u.up.xyz),0));
- let diffuse=color/3.141592;var direct=(diffuse*nl+ggx(n,eye,L,rough,f0)*nl)*u.irradiance.xyz*vis;
- if(v.material>9){direct+=color*u.irradiance.xyz*.22*pow(max(dot(eye,-L),0),3)*vis*(.4+.6*v.local.y);}
+ let L=normalize(u.sun.xyz);let nl=max(dot(n,L),0);var vis=shadowAt(v.p,n);if(v.material>9){vis*=v.local.z;}else{vis*=nearSceneryShadow(v.p)*shipShadowAt(v.p);}
+ let Ek=keyIrradiance();
+ let diffuse=color/PI;var direct=(diffuse*nl+ggx(n,eye,L,rough,f0)*nl)*Ek*vis;
+ // (a blade lit from behind: the light through its leaf)
+ if(v.material>9){direct+=color*Ek*.22*pow(max(dot(eye,-L),0),3)*vis*(.4+.6*v.local.y);}
  let ao=select(1.0,mix(.45,1.0,v.local.y),v.material>9);
  let coverage=select(1.0,edgeCoverage*v.coverage,v.material>9);
- return vec4f((direct+color*sky*ao)*u.image.w*coverage,coverage);
+ let F=f0+(vec3f(1)-f0)*pow(1-max(dot(n,eye),0),5);
+ let ambient=diffuse*(vec3f(1)-F)*ambientIrradiance(n)*ao+envSpecular(reflect(-eye,n),rough)*F*ao;
+ var o:Out;o.color=vec4f((direct+ambient)*u.image.w*coverage,coverage);o.occluder=vec4f(length(v.p)*coverage,coverage,0,coverage);return o;
 }
 @vertex fn screenVs(@builtin(vertex_index) k:u32)->@builtin(position) vec4f {let p=array<vec2f,3>(vec2f(-1,-1),vec2f(3,-1),vec2f(-1,3));return vec4f(p[k],0,1);}
+// The astronaut's shadow and contact occlusion on what the tracer drew: the traced light is the key's
+// (Ek cos θ, where nothing else shadows it already) and the ambient's (the probe's irradiance from above);
+// the shadow takes the key's share away, the contact a part of the ambient's under the feet — the same
+// physics on the Earth (a soft shadow under a blue sky), the Moon (black: no air) or under clouds (faint).
 @fragment fn groundShadow(@builtin(position) pixel:vec4f)->@location(0) vec4f {
  let at=u32(pixel.y)*u32(u.image.x)+u32(pixel.x);let distance=moments[at].y*u.image.z;
  if(distance<=0||distance>35){return vec4f(1);}
  let ndc=vec2f(pixel.x/u.image.x*2-1,1-pixel.y/u.image.y*2);let p=normalize(vec3f(ndc* u.view.xy,1))*distance;
- let s=shadowAt(p,u.up.xyz);let daylight=smoothstep(-.01,.12,dot(u.up.xyz,u.sun.xyz));
- return vec4f(vec3f(1-(1-s)*daylight*.68),1);
+ let delta=p-u.origin.xyz;let h=dot(delta,u.up.xyz);let r=length(delta-u.up.xyz*h);
+ let contact=.6*exp(-(r*r)/.09)*(1-smoothstep(.05,.45,abs(h)));
+ let s=shadowAt(p,u.up.xyz);
+ if(s>=.999&&contact<.003){return vec4f(1);}
+ let L=normalize(u.sun.xyz);let cosine=max(dot(u.up.xyz,L),0);
+ // (already in a tree's, a building's or the vessel's shadow: no key light left to take away)
+ var lit=1.0;if(s<.999){lit=nearSceneryShadow(p)*shipShadowAt(p);}
+ let lum=vec3f(.2126,.7152,.0722);
+ let key=dot(keyIrradiance(),lum)*cosine*lit;let sky=dot(ambientIrradiance(u.up.xyz),lum);
+ let total=key+sky;if(total<=0){return vec4f(1);}
+ return vec4f(vec3f(clamp((key*s+sky*(1-contact))/total,0.0,1.0)),1);
 }
 
 // Imported astronaut: native GPU skinning, authored PBR maps in an eight-layer texture array.
@@ -113,7 +191,7 @@ fn skin(v:SkinIn)->SkinV{
 }
 @vertex fn skinVs(v:SkinIn)->SkinV{return skin(v);}
 @vertex fn skinShadowVs(v:SkinIn)->@builtin(position) vec4f {return vec4f(lightClip(skin(v).p),1);}
-@fragment fn skinFs(v:SkinV,@builtin(front_facing) front:bool)->@location(0) vec4f{
+@fragment fn skinFs(v:SkinV,@builtin(front_facing) front:bool)->Out{
  let ip=vec2u(v.clip.xy);let at=min(ip.y,u32(u.image.y)-1u)*u32(u.image.x)+min(ip.x,u32(u.image.x)-1u);
  if(moments[at].y*u.image.z<length(v.p)-.025){discard;}
  let layer=select(4i,0i,v.material==0u);
@@ -123,15 +201,17 @@ fn skin(v:SkinIn)->SkinV{
  let mapped=textureSample(materialMaps,materialSampler,v.uv,layer+3).xyz*2-1;
  let base=normalize(v.n);let T=normalize(v.tangent.xyz-base*dot(base,v.tangent.xyz));let B=cross(base,T)*v.tangent.w;
  var N=normalize(T*mapped.x+B*mapped.y+base*mapped.z);let V=normalize(-v.p);if(dot(N,V)<0){N=-N;}
- let L=normalize(u.sun.xyz);let visibility=shadowAt(v.p,N)*nearSceneryShadow(v.p);let nl=max(dot(N,L),0);
+ let L=normalize(u.sun.xyz);let visibility=shadowAt(v.p,N)*nearSceneryShadow(v.p)*shipShadowAt(v.p);let nl=max(dot(N,L),0);
  let rough=select(clamp(1-metal,.14,.92),.08,v.material==2u);let f0=select(mix(vec3f(.04),color,metal),vec3f(.11),v.material==2u);
- let sky=u.sky.xyz*(.4+.6*max(dot(N,u.up.xyz),0));
- let F=f0+(vec3f(1)-f0)*pow(1-max(dot(N,V),0),5);
- let diffuse=color*(1-metal)*(vec3f(1)-F)/3.141592;
- let direct=(diffuse*nl+ggx(N,V,L,rough,f0)*nl)*u.irradiance.xyz*visibility;
- let R=reflect(-V,N);let skyReflect=u.sky.xyz*(.2+1.8*smoothstep(-.05,.25,dot(R,u.up.xyz)));
- let ambient=color*(1-metal)*sky*ao+skyReflect*F*ao;
- return vec4f((direct+ambient)*u.image.w,1);
+ let nv=clamp(dot(N,V),1e-4,1.0);
+ let F=f0+(vec3f(1)-f0)*pow(1-nv,5);
+ let diffuse=color*(1-metal)*(vec3f(1)-F)/PI;
+ let direct=(diffuse*nl+ggx(N,V,L,rough,f0)*nl)*keyIrradiance()*visibility;
+ // (the surroundings: the probe's irradiance on the suit, its pre-filtered image in the visor and the metal —
+ // the split sum's scale and bias, the specular occluded with the cavities, Lagarde)
+ let ab=envAB(rough,nv);let so=clamp(pow(nv+ao,exp2(-16*rough-1))-1+ao,0.0,1.0);
+ let ambient=diffuse*ambientIrradiance(N)*ao+envSpecular(reflect(-V,N),rough)*(f0*ab.x+ab.y)*so;
+ var o:Out;o.color=vec4f((direct+ambient)*u.image.w,1);o.occluder=vec4f(length(v.p),1,0,1);return o;
 }
 
 // Same packed OSM/WorldCover BVH as the planet renderer: direct sunlight at each near-field fragment.

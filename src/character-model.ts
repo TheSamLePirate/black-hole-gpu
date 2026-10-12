@@ -9,6 +9,7 @@ import detailMetal from "../assets/character/Details-Metallic.ktx2";
 import detailAO from "../assets/character/Details-Ao.ktx2";
 import detailNormal from "../assets/character/Details-Normals.ktx2";
 import { ktxLevels, ktxTarget, writeLevels } from "./system/ktx2";
+import { jointAt, rotateAbout, rotationBetween, solveKnee } from "./character-ik";
 interface Node {
   name: string;
   t: number[];
@@ -37,6 +38,7 @@ interface Model {
   ni: number;
   stride: number;
 }
+const sub3 = (a: number[], b: number[]): [number, number, number] => [a[0]! - b[0]!, a[1]! - b[1]!, a[2]! - b[2]!];
 /** Column-major product a·b into out, from offset `at` (an allocation-free composition of the joints). */
 export function multiply(a: ArrayLike<number>, b: ArrayLike<number>, out: Float32Array, at = 0) {
   for (let col = 0; col < 4; col++)
@@ -136,9 +138,17 @@ export class AstronautModel {
   private blend = 0;
   // Each gait clock is integrated: its rate follows the speed, its time never jumps when the speed changes.
   private gait = [0, 0, 0];
+  /** off the ground, eased (0 standing … 1 in the air): the stride held, as a leap */
+  private air = 0;
   // The rest pose of each node (translation, rotation, scale) and whether it is in place (its root keeps its own motion).
   private rest: Float32Array[] = [];
   private inPlace: boolean[] = [];
+  /** the legs (thigh, calf, foot nodes) and the nodes under each calf, in order: the feet's IK */
+  private legs: { thigh: number; calf: number; foot: number; below: number[] }[] = [];
+  /** how far the body is lowered for the lower foot to reach its ground on a slope [m, ≤ 0], eased */
+  footDrop = 0;
+  /** each foot's lift by its IK this frame [m] (left, right) */
+  readonly footLift = [0, 0];
   constructor(private d: GPUDevice) {
     this.bones = d.createBuffer({ size: 70 * 64, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.sampler = d.createSampler({
@@ -159,7 +169,7 @@ export class AstronautModel {
           header = new Uint32Array(b, 0, 4);
         if (header[0] !== 0x314e4b53) throw new Error("Invalid astronaut mesh");
         const size = header[1]!,
-          m = (this.model = JSON.parse(new TextDecoder().decode(new Uint8Array(b, 16, size))) as Model);
+          m = JSON.parse(new TextDecoder().decode(new Uint8Array(b, 16, size))) as Model;
         if (m.joints.length !== 70 || m.nv > 100000 || m.ni > 500000 || m.stride !== 84)
           throw new Error("Astronaut budget/format mismatch");
         const offset = 16 + Math.ceil(size / 4) * 4;
@@ -169,20 +179,7 @@ export class AstronautModel {
         this.d.queue.writeBuffer(this.indices, 0, b, offset + m.nv * m.stride, m.ni * 4);
         this.count = m.ni;
         this.meshBytes = m.nv * m.stride + m.ni * 4;
-        this.rest = m.nodes.map((n) => new Float32Array([...n.t, ...n.r, ...n.s]));
-        this.inPlace = m.nodes.map((n) => n.name === "root");
-        this.pose = this.rest.map((p) => new Float32Array(p));
-        this.sampled = m.clips.map(() => this.pose.map((p) => new Float32Array(p)));
-        this.global = m.nodes.map(() => new Float32Array(16));
-        this.local = m.nodes.map(() => new Float32Array(16));
-        this.inverse = m.joints.map((_, i) => new Float32Array(m.inverse.slice(i * 16, i * 16 + 16)));
-        const visit = (i: number) => {
-          if (this.order.includes(i)) return;
-          const p = m.nodes[i]!.parent;
-          if (p >= 0) visit(p);
-          this.order.push(i);
-        };
-        m.nodes.forEach((_, i) => visit(i));
+        this.prepare(m);
         const target = ktxTarget(this.d);
         const format: GPUTextureFormat = target === "bc7" ? "bc7-rgba-unorm" : target === "astc" ? "astc-4x4-unorm" : "rgba8unorm";
         const urls = [bodyAlbedo, bodyMetal, bodyAO, bodyNormal, detailAlbedo, detailMetal, detailAO, detailNormal];
@@ -211,19 +208,49 @@ export class AstronautModel {
       }
     })());
   }
+  /** The skeleton's working arrays, once: the rest pose, the nodes' order, the legs for the feet's IK. */
+  private prepare(m: Model) {
+    this.model = m;
+    this.rest = m.nodes.map((n) => new Float32Array([...n.t, ...n.r, ...n.s]));
+    this.inPlace = m.nodes.map((n) => n.name === "root");
+    this.pose = this.rest.map((p) => new Float32Array(p));
+    this.sampled = m.clips.map(() => this.pose.map((p) => new Float32Array(p)));
+    this.global = m.nodes.map(() => new Float32Array(16));
+    this.local = m.nodes.map(() => new Float32Array(16));
+    this.inverse = m.joints.map((_, i) => new Float32Array(m.inverse.slice(i * 16, i * 16 + 16)));
+    const visit = (i: number) => {
+      if (this.order.includes(i)) return;
+      const p = m.nodes[i]!.parent;
+      if (p >= 0) visit(p);
+      this.order.push(i);
+    };
+    m.nodes.forEach((_, i) => visit(i));
+    const at = (name: string) => m.nodes.findIndex((n) => n.name === name);
+    const under = (i: number, ancestor: number): boolean => {
+      const p = m.nodes[i]!.parent;
+      return p === ancestor || (p >= 0 && under(p, ancestor));
+    };
+    this.legs = ["l", "r"]
+      .map((side) => ({ thigh: at(`thigh_${side}`), calf: at(`calf_${side}`), foot: at(`foot_${side}`), below: [] as number[] }))
+      .filter((leg) => leg.thigh >= 0 && leg.calf >= 0 && leg.foot >= 0);
+    for (const leg of this.legs) leg.below = this.order.filter((i) => under(i, leg.calf));
+  }
   /** One frame of the pose: three clips sampled, blended, composed and skinned into the bone matrices. Nothing is
    * allocated here: the arrays of the model are reused, the samples written in place. */
-  evaluate(age: number, speed: number) {
+  evaluate(age: number, speed: number, airborne = false, ground: ((x: number, z: number) => number) | null = null) {
     if (!this.model) return;
     const began = performance.now(),
       m = this.model,
       n = m.nodes.length,
       dt = Math.max(0, Math.min(0.1, age - this.lastAge));
     this.lastAge = age;
-    this.blend += (Math.min(1, speed / 1.4) - this.blend) * (1 - Math.exp(-dt * 12));
-    this.gait[1]! += dt * Math.max(0.5, speed / 1.4);
-    this.gait[2]! += dt * Math.max(0.5, speed / 3.5);
-    const run = Math.max(0, Math.min(1, (speed - 1.4) / 2.6));
+    // (in the air the legs stop cycling: the stride is held — a standing jump takes a running one's, a leap)
+    this.air += ((airborne ? 1 : 0) - this.air) * (1 - Math.exp(-dt * (airborne ? 10 : 16)));
+    const stepping = 1 - this.air;
+    this.blend += (Math.max(Math.min(1, speed / 1.4), this.air) - this.blend) * (1 - Math.exp(-dt * 12));
+    this.gait[1]! += dt * Math.max(0.5, speed / 1.4) * stepping;
+    this.gait[2]! += dt * Math.max(0.5, speed / 3.5) * stepping;
+    const run = Math.max(Math.max(0, Math.min(1, (speed - 1.4) / 2.6)), 0.6 * this.air);
     const w0 = 1 - this.blend,
       w1 = this.blend * (1 - run),
       w2 = this.blend * run;
@@ -254,9 +281,47 @@ export class AstronautModel {
       if (parent < 0) this.global[i]!.set(this.local[i]!);
       else multiply(this.global[parent]!, this.local[i]!, this.global[i]!);
     }
+    this.placeFeet(ground, dt);
     for (let i = 0; i < m.joints.length; i++) multiply(this.global[m.joints[i]!]!, this.inverse[i]!, this.mats, i * 16);
     this.d.queue.writeBuffer(this.bones, 0, this.mats);
     this.cpuMs = performance.now() - began;
+  }
+  /**
+   * The feet on the ground under them (ground: its height at a model-space x, z [m] over the ground under the
+   * astronaut, null in the air): the body lowered for the lower foot (eased), each leg bent by its two bones for
+   * its ankle to rise by its ground's height there, the knee in its own plane, the foot as the clip holds it.
+   */
+  private placeFeet(ground: ((x: number, z: number) => number) | null, dt: number) {
+    const rises = this.legs.map((leg) => {
+      if (!ground) return 0;
+      const a = jointAt(this.global[leg.foot]!),
+        r = ground(a[0], a[2]);
+      // (beyond a step — an edge, a wall's foot —: the foot left as the clip has it)
+      return Number.isFinite(r) && Math.abs(r) <= 0.35 ? r : 0;
+    });
+    const want = Math.max(-0.35, Math.min(0, ...rises));
+    this.footDrop += (want - this.footDrop) * (1 - Math.exp(-dt * 12));
+    const parent = (i: number) => this.model!.nodes[i]!.parent;
+    const recompose = (nodes: number[]) => {
+      for (const i of nodes) multiply(this.global[parent(i)]!, this.local[i]!, this.global[i]!);
+    };
+    this.legs.forEach((leg, k) => {
+      const lift = ground ? rises[k]! - this.footDrop : 0;
+      this.footLift[k] = lift;
+      if (Math.abs(lift) < 0.002) return;
+      const hip = jointAt(this.global[leg.thigh]!),
+        knee = jointAt(this.global[leg.calf]!),
+        ankle = jointAt(this.global[leg.foot]!);
+      const target: [number, number, number] = [ankle[0], ankle[1] + lift, ankle[2]];
+      const bent = solveKnee(hip, knee, ankle, target);
+      // (the thigh turned about the hip onto the new knee, the calf following; then the calf about the knee onto the target)
+      rotateAbout(this.global[leg.thigh]!, hip, rotationBetween(sub3(knee, hip), sub3(bent, hip)));
+      recompose([leg.calf, ...leg.below]);
+      const k2 = jointAt(this.global[leg.calf]!),
+        a2 = jointAt(this.global[leg.foot]!);
+      rotateAbout(this.global[leg.calf]!, k2, rotationBetween(sub3(a2, k2), sub3(target, k2)));
+      recompose(leg.below);
+    });
   }
   stats() {
     return {

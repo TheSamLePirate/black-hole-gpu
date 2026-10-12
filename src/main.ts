@@ -715,6 +715,7 @@ async function main() {
   camera.character.contact = () => (settings.earthTerrain && renderer.earthScenery.supported ? renderer.earthScenery.contact : null);
   camera.character.terrainRevision = () => renderer.earthTiles.stamp;
   camera.character.surface = (body, q) => body !== "earth" || renderer.earthLandAt(q);
+  camera.character.hullBounds = () => renderer.ship.hullBound(settings.vessel);
   camera.character.onEvent = (to, detail) => tarsEvent({ kind: "character", to, detail });
   const tarsEvent = (e: GameEvent) => {
     const rules = tarsTriggers.match(e);

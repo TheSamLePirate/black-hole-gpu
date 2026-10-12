@@ -16,6 +16,53 @@ export interface CharacterLight {
   fov: number;
 }
 const MAX = 65536;
+// The procedural astronaut drawn while the model loads: layered pressure suit, hard rings, visor, life-support
+// pack — each ellipsoid's centre, radii, material (character.wgsl avatarVertex).
+const PARTS: number[][] = [
+  [0, 1.22, 0, 0.26, 0.32, 0.16, 0],
+  [0, 0.93, 0, 0.22, 0.14, 0.15, 1],
+  [0, 1.66, 0, 0.19, 0.2, 0.19, 0],
+  [0, 1.68, 0.125, 0.16, 0.135, 0.1, 2],
+  [0, 1.48, 0, 0.205, 0.045, 0.19, 4],
+  [0, 1.2, -0.21, 0.21, 0.3, 0.12, 4],
+  [0, 1.22, 0.165, 0.135, 0.14, 0.035, 4],
+  [0, 1.25, 0.202, 0.06, 0.05, 0.015, 1],
+  [-0.34, 1.19, 0, 0.095, 0.23, 0.095, 0],
+  [0.34, 1.19, 0, 0.095, 0.23, 0.095, 0],
+  [-0.35, 0.94, 0, 0.08, 0.12, 0.08, 1],
+  [0.35, 0.94, 0, 0.08, 0.12, 0.08, 1],
+  [-0.12, 0.66, 0, 0.105, 0.25, 0.11, 0],
+  [0.12, 0.66, 0, 0.105, 0.25, 0.11, 0],
+  [-0.12, 0.28, 0, 0.09, 0.23, 0.1, 0],
+  [0.12, 0.28, 0, 0.09, 0.23, 0.1, 0],
+  [-0.12, 0.075, 0.07, 0.105, 0.07, 0.19, 1],
+  [0.12, 0.075, 0.07, 0.105, 0.07, 0.19, 1],
+  [-0.12, 0.46, 0.055, 0.11, 0.075, 0.095, 4],
+  [0.12, 0.46, 0.055, 0.11, 0.075, 0.095, 4],
+  [-0.29, 1.42, 0, 0.12, 0.07, 0.1, 3],
+  [0.29, 1.42, 0, 0.12, 0.07, 0.1, 3],
+  [0, 1.03, 0, 0.23, 0.04, 0.16, 4],
+  [0, 1.64, -0.17, 0.12, 0.1, 0.055, 1],
+];
+/** the uniform's vec4s (character.wgsl U) */
+const UNIFORM_VEC4S = 88;
+/** the occluder's format: distance [m] × coverage, coverage (ship.wgsl reads it as the station's) */
+const OCCLUDER: GPUTextureFormat = "rg16float";
+
+/** The light probe round the camera (the ship's: ShipRenderer) and the vessel's shadow map, shared with the astronaut. */
+export interface CharacterProbe {
+  /** spherical harmonics, dominant light, key light (ShipRenderer.shBuf) */
+  sh: GPUBuffer;
+  /** GGX pre-filtered radiance */
+  env: GPUTextureView;
+  mips: number;
+  /** the vessel's shadow map */
+  shipShadow: GPUTextureView;
+  /** the camera's axes in the probe's; null: no fresh probe this frame (the astronaut falls back to the sky estimate) */
+  axes: [Vec3, Vec3, Vec3] | null;
+  /** the vessel's bounding sphere in the camera's axes [m]; null: no vessel shadow */
+  shipBound: { c: Vec3; r: number } | null;
+}
 
 /** The grass's settings: its reach [m], its sway (1 as authored), the share of its blades drawn. null: no grass pass. */
 export interface GrassTune {
@@ -40,7 +87,6 @@ export class CharacterRenderer {
   readonly model: AstronautModel;
   private skinPipe: GPURenderPipeline;
   private skinShadow: GPURenderPipeline;
-  private skinBindings: GPUBindGroup[] = [];
   private uniform: GPUBuffer;
   private visible: GPUBuffer;
   private commands: GPUBuffer;
@@ -53,12 +99,18 @@ export class CharacterRenderer {
   private comp: GPURenderPipeline;
   private cull: GPUComputePipeline;
   private depth: GPUTexture | null = null;
+  /** the astronaut's and the grass's distance for the vessel drawn after them (ship.wgsl's occluder) */
+  private occluderTex: GPUTexture | null = null;
+  private envSampler: GPUSampler;
+  private probeKey: unknown[] = [];
   private shadow: GPUTexture;
   private sampler: GPUSampler;
   private size = "";
-  private binds: GPUBindGroup[] = [];
-  private bound: GPUBuffer | null = null;
-  private lastScene: GPUBuffer | null = null;
+  /** the bind groups by pipeline and root set (made again when a resource they hold changes) */
+  private groups = new Map<string, GPUBindGroup>();
+  private shadowView: GPUTextureView;
+  private probeLit = false;
+  private shipShadowed = false;
   private rootsData = new Float32Array(MAX * 4);
   // Two sets: the drawn one, and the one being generated for the current key (the other one).
   private sets: RootSet[] = [];
@@ -74,7 +126,7 @@ export class CharacterRenderer {
     this.model = new AstronautModel(d);
     this.module = d.createShaderModule({ label: "character and grass", code: shader });
     const buffer = (size: number, usage: number) => d.createBuffer({ size, usage });
-    this.uniform = buffer(84 * 16, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+    this.uniform = buffer(UNIFORM_VEC4S * 16, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
     this.sets = [0, 1].map((index) => ({
       index,
       buffer: buffer(MAX * 16, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST),
@@ -119,19 +171,18 @@ export class CharacterRenderer {
         fragment: {
           module: this.module,
           entryPoint: "fs",
-          targets: [
-            {
-              format: "rgba16float",
-              ...(entry === "grassVs"
-                ? {
-                    blend: {
-                      color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
-                      alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
-                    } as GPUBlendState,
-                  }
-                : {}),
-            },
-          ],
+          // (the grass blended, premultiplied, in both: its occluder is a coverage-weighted distance)
+          targets: [{ format: "rgba16float" }, { format: OCCLUDER }].map((t) => ({
+            ...t,
+            ...(entry === "grassVs"
+              ? {
+                  blend: {
+                    color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+                    alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+                  } as GPUBlendState,
+                }
+              : {}),
+          })) as GPUColorTargetState[],
         },
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: "depth32float", depthWriteEnabled: entry !== "grassVs", depthCompare: "greater" },
@@ -151,7 +202,7 @@ export class CharacterRenderer {
     this.skinPipe = d.createRenderPipeline({
       layout: "auto",
       vertex: { module: this.module, entryPoint: "skinVs", buffers: [skinVertex] },
-      fragment: { module: this.module, entryPoint: "skinFs", targets: [{ format: "rgba16float" }] },
+      fragment: { module: this.module, entryPoint: "skinFs", targets: [{ format: "rgba16float" }, { format: OCCLUDER }] },
       primitive: { topology: "triangle-list", cullMode: "none" },
       depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
     });
@@ -193,7 +244,9 @@ export class CharacterRenderer {
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
     this.sampler = d.createSampler({ compare: "less-equal", magFilter: "linear", minFilter: "linear" });
-    for (let i = 0; i < 3; i++) this.lodUniform.push(buffer(84 * 16, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST));
+    this.shadowView = this.shadow.createView();
+    for (let i = 0; i < 3; i++) this.lodUniform.push(buffer(UNIFORM_VEC4S * 16, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST));
+    this.envSampler = d.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", addressModeU: "repeat" });
   }
   stats() {
     return {
@@ -207,6 +260,9 @@ export class CharacterRenderer {
       indexBytes: MAX * 3 * 4,
       shadowBytes: 512 * 512 * 4,
       depthBytes: this.depth ? Number(this.size.split(":")[0]) * Number(this.size.split(":")[1]) * 4 : 0,
+      occluderBytes: this.occluderTex ? this.occluderTex.width * this.occluderTex.height * 4 : 0,
+      probe: this.probeLit,
+      shipShadow: this.shipShadowed,
       cpuMs: this.cpuMs,
       generationMs: this.generationMs,
     };
@@ -220,8 +276,10 @@ export class CharacterRenderer {
       this.depth = null;
       this.size = "";
     }
-    this.binds = [];
-    this.bound = null;
+    this.occluderTex?.destroy();
+    this.occluderTex = null;
+    this.groups.clear();
+    this.probeKey = [];
   }
   private generate(c: PlanetCharacter, contact: SceneryContact | null, revision: number, grass: GrassTune | null) {
     this.reason = !grass
@@ -314,10 +372,12 @@ export class CharacterRenderer {
     grass: GrassTune | null,
     prof: GpuProfiler,
     sceneryBuffer: GPUBuffer,
+    probe: CharacterProbe,
   ) {
     const began = performance.now();
     if (!this.model.ready && !this.model.error) void this.model.load();
-    if (this.model.ready) this.model.evaluate(c.age, frame.speed);
+    // (on the ground, the feet on the ground under them: a slope's rise at each foot)
+    if (this.model.ready) this.model.evaluate(c.age, frame.speed, frame.airborne, frame.airborne ? null : (x, z) => c.groundRise(x, z));
     this.active = true;
     this.generate(c, contact, revision, grass);
     const width = target.width,
@@ -325,16 +385,23 @@ export class CharacterRenderer {
       key = `${width}:${height}`;
     if (key !== this.size) {
       this.depth?.destroy();
+      this.occluderTex?.destroy();
       this.depth = this.d.createTexture({ size: [width, height], format: "depth32float", usage: GPUTextureUsage.RENDER_ATTACHMENT });
+      this.occluderTex = this.d.createTexture({
+        size: [width, height],
+        format: OCCLUDER,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      });
       this.size = key;
     }
-    const u = new Float32Array(84 * 4);
+    const u = new Float32Array(UNIFORM_VEC4S * 4);
     const set = (i: number, v: number[]) => u.set(v, i * 4);
     const tan = Math.tan((light.fov * Math.PI) / 360);
     const roots = this.sets[this.drawn] ?? null;
     set(0, [(tan * width) / height, tan, roots?.lattice[0] ?? 0, roots?.lattice[1] ?? 0]);
     set(1, [width, height, light.metres, light.pre]);
-    set(2, [...frame.origin, frame.phase]);
+    // (the landing's give and the body lowered for the lower foot on a slope)
+    set(2, [...add(frame.origin, frame.axes[1], frame.dip + this.model.footDrop), frame.phase]);
     set(3, [...frame.axes[0], Math.min(1, frame.speed / 4)]);
     set(4, [...frame.axes[1], c.age]);
     set(5, [...frame.axes[2], 0]);
@@ -353,34 +420,7 @@ export class CharacterRenderer {
       const local: Vec3 = [dot(a, cross(c.forward, c.up())), dot(a, c.up()), dot(a, c.forward)];
       set(10 + i, [...cam(local), 0]);
     }
-    // Original procedural astronaut: layered pressure suit, hard rings, visor, life-support pack.
-    const parts: number[][] = [
-      [0, 1.22, 0, 0.26, 0.32, 0.16, 0],
-      [0, 0.93, 0, 0.22, 0.14, 0.15, 1],
-      [0, 1.66, 0, 0.19, 0.2, 0.19, 0],
-      [0, 1.68, 0.125, 0.16, 0.135, 0.1, 2],
-      [0, 1.48, 0, 0.205, 0.045, 0.19, 4],
-      [0, 1.2, -0.21, 0.21, 0.3, 0.12, 4],
-      [0, 1.22, 0.165, 0.135, 0.14, 0.035, 4],
-      [0, 1.25, 0.202, 0.06, 0.05, 0.015, 1],
-      [-0.34, 1.19, 0, 0.095, 0.23, 0.095, 0],
-      [0.34, 1.19, 0, 0.095, 0.23, 0.095, 0],
-      [-0.35, 0.94, 0, 0.08, 0.12, 0.08, 1],
-      [0.35, 0.94, 0, 0.08, 0.12, 0.08, 1],
-      [-0.12, 0.66, 0, 0.105, 0.25, 0.11, 0],
-      [0.12, 0.66, 0, 0.105, 0.25, 0.11, 0],
-      [-0.12, 0.28, 0, 0.09, 0.23, 0.1, 0],
-      [0.12, 0.28, 0, 0.09, 0.23, 0.1, 0],
-      [-0.12, 0.075, 0.07, 0.105, 0.07, 0.19, 1],
-      [0.12, 0.075, 0.07, 0.105, 0.07, 0.19, 1],
-      [-0.12, 0.46, 0.055, 0.11, 0.075, 0.095, 4],
-      [0.12, 0.46, 0.055, 0.11, 0.075, 0.095, 4],
-      [-0.29, 1.42, 0, 0.12, 0.07, 0.1, 3],
-      [0.29, 1.42, 0, 0.12, 0.07, 0.1, 3],
-      [0, 1.03, 0, 0.23, 0.04, 0.16, 4],
-      [0, 1.64, -0.17, 0.12, 0.1, 0.055, 1],
-    ];
-    parts.forEach((p, i) => {
+    PARTS.forEach((p, i) => {
       set(13 + i * 2, [p[0]!, p[1]!, p[2]!, p[6]!]);
       set(14 + i * 2, [p[3]!, p[4]!, p[5]!, 0]);
     });
@@ -393,55 +433,93 @@ export class CharacterRenderer {
       set(80, [...contact.local(frame.q), 0]);
     }
     set(83, [grass?.reach ?? 28, grass?.wind ?? 1, grass?.density ?? 1, 0]);
+    // (the probe: the same light as the vessel's hull — none fresh, the astronaut's own estimate of the sky)
+    this.probeLit = !!probe.axes;
+    this.shipShadowed = !!(probe.axes && probe.shipBound);
+    const ax = probe.axes;
+    set(84, [...(ax?.[0] ?? [1, 0, 0]), ax ? 1 : 0]);
+    set(85, [...(ax?.[1] ?? [0, 1, 0]), probe.mips - 1]);
+    set(86, [...(ax?.[2] ?? [0, 0, 1]), 0]);
+    set(87, probe.shipBound && ax ? [...probe.shipBound.c, probe.shipBound.r] : [0, 0, 0, 0]);
     this.d.queue.writeBuffer(this.uniform, 0, u);
     for (let i = 0; i < 3; i++) {
       u[23] = i;
       this.d.queue.writeBuffer(this.lodUniform[i]!, 0, u);
     }
     this.d.queue.writeBuffer(this.commands, 0, new Uint32Array([36, 0, 0, 0, 12, 0, 0, 0, 6, 0, 0, 0]));
-    if (this.bound !== moments || this.lastScene !== sceneryBuffer) {
-      this.lastScene = sceneryBuffer;
-      this.bound = moments;
-      this.binds = [];
-      this.skinBindings = [];
+    // (the bind groups follow their resources: a new moments buffer, scenery buffer or probe — made again)
+    const resources = [moments, sceneryBuffer, probe.sh, probe.env, probe.shipShadow];
+    if (resources.some((r, i) => r !== this.probeKey[i])) {
+      this.probeKey = resources;
+      this.groups.clear();
     }
-    const bind = (pipe: GPURenderPipeline | GPUComputePipeline, entries: GPUBindGroupEntry[], slot: number) =>
-      (this.binds[slot] ??= this.d.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries }));
-    const base = [{ binding: 0, resource: { buffer: this.uniform } }];
-    const shading = [
-      ...base,
-      { binding: 8, resource: { buffer: sceneryBuffer } },
-      { binding: 1, resource: { buffer: moments } },
-      { binding: 5, resource: this.shadow.createView() },
-      { binding: 6, resource: this.sampler },
-    ];
+    const resource = (b: number, uniform: GPUBuffer, rootBuffer: GPUBuffer | null): GPUBindingResource => {
+      switch (b) {
+        case 0:
+          return { buffer: uniform };
+        case 1:
+          return { buffer: moments };
+        case 2:
+          return { buffer: rootBuffer! };
+        case 3:
+        case 7:
+          return { buffer: this.visible };
+        case 4:
+          return { buffer: this.commands };
+        case 5:
+          return this.shadowView;
+        case 6:
+          return this.sampler;
+        case 8:
+          return { buffer: sceneryBuffer };
+        case 9:
+          return { buffer: probe.sh };
+        case 10:
+          return probe.env;
+        case 11:
+          return this.envSampler;
+        default:
+          return probe.shipShadow;
+      }
+    };
+    /** pipeline's group 0 with exactly the bindings its entry points use (layout "auto") */
+    const group = (
+      pipe: GPURenderPipeline | GPUComputePipeline,
+      slot: string,
+      bindings: number[],
+      uniform = this.uniform,
+      rootSet: RootSet | null = null,
+    ) => {
+      const id = `${slot}:${rootSet?.index ?? -1}`;
+      let g = this.groups.get(id);
+      if (!g) {
+        g = this.d.createBindGroup({
+          layout: pipe.getBindGroupLayout(0),
+          entries: bindings.map((binding) => ({ binding, resource: resource(binding, uniform, rootSet?.buffer ?? null) })),
+        });
+        this.groups.set(id, g);
+      }
+      return g;
+    };
+    const lit = [0, 1, 5, 6, 8, 9, 10, 11, 12];
     const shadowPass = enc.beginRenderPass({
       ...prof.pass("character solar shadow"),
       colorAttachments: [],
-      depthStencilAttachment: { view: this.shadow.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" },
+      depthStencilAttachment: { view: this.shadowView, depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" },
     });
     if (this.model.ready) {
       shadowPass.setPipeline(this.skinShadow);
-      shadowPass.setBindGroup(
-        0,
-        (this.skinBindings[0] ??= this.d.createBindGroup({ layout: this.skinShadow.getBindGroupLayout(0), entries: base })),
-      );
-      shadowPass.setBindGroup(
-        1,
-        (this.skinBindings[1] ??= this.d.createBindGroup({
-          layout: this.skinShadow.getBindGroupLayout(1),
-          entries: [{ binding: 0, resource: { buffer: this.model.bones } }],
-        })),
-      );
+      shadowPass.setBindGroup(0, group(this.skinShadow, "skin-shadow", [0]));
+      shadowPass.setBindGroup(1, this.bonesGroup(this.skinShadow, "skin-shadow-bones", false));
       shadowPass.setVertexBuffer(0, this.model.vertices!);
       shadowPass.setIndexBuffer(this.model.indices!, "uint32");
       shadowPass.drawIndexed(this.model.count);
     } else {
       shadowPass.setPipeline(this.shadowPipe);
-      shadowPass.setBindGroup(0, bind(this.shadowPipe, base, 0));
+      shadowPass.setBindGroup(0, group(this.shadowPipe, "shadow", [0]));
       shadowPass.setVertexBuffer(0, this.vertices);
       shadowPass.setIndexBuffer(this.indices, "uint32");
-      shadowPass.drawIndexed(this.count, parts.length);
+      shadowPass.drawIndexed(this.count, PARTS.length);
     }
     shadowPass.end();
     const comp = enc.beginRenderPass({
@@ -449,90 +527,73 @@ export class CharacterRenderer {
       colorAttachments: [{ view: target.createView({ baseMipLevel: 0, mipLevelCount: 1 }), loadOp: "load", storeOp: "store" }],
     });
     comp.setPipeline(this.comp);
-    comp.setBindGroup(
-      0,
-      bind(
-        this.comp,
-        shading.filter((e) => e.binding !== 8),
-        1,
-      ),
-    );
+    comp.setBindGroup(0, group(this.comp, "ground", [0, 1, 5, 6, 8, 9, 12]));
     comp.draw(3);
     comp.end();
     if (roots?.count) {
       const pass = enc.beginComputePass({ ...prof.pass("grass visibility and LOD") });
       pass.setPipeline(this.cull);
-      pass.setBindGroup(
-        0,
-        bind(
-          this.cull,
-          [
-            ...base,
-            { binding: 2, resource: { buffer: roots.buffer } },
-            { binding: 7, resource: { buffer: this.visible } },
-            { binding: 4, resource: { buffer: this.commands } },
-            { binding: 8, resource: { buffer: sceneryBuffer } },
-          ],
-          2 + 8 * roots.index,
-        ),
-      );
+      pass.setBindGroup(0, group(this.cull, "cull", [0, 2, 4, 7, 8, 9, 12], this.uniform, roots));
       pass.dispatchWorkgroups(Math.ceil(roots.count / 128));
       pass.end();
     }
     const pass = enc.beginRenderPass({
       ...prof.pass("character and grass HDR"),
-      colorAttachments: [{ view: target.createView({ baseMipLevel: 0, mipLevelCount: 1 }), loadOp: "load", storeOp: "store" }],
+      colorAttachments: [
+        { view: target.createView({ baseMipLevel: 0, mipLevelCount: 1 }), loadOp: "load", storeOp: "store" },
+        { view: this.occluderTex!.createView(), clearValue: [0, 0, 0, 0], loadOp: "clear", storeOp: "store" },
+      ],
       depthStencilAttachment: { view: this.depth!.createView(), depthClearValue: 0, depthLoadOp: "clear", depthStoreOp: "discard" },
     });
     if (this.model.ready) {
       pass.setPipeline(this.skinPipe);
-      pass.setBindGroup(
-        0,
-        (this.skinBindings[2] ??= this.d.createBindGroup({ layout: this.skinPipe.getBindGroupLayout(0), entries: shading })),
-      );
-      pass.setBindGroup(
-        1,
-        (this.skinBindings[3] ??= this.d.createBindGroup({
-          layout: this.skinPipe.getBindGroupLayout(1),
-          entries: [
-            { binding: 0, resource: { buffer: this.model.bones } },
-            { binding: 1, resource: this.model.sampler },
-            { binding: 2, resource: this.model.texture!.createView({ dimension: "2d-array" }) },
-          ],
-        })),
-      );
+      pass.setBindGroup(0, group(this.skinPipe, "skin", lit));
+      pass.setBindGroup(1, this.bonesGroup(this.skinPipe, "skin-bones", true));
       pass.setVertexBuffer(0, this.model.vertices!);
       pass.setIndexBuffer(this.model.indices!, "uint32");
       pass.drawIndexed(this.model.count);
     } else {
       pass.setPipeline(this.avatar);
-      pass.setBindGroup(0, bind(this.avatar, shading, 3));
+      pass.setBindGroup(0, group(this.avatar, "avatar", lit));
       pass.setVertexBuffer(0, this.vertices);
       pass.setIndexBuffer(this.indices, "uint32");
-      pass.drawIndexed(this.count, parts.length);
+      pass.drawIndexed(this.count, PARTS.length);
     }
     if (roots?.count) {
       pass.setPipeline(this.grass);
       for (let lod = 0; lod < 3; lod++) {
-        pass.setBindGroup(
-          0,
-          bind(
-            this.grass,
-            [
-              { binding: 0, resource: { buffer: this.lodUniform[lod]! } },
-              ...shading.slice(1),
-              { binding: 2, resource: { buffer: roots.buffer } },
-              { binding: 3, resource: { buffer: this.visible } },
-            ],
-            4 + lod + 8 * roots.index,
-          ),
-        );
+        pass.setBindGroup(0, group(this.grass, `grass${lod}`, [0, 1, 2, 3, 5, 6, 8, 9, 10, 11, 12], this.lodUniform[lod]!, roots));
         pass.drawIndirect(this.commands, lod * 16);
       }
     }
     pass.end();
     this.cpuMs = performance.now() - began;
     this.initialized = true;
+  }
+  /** The astronaut's group 1: its bones (and for the lit pass its maps). */
+  private bonesGroup(pipe: GPURenderPipeline, slot: string, maps: boolean) {
+    let g = this.groups.get(slot);
+    if (!g) {
+      g = this.d.createBindGroup({
+        layout: pipe.getBindGroupLayout(1),
+        entries: [
+          { binding: 0, resource: { buffer: this.model.bones } },
+          ...(maps
+            ? [
+                { binding: 1, resource: this.model.sampler },
+                { binding: 2, resource: this.model.texture!.createView({ dimension: "2d-array" }) },
+              ]
+            : []),
+        ],
+      });
+      this.groups.set(slot, g);
+    }
+    return g;
+  }
+  /** The astronaut's and the grass's distance this frame, for the vessel drawn over them (null: not on foot). */
+  get occluder(): { depth: GPUTexture; rect: [number, number, number, number] } | null {
+    const t = this.active ? this.occluderTex : null;
+    return t ? { depth: t, rect: [0, 0, t.width, t.height] } : null;
   }
   get ready() {
     return this.initialized;

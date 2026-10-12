@@ -11,6 +11,16 @@ import { body as systemBody, GARGANTUA_SYSTEM } from "../system/bodies";
 import { freeCameraKeys } from "../input/bindings";
 import { shipToCamera } from "../mounts";
 import type { SceneryContact } from "../system/scenery-contact";
+import { t } from "../i18n";
+import { capsuleInHull, hullDistance, outOfHull, placeHull, type VesselHull } from "./vessel-hull";
+
+/** a jump asked this long before the feet touch down is still made on landing [s] */
+export const JUMP_BUFFER_S = 0.15;
+/** a jump asked this long after walking off an edge is still made (coyote time) [s] */
+export const COYOTE_S = 0.12;
+/** how fast the velocity follows the input: on the ground, in the air (a little steering only) [1/s] */
+export const GROUND_RESPONSE = 14;
+export const AIR_RESPONSE = 2.5;
 
 export interface CharacterSave {
   body: string;
@@ -33,6 +43,10 @@ export interface CharacterFrame {
   speed: number;
   phase: number;
   grounded: boolean;
+  /** off the ground (a jump, a fall): the gait stops, the stride held */
+  airborne: boolean;
+  /** the landing's give: how far the body sinks on its legs this instant [m, ≤ 0] */
+  dip: number;
   time: number;
 }
 export const tangent = (up: Vec3, f: Vec3): Vec3 => {
@@ -58,11 +72,19 @@ export class PlanetCharacter {
   velocity: Vec3 = [0, 0, 0];
   contact: () => SceneryContact | null = () => null;
   surface: (body: string, q: Vec3) => boolean | null = () => true;
+  /** the flown vessel's box in its own frame (x left, y up, z nose) [m]: the renderer's mesh, gear out; null: unknown */
+  hullBounds: () => { lo: Vec3; hi: Vec3 } | null = () => null;
   onEvent: (kind: string, detail: string) => void = () => {};
   lastError: string | null = null;
   cpuMs = 0;
   private accumulator = 0;
-  private jumpPending = false;
+  /** the jump asked and not yet made: how long it still waits for the ground [s] */
+  private jumpBuffer = 0;
+  /** the time since the feet last touched the ground [s] */
+  private airTime = 0;
+  /** the landing's give [m] and its rate [m/s] (a damped spring) */
+  private dip = 0;
+  private dipRate = 0;
   private drive: { forward: number; right: number; run: boolean; remaining: number } | null = null;
   private drag: { id: number; x: number; y: number } | null = null;
   private lastTime = 0;
@@ -112,28 +134,29 @@ export class PlanetCharacter {
           ? !solidBody(body)
           : !systemBody(GARGANTUA_SYSTEM, body).surface || ["gas", "ocean"].includes(systemBody(GARGANTUA_SYSTEM, body).surface!.kind)
       )
-        return "Cette surface ne permet pas la marche.";
+        return t("You cannot walk on this surface.");
     } catch {
-      return "Corps inconnu ou surface non solide.";
+      return t("Unknown body, or no solid surface.");
     }
     const prev = { body: this.body, ours: this.ours, q: this.q };
     this.body = body;
     this.ours = ours;
     this.q = q;
     this.groundPatch.clear();
+    this.hullCache = { at: -1, hull: null };
     this.lastTime = this.c.nowTime();
     const foot = this.ground(q);
     if (ours && this.surface(body, foot) === null) {
       Object.assign(this, prev);
-      return "Chargement des données de sol : réessayez dans un instant.";
+      return t("The ground is still loading: try again in a moment.");
     }
     if (ours && this.surface(body, foot) === false) {
       Object.assign(this, prev);
-      return "Le point de sortie est dans l’eau.";
+      return t("The exit is in the water.");
     }
-    if (ours && body === "earth" && this.contact()?.at(foot).blocked) {
+    if ((ours && body === "earth" && this.contact()?.at(foot).blocked) || this.inHull(foot)) {
       Object.assign(this, prev);
-      return "Le point de sortie est obstrué.";
+      return t("The exit is blocked.");
     }
     this.q = foot;
     if (ours && body === "earth") this.groundPatch.build(foot, this.up(), (p) => this.rawHeight(p), this.terrainRevision());
@@ -156,6 +179,9 @@ export class PlanetCharacter {
     this.speed = 0;
     this.velocity = [0, 0, 0];
     this.grounded = true;
+    this.airTime = 0;
+    this.jumpBuffer = 0;
+    this.dip = this.dipRate = 0;
     this.yaw = 0;
     this.pitch = 0.2;
     this.distance = this.camDistance = this.c.s.characterDistance;
@@ -175,7 +201,7 @@ export class PlanetCharacter {
   }
   start(body: string, lat = 0, lon = 0) {
     this.lastTime = this.c.nowTime();
-    if (solarBody(body) && !solidBody(body)) return this.fail("Cette surface ne permet pas la marche.");
+    if (solarBody(body) && !solidBody(body)) return this.fail(t("You cannot walk on this surface."));
     if (solidBody(body)) return this.prepare(body, true, scale(groundPointOf(body, lat, lon, 0), M_METRES), [0, 0, 1]);
     try {
       const F = planetFrame(body, this.lastTime, this.c.s.spin, this.c.s.massSolar);
@@ -188,18 +214,18 @@ export class PlanetCharacter {
         [0, 0, 1],
       );
     } catch {
-      return "Surface non marchable.";
+      return t("This surface cannot be walked on.");
     }
   }
   disembark() {
     if (this.active) return null;
     const c = this.c,
       w = c.rigWorld();
-    if (!w || !c.piloting) return this.fail("Il faut piloter un vaisseau posé.");
+    if (!w || !c.piloting) return this.fail(t("Fly a landed vessel first."));
     const body = c.ourLanded?.body ?? (c.landed ? c.local?.F.id : undefined);
-    if (!body) return this.fail("Posez le vaisseau avant de sortir.");
+    if (!body) return this.fail(t("Land the vessel before going out."));
     const h = c.airInfo?.();
-    if (h && h.speed > 0.5) return this.fail("Le vaisseau doit être presque immobile.");
+    if (h && h.speed > 0.5) return this.fail(t("The vessel must be almost still."));
     this.lastTime = c.nowTime();
     let f: Vec3;
     if (w.ours) {
@@ -218,7 +244,7 @@ export class PlanetCharacter {
       const err = this.prepare(body, w.ours, point, f);
       if (!err) return null;
     }
-    return this.fail("Aucune sortie dégagée et solide près du vaisseau.");
+    return this.fail(t("No clear, solid exit near the vessel."));
   }
   private accessPoints(): Vec3[] {
     const w = this.c.rigWorld();
@@ -227,14 +253,81 @@ export class PlanetCharacter {
       C = shipToCamera(this.c.shipPose(), this.c.s.shipLookYaw, this.c.s.shipLookPitch).S;
     const axes: [Vec3, Vec3, Vec3] = [w.right, w.up, w.fwd];
     const rightWorld = add(add(scale(axes[0], C[0][0]), axes[1], C[1][0]), axes[2], C[2][0]);
-    const point = (side: number) => {
-      const X = add(w.X, rightWorld, (side * this.accessOffset()) / this.metres());
-      const q = this.ours
+    const local = (X: Vec3) =>
+      this.ours
         ? scale(toBodyFixed(this.body, X, t), M_METRES)
         : scale(toLocal(planetFrame(this.body, t, this.c.s.spin, this.c.s.massSolar), X, [0, 0, 0]).xi, this.metres());
-      return this.ground(q);
+    const hull = this.vesselHull();
+    const point = (side: number) => {
+      const q = this.ground(local(add(w.X, rightWorld, (side * this.accessOffset()) / this.metres())));
+      // (a hatch estimated inside the hull — a wide craft —: out of its box, sideways, the astronaut's waist clear)
+      if (hull && capsuleInHull(hull, q, this.up(q))) {
+        const up = this.up(q),
+          away = tangent(up, sub(local(add(w.X, rightWorld, side / this.metres())), local(w.X)));
+        return this.ground(add(outOfHull(hull, add(q, up, 0.9), away, 0.6), up, -0.9));
+      }
+      return q;
     };
     return [point(1), point(-1)];
+  }
+  /**
+   * The flown vessel's box on the body, in the walk's metres (its mesh's, gear out: the renderer's), from its
+   * pose now — null: no vessel landed on this body, or its mesh not known yet.
+   */
+  vesselHull(): VesselHull | null {
+    const bounds = this.hullBounds();
+    if (!bounds || !this.c.piloting || !(this.c.ourLanded || this.c.landed)) return null;
+    if ((this.c.ourLanded?.body ?? this.c.local?.F.id) !== this.body) return null;
+    const w = this.c.rigWorld();
+    if (!w || w.ours !== this.ours) return null;
+    const time = this.c.nowTime(),
+      m = this.metres(),
+      pose = shipToCamera(this.c.shipPose(), this.c.s.shipLookYaw, this.c.s.shipLookPitch);
+    const cam: [Vec3, Vec3, Vec3] = [w.right, w.up, w.fwd];
+    // (a ship-frame vector in the world: its camera components, on the camera's world axes)
+    const world = (v: Vec3): Vec3 => {
+      const c = pose.S.map((row) => dot(row, v));
+      return add(add(scale(cam[0], c[0]!), cam[1], c[1]!), cam[2], c[2]!);
+    };
+    const origin = add(add(add(w.X, cam[0], pose.t[0] / m), cam[1], pose.t[1] / m), cam[2], pose.t[2] / m);
+    const local = (X: Vec3) =>
+      this.ours
+        ? scale(toBodyFixed(this.body, X, time), M_METRES)
+        : scale(toLocal(planetFrame(this.body, time, this.c.s.spin, this.c.s.massSolar), X, [0, 0, 0]).xi, m);
+    const o = local(origin);
+    // (the axes through the same conversion as the points: the body's turn, a world's own frame)
+    const axes = ([0, 1, 2] as const).map((k) => {
+      const e: Vec3 = [0, 0, 0];
+      e[k] = 1;
+      return unit(sub(local(add(origin, world(e), 1 / m)), o));
+    }) as [Vec3, Vec3, Vec3];
+    return placeHull(o, axes, bounds.lo, bounds.hi);
+  }
+  private hullCache: { at: number; hull: VesselHull | null } = { at: -1, hull: null };
+  /** the vessel's box this step (computed once per frame: the vessel stands still on the ground) */
+  private hullNow() {
+    if (this.hullCache.at !== this.age) this.hullCache = { at: this.age, hull: this.vesselHull() };
+    return this.hullCache.hull;
+  }
+  /** How high the feet stand at p over the ground or what holds them (a bridge's deck, a roof) [m]. */
+  private standing(p: Vec3) {
+    const h = this.height(p);
+    const object = this.ours && this.body === "earth" ? this.contact()?.at(p, 0.05, 1.8, 0.4) : null;
+    return object && Number.isFinite(object.support) ? Math.min(h, -object.support) : h;
+  }
+  /**
+   * The ground's rise at x metres to the astronaut's right and z ahead of him, over the ground under him [m]: where
+   * his feet's IK puts each foot on a slope (character-model.ts placeFeet).
+   */
+  groundRise(x: number, z: number) {
+    const up = this.up(),
+      right = unit(cross(this.forward, up));
+    return this.standing(this.q) - this.standing(add(add(this.q, right, x), this.forward, z));
+  }
+  /** The astronaut standing at q would be inside the vessel's hull. */
+  inHull(q: Vec3, radius = 0.3, height = 1.8) {
+    const h = this.hullNow();
+    return !!h && capsuleInHull(h, q, this.up(q), radius, height);
   }
   private accessOffset() {
     return this.c.s.vessel === "endurance" ? 75 : this.c.s.vessel === "lander" ? 13 : 9;
@@ -246,9 +339,9 @@ export class PlanetCharacter {
   }
   board() {
     if (!this.active) return null;
-    if (!this.c.piloting || !(this.c.ourLanded || this.c.landed)) return this.fail("Le vaisseau doit être posé.");
-    if (this.accessDistance() > 3) return this.fail("Approchez-vous de l’accès du vaisseau (3 m).");
-    if ((this.c.airInfo?.()?.speed ?? 0) > 0.5) return this.fail("Le vaisseau se déplace trop vite.");
+    if (!this.c.piloting || !(this.c.ourLanded || this.c.landed)) return this.fail(t("The vessel must be landed."));
+    if (this.accessDistance() > 3) return this.fail(t("Come closer to the vessel's hatch (3 m)."));
+    if ((this.c.airInfo?.()?.speed ?? 0) > 0.5) return this.fail(t("The vessel is moving too fast."));
     this.stop();
     this.onEvent("boarded", this.c.s.vessel);
     return null;
@@ -260,7 +353,7 @@ export class PlanetCharacter {
     this.groundPatch.clear();
     this.active = false;
     this.drive = null;
-    this.jumpPending = false;
+    this.jumpBuffer = 0;
     this.drag = null;
     this.c.spectator = null;
     this.c.keys.clear();
@@ -273,12 +366,12 @@ export class PlanetCharacter {
   }
   releaseInput() {
     this.drive = null;
-    this.jumpPending = false;
+    this.jumpBuffer = 0;
     this.drag = null;
     this.velocity = [0, 0, 0];
   }
   move(forward: number, right: number, seconds: number, run = false) {
-    if (!this.active) return this.fail("Le personnage n’est pas à pied.");
+    if (!this.active) return this.fail(t("The astronaut is not on foot."));
     this.drive = {
       forward: Math.max(-1, Math.min(1, forward)),
       right: Math.max(-1, Math.min(1, right)),
@@ -287,8 +380,9 @@ export class PlanetCharacter {
     };
     return null;
   }
+  /** A jump: made now on the ground (or just off an edge), else as soon as the feet touch down (within JUMP_BUFFER_S). */
   jump() {
-    if (this.active && this.grounded) this.jumpPending = true;
+    if (this.active) this.jumpBuffer = JUMP_BUFFER_S;
   }
   orbit(dx: number, dy: number) {
     this.yaw -= dx * 0.006;
@@ -359,19 +453,21 @@ export class PlanetCharacter {
       n = Math.max(1, Math.hypot(f, r));
     const pace = run ? this.c.s.runSpeed : this.c.s.walkSpeed;
     const desired = add(scale(cam, (f / n) * pace), right, (r / n) * pace);
-    this.velocity = add(this.velocity, sub(desired, this.velocity), 1 - Math.exp(-dt * 14));
+    // (in the air: the momentum kept, a little steering)
+    this.velocity = add(this.velocity, sub(desired, this.velocity), 1 - Math.exp(-dt * (this.grounded ? GROUND_RESPONSE : AIR_RESPONSE)));
     const speed = len(this.velocity);
     if (speed > 0.05) {
       this.forward = tangent(up, add(this.forward, sub(unit(this.velocity), this.forward), 1 - Math.exp(-dt * 12)));
     }
     let target = add(this.q, this.velocity, dt);
     const contact = this.ours && this.body === "earth" ? this.contact() : null;
-    if (contact?.at(target).blocked || this.surface(this.body, target) === false) {
-      // Slide along one tangent component when the full capsule step hits a facade/trunk.
+    const free = (q: Vec3) => !contact?.at(q).blocked && this.surface(this.body, q) !== false && !this.inHull(q);
+    if (!free(target)) {
+      // Slide along one tangent component when the full capsule step hits a facade, a trunk or the hull.
       target = this.q;
       for (const v of [scale(cam, dot(this.velocity, cam)), scale(right, dot(this.velocity, right)), [0, 0, 0] as Vec3]) {
         const q = add(this.q, v, dt);
-        if (!contact?.at(q).blocked && this.surface(this.body, q) !== false) {
+        if (free(q)) {
           target = q;
           break;
         }
@@ -384,12 +480,15 @@ export class PlanetCharacter {
       ? (solarBody(this.body)!.mass / (len(this.q) / M_METRES) ** 2) * (299792458 ** 2 / M_METRES)
       : (planetFrame(this.body, this.lastTime, this.c.s.spin, this.c.s.massSolar).m / (len(this.q) / this.metres()) ** 2) *
         (299792458 ** 2 / this.metres());
-    if (this.jumpPending && this.grounded) {
+    // (a jump asked a little early, or just after walking off an edge, is still made)
+    if (this.jumpBuffer > 0 && (this.grounded || (this.airTime < COYOTE_S && this.vertical <= 0))) {
       this.vertical = this.c.s.jumpSpeed;
       this.grounded = false;
-      this.jumpPending = false;
+      this.jumpBuffer = 0;
+      this.airTime = COYOTE_S;
       this.onEvent("jump", this.body);
     }
+    this.jumpBuffer = Math.max(0, this.jumpBuffer - dt);
     if (!this.grounded) this.vertical -= g * dt;
     target = add(target, up, this.vertical * dt);
     let above = this.height(target);
@@ -397,11 +496,23 @@ export class PlanetCharacter {
     if (object && Number.isFinite(object.support)) above = Math.min(above, -object.support);
     if (above <= 0.02 || (this.grounded && above < 0.25)) {
       target = add(target, up, -above + 0.012);
-      if (!this.grounded) this.onEvent("landed", this.body);
+      if (!this.grounded) {
+        // (the legs give on landing: a damped spring, deeper the faster the fall)
+        this.dipRate = Math.min(this.dipRate, -Math.min(2, 0.6 * Math.abs(this.vertical)));
+        this.onEvent("landed", this.body);
+      }
       this.grounded = true;
       this.vertical = 0;
-    } else this.grounded = false;
-    this.speed = len(sub(target, this.q)) / dt;
+      this.airTime = 0;
+    } else {
+      this.grounded = false;
+      this.airTime += dt;
+    }
+    this.dipRate += (-120 * this.dip - 22 * this.dipRate) * dt;
+    this.dip = Math.max(-0.15, Math.min(0, this.dip + this.dipRate * dt));
+    // (the speed along the ground: the gait's pace — a fall or a jump does not walk)
+    const step = sub(target, this.q);
+    this.speed = len(sub(step, scale(up, dot(step, up)))) / dt;
     this.q = target;
     this.phase += speed * dt * 3;
   }
@@ -416,7 +527,12 @@ export class PlanetCharacter {
     let reach = this.distance;
     for (let d = 0.25; d <= this.distance; d += 0.25) {
       const p = add(target, away, d);
-      if (this.height(p) < 0.2 || (this.ours && this.body === "earth" && this.contact()?.at(p, 0.2, 0.1, 0).blocked)) {
+      const hull = this.hullNow();
+      if (
+        this.height(p) < 0.2 ||
+        (this.ours && this.body === "earth" && this.contact()?.at(p, 0.2, 0.1, 0).blocked) ||
+        (hull && hullDistance(hull, p) < 0.25)
+      ) {
         reach = Math.max(0.3, d - 0.3);
         break;
       }
@@ -447,6 +563,8 @@ export class PlanetCharacter {
       speed: this.speed,
       phase: this.phase,
       grounded: this.grounded,
+      airborne: !this.grounded,
+      dip: this.dip,
       time: this.lastTime,
     };
   }
@@ -490,6 +608,12 @@ export class PlanetCharacter {
       grounded: this.grounded,
       heightM: this.active ? this.height() : null,
       accessDistanceM: this.active ? this.accessDistance() : null,
+      airborneS: this.grounded ? 0 : this.airTime,
+      dipM: this.dip,
+      hull: (() => {
+        const h = this.active ? this.hullNow() : null;
+        return h ? { distanceM: hullDistance(h, this.q), half: [...h.half] } : null;
+      })(),
       cpuMs: this.cpuMs,
       groundPatch: {
         ready: this.groundPatch.ready,

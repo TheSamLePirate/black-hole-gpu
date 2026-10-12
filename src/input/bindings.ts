@@ -324,8 +324,8 @@ function actionLabel(b: KeyBind): Text {
 }
 
 /** The key of a flight action now (its first binding, as the player set it), printed — "⇧G", "P" — or null. */
-export function keyFor(action: KeyAction, arg?: string): string | null {
-  const b = BINDINGS.find((x) => x.layer === "flight" && x.do === action && (arg === undefined || x.arg === arg));
+export function keyFor(action: KeyAction, arg?: string, layer: KeyLayer = "flight"): string | null {
+  const b = BINDINGS.find((x) => x.layer === layer && x.do === action && (arg === undefined || x.arg === arg));
   if (!b) return null;
   const e = effective(b);
   const k = e.code ? { code: e.code[0]! } : e.key ? { key: e.key[0]! } : null;

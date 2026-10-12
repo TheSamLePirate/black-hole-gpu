@@ -429,6 +429,12 @@ export class Renderer {
   private stationLoading: Promise<void> | null = null;
   /** the disk's reference luminance (log10 Y) of the last frame's parameters: the stars' scale */
   private walkStamp = -1;
+  /** when the light probe last ran [ms, performance.now()]: the astronaut reads it while it is fresh */
+  private envAt = -Infinity;
+  /** the probe's and the vessel's shadow map's views, as the astronaut binds them (made once) */
+  private characterViews: { env: GPUTextureView; shadow: GPUTextureView } | null = null;
+  /** the key light's direction the astronaut was last lit from (camera axes) */
+  private characterSun: Vec3 | null = null;
   private lastLogY = 0;
   /** the last frame's bodies (the stars' radius, temperature, brightness) */
   private lastBodies: GpuBody[] = [];
@@ -2145,7 +2151,8 @@ export class Renderer {
     if (!o.probe) this.lastBodies = bodies;
     if (bodies.length) this.featureKey |= 128;
     // (the Ranger's shadow on the near ground: its bounding sphere in the camera's axes; 0: none)
-    const sb = !o.probe && s.ship && this.ship.ready && near ? this.ship.shadowBound : null;
+    // (the ship seen from outside — a spectator, the astronaut on foot — casts its shadow too)
+    const sb = !o.probe && (s.ship || this.shipInView) && this.ship.ready && near ? this.ship.shadowBound : null;
     set(65, sb?.c[0] ?? 0, sb?.c[1] ?? 0, sb?.c[2] ?? 0, sb?.r ?? 0);
     // (the far field's LUT: the live view, a scene with nothing a ray between clean samples could meet —
     // and a block of 2 at most: coarser, the tracer's few rays cost less than the LUT's pass, audit O1)
@@ -2802,7 +2809,8 @@ export class Renderer {
 
   /** The light probe around the camera (after the frame's params are written), then its mips and SH. */
   private dispatchEnv(enc: GPUCommandEncoder, t: Target, s: Settings) {
-    if (!s.ship && !this.craftsShown) {
+    // (on foot, the probe round the camera lights the astronaut and the grass: the ship's light, the same world)
+    if (!s.ship && !this.craftsShown && !this.character?.active) {
       this.envReset = true; // stale by the time the ship comes back
       return;
     }
@@ -2833,6 +2841,7 @@ export class Renderer {
     if (k !== 4 || this.envPhase % 2 === 0) this.ship.encodeEnv(enc);
     enc.copyBufferToBuffer(this.ship.shBuf, 0, this.bodyBuf, this.bodyData.byteLength, SH_BYTES);
     this.envReset = false;
+    this.envAt = performance.now();
     if (this.envSpread > 0) this.envSpread--;
     this.envPhase++;
   }
@@ -3652,7 +3661,9 @@ export class Renderer {
             glow: preExposure(this.ev(s)) / 2 ** this.ev(s),
             contrails: this.shipContrails,
           },
-          this.station.depthTexture() ? { depth: this.station.depthTexture()!, rect: this.station.rect } : undefined,
+          // (on foot: the astronaut and the grass before it hide the hull — else the station, before it in orbit)
+          this.characterRenderer.occluder ??
+            (this.station.depthTexture() ? { depth: this.station.depthTexture()!, rect: this.station.rect } : undefined),
           t.moments,
         );
         // (where it was drawn: the display reads its image there, the bloom too)
@@ -3783,6 +3794,52 @@ export class Renderer {
     return mapHeightSampler(h.map, h.W, h.H)(normal) > 0;
   }
 
+  /**
+   * On foot: the light the astronaut stands in, read back from the probe — the key light's and the sky's
+   * (irradiance luminances, in the tracer's units, on a surface facing up), the Sun's height (cosine) and how
+   * deep a shadow falls there (the key's share of the light: ~1 on an airless world, less under a sky). Null
+   * off foot, or with no fresh probe.
+   */
+  async characterLight(): Promise<{ key: number; sky: number; cosine: number; shadowDepth: number } | null> {
+    const f = this.character?.frame(),
+      L = this.characterSun;
+    if (!f || !L || !this.characterRenderer.stats().probe) return null;
+    const stage = this.device.createBuffer({ size: 256, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+    const enc = this.device.createCommandEncoder();
+    enc.copyBufferToBuffer(this.ship.shBuf, 0, stage, 0, 256);
+    this.device.queue.submit([enc.finish()]);
+    await stage.mapAsync(GPUMapMode.READ);
+    const sh = new Float32Array(stage.getMappedRange().slice(0));
+    stage.unmap();
+    stage.destroy();
+    // (the body's up in the probe's axes; Ramamoorthi & Hanrahan's irradiance there, as character.wgsl)
+    const ax = this.shipProbeAxes,
+      n = f.axes[1];
+    const d = [0, 1, 2].map((k) => n[0] * ax[0][k]! + n[1] * ax[1][k]! + n[2] * ax[2][k]!);
+    const [x, y, z] = d as [number, number, number];
+    const basis = [
+      0.282095,
+      0.488603 * y,
+      0.488603 * z,
+      0.488603 * x,
+      1.092548 * x * y,
+      1.092548 * y * z,
+      0.315392 * (3 * z * z - 1),
+      1.092548 * x * z,
+      0.546274 * (x * x - y * y),
+    ];
+    const A = [Math.PI, 2.094395, 2.094395, 2.094395, 0.785398, 0.785398, 0.785398, 0.785398, 0.785398];
+    const lum = (o: number) => 0.2126 * sh[o]! + 0.7152 * sh[o + 1]! + 0.0722 * sh[o + 2]!;
+    const sky = Math.max(
+      0,
+      basis.reduce((e, b, k) => e + A[k]! * b * lum(k * 4), 0),
+    );
+    const key = sh[47]! > 0.5 ? Math.max(0, lum(44)) : 0;
+    const cosine = Math.max(0, dot3(L, n) / Math.hypot(...L));
+    const total = key * cosine + sky;
+    return { key, sky, cosine, shadowDepth: total > 0 ? (key * cosine) / total : 0 };
+  }
+
   private encodeCharacter(enc: GPUCommandEncoder, target: Target, s: Settings) {
     const c = this.character,
       frame = c?.frame();
@@ -3814,6 +3871,7 @@ export class Renderer {
       L = [dot3(rep, cam.right), dot3(rep, cam.up), dot3(rep, cam.fwd)];
     }
     const elevation = dot3(L, frame.axes[1]);
+    this.characterSun = L;
     const temp = (!frame.ours ? planet?.lightT : undefined) ?? sunBody?.temperature ?? 5772;
     const E =
       Math.PI *
@@ -3843,6 +3901,15 @@ export class Renderer {
       s.earthGrass !== "off" ? { density: s.earthGrassDensity, reach: s.earthGrassReach, wind: s.earthGrassWind } : null,
       this.prof,
       this.earthScenery.buffer,
+      {
+        sh: this.ship.shBuf,
+        env: (this.characterViews ??= { env: this.ship.envSpecView, shadow: this.ship.shadowView }).env,
+        mips: this.ship.specMips,
+        shipShadow: this.characterViews.shadow,
+        // (fresh: run within the last half second — the probe refreshes every frame or every fourth)
+        axes: this.ship.ready && performance.now() - this.envAt < 500 ? this.shipProbeAxes : null,
+        shipBound: (s.ship || this.shipInView) && this.ship.ready ? this.ship.shadowBound : null,
+      },
     );
   }
 

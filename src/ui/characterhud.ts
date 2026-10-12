@@ -67,7 +67,7 @@ export class CharacterHud {
       : tr({ fr: "Vaisseau posé", en: "Craft landed" });
     const label = `${keyFor("leaveShip") ?? "⇧K"} — ${tr(on ? { fr: "Entrer dans le vaisseau", en: "Board the craft" } : { fr: "Quitter le vaisseau", en: "Leave the craft" })}`;
     const text = on
-      ? `${["camForward", "camLeft", "camBack", "camRight"].map((a) => keyLabel({ code: heldCode(a as "camForward") })).join(" ")} · ${tr({ fr: "Marcher · Maj : courir · Espace : sauter · Glisser : caméra", en: "Walk · Shift: run · Space: jump · Drag: camera" })}`
+      ? `${["camForward", "camLeft", "camBack", "camRight"].map((a) => keyLabel({ code: heldCode(a as "camForward") })).join(" ")} · ${tr({ fr: "Marcher · Maj : courir", en: "Walk · Shift: run" })} · ${keyFor("characterJump", undefined, "character") ?? keyLabel({ code: "Space" })} : ${tr({ fr: "sauter", en: "jump" })} · ${tr({ fr: "Glisser : caméra", en: "Drag: camera" })}`
       : "";
     const key = status + label + text + near;
     if (key !== this.last) {

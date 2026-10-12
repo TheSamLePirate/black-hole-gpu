@@ -5093,7 +5093,9 @@ fn earthHeightStepG(q: vec3f, foot: f32) -> f32 {
 }
 // the relief's own normal at q, no finer than the footprint
 fn earthNormalAt(q: vec3f, foot: f32) -> vec3f {
-  if(P.walk[0].w>.5 && dot(WALK_N,WALK_N)>.5){return WALK_N;}
+  // (on foot: the shared walking grid's own normal where the ground was met on it, blended out at its rim)
+  let walk = walkNormal();
+  if (walk.w >= 0.999) { return walk.xyz; }
   // (no finer than 10 m: a float32 point of the unit sphere is good to ~0.4 m — finer differences would
   // show its steps, a grid)
   let e = max(foot, 10.0) / EARTH_RM;
@@ -5105,7 +5107,8 @@ fn earthNormalAt(q: vec3f, foot: f32) -> vec3f {
     let qi = select(select(q, normalize(q + t1 * e), i == 1), normalize(q + t2 * e), i == 2);
     hs[i] = earthHeight(qi, foot);
   }
-  return normalize(q - ((hs[1] - hs[0]) * t1 + (hs[2] - hs[0]) * t2) / (e * EARTH_RM));
+  let relief = normalize(q - ((hs[1] - hs[0]) * t1 + (hs[2] - hs[0]) * t2) / (e * EARTH_RM));
+  return select(relief, normalize(mix(relief, walk.xyz, walk.w)), walk.w > 0.0);
 }
 
 // The relief's shadow at a ground point p (its axes, radii) towards the sun Ls: marched up to ~50 km,
@@ -5138,25 +5141,47 @@ fn earthTerrainShadow(p: vec3f, Ls: vec3f, foot: f32) -> f32 {
 // fraction of the height above the ground (and of the distance: the far horizon), then bisected; fpK:
 // the pixel's footprint per unit distance. < 0: missed.
 
-var<private> WALK_N:vec3f;
+// where the last march step met the walking grid: its metres along right and forward, its weight (0: off it)
+var<private> WALK_AT:vec3f;
+// One height of the walking grid, its cell clamped to the grid.
+fn walkHeight(x:i32,z:i32)->f32 {
+ let size=i32(P.walk[2].w);let at=u32(clamp(z,0,size-1)*size+clamp(x,0,size-1));
+ return bodies[u32(P.walk[1].w)+at/4u][at%4u];
+}
 // CPU and GPU share this local metre grid. No extra storage binding; no per-frame readback.
+// The march reads its bilinear heights alone; the normal (walkNormal) only where the ground is shaded.
 fn walkDistance(rd:vec3f,t:f32)->vec2f {
- WALK_N=vec3f(0);
+ WALK_AT=vec3f(0);
  if(P.walk[0].w<.5){return vec2f(0);}
  let direction=vec3f(rd.xy,rd.z/EARTH_AB);
  let d=P.walk[0].xyz+vec3f(dot(direction,P.walk[1].xyz),dot(direction,P.walk[2].xyz),dot(direction,P.walk[3].xyz))*(t*EARTH_RM);
  if(max(abs(d.x),abs(d.z))>=32){return vec2f(0);}
- let size=u32(P.walk[2].w);let step=P.walk[3].w;let q=(d.xz+32)/step;let cell=min(vec2u(floor(q)),vec2u(size-2u));let f=q-vec2f(cell);let at=cell.y*size+cell.x;let base=u32(P.walk[1].w);
- let a=bodies[base+at/4u][at%4u];let b=bodies[base+(at+1u)/4u][(at+1u)%4u];let c=bodies[base+(at+size)/4u][(at+size)%4u];let e=bodies[base+(at+size+1u)/4u][(at+size+1u)%4u];
- let h=mix(mix(a,b,f.x),mix(c,e,f.x),f.y);
- let dx=mix(b-a,e-c,f.y)/step;let dz=mix(c-a,e-b,f.x)/step;
- let normal=normalize(P.walk[2].xyz-P.walk[1].xyz*dx-P.walk[3].xyz*dz);
- WALK_N=normalize(vec3f(normal.xy,normal.z/EARTH_AB));
- return vec2f((d.y-h)/EARTH_RM,1-smoothstep(30.0,32.0,max(abs(d.x),abs(d.z))));
+ let size=u32(P.walk[2].w);let step=P.walk[3].w;let q=(d.xz+32)/step;let cell=min(vec2u(floor(q)),vec2u(size-2u));let f=q-vec2f(cell);
+ let x=i32(cell.x);let z=i32(cell.y);
+ let h=mix(mix(walkHeight(x,z),walkHeight(x+1,z),f.x),mix(walkHeight(x,z+1),walkHeight(x+1,z+1),f.x),f.y);
+ let w=1-smoothstep(30.0,32.0,max(abs(d.x),abs(d.z)));
+ WALK_AT=vec3f(d.xz,w);
+ return vec2f((d.y-h)/EARTH_RM,w);
+}
+// The walking grid's normal where the march met it (squashed space; w: its weight, 0 off the grid): the
+// heights' slopes at the four corners (central differences) interpolated — smooth across the 1 m cells,
+// where the bilinear surface's own normal jumps at each cell's edge (a faceted light near the feet).
+fn walkNormal()->vec4f {
+ if(P.walk[0].w<.5||WALK_AT.z<=0){return vec4f(0);}
+ let size=u32(P.walk[2].w);let step=P.walk[3].w;let q=(WALK_AT.xy+32)/step;let cell=min(vec2u(floor(q)),vec2u(size-2u));let f=q-vec2f(cell);
+ let x=i32(cell.x);let z=i32(cell.y);
+ var g=array<vec2f,4>();
+ for(var k=0;k<4;k++){
+  let cx=x+(k&1);let cz=z+(k>>1);
+  g[k]=vec2f(walkHeight(cx+1,cz)-walkHeight(cx-1,cz),walkHeight(cx,cz+1)-walkHeight(cx,cz-1))/(2*step);
+ }
+ let s=mix(mix(g[0],g[1],f.x),mix(g[2],g[3],f.x),f.y);
+ let normal=normalize(P.walk[2].xyz-P.walk[1].xyz*s.x-P.walk[3].xyz*s.y);
+ return vec4f(normalize(vec3f(normal.xy,normal.z/EARTH_AB)),WALK_AT.z);
 }
 
 fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
-  WALK_N=vec3f(0);
+  WALK_AT=vec3f(0);
   let Rs = 1.0 + 9600.0 / EARTH_RM;
   let b = dot(ro, rd);
   let off = ro - rd * b;

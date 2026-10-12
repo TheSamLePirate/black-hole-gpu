@@ -128,6 +128,7 @@ Every e2e file (`tests/e2e/*.e2e.test.ts`), by theme: what it proves, the scene 
 | file | what it proves | scene(s) booted | ~s here | needs |
 |---|---|---|---|---|
 | character.e2e.test.ts | Real skinned astronaut on Moon/Earth/Mars; Shift+K disembark/board, save reload, local-gravity jump; Earth grass from actual WorldCover, roots bounded, no grass on Moon or in flight. Captures require satellite, terrain, scenery, render/lighting shaders and 120 settled frames; JSON readiness beside PNG. | Earth: the Blue Marble, 960×540 | ~50–90; cold network/compilation can take longer | live terrain/WorldCover/OSM for Earth capture; licensed astronaut assets in tree |
+| character-aaa.e2e.test.ts | On foot as a game is judged: before the landed vessel the astronaut is drawn over its hull (screen patches with/without him and the ship) and stopped by it (10 s walked into it, never inside); lit by the vessel's light probe and reading its shadow map; per-world light from the probe (`characterLight()`: the Moon's shadow deepest, the Earth's softer, none at midnight); the jump with real Space keys (buffered on landing, the legs give, no gait in the air); after a 22 km teleport the settled frame never comes before the new place's scenery. Captures `character-aaa-*.png` with readiness JSON. | Earth: the Blue Marble (Moon landing; Moon/Mars/Cévennes/Paris on foot), 960×540 | ~4–8 min; cold network and kernel compilation longer | native WebGPU; live terrain/WorldCover/OSM for the Earth parts; licensed astronaut assets in tree |
 
 ## Slow (> 60 s)
 
