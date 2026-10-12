@@ -9,7 +9,7 @@ The plan, the request and the user's choices: [PLAN-MODES-AAA.md](../PLAN-MODES-
 | M3 Pause → offline capture everywhere | done |
 | M4 Ship HUD in chase and dorsal, three HUDs | done |
 | M5 On-foot HUD | done |
-| M6 The Atlas: maps, POIs, placement, geocoding | to do |
+| M6 The Atlas: maps, POIs, placement, geocoding | done |
 | M7 Tripod and sky events from the view | to do |
 | M8 Photo mode: renders and animations | to do |
 | M9 Coherence | to do |
@@ -348,3 +348,68 @@ bun run e2e --remote modes a11y s5 photo-fps place eclipses metar music-panel bh
 5. **Mars, a Gargantua world:** the planisphere or the graticule. The Sun mark is absent on Gargantua's side.
 6. **H hides everything.** The photo mode hides the HUD.
 7. **A phone:** the smaller minimap, nothing over the touch controls.
+
+## M6. The Atlas: maps, destinations, placement, geocoding
+
+### What changed
+
+- **`ui/atlas.ts`, a full page** opened by F8, the top bar's Atlas button, the pause menu and TARS.
+- **The worlds:**
+  - the Earth on Web Mercator from its imagery's tiles (NASA GIBS's Blue Marble to level 8, EOX Sentinel-2
+    cloudless to 13: the same live public sources as the scenery);
+  - the Moon and Mars on the plate carrée from their maps (2048 px at once, 8192 px once zoomed).
+- **The map** (`ui/mapview.ts`):
+  - dragged, zoomed about the pointer (the wheel, a pinch, a double click), flown to a place eased;
+  - the world always filling the view;
+  - the night darkened with the Earth's city lights (VIIRS) through it and the terminator drawn;
+  - a graticule; names that do not overlap.
+- **Destinations** (`game/pois.ts`, about 90): launch sites, summits, wonders, observatories, cities, poles; the
+  Apollo sites, craters, seas; the rovers, volcanoes, canyons and caps of Mars. Each has its kind and a line. The
+  runways and sites, and the landscapes' viewpoints, join them.
+- **Search:** destinations by name (French or English, accents ignored), coordinates (decimal or DMS), and on the
+  Earth addresses through Photon with Nominatim as fallback (`game/geocode.ts`: one request a second at most,
+  answers kept for the session).
+- **A place picked** (a mark, a result, anywhere):
+  - its card: the place, the elevation, the distance and direction from you, day or night there;
+  - its actions: in orbit over it, the craft set down there, walk there, the free camera above it (30° down,
+    carried with the ground; the spectator if a ship flies), a tripod on it;
+  - "This view, as photographed" for a viewpoint; "Ask TARS";
+  - a mission running ends only after a second click.
+- **TARS:** the `atlas` tool (search, go, open), `/atlas` and `/visit`.
+- **Compass points** are translated everywhere (O, SO, NO in French).
+- **Docs:** `docs/systemes/08-interface.md` § 6.3 quater; the TARS tools table; the e2e catalogue.
+
+### Tests
+
+- **Unit:**
+  - `tests/mapproj.test.ts`: the projections both ways, the terminator, the tiles;
+  - `tests/pois.test.ts`: every destination valid, the search, Photon's and Nominatim's answers, typed coordinates.
+- **e2e (Macs):** `tests/e2e/atlas.e2e.test.ts`. `ATLAS_LIVE=1` adds a live address search.
+- **Checked here** in a headless page: the Moon with its destinations, the Earth with GIBS's tiles and Photon's
+  answers live, the night with the city lights.
+
+### Manual tests to do (on the Mac)
+
+1. **F8.** The Atlas on the world you are on, centred on you.
+   - Drag, wheel, pinch on a trackpad, double click: smooth.
+   - Zoom on Paris: the EOX imagery sharpens to the streets' scale.
+2. **Night.** The terminator and the night with the cities lit on the Earth. Change the date (the time panel), then
+   reopen: the night has moved.
+3. **Search.**
+   - "mont blanc": the destination, then the addresses.
+   - "48.8584, 2.2945": the coordinates.
+   - "Tour Eiffel": Photon's result.
+   - On the Moon "tycho"; on Mars "jezero".
+4. **Each action, from a destination:**
+   - In orbit over Everest: the craft passes over it now.
+   - Set the craft down at Gale crater.
+   - Walk at Apollo 11: on foot beside the craft.
+   - Free camera above Valles Marineris.
+   - Tripod at Paranal: the camera on the ground, looking north.
+5. **A viewpoint:** "This view, as photographed" opens the landscape.
+6. **A mission running:** the first click warns, the second goes.
+7. **TARS.**
+   - "emmène-moi au-dessus du Grand Canyon en caméra libre".
+   - "pose-nous au cratère Gale".
+   - "/visit tour eiffel".
+8. **Narrow window and phone:** the map above, the list and the card under it.

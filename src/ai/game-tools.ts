@@ -135,6 +135,18 @@ export interface GameHost {
   dayClouds?(): { date: string; layer: string } | null;
   /** the game's mode (game/modes.ts): now, into another (why not, or null), the top bar shown or hidden */
   mode?: { get(): GameMode; set(m: GameMode): string | null; hideBar(on: boolean): void };
+  /** the Atlas (ui/atlas.ts): the destinations and the Earth's addresses found; the game put at a place; the page */
+  atlas?: {
+    search(
+      q: string,
+      body?: "earth" | "moon" | "mars",
+    ): Promise<{ name: string; body: string; lat: number; lon: number; kind: string; detail?: string }[]>;
+    go(
+      to: "orbit" | "land" | "walk" | "camera" | "tripod",
+      p: { body: "earth" | "moon" | "mars"; lat: number; lon: number; name: string },
+    ): string | null;
+    open(o: { body?: "earth" | "moon" | "mars"; query?: string }): void;
+  };
   /** the offline capture (renderdialog.ts): the view now rendered converged, saved by itself; its state; stopped */
   capture?: {
     start(o: { preset?: string; width?: number; height?: number; spp?: number; save?: "png" | "png16" | "exr" | null }): string | null;
@@ -203,6 +215,7 @@ export const PANELS = [
   "camera",
   "music",
   "render",
+  "atlas",
 ] as const;
 export type Panel = (typeof PANELS)[number];
 
@@ -1343,6 +1356,40 @@ export function gameTools(h: GameHost): Tool[] {
         if (a.bar) h.mode.hideBar(a.bar === "hide");
         const error = a.mode ? h.mode.set(a.mode as GameMode) : null;
         return { ok: !error, error, mode: h.mode.get() };
+      }),
+    },
+    {
+      name: "atlas",
+      description:
+        "The Atlas of the Earth, the Moon and Mars. search: the destinations (launch sites, summits, wonders, observatories, cities, poles; the Apollo sites, craters, seas; the rovers, volcanoes, canyons), the runways and viewpoints, and on the Earth any address or place name (OpenStreetMap) or coordinates — names, places [°], kinds. go: the game put at a place (lat, lon, or the first found for query): to orbit (an orbit over it now), land (the craft set down there), walk (landed, you on foot beside it), camera (the free camera above it, looking at it), tripod (the camera on the ground there). open: the Atlas's page, on a world, a search typed.",
+      params: {
+        action: { type: "string", enum: ["search", "go", "open"] },
+        query: { type: "string" },
+        body: { type: "string", enum: ["earth", "moon", "mars"] },
+        lat: { type: "number", minimum: -90, maximum: 90 },
+        lon: { type: "number", minimum: -180, maximum: 180 },
+        to: { type: "string", enum: ["orbit", "land", "walk", "camera", "tripod"] },
+      },
+      required: ["action"],
+      run: act(async (a) => {
+        const A = h.atlas;
+        if (!A) return { ok: false, error: "no Atlas here" };
+        const body = a.body as "earth" | "moon" | "mars" | undefined;
+        if (a.action === "open") {
+          A.open({ body, query: a.query as string | undefined });
+          return { ok: true };
+        }
+        const found = a.query ? await A.search(String(a.query), body) : [];
+        if (a.action === "search") return { ok: true, found: found.slice(0, 12) };
+        const p =
+          a.lat !== undefined && a.lon !== undefined
+            ? { body: body ?? "earth", lat: Number(a.lat), lon: Number(a.lon), name: String(a.query ?? `${a.lat}, ${a.lon}`) }
+            : found[0]
+              ? { body: found[0].body as "earth" | "moon" | "mars", lat: found[0].lat, lon: found[0].lon, name: found[0].name }
+              : null;
+        if (!p) return { ok: false, error: "no place: give lat and lon, or a query that finds one" };
+        const error = A.go((a.to as "orbit" | "land" | "walk" | "camera" | "tripod" | undefined) ?? "camera", p);
+        return { ok: !error, error, place: p };
       }),
     },
     {

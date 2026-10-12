@@ -29,6 +29,8 @@ const T = {
     en: "this instant's view, rendered noise-free, saved as a PNG",
   },
   render: { fr: "Rendu…", en: "Render…" },
+  atlas: { fr: "Atlas", en: "Atlas" },
+  atlasHint: { fr: "la Terre, la Lune, Mars : y aller", en: "the Earth, the Moon, Mars: go there" },
   renderHint: { fr: "une image ou une vidéo : taille, échantillons, plan", en: "a picture or a video: size, samples, shot" },
   title2: { fr: "Écran titre", en: "Title screen" },
   back: { fr: "Retour", en: "Back" },
@@ -59,6 +61,8 @@ export interface PauseDeps {
   /** the offline capture of the view now (saved once converged), and the render dialog */
   capture(): void;
   render(): void;
+  /** the Atlas (ui/atlas.ts) */
+  atlas(): void;
   /** placing the ship (ui/placepanel.ts) */
   place(): void;
   /** the date and time (ui/timepanel.ts) */
@@ -137,6 +141,7 @@ export class PauseMenu {
       this.item(tr(T.save), () => this.savePage(), { testid: "pause-save" }),
       this.item(tr(T.load), () => this.loadPage(), { testid: "pause-load" }),
       this.item(t("Download graphics diagnostic"), downloadGpuDiagnostic, { testid: "pause-graphics-diagnostic" }),
+      this.item(tr(T.atlas), () => this.leaveFor(this.d.atlas), { hint: tr(T.atlasHint), testid: "pause-atlas" }),
       this.item(tr(T.place), () => this.leaveFor(this.d.place), { testid: "pause-place" }),
       this.item(tr(T.time), () => this.leaveFor(this.d.time), { testid: "pause-time" }),
       this.item(tr(T.weather), () => this.leaveFor(this.d.weather), { testid: "pause-weather" }),

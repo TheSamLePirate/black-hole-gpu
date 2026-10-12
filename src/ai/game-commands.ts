@@ -75,6 +75,23 @@ export const GAME_COMMANDS: GameCommand[] = [
     desc: { fr: "La barre du haut : show, hide", en: "The top bar: show, hide" },
   },
   {
+    name: "atlas",
+    tool: "atlas",
+    fixed: { action: "open" },
+    args: [{ param: "query", rest: true }],
+    desc: { fr: "L'Atlas : la Terre, la Lune, Mars — une recherche", en: "The Atlas: the Earth, the Moon, Mars — a search" },
+  },
+  {
+    name: "visit",
+    tool: "atlas",
+    fixed: { action: "go", to: "camera" },
+    args: [{ param: "query", rest: true }],
+    desc: {
+      fr: "La caméra libre au-dessus d'un lieu (destination, adresse)",
+      en: "The free camera above a place (a destination, an address)",
+    },
+  },
+  {
     name: "capture",
     tool: "capture",
     fixed: { action: "start" },

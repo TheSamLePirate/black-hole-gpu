@@ -9,7 +9,7 @@
 // Drawn ten times a second at most; the map's picture redrawn only when the walker moves on it or it zooms (its
 // turning is the browser's).
 
-import { compassPoint, fmtLatLon, greatCircle } from "../game/geo";
+import { compassPoint, fmtLatLon, greatCircle, POINTS } from "../game/geo";
 import { t } from "../i18n";
 import { el as h } from "./kit";
 import { LocalGroundMap, type LocalPlace } from "./local-ground-map";
@@ -186,10 +186,11 @@ export class FootHud {
     set("alt", `${Math.round(p.altM).toLocaleString("en-US").replace(/,/g, " ")} m`);
     set("agl", `${p.aglM < 10 ? p.aglM.toFixed(1) : Math.round(p.aglM)} m`);
     set("speed", `${p.speedMs.toFixed(1)} m/s · ${(p.speedMs * 3.6).toFixed(1)} km/h`);
-    set("hdg", `${String(Math.round(p.viewDeg) % 360).padStart(3, "0")}° ${compassPoint(p.viewDeg)}`);
+    const pts = POINTS.map((x) => t(x));
+    set("hdg", `${String(Math.round(p.viewDeg) % 360).padStart(3, "0")}° ${compassPoint(p.viewDeg, pts)}`);
     set(
       "craft",
-      g ? `${groundDist(g.dist)} · ${String(Math.round(g.bearingDeg) % 360).padStart(3, "0")}° ${compassPoint(g.bearingDeg)}` : "—",
+      g ? `${groundDist(g.dist)} · ${String(Math.round(g.bearingDeg) % 360).padStart(3, "0")}° ${compassPoint(g.bearingDeg, pts)}` : "—",
     );
     R.craft!.parentElement!.hidden = !g;
     // (the minimap: turned with the view; its picture again when the walker moved a few pixels on it)

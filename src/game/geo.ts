@@ -48,6 +48,9 @@ export function fmtLatLon(lat: number, lon: number, digits = 4, words: [string, 
   return `${Math.abs(lat).toFixed(digits)}° ${lat >= 0 ? words[0] : words[1]} ${Math.abs(lo).toFixed(digits)}° ${lo >= 0 ? words[2] : words[3]}`;
 }
 
+/** The eight points' letters, north first (the English; the interface translates them). */
+export const POINTS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+
 /** The compass point of an azimuth (8 points). */
 export function compassPoint(deg: number, points = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]): string {
   return points[Math.round((((deg % 360) + 360) % 360) / 45) % 8]!;

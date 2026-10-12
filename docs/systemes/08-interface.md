@@ -594,6 +594,29 @@ Sur tout monde solide, quand on marche (et la carte complète fermée) :
   clic ouvre la carte complète (M). Son image n’est redessinée que si le marcheur bouge de quelques pixels ou
   si elle zoome ; la rotation est celle du navigateur.
 
+#### 6.3 quater L’Atlas (`ui/atlas.ts`, `ui/mapview.ts`, PLAN-MODES-AAA M6)
+
+Une page plein écran (F8, la barre du haut, le menu pause, TARS) :
+
+- **les mondes** : la Terre en Web Mercator, d’après les tuiles de son imagerie (Blue Marble de NASA GIBS jusqu’au
+  niveau 8, Sentinel-2 cloudless d’EOX au-delà jusqu’au 13 — les mêmes sources publiques en direct que le décor ;
+  la tuile parente affichée pendant que la sienne arrive) ; la Lune et Mars en plate carrée, d’après leurs cartes
+  (2048 px tout de suite, 8192 px dès qu’on zoome) ;
+- **la carte** (`MapView`) : glisser, molette et pincement zooment autour du pointeur, double clic, vol animé vers
+  un lieu ; le monde remplit toujours la vue ; grille, nuit (assombrie, les lumières des villes de la Terre — VIIRS —
+  au travers, le terminateur tracé), noms placés sans chevauchement ;
+- **les destinations** (`game/pois.ts`) : bases de lancement, sommets, merveilles, observatoires, villes, pôles ;
+  sites Apollo, cratères, mers ; atterrisseurs, volcans, canyons, calottes de Mars — chacune avec son type et une
+  ligne ; s’y ajoutent les pistes et sites (`SITES`) et les points de vue des paysages ;
+- **la recherche** : les destinations par nom (les deux langues, sans accents), les coordonnées tapées, et sur Terre
+  les adresses par Photon (Nominatim en secours — `game/geocode.ts`, une requête par seconde au plus, gardées pour
+  la session) ;
+- **un lieu choisi** (une marque, un résultat, n’importe quel point) : sa fiche (lieu, altitude, distance et
+  direction depuis vous, jour ou nuit) et ses actions — en orbite au-dessus (`tools.orbitOver`), y poser le
+  vaisseau (`land`), y marcher (`walk`), la caméra libre au-dessus (`cameraAt` : 30° de plongée, emportée par le
+  sol ; un spectateur si un vaisseau vole), un trépied sur place (`standOn`) ; « Cette vue » pour un point de vue
+  photographié ; « Demander à TARS ». Une mission en cours se termine après un second clic.
+
 #### 6.4 Les instruments
 
 - **Marqueurs dans la vue** (`drawHud`). La projection reprend celle de la caméra : x = d·x/(d·z ·

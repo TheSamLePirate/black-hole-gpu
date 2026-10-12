@@ -5,6 +5,11 @@ import { bodyAxes } from "./system/solar";
 import { groundVelocity } from "./system/our-surface";
 import { CharacterHud } from "./ui/characterhud";
 import { FootHud, type CompassMark } from "./ui/foothud";
+import { AtlasPage, type AtlasAction, type AtlasPlace } from "./ui/atlas";
+import { POIS, searchPois } from "./game/pois";
+import { geocode, parseCoords } from "./game/geocode";
+import { LANDSCAPES } from "./system/landscapes";
+import type { MapBody } from "./ui/mapview";
 import { poseData } from "./cockpit/controls";
 import { GEARS } from "./gear";
 import { ControlTravel, controlStates } from "./cockpit/state";
@@ -2689,6 +2694,7 @@ async function main() {
         if (why) panel.toast(why);
       },
       render: () => renderDialog.toggle(true),
+      atlas: () => atlas.open(),
       place: () => placePanel.open(),
       time: () => timePanel.open(),
       weather: () => weatherPanel.open(),
@@ -2719,6 +2725,7 @@ async function main() {
     gameMode: (e, m) => {
       if (!e.repeat) setGameMode(m as GameMode);
     },
+    atlas: () => (atlas.isOpen ? atlas.hide() : atlas.open()),
     // (held flight keys: translation, throttle — read each frame by the controller)
     held: () => {},
     throttleFull: () => {
@@ -3350,6 +3357,132 @@ async function main() {
     },
   });
   flightHud.onPlace = () => placePanel.open();
+  // the Atlas (ui/atlas.ts, PLAN-MODES-AAA M6): the Earth, the Moon and Mars as maps, their destinations, the
+  // addresses — the game put there (in orbit, landed, on foot, the free camera, a tripod)
+  const ATLAS_ORBIT_KM: Record<MapBody, number> = { earth: 400, moon: 100, mars: 300 };
+  /** The game ready for a placement on our worlds: a mission ended (said), our universe loaded, the walk left. */
+  function atlasReady() {
+    const m = MISSIONS.find((q) => q.scene === currentScene);
+    if (m || mission.active) {
+      mission.stop(t("Mission ended — the ship placed"));
+      currentScene = null;
+    }
+    if (!settings.wormhole || settings.system !== "gargantua") applyPreset("Earth: the Blue Marble");
+  }
+  /**
+   * The free camera above a place (a spectator when a ship flies — it flies on): `altKm` up, south of it, looking at
+   * it 30° down, carried with the ground; or `ground`: on its tripod there, looking north. Why not, or null.
+   */
+  function cameraAt(body: MapBody, lat: number, lon: number, o: { altKm?: number; ground?: boolean } = {}): string | null {
+    atlasReady();
+    if (camera.character.active) leaveWalk("free");
+    if (settings.ship && camera.piloting && !camera.spectating) {
+      setSpectator(true);
+      if (!camera.spectating) return t("The spectator leaves a ship flown: fly one first (K)");
+    }
+    const vc = camera.viewController();
+    const time = vc.nowTime();
+    const alt = o.ground ? 0.03 : (o.altKm ?? (body === "earth" ? 3 : 8));
+    const R = (solarBody(body)!.radius * M_METRES) / 1e3;
+    const back = o.ground ? 0 : (alt / Math.tan((30 * Math.PI) / 180) / R) * (180 / Math.PI);
+    const v = bodyView(
+      time,
+      o.ground
+        ? { body, at: [lat, lon], altKm: alt, heading: 0 }
+        : { body, at: [Math.max(-89.9, lat - back), lon], altKm: alt, aim: [lat, lon] },
+    );
+    vc.setCinematic(null);
+    if (vc.gravity) vc.setGravity(false);
+    vc.setOurLanded(null);
+    vc.s.lookAt = false;
+    vc.s.telescope = false;
+    vc.setRotation("free");
+    vc.rigPlace(true, v.X, v.fwd, v.up, groundVelocity(body, v.X, time));
+    if (o.ground) {
+      const why = vc.standOn(body as Body);
+      if (why) return why;
+    }
+    refreshGui();
+    touch();
+    return null;
+  }
+  const atlas = new AtlasPage({
+    lang: () => lang,
+    subsolar: (body) => {
+      const time = camera.nowTime();
+      const q = toBodyFixed(body, ourState("sun", time).pos, time);
+      const r = Math.hypot(...q);
+      return r > 0 ? { lat: (Math.asin(q[2] / r) * 180) / Math.PI, lon: (Math.atan2(q[1], q[0]) * 180) / Math.PI } : null;
+    },
+    here: () => {
+      const out: { body: string; lat: number; lon: number; who: "craft" | "walker" | "camera" }[] = [];
+      const time = camera.nowTime();
+      const sub = (body: string, X: Vec3) => {
+        const q = toBodyFixed(body, X, time);
+        const g = cartToGeodetic(1, body === "earth" ? WGS84_F : 0, q.map((v) => v / Math.hypot(...q)) as Vec3);
+        return { lat: (g.lat * 180) / Math.PI, lon: (g.lon * 180) / Math.PI };
+      };
+      const ours = ["earth", "moon", "mars"];
+      const p = camera.character.place();
+      if (p && ours.includes(p.body)) out.push({ body: p.body, lat: p.lat, lon: p.lon, who: "walker" });
+      if (settings.ship && camera.piloting) {
+        const st = tools.status();
+        const pose = camera.activePoseNow();
+        if (pose && st.side === "ours" && ours.includes(st.soi)) out.push({ body: st.soi, ...sub(st.soi, pose.X as Vec3), who: "craft" });
+      }
+      if (!p && (!settings.ship || camera.spectating)) {
+        const g = camera.viewController().groundBelow(40);
+        if (g && ours.includes(g.body)) out.push({ body: g.body, lat: g.lat, lon: g.lon, who: "camera" });
+      }
+      return out;
+    },
+    marks: () => [
+      ...SITES.filter((x) => x.body === "earth" || x.body === "moon" || x.body === "mars").map((x) => ({
+        body: x.body as MapBody,
+        lat: x.lat,
+        lon: x.lon,
+        name: x.name,
+        detail: x.icao ? `${x.icao}${x.runway ? ` · ${t("runway")} ${x.rwy ?? ""}` : ""}` : t("Landing site"),
+        elevM: x.elev,
+        source: "site" as const,
+      })),
+      ...LANDSCAPES.map((l) => ({
+        body: "earth" as MapBody,
+        lat: l.at[0],
+        lon: l.at[1],
+        name: t(l.title),
+        detail: t(l.description),
+        scene: l.scene,
+        source: "view" as const,
+      })),
+    ],
+    go: (to, p) => atlasGo(to, p),
+    mission: () => {
+      const m = MISSIONS.find((q) => q.scene === currentScene);
+      return m ? tr(m.title) : mission.active ? t("The Interstellar journey") : null;
+    },
+    ask: (q) => {
+      tarsPanel.show();
+      tarsPanelAsk(q);
+    },
+    view: (scene) => applyPreset(scene),
+  });
+  /** The game put at a place of the Atlas: why not, or null. */
+  function atlasGo(to: AtlasAction, p: AtlasPlace): string | null {
+    try {
+      if (to === "camera" || to === "tripod") return cameraAt(p.body, p.lat, p.lon, { ground: to === "tripod" });
+      atlasReady();
+      if (camera.character.active) camera.character.stop();
+      if (to === "orbit") tools.orbitOver(p.body, p.lat, p.lon, { altKm: ATLAS_ORBIT_KM[p.body] });
+      else if (to === "land") tools.land(p.body, p.lat, p.lon);
+      else tools.walk(p.body, p.lat, p.lon);
+      refreshGui();
+      touch();
+      return null;
+    } catch (e) {
+      return (e as Error).message;
+    }
+  }
   // the date and time (ui/timepanel.ts): the transport bar's clock, the pause menu
   const timePanel = new TimePanel({ tools, settings, sceneStart: () => sceneStart, toast: (x) => panel.toast(x) });
   // the weather (ui/weatherpanel.ts, PLAN-METEO W2): the HUD's Weather button, the pause menu
@@ -3409,6 +3542,15 @@ async function main() {
   {
     const btn = (id: string) => document.getElementById(id) as HTMLButtonElement;
     topBar.freeSlot.append(btn("btn-camera"));
+    topBar.add({
+      id: "btn-atlas",
+      label: t("Atlas: the Earth, the Moon and Mars — destinations, addresses; go there"),
+      icon: TB_ICONS.atlas,
+      key: "F8",
+      run: () => atlas.open(),
+      prio: 1,
+      testid: "topbar-atlas",
+    });
     topBar.add({
       id: "btn-place",
       label: t("Place: in orbit, on a ground, on foot, beside a body"),
@@ -4019,6 +4161,7 @@ async function main() {
         camera: () => actions["btn-camera"]!(),
         music: () => musicPanel.toggle(true),
         render: () => renderDialog.toggle(true),
+        atlas: () => atlas.open(),
       };
       open[p]();
     },
@@ -4035,6 +4178,24 @@ async function main() {
     now: () => performance.now(),
     dayClouds: () => renderer.dayCloudsOf,
     mode: { get: () => gameMode(), set: (m) => setGameMode(m), hideBar: (on) => topBar.hide(on) },
+    atlas: {
+      search: async (q, body) => {
+        const out: { name: string; body: string; lat: number; lon: number; kind: string; detail?: string }[] = [];
+        const c = parseCoords(q);
+        if (c) out.push({ name: q, body: body ?? "earth", ...c, kind: "coordinates" });
+        for (const p of searchPois(q, POIS, body))
+          out.push({ name: p.name[lang], body: p.body, lat: p.lat, lon: p.lon, kind: p.kind, detail: p.about[lang] });
+        for (const x of SITES)
+          if ((!body || x.body === body) && x.name.toLowerCase().includes(q.toLowerCase()))
+            out.push({ name: x.name, body: x.body, lat: x.lat, lon: x.lon, kind: "site" });
+        if ((!body || body === "earth") && !c && out.length < 3)
+          for (const g of await geocode(q, { lang }).catch(() => []))
+            out.push({ name: g.name, body: "earth", lat: g.lat, lon: g.lon, kind: g.kind || "address", detail: g.detail });
+        return out;
+      },
+      go: (to, p) => atlasGo(to, { ...p }),
+      open: (o) => atlas.open(o),
+    },
     capture: {
       start: (o) => renderDialog.capture(o),
       state: () => {

@@ -16,6 +16,7 @@ export type KeyAction =
   // system
   | "tools"
   | "gameMode"
+  | "atlas"
   | "pause"
   | "quickSave"
   | "quickLoad"
@@ -385,6 +386,11 @@ export const KEYMAP: KeySection[] = [
         keys: "F6",
         text: 'TARS, in every mode: tap — write to him; hold — speak to him. Ask him anything, or ask him to do it: land us at Edwards, take us to the Moon, walk here, render this view, warp ×1000… (his honesty and humour: "honesty 70")',
         bind: [codes("system", "F6", "tars")],
+      },
+      {
+        keys: "F8",
+        text: "The Atlas: the Earth, the Moon and Mars as maps — destinations, addresses, coordinates; in orbit over a place, landed, on foot, the free camera, a tripod",
+        bind: [codes("system", "F8", "atlas")],
       },
       {
         keys: "F10",
