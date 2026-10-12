@@ -1486,28 +1486,62 @@ from the Earth and dropped when that delay (the light's time divided by the warp
 
 ### `__bh.music` → Music
 
-The score (`src/audio/music.ts`, the pieces in `src/audio/score.ts`), synthesized in the game's audio context on the
-music bus (nothing downloaded). One piece per moment: `liftoff`, `entry`, `final`, `wormhole`, `gargantua`,
-`miller`. A moment's piece fades in, its chords turn every `chordS`, and it fades out when the moment is over; a new
-moment crossfades. `update(m)` is called every frame with the moment now, or `null` for silence (main.ts passes `null` when the sound or the
-music setting is off, or there is no moment). Without an output (no audio context yet) `update` does nothing, and `moment` is not set.
+The music system (`src/audio/music.ts`; the themes, composer, instruments and engine in `src/audio/music/`; the
+moments and contexts in `src/audio/score.ts`; its console in `src/ui/musicpanel.ts`). It is synthesized in the
+game's audio context on the music bus, so nothing is downloaded.
+
+**Themes.** Twelve themes, each in its own key, mode and tempo, composed bar by bar with a form (intro, verse,
+build, drop, break). The band: drums, sub bass, pads, arpeggio, lead, ethereal guitar, organ and choir. The energy
+comes from the section and the flight's intensity.
+
+**What plays:**
+
+- in the **moments** mode (the default), a theme at each moment: `liftoff`, `entry`, `final`, `wormhole`,
+  `gargantua`, `miller`, `docking`, `lowpass`; silence otherwise;
+- in the **adaptive** mode, the moments plus a theme between them by context: `orbit`, `deep`, `air`, `ground`,
+  `onFoot`;
+- in the **playlist** mode, the checked themes in turn;
+- `listen(id)` overrides all of them.
+
+**Updating.**
+
+- `update(m, {context, intensity, enabled})` is called every frame. With the music off (`enabled` false),
+  `moment` is null.
+- Themes change on the bar, crossfaded.
+- Without an output (no audio context yet), `update` does nothing.
 
 | member | type | meaning |
 |---|---|---|
-| `update(m)` | `(m: Moment \| null) => void` | the moment now (called each frame) |
-| `stop()` | `() => void` | silences the score now |
-| `moment` | `Moment \| null` | the moment playing now (null: silence) |
+| `update(m, o?)` | `(m: Moment \| null, o?: { context?, intensity?, enabled? }) => void` | the moment, context and intensity now (called each frame) |
+| `stop()` | `() => void` | silences the music now, and stops listening |
+| `listen(id)` | `(id: string \| null) => void` | plays a theme over the game's choice (null: the game's choice again) |
+| `skip(dir)` | `(1 \| -1) => void` | the playlist's next or previous theme |
+| `state()` | `() => MusicState` | what plays: theme, name, bpm, section, bar, beat, energy, intensity, chord, mode, moment, context, preview |
+| `levels()` | `() => Record<Layer, number> \| null` | each layer's level (dBFS RMS) |
+| `analyser()` | `() => AnalyserNode \| null` | the master's spectrum |
+| `prefs` | `MusicPrefs` | the panel's preferences: mode, map, mix, muted, intensity, seed, playlist, playlistS, fade |
+| `save()` | `() => void` | keeps `prefs` in the browser (`kerr.music`) and applies the mixer |
+| `moment` | `Moment \| null` | the moment now (null: none, or the music off) |
+| `context` | `Context \| null` | the context now (the adaptive mode's) |
+| `preview` | `string \| null` | the theme listened to from the panel |
+| `wanted` | `string \| null` | the theme asked now |
+| `flight` | `number` | the flight's intensity last given |
 | `notes` | `number` | notes started so far |
 | `ticks` | `number` | the ticks started so far (Miller's tick, every 1.25 s) |
 
 ```js
-// on Miller: its piece and its tick, heard on the music bus
+// on Miller: its theme and its tick, heard on the music bus
 await app.waitFor(`__bh.music.moment === "miller"`, 10_000);
 const t0 = await app.js(`__bh.music.ticks`);
 await Bun.sleep(5000);
 const n = (await app.js(`__bh.music.ticks`)) - t0; // about 4
+// a theme listened to from the panel
+await app.js(`(__bh.music.listen("ascent"), true)`);
 ```
-*Used in:* `tests/e2e/music.e2e.test.ts` (on Miller: the ticks counted over 5 s, the music bus level; off in orbit: silence)
+*Used in:*
+
+- `tests/e2e/music.e2e.test.ts`: on Miller, the ticks counted over 5 s and the music bus level; in orbit, silence.
+- `tests/e2e/music-panel.e2e.test.ts`: the console, listening, the mixer, every theme.
 
 ### `__bh.tars` → object
 

@@ -16,7 +16,7 @@ export const CHROME =
  * extension); `args`: more Chrome flags (a proxy: --proxy-server=…).
  */
 export async function withGpuPage<T>(
-  use: (evaluate: <V>(expression: string) => Promise<V>) => Promise<T>,
+  use: (evaluate: <V>(expression: string) => Promise<V>, shot: (path: string, w?: number, h?: number) => Promise<void>) => Promise<T>,
   o: { files?: Record<string, string>; args?: string[] } = {},
 ): Promise<T> {
   const port = 9500 + Math.floor(Math.random() * 300);
@@ -90,11 +90,19 @@ export async function withGpuPage<T>(
     await cdp("Page.enable");
     await cdp("Page.navigate", { url: `http://localhost:${server.port}/` });
     await Bun.sleep(500);
-    return await use(async <V>(expression: string) => {
-      const r = await cdp("Runtime.evaluate", { awaitPromise: true, returnByValue: true, expression });
-      if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? "evaluation failed");
-      return r.result?.value as V;
-    });
+    return await use(
+      async <V>(expression: string) => {
+        const r = await cdp("Runtime.evaluate", { awaitPromise: true, returnByValue: true, expression });
+        if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? "evaluation failed");
+        return r.result?.value as V;
+      },
+      // (a PNG of the page, at a size)
+      async (path: string, w = 1280, h = 800) => {
+        await cdp("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile: false });
+        const r = (await cdp("Page.captureScreenshot", { format: "png" })) as { data?: string };
+        if (r.data) await Bun.write(path, Buffer.from(r.data, "base64"));
+      },
+    );
   } finally {
     ws?.close();
     chrome.kill();

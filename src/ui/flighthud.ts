@@ -78,6 +78,7 @@ const ICONS: Record<string, string> = {
   path: '<path d="M3 19c4-1 5-6 9-7s6-6 9-8" /><circle cx="3" cy="19" r="1.4" class="f" /><circle cx="21" cy="4" r="1.4" class="f" />',
   sound: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" class="f" /><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" />',
   mute: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" class="f" /><path d="M16 9.5l5 5M21 9.5l-5 5" />',
+  music: '<path d="M9 18V6l11-2v12" /><circle cx="6.5" cy="18" r="2.5" class="f" /><circle cx="17.5" cy="16" r="2.5" class="f" />',
   tools: '<path d="M14.5 5.5a4 4 0 0 0-5 5L4 16l4 4 5.5-5.5a4 4 0 0 0 5-5l-2.6 2.6-2.8-.6-.6-2.8z" />',
   density: '<rect x="3.5" y="4.5" width="17" height="15" rx="2" /><path d="M3.5 9h17M8 9v10.5" />',
   more: '<circle cx="5" cy="12" r="1.6" class="f" /><circle cx="12" cy="12" r="1.6" class="f" /><circle cx="19" cy="12" r="1.6" class="f" />',
@@ -322,6 +323,8 @@ export class FlightHud {
   onWeather: (() => void) | null = null;
   /** the eclipse calculator (PLAN-CIEL C7) */
   onEclipses: (() => void) | null = null;
+  /** the music panel (ui/musicpanel.ts) */
+  onMusic: (() => void) | null = null;
   private veff = h("canvas", "fl-veff");
   private orbitEls: Record<string, HTMLElement> = {};
   private cockpit = h("div", "fl-cockpit");
@@ -812,6 +815,7 @@ export class FlightHud {
     const pathBtn = iconBtn("path", t("Future path in the view (the cyan tube)"), () => act.pathInView(), "fl-pathbtn");
     this.missionEls.pathBtn = pathBtn;
     const soundBtn = iconBtn("sound", t("Sound on / off (Settings › Game › Sound: the mix)"), () => act.sound(), "fl-soundbtn");
+    const musicBtn = iconBtn("music", t("Music: the themes, listen, the mode, the mixer"), () => this.onMusic?.(), "fl-musicbtn");
     this.missionEls.soundBtn = soundBtn;
     const toolsBtn = iconBtn("tools", t("Game tools: status, place, target, time, saves, audit, journal"), () => act.tools());
     // (the game tools are the developers': a development build or ?dev)
@@ -967,7 +971,7 @@ export class FlightHud {
           ),
         ),
       ),
-      group("fl-mg-acts", craftBox, planBtn, placeBtn, weatherBtn, eclipseBtn, viewBox, pathBtn, soundBtn, toolsBtn, dens, tools),
+      group("fl-mg-acts", craftBox, planBtn, placeBtn, weatherBtn, eclipseBtn, viewBox, pathBtn, soundBtn, musicBtn, toolsBtn, dens, tools),
     );
 
     // ---- target: its name (the ball's target mark) and range; the rest as tiles

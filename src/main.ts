@@ -122,7 +122,8 @@ import { Callouts } from "./game/callouts";
 import { gpwsOf } from "./game/gpws";
 import { Capcom } from "./game/capcom";
 import { Music } from "./audio/music";
-import { ScoreDirector } from "./audio/score";
+import { MusicPanel } from "./ui/musicpanel";
+import { type Context, flightIntensity, type Moment, ScoreDirector } from "./audio/score";
 import { Tars, type TarsMoment, type TarsState } from "./game/tars";
 import { TarsPanel, type TarsPanelHost } from "./ui/tars-panel";
 import { AGENT_MODELS, connect as orConnect, finishFromFragment, OpenRouter, openRouterKey } from "./ai/openrouter";
@@ -591,6 +592,8 @@ async function main() {
   // the score (PLAN-TARS T4): silence, but at the flight's great moments
   const score = new ScoreDirector();
   const music = new Music(() => sound.musicOut());
+  /** the music's cue this frame (the flight's moment, context and intensity — set where they are known) */
+  let musicCue: { m: Moment | null; context: Context | null; intensity: number } = { m: null, context: null, intensity: 0.5 };
   // TARS (PLAN-TARS T5b): asked by F6, answering from the flight's state; his remarks unasked
   const tars = new Tars(Math.floor(Math.random() * 2 ** 31));
   let tarsView: TarsState | null = null;
@@ -1533,6 +1536,7 @@ async function main() {
     "btn-tools": () => DEV_TOOLS && toolsWin.toggle(),
     "btn-scenes": () => scenes.toggle(),
     "btn-sound": () => toggleSound(),
+    "btn-music": () => musicPanel.toggle(),
     "btn-camera": () => {
       camPanel!.toggle();
       syncCameraButton();
@@ -3144,6 +3148,21 @@ async function main() {
     },
   });
   flightHud.onEclipses = () => eclipses.open();
+  // (the music panel — ui/musicpanel.ts —: the toolbar's Music, the flight HUD's)
+  const musicPanel = new MusicPanel({
+    music,
+    settings,
+    changed: (keys) => onSettingsChange(keys),
+    // (listening: the sound and the music on — the click itself starts the audio context)
+    startSound: () => {
+      if (settings.sound && settings.music) return;
+      settings.sound = true;
+      settings.music = true;
+      audio.applyMix();
+      onSettingsChange(["sound", "music"]);
+    },
+  });
+  flightHud.onMusic = () => musicPanel.toggle();
   // multiple exposures (photo/multiexposure.ts, PLAN-CIEL C8–C10): a tripod's series rendered offline and
   // blended — the analemma, an eclipse's phases, the stars' trails; the game put back after
   const mxSnapshot = () => ({
@@ -4400,18 +4419,36 @@ async function main() {
         for (let k = capcomDue.length - 1; k >= 0; k--) if (capcomDue[k]!.at <= wall) voice.say(capcomDue.splice(k, 1)[0]!.line);
         // (the score: the moment's piece — none: silence)
         const ph2 = phaseWatch.current;
-        const moment = score.moment({
+        const plasmaNow = A?.inAir ? Math.min(Math.max((Math.log10(Math.max(A.heat, 1)) - 4.6) / 1.7, 0), 1) : 0;
+        const soiR = status.soi ? solarBody(status.soi)?.radius : undefined;
+        const scoreIn = {
           now: wall / 1000,
           mode: ph2?.mode ?? null,
           stage: ph2?.stage ?? null,
           side: status.side,
-          plasma: A?.inAir ? Math.min(Math.max((Math.log10(Math.max(A.heat, 1)) - 4.6) / 1.7, 0), 1) : 0,
+          plasma: plasmaNow,
           final: !!camera.entryRun?.app?.final,
           agl: info.surface?.alt ?? Number.POSITIVE_INFINITY,
           r: info.region === "hole" ? info.r : Number.POSITIVE_INFINITY,
           body: status.soi ?? null,
-        });
-        music.update(settings.sound && settings.music ? moment : null);
+          docking: !!camera.dockAuto || (!!info.dock && !info.dock.docked && info.dock.range < 300),
+          inAir: !!A?.inAir,
+          airspeed: A?.inAir ? A.speed : 0,
+          nearWorld: soiR !== undefined && Number.isFinite(status.altKm) && status.altKm < (7 * soiR * M_METRES) / 1e3,
+        };
+        const moment = score.moment(scoreIn);
+        musicCue = {
+          m: moment,
+          context: score.context(scoreIn),
+          intensity: flightIntensity({
+            throttle: camera.pilot.engineNow,
+            plasma: plasmaNow,
+            mach: A?.inAir ? A.mach : 0,
+            agl: info.surface?.alt ?? Number.POSITIVE_INFINITY,
+            g: A?.inAir ? (A.g ?? 1) : 1,
+            alarm: flightHud.alerts.some((a) => a.level === "warning"),
+          }),
+        };
         // (TARS — PLAN-TARS T5b —: what he knows of the flight, for when he is asked; his remarks unasked)
         const fuel = info.engine.fuel;
         tarsView = {
@@ -4530,6 +4567,11 @@ async function main() {
         rain: renderer.rain && !renderer.rain.dust && settings.animate && !frozen && !paused ? renderer.rain.rain : 0,
       });
     }
+    // (the music — audio/music.ts —: every frame, whatever is flown or not: the flight's cue when it is known,
+    // walking on a world, else none — the panel's listening over it)
+    if (camera.character.active) musicCue = { m: null, context: "onFoot", intensity: 0.4 };
+    else if (!(settings.ship && camera.piloting && !camera.spectating)) musicCue = { m: null, context: null, intensity: 0.5 };
+    music.update(musicCue.m, { context: musicCue.context, intensity: musicCue.intensity, enabled: settings.sound && settings.music });
     hudTimer += dt;
     if (hudTimer > 0.15 && lastStats) {
       hudTimer = 0;

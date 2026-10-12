@@ -102,7 +102,8 @@ Every e2e file (`tests/e2e/*.e2e.test.ts`), by theme: what it proves, the scene 
 |---|---|---|---|---|
 | audio-space.e2e.test.ts | Engine, thrusters, cabin, ground, station, Mach boom and Doppler placed in the sound's space, metered at the output. | game:artemis, 1280×800 | 85 | `--mute-audio` (metered at the graph, not the speakers) |
 | voice.e2e.test.ts | Voices say lines with subtitles and speaker; an urgent line cuts the one being said; subtitles off shows none. | game:artemis, 1280×800 | 6 | voice off in the test (reading-time rhythm) |
-| music.e2e.test.ts | The score plays its piece and tick on Miller, silence when music is off, none in orbit round Earth. | Miller: Gargantua over the sea, 1280×800 | 14 | — |
+| music.e2e.test.ts | The score plays its theme and tick on Miller, silence when music is off, none in orbit round Earth. | Miller: Gargantua over the sea, 1280×800 | 14 | — |
+| music-panel.e2e.test.ts | The music console: opened from the toolbar, a theme listened to and heard, its section and chord, the mixer kept in the browser, all twelve themes played without an error. Captures `music-panel.png`. | Earth: the Blue Marble, 1400×900 | 50 | — |
 | tars-voice.e2e.test.ts | TARS's robot voice is synthesised, subtitled, queued until its end, and cut at once by a more urgent line. | game:artemis, 1280×800 | 6 | — |
 
 ### TARS

@@ -387,6 +387,106 @@ export default {
   "Speed lens": "Objectif de vitesse",
   "The softened views' field widened with the speed through the air and the afterburner (its gain; 0: none).":
     "Le champ des vues adoucies s'élargit avec la vitesse dans l'air et la postcombustion (son gain ; 0 : aucun).",
+  "A theme at every moment, and between them one by the flight's context":
+    "Un thème à chaque instant, et entre les deux, un thème choisi selon le contexte du vol",
+  "A theme at the flight's great moments; silence between": "Un thème aux grands moments du vol ; silence entre les deux",
+  Adaptive: "Adaptative",
+  "Another melody": "Une autre mélodie",
+  "Another variation of every theme: its lead's motif, its arpeggio's choices, its drums' accents":
+    "Une autre variation de chaque thème : le motif de son Lead, les choix de son arpège, les accents de sa batterie",
+  Arpeggio: "Arpège",
+  "Back to the theme the flight chooses": "Retour au thème que choisit le vol",
+  "Between the worlds: the choir and warm pads, a drone, the guitar's swells, booms far away":
+    "Entre les mondes : le chœur et des nappes chaudes, un bourdon, les crescendos de la guitare, des coups sourds au loin",
+  Break: "Pont",
+  "Build-up": "Montée",
+  Choir: "Chœur",
+  "Click: listen · the box: in the playlist": "Clic : écouter · la case : dans la playlist",
+  "Coasting in orbit: glass pads, bells, the guitar's arpeggio, a light pulse, a few notes of a soft lead":
+    "Dérive en orbite : nappes de verre, cloches, l'arpège de la guitare, une pulsation légère, quelques notes d'un Lead doux",
+  Crossfade: "Fondu enchaîné",
+  "Deep space": "Espace lointain",
+  Defaults: "Valeurs par défaut",
+  Delay: "Écho",
+  "Docking: ticking hats, a syncopated sub, slow bells, the guitar's harmonics, glass pads — tension held":
+    "Amarrage : hi-hats qui tictaquent, une sub-basse syncopée, cloches lentes, les harmoniques de la guitare, nappes de verre — tension maintenue",
+  Dorian: "dorien",
+  Drop: "Drop",
+  Drums: "Batterie",
+  Energy: "Énergie",
+  "Ethereal guitar": "Guitare éthérée",
+  "Flying low and fast: synthwave drums, an octave bass, supersaws, a saw lead":
+    "Vol rasant et rapide : batterie synthwave, basse à l'octave, supersaws, Lead en dent de scie",
+  "Gargantua: the organ over a sub drone, the ethereal guitar's swells, distant booms":
+    "Gargantua : l'orgue sur un bourdon de sub-basse, les crescendos de la guitare éthérée, des coups sourds au loin",
+  "In the air": "En vol",
+  "In the playlist": "Dans la playlist",
+  "Intensity & variation": "Intensité et variation",
+  Intro: "Intro",
+  Lead: "Lead",
+  "Lift-off": "Décollage",
+  "Listen to the next theme": "Écouter le thème suivant",
+  "Listen to the previous theme": "Écouter le thème précédent",
+  "Listen to the theme shown · stop listening": "Écouter le thème affiché · arrêter l'écoute",
+  Listening: "Écoute",
+  "Low pass": "Rase-mottes",
+  Lydian: "lydien",
+  Master: "Master",
+  "Miller: the 1.25 s tick, the organ low, the sub's slow swell, the guitar like a wave":
+    "Miller : le tic de 1,25 s, l'orgue en grave, le lent crescendo de la sub-basse, la guitare comme une vague",
+  Mixer: "Table de mixage",
+  Mixolydian: "mixolydien",
+  Mode: "Mode",
+  Moments: "Moments",
+  "Music — the themes, listen, the mode, the mixer, which theme when":
+    "Musique — les thèmes, l'écoute, le mode, la table de mixage, quel thème quand",
+  "Music: the themes, listen, the mode, the mixer": "Musique : les thèmes, l'écoute, le mode, la table de mixage",
+  Mute: "Muet",
+  "No music": "Aucune musique",
+  "Nothing plays. Click a theme to listen, or choose the adaptive mode.":
+    "Rien ne joue. Cliquez sur un thème pour l'écouter, ou choisissez le mode adaptative.",
+  "On foot on another world: a light break, the guitar's arpeggio, glass pads, a gentle lead in Mixolydian":
+    "À pied sur un autre monde : un léger pont, l'arpège de la guitare, nappes de verre, un Lead doux en mixolydien",
+  Organ: "Orgue",
+  Original: "Original",
+  Outro: "Outro",
+  Pads: "Nappes",
+  Phrygian: "phrygien",
+  Playlist: "Playlist",
+  "Playlist: each theme": "Playlist : chaque thème",
+  "Re-entry": "Rentrée",
+  Reverb: "Réverbération",
+  "Sidechain pump": "Pompage sidechain",
+  "Silence — no moment now": "Silence — aucun moment en cours",
+  Solo: "Solo",
+  "Sub bass": "Sub-basse",
+  "The checked themes in turn, whatever the flight": "Les thèmes cochés à tour de rôle, quel que soit le vol",
+  "The final: a soft pulse, the ethereal guitar's arpeggio, glass pads, a quiet sub":
+    "Le final : une pulsation douce, l'arpège de la guitare éthérée, nappes de verre, une sub-basse discrète",
+  "The flight's": "Celui du vol",
+  "The game's choice": "Le choix du jeu",
+  "The intensity follows the flight: the engine, the plasma, the speed, the ground near, the load, an alarm":
+    "L'intensité suit le vol : le moteur, le plasma, la vitesse, le sol proche, le facteur de charge, une alarme",
+  "The lift-off: four on the floor building, supersaws, a bright arpeggio, a lead climbing":
+    "Le décollage : une grosse caisse en quatre temps qui monte, supersaws, un arpège lumineux, un Lead qui grimpe",
+  "The music's settings as they came: the mode, the themes, the mixer":
+    "Les réglages de la musique tels qu'ils étaient à l'origine : le mode, les thèmes, la table de mixage",
+  "The plasma: taikos and toms, a growling bass, the choir, dark pads in Phrygian":
+    "Le plasma : taikos et toms, une basse grondante, le chœur, des nappes sombres en phrygien",
+  "The ship's theme: epic drums, the organ and supersaws, a heroic lead, the choir":
+    "Le thème du vaisseau : batterie épique, l'orgue et les supersaws, un Lead héroïque, le chœur",
+  "The wormhole: half-time breaks, cascading arpeggios, supersaws and the choir, the guitar's harmonics":
+    "Le trou de ver : ponts à demi-tempo, arpèges en cascade, supersaws et chœur, les harmoniques de la guitare",
+  Themes: "Thèmes",
+  Transitions: "Transitions",
+  Variation: "Variation",
+  Verse: "Couplet",
+  "Which theme, when": "Quel thème, quand",
+  adaptive: "adaptative",
+  bar: "mesure",
+  "harmonic minor": "mineur harmonique",
+  major: "majeur",
+  minor: "mineur",
   "Jet HUD": "HUD de chasseur",
   "Speed effects": "Effets de vitesse",
   "The speed felt in the air: streaks of moisture and dust rushing past the eye — more of them faster, low over the ground, with the afterburner; a turn sweeps them across the view — and the frame's edges darkened. 0: none.":
