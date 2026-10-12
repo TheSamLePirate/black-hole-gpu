@@ -143,7 +143,7 @@ struct Out { @location(0) color:vec4f, @location(1) occluder:vec4f };
  if(s>=.999&&contact<.003){return vec4f(1);}
  let L=normalize(u.sun.xyz);let cosine=max(dot(u.up.xyz,L),0);
  // (already in a tree's, a building's or the vessel's shadow: no key light left to take away)
- var lit=1.0;if(s<.999){lit=nearSceneryShadow(p)*shipShadowAt(p);}
+ var lit=1.0;if(s<.999||contact>=.003){lit=nearSceneryShadow(p)*shipShadowAt(p);}
  let lum=vec3f(.2126,.7152,.0722);
  let key=dot(keyIrradiance(),lum)*cosine*lit;let sky=dot(ambientIrradiance(u.up.xyz),lum);
  let total=key+sky;if(total<=0){return vec4f(1);}
@@ -379,7 +379,8 @@ fn trampleTag(gx:i32,gz:i32)->f32{return f32((gx&4095)|((gz&4095)<<12))+.5;}
  // its figures: the clump's, varied per blade
  let bh=hash2(gi,gj,6u);let bw=hash2(gi,gj,7u);let bb=hash2(gi,gj,8u);
  let rows=select(1.0,.12,K2.y>0);
- var height=mix(K0.y,K0.z,mix(.5,ch,edge))*mix(1-.28*rows,1+.22*rows,bh);
+ // (sinking into the ground over the reach's last 4 m: no edge to the field — before the wind and the legs lean it)
+ var height=mix(K0.y,K0.z,mix(.5,ch,edge))*mix(1-.28*rows,1+.22*rows,bh)*(1-smoothstep(reach-4,reach,fromWalker));
  var width=mix(K1.x,K1.y,bw);
  var bend=mix(K1.z,K1.w,mix(.5,ch2,edge))*(.7+.6*bb);
  // facing: the clump's, the blade's own, a little towards the clump's middle
@@ -395,10 +396,11 @@ fn trampleTag(gx:i32,gz:i32)->f32{return f32((gx&4095)|((gz&4095)<<12))+.5;}
  var squash=0.0;
  if(r<.75&&abs(h0-g.walker.y)<1.2){let push=1-smoothstep(.2,.7,r);tip+=fromFeet/max(r,1e-3)*push*height*.55;squash=push*.25;}
  let tc=vec2i(floor(vec2f(x,z)/g.trample.x));let tr=trample[trampleIndex(tc.x,tc.y)];
- if(tr.w==trampleTag(tc.x,tc.y)&&tr.z>.01){tip+=tr.xy*tr.z*height*.8;squash=max(squash,tr.z*.75);}
+ // (a footprint fades before its ring cell is given to another place, 8 m away: no blade springing up at once)
+ let ring=max(abs(fromFeet.x),abs(fromFeet.y));let press=tr.z*(1-smoothstep(5.5,7.5,ring));
+ if(tr.w==trampleTag(tc.x,tc.y)&&press>.01){tip+=tr.xy*press*height*.8;squash=max(squash,press*.75);}
  // the far blades: fewer, wider (the field's cover kept), sinking into the ground at the reach (no edge)
  width*=select(1.0,min(2.4,inverseSqrt(keepD)),dCam>5);
- height*=1-smoothstep(reach-4,reach,fromWalker);
  // shade: the trees', the buildings', the vessel's (at two thirds of its height)
  let sh=sceneryShadeAt(x,z)*shipShadowAt(root+g.gup.xyz*height*.66);
  // its colour: the kind's tip, its hue from the satellite where there is one, varied per clump and blade
@@ -482,7 +484,7 @@ fn bezierTangent(p0:vec3f,p1:vec3f,p2:vec3f,p3:vec3f,t:f32)->vec3f{let s=1-t;ret
  if(moments[at].y*u.image.z<length(v.p)-.03){discard;}
  let edgeWidth=max(fwidth(v.blade.x),.001);let coverage=(1-smoothstep(1-edgeWidth,1+edgeWidth,abs(v.blade.x)))*v.coverage;
  if(coverage<.004){discard;}
- let t=v.blade.y;let k=u32(v.info.x+.5);let head=v.info.w;
+ let t=saturate(v.blade.y);let k=u32(v.info.x+.5);let head=v.info.w;
  let eye=normalize(-v.p);
  // a rounded blade: its midrib and rims bend the normal across it
  var n=normalize(v.n+v.side*v.blade.x*.55);if(dot(n,eye)<0){n=-n;}
@@ -506,8 +508,10 @@ fn bezierTangent(p0:vec3f,p1:vec3f,p2:vec3f,p3:vec3f,t:f32)->vec3f{let s=1-t;ret
  let diffuse=albedo/PI*nl;
  // the light through the leaf: diffusely through a blade lit on its other face (a leaf passes about half of the
  // green it receives), and a forward lobe towards an eye looking into the light
+ // (a leaf passes ~half: diffusely through its far face, and a normalised forward lobe ((k+1)/2π, k=1.6) —
+ // together never more than the light it receives)
  let back=max(dot(-n,L),0);
- let through=albedo*(.55*back/PI+.9*pow(max(dot(eye,-L),0),1.6)*(1-nl*.5))*(.3+.7*t);
+ let through=albedo*(.3*back/PI+.25*.414*pow(max(dot(eye,-L),0),1.6)*(1-nl*.5))*(.3+.7*t);
  let spec=ggx(n,eye,L,.42,vec3f(.035))*nl;
  let direct=(diffuse+through+spec)*Ek*vis;
  // the sky and the ground's light, darker into the field (its depth: the roots)

@@ -15,7 +15,15 @@ export class WalkingGround {
   step = 4;
   ready = false;
   cpuMs = 0;
-  private pending: { origin: Vec3; right: Vec3; up: Vec3; forward: Vec3; values: Float32Array<ArrayBuffer>; cursor: number } | null = null;
+  private pending: {
+    revision: number;
+    origin: Vec3;
+    right: Vec3;
+    up: Vec3;
+    forward: Vec3;
+    values: Float32Array<ArrayBuffer>;
+    cursor: number;
+  } | null = null;
   private revision = -1;
   private sampleHeight(q: Vec3, raw: (q: Vec3) => number, up: Vec3, origin: Vec3) {
     return dot(sub(q, origin), up) - raw(q);
@@ -24,26 +32,34 @@ export class WalkingGround {
     const distance = dot(sub(q, this.origin), this.right) ** 2 + dot(sub(q, this.origin), this.forward) ** 2;
     if (this.ready && revision === this.revision && distance < 64 && !this.pending) return;
     const begin = performance.now();
-    if (!this.ready || revision !== this.revision || (distance >= 64 && !this.pending)) {
-      this.revision = revision;
-      this.origin = [...q];
-      this.up = [...up];
-      this.right = unit(cross(Math.abs(up[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0], up));
-      this.forward = cross(up, this.right);
-      this.size = 17;
-      this.step = 4;
-      for (let y = 0; y < 17; y++)
-        for (let x = 0; x < 17; x++) {
-          const p = add(add(q, this.right, x * 4 - 32), this.forward, y * 4 - 32);
-          this.values[y * 17 + x] = this.sampleHeight(p, raw, up, q);
-        }
-      this.ready = true;
-      this.stamp++;
+    // (new ground data while a grid is made: that one finished first, then made again — tiles streaming in must
+    // not keep a grid from ever coming out)
+    if (!this.ready || (!this.pending && (revision !== this.revision || distance >= 64))) {
+      if (!this.ready) this.revision = revision;
+      const right = unit(cross(Math.abs(up[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0], up));
+      // (the first patch only: a coarse 4 m grid at once; afterwards the fine grid in use stays — it covers
+      // ±32 m, the astronaut 8 m from its middle — until its successor is published whole)
+      if (!this.ready) {
+        this.origin = [...q];
+        this.up = [...up];
+        this.right = right;
+        this.forward = cross(up, right);
+        this.size = 17;
+        this.step = 4;
+        for (let y = 0; y < 17; y++)
+          for (let x = 0; x < 17; x++) {
+            const p = add(add(q, this.right, x * 4 - 32), this.forward, y * 4 - 32);
+            this.values[y * 17 + x] = this.sampleHeight(p, raw, up, q);
+          }
+        this.ready = true;
+        this.stamp++;
+      }
       this.pending = {
+        revision,
         origin: [...q],
-        right: [...this.right],
+        right,
         up: [...up],
-        forward: [...this.forward],
+        forward: cross(up, right),
         values: new Float32Array(WALK_VEC4S * 4),
         cursor: 0,
       };
@@ -58,6 +74,11 @@ export class WalkingGround {
         p.values[i] = this.sampleHeight(point, raw, p.up, p.origin);
       }
       if (p.cursor === WALK_GRID ** 2) {
+        this.revision = p.revision;
+        this.origin = p.origin;
+        this.right = p.right;
+        this.up = p.up;
+        this.forward = p.forward;
         this.values = p.values;
         this.size = WALK_GRID;
         this.step = 1;

@@ -118,6 +118,8 @@ export class CharacterRenderer {
   private comp: GPURenderPipeline;
   // the living ground
   private grassDraw: GPURenderPipeline;
+  /** the far levels: no depth written — their sub-pixel blades' soft footprints must not hide the blades behind */
+  private grassDrawFar: GPURenderPipeline;
   private grassLight: GPUComputePipeline;
   private grassTrample: GPUComputePipeline;
   private grassBlades: GPUComputePipeline;
@@ -134,6 +136,12 @@ export class CharacterRenderer {
   private countsAt = 0;
   private lodUniform: GPUBuffer[] = [];
   private groundStamp = -1;
+  private frameStamp = -1;
+  private clearTrample = true;
+  /** the per-frame arrays, reused: the uniforms, the draws' reset, the kinds' table (constant) */
+  private uData = new Float32Array(UNIFORM_VEC4S * 4);
+  private gData = new Float32Array(GRASS_VEC4S * 4);
+  private drawReset = new Uint32Array(GRASS_LODS.flatMap((l) => [l.segments * 6, 0, 0, 0]));
   private bladeCounts = [0, 0, 0];
   private grassOn = false;
   /** the lattice's points a side this frame */
@@ -215,13 +223,16 @@ export class CharacterRenderer {
       depthStencil,
     });
     // (the grass writes its depth: its levels drawn far to near, a blade's soft edge falls over those behind it)
-    this.grassDraw = d.createRenderPipeline({
-      layout: "auto",
-      vertex: { module: this.module, entryPoint: "grassVs" },
-      fragment: { module: this.module, entryPoint: "grassFs", targets: targets(premultiplied) },
-      primitive: { topology: "triangle-list", cullMode: "none" },
-      depthStencil,
-    });
+    const grassPipe = (writeDepth: boolean) =>
+      d.createRenderPipeline({
+        layout: "auto",
+        vertex: { module: this.module, entryPoint: "grassVs" },
+        fragment: { module: this.module, entryPoint: "grassFs", targets: targets(premultiplied) },
+        primitive: { topology: "triangle-list", cullMode: "none" },
+        depthStencil: { ...depthStencil, depthWriteEnabled: writeDepth },
+      });
+    this.grassDraw = grassPipe(true);
+    this.grassDrawFar = grassPipe(false);
     const skinVertex: GPUVertexBufferLayout = {
       arrayStride: 84,
       attributes: [
@@ -283,6 +294,7 @@ export class CharacterRenderer {
     this.sampler = d.createSampler({ compare: "less-equal", magFilter: "linear", minFilter: "linear" });
     this.shadowView = this.shadow.createView();
     this.envSampler = d.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", addressModeU: "repeat" });
+    this.gData.set(packVegetation(), GRASS_FIGURES * 4);
   }
   stats() {
     return {
@@ -315,6 +327,7 @@ export class CharacterRenderer {
     this.grassOn = false;
     this.grassGround.clear();
     this.groundStamp = -1;
+    this.clearTrample = true;
     this.bladeCounts = [0, 0, 0];
     if (this.depth) {
       this.depth.destroy();
@@ -371,6 +384,11 @@ export class CharacterRenderer {
       this.grassOn = false;
       return;
     }
+    if (this.frameStamp !== g.frameStamp) {
+      // (a new frame: the last place's footprints would come back at the same local coordinates)
+      this.clearTrample = true;
+      this.frameStamp = g.frameStamp;
+    }
     if (this.groundStamp !== g.stamp) {
       this.d.queue.writeBuffer(this.grassHeights, 0, g.heights);
       this.d.queue.writeBuffer(this.grassCells, 0, g.cells);
@@ -411,7 +429,7 @@ export class CharacterRenderer {
       wn = Math.hypot(wx, wz) || 1;
     const strength = Math.min(2, Math.max(0.12, wind.speed / 8));
     // (the landed vessel's box: nothing grows under it)
-    const hull = c.vesselHull();
+    const hull = c.hullNow();
     let hullFig = [0, 0, 0, 0],
       hullAxis = [0, 0, 0, 0];
     if (hull) {
@@ -425,7 +443,7 @@ export class CharacterRenderer {
     const dt = this.lastAge < 0 ? 0 : Math.max(0, Math.min(0.25, age - this.lastAge));
     this.lastAge = age;
     const pixel = (2 * Math.tan((light.fov * Math.PI) / 360)) / height;
-    const u = new Float32Array(GRASS_VEC4S * 4);
+    const u = this.gData;
     const set = (i: number, v: number[]) => u.set(v, i * 4);
     set(0, [...O, reach]);
     set(1, [...R, GRASS_SPACING]);
@@ -444,7 +462,6 @@ export class CharacterRenderer {
     set(13, [TRAMPLE_CELL, TRAMPLE_GRID, Math.exp(-dt / TRAMPLE_RECOVERY_S), 0]);
     set(14, [GRASS_LODS[0].until, GRASS_LODS[1].until, GRASS_LODS[0].capacity, GRASS_LODS[1].capacity]);
     set(15, [GRASS_LODS[2].capacity, LOD_FIRST[1]!, LOD_FIRST[2]!, 0]);
-    u.set(packVegetation(), GRASS_FIGURES * 4);
     this.d.queue.writeBuffer(this.grassUniform, 0, u);
     this.lattice = N;
   }
@@ -482,7 +499,8 @@ export class CharacterRenderer {
       });
       this.size = key;
     }
-    const u = new Float32Array(UNIFORM_VEC4S * 4);
+    const u = this.uData;
+    u.fill(0);
     const set = (i: number, v: number[]) => u.set(v, i * 4);
     const tan = Math.tan((light.fov * Math.PI) / 360);
     set(0, [(tan * width) / height, tan, 0, 0]);
@@ -607,7 +625,11 @@ export class CharacterRenderer {
     let readCounts = false;
     if (this.grassOn) {
       // the living ground: the trees' shade on it, the footprints, every blade of the lattice (the draws' counts reset first)
-      this.d.queue.writeBuffer(this.commands, 0, new Uint32Array(GRASS_LODS.flatMap((l) => [l.segments * 6, 0, 0, 0])));
+      this.d.queue.writeBuffer(this.commands, 0, this.drawReset);
+      if (this.clearTrample) {
+        enc.clearBuffer(this.trample);
+        this.clearTrample = false;
+      }
       const pass = enc.beginComputePass({ ...prof.pass("grass: shade, footprints, blades") });
       if (contact) {
         pass.setPipeline(this.grassLight);
@@ -653,10 +675,12 @@ export class CharacterRenderer {
       pass.drawIndexed(this.count, PARTS.length);
     }
     if (this.grassOn) {
-      pass.setPipeline(this.grassDraw);
-      // (far to near: the near blades' soft edges blend over the far ones)
+      // (far to near: the near blades' soft edges blend over the far ones; only the nearest level writes depth —
+      // the far levels' blades are thin and many, their order unknown: tested against the astronaut alone)
       for (let lod = GRASS_LODS.length - 1; lod >= 0; lod--) {
-        pass.setBindGroup(0, group(this.grassDraw, `grass-draw-${lod}`, [0, 1, 5, 6, 9, 10, 11, 13, 17, 20], lod));
+        const pipe = lod === 0 ? this.grassDraw : this.grassDrawFar;
+        pass.setPipeline(pipe);
+        pass.setBindGroup(0, group(pipe, `grass-draw-${lod}`, [0, 1, 5, 6, 9, 10, 11, 13, 17, 20], lod));
         pass.drawIndirect(this.commands, lod * 16);
       }
     }
@@ -732,5 +756,9 @@ export class CharacterRenderer {
   }
   get ready() {
     return this.initialized;
+  }
+  /** drawn last frame (on foot) */
+  get drawing() {
+    return this.active;
   }
 }

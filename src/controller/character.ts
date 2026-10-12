@@ -131,7 +131,7 @@ export class PlanetCharacter {
     }
     return unit(sub(this.world(add(this.q, v, 100), time), this.world(this.q, time)));
   }
-  private prepare(body: string, ours: boolean, q: Vec3, forward: Vec3): string | null {
+  private prepare(body: string, ours: boolean, q: Vec3, forward: Vec3, quiet = false): string | null {
     try {
       if (
         ours
@@ -149,7 +149,7 @@ export class PlanetCharacter {
     this.ours = ours;
     this.q = q;
     this.groundPatch.clear();
-    this.hullCache = { at: -1, hull: null };
+    this.shipCache = { at: -1, frame: null, hull: null };
     this.lastTime = this.c.nowTime();
     const foot = this.ground(q);
     if (ours && this.surface(body, foot) === null) {
@@ -202,7 +202,7 @@ export class PlanetCharacter {
     this.c.s.timeSpeed = 1 / (this.ours ? M_SECONDS : 4.925490947e-6 * this.c.s.massSolar);
     this.placeView(this.lastTime, 0);
     this.lastError = null;
-    this.onEvent("disembarked", body);
+    if (!quiet) this.onEvent("disembarked", body);
     return null;
   }
   start(body: string, lat = 0, lon = 0) {
@@ -283,49 +283,109 @@ export class PlanetCharacter {
    * pose now — null: no vessel landed on this body, or its mesh not known yet.
    */
   vesselHull(): VesselHull | null {
-    const bounds = this.hullBounds();
-    if (!bounds || !this.c.piloting || !(this.c.ourLanded || this.c.landed)) return null;
+    const f = this.shipFrame(),
+      vessel = vesselHulls[this.c.s.vessel],
+      bounds = vessel?.bvh ? { lo: vessel.lo, hi: vessel.hi } : this.hullBounds();
+    return f && bounds ? placeHull(f.origin, f.axes, bounds.lo, bounds.hi) : null;
+  }
+  /**
+   * The landed vessel's frame in the walk's metres: its origin (the ship's own, rigWorld's X) and its axes (x left,
+   * y up, z nose) — from its pose now, through the same conversion as the walk's points (the body's turn, a
+   * Gargantua world's proper frame). Null: no vessel landed on this body.
+   */
+  shipFrame(): { origin: Vec3; axes: [Vec3, Vec3, Vec3] } | null {
+    if (!this.c.piloting || !(this.c.ourLanded || this.c.landed)) return null;
     if ((this.c.ourLanded?.body ?? this.c.local?.F.id) !== this.body) return null;
     const w = this.c.rigWorld();
     if (!w || w.ours !== this.ours) return null;
     const time = this.c.nowTime(),
       m = this.metres(),
-      pose = shipToCamera(this.c.shipPose(), this.c.s.shipLookYaw, this.c.s.shipLookPitch);
-    const cam: [Vec3, Vec3, Vec3] = [w.right, w.up, w.fwd];
+      S = shipToCamera(this.c.shipPose(), this.c.s.shipLookYaw, this.c.s.shipLookPitch).S;
     // (a ship-frame vector in the world: its camera components, on the camera's world axes)
     const world = (v: Vec3): Vec3 => {
-      const c = pose.S.map((row) => dot(row, v));
-      return add(add(scale(cam[0], c[0]!), cam[1], c[1]!), cam[2], c[2]!);
+      const c = S.map((row) => dot(row, v));
+      return add(add(scale(w.right, c[0]!), w.up, c[1]!), w.fwd, c[2]!);
     };
-    const origin = add(add(add(w.X, cam[0], pose.t[0] / m), cam[1], pose.t[1] / m), cam[2], pose.t[2] / m);
-    const local = (X: Vec3) =>
-      this.ours
-        ? scale(toBodyFixed(this.body, X, time), M_METRES)
-        : scale(toLocal(planetFrame(this.body, time, this.c.s.spin, this.c.s.massSolar), X, [0, 0, 0]).xi, m);
-    const o = local(origin);
-    // (the axes through the same conversion as the points: the body's turn, a world's own frame)
+    const local = this.walkOf(time);
+    const origin = local(w.X);
     const axes = ([0, 1, 2] as const).map((k) => {
       const e: Vec3 = [0, 0, 0];
       e[k] = 1;
-      return unit(sub(local(add(origin, world(e), 1 / m)), o));
+      return unit(sub(local(add(w.X, world(e), 1 / m)), origin));
     }) as [Vec3, Vec3, Vec3];
-    return placeHull(o, axes, bounds.lo, bounds.hi);
+    return { origin, axes };
   }
-  private hullCache: { at: number; hull: VesselHull | null } = { at: -1, hull: null };
-  /** the vessel's box this step (computed once per frame: the vessel stands still on the ground) */
-  private hullNow() {
-    if (this.hullCache.at !== this.age) this.hullCache = { at: this.age, hull: this.vesselHull() };
-    return this.hullCache.hull;
+  /** A world point (M) in the walk's metres at time t: body-fixed on our worlds, a Gargantua world's proper frame. */
+  private walkOf(time: number) {
+    if (this.ours) return (X: Vec3) => scale(toBodyFixed(this.body, X, time), M_METRES);
+    const F = planetFrame(this.body, time, this.c.s.spin, this.c.s.massSolar),
+      m = this.metres();
+    return (X: Vec3) => scale(toLocal(F, X, [0, 0, 0]).xi, m);
+  }
+  private shipCache: { at: number; frame: ReturnType<PlanetCharacter["shipFrame"]>; hull: VesselHull | null } = {
+    at: -1,
+    frame: null,
+    hull: null,
+  };
+  /** the vessel's frame and box this frame (computed once a frame: it stands still on the ground) */
+  private shipNow() {
+    if (this.shipCache.at !== this.age) {
+      const frame = this.shipFrame();
+      this.shipCache = { at: this.age, frame, hull: frame ? this.vesselHull() : null };
+    }
+    return this.shipCache;
+  }
+  /** the vessel's box this frame (the grass under it, the exits, the state) */
+  hullNow() {
+    return this.shipNow().hull;
+  }
+  /** Does the segment a → b pass within margin [m] of the vessel's box (a cheap test before its triangles)? */
+  private lineNearShip(a: Vec3, b: Vec3, margin: number) {
+    const h = this.shipNow().hull;
+    if (!h) return false;
+    for (let i = 0; i <= 8; i++) if (hullDistance(h, add(a, sub(b, a), i / 8)) < margin + len(sub(b, a)) / 16) return true;
+    return false;
+  }
+  /** A walk point in the vessel's frame [m] (null: no vessel). */
+  private toShip(p: Vec3): Vec3 | null {
+    const f = this.shipNow().frame;
+    if (!f) return null;
+    const d = sub(p, f.origin);
+    return [dot(d, f.axes[0]), dot(d, f.axes[1]), dot(d, f.axes[2])];
   }
   /** The surface wind where he walks (the weather's at the landed vessel: speed [m/s], from [°]); null: unknown. */
   wind(): { speed: number; from: number } | null {
     return this.ours && this.body === "earth" ? this.c.windNow : null;
   }
   /** How high the feet stand at p over the ground or what holds them (a bridge's deck, a roof) [m]. */
-  private standing(p: Vec3) {
+  private standing(p: Vec3, radius = 0.05, step = 0.4) {
     const h = this.height(p);
-    const object = this.ours && this.body === "earth" ? this.contact()?.at(p, 0.05, 1.8, 0.4) : null;
-    return object && Number.isFinite(object.support) ? Math.min(h, -object.support) : h;
+    const object = this.ours && this.body === "earth" ? this.contact()?.at(p, radius, 1.8, step) : null;
+    const scenery = object && Number.isFinite(object.support) ? Math.min(h, -object.support) : h;
+    return Math.min(scenery, this.vesselSupport(p));
+  }
+  /**
+   * How high p stands over the landed vessel's top under it [m] — a wing, the hull's back — within a step up
+   * (0.4 m) or a short drop (0.5 m); Infinity: none there. Its triangles (the first crossing down), else its box.
+   */
+  private vesselSupport(p: Vec3) {
+    const f = this.shipNow().frame;
+    if (!f) return Infinity;
+    const up = this.up(p),
+      vessel = vesselHulls[this.c.s.vessel];
+    if (vessel?.bvh) {
+      const a = this.toShip(add(p, up, 0.4))!,
+        b = this.toShip(add(p, up, -0.5))!;
+      if ([0, 1, 2].some((k) => Math.max(a[k]!, b[k]!) < vessel.lo[k]! || Math.min(a[k]!, b[k]!) > vessel.hi[k]!)) return Infinity;
+      const hit = vessel.bvh.segment(a, b);
+      return hit ? 0.9 * hit.t - 0.4 : Infinity;
+    }
+    const h = this.shipNow().hull;
+    if (!h) return Infinity;
+    const d = sub(p, h.centre);
+    if (Math.abs(dot(d, h.axes[0])) > h.half[0] || Math.abs(dot(d, h.axes[2])) > h.half[2]) return Infinity;
+    const above = dot(d, h.axes[1]) - h.half[1];
+    return above > -0.4 && above < 0.5 ? above : Infinity;
   }
   /**
    * The ground's rise at x metres to the astronaut's right and z ahead of him, over the ground under him [m]: where
@@ -376,6 +436,10 @@ export class PlanetCharacter {
     this.onEvent("unavailable", reason);
     return reason;
   }
+  /** The held movement let go (a touch pad's finger lifted): the walk slows as it would, a jump asked stays. */
+  releaseMove() {
+    this.drive = null;
+  }
   releaseInput() {
     this.drive = null;
     this.jumpBuffer = 0;
@@ -421,16 +485,15 @@ export class PlanetCharacter {
     this.age += dt;
     if (this.ours && this.body === "earth") this.groundPatch.build(this.q, this.up(), (p) => this.rawHeight(p), this.terrainRevision());
     if (this.grounded) {
-      const h = this.height();
-      const object = this.ours && this.body === "earth" ? this.contact()?.at(this.q) : null;
-      const above = object && Number.isFinite(object.support) ? Math.min(h, -object.support) : h;
+      const above = this.standing(this.q, 0.3, 0.25);
       if (Math.abs(above - 0.012) > 0.01) this.q = add(this.q, this.up(), 0.012 - above);
     }
     const codes = this.c.enabled ? this.c.codes : new Set<string>();
     let f = 0,
       r = 0;
+    const keys = freeCameraKeys();
     for (const code of codes) {
-      const v = freeCameraKeys()[code];
+      const v = keys[code];
       if (v) {
         f += v[0];
         r += v[1];
@@ -463,23 +526,15 @@ export class PlanetCharacter {
    * BVH), else — its mesh not read yet — against its box (vesselHull).
    */
   private vesselBlocked(q: Vec3, radius = 0.3, height = 1.8) {
-    const hull = vesselHulls[this.c.s.vessel],
-      pose = this.c.activePoseNow();
-    if (!this.c.piloting) return false;
-    if (!hull.bvh) return this.inHull(q, radius, height);
-    if (!pose) return false;
-    const w = this.c.rigWorld();
-    if (!w || w.ours !== this.ours) return false;
-    const S = shipToCamera(this.c.shipPose(), this.c.s.shipLookYaw, this.c.s.shipLookPitch).S;
-    const local = (p: Vec3): Vec3 => {
-      const d = scale(sub(this.world(p), pose.X), this.metres());
-      const cam = [dot(d, w.right), dot(d, w.up), dot(d, w.fwd)];
-      return [0, 1, 2].map((i) => S[0][i]! * cam[0]! + S[1][i]! * cam[1]! + S[2][i]! * cam[2]!) as Vec3;
-    };
-    const a = local(add(q, this.up(), Math.min(radius, height / 2))),
-      b = local(add(q, this.up(), Math.max(height - radius, height / 2)));
-    if ([0, 1, 2].some((k) => Math.max(a[k]!, b[k]!) + radius < hull.lo[k]! || Math.min(a[k]!, b[k]!) - radius > hull.hi[k]!)) return false;
-    return hull.bvh.capsule(a, b, radius);
+    if (!this.shipNow().frame) return false;
+    const vessel = vesselHulls[this.c.s.vessel];
+    if (!vessel?.bvh) return this.inHull(q, radius, height);
+    const up = this.up(q);
+    const a = this.toShip(add(q, up, Math.min(radius, height / 2)))!,
+      b = this.toShip(add(q, up, Math.max(height - radius, height / 2)))!;
+    if ([0, 1, 2].some((k) => Math.max(a[k]!, b[k]!) + radius < vessel.lo[k]! || Math.min(a[k]!, b[k]!) - radius > vessel.hi[k]!))
+      return false;
+    return vessel.bvh.capsule(a, b, radius);
   }
   private integrate(dt: number, f: number, r: number, run: boolean) {
     const up = this.up(),
@@ -508,8 +563,9 @@ export class PlanetCharacter {
         }
       }
     }
-    const floor = this.height(target),
-      slope = floor - this.height(this.q);
+    // (what he stands on: the ground, a deck, a roof, the vessel's back)
+    const floor = this.standing(target, 0.3, 0.25),
+      slope = floor - this.standing(this.q, 0.3, 0.25);
     if (this.grounded && -slope > Math.max(0.025, len(sub(target, this.q)))) target = this.q; // steep upward step: do not climb vertical terrain
     const g = this.ours
       ? (solarBody(this.body)!.mass / (len(this.q) / M_METRES) ** 2) * (299792458 ** 2 / M_METRES)
@@ -527,8 +583,12 @@ export class PlanetCharacter {
     if (!this.grounded) this.vertical -= g * dt;
     const horizontal = target;
     target = add(target, up, this.vertical * dt);
-    // A jump must stop at an underside/crown, not cross it after the horizontal collision query.
+    // (moving up or down, stopped at an underside or a crown — not crossed after the horizontal query; come down
+    // on something that blocks without holding him (a crown), he rests there, free to jump off it: its own
+    // coyote time renewed — what holds him (the ground, a deck, a roof, the vessel) lands him below)
+    let perched = false;
     if (
+      this.vertical !== 0 &&
       (contact?.at(target).blocked || this.vesselBlocked(target)) &&
       !contact?.at(horizontal).blocked &&
       !this.vesselBlocked(horizontal)
@@ -542,12 +602,12 @@ export class PlanetCharacter {
         else lo = mid;
       }
       target = add(horizontal, up, this.vertical * dt * lo);
+      perched = this.vertical < 0;
       this.vertical = 0;
     }
-    let above = this.height(target);
-    const object = contact?.at(target, 0.3, 1.8, 0.25);
-    if (object && Number.isFinite(object.support)) above = Math.min(above, -object.support);
-    if (above <= 0.02 || (this.grounded && above < 0.25)) {
+    const above = this.standing(target, 0.3, 0.25);
+    // (a jump leaving the ground is not a landing: only coming down, or walking over the ground)
+    if ((above <= 0.02 && this.vertical <= 0) || (this.grounded && above < 0.25)) {
       target = add(target, up, -above + 0.012);
       if (!this.grounded) {
         // (the legs give on landing: a damped spring, deeper the faster the fall)
@@ -559,7 +619,7 @@ export class PlanetCharacter {
       this.airTime = 0;
     } else {
       this.grounded = false;
-      this.airTime += dt;
+      this.airTime = perched ? 0 : this.airTime + dt;
     }
     this.dipRate += (-120 * this.dip - 22 * this.dipRate) * dt;
     this.dip = Math.max(-0.15, Math.min(0, this.dip + this.dipRate * dt));
@@ -578,12 +638,14 @@ export class PlanetCharacter {
       target = add(this.q, up, 1.35);
     const away = add(scale(f, -Math.cos(this.pitch)), up, Math.sin(this.pitch));
     let reach = this.distance;
+    // (the vessel's triangles only when the camera's line passes its box at all: a box test for the whole line)
+    const nearShip = this.lineNearShip(target, add(target, away, this.distance), 0.6);
     for (let d = 0.25; d <= this.distance; d += 0.25) {
       const p = add(target, away, d);
       if (
         this.height(p) < 0.2 ||
         (this.ours && this.body === "earth" && this.contact()?.at(p, 0.2, 0.1, 0).blocked) ||
-        this.vesselBlocked(p, 0.2, 0.4)
+        (nearShip && this.vesselBlocked(p, 0.2, 0.4))
       ) {
         reach = Math.max(0.3, d - 0.3);
         break;
@@ -665,7 +727,8 @@ export class PlanetCharacter {
       : null;
   }
   restore(s: CharacterSave) {
-    const err = this.prepare(s.body, s.ours, s.q, s.forward);
+    // (a save loaded is not a new exit: no event to TARS)
+    const err = this.prepare(s.body, s.ours, s.q, s.forward, true);
     if (!err) {
       this.q = [...s.q];
       this.heading = tangent(this.up(), s.heading ?? s.forward);
@@ -674,6 +737,8 @@ export class PlanetCharacter {
       this.distance = s.distance;
       this.vertical = s.vertical;
       this.grounded = Math.abs(this.height()) < 0.1;
+      // (restored in the air: no coyote jump there)
+      this.airTime = this.grounded ? 0 : COYOTE_S;
       this.placeView(this.c.nowTime(), 0);
     }
     return err;

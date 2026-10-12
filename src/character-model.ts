@@ -38,6 +38,10 @@ interface Model {
   ni: number;
   stride: number;
 }
+/** the clips' authored paces [m/s] and the run clip's phase against the walk's (its left foot down 0.016 earlier) */
+const WALK_SPEED = 1.4,
+  RUN_SPEED = 3.5,
+  RUN_PHASE = 0.016;
 const sub3 = (a: number[], b: number[]): [number, number, number] => [a[0]! - b[0]!, a[1]! - b[1]!, a[2]! - b[2]!];
 /** Column-major product a·b into out, from offset `at` (an allocation-free composition of the joints). */
 export function multiply(a: ArrayLike<number>, b: ArrayLike<number>, out: Float32Array, at = 0) {
@@ -136,8 +140,12 @@ export class AstronautModel {
   private sampled: Float32Array[][] = [];
   private lastAge = 0;
   private blend = 0;
-  // Each gait clock is integrated: its rate follows the speed, its time never jumps when the speed changes.
+  // The gait's one phase (cycles), integrated: its rate follows the speed, never jumping when the speed changes;
+  // the walk and the run read it together — their feet in step while they blend (both clips plant the left foot
+  // at 0.45 of their cycle, measured on the asset: RUN_PHASE the remainder).
+  private stride = 0;
   private gait = [0, 0, 0];
+  private turn = new Float32Array(4);
   /** off the ground, eased (0 standing … 1 in the air): the stride held, as a leap */
   private air = 0;
   // The rest pose of each node (translation, rotation, scale) and whether it is in place (its root keeps its own motion).
@@ -235,8 +243,9 @@ export class AstronautModel {
       .filter((leg) => leg.thigh >= 0 && leg.calf >= 0 && leg.foot >= 0);
     for (const leg of this.legs) leg.below = this.order.filter((i) => under(i, leg.calf));
   }
-  /** One frame of the pose: three clips sampled, blended, composed and skinned into the bone matrices. Nothing is
-   * allocated here: the arrays of the model are reused, the samples written in place. */
+  /** One frame of the pose: three clips sampled, blended, composed and skinned into the bone matrices, the feet
+   *  placed on the ground (placeFeet). The clips' arrays are reused, the samples written in place; the feet's IK
+   *  allocates a few small vectors a frame (two legs). */
   evaluate(age: number, speed: number, airborne = false, ground: ((x: number, z: number) => number) | null = null) {
     if (!this.model) return;
     const began = performance.now(),
@@ -248,9 +257,14 @@ export class AstronautModel {
     this.air += ((airborne ? 1 : 0) - this.air) * (1 - Math.exp(-dt * (airborne ? 10 : 16)));
     const stepping = 1 - this.air;
     this.blend += (Math.max(Math.min(1, speed / 1.4), this.air) - this.blend) * (1 - Math.exp(-dt * 12));
-    this.gait[1]! += dt * Math.max(0.5, speed / 1.4) * stepping;
-    this.gait[2]! += dt * Math.max(0.5, speed / 3.5) * stepping;
     const run = Math.max(Math.max(0, Math.min(1, (speed - 1.4) / 2.6)), 0.6 * this.air);
+    const walkClip = m.clips[1]!.duration,
+      runClip = m.clips[2]!.duration;
+    // (a cycle's length on the ground: the walk's at 1.4 m/s, the run's at 3.5 m/s, blended; slow, a shuffle)
+    const cycleM = WALK_SPEED * walkClip + (RUN_SPEED * runClip - WALK_SPEED * walkClip) * run;
+    this.stride += dt * Math.max(0.47, speed / cycleM) * stepping;
+    this.gait[1] = this.stride * walkClip;
+    this.gait[2] = (this.stride + RUN_PHASE) * runClip;
     const w0 = 1 - this.blend,
       w1 = this.blend * (1 - run),
       w2 = this.blend * run;
@@ -267,8 +281,9 @@ export class AstronautModel {
         b = this.sampled[1]![i]!,
         c = this.sampled[2]![i]!;
       for (let j = 0; j < 10; j++) if (j < 3 || j > 6) out[j] = w0 * a[j]! + w1 * b[j]! + w2 * c[j]!;
-      slerpAt(a, 3, b, 3, this.blend, out, 3);
-      if (run > 0) slerpAt(out, 3, c, 3, run, out, 3);
+      // (as the translations: idle ↔ (walk ↔ run by run) by blend)
+      slerpAt(b, 3, c, 3, run, this.turn, 0);
+      slerpAt(a, 3, this.turn, 0, this.blend, out, 3);
       // In-place locomotion: root motion belongs to the planetary controller, not the imported clip.
       if (this.inPlace[i]) {
         out[0] = this.rest[i]![0]!;

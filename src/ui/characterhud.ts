@@ -42,7 +42,7 @@ export class CharacterHud {
         b.setPointerCapture(e.pointerId);
         c.character.move(f, r, 10);
       };
-      b.onpointerup = b.onpointercancel = () => c.character.releaseInput();
+      b.onpointerup = b.onpointercancel = () => c.character.releaseMove();
       touch.append(b);
     }
     const jump = document.createElement("button");

@@ -4,7 +4,9 @@ import { afterEach, expect, test } from "bun:test";
 import { CameraController } from "../src/controls";
 import { defaultSettings } from "../src/settings";
 import { setSceneTime } from "../src/wormhole";
-import { add, dot, len, sub, unit } from "../src/math/vec3";
+import { add, dot, len, scale, sub, unit } from "../src/math/vec3";
+import { toBodyFixed } from "../src/system/our-surface";
+import { M_METRES } from "../src/system/solar";
 import type { Vec3 } from "../src/physics";
 import { flight, resetFlights } from "./helpers/flight";
 import { ourGroundPose } from "../src/game/place";
@@ -192,4 +194,66 @@ test("the landed vessel's hull stops the walk and the camera; the exits stand cl
   const wide = c.character.vesselHull()!;
   expect(capsuleInHull(wide, c.character.q, c.character.up())).toBe(false);
   expect(unit(sub(c.character.q, wide.centre)).every(Number.isFinite)).toBe(true);
+});
+
+test("the vessel's box stands on the vessel's own origin (not the pilot's eye), whatever the mount", () => {
+  const { c } = flight(ourGroundPose("moon", 0, 0, 0), false);
+  c.character.hullBounds = () => ({ lo: [-2, -1, -3], hi: [2, 1, 3] });
+  expect(c.character.disembark()).toBeNull();
+  const w = c.rigWorld()!;
+  const origin = scale(toBodyFixed("moon", w.X, c.nowTime()), M_METRES);
+  for (const mount of ["cockpit", "chase"] as const) {
+    c.s.shipMount = mount;
+    const h = c.character.vesselHull()!;
+    expect(len(sub(h.centre, origin))).toBeLessThan(0.01);
+  }
+});
+
+test("a jump leaves the ground at any launch speed, and running up a slope", () => {
+  setSceneTime(0);
+  const s = defaultSettings();
+  s.jumpSpeed = 1;
+  const c = new CameraController({} as HTMLCanvasElement, s, () => {}, true);
+  expect(c.character.start("earth", 0, 0)).toBeNull();
+  c.character.jump();
+  let top = 0;
+  for (let i = 0; i < 60; i++) {
+    c.character.step(1 / 120, 0, null);
+    top = Math.max(top, c.character.height());
+  }
+  // (1 m/s on the Earth: v²/2g ≈ 5 cm)
+  expect(top).toBeGreaterThan(0.04);
+  // (running up a 40° slope: the ground rising under the feet does not cancel the take-off)
+  const r = walker("earth");
+  const up = r.character.up();
+  r.character.rawHeight = (p: Vec3) =>
+    dot(sub(p, r.character.q), up) - Math.tan((40 * Math.PI) / 180) * dot(sub(p, r.character.q), r.character.forward);
+  r.character.groundPatch.clear();
+  const seen = events(r);
+  r.character.move(1, 0, 2, true);
+  for (let i = 0; i < 24; i++) r.character.step(1 / 120, 0, null);
+  r.character.jump();
+  for (let i = 0; i < 6; i++) r.character.step(1 / 120, 0, null);
+  expect(seen.filter((k) => k === "jump").length).toBe(1);
+  expect(r.character.vertical).toBeGreaterThan(0);
+});
+
+test("he stands on the vessel's back: landed there, grounded, jumping off again", () => {
+  const { c } = flight(ourGroundPose("moon", 0, 0, 0), false);
+  c.character.hullBounds = () => ({ lo: [-4, -0.5, -6], hi: [4, 1.5, 6] });
+  expect(c.character.disembark()).toBeNull();
+  const h = c.character.vesselHull()!;
+  const up = c.character.up();
+  // (above the box's middle, half a metre over its top)
+  const top = add(h.centre, h.axes[1], h.half[1]);
+  c.character.q = add(top, up, 0.5);
+  c.character.grounded = false;
+  const seen = events(c);
+  for (let i = 0; i < 240; i++) c.character.step(1 / 120, 0, null);
+  expect(c.character.grounded).toBe(true);
+  expect(seen).toContain("landed");
+  expect(Math.abs(dot(sub(c.character.q, top), up) - 0.012)).toBeLessThan(0.03);
+  c.character.jump();
+  for (let i = 0; i < 6; i++) c.character.step(1 / 120, 0, null);
+  expect(c.character.vertical).toBeGreaterThan(0);
 });

@@ -3860,7 +3860,7 @@ export class Renderer {
     const c = this.character,
       frame = c?.frame();
     if (!c || !frame) {
-      if (this.characterRenderer.stats().active) this.characterRenderer.reset();
+      if (this.characterRenderer.drawing) this.characterRenderer.reset();
       return;
     }
     const sp = c.metres();
