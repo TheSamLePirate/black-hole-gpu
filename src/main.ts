@@ -2645,6 +2645,7 @@ async function main() {
       cfg.flaps = cfg.flaps === 0.5 ? 1 : cfg.flaps === 1 ? 0 : 0.5;
       panel.toast(cfg.flaps === 0 ? t("Flaps up") : cfg.flaps === 0.5 ? t("Flaps half") : t("Flaps full"));
     },
+    jetSystem: (_, a) => panel.toast(camera.jetToggle(a === "ab" ? "ab" : a === "athr" ? "athr" : "ap")),
     airBrake: () => {
       camera.airBrake = camera.airBrake > 0 ? 0 : 1;
       panel.toast(camera.airBrake > 0 ? t("Air brake out") : t("Air brake in"));

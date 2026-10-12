@@ -18,6 +18,7 @@ import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
 import { aeroForces, airAt, airTop, entryInterface } from "../aero";
 import { GEAR, groundR, localAccel, localToZamo, planetFrame, toGlobal, toLocal, zamoBeta, zamoToLocal } from "../landing";
 import { circularSpeed, type FlightMode, type PilotInput } from "../pilot";
+import { JET } from "../game/jet";
 import { MOUNT_KEYS, MOUNTS, mountPose, shipToCamera, type M3, type Mount, type MountPose, type OutsideView } from "../mounts";
 import { fleet } from "../fleet";
 import { fuelOn, loadShare } from "../engine";
@@ -873,6 +874,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   const LA0 = this.airFlight.last;
   const AV = VESSELS[fleet.active].aero;
   const onWheels0 = !!this.rolling || !!this.local?.L.rolling;
+  // (the jet's systems — controller/jet.ts —: the autopilot's holds as the plane law's, the autothrottle)
+  const jetCmd = this.jetStep(inp, dtPilot);
   const airCtx =
     LA0 && LA0.out.q > 20
       ? {
@@ -887,6 +890,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
           gamma: this.pathAngle(cam),
           bank: (this.attitudeNow() as { bank?: number }).bank ?? 0,
           mach: LA0.out.mach,
+          gammaCmd: jetCmd.gamma,
+          bankCmd: jetCmd.bank,
         }
       : null;
   const sfCtx = mode === "sf" && this.pilot.auto === "none" && this.pilot.hold === "none" ? this.sfWant(cam, inp, dtPilot) : null;
@@ -919,7 +924,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
       fwd: cam.fwd,
       beta: cam.beta,
       S: this.shipMatrix(),
-      thrust: this.thrustMax(),
+      // (the afterburner's: the dry thrust ×1.5)
+      thrust: this.thrustMax() * this.jetThrust(),
       tauRate,
       radialOut: this.radialOut(cam),
       refVel: this.speedMode === "target" ? (this.targetVelLocal(cam) ?? undefined) : this.ourNav(cam)?.refVelRep,
@@ -1059,7 +1065,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   if (this.pilot.auto === "burns" && this.fcBurns[0]?.firing)
     this.fcBurns[0].done = Math.max(this.fcBurns[0].done + along(entryAtt?.nose) * C_MPS, 0);
   // (the propellant: in the air the same thrust costs more of it — the Isp lowered by the pressure)
-  if (fuelOn(s)) this.spent += w / Math.max(this.pressureThrust(), 0.05);
+  // (the afterburner: three times the propellant for half again the thrust)
+  if (fuelOn(s)) this.spent += (w / Math.max(this.pressureThrust(), 0.05)) * (this.jetModes.ab ? JET.abFlow / JET.abThrust : 1);
   if (burn && this.nodeBurning) this.nodeDone = Math.max(this.nodeDone + along(burn.dir), 0);
   this.dockCheck();
   this.measureSpin();

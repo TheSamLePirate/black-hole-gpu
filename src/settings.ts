@@ -405,6 +405,7 @@ export interface Settings {
   pathInView: boolean; // the ship's future path drawn in the view (the cyan tube; the map keeps it)
   // the HUD's aids over the view (ui/hud/symbology.ts): each shown where it helps, each can be turned off
   hudHorizon: boolean; // the horizon and the pitch ladder about the local vertical
+  hudJet: "off" | "aviation" | "metric"; // plane mode in the air: a fighter's HUD (ui/hud/jethud.ts) in green — its tapes in knots and feet, or metric
   hudHeading: boolean; // the heading tape (the world's north)
   hudBank: boolean; // the bank scale and its pointer
   hudMarkers: boolean; // radial and normal marked in the view
@@ -680,6 +681,7 @@ export function defaultSettings(): Settings {
     soiRings: true,
     pathInView: true,
     hudHorizon: true,
+    hudJet: "aviation",
     hudHeading: true,
     hudBank: true,
     hudMarkers: true,
@@ -1935,6 +1937,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   soiRings: "pref",
   pathInView: "carried",
   hudHorizon: "pref",
+  hudJet: "pref",
   hudHeading: "pref",
   hudBank: "pref",
   hudMarkers: "pref",

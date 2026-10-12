@@ -16,6 +16,8 @@ export interface ThrustAsked {
   torque: V3;
   air: number;
   time: number;
+  /** the afterburner's thrust factor (1 or none: dry) */
+  boost?: number;
 }
 
 const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -29,7 +31,8 @@ const smooth = (a: number, b: number, x: number) => {
 export function jetLevel(V: VesselDef, J: JetDef, i: number, th: ThrustAsked): number {
   if (J.main) {
     const level = Math.min(Math.max(th.throttle, 0), 1);
-    return level < 0.01 ? 0 : level;
+    // (the afterburner lit: the main flame at its factor — longer, brighter, louder)
+    return level < 0.01 ? 0 : level * (th.boost ?? 1);
   }
   const tq = th.torque;
   const tl = Math.hypot(...tq);

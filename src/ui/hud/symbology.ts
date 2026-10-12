@@ -16,6 +16,7 @@ import { blinkOn } from "../clock";
 import type { HudItem } from "./declutter";
 import { safeFrame } from "./safe";
 import { type Box, drawn, fit } from "./layout";
+import { drawJetHud, JET_GREEN, type JetHudInfo } from "./jethud";
 import { t, tf } from "../../i18n";
 
 /** The phase lets this element show (hud/declutter.ts — none given: all). */
@@ -80,7 +81,13 @@ export interface SymInfo {
     sf?: { speed: number; gamma: number; heading: number } | null;
     /** Effective commanded direction through the air, in ship coordinates (as u). */
     sfU?: V3 | null;
+    /** the load's peak this flight [g], Mach */
+    gPeak?: number;
+    mach?: number;
   } | null;
+  /** the jet's systems and figures (plane mode in the air — ui/hud/jethud.ts): the altitude over the sea [m],
+   *  the throttle, the modes engaged */
+  jet?: Pick<JetHudInfo, "alt" | "throttle" | "modes"> | null;
 }
 
 export interface SymFrame {
@@ -115,7 +122,9 @@ export interface SymFrame {
 }
 
 const UNDER = "rgba(0, 0, 0, 0.42)";
-const LADDER = "124, 214, 255";
+/** the ladder's, the heading's, the bank's colour (r, g, b): the HUD's cyan, the jet's green in its style */
+const CYAN = "124, 214, 255";
+let LADDER = CYAN;
 const D = Math.PI / 180;
 const norm = (a: V3): V3 => {
   const l = Math.hypot(a[0], a[1], a[2]) || 1;
@@ -170,6 +179,10 @@ export function drawSymbology(F: SymFrame) {
   const up = i.dirs.up ?? null;
   const north = i.dirs.north ?? null;
   const pilotView = !F.outside && F.density < 2;
+  // (the jet's style: flown as a plane, in the air, from the pilot's seat — its green, its tapes)
+  const A0 = i.air;
+  const jet = s.hudJet !== "off" && pilotView && i.jet && A0?.inAir && A0.mode === "plane" && A0.q > 20 ? i.jet : null;
+  LADDER = jet ? JET_GREEN : CYAN;
   const S = i.S;
   const nose: V3 = [S[0]![2]!, S[1]![2]!, S[2]![2]!];
 
@@ -417,6 +430,26 @@ export function drawSymbology(F: SymFrame) {
   // ---- in the air: the angle of attack, the energy, the sideslip, the load, the flight director
   const A = i.air;
   if (A && A.u && A.q > 20 && pilotView) drawAir(F, A, pr, stroke, text, up, fpx);
+  if (jet && A && i.surface)
+    drawJetHud(
+      { ctx, W, H, dpr, compact: !!F.compact, top: F.top, units: s.hudJet === "metric" ? "metric" : "aviation" },
+      {
+        speed: A.speed ?? 0,
+        mach: A.mach ?? 0,
+        g: A.g ?? 1,
+        gPeak: A.gPeak ?? A.g ?? 1,
+        gMax: A.gMax ?? 9,
+        alpha: A.alpha ?? 0,
+        stall: A.stallA ?? null,
+        alt: jet.alt,
+        radar: i.surface.alt,
+        vs: i.surface.vVert,
+        throttle: jet.throttle,
+        modes: jet.modes,
+      },
+      stroke,
+      text,
+    );
 
   // ---- the orbital markers the view lacked: radial, normal
   if (s.hudMarkers && on(F, "markers")) {

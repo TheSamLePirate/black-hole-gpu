@@ -37,6 +37,7 @@ export type KeyAction =
   | "antigrav"
   | "flaps"
   | "airBrake"
+  | "jetSystem"
   | "gear"
   | "tars"
   | "pathInView"
@@ -233,7 +234,16 @@ export const KEYMAP: KeySection[] = [
       {
         keys: "Z · X",
         text: "Full throttle · cut (W · X on AZERTY) — on the entry autopilot's approach, full throttle goes around",
-        bind: [fly("KeyZ", "throttleFull"), fly("KeyX", "throttleCut")],
+        bind: [fly("KeyZ", "throttleFull", off), fly("KeyX", "throttleCut")],
+      },
+      {
+        keys: "⇧Z · ' · ⇧'",
+        text: "Plane mode, the jet's systems: afterburner (the throttle full, thrust ×1.5) · autopilot: the altitude and heading held (the stick flies through it; let go, the new ones held) · autothrottle: the speed held (⇧ Alt then set it) (' is ù on AZERTY)",
+        bind: [
+          fly("KeyZ", "jetSystem", { arg: "ab", shift: true }),
+          fly("Quote", "jetSystem", { arg: "ap", shift: false }),
+          fly("Quote", "jetSystem", { arg: "athr", shift: true }),
+        ],
       },
       {
         keys: "I K · J L · H N",

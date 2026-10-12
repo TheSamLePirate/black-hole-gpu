@@ -124,6 +124,15 @@ export default {
   "Antigravity off — every hold costs thrust and propellant":
     "Antigravité désactivée — chaque maintien coûte de la poussée et du propergol",
   "Flaps up": "Volets rentrés",
+  "Plane mode, the jet's systems: afterburner (the throttle full, thrust ×1.5) · autopilot: the altitude and heading held (the stick flies through it; let go, the new ones held) · autothrottle: the speed held (⇧ Alt then set it) (' is ù on AZERTY)":
+    "Mode avion, les systèmes du jet : postcombustion (plein gaz, poussée ×1,5) · pilote automatique : l'altitude et le cap tenus (le manche passe outre ; relâché, les nouveaux sont tenus) · auto-manette : la vitesse tenue (⇧ Alt la règlent alors) (ù sur AZERTY)",
+  "The jet's systems: in plane mode (F)": "Les systèmes du jet : en mode avion (F)",
+  "Afterburner on — the thrust ×1.5, the propellant ×3": "Postcombustion — poussée ×1,5, ergols ×3",
+  "Afterburner off": "Postcombustion coupée",
+  "The autopilot's holds: in the air": "Les tenues du pilote automatique : en vol",
+  "Autopilot: altitude {0} m, heading {1}°": "Pilote automatique : altitude {0} m, cap {1}°",
+  "Autothrottle off": "Auto-manette désengagée",
+  "Autothrottle: {0} m/s — the throttle keys set the speed": "Auto-manette : {0} m/s — les touches des gaz règlent la vitesse",
   "Flaps half": "Volets à mi-course",
   "Flaps full": "Volets sortis",
   "Air brake out": "Aérofrein sorti",

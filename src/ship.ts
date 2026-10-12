@@ -99,6 +99,8 @@ export interface Thrust {
   torque: V3;
   air: number;
   time: number;
+  /** the afterburner's thrust factor (1 or none: dry) — the main flame longer and brighter */
+  boost?: number;
 }
 
 /**

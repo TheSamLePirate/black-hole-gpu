@@ -142,6 +142,7 @@ export class Simulation {
           torque: fired.torque,
           air: Math.min((info?.surface?.air ?? 0) / 1.225, 1),
           time: this.play,
+          boost: c.jetThrust(),
         }
       : null;
     if (firing || was) changed = true;

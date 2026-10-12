@@ -257,6 +257,10 @@ const ACTION_LABELS: Partial<Record<KeyAction, Text>> = {
   antigrav: { fr: "Antigravité", en: "Antigravity" },
   flaps: { fr: "Volets", en: "Flaps" },
   airBrake: { fr: "Aérofreins", en: "Air brake" },
+  jetSystem: {
+    fr: "Systèmes du jet (postcombustion, pilote automatique, auto-manette)",
+    en: "Jet systems (afterburner, autopilot, autothrottle)",
+  },
   gear: { fr: "Train d'atterrissage", en: "Landing gear" },
   tars: { fr: "Parler à TARS", en: "Talk to TARS" },
   pathInView: { fr: "Trajectoire dans la vue", en: "Path in the view" },

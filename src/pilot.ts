@@ -122,6 +122,10 @@ export interface FlightContext {
     gamma: number;
     bank: number;
     mach: number;
+    /** the jet's autopilot (game/jet.ts): the flight path angle and the bank to hold, the stick let go
+     *  (null: the plane law's own — those it had when let go) */
+    gammaCmd?: number | null;
+    bankCmd?: number | null;
   } | null;
   /** the sci-fi flight computer: the velocity it flies (local 3-velocity), the feed-forward against
    *  gravity and the air (local, proper acceleration), the attitude it holds (local), and the part of
@@ -512,6 +516,7 @@ export class FlightComputer {
       const rates: V3 = [0.35, 0.14, 1.2];
       const stallSafe = alphaLimit(P.stall, P.mach);
       if (this.gammaHold === null && inp.pitch === 0) this.gammaHold = P.gamma;
+      if (P.gammaCmd != null && inp.pitch === 0) this.gammaHold = P.gammaCmd;
       const gdot = this.gammaPrev !== null && dt > 0 ? (P.gamma - this.gammaPrev) / dt : 0;
       this.gammaPrev = P.gamma;
       // (on its own gear, the springs set the pitch — the nose lowered onto its wheel, held back to 3°/s
@@ -527,6 +532,7 @@ export class FlightComputer {
       // (on its own gear the nose wheel steers it: the rudder only as the pedals ask)
       want[1] = P.ground ? (c.onGear && manual[1] === 0 ? this.omega[1] : manual[1] * 0.3) : P.path[1] - 2 * P.beta + manual[1] * rates[1];
       if (this.bankHold === null && inp.roll === 0) this.bankHold = Math.abs(P.bank) < 0.105 ? 0 : P.bank;
+      if (P.bankCmd != null && inp.roll === 0) this.bankHold = P.bankCmd;
       // (the bank: right is +; the pilot's roll: left is +)
       // (on the ground the wings held level — the ailerons into a crosswind, as a pilot's)
       want[2] = manual[2] !== 0 ? manual[2] * rates[2] : P.ground ? 0.4 * P.bank : 1.2 * (P.bank - (this.bankHold ?? P.bank));

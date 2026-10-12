@@ -1,5 +1,6 @@
 // The CameraController — telemetry: the one view of the flight every display reads (FlightInfo).
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import type { JetModes } from "../game/jet";
 import { blToCartesian, cameraFrame } from "../camera";
 import { horizon, isco, photonOrbits, type Vec3 } from "../physics";
 import { bodyCentre, bodyVelocity, ourTarget } from "../targeting";
@@ -170,6 +171,9 @@ export interface FlightInfo {
   air: ReturnType<CameraController["airInfo"]>;
   /** the straight flight path's seconds to the ground (our worlds, low; Infinity else — game/gpws.ts) */
   terrainAhead: number;
+  /** the jet's systems (plane mode, in the air — game/jet.ts): the altitude over the sea [m], the throttle,
+   *  the modes engaged */
+  jet: { alt: number; throttle: number; modes: JetModes } | null;
   entry: ReturnType<CameraController["entryInfo"]>;
   // ---- the target
   /** the selected target: distance (centre to centre, flat map) and range rate (> 0: receding) */
@@ -331,6 +335,10 @@ function flightInfo(this: CameraController): FlightInfo {
     surface: this.surfaceInfo(),
     air: this.airInfo(),
     terrainAhead: this.local ? Infinity : this.terrainAheadNow(),
+    jet: (() => {
+      const f = this.flightModeNow() === "plane" ? this.jetFigures() : null;
+      return f ? { alt: f.h, throttle: this.pilot.engineNow, modes: { ...this.jetModes } } : null;
+    })(),
     entry: this.entryInfo(),
     /** the engine and the tank */
     engine: { kind: s.engine, max: this.thrustMax(), fuel: fuelOn(s) ? tank(s, this.spent) : null },
