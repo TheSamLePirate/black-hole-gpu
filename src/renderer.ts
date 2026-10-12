@@ -2474,6 +2474,7 @@ export class Renderer {
         surfaceFocus ? aheadFocus(surfaceFocus, lead) : null,
       );
       this.earthScenery.shadows = s.earthSceneryShadows;
+      this.earthScenery.season(utcOf(time));
     }
     f.set(this.earthTiles.params(), 69 * 4);
     f.set(this.earthSurface.params(), BASE_PARAM_VEC4S * 4);

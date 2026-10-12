@@ -1,4 +1,5 @@
 import type { Vec3 } from "../physics";
+import { forestKindTable, forestSeason } from "./forest";
 import { SceneryContact } from "./scenery-contact";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "./ellipsoid";
 import {
@@ -55,6 +56,9 @@ export class EarthScenery {
   private wanted = false;
   /** the key of the scene drawn (centre, mode, satellite) */
   private applied = "";
+  /** the drawn scene's forest section (vec4 index, 0: none), and the season its kinds' table was written for */
+  private forestAt = 0;
+  private seasonKey = "";
   constructor(
     private device: GPUDevice,
     private makeWorker: () => Worker = () => new Worker(new URL("scenery-worker.js", location.href), { type: "module" }),
@@ -203,6 +207,8 @@ export class EarthScenery {
         }
         const t = performance.now();
         this.device.queue.writeBuffer(this.buffer, 0, r.buffer);
+        this.forestAt = new Float32Array(r.buffer, 0, 16)[8] ?? 0;
+        this.seasonKey = "";
         this.contact = new SceneryContact(r, r.buffer);
         this.uploaded += performance.now() - t;
         this.data = { ...r, buffer: undefined };
@@ -235,6 +241,14 @@ export class EarthScenery {
       this.reason = "degraded";
       this.busy = false;
     }
+  }
+  /** The forest's season at the sim's date (UTC ms): the kinds' table rewritten when it moves two days. */
+  season(utcMs: number) {
+    if (!this.data || !this.forestAt || !this.allocated) return;
+    const key = `${Math.round(utcMs / 172800000)}:${Math.round(this.data.lat)}`;
+    if (key === this.seasonKey) return;
+    this.seasonKey = key;
+    this.device.queue.writeBuffer(this.buffer, (this.forestAt + 7) * 16, forestKindTable(forestSeason(utcMs, this.data.lat)));
   }
   /** the wait before trying again after a failure [ms]: 30 s, doubled each time, 5 min at most (never given up) */
   private backoff() {

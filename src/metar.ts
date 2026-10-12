@@ -84,7 +84,6 @@ export function parseMetar(raw: string): WeatherState | null {
       else if (/DZ/.test(ph)) rain = Math.max(rain, 0.25 * k + 0.1);
       if (/FG/.test(ph) && m[2] !== "MI" && m[2] !== "BC" && m[2] !== "PR") fog = true;
       if (/DU|SA|SS|DS/.test(ph)) dust = Math.max(dust, m[1] === "+" ? 1 : 0.6);
-      continue;
     }
   }
   if (!windSeen) return null;

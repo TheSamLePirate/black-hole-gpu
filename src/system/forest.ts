@@ -56,6 +56,8 @@ export interface KindShape {
   clump: number;
   grain: number;
   tiers: number;
+  /** its leaves fall in the autumn (outside the tropics): 1, 0 evergreen, between: some of them */
+  deciduous: number;
 }
 export const KIND_SHAPES: KindShape[] = [
   // (none)
@@ -73,6 +75,7 @@ export const KIND_SHAPES: KindShape[] = [
     clump: 0,
     grain: 1,
     tiers: 0,
+    deciduous: 0,
   },
   // broadleaf: an oak, a beech — a round crown on a short trunk
   {
@@ -89,6 +92,7 @@ export const KIND_SHAPES: KindShape[] = [
     clump: 0.3,
     grain: 1.4,
     tiers: 0,
+    deciduous: 1,
   },
   // conifer: a spruce, a fir — a cone from low on the trunk
   {
@@ -105,6 +109,7 @@ export const KIND_SHAPES: KindShape[] = [
     clump: 0.32,
     grain: 0.9,
     tiers: 1.1,
+    deciduous: 0,
   },
   // pine: a Scots or stone pine — a flat crown high on a bare trunk
   {
@@ -121,6 +126,7 @@ export const KIND_SHAPES: KindShape[] = [
     clump: 0.35,
     grain: 1.2,
     tiers: 0,
+    deciduous: 0,
   },
   // palm: a thin stem, a flat head of fronds
   {
@@ -137,6 +143,7 @@ export const KIND_SHAPES: KindShape[] = [
     clump: 0.4,
     grain: 0.8,
     tiers: 0,
+    deciduous: 0,
   },
   // shrub, mangrove: a low dome to the ground
   {
@@ -153,6 +160,7 @@ export const KIND_SHAPES: KindShape[] = [
     clump: 0.25,
     grain: 0.8,
     tiers: 0,
+    deciduous: 0.4,
   },
   // columnar: a poplar, a cypress — a narrow spindle
   {
@@ -169,6 +177,7 @@ export const KIND_SHAPES: KindShape[] = [
     clump: 0.18,
     grain: 0.9,
     tiers: 0,
+    deciduous: 1,
   },
 ];
 
@@ -323,10 +332,12 @@ export function trunkOf(t: ForestTree): { radius: number; top: number } {
   return k.trunk > 0 ? { radius: k.bark0 + k.barkH * t.height, top: t.z + k.trunk * t.height } : { radius: 0, top: t.z };
 }
 /** A tree's crown as the tracer draws it plain: a cone (apex, base radius, height) or an ellipsoid (centre,
- *  radii) — near, the bound the leaves carve inwards; far, shrunk by half the carving (forest.wgsl). */
-export function crownOf(t: ForestTree, near = false): { cone: boolean; c: Vec3; r: Vec3 } {
+ *  radii) — near, the bound the leaves carve inwards; far, shrunk by half the carving (forest.wgsl), deeper
+ *  for a bare deciduous crown (`bare`: the season's, 0 … 1). */
+export function crownOf(t: ForestTree, near = false, bare = 0): { cone: boolean; c: Vec3; r: Vec3 } {
   const k = KIND_SHAPES[t.kind]!;
-  const shrink = near ? 0 : 0.5 * k.clump * t.radius;
+  // (the carving's depth: the leaves' clumps, and a deciduous crown's bareness in winter — forest.wgsl's amp)
+  const shrink = near ? 0 : 0.5 * (k.clump + 0.55 * k.deciduous * bare) * t.radius;
   return k.cone
     ? { cone: true, c: [t.x, t.y, t.z + t.height], r: [k.width * t.radius - shrink, t.height * (1 - k.crown), 0] }
     : {
@@ -430,7 +441,8 @@ export function forestBlockBounds(f: ForestFrame, cells: Uint32Array): Float32Ar
  *   +2 (a0, a1, a2, —) +3 (b0, b1, b2, —) +4 (c0, c1, c2, —) +5 (d0, d1, d2, —)
  *   +6 (i0, j0 as i32 bits, trees, reach [m])
  *   +7 + 4k: kind k — (cone, crown, width, depth), (trunk, bark0, barkH, tint), (leaf r, g, b, bark rgb10
- *            bits), (clump, grain, tiers, —)
+ *            bits), (clump, grain, tiers, deciduous); kind 0's first: the season (fresh, autumn, bare, snow line)
+ *            — rewritten as the date moves (forestKindTable)
  */
 export function writeForest(fv: Float32Array, uv: Uint32Array, at: number, f: ForestFrame, cells: Uint32Array, trees: number) {
   const [bw, bh] = forestBlocks(f);
@@ -442,9 +454,54 @@ export function writeForest(fv: Float32Array, uv: Uint32Array, at: number, f: Fo
   ints[0] = f.i0;
   ints[1] = f.j0;
   fv.set([trees, f.reach], o + 26);
+  fv.set(forestKindTable(SUMMER), o + 28);
+  uv.set(cells, cellsAt * 4);
+  fv.set(
+    forestBlockBounds(f, cells).map((v) => (Number.isFinite(v) ? v : v > 0 ? 3e38 : -3e38)),
+    blocksAt * 4,
+  );
+}
+// ---- the seasons
+/** The forest's season at a place: the spring's fresh leaves, the autumn's colours, the deciduous crowns'
+ *  bareness (0 … 1, nil in the tropics), and the altitude above which the evergreens carry snow [m]. */
+export interface ForestSeason {
+  fresh: number;
+  autumn: number;
+  bare: number;
+  snowLine: number;
+}
+export const SUMMER: ForestSeason = { fresh: 0, autumn: 0, bare: 0, snowLine: 9000 };
+const bell = (x: number) => Math.exp(-x * x);
+const ramp = (a: number, b: number, x: number) => Math.max(0, Math.min(1, (x - a) / (b - a)));
+export function forestSeason(utcMs: number, lat: number): ForestSeason {
+  const start = Date.UTC(new Date(utcMs).getUTCFullYear(), 0, 1);
+  // (the day as the northern hemisphere's: the south half a year on)
+  const d = ((((utcMs - start) / 86400000 + (lat < 0 ? 182.6 : 0)) % 365.25) + 365.25) % 365.25;
+  const a = Math.abs(lat);
+  // (deciduous forests outside the tropics; the seasons come earlier in autumn, later in spring, polewards)
+  const temperate = ramp(18, 30, a);
+  const shift = (a - 45) * 1.5;
+  const leafOut = 112 + shift,
+    colours = 288 - shift;
+  const fresh = temperate * bell((d - (leafOut + 15)) / 18);
+  const autumn = temperate * bell((d - colours) / 17);
+  const fallen = d > colours ? ramp(colours + 8, colours + 32, d) : 1 - ramp(leafOut - 12, leafOut + 6, d);
+  const bare = temperate * fallen;
+  // the snow line on the trees: lowest in mid-January, gone by late spring (a mountain's winter)
+  const winter = Math.max(0, Math.cos(((d - 15) / 365.25) * 2 * Math.PI));
+  const winterLine = Math.max(0, 1800 - Math.max(0, a - 35) * 90);
+  const snowLine = winterLine + (9000 - winterLine) * (1 - ramp(0.25, 0.75, winter));
+  return { fresh, autumn, bare, snowLine };
+}
+/** The kinds' table for a season (the section's +7 onwards: four vec4s a kind; kind 0's first the season's) */
+export function forestKindTable(season: ForestSeason): Float32Array<ArrayBuffer> {
+  const out = new Float32Array(FOREST_KINDS * 16);
   for (let k = 0; k < FOREST_KINDS; k++) {
     const s = KIND_SHAPES[k]!;
-    fv.set(
+    // (the spring's young leaves: lighter, yellower)
+    const f = season.fresh * s.deciduous;
+    const leaf: Vec3 = [s.leaf[0] * (1 + 0.6 * f), s.leaf[1] * (1 + 0.45 * f), s.leaf[2] * (1 - 0.2 * f)];
+    out.set(
       [
         s.cone ? 1 : 0,
         s.crown,
@@ -454,22 +511,20 @@ export function writeForest(fv: Float32Array, uv: Uint32Array, at: number, f: Fo
         s.bark0,
         s.barkH,
         s.tint,
-        ...s.leaf,
+        ...leaf,
         packRgb(s.bark),
         s.clump,
         s.grain,
         s.tiers,
-        0,
+        s.deciduous,
       ],
-      o + 28 + k * 16,
+      k * 16,
     );
   }
-  uv.set(cells, cellsAt * 4);
-  fv.set(
-    forestBlockBounds(f, cells).map((v) => (Number.isFinite(v) ? v : v > 0 ? 3e38 : -3e38)),
-    blocksAt * 4,
-  );
+  out.set([season.fresh, season.autumn, season.bare, season.snowLine], 0);
+  return out;
 }
+
 /** an albedo packed in one float's bits (rgb10: 0 … 1 linear) — the bark's, beside the leaves' */
 function packRgb(c: Vec3): number {
   const q = (v: number) => Math.max(0, Math.min(1023, Math.round(v * 1023)));

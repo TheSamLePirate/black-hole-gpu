@@ -127,17 +127,67 @@ fn forestCarved(o: vec3f, d: vec3f, s: ForestCrown, t0: f32) -> vec4f {
   }
   return vec4f(t, forestCrownBase(s, o + d * t), 0.0, 1.0);
 }
+// a bare crown near (a deciduous tree in winter): its branches, radiating up and out from the trunk — thin
+// across (around it, and up), long along the radius —, the sky between them, denser towards the core;
+// (t, the plain shape's depth there), or none
+fn forestBranches(q: vec3f, seed: f32) -> f32 {
+  let rho = length(q.xy);
+  let u = atan2(q.y, q.x) * 5.093; let v = (q.z - 0.55 * rho) * 2.4; let w = rho * 0.7;
+  return 0.75 * forestNoise(vec3f(u, v, w + seed * 37.0)) + 0.25 * forestNoise(vec3f(u * 2.3, v * 2.3, w * 2.0 + 11.0));
+}
+fn forestTwigs(o: vec3f, d: vec3f, s: ForestCrown, t0: f32, seed: f32) -> vec4f {
+  var t = t0;
+  let core = 0.6 * min(s.r.x, s.r.z);
+  for (var n = 0; n < 44; n++) {
+    let p = o + d * t;
+    let b = forestCrownBase(s, p);
+    if (b > 0.02 && t > t0 + 0.05) { return vec4f(-1.0); }
+    if (forestBranches(p - s.c, seed) > 0.66 - 0.3 * clamp(-b / core, 0.0, 1.0)) { return vec4f(t, b, 0.0, 1.0); }
+    t += 0.14;
+  }
+  return vec4f(-1.0);
+}
+fn forestTwigNormal(q: vec3f, seed: f32) -> vec3f {
+  let e = vec2f(0.04, -0.04);
+  return -normalize(e.xyy * forestBranches(q + e.xyy, seed) + e.yyx * forestBranches(q + e.yyx, seed) + e.yxy * forestBranches(q + e.yxy, seed) + e.xxx * forestBranches(q + e.xxx, seed) + vec3f(1e-6));
+}
 fn forestCrownNormal(s: ForestCrown, p: vec3f) -> vec3f {
   let e = vec2f(0.06, -0.06);
   return normalize(e.xyy * forestCrownField(s, p + e.xyy) + e.yyx * forestCrownField(s, p + e.yyx) + e.yxy * forestCrownField(s, p + e.yxy) + e.xxx * forestCrownField(s, p + e.xxx));
 }
 
+// the season (forest.ts forestSeason): the spring's fresh leaves, the autumn's colours, the deciduous crowns'
+// bareness, the snow line on the evergreens [m]; whether a kind's leaves fall (0 … 1)
+fn forestSeason() -> vec4f { return forestData(u32(forestData(2u).x) + 7u); }
+fn forestDeciduous(kind: u32) -> f32 { return forestData(u32(forestData(2u).x) + 10u + 4u * kind).w; }
 // a kind's leaves' and bark's albedo (linear), and the share of the satellite's colour in its leaves
 fn forestLeaf(kind: u32) -> vec3f { return forestData(u32(forestData(2u).x) + 9u + 4u * kind).xyz; }
 fn forestTint(kind: u32) -> f32 { return forestData(u32(forestData(2u).x) + 8u + 4u * kind).w; }
 fn forestBark(kind: u32) -> vec3f {
   let b = bitcast<u32>(forestData(u32(forestData(2u).x) + 9u + 4u * kind).w);
   return vec3f(f32(b & 1023u), f32((b >> 10u) & 1023u), f32((b >> 20u) & 1023u)) / 1023.0;
+}
+
+// A crossing's look: its albedo and the light its leaves let through (both linear, over π), from its species,
+// the satellite's colour under it (rgb, weight 0 … 1), the season — autumn's colours tree by tree (some turn
+// early; yellow, orange or red), winter's bare twigs, snow on the evergreens' upper needles above the snow
+// line — and its own shade (the crown darker inside and below). n: its normal (frame), p: the point.
+struct ForestLook { albedo: vec3f, through: vec3f };
+fn forestLook(h: ForestHit, n: vec3f, p: vec3f, sat: vec4f) -> ForestLook {
+  if (h.part == 1u) { return ForestLook(forestBark(h.kind) * (0.8 + 0.4 * h.seed), vec3f(0.0)); }
+  var alb = mix(forestLeaf(h.kind), sat.rgb * 1.25, forestTint(h.kind) * sat.w) * (0.82 + 0.36 * h.seed);
+  let season = forestSeason(); let falls = forestDeciduous(h.kind);
+  let s2 = fract(h.seed * 7.31 + 0.13);
+  let turned = clamp(season.y * 1.6 - 0.5 * fract(h.seed * 3.7), 0.0, 1.0) * falls;
+  let fall = select(select(vec3f(0.17, 0.035, 0.012), vec3f(0.2, 0.09, 0.012), s2 < 0.75), vec3f(0.2, 0.14, 0.018), s2 < 0.4);
+  alb = mix(alb, fall, turned);
+  alb = mix(alb, vec3f(0.085, 0.07, 0.06), season.z * falls);
+  let snowy = (1.0 - falls) * smoothstep(season.w - 150.0, season.w + 150.0, h.base.z + h.height * 0.6 + 120.0 * (h.seed - 0.5));
+  alb = mix(alb, vec3f(0.72, 0.74, 0.78), snowy * smoothstep(0.15, 0.7, n.z) * 0.85);
+  // (light through the leaves: their own colour, deepened; the bare and the snowy let none)
+  let through = alb * vec3f(1.15, 1.4, 0.55) * (1.0 - season.z * falls) * (1.0 - snowy);
+  alb *= h.ao * mix(0.6, 1.0, smoothstep(h.base.z + h.height * 0.25, h.base.z + h.height, p.z));
+  return ForestLook(alb, through);
 }
 
 // The first tree a ray from o along d (unit, frame metres) meets before tMax; anyHit: the first found.
@@ -201,7 +251,8 @@ fn forestQuery(o: vec3f, d: vec3f, tMax: f32, anyHit: bool, detail: f32) -> Fore
         // (the ray started near the tree: the shapes' sums stay small however far the camera)
         let t0 = max(0.0, dot(foot - o, d) - r - height);
         let oo = o + d * t0;
-        let amp = kD.x * r;
+        // (a deciduous crown in winter: its twigs carved through, the sky behind them)
+        let amp = (kD.x + 0.55 * kD.w * forestData(F + 7u).z) * r;
         let near = t0 + r + height < detail * (0.85 + 0.3 * forestUnit(forestHash(gi, gj, 8u)));
         // the plain crown (far: shrunk by half the carving, its mean)
         var crown = ForestCrown(kA.x > 0.5, vec3f(0.0), vec3f(0.0), amp, kD.y, kD.z);
@@ -215,20 +266,34 @@ fn forestQuery(o: vec3f, d: vec3f, tMax: f32, anyHit: bool, detail: f32) -> Fore
         }
         var h = select(forestEllipsoid(oo, d, crown.c, crown.r), forestCone(oo, d, crown.c, crown.r.x, crown.r.y), crown.cone);
         var part = 0u; var ao = 1.0;
-        if (h.x > 0.0 && near) {
+        // (bare: a deciduous tree's winter, 0 … 1)
+        let bare = kD.w * forestData(F + 7u).z;
+        let seed = forestUnit(forestHash(gi, gj, 4u));
+        if (h.x > 0.0 && near && bare > 0.5) {
+          let c = forestTwigs(oo, d, crown, h.x, seed);
+          if (c.x > 0.0) {
+            h = vec4f(c.x, forestTwigNormal(oo + d * c.x - crown.c, seed));
+            ao = clamp(1.0 + c.y / (crown.r.x + 1e-3), 0.45, 1.0);
+          } else { h = vec4f(-1.0); }
+        } else if (h.x > 0.0 && near) {
           let c = forestCarved(oo, d, crown, h.x);
           if (c.x > 0.0) {
             h = vec4f(c.x, forestCrownNormal(crown, oo + d * c.x));
             ao = clamp(1.0 + c.y / (crown.amp * 1.6 + 1e-3), 0.3, 1.0);
           } else { h = vec4f(-1.0); }
+        } else if (h.x > 0.0 && bare > 0.5) {
+          // (far: the twigs' cover, a fine fixed pattern the camera's jitter averages)
+          let k = bitcast<vec3u>(vec3i(floor((oo + d * h.x) * 2.5)));
+          if (forestUnit(forestPcg((k.x * 73856093u) ^ (k.y * 19349663u) ^ (k.z * 83492791u))) > 0.45) { h = vec4f(-1.0); }
         }
         if (h.x > 0.0) { h.x += t0; }
         if (kB.x > 0.0) {
-          let tr = forestTrunk(oo, d, foot - vec3f(0.0, 0.0, 1.0), kB.y + kB.z * height, z + kB.x * height);
+          // (a bare crown shows its trunk running up into it)
+          let tr = forestTrunk(oo, d, foot - vec3f(0.0, 0.0, 1.0), kB.y + kB.z * height, z + mix(kB.x, 0.8, bare) * height);
           if (tr.x > 0.0 && (h.x < 0.0 || tr.x + t0 < h.x)) { h = vec4f(tr.x + t0, tr.yzw); part = 1u; ao = 1.0; }
         }
         if (h.x > 0.0 && h.x < best.t) {
-          best = ForestHit(h.x, h.yzw, kind, part, foot, height, forestUnit(forestHash(gi, gj, 4u)), ao);
+          best = ForestHit(h.x, h.yzw, kind, part, foot, height, seed, ao);
           if (anyHit) { return best; }
         }
       }

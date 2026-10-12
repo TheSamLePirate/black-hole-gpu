@@ -20,6 +20,8 @@ import {
   forestPlaceOf,
   forestTree,
   forestTreesNear,
+  forestKindTable,
+  forestSeason,
   growForest,
   treeline,
   KIND_SHAPES,
@@ -279,4 +281,39 @@ test("growing a forest: where the cover says, not on the road, its feet on the g
   for (const w of failing.cells) if (w) expect(unpackCell(w).z).toBeGreaterThan(300);
   // (the worker's whole high-mode grid: this one is 1.2 km; the 3.25 km grid is ~7× — a few seconds here)
   expect(ms).toBeLessThan(5000);
+});
+
+test("the seasons: autumn's colours, winter's bare crowns and snow line, spring's fresh leaves; none in the tropics", () => {
+  const at = (y: number, m: number, d: number) => Date.UTC(y, m - 1, d, 12);
+  // the Vosges
+  const oct = forestSeason(at(2026, 10, 15), 48),
+    jan = forestSeason(at(2026, 1, 15), 48),
+    jul = forestSeason(at(2026, 7, 15), 48),
+    may = forestSeason(at(2026, 5, 15), 48);
+  expect(oct.autumn).toBeGreaterThan(0.6);
+  expect(oct.bare).toBeLessThan(0.3);
+  expect(jan.bare).toBeGreaterThan(0.95);
+  expect(jan.snowLine).toBeCloseTo(1800 - 13 * 90, 0);
+  expect(jul.bare).toBe(0);
+  expect(jul.autumn).toBeLessThan(0.05);
+  expect(jul.snowLine).toBe(9000);
+  expect(may.fresh).toBeGreaterThan(0.5);
+  expect(forestSeason(at(2026, 11, 25), 48).bare).toBeGreaterThan(0.9);
+  // Patagonia: its autumn in April, its summer in January
+  expect(forestSeason(at(2026, 4, 15), -50).autumn).toBeGreaterThan(0.4);
+  expect(forestSeason(at(2026, 1, 15), -50).bare).toBe(0);
+  // the Amazon: evergreen all year
+  for (const m of [1, 4, 7, 10]) {
+    const s = forestSeason(at(2026, m, 15), -3);
+    expect(s.bare + s.autumn + s.fresh).toBe(0);
+  }
+  // the kinds' table: the season in kind 0's row; the spring lightens the deciduous leaves only
+  const summer = forestKindTable(forestSeason(at(2026, 7, 15), 48)),
+    spring = forestKindTable(may);
+  expect(summer.length).toBe(16 * 7);
+  expect(Array.from(spring.slice(0, 4))).toEqual([may.fresh, may.autumn, may.bare, may.snowLine].map(Math.fround));
+  expect(spring[16 * ForestKind.broadleaf + 9]!).toBeGreaterThan(summer[16 * ForestKind.broadleaf + 9]!);
+  expect(spring[16 * ForestKind.conifer + 9]!).toBe(summer[16 * ForestKind.conifer + 9]!);
+  expect(summer[16 * ForestKind.broadleaf + 15]).toBe(1);
+  expect(summer[16 * ForestKind.conifer + 15]).toBe(0);
 });

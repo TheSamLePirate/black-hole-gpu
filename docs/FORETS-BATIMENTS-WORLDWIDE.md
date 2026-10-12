@@ -124,7 +124,14 @@ activé par défaut, indépendant du niveau de décor et contrôlable par TARS.
    branches des conifères ; uniquement vers l'intérieur : l'invariant reste exact), le ciel passe entre elles,
    l'ombre au sol est tachetée ; au-delà, la forme pleine réduite de la moitié du creusement moyen.
    `bun run check:forest` compare le GPU à une intersection exhaustive en double précision (hachage bit à bit,
-   milliers de rayons) et rend une forêt synthétique.
+   milliers de rayons) et rend une forêt synthétique (`--date` : sa saison).
+8. **Saisons et lumière** : la table des espèces est réécrite dans le buffer quand la date du jeu avance de deux
+   jours (`forestSeason` : feuilles jeunes au printemps, couleurs d'automne arbre par arbre — jaune, orange,
+   rouge, certains plus tôt —, feuillus nus l'hiver — leurs branches rayonnant du tronc, le ciel au travers —,
+   neige sur les résineux au-dessus d'une limite qui descend avec l'hiver et la latitude ; rien sous les
+   tropiques). Les feuilles laissent passer la lumière : en contre-jour, le bord mince des couronnes s'éclaire
+   de leur propre vert. Pas encore de balancement au vent : avec la reprojection temporelle du traceur, des
+   couronnes mobiles traîneraient (à traiter avec des vecteurs de mouvement).
 
 **Pourquoi ce choix plutôt qu'un draw call par arbre ou un second moteur de scène ?** Le projet
 calcule déjà ses paysages par ray tracing. Une passe raster instanciée demanderait de partager et

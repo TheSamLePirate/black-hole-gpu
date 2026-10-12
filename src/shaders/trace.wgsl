@@ -4703,6 +4703,7 @@ var<private> RWY_HIT: vec4f = vec4f(0.0);
 // met exactly in the runway's own metres; sub-pixel beyond 3 km (none drawn there).
 var<private> WS: vec4f = vec4f(0.0);   // the hit's normal (the Earth's physical axes), w: on
 var<private> WS_A: vec3f = vec3f(0.0); // its albedo
+var<private> WS_T: vec3f = vec3f(0.0); // the light it lets through (leaves), over its albedo's sense
 // a ray from o (unit d, metres) against the cylinder from p0 along the unit ax, len long, r wide: x the
 // distance to it (−1: none), y along it (0 … 1) — from the ray's closest approach to the axis (the camera
 // kilometres away, the metres of the radius kept)
@@ -4726,6 +4727,7 @@ fn cylHit(o: vec3f, d: vec3f, p0: vec3f, ax: vec3f, len: f32, r: f32) -> vec2f {
 fn windsocks(d: vec3f, tMax: f32) -> f32 {
   var best = tMax;
   WS = vec4f(0.0);
+  WS_T = vec3f(0.0);
   let wv = P.runways[0].yzw;
   let U = length(wv);
   for (var k = 0u; k < rwyCount(); k++) {
@@ -4770,14 +4772,17 @@ fn windsocks(d: vec3f, tMax: f32) -> f32 {
 }
 // a windsock's light at q (its normal WS, albedo WS_A): the sun through the air (and the weather's decks),
 // the sky's; an airport's object its own light at night too (WS_E: the tower's cab, the terminal's windows)
-fn windsockShade(q: vec3f, Ls: vec3f, E: vec3f, h: f32) -> vec3f {
+fn windsockShade(q: vec3f, Ls: vec3f, E: vec3f, h: f32, view: vec3f) -> vec3f {
   let Lp = airPhysicalDirection(Ls);
   let mu0 = dot(geoQ(q), Lp);
   let vl = wxVeil(h, wxNear(q), 3u);
   let Ts = sunThrough(h, mu0);
   let sky = E * max(vec3f(0.06, 0.1, 0.19) * smoothstep(-0.18, 0.25, mu0), nightFloor(1.0, mu0));
   let lit = E * Ts * max(dot(WS.xyz, Lp), 0.0) * vl.x * sceneryShadow(Lp,WS.xyz) + sky * 0.6 * vl.x + E * Ts * max(mu0, 0.0) * (vl.y - vl.x) * 0.6;
-  return WS_A / PI * lit + WS_E * (luminance(E) / PI) * 30.0 * (1.0 - smoothstep(-0.12, 0.06, mu0));
+  // leaves against the Sun: the light through the crown's thin edge, brightest looking into the Sun
+  let rim = 1.0 - abs(dot(WS.xyz, view));
+  let through = WS_T / PI * E * Ts * vl.x * max(-dot(WS.xyz, Lp), 0.0) * rim * (0.3 + 0.7 * pow(max(dot(view, Lp), 0.0), 4.0));
+  return WS_A / PI * lit + through + WS_E * (luminance(E) / PI) * 30.0 * (1.0 - smoothstep(-0.12, 0.06, mu0));
 }
 
 // ---- The airport's buildings and its parked craft (PLAN-AEROPORTS A3), the published frame of each runway
@@ -5558,9 +5563,8 @@ fn forestData(i:u32)->vec4f { return scenery[i]; }
 // BEGIN_FOREST_MODULE (shaders/forest.wgsl set in at load, src/forest-shader.ts: this stub draws no tree)
 struct ForestHit { t: f32, n: vec3f, kind: u32, part: u32, base: vec3f, height: f32, seed: f32, ao: f32 };
 fn forestQuery(o: vec3f, d: vec3f, tMax: f32, anyHit: bool, detail: f32) -> ForestHit { return ForestHit(tMax, vec3f(0.0), 0u, 0u, vec3f(0.0), 0.0, 0.0, 1.0); }
-fn forestLeaf(kind: u32) -> vec3f { return vec3f(0.0); }
-fn forestTint(kind: u32) -> f32 { return 0.0; }
-fn forestBark(kind: u32) -> vec3f { return vec3f(0.0); }
+struct ForestLook { albedo: vec3f, through: vec3f };
+fn forestLook(h: ForestHit, n: vec3f, p: vec3f, sat: vec4f) -> ForestLook { return ForestLook(vec3f(0.0), vec3f(0.0)); }
 // END_FOREST_MODULE
 fn sceneryLocal(d:vec3f)->vec3f { return vec3f(dot(d,P.scenery[0].xyz),dot(d,P.scenery[1].xyz),dot(d,P.scenery[2].xyz)); }
 fn sceneryGlobal(d:vec3f)->vec3f { return d.x*P.scenery[0].xyz+d.y*P.scenery[1].xyz+d.z*P.scenery[2].xyz; }
@@ -5656,7 +5660,7 @@ fn sceneryQuery(o:vec3f,d:vec3f,limit:f32,shadow:bool)->SceneryHit {
   return out;
 }
 fn worldScenery(dW:vec3f,tMax:f32,rnd:f32)->f32 {
-  SC_DISTANCE=1e9;
+  SC_DISTANCE=1e9;WS_T=vec3f(0.0);
   if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5){return tMax;}
   let d=sceneryLocal(dW);let o=P.scenery[3].xyz;
   SC_SAMPLE=rnd;SC_POINT=o+d*tMax;SC_DISTANCE=tMax;
@@ -5666,20 +5670,18 @@ fn worldScenery(dW:vec3f,tMax:f32,rnd:f32)->f32 {
     let p=o+d*tree.t;
     SC_POINT=p;SC_DISTANCE=tree.t;
     var n=tree.n;var alb:vec3f;
+    let look=forestLook(tree,n,p,sceneryColourAt(tree.base.xy));
+    WS_T=look.through;
     if(tree.part==1u){
       // bark: furrowed along the trunk
-      alb=forestBark(tree.kind)*(.8+.4*tree.seed)*(.8+.2*gnoise(p*vec3f(5.0,5.0,.7)));
+      alb=look.albedo*(.8+.2*gnoise(p*vec3f(5.0,5.0,.7)));
     }else{
-      // leaves: the species' green drawn towards the satellite's, clumps that break the shape's light,
-      // the crown darker inside and below (what its own leaves shade from the sky)
-      let sat=sceneryColourAt(tree.base.xy);
-      alb=mix(forestLeaf(tree.kind),sat.rgb*1.25,forestTint(tree.kind)*sat.w)*(.82+.36*tree.seed);
       // (far, where the crown is its plain shape: clumps in the normal stand for the carving)
       let far=smoothstep(150.0,260.0,tree.t);
       let clump=vec3f(gnoise(p*.9),gnoise(p*.9+vec3f(17.1,3.7,-5.3)),gnoise(p*.9+vec3f(-8.3,11.9,2.1)));
       n=normalize(n+.55*far*clump);
       // leaves facing all ways: a fine flicker of their own
-      alb*=tree.ao*mix(.6,1.0,smoothstep(tree.base.z+tree.height*.25,tree.base.z+tree.height,p.z))*(.8+.2*gnoise(p*5.3));
+      alb=look.albedo*(.8+.2*gnoise(p*5.3));
     }
     WS=vec4f(normalize(sceneryGlobal(n)),1.0);WS_A=alb;WS_E=vec3f(0.0);
     return tree.t;
@@ -6407,7 +6409,7 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
     let q = normalize(ph);
     let fp = fp0 + fpK * tHit;
     if (WS.w > 0.5) {
-      G = windsockShade(q, Ls, E, max(airHeight(ph), 0.0));
+      G = windsockShade(q, Ls, E, max(airHeight(ph), 0.0), airPhysicalDirection(rd));
     } else if (earth) {
       G = earthGround(q, rd, Ls, E, earthFoot(q, rd, gx, fp), earthFoot(q, rd, gy, fp), max(airHeight(ph), 0.0));
     } else {

@@ -3,10 +3,10 @@
 // bit for bit, then thousands of rays (views, downwards, shadows) traced on the GPU and by brute force on
 // the CPU (every tree's exact shape): the first tree and its distance must agree.
 //
-//   bun scripts/check-forest.ts [--rays 6000] [--png forest.png]   (CHROME=/path/to/chrome)
+//   bun scripts/check-forest.ts [--rays 6000] [--png forest.png] [--date 2026-10-15]   (CHROME=/path/to/chrome)
 //
-// --png also renders the synthetic forest (sunlit, its own shadows) from the ground and from the air:
-// a look at the shapes without the app. Exit 1 when the GPU disagrees; 0 without a WebGPU adapter
+// --png also renders the synthetic forest (sunlit, its own shadows, its leaves' light through, forest.wgsl's
+// own look) from the ground and from the air — at --date's season (46° N): a look without the app. Exit 1 when the GPU disagrees; 0 without a WebGPU adapter
 // (nothing could be checked).
 import { encodePNG16 } from "../src/exporters";
 import {
@@ -17,6 +17,8 @@ import {
   forestTree,
   type ForestTree,
   crownOf,
+  forestKindTable,
+  forestSeason,
   packCell,
   trunkOf,
 } from "../src/system/forest";
@@ -30,6 +32,7 @@ const arg = (k: string, d: string) => {
 };
 const RAYS = Number(arg("rays", "6000"));
 const PNG = arg("png", "");
+const DATE = arg("date", "2026-07-15");
 
 // ---- a synthetic forest: 300 m round the origin, rolling ground, every kind
 const ground = (x: number, y: number) => 400 + 15 * Math.sin(x / 40) * Math.cos(y / 55);
@@ -51,6 +54,10 @@ for (let j = 0; j < ff.h; j++)
     trees.push(forestTree(ff, cells[j * ff.w + i]!, i, j)!);
   }
 const buffer = packScenery([], new Uint32Array(16), [], { frame: ff, cells, trees: trees.length });
+// (the rays on the summer's table — winter's twigs are a chance pattern, no exact twin; the pictures at the
+// date's season, its kinds' table written as the app writes it)
+const seasonTable = forestKindTable(forestSeason(Date.parse(DATE), 46));
+const seasonAt = (new Float32Array(buffer)[8]! + 7) * 16;
 
 // ---- the CPU's exact shapes (forest.wgsl's, in double precision)
 type Hit = { t: number; kind: number; part: number };
@@ -172,16 +179,20 @@ fn shade(c: vec3f) -> vec3f { let x = c * 1.4; return pow(x / (1.0 + x), vec3f(1
   var c = sky;
   if (h.kind > 0u || tg < 1e8) {
     var n = vec3f(0.0, 0.0, 1.0); var alb = vec3f(0.12, 0.1, 0.07); var p = o + d * tg;
+    var through = vec3f(0.0);
     if (h.kind > 0u) {
       p = o + d * h.t; n = h.n;
-      alb = select(forestLeaf(h.kind) * (0.82 + 0.36 * h.seed) * h.ao, forestBark(h.kind), h.part == 1u);
+      let look = forestLook(h, n, p, vec4f(0.0));
+      alb = look.albedo; through = look.through;
     } else {
       let e = 0.5; n = normalize(vec3f(groundAt(p.xy - vec2f(e, 0.0)) - groundAt(p.xy + vec2f(e, 0.0)), groundAt(p.xy - vec2f(0.0, e)) - groundAt(p.xy + vec2f(0.0, e)), 2.0 * e));
     }
     let lit = select(1.0, 0.0, forestQuery(p + n * 0.35 + L * 0.15, L, 500.0, true, select(0.0, 60.0, length(p - o) < 180.0)).kind > 0u);
     let sun = vec3f(1.0, 0.95, 0.85) * 3.0 * max(dot(n, L), 0.0) * lit;
-    let back = select(0.0, 0.35 * max(dot(-n, L), 0.0) * lit, h.kind > 0u && h.part == 0u);
-    c = alb * (sun + vec3f(0.45, 0.55, 0.75) * (0.55 + 0.45 * n.z) + vec3f(0.6, 0.8, 0.3) * back);
+    // (the tracer's: light through the crown's thin edge, brightest looking into the Sun)
+    let rim = 1.0 - abs(dot(n, d));
+    let back = vec3f(1.0, 0.95, 0.85) * 3.0 * max(-dot(n, L), 0.0) * rim * (0.3 + 0.7 * pow(max(dot(d, L), 0.0), 4.0));
+    c = alb * (sun + vec3f(0.45, 0.55, 0.75) * (0.55 + 0.45 * n.z)) + through * back;
     c = mix(c, sky, 1.0 - exp(-length(p - o) / 1800.0));
   }
   image[id.y * w + id.x] = vec4f(shade(c), 1.0);
@@ -226,6 +237,7 @@ try {
       const out = { adapter: adapter.info?.description || adapter.info?.vendor || "an adapter", hits: Array.from(new Float32Array(await read(hits, ${RAYS * 32}))), hashes: Array.from(new Uint32Array(await read(hashes, ${hashes.length * 4}))), images: [] };
       const views = ${JSON.stringify(views)};
       if (views.length) {
+        device.queue.writeBuffer(scene, ${seasonAt}, new Float32Array(${JSON.stringify(Array.from(seasonTable))}));
         const render = pipe("render");
         const bind = device.createBindGroup({ layout: render.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: scene } }, { binding: 4, resource: { buffer: view } }, { binding: 5, resource: { buffer: image } }] });
         for (const v of views) {
@@ -293,7 +305,7 @@ console.log(`rays: ${RAYS - bad}/${RAYS} agree (${hitsN} hit a tree; worst dista
 console.log(`carved crowns: ${carvedHits} rays meet a tree, ${carvedBad} outside their bounds`);
 for (const s of shown) console.log(`  ✗ ${s}`);
 for (let k = 0; k < (out.images?.length ?? 0); k++) {
-  const file = PNG.replace(/\.png$/, "") + (k ? `-air` : `-ground`) + ".png";
+  const file = `${PNG.replace(/\.png$/, "")}-${k ? "air" : "ground"}.png`;
   await Bun.write(file, await encodePNG16(new Float32Array(out.images![k]!), W, H));
   console.log(`picture: ${file}`);
 }

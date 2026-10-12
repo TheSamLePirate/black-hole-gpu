@@ -65,6 +65,9 @@ Légende : ✅ fait et vérifié ici (unitaires, typecheck, WGSL, validation Web
   près (le ciel passe au travers, ombre tachetée), formes pleines au loin ; ombres sur le sol, l’herbe et
   l’astronaute ; collisions des troncs et des arbustes. `bun run check:forest` : GPU = CPU (hachage bit à
   bit, rayons), image d’une forêt synthétique.
+- **Saisons et translucidité (A2, A5)** : printemps, automne (couleurs arbre par arbre), hiver (feuillus nus en
+  branches, neige sur les résineux en altitude), aucune saison sous les tropiques ; lumière à travers les
+  feuilles en contre-jour. Le vent sur les couronnes est reporté (traînées avec la reprojection temporelle).
 
 ## Tests à faire sur les Macs
 
@@ -119,6 +122,8 @@ noter `withTrees` contre `without` (le coût du décor, arbres et ombres compris
 8. **Forêts** : marcher dans une forêt des Vosges au matin (ombre tachetée qui bouge avec le soleil, troncs
    qui arrêtent), regarder un épicéa contre le ciel (étages de branches, pointe nette), survoler à 300 m puis
    1 km (pas de « pop » des couronnes vers 220 m, pas d’arbre sur les routes ni dans les rivières), recentrer
-   la scène en avançant de 600 m : aucun arbre ne saute.
+   la scène en avançant de 600 m : aucun arbre ne saute. Changer la date (`__bh.game.setDate`) : 15 octobre
+   (couleurs), 15 janvier (branches nues, neige au-dessus de ~600 m dans les Vosges), 15 mai (vert tendre) ;
+   regarder une lisière face au soleil bas : le bord des couronnes s’éclaire.
 9. **Réseau** : couper le Wi-Fi 2 s en survolant le Bourget à basse altitude puis le rétablir : les pages
    satellite manquantes reviennent seules (≤ 1 min).
