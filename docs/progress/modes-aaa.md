@@ -11,7 +11,7 @@ The plan, the request and the user's choices: [PLAN-MODES-AAA.md](../PLAN-MODES-
 | M5 On-foot HUD | done |
 | M6 The Atlas: maps, POIs, placement, geocoding | done |
 | M7 Tripod and sky events from the view | done |
-| M8 Photo mode: renders and animations | to do |
+| M8 Photo mode: renders and animations | done |
 | M9 Coherence | to do |
 
 ## M1. The four modes, and the top bar always present
@@ -485,4 +485,69 @@ bun run e2e --remote modes a11y s5 photo-fps place eclipses metar music-panel bh
    - "/skyevents".
 8. **The pause menu:** "The sky from here".
 9. **Phone width:** one column of cards; the live card fits.
+
+## M8. The photo mode: renders and films
+
+### What changed
+
+- **The render dialog** is built in TypeScript in the interface's language (`renderdialog.ts`, `mountPanel`). The
+  static HTML is gone from `index.html`; the ids are kept.
+- **A video is a job:** `startVideo(job)`, `videoState()`, `stopVideo()`, `shots()`. The dialog, the photo bar and
+  TARS start it the same way. Its shots:
+  - live, the recorded take, the auto-orbit, the dive, the journey;
+  - **the director's cameras** on a ship flown (the Director view put on for the video, then put back).
+- **The draft** (`photo/videoplan.ts`): the same shot at 640×360 at most (a portrait at 360×640), 4 samples, the
+  fixed-step integrator, no motion blur.
+  - It opens by itself in the **preview** (`ui/videopreview.ts`): played in a loop, its facts shown.
+  - Its buttons: "Save the draft" and "Render the final" (the same shot, length and rate, at the dialog's size and
+    quality).
+  - A final is saved, then shown in the same preview.
+- **The formats:** MP4 (H.264) or WebM (VP9, else VP8), chosen in the dialog.
+  - The other one is used when the browser cannot encode the first.
+  - The WebM writer has no dependency (`WebmWriter` in `video.ts`: seek head, track, a cluster per key frame, the
+    cues to seek by).
+- **The photo bar** has a video row:
+  - the shot (those that cannot film now are greyed), the length, the frame rate, Draft and Render video;
+  - while it renders: its gauge, the frame, the time left and Stop.
+- **The multiple exposures animated:** the lived capture (M7) also offers its time-lapse, the stack growing
+  exposure by exposure (about four seconds, the last image held a second and a half).
+- **TARS:** the `video` tool (start, status, stop, shots), `/draft` and `/video`.
+- **French** for every text of the dialog, the bar and the preview.
+- **Docs:** `docs/systemes/08-interface.md` § 6.3 sexies; the TARS tools table; the e2e catalogue.
+
+### Tests
+
+- **Unit:**
+  - `tests/webm.test.ts`: the EBML sizes; a file read back (segment, seek head positions, a cluster per key frame,
+    the cues);
+  - `tests/videoplan.test.ts`: the draft's size, the frames, the names;
+  - `tests/livecapture.test.ts`: the time-lapse's rate, the even crop.
+- **e2e (Macs):** `tests/e2e/photo-video.e2e.test.ts`.
+- **Checked here** in headless Chromium, which has no H.264 encoder:
+  - MP4 asked falls back to WebM VP9;
+  - the file reads back at 640×360 for 2.0 s and seeks to 1.2 s;
+  - the photo bar's video row is drawn while rendering, and the preview plays the draft.
+
+### Manual tests to do (on the Mac)
+
+1. **F4, the video row:**
+   - an orbit, 10 s, 24 fps, Draft: the gauge, the frame and the time left move;
+   - the preview opens and loops; Save the draft;
+   - Render the final: the dialog's size, the progress, then saved and shown.
+2. **Each shot as a draft:**
+   - live (in flight, the autopilot on);
+   - dive; journey (near Gargantua);
+   - a take: record 10 s with ●, then its draft;
+   - director: in flight with the ship flown; on foot it is greyed.
+3. **Formats:**
+   - WebM chosen: the file plays in Chrome and in VLC;
+   - MP4 in Safari and QuickTime.
+4. **Stop** a draft halfway: nothing is saved, the scene comes back where it was.
+5. **The render dialog** (Render…) in French: every label, tooltip and option.
+6. **A lived capture** (⇧F8 → Live it, trails): at the end, Time-lapse (MP4/WebM) saves the growing stack.
+7. **TARS:**
+   - "fais-moi un brouillon d'une orbite de 8 secondes";
+   - "/video dive";
+   - "où en est la vidéo ?".
+8. **Narrow window and tablet:** the bar's rows wrap and stay usable.
 

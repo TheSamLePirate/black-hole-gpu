@@ -285,6 +285,21 @@ body.photo:has(.ph-bar.ph-hidden) :is(#topbar, .tb-handle) { display: none !impo
 .ph-ctl input[type="range"] { width: 110px; accent-color: var(--k-on); }
 .ph-val { min-width: 58px; font: var(--k-font-value); color: #eef5ff; }
 .ph-keys { display: flex; align-items: center; gap: 4px; font: 500 11px var(--mono); color: var(--k-dim); }
+/* (the film row: the shot, its length and rate, a draft or the final, its progress) */
+.ph-video { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 12px; padding-top: 8px; border-top: 1px solid var(--k-line); }
+.ph-sel, .ph-num {
+  all: unset; box-sizing: border-box; padding: 4px 8px; border-radius: var(--k-r); border: 1px solid var(--k-ctl-edge);
+  background: rgba(0, 0, 0, 0.35); color: var(--k-text); font: var(--k-font-value); cursor: pointer;
+}
+.ph-sel:focus-visible, .ph-num:focus-visible { border-color: var(--k-on-edge); }
+.ph-sel:disabled, .ph-num:disabled { opacity: 0.5; cursor: default; }
+.ph-sel option { background: #151823; }
+.ph-num { width: 64px; cursor: text; }
+.ph-meter { width: 120px; height: 4px; border-radius: 2px; background: rgba(160, 210, 255, 0.14); overflow: hidden; }
+.ph-meter i { display: block; height: 100%; width: 0; background: var(--k-on); transition: width 0.25s; }
+.ph-meter[hidden], .ph-video .k-btn[hidden] { display: none; }
+.ph-prog { font: 500 11.5px var(--mono); color: var(--k-text); }
+.ph-prog:empty { display: none; }
 
 /* ---------------------------------------------------------------- the controls screen (ui/controls-screen.ts) */
 .cs { width: min(980px, calc(100vw - 32px)); max-height: calc(100vh - 40px); box-sizing: border-box; padding: 18px 20px 16px; display: flex; flex-direction: column; gap: 12px; }

@@ -118,6 +118,7 @@ flowchart LR
 | Atlas | `atlas` (chercher une destination, une piste, un point de vue, une adresse sur Terre ou des coordonnées ; y aller : en orbite, posé, à pied, caméra libre, trépied ; ouvrir la page), `/atlas`, `/visit` |
 | Ciel d’ici | `sky_events` (lister les événements depuis là où l’on se tient sur Terre — filés, analemme, Lune, passage et transits de l’ISS, éclipses, sélénélion, transits de Mercure et Vénus — avec date, visée et objectif ; en prendre un : `go` y aller, `live` le vivre en poses empilées, `render` le rendu pleine qualité ; ouvrir la page), `/skyevents` |
 | Capture | `capture` (la vue de l'instant rendue hors ligne, convergée, enregistrée seule en PNG, PNG 16 bits ou EXR ; son avancement ; arrêt), `/capture` |
+| Vidéo | `video` (filmer la vue : `live`, `take`, `orbit`, `dive`, `journey`, `director` ; brouillon rapide 640×360 lu aussitôt, ou version finale à la taille et la qualité du rendu ; durée, cadence, MP4 ou WebM ; avancement ; arrêt ; les plans possibles maintenant), `/draft`, `/video` |
 | Lieux, parties | `place_ship`, `saves`, `start_scene` |
 | Tout le reste | `set_settings` (tout réglage, vérifié au schéma), `press_key` (toute touche) |
 | Attendre, parler | `wait`, `say` |

@@ -175,4 +175,66 @@ export default {
   "{0} exposures stacked": "{0} poses empilées",
   "Save the stack (PNG)": "Enregistrer l'empilement (PNG)",
   "Full-quality render": "Rendu pleine qualité",
+  // the photo mode's renders and films (M8)
+  "The director's cameras (a ship flown)": "Les caméras du réalisateur (un vaisseau piloté)",
+  "Scene frozen in time · any resolution · rendered progressively over many frames":
+    "Scène figée dans le temps · toute résolution · rendue progressivement sur de nombreuses images",
+  "Hide (the render keeps running)": "Masquer (le rendu continue)",
+  Preset: "Préréglage",
+  "Sets resolution, sampling and integrator for the purpose": "Règle la résolution, l'échantillonnage et l'intégrateur selon l'usage",
+  Resolution: "Résolution",
+  "Geodesic integrator": "Intégrateur des géodésiques",
+  "Adaptive sampling (noise threshold)": "Échantillonnage adaptatif (seuil de bruit)",
+  "Stop sampling a pixel once the relative standard error of its mean falls below this value":
+    "Cesse d'échantillonner un pixel dès que l'erreur relative de sa moyenne passe sous cette valeur",
+  "Motion-blur shutter [M]": "Obturateur du flou de mouvement [M]",
+  "Exposure time in units of M = GM/c³; samples are spread over it (motion blur of the flow)":
+    "Temps de pose en unités de M = GM/c³ ; les échantillons s'y répartissent (flou de mouvement du flot)",
+  "GPU budget": "Budget GPU",
+  Video: "Vidéo",
+  Shot: "Plan",
+  "What the video films: the scene as it goes on from now (the camera's mode, the ship and its autopilot, the mission — as live), a take recorded live (● on the time bar), a camera move, or the director's cameras":
+    "Ce que filme la vidéo : la scène qui continue à partir de maintenant (le mode de la caméra, le vaisseau et son pilote automatique, la mission — comme en direct), une prise enregistrée en direct (● sur la barre du temps), un mouvement de caméra, ou les caméras du réalisateur",
+  "Duration [s]": "Durée [s]",
+  "Frame rate": "Cadence",
+  "The scene's time during the video: the live warp, another one, or frozen (the camera moves in a still instant)":
+    "Le temps de la scène pendant la vidéo : l'accélération du direct, une autre, ou figé (la caméra bouge dans un instant arrêté)",
+  Shutter: "Obturateur",
+  "Motion blur of the flow: exposure as a fraction of the frame interval":
+    "Flou de mouvement du flot : la pose, en fraction de l'intervalle entre images",
+  Format: "Format",
+  "MP4 (H.264) plays everywhere; WebM (VP9) is open — the other one when this browser cannot encode it":
+    "Le MP4 (H.264) se lit partout ; le WebM (VP9) est ouvert — l'autre quand ce navigateur ne sait pas l'encoder",
+  "After the video, the scene returns to where it was (else it goes on from the video's end)":
+    "Après la vidéo, la scène revient où elle était (sinon elle reprend à la fin de la vidéo)",
+  "Return to the start afterwards": "Revenir au début ensuite",
+  "640×360, 4 samples: the shot and its timing in seconds, before the final render":
+    "640×360, 4 échantillons : le plan et son rythme en quelques secondes, avant le rendu final",
+  Draft: "Brouillon",
+  "Render video": "Rendu vidéo",
+  Export: "Exporter",
+  "8-bit sRGB, tone-mapped": "sRGB 8 bits, tonalités ajustées",
+  "16 bits per channel sRGB, tone-mapped, no dithering": "sRGB 16 bits par canal, tonalités ajustées, sans tramage",
+  "PNG 16-bit": "PNG 16 bits",
+  "Linear scene radiance (half float), no bloom / tone mapping":
+    "Luminance linéaire de la scène (demi-flottant), sans éclat ni ajustement des tonalités",
+  "EXR (HDR)": "EXR (HDR)",
+  "MP4 · H.264": "MP4 · H.264",
+  "WebM · VP9": "WebM · VP9",
+  "The director's cameras film the ship flown: chase, orbit, pass, tracking — the cuts its own.":
+    "Les caméras du réalisateur filment le vaisseau piloté : poursuite, orbite, passage, travelling — les coupes sont les siennes.",
+  "No take recorded yet: ● on the time bar": "Aucune prise enregistrée : ● sur la barre du temps",
+  "The director's cameras film a ship flown: fly one first (F1)":
+    "Les caméras du réalisateur filment un vaisseau piloté : pilotez-en un d'abord (F1)",
+  "this browser cannot encode a video at {0}": "ce navigateur ne sait pas encoder de vidéo en {0}",
+  draft: "brouillon",
+  "Video saved · {0}": "Vidéo enregistrée · {0}",
+  "frame {0} / {1}": "image {0} / {1}",
+  "Time-lapse ({0})": "Time-lapse ({0})",
+  "Save the draft": "Enregistrer le brouillon",
+  "Save again": "Enregistrer à nouveau",
+  "Render the final": "Rendre la version finale",
+  "Draft video": "Vidéo brouillon",
+  "The final: the same shot at {0}×{1}, with the render dialog's samples, integrator and motion blur":
+    "La version finale : le même plan en {0}×{1}, avec les échantillons, l'intégrateur et le flou de mouvement du rendu",
 } satisfies Record<string, string>;

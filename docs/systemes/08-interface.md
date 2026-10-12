@@ -437,7 +437,7 @@ de priorité : le mode de distorsion d’une manœuvre (`auto`, `held`, `manual`
 puis la valeur en M/s. Le bouton AUTO (`settings.autoWarp`) n’apparaît que si un plan existe. Pendant
 l’exécution d’une manœuvre en distorsion automatique, `autoWarpHeld()` refuse toute distorsion
 manuelle. ● lance ou arrête une **prise** (`take.ts`) : la session en direct est enregistrée, plafonnée
-à 10 min, puis peut être rendue en vidéo depuis Render › Video.
+à 10 min, puis peut être rendue en vidéo depuis Rendu › Vidéo ou la barre photo (§ 6.3 sexies).
 
 **Panneau caméra** (`camerapanel.ts`, `#cam-pop`). Il réunit au même endroit :
 
@@ -642,6 +642,30 @@ Une page plein écran (F8, la barre du haut, le menu pause, TARS) :
     l’empilement en PNG ou le rendu pleine qualité. L’ISS, que la scène ne dessine pas vue du sol, y est tracée
     (`drawIssTrail` : sa traînée lumineuse, ou sa silhouette devant un disque) ;
   - *Rendu* : la boîte des expositions multiples remplie (filé, analemme, Lune, ISS, éclipse ou transit).
+
+#### 6.3 sexies Le mode photo : rendus et films (`renderdialog.ts`, `ui/photo.ts`, `ui/videopreview.ts`, `video.ts`, PLAN-MODES-AAA M8)
+
+- **Le dialogue de rendu** est construit en TypeScript dans la langue de l’interface (`mountPanel`, ses ids
+  inchangés — `r-start`, `r-bar`, `v-source`… —, son style dans `style.css`) ; la page n’a plus de HTML statique.
+- **Une vidéo est une tâche** (`startVideo(job)` → pourquoi pas, ou null ; `videoState()`, `stopVideo()`,
+  `shots()`), demandée par le dialogue, la barre photo ou TARS. Chaque image est un rendu hors ligne de la scène à
+  cet instant ; les plans :
+  - `live` : la scène continue comme en direct (le vaisseau et son autopilote, la mission, le temps) ;
+  - `take` : la prise enregistrée (● sur la barre du temps) ;
+  - `orbit`, `dive`, `journey` : l’orbite automatique, la plongée, le voyage par le trou de ver ;
+  - `director` : les caméras du réalisateur sur le vaisseau piloté (la vue Director mise, puis rendue).
+- **Le brouillon** (`photo/videoplan.ts`) : le même plan dans 640×360 au plus (un portrait en 360×640), 4
+  échantillons, l’intégrateur RK4 à pas fixe, sans flou — le cadrage et le rythme jugés en quelques secondes. Il
+  s’ouvre de lui-même dans l’aperçu (`VideoPreview` : lecture en boucle, ses caractéristiques) avec « Enregistrer le
+  brouillon » et « Rendre la version finale » (le même plan, sa durée et sa cadence, à la taille et la qualité du
+  dialogue). Une version finale est enregistrée, puis montrée.
+- **Les formats** : MP4 (H.264) ou WebM (VP9, sinon VP8), au choix ; l’autre quand le navigateur ne sait pas
+  encoder le premier. Le WebM est écrit sans dépendance (`WebmWriter` : en-tête EBML, table de recherche, piste,
+  une grappe par image clé, index pour la navigation).
+- **La barre photo** gagne une rangée Vidéo : le plan (ceux qui ne peuvent filmer grisés), la durée, la cadence,
+  Brouillon et Rendu vidéo ; pendant le rendu, sa jauge, l’image en cours et le temps restant, Arrêter.
+- **Les expositions multiples animées** : la capture vécue (§ 6.3 quinquies) offre aussi son time-lapse — la
+  surimpression qui se construit pose après pose, environ quatre secondes, la dernière image tenue.
 
 #### 6.4 Les instruments
 

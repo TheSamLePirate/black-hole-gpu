@@ -110,6 +110,8 @@ import { SettingsPanel } from "./ui/panel";
 import { type ChoiceDef, SCHEMA, SCHEMA_BY_KEY } from "./ui/schema";
 import { loadFromUrl } from "./urlstate";
 import { setupRenderDialog } from "./renderdialog";
+import { VideoPreview } from "./ui/videopreview";
+import { SHOTS as SHOT_IDS, type Shot } from "./photo/videoplan";
 import { fmtDate, GameTools } from "./game/tools";
 import { rangerStatus, type RangerStatus } from "./game/status";
 import { GameToolsWindow, rangerView } from "./ui/gametools";
@@ -2958,6 +2960,13 @@ async function main() {
       png: () => void savePNG(),
       render: () => renderDialog.toggle(),
       multi: () => void mxDialog.open(),
+      video: {
+        shots: () => renderDialog.shots(),
+        start: (o) => renderDialog.startVideo(o),
+        stop: () => renderDialog.stopVideo(),
+        state: () => renderDialog.videoState(),
+      },
+      toast: (x) => panel.toast(x),
     })).open();
 
   // ---- the four modes (game/modes.ts, PLAN-MODES-AAA M1): the ship, on foot, the free camera, photo — read from
@@ -3270,6 +3279,31 @@ async function main() {
       touch();
       touchDisplay();
     },
+    // (the director's cameras: the ship flown, its Director view put on — the scene's snapshot puts the view back)
+    director: {
+      available: () => settings.ship && camera.piloting && !camera.spectating,
+      set: () => {
+        const was = settings.shipMount as Mount;
+        setMount("director");
+        return () => {
+          if (settings.shipMount === "director" && was !== "director") setMount(was);
+        };
+      },
+    },
+    // (a draft: seen at once; a final: saved, then seen)
+    onVideo: (v) => {
+      if (!v.draft) {
+        download(v.blob, v.name);
+        panel.toast(tf("Video saved · {0}", v.name));
+      }
+      videoPreview.show(v);
+    },
+  });
+  const videoPreview = new VideoPreview({
+    download: (b, name) => download(b, name),
+    final: (v) => renderDialog.startVideo({ ...v.job, draft: false }),
+    shotName: (v) => renderDialog.shots().find((x) => x.id === v.shot)?.label ?? v.shot,
+    finalSize: () => renderDialog.size(),
   });
 
   // -------------------------------------------------------------------- saved state
@@ -4310,6 +4344,15 @@ async function main() {
     now: () => performance.now(),
     dayClouds: () => renderer.dayCloudsOf,
     mode: { get: () => gameMode(), set: (m) => setGameMode(m), hideBar: (on) => topBar.hide(on) },
+    video: {
+      start: (o) => {
+        if (!(SHOT_IDS as readonly string[]).includes(o.shot)) return `no shot "${o.shot}" — ${SHOT_IDS.join(", ")}`;
+        return renderDialog.startVideo({ ...o, shot: o.shot as Shot });
+      },
+      state: () => renderDialog.videoState(),
+      stop: () => renderDialog.stopVideo(),
+      shots: () => renderDialog.shots(),
+    },
     skyEvents: {
       list: async () =>
         (await skyEvents.events())?.map((e) => ({

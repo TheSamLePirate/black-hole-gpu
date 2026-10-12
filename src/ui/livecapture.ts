@@ -1,11 +1,13 @@
 // Living a capture (PLAN-MODES-AAA M7): a sky event's exposures taken one after the other in the game itself — the
 // scene put at each exposure's time, the view as it is, the image taken and stacked (the brightest of each pixel:
 // a multiple exposure's lighten) — the stack growing on screen as the event unfolds, its progress and the time left.
-// Stopped at any time; at the end, the stack saved as it is, or the series rendered at full quality (the multiple
-// exposure's dialog). The game's time held during it, given back after.
+// Stopped at any time; at the end, the stack saved as it is, its growth as a time-lapse video (PLAN-MODES-AAA M8:
+// the multiple exposure's animation), or the series rendered at full quality (the multiple exposure's dialog). The
+// game's time held during it, given back after.
 
 import "./livecapture.css";
 import { t, tf } from "../i18n";
+import { VIDEO_EXT, VideoWriter } from "../video";
 import { button, el, h } from "./kit";
 
 export interface LiveHost {
@@ -40,6 +42,22 @@ export function lighten(stack: Uint8ClampedArray, frame: Uint8Array | Uint8Clamp
     if (frame[i + 2]! > stack[i + 2]!) stack[i + 2] = frame[i + 2]!;
     stack[i + 3] = 255;
   }
+}
+
+/** The time-lapse's rate for `n` exposures: about four seconds of growth, 4 to 24 frames a second. */
+export function lapseFps(n: number): number {
+  return Math.min(24, Math.max(4, Math.round(n / 4)));
+}
+
+/** An image cropped to even sides (the encoders' need): itself when they already are. */
+export function evenCrop(data: Uint8Array | Uint8ClampedArray, w: number, h: number): { data: Uint8Array; w: number; h: number } {
+  const ew = w & ~1,
+    eh = h & ~1;
+  const bytes = new Uint8Array(data.buffer, data.byteOffset, data.length);
+  if (ew === w && eh === h) return { data: bytes, w, h };
+  const out = new Uint8Array(ew * eh * 4);
+  for (let y = 0; y < eh; y++) out.set(bytes.subarray(y * w * 4, y * w * 4 + ew * 4), y * ew * 4);
+  return { data: out, w: ew, h: eh };
 }
 
 /** The time left [s], from the exposures done and the time they took so far. */
@@ -85,6 +103,19 @@ export class LiveCapture {
     let stack: ImageData | null = null;
     const ctx = canvas.getContext("2d")!;
     let done = 0;
+    // (the time-lapse: the stack after each exposure, a frame — when this browser encodes video)
+    let lapse: VideoWriter | null = null;
+    const fps = lapseFps(o.times.length);
+    const addLapse = async (img: ImageData, times = 1) => {
+      if (!lapse) return;
+      const c = evenCrop(img.data, img.width, img.height);
+      try {
+        for (let k = 0; k < times; k++) await lapse.addFrame(c.data, c.w, c.h);
+      } catch {
+        lapse.close();
+        lapse = null;
+      }
+    };
     try {
       for (const [i, ms] of o.times.entries()) {
         if (this.stop) break;
@@ -99,6 +130,11 @@ export class LiveCapture {
         }
         lighten(stack.data, px.data);
         ctx.putImageData(stack, 0, 0);
+        if (i === 0) {
+          const cfg = await VideoWriter.supported(stack.width & ~1, stack.height & ~1, fps).catch(() => null);
+          lapse = cfg ? new VideoWriter(cfg, fps) : null;
+        }
+        await addLapse(stack);
         done = i + 1;
         bar.style.width = `${((done / o.times.length) * 100).toFixed(1)}%`;
         line.textContent = tf(
@@ -119,6 +155,13 @@ export class LiveCapture {
     root.querySelector(".lc-rec")!.textContent = this.stop ? t("STOPPED") : t("DONE");
     left.textContent = tf("{0} exposures stacked", done);
     acts.replaceChildren();
+    // (the time-lapse closed on the whole stack held a second and a half)
+    let film: Blob | null = null;
+    if (lapse && stack && done > 1) {
+      await addLapse(stack, Math.round(1.5 * fps));
+      film = lapse ? await lapse.finish().catch(() => null) : null;
+    } else lapse?.close();
+    const ext = lapse ? VIDEO_EXT[lapse.format] : "mp4";
     if (stack && done)
       acts.append(
         button({
@@ -126,6 +169,14 @@ export class LiveCapture {
           kind: "primary",
           testid: "live-save",
           onClick: () => canvas.toBlob((b) => b && this.d.download(b, `${o.stem}-live.png`), "image/png"),
+        }),
+      );
+    if (film)
+      acts.append(
+        button({
+          label: tf("Time-lapse ({0})", ext.toUpperCase()),
+          testid: "live-lapse",
+          onClick: () => this.d.download(film, `${o.stem}-timelapse.${ext}`),
         }),
       );
     if (o.render)

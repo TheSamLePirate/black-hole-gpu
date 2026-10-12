@@ -164,6 +164,22 @@ export interface GameHost {
     take(id: string, way: "go" | "live" | "render"): string | null;
     open(): string | null;
   };
+  /** a video (renderdialog.ts, PLAN-MODES-AAA M8): a shot filmed — a draft to test it, or the final —, its state, stopped */
+  video?: {
+    start(o: { shot: string; seconds?: number; fps?: number; draft?: boolean; format?: "mp4" | "webm" }): string | null;
+    state(): {
+      shot: string;
+      draft: boolean;
+      frame: number;
+      frames: number;
+      etaS: number;
+      width: number;
+      height: number;
+      format: string | null;
+    } | null;
+    stop(): void;
+    shots(): { id: string; label: string; available: boolean }[];
+  };
   /** the offline capture (renderdialog.ts): the view now rendered converged, saved by itself; its state; stopped */
   capture?: {
     start(o: { preset?: string; width?: number; height?: number; spp?: number; save?: "png" | "png16" | "exr" | null }): string | null;
@@ -1434,6 +1450,38 @@ export function gameTools(h: GameHost): Tool[] {
         if (!a.id) return { ok: false, error: "take needs an id from the list" };
         const error = S.take(String(a.id), (a.way as "go" | "live" | "render" | undefined) ?? "go");
         return { ok: !error, error };
+      }),
+    },
+    {
+      name: "video",
+      description:
+        "A video of the view, in every mode — each frame an offline render. shot: live (the scene goes on from now as it would: the ship and its autopilot, the mission, the time), take (the take recorded live with ● on the time bar), orbit (the auto-orbit around the target), dive (to the horizon), journey (through the wormhole), director (the director's cameras on the ship flown: chase, orbit, pass, tracking). draft: true for a quick test — 640×360, 4 samples, seconds to minutes — played at once with a button for the final; false for the final at the render dialog's size and quality (minutes to hours: say so). seconds (1–600), fps (24, 30, 60), format (mp4, else webm). start, status (frame, frames, time left), stop, shots (which can film now). The pilot sees it when it is done (a draft plays by itself; a final is saved).",
+      params: {
+        action: { type: "string", enum: ["start", "status", "stop", "shots"] },
+        shot: { type: "string", enum: ["live", "take", "orbit", "dive", "journey", "director"] },
+        seconds: { type: "number", minimum: 1, maximum: 600 },
+        fps: { type: "number", minimum: 24, maximum: 60, integer: true, description: "24, 30 or 60" },
+        draft: { type: "boolean" },
+        format: { type: "string", enum: ["mp4", "webm"] },
+      },
+      required: ["action"],
+      run: act((a) => {
+        const V = h.video;
+        if (!V) return { ok: false, error: "no video here" };
+        if (a.action === "shots") return { ok: true, shots: V.shots() };
+        if (a.action === "status") return { ok: true, video: V.state() };
+        if (a.action === "stop") {
+          V.stop();
+          return { ok: true };
+        }
+        const error = V.start({
+          shot: String(a.shot ?? "orbit"),
+          seconds: a.seconds as number | undefined,
+          fps: a.fps as number | undefined,
+          draft: a.draft === undefined ? true : !!a.draft,
+          format: a.format as "mp4" | "webm" | undefined,
+        });
+        return { ok: !error, error, video: V.state() };
       }),
     },
     {

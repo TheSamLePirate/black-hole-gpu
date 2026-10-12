@@ -63,62 +63,6 @@
       <button id="btn-help" data-tip="Keyboard & mouse" data-key="?"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M9.6 9.3a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2 1-1.2 1.9v.4" /><circle cx="12" cy="17.2" r="0.9" class="fill" /></svg><span>Help</span></button>
     </nav>
 
-    <section id="render" class="glass" hidden>
-      <header>
-        <div>
-          <h2>Offline render</h2>
-          <p>Scene frozen in time · any resolution · rendered progressively over many frames</p>
-        </div>
-        <button id="render-close" class="icon" title="Hide (the render keeps running)">✕</button>
-      </header>
-      <div class="form">
-        <label title="Sets resolution, sampling and integrator for the purpose">Preset<select id="r-preset"></select></label>
-        <label>Resolution<select id="r-res"></select></label>
-        <div class="pair">
-          <label>Width<input id="r-w" type="number" min="16" step="1" /></label>
-          <label>Height<input id="r-h" type="number" min="16" step="1" /></label>
-        </div>
-        <label>Samples / pixel<select id="r-spp"></select></label>
-        <label>Geodesic integrator<select id="r-int"></select></label>
-        <label title="Stop sampling a pixel once the relative standard error of its mean falls below this value">Adaptive sampling (noise threshold)<select id="r-noise"></select></label>
-        <label title="Exposure time in units of M = GM/c³; samples are spread over it (motion blur of the flow)">Motion-blur shutter [M]<input id="r-shutter" type="number" min="0" step="0.5" value="0" /></label>
-        <label>GPU budget<select id="r-budget"></select></label>
-      </div>
-      <div class="progress"><div id="r-bar"></div></div>
-      <div id="r-status"></div>
-      <div class="actions">
-        <button id="r-start" class="primary">Start render</button>
-        <button id="r-pause">Pause</button>
-        <button id="r-stop">Close</button>
-      </div>
-      <details id="r-video">
-        <summary>Video</summary>
-        <div class="form">
-          <label title="What the video films: the scene as it goes on from now (the camera's mode, the ship and its autopilot, the mission — as live), a take recorded live (● on the time bar), or a cinematic">Shot<select id="v-source"></select></label>
-          <div class="pair">
-            <label>Duration [s]<input id="v-duration" type="number" min="1" max="600" step="1" value="24" /></label>
-            <label>Frame rate<select id="v-fps"></select></label>
-          </div>
-          <div class="pair">
-            <label title="The scene's time during the video: the live warp, another one, or frozen (the camera moves in a still instant)">Time<select id="v-rate"></select></label>
-            <label title="Motion blur of the flow: exposure as a fraction of the frame interval">Shutter<select id="v-shutter"></select></label>
-          </div>
-          <label class="check" title="After the video, the scene returns to where it was (else it goes on from the video's end)"><input id="v-restore" type="checkbox" checked /> Return to the start afterwards</label>
-          <div id="v-note" class="note"></div>
-        </div>
-        <div class="actions">
-          <button id="v-start" class="primary">Render video (MP4)</button>
-          <button id="v-stop">Stop</button>
-        </div>
-      </details>
-      <div class="actions exports">
-        <span>Export</span>
-        <button id="r-png" title="8-bit sRGB, tone-mapped">PNG</button>
-        <button id="r-png16" title="16 bits per channel sRGB, tone-mapped, no dithering">PNG 16-bit</button>
-        <button id="r-exr" title="Linear scene radiance (half float), no bloom / tone mapping">EXR (HDR)</button>
-      </div>
-    </section>
-
     <div id="tip" role="tooltip" hidden></div>
     <div id="hint" hidden>
       <span><b>Drag</b> to orbit</span><span><b>Wheel</b> to zoom</span><span><b>Click</b> a body to target it</span><span><kbd>?</kbd> all shortcuts</span>

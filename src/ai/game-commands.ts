@@ -101,6 +101,26 @@ export const GAME_COMMANDS: GameCommand[] = [
     },
   },
   {
+    name: "draft",
+    tool: "video",
+    fixed: { action: "start", draft: true },
+    args: [{ param: "shot" }],
+    desc: {
+      fr: "Vidéo brouillon (640×360, rapide) : live, take, orbit, dive, journey, director",
+      en: "A draft video (640×360, quick): live, take, orbit, dive, journey, director",
+    },
+  },
+  {
+    name: "video",
+    tool: "video",
+    fixed: { action: "start", draft: false },
+    args: [{ param: "shot" }],
+    desc: {
+      fr: "Vidéo finale, à la taille et la qualité du rendu : live, take, orbit, dive, journey, director",
+      en: "The final video, at the render's size and quality: live, take, orbit, dive, journey, director",
+    },
+  },
+  {
     name: "capture",
     tool: "capture",
     fixed: { action: "start" },

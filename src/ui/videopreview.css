@@ -1,0 +1,8 @@
+/* A video seen as soon as it is done (videopreview.ts, PLAN-MODES-AAA M8): the player as large as the window
+   allows, its facts under it, its ways. */
+.vp-frame { width: min(1000px, calc(100vw - 24px)); padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 8px; }
+.vp-video { display: block; width: 100%; max-height: calc(100vh - 220px); aspect-ratio: 16 / 9; object-fit: contain; border-radius: 3px; background: #000; }
+.vp-facts { margin: 0; font: 500 12px var(--mono); color: var(--k-text); }
+.vp-why { margin: 0; font: 500 12px/1.4 var(--font, Inter, sans-serif); color: var(--k-dim); }
+.vp-why:empty { display: none; }
+.vp-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
