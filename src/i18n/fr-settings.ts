@@ -852,6 +852,9 @@ export default {
   "Fly the Ranger: the film's journey, missions": "Pilotez le Ranger : le voyage du film, des missions",
   "Our planet from its ground and its orbits: its air, its night, the Sun, the Moon and the stars":
     "Notre planète depuis son sol et ses orbites : son air, sa nuit, le Soleil, la Lune et les étoiles",
+  Landscapes: "Paysages",
+  "The Earth's exceptional places rebuilt from real photographs: the same spot, the same direction, the same hour":
+    "Les lieux d'exception de la Terre recréés d'après de vraies photographies : le même endroit, la même direction, la même heure",
   "Solar system": "Système solaire",
   "Our worlds from their orbits and their grounds: the Moon, the planets, their moons":
     "Nos mondes depuis leurs orbites et leurs sols : la Lune, les planètes, leurs lunes",

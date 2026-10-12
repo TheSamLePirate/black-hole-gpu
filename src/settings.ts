@@ -1,3 +1,4 @@
+import { fovOf35mm, LANDSCAPES, photoUtc, viewHeading } from "./system/landscapes";
 import type { BodyView } from "./system/our-side";
 import type { WeatherPreset } from "./weather";
 import { M_SECONDS } from "./units";
@@ -1151,6 +1152,22 @@ export const presets: Record<string, Preset> = {
     time: (Date.UTC(2026, 7, 12, 7, 30) - Date.UTC(2067, 0, 1)) / 1000 / M_SECONDS,
     pose: { at: [44.233, 4.143], aim: [44.4262, 3.7391] },
   },
+  // ---- the exceptional landscapes (system/landscapes.ts): real photographs rebuilt — the camera where the
+  // photographer stood, the way they looked, at their moment, through their lens
+  ...Object.fromEntries(
+    LANDSCAPES.map((l): [string, Preset] => [
+      l.scene,
+      {
+        ...EARTH_VIEW,
+        ship: false,
+        target: "earth",
+        fov: fovOf35mm(l.photo.focal35),
+        earthClouds: l.clouds ?? 0,
+        time: (photoUtc(l.photo) - Date.UTC(2067, 0, 1)) / 1000 / M_SECONDS,
+        pose: { at: l.at, heading: viewHeading(l), off: [0, l.pitch] },
+      },
+    ]),
+  ),
   // ---- the solar system's worlds (group "solar"): each from its orbit (placed by its phase: the angle from
   // the point under the Sun) or from its ground; their surfaces from a few tens of km (their maps' detail)
   "Moon: Earthrise": {

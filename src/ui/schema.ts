@@ -1,5 +1,6 @@
 import { OUR_TARGETS, type Settings } from "../settings";
 import { SOLAR_BODIES } from "../system/solar";
+import { LANDSCAPES } from "../system/landscapes";
 import { MOUNTS } from "../mounts";
 import { AGENT_MODELS } from "../ai/openrouter";
 import { AURA_VOICES, type AuraVoice } from "../audio/aura-voices";
@@ -3517,10 +3518,15 @@ export const QUALITY_KEYS: (keyof Settings)[] = [
   "noiseThreshold",
 ];
 
-export type SceneGroup = "game" | "earth" | "solar" | "gargantua" | "wormhole" | "hole";
+export type SceneGroup = "game" | "earth" | "landscapes" | "solar" | "gargantua" | "wormhole" | "hole";
 export const SCENE_GROUPS: { id: SceneGroup; label: string; hint: string }[] = [
   { id: "game", label: "Game", hint: "Fly the Ranger: the film's journey, missions" },
   { id: "earth", label: "Earth", hint: "Our planet from its ground and its orbits: its air, its night, the Sun, the Moon and the stars" },
+  {
+    id: "landscapes",
+    label: "Landscapes",
+    hint: "The Earth's exceptional places rebuilt from real photographs: the same spot, the same direction, the same hour",
+  },
   { id: "solar", label: "Solar system", hint: "Our worlds from their orbits and their grounds: the Moon, the planets, their moons" },
   {
     id: "gargantua",
@@ -3669,6 +3675,9 @@ export const PRESET_INFO: Record<string, { title?: string; description: string; 
     icon: "⌂",
     group: "earth",
   },
+  ...Object.fromEntries(
+    LANDSCAPES.map((l) => [l.scene, { title: l.title, description: l.description, icon: l.icon, group: "landscapes" as const }]),
+  ),
   "Moon: Earthrise": {
     title: "Earthrise",
     description: "On the Moon's far edge, the gibbous Earth just over the horizon, the ground's craters and stones lit by a low Sun.",
