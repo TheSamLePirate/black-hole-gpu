@@ -439,6 +439,7 @@ export interface Settings {
   soundAmbience: number; // the cabin (life support, reaction wheels) and the wind
   soundUi: number; // the interface's clicks
   soundHeadphones: boolean; // headphones: the sources placed in 3D (HRTF); speakers: equal-power panning
+  groundAlerts: "full" | "reduced" | "off"; // the ground's warnings low in the air (game/gpws.ts): an airliner's every callout, a fighter's few, the last-moment pull-up alone
   voice: boolean; // the voices spoken (the landing's callouts, mission control, TARS — PLAN-TARS); off: subtitles alone
   soundVoice: number; // their volume, 0…1
   subtitles: boolean; // the line being said shown, its speaker named
@@ -713,6 +714,7 @@ export function defaultSettings(): Settings {
     soundAmbience: 0.5,
     soundUi: 0.35,
     soundHeadphones: false,
+    groundAlerts: "reduced",
     voice: true,
     soundVoice: 0.9,
     subtitles: true,
@@ -1967,6 +1969,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   soundAmbience: "pref",
   soundUi: "pref",
   soundHeadphones: "pref",
+  groundAlerts: "pref",
   voice: "pref",
   soundVoice: "pref",
   subtitles: "pref",

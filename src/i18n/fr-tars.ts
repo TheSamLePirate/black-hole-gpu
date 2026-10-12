@@ -51,6 +51,16 @@ export default {
   "Silence by default; the score comes only at the flight's great moments — the lift-off, the entry's plasma, the final, the wormhole, near Gargantua, on Miller (its tick, the film's motif) —, an organ and pads synthesized live, faded in and out.":
     "Le silence par défaut ; la musique ne vient qu'aux grands moments du vol — le décollage, le plasma de la rentrée, la finale, le trou de ver, près de Gargantua, sur Miller (son tic-tac, le motif du film) —, un orgue et des nappes synthétisés en direct, en fondu.",
   "Voice volume": "Volume des voix",
+  "Ground alerts": "Alertes sol",
+  "The ground's warnings low in the air. The ground ahead is read along the flight path — a hill, a ridge —, not the free fall a wing never follows: flying low on the wings is quiet until the ground really comes.":
+    "Les alertes du sol à basse altitude. Le sol devant est lu le long de la trajectoire — une colline, une crête —, pas la chute libre qu'une aile ne suit jamais : voler bas sur ses ailes reste silencieux jusqu'à ce que le sol arrive vraiment.",
+  Airliner: "Avion de ligne",
+  "Every callout: the radio heights, the sink rate, the ground 14 s ahead, the pull-up 7 s ahead":
+    "Toutes les annonces : les hauteurs radio, le taux de chute, le sol à 14 s, le « pull up » à 7 s",
+  Fighter: "Chasseur",
+  "The ground 7 s ahead, the pull-up 4 s ahead; the heights and the sink rate only set to land (the gear down, the flaps out, on a final)":
+    "Le sol à 7 s, le « pull up » à 4 s ; les hauteurs et le taux de chute seulement en configuration d'atterrissage (train sorti, volets sortis, en finale)",
+  "Only the pull-up, the ground 2.5 s ahead": "Seulement le « pull up », le sol à 2,5 s",
   Subtitles: "Sous-titres",
   "The voices spoken: the landing's callouts (heights, minimums, sink rate), mission control by radio, TARS. The system's voices (the browser's, the computer's), in the interface's language. Off: their subtitles alone.":
     "Les voix parlées : les annonces de l'atterrissage (hauteurs, minimums, taux de chute), le contrôle de mission par radio, TARS. Les voix du système (du navigateur, de l'ordinateur), dans la langue de l'interface. Désactivé : leurs sous-titres seuls.",

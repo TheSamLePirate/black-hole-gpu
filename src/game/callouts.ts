@@ -31,6 +31,9 @@ export interface CalloutInput {
   /** the autopilot flying ("none": the pilot) — the entry's flies its glide past the stall on purpose: the
    *  HUD shows it, the voice does not cry it */
   auto?: string;
+  /** the ground's warnings (game/gpws.ts gpwsOf): the pull-up from the flight path's look-ahead, the sink
+   *  rate and the heights only when its level says (a fighter's: set to land) — absent, the landing's own */
+  gpws?: { pullUp: boolean; sinkRate: boolean; heights: boolean };
 }
 
 /** The radio heights called going down [m]. */
@@ -126,11 +129,11 @@ export class Callouts {
     }
     // the ground seconds away, low: "pull up" (not in the flare: within 30 m it is the landing)
     const tti = i.vz < 0 ? i.agl / -i.vz : Infinity;
-    const pull = i.agl > 30 && i.agl < 500 && (tti < 2.5 || -i.vz > 1.3 * sinkLimit(i.agl));
+    const pull = i.gpws ? i.gpws.pullUp : i.agl > 30 && i.agl < 500 && (tti < 2.5 || -i.vz > 1.3 * sinkLimit(i.agl));
     if (pull && !this.pulling) out.push({ id: "pull-up", text: t("Terrain! Pull up!"), speaker: "callout", priority: 0 });
     this.pulling = pull;
     // the descent past its envelope
-    const sink = !pull && i.vz < -sinkLimit(i.agl);
+    const sink = !pull && (i.gpws?.sinkRate ?? true) && i.vz < -sinkLimit(i.agl);
     if (sink && !this.sinking) out.push({ id: "sink-rate", text: t("Sink rate!"), speaker: "callout", priority: 0 });
     this.sinking = sink;
     // the decision height on a runway's final (the height over the threshold), once going down
@@ -143,6 +146,8 @@ export class Callouts {
     for (const h of HEIGHTS) {
       if (this.armed.has(h) && i.agl <= h && i.vz < -0.3) {
         this.armed.delete(h);
+        // (not called — a low pass, a fighter's level — but crossed: said again only once back above)
+        if (i.gpws && !i.gpws.heights) continue;
         // (only the lowest crossed in one frame: a frame that jumped two heights says the last)
         for (const o of out) if (o.id?.startsWith("h-")) o.text = "";
         out.push({ id: `h-${h}`, text: HEIGHT_TEXT[h]!(), speaker: "callout", priority: 1, ttl: 1500 });

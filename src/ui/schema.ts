@@ -3142,6 +3142,30 @@ export const SCHEMA: ControlDef[] = [
     keywords: "music volume",
   },
   {
+    key: "groundAlerts",
+    type: "choice",
+    section: "game",
+    group: "Sound",
+    label: "Ground alerts",
+    style: "segmented",
+    effect: "none",
+    help: "The ground's warnings low in the air. The ground ahead is read along the flight path — a hill, a ridge —, not the free fall a wing never follows: flying low on the wings is quiet until the ground really comes.",
+    options: [
+      {
+        value: "full",
+        label: "Airliner",
+        hint: "Every callout: the radio heights, the sink rate, the ground 14 s ahead, the pull-up 7 s ahead",
+      },
+      {
+        value: "reduced",
+        label: "Fighter",
+        hint: "The ground 7 s ahead, the pull-up 4 s ahead; the heights and the sink rate only set to land (the gear down, the flaps out, on a final)",
+      },
+      { value: "off", label: "Off", hint: "Only the pull-up, the ground 2.5 s ahead" },
+    ],
+    keywords: "gpws terrain pull up sink rate alarm beep low altitude callouts ground warning",
+  },
+  {
     key: "voice",
     type: "toggle",
     section: "game",

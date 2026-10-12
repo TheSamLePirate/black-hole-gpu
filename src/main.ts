@@ -116,6 +116,7 @@ import { synthesize } from "./audio/formant";
 import { phonemes } from "./audio/g2p";
 import { Subtitles } from "./ui/subtitles";
 import { Callouts } from "./game/callouts";
+import { gpwsOf } from "./game/gpws";
 import { Capcom } from "./game/capcom";
 import { Music } from "./audio/music";
 import { ScoreDirector } from "./audio/score";
@@ -4312,6 +4313,7 @@ async function main() {
           alerts: flightHud.alerts,
           now: performance.now(),
           auto: camera.pilot.auto,
+          gpws: gpwsOf(info, settings.groundAlerts),
         }))
           voice.say(l);
       }

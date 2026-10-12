@@ -168,6 +168,8 @@ export interface FlightInfo {
   /** its frame's figures (landing.ts) */
   surface: ReturnType<CameraController["surfaceInfo"]>;
   air: ReturnType<CameraController["airInfo"]>;
+  /** the straight flight path's seconds to the ground (our worlds, low; Infinity else — game/gpws.ts) */
+  terrainAhead: number;
   entry: ReturnType<CameraController["entryInfo"]>;
   // ---- the target
   /** the selected target: distance (centre to centre, flat map) and range rate (> 0: receding) */
@@ -328,6 +330,7 @@ function flightInfo(this: CameraController): FlightInfo {
     /** near a planet: its frame's figures (landing.ts) */
     surface: this.surfaceInfo(),
     air: this.airInfo(),
+    terrainAhead: this.local ? Infinity : this.terrainAheadNow(),
     entry: this.entryInfo(),
     /** the engine and the tank */
     engine: { kind: s.engine, max: this.thrustMax(), fuel: fuelOn(s) ? tank(s, this.spent) : null },
