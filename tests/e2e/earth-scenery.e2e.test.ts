@@ -175,7 +175,11 @@ test.skipIf(!E2E)(
       expect(await app.js<string>("__bh.camera.flightModeNow()")).toBe("plane");
       expect(await app.js<number>("__bh.renderer.earthScenery.stats().buildings")).toBeGreaterThan(100);
       expect(await app.js<number>("__bh.renderer.earthScenery.stats().gpuBytes")).toBe(16 * 1024 ** 2);
-      expect(await app.js<number>("__bh.renderer.earthScenery.stats().trees")).toBeLessThanOrEqual(32000);
+      // (the trees: a world-fixed grid, one at most a cell — no count to cap)
+      expect(await app.js<number>("__bh.renderer.earthScenery.stats().forestCells")).toBeGreaterThan(0);
+      expect(await app.js<number>("__bh.renderer.earthScenery.stats().trees")).toBeLessThanOrEqual(
+        await app.js<number>("__bh.renderer.earthScenery.stats().forestCells"),
+      );
       expect(await app.js<number>("__bh.renderer.earthScenery.stats().buildings")).toBeLessThanOrEqual(8000);
       await app.shot("remote-results/earth-scenery-plane-high.png");
       await Bun.write(

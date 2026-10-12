@@ -53,6 +53,19 @@ Légende : ✅ fait et vérifié ici (unitaires, typecheck, WGSL, validation Web
 | Streaming anticipé (6 s, 650 m) | Gardé | 🧪 vol à 200 m/s |
 | Carte locale (M), planisphères des mondes, volumes roses, sortie sur Mann/Miller/Edmunds | Gardé | 🧪 |
 
+## Lot 5 — Monde vivant : paysages d’exception et forêts procédurales (plan `PLAN-MONDE-VIVANT-AAA.md`)
+
+- **Paysages d’exception** (`deaa89f`) : 14 scènes refaites d’après de vraies photos Commons (position,
+  direction, heure, objectif), galerie « Paysages », comparatif capture/photo sur Mac.
+- **Forêts procédurales (A1, A3, A4 près)** : la liste de 16 000 / 32 000 arbres du BVH remplacée par une
+  grille fixe dans le monde (7 m, un arbre au plus par cellule, ~200 arbres/ha en forêt) : espèces selon le
+  climat et l’altitude (feuillus, épicéas en étages, pins, palmiers, peupliers/cyprès, arbustes ; limite des
+  arbres par latitude), hauteurs, pied sur le relief ; même arbre au même endroit d’une scène à l’autre.
+  Tracé exact par la grille duale (4 arbres par pas, blocs 8 × 8 sautés), couronnes creusées en touffes de
+  près (le ciel passe au travers, ombre tachetée), formes pleines au loin ; ombres sur le sol, l’herbe et
+  l’astronaute ; collisions des troncs et des arbustes. `bun run check:forest` : GPU = CPU (hachage bit à
+  bit, rayons), image d’une forêt synthétique.
+
 ## Tests à faire sur les Macs
 
 ### Automatiques
@@ -66,6 +79,8 @@ bun run e2e --each ground-details ground-planets gargantua-ground scenery-hitbox
 bun run e2e earth-scenery earth-surface   # non-régression du streaming
 bun run e2e --remote --detach landscapes  # paysages d’exception vs leurs photos (~1 h pour les 14)
 LANDSCAPES="Matterhorn|Fuji" bun run e2e landscapes   # une partie seulement
+bun run e2e --remote --detach forest-aaa  # forêts réelles : densité, espèces, ombre tachetée, coût (~15–25 min)
+bun run check:forest -- --png forest.png  # le traceur de forêt sur le vrai GPU (Mac) + deux images synthétiques
 ```
 
 À relire après la campagne : `remote-results/character-aaa-*.png` et leurs `*-readiness.json`,
@@ -79,6 +94,10 @@ Paysages : ouvrir `remote-results/landscapes/index.html` (chaque capture à côt
 noter ce qui diffère — cadrage (cap/inclinaison), lumière (heure), couleurs du sol, végétation, eau, neige —
 dans `docs/progress/landscapes.md` : c’est la liste de travail des chantiers A–C du plan. Une fois validées,
 installer les vignettes de galerie : `bun run gallery --scenes "Earth: the Matterhorn from the Riffelsee|…" --update`.
+
+Forêts : `remote-results/forest-aaa-*.png` (sol et 300 m, Vosges/Landes/Amazonie) et `forest-aaa.json` —
+noter `withTrees` contre `without` (le coût du décor, arbres et ombres compris) sur chaque Mac ; s’il dépasse
+~4 ms sur le M1, le signaler (paliers F1 : distance de détail des couronnes, rayon d’ombre).
 
 ### Manuels (le ressenti, que les tests ne voient pas)
 
@@ -97,5 +116,9 @@ installer les vignettes de galerie : `bun run gallery --scenes "Earth: the Matte
    lumineux), vent `windy` puis calme, courir et regarder les traces derrière soi, se poser en Ranger dans un
    champ (pas d’herbe dans la coque), traverser une route (bord net mais effiloché), un champ de blé autour du
    Bourget, une zone humide. Régler densité 0,25 et portée 8 m : le framerate doit remonter nettement.
-8. **Réseau** : couper le Wi-Fi 2 s en survolant le Bourget à basse altitude puis le rétablir : les pages
+8. **Forêts** : marcher dans une forêt des Vosges au matin (ombre tachetée qui bouge avec le soleil, troncs
+   qui arrêtent), regarder un épicéa contre le ciel (étages de branches, pointe nette), survoler à 300 m puis
+   1 km (pas de « pop » des couronnes vers 220 m, pas d’arbre sur les routes ni dans les rivières), recentrer
+   la scène en avançant de 600 m : aucun arbre ne saute.
+9. **Réseau** : couper le Wi-Fi 2 s en survolant le Bourget à basse altitude puis le rétablir : les pages
    satellite manquantes reviennent seules (≤ 1 min).

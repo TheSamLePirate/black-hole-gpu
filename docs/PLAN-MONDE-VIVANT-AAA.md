@@ -197,7 +197,7 @@ scène n’est « parfaite » qu’une fois validée à l’œil sur Mac.
 
 | Jalon | Contenu | Critère de sortie |
 |---|---|---|
-| J1 | F2 (banc GPU), E (14 scènes d’après photos : livré), A1 (grille procédurale) | densité forestière réelle sans limite de nombre, ≤ 2 ms GPU sur M1 |
+| J1 | F2 (banc GPU : `check:forest` livré), E (14 scènes d’après photos : livré), A1 (grille procédurale : livrée, + A3 espèces, A4 couronnes creusées de près) | densité forestière réelle sans limite de nombre, ≤ 2 ms GPU sur M1 |
 | J2 | A2–A3 (données, espèces, saisons) | Landes, Vosges, Amazonie crédibles en captures |
 | J3 | A4–A5 (LOD tracés, couche de canopée, vent) | forêts d’avion à 10 km sans arbres individuels, transitions invisibles |
 | J4 | B1–B2 (océan FFT, littoral, lacs/rivières, reflets) | Maldives, Geiranger, Fuji validés |

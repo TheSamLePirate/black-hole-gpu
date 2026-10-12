@@ -101,8 +101,14 @@ activé par défaut, indépendant du niveau de décor et contrôlable par TARS.
 1. La caméra est convertie sur WGS84 ; son centre de streaming est quantifié à environ 556 m.
 2. Un worker lit WorldCover, le RGB si le sol satellite est activé, les tuiles OSM nécessaires et le DEM
    utilisé par les objets. Une seule préparation est active à la fois, avec un délai réseau global de 60 s.
-3. Les arbres suivent une grille déterministe par bandes de latitude ; la grille boucle en longitude.
-   Les racines suivent le DEM filtré et le relief fin déjà utilisé par le moteur.
+3. Les arbres sont une **forêt procédurale** (`src/system/forest.ts`, `src/shaders/forest.wgsl`, octobre 2026) :
+   une grille Mercator fixe dans le monde, cellules de 7 m par bandes de 4° de latitude, au plus un arbre par
+   cellule. Le worker décide chaque cellule — présence selon la classe WorldCover (forêt 86 %, mangrove 80 %,
+   arbustes 22 %, zones humides 12 %, prairie 2,5 %), routes/eaux/pistes exclues, espèce selon le climat
+   (feuillus, épicéas, pins, palmiers, peupliers/cyprès, arbustes ; limite des arbres par latitude), hauteur,
+   pied sur le sol (grille de hauteurs à 14 m, interpolée) — et en écrit un mot de 32 bits par cellule. Le GPU
+   en tire la position dans la cellule, la taille et la forme par hachage de l'indice global : le même arbre
+   au même endroit quelle que soit la scène qui le porte (un recentrage le déplace de < 8 cm à 400 m).
 4. Les géométries OSM multipolygones sont séparées en bâtiments et leurs trous sont conservés.
    Les copies appartenant au tampon d'une tuile voisine sont éliminées. Les bâtiments individuels
    les plus proches de la caméra sont retenus, plutôt que les premiers objets d'une tuile dense.
@@ -111,6 +117,14 @@ activé par défaut, indépendant du niveau de décor et contrôlable par TARS.
 6. Le ray tracer traverse le BVH en mètres dans un repère local. Il compare les intersections avec
    le terrain et le décor d'aéroport, puis utilise les normales, l'éclairage atmosphérique, la profondeur
    et la reconstruction temporelle existants. Les volumes sont donc occultés par le terrain.
+7. La forêt n'est pas dans le BVH : le rayon parcourt la grille duale (autour des sommets des cellules) —
+   une couronne ne dépasse jamais d'une demi-cellule la sienne, donc quatre arbres candidats par pas, exact —
+   et saute en bloc les 8 × 8 cellules dont le sol le plus bas et la cime la plus haute ne croisent pas sa
+   hauteur. À moins de ~220 m, chaque couronne est creusée par ses touffes de feuilles (bruit 3D, étages de
+   branches des conifères ; uniquement vers l'intérieur : l'invariant reste exact), le ciel passe entre elles,
+   l'ombre au sol est tachetée ; au-delà, la forme pleine réduite de la moitié du creusement moyen.
+   `bun run check:forest` compare le GPU à une intersection exhaustive en double précision (hachage bit à bit,
+   milliers de rayons) et rend une forêt synthétique.
 
 **Pourquoi ce choix plutôt qu'un draw call par arbre ou un second moteur de scène ?** Le projet
 calcule déjà ses paysages par ray tracing. Une passe raster instanciée demanderait de partager et
@@ -119,10 +133,10 @@ Le BVH permet de livrer les volumes dans ce pipeline avec peu de travail sur le 
 Il ne prouve pas que cette approche sera la meilleure pour des feuillages très détaillés : un rendu
 hybride instancié restera à comparer lorsque les véritables assets seront disponibles.
 
-Les couronnes actuelles sont cinq ellipsoïdes et un tronc, avec variation de taille et de couleur.
-Les bâtiments sont des extrusions de polygones, avec fenêtres procédurales. Il n'y a ni allocation
-ni reconstruction de chaque objet à chaque frame. Les interactions physiques avec les arbres et les
-immeubles ne sont pas ajoutées : il s'agit de décor visuel.
+Les couronnes sont des ellipsoïdes ou des cônes selon l'espèce, creusées de près ; les troncs, des cylindres
+(collisions à pied : troncs et dômes des arbustes, `scenery-contact.ts`). Les bâtiments sont des extrusions
+de polygones, avec fenêtres procédurales. Il n'y a ni allocation ni reconstruction de chaque objet à chaque
+frame.
 
 ## Budgets et portée
 
@@ -131,7 +145,7 @@ immeubles ne sont pas ajoutées : il s'agit de décor visuel.
 | Buffer GPU résident du décor | 64 octets | 16 MiB maximum | 16 MiB maximum |
 | Rayon nominal de préparation | — | 2 km | 3 km |
 | Distance maximale d'intersection depuis la caméra | — | 2,5 km | 3,5 km |
-| Arbres | 0 | ≤ 16 000 | ≤ 32 000 |
+| Arbres (grille de 7 m, ≤ 1 par cellule) | 0 | sans plafond, ~1,7 Mio pour la grille | sans plafond, ~3,5 Mio pour la grille |
 | Bâtiments | 0 | ≤ 5 000 | ≤ 8 000 |
 | Éléments vectoriels au sol, segments ou polygones | 0 | ≤ 16 000 | ≤ 24 000 |
 | Ponts, contours ou axes | 0 | ≤ 128 | ≤ 256 |

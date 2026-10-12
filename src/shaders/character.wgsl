@@ -188,6 +188,11 @@ fn skin(v:SkinIn)->SkinV{
 
 // Same packed OSM/WorldCover BVH as the planet renderer: direct sunlight at each near-field fragment.
 @group(0) @binding(8) var<storage,read> nearScene:array<vec4f>;
+fn forestData(i:u32)->vec4f{return nearScene[i];}
+// BEGIN_FOREST_MODULE (shaders/forest.wgsl set in at load, src/forest-shader.ts: this stub casts no tree's shadow)
+struct ForestHit { t: f32, n: vec3f, kind: u32, part: u32, base: vec3f, height: f32, seed: f32, ao: f32 };
+fn forestQuery(o: vec3f, d: vec3f, tMax: f32, anyHit: bool, detail: f32) -> ForestHit { return ForestHit(tMax, vec3f(0.0), 0u, 0u, vec3f(0.0), 0.0, 0.0, 1.0); }
+// END_FOREST_MODULE
 fn nearSceneryShadow(q:vec3f)->f32 {
  if(u.scene[2].w<.5){return 1;}
  let delta=q-u.origin.xyz;
@@ -199,16 +204,8 @@ fn nearSceneryShadow(q:vec3f)->f32 {
   let low=min(a,b);let high=max(a,b);let enter=max(max(low.x,low.y),low.z);let leave=min(min(high.x,high.y),high.z);
   if(leave<max(enter,0)||enter>500){i=u32(lo.w);continue;}
   if(hi.w<0){i++;continue;}
-  let base=u32(nearScene[0].y+hi.w);let p=nearScene[base];let size=nearScene[base+1u];
-  if(p.w<.5){
-   for(var l=0u;l<5u;l++){
-    let phase=f32(l)*2.399963+size.z*6.283185;let reach=select(size.x*.38,0.0,l==0u);
-    let center=p.xyz+vec3f(cos(phase)*reach,sin(phase)*reach,size.y*(.6+.06*f32(l)));
-    let r=vec3f(size.x*(.65+.06*f32(l%3u)),size.x*(.65+.06*f32(l%3u)),size.y*(.22+.02*f32(l%3u)));
-    let op=(origin-center)/r;let dr=d/r;let aa=dot(dr,dr);let bb=dot(op,dr);let determinant=bb*bb-aa*(dot(op,op)-1);
-    if(determinant>=0){let t=(-bb-sqrt(determinant))/aa;if(t>.01&&t<500){return 0;}}
-   }
-  }else{
+  let base=u32(nearScene[0].y+hi.w);let p=nearScene[base];
+  {
    let count=u32(p.z);
    for(var e=0u;e<count;e++){
     let edge=nearScene[base+3u+e];let v=edge.zw-edge.xy;let den=d.x*v.y-d.y*v.x;if(abs(den)<1e-7){continue;}
@@ -219,6 +216,8 @@ fn nearSceneryShadow(q:vec3f)->f32 {
   }
   i++;
  }
+ // the trees (a world-fixed grid, not the hierarchy's)
+ if(forestQuery(origin,d,500,true,40).kind>0u){return 0;}
  return 1;
 }
 

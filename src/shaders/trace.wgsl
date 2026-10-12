@@ -5554,6 +5554,14 @@ var<private> SC_DISTANCE:f32=1e9;
 var<private> SC_SAMPLE:f32=0.0;
 // Worldwide scenery: one bounded storage buffer, stackless BVH; all distances are local metres.
 @group(0) @binding(32) var<storage, read> scenery: array<vec4f>;
+fn forestData(i:u32)->vec4f { return scenery[i]; }
+// BEGIN_FOREST_MODULE (shaders/forest.wgsl set in at load, src/forest-shader.ts: this stub draws no tree)
+struct ForestHit { t: f32, n: vec3f, kind: u32, part: u32, base: vec3f, height: f32, seed: f32, ao: f32 };
+fn forestQuery(o: vec3f, d: vec3f, tMax: f32, anyHit: bool, detail: f32) -> ForestHit { return ForestHit(tMax, vec3f(0.0), 0u, 0u, vec3f(0.0), 0.0, 0.0, 1.0); }
+fn forestLeaf(kind: u32) -> vec3f { return vec3f(0.0); }
+fn forestTint(kind: u32) -> f32 { return 0.0; }
+fn forestBark(kind: u32) -> vec3f { return vec3f(0.0); }
+// END_FOREST_MODULE
 fn sceneryLocal(d:vec3f)->vec3f { return vec3f(dot(d,P.scenery[0].xyz),dot(d,P.scenery[1].xyz),dot(d,P.scenery[2].xyz)); }
 fn sceneryGlobal(d:vec3f)->vec3f { return d.x*P.scenery[0].xyz+d.y*P.scenery[1].xyz+d.z*P.scenery[2].xyz; }
 fn sceneryColour(at:vec2i,n:u32)->vec3f {
@@ -5578,6 +5586,16 @@ fn sceneryImage(q:vec3f)->SurfaceImage {
   let rim=min(min(uv.x,uv.y),min(1.0-uv.x,1.0-uv.y));
   o.w=smoothstep(0.0,0.04,rim)*P.scenery[3].w;
   return o;
+}
+// The satellite's colour at a frame point (east, north metres), its weight 0 where the raster has none.
+fn sceneryColourAt(xy:vec2f)->vec4f {
+  if(P.scenery[5].y<0.5 || P.scenery[5].z<0.5){return vec4f(0.0);}
+  let latC=P.scenery[4].y-0.5/P.scenery[4].w;
+  let uv=vec2f(0.5+xy.x/(6378137.0*cos(latC))*P.scenery[4].z,0.5-xy.y/6378137.0*P.scenery[4].w);
+  if(any(uv<vec2f(0.0)) || any(uv>=vec2f(1.0))){return vec4f(0.0);}
+  let n=u32(scenery[0].w);let grid=uv*f32(n)-.5;let a=vec2i(floor(grid));let w=fract(grid);
+  let c=mix(mix(sceneryColour(a,n),sceneryColour(a+vec2i(1,0),n),w.x),mix(sceneryColour(a+vec2i(0,1),n),sceneryColour(a+vec2i(1,1),n),w.x),w.y);
+  return vec4f(c,select(1.0,0.0,dot(c,vec3f(1.0))<=0.0));
 }
 struct SceneryHit { t:f32, normal:vec3f, albedo:vec3f, kind:f32, root:f32 };
 fn sceneryEllipsoid(o:vec3f,d:vec3f,c:vec3f,r:vec3f)->vec4f {
@@ -5610,21 +5628,9 @@ fn sceneryQuery(o:vec3f,d:vec3f,limit:f32,shadow:bool)->SceneryHit {
     let far=min(min(max(a,b).x,max(a,b).y),max(a,b).z);
     if(far<max(near,0.0) || near>out.t){i=u32(lo.w);continue;}
     if(hi.w<0.0){i++;continue;}
-    let base=u32(scenery[0].y+hi.w);let p=scenery[base];let size=scenery[base+1u];let alb=scenery[base+2u].xyz;
+    let base=u32(scenery[0].y+hi.w);let p=scenery[base];let alb=scenery[base+2u].xyz;
     var h=vec4f(-1.0);
-    if(p.w<0.5){
-      // Solid trunk and five overlapping crowns, with stable species/size variation.
-      h=boxHit(o,d,p.xyz+vec3f(0.0,0.0,size.y*.32),vec3f(.22,.22,size.y*.32));
-      var best=select(out.t,h.x,h.x>0.0 && h.x<out.t);
-      for(var l=0u;l<5u;l++){
-        let phase=f32(l)*2.399963+size.z*TAU;
-        let reach=select(size.x*.38,0.0,l==0u);
-        let c=p.xyz+vec3f(cos(phase)*reach,sin(phase)*reach,size.y*(.6+.06*f32(l)));
-        let r=vec3f(size.x*(.65+.06*f32(l%3u)),size.x*(.65+.06*f32(l%3u)),size.y*(.22+.02*f32(l%3u)));
-        let hit=sceneryEllipsoid(o,d,c,r);
-        if(hit.x>0.0 && hit.x<best){h=hit;best=hit.x;}
-      }
-    }else{
+    {
       let count=u32(p.z);var best=out.t;
       if(abs(d.z)>1e-7){
         for(var cap=0u;cap<2u;cap++){
@@ -5655,6 +5661,29 @@ fn worldScenery(dW:vec3f,tMax:f32,rnd:f32)->f32 {
   let d=sceneryLocal(dW);let o=P.scenery[3].xyz;
   SC_SAMPLE=rnd;SC_POINT=o+d*tMax;SC_DISTANCE=tMax;
   let hit=sceneryQuery(o,d,min(tMax,P.scenery[1].w),false);
+  let tree=forestQuery(o,d,hit.t,false,220.0);
+  if(tree.kind>0u){
+    let p=o+d*tree.t;
+    SC_POINT=p;SC_DISTANCE=tree.t;
+    var n=tree.n;var alb:vec3f;
+    if(tree.part==1u){
+      // bark: furrowed along the trunk
+      alb=forestBark(tree.kind)*(.8+.4*tree.seed)*(.8+.2*gnoise(p*vec3f(5.0,5.0,.7)));
+    }else{
+      // leaves: the species' green drawn towards the satellite's, clumps that break the shape's light,
+      // the crown darker inside and below (what its own leaves shade from the sky)
+      let sat=sceneryColourAt(tree.base.xy);
+      alb=mix(forestLeaf(tree.kind),sat.rgb*1.25,forestTint(tree.kind)*sat.w)*(.82+.36*tree.seed);
+      // (far, where the crown is its plain shape: clumps in the normal stand for the carving)
+      let far=smoothstep(150.0,260.0,tree.t);
+      let clump=vec3f(gnoise(p*.9),gnoise(p*.9+vec3f(17.1,3.7,-5.3)),gnoise(p*.9+vec3f(-8.3,11.9,2.1)));
+      n=normalize(n+.55*far*clump);
+      // leaves facing all ways: a fine flicker of their own
+      alb*=tree.ao*mix(.6,1.0,smoothstep(tree.base.z+tree.height*.25,tree.base.z+tree.height,p.z))*(.8+.2*gnoise(p*5.3));
+    }
+    WS=vec4f(normalize(sceneryGlobal(n)),1.0);WS_A=alb;WS_E=vec3f(0.0);
+    return tree.t;
+  }
   if(hit.kind<0.0){return tMax;}
   let p=o+d*hit.t;
   SC_POINT=p;SC_DISTANCE=hit.t;
@@ -5666,10 +5695,6 @@ fn worldScenery(dW:vec3f,tMax:f32,rnd:f32)->f32 {
     let win=wall && p.z-hit.root>1.6 && fract((p.x+p.y)*.24)<.6 && fract((p.z-hit.root)/3.0)<.55;
     alb=select(alb,vec3f(.045,.065,.075),win);
     alb*=select(.72,1.0,wall);
-  }else if(hit.kind<.5){
-    alb*=mix(.45,1.0,smoothstep(hit.root,hit.root+12.0,p.z));
-    // Crown lobes hide their joints in a stable, fine leaf response.
-    alb*=.85+.15*gnoise(p*2.1);
   }
   WS=vec4f(normalize(sceneryGlobal(hit.normal)),1.0);WS_A=alb;WS_E=vec3f(0.0);
   return hit.t;
@@ -5684,9 +5709,12 @@ fn sceneryShadow(light:vec3f,normal:vec3f)->f32 {
   let axis=normalize(cross(sun,select(vec3f(0.0,0.0,1.0),vec3f(0.0,1.0,0.0),abs(sun.z)>.9)));
   let radius=.00465*sqrt(fract(SC_SAMPLE*7.31+.17));let phase=TAU*fract(SC_SAMPLE*13.73+.41);
   let d=normalize(sun+radius*(axis*cos(phase)+cross(sun,axis)*sin(phase)));
-  let h=sceneryQuery(SC_POINT+n*.35+d*.15,d,select(500.0,900.0,P.scenery[5].x>.5),true);
+  let start=SC_POINT+n*.35+d*.15;let range=select(500.0,900.0,P.scenery[5].x>.5);
+  let h=sceneryQuery(start,d,range,true);
+  var blocked=h.kind>=0.0;
+  if(!blocked){blocked=forestQuery(start,d,range,true,select(0.0,60.0,SC_DISTANCE<180.0)).kind>0u;}
   let fade=smoothstep(reach-200.0,reach,SC_DISTANCE);
-  return mix(select(1.0,0.0,h.kind>=0.0),1.0,fade);
+  return mix(select(1.0,0.0,blocked),1.0,fade);
 }
 struct ScenerySurface { color:vec3f, cover:f32, kind:f32 };
 fn scenerySurface(foot:f32)->ScenerySurface {

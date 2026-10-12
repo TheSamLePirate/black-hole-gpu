@@ -2,6 +2,7 @@
 import { VectorTile, classifyRings } from "@mapbox/vector-tile";
 import { PbfReader } from "pbf";
 import { earthDetail, toHalf } from "../terrain";
+import { forestFrame, forestVec4s, growForest } from "./forest";
 import { roadWidth, surfaceSegment, polygonPrimitive, stripPolygon, surfaceContains } from "./scenery-geometry";
 import {
   D,
@@ -10,7 +11,6 @@ import {
   sceneryFrame,
   SCENERY_GRID as N,
   SCENERY_BYTES,
-  seed,
   wrapLon,
   rasterParts,
   sceneryExcluded,
@@ -20,8 +20,6 @@ import {
 } from "./scenery-data";
 
 const g = globalThis as unknown as { onmessage: unknown; postMessage(v: SceneryReply, t?: Transferable[]): void };
-const merc = (lat: number) => Math.log(Math.tan(Math.PI / 4 + (lat * D) / 2)) * 6378137;
-const unmerc = (y: number) => (2 * Math.atan(Math.exp(y / 6378137)) - Math.PI / 2) / D;
 const tx = (lon: number, z = 14) => ((lon + 180) / 360) * 2 ** z;
 const ty = (lat: number, z = 14) => ((1 - Math.asinh(Math.tan(lat * D)) / Math.PI) / 2) * 2 ** z;
 
@@ -167,7 +165,10 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   };
   const excluded = (lat: number, lon: number) => sceneryExcluded(lat, lon, q.exclusions);
   const prims: Primitive[] = [];
-  let storedBytes = 64 + pixels.byteLength,
+  // (the forest's grid: its bytes held from the start — the networks' and buildings' budgets after it)
+  const reach = radius + 250;
+  const ff = forestFrame(q.lat, q.lon, reach, (lat, lon) => localPoint(frame, lat, lon, 0));
+  let storedBytes = 64 + pixels.byteLength + forestVec4s(ff) * 16,
     budgetLimited = false;
   let trees = 0,
     buildings = 0,
@@ -473,63 +474,20 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     const p = localPoint(frame, lat, lon, 0);
     return surfaceCells.get(`${Math.floor(p[0] / 64)}:${Math.floor(p[1] / 64)}`)?.some((v) => surfaceContains(p, v, 7)) ?? false;
   };
-  // Fixed one-degree bands preserve placement across streaming centres and latitude changes.
-  const xC = q.lon * D * 6378137,
-    yC = merc(q.lat);
-  const candidates: { lat: number; lon: number; x: number; y: number; d: number }[] = [];
-  const rM = (radius + 400) / Math.max(Math.cos(q.lat * D), 0.12);
-  for (let band = Math.floor(bounds[1]); band <= Math.floor(bounds[3]); band++) {
-    const cell = 28 / Math.max(Math.cos((band + 0.5) * D), 0.12);
-    const columns = Math.ceil((2 * Math.PI * 6378137) / cell),
-      cellX = (2 * Math.PI * 6378137) / columns;
-    for (let y = Math.floor((yC - rM) / cell); y <= Math.ceil((yC + rM) / cell); y++)
-      for (let x = Math.floor((xC - rM) / cellX); x <= Math.ceil((xC + rM) / cellX); x++) {
-        const sx = ((x % columns) + columns) % columns;
-        const lon = ((x + 0.15 + 0.7 * seed(sx, y)) * cellX) / 6378137 / D,
-          lat = unmerc((y + 0.15 + 0.7 * seed(y, sx)) * cell);
-        if (Math.floor(lat) !== band) continue;
-        const i = index(lat, lon);
-        if (i < 0 || ![10, 95].includes(classes[i]!) || excluded(lat, lon) || networkExcluded(lat, lon)) continue;
-        const d = Math.hypot((lat - q.lat) * 111320, (lon - q.lon) * 111320 * Math.cos(q.lat * D));
-        if (d <= radius + 250) candidates.push({ lat, lon, x: sx, y, d });
-      }
-  }
-  candidates.sort((a, b) => a.d - b.d);
-  if (candidates.length > (q.mode === "high" ? 32000 : 16000)) budgetLimited = true;
-  // Root sampling and BVH construction happen here, never per frame on the main thread.
-  for (const v of candidates.slice(0, q.mode === "high" ? 32000 : 16000)) {
-    try {
-      if (storedBytes + 112 > SCENERY_BYTES - 2 * 1024 * 1024) {
-        budgetLimited = true;
-        break;
-      }
-      const h = await height(v.lat, v.lon),
-        p = localPoint(frame, v.lat, v.lon, h - 1.5),
-        s = seed(v.x + 71, v.y + 43),
-        r = 4 + 3 * s,
-        H = 12 + 15 * seed(v.y + 83, v.x);
-      const i = index(v.lat, v.lon),
-        col = pixels[i]!;
-      const c =
-        col & 0xffffff
-          ? [
-              Math.max(0.025, ((col & 255) / 255) ** 2.2 * 0.8),
-              Math.max(0.045, (((col >>> 8) & 255) / 255) ** 2.2 * 0.8),
-              Math.max(0.018, (((col >>> 16) & 255) / 255) ** 2.2 * 0.8),
-            ]
-          : [0.045, 0.095, 0.027];
-      prims.push({
-        min: [p[0] - 1.2 * r, p[1] - 1.2 * r, p[2]],
-        max: [p[0] + 1.2 * r, p[1] + 1.2 * r, p[2] + 1.1 * H],
-        tree: true,
-        data: [...p, 0, r, H, s, 0, ...c, 0],
-      });
-      storedBytes += 112;
-      trees++;
-    } catch (e) {
-      if (!errors.length) errors.push(String(e).slice(0, 220));
-    }
-  }
+  // ---- the forests: at most one tree a cell of the world-fixed grid (forest.ts), decided here once —
+  // the same tree at the same place whichever scenery holds it (the class, the roads, the ground at its foot)
+  const grown = await growForest(ff, {
+    cover: (lat, lon) => {
+      const k = index(lat, lon);
+      return k < 0 ? 0 : classes[k]!;
+    },
+    excluded: (lat, lon) => excluded(lat, lon) || networkExcluded(lat, lon),
+    ground: height,
+    local: (lat, lon, h) => localPoint(frame, lat, lon, h),
+    error: (e) => void (errors.length < 12 && errors.push(String(e).slice(0, 220))),
+  });
+  const cells = grown.cells;
+  trees = grown.trees;
   // Select individual buildings by distance, so a dense tile cannot consume the budget before closer neighbours.
   for (const v of choices) {
     try {
@@ -560,7 +518,6 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       prims.push({
         min: [minX, minY, base + low - 1],
         max: [maxX, maxY, base + h],
-        tree: false,
         data: [base + low - 1, base + h, edges.length / 4, 1, minX, minY, maxX, maxY, 0.38, 0.36, 0.32, 0, ...edges],
       });
       vertices += edges.length / 4;
@@ -569,7 +526,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       if (!errors.length) errors.push(String(e).slice(0, 220));
     }
   }
-  const buffer = packScenery(prims, pixels, keptSurfaces);
+  const buffer = packScenery(prims, pixels, keptSurfaces, { frame: ff, cells, trees });
   return {
     id: q.id,
     lat: q.lat,
@@ -577,6 +534,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     bounds,
     buffer,
     trees,
+    forestCells: ff.w * ff.h,
+    forestCellM: ff.cell,
     buildings,
     vertices,
     roads: keptSurfaces.filter((v) => v.data.length === 12 && v.data[5] === 1).length,

@@ -294,6 +294,9 @@ export class EarthScenery {
       lat: d?.lat ?? null,
       lon: d?.lon ?? null,
       trees: d?.trees ?? 0,
+      /** the procedural forest's grid: its cells (one tree at most each), a cell's side [m] */
+      forestCells: d?.forestCells ?? 0,
+      forestCellM: d?.forestCellM ?? 0,
       buildings: d?.buildings ?? 0,
       footprintEdges: d?.vertices ?? 0,
       roads: d?.roads ?? 0,

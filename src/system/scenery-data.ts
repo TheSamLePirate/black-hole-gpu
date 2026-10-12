@@ -1,5 +1,6 @@
 // Shared worker/GPU contract: local WGS84 metres, stackless BVH, exact polygon extrusions.
 import { geodeticToCart, WGS84_A, WGS84_F } from "./ellipsoid";
+import { type ForestFrame, forestVec4s, writeForest } from "./forest";
 import type { Vec3 } from "../physics";
 
 export const SCENERY_BYTES = 16 * 1024 * 1024;
@@ -72,7 +73,12 @@ export interface Primitive {
   min: Vec3;
   max: Vec3;
   data: number[];
-  tree: boolean;
+}
+/** a scenery's forest (forest.ts): its grid's frame, a word a cell, the trees in it */
+export interface ForestSection {
+  frame: ForestFrame;
+  cells: Uint32Array;
+  trees: number;
 }
 function sceneryBVH(prims: Primitive[]) {
   const nodes: number[] = [],
@@ -103,22 +109,30 @@ function sceneryBVH(prims: Primitive[]) {
   if (prims.length) build([...prims]);
   return { nodes, geometries };
 }
-// A separate planar BVH keeps roads/water out of every primary and shadow ray.
-export function packScenery(prims: Primitive[], pixels: Uint32Array, surfaces: Primitive[] = []) {
+// A separate planar BVH keeps roads/water out of every primary and shadow ray; the trees are a grid of
+// their own (forest.ts), after the raster.
+//   vec4 0 (nodes, geometries at, raster at, raster side)  1 (surfaces' nodes at, count, geometries at, surfaces)
+//   2 (forest at: 0 none, —, —, —)  3 (—)  then the nodes, geometries, surfaces, raster, forest
+export function packScenery(prims: Primitive[], pixels: Uint32Array, surfaces: Primitive[] = [], forest?: ForestSection) {
   const { nodes, geometries } = sceneryBVH(prims);
   const surface = sceneryBVH(surfaces);
   const nodeCount = nodes.length / 8,
     geomOffset = 4 + nodes.length / 4,
     surfaceOffset = geomOffset + geometries.length / 4,
     surfaceGeom = surfaceOffset + surface.nodes.length / 4,
-    pixelOffset = surfaceGeom + surface.geometries.length / 4;
-  const bytes = (pixelOffset * 4 + pixels.length) * 4;
+    pixelOffset = surfaceGeom + surface.geometries.length / 4,
+    forestOffset = pixelOffset + Math.ceil(pixels.length / 4);
+  const bytes = (forestOffset + (forest ? forestVec4s(forest.frame) : 0)) * 16;
   if (bytes > SCENERY_BYTES) throw new Error("scenery budget exceeded");
   const buffer = new ArrayBuffer(bytes),
     f = new Float32Array(buffer),
     u = new Uint32Array(buffer);
   f.set([nodeCount, geomOffset, pixelOffset, SCENERY_GRID], 0);
   f.set([surfaceOffset, surface.nodes.length / 8, surfaceGeom, surfaces.length], 4);
+  if (forest) {
+    f[8] = forestOffset;
+    writeForest(f, u, forestOffset, forest.frame, forest.cells, forest.trees);
+  }
   f.set(nodes, 16);
   f.set(geometries, geomOffset * 4);
   f.set(surface.nodes, surfaceOffset * 4);
@@ -141,6 +155,8 @@ export interface SceneryReply {
   lon: number;
   bounds?: [number, number, number, number];
   trees?: number;
+  forestCells?: number;
+  forestCellM?: number;
   buildings?: number;
   vertices?: number;
   roads?: number;

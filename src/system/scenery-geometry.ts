@@ -17,7 +17,6 @@ export function surfaceSegment(a: Vec3, b: Vec3, width: number, kind: number, co
   return {
     min: [Math.min(a[0], b[0]) - r, Math.min(a[1], b[1]) - r, 0],
     max: [Math.max(a[0], b[0]) + r, Math.max(a[1], b[1]) + r, 0],
-    tree: false,
     data: [a[0], a[1], b[0], b[1], r, kind, 0, 0, ...color, 0],
   };
 }
@@ -41,7 +40,6 @@ export function polygonPrimitive(rings: Vec3[][], bottom: number, top: number, k
   return {
     min: [x0, y0, bottom],
     max: [x1, y1, top],
-    tree: false,
     data: [bottom, top, edges.length / 4, kind, x0, y0, x1, y1, ...color, (rings[0]?.length ?? 1) - 1, ...edges],
   };
 }

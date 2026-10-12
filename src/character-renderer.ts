@@ -1,6 +1,7 @@
 import type { GpuProfiler } from "./gpuprof";
 import { AstronautModel } from "./character-model";
 import shader from "./shaders/character.wgsl" with { type: "text" };
+import { withForest } from "./forest-shader";
 import type { Vec3 } from "./physics";
 import type { CharacterFrame, PlanetCharacter } from "./controller/character";
 import type { SceneryContact } from "./system/scenery-contact";
@@ -167,7 +168,7 @@ export class CharacterRenderer {
   private generationMs = 0;
   constructor(private d: GPUDevice) {
     this.model = new AstronautModel(d);
-    this.module = d.createShaderModule({ label: "character and grass", code: shader });
+    this.module = d.createShaderModule({ label: "character and grass", code: withForest(shader) });
     const buffer = (size: number, usage: number, label?: string) => d.createBuffer({ size, usage, label });
     const S = GPUBufferUsage.STORAGE;
     this.uniform = buffer(UNIFORM_VEC4S * 16, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);

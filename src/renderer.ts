@@ -4,6 +4,7 @@ import type { PlanetCharacter } from "./controller/character";
 import { dot as dot3 } from "./math/vec3";
 import { sphericalFrame } from "./wormhole";
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
+import { forestSource, withForest } from "./forest-shader";
 import { lampsOf } from "./cockpit/lights";
 import { EARTH_RUNWAYS, landingEnd, RUNWAY_HALF_WIDTH, RUNWAY_LENGTH, runwayGrade, runwayPaved } from "./game/sites";
 import {
@@ -1326,7 +1327,10 @@ export class Renderer {
     gpuDiagnostics.enter("shader-download");
     const src = {
       trace: sceneryShader(
-        surfaceShader(await wgsl(traceWGSL), device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT),
+        surfaceShader(
+          withForest(await wgsl(traceWGSL), await wgsl(forestSource)),
+          device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT,
+        ),
         device.limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT,
       ),
       display: await wgsl(displayWGSL),

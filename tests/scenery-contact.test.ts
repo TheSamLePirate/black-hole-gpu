@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { SceneryContact } from "../src/system/scenery-contact";
 import { polygonPrimitive, surfaceSegment } from "../src/system/scenery-geometry";
-import { packScenery, SCENERY_GRID, sceneryFrame } from "../src/system/scenery-data";
+import { localPoint, packScenery, SCENERY_GRID, sceneryFrame } from "../src/system/scenery-data";
+import { ForestKind, forestFrame, forestTree, packCell, trunkOf } from "../src/system/forest";
 import { add, scale } from "../src/math/vec3";
 import type { Vec3 } from "../src/physics";
 const ring = (r: number): Vec3[] => [
@@ -66,14 +67,27 @@ test("what grows: the class and the satellite's colour, bare under roads, buildi
   }
 });
 
-test("tree corners and low crowns match the rendered box and five ellipsoids", () => {
-  const tree = { min: [-6, -6, 0] as Vec3, max: [6, 6, 13] as Vec3, tree: true, data: [0, 0, 0, 0, 4, 12, 0, 0, 0.1, 0.2, 0.1, 0] };
-  const c = new SceneryContact(reply, packScenery([tree], pixels));
-  expect(c.at(point(0.4, 0.4), 0.3).blocked).toBe(true); // intersects square corner, misses the old cylinder
-  expect(c.at(point(0.6, 0.6), 0.3).blocked).toBe(false);
-  expect(c.at(point(1, 0, 5), 0.3).blocked).toBe(true); // crown, above the trunk's actual range
-  expect(c.at(point(0, 0, 14), 0.2, 0.1).blocked).toBe(false);
-  expect(c.at(point(2, 0, 6), 0.2, 0.1).blocked).toBe(true); // camera sphere must not pass through the crown
+// a scenery holding one procedural tree of the given kind in the cell nearest the origin (forest.ts)
+function forested(kind: ForestKind, height = 12) {
+  const ff = forestFrame(0, 0, 200, (lat, lon) => localPoint(frame, lat, lon, 0));
+  const cells = new Uint32Array(ff.w * ff.h);
+  const i = Math.floor(ff.a[0]),
+    j = Math.floor(ff.b[0]);
+  cells[j * ff.w + i] = packCell(0, kind, height);
+  const tree = forestTree(ff, cells[j * ff.w + i]!, i, j)!;
+  return { c: new SceneryContact(reply, packScenery([], pixels, [], { frame: ff, cells, trees: 1 })), tree };
+}
+test("a tree's trunk stops the capsule where it is drawn; its crown, high, does not; a shrub's dome does", () => {
+  const { c, tree } = forested(ForestKind.broadleaf);
+  const trunk = trunkOf(tree);
+  expect(trunk.radius).toBeCloseTo(0.08 + 0.012 * 12, 6);
+  expect(c.at(point(tree.x + trunk.radius + 0.25, tree.y), 0.3).blocked).toBe(true);
+  expect(c.at(point(tree.x + trunk.radius + 0.35, tree.y), 0.3).blocked).toBe(false);
+  // (above the trunk, under the crown's top: the astronaut never climbs there; the trunk's top bounds it)
+  expect(c.at(point(tree.x, tree.y, trunk.top + 0.1), 0.3).blocked).toBe(false);
+  const shrub = forested(ForestKind.shrub, 4);
+  expect(shrub.c.at(point(shrub.tree.x + shrub.tree.radius * 0.5, shrub.tree.y), 0.3).blocked).toBe(true);
+  expect(shrub.c.at(point(shrub.tree.x + shrub.tree.radius + 0.5, shrub.tree.y), 0.3).blocked).toBe(false);
 });
 
 test("pink hitboxes use CPU local metres, polygon holes and actual vertical bounds", () => {
@@ -89,17 +103,13 @@ test("pink hitboxes use CPU local metres, polygon holes and actual vertical boun
   expect(c.collisionLines(point(1000, 1000)).vertices.length).toBe(0);
   expect(c.collisionLines(point(0, 0), 60, 2).vertices.length).toBe(12);
 });
-test("pink tree hitboxes include the trunk corners and all crown extrema", () => {
-  const tree = { min: [-6, -6, 0] as Vec3, max: [6, 6, 13] as Vec3, tree: true, data: [0, 0, 0, 0, 4, 12, 0, 0, 0.1, 0.2, 0.1, 0] };
-  const c = new SceneryContact(reply, packScenery([tree], pixels)),
-    debug = c.collisionLines(point(0, 0));
+test("pink tree hitboxes: the trunk's rings and the crown's widest ring and top", () => {
+  const { c, tree } = forested(ForestKind.conifer, 20);
+  const debug = c.collisionLines(point(tree.x, tree.y));
   expect(debug.trees).toBe(1);
-  expect(debug.vertices.length / 6).toBe(12 + 5 * 3 * 16);
-  expect(debug.vertices[0]).toBeCloseTo(-0.22, 6);
-  expect(debug.vertices[1]).toBeCloseTo(-0.22, 6);
-  expect(
-    Array.from(debug.vertices)
-      .filter((_, i) => i % 3 === 2)
-      .some((z) => z > 10),
-  ).toBe(true);
+  // (two trunk rings and four sides, the crown's ring and its axis)
+  expect(debug.vertices.length / 6).toBe(12 * 2 + 4 + 12 + 1);
+  const zs = Array.from(debug.vertices).filter((_, i) => i % 3 === 2);
+  expect(Math.max(...zs)).toBeCloseTo(tree.z + 20, 4);
+  expect(Math.min(...zs)).toBeCloseTo(tree.z, 4);
 });
