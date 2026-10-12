@@ -375,6 +375,16 @@ interface OfflineJob {
   fixedSteps?: string;
 }
 
+/** Near a body (below NEAR_BODY_M of its surface), a camera translation beyond TRANSLATION_M metres — a millimetre — breaks the temporal reprojection. */
+const TRANSLATION_M = 0.001;
+const NEAR_BODY_M = 20000;
+
+/** The camera's place on its near body, in metres along the body's own axes: a rotation of the view leaves it unchanged. */
+function placeOnBody(near: { centre: Vec3; radius: number; axes: Vec3[] }): Vec3 {
+  const mR = near.radius * M_METRES;
+  return near.axes.map((a) => -(a[0]! * near.centre[0] + a[1]! * near.centre[1] + a[2]! * near.centre[2]) * mR) as Vec3;
+}
+
 export class Renderer {
   private device: GPUDevice;
   private context: GPUCanvasContext;
@@ -3255,6 +3265,8 @@ export class Renderer {
     region: string;
     time: number;
     near: { index: number; centre: Vec3; radius: number; axes: [Vec3, Vec3, Vec3] } | null;
+    /** the camera's place on its near body, in metres (placeOnBody); null: no near body */
+    at: Vec3 | null;
   } | null = null;
   /** the reprojection's weights: a pixel a ray landed on, one between rays; the clamp's width [σ] */
   // (the least α of a fresh pixel — 1/16: its history's weight capped at 15 frames (audit R2) —, a pixel
@@ -3331,10 +3343,19 @@ export class Renderer {
     const asp = t.width / t.height;
     const pre = preExposure(this.ev(s));
     const prev = this.taPrev;
-    // (a jump: the other region, or the distance to the hole changed by more than 5 % in a frame)
-    const jumped = !prev || prev.region !== cam.region || Math.abs(cam.r - prev.r) > 0.05 * Math.max(cam.r, 1e-9);
-    const on = s.temporalReprojection && this.taPhase === "realtime" && ta.valid && !jumped;
     const ln = this.lastNear;
+    const at = ln ? placeOnBody(ln) : null;
+    // (the camera moved on its near body: the reprojection carries the image by the camera's rotation alone, so
+    // a tree 50 m away would hang in place while the camera walked — the frame is traced afresh instead)
+    // (high above the body — a vessel in orbit, nothing near enough for the parallax to show: the reprojection stays)
+    const low = at !== null && ln !== null && Math.hypot(...at) - ln.radius * M_METRES < NEAR_BODY_M;
+    const moved =
+      !!prev &&
+      (prev.at !== null || at !== null) &&
+      (prev.at === null || at === null || (low && Math.hypot(at[0] - prev.at[0], at[1] - prev.at[1], at[2] - prev.at[2]) > TRANSLATION_M));
+    // (a jump: the other region, or the distance to the hole changed by more than 5 % in a frame, or a translation)
+    const jumped = !prev || prev.region !== cam.region || Math.abs(cam.r - prev.r) > 0.05 * Math.max(cam.r, 1e-9) || moved;
+    const on = s.temporalReprojection && this.taPhase === "realtime" && ta.valid && !jumped;
     const near = ln
       ? { index: ln.index, centre: [...ln.centre] as Vec3, radius: ln.radius, axes: ln.axes.map((a) => [...a]) as [Vec3, Vec3, Vec3] }
       : null;
@@ -3349,6 +3370,7 @@ export class Renderer {
       region: cam.region,
       time: this.lastTime,
       near,
+      at,
     };
     // (the camera stopped after moving — a pause between two inputs, or for good: the refinement's first
     // passes drawn in bands, the rest of the image the last frame's sparse rays; the history kept where no
