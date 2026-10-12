@@ -1,15 +1,13 @@
-// The score's themes: an orchestral score in three manners — Hans Zimmer's (the pipe organ and its pedal, the
-// minimal ostinatos of strings or organ, the ticking clock, the braams and the taikos, the rising Shepard tone, the
-// choir), John Williams's (the heroic brass melody with its leaps, the Lydian brightness, the march's snare and the
-// timpani, the string ostinatos, the harp and the celesta) and Max Richter's (a string elegy: a slow loop of chords,
-// the viola's long melody, the violins over it later, the cellos under). The melodies are this game's own, written
-// in the manner, not taken from any film: each theme its key, mode and tempo, its form (intro, verse, build, drop,
-// break: each a few bars and an energy), its progressions, its melody (phrases in the scale's degrees, fitted to
-// the progressions' chords) and its orchestra. The composer (music/composer.ts) plays them bar by bar; the energy —
-// the section's, raised or lowered by the flight's intensity — decides which sections of the orchestra play.
-// Data only.
+// The score's themes: an orchestral score built on the harmony, the structure and the orchestration of the best-known
+// film scores — Hans Zimmer's Interstellar (its main theme, Day One, Mountains, No Time for Caution) and Inception
+// (Time), John Williams's Star Wars, Imperial March, Jurassic Park and E.T. (Flying), Max Richter's On the Nature of
+// Daylight. Their chord progressions, keys, tempi, metres and forms are taken from published analyses (Hooktheory,
+// Film Music Notes, Attack Magazine, the Wikipedia article on Daylight); progressions are not a work's protected
+// part. Their melodies are not: each theme's melody is this game's own, written on those chords. The composer
+// (music/composer.ts) plays them bar by bar; the energy — the section's, raised or lowered by the flight's intensity —
+// decides which sections of the orchestra play. Data only.
 
-import type { ChordKind, ScaleName } from "./theory";
+import type { ScaleName } from "./theory";
 
 /** The orchestra's sections, each its own bus in the mixer (music/engine.ts). */
 export type Layer = "perc" | "bass" | "strings" | "ostinato" | "brass" | "melody" | "keys" | "organ" | "choir";
@@ -23,43 +21,50 @@ export interface Section {
   energy: number;
   /** its progression's name (default: "a"; builds and drops "b" when the theme has one) */
   prog?: string;
+  /** only these sections of the orchestra play in it (a solo piano's ending, the low strings' opening) */
+  only?: Layer[];
 }
+/** A chord of a progression: its symbol (music/theory.ts parseChord: "Fmaj7", "Em/G", "Fq"), the bars it lasts. */
 export interface ChordStep {
-  /** the scale's degree (0: the tonic) */
-  deg: number;
-  kind?: ChordKind;
-  /** bars it lasts (1 by default) */
-  bars?: number;
+  chord: string;
+  bars: number;
 }
 
-/** The percussion's manner: a march (snare, bass drum, timpani), action (toms and taikos in 3-3-2), taikos, a
- *  heartbeat, a clock's ticking eighths, booms on the chords, timpani alone. */
-export type PercStyle = "march" | "action" | "taiko" | "heartbeat" | "clock" | "booms" | "timpani";
+/** The percussion's manner: a march (snare, bass drum, timpani), a march in triplets, action (toms and taikos in
+ *  3-3-2), taikos, an insistent pulse, a heartbeat, a clock's ticking eighths, booms on the chords, timpani alone. */
+export type PercStyle = "march" | "tripletMarch" | "action" | "taiko" | "pulse" | "heartbeat" | "clock" | "booms" | "timpani";
 /** The bass: the organ's pedal (32'), low strings' eighths, a march's root and fifth, a held drone, the cellos'
- *  whole notes (the elegy). */
+ *  ground bass (the elegy) — each on the chord's bass (its slash's) */
 export type BassStyle = "pedal" | "pulse" | "march" | "drone" | "elegy";
-/** The strings' chords: held, tremolo, high (the violins' shimmer), the elegy's middle voices. */
-export type StringsStyle = "sustain" | "tremolo" | "high" | "elegy";
+/** The strings' chords: held, tremolo, high (the violins' shimmer), the elegy's middle voices, a hymn (re-struck with
+ *  the melody, chord and tune moving together). */
+export type StringsStyle = "sustain" | "tremolo" | "high" | "elegy" | "hymn";
 export interface OstinatoStyle {
-  /** pendulum: two notes rocking in eighths; spiccato: sixteenths on the root and its neighbours; organ: sixteenths
-   *  across the chord; arpeggio: triplets up and down two octaves; piano: sparse notes on the beats */
-  pattern: "pendulum" | "spiccato" | "organ" | "arpeggio" | "piano";
+  /** pendulum: two notes rocking; spiccato: the root and its neighbours on the grid; organ: sixteenths across the
+   *  chord; arpeggio: triplets up and down two octaves; piano: sparse notes on the beats; clock: one note repeated on
+   *  the grid (a pedal, a clock's ticking); broken: the left hand's broken chord in eighths */
+  pattern: "pendulum" | "spiccato" | "organ" | "arpeggio" | "piano" | "clock" | "broken";
   sound: "spiccato" | "pizz" | "harp" | "celesta" | "piano" | "organ";
   /** its register's centre (MIDI) */
   register: number;
+  /** the clock's repeated note (a pitch class: 4 = E) */
+  pedal?: number;
 }
 export interface BrassStyle {
-  /** the horns holding the chords; a braam on each chord change; Williams's fanfare stabs */
+  /** the horns holding the chords; a braam on each chord change; Williams's fanfare stabs; a chorale (the horns'
+   *  chord with each note of the melody) */
   chords: boolean;
   braam: boolean;
   fanfare: boolean;
+  chorale?: boolean;
 }
 export type MelodySound = "horn" | "trumpet" | "violins" | "viola" | "cello" | "flute" | "piano" | "organlead";
 export interface MelodyStyle {
   sound: MelodySound;
-  /** octaves above the chords' octave (the theme's root) */
+  /** octaves above the theme's root */
   oct: number;
-  /** the phrases, one per progression ("a", "b"): `degree/beats` tokens ("r/2": a rest), in bars of four beats */
+  /** the phrases, one per progression: `degree/beats` tokens in the theme's scale ("4+": raised a semitone, "6-":
+   *  lowered; "r": a rest; "/t": a triplet eighth, a third of a beat), whole bars */
   phrases: Record<string, string>;
   /** in the strongest sections, doubled an octave up or down by another section */
   double?: { sound: MelodySound; oct: 1 | -1 };
@@ -76,16 +81,20 @@ export interface KeysStyle {
 export interface Theme {
   id: string;
   name: string;
-  /** in whose manner */
+  /** in whose manner, and the score it is built on */
   manner: "zimmer" | "williams" | "richter";
+  after: string;
   mood: string;
   bpm: number;
-  /** the tonic (MIDI, the octave of the chords: ~A3) and its mode */
+  /** beats a bar (3: a waltz's, Day One's), the grid's subdivisions a beat (3: triplets — a 6/8's or 12/8's feel) */
+  beats?: 3 | 4;
+  grid?: 3 | 4;
+  /** the tonic (MIDI, the octave of the chords: ~A3) and its mode (the melody's degrees) */
   root: number;
   scale: ScaleName;
   progressions: Record<string, ChordStep[]>;
   form: Section[];
-  /** the section the form loops back to once played through (the intro not again) */
+  /** the section the form loops back to once played through */
   loopFrom: number;
   perc: PercStyle | null;
   bass: BassStyle | null;
@@ -103,46 +112,49 @@ export interface Theme {
   tick?: number;
 }
 
-const F = (name: SectionName, bars: number, energy: number, prog?: string): Section => ({ name, bars, energy, ...(prog ? { prog } : {}) });
-const BRASS = (chords: boolean, braam: boolean, fanfare: boolean): BrassStyle => ({ chords, braam, fanfare });
+const F = (name: SectionName, bars: number, energy: number, o: { prog?: string; only?: Layer[] } = {}): Section => ({
+  name,
+  bars,
+  energy,
+  ...o,
+});
+const BRASS = (chords: boolean, braam: boolean, fanfare: boolean, chorale = false): BrassStyle => ({ chords, braam, fanfare, chorale });
 const KEYS = (gliss: boolean, sparkle: boolean, shepard: boolean): KeysStyle => ({ gliss, sparkle, shepard });
+/** A progression from its chords' symbols, each "symbol" (a bar) or "symbol:bars". */
+const P = (s: string): ChordStep[] =>
+  s
+    .trim()
+    .split(/\s+/)
+    .map((tok) => {
+      const [chord, bars] = tok.split(":");
+      return { chord: chord!, bars: bars ? Number(bars) : 1 };
+    });
 
 export const THEMES: Theme[] = [
   {
     id: "event-horizon",
     name: "Event Horizon",
     manner: "zimmer",
-    mood: "Gargantua, in Hans Zimmer's manner: the pipe organ and its 32-foot pedal, a long melody rising on the organ, the strings and the choir swelling, booms far away",
-    bpm: 60,
+    after: "Interstellar — main theme",
+    mood: "Gargantua, after Interstellar's main theme: A minor, the VI7 – v6 – i – v65 loop, the organ's clock ticking on an E pedal in triplets, the organ and its pedal, the strings and the choir swelling",
+    bpm: 96,
+    grid: 3,
     root: 57,
     scale: "minor",
-    progressions: {
-      a: [
-        { deg: 0, kind: "add9", bars: 2 },
-        { deg: 5, kind: "seventh", bars: 2 },
-        { deg: 2, kind: "add9", bars: 2 },
-        { deg: 6, kind: "sus2", bars: 2 },
-      ],
-      b: [
-        { deg: 0, kind: "add9" },
-        { deg: 5, kind: "triad" },
-        { deg: 3, kind: "seventh" },
-        { deg: 4, kind: "sus4" },
-      ],
-    },
-    form: [F("intro", 8, 0.2), F("verse", 16, 0.45), F("build", 8, 0.65), F("drop", 16, 0.92), F("break", 8, 0.3)],
+    progressions: { a: P("Fmaj7 Em/G Am Em7/G"), b: P("Fmaj7 G6 Am Em/G") },
+    form: [F("intro", 4, 0.22), F("verse", 8, 0.45), F("build", 4, 0.65), F("drop", 8, 0.95), F("break", 4, 0.3)],
     loopFrom: 1,
     perc: "booms",
     bass: "pedal",
     strings: "high",
-    ostinato: { pattern: "pendulum", sound: "organ", register: 69 },
+    ostinato: { pattern: "clock", sound: "organ", register: 76, pedal: 4 },
     brass: BRASS(true, false, false),
     melody: {
       sound: "organlead",
       oct: 0,
       phrases: {
-        a: "4/3 7/1 8/4 9/3 7/1 11/4 11/3 10/1 9/4 10/2 11/2 7/4",
-        b: "7/2 11/2 12/3 9/1 10/2 12/2 11/4",
+        a: "9/3 7/1 6/2 4/2 7/3 8/1 11/4 11/2 12/2 13/3 11/1 14/2 11/2 10/4",
+        b: "12/2 11/2 13/2 11/1 9/1 11/3 7/1 8/2 6/2",
       },
       double: { sound: "horn", oct: -1 },
     },
@@ -156,37 +168,39 @@ export const THEMES: Theme[] = [
     id: "ascent",
     name: "Ascent",
     manner: "williams",
-    mood: "The lift-off, in John Williams's manner: a heroic trumpet melody leaping in D Lydian, the horns under it, string sixteenths, the snare's march, timpani and the harp's glissandi",
-    bpm: 112,
-    root: 62,
-    scale: "lydian",
+    after: "Star Wars — main title",
+    mood: "The lift-off, after Star Wars's main title: B♭, a fanfare on the tonic, the big tune between the tonic and a chord of fourths on F, A♭ before the dominant, every phrase ending on it, a march in triplets, a lyrical middle for the strings and horns",
+    bpm: 104,
+    grid: 3,
+    root: 58,
+    scale: "mixolydian",
     progressions: {
-      a: [
-        { deg: 0, kind: "add9" },
-        { deg: 1, kind: "triad" },
-        { deg: 5, kind: "triad" },
-        { deg: 4, kind: "triad" },
-      ],
-      b: [
-        { deg: 0, kind: "triad" },
-        { deg: 4, kind: "triad" },
-        { deg: 5, kind: "triad" },
-        { deg: 1, kind: "triad" },
-      ],
+      i: P("Bbq Bb Bbq Fq"),
+      a: P("Bb Fq Bb Fq Bb Ab F F"),
+      b: P("Bb Ab F Fm"),
+      c: P("Eb/G F7sus4 Db F"),
     },
-    form: [F("intro", 4, 0.35), F("verse", 8, 0.55), F("build", 4, 0.75), F("drop", 8, 1), F("break", 4, 0.45), F("drop", 8, 1)],
+    form: [
+      F("intro", 4, 0.6, { prog: "i" }),
+      F("verse", 8, 0.75),
+      F("build", 4, 0.8),
+      F("break", 4, 0.45, { prog: "c" }),
+      F("drop", 8, 1, { prog: "a" }),
+    ],
     loopFrom: 1,
-    perc: "march",
+    perc: "tripletMarch",
     bass: "march",
     strings: "sustain",
-    ostinato: { pattern: "spiccato", sound: "spiccato", register: 69 },
+    ostinato: { pattern: "spiccato", sound: "spiccato", register: 70 },
     brass: BRASS(true, false, true),
     melody: {
       sound: "trumpet",
       oct: 0,
       phrases: {
-        a: "4/1.5 2/0.5 4/1 9/1 8/2 10/1 8/1 7/1.5 5/0.5 6/1 7/1 8/3 r/1",
-        b: "9/2 11/1 9/1 8/1.5 6/0.5 8/2 9/1 7/1 5/2 10/3 r/1",
+        i: "r/4 r/4 r/4 r/4",
+        a: "7/1.5 4/0.5 9/2 10/2 7/2 9/1 8/1 9/2 11/3 r/1 9/t 9/t 9/t 11/1 14/2 13/2 10/2 11/1 12/1 8/2 11/4",
+        b: "11/2 9/2 10/t 10/t 10/t 13/3 11/2 8/2 13/2 11/2",
+        c: "10/4 11/2 8/2 13/2 11/2 8/4",
       },
       double: { sound: "horn", oct: -1 },
     },
@@ -198,63 +212,41 @@ export const THEMES: Theme[] = [
   {
     id: "reentry",
     name: "Re-entry Fire",
-    manner: "zimmer",
-    mood: "The plasma, in Hans Zimmer's manner: braams of low brass on every chord, taikos, the low strings' eighths, a menacing half-step motif in D Phrygian, the choir",
-    bpm: 92,
-    root: 62,
-    scale: "phrygian",
-    progressions: {
-      a: [
-        { deg: 0, kind: "power" },
-        { deg: 1, kind: "triad" },
-        { deg: 0, kind: "power" },
-        { deg: 6, kind: "triad" },
-      ],
-      b: [
-        { deg: 0, kind: "triad" },
-        { deg: 5, kind: "triad" },
-        { deg: 1, kind: "triad" },
-        { deg: 6, kind: "triad" },
-      ],
-    },
-    form: [F("intro", 4, 0.35), F("verse", 8, 0.6), F("build", 4, 0.8), F("drop", 16, 1), F("break", 4, 0.45)],
+    manner: "williams",
+    after: "The Imperial March",
+    mood: "The plasma, after the Imperial March: G minor, the low strings, horns and timpani on G minor and E♭ minor, then i – ♯iv – ♯v – i (all minor chords, a semitone off the expected ones), trumpets and trombones in the middle register, the snare",
+    bpm: 104,
+    root: 55,
+    scale: "minor",
+    progressions: { a: P("Gm Ebm Gm Ebm"), b: P("Gm C#m D#m Gm") },
+    form: [F("intro", 4, 0.4), F("verse", 8, 0.65), F("build", 4, 0.8), F("drop", 8, 1), F("break", 4, 0.45)],
     loopFrom: 1,
-    perc: "taiko",
+    perc: "march",
     bass: "pulse",
     strings: "tremolo",
     ostinato: null,
-    brass: BRASS(false, true, false),
+    brass: BRASS(true, false, false),
     melody: {
-      sound: "horn",
-      oct: -1,
-      phrases: {
-        a: "0/1.5 1/0.5 0/2 1/3 r/1 0/1.5 1/0.5 4/2 3/2 1/2",
-        b: "4/1.5 5/0.5 4/2 5/3 r/1 3/1.5 1/0.5 3/2 1/4",
-      },
-      double: { sound: "cello", oct: -1 },
+      sound: "trumpet",
+      oct: 0,
+      phrases: { a: "4/2 2/1 0/1 5/2 2/2 4/1 7/1 4/2 2/3 5/1", b: "7/4 3+/2 5+/2 4+/2 6+/2 4/4" },
+      double: { sound: "horn", oct: -1 },
     },
     keys: null,
     organ: 0,
-    choir: 0.8,
-    vowel: "ah",
-    fx: { reverb: "hall", wet: 0.45, delay: 0, feedback: 0 },
+    choir: 0,
+    fx: { reverb: "hall", wet: 0.42, delay: 0, feedback: 0 },
   },
   {
     id: "final-approach",
     name: "Final Approach",
     manner: "williams",
-    mood: "The final, in John Williams's manner: a lyrical horn line in F Lydian, the strings held, the harp's arpeggios, soft timpani",
-    bpm: 96,
+    after: "E.T. — the Lydian neighbour chord",
+    mood: "The final, in John Williams's lyrical manner: F, the tonic and its Lydian neighbour (II over the tonic's bass), a horn line doubled by the violins, the harp's arpeggios, soft timpani",
+    bpm: 88,
     root: 65,
     scale: "lydian",
-    progressions: {
-      a: [
-        { deg: 0, kind: "add9" },
-        { deg: 4, kind: "sus2" },
-        { deg: 2, kind: "seventh" },
-        { deg: 1, kind: "add9" },
-      ],
-    },
+    progressions: { a: P("F G/F F G/F"), b: P("Dm Bb F C") },
     form: [F("intro", 4, 0.25), F("verse", 8, 0.45), F("build", 8, 0.65), F("break", 4, 0.3)],
     loopFrom: 1,
     perc: "timpani",
@@ -265,7 +257,7 @@ export const THEMES: Theme[] = [
     melody: {
       sound: "horn",
       oct: -1,
-      phrases: { a: "4/2 2/1 4/1 8/3 7/1 6/2 4/2 5/1 3/1 1/2" },
+      phrases: { a: "4/2 2/1 4/1 8/3 6/1 7/2 4/2 5/1 3/1 1/2", b: "5/2 7/2 7/2 5/2 4/2 2/2 4/4" },
       double: { sound: "violins", oct: 1 },
     },
     keys: KEYS(false, true, false),
@@ -277,24 +269,12 @@ export const THEMES: Theme[] = [
     id: "wormhole",
     name: "Through the Throat",
     manner: "zimmer",
-    mood: "The wormhole, in Hans Zimmer's manner: a Shepard tone rising without end, the organ's sixteenths, high violins, the choir and the taikos",
+    after: "Interstellar — The Wormhole; Dunkirk's Shepard tone",
+    mood: "The wormhole, after Interstellar: E minor, i – VI – III – VII, a Shepard tone rising without end, the organ's sixteenths, high violins, the choir and the taikos",
     bpm: 120,
     root: 64,
     scale: "minor",
-    progressions: {
-      a: [
-        { deg: 0, kind: "add9" },
-        { deg: 5, kind: "add9" },
-        { deg: 2, kind: "add9" },
-        { deg: 6, kind: "sus2" },
-      ],
-      b: [
-        { deg: 5, kind: "seventh" },
-        { deg: 6, kind: "triad" },
-        { deg: 0, kind: "add9" },
-        { deg: 4, kind: "sus4" },
-      ],
-    },
+    progressions: { a: P("Em C G D"), b: P("C D Em Em") },
     form: [F("intro", 8, 0.4), F("build", 8, 0.7), F("drop", 16, 1), F("break", 8, 0.45), F("drop", 16, 1)],
     loopFrom: 1,
     perc: "taiko",
@@ -305,7 +285,7 @@ export const THEMES: Theme[] = [
     melody: {
       sound: "violins",
       oct: 0,
-      phrases: { a: "7/4 9/2 7/2 10/4 7/4", b: "12/2 11/2 10/4 9/2 7/2 8/4" },
+      phrases: { a: "7/4 9/2 7/2 11/4 10/2 8/2", b: "12/2 11/2 10/4 9/2 7/2 11/4" },
       double: { sound: "horn", oct: -1 },
     },
     keys: KEYS(false, false, true),
@@ -318,21 +298,13 @@ export const THEMES: Theme[] = [
     id: "millers-tide",
     name: "Miller's Tide",
     manner: "zimmer",
-    mood: "Miller, in Hans Zimmer's manner: the 1.25 s tick, the organ low, the strings and the horns swelling like the wave, booms",
+    after: "Interstellar — Mountains",
+    mood: "Miller, after Interstellar's Mountains: the tick every 1.25 s (an hour there, seven years on Earth), A minor, the organ low with Fmaj7 and G6, the strings and the horns swelling like the wave, booms",
     bpm: 48,
     root: 57,
     scale: "minor",
-    progressions: {
-      a: [
-        { deg: 0, kind: "add9", bars: 2 },
-        { deg: 5, kind: "add9", bars: 2 },
-      ],
-      b: [
-        { deg: 3, kind: "seventh", bars: 2 },
-        { deg: 4, kind: "sus4", bars: 2 },
-      ],
-    },
-    form: [F("intro", 4, 0.25), F("verse", 8, 0.45), F("build", 4, 0.6), F("drop", 8, 0.8), F("break", 4, 0.3)],
+    progressions: { a: P("Am:2 Fmaj7:2 Dm/F:2 Esus4:2"), b: P("Fmaj7:2 G6:2 Am:4") },
+    form: [F("intro", 8, 0.25), F("verse", 8, 0.45), F("build", 8, 0.65), F("drop", 8, 0.85), F("break", 8, 0.3)],
     loopFrom: 1,
     perc: "booms",
     bass: "pedal",
@@ -342,7 +314,7 @@ export const THEMES: Theme[] = [
     melody: {
       sound: "horn",
       oct: 0,
-      phrases: { a: "4/4 3/2 2/2 2/4 0/4", b: "3/4 2/2 0/2 1/4 4/4" },
+      phrases: { a: "4/4 2/4 4/2 5/2 7/4 5/4 3/4 4/4 1/4", b: "5/4 4/4 6/4 4/4 2/8 0/8" },
     },
     keys: null,
     organ: 0.8,
@@ -355,29 +327,34 @@ export const THEMES: Theme[] = [
     id: "orbit-drift",
     name: "Earthlight",
     manner: "richter",
-    mood: "In orbit, in Max Richter's manner (On the Nature of Daylight): a string elegy — a slow loop of chords, the viola's long melody, the violins over it later, the cellos under",
-    bpm: 54,
-    root: 53,
+    after: "On the Nature of Daylight",
+    mood: "In orbit, after Max Richter's On the Nature of Daylight: B♭ minor at 61 BPM, a ground bass under i – v6 – III6 – VI – VII looping unchanged, the low strings first, the violins' long melody later, built up and stripped back like a palindrome",
+    bpm: 61,
+    root: 58,
     scale: "minor",
-    progressions: {
-      a: [{ deg: 0 }, { deg: 5 }, { deg: 2 }, { deg: 6 }],
-      b: [{ deg: 3 }, { deg: 5 }, { deg: 0, kind: "add9" }, { deg: 4, kind: "sus4" }],
-    },
-    form: [F("intro", 4, 0.2), F("verse", 8, 0.4), F("verse", 8, 0.55), F("build", 4, 0.7, "b"), F("drop", 8, 0.85), F("break", 4, 0.3)],
-    loopFrom: 1,
+    progressions: { a: P("Bbm:2 Fm/Ab:2 Db/F:2 Gb Ab"), b: P("Bbm:2 Fm/Ab:2 Db/F:2 Gb Ab") },
+    form: [
+      F("intro", 8, 0.25, { only: ["bass", "strings"] }),
+      F("verse", 8, 0.45),
+      F("build", 8, 0.65),
+      F("drop", 8, 0.9),
+      F("verse", 8, 0.5),
+      F("outro", 8, 0.25, { only: ["bass", "strings"] }),
+    ],
+    loopFrom: 0,
     perc: null,
     bass: "elegy",
     strings: "elegy",
     ostinato: null,
     brass: null,
     melody: {
-      sound: "viola",
+      sound: "violins",
       oct: 0,
       phrases: {
-        a: "4/4 5/2 4/2 4/4 3/2 1/2 2/3 4/1 7/2 5/2 6/2 4/2 3/4",
-        b: "10/2 12/2 12/2 11/2 9/2 8/2 7/4",
+        a: "9/4 11/4 8/6 6/2 6/4 4/4 5/2 7/2 8/4",
+        b: "11/4 14/4 13/4 11/2 15/2 16/4 13/4 12/2 14/2 15/4",
       },
-      double: { sound: "violins", oct: 1 },
+      double: { sound: "viola", oct: -1 },
     },
     keys: null,
     organ: 0,
@@ -388,142 +365,119 @@ export const THEMES: Theme[] = [
     id: "low-pass",
     name: "Low Pass",
     manner: "williams",
-    mood: "Flying low and fast, in John Williams's manner: trumpets' fanfare in A harmonic minor, brass stabs, the strings' driving sixteenths, toms and timpani",
-    bpm: 138,
-    root: 57,
-    scale: "harmonicMinor",
-    progressions: {
-      a: [
-        { deg: 0, kind: "triad" },
-        { deg: 5, kind: "triad" },
-        { deg: 3, kind: "triad" },
-        { deg: 4, kind: "triad" },
-      ],
-      b: [
-        { deg: 5, kind: "triad" },
-        { deg: 3, kind: "triad" },
-        { deg: 0, kind: "triad" },
-        { deg: 4, kind: "triad" },
-      ],
-    },
-    form: [F("intro", 4, 0.45), F("verse", 8, 0.65), F("build", 4, 0.8), F("drop", 8, 1), F("break", 4, 0.5)],
+    after: "E.T. — Flying",
+    mood: "Flying low and fast, after E.T.'s Flying: C with its Lydian neighbour chord (D over C), the violins soaring, brass stabs, the strings' sixteenths, the harp and the celesta, timpani and cymbals",
+    bpm: 132,
+    root: 60,
+    scale: "lydian",
+    progressions: { a: P("C D/C C D/C"), b: P("Am F C G F Am D G") },
+    form: [F("intro", 4, 0.45), F("verse", 8, 0.65), F("build", 8, 0.8), F("drop", 8, 1), F("break", 4, 0.5)],
     loopFrom: 1,
     perc: "action",
     bass: "pulse",
     strings: "sustain",
-    ostinato: { pattern: "spiccato", sound: "spiccato", register: 64 },
+    ostinato: { pattern: "spiccato", sound: "spiccato", register: 67 },
     brass: BRASS(true, false, true),
     melody: {
-      sound: "trumpet",
+      sound: "violins",
       oct: 0,
       phrases: {
-        a: "7/1 7/0.5 7/0.5 11/2 12/1.5 11/0.5 9/2 10/1 9/1 7/1 5/1 6/2 4/2",
-        b: "12/2 9/2 10/1.5 9/0.5 7/2 9/1 11/1 14/2 13/3 r/1",
+        a: "9/1 11/1 14/2 12/1.5 10/0.5 8/2 9/2 7/2 10/3 r/1",
+        b: "12/2 9/2 14/2 12/2 11/1 9/1 7/2 8/2 6/2 12/2 14/2 16/2 14/2 15/2 12/2 11/4",
       },
-      double: { sound: "horn", oct: -1 },
+      double: { sound: "trumpet", oct: -1 },
     },
-    keys: KEYS(true, false, false),
+    keys: KEYS(true, true, false),
     organ: 0,
     choir: 0,
-    fx: { reverb: "hall", wet: 0.32, delay: 0, feedback: 0 },
+    fx: { reverb: "hall", wet: 0.34, delay: 0, feedback: 0 },
   },
   {
     id: "docking",
     name: "Soft Capture",
     manner: "zimmer",
-    mood: "Docking, in Hans Zimmer's manner: the organ's sixteenths building, a clock ticking in eighths, the strings held, a horn line at the height",
-    bpm: 96,
-    root: 55,
+    after: "Interstellar — No Time for Caution",
+    mood: "Docking, after Interstellar's No Time for Caution: A minor, Am – F – C – G, the organ's sixteenths building, a clock ticking in eighths, the strings held, a horn line at the height, braams at the climax",
+    bpm: 104,
+    root: 57,
     scale: "minor",
-    progressions: {
-      a: [
-        { deg: 0, kind: "sus2" },
-        { deg: 0, kind: "add9" },
-        { deg: 5, kind: "sus2" },
-        { deg: 4, kind: "sus4" },
-      ],
-    },
-    form: [F("intro", 4, 0.3), F("verse", 8, 0.5), F("build", 8, 0.7), F("drop", 8, 0.9), F("break", 4, 0.35)],
+    progressions: { a: P("Am F C G"), b: P("F G Am Am") },
+    form: [F("intro", 4, 0.3), F("verse", 8, 0.5), F("build", 8, 0.7), F("drop", 8, 0.95), F("break", 4, 0.35)],
     loopFrom: 1,
     perc: "clock",
     bass: "pedal",
     strings: "sustain",
     ostinato: { pattern: "organ", sound: "organ", register: 67 },
-    brass: BRASS(true, false, false),
-    melody: { sound: "horn", oct: 1, phrases: { a: "4/4 2/2 4/2 5/2 6/2 4/4" } },
+    brass: BRASS(true, true, false),
+    melody: { sound: "horn", oct: 0, phrases: { a: "4/4 5/2 7/2 6/2 4/2 1/2 6/2", b: "5/2 7/2 6/2 8/2 7/4 4/4" } },
     keys: null,
-    organ: 0.7,
-    choir: 0,
+    organ: 0.75,
+    choir: 0.3,
+    vowel: "ah",
     fx: { reverb: "cathedral", wet: 0.5, delay: 0, feedback: 0 },
   },
   {
     id: "deep-space",
     name: "Deep Space",
     manner: "zimmer",
-    mood: "Between the worlds, in Hans Zimmer's manner: a few piano notes in a vast hall, the organ and the choir held, the strings low",
-    bpm: 64,
-    root: 61,
+    after: "Interstellar — Day One",
+    mood: "Between the worlds, after Interstellar's Day One: A minor in 3/4, the piano's left hand in broken chords, a few notes over them, the organ and the choir held far away",
+    bpm: 92,
+    beats: 3,
+    root: 57,
     scale: "minor",
-    progressions: {
-      a: [
-        { deg: 0, kind: "add9", bars: 2 },
-        { deg: 3, kind: "add9", bars: 2 },
-        { deg: 5, kind: "seventh", bars: 2 },
-        { deg: 4, kind: "sus4", bars: 2 },
-      ],
-    },
-    form: [F("intro", 8, 0.15), F("verse", 16, 0.35), F("build", 8, 0.5), F("break", 8, 0.2)],
+    progressions: { a: P("Am:2 F:2 C:2 G:2"), b: P("F:2 G:2 Am:2 Em:2") },
+    form: [F("intro", 8, 0.2), F("verse", 16, 0.4), F("build", 8, 0.55), F("break", 8, 0.25)],
     loopFrom: 1,
-    perc: "heartbeat",
+    perc: null,
     bass: "drone",
     strings: "sustain",
-    ostinato: { pattern: "piano", sound: "piano", register: 76 },
+    ostinato: { pattern: "broken", sound: "piano", register: 57 },
     brass: null,
-    melody: { sound: "piano", oct: 0, phrases: { a: "7/2 4/2 8/4 10/2 7/2 11/4 9/2 7/2 5/4 8/2 7/2 4/4" } },
+    melody: {
+      sound: "piano",
+      oct: 0,
+      phrases: { a: "11/2 9/1 7/3 12/2 11/1 9/3 11/2 13/1 11/3 10/2 8/1 6/3", b: "12/3 9/3 13/2 10/1 8/3 7/3 9/3 6/3 4/3" },
+    },
     keys: null,
     organ: 0.35,
-    choir: 0.6,
+    choir: 0.5,
     vowel: "oo",
-    fx: { reverb: "cathedral", wet: 0.7, delay: 1, feedback: 0.3 },
+    fx: { reverb: "cathedral", wet: 0.65, delay: 1, feedback: 0.25 },
   },
   {
     id: "endurance",
     name: "Endurance",
     manner: "zimmer",
-    mood: "The ship's theme, in Hans Zimmer's manner with John Williams's horns: the organ and the strings' eighths, taikos, braams, a heroic horn melody in E minor, the choir",
-    bpm: 96,
+    after: "Inception — Time",
+    mood: "The ship's theme, after Inception's Time: E minor at 60 BPM, Am – Em – G – D – Am – Cmaj7 – G – D (the Cmaj7 its lift), an insistent drum, the layers added one by one to the horns' climax, a solo piano to end",
+    bpm: 60,
     root: 64,
     scale: "minor",
-    progressions: {
-      a: [
-        { deg: 0, kind: "triad" },
-        { deg: 5, kind: "triad" },
-        { deg: 3, kind: "triad" },
-        { deg: 4, kind: "triad" },
-      ],
-      b: [
-        { deg: 5, kind: "add9" },
-        { deg: 2, kind: "triad" },
-        { deg: 6, kind: "triad" },
-        { deg: 4, kind: "sus4" },
-      ],
-    },
-    form: [F("intro", 8, 0.3), F("verse", 8, 0.55), F("build", 8, 0.75), F("drop", 16, 1), F("break", 8, 0.4)],
+    progressions: { a: P("Am Em G D Am Cmaj7 G D") },
+    form: [
+      F("intro", 8, 0.25),
+      F("verse", 8, 0.45),
+      F("build", 8, 0.65),
+      F("drop", 8, 0.95),
+      F("drop", 8, 1),
+      F("break", 8, 0.3, { only: ["ostinato"] }),
+    ],
     loopFrom: 1,
-    perc: "taiko",
-    bass: "pulse",
+    perc: "pulse",
+    bass: "pedal",
     strings: "sustain",
-    ostinato: { pattern: "pendulum", sound: "spiccato", register: 67 },
+    ostinato: { pattern: "broken", sound: "piano", register: 57 },
     brass: BRASS(true, true, false),
     melody: {
       sound: "horn",
-      oct: -1,
-      phrases: { a: "4/1 7/2 9/1 9/1.5 8/0.5 7/2 7/1 8/1 9/1 10/1 11/2 8/2", b: "9/2 12/2 11/3 9/1 10/2 8/2 11/4" },
+      oct: 0,
+      phrases: { a: "3/4 4/2 2/2 6/3 4/1 3/4 5/2 7/2 11/2 7/2 9/3 6/1 8/4" },
       double: { sound: "trumpet", oct: 1 },
     },
     keys: null,
-    organ: 0.7,
-    choir: 0.7,
+    organ: 0,
+    choir: 0.45,
     vowel: "ah",
     fx: { reverb: "hall", wet: 0.5, delay: 0, feedback: 0 },
   },
@@ -531,54 +485,65 @@ export const THEMES: Theme[] = [
     id: "new-worlds",
     name: "New Worlds",
     manner: "williams",
-    mood: "On foot on another world, in John Williams's manner: wonder in D Lydian — the flute and the violins, the celesta's sparkles, the harp, strings held",
-    bpm: 84,
-    root: 62,
-    scale: "lydian",
-    progressions: {
-      a: [
-        { deg: 0, kind: "seventh" },
-        { deg: 1, kind: "triad" },
-        { deg: 4, kind: "triad" },
-        { deg: 5, kind: "triad" },
-      ],
-    },
-    form: [F("intro", 4, 0.25), F("verse", 8, 0.45), F("build", 8, 0.65), F("break", 4, 0.3)],
+    after: "Jurassic Park — main theme",
+    mood: "On foot on another world, after Jurassic Park's theme: B♭ major, reverently, I(add9) – V7sus4 to open, then I – IV – I (the IV resolving back home), only major chords, a hymn where chord and tune move together, low strings and horns first, the choir later, A♭ at the climaxes",
+    bpm: 76,
+    root: 58,
+    scale: "major",
+    progressions: { i: P("Bbadd9:2 F7sus4:2"), a: P("Bb Eb/Bb Bb F"), b: P("Eb Bb Eb Bb Ab Eb F:2") },
+    form: [F("intro", 4, 0.25, { prog: "i" }), F("verse", 8, 0.45), F("build", 8, 0.65), F("drop", 8, 0.85), F("break", 4, 0.3)],
     loopFrom: 1,
     perc: "timpani",
     bass: "drone",
-    strings: "sustain",
-    ostinato: { pattern: "arpeggio", sound: "harp", register: 66 },
-    brass: BRASS(true, false, false),
+    strings: "hymn",
+    ostinato: null,
+    brass: BRASS(false, false, false, true),
     melody: {
-      sound: "flute",
+      sound: "horn",
       oct: 0,
-      phrases: { a: "9/1 11/1 13/2 12/1.5 10/0.5 8/2 8/1 9/1 11/2 12/3 9/1" },
-      double: { sound: "violins", oct: -1 },
+      phrases: {
+        i: "r/4 r/4 r/4 r/4",
+        a: "4/1.5 2/0.5 4/2 5/1.5 3/0.5 7/2 2/1 4/1 7/2 8/3 r/1",
+        b: "10/1.5 9/0.5 7/2 9/2 11/2 12/1.5 10/0.5 12/2 11/4 10/2 8/2 10/2 12/2 11/2 13/2 11/4",
+      },
+      double: { sound: "violins", oct: 1 },
     },
-    keys: KEYS(true, true, false),
+    keys: null,
     organ: 0,
-    choir: 0.2,
-    vowel: "oo",
-    fx: { reverb: "hall", wet: 0.45, delay: 0.75, feedback: 0.2 },
+    choir: 0.4,
+    vowel: "ah",
+    fx: { reverb: "hall", wet: 0.48, delay: 0, feedback: 0 },
   },
 ];
 
 export const THEME_BY_ID: Record<string, Theme> = Object.fromEntries(THEMES.map((t) => [t.id, t]));
 
-/** A phrase's notes: `degree/beats` tokens ("r/…": a rest) → their start [beats from the phrase's], length, degree
- *  (null: a rest); its length [beats]. */
-export function parsePhrase(p: string): { notes: { at: number; dur: number; deg: number | null }[]; beats: number } {
+/** A theme's beats a bar and its grid's subdivisions a beat. */
+export const beatsOf = (t: Theme) => t.beats ?? 4;
+export const gridOf = (t: Theme) => t.grid ?? 4;
+
+/**
+ * A phrase's notes: `degree/beats` tokens ("r": a rest; "4+" raised a semitone, "6-" lowered; "/t": a triplet
+ * eighth, a third of a beat) → their start [beats from the phrase's], length, degree and alteration (null: a rest);
+ * its length [beats].
+ */
+export function parsePhrase(p: string): { notes: { at: number; dur: number; deg: number | null; acc: number }[]; beats: number } {
   let at = 0;
   const notes = p
     .trim()
     .split(/\s+/)
     .map((tok) => {
       const [d, l] = tok.split("/");
-      const dur = Number(l);
-      const n = { at, dur, deg: d === "r" ? null : Number(d) };
+      const dur = l === "t" ? 1 / 3 : Number(l);
+      const m = /^(-?\d+)([+-]?)$/.exec(d!);
+      const n = {
+        at: Math.round(at * 1e6) / 1e6,
+        dur,
+        deg: d === "r" || !m ? null : Number(m[1]),
+        acc: m?.[2] === "+" ? 1 : m?.[2] === "-" ? -1 : 0,
+      };
       at += dur;
       return n;
     });
-  return { notes, beats: at };
+  return { notes, beats: Math.round(at * 1e6) / 1e6 };
 }

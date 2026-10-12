@@ -11,7 +11,7 @@ import { DEFAULT_PREFS } from "../audio/music";
 import { CONTEXTS, MOMENTS } from "../audio/score";
 import { LAYERS, type Layer, THEME_BY_ID, THEMES } from "../audio/music/themes";
 import type { Settings } from "../settings";
-import { t } from "../i18n";
+import { t, tf } from "../i18n";
 import { el as h } from "./kit";
 import { onEscape } from "./keys";
 
@@ -38,11 +38,6 @@ const LAYER_NAME: Record<Layer, () => string> = {
   keys: () => t("Harp, celesta"),
   organ: () => t("Organ"),
   choir: () => t("Choir"),
-};
-const MANNER: Record<string, () => string> = {
-  zimmer: () => t("Hans Zimmer's manner"),
-  williams: () => t("John Williams's manner"),
-  richter: () => t("Max Richter's manner"),
 };
 const CUE_NAME: Record<string, () => string> = {
   liftoff: () => t("Lift-off"),
@@ -267,7 +262,7 @@ export class MusicPanel {
       const name = SCALE_NAME[th.scale]?.() ?? th.scale;
       b.append(
         h("b", "", th.name),
-        h("small", "", `${MANNER[th.manner]!()} · ${th.bpm} BPM · ${NOTE_NAMES[th.root % 12]} ${name}`),
+        h("small", "", `${tf("After {0}", t(th.after))} · ${th.bpm} BPM · ${NOTE_NAMES[th.root % 12]} ${name}`),
         h("small", "", t(th.mood)),
       );
       b.title = t(th.mood);
@@ -455,9 +450,15 @@ export class MusicPanel {
         h(
           "div",
           "mp-meta",
-          s.playing ? `${SECTION[s.section]?.() ?? s.section} · ${t("bar")} ${s.bar + 1} · ${Math.floor(s.beat) + 1}/4` : "",
+          s.playing
+            ? `${SECTION[s.section]?.() ?? s.section} · ${t("bar")} ${s.bar + 1} · ${Math.floor(s.beat) + 1}/${(s.theme && THEME_BY_ID[s.theme]?.beats) || 4}`
+            : "",
         ),
-        h("div", "mp-meta", s.playing ? `${s.bpm} BPM · ${chordName(s.chord, Number.isFinite(s.root) ? s.root : undefined)}` : ""),
+        h(
+          "div",
+          "mp-meta",
+          s.playing ? `${s.bpm} BPM · ${s.symbol || chordName(s.chord, Number.isFinite(s.root) ? s.root : undefined)}` : "",
+        ),
         h("div", "mp-small", t("Energy")),
         energy,
         h("div", "mp-small", t("Intensity")),

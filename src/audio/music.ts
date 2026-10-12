@@ -204,6 +204,7 @@ export class Music {
           energy: 0,
           intensity: 0.5,
           chord: [],
+          symbol: "",
           root: Number.NaN,
           notes: 0,
         };

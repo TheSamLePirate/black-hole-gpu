@@ -101,3 +101,48 @@ export function seedOf(...parts: (string | number)[]): number {
 
 /** A MIDI note's frequency [Hz]. */
 export const midiHz = (n: number) => 440 * 2 ** ((n - 69) / 12);
+
+/** A chord's qualities, as semitones above its root. */
+export const QUALITIES: Record<string, number[]> = {
+  "": [0, 4, 7],
+  m: [0, 3, 7],
+  dim: [0, 3, 6],
+  aug: [0, 4, 8],
+  maj7: [0, 4, 7, 11],
+  m7: [0, 3, 7, 10],
+  "7": [0, 4, 7, 10],
+  sus2: [0, 2, 7],
+  sus4: [0, 5, 7],
+  add9: [0, 4, 7, 14],
+  madd9: [0, 3, 7, 14],
+  "6": [0, 4, 7, 9],
+  m6: [0, 3, 7, 9],
+  "7sus4": [0, 5, 7, 10],
+  maj9: [0, 4, 7, 11, 14],
+  m9: [0, 3, 7, 10, 14],
+  "5": [0, 7, 12],
+  // (stacked fourths: the fanfare's open, modern sound)
+  q: [0, 5, 10, 15],
+};
+const PC: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+
+/**
+ * A chord from its symbol ("Fmaj7", "Em/G", "Ebm", "F7sus4", "Bbq": stacked fourths on B♭), voiced on the octave
+ * at or above `low` (MIDI): its notes from its root up, its bass (the slash's, else the root), its root's pitch
+ * class.
+ */
+export function parseChord(sym: string, low = 48): { notes: number[]; bass: number; root: number } {
+  const m = /^([A-G])([#b]?)([^/]*)(?:\/([A-G])([#b]?))?$/.exec(sym.trim());
+  if (!m) throw new Error(`not a chord: ${sym}`);
+  const acc = (a: string) => (a === "#" ? 1 : a === "b" ? -1 : 0);
+  const rootPc = (PC[m[1]!]! + acc(m[2]!) + 12) % 12;
+  const shape = QUALITIES[m[3]!];
+  if (!shape) throw new Error(`unknown chord quality "${m[3]}" in ${sym}`);
+  let r = low + ((((rootPc - low) % 12) + 12) % 12);
+  const notes = shape.map((s) => r + s);
+  const bassPc = m[4] ? (PC[m[4]]! + acc(m[5]!) + 12) % 12 : rootPc;
+  let bass = low + ((((bassPc - low) % 12) + 12) % 12);
+  if (bass > r) bass -= 12;
+  r = rootPc;
+  return { notes, bass, root: r };
+}

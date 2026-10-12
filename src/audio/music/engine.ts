@@ -7,7 +7,7 @@
 
 import { type BarPlan, composeBar } from "./composer";
 import { impulseResponse, type Kit, makeKit, playNote } from "./instruments";
-import { type Layer, LAYERS, type Theme, THEME_BY_ID } from "./themes";
+import { beatsOf, type Layer, LAYERS, type Theme, THEME_BY_ID } from "./themes";
 
 export type ReverbKind = "hall" | "plate" | "cathedral";
 
@@ -81,6 +81,8 @@ export interface MusicState {
   energy: number;
   intensity: number;
   chord: number[];
+  /** the chord's symbol ("Fmaj7", "Em/G"; "": none) */
+  symbol: string;
   /** the chord's root (MIDI; NaN: none) */
   root: number;
   /** the notes started (all of them) */
@@ -248,7 +250,7 @@ export class MusicEngine {
           this.notes++;
         }
         tr.bar++;
-        tr.at += 4 * spb;
+        tr.at += beatsOf(tr.theme) * spb;
       }
       if (tr.theme.tick)
         while (tr.nextTick < now + ahead && tr.nextTick < tr.endAt - 3) {
@@ -280,12 +282,14 @@ export class MusicEngine {
         energy: 0,
         intensity: this.intensity,
         chord: [],
+        symbol: "",
         root: Number.NaN,
         notes: this.notes,
       };
     const spb = 60 / tr.theme.bpm;
     const pos = Math.max(0, (now - tr.t0) / spb);
-    const bar = Math.floor(pos / 4);
+    const bpb = beatsOf(tr.theme);
+    const bar = Math.floor(pos / bpb);
     const plan = tr.plans.find((p) => p.bar === bar) ?? tr.plans[0];
     return {
       playing: true,
@@ -294,10 +298,11 @@ export class MusicEngine {
       bpm: tr.theme.bpm,
       section: plan?.section.name ?? "",
       bar,
-      beat: pos % 4,
+      beat: pos % bpb,
       energy: plan?.energy ?? 0,
       intensity: this.intensity,
       chord: plan?.chord ?? [],
+      symbol: plan?.symbol ?? "",
       root: plan?.root ?? Number.NaN,
       notes: this.notes,
     };

@@ -220,3 +220,60 @@ theme is the game's own, written in the composer's manner:
 7. **A saved mixer from before:** reload; no stale "Drums" or "Guitar" mute is left.
 8. **iPad:** CPU load with Through the Throat and Low Pass.
 
+## The references pass: the scores' own harmony and structure
+
+The request: to feel inside these well-known scores — their progressions, structures, harmonies, the simple and
+moving chords.
+
+**What is taken, what is not.** The themes take each score's chord progression, key, tempo, metre, form and
+orchestration, from published analyses: Hooktheory, Film Music Notes, Attack Magazine, and the Wikipedia article
+on Daylight. A progression is not a work's protected part. Its melody is, so each melody stays the game's own,
+written on those chords. The panel names each theme's model ("After …").
+
+| Theme | After | What it takes |
+| --- | --- | --- |
+| Event Horizon | Interstellar, main theme | A minor, 96 BPM in triplets (its 6/8), VI7 – v6 – i – v65 (Fmaj7 – Em/G – Am – Em7/G), the organ's clock repeating E (the pedal on E), the pedal under the chords' bass |
+| Through the Throat | Interstellar, The Wormhole | E minor, i – VI – III – VII, the organ's sixteenths, a Shepard tone (Dunkirk's device) |
+| Miller's Tide | Interstellar, Mountains | the 1.25 s tick, A minor, Fmaj7 and G6 |
+| Soft Capture | Interstellar, No Time for Caution | A minor, Am – F – C – G, the organ building |
+| Deep Space | Interstellar, Day One | A minor in 3/4, the piano's broken chords |
+| Endurance | Inception, Time | E minor at 60 BPM, Am – Em – G – D – Am – Cmaj7 – G – D, the insistent drum, the layers added one by one, a solo piano to end |
+| Ascent | Star Wars, main title | B♭, the fanfare on the tonic, the big tune between B♭ and fourths on F, A♭ before the dominant, every phrase ending on it, the verse's I – ♭VII – V – v, the middle's IV6 – V7sus4 – ♭III – V, a march in triplets |
+| Re-entry Fire | The Imperial March | G minor and E♭ minor, then i – ♯iv – ♯v – i, low strings, horns and timpani, trumpets and trombones, the snare |
+| New Worlds | Jurassic Park | B♭, I(add9) – V7sus4, I – IV – I, major chords only, A♭ at the climaxes, a hymn (chords moving with the tune), low strings and horns first, the choir later |
+| Low Pass | E.T., Flying | C with its Lydian II over the tonic's bass |
+| Final Approach | E.T.'s Lydian neighbour chord | F with G over F, a lyrical horn |
+| Earthlight | On the Nature of Daylight | B♭ minor at 61 BPM, a ground bass under i – v6 – III6 – VI – VII (B♭m – Fm/A♭ – D♭/F – G♭ – A♭), the low strings alone first and last (the palindrome), the violins' line |
+
+**The engine, to play them:**
+
+- **Chords by their symbols:** slashes, borrowed chords such as A♭ in B♭, C♯m and D♯m in G minor, stacked fourths
+  ("Fq"). The bass follows the slash.
+- **Metre and grid:** bars of three beats (Day One) and a triplet grid (the 6/8 and 12/8 feels of Interstellar's
+  theme and Star Wars).
+- **New percussion:**
+  - a triplet march;
+  - an insistent pulse.
+- **New ostinatos:**
+  - the clock repeating its pedal note;
+  - the piano's broken chords.
+- **New ways for the orchestra to play together:**
+  - a hymn, with the strings' and horns' chords moving with each note of the tune;
+  - sections for a few instruments only (Daylight's low strings, Time's solo piano).
+- **The panel** shows the chord's symbol and the bar's beats (/3 or /4).
+
+### Checks
+
+- **Unit tests:**
+  - each progression against its published analysis;
+  - the chord parser;
+  - Interstellar's clock on E in triplets, its pedal under G;
+  - Time's pulse, braams and solo piano;
+  - Day One in 3/4;
+  - Jurassic Park's hymn;
+  - Daylight's palindrome;
+  - Star Wars's triplet march;
+  - the melodies fitted to their chords (≥ 80 % chord tones on the strong beats);
+  - every note in the mode or its chord.
+- **Offline render (60 s per theme):** all 12 pass, peaks −0.6 to −2 dBFS, RMS −11 to −17 dBFS.
+
