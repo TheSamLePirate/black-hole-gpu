@@ -368,6 +368,10 @@ export interface Settings {
   /** the craft flown (vessels.ts): the Ranger, the Lander, the Endurance */
   vessel: "ranger" | "lander" | "endurance";
   shipMount: string; // attach point of the camera (ship.ts MOUNTS)
+  cineShot: "auto" | "chase" | "orbit" | "pass" | "tracking" | "planet" | "system"; // the director's view (cine/brain.ts): its shot, or the director choosing
+  cineShake: number; // its noise: the air's buffeting, the engine's rumble, the hand (0 … 1)
+  cineDynamicFov: boolean; // its lens widened with the speed and the afterburner, the long lens on the still cameras
+  characterShoulder: number; // on foot: the camera over the right shoulder [m] (0: behind the head)
   shipAlbedo: number; // hull albedo (light grey paint in the film)
   shipMetal: number; // metalness of the plating (0 painted … 1 bare metal)
   shipRough: number; // roughness scale (lower: glossier)
@@ -647,6 +651,10 @@ export function defaultSettings(): Settings {
     ship: false,
     vessel: "ranger",
     shipMount: "quarter",
+    cineShot: "auto",
+    cineShake: 0.5,
+    cineDynamicFov: true,
+    characterShoulder: 0.45,
     shipAlbedo: 0.6,
     shipMetal: 0.15,
     shipRough: 1,
@@ -1904,6 +1912,10 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   ship: "carried",
   vessel: "scene",
   shipMount: "carried",
+  cineShot: "pref",
+  cineShake: "pref",
+  cineDynamicFov: "pref",
+  characterShoulder: "pref",
   shipAlbedo: "carried",
   shipMetal: "carried",
   shipRough: "carried",

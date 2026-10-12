@@ -7,7 +7,67 @@ plane mode flown like a jet with all of a jet's options, and fewer alarm beeps w
 | --- | --- | --- |
 | 1 | Ground alerts on the flight path (GPWS) | done |
 | 2 | Jet HUD and jet systems | done |
-| 3 | Camera brain (virtual cameras, blends, noise, dynamic FOV) | to do |
+| 3 | Camera brain (virtual cameras, blends, noise, dynamic FOV) | done |
+
+## Lot 3: the camera director (Cinemachine-style)
+
+**The brain** (`src/cine/brain.ts` and `src/cine/rig.ts`, pure and tested in `tests/cine.test.ts`).
+
+- **Shots.** Virtual cameras, each with a body, an aim, a lens, damping (critically damped springs) and noise:
+
+  | Shot | What it does |
+  | --- | --- |
+  | Chase | Behind the direction of travel, lagging the turns, the horizon mostly level in the air. |
+  | Slow orbit | One turn round the craft every 45 s. |
+  | Fly-by | A camera fixed in the world ahead of the craft, following it past with a long lens. |
+  | Ground tracking | On the ground 900 m to the side, the lens closing as the craft climbs away (a launch shot). |
+  | Planet's limb | The world's horizon behind the craft, seen from above and behind. |
+  | Destination | The target (else the Sun) behind the craft, with a longer lens. |
+
+- **Director.** It picks the shots by flight phase (ground, launch, low, air, orbit, deep space) and holds each
+  for 8 to 20 s. It cuts to and from the still cameras (fly-by, tracking) and blends 1.6 s between the moving
+  ones. The fly-by ends once the craft has passed.
+- **Lens.** The chase widens with Mach (up to +14 %) and with the afterburner (+7 %). The still cameras use a long
+  lens that keeps the craft a third of the frame high.
+- **Noise.** Air buffeting (strongest through Mach 1), engine rumble, afterburner, and hand tremor on a long lens.
+
+**In the app** (`src/controller/cine.ts`):
+
+- A new outside view, **Director** (in the V cycle and the view buttons). The craft keeps its attitude: the existing
+  view easing re-orients the camera, not the craft. `tests/cine-flight.test.ts` checks that a flight seen from the
+  Director is the same as from the chase, within 0.5 m and 0.01°.
+- The view carries a camera up vector (`MountPose.up`), so the horizon stays level.
+- The lens is taken while the Director is on and given back afterwards. The mouse wheel sets the shot distance.
+- **Key `\`** (` on a French Mac keyboard): switches to the Director, then cycles through "director chooses",
+  then each shot.
+- **Settings** (Ranger): Director's shot, camera shake (0.5), dynamic lens (on).
+- **Sound.** In the fly-by and tracking shots, the sonic boom is heard as a standing listener.
+
+**On foot** (`src/controller/character.ts`):
+
+- The camera sits over the right shoulder (setting Over the shoulder: 0.45 m).
+- Its pivot follows the head with a 70 ms lag and is saved in snapshots.
+- It dips with the legs on a landing and jolts in proportion to the fall.
+- The field widens by 7 % when running (disabled along with the dynamic lens).
+
+### Tests to run on the Macs (manual)
+
+1. **Low pass.** Ranger in plane mode, low pass at 300 m, `\` (Director): chase first, then fly-by (a cut), slow
+   orbit, chase again. No jerks, and the horizon stays level in the chase.
+2. **Supersonic.** Mach 1.2 in the chase: the field widens and the camera shakes at the sonic transition. With
+   shake set to 0 it is steady.
+3. **Afterburner.** ⇧Z in the chase: a small lens kick and more rumble.
+4. **Launch.** Take off with U from Kennedy in the Director: the tracking shot from the ground, the long lens
+   closing, the boom heard from the ground.
+5. **Orbit.** At 400 km in the Director: the planet's limb behind the Ranger, the horizon visible in the upper
+   third. Then the chase, the slow orbit, and the destination with the Moon targeted.
+6. **Deep space.** Transfer to Mars in the Director: the destination shot shows Mars behind the craft.
+7. **Fixed shot.** Setting Director's shot = Chase: no cuts. Wheel: the distance changes (×0.35 to ×10).
+8. **Leaving.** V to the cockpit view: the field of view returns to its value (eased).
+9. **On foot.** Walk on the Earth: the shoulder offset, running widens the view, a jump lands with a dip and a
+   jolt. F5 then F9 (save, load): the camera is restored identically.
+10. **Performance.** No measurable CPU cost (the brain is a few vectors per frame), visible in the "flight HUD"
+    and "sound" profiler rows.
 
 ## Lot 2: jet systems and the jet HUD
 

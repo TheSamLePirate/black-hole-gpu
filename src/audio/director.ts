@@ -326,6 +326,8 @@ export class SoundDirector {
       groundWind?: number;
       /** the rain where the view is (PLAN-PLUIE P5; 0: none, or the time held) */
       rain?: number;
+      /** the view a still camera's (the director's fly-by, its tracking shot): the boom heard standing */
+      standing?: boolean;
     },
   ) {
     const s = this.s;
@@ -416,7 +418,7 @@ export class SoundDirector {
     // through Mach 1 in the air, aboard (and on the views riding with the ship): the airframe's shudder —
     // one's own boom is never heard (S7); the boom is a standing listener's, its Mach cone sweeping it
     const M = info.air?.inAir ? info.air.mach : 0;
-    const standing = !!o.spectator || s.shipMount === "flyby";
+    const standing = !!o.spectator || s.shipMount === "flyby" || (s.shipMount === "director" && !!o.standing);
     if (this.mach < 1 !== M < 1 && this.mach > 0 && M > 0 && Math.abs(M - this.mach) < 0.2 && !standing) {
       this.cue("transonic");
       haptics.impulse("transonic");

@@ -2645,6 +2645,11 @@ async function main() {
       cfg.flaps = cfg.flaps === 0.5 ? 1 : cfg.flaps === 1 ? 0 : 0.5;
       panel.toast(cfg.flaps === 0 ? t("Flaps up") : cfg.flaps === 0.5 ? t("Flaps half") : t("Flaps full"));
     },
+    cineShot: () => {
+      // (the Director view's shot — the view itself put on if another was)
+      if (settings.shipMount !== "director") setMount("director");
+      else panel.toast(camera.cineNextShot());
+    },
     jetSystem: (_, a) => panel.toast(camera.jetToggle(a === "ab" ? "ab" : a === "athr" ? "athr" : "ap")),
     airBrake: () => {
       camera.airBrake = camera.airBrake > 0 ? 0 : 1;
@@ -4466,6 +4471,7 @@ async function main() {
               ? shipToCamera(renderer.shipPose, settings.shipLookYaw, settings.shipLookPitch)
               : null,
           spectator: camera.spectating,
+          standing: camera.cine.shot === "pass" || camera.cine.shot === "tracking",
           thrust: renderer.shipThrust,
           gear: camera.gearLast,
           groundWind: camera.weatherNow?.wind.u10 ?? 0,

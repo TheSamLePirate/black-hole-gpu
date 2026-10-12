@@ -494,6 +494,7 @@ function mountTarget(this: CameraController): MountPose {
     return { eye: o.eye, aim: lin(o.eye, 1, f, 10) };
   }
   if (v === "flyby") return { eye: this.flyby.eye, aim: V.centre };
+  if (v === "director") return this.cineOut ?? { eye: lin(V.centre, 1, [0, 0.25 * V.viewDist, -V.viewDist], 1), aim: V.centre };
   // (about the cabin: where the camera has moved to, looking along the nose — the look turns it)
   if (this.s.shipMount === "cabin") {
     const e = this.cabinCam.eye ?? mountPose("cockpit").eye;
@@ -585,7 +586,9 @@ function stepMount(this: CameraController, dt: number) {
     A.t = Math.min(1, A.t + dt / 0.6);
     const k = smoothstep(A.t);
     const mix = (p: Vec3, q: Vec3) => lin(p, 1 - k, q, k);
-    this.mountEff = { eye: mix(A.from.eye, to.eye), aim: mix(A.from.aim, to.aim) };
+    // (the camera's up, when either view sets its own: turned from one to the other)
+    const up = A.from.up || to.up ? normalize(mix(A.from.up ?? [0, 1, 0], to.up ?? [0, 1, 0])) : undefined;
+    this.mountEff = { eye: mix(A.from.eye, to.eye), aim: mix(A.from.aim, to.aim), ...(up ? { up } : {}) };
     if (A.t >= 1) (this.mountAnim = null), (this.mountEff = null);
   } else this.mountEff = null;
   if (s.ship && !this.cinematic) this.reorient(S0, this.shipMatrix());

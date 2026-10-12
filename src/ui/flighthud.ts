@@ -2382,7 +2382,7 @@ export class FlightHud {
       future: fut,
       quarter,
       runway: this.runway?.() ?? null,
-      outside: ["around", "free", "flyby", "station"].includes(String(i.mount)),
+      outside: ["around", "free", "flyby", "station", "director"].includes(String(i.mount)),
       top: (safeFrame().top - 16) * dpr,
     });
     const r = 11 * dpr;

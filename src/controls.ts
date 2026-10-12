@@ -1,5 +1,6 @@
 import type { MlsReading } from "./game/mls";
 import { Autothrottle, type JetModes, noJetModes } from "./game/jet";
+import { CineBrain } from "./cine/brain";
 import type { CockpitInput } from "./cockpit/input";
 import type { cameraFrame } from "./camera";
 import type { RealInfo } from "./realweather";
@@ -47,6 +48,7 @@ import { installTelemetry } from "./controller/telemetry";
 import { PlanetCharacter } from "./controller/character";
 import { installSpectator } from "./controller/spectator";
 import { installJet } from "./controller/jet";
+import { installCine } from "./controller/cine";
 import { isTyping } from "./controller/util";
 export { FLIGHT_KEYS, LANDING, TELE_MIN, finalGate, isTyping, landingProfile, wrapYaw } from "./controller/util";
 export type { LandingFix } from "./controller/util";
@@ -893,6 +895,13 @@ export class CameraController {
 
   /** The air brake asked for (0 … 1). */
   airBrake = 0;
+  /** the director's view (mounts.ts "director", cine/brain.ts — controller/cine.ts): its brain, its pose this
+   *  frame (ship frame), the lens's field before it took the lens, the wheel's distance factor, its clock [s] */
+  readonly cine = new CineBrain();
+  cineOut: MountPose | null = null;
+  cineFovBase: number | null = null;
+  cineZoom = 1;
+  cineClock = 0;
   /** the jet's systems (plane mode — game/jet.ts, controller/jet.ts): the autopilot's altitude and heading
    *  holds, the autothrottle, the afterburner; the stick flying through the holds (pitch, roll) */
   jetModes: JetModes = noJetModes();
@@ -1237,3 +1246,4 @@ installJourney(CameraController);
 installTelemetry(CameraController);
 installSpectator(CameraController);
 installJet(CameraController);
+installCine(CameraController);

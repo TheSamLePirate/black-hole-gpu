@@ -157,6 +157,9 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
     if (s.shipMount !== this.lastMount) this.flyby.E = null; // (a new fly-by: from where the view is)
     this.flybyStep(dt);
   }
+  // (the director's view: its shot this frame — controller/cine.ts —; left, its lens given back)
+  if (this.piloting && !this.cinematic && this.outsideView() === "director") this.cineStep(dt);
+  else this.cineLeave();
   this.stepMount(dt);
   const pilotNow = this.piloting && this.cinematic !== "dive" && this.cinematic !== "journey";
   // (a spectator out: the keys, the sticks, the zoom are its — the ship's view keeps still)

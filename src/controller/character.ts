@@ -17,6 +17,7 @@ import { shipToCamera } from "../mounts";
 import type { SceneryContact } from "../system/scenery-contact";
 import { t } from "../i18n";
 import { capsuleInHull, hullDistance, outOfHull, placeHull, type VesselHull } from "./vessel-hull";
+import { damp, fbm, Spring3, type V3 } from "../cine/rig";
 
 /** a jump asked this long before the feet touch down is still made on landing [s] */
 export const JUMP_BUFFER_S = 0.15;
@@ -36,6 +37,8 @@ export interface CharacterSave {
   pitch: number;
   distance: number;
   vertical: number;
+  /** the view's pivot (body-fixed [m]: it lags the head — the view saved where it was) */
+  pivot?: Vec3;
 }
 export interface CharacterFrame {
   origin: Vec3;
@@ -96,6 +99,12 @@ export class PlanetCharacter {
   private lastTime = 0;
   private heading: Vec3 = [0, 1, 0];
   private camDistance = 4.5;
+  /** the view's pivot following the head with a little lag (body-fixed), the lens's run factor, a landing's
+   *  jolt (its strength, decaying) and its clock [s] */
+  private camPivot = new Spring3();
+  private runFov = 1;
+  private jolt = 0;
+  private camClock = 0;
   constructor(private c: CameraController) {}
   metres() {
     return this.ours ? M_METRES : 1476.625 * this.c.s.massSolar;
@@ -193,6 +202,9 @@ export class PlanetCharacter {
     this.yaw = 0;
     this.pitch = 0.2;
     this.distance = this.camDistance = this.c.s.characterDistance;
+    this.camPivot.reset();
+    this.jolt = 0;
+    this.runFov = 1;
     this.accumulator = 0;
     this.drive = null;
     this.c.keys.clear();
@@ -615,6 +627,8 @@ export class PlanetCharacter {
       if (!this.grounded) {
         // (the legs give on landing: a damped spring, deeper the faster the fall)
         this.dipRate = Math.min(this.dipRate, -Math.min(2, 0.6 * Math.abs(this.vertical)));
+        // (the camera jolted, harder the faster the fall)
+        this.jolt = Math.max(this.jolt, Math.min(1, Math.abs(this.vertical) / 6));
         this.onEvent("landed", this.body);
       }
       this.grounded = true;
@@ -636,10 +650,26 @@ export class PlanetCharacter {
     const sp = this.c.spectator;
     if (!sp) return;
     Object.assign(sp.s, this.c.s, { ship: false, rotation: "free", lookAt: false, telescope: false });
+    sp.s.fov = this.c.s.fov * this.runFov;
     const up = this.up(),
-      f = tangent(up, add(scale(this.heading, Math.cos(this.yaw)), cross(this.heading, up), Math.sin(this.yaw))),
-      target = add(this.q, up, 1.35);
-    const away = add(scale(f, -Math.cos(this.pitch)), up, Math.sin(this.pitch));
+      f = tangent(up, add(scale(this.heading, Math.cos(this.yaw)), cross(this.heading, up), Math.sin(this.yaw)));
+    // (the third person's camera, as a game's: over the right shoulder, the pivot following the head with a
+    // little lag — its height dipping with the legs on a landing —, the lens a little wider running, a landing's
+    // jolt)
+    const s = this.c.s;
+    const right = unit(cross(f, up));
+    const head = add(add(this.q, up, 1.35 + 0.8 * this.dip), right, s.characterShoulder ?? 0);
+    // (no time: where it was — a save restored —, else on the head)
+    const target = (
+      dt > 0 ? this.camPivot.step(head as V3, 0.07, dt) : (this.camPivot.x ?? (this.camPivot.reset(head as V3), head))
+    ) as Vec3;
+    this.camClock += dt;
+    this.jolt = damp(this.jolt, 0, 0.25, dt);
+    const running = this.grounded && this.speed > 0.5 * ((s.walkSpeed ?? 1.4) + (s.runSpeed ?? 4)) ? 1 : 0;
+    this.runFov = damp(this.runFov, s.cineDynamicFov === false ? 1 : 1 + 0.07 * running, 0.4, dt);
+    const shake = this.jolt * 0.035;
+    const pitch = this.pitch + shake * fbm(this.camClock, 11, 3.3);
+    const away = add(scale(f, -Math.cos(pitch)), up, Math.sin(pitch));
     let reach = this.distance;
     // (the vessel's triangles only when the camera's line passes its box at all: a box test for the whole line)
     const nearShip = this.lineNearShip(target, add(target, away, this.distance), 0.6);
@@ -726,6 +756,7 @@ export class PlanetCharacter {
           pitch: this.pitch,
           distance: this.distance,
           vertical: this.vertical,
+          ...(this.camPivot.x ? { pivot: [...this.camPivot.x] as Vec3 } : {}),
         }
       : null;
   }
@@ -742,6 +773,7 @@ export class PlanetCharacter {
       this.grounded = Math.abs(this.height()) < 0.1;
       // (restored in the air: no coyote jump there)
       this.airTime = this.grounded ? 0 : COYOTE_S;
+      this.camPivot.reset(s.pivot ? ([...s.pivot] as V3) : null);
       this.placeView(this.c.nowTime(), 0);
     }
     return err;

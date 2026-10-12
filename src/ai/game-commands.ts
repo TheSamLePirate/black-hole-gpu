@@ -77,6 +77,7 @@ export const GAME_COMMANDS: GameCommand[] = [
   M("quarter", { fr: "Vue trois-quarts (film)", en: "Quarter view (film)" }),
   M("around", { fr: "Vue autour du vaisseau", en: "View around the ship" }),
   M("flyby", { fr: "Vue de passage", en: "Fly-by view" }),
+  M("director", { fr: "Vue réalisateur (caméras de film)", en: "Director view (the film's cameras)" }),
   { name: "shipview", tool: "camera", fixed: { shipView: true }, desc: { fr: "Retour à la vue vaisseau", en: "Back to the ship's view" } },
   {
     name: "spectator",

@@ -386,6 +386,44 @@ export default {
   Film: "Film",
   "Chase, above the tail": "Poursuite, au-dessus de la queue",
   Chase: "Poursuite",
+  "Over the shoulder": "Par-dessus l'épaule",
+  "The camera over the astronaut's right shoulder, in metres (0.45 by default; 0: behind the head). The view follows with a little lag, widens a little running, dips on a landing.":
+    "La caméra au-dessus de l'épaule droite de l'astronaute, en mètres (0,45 par défaut ; 0 : derrière la tête). La vue suit avec un léger retard, s'élargit un peu à la course, plonge à la réception d'un saut.",
+  "Director: the film's cameras — chase, fly-by, launch tracking, the planet, the destination":
+    "Réalisateur : les caméras du film — poursuite, passage, suivi du décollage, la planète, la destination",
+  "Director's shot": "Plan du réalisateur",
+  "The Director view (V, or \\ in flight to change its shot): the film's virtual cameras, each damped, blended or cut to the next. The director chooses by the flight's phase — a launch tracked from the ground with a long lens, the chase and the fly-by low in the air, the planet's limb behind the craft in orbit, the destination behind it far out — or one is held.":
+    "La vue Réalisateur (V, ou \\ en vol pour changer de plan) : les caméras virtuelles du film, chacune amortie, fondue ou coupée vers la suivante. Le réalisateur choisit selon la phase du vol — un décollage suivi du sol au téléobjectif, la poursuite et le passage à basse altitude, le limbe de la planète derrière l'appareil en orbite, la destination derrière lui au loin — ou un plan est tenu.",
+  "The director chooses": "Le réalisateur choisit",
+  "Behind the way the craft goes, lagging its turns, the horizon mostly level":
+    "Derrière la trajectoire de l'appareil, en retard sur ses virages, l'horizon presque à plat",
+  "Slow orbit": "Orbite lente",
+  "A turn round the craft in 45 s": "Un tour de l'appareil en 45 s",
+  "A camera still in the world ahead of the craft, its long lens following it past":
+    "Une caméra immobile devant l'appareil, son téléobjectif le suivant au passage",
+  "Ground tracking": "Suivi depuis le sol",
+  "On the ground a kilometre aside: the launch followed up with a closing lens":
+    "Au sol à un kilomètre de côté : le décollage suivi, la focale se resserrant",
+  "The planet's limb": "Le limbe de la planète",
+  "Above and behind the craft, the world's horizon behind it": "Au-dessus et en arrière de l'appareil, l'horizon du monde derrière lui",
+  "The destination": "La destination",
+  "The target (else the Sun) behind the craft, a longer lens": "La cible (sinon le Soleil) derrière l'appareil, une focale plus longue",
+  "Director's camera shake": "Tremblement de la caméra du réalisateur",
+  "The noise on the director's shots: the air's buffeting (strongest through Mach 1), the engine's rumble, the afterburner, the hand on a long lens. 0: steady.":
+    "Le bruit sur les plans du réalisateur : les turbulences de l'air (les plus fortes au passage de Mach 1), le grondement du moteur, la postcombustion, la main sur un téléobjectif. 0 : stable.",
+  "Director's dynamic lens": "Focale dynamique du réalisateur",
+  "The chase's field widened with the speed through the air (up to a seventh near Mach 1.3) and the afterburner; the still cameras' long lenses holding the craft a third of the frame.":
+    "Le champ de la poursuite élargi avec la vitesse dans l'air (jusqu'à un septième vers Mach 1,3) et la postcombustion ; les téléobjectifs des caméras fixes gardant l'appareil sur un tiers de l'image.",
+  "The Director view's shot: the director chooses · chase · slow orbit · fly-by · ground tracking · the planet's limb · the destination (` on a French Mac keyboard)":
+    "Le plan de la vue Réalisateur : le réalisateur choisit · poursuite · orbite lente · passage · suivi depuis le sol · le limbe de la planète · la destination (` sur un clavier Mac français)",
+  Director: "Réalisateur",
+  "the director chooses": "le réalisateur choisit",
+  chase: "poursuite",
+  "slow orbit": "orbite lente",
+  "fly-by": "passage",
+  "ground tracking, long lens": "suivi depuis le sol, téléobjectif",
+  "the planet's limb": "le limbe de la planète",
+  "the destination behind": "la destination derrière",
   "Dorsal, behind the cockpit": "Dorsale, derrière le cockpit",
   Dorsal: "Dorsale",
   Wingtip: "Bout d'aile",

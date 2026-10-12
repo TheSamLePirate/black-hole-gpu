@@ -257,6 +257,7 @@ const ACTION_LABELS: Partial<Record<KeyAction, Text>> = {
   antigrav: { fr: "Antigravité", en: "Antigravity" },
   flaps: { fr: "Volets", en: "Flaps" },
   airBrake: { fr: "Aérofreins", en: "Air brake" },
+  cineShot: { fr: "Plan de la vue réalisateur", en: "The Director view's shot" },
   jetSystem: {
     fr: "Systèmes du jet (postcombustion, pilote automatique, auto-manette)",
     en: "Jet systems (afterburner, autopilot, autothrottle)",

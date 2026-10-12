@@ -48,6 +48,8 @@ const MOUNT_ICON = {
   around: VIEW_ICON.orbit,
   free: VIEW_ICON.free,
   flyby: '<path d="M3 17c4-1 8-5 11-10"/><path d="M11 6l3 1 1-3"/><path d="M17 20v-5l-3-2"/><circle cx="17" cy="12" r="1.3" class="f"/>',
+  director:
+    '<rect x="3" y="8" width="12" height="9" rx="1.5"/><path d="M15 11l6-3v9l-6-3"/><circle cx="7" cy="5" r="2"/><circle cx="12" cy="5" r="2"/>',
   station:
     '<rect x="3" y="9" width="18" height="6" rx="1"/><path d="M8 9V4M16 9V4M8 15v5M16 15v5"/><circle cx="12" cy="12" r="1.5" class="f"/>',
 };
@@ -322,7 +324,7 @@ export class CameraPanel {
       const sec = this.section(g, outside ? "" : "V · ⇧V");
       const tiles = h("div", "cp-tiles cp-tiles-3");
       for (const m of Object.keys(MOUNTS) as Mount[]) {
-        const o = (MOUNTS[m] as { outside?: "around" | "free" | "flyby" | "station" }).outside;
+        const o = (MOUNTS[m] as { outside?: "around" | "free" | "flyby" | "station" | "director" }).outside;
         if (!!o !== outside) continue;
         tiles.append(
           this.tile(o ? MOUNT_ICON[o] : MOUNT_ICON.on, MOUNTS[m].short, MOUNTS[m].label, s.shipMount === m, () => this.d.setMount(m)),

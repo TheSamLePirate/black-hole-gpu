@@ -38,6 +38,7 @@ export type KeyAction =
   | "flaps"
   | "airBrake"
   | "jetSystem"
+  | "cineShot"
   | "gear"
   | "tars"
   | "pathInView"
@@ -327,6 +328,11 @@ export const KEYMAP: KeySection[] = [
         bind: [fly("KeyG", "auto", { arg: "entry", shift: true })],
       },
       { keys: "⇧Y", text: "The future path in the view", bind: [fly("KeyY", "pathInView", on)] },
+      {
+        keys: "\\",
+        text: "The Director view's shot: the director chooses · chase · slow orbit · fly-by · ground tracking · the planet's limb · the destination (` on a French Mac keyboard)",
+        bind: [fly("Backslash", "cineShot")],
+      },
       { keys: "²  (`)", text: "HUD density: full · minimal · clean view", bind: [fly("Backquote", "hudDensity")] },
       {
         keys: "O",
