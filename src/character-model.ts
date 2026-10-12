@@ -37,16 +37,24 @@ interface Model {
   ni: number;
   stride: number;
 }
-export function multiply(a: ArrayLike<number>, b: ArrayLike<number>, out: Float32Array) {
+/** Column-major product a·b into out, from offset `at` (an allocation-free composition of the joints). */
+export function multiply(a: ArrayLike<number>, b: ArrayLike<number>, out: Float32Array, at = 0) {
   for (let col = 0; col < 4; col++)
     for (let row = 0; row < 4; row++) {
       let value = 0;
       for (let k = 0; k < 4; k++) value += a[k * 4 + row]! * b[col * 4 + k]!;
-      out[col * 4 + row] = value;
+      out[at + col * 4 + row] = value;
     }
 }
-export function compose(t: ArrayLike<number>, q: ArrayLike<number>, s: ArrayLike<number>, out: Float32Array) {
-  const [x, y, z, w] = [q[0]!, q[1]!, q[2]!, q[3]!],
+/** The local matrix of the pose stored at pose[at..at+10): translation 0–2, rotation quaternion 3–6, scale 7–9. */
+export function composeAt(pose: ArrayLike<number>, out: Float32Array) {
+  const x = pose[3]!,
+    y = pose[4]!,
+    z = pose[5]!,
+    w = pose[6]!,
+    sx = pose[7]!,
+    sy = pose[8]!,
+    sz = pose[9]!,
     xx = x * x,
     yy = y * y,
     zz = z * z,
@@ -56,39 +64,40 @@ export function compose(t: ArrayLike<number>, q: ArrayLike<number>, s: ArrayLike
     wx = w * x,
     wy = w * y,
     wz = w * z;
-  out.set([
-    (1 - 2 * (yy + zz)) * s[0]!,
-    2 * (xy + wz) * s[0]!,
-    2 * (xz - wy) * s[0]!,
-    0,
-    2 * (xy - wz) * s[1]!,
-    (1 - 2 * (xx + zz)) * s[1]!,
-    2 * (yz + wx) * s[1]!,
-    0,
-    2 * (xz + wy) * s[2]!,
-    2 * (yz - wx) * s[2]!,
-    (1 - 2 * (xx + yy)) * s[2]!,
-    0,
-    t[0]!,
-    t[1]!,
-    t[2]!,
-    1,
-  ]);
+  out[0] = (1 - 2 * (yy + zz)) * sx;
+  out[1] = 2 * (xy + wz) * sx;
+  out[2] = 2 * (xz - wy) * sx;
+  out[3] = 0;
+  out[4] = 2 * (xy - wz) * sy;
+  out[5] = (1 - 2 * (xx + zz)) * sy;
+  out[6] = 2 * (yz + wx) * sy;
+  out[7] = 0;
+  out[8] = 2 * (xz + wy) * sz;
+  out[9] = 2 * (yz - wx) * sz;
+  out[10] = (1 - 2 * (xx + yy)) * sz;
+  out[11] = 0;
+  out[12] = pose[0]!;
+  out[13] = pose[1]!;
+  out[14] = pose[2]!;
+  out[15] = 1;
 }
-export function slerp(a: ArrayLike<number>, b: ArrayLike<number>, t: number, out: Float32Array) {
+/** Spherical interpolation of the quaternions a[ao..ao+4) and b[bo..bo+4), written at out[at..at+4). Safe when out is a. */
+function slerpAt(a: ArrayLike<number>, ao: number, b: ArrayLike<number>, bo: number, t: number, out: Float32Array, at: number) {
   let cosine = 0;
-  for (let i = 0; i < 4; i++) cosine += a[i]! * b[i]!;
+  for (let i = 0; i < 4; i++) cosine += a[ao + i]! * b[bo + i]!;
   const sign = cosine < 0 ? -1 : 1;
   cosine = Math.min(1, Math.abs(cosine));
   const angle = Math.acos(cosine),
     sine = Math.sin(angle);
   const p = sine > 1e-5 ? Math.sin((1 - t) * angle) / sine : 1 - t,
     q = sine > 1e-5 ? Math.sin(t * angle) / sine : t;
-  for (let i = 0; i < 4; i++) out[i] = p * a[i]! + sign * q * b[i]!;
+  for (let i = 0; i < 4; i++) out[at + i] = p * a[ao + i]! + sign * q * b[bo + i]!;
 }
-function value(track: Track, time: number, out: Float32Array) {
+/** A track sampled at `time` into out[at..at+size): linear for translations and scales, slerp for rotations. */
+function value(track: Track, time: number, out: Float32Array, at: number) {
   const size = track.path === "rotation" ? 4 : 3,
-    times = track.times;
+    times = track.times,
+    values = track.values;
   let lo = 0,
     hi = times.length - 1;
   while (lo + 1 < hi) {
@@ -96,11 +105,11 @@ function value(track: Track, time: number, out: Float32Array) {
     if (times[mid]! <= time) lo = mid;
     else hi = mid;
   }
-  const a = track.values.slice(lo * size, (lo + 1) * size),
-    b = track.values.slice(hi * size, (hi + 1) * size);
   const t = track.step ? 0 : Math.max(0, Math.min(1, (time - times[lo]!) / (times[hi]! - times[lo]! || 1)));
-  if (size === 4) slerp(a, b, t, out);
-  else for (let i = 0; i < size; i++) out[i] = a[i]! + (b[i]! - a[i]!) * t;
+  const a = lo * size,
+    b = hi * size;
+  if (size === 4) slerpAt(values, a, values, b, t, out, at);
+  else for (let i = 0; i < size; i++) out[at + i] = values[a + i]! + (values[b + i]! - values[a + i]!) * t;
 }
 export class AstronautModel {
   vertices: GPUBuffer | null = null;
@@ -127,6 +136,9 @@ export class AstronautModel {
   private blend = 0;
   // Each gait clock is integrated: its rate follows the speed, its time never jumps when the speed changes.
   private gait = [0, 0, 0];
+  // The rest pose of each node (translation, rotation, scale) and whether it is in place (its root keeps its own motion).
+  private rest: Float32Array[] = [];
+  private inPlace: boolean[] = [];
   constructor(private d: GPUDevice) {
     this.bones = d.createBuffer({ size: 70 * 64, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.sampler = d.createSampler({
@@ -157,7 +169,9 @@ export class AstronautModel {
         this.d.queue.writeBuffer(this.indices, 0, b, offset + m.nv * m.stride, m.ni * 4);
         this.count = m.ni;
         this.meshBytes = m.nv * m.stride + m.ni * 4;
-        this.pose = m.nodes.map((n) => new Float32Array([...n.t, ...n.r, ...n.s]));
+        this.rest = m.nodes.map((n) => new Float32Array([...n.t, ...n.r, ...n.s]));
+        this.inPlace = m.nodes.map((n) => n.name === "root");
+        this.pose = this.rest.map((p) => new Float32Array(p));
         this.sampled = m.clips.map(() => this.pose.map((p) => new Float32Array(p)));
         this.global = m.nodes.map(() => new Float32Array(16));
         this.local = m.nodes.map(() => new Float32Array(16));
@@ -197,50 +211,50 @@ export class AstronautModel {
       }
     })());
   }
+  /** One frame of the pose: three clips sampled, blended, composed and skinned into the bone matrices. Nothing is
+   * allocated here: the arrays of the model are reused, the samples written in place. */
   evaluate(age: number, speed: number) {
     if (!this.model) return;
     const began = performance.now(),
       m = this.model,
+      n = m.nodes.length,
       dt = Math.max(0, Math.min(0.1, age - this.lastAge));
     this.lastAge = age;
     this.blend += (Math.min(1, speed / 1.4) - this.blend) * (1 - Math.exp(-dt * 12));
     this.gait[1]! += dt * Math.max(0.5, speed / 1.4);
     this.gait[2]! += dt * Math.max(0.5, speed / 3.5);
     const run = Math.max(0, Math.min(1, (speed - 1.4) / 2.6));
-    const clips = [0, 1, 2],
-      weights = [1 - this.blend, this.blend * (1 - run), this.blend * run];
+    const w0 = 1 - this.blend,
+      w1 = this.blend * (1 - run),
+      w2 = this.blend * run;
     for (let k = 0; k < 3; k++) {
-      const clip = m.clips[clips[k]!]!,
+      const clip = m.clips[k]!,
         poses = this.sampled[k]!;
-      for (let i = 0; i < m.nodes.length; i++) poses[i]!.set([...m.nodes[i]!.t, ...m.nodes[i]!.r, ...m.nodes[i]!.s]);
+      for (let i = 0; i < n; i++) poses[i]!.set(this.rest[i]!);
       const time = (((k === 0 ? age : this.gait[k]!) % clip.duration) + clip.duration) % clip.duration;
-      for (const t of clip.tracks) {
-        const offset = t.path === "translation" ? 0 : t.path === "rotation" ? 3 : 7;
-        value(t, time, poses[t.node]!.subarray(offset, offset + (offset === 3 ? 4 : 3)));
-      }
+      for (const t of clip.tracks) value(t, time, poses[t.node]!, t.path === "translation" ? 0 : t.path === "rotation" ? 3 : 7);
     }
-    for (let i = 0; i < m.nodes.length; i++) {
+    for (let i = 0; i < n; i++) {
       const out = this.pose[i]!,
         a = this.sampled[0]![i]!,
         b = this.sampled[1]![i]!,
         c = this.sampled[2]![i]!;
-      for (let j = 0; j < 10; j++) if (j < 3 || j > 6) out[j] = weights[0]! * a[j]! + weights[1]! * b[j]! + weights[2]! * c[j]!;
-      slerp(a.subarray(3, 7), b.subarray(3, 7), this.blend, out.subarray(3, 7));
-      if (run > 0) slerp(out.subarray(3, 7), c.subarray(3, 7), run, out.subarray(3, 7));
+      for (let j = 0; j < 10; j++) if (j < 3 || j > 6) out[j] = w0 * a[j]! + w1 * b[j]! + w2 * c[j]!;
+      slerpAt(a, 3, b, 3, this.blend, out, 3);
+      if (run > 0) slerpAt(out, 3, c, 3, run, out, 3);
       // In-place locomotion: root motion belongs to the planetary controller, not the imported clip.
-      if (m.nodes[i]!.name === "root") {
-        out[0] = m.nodes[i]!.t[0]!;
-        out[1] = m.nodes[i]!.t[1]!;
+      if (this.inPlace[i]) {
+        out[0] = this.rest[i]![0]!;
+        out[1] = this.rest[i]![1]!;
       }
-      compose(out.subarray(0, 3), out.subarray(3, 7), out.subarray(7, 10), this.local[i]!);
+      composeAt(out, this.local[i]!);
     }
     for (const i of this.order) {
       const parent = m.nodes[i]!.parent;
       if (parent < 0) this.global[i]!.set(this.local[i]!);
       else multiply(this.global[parent]!, this.local[i]!, this.global[i]!);
     }
-    for (let i = 0; i < m.joints.length; i++)
-      multiply(this.global[m.joints[i]!]!, this.inverse[i]!, this.mats.subarray(i * 16, i * 16 + 16));
+    for (let i = 0; i < m.joints.length; i++) multiply(this.global[m.joints[i]!]!, this.inverse[i]!, this.mats, i * 16);
     this.d.queue.writeBuffer(this.bones, 0, this.mats);
     this.cpuMs = performance.now() - began;
   }
