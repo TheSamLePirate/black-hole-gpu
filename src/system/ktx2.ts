@@ -15,6 +15,8 @@ const waiting = new Map<number, (r: KtxReply) => void>();
  */
 export const KTX_IDLE_MS = 10_000;
 let idle: ReturnType<typeof setTimeout> | undefined;
+/** after the worker failed to start, how long before it is tried again [ms] */
+export const KTX_RETRY_MS = 15_000;
 
 function getWorker(): Worker | null {
   if (worker || failed || typeof Worker === "undefined") return worker;
@@ -27,7 +29,10 @@ function getWorker(): Worker | null {
       if (!waiting.size) idle = setTimeout(release, KTX_IDLE_MS);
     };
     worker.onerror = () => {
+      // (its script unreachable — offline before the cache held it —: tried again in a while, not given up)
       failed = true;
+      setTimeout(() => (failed = false), KTX_RETRY_MS);
+      worker?.terminate();
       worker = null;
       for (const [id, f] of waiting) f({ id, error: "KTX2 worker unavailable" });
       waiting.clear();

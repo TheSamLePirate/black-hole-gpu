@@ -4,7 +4,8 @@ export default {
   "How fast the astronaut walks, in metres a second (1.4 by default, a brisk walk). The steps quicken with the pace; the stride stays that of the walking clip, so a much faster walk can slide the feet.":
     "Vitesse de l'astronaute à la marche, en mètres par seconde (1,4 par défaut, une marche soutenue). Les pas s'accélèrent avec l'allure ; l'enjambée reste celle du cycle de marche, donc une marche beaucoup plus rapide peut faire glisser les pieds.",
   "Running speed": "Vitesse de course",
-  "How fast the astronaut runs, held Shift, in metres a second (4 by default).": "Vitesse de l'astronaute en course, Maj maintenu, en mètres par seconde (4 par défaut).",
+  "How fast the astronaut runs, held Shift, in metres a second (4 by default).":
+    "Vitesse de l'astronaute en course, Maj maintenu, en mètres par seconde (4 par défaut).",
   "Jump speed": "Vitesse de saut",
   "The speed the astronaut leaves the ground with, in metres a second (3.6 by default). The height reached follows the local gravity: the Moon's jump is six times the Earth's at the same speed.":
     "Vitesse de décollage de l'astronaute, en mètres par seconde (3,6 par défaut). La hauteur atteinte suit la gravité locale : à vitesse égale, le saut sur la Lune va six fois plus haut que sur la Terre.",

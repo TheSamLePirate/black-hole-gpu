@@ -51,6 +51,10 @@ export class EarthScenery {
   private requestedCentre: { lat: number; lon: number } | null = null;
   private failures = 0;
   private retryAt = 0;
+  /** the scene wanted here is neither drawn nor given up on for now (pending: the settled frame waits for it) */
+  private wanted = false;
+  /** the key of the scene drawn (centre, mode, satellite) */
+  private applied = "";
   constructor(
     private device: GPUDevice,
     private makeWorker: () => Worker = () => new Worker(new URL("scenery-worker.js", location.href), { type: "module" }),
@@ -68,10 +72,13 @@ export class EarthScenery {
     this.busy = false;
     this.requested = "";
     this.requestedCentre = null;
+    // (a new place: its scene asked at once, not after the throttle)
+    this.attempted = -Infinity;
     this.failures = 0;
     this.lastError = null;
     this.id++;
     this.data = null;
+    this.applied = "";
     this.contact = null;
     if (this.allocated) {
       const old = this.buffer;
@@ -110,6 +117,7 @@ export class EarthScenery {
               ? "polar-limit"
               : "loading";
     if (this.reason !== "loading") {
+      this.wanted = false;
       if (this.data || this.busy) this.clear();
       return;
     }
@@ -128,12 +136,16 @@ export class EarthScenery {
       this.busy = false;
       this.requested = "";
       this.id++;
+      // (the camera moved on: its new scene asked at once, not after the throttle)
+      this.attempted = -Infinity;
     }
     const key = `${c.key}:${mode}:${satellite}`;
+    // (waited for — the settled frame, an offline render — until drawn, or failed and waiting to be tried again)
+    this.wanted = key !== this.applied && !(key === this.requested && this.lastError);
     if (
       this.busy ||
       this.retiredBytes ||
-      (key === this.requested && (!this.lastError || this.failures >= 2 || performance.now() < this.retryAt)) ||
+      (key === this.requested && (!this.lastError || performance.now() < this.retryAt)) ||
       performance.now() - this.attempted < 3000
     )
       return;
@@ -148,13 +160,15 @@ export class EarthScenery {
       this.worker.onmessage = (e: MessageEvent<SceneryReply>) => {
         if (this.disposed || e.data.id !== this.id) return;
         this.busy = false;
+        // (drawn, or failed and waiting to be tried again: no longer waited for)
+        this.wanted = false;
         this.worker?.terminate();
         this.worker = null;
         const r = e.data;
         if (r.error || !r.buffer || r.buffer.byteLength > SCENERY_BYTES) {
           this.lastError = r.error ?? "invalid scene size";
           this.failures++;
-          this.retryAt = performance.now() + 30000;
+          this.retryAt = performance.now() + this.backoff();
           this.reason = "degraded";
           this.onContent?.();
           return;
@@ -170,24 +184,35 @@ export class EarthScenery {
           old.destroy();
           this.onChange?.();
         }
+        // (a scene rebuilt with a source missing — the land cover's raster, a tile — while one is drawn here: the
+        // drawn one kept, its trees and its contacts, the rebuild tried again later)
+        if (r.errors?.length && this.data) {
+          this.lastError = r.errors[0]!;
+          this.failures++;
+          this.retryAt = performance.now() + this.backoff();
+          this.onContent?.();
+          return;
+        }
         const t = performance.now();
         this.device.queue.writeBuffer(this.buffer, 0, r.buffer);
         this.contact = new SceneryContact(r, r.buffer);
         this.uploaded += performance.now() - t;
         this.data = { ...r, buffer: undefined };
+        this.applied = key;
         this.started = performance.now();
         this.lastError = r.errors?.[0] ?? null;
         if (this.lastError) {
           this.failures++;
-          this.retryAt = performance.now() + 30000;
+          this.retryAt = performance.now() + this.backoff();
         }
         this.stamp++;
         this.onContent?.();
       };
       this.worker.onerror = () => {
+        this.wanted = false;
         this.lastError = "scenery worker unavailable";
         this.failures++;
-        this.retryAt = performance.now() + 30000;
+        this.retryAt = performance.now() + this.backoff();
         this.reason = "degraded";
         this.busy = false;
         this.worker?.terminate();
@@ -198,10 +223,14 @@ export class EarthScenery {
     } catch (e) {
       this.lastError = String(e);
       this.failures++;
-      this.retryAt = performance.now() + 30000;
+      this.retryAt = performance.now() + this.backoff();
       this.reason = "degraded";
       this.busy = false;
     }
+  }
+  /** the wait before trying again after a failure [ms]: 30 s, doubled each time, 5 min at most (never given up) */
+  private backoff() {
+    return Math.min(300000, 30000 * 2 ** Math.max(0, this.failures - 1));
   }
   params() {
     const r = this.data;
@@ -233,7 +262,7 @@ export class EarthScenery {
     return !!this.data && this.mode !== "off";
   }
   get pending() {
-    return this.busy || (!!this.data && performance.now() - this.started < 600);
+    return this.busy || this.wanted || (!!this.data && performance.now() - this.started < 600);
   }
   stats() {
     const d = this.data;

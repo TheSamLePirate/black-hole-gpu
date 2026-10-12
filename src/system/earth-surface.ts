@@ -108,6 +108,8 @@ export class EarthSurface {
   private epoch = 0;
   private valid = 0;
   private attempts: number[] = [];
+  /** when a failed page is tried again [ms, performance.now()]: 2 s, doubled each time, a minute at most */
+  private retryAt: number[] = [];
   private loadedAt = new Float32Array(16);
   private started = performance.now();
   private jobs = new Set<number>();
@@ -162,6 +164,7 @@ export class EarthSurface {
     this.failed.clear();
     this.queue = [];
     this.attempts = [];
+    this.retryAt = [];
     this.loadedAt.fill(0);
     this.started = performance.now();
     this.lastError = null;
@@ -213,6 +216,13 @@ export class EarthSurface {
     const x = Math.max(0, Math.min(r.columns - 1, Math.floor((lon - r.west) / r.step)));
     const y = Math.max(0, Math.min(r.rows - 1, Math.floor((r.north - lat) / r.step)));
     const centre = y * r.columns + x;
+    // (a page failed — a network blip, the service unreachable for a while —: tried again once due, never given up)
+    const now = performance.now();
+    for (const page of this.failed)
+      if (now >= (this.retryAt[page] ?? 0)) {
+        this.failed.delete(page);
+        if (centre === this.centre && !this.jobs.has(page)) this.queue.push(page);
+      }
     if (centre !== this.centre) {
       this.centre = centre;
       this.queue = Array.from({ length: r.rows * r.columns }, (_, i) => i).filter(
@@ -275,12 +285,13 @@ export class EarthSurface {
             this.valid |= 1 << page;
             this.loadedAt[page] = (performance.now() - this.started) / 1000;
             this.lastArrival = performance.now();
+            if (!this.failed.size) this.lastError = null;
             this.stamp++;
             this.onContent?.();
           } catch (err) {
             this.lastError = String(err).slice(0, 240);
-            if (this.attempts[page]! < 2) this.queue.push(page);
-            else this.failed.add(page);
+            this.failed.add(page);
+            this.retryAt[page] = performance.now() + Math.min(60000, 2000 * 2 ** (this.attempts[page]! - 1));
           }
         })
         .finally(() => {
@@ -355,5 +366,9 @@ export class EarthSurface {
     this.color.destroy();
     this.cover.destroy();
     this.queue = [];
+    // (nothing left to wait for: the jobs in flight are dropped as they come back)
+    this.jobs.clear();
+    this.failed.clear();
+    this.region = null;
   }
 }

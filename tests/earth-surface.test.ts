@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 import { gunzipSync } from "node:zlib";
 import manifest from "../assets/earth-surface/manifest.json";
 import {
@@ -14,7 +14,12 @@ import {
 import { geodeticToCart, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
 
 (globalThis as { GPUTextureUsage?: unknown }).GPUTextureUsage ??= { TEXTURE_BINDING: 4, COPY_DST: 2 };
+// (a page's location for the pages' URLs — taken away after: other files read its absence as "not a page")
+const hadLocation = "location" in globalThis;
 (globalThis as { location?: unknown }).location ??= { href: "https://example.org/test/" };
+afterAll(() => {
+  if (!hadLocation) delete (globalThis as { location?: unknown }).location;
+});
 const at = (lat = 48.95, lon = 2.45, metres = 1000) =>
   geodeticToCart(1, WGS84_F, (lat * Math.PI) / 180, (lon * Math.PI) / 180, metres / WGS84_A);
 const settle = async () => {
@@ -125,17 +130,61 @@ test("switching region or disabling rejects late uploads without increasing conc
   f.surface.dispose();
 });
 
-test("failed or malformed pages settle with fallback after two attempts", async () => {
+test("failed pages settle with fallback, then are tried again with a growing wait (a network blip is not final)", async () => {
   const f = fixture();
-  f.surface.update(at(), "satellite");
-  for (let i = 0; i < 32; i++) {
-    f.jobs[i]!.reject(new Error("offline"));
+  const realNow = performance.now.bind(performance);
+  let offset = 0;
+  performance.now = () => realNow() + offset;
+  try {
+    f.surface.update(at(), "satellite");
+    for (let i = 0; i < 16; i++) {
+      f.jobs[i]!.reject(new Error("offline"));
+      await settle();
+    }
+    // (each page tried once, then waiting: nothing pending — the settled frame does not wait on the network)
+    expect(f.jobs).toHaveLength(16);
+    expect(f.surface.stats()).toMatchObject({ status: "degraded", loaded: 0, failed: 16, pending: false, inflight: 0 });
+    expect(f.surface.active).toBe(false);
+    expect(f.writes).toHaveLength(0);
+    f.surface.update(at(), "satellite");
+    expect(f.jobs).toHaveLength(16);
+    // (two seconds on: every page asked again; the network back, they load)
+    offset += 2100;
+    f.surface.update(at(), "satellite");
     await settle();
+    for (let i = 16; i < 32; i++) {
+      expect(f.jobs[i]).toBeDefined();
+      f.complete(i);
+      await settle();
+    }
+    offset += 400;
+    expect(f.surface.stats()).toMatchObject({ status: "ready", loaded: 16, failed: 0, inflight: 0, lastError: null });
+    // (a page failing twice waits twice as long: 4 s)
+    const again = fixture();
+    again.surface.update(at(), "satellite");
+    for (let i = 0; i < 16; i++) {
+      again.jobs[i]!.reject(new Error("offline"));
+      await settle();
+    }
+    offset += 2100;
+    again.surface.update(at(), "satellite");
+    await settle();
+    for (let i = 16; i < 32; i++) {
+      again.jobs[i]!.reject(new Error("offline"));
+      await settle();
+    }
+    offset += 2100;
+    again.surface.update(at(), "satellite");
+    expect(again.jobs).toHaveLength(32);
+    offset += 2100;
+    again.surface.update(at(), "satellite");
+    await settle();
+    expect(again.jobs.length).toBeGreaterThan(32);
+    again.surface.dispose();
+    expect(again.surface.pending).toBe(false);
+  } finally {
+    performance.now = realNow;
   }
-  expect(f.jobs).toHaveLength(32);
-  expect(f.surface.stats()).toMatchObject({ status: "degraded", loaded: 0, failed: 16, pending: false, inflight: 0 });
-  expect(f.surface.active).toBe(false);
-  expect(f.writes).toHaveLength(0);
   f.surface.dispose();
   const malformed = fixture();
   malformed.surface.update(at(), "satellite");

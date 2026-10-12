@@ -231,3 +231,88 @@ test("OSM analytic networks preserve narrow roads, lake islands and bridge width
   expect(f[geom + 11]).toBe(4); // Outer-ring length identifies polygons and preserves islands against river centre lines.
   expect(pack.byteLength).toBeLessThan(SCENERY_BYTES);
 });
+
+test("world scenery: pending until the wanted scene is drawn, a partial rebuild keeps the drawn one, a teleport asks at once", async () => {
+  (globalThis as { GPUBufferUsage?: unknown }).GPUBufferUsage ??= { STORAGE: 128, COPY_DST: 8 };
+  const jobs: { request: SceneryRequest; worker: Worker }[] = [];
+  let writes = 0;
+  const device = {
+    limits: { maxStorageBuffersPerShaderStage: 9 },
+    createBuffer: (v: { size: number }) => ({ size: v.size, destroy() {} }),
+    queue: {
+      writeBuffer() {
+        writes++;
+      },
+      onSubmittedWorkDone: () => new Promise<void>((r) => releases.push(r)),
+    },
+  } as unknown as GPUDevice;
+  const releases: (() => void)[] = [];
+  const factory = () =>
+    ({
+      onmessage: null,
+      onerror: null,
+      terminate() {},
+      postMessage(request: SceneryRequest) {
+        jobs.push({ request, worker: this as unknown as Worker });
+      },
+    }) as unknown as Worker;
+  const realNow = performance.now.bind(performance);
+  let offset = 0;
+  performance.now = () => realNow() + offset;
+  try {
+    const scenery = new EarthScenery(device, factory);
+    const place = (lat: number, lon: number) => geodeticToCart(1, WGS84_F, lat * D, lon * D, 400 / WGS84_A);
+    const reply = (k: number, errors?: string[]) => {
+      const j = jobs[k]!;
+      j.worker.onmessage!({
+        data: {
+          id: j.request.id,
+          lat: j.request.lat,
+          lon: j.request.lon,
+          bounds: [j.request.lon - 0.05, j.request.lat - 0.05, j.request.lon + 0.05, j.request.lat + 0.05],
+          buffer: packScenery([], new Uint32Array(SCENERY_GRID ** 2)),
+          ...(errors ? { errors } : {}),
+        },
+      } as MessageEvent<SceneryReply>);
+    };
+    scenery.update(place(48.86, 2.35), "balanced", true, true);
+    expect(scenery.pending).toBe(true);
+    reply(0);
+    offset += 700;
+    scenery.update(place(48.86, 2.35), "balanced", true, true);
+    expect(scenery.pending).toBe(false);
+    const drawn = scenery.contact;
+    // (a kilometre on: a new centre, rebuilt — its land cover's raster missing: the drawn scene kept)
+    offset += 3100;
+    scenery.update(place(48.869, 2.35), "balanced", true, true);
+    expect(jobs).toHaveLength(2);
+    expect(scenery.pending).toBe(true);
+    reply(1, ["WorldCover raster: offline"]);
+    expect(scenery.contact).toBe(drawn);
+    expect(writes).toBe(1);
+    expect(scenery.stats().lastError).toContain("offline");
+    expect(scenery.pending).toBe(false);
+    // (tried again after its wait, not given up)
+    offset += 31000;
+    scenery.update(place(48.869, 2.35), "balanced", true, true);
+    expect(jobs).toHaveLength(3);
+    reply(2);
+    expect(scenery.contact).not.toBe(drawn);
+    expect(writes).toBe(2);
+    // (a teleport while a rebuild runs: the old one dropped, the new one asked at once — and waited for)
+    offset += 3100;
+    scenery.update(place(48.875, 2.35), "balanced", true, true);
+    expect(jobs).toHaveLength(4);
+    scenery.update(place(43.6, 1.44), "balanced", true, true);
+    // (the drawn scene's buffer retiring behind the GPU's work: waited for — the frame is not settled meanwhile)
+    expect(scenery.pending).toBe(true);
+    releases.forEach((r) => r());
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    scenery.update(place(43.6, 1.44), "balanced", true, true);
+    expect(jobs).toHaveLength(5);
+    expect(scenery.pending).toBe(true);
+    scenery.dispose();
+  } finally {
+    performance.now = realNow;
+  }
+});
