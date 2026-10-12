@@ -6,7 +6,7 @@ The plan, the request and the user's choices: [PLAN-MODES-AAA.md](../PLAN-MODES-
 | --- | --- |
 | M1 The four modes, the top bar always present | done |
 | M2 TARS everywhere | done |
-| M3 Pause → offline capture everywhere | to do |
+| M3 Pause → offline capture everywhere | done |
 | M4 Ship HUD in chase and dorsal, three HUDs | to do |
 | M5 On-foot HUD | to do |
 | M6 The Atlas: maps, POIs, placement, geocoding | to do |
@@ -195,3 +195,44 @@ bun run e2e --remote modes a11y s5 photo-fps place eclipses metar music-panel bh
    - "ouvre la musique": the music console.
    - "ouvre le rendu": the render dialog.
    - "mode photo": the photo mode, Esc back.
+
+## M3. Pause gives the offline capture, everywhere
+
+### What changed
+
+- **The capture** (`renderdialog.ts` `capture()`): the view now, rendered offline at once with the dialog's
+  settings, or a preset, a size and samples given.
+  - It renders whatever the view is: the ship's, the walker's (the explorer drawn in it), the free camera's, the
+    photo mode's. The offline passes draw the station, the character and the crafts as the live view does.
+  - The PNG is saved by itself once converged (or a 16-bit PNG, an EXR, nothing).
+  - A box in the dialog keeps the same choice for a render started by hand. A capture's choice is its own: a
+    render started by hand afterwards does not inherit it.
+- **The pause menu:** "Capture (offline render)" (primary, right under Resume) and "Render…" (the dialog: a
+  picture or a video).
+- **The top bar:** a Capture button (the shutter), beside the Render one.
+- **TARS:** the `capture` tool (start with a preset or a size and samples, status, save, stop) and `/capture`. The
+  `render` event (M2) tells him when it ends.
+- **Docs:** the TARS tools table; the e2e catalogue.
+
+### Tests
+
+- **e2e (Macs), `modes.e2e.test.ts`:**
+  - a 320×180, 16 spp capture converges on foot, in the free camera and in the ship, with no GPU error;
+  - the pause menu shows the Capture item.
+
+### Manual tests to do (on the Mac)
+
+1. **Pause, then Capture.**
+   - Flying, in chase: Esc, then "Capture (offline render)". The render dialog shows the progress. Once
+     converged, the PNG downloads by itself, the Ranger in it.
+   - On foot: the explorer is in the picture.
+   - In the free camera and in the photo mode: the view as framed.
+2. **The bar's shutter button:** the same, without the pause.
+3. **By hand.** In the dialog, check "Save the PNG when done" and Start: the PNG comes by itself. Unchecked: it
+   does not.
+4. **A capture, then by hand.** After a capture, start a render by hand with the box unchecked: nothing is saved
+   by itself.
+5. **TARS.**
+   - "fais une capture 4K de cette vue": a 3840×2160 render, saved at the end.
+   - "dis-moi quand c'est fini": he speaks when it ends.
+6. **A video running:** a capture is refused with a toast, and the video goes on.

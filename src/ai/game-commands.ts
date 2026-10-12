@@ -74,6 +74,15 @@ export const GAME_COMMANDS: GameCommand[] = [
     args: [{ param: "bar" }],
     desc: { fr: "La barre du haut : show, hide", en: "The top bar: show, hide" },
   },
+  {
+    name: "capture",
+    tool: "capture",
+    fixed: { action: "start" },
+    desc: {
+      fr: "Capture : la vue de cet instant rendue hors ligne, enregistrée en PNG",
+      en: "Capture: this instant's view rendered offline, saved as a PNG",
+    },
+  },
   // the target, the views
   {
     name: "target",

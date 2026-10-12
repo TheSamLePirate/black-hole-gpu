@@ -23,6 +23,13 @@ const T = {
   settings: { fr: "Réglages", en: "Settings" },
   controls: { fr: "Commandes", en: "Controls" },
   photo: { fr: "Mode photo", en: "Photo mode" },
+  capture: { fr: "Capture (rendu hors ligne)", en: "Capture (offline render)" },
+  captureHint: {
+    fr: "la vue de cet instant, rendue sans bruit, enregistrée en PNG",
+    en: "this instant's view, rendered noise-free, saved as a PNG",
+  },
+  render: { fr: "Rendu…", en: "Render…" },
+  renderHint: { fr: "une image ou une vidéo : taille, échantillons, plan", en: "a picture or a video: size, samples, shot" },
   title2: { fr: "Écran titre", en: "Title screen" },
   back: { fr: "Retour", en: "Back" },
   name: { fr: "Nom de la sauvegarde", en: "Save name" },
@@ -49,6 +56,9 @@ export interface PauseDeps {
   /** the controls screen (its back: this menu again) */
   controls(): void;
   photo(): void;
+  /** the offline capture of the view now (saved once converged), and the render dialog */
+  capture(): void;
+  render(): void;
   /** placing the ship (ui/placepanel.ts) */
   place(): void;
   /** the date and time (ui/timepanel.ts) */
@@ -122,6 +132,8 @@ export class PauseMenu {
       "nav",
       { class: "pm-list", "aria-label": tr(T.title) },
       this.item(tr(T.resume), () => this.close(), { testid: "pause-resume" }),
+      this.item(tr(T.capture), () => this.leaveFor(this.d.capture), { hint: tr(T.captureHint), testid: "pause-capture", kind: "primary" }),
+      this.item(tr(T.render), () => this.leaveFor(this.d.render), { hint: tr(T.renderHint), testid: "pause-render" }),
       this.item(tr(T.save), () => this.savePage(), { testid: "pause-save" }),
       this.item(tr(T.load), () => this.loadPage(), { testid: "pause-load" }),
       this.item(t("Download graphics diagnostic"), downloadGpuDiagnostic, { testid: "pause-graphics-diagnostic" }),

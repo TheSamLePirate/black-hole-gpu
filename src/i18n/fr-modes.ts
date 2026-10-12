@@ -45,4 +45,9 @@ export default {
   "On foot on {0}, at {1}, {2} metres up.": "À pied sur {0}, à {1}, à {2} mètres d'altitude.",
   "Free camera, far from everything, looking at {0}.": "Caméra libre, loin de tout, tournée vers {0}.",
   "Free camera, {0} kilometres above {1}, looking at {2}.": "Caméra libre, à {0} kilomètres au-dessus de {1}, tournée vers {2}.",
+  "Once the render has converged, the PNG is saved without a click": "Une fois le rendu convergé, le PNG est enregistré sans clic",
+  "Save the PNG when done": "Enregistrer le PNG à la fin",
+  "A video is rendering: stop it first": "Une vidéo est en cours de rendu : arrêtez-la d'abord",
+  "Capture: this view rendered offline, saved as a PNG once converged":
+    "Capture : cette vue rendue hors ligne, enregistrée en PNG une fois convergée",
 } satisfies Record<string, string>;

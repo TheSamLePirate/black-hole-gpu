@@ -135,6 +135,21 @@ export interface GameHost {
   dayClouds?(): { date: string; layer: string } | null;
   /** the game's mode (game/modes.ts): now, into another (why not, or null), the top bar shown or hidden */
   mode?: { get(): GameMode; set(m: GameMode): string | null; hideBar(on: boolean): void };
+  /** the offline capture (renderdialog.ts): the view now rendered converged, saved by itself; its state; stopped */
+  capture?: {
+    start(o: { preset?: string; width?: number; height?: number; spp?: number; save?: "png" | "png16" | "exr" | null }): string | null;
+    state(): {
+      active: boolean;
+      progress: number | null;
+      done: boolean;
+      width: number;
+      height: number;
+      spp: number;
+      autoSave: string | null;
+    };
+    stop(): void;
+    save(kind: "png" | "png16" | "exr"): void;
+  };
 }
 
 export const SCREENS = [
@@ -1320,6 +1335,37 @@ export function gameTools(h: GameHost): Tool[] {
         if (a.bar) h.mode.hideBar(a.bar === "hide");
         const error = a.mode ? h.mode.set(a.mode as GameMode) : null;
         return { ok: !error, error, mode: h.mode.get() };
+      }),
+    },
+    {
+      name: "capture",
+      description:
+        "The offline capture, in every mode: the view now (the ship's, the walker's, the free camera's) rendered converged — noise-free, any size — and saved by itself as a PNG once done (save: png, png16, exr or none). start (preset: 'Mega photo · 8K reference'; or width, height, spp: 16 to 4096), status (progress 0…1, done), save (the picture now, as a kind), stop. A render takes from seconds to minutes: say so, then wait or let the pilot know when it is done (schedule on render).",
+      params: {
+        action: { type: "string", enum: ["start", "status", "save", "stop"] },
+        preset: { type: "string", enum: ["Mega photo · 8K reference"] },
+        width: { type: "number", minimum: 16, maximum: 16384, integer: true },
+        height: { type: "number", minimum: 16, maximum: 16384, integer: true },
+        spp: { type: "number", minimum: 16, maximum: 4096, integer: true },
+        save: { type: "string", enum: ["png", "png16", "exr", "none"] },
+      },
+      required: ["action"],
+      run: act((a) => {
+        const c = h.capture;
+        if (!c) return { ok: false, error: "no capture here" };
+        if (a.action === "start") {
+          const error = c.start({
+            preset: a.preset as string | undefined,
+            width: a.width as number | undefined,
+            height: a.height as number | undefined,
+            spp: a.spp as number | undefined,
+            save: a.save === "none" ? null : (a.save as "png" | "png16" | "exr" | undefined),
+          });
+          return { ok: !error, error, ...c.state() };
+        }
+        if (a.action === "save") c.save((a.save === "none" ? "png" : (a.save as "png" | "png16" | "exr" | undefined)) ?? "png");
+        if (a.action === "stop") c.stop();
+        return { ok: true, ...c.state() };
       }),
     },
     // ------------------------------------------------------------------ teleporting, saves, scenes

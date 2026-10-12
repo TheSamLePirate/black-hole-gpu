@@ -97,6 +97,33 @@ describe.skipIf(!E2E)("the four modes and the top bar", () => {
     expect(await app.js<{ hidden: boolean }>("__bh.mode.bar()")).toMatchObject({ hidden: false });
   }, 30_000);
 
+  test("the capture in every mode (M3): on foot, the free camera, the ship — the view rendered converged", async () => {
+    const capture = (args: object) =>
+      app.js<{ ok: boolean; active: boolean; progress: number | null; done: boolean; error?: string }>(
+        `__bh.tars.tools().find((t) => t.name === "capture").run(${JSON.stringify(args)}, new AbortController().signal).then((r) => r.result ?? r)`,
+      );
+    await app.js(`(()=>{__bh.camera.character.start('moon',0.67,23.47);__bh.step(0);return true;})()`);
+    await settle();
+    for (const m of ["foot", "free", "ship"]) {
+      if (m !== "foot") await app.js(`__bh.mode.set(${JSON.stringify(m)})`);
+      await settle();
+      expect(await mode()).toBe(m);
+      const r = await capture({ action: "start", width: 320, height: 180, spp: 16, save: "none" });
+      expect(r).toMatchObject({ ok: true, active: true });
+      await app.waitFor(`document.getElementById("r-bar").classList.contains("done")`, 120_000);
+      expect(await app.js<number>("__bh.renderer.gpuErrors")).toBe(0);
+      await capture({ action: "stop" });
+      expect(await app.js<boolean>("__bh.renderer.offlineActive")).toBe(false);
+    }
+    await app.press("Escape", "Escape");
+  }, 400_000);
+
+  test("the pause menu offers the capture", async () => {
+    await app.press("Escape", "Escape");
+    await app.waitFor(`!!document.querySelector("[data-testid=pause-capture]")`, 3_000);
+    await app.press("Escape", "Escape");
+  }, 30_000);
+
   test("TARS's set_mode: the free camera, then the ship", async () => {
     const run = (args: object) =>
       app.js<{ ok: boolean; mode: string }>(

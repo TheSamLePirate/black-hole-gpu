@@ -204,6 +204,24 @@ export function setupRenderDialog(d: DialogDeps) {
   resSel.onchange = syncSize;
   wIn.onchange = hIn.onchange = syncSize;
 
+  // (a capture: the picture saved by itself once converged — the pause menu's, the bar's, TARS's; the box keeps
+  // the choice for a render started by hand)
+  const autoBox = document.createElement("input");
+  autoBox.type = "checkbox";
+  autoBox.id = "r-autosave";
+  {
+    const label = document.createElement("label");
+    label.className = "check";
+    label.title = t("Once the render has converged, the PNG is saved without a click");
+    label.append(autoBox, ` ${t("Save the PNG when done")}`);
+    status.after(label);
+  }
+  /** what the render saves by itself once converged; whether it has */
+  let autoSave: "png" | "png16" | "exr" | null = null;
+  let autoSaved = false;
+  /** a capture's own choice for the start it asks (undefined: the box's) */
+  let captureSave: "png" | "png16" | "exr" | null | undefined;
+
   let active = false;
   /** the offline render paused (its button: Resume) */
   let offPaused = false;
@@ -252,6 +270,9 @@ export function setupRenderDialog(d: DialogDeps) {
       budgetMs: BUDGETS[budgetSel.value]!,
     };
     d.renderer.startOffline(d.settings, d.time(), opts);
+    autoSave = captureSave !== undefined ? captureSave : autoBox.checked ? "png" : null;
+    captureSave = undefined;
+    autoSaved = false;
     offPaused = false;
     btnPause.textContent = t("Pause");
     btnStart.textContent = t("Restart");
@@ -263,6 +284,7 @@ export function setupRenderDialog(d: DialogDeps) {
     btnPause.textContent = offPaused ? t("Resume") : t("Pause");
   };
   btnStop.onclick = () => {
+    autoSave = null;
     d.renderer.cancelOffline();
     btnStart.textContent = t("Start render");
     bar.style.width = "0%";
@@ -446,9 +468,43 @@ export function setupRenderDialog(d: DialogDeps) {
       status.textContent = `⚠ ${error instanceof Error ? error.message : String(error)}`;
     }
   };
-  exports[0]!.onclick = () => save(() => d.renderer.exportPNG(d.settings), `${stem()}.png`);
-  exports[1]!.onclick = () => save(() => d.renderer.exportPNG16(d.settings), `${stem()}-16bit.png`);
-  exports[2]!.onclick = () => save(() => d.renderer.exportEXR(d.settings), `${stem()}-linear.exr`);
+  const saveAs = (kind: "png" | "png16" | "exr") =>
+    kind === "png"
+      ? save(() => d.renderer.exportPNG(d.settings), `${stem()}.png`)
+      : kind === "png16"
+        ? save(() => d.renderer.exportPNG16(d.settings), `${stem()}-16bit.png`)
+        : save(() => d.renderer.exportEXR(d.settings), `${stem()}-linear.exr`);
+  exports[0]!.onclick = () => saveAs("png");
+  exports[1]!.onclick = () => saveAs("png16");
+  exports[2]!.onclick = () => saveAs("exr");
+
+  /**
+   * A capture (the pause menu's, the top bar's, TARS's): the view now, rendered offline at once with the dialog's
+   * settings — or a preset, a size, the samples given —, saved by itself once converged. Why not, or null.
+   */
+  function capture(o: { preset?: string; width?: number; height?: number; spp?: number; save?: "png" | "png16" | "exr" | null } = {}) {
+    if (video) return t("A video is rendering: stop it first");
+    toggle(true);
+    if (o.preset && o.preset in PRESETS) {
+      presetSel.value = o.preset;
+      presetSel.onchange?.(new Event("change"));
+    }
+    if (o.width && o.height) {
+      resSel.value = "Custom";
+      wIn.value = String(Math.round(o.width));
+      hIn.value = String(Math.round(o.height));
+    }
+    if (o.spp) {
+      // (the nearest offered at or above it)
+      const offered = [...sppSel.options].map((x) => Number(x.value));
+      sppSel.value = String(offered.find((v) => v >= o.spp!) ?? offered[offered.length - 1]);
+    }
+    syncSize();
+    if (btnStart.disabled) return status.textContent;
+    captureSave = o.save === undefined ? "png" : o.save;
+    btnStart.click();
+    return null;
+  }
   $<HTMLButtonElement>("render-close").onclick = () => toggle(false);
 
   let unEscape: (() => void) | undefined;
@@ -470,6 +526,12 @@ export function setupRenderDialog(d: DialogDeps) {
 
   return {
     toggle,
+    capture,
+    /** a kind of picture saved now; the render stopped */
+    save: (kind: "png" | "png16" | "exr") => void saveAs(kind),
+    stop: () => btnStop.click(),
+    /** the render running, its size, whether it saves itself */
+    state: () => ({ active, video: !!video, autoSave, width: size[0], height: size[1], spp: Number(sppSel.value) }),
     /** a take was recorded: offered as the video's shot */
     takeChanged: () => {
       if (video) return;
@@ -482,6 +544,11 @@ export function setupRenderDialog(d: DialogDeps) {
     size: () => ({ width: size[0], height: size[1] }),
     update(st: OfflineStatus) {
       for (const b of exports) b.disabled = !!st.error;
+      // (a capture converged: saved once)
+      if (st.done && autoSave && !autoSaved && !video) {
+        autoSaved = true;
+        void saveAs(autoSave);
+      }
       btnPause.disabled = !!st.error;
       if (st.error) {
         status.textContent = `⚠ ${st.error}`;

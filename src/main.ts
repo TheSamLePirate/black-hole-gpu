@@ -2653,6 +2653,11 @@ async function main() {
       help: () => actions["btn-help"]!(),
       controls: () => controlsScreen.open(),
       photo: () => void setGameMode("photo"),
+      capture: () => {
+        const why = renderDialog.capture();
+        if (why) panel.toast(why);
+      },
+      render: () => renderDialog.toggle(true),
       place: () => placePanel.open(),
       time: () => timePanel.open(),
       weather: () => weatherPanel.open(),
@@ -3403,6 +3408,17 @@ async function main() {
       testid: "topbar-sound",
     });
     topBar.add({
+      id: "btn-capture",
+      label: t("Capture: this view rendered offline, saved as a PNG once converged"),
+      icon: TB_ICONS.capture,
+      run: () => {
+        const why = renderDialog.capture();
+        if (why) panel.toast(why);
+      },
+      prio: 3,
+      testid: "topbar-capture",
+    });
+    topBar.add({
       id: "btn-render",
       label: t("Offline render: a picture or a video"),
       icon: TB_ICONS.render,
@@ -3982,6 +3998,16 @@ async function main() {
     now: () => performance.now(),
     dayClouds: () => renderer.dayCloudsOf,
     mode: { get: () => gameMode(), set: (m) => setGameMode(m), hideBar: (on) => topBar.hide(on) },
+    capture: {
+      start: (o) => renderDialog.capture(o),
+      state: () => {
+        const r = renderDialog.state();
+        const st = renderer.offlineActive ? lastOffline : null;
+        return { ...r, active: renderer.offlineActive, progress: st ? st.progress : null, done: !!st?.done };
+      },
+      stop: () => renderDialog.stop(),
+      save: (k) => renderDialog.save(k),
+    },
     utcNow: () => utcOf(sim.time),
     multiExposure: (r) => mxDialog.open({ kind: r.kind, run: r }),
     issPasses: (lat, lon, from, days) => issPasses(lat, lon, from, days),
