@@ -1,7 +1,7 @@
 // French for the settings, the scenes and the keyboard sheet (keyed by the English: see src/i18n.ts).
 export default {
   "Walking speed": "Vitesse de marche",
-  "How fast the astronaut walks, in metres a second (1.4 by default, a brisk walk). The walking clip keeps its pace; a faster walk moves the feet faster on the ground than the clip was made for.":
+  "How fast the astronaut walks, in metres a second (1.4 by default, a brisk walk). The steps quicken with the pace; the stride stays that of the walking clip, so a much faster walk can slide the feet.":
     "Vitesse de l'astronaute à la marche, en mètres par seconde (1,4 par défaut, une marche soutenue). Les pas s'accélèrent avec l'allure ; l'enjambée reste celle du cycle de marche, donc une marche beaucoup plus rapide peut faire glisser les pieds.",
   "Running speed": "Vitesse de course",
   "How fast the astronaut runs, held Shift, in metres a second (4 by default).": "Vitesse de l'astronaute en course, Maj maintenu, en mètres par seconde (4 par défaut).",
