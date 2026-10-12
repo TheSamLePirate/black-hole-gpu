@@ -60,6 +60,15 @@ une seule forme (tronc boîte + 5 ellipsoïdes), hauteurs tirées au hasard (12�
   nombre de cellules traversées (rayon proche : ~40 cellules max).
 
 ### A2. Données de forêt réelles
+
+> **Constat (12 octobre 2026, fichier réel inspecté)** : les COG Meta/WRI (`alsgedi_global_v6_float/chm/<quadkey z9>.tif`)
+> sont des BigTIFF de 65 536² pixels (1,19 m), **une bande compressée par ligne entière** (78 km), Deflate +
+> prédicteur 2, entiers 8 bits en mètres, **sans aperçus**, sans CORS. Lire les hauteurs d'une scène (6,5 km)
+> coûte ~900 lignes (~13 Mo) au pas de 7 m, ~230 requêtes (~3,5 Mo) au pas de 28 m, à chaque reconstruction
+> (~550 m de déplacement), via un relais serveur. Incompatible avec « sources publiques en direct » à ce coût.
+> Options : (a) un relais qui échantillonne côté serveur (une ligne sur 24, réponse compacte) ; (b) une
+> pyramide pré-tuilée hébergée (refusée : pas de stockage à nous) ; (c) une autre source (ETH 10 m, GLAD 30 m :
+> pas de CORS non plus). **En attendant : hauteurs par climat, espèce et limite des arbres (`forestHeight`).**
 - **Hauteur de canopée Meta 1 m** (relais nginx + cache) rééchantillonnée à 4 m par le worker de décor → hauteur
   de chaque arbre, trouées, lisières réelles.
 - **Type de feuillage** : feuillus / conifères / mixtes depuis la latitude, l’altitude, le climat (Köppen
