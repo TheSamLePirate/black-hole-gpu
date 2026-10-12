@@ -15,6 +15,18 @@ export interface CharacterLight {
   fov: number;
 }
 const MAX = 65536;
+
+// One set of grass roots: generated in bounded chunks, drawn only once complete. Its origin and axes travel with it.
+interface RootSet {
+  index: number;
+  buffer: GPUBuffer;
+  count: number;
+  cursor: number;
+  key: string;
+  origin: Vec3;
+  axes: [Vec3, Vec3, Vec3];
+  lattice: [number, number];
+}
 export class CharacterRenderer {
   readonly module: GPUShaderModule;
   readonly model: AstronautModel;
@@ -22,7 +34,6 @@ export class CharacterRenderer {
   private skinShadow: GPURenderPipeline;
   private skinBindings: GPUBindGroup[] = [];
   private uniform: GPUBuffer;
-  private roots: GPUBuffer;
   private visible: GPUBuffer;
   private commands: GPUBuffer;
   private vertices: GPUBuffer;
@@ -41,15 +52,10 @@ export class CharacterRenderer {
   private bound: GPUBuffer | null = null;
   private lastScene: GPUBuffer | null = null;
   private rootsData = new Float32Array(MAX * 4);
-  private rootCount = 0;
-  private key = "";
-  private cursor = 0;
-  private rootOrigin: Vec3 = [0, 0, 0];
-  private rootAxes: [Vec3, Vec3, Vec3] = [
-    [1, 0, 0],
-    [0, 1, 0],
-    [0, 0, 1],
-  ];
+  // Two sets: the drawn one, and the one being generated for the current key (the other one).
+  private sets: RootSet[] = [];
+  private drawn = -1;
+  private building = -1;
   private lodUniform: GPUBuffer[] = [];
   private initialized = false;
   private active = false;
@@ -61,7 +67,20 @@ export class CharacterRenderer {
     this.module = d.createShaderModule({ label: "character and grass", code: shader });
     const buffer = (size: number, usage: number) => d.createBuffer({ size, usage });
     this.uniform = buffer(83 * 16, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
-    this.roots = buffer(MAX * 16, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST);
+    this.sets = [0, 1].map((index) => ({
+      index,
+      buffer: buffer(MAX * 16, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST),
+      count: 0,
+      cursor: 0,
+      key: "",
+      origin: [0, 0, 0] as Vec3,
+      axes: [
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1],
+      ] as [Vec3, Vec3, Vec3],
+      lattice: [0, 0] as [number, number],
+    }));
     this.visible = buffer(MAX * 3 * 4, GPUBufferUsage.STORAGE);
     this.commands = buffer(48, GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST);
     const v: number[] = [],
@@ -173,9 +192,9 @@ export class CharacterRenderer {
       astronaut: this.model.stats(),
       active: this.active,
       reason: this.reason,
-      roots: this.rootCount,
+      roots: this.sets[this.drawn]?.count ?? 0,
       maxRoots: MAX,
-      pending: this.reason === "grass" && this.cursor < 64 * 64 && this.rootCount < MAX,
+      pending: this.building >= 0,
       rootBytes: MAX * 16,
       indexBytes: MAX * 3 * 4,
       shadowBytes: 512 * 512 * 4,
@@ -187,8 +206,7 @@ export class CharacterRenderer {
   reset() {
     this.active = false;
     this.reason = "off";
-    this.key = "";
-    this.rootCount = 0;
+    this.dropRoots();
     if (this.depth) {
       this.depth.destroy();
       this.depth = null;
@@ -210,8 +228,7 @@ export class CharacterRenderer {
               ? "outside-grass"
               : "grass";
     if (this.reason !== "grass") {
-      this.rootCount = 0;
-      this.key = "";
+      this.dropRoots();
       return;
     }
     const q = c.q,
@@ -220,39 +237,60 @@ export class CharacterRenderer {
       forward = cross(up, right);
     const cell = [Math.round(dot(q, right) / 8), Math.round(dot(q, forward) / 8)];
     const key = `${revision}:${cell.join(":")}`;
-    if (key !== this.key) {
-      this.key = key;
-      this.cursor = 0;
-      this.rootCount = 0;
-      this.rootAxes = [right, up, forward];
-      this.rootOrigin = add(add(c.ground(q), right, cell[0]! * 8 - dot(q, right)), forward, cell[1]! * 8 - dot(q, forward));
+    // The drawn set stays on screen until its replacement is complete: a rebuilt terrain patch or a crossed cell
+    // no longer empties the grass for the frames the generation takes.
+    if (this.drawn >= 0 && this.sets[this.drawn]?.key === key) return;
+    if (this.building < 0 || this.sets[this.building]?.key !== key) {
+      const s = this.sets[this.drawn === 0 ? 1 : 0]!;
+      s.key = key;
+      s.cursor = 0;
+      s.count = 0;
+      s.axes = [right, up, forward];
+      s.origin = add(add(c.ground(q), right, cell[0]! * 8 - dot(q, right)), forward, cell[1]! * 8 - dot(q, forward));
+      s.lattice = [cell[0]! * 8, cell[1]! * 8];
+      this.building = s.index;
     }
+    const s = this.sets[this.building]!;
     const begin = performance.now();
-    const old = this.rootCount;
+    const old = s.count;
     // A bounded chunk per frame; generate static roots once, never terrain-readback from the GPU.
-    while (this.cursor < 64 * 64 && this.rootCount < MAX && performance.now() - begin < 1) {
-      const cellId = this.cursor++,
+    while (s.cursor < 64 * 64 && s.count < MAX && performance.now() - begin < 1) {
+      const cellId = s.cursor++,
         x = (cellId % 64) - 32,
         z = Math.floor(cellId / 64) - 32,
         d = Math.hypot(x, z);
       if (d > 29) continue;
       const density = d < 6 ? 120 : d < 16 ? 40 : 8;
-      const p = add(add(this.rootOrigin, right, x), forward, z);
+      const p = add(add(s.origin, s.axes[0], x), s.axes[2], z);
       if (!contact!.grass(p)) continue;
       const ground = c.ground(p);
-      const rel = sub(ground, this.rootOrigin);
-      const h = dot(rel, up);
-      for (let n = 0; n < density && this.rootCount < MAX; n++) {
-        const hx = x + cell[0]! * 8,
-          hz = z + cell[1]! * 8;
+      const rel = sub(ground, s.origin);
+      const h = dot(rel, s.axes[1]);
+      for (let n = 0; n < density && s.count < MAX; n++) {
+        const hx = x + s.lattice[0],
+          hz = z + s.lattice[1];
         const a = seed(hx * 131 + n, hz),
           b = seed(hx, hz * 137 + n),
-          s = seed(hx * 37 + n * 7, hz * 31);
-        this.rootsData.set([x + a, h, z + b, s], this.rootCount++ * 4);
+          g = seed(hx * 37 + n * 7, hz * 31);
+        this.rootsData.set([x + a, h, z + b, g], s.count++ * 4);
       }
     }
-    if (this.rootCount > old) this.d.queue.writeBuffer(this.roots, old * 16, this.rootsData, old * 4, (this.rootCount - old) * 4);
+    if (s.count > old) this.d.queue.writeBuffer(s.buffer, old * 16, this.rootsData, old * 4, (s.count - old) * 4);
+    if (s.cursor >= 64 * 64 || s.count >= MAX) {
+      this.drawn = this.building;
+      this.building = -1;
+    }
     this.generationMs = performance.now() - begin;
+  }
+
+  private dropRoots() {
+    for (const s of this.sets) {
+      s.count = 0;
+      s.cursor = 0;
+      s.key = "";
+    }
+    this.drawn = -1;
+    this.building = -1;
   }
   encode(
     enc: GPUCommandEncoder,
@@ -298,9 +336,10 @@ export class CharacterRenderer {
       return [dot(delta, cross(c.forward, c.up())), dot(delta, c.up()), dot(delta, c.forward)];
     };
     const cam = (v: Vec3) => add(add(scale(frame.axes[0], v[0]), frame.axes[1], v[1]), frame.axes[2], v[2]);
-    set(9, [...add(frame.origin, cam(project(this.rootOrigin))), this.rootCount]);
+    const roots = this.sets[this.drawn] ?? null;
+    set(9, [...add(frame.origin, cam(project(roots?.origin ?? [0, 0, 0]))), roots?.count ?? 0]);
     for (let i = 0; i < 3; i++) {
-      const a = this.rootAxes[i]!;
+      const a = roots?.axes[i] ?? ([0, 0, 0] as Vec3);
       const local: Vec3 = [dot(a, cross(c.forward, c.up())), dot(a, c.up()), dot(a, c.forward)];
       set(10 + i, [...cam(local), 0]);
     }
@@ -409,7 +448,7 @@ export class CharacterRenderer {
     );
     comp.draw(3);
     comp.end();
-    if (this.rootCount) {
+    if (roots?.count) {
       const pass = enc.beginComputePass({ ...prof.pass("grass visibility and LOD") });
       pass.setPipeline(this.cull);
       pass.setBindGroup(
@@ -418,15 +457,15 @@ export class CharacterRenderer {
           this.cull,
           [
             ...base,
-            { binding: 2, resource: { buffer: this.roots } },
+            { binding: 2, resource: { buffer: roots.buffer } },
             { binding: 7, resource: { buffer: this.visible } },
             { binding: 4, resource: { buffer: this.commands } },
             { binding: 8, resource: { buffer: sceneryBuffer } },
           ],
-          2,
+          2 + 8 * roots.index,
         ),
       );
-      pass.dispatchWorkgroups(Math.ceil(this.rootCount / 128));
+      pass.dispatchWorkgroups(Math.ceil(roots.count / 128));
       pass.end();
     }
     const pass = enc.beginRenderPass({
@@ -461,7 +500,7 @@ export class CharacterRenderer {
       pass.setIndexBuffer(this.indices, "uint32");
       pass.drawIndexed(this.count, parts.length);
     }
-    if (this.rootCount) {
+    if (roots?.count) {
       pass.setPipeline(this.grass);
       for (let lod = 0; lod < 3; lod++) {
         pass.setBindGroup(
@@ -471,10 +510,10 @@ export class CharacterRenderer {
             [
               { binding: 0, resource: { buffer: this.lodUniform[lod]! } },
               ...shading.slice(1),
-              { binding: 2, resource: { buffer: this.roots } },
+              { binding: 2, resource: { buffer: roots.buffer } },
               { binding: 3, resource: { buffer: this.visible } },
             ],
-            4 + lod,
+            4 + lod + 8 * roots.index,
           ),
         );
         pass.drawIndirect(this.commands, lod * 16);
