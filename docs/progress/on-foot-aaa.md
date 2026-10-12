@@ -30,7 +30,7 @@ Légende : ✅ fait et vérifié ici (unitaires, typecheck, WGSL, validation Web
 | Reconstruction partielle : la scène dessinée est gardée | ✅ unitaires · 🧪 hors ligne |
 | Nouvel essai avec attente croissante (décor 30 s→5 min, pages 2 s→1 min, worker KTX 15 s) | ✅ unitaires · 🧪 coupure Wi-Fi réelle |
 
-## Lot 3 — Herbe AAA : le sol vivant
+## Lot 3 — Herbe AAA : le sol vivant (commit `54dea1c`)
 
 | Changement | État |
 |---|---|
@@ -41,6 +41,18 @@ Légende : ✅ fait et vérifié ici (unitaires, typecheck, WGSL, validation Web
 | Lumière : sonde, translucidité, canopée, ombres arbres/vaisseau/personnage | ✅ rendu · 🧪 sur chaque heure du jour |
 | Réglages : densité (part des brins), portée 8–30 m, vent ×0–2 | ✅ |
 
+## Lot 4 — Fusion de `codex/ground-fixes-b42a483` (commit `74b394f`)
+
+| Changement apporté | Adaptation AAA | État |
+|---|---|---|
+| Scène proche dans le repère physique (décalage optique de 6,5 m supprimé) | L’herbe, les contacts et le décor tracé partagent le même repère | ✅ unitaires · 🧪 visuel (volumes roses) |
+| Collisions arbres = rendu (tronc boîte, cinq couronnes), saut arrêté sous tabliers/couronnes | Combiné au buffer de saut et au coyote time | ✅ unitaires · 🧪 |
+| Capsule contre les vrais triangles de la coque (BVH) | Ma boîte reste le repli avant lecture du maillage, pour les sorties et l’herbe sous la coque | ✅ unitaires · 🧪 avec Ranger/Lander |
+| Profondeur du personnage lue par le vaisseau | Remplacée par l’occulteur pondéré par la couverture (l’herbe écrit sa profondeur : pas de trous dans la coque) ; `ground-details` adapté | ✅ · 🧪 e2e |
+| Ombre du vaisseau sur le sol terrestre, carte d’ombre chaque image à pied | Gardé tel quel | 🧪 |
+| Streaming anticipé (6 s, 650 m) | Gardé | 🧪 vol à 200 m/s |
+| Carte locale (M), planisphères des mondes, volumes roses, sortie sur Mann/Miller/Edmunds | Gardé | 🧪 |
+
 ## Tests à faire sur les Macs
 
 ### Automatiques
@@ -50,6 +62,7 @@ bun run e2e character-aaa            # ici, headless (~4–8 min)
 bun run e2e --remote character-aaa   # kerr-mini, plein écran
 bun run e2e grass-aaa                # herbe : densité, coût GPU, types, traces de pas (~6–12 min)
 bun run e2e character                # l’ancien fichier : doit toujours passer
+bun run e2e --each ground-details ground-planets gargantua-ground scenery-hitboxes place   # tests de la fusion
 bun run e2e earth-scenery earth-surface   # non-régression du streaming
 ```
 
