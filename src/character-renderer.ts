@@ -6,6 +6,7 @@ import type { CharacterFrame, PlanetCharacter } from "./controller/character";
 import type { SceneryContact } from "./system/scenery-contact";
 import { dot, sub, add, scale, unit, cross } from "./math/vec3";
 import { sceneryFrame, seed } from "./system/scenery-data";
+import { bladesInCell, grassDensity } from "./grass-layout";
 export interface CharacterLight {
   sun: Vec3;
   irradiance: Vec3;
@@ -260,12 +261,12 @@ export class CharacterRenderer {
         z = Math.floor(cellId / 64) - 32,
         d = Math.hypot(x, z);
       if (d > 29) continue;
-      const density = d < 6 ? 120 : d < 16 ? 40 : 8;
       const p = add(add(s.origin, s.axes[0], x), s.axes[2], z);
       if (!contact!.grass(p)) continue;
+      const hx = x + s.lattice[0],
+        hz = z + s.lattice[1];
+      const density = bladesInCell(grassDensity(d), hx, hz);
       for (let n = 0; n < density && s.count < MAX; n++) {
-        const hx = x + s.lattice[0],
-          hz = z + s.lattice[1];
         const a = seed(hx * 131 + n, hz),
           b = seed(hx, hz * 137 + n),
           g = seed(hx * 37 + n * 7, hz * 31);
