@@ -263,15 +263,16 @@ export class CharacterRenderer {
       const density = d < 6 ? 120 : d < 16 ? 40 : 8;
       const p = add(add(s.origin, s.axes[0], x), s.axes[2], z);
       if (!contact!.grass(p)) continue;
-      const ground = c.ground(p);
-      const rel = sub(ground, s.origin);
-      const h = dot(rel, s.axes[1]);
       for (let n = 0; n < density && s.count < MAX; n++) {
         const hx = x + s.lattice[0],
           hz = z + s.lattice[1];
         const a = seed(hx * 131 + n, hz),
           b = seed(hx, hz * 137 + n),
           g = seed(hx * 37 + n * 7, hz * 31);
+        // Each blade stands on the ground under itself: the cell's centre is up to a metre away, a slope's
+        // difference of tens of centimetres would float or bury it.
+        const base = add(add(s.origin, s.axes[0], x + a), s.axes[2], z + b);
+        const h = dot(sub(c.ground(base), s.origin), s.axes[1]);
         this.rootsData.set([x + a, h, z + b, g], s.count++ * 4);
       }
     }
