@@ -288,11 +288,6 @@ export const KEYMAP: KeySection[] = [
         text: "Spectator: a free camera, anywhere — the ship flies on, its autopilots and plan (the Free camera mode, F3; F1 or V: back to it)",
       },
       {
-        keys: "F6",
-        text: 'TARS: tap — write to him; hold — speak to him. Ask him anything, or ask him to do it: land us at Edwards, take us to the Moon, target Mars, warp ×1000, the cockpit view… (his honesty and humour: "honesty 70")',
-        bind: [fly("F6", "tars")],
-      },
-      {
         keys: "⇧F4",
         text: "Autopilot: it flies, or it assists — you fly, its director on the HUD shows where to point, how much throttle",
         bind: [fly("F4", "assist", on)],
@@ -380,6 +375,11 @@ export const KEYMAP: KeySection[] = [
           codes("system", "F3", "gameMode", { arg: "free", shift: false }),
           codes("system", "F4", "gameMode", { arg: "photo", shift: false }),
         ],
+      },
+      {
+        keys: "F6",
+        text: 'TARS, in every mode: tap — write to him; hold — speak to him. Ask him anything, or ask him to do it: land us at Edwards, take us to the Moon, walk here, render this view, warp ×1000… (his honesty and humour: "honesty 70")',
+        bind: [codes("system", "F6", "tars")],
       },
       {
         keys: "F10",

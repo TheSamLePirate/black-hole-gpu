@@ -18,6 +18,8 @@ import type { SceneryContact } from "../system/scenery-contact";
 import { t } from "../i18n";
 import { capsuleInHull, hullDistance, outOfHull, placeHull, type VesselHull } from "./vessel-hull";
 import { damp, fbm, Spring3, type V3 } from "../cine/rig";
+import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
+import { azimuthDeg } from "../game/geo";
 
 /** a jump asked this long before the feet touch down is still made on landing [s] */
 export const JUMP_BUFFER_S = 0.15;
@@ -778,6 +780,40 @@ export class PlanetCharacter {
       this.placeView(this.c.nowTime(), 0);
     }
     return err;
+  }
+  /**
+   * Where the explorer stands, as a map and a compass read it: the latitude and longitude [°] (the Earth's
+   * geodetic), the height above the datum and above the ground [m], the datum's radius [m], the azimuths [°] he
+   * faces and the camera looks along, his speed [m/s]. Null: not walking.
+   */
+  place() {
+    if (!this.active) return null;
+    const deg = 180 / Math.PI;
+    const q = this.q;
+    let lat: number, lon: number, altM: number, radiusM: number;
+    if (this.ours) {
+      radiusM = solarBody(this.body)!.radius * M_METRES;
+      const g = cartToGeodetic(radiusM, flatteningOf(this.body), q);
+      [lat, lon, altM] = [g.lat * deg, g.lon * deg, g.h];
+    } else {
+      const F = planetFrame(this.body, this.lastTime, this.c.s.spin, this.c.s.massSolar);
+      radiusM = F.R * F.mPerM;
+      const r = len(q);
+      [lat, lon, altM] = [Math.asin(q[2] / r) * deg, Math.atan2(q[1], q[0]) * deg, r - radiusM];
+    }
+    const up = this.up();
+    const look = tangent(up, add(scale(this.heading, Math.cos(this.yaw)), cross(this.heading, up), Math.sin(this.yaw)));
+    return {
+      body: this.body,
+      lat,
+      lon,
+      altM,
+      aglM: this.height(),
+      radiusM,
+      headingDeg: azimuthDeg(up, tangent(up, this.heading)),
+      viewDeg: azimuthDeg(up, look),
+      speedMs: this.speed,
+    };
   }
   state() {
     return {

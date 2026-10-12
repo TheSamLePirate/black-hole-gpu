@@ -9,6 +9,7 @@
 // Humour higher: a dry quip now and then, a joke when asked; at 0, none.
 
 import { t, tf } from "../i18n";
+import { compassPoint, fmtLatLon } from "./geo";
 
 export interface TarsState {
   /** the body we are by (its name), the height over it [km], how we fly (the status' label) */
@@ -32,6 +33,34 @@ export interface TarsState {
   auto: string;
   /** on Gargantua's side: the ship's clock rate (dτ/dt) */
   dtau: number | null;
+  /** the game's mode (game/modes.ts): ship, foot, free, photo — TARS knows it in every mode */
+  mode?: string;
+  /** on foot: the world, the place [°], the height above the datum and the ground [m], where the view looks [° from
+   *  the north], the speed [m/s], the landed craft's distance [m] and bearing [°] */
+  foot?: {
+    body: string;
+    lat: number;
+    lon: number;
+    altM: number;
+    aglM: number;
+    viewDeg: number;
+    speedMs: number;
+    craft: { distM: number; bearingDeg: number } | null;
+  } | null;
+  /** the free camera (the spectator, or no ship): the world nearest and the height above it [km], the target, the
+   *  look locked on it, the telescope, the lens [°], a cinematic running */
+  view?: {
+    near: string | null;
+    altKm: number | null;
+    target: string;
+    lookAt: boolean;
+    telescope: boolean;
+    fovDeg: number;
+    cinematic: string | null;
+    spectator: boolean;
+  } | null;
+  /** the photo mode open (over which mode), an offline render running (0…1, its size) */
+  photo?: { open: boolean; over: string | null; render: { progress: number; width: number; height: number; done: boolean } | null } | null;
 }
 
 export interface Personality {
@@ -58,6 +87,10 @@ const fmtDur = (s: number) =>
         ? tf("{0} hours", Math.round(s / 3600))
         : tf("{0} days", Math.round(s / 86400));
 
+/** the compass's points and the hemispheres' letters, in the language */
+const COMPASS = () => [t("north"), t("north-east"), t("east"), t("south-east"), t("south"), t("south-west"), t("west"), t("north-west")];
+const NSEW = (): [string, string, string, string] => [t("N"), t("S"), t("E"), t("W")];
+
 export class Tars {
   private seed: number;
   /** when each moment was last remarked on, and any remark [ms] */
@@ -79,7 +112,9 @@ export class Tars {
 
   /** A figure as honest as the setting: exact at 80 % and over, rounded below, round and vague under 40 %. */
   private figure(x: number, p: Personality): string {
-    if (p.honesty >= 80) return x >= 100 ? Math.round(x).toLocaleString("en-US") : x >= 10 ? x.toFixed(0) : x.toFixed(1);
+    // (a height under the datum, a descent: negative — its size decides the digits)
+    const a = Math.abs(x);
+    if (p.honesty >= 80) return a >= 100 ? Math.round(x).toLocaleString("en-US") : a >= 10 ? x.toFixed(0) : x.toFixed(1);
     const mag = 10 ** Math.max(0, Math.floor(Math.log10(Math.max(Math.abs(x), 1))) - (p.honesty >= 40 ? 1 : 0));
     return (Math.round(x / mag) * mag).toLocaleString("en-US");
   }
@@ -165,6 +200,7 @@ export class Tars {
     }
     // the speed
     if (/speed|fast|vitesse|vite|velocity/.test(x)) {
+      if (s.foot) return { text: tf("{0} metres per second, on foot.", this.figure(s.foot.speedMs, p)) + this.quip(p) };
       if (s.speed === null) return { text: t("Speed relative to what? Out here, that's a real question.") };
       const rel = s.body ?? t("the nearest body");
       if (s.speed >= 1e6)
@@ -175,6 +211,23 @@ export class Tars {
     }
     // where, how high
     if (/where|position|altitude|how high|ou sommes|ou est|ou on|hauteur|ou suis|ou en/.test(x)) {
+      // (on foot, the free camera: the mode's own place — PLAN-MODES-AAA M2)
+      const f = s.foot;
+      if (f) {
+        const craft = f.craft
+          ? ` ${tf("The craft is {0} metres away, to the {1}.", this.figure(f.craft.distM, p), compassPoint(f.craft.bearingDeg, COMPASS()))}`
+          : "";
+        return {
+          text: tf("On foot on {0}, at {1}, {2} metres up.", f.body, fmtLatLon(f.lat, f.lon, 3, NSEW()), this.figure(f.altM, p)) + craft,
+        };
+      }
+      const v = s.view;
+      if (v && !s.body) {
+        if (!v.near || v.altKm === null) return { text: tf("Free camera, far from everything, looking at {0}.", v.target) };
+        return {
+          text: tf("Free camera, {0} kilometres above {1}, looking at {2}.", this.figure(v.altKm, p), v.near, v.target) + this.quip(p),
+        };
+      }
       if (s.landed) return { text: tf("On the ground at {0}. Solid. I checked.", s.body ?? t("somewhere")) };
       if (s.docked) return { text: t("Docked. Going nowhere until you say so.") };
       if (s.altKm === null || !s.body) return { text: t("Far from everything. That's the short answer.") };

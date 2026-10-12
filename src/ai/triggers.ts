@@ -22,6 +22,8 @@ export type TriggerKind =
   | "character"
   | "grass"
   | "map"
+  | "mode"
+  | "render"
   | "every"
   | "at"
   | "in";
@@ -43,6 +45,8 @@ export const EVENT_KINDS: TriggerKind[] = [
   "character",
   "grass",
   "map",
+  "mode",
+  "render",
 ];
 
 export interface TriggerOn {

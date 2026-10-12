@@ -5,7 +5,7 @@ The plan, the request and the user's choices: [PLAN-MODES-AAA.md](../PLAN-MODES-
 | Lot | State |
 | --- | --- |
 | M1 The four modes, the top bar always present | done |
-| M2 TARS everywhere | to do |
+| M2 TARS everywhere | done |
 | M3 Pause → offline capture everywhere | to do |
 | M4 Ship HUD in chase and dorsal, three HUDs | to do |
 | M5 On-foot HUD | to do |
@@ -135,3 +135,63 @@ bun run e2e --remote modes a11y s5 photo-fps place eclipses metar music-panel bh
     - The help sheet (?) lists F1–F4, F10 and ⇧F4.
 11. **Phone or tablet.** The bar fits within the width, the names shortened. Upright, the time goes onto a second
     row.
+
+## M2. TARS everywhere
+
+### What changed
+
+- **F6:** moved to the keyboard's system layer, so it works in every mode (ship, on foot, free camera, photo). The
+  top bar's emblem (M1) also opens the console.
+- **What he knows** (`TarsState`, sent with every question and given by `get_state`):
+  - the flight, only while a craft is flown (no stale flight figures once it is left);
+  - the mode, always;
+  - on foot (`foot`): the world, the latitude and longitude, the height above the datum and the ground, the view's
+    heading, the speed, the landed craft's distance and bearing;
+  - in the free camera (`view`): the nearest world and the height above it, the target, the look, the telescope,
+    the lens, a cinematic, the spectator;
+  - in the photo mode and during a render (`photo`): the mode under the photo, the render's progress.
+- **New helpers:**
+  - `character.place()` (`controller/character.ts`): where the walker stands, as a map and a compass read it.
+  - `src/game/geo.ts`: local axes, azimuths, great circles, the place written, compass points (pure). The on-foot
+    HUD (M5) will use them too.
+- **His offline answers** ("where are we", "how fast") know the walk and the free camera.
+- **His figures** handle negative values (a height below the datum).
+- **His 1 s loop** runs in every mode:
+  - the mode's changes (`mode`) and a render's end (`render`) are new events his rules can wait on (`schedule`);
+  - his timed rules fire outside the flight too;
+  - the flight's own events stay the flight's;
+  - his console's hub card clears once the flight is left.
+- **His prompt** describes the four modes and the fields he is given.
+- **The `interface` tool** opens the music console and the render dialog too.
+- **Every way into the photo mode** goes through the mode change: the pause menu, the title screen, TARS.
+- **Docs:** `docs/systemes/10-tars-agent.md` gets a section "Dans tous les modes", and its events, tools and
+  commands are updated.
+
+### Tests
+
+- **Unit:**
+  - `tests/geo.test.ts`;
+  - `tests/tars.test.ts`: on foot and in the free camera;
+  - `tests/keymap.test.ts`: F6 in the system layer;
+  - `tests/i18n.test.ts`.
+- **e2e (Macs):** `modes.e2e.test.ts` now presses F6 on foot (the console opens) and reads `get_state` (the mode,
+  the world, the craft's distance).
+
+### Manual tests to do (on the Mac)
+
+1. **Every mode.** On foot, in the free camera and in the photo mode, F6 tapped opens his field and F6 held
+   listens. The emblem in the bar moves while he listens, thinks and speaks.
+2. **On foot.** Ask "où sommes-nous ?": the world, the place, the height and the craft's distance and direction.
+   - Offline (no key): his written answer says the same.
+   - Online: he can also say how to walk back to the craft.
+3. **Free camera near Mars.** Ask "où suis-je ?": the height above Mars and the target.
+4. **His rules.**
+   - Ask "préviens-moi quand je repasse en mode vaisseau": a rule `mode` → `ship`. Switch with F1: he wakes and
+     speaks.
+   - Ask "dis-moi quand le rendu est fini", start an offline render (the bar's render button), let it finish: he
+     says so.
+5. **Leaving the flight.** Walk off a landed craft: the hub card on his console clears.
+6. **Commands.**
+   - "ouvre la musique": the music console.
+   - "ouvre le rendu": the render dialog.
+   - "mode photo": the photo mode, Esc back.

@@ -67,6 +67,16 @@ describe.skipIf(!E2E)("the four modes and the top bar", () => {
     expect(await mode()).toBe("foot");
     expect(await app.js<boolean>("__bh.camera.character.active")).toBe(true);
     await app.waitFor(`/°/.test(document.querySelector("[data-testid=topbar-context]")?.textContent ?? "")`, 5_000);
+    // (TARS on foot — M2: F6 opens his console; his state has the walker's place and the craft's distance)
+    await app.press("F6", "F6");
+    await app.waitFor(`!!document.querySelector(".tars-panel:not([hidden])")`, 3_000);
+    await app.press("Escape", "Escape");
+    const st = await app.js<{ mode: string; foot: { body: string; craft: { distM: number } | null } | null }>(
+      `__bh.tars.tools().find((t) => t.name === "get_state").run({}, new AbortController().signal).then((r) => r.flight)`,
+    );
+    expect(st.mode).toBe("foot");
+    expect(st.foot?.body).toBe("moon");
+    expect(st.foot?.craft?.distM ?? Infinity).toBeLessThan(200);
     await app.press("F3", "F3");
     await settle();
     expect(await mode()).toBe("free");

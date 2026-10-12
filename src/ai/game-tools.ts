@@ -186,6 +186,8 @@ export const PANELS = [
   "planner",
   "sky",
   "camera",
+  "music",
+  "render",
 ] as const;
 export type Panel = (typeof PANELS)[number];
 
@@ -1277,7 +1279,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "interface",
       description:
-        "The interface: open a panel (settings, place, time, weather, eclipses — the eclipse calculator's page —, scenes, photo, controls, help, pause, planner: the flight computer's MISSION tab over the map, sky, camera) or close the one on top; the map (open, tab: orbit/globe/map; on the ground: local planisphere, mapZoom 0–21, default 18); HUD density 0 full, 1 minimal, 2 clean; a screenshot (PNG download).",
+        "The interface: open a panel (settings, place, time, weather, eclipses — the eclipse calculator's page —, scenes, photo — the photo mode —, controls, help, pause, planner: the flight computer's MISSION tab over the map, sky, camera, music — the music console —, render — the offline render dialog) or close the one on top; the map (open, tab: orbit/globe/map; on the ground: local planisphere, mapZoom 0–21, default 18); HUD density 0 full, 1 minimal, 2 clean; a screenshot (PNG download).",
       params: {
         open: { type: "string", enum: PANELS },
         close: { type: "boolean" },
@@ -1759,7 +1761,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "schedule",
       description:
-        "Set yourself a rule that wakes you later, with what to do then (your own words, an instruction to yourself): on a change of the game — autopilot (to: a mode, or none = an autopilot ended), phase (to: orbit, air, entry, approach, ground…), hub_step, entry_phase, alert (to: warning/caution), soi (to: a body), landed, docked, report, deviation, eclipse (to: solar_partial, solar_total, solar_annular, lunar_partial, lunar_total or end: at the camera's place) —, every N minutes, at a game time (simTimeS, seconds), or in N seconds. once: fired a single time. Use it when the pilot asks you to watch, remind, check regularly or react to something.",
+        "Set yourself a rule that wakes you later, with what to do then (your own words, an instruction to yourself): on a change of the game — autopilot (to: a mode, or none = an autopilot ended), phase (to: orbit, air, entry, approach, ground…), hub_step, entry_phase, alert (to: warning/caution), soi (to: a body), landed, docked, report, deviation, eclipse (to: solar_partial, solar_total, solar_annular, lunar_partial, lunar_total or end: at the camera's place), mode (to: ship, foot, free, photo — the game's mode changed), render (to: done or stopped — an offline render ended), character (to: disembarked, boarded…) —, every N minutes, at a game time (simTimeS, seconds), or in N seconds. once: fired a single time. Use it when the pilot asks you to watch, remind, check regularly or react to something.",
       params: {
         on: { type: "string", enum: [...EVENT_KINDS, "every", "at", "in"] },
         to: { type: "string" },

@@ -76,8 +76,8 @@ export default {
   "TARS humour": "Humour de TARS",
   'His dry asides, his jokes when asked, his remarks unasked. 0: none. Also by asking him: "humour 50".':
     "Ses apartés pince-sans-rire, ses blagues sur demande, ses remarques spontanées. 0 : aucun. Aussi en le lui demandant : « humour 50 ».",
-  'TARS: tap — write to him; hold — speak to him. Ask him anything, or ask him to do it: land us at Edwards, take us to the Moon, target Mars, warp ×1000, the cockpit view… (his honesty and humour: "honesty 70")':
-    "TARS : tapé — lui écrire ; tenu — lui parler. Demandez-lui tout, ou de le faire : pose-nous à Edwards, emmène-nous sur la Lune, vise Mars, le temps ×1000, la vue cockpit… (son honnêteté et son humour : « honnêteté 70 »)",
+  'TARS, in every mode: tap — write to him; hold — speak to him. Ask him anything, or ask him to do it: land us at Edwards, take us to the Moon, walk here, render this view, warp ×1000… (his honesty and humour: "honesty 70")':
+    "TARS, dans tous les modes : tapé — lui écrire ; tenu — lui parler. Demandez-lui tout, ou de le faire : pose-nous à Edwards, emmène-nous sur la Lune, marche ici, fais le rendu de cette vue, le temps ×1000… (son honnêteté et son humour : « honnêteté 70 »)",
   "{0} seconds": "{0} secondes",
   "{0} minutes": "{0} minutes",
   "{0} hours": "{0} heures",

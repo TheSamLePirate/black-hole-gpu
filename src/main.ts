@@ -13,7 +13,7 @@ import { CockpitInput } from "./cockpit/input";
 import { cockpitTarget } from "./cockpit/pointer";
 import { CockpitTip } from "./ui/cockpit-tip";
 import { cockpitHull } from "./system/collide";
-import { prefetchSkyAssets, Renderer, type FrameStats } from "./renderer";
+import { prefetchSkyAssets, Renderer, type FrameStats, type OfflineStatus } from "./renderer";
 import { swappable } from "./util/swappable";
 import { downloadGpuDiagnostic, globalErrorRouter, gpuDiagnostics } from "./gpu-diagnostics";
 import { horizon, isco } from "./physics";
@@ -61,6 +61,7 @@ import { RadialWheel, type WheelItem } from "./ui/wheel";
 import { Tablet } from "./ui/tablet";
 import { PhotoMode } from "./ui/photo";
 import { TB_ICONS, TopBar, modeName } from "./ui/topbar";
+import { greatCircle } from "./game/geo";
 import { GAME_MODES, baseMode, modeOf, planMode, type GameMode, type ModeState, type ModeStep } from "./game/modes";
 import { POSE_KEYS } from "./controller/util";
 import { readPrefs, writePrefs } from "./game/prefs";
@@ -585,8 +586,9 @@ async function main() {
   const openRouter = new OpenRouter(undefined, undefined, () => settings.tarsModel);
   const tarsOnline = new TarsOnline(openRouter);
   let tarsBusy = false;
-  const tarsNow = (): TarsState =>
-    tarsView ?? {
+  // (what he knows in every mode: the flight while one is flown, the mode's own situation always — PLAN-MODES-AAA M2)
+  const tarsNow = (): TarsState => ({
+    ...((camera.piloting ? tarsView : null) ?? {
       body: null,
       altKm: null,
       status: null,
@@ -600,7 +602,59 @@ async function main() {
       stage: null,
       auto: camera.pilot.auto,
       dtau: null,
-    };
+    }),
+    ...tarsSituation(),
+  });
+  /** The mode's situation for TARS: on foot the place, the free camera where it is and what it looks at, the photo
+   *  mode and a render running. */
+  function tarsSituation(): Partial<TarsState> {
+    const mode = gameMode();
+    const r1 = (v: number, k = 1) => Math.round(v * 10 ** k) / 10 ** k;
+    const out: Partial<TarsState> = { mode, foot: null, view: null, photo: null };
+    const p = camera.character.place();
+    if (p) {
+      const v = flightHud.ground.localPlace?.()?.vessel ?? null;
+      const g = v ? greatCircle(p.lat, p.lon, v.lat, v.lon, p.radiusM) : null;
+      out.foot = {
+        body: p.body,
+        lat: r1(p.lat, 5),
+        lon: r1(p.lon, 5),
+        altM: Math.round(p.altM),
+        aglM: r1(p.aglM),
+        viewDeg: Math.round(p.viewDeg),
+        speedMs: r1(p.speedMs),
+        craft: g ? { distM: Math.round(g.dist), bearingDeg: Math.round(g.bearingDeg) } : null,
+      };
+    } else if (mode !== "ship") {
+      const vc = camera.viewController();
+      const vs = camera.viewSettings();
+      const w = vc.rigWorld();
+      const n = w ? vc.rigNearest(w.ours, w.X, vc.nowTime()) : null;
+      const mPerUnit = w?.ours ? M_METRES : 1476.625 * settings.massSolar;
+      out.view = {
+        near: n ? (BODY_NAMES[n.id as Target] ?? n.id) : null,
+        altKm: n && w ? r1(((Math.hypot(w.X[0] - n.C[0], w.X[1] - n.C[1], w.X[2] - n.C[2]) - n.R) * mPerUnit) / 1e3, 1) : null,
+        target: BODY_NAMES[vs.target] ?? vs.target,
+        lookAt: vs.lookAt,
+        telescope: vs.telescope,
+        fovDeg: r1(vs.fov),
+        cinematic: camera.cinematic ?? null,
+        spectator: camera.spectating,
+      };
+    }
+    if (mode === "photo" || renderer.offlineActive)
+      out.photo = {
+        open: mode === "photo",
+        over: mode === "photo" ? baseMode(modeState()) : null,
+        render:
+          renderer.offlineActive && lastOffline
+            ? { progress: r1(lastOffline.progress, 3), width: lastOffline.width, height: lastOffline.height, done: lastOffline.done }
+            : null,
+      };
+    return out;
+  }
+  /** the offline render's last status (the render dialog's; TARS's) */
+  let lastOffline: OfflineStatus | null = null;
   const online = () => settings.tarsOnline && !!openRouterKey.get() && navigator.onLine !== false;
   // TARS the agent (PLAN-TARS-AGENT): the whole game as his tools (built once everything is declared, below),
   // his memory kept in this browser
@@ -745,6 +799,8 @@ async function main() {
     grass: string;
   } | null = null;
   let tarsMapSeen: string | null = null;
+  let tarsModeSeen: GameMode | null = null;
+  let tarsRenderSeen = "";
   let tarsSpentSeen = 0;
   setInterval(() => {
     // (what OpenRouter cost since: the budget's)
@@ -753,70 +809,89 @@ async function main() {
     const mapKey = `${flightHud.mapView}:${flightHud.ground.localMap.zoom}`;
     if (tarsMapSeen !== null && mapKey !== tarsMapSeen) tarsEvent({ kind: "map", from: tarsMapSeen, to: mapKey });
     tarsMapSeen = mapKey;
-    if (!camera.piloting) return void (tarsSeen = null);
-    const st = tools.status();
-    // (what he follows — B4: the hub's card mirrored on his console)
-    const hub = camera.hubInfo?.() ?? null;
-    tarsPanel.follow(
-      hub
-        ? {
-            title: hub.title,
-            step: hub.phase,
-            progress: hub.bar,
-            rows: hub.rows as [string, string, string?][],
-            next: hub.next,
-            callout: hub.say?.length ? hub.say.join(" · ") : null,
-            verdict: hub.graph?.state ?? null,
-            fix: hub.graph?.fix,
-          }
-        : null,
-    );
-    const now = {
-      auto: camera.pilot.auto,
-      entry: camera.entryRun?.phase ?? "",
-      hub: hub?.phase ?? "",
-      alerts: new Set(flightHud.alerts.map((a) => `${a.level}:${a.id}`)),
-      soi: st.soi,
-      landed: camera.landed && !camera.rolling,
-      docked: camera.docked,
-      surface: `${renderer.earthSurface.stats().region ?? "none"}:${renderer.earthSurface.stats().status}`,
-      grass: renderer.characterRenderer.stats().reason,
-      scenery: `${renderer.earthScenery.stats().lat ?? "none"}:${renderer.earthScenery.stats().lon ?? "none"}:${renderer.earthScenery.stats().status}:${settings.earthSceneryShadows}`,
-      // (the deviations: the hub's graph out of its corridor, the entry out of its own, the approach's PAPI all
-      // white or all red on final)
-      off: hub?.graph?.state === "off" ? `${hub.graph.kind}` : camera.entryRun?.inCorr === false ? "entry" : "",
-      papi: (() => {
-        const r = camera.runwayView?.();
-        return r?.final && (r.papi === 0 || r.papi === 4) ? (r.papi === 0 ? "low" : "high") : "";
-      })(),
-      // (an eclipse at the camera's place: its phase — PLAN-CIEL C11)
-      eclipse:
-        (camera as unknown as { skyInfo?: () => { eclipse?: { phase: string } } | null }).skyInfo?.()?.eclipse?.phase.replace("none", "") ??
-        "",
-    };
-    const was = tarsSeen;
-    tarsSeen = now;
-    if (was) {
-      if (now.auto !== was.auto) tarsEvent({ kind: "autopilot", from: was.auto, to: now.auto });
-      if (now.entry !== was.entry && now.entry) tarsEvent({ kind: "entry_phase", from: was.entry, to: now.entry });
-      if (now.hub !== was.hub && now.hub) tarsEvent({ kind: "hub_step", from: was.hub, to: now.hub, detail: hub?.title });
-      for (const a of now.alerts) if (!was.alerts.has(a)) tarsEvent({ kind: "alert", to: a.split(":")[0], detail: a.split(":")[1] });
-      if (now.soi !== was.soi) tarsEvent({ kind: "soi", from: was.soi, to: now.soi });
-      if (now.landed && !was.landed) tarsEvent({ kind: "landed", to: st.soi });
-      if (now.docked && !was.docked) tarsEvent({ kind: "docked" });
-      if (now.surface !== was.surface) tarsEvent({ kind: "surface", from: was.surface, to: now.surface });
-      if (now.grass !== was.grass) tarsEvent({ kind: "grass", from: was.grass, to: now.grass });
-      if (now.scenery !== was.scenery) tarsEvent({ kind: "scenery", from: was.scenery, to: now.scenery });
-      if (now.off && now.off !== was.off) tarsEvent({ kind: "deviation", to: now.off, detail: hub?.graph?.fix ?? hub?.graph?.about });
-      if (now.eclipse !== was.eclipse)
-        tarsEvent({
-          kind: "eclipse",
-          from: was.eclipse || "none",
-          to: now.eclipse || "end",
-          detail: now.eclipse ? `an eclipse phase here: ${now.eclipse}` : `the eclipse here is over (${was.eclipse})`,
-        });
-      if (now.papi && now.papi !== was.papi)
-        tarsEvent({ kind: "deviation", to: "approach", detail: `PAPI ${now.papi === "low" ? "all red: too low" : "all white: too high"}` });
+    // (every mode: the mode's changes, a render's end — PLAN-MODES-AAA M2)
+    const modeNow = gameMode();
+    if (tarsModeSeen !== null && modeNow !== tarsModeSeen) tarsEvent({ kind: "mode", from: tarsModeSeen, to: modeNow });
+    tarsModeSeen = modeNow;
+    const renderNow = renderer.offlineActive ? (lastOffline?.done ? "done" : "running") : "";
+    if (tarsRenderSeen === "running" && renderNow !== "running")
+      tarsEvent({ kind: "render", from: "running", to: renderNow === "done" || lastOffline?.done ? "done" : "stopped" });
+    tarsRenderSeen = renderNow;
+    // (the flight's own, while one is flown)
+    if (!camera.piloting) {
+      // (his console's hub card cleared once the flight is left)
+      if (tarsSeen) tarsPanel.follow(null);
+      tarsSeen = null;
+    } else {
+      const st = tools.status();
+      // (what he follows — B4: the hub's card mirrored on his console)
+      const hub = camera.hubInfo?.() ?? null;
+      tarsPanel.follow(
+        hub
+          ? {
+              title: hub.title,
+              step: hub.phase,
+              progress: hub.bar,
+              rows: hub.rows as [string, string, string?][],
+              next: hub.next,
+              callout: hub.say?.length ? hub.say.join(" · ") : null,
+              verdict: hub.graph?.state ?? null,
+              fix: hub.graph?.fix,
+            }
+          : null,
+      );
+      const now = {
+        auto: camera.pilot.auto,
+        entry: camera.entryRun?.phase ?? "",
+        hub: hub?.phase ?? "",
+        alerts: new Set(flightHud.alerts.map((a) => `${a.level}:${a.id}`)),
+        soi: st.soi,
+        landed: camera.landed && !camera.rolling,
+        docked: camera.docked,
+        surface: `${renderer.earthSurface.stats().region ?? "none"}:${renderer.earthSurface.stats().status}`,
+        grass: renderer.characterRenderer.stats().reason,
+        scenery: `${renderer.earthScenery.stats().lat ?? "none"}:${renderer.earthScenery.stats().lon ?? "none"}:${renderer.earthScenery.stats().status}:${settings.earthSceneryShadows}`,
+        // (the deviations: the hub's graph out of its corridor, the entry out of its own, the approach's PAPI all
+        // white or all red on final)
+        off: hub?.graph?.state === "off" ? `${hub.graph.kind}` : camera.entryRun?.inCorr === false ? "entry" : "",
+        papi: (() => {
+          const r = camera.runwayView?.();
+          return r?.final && (r.papi === 0 || r.papi === 4) ? (r.papi === 0 ? "low" : "high") : "";
+        })(),
+        // (an eclipse at the camera's place: its phase — PLAN-CIEL C11)
+        eclipse:
+          (camera as unknown as { skyInfo?: () => { eclipse?: { phase: string } } | null })
+            .skyInfo?.()
+            ?.eclipse?.phase.replace("none", "") ?? "",
+      };
+      const was = tarsSeen;
+      tarsSeen = now;
+      if (was) {
+        if (now.auto !== was.auto) tarsEvent({ kind: "autopilot", from: was.auto, to: now.auto });
+        if (now.entry !== was.entry && now.entry) tarsEvent({ kind: "entry_phase", from: was.entry, to: now.entry });
+        if (now.hub !== was.hub && now.hub) tarsEvent({ kind: "hub_step", from: was.hub, to: now.hub, detail: hub?.title });
+        for (const a of now.alerts) if (!was.alerts.has(a)) tarsEvent({ kind: "alert", to: a.split(":")[0], detail: a.split(":")[1] });
+        if (now.soi !== was.soi) tarsEvent({ kind: "soi", from: was.soi, to: now.soi });
+        if (now.landed && !was.landed) tarsEvent({ kind: "landed", to: st.soi });
+        if (now.docked && !was.docked) tarsEvent({ kind: "docked" });
+        if (now.surface !== was.surface) tarsEvent({ kind: "surface", from: was.surface, to: now.surface });
+        if (now.grass !== was.grass) tarsEvent({ kind: "grass", from: was.grass, to: now.grass });
+        if (now.scenery !== was.scenery) tarsEvent({ kind: "scenery", from: was.scenery, to: now.scenery });
+        if (now.off && now.off !== was.off) tarsEvent({ kind: "deviation", to: now.off, detail: hub?.graph?.fix ?? hub?.graph?.about });
+        if (now.eclipse !== was.eclipse)
+          tarsEvent({
+            kind: "eclipse",
+            from: was.eclipse || "none",
+            to: now.eclipse || "end",
+            detail: now.eclipse ? `an eclipse phase here: ${now.eclipse}` : `the eclipse here is over (${was.eclipse})`,
+          });
+        if (now.papi && now.papi !== was.papi)
+          tarsEvent({
+            kind: "deviation",
+            to: "approach",
+            detail: `PAPI ${now.papi === "low" ? "all red: too low" : "all white: too high"}`,
+          });
+      }
     }
     for (const r of tarsTriggers.due(sim.time * 4.925490947e-6 * settings.massSolar))
       if (!tarsWakeQueue.some((q) => q.rules.includes(r))) {
@@ -2577,7 +2652,7 @@ async function main() {
       settings: () => panel.toggle(true),
       help: () => actions["btn-help"]!(),
       controls: () => controlsScreen.open(),
-      photo: () => openPhoto(),
+      photo: () => void setGameMode("photo"),
       place: () => placePanel.open(),
       time: () => timePanel.open(),
       weather: () => weatherPanel.open(),
@@ -3882,13 +3957,15 @@ async function main() {
         weather: () => weatherPanel.open(),
         eclipses: () => eclipses.open(),
         scenes: () => scenes.open(),
-        photo: () => openPhoto(),
+        photo: () => void setGameMode("photo"),
         controls: () => controlsScreen.open(),
         help: () => actions["btn-help"]!(),
         pause: () => keyActions.pause(new KeyboardEvent("keydown")),
         planner: () => openMissions(),
         sky: () => actions["btn-sky"]!(),
         camera: () => actions["btn-camera"]!(),
+        music: () => musicPanel.toggle(true),
+        render: () => renderDialog.toggle(true),
       };
       open[p]();
     },
@@ -4290,7 +4367,7 @@ async function main() {
       sim.timeDirty = false;
       displayChanged = false;
       lastStats = st;
-      if (st.offline) renderDialog.update(st.offline);
+      if (st.offline) renderDialog.update((lastOffline = st.offline));
       if (renderer.completedFrames !== measuredFrames) {
         measuredFrames = renderer.completedFrames;
         gpuEma = gpuEma ? 0.9 * gpuEma + 0.1 * renderer.lastGpuMs : renderer.lastGpuMs;
@@ -4847,7 +4924,7 @@ async function main() {
       },
       photo: () => {
         started = true;
-        openPhoto();
+        setGameMode("photo");
       },
       settings: () => {
         started = true;
