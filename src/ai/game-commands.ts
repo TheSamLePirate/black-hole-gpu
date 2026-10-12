@@ -92,6 +92,15 @@ export const GAME_COMMANDS: GameCommand[] = [
     },
   },
   {
+    name: "skyevents",
+    tool: "sky_events",
+    fixed: { action: "open" },
+    desc: {
+      fr: "Le ciel d'ici : filés, analemme, Lune, ISS, éclipses, sélénélion — y aller, le vivre, le rendre",
+      en: "The sky from here: trails, analemma, the Moon, the ISS, eclipses, selenelion — go, live, render",
+    },
+  },
+  {
     name: "capture",
     tool: "capture",
     fixed: { action: "start" },

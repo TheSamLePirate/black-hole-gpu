@@ -147,6 +147,23 @@ export interface GameHost {
     ): string | null;
     open(o: { body?: "earth" | "moon" | "mars"; query?: string }): void;
   };
+  /** the sky's events from where one stands on the Earth (ui/skyevents.ts): listed, taken a way, the page opened */
+  skyEvents?: {
+    list(): Promise<
+      | {
+          id: string;
+          title: string;
+          when: string | null;
+          detail: string;
+          look: { azDeg: number; altDeg: number; fovDeg: number; lensMm: number };
+          render: boolean;
+          transit?: boolean;
+        }[]
+      | null
+    >;
+    take(id: string, way: "go" | "live" | "render"): string | null;
+    open(): string | null;
+  };
   /** the offline capture (renderdialog.ts): the view now rendered converged, saved by itself; its state; stopped */
   capture?: {
     start(o: { preset?: string; width?: number; height?: number; spp?: number; save?: "png" | "png16" | "exr" | null }): string | null;
@@ -216,6 +233,7 @@ export const PANELS = [
   "music",
   "render",
   "atlas",
+  "skyevents",
 ] as const;
 export type Panel = (typeof PANELS)[number];
 
@@ -1390,6 +1408,32 @@ export function gameTools(h: GameHost): Tool[] {
         if (!p) return { ok: false, error: "no place: give lat and lon, or a query that finds one" };
         const error = A.go((a.to as "orbit" | "land" | "walk" | "camera" | "tripod" | undefined) ?? "camera", p);
         return { ok: !error, error, place: p };
+      }),
+    },
+    {
+      name: "sky_events",
+      description:
+        "The sky's events from where one stands on the Earth (walking, the tripod, the free camera over the ground) and the way one looks: the star trails (circumpolar when the pole is up), the analemma, the Moon's path tonight, the next ISS pass, the ISS's closest approach to the Moon and the Sun (a transit when it crosses their disc), the next solar and lunar eclipses seen here, the next selenelion, the next transits of Mercury and Venus — each with its date (UTC), where to look (azimuth, altitude), the field and the lens. list: them all (takes a few seconds: the eclipses searched over 30 years). take (id from the list): go — the tripod set there at that time, aimed; live — its exposures taken one after the other in the game and stacked on screen (the pilot watches the event unfold; saved as a PNG or rendered at full quality after); render — the multiple exposure's full-quality dialog filled. open: the page.",
+      params: {
+        action: { type: "string", enum: ["list", "take", "open"] },
+        id: { type: "string" },
+        way: { type: "string", enum: ["go", "live", "render"] },
+      },
+      required: ["action"],
+      run: act(async (a) => {
+        const S = h.skyEvents;
+        if (!S) return { ok: false, error: "no sky events here" };
+        if (a.action === "open") {
+          const error = S.open();
+          return { ok: !error, error };
+        }
+        if (a.action === "list") {
+          const events = await S.list();
+          return events ? { ok: true, events } : { ok: false, error: "not on the Earth's ground: walk there (F2), or set the tripod (⇧T)" };
+        }
+        if (!a.id) return { ok: false, error: "take needs an id from the list" };
+        const error = S.take(String(a.id), (a.way as "go" | "live" | "render" | undefined) ?? "go");
+        return { ok: !error, error };
       }),
     },
     {

@@ -161,7 +161,7 @@ export function drawIssTrail(
   H: number,
   view: Framing,
   track: IssSight[],
-  o: { width?: number; dashes?: boolean; exposure?: number } = {},
+  o: { width?: number; dashes?: boolean; exposure?: number; dark?: boolean } = {},
 ) {
   const width = o.width ?? Math.max(1.6, W / 1100);
   const R = Math.ceil(width * 2);
@@ -178,7 +178,8 @@ export function drawIssTrail(
       prev = null;
       continue;
     }
-    const I = Math.min(Math.max((1 - s.mag) / 5, 0.12), 1) * s.lit;
+    // (dark: its silhouette against the Moon's or the Sun's disc — a transit —, whatever its light)
+    const I = o.dark ? 1 : Math.min(Math.max((1 - s.mag) / 5, 0.12), 1) * s.lit;
     if (I <= 0.01) {
       prev = null;
       continue;
@@ -202,6 +203,10 @@ export function drawIssTrail(
           const w = I * (d < width / 2 ? 1 : Math.exp(-((d - width / 2) ** 2) / (0.5 * width * width)));
           if (w < 0.02) continue;
           const q = (iy * W + ix) * 4;
+          if (o.dark) {
+            for (let j = 0; j < 3; j++) out[q + j] = out[q + j]! * (1 - w * 0.92);
+            continue;
+          }
           for (let j = 0; j < 3; j++) {
             const v = col[j]! * w;
             if (v > out[q + j]!) out[q + j] = v;

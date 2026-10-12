@@ -617,6 +617,32 @@ Une page plein écran (F8, la barre du haut, le menu pause, TARS) :
   sol ; un spectateur si un vaisseau vole), un trépied sur place (`standOn`) ; « Cette vue » pour un point de vue
   photographié ; « Demander à TARS ». Une mission en cours se termine après un second clic.
 
+#### 6.3 quinquies Le trépied et le ciel d’ici (`ui/skyevents.ts`, `ui/livecapture.ts`, `photo/skyevents.ts`, PLAN-MODES-AAA M7)
+
+- **⇧T à pied** pose le trépied là où l’on se tient, regardant du même côté (`tripodHere` → `cameraAt(…, { ground,
+  heading })`) : la caméra libre au sol, fixée à la Terre, le ciel tournant au-dessus.
+- **⇧F8** (la barre du haut, le menu pause, TARS) ouvre **le ciel d’ici** : depuis la Terre (à pied, sur le trépied,
+  ou la caméra libre à moins de 130 km du sol) et selon la vue, des cartes datées (UTC), chacune avec où regarder
+  (azimut, hauteur), le champ et l’objectif 24×36 équivalent :
+  - **filé d’étoiles** : autour du pôle s’il est à 10° au moins (circumpolaire), sinon dans l’axe de la vue
+    (relevée à 25°), quatre heures dès la nuit noire (Soleil à −12°) ;
+  - **analemme** : le Soleil à l’heure qu’il est si toute la figure reste au-dessus de l’horizon, sinon au premier
+    temps solaire moyen qui la garde (midi, 10 h, 14 h, 9 h, 15 h) — aucune dans les cercles polaires ;
+  - **la course de la Lune** ce soir ; **le prochain passage de l’ISS** visible ;
+  - **l’ISS au plus près de la Lune et du Soleil** sur trois jours (transit sous 0,26°, marqué ambre) ;
+  - **les prochaines éclipses de Soleil et de Lune vues d’ici**, **le prochain sélénélion** (la Lune éclipsée et le
+    Soleil tous deux dans la bande −1…+2° de l’horizon), **les transits de Mercure et de Vénus** (Soleil levé ici).
+  Les cartes arrivent au fil du calcul (le fil principal rendu à chaque groupe ; les éclipses par le worker du
+  planificateur, sur trente ans).
+- **Ses trois voies :**
+  - *Y aller* : l’horloge à cette date, le trépied au même lieu tourné vers (azimut, hauteur), le champ réglé ;
+  - *Le vivre* (`LiveCapture`) : les poses prises une à une dans le jeu (la date posée, la scène attendue —
+    `mxHost.settle` —, l’image exportée), empilées en « éclaircir » sur une carte en bas à droite qui grandit avec
+    l’événement, la progression, la pose et le temps restant ; le temps du jeu suspendu puis rendu ; à la fin,
+    l’empilement en PNG ou le rendu pleine qualité. L’ISS, que la scène ne dessine pas vue du sol, y est tracée
+    (`drawIssTrail` : sa traînée lumineuse, ou sa silhouette devant un disque) ;
+  - *Rendu* : la boîte des expositions multiples remplie (filé, analemme, Lune, ISS, éclipse ou transit).
+
 #### 6.4 Les instruments
 
 - **Marqueurs dans la vue** (`drawHud`). La projection reprend celle de la caméra : x = d·x/(d·z ·

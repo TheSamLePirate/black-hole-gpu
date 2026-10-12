@@ -10,7 +10,7 @@ The plan, the request and the user's choices: [PLAN-MODES-AAA.md](../PLAN-MODES-
 | M4 Ship HUD in chase and dorsal, three HUDs | done |
 | M5 On-foot HUD | done |
 | M6 The Atlas: maps, POIs, placement, geocoding | done |
-| M7 Tripod and sky events from the view | to do |
+| M7 Tripod and sky events from the view | done |
 | M8 Photo mode: renders and animations | to do |
 | M9 Coherence | to do |
 
@@ -413,3 +413,76 @@ bun run e2e --remote modes a11y s5 photo-fps place eclipses metar music-panel bh
    - "pose-nous au cratère Gale".
    - "/visit tour eiffel".
 8. **Narrow window and phone:** the map above, the list and the card under it.
+
+## M7. The tripod and the sky's events from the view
+
+### What changed
+
+- **⇧T on foot** sets the tripod where one stands, looking the same way (`tripodHere` in `main.ts`): the free
+  camera on the ground, fixed to the world, the sky wheeling overhead. `cameraAt` takes a heading and a pitch.
+- **The sky from here** (`ui/skyevents.ts`), opened by ⇧F8, the top bar, the pause menu, TARS and `/skyevents`.
+  - From the Earth (walking, the tripod, or the free camera under 130 km) and the way the view looks.
+  - Its cards, dated (UTC), each with where to look (azimuth, altitude), the field and the 35 mm lens:
+    - star trails: around the pole when it stands 10° up (circumpolar), else along the view; four hours from the
+      dark sky (the Sun at −12°);
+    - the analemma: at the time it is now if the whole figure stays up, else at local mean solar noon, 10:00,
+      14:00, 9:00 or 15:00; none in the polar circles;
+    - the Moon's path tonight; the next visible ISS pass;
+    - the ISS's closest approach to the Moon and the Sun over three days; a transit (under 0.26°) marked amber;
+    - the next solar and lunar eclipses seen here, the next selenelion (both bodies within −1…+2° of the horizon
+      during the umbral phase), the next transits of Mercury and Venus with the Sun up.
+  - The cards come in as they are computed: the page opens at once (about 20 ms), the main thread given back
+    between groups (175 ms at most measured), the eclipses from the planner's worker over thirty years.
+- **Three ways for each event:**
+  - **Go there:** the clock to that date, the tripod at the same place aimed (azimuth, altitude), the field set.
+  - **Live it** (`ui/livecapture.ts`): the exposures taken one by one in the game (the date set, the scene settled,
+    the image exported) and stacked (lighten) on a card at the bottom right that grows with the event, with the
+    progress, the exposure and the time left. The game's time is held, then given back. At the end: the stack as a
+    PNG, or the full-quality render. The ISS, which the scene does not draw from the ground, is drawn on each
+    exposure: its lit streak, or its silhouette across the disc for a transit.
+  - **Render:** the multiple exposure's dialog, filled (trails, analemma, Moon, ISS, eclipse or transit).
+- **The geometry** is pure (`photo/skyevents.ts`): `angSep`, `poleView`, `trailsAim`, `shotTimes`, `lensMm`,
+  `selenelionAt`, `closestApproach`.
+- **TARS:** the `sky_events` tool (list, take with go / live / render, open) and the `skyevents` panel.
+- **French** for every text; the ⇧T help line updated.
+- **Docs:** `docs/systemes/08-interface.md` § 6.3 quinquies; the TARS tools table; the e2e catalogue.
+
+### Tests
+
+- **Unit:**
+  - `tests/skyevents.test.ts`: the angles, the pole, the trails' aim, the times and lenses, the selenelion, the
+    ISS's closest approach;
+  - `tests/livecapture.test.ts`: the lighten stack, the time left.
+- **e2e (Macs):** `tests/e2e/sky-events.e2e.test.ts`.
+- **Checked here** in a headless page with the real ephemerides, from Paris on 12 Oct 2026 at 19:00 UTC:
+  - circumpolar trails;
+  - the analemma at 11:51 UTC (solar noon), a 59° field;
+  - the ISS 2.1° from the Moon on 13 Oct, and across the Sun (0.17°) on 14 Oct at 11:43 UTC;
+  - the penumbral lunar eclipse of 20 Feb 2027 and the partial solar eclipse of 2 Aug 2027 (magnitude 0.63);
+  - a selenelion on 31 Dec 2028 at 15:53 UTC;
+  - the transit of Mercury on 13 Nov 2032;
+  - the live card stacking 30 exposures, then its actions.
+
+### Manual tests to do (on the Mac)
+
+1. **⇧T on foot** in a field on the Earth: the camera stays where you stood, looking the same way. Let time run: the
+   sky turns, the ground stays.
+2. **⇧F8** there: the page opens at once, the cards come in, the eclipses last.
+   - At the North Cape: the analemma is missing.
+   - Near the equator: the trails go along the view, not to the pole.
+3. **Go there** on the trails at night: the tripod faces the pole at its height, the field is 60°.
+4. **Live it:**
+   - the trails: 48 exposures, the arcs grow on the card, the time left falls;
+   - Stop halfway: the stack is kept, Save it as a PNG, the time runs again if it ran;
+   - the Moon's path, then Full-quality render: the dialog opens filled.
+5. **The ISS:**
+   - a pass lived: its streak crosses the stack;
+   - a transit (amber card) lived: its silhouette on the disc. Use a solar filter for the Sun.
+6. **The free camera** over the ground (F3, under 130 km): ⇧F8 works. Higher up, or on the Moon: the refusal toast.
+7. **TARS:**
+   - "qu'est-ce que je peux photographier d'ici ?" (he lists them);
+   - "fais-moi vivre le filé d'étoiles";
+   - "/skyevents".
+8. **The pause menu:** "The sky from here".
+9. **Phone width:** one column of cards; the live card fits.
+

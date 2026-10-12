@@ -1364,8 +1364,8 @@ export default {
   "Free fall along the geodesic (the keys thrust) ⟷ free": "Chute libre le long de la géodésique (les touches poussent) ⟷ libre",
   "Auto-orbit · dive to the horizon · wormhole journey (they run with the time)":
     "Orbite auto · plongée vers l'horizon · voyage par le trou de ver (ils suivent le temps)",
-  "Tripod on the ground: the target's world (else the nearest), level, facing the horizon":
-    "Trépied au sol : le monde de la cible (sinon le plus proche), à niveau, face à l'horizon",
+  "Tripod on the ground: the target's world (else the nearest), level, facing the horizon — on foot, where one stands, looking the same way":
+    "Trépied au sol : le monde de la cible (sinon le plus proche), à niveau, face à l'horizon — à pied, là où l'on se tient, regardant du même côté",
   "Jet · shadow guide": "Jet · guide de l'ombre",
   "Cinematic mode: liquid wormhole surface": "Mode cinématique : surface liquide du trou de ver",
   "Ranger: camera on the spaceship · next view": "Ranger : caméra sur le vaisseau · vue suivante",

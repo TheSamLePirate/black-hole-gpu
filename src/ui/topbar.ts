@@ -39,6 +39,8 @@ export const TB_ICONS = {
   sound: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" class="f"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
   mute: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" class="f"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>',
   atlas: '<path d="M3.5 6.5l5.5-2 6 2 5.5-2v13l-5.5 2-6-2-5.5 2z"/><path d="M9 4.5v13M15 6.5v13"/>',
+  skyEvents:
+    '<path d="M4.5 19a7.5 7.5 0 0 1 15 0M7.5 19a4.5 4.5 0 0 1 9 0"/><circle cx="12" cy="19" r="1.1" class="f"/><path d="M17.5 3.5l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z" class="f"/>',
   capture:
     '<path d="M4 8.5h3l1.6-2.5h6.8L17 8.5h3v10.5H4z"/><circle cx="12" cy="13.5" r="3.6"/><circle cx="12" cy="13.5" r="1.2" class="f"/>',
   render: '<rect x="3.5" y="5" width="17" height="12" rx="1.5"/><path d="M8 21h8M12 17v4M9.5 8.5v5l4.5-2.5z"/>',

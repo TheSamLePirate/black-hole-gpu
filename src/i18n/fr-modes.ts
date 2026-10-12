@@ -135,4 +135,44 @@ export default {
   You: "Vous",
   "The camera": "La caméra",
   "Ask TARS": "Demander à TARS",
+  // the tripod and the sky's events from here (M7)
+  "The sky's events from here (on the Earth): star trails, analemma, the Moon, the ISS and its transits, eclipses, selenelion — go there, live it, render it":
+    "Le ciel d'ici (sur la Terre) : filés d'étoiles, analemme, la Lune, l'ISS et ses transits, éclipses, sélénélion — y aller, le vivre, le rendre",
+  "Tripod here: walk on a world first (F2)": "Trépied ici : marchez d'abord sur un monde (F2)",
+  "The tripod stands on our worlds: the Earth, the Moon, Mars and the others":
+    "Le trépied se pose sur nos mondes : la Terre, la Lune, Mars et les autres",
+  "Tripod on {0}, looking {1}° — the sky's events from here (⇧F8)": "Trépied sur {0}, regard à {1}° — le ciel d'ici (⇧F8)",
+  "The sky's events from here: trails, analemma, the Moon, the ISS, eclipses — go there, live it, render it":
+    "Le ciel d'ici : filés, analemme, la Lune, l'ISS, éclipses — y aller, le vivre, le rendre",
+  "The sky's events: stand on the Earth first — walking, on the tripod, or the free camera over the ground":
+    "Le ciel d'ici : tenez-vous d'abord sur la Terre — à pied, sur le trépied, ou la caméra libre au ras du sol",
+  "looking {0}° · {1}° up · {2} UTC": "regard à {0}° · {1}° de hauteur · {2} UTC",
+  "Reading the sky…": "Lecture du ciel…",
+  "The sky's events from here": "Le ciel d'ici",
+  "Around the pole, {0}° up — four hours": "Autour du pôle, à {0}° de hauteur — quatre heures",
+  "Along the view, toward {0} — four hours": "Dans l'axe de la vue, vers {0} — quatre heures",
+  "The Sun at {0} UTC, every fortnight for a year": "Le Soleil à {0} UTC, tous les quinze jours pendant un an",
+  "{0} exposures while it is up": "{0} poses tant qu'elle est levée",
+  "Up to {0}° · magnitude {1}": "Jusqu'à {0}° · magnitude {1}",
+  "A transit: {0}° from its centre — a second and a half, a solar filter for the Sun":
+    "Un transit : à {0}° de son centre — une seconde et demie, un filtre solaire pour le Soleil",
+  "Closest approach {0}° — a transit needs under {1}°: move a few kilometres":
+    "Au plus près {0}° — un transit demande moins de {1}° : déplacez-vous de quelques kilomètres",
+  "Here: magnitude {0}, the Sun {1}° up": "Ici : magnitude {0}, le Soleil à {1}° de hauteur",
+  "The Moon {0}° up at the greatest": "La Lune à {0}° de hauteur au maximum",
+  "The eclipsed Moon on the horizon at {0}°, the Sun rising or setting opposite at {1}°":
+    "La Lune éclipsée sur l'horizon à {0}°, le Soleil se levant ou se couchant en face à {1}°",
+  "Across the Sun for {0} h — a solar filter": "Devant le Soleil pendant {0} h — un filtre solaire",
+  "Nothing to see from here for now": "Rien à voir d'ici pour l'instant",
+  "Look {0}° · {1}° up · field {2}° (≈ {3} mm)": "Regarder à {0}° · {1}° de hauteur · champ {2}° (≈ {3} mm)",
+  "Go there": "Y aller",
+  "Live it": "Le vivre",
+  LIVE: "EN DIRECT",
+  "Exposure {0} / {1} · {2} UTC": "Pose {0} / {1} · {2} UTC",
+  "about {0} s left": "encore {0} s environ",
+  STOPPED: "ARRÊTÉ",
+  DONE: "TERMINÉ",
+  "{0} exposures stacked": "{0} poses empilées",
+  "Save the stack (PNG)": "Enregistrer l'empilement (PNG)",
+  "Full-quality render": "Rendu pleine qualité",
 } satisfies Record<string, string>;

@@ -17,6 +17,7 @@ export type KeyAction =
   | "tools"
   | "gameMode"
   | "atlas"
+  | "skyEvents"
   | "pause"
   | "quickSave"
   | "quickLoad"
@@ -203,7 +204,7 @@ export const KEYMAP: KeySection[] = [
       },
       {
         keys: "⇧T",
-        text: "Tripod on the ground: the target's world (else the nearest), level, facing the horizon",
+        text: "Tripod on the ground: the target's world (else the nearest), level, facing the horizon — on foot, where one stands, looking the same way",
         bind: [scene("t", "standOn", on)],
       },
     ],
@@ -390,7 +391,12 @@ export const KEYMAP: KeySection[] = [
       {
         keys: "F8",
         text: "The Atlas: the Earth, the Moon and Mars as maps — destinations, addresses, coordinates; in orbit over a place, landed, on foot, the free camera, a tripod",
-        bind: [codes("system", "F8", "atlas")],
+        bind: [codes("system", "F8", "atlas", { shift: false })],
+      },
+      {
+        keys: "⇧F8",
+        text: "The sky's events from here (on the Earth): star trails, analemma, the Moon, the ISS and its transits, eclipses, selenelion — go there, live it, render it",
+        bind: [codes("system", "F8", "skyEvents", { shift: true })],
       },
       {
         keys: "F10",
@@ -467,7 +473,7 @@ export function matchKey(
     matchIn("time", e, false, list) ??
     (character
       ? matchIn("scene", e, false, list) &&
-        ["help", "png", "fullscreen", "details", "toggleUi", "quality", "map"].includes(matchIn("scene", e, false, list)!.do)
+        ["help", "png", "fullscreen", "details", "toggleUi", "quality", "map", "standOn"].includes(matchIn("scene", e, false, list)!.do)
         ? matchIn("scene", e, false, list)
         : undefined
       : flightKey

@@ -6,6 +6,10 @@ import { groundVelocity } from "./system/our-surface";
 import { CharacterHud } from "./ui/characterhud";
 import { FootHud, type CompassMark } from "./ui/foothud";
 import { AtlasPage, type AtlasAction, type AtlasPlace } from "./ui/atlas";
+import { azAltAt } from "./eclipse/earth-moon";
+import { LiveCapture } from "./ui/livecapture";
+import { lensMm } from "./photo/skyevents";
+import { SkyEventsPage, type SkyPlace } from "./ui/skyevents";
 import { POIS, searchPois } from "./game/pois";
 import { geocode, parseCoords } from "./game/geocode";
 import { LANDSCAPES } from "./system/landscapes";
@@ -54,7 +58,7 @@ import {
   skyMarks,
 } from "./photo/plans";
 import { type MoonPathOptions, moonPathPlan, type TrailsOptions, trailsPlan } from "./photo/sky-series";
-import { drawIssTrail, issPasses, issPhotoPlan } from "./photo/iss-pass";
+import { drawIssTrail, issPasses, issPhotoPlan, issSight } from "./photo/iss-pass";
 import { transits } from "./eclipse/moons";
 import { MultiExposureDialog } from "./ui/multiexposure";
 import { bestPlace } from "./eclipse/details";
@@ -88,6 +92,7 @@ import { Mission } from "./mission";
 import { physicalReadouts } from "./readouts";
 import {
   aimAngles,
+  altAzOf,
   buildChart,
   chartOn,
   chartOptions,
@@ -2695,6 +2700,7 @@ async function main() {
       },
       render: () => renderDialog.toggle(true),
       atlas: () => atlas.open(),
+      skyEvents: () => void skyEventsToggle(),
       place: () => placePanel.open(),
       time: () => timePanel.open(),
       weather: () => weatherPanel.open(),
@@ -2726,6 +2732,7 @@ async function main() {
       if (!e.repeat) setGameMode(m as GameMode);
     },
     atlas: () => (atlas.isOpen ? atlas.hide() : atlas.open()),
+    skyEvents: () => void skyEventsToggle(),
     // (held flight keys: translation, throttle — read each frame by the controller)
     held: () => {},
     throttleFull: () => {
@@ -2852,7 +2859,8 @@ async function main() {
     dive: () => cinematic("dive"),
     journey: () => cinematic("journey"),
     standOn: () => {
-      const why = standOn();
+      // (on foot: the tripod where the walker stands, looking where the view looked — PLAN-MODES-AAA M7)
+      const why = camera.character.active ? tripodHere() : standOn();
       if (why) panel.toast(why);
     },
     fall: () => setView(view() === "fall" ? "free" : "fall"),
@@ -3371,9 +3379,15 @@ async function main() {
   }
   /**
    * The free camera above a place (a spectator when a ship flies — it flies on): `altKm` up, south of it, looking at
-   * it 30° down, carried with the ground; or `ground`: on its tripod there, looking north. Why not, or null.
+   * it 30° down, carried with the ground; or `ground`: on its tripod there, looking along `heading` (north by
+   * default), `pitch` up from the horizon. Why not, or null.
    */
-  function cameraAt(body: MapBody, lat: number, lon: number, o: { altKm?: number; ground?: boolean } = {}): string | null {
+  function cameraAt(
+    body: string,
+    lat: number,
+    lon: number,
+    o: { altKm?: number; ground?: boolean; heading?: number; pitch?: number } = {},
+  ): string | null {
     atlasReady();
     if (camera.character.active) leaveWalk("free");
     if (settings.ship && camera.piloting && !camera.spectating) {
@@ -3388,7 +3402,7 @@ async function main() {
     const v = bodyView(
       time,
       o.ground
-        ? { body, at: [lat, lon], altKm: alt, heading: 0 }
+        ? { body, at: [lat, lon], altKm: alt, heading: o.heading ?? 0 }
         : { body, at: [Math.max(-89.9, lat - back), lon], altKm: alt, aim: [lat, lon] },
     );
     vc.setCinematic(null);
@@ -3401,10 +3415,31 @@ async function main() {
     if (o.ground) {
       const why = vc.standOn(body as Body);
       if (why) return why;
+      // (the look raised off the horizon: the tripod then holds it, fixed on the ground)
+      const w = o.pitch ? vc.rigWorld() : null;
+      if (w) {
+        const a = (o.pitch! * Math.PI) / 180;
+        const fwd = w.fwd.map((f, i) => f * Math.cos(a) + w.up[i]! * Math.sin(a)) as Vec3;
+        const up = w.up.map((u, i) => u * Math.cos(a) - w.fwd[i]! * Math.sin(a)) as Vec3;
+        vc.rigPlace(w.ours, w.X, fwd, up, groundVelocity(body, w.X, time));
+      }
     }
     refreshGui();
     touch();
     return null;
+  }
+  /** The tripod where the walker stands, looking where the view looked (PLAN-MODES-AAA M7): why not, or null. */
+  function tripodHere(): string | null {
+    const ch = camera.character;
+    const p = ch.place();
+    if (!p) return t("Tripod here: walk on a world first (F2)");
+    if (!ch.ours) return t("The tripod stands on our worlds: the Earth, the Moon, Mars and the others");
+    const why = cameraAt(p.body, p.lat, p.lon, { ground: true, heading: p.viewDeg });
+    if (!why)
+      panel.toast(
+        tf("Tripod on {0}, looking {1}° — the sky's events from here (⇧F8)", BODY_NAMES[p.body as Target] ?? p.body, Math.round(p.viewDeg)),
+      );
+    return why;
   }
   const atlas = new AtlasPage({
     lang: () => lang,
@@ -3522,6 +3557,93 @@ async function main() {
     },
   });
   flightHud.onEclipses = () => eclipses.open();
+  // the sky's events from here (ui/skyevents.ts, PLAN-MODES-AAA M7): from where one stands on the Earth (walking, on
+  // the tripod, the free camera over the ground) and the way one looks — each event gone to (the tripod set, the
+  // time, the aim), lived (its exposures taken and stacked in the game: ui/livecapture.ts) or rendered
+  /** Where one stands on the Earth's ground and the way the view looks (null: not there). */
+  function skyPlace(): SkyPlace | null {
+    const cam = cameraFrame(settings);
+    const hz = horizonAt(settings, cam, sim.time);
+    const look = hz ? altAzOf(hz, cam.fwd as Vec3) : null;
+    const view = look ? { az: look[1], alt: look[0] } : { az: 0, alt: 0 };
+    const p = camera.character.place();
+    if (p) return p.body === "earth" ? { lat: p.lat, lon: p.lon, view: { ...view, az: p.viewDeg } } : null;
+    if (settings.ship && !camera.spectating) return null;
+    const g = camera.viewController().groundBelow(0.02);
+    return g && g.body === "earth" ? { lat: g.lat, lon: g.lon, view } : null;
+  }
+  /** The tripod at a place of the Earth, the clock at a time, looking at (az, alt) through a field [°]: why not, or null. */
+  function skyAim(lat: number, lon: number, o: { ms: number; az: number; alt: number; fov: number }): string | null {
+    try {
+      tools.setDate(new Date(o.ms).toISOString());
+    } catch (e) {
+      return (e as Error).message;
+    }
+    const why = cameraAt("earth", lat, lon, { ground: true, heading: o.az, pitch: o.alt });
+    if (why) return why;
+    camera.setFov(o.fov);
+    touch();
+    return null;
+  }
+  const liveCapture = new LiveCapture({
+    at: async (ms, first) => {
+      tools.setDate(new Date(ms).toISOString());
+      await mxHost.settle(first);
+    },
+    grab: () => renderer.exportRGBA(settings),
+    download: (b, name) => download(b, name),
+    hold: () => {
+      const was = settings.animate;
+      playPause(false);
+      return was;
+    },
+    release: (was) => playPause(was as boolean),
+  });
+  const skyEvents = new SkyEventsPage({
+    place: skyPlace,
+    now: () => utcOf(sim.time),
+    azAlt: (id, lat, lon, ms) => azAltAt(id, (lat * Math.PI) / 180, (lon * Math.PI) / 180, 0, ms),
+    iss: (lat, lon, ms) => issSight(lat, lon, ms),
+    issPasses: (lat, lon, from, days) => issPasses(lat, lon, from, days),
+    search: async (q) => {
+      const r = (await plan({ kind: "eclipses", q })) as { events: EclipseEvent[] } | { error: string };
+      if ("error" in r) throw new Error(r.error);
+      return r;
+    },
+    aim: (o) => {
+      const p = skyPlace();
+      const why = p && skyAim(p.lat, p.lon, o);
+      if (why) panel.toast(why);
+    },
+    live: (o) => {
+      const p = skyPlace();
+      if (!p) return;
+      const why = skyAim(p.lat, p.lon, { ms: o.times[0]!, az: o.az, alt: o.alt, fov: o.fov });
+      if (why) return void panel.toast(why);
+      // (the station: its streak since the last exposure, as a long exposure catches it — the scene does not draw it
+      // from the ground)
+      const view = { az: o.az, alt: o.alt, fov: o.fov };
+      const overlay = o.iss
+        ? (data: Uint8Array, w: number, h: number, i: number) => {
+            const to = o.times[i]!;
+            const from = i > 0 ? o.times[i - 1]! : to - 1e3;
+            const track = Array.from({ length: 41 }, (_, k) => issSight(p.lat, p.lon, from + ((to - from) * k) / 40)).filter(
+              (x): x is NonNullable<typeof x> => !!x,
+            );
+            drawIssTrail(new Uint8ClampedArray(data.buffer, data.byteOffset, data.length), w, h, view, track, { dark: o.iss === "dark" });
+          }
+        : undefined;
+      void liveCapture.run({ title: o.title, times: o.times, stem: o.stem, render: o.render, overlay });
+    },
+    render: (kind, fill) => void mxDialog.open({ kind, fill }),
+  });
+  /** The sky's events from here, opened or closed: why not, or null. */
+  function skyEventsToggle(): string | null {
+    if (skyEvents.isOpen) return skyEvents.hide(), null;
+    const why = skyEvents.open();
+    if (why) panel.toast(why);
+    return why;
+  }
   // (the music panel — ui/musicpanel.ts —: the toolbar's Music, the flight HUD's)
   const musicPanel = new MusicPanel({
     music,
@@ -3550,6 +3672,15 @@ async function main() {
       run: () => atlas.open(),
       prio: 1,
       testid: "topbar-atlas",
+    });
+    topBar.add({
+      id: "btn-skyevents",
+      label: t("The sky's events from here: trails, analemma, the Moon, the ISS, eclipses — go there, live it, render it"),
+      icon: TB_ICONS.skyEvents,
+      key: "⇧F8",
+      run: () => void skyEventsToggle(),
+      prio: 3,
+      testid: "topbar-skyevents",
     });
     topBar.add({
       id: "btn-place",
@@ -4162,6 +4293,7 @@ async function main() {
         music: () => musicPanel.toggle(true),
         render: () => renderDialog.toggle(true),
         atlas: () => atlas.open(),
+        skyevents: () => void skyEvents.open(),
       };
       open[p]();
     },
@@ -4178,6 +4310,25 @@ async function main() {
     now: () => performance.now(),
     dayClouds: () => renderer.dayCloudsOf,
     mode: { get: () => gameMode(), set: (m) => setGameMode(m), hideBar: (on) => topBar.hide(on) },
+    skyEvents: {
+      list: async () =>
+        (await skyEvents.events())?.map((e) => ({
+          id: e.id,
+          title: e.title.en,
+          when: e.when ? new Date(e.when).toISOString() : null,
+          detail: e.detail,
+          look: {
+            azDeg: Math.round(e.view.az),
+            altDeg: Math.round(e.view.alt),
+            fovDeg: +e.view.fov.toFixed(1),
+            lensMm: Math.round(lensMm(e.view.fov)),
+          },
+          render: !!e.render,
+          ...(e.highlight && e.id.startsWith("iss-") ? { transit: true } : {}),
+        })) ?? null,
+      take: (id, way) => skyEvents.take(id, way),
+      open: () => skyEvents.open(),
+    },
     atlas: {
       search: async (q, body) => {
         const out: { name: string; body: string; lat: number; lon: number; kind: string; detail?: string }[] = [];
