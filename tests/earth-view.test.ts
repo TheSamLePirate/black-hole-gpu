@@ -3,6 +3,7 @@ import type { Vec3 } from "../src/physics";
 import { bodyView, earthView, ourState } from "../src/system/our-side";
 import { bodyFixedOf, fromBodyFixed, gearHeight } from "../src/system/our-surface";
 import { presets } from "../src/settings";
+import { LANDSCAPES } from "../src/system/landscapes";
 
 // The Earth's scenes' placements: on the ground, the ship level on its gear, its nose under the body
 // it looks at; in orbit, its nose on it (the north up when it looks straight down).
@@ -39,7 +40,7 @@ test("in orbit: the nose on the Earth's centre, the north up, a circular speed",
 
 test("the Earth's scenes all place the camera", () => {
   const names = Object.keys(presets).filter((n) => n.startsWith("Earth:"));
-  expect(names.length).toBe(21);
+  expect(names.length).toBe(21 + LANDSCAPES.length);
   for (const n of names) {
     const p = presets[n]!;
     // (the space station's: beside it at the real time now — iss.test.ts)
@@ -124,6 +125,6 @@ test("the real ground's scenes: on the ground there, level, the nose towards the
 test("every world's scene has its gallery entry", async () => {
   const { PRESET_INFO } = await import("../src/ui/schema");
   const worlds = Object.keys(presets).filter((n) => typeof presets[n]!.pose === "object");
-  expect(worlds.length).toBe(17 + 27);
+  expect(worlds.length).toBe(17 + 27 + LANDSCAPES.length);
   for (const n of worlds) expect(PRESET_INFO[n]?.group).toBeDefined();
 });

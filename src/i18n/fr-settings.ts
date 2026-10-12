@@ -926,6 +926,48 @@ export default {
   "Saint-Jean-de-Valériscle": "Saint-Jean-de-Valériscle",
   "A summer morning in the Gard, 229 m: the Cévennes' foothills rolling towards Mont Lozère, 39 km to the north-west (EU-DEM's relief).":
     "Un matin d'été dans le Gard, 229 m : les contreforts des Cévennes ondulent vers le mont Lozère, à 39 km au nord-ouest (relief EU-DEM).",
+  "The Grand Canyon": "Le Grand Canyon",
+  "Hopi Point on the South Rim at 17:55 in September: the evening light on the Tower of Set, Horus, Osiris and Shiva Temples, the canyon two kilometres deep below.":
+    "Hopi Point sur la rive sud à 17:55 en septembre : la lumière du soir sur la Tour de Seth, les temples d'Horus, d'Osiris et de Shiva, le canyon profond de deux kilomètres en contrebas.",
+  "The Matterhorn": "Le Cervin",
+  "From the Riffelsee, 2 757 m, on a June morning: the Matterhorn's east face and Hörnli ridge across the lake, eight kilometres off.":
+    "Depuis le Riffelsee, 2 757 m, un matin de juin : la face est du Cervin et l'arête du Hörnli au-delà du lac, à huit kilomètres.",
+  "Mont Blanc": "Le Mont Blanc",
+  "The Lac Blanc above Chamonix, 2 352 m, at midday in September: the whole massif across the valley — the Aiguille Verte, the Mer de Glace, Mont Blanc 17 km away.":
+    "Le lac Blanc au-dessus de Chamonix, 2 352 m, à midi en septembre : tout le massif de l'autre côté de la vallée — l'Aiguille Verte, la Mer de Glace, le Mont Blanc à 17 km.",
+  "The Geirangerfjord": "Le Geirangerfjord",
+  "Flydalsjuvet in June: Geiranger at the fjord's head 300 m below, the fjord winding away north-west between its walls.":
+    "Flydalsjuvet en juin : Geiranger au fond du fjord, 300 m plus bas, le fjord qui serpente vers le nord-ouest entre ses parois.",
+  "Reine, the Lofoten": "Reine, les Lofoten",
+  "From Reinebringen's summit, 448 m, on a July afternoon: Reine's islets and red cabins far below, the fjord and the Lofoten's sharp peaks around.":
+    "Depuis le sommet du Reinebringen, 448 m, un après-midi de juillet : les îlots et les cabanes rouges de Reine tout en bas, le fjord et les pics acérés des Lofoten autour.",
+  Kirkjufell: "Kirkjufell",
+  "Kirkjufellsfoss in July at 16:30: the falls in front, Kirkjufell's cone behind, sun and heavy showers over the Snæfellsnes peninsula.":
+    "Kirkjufellsfoss en juillet à 16:30 : la cascade devant, le cône du Kirkjufell derrière, soleil et grosses averses sur la péninsule de Snæfellsnes.",
+  Lauterbrunnen: "Lauterbrunnen",
+  "Lauterbrunnen at midday in September: the Staubbach falling 300 m off the valley's sheer western wall, the glacial trough running south.":
+    "Lauterbrunnen à midi en septembre : le Staubbach qui tombe de 300 m depuis la paroi ouest de la vallée, l'auge glaciaire qui file vers le sud.",
+  "Torres del Paine": "Torres del Paine",
+  "In the Valle del Francés on an April afternoon: the Cuernos del Paine's granite and their black slate caps, a kilometre above.":
+    "Dans la vallée du Francés un après-midi d'avril : le granite des Cuernos del Paine et leurs coiffes d'ardoise noire, un kilomètre plus haut.",
+  "Fitz Roy": "Le Fitz Roy",
+  "Below the Laguna de los Tres at midday in December: the Fitz Roy massif's granite towers, the Laguna Sucia's glacier beneath them.":
+    "Sous la Laguna de los Tres à midi en décembre : les tours de granite du massif du Fitz Roy, le glacier de la Laguna Sucia à leurs pieds.",
+  "Mount Fuji": "Le mont Fuji",
+  "Lake Kawaguchi's shore in March at midday: Fuji's snow cone 17 km to the south over the water and the Ubuyagasaki cape.":
+    "La rive du lac Kawaguchi en mars à midi : le cône enneigé du Fuji à 17 km au sud, au-delà de l'eau et du cap Ubuyagasaki.",
+  "Moraine Lake": "Moraine Lake",
+  "From the Rockpile on a June evening: the turquoise lake below the Valley of the Ten Peaks, Deltaform and Wenkchemna in the low light.":
+    "Depuis le Rockpile un soir de juin : le lac turquoise sous la vallée des Dix Pics, le Deltaform et le Wenkchemna dans la lumière rasante.",
+  Sossusvlei: "Sossusvlei",
+  "From Deadvlei's white pan at 09:49 in August: the red dunes' crests and their shadows, through a long telephoto lens.":
+    "Depuis la cuvette blanche de Deadvlei à 09:49 en août : les crêtes des dunes rouges et leurs ombres, au long téléobjectif.",
+  "Monument Valley": "Monument Valley",
+  "Above the valley on a July afternoon: the West and East Mitten Buttes and Merrick Butte, left to right, on the red desert.":
+    "Au-dessus de la vallée un après-midi de juillet : les buttes West Mitten, East Mitten et Merrick, de gauche à droite, sur le désert rouge.",
+  "Oxbow Bend": "Oxbow Bend",
+  "The Snake River's Oxbow Bend on a July morning: Mount Moran and the Teton Range beyond the still water.":
+    "La boucle d'Oxbow Bend sur la Snake River un matin de juillet : le mont Moran et la chaîne des Teton au-delà de l'eau calme.",
   Earthrise: "Lever de Terre",
   "On the Moon's far edge, the gibbous Earth just over the horizon, the ground's craters and stones lit by a low Sun.":
     "Au bord de la face cachée de la Lune, la Terre gibbeuse juste au-dessus de l'horizon, les cratères et les pierres du sol éclairés par un Soleil rasant.",

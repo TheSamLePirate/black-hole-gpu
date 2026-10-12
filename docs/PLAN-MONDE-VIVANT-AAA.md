@@ -95,32 +95,43 @@ une seule forme (tronc boîte + 5 ellipsoïdes), hauteurs tirées au hasard (12�
 
 ## Chantier E — Paysages d’exception (cible de validation, en continu)
 
-Une collection de scènes « Terre : paysages d’exception » avec caméra, date, heure dorée, météo choisies pour
-chaque lieu. Elles servent de **références visuelles** : la galerie (`bun run gallery`) les capture à chaque
-lot et détecte les régressions (SSIM).
+**Méthode : chaque paysage recrée une vraie photographie** (Wikimedia Commons, licences libres) — la caméra là
+où le photographe se tenait (position de la photo), tournée comme lui, à l’instant du déclenchement (EXIF,
+fuseau du lieu), à travers le même objectif (focale équivalente 35 mm → champ vertical). La photo est la
+référence : `tests/e2e/landscapes.e2e.test.ts` capture chaque scène au même cadre et produit une page où
+capture et photo sont côte à côte. Données : `src/system/landscapes.ts` (une table typée, testée par
+`tests/landscapes.test.ts`) ; la galerie les range sous « Paysages ».
 
-| Paysage | Vue | Lumière | Ce qui le rend parfait |
+Direction de vue, par ordre de fiabilité (`headingFrom`) :
+1. **landmarks** — les sommets annotés sur la page de la photo à leurs pixels, résolus contre le relief réel
+   (Terrarium z13) : cap et inclinaison mesurés (Grand Canyon : trois temples concordent à 1°) ;
+2. **exif** — la boussole de l’appareil (vérifiée contre le relèvement du sujet : Cervin 265° vs 264,5°) ;
+3. **subject** — le relèvement du sujet, l’inclinaison choisie d’après son angle d’élévation.
+Ce que la page ne donne pas (heure, objectif d’un panorama, année hors éphémérides) est marqué `estimated`.
+
+| Paysage | Photo (auteur) | Cap | Moment |
 |---|---|---|---|
-| Grand Canyon (Mather Point) | sol, falaise | lever du soleil | strates de roche, brume de profondeur, relief 30 m + micro-relief |
-| Yosemite (Tunnel View) — existe | sol | fin d’après-midi | conifères (A), granit, cascade |
-| Everest depuis Kala Patthar — existe | sol | coucher | neige/roche, glacier |
-| Mont-Blanc et aiguilles de Chamonix | vol à 4 500 m | matin | séracs, glaciers, ombres longues |
-| Cervin depuis Zermatt | vol bas | aube rose | pyramide, alpage (herbe), mélèzes en automne |
-| Dolomites, Tre Cime | sol | coucher | parois, éboulis, prés fleuris |
-| Fjord de Geiranger (Norvège) | vol | été, soleil bas | eau (B), cascades, falaises boisées |
-| Lofoten, Reine | vol bas | hiver, lumière rasante | mer, neige, cabanes rouges (bâtiments) |
-| Kirkjufell (Islande) | sol | aurore | prairie, cascade, mer |
-| Torres del Paine (Patagonie) | sol | aube | lac turquoise, pics, steppe (herbe touffue) |
-| Baie d’Halong | vol bas | brume matinale | pitons karstiques boisés, eau calme |
-| Mont Fuji et lac Kawaguchi | sol | aube, reflet | eau miroir (B), cerisiers ou érables (A, saisons) |
-| Erg Chebbi / Sossusvlei | vol bas | coucher | dunes, ombres, ciel |
-| Atolls des Maldives | vol | midi | lagon, dégradés de profondeur (B), écume |
-| Uluru — existe | sol | nuit/coucher | — |
-| Forêt amazonienne et fleuve | vol bas | après la pluie | canopée (A4), brume, fleuve (B) |
-| Les Cévennes (Saint-Jean) — existe | sol | matin | herbe, garrigue, châtaigniers |
+| Grand Canyon, Hopi Point | Tuxyso — Featured | landmarks 349,7° / −5,2° | 8 sept. 2013 17:55 MST |
+| Cervin depuis le Riffelsee | Dirk Beyer — Featured | exif 265° | 11 juin 2005 09:50 CEST |
+| Mont Blanc depuis le lac Blanc | Guilhem Vellut | subject | 8 sept. 2021 13:26 CEST |
+| Geirangerfjord, Flydalsjuvet | DXR — Quality | subject | 4 juin 2015 (heure estimée) |
+| Reine depuis le Reinebringen | Lukas Beck | subject | 21 juil. 2025 16:15 CEST |
+| Kirkjufell et sa cascade | Jakub Hałun — Featured | subject | 14 juil. 2024 16:31 UTC |
+| Lauterbrunnen, Staubbach | JoachimKohler-HB — Quality | subject | 21 sept. 2019 12:46 CEST |
+| Cuernos del Paine | Alfredo Olivares Bueno | subject | 12 avr. 2025 15:59 (UTC−3) |
+| Fitz Roy | Fredlyfish4 | subject | 14 déc. 2015 13:12 (UTC−3) |
+| Fuji depuis le lac Kawaguchi | DimiTalen | exif 185° | 27 mars 2016 12:16 JST |
+| Moraine Lake | WhyDon'tWeZJCDJ | exif 224,5° | 13 juin 2018 19:19 MDT |
+| Sossusvlei, Deadvlei | Diego Delso — Featured | subject | 6 août 2018 09:49 |
+| Monument Valley, les Mittens | Supercarwaar | subject | 27 juil. 2015 16:30 MDT |
+| Mont Moran, Oxbow Bend | Michael Gäbler — Featured | subject | juillet (diapositive 1980 : heure estimée) |
 
-Chaque scène est livrée avec sa capture de référence, son test de chargement (prête avant capture) et la liste
-des chantiers qui la conditionnent ; une scène n’est « parfaite » qu’une fois validée à l’œil sur Mac.
+Écartés faute de données fiables : Tre Cime (le panorama regarde le refuge, pas les tours), baie d’Halong
+(pas de cap ni d’heure, pitons plus fins que le relief à 30 m), Machu Picchu (géolocalisation à 1,3 km),
+Santorin (pas de position), le lever de soleil sur le Cervin (cap EXIF à 40° du sommet).
+
+Chaque écart observé capture/photo devient une tâche des chantiers A–C (`docs/progress/landscapes.md`) ; une
+scène n’est « parfaite » qu’une fois validée à l’œil sur Mac.
 
 ---
 
@@ -186,7 +197,7 @@ des chantiers qui la conditionnent ; une scène n’est « parfaite » qu’une 
 
 | Jalon | Contenu | Critère de sortie |
 |---|---|---|
-| J1 | F2 (banc GPU), E (scènes + références), A1 (grille procédurale) | densité forestière réelle sans limite de nombre, ≤ 2 ms GPU sur M1 |
+| J1 | F2 (banc GPU), E (14 scènes d’après photos : livré), A1 (grille procédurale) | densité forestière réelle sans limite de nombre, ≤ 2 ms GPU sur M1 |
 | J2 | A2–A3 (données, espèces, saisons) | Landes, Vosges, Amazonie crédibles en captures |
 | J3 | A4–A5 (LOD tracés, couche de canopée, vent) | forêts d’avion à 10 km sans arbres individuels, transitions invisibles |
 | J4 | B1–B2 (océan FFT, littoral, lacs/rivières, reflets) | Maldives, Geiranger, Fuji validés |

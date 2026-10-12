@@ -1,6 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
 import { sceneSlug } from "../../scripts/scene-slug";
-import { fovOf35mm, LANDSCAPES, photoUtc, viewHeading } from "../../src/system/landscapes";
+import { LANDSCAPES, landscapeFov, photoUtc, viewHeading } from "../../src/system/landscapes";
 import { App, E2E, stopServer } from "./lib/app";
 // The exceptional landscapes against their photographs: each scene on the real ground (tiles on), its
 // terrain, scenery and lighting settled, captured at 3 : 2 (the photo's frame, so the vertical field of
@@ -28,7 +28,8 @@ test.skipIf(!E2E)(
     const rows: string[] = [];
     for (const l of chosen) {
       const slug = sceneSlug(l.scene);
-      const app = await App.boot({ hash: `scene=${encodeURIComponent(l.scene)}`, width: 1440, height: 960, tiles: true });
+      const [width, height] = l.photo.portrait ? [960, 1440] : [1440, 960];
+      const app = await App.boot({ hash: `scene=${encodeURIComponent(l.scene)}`, width, height, tiles: true });
       try {
         // (the scene's own clock stopped at the photo's moment: the light held while the tiles stream)
         await app.js(
@@ -56,7 +57,7 @@ test.skipIf(!E2E)(
       const photo = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file.replace(/^File:/, ""))}?width=1440`;
       rows.push(`<section><h2>${l.title}</h2>
 <p>${l.description}</p>
-<p class="m">${l.at.join(", ")} · heading ${viewHeading(l).toFixed(1)}° · pitch ${l.pitch}° · ${l.photo.focal35} mm (fov ${fovOf35mm(l.photo.focal35).toFixed(1)}° vertical) · ${new Date(photoUtc(l.photo)).toISOString()} UTC</p>
+<p class="m">${l.at.join(", ")} · heading ${viewHeading(l).toFixed(1)}° · pitch ${l.pitch}° · ${l.photo.focal35} mm (fov ${landscapeFov(l).toFixed(1)}° vertical) · heading from ${l.headingFrom}${l.photo.estimated ? ` · estimated: ${l.photo.estimated}` : ""} · ${new Date(photoUtc(l.photo)).toISOString()} UTC</p>
 <div class="pair"><figure><img src="${photo}" alt="photograph"><figcaption><a href="${l.photo.page}">${file}</a> — ${l.photo.author}, ${l.photo.licence}</figcaption></figure>
 <figure><img src="${slug}.png" alt="capture"><figcaption>${l.scene}</figcaption></figure></div></section>`);
     }
@@ -64,7 +65,7 @@ test.skipIf(!E2E)(
       `${OUT}/index.html`,
       `<!doctype html><meta charset="utf-8"><title>Landscapes vs photographs</title>
 <style>body{font:14px system-ui;background:#111;color:#ddd;margin:16px}h2{margin:24px 0 4px}.m{color:#999}.pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-figure{margin:0}img{width:100%;aspect-ratio:3/2;object-fit:cover;background:#222}a{color:#9cf}</style>
+figure{margin:0}img{width:100%;max-height:80vh;object-fit:contain;background:#222}a{color:#9cf}</style>
 <h1>Landscapes vs photographs</h1>${rows.join("\n")}`,
     );
   },

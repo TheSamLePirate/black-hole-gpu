@@ -64,6 +64,8 @@ bun run e2e grass-aaa                # herbe : densité, coût GPU, types, trace
 bun run e2e character                # l’ancien fichier : doit toujours passer
 bun run e2e --each ground-details ground-planets gargantua-ground scenery-hitboxes place   # tests de la fusion
 bun run e2e earth-scenery earth-surface   # non-régression du streaming
+bun run e2e --remote --detach landscapes  # paysages d’exception vs leurs photos (~1 h pour les 14)
+LANDSCAPES="Matterhorn|Fuji" bun run e2e landscapes   # une partie seulement
 ```
 
 À relire après la campagne : `remote-results/character-aaa-*.png` et leurs `*-readiness.json`,
@@ -72,6 +74,11 @@ Si un seuil de lumière ou de différence de pixels échoue, ces JSON donnent le
 Herbe : `remote-results/grass-aaa-*.png`, `grass-aaa-cost.json` (coût GPU des passes, image avec/sans),
 `grass-aaa-kinds.json` (types trouvés), `grass-aaa-footprints.json`. Les budgets (compute < 2,5 ms, dessin
 < 4 ms à 1280×720) sont des cibles : si le mini les dépasse, noter les valeurs avant de régler la densité.
+
+Paysages : ouvrir `remote-results/landscapes/index.html` (chaque capture à côté de sa photo). Pour chacun,
+noter ce qui diffère — cadrage (cap/inclinaison), lumière (heure), couleurs du sol, végétation, eau, neige —
+dans `docs/progress/landscapes.md` : c’est la liste de travail des chantiers A–C du plan. Une fois validées,
+installer les vignettes de galerie : `bun run gallery --scenes "Earth: the Matterhorn from the Riffelsee|…" --update`.
 
 ### Manuels (le ressenti, que les tests ne voient pas)
 

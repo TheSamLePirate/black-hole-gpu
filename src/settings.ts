@@ -1,4 +1,4 @@
-import { fovOf35mm, LANDSCAPES, photoUtc, viewHeading } from "./system/landscapes";
+import { LANDSCAPES, landscapeFov, photoUtc, viewHeading } from "./system/landscapes";
 import type { BodyView } from "./system/our-side";
 import type { WeatherPreset } from "./weather";
 import { M_SECONDS } from "./units";
@@ -1161,7 +1161,7 @@ export const presets: Record<string, Preset> = {
         ...EARTH_VIEW,
         ship: false,
         target: "earth",
-        fov: fovOf35mm(l.photo.focal35),
+        fov: landscapeFov(l),
         earthClouds: l.clouds ?? 0,
         time: (photoUtc(l.photo) - Date.UTC(2067, 0, 1)) / 1000 / M_SECONDS,
         pose: { at: l.at, heading: viewHeading(l), off: [0, l.pitch] },
