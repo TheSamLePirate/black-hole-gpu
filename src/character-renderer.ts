@@ -321,7 +321,8 @@ export class CharacterRenderer {
     const u = new Float32Array(83 * 4);
     const set = (i: number, v: number[]) => u.set(v, i * 4);
     const tan = Math.tan((light.fov * Math.PI) / 360);
-    set(0, [(tan * width) / height, tan, 0, 0]);
+    const roots = this.sets[this.drawn] ?? null;
+    set(0, [(tan * width) / height, tan, roots?.lattice[0] ?? 0, roots?.lattice[1] ?? 0]);
     set(1, [width, height, light.metres, light.pre]);
     set(2, [...frame.origin, frame.phase]);
     set(3, [...frame.axes[0], Math.min(1, frame.speed / 4)]);
@@ -336,7 +337,6 @@ export class CharacterRenderer {
       return [dot(delta, cross(c.forward, c.up())), dot(delta, c.up()), dot(delta, c.forward)];
     };
     const cam = (v: Vec3) => add(add(scale(frame.axes[0], v[0]), frame.axes[1], v[1]), frame.axes[2], v[2]);
-    const roots = this.sets[this.drawn] ?? null;
     set(9, [...add(frame.origin, cam(project(roots?.origin ?? [0, 0, 0]))), roots?.count ?? 0]);
     for (let i = 0; i < 3; i++) {
       const a = roots?.axes[i] ?? ([0, 0, 0] as Vec3);

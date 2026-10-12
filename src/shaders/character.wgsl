@@ -1,5 +1,6 @@
 // Native near-ground pass: camera-relative metres, HDR, solar PBR, procedural suit and grass.
 struct U {
+  // view.zw: the grass lattice's offset (metres along right and forward) — the wind is read from it, so a blade's gust does not jump when the patch recentres.
   view:vec4f, image:vec4f, origin:vec4f,
   right:vec4f, up:vec4f, forward:vec4f,
   sun:vec4f, irradiance:vec4f, sky:vec4f,
@@ -56,7 +57,7 @@ fn avatarVertex(p:vec3f,k:u32)->V {
  let c=corners[v%6u];let t=(f32(v/6u)+c.x)/f32(segments);let entry=visible[lod*65536u+instance];let r=roots[entry&65535u];
  let angle=r.w*6.283185;let h=.19+.25*fract(r.w*17.319);let width=(.008+.006*fract(r.w*71.79))*(1-t);
  let root=grassCam(r.xyz);let pixelWidth=max(root.z,.035)*u.view.y/u.image.y;let rasterWidth=max(width,pixelWidth*.7*(1-t));let side=u.grassRight.xyz*cos(angle)+u.grassForward.xyz*sin(angle);
- let wind=sin(dot(r.xz,vec2f(.37,.21))+u.up.w*1.7)+.4*sin(dot(r.xz,vec2f(.13,-.33))+u.up.w*2.3);
+ let g=r.xz+u.view.zw;let wind=sin(dot(g,vec2f(.37,.21))+u.up.w*1.7)+.4*sin(dot(g,vec2f(.13,-.33))+u.up.w*2.3);
  let delta=root-u.origin.xyz;let dist=length(delta-u.up.xyz*dot(delta,u.up.xyz));let push=normalize(delta+vec3f(.001));let influence=1-smoothstep(.15,.9,dist);
  let bend=(u.grassRight.xyz*.06*wind+u.grassForward.xyz*.045*wind+push*.35*influence)*t*t;
  var o:V;o.p=root+u.grassUp.xyz*h*t+side*(c.y*rasterWidth)+bend;o.n=normalize(cross(side,u.grassUp.xyz+bend*2));o.local=vec3f(c.y,t,f32(entry>>16u)/255);o.material=10;o.coverage=min(1.0,width/max(rasterWidth,1e-6))*(1-smoothstep(25.0,28.0,dist));o.tint=mix(vec3f(.018,.055,.009),vec3f(.075,.19,.018),t)*(.7+.6*fract(r.w*37.71));o.clip=project(o.p);return o;
