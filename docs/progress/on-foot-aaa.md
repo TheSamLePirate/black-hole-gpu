@@ -83,7 +83,9 @@ Légende : ✅ fait et vérifié ici (unitaires, typecheck, WGSL, validation Web
   routes, eau, bâtiments ; davantage en pente) : surtout des cailloux, quelques blocs (taille à la puissance 4),
   facettées, aplaties, tournées, enfoncées, grises teintées du sol, moussues sur le dessus en sous-bois ;
   éclairées comme l’herbe (sonde, ombres), dessinées avant l’herbe. Les blocs de plus de 20 cm arrêtent la
-  marche (le CPU refait le choix du GPU, même hachage). Les arbustes (D2) restent à faire.
+  marche (le CPU refait le choix du GPU, même hachage).
+- **Sous-bois (D2)** : les trouées des forêts (14 % de leurs cellules) portent pour la plupart un arbuste (1 à
+  6 m), quelques-unes restent ouvertes : la canopée n’est plus percée de sol nu.
 
 ## Tests à faire sur les Macs
 

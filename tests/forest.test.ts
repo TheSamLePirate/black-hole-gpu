@@ -5,6 +5,7 @@ import {
   FOREST_CELL,
   FOREST_KINDS,
   FOREST_SINK,
+  FOREST_UNDERSTORY,
   ForestKind,
   forestBlockBounds,
   forestBlocks,
@@ -152,7 +153,9 @@ test("what grows where: density by land cover, the climate's kinds, the tree lin
     }
     return n / 4000;
   };
-  expect(share(10, 47, 400)).toBeCloseTo(forestDensity(10), 1);
+  // a forest: its trees at its density, its gaps mostly understory
+  expect(share(10, 47, 400) - share(10, 47, 400, ForestKind.shrub)).toBeCloseTo(forestDensity(10), 1);
+  expect(share(10, 47, 400, ForestKind.shrub)).toBeCloseTo(FOREST_UNDERSTORY - forestDensity(10), 1);
   expect(share(30, 47, 400)).toBeLessThan(0.05);
   expect(share(40, 47, 400)).toBe(0);
   expect(share(50, 47, 400)).toBe(0);
@@ -238,6 +241,7 @@ test("growing a forest: where the cover says, not on the road, its feet on the g
   let north = 0,
     planted = 0,
     inner = 0,
+    understory = 0,
     conifers = 0;
   for (let j = 0; j < ff.h; j++)
     for (let i = 0; i < ff.w; i++) {
@@ -250,6 +254,7 @@ test("growing a forest: where the cover says, not on the road, its feet on the g
       if (counted) north++;
       if (!t) continue;
       if (counted) inner++;
+      if (counted && t.kind === ForestKind.shrub) understory++;
       if (t.kind === ForestKind.conifer) conifers++;
       // (north of the line only, never on the road)
       expect(lat).toBeGreaterThan(48.0498);
@@ -257,9 +262,12 @@ test("growing a forest: where the cover says, not on the road, its feet on the g
     }
   expect(planted).toBe(trees);
   // (the share of the forest's cells holding a tree: its density, less the road)
-  expect(inner / north).toBeGreaterThan(0.8);
-  expect(inner / north).toBeLessThan(0.92);
-  expect(conifers / trees).toBeGreaterThan(0.2);
+  expect((inner - understory) / north).toBeGreaterThan(0.8);
+  expect((inner - understory) / north).toBeLessThan(0.92);
+  // (its gaps: understory, but for a few open ones)
+  expect(inner / north).toBeGreaterThan(0.9);
+  expect(inner / north).toBeLessThan(0.99);
+  expect(conifers / (trees - understory)).toBeGreaterThan(0.2);
   // a tree's foot: the ground at its place, sunk FOREST_SINK, in the frame (to the word's centimetre)
   const k = cells.findIndex((w) => w !== 0);
   const tree = forestTree(ff, cells[k]!, k % ff.w, Math.floor(k / ff.w))!;

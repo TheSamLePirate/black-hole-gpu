@@ -350,6 +350,8 @@ export function crownOf(t: ForestTree, near = false, bare = 0): { cone: boolean;
 // ---- what grows where
 /** The share of a land cover's cells holding a tree (ESA WorldCover: 10 trees, 95 mangroves, 20 shrubs,
  *  90 wetland, 30 grassland — its lone trees). */
+/** a forest's cells holding a tree or, in its gaps, a shrub (the rest open ground) */
+export const FOREST_UNDERSTORY = 0.96;
 export function forestDensity(cls: number): number {
   return cls === 10 ? 0.86 : cls === 95 ? 0.8 : cls === 20 ? 0.22 : cls === 90 ? 0.12 : cls === 30 ? 0.025 : 0;
 }
@@ -365,6 +367,9 @@ export function treeline(lat: number): number {
   return a <= 20 ? 4000 : a <= 46 ? 4000 - ((a - 20) * 1900) / 26 : a <= 60 ? 2100 - (a - 46) * 86 : Math.max(0, 900 - (a - 60) * 60);
 }
 export function forestKind(cls: number, lat: number, altitude: number, present: number, pick: number): ForestKind {
+  // (a forest's gaps: most of them its understory — shrubs, young trees —, a few left open)
+  if (cls === 10 && present >= forestDensity(cls) && present < FOREST_UNDERSTORY && altitude <= treeline(lat) + 150)
+    return ForestKind.shrub;
   if (present >= forestDensity(cls)) return ForestKind.none;
   if (cls === 95 || cls === 20) return ForestKind.shrub;
   const a = Math.abs(lat);
@@ -604,7 +609,8 @@ export async function growForest(f: ForestFrame, io: ForestSources): Promise<{ c
         y = f.d[0] + f.d[1] * u + f.d[2] * v;
       if (x * x + y * y > f.reach * f.reach) continue;
       const [lat, lon] = forestPlaceOf(f.i0 + u, f.j0 + v, f.columns);
-      if (forestUnit(forestHash(gi, gj, 5)) >= forestDensity(io.cover(lat, lon)) || io.excluded(lat, lon)) continue;
+      const cls = io.cover(lat, lon);
+      if (forestUnit(forestHash(gi, gj, 5)) >= (cls === 10 ? FOREST_UNDERSTORY : forestDensity(cls)) || io.excluded(lat, lon)) continue;
       candidates.push(j * f.w + i);
       const a = Math.floor(u / 2),
         b = Math.floor(v / 2);
