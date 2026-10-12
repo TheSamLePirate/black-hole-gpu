@@ -125,6 +125,8 @@ export class AstronautModel {
   private sampled: Float32Array[][] = [];
   private lastAge = 0;
   private blend = 0;
+  // Each gait clock is integrated: its rate follows the speed, its time never jumps when the speed changes.
+  private gait = [0, 0, 0];
   constructor(private d: GPUDevice) {
     this.bones = d.createBuffer({ size: 70 * 64, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.sampler = d.createSampler({
@@ -202,6 +204,8 @@ export class AstronautModel {
       dt = Math.max(0, Math.min(0.1, age - this.lastAge));
     this.lastAge = age;
     this.blend += (Math.min(1, speed / 1.4) - this.blend) * (1 - Math.exp(-dt * 12));
+    this.gait[1]! += dt * Math.max(0.5, speed / 1.4);
+    this.gait[2]! += dt * Math.max(0.5, speed / 3.5);
     const run = Math.max(0, Math.min(1, (speed - 1.4) / 2.6));
     const clips = [0, 1, 2],
       weights = [1 - this.blend, this.blend * (1 - run), this.blend * run];
@@ -209,9 +213,7 @@ export class AstronautModel {
       const clip = m.clips[clips[k]!]!,
         poses = this.sampled[k]!;
       for (let i = 0; i < m.nodes.length; i++) poses[i]!.set([...m.nodes[i]!.t, ...m.nodes[i]!.r, ...m.nodes[i]!.s]);
-      const time =
-        (((k === 0 ? age : age * (k === 2 ? Math.max(0.5, speed / 3.5) : Math.max(0.5, speed / 1.4))) % clip.duration) + clip.duration) %
-        clip.duration;
+      const time = (((k === 0 ? age : this.gait[k]!) % clip.duration) + clip.duration) % clip.duration;
       for (const t of clip.tracks) {
         const offset = t.path === "translation" ? 0 : t.path === "rotation" ? 3 : 7;
         value(t, time, poses[t.node]!.subarray(offset, offset + (offset === 3 ? 4 : 3)));
