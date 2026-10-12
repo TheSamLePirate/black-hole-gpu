@@ -62,6 +62,7 @@ import { Tablet } from "./ui/tablet";
 import { PhotoMode } from "./ui/photo";
 import { TB_ICONS, TopBar, modeName } from "./ui/topbar";
 import { greatCircle } from "./game/geo";
+import { hudKindName, nextHudKind } from "./game/hudkind";
 import { GAME_MODES, baseMode, modeOf, planMode, type GameMode, type ModeState, type ModeStep } from "./game/modes";
 import { POSE_KEYS } from "./controller/util";
 import { readPrefs, writePrefs } from "./game/prefs";
@@ -2308,6 +2309,7 @@ async function main() {
     clearPlan: () => camera.clearPlan(),
     pathInView: togglePathInView,
     tools: () => toolsWin.toggle(),
+    hudKind: () => keyActions.hudKind(new KeyboardEvent("keydown")),
     execute: () => pilotAuto(camera.transfer || camera.pilot.auto === "transfer" ? "transfer" : "node"),
   });
   flightHud.ground.localPlace = () => {
@@ -2766,6 +2768,12 @@ async function main() {
     tars: (e) => tarsKey(e),
     pathInView: () => togglePathInView(),
     hudDensity: () => panel.toast(flightHud.cycleDensity()),
+    hudKind: () => {
+      settings.hudKind = nextHudKind(settings.hudKind);
+      onSettingsChange(["hudKind"]);
+      refreshGui();
+      panel.toast(tf("HUD: {0}", hudKindName(settings.hudKind)));
+    },
     missions: () => openMissions(),
     stopFlight: () => releaseControls(),
     ack: () => flightHud.acknowledge(),

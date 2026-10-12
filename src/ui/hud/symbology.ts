@@ -17,6 +17,8 @@ import type { HudItem } from "./declutter";
 import { safeFrame } from "./safe";
 import { type Box, drawn, fit } from "./layout";
 import { drawJetHud, JET_GREEN, type JetHudInfo } from "./jethud";
+import type { HudKind } from "../../game/hudkind";
+import { drawApproachHud, drawSpaceHud, type ApproachHudInfo, type SpaceHudInfo } from "./kindhud";
 import { t, tf } from "../../i18n";
 
 /** The phase lets this element show (hud/declutter.ts — none given: all). */
@@ -88,6 +90,16 @@ export interface SymInfo {
   /** the jet's systems and figures (plane mode in the air — ui/hud/jethud.ts): the altitude over the sea [m],
    *  the throttle, the modes engaged */
   jet?: Pick<JetHudInfo, "alt" | "throttle" | "modes"> | null;
+  /** the craft's status (game/status.ts): the Space HUD's orbit, its next event, the target */
+  status?: {
+    soiName: string;
+    kerr?: unknown;
+    orbit: SpaceHudInfo["orbit"];
+    next: SpaceHudInfo["next"];
+    target: SpaceHudInfo["target"];
+  } | null;
+  /** the gear, the flaps, the air brake: the Approach HUD's */
+  gear?: ApproachHudInfo["gear"];
 }
 
 export interface SymFrame {
@@ -114,6 +126,9 @@ export interface SymFrame {
   runway?: RunwayView | null;
   /** the scene's time [s] (the energy chevron's rate is taken in it) */
   simS?: number;
+  /** the HUD's kind (game/hudkind.ts): its own readouts, the atmosphere's style (absent: as before — the jet's
+   *  in plane mode) */
+  kind?: HudKind;
   /** what the flight's phase lets the HUD draw (hud/declutter.ts; absent: everything) */
   show?: Record<HudItem, boolean>;
   /** a small screen (a phone): the symbology in the view kept, the boxes, scopes, heading tape and bank
@@ -181,7 +196,9 @@ export function drawSymbology(F: SymFrame) {
   const pilotView = !F.outside && F.density < 2;
   // (the jet's style: flown as a plane, in the air, from the pilot's seat — its green, its tapes)
   const A0 = i.air;
-  const jet = s.hudJet !== "off" && pilotView && i.jet && A0?.inAir && A0.mode === "plane" && A0.q > 20 ? i.jet : null;
+  // (the Atmosphere HUD: the fighter's for every flight in the air; without a kind, the plane's only)
+  const atmo = F.kind ? F.kind === "atmo" : A0?.mode === "plane";
+  const jet = s.hudJet !== "off" && pilotView && atmo && i.jet && A0?.inAir && A0.q > 20 ? i.jet : null;
   LADDER = jet ? JET_GREEN : CYAN;
   const S = i.S;
   const nose: V3 = [S[0]![2]!, S[1]![2]!, S[2]![2]!];
@@ -450,6 +467,27 @@ export function drawSymbology(F: SymFrame) {
       stroke,
       text,
     );
+
+  // ---- the HUD's kind (game/hudkind.ts): the Space HUD's orbit block, the Approach HUD's radar altitude, its
+  // deviations, its gear and flaps (the Atmosphere's: the fighter's, above)
+  if (F.kind === "space" && pilotView && !F.compact && i.status && !i.status.kerr && i.region !== "hole")
+    drawSpaceHud({ ctx, W, H, dpr }, { body: i.status.soiName, orbit: i.status.orbit, next: i.status.next, target: i.status.target }, text);
+  if (F.kind === "approach" && pilotView && i.surface) {
+    const mls = F.runway?.mls;
+    drawApproachHud(
+      { ctx, W, H, dpr, units: s.hudJet === "aviation" ? "aviation" : "metric" },
+      {
+        radar: i.surface.alt,
+        vs: i.surface.vVert,
+        gear: i.gear ?? null,
+        el: mls?.elIn ? mls.el : null,
+        az: mls?.azIn ? mls.az : null,
+        landed: !!i.surface.landed,
+      },
+      text,
+      blinkOn(),
+    );
+  }
 
   // ---- the orbital markers the view lacked: radial, normal
   if (s.hudMarkers && on(F, "markers")) {

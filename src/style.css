@@ -1775,6 +1775,10 @@ body.reduce-motion .tars-panel, body.reduce-motion .tars-presence { animation: n
 .fl-root[data-density="1"] .fl-tel, .fl-root[data-density="1"] .fl-orbit, .fl-root[data-density="1"] .fl-right, .fl-root[data-density="1"] .fl-target { display: none; }
 .fl-root[data-density="2"] > :not(.fl-warn) { display: none; }
 body.hide-ui .fl-root > :not(.fl-warn) { display: none; }
+/* a view the HUD does not show in (game/hudkind.ts hudInView — the cockpit: its own screens; the film's views):
+   the warnings, the autopilot's card, the docking aid, the spectator's bar, the menus and the report stay */
+.fl-root[data-view="bare"]:not(.mapview) > :is(.fl-target, .fl-tel, .fl-orbit, .fl-right, .fl-airdata) { display: none !important; }
+.fl-root[data-view="bare"]:not(.mapview) .fl-cockpit > :not(.fl-hubcard) { display: none !important; }
 
 /* smaller screens: the least needed go first, the rest shrinks */
 .fl-cockpit { transform-origin: 50% 100%; }

@@ -7,7 +7,7 @@ The plan, the request and the user's choices: [PLAN-MODES-AAA.md](../PLAN-MODES-
 | M1 The four modes, the top bar always present | done |
 | M2 TARS everywhere | done |
 | M3 Pause → offline capture everywhere | done |
-| M4 Ship HUD in chase and dorsal, three HUDs | to do |
+| M4 Ship HUD in chase and dorsal, three HUDs | done |
 | M5 On-foot HUD | to do |
 | M6 The Atlas: maps, POIs, placement, geocoding | to do |
 | M7 Tripod and sky events from the view | to do |
@@ -236,3 +236,70 @@ bun run e2e --remote modes a11y s5 photo-fps place eclipses metar music-panel bh
    - "fais une capture 4K de cette vue": a 3840×2160 render, saved at the end.
    - "dis-moi quand c'est fini": he speaks when it ends.
 6. **A video running:** a capture is refused with a toast, and the video goes on.
+
+## M4. Ship HUD: in the chase and dorsal views, three HUDs by type of flight
+
+### What changed
+
+**Where the HUD shows** (`game/hudkind.ts` `hudInView`, setting "HUD in the views").
+
+- By default the whole HUD (the symbology, its tapes, the flight's panels) shows in the chase and dorsal views.
+- In the cockpit, the cabin's screens are the instruments.
+- The other views keep the warnings, the autopilot's card, the docking aid, the spectator's bar and the menus.
+- "Every outside view" and "Everywhere" widen it.
+- The speed effects (streaks, grey-out) stay in every view: they are the eye's, not the HUD's.
+
+**Three HUDs** (setting "The ship's HUD", ⇧², the HUD chip in the top bar).
+
+- **Atmosphere:** the fighter's (`hud/jethud.ts`) for every flight in the air, not only plane mode. Its figures are
+  computed in the air whatever the flight law; its modes engage in plane mode.
+- **Space** (`hud/kindhud.ts`): a cyan block right of the centre with:
+  - the orbit about the sphere of influence's body;
+  - the apsides with their heights and times;
+  - the inclination, the eccentricity, the period;
+  - the next event (an impact in red);
+  - the target's range and closing rate.
+- **Approach:**
+  - the radar altitude and the vertical speed, large;
+  - the glide's and the axis's deviations as an ILS's dots, from the runway's MLS guidance;
+  - the gear, the flaps and the air brake (the gear up low: red, blinking);
+  - the existing runway guidance and vertical landing scope.
+- **Automatic:**
+  - chosen by the flight's phase: the air and the entry are Atmosphere; the final, the approach, a low hover and
+    the ground are Approach; the rest is Space;
+  - a change is held 1.5 s before it shows, so nothing flickers at a boundary;
+  - a forced kind applies at once.
+- **What each kind leaves out:** `hudShownFor` crosses the phases' matrix with the kind's own.
+- **The telemetry** gives the gear, the flaps and the air brake.
+- **TARS:** the `interface` tool sets `hudKind` and `hudViews`; `get_state` gives them.
+- **Docs:** `docs/systemes/08-interface.md`, sections 5 (the top bar) and 6.3 bis.
+
+### Tests
+
+- **Unit:**
+  - `tests/hudkind.test.ts`: the kind by the phase, the hold, the forced kind, the cycle, the views;
+  - `tests/kindhud.test.ts`: the Space HUD's lines, the deviations, the formats.
+- **e2e (Macs):**
+  - new `tests/e2e/hud-kinds.e2e.test.ts`;
+  - `hud-layout.e2e.test.ts` now runs with the HUD in every view, so the docking and film states keep their
+    panels to measure.
+
+### Manual tests to do (on the Mac)
+
+1. **Chase, in orbit.**
+   - The HUD chip reads "HUD SPACE" (dim: automatic).
+   - The cyan block right of the centre: ORBIT · EARTH, AP and PE with their T−, INC, e, P.
+   - Target the ISS: its range and closing rate (green when closing).
+2. **Dorsal:** the same. **Cockpit:** no tapes or panels over the view, the cabin's screens; the warnings and
+   the autopilot's card stay. **Film, Wing, Director:** the image clean.
+3. **The setting.** Settings › HUD aids › "HUD in the views": Everywhere brings the HUD back over the cockpit;
+   Every outside view brings it over the film's views.
+4. **Entry, then the glide.**
+   - The HUD turns Atmosphere (green tapes, Mach, G) about 1.5 s after the entry begins, in rocket mode too.
+   - On the final it turns Approach: RA and VS large, the G/S and axis diamonds moving the right way (fly toward
+     the diamond), GEAR DN green, FLAPS.
+5. **Gear up low:** below 300 m with the gear up, GEAR UP blinks red.
+6. **Vertical landing on the Moon:** Approach, with the drift scope and the RA.
+7. **⇧²:** automatic → Atmosphere → Space → Approach → automatic, a toast each time. The chip is lit while forced.
+8. **Speed effects:** in the cockpit, a fast low pass still streaks.
+9. **TARS:** "mets le HUD d'approche", then "remets le HUD automatique".

@@ -398,6 +398,7 @@ export function gameTools(h: GameHost): Tool[] {
           warp: { running: settings.animate, timesRealTime: round(settings.timeSpeed / h.realTimeSpeed(), 2), autoWarp: settings.autoWarp },
           mode: h.mode?.get() ?? null,
           view: { ship: settings.ship, mount: settings.shipMount, spectating: camera.spectating, vessel: settings.vessel },
+          hud: { kind: settings.hudKind, views: settings.hudViews },
           gear: { down: camera.gearDown, flaps: camera.airFlight?.cfg.flaps, airBrake: camera.airBrake },
           docked: camera.docked,
           surface: tools.perf({ gpu: false }).earthSurface,
@@ -1294,7 +1295,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "interface",
       description:
-        "The interface: open a panel (settings, place, time, weather, eclipses — the eclipse calculator's page —, scenes, photo — the photo mode —, controls, help, pause, planner: the flight computer's MISSION tab over the map, sky, camera, music — the music console —, render — the offline render dialog) or close the one on top; the map (open, tab: orbit/globe/map; on the ground: local planisphere, mapZoom 0–21, default 18); HUD density 0 full, 1 minimal, 2 clean; a screenshot (PNG download).",
+        "The interface: open a panel (settings, place, time, weather, eclipses — the eclipse calculator's page —, scenes, photo — the photo mode —, controls, help, pause, planner: the flight computer's MISSION tab over the map, sky, camera, music — the music console —, render — the offline render dialog) or close the one on top; the map (open, tab: orbit/globe/map; on the ground: local planisphere, mapZoom 0–21, default 18); HUD density 0 full, 1 minimal, 2 clean; the ship's HUD (hudKind: auto — by the flight —, atmo, space, approach) and where it shows (hudViews: chaseDorsal — the default —, outside, all; in the cockpit the cabin's screens); a screenshot (PNG download).",
       params: {
         open: { type: "string", enum: PANELS },
         close: { type: "boolean" },
@@ -1307,6 +1308,8 @@ export function gameTools(h: GameHost): Tool[] {
           description: "Local ground planisphere zoom, default 18; on foot or a landed craft.",
         },
         hudDensity: { type: "number", minimum: 0, maximum: 2, integer: true },
+        hudKind: { type: "string", enum: ["auto", "atmo", "space", "approach"] },
+        hudViews: { type: "string", enum: ["chaseDorsal", "outside", "all"] },
         screenshot: { type: "boolean" },
       },
       run: act(async (a) => {
@@ -1318,6 +1321,11 @@ export function gameTools(h: GameHost): Tool[] {
           h.localMap?.zoom(Number(a.mapZoom));
         }
         if (a.hudDensity !== undefined) h.hudDensity(a.hudDensity as 0 | 1 | 2);
+        if (a.hudKind !== undefined || a.hudViews !== undefined) {
+          if (a.hudKind !== undefined) settings.hudKind = a.hudKind as Settings["hudKind"];
+          if (a.hudViews !== undefined) settings.hudViews = a.hudViews as Settings["hudViews"];
+          h.changed(["hudKind", "hudViews"]);
+        }
         if (a.screenshot) await h.screenshot();
         return "done";
       }),

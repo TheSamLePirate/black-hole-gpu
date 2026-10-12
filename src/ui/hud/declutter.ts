@@ -4,6 +4,7 @@
 // player's switches (Settings › HUD aids) and the density key (²) still apply on top: an element is
 // drawn when the phase, the switch and the data all allow it.
 
+import type { HudKind } from "../../game/hudkind";
 import type { FlightPhase, Stage } from "../../game/phase";
 
 export type HudItem =
@@ -69,4 +70,20 @@ export function hudShown(p: FlightPhase | null): Record<HudItem, boolean> {
   if (!stage) return EVERYTHING;
   const out = new Set(OUT[stage]);
   return Object.fromEntries(ALL.map((k) => [k, !out.has(k)])) as Record<HudItem, boolean>;
+}
+
+/** What each of the three HUDs leaves out (game/hudkind.ts): the atmosphere's the orbit's and the hole's, the
+ *  space's the air and the ground, the approach's the orbit's. */
+const KIND_OUT: Record<HudKind, HudItem[]> = {
+  atmo: ["relativity", "burn", "dock", "hover"],
+  space: ["airData", "runway", "hover", "bank"],
+  approach: ["markers", "future", "path", "burn", "relativity", "dock"],
+};
+
+/** The elements the phase and the HUD's kind both let it draw. */
+export function hudShownFor(p: FlightPhase | null, kind: HudKind | null): Record<HudItem, boolean> {
+  const shown = hudShown(p);
+  if (!kind) return shown;
+  const out = new Set(KIND_OUT[kind]);
+  return Object.fromEntries(ALL.map((k) => [k, shown[k] && !out.has(k)])) as Record<HudItem, boolean>;
 }

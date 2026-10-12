@@ -37,7 +37,8 @@ describe.skipIf(!E2E)("the HUD: nothing overlaps", () => {
   for (const f of states)
     test(f.replace(/\.json$/, ""), async () => {
       const json = await Bun.file(`${dir}/${f}`).text();
-      await app.js(`(__bh.freeze(false), __bh.game.importSave(${JSON.stringify(json)}, false), true)`);
+      // (the HUD in every view — PLAN-MODES-AAA M4: the docking's and the film's states keep their panels to measure)
+      await app.js(`(__bh.freeze(false), __bh.game.importSave(${JSON.stringify(json)}, false), __bh.settings.hudViews = "all", true)`);
       await Bun.sleep(2500);
       const boxes = await app.js<Box[]>("__bh.hud.boxes()");
       if (process.env.HUD_BOXES) console.log(f, JSON.stringify(boxes.map((b) => [b.id, ...[b.x, b.y, b.w, b.h].map(Math.round)])));

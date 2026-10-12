@@ -44,7 +44,8 @@ import { onEscape } from "./keys";
 import { el as h } from "./kit";
 import { alertsOf, MasterCaution } from "./hud/alerts";
 import { sound } from "../audio/engine";
-import { hudShown } from "./hud/declutter";
+import { hudShownFor } from "./hud/declutter";
+import { HudKindChooser, hudInView, hudKindName, type HudKind } from "../game/hudkind";
 import { safeFrame } from "./hud/safe";
 import { type Box, fit } from "./hud/layout";
 import { hudMode, shownSpeed } from "./hud/model";
@@ -194,6 +195,8 @@ const GLYPH: Record<string, string> = {
 export interface FlightHudActions {
   /** the game tools' window */
   tools(): void;
+  /** the HUD's kind: the next of automatic, atmosphere, space, approach (⇧²) */
+  hudKind?(): void;
   /** the future path in the view, on / off */
   pathInView(): void;
   /** the sound, on / off */
@@ -317,6 +320,10 @@ export class FlightHud {
   }
   /** the flight's phase (game/phase.ts), as the watcher last settled it */
   phase: import("../game/phase").FlightPhase | null = null;
+  /** the HUD's kind now (game/hudkind.ts: the phase's, held; or forced), and whether the view shows it whole */
+  kind: HudKind = "space";
+  view: "full" | "bare" = "full";
+  private kinds = new HudKindChooser();
   /** the planner's button and key: the flight computer's MISSION tab over the map (main.ts) */
   onPlanner: (() => void) | null = null;
   /**
@@ -927,6 +934,12 @@ export class FlightHud {
     // (the ship's groups, in the top bar: the place, the weather, the eclipses, the sound, the music and the
     // tools are the bar's own actions, in every mode)
     this.bar.modes.append(
+      chip(
+        "hudk",
+        t("The HUD"),
+        t("The ship's HUD: Atmosphere, Space or Approach, chosen by the flight — click: the next, or automatic (⇧²)"),
+        () => act.hudKind?.(),
+      ),
       chip("sas", t("Stability assist"), t("Holds the attitude, damps any rotation — click to toggle"), () => act.sas()),
       chip("hold", t("Attitude hold"), t("The direction the nose is held along — click to release it"), () => {
         const hd = this.lastInfo?.hold;
@@ -1714,6 +1727,18 @@ export class FlightHud {
   update(info: Info, time: number) {
     this.drawn = true;
     this.updateSpectator();
+    // (the HUD's kind — the phase's, held a moment; or forced — and whether this view shows it whole)
+    const sf = info.surface;
+    const low =
+      !!sf && !sf.landed && sf.alt < 300 && sf.vHor < 25 && !(info.air?.inAir && info.air.mode === "plane" && (info.air.speed ?? 0) > 60);
+    this.kind = this.kinds.step(
+      { stage: this.phase?.stage ?? null, mode: this.phase?.mode ?? null, final: !!this.runway?.()?.final, low },
+      performance.now() / 1000,
+      this.s.hudKind,
+    );
+    this.view = hudInView(this.s.shipMount, this.s.hudViews, !!this.spectating);
+    if (this.root.dataset.view !== this.view) this.root.dataset.view = this.view;
+    if (this.root.dataset.kind !== this.kind) this.root.dataset.kind = this.kind;
     this.lastTime = time;
     if (!this.start) this.start = { t: time, tau: info.properTime };
     this.record(info, time);
@@ -1732,10 +1757,11 @@ export class FlightHud {
     this.drawAirData(info);
     this.drawDock(info);
     const tasks: [string, number, () => void][] = [];
-    if (this.density < 2 && !full) tasks.push(["ball", 20, () => cpuProf.time("HUD: attitude ball", () => this.drawBall(info))]);
+    const bare = this.view === "bare";
+    if (this.density < 2 && !full && !bare) tasks.push(["ball", 20, () => cpuProf.time("HUD: attitude ball", () => this.drawBall(info))]);
     if (full) tasks.push(["strip", 8, () => this.drawStrip(info)]);
     if (this.density === 0 || full) {
-      if (!full) {
+      if (!full && !bare) {
         tasks.push([
           "instr",
           15,
@@ -1856,6 +1882,8 @@ export class FlightHud {
       (M[k]!.lastChild as HTMLElement).textContent = text;
     };
     setChip("sas", i.sas, "SAS");
+    // (the HUD's kind: lit when forced, its name; automatic: dim, the phase's)
+    setChip("hudk", s.hudKind !== "auto", `HUD ${hudKindName(this.kind).toUpperCase()}`);
     M.pathBtn!.classList.toggle("off", !s.pathInView);
     M.viewName!.textContent = this.spectating ? t("Spectator") : (MOUNTS[s.shipMount as Mount]?.short ?? "");
     const cn = VESSELS[i.vessel].name;
@@ -2379,6 +2407,10 @@ export class FlightHud {
     ctx.clearRect(0, 0, W, H);
     // (a spectator out: the conformal symbology is the ship's eye's — not drawn; the ship marked instead)
     if (this.spectating) return this.drawShipMark(ctx, W, H, dpr);
+    // the speed felt first, under everything (ui/speedfx.ts) — the eye's, in every view
+    this.drawSpeed(ctx, W, H, dpr, i);
+    // (a view the HUD does not show in — the cockpit, the film's —: its warnings and cards only, in the DOM)
+    if (this.view === "bare") return;
     const tanH = Math.tan((this.s.fov * Math.PI) / 360);
     const asp = W / H;
     const proj = (d: V3 | null) => {
@@ -2388,8 +2420,6 @@ export class FlightHud {
       if (Math.abs(x) > 1.05 || Math.abs(y) > 1.05) return null;
       return [((x + 1) / 2) * W, ((1 - y) / 2) * H] as const;
     };
-    // the speed felt first, under everything (ui/speedfx.ts)
-    this.drawSpeed(ctx, W, H, dpr, i);
     // the conformal symbology first, under the rest: horizon, pitch ladder, heading, bank, the markers
     // (the future: +10, +30, +60 s and a quarter of the orbit, when there is one)
     const T = i.status?.orbit?.period;
@@ -2405,8 +2435,9 @@ export class FlightHud {
       i,
       density: this.density,
       simS: this.lastTime * M_SECONDS,
-      // (what the flight's phase lets the HUD draw — hud/declutter.ts)
-      show: hudShown(this.phase),
+      // (what the flight's phase and the HUD's kind let it draw — hud/declutter.ts)
+      show: hudShownFor(this.phase, this.kind),
+      kind: this.kind,
       future: fut,
       quarter,
       runway: this.runway?.() ?? null,

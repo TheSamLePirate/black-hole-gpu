@@ -174,6 +174,8 @@ export interface FlightInfo {
   /** the jet's systems (plane mode, in the air — game/jet.ts): the altitude over the sea [m], the throttle,
    *  the modes engaged */
   jet: { alt: number; throttle: number; modes: JetModes } | null;
+  /** the gear (down, its extension 0…1), the flaps (0, 0.5, 1), the air brake (0…1): the Approach HUD's */
+  gear: { down: boolean; ext: number; flaps: number; brake: number };
   entry: ReturnType<CameraController["entryInfo"]>;
   // ---- the target
   /** the selected target: distance (centre to centre, flat map) and range rate (> 0: receding) */
@@ -335,8 +337,10 @@ function flightInfo(this: CameraController): FlightInfo {
     surface: this.surfaceInfo(),
     air: this.airInfo(),
     terrainAhead: this.local ? Infinity : this.terrainAheadNow(),
+    gear: { down: this.gearDown, ext: this.gearExt, flaps: this.airFlight.cfg.flaps ?? 0, brake: this.airBrake },
     jet: (() => {
-      const f = this.flightModeNow() === "plane" ? this.jetFigures() : null;
+      // (in the air, however it is flown: the Atmosphere HUD's figures — its modes engage in plane mode only)
+      const f = this.jetFigures();
       return f ? { alt: f.h, throttle: this.pilot.engineNow, modes: { ...this.jetModes } } : null;
     })(),
     entry: this.entryInfo(),

@@ -50,4 +50,39 @@ export default {
   "A video is rendering: stop it first": "Une vidéo est en cours de rendu : arrêtez-la d'abord",
   "Capture: this view rendered offline, saved as a PNG once converged":
     "Capture : cette vue rendue hors ligne, enregistrée en PNG une fois convergée",
+  // the ship's three HUDs (PLAN-MODES-AAA M4)
+  "The ship's HUD": "Le HUD du vaisseau",
+  "Three HUDs by the type of flight: Atmosphere (a fighter's — the tapes, Mach, the load, the incidence, the vertical speed, the radar altitude), Space (the apsides and their times, the inclination, the next burn, the target's range) and Approach (the runway's guidance or the vertical landing's scope, the radar altitude and the vertical speed large, the glide's and the axis's deviations, the gear and the flaps). Automatic: chosen by the flight's phase. ⇧² cycles them.":
+    "Trois HUD selon le type de vol : Atmosphère (celui d'un chasseur — les rubans, le Mach, le facteur de charge, l'incidence, la vitesse verticale, la hauteur radar), Spatial (les apsides et leurs temps, l'inclinaison, la prochaine poussée, la distance de la cible) et Approche (le guidage de la piste ou le viseur d'atterrissage vertical, la hauteur radar et la vitesse verticale en grand, les écarts de plan et d'axe, le train et les volets). Automatique : choisi par la phase du vol. ⇧² les fait défiler.",
+  "Chosen by the flight's phase: in the air, in space, on the approach":
+    "Choisi par la phase du vol : dans l'air, dans l'espace, en approche",
+  Atmosphere: "Atmosphère",
+  "A fighter's HUD, whatever the flight": "Le HUD d'un chasseur, quel que soit le vol",
+  "The orbit's HUD, whatever the flight": "Le HUD de l'orbite, quel que soit le vol",
+  "The landing's HUD, whatever the flight": "Le HUD de l'atterrissage, quel que soit le vol",
+  "HUD in the views": "HUD dans les vues",
+  "Where the whole HUD shows. By default in the chase and dorsal views: in the cockpit the cabin's screens are the instruments, and the film's views stay clean. The warnings, the autopilot's card and the docking aid show in every view.":
+    "Où le HUD complet s'affiche. Par défaut dans les vues poursuite et dorsale : dans le cockpit, les écrans de la cabine sont les instruments, et les vues de film restent nettes. Les alertes, la fiche de l'autopilote et l'aide à l'amarrage s'affichent dans toutes les vues.",
+  "Chase and dorsal": "Poursuite et dorsale",
+  "The HUD behind the ship; the cockpit's own screens inside": "Le HUD derrière le vaisseau ; les écrans du cockpit à l'intérieur",
+  "Every outside view": "Toutes les vues extérieures",
+  "The HUD in every view but the cockpit and the cabin": "Le HUD dans toutes les vues sauf le cockpit et la cabine",
+  Everywhere: "Partout",
+  "The HUD over every view, the cockpit included": "Le HUD sur toutes les vues, cockpit compris",
+  "HUD density: full · minimal · clean view · the HUD: automatic (by the flight) · Atmosphere · Space · Approach":
+    "Densité du HUD : complet · minimal · vue nette · le HUD : automatique (selon le vol) · Atmosphère · Spatial · Approche",
+  "HUD: {0}": "HUD : {0}",
+  automatic: "automatique",
+  "The HUD": "Le HUD",
+  "The ship's HUD: Atmosphere, Space or Approach, chosen by the flight — click: the next, or automatic (⇧²)":
+    "Le HUD du vaisseau : Atmosphère, Spatial ou Approche, choisi selon le vol — clic : le suivant, ou automatique (⇧²)",
+  "SOI {0}": "SOI {0}",
+  "LEAVE {0}": "SORTIE {0}",
+  "MOUTH {0}": "BOUCHE {0}",
+  "GEAR ↕": "TRAIN ↕",
+  "GEAR DN": "TRAIN SORTI",
+  "GEAR UP": "TRAIN RENTRÉ",
+  "FLAPS UP": "VOLETS 0",
+  "FLAPS ½": "VOLETS ½",
+  "FLAPS FULL": "VOLETS PLEINS",
 } satisfies Record<string, string>;

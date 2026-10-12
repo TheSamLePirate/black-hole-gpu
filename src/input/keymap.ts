@@ -44,6 +44,7 @@ export type KeyAction =
   | "tars"
   | "pathInView"
   | "hudDensity"
+  | "hudKind"
   | "missions"
   | "stopFlight"
   | "ack"
@@ -328,7 +329,11 @@ export const KEYMAP: KeySection[] = [
         text: "The Director view's shot: the director chooses · chase · slow orbit · fly-by · ground tracking · the planet's limb · the destination (` on a French Mac keyboard)",
         bind: [fly("Backslash", "cineShot")],
       },
-      { keys: "²  (`)", text: "HUD density: full · minimal · clean view", bind: [fly("Backquote", "hudDensity")] },
+      {
+        keys: "²  (`) · ⇧²",
+        text: "HUD density: full · minimal · clean view · the HUD: automatic (by the flight) · Atmosphere · Space · Approach",
+        bind: [fly("Backquote", "hudDensity", off), fly("Backquote", "hudKind", on)],
+      },
       {
         keys: "O",
         text: "The flight computer's MISSION tab, over the map: a destination, a transfer, a rendezvous, through the wormhole — PLAN, then EXECUTE",
