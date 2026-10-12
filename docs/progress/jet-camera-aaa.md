@@ -8,6 +8,92 @@ plane mode flown like a jet with all of a jet's options, and fewer alarm beeps w
 | 1 | Ground alerts on the flight path (GPWS) | done |
 | 2 | Jet HUD and jet systems | done |
 | 3 | Camera brain (virtual cameras, blends, noise, dynamic FOV) | done |
+| 4 | Cinemachine options, no jerks anywhere, softened chase and dorsal, docking jerk, speed effects | done |
+
+## Lot 4: Cinemachine options, smooth everywhere, speed effects
+
+**The rig** (`src/cine/follow.ts`, pure and tested in `tests/cine-follow.test.ts`; applied in
+`src/controller/camrig.ts`):
+
+| Cinemachine | Here | Setting (Game › Camera rig) |
+| --- | --- | --- |
+| Transposer binding modes | Lock to target, lock without roll, world up (horizon level), world | Binding |
+| Rotation damping per axis | Critically damped spring on the orientation, per axis. A steady turn (the Endurance's spin) is followed with no lag; only jolts are smoothed, without overshoot. | Damping: pitch, yaw, roll |
+| Position damping | The camera falls behind under acceleration (afterburner) and catches up | Damping: position |
+| Composer lookahead and screen position | The aim leads along the motion; the craft sits at an x/y offset on screen | Lookahead, Composer x / y |
+| Lens dutch | Roll of the view | Dutch angle |
+| Noise profiles (Basic Multi-Channel Perlin) | None, hand-held, shake, rumble, vibration, with amplitude and frequency gains | Noise profile, amplitude, frequency |
+| Impulse sources and listener | Wheel contact, touchdown, sonic boom, transonic, docking latches, crash (the haptic events) | Impulses |
+| Default blend | Ease in-out, ease in, ease out, hard in, hard out, linear, cut, plus a time | Blend, Blend time |
+| Dynamic lens | Wider at speed and with the afterburner | Speed lens |
+| Which views get the rig | Chase and dorsal (default), every outside hull view, or off | Softened views |
+
+**The rig runs after the flight, each frame** (Cinemachine's LateUpdate). Running before, it showed each turn
+rigid first, then smoothed a frame late. Moving it also fixes the port camera's one-frame lag.
+
+**No more cuts:**
+
+- **Between views (V):** the eye swings round the craft and the look direction is slerped. It never passes
+  through the hull, and never flips 180° between a forward view and a backward one (cockpit → docking camera).
+  The old point lerp flipped about 0.2 s in.
+- **Between vessels ([ ]):** the view is carried from the craft left to the new one.
+- **Spectator (F3):** it now leaves from the eye itself and arcs back behind the ship. Returning, it is carried
+  onto the view.
+- **Between planets, craft and the ISS** (go to, when not flying): a travel. The distance is eased on a log
+  scale, the camera looks at the destination midway, and takes 1.2 to 6 s. Tested in `tests/travel.test.ts`.
+- **Target change while orbiting a planet:** the turn to the new aim is blended (it used to snap).
+- **Coasting craft with the free camera:** they are now stepped every frame. Before, the switch between
+  analytic coast and integration made them jump about 5 s after leaving the seat.
+
+**Docking with the spinning Endurance** (`tests/dock-spin.test.ts`, a real docking flown headless).
+
+- **Causes found:**
+  - the warp ladder flickered ×10↔×5 around 150 m;
+  - at ×10 the Endurance's 18°/s looked like 180°/s, beyond what the Ranger can turn;
+  - the turn rate was computed at the previous frame's warp;
+  - the capture snapped the Ranger onto the port.
+- **Fixes:**
+  - the warp steps hold within a 15 % band;
+  - the warp is capped at what the Ranger can turn with;
+  - the warp is eased over 1.5 s;
+  - the rate is read after the warp is set;
+  - the capture is carried (0.6 s).
+- **Measured:** the view's worst frame-to-frame change in turn rate fell from 0.053 to 0.007 rad/s. The docking
+  takes 141 s.
+
+**Speed effects** (`src/ui/speedfx.ts`, setting HUD aids › Speed effects 0.7, Grey-out under load):
+
+- streaks of air flowing past the eye, in world coordinates, so a turn sweeps them across the view;
+- more of them faster, close to the ground and with the afterburner; none in vacuum;
+- edges darkened with speed;
+- grey-out from 5 g, narrowing to a tunnel at 9 g;
+- a camera jolt on every haptic impulse;
+- a wider lens at speed in the softened views.
+
+### Tests to run on the Macs (manual)
+
+1. **Hard roll in the chase.** Plane mode, chase view. The view follows the roll with a slight lag and no
+   jerk. With Softened views = Off it is rigid again. Binding = World up keeps the horizon level.
+2. **Dorsal and position damping.** Dorsal view, ⇧Z (afterburner): the craft pulls away a little, then the
+   camera catches up.
+3. **Views.** Go round all the views with V, especially cockpit → docking camera (180°): no flip. Blend = Cut
+   gives clean cuts. Blend time 3 s gives slow blends.
+4. **Vessels.** [ and ] in the Endurance scene: the camera glides from one craft to the other.
+5. **Spectator.** F3 from the cockpit: the camera leaves the cockpit and arcs back behind. F3 again: back to the
+   seat, eased.
+6. **Planets.** Free camera, camera panel › go to Mars, then the Moon, then the ISS: a travel with no jump.
+7. **Endurance docking.** "Earth: the Endurance tumbling" preset, B: no flicker or jolt in the hatch camera;
+   the capture is soft.
+8. **Speed.** At 300 m and Mach 0.9: streaks and darker edges. A 7 g pull: grey-out. A touchdown: a jolt.
+9. **Noise.** Profiles hand-held, then shake, then vibration, with the amplitude raised.
+10. **Composer and dutch.** Composer x = 0.25 puts the craft right of centre; dutch 10° tilts the view.
+
+**Not done (Cinemachine features with no equivalent yet):**
+
+- Tracked Dolly (a camera on a path);
+- Group Composer (framing several targets);
+- Confiner and Collider for the hull views;
+- a fixed-step simulation with interpolation (rAF jitter and dropped frames still show as is).
 
 ## Lot 3: the camera director (Cinemachine-style)
 

@@ -7,7 +7,8 @@
 // tremor as noise. Its coordinates: the local frame's axes (quasi-inertial), metres, about the craft's origin.
 // Pure: a frame's figures in, the eye, the aim, the up and the field out (controller/cine.ts places them).
 
-import { add3, cross3, dot3, ease, fbm, len3, lerp3, scale3, Spring3, sub3, tangent3, unit3, type V3 } from "./rig";
+import { add3, cross3, dot3, fbm, len3, lerp3, scale3, Spring3, sub3, tangent3, unit3, type V3 } from "./rig";
+import { type BlendStyle, blendCurve, blendPose, Impulses, type NoiseProfile, noiseAngles } from "./follow";
 
 export type Shot = "chase" | "orbit" | "pass" | "tracking" | "planet" | "system";
 export const SHOTS: Shot[] = ["chase", "orbit", "pass", "tracking", "planet", "system"];
@@ -51,6 +52,14 @@ export interface CineAsk {
   shake: number;
   dynamicFov: boolean;
   zoom: number;
+  /** the blends between moving shots (Cinemachine's default blend: its curve, its time [s]) */
+  blend?: { style: BlendStyle; time: number };
+  /** the impulses' gain; the noise profile on top of the shot's own, its gains; the dutch [°] */
+  impulse?: number;
+  noise?: NoiseProfile;
+  noiseAmp?: number;
+  noiseFreq?: number;
+  dutch?: number;
 }
 
 export interface CineOut {
@@ -144,8 +153,18 @@ export class CineBrain {
   }
 
   /** Cuts or blends to another shot. */
+  /** the impulses (touchdowns, booms, latches) */
+  readonly impulses = new Impulses();
+  private clock = 0;
+  private blendStyle: BlendStyle = "easeInOut";
+  private blendTime = 1.6;
+  /** A jolt (0 … 1). */
+  impulse(k: number, decay = 0.5, freq = 9) {
+    this.impulses.add(k, this.clock, decay, freq);
+  }
+
   private go(shot: Shot, cut: boolean) {
-    if (this.last && !cut) this.blend = { from: this.last, t: 0, len: 1.6 };
+    if (this.last && !cut && this.blendStyle !== "cut") this.blend = { from: this.last, t: 0, len: this.blendTime };
     else this.blend = null;
     this.shot = shot;
     this.age = 0;
@@ -168,6 +187,11 @@ export class CineBrain {
   }
 
   update(c: CineContext, a: CineAsk, dt: number): CineOut {
+    this.clock += dt;
+    if (a.blend) {
+      this.blendStyle = a.blend.style;
+      this.blendTime = Math.max(0.05, a.blend.time);
+    }
     // ---- the director: which shot
     if (a.shot !== "auto") {
       if (this.asked !== a.shot || this.shot !== a.shot) this.go(a.shot, this.last === null);
@@ -214,20 +238,30 @@ export class CineBrain {
       const ny = fbm(t, fast, 4.9) + 0.4 * fbm(t, 0.3, 2.3) * (w.hand > 0 ? 1 : 0);
       aim = add3(add3(aim, r, Math.tan(deg * nx) * d), u, Math.tan(deg * ny) * d);
     }
+    // ---- the profile's noise, the impulses, the dutch: turns about the eye
+    const n = noiseAngles(a.noise ?? "none", c.time, a.noiseAmp ?? 1, a.noiseFreq ?? 1);
+    const j = this.impulses.angles(this.clock, a.impulse ?? 1);
+    const roll = ((a.dutch ?? 0) * Math.PI) / 180 + n[2] + j[2];
+    let upOut = up;
+    if (n[0] || n[1] || j[0] || j[1] || roll) {
+      const look = sub3(aim, eye);
+      const d = len3(look);
+      const f = unit3(look);
+      const r = unit3(cross3(f, up), [1, 0, 0]);
+      const u = cross3(r, f);
+      aim = add3(add3(aim, r, Math.tan(n[1] + j[1]) * d), u, Math.tan(n[0] + j[0]) * d);
+      if (roll) upOut = add3(scale3(u, Math.cos(roll)), r, -Math.sin(roll));
+    }
     // ---- the lens
     this.fovNow = Number.isFinite(this.fovNow) ? this.fovNow + (w.fov - this.fovNow) * (1 - Math.exp(-dt / 0.35)) : w.fov;
-    let out: CineOut = { eye, aim, up, fov: this.fovNow, shot: this.shot };
+    let out: CineOut = { eye, aim, up: upOut, fov: this.fovNow, shot: this.shot };
     if (this.blend) {
       const B = this.blend;
       B.t += dt / B.len;
-      const k = ease(B.t);
-      out = {
-        eye: lerp3(B.from.eye, out.eye, k),
-        aim: lerp3(B.from.aim, out.aim, k),
-        up: unit3(lerp3(B.from.up, out.up, k), out.up),
-        fov: B.from.fov + (out.fov - B.from.fov) * k,
-        shot: out.shot,
-      };
+      const k = blendCurve(this.blendStyle, B.t);
+      // (swung round the craft, the look slerped: never through the hull, never flipping)
+      const p = blendPose(B.from, out, k, c.centre);
+      out = { ...p, fov: B.from.fov + (out.fov - B.from.fov) * k, shot: out.shot };
       if (B.t >= 1) this.blend = null;
     }
     this.last = out;

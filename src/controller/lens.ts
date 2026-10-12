@@ -9,6 +9,7 @@ import { mouth } from "../wormhole";
 import type { CameraController } from "../controls";
 import { TELE_MIN, clamp } from "./util";
 import { freeCameraKeys } from "../input/bindings";
+import { fleet } from "../fleet";
 
 declare module "../controls" {
   interface CameraController {
@@ -33,6 +34,12 @@ declare module "../controls" {
 /** Zooms the lens by a factor of its field (eased): 1°…150°, the telescope down to 0.02°. */
 function zoomLens(this: CameraController, f: number) {
   const s = this.s;
+  // (the lens taken by a view — the director's, the speed's widening —: the player's own field zoomed)
+  if (this.lensBase !== null && !s.telescope) {
+    this.lensBase = clamp(this.lensBase * f, 1, 150);
+    this.activity = performance.now();
+    return;
+  }
   const [lo, hi] = s.telescope ? [TELE_MIN, 20] : [Math.min(1, s.fov), 150];
   this.fovTarget = clamp((this.fovTarget ?? s.fov) * f, lo, hi);
   this.activity = performance.now();
@@ -157,10 +164,6 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
     if (s.shipMount !== this.lastMount) this.flyby.E = null; // (a new fly-by: from where the view is)
     this.flybyStep(dt);
   }
-  // (the director's view: its shot this frame — controller/cine.ts —; left, its lens given back)
-  if (this.piloting && !this.cinematic && this.outsideView() === "director") this.cineStep(dt);
-  else this.cineLeave();
-  this.stepMount(dt);
   const pilotNow = this.piloting && this.cinematic !== "dive" && this.cinematic !== "journey";
   // (a spectator out: the keys, the sticks, the zoom are its — the ship's view keeps still)
   const away = !!this.spectator;
@@ -228,12 +231,18 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   // so the tracking keeps its offset from the target
   const tracked = [s.yaw, s.pitch, s.roll].join() === this.written;
   this.rig.on = false; // (set again below while the rig moves the camera)
+  // (no craft flown: the others coasting flown to the frame's end all the same — their integrator's, not the
+  // analytic coast's then the integrator's again 5 s on: a jump)
+  if (!this.piloting && s.animate && Number.isFinite(this.time) && s.timeSpeed > 0) fleet.stepFree(this.time + s.timeSpeed * dt);
   if (pilotNow) {
     if (away) {
       // (the view is the spectator's)
     } else if (this.outsideView() === "free") this.moveOutside(dt, move, fast);
     else if (s.shipMount === "cabin") this.moveCabin(dt, move, fast);
     this.flyShip(dt, pad);
+    this.flyVel = [0, 0, 0];
+  } else if (this.travel) {
+    // (travelling to a body or a craft: placed at the frame's end — travelStep, below)
     this.flyVel = [0, 0, 0];
   } else if (!this.gravity && free && this.rigStep(dt, move, fast)) {
     // the rig moves the camera (around a body, following it, carried by it, on a tripod)
@@ -251,6 +260,21 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
     if (Math.hypot(...this.flyVel) > 1e-3 * this.flySpeed) this.fly(this.flyVel, dt);
     else this.flyVel = [0, 0, 0];
   }
+  // the views on the ship after its flight (Cinemachine's late update: the rig sees where the craft went this
+  // frame — a view placed before it showed each turn rigid first, then smoothed a frame late): the director's
+  // shot (controller/cine.ts), the attach point eased and softened (stepMount, controller/camrig.ts), the lens —
+  // the director's field, a hull view's widening with the speed, else the player's given back
+  const directing = this.piloting && !this.cinematic && this.outsideView() === "director";
+  if (directing) this.cineStep(dt);
+  else this.cineLeave();
+  this.stepMount(dt);
+  this.lensApply(
+    directing
+      ? this.cineFov
+      : this.piloting && this.softMount() && Math.abs(this.camKick - 1) > 1e-4
+        ? this.lensBaseNow() * this.camKick
+        : null,
+  );
   if (tracked) this.written = [s.yaw, s.pitch, s.roll].join();
   // (the rig idle this frame: it starts afresh from where the camera is when it takes over again)
   if (!this.rig.on) this.rig.key = "";
@@ -300,7 +324,9 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   }
   if (this.baryRest() && s.rotation === "free" && !this.rig.on) this.driftWithBarycentre();
   this.updateMotion(dt);
-  if (this.tracking && !flying && !this.inThroat()) this.track(dt);
+  // (a travel: its pose, over the rest — controller/travel.ts)
+  const travelling = !this.piloting && this.travelStep(dt);
+  if (this.tracking && !flying && !this.inThroat() && !travelling) this.track(dt);
   // (tracking resumes from the orientation the flight left: offset recomputed, no jump)
   else this.offset = null;
   // the spectator, after the ship (its frame's pose): its own flight

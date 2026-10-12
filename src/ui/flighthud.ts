@@ -32,6 +32,7 @@ import { fmtS } from "./gametools";
 import { blinkOn } from "./clock";
 import { cpuProf } from "../perf";
 import { drawSymbology } from "./hud/symbology";
+import { cameraInWorld, SpeedFx, speedFxLevel } from "./speedfx";
 import { Map3D } from "./map3d/map3d";
 import type { WeatherState } from "../weather";
 import { GroundTrack } from "./groundtrack";
@@ -2343,6 +2344,57 @@ export class FlightHud {
     ctx.fillText(`${VESSELS[fleet.active].name.toUpperCase()} ${this.fmtMetres(d)}`, px + (px > W * 0.8 ? -1.6 : 1.6) * r, py - 1.2 * r);
   }
 
+  /** the speed's streaks, the edges, the grey-out (ui/speedfx.ts); the wall clock of the last frame drawn */
+  private speedFx = new SpeedFx();
+  private fxAt = Number.NaN;
+
+  /** The speed felt, under the symbology: the air's streaks past the eye, the edges, a hard pull's grey-out. */
+  private drawSpeed(ctx: CanvasRenderingContext2D, W: number, H: number, dpr: number, i: Info) {
+    const now = performance.now() / 1000;
+    const dt = Number.isFinite(this.fxAt) ? Math.min(now - this.fxAt, 0.1) : 0;
+    this.fxAt = now;
+    const s = this.s;
+    const A = i.air;
+    const up = i.dirs.up,
+      north = i.dirs.north;
+    // (the air streaming past the eye: not past a still camera — the fly-by, the port's, the free one)
+    const still = ["flyby", "free", "station", "around"].includes(String(i.mount));
+    if (!A || !A.inAir || !A.u || !up || !north || still || !s.animate) {
+      if (s.gVignette && A?.inAir)
+        this.speedFx.draw(ctx, {
+          W,
+          H,
+          dpr,
+          fov: s.fov,
+          dt,
+          M: [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1],
+          ],
+          flow: [0, 0, 0],
+          level: 0,
+          g: A.g ?? 1,
+          greyOut: true,
+        });
+      return;
+    }
+    const S = i.S;
+    const u = A.u;
+    const vc: [number, number, number] = [0, 1, 2].map((r) => (S[r]![0]! * u[0]! + S[r]![1]! * u[1]! + S[r]![2]! * u[2]!) * A.speed) as [
+      number,
+      number,
+      number,
+    ];
+    const M = cameraInWorld(up as [number, number, number], north as [number, number, number]);
+    // (the flow past the eye in the world: the motion through the air, the other way)
+    const flow = [0, 1, 2].map((k) => -(M[0][k]! * vc[0] + M[1][k]! * vc[1] + M[2][k]! * vc[2])) as [number, number, number];
+    const level =
+      (s.speedLines ?? 0.7) *
+      speedFxLevel({ speed: A.speed, rho: A.rho, agl: i.surface?.alt ?? Number.NaN, boost: i.jet?.modes.ab ? 1.5 : 1 });
+    this.speedFx.draw(ctx, { W, H, dpr, fov: s.fov, dt, M, flow, level, g: A.g ?? 1, greyOut: s.gVignette !== false });
+  }
+
   private drawHud(i: Info) {
     const c = this.hud;
     const dpr = devicePixelRatio;
@@ -2362,6 +2414,8 @@ export class FlightHud {
       if (Math.abs(x) > 1.05 || Math.abs(y) > 1.05) return null;
       return [((x + 1) / 2) * W, ((1 - y) / 2) * H] as const;
     };
+    // the speed felt first, under everything (ui/speedfx.ts)
+    this.drawSpeed(ctx, W, H, dpr, i);
     // the conformal symbology first, under the rest: horizon, pitch ladder, heading, bank, the markers
     // (the future: +10, +30, +60 s and a quarter of the orbit, when there is one)
     const T = i.status?.orbit?.period;

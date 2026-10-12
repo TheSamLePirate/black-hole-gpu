@@ -310,7 +310,90 @@ export default {
   "Disk light bent back onto the disk by the hole (Cunningham 1976), traced with one extra geodesic per disk hit and re-emitted with the albedo below: brightens the inner disk and the far side, strongest at high spin. Thin disk, quality passes; by default only in offline renders.":
     "Lumière du disque renvoyée sur le disque par le trou (Cunningham 1976), tracée avec une géodésique supplémentaire par impact sur le disque et réémise avec l'albédo ci-dessous : éclaircit le disque interne et la face lointaine, surtout à spin élevé. Disque mince, passes de qualité ; par défaut uniquement en rendu hors ligne.",
   Off: "Désactivé",
+  "Softened views": "Vues adoucies",
+  "The craft's outside views on its hull follow it as a film camera on a rig does: its jolts smoothed, its steady turns (the Endurance's spin) followed without lag, left behind a little by its accelerations. The craft flies the same: only the camera moves.":
+    "Les vues extérieures de l'appareil, fixées sur sa coque, le suivent comme une caméra de cinéma sur son support : ses secousses sont lissées, ses virages réguliers (la rotation de l'Endurance) suivis sans retard, et ses accélérations la laissent un peu en arrière. L'appareil vole de la même façon : seule la caméra bouge.",
+  "Camera rig": "Support de caméra",
+  "Chase and dorsal": "Poursuite et dorsale",
+  "The chase and the dorsal views follow the craft through the rig":
+    "Les vues de poursuite et dorsale suivent l'appareil via le support de caméra",
+  "Every hull view": "Toutes les vues de coque",
+  "Quarter, chase, dorsal, wing, belly, nose too": "Trois-quarts, poursuite, dorsale, aile, ventre, nez aussi",
+  "The attach points rigid on the hull": "Les points d'attache rigides sur la coque",
+  Binding: "Liaison",
+  "How the softened view's offset turns with the craft (Cinemachine's binding modes).":
+    "Comment le décalage de la vue adoucie tourne avec l'appareil (modes de liaison de Cinemachine).",
+  "Locked to the craft": "Solidaire de l'appareil",
+  "The view turns with the craft, its roll too": "La vue tourne avec l'appareil, son roulis aussi",
+  "Locked, no roll": "Solidaire, sans roulis",
+  "The view turns with the craft's nose, its top kept up": "La vue tourne avec le nez de l'appareil, le haut toujours relevé",
+  "World up": "Verticale du monde",
+  "The view follows the heading alone: the horizon level": "La vue suit le cap seul : l'horizon reste à niveau",
+  World: "Monde",
+  "The view's offset fixed in the world: the craft turns in it":
+    "Le décalage de la vue fixé dans le monde : l'appareil tourne à l'intérieur",
+  "Damping: pitch": "Amortissement : tangage",
+  "How long the view takes to follow the craft's pitching (0: rigid). Steady turns are followed without lag; only their changes are smoothed.":
+    "Le temps que met la vue à suivre le tangage de l'appareil (0 : rigide). Les virages réguliers sont suivis sans retard ; seuls leurs changements sont lissés.",
+  "Damping: yaw": "Amortissement : lacet",
+  "How long the view takes to follow the craft's yawing (0: rigid).":
+    "Le temps que met la vue à suivre le lacet de l'appareil (0 : rigide).",
+  "Damping: roll": "Amortissement : roulis",
+  "How long the view takes to follow the craft's roll (0: rigid).":
+    "Le temps que met la vue à suivre le roulis de l'appareil (0 : rigide).",
+  "Damping: position": "Amortissement : position",
+  "The view left behind by the craft's accelerations — the afterburner pulls away, a brake catches up (0: none).":
+    "La vue reste en arrière sous les accélérations de l'appareil : la postcombustion s'éloigne, un freinage la rattrape (0 : aucun).",
+  Lookahead: "Anticipation",
+  "The aim led along the motion: the view looks a little ahead of where the craft goes.":
+    "Le point visé est guidé par le mouvement : la vue regarde un peu devant là où va l'appareil.",
+  "Composer: screen x": "Composeur : x à l'écran",
+  "Where the craft sits across the frame (−0.4 left … 0.4 right of the centre).":
+    "Où se place l'appareil dans le cadre (−0,4 à gauche … 0,4 à droite du centre).",
+  "Composer: screen y": "Composeur : y à l'écran",
+  "Where the craft sits up the frame (−0.4 low … 0.4 high).": "Où se place l'appareil en hauteur dans le cadre (−0,4 bas … 0,4 haut).",
+  "Dutch angle": "Angle hollandais",
+  "The view rolled about its axis (a dutch tilt).": "La vue est roulée autour de son axe (une inclinaison hollandaise).",
+  "Noise profile": "Profil de bruit",
+  "The noise on the softened views and the director's shots (Cinemachine's noise profiles), its amplitude and frequency gains below.":
+    "Le bruit appliqué aux vues adoucies et aux plans du réalisateur (profils de bruit de Cinemachine), ses gains d'amplitude et de fréquence ci-dessous.",
+  Steady: "Stable",
+  "Hand-held": "Caméra à l'épaule",
+  "A slow drift, a hand on the camera": "Une lente dérive, une main sur la caméra",
+  Shake: "Secousse",
+  "A firm shake": "Une secousse franche",
+  Rumble: "Grondement",
+  "An engine's rumble": "Le grondement d'un moteur",
+  Vibration: "Vibration",
+  "A fine, fast vibration": "Une vibration fine et rapide",
+  "Noise amplitude": "Amplitude du bruit",
+  "The noise profile's amplitude gain.": "Le gain d'amplitude du profil de bruit.",
+  "Noise frequency": "Fréquence du bruit",
+  "The noise profile's frequency gain.": "Le gain de fréquence du profil de bruit.",
+  Impulses: "Impulsions",
+  "The camera jolted by the flight's events — a wheel touching, the touchdown, a sonic boom, the transonic shudder, the docking latches, a crash (0: none).":
+    "La caméra secouée par les événements du vol : un train qui touche le sol, l'atterrissage, un bang supersonique, le tremblement transsonique, les verrous d'amarrage, un crash (0 : aucun).",
+  Blend: "Fondu",
+  "How the camera goes from one view to the next (V, a vessel, the spectator, the director's shots): the curve of its blend — swung round the craft, never through it.":
+    "Le passage de la caméra d'une vue à l'autre (V, un vaisseau, le spectateur, les plans du réalisateur) : la courbe de son fondu, qui contourne l'appareil sans jamais le traverser.",
+  "Ease in and out": "Accélération et décélération",
+  "Ease in": "Accélération",
+  "Ease out": "Décélération",
+  "Hard in": "Arrivée franche",
+  "Hard out": "Départ franc",
+  Cut: "Coupe",
+  "Blend time": "Durée du fondu",
+  "How long a blend between views lasts.": "Durée d'un fondu entre deux vues.",
+  "Speed lens": "Objectif de vitesse",
+  "The softened views' field widened with the speed through the air and the afterburner (its gain; 0: none).":
+    "Le champ des vues adoucies s'élargit avec la vitesse dans l'air et la postcombustion (son gain ; 0 : aucun).",
   "Jet HUD": "HUD de chasseur",
+  "Speed effects": "Effets de vitesse",
+  "The speed felt in the air: streaks of moisture and dust rushing past the eye — more of them faster, low over the ground, with the afterburner; a turn sweeps them across the view — and the frame's edges darkened. 0: none.":
+    "La vitesse ressentie en vol : des traînées d'humidité et de poussière filant devant l'œil — plus nombreuses plus vite, près du sol, avec la postcombustion ; un virage les balaie dans la vue — et les bords de l'image assombris. 0 : aucun.",
+  "Grey-out under load": "Voile gris sous facteur de charge",
+  "A hard pull narrows and greys the view, as a pilot's: from 5 g, a tunnel at 9 — eased in over a second, out faster.":
+    "Une ressource serrée rétrécit et grise la vue, comme pour un pilote : dès 5 g, un tunnel à 9 — installé en une seconde, dissipé plus vite.",
   "Flown as a plane in the air: a fighter's head-up display in green — the airspeed and altitude tapes, Mach, the load and its peak, the incidence, the vertical speed, the radar altitude, the autopilot's and autothrottle's modes and bugs, the throttle and the afterburner.":
     "En vol, piloté en avion : le collimateur tête haute d'un chasseur, en vert — les échelles de vitesse et d'altitude, le Mach, le facteur de charge et son pic, l'incidence, la vitesse verticale, la hauteur radar, les modes et repères du pilote automatique et de l'auto-manette, la manette des gaz et la postcombustion.",
   "Knots · feet": "Nœuds · pieds",

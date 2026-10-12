@@ -13,6 +13,7 @@ import { M_METRES } from "../units";
 import { tf } from "../i18n";
 import { dot as dot3, lin, sub as sub3 } from "../math/vec3";
 
+import { viewBlend } from "./camrig";
 import type { CameraController } from "../controls";
 import { clamp, onAxesV, unitV } from "./util";
 
@@ -156,6 +157,8 @@ function switchVessel(this: CameraController, id: VesselId): string | null {
   if (!to) return tf("{0}: not found", VESSELS[id].name);
   const old = fleet.active;
   const me = this.activePoseNow();
+  // (the view carried from the craft left to the new one: no cut — controller/camrig.ts)
+  const before = this.viewWorld();
   const group = fleet.assembly(old);
   // (the craft left: its assembly coasts as it — unless the new one or the station holds it)
   if (me && !group.includes(id) && !group.includes("iss")) fleet.setFree(old, me, t, this.coastCom());
@@ -181,6 +184,7 @@ function switchVessel(this: CameraController, id: VesselId): string | null {
   this.spin = null;
   if (to.w && Math.hypot(...to.w) > 0) this.pilot.omega = to.ax.map((a) => -dot3(to.w!, a) * s.timeSpeed) as Vec3;
   this.dockInfo = null;
+  this.carryCommit(before, Math.max(1.2, viewBlend(s).time * 1.5));
   // (the target now flown, or docked to it: the body it orbits instead)
   if (fleet.flownAssembly().includes(s.target as VesselId)) this.selectTarget(nav.ref as Body);
   const with_ = fleet

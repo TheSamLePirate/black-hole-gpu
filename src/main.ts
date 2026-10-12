@@ -110,6 +110,9 @@ import { sitesOf, SITES } from "./game/sites";
 import { Splash } from "./ui/splash";
 import { SceneGallery } from "./ui/scenes";
 import { SoundDirector } from "./audio/director";
+import { haptics } from "./input/haptics";
+import type { TravelGoal } from "./controller/travel";
+import type { Vec3 } from "./physics";
 import { sound } from "./audio/engine";
 import { Speech, voiceScore } from "./audio/voice";
 import { synthesize } from "./audio/formant";
@@ -559,6 +562,19 @@ async function main() {
   });
   // the offline cache and the install (PLAN-MONDE M1): off on the dev server's hot reload
   const pwa = installPwa({ toast: (m) => panel.toast(m), dev: DEV && !/[?&]sw=1/.test(location.search) });
+  // (the flight's jolts felt by the camera too — Cinemachine's impulses: controller/camrig.ts)
+  haptics.onImpulse = (kind, k) => {
+    const J = {
+      wheel: [0.35, 0.25, 12],
+      joint: [0.08, 0.15, 14],
+      boom: [0.6, 0.5, 7],
+      transonic: [0.45, 0.8, 9],
+      dock: [0.4, 0.4, 8],
+      undock: [0.25, 0.3, 8],
+      crash: [1, 0.9, 6],
+    }[kind];
+    if (J) camera.camImpulse(J[0]! * k, J[1], J[2]);
+  };
   const audio = new SoundDirector(settings);
   // the voices (PLAN-TARS T1): who speaks in what order, the system's speech, the subtitles, the radio heard
   // round mission control's lines
@@ -1621,6 +1637,35 @@ async function main() {
    * Takes the free camera to a body — anywhere in the world, through the wormhole too: in orbit around
    * it (a planet, a moon: a few radii up), around it. Why it cannot, or null.
    */
+  /**
+   * The view travelled to a goal (controller/travel.ts) — the spectator's, or the free camera's, placed at once
+   * when it cannot (another universe) —, then around it.
+   */
+  function travelTo(goal: (time: number) => TravelGoal, then: () => void): string | null {
+    const S = camera.viewSettings();
+    const C = viewCamera();
+    C.setCinematic(null);
+    if (C.gravity) C.setGravity(false);
+    C.setOurLanded(null);
+    const finish = () => {
+      S.motion = "geodesic";
+      C.setOurLanded(null);
+      C.sync();
+      S.rotation = "orbit";
+      then();
+      refreshGui();
+      touch();
+    };
+    if (!camera.spectating && C.startTravel(goal, finish)) {
+      touch();
+      return null;
+    }
+    const g = goal(sim.time);
+    setHomePose(S, g.X, g.fwd, g.up, g.V);
+    finish();
+    return null;
+  }
+
   function goTo(b: Target): string | null {
     if (settings.ship && !camera.spectating) return t("The Ranger flies there: the planner (O), the autopilot (0: approach)");
     // (a spectator out: it goes, the ship flies on — the view's settings and controller)
@@ -1642,58 +1687,40 @@ async function main() {
       // with it, around it
       if (!(S.system === "gargantua" && S.wormhole))
         return t("The craft fly in our universe (through the wormhole of the Gargantua-system scenes)");
-      const p = fleet.pose(b, sim.time);
-      if (!p) return tf("The {0}: not known now", BODY_NAMES[b]);
+      if (!fleet.pose(b, sim.time)) return tf("The {0}: not known now", BODY_NAMES[b]);
       const R = craftRadius(b);
       const o = [1.1 * R, 0.8 * R, -1.9 * R];
-      const X = [0, 1, 2].map((k) => p.X[k]! + (p.ax[0][k]! * o[0]! + p.ax[1][k]! * o[1]! + p.ax[2][k]! * o[2]!) / M_METRES) as [
-        number,
-        number,
-        number,
-      ];
-      const d = [p.X[0] - X[0], p.X[1] - X[1], p.X[2] - X[2]];
-      const l = Math.hypot(...d);
-      C.setCinematic(null);
-      if (C.gravity) C.setGravity(false);
-      setHomePose(S, X, [d[0]! / l, d[1]! / l, d[2]! / l], p.ax[1], p.V);
-      S.motion = "geodesic";
-      C.setOurLanded(null);
-      C.sync();
-      S.rotation = "orbit";
-      C.selectTarget(b, { focus: true });
-      panel.toast(tf("Camera: around the {0}", BODY_NAMES[b]));
-      refreshGui();
-      touch();
-      return null;
+      const goal = (time: number): TravelGoal => {
+        const p = fleet.pose(b, time) ?? fleet.pose(b, sim.time)!;
+        const X = [0, 1, 2].map((k) => p.X[k]! + (p.ax[0][k]! * o[0]! + p.ax[1][k]! * o[1]! + p.ax[2][k]! * o[2]!) / M_METRES) as Vec3;
+        const d = [p.X[0] - X[0], p.X[1] - X[1], p.X[2] - X[2]];
+        const l = Math.hypot(...d);
+        return { X, fwd: [d[0]! / l, d[1]! / l, d[2]! / l], up: p.ax[1], V: p.V, C: p.X };
+      };
+      return travelTo(goal, () => {
+        C.selectTarget(b, { focus: true });
+        panel.toast(tf("Camera: around the {0}", BODY_NAMES[b]));
+      });
     }
     if (b === "iss") {
       // the space station: the C 110 m off it — behind, to starboard, above —, moving with it,
       // around it
       if (!(S.system === "gargantua" && S.wormhole && S.iss))
         return t("The space station flies in our universe (through the wormhole of the Gargantua-system scenes)");
-      const st = issTrack.peek(sim.time);
-      if (!st) return t("The space station: no orbit known at this date");
-      const A = issAxes(st.X, st.V, sim.time);
+      if (!issTrack.peek(sim.time)) return t("The space station: no orbit known at this date");
       const o = [-70, 60, -55];
-      const X = [0, 1, 2].map((k) => st.X[k]! + (A[0][k]! * o[0]! + A[1][k]! * o[1]! + A[2][k]! * o[2]!) / M_METRES) as [
-        number,
-        number,
-        number,
-      ];
-      const d = [st.X[0] - X[0], st.X[1] - X[1], st.X[2] - X[2]];
-      const l = Math.hypot(...d);
-      C.setCinematic(null);
-      if (C.gravity) C.setGravity(false);
-      setHomePose(S, X, [d[0]! / l, d[1]! / l, d[2]! / l], [-A[2]![0]!, -A[2]![1]!, -A[2]![2]!], st.V);
-      S.motion = "geodesic";
-      C.setOurLanded(null);
-      C.sync();
-      S.rotation = "orbit";
-      C.selectTarget("iss", { focus: true });
-      panel.toast(t("Camera: around the ISS"));
-      refreshGui();
-      touch();
-      return null;
+      const goal = (time: number): TravelGoal => {
+        const st = issTrack.peek(time) ?? issTrack.peek(sim.time)!;
+        const A = issAxes(st.X, st.V, time);
+        const X = [0, 1, 2].map((k) => st.X[k]! + (A[0][k]! * o[0]! + A[1][k]! * o[1]! + A[2][k]! * o[2]!) / M_METRES) as Vec3;
+        const d = [st.X[0] - X[0], st.X[1] - X[1], st.X[2] - X[2]];
+        const l = Math.hypot(...d);
+        return { X, fwd: [d[0]! / l, d[1]! / l, d[2]! / l], up: [-A[2]![0]!, -A[2]![1]!, -A[2]![2]!], V: st.V, C: st.X };
+      };
+      return travelTo(goal, () => {
+        C.selectTarget("iss", { focus: true });
+        panel.toast(t("Camera: around the ISS"));
+      });
     }
     const id = b === "hole" ? "gargantua" : b;
     const u = universeOf(id);
@@ -1719,6 +1746,17 @@ async function main() {
               S.massSolar,
             );
       if (C.gravity) C.setGravity(false);
+      // (our worlds: travelled to — controller/travel.ts —, Gargantua's: placed)
+      if (p.frame === "ours" && u === "ours") {
+        const goal = (time: number): TravelGoal => {
+          const q = ourOrbitPose({ body: id, altKm: alt }, time);
+          return { X: q.X, fwd: q.fwd, up: q.up, V: q.vel, C: ourState(id, time).pos };
+        };
+        return travelTo(goal, () => {
+          C.selectTarget(b, { focus: true });
+          panel.toast(tf("Camera: around {0}", BODY_NAMES[b]));
+        });
+      }
       if (p.frame === "ours") setHomePose(S, p.X, p.fwd, p.up, p.vel);
       else setHolePose(S, p.X, p.fwd, p.up, p.vel);
       S.motion = "geodesic";
@@ -1944,7 +1982,8 @@ async function main() {
       return;
     }
     if (!on) camera.stopSpectator();
-    renderer.resetTemporal(); // (a cut: no history across it)
+    // (no cut: the view glides out of the ship and is carried back onto it — controller/spectator.ts — the
+    // image's history kept across)
     renderer.shipPlace = null;
     renderer.shipFocus = null;
     syncButtons();

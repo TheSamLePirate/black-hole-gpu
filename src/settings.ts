@@ -368,6 +368,23 @@ export interface Settings {
   /** the craft flown (vessels.ts): the Ranger, the Lander, the Endurance */
   vessel: "ranger" | "lander" | "endurance";
   shipMount: string; // attach point of the camera (ship.ts MOUNTS)
+  camSoft: "off" | "chase" | "hull"; // the hull views softened (controller/camrig.ts): none, the chase and the dorsal, every outside attach point on the hull
+  camBinding: "lockToTarget" | "lockNoRoll" | "worldUp" | "world"; // how the softened view's offset turns with the craft (Cinemachine's binding modes)
+  camDampPitch: number; // its rotation's damping on the pitch [s]
+  camDampYaw: number; // on the yaw [s]
+  camDampRoll: number; // on the roll [s]
+  camDampPos: number; // its position's damping [s]: left behind by the accelerations
+  camLookahead: number; // the aim led along the motion [s]
+  camScreenX: number; // the composer: the craft's place on the screen (−0.4 … 0.4 of the frame, right > 0)
+  camScreenY: number; // (up > 0)
+  camDutch: number; // the dutch angle [°]
+  camNoise: "none" | "handheld" | "shake" | "rumble" | "vibration"; // the noise profile (the softened views and the director's shots)
+  camNoiseAmp: number; // its amplitude gain
+  camNoiseFreq: number; // its frequency gain
+  camImpulse: number; // the impulses' gain: the touchdown, the boom, the latches, a wheel (0: none)
+  camBlend: "easeInOut" | "easeIn" | "easeOut" | "hardIn" | "hardOut" | "linear" | "cut"; // the blends between views (Cinemachine's default blend)
+  camBlendTime: number; // their time [s]
+  camSpeedFov: number; // the softened views' lens widened with the speed and the afterburner (its gain; 0: none)
   cineShot: "auto" | "chase" | "orbit" | "pass" | "tracking" | "planet" | "system"; // the director's view (cine/brain.ts): its shot, or the director choosing
   cineShake: number; // its noise: the air's buffeting, the engine's rumble, the hand (0 … 1)
   cineDynamicFov: boolean; // its lens widened with the speed and the afterburner, the long lens on the still cameras
@@ -409,6 +426,8 @@ export interface Settings {
   pathInView: boolean; // the ship's future path drawn in the view (the cyan tube; the map keeps it)
   // the HUD's aids over the view (ui/hud/symbology.ts): each shown where it helps, each can be turned off
   hudHorizon: boolean; // the horizon and the pitch ladder about the local vertical
+  speedLines: number; // the speed felt (ui/speedfx.ts): the air's streaks past the eye, the edges darkened (0: none)
+  gVignette: boolean; // a hard pull's grey-out (from 5 g, a tunnel at 9)
   hudJet: "off" | "aviation" | "metric"; // plane mode in the air: a fighter's HUD (ui/hud/jethud.ts) in green — its tapes in knots and feet, or metric
   hudHeading: boolean; // the heading tape (the world's north)
   hudBank: boolean; // the bank scale and its pointer
@@ -651,6 +670,23 @@ export function defaultSettings(): Settings {
     ship: false,
     vessel: "ranger",
     shipMount: "quarter",
+    camSoft: "chase",
+    camBinding: "lockToTarget",
+    camDampPitch: 0.25,
+    camDampYaw: 0.25,
+    camDampRoll: 0.35,
+    camDampPos: 0.3,
+    camLookahead: 0.1,
+    camScreenX: 0,
+    camScreenY: 0,
+    camDutch: 0,
+    camNoise: "none",
+    camNoiseAmp: 1,
+    camNoiseFreq: 1,
+    camImpulse: 1,
+    camBlend: "easeInOut",
+    camBlendTime: 1.2,
+    camSpeedFov: 1,
     cineShot: "auto",
     cineShake: 0.5,
     cineDynamicFov: true,
@@ -690,6 +726,8 @@ export function defaultSettings(): Settings {
     pathInView: true,
     hudHorizon: true,
     hudJet: "aviation",
+    speedLines: 0.7,
+    gVignette: true,
     hudHeading: true,
     hudBank: true,
     hudMarkers: true,
@@ -1912,6 +1950,23 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   ship: "carried",
   vessel: "scene",
   shipMount: "carried",
+  camSoft: "pref",
+  camBinding: "pref",
+  camDampPitch: "pref",
+  camDampYaw: "pref",
+  camDampRoll: "pref",
+  camDampPos: "pref",
+  camLookahead: "pref",
+  camScreenX: "pref",
+  camScreenY: "pref",
+  camDutch: "pref",
+  camNoise: "pref",
+  camNoiseAmp: "pref",
+  camNoiseFreq: "pref",
+  camImpulse: "pref",
+  camBlend: "pref",
+  camBlendTime: "pref",
+  camSpeedFov: "pref",
   cineShot: "pref",
   cineShake: "pref",
   cineDynamicFov: "pref",
@@ -1950,6 +2005,8 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   pathInView: "carried",
   hudHorizon: "pref",
   hudJet: "pref",
+  speedLines: "pref",
+  gVignette: "pref",
   hudHeading: "pref",
   hudBank: "pref",
   hudMarkers: "pref",

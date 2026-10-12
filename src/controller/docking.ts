@@ -1,5 +1,6 @@
 // The CameraController — docking: the ports, the approach, the contact.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { TUNING } from "../game/tuning";
 import { recorder } from "../game/recorder";
 import { gradeDocking } from "../game/report";
 import { cameraFrame, setHomePose } from "../camera";
@@ -439,7 +440,11 @@ function dockCheck(this: CameraController) {
     // the flown craft where the link puts it, from the target (it does not jump)
     const V = lin(nav.V, mMe / (mMe + mT), tgtPose.V, mT / (mMe + mT));
     const P = fleet.posesFrom(g.target, { X: tgtPose.X, V, ax: tgtPose.ax }, t).get(fleet.active)!;
+    // (the latches pull the craft onto the port — up to 10° and 30 cm —: the view carried, eased onto it, and a
+    // jolt)
+    const before = this.viewWorld();
     this.placeOnPose({ X: P.X, V, ax: P.ax });
+    this.carryCommit(before, 0.6);
     // (the assembly turning: the pilot's rates — per second of its clock, the other way round from the
     // right-hand rule — on the flown craft's axes)
     if (wAll && Math.hypot(...wAll) > 0) this.pilot.omega = P.ax.map((a) => -dot3(wAll, a) * s.timeSpeed) as Vec3;
@@ -647,7 +652,8 @@ function dockWant(
   // other way round from the right-hand rule: ownTurn's —, flown ahead of the attitude's error: the
   // tumbling Endurance's 18°/s, chased on the error alone, were never caught — the roll's error went
   // round past 180° and the pilot turned back)
-  D.att = { nose: loc(R([0, 0, 1])), up: loc(R([0, 1, 0])), rate: sh.map((x) => -dot3(g.om, x) * s.timeSpeed) as Vec3 };
+  const attNose = loc(R([0, 0, 1])),
+    attUp = loc(R([0, 1, 0]));
   // the ring against the port [m]; the target's point there, its motion and pull
   const along = g.along,
     lat = g.lateral;
@@ -662,8 +668,36 @@ function dockWant(
   const ff = lin(sub3(gravityHome(g.tgt.X, nav.t).acc, gravityHome(nav.X, nav.t).acc), 1, cross(om, cross(om, rho)), 1);
   // the warp: by the range (the pilot's own, if lower, without auto warp)
   const real = 1 / M_SECONDS;
-  const cap = (g.range > 150 ? 10 : g.range > 40 ? 5 : g.range > 4 ? 2 : 1) * real;
+  // (its steps by the range, each kept until the range is 15 % past its threshold — a ring circling a metre
+  // off the axis 150 m out flipped ×10 and ×5 frame after frame —, and no faster than the craft can turn with
+  // its target: the Endurance's 18°/s at ×10 were 180°/s, beyond the Ranger's turn — the view jerked at
+  // each step)
+  const steps: [number, number][] = [
+    [150, 10],
+    [40, 5],
+    [4, 2],
+  ];
+  const stepFor = (r: number) => steps.find(([d]) => r > d)?.[1] ?? 1;
+  const prev = D.warpStep ?? stepFor(g.range);
+  let step = stepFor(g.range);
+  if (step !== prev) {
+    // (a change held back while within the band about its threshold)
+    const th = steps.find(([, k]) => k === Math.max(step, prev))?.[0] ?? 0;
+    if (Math.abs(g.range - th) < 0.15 * th) step = prev;
+  }
+  D.warpStep = step;
+  const spin = Math.hypot(...g.om) / M_SECONDS; // [rad/s of the scene's time]
+  const turnable = spin > 1e-6 ? Math.max(1, Math.floor((0.9 * TUNING.turnRate) / spin)) : Infinity;
+  // (and eased from one step to the next over a second and a half of the wall's time: a turning target's
+  // apparent spin doubled in one frame was a jolt of the view)
+  const target = Math.min(step, turnable);
+  const wallDt = D.warpT !== undefined && s.timeSpeed > 0 ? Math.max(0, (nav.t - D.warpT) / s.timeSpeed) : Infinity;
+  D.warpT = nav.t;
+  D.warpNow = D.warpNow === undefined || !Number.isFinite(wallDt) ? target : D.warpNow + (target - D.warpNow) * Math.min(1, wallDt / 1.5);
+  const cap = Math.max(1, D.warpNow) * real;
   this.setHubWarp(cap);
+  // (the target's turn as the pilot's rates at the warp now set — not the last frame's)
+  D.att = { nose: attNose, up: attUp, rate: sh.map((x) => -dot3(g.om, x) * s.timeSpeed) as Vec3 };
   D.set = s.timeSpeed;
   // (the lateral gain within what the velocity loop follows at this warp: damped)
   const Ts = 1.2 * s.timeSpeed * M_SECONDS;

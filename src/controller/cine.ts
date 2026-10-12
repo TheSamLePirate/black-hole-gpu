@@ -6,6 +6,8 @@
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import { cameraFrame } from "../camera";
 import { SHOTS, type CineContext, type Shot } from "../cine/brain";
+import type { NoiseProfile } from "../cine/follow";
+import { viewBlend } from "./camrig";
 import type { V3 } from "../cine/rig";
 import { fleet } from "../fleet";
 import { t } from "../i18n";
@@ -107,8 +109,8 @@ function cineContext(this: CameraController, warp: number): { c: CineContext; ax
 /** A frame of the director's view: the shot placed (this.cineOut, ship frame), the lens taken. */
 function cineStep(this: CameraController, dt: number) {
   const s = this.s;
-  if (this.cineFovBase === null) {
-    this.cineFovBase = this.fovTarget ?? s.fov;
+  if (!this.cineOn) {
+    this.cineOn = true;
     this.cine.reset();
   }
   const Msec = 4.925490947e-6 * s.massSolar;
@@ -120,24 +122,29 @@ function cineStep(this: CameraController, dt: number) {
     c,
     {
       shot: (s.cineShot as Shot | "auto") ?? "auto",
-      fov: this.cineFovBase,
+      fov: this.lensBaseNow(),
       shake: s.cineShake,
       dynamicFov: s.cineDynamicFov,
       zoom: this.cineZoom,
+      blend: viewBlend(s),
+      impulse: s.camImpulse ?? 1,
+      noise: (s.camNoise ?? "none") as NoiseProfile,
+      noiseAmp: s.camNoiseAmp ?? 1,
+      noiseFreq: s.camNoiseFreq ?? 1,
+      dutch: s.camDutch ?? 0,
     },
     dtCam,
   );
   const toShip = (E: V3): Vec3 => [dot3(E, ax[0]), dot3(E, ax[1]), dot3(E, ax[2])];
   this.cineOut = { eye: toShip(out.eye), aim: toShip(out.aim), up: unitV(toShip(out.up)) };
-  this.fovTarget = null;
-  s.fov = clamp(out.fov, 0.3, 150);
+  this.cineFov = clamp(out.fov, 0.3, 150);
 }
 
-/** Out of the director's view: its lens given back (eased), its shots forgotten. */
+/** Out of the director's view: its shots forgotten (its lens given back by lensApply). */
 function cineLeave(this: CameraController) {
-  if (this.cineFovBase === null) return;
-  this.fovTarget = this.cineFovBase;
-  this.cineFovBase = null;
+  if (!this.cineOn) return;
+  this.cineOn = false;
+  this.cineFov = null;
   this.cineOut = null;
   this.cineZoom = 1;
   this.cine.reset();

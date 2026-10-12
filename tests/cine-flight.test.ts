@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { cameraFrame } from "../src/camera";
 import { ourGroundPose } from "../src/game/place";
 import { add, dot, scale } from "../src/math/vec3";
+import { qConj, qLog, qMul } from "../src/cine/follow";
 import { C_MPS, M_METRES } from "../src/units";
 import { flight, resetFlights } from "./helpers/flight";
 
@@ -26,11 +27,13 @@ function run(mount: string, seconds: number) {
   const dt = 1 / 30;
   for (let k = 0; k < seconds * 30; k++) {
     // (the view's part of the frame — lens.ts —, then the flight)
+    // (the flight, then the view's part of the frame — lens.ts's late update)
+    c.flyShip(dt, null as never);
+    if (Number.isFinite(c.shipTime)) c.time = c.shipTime;
     if (c.outsideView() === "director") c.cineStep(dt);
     else c.cineLeave();
     c.stepMount(dt);
-    c.flyShip(dt, null as never);
-    if (Number.isFinite(c.shipTime)) c.time = c.shipTime;
+    c.lensApply(c.outsideView() === "director" ? c.cineFov : null);
     const p = c.shipPose();
     poses.push({ eye: [...p.eye], aim: [...p.aim], fov: c.s.fov });
   }
@@ -69,10 +72,49 @@ test("its shot: a pose about the craft that moves smoothly, the lens its own", (
 
 test("out of the director's view: its lens given back", () => {
   const { c } = run("director", 3);
-  const base = c.cineFovBase!;
+  const base = c.lensBase!;
   expect(base).toBeGreaterThan(0);
   c.s.shipMount = "chase";
   c.cineLeave();
+  c.lensApply(null);
   expect(c.fovTarget).toBe(base);
   expect(c.cineOut).toBeNull();
+}, 120_000);
+
+test("the chase softened (the rig): the same flight, the view's jolts on a hard roll smoothed", () => {
+  const roll = (soft: "off" | "chase") => {
+    const g = ourGroundPose("earth", 45, -30, 0);
+    const X = add(g.X, scale(g.up, 2000 / M_METRES));
+    const r = flight({ ...g, X, vel: add(g.vel, scale(g.fwd, 200 / C_MPS)), landed: undefined }, false);
+    const c = r.c;
+    c.s.flightMode = "plane";
+    c.s.camSoft = soft;
+    c.settleMount();
+    c.s.shipMount = "chase";
+    c.pilot.throttle = 0.4;
+    const input = c.pilotInput.bind(c);
+    const dt = 1 / 30;
+    let prevQ = c.viewWorld().q,
+      prevW: number[] | null = null,
+      jerk = 0;
+    for (let k = 0; k < 6 * 30; k++) {
+      // (a full roll input from 2 s to 3 s: the roll's rate on and off at once)
+      c.pilotInput = k >= 60 && k < 90 ? (pad) => ({ ...input(pad), roll: 1 }) : input;
+      c.flyShip(dt, null as never);
+      if (Number.isFinite(c.shipTime)) c.time = c.shipTime;
+      c.stepMount(dt);
+      const q = c.viewWorld().q;
+      const w = qLog(qMul(q, qConj(prevQ))).map((x) => x / dt);
+      if (prevW && k > 45) jerk = Math.max(jerk, Math.hypot(...w.map((x, i) => x - prevW![i]!)));
+      prevW = w;
+      prevQ = q;
+    }
+    return { jerk, X: c.activePoseNow()!.X as number[], nose: c.shipAxesLocal(cameraFrame(c.s))[2] };
+  };
+  const rigid = roll("off"),
+    soft = roll("chase");
+  if (process.env.TRACE) console.log({ rigid: rigid.jerk, soft: soft.jerk });
+  expect(Math.hypot(...rigid.X.map((x, i) => x - soft.X[i]!)) * M_METRES).toBeLessThan(0.5);
+  expect(dot(rigid.nose, soft.nose)).toBeGreaterThan(Math.cos((0.01 * Math.PI) / 180));
+  expect(soft.jerk).toBeLessThan(0.5 * rigid.jerk);
 }, 120_000);

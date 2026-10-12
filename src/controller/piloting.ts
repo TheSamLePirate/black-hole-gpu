@@ -20,6 +20,9 @@ import { GEAR, groundR, localAccel, localToZamo, planetFrame, toGlobal, toLocal,
 import { circularSpeed, type FlightMode, type PilotInput } from "../pilot";
 import { JET } from "../game/jet";
 import { MOUNT_KEYS, MOUNTS, mountPose, shipToCamera, type M3, type Mount, type MountPose, type OutsideView } from "../mounts";
+import { blendCurve, blendPose } from "../cine/follow";
+import type { V3 } from "../cine/rig";
+import { upOf, viewBlend } from "./camrig";
 import { fleet } from "../fleet";
 import { fuelOn, loadShare } from "../engine";
 import { VESSELS } from "../vessels";
@@ -580,17 +583,28 @@ function stepMount(this: CameraController, dt: number) {
     }
     if (v) this.setLookRaw(0, 0);
   }
-  const to = this.mountTarget();
+  // (the hull views softened by the rig — controller/camrig.ts —, the others as they are)
+  const to = this.camRigStep(this.mountTarget(), dt);
+  let pose: MountPose | null = this.softMount() ? to : null;
   if (this.mountAnim) {
+    // (the blend between two views — its curve and time the settings' —: the eye swung round the craft, the
+    // look slerped — never through the hull, never flipping between views that look opposite ways)
     const A = this.mountAnim;
-    A.t = Math.min(1, A.t + dt / 0.6);
-    const k = smoothstep(A.t);
-    const mix = (p: Vec3, q: Vec3) => lin(p, 1 - k, q, k);
-    // (the camera's up, when either view sets its own: turned from one to the other)
-    const up = A.from.up || to.up ? normalize(mix(A.from.up ?? [0, 1, 0], to.up ?? [0, 1, 0])) : undefined;
-    this.mountEff = { eye: mix(A.from.eye, to.eye), aim: mix(A.from.aim, to.aim), ...(up ? { up } : {}) };
-    if (A.t >= 1) (this.mountAnim = null), (this.mountEff = null);
-  } else this.mountEff = null;
+    const B = viewBlend(s);
+    A.t = Math.min(1, A.t + (B.style === "cut" ? 1 : dt / B.time));
+    const k = blendCurve(B.style, A.t);
+    const p = blendPose(
+      { eye: A.from.eye as V3, aim: A.from.aim as V3, up: upOf(A.from) as V3 },
+      { eye: to.eye as V3, aim: to.aim as V3, up: upOf(to) as V3 },
+      k,
+      VESSELS[fleet.active].centre as V3,
+    );
+    pose = A.t >= 1 ? (this.softMount() || to.up ? to : null) : { eye: p.eye, aim: p.aim, up: p.up };
+    if (A.t >= 1) this.mountAnim = null;
+  }
+  // (a teleport's view carried back to where it was, blended away)
+  if (this.viewCarry) pose = this.applyCarry(pose ?? to, dt);
+  this.mountEff = pose;
   if (s.ship && !this.cinematic) this.reorient(S0, this.shipMatrix());
   this.lastPose = this.shipPose();
 }
