@@ -289,15 +289,23 @@ export class EarthTiles {
     this.inflight.set(key, ctl);
     const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
     let h: Float32Array | null = null;
-    // (its imagery alongside, on the levels that have some: none if it will not come — the global maps there)
+    // (its imagery alongside, on the levels that have some: none if it will not come — the coarser level's
+    // there. Never waited for: the heights drawn as they come, the tile written again with its imagery — under
+    // its own time limit, given up with the tile)
     const xw = ((x % L.n) + L.n) % L.n;
-    const img = L.z <= IMG_Z1 ? imagery(L.z, xw, y, ctl.signal) : Promise.resolve(null);
-    let col: Uint32Array | null = null;
+    const imgCtl = new AbortController();
+    const imgTimer = setTimeout(() => imgCtl.abort(), TIMEOUT_MS);
+    ctl.signal.addEventListener("abort", () => imgCtl.abort(), { once: true });
+    const img = (L.z <= IMG_Z1 ? imagery(L.z, xw, y, imgCtl.signal) : Promise.resolve(null)).finally(() => clearTimeout(imgTimer));
     try {
       const res = await fetch(tileUrl(L.z, xw, y), { signal: ctl.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      [h, col] = await Promise.all([res.blob().then(decode), img]);
+      const heights = await res.blob().then(decode);
+      h = heights;
       this.loaded++;
+      void img.then((col) => {
+        if (col && L.key[slotOf(x, y)] === key) this.put(L.z, x, y, heights, col);
+      });
     } catch (e) {
       if (!this.inflight.has(key)) return; // (cleared)
       const f = this.failures.get(key) ?? { n: 0, at: 0 };
@@ -316,7 +324,7 @@ export class EarthTiles {
       clearTimeout(timer);
       if (this.inflight.get(key) === ctl) this.inflight.delete(key);
     }
-    if (h) this.put(L.z, x, y, h, col);
+    if (h) this.put(L.z, x, y, h);
     this.request(cx0(this.priorityLon), this.prioritySinLat);
   }
 
@@ -476,7 +484,16 @@ function parentBlob(url: string): Promise<Blob> {
 async function imagery(z: number, x: number, y: number, signal: AbortSignal): Promise<Uint32Array | null> {
   try {
     const get = async (url: string, crop?: [number, number, number]) => {
-      if (crop) return pixels(await parentBlob(url), crop);
+      // (the shared parent raced against this tile's own abort: a stalled request never holds the tile — nor its
+      // slot, nor the heights waiting on it)
+      if (crop)
+        return pixels(
+          await Promise.race([
+            parentBlob(url),
+            new Promise<never>((_, no) => signal.addEventListener("abort", () => no(new Error("aborted")), { once: true })),
+          ]),
+          crop,
+        );
       const res = await fetch(url, { signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return pixels(await res.blob());

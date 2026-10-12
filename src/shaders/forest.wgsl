@@ -138,7 +138,8 @@ fn forestBranches(q: vec3f, seed: f32) -> f32 {
 fn forestTwigs(o: vec3f, d: vec3f, s: ForestCrown, t0: f32, seed: f32) -> vec4f {
   var t = t0;
   let core = 0.6 * min(s.r.x, s.r.z);
-  for (var n = 0; n < 44; n++) {
+  // (until the ray leaves the plain shape: a vertical path through a tall crown is ~18 m)
+  for (var n = 0; n < 140; n++) {
     let p = o + d * t;
     let b = forestCrownBase(s, p);
     if (b > 0.02 && t > t0 + 0.05) { return vec4f(-1.0); }
@@ -214,19 +215,24 @@ fn forestQuery(o: vec3f, d: vec3f, tMax: f32, anyHit: bool, detail: f32) -> Fore
   let stp = vec2i(select(vec2i(-1), vec2i(1), sd >= vec2f(0.0)));
   let delta = abs(inv);
   var steps = 0u;
+  // the blocks in the ray's order, an integer walk (a block found again from the ray's point would stall where
+  // the ray barely moves across them — looking straight down: a float's step over 900 cells)
+  let s1 = s0 + sd * t;
+  var bc = clamp(vec2i(floor(s1 / 8.0)), vec2i(0), vec2i(i32(bw) - 1, bh - 1));
+  var bNext = (vec2f(bc * 8) + select(vec2f(0.0), vec2f(8.0), sd >= vec2f(0.0)) - s0) * inv;
+  let bDelta = 8.0 * delta;
   loop {
     if (t >= t1 || t >= best.t || steps > 640u) { break; }
-    let s = s0 + sd * (t + 1e-3);
-    let bc = clamp(vec2i(floor(s / 8.0)), vec2i(0), vec2i(i32(bw) - 1, bh - 1));
+    if (any(bc < vec2i(0)) || bc.x >= i32(bw) || bc.y >= bh) { break; }
     let bi = u32(bc.y) * bw + u32(bc.x);
     let bv = forestData(blocksAt + bi / 2u); let zb = select(bv.xy, bv.zw, (bi & 1u) == 1u);
-    let lo = vec2f(bc) * 8.0; let ea = (lo - s0) * inv; let eb = (lo + 8.0 - s0) * inv;
-    let tExit = min(min(max(ea, eb).x, max(ea, eb).y), t1);
+    let tExit = min(min(bNext.x, bNext.y), t1);
     let za = o.z + d.z * t; let zz = o.z + d.z * tExit;
     steps++;
-    if (zb.y < zb.x || max(za, zz) < zb.x || min(za, zz) > zb.y) { t = tExit + 1e-3; continue; }
-    // the dual cells in this block, in the ray's order
-    var p = vec2i(floor(s));
+    if (!(zb.y < zb.x || max(za, zz) < zb.x || min(za, zz) > zb.y)) {
+    // the dual cells in this block, in the ray's order (the first: where the ray enters it, kept inside it)
+    let s = s0 + sd * t;
+    var p = clamp(vec2i(floor(s)), bc * 8, bc * 8 + vec2i(7));
     var next = (vec2f(p) + select(vec2f(0.0), vec2f(1.0), sd >= vec2f(0.0)) - s0) * inv;
     loop {
       for (var q = 0; q < 4; q++) {
@@ -302,7 +308,10 @@ fn forestQuery(o: vec3f, d: vec3f, tMax: f32, anyHit: bool, detail: f32) -> Fore
       if (next.x < next.y) { p.x += stp.x; next.x += delta.x; } else { p.y += stp.y; next.y += delta.y; }
       steps++;
     }
-    t = tExit + 1e-3;
+    }
+    if (best.t <= tExit) { break; }
+    t = tExit;
+    if (bNext.x < bNext.y) { bc.x += stp.x; bNext.x += bDelta.x; } else { bc.y += stp.y; bNext.y += bDelta.y; }
   }
   return best;
 }

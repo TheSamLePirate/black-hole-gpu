@@ -37,13 +37,16 @@ const DATE = arg("date", "2026-07-15");
 // ---- a synthetic forest: 300 m round the origin, rolling ground, every kind
 const ground = (x: number, y: number) => 400 + 15 * Math.sin(x / 40) * Math.cos(y / 55);
 const frame = sceneryFrame(46, 7);
-const ff = forestFrame(46, 7, 300, (lat, lon) => localPoint(frame, lat, lon, 0));
+// (the app's frame — 3.25 km, ~930 cells a side: the dual grid's coordinates as large as there, where a
+// float's step matters —, its trees within 300 m: the CPU's brute force stays quick)
+const ff = forestFrame(46, 7, 3250, (lat, lon) => localPoint(frame, lat, lon, 0));
 const cells = new Uint32Array(ff.w * ff.h);
 let rng = 12345;
 const random = () => (rng = (Math.imul(rng, 1103515245) + 12345) >>> 0) / 4294967296;
 const trees: ForestTree[] = [];
-for (let j = 0; j < ff.h; j++)
-  for (let i = 0; i < ff.w; i++) {
+const mid = [Math.floor(ff.a[0]), Math.floor(ff.b[0])];
+for (let j = mid[1]! - 46; j <= mid[1]! + 46; j++)
+  for (let i = mid[0]! - 46; i <= mid[0]! + 46; i++) {
     if (random() > 0.72) continue;
     const kind = (1 + Math.floor(random() * (FOREST_KINDS - 1))) as ForestKind;
     const height = kind === ForestKind.shrub ? 2 + 4 * random() : 6 + 24 * random();
@@ -135,11 +138,19 @@ const rays: number[] = [];
 for (let n = 0; n < RAYS; n++) {
   const x = (random() - 0.5) * 300,
     y = (random() - 0.5) * 300;
-  const mode = n % 3;
-  const z = ground(x, y) + (mode === 1 ? 40 + 80 * random() : 1.2 + 3 * random());
+  // (from the floor, from above, towards a sun; straight down from 600 m — the aircraft's view)
+  const mode = n % 4;
+  const z = ground(x, y) + (mode === 1 ? 40 + 80 * random() : mode === 3 ? 600 : 1.2 + 3 * random());
   const az = random() * 2 * Math.PI,
-    el = mode === 1 ? -(0.1 + 1.3 * random()) : mode === 2 ? 0.15 + 1.2 * random() : (random() - 0.5) * 0.5;
-  rays.push(x, y, z, 400, Math.cos(el) * Math.cos(az), Math.cos(el) * Math.sin(az), Math.sin(el), mode === 2 ? 1 : 0);
+    el =
+      mode === 1
+        ? -(0.1 + 1.3 * random())
+        : mode === 2
+          ? 0.15 + 1.2 * random()
+          : mode === 3
+            ? -(1.0 + 0.57 * random())
+            : (random() - 0.5) * 0.5;
+  rays.push(x, y, z, mode === 3 ? 900 : 400, Math.cos(el) * Math.cos(az), Math.cos(el) * Math.sin(az), Math.sin(el), mode === 2 ? 1 : 0);
 }
 const hashes: number[] = [];
 for (let n = 0; n < 256; n++) hashes.push(Math.floor(random() * 2 ** 32), Math.floor((random() - 0.5) * 2 ** 31) >>> 0, n % 8, 0);

@@ -4,7 +4,8 @@
 // Mercator size fixed per band, so a cell is FOREST_CELL m on the ground at the band's middle). A cell holds at
 // most one tree, its place in the cell and its size drawn from the cell's global index (forestHash): the
 // same tree at the same place whichever scenery holds it — a rebuild moves it only by what the frames'
-// affine maps (exact at their origins) and tangent planes miss: < 8 cm within 400 m, < 25 cm at a kilometre.
+// affine maps (exact at their origins) and tangent planes miss: < 8 cm within 400 m, < 25 cm at a kilometre —
+// within a band: a scenery whose centre crosses a band's edge (every 445 km north–south) lays its trees anew.
 //
 // The worker (scenery-worker.ts) decides each cell's tree — its kind from the land cover and the climate,
 // its height, its ground — and packs one u32 a cell, a coarse block grid (the lowest ground and the highest
@@ -249,7 +250,11 @@ export interface ForestFrame {
   /** trees drawn within this distance of the origin [m] */
   reach: number;
 }
+/** the forests' last latitude [°] (the taiga's northernmost, ~72.5° N): beyond, no grid at all — the cells
+ *  shrinking towards the poles would take the scenery's budget for nothing */
+export const FOREST_MAX_LAT = 73;
 export function forestFrame(lat0: number, lon0: number, reach: number, local: (lat: number, lon: number) => Vec3): ForestFrame {
+  if (Math.abs(lat0) > FOREST_MAX_LAT) reach = 0;
   const columns = forestColumns(lat0);
   const [x0, y0] = forestCellOf(lat0, lon0, columns, lon0);
   // (the tangent: cell coordinates of the frame's metres a few metres out, differenced)

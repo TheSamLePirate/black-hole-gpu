@@ -21,6 +21,7 @@ import {
   forestPlaceOf,
   forestTree,
   forestTreesNear,
+  FOREST_MAX_LAT,
   forestKindTable,
   forestSeason,
   growForest,
@@ -324,4 +325,14 @@ test("the seasons: autumn's colours, winter's bare crowns and snow line, spring'
   expect(spring[16 * ForestKind.conifer + 9]!).toBe(summer[16 * ForestKind.conifer + 9]!);
   expect(summer[16 * ForestKind.broadleaf + 15]).toBe(1);
   expect(summer[16 * ForestKind.conifer + 15]).toBe(0);
+});
+
+test("no grid beyond the forests' last latitude: the cells shrinking to the poles take no budget", () => {
+  for (const lat of [FOREST_MAX_LAT + 1, 80, 88, -86]) {
+    const f = forestFrame(lat, 15, 3250, (la, lo) => localPoint(sceneryFrame(lat, 15), la, lo, 0));
+    expect(f.w * f.h).toBeLessThanOrEqual(36);
+  }
+  const taiga = forestFrame(FOREST_MAX_LAT - 1, 100, 3250, (la, lo) => localPoint(sceneryFrame(FOREST_MAX_LAT - 1, 100), la, lo, 0));
+  expect(taiga.w).toBeGreaterThan(500);
+  expect(taiga.w * taiga.h * 4).toBeLessThan(6 * 1024 * 1024);
 });

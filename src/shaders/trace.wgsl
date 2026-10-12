@@ -5568,20 +5568,23 @@ fn waterMirror(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, sky: vec3f, footM: f32)
   if (dot(r, q) <= 0.0005) { return vec4f(0.0); }
   let rp = airPhysicalDirection(r);
   let Lp = airPhysicalDirection(Ls);
-  // (the water's surface: the relief there, the ray started a few metres up from it)
-  let p0 = q * (1.0 + earthHeight(q, max(footM, 1.0)) / EARTH_RM);
+  // (the water's surface: the relief there, the ray started 1.5 m above it — a float keeps ~0.8 m of a point
+  // of the unit sphere, and the march's cheap heights differ from the full ones: from the water itself, a
+  // grazing ray would meet it at once)
+  let p0 = q * (1.0 + (earthHeight(q, max(footM, 1.0)) + 1.5) / EARTH_RM);
   let trees = sceneryMirror(rp, Ls, E, sky);
   let tEnd = select(25000.0, trees.w, trees.w > 0.0) / EARTH_RM;
   var t = 3.0 / EARTH_RM;
   var tPrev = t;
-  var fPrev = 1.0;
+  var fPrev = -1.0;
   var tHit = -1.0;
   for (var i = 0; i < 64; i++) {
     let p = p0 + r * t;
     let rr = length(p);
     let foot = max(footM, t * EARTH_RM * 0.003);
     let f = rr - 1.0 - earthHeightStep(p / rr, foot) / EARTH_RM;
-    if (f < 0.0) {
+    // (a crossing only once the ray has been above the ground: never the shore's own rounding)
+    if (f < 0.0 && fPrev > 0.0) {
       // (bracketed: bisected on the full heights)
       var lo = tPrev;
       var hi = t;
@@ -5596,7 +5599,7 @@ fn waterMirror(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, sky: vec3f, footM: f32)
     }
     tPrev = t;
     fPrev = f;
-    t += max(0.6 * f, 0.01 * t + 2.0 / EARTH_RM);
+    t += max(0.6 * abs(f), 0.01 * t + 2.0 / EARTH_RM);
     if (t > tEnd) { break; }
   }
   if (tHit < 0.0) {
