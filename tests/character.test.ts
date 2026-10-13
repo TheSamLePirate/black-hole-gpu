@@ -6,6 +6,7 @@ import { afterEach, expect, test } from "bun:test";
 import { CameraController } from "../src/controls";
 import { defaultSettings } from "../src/settings";
 import { M_METRES } from "../src/system/solar";
+import { toBodyFixed } from "../src/system/our-surface";
 import { setSceneTime } from "../src/wormhole";
 import { len, sub } from "../src/math/vec3";
 import { flight, resetFlights } from "./helpers/flight";
@@ -264,4 +265,29 @@ test("Gargantua terrain floating origin uses the same proper local metres as the
     const frame = c.character.frame()!;
     expect(Math.hypot(...frame.origin)).toBeLessThan(10);
   }
+});
+
+test("the walk left for the free camera: the walker's view stays where it was, not cut back to the ship", () => {
+  const { c } = flight(ourGroundPose("moon", 0, 0, 0), false);
+  expect(c.character.disembark()).toBeNull();
+  c.character.move(1, 0, 4);
+  for (let i = 0; i < 480; i++) c.character.step(1 / 120, 0, null);
+  // (on the Moon's ground: its turn and its orbit carry the view)
+  const fixed = () => toBodyFixed("moon", c.spectator!.rigWorld()!.X, c.spectator!.nowTime());
+  const before = fixed();
+  c.character.stop({ keepView: true });
+  expect(c.spectator).not.toBeNull();
+  // (a second of the scene's time, as the app's frames run it)
+  for (let i = 1; i <= 30; i++) c.advanceSpectator(1 / 30, (i / 30) * c.s.timeSpeed, null);
+  expect(len(sub(fixed(), before)) * M_METRES).toBeLessThan(0.5);
+});
+
+test("a new flight with nobody walking: the character's stop leaves the spectator to the flight", () => {
+  const { c } = flight(ourGroundPose("moon", 0, 0, 0), false);
+  const sp = new CameraController({} as HTMLCanvasElement, { ...c.s, ship: false }, () => {}, true);
+  c.spectator = sp;
+  c.character.stop();
+  expect(c.spectator).toBe(sp);
+  c.newFlight();
+  expect(c.spectator).toBeNull();
 });

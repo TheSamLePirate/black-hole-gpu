@@ -3125,8 +3125,10 @@ async function main() {
     topBar.setIcon("btn-sound", settings.sound ? TB_ICONS.sound : TB_ICONS.mute, !settings.sound);
     // (the tabs a change would refuse now: dimmed, the reason in their tips)
     const st = modeState(true);
+    // (the hatch near: once for every tab)
+    const hatch = camera.character.active && camera.character.accessDistance() <= 3;
     for (const k of GAME_MODES) {
-      const p = k === m ? null : planMode(st, k, { hatch: camera.character.active && camera.character.accessDistance() <= 3 });
+      const p = k === m ? null : planMode(st, k, { hatch });
       topBar.setAvailable(k, p && "refused" in p ? t(p.refused) : null);
     }
   }
