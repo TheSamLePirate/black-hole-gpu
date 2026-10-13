@@ -1,4 +1,4 @@
-// The ground under the grass, on the CPU: a grid of 1 m cells round the astronaut (GRASS_GRID², recentred by
+// The ground under the grass, on the CPU: a grid of 1 m cells round the ground under the camera (GRASS_GRID², recentred by
 // GRASS_GRID_SNAP steps) in a frame fixed on the body for kilometres — its heights and, per cell, what grows
 // there (the kind, from WorldCover and the OSM exclusions) and the satellite's colour. Built in slices of a
 // millisecond, the cells already known kept when it recentres, published whole (the GPU never sees a half grid).
@@ -75,8 +75,8 @@ export class GrassGround {
     return (h[k]! * (1 - fx) + h[k + 1]! * fx) * (1 - fz) + (h[k + GRASS_GRID]! * (1 - fx) + h[k + GRASS_GRID + 1]! * fx) * fz;
   }
   /**
-   * One slice of the work round the astronaut at q (up: the body's there): a new frame far from the last,
-   * a grid recentred when he leaves its middle, rebuilt when the ground's data change (revision).
+   * One slice of the work round q — the ground under the camera — (up: the body's there): a new frame far from
+   * the last, a grid recentred when q leaves its middle, rebuilt when the ground's data change (revision).
    * raw: a point's height over the ground [m]; vegetation: what grows at a ground point.
    */
   build(q: Vec3, up: Vec3, raw: (p: Vec3) => number, vegetation: VegetationAt, revision: number, budgetMs = 1) {
@@ -144,7 +144,7 @@ export class GrassGround {
           cells[k] = this.cells[oj * GRASS_GRID + oi]!;
         } else todo.push(k);
       }
-    // (nearest the middle first: the ground under the astronaut comes in before the grid's rim)
+    // (nearest the middle first: the ground under the camera comes in before the grid's rim)
     todo.sort(
       (a, b) =>
         ((a % GRASS_GRID) - HALF) ** 2 +

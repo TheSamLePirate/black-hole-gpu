@@ -1,5 +1,5 @@
 import { streamingLead, aheadFocus } from "./system/streaming-focus";
-import { CharacterRenderer } from "./character-renderer";
+import { CharacterRenderer, type GrassView } from "./character-renderer";
 import type { PlanetCharacter } from "./controller/character";
 import { dot as dot3 } from "./math/vec3";
 import { sphericalFrame } from "./wormhole";
@@ -3963,58 +3963,92 @@ export class Renderer {
     return { key, sky, cosine, shadowDepth: total > 0 ? (key * cosine) / total : 0 };
   }
 
+  /**
+   * The camera on the Earth's near patch, for the living ground round it (what grows is placed round the camera,
+   * whoever walks — or none: a free camera, a tripod, a photo, the cockpit of a landed ship): its eye [m,
+   * body-fixed], the body's up there, the body's axes in the camera's (those the tracer draws the ground on), the
+   * walker's own height query. Null: the camera is not by the Earth.
+   */
+  private grassView(): GrassView | null {
+    const near = this.lastNear,
+      cam = this.lastCam;
+    if (!near || !cam || this.lastBodies[near.index]?.id !== "earth") return null;
+    const q = bodyEye(near).map((x) => x * near.radius * M_METRES) as Vec3;
+    const A = near.axes;
+    const toCamera = (v: Vec3): Vec3 => {
+      const r = [0, 1, 2].map((i) => v[0] * A[0][i]! + v[1] * A[1][i]! + v[2] * A[2][i]!) as Vec3;
+      return [dot3(r, cam.right), dot3(r, cam.up), dot3(r, cam.fwd)];
+    };
+    // (the ellipsoid's normal: the walker's own up, controller/character.ts)
+    const a = WGS84_A,
+      b = a * (1 - WGS84_F);
+    const n: Vec3 = [q[0] / (a * a), q[1] / (a * a), q[2] / (b * b)];
+    const nl = Math.hypot(...n) || 1;
+    return {
+      q,
+      up: [n[0] / nl, n[1] / nl, n[2] / nl],
+      toCamera,
+      raw: (p) => heightOverGround("earth", p.map((v) => v / M_METRES) as Vec3),
+    };
+  }
+
   private encodeCharacter(enc: GPUCommandEncoder, target: Target, s: Settings) {
     const c = this.character,
-      frame = c?.frame();
-    if (!c || !frame) {
+      frame = c?.frame() ?? null;
+    // (the astronaut where he walks; the living ground round the camera on the Earth, with him or without)
+    const view = s.earthGrass !== "off" ? this.grassView() : null;
+    const cam = this.lastCam;
+    if ((!frame && !view) || !cam) {
       if (this.characterRenderer.drawing) this.characterRenderer.reset();
       return;
     }
-    const sp = c.metres();
-    const planet = this.lastBodies.find((b) => b.id === frame.body);
-    const sunBody = frame.ours
+    const ours = frame ? frame.ours : true,
+      body = frame ? frame.body : "earth";
+    const sp = c && frame ? c.metres() : M_METRES;
+    const planet = this.lastBodies.find((b) => b.id === body);
+    const sunBody = ours
       ? this.lastBodies.find((b) => b.id === "sun")
       : planet && planet.light >= 0
         ? this.lastBodies[planet.light]
         : this.lastBodies.find((b) => b.id === "star");
-    const sunWorld = frame.ours ? solarState("sun", this.lastTime).pos : ((sunBody?.pos ?? [0, 0, 0]) as Vec3);
-    const d = !frame.ours && planet?.lightDir ? planet.lightDir : (sunWorld.map((v, i) => v - frame.sunOrigin[i]!) as Vec3);
+    // (where the light is taken: the astronaut's place, else the camera's)
+    const sunOrigin = frame ? frame.sunOrigin : (homePosition(s) ?? solarState("earth", this.lastTime).pos);
+    const sunWorld = ours ? solarState("sun", this.lastTime).pos : ((sunBody?.pos ?? [0, 0, 0]) as Vec3);
+    const d = !ours && planet?.lightDir ? planet.lightDir : (sunWorld.map((v, i) => v - sunOrigin[i]!) as Vec3);
     const dist = Math.hypot(...d) || 1;
     // The camera-frame Sun agrees with the traced scene and the same radiance normalization.
-    const cam = this.lastCam;
-    if (!cam) return;
     let L: Vec3;
-    if (frame.ours) {
+    if (ours) {
       const home = homeToRep(mouth(s).w, cam.ell, cam.n, d.map((v) => v / dist) as Vec3);
       L = [dot3(home, cam.right), dot3(home, cam.up), dot3(home, cam.fwd)];
     } else {
-      const sf = sphericalFrame(frame.sunOrigin);
+      const sf = sphericalFrame(sunOrigin);
       const d0 = d.map((v) => v / dist) as Vec3;
       const rep: Vec3 = [dot3(d0, sf.er), dot3(d0, sf.et), dot3(d0, sf.ep)];
       L = [dot3(rep, cam.right), dot3(rep, cam.up), dot3(rep, cam.fwd)];
     }
-    const elevation = dot3(L, frame.axes[1]);
+    const elevation = dot3(L, frame ? frame.axes[1] : view!.toCamera(view!.up));
     this.characterSun = L;
-    const temp = (!frame.ours ? planet?.lightT : undefined) ?? sunBody?.temperature ?? 5772;
+    const temp = (!ours ? planet?.lightT : undefined) ?? sunBody?.temperature ?? 5772;
     const E =
       Math.PI *
       10 ** (this.logYOf(Math.round(temp / 50) * 50) - this.lastLogY) *
       (sunBody?.brightness ?? 1) *
-      (!frame.ours && planet ? planet.illum : ((sunBody?.radius ?? 0) / dist) ** 2);
-    const share = frame.ours ? sunShare(frame.sunOrigin, this.lastTime) : Math.max(0, Math.min(1, (elevation + 0.005) / 0.01));
-    const transmission = frame.body === "earth" ? Math.exp(-0.15 / Math.max(0.08, elevation)) : 0.98;
+      (!ours && planet ? planet.illum : ((sunBody?.radius ?? 0) / dist) ** 2);
+    const share = ours ? sunShare(sunOrigin, this.lastTime) : Math.max(0, Math.min(1, (elevation + 0.005) / 0.01));
+    const transmission = body === "earth" ? Math.exp(-0.15 / Math.max(0.08, elevation)) : 0.98;
     const daylight = Math.max(0, Math.min(1, (elevation + 0.08) / 0.2));
     const e = E * share * transmission;
     this.characterRenderer.encode(
       enc,
       target.hdr,
       target.moments,
-      c,
-      frame,
+      c && frame ? { c, frame } : null,
+      view,
       {
         sun: L,
         irradiance: [e, e * (0.7 + 0.3 * daylight), e * (0.45 + 0.55 * daylight)],
-        sky: frame.body === "earth" ? [E * 0.045 * daylight, E * 0.07 * daylight, E * 0.11 * daylight] : [E * 0.007, E * 0.007, E * 0.007],
+        sky: body === "earth" ? [E * 0.045 * daylight, E * 0.07 * daylight, E * 0.11 * daylight] : [E * 0.007, E * 0.007, E * 0.007],
         pre: preExposure(this.ev(s)),
         metres: sp,
         fov: s.fov,
@@ -4034,7 +4068,12 @@ export class Renderer {
         axes: this.ship.ready && performance.now() - this.envAt < 500 ? this.shipProbeAxes : null,
         shipBound: (s.ship || this.shipInView) && this.ship.ready ? this.ship.shadowBound : null,
       },
-      { wind: c.wind(), paved: runwayPaved },
+      {
+        wind: c?.wind() ?? null,
+        paved: runwayPaved,
+        // (the landed vessel's box: the walker's, else asked of the walk's own conversion — no walker out)
+        hull: frame ? c!.hullNow() : view && c?.body === "earth" && c.ours ? c.vesselHull() : null,
+      },
     );
   }
 
