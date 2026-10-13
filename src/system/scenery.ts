@@ -88,18 +88,23 @@ export class EarthScenery {
       const old = this.buffer;
       this.allocated = false;
       this.buffer = this.device.createBuffer({ size: 64, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
-      this.retiredBytes += SCENERY_BYTES;
-      void this.device.queue
-        .onSubmittedWorkDone()
-        .catch(() => {})
-        .then(() => {
-          old.destroy();
-          this.retiredBytes -= SCENERY_BYTES;
-          this.onContent?.();
-        });
+      this.retire(old, SCENERY_BYTES);
       this.onChange?.();
     }
     this.stamp++;
+  }
+  /** A buffer the bind groups still hold, destroyed once the work submitted with them is done (as clear()
+   *  had it; the placeholder was destroyed at once: a frame encoded before the rebinding would use it) */
+  private retire(old: GPUBuffer, bytes: number) {
+    this.retiredBytes += bytes;
+    void this.device.queue
+      .onSubmittedWorkDone()
+      .catch(() => {})
+      .then(() => {
+        old.destroy();
+        this.retiredBytes -= bytes;
+        if (bytes > 0) this.onContent?.();
+      });
   }
   update(
     camera: Vec3 | null,
@@ -193,7 +198,7 @@ export class EarthScenery {
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
             label: "world forests and OSM scenery",
           });
-          old.destroy();
+          this.retire(old, 0); // (the placeholder: not counted — the next scene is not held back for it)
           this.onChange?.();
         }
         // (a scene rebuilt with a source missing — the land cover's raster, a tile — while one is drawn here: the
@@ -254,31 +259,39 @@ export class EarthScenery {
   private backoff() {
     return Math.min(300000, 30000 * 2 ** Math.max(0, this.failures - 1));
   }
+  /** the tracer's params (P.scenery), one array written again each frame (none allocated per frame) */
+  private paramsOut = new Float32Array(SCENERY_VEC4S * 4);
   params() {
+    const o = this.paramsOut;
     const r = this.data;
-    if (!r || !this.camera || this.mode === "off") return new Float32Array(SCENERY_VEC4S * 4);
+    if (!r || !this.camera || this.mode === "off") return o.fill(0);
     const frame = sceneryFrame(r.lat, r.lon);
-    const delta = this.camera.map((v, i) => v * WGS84_A - frame.origin[i]!) as Vec3;
-    const cam = [frame.east, frame.north, frame.up].map((v) => v[0] * delta[0] + v[1] * delta[1] + v[2] * delta[2]);
+    const c = this.camera;
+    const dx = c[0] * WGS84_A - frame.origin[0]!,
+      dy = c[1] * WGS84_A - frame.origin[1]!,
+      dz = c[2] * WGS84_A - frame.origin[2]!;
     const b = r.bounds!;
-    return new Float32Array([
-      ...frame.east,
-      this.terrain ? 1 : 0,
-      ...frame.north,
-      this.mode === "high" ? 3500 : 2500,
-      ...frame.up,
-      1,
-      ...cam,
-      Math.min(1, (performance.now() - this.started) / 600),
-      b[0] * D,
-      b[3] * D,
-      1 / ((b[2] - b[0]) * D),
-      1 / ((b[3] - b[1]) * D),
-      this.mode === "high" ? 1 : 0,
-      this.satellite ? 1 : 0,
-      r.rgbPixels ? 1 : 0,
-      this.shadows ? 1 : 0,
-    ]);
+    const axes = [frame.east, frame.north, frame.up];
+    for (let i = 0; i < 3; i++) {
+      const v = axes[i]!;
+      o[4 * i] = v[0];
+      o[4 * i + 1] = v[1];
+      o[4 * i + 2] = v[2];
+      o[12 + i] = v[0] * dx + v[1] * dy + v[2] * dz;
+    }
+    o[3] = this.terrain ? 1 : 0;
+    o[7] = this.mode === "high" ? 3500 : 2500;
+    o[11] = 1;
+    o[15] = Math.min(1, (performance.now() - this.started) / 600);
+    o[16] = b[0] * D;
+    o[17] = b[3] * D;
+    o[18] = 1 / ((b[2] - b[0]) * D);
+    o[19] = 1 / ((b[3] - b[1]) * D);
+    o[20] = this.mode === "high" ? 1 : 0;
+    o[21] = this.satellite ? 1 : 0;
+    o[22] = r.rgbPixels ? 1 : 0;
+    o[23] = this.shadows ? 1 : 0;
+    return o;
   }
   get active() {
     return !!this.data && this.mode !== "off";

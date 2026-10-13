@@ -3113,7 +3113,7 @@ export class Renderer {
   private qualityCascade(key: number, slot: NonNullable<ReturnType<Renderer["variants"]["get"]>>) {
     slot.qBusy = true;
     const current = this.wanted(key, slot);
-    const compile = (entry: "main" | "lut") => this.variantQueue.run(current, () => this.mkVariant(key, entry, true));
+    const compile = (entry: "main" | "lut") => this.variantQueue.run(current, () => this.timedVariant(key, entry, true));
     const run = async () => {
       if (!slot.q) {
         slot.q = await compile("main");
@@ -3138,14 +3138,17 @@ export class Renderer {
     return null;
   }
 
-  /** mkVariant, its compile time in the diagnostic while the first image waits for it */
-  private async timedVariant(key: number, entry: "main" | "env" | "lut") {
+  /** mkVariant, its key and compile time in the diagnostic — every one, not only those the first image
+   *  waits for: a scene's feature bit switching on in flight (the scenery's 8192) recompiles for seconds (R-M4) */
+  private async timedVariant(key: number, entry: "main" | "env" | "lut", quality = false) {
     const t0 = performance.now();
-    const p = await this.mkVariant(key, entry, false);
-    if (!this.firstFrameDoneAt) {
-      gpuDiagnostics.record("pipeline-compiled", `tracer ${entry}, features ${key}: ${((performance.now() - t0) / 1000).toFixed(1)} s`);
-      if (entry === "main") gpuDiagnostics.enter("first-frame");
-    }
+    const p = await this.mkVariant(key, entry, quality);
+    const s = ((performance.now() - t0) / 1000).toFixed(1);
+    gpuDiagnostics.record(
+      "pipeline-compiled",
+      `tracer ${entry}${quality ? " (quality)" : ""}, features ${key}: ${s} s${this.firstFrameDoneAt ? "" : ", before the first image"}`,
+    );
+    if (!this.firstFrameDoneAt && entry === "main" && !quality) gpuDiagnostics.enter("first-frame");
     return p;
   }
 

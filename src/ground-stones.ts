@@ -41,6 +41,8 @@ export function packStones(): Float32Array {
   });
   return out;
 }
+// (the table bouldersNear reads by default: made once — it was packed again at each call, each frame on foot)
+let stoneTable: Float32Array | null = null;
 /** a stone's radius [m] from its draw u ∈ [0, 1) and its kind's size: pebbles mostly, a boulder now and then
  *  (stonesGrow's) */
 export const stoneRadius = (u: number, size: number) => size * (0.04 + 0.66 * u ** 4);
@@ -132,7 +134,15 @@ export interface Boulder {
 }
 /** The stones at least `minR` round within `radius` of (x, z) — those stonesGrow lays there (the view and the
  *  vessel aside: they lie there all the same). */
-export function bouldersNear(ground: StoneGround, x: number, z: number, radius: number, minR = 0.2, table = packStones()): Boulder[] {
+export function bouldersNear(
+  ground: StoneGround,
+  x: number,
+  z: number,
+  radius: number,
+  minR = 0.2,
+  table = (stoneTable ??=
+    packStones()),
+): Boulder[] {
   const out: Boulder[] = [];
   if (!ground.ready) return out;
   const sp = STONE_SPACING,
