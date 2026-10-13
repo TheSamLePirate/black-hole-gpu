@@ -3844,6 +3844,8 @@ async function main() {
     });
     if (DEV_TOOLS)
       topBar.add({ id: "btn-tools", label: t("Game tools"), icon: TB_ICONS.tools, key: "F10", run: () => toolsWin.toggle(), prio: 9 });
+    // the ship's least used controls (ui/flighthud.ts): the ⋯ menu takes them when narrow, like the actions
+    topBar.overflowable(flightHud.barPieces);
     // (the page's bar, emptied)
     document.getElementById("toolbar")?.remove();
   }

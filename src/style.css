@@ -1750,14 +1750,11 @@ body.hide-ui .fl-root > :not(.fl-warn) { display: none; }
 
 /* smaller screens: the least needed go first, the rest shrinks */
 .fl-cockpit { transform-origin: 50% 100%; }
-@media (max-width: 1600px) { #topbar .fl-clock:nth-child(4) { display: none; } }
-@media (max-width: 1440px) { #topbar .fl-clock:nth-child(3) { display: none; } }
 @media (max-width: 1280px) { .fl-tel .fl-sub, .fl-telc { display: none; } }
 @media (max-width: 1100px) {
   .fl-cockpit { transform: translateX(-50%) scale(0.86); }
   .fl-orbit { width: 216px; } .fl-veff { height: 140px; }
   .fl-right { width: 222px; } .m3-stage { height: 160px; }
-  #topbar .fl-mg-clocks { display: none; }
 }
 @media (max-width: 900px) {
   .fl-orbit, .fl-tel { display: none; }
@@ -2258,7 +2255,8 @@ body .sp-tooltip, #tip {
 .tb-btn > span:not(.tb-ic) { display: none; }
 .tb-btn > svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .tb-btn > svg .fill { fill: currentColor; stroke: none; }
-.tb-btn.tb-off, .tb-btn.tb-over { display: none; }
+/* (off: the mode's own; over: in the ⋯ menu — for an action, a piece of the mode's group alike) */
+.tb-off, .tb-over { display: none !important; }
 .tb-more, .tb-hide { margin-left: 2px; border-radius: 0; }
 .tb-hide { width: 26px; color: var(--hud-dim); }
 .tb-acts { gap: 1px; padding: 0 4px; }
@@ -2272,6 +2270,9 @@ body .sp-tooltip, #tip {
 .tb-mi:hover, .tb-mi:focus-visible { background: rgba(160, 210, 255, 0.1); }
 .tb-mi .tb-ic svg { width: 17px; height: 17px; }
 .tb-mi-name { flex: 1; font: 600 13px var(--hud-font); letter-spacing: 0.04em; }
+.tb-mi-value { font: 500 12px var(--mono); color: #fff; }
+.tb-mi:disabled { cursor: default; }
+.tb-mi:disabled:hover { background: none; }
 .tb-mi kbd { font: 600 11px var(--mono); color: var(--hud-dim); }
 .tb-mi kbd:empty { display: none; }
 
@@ -2557,6 +2558,19 @@ body.mobile.portrait #topbar { flex-wrap: wrap; justify-content: center; row-gap
 body.mobile.portrait #topbar .tb-time { order: 9; flex-basis: 100%; justify-content: center; border-left: none; }
 body.mobile.portrait .fl-chip { padding: 5px 4px; gap: 4px; font-size: 11px; letter-spacing: 0.02em; }
 body.mobile.portrait .fl-viewbtn .fl-caret { display: none; }
+/* (a narrow window, touch or not: the mode's groups can't share one row — the names shortened, the bar wrapped,
+   its height its rows') */
+@media (max-width: 900px) {
+  #topbar .tb-tab-name, #topbar .tb-tars-name, .fl-viewname, .fl-planbtn > span:not(.fl-ic) { display: none; }
+  .tp-rec, .tp-sep:last-of-type { display: none; }
+  .fl-chip { padding: 5px 4px; gap: 4px; font-size: 11px; letter-spacing: 0.02em; }
+}
+@media (max-width: 760px) {
+  #topbar { flex-wrap: wrap; justify-content: center; row-gap: 2px; height: auto; min-height: 44px; }
+  #topbar .tb-time { order: 9; flex-basis: 100%; justify-content: center; border-left: none; }
+  #topbar .tb-tab-name, #topbar .tb-tars-name, .fl-viewname, .fl-planbtn > span:not(.fl-ic) { display: none; }
+  .fl-chip { padding: 5px 4px; gap: 4px; font-size: 11px; letter-spacing: 0.02em; }
+}
 
 /* the attitude ball: between the stick and the throttle; upright, above them */
 body.mobile .fl-cockpit { transform: translateX(-50%) scale(0.72); bottom: calc(2px + env(safe-area-inset-bottom)); }

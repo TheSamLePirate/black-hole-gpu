@@ -26,6 +26,8 @@
 .pm-item:focus::before { content: "▸"; position: absolute; left: 4px; color: var(--k-on); }
 .pm-item { position: relative; }
 .pm-hint { font: 500 11px var(--mono); letter-spacing: 0; text-transform: none; color: var(--k-dim); }
+/* (the primary item: its dark label on the light fill — the hint too, as dark) */
+.k-btn.primary .pm-hint { color: rgba(11, 18, 32, 0.8); }
 .pm-foot { margin: 2px 0 0; font: 500 11px var(--mono); color: var(--k-dim); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .pm-row { display: flex; gap: 8px; }
 .pm-input {

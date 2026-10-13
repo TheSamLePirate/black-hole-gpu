@@ -493,6 +493,10 @@ export class Renderer {
   water = { clock: 0, splash: [0, 0, 1] as [number, number, number], splashAt: -1e9, side: 0 };
   private paramsF = new Float32Array(this.params);
   private paramsU = new Uint32Array(this.params);
+  /** the weather near the camera's block of the params, as the kernel reads it (Params.wx: WX_VEC4S vec4s) */
+  get weatherBlock(): Float32Array {
+    return this.paramsF.subarray((BASE_PARAM_VEC4S - WX_VEC4S) * 4, BASE_PARAM_VEC4S * 4);
+  }
   private paramBuf: GPUBuffer;
   private displayBuf: GPUBuffer;
   /** the blackbody's LUT, then the synchrotron's (one binding: the tracer's storage buffers are counted) */

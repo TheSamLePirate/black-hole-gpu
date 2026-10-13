@@ -158,6 +158,9 @@ function advanceSpectator(this: CameraController, dt: number, time: number | und
   sp.codes = this.codes;
   sp.enabled = this.enabled;
   sp.padFrame = pad ?? null;
+  // (the scene's time, also while it follows the ship and its own update is not run: its clock left NaN, nowTime
+  // read 0 — the bodies where they were at the scene's start: no ground under a tripod, no sky's events)
+  if (time !== undefined) sp.time = time;
   const at = this.shipFromView();
   sp.nearShip = at ? at.dist / M_METRES : Infinity;
   if (this.spectatorFollow && this.followShip(sp, dt, pad)) return true;

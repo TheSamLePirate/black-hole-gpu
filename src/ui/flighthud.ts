@@ -46,6 +46,7 @@ import { alertsOf, MasterCaution } from "./hud/alerts";
 import { sound } from "../audio/engine";
 import { hudShownFor } from "./hud/declutter";
 import { HudKindChooser, hudInView, hudKindName, type HudKind } from "../game/hudkind";
+import type { BarPiece } from "./topbar";
 import { safeFrame } from "./hud/safe";
 import { type Box, fit } from "./hud/layout";
 import { hudMode, shownSpeed } from "./hud/model";
@@ -79,6 +80,12 @@ const topBar = () => {
   if (!e || e.hidden) return null;
   const r = e.getBoundingClientRect();
   return r.height > 0 ? r : null;
+};
+
+/** Where a menu of the HUD opens from: its button, or the top bar's ⋯ button when the button is in that menu. */
+const menuAnchor = (b: HTMLElement) => {
+  const more = document.querySelector<HTMLElement>("#topbar .tb-more");
+  return (b.getClientRects().length || !more ? b : more).getBoundingClientRect();
 };
 
 /** The HUD's line icons (24 × 24, stroked with the text's colour). */
@@ -291,6 +298,8 @@ export class FlightHud {
   private dock = h("div", "fl-dock fl-panel");
   private dockKey = "";
   private missionEls: Record<string, HTMLElement> = {};
+  /** the ship's least used controls, which the top bar's ⋯ menu takes when the window is narrow (main.ts) */
+  readonly barPieces: BarPiece[] = [];
   private target = h("div", "fl-target fl-panel");
   private targetEls: Record<string, HTMLElement> = {};
   private tel = h("div", "fl-tel fl-panel");
@@ -796,6 +805,7 @@ export class FlightHud {
       const v = h("b");
       c.append(h("span", "", label), v);
       this.missionEls[key] = v;
+      this.barPieces.push({ id: `tb-clock-${key}`, el: c, label, prio: 9, value: v });
       return c;
     };
     const iconBtn = (name: string, title: string, fn: () => void, cls = "") => {
@@ -863,7 +873,7 @@ export class FlightHud {
       if (act.camera) return act.camera();
       viewMenu.hidden = !viewMenu.hidden;
       if (viewMenu.hidden) return;
-      const r = viewBtn.getBoundingClientRect();
+      const r = menuAnchor(viewBtn);
       viewMenu.style.top = `${r.bottom + 8}px`;
       viewMenu.style.left = `${Math.max(8, Math.min(innerWidth - 268, r.left))}px`;
     };
@@ -922,7 +932,7 @@ export class FlightHud {
       craftMenu.hidden = !craftMenu.hidden;
       if (craftMenu.hidden) return;
       fillCraft();
-      const r = craftBtn.getBoundingClientRect();
+      const r = menuAnchor(craftBtn);
       craftMenu.style.top = `${r.bottom + 8}px`;
       craftMenu.style.left = `${Math.max(8, Math.min(innerWidth - 268, r.left))}px`;
     };
@@ -963,6 +973,12 @@ export class FlightHud {
       ),
     );
     this.bar.acts.append(craftBox, planBtn, viewBox, pathBtn, dens);
+    // (the least used of them, the top bar's ⋯ menu takes first: the clocks, the path, then the craft and the view)
+    this.barPieces.push(
+      { id: "tb-path", el: pathBtn, label: pathBtn.title, prio: 8, key: "⇧Y", control: pathBtn },
+      { id: "tb-craft", el: craftBox, label: craftBtn.title, prio: 7, key: "[ · ]", control: craftBtn },
+      { id: "tb-view", el: viewBox, label: viewBtn.title, prio: 7, control: viewBtn },
+    );
 
     // ---- target: its name (the ball's target mark) and range; the rest as tiles
     this.target.append(panelHead(this.target, "target", t("Target")).head);

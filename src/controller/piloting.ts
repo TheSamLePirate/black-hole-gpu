@@ -8,7 +8,7 @@ import { GEARS, gearByItself, stepGear } from "../gear";
 import { basis, blToCartesian, cameraFrame, setHolePose, setHomePose, setRepPose, yawPitchRoll } from "../camera";
 import { TUNING } from "../game/tuning";
 import { isco, type Vec3 } from "../physics";
-import { BODY_NAMES, type Body, onOurSide } from "../targeting";
+import { BODY_NAMES, type Body, isCraft, onOurSide } from "../targeting";
 import { AIR_WARP } from "../flightair";
 import { brakingAccels } from "../descent";
 import { attitudeFor, CAPSULE, EntryGuidance, heightOf, type EntryCraft, type EntryResult, type EntryState } from "../entry";
@@ -71,6 +71,7 @@ declare module "../controls" {
     refBeta: typeof refBeta;
     mountTarget: typeof mountTarget;
     settleMount: typeof settleMount;
+    rigidMount: typeof rigidMount;
     weatherPlace: typeof weatherPlace;
     runwayInUse: typeof runwayInUse;
     rainView: typeof rainView;
@@ -193,6 +194,23 @@ function newFlight(this: CameraController) {
   this.pilot.newFlight();
   this.hubCache = this.runwayCache = this.futureCache = this.kerrInfoCache = this.aimCache = null;
   this.contrails.clear();
+  this.rigidMount();
+}
+
+/**
+ * The view straight at its attach point, the rig's lag and any carry let go. A placement (placeAt, a scene)
+ * sets the camera's pose for the ship's through the attach point's own relation: the ship's attitude is the
+ * camera's turned by the pose the view has now (shipMatrix), so a softened view lagging behind the craft
+ * (controller/camrig.ts) put a placed ship off by its lag — a glide set at 120 m/s 4° nose-high flew 10° off
+ * its heading and into the ground —, and the view unwinding then turned the ship with it.
+ */
+function rigidMount(this: CameraController) {
+  this.camFollow.reset();
+  this.camKick = 1;
+  this.viewCarry = null;
+  this.mountAnim = null;
+  this.mountEff = null;
+  this.lastPose = this.mountTarget();
 }
 
 /**
@@ -229,9 +247,10 @@ function standOn(this: CameraController, b?: Body): string | null {
   const w = this.rigWorld();
   if (!w) return tf("No world to stand on here");
   const t = this.nowTime();
-  const solid = (id: Body) => (w.ours ? solidBody(id) : ["miller", "mann", "edmunds"].includes(id));
+  const solid = (id: Body) => (w.ours ? solidBody(id) && !isCraft(id) && id !== "iss" : ["miller", "mann", "edmunds"].includes(id));
   const pick = (id: Body | null | undefined) => (id && solid(id) ? this.rigBody(id, w.ours, t) : null);
-  const ref = b ? pick(b) : (pick(s.target) ?? this.rigNearest(w.ours, w.X, t));
+  // (the nearest world — not a craft beside the camera, nearer in its own radii)
+  const ref = b ? pick(b) : (pick(s.target) ?? this.rigNearest(w.ours, w.X, t, solid));
   if (!ref || !solid(ref.id))
     return tf("Nothing solid to stand on — a planet or a moon on this side of the wormhole (Go to takes the camera through)");
   let up = unitV(sub3(w.X, ref.C));
@@ -277,10 +296,11 @@ function groundBelow(this: CameraController, radii = 2): { body: Body; lat: numb
   const w = this.rigWorld();
   if (!w) return null;
   const t = this.nowTime();
-  const ref = this.rigNearest(w.ours, w.X, t);
+  // (the worlds only: a craft beside the camera — the Ranger landed 50 m away — is nearer in its own radii, and no ground)
+  const isWorld = (b: Body) => (w.ours ? solidBody(b) && !isCraft(b) && b !== "iss" : ["miller", "mann", "edmunds"].includes(b));
+  const ref = this.rigNearest(w.ours, w.X, t, isWorld);
   if (!ref) return null;
-  const solid = w.ours ? solidBody(ref.id) : ["miller", "mann", "edmunds"].includes(ref.id);
-  if (!solid || (Math.hypot(...sub3(w.X, ref.C)) - ref.R) / ref.R > radii) return null;
+  if ((Math.hypot(...sub3(w.X, ref.C)) - ref.R) / ref.R > radii) return null;
   const deg = 180 / Math.PI;
   if (w.ours) {
     const q = toBodyFixed(ref.id, w.X, t);
@@ -559,9 +579,7 @@ function settleMount(this: CameraController) {
     fpitch: -5,
     fvel: [0, 0, 0] as Vec3,
   });
-  this.mountAnim = null;
-  this.mountEff = null;
-  this.lastPose = this.mountTarget();
+  this.rigidMount();
 }
 
 /** Eases the camera towards the chosen attach point; keeps the ship's attitude while it moves. */
@@ -1891,6 +1909,7 @@ export function installPiloting(C: { prototype: CameraController }) {
     refBeta,
     mountTarget,
     settleMount,
+    rigidMount,
     stepMount,
     reorient,
     shipMatrix,

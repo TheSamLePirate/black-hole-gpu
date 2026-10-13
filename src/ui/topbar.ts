@@ -95,6 +95,33 @@ export function overflowed(fixed: number, items: { w: number; prio: number }[], 
   return out;
 }
 
+/**
+ * A piece of a mode's own group on the bar (the flight HUD's clocks, the craft and the views): it stays on the bar
+ * while the window has room, and goes into the ⋯ menu when not, by its `prio` like an action. Its `control` is what
+ * the menu's item clicks; without one the item only reads, with the `value` the bar shows (a clock's reading).
+ */
+export interface BarPiece {
+  id: string;
+  el: HTMLElement;
+  label: string;
+  prio: number;
+  key?: string;
+  control?: HTMLElement;
+  value?: HTMLElement;
+}
+
+/** An item of the bar: an action or a piece, what the ⋯ menu shows of it. */
+interface BarItem {
+  id: string;
+  el: HTMLElement;
+  label: string;
+  prio: number;
+  key?: string;
+  modes?: GameMode[];
+  control?: HTMLElement;
+  value?: HTMLElement;
+}
+
 export interface TopBarDeps {
   /** a tab clicked: the host changes the mode (or says why not) */
   setMode(m: GameMode): void;
@@ -125,7 +152,9 @@ export class TopBar {
   private ctxTitle = h("b");
   private ctxSub = h("span");
   private acts = h("div", "tb-group tb-acts");
-  private items: { a: TopBarAction; b: HTMLButtonElement }[] = [];
+  private items: BarItem[] = [];
+  /** the ⋯ menu's live values (a clock's reading), refreshed with the fit */
+  private liveValues: (() => void)[] = [];
   private more = h("button", "tb-btn tb-more") as HTMLButtonElement;
   private menu = h("div", "tb-menu");
   private handle = h("button", "tb-handle") as HTMLButtonElement;
@@ -233,19 +262,37 @@ export class TopBar {
     if (a.key) b.dataset.key = a.key;
     if (a.testid) b.dataset.testid = a.testid;
     b.setAttribute("aria-label", a.label);
-    this.items.push({ a, b });
+    this.items.push({ id: a.id, el: b, label: a.label, prio: a.prio, key: a.key, modes: a.modes, control: b });
     this.acts.append(b);
     this.fit(true);
     return b;
   }
 
+  /** The mode's pieces that may go into the ⋯ menu when narrow (in the ship mode: the flight HUD's). */
+  overflowable(pieces: BarPiece[]) {
+    for (const p of pieces) {
+      p.el.id = p.id;
+      this.items.push({
+        id: p.id,
+        el: p.el,
+        label: p.label,
+        prio: p.prio,
+        key: p.key,
+        modes: ["ship"],
+        control: p.control,
+        value: p.value,
+      });
+    }
+    this.fit(true);
+  }
+
   /** An action's icon changed (the sound's: on, muted), and whether it is lit. */
   setIcon(id: string, icon: string, off = false) {
-    const it = this.items.find(({ a }) => a.id === id);
-    if (!it || it.b.dataset.icon === icon) return;
-    it.b.dataset.icon = icon;
-    it.b.classList.toggle("off", off);
-    it.b.replaceChildren(svg(icon));
+    const it = this.items.find((i) => i.id === id);
+    if (!it || it.el.dataset.icon === icon) return;
+    it.el.dataset.icon = icon;
+    it.el.classList.toggle("off", off);
+    it.el.replaceChildren(svg(icon));
   }
 
   /** The mode shown: its tab lit, its groups. */
@@ -257,7 +304,7 @@ export class TopBar {
       b.classList.toggle("on", k === m);
       b.setAttribute("aria-selected", String(k === m));
     }
-    for (const { a, b } of this.items) b.classList.toggle("tb-off", !!a.modes && !a.modes.includes(m));
+    for (const it of this.items) it.el.classList.toggle("tb-off", !!it.modes && !it.modes.includes(m));
     this.fit(true);
   }
 
@@ -293,27 +340,33 @@ export class TopBar {
     const at = performance.now();
     if (this.hidden || (!now && at - this.fitAt < 500)) return;
     this.fitAt = at;
-    const shown = this.items.filter(({ b }) => !b.classList.contains("tb-off"));
-    for (const { b } of shown) b.classList.remove("tb-over");
+    const shown = this.items.filter(({ el }) => !el.classList.contains("tb-off"));
+    for (const { el } of shown) el.classList.remove("tb-over");
     this.more.hidden = false;
     // (the content's own width: the bar's box is capped at the window's)
     const W = Math.max(this.el.getBoundingClientRect().width, this.el.scrollWidth);
     const max = innerWidth - 16;
-    const widths = shown.map(({ b }) => b.getBoundingClientRect().width + 2);
-    const fixed = W - widths.reduce((a, w) => a + w, 0) - this.more.getBoundingClientRect().width;
+    const widths = shown.map(({ el }) => el.getBoundingClientRect().width + 2);
+    // (a narrow window wraps the bar, each group on its row — style.css: the actions' row alone must fit, with
+    // ⋯ and the hide button; the mode's pieces keep their own rows)
+    const wrap = getComputedStyle(this.el).flexWrap === "wrap";
+    const fixed = wrap
+      ? this.hideBtn.getBoundingClientRect().width + 24
+      : W - widths.reduce((a, w) => a + w, 0) - this.more.getBoundingClientRect().width;
     const over = overflowed(
       fixed,
-      shown.map(({ a }, i) => ({ w: widths[i]!, prio: a.prio })),
+      shown.map(({ prio, el }, i) => (wrap && !el.classList.contains("tb-btn") ? { w: 0, prio: 0 } : { w: widths[i]!, prio })),
       max,
       36,
     );
-    shown.forEach(({ b }, i) => b.classList.toggle("tb-over", over[i]!));
+    shown.forEach(({ el }, i) => el.classList.toggle("tb-over", over[i]!));
     this.more.hidden = !over.some(Boolean);
     const sig = over.join();
     if (sig !== this.lastFit) {
       this.lastFit = sig;
       if (!this.menu.hidden) this.fillMenu();
     }
+    if (!this.menu.hidden) for (const live of this.liveValues) live();
   }
 
   private toggleMenu() {
@@ -327,19 +380,34 @@ export class TopBar {
 
   private fillMenu() {
     this.menu.replaceChildren();
-    for (const { a, b } of this.items) {
-      if (!b.classList.contains("tb-over") || b.classList.contains("tb-off")) continue;
+    this.liveValues = [];
+    for (const it of this.items) {
+      if (!it.el.classList.contains("tb-over") || it.el.classList.contains("tb-off")) continue;
       const i = h("button", "tb-mi") as HTMLButtonElement;
       i.type = "button";
       i.setAttribute("role", "menuitem");
-      const ic = b.querySelector("svg")?.cloneNode(true);
+      i.dataset.action = it.id;
+      const ic = it.el.querySelector("svg")?.cloneNode(true);
       const box = h("span", "tb-ic");
       if (ic) box.append(ic);
-      i.append(box, h("span", "tb-mi-name", a.label), h("kbd", "", a.key ?? ""));
-      i.onclick = () => {
-        this.menu.hidden = true;
-        b.click();
-      };
+      const name = h("span", "tb-mi-name", it.label);
+      i.append(box, name, h("kbd", "", it.key ?? ""));
+      if (it.value) {
+        // (a reading: shown beside the label, as the bar shows it, and read only)
+        const v = h("b", "tb-mi-value");
+        i.append(v);
+        const value = it.value;
+        this.liveValues.push(() => {
+          if (v.textContent !== value.textContent) v.textContent = value.textContent;
+        });
+      }
+      if (it.control) {
+        const control = it.control;
+        i.onclick = () => {
+          this.menu.hidden = true;
+          control.click();
+        };
+      } else i.disabled = true;
       this.menu.append(i);
     }
   }

@@ -218,7 +218,9 @@ export class MapView {
       // (used: to the back of the queue)
       this.tiles.delete(key);
       this.tiles.set(key, have);
-      return have === "error" || have.complete ? have : null;
+      // (a failed load is complete too, but broken: drawImage throws on it, so it is an error here)
+      if (have === "error" || (have.complete && !have.naturalWidth)) return "error";
+      return have.complete ? have : null;
     }
     const img = new Image();
     img.crossOrigin = "anonymous";

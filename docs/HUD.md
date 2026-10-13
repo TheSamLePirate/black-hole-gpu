@@ -129,7 +129,7 @@ untouched.
 
 ## The assistants: every autopilot flown by hand
 
-**F4** (or the card's **AUTO / ASSISTED** button) switches all the autopilots at once: assisted, the
+**⇧F4** (or the card's **AUTO / ASSISTED** button) switches all the autopilots at once: assisted, the
 autopilot works out what it would do — where the nose and the top go, the throttle, the thrusters' push —
 and leaves the ship to the pilot (`FlightComputer.assist`, its commands kept as `director`); back to AUTO, it
 flies on from where the ship is. A hold (1 – 7) keeps an assisted autopilot: it is the pilot's way to follow
@@ -196,7 +196,7 @@ the ring.
   8 km to the side climbing to 3 km, turns in at the hold 20 km out and flies the legs to the final again,
   the engines holding its speed until the final. The hub's card shows "missed approach — climbing out".
 - **Alerts explained**: every alert's line has a tooltip, and a click opens why it is on and what to do.
-- **The key hints** add F4 (assisted) and F3 (the free camera: the ship flies on) while an autopilot flies.
+- **The key hints** add ⇧F4 (assisted) and F3 (the free camera: the ship flies on) while an autopilot flies.
 
 ## On the cockpit's screens
 

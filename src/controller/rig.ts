@@ -91,10 +91,11 @@ function rigBody(this: CameraController, b: Body | null, ours: boolean, t: numbe
 }
 
 /** The body nearest the camera (in its radii from its surface), within 40 of them. */
-function rigNearest(this: CameraController, ours: boolean, X: Vec3, t: number) {
+function rigNearest(this: CameraController, ours: boolean, X: Vec3, t: number, only?: (b: Body) => boolean) {
   let best: ReturnType<CameraController["rigBody"]> = null;
   let bd = 40;
   for (const b of availableBodies(this.s, cameraFrame(this.s))) {
+    if (only && !only(b)) continue;
     const r = this.rigBody(b, ours, t);
     if (!r) continue;
     const d = (Math.hypot(...sub3(X, r.C)) - r.R) / r.R;
