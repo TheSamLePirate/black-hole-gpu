@@ -46,6 +46,9 @@ export interface Landscape {
   /** the viewpoint's clearing of procedural trees [m] (LANDSCAPE_CLEARING_M when none: a lookout over a forest
    *  the photo looks across needs more) */
   clearing?: number;
+  /** the grass round the tripod (none by default: a viewpoint's near ground, flattened by the relief's ~30 m, would
+   *  fill the frame's foot with blades a metre from the lens) */
+  grass?: boolean;
   /** the scene's clouds (0: none — the photo's sky clear) */
   clouds?: number;
   photo: PhotoReference;
@@ -172,14 +175,15 @@ export const LANDSCAPES: Landscape[] = [
     scene: "Earth: Reine from Reinebringen",
     title: "Reine, the Lofoten",
     description:
-      "From Reinebringen's summit, 448 m, on a July afternoon: Reine's islets and red cabins far below, the fjord and the Lofoten's sharp peaks around.",
+      "From Reinebringen's summit, 448 m, on a July afternoon: Olstinden across the Reinefjord, Klokketinden beyond the Vorfjord to the right.",
     icon: "⌂",
     at: [67.927787, 13.073984],
-    subject: [67.9324675, 13.0887684],
-    // (checked against the photograph: the massif across the water at eye level, not Reine below — the frame nearly level, turned 6°)
-    heading: 56,
-    headingFrom: "photograph",
-    pitch: -4,
+    subject: [67.9564797, 13.0768487],
+    // (the photo's page names Olstinden, 675 m, 3.2 km north across the Reinefjord; framed as the photograph is — the
+    // skyline matched at 0.96: 2° right of its summit, 2° down)
+    heading: 4.8,
+    headingFrom: "landmarks",
+    pitch: -2,
     photo: {
       page: `${C}Moskenes_Reinebringen_lub_2025-07-21_img02_Aussicht.jpg`,
       author: "Lukas Beck",
@@ -219,7 +223,10 @@ export const LANDSCAPES: Landscape[] = [
     icon: "║",
     at: [46.594179, 7.907383],
     subject: [46.589776, 7.905429],
-    headingFrom: "subject",
+    // (checked against the photograph: the falls stand at a quarter of the width, the wall rising on the right — 9° right
+    // of the bearing to the falls' foot)
+    heading: 206,
+    headingFrom: "photograph",
     pitch: 12,
     photo: {
       page: `${C}Staubbachfall_in_Lauterbrunnen_BE.jpg`,
@@ -243,7 +250,8 @@ export const LANDSCAPES: Landscape[] = [
     // ground)
     clearing: 500,
     headingFrom: "subject",
-    pitch: 8,
+    // (checked against the photograph: it looks up at the massif, the dark ground a fifth of the frame)
+    pitch: 16,
     photo: {
       page: `${C}AOB_Torres_del_Paine_cuernos.jpg`,
       author: "Alfredo Olivares Bueno",
@@ -259,10 +267,14 @@ export const LANDSCAPES: Landscape[] = [
     description:
       "Below the Laguna de los Tres at midday in December: the Fitz Roy massif's granite towers, the Laguna Sucia's glacier beneath them.",
     icon: "⩘",
-    at: [-49.281578, -72.986686],
+    at: [-49.280129, -72.994644],
     subject: [-49.2712498, -73.0432115],
-    headingFrom: "subject",
-    pitch: 9,
+    // (checked against the photograph: at its GPS point, 1 177 m in the relief, the camera stood in a hollow of the
+    // moraine, a hump hiding both lagunas. 700 m west along the ridge between them, 1 300 m, the panorama's layout
+    // comes back — the Laguna Sucia below on the left, the Laguna de los Tres on the right, the massif behind)
+    heading: 282,
+    headingFrom: "photograph",
+    pitch: 7,
     photo: {
       page: `${C}Fitz_Roy_massif_2015_1.JPG`,
       author: "Fredlyfish4",
@@ -298,11 +310,14 @@ export const LANDSCAPES: Landscape[] = [
     description:
       "From the Rockpile on a June evening: the turquoise lake below the Valley of the Ten Peaks, Deltaform and Wenkchemna in the low light.",
     icon: "▴",
-    at: [51.327483, -116.180039],
+    at: [51.326715, -116.181249],
     subject: [51.3013438, -116.2448273],
     heading: 224.55,
     headingFrom: "exif",
-    pitch: 5,
+    // (the Rockpile, 20 m of boulders, is finer than the relief: stood at the photo's GPS point the camera saw the
+    // moraine's back slope. Its top in the relief, 1 925 m — the lake 1 884 m —, is 120 m along the view: stood there,
+    // the lake fills the lower half as on the photo, the peaks along the top)
+    pitch: 7,
     photo: {
       page: `${C}Moraine_Lake_2018.jpg`,
       author: "WhyDon'tWeZJCDJ",
@@ -320,7 +335,9 @@ export const LANDSCAPES: Landscape[] = [
     at: [-24.7588481, 15.2939213],
     subject: [-24.7581561, 15.3074213],
     headingFrom: "subject",
-    pitch: 1,
+    // (checked against the photograph: through the 150 mm lens the frame holds a dune's crest on the sky — the dune
+    // 150 m east rises 80 m over the pan, its crest 28° up; at 1° the frame held its face alone)
+    pitch: 29,
     photo: {
       page: `${C}Sossusvlei,_Namibia,_2018-08-06,_DD_040.jpg`,
       author: "Diego Delso",

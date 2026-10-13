@@ -1217,6 +1217,8 @@ export const presets: Record<string, Preset> = {
         target: "earth",
         fov: landscapeFov(l),
         earthClouds: l.clouds ?? 0,
+        // (the grass round the tripod only where the photo has a meadow at its foot: landscapes.ts)
+        ...(l.grass ? {} : { earthGrass: "off" as const }),
         time: (photoUtc(l.photo) - Date.UTC(2067, 0, 1)) / 1000 / M_SECONDS,
         pose: { at: l.at, heading: viewHeading(l), off: [0, l.pitch] },
       },

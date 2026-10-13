@@ -19,6 +19,8 @@ import type { Vec3 } from "../physics";
 
 /** a cell's side on the ground [m] at its band's middle latitude */
 export const FOREST_CELL = 7;
+/** the steepest ground a tree grows on (rise over run: 1.2 ≈ 50°) — steeper, rock */
+export const FOREST_MAX_SLOPE = 1.2;
 /** cells a block's side (the empty space a ray skips) */
 export const FOREST_BLOCK = 8;
 /** the latitude bands' height [°] (a band's cells share one Mercator size) */
@@ -646,6 +648,12 @@ export async function growForest(f: ForestFrame, io: ForestSources): Promise<{ c
     // (a node whose height failed: its trees left out, never at sea level)
     const ground = (n(0, 0) * (1 - fx) + n(1, 0) * fx) * (1 - fy) + (n(0, 1) * (1 - fx) + n(1, 1) * fx) * fy;
     if (!Number.isFinite(ground)) continue;
+    // (no tree on a cliff: the ground's slope over the four nodes round it, two cells apart — past FOREST_MAX_SLOPE
+    // the land cover's 10 m pixel is a wall's face, Lauterbrunnen's 300 m of rock drew a forest)
+    const span = 2 * f.cell;
+    const gx = (n(1, 0) - n(0, 0) + n(1, 1) - n(0, 1)) / (2 * span),
+      gy = (n(0, 1) - n(0, 0) + n(1, 1) - n(1, 0)) / (2 * span);
+    if (gx * gx + gy * gy > FOREST_MAX_SLOPE * FOREST_MAX_SLOPE) continue;
     const [lat, lon] = forestPlaceOf(f.i0 + u, f.j0 + v, f.columns);
     const kind = forestKind(io.cover(lat, lon), lat, ground, forestUnit(forestHash(gi, gj, 5)), forestUnit(forestHash(gi, gj, 6)));
     if (kind === ForestKind.none) continue;

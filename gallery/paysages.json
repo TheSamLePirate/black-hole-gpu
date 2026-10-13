@@ -26,12 +26,12 @@
     "compare": {
       "slug": "earth-the-grand-canyon-from-hopi-point",
       "title": "The Grand Canyon",
-      "skylineCorr": -0.58,
+      "skylineCorr": -0.577,
       "skylineOffsetPct": 6.4,
       "pitchErrDeg": 1.4,
       "headingErrDeg": 4,
-      "skylineCorrAligned": -0.362,
-      "edgeCorr": 0.261
+      "skylineCorrAligned": -0.365,
+      "edgeCorr": 0.26
     },
     "note": "Fidèle au cadrage : la rive nord et les temples au même endroit. La photo, voilée de nuages, est plus claire que la lumière du soir calculée."
   },
@@ -62,12 +62,12 @@
     "compare": {
       "slug": "earth-the-matterhorn-from-the-riffelsee",
       "title": "The Matterhorn",
-      "skylineCorr": 0.853,
+      "skylineCorr": 0.852,
       "skylineOffsetPct": 3.6,
       "pitchErrDeg": 1.4,
       "headingErrDeg": 0.2,
       "skylineCorrAligned": 0.853,
-      "edgeCorr": 0.366
+      "edgeCorr": 0.364
     },
     "note": "Fidèle : la pyramide et son reflet dans le Riffelsee à la même place. La neige et la roche manquent de détail (le relief est à ~20 m)."
   },
@@ -103,7 +103,7 @@
       "pitchErrDeg": 0.1,
       "headingErrDeg": 0.3,
       "skylineCorrAligned": 0.961,
-      "edgeCorr": 0.35
+      "edgeCorr": 0.351
     },
     "note": "Fidèle après correction (cap 7° plus à l'ouest, regard 12° plus bas) : la ligne de crêtes du massif épouse celle de la photo."
   },
@@ -134,12 +134,12 @@
     "compare": {
       "slug": "earth-the-geirangerfjord-from-flydalsjuvet",
       "title": "The Geirangerfjord",
-      "skylineCorr": 0.963,
+      "skylineCorr": 0.964,
       "skylineOffsetPct": -0.3,
       "pitchErrDeg": -0.2,
       "headingErrDeg": -0.4,
       "skylineCorrAligned": 0.964,
-      "edgeCorr": 0.275
+      "edgeCorr": 0.276
     },
     "note": "Fidèle : la vallée, le lac du fond et les deux versants au même endroit."
   },
@@ -147,7 +147,7 @@
     "slug": "earth-reine-from-reinebringen",
     "scene": "Earth: Reine from Reinebringen",
     "title": "Reine, les Lofoten",
-    "text": "Depuis le sommet du Reinebringen, 448 m, un après-midi de juillet : les îlots et les cabanes rouges de Reine tout en bas, le fjord et les pics acérés des Lofoten autour.",
+    "text": "Depuis le sommet du Reinebringen, 448 m, un après-midi de juillet : l'Olstinden de l'autre côté du Reinefjord, le Klokketinden au-delà du Vorfjord à droite.",
     "portrait": false,
     "photo": {
       "page": "https://commons.wikimedia.org/wiki/File:Moskenes_Reinebringen_lub_2025-07-21_img02_Aussicht.jpg",
@@ -161,23 +161,23 @@
       67.927787,
       13.073984
     ],
-    "heading": 56,
-    "headingFrom": "photograph",
-    "pitch": -4,
+    "heading": 4.8,
+    "headingFrom": "landmarks",
+    "pitch": -2,
     "focal35": 56,
     "fov": 24.2,
     "utc": "2025-07-21 14:15",
     "compare": {
       "slug": "earth-reine-from-reinebringen",
       "title": "Reine, the Lofoten",
-      "skylineCorr": 0.406,
-      "skylineOffsetPct": 38,
-      "pitchErrDeg": 9.2,
-      "headingErrDeg": -2,
-      "skylineCorrAligned": 0.556,
-      "edgeCorr": 0.14
+      "skylineCorr": 0.93,
+      "skylineOffsetPct": 0.5,
+      "pitchErrDeg": 0.1,
+      "headingErrDeg": 0.3,
+      "skylineCorrAligned": 0.937,
+      "edgeCorr": 0.397
     },
-    "note": "Ne ressemble pas : le massif que la photo montre en face n'apparaît pas — la direction réelle de la prise de vue reste à retrouver."
+    "note": "Fidèle : Olstinden au-delà du Reinefjord, ligne d'horizon corrélée à 0,93 — la photo vise ce sommet, nommé sur sa page, et non le village en contrebas."
   },
   {
     "slug": "earth-kirkjufell-over-kirkjufellsfoss",
@@ -206,12 +206,12 @@
     "compare": {
       "slug": "earth-kirkjufell-over-kirkjufellsfoss",
       "title": "Kirkjufell",
-      "skylineCorr": 0.049,
-      "skylineOffsetPct": -2,
-      "pitchErrDeg": -1,
+      "skylineCorr": 0.061,
+      "skylineOffsetPct": -1.7,
+      "pitchErrDeg": -0.9,
       "headingErrDeg": 0.6,
-      "skylineCorrAligned": 0.051,
-      "edgeCorr": 0.12
+      "skylineCorrAligned": 0.064,
+      "edgeCorr": 0.117
     },
     "note": "Proche après correction (cap 14° plus à droite) : le cône à gauche du centre. La cascade du premier plan, trop petite pour le relief, manque."
   },
@@ -233,8 +233,8 @@
       46.594179,
       7.907383
     ],
-    "heading": 197,
-    "headingFrom": "subject",
+    "heading": 206,
+    "headingFrom": "photograph",
     "pitch": 12,
     "focal35": 46,
     "fov": 42.7,
@@ -242,14 +242,14 @@
     "compare": {
       "slug": "earth-lauterbrunnen-and-the-staubbach-falls",
       "title": "Lauterbrunnen",
-      "skylineCorr": -0.158,
-      "skylineOffsetPct": 12.9,
-      "pitchErrDeg": 5.5,
-      "headingErrDeg": 2.6,
-      "skylineCorrAligned": 0.162,
-      "edgeCorr": 0.018
+      "skylineCorr": 0.119,
+      "skylineOffsetPct": 17.1,
+      "pitchErrDeg": 7.3,
+      "headingErrDeg": -3.8,
+      "skylineCorrAligned": 0.376,
+      "edgeCorr": 0.047
     },
-    "note": "Partiel : la falaise et la chute du Staubbach sont là ; les maisons ne sont que des volumes (OpenStreetMap)."
+    "note": "Proche : la chute dans le tiers gauche, la paroi désormais nue (plus d'arbres sur les pentes de plus de 50°), les maisons en volumes ; la photo, prise plus près, emplit le cadre de la paroi."
   },
   {
     "slug": "earth-the-cuernos-del-paine",
@@ -271,21 +271,21 @@
     ],
     "heading": 71.7,
     "headingFrom": "subject",
-    "pitch": 8,
+    "pitch": 16,
     "focal35": 26,
     "fov": 49.6,
     "utc": "2025-04-12 18:59",
     "compare": {
       "slug": "earth-the-cuernos-del-paine",
       "title": "Torres del Paine",
-      "skylineCorr": -0.756,
-      "skylineOffsetPct": -14.4,
-      "pitchErrDeg": -7.1,
+      "skylineCorr": -0.736,
+      "skylineOffsetPct": 1.5,
+      "pitchErrDeg": 0.8,
       "headingErrDeg": -12.4,
-      "skylineCorrAligned": -0.461,
-      "edgeCorr": 0.098
+      "skylineCorrAligned": -0.431,
+      "edgeCorr": 0.162
     },
-    "note": "Partiel : la forêt qui couvrait le point de vue est dégagée, mais les aiguilles des Cuernos, trop fines pour le relief (~30 m), deviennent un massif arrondi."
+    "note": "Partiel : le point de vue dégagé de sa forêt et le massif à la bonne hauteur, mais les aiguilles des Cuernos, trop fines pour le relief (~30 m), deviennent un dôme arrondi."
   },
   {
     "slug": "earth-fitz-roy-above-the-laguna-de-los-tres",
@@ -302,26 +302,26 @@
       "estimated": "the lens (a stitched panorama): the scene's field holds the massif"
     },
     "at": [
-      -49.281578,
-      -72.986686
+      -49.280129,
+      -72.994644
     ],
-    "heading": 285.6,
-    "headingFrom": "subject",
-    "pitch": 9,
+    "heading": 282,
+    "headingFrom": "photograph",
+    "pitch": 7,
     "focal35": 24,
     "fov": 53.1,
     "utc": "2015-12-14 16:12",
     "compare": {
       "slug": "earth-fitz-roy-above-the-laguna-de-los-tres",
       "title": "Fitz Roy",
-      "skylineCorr": -0.049,
-      "skylineOffsetPct": 20.4,
-      "pitchErrDeg": 10.8,
+      "skylineCorr": -0.429,
+      "skylineOffsetPct": 13.1,
+      "pitchErrDeg": 7,
       "headingErrDeg": 13.3,
-      "skylineCorrAligned": 0.532,
-      "edgeCorr": 0.038
+      "skylineCorrAligned": -0.206,
+      "edgeCorr": 0.103
     },
-    "note": "Ne ressemble pas encore : une arête du premier plan cache la laguna ; le point de vue est à revoir."
+    "note": "Partiel : au point GPS la caméra était dans un creux ; depuis la crête entre les deux lagunas, la Sucia à gauche, la Tres à droite et le massif derrière, mais les tours de granit, plus fines que le relief, sont arrondies."
   },
   {
     "slug": "earth-mount-fuji-across-lake-kawaguchi",
@@ -351,10 +351,10 @@
       "slug": "earth-mount-fuji-across-lake-kawaguchi",
       "title": "Mount Fuji",
       "skylineCorr": 0.28,
-      "skylineOffsetPct": 18.7,
+      "skylineOffsetPct": 18.8,
       "pitchErrDeg": 8.2,
       "headingErrDeg": 10.2,
-      "skylineCorrAligned": 0.385,
+      "skylineCorrAligned": 0.392,
       "edgeCorr": 0.4
     },
     "note": "Proche : les pins à gauche, le lac et le Fuji au fond ; le volcan paraît plus grand que sur la photo."
@@ -374,26 +374,26 @@
       "estimated": null
     },
     "at": [
-      51.327483,
-      -116.180039
+      51.326715,
+      -116.181249
     ],
     "heading": 224.6,
     "headingFrom": "exif",
-    "pitch": 5,
+    "pitch": 7,
     "focal35": 28,
     "fov": 46.4,
     "utc": "2018-06-14 01:19",
     "compare": {
       "slug": "earth-moraine-lake-and-the-valley-of-the-ten-peaks",
       "title": "Moraine Lake",
-      "skylineCorr": 0.504,
-      "skylineOffsetPct": 34.9,
-      "pitchErrDeg": 16.2,
-      "headingErrDeg": 3.6,
-      "skylineCorrAligned": 0.698,
-      "edgeCorr": 0.015
+      "skylineCorr": 0.692,
+      "skylineOffsetPct": 26,
+      "pitchErrDeg": 12.1,
+      "headingErrDeg": 0.3,
+      "skylineCorrAligned": 0.692,
+      "edgeCorr": 0.017
     },
-    "note": "Ne ressemble pas : une butte cache le lac et les Dix Pics — le Rockpile, trop petit pour le relief, n'élève pas la caméra."
+    "note": "Proche : la caméra posée au sommet du Rockpile tel que le relief le dessine (120 m plus loin que le point GPS) — le lac et les Dix Pics avec leur reflet. Les sommets, arrondis par le relief, et le miroir du lac reste tacheté."
   },
   {
     "slug": "earth-the-dunes-of-sossusvlei",
@@ -415,21 +415,21 @@
     ],
     "heading": 86.8,
     "headingFrom": "subject",
-    "pitch": 1,
+    "pitch": 29,
     "focal35": 150,
     "fov": 9.1,
     "utc": "2018-08-06 07:49",
     "compare": {
       "slug": "earth-the-dunes-of-sossusvlei",
       "title": "Sossusvlei",
-      "skylineCorr": 0.046,
-      "skylineOffsetPct": -19.5,
-      "pitchErrDeg": -1.8,
-      "headingErrDeg": 0.2,
-      "skylineCorrAligned": 0.065,
-      "edgeCorr": 0.03
+      "skylineCorr": -0.569,
+      "skylineOffsetPct": 2,
+      "pitchErrDeg": 0.2,
+      "headingErrDeg": -2.3,
+      "skylineCorrAligned": -0.347,
+      "edgeCorr": 0.007
     },
-    "note": "Ne ressemble pas : les dunes, plus fines que le relief, n'existent pas dans le terrain."
+    "note": "Partiel : au 150 mm, la crête d'une dune sur le ciel comme sur la photo ; le sable sans ses rides ni le jeu d'ombre du matin."
   },
   {
     "slug": "earth-monument-valley-s-mittens",
@@ -463,7 +463,7 @@
       "pitchErrDeg": 4.3,
       "headingErrDeg": 0,
       "skylineCorrAligned": 0.493,
-      "edgeCorr": 0.096
+      "edgeCorr": 0.092
     },
     "note": "Fidèle : les deux Mittens et Merrick Butte au même endroit, sur le même horizon."
   },
@@ -494,12 +494,12 @@
     "compare": {
       "slug": "earth-mount-moran-from-oxbow-bend",
       "title": "Oxbow Bend",
-      "skylineCorr": 0.604,
+      "skylineCorr": 0.605,
       "skylineOffsetPct": 1.2,
       "pitchErrDeg": 0.3,
       "headingErrDeg": 0.1,
-      "skylineCorrAligned": 0.606,
-      "edgeCorr": 0.066
+      "skylineCorrAligned": 0.607,
+      "edgeCorr": 0.028
     },
     "note": "Proche après correction (cap 4° à gauche, regard 9° plus bas) : le mont Moran et la rivière ; les fleurs du premier plan manquent."
   }

@@ -1098,8 +1098,8 @@ export default {
   "Flydalsjuvet in June: Geiranger at the fjord's head 300 m below, the fjord winding away north-west between its walls.":
     "Flydalsjuvet en juin : Geiranger au fond du fjord, 300 m plus bas, le fjord qui serpente vers le nord-ouest entre ses parois.",
   "Reine, the Lofoten": "Reine, les Lofoten",
-  "From Reinebringen's summit, 448 m, on a July afternoon: Reine's islets and red cabins far below, the fjord and the Lofoten's sharp peaks around.":
-    "Depuis le sommet du Reinebringen, 448 m, un après-midi de juillet : les îlots et les cabanes rouges de Reine tout en bas, le fjord et les pics acérés des Lofoten autour.",
+  "From Reinebringen's summit, 448 m, on a July afternoon: Olstinden across the Reinefjord, Klokketinden beyond the Vorfjord to the right.":
+    "Depuis le sommet du Reinebringen, 448 m, un après-midi de juillet : l'Olstinden de l'autre côté du Reinefjord, le Klokketinden au-delà du Vorfjord à droite.",
   Kirkjufell: "Kirkjufell",
   "Kirkjufellsfoss in July at 16:30: the falls in front, Kirkjufell's cone behind, sun and heavy showers over the Snæfellsnes peninsula.":
     "Kirkjufellsfoss en juillet à 16:30 : la cascade devant, le cône du Kirkjufell derrière, soleil et grosses averses sur la péninsule de Snæfellsnes.",

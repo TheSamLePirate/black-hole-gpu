@@ -16,7 +16,7 @@ import { sceneSlug } from "./scene-slug";
 
 const SRC = "remote-results/landscapes";
 /** What the capture shares with its photograph and what it misses — looked at side by side
- *  (scripts/landscapes-compare.html), 13 October 2026 */
+ *  (scripts/landscapes-compare.html), 13 October 2026, the last six again after their fixes */
 const NOTES: Record<string, string> = {
   "earth-the-grand-canyon-from-hopi-point":
     "Fidèle au cadrage : la rive nord et les temples au même endroit. La photo, voilée de nuages, est plus claire que la lumière du soir calculée.",
@@ -26,20 +26,21 @@ const NOTES: Record<string, string> = {
     "Fidèle après correction (cap 7° plus à l'ouest, regard 12° plus bas) : la ligne de crêtes du massif épouse celle de la photo.",
   "earth-the-geirangerfjord-from-flydalsjuvet": "Fidèle : la vallée, le lac du fond et les deux versants au même endroit.",
   "earth-reine-from-reinebringen":
-    "Ne ressemble pas : le massif que la photo montre en face n'apparaît pas — la direction réelle de la prise de vue reste à retrouver.",
+    "Fidèle : Olstinden au-delà du Reinefjord, ligne d'horizon corrélée à 0,93 — la photo vise ce sommet, nommé sur sa page, et non le village en contrebas.",
   "earth-kirkjufell-over-kirkjufellsfoss":
     "Proche après correction (cap 14° plus à droite) : le cône à gauche du centre. La cascade du premier plan, trop petite pour le relief, manque.",
   "earth-lauterbrunnen-and-the-staubbach-falls":
-    "Partiel : la falaise et la chute du Staubbach sont là ; les maisons ne sont que des volumes (OpenStreetMap).",
+    "Proche : la chute dans le tiers gauche, la paroi désormais nue (plus d'arbres sur les pentes de plus de 50°), les maisons en volumes ; la photo, prise plus près, emplit le cadre de la paroi.",
   "earth-the-cuernos-del-paine":
-    "Partiel : la forêt qui couvrait le point de vue est dégagée, mais les aiguilles des Cuernos, trop fines pour le relief (~30 m), deviennent un massif arrondi.",
+    "Partiel : le point de vue dégagé de sa forêt et le massif à la bonne hauteur, mais les aiguilles des Cuernos, trop fines pour le relief (~30 m), deviennent un dôme arrondi.",
   "earth-fitz-roy-above-the-laguna-de-los-tres":
-    "Ne ressemble pas encore : une arête du premier plan cache la laguna ; le point de vue est à revoir.",
+    "Partiel : au point GPS la caméra était dans un creux ; depuis la crête entre les deux lagunas, la Sucia à gauche, la Tres à droite et le massif derrière, mais les tours de granit, plus fines que le relief, sont arrondies.",
   "earth-mount-fuji-across-lake-kawaguchi":
     "Proche : les pins à gauche, le lac et le Fuji au fond ; le volcan paraît plus grand que sur la photo.",
   "earth-moraine-lake-and-the-valley-of-the-ten-peaks":
-    "Ne ressemble pas : une butte cache le lac et les Dix Pics — le Rockpile, trop petit pour le relief, n'élève pas la caméra.",
-  "earth-the-dunes-of-sossusvlei": "Ne ressemble pas : les dunes, plus fines que le relief, n'existent pas dans le terrain.",
+    "Proche : la caméra posée au sommet du Rockpile tel que le relief le dessine (120 m plus loin que le point GPS) — le lac et les Dix Pics avec leur reflet. Les sommets, arrondis par le relief, et le miroir du lac reste tacheté.",
+  "earth-the-dunes-of-sossusvlei":
+    "Partiel : au 150 mm, la crête d'une dune sur le ciel comme sur la photo ; le sable sans ses rides ni le jeu d'ombre du matin.",
   "earth-monument-valley-s-mittens": "Fidèle : les deux Mittens et Merrick Butte au même endroit, sur le même horizon.",
   "earth-mount-moran-from-oxbow-bend":
     "Proche après correction (cap 4° à gauche, regard 9° plus bas) : le mont Moran et la rivière ; les fleurs du premier plan manquent.",

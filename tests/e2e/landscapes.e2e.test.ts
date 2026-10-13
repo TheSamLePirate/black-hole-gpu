@@ -12,14 +12,18 @@ const OUT = "remote-results/landscapes";
 const only = (process.env.LANDSCAPES ?? "").split("|").filter(Boolean);
 const chosen = LANDSCAPES.filter((l) => !only.length || only.some((o) => l.scene.toLowerCase().includes(o.toLowerCase())));
 
-// (a completed frame is not a loaded scene: the relief, the scenery and the light all in, and none failed)
+// (a completed frame is not a loaded scene: the relief and its imagery, the regional surface, the scenery and the
+// forests, the grass round the camera, the light — all in, none failed, the tripod set on the finest ground, the
+// kernel with every feature the scene uses compiled in; then the still view refined to its end)
 const readiness = `(() => {
-  const r = __bh.renderer, s = r.earthScenery.stats();
+  const r = __bh.renderer, s = r.earthScenery.stats(), g = r.characterRenderer.stats();
+  const grassIn = !g.pending && g.reason !== 'loading';
   const ready = r.variantReady && !!r.variants.get(r.featureKey)?.env && r.calibrationReady && !r.hdLoading &&
     r.earthMaps.tier === 'high' && r.earthTiles.pending === 0 && r.earthTiles.failed === 0 &&
-    s.status === 'ready' && !s.pending && r.gpuErrors === 0;
-  return { ready, frames: r.completedFrames, tier: r.earthMaps.tier, tiles: { pending: r.earthTiles.pending, failed: r.earthTiles.failed, stamp: r.earthTiles.stamp },
-    scenery: s, signature: [r.featureKey, r.earthMaps.tier, r.earthTiles.stamp, r.earthScenery.stamp].join(':') };
+    !r.earthSurface.pending && s.status === 'ready' && !s.pending && grassIn && r.gpuErrors === 0;
+  return { ready, frames: r.completedFrames, tier: r.earthMaps.tier, tiles: { pending: r.earthTiles.pending, failed: r.earthTiles.failed, stamp: r.earthTiles.stamp, imagery: r.earthTiles.imagery },
+    scenery: s, grass: { reason: g.reason, pending: g.pending, roots: g.roots }, ground: r.groundStamp,
+    signature: [r.featureKey, r.earthMaps.tier, r.earthTiles.stamp, r.earthTiles.imagery, r.earthScenery.stamp, r.groundStamp, g.reason].join(':') };
 })()`;
 
 test.skipIf(!E2E)(
@@ -46,6 +50,8 @@ test.skipIf(!E2E)(
         );
         const status = await app.js<{ ready: boolean }>(readiness);
         expect(status.ready).toBe(true);
+        // (the still view refined to its end: every sample in — a capture mid-way is noisy and blocky)
+        await app.waitFor(`__bh.renderer.lastPhase === "converged"`, 240_000);
         await Bun.write(`${OUT}/${slug}.json`, JSON.stringify({ landscape: l, readiness: status }, null, 2));
         // (the picture alone, as the photograph is: the interface hidden — the data's credits go with the gallery's
         // captions —, a few frames for the page to draw without it)
