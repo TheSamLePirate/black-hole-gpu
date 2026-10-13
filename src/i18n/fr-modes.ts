@@ -252,44 +252,31 @@ export default {
   "all shortcuts": "tous les raccourcis",
   "Tripod: the camera set down on the ground — on foot, where you stand, looking the same way":
     "Trépied : la caméra posée au sol — à pied, là où vous êtes, regardant du même côté",
-  // the orchestral score (music: after Zimmer, Williams and Richter)
-  "Gargantua, after Interstellar's main theme: A minor, the VI7 – v6 – i – v65 loop, the organ's clock ticking on an E pedal in triplets, the organ and its pedal, the strings and the choir swelling":
-    "Gargantua, d'après le thème principal d'Interstellar : la mineur, la boucle VI7 – v6 – i – v65, l'horloge de l'orgue qui bat en triolets sur une pédale de mi, l'orgue et sa pédale, les cordes et le chœur qui enflent",
-  "The lift-off, after Star Wars's main title: B♭, a fanfare on the tonic, the big tune between the tonic and a chord of fourths on F, A♭ before the dominant, every phrase ending on it, a march in triplets, a lyrical middle for the strings and horns":
-    "Le décollage, d'après le générique de Star Wars : si♭, une fanfare sur la tonique, le grand thème entre la tonique et un accord de quartes sur fa, la♭ avant la dominante, chaque phrase finissant sur elle, une marche en triolets, un milieu lyrique pour les cordes et les cors",
-  "The plasma, after the Imperial March: G minor, the low strings, horns and timpani on G minor and E♭ minor, then i – ♯iv – ♯v – i (all minor chords, a semitone off the expected ones), trumpets and trombones in the middle register, the snare":
-    "Le plasma, d'après la Marche impériale : sol mineur, les cordes graves, les cors et les timbales sur sol mineur et mi♭ mineur, puis i – ♯iv – ♯v – i (que des accords mineurs, à un demi-ton des accords attendus), trompettes et trombones dans le médium, la caisse claire",
-  "The final, in John Williams's lyrical manner: F, the tonic and its Lydian neighbour (II over the tonic's bass), a horn line doubled by the violins, the harp's arpeggios, soft timpani":
-    "La finale, dans la veine lyrique de John Williams : fa, la tonique et sa voisine lydienne (II sur la basse de la tonique), une ligne de cor doublée par les violons, les arpèges de la harpe, des timbales douces",
-  "The wormhole, after Interstellar: E minor, i – VI – III – VII, a Shepard tone rising without end, the organ's sixteenths, high violins, the choir and the taikos":
-    "Le trou de ver, d'après Interstellar : mi mineur, i – VI – III – VII, un son de Shepard qui monte sans fin, les doubles croches de l'orgue, les violons aigus, le chœur et les taikos",
-  "Miller, after Interstellar's Mountains: the tick every 1.25 s (an hour there, seven years on Earth), A minor, the organ low with Fmaj7 and G6, the strings and the horns swelling like the wave, booms":
-    "Miller, d'après Mountains (Interstellar) : le tic toutes les 1,25 s (une heure là-bas, sept ans sur Terre), la mineur, l'orgue grave avec Fmaj7 et G6, les cordes et les cors qui enflent comme la vague, des coups sourds",
-  "In orbit, after Max Richter's On the Nature of Daylight: B♭ minor at 61 BPM, a ground bass under i – v6 – III6 – VI – VII looping unchanged, the low strings first, the violins' long melody later, built up and stripped back like a palindrome":
-    "En orbite, d'après On the Nature of Daylight de Max Richter : si♭ mineur à 61 BPM, une basse obstinée sous i – v6 – III6 – VI – VII qui tourne sans changer, les cordes graves d'abord, la longue mélodie des violons ensuite, construit puis dépouillé comme un palindrome",
-  "Flying low and fast, after E.T.'s Flying: C with its Lydian neighbour chord (D over C), the violins soaring, brass stabs, the strings' sixteenths, the harp and the celesta, timpani and cymbals":
-    "Vol bas et rapide, d'après Flying (E.T.) : do et son accord voisin lydien (ré sur do), les violons qui s'envolent, les attaques de cuivres, les doubles croches des cordes, la harpe et le célesta, timbales et cymbales",
-  "Docking, after Interstellar's No Time for Caution: A minor, Am – F – C – G, the organ's sixteenths building, a clock ticking in eighths, the strings held, a horn line at the height, braams at the climax":
-    "L'amarrage, d'après No Time for Caution (Interstellar) : la mineur, Am – F – C – G, les doubles croches de l'orgue qui montent, une horloge en croches, les cordes tenues, une ligne de cor au sommet, des braams au paroxysme",
-  "Between the worlds, after Interstellar's Day One: A minor in 3/4, the piano's left hand in broken chords, a few notes over them, the organ and the choir held far away":
-    "Entre les mondes, d'après Day One (Interstellar) : la mineur à 3/4, la main gauche du piano en accords brisés, quelques notes au-dessus, l'orgue et le chœur tenus au loin",
-  "The ship's theme, after Inception's Time: E minor at 60 BPM, Am – Em – G – D – Am – Cmaj7 – G – D (the Cmaj7 its lift), an insistent drum, the layers added one by one to the horns' climax, a solo piano to end":
-    "Le thème du vaisseau, d'après Time (Inception) : mi mineur à 60 BPM, Am – Em – G – D – Am – Cmaj7 – G – D (le Cmaj7 qui soulève tout), un tambour obstiné, les couches ajoutées une à une jusqu'au sommet des cors, un piano seul pour finir",
-  "On foot on another world, after Jurassic Park's theme: B♭ major, reverently, I(add9) – V7sus4 to open, then I – IV – I (the IV resolving back home), only major chords, a hymn where chord and tune move together, low strings and horns first, the choir later, A♭ at the climaxes":
-    "À pied sur un autre monde, d'après le thème de Jurassic Park : si♭ majeur, avec révérence, I(add9) – V7sus4 pour ouvrir, puis I – IV – I (le IV qui revient au port), que des accords majeurs, un hymne où accords et mélodie avancent ensemble, cordes graves et cors d'abord, le chœur ensuite, la♭ aux sommets",
-  "Interstellar — main theme": "Interstellar — thème principal",
-  "Star Wars — main title": "Star Wars — générique",
-  "The Imperial March": "la Marche impériale",
-  "E.T. — the Lydian neighbour chord": "E.T. — l'accord voisin lydien",
-  "Interstellar — The Wormhole; Dunkirk's Shepard tone": "Interstellar — The Wormhole ; le son de Shepard de Dunkerque",
-  "Interstellar — Mountains": "Interstellar — Mountains",
-  "On the Nature of Daylight": "On the Nature of Daylight",
-  "E.T. — Flying": "E.T. — Flying",
-  "Interstellar — No Time for Caution": "Interstellar — No Time for Caution",
-  "Interstellar — Day One": "Interstellar — Day One",
-  "Inception — Time": "Inception — Time",
-  "Jurassic Park — main theme": "Jurassic Park — thème principal",
-  "After {0}": "D'après {0}",
+  // the orchestral score (music/themes.ts: its moods, no real work named)
+  "Gargantua: A minor, the VI7 – v6 – i – v65 loop, the organ's clock ticking on an E pedal in triplets, the organ and its pedal, the strings and the choir swelling":
+    "Gargantua : la mineur, la boucle VI7 – v6 – i – v65, l'horloge de l'orgue qui bat en triolets sur une pédale de mi, l'orgue et sa pédale, les cordes et le chœur qui enflent",
+  "The lift-off: B♭, a fanfare on the tonic, the big tune between the tonic and a chord of fourths on F, A♭ before the dominant, every phrase ending on it, a march in triplets, a lyrical middle for the strings and horns":
+    "Le décollage : si♭, une fanfare sur la tonique, le grand thème entre la tonique et un accord de quartes sur fa, la♭ avant la dominante, chaque phrase finissant sur elle, une marche en triolets, un milieu lyrique pour les cordes et les cors",
+  "The plasma: G minor, the low strings, horns and timpani on G minor and E♭ minor, then i – ♯iv – ♯v – i (all minor chords, a semitone off the expected ones), trumpets and trombones in the middle register, the snare":
+    "Le plasma : sol mineur, les cordes graves, les cors et les timbales sur sol mineur et mi♭ mineur, puis i – ♯iv – ♯v – i (que des accords mineurs, à un demi-ton des accords attendus), trompettes et trombones dans le médium, la caisse claire",
+  "The final, lyrical: F, the tonic and its Lydian neighbour (II over the tonic's bass), a horn line doubled by the violins, the harp's arpeggios, soft timpani":
+    "La finale, lyrique : fa, la tonique et sa voisine lydienne (II sur la basse de la tonique), une ligne de cor doublée par les violons, les arpèges de la harpe, des timbales douces",
+  "The wormhole: E minor, i – VI – III – VII, a Shepard tone rising without end, the organ's sixteenths, high violins, the choir and the taikos":
+    "Le trou de ver : mi mineur, i – VI – III – VII, un son de Shepard qui monte sans fin, les doubles croches de l'orgue, les violons aigus, le chœur et les taikos",
+  "Miller: the tick every 1.25 s (an hour there, seven years on Earth), A minor, the organ low with Fmaj7 and G6, the strings and the horns swelling like the wave, booms":
+    "Miller : le tic toutes les 1,25 s (une heure là-bas, sept ans sur Terre), la mineur, l'orgue grave avec Fmaj7 et G6, les cordes et les cors qui enflent comme la vague, des coups sourds",
+  "In orbit: B♭ minor at 61 BPM, a ground bass under i – v6 – III6 – VI – VII looping unchanged, the low strings first, the violins' long melody later, built up and stripped back like a palindrome":
+    "En orbite : si♭ mineur à 61 BPM, une basse obstinée sous i – v6 – III6 – VI – VII qui tourne sans changer, les cordes graves d'abord, la longue mélodie des violons ensuite, construit puis dépouillé comme un palindrome",
+  "Flying low and fast: C with its Lydian neighbour chord (D over C), the violins soaring, brass stabs, the strings' sixteenths, the harp and the celesta, timpani and cymbals":
+    "Vol bas et rapide : do et son accord voisin lydien (ré sur do), les violons qui s'envolent, les attaques de cuivres, les doubles croches des cordes, la harpe et le célesta, timbales et cymbales",
+  "Docking: A minor, Am – F – C – G, the organ's sixteenths building, a clock ticking in eighths, the strings held, a horn line at the height, braams at the climax":
+    "L'amarrage : la mineur, Am – F – C – G, les doubles croches de l'orgue qui montent, une horloge en croches, les cordes tenues, une ligne de cor au sommet, des braams au paroxysme",
+  "Between the worlds: A minor in 3/4, the piano's left hand in broken chords, a few notes over them, the organ and the choir held far away":
+    "Entre les mondes : la mineur à 3/4, la main gauche du piano en accords brisés, quelques notes au-dessus, l'orgue et le chœur tenus au loin",
+  "The ship's theme: E minor at 60 BPM, Am – Em – G – D – Am – Cmaj7 – G – D (the Cmaj7 its lift), an insistent drum, the layers added one by one to the horns' climax, a solo piano to end":
+    "Le thème du vaisseau : mi mineur à 60 BPM, Am – Em – G – D – Am – Cmaj7 – G – D (le Cmaj7 qui soulève tout), un tambour obstiné, les couches ajoutées une à une jusqu'au sommet des cors, un piano seul pour finir",
+  "On foot on another world: B♭ major, reverently, I(add9) – V7sus4 to open, then I – IV – I (the IV resolving back home), only major chords, a hymn where chord and tune move together, low strings and horns first, the choir later, A♭ at the climaxes":
+    "À pied sur un autre monde : si♭ majeur, avec révérence, I(add9) – V7sus4 pour ouvrir, puis I – IV – I (le IV qui revient au port), que des accords majeurs, un hymne où accords et mélodie avancent ensemble, cordes graves et cors d'abord, le chœur ensuite, la♭ aux sommets",
   Percussion: "Percussions",
   Basses: "Basses",
   Strings: "Cordes",

@@ -11,7 +11,7 @@ import { DEFAULT_PREFS } from "../audio/music";
 import { CONTEXTS, MOMENTS } from "../audio/score";
 import { LAYERS, type Layer, THEME_BY_ID, THEMES } from "../audio/music/themes";
 import type { Settings } from "../settings";
-import { t, tf } from "../i18n";
+import { t } from "../i18n";
 import { el as h } from "./kit";
 import { onEscape } from "./keys";
 
@@ -263,11 +263,7 @@ export class MusicPanel {
     for (const th of THEMES) {
       const b = h("button", "mp-theme") as HTMLButtonElement;
       const name = SCALE_NAME[th.scale]?.() ?? th.scale;
-      b.append(
-        h("b", "", th.name),
-        h("small", "", `${tf("After {0}", t(th.after))} · ${th.bpm} BPM · ${NOTE_NAMES[th.root % 12]} ${name}`),
-        h("small", "", t(th.mood)),
-      );
+      b.append(h("b", "", th.name), h("small", "", `${th.bpm} BPM · ${NOTE_NAMES[th.root % 12]} ${name}`), h("small", "", t(th.mood)));
       b.title = t(th.mood);
       const box = h("input") as HTMLInputElement;
       box.type = "checkbox";
