@@ -43,11 +43,12 @@ async function tree(rev: string) {
 async function binaries() {
   const out = new Set<string>(),
     lfs = new Set<string>();
+  // (git check-attr -z: path, attribute, value — in threes)
+  const attrs = (await $`git ls-files -z | git check-attr --stdin -z filter`.quiet().text()).split("\0");
+  for (let i = 0; i + 2 < attrs.length; i += 3) if (attrs[i + 2] === "lfs") lfs.add(attrs[i]!);
   for (const line of (await $`git ls-files --eol -z`.quiet().text()).split("\0")) {
-    const m = /^i\/(\S*)\s+w\/\S*\s+attr\/([^\t]*)\t(.*)$/s.exec(line);
-    if (!m) continue;
-    if (/filter=lfs/.test(m[2]!)) lfs.add(m[3]!);
-    else if (m[1] === "-text") out.add(m[3]!);
+    const m = /^i\/(\S*)\s+w\/\S*\s+attr\/[^\t]*\t(.*)$/s.exec(line);
+    if (m && m[1] === "-text" && !lfs.has(m[2]!)) out.add(m[2]!);
   }
   return { out, lfs };
 }
