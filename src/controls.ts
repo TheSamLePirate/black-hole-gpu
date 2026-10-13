@@ -375,6 +375,9 @@ export class CameraController {
   specVel: [number, number, number] = [0, 0, 0];
   /** the spectator gliding out of the ship: its offset from the eye's to behind the ship [m] */
   specGlide: { from: [number, number, number]; to: [number, number, number]; t: number; T: number } | null = null;
+  /** a walk left for the free camera: where its view stands, as a world point at a time — the follow's offset taken
+   *  from it at the next frame, once the ship's own place there is known (the ship's rig lags a walk's length) */
+  specRebase: ((time: number) => [number, number, number]) | null = null;
   /** a spectator's distance to the flown ship [M] (its keys' speed scales with it too: slow by the ship) */
   nearShip = Infinity;
   /** a headless controller's pad this frame, polled by the main one (undefined: poll its own) */

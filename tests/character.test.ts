@@ -276,12 +276,16 @@ test("the walk left for the free camera: the walker's view stays where it was, n
   c.character.move(1, 0, 4);
   for (let i = 0; i < 480; i++) c.character.step(1 / 120, 0, null);
   // (on the Moon's ground: its turn and its orbit carry the view)
-  const fixed = () => toBodyFixed("moon", c.spectator!.rigWorld()!.X, c.spectator!.nowTime());
+  // (at the flight's clock: the spectator's lags it by the frame's step — the Moon's 25 km/s round the Sun read as a
+  // view gone 850 m in one frame)
+  const fixed = () => toBodyFixed("moon", c.spectator!.rigWorld()!.X, c.nowTime());
   const before = fixed();
   c.character.stop({ keepView: true });
   expect(c.spectator).not.toBeNull();
-  // (a second of the scene's time, as the app's frames run it)
-  for (let i = 1; i <= 30; i++) c.advanceSpectator(1 / 30, (i / 30) * c.s.timeSpeed, null);
+  // (a second of the scene's time, as the app's frames run it: the flight's controller — the landed ship carried by
+  // its world — then the spectator following it)
+  const t0 = c.nowTime();
+  for (let i = 1; i <= 30; i++) c.update(1 / 30, t0 + (i / 30) * c.s.timeSpeed);
   expect(len(sub(fixed(), before)) * M_METRES).toBeLessThan(0.5);
 });
 

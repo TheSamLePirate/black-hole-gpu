@@ -107,6 +107,8 @@ export class PlanetCharacter {
   private runFov = 1;
   private jolt = 0;
   private camClock = 0;
+  /** the view's place [the walk's metres] as last placed (the free camera taken over from it) */
+  private camQ: Vec3 | null = null;
   constructor(private c: CameraController) {}
   /** the Gargantua world's frame walked on at a time (one a step: the height's samples, the sub-steps, the camera
    *  read it many times — each built anew allocated, 32 times for the camera's march alone) */
@@ -474,9 +476,12 @@ export class PlanetCharacter {
     if (walking && !o.keepView) this.c.spectator = null;
     else if (walking && this.c.spectator) {
       // (the walker's camera goes on free where it stands: the follow's offset and the glide out of the ship set
-      // when the walk began — never advanced while walking — cut it back to that stale view of the ship)
+      // when the walk began — never advanced while walking — cut it back to that stale view of the ship. Its
+      // following kept as it was, its offset taken from where it is now: unfollowed, it stayed still in space while
+      // the world turned under it — the ground gone from below the tripod in seconds)
       this.c.specGlide = null;
-      this.c.setSpectatorFollow(false);
+      const eye = this.camQ;
+      if (this.c.spectatorFollow && eye) this.c.specRebase = (time) => this.world(eye, time) as [number, number, number];
     }
     this.c.keys.clear();
     this.c.codes.clear();
@@ -726,6 +731,7 @@ export class PlanetCharacter {
     }
     this.camDistance = reach < this.camDistance ? reach : this.camDistance + (reach - this.camDistance) * (1 - Math.exp(-dt * 8));
     const q = add(target, away, this.camDistance);
+    this.camQ = q;
     if (this.ours) {
       const X = this.world(q, time);
       sp.rigPlace(true, X, unit(sub(this.world(target, time), X)), this.worldVector(up, time), groundVelocity(this.body, X, time));

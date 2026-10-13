@@ -180,6 +180,12 @@ function followShip(this: CameraController, sp: CameraController, dt: number, pa
     sp.sync();
     return false;
   }
+  // (a walk just left: the offset from where its view stood, at the ship's own time now)
+  if (this.specRebase) {
+    const X = this.specRebase(this.nowTime());
+    this.specRebase = null;
+    this.specOff = [0, 1, 2].map((i) => (X[i]! - a.X[i]!) * M_METRES) as Vec3;
+  }
   const move = [0, 0, 0, 0];
   const keys = freeCameraKeys();
   for (const c of this.codes) {
