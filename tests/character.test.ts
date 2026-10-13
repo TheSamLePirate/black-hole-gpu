@@ -132,7 +132,9 @@ test("shared walking grid publishes the same heights and rejects samples outside
   expect(p.sample([2, 3, 0.7])).toBeCloseTo(0, 4);
   expect(p.sample([100, 100, 0])).toBeNull();
   const before = p.stamp;
-  p.build([20, 0, 0], [0, 0, 1], raw, 2);
+  // (the fine grid is made 1 ms at a time, the one under way finished first: built until the new one is out)
+  for (let i = 0; i < 2000 && (p.origin[0] !== 20 || p.size !== 65); i++) p.build([20, 0, 0], [0, 0, 1], raw, 2);
+  expect(p.origin[0]).toBe(20);
   expect(p.stamp).toBeGreaterThan(before);
   expect(p.sample([22, 3, 4.7])).toBeCloseTo(0, 4);
   p.clear();
