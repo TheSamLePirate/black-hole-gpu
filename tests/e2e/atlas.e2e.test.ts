@@ -53,7 +53,7 @@ describe.skipIf(!E2E)("the Atlas", () => {
 
   test("TARS finds Mont Blanc; the pause menu offers the Atlas", async () => {
     const r = await app.js<{ found: { name: string; lat: number; lon: number }[] }>(
-      `__bh.tars.tools().find((t) => t.name === "atlas").run({ action: "search", query: "Mont Blanc", body: "earth" }, new AbortController().signal).then((r) => r.result ?? r)`,
+      `Promise.resolve(__bh.tars.tools().find((t) => t.name === "atlas").run({ action: "search", query: "Mont Blanc", body: "earth" }, new AbortController().signal)).then((r) => r.result ?? r)`,
     );
     expect(r.found[0]!.lat).toBeCloseTo(45.83, 1);
     await app.press("Escape", "Escape");

@@ -47,7 +47,7 @@ describe.skipIf(!E2E)("the photo mode's films", () => {
   test("TARS: the shots, the director's refused without a ship, a live draft", async () => {
     const run = (args: string) =>
       app.js<{ ok: boolean; error?: string; shots?: { id: string; available: boolean }[] }>(
-        `__bh.tars.tools().find((t) => t.name === "video").run(${args}, new AbortController().signal).then((r) => r.result ?? r)`,
+        `Promise.resolve(__bh.tars.tools().find((t) => t.name === "video").run(${args}, new AbortController().signal)).then((r) => r.result ?? r)`,
       );
     const shots = (await run(`{ action: "shots" }`)).shots!;
     expect(shots.map((s) => s.id)).toEqual(["live", "take", "orbit", "dive", "journey", "director"]);

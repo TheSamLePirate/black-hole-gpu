@@ -9,6 +9,7 @@ import { captureLoadedCharacter } from "./lib/character-ready";
 
 afterAll(stopServer);
 
+// (frozen: the view goes where the walker starts only when stepped — hence a step after each start)
 const SETUP = `__bh.freeze(true);__bh.game.setDate('2021-06-21T10:00:00Z');Object.assign(__bh.settings,{earthScenery:'balanced',earthTerrain:true,earthSurface:'materials',earthGrass:'balanced',earthGrassDensity:1,earthGrassReach:28,earthClouds:0,volumetricClouds:false,dynamicResolution:false,realtimeSubsampling:2,pixelRatio:1,temporalReprojection:false});`;
 
 /** In the scenery raster round the astronaut, the place nearest the middle with the class (null: none within 2 km). */
@@ -29,11 +30,13 @@ const FIND = (cls: number) => `(()=>{
 
 async function settle(app: App) {
   await app.js("(()=>{__bh.step(0);__bh.touch();return true;})()");
-  await app.waitFor(
-    "__bh.renderer.characterRenderer.stats().reason!=='loading' && !__bh.renderer.characterRenderer.stats().pending",
-    120_000,
-  );
+  // (a place FIND chose up to 400 px away: the scenery asked there anew — the grass waits for it)
+  await app.waitFor("__bh.renderer.earthScenery.contact && !__bh.renderer.earthScenery.pending", 180_000);
+  const grassIn = "__bh.renderer.characterRenderer.stats().reason!=='loading' && !__bh.renderer.characterRenderer.stats().pending";
+  await app.waitFor(grassIn, 120_000);
   await app.waitFor("__bh.renderer.variantReady && __bh.renderer.calibrationReady", 240_000);
+  // (the kernel's compile can outlast a scenery refresh: the grass in again before the frames counted)
+  await app.waitFor(grassIn, 120_000);
   const frame = await app.js<number>("__bh.renderer.completedFrames");
   await app.waitFor(`__bh.renderer.completedFrames >= ${frame + 20}`, 60_000);
 }
@@ -43,7 +46,7 @@ test.skipIf(!E2E)(
   async () => {
     const app = await App.boot({ hash: `scene=${encodeURIComponent("Earth: the Blue Marble")}`, width: 1280, height: 720, tiles: true });
     try {
-      await app.js(`(()=>{${SETUP}return __bh.camera.character.start('earth',44.2,4.15);})()`);
+      await app.js(`(()=>{${SETUP}const e=__bh.camera.character.start('earth',44.2,4.15);__bh.step(0);__bh.touch();return e;})()`);
       await app.waitFor("__bh.renderer.earthScenery.contact && !__bh.renderer.earthScenery.pending", 180_000);
       const place = await app.js<{ lat: number; lon: number } | null>(FIND(30));
       expect(place).not.toBeNull();
@@ -105,7 +108,7 @@ test.skipIf(!E2E)(
         [48.95, 2.45],
         [44.2, 4.15],
       ] as const) {
-        await app.js(`(()=>{${SETUP}return __bh.camera.character.start('earth',${lat},${lon});})()`);
+        await app.js(`(()=>{${SETUP}const e=__bh.camera.character.start('earth',${lat},${lon});__bh.step(0);__bh.touch();return e;})()`);
         await app.js("(()=>{__bh.step(0);__bh.touch();return true;})()");
         await app.waitFor("__bh.renderer.earthScenery.contact && !__bh.renderer.earthScenery.pending", 180_000);
         for (const [name, cls] of [
@@ -144,7 +147,7 @@ test.skipIf(!E2E)(
   async () => {
     const app = await App.boot({ hash: `scene=${encodeURIComponent("Earth: the Blue Marble")}`, width: 1280, height: 720, tiles: true });
     try {
-      await app.js(`(()=>{${SETUP}return __bh.camera.character.start('earth',44.2,4.15);})()`);
+      await app.js(`(()=>{${SETUP}const e=__bh.camera.character.start('earth',44.2,4.15);__bh.step(0);__bh.touch();return e;})()`);
       await app.waitFor("__bh.renderer.earthScenery.contact && !__bh.renderer.earthScenery.pending", 180_000);
       expect(await app.js(FIND(30))).not.toBeNull();
       await settle(app);

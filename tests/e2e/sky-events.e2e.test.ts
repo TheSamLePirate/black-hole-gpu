@@ -49,7 +49,7 @@ describe.skipIf(!E2E)("the tripod and the sky's events", () => {
 
   test("TARS lists them and lives the analemma: three exposures, stopped, the stack offered", async () => {
     const r = await app.js<{ ok: boolean; events: { id: string; look: { fovDeg: number } }[] }>(
-      `__bh.tars.tools().find((t) => t.name === "sky_events").run({ action: "list" }, new AbortController().signal).then((r) => r.result ?? r)`,
+      `Promise.resolve(__bh.tars.tools().find((t) => t.name === "sky_events").run({ action: "list" }, new AbortController().signal)).then((r) => r.result ?? r)`,
     );
     expect(r.ok).toBe(true);
     const ids = r.events.map((e) => e.id);

@@ -78,7 +78,7 @@ describe.skipIf(!E2E)("the four modes and the top bar", () => {
     await app.waitFor(`!!document.querySelector(".tars-panel:not([hidden])")`, 3_000);
     await app.press("Escape", "Escape");
     const st = await app.js<{ mode: string; foot: { body: string; craft: { distM: number } | null } | null }>(
-      `__bh.tars.tools().find((t) => t.name === "get_state").run({}, new AbortController().signal).then((r) => r.flight)`,
+      `Promise.resolve(__bh.tars.tools().find((t) => t.name === "get_state").run({}, new AbortController().signal)).then((r) => r.flight)`,
     );
     expect(st.mode).toBe("foot");
     expect(st.foot?.body).toBe("moon");
@@ -106,7 +106,7 @@ describe.skipIf(!E2E)("the four modes and the top bar", () => {
   test("the capture in every mode (M3): on foot, the free camera, the ship — the view rendered converged", async () => {
     const capture = (args: object) =>
       app.js<{ ok: boolean; active: boolean; progress: number | null; done: boolean; error?: string }>(
-        `__bh.tars.tools().find((t) => t.name === "capture").run(${JSON.stringify(args)}, new AbortController().signal).then((r) => r.result ?? r)`,
+        `Promise.resolve(__bh.tars.tools().find((t) => t.name === "capture").run(${JSON.stringify(args)}, new AbortController().signal)).then((r) => r.result ?? r)`,
       );
     await app.js(`(()=>{__bh.camera.character.start('moon',0.67,23.47);__bh.step(0);return true;})()`);
     await settle();
@@ -133,7 +133,7 @@ describe.skipIf(!E2E)("the four modes and the top bar", () => {
   test("TARS's set_mode: the free camera, then the ship", async () => {
     const run = (args: object) =>
       app.js<{ ok: boolean; mode: string }>(
-        `__bh.tars.tools().find((t) => t.name === "set_mode").run(${JSON.stringify(args)}, new AbortController().signal).then((r) => r.result ?? r)`,
+        `Promise.resolve(__bh.tars.tools().find((t) => t.name === "set_mode").run(${JSON.stringify(args)}, new AbortController().signal)).then((r) => r.result ?? r)`,
       );
     expect(await run({ mode: "free" })).toMatchObject({ ok: true, mode: "free" });
     await settle();

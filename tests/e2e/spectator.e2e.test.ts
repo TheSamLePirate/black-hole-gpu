@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
-// The spectator (controller/spectator.ts) by real keys: F3 out and back; the camera moved about the
+// The spectator (controller/spectator.ts) by real keys: F3 out (the Free camera mode), F1 back (the Ship mode); the camera moved about the
 // ship, the ship on its orbit as it was; a ship landed on the Moon while the camera flies far away —
 // its ground (the Moon's measured heights, streamed round the view) kept under it.
 
@@ -30,7 +30,7 @@ describe.skipIf(!E2E)("the spectator", () => {
     app.js<{ pe: number; ap: number }>(`(() => { const o = __bh.game.status().orbit; return { pe: o.peKm, ap: o.apKm }; })()`);
   const away = () => app.js<number>("__bh.renderer.shipPlace ? __bh.renderer.shipPlace.dist : -1");
 
-  test("F3: out, the banner; S backs away from the ship, which keeps its orbit; F3: back", async () => {
+  test("F3: out, the banner; S backs away from the ship, which keeps its orbit; F1: back", async () => {
     const o0 = await orbit();
     await app.press("F3", "F3");
     await app.waitFor("__bh.camera.spectating");
@@ -43,7 +43,7 @@ describe.skipIf(!E2E)("the spectator", () => {
     const o1 = await orbit();
     expect(Math.abs(o1.pe - o0.pe)).toBeLessThan(1);
     expect(Math.abs(o1.ap - o0.ap)).toBeLessThan(1);
-    await app.press("F3", "F3");
+    await app.press("F1", "F1");
     await app.waitFor("!__bh.camera.spectating");
     expect(await app.js<boolean>(`document.querySelector(".fl-spect").hidden`)).toBe(true);
   });
@@ -62,7 +62,7 @@ describe.skipIf(!E2E)("the spectator", () => {
     const o1 = await orbit();
     expect(await app.js<string>("__bh.game.status().soi")).toBe("earth");
     expect(Math.abs(o1.pe - o0.pe)).toBeLessThan(1);
-    await app.press("F3", "F3");
+    await app.press("F1", "F1");
     await app.waitFor("!__bh.camera.spectating");
   });
 
@@ -84,7 +84,7 @@ describe.skipIf(!E2E)("the spectator", () => {
     const g1 = await app.js<number>(`__bh.game.status().altKm * 1000`);
     expect(Math.abs(g1 - g0)).toBeLessThan(1);
     expect(await app.js<string>(`__bh.game.status().status`)).toBe("landed");
-    await app.press("F3", "F3");
+    await app.press("F1", "F1");
     await app.waitFor("!__bh.camera.spectating");
   });
 });

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
-// The entry autopilot assisted (F4: the pilot flies, the HUD's director shows its commands), in the plane
+// The entry autopilot assisted (⇧F4: the pilot flies, the HUD's director shows its commands), in the plane
 // law, flown by a pilot who keeps the director's ring on the nose — the stick's pitch and roll against the
 // ring's offset (touchInput: an analogue stick). Hypersonic, the ring asks the entry's 40° of incidence:
 // the plane law's protection let the stick reach 21° only (the wing's stall), the craft dived 8 km in 15 s.

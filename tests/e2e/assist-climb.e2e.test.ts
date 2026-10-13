@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
-// The take-off's assistant (C2) by real input: from the Cape, the take-off assisted (F4, U) waits for its
+// The take-off's assistant (C2) by real input: from the Cape, the take-off assisted (⇧F4, U) waits for its
 // pilot — the director gives the path's angle and heading, the countdown to the gravity turn; the graph
 // beside the hub is the ascent's. Handed to the autopilot (the card's button), it climbs on its optimum:
 // the trace in the corridor, max-Q passed, the cutoff counted down; assisted again mid-climb, the throttle
@@ -21,7 +21,7 @@ describe.skipIf(!E2E)("the take-off assisted", () => {
   test("from the Cape: the pilot awaited, the ascent's graph and countdowns; the autopilot on its optimum", async () => {
     await app.js(`__bh.game.land("earth", 28.573, -80.649)`);
     await Bun.sleep(2000);
-    await app.press("F4", "F4");
+    await app.press("F4", "F4", { shift: true });
     await app.press("KeyU", "u");
     await app.waitFor(`__bh.camera.hubInfo()?.graph?.kind === "climb"`, 10_000);
     await Bun.sleep(1500);
@@ -29,7 +29,9 @@ describe.skipIf(!E2E)("the take-off assisted", () => {
     expect(await app.js<number>("__bh.camera.pilot.throttle")).toBe(0);
     expect(await app.js<number>("__bh.game.status().altKm")).toBeLessThan(0.05);
     const say = await app.js<string[]>("__bh.camera.hubInfo().say");
-    expect(say.some((l) => l.startsWith("PATH 90°"))).toBe(true);
+    // (the path the director asks is the command flown, commit 2b8342a: on the roll it is the runway's, 0°; the
+    // optimum's 90° is the climb's once it rotates)
+    expect(say.some((l) => l.startsWith("PATH 0° · TRK 090°"))).toBe(true);
     expect(say.some((l) => l.startsWith("GRAVITY TURN IN"))).toBe(true);
     // the autopilot flies: on its optimum, max-Q met, the cutoff counted down
     await app.click("[data-testid=hub-assist]");
@@ -44,7 +46,7 @@ describe.skipIf(!E2E)("the take-off assisted", () => {
     expect(H.rows).toContain("q · max");
     expect(H.rows).toContain("MECO in");
     // assisted again, mid-climb: the throttle the pilot's from where the autopilot left it
-    await app.press("F4", "F4");
+    await app.press("F4", "F4", { shift: true });
     expect(await app.js<number>("__bh.camera.pilot.throttle")).toBeGreaterThan(0.3);
     expect(await app.js<boolean>(`document.querySelector(".fl-hub-graph").dataset.state !== undefined`)).toBe(true);
     await app.press("KeyX", "x");

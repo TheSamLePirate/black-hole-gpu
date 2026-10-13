@@ -49,13 +49,15 @@ describe.skipIf(!E2E)("s5: the interface for every eye, size and session", () =>
     await Bun.sleep(300);
     await app.press("Escape");
     await Bun.sleep(300);
+    // (⇧K goes out of a craft that is landed: from orbit it only says so)
+    await app.js(`(__bh.game.land("moon", 0, 0), __bh.step(0), __bh.touch(), true)`);
     await app.press("KeyK", "K", { shift: true });
-    await app.waitFor("!__bh.camera.piloting");
+    // (on foot the craft stays flown — camera.piloting kept, BH-API: the explorer owns the view)
+    await app.waitFor("__bh.camera.character.active");
     await Bun.sleep(600);
     await look("foot");
     for (const [state, opener] of [
-      ["settings", ".sp-opener"],
-      ["camera", "#btn-camera"],
+      ["settings", "[data-testid=topbar-settings]"],
       ["sky", "#btn-sky"],
       ["scenes", "#btn-scenes"],
       ["help", "#btn-help"],
@@ -66,6 +68,14 @@ describe.skipIf(!E2E)("s5: the interface for every eye, size and session", () =>
       await app.press("Escape");
       await Bun.sleep(300);
     }
+    // (the camera panel is the free camera's own, on its group of the top bar — PLAN-MODES-AAA M1: F3 from the walk)
+    await app.press("F3", "F3");
+    await app.waitFor(`__bh.mode.get() === "free"`);
+    await app.click("#btn-camera");
+    await Bun.sleep(700);
+    await look("camera");
+    await app.press("Escape");
+    await Bun.sleep(300);
   });
 
   test("T9: the controls without a data-testid are only ever fewer (a ratchet)", async () => {
@@ -84,7 +94,7 @@ describe.skipIf(!E2E)("s5: the interface for every eye, size and session", () =>
       return app.cdp.send<{ nodes: number; jsEventListeners: number }>("Memory.getDOMCounters");
     };
     const cycle = async () => {
-      await app.click(".sp-opener");
+      await app.click("[data-testid=topbar-settings]");
       await Bun.sleep(80);
       await app.press("Escape");
       await app.press("Escape");

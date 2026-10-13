@@ -71,12 +71,24 @@ test.skipIf(!E2E)(
         const flat = d.map((v, i) => v - up[i] * k), n = Math.hypot(...flat);
         c.heading = flat.map((v) => v / n); c.yaw = 0; c.pitch = 0.12;
         c.move(1, 0, 10);
+        // (the walker's capsule against the box — its axis, feet to head: the landed Ranger's body is on its gear, its
+        // belly above head height, so the head meets its edge while the feet are still metres from the box)
+        const box = h, capsule = () => {
+          let m = Infinity;
+          for (let y = 0.3; y <= 1.5 + 1e-9; y += 0.15) {
+            const p = c.q.map((v, j) => v + up[j] * y);
+            const l = p.map((v, j) => v - box.centre[j]);
+            const out = box.axes.map((a, j) => Math.max(0, Math.abs(a[0] * l[0] + a[1] * l[1] + a[2] * l[2]) - box.half[j]));
+            m = Math.min(m, Math.hypot(...out));
+          }
+          return m;
+        };
         let closest = Infinity, inside = 0;
         for (let i = 0; i < 1200; i++) {
           __bh.step(1 / 120);
-          const s = c.state().hull;
-          closest = Math.min(closest, s.distanceM);
-          if (s.distanceM < 0.29) inside++;
+          const d = capsule();
+          closest = Math.min(closest, d);
+          if (d < 0.29) inside++;
         }
         c.move(0, 0, 0);
         return { closest, inside };
@@ -84,7 +96,10 @@ test.skipIf(!E2E)(
       expect(walk.inside).toBe(0);
       expect(walk.closest).toBeLessThan(1.5);
       // (the camera behind him, the hull beyond: the hull covers his chest's pixels, he is drawn over it)
-      await app.js("(()=>{const c=__bh.camera.character;c.yaw=0;c.pitch=0.12;for(let i=0;i<60;i++)__bh.step(1/60);return true;})()");
+      // (facing the hull again — the walk, stopped against it, slid him along it and turned him —, the camera behind)
+      await app.js(`(()=>{const c=__bh.camera.character,h=c.vesselHull(),up=c.up();
+        const d=h.centre.map((v,i)=>v-c.q[i]),k=d[0]*up[0]+d[1]*up[1]+d[2]*up[2],flat=d.map((v,i)=>v-up[i]*k),n=Math.hypot(...flat);
+        c.heading=flat.map((v)=>v/n);c.yaw=0;c.pitch=0.12;for(let i=0;i<60;i++)__bh.step(1/60);return true;})()`);
       const all = await shotAt(app, 1.1);
       await app.js("(()=>{globalThis.__enc=__bh.renderer.encodeCharacter;__bh.renderer.encodeCharacter=()=>{};return true;})()");
       const shipOnly = await shotAt(app, 1.1);
@@ -131,12 +146,13 @@ test.skipIf(!E2E)(
         return l!;
       };
       // (the Moon and Mars: the first longitude of the equator with the Sun well up at that date; the Earth's
-      // Cévennes at noon, and its antipode at midnight)
+      // Cévennes at noon, and the Canterbury plains (New Zealand) near midnight — the Cévennes' antipode is open
+      // sea, where the walker is not let out)
       for (const [name, body, lat, lons] of [
         ["moon", "moon", 0, [0, 90, 180, 270]],
         ["mars", "mars", 0, [0, 90, 180, 270]],
         ["earth", "earth", 44.2, [4.15]],
-        ["earth-night", "earth", -44.2, [-175.85]],
+        ["earth-night", "earth", -43.9, [171.0]],
       ] as const) {
         for (const lon of lons) {
           light[name] = await measure(body, lat, lon);

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
-// The assistants' frame (C0) by real input: an autopilot assisted — F4 — works out its commands but
+// The assistants' frame (C0) by real input: an autopilot assisted — ⇧F4 — works out its commands but
 // leaves the ship to the pilot (its director on the HUD), the hub card's button gives it back; an
 // alert's line opens its explanation.
 
@@ -16,8 +16,8 @@ describe.skipIf(!E2E)("the flight assistants' frame", () => {
     stopServer();
   });
 
-  test("F4 then hold position: the director shows the burn, the ship left alone; the hub card's button: the autopilot flies", async () => {
-    await app.press("F4", "F4");
+  test("⇧F4 then hold position: the director shows the burn, the ship left alone; the hub card's button: the autopilot flies", async () => {
+    await app.press("F4", "F4", { shift: true });
     expect(await app.js<boolean>("__bh.camera.pilot.assist")).toBe(true);
     const v0 = await app.js<number>("__bh.game.status().speed");
     await app.press("Digit8", "8");

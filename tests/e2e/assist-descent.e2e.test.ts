@@ -3,7 +3,7 @@ import { App, E2E, stopServer } from "./lib/app";
 
 // The vertical descent's assistant (C5) by real input, over the Moon: the hold (8) let go, the craft falls —
 // the hub's card is the descent's (no autopilot), its graph the descent rate against the height with the
-// landing autopilot's braking curve and its corridor; then the landing assisted (F4, G): the director's
+// landing autopilot's braking curve and its corridor; then the landing assisted (⇧F4, G): the director's
 // rate as flown and as asked.
 
 describe.skipIf(!E2E)("the vertical descent assisted", () => {
@@ -34,7 +34,7 @@ describe.skipIf(!E2E)("the vertical descent assisted", () => {
     // (falling slowly yet: safe, below the curve — cyan, not amber)
     expect(G.state).toBe("wait");
     // the landing assisted: its rates said
-    await app.press("F4", "F4");
+    await app.press("F4", "F4", { shift: true });
     await app.press("F7", "F7");
     await app.waitFor(`__bh.camera.pilot.auto === "land"`, 5_000);
     await app.waitFor(`(__bh.camera.hubInfo()?.say ?? []).some((l) => l.startsWith("DESCENT "))`, 10_000);

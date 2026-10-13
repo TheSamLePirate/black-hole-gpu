@@ -192,7 +192,10 @@ export class App {
       key ?? (code.startsWith("Key") ? code[3]!.toLowerCase() : code.startsWith("Digit") ? code[5]! : code === "Backquote" ? "`" : code);
     // (Enter types a carriage return, as a keyboard does: what activates a focused button)
     const text = k.length === 1 ? k : code === "Enter" ? "\r" : undefined;
-    const ev = { code, key: k, windowsVirtualKeyCode: vk(code), nativeVirtualKeyCode: vk(code), modifiers: o.shift ? 8 : 0 };
+    // (no nativeVirtualKeyCode: on macOS CDP reads it as a Mac key code — the Windows codes passed there were other
+    // keys to Chrome, which acted on them when the page let a key through: an Escape in TARS's field opened
+    // chrome://settings/help, the game's tab hidden behind it, its frames stopped)
+    const ev = { code, key: k, windowsVirtualKeyCode: vk(code), modifiers: o.shift ? 8 : 0 };
     await this.cdp.send("Input.dispatchKeyEvent", { type: text ? "keyDown" : "rawKeyDown", ...ev, text });
     await this.cdp.send("Input.dispatchKeyEvent", { type: "keyUp", ...ev });
     await Bun.sleep(60);
@@ -200,7 +203,7 @@ export class App {
 
   /** A key held down for a while (`during` runs while it is down: a push-to-talk's words), then released. */
   async hold(code: string, ms: number, during?: () => Promise<void>) {
-    const ev = { code, key: code, windowsVirtualKeyCode: vk(code), nativeVirtualKeyCode: vk(code), modifiers: 0 };
+    const ev = { code, key: code, windowsVirtualKeyCode: vk(code), modifiers: 0 };
     await this.cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", ...ev });
     await Bun.sleep(ms);
     await during?.();
@@ -228,7 +231,20 @@ export class App {
     return r;
   }
 
+  /**
+   * A real mouse click at the element's centre. A bar action that does not fit the window's width is in the top
+   * bar's ⋯ menu (ui/topbar.ts): the menu opens by a click on ⋯, and the action is clicked there.
+   */
   async click(selector: string) {
+    const action = await this.js<string | null>(`(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      return el && el.classList.contains("tb-over") ? el.id : null;
+    })()`);
+    if (action) {
+      if (await this.js<boolean>(`document.querySelector(".tb-menu").hidden`)) await this.click("[data-testid=topbar-more]");
+      await this.click(`.tb-menu [data-action="${action}"]`);
+      return;
+    }
     const { x, y } = await this.hit(selector);
     await this.cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
     await this.cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount: 1 });

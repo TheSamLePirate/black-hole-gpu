@@ -49,7 +49,9 @@ test.skipIf(!E2E)(
           // Warm through the page fades, shader compilation and all uploads before timing steady state.
           await app.js("new Promise(r => setTimeout(r, 1500))");
           await app.js("(() => { __bh.game.perf(); __bh.renderer.prof.reset(); return true; })()");
-          await app.waitFor("__bh.renderer.prof.frames >= 60", 30_000);
+          // (60 frames profiled, one in 8: ~480 drawn — at this view's 22 fps on the M1 Max, 44 ms of GPU since the
+          // Oct 12 ground work (28 fps, 35 ms on Oct 11), 22 s and more: 30 s was too short)
+          await app.waitFor("__bh.renderer.prof.frames >= 60", 60_000);
           measures.push(
             await app.js(`({mode:${JSON.stringify(mode)}, block:${block}, perf:__bh.game.perf({gpu:false}), adapter:__bh.renderer.adapter,
           terrain:{enabled:${liveTerrain}, pending:__bh.renderer.earthTiles.pending, finest:__bh.renderer.earthTiles.finest},
