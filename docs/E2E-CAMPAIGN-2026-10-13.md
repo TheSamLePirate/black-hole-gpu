@@ -52,29 +52,13 @@ the review marks "non fait" (on branch `review-fixes`, merged here). Then:
 
 ## Left to do
 
-1. **Re-run on both Macs** with the current tree:
-   `bun scripts/remote.ts run --detach --name full -- E2E=1 bun scripts/e2e.ts --each` and here
-   `E2E=1 bun scripts/e2e.ts --each`. Expected: only items 2 and 3 below.
-2. **character-aaa, "in front of the landed vessel"** (both Macs): the walk is now checked against the
-   walker's capsule (OK: 0.32 m, never inside). But the check "the hull covers his chest's pixels" finds
-   `hullThere = 0`. The landed Ranger's belly is above head height, and since 428189f the camera director places
-   the on-foot view itself (`character.pitch` no longer moves it). The occlusion check needs a new design: a
-   view looking up at the belly, or the director's own framing. This is a product/test decision.
-3. **Mini performance budgets** (kiosk 1920×1080, 8 GPU cores, ~1.5 fps in these views):
-   - grass-aaa "a meadow full of life": `frameOn - frameOff` is 7–17 ms against a 5 ms budget written for
-     1280×720. The grass's own passes stay within budget. Scale the budget to the pixels, or run headless at
-     1280×720 on the mini?
-   - earth-surface / earth-scenery / forest-aaa: measurements are now time-bounded (≥ 12 frames after 45 s).
-     Check on the mini that they pass (not verified since the last change).
-4. **Performance regression to look at**: the earth-surface view (Bourget, 2 km, satellite) runs at 22 fps /
-   44 ms GPU on the M1 Max, against 28 fps / 35 ms on 11 Oct, with the scenery *off*. Probably the
-   trace.wgsl additions of 12 Oct (forests, water, grass): a GPU A/B (`scripts/trace-ab.ts`) is needed.
-5. **Stalls of ~4 s** when the Earth's scenery turns `ready` (172k trees, Cape Canaveral): no GPU frame
-   (`gpuFrameMs` 0) and the loop at ~8 fps. Likely the specialised kernel's compile (`featureKey` | 8192) or
-   the upload. Felt by the player when landing.
-6. **Product question**: the top bar is centred, so its buttons slide when the chips' or the clocks' text
-   changes width. A real click can land on the neighbour. Pin the actions group to the right?
-7. **Clean-up**: the lane worktrees `../bh-wt/*` (branches `fix/e2e-*`, no commits) and `/tmp/probes`. Remove
-   them with `git worktree remove ../bh-wt/<lane>` + `git branch -D fix/e2e-<lane>`.
-8. pi-subagents: background runs fail (`@earendil-works/chord` missing from the pi 1.2.0 install), and a
-   foreground child times out after 30 min by default. Without that fix, use `options.timeoutMs`.
+1. A full campaign on both Macs with the final tree (only targeted runs were made after the fixes; see the second
+   round above for what passed where).
+2. The Moon's DEM arriving after a landing with the clock held: the landed craft is not put on it (730 m above at
+   0°, 0°), the walker is; and the on-foot HUD's altitude reads the coarse relief (docs/REVIEW-BRANCH-2026-10-13.md,
+   "Nouveaux constats").
+3. The first CI run of the new guards (pages.yml: fetch-depth 2, the size guard, check-forest on SwiftShader) and
+   tests/earth-surface.test.ts, which times out at bun's 5 s default under load.
+4. LFS or a bucket for the binary packs: the user's decision (docs/ASSETS.md).
+5. pi-subagents: background runs fail (`@earendil-works/chord` missing from the pi 1.2.0 install), and a foreground
+   child times out after 30 min by default. Without that fix, use `options.timeoutMs`.
