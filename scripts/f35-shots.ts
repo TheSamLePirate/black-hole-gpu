@@ -75,9 +75,12 @@ try {
       for (const k of ["stab", "flaperon", "lef", "rudder"]) if (f[k]) p[k] = deg(f[k]);
       for (const k of ["canopy", "petals", "gear", "stovl", "nozzle", "fan"]) if (f[k] !== undefined) p[k] = f[k];
       __bh.renderer.jetForce = p;
-      document.body.classList.add("hide-ui");
-      document.querySelectorAll("canvas.fl-hud").forEach((e) => (e.style.visibility = "hidden"));
+      // (the interface hidden — but the flight's HUD kept when a view asks for it: window.__keepHud)
+      document.body.classList.toggle("hide-ui", !window.__keepHud);
+      document.querySelectorAll("canvas.fl-hud").forEach((e) => (e.style.visibility = window.__keepHud ? "visible" : "hidden"));
       for (let i = 0; i < 6; i++) { __bh.touch(); await new Promise((r) => requestAnimationFrame(r)); }
+      // (the flight's HUD is drawn by the running loop: let it run a moment)
+      if (window.__keepHud) { __bh.freeze(false); await new Promise((r) => setTimeout(r, 1200)); __bh.freeze(true); }
       return true;
     })()`);
     await Bun.sleep(1500);

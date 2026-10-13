@@ -31,6 +31,9 @@ export interface JetHudInfo {
   /** the throttle (0 … 1), the modes engaged */
   throttle: number;
   modes: JetModes;
+  /** the F-35's helmet (its HMD: no head-up glass — the values boxed, no tapes): its fuel [kg] and full, its
+   *  STOVL hover (the speed over the ground [m/s], the vertical speed held [m/s]) */
+  hmd?: { fuel: number; full: number; hover: { gs: number; vz: number } | null; stovl: string | null };
 }
 
 export type JetUnits = "aviation" | "metric";
@@ -140,7 +143,60 @@ export function drawJetHud(
   const spd = U.spd(J.speed),
     alt = U.alt(J.alt);
   const aviation = o.units === "aviation";
-  if (!compact) {
+  // ---- the F-35's helmet: the airspeed and the altitude boxed, their names and Mach, the load, the incidence
+  // beneath; the fuel bottom right; in a hover the speed over the ground and the vertical speed held
+  if (J.hmd && !compact) {
+    const bw = 92 * dpr,
+      bh = 30 * dpr;
+    // (closer in than a HUD's tapes: the runway's card and the radar altitude's dial keep their places outside)
+    const hoff = Math.min(W * 0.2, 270 * dpr);
+    const lx = cx - hoff,
+      rx = cx + hoff;
+    box(lx + bw / 2, cy, bw, bh, `${Math.round(spd)}`, "right");
+    text(aviation ? "KCAS" : "M/S", lx, cy - bh, G(0.8), 11, "center", true);
+    box(rx - bw / 2, cy, bw, bh, `${Math.round(alt / (aviation ? 10 : 1)) * (aviation ? 10 : 1)}`, "left");
+    text(U.altName, rx, cy - bh, G(0.8), 11, "center", true);
+    const ly = cy + 46 * dpr;
+    const gk = J.g / 7;
+    text(`M ${J.mach.toFixed(2)}`, lx - bw / 2, ly, G(0.95), 14, "left", true);
+    text(`G ${J.g.toFixed(1)}`, lx - bw / 2, ly + 20 * dpr, gk > 0.95 ? RED : gk > 0.8 ? AMBER : G(0.95), 14, "left", true);
+    text(`α ${((J.alpha * 180) / Math.PI).toFixed(1)}`, lx - bw / 2, ly + 40 * dpr, J.alpha > 0.42 ? AMBER : G(0.95), 14, "left", true);
+    const vs = U.vs(J.vs);
+    text(
+      `${vs >= 0 ? "+" : "−"}${aviation ? Math.abs(Math.round(vs / 10) * 10) : Math.abs(vs).toFixed(1)}`,
+      rx + bw / 2,
+      ly,
+      G(0.95),
+      14,
+      "right",
+      true,
+    );
+    if (Number.isFinite(J.radar) && J.radar < 1500)
+      text(
+        `R ${Math.round(U.alt(J.radar) / (aviation ? 10 : 5)) * (aviation ? 10 : 5)}`,
+        rx + bw / 2,
+        ly + 20 * dpr,
+        J.radar < 60 ? AMBER : G(0.95),
+        14,
+        "right",
+        true,
+      );
+    const fk = J.hmd.full > 0 ? J.hmd.fuel / J.hmd.full : 1;
+    text(`FUEL ${Math.round(J.hmd.fuel)}`, rx + bw / 2, cy + half + 70 * dpr, fk < 0.2 ? AMBER : G(0.95), 14, "right", true);
+    if (J.hmd.stovl) text(J.hmd.stovl, cx, cy + half + 40 * dpr, G(1), 14, "center", true);
+    if (J.hmd.hover) {
+      const hv = J.hmd.hover;
+      text(
+        `GS ${Math.round(U.spd(hv.gs))}   VZ ${hv.vz >= 0 ? "+" : "−"}${Math.abs(hv.vz).toFixed(1)}`,
+        cx,
+        cy + half + 60 * dpr,
+        G(1),
+        15,
+        "center",
+        true,
+      );
+    }
+  } else if (!compact) {
     // ---- the airspeed (left): 10 kt ticks, 50 labelled; metric 5 / 25 m/s
     const L = tape(
       -1,

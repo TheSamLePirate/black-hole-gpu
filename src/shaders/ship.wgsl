@@ -261,6 +261,8 @@ fn envSH(@builtin(local_invocation_id) lid: vec3u) {
 @group(0) @binding(22) var jetAlbedo: texture_2d_array<f32>;
 @group(0) @binding(23) var jetNormal: texture_2d_array<f32>;
 @group(0) @binding(24) var jetMr: texture_2d_array<f32>;
+// its panoramic cockpit display's picture (src/f35/pcd.ts: drawn on a canvas, sRGB)
+@group(0) @binding(25) var jetScreen: texture_2d<f32>;
 @group(1) @binding(0) var stationDepth: texture_2d<f32>; // the station's box: distance [m], coverage
 
 struct VIn {
@@ -718,6 +720,16 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
       coat = 0.0;
       if (part == 33u) { emit = albedo * 1.5; }
     }
+    // the F-35's panoramic display: its picture's light under a glass (dark, smooth: the cockpit reflected)
+    case 36u: {
+      albedo = vec3f(0.01);
+      metal = 0.0;
+      rough = 0.08;
+      coat = 0.0;
+      emit = textureSampleGrad(jetScreen, mapSamp, in.uv, duvx, duvy).rgb * 1.3;
+    }
+    // its cockpit's dark hardware (the stick, the throttle: generated)
+    case 37u: { albedo = vec3f(0.035, 0.036, 0.04); metal = 0.1; rough = 0.55; coat = 0.0; }
     // (the F-35B's lift fan, its well: generated — a plain dark metal)
     case 35u: { albedo = vec3f(0.07, 0.07, 0.075); metal = 0.85; rough = 0.42 + 0.1 * grime; coat = 0.0; }
     // the Endurance's parts (as endurance.wgsl): metal, non-metal panels, glass, tiles, lights, interior,
@@ -1647,8 +1659,9 @@ fn fsJetGlass(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4
   }
   // (the cover: the film's, more at grazing angles; the visor dark — the canopy seen from within it, its
   // film thin against the bright day outside: a faint tint)
+  // (from within, the film faint — and its cords, the map's opaque bands, thin lines rather than bars)
   let within = 1.0 - smoothstep(0.9, 2.2, length(in.p));
-  let cover = clamp(select(base.a * mix(0.9, 0.22, within), 0.75, part == 34u) + 0.6 * F * mix(1.0, 0.4, within), 0.0, 0.97);
+  let cover = clamp(select(base.a * mix(0.9, 0.1, within), 0.75, part == 34u) + 0.6 * F * mix(1.0, 0.3, within), 0.0, 0.97);
   // (the film's own scattered light, as much as it covers — premultiplied)
   let tint = select(base.rgb, vec3f(0.01), part == 34u) * irradiance(gn) / PI * 0.35 * cover;
   let o = (refl * F * mix(1.0, 0.5, within) + tint * (1.0 - F)) * S.light.x;

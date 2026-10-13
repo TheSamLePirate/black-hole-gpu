@@ -91,6 +91,9 @@ export class JetPoser {
     p.petals = toward(p.petals, want, RATE.petals, dt);
     // the canopy: raised parked, lowered otherwise (some 8 s to travel)
     p.canopy = toward(p.canopy, i.parked ? 1 : 0, RATE.canopy, dt);
+    // (the pilot's hands: the stick as the rates and the authority asked, the throttle as set)
+    p.stick = [toward(p.stick[0], clamp(pitch, -1, 1), 6, dt), toward(p.stick[1], clamp(roll, -1, 1), 6, dt)];
+    p.throttle = toward(p.throttle, i.throttle, 2, dt);
     p.stovl = i.stovl ?? 0;
     p.nozzle = i.nozzle ?? 0;
     p.fan = i.fan ?? 0;

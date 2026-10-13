@@ -20,6 +20,7 @@ import f35Normal1 from "../assets/f35/f35-normal-1.ktx2";
 import f35Mr0 from "../assets/f35/f35-mr-0.ktx2";
 import f35Mr1 from "../assets/f35/f35-mr-1.ktx2";
 import { nozzleExit, parseF35, partMatrices, restPose, type F35Mesh, type F35Pose } from "./f35/model";
+import { PCD_H, PCD_W } from "./f35/pcd-size";
 import { ktxLevels, ktxTarget, writeLevels } from "./system/ktx2";
 
 import { shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
@@ -30,6 +31,7 @@ import { F35_LAMPS, lampLevels, lampUniform, MAX_LAMPS, placeLamps, RANGER_LAMPS
 import { GEAR_HINGES, gearMesh } from "./gear-mesh";
 import type { GpuProfiler } from "./gpuprof";
 import { cockpitHull, samplePoints, TriBVH, vesselHulls } from "./system/collide";
+import { cabinHitOf } from "./cockpit/pick";
 import { MAX_SEGMENTS, SEG_FLOATS } from "./contrails";
 import { VESSELS, type JetDef, type VesselId } from "./vessels";
 import { jetLevel } from "./jets";
@@ -246,6 +248,33 @@ export class ShipRenderer {
   private jetMesh: F35Mesh | null = null;
   private jetMaps: { albedo: GPUTexture; normal: GPUTexture; mr: GPUTexture } | null = null;
   private jetMapsLoading = false;
+  /** What a pixel (ndc) of the F-35's cockpit view meets on its mesh (as built — the parts at rest): the
+   *  distance, the material, the part, on its panoramic display the point (u, v). Null: nothing. */
+  jetPick(
+    nx: number,
+    ny: number,
+  ): { t: number; mat: number; part: number; p: V3; uv: [number, number]; screen?: { u: number; v: number } } | null {
+    const ray = this.cabinRay(nx, ny);
+    const bvh = vesselHulls.f35.bvh,
+      verts = this.jetMesh?.verts;
+    if (!ray || !bvh || !verts) return null;
+    const h = cabinHitOf(ray.o, ray.d, bvh, verts, 4);
+    if (!h) return null;
+    const ia = bvh.tri[3 * (bvh.segment(ray.o, [ray.o[0] + ray.d[0] * 4, ray.o[1] + ray.d[1] * 4, ray.o[2] + ray.d[2] * 4])?.tri ?? 0)]!;
+    return {
+      t: h.t,
+      mat: h.mat,
+      part: Math.floor(verts[10 * ia + 7]!),
+      p: h.p,
+      uv: [verts[10 * ia + 8]!, verts[10 * ia + 9]!],
+      screen: h.screen && h.mat === 36 ? { u: h.screen.u, v: h.screen.v } : undefined,
+    };
+  }
+
+  /** The F-35's vertices as built (10 floats each: ship.wgsl's layout) — its cockpit's picking. */
+  get jetVerts(): Float32Array | null {
+    return this.jetMesh?.verts ?? null;
+  }
   /** the flown F-35's nozzle exit now (ship frame): where its plume starts, which way */
   private jetExit: { p: V3; d: V3 } | null = null;
   /** this frame's draws: mesh, and whether in the shadow map */
@@ -1012,6 +1041,7 @@ export class ShipRenderer {
       { binding: 22, resource: jm.albedo.createView({ dimension: "2d-array" }) },
       { binding: 23, resource: jm.normal.createView({ dimension: "2d-array" }) },
       { binding: 24, resource: jm.mr.createView({ dimension: "2d-array" }) },
+      { binding: 25, resource: this.jetScreenTexture().createView() },
     ];
     this.bindGen++;
 
@@ -1391,6 +1421,36 @@ export class ShipRenderer {
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
     }));
   }
+  /** The F-35's panoramic display's picture (src/f35/pcd.ts), mip-mapped: made at its first use. */
+  private jetScreen: GPUTexture | null = null;
+  private jetScreenTexture() {
+    return (this.jetScreen ??= this.device.createTexture({
+      size: [PCD_W, PCD_H],
+      format: "rgba8unorm-srgb",
+      mipLevelCount: 8,
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+    }));
+  }
+  private jetMipCanvases: OffscreenCanvas[] = [];
+  /** The panoramic display's new picture: its canvas, then its mips (halved on canvases). */
+  updateJetScreen(src: OffscreenCanvas | HTMLCanvasElement) {
+    const tex = this.jetScreenTexture();
+    let level: HTMLCanvasElement | OffscreenCanvas = src;
+    for (let l = 0; l < tex.mipLevelCount; l++) {
+      const w = Math.max(1, PCD_W >> l),
+        h = Math.max(1, PCD_H >> l);
+      if (l > 0) {
+        const c = (this.jetMipCanvases[l] ??= new OffscreenCanvas(w, h));
+        const g = c.getContext("2d")!;
+        g.imageSmoothingQuality = "high";
+        g.clearRect(0, 0, w, h);
+        g.drawImage(level, 0, 0, w, h);
+        level = c;
+      }
+      this.device.queue.copyExternalImageToTexture({ source: level }, { texture: tex, mipLevel: l }, [w, h]);
+    }
+  }
+
   /** The screens' new picture: a 2048 × 1024 canvas, then its mips (halved on canvases). */
   updateScreens(src: HTMLCanvasElement | OffscreenCanvas) {
     const tex = this.screenTexture();

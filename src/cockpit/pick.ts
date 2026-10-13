@@ -33,6 +33,12 @@ export function cabinHitOf(o: V3, d: V3, bvh: TriBVH, verts: Float32Array, far =
     n: [h.n[0] * s, h.n[1] * s, h.n[2] * s],
     mat,
   };
+  // (the F-35's panoramic display, 36: one screen — slot −1 —, its uv over it)
+  if (mat === 36) {
+    const w0 = 1 - h.u - h.v;
+    const at = (k: number) => w0 * verts[10 * a + k]! + h.u * verts[10 * b + k]! + h.v * verts[10 * c + k]!;
+    out.screen = { slot: -1, u: Math.min(Math.max(at(8), 0), 1), v: Math.min(Math.max(at(9), 0), 1) };
+  }
   if (mat === 68) {
     const w0 = 1 - h.u - h.v;
     const x = w0 * verts[10 * a + 8]! + h.u * verts[10 * b + 8]! + h.v * verts[10 * c + 8]!;

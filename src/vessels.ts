@@ -431,8 +431,8 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     },
     mounts: {
       // (the pilot's eyes: in the helmet the model sits — scripts/build-f35.py)
-      cockpit: { eye: [0, 1.9, 4.55], aim: [0, 1.72, 30] },
-      cabin: { eye: [0, 1.9, 4.55], aim: [0, 1.9, 30] },
+      cockpit: { eye: [0, 2.0, 4.6], aim: [0, 1.78, 30] },
+      cabin: { eye: [0, 2.0, 4.6], aim: [0, 2.0, 30] },
       quarter: { eye: [7.5, 3.6, -9.5], aim: [-2, 1.2, 8] },
       chase: { eye: [0, 3.9, -17], aim: [0, 1.4, 10] },
       dorsal: { eye: [0, 3.0, -1.2], aim: [0, 2.2, 20] },

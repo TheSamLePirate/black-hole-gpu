@@ -16,6 +16,10 @@ import type { MapBody } from "./ui/mapview";
 import { poseData } from "./cockpit/controls";
 import { GEARS } from "./gear";
 import { JetPoser } from "./f35/pose";
+import { Pcd } from "./f35/pcd";
+import { pcdData } from "./f35/cockpit";
+import { alertsOf } from "./ui/hud/alerts";
+import { dateOf } from "./game/tools";
 import { ControlTravel, controlStates } from "./cockpit/state";
 import { cockpitAct, controlTip, type CockpitDeps } from "./cockpit/actions";
 import { Chrono } from "./cockpit/chrono";
@@ -2281,6 +2285,8 @@ async function main() {
   const cockpitTravel = new ControlTravel();
   /** the F-35's moving parts, eased at their actuators' rates (src/f35/pose.ts) */
   const jetPoser = new JetPoser();
+  /** the F-35's panoramic cockpit display (src/f35/pcd.ts) */
+  const jetPcd = new Pcd();
   const flightHud = new FlightHud(settings, {
     hold: pilotHold,
     auto: pilotAuto,
@@ -3412,6 +3418,15 @@ async function main() {
   });
   const toolsWin = new GameToolsWindow(tools, settings);
   // (the F-35 chosen: on the runway nearest the craft flown — docs/PLAN-F35.md)
+  // (a click in the F-35's cockpit: its panoramic display touched — cockpit/pick.ts, material 36)
+  camera.onJetTouch = (nx, ny) => {
+    if (settings.vessel !== "f35" || !(settings.shipMount === "cockpit" || settings.shipMount === "cabin")) return false;
+    const h = renderer.ship.jetPick(nx, ny);
+    if (!h?.screen) return false;
+    const what = jetPcd.touch(h.screen.u, h.screen.v);
+    if (what) panel.toast(`PCD · ${what}`);
+    return true;
+  };
   camera.onJetStart = () => {
     try {
       tools.lineUp();
@@ -5153,6 +5168,15 @@ async function main() {
             nozzle: camera.stovl.swivel,
             fan: camera.stovl.fan,
           });
+        }
+        // (the F-35's panoramic display, seen from its seat: drawn at 10 Hz, onto the dashboard)
+        if (settings.vessel === "f35" && (settings.shipMount === "cockpit" || settings.shipMount === "cabin")) {
+          const al = alertsOf({ ...info, status, animate: settings.animate, fmtM: () => "" }).map((a) => ({
+            text: a.text,
+            level: a.level,
+          }));
+          const d = pcdData(camera, settings, renderer.jetPose, al, dateOf(sim.time));
+          if (d && jetPcd.draw(d, performance.now())) renderer.ship.updateJetScreen(jetPcd.canvas);
         }
         // (the cockpit's controls: each where the flight has it, lit by its mode — PLAN-COCKPIT)
         // (each moving part travelling there: a lever moved by a key or an autopilot seen going — K5)

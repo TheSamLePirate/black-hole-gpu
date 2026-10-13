@@ -16,6 +16,9 @@ export const PART_PETAL = 4;
 export const PART_SWIVEL = 5;
 export const PART_FAN = 6;
 export const PART_MARKER = 7;
+/** the pilot's side stick (tilted about its base) and throttle (slid along its axis) */
+export const PART_STICK = 8;
+export const PART_THROTTLE = 9;
 
 export interface F35Part {
   name: string;
@@ -157,6 +160,9 @@ export interface F35Pose {
   stovl: number;
   nozzle: number;
   fan: number;
+  /** the side stick (> 0 back — the nose up —, > 0 right) −1…1, the throttle 0…1 */
+  stick: [number, number];
+  throttle: number;
 }
 
 export const restPose = (): F35Pose => ({
@@ -174,6 +180,8 @@ export const restPose = (): F35Pose => ({
   stovl: 0,
   nozzle: 0,
   fan: 0,
+  stick: [0, 0],
+  throttle: 0,
 });
 
 /** 3 × 4 affine maps (rows) */
@@ -315,10 +323,14 @@ export function partMatrices(m: F35Mesh, pose: F35Pose, out = new Float32Array(m
     if (open >= 0) own[i] = turnAbout(p.pivot, p.axis, p.b * Math.min(Math.max(open, 0), 1));
     else if (p.kind === PART_SWIVEL) own[i] = sw.get(i) ?? ident();
     else if (p.kind === PART_FAN) own[i] = turnAbout(p.pivot, p.axis, pose.fan * p.a);
+    // (the stick: 12° back or forth, 10° aside — about its base; the throttle along its quadrant)
+    else if (p.kind === PART_STICK)
+      own[i] = mul(turnAbout(p.pivot, [0, 0, 1], (pose.stick[1] ?? 0) * 0.17), turnAbout(p.pivot, [1, 0, 0], -(pose.stick[0] ?? 0) * 0.21));
+    else if (p.kind === PART_THROTTLE) own[i] = translate(p.axis.map((x) => x * p.a * Math.min(Math.max(pose.throttle, 0), 1)) as V3);
     else if (p.kind === PART_TRACK) own[i] = trackAt(m, p.track, pose.gear);
     else if (p.kind === PART_HINGE && p.name === "canopy") own[i] = turnAbout(p.pivot, p.axis, p.b * Math.min(Math.max(pose.canopy, 0), 1));
     else if (p.kind === PART_PETAL) own[i] = turnAbout(p.pivot, p.axis, 0.2 * Math.min(Math.max(pose.petals, 0), 1));
-    else if (p.name === "pilot" && !pose.pilot) own[i] = new Float32Array(12);
+    else if ((p.name === "pilot" || p.name === "canopy arches") && !pose.pilot) own[i] = new Float32Array(12);
   });
   // (the wheels: up their leg by the oleo's compression, turned about their axle; the nose's steered about
   // the vertical through its axle)

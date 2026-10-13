@@ -2429,8 +2429,10 @@ export class FlightHud {
     if (this.spectating) return this.drawShipMark(ctx, W, H, dpr);
     // the speed felt first, under everything (ui/speedfx.ts) — the eye's, in every view
     this.drawSpeed(ctx, W, H, dpr, i);
-    // (a view the HUD does not show in — the cockpit, the film's —: its warnings and cards only, in the DOM)
-    if (this.view === "bare") return;
+    // (a view the HUD does not show in — the cockpit, the film's —: its warnings and cards only, in the DOM —
+    // but the F-35's cockpit: its pilot's helmet shows the symbology there, as the real one does)
+    const helmet = this.s.vessel === "f35" && (this.s.shipMount === "cockpit" || this.s.shipMount === "cabin");
+    if (this.view === "bare" && !helmet) return;
     const tanH = Math.tan((this.s.fov * Math.PI) / 360);
     const asp = W / H;
     const proj = (d: V3 | null) => {
@@ -2523,7 +2525,8 @@ export class FlightHud {
     }
     // the assisted autopilot's director: where it would point the nose, its top, its throttle, its thrusters
     if (i.director) this.drawDirector(ctx, i, W, H, dpr, tanH, asp);
-    if (this.density < 2) {
+    // (the F-35's helmet: its own boxed figures — the game's tapes left out)
+    if (this.density < 2 && !helmet) {
       // each tape in the free band between the panels above and below it on its side (a phone: between
       // the mission bar and the touch controls, smaller)
       const phone = isMobile();

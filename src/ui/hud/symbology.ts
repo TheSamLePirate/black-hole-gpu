@@ -46,7 +46,9 @@ export interface SymInfo {
   /** the flight plan: its burns (coordinate times [M], Δ(γβ) [c]), the one burning, now [M] */
   plan?: { nodes: { t: number; dv: number[] }[]; burning?: boolean | number | null; now: number } | null;
   /** the engine: its full thrust [the scene's acceleration unit] */
-  engine?: { max: number } | null;
+  engine?: { max: number; jet?: { kg: number; full: number } | null } | null;
+  /** the F-35B's STOVL mode (controller/telemetry.ts) */
+  stovl?: { on: boolean; conv: number; swivel: number; hover: boolean; vz: number; heavy: boolean } | null;
   /** the docking: the ports' range, closing rate, angle; the guide (camera coordinates) */
   dock?: {
     range: number;
@@ -197,8 +199,11 @@ export function drawSymbology(F: SymFrame) {
   // (the jet's style: flown as a plane, in the air, from the pilot's seat — its green, its tapes)
   const A0 = i.air;
   // (the Atmosphere HUD: the fighter's for every flight in the air; without a kind, the plane's only)
-  const atmo = F.kind ? F.kind === "atmo" : A0?.mode === "plane";
-  const jet = s.hudJet !== "off" && pilotView && atmo && i.jet && A0?.inAir && A0.q > 20 ? i.jet : null;
+  // (the F-35's helmet: its symbology in the air whatever the phase — the approach's too)
+  const helmet = !!i.engine?.jet;
+  const atmo = F.kind ? F.kind === "atmo" || (helmet && F.kind === "approach") : A0?.mode === "plane";
+  // (the F-35B in its STOVL mode keeps it to a hover: its helmet's symbology down to no speed at all)
+  const jet = s.hudJet !== "off" && pilotView && atmo && i.jet && A0?.inAir && (A0.q > 20 || !!i.stovl?.on) ? i.jet : null;
   LADDER = jet ? JET_GREEN : CYAN;
   const S = i.S;
   const nose: V3 = [S[0]![2]!, S[1]![2]!, S[2]![2]!];
@@ -463,6 +468,21 @@ export function drawSymbology(F: SymFrame) {
         vs: i.surface.vVert,
         throttle: jet.throttle,
         modes: jet.modes,
+        // (the F-35: its helmet's symbology — the values boxed, its fuel, its hover)
+        hmd: i.engine?.jet
+          ? {
+              fuel: i.engine.jet.kg,
+              full: i.engine.jet.full,
+              hover: i.stovl?.hover ? { gs: i.surface.vHor, vz: i.stovl.vz } : null,
+              stovl: i.stovl?.on
+                ? i.stovl.hover
+                  ? "HOVER"
+                  : i.stovl.conv < 1
+                    ? `CONVERT ${Math.round(i.stovl.conv * 100)}`
+                    : `STOVL ${Math.round(i.stovl.swivel * 95)}°`
+                : null,
+            }
+          : undefined,
       },
       stroke,
       text,
@@ -472,7 +492,7 @@ export function drawSymbology(F: SymFrame) {
   // deviations, its gear and flaps (the Atmosphere's: the fighter's, above)
   if (F.kind === "space" && pilotView && !F.compact && i.status && !i.status.kerr && i.region !== "hole")
     drawSpaceHud({ ctx, W, H, dpr }, { body: i.status.soiName, orbit: i.status.orbit, next: i.status.next, target: i.status.target }, text);
-  if (F.kind === "approach" && pilotView && i.surface) {
+  if (F.kind === "approach" && pilotView && i.surface && !(helmet && jet)) {
     const mls = F.runway?.mls;
     drawApproachHud(
       { ctx, W, H, dpr, units: s.hudJet === "aviation" ? "aviation" : "metric" },

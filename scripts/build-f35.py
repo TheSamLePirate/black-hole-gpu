@@ -22,13 +22,15 @@ Run with Blender (its glTF importer evaluates the gear's skins and its clip):
 
 Binary (little endian, gzip): "F35B", u32 version 2, u32 vertex count, u32 index count, 6 × f32 bounds
 (min, max of the extended pose), u32 part count, u32 track samples K; per part 16 f32 — kind (0 still,
-1 hinge, 2 track, 3 wheel, 4 petal, 5 a swivel bearing's segment, 6 a fan's stage, 7 a marker: no vertices),
+1 hinge, 2 track, 3 wheel, 4 petal, 5 a swivel bearing's segment, 6 a fan's stage, 7 a marker: no vertices,
+8 the side stick — tilted about its base —, 9 the throttle — slid along its axis by up to a),
 parent part (−1: none), pivot xyz, axis xyz, a, b (kind-dependent: a hinge's travel down / up [rad], a wheel's
 radius, a petal's ring radius, a bearing's or a stage's turning sense), track index (−1: none), side (+1 left,
 −1 right, 0 centre), 0, 0, 0, 0 —; per track K × 12 f32 (an affine map, rows of 3 × 4: extended pose → the pose
 at extension k / (K − 1)); u32 byte length then the parts' names (JSON, padded to 4 bytes); then the vertices
 (10 × f32: position, normal, material — 30 the airframe's layer, 31 the atlas's, 32 the canopy's glass, 33 the
-lights, 34 the visor, 35 a plain dark metal (the lift fan) —, part + ambient occlusion × 0.999, UV in its layer)
+lights, 34 the visor, 35 a plain dark metal (the lift fan), 36 the panoramic display (UV over it), 37 the
+cockpit's dark hardware —, part + ambient occlusion × 0.999, UV in its layer)
 and u32 indices.
 """
 import bpy, bmesh, gzip, json, math, os, struct, sys, time
@@ -94,6 +96,10 @@ CELLS = {
     "mat_14": (1, 0.625, 0.875, 0.03125, 0.03125),  # the visor
 }
 MATNUM = {"mat_15": 32, "mat_8": 33, "mat_14": 34}
+# the panoramic cockpit display: the dashboard's face before the pilot (its map's display region, mirrored on
+# the model's two halves) — material 36, UVs over it from where each point is (the pilot's left to right, top to
+# bottom: 53 × 20 cm), the game drawing it live (src/f35/pcd.ts)
+PCD_BOX = (0.5, 2.895, 3.315)  # (its half width, its bottom and top: model x, z)
 with open(f"{WORK}/atlas.json", "w") as o:
     json.dump({"cells": CELLS, "maps": maps}, o, indent=1)
 log("textures written", len(maps))
@@ -203,13 +209,29 @@ def emit(bm, src_mats, part_ids):
     for f in bm.faces:
         mname = src_mats[f.material_index] if f.material_index < len(src_mats) else "mat_4"
         layer, u0, v0, w, h = CELLS[mname]
-        for lp in f.loops:
+        # (the display's faces: their map's UVs inside its rectangle)
+        guv = [(lp[uvl].uv.x, 1.0 - lp[uvl].uv.y) for lp in f.loops] if uvl else []
+        # (by where it is alone: the dashboard's face in its plane, towards the pilot — the map's display is
+        # mirrored on the model's two halves, its UVs no guide)
+        screen = (
+            mname == "mat_5"
+            and f.normal.y > 0.3
+            and all(
+                abs(lp.vert.co.x) <= PCD_BOX[0] + 0.01 and PCD_BOX[1] - 0.01 <= lp.vert.co.z <= PCD_BOX[2] + 0.01 and -9.62 < lp.vert.co.y < -9.4
+                for lp in f.loops
+            )
+        )
+        for k, lp in enumerate(f.loops):
             P.append(lp.vert.co[:])
             N.append(lp[cnl][:] if cnl else lp.vert.normal[:])
             uv = lp[uvl].uv if uvl else Vector((0, 0))
-            # (Blender's v up; the atlas in glTF's orientation, v down)
-            UV.append((u0 + uv.x * w, v0 + (1.0 - uv.y) * h))
-        MAT.append(MATNUM.get(mname, 30 + layer))
+            if screen:
+                q = lp.vert.co
+                UV.append((min(max((PCD_BOX[0] - q.x) / (2 * PCD_BOX[0]), 0), 1), min(max((PCD_BOX[2] - q.z) / (PCD_BOX[2] - PCD_BOX[1]), 0), 1)))
+            else:
+                # (Blender's v up; the atlas in glTF's orientation, v down)
+                UV.append((u0 + uv.x * w, v0 + (1.0 - uv.y) * h))
+        MAT.append(36 if screen else MATNUM.get(mname, 30 + layer))
         PART.append(f[pl] if pl else part_ids)
     corners.append((to_ship(np.array(P)).reshape(-1, 3, 3), dir_to_ship(np.array(N)).reshape(-1, 3, 3),
                     np.array(UV).reshape(-1, 3, 2), np.array(MAT), np.array(PART)))
@@ -376,6 +398,15 @@ for sx, side in ((1, "left"), (-1, "right")):
     pid = part(f"nozzle bay door {side}", 1, pivot=model_pivot((sx * 1.3, 9.8, 1.6)), axis=(0, 1, 0), a=0.0, b=math.radians(100), side=sx)
     carve(bm, bay, [((0, 9.0, 0), (0, 1, 0)), ((0, 0, 0), (sx, 0, 0)), ((sx * 1.3, 0, 0), (-sx, 0, 0))], pid)
 log("  the STOVL doors cut")
+# -- the airframe's arches under the canopy (its frame as the model has it, in front of the pilot's eyes): a part
+# of their own, hidden from the pilot's seat as the pilot is (src/f35/model.ts)
+P_ARCH = part("canopy arches")
+for f in bm.faces:
+    if f[pl] != P_AIRFRAME:
+        continue
+    c = f.calc_center_median()
+    if -11.3 < c.y < -6.9 and abs(c.x) < 0.95 and c.z > 3.45:
+        f[pl] = P_ARCH
 emit(bm, [s.material.name for s in o.material_slots], None)
 bm.free()
 
@@ -419,6 +450,36 @@ for stage, z, turn in ((1, 3.05, 1), (2, 2.55, -1)):
         nrm += [(0, 0, 1)] * 3
     add_tris(t, nrm, pid)
 log("  the lift fan generated")
+
+# -- the pilot's controls (the model's pilot holds none): the side stick on the right console, the throttle on
+# the left — a grip on a boot each, material 37 (the cockpit's dark hardware); the stick tilts about its base
+# (pitch, roll), the throttle slides fore and aft along its quadrant
+def box(c, half, rot=None):
+    """a box's triangles and normals (model frame), centred at c, half-sizes half"""
+    cx, cy, cz = c
+    hx, hy, hz = half
+    V = [(cx + sx * hx, cy + sy * hy, cz + sz * hz) for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1)]
+    F = [((0, 1, 3, 2), (-1, 0, 0)), ((4, 6, 7, 5), (1, 0, 0)), ((0, 4, 5, 1), (0, -1, 0)), ((2, 3, 7, 6), (0, 1, 0)), ((0, 2, 6, 4), (0, 0, -1)), ((1, 5, 7, 3), (0, 0, 1))]
+    t, n = [], []
+    for q, nn in F:
+        a, b, c_, d = (V[i] for i in q)
+        t += [a, b, c_, a, c_, d]
+        n += [nn] * 6
+    return t, n
+STICK = (-0.64, -8.86, 2.56)
+P_STICK = part("side stick", 8, pivot=model_pivot(STICK), axis=(1, 0, 0))
+t1, n1 = box((STICK[0], STICK[1], STICK[2] + 0.02), (0.07, 0.07, 0.03))
+t2, n2 = box((STICK[0], STICK[1] - 0.01, STICK[2] + 0.15), (0.045, 0.055, 0.11))
+t3, n3 = box((STICK[0], STICK[1] - 0.035, STICK[2] + 0.27), (0.04, 0.06, 0.025))
+add_tris(t2 + t3, n2 + n3, P_STICK, 37)
+add_tris(t1, n1, P_AIRFRAME, 37)
+THROTTLE = (0.63, -8.98, 2.6)
+P_THR = part("throttle", 9, pivot=model_pivot(THROTTLE), axis=dir_to_ship(np.array((0, -1.0, 0))), a=0.16 * SCALE)
+t1, n1 = box((THROTTLE[0], THROTTLE[1], THROTTLE[2] - 0.02), (0.05, 0.22, 0.02))
+t2, n2 = box((THROTTLE[0], THROTTLE[1] + 0.12, THROTTLE[2] + 0.09), (0.055, 0.07, 0.08))
+add_tris(t2, n2, P_THR, 37)
+add_tris(t1, n1, P_AIRFRAME, 37)
+log("  the stick and the throttle generated")
 
 # -- the landing gear: the legs on their tracks, their wheels turning on them; the doors
 WHEELS = {"Object_47": ((-0.05, -7.465, -1.71), 0.47, (-0.22, 0.12)),

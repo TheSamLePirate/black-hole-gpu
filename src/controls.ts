@@ -270,6 +270,8 @@ export class CameraController {
   readonly touchInput = { pitch: 0, yaw: 0, roll: 0 };
   /** Pilot messages (autopilot engaged, impossible manoeuvre…) for the app to show. */
   onPilotMessage?: (text: string) => void;
+  /** a click in the F-35's cockpit (ndc): on its panoramic display, a touch — true: taken (main.ts) */
+  onJetTouch?: (nx: number, ny: number) => boolean;
   /** the F-35 chosen where it is not: put it on a runway (main.ts: GameTools.lineUp) */
   onJetStart?: () => void;
   /** the flown craft entering the air (the last moment before an entry: a point to resume from) */
@@ -620,6 +622,8 @@ export class CameraController {
       const r = this.canvas.getBoundingClientRect();
       // (in the cabin, a click on its walls or its screens: no body beyond them)
       const [nx, ny] = this.ndcOf(e);
+      // (the F-35's cockpit: a touch on its panoramic display — main.ts)
+      if (this.onJetTouch?.(nx, ny)) return;
       const inside = this.cockpit?.active() ? this.cockpit.input.move(nx, ny) : null;
       if (inside) {
         // (nothing: the cabin hides the sky there)
