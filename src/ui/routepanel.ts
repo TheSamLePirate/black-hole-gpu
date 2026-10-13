@@ -291,7 +291,7 @@ export class RoutePanel {
       label: "NAV",
       kind: "primary",
       testid: "rp-nav",
-      title: t("The autopilot flies the plan (⇧N)"),
+      title: t("The autopilot flies the plan (⇧M)"),
       onClick: () => {
         this.host.toast(this.host.camera.navToggle());
         this.summary();
@@ -418,7 +418,8 @@ export class RoutePanel {
     }
     if ((N.on.l || N.on.v) && o) {
       const w = R.wps[o.active];
-      cells.push([t("Active"), `${w?.name ?? "—"} · ${(o.dist / NM).toFixed(1)} NM · ${hms(o.ete)}`, "act"]);
+      const ete = Number.isFinite(o.ete) ? `${Math.floor(o.ete / 60)}:${String(Math.floor(o.ete % 60)).padStart(2, "0")}` : "—";
+      cells.push([t("Active"), `${w?.name ?? "—"} · ${(o.dist / NM).toFixed(1)} NM · ${ete}`, "act"]);
     }
     S.replaceChildren(
       ...cells.map(([k, v, cls]) => {

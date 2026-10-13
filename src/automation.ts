@@ -61,6 +61,8 @@ export interface BhContext {
   bench: KerrBench;
   mission: Mission;
   cockpitScreens: CockpitScreens;
+  /** a plane's flight: its preparation, its plan (ui/flighthub.ts, ui/routepanel.ts) */
+  flight?: { hub: { open(): void }; route: { open(): void } };
   audio: SoundDirector;
   /** the voices (PLAN-TARS): say(line), what was said, the queue */
   voice: Speech;
@@ -323,6 +325,7 @@ export function installBh(c: BhContext) {
       tarsVoice: { phonemes, synthesize, robotVoice },
       /** the cabin's screens: their picture (canvas: 4 × 2 slots of 512 px, the PFD first) */
       cockpitScreens,
+      flight: c.flight,
       /** what a pixel shows in the Ranger's cabin (ndc −1…1, y up): the face hit — point, normal, material,
        *  a screen's display and uv — or null (cockpit/pick.ts) */
       /** where a cockpit control is in the view (its box's centre): ndc (y up), or null (cockpit/controls.ts ids) */

@@ -47,6 +47,7 @@ import { TitleScreen } from "./ui/title";
 import { MissionSelect } from "./ui/missions";
 import { PlacePanel } from "./ui/placepanel";
 import { RoutePanel } from "./ui/routepanel";
+import { FlightHub } from "./ui/flighthub";
 import { TimePanel } from "./ui/timepanel";
 import { WeatherPanel } from "./ui/weatherpanel";
 import { RealWeather } from "./realweather";
@@ -3179,7 +3180,10 @@ async function main() {
         { label: { fr: "Carte", en: "Map" }, key: "M", on: flightHud.mapView, run: () => flightHud.toggleMapView() },
         { label: { fr: "Placer", en: "Place" }, run: () => placePanel.open() },
         ...(VESSELS[fleet.active].flies
-          ? [{ label: { fr: "Plan de vol", en: "Flight plan" }, key: "⇧O", on: camera.nav.on.l, run: () => routePanel.open() }]
+          ? [
+              { label: { fr: "Plan de vol", en: "Flight plan" }, key: "⇧O", on: camera.nav.on.l, run: () => routePanel.open() },
+              { label: { fr: "Préparer un vol", en: "Prepare a flight" }, run: () => flightHub.open() },
+            ]
           : []),
         { label: { fr: "Vue", en: "View" }, key: "V", run: () => keyActions.mount(new KeyboardEvent("keydown")) },
         { label: { fr: "Photo", en: "Photo" }, run: openPhoto },
@@ -3200,6 +3204,7 @@ async function main() {
       },
       { label: { fr: "Piloter", en: "Fly" }, key: "K", run: () => actions["btn-ship"]!() },
       { label: { fr: "Placer le vaisseau", en: "Place the ship" }, run: () => placePanel.open() },
+      { label: { fr: "Voler en F-35", en: "Fly the F-35" }, run: () => flightHub.open() },
       {
         label: { fr: "Cinématique", en: "Cinematic" },
         on: !!camera.cinematic,
@@ -3465,6 +3470,19 @@ async function main() {
   flightHud.onPlace = () => placePanel.open();
   // a plane's flight plan (ui/routepanel.ts, PLAN-F35 F8): its waypoints on the map, NAV flying it
   const routePanel = new RoutePanel({ camera, toast: (s) => panel.toast(s) });
+  // a flight prepared (ui/flighthub.ts): the F-35 at an airfield, its hour, its weather, its fuel, its plan
+  const flightHub = new FlightHub({
+    tools,
+    settings,
+    camera,
+    weatherChanged: () => {
+      metarTick();
+      touch();
+      scheduleUrlSave();
+    },
+    toast: (s) => panel.toast(s),
+    openRoute: () => routePanel.open(),
+  });
   // the Atlas (ui/atlas.ts, PLAN-MODES-AAA M6): the Earth, the Moon and Mars as maps, their destinations, the
   // addresses — the game put there (in orbit, landed, on foot, the free camera, a tripod)
   const ATLAS_ORBIT_KM: Record<MapBody, number> = { earth: 400, moon: 100, mars: 300 };
@@ -4702,6 +4720,7 @@ async function main() {
     bench,
     mission,
     cockpitScreens,
+    flight: { hub: flightHub, route: routePanel },
     audio,
     voice,
     capcom,

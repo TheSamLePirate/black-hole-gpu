@@ -258,9 +258,9 @@ export const KEYMAP: KeySection[] = [
         bind: [fly("KeyB", "jetSystem", { arg: "stovl", shift: true })],
       },
       {
-        keys: "⇧N · ⇧O",
+        keys: "⇧M · ⇧O",
         text: "A plane's flight plan: NAV — the autopilot flying it (LNAV the route, VNAV its altitudes and speeds; the stick takes them off) · the flight plan's panel: its waypoints edited on the map, its fuel, the bingo",
-        bind: [fly("KeyN", "jetSystem", { arg: "nav", shift: true }), fly("KeyO", "route", { shift: true })],
+        bind: [fly("KeyM", "jetSystem", { arg: "nav", shift: true }), fly("KeyO", "route", { shift: true })],
       },
       {
         keys: "I K · J L · H N",
