@@ -1,0 +1,11 @@
+# Git LFS (docs/ASSETS.md): the binaries rebuilt or added often — the regional surface packs (content-addressed: a
+# rebuild writes new names), the licensed astronaut, the docs' captures and the gallery's videos. The older asset packs
+# stay in plain Git.
+assets/earth-surface/v1/**/*.ktx2 filter=lfs diff=lfs merge=lfs -text
+assets/earth-surface/v1/**/*.gz filter=lfs diff=lfs merge=lfs -text
+assets/character/*.ktx2 filter=lfs diff=lfs merge=lfs -text
+assets/character/*.bin filter=lfs diff=lfs merge=lfs -text
+docs/img/**/*.png filter=lfs diff=lfs merge=lfs -text
+docs/img/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+docs/img/**/*.webp filter=lfs diff=lfs merge=lfs -text
+docs/video/*.mp4 filter=lfs diff=lfs merge=lfs -text

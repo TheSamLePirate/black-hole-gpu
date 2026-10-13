@@ -1,7 +1,8 @@
 # Assets and repository size
 
-The repository keeps the app's binaries in plain Git — no LFS, no bucket. About 520 MB of binaries are
-tracked at the head of the branch (`bun scripts/check-repo-size.ts` gives today's figure), and the site
+The repository keeps the app's older binaries in plain Git and, since 13 October 2026, the ones rebuilt
+or added often in Git LFS (below). About 390 MB of binaries are tracked in Git and 130 MB in LFS at the
+head of main (`bun scripts/check-repo-size.ts` gives today's figures), and the site
 GitHub Pages serves is made of them: Pages' limit is 1 GB for the whole deployment, the root and the
 `/test/` preview together.
 
@@ -53,16 +54,30 @@ directory — its bundle, workers, Service Worker precache and scope — and Pag
 Sharing them would mean rewriting the preview's URLs to `../` for files only identical by chance, so
 the site stays about twice one build.
 
-## Later: LFS or a bucket
+## Git LFS
 
-When the budgets bind, two ways out, both needing a decision on the remote (and neither rewriting
-the history already pushed):
+`.gitattributes` puts these in Git LFS (decided 13 October 2026): the regional surface packs
+(`assets/earth-surface/v1/**`: content-addressed, a rebuild writes new names), the licensed astronaut
+(`assets/character/*.ktx2`, `*.bin`), the docs' captures (`docs/img/**` png, jpg, webp) and the
+gallery's videos (`docs/video/*.mp4`). A rebuild of those no longer grows every clone: Git keeps a
+pointer, the object goes to GitHub's LFS store.
 
-- **Git LFS** for `assets/**/*.ktx2`, `*.bin`, `*.mp4`: clones stay small, the files are fetched on
-  checkout. GitHub's LFS has its own storage and bandwidth quota, which the CI's checkouts spend.
-- **A release or a bucket** for the content-addressed packs: `manifest.json` stays in Git, and
-  `scripts/build-pages.ts` fetches each file named there (checking its hash) into `_site/`. The
-  hashes make the files immutable, so any static host or CDN can keep them.
+- **Setting up a clone**: `git lfs install` once per machine (Homebrew: `brew install git-lfs`), then
+  `git lfs pull` in a clone made before. Without it the files are their pointers (a few lines of text):
+  the app shows no regional surface, no astronaut. kerr-mini has no git-lfs yet — its clone pulled by
+  `scripts/remote.ts` gets pointers; the remote runs are not affected (they run on the copy sent from
+  here, with the real files).
+- **The CI** (`pages.yml`): each checkout lists its LFS objects, restores them from the Actions cache
+  keyed by their ids and runs `git lfs pull` — the objects are downloaded only when they change
+  (GitHub's LFS bandwidth quota).
+- **The guard**: `check-repo-size.ts` counts the LFS objects apart (a warning past 800 MB: GitHub's LFS
+  quotas) — they are not in the Git binaries' 600 MB.
+- **The history**: the objects committed before the switch stay in Git's history (about 96 MB); taking
+  them out means rewriting main's history (`git lfs migrate import --everything`) and a force-push —
+  not done.
 
-The site's own limit is a separate matter: moving the packs out of Pages (a CDN, the dedicated
-server) is what lifts it.
+## Later: a bucket
+
+When the site's 1 GB binds, the content-addressed packs can leave Pages: `manifest.json` stays in Git,
+and `scripts/build-pages.ts` fetches each file named there (checking its hash) into `_site/` from a
+release or a bucket. The hashes make the files immutable, so any static host or CDN can keep them.

@@ -44,6 +44,14 @@ jobs:
         with:
           fetch-depth: 2
           persist-credentials: false
+      # (the Git LFS objects — docs/ASSETS.md —: cached by their ids, fetched only when they change)
+      - run: git lfs ls-files --long | cut -d' ' -f1 | sort > .lfs-ids
+      - uses: actions/cache@v4
+        with:
+          path: .git/lfs
+          key: lfs-${{ hashFiles('.lfs-ids') }}
+          restore-keys: lfs-
+      - run: git lfs pull
       - uses: oven-sh/setup-bun@v2
       - uses: actions/cache@v4
         with:
@@ -128,6 +136,24 @@ jobs:
           path: test-src
           fetch-depth: 2
           persist-credentials: false
+      # (the Git LFS objects of both revisions — docs/ASSETS.md —: cached by their ids, fetched only when they change;
+      # a preview without LFS files lists none)
+      - name: The LFS objects' ids
+        run: |
+          for d in main-src test-src; do
+            if [ -d "$d/.git" ]; then (cd "$d" && git lfs ls-files --long | cut -d' ' -f1); fi
+          done | sort -u > .lfs-ids
+      - uses: actions/cache@v4
+        with:
+          path: |
+            main-src/.git/lfs
+            test-src/.git/lfs
+          key: lfs-site-${{ hashFiles('.lfs-ids') }}
+          restore-keys: lfs-site-
+      - name: The LFS objects
+        run: |
+          (cd main-src && git lfs pull)
+          if [ -d test-src/.git ]; then (cd test-src && git lfs pull) || echo "::warning::the preview's LFS objects could not be fetched"; fi
       - uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache

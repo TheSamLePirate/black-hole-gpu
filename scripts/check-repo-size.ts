@@ -7,6 +7,9 @@
 //   bun scripts/check-repo-size.ts [--base <rev>]      (the CI: --base HEAD^1 — a pull request's base, a push's
 //                                                       previous commit; without a base: the total alone)
 //
+// The files under Git LFS (.gitattributes) are pointers in Git — not counted with the binaries —: their objects are
+// summed apart from the pointers' own sizes, a warning past WARN_LFS_MB (GitHub's LFS storage and bandwidth quotas).
+//
 // Raising a budget is a decision made in the same change, in this file, where a review sees it.
 import { $ } from "bun";
 
@@ -14,6 +17,7 @@ const MAX_FILE_MB = 8;
 const WARN_ADDED_MB = 20;
 const WARN_TOTAL_MB = 560;
 const MAX_TOTAL_MB = 600;
+const WARN_LFS_MB = 800;
 
 const arg = (k: string) => {
   const i = process.argv.indexOf(`--${k}`);
@@ -35,18 +39,26 @@ async function tree(rev: string) {
   }
   return out;
 }
-/** the paths git sees as binary in the index */
+/** the paths git sees as binary in the index, and those stored by Git LFS (pointers in Git) */
 async function binaries() {
-  const out = new Set<string>();
+  const out = new Set<string>(),
+    lfs = new Set<string>();
   for (const line of (await $`git ls-files --eol -z`.quiet().text()).split("\0")) {
-    const m = /^i\/(\S*)\s+w\/\S*\s+attr\/[^\t]*\t(.*)$/s.exec(line);
-    if (m && m[1] === "-text") out.add(m[2]!);
+    const m = /^i\/(\S*)\s+w\/\S*\s+attr\/([^\t]*)\t(.*)$/s.exec(line);
+    if (!m) continue;
+    if (/filter=lfs/.test(m[2]!)) lfs.add(m[3]!);
+    else if (m[1] === "-text") out.add(m[3]!);
   }
-  return out;
+  return { out, lfs };
+}
+/** an LFS pointer's object size [bytes] (its "size" line) */
+async function lfsSize(sha: string) {
+  const m = /^size (\d+)$/m.exec(await $`git cat-file -p ${sha}`.quiet().text());
+  return m ? Number(m[1]) : 0;
 }
 
 const head = await tree("HEAD");
-const binary = await binaries();
+const { out: binary, lfs } = await binaries();
 let total = 0;
 for (const [path, b] of head) if (binary.has(path)) total += b.size;
 let failed = false;
@@ -56,6 +68,10 @@ if (total > MAX_TOTAL_MB * MB) {
   fail(`the tracked binaries exceed ${MAX_TOTAL_MB} MB — see docs/ASSETS.md`);
   failed = true;
 } else if (total > WARN_TOTAL_MB * MB) warn(`the tracked binaries pass ${WARN_TOTAL_MB} MB — see docs/ASSETS.md`);
+let lfsTotal = 0;
+for (const [path, b] of head) if (lfs.has(path)) lfsTotal += await lfsSize(b.sha);
+console.log(`check-repo-size: ${lfs.size} file(s) under Git LFS, ${mb(lfsTotal)} of objects`);
+if (lfsTotal > WARN_LFS_MB * MB) warn(`the LFS objects pass ${WARN_LFS_MB} MB — GitHub's LFS quotas, see docs/ASSETS.md`);
 
 const base = arg("base");
 const baseOk = base && (await $`git rev-parse --verify --quiet ${`${base}^{commit}`}`.nothrow().quiet()).exitCode === 0;

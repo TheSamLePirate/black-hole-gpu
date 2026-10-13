@@ -10,6 +10,7 @@ working cockpit, real weather and airports, spatial sound, HOTAS support, and TA
 fly, navigate and set anything in the game.
 
 ```bash
+git lfs install && git lfs pull   # the surface packs, the astronaut, the docs' media are in Git LFS (docs/ASSETS.md)
 bun install
 bun run dev        # http://localhost:3000 (hot reload; server.ts)
 bun test           # physics unit tests (geodesics, closed-form Kerr solutions, ISCO, colorimetry, ephemerides…)
