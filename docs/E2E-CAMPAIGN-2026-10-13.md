@@ -50,10 +50,18 @@ the review marks "non fait" (on branch `review-fixes`, merged here). Then:
 - Items 2, 3, 6, 7: done (character-aaa redesigned from below, grass budget scaled by the frame's own cost, the top
   bar's actions held in place, the lane worktrees removed).
 
+- **Final campaign on the fixed tree** (42c5cc0 and after), split between the Macs by duration: the mini's 34 files
+  all pass; here 50/52 — earth-surface's two tests then made sound (168799c: a guard on the surface's GPU cost
+  instead of a budget read in noise; a retry's pending waited past), 4/4 twice; music fails on this Mac on every tree
+  this afternoon, the pre-fix one included, and passes on the mini with the final tree: this Mac's audio, not the code.
+- Slow-machine fixes found on the mini: a still view restarted at each imagery arrival never converged there
+  (f3e5b8b), grass blades read back late (f3e5b8b), earth-surface's eight measures and rain's 32 samples given the
+  mini's time (c7bdf31, 42c5cc0).
+
 ## Left to do
 
-1. A full campaign on both Macs with the final tree (only targeted runs were made after the fixes; see the second
-   round above for what passed where).
+1. music.e2e here: fails on every tree this afternoon (ticks 2 in 5 s, the bus at −52 dB after the music is
+   switched off), passes on the mini — look at this Mac's audio output (device, sample rate) before the code.
 2. The Moon's DEM arriving after a landing: the landed craft is not put on it (730 m above at 0°, 0°), the walker is
    (docs/REVIEW-BRANCH-2026-10-13.md, "Nouveaux constats").
 3. The first CI run of the new guards (pages.yml: fetch-depth 2, the size guard, check-forest on SwiftShader) and
