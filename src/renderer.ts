@@ -2512,10 +2512,18 @@ export class Renderer {
       );
       this.earthScenery.shadows = s.earthSceneryShadows;
       this.earthScenery.season(utcOf(time));
+      // (imagery come in over tiles already drawn — their heights unchanged, no onChange: a still view kept
+      // its colours without them —: drawn anew at most every half second, once for all those in — up to a
+      // hundred while a window fills, each would restart it; a moving view shows them as it goes)
+      const now = performance.now();
+      if (t === this.live && this.earthTiles.imagery !== this.imagerySeen && now - this.imageryAt > 500) {
+        this.imagerySeen = this.earthTiles.imagery;
+        this.imageryAt = now;
+        if (this.lastPhase !== "realtime" && !this.offline) queueMicrotask(() => this.invalidate());
+      }
     }
     f.set(this.earthTiles.params(), 69 * 4);
     f.set(this.earthSurface.params(), BASE_PARAM_VEC4S * 4);
-    if (this.earthSurface.active) this.featureKey |= 4096;
     f.set(this.earthScenery.params(), (BASE_PARAM_VEC4S + SURFACE_VEC4S) * 4);
     if (!o.probe && this.character?.active && this.character.body === "earth")
       this.character.groundPatch.build(this.character.q, this.character.up(), (q) => this.character!.rawHeight(q), this.earthTiles.stamp);
@@ -2535,12 +2543,34 @@ export class Renderer {
         this.walkStamp = walking.stamp;
       }
     }
-    if (this.earthScenery.active) this.featureKey |= 8192;
     f[61 * 4 + 1] = sunAng; // (earth4.y)
     f[61 * 4 + 2] = this.marsDust(s, near, bodies, time); // (earth4.z)
     if (!o.probe) this.marsDustNow = f[61 * 4 + 2]!;
     // (the storm's diffuse light in the kernel's weather code: compiled in only then)
     if (f[61 * 4 + 2]! > 0) this.featureKey |= 1024;
+    // the regional surface's and the scenery's code in the kernel (4096, 8192): their kernel compiled ahead,
+    // from the moment their data is asked for — its compile (three of a ~7 000-line kernel, seconds of the GPU
+    // process) falls while they load, not in the frame they appear (E2E campaign item 5) —, and their bits
+    // switched on only once it is there: until then their params stay zero, the kernel without them draws on
+    const surfaceAsked = this.earthSurface.active || this.earthSurface.pending;
+    const sceneryAsked = this.earthScenery.active || this.earthScenery.pending;
+    const ahead = this.featureKey | (surfaceAsked ? 4096 : 0) | (sceneryAsked ? 8192 : 0);
+    if (!o.probe) {
+      this.aheadKey = this.firstFrameDoneAt && ahead !== this.featureKey ? ahead : -1;
+      if (this.aheadKey >= 0) this.traceVariant("rt", this.aheadKey);
+    }
+    const surfaceOn = this.earthSurface.active && this.kernelReady(this.featureKey | 4096);
+    if (surfaceOn) this.featureKey |= 4096;
+    else f.fill(0, BASE_PARAM_VEC4S * 4, (BASE_PARAM_VEC4S + SURFACE_VEC4S) * 4);
+    const sceneryOn = this.earthScenery.active && this.kernelReady(this.featureKey | 8192);
+    if (sceneryOn) this.featureKey |= 8192;
+    else f.fill(0, (BASE_PARAM_VEC4S + SURFACE_VEC4S) * 4, (BASE_PARAM_VEC4S + SURFACE_VEC4S + SCENERY_VEC4S) * 4);
+    if (!o.probe) {
+      // (held back, the settled frame waits; let through, the image changes: drawn anew once this frame is out)
+      const held = (this.earthSurface.active && !surfaceOn) || (this.earthScenery.active && !sceneryOn);
+      if (this.earthHeld && !held && !this.offline) queueMicrotask(() => this.invalidate());
+      this.earthHeld = held;
+    }
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
 
@@ -2991,6 +3021,13 @@ export class Renderer {
   /** the camera's features key, as the last trace dispatched had it (a planet probe's params, written
    *  since, bring their own) */
   private cameraKey = FEATURES_ALL;
+  /** the key compiled ahead of the camera's (its surface's or scenery's data asked for, not yet drawn); −1: none */
+  private aheadKey = -1;
+  /** the tiles' imagery last seen (EarthTiles.imagery) and when [ms]: a still view redrawn for it */
+  private imagerySeen = 0;
+  private imageryAt = 0;
+  /** the regional surface or the scenery is in, its kernel still compiling: not drawn yet (the settled frame waits) */
+  private earthHeld = false;
   private variants = new Map<
     number,
     {
@@ -3082,7 +3119,15 @@ export class Renderer {
    *  a scene left, its remaining compiles (minutes each on a slow D3D12 driver) no longer hold the new
    *  scene's back */
   private wanted(key: number, slot: unknown) {
-    return () => this.variants.get(key) === slot && !this.lost && key === this.cameraKey;
+    return () => this.variants.get(key) === slot && !this.lost && (key === this.cameraKey || key === this.aheadKey);
+  }
+
+  /** a key's realtime kernel is there — its own, or an earlier scene's covering it —, or never will be (its
+   *  compile failed or hung: the general kernel draws) */
+  private kernelReady(key: number) {
+    if (key === FEATURES_ALL) return true;
+    const v = this.variants.get(key);
+    return !!v?.rt || !!v?.failed || !!v?.rtGivenUp || !!this.coveringVariant(key, "rt");
   }
 
   /** the realtime kernel first, then its probe — then the general kernel, the later scenes' fallback —,
@@ -3187,11 +3232,13 @@ export class Renderer {
     });
   }
 
-  /** At most the current key plus the previous one (LRU): each key is up to five specialised
-   *  compiles — and the browser's shader disk cache has a budget (plan §2.2-F). */
+  /** At most four keys (LRU): the current one, the one compiled ahead and those the game goes back and forth
+   *  between — the surface's and the scenery's bits come and go in play (the scenery cleared every 8 km, the
+   *  surface's pages, the weather, the runways): two kept made each change a compile of seconds again. Each
+   *  key is up to five specialised compiles — and the browser's shader disk cache has a budget (plan §2.2-F). */
   private evictVariants() {
     const keys = [...this.variants.keys()];
-    for (const k of keys.slice(0, Math.max(0, keys.length - 2))) this.variants.delete(k);
+    for (const k of keys.slice(0, Math.max(0, keys.length - 4))) this.variants.delete(k);
   }
 
   /** the trace's passes encoded; false: no kernel for the scene yet (still compiling) — nothing traced */
@@ -4933,6 +4980,7 @@ export class Renderer {
       !this.earthTiles.pending &&
       !this.earthSurface.pending &&
       !this.earthScenery.pending &&
+      !this.earthHeld &&
       !(this.earthWant && this.earthWant !== this.earthMaps.tier) &&
       !(this.earthIsNear && !this.earthMaps.tier)
     );
