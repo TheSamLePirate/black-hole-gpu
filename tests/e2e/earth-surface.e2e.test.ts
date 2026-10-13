@@ -63,12 +63,13 @@ test.skipIf(!E2E)(
           await app.waitFor(`__bh.renderer.completedFrames >= ${warm + 30}`, 60_000);
           // (every frame profiled while measured — 2–3 % of GPU time: one in eight was ~480 frames drawn for 60, 22 s
           // at this view's 22 fps on the M1 Max — 44 ms of GPU since the Oct 12 ground work, 35 ms on Oct 11 — and
-          // never within a minute on the mini, whose kiosk draws 1920×1080 whatever the test asks)
+          // never within a minute on the mini, whose kiosk draws 1920×1080 whatever the test asks: 60 frames, or 12
+          // after 20 s — eight measures of 45 s outran the test's time there)
           await app.js(
             "(() => { __bh.game.perf(); __bh.renderer.prof.every = 1; __bh.renderer.prof.reset();window.__profT0=performance.now(); window.__profF0=__bh.renderer.completedFrames; return true; })()",
           );
           await app.waitFor(
-            "__bh.renderer.prof.frames>=60 || (__bh.renderer.prof.frames>=12 && performance.now()-window.__profT0>45000)",
+            "__bh.renderer.prof.frames>=60 || (__bh.renderer.prof.frames>=12 && performance.now()-window.__profT0>20000)",
             60_000,
           );
           const m =
@@ -116,7 +117,7 @@ test.skipIf(!E2E)(
       app.close();
     }
   },
-  300_000,
+  600_000,
 );
 
 test.skipIf(!E2E)(
