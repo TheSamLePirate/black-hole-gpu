@@ -381,6 +381,11 @@ interface OfflineJob {
 const TRANSLATION_M = 0.001;
 const NEAR_BODY_M = 20000;
 
+/** The camera's eye on its near body's axes [its radii] (float64): where the tracer's rays start (trace.wgsl nearCam). */
+function earthEye(near: { centre: Vec3; axes: Vec3[] }): Vec3 {
+  return near.axes.map((a) => -(a[0]! * near.centre[0] + a[1]! * near.centre[1] + a[2]! * near.centre[2])) as Vec3;
+}
+
 /** The camera's place on its near body, in metres along the body's own axes: a rotation of the view leaves it unchanged. */
 function placeOnBody(near: { centre: Vec3; radius: number; axes: Vec3[] }): Vec3 {
   const mR = near.radius * M_METRES;
@@ -473,18 +478,44 @@ export class Renderer {
    */
   shipPlace: { S: M3; t: Vec3; dist: number } | null = null;
   /**
-   * While a spectator is out: the flown ship's body, its place on the body's axes [its radii] and its
-   * height [km] — what the ship stands on kept streamed round the ship, not round the view (the Earth's
-   * maps and terrain tiles, a world's finer maps: the ground under its gear is the heights drawn).
+   * The flown ship (not a spectator's: main.ts): its body, its place on the body's axes [its radii] and its
+   * height [km] — a prefetch hint only: the Earth's and a world's finer maps kept for the ground under its gear,
+   * and the terrain tiles round it while the view is off the Earth's near patch. What is streamed and drawn
+   * (tiles, surface, scenery) and where the rays start is the camera's.
    */
   shipFocus: { body: string; c: Vec3; altKm: number } | null = null;
   /** on foot: the view is the astronaut's — the ground and the scenery follow the view, not the vessel left on the ground */
   onFoot = false;
+  /** the camera's velocity over the Earth's ground [m/s, on its axes] (the streaming's lead; null: off the Earth) */
   streamVelocity: Vec3 | null = null;
+  /** the camera's last place on the Earth [its radii] and when [ms]: its velocity measured from frame to frame */
+  private eyeTrack: { c: Vec3; at: number } | null = null;
   streamingState = { leadM: 0, lookAheadSeconds: 6 };
   /** the spectator's view holds the flown ship (near enough to draw) */
   private get shipInView() {
     return !!this.shipPlace && this.shipPlace.dist < 2e4;
+  }
+  /**
+   * The camera's velocity over the Earth's ground [m/s, on its axes], from its eye's place frame to frame (eye: on
+   * the Earth's axes [its radii]; null: off it) — the ship's, a spectator's, a free camera's or a time warp's alike.
+   * Smoothed over a quarter second; a jump (a teleport, a cut — faster than 12 km/s) starts it again from rest.
+   */
+  private cameraGroundVelocity(eye: Vec3 | null): Vec3 | null {
+    if (!eye) {
+      this.eyeTrack = null;
+      return null;
+    }
+    const now = performance.now(),
+      last = this.eyeTrack,
+      v = this.streamVelocity ?? ([0, 0, 0] as Vec3);
+    this.eyeTrack = { c: [...eye], at: now };
+    if (!last) return [0, 0, 0];
+    const dt = (now - last.at) / 1000;
+    if (dt <= 0) return v;
+    const step = eye.map((x, i) => ((x - last.c[i]!) * WGS84_A) / dt) as Vec3;
+    if (dt > 0.5 || Math.hypot(...step) > 12000) return [0, 0, 0];
+    const k = Math.min(1, dt / 0.25);
+    return v.map((x, i) => x + (step[i]! - x) * k) as Vec3;
   }
   /**
    * Cinematic liquid throat: its clock [s] (advanced by the app, or by the video renderer) and the
@@ -2448,34 +2479,30 @@ export class Renderer {
       earthSurface && s.refraction ? refractionParams(this.refractivity(s), earthSurface.h * EARTH_RM, EARTH_RM) : [0, 0, 0, 0],
       (BASE_PARAM_VEC4S - WX_VEC4S - SHADE_VEC4S - 1) * 4,
     );
-    // the Earth's terrain tiles round the camera (on its own maps, the camera near it)
+    // the Earth's terrain tiles, its regional surface and its scenery round the camera — the tracer's own eye
+    // (near.centre, the mount's offset in): what is drawn, and the trees' and buildings' rays and shadows, start
+    // there, never from the ship's centre (a spectator kilometres off, a flyby shot, the cockpit's 3.6 m)
     if (!o.probe) {
-      const onEarth = s.earthTerrain && !!near && near.index === earthK && !!this.earthMaps.tier;
-      // (the ship low over the Earth, the view away: the tiles round the ship — its ground)
+      const eye = near?.index === earthK && this.earthMaps.tier ? earthEye(near) : null;
+      const onEarth = s.earthTerrain && !!eye;
+      // (the camera off the Earth's near patch, the ship low over it — never a spectator's: main.ts —: the tiles
+      // kept round the ship, the ground under its gear; the camera's place wins whenever it is on the Earth)
       const F = this.shipFocus;
       const shipLow = s.earthTerrain && !this.onFoot && F?.body === "earth" && F.altKm < 60 && !!this.earthMaps.tier;
-      const focus = shipLow
-        ? F!.c
-        : onEarth
-          ? (near!.axes.map((a) => -(a[0] * near!.centre[0] + a[1] * near!.centre[1] + a[2] * near!.centre[2])) as Vec3)
-          : null;
-      const lead = focus && !this.onFoot ? streamingLead(focus, this.streamVelocity) : ([0, 0, 0] as Vec3);
+      const focus = onEarth ? eye : shipLow ? F!.c : null;
+      // (the streaming's lead: the camera's own motion over the ground, whatever carries it — the live view's)
+      if (t === this.live) this.streamVelocity = this.cameraGroundVelocity(eye);
+      const lead = focus ? streamingLead(focus, this.streamVelocity) : ([0, 0, 0] as Vec3);
       this.streamingState.leadM = Math.hypot(...lead) * 6378137;
       this.earthTiles.update(focus, pixelAngle, lead);
-      const surfaceFocus =
-        !this.onFoot && F?.body === "earth" && F.altKm < 30
-          ? F.c
-          : near?.index === earthK && this.earthMaps.tier
-            ? (near.axes.map((a) => -(a[0] * near.centre[0] + a[1] * near.centre[1] + a[2] * near.centre[2])) as Vec3)
-            : null;
-      this.earthSurface.update(surfaceFocus, s.earthSurface, lead);
+      this.earthSurface.update(eye, s.earthSurface, lead);
       this.earthScenery.update(
-        surfaceFocus,
+        eye,
         s.earthScenery,
         s.earthSurface !== "off",
         s.earthTerrain,
         SCENERY_EXCLUSIONS,
-        surfaceFocus ? aheadFocus(surfaceFocus, lead) : null,
+        eye ? aheadFocus(eye, lead) : null,
       );
       this.earthScenery.shadows = s.earthSceneryShadows;
       this.earthScenery.season(utcOf(time));

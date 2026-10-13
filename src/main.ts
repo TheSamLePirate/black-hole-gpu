@@ -1,7 +1,6 @@
 import { SceneryHitboxes } from "./ui/scenery-hitboxes";
 import { planetFrame, toLocal } from "./landing";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "./system/ellipsoid";
-import { bodyAxes } from "./system/solar";
 import { groundVelocity } from "./system/our-surface";
 import { CharacterHud } from "./ui/characterhud";
 import { FootHud, type CompassMark } from "./ui/foothud";
@@ -4808,15 +4807,9 @@ async function main() {
       settings.fpsCap > 0 && !renderer.offlineActive && now - renderedAt < 1000 / settings.fpsCap - 0.25 * (renderer.refreshMs || 4);
     if (!capped) cpuProf.time("sky chart", () => updateChart());
     skyPanel.refresh();
-    const groundFocus = camera.piloting && !camera.character.active ? shipFocus() : null;
-    renderer.shipFocus = groundFocus;
-    const pose = camera.activePoseNow();
-    if (groundFocus?.body === "earth" && pose) {
-      const ground = groundVelocity("earth", pose.X, sim.time);
-      renderer.streamVelocity = bodyAxes(solarBody("earth")!, sim.time).map((a) =>
-        a.reduce((sum, v, i) => sum + v * (pose.V[i]! - ground[i]!) * 299792458, 0),
-      ) as [number, number, number];
-    } else renderer.streamVelocity = null;
+    // (the flown ship's ground, kept for its gear while the view is off the Earth — never a spectator's: what is
+    // streamed and drawn follows the camera; the streaming's lead, the camera's own motion: renderer.ts)
+    renderer.shipFocus = camera.piloting && !camera.character.active && !camera.spectating ? shipFocus() : null;
     renderer.onFoot = camera.character.active;
     // (the rain where the view is: the spectator's camera away from the ship — in orbit, under another sky —
     // has its own, or none)

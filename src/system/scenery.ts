@@ -101,6 +101,10 @@ export class EarthScenery {
     }
     this.stamp++;
   }
+  /**
+   * camera: the tracer's eye on the Earth's axes [its equatorial radii] — the rays' origin in worldScenery
+   * (params: P.scenery[3]) and the 12 km gate; priority: where the scene is centred (the eye led by its motion).
+   */
   update(
     camera: Vec3 | null,
     mode: SceneryMode,
