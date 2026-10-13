@@ -5,6 +5,9 @@
 import "./challengepanel.css";
 import type { CameraController } from "../controls";
 import { bests } from "../controller/challenge";
+import { combatBests } from "../controller/combat";
+import { LOADOUTS } from "../game/combat";
+import { SCENARIOS, type Scenario } from "../game/scenarios";
 import { fleet } from "../fleet";
 import { CHALLENGES, type ChallengeDef } from "../game/challenges";
 import type { GameTools } from "../game/tools";
@@ -32,7 +35,7 @@ export class ChallengePanel {
   open() {
     if (this.close) return;
     const root = h("div", "chp");
-    const m = modal({ title: t("Challenges — F-35B"), body: [root], cls: "chp-frame", testid: "challenge-panel", onClose: () => (this.close = null) });
+    const m = modal({ title: t("Challenges and fights — F-35B"), body: [root], cls: "chp-frame", testid: "challenge-panel", onClose: () => (this.close = null) });
     this.close = m.close;
     const B = bests();
     for (const d of CHALLENGES) {
@@ -51,6 +54,34 @@ export class ChallengePanel {
       );
       root.append(card);
     }
+    // the fights
+    root.append(h("h4", "chp-h", t("Combat")));
+    const CB = combatBests();
+    for (const d of SCENARIOS) {
+      const card = h("div", "chp-card chp-fight");
+      const best = CB[d.id];
+      const L = LOADOUTS[d.loadout];
+      const load = [L.aim120 && `${L.aim120} AIM-120`, L.aim9x && `${L.aim9x} AIM-9X`, L.jdam && `${L.jdam} GBU-32`, `${L.gun} × 25 mm`].filter(Boolean).join(" · ");
+      card.append(
+        h("b", "chp-name", tr(d.title)),
+        h("p", "chp-brief", tr(d.brief)),
+        h("span", "chp-par", load),
+        h("span", "chp-best", best ? `${Math.floor(best.time / 60)}:${String(Math.floor(best.time % 60)).padStart(2, "0")}` : t("not flown")),
+        button({ label: t("Fight"), kind: "primary", testid: `chp-fight-${d.id}`, onClick: () => this.fight(d) }),
+      );
+      root.append(card);
+    }
+    if (this.host.camera.combat?.status === "run")
+      root.append(
+        button({
+          label: t("End the fight"),
+          kind: "danger",
+          onClick: () => {
+            this.host.camera.combatEnd();
+            this.close?.();
+          },
+        }),
+      );
     if (this.host.camera.chal?.status === "run")
       root.append(
         button({
@@ -64,6 +95,28 @@ export class ChallengePanel {
       );
   }
 
+  /** A fight flown: the F-35 at its start over the range, its tanks full, its loadout, the world running. */
+  fight(d: Scenario) {
+    const T = this.host.tools;
+    const C = this.host.camera;
+    try {
+      if (fleet.active !== "f35") T.set("vessel", "f35");
+      C.nav.on = { l: false, v: false };
+      C.challengeAbort();
+      const D = Math.PI / 180;
+      const lat = d.anchor.lat + d.start.n / (D * 6_371_008.8);
+      const lon = d.anchor.lon + d.start.e / (D * 6_371_008.8 * Math.cos(d.anchor.lat * D));
+      T.flyAt(lat, lon, d.start.agl, d.start.hdg, d.start.speed);
+      C.airFlight.cfg.flaps = 0;
+      C.pilot.throttle = C.pilot.engineNow = 0.85;
+      fleet.fuel.f35 = VESSELS.f35.fuelKg ?? 0;
+      C.combatStart(d);
+      this.close?.();
+    } catch (e) {
+      this.host.toast(String((e as Error).message ?? e));
+    }
+  }
+
   /** A challenge flown: the F-35 at its start, its tanks full, the judge running. */
   go(d: ChallengeDef) {
     const T = this.host.tools;
@@ -71,6 +124,7 @@ export class ChallengePanel {
     try {
       if (fleet.active !== "f35") T.set("vessel", "f35");
       C.nav.on = { l: false, v: false };
+      if (C.combat) C.combatEnd();
       const s = d.start;
       if ("field" in s) {
         // (a final: 3° down to the aim point, at the reference speed, the gear down, full flaps)

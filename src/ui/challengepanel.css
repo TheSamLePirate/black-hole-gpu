@@ -8,3 +8,5 @@
 .chp-best { font: 600 13px/1.2 var(--mono); color: var(--k-amber); align-self: center; justify-self: end; }
 .chp-card .k-btn { grid-column: 1 / -1; justify-content: center; }
 .chp > .k-btn { grid-column: 1 / -1; justify-self: start; }
+.chp-h { grid-column: 1 / -1; margin: 8px 0 0; font: var(--k-font-title); letter-spacing: 0.12em; text-transform: uppercase; color: var(--k-amber); }
+.chp-fight { border-color: rgba(255, 120, 90, 0.25); }

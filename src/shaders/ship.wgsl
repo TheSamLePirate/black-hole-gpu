@@ -1225,7 +1225,7 @@ struct Seg {
   a: vec4f, // end a (ship frame), its width [m]
   b: vec4f,
   k: vec4f, // optical depths at a and b, distances along the trail [m]
-  m: vec4f, // kind (0 an engine's, 1 a wingtip's, 2 a wing's vapour sheet, 3 a fighter's wingtip thread)
+  m: vec4f, // kind (0 an engine's, 1 a wingtip's, 2 a wing's vapour sheet, 3 a fighter's wingtip thread, 4 a missile's smoke)
 };
 @group(0) @binding(19) var<storage, read> segs: array<Seg>;
 
@@ -1283,7 +1283,8 @@ fn trailFs(in: TOut) -> @location(0) vec4f {
   let chord = sqrt(max(1.0 - x * x, 0.0));
   let tip = in.kind > 0.5;
   // (a vapour sheet's: finer, more ragged — it is torn off the wing in tatters)
-  let sc = select(45.0, select(6.0, 2.2, in.kind > 1.5 && in.kind < 2.5), tip);
+  // (a missile's smoke: puffs a dozen metres apart, billowing)
+  let sc = select(45.0, select(select(6.0, 2.2, in.kind > 1.5 && in.kind < 2.5), 12.0, in.kind > 3.5), tip);
   let nz = vnoise(vec3f(in.s / sc, x * 1.7, in.kind * 7.3)) * 0.65 + vnoise(vec3f(in.s / (0.3 * sc), x * 4.1, 3.1)) * 0.35;
   let edge = smoothstep(0.0, 0.35, chord - 0.25 * (nz - 0.5));
   var tau = in.tau * chord * edge * (0.55 + 0.9 * nz);

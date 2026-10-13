@@ -38,6 +38,8 @@ import shipWGSL from "./shaders/ship.wgsl" with { type: "text" };
 import enduranceWGSL from "./shaders/endurance.wgsl" with { type: "text" };
 import stationWGSL from "./shaders/station.wgsl" with { type: "text" };
 import { ENV_H, ShipRenderer, type Reentry, type ShipInstance, type Thrust } from "./ship";
+import type { VesselId } from "./vessels";
+import type { F35Pose } from "./f35/model";
 import { fleet } from "./fleet";
 import { vesselHulls } from "./system/collide";
 import { EnduranceRenderer } from "./endurance";
@@ -4162,7 +4164,30 @@ export class Renderer {
     );
   }
 
+  /** a fight's aircraft (controller/combat.ts — sim.ts): each from the flown craft's origin on the camera's axes
+   *  [m], its axes on them, its pose */
+  combatOthers: { id: VesselId; rel: Vec3; axes: [Vec3, Vec3, Vec3]; jet?: F35Pose; hidden?: boolean }[] = [];
+
   private shipOthers(s: Settings): ShipInstance[] {
+    const extra = this.combatShips(s);
+    return extra.length ? [...extra, ...this.fleetOthers(s)] : this.fleetOthers(s);
+  }
+
+  /** The fight's aircraft as instances: their place from the eye, their axes. */
+  private combatShips(s: Settings): ShipInstance[] {
+    if (!this.combatOthers.length || !s.ship || !this.shipPose) return [];
+    const eye = shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t;
+    return this.combatOthers.filter((o) => !o.hidden).map((o) => ({
+      id: o.id,
+      S: [0, 1, 2].map((k) => [o.axes[0][k]!, o.axes[1][k]!, o.axes[2][k]!]) as [Vec3, Vec3, Vec3],
+      t: [o.rel[0] + eye[0], o.rel[1] + eye[1], o.rel[2] + eye[2]] as Vec3,
+      shadow: false,
+      jet: o.jet,
+      far: false,
+    }));
+  }
+
+  private fleetOthers(s: Settings): ShipInstance[] {
     const cam = this.lastCam;
     if (!cam || s.system !== "gargantua" || !s.wormhole || cam.region !== "throat" || cam.ell >= 0) return [];
     const time = this.lastTime;

@@ -1390,7 +1390,8 @@ export default {
   "Releases the controls: stops the mission, the hold and the autopilot":
     "Relâche les commandes : arrête la mission, le maintien et le pilote auto",
   Enter: "Entrée",
-  "Acknowledges the master caution: the lamp out, the warning silent": "Acquitte l'alarme principale : voyant éteint, avertissement coupé",
+  "Acknowledges the master caution: the lamp out, the warning silent (in a fight: the weapon released)":
+    "Acquitte l'alarme principale : voyant éteint, avertissement coupé (en combat : tire l'arme choisie)",
   "Leave the Ranger": "Quitter le Ranger",
   "Drag · double-click": "Glisser · double-clic",
   "Look around from the attach point · look ahead": "Regarder autour depuis le point d'attache · regarder devant",

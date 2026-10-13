@@ -12,6 +12,7 @@ import type { SiteTrack } from "../fc/land-ops";
 import { elements as kepElements, fromPNR, propagate as kepProp, type V3 as KV3 } from "../fc/kepler";
 import type { Burn, FcContext, OpResult } from "../fc/ops";
 import { engineTrail, sheetTrail, tipTrail, type ContrailSource } from "../contrails";
+import { MISSILES } from "../game/combat";
 import {
   kApoapsis,
   kCircularize,
@@ -1315,6 +1316,29 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
         if (apx > 0) for (const sx of [1, -1]) src.push({ key: `x${sx}`, p: at([vp.apex[0] * sx, vp.apex[1], vp.apex[2]]), kind: 3, str: apx });
       }
     }
+  }
+  // (a fight's missiles: their motors' smoke — controller/combat.ts —, at their place from the craft in the
+  // local east, north, up)
+  const CB = this.combat;
+  const sf = CB?.last ? this.sfFrame(cam) : null;
+  if (CB?.last && sf && LA && LA.air.rho > 0) {
+    const P = CB.last;
+    // (the local east, north, up in this frame: through the local axes)
+    const [E, N, U] = [sf.east, sf.north, sf.up].map((v) => fr.fromLocal(sf.toLocal(v as Vec3))) as [Vec3, Vec3, Vec3];
+    for (const m of CB.world.missiles) {
+      if (!m.alive || m.t > MISSILES[m.kind].burn + 0.5) continue;
+      const r = [m.p[0] - P.p[0], m.p[1] - P.p[1], m.p[2] - P.p[2]];
+      if (Math.hypot(r[0]!, r[1]!, r[2]!) > 40_000) continue;
+      const q = [0, 1, 2].map((k) => x[k]! + E[k]! * r[0]! + N[k]! * r[1]! + U[k]! * r[2]!) as Vec3;
+      src.push({ key: `m${m.id}`, p: q, kind: 4, str: 1 });
+    }
+    // (a downed aircraft burning: its smoke as it falls)
+    for (const q of CB.world.targets)
+      if (q.ai && !q.alive && CB.world.t - q.diedAt < 20) {
+        const r = [q.p[0] - P.p[0], q.p[1] - P.p[1], q.p[2] - P.p[2]];
+        const p = [0, 1, 2].map((k) => x[k]! + E[k]! * r[0]! + N[k]! * r[1]! + U[k]! * r[2]!) as Vec3;
+        src.push({ key: `w${q.id}`, p, kind: 4, str: 0.8 });
+      }
   }
   this.contrails.step(fr.now, fr.body, fr.env.carry, src);
   const n = this.contrails.view(fr.now, x, ax, this.contrailBuf);

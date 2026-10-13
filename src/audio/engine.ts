@@ -1574,6 +1574,81 @@ export class SoundEngine {
     }
   }
 
+  // ------------------------------------------------------------------------------ a fight (PLAN-F35 F10)
+  private gun: { g: GainNode; nodes: AudioScheduledSourceNode[] } | null = null;
+  private warnNext = 0;
+
+  /**
+   * Each frame of a fight: the gun's roar while it fires (the GAU-22/A's 55 rounds a second — a buzz at that
+   * rate through the airframe, its crackle), the missile warning's tone while one chases (the RWR's: two
+   * tones, fast).
+   */
+  combatFrame(firing: boolean, warning: boolean) {
+    if (!this.running || !this.enabled || !this.ctx) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    if (firing && !this.gun) {
+      const g = new GainNode(ctx, { gain: 0 });
+      g.gain.setTargetAtTime(0.55, t, 0.01);
+      const osc = new OscillatorNode(ctx, { type: "sawtooth", frequency: 55 });
+      const lp = new BiquadFilterNode(ctx, { type: "lowpass", frequency: 900, Q: 0.8 });
+      const noise = ctx.createBufferSource();
+      noise.buffer = this.white;
+      noise.loop = true;
+      const bp = new BiquadFilterNode(ctx, { type: "bandpass", frequency: 1800, Q: 0.7 });
+      const ng = new GainNode(ctx, { gain: 0.35 });
+      // (the noise chopped at the firing rate: each round's crack)
+      const am = new OscillatorNode(ctx, { type: "square", frequency: 55 });
+      const amg = new GainNode(ctx, { gain: 0.3 });
+      am.connect(amg).connect(ng.gain);
+      osc.connect(lp).connect(g);
+      noise.connect(bp).connect(ng).connect(g);
+      g.connect(this.busses.engine);
+      for (const n of [osc, noise, am]) n.start(t);
+      this.gun = { g, nodes: [osc, noise, am] };
+    } else if (!firing && this.gun) {
+      const G = this.gun;
+      G.g.gain.setTargetAtTime(0, t, 0.03);
+      for (const n of G.nodes) n.stop(t + 0.2);
+      this.gun = null;
+    }
+    if (warning && t >= this.warnNext) {
+      this.tone(1250, 0, 0.09, { level: 0.22, type: "square" });
+      this.tone(950, 0.11, 0.09, { level: 0.22, type: "square" });
+      this.warnNext = t + 0.26;
+    }
+  }
+
+  /** A fight's one-shot: the player's missile off (its motor's roar going away), an enemy launch's alarm, an
+   *  explosion — late by the sound's travel, quieter and duller with the distance —, a hit on the jet. */
+  combatCue(cue: "launch" | "enemyLaunch" | "explode" | "hit", o: { dist?: number; size?: number } = {}) {
+    if (!this.running || !this.enabled || !this.ctx) return;
+    const E = this.busses.engine;
+    switch (cue) {
+      case "launch":
+        this.burst(E, 0.9, 500, 2.2, 0.6);
+        this.burst(E, 0.6, 140, 1.6, 0.7);
+        break;
+      case "enemyLaunch":
+        for (let k = 0; k < 4; k++) this.tone(1600, k * 0.14, 0.07, { level: 0.25, type: "square" });
+        break;
+      case "explode": {
+        const d = o.dist ?? 1000;
+        const s = o.size ?? 1;
+        const lvl = Math.min(1, (s * 400) / Math.max(d, 80));
+        if (lvl < 0.02) break;
+        const at = Math.min(d / 340, 12);
+        this.burst(this.busses.master, lvl, 70, 2.8 + s, 0.6, at);
+        if (d < 4000) this.burst(this.busses.master, lvl * 0.7, 900, 0.5, 0.8, at);
+        break;
+      }
+      case "hit":
+        this.burst(E, 1, 300, 0.6, 0.6);
+        this.burst(E, 0.8, 90, 1.4, 0.6, 0.02);
+        break;
+    }
+  }
+
   /**
    * A radio line's frame (PLAN-TARS T1) — the system's voice cannot be filtered, the radio is heard round
    * it: at its start Quindar's intro tone (2525 Hz, 250 ms, as Apollo's capcom keyed) and the squelch's

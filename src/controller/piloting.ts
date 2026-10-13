@@ -975,6 +975,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   const jetCmd = this.jetStep(inp, dtPilot);
   // (a challenge's clock, its gates, its touchdown, its figures — controller/challenge.ts)
   this.challengeStep(dtPilot);
+  // (a fight: its world stepped with the player — controller/combat.ts)
+  this.combatStep(dtPilot);
   // (the F-35B's STOVL mode — controller/stovl.ts —: the thrust's direction, the hover law; its input the stick's
   // left to the pilot — none when the hover law takes it)
   const vt = this.stovlStep(cam, inp, dtPilot);

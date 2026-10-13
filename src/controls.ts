@@ -51,6 +51,7 @@ import { installSpectator } from "./controller/spectator";
 import { installJet } from "./controller/jet";
 import { installFplan, noNav, type NavState } from "./controller/fplan";
 import { installChallenge, type ChalState } from "./controller/challenge";
+import { installCombat, type CombatState } from "./controller/combat";
 import { installStovl, noStovl, type StovlState } from "./controller/stovl";
 import { CamShake } from "./camshake";
 import { installCine } from "./controller/cine";
@@ -956,6 +957,10 @@ export class CameraController {
   nav: NavState = noNav();
   /** a challenge flown (game/challenges.ts — controller/challenge.ts), null: none */
   chal: ChalState | null = null;
+  /** a fight flown (game/combat.ts — controller/combat.ts), null: none */
+  combat: CombatState | null = null;
+  /** the gun's trigger held by another hand (a HOTAS's button, a touch) */
+  gunTrigger = false;
   /** the last touchdown: its count, its sink and its speed along [m/s], the gear's verdict (controller/motion.ts) */
   lastTouch: { n: number; sink: number; along: number; gear: string } | null = null;
 
@@ -1308,6 +1313,7 @@ installSpectator(CameraController);
 installJet(CameraController);
 installFplan(CameraController);
 installChallenge(CameraController);
+installCombat(CameraController);
 installStovl(CameraController);
 installCine(CameraController);
 installCamRig(CameraController);

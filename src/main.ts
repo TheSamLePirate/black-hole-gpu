@@ -1666,6 +1666,11 @@ async function main() {
   // sectors and the settings)
   for (const [id, fn] of Object.entries(actions)) document.getElementById(id)?.addEventListener("click", fn);
   /** Next / previous target, named in a toast (or why there is nothing else to pick). */
+  /** A fight's trigger's answer said (controller/combat.ts). */
+  function combatSay(s: string | null) {
+    if (s) panel.toast(s);
+  }
+
   function nextTarget(dir: 1 | -1) {
     const list = camera.availableTargets();
     if (list.length < 2) {
@@ -2862,7 +2867,8 @@ async function main() {
     },
     missions: () => openMissions(),
     stopFlight: () => releaseControls(),
-    ack: () => flightHud.acknowledge(),
+    ack: () => (camera.combat?.status === "run" ? combatSay(camera.combatTrigger("fire")) : flightHud.acknowledge()),
+    combat: (_, a) => combatSay(camera.combatTrigger(a === "cm" ? "cm" : "weapon")),
     pause: () => (pauseMenu ??= makePauseMenu()).open(),
     quickSave: () => quickSave(),
     quickLoad: () => quickLoad(),
@@ -2878,8 +2884,11 @@ async function main() {
     characterJump: (e) => {
       if (!e.repeat && camera.enabled) camera.character.jump();
     },
-    // time, in every mode
-    playPause: () => playPause(),
+    // time, in every mode (in a fight Space is the gun's trigger: the pause on Esc)
+    playPause: () => {
+      if (camera.combat?.status === "run" && camera.piloting) return;
+      playPause();
+    },
     warp: (_, d) => warp(d === "1" ? 1 : -1),
     realTime: () => realTime(),
     // the scene; the camera in every mode: V the next view, C the look locked on the target, Y the
@@ -2893,7 +2902,7 @@ async function main() {
       camera.resetView();
       touch();
     },
-    target: (e) => nextTarget(e.shiftKey ? -1 : 1),
+    target: (e) => (camera.combat?.status === "run" ? combatSay(camera.combatTrigger("lock")) : nextTarget(e.shiftKey ? -1 : 1)),
     png: () => savePNG(),
     fullscreen: () => fullscreen(),
     lookAt: () => toggleLookAt(),
@@ -3243,10 +3252,11 @@ async function main() {
   addEventListener("keyup", (e: KeyboardEvent) => {
     if (e.key !== "Tab") return;
     if (tabTimer) {
-      // (a tap: the next target)
+      // (a tap: the next target — in a fight, the radar's next lock)
       clearTimeout(tabTimer);
       tabTimer = 0;
-      nextTarget(tabShift ? -1 : 1);
+      if (camera.combat?.status === "run" && camera.piloting) combatSay(camera.combatTrigger("lock"));
+      else nextTarget(tabShift ? -1 : 1);
     } else if (wheel.isOpen) {
       if (wheel.selected >= 0) wheel.activate();
       else wheel.close();
@@ -4844,6 +4854,24 @@ async function main() {
         panel.toast(camera.chal.say);
         camera.chal.say = null;
       }
+      // (a fight: what it says, what is heard — the gun, the launches, the explosions at their distance, the
+      // missile warning)
+      const CB = camera.combat;
+      if (CB) {
+        if (CB.say) {
+          panel.toast(CB.say);
+          CB.say = null;
+        }
+        sound.combatFrame(CB.world.firing && CB.world.stores.gun > 0, CB.world.missiles.some((m) => m.alive && m.owner === "red" && m.target === -1));
+        for (const e of CB.events) {
+          if (e.kind === "launch") sound.combatCue(e.who === "blue" ? "launch" : "enemyLaunch");
+          else if (e.kind === "explode" && CB.last) {
+            const d = Math.hypot(e.p[0] - CB.last.p[0], e.p[1] - CB.last.p[1], e.p[2] - CB.last.p[2]);
+            sound.combatCue("explode", { dist: d, size: e.size });
+          } else if (e.kind === "hit" && e.on === "player") sound.combatCue("hit");
+        }
+        CB.events = [];
+      } else sound.combatFrame(false, false);
       if (cpuProf.time("flight (camera.update)", () => sim.step(dt))) {
         changed = true;
         guiDirty = true;

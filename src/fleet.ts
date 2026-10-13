@@ -97,6 +97,8 @@ export class Fleet {
   spent: Partial<Record<VesselId, number>> = {};
   /** an aircraft's fuel left [kg] (VESSELS[…].fuelKg: the F-35's) — none: full */
   fuel: Partial<Record<VesselId, number>> = {};
+  /** an aircraft's stores [kg] — the F-35's missiles, bombs, gun pod (controller/combat.ts) */
+  payload: Partial<Record<VesselId, number>> = {};
   /** the tanks' model (the scene's exhaust speed and mass ratio); null: no propellant counted */
   tanks: { exhaust: number; massRatio: number } | null = null;
 
@@ -104,7 +106,7 @@ export class Fleet {
   massLeft(id: VesselId): number {
     // (an aircraft: its fuel burnt, not a rocket's propellant)
     const V = VESSELS[id];
-    if (V.fuelKg) return (V.mass - V.fuelKg + Math.max(this.fuel[id] ?? V.fuelKg, 0)) / V.mass;
+    if (V.fuelKg) return (V.mass - V.fuelKg + Math.max(this.fuel[id] ?? V.fuelKg, 0) + (this.payload[id] ?? 0)) / V.mass;
     return this.tanks ? massLeft(this.tanks, this.spent[id] ?? 0) : 1;
   }
 

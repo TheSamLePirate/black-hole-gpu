@@ -62,6 +62,27 @@ export interface SymInfo {
     figures: { idx: number; list: string[]; marks: number[] } | null;
     gates: { c: (V3 | null)[]; k: number; n: number; dist: number }[];
   } | null;
+  /** a fight flown (controller/combat.ts): every vector on the camera's axes from the craft [m] */
+  combat?: {
+    title: string;
+    t: number;
+    limit: number;
+    status: string;
+    result: string | null;
+    weapon: string;
+    stores: { aim120: number; aim9x: number; jdam: number; gun: number; flares: number };
+    damage: number;
+    firing: boolean;
+    targets: { d: V3; dist: number; name: string; kind: string; alive: boolean; locked: boolean; seen: boolean; ground: boolean; closing: number }[];
+    missiles: { d: V3; dist: number; red: boolean; motor: boolean }[];
+    rounds: V3[];
+    booms: { d: V3; dist: number; age: number; size: number }[];
+    lead: V3 | null;
+    zone: { range: number; rMax: number; rMin: number; inRange: boolean } | null;
+    fall: V3 | null;
+    threats: { d: V3; dist: number }[];
+    gunReady: boolean;
+  } | null;
   /** a plane's flight plan: the active waypoint (its bearing [° true], its distance [m]) */
   nav?: { name: string; brg: number; dist: number; on: boolean } | null;
   /** the F-35B's STOVL mode (controller/telemetry.ts) */
@@ -467,6 +488,7 @@ export function drawSymbology(F: SymFrame) {
   if (i.plan && i.plan.nodes.length && s.hudBurn && on(F, "burn") && !F.outside && F.density < 2)
     drawBurn(F, pr, stroke, text, inside, nose);
   if (i.chal) drawChallenge(F, pr, stroke, text);
+  if (i.combat) drawCombat(F, pr, stroke, text);
   if (i.dock && i.dockGuide && !i.dock.docked && s.hudDock && on(F, "dock") && F.density < 2) drawDock(F, pr, stroke, text, inside);
 
   // ---- in the air: the angle of attack, the energy, the sideslip, the load, the flight director
@@ -1700,4 +1722,188 @@ function drawChallenge(
     const col = medal === "gold" ? "#ffd23f" : medal === "silver" ? "#d8e2ea" : medal === "bronze" ? "#d08a4a" : "#ff6a5a";
     text(C.result.text, W / 2, H * 0.32, col, 22, "center", true);
   }
+}
+
+/** A fight (controller/combat.ts): the explosions, the smoke-less motors' glow, the gun's tracers, the targets
+ *  (the radar's in green, the lock a diamond with its range and closure), the gun's pipper on the lead, the
+ *  launch zone's scale and its SHOOT cue, the bomb's fall point, the missile warning and its bearings, the
+ *  stores, the damage, the end. */
+function drawCombat(
+  F: SymFrame,
+  pr: (d: V3 | null | undefined) => [number, number] | null,
+  stroke: (draw: () => void, col: string, lw: number, dash?: number[]) => void,
+  text: (t: string, x: number, y: number, col: string, size: number, align?: CanvasTextAlign, mono?: boolean) => void,
+) {
+  const { ctx, W, H, dpr, i } = F;
+  const K = i.combat!;
+  const tanH = Math.tan((F.fov * D) / 2);
+  const fpx = H / (2 * tanH);
+  const GRN = "rgba(90, 255, 140, 0.95)",
+    RED = "rgba(255, 70, 60, 1)",
+    AMB = "rgba(255, 190, 60, 1)";
+  const blink = Math.floor(performance.now() / 250) % 2 === 0;
+  // the explosions: a flash, a fireball swelling and cooling to smoke (their real size at their distance)
+  for (const b of K.booms) {
+    const p = pr(b.d);
+    if (!p || b.d[2] <= 0) continue;
+    const R = b.size * 14 * (0.5 + 1.6 * Math.min(b.age / 1.2, 1) + 0.3 * b.age);
+    const r = Math.max((R * fpx) / b.d[2], 2 * dpr);
+    const heat = Math.max(0, 1 - b.age / 1.8);
+    const fade = Math.max(0, 1 - b.age / 8);
+    const g = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], r);
+    g.addColorStop(0, `rgba(255, ${Math.round(200 + 55 * heat)}, ${Math.round(150 * heat)}, ${0.95 * heat + 0.25 * fade})`);
+    g.addColorStop(0.45, `rgba(${Math.round(255 * heat + 70 * (1 - heat))}, ${Math.round(110 * heat + 66 * (1 - heat))}, ${Math.round(30 * heat + 60 * (1 - heat))}, ${0.8 * heat + 0.45 * fade})`);
+    g.addColorStop(1, "rgba(60, 56, 52, 0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(p[0], p[1], r, 0, 2 * Math.PI);
+    ctx.fill();
+    if (b.age < 0.15) {
+      ctx.fillStyle = `rgba(255, 250, 230, ${0.5 * (1 - b.age / 0.15)})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+  // the missiles' motors: a glow (white-hot, a little orange), larger near
+  for (const m of K.missiles) {
+    const p = pr(m.d);
+    if (!p || !m.motor) continue;
+    const r = Math.max(Math.min((6 * fpx) / Math.max(m.d[2], 1), 40 * dpr), 2.5 * dpr);
+    const g = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], r);
+    g.addColorStop(0, "rgba(255, 255, 240, 1)");
+    g.addColorStop(0.35, "rgba(255, 190, 90, 0.8)");
+    g.addColorStop(1, "rgba(255, 120, 40, 0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(p[0], p[1], r, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+  // the gun's tracers
+  ctx.fillStyle = "rgba(255, 220, 120, 0.95)";
+  for (const d of K.rounds) {
+    const p = pr(d);
+    if (p) ctx.fillRect(p[0] - 1.2 * dpr, p[1] - 1.2 * dpr, 2.4 * dpr, 2.4 * dpr);
+  }
+  // the targets
+  for (const q of K.targets) {
+    const p = pr(q.d);
+    const col = !q.alive ? "rgba(160, 160, 160, 0.7)" : q.locked ? AMB : q.seen ? GRN : "rgba(90, 255, 140, 0.45)";
+    if (p && p[0] > 0 && p[0] < W && p[1] > 0 && p[1] < H) {
+      const s = (q.locked ? 16 : 11) * dpr;
+      if (q.ground) {
+        stroke(() => {
+          ctx.moveTo(p[0], p[1] - s);
+          ctx.lineTo(p[0] + s, p[1]);
+          ctx.lineTo(p[0], p[1] + s);
+          ctx.lineTo(p[0] - s, p[1]);
+          ctx.closePath();
+        }, col, q.locked ? 2.2 : 1.5);
+      } else stroke(() => ctx.rect(p[0] - s, p[1] - s, 2 * s, 2 * s), col, q.locked ? 2.2 : 1.5);
+      if (q.locked) {
+        stroke(() => ctx.arc(p[0], p[1], s * 1.6, 0, 2 * Math.PI), col, 1.5);
+        text(`${q.name}  ${(q.dist / 1000).toFixed(1)} km  ${q.closing >= 0 ? "+" : ""}${Math.round(q.closing)} m/s`, p[0], p[1] + s + 18 * dpr, col, 12, "center", true);
+      } else if (q.seen) text((q.dist / 1000).toFixed(1), p[0], p[1] + s + 12 * dpr, col, 10, "center", true);
+      if (!q.alive) text("SPLASH", p[0], p[1] - s - 8 * dpr, col, 11, "center", true);
+    } else if (q.locked && q.alive) {
+      // (out of view: an arrow at the edge towards it)
+      const a = Math.atan2(-q.d[1], q.d[2] > 0 ? q.d[0] : -q.d[0] || 1e-3);
+      const r = Math.min(W, H) * 0.4;
+      const x = W / 2 + Math.cos(a) * r,
+        y = H / 2 + Math.sin(a) * r;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(a);
+      ctx.fillStyle = AMB;
+      ctx.beginPath();
+      ctx.moveTo(18 * dpr, 0);
+      ctx.lineTo(-8 * dpr, -10 * dpr);
+      ctx.lineTo(-8 * dpr, 10 * dpr);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      text(`${q.name} ${(q.dist / 1000).toFixed(1)}`, x, y + 22 * dpr, AMB, 12, "center", true);
+    }
+  }
+  // the gun's pipper on the lead
+  const L = K.lead ? pr(K.lead) : null;
+  if (L && K.gunReady) {
+    stroke(() => ctx.arc(L[0], L[1], 26 * dpr, 0, 2 * Math.PI), K.firing ? AMB : GRN, 1.6);
+    ctx.fillStyle = K.firing ? AMB : GRN;
+    ctx.beginPath();
+    ctx.arc(L[0], L[1], 2.5 * dpr, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+  // the bomb's fall point: a cross on the ground
+  const fp = K.fall ? pr(K.fall) : null;
+  if (fp) {
+    stroke(() => {
+      ctx.moveTo(fp[0] - 14 * dpr, fp[1]);
+      ctx.lineTo(fp[0] + 14 * dpr, fp[1]);
+      ctx.moveTo(fp[0], fp[1] - 14 * dpr);
+      ctx.lineTo(fp[0], fp[1] + 14 * dpr);
+    }, GRN, 1.6);
+    text("CCIP", fp[0] + 18 * dpr, fp[1] - 10 * dpr, GRN, 10, "left", true);
+  }
+  // the launch zone: a scale on the right — its least and its reach, the range now —, SHOOT in range
+  const Z = K.zone;
+  if (Z) {
+    const x = W - (F.compact ? 40 : 120) * dpr,
+      y0 = H * 0.3,
+      y1 = H * 0.62;
+    const top = Math.max(Z.rMax * 1.3, Z.range * 1.05, 1);
+    const y = (r: number) => y1 - (y1 - y0) * Math.min(r / top, 1);
+    stroke(() => {
+      ctx.moveTo(x, y(0));
+      ctx.lineTo(x, y(top));
+      ctx.moveTo(x - 8 * dpr, y(Z.rMax));
+      ctx.lineTo(x + 8 * dpr, y(Z.rMax));
+      ctx.moveTo(x - 8 * dpr, y(Z.rMin));
+      ctx.lineTo(x + 8 * dpr, y(Z.rMin));
+    }, GRN, 1.4);
+    ctx.fillStyle = Z.inRange ? AMB : GRN;
+    ctx.beginPath();
+    ctx.moveTo(x - 4 * dpr, y(Z.range));
+    ctx.lineTo(x - 14 * dpr, y(Z.range) - 6 * dpr);
+    ctx.lineTo(x - 14 * dpr, y(Z.range) + 6 * dpr);
+    ctx.fill();
+    text(`${(Z.range / 1000).toFixed(1)}`, x - 18 * dpr, y(Z.range), Z.inRange ? AMB : GRN, 11, "right", true);
+    if (Z.inRange && blink) text("SHOOT", W / 2, H * 0.62, AMB, 18, "center", true);
+  }
+  // the missile warning: its bearings on a ring, MISSILE flashing
+  if (K.threats.length) {
+    const cx = W - (F.compact ? 70 : 170) * dpr,
+      cy = H * 0.78,
+      R = 42 * dpr;
+    stroke(() => ctx.arc(cx, cy, R, 0, 2 * Math.PI), RED, 1.4);
+    for (const m of K.threats) {
+      const a = Math.atan2(m.d[0], m.d[2]);
+      const k = Math.max(0.3, 1 - m.dist / 15_000);
+      ctx.fillStyle = RED;
+      ctx.beginPath();
+      ctx.arc(cx + Math.sin(a) * R * (1 - 0.6 * k + 0.6), cy - Math.cos(a) * R * (1 - 0.6 * k + 0.6), 5 * dpr, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+    if (blink) text("MISSILE", W / 2, H * 0.36, RED, 24, "center", true);
+    const near = Math.min(...K.threats.map((m) => m.dist));
+    text(`${(near / 1000).toFixed(1)} km`, cx, cy + R + 14 * dpr, RED, 12, "center", true);
+  }
+  // the stores, the weapon chosen; the damage; the clock
+  // (under the heading tape's annunciators, centred: clear of the panels in the corners)
+  const yb = F.top + (F.compact ? 96 : 196) * dpr;
+  const xb = W / 2;
+  const S = K.stores;
+  const sel = (w: string, s: string) => (K.weapon === w ? `[${s}]` : s);
+  text(
+    `${sel("aim9x", `9X ${S.aim9x}`)}  ${sel("aim120", `120 ${S.aim120}`)}  ${sel("jdam", `JDAM ${S.jdam}`)}  GUN ${S.gun}  CM ${S.flares}`,
+    xb,
+    yb,
+    GRN,
+    13,
+    "center",
+    true,
+  );
+  const mm = Math.floor(K.t / 60),
+    ss = String(Math.floor(K.t % 60)).padStart(2, "0");
+  text(`${K.title.toUpperCase()}  ${mm}:${ss}  · ${K.targets.filter((q) => q.alive).length} ${K.targets.length > 1 ? "TGTS" : "TGT"}`, xb, yb - 20 * dpr, GRN, 12, "center", true);
+  if (K.damage > 0) text(`DAMAGE ${Math.round(K.damage)} %`, xb, yb + 20 * dpr, K.damage > 60 ? RED : AMB, 13, "center", true);
+  if (K.result) text(K.result, W / 2, H * 0.32, K.status === "won" ? "#ffd23f" : RED, 22, "center", true);
 }

@@ -46,6 +46,10 @@ export interface ShipInstance {
   S: M3;
   t: V3;
   shadow: boolean;
+  /** an F-35's own pose (its gear, its surfaces — an aggressor's: docs/PLAN-F35.md F10); none: at rest */
+  jet?: F35Pose;
+  /** hidden where the traced image holds something nearer (default: yes) */
+  far?: boolean;
 }
 
 export interface ShipView {
@@ -134,7 +138,7 @@ export interface Reentry {
 
 const MAX_JETS = 40;
 /** the craft drawn at once, at most */
-const MAX_INST = 8;
+const MAX_INST = 24;
 /** ship.wgsl's Ship: up to the gear's hinges 512 bytes, then the cabin's light (S.cab, S.scr: 1 + 8 × 3 vec4s) */
 const SHIP_UNIFORM_BYTES = 512 + 16 + 8 * 3 * 16 + 16 + MAX_LAMPS * 3 * 16;
 /** where the lamps start in it (S.lampN) */
@@ -142,7 +146,7 @@ const LAMPS_AT = 512 + 16 + 8 * 3 * 16;
 const INST_FLOATS = 20;
 /** the F-35's parts (src/f35/model.ts) at most, and how many F-35s drawn with their parts posed */
 const MAX_PARTS = 160;
-const JET_SLOTS = 2;
+const JET_SLOTS = 8;
 const JET_FLOATS = 16;
 
 const norm = (a: V3): V3 => {
@@ -1239,7 +1243,9 @@ export class ShipRenderer {
     // 80 m, beyond which it vanished), its plumes (a few hundred metres) within them
     const dist = Math.hypot(c[0] + t[0], c[1] + t[1], c[2] + t[2]);
     const reach = this.bound.r * 1.2 + 400;
-    m.set([tanH * v.aspect, tanH, Math.max(0.05, Math.min(dist - reach, 0.5 * dist)), Math.max(80, dist + reach)], 16);
+    // (the others in view — an aggressor kilometres off —: the far plane out to them)
+    const farOthers = Math.max(0, ...(v.others ?? []).map((o) => Math.hypot(...o.t) + 60));
+    m.set([tanH * v.aspect, tanH, Math.max(0.05, Math.min(dist - reach, 0.5 * dist)), Math.max(80, dist + reach, farOthers)], 16);
     m.set([v.albedo, v.metal, v.rough, SPEC_MIPS], 20);
     // the instances: the flown craft, then the others in view whose mesh is there — their transforms,
     // their kind, whether they are in the shadow map and hidden by what the traced image holds nearer
@@ -1249,11 +1255,11 @@ export class ShipRenderer {
     if (v.inside && this.flown && this.vessel === "ranger") this.loadCockpit();
     const inCabin = !!(v.inside && this.flown && this.vessel === "ranger" && this.cockpit);
     this.inCabin = inCabin;
-    const list: { id: VesselId; R: M3; t: V3; shadow: boolean; far: boolean }[] = this.flown
+    const list: { id: VesselId; R: M3; t: V3; shadow: boolean; far: boolean; jet?: F35Pose }[] = this.flown
       ? [{ id: this.vessel, R, t, shadow: true, far: !!v.place }]
       : [];
     for (const o of v.others ?? [])
-      if (list.length < MAX_INST && this.meshes[o.id]) list.push({ id: o.id, R: o.S, t: o.t, shadow: o.shadow, far: true });
+      if (list.length < MAX_INST && this.meshes[o.id]) list.push({ id: o.id, R: o.S, t: o.t, shadow: o.shadow, far: o.far ?? true, jet: o.jet });
     this.draws = [];
     const corners: V3[] = [];
     // (the shadow map's sphere: about the flown craft and those near it)
@@ -1266,7 +1272,7 @@ export class ShipRenderer {
       let parts = 0;
       if (it.id === "f35" && this.jetMesh && jetSlot < JET_SLOTS) {
         parts = MAX_INST + jetSlot++ * MAX_PARTS;
-        let pose = i === 0 && this.flown ? (v.jet ?? restPose()) : restPose();
+        let pose = i === 0 && this.flown ? (v.jet ?? restPose()) : (it.jet ?? restPose());
         if (i === 0 && v.inside) pose = { ...pose, pilot: false };
         const mats = partMatrices(this.jetMesh, pose);
         this.writeParts(mats, parts);

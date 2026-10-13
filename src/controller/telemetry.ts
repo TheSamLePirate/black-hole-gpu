@@ -179,6 +179,8 @@ export interface FlightInfo {
   nav: { name: string; brg: number; dist: number; on: boolean } | null;
   /** a challenge flown: its banner, its next gates (controller/challenge.ts) */
   chal: ReturnType<CameraController["challengeHud"]>;
+  /** a fight flown: its targets, missiles, lead, zone, warnings (controller/combat.ts) */
+  combat: ReturnType<CameraController["combatHud"]>;
   /** the F-35B's STOVL mode (controller/stovl.ts): on, converted 0…1, the nozzle's swivel 0…1, the hover law
    *  flying, the vertical speed it holds [m/s], too heavy to hover */
   stovl: { on: boolean; conv: number; swivel: number; hover: boolean; vz: number; heavy: boolean } | null;
@@ -352,6 +354,7 @@ function flightInfo(this: CameraController): FlightInfo {
       return f ? { alt: f.h, throttle: this.pilot.engineNow, modes: { ...this.jetModes, lnav: this.nav.on.l, vnav: this.nav.on.v } } : null;
     })(),
     chal: this.challengeHud(C),
+    combat: this.combatHud(C),
     nav: (() => {
       const N = this.nav,
         o = N.last.l;
