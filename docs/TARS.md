@@ -226,6 +226,6 @@ Le planisphère au sol fonctionne sur toutes les surfaces marchables. Le zoom va
 planétaires disponibles sont réutilisés, et les mondes sans atlas affichent un quadrillage explicite.
 L’état `map` indique aussi `radiusM` et `sourceStatus` (`ready`, `loading`, `unavailable`).
 
-Les volumes de collision des arbres et bâtiments se visualisent en rose à pied sur Terre :
+Les volumes de collision des arbres et bâtiments se visualisent en rose à pied sur Terre (éteint par défaut) :
 `/set sceneryHitboxes true` (désactiver avec `false`), ou `set_settings` avec la même clé.
 `find_settings("hitbox")` retrouve l’interrupteur et `get_state.sceneryHitboxes` indique son état.

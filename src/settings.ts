@@ -614,7 +614,7 @@ export function defaultSettings(): Settings {
     earthSurface: "satellite",
     earthScenery: "balanced",
     earthSceneryShadows: true,
-    sceneryHitboxes: true,
+    sceneryHitboxes: false,
     earthGrass: "balanced",
     earthGrassDensity: 1,
     earthGrassReach: 28,
