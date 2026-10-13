@@ -21,6 +21,28 @@ export function speedFxLevel(o: { speed: number; rho: number; agl: number; boost
 /** The grey-out's strength (0 … 1) at a load [g]: from 5 g, full at 9. */
 export const greyOut = (g: number) => Math.min(Math.max((g - 5) / 4, 0), 1);
 
+/**
+ * The load felt at the pilot's eyes (docs/PLAN-F35.md, F7): the blood's pressure there lags the load — the heart
+ * and the anti-g suit catch up in seconds (faster as the load eases) —, so a brief pull is borne where a held one
+ * greys the view: from 5.5 g felt (the suit and the straining), black by 9.5; and under a negative load the blood
+ * rushes to the head: a red-out past −1.5 g.
+ */
+export class GStrain {
+  felt = 1;
+  step(g: number, dt: number) {
+    if (!Number.isFinite(g)) return this;
+    const tau = g > this.felt ? 2.4 : 0.9;
+    this.felt += (g - this.felt) * Math.min(1, Math.max(dt, 0) / tau);
+    return this;
+  }
+  get grey() {
+    return Math.min(Math.max((this.felt - 5.5) / 4, 0), 1);
+  }
+  get red() {
+    return Math.min(Math.max((-this.felt - 1.5) / 2, 0), 1);
+  }
+}
+
 type V3 = [number, number, number];
 const N = 140;
 
@@ -41,6 +63,7 @@ export class SpeedFx {
   private p: V3[] = [];
   private seed: number[] = [];
   private grey = 0;
+  private strain = new GStrain();
   constructor() {
     let s = 12345;
     const rnd = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648) * 2 - 1;
@@ -113,9 +136,22 @@ export class SpeedFx {
       }
       ctx.restore();
     }
-    // ---- the edges darkened with the speed, the grey-out of a hard pull (eased in and out)
-    const gWant = o.greyOut ? greyOut(o.g) : 0;
-    this.grey += (gWant - this.grey) * Math.min(1, o.dt / (gWant > this.grey ? 1.2 : 0.5));
+    // ---- the edges darkened with the speed, the grey-out of a hard pull (the load felt at the eyes: GStrain), the
+    // field narrowing to a tunnel, the colours washed out; the red-out of a negative load
+    const st = this.strain.step(o.g, o.dt);
+    this.grey = o.greyOut ? st.grey : 0;
+    const red = o.greyOut ? st.red : 0;
+    if (this.grey > 0.25) {
+      ctx.fillStyle = `rgba(70, 70, 70, ${Math.min(0.55, (this.grey - 0.25) * 0.8).toFixed(3)})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+    if (red > 0.01) {
+      const gr = ctx.createRadialGradient(W / 2, H / 2, Math.hypot(W, H) * 0.1, W / 2, H / 2, Math.hypot(W, H) * 0.6);
+      gr.addColorStop(0, `rgba(160, 10, 10, ${(0.25 * red).toFixed(3)})`);
+      gr.addColorStop(1, `rgba(90, 0, 0, ${Math.min(0.9, 0.85 * red).toFixed(3)})`);
+      ctx.fillStyle = gr;
+      ctx.fillRect(0, 0, W, H);
+    }
     const edge = 0.28 * o.level + 0.75 * this.grey;
     if (edge > 0.01) {
       const r0 = Math.hypot(W, H) * (0.55 - 0.3 * this.grey),

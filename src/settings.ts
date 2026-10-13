@@ -387,6 +387,8 @@ export interface Settings {
   camSpeedFov: number; // the softened views' lens widened with the speed and the afterburner (its gain; 0: none)
   cineShot: "auto" | "chase" | "orbit" | "pass" | "tracking" | "planet" | "system"; // the director's view (cine/brain.ts): its shot, or the director choosing
   cineShake: number; // its noise: the air's buffeting, the engine's rumble, the hand (0 … 1)
+  flightShake: number; // a plane's view shaken by its flight: the runway, the buffet, Mach 1, the afterburner, the touchdown (0 … 1)
+  heatHaze: boolean; // the jet's heat haze: the background shimmering through its hot exhaust
   cineDynamicFov: boolean; // its lens widened with the speed and the afterburner, the long lens on the still cameras
   characterShoulder: number; // on foot: the camera over the right shoulder [m] (0: behind the head)
   shipAlbedo: number; // hull albedo (light grey paint in the film)
@@ -691,6 +693,8 @@ export function defaultSettings(): Settings {
     camSpeedFov: 1,
     cineShot: "auto",
     cineShake: 0.5,
+    flightShake: 0.7,
+    heatHaze: true,
     cineDynamicFov: true,
     characterShoulder: 0.45,
     shipAlbedo: 0.6,
@@ -1975,6 +1979,8 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   camSpeedFov: "pref",
   cineShot: "pref",
   cineShake: "pref",
+  flightShake: "pref",
+  heatHaze: "pref",
   cineDynamicFov: "pref",
   characterShoulder: "pref",
   shipAlbedo: "carried",

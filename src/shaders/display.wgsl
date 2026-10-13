@@ -16,6 +16,8 @@ struct Display {
   rainV: vec4f, // the drops' velocity relative to the camera [m/s, its axes: right, up, forward], their speed
   rainX: vec4f, // the rain's more (PLAN-PLUIE): the flown craft's distance from the camera [m] (0: none — the
                 // drops beyond it hidden by it), the gusts (0…1: the curtains), the camera's lens wet (0/1), unused
+  haze: vec4f,  // the F-35's heat haze: its exhaust's column in the image, from its exit to downstream (uv ×2)
+  hazeR: vec4f, // its radii there [uv of the height], its strength (0: none), a clock [s]
 };
 
 @group(0) @binding(0) var hdr: texture_2d<f32>;
@@ -605,6 +607,31 @@ fn fs(in: VSOut) -> @location(0) vec4f {
     c = textureSampleLevel(hdr, samp, uv, D.lod.x).rgb;
     if (D.lod.w > 0.0 && D.lod.x == 0.0 && D.flags.x < 0.5) {
       c = max(c + rcasDelta(vec2i(uv * vec2f(textureDimensions(hdr, 0))), D.lod.w, D.size.z), vec3f(0.0));
+    }
+  }
+  if (D.hazeR.z > 0.0) {
+    // the heat haze behind a jet's nozzle: the hot exhaust's turbulent gradients of index bend the light —
+    // what is behind it, seen through it, shimmers; its eddies carried downstream (the hull is drawn over
+    // it, sharp: only the background is bent)
+    let hzA = D.haze.xy;
+    let hzB = D.haze.zw;
+    let asp = vec2f(D.img.x / D.img.y, 1.0);
+    let ab = (hzB - hzA) * asp;
+    let L2 = max(dot(ab, ab), 1e-8);
+    let ap = (uv - hzA) * asp;
+    let t = clamp(dot(ap, ab) / L2, 0.0, 1.0);
+    let rad = mix(D.hazeR.x, D.hazeR.y, t);
+    let dist = length(ap - ab * t);
+    let m = (1.0 - smoothstep(0.35 * rad, rad, dist)) * smoothstep(0.0, 0.08, t) * pow(1.0 - t, 1.3) * D.hazeR.z;
+    if (m > 0.002) {
+      let ax = normalize(ab + vec2f(1e-6, 0.0));
+      let s = dot(ap, ax) / max(rad, 1e-3);
+      let w = D.hazeR.w;
+      let q = vec2f(s * 2.3 - w * 9.0, dot(ap, vec2f(-ax.y, ax.x)) / max(rad, 1e-3) * 3.1);
+      let n = vec2f(sin(q.x + 1.7 * sin(q.y * 1.3 + w * 3.1)) + 0.5 * sin(2.1 * q.x - q.y + w * 5.0),
+                    cos(1.3 * q.x + q.y * 0.9 - w * 4.0) + 0.5 * sin(1.9 * q.y + 0.7 * q.x + w * 6.3));
+      let off = n * m * 0.07 * rad / asp;
+      c = textureSampleLevel(hdr, samp, clamp(uv + off, vec2f(0.0), vec2f(1.0)), 0.0).rgb;
     }
   }
   if (D.lod.z > 0.5 && D.lod.x == 0.0) {

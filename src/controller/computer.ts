@@ -11,7 +11,7 @@ import { MISSED_HOLD, MISSED_SIDE, MISSED_TOP_H, MISSED_TURN_H, RUNWAY_DH, unsta
 import type { SiteTrack } from "../fc/land-ops";
 import { elements as kepElements, fromPNR, propagate as kepProp, type V3 as KV3 } from "../fc/kepler";
 import type { Burn, FcContext, OpResult } from "../fc/ops";
-import { engineTrail, tipTrail, type ContrailSource } from "../contrails";
+import { engineTrail, sheetTrail, tipTrail, type ContrailSource } from "../contrails";
 import {
   kApoapsis,
   kCircularize,
@@ -1297,8 +1297,23 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
     const wing = V.aero.wing;
     const tip = V.wingtip;
     if (tip && wing && LA.out.q > 0) {
-      const t = tipTrail(Math.abs(LA.out.L) / (LA.out.q * wing.S), LA.air.rho, LA.air.T, LA.speed);
-      if (t > 0) for (const sx of [1, -1]) src.push({ key: `t${sx}`, p: at([tip[0] * sx, tip[1], tip[2]]), kind: 1, str: t });
+      const cl = Math.abs(LA.out.L) / (LA.out.q * wing.S);
+      const t = tipTrail(cl, LA.air.rho, LA.air.T, LA.speed);
+      if (t > 0) for (const sx of [1, -1]) src.push({ key: `t${sx}`, p: at([tip[0] * sx, tip[1], tip[2]]), kind: V.vapour ? 3 : 1, str: t });
+      // (a fighter's: the vapour sheet over each wing pulling hard, its apex vortices at a high incidence)
+      const vp = V.vapour;
+      if (vp) {
+        const sh = sheetTrail(cl, LA.air.rho, LA.air.T, LA.speed);
+        if (sh > 0)
+          for (const sx of [1, -1])
+            for (let k = 0; k < 6; k++) {
+              const f = k / 5;
+              const q: Vec3 = [(vp.root[0] + (vp.tip[0] - vp.root[0]) * f) * sx, vp.root[1] + (vp.tip[1] - vp.root[1]) * f, vp.root[2] + (vp.tip[2] - vp.root[2]) * f];
+              src.push({ key: `v${sx}${k}`, p: at(q), kind: 2, str: sh * (0.7 + 0.3 * Math.sin(3 * f)) });
+            }
+        const apx = tipTrail(cl * Math.min(Math.max((LA.out.alpha - 0.22) / 0.2, 0), 1), LA.air.rho, LA.air.T, LA.speed);
+        if (apx > 0) for (const sx of [1, -1]) src.push({ key: `x${sx}`, p: at([vp.apex[0] * sx, vp.apex[1], vp.apex[2]]), kind: 3, str: apx });
+      }
     }
   }
   this.contrails.step(fr.now, fr.body, fr.env.carry, src);

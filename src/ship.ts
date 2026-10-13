@@ -275,6 +275,39 @@ export class ShipRenderer {
   get jetVerts(): Float32Array | null {
     return this.jetMesh?.verts ?? null;
   }
+  /** the flown F-35's exhaust now (ship frame): its exit, its way, its radius [m], how strongly it shimmers */
+  private haze: { p: V3; d: V3; r: number; k: number } | null = null;
+
+  /**
+   * The heat haze behind the F-35's nozzle in the last frame's view (display.wgsl haze): the exhaust's
+   * column from its exit to some 18 m downstream, in the image's uv, its radii there [uv of the height], its
+   * strength (0: none). The hot gas bends the light behind it: the background seen through it shimmers.
+   */
+  hazeView(): [number, number, number, number, number, number, number] | null {
+    const H = this.haze,
+      C = this.lastCam;
+    if (!H || !C || H.k <= 0.01) return null;
+    const len = 18;
+    const view = (p: V3) => {
+      const q: V3 = [p[0] - this.camShip[0], p[1] - this.camShip[1], p[2] - this.camShip[2]];
+      return C.R.map((r) => r[0]! * q[0] + r[1]! * q[1] + r[2]! * q[2]) as V3;
+    };
+    let a = view(H.p),
+      b = view([H.p[0] + H.d[0] * len, H.p[1] + H.d[1] * len, H.p[2] + H.d[2] * len]);
+    // (the column clipped at the near plane: the camera beside or inside it)
+    const near = 0.3;
+    if (a[2] < near && b[2] < near) return null;
+    if (a[2] < near || b[2] < near) {
+      const t = (near - a[2]) / (b[2] - a[2]);
+      const m: V3 = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, near];
+      if (a[2] < near) a = m;
+      else b = m;
+    }
+    const uv = (c: V3) => [0.5 + (0.5 * c[0]) / (c[2] * C.tanX), 0.5 - (0.5 * c[1]) / (c[2] * C.tanY)];
+    const r = (c: V3, k: number) => Math.min((H.r * k) / (c[2] * C.tanY * 2), 0.5);
+    return [...uv(a), ...uv(b), r(a, 1.1), r(b, 3.2), H.k] as [number, number, number, number, number, number, number];
+  }
+
   /** the flown F-35's nozzle exit now (ship frame): where its plume starts, which way */
   private jetExit: { p: V3; d: V3 } | null = null;
   /** this frame's draws: mesh, and whether in the shadow map */
@@ -1109,6 +1142,7 @@ export class ShipRenderer {
   private writeJets(th: Thrust | null | undefined) {
     const out = this.jetData;
     let n = 0;
+    let haze: ShipRenderer["haze"] = null;
     if (th) {
       const air = Math.min(Math.max(th.air, 0), 1);
       const V = VESSELS[this.vessel];
@@ -1125,6 +1159,7 @@ export class ShipRenderer {
         const ex = jet ? this.jetExit : null;
         if (ex) J = { ...J, p: ex.p, d: ex.d };
         const ab = jet ? Math.min(Math.max(((th.boost ?? 1) - 1) / 0.5, 0), 1) : 0;
+        if (jet) haze = { p: J.p, d: J.d, r: J.half[0], k: air * Math.min(0.35 + 0.65 * level + 0.8 * ab, 1.4) };
         const len = jet ? 2.5 + 8 * ab : J.main ? (4 + 20 * level) * (1 - 0.45 * air) * V.flame : 1.2 + 1.6 * level;
         out.set([...J.p, level, ...J.d, jet ? 2 : J.main ? 0 : 1, J.half[0], J.half[1], len, (i * 0.618) % 1, ...J.u, ab], n * JET_FLOATS);
         // (the camera inside its proxy — the shader's frustum, a margin for the near plane)
@@ -1141,6 +1176,7 @@ export class ShipRenderer {
       }
     }
     this.jetCount = n;
+    this.haze = haze;
     if (n) this.device.queue.writeBuffer(this.jetBuf, 0, out, 0, n * JET_FLOATS);
   }
 

@@ -1017,7 +1017,7 @@ export class Renderer {
     this.paramBuf = device.createBuffer({ size: this.params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.probeBuf = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     this.probeStage = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
-    this.displayBuf = device.createBuffer({ size: 192, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.displayBuf = device.createBuffer({ size: 224, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.chart = new ChartOverlay(device, src.overlay);
     // (trace.wgsl: the colours' LUTs at LUT_OFF — the synchrotron's from LUT_N = BB_LUT_SIZE)
     const lut = buildBlackbodyLUT();
@@ -2720,6 +2720,14 @@ export class Renderer {
         r && !r.dust && !inside ? 1 : 0,
         0,
       ]),
+    );
+    // (the F-35's heat haze — display.wgsl haze —: its exhaust's column in the image, its radii, its strength,
+    // a clock)
+    const hz = target === this.live && s.ship && s.heatHaze ? this.ship.hazeView() : null;
+    this.device.queue.writeBuffer(
+      this.displayBuf,
+      192,
+      new Float32Array(hz ? [...hz, (performance.now() / 1000) % 3600] : [0, 0, 0, 0, 0, 0, 0, 0]),
     );
   }
 

@@ -9,7 +9,8 @@
 // turbulence) and thins as it does, then sublimates — here within a few minutes.
 //
 // A wing pulling hard in moist warm air drops the pressure in its tip vortices below saturation: short
-// white spirals from the wingtips, gone in a few seconds.
+// white spirals from the wingtips, gone in a few seconds. Harder still, the air over its upper surface
+// condenses in a sheet that lives a fraction of a second (a fighter's high-g vapour, kind 2).
 //
 // The trails are kept in the body's frame (SI, centred on it), fixed to the air: carried round with the
 // ground on our side's turning worlds, at rest in the frames of Gargantua's. Each frame they are handed to
@@ -17,12 +18,13 @@
 
 export type V3 = [number, number, number];
 
-/** A source this step: where it is (body frame [m]), what kind (0: an engine, 1: a wingtip), how
+/** A source this step: where it is (body frame [m]), what kind (0: an engine, 1: a wingtip, 2: a wing's
+ *  vapour sheet, 3: a fighter's wingtip — a thread), how
  *  strongly it makes a trail (0 … 1). The key names it from step to step (one trail per key). */
 export interface ContrailSource {
   key: string;
   p: V3;
-  kind: 0 | 1;
+  kind: 0 | 1 | 2 | 3;
   str: number;
 }
 
@@ -37,7 +39,7 @@ interface Pt {
 
 interface Trail {
   key: string;
-  kind: 0 | 1;
+  kind: 0 | 1 | 2 | 3;
   pts: Pt[];
   /** still drawn out by its source */
   open: boolean;
@@ -48,6 +50,8 @@ interface Trail {
 const KIND = [
   { life: 150, w0: 3, spread: 3.2, tau: 2.2, wRef: 6, form: 0.35 },
   { life: 3.5, w0: 0.6, spread: 0.7, tau: 1.2, wRef: 0.8, form: 0.05 },
+  { life: 0.2, w0: 0.7, spread: 2.2, tau: 0.16, wRef: 1.2, form: 0.02 },
+  { life: 2.2, w0: 0.22, spread: 0.35, tau: 0.9, wRef: 0.3, form: 0.03 },
 ] as const;
 
 /** The most points a trail keeps, the most segments drawn. */
@@ -58,7 +62,7 @@ export const MAX_SEGMENTS = 4096;
 export const SEG_FLOATS = 16;
 
 /** A trail point's width [m] and optical depth across its middle, at an age [s]. */
-export function trailLook(kind: 0 | 1, age: number, str: number): { w: number; tau: number } {
+export function trailLook(kind: 0 | 1 | 2 | 3, age: number, str: number): { w: number; tau: number } {
   const K = KIND[kind];
   const w = K.w0 + K.spread * Math.max(age, 0) ** 0.7;
   const form = Math.min(Math.max(age / K.form, 0), 1);
@@ -97,6 +101,12 @@ export function tipTrail(cl: number, rho: number, T: number, speed: number): num
   return smooth(0.7, 1.05, cl) * smooth(0.45, 0.9, rho) * smooth(255, 268, T) * smooth(40, 80, speed);
 }
 
+/** How strongly the air over a wing condenses in a sheet (0 … 1): a lift coefficient past ~0.6 at speed in
+ *  dense, warm air — the high-g vapour (a fighter's turn, a pull-up low over the sea). */
+export function sheetTrail(cl: number, rho: number, T: number, speed: number): number {
+  return smooth(0.55, 0.95, cl) * smooth(0.6, 1.0, rho) * smooth(268, 280, T) * smooth(90, 150, speed);
+}
+
 export class Contrails {
   trails: Trail[] = [];
   private tLast = NaN;
@@ -132,7 +142,7 @@ export class Contrails {
       const head = P[P.length - 1];
       const prev = P[P.length - 2];
       // (a new point when the head is far enough from the one before it — else the head moved on)
-      const step = s.kind === 0 ? 12 : 1.5;
+      const step = s.kind === 0 ? 12 : s.kind === 2 ? 0.8 : 1.5;
       if (!head || !prev || dist(head.p, prev.p) > step || now - prev.t > 0.5)
         P.push({ p: s.p, t: now, str: s.str, s: head ? head.s + dist(head.p, s.p) : 0 });
       else {

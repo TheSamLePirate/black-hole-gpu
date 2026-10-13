@@ -675,6 +675,8 @@ function stepMount(this: CameraController, dt: number) {
   }
   // (a teleport's view carried back to where it was, blended away)
   if (this.viewCarry) pose = this.applyCarry(pose ?? to, dt);
+  // (a plane's flight shakes its views — the seat's, the chase's: camshake.ts)
+  if (isPlane(fleet.active) && s.flightShake > 0 && !this.cinematic && this.piloting) pose = this.shakePose(pose ?? to, dt);
   this.mountEff = pose;
   if (s.ship && !this.cinematic) this.reorient(S0, this.shipMatrix());
   this.lastPose = this.shipPose();

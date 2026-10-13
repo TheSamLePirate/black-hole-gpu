@@ -75,6 +75,9 @@ export interface VesselDef {
   flies: boolean;
   /** its wingtips (ship frame, the left one): where the tip vortices' trails start (contrails.ts) */
   wingtip?: V3;
+  /** a fighter's: its left wing's upper surface (root and tip, a little above it — the high-g vapour sheet's
+   *  line) and its leading-edge extension's apex (the vortex that condenses at a high angle of attack) */
+  vapour?: { root: V3; tip: V3; apex: V3 };
   /** an aircraft's engine — an afterburning turbofan (src/f35/engine.ts) — instead of a rocket's: its thrust
    *  from the air it breathes; its fuel [kg] (in `mass`, burnt by the engine's consumption: no rocket tank) */
   turbofan?: TurbofanDef;
@@ -402,6 +405,7 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     flame: 0.35,
     flies: true,
     wingtip: [5.36, 1.16, -3.0],
+    vapour: { root: [1.8, 1.32, -1.9], tip: [5.0, 1.27, -2.85], apex: [0.85, 1.55, 3.0] },
     // a fighter (42.7 m² of wing, aspect ratio 2.7; two canted fins of 4.6 m² each; the fuselage's
     // planform with the wing ~62 m²): low drag (C_D0 ≈ 0.021)
     // (the nose's face nearly nothing — a fine nose, its drag in cdA0; the lift slope the whole craft's

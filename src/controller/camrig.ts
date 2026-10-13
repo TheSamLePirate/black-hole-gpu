@@ -38,6 +38,7 @@ declare module "../controls" {
   interface CameraController {
     softMount: typeof softMount;
     camRigStep: typeof camRigStep;
+    shakePose: typeof shakePose;
     followOptions: typeof followOptions;
     lensBaseNow: typeof lensBaseNow;
     lensApply: typeof lensApply;
@@ -240,8 +241,49 @@ function lensApply(this: CameraController, want: number | null) {
   }
 }
 
+/**
+ * A plane's view shaken by its flight (camshake.ts): the runway under its wheels, the buffet near its angle of
+ * attack's limit, the transonic band, the afterburner, a touchdown's jolt — the aim turned about the eye, the up
+ * rolled; from the seat fully, from outside less.
+ */
+function shakePose(this: CameraController, pose: MountPose, dt: number): MountPose {
+  const L = this.airFlight.last;
+  const V = VESSELS[fleet.active];
+  const aMax = V.fbw?.alphaMax ?? V.aero.wing?.stall ?? 0.4;
+  const alpha = L?.out.alpha ?? 0;
+  const mach = L ? L.speed / Math.max(L.air.a, 1) : 0;
+  const dense = L ? clamp(L.air.rho / 0.4, 0, 1) : 0;
+  const contact = this.gearLast?.contact ?? 0;
+  const jolt = contact > 0 && this.shakeContact === 0 && !!L && L.speed > 20 ? 1.4 : 0;
+  this.shakeContact = contact;
+  const sh = this.camShake.step(
+    {
+      dt,
+      roll: this.rolling ? (L?.speed ?? 0) : 0,
+      buffet: L && !this.rolling ? clamp((alpha - 0.72 * aMax) / (0.28 * aMax), 0, 1) * clamp(L.out.q / 3000, 0, 1) : 0,
+      transonic: dense * clamp(1 - Math.abs(mach - 1.0) / 0.1, 0, 1),
+      ab: this.abLevel,
+      engine: this.pilot.engineNow,
+      jolt,
+    },
+    this.s.flightShake * (this.s.shipMount === "cockpit" || this.s.shipMount === "cabin" ? 1 : 0.55),
+  );
+  const e = pose.eye as V3,
+    d = vsub(pose.aim as V3, e);
+  const up0 = (pose.up ?? [0, 1, 0]) as V3;
+  const r = cross3(up0, d);
+  const rl = len3(r) || 1;
+  const right = scale3(r, 1 / rl);
+  const dl = len3(d) || 1;
+  // (small turns: the aim moved across, about the up and the right; the up rolled about the line of sight)
+  const d2 = lin(lin(d as Vec3, 1, cross3(up0, d) as Vec3, sh.yaw), 1, cross3(right, d) as Vec3, sh.pitch) as V3;
+  const up2 = lin(up0 as Vec3, 1, cross3(scale3(d, 1 / dl), up0) as Vec3, sh.roll) as V3;
+  return { eye: e, aim: [e[0] + d2[0], e[1] + d2[1], e[2] + d2[2]], up: up2 };
+}
+
 export function installCamRig(C: { prototype: CameraController }) {
   Object.assign(C.prototype, {
+    shakePose,
     softMount,
     camRigStep,
     followOptions,
