@@ -156,6 +156,9 @@ export class EarthTiles {
   /** heights of the global map (for a tile that will not load: terrain.ts, tileFallbackSampler) */
   fallback: ((q: Vec3) => number) | null = null;
   onChange: (() => void) | null = null;
+  /** bumped when a tile already drawn gets its imagery (its heights unchanged: not the stamp — the ground built
+   *  from them stays; the renderer redraws a still view for it, at most once in a while) */
+  imagery = 0;
   /** tiles loaded, failed (for the readouts) */
   loaded = 0;
   failed = 0;
@@ -343,6 +346,7 @@ export class EarthTiles {
     const L = this.levels[z - Z0];
     if (!L || !inside(L.want, x, y)) return;
     const s = slotOf(x, y);
+    if (col && inside(L.valid, x, y) && L.key[s] === this.keyOf(L, x, y)) this.imagery++;
     L.key[s] = this.keyOf(L, x, y);
     L.data[s] = h;
     const hb = new Uint32Array(h.buffer, h.byteOffset, h.length);

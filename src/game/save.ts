@@ -55,6 +55,10 @@ export interface GameSave {
       trim: { t: number; dv: number } | null;
       plan: { heat: number; shield: number; g: number } | null;
     } | null;
+    /** the camera on the craft (its frame: the eye, the aim, the up) when saved — the craft's attitude is the
+     *  camera's through it: a director's shot, a view dragged about the craft are not their defaults (older
+     *  saves: none — the attach point's own) */
+    view?: { eye: [number, number, number]; aim: [number, number, number]; up?: [number, number, number] } | null;
   };
   /** the fleet: the craft flown, the ones coasting, the docks (older saves: none — the craft the settings
    *  name is the one flown, the others where the scene puts them) */
@@ -178,6 +182,8 @@ export function checkSave(x: unknown): GameSave {
   if (!isNum(sh.throttle) || sh.throttle < 0 || sh.throttle > 1) fault("throttle");
   if (sh.landed !== null && (typeof sh.landed?.body !== "string" || !isVec(sh.landed.q))) fault("ground");
   if (g.plan !== null && g.plan !== undefined && !Array.isArray(g.plan.nodes)) fault("plan");
+  if (sh.view != null && (!isVec(sh.view.eye) || !isVec(sh.view.aim) || (sh.view.up !== undefined && !isVec(sh.view.up))))
+    fault("ship's view");
   if (sh.tunnelEntry !== undefined && sh.tunnelEntry !== "ours" && sh.tunnelEntry !== "gargantua") fault("tunnel entry side");
   if (g.plan?.universe !== undefined && g.plan.universe !== "ours" && g.plan.universe !== "gargantua") fault("plan universe");
   // (a fleet that is not one — a foreign file's — is left out, told: the flight still loads, the others

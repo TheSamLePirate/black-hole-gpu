@@ -223,7 +223,7 @@ fn nearSceneryShadow(q:vec3f)->f32 {
 }
 
 // ======================================================================== the living ground
-// Grass, crops, reeds, scrub, moss: every blade made on the GPU each frame from a lattice round the astronaut
+// Grass, crops, reeds, scrub, moss: every blade made on the GPU each frame from a lattice round the camera
 // (a world-fixed grid of points, each jittered by its own hash: the same blade at the same place every frame),
 // grown where the ground grid says something grows (WorldCover's class, the OSM roads, buildings, water and
 // pavement left bare), in Voronoi clumps, crops in rows, thinned and widened with the distance, culled to the
@@ -251,7 +251,7 @@ struct G {
   hull:vec4f, hullAxis:vec4f,
   // the scenery's shade grid: its first cell (x, z: whole cells), cells a side, on (1)
   light:vec4f,
-  // the footprints' ring: its cell [m], cells a side, the decay this frame, unused
+  // the footprints' ring: its cell [m], cells a side, the decay this frame; the camera's height over the ground [m]
   trample:vec4f,
   // the levels: until 0, until 1 [m], capacity 0, capacity 1; capacity 2, first instance 1, first instance 2, unused
   lods:vec4f, lods2:vec4f,
@@ -335,15 +335,17 @@ fn trampleTag(gx:i32,gz:i32)->f32{return f32((gx&4095)|((gz&4095)<<12))+.5;}
  }
  trample[k]=t;
 }
-// Every lattice point round the astronaut: a blade or none, culled, its level chosen, its instance written.
+// Every lattice point round the camera: a blade or none, culled, its level chosen, its instance written.
 @compute @workgroup_size(16,16) fn grassBlades(@builtin(global_invocation_id) id:vec3u){
  let n=u32(g.lattice.z);if(id.x>=n||id.y>=n||g.grid.w<.5){return;}
  let gi=i32(g.lattice.x)+i32(id.x);let gj=i32(g.lattice.y)+i32(id.y);let s=g.gright.w;
  var x=(f32(gi)+hash2(gi,gj,1u))*s;var z=(f32(gj)+hash2(gi,gj,2u))*s;
  let reach=g.origin.w;
- let fromWalker=length(vec2f(x,z)-g.walker.xz);if(fromWalker>reach){return;}
+ // (the reach round the camera — the place drawn is the camera's: a free camera, a tripod, a cockpit have it too)
+ let fromEye=length(vec2f(x,z)-g.eye.xz);if(fromEye>reach){return;}
  // (the cheap tests first: most points leave here — out of the view, or thinned out by the distance)
- let ec=g.eye.xyz-vec3f(x,0,z);let dCam=length(vec2f(ec.x,ec.z));
+ // (the camera's distance: along the ground and its height over it)
+ let ec=g.eye.xyz-vec3f(x,0,z);let dCam=length(vec3f(ec.x,g.trample.w,ec.z));
  let keepD=select(max(.18,pow(5/max(dCam,5.0),1.1)),1.0,dCam<=5);
  let thin=hash2(gi,gj,5u);if(thin>=keepD*g.gforward.w*1.1){return;}
  let early=frameToCamera(x,groundHeight(x,z),z);
@@ -384,7 +386,7 @@ fn trampleTag(gx:i32,gz:i32)->f32{return f32((gx&4095)|((gz&4095)<<12))+.5;}
  let bh=hash2(gi,gj,6u);let bw=hash2(gi,gj,7u);let bb=hash2(gi,gj,8u);
  let rows=select(1.0,.12,K2.y>0);
  // (sinking into the ground over the reach's last 4 m: no edge to the field — before the wind and the legs lean it)
- var height=mix(K0.y,K0.z,mix(.5,ch,edge))*mix(1-.28*rows,1+.22*rows,bh)*(1-smoothstep(reach-4,reach,fromWalker));
+ var height=mix(K0.y,K0.z,mix(.5,ch,edge))*mix(1-.28*rows,1+.22*rows,bh)*(1-smoothstep(reach-4,reach,fromEye));
  var width=mix(K1.x,K1.y,bw);
  var bend=mix(K1.z,K1.w,mix(.5,ch2,edge))*(.7+.6*bb);
  // facing: the clump's, the blade's own, a little towards the clump's middle
@@ -525,7 +527,7 @@ fn bezierTangent(p0:vec3f,p1:vec3f,p2:vec3f,p3:vec3f,t:f32)->vec3f{let s=1-t;ret
 }
 
 // ======================================================================== the stones
-// Stones on the living ground (ground-stones.ts): a world-fixed lattice round the astronaut, a stone kept by its
+// Stones on the living ground (ground-stones.ts): a world-fixed lattice round the camera, a stone kept by its
 // kind's density (more on steep ground), most of them pebbles; a squashed, turned, faceted lump sunk into the
 // ground, coloured from the satellite greyed towards rock, moss on the top of the damp ones. Drawn opaque
 // before the grass, lit as it is.
@@ -538,7 +540,7 @@ struct Stone { a:vec4f, b:vec4f, c:vec4f };
  let n=u32(g.stone.z);if(id.x>=n||id.y>=n||g.grid.w<.5){return;}
  let gi=i32(g.stone.x)+i32(id.x);let gj=i32(g.stone.y)+i32(id.y);let sp=g.stone.w;
  let x=(f32(gi)+hash2(gi,gj,31u))*sp;let z=(f32(gj)+hash2(gi,gj,32u))*sp;
- if(length(vec2f(x,z)-g.walker.xz)>g.origin.w){return;}
+ if(length(vec2f(x,z)-g.eye.xz)>g.origin.w){return;}
  let k=cellAt(x,z)>>24u;if(k==0u||k>7u){return;}
  let S=g.stoneKinds[k];
  // (steep ground: scree, outcrops)

@@ -71,6 +71,8 @@ export interface CineOut {
 }
 
 const D2R = Math.PI / 180;
+/** the director's eye at least this high over the ground [m] */
+export const GROUND_CLEARANCE = 1.5;
 const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
 const smooth = (a: number, b: number, x: number) => {
   const t = clamp((x - a) / (b - a), 0, 1);
@@ -152,7 +154,6 @@ export class CineBrain {
     this.fovNow = Number.NaN;
   }
 
-  /** Cuts or blends to another shot. */
   /** the impulses (touchdowns, booms, latches) */
   readonly impulses = new Impulses();
   private clock = 0;
@@ -163,6 +164,7 @@ export class CineBrain {
     this.impulses.add(k, this.clock, decay, freq);
   }
 
+  /** Cuts or blends to another shot. */
   private go(shot: Shot, cut: boolean) {
     if (this.last && !cut && this.blendStyle !== "cut") this.blend = { from: this.last, t: 0, len: this.blendTime };
     else this.blend = null;
@@ -178,15 +180,10 @@ export class CineBrain {
     }
   }
 
-  /** The next shot in the playlist (the player's "next shot": the director's next). */
-  next(c: CineContext) {
-    const list = PLAYLIST[phaseOf(c)];
-    this.slot = (this.slot + 1) % list.length;
-    const s = list[this.slot]!;
-    this.go(s === this.shot ? list[(this.slot + 1) % list.length]! : s, true);
-  }
-
   update(c: CineContext, a: CineAsk, dt: number): CineOut {
+    // (no time — the scene paused —: the last view held; stepped at dt 0 the springs snapped onto their wants and
+    // the way it goes, its velocity scaled by no warp, fell back on the nose: the camera jumped)
+    if (!(dt > 0) && this.last && this.asked === a.shot) return this.last;
     this.clock += dt;
     if (a.blend) {
       this.blendStyle = a.blend.style;
@@ -218,7 +215,7 @@ export class CineBrain {
 
     // ---- the shot's wants, damped
     const w = this.want(this.shot, c, a, dt);
-    const eye = this.eye.step(w.eye, w.tauEye, dt);
+    const eye = this.aboveGround(this.eye.step(w.eye, w.tauEye, dt), c);
     let aim = this.aim.step(w.aim, w.tauAim, dt);
     const up = unit3(this.up.step(w.up, 0.5, dt), w.up);
     // ---- the noise: the air's buffeting, the engine's rumble, the hand — an angle off the aim, wider lenses
@@ -262,10 +259,22 @@ export class CineBrain {
       // (swung round the craft, the look slerped: never through the hull, never flipping)
       const p = blendPose(B.from, out, k, c.centre);
       out = { ...p, fov: B.from.fov + (out.fov - B.from.fov) * k, shot: out.shot };
+      const lifted = this.aboveGround(out.eye, c);
+      if (lifted !== out.eye) out = { ...out, aim: add3(out.aim, sub3(lifted, out.eye)), eye: lifted };
       if (B.t >= 1) this.blend = null;
     }
     this.last = out;
     return out;
+  }
+
+  /**
+   * The eye kept over the ground (GROUND_CLEARANCE m at least, the ground taken flat at the height over it under the
+   * craft): a chase behind a steep climb, a fly-by planted ahead of a dive went under it. As it is: no ground known.
+   */
+  private aboveGround(eye: V3, c: CineContext): V3 {
+    if (!c.up || !Number.isFinite(c.agl)) return eye;
+    const h = c.agl + dot3(eye, c.up);
+    return h >= GROUND_CLEARANCE ? eye : add3(eye, c.up, GROUND_CLEARANCE - h);
   }
 
   /** The fly-by's craft well past the camera: the director moves on (a held fly-by: planted again). */
@@ -325,8 +334,10 @@ export class CineBrain {
       case "tracking": {
         // a still camera in the world: the fly-by's ahead on the way, aside and above it; the tracking's on the
         // ground, a kilometre from where the climb began; its long lens holding the craft a third of the frame
+        // (planted where it stands now — not moved on by this frame's motion as well: a tracking camera 2 m up
+        // went under the ground on its first frame)
         if (!this.fixed) this.fixed = this.plant(shot, c, vdir, side, worldUp);
-        this.fixed = add3(this.fixed, c.vel, -dt);
+        else this.fixed = add3(this.fixed, c.vel, -dt);
         if (shot === "pass" && this.passedBy(c) && a.shot !== "auto") this.fixed = this.plant(shot, c, vdir, side, worldUp);
         const dist = len3(sub3(this.fixed, ctr));
         return {

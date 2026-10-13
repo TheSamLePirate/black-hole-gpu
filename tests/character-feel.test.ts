@@ -257,3 +257,44 @@ test("he stands on the vessel's back: landed there, grounded, jumping off again"
   for (let i = 0; i < 6; i++) c.character.step(1 / 120, 0, null);
   expect(c.character.vertical).toBeGreaterThan(0);
 });
+
+test("a save restored standing on the vessel's back: there again, on it, no landing", () => {
+  const { c } = flight(ourGroundPose("moon", 0, 0, 0), false);
+  c.character.hullBounds = () => ({ lo: [-4, -0.5, -6], hi: [4, 1.5, 6] });
+  expect(c.character.disembark()).toBeNull();
+  const h = c.character.vesselHull()!;
+  const up = c.character.up();
+  const top = add(h.centre, h.axes[1], h.half[1]);
+  c.character.q = add(top, up, 0.3);
+  c.character.grounded = false;
+  for (let i = 0; i < 240; i++) c.character.step(1 / 120, 0, null);
+  expect(c.character.grounded).toBe(true);
+  const saved = c.character.snapshot()!;
+  c.s.animate = false;
+  c.character.stop();
+  const seen = events(c);
+  expect(c.character.restore(saved)).toBeNull();
+  // (where it was saved — not the ground under the vessel, not refused as blocked —, standing, the pause kept)
+  expect(len(sub(c.character.q, saved.q))).toBeLessThan(1e-9);
+  expect(c.character.grounded).toBe(true);
+  expect(c.s.animate).toBe(false);
+  for (let i = 0; i < 60; i++) c.character.step(1 / 120, 0, null);
+  expect(seen).not.toContain("landed");
+  expect(seen).not.toContain("disembarked");
+  expect(Math.abs(dot(sub(c.character.q, top), up) - 0.012)).toBeLessThan(0.03);
+});
+
+test("pushed against the hull the legs stop: the stride follows the ground covered", () => {
+  const { c } = flight(ourGroundPose("moon", 0, 0, 0), false);
+  c.character.hullBounds = () => ({ lo: [-4.15, -2.6, -7.4], hi: [4.15, 2.2, 7.4] });
+  expect(c.character.disembark()).toBeNull();
+  const hull = c.character.vesselHull()!;
+  (c.character as unknown as { heading: Vec3 }).heading = tangent(c.character.up(), sub(hull.centre, c.character.q));
+  c.character.yaw = 0;
+  c.character.move(1, 0, 10);
+  for (let i = 0; i < 600; i++) c.character.step(1 / 120, 0, null);
+  // (against it now: a second more of pushing)
+  const phase = c.character.phase;
+  for (let i = 0; i < 120; i++) c.character.step(1 / 120, 0, null);
+  expect(c.character.phase - phase).toBeLessThan(0.5);
+});

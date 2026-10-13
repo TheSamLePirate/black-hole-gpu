@@ -122,10 +122,14 @@ export function currentKey(defaultCode: string): KeyRef {
   return { code: defaultCode };
 }
 
-/** The free camera's held keys now: code → [forward, right, up, roll]. */
-export function freeCameraKeys(): Record<string, [number, number, number, number]> {
-  const out: Record<string, [number, number, number, number]> = {};
+/** the free camera's keys as last built (read several times a frame: built again only when a key is rebound) */
+let camKeys: Record<string, readonly [number, number, number, number]> | null = null;
+/** The free camera's held keys now: code → [forward, right, up, roll] (shared: read, not changed). */
+export function freeCameraKeys(): Readonly<Record<string, readonly [number, number, number, number]>> {
+  if (camKeys) return camKeys;
+  const out: Record<string, readonly [number, number, number, number]> = {};
   for (const [a, v] of Object.entries(CAM_VECTORS) as [HeldAxis, [number, number, number, number]][]) out[heldCode(a)] = v;
+  camKeys = out;
   return out;
 }
 
@@ -211,6 +215,7 @@ export function resetBindings() {
 export const customised = () => Object.keys(overrides).length > 0;
 
 function save() {
+  camKeys = null;
   store.setJSON(STORE, overrides);
 }
 

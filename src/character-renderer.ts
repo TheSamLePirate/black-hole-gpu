@@ -6,6 +6,7 @@ import { bouldersNear, packStones, STONE_CAPACITY, STONE_LATTICE, STONE_SPACING,
 import type { Vec3 } from "./physics";
 import type { CharacterFrame, PlanetCharacter } from "./controller/character";
 import type { SceneryContact } from "./system/scenery-contact";
+import type { VesselHull } from "./controller/vessel-hull";
 import { dot, sub, add, scale, cross } from "./math/vec3";
 import { sceneryFrame } from "./system/scenery-data";
 import { GrassGround, type VegetationAt } from "./system/grass-ground";
@@ -105,7 +106,27 @@ export interface GrassWorld {
   wind: { speed: number; from: number } | null;
   /** a ground point no vegetation grows on besides the scenery's own exclusions (a runway's pavement) */
   paved: (q: Vec3) => boolean;
+  /** the landed vessel's box [m, body-fixed]: nothing grows under it; null: none */
+  hull?: VesselHull | null;
 }
+/**
+ * Where the living ground grows: round the ground under the camera, on the Earth — what is drawn is placed from
+ * the camera (a free camera, a tripod, a photo, a landed ship's cockpit have it too); the walker only presses it.
+ */
+export interface GrassView {
+  /** the camera's eye [m, body-fixed] */
+  q: Vec3;
+  /** the body's up there (the ellipsoid's normal) */
+  up: Vec3;
+  /** a body-fixed vector in the camera's axes (right, up, forward): the body's axes the tracer draws the ground on */
+  toCamera: (v: Vec3) => Vec3;
+  /** a point's height over the ground [m] (the walker's own query: our-surface.ts heightOverGround) */
+  raw: (p: Vec3) => number;
+}
+/** the camera higher over the ground than this [m]: no living ground (its blades under a pixel, the grid's work for nothing) */
+export const GRASS_CAMERA_MAX = 25;
+/** the walker's place when none walks: far below the ground (no blade pushed aside, no footprint pressed) */
+const NO_WALKER_Y = -1e4;
 
 export class CharacterRenderer {
   readonly module: GPUShaderModule;
@@ -159,6 +180,9 @@ export class CharacterRenderer {
   /** the lattice's points a side this frame */
   private lattice = 0;
   private lastAge = -1;
+  /** the living ground's clock [s]: the walker's while he walks, the wall's otherwise (the wind's gusts, the footprints' rise) */
+  private clock = 0;
+  private lastWall = -1;
   private depth: GPUTexture | null = null;
   /** the astronaut's and the grass's distance for the vessel drawn after them (ship.wgsl's occluder) */
   private occluderTex: GPUTexture | null = null;
@@ -378,25 +402,27 @@ export class CharacterRenderer {
   }
   /**
    * The living ground's CPU side this frame: why there is grass or none, the ground grid's slice of work, its
-   * upload once published, the grass's figures (the frame, the lattice, the astronaut, the wind, the vessel).
+   * upload once published, the grass's figures (the frame, the lattice round the camera, the astronaut, the wind,
+   * the vessel).
    */
   private prepareGrass(
-    c: PlanetCharacter,
-    frame: CharacterFrame,
+    view: GrassView | null,
+    walker: { c: PlanetCharacter; frame: CharacterFrame } | null,
     contact: SceneryContact | null,
     revision: number,
     grass: GrassTune | null,
     world: GrassWorld,
     light: CharacterLight,
     height: number,
-    cam: (v: Vec3) => Vec3,
   ) {
     const g = this.grassGround;
+    // (the camera's height over the ground: the gate — high above it, a jump or a jetpack's included, none)
+    const above = view ? view.raw(view.q) : Infinity;
     const reason = !grass
       ? "off"
-      : c.body !== "earth" || !c.ours
+      : !view || (walker && (walker.c.body !== "earth" || !walker.c.ours))
         ? "other-planet"
-        : !c.grounded && c.height() > 2
+        : above > GRASS_CAMERA_MAX
           ? "above-ground"
           : !contact
             ? "mask-unavailable"
@@ -409,12 +435,14 @@ export class CharacterRenderer {
       this.bladeCounts = [0, 0, 0];
       return;
     }
+    const v = view!;
     const begin = performance.now();
     const vegetation: VegetationAt = (q) => {
-      const v = contact!.vegetation(q);
-      return world.paved(q) ? { cover: 0, rgb: v.rgb } : v;
+      const veg = contact!.vegetation(q);
+      return world.paved(q) ? { cover: 0, rgb: veg.rgb } : veg;
     };
-    g.build(c.q, c.up(), (p) => c.rawHeight(p), vegetation, revision);
+    // (the grid round the ground under the camera — the walker's own ground patch is his contact's, apart)
+    g.build(add(v.q, v.up, -above), v.up, v.raw, vegetation, revision);
     this.generationMs = performance.now() - begin;
     if (!g.ready) {
       this.reason = "loading";
@@ -439,22 +467,26 @@ export class CharacterRenderer {
     }
     const tune = grass!;
     const f = g.frame!;
-    // (the frame's axes and origin in the camera's: through the astronaut's own axes, as his body is placed)
-    const toLocal = (v: Vec3): Vec3 => [dot(v, cross(c.forward, c.up())), dot(v, c.up()), dot(v, c.forward)];
-    const R = cam(toLocal(f.right)),
-      U = cam(toLocal(f.up)),
-      F = cam(toLocal(f.forward));
-    const O = add(frame.origin, cam(toLocal(sub(f.origin, frame.q))));
-    const walker = g.local(frame.q),
-      eye: Vec3 = [-dot(O, R), -dot(O, U), -dot(O, F)];
+    // (the frame's axes and origin in the camera's: through the body's axes the tracer draws the ground on)
+    const R = v.toCamera(f.right),
+      U = v.toCamera(f.up),
+      F = v.toCamera(f.forward);
+    const O = v.toCamera(sub(f.origin, v.q));
+    // (the camera in the frame: the lattice's, the stones', the shade's centre and the blades' reach)
+    const eye = g.local(v.q);
+    const c = walker?.c;
+    const feet: Vec3 = walker ? g.local(walker.frame.q) : [eye[0], NO_WALKER_Y, eye[2]];
     const reach = Math.min(GRASS_REACH_MAX, Math.max(4, tune.reach));
     const N = Math.ceil((2 * reach) / GRASS_SPACING) + 2;
-    const ahead = g.local(add(frame.q, c.forward, 1));
-    const heading = [ahead[0] - walker[0], ahead[2] - walker[2]];
+    let heading = [0, 0];
+    if (c && walker) {
+      const ahead = g.local(add(walker.frame.q, c.forward, 1));
+      heading = [ahead[0] - feet[0], ahead[2] - feet[2]];
+    }
     const hn = Math.hypot(heading[0]!, heading[1]!) || 1;
     // (the wind: the weather's at the vessel, towards where it blows, in the frame — a light breeze when unknown)
     const wind = world.wind ?? { speed: 3, from: 250 };
-    const up = c.up();
+    const up = v.up;
     const e = cross([0, 0, 1], up),
       en = Math.hypot(...e);
     const east: Vec3 = en > 1e-6 ? scale(e, 1 / en) : [1, 0, 0];
@@ -466,7 +498,7 @@ export class CharacterRenderer {
       wn = Math.hypot(wx, wz) || 1;
     const strength = Math.min(2, Math.max(0.12, wind.speed / 8));
     // (the landed vessel's box: nothing grows under it)
-    const hull = c.hullNow();
+    const hull = world.hull ?? null;
     let hullFig = [0, 0, 0, 0],
       hullAxis = [0, 0, 0, 0];
     if (hull) {
@@ -476,32 +508,42 @@ export class CharacterRenderer {
       hullFig = [centre[0], centre[2], hull.half[0] + 0.15, hull.half[2] + 0.15];
       hullAxis = [a[0] / an, a[2] / an, 0, 1];
     }
-    const age = c.age;
-    const dt = this.lastAge < 0 ? 0 : Math.max(0, Math.min(0.25, age - this.lastAge));
-    this.lastAge = age;
+    // (the clock: the walker's age while he walks — paused with the game —, else the wall's)
+    const wall = performance.now() / 1000;
+    const dt = c
+      ? this.lastAge < 0
+        ? 0
+        : Math.max(0, Math.min(0.25, c.age - this.lastAge))
+      : this.lastWall < 0
+        ? 0
+        : Math.max(0, Math.min(0.25, wall - this.lastWall));
+    this.lastAge = c ? c.age : -1;
+    this.lastWall = wall;
+    this.clock += dt;
     const pixel = (2 * Math.tan((light.fov * Math.PI) / 360)) / height;
     const u = this.gData;
-    const set = (i: number, v: number[]) => u.set(v, i * 4);
+    const set = (i: number, val: number[]) => u.set(val, i * 4);
     set(0, [...O, reach]);
     set(1, [...R, GRASS_SPACING]);
-    set(2, [...U, age]);
+    set(2, [...U, this.clock]);
     set(3, [...F, Math.max(0, Math.min(1, tune.density))]);
-    set(4, [Math.round(walker[0] / GRASS_SPACING) - N / 2, Math.round(walker[2] / GRASS_SPACING) - N / 2, N, pixel]);
+    set(4, [Math.round(eye[0] / GRASS_SPACING) - N / 2, Math.round(eye[2] / GRASS_SPACING) - N / 2, N, pixel]);
     set(5, [g.centre[0] - (GRASS_GRID - 1) / 2, g.centre[1] - (GRASS_GRID - 1) / 2, GRASS_GRID, 1]);
-    set(6, [...walker, c.speed]);
-    set(7, [heading[0]! / hn, heading[1]! / hn, c.grounded ? 1 : 0, dt]);
+    set(6, [...feet, c ? c.speed : 0]);
+    set(7, [heading[0]! / hn, heading[1]! / hn, c?.grounded ? 1 : 0, dt]);
     set(8, [...eye, tune.wind]);
     set(9, [wx / wn, wz / wn, strength, 1.5 + wind.speed * 0.6]);
     set(10, hullFig);
     set(11, hullAxis);
     const lc = (GRASS_LIGHT_GRID - 1) / 2;
-    set(12, [Math.round(walker[0] / GRASS_LIGHT_CELL) - lc, Math.round(walker[2] / GRASS_LIGHT_CELL) - lc, GRASS_LIGHT_GRID, 1]);
-    set(13, [TRAMPLE_CELL, TRAMPLE_GRID, Math.exp(-dt / TRAMPLE_RECOVERY_S), 0]);
+    set(12, [Math.round(eye[0] / GRASS_LIGHT_CELL) - lc, Math.round(eye[2] / GRASS_LIGHT_CELL) - lc, GRASS_LIGHT_GRID, 1]);
+    // (w: the camera's height over the ground — the blades' distance from it, their level and thinning)
+    set(13, [TRAMPLE_CELL, TRAMPLE_GRID, Math.exp(-dt / TRAMPLE_RECOVERY_S), Math.max(0, above)]);
     set(14, [GRASS_LODS[0].until, GRASS_LODS[1].until, GRASS_LODS[0].capacity, GRASS_LODS[1].capacity]);
     set(15, [GRASS_LODS[2].capacity, LOD_FIRST[1]!, LOD_FIRST[2]!, STONE_CAPACITY]);
     set(16, [
-      Math.round(walker[0] / STONE_SPACING) - STONE_LATTICE / 2,
-      Math.round(walker[2] / STONE_SPACING) - STONE_LATTICE / 2,
+      Math.round(eye[0] / STONE_SPACING) - STONE_LATTICE / 2,
+      Math.round(eye[2] / STONE_SPACING) - STONE_LATTICE / 2,
       STONE_LATTICE,
       STONE_SPACING,
     ]);
@@ -512,8 +554,8 @@ export class CharacterRenderer {
     enc: GPUCommandEncoder,
     target: GPUTexture,
     sceneDepth: GPUBuffer,
-    c: PlanetCharacter,
-    frame: CharacterFrame,
+    walker: { c: PlanetCharacter; frame: CharacterFrame } | null,
+    view: GrassView | null,
     light: CharacterLight,
     contact: SceneryContact | null,
     revision: number,
@@ -524,13 +566,78 @@ export class CharacterRenderer {
     world: GrassWorld = { wind: null, paved: () => false },
   ) {
     const began = performance.now();
-    if (!this.model.ready && !this.model.error) void this.model.load();
+    if (walker && !this.model.ready && !this.model.error) void this.model.load();
     // (on the ground, the feet on the ground under them: a slope's rise at each foot)
-    if (this.model.ready) this.model.evaluate(c.age, frame.speed, frame.airborne, frame.airborne ? null : (x, z) => c.groundRise(x, z));
-    this.active = true;
+    if (walker && this.model.ready) {
+      const { c, frame } = walker;
+      this.model.evaluate(c.age, frame.speed, frame.airborne, frame.airborne ? null : (x, z) => c.groundRise(x, z));
+    }
     const width = target.width,
       height = target.height,
       key = `${width}:${height}`;
+    const u = this.uData;
+    u.fill(0);
+    const set = (i: number, v: number[]) => u.set(v, i * 4);
+    const tan = Math.tan((light.fov * Math.PI) / 360);
+    set(0, [(tan * width) / height, tan, 0, 0]);
+    set(1, [width, height, light.metres, light.pre]);
+    // a body-fixed vector in the camera's axes, and the place the scene's shadows are measured from (u.origin's,
+    // body-fixed): the astronaut's, through his own axes; with none walking, the camera's (u.origin zero)
+    let toCamera: (v: Vec3) => Vec3;
+    let at: Vec3;
+    if (walker) {
+      const { c, frame } = walker;
+      // (the landing's give and the body lowered for the lower foot on a slope)
+      set(2, [...add(frame.origin, frame.axes[1], frame.dip + this.model.footDrop), frame.phase]);
+      set(3, [...frame.axes[0], Math.min(1, frame.speed / 4)]);
+      set(4, [...frame.axes[1], c.age]);
+      set(5, [...frame.axes[2], 0]);
+      const cam = (v: Vec3) => add(add(scale(frame.axes[0], v[0]), frame.axes[1], v[1]), frame.axes[2], v[2]);
+      const right = cross(c.forward, c.up());
+      toCamera = (v) => cam([dot(v, right), dot(v, c.up()), dot(v, c.forward)]);
+      at = frame.q;
+    } else {
+      const v = view!;
+      const up = v.toCamera(v.up);
+      const right = Math.abs(up[2]) < 0.9 ? cross(up, [0, 0, 1]) : cross(up, [1, 0, 0]);
+      const rn = Math.hypot(...right) || 1;
+      const r: Vec3 = [right[0] / rn, right[1] / rn, right[2] / rn];
+      set(2, [0, 0, 0, 0]);
+      set(3, [...r, 0]);
+      set(4, [...up, 0]);
+      set(5, [...cross(r, up), 0]);
+      toCamera = v.toCamera;
+      at = v.q;
+    }
+    set(6, [...light.sun, 0]);
+    set(7, [...light.irradiance, 0]);
+    set(8, [...light.sky, 0]);
+    PARTS.forEach((p, i) => {
+      set(U_PARTS + i * 2, [p[0]!, p[1]!, p[2]!, p[6]!]);
+      set(U_PARTS + 1 + i * 2, [p[3]!, p[4]!, p[5]!, 0]);
+    });
+    if (contact) {
+      const sf = sceneryFrame(contact.reply.lat, contact.reply.lon);
+      [sf.east, sf.north, sf.up].forEach((a, i) => set(U_SCENE + i, [...toCamera(a), i === 2 ? 1 : 0]));
+      set(U_SCENE + 3, [...contact.local(at), 0]);
+    }
+    // (the probe: the same light as the vessel's hull — none fresh, the astronaut's own estimate of the sky)
+    this.probeLit = !!probe.axes;
+    this.shipShadowed = !!(probe.axes && probe.shipBound);
+    const ax = probe.axes;
+    set(U_PROBE, [...(ax?.[0] ?? [1, 0, 0]), ax ? 1 : 0]);
+    set(U_PROBE + 1, [...(ax?.[1] ?? [0, 1, 0]), probe.mips - 1]);
+    set(U_PROBE + 2, [...(ax?.[2] ?? [0, 0, 1]), 0]);
+    set(U_SHIP, probe.shipBound && ax ? [...probe.shipBound.c, probe.shipBound.r] : [0, 0, 0, 0]);
+    this.d.queue.writeBuffer(this.uniform, 0, u);
+    this.prepareGrass(view, walker, contact, revision, grass, world, light, height);
+    // (none walking and nothing growing round the camera: nothing drawn — the vessel finds no occluder)
+    if (!walker && !this.grassOn) {
+      this.active = false;
+      this.cpuMs = performance.now() - began;
+      return;
+    }
+    this.active = true;
     if (key !== this.size) {
       this.depth?.destroy();
       this.occluderTex?.destroy();
@@ -542,43 +649,6 @@ export class CharacterRenderer {
       });
       this.size = key;
     }
-    const u = this.uData;
-    u.fill(0);
-    const set = (i: number, v: number[]) => u.set(v, i * 4);
-    const tan = Math.tan((light.fov * Math.PI) / 360);
-    set(0, [(tan * width) / height, tan, 0, 0]);
-    set(1, [width, height, light.metres, light.pre]);
-    // (the landing's give and the body lowered for the lower foot on a slope)
-    set(2, [...add(frame.origin, frame.axes[1], frame.dip + this.model.footDrop), frame.phase]);
-    set(3, [...frame.axes[0], Math.min(1, frame.speed / 4)]);
-    set(4, [...frame.axes[1], c.age]);
-    set(5, [...frame.axes[2], 0]);
-    set(6, [...light.sun, 0]);
-    set(7, [...light.irradiance, 0]);
-    set(8, [...light.sky, 0]);
-    const cam = (v: Vec3) => add(add(scale(frame.axes[0], v[0]), frame.axes[1], v[1]), frame.axes[2], v[2]);
-    PARTS.forEach((p, i) => {
-      set(U_PARTS + i * 2, [p[0]!, p[1]!, p[2]!, p[6]!]);
-      set(U_PARTS + 1 + i * 2, [p[3]!, p[4]!, p[5]!, 0]);
-    });
-    if (contact) {
-      const sf = sceneryFrame(contact.reply.lat, contact.reply.lon);
-      [sf.east, sf.north, sf.up].forEach((a, i) => {
-        const local: Vec3 = [dot(a, cross(c.forward, c.up())), dot(a, c.up()), dot(a, c.forward)];
-        set(U_SCENE + i, [...cam(local), i === 2 ? 1 : 0]);
-      });
-      set(U_SCENE + 3, [...contact.local(frame.q), 0]);
-    }
-    // (the probe: the same light as the vessel's hull — none fresh, the astronaut's own estimate of the sky)
-    this.probeLit = !!probe.axes;
-    this.shipShadowed = !!(probe.axes && probe.shipBound);
-    const ax = probe.axes;
-    set(U_PROBE, [...(ax?.[0] ?? [1, 0, 0]), ax ? 1 : 0]);
-    set(U_PROBE + 1, [...(ax?.[1] ?? [0, 1, 0]), probe.mips - 1]);
-    set(U_PROBE + 2, [...(ax?.[2] ?? [0, 0, 1]), 0]);
-    set(U_SHIP, probe.shipBound && ax ? [...probe.shipBound.c, probe.shipBound.r] : [0, 0, 0, 0]);
-    this.d.queue.writeBuffer(this.uniform, 0, u);
-    this.prepareGrass(c, frame, contact, revision, grass, world, light, height, cam);
     // (the bind groups follow their resources: a new occlusion depth buffer, scenery buffer or probe — made again)
     const resources = [sceneDepth, sceneryBuffer, probe.sh, probe.env, probe.shipShadow];
     if (resources.some((r, i) => r !== this.probeKey[i])) {
@@ -645,14 +715,15 @@ export class CharacterRenderer {
       colorAttachments: [],
       depthStencilAttachment: { view: this.shadowView, depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" },
     });
-    if (this.model.ready) {
+    // (none walking: the map cleared all the same — no astronaut's shadow left on the grass)
+    if (walker && this.model.ready) {
       shadowPass.setPipeline(this.skinShadow);
       shadowPass.setBindGroup(0, group(this.skinShadow, "skin-shadow", [0]));
       shadowPass.setBindGroup(1, this.bonesGroup(this.skinShadow, "skin-shadow-bones", false));
       shadowPass.setVertexBuffer(0, this.model.vertices!);
       shadowPass.setIndexBuffer(this.model.indices!, "uint32");
       shadowPass.drawIndexed(this.model.count);
-    } else {
+    } else if (walker) {
       shadowPass.setPipeline(this.shadowPipe);
       shadowPass.setBindGroup(0, group(this.shadowPipe, "shadow", [0]));
       shadowPass.setVertexBuffer(0, this.vertices);
@@ -660,14 +731,16 @@ export class CharacterRenderer {
       shadowPass.drawIndexed(this.count, PARTS.length);
     }
     shadowPass.end();
-    const comp = enc.beginRenderPass({
-      ...prof.pass("character shadow on traced terrain"),
-      colorAttachments: [{ view: target.createView({ baseMipLevel: 0, mipLevelCount: 1 }), loadOp: "load", storeOp: "store" }],
-    });
-    comp.setPipeline(this.comp);
-    comp.setBindGroup(0, group(this.comp, "ground", [0, 1, 5, 6, 8, 9, 12]));
-    comp.draw(3);
-    comp.end();
+    if (walker) {
+      const comp = enc.beginRenderPass({
+        ...prof.pass("character shadow on traced terrain"),
+        colorAttachments: [{ view: target.createView({ baseMipLevel: 0, mipLevelCount: 1 }), loadOp: "load", storeOp: "store" }],
+      });
+      comp.setPipeline(this.comp);
+      comp.setBindGroup(0, group(this.comp, "ground", [0, 1, 5, 6, 8, 9, 12]));
+      comp.draw(3);
+      comp.end();
+    }
     let readCounts = false;
     if (this.grassOn) {
       // the living ground: the trees' shade on it, the footprints, every blade of the lattice (the draws' counts reset first)
@@ -712,14 +785,14 @@ export class CharacterRenderer {
       ],
       depthStencilAttachment: { view: this.depth!.createView(), depthClearValue: 0, depthLoadOp: "clear", depthStoreOp: "discard" },
     });
-    if (this.model.ready) {
+    if (walker && this.model.ready) {
       pass.setPipeline(this.skinPipe);
       pass.setBindGroup(0, group(this.skinPipe, "skin", lit));
       pass.setBindGroup(1, this.bonesGroup(this.skinPipe, "skin-bones", true));
       pass.setVertexBuffer(0, this.model.vertices!);
       pass.setIndexBuffer(this.model.indices!, "uint32");
       pass.drawIndexed(this.model.count);
-    } else {
+    } else if (walker) {
       pass.setPipeline(this.avatar);
       pass.setBindGroup(0, group(this.avatar, "avatar", lit));
       pass.setVertexBuffer(0, this.vertices);
@@ -809,7 +882,7 @@ export class CharacterRenderer {
     }
     return g;
   }
-  /** The astronaut's and the grass's distance this frame, for the vessel drawn over them (null: not on foot). */
+  /** The astronaut's and the grass's distance this frame, for the vessel drawn over them (null: neither drawn). */
   get occluder(): { depth: GPUTexture; rect: [number, number, number, number] } | null {
     const t = this.active ? this.occluderTex : null;
     return t ? { depth: t, rect: [0, 0, t.width, t.height] } : null;
@@ -817,7 +890,7 @@ export class CharacterRenderer {
   get ready() {
     return this.initialized;
   }
-  /** drawn last frame (on foot) */
+  /** drawn last frame (the astronaut on foot, or the living ground round the camera) */
   get drawing() {
     return this.active;
   }

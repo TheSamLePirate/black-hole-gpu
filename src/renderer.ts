@@ -1,5 +1,5 @@
 import { streamingLead, aheadFocus } from "./system/streaming-focus";
-import { CharacterRenderer } from "./character-renderer";
+import { CharacterRenderer, type GrassView } from "./character-renderer";
 import type { PlanetCharacter } from "./controller/character";
 import { dot as dot3 } from "./math/vec3";
 import { sphericalFrame } from "./wormhole";
@@ -90,7 +90,15 @@ const SCENERY_EXCLUSIONS = EARTH_RUNWAYS.map((r) => ({
   length: RUNWAY_LENGTH,
   halfWidth: 340,
 }));
-import { altitudeOver, bodyFixedOf, groundRelief, toBodyFixed, setGroundHeights, setGroundRelief } from "./system/our-surface";
+import {
+  altitudeOver,
+  bodyFixedOf,
+  groundRelief,
+  heightOverGround,
+  toBodyFixed,
+  setGroundHeights,
+  setGroundRelief,
+} from "./system/our-surface";
 import { EARTH_RM, earthHeightSampler, mapHeightSampler, tileFallbackSampler } from "./terrain";
 import { figureDiskShare, figureSourceElevation, flatteningOf, geodeticNormal, rayFigure, WGS84_A, WGS84_F } from "./system/ellipsoid";
 import { AIR_K, sunThroughY } from "./system/earth-air";
@@ -384,14 +392,17 @@ interface OfflineJob {
   fixedSteps?: string;
 }
 
-/** Near a body (below NEAR_BODY_M of its surface), a camera translation beyond TRANSLATION_M metres — a millimetre — breaks the temporal reprojection. */
-const TRANSLATION_M = 0.001;
-const NEAR_BODY_M = 20000;
+/** Trees and buildings stand above the ground [m]: the nearest scenery's distance taken this much under the camera's height. */
+const SCENERY_TOP_M = 60;
 
-/** The camera's place on its near body, in metres along the body's own axes: a rotation of the view leaves it unchanged. */
-function placeOnBody(near: { centre: Vec3; radius: number; axes: Vec3[] }): Vec3 {
-  const mR = near.radius * M_METRES;
-  return near.axes.map((a) => -(a[0]! * near.centre[0] + a[1]! * near.centre[1] + a[2]! * near.centre[2]) * mR) as Vec3;
+/** The camera's eye on its near body's axes [its radii] (float64): where the tracer's rays start (trace.wgsl nearCam). */
+function bodyEye(near: { centre: Vec3; axes: Vec3[] }): Vec3 {
+  return near.axes.map((a) => -(a[0]! * near.centre[0] + a[1]! * near.centre[1] + a[2]! * near.centre[2])) as Vec3;
+}
+
+/** The camera's place on its near body, in metres along the body's own axes (mPerM: metres per M): a rotation of the view leaves it unchanged. */
+function placeOnBody(near: { centre: Vec3; radius: number; axes: Vec3[] }, mPerM: number): Vec3 {
+  return bodyEye(near).map((x) => x * near.radius * mPerM) as Vec3;
 }
 
 export class Renderer {
@@ -481,18 +492,44 @@ export class Renderer {
    */
   shipPlace: { S: M3; t: Vec3; dist: number } | null = null;
   /**
-   * While a spectator is out: the flown ship's body, its place on the body's axes [its radii] and its
-   * height [km] — what the ship stands on kept streamed round the ship, not round the view (the Earth's
-   * maps and terrain tiles, a world's finer maps: the ground under its gear is the heights drawn).
+   * The flown ship (not a spectator's: main.ts): its body, its place on the body's axes [its radii] and its
+   * height [km] — a prefetch hint only: the Earth's and a world's finer maps kept for the ground under its gear,
+   * and the terrain tiles round it while the view is off the Earth's near patch. What is streamed and drawn
+   * (tiles, surface, scenery) and where the rays start is the camera's.
    */
   shipFocus: { body: string; c: Vec3; altKm: number } | null = null;
   /** on foot: the view is the astronaut's — the ground and the scenery follow the view, not the vessel left on the ground */
   onFoot = false;
+  /** the camera's velocity over the Earth's ground [m/s, on its axes] (the streaming's lead; null: off the Earth) */
   streamVelocity: Vec3 | null = null;
+  /** the camera's last place on the Earth [its radii] and when [ms]: its velocity measured from frame to frame */
+  private eyeTrack: { c: Vec3; at: number } | null = null;
   streamingState = { leadM: 0, lookAheadSeconds: 6 };
   /** the spectator's view holds the flown ship (near enough to draw) */
   private get shipInView() {
     return !!this.shipPlace && this.shipPlace.dist < 2e4;
+  }
+  /**
+   * The camera's velocity over the Earth's ground [m/s, on its axes], from its eye's place frame to frame (eye: on
+   * the Earth's axes [its radii]; null: off it) — the ship's, a spectator's, a free camera's or a time warp's alike.
+   * Smoothed over a quarter second; a jump (a teleport, a cut — faster than 12 km/s) starts it again from rest.
+   */
+  private cameraGroundVelocity(eye: Vec3 | null): Vec3 | null {
+    if (!eye) {
+      this.eyeTrack = null;
+      return null;
+    }
+    const now = performance.now(),
+      last = this.eyeTrack,
+      v = this.streamVelocity ?? ([0, 0, 0] as Vec3);
+    this.eyeTrack = { c: [...eye], at: now };
+    if (!last) return [0, 0, 0];
+    const dt = (now - last.at) / 1000;
+    if (dt <= 0) return v;
+    const step = eye.map((x, i) => ((x - last.c[i]!) * WGS84_A) / dt) as Vec3;
+    if (dt > 0.5 || Math.hypot(...step) > 12000) return [0, 0, 0];
+    const k = Math.min(1, dt / 0.25);
+    return v.map((x, i) => x + (step[i]! - x) * k) as Vec3;
   }
   /**
    * Cinematic liquid throat: its clock [s] (advanced by the app, or by the video renderer) and the
@@ -2472,41 +2509,45 @@ export class Renderer {
       earthSurface && s.refraction ? refractionParams(this.refractivity(s), earthSurface.h * EARTH_RM, EARTH_RM) : [0, 0, 0, 0],
       (BASE_PARAM_VEC4S - WX_VEC4S - SHADE_VEC4S - 1) * 4,
     );
-    // the Earth's terrain tiles round the camera (on its own maps, the camera near it)
+    // the Earth's terrain tiles, its regional surface and its scenery round the camera — the tracer's own eye
+    // (near.centre, the mount's offset in): what is drawn, and the trees' and buildings' rays and shadows, start
+    // there, never from the ship's centre (a spectator kilometres off, a flyby shot, the cockpit's 3.6 m)
     if (!o.probe) {
-      const onEarth = s.earthTerrain && !!near && near.index === earthK && !!this.earthMaps.tier;
-      // (the ship low over the Earth, the view away: the tiles round the ship — its ground)
+      const eye = near?.index === earthK && this.earthMaps.tier ? bodyEye(near) : null;
+      const onEarth = s.earthTerrain && !!eye;
+      // (the camera off the Earth's near patch, the ship low over it — never a spectator's: main.ts —: the tiles
+      // kept round the ship, the ground under its gear; the camera's place wins whenever it is on the Earth)
       const F = this.shipFocus;
       const shipLow = s.earthTerrain && !this.onFoot && F?.body === "earth" && F.altKm < 60 && !!this.earthMaps.tier;
-      const focus = shipLow
-        ? F!.c
-        : onEarth
-          ? (near!.axes.map((a) => -(a[0] * near!.centre[0] + a[1] * near!.centre[1] + a[2] * near!.centre[2])) as Vec3)
-          : null;
-      const lead = focus && !this.onFoot ? streamingLead(focus, this.streamVelocity) : ([0, 0, 0] as Vec3);
+      const focus = onEarth ? eye : shipLow ? F!.c : null;
+      // (the streaming's lead: the camera's own motion over the ground, whatever carries it — the live view's)
+      if (t === this.live) this.streamVelocity = this.cameraGroundVelocity(eye);
+      const lead = focus ? streamingLead(focus, this.streamVelocity) : ([0, 0, 0] as Vec3);
       this.streamingState.leadM = Math.hypot(...lead) * 6378137;
       this.earthTiles.update(focus, pixelAngle, lead);
-      const surfaceFocus =
-        !this.onFoot && F?.body === "earth" && F.altKm < 30
-          ? F.c
-          : near?.index === earthK && this.earthMaps.tier
-            ? (near.axes.map((a) => -(a[0] * near.centre[0] + a[1] * near.centre[1] + a[2] * near.centre[2])) as Vec3)
-            : null;
-      this.earthSurface.update(surfaceFocus, s.earthSurface, lead);
+      this.earthSurface.update(eye, s.earthSurface, lead);
       this.earthScenery.update(
-        surfaceFocus,
+        eye,
         s.earthScenery,
         s.earthSurface !== "off",
         s.earthTerrain,
         SCENERY_EXCLUSIONS,
-        surfaceFocus ? aheadFocus(surfaceFocus, lead) : null,
+        eye ? aheadFocus(eye, lead) : null,
       );
       this.earthScenery.shadows = s.earthSceneryShadows;
       this.earthScenery.season(utcOf(time));
+      // (imagery come in over tiles already drawn — their heights unchanged, no onChange: a still view kept
+      // its colours without them —: drawn anew at most every half second, once for all those in — up to a
+      // hundred while a window fills, each would restart it; a moving view shows them as it goes)
+      const now = performance.now();
+      if (t === this.live && this.earthTiles.imagery !== this.imagerySeen && now - this.imageryAt > 500) {
+        this.imagerySeen = this.earthTiles.imagery;
+        this.imageryAt = now;
+        if (this.lastPhase !== "realtime" && !this.offline) queueMicrotask(() => this.invalidate());
+      }
     }
     f.set(this.earthTiles.params(), 69 * 4);
     f.set(this.earthSurface.params(), BASE_PARAM_VEC4S * 4);
-    if (this.earthSurface.active) this.featureKey |= 4096;
     f.set(this.earthScenery.params(), (BASE_PARAM_VEC4S + SURFACE_VEC4S) * 4);
     if (!o.probe && this.character?.active && this.character.body === "earth")
       this.character.groundPatch.build(this.character.q, this.character.up(), (q) => this.character!.rawHeight(q), this.earthTiles.stamp);
@@ -2526,12 +2567,34 @@ export class Renderer {
         this.walkStamp = walking.stamp;
       }
     }
-    if (this.earthScenery.active) this.featureKey |= 8192;
     f[61 * 4 + 1] = sunAng; // (earth4.y)
     f[61 * 4 + 2] = this.marsDust(s, near, bodies, time); // (earth4.z)
     if (!o.probe) this.marsDustNow = f[61 * 4 + 2]!;
     // (the storm's diffuse light in the kernel's weather code: compiled in only then)
     if (f[61 * 4 + 2]! > 0) this.featureKey |= 1024;
+    // the regional surface's and the scenery's code in the kernel (4096, 8192): their kernel compiled ahead,
+    // from the moment their data is asked for — its compile (three of a ~7 000-line kernel, seconds of the GPU
+    // process) falls while they load, not in the frame they appear (E2E campaign item 5) —, and their bits
+    // switched on only once it is there: until then their params stay zero, the kernel without them draws on
+    const surfaceAsked = this.earthSurface.active || this.earthSurface.pending;
+    const sceneryAsked = this.earthScenery.active || this.earthScenery.pending;
+    const ahead = this.featureKey | (surfaceAsked ? 4096 : 0) | (sceneryAsked ? 8192 : 0);
+    if (!o.probe) {
+      this.aheadKey = this.firstFrameDoneAt && ahead !== this.featureKey ? ahead : -1;
+      if (this.aheadKey >= 0) this.traceVariant("rt", this.aheadKey);
+    }
+    const surfaceOn = this.earthSurface.active && this.kernelReady(this.featureKey | 4096);
+    if (surfaceOn) this.featureKey |= 4096;
+    else f.fill(0, BASE_PARAM_VEC4S * 4, (BASE_PARAM_VEC4S + SURFACE_VEC4S) * 4);
+    const sceneryOn = this.earthScenery.active && this.kernelReady(this.featureKey | 8192);
+    if (sceneryOn) this.featureKey |= 8192;
+    else f.fill(0, (BASE_PARAM_VEC4S + SURFACE_VEC4S) * 4, (BASE_PARAM_VEC4S + SURFACE_VEC4S + SCENERY_VEC4S) * 4);
+    if (!o.probe) {
+      // (held back, the settled frame waits; let through, the image changes: drawn anew once this frame is out)
+      const held = (this.earthSurface.active && !surfaceOn) || (this.earthScenery.active && !sceneryOn);
+      if (this.earthHeld && !held && !this.offline) queueMicrotask(() => this.invalidate());
+      this.earthHeld = held;
+    }
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
 
@@ -2982,6 +3045,13 @@ export class Renderer {
   /** the camera's features key, as the last trace dispatched had it (a planet probe's params, written
    *  since, bring their own) */
   private cameraKey = FEATURES_ALL;
+  /** the key compiled ahead of the camera's (its surface's or scenery's data asked for, not yet drawn); −1: none */
+  private aheadKey = -1;
+  /** the tiles' imagery last seen (EarthTiles.imagery) and when [ms]: a still view redrawn for it */
+  private imagerySeen = 0;
+  private imageryAt = 0;
+  /** the regional surface or the scenery is in, its kernel still compiling: not drawn yet (the settled frame waits) */
+  private earthHeld = false;
   private variants = new Map<
     number,
     {
@@ -3073,7 +3143,15 @@ export class Renderer {
    *  a scene left, its remaining compiles (minutes each on a slow D3D12 driver) no longer hold the new
    *  scene's back */
   private wanted(key: number, slot: unknown) {
-    return () => this.variants.get(key) === slot && !this.lost && key === this.cameraKey;
+    return () => this.variants.get(key) === slot && !this.lost && (key === this.cameraKey || key === this.aheadKey);
+  }
+
+  /** a key's realtime kernel is there — its own, or an earlier scene's covering it —, or never will be (its
+   *  compile failed or hung: the general kernel draws) */
+  private kernelReady(key: number) {
+    if (key === FEATURES_ALL) return true;
+    const v = this.variants.get(key);
+    return !!v?.rt || !!v?.failed || !!v?.rtGivenUp || !!this.coveringVariant(key, "rt");
   }
 
   /** the realtime kernel first, then its probe — then the general kernel, the later scenes' fallback —,
@@ -3181,11 +3259,13 @@ export class Renderer {
     });
   }
 
-  /** At most the current key plus the previous one (LRU): each key is up to five specialised
-   *  compiles — and the browser's shader disk cache has a budget (plan §2.2-F). */
+  /** At most four keys (LRU): the current one, the one compiled ahead and those the game goes back and forth
+   *  between — the surface's and the scenery's bits come and go in play (the scenery cleared every 8 km, the
+   *  surface's pages, the weather, the runways): two kept made each change a compile of seconds again. Each
+   *  key is up to five specialised compiles — and the browser's shader disk cache has a budget (plan §2.2-F). */
   private evictVariants() {
     const keys = [...this.variants.keys()];
-    for (const k of keys.slice(0, Math.max(0, keys.length - 2))) this.variants.delete(k);
+    for (const k of keys.slice(0, Math.max(0, keys.length - 4))) this.variants.delete(k);
   }
 
   /** the trace's passes encoded; false: no kernel for the scene yet (still compiling) — nothing traced */
@@ -3342,9 +3422,23 @@ export class Renderer {
   reprojectGround = true;
   /** (the last reprojection: the camera standing still on the near body's ground) */
   taStill: { still: boolean; mMetres: number; turn: number } | null = null;
+  /** the camera's move that breaks the history: the nearest ground's or scenery's shift on the image [px] (a switch for comparisons) */
+  taParallaxPx = 0.5;
   /** the history is dropped on the next frame (a new scene, a jump) */
   resetTemporal() {
     this.taPrev = null;
+  }
+  /**
+   * How far the nearest of the near body's ground or scenery may be [m]: the camera's height over the ground
+   * (its relief where known), less the trees' and buildings' height where the Earth's scenery is drawn; a metre
+   * at least.
+   */
+  private nearestSurfaceM(near: { index: number; centre: Vec3; radius: number; axes: Vec3[] }, mPerM: number) {
+    const id = this.lastBodies[near.index]?.id;
+    const eye = bodyEye(near);
+    const h =
+      id && solarBody(id) ? heightOverGround(id, eye.map((x) => x * near.radius) as Vec3) : (Math.hypot(...eye) - 1) * near.radius * mPerM;
+    return Math.max(1, h - (id === "earth" && this.earthScenery.active ? SCENERY_TOP_M : 0));
   }
 
   /**
@@ -3404,15 +3498,19 @@ export class Renderer {
     const pre = preExposure(this.ev(s));
     const prev = this.taPrev;
     const ln = this.lastNear;
-    const at = ln ? placeOnBody(ln) : null;
-    // (the camera moved on its near body: the reprojection carries the image by the camera's rotation alone, so
-    // a tree 50 m away would hang in place while the camera walked — the frame is traced afresh instead)
-    // (high above the body — a vessel in orbit, nothing near enough for the parallax to show: the reprojection stays)
-    const low = at !== null && ln !== null && Math.hypot(...at) - ln.radius * M_METRES < NEAR_BODY_M;
+    const mPerM = 1476.625 * (s.massSolar || 1);
+    const at = ln ? placeOnBody(ln, mPerM) : null;
+    // (the camera moved on its near body: each pixel is carried by its depth — the parallax, the ground's rigid
+    // move (R4) —, but what the move uncovers, and a depth taken between rays, are wrong: the frame is traced
+    // afresh once the move shifts the nearest ground or scenery by more than taParallaxPx of a pixel. High above
+    // the body — a vessel in orbit, a cruise — the shift stays under it: the reprojection kept)
+    const shift = at && prev?.at ? Math.hypot(at[0] - prev.at[0], at[1] - prev.at[1], at[2] - prev.at[2]) : 0;
     const moved =
       !!prev &&
       (prev.at !== null || at !== null) &&
-      (prev.at === null || at === null || (low && Math.hypot(at[0] - prev.at[0], at[1] - prev.at[1], at[2] - prev.at[2]) > TRANSLATION_M));
+      (prev.at === null ||
+        at === null ||
+        (shift > 0 && shift / this.nearestSurfaceM(ln!, mPerM) > (this.taParallaxPx * 2 * tanH) / t.height));
     // (a jump: the other region, or the distance to the hole changed by more than 5 % in a frame, or a translation)
     const jumped = !prev || prev.region !== cam.region || Math.abs(cam.r - prev.r) > 0.05 * Math.max(cam.r, 1e-9) || moved;
     const on = s.temporalReprojection && this.taPhase === "realtime" && ta.valid && !jumped;
@@ -3916,58 +4014,92 @@ export class Renderer {
     return { key, sky, cosine, shadowDepth: total > 0 ? (key * cosine) / total : 0 };
   }
 
+  /**
+   * The camera on the Earth's near patch, for the living ground round it (what grows is placed round the camera,
+   * whoever walks — or none: a free camera, a tripod, a photo, the cockpit of a landed ship): its eye [m,
+   * body-fixed], the body's up there, the body's axes in the camera's (those the tracer draws the ground on), the
+   * walker's own height query. Null: the camera is not by the Earth.
+   */
+  private grassView(): GrassView | null {
+    const near = this.lastNear,
+      cam = this.lastCam;
+    if (!near || !cam || this.lastBodies[near.index]?.id !== "earth") return null;
+    const q = bodyEye(near).map((x) => x * near.radius * M_METRES) as Vec3;
+    const A = near.axes;
+    const toCamera = (v: Vec3): Vec3 => {
+      const r = [0, 1, 2].map((i) => v[0] * A[0][i]! + v[1] * A[1][i]! + v[2] * A[2][i]!) as Vec3;
+      return [dot3(r, cam.right), dot3(r, cam.up), dot3(r, cam.fwd)];
+    };
+    // (the ellipsoid's normal: the walker's own up, controller/character.ts)
+    const a = WGS84_A,
+      b = a * (1 - WGS84_F);
+    const n: Vec3 = [q[0] / (a * a), q[1] / (a * a), q[2] / (b * b)];
+    const nl = Math.hypot(...n) || 1;
+    return {
+      q,
+      up: [n[0] / nl, n[1] / nl, n[2] / nl],
+      toCamera,
+      raw: (p) => heightOverGround("earth", p.map((v) => v / M_METRES) as Vec3),
+    };
+  }
+
   private encodeCharacter(enc: GPUCommandEncoder, target: Target, s: Settings) {
     const c = this.character,
-      frame = c?.frame();
-    if (!c || !frame) {
+      frame = c?.frame() ?? null;
+    // (the astronaut where he walks; the living ground round the camera on the Earth, with him or without)
+    const view = s.earthGrass !== "off" ? this.grassView() : null;
+    const cam = this.lastCam;
+    if ((!frame && !view) || !cam) {
       if (this.characterRenderer.drawing) this.characterRenderer.reset();
       return;
     }
-    const sp = c.metres();
-    const planet = this.lastBodies.find((b) => b.id === frame.body);
-    const sunBody = frame.ours
+    const ours = frame ? frame.ours : true,
+      body = frame ? frame.body : "earth";
+    const sp = c && frame ? c.metres() : M_METRES;
+    const planet = this.lastBodies.find((b) => b.id === body);
+    const sunBody = ours
       ? this.lastBodies.find((b) => b.id === "sun")
       : planet && planet.light >= 0
         ? this.lastBodies[planet.light]
         : this.lastBodies.find((b) => b.id === "star");
-    const sunWorld = frame.ours ? solarState("sun", this.lastTime).pos : ((sunBody?.pos ?? [0, 0, 0]) as Vec3);
-    const d = !frame.ours && planet?.lightDir ? planet.lightDir : (sunWorld.map((v, i) => v - frame.sunOrigin[i]!) as Vec3);
+    // (where the light is taken: the astronaut's place, else the camera's)
+    const sunOrigin = frame ? frame.sunOrigin : (homePosition(s) ?? solarState("earth", this.lastTime).pos);
+    const sunWorld = ours ? solarState("sun", this.lastTime).pos : ((sunBody?.pos ?? [0, 0, 0]) as Vec3);
+    const d = !ours && planet?.lightDir ? planet.lightDir : (sunWorld.map((v, i) => v - sunOrigin[i]!) as Vec3);
     const dist = Math.hypot(...d) || 1;
     // The camera-frame Sun agrees with the traced scene and the same radiance normalization.
-    const cam = this.lastCam;
-    if (!cam) return;
     let L: Vec3;
-    if (frame.ours) {
+    if (ours) {
       const home = homeToRep(mouth(s).w, cam.ell, cam.n, d.map((v) => v / dist) as Vec3);
       L = [dot3(home, cam.right), dot3(home, cam.up), dot3(home, cam.fwd)];
     } else {
-      const sf = sphericalFrame(frame.sunOrigin);
+      const sf = sphericalFrame(sunOrigin);
       const d0 = d.map((v) => v / dist) as Vec3;
       const rep: Vec3 = [dot3(d0, sf.er), dot3(d0, sf.et), dot3(d0, sf.ep)];
       L = [dot3(rep, cam.right), dot3(rep, cam.up), dot3(rep, cam.fwd)];
     }
-    const elevation = dot3(L, frame.axes[1]);
+    const elevation = dot3(L, frame ? frame.axes[1] : view!.toCamera(view!.up));
     this.characterSun = L;
-    const temp = (!frame.ours ? planet?.lightT : undefined) ?? sunBody?.temperature ?? 5772;
+    const temp = (!ours ? planet?.lightT : undefined) ?? sunBody?.temperature ?? 5772;
     const E =
       Math.PI *
       10 ** (this.logYOf(Math.round(temp / 50) * 50) - this.lastLogY) *
       (sunBody?.brightness ?? 1) *
-      (!frame.ours && planet ? planet.illum : ((sunBody?.radius ?? 0) / dist) ** 2);
-    const share = frame.ours ? sunShare(frame.sunOrigin, this.lastTime) : Math.max(0, Math.min(1, (elevation + 0.005) / 0.01));
-    const transmission = frame.body === "earth" ? Math.exp(-0.15 / Math.max(0.08, elevation)) : 0.98;
+      (!ours && planet ? planet.illum : ((sunBody?.radius ?? 0) / dist) ** 2);
+    const share = ours ? sunShare(sunOrigin, this.lastTime) : Math.max(0, Math.min(1, (elevation + 0.005) / 0.01));
+    const transmission = body === "earth" ? Math.exp(-0.15 / Math.max(0.08, elevation)) : 0.98;
     const daylight = Math.max(0, Math.min(1, (elevation + 0.08) / 0.2));
     const e = E * share * transmission;
     this.characterRenderer.encode(
       enc,
       target.hdr,
       target.sceneDepth,
-      c,
-      frame,
+      c && frame ? { c, frame } : null,
+      view,
       {
         sun: L,
         irradiance: [e, e * (0.7 + 0.3 * daylight), e * (0.45 + 0.55 * daylight)],
-        sky: frame.body === "earth" ? [E * 0.045 * daylight, E * 0.07 * daylight, E * 0.11 * daylight] : [E * 0.007, E * 0.007, E * 0.007],
+        sky: body === "earth" ? [E * 0.045 * daylight, E * 0.07 * daylight, E * 0.11 * daylight] : [E * 0.007, E * 0.007, E * 0.007],
         pre: preExposure(this.ev(s)),
         metres: sp,
         fov: s.fov,
@@ -3987,7 +4119,12 @@ export class Renderer {
         axes: this.ship.ready && performance.now() - this.envAt < 500 ? this.shipProbeAxes : null,
         shipBound: (s.ship || this.shipInView) && this.ship.ready ? this.ship.shadowBound : null,
       },
-      { wind: c.wind(), paved: runwayPaved },
+      {
+        wind: c?.wind() ?? null,
+        paved: runwayPaved,
+        // (the landed vessel's box: the walker's, else asked of the walk's own conversion — no walker out)
+        hull: frame ? c!.hullNow() : view && c?.body === "earth" && c.ours ? c.vesselHull() : null,
+      },
     );
   }
 
@@ -4933,6 +5070,7 @@ export class Renderer {
       !this.earthTiles.pending &&
       !this.earthSurface.pending &&
       !this.earthScenery.pending &&
+      !this.earthHeld &&
       !(this.earthWant && this.earthWant !== this.earthMaps.tier) &&
       !(this.earthIsNear && !this.earthMaps.tier)
     );

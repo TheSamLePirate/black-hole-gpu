@@ -62,6 +62,9 @@ Gravité : **Critique** (à régler avant tout merge ou déjà exposé), **Haute
 
 1. ☐ Astronaute : décision de l'utilisateur. Le sortir de l'historique des branches distantes, le servir depuis
    un stockage privé, et vérifier si la licence permet de servir les fichiers transcodés.
+2. ☐ Réglages par défaut : `sceneryHitboxes: false`.
+2b. ☑ Ancrage caméra (Z-V1 en premier : le décor tracé depuis le vaisseau est faux dans toutes les vues de vol), puis
+   Z-V2 (streaming) et Z-V3 (sol vivant autour de la caméra). — fait : 3e57680, bd0652a
 2. ☑ Réglages par défaut : `sceneryHitboxes: false`. — fait : par défaut éteint, l’e2e l’allume lui-même, 44e8af7
 2b. ☐ Ancrage caméra (Z-V1 en premier : le décor tracé depuis le vaisseau est faux dans toutes les vues de vol), puis
    Z-V2 (streaming) et Z-V3 (sol vivant autour de la caméra).
@@ -95,12 +98,15 @@ Gravité : **Critique** (à régler avant tout merge ou déjà exposé), **Haute
   point vaut zéro, c'est-à-dire la caméra. Conséquence : dans le cockpit au soleil, tout le sol de la sonde reçoit
   l'ombre de la coque à la caméra, et l'ambiance du vaisseau, de l'astronaute et de `characterLight()` devient noire.
   *Correctif* : passer le point touché à `earthGround`, et sauter `shipShadow` dans l'entrée env.
+- ☑ **R-H2. Reprojection temporelle coupée pour toute translation supérieure à 1 mm sous 20 km.**
   — fait : `EARTH_SHADOW_ON`, posé autour du seul `earthLook` d'`earthNear` ; la sonde et les corps lointains n'ont plus l'ombre, 665cac9
 - ☐ **R-H2. Reprojection temporelle coupée pour toute translation supérieure à 1 mm sous 20 km.**
   `renderer.ts:380-381, 3384-3390`. La marche fait environ 23 mm par image, et le vol bas ou le roulage davantage :
   pas d'historique, une copie pleine résolution par image, et la reprojection rigide (R4) qui suit devient du code
   mort dans le régime pour lequel elle a été écrite. `placeOnBody` utilise `M_METRES`, alors que le reste utilise
   `1476.625·massSolar`. *Correctif* : un seuil fondé sur la parallaxe du décor le plus proche, et le même facteur en mètres.
+  — fait : seuil `taParallaxPx` (0,5 px) sur le déplacement rapporté à la hauteur au-dessus du relief (moins 60 m de décor), même facteur, f4f4093
+- ☐ **R-H3. `windsockShade` n'est plus retiré par `HAS_RWY`.** `trace.wgsl:6506` : `main` avait
 - ☑ **R-H3. `windsockShade` n'est plus retiré par `HAS_RWY`.** `trace.wgsl:6506` : `main` avait
   `if (HAS_RWY && WS.w > 0.5)` (vérifié). Toutes les variantes Terre portent donc `wxVeil`, `sunThrough`, la feuille
   et `sceneryShadow`. *Correctif* : `if ((HAS_RWY || HAS_SCENERY) && WS.w > 0.5)`.
@@ -109,6 +115,17 @@ Gravité : **Critique** (à régler avant tout merge ou déjà exposé), **Haute
 ### Moyenne
 - ☑ **R-M1.** `waterMirror` et le calme (`trace.wgsl:6108-6110`, `:5521`) ne disparaissent que si le compilateur
   plie `0·x`, ce qui demande fast-math : sinon il reste une marche de 64 pas, une bissection, 3 `earthHeight` et
+  `sceneryMirror`. `seaShade` évalue aussi un `gnoise` par pixel de mer même quand le calme vaut 0. *Correctif* : `HAS_SCENERY &&`.
+- ☐ **R-M2.** `sceneryShadow` (`trace.wgsl:5783, 4781, 6054`) lance des rayons d'ombre pour les faces tournées
+  dos au Soleil : parcours du BVH plus `forestQuery` jusqu'à 640 pas, pour rien. *Correctif* : sortir tôt si `dot(n,L) <= 0`.
+- ☑ **R-M3.** Le cache ne garde que 2 clés de variantes (`renderer.ts:3159`), alors que les bits 4096 et 8192 changent
+  en cours de jeu (`earthScenery.clear()` tous les 8 km, pages de surface, météo, pistes) : on recompile en boucle,
+  plusieurs secondes à chaque fois. *Correctif* : environ 4 clés.
+  — fait : 4 clés ; la clé `|4096`/`|8192` compilée d'avance dès la demande des données, les bits allumés seulement
+  une fois son noyau prêt (paramètres à zéro d'ici là, l'image posée attend) — item 5 de la campagne, b230bd1
+- ☐ **R-M4.** `timedVariant` ne journalise les compilations qu'avant la première image : celle de `|8192` est
+  invisible dans les diagnostics.
+- ☑ **R-M5.** `earth-tiles.ts:298-317` : l'imagerie qui arrive après les hauteurs refait un `put()` (512 Ko), puis
   `sceneryMirror`. `seaShade` évalue aussi un `gnoise` par pixel de mer même quand le calme vaut 0. *Correctif* : `HAS_SCENERY &&`. — fait : calme, miroir et `gnoise` des lacs derrière `HAS_SCENERY` (et `calm > 0`), 665cac9
 - ☑ **R-M2.** `sceneryShadow` (`trace.wgsl:5783, 4781, 6054`) lance des rayons d'ombre pour les faces tournées
   dos au Soleil : parcours du BVH plus `forestQuery` jusqu'à 640 pas, pour rien. *Correctif* : sortir tôt si `dot(n,L) <= 0`. — fait, 665cac9
@@ -120,6 +137,9 @@ Gravité : **Critique** (à régler avant tout merge ou déjà exposé), **Haute
 - ☐ **R-M5.** `earth-tiles.ts:298-317` : l'imagerie qui arrive après les hauteurs refait un `put()` (512 Ko), puis
   `onChange` et `invalidate()`. Avec z9–13, jusqu'à 128 invalidations par remplissage de fenêtre, et une vue fixe
   qui ne finit jamais de converger pendant le chargement.
+  — fait (constat corrigé) : le `put()` de l'imagerie ne change pas le rectangle valide, donc ni `onChange` ni
+  `invalidate()` ; le vrai défaut était l'inverse (une vue fixe convergée gardait ses couleurs sans l'imagerie).
+  Compteur `EarthTiles.imagery`, vue fixe redessinée au plus toutes les 0,5 s, b230bd1
 
 ### Basse
 - ☑ `earth-tiles.ts:493, 298` : écouteurs d'abandon jamais retirés (petite fuite par tuile). — fait, ea44018
@@ -237,7 +257,7 @@ Contexte vérifié :
 | `renderer.ts:2401, 2440` | observateur des éclipses et des ombres de corps | caméra | ✓ |
 
 ### Haute
-- ☐ **Z-V1. Le décor (arbres, bâtiments) et ses ombres sont tracés depuis le centre du vaisseau.** Vérifié :
+- ☑ **Z-V1. Le décor (arbres, bâtiments) et ses ombres sont tracés depuis le centre du vaisseau.** Vérifié :
   `earthScenery.update(surfaceFocus, …)` avec `surfaceFocus = F.c` sous 30 km, puis
   `scenery.params()` calcule `cam` (l'origine du rayon dans `worldScenery`) à partir de cette position. Le terrain,
   lui, part de l'œil.
@@ -247,7 +267,8 @@ Contexte vérifié :
   - **Spectateur à 2 km d'un vaisseau en vol bas :** décor décalé de 2 km, objets fantômes ou manquants, ombres fausses.
   - **Correctif :** `P.scenery[3]` vient toujours de la position de caméra du traceur (le `near.centre` déjà corrigé
     de l'œil, l'expression `onEarth` de `renderer.ts:2460`). Le vaisseau ne sert plus que d'indice de préchargement.
-- ☐ **Z-V2. Le streaming et les seuils suivent le vaisseau.**
+  — fait : tuiles, surface et décor sur l'œil du traceur (`bodyEye(near)`), 3e57680
+- ☑ **Z-V2. Le streaming et les seuils suivent le vaisseau.**
   - Spectateur au sol, vaisseau à 13 km : le décor est vidé (seuil de 12 km).
   - Vaisseau entre 20 et 30 km : la surface régionale est retirée.
   - Plan réalisateur pris du sol : `zNeed` est calculé pour l'altitude du vaisseau, donc le premier plan est grossier.
@@ -257,7 +278,10 @@ Contexte vérifié :
   **Correctif :** `focus` et `surfaceFocus` = la caméra (l'œil). Le vaisseau devient un second point de
   préchargement s'il est à quelques km. Pas de `shipFocus` quand `camera.spectating`. L'avance de streaming se
   calcule sur la vitesse de la caméra.
-- ☐ **Z-V3. L'herbe et les pierres appartiennent au marcheur.**
+  — fait : focus/surface/décor = l'œil ; le vaisseau ne garde que ses cartes et, vue hors du patch terrestre, les
+  tuiles sous lui (les fenêtres z13 font ~20 km : un vaisseau à quelques km de la caméra y est déjà) ; pas de
+  `shipFocus` en spectateur ; avance = vitesse de la caméra mesurée d'image en image, 3e57680
+- ☑ **Z-V3. L'herbe et les pierres appartiennent au marcheur.**
   - Caméra libre, trépied ou photo au sol sans marcheur : aucune herbe, aucune pierre.
   - À pied, télescope (Y) sur un champ à 200 m : pas de brins (coupés à 30 m du marcheur).
   - Saut ou jetpack à plus de 2 m : l'herbe disparaît (`reason "above-ground"`) alors que la caméra est au sol.
@@ -266,12 +290,16 @@ Contexte vérifié :
   la grille d'ombrage (`set(12)`), les pierres (`set(16)`) et la coupe (`fromWalker`, `stonesGrow`) sur le point
   du sol sous la caméra. Tester la hauteur de la caméra au-dessus du sol. Garder le marcheur pour les empreintes et
   l'herbe foulée. Agrandir la portée selon la taille du pixel au télescope.
+  — fait sauf la portée au télescope (le réseau de 7,5 cm et la grille de 81 m ne s'étendent pas simplement : il
+  faudrait centrer le réseau sur le point visé) : sol vivant autour du sol sous la caméra, porte à 25 m de hauteur
+  de caméra, sans marcheur aussi ; marcheur gardé pour empreintes et herbe foulée, bd0652a
 
 ### Basse
-- ☐ **Z-V4.** La grille d'ombrage de l'herbe (64 m) doit suivre la caméra en même temps que Z-V3.
+- ☑ **Z-V4.** La grille d'ombrage de l'herbe (64 m) doit suivre la caméra en même temps que Z-V3. — fait : bd0652a
 - ☐ **Z-V5.** La sonde de lumière est à la caméra. Un vaisseau éclairé jusqu'à 20 km (`shipInView`), ou un
   astronaute vu de loin sous les arbres, reçoit donc le ciel de la caméra. C'est acceptable. Option : ciel
-  analytique au-delà de quelques centaines de mètres.
+  analytique au-delà de quelques centaines de mètres. — non fait : pas trivial (une seconde sonde ou un ciel
+  analytique par objet), et jugé acceptable par la revue.
 
 **Correct tel quel :** les cartes d'ombre centrées sur ce qui projette l'ombre (vaisseau, astronaute) mais
 exprimées par rapport à la caméra, les empreintes, le patch de marche, et l'observateur des éclipses.
@@ -279,42 +307,42 @@ exprimées par rapport à la caméra, les empreintes, le patch de marche, et l'o
 ## Piéton, caméra, contrôleurs
 
 ### Haute
-- ☐ **P-H1. Passer du piéton à la caméra libre (F3) coupe vers une vue « suivi du vaisseau » périmée.**
+- ☑ **P-H1. Passer du piéton à la caméra libre (F3) coupe vers une vue « suivi du vaisseau » périmée.**
   `character.ts:184-195, 441-450`, `spectator.ts:90-97, 189-201`, `main.ts:3016-3018`. `prepare` lance
   `startSpectator()`, qui fixe `specOff` sur l'œil du vaisseau et démarre `specGlide` à t=0 ; ils n'avancent jamais
   pendant la marche, puis `stop({keepView})` les réutilise. `walkHere` a le même problème. *Correctif* : remettre à zéro
-  `spectatorFollow` et `specGlide` dans `stop({keepView})`.
-- ☐ **P-H2. Vue réalisateur : le placement et le chargement orientent le vaisseau d'après un plan périmé.**
+  `spectatorFollow` et `specGlide` dans `stop({keepView})`. — fait : `stop({keepView})` lâche le glissé et passe le spectateur en libre là où il est, 1736a3d.
+- ☑ **P-H2. Vue réalisateur : le placement et le chargement orientent le vaisseau d'après un plan périmé.**
   `piloting.ts:207-214` (`rigidMount`), `:546` (`mountTarget` renvoie `cineOut`). `placeAt` (`game/tools.ts:224`) et
   le chargement (`tools.ts:623-635` puis `settleMount`) en dépendent, alors que la sauvegarde ne garde pas le plan.
   Résultat : un vaisseau rechargé de quelques dizaines à 180° de travers. *Correctif* : `cine.reset()` dans
-  `rigidMount`, et une relation fixe (ou l'attitude enregistrée) pour la vue réalisateur.
-- ☐ **P-H3. Restauration à pied impossible sur un toit, un pont, un pont de navire ou le vaisseau.**
+  `rigidMount`, et une relation fixe (ou l'attitude enregistrée) pour la vue réalisateur. — fait : `rigidMount` remet le plan à zéro (relation fixe par défaut pour un placement), la sauvegarde garde la pose de la caméra sur le vaisseau (`ship.view`) et le chargement la tient (`holdMount`), b831873.
+- ☑ **P-H3. Restauration à pied impossible sur un toit, un pont, un pont de navire ou le vaisseau.**
   `character.ts:766-783` → `prepare` `:167-179` projette sur le sol sous le point, d'où « sortie bloquée » ou « dans
   l'eau ». De plus `grounded = |height()| < 0.1` (`:776`) ignore les ponts, ce qui déclenche un faux atterrissage et un
-  à-coup. *Correctif* : un mode restauration qui teste la capsule au point enregistré, et `standing()`.
+  à-coup. *Correctif* : un mode restauration qui teste la capsule au point enregistré, et `standing()`. — fait : `prepare(…, restoring)` garde le point enregistré (l'eau refusée seulement si rien ne le porte), `grounded` par `standing()`, 1736a3d.
 
 ### Moyenne
-- ☐ **P-M4.** En pause en vue réalisateur (`cine.ts:116-120`, `brain.ts:221-223, 283`, `follow.ts:332-338`), avec
-  dt=0 les ressorts sautent et la direction retombe sur le nez : la caméra saute. *Correctif* : renvoyer la dernière pose.
-- ☐ **P-M5.** Les plans du réalisateur n'ont aucune garde au sol (`brain.ts:295-306`) : en montée raide, l'œil de la
-  poursuite passe sous terre au décollage. *Correctif* : borner avec l'AGL.
-- ☐ **P-M6.** Coût de la caméra à pied hors de la Terre : 32 échantillons × `height()`, soit `planetFrame` (avec
+- ☑ **P-M4.** En pause en vue réalisateur (`cine.ts:116-120`, `brain.ts:221-223, 283`, `follow.ts:332-338`), avec
+  dt=0 les ressorts sautent et la direction retombe sur le nez : la caméra saute. *Correctif* : renvoyer la dernière pose. — fait : le cerveau renvoie sa dernière vue, le rig garde son retard, b831873.
+- ☑ **P-M5.** Les plans du réalisateur n'ont aucune garde au sol (`brain.ts:295-306`) : en montée raide, l'œil de la
+  poursuite passe sous terre au décollage. *Correctif* : borner avec l'AGL. — fait : œil à 1,5 m au moins au-dessus du sol (AGL, sol plat), caméra fixe plantée sans le pas de sa première image, b831873.
+- ☑ **P-M6.** Coût de la caméra à pied hors de la Terre : 32 échantillons × `height()`, soit `planetFrame` (avec
   allocation) sur les mondes de Gargantua, plus `contact().at` ; `integrate` recalcule `planetFrame` à chaque
-  sous-pas à 120 Hz (`character.ts:679-689, 588-591, 127-131`).
-- ☐ **P-M7.** `lens.ts` : un `travel` en cours n'est pas effacé quand on prend les commandes, il reprend plus tard et saute.
+  sous-pas à 120 Hz (`character.ts:679-689, 588-591, 127-131`). — fait : `planetFrame` mémorisé par instant, marche par pas de 0,5 m (le pas d'avant revu), un seul `toGlobal`, `contact()` une fois, 1736a3d.
+- ☑ **P-M7.** `lens.ts` : un `travel` en cours n'est pas effacé quand on prend les commandes, il reprend plus tard et saute. — fait : `setPilot(true)` l'efface, b831873.
 
 ### Basse
-- ☐ `character.stop()` lâche le spectateur même quand personne ne marche (`newFlight`, `piloting.ts:152`).
-- ☐ Les jambes marchent contre un mur : la phase avance avec la vitesse demandée (`character.ts:650`).
-- ☐ Travail en double à chaque image : `rigPlace` appelé deux fois sur Gargantua (`:702`, `:712`), les réglages
+- ☑ `character.stop()` lâche le spectateur même quand personne ne marche (`newFlight`, `piloting.ts:152`). — fait : `stop()` ne touche au spectateur que si quelqu'un marche ; `newFlight` le lâche explicitement, b831873, 1736a3d.
+- ☑ Les jambes marchent contre un mur : la phase avance avec la vitesse demandée (`character.ts:650`). — fait : la phase suit la vitesse au sol réelle, 1736a3d.
+- ☑ Travail en double à chaque image : `rigPlace` appelé deux fois sur Gargantua (`:702`, `:712`), les réglages
   copiés deux fois (`spectator.ts:133-137`), `accessDistance()` à chaque image (`main.ts:3129`),
-  `freeCameraKeys()` (`bindings.ts:126`).
-- ☐ Tests de coque incohérents : les points d'accès utilisent la boîte (`capsuleInHull`, `:288`), la marche le BVH,
-  ce qui place la trappe au bout de l'aile sous le ventre du Ranger.
-- ☐ La restauration force `animate=true` et le temps réel (`:217-218`).
-- ☐ Duplications : axes du vaisseau calculés à 3 endroits, vitesse sol en double. Code mort : `CineBrain.next()`.
-  Commentaire orphelin : `brain.ts:155`.
+  `freeCameraKeys()` (`bindings.ts:126`). — fait en partie, 1736a3d : `freeCameraKeys()` construit une fois par changement de touche, `accessDistance()` une fois par mise à jour de la barre ; sur Gargantua le premier `rigPlace` reste (les axes propres se lisent sur la caméra placée) mais sans les trois conversions `world()` qu'il coûtait. Non fait : la double copie des réglages (`placeView` copie aussi les clés de vue du vaisseau — ancre, cible — que `viewSettings` ne copie pas ; les fusionner demande une vérification dans le navigateur).
+- ☑ Tests de coque incohérents : les points d'accès utilisent la boîte (`capsuleInHull`, `:288`), la marche le BVH,
+  ce qui place la trappe au bout de l'aile sous le ventre du Ranger. — fait : les sorties passent par `vesselBlocked` (le BVH quand il est connu), 1736a3d.
+- ☑ La restauration force `animate=true` et le temps réel (`:217-218`). — fait : seulement à une vraie sortie, 1736a3d.
+- ☑ Duplications : axes du vaisseau calculés à 3 endroits, vitesse sol en double. Code mort : `CineBrain.next()`.
+  Commentaire orphelin : `brain.ts:155`. — fait : `drawnMatrix()` + `shipAxesLocal(b, S)` (cine, camrig, flyby, shipQ), la vitesse du réalisateur = `flowVelocity()`, `next()` retiré, commentaire remis sur `go()`, b831873 ; à pied, position et vitesse d'un seul `toGlobal`, 1736a3d.
 
 ## UI et modes
 
