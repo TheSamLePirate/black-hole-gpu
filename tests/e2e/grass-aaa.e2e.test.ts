@@ -28,6 +28,10 @@ const FIND = (cls: number) => `(()=>{
   return null;
 })()`;
 
+/** The scenery drawn round (lat, lon) — the camera's place there: asked a frame after the walker is put there. */
+const HERE = (lat: number, lon: number) =>
+  `__bh.renderer.earthScenery.contact && !__bh.renderer.earthScenery.pending && Math.abs(__bh.renderer.earthScenery.stats().lat - ${lat}) < 0.05 && Math.abs(__bh.renderer.earthScenery.stats().lon - ${lon}) < 0.05`;
+
 async function settle(app: App) {
   await app.js("(()=>{__bh.step(0);__bh.touch();return true;})()");
   // (a place FIND chose up to 400 px away: the scenery asked there anew — the grass waits for it)
@@ -48,7 +52,8 @@ test.skipIf(!E2E)(
     const app = await App.boot({ hash: `scene=${encodeURIComponent("Earth: the Blue Marble")}`, width: 1280, height: 720, tiles: true });
     try {
       await app.js(`(()=>{${SETUP}const e=__bh.camera.character.start('earth',44.2,4.15);__bh.step(0);__bh.touch();return e;})()`);
-      await app.waitFor("__bh.renderer.earthScenery.contact && !__bh.renderer.earthScenery.pending", 180_000);
+      // (the scene round where he stands: the one asked for the camera there, not a scene drawn before)
+      await app.waitFor(HERE(44.2, 4.15), 180_000);
       const place = await app.js<{ lat: number; lon: number } | null>(FIND(30));
       expect(place).not.toBeNull();
       await settle(app);
@@ -67,22 +72,31 @@ test.skipIf(!E2E)(
       await captureLoadedCharacter(app, "grass-aaa-meadow");
       // the cost: its passes, then the same frozen view with the grass off
       const measure = async () => {
-        await app.js("(()=>{__bh.renderer.prof.enabled=true;__bh.renderer.prof.reset();__bh.touch();return true;})()");
+        await app.js(
+          "(()=>{__bh.renderer.prof.enabled=true;__bh.renderer.prof.every=1;__bh.renderer.prof.reset();__bh.touch();return true;})()",
+        );
         const frame = await app.js<number>("__bh.renderer.completedFrames");
         await app.waitFor(`__bh.renderer.completedFrames >= ${frame + 150}`, 60_000);
         return app.js<{ gpuFrameMs: number; gpu: { pass: string; ms: number }[] }>("__bh.game.perf()");
       };
+      // (on, off, on, off: the machine's heat and clocks drift on both alike; the faster of each pair — a frame's
+      // whole GPU time swings by several ms from one window to the next, the grass's own passes are ~0.6 ms)
+      const grass = async (mode: "balanced" | "off") => {
+        await app.js(`(()=>{__bh.settings.earthGrass='${mode}';__bh.touch();return true;})()`);
+        await app.waitFor(`__bh.renderer.characterRenderer.stats().reason==='${mode === "off" ? "off" : "grass"}'`, 30_000);
+        return measure();
+      };
       const on = await measure();
-      await app.js("(()=>{__bh.settings.earthGrass='off';__bh.touch();return true;})()");
-      await app.waitFor("__bh.renderer.characterRenderer.stats().reason==='off'", 30_000);
-      const off = await measure();
+      const off = await grass("off");
+      const on2 = await grass("balanced");
+      const off2 = await grass("off");
       await app.js("(()=>{__bh.settings.earthGrass='balanced';__bh.touch();return true;})()");
       const pass = (p: typeof on, name: string) => p.gpu.find((x) => x.pass.startsWith(name))?.ms ?? 0;
       const cost = {
         blades: pass(on, "grass: shade, footprints, blades"),
         draw: pass(on, "character and grass HDR") - pass(off, "character HDR"),
-        frameOn: on.gpuFrameMs,
-        frameOff: off.gpuFrameMs,
+        frameOn: Math.min(on.gpuFrameMs, on2.gpuFrameMs),
+        frameOff: Math.min(off.gpuFrameMs, off2.gpuFrameMs),
       };
       await Bun.write("remote-results/grass-aaa-cost.json", JSON.stringify({ place, stats: s, cost, on, off }, null, 2));
       // (budgets on the Macs at 1280×720: the blades' compute, their draw, the whole frame's difference — the last one
@@ -113,7 +127,7 @@ test.skipIf(!E2E)(
       ] as const) {
         await app.js(`(()=>{${SETUP}const e=__bh.camera.character.start('earth',${lat},${lon});__bh.step(0);__bh.touch();return e;})()`);
         await app.js("(()=>{__bh.step(0);__bh.touch();return true;})()");
-        await app.waitFor("__bh.renderer.earthScenery.contact && !__bh.renderer.earthScenery.pending", 180_000);
+        await app.waitFor(HERE(lat, lon), 180_000);
         for (const [name, cls] of [
           ["crop", 40],
           ["reeds", 90],
