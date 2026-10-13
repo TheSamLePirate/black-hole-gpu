@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { cameraFrame } from "../src/camera";
+import { cameraFrame, setHomePose } from "../src/camera";
 import { ourGroundPose } from "../src/game/place";
 import { add, dot, scale } from "../src/math/vec3";
 import { qConj, qLog, qMul } from "../src/cine/follow";
@@ -117,4 +117,54 @@ test("the chase softened (the rig): the same flight, the view's jolts on a hard 
   expect(Math.hypot(...rigid.X.map((x, i) => x - soft.X[i]!)) * M_METRES).toBeLessThan(0.5);
   expect(dot(rigid.nose, soft.nose)).toBeGreaterThan(Math.cos((0.01 * Math.PI) / 180));
   expect(soft.jerk).toBeLessThan(0.5 * rigid.jerk);
+}, 120_000);
+
+test("placed or reloaded in the director's view: the craft as asked, not turned by the last shot", () => {
+  // (a craft placed with the director's view on, its shot never stepped: the fixed default's relation)
+  const fresh = run("director", 0);
+  const g = ourGroundPose("earth", 45, -30, 0);
+  const X = add(g.X, scale(g.up, 2000 / M_METRES));
+  const pose = { ...g, X, vel: add(g.vel, scale(g.fwd, 200 / C_MPS)), landed: undefined };
+  const placed = () => {
+    setHomePose(fresh.c.s, pose.X, pose.fwd, pose.up, pose.vel);
+    fresh.c.s.anchor = "wormhole";
+    fresh.c.newFlight();
+    return fresh.c.shipAxesLocal(cameraFrame(fresh.c.s))[2];
+  };
+  const first = placed();
+  // (twenty seconds of shots, then placed again at the same pose: the same attitude)
+  const { c } = run("director", 20);
+  expect(c.cineOut).not.toBeNull();
+  setHomePose(c.s, pose.X, pose.fwd, pose.up, pose.vel);
+  c.s.anchor = "wormhole";
+  c.newFlight();
+  expect(c.cineOut).toBeNull();
+  const again = c.shipAxesLocal(cameraFrame(c.s))[2];
+  expect(dot(first, again)).toBeGreaterThan(Math.cos((0.01 * Math.PI) / 180));
+}, 120_000);
+
+test("a save in the director's view: the camera's pose on the craft kept, the craft reloaded as it pointed", () => {
+  const { c } = run("director", 12);
+  const nose = c.shipAxesLocal(cameraFrame(c.s))[2];
+  const view = structuredClone(c.lastPose!);
+  const cam = { yaw: c.s.yaw, pitch: c.s.pitch, roll: c.s.roll };
+  // (as load does: a new flight, the scene's mount settled, the camera's settings as saved, the view held)
+  c.newFlight();
+  c.settleMount();
+  Object.assign(c.s, cam);
+  c.holdMount(view);
+  const loaded = c.shipAxesLocal(cameraFrame(c.s))[2];
+  expect(dot(nose, loaded)).toBeGreaterThan(Math.cos((0.01 * Math.PI) / 180));
+  // (the director's next shot moves the camera, not the craft)
+  c.cineStep(1 / 30);
+  c.stepMount(1 / 30);
+  expect(dot(nose, c.shipAxesLocal(cameraFrame(c.s))[2])).toBeGreaterThan(Math.cos((0.05 * Math.PI) / 180));
+}, 120_000);
+
+test("taking the controls drops a camera travel under way", () => {
+  const { c } = run("chase", 0);
+  c.setPilot(false);
+  (c as unknown as { travel: unknown }).travel = { t: 0, T: 3 };
+  c.setPilot(true);
+  expect(c.travel).toBeNull();
 }, 120_000);

@@ -72,6 +72,7 @@ declare module "../controls" {
     mountTarget: typeof mountTarget;
     settleMount: typeof settleMount;
     rigidMount: typeof rigidMount;
+    holdMount: typeof holdMount;
     weatherPlace: typeof weatherPlace;
     runwayInUse: typeof runwayInUse;
     rainView: typeof rainView;
@@ -80,6 +81,7 @@ declare module "../controls" {
     shipMatrix: typeof shipMatrix;
     levelShip: typeof levelShip;
     shipAxesLocal: typeof shipAxesLocal;
+    drawnMatrix: typeof drawnMatrix;
     rotateC: typeof rotateC;
     pilotInput: typeof pilotInput;
     flyShip: typeof flyShip;
@@ -131,6 +133,9 @@ function setPilot(this: CameraController, on: boolean) {
     return;
   }
   if (this.cinematic === "orbit") this.setCinematic(null);
+  // (a travel of the free camera under way let go: flying, it waited, then went on from where it was when the
+  // controls were left — the view jumped back to it)
+  this.travel = null;
   this.flyMode = false;
   s.rotation = "free";
   if (!this.gravity) this.setGravity(true);
@@ -150,6 +155,9 @@ function setPilot(this: CameraController, on: boolean) {
  */
 function newFlight(this: CameraController) {
   this.character.stop();
+  // (the view the new flight's own: a spectator out — walking or not — let go, its glide with it)
+  this.spectator = null;
+  this.specGlide = null;
   this.tunnelEntry = null;
   this.predictionContext = "";
   this.predictionGeneration++;
@@ -210,7 +218,25 @@ function rigidMount(this: CameraController) {
   this.viewCarry = null;
   this.mountAnim = null;
   this.mountEff = null;
+  // (the director's shot let go: its last one — of the flight before, never saved — put a placed or reloaded
+  // craft tens of degrees, up to 180°, off; the director's view starts again from its fixed default)
+  this.cine.reset();
+  this.cineOn = false;
+  this.cineOut = null;
   this.lastPose = this.mountTarget();
+}
+
+/**
+ * The camera held at a pose on the craft (its frame — a save's: the view as it was then): the craft's attitude is
+ * the camera's through it. The next frame's stepMount turns the camera onto the attach point's own pose, the craft
+ * kept where it points (a director's shot, a view dragged about the craft are not their defaults).
+ */
+function holdMount(this: CameraController, pose: MountPose) {
+  const p: MountPose = { eye: [...pose.eye], aim: [...pose.aim], ...(pose.up ? { up: [...pose.up] as Vec3 } : {}) };
+  this.mountAnim = null;
+  this.viewCarry = null;
+  this.mountEff = p;
+  this.lastPose = p;
 }
 
 /**
@@ -458,7 +484,7 @@ function aimShipViews(this: CameraController, dt: number) {
   const s = this.s;
   // (the ship's axes as the camera had them last frame: the pose drawn — the outside views' placement
   // depends on the aim itself)
-  const S = this.lastPose ? shipToCamera(this.lastPose, s.shipLookYaw, s.shipLookPitch).S : this.shipMatrix();
+  const S = this.drawnMatrix();
   this.shipAim = null;
   if (!s.lookAt || !this.piloting || this.cinematic) return;
   const cam = cameraFrame(s);
@@ -485,8 +511,7 @@ function flybyStep(this: CameraController, dt: number) {
   const s = this.s,
     F = this.flyby;
   const cam = cameraFrame(s);
-  const S = this.lastPose ? shipToCamera(this.lastPose, s.shipLookYaw, s.shipLookPitch).S : this.shipMatrix();
-  const ax = [0, 1, 2].map((i) => lin(lin(cam.right, S[0][i]!, cam.up, S[1][i]!), 1, cam.fwd, S[2][i]!)) as [Vec3, Vec3, Vec3];
+  const ax = this.shipAxesLocal(cam, this.drawnMatrix());
   const toShip = (E: Vec3): Vec3 => [dot3(E, ax[0]), dot3(E, ax[1]), dot3(E, ax[2])];
   const toLocal = (e: Vec3) => lin(lin(ax[0], e[0], ax[1], e[1]), 1, ax[2], e[2]);
   if (!F.E) F.E = toLocal(this.lastPose?.eye ?? F.eye);
@@ -672,6 +697,12 @@ function shipMatrix(this: CameraController): M3 {
   return shipToCamera(this.shipPose(), this.s.shipLookYaw, this.s.shipLookPitch).S;
 }
 
+/** The camera's axes in the ship's frame (rows) as the pose drawn last frame has them — the outside views'
+ *  placement depends on them —, else as now. */
+function drawnMatrix(this: CameraController): M3 {
+  return this.lastPose ? shipToCamera(this.lastPose, this.s.shipLookYaw, this.s.shipLookPitch).S : this.shipMatrix();
+}
+
 /**
  * Levels the ship on the ground: its top towards the local up (ZAMO components), its nose on the
  * horizon along its heading (tilted forwards if it stood on its tail). The cameras follow it.
@@ -701,8 +732,7 @@ function levelShip(this: CameraController, upZ: Vec3) {
 }
 
 /** The ship's axes (x left, y up, z nose) in the camera basis's local components. */
-function shipAxesLocal(this: CameraController, b: { right: Vec3; up: Vec3; fwd: Vec3 }): [Vec3, Vec3, Vec3] {
-  const S = this.shipMatrix();
+function shipAxesLocal(this: CameraController, b: { right: Vec3; up: Vec3; fwd: Vec3 }, S = this.shipMatrix()): [Vec3, Vec3, Vec3] {
   const ax = (i: number) => lin(lin(b.right, S[0]![i]!, b.up, S[1]![i]!), 1, b.fwd, S[2]![i]!);
   return [ax(0), ax(1), ax(2)];
 }
@@ -1910,11 +1940,13 @@ export function installPiloting(C: { prototype: CameraController }) {
     mountTarget,
     settleMount,
     rigidMount,
+    holdMount,
     stepMount,
     reorient,
     shipMatrix,
     levelShip,
     shipAxesLocal,
+    drawnMatrix,
     rotateC,
     pilotInput,
     flyShip,

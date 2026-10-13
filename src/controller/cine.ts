@@ -12,12 +12,11 @@ import type { V3 } from "../cine/rig";
 import { fleet } from "../fleet";
 import { t } from "../i18n";
 import { dot as dot3, lin, sub as sub3 } from "../math/vec3";
-import { shipToCamera } from "../mounts";
 import type { Vec3 } from "../physics";
 import { ourState } from "../system/our-side";
-import { gearHeight, groundVelocity, solidBody } from "../system/our-surface";
+import { gearHeight, solidBody } from "../system/our-surface";
 import { solarBody } from "../system/solar";
-import { C_MPS, M_METRES } from "../units";
+import { M_METRES } from "../units";
 import { VESSELS } from "../vessels";
 import type { CameraController } from "../controls";
 import { clamp, unitV } from "./util";
@@ -46,15 +45,14 @@ export const SHOT_NAMES: Record<Shot | "auto", () => string> = {
 function cineContext(this: CameraController, warp: number): { c: CineContext; ax: [Vec3, Vec3, Vec3] } {
   const s = this.s;
   const cam = cameraFrame(s);
-  const S = this.lastPose ? shipToCamera(this.lastPose, s.shipLookYaw, s.shipLookPitch).S : this.shipMatrix();
-  const ax = [0, 1, 2].map((i) => lin(lin(cam.right, S[0][i]!, cam.up, S[1][i]!), 1, cam.fwd, S[2][i]!)) as [Vec3, Vec3, Vec3];
+  const ax = this.shipAxesLocal(cam, this.drawnMatrix());
   const V = VESSELS[fleet.active];
   const centre = lin(lin(ax[0], V.centre[0], ax[1], V.centre[1]), 1, ax[2], V.centre[2]) as V3;
   const nav = this.local ? null : this.ourNav(cam);
   const ref = nav && nav.ref !== "sun" && solarBody(nav.ref) ? nav.ref : null;
   // (the velocity over the ground near a world — a still camera on it stays on it, its turn carried —, else in
-  // the frame flown in)
-  let vel: Vec3 = lin(sub3(cam.beta, this.refBeta(cam)), C_MPS, cam.beta, 0);
+  // the frame flown in: the rig's own, camrig.ts flowVelocity)
+  const vel = this.flowVelocity();
   let agl = Number.NaN;
   let body: CineContext["body"] = null;
   let sun: V3 | null = null;
@@ -63,10 +61,7 @@ function cineContext(this: CameraController, warp: number): { c: CineContext; ax
     const d = sub3(nav.refPos, nav.X);
     const dist = Math.hypot(...d);
     body = { dir: unitV(nav.toRep(lin(d, 1 / dist, d, 0))) as V3, dist: dist * M_METRES, radius: R * M_METRES };
-    if (solidBody(ref)) {
-      agl = gearHeight(ref, nav.X, nav.t);
-      if (agl < 150e3) vel = lin(nav.toRep(sub3(nav.V, groundVelocity(ref, nav.X, nav.t))), C_MPS, cam.beta, 0);
-    }
+    if (solidBody(ref)) agl = gearHeight(ref, nav.X, nav.t);
   }
   if (nav) {
     const sp = sub3(ourState("sun", nav.t).pos, nav.X);
