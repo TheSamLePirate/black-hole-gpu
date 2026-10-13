@@ -100,6 +100,9 @@ export interface EngineState {
   live: boolean;
   /** the rain where the view is (PLAN-PLUIE P5: 0 none — or the time paused —, 1 heavy, 1.3 a storm's core) */
   rain?: number;
+  /** an aircraft's turbofan (the F-35's — docs/PLAN-F35.md, F6) instead of a rocket: its core's spool 0…1, its
+   *  thrust over its full wet thrust 0…1, its afterburner lit 0…1, its lift fan's power 0…1 */
+  jet?: { spool: number; thrust: number; ab: number; fan: number } | null;
 }
 
 /** Where the main engine is from the ear (audio/space.ts): its place in the listener's frame [m], its
@@ -569,8 +572,97 @@ export class SoundEngine {
     subOsc.connect(sub).connect(this.busses.engine);
     subOsc.start();
     this.eng = { rumble, rumbleLP, roar, roarBP, sub, subOsc, crackle };
+    this.buildJet();
     // (the Doppler's pitch: the voices' detune, in cents)
     if (this.engSpace) this.engSpace.detune = [rumbleSrc.detune, roarSrc.detune, subOsc.detune];
+  }
+
+  /**
+   * An aircraft's turbofan (the F-35's F135 — PLAN-F35 F6), its voices into the engine's bus (placed, its Doppler):
+   * the compressor's whine — the fan's blades passing, a chord of its stages rising with the spool —, the exhaust's
+   * roar (the jet's mixing: broadband, its colour with the thrust), its rumble low; the afterburner's tearing
+   * crackle and its pressure; the lift fan's own roar and its blade tone.
+   */
+  private jetV: {
+    whine: GainNode;
+    whineOsc: OscillatorNode[];
+    whineBP: BiquadFilterNode;
+    roar: GainNode;
+    roarLP: BiquadFilterNode;
+    low: GainNode;
+    lowLP: BiquadFilterNode;
+    ab: GainNode;
+    abAmp: GainNode;
+    fan: GainNode;
+    fanOsc: OscillatorNode;
+  } | null = null;
+  private buildJet() {
+    const ctx = this.ctx!;
+    const bus = this.busses.engine;
+    const whine = ctx.createGain();
+    whine.gain.value = 0;
+    const whineBP = ctx.createBiquadFilter();
+    whineBP.type = "bandpass";
+    whineBP.frequency.value = 2600;
+    whineBP.Q.value = 2.5;
+    const whineOsc = [1, 1.48, 2.02, 3.1].map((k, i) => {
+      const o = ctx.createOscillator();
+      o.type = i === 0 ? "sawtooth" : "triangle";
+      o.frequency.value = 900 * k;
+      const g = ctx.createGain();
+      g.gain.value = [0.5, 0.3, 0.2, 0.12][i]!;
+      o.connect(g).connect(whineBP);
+      o.start();
+      return o;
+    });
+    whineBP.connect(whine).connect(bus);
+    const roar = ctx.createGain();
+    roar.gain.value = 0;
+    const roarLP = ctx.createBiquadFilter();
+    roarLP.type = "lowpass";
+    roarLP.frequency.value = 900;
+    roarLP.Q.value = 0.4;
+    const roarSrc = this.loop(this.white, 1.13);
+    roarSrc.connect(roarLP).connect(roar).connect(bus);
+    const low = ctx.createGain();
+    low.gain.value = 0;
+    const lowLP = ctx.createBiquadFilter();
+    lowLP.type = "lowpass";
+    lowLP.frequency.value = 140;
+    const lowSrc = this.loop(this.brown, 0.71);
+    lowSrc.connect(lowLP).connect(low).connect(bus);
+    // (the afterburner: brown noise torn by a fast random amplitude — its crackle —, low and wide)
+    const ab = ctx.createGain();
+    ab.gain.value = 0;
+    const abAmp = ctx.createGain();
+    abAmp.gain.value = 0.6;
+    const tear = ctx.createGain();
+    tear.gain.value = 0.9;
+    this.loop(this.slow, 14).connect(tear).connect(abAmp.gain);
+    const abLP = ctx.createBiquadFilter();
+    abLP.type = "lowpass";
+    abLP.frequency.value = 700;
+    const abSrc = this.loop(this.brown, 1.37);
+    abSrc.connect(abLP).connect(abAmp).connect(ab).connect(bus);
+    // (the lift fan: a broad roar and its blades' tone)
+    const fan = ctx.createGain();
+    fan.gain.value = 0;
+    const fanBP = ctx.createBiquadFilter();
+    fanBP.type = "bandpass";
+    fanBP.frequency.value = 420;
+    fanBP.Q.value = 0.7;
+    this.loop(this.white, 0.87).connect(fanBP).connect(fan);
+    const fanOsc = ctx.createOscillator();
+    fanOsc.type = "sawtooth";
+    fanOsc.frequency.value = 320;
+    const fanTone = ctx.createGain();
+    fanTone.gain.value = 0.08;
+    fanOsc.connect(fanTone).connect(fan);
+    fanOsc.start();
+    fan.connect(bus);
+    this.jetV = { whine, whineOsc, whineBP, roar, roarLP, low, lowLP, ab, abAmp, fan, fanOsc };
+    if (this.engSpace)
+      this.engSpace.detune.push(...whineOsc.map((o) => o.detune), roarSrc.detune, lowSrc.detune, abSrc.detune, fanOsc.detune);
   }
 
   /** The granular engine (S2): its worklet loaded (by URL next to the page), its voice into the engine's
@@ -949,8 +1041,32 @@ export class SoundEngine {
       for (const d of sp.detune) set(d, cents, 0.1);
     }
 
+    // an aircraft's turbofan (PLAN-F35 F6): its voices; the rocket's silent then
+    const J = this.jetV;
+    const jet = s.jet ?? null;
+    if (J) {
+      const on = jet ? live : 0;
+      const n = clamp(jet?.spool ?? 0),
+        th2 = clamp(jet?.thrust ?? 0),
+        abl = clamp(jet?.ab ?? 0),
+        fl = clamp(jet?.fan ?? 0);
+      // (the whine: the fan's blade-passing chord from ~900 Hz at idle to ~3 kHz at full, louder from inside)
+      const f0 = 700 + 2300 * n;
+      J.whineOsc.forEach((o, i) => set(o.frequency, f0 * [1, 1.48, 2.02, 3.1][i]!, 0.25));
+      set(J.whineBP.frequency, f0 * 1.6, 0.25);
+      // (from the seat: the canopy and the helmet between — the roar behind dulled, the whine through the structure)
+      const cab = s.inside ? 0.45 : 1;
+      set(J.whine.gain, on * (0.025 + 0.06 * n) * (s.inside ? 0.8 : 1), 0.2);
+      set(J.roar.gain, on * cab * 0.55 * th2 ** 1.3, 0.15);
+      set(J.roarLP.frequency, 500 + 2600 * th2, 0.2);
+      set(J.low.gain, on * cab * (0.15 + 0.9 * th2), 0.15);
+      set(J.lowLP.frequency, 90 + 120 * th2 + 120 * abl, 0.2);
+      set(J.ab.gain, on * cab * 1.3 * abl, 0.12);
+      set(J.fan.gain, on * cab * 0.5 * fl, 0.3);
+      set(J.fanOsc.frequency, 180 + 220 * n, 0.3);
+    }
     // main engine: granular (its worklet's controls), else the filtered noises
-    const th = clamp(s.throttle) * live;
+    const th = clamp(jet ? 0 : s.throttle) * live;
     const e = this.eng;
     const g = this.gran;
     if (g) {

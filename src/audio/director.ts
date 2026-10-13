@@ -328,6 +328,8 @@ export class SoundDirector {
       rain?: number;
       /** the view a still camera's (the director's fly-by, its tracking shot): the boom heard standing */
       standing?: boolean;
+      /** an aircraft's turbofan (engine.ts EngineState.jet) */
+      jet?: { spool: number; thrust: number; ab: number; fan: number } | null;
     },
   ) {
     const s = this.s;
@@ -373,6 +375,7 @@ export class SoundDirector {
       aboard: flying,
       live: o.live,
       rain: o.rain ?? 0,
+      jet: flying ? (o.jet ?? null) : null,
     });
     if (!flying || !info) {
       sound.alarm("collision", false);

@@ -5390,6 +5390,16 @@ async function main() {
           thrust: renderer.shipThrust,
           gear: camera.gearLast,
           groundWind: camera.weatherNow?.wind.u10 ?? 0,
+          // (the F-35's turbofan: its spool, its thrust over its full wet thrust, its afterburner, its lift fan)
+          jet:
+            settings.vessel === "f35"
+              ? {
+                  spool: camera.pilot.engineNow,
+                  thrust: (camera.pilot.engineNow * camera.jetThrust()) / 1.47,
+                  ab: camera.abLevel,
+                  fan: camera.stovl.clutch * camera.pilot.engineNow,
+                }
+              : null,
           // (the rain heard where it falls — none held with the time)
           rain: renderer.rain && !renderer.rain.dust && settings.animate && !frozen && !paused ? renderer.rain.rain : 0,
         }),
