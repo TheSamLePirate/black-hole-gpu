@@ -1566,18 +1566,19 @@ harp and celesta (`keys`), organ and choir. The energy comes from the section an
 - `update(m, {context, intensity, enabled})` is called every frame. With the music off (`enabled` false),
   `moment` is null.
 - Themes change on the bar, crossfaded.
-- Without an output (no audio context yet), `update` does nothing.
+- Without an output (no audio context yet, or the sound off), `update` lets every theme go at once and
+  forgets the theme asked: when the output is back the theme starts again, not caught up. Bars left behind by a
+  long pause are skipped, not played at once.
 
 | member | type | meaning |
 |---|---|---|
 | `update(m, o?)` | `(m: Moment \| null, o?: { context?, intensity?, enabled? }) => void` | the moment, context and intensity now (called each frame) |
 | `stop()` | `() => void` | silences the music now, and stops listening |
 | `listen(id)` | `(id: string \| null) => void` | plays a theme over the game's choice (null: the game's choice again) |
-| `skip(dir)` | `(1 \| -1) => void` | the playlist's next or previous theme |
 | `state()` | `() => MusicState` | what plays: theme, name, bpm, section, bar, beat, energy, intensity, chord, mode, moment, context, preview |
 | `levels()` | `() => Record<Layer, number> \| null` | each layer's level (dBFS RMS) |
 | `analyser()` | `() => AnalyserNode \| null` | the master's spectrum |
-| `prefs` | `MusicPrefs` | the panel's preferences: mode, map, mix, muted, intensity, seed, playlist, playlistS, fade |
+| `prefs` | `MusicPrefs` | the panel's preferences: mode, map, mix, muted, solo (a section heard alone, the mutes kept under it; null: none), intensity, seed, playlist, playlistS, fade — checked when read from the browser (unknown theme ids and sections dropped, numbers clamped) |
 | `save()` | `() => void` | keeps `prefs` in the browser (`kerr.music`) and applies the mixer |
 | `moment` | `Moment \| null` | the moment now (null: none, or the music off) |
 | `context` | `Context \| null` | the context now (the adaptive mode's) |

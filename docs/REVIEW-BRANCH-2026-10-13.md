@@ -349,29 +349,35 @@ exprimées par rapport à la caméra, les empreintes, le patch de marche, et l'o
 ## Musique et audio
 
 ### Haute
-- ☐ **A-H1. Rattrapage en rafale** (`music/engine.ts:242`, vérifié : aucun saut). Son coupé : `Music.update` sort
+- ☑ **A-H1. Rattrapage en rafale** (`music/engine.ts:242`, vérifié : aucun saut). Son coupé : `Music.update` sort
   avant `pump`, mais le contexte audio tourne toujours (`music.ts:117-119, 151-152`, gain à 0 seulement). Au retour du
   son, environ 150 mesures sont programmées d'un coup, avec des notes dans le passé : gel et grappe de notes très
   forte. Même chose, en plus petit, après une pause de plus de 0,4 s. *Correctif* : sauter les mesures entières
-  en retard, et arrêter la piste quand `ensure()` vaut null.
+  en retard, et arrêter la piste quand `ensure()` vaut null. — fait : mesures entières en retard sautées (et les tics),
+  notes déjà passées omises, `MusicEngine.halt()` quand la sortie est nulle (185077a, ba4086d)
 
 ### Moyenne
-- ☐ **A-M2.** `engine.ts:221-228` : `cancelScheduledValues(at futur)` efface la montée d'entrée, ce qui donne un silence puis
-  un « pop ». *Correctif* : `cancelAndHoldAtTime`.
-- ☐ **A-M3.** `score.ts:62-68` : les moments n'ont pas d'hystérésis (passage bas à 400 m et 140 m/s, plasma, finale). Le
-  thème bascule sans cesse, et chaque bascule construit une piste complète.
-- ☐ **A-M4.** `instruments.ts:407-421, 452-478, 496-530` : les tampons de notes sont synthétisés sur le thread principal
-  dans la frame (10 à 30 ms pour une note grave de piano), et le cache n'est jamais vidé (60 à 100 Mo).
+- ☑ **A-M2.** `engine.ts:221-228` : `cancelScheduledValues(at futur)` efface la montée d'entrée, ce qui donne un silence puis
+  un « pop ». *Correctif* : `cancelAndHoldAtTime`. — fait : `cancelAndHoldAtTime`, sinon rampe coupée à sa valeur (185077a)
+- ☑ **A-M3.** `score.ts:62-68` : les moments n'ont pas d'hystérésis (passage bas à 400 m et 140 m/s, plasma, finale). Le
+  thème bascule sans cesse, et chaque bascule construit une piste complète. — fait : seuils de sortie plus larges que
+  ceux d'entrée, et tenue minimale de 8 s sauf moment plus grave (76526e5)
+- ☑ **A-M4.** `instruments.ts:407-421, 452-478, 496-530` : les tampons de notes sont synthétisés sur le thread principal
+  dans la frame (10 à 30 ms pour une note grave de piano), et le cache n'est jamais vidé (60 à 100 Mo). — fait : notes
+  probables du thème rendues en tranches (2 ms/image + requestIdleCallback), mesure suivante composée 1,5 s avant,
+  piano grave et timbales à demi-fréquence, cache LRU plafonné à 64 Mo (185077a)
 
 ### Basse
-- ☐ Délai partagé réaccordé brutalement (`engine.ts:215-217`).
-- ☐ Code mort : `MusicEngine.solo`, `Music.skip`, `MOMENT_LIST`. Le solo du panneau écrase les sourdines de
-  l'utilisateur (`musicpanel.ts:310-314`).
-- ☐ Identifiants de thème enregistrés non vérifiés (`music.ts:85-91`).
-- ☐ Allocations par image quand le panneau est ouvert (`engine.ts:314, 178`, `musicpanel.ts:489`).
-- ☐ **Droits** : aucune mélodie connue n'est transcrite (vérifié contre Star Wars, la Marche impériale, Jurassic Park,
+- ☑ Délai partagé réaccordé brutalement (`engine.ts:215-217`). — fait : `setTargetAtTime` (185077a)
+- ☑ Code mort : `MusicEngine.solo`, `Music.skip`, `MOMENT_LIST`. Le solo du panneau écrase les sourdines de
+  l'utilisateur (`musicpanel.ts:310-314`). — fait : `skip` et `MOMENT_LIST` retirés, solo branché sur `prefs.solo`
+  (les sourdines restent) (ba4086d)
+- ☑ Identifiants de thème enregistrés non vérifiés (`music.ts:85-91`). — fait : `Music.checked()` (ba4086d)
+- ☑ Allocations par image quand le panneau est ouvert (`engine.ts:314, 178`, `musicpanel.ts:489`). — fait : tampon et
+  objet des niveaux réutilisés, `current` sans copie, dégradé créé une fois (185077a, ba4086d)
+- ☑ **Droits** : aucune mélodie connue n'est transcrite (vérifié contre Star Wars, la Marche impériale, Jurassic Park,
   E.T. et Interstellar). L'interface affiche « D'après {œuvre réelle} » (`musicpanel.ts:265-266, 449`) : à garder en
-  commentaire seulement.
+  commentaire seulement. — fait : `Theme.after` retiré (en commentaire), humeurs neutres EN/FR (f618807)
 
 ## TARS, données, réglages
 
@@ -414,7 +420,8 @@ de `t()` complètes, déclencheurs branchés, environ 100 POI contrôlés, déca
 - ☑ **D-M2.** `ground-details.e2e:38` : l'A/B de l'occulteur passe même quand `correct === missing`. — fait : si la coque recouvre l'astronaute sur > 200 px, l'occulteur doit en cacher au moins 10 % ; sinon seul le cas synthétique décide, a5bcbbc
 - ☑ **D-M3.** `scripts/check-forest.ts` (WGSL contre TS au bit près) n'est ni dans la CI ni dans `check`. — fait : `check-forest --rays 2000` dans verify et les deux étapes du site (sort 0 sans adaptateur), 19178c0
 - ☐ **D-M4.** character-aaa « devant le vaisseau posé » est rouge (refonte en contre-plongée en cours).
-- ☐ **D-M5.** `tests/score.test.ts:43-48` a perdu les bornes de hauteur et de niveau des notes.
+- ☑ **D-M5.** `tests/score.test.ts:43-48` a perdu les bornes de hauteur et de niveau des notes. — fait : chaque
+  thème composé (3 graines × 3 intensités × 64 mesures), notes dans le clavier, vélocité ≤ 1, effets bornés (76526e5)
 
 ### Basse
 - ☑ Pas de commentaire d'en-tête : earth-surface, gargantua-ground, ground-planets, scenery-hitboxes (e2e). — fait : earth-surface a5bcbbc, les trois autres 1d98705

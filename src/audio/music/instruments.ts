@@ -21,8 +21,12 @@ export type Ctx = BaseAudioContext;
 export interface Kit {
   ctx: Ctx;
   noise: AudioBuffer;
-  /** the notes rendered once (piano, celesta, timpani, harp, pizzicato) */
+  /** the notes rendered once (piano, celesta, timpani, harp, pizzicato), the least recently used first, and their
+   *  size [samples] (kept under BUFFER_CAP) */
   buffers: Map<string, AudioBuffer>;
+  bufferSamples: number;
+  /** the notes rendered so far (the cost's count) */
+  made: number;
   soft: Float32Array<ArrayBuffer>;
   /** the waves: the bowed string's, the brass's, the organ's ranks, the flute's */
   bowed: PeriodicWave;
@@ -82,7 +86,21 @@ export function makeKit(ctx: Ctx): Kit {
   // (the flute: nearly a sine, a little second and third)
   const flute = waveOf(ctx, 6, (h) => [0, 1, 0.22, 0.09, 0.04, 0.02, 0.01][h] ?? 0);
   const organPartials = [...org.entries()].sort((a, b) => a[0] - b[0]);
-  return { ctx, noise, buffers: new Map(), soft: curve, bowed, brass, organ, organPartials, flute, shared: new Map(), ids: new WeakMap() };
+  return {
+    ctx,
+    noise,
+    buffers: new Map(),
+    bufferSamples: 0,
+    made: 0,
+    soft: curve,
+    bowed,
+    brass,
+    organ,
+    organPartials,
+    flute,
+    shared: new Map(),
+    ids: new WeakMap(),
+  };
 }
 
 let nextId = 1;
@@ -403,11 +421,24 @@ function braam(k: Kit, out: AudioNode, t: number, dur: number, note: number, vel
 
 // ------------------------------------------------------------------ notes rendered once
 
-/** A note rendered once into a buffer (mono), its samples filled by `fill`. */
-function rendered(k: Kit, key: string, secs: number, fill: (d: Float32Array, sr: number) => void): AudioBuffer {
+/** The rendered notes kept at most [samples]: 64 MB of them (a theme's working set fits; the next theme's
+ *  pushes out the oldest). */
+const BUFFER_CAP = 16 * 1024 * 1024;
+
+/**
+ * A note rendered once into a buffer (mono), its samples filled by `fill`. `low`: its content all well under a
+ * quarter of the context's rate — rendered at half of it (half the work, half the memory; the source node
+ * resamples it).
+ */
+function rendered(k: Kit, key: string, secs: number, fill: (d: Float32Array, sr: number) => void, low = false): AudioBuffer {
   const hit = k.buffers.get(key);
-  if (hit) return hit;
-  const sr = k.ctx.sampleRate;
+  if (hit) {
+    // (used: the most recent again)
+    k.buffers.delete(key);
+    k.buffers.set(key, hit);
+    return hit;
+  }
+  const sr = low && k.ctx.sampleRate >= 44100 ? k.ctx.sampleRate / 2 : k.ctx.sampleRate;
   const buf = k.ctx.createBuffer(1, Math.floor(sr * secs), sr);
   const d = buf.getChannelData(0);
   fill(d, sr);
@@ -418,8 +449,21 @@ function rendered(k: Kit, key: string, secs: number, fill: (d: Float32Array, sr:
   const fade = Math.min(4096, d.length >> 2);
   for (let i = 0; i < d.length; i++) d[i]! *= g * (i > d.length - fade ? (d.length - i) / fade : 1);
   k.buffers.set(key, buf);
+  k.bufferSamples += d.length;
+  k.made++;
+  // (the least recently used let go: a playing source keeps its own)
+  for (const [kk, b] of k.buffers) {
+    if (k.bufferSamples <= BUFFER_CAP || kk === key) break;
+    k.buffers.delete(kk);
+    k.bufferSamples -= b.length;
+  }
   return buf;
 }
+
+/** White noise's level in a band, the same at any rendering rate (its power spread over the rate's band). */
+const noiseScale = (k: Kit, sr: number) => Math.sqrt(sr / k.ctx.sampleRate);
+/** A one-pole low-pass's coefficient designed at the context's rate, at `sr`. */
+const poleAt = (k: Kit, sr: number, c: number) => 1 - (1 - c) ** (k.ctx.sampleRate / sr);
 
 /** Partials summed into `d`: each its frequency, amplitude and two decays (fast and slow, mixed by `mix`). */
 function partials(d: Float32Array, sr: number, ps: { f: number; a: number; tau: number; tau2?: number; mix?: number }[]) {
@@ -452,29 +496,38 @@ function partials(d: Float32Array, sr: number, ps: { f: number; a: number; tau: 
 function pianoBuffer(k: Kit, note: number, layer: number): AudioBuffer {
   const f0 = midiHz(note);
   const secs = note < 55 ? 5 : note < 79 ? 3.6 : 2.2;
-  return rendered(k, `piano|${note}|${layer}`, secs, (d, sr) => {
-    const B = 0.00012 * 2 ** ((note - 48) / 18);
-    const n = Math.min(28, Math.floor(9000 / f0));
-    const tau0 = Math.min(7, Math.max(0.7, 4.2 * 2 ** (-(note - 48) / 22)));
-    const hard = 2.5 + 3 * layer;
-    const ps = [];
-    for (let h = 1; h <= n; h++) {
-      const f = f0 * h * Math.sqrt(1 + B * h * h);
-      const a = (1 / h ** 1.05) * Math.exp(-h / hard) * (h === 1 ? 0.8 : 1);
-      const tau = tau0 / (1 + 0.28 * (h - 1));
-      // (two strings a hair apart: the beating that makes a piano's tone live)
-      for (const det of [-0.0005, 0.0006]) ps.push({ f: f * (1 + det), a: a / 2, tau: tau * 0.18, tau2: tau, mix: 0.45 });
-    }
-    partials(d, sr, ps);
-    // (the hammer's thump)
-    let lp = 0,
-      s = note * 911;
-    for (let i = 0; i < Math.min(d.length, sr * 0.02); i++) {
-      s = (s * 1103515245 + 12345) & 0x7fffffff;
-      lp += ((s / 0x7fffffff) * 2 - 1 - lp) * 0.08;
-      d[i]! += lp * 0.25 * (1 + layer) * (1 - i / (sr * 0.02));
-    }
-  });
+  // (the low notes — their partials under ~5.5 kHz — at half the rate: the costliest notes made half as costly)
+  return rendered(
+    k,
+    `piano|${note}|${layer}`,
+    secs,
+    (d, sr) => {
+      const B = 0.00012 * 2 ** ((note - 48) / 18);
+      const n = Math.min(28, Math.floor(9000 / f0));
+      const tau0 = Math.min(7, Math.max(0.7, 4.2 * 2 ** (-(note - 48) / 22)));
+      const hard = 2.5 + 3 * layer;
+      const ps = [];
+      for (let h = 1; h <= n; h++) {
+        const f = f0 * h * Math.sqrt(1 + B * h * h);
+        const a = (1 / h ** 1.05) * Math.exp(-h / hard) * (h === 1 ? 0.8 : 1);
+        const tau = tau0 / (1 + 0.28 * (h - 1));
+        // (two strings a hair apart: the beating that makes a piano's tone live)
+        for (const det of [-0.0005, 0.0006]) ps.push({ f: f * (1 + det), a: a / 2, tau: tau * 0.18, tau2: tau, mix: 0.45 });
+      }
+      partials(d, sr, ps);
+      // (the hammer's thump)
+      let lp = 0,
+        s = note * 911;
+      const c = poleAt(k, sr, 0.08),
+        ns = noiseScale(k, sr);
+      for (let i = 0; i < Math.min(d.length, sr * 0.02); i++) {
+        s = (s * 1103515245 + 12345) & 0x7fffffff;
+        lp += ((s / 0x7fffffff) * 2 - 1 - lp) * c;
+        d[i]! += lp * ns * 0.25 * (1 + layer) * (1 - i / (sr * 0.02));
+      }
+    },
+    note < 55,
+  );
 }
 
 /** The celesta: a struck bar's modes over its resonator — the fundamental ringing, the upper ones brief. */
@@ -495,38 +548,47 @@ function celestaBuffer(k: Kit, note: number): AudioBuffer {
  *  rebounds, the mallet's felt (soft or hard). */
 function timpaniBuffer(k: Kit, note: number, hard: boolean): AudioBuffer {
   const f = midiHz(note);
-  return rendered(k, `timp|${note}|${hard}`, 3.5, (d, sr) => {
-    const modes: [number, number, number][] = [
-      [0.62, 0.35, 0.18],
-      [1, 1, 2.4],
-      [1.5, 0.72, 1.5],
-      [1.98, 0.45, 1.05],
-      [2.44, 0.3, 0.8],
-      [2.94, 0.18, 0.55],
-      [3.42, 0.1, 0.4],
-    ];
-    for (const [r, a, tau] of modes) {
-      const amp = a * (hard || r < 2 ? 1 : 0.55);
-      let ph = 0;
-      const k1 = Math.exp(-1 / (tau * sr));
-      let env = amp;
-      for (let i = 0; i < d.length && env > 1e-5; i++) {
-        const tt = i / sr;
-        ph += (2 * Math.PI * f * r * (1 + 0.018 * Math.exp(-tt / 0.07))) / sr;
-        d[i]! += env * Math.sin(ph);
-        env *= k1;
+  // (a membrane's modes under ~1 kHz: at half the rate)
+  return rendered(
+    k,
+    `timp|${note}|${hard}`,
+    3.5,
+    (d, sr) => {
+      const modes: [number, number, number][] = [
+        [0.62, 0.35, 0.18],
+        [1, 1, 2.4],
+        [1.5, 0.72, 1.5],
+        [1.98, 0.45, 1.05],
+        [2.44, 0.3, 0.8],
+        [2.94, 0.18, 0.55],
+        [3.42, 0.1, 0.4],
+      ];
+      for (const [r, a, tau] of modes) {
+        const amp = a * (hard || r < 2 ? 1 : 0.55);
+        let ph = 0;
+        const k1 = Math.exp(-1 / (tau * sr));
+        let env = amp;
+        for (let i = 0; i < d.length && env > 1e-5; i++) {
+          const tt = i / sr;
+          ph += (2 * Math.PI * f * r * (1 + 0.018 * Math.exp(-tt / 0.07))) / sr;
+          d[i]! += env * Math.sin(ph);
+          env *= k1;
+        }
       }
-    }
-    // (the mallet)
-    let lp = 0,
-      s = note * 37;
-    const len = Math.floor(sr * 0.015);
-    for (let i = 0; i < len; i++) {
-      s = (s * 1103515245 + 12345) & 0x7fffffff;
-      lp += ((s / 0x7fffffff) * 2 - 1 - lp) * (hard ? 0.35 : 0.12);
-      d[i]! += lp * 0.6 * (1 - i / len);
-    }
-  });
+      // (the mallet)
+      let lp = 0,
+        s = note * 37;
+      const len = Math.floor(sr * 0.015);
+      const c = poleAt(k, sr, hard ? 0.35 : 0.12),
+        ns = noiseScale(k, sr);
+      for (let i = 0; i < len; i++) {
+        s = (s * 1103515245 + 12345) & 0x7fffffff;
+        lp += ((s / 0x7fffffff) * 2 - 1 - lp) * c;
+        d[i]! += lp * ns * 0.6 * (1 - i / len);
+      }
+    },
+    note < 60,
+  );
 }
 
 /** A plucked string (Karplus–Strong): noise in a delay line, averaged each period — the harp's (long, plucked at
@@ -1022,6 +1084,75 @@ const CHORD_STR: Omit<BowOpts, "chord"> = {
   level: 0.09,
 };
 
+// (the drums' variants by the time struck — a few each: no machine-gun —, the piano's layer by the velocity)
+const taikoOf = (t: number) => Math.floor(Math.abs(jit(t, 1)) * 3);
+const tomOf = (t: number) => Math.floor(Math.abs(jit(t, 2)) * 4);
+const snareOf = (t: number) => Math.floor(Math.abs(jit(t, 3)) * 3);
+const pianoLayer = (vel: number) => (vel > 0.75 ? 2 : vel > 0.45 ? 1 : 0);
+const taikoBuffer = (k: Kit, v: number) =>
+  drumBuffer(k, `taiko${v}`, { from: 125 + 8 * v, to: 60 + 3 * v, drop: 0.08, decay: 0.9, skin: 0.35, skinHz: 450, seed: v + 1 });
+const tomBuffer = (k: Kit, v: number) =>
+  drumBuffer(k, `tom${v}`, { from: 230 - 25 * v, to: 125 - 12 * v, drop: 0.12, decay: 0.55, skin: 0.28, skinHz: 900, seed: 20 + v });
+const bassDrumBuffer = (k: Kit) =>
+  drumBuffer(k, "bassdrum", { from: 70, to: 46, drop: 0.15, decay: 1.4, skin: 0.12, skinHz: 180, seed: 9 });
+
+/**
+ * The buffer a note will play rendered now, ahead of it (nothing for the notes made of live nodes): what the music
+ * engine does in its idle slices, so that the frame that schedules the note does not pay for it. `t` unknown
+ * (NaN): every variant of a drum. True when it was not rendered yet (the work was done here).
+ */
+export function prepareNote(k: Kit, inst: string, dur: number, note: number, vel: number, t = Number.NaN): boolean {
+  const n = k.made;
+  const some = (f: (v: number) => void, of: (t: number) => number, count: number) => {
+    if (Number.isFinite(t)) f(of(t));
+    else for (let v = 0; v < count; v++) f(v);
+  };
+  switch (inst) {
+    case "spiccato":
+    case "lowspic":
+      spicBuffer(k, note, inst === "lowspic", vel > 0.65);
+      break;
+    case "pizz":
+      ksBuffer(k, note, "pizz");
+      break;
+    case "harp":
+      ksBuffer(k, note, "harp");
+      break;
+    case "horn":
+    case "trumpet":
+      if (dur <= 0.45) brassBuffer(k, note, inst === "trumpet", vel > 0.7);
+      break;
+    case "piano":
+      pianoBuffer(k, note, pianoLayer(vel));
+      break;
+    case "celesta":
+      celestaBuffer(k, note);
+      break;
+    case "timpani":
+      timpaniBuffer(k, note, vel > 0.7);
+      break;
+    case "timproll":
+      timpaniBuffer(k, note, false);
+      break;
+    case "organ":
+      if (dur <= 0.5) organBuffer(k, note);
+      break;
+    case "taiko":
+      some((v) => taikoBuffer(k, v), taikoOf, 3);
+      break;
+    case "bassdrum":
+      bassDrumBuffer(k);
+      break;
+    case "tom":
+      some((v) => tomBuffer(k, v), tomOf, 4);
+      break;
+    case "snare":
+      some((v) => snareBuffer(k, v), snareOf, 3);
+      break;
+  }
+  return k.made !== n;
+}
+
 /** Plays a note of an instrument by its name, at `t` [ctx s], `dur` [s]. */
 export function playNote(k: Kit, out: AudioNode, inst: string, t: number, dur: number, note: number, vel: number, pan = 0) {
   const o = panTo(k, out, pan);
@@ -1098,7 +1229,7 @@ export function playNote(k: Kit, out: AudioNode, inst: string, t: number, dur: n
       return braam(k, o, t, dur, note, vel);
     // rendered once
     case "piano":
-      return playBuffer(k, o, pianoBuffer(k, note, vel > 0.75 ? 2 : vel > 0.45 ? 1 : 0), t, dur, 0.4 * (0.35 + 0.65 * vel), 0.6);
+      return playBuffer(k, o, pianoBuffer(k, note, pianoLayer(vel)), t, dur, 0.4 * (0.35 + 0.65 * vel), 0.6);
     case "celesta":
       return playBuffer(k, o, celestaBuffer(k, note), t, dur, 0.35 * vel, 1.5);
     case "harp":
@@ -1135,42 +1266,14 @@ export function playNote(k: Kit, out: AudioNode, inst: string, t: number, dur: n
     case "shepard":
       return shepard(k, o, t, dur, note, vel);
     // the percussion
-    case "taiko": {
-      const v = Math.floor(Math.abs(jit(t, 1)) * 3);
-      return playBuffer(
-        k,
-        o,
-        drumBuffer(k, `taiko${v}`, { from: 125 + 8 * v, to: 60 + 3 * v, drop: 0.08, decay: 0.9, skin: 0.35, skinHz: 450, seed: v + 1 }),
-        t,
-        4,
-        0.38 * vel,
-        0.5,
-      );
-    }
+    case "taiko":
+      return playBuffer(k, o, taikoBuffer(k, taikoOf(t)), t, 4, 0.38 * vel, 0.5);
     case "bassdrum":
-      return playBuffer(
-        k,
-        o,
-        drumBuffer(k, "bassdrum", { from: 70, to: 46, drop: 0.15, decay: 1.4, skin: 0.12, skinHz: 180, seed: 9 }),
-        t,
-        4,
-        0.36 * vel,
-        0.5,
-      );
-    case "tom": {
-      const v = Math.floor(Math.abs(jit(t, 2)) * 4);
-      return playBuffer(
-        k,
-        o,
-        drumBuffer(k, `tom${v}`, { from: 230 - 25 * v, to: 125 - 12 * v, drop: 0.12, decay: 0.55, skin: 0.28, skinHz: 900, seed: 20 + v }),
-        t,
-        2,
-        0.26 * vel,
-        0.3,
-      );
-    }
+      return playBuffer(k, o, bassDrumBuffer(k), t, 4, 0.36 * vel, 0.5);
+    case "tom":
+      return playBuffer(k, o, tomBuffer(k, tomOf(t)), t, 2, 0.26 * vel, 0.3);
     case "snare":
-      return playBuffer(k, o, snareBuffer(k, Math.floor(Math.abs(jit(t, 3)) * 3)), t, 1, 0.3 * vel, 0.2);
+      return playBuffer(k, o, snareBuffer(k, snareOf(t)), t, 1, 0.3 * vel, 0.2);
     case "roll":
       return roll(k, o, t, dur, vel);
     case "cymbal":

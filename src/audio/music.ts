@@ -6,9 +6,9 @@
 // choice — the panel's), the flight's intensity raising the band (or the player's own), the mixer's levels, a
 // variation (another melody). Its preferences kept in the browser (the panel's).
 
-import { type Context, type Moment, MOMENTS } from "./score";
+import { CONTEXTS, type Context, type Moment, MOMENTS } from "./score";
 import { DEFAULT_MIX, MusicEngine, type MusicMix, type MusicState } from "./music/engine";
-import { type Layer, LAYERS, THEMES } from "./music/themes";
+import { type Layer, LAYERS, THEME_BY_ID, THEMES } from "./music/themes";
 import { store } from "../util/storage";
 
 export type MusicMode = "moments" | "adaptive" | "playlist";
@@ -36,6 +36,8 @@ export interface MusicPrefs {
   map: Record<Moment | Context, string>;
   mix: MusicMix;
   muted: Layer[];
+  /** the section heard alone (the user's mutes kept under it: back as they were after), or none */
+  solo: Layer | null;
   /** the intensity: the flight's (null), or the player's own 0 … 1 */
   intensity: number | null;
   /** the variation (another melody for each theme) */
@@ -52,6 +54,7 @@ export const DEFAULT_PREFS = (): MusicPrefs => ({
   map: { ...DEFAULT_MAP },
   mix: { ...DEFAULT_MIX },
   muted: [],
+  solo: null,
   intensity: null,
   seed: 0,
   playlist: THEMES.map((t) => t.id),
@@ -77,17 +80,34 @@ export class Music {
   flight = 0.5;
 
   constructor(private out: () => { ctx: AudioContext; bus: GainNode } | null) {
-    const p = store.getJSON<Partial<MusicPrefs>>(KEY, {});
+    this.prefs = Music.checked(store.getJSON<Partial<MusicPrefs>>(KEY, {}));
+  }
+
+  /**
+   * Kept preferences made sound: what the browser kept may be from an older version or edited by hand — a theme
+   * gone (its id unknown), the former band's sections (its drums, its guitar, its pump), a level not a number.
+   */
+  static checked(p: Partial<MusicPrefs>): MusicPrefs {
     const d = DEFAULT_PREFS();
-    // (kept preferences from the former band — its drums, its guitar, its pump — dropped: the orchestra's sections
-    // only)
-    const mix = Object.fromEntries(Object.entries(p.mix ?? {}).filter(([key]) => key in d.mix)) as Partial<MusicMix>;
-    this.prefs = {
-      ...d,
-      ...p,
-      map: { ...d.map, ...(p.map ?? {}) },
-      mix: { ...d.mix, ...mix },
-      muted: (p.muted ?? []).filter((l) => (LAYERS as string[]).includes(l)),
+    const theme = (id: unknown): id is string => typeof id === "string" && id in THEME_BY_ID;
+    const num = (v: unknown, lo: number, hi: number, dflt: number) =>
+      typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : dflt;
+    const layer = (l: unknown): l is Layer => (LAYERS as unknown[]).includes(l);
+    const map = { ...d.map };
+    for (const k of [...MOMENTS, ...CONTEXTS]) if (theme(p.map?.[k])) map[k] = p.map[k];
+    const mix = { ...d.mix };
+    for (const k of Object.keys(mix) as (keyof MusicMix)[]) mix[k] = num(p.mix?.[k], 0, 2, mix[k]);
+    return {
+      mode: p.mode === "adaptive" || p.mode === "playlist" ? p.mode : d.mode,
+      map,
+      mix,
+      muted: Array.isArray(p.muted) ? p.muted.filter(layer) : [],
+      solo: layer(p.solo) ? p.solo : null,
+      intensity: p.intensity === null || p.intensity === undefined ? null : num(p.intensity, 0, 1, 0.5),
+      seed: Math.round(num(p.seed, 0, 999, 0)),
+      playlist: Array.isArray(p.playlist) ? p.playlist.filter(theme) : d.playlist,
+      playlistS: num(p.playlistS, 30, 600, d.playlistS),
+      fade: num(p.fade, 0, 10, d.fade),
     };
   }
 
@@ -110,6 +130,7 @@ export class Music {
     if (!e) return;
     e.mix = { ...this.prefs.mix };
     e.muted = new Set(this.prefs.muted);
+    e.solo = this.prefs.solo;
     e.seed = this.prefs.seed;
     e.applyMix();
   }
@@ -149,7 +170,14 @@ export class Music {
    */
   update(m: Moment | null, o: { context?: Context | null; intensity?: number; enabled?: boolean } = {}) {
     const e = this.ensure();
-    if (!e) return;
+    if (!e) {
+      // (no output — the sound off —: the themes let go, not left to fall behind and be caught up all at once
+      // when it is back; the theme asked starts again then)
+      this.engine?.halt();
+      this.wanted = null;
+      this.lastT = 0;
+      return;
+    }
     const now = e.ctx.currentTime;
     const dt = this.lastT ? Math.min(0.5, Math.max(0, now - this.lastT)) : 0;
     this.lastT = now;
@@ -182,13 +210,6 @@ export class Music {
     this.preview = id;
   }
 
-  /** The playlist's next (or previous) theme at once. */
-  skip(dir: 1 | -1) {
-    const list = this.prefs.playlist.length ? this.prefs.playlist : THEMES.map((t) => t.id);
-    this.listAt = (this.listAt + dir + list.length) % list.length;
-    this.listSince = this.lastT;
-  }
-
   state(): MusicState & { mode: MusicMode; moment: Moment | null; context: Context | null; preview: string | null } {
     const e = this.engine;
     const s = e
@@ -217,6 +238,3 @@ export class Music {
     return this.engine?.analyser ?? null;
   }
 }
-
-/** The moments, for the panel's assignments. */
-export const MOMENT_LIST = MOMENTS;
