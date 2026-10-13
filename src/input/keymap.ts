@@ -41,6 +41,7 @@ export type KeyAction =
   | "flaps"
   | "airBrake"
   | "jetSystem"
+  | "route"
   | "cineShot"
   | "gear"
   | "tars"
@@ -257,6 +258,11 @@ export const KEYMAP: KeySection[] = [
         bind: [fly("KeyB", "jetSystem", { arg: "stovl", shift: true })],
       },
       {
+        keys: "⇧N · ⇧O",
+        text: "A plane's flight plan: NAV — the autopilot flying it (LNAV the route, VNAV its altitudes and speeds; the stick takes them off) · the flight plan's panel: its waypoints edited on the map, its fuel, the bingo",
+        bind: [fly("KeyN", "jetSystem", { arg: "nav", shift: true }), fly("KeyO", "route", { shift: true })],
+      },
+      {
         keys: "I K · J L · H N",
         text: "RCS translation: down/up · left/right · forward/back",
         bind: [fly(["KeyI", "KeyJ", "KeyL", "KeyH", "KeyN"], "held"), fly("KeyK", "held", off)],
@@ -345,7 +351,7 @@ export const KEYMAP: KeySection[] = [
       {
         keys: "O",
         text: "The flight computer's MISSION tab, over the map: a destination, a transfer, a rendezvous, through the wormhole — PLAN, then EXECUTE",
-        bind: [fly("KeyO", "missions")],
+        bind: [fly("KeyO", "missions", { shift: false })],
       },
       {
         keys: "⌫ Backspace",

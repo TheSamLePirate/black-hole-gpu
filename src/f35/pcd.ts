@@ -69,6 +69,10 @@ export interface PcdData {
   ap: { alt: number | null; hdg: number | null; spd: number | null };
   /** the airfields near, the alerts the HUD gives (their texts, their levels) */
   fields: PcdField[];
+  /** the flight plan (game/flightplan.ts): its points, the active one, NAV engaged, to the active: distance [m],
+   *  time [s], cross-track [m]; the bingo [kg] (null: none planned) */
+  route: { wps: { name: string; lat: number; lon: number }[]; active: number; l: boolean; v: boolean; dist: number; ete: number; xtk: number } | null;
+  bingo: number | null;
   alerts: { text: string; level: "warning" | "caution" | "advisory" }[];
 }
 
@@ -210,9 +214,12 @@ export class Pcd {
     g.fillRect(x0, y0, x1 - x0, PCD_H - y0);
     const ap = d.ap;
     const on = (b: boolean, s: string) => [s, b ? C.green : C.dim] as const;
+    // (the flight plan's guidance: LNAV, VNAV in magenta — the route's colour)
+    const nl = !!d.route?.l && ap.hdg !== null,
+      nv = !!d.route?.v && ap.alt !== null;
     const row1: (readonly [string, string])[] = [
-      on(ap.alt !== null, ap.alt !== null ? `ALT ${Math.round(ap.alt * FT)}` : "ALT"),
-      on(ap.hdg !== null, ap.hdg !== null ? `HDG ${String(Math.round((((ap.hdg / D) % 360) + 360) % 360)).padStart(3, "0")}` : "HDG"),
+      nv ? [`VNAV ${Math.round(ap.alt! * FT)}`, C.magenta] : on(ap.alt !== null, ap.alt !== null ? `ALT ${Math.round(ap.alt * FT)}` : "ALT"),
+      nl ? ["LNAV", C.magenta] : on(ap.hdg !== null, ap.hdg !== null ? `HDG ${String(Math.round((((ap.hdg / D) % 360) + 360) % 360)).padStart(3, "0")}` : "HDG"),
       on(ap.spd !== null, ap.spd !== null ? `A/T ${Math.round(ap.spd * KT)}` : "A/T"),
       [d.stovl?.on ? (d.stovl.hover ? "HOVER" : "STOVL") : "CTOL", d.stovl?.on ? C.cyan : C.white],
     ];
@@ -336,6 +343,52 @@ export class Pcd {
       g.arc(x, y, 7, 0, 2 * Math.PI);
       g.stroke();
       this.text(f.icao ?? f.name.slice(0, 6), x + 14, y + 18, C.cyan, 22);
+    }
+    // the route: its legs (the active magenta), its points (diamonds, their names); the active's bearing,
+    // distance and time
+    const rt = d.route;
+    if (rt && rt.wps.length) {
+      const P = rt.wps.map((w) => where(w.lat, w.lon));
+      g.lineWidth = 3;
+      for (let i = 1; i < P.length; i++) {
+        g.strokeStyle = i === rt.active ? C.magenta : i < rt.active ? C.grey : C.white;
+        g.setLineDash(i < rt.active ? [8, 8] : []);
+        g.beginPath();
+        g.moveTo(P[i - 1]![0], P[i - 1]![1]);
+        g.lineTo(P[i]![0], P[i]![1]);
+        g.stroke();
+      }
+      g.setLineDash([]);
+      P.forEach(([x, y], i) => {
+        if (Math.abs(x - cx) > r.w || Math.abs(y - cy) > r.h * 1.4) return;
+        const col = i === rt.active ? C.magenta : C.white;
+        g.strokeStyle = col;
+        g.lineWidth = 3;
+        g.beginPath();
+        g.moveTo(x, y - 11);
+        g.lineTo(x + 11, y);
+        g.lineTo(x, y + 11);
+        g.lineTo(x - 11, y);
+        g.closePath();
+        g.stroke();
+        this.text(rt.wps[i]!.name, x + 16, y - 14, col, 22);
+      });
+      const w = rt.wps[rt.active];
+      if (w) {
+        const brg = (Math.atan2(
+          Math.sin((w.lon - d.lon) * D) * Math.cos(w.lat * D),
+          Math.cos(d.lat * D) * Math.sin(w.lat * D) - Math.sin(d.lat * D) * Math.cos(w.lat * D) * Math.cos((w.lon - d.lon) * D),
+        ) / D + 360) % 360;
+        const ete = Number.isFinite(rt.ete) ? `${Math.floor(rt.ete / 60)}:${String(Math.floor(rt.ete % 60)).padStart(2, "0")}` : "--:--";
+        this.text(
+          `${rt.l ? "LNAV" : "RTE"}${rt.v ? "/VNAV" : ""} ▸ ${w.name}  ${String(Math.round(brg)).padStart(3, "0")}°  ${(rt.dist / NM).toFixed(1)} NM  ${ete}`,
+          r.x + 16,
+          r.y + 58,
+          C.magenta,
+          24,
+        );
+        if (rt.l) this.text(`XTK ${(Math.abs(rt.xtk) / NM).toFixed(1)}${rt.xtk > 0 ? "R" : "L"}`, r.x + r.w - 16, r.y + 88, C.magenta, 22, "right");
+      }
     }
     // the ground track's line, the ownship
     g.strokeStyle = C.white;
@@ -494,11 +547,13 @@ export class Pcd {
     g.strokeStyle = C.frame;
     g.lineWidth = 3;
     g.strokeRect(x, y, w, h);
-    g.fillStyle = f < 0.2 ? C.yellow : C.green;
+    g.fillStyle = f < (d.bingo !== null && d.fuelFull > 0 ? d.bingo / d.fuelFull : 0.2) ? C.yellow : C.green;
     g.fillRect(x + 4, y + 4 + (h - 8) * (1 - f), w - 8, (h - 8) * f);
+    // (the bingo: the flight plan's when there is one — the fuel home with its reserve —, the joker 1 500 kg above it)
+    const bg = d.bingo !== null && d.fuelFull > 0 ? Math.min(d.bingo / d.fuelFull, 0.95) : 0.2;
     for (const [m, s] of [
-      [0.35, "JOKER"],
-      [0.2, "BINGO"],
+      [Math.min(bg + (d.bingo !== null ? 1500 / Math.max(d.fuelFull, 1) : 0.15), 0.98), "JOKER"],
+      [bg, "BINGO"],
     ] as const) {
       const yy = y + h * (1 - m);
       g.strokeStyle = C.magenta;

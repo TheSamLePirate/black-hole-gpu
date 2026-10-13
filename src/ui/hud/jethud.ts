@@ -34,6 +34,8 @@ export interface JetHudInfo {
   /** the F-35's helmet (its HMD: no head-up glass — the values boxed, no tapes): its fuel [kg] and full, its
    *  STOVL hover (the speed over the ground [m/s], the vertical speed held [m/s]) */
   hmd?: { fuel: number; full: number; hover: { gs: number; vz: number } | null; stovl: string | null };
+  /** the flight plan's active waypoint: its name, its distance [m], NAV engaged */
+  wp?: { name: string; dist: number; on: boolean } | null;
 }
 
 export type JetUnits = "aviation" | "metric";
@@ -254,6 +256,11 @@ export function drawJetHud(
     spd: (v) => `${Math.round(U.spd(v))}`,
   }).filter((a) => a !== "AB");
   if (ann.length) text(ann.join("   "), cx, o.top + (compact ? 30 : 100) * dpr, G(1), 13, "center", true);
+  // (the flight plan's active waypoint, magenta: its name, its distance)
+  if (J.wp) {
+    const d = aviation ? `${(J.wp.dist / 1852).toFixed(1)} NM` : `${(J.wp.dist / 1000).toFixed(1)} KM`;
+    text(`▸ ${J.wp.name}  ${d}`, cx, o.top + (compact ? 48 : 118) * dpr, J.wp.on ? "#ff4fd8" : G(0.7), 12, "center", true);
+  }
 
   // ---- the throttle, the afterburner (bottom left)
   const tx = compact ? 16 * dpr : cx - off - 66 * dpr,

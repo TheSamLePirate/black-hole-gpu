@@ -94,6 +94,18 @@ export function pcdData(
     liftMax: V.turbofan ? dryThrust(V.turbofan, e.mach, Math.max(e.sigma, 0)) * STOVL.boost : 0,
     ap: { alt: m.alt, hdg: m.hdg, spd: m.spd },
     fields: FIELDS,
+    route: c.nav.route.wps.length
+      ? {
+          wps: c.nav.route.wps,
+          active: c.nav.lnav?.active ?? 1,
+          l: c.nav.on.l,
+          v: c.nav.on.v,
+          dist: c.nav.last.l?.dist ?? NaN,
+          ete: c.nav.last.l?.ete ?? NaN,
+          xtk: c.nav.last.l?.xtk ?? 0,
+        }
+      : null,
+    bingo: c.routeBingo(),
     alerts,
   };
 }

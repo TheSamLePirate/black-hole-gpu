@@ -166,9 +166,9 @@ export function alertsOf(i: AlertInput): Alert[] {
   }
   const je = i.engine.jet;
   if (je) {
-    // (an aircraft's fuel: bingo at a fifth — enough to come back and land —, the engine out when none)
+    // (an aircraft's fuel: bingo — its flight plan's, the fuel home with its reserve; else a fifth —, the engine out when none)
     if (je.kg <= 0) add("fuel-empty", "warning", t("FLAMEOUT · NO FUEL"));
-    else if (je.kg < 0.2 * je.full) add("fuel-low", "caution", tf("BINGO FUEL · {0} kg", Math.round(je.kg)));
+    else if (je.kg < (je.bingo ?? 0.2 * je.full)) add("fuel-low", "caution", tf("BINGO FUEL · {0} kg", Math.round(je.kg)));
   } else if (fuel?.empty) add("fuel-empty", "warning", t("PROPELLANT EXHAUSTED"));
   else if (fuel && fuel.fraction < 0.1) add("fuel-low", "caution", tf("PROPELLANT LOW · {0} %", Math.round(fuel.fraction * 100)));
   // the hole

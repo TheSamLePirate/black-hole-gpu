@@ -634,6 +634,7 @@ export class GameTools {
         properTime: c.properTime,
         tunnelEntry: c.tunnelEntry ?? undefined,
         entrySite: c.entrySite?.name ?? null,
+        route: c.nav.route.wps.length ? structuredClone(c.nav.route) : null,
         // (waited for, or under way: what is left of it)
         entryPlan:
           c.entryRun && (c.entryRun.phase === "wait" || c.entryRun.phase === "burn")
@@ -711,6 +712,13 @@ export class GameTools {
     // none saved, none: the last flight's kept graded a Lander at Kennedy on its distance to Le Bourget)
     const site = save.ship.entrySite ? SITES.find((q) => q.name === save.ship.entrySite) : undefined;
     c.entrySite = site ?? null;
+    // (the flight plan: kept, its guidance off — engaged again by the pilot)
+    const rt = save.ship.route;
+    if (rt && Array.isArray(rt.wps)) {
+      c.nav.route = structuredClone(rt);
+      c.nav.on = { l: false, v: false };
+      c.routeChanged();
+    }
     c.entryResume = save.ship.entryPlan ?? null;
     // (the free camera falling freely: again, from its saved velocity)
     if (!s.ship && !!save.camera?.gravity !== c.gravity) {

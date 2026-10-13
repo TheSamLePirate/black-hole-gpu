@@ -49,6 +49,7 @@ import { installTelemetry } from "./controller/telemetry";
 import { PlanetCharacter } from "./controller/character";
 import { installSpectator } from "./controller/spectator";
 import { installJet } from "./controller/jet";
+import { installFplan, noNav, type NavState } from "./controller/fplan";
 import { installStovl, noStovl, type StovlState } from "./controller/stovl";
 import { CamShake } from "./camshake";
 import { installCine } from "./controller/cine";
@@ -950,6 +951,8 @@ export class CameraController {
   stovl: StovlState = noStovl();
   readonly jetAthr = new Autothrottle();
   jetCws = { pitch: false, roll: false, thr: Number.NaN };
+  /** a plane's flight plan and its guidance (game/flightplan.ts — controller/fplan.ts) */
+  nav: NavState = noNav();
 
   /** On the ground and rolling (our side): the body under the wheels. */
   rolling: { body: string } | null = null;
@@ -1298,6 +1301,7 @@ installJourney(CameraController);
 installTelemetry(CameraController);
 installSpectator(CameraController);
 installJet(CameraController);
+installFplan(CameraController);
 installStovl(CameraController);
 installCine(CameraController);
 installCamRig(CameraController);

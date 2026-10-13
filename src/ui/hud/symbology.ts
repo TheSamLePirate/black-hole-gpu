@@ -46,7 +46,9 @@ export interface SymInfo {
   /** the flight plan: its burns (coordinate times [M], Δ(γβ) [c]), the one burning, now [M] */
   plan?: { nodes: { t: number; dv: number[] }[]; burning?: boolean | number | null; now: number } | null;
   /** the engine: its full thrust [the scene's acceleration unit] */
-  engine?: { max: number; jet?: { kg: number; full: number } | null } | null;
+  engine?: { max: number; jet?: { kg: number; full: number; bingo?: number } | null } | null;
+  /** a plane's flight plan: the active waypoint (its bearing [° true], its distance [m]) */
+  nav?: { name: string; brg: number; dist: number; on: boolean } | null;
   /** the F-35B's STOVL mode (controller/telemetry.ts) */
   stovl?: { on: boolean; conv: number; swivel: number; hover: boolean; vz: number; heavy: boolean } | null;
   /** the docking: the ports' range, closing rate, angle; the guide (camera coordinates) */
@@ -366,6 +368,8 @@ export function drawSymbology(F: SymFrame) {
             ])
           : bearing(i.dirs.prograde);
       caret(bearing(i.dirs.target), COL.target!, true);
+      // (the flight plan's active waypoint: magenta, the route's colour)
+      caret(i.nav ? i.nav.brg : null, "#ff4fd8", true);
       caret(track, "#78ffaa", true);
       caret(bearing(nose), "#ffc85a", true);
       // the view's heading, boxed
@@ -468,6 +472,7 @@ export function drawSymbology(F: SymFrame) {
         vs: i.surface.vVert,
         throttle: jet.throttle,
         modes: jet.modes,
+        wp: i.nav ?? null,
         // (the F-35: its helmet's symbology — the values boxed, its fuel, its hover)
         hmd: i.engine?.jet
           ? {

@@ -140,6 +140,8 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
       if (Number.isFinite(f.hdg)) m.hdg = f.hdg;
     }
   }
+  // (the flight plan's guidance: the holds' targets — controller/fplan.ts)
+  this.navStep(inp, f);
   if (m.spd !== null) {
     // (the throttle keys: the speed selected)
     m.spd = Math.max(30, m.spd + inp.throttle * JET.spdRate * dt);

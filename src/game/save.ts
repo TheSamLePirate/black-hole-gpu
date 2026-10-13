@@ -8,6 +8,7 @@ import type { CharacterSave } from "../controller/character";
 // then checked; one of a newer version is refused. v2: the player's own settings (SETTING_KIND
 // "pref" — the budget, the display, the sound, the aids) are no longer in the save.
 
+import type { FlightPlan } from "./flightplan";
 import { defaultSettings, SETTING_KIND, settingKeys, type Settings } from "../settings";
 import { caught } from "../debug";
 import { store } from "../util/storage";
@@ -48,6 +49,8 @@ export interface GameSave {
     tunnelEntry?: "ours" | "gargantua";
     /** the site the entry autopilot flies to (its name; older saves: none — the nearest pass's) */
     entrySite?: string | null;
+    /** a plane's flight plan (game/flightplan.ts; PLAN-F35 F8) */
+    route?: FlightPlan | null;
     /** the deorbit planned and waited for (the entry frame's seconds): taken up again, not planned anew */
     entryPlan?: {
       tBurn: number;

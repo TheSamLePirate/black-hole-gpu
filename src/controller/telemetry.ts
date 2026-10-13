@@ -122,7 +122,7 @@ export interface FlightInfo {
   };
   /** the engine and the tank */
   /** (an aircraft's turbofan: `fuel` its tank's share — fraction, empty; `jet` its fuel [kg], full [kg]) */
-  engine: { kind: Settings["engine"]; max: number; fuel: ReturnType<typeof tank> | null; jet?: { kg: number; full: number } | null };
+  engine: { kind: Settings["engine"]; max: number; fuel: ReturnType<typeof tank> | null; jet?: { kg: number; full: number; bingo?: number } | null };
   speedMode: CameraController["speedMode"];
   precision: boolean;
   // ---- the map: position, velocity, nose and view (flat map: the hole's frame, or our home frame)
@@ -175,6 +175,8 @@ export interface FlightInfo {
   /** the jet's systems (plane mode, in the air — game/jet.ts): the altitude over the sea [m], the throttle,
    *  the modes engaged */
   jet: { alt: number; throttle: number; modes: JetModes } | null;
+  /** a plane's flight plan (controller/fplan.ts): the active waypoint's name, its bearing [° true], its distance [m], NAV engaged */
+  nav: { name: string; brg: number; dist: number; on: boolean } | null;
   /** the F-35B's STOVL mode (controller/stovl.ts): on, converted 0…1, the nozzle's swivel 0…1, the hover law
    *  flying, the vertical speed it holds [m/s], too heavy to hover */
   stovl: { on: boolean; conv: number; swivel: number; hover: boolean; vz: number; heavy: boolean } | null;
@@ -345,7 +347,13 @@ function flightInfo(this: CameraController): FlightInfo {
     jet: (() => {
       // (in the air, however it is flown: the Atmosphere HUD's figures — its modes engage in plane mode only)
       const f = this.jetFigures();
-      return f ? { alt: f.h, throttle: this.pilot.engineNow, modes: { ...this.jetModes } } : null;
+      return f ? { alt: f.h, throttle: this.pilot.engineNow, modes: { ...this.jetModes, lnav: this.nav.on.l, vnav: this.nav.on.v } } : null;
+    })(),
+    nav: (() => {
+      const N = this.nav,
+        o = N.last.l;
+      const w = o ? N.route.wps[o.active] : undefined;
+      return w && o ? { name: w.name, brg: (o.brg * 180) / Math.PI, dist: o.dist, on: N.on.l } : null;
     })(),
     entry: this.entryInfo(),
     stovl:
@@ -370,7 +378,8 @@ function flightInfo(this: CameraController): FlightInfo {
         kind: s.engine,
         max: this.thrustMax(),
         fuel: { budget: 0, left: 0, dvLeft: 0, fraction, empty: kg <= 0 },
-        jet: { kg, full },
+        // (the bingo: the flight plan's — the fuel home with its reserve —, else a fifth of full)
+        jet: { kg, full, bingo: this.routeBingo() ?? 0.2 * full },
       };
     })(),
     /** the selected target: distance (centre to centre, flat map) and range rate (> 0: receding) */
