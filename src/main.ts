@@ -172,7 +172,7 @@ import { TransportBar } from "./ui/transport";
 import { Take, type TakeState } from "./take";
 import { BODY_COLOURS, CameraPanel, fmtHeight, VIEW_HELP, VIEW_LABEL, VIEWS, type View } from "./ui/camerapanel";
 import { defaultAltKm, ourMouthPose, ourOrbitPose } from "./game/place";
-import { EPOCH_DATE, solarBody, solarState, M_METRES, utcOf } from "./system/solar";
+import { bodyAxes, EPOCH_DATE, solarBody, solarState, M_METRES, utcOf } from "./system/solar";
 import { plan } from "./system/plan-client";
 import { C_MPS, M_SECONDS } from "./units";
 import { mouth, setSceneTime } from "./wormhole";
@@ -4812,9 +4812,18 @@ async function main() {
       settings.fpsCap > 0 && !renderer.offlineActive && now - renderedAt < 1000 / settings.fpsCap - 0.25 * (renderer.refreshMs || 4);
     if (!capped) cpuProf.time("sky chart", () => updateChart());
     skyPanel.refresh();
-    // (the flown ship's ground, kept for its gear while the view is off the Earth — never a spectator's: what is
-    // streamed and drawn follows the camera; the streaming's lead, the camera's own motion: renderer.ts)
-    renderer.shipFocus = camera.piloting && !camera.character.active && !camera.spectating ? shipFocus() : null;
+    // (the flown ship's ground, kept for its gear — a spectator's too, the view gone thousands of km: the Moon's
+    // finer maps pinned, the Earth's tiles round it when the view is off the Earth. What is drawn on the Earth —
+    // tiles, surface, scenery, their shadows — follows the camera whenever it is there; the streaming's lead, the
+    // camera's own motion: renderer.ts)
+    renderer.shipFocus = camera.piloting && !camera.character.active ? shipFocus() : null;
+    const ridden = renderer.shipFocus?.body === "earth" && !camera.spectating ? camera.activePoseNow() : null;
+    if (ridden) {
+      const ground = groundVelocity("earth", ridden.X, sim.time);
+      renderer.carrierVelocity = bodyAxes(solarBody("earth")!, sim.time).map((a) =>
+        a.reduce((sum, v, i) => sum + v * (ridden.V[i]! - ground[i]!) * 299792458, 0),
+      ) as [number, number, number];
+    } else renderer.carrierVelocity = null;
     renderer.onFoot = camera.character.active;
     // (the rain where the view is: the spectator's camera away from the ship — in orbit, under another sky —
     // has its own, or none)

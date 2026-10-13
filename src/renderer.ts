@@ -502,6 +502,9 @@ export class Renderer {
   onFoot = false;
   /** the camera's velocity over the Earth's ground [m/s, on its axes] (the streaming's lead; null: off the Earth) */
   streamVelocity: Vec3 | null = null;
+  /** the velocity over the Earth's ground [m/s, on its axes] of what carries the camera — the flown ship, its
+   *  views riding with it (set by the app; null otherwise): the sim's own, true with the clock held */
+  carrierVelocity: Vec3 | null = null;
   /** the camera's last place on the Earth [its radii] and when [ms]: its velocity measured from frame to frame */
   private eyeTrack: { c: Vec3; at: number } | null = null;
   streamingState = { leadM: 0, lookAheadSeconds: 6 };
@@ -523,6 +526,8 @@ export class Renderer {
       last = this.eyeTrack,
       v = this.streamVelocity ?? ([0, 0, 0] as Vec3);
     this.eyeTrack = { c: [...eye], at: now };
+    // (riding with the ship: its velocity — a still image of a flight keeps its lead; measured, a held clock read 0)
+    if (this.carrierVelocity) return [...this.carrierVelocity] as Vec3;
     if (!last) return [0, 0, 0];
     const dt = (now - last.at) / 1000;
     if (dt <= 0) return v;
