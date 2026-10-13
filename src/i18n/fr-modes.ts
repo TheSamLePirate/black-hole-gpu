@@ -173,6 +173,8 @@ export default {
   STOPPED: "ARRÊTÉ",
   DONE: "TERMINÉ",
   "{0} exposures stacked": "{0} poses empilées",
+  "The capture failed: {0}": "La capture a échoué : {0}",
+  "A live capture is running: stop it first": "Une capture en direct est en cours : arrêtez-la d'abord",
   "Save the stack (PNG)": "Enregistrer l'empilement (PNG)",
   "Full-quality render": "Rendu pleine qualité",
   // the photo mode's renders and films (M8)

@@ -3321,6 +3321,8 @@ async function main() {
       }
       videoPreview.show(v);
     },
+    // (a live capture grabs the view each exposure: one user of the renderer's export at a time)
+    busy: () => (liveCapture.running ? t("A live capture is running: stop it first") : null),
   });
   const videoPreview = new VideoPreview({
     download: (b, name) => download(b, name),
@@ -3675,6 +3677,7 @@ async function main() {
     live: (o) => {
       const p = skyPlace();
       if (!p) return;
+      if (renderer.offlineActive || renderDialog.videoState()) return void panel.toast(t("A render is running"));
       const why = skyAim(p.lat, p.lon, { ms: o.times[0]!, az: o.az, alt: o.alt, fov: o.fov });
       if (why) return void panel.toast(why);
       // (the station: its streak since the last exposure, as a long exposure catches it — the scene does not draw it
@@ -5546,6 +5549,13 @@ async function main() {
   // flight HUD shows its own)
   for (const el of document.querySelectorAll<HTMLElement>("[data-tip]"))
     if (!el.getAttribute("aria-label")) el.setAttribute("aria-label", el.dataset.tip!);
+  // (a tip changed later — a mode's tab refused, its reason in it —: the name read out follows, where it was the tip)
+  new MutationObserver((ms) => {
+    for (const m of ms) {
+      const el = m.target as HTMLElement;
+      if (el.dataset.tip && el.getAttribute("aria-label") === m.oldValue) el.setAttribute("aria-label", el.dataset.tip);
+    }
+  }).observe(document.body, { subtree: true, attributeFilter: ["data-tip"], attributeOldValue: true });
   let tipEl: HTMLElement | null = null;
   // (clicked: no tip for that element until the pointer leaves it — a button redrawn under the
   // pointer, its label changed, would otherwise bring its tip back over what it opened)
