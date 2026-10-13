@@ -41,31 +41,59 @@ export interface ScoreInput {
 export const GARGANTUA_NEAR = 30;
 /** How long the lift-off's theme plays after the wheels leave the ground [s]. */
 export const LIFTOFF_S = 75;
+/** How long a moment holds at least once begun [s] (a graver one may still take over): each change of moment
+ *  builds a new track and crossfades — not to be done at every flicker of a threshold. */
+export const MOMENT_HOLD_S = 8;
+/** The moments, the gravest first (the order they are tested in). */
+const GRAVITY: Moment[] = ["wormhole", "entry", "final", "liftoff", "docking", "miller", "gargantua", "lowpass"];
 
-/** The moment the flight is in, or none. Remembers the lift-off's time. */
+/** The moment the flight is in, or none. Remembers the lift-off's time, the moment last given and since when. */
 export class ScoreDirector {
   private liftoffAt = -Infinity;
   private prevMode: string | null = null;
+  private last: Moment | null = null;
+  private since = -Infinity;
 
   reset() {
     this.liftoffAt = -Infinity;
     this.prevMode = null;
+    this.last = null;
+    this.since = -Infinity;
   }
 
   moment(i: ScoreInput): Moment | null {
     if (this.prevMode === "landed" && i.mode === "flight") this.liftoffAt = i.now;
     if (i.mode === "landed") this.liftoffAt = -Infinity;
     this.prevMode = i.mode;
-    if (i.mode !== "flight" && i.mode !== "landed" && i.mode !== "docked") return null;
+    if (i.mode !== "flight" && i.mode !== "landed" && i.mode !== "docked") {
+      this.last = null;
+      return null;
+    }
+    const was = this.last;
+    const raw = this.raw(i, was);
+    // (held a while once begun, unless a graver one comes)
+    const held = was !== null && i.now >= this.since && i.now - this.since < MOMENT_HOLD_S;
+    const m = raw !== was && held && (raw === null || GRAVITY.indexOf(raw) > GRAVITY.indexOf(was)) ? was : raw;
+    if (m !== was) {
+      this.last = m;
+      this.since = i.now;
+    }
+    return m;
+  }
+
+  /** The moment by the thresholds — a moment already playing left on wider ones than it is entered on
+   *  (hysteresis: no back and forth on the edge). */
+  private raw(i: ScoreInput, was: Moment | null): Moment | null {
     // (the gravest first: the throat, the plasma, the final, the lift-off, the docking; then the places)
     if (i.side === "throat") return "wormhole";
-    if (i.plasma > 0.15) return "entry";
-    if (i.final && i.agl < 3000) return "final";
+    if (i.plasma > (was === "entry" ? 0.08 : 0.15)) return "entry";
+    if (i.final && i.agl < (was === "final" ? 3500 : 3000)) return "final";
     if (i.now - this.liftoffAt < LIFTOFF_S) return "liftoff";
     if (i.docking) return "docking";
     if (i.side === "gargantua" && i.body === "miller") return "miller";
-    if (i.side === "gargantua" && i.r < GARGANTUA_NEAR) return "gargantua";
-    if (i.inAir && i.agl < 400 && (i.airspeed ?? 0) > 140) return "lowpass";
+    if (i.side === "gargantua" && i.r < GARGANTUA_NEAR * (was === "gargantua" ? 1.2 : 1)) return "gargantua";
+    const low = was === "lowpass";
+    if (i.inAir && i.agl < (low ? 600 : 400) && (i.airspeed ?? 0) > (low ? 115 : 140)) return "lowpass";
     return null;
   }
 
