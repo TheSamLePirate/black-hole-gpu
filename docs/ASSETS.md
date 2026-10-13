@@ -21,6 +21,7 @@ Each binary under `assets/` is the output of a script, from a source kept outsid
 | `assets/sky`, `assets/etoiles` | `scripts/build-sky.ts`, `scripts/build-constellations.ts` | NASA SVS Deep Star Maps, HYG |
 | `assets/ranger`, `assets/endurance`, `assets/lander` | `scripts/build-ranger.ts`, `build-endurance.ts`, `build-lander.ts`, `build-cockpit.ts` | the supplied models (git-ignored folders) |
 | `assets/iss` | `scripts/build-iss.py` (Blender) | NASA's ISS2.glb |
+| `assets/f35` | `scripts/build-f35.py` (Blender), `scripts/build-f35-maps.py` | the F-35 GLB ([README](../assets/f35/README.md), git-ignored `assets/airplanes/`) |
 | `assets/character` | `scripts/build-astronaut.ts` | the licensed astronaut ([README](../assets/character/README.md)) |
 
 `docs/img`, `docs/video` and `docs/perf` hold captures, the gallery's videos and the benchmark's
@@ -58,7 +59,7 @@ the site stays about twice one build.
 
 `.gitattributes` puts these in Git LFS (decided 13 October 2026): the regional surface packs
 (`assets/earth-surface/v1/**`: content-addressed, a rebuild writes new names), the licensed astronaut
-(`assets/character/*.ktx2`, `*.bin`), the docs' captures (`docs/img/**` png, jpg, webp) and the
+(`assets/character/*.ktx2`, `*.bin`), the F-35 (`assets/f35/*.ktx2`, `*.bin`: rebuilt as its parts grow), the docs' captures (`docs/img/**` png, jpg, webp) and the
 gallery's videos (`docs/video/*.mp4`). A rebuild of those no longer grows every clone: Git keeps a
 pointer, the object goes to GitHub's LFS store.
 

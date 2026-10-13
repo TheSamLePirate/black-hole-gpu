@@ -36,6 +36,7 @@ import { AU_M, C_MPS, G0 } from "../../units";
 import { store } from "../../util/storage";
 import { t, tf } from "../../i18n";
 import { el as h } from "../kit";
+import { VESSEL_IDS } from "../../vessels";
 
 /** What the computer needs from the flight (controls.ts). */
 export interface FcHost {
@@ -695,7 +696,7 @@ export class FlightComputer {
     requestAnimationFrame(() => list.querySelector(".fc-dest.on")?.scrollIntoView({ block: "nearest" }));
     // the arrival
     const dest = T.list.find((x) => x.id === M.target)!;
-    const craft = ["iss", "ranger", "lander", "endurance"].includes(dest.id);
+    const craft = dest.id === "iss" || (VESSEL_IDS as string[]).includes(dest.id);
     const fields: HTMLElement[] = [];
     let help = "";
     if (T.universe === "ours" && !craft && dest.id !== "wormhole") {

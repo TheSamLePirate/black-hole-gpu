@@ -131,6 +131,8 @@ export default {
   Endurance: "Endurance",
   "The Endurance (when another craft is flown): 800 km up at the start":
     "L'Endurance (quand un autre engin est piloté) : à 800 km d'altitude au départ",
+  "F-35B": "F-35B",
+  "The F-35B (when another craft is flown): where it was left": "Le F-35B (quand un autre engin est piloté) : là où on l'a laissé",
   "Field of view": "Champ de vision",
   "Vertical field of view, in the observer's rest frame: 45° is a 29 mm lens on a 35 mm frame, 1° a 1.4 m telephoto, 0.02° the telescope's narrowest (Alt + wheel; the telescope's wheel).":
     "Champ de vision vertical, dans le référentiel propre de l'observateur : 45° correspond à un 29 mm en format 35 mm, 1° à un téléobjectif de 1.4 m, 0.02° au plus étroit du télescope (Alt + molette ; la molette du télescope).",
@@ -795,14 +797,16 @@ export default {
   "Fly Interstellar's Ranger, the camera on one of its attach points. A real flight model: the ship follows the Kerr geodesic in the scene's time, its main engine and RCS give it a proper acceleration (Thrust, in Flight & gravity), its attitude has inertia (reaction wheels), with SAS, attitude holds and autopilots (hold position, circularize, approach the target). Flight data, attitude ball, map with the predicted free-fall path. The hull is lit by the light the tracer sees around the camera — the lensed disk, Gargantua, the sky — with a shadow from the dominant light. Shortcut: K (⇧K: next attach point); ? lists the flight keys. Model: “Interstellar Ranger One” by Max Vizell (Sketchfab), CC BY 4.0, modified.":
     "Pilotez le Ranger d'Interstellar, la caméra sur l'un de ses points de fixation. Un vrai modèle de vol : le vaisseau suit la géodésique de Kerr dans le temps de la scène, son moteur principal et ses RCS lui donnent une accélération propre (Poussée, dans Vol et gravité), son attitude a de l'inertie (roues de réaction), avec SAS, maintiens d'attitude et pilotes automatiques (maintien de position, circularisation, approche de la cible). Données de vol, boule d'attitude, carte avec la trajectoire de chute libre prédite. La coque est éclairée par la lumière que le traceur voit autour de la caméra — le disque lentillé, Gargantua, le ciel — avec l'ombre de la lumière dominante. Raccourci : K (⇧K : point de fixation suivant) ; ? liste les touches de vol. Modèle : « Interstellar Ranger One » par Max Vizell (Sketchfab), CC BY 4.0, modifié.",
   Craft: "Engin",
-  "The craft flown ([ and ] in flight). The others coast on Kepler orbits where they were left, or stay docked: docked craft fly together — the one flown pushes the others, their masses added. Lander: “Endurance Lander from Interstellar” by Crusty Bread (Sketchfab), CC BY 4.0, modified. Endurance: “Interstellar | Endurance” by devPilot (Sketchfab), CC BY 4.0, modified.":
-    "L'engin piloté ([ et ] en vol). Les autres dérivent sur des orbites de Kepler là où on les a laissés, ou restent amarrés : les engins amarrés volent ensemble — celui qu'on pilote pousse les autres, leurs masses additionnées. Lander : « Endurance Lander from Interstellar » par Crusty Bread (Sketchfab), CC BY 4.0, modifié. Endurance : « Interstellar | Endurance » par devPilot (Sketchfab), CC BY 4.0, modifié.",
+  "The craft flown ([ and ] in flight). The others coast on Kepler orbits where they were left, or stay docked: docked craft fly together — the one flown pushes the others, their masses added. Lander: “Endurance Lander from Interstellar” by Crusty Bread (Sketchfab), CC BY 4.0, modified. Endurance: “Interstellar | Endurance” by devPilot (Sketchfab), CC BY 4.0, modified. F-35B: “F-35A Lightning II” by shangus930 (Sketchfab), CC BY 4.0, modified.":
+    "L'engin piloté ([ et ] en vol). Les autres dérivent sur des orbites de Kepler là où on les a laissés, ou restent amarrés : les engins amarrés volent ensemble — celui qu'on pilote pousse les autres, leurs masses additionnées. Lander : « Endurance Lander from Interstellar » par Crusty Bread (Sketchfab), CC BY 4.0, modifié. Endurance : « Interstellar | Endurance » par devPilot (Sketchfab), CC BY 4.0, modifié. F-35B : « F-35A Lightning II » par shangus930 (Sketchfab), CC BY 4.0, modifié.",
   "The Ranger: 40 t, the agile one — lands, docks by its rear hatch":
     "Le Ranger : 40 t, l'agile — se pose, s'amarre par son écoutille arrière",
   "The Lander: 160 t, heavy-lift, lands — docks by its dorsal hatch; 500 km up at the start":
     "Le Lander : 160 t, transport lourd, se pose — s'amarre par son écoutille dorsale ; à 500 km d'altitude au départ",
   "The Endurance: 900 t, the ring ship — docks by its hub's ends, never lands; 800 km up at the start":
     "L'Endurance : 900 t, le vaisseau-anneau — s'amarre par les extrémités de son moyeu, ne se pose jamais ; à 800 km d'altitude au départ",
+  "The F-35B Lightning II: 20 t, a fighter for the Earth's air — chosen, it waits lined up on the nearest runway":
+    "Le F-35B Lightning II : 20 t, un chasseur pour l'air de la Terre — choisi, il attend aligné sur la piste la plus proche",
   "Where the camera is fixed on the hull.": "Où la caméra est fixée sur la coque.",
   "Cockpit, the pilot's seat": "Cockpit, le siège du pilote",
   "Cabin, free — the keys move about it": "Cabine, libre — les touches s'y déplacent",

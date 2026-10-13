@@ -71,7 +71,7 @@ export const OUR_TARGETS: OurBody[] = [
 ];
 /** "iss": the International Space Station, on its real orbit around the Earth (system/iss.ts); "ranger",
  *  "lander", "endurance": the fleet's craft not flown (fleet.ts) */
-export type Target = "hole" | "star" | "wormhole" | "barycentre" | SystemBody | OurBody | "iss" | "ranger" | "lander" | "endurance";
+export type Target = "hole" | "star" | "wormhole" | "barycentre" | SystemBody | OurBody | "iss" | "ranger" | "lander" | "endurance" | "f35";
 export type RenderMode = "physical" | "redshift" | "temperature" | "order" | "steps";
 export type ShiftMode = "full" | "gravitational" | "noBeaming" | "none";
 export type Background = "real" | "stars" | "alien" | "checker" | "image";
@@ -366,7 +366,7 @@ export interface Settings {
   // the spaceship carrying the camera (Interstellar's Ranger)
   ship: boolean;
   /** the craft flown (vessels.ts): the Ranger, the Lander, the Endurance */
-  vessel: "ranger" | "lander" | "endurance";
+  vessel: "ranger" | "lander" | "endurance" | "f35";
   shipMount: string; // attach point of the camera (ship.ts MOUNTS)
   camSoft: "off" | "chase" | "hull"; // the hull views softened (controller/camrig.ts): none, the chase and the dorsal, every outside attach point on the hull
   camBinding: "lockToTarget" | "lockNoRoll" | "worldUp" | "world"; // how the softened view's offset turns with the craft (Cinemachine's binding modes)

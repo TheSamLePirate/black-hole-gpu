@@ -22,7 +22,7 @@ import { BODY_NAMES, type Body } from "../targeting";
 import { AMBER, CYAN, FONT, OUR_COLOURS } from "./hudkit";
 import { fleet } from "../fleet";
 import { keplerProp } from "../system/our-plan";
-import { VESSELS } from "../vessels";
+import { VESSEL_IDS, VESSELS } from "../vessels";
 import { siteDir, sitesOf } from "../game/sites";
 import { BodyKind, MapGpu, type GpuBody, type MapTextures } from "./map3d/gpu";
 import { Paint } from "./map3d/paint";
@@ -373,7 +373,7 @@ export class GroundTrack {
   private craftTracks(t: number) {
     const out: NonNullable<Scene["crafts"]> = [];
     const mu = solarBody("earth")!.mass;
-    for (const id of ["ranger", "lander", "endurance"] as const) {
+    for (const id of VESSEL_IDS) {
       if (fleet.activePose?.() && fleet.flownAssembly().includes(id)) continue;
       const p = fleet.pose(id, t);
       if (!p) continue;

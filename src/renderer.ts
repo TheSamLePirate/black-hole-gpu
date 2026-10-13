@@ -3837,6 +3837,7 @@ export class Renderer {
             dash: this.cockpitDash ?? undefined,
             controls: this.cockpitControls ?? undefined,
             gear: this.shipGear ?? undefined,
+            jet: s.vessel === "f35" ? this.jetPose : null,
             cabin: lampsOf(s, this.cockpitGlow),
             lamps: { navLights: s.navLights, strobeLights: s.strobeLights, landingLights: s.landingLights, t: performance.now() / 1000 },
             mount: this.shipPose ?? (s.shipMount as Mount),
@@ -3969,6 +3970,8 @@ export class Renderer {
   cockpitControls: Float32Array<ArrayBuffer> | null = null;
   /** the Ranger's landing gear: out (0…1), each leg's oleo compression [m] (set each frame by main.ts) */
   shipGear: { ext: number; comp: number[] } | null = null;
+  /** the flown F-35's moving parts (src/f35/pose.ts) */
+  jetPose: import("./f35/model").F35Pose | null = null;
   /** the cockpit's displays' mean colours (cockpit/lights.ts displayColours): the screens' light in the cabin */
   cockpitGlow: Float32Array | null = null;
 
@@ -4806,6 +4809,7 @@ export class Renderer {
     this.cockpitDash = old.cockpitDash;
     this.cockpitControls = old.cockpitControls;
     this.shipGear = old.shipGear;
+    this.jetPose = old.jetPose;
     this.prof.enabled = old.prof.enabled;
     this.water = { ...old.water };
     this.weatherReal = old.weatherReal;

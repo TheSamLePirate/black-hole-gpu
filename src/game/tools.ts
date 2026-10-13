@@ -237,6 +237,54 @@ export class GameTools {
   }
 
   /**
+   * Lined up on a runway of the Earth, `alongM` past its threshold, its nose down the runway in use (into
+   * the wind), at rest on its gear — a take-off's start (the F-35's: docs/PLAN-F35.md). `name` matched as
+   * glideTo's; none: the runway nearest the flown craft (Edwards when it is not near the Earth).
+   */
+  lineUp(name?: string, alongM = 60) {
+    const runways = SITES.filter((q) => q.body === "earth" && q.runway);
+    const t = this.ctx.time();
+    let found = name ? runways.find((q) => q.name.toLowerCase().includes(name.toLowerCase())) : undefined;
+    if (name && !found) throw new Error(`no runway "${name}" — ${runways.map((q) => q.name).join(", ")}`);
+    if (!found) {
+      const here = fleet.pose(fleet.active, t)?.X;
+      const E = solarState("earth", t).pos;
+      const near = here && Math.hypot(here[0] - E[0], here[1] - E[1], here[2] - E[2]) * M_METRES < 2e7;
+      found = runways.find((q) => q.name.startsWith("Edwards"))!;
+      if (near) {
+        let best = Infinity;
+        for (const q of runways) {
+          const P = fromBodyFixed("earth", bodyFixedOf("earth", q.lat, q.lon, 0), t);
+          const d = Math.hypot(P[0] - here![0], P[1] - here![1], P[2] - here![2]);
+          if (d < best) (best = d), (found = q);
+        }
+      }
+    }
+    const site = this.ctx.camera.runwayInUse(found);
+    // (a point along the runway: its threshold moved alongM down its heading — metres on the sphere, close
+    // enough over a hundred metres)
+    const D = Math.PI / 180;
+    const R = 6.371e6;
+    const h = (site.rwy ?? 0) * D;
+    const at = (m: number): [number, number] => [
+      site.lat + (m * Math.cos(h)) / R / D,
+      site.lon + (m * Math.sin(h)) / (R * Math.cos(site.lat * D)) / D,
+    ];
+    const [lat, lon] = at(alongM);
+    const g = ourGroundPose("earth", lat, lon, t);
+    const ahead = fromBodyFixed("earth", bodyFixedOf("earth", ...at(alongM + 200), 0), t);
+    const d: V3 = [ahead[0] - g.X[0], ahead[1] - g.X[1], ahead[2] - g.X[2]];
+    const k = d[0] * g.up[0] + d[1] * g.up[1] + d[2] * g.up[2];
+    const f: V3 = [d[0] - k * g.up[0], d[1] - k * g.up[1], d[2] - k * g.up[2]];
+    const l = Math.hypot(...f) || 1;
+    return this.placeAt({
+      ...g,
+      fwd: [f[0] / l, f[1] / l, f[2] / l],
+      note: `${site.name}: lined up, runway ${Math.round((site.rwy ?? 0) / 10)}`,
+    });
+  }
+
+  /**
    * On a site's approach (our worlds): `distKm` before its runway's threshold on the runway's line (or
    * north of a pad), `altKm` up, flying towards it at `speed` m/s — the entry autopilot's glide takes
    * it from there (the practice of the last minutes of an entry). `o.acrossKm` puts it off the runway's

@@ -17,6 +17,7 @@ import { M_METRES, seenFrom, solarBody, SOLAR_BODIES } from "./system/solar";
 import { issTrack } from "./system/iss";
 import { fleet } from "./fleet";
 import { vesselHulls } from "./system/collide";
+import { VESSEL_IDS, type VesselId } from "./vessels";
 import { GARGANTUA_SYSTEM, body as sysBody } from "./system/bodies";
 import { bodyTrack } from "./system/ephemeris";
 import { cameraRay, zamoToCamera } from "./shadow";
@@ -41,6 +42,7 @@ export const BODY_NAMES: Record<Body, string> = Object.fromEntries(
     ranger: "Ranger",
     lander: "Lander",
     endurance: "Endurance",
+    f35: "F-35B",
     ...(Object.fromEntries(SOLAR_BODIES.map((b) => [b.id, b.name])) as Record<OurBody, string>),
   }).map(([k, v]) => [k, t(v)]),
 ) as Record<Body, string>;
@@ -49,15 +51,15 @@ const isSystem = (b: Body): b is SystemBody => (SYSTEM_BODIES as string[]).inclu
 /** A body of our universe (the solar system, beyond our end of the wormhole) */
 export const isOurBody = (b: Body): b is OurBody => (OUR_TARGETS as string[]).includes(b);
 /** One of the fleet's craft (fleet.ts) */
-export const isCraft = (b: Body): b is "ranger" | "lander" | "endurance" => b === "ranger" || b === "lander" || b === "endurance";
+export const isCraft = (b: Body): b is VesselId => (VESSEL_IDS as string[]).includes(b);
 /** A target of our universe: a body of the solar system, the space station, a craft of the fleet */
 export const isOurs = (b: Body) => isOurBody(b) || b === "iss" || isCraft(b);
 /** A craft's half-size, for framing and picking [m] (its hull's sphere; before its mesh loads, a guess) */
-export const craftRadius = (b: "ranger" | "lander" | "endurance") => vesselHulls[b].radius || { ranger: 10, lander: 16, endurance: 40 }[b];
+export const craftRadius = (b: VesselId) => vesselHulls[b].radius || { ranger: 10, lander: 16, endurance: 40, f35: 9 }[b];
 /** The craft that can be targeted: the fleet's, but the one flown (and those docked to it) */
 export function targetCrafts(s: Settings): Body[] {
   const mine = s.ship ? fleet.assembly(fleet.active) : [];
-  return (["ranger", "lander", "endurance"] as Body[]).filter((v) => !mine.includes(v as never) && !(s.ship && v === fleet.active));
+  return (VESSEL_IDS as Body[]).filter((v) => !mine.includes(v as never) && !(s.ship && v === fleet.active));
 }
 /** The space station's half-span, for framing and picking [m] */
 export const ISS_RADIUS_M = 55;

@@ -82,8 +82,10 @@ struct Ship {
   lamp: array<vec4f, 24>,
 };
 
-// A craft drawn: craft → camera frame, then its kind (0 Ranger, 1 Lander, 2 Endurance), in the shadow map
-// (1), hidden by what the traced image holds nearer (1: the craft not flown)
+// A craft drawn: craft → camera frame, then its kind (0 Ranger, 1 Lander, 2 Endurance, 3 F-35), in the shadow
+// map (1), hidden by what the traced image holds nearer (1: the craft not flown), and — an F-35 — where its
+// parts' maps start in this same array (src/f35/model.ts: one record a part, its map in the first three
+// columns of `model`, the translation in the fourth)
 struct Inst {
   model: mat4x4f,
   flags: vec4f,
@@ -254,6 +256,11 @@ fn envSH(@builtin(local_invocation_id) lid: vec3u) {
 @group(0) @binding(14) var normalMap: texture_2d<f32>; // its tangent-space normals (v down the image)
 @group(0) @binding(15) var lightsMap: texture_2d<f32>; // its lights' emission
 @group(0) @binding(16) var mapSamp: sampler;
+// the F-35's maps (scripts/build-f35-maps.py): two layers — the airframe's paint, the atlas of the rest —
+// of colour (sRGB; alpha: the glass's cover), normals, metal-roughness (glTF's: g roughness, b metalness)
+@group(0) @binding(22) var jetAlbedo: texture_2d_array<f32>;
+@group(0) @binding(23) var jetNormal: texture_2d_array<f32>;
+@group(0) @binding(24) var jetMr: texture_2d_array<f32>;
 @group(1) @binding(0) var stationDepth: texture_2d<f32>; // the station's box: distance [m], coverage
 
 struct VIn {
@@ -331,6 +338,18 @@ fn stickPos(v: VIn) -> vec3f {
   return v.pos;
 }
 
+// ---- the F-35 (docs/PLAN-F35.md): its materials 30–34 (30 the airframe's layer, 31 the atlas's, 32 the
+// canopy's glass, 33 the lights, 34 the visor), each vertex's part in the integer of its AO; the part's map
+// (its control surface on its hinge, its gear leg on its track…) an instance record after the craft's
+fn isJet(m: f32) -> bool { return m > 29.5 && m < 39.5; }
+fn jetMap(v: VIn, ii: u32) -> mat4x4f { return inst[u32(inst[ii].flags.w + 0.5) + u32(v.ao)].model; }
+/** A vertex where it is drawn, in its craft's frame (the F-35's parts posed; the Ranger's gear and sticks). */
+fn shipPos(v: VIn, ii: u32) -> vec3f {
+  if (isJet(v.mat)) { return (jetMap(v, ii) * vec4f(v.pos, 1.0)).xyz; }
+  return stickPos(v);
+}
+fn jetAo(v: VIn) -> f32 { return select(v.ao, fract(v.ao), isJet(v.mat)); }
+
 // the cockpit's controls (cockpit/controls.ts: material 73 — the control's index in uv.x, its part in
 // uv.y: 0 the base, still; 1 the arm, 2 the knob, 3 the lit cap, moving): per control its moving part's
 // pivot and angle, the axis it turns about, a push, the lamp's light and the hover
@@ -382,7 +401,7 @@ struct DOut { @builtin(position) @invariant clip: vec4f };
 @vertex
 fn depthVs(v: VIn, @builtin(instance_index) ii: u32) -> DOut {
   var o: DOut;
-  o.clip = project((inst[ii].model * vec4f(stickPos(v), 1.0)).xyz);
+  o.clip = project((inst[ii].model * vec4f(shipPos(v, ii), 1.0)).xyz);
   if (abs(v.mat - 71.0) < 0.5) { o.clip = vec4f(2.0, 2.0, 2.0, 1.0); }
   return o;
 }
@@ -391,15 +410,16 @@ fn depthVs(v: VIn, @builtin(instance_index) ii: u32) -> DOut {
 fn vs(v: VIn, @builtin(instance_index) ii: u32) -> VOut {
   var o: VOut;
   let M = inst[ii].model;
-  let pos = stickPos(v);
+  let pos = shipPos(v, ii);
   var nrm = v.nrm;
   if (abs(v.mat - 72.0) < 0.5) { nrm = stickRot(S.ctl.xyz) * v.nrm; }
+  if (isJet(v.mat)) { nrm = (jetMap(v, ii) * vec4f(v.nrm, 0.0)).xyz; }
   let p = (M * vec4f(pos, 1.0)).xyz;
   o.p = p;
   o.clip = project(p);
   o.n = (M * vec4f(nrm, 0.0)).xyz;
   o.mat = v.mat;
-  o.ao = v.ao;
+  o.ao = jetAo(v);
   o.q = pos;
   o.qn = nrm;
   o.uv = v.uv;
@@ -426,7 +446,8 @@ fn lightClip(p: vec3f) -> vec3f {
 fn shadowVs(v: VIn, @builtin(instance_index) ii: u32) -> @builtin(position) vec4f {
   // (the cockpit's glass lets the light in: out of the map)
   if (abs(v.mat - 71.0) < 0.5) { return vec4f(2.0, 2.0, 2.0, 1.0); }
-  return vec4f(lightClip((inst[ii].model * vec4f(v.pos, 1.0)).xyz), 1.0);
+  let q = select(v.pos, (jetMap(v, ii) * vec4f(v.pos, 1.0)).xyz, isJet(v.mat));
+  return vec4f(lightClip((inst[ii].model * vec4f(q, 1.0)).xyz), 1.0);
 }
 
 fn irradiance(n: vec3f) -> vec3f {
@@ -678,6 +699,25 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
       coat = 0.35 * coat;
       emit = textureSampleGrad(lightsMap, mapSamp, in.uv, duvx, duvy).rgb;
     }
+    // the F-35: its painted maps (the airframe's layer, the atlas's), normals by the same cotangent frame
+    // as the Lander's, glTF's metal-roughness; no varnish (its coating is matte); the lights glow
+    case 30u, 31u, 33u: {
+      let layer = select(1, 0, part == 30u);
+      albedo = textureSampleGrad(jetAlbedo, mapSamp, in.uv, layer, duvx, duvy).rgb;
+      var tn = textureSampleGrad(jetNormal, mapSamp, in.uv, layer, duvx, duvy).xyz * 2.0 - 1.0;
+      tn.y = -tn.y;
+      let d2 = cross(dpy, ng);
+      let d1 = cross(ng, dpx);
+      let T = d2 * duvx.x + d1 * duvy.x;
+      let B = d2 * duvx.y + d1 * duvy.y;
+      let im = inverseSqrt(max(max(dot(T, T), dot(B, B)), 1e-30));
+      n = normalize(T * im * tn.x + B * im * tn.y + ng * max(tn.z, 0.05));
+      let mr = textureSampleGrad(jetMr, mapSamp, in.uv, layer, duvx, duvy);
+      rough = max(mr.g, 0.12);
+      metal = mr.b;
+      coat = 0.0;
+      if (part == 33u) { emit = albedo * 1.5; }
+    }
     // the Endurance's parts (as endurance.wgsl): metal, non-metal panels, glass, tiles, lights, interior,
     // the rolling shuttle
     case 20u: { albedo = vec3f(0.72) * (1.0 - 0.18 * grime); metal = 1.0; rough = 0.38 + 0.12 * grime; coat = 0.0; }
@@ -809,6 +849,9 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
 // behind it). Main engines: a blue-white core, hottest at the exit, a wide faint halo; in vacuum
 // long and flaring, in air narrow with shock diamonds. Attitude thrusters: short white puffs.
 
+/** The flown craft's vertex (instance 0): the F-35's parts posed. */
+fn flownPos(v: VIn) -> vec3f { return select(v.pos, (jetMap(v, 0u) * vec4f(v.pos, 1.0)).xyz, isJet(v.mat)); }
+
 /** The tracer's pinhole over the whole image (the plumes' half-resolution pass), with a depth. */
 fn projectFull(p: vec3f) -> vec4f {
   let near = S.proj.z;
@@ -819,7 +862,7 @@ fn projectFull(p: vec3f) -> vec4f {
 // the hull's depth alone, at the plumes' resolution: what hides them
 @vertex
 fn hullDepthVs(v: VIn) -> @builtin(position) @invariant vec4f {
-  return projectFull((S.model * vec4f(v.pos, 1.0)).xyz);
+  return projectFull((S.model * vec4f(flownPos(v), 1.0)).xyz);
 }
 
 @fragment
@@ -980,9 +1023,10 @@ struct GOut {
 @vertex
 fn glowVs(v: VIn) -> GOut {
   var o: GOut;
-  o.clip = projectFull((S.model * vec4f(v.pos, 1.0)).xyz);
-  o.n = v.nrm;
-  o.q = v.pos;
+  let q = flownPos(v);
+  o.clip = projectFull((S.model * vec4f(q, 1.0)).xyz);
+  o.n = select(v.nrm, (jetMap(v, 0u) * vec4f(v.nrm, 0.0)).xyz, isJet(v.mat));
+  o.q = q;
   return o;
 }
 
@@ -1008,7 +1052,7 @@ struct DistOut {
 @vertex
 fn distVs(v: VIn) -> DistOut {
   var o: DistOut;
-  o.p = (S.model * vec4f(v.pos, 1.0)).xyz;
+  o.p = (S.model * vec4f(flownPos(v), 1.0)).xyz;
   o.clip = projectFull(o.p);
   return o;
 }
@@ -1556,4 +1600,33 @@ fn cabinShade(in: VOut, front: bool, glassPass: bool) -> vec4f {
   if (pl > 0.0) { cl += kd * S.re2.rgb * (pl * pl * 2.4 * sky * ao * (0.85 + 0.15 * sin(S.re5.w * 23.0 + in.p.x))); }
   let o = col * S.light.x + (emit * 2.0 + cl) * S.jet.y;
   return vec4f(o / (1.0 + dot(o, vec3f(0.2126, 0.7152, 0.0722))), 1.0);
+}
+
+// ------------------------------------------------------------------------------------ the F-35's glass
+// The canopy and the helmet's visor (materials 32, 34), over what the opaque draws left: premultiplied, both
+// faces, their depth not written. The canopy's gold film (its map's colour) tints what is seen through it and
+// covers it by its map's alpha; its faces reflect the sky — the traced image where it holds the direction,
+// the probe elsewhere — by their Fresnel, and the key light's highlight.
+@fragment
+fn fsJetGlass(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
+  let base = textureSample(jetAlbedo, mapSamp, in.uv, 1);
+  let part = u32(in.mat + 0.5);
+  if (part != 32u && part != 34u) { discard; }
+  let gn = normalize(in.n) * select(-1.0, 1.0, front);
+  let gv = normalize(-in.p);
+  let gnv = clamp(dot(gn, gv), 1e-4, 1.0);
+  let F = 0.04 + 0.96 * pow(1.0 - gnv, 5.0);
+  let r = reflect(-gv, gn);
+  let sr = screenRefl(r, 0.0004);
+  var refl = mix(envSpec(r, 0.02), sr.rgb, sr.w);
+  if (sh[11].w > 0.5) {
+    let l = fromProbe(sh[9].xyz);
+    let hv = normalize(l + gv);
+    refl += sh[11].rgb * pow(clamp(dot(gn, hv), 0.0, 1.0), 800.0) * 40.0 * (1.0 - inFrame(l));
+  }
+  // (the cover: the film's, more at grazing angles; the visor dark)
+  let cover = clamp(select(base.a * 0.9, 0.75, part == 34u) + 0.6 * F, 0.0, 0.97);
+  let tint = select(base.rgb, vec3f(0.01), part == 34u) * irradiance(gn) / PI * 0.35;
+  let o = (refl * F + tint * (1.0 - F)) * S.light.x;
+  return vec4f(o / (1.0 + dot(o, vec3f(0.2126, 0.7152, 0.0722))), cover);
 }

@@ -178,6 +178,7 @@ export const SCHEMA: ControlDef[] = [
       { value: "ranger", label: "Ranger", hint: "The Ranger (when another craft is flown)" },
       { value: "lander", label: "Lander", hint: "The Lander (when another craft is flown): 500 km up at the start" },
       { value: "endurance", label: "Endurance", hint: "The Endurance (when another craft is flown): 800 km up at the start" },
+      { value: "f35", label: "F-35B", hint: "The F-35B (when another craft is flown): where it was left" },
     ],
     help: "The body the camera orbits and aims at (Tab cycles, a click on its image selects it — even a lensed secondary image). Orbiting the star follows it along its orbit, co-moving: the camera takes the star's velocity, so the star shows no Doppler shift.",
     keywords: "select body pivot focus star hole wormhole follow",
@@ -2379,8 +2380,13 @@ export const SCHEMA: ControlDef[] = [
         label: "Endurance",
         hint: "The Endurance: 900 t, the ring ship — docks by its hub's ends, never lands; 800 km up at the start",
       },
+      {
+        value: "f35",
+        label: "F-35B",
+        hint: "The F-35B Lightning II: 20 t, a fighter for the Earth's air — chosen, it waits lined up on the nearest runway",
+      },
     ],
-    help: "The craft flown ([ and ] in flight). The others coast on Kepler orbits where they were left, or stay docked: docked craft fly together — the one flown pushes the others, their masses added. Lander: “Endurance Lander from Interstellar” by Crusty Bread (Sketchfab), CC BY 4.0, modified. Endurance: “Interstellar | Endurance” by devPilot (Sketchfab), CC BY 4.0, modified.",
+    help: "The craft flown ([ and ] in flight). The others coast on Kepler orbits where they were left, or stay docked: docked craft fly together — the one flown pushes the others, their masses added. Lander: “Endurance Lander from Interstellar” by Crusty Bread (Sketchfab), CC BY 4.0, modified. Endurance: “Interstellar | Endurance” by devPilot (Sketchfab), CC BY 4.0, modified. F-35B: “F-35A Lightning II” by shangus930 (Sketchfab), CC BY 4.0, modified.",
     keywords: "vessel craft ranger lander endurance switch fleet ship",
   },
   {

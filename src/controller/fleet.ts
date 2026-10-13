@@ -5,7 +5,7 @@ import type { Vec3 } from "../physics";
 import { type Body, onOurSide } from "../targeting";
 import { mountPose, setMountVessel, shipToCamera } from "../mounts";
 import { fleet, type Pose } from "../fleet";
-import { dockedFrame, VESSELS, type VesselId } from "../vessels";
+import { dockedFrame, VESSEL_IDS, VESSELS, type VesselId } from "../vessels";
 import { mouth } from "../wormhole";
 import { repToHomeVec } from "../system/our-side";
 import { cockpitHull } from "../system/collide";
@@ -154,6 +154,25 @@ function switchVessel(this: CameraController, id: VesselId): string | null {
   if (!nav) return tf("The other craft are near the Earth — in our solar system");
   const t = nav.t;
   const to = fleet.pose(id, t);
+  // (the F-35 is where it is flown: chosen, it is put on a runway — the nearest — by the page's hook)
+  if (!to && id === "f35" && this.onJetStart) {
+    const old = fleet.active;
+    for (const v of fleet.assembly(old)) if (v !== "iss") delete fleet.free[v];
+    fleet.links = fleet.links.filter((l) => l.a !== old && l.b !== old);
+    fleet.active = id;
+    s.vessel = id;
+    setMountVessel(id);
+    this.onJetStart();
+    this.pilot.auto = "none";
+    this.pilot.hold = "none";
+    this.pilot.throttle = 0;
+    this.pilot.omega = [0, 0, 0];
+    s.flightMode = "plane";
+    this.outside.dist = VESSELS[id].viewDist;
+    this.settleMount();
+    this.onPilotMessage?.(tf("Flying the {0}", VESSELS[id].name));
+    return null;
+  }
   if (!to) return tf("{0}: not found", VESSELS[id].name);
   const old = fleet.active;
   const me = this.activePoseNow();
@@ -171,7 +190,7 @@ function switchVessel(this: CameraController, id: VesselId): string | null {
   this.pilot.throttle = 0;
   this.pilot.omega = [0, 0, 0];
   // (its own way of flying the air: the Ranger as a plane, the Lander as a rocket)
-  s.flightMode = id === "ranger" ? "plane" : "rocket";
+  s.flightMode = id === "ranger" || id === "f35" ? "plane" : "rocket";
   this.sfCmd = null;
   this.plan = { nodes: [], path: null, at: 0, note: "" };
   this.issGoal = null;
@@ -230,7 +249,7 @@ function placeNearPort(this: CameraController, target: VesselId, distM: number, 
 function cycleVessel(this: CameraController, dir: 1 | -1) {
   // (another craft flown: the view back with it)
   this.stopSpectator();
-  const ids: VesselId[] = ["ranger", "lander", "endurance"];
+  const ids: VesselId[] = VESSEL_IDS;
   const i = ids.indexOf(fleet.active);
   this.s.vessel = ids[(i + dir + ids.length) % ids.length]!;
   return this.s.vessel;

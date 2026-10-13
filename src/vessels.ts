@@ -1,5 +1,5 @@
-// The spacecraft the player flies: Interstellar's Ranger, its Lander and the Endurance itself. One is
-// flown at a time — the camera rides it (controls.ts); the others coast on Kepler orbits, or stay docked
+// The craft the player flies: Interstellar's Ranger, its Lander and the Endurance itself — and a fighter,
+// the F-35B (docs/PLAN-F35.md), for the Earth's air. One is flown at a time — the camera rides it (controls.ts); the others coast on Kepler orbits, or stay docked
 // (fleet.ts). Each has its mesh (ship.ts draws them together), its mass and engines, how fast it turns,
 // its docking ports, its thrusters and the camera's attach points on it.
 //
@@ -9,8 +9,12 @@
 import type { V3 } from "./mounts";
 import type { VesselAero } from "./aero";
 
-export type VesselId = "ranger" | "lander" | "endurance";
-export const VESSEL_IDS: VesselId[] = ["ranger", "lander", "endurance"];
+export type VesselId = "ranger" | "lander" | "endurance" | "f35";
+export const VESSEL_IDS: VesselId[] = ["ranger", "lander", "endurance", "f35"];
+/** The spacecraft: the fleet near the Earth, always somewhere (fleet.ts fleetStart). The F-35 is only where
+ *  it is flown — put on a runway when chosen (controller/fleet.ts). */
+export type SpacecraftId = Exclude<VesselId, "f35">;
+export const SPACECRAFT: SpacecraftId[] = ["ranger", "lander", "endurance"];
 
 /** A docking port: the centre of its ring and the axis out of it (ship frame). */
 export interface Port {
@@ -177,6 +181,10 @@ const ENDURANCE_JETS: JetDef[] = [
     ],
   ),
 ];
+
+// the F-35B: its one engine's nozzle (scripts/build-f35.py: the petals' ring 1.13 m across, its exit 7.7 m
+// behind the centre — the plume's start —, 1.05 m up); no attitude thrusters (its roll posts: F4)
+const F35_JETS: JetDef[] = [{ p: [0, 1.05, -6.2], d: [0, 0, -1], half: [0.42, 0.42], u: [1, 0, 0], main: true }];
 
 export const VESSELS: Record<VesselId, VesselDef> = {
   ranger: {
@@ -349,6 +357,65 @@ export const VESSELS: Record<VesselId, VesselDef> = {
       belly: { eye: [0, -38, -12], aim: [0, -30, 60] },
       rear: { eye: [0, 3, 16], aim: [0, 0, -10] },
       dock: { eye: [0, 0, 9.6], aim: [0, 0, 60] },
+    },
+  },
+  // the F-35B (assets/f35: scripts/build-f35.py — 15.4 m long, 10.7 m span, its belly gear up at y = 0, the
+  // wheels 1.17 m under it): 14.7 t empty, 6.1 t of fuel, the pilot — some 20 t as it leaves the ramp
+  f35: {
+    id: "f35",
+    name: "F-35B",
+    mass: 20e3,
+    accel: 1,
+    slThrust: 1,
+    spool: 1.2,
+    gyr: 3.2,
+    // (a fighter's: long, its wings short — least about the nose; F-16's scaled: 0.22 L, 0.24 L, 0.1 L)
+    rg: [3.4, 3.7, 1.6],
+    tank: [0, 1.3, -1.2],
+    // (no reaction wheels: it turns by its control surfaces — its roll posts in a hover, F4)
+    agility: 0.05,
+    // (a quarter of the wing's mean chord: 1.1 m ahead of the main wheels)
+    com: [0, 1.25, -1.6],
+    centre: [0, 1.2, -0.4],
+    viewDist: 24,
+    ports: [],
+    lands: true,
+    jets: F35_JETS,
+    flame: 0.35,
+    flies: true,
+    // a fighter (42.7 m² of wing, aspect ratio 2.7; two canted fins of 4.6 m² each; the fuselage's
+    // planform with the wing ~62 m²): low drag (C_D0 ≈ 0.021)
+    aero: {
+      area: [28, 62, 4.5],
+      cdA0: 0.9,
+      wing: { S: 42.7, AR: 2.68, cla: 3.5, stall: 0.6, e: 0.8, dihedral: -0.03 },
+      fin: { S: 9.2, cla: 2.4, at: [0, 1.6, -4.2] },
+      cp: [
+        [0, 0.3, -1.0],
+        [0, 0, -0.2],
+        [0, 0.2, 0],
+      ],
+      cw: [0, 0, -0.35],
+      curve: [0, 0.1, 0.4],
+      damp: [5, 5, 0.6],
+      len: 15.4,
+      noseR: 0.25,
+      shield: null,
+      hull: { tMax: 480, cap: 8e3, eps: 0.85 },
+      gMax: 7,
+      ctrl: [0.5, 0.2, 1.6],
+    },
+    mounts: {
+      // (the pilot's eyes: in the helmet the model sits — scripts/build-f35.py)
+      cockpit: { eye: [0, 1.9, 4.55], aim: [0, 1.72, 30] },
+      cabin: { eye: [0, 1.9, 4.55], aim: [0, 1.9, 30] },
+      quarter: { eye: [7.5, 3.6, -9.5], aim: [-2, 1.2, 8] },
+      chase: { eye: [0, 3.9, -17], aim: [0, 1.4, 10] },
+      dorsal: { eye: [0, 3.0, -1.2], aim: [0, 2.2, 20] },
+      wing: { eye: [-5.6, 2.1, -3.8], aim: [-0.4, 1.2, 10] },
+      belly: { eye: [0.4, -0.35, -2.4], aim: [0.1, 0.1, 20] },
+      rear: { eye: [0, 1.9, 10.5], aim: [0, 1.3, -6] },
+      dock: { eye: [0, 1.9, 4.55], aim: [0, 1.72, 30] },
     },
   },
 };

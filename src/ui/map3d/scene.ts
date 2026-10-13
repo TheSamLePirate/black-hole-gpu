@@ -18,11 +18,10 @@ import { issAxes, issOrbit, issTrack } from "../../system/iss";
 import { M_METRES, solarBody } from "../../system/solar";
 import { fleet } from "../../fleet";
 import { keplerProp } from "../../system/our-plan";
-import { VESSELS, type VesselId } from "../../vessels";
+import { VESSEL_IDS, VESSELS, type VesselId } from "../../vessels";
 import { t } from "../../i18n";
 
-const CRAFT = ["ranger", "lander", "endurance"] as const;
-const isCraftId = (id: string): id is VesselId => (CRAFT as readonly string[]).includes(id);
+const isCraftId = (id: string): id is VesselId => (VESSEL_IDS as readonly string[]).includes(id);
 
 /** A place in our universe's home frame at t: a body of the solar system's, the space station's, a craft's. */
 export function ourPos(id: string, t: number): V3 {
@@ -235,7 +234,7 @@ export function ourScene(t0: number, mouthRadius = 0.05): MapScene {
   }
   // the fleet's craft not flown (fleet.ts): where they are, a turn of their Kepler orbit around the Earth
   const mu = solarBody("earth")!.mass;
-  for (const id of CRAFT) {
+  for (const id of VESSEL_IDS) {
     if (fleet.activePose?.() && fleet.flownAssembly().includes(id)) continue;
     const p = fleet.pose(id, t0);
     if (!p) continue;

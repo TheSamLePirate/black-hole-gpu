@@ -16,6 +16,7 @@ import { SOLAR_BODIES } from "../system/solar";
 import { fmtAngle, focalLength } from "./telescope";
 import { el as h } from "./kit";
 import { t, tf } from "../i18n";
+import { VESSEL_IDS } from "../vessels";
 
 /** The camera's placements without the ship: the rig's four, and falling freely (gravity). */
 export type View = Settings["rotation"] | "fall";
@@ -82,6 +83,7 @@ export const BODY_COLOURS: Record<Target, string> = {
   ranger: "255, 214, 120",
   lander: "255, 160, 200",
   endurance: "200, 225, 255",
+  f35: "190, 200, 210",
   sun: "255, 236, 170",
   mercury: "190, 180, 170",
   venus: "240, 220, 170",
@@ -521,7 +523,7 @@ export class CameraPanel {
   private groups(list: Target[]): [string, Target[]][] {
     const s = this.d.settings;
     const ours = list.filter((b) => SOLAR_BODIES.some((q) => q.id === b));
-    const craft: Target[] = list.filter((b) => b === "iss" || b === "ranger" || b === "lander" || b === "endurance");
+    const craft: Target[] = list.filter((b) => b === "iss" || (VESSEL_IDS as string[]).includes(b));
     const theirs = list.filter((b) => !ours.includes(b) && !craft.includes(b));
     const planets = ours.filter((b) => {
       const q = SOLAR_BODIES.find((x) => x.id === b)!;

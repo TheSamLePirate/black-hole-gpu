@@ -12,6 +12,15 @@ import landerNormalUrl from "../assets/lander/lander-normal.webp";
 import landerLightsUrl from "../assets/lander/lander-lights.webp";
 import enduranceUrl from "../assets/endurance/endurance.bin";
 import cockpitUrl from "../assets/ranger/cockpit.bin";
+import f35Url from "../assets/f35/f35.bin";
+import f35Albedo0 from "../assets/f35/f35-albedo-0.ktx2";
+import f35Albedo1 from "../assets/f35/f35-albedo-1.ktx2";
+import f35Normal0 from "../assets/f35/f35-normal-0.ktx2";
+import f35Normal1 from "../assets/f35/f35-normal-1.ktx2";
+import f35Mr0 from "../assets/f35/f35-mr-0.ktx2";
+import f35Mr1 from "../assets/f35/f35-mr-1.ktx2";
+import { parseF35, partMatrices, restPose, type F35Mesh, type F35Pose } from "./f35/model";
+import { ktxLevels, ktxTarget, writeLevels } from "./system/ktx2";
 
 import { shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
 import { controlMesh, MAX_CONTROLS, POSE_VEC4, poseData } from "./cockpit/controls";
@@ -84,6 +93,8 @@ export interface ShipView {
   probeAxes?: [V3, V3, V3];
   /** the thrusters: see Thrust */
   thrust?: Thrust | null;
+  /** the flown F-35's moving parts (src/f35/model.ts) */
+  jet?: F35Pose | null;
   /** display-referred emission scale: pre-exposure / 2^EV (a flame as bright whatever the exposure) */
   glow?: number;
 }
@@ -127,6 +138,9 @@ const SHIP_UNIFORM_BYTES = 512 + 16 + 8 * 3 * 16 + 16 + MAX_LAMPS * 3 * 16;
 /** where the lamps start in it (S.lampN) */
 const LAMPS_AT = 512 + 16 + 8 * 3 * 16;
 const INST_FLOATS = 20;
+/** the F-35's parts (src/f35/model.ts) at most, and how many F-35s drawn with their parts posed */
+const MAX_PARTS = 160;
+const JET_SLOTS = 2;
 const JET_FLOATS = 16;
 
 const norm = (a: V3): V3 => {
@@ -149,6 +163,8 @@ interface Mesh {
   vbuf: GPUBuffer;
   ibuf: GPUBuffer;
   count: number;
+  /** the opaque triangles' indices, first; the glass's after them (the F-35's canopy) — none: all opaque */
+  solid?: number;
   /** its box's centre and half-diagonal, its box (ship frame) [m] */
   bound: { c: V3; r: number; lo: V3; hi: V3 };
 }
@@ -179,6 +195,10 @@ interface ShipTargetRes {
   bind?: GPUBindGroup;
   bindGen?: number;
   bindMoments?: GPUBuffer;
+  /** the F-35's glass pass's bind group (with this target's traced image) */
+  jetGlassBind?: GPUBindGroup;
+  jetGlassGen?: number;
+  jetGlassHdr?: GPUTexture;
   /** the station's depth bound (group 1), and which texture it holds */
   occBind?: { tex: GPUTexture; g: GPUBindGroup };
 }
@@ -221,7 +241,11 @@ export class ShipRenderer {
   private loadingMesh = new Set<VesselId>();
   /** the instances' transforms and flags (the flown craft first) */
   private instBuf: GPUBuffer;
-  private instData = new Float32Array(MAX_INST * INST_FLOATS);
+  private instData = new Float32Array((MAX_INST + JET_SLOTS * MAX_PARTS) * INST_FLOATS);
+  /** the F-35's mesh as built (its parts, their tracks), its maps (two layers each; 1 × 1 until loaded) */
+  private jetMesh: F35Mesh | null = null;
+  private jetMaps: { albedo: GPUTexture; normal: GPUTexture; mr: GPUTexture } | null = null;
+  private jetMapsLoading = false;
   /** this frame's draws: mesh, and whether in the shadow map */
   private draws: { mesh: Mesh; shadow: boolean; cabin?: boolean; inst: number }[] = [];
   /** the Ranger's landing gear (gear-mesh.ts), made at its first draw */
@@ -267,6 +291,7 @@ export class ShipRenderer {
     lamp: GPURenderPipeline;
     dist: GPURenderPipeline;
     glass: GPURenderPipeline;
+    jetGlass: GPURenderPipeline;
     cabin: GPURenderPipeline;
     depthPre: GPURenderPipeline;
     ctl: GPURenderPipeline;
@@ -537,6 +562,27 @@ export class ShipRenderer {
         depthStencil: { format: "depth32float", depthWriteEnabled: false, depthCompare: "greater-equal" },
         multisample: { count: 4 },
       }),
+      // the F-35's canopy and visor: after the opaque draws, blended (premultiplied), the depth tested not written
+      jetGlass: d.createRenderPipeline({
+        layout: "auto",
+        vertex,
+        fragment: {
+          module,
+          entryPoint: "fsJetGlass",
+          targets: [
+            {
+              format: "rgba16float",
+              blend: {
+                color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+                alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+              },
+            },
+          ],
+        },
+        primitive: { topology: "triangle-list", cullMode: "none" },
+        depthStencil: { format: "depth32float", depthWriteEnabled: false, depthCompare: "greater-equal" },
+        multisample: { count: 4 },
+      }),
       // the depth alone, first: the shading then runs once a pixel
       depthPre: d.createRenderPipeline({
         layout: "auto",
@@ -598,6 +644,7 @@ export class ShipRenderer {
    * Lander's as built (its maps with it). Its hull for contacts, too.
    */
   private async loadVessel(id: VesselId) {
+    if (id === "f35") return this.loadJet();
     const d = this.device;
     const url = id === "ranger" ? rangerUrl : id === "lander" ? landerUrl : enduranceUrl;
     const buf = await this.getter(url).then(inflated);
@@ -646,6 +693,91 @@ export class ShipRenderer {
     d.queue.writeBuffer(ibuf, 0, idx);
     if (id === "lander") await this.loadMaps();
     this.meshes[id] = { vbuf, ibuf, count: ni, bound: { c, r, lo, hi } };
+  }
+
+  /**
+   * The F-35 (assets/f35/f35.bin: scripts/build-f35.py): its vertices as built (the gear out, the surfaces at
+   * rest; the vertex shader poses each part), its glass's triangles last; its hull for contacts; its maps.
+   */
+  private async loadJet() {
+    const d = this.device;
+    const m = (this.jetMesh = parseF35(await this.getter(f35Url).then(inflated)));
+    const { verts, lo, hi } = m;
+    const nv = verts.length / 10;
+    // (the glass — the canopy 32, the visor 34 — last: drawn by its own pass, out of the shadow map)
+    const glass = (t: number) => {
+      const k = Math.round(verts[10 * m.idx[3 * t]! + 6]!);
+      return k === 32 || k === 34;
+    };
+    const idx = new Uint32Array(m.idx.length);
+    let o = 0,
+      solid = 0;
+    for (const g of [false, true])
+      for (let t = 0; t < m.idx.length / 3; t++)
+        if (glass(t) === g) {
+          idx.set(m.idx.subarray(3 * t, 3 * t + 3), 3 * o++);
+          if (!g) solid = 3 * o;
+        }
+    const pos = new Float32Array(nv * 3);
+    for (let i = 0; i < nv; i++) pos.set(verts.subarray(10 * i, 10 * i + 3), 3 * i);
+    const c: V3 = [0, 1, 2].map((j) => (lo[j]! + hi[j]!) / 2) as V3;
+    const r = Math.hypot(...sub(hi, lo)) / 2;
+    const H = vesselHulls.f35;
+    H.points = samplePoints(verts, 10, nv, 0.5);
+    H.bvh = new TriBVH(pos, idx.slice(0, solid));
+    H.radius = r + Math.hypot(...c);
+    H.lo = lo;
+    H.hi = hi;
+    const vbuf = d.createBuffer({ size: verts.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+    d.queue.writeBuffer(vbuf, 0, verts);
+    const ibuf = d.createBuffer({ size: idx.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
+    d.queue.writeBuffer(ibuf, 0, idx);
+    this.meshes.f35 = { vbuf, ibuf, count: idx.length, solid, bound: { c, r, lo, hi } };
+    void this.loadJetMaps();
+  }
+
+  /** The F-35's maps: KTX2 transcoded for this GPU (BC7 / ASTC), two layers a map; drawn grey until then. */
+  private async loadJetMaps() {
+    if (this.jetMapsLoading) return;
+    this.jetMapsLoading = true;
+    const d = this.device;
+    const target = ktxTarget(d);
+    const make = async (urls: string[], srgb: boolean) => {
+      const imgs = await Promise.all(urls.map((u) => ktxLevels(u, target)));
+      const { width, height } = imgs[0]!;
+      const format: GPUTextureFormat =
+        target === "bc7"
+          ? srgb
+            ? "bc7-rgba-unorm-srgb"
+            : "bc7-rgba-unorm"
+          : target === "astc"
+            ? srgb
+              ? "astc-4x4-unorm-srgb"
+              : "astc-4x4-unorm"
+            : srgb
+              ? "rgba8unorm-srgb"
+              : "rgba8unorm";
+      const tex = d.createTexture({
+        size: [width, height, urls.length],
+        format,
+        mipLevelCount: imgs[0]!.levels.length,
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      });
+      imgs.forEach((im, layer) => writeLevels(d, tex, im.levels, im.width, im.height, target, layer));
+      return tex;
+    };
+    try {
+      const [albedo, normal, mr] = await Promise.all([
+        make([f35Albedo0, f35Albedo1], true),
+        make([f35Normal0, f35Normal1], false),
+        make([f35Mr0, f35Mr1], false),
+      ]);
+      this.jetMaps = { albedo, normal, mr };
+      this.bind();
+      this.onLoaded?.();
+    } catch (e) {
+      console.error("F-35 maps:", e);
+    }
   }
 
   /** The vessel's box in its own frame (x left, y up, z nose) [m]: its mesh's, the Ranger's gear out with it — the
@@ -851,6 +983,17 @@ export class ShipRenderer {
     const cmp = d.createSampler({ compare: "less-equal", magFilter: "linear", minFilter: "linear" });
     const dummy = (format: GPUTextureFormat) => d.createTexture({ size: [1, 1], format, usage: GPUTextureUsage.TEXTURE_BINDING });
     const maps = this.maps ?? { albedo: dummy("rgba8unorm-srgb"), normal: dummy("rgba8unorm"), lights: dummy("rgba8unorm-srgb") };
+    // (the F-35's: grey, flat, mid-rough until they load)
+    const dummyArray = (px: number[], format: GPUTextureFormat) => {
+      const t = d.createTexture({ size: [1, 1, 2], format, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+      d.queue.writeTexture({ texture: t }, new Uint8Array([...px, ...px]), { bytesPerRow: 4, rowsPerImage: 1 }, [1, 1, 2]);
+      return t;
+    };
+    const jm = this.jetMaps ?? {
+      albedo: dummyArray([110, 112, 116, 255], "rgba8unorm-srgb"),
+      normal: dummyArray([128, 128, 255, 255], "rgba8unorm"),
+      mr: dummyArray([255, 110, 40, 255], "rgba8unorm"),
+    };
     this.shipEntries = [
       { binding: 0, resource: { buffer: this.uniform } },
       { binding: 1, resource: { buffer: this.shBuf } },
@@ -864,13 +1007,20 @@ export class ShipRenderer {
       { binding: 14, resource: maps.normal.createView() },
       { binding: 15, resource: maps.lights.createView() },
       { binding: 16, resource: this.mapSamp },
+      { binding: 22, resource: jm.albedo.createView({ dimension: "2d-array" }) },
+      { binding: 23, resource: jm.normal.createView({ dimension: "2d-array" }) },
+      { binding: 24, resource: jm.mr.createView({ dimension: "2d-array" }) },
     ];
     this.bindGen++;
 
+    // (the hull's passes read the instances: the F-35's parts posed)
     const pb = (p: GPURenderPipeline, jets = true) =>
       d.createBindGroup({
         layout: p.getBindGroupLayout(0),
-        entries: [{ binding: 0, resource: { buffer: this.uniform } }, ...(jets ? [{ binding: 9, resource: { buffer: this.jetBuf } }] : [])],
+        entries: [
+          { binding: 0, resource: { buffer: this.uniform } },
+          ...(jets ? [{ binding: 9, resource: { buffer: this.jetBuf } }] : [{ binding: 12, resource: { buffer: this.instBuf } }]),
+        ],
       });
     this.plumeBinds = {
       plume: pb(this.pipes.plume),
@@ -1014,7 +1164,8 @@ export class ShipRenderer {
     m.set([v.albedo, v.metal, v.rough, SPEC_MIPS], 20);
     // the instances: the flown craft, then the others in view whose mesh is there — their transforms,
     // their kind, whether they are in the shadow map and hidden by what the traced image holds nearer
-    const kind = { ranger: 0, lander: 1, endurance: 2 } as const;
+    const kind = { ranger: 0, lander: 1, endurance: 2, f35: 3 } as const;
+    let jetSlot = 0;
     // (inside the Ranger: its cabin instead of its hull)
     if (v.inside && this.flown && this.vessel === "ranger") this.loadCockpit();
     const inCabin = !!(v.inside && this.flown && this.vessel === "ranger" && this.cockpit);
@@ -1032,7 +1183,15 @@ export class ShipRenderer {
     list.forEach((it, i) => {
       const me = i === 0 && inCabin ? this.cockpit!.mesh : this.meshes[it.id]!;
       model(it.R, it.t, this.instData, i * INST_FLOATS);
-      this.instData.set([kind[it.id], it.shadow ? 1 : 0, it.far ? 1 : 0, 0], i * INST_FLOATS + 16);
+      // (an F-35: its parts' maps after the instances — the flown one's pose, the others' at rest)
+      let parts = 0;
+      if (it.id === "f35" && this.jetMesh && jetSlot < JET_SLOTS) {
+        parts = MAX_INST + jetSlot++ * MAX_PARTS;
+        let pose = i === 0 && this.flown ? (v.jet ?? restPose()) : restPose();
+        if (i === 0 && v.inside) pose = { ...pose, pilot: false };
+        this.writeParts(partMatrices(this.jetMesh, pose), parts);
+      }
+      this.instData.set([kind[it.id], it.shadow ? 1 : 0, it.far ? 1 : 0, parts], i * INST_FLOATS + 16);
       this.draws.push({ mesh: me, shadow: it.shadow, cabin: i === 0 && inCabin, inst: i });
       // (the Ranger's landing gear, out: drawn with it — its own mesh, the craft's instance)
       const gear = it.id === "ranger" && !(i === 0 && inCabin) && (v.gear?.ext ?? 0) > 0 ? this.gearMesh() : null;
@@ -1061,6 +1220,14 @@ export class ShipRenderer {
       }
     });
     this.device.queue.writeBuffer(this.instBuf, 0, this.instData, 0, list.length * INST_FLOATS);
+    if (jetSlot)
+      this.device.queue.writeBuffer(
+        this.instBuf,
+        MAX_INST * INST_FLOATS * 4,
+        this.instData,
+        MAX_INST * INST_FLOATS,
+        jetSlot * MAX_PARTS * INST_FLOATS,
+      );
     // (none in the shadow map: its sphere about the first, unused)
     if (!sc) (sc = list[0]!.t), (sr = this.meshes[list[0]!.id]!.bound.r);
     m.set([sc[0], sc[1], sc[2], sr * 1.02], 24);
@@ -1114,6 +1281,22 @@ export class ShipRenderer {
       );
     }
   }
+  /** The F-35's parts' maps (rows of 3 × 4, partMatrices) into the instance records from `base`: each a mat4,
+   *  column-major (ship.wgsl jetMap). */
+  private writeParts(m: Float32Array, base: number) {
+    const n = Math.min(m.length / 12, MAX_PARTS);
+    for (let k = 0; k < n; k++) {
+      const o = (base + k) * INST_FLOATS,
+        r = 12 * k;
+      for (let c = 0; c < 3; c++) for (let row = 0; row < 3; row++) this.instData[o + c * 4 + row] = m[r + row * 4 + c]!;
+      this.instData[o + 3] = this.instData[o + 7] = this.instData[o + 11] = 0;
+      this.instData[o + 12] = m[r + 3]!;
+      this.instData[o + 13] = m[r + 7]!;
+      this.instData[o + 14] = m[r + 11]!;
+      this.instData[o + 15] = 1;
+    }
+  }
+
   /**
    * The re-entry's uniforms: the flow (ship frame) and the plasma's level from the heat flux (from
    * 40 kW/m², full by 2 MW/m²), the skin's temperatures, Mach and the air's density, the gas's glow; the
@@ -1338,7 +1521,7 @@ export class ShipRenderer {
         if (!dr.shadow) return;
         sp.setVertexBuffer(0, dr.mesh.vbuf);
         sp.setIndexBuffer(dr.mesh.ibuf, "uint32");
-        sp.drawIndexed(dr.cabin ? this.cockpit!.solid : dr.mesh.count, 1, 0, 0, dr.inst);
+        sp.drawIndexed(dr.cabin ? this.cockpit!.solid : (dr.mesh.solid ?? dr.mesh.count), 1, 0, 0, dr.inst);
       });
       sp.end();
     }
@@ -1371,7 +1554,7 @@ export class ShipRenderer {
     this.draws.forEach((dr) => {
       rp.setVertexBuffer(0, dr.mesh.vbuf);
       rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
-      rp.drawIndexed(dr.cabin ? this.cockpit!.solid : dr.mesh.count, 1, 0, 0, dr.inst);
+      rp.drawIndexed(dr.cabin ? this.cockpit!.solid : (dr.mesh.solid ?? dr.mesh.count), 1, 0, 0, dr.inst);
     });
     rp.setPipeline(this.pipes.ship);
     // (the traced image the craft are drawn over: its sharp reflections — ship.wgsl screenRefl —, its
@@ -1391,8 +1574,28 @@ export class ShipRenderer {
       if (dr.cabin) return;
       rp.setVertexBuffer(0, dr.mesh.vbuf);
       rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
-      rp.drawIndexed(dr.mesh.count, 1, 0, 0, dr.inst);
+      rp.drawIndexed(dr.mesh.solid ?? dr.mesh.count, 1, 0, 0, dr.inst);
     });
+    // the F-35's glass, over all that (its canopy, the helmet's visor)
+    const glassy = this.draws.filter((dr) => !dr.cabin && dr.mesh.solid !== undefined && dr.mesh.solid < dr.mesh.count);
+    if (glassy.length) {
+      if (!res.jetGlassBind || res.jetGlassGen !== this.bindGen || res.jetGlassHdr !== hdr) {
+        const keep = [0, 1, 2, 3, 12, 16, 22];
+        res.jetGlassBind = this.device.createBindGroup({
+          layout: this.pipes.jetGlass.getBindGroupLayout(0),
+          entries: [...this.shipEntries!.filter((e) => keep.includes(e.binding)), { binding: 10, resource: hdr.createView() }],
+        });
+        res.jetGlassGen = this.bindGen;
+        res.jetGlassHdr = hdr;
+      }
+      rp.setPipeline(this.pipes.jetGlass);
+      rp.setBindGroup(0, res.jetGlassBind);
+      for (const dr of glassy) {
+        rp.setVertexBuffer(0, dr.mesh.vbuf);
+        rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
+        rp.drawIndexed(dr.mesh.count - dr.mesh.solid!, 1, dr.mesh.solid!, 0, dr.inst);
+      }
+    }
     // the cabin (its own shader), then its glass, over the cabin and the view
     if (this.inCabin && this.cockpit) {
       if (!this.cabinBinds || this.cabinBinds.gen !== this.bindGen) {
@@ -1440,7 +1643,8 @@ export class ShipRenderer {
     if (jets || re.glow || re.sheath || trails || lamps) {
       const B = this.plumeBinds!;
       // (what hides the flames and the plasma: the hull — from inside, the cabin's walls, not its glass)
-      const occl = this.inCabin && this.cockpit ? { m: this.cockpit.mesh, n: this.cockpit.solid } : { m: mesh, n: mesh.count };
+      const occl =
+        this.inCabin && this.cockpit ? { m: this.cockpit.mesh, n: this.cockpit.solid } : { m: mesh, n: mesh.solid ?? mesh.count };
       if (re.sheath) {
         const dp = enc.beginRenderPass(
           this.pass("ship: hull distance", {

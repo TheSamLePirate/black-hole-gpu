@@ -16,7 +16,7 @@ import { coastHome, stableOrbitOf } from "./system/our-coast";
 import { gearHeight, railsDecay, solidBody } from "./system/our-surface";
 import { M_METRES, M_SECONDS, solarBody } from "./system/solar";
 import { issAxes, issOrbit, issTrack } from "./system/iss";
-import { dockedFrame, VESSELS, VESSEL_IDS, type VesselId } from "./vessels";
+import { dockedFrame, VESSELS, VESSEL_IDS, type SpacecraftId, type VesselId } from "./vessels";
 import { cross, dot, lin, sub } from "./math/vec3";
 import { GEARS } from "./gear";
 import { setGear } from "./landing";
@@ -447,7 +447,7 @@ setGear(GEARS[fleet.active]!.height);
  * to the zenith. The craft flown keeps its own place; the Ranger, when it is not flown, docked on the
  * Endurance's fore port (as in the film).
  */
-export function fleetStart(t: number, active: VesselId): Record<VesselId, Pose> {
+export function fleetStart(t: number, active: VesselId): Record<SpacecraftId, Pose> {
   fleet.active = active;
   fleet.free = {};
   fleet.links = [];
@@ -503,7 +503,7 @@ export const SPIN_START = { altKm: 300, rpm: 3, rangerM: 150 };
  * and not turning: to dock it must match the turn (dockCheck: the turn's too), then the assembly's turn is
  * stopped (the SAS, against the assembly's inertia), then the Endurance flown up to 400 km.
  */
-export function fleetSpinStart(t: number, o: Partial<typeof SPIN_START> = {}): Record<VesselId, Pose> {
+export function fleetSpinStart(t: number, o: Partial<typeof SPIN_START> = {}): Record<SpacecraftId, Pose> {
   const S = { ...SPIN_START, ...o };
   fleetStart(t, "ranger");
   fleet.free = {};

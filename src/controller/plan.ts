@@ -40,7 +40,7 @@ import {
   type ManeuverNode,
 } from "../maneuver";
 import { fleet } from "../fleet";
-import { VESSELS, type VesselId } from "../vessels";
+import { VESSEL_IDS, VESSELS, type VesselId } from "../vessels";
 import { mouth, sphericalFrame } from "../wormhole";
 import { circularVelocity } from "../system/geopotential";
 import { gravityHome, homeOf, homeToRep, ourState, referenceBody, repToHomeVec } from "../system/our-side";
@@ -627,7 +627,7 @@ function missionTargets(this: CameraController): {
     }
     if (nav.ref === "earth") {
       if (s.iss) list.push({ id: "iss", name: "ISS", group: t("Craft about the Earth"), far: "" });
-      for (const id of ["ranger", "lander", "endurance"] as VesselId[]) {
+      for (const id of VESSEL_IDS) {
         if (fleet.flownAssembly().includes(id)) continue;
         const p = fleet.pose(id, nav.t);
         if (p) list.push({ id, name: VESSELS[id].name, group: t("Craft about the Earth"), far: fmt(dist(p.X as Vec3)) });

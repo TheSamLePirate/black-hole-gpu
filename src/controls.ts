@@ -269,6 +269,8 @@ export class CameraController {
   readonly touchInput = { pitch: 0, yaw: 0, roll: 0 };
   /** Pilot messages (autopilot engaged, impossible manoeuvre…) for the app to show. */
   onPilotMessage?: (text: string) => void;
+  /** the F-35 chosen where it is not: put it on a runway (main.ts: GameTools.lineUp) */
+  onJetStart?: () => void;
   /** the flown craft entering the air (the last moment before an entry: a point to resume from) */
   onAirEntry?: () => void;
   /** the craft lost to the air (heat, load): why */

@@ -15,6 +15,7 @@ import { LANDSCAPES } from "./system/landscapes";
 import type { MapBody } from "./ui/mapview";
 import { poseData } from "./cockpit/controls";
 import { GEARS } from "./gear";
+import { JetPoser } from "./f35/pose";
 import { ControlTravel, controlStates } from "./cockpit/state";
 import { cockpitAct, controlTip, type CockpitDeps } from "./cockpit/actions";
 import { Chrono } from "./cockpit/chrono";
@@ -77,7 +78,7 @@ import { POSE_KEYS } from "./controller/util";
 import { readPrefs, writePrefs } from "./game/prefs";
 import { events } from "./game/events";
 import { phaseOf, phaseText, PhaseWatcher } from "./game/phase";
-import { BODY_NAMES, bodyLook, craftRadius, onOurSide, type Body } from "./targeting";
+import { BODY_NAMES, bodyLook, craftRadius, isCraft, onOurSide, type Body } from "./targeting";
 import { HidPads } from "./gamepad";
 import { MOUNT_KEYS, MOUNTS, setMountVessel, shipToCamera, type Mount } from "./mounts";
 import { fleet, fleetSpinStart, fleetStart } from "./fleet";
@@ -1568,7 +1569,7 @@ async function main() {
     // where the scene puts it — or, "fleet", where the fleet's start has it
     setMountVessel(settings.vessel);
     const starts = pose === "fleetSpin" ? fleetSpinStart(sim.time) : fleetStart(sim.time, settings.vessel);
-    if ((pose === "fleet" || pose === "fleetSpin") && settings.ship) camera.flyFrom(starts[settings.vessel]);
+    if ((pose === "fleet" || pose === "fleetSpin") && settings.ship && settings.vessel !== "f35") camera.flyFrom(starts[settings.vessel]);
     if (pose === "iss" && settings.ship) {
       // (the station's start gives the ship's own axes — its nose to the port's axis — not the view's:
       // the camera then where its mount is)
@@ -1770,7 +1771,7 @@ async function main() {
       touch();
       return null;
     }
-    if (b === "ranger" || b === "lander" || b === "endurance") {
+    if (isCraft(b)) {
       // a craft of the fleet: the C a few of its sizes off it — behind, to its side, above —, moving
       // with it, around it
       if (!(S.system === "gargantua" && S.wormhole))
@@ -2278,6 +2279,8 @@ async function main() {
   // (the cockpit's chronometer: its CHRONO button)
   const cockpitChrono = new Chrono();
   const cockpitTravel = new ControlTravel();
+  /** the F-35's moving parts, eased at their actuators' rates (src/f35/pose.ts) */
+  const jetPoser = new JetPoser();
   const flightHud = new FlightHud(settings, {
     hold: pilotHold,
     auto: pilotAuto,
@@ -3407,6 +3410,14 @@ async function main() {
     scene: { get: () => currentScene, set: (n) => (currentScene = n && presets[n] ? n : null) },
   });
   const toolsWin = new GameToolsWindow(tools, settings);
+  // (the F-35 chosen: on the runway nearest the craft flown — docs/PLAN-F35.md)
+  camera.onJetStart = () => {
+    try {
+      tools.lineUp();
+    } catch (e) {
+      panel.toast(String((e as Error).message ?? e));
+    }
+  };
   // placing the ship (ui/placepanel.ts): the HUD's Place button, the radial wheel, the pause menu — a
   // mission running ends (asked first); a scene without the game's world loads it
   const placePanel = new PlacePanel({
@@ -5109,6 +5120,31 @@ async function main() {
             ext: settings.vessel === "ranger" ? camera.gearExt : 0,
             comp: legs.map((L, k) => Math.min(Math.max(gl?.[k]?.comp ?? 0, 0), L.stroke)),
           };
+        }
+        // (the F-35's moving parts: its control surfaces as its flight controls move them, its gear, its
+        // nozzle, its canopy — src/f35/pose.ts)
+        if (settings.vessel === "f35") {
+          const gl = camera.gearLast?.legs;
+          const legs = GEARS.f35!.legs;
+          const th = renderer.shipThrust;
+          const L = camera.airFlight.last;
+          const onGround = !!camera.gearLast && camera.gearLast.contact > 0;
+          const speed = status?.speed ?? 0;
+          renderer.jetPose = jetPoser.step({
+            dt,
+            torque: th?.torque ?? [0, 0, 0],
+            throttle: th?.throttle ?? 0,
+            afterburner: (th?.boost ?? 1) > 1.01,
+            alpha: L?.out.alpha ?? 0,
+            flaps: camera.airFlight.cfg.flaps ?? 0,
+            brake: camera.airFlight.cfg.brake ?? 0,
+            gear: camera.gearExt,
+            comp: legs.map((Lg, k) => Math.min(Math.max(gl?.[k]?.comp ?? 0, 0), Lg.stroke)) as [number, number, number],
+            onGround,
+            groundSpeed: speed,
+            steer: onGround ? (th?.torque[1] ?? 0) : 0,
+            parked: onGround && speed < 0.5 && (th?.throttle ?? 0) <= 0.02,
+          });
         }
         // (the cockpit's controls: each where the flight has it, lit by its mode — PLAN-COCKPIT)
         // (each moving part travelling there: a lever moved by a key or an autopilot seen going — K5)

@@ -63,6 +63,22 @@ export const GEARS: Record<string, GearDef> = {
     muBrake: 0.45,
     roll: 0.015,
   },
+  // the F-35B's tricycle (scripts/build-f35.py: the wheels' axles and radii on the model): the nose wheel
+  // 5.6 m ahead of the centre of mass — it carries a sixth —, the mains 1.1 m behind it, 4.3 m apart; their
+  // tyres 1.17 m under the belly fully out (0.3 m of stroke: 9 cm of it taken at rest)
+  f35: {
+    height: 1.08,
+    legs: [
+      { at: [-0.03, legY(1.08, 0.3, 0.3), 3.99], stroke: 0.3, share: 0.17, wheel: true, steers: true, mu: 0.35 },
+      { at: [2.16, legY(1.08, 0.3, 0.3), -2.74], stroke: 0.3, share: 0.415, wheel: true, brakes: true },
+      { at: [-2.16, legY(1.08, 0.3, 0.3), -2.74], stroke: 0.3, share: 0.415, wheel: true, brakes: true },
+    ],
+    sag: 0.3,
+    zeta: 0.6,
+    mu: 0.8,
+    muBrake: 0.5,
+    roll: 0.015,
+  },
   lander: {
     height: 6,
     legs: [
@@ -90,6 +106,21 @@ export const BELLY: Record<string, GearDef> = {
       { at: [1.4, 0.05, 1], stroke: 0.08, share: 0.25, wheel: false },
       { at: [-1.4, 0.05, 1], stroke: 0.08, share: 0.25, wheel: false },
       { at: [0, 0.2, -4.5], stroke: 0.08, share: 0.25, wheel: false },
+    ],
+    sag: 0.3,
+    zeta: 0.9,
+    mu: 0.45,
+    muBrake: 0.45,
+    roll: 0,
+  },
+  // the F-35's belly: the nose's underside, the intakes' lips, the nozzle's bottom
+  f35: {
+    height: 0,
+    legs: [
+      { at: [0, 0.35, 5.5], stroke: 0.08, share: 0.25, wheel: false },
+      { at: [1.3, 0.1, 0], stroke: 0.08, share: 0.25, wheel: false },
+      { at: [-1.3, 0.1, 0], stroke: 0.08, share: 0.25, wheel: false },
+      { at: [0, 0.45, -5.6], stroke: 0.08, share: 0.25, wheel: false },
     ],
     sag: 0.3,
     zeta: 0.9,
