@@ -20,7 +20,7 @@ struct U {
   sh: array<vec4f, 9>, // the disk's light on order-2 harmonics (camera frame), × its irradiance (x)
 };
 @group(0) @binding(0) var<uniform> u: U;
-@group(0) @binding(1) var<storage, read> moments: array<vec2f>; // Σ l², the traced depth [M]
+@group(0) @binding(1) var<storage, read> sceneDepth: array<f32>; // the traced occlusion depth [M] (post.wgsl occlusion)
 
 struct VOut {
   @builtin(position) pos: vec4f,
@@ -81,7 +81,7 @@ fn fs(in: VOut) -> FOut {
   // hidden where the traced scene is nearer (the disk's gas, a body)
   let ip = vec2u(in.pos.xy + u.box.xy);
   let idx = min(ip.y, u.img.y - 1u) * u.img.x + min(ip.x, u.img.x - 1u);
-  if (moments[idx].y < dist * 0.97) { discard; }
+  if (sceneDepth[idx] < dist * 0.97) { discard; }
   let V = -in.p / dist;
   var N = in.n;
   if (dot(N, V) < 0.0) { N = -N; } // (thin, open parts: lit from the side seen)

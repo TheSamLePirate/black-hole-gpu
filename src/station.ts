@@ -67,7 +67,7 @@ export class StationRenderer {
   private shadowPipe: GPURenderPipeline;
   private comp: GPURenderPipeline;
   private shadowTex: GPUTexture;
-  private bind: { g: GPUBindGroup; moments: GPUBuffer } | null = null;
+  private bind: { g: GPUBindGroup; sceneDepth: GPUBuffer } | null = null;
   private shadowBind: GPUBindGroup;
   private box: Box | null = null;
   /** its box's resolved depth (distance [m], coverage): the Ranger hidden behind it */
@@ -202,7 +202,7 @@ export class StationRenderer {
   }
 
   /** Draws it (when on screen) into a box and composites it into `hdr`. */
-  encode(enc: GPUCommandEncoder, hdr: GPUTexture, moments: GPUBuffer, v: StationView) {
+  encode(enc: GPUCommandEncoder, hdr: GPUTexture, sceneDepth: GPUBuffer, v: StationView) {
     this.rect = [0, 0, 0, 0];
     if (!this.ready) return;
     const W = hdr.width,
@@ -266,14 +266,14 @@ export class StationRenderer {
     sp.setIndexBuffer(mesh.ibuf, "uint32");
     sp.drawIndexed(mesh.count);
     sp.end();
-    if (this.bind?.moments !== moments) {
+    if (this.bind?.sceneDepth !== sceneDepth) {
       this.bind = {
-        moments,
+        sceneDepth,
         g: d.createBindGroup({
           layout: this.pipe.getBindGroupLayout(0),
           entries: [
             { binding: 0, resource: { buffer: this.uniform } },
-            { binding: 1, resource: { buffer: moments } },
+            { binding: 1, resource: { buffer: sceneDepth } },
             { binding: 2, resource: this.shadowTex.createView() },
             { binding: 3, resource: d.createSampler({ compare: "less-equal", magFilter: "linear", minFilter: "linear" }) },
           ],

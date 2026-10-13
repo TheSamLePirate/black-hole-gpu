@@ -20,7 +20,7 @@ struct U {
   part: array<vec4f, 39>,   // 13 parts × 3 rows: x_cam = row · (x, 1)
 };
 @group(0) @binding(0) var<uniform> u: U;
-@group(0) @binding(1) var<storage, read> moments: array<vec2f>; // Σ l², the traced depth [M]
+@group(0) @binding(1) var<storage, read> sceneDepth: array<f32>; // the traced occlusion depth [M] (post.wgsl occlusion)
 @group(0) @binding(2) var shadowTex: texture_depth_2d;
 @group(0) @binding(3) var shadowSamp: sampler_comparison;
 
@@ -144,7 +144,7 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> FOut {
   let iw = u32(u.img.x);
   let ih = u32(u.img.y);
   let idx = min(ip.y, ih - 1u) * iw + min(ip.x, iw - 1u);
-  if (moments[idx].y * u.img.z < dist * 0.999) { discard; }
+  if (sceneDepth[idx] * u.img.z < dist * 0.999) { discard; }
   let V = -in.p / dist;
   var N = normalize(in.n);
   if (dot(N, V) < 0.0) { N = -N; } // (thin parts: the face seen)

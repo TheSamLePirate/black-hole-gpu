@@ -176,7 +176,7 @@ const FLAG_REPROJECT = 16u;     // realtime under the temporal reprojection: the
 @group(0) @binding(1) var<storage, read_write> accum: array<vec4f>;
 @group(0) @binding(3) var bgTex: texture_2d<f32>;
 @group(0) @binding(4) var bgSamp: sampler;
-@group(0) @binding(5) var<storage, read_write> moments: array<vec2f>; // Σ luminance², depth (mean) per pixel
+@group(0) @binding(5) var<storage, read_write> moments: array<vec2f>; // Σ luminance², depth (the samples' nearest) per pixel
 @group(0) @binding(6) var<storage, read_write> stamps: array<u32>;  // frame of the last sample
 // the catalogue stars of a realtime frame, splatted where they fall (R8): 3 × u32 per pixel, fixed point
 // (radiance × P.camFwd.w — the pre-exposure × 2¹⁶), cleared before the frame (post.wgsl: stars)
@@ -7573,7 +7573,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     let na = accum[idx].a + 1.0;
     accum[idx] += vec4f(col, 1.0);
     let m = moments[idx];
-    moments[idx] = vec2f(m.x + l * l, mix(m.y, tr.depth, 1.0 / na));
+    // (the depth: the nearest of the samples — the opaque one —, not their mean: by a trunk against the sky the
+    // mean went towards 5e8 M, and the grass behind showed through a fringe of 1–2 px, the camera held)
+    moments[idx] = vec2f(m.x + l * l, select(min(m.y, tr.depth), tr.depth, na < 1.5));
     if (polOn) { polAcc[idx] += qu; }
   } else {
     accum[idx] = vec4f(col, 1.0);
