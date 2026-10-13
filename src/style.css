@@ -2205,6 +2205,11 @@ body .sp-tooltip, #tip {
 .tb-group { display: flex; align-items: center; gap: 2px; height: 100%; padding: 0 8px; }
 .tb-group + .tb-group, .tb-more, .tb-hide { border-left: 1px solid rgba(160, 210, 255, 0.09); }
 .tb-group:empty, .tb-context.empty { display: none; }
+/* (the actions at the bar's right end — ui/topbar.ts holdW: the bar's width held, what grows in the middle takes
+   the room, the actions and the tabs stay put) */
+.tb-spacer { flex: 1 1 0; min-width: 0; align-self: stretch; }
+.tb-spacer + .tb-group { border-left: 1px solid rgba(160, 210, 255, 0.09); }
+#topbar.tb-wrap .tb-spacer, body.mobile.portrait #topbar .tb-spacer { display: none; }
 /* (the mode's groups: only the mode's own shown) */
 #topbar:not([data-mode="ship"]) .tb-ship, #topbar:not([data-mode="free"]) .tb-free { display: none; }
 .tb-ic { display: grid; place-items: center; width: 18px; height: 18px; flex: none; }

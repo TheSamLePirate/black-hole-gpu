@@ -160,6 +160,11 @@ export class TopBar {
   private handle = h("button", "tb-handle") as HTMLButtonElement;
   private tarsBtn = h("button", "tb-tars") as HTMLButtonElement;
   private hideBtn = h("button", "tb-btn tb-hide") as HTMLButtonElement;
+  /** pushes the actions to the bar's right end: what changes width in the middle no longer moves them */
+  private spacer = h("div", "tb-spacer");
+  /** the bar's width, only ever grown while its layout stays the same (its signature): the actions and the tabs
+   *  stay where they are when a clock's or a chip's text changes width — a real click lands where it was aimed */
+  private holdW = 0;
   private fitAt = 0;
   private lastFit = "";
   mode: GameMode = "free";
@@ -230,6 +235,7 @@ export class TopBar {
       this.context,
       this.time,
       this.shipClocks,
+      this.spacer,
       this.shipActs,
       this.acts,
       this.more,
@@ -239,7 +245,10 @@ export class TopBar {
     document.body.classList.add("has-topbar");
     this.hide(store.get(HIDDEN_KEY) === "1", false);
     this.setMode("free");
-    addEventListener("resize", () => this.fit(true));
+    addEventListener("resize", () => {
+      this.holdW = 0;
+      this.fit(true);
+    });
   }
 
   /** The emblems in TARS's state (his console mirrors his to them). */
@@ -341,6 +350,8 @@ export class TopBar {
     if (this.hidden || (!now && at - this.fitAt < 500)) return;
     this.fitAt = at;
     const shown = this.items.filter(({ el }) => !el.classList.contains("tb-off"));
+    // (measured at its own width: the held one would read as content)
+    this.el.style.minWidth = "";
     // (what yields, in turn, until the bar fits the window: the actions and the mode's least used pieces into ⋯;
     // then the names shortened — tb-compact —; then the groups on rows of their own — tb-wrap. Measured, not
     // guessed from the width: a mode's groups, a scene's chips and the language change what fits)
@@ -357,11 +368,17 @@ export class TopBar {
     const over = r.over;
     shown.forEach(({ el }, i) => el.classList.toggle("tb-over", over[i]!));
     this.more.hidden = !over.some(Boolean);
-    const sig = over.join() + this.el.className;
+    const sig = over.join() + this.el.className + this.mode;
     if (sig !== this.lastFit) {
       this.lastFit = sig;
+      this.holdW = 0;
       if (!this.menu.hidden) this.fillMenu();
     }
+    // (wrapped, the rows are centred on their own: nothing held)
+    if (!this.el.classList.contains("tb-wrap")) {
+      this.holdW = Math.min(innerWidth - 16, Math.max(this.holdW, this.el.getBoundingClientRect().width));
+      this.el.style.minWidth = `${Math.ceil(this.holdW)}px`;
+    } else this.holdW = 0;
     if (!this.menu.hidden) for (const live of this.liveValues) live();
   }
 

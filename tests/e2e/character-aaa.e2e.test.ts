@@ -95,24 +95,32 @@ test.skipIf(!E2E)(
       })()`);
       expect(walk.inside).toBe(0);
       expect(walk.closest).toBeLessThan(1.5);
-      // (the camera behind him, the hull beyond: the hull covers his chest's pixels, he is drawn over it)
-      // (facing the hull again — the walk, stopped against it, slid him along it and turned him —, the camera behind)
-      await app.js(`(()=>{const c=__bh.camera.character,h=c.vesselHull(),up=c.up();
-        const d=h.centre.map((v,i)=>v-c.q[i]),k=d[0]*up[0]+d[1]*up[1]+d[2]*up[2],flat=d.map((v,i)=>v-up[i]*k),n=Math.hypot(...flat);
-        c.heading=flat.map((v)=>v/n);c.yaw=0;c.pitch=0.12;for(let i=0;i<60;i++)__bh.step(1/60);return true;})()`);
-      const all = await shotAt(app, 1.1);
-      await app.js("(()=>{globalThis.__enc=__bh.renderer.encodeCharacter;__bh.renderer.encodeCharacter=()=>{};return true;})()");
-      const shipOnly = await shotAt(app, 1.1);
-      await app.js("(()=>{globalThis.__ship=__bh.renderer.ship.encodeShip;__bh.renderer.ship.encodeShip=()=>{};return true;})()");
-      const groundOnly = await shotAt(app, 1.1);
-      await app.js(
-        "(()=>{__bh.renderer.encodeCharacter=globalThis.__enc;__bh.renderer.ship.encodeShip=globalThis.__ship;__bh.touch();return true;})()",
-      );
-      const hullThere = await patchDiff(app, shipOnly, groundOnly);
-      const astronautThere = await patchDiff(app, all, shipOnly);
-      await Bun.write("remote-results/character-aaa-occlusion.json", JSON.stringify({ hull, walk, hullThere, astronautThere }, null, 2));
-      expect(hullThere).toBeGreaterThan(8);
-      expect(astronautThere).toBeGreaterThan(8);
+      // (the hull beyond him, he drawn over it: the landed Ranger's belly is above his head, so the camera looks up at
+      // it — low behind him, its line rising through his head into the belly. Facing the hull again — the walk,
+      // stopped against it, slid him along it and turned him —; the first framing whose clip has the hull behind)
+      const tries: { pitch: number; heightM: number; hullThere: number; astronautThere: number }[] = [];
+      for (const pitch of [-0.2, -0.3, -0.4]) {
+        await app.js(`(()=>{const c=__bh.camera.character,h=c.vesselHull(),up=c.up();
+          const d=h.centre.map((v,i)=>v-c.q[i]),k=d[0]*up[0]+d[1]*up[1]+d[2]*up[2],flat=d.map((v,i)=>v-up[i]*k),n=Math.hypot(...flat);
+          c.heading=flat.map((v)=>v/n);c.yaw=0;c.pitch=${pitch};for(let i=0;i<60;i++)__bh.step(1/60);return true;})()`);
+        for (const heightM of [1.55, 1.3]) {
+          const all = await shotAt(app, heightM);
+          await app.js("(()=>{globalThis.__enc=__bh.renderer.encodeCharacter;__bh.renderer.encodeCharacter=()=>{};return true;})()");
+          const shipOnly = await shotAt(app, heightM);
+          await app.js("(()=>{globalThis.__ship=__bh.renderer.ship.encodeShip;__bh.renderer.ship.encodeShip=()=>{};return true;})()");
+          const groundOnly = await shotAt(app, heightM);
+          await app.js(
+            "(()=>{__bh.renderer.encodeCharacter=globalThis.__enc;__bh.renderer.ship.encodeShip=globalThis.__ship;__bh.touch();return true;})()",
+          );
+          tries.push({ pitch, heightM, hullThere: await patchDiff(app, shipOnly, groundOnly), astronautThere: await patchDiff(app, all, shipOnly) });
+          if (tries.at(-1)!.hullThere > 8) break;
+        }
+        if (tries.at(-1)!.hullThere > 8) break;
+      }
+      const seen = tries.at(-1)!;
+      await Bun.write("remote-results/character-aaa-occlusion.json", JSON.stringify({ hull, walk, tries }, null, 2));
+      expect(seen.hullThere).toBeGreaterThan(8);
+      expect(seen.astronautThere).toBeGreaterThan(8);
       await captureLoadedCharacter(app, "character-aaa-vessel-moon");
       // (boarding from where he stands: within reach of the hatch, or not — the key answers either way, no error)
       expect(await app.js<number>("__bh.renderer.gpuErrors")).toBe(0);
