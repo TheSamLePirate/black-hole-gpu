@@ -147,14 +147,6 @@ describe("a hull view softened", () => {
     expect(o.eye[2]).toBeLessThan(chase.eye[2] - 1);
     expect(o.eye[2]).toBeGreaterThan(chase.eye[2] - 0.36 * 26);
   });
-  test("paused (no time): the position's lag held, not dropped at once", () => {
-    const f = new Follow();
-    const o0 = opts({ posDamp: 0.4 });
-    let o = f.step(input(qExp([0, 0, 0]), [0, 0, 100]), o0, 1 / 60);
-    for (let k = 1; k < 120; k++) o = f.step(input(qExp([0, 0, 0]), [0, 0, 100 + 30 * (k / 60)]), o0, 1 / 60);
-    const p = f.step(input(qExp([0, 0, 0]), [0, 0, 160]), o0, 0);
-    expect(len3(sub3(p.eye, o.eye))).toBeLessThan(1e-6);
-  });
   test("the composer's offset and the dutch", () => {
     const f = new Follow();
     const o = f.step(input(qExp([0, 0, 0])), opts({ screen: [0.2, 0], dutch: 10 }), 1 / 60);

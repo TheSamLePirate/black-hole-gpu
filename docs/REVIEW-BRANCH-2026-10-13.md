@@ -324,7 +324,7 @@ exprimées par rapport à la caméra, les empreintes, le patch de marche, et l'o
 
 ### Moyenne
 - ☑ **P-M4.** En pause en vue réalisateur (`cine.ts:116-120`, `brain.ts:221-223, 283`, `follow.ts:332-338`), avec
-  dt=0 les ressorts sautent et la direction retombe sur le nez : la caméra saute. *Correctif* : renvoyer la dernière pose. — fait : le cerveau renvoie sa dernière vue, le rig garde son retard, b831873.
+  dt=0 les ressorts sautent et la direction retombe sur le nez : la caméra saute. *Correctif* : renvoyer la dernière pose. — fait en partie : le cerveau renvoie sa dernière vue (b831873). Le rig qui gardait son retard en pause a été retiré : en pause la caméra reçoit encore des pas réels, le retard décroissait sans jamais se figer, et une vue fixe ne convergeait plus (rain.e2e).
 - ☑ **P-M5.** Les plans du réalisateur n'ont aucune garde au sol (`brain.ts:295-306`) : en montée raide, l'œil de la
   poursuite passe sous terre au décollage. *Correctif* : borner avec l'AGL. — fait : œil à 1,5 m au moins au-dessus du sol (AGL, sol plat), caméra fixe plantée sans le pas de sa première image, b831873.
 - ☑ **P-M6.** Coût de la caméra à pied hors de la Terre : 32 échantillons × `height()`, soit `planetFrame` (avec
