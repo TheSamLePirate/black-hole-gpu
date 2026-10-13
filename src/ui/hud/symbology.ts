@@ -47,6 +47,21 @@ export interface SymInfo {
   plan?: { nodes: { t: number; dv: number[] }[]; burning?: boolean | number | null; now: number } | null;
   /** the engine: its full thrust [the scene's acceleration unit] */
   engine?: { max: number; jet?: { kg: number; full: number; bingo?: number } | null } | null;
+  /** a challenge flown (controller/challenge.ts): its banner, its next gates (corners in camera coordinates) */
+  chal?: {
+    title: string;
+    kind: string;
+    time: number;
+    next: number;
+    count: number;
+    missed: number;
+    over: number;
+    ceiling: number | null;
+    status: string;
+    result: { text: string; medal: string | null } | null;
+    figures: { idx: number; list: string[]; marks: number[] } | null;
+    gates: { c: (V3 | null)[]; k: number; n: number; dist: number }[];
+  } | null;
   /** a plane's flight plan: the active waypoint (its bearing [° true], its distance [m]) */
   nav?: { name: string; brg: number; dist: number; on: boolean } | null;
   /** the F-35B's STOVL mode (controller/telemetry.ts) */
@@ -451,6 +466,7 @@ export function drawSymbology(F: SymFrame) {
   // ---- in space: the next burn (its countdown, its Δv, its length, the aim), the docking's guide
   if (i.plan && i.plan.nodes.length && s.hudBurn && on(F, "burn") && !F.outside && F.density < 2)
     drawBurn(F, pr, stroke, text, inside, nose);
+  if (i.chal) drawChallenge(F, pr, stroke, text);
   if (i.dock && i.dockGuide && !i.dock.docked && s.hudDock && on(F, "dock") && F.density < 2) drawDock(F, pr, stroke, text, inside);
 
   // ---- in the air: the angle of attack, the energy, the sideslip, the load, the flight director
@@ -1619,4 +1635,69 @@ function drawRelativity(F: SymFrame, pr: Proj, text: Text, inside: (p: [number, 
   // the way to the hole
   const p = pr(i.dirs.radialIn);
   if (inside(p, 20 * dpr)) text("GARGANTUA", p![0], p![1] + 22 * dpr, "rgba(95, 211, 255, 0.9)", 10.5);
+}
+
+/** A challenge (controller/challenge.ts): its next gates in perspective — the next one yellow, the two after
+ *  it fainter —, an arrow at the edge towards the next when it is out of view, its banner (the clock, the gate,
+ *  the penalties) and, at its end, its result. */
+function drawChallenge(
+  F: SymFrame,
+  pr: (d: V3 | null | undefined) => [number, number] | null,
+  stroke: (draw: () => void, col: string, lw: number, dash?: number[]) => void,
+  text: (t: string, x: number, y: number, col: string, size: number, align?: CanvasTextAlign, mono?: boolean) => void,
+) {
+  const { ctx, W, H, dpr, i } = F;
+  const C = i.chal!;
+  const COLS = ["255, 210, 63", "111, 210, 255", "111, 210, 255"];
+  const ALPHA = [1, 0.75, 0.4];
+  for (const g of [...C.gates].reverse()) {
+    const P = g.c.map((d) => pr(d));
+    const col = `rgba(${COLS[g.k]}, ${ALPHA[g.k]})`;
+    if (P.every((p) => p)) {
+      stroke(
+        () => {
+          ctx.moveTo(P[0]![0], P[0]![1]);
+          for (const p of [P[1]!, P[2]!, P[3]!, P[0]!]) ctx.lineTo(p[0], p[1]);
+        },
+        col,
+        g.k === 0 ? 3 : 2,
+      );
+      const top: [number, number] = [(P[2]![0] + P[3]![0]) / 2, (P[2]![1] + P[3]![1]) / 2];
+      text(g.k === 0 ? `${g.n} · ${(g.dist / 1000).toFixed(1)} km` : String(g.n), top[0], top[1] - 12 * dpr, col, g.k === 0 ? 14 : 11, "center", true);
+    } else if (g.k === 0) {
+      // (out of view: an arrow at the edge, towards it)
+      const v = g.c.filter((d): d is V3 => !!d).reduce((a, d) => [a[0] + d[0], a[1] + d[1], a[2] + d[2]] as V3, [0, 0, 0] as V3);
+      const a = Math.atan2(-v[1], v[0]);
+      const r = Math.min(W, H) * 0.36;
+      const x = W / 2 + Math.cos(a) * r,
+        y = H / 2 + Math.sin(a) * r;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(a);
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.moveTo(18 * dpr, 0);
+      ctx.lineTo(-8 * dpr, -11 * dpr);
+      ctx.lineTo(-8 * dpr, 11 * dpr);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      text(`${g.n}`, x, y + 22 * dpr, col, 13, "center", true);
+    }
+  }
+  // the banner
+  const y = F.top + (F.compact ? 64 : 150) * dpr;
+  const mm = Math.floor(C.time / 60),
+    ss = (C.time % 60).toFixed(1).padStart(4, "0");
+  const parts = [C.title.toUpperCase(), `${mm}:${ss}`];
+  if (C.kind === "gates") parts.push(`${Math.min(C.next + 1, C.count)}/${C.count}`);
+  if (C.missed) parts.push(`+${C.missed * 10} s`);
+  if (C.over > 0.05) parts.push(`▲ ${C.over.toFixed(1)} s`);
+  if (C.figures) parts.push(C.figures.list.map((f, k) => (k < C.figures!.idx ? `${f.toUpperCase()} ${C.figures!.marks[k]}` : k === C.figures!.idx ? `[${f.toUpperCase()}]` : f)).join(" · "));
+  text(parts.join("   "), W / 2, y, "rgba(255, 210, 63, 1)", 14, "center", true);
+  if (C.result) {
+    const medal = C.result.medal;
+    const col = medal === "gold" ? "#ffd23f" : medal === "silver" ? "#d8e2ea" : medal === "bronze" ? "#d08a4a" : "#ff6a5a";
+    text(C.result.text, W / 2, H * 0.32, col, 22, "center", true);
+  }
 }

@@ -354,6 +354,55 @@ export class GameTools {
   }
 
   /**
+   * In the air over a place of the Earth (latitude, east longitude [°]), `aglM` above its ground, flying a
+   * heading [° true] at a speed through the air [m/s], level, flown by hand (no autopilot), clean — a
+   * challenge's start (docs/PLAN-F35.md, F9).
+   */
+  flyAt(lat: number, lon: number, aglM: number, headingDeg: number, speed: number, body = "earth") {
+    if (universeOf(body) !== "ours") throw new Error("flyAt: our worlds");
+    const t = this.ctx.time();
+    const b = solarBody(body)!;
+    const P = solarState(body, t).pos;
+    const D = Math.PI / 180;
+    const sub = (a: V3, c: V3): V3 => [a[0] - c[0], a[1] - c[1], a[2] - c[2]];
+    const unit = (a: V3): V3 => {
+      const l = Math.hypot(...a) || 1;
+      return [a[0] / l, a[1] / l, a[2] / l];
+    };
+    const dot = (a: V3, c: V3) => a[0] * c[0] + a[1] * c[1] + a[2] * c[2];
+    const cross = (a: V3, c: V3): V3 => [a[1] * c[2] - a[2] * c[1], a[2] * c[0] - a[0] * c[2], a[0] * c[1] - a[1] * c[0]];
+    const T = fromBodyFixed(body, bodyFixedOf(body, lat, lon, 0), t);
+    const up = unit(sub(T, P));
+    const pole = unit(spinVector(b, t) as V3);
+    const north = unit(sub(pole, up.map((x) => x * dot(pole, up)) as V3));
+    const east = cross(north, up);
+    const hd = headingDeg * D;
+    const fwd: V3 = [0, 1, 2].map((i) => north[i]! * Math.cos(hd) + east[i]! * Math.sin(hd)) as V3;
+    // (the height over the ground there, measured — the relief's — and set right)
+    const r0 = b.radius + aglM / M_METRES;
+    const h0 = gearHeight(body, [P[0] + up[0] * r0, P[1] + up[1] * r0, P[2] + up[2] * r0], t) + GEAR;
+    const r = r0 + (aglM - h0) / M_METRES;
+    const X: V3 = [P[0] + up[0] * r, P[1] + up[1] * r, P[2] + up[2] * r];
+    const g = groundVelocity(body, X, t);
+    const k = speed / C_MPS;
+    const note = this.placeAt({
+      frame: "ours",
+      X,
+      vel: [g[0] + fwd[0] * k, g[1] + fwd[1] * k, g[2] + fwd[2] * k],
+      fwd,
+      up,
+      note: `${nameOf(body)}: ${Math.round(aglM)} m over ${lat.toFixed(3)}°, ${lon.toFixed(3)}°, heading ${Math.round(headingDeg)}°, ${Math.round(speed)} m/s`,
+    });
+    const c = this.ctx.camera;
+    if (c.pilot.auto !== "none") c.pilot.setAuto(c.pilot.auto);
+    c.pilot.auto = "none";
+    c.gearInit = true;
+    c.gearDown = false;
+    c.gearExt = 0;
+    return note;
+  }
+
+  /**
    * Over a place of one of our solid bodies (latitude, east longitude [°]), `altKm` above its ground, at
    * rest over it — carried by its turning —, the hover autopilot holding it there: the practice of a
    * powered landing's last minutes (G lands it), as glideTo is of an entry's.

@@ -1,0 +1,10 @@
+/* The F-35's challenges (ui/challengepanel.ts): a card each, in the kit's language. */
+.chp-frame { width: min(860px, calc(100vw - 32px)); padding: 16px 18px 18px; }
+.chp { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-top: 10px; }
+.chp-card { display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto 1fr auto; gap: 6px 10px; padding: 10px 12px; border: 1px solid var(--k-line); border-radius: var(--k-r); background: var(--k-ctl-bg); }
+.chp-name { grid-column: 1 / -1; font: var(--k-font-title); letter-spacing: 0.08em; text-transform: uppercase; color: var(--k-text); }
+.chp-brief { grid-column: 1 / -1; margin: 0; font: 12.5px/1.35 var(--font); color: var(--k-dim); }
+.chp-par { font: var(--k-font-value); color: var(--k-dim); align-self: center; }
+.chp-best { font: 600 13px/1.2 var(--mono); color: var(--k-amber); align-self: center; justify-self: end; }
+.chp-card .k-btn { grid-column: 1 / -1; justify-content: center; }
+.chp > .k-btn { grid-column: 1 / -1; justify-self: start; }

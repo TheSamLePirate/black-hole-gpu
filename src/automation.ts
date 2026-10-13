@@ -62,7 +62,7 @@ export interface BhContext {
   mission: Mission;
   cockpitScreens: CockpitScreens;
   /** a plane's flight: its preparation, its plan (ui/flighthub.ts, ui/routepanel.ts) */
-  flight?: { hub: { open(): void }; route: { open(): void } };
+  flight?: { hub: { open(): void }; route: { open(): void }; challenges: { open(): void } };
   audio: SoundDirector;
   /** the voices (PLAN-TARS): say(line), what was said, the queue */
   voice: Speech;

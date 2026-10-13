@@ -50,6 +50,7 @@ import { PlanetCharacter } from "./controller/character";
 import { installSpectator } from "./controller/spectator";
 import { installJet } from "./controller/jet";
 import { installFplan, noNav, type NavState } from "./controller/fplan";
+import { installChallenge, type ChalState } from "./controller/challenge";
 import { installStovl, noStovl, type StovlState } from "./controller/stovl";
 import { CamShake } from "./camshake";
 import { installCine } from "./controller/cine";
@@ -953,6 +954,10 @@ export class CameraController {
   jetCws = { pitch: false, roll: false, thr: Number.NaN };
   /** a plane's flight plan and its guidance (game/flightplan.ts — controller/fplan.ts) */
   nav: NavState = noNav();
+  /** a challenge flown (game/challenges.ts — controller/challenge.ts), null: none */
+  chal: ChalState | null = null;
+  /** the last touchdown: its count, its sink and its speed along [m/s], the gear's verdict (controller/motion.ts) */
+  lastTouch: { n: number; sink: number; along: number; gear: string } | null = null;
 
   /** On the ground and rolling (our side): the body under the wheels. */
   rolling: { body: string } | null = null;
@@ -1302,6 +1307,7 @@ installTelemetry(CameraController);
 installSpectator(CameraController);
 installJet(CameraController);
 installFplan(CameraController);
+installChallenge(CameraController);
 installStovl(CameraController);
 installCine(CameraController);
 installCamRig(CameraController);

@@ -48,6 +48,7 @@ import { MissionSelect } from "./ui/missions";
 import { PlacePanel } from "./ui/placepanel";
 import { RoutePanel } from "./ui/routepanel";
 import { FlightHub } from "./ui/flighthub";
+import { ChallengePanel } from "./ui/challengepanel";
 import { TimePanel } from "./ui/timepanel";
 import { WeatherPanel } from "./ui/weatherpanel";
 import { RealWeather } from "./realweather";
@@ -3183,6 +3184,7 @@ async function main() {
           ? [
               { label: { fr: "Plan de vol", en: "Flight plan" }, key: "⇧O", on: camera.nav.on.l, run: () => routePanel.open() },
               { label: { fr: "Préparer un vol", en: "Prepare a flight" }, run: () => flightHub.open() },
+              { label: { fr: "Défis", en: "Challenges" }, on: camera.chal?.status === "run", run: () => challengePanel.open() },
             ]
           : []),
         { label: { fr: "Vue", en: "View" }, key: "V", run: () => keyActions.mount(new KeyboardEvent("keydown")) },
@@ -3205,6 +3207,7 @@ async function main() {
       { label: { fr: "Piloter", en: "Fly" }, key: "K", run: () => actions["btn-ship"]!() },
       { label: { fr: "Placer le vaisseau", en: "Place the ship" }, run: () => placePanel.open() },
       { label: { fr: "Voler en F-35", en: "Fly the F-35" }, run: () => flightHub.open() },
+      { label: { fr: "Défis F-35", en: "F-35 challenges" }, run: () => challengePanel.open() },
       {
         label: { fr: "Cinématique", en: "Cinematic" },
         on: !!camera.cinematic,
@@ -3483,6 +3486,8 @@ async function main() {
     toast: (s) => panel.toast(s),
     openRoute: () => routePanel.open(),
   });
+  // the F-35's challenges (ui/challengepanel.ts, PLAN-F35 F9): gate courses, graded landings, aerobatics
+  const challengePanel = new ChallengePanel({ tools, camera, toast: (s) => panel.toast(s) });
   // the Atlas (ui/atlas.ts, PLAN-MODES-AAA M6): the Earth, the Moon and Mars as maps, their destinations, the
   // addresses — the game put there (in orbit, landed, on foot, the free camera, a tripod)
   const ATLAS_ORBIT_KM: Record<MapBody, number> = { earth: 400, moon: 100, mars: 300 };
@@ -4720,7 +4725,7 @@ async function main() {
     bench,
     mission,
     cockpitScreens,
-    flight: { hub: flightHub, route: routePanel },
+    flight: { hub: flightHub, route: routePanel, challenges: challengePanel },
     audio,
     voice,
     capcom,
@@ -4834,6 +4839,10 @@ async function main() {
       if (camera.nav.say) {
         panel.toast(camera.nav.say);
         camera.nav.say = null;
+      }
+      if (camera.chal?.say) {
+        panel.toast(camera.chal.say);
+        camera.chal.say = null;
       }
       if (cpuProf.time("flight (camera.update)", () => sim.step(dt))) {
         changed = true;
