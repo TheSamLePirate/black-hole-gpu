@@ -147,3 +147,12 @@ test("the fleet and the entry's site travel with a save; a foreign fleet is left
   // (an older save: no fleet, no site — loaded as before)
   expect(checkSave(JSON.parse(JSON.stringify(save()))).fleet).toBeUndefined();
 });
+
+test("a walker saved on foot travels with a save; a malformed one is left out, the flight still loads", () => {
+  const character = { body: "moon", ours: true, q: [1, 2, 3], forward: [0, 0, 1], yaw: 0.1, pitch: 0.2, distance: 4.5, vertical: 0 };
+  const g = { ...save(), character } as GameSave;
+  expect(parseSave(JSON.stringify(g)).character).toEqual(character as GameSave["character"]);
+  const bad = parseSave(JSON.stringify({ ...g, character: { ...character, q: [1, 2] } }));
+  expect(bad.character).toBeUndefined();
+  expect(bad.ship).toEqual(g.ship);
+});
