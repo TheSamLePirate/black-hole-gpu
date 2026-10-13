@@ -297,9 +297,7 @@ export class PlanetCharacter {
     const axes: [Vec3, Vec3, Vec3] = [w.right, w.up, w.fwd];
     const rightWorld = add(add(scale(axes[0], C[0][0]), axes[1], C[1][0]), axes[2], C[2][0]);
     const local = (X: Vec3) =>
-      this.ours
-        ? scale(toBodyFixed(this.body, X, t), M_METRES)
-        : scale(toLocal(this.planet(t), X, [0, 0, 0]).xi, this.metres());
+      this.ours ? scale(toBodyFixed(this.body, X, t), M_METRES) : scale(toLocal(this.planet(t), X, [0, 0, 0]).xi, this.metres());
     // (not walking — the exits sought for a disembarking —: the vessel's frame read now, not a last walk's)
     if (!this.active) this.shipCache = { at: -1, frame: null, hull: null };
     const hull = this.shipNow().hull;
@@ -625,8 +623,7 @@ export class PlanetCharacter {
     if (this.grounded && -slope > Math.max(0.025, len(sub(target, this.q)))) target = this.q; // steep upward step: do not climb vertical terrain
     const g = this.ours
       ? (solarBody(this.body)!.mass / (len(this.q) / M_METRES) ** 2) * (299792458 ** 2 / M_METRES)
-      : (this.planet(this.lastTime).m / (len(this.q) / this.metres()) ** 2) *
-        (299792458 ** 2 / this.metres());
+      : (this.planet(this.lastTime).m / (len(this.q) / this.metres()) ** 2) * (299792458 ** 2 / this.metres());
     // (a jump asked a little early, or just after walking off an edge, is still made)
     if (this.jumpBuffer > 0 && (this.grounded || (this.airTime < COYOTE_S && this.vertical <= 0))) {
       this.vertical = this.c.s.jumpSpeed;

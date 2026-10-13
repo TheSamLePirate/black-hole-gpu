@@ -45,7 +45,9 @@ test("a corrupted save is refused with its fault", () => {
   expect(() => checkSave({ ...save(), ship: { ...save().ship, landed: { body: "earth", q: [1, 2] } } })).toThrow(/ground/);
   // (the camera's pose on the craft: optional, a pose when given)
   expect(() => checkSave({ ...save(), ship: { ...save().ship, view: { eye: [0, 1, 2], aim: [0, 0] } } })).toThrow(/view/);
-  expect(checkSave({ ...save(), ship: { ...save().ship, view: { eye: [0, 9, -42], aim: [0, 1.5, 0], up: [0, 1, 0] } } }).ship.view).toBeTruthy();
+  expect(
+    checkSave({ ...save(), ship: { ...save().ship, view: { eye: [0, 9, -42], aim: [0, 1.5, 0], up: [0, 1, 0] } } }).ship.view,
+  ).toBeTruthy();
   expect(() => checkSave({ ...save(), plan: { nodes: "x" } })).toThrow(/plan/);
   expect(() => parseSave("not json")).toThrow();
 });
