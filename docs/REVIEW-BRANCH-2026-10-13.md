@@ -63,8 +63,8 @@ Gravité : **Critique** (à régler avant tout merge ou déjà exposé), **Haute
 1. ☐ Astronaute : décision de l'utilisateur. Le sortir de l'historique des branches distantes, le servir depuis
    un stockage privé, et vérifier si la licence permet de servir les fichiers transcodés.
 2. ☐ Réglages par défaut : `sceneryHitboxes: false`.
-2b. ☐ Ancrage caméra (Z-V1 en premier : le décor tracé depuis le vaisseau est faux dans toutes les vues de vol), puis
-   Z-V2 (streaming) et Z-V3 (sol vivant autour de la caméra).
+2b. ☑ Ancrage caméra (Z-V1 en premier : le décor tracé depuis le vaisseau est faux dans toutes les vues de vol), puis
+   Z-V2 (streaming) et Z-V3 (sol vivant autour de la caméra). — fait : 3e57680, bd0652a
 2c. ☐ Profondeur d'occlusion fraîche à pleine résolution pour les passes rasterisées (Z-P1).
 3. ☐ Noyau : regarder l'A/B `trace-ab` (Bourget) une garde à la fois (manche à air, `waterMirror`/mer,
    `walkDistance`, niveaux d'imagerie), puis remettre les gardes `HAS_*`.
@@ -95,11 +95,12 @@ Gravité : **Critique** (à régler avant tout merge ou déjà exposé), **Haute
   point vaut zéro, c'est-à-dire la caméra. Conséquence : dans le cockpit au soleil, tout le sol de la sonde reçoit
   l'ombre de la coque à la caméra, et l'ambiance du vaisseau, de l'astronaute et de `characterLight()` devient noire.
   *Correctif* : passer le point touché à `earthGround`, et sauter `shipShadow` dans l'entrée env.
-- ☐ **R-H2. Reprojection temporelle coupée pour toute translation supérieure à 1 mm sous 20 km.**
+- ☑ **R-H2. Reprojection temporelle coupée pour toute translation supérieure à 1 mm sous 20 km.**
   `renderer.ts:380-381, 3384-3390`. La marche fait environ 23 mm par image, et le vol bas ou le roulage davantage :
   pas d'historique, une copie pleine résolution par image, et la reprojection rigide (R4) qui suit devient du code
   mort dans le régime pour lequel elle a été écrite. `placeOnBody` utilise `M_METRES`, alors que le reste utilise
   `1476.625·massSolar`. *Correctif* : un seuil fondé sur la parallaxe du décor le plus proche, et le même facteur en mètres.
+  — fait : seuil `taParallaxPx` (0,5 px) sur le déplacement rapporté à la hauteur au-dessus du relief (moins 60 m de décor), même facteur, f4f4093
 - ☐ **R-H3. `windsockShade` n'est plus retiré par `HAS_RWY`.** `trace.wgsl:6506` : `main` avait
   `if (HAS_RWY && WS.w > 0.5)` (vérifié). Toutes les variantes Terre portent donc `wxVeil`, `sunThrough`, la feuille
   et `sceneryShadow`. *Correctif* : `if ((HAS_RWY || HAS_SCENERY) && WS.w > 0.5)`.
@@ -110,14 +111,19 @@ Gravité : **Critique** (à régler avant tout merge ou déjà exposé), **Haute
   `sceneryMirror`. `seaShade` évalue aussi un `gnoise` par pixel de mer même quand le calme vaut 0. *Correctif* : `HAS_SCENERY &&`.
 - ☐ **R-M2.** `sceneryShadow` (`trace.wgsl:5783, 4781, 6054`) lance des rayons d'ombre pour les faces tournées
   dos au Soleil : parcours du BVH plus `forestQuery` jusqu'à 640 pas, pour rien. *Correctif* : sortir tôt si `dot(n,L) <= 0`.
-- ☐ **R-M3.** Le cache ne garde que 2 clés de variantes (`renderer.ts:3159`), alors que les bits 4096 et 8192 changent
+- ☑ **R-M3.** Le cache ne garde que 2 clés de variantes (`renderer.ts:3159`), alors que les bits 4096 et 8192 changent
   en cours de jeu (`earthScenery.clear()` tous les 8 km, pages de surface, météo, pistes) : on recompile en boucle,
   plusieurs secondes à chaque fois. *Correctif* : environ 4 clés.
+  — fait : 4 clés ; la clé `|4096`/`|8192` compilée d'avance dès la demande des données, les bits allumés seulement
+  une fois son noyau prêt (paramètres à zéro d'ici là, l'image posée attend) — item 5 de la campagne, b230bd1
 - ☐ **R-M4.** `timedVariant` ne journalise les compilations qu'avant la première image : celle de `|8192` est
   invisible dans les diagnostics.
-- ☐ **R-M5.** `earth-tiles.ts:298-317` : l'imagerie qui arrive après les hauteurs refait un `put()` (512 Ko), puis
+- ☑ **R-M5.** `earth-tiles.ts:298-317` : l'imagerie qui arrive après les hauteurs refait un `put()` (512 Ko), puis
   `onChange` et `invalidate()`. Avec z9–13, jusqu'à 128 invalidations par remplissage de fenêtre, et une vue fixe
   qui ne finit jamais de converger pendant le chargement.
+  — fait (constat corrigé) : le `put()` de l'imagerie ne change pas le rectangle valide, donc ni `onChange` ni
+  `invalidate()` ; le vrai défaut était l'inverse (une vue fixe convergée gardait ses couleurs sans l'imagerie).
+  Compteur `EarthTiles.imagery`, vue fixe redessinée au plus toutes les 0,5 s, b230bd1
 
 ### Basse
 - ☐ `earth-tiles.ts:493, 298` : écouteurs d'abandon jamais retirés (petite fuite par tuile).
@@ -234,7 +240,7 @@ Contexte vérifié :
 | `renderer.ts:2401, 2440` | observateur des éclipses et des ombres de corps | caméra | ✓ |
 
 ### Haute
-- ☐ **Z-V1. Le décor (arbres, bâtiments) et ses ombres sont tracés depuis le centre du vaisseau.** Vérifié :
+- ☑ **Z-V1. Le décor (arbres, bâtiments) et ses ombres sont tracés depuis le centre du vaisseau.** Vérifié :
   `earthScenery.update(surfaceFocus, …)` avec `surfaceFocus = F.c` sous 30 km, puis
   `scenery.params()` calcule `cam` (l'origine du rayon dans `worldScenery`) à partir de cette position. Le terrain,
   lui, part de l'œil.
@@ -244,7 +250,8 @@ Contexte vérifié :
   - **Spectateur à 2 km d'un vaisseau en vol bas :** décor décalé de 2 km, objets fantômes ou manquants, ombres fausses.
   - **Correctif :** `P.scenery[3]` vient toujours de la position de caméra du traceur (le `near.centre` déjà corrigé
     de l'œil, l'expression `onEarth` de `renderer.ts:2460`). Le vaisseau ne sert plus que d'indice de préchargement.
-- ☐ **Z-V2. Le streaming et les seuils suivent le vaisseau.**
+  — fait : tuiles, surface et décor sur l'œil du traceur (`bodyEye(near)`), 3e57680
+- ☑ **Z-V2. Le streaming et les seuils suivent le vaisseau.**
   - Spectateur au sol, vaisseau à 13 km : le décor est vidé (seuil de 12 km).
   - Vaisseau entre 20 et 30 km : la surface régionale est retirée.
   - Plan réalisateur pris du sol : `zNeed` est calculé pour l'altitude du vaisseau, donc le premier plan est grossier.
@@ -254,7 +261,10 @@ Contexte vérifié :
   **Correctif :** `focus` et `surfaceFocus` = la caméra (l'œil). Le vaisseau devient un second point de
   préchargement s'il est à quelques km. Pas de `shipFocus` quand `camera.spectating`. L'avance de streaming se
   calcule sur la vitesse de la caméra.
-- ☐ **Z-V3. L'herbe et les pierres appartiennent au marcheur.**
+  — fait : focus/surface/décor = l'œil ; le vaisseau ne garde que ses cartes et, vue hors du patch terrestre, les
+  tuiles sous lui (les fenêtres z13 font ~20 km : un vaisseau à quelques km de la caméra y est déjà) ; pas de
+  `shipFocus` en spectateur ; avance = vitesse de la caméra mesurée d'image en image, 3e57680
+- ☑ **Z-V3. L'herbe et les pierres appartiennent au marcheur.**
   - Caméra libre, trépied ou photo au sol sans marcheur : aucune herbe, aucune pierre.
   - À pied, télescope (Y) sur un champ à 200 m : pas de brins (coupés à 30 m du marcheur).
   - Saut ou jetpack à plus de 2 m : l'herbe disparaît (`reason "above-ground"`) alors que la caméra est au sol.
@@ -263,12 +273,16 @@ Contexte vérifié :
   la grille d'ombrage (`set(12)`), les pierres (`set(16)`) et la coupe (`fromWalker`, `stonesGrow`) sur le point
   du sol sous la caméra. Tester la hauteur de la caméra au-dessus du sol. Garder le marcheur pour les empreintes et
   l'herbe foulée. Agrandir la portée selon la taille du pixel au télescope.
+  — fait sauf la portée au télescope (le réseau de 7,5 cm et la grille de 81 m ne s'étendent pas simplement : il
+  faudrait centrer le réseau sur le point visé) : sol vivant autour du sol sous la caméra, porte à 25 m de hauteur
+  de caméra, sans marcheur aussi ; marcheur gardé pour empreintes et herbe foulée, bd0652a
 
 ### Basse
-- ☐ **Z-V4.** La grille d'ombrage de l'herbe (64 m) doit suivre la caméra en même temps que Z-V3.
+- ☑ **Z-V4.** La grille d'ombrage de l'herbe (64 m) doit suivre la caméra en même temps que Z-V3. — fait : bd0652a
 - ☐ **Z-V5.** La sonde de lumière est à la caméra. Un vaisseau éclairé jusqu'à 20 km (`shipInView`), ou un
   astronaute vu de loin sous les arbres, reçoit donc le ciel de la caméra. C'est acceptable. Option : ciel
-  analytique au-delà de quelques centaines de mètres.
+  analytique au-delà de quelques centaines de mètres. — non fait : pas trivial (une seconde sonde ou un ciel
+  analytique par objet), et jugé acceptable par la revue.
 
 **Correct tel quel :** les cartes d'ombre centrées sur ce qui projette l'ombre (vaisseau, astronaute) mais
 exprimées par rapport à la caméra, les empreintes, le patch de marche, et l'observateur des éclipses.
