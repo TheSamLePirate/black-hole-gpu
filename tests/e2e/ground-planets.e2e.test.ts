@@ -1,3 +1,6 @@
+// The on-foot local map (M) away from Earth: on the Moon and Mars by the date line, it follows the world, loads its
+// atlas at zoom 18 and zooms out to the whole world (its seam visible); on Mann, without imagery, the grid alone
+// and "imagery unavailable"; no GPU error. Captures: remote-results/ground-planisphere-*.png.
 import { afterAll, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 import { captureLoadedCharacter } from "./lib/character-ready";
