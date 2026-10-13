@@ -100,6 +100,9 @@ describe.skipIf(!E2E)("the sound's space", () => {
       app.js<Cab>(`(async () => {
         __bh.settings.shipMount = ${JSON.stringify(m)}; __bh.refresh();
         await new Promise((ok) => setTimeout(ok, 1500));
+        // (the panel placed from the ship's pose once the new mount's is in — at times past the 1.5 s, under load)
+        for (let k = 0; k < 40 && ${JSON.stringify(m)} === "cockpit" && __sound.spaceState().cabin.beep[1] === 0; k++)
+          await new Promise((ok) => setTimeout(ok, 100));
         return __sound.spaceState().cabin;
       })()`);
     const seat = await at("cockpit");
