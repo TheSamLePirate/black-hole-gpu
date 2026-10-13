@@ -119,6 +119,9 @@ export class LiveCapture {
         lapse = null;
       }
     };
+    // (an exposure that fails — the scene not settling, the view not read —: the capture ends there, what it
+    // stacked kept, the error said, the way out offered)
+    let failed = "";
     try {
       for (const [i, ms] of o.times.entries()) {
         if (this.stop) break;
@@ -150,6 +153,8 @@ export class LiveCapture {
         const s = timeLeft(done, o.times.length, (performance.now() - started) / 1000);
         left.textContent = Number.isFinite(s) && done < o.times.length ? tf("about {0} s left", Math.ceil(s)) : "";
       }
+    } catch (e) {
+      failed = e instanceof Error ? e.message : String(e);
     } finally {
       this.d.release(was);
       this.running = false;
@@ -157,16 +162,22 @@ export class LiveCapture {
     }
     // the end: the stack kept, saved or rendered at full quality
     root.classList.add("done");
-    root.querySelector(".lc-rec")!.textContent = this.stop ? t("STOPPED") : t("DONE");
+    root.querySelector(".lc-rec")!.textContent = this.stop || failed ? t("STOPPED") : t("DONE");
     left.textContent = tf("{0} exposures stacked", done);
+    if (failed) line.textContent = `⚠ ${tf("The capture failed: {0}", failed)}`;
     acts.replaceChildren();
-    // (the time-lapse closed on the whole stack held a second and a half)
+    // (the time-lapse closed on the whole stack held a second and a half; its encoder closed whatever happens)
     let film: Blob | null = null;
-    if (lapse && stack && done > 1) {
-      await addLapse(stack, Math.round(1.5 * fps));
-      film = lapse ? await lapse.finish().catch(() => null) : null;
-    } else lapse?.close();
-    const ext = lapse ? VIDEO_EXT[lapse.format] : "mp4";
+    const format = lapse?.format;
+    try {
+      if (lapse && stack && done > 1) {
+        await addLapse(stack, Math.round(1.5 * fps));
+        film = lapse ? await lapse.finish().catch(() => null) : null;
+      }
+    } finally {
+      lapse?.close();
+    }
+    const ext = format ? VIDEO_EXT[format] : "mp4";
     if (stack && done)
       acts.append(
         button({

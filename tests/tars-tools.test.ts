@@ -518,7 +518,10 @@ test("planetary character actions, telemetry, waits, events and commands are rea
       calls.push("board");
       return null;
     },
-    start: () => null,
+    start: (b: string, lat: number, lon: number) => {
+      calls.push(`start ${b} ${lat} ${lon}`);
+      return null;
+    },
     move: () => null,
     jump: () => calls.push("jump"),
     yaw: 0,
@@ -531,17 +534,32 @@ test("planetary character actions, telemetry, waits, events and commands are rea
       perf: () => ({ grass: { roots: 123 } }),
       status: () => ({ soiName: "Moon", label: "ground", altKm: 0, orbit: null }),
       pilotState: () => ({}),
+      save: (name: string) => calls.push(`save ${name}`),
     },
     changed: () => {},
     now: () => 0,
     progress: () => {},
     phase: () => null,
     alerts: () => [],
+    log: () => [],
   } as unknown as GameHost;
   const tools = gameTools(host),
     signal = new AbortController().signal;
   expect(await tools.find((t) => t.name === "character")!.run({ action: "disembark" }, signal)).toMatchObject({ ok: true, body: "moon" });
   expect(calls).toEqual(["disembark"]);
+  // (start: no default place, a solid world only, the net first)
+  const char = tools.find((t) => t.name === "character")!;
+  expect(await char.run({ action: "start", body: "moon" }, signal)).toMatchObject({ ok: false });
+  expect(await char.run({ action: "start", body: "jupiter", lat: 0, lon: 0 }, signal)).toMatchObject({ ok: false });
+  expect(calls).toEqual(["disembark"]);
+  expect(await char.run({ action: "start", body: "moon", lat: 20, lon: 30 }, signal)).toMatchObject({ ok: true });
+  expect(calls.slice(1)).toEqual(["save Before TARS", "start moon 20 30"]);
+  // (orbit: only what is given changes)
+  character.yaw = 1;
+  character.pitch = 0.5;
+  await char.run({ action: "orbit", pitch: 30 }, signal);
+  expect(character.yaw).toBe(1);
+  expect(character.pitch).toBeCloseTo(Math.PI / 6, 9);
   expect(await tools.find((t) => t.name === "get_telemetry")!.run({ groups: ["character", "grass"] }, signal)).toEqual({
     character: character.state(),
     grass: { roots: 123 },
@@ -576,4 +594,30 @@ test("TARS can zoom and read the local map and streaming priority", async () => 
   });
   expect(GAME_COMMANDS.find((c) => c.name === "mapzoom")?.tool).toBe("interface");
   expect(EVENT_KINDS).toContain("map");
+});
+
+test("TARS's new teleports save 'Before TARS' first: atlas go, sky event go/live, on foot", async () => {
+  const { gameTools, UNDO_SAVE } = await import("../src/ai/game-tools");
+  const calls: string[] = [];
+  let mode = "ship";
+  const host = {
+    settings: {},
+    camera: { character: { state: () => ({}) } },
+    tools: { save: (n: string) => calls.push(`save ${n}`) },
+    atlas: { search: async () => [], go: (to: string) => (calls.push(`go ${to}`), null), open: () => {} },
+    skyEvents: { take: (id: string, way: string) => (calls.push(`take ${id} ${way}`), null), list: async () => [], open: () => null },
+    mode: { get: () => mode, set: (m: string) => (calls.push(`mode ${m}`), (mode = m), null), hideBar: () => {} },
+    changed: () => {},
+    log: () => [],
+  } as unknown as GameHost;
+  const tools = gameTools(host),
+    signal = new AbortController().signal;
+  const run = (name: string, a: Record<string, unknown>) => tools.find((t) => t.name === name)!.run(a, signal);
+  await run("atlas", { action: "go", lat: 45, lon: 6, to: "walk" });
+  await run("sky_events", { action: "take", id: "trails", way: "go" });
+  await run("sky_events", { action: "take", id: "trails", way: "render" });
+  await run("set_mode", { mode: "foot" });
+  await run("set_mode", { mode: "foot" });
+  const save = `save ${UNDO_SAVE}`;
+  expect(calls).toEqual([save, "go walk", save, "take trails go", "take trails render", save, "mode foot", "mode foot"]);
 });

@@ -489,8 +489,8 @@ export default {
   "Constellation · {0}": "Constellation · {0}",
 
   // ---- the transport bar (ui/transport.ts)
-  "Run / pause time — every mode (paused: the image refines)":
-    "Lancer / suspendre le temps — dans tous les modes (en pause : l'image s'affine)",
+  "Run / pause time — Space in every mode but on foot, where Space jumps (paused: the image refines)":
+    "Lancer / suspendre le temps — Espace dans tous les modes sauf à pied, où Espace fait sauter (en pause : l'image s'affine)",
   Space: "Espace",
   "Slower time": "Temps plus lent",
   "Faster time": "Temps plus rapide",

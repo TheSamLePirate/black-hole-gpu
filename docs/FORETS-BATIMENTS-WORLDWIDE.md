@@ -294,6 +294,8 @@ Les captures sont prises après disponibilité du shader spécialisé, chargemen
 
 ![Seine, berges, routes et pont 3D](img/earth-scenery/earth-scenery-seine.png)
 
+*Crédits des captures* : bâtiments, routes, eau et ponts © les contributeurs d'[OpenStreetMap](https://www.openstreetmap.org/copyright), [ODbL](https://opendatacommons.org/licenses/odbl/) ; couvert du sol © ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), processed by ESA WorldCover consortium, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) ; imagerie du sol Sentinel-2 cloudless 2021 by [EOX IT Services GmbH](https://s2maps.eu) (Contains modified Copernicus Sentinel data 2021), [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+
 [Ombres activées](img/earth-scenery/earth-scenery-shadows-true.png),
 [ombres désactivées](img/earth-scenery/earth-scenery-shadows-false.png). Sur la zone comparée de Paris,
 13 716 pixels deviennent plus sombres d’au moins quatre niveaux de luminance, contre 1 693 plus clairs

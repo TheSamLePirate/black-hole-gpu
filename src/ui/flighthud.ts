@@ -1770,10 +1770,12 @@ export class FlightHud {
     // (full screen: the map, the strip under it — the instruments hidden, not drawn)
     const full = this.mapView;
     if (!full) cpuProf.time("HUD: markers & tapes", () => this.drawHud(info));
-    this.drawAirData(info);
+    // (a view the HUD does not show in — bare —: the panels its style hides — the air data, the target, the
+    // telemetry, the orbit, the mini-map — not drawn either)
+    const bare = this.view === "bare" && !full;
+    if (!bare) this.drawAirData(info);
     this.drawDock(info);
     const tasks: [string, number, () => void][] = [];
-    const bare = this.view === "bare";
     if (this.density < 2 && !full && !bare) tasks.push(["ball", 20, () => cpuProf.time("HUD: attitude ball", () => this.drawBall(info))]);
     if (full) tasks.push(["strip", 8, () => this.drawStrip(info)]);
     if (this.density === 0 || full) {
@@ -1787,7 +1789,9 @@ export class FlightHud {
         tasks.push(["orbit", 10, () => cpuProf.time("HUD: orbit panel", () => this.drawPotential(info))]);
       }
       // (the full-screen map, or its animation, every frame; the ground track: the globe dragged)
-      if (this.syncMapTab()) {
+      if (bare) {
+        // (the mini-map's panel hidden: nothing to draw)
+      } else if (this.syncMapTab()) {
         if (this.ground.animating) cpuProf.time("HUD: ground track", () => this.ground.draw(info, time));
         else tasks.push(["map", this.mapView ? 30 : 15, () => cpuProf.time("HUD: ground track", () => this.ground.draw(info, time))]);
       } else if (this.mapView || this.map3d.eased) cpuProf.time("HUD: map", () => this.map3d.draw(info, time));

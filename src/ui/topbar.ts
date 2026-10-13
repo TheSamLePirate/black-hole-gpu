@@ -167,6 +167,10 @@ export class TopBar {
   private holdW = 0;
   private fitAt = 0;
   private lastFit = "";
+  /** something on the bar changed size since the last fit (its groups observed): measured again */
+  private dirty = true;
+  /** the bar's bottom as published in --tb-bottom (the panels under it are placed from it) */
+  private bottom = -1;
   mode: GameMode = "free";
   hidden = false;
 
@@ -249,6 +253,15 @@ export class TopBar {
       this.holdW = 0;
       this.fit(true);
     });
+    // (measured again only when something on it changed size — a chip's text, a clock, a mode's group —, not
+    // twice a second for nothing: each measure forces up to three layouts)
+    if (typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(() => {
+        this.dirty = true;
+      });
+      ro.observe(this.el);
+      for (const g of this.el.children) ro.observe(g);
+    }
   }
 
   /** The emblems in TARS's state (his console mirrors his to them). */
@@ -342,13 +355,28 @@ export class TopBar {
     document.body.classList.toggle("topbar-hidden", on);
     if (save) store.set(HIDDEN_KEY, on ? "1" : "0");
     if (!on) this.fit(true);
+    else this.publishBottom();
   }
 
-  /** The actions that fit shown, the rest in the ⋯ menu (measured at most twice a second, or now). */
+  /** The bar's bottom (hidden: the handle's) in --tb-bottom on the page's root: the panels under the bar are
+   *  placed from it (style.css), so a bar wrapped on two or three rows no longer covers them. (offsetTop: the
+   *  bar's own place, not its entrance animation's) */
+  private publishBottom() {
+    const e = this.hidden ? this.handle : this.el;
+    const b = Math.ceil(e.offsetTop + e.offsetHeight);
+    if (b === this.bottom) return;
+    this.bottom = b;
+    document.documentElement.style.setProperty("--tb-bottom", `${b}px`);
+  }
+
+  /** The actions that fit shown, the rest in the ⋯ menu (measured now, or — called every frame — at most twice a
+   *  second when something on the bar changed size, and every few seconds anyway: an action in ⋯ whose content
+   *  shrank resizes nothing on the bar). */
   fit(now = false) {
     const at = performance.now();
-    if (this.hidden || (!now && at - this.fitAt < 500)) return;
+    if (this.hidden || (!now && at - this.fitAt < (this.dirty ? 500 : 3000))) return;
     this.fitAt = at;
+    this.dirty = false;
     const shown = this.items.filter(({ el }) => !el.classList.contains("tb-off"));
     // (measured at its own width: the held one would read as content)
     this.el.style.minWidth = "";
@@ -379,6 +407,7 @@ export class TopBar {
       this.holdW = Math.min(innerWidth - 16, Math.max(this.holdW, this.el.getBoundingClientRect().width));
       this.el.style.minWidth = `${Math.ceil(this.holdW)}px`;
     } else this.holdW = 0;
+    this.publishBottom();
     if (!this.menu.hidden) for (const live of this.liveValues) live();
   }
 

@@ -69,7 +69,7 @@ describe("the themes", () => {
     expect(new Set(THEMES.map((t) => t.id)).size).toBe(THEMES.length);
     expect([...new Set(THEMES.map((t) => t.manner))].sort()).toEqual(["richter", "williams", "zimmer"]);
     for (const t of THEMES) {
-      expect(t.after.length).toBeGreaterThan(3);
+      expect(t.mood.length).toBeGreaterThan(3);
       expect(t.form.length).toBeGreaterThan(1);
       expect(t.progressions.a!.length).toBeGreaterThan(0);
       expect(t.loopFrom).toBeLessThan(t.form.length);

@@ -176,7 +176,7 @@ const FLAG_REPROJECT = 16u;     // realtime under the temporal reprojection: the
 @group(0) @binding(1) var<storage, read_write> accum: array<vec4f>;
 @group(0) @binding(3) var bgTex: texture_2d<f32>;
 @group(0) @binding(4) var bgSamp: sampler;
-@group(0) @binding(5) var<storage, read_write> moments: array<vec2f>; // Σ luminance², depth (mean) per pixel
+@group(0) @binding(5) var<storage, read_write> moments: array<vec2f>; // Σ luminance², depth (the samples' nearest) per pixel
 @group(0) @binding(6) var<storage, read_write> stamps: array<u32>;  // frame of the last sample
 // the catalogue stars of a realtime frame, splatted where they fall (R8): 3 × u32 per pixel, fixed point
 // (radiance × P.camFwd.w — the pre-exposure × 2¹⁶), cleared before the frame (post.wgsl: stars)
@@ -5517,9 +5517,12 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     fine = 1.0 - 0.5 * b;
   }
   // (a lake's wind: the fetch's — a few hundred metres to kilometres — keeps its waves a ripple; cat's paws
-  // over it, a breath of wind here and not there)
-  let paws = 0.5 + 0.5 * gnoise(q * (EARTH_RM / 40.0) + vec3f(P.time.x * P.near5.w * 0.02));
-  U = mix(U, min(U * 0.3, 2.2) * paws + 0.15, calm);
+  // over it, a breath of wind here and not there — the open sea, calm 0, without its noise; no lakes without
+  // the scenery: out of the kernel)
+  if (HAS_SCENERY && calm > 0.0) {
+    let paws = 0.5 + 0.5 * gnoise(q * (EARTH_RM / 40.0) + vec3f(P.time.x * P.near5.w * 0.02));
+    U = mix(U, min(U * 0.3, 2.2) * paws + 0.15, calm);
+  }
   let su2 = 0.00316 * U * fine + vu;
   let sc2 = (0.003 + 0.00192 * U) * fine + vc;
   let tun = normalize(tu - n * dot(n, tu));
@@ -5780,7 +5783,10 @@ fn worldScenery(dW:vec3f,tMax:f32,rnd:f32)->f32 {
 
 // A ray to the finite solar disc: existing temporal accumulation integrates the penumbra.
 // Ambient skylight remains present in shadow. Any-hit traversal avoids finding the nearest blocker.
+// (a face turned away from the Sun: no ray — the BVH and up to 640 forest steps for a light its cosine
+// zeroes anyway — R-M2)
 fn sceneryShadow(light:vec3f,normal:vec3f)->f32 {
+  if(dot(light,normal)<=0.0){return 1.0;}
   let reach=select(1200.0,2000.0,P.scenery[5].x>.5);
   if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5 || P.scenery[5].w<.5 || SC_DISTANCE>reach || dot(light,P.scenery[2].xyz)<=.015){return 1.0;}
   let sun=sceneryLocal(light);let n=sceneryLocal(normal);
@@ -5896,7 +5902,11 @@ fn surfaceMaterial(q: vec3f, cover: u32, footM: f32) -> vec3f {
   return vec3f(1.0 + amplitude * filtered * (gnoise(q * (EARTH_RM / scaleM)) * 2.0 - 1.0));
 }
 
+// (the camera's own ray's ground point [m, from the camera], for the Ranger's shadow — set by earthNear alone: the
+// light probe's rays and a far body's ground, through earthLook too, had the camera's point — zero, or a pixel's
+// left over —, and the whole probe's ground took the hull's shadow: the cockpit's ambient black in the sun — R-H1)
 var<private> EARTH_SHADOW_POINT:vec3f;
+var<private> EARTH_SHADOW_ON: bool = false;
 fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, hG: f32) -> vec3f {
   // (the maps at the geodetic latitude — q the squashed space's —, the geometry at q)
   let gq = geoQ(q);
@@ -6052,7 +6062,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   }
   var Eg = E * sunThrough(hG, mu0) * shade * sunSeen(q * (1.0 + hG / (EARTH_RM * earthSq(q))), Ls);
   Eg *= sceneryShadow(physicalLs,physicalNormal);
-  Eg *= shipShadow(EARTH_SHADOW_POINT);
+  if (EARTH_SHADOW_ON) { Eg *= shipShadow(EARTH_SHADOW_POINT); }
   // (near, the mountains' shadows: a peak between the sun and the valley)
   let footS = max(length(fx), length(fy)) * EARTH_RM;
   if (footS < 2.0 * EARTH_RM * TAU / f32(textureDimensions(earthElev).x) && mu0 > -0.05 && ocean < 1.0) {
@@ -6105,9 +6115,11 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   if (ocean > 0.0) {
     // (inland water — OSM's lakes and rivers off the sea's map —: calm, a lake more than a river; near, the
     // world mirrored in it)
-    let calm = osmWater * (1.0 - sea0) * select(0.6, 0.92, osm.kind == 4.0);
+    // (HAS_SCENERY: without it the calm is 0 only at run time — 0 · x does not fold without fast-math —, and
+    // waterMirror's march, bisection and sceneryMirror stayed in the kernel — R-M1)
+    let calm = select(0.0, osmWater * (1.0 - sea0) * select(0.6, 0.92, osm.kind == 4.0), HAS_SCENERY);
     var mirror = vec4f(0.0);
-    if (calm > 0.3 && footM < 40.0) { mirror = waterMirror(q, rd, Ls, E, sky, footM); }
+    if (HAS_SCENERY && calm > 0.3 && footM < 40.0) { mirror = waterMirror(q, rd, Ls, E, sky, footM); }
     col = mix(col, seaShade(q, V, Ls, Eg, sky, col, footM, calm, mirror), ocean);
   }
   // the cities at night (sodium's orange, whiter at their hearts), fading into the twilight
@@ -6503,7 +6515,9 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
     let ph = ro + rd * tHit;
     let q = normalize(ph);
     let fp = fp0 + fpK * tHit;
-    if (WS.w > 0.5) {
+    // (WS.w: a windsock, an airport's building — HAS_RWY — or a tree, a building of the world's scenery —
+    // HAS_SCENERY — met: without either, windsockShade and all it calls compile out — R-H3)
+    if ((HAS_RWY || HAS_SCENERY) && WS.w > 0.5) {
       G = windsockShade(q, Ls, E, max(airHeight(ph), 0.0), airPhysicalDirection(rd));
     } else if (earth) {
       G = earthGround(q, rd, Ls, E, earthFoot(q, rd, gx, fp), earthFoot(q, rd, gy, fp), max(airHeight(ph), 0.0));
@@ -6583,8 +6597,10 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   WX_W = select(0.0, P.wx[0].x, HAS_WX && isEarth(k) && earthOn());
   WX_Q = normalize(ro);
   EARTH_SHADOW_POINT=look*(max(t,0.0)/m*P.near4.w);
+  EARTH_SHADOW_ON = true;
   let e = earthLook(k, ro, rd, t, normalize(squashed(toBody(lt.dir), ab)), lt.e, squashed(toBody(P.camRight.xyz), ab), squashed(toBody(P.camUp.xyz), ab),
     0.0, pixFoot(), fract(rnd * 7.31 + 0.37), P.earth4.w > 0.5);
+  EARTH_SHADOW_ON = false;
   SEA_ON = false;
   WX_W = 0.0;
   WS = vec4f(0.0);
@@ -7573,7 +7589,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     let na = accum[idx].a + 1.0;
     accum[idx] += vec4f(col, 1.0);
     let m = moments[idx];
-    moments[idx] = vec2f(m.x + l * l, mix(m.y, tr.depth, 1.0 / na));
+    // (the depth: the nearest of the samples — the opaque one —, not their mean: by a trunk against the sky the
+    // mean went towards 5e8 M, and the grass behind showed through a fringe of 1–2 px, the camera held)
+    moments[idx] = vec2f(m.x + l * l, select(min(m.y, tr.depth), tr.depth, na < 1.5));
     if (polOn) { polAcc[idx] += qu; }
   } else {
     accum[idx] = vec4f(col, 1.0);

@@ -1,6 +1,6 @@
 // The Atlas's destinations (game/pois.ts) and the addresses (game/geocode.ts: Photon, Nominatim, coordinates).
 import { expect, test } from "bun:test";
-import { parseCoords, parseNominatim, parsePhoton } from "../src/game/geocode";
+import { geocode, parseCoords, parseNominatim, parsePhoton } from "../src/game/geocode";
 import { POI_KINDS, POIS, searchPois } from "../src/game/pois";
 
 test("every destination: a unique id, its place on its world, its names and its line in both languages", () => {
@@ -96,3 +96,42 @@ test("coordinates typed: decimal, hemispheres, degrees-minutes-seconds; nonsense
   expect(parseCoords("95 10")).toBeNull();
   expect(parseCoords("paris")).toBeNull();
 });
+
+test("geocode: Nominatim only when asked, failures not kept, one request a second even when two race", async () => {
+  const real = globalThis.fetch;
+  const calls: { host: string; at: number }[] = [];
+  let photonUp = false;
+  globalThis.fetch = (async (u: URL | string) => {
+    const url = new URL(String(u));
+    calls.push({ host: url.host, at: Date.now() });
+    if (url.host.startsWith("photon")) {
+      if (!photonUp) return new Response("down", { status: 503 });
+      return Response.json({
+        features: [{ geometry: { coordinates: [2.35, 48.85] }, properties: { name: "Paris", osm_key: "place", osm_value: "city" } }],
+      });
+    }
+    return Response.json([{ lat: "48.85", lon: "2.35", name: "Paris", display_name: "Paris, France" }]);
+  }) as typeof fetch;
+  try {
+    // (typing: Photon down, no Nominatim, and the failure is not kept)
+    expect(await geocode("zzparis", { lang: "en" })).toEqual([]);
+    expect(calls.map((c) => c.host)).toEqual(["photon.komoot.io"]);
+    // (Enter: Nominatim asked when Photon fails)
+    const r = await geocode("zzparis", { lang: "en", fallback: true });
+    expect(r[0]?.source).toBe("nominatim");
+    expect(calls.map((c) => c.host)).toEqual(["photon.komoot.io", "photon.komoot.io", "nominatim.openstreetmap.org"]);
+    // (the failed typed search asked again: Photon answers now, and that answer is kept)
+    photonUp = true;
+    calls.length = 0;
+    const [a, b] = await Promise.all([geocode("zzparis", { lang: "en" }), geocode("zzlyon", { lang: "en" })]);
+    expect(a[0]?.source).toBe("photon");
+    expect(b[0]?.source).toBe("photon");
+    expect(calls.length).toBe(2);
+    expect(Math.abs(calls[1]!.at - calls[0]!.at)).toBeGreaterThanOrEqual(950);
+    calls.length = 0;
+    await geocode("zzparis", { lang: "en" });
+    expect(calls.length).toBe(0);
+  } finally {
+    globalThis.fetch = real;
+  }
+}, 15000);

@@ -1,3 +1,7 @@
+// The scenery's colliders drawn in pink (settings.sceneryHitboxes), on foot at Le Bourget: a block of WorldCover
+// tree cover and the nearest OSM buildings found round the walker, their boxes listed and drawn, the eye the
+// CPU collides from within 5 cm of the one the GPU drew; switched off, the overlay hides; no GPU error.
+// Captures and measures: remote-results/pink-hitboxes-*.png, pink-hitboxes-<kind>-alignment.json.
 import { afterAll, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 import { captureLoadedCharacter } from "./lib/character-ready";

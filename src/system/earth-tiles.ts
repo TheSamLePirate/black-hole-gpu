@@ -47,6 +47,10 @@ export const dayUrl = (z: number, x: number, y: number) =>
   `${GIBS}/BlueMarble_NextGeneration/default/default/GoogleMapsCompatible_Level8/${z}/${y}/${x}.jpeg`;
 export const nightUrl = (z: number, x: number, y: number) =>
   `${GIBS}/VIIRS_Night_Lights/default/2016-01-01/GoogleMapsCompatible_Level8/${z}/${y}/${x}.png`;
+// (licence: s2cloudless 2021 is CC BY-NC-SA 4.0 — non-commercial use only, derivatives under the same licence;
+// credited in the panel, the Atlas and the setting's help. The plan allows NC sources; a commercial release needs
+// another layer — EOX's 2016 mosaic is CC BY 4.0, not checked here, and EOX_FIT would have to be fitted again:
+// docs/systemes/03-univers-ephemerides.md)
 export const eoxUrl = (z: number, x: number, y: number) =>
   `https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2021_3857/default/GoogleMapsCompatible/${z}/${y}/${x}.jpg`;
 
@@ -298,8 +302,13 @@ export class EarthTiles {
     const xw = ((x % L.n) + L.n) % L.n;
     const imgCtl = new AbortController();
     const imgTimer = setTimeout(() => imgCtl.abort(), TIMEOUT_MS);
-    ctl.signal.addEventListener("abort", () => imgCtl.abort(), { once: true });
-    const img = (L.z <= IMG_Z1 ? imagery(L.z, xw, y, imgCtl.signal) : Promise.resolve(null)).finally(() => clearTimeout(imgTimer));
+    const relay = () => imgCtl.abort();
+    ctl.signal.addEventListener("abort", relay, { once: true });
+    // (the relay removed once the imagery is in or given up: none left on the tile's signal)
+    const img = (L.z <= IMG_Z1 ? imagery(L.z, xw, y, imgCtl.signal) : Promise.resolve(null)).finally(() => {
+      clearTimeout(imgTimer);
+      ctl.signal.removeEventListener("abort", relay);
+    });
     try {
       const res = await fetch(tileUrl(L.z, xw, y), { signal: ctl.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -490,14 +499,20 @@ async function imagery(z: number, x: number, y: number, signal: AbortSignal): Pr
     const get = async (url: string, crop?: [number, number, number]) => {
       // (the shared parent raced against this tile's own abort: a stalled request never holds the tile — nor its
       // slot, nor the heights waiting on it)
-      if (crop)
-        return pixels(
-          await Promise.race([
-            parentBlob(url),
-            new Promise<never>((_, no) => signal.addEventListener("abort", () => no(new Error("aborted")), { once: true })),
-          ]),
-          crop,
-        );
+      if (crop) {
+        if (signal.aborted) throw new Error("aborted");
+        let stop = () => {};
+        const aborted = new Promise<never>((_, no) => {
+          stop = () => no(new Error("aborted"));
+          signal.addEventListener("abort", stop, { once: true });
+        });
+        // (its listener removed when the race is over, the parent's blob in or the tile given up)
+        try {
+          return pixels(await Promise.race([parentBlob(url), aborted]), crop);
+        } finally {
+          signal.removeEventListener("abort", stop);
+        }
+      }
       const res = await fetch(url, { signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return pixels(await res.blob());

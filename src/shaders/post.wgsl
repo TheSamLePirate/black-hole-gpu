@@ -708,3 +708,40 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
   // (the alpha: the history's weight — the variance the refining passes keep there is not needed while it moves)
   textureStore(dst, gid.xy, vec4f(c, nOut));
 }
+
+// The occlusion depth [M] the raster passes test against (the astronaut, the grass, the stones, the vessels, the
+// station, the Endurance), at full resolution, written each frame after the temporal pass — moments.y stays the
+// depth of field's and the reprojection's. A pixel a ray landed on (or every pixel: one ray each, the refinement
+// keeping the nearest of its samples — trace.wgsl), its own depth; one reconstructed between the rays, the
+// nearest of the fresh samples that enclose it — the block lattice's four (the resolve's bilinear corners). Its
+// own was traced one to b² − 1 frames ago: the ground or the sky behind a trunk that now covers it, and the
+// grass 14 m away passed in front of the trunk. (Conservative: the grass may go a block short of a trunk's
+// edge, where the colour is reconstructed from the trunk's rays anyway.)
+@group(0) @binding(24) var<storage, read_write> sceneDepth: array<f32>;
+@compute @workgroup_size(8, 8)
+fn occlusion(@builtin(global_invocation_id) gid: vec3u) {
+  let W = R.u.x >> 16u;
+  let H = arrayLength(&sceneDepth) / max(W, 1u);
+  if (gid.x >= W || gid.y >= H) { return; }
+  let idx = gid.y * W + gid.x;
+  let block = max(R.u.x & 0xffu, 1u);
+  var depth = moments[idx].y;
+  if (block > 1u && stamps[idx] < R.u.w) {
+    let size = vec2u(W, H);
+    let off = vec2i(i32(R.u.y), i32(R.u.z));
+    let nb = vec2i((size + block - 1u) / block);
+    let b0 = vec2i(floor((vec2f(gid.xy) + 0.5 - (vec2f(off) + 0.5)) / f32(block)));
+    let maxP = vec2i(size) - 1;
+    var dn = 3e38;
+    for (var j = 0; j <= 1; j++) {
+      for (var i = 0; i <= 1; i++) {
+        let q = vec2u(min(clamp(b0 + vec2i(i, j), vec2i(0), nb - 1) * i32(block) + off, maxP));
+        let qi = q.y * W + q.x;
+        if (stamps[qi] >= R.u.w) { dn = min(dn, moments[qi].y); }
+      }
+    }
+    // (none fresh — the first frames after a jump —: its own, as before)
+    if (dn < 3e38) { depth = dn; }
+  }
+  sceneDepth[idx] = depth;
+}

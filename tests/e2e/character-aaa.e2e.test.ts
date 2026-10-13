@@ -112,7 +112,12 @@ test.skipIf(!E2E)(
           await app.js(
             "(()=>{__bh.renderer.encodeCharacter=globalThis.__enc;__bh.renderer.ship.encodeShip=globalThis.__ship;__bh.touch();return true;})()",
           );
-          tries.push({ pitch, heightM, hullThere: await patchDiff(app, shipOnly, groundOnly), astronautThere: await patchDiff(app, all, shipOnly) });
+          tries.push({
+            pitch,
+            heightM,
+            hullThere: await patchDiff(app, shipOnly, groundOnly),
+            astronautThere: await patchDiff(app, all, shipOnly),
+          });
           if (tries.at(-1)!.hullThere > 8) break;
         }
         if (tries.at(-1)!.hullThere > 8) break;

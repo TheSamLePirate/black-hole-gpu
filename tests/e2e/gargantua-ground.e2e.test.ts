@@ -1,3 +1,7 @@
+// Landed and on foot on Gargantua's worlds (Mann, Miller, Edmunds): the ship set down level, the astronaut out
+// (⇧K) on the ground beside it — the ship's ground and the walker's within 15 m, his feet on it, the hatch within
+// reach —, back aboard, then __bh.game.walk and the placement panel's "On foot" path to Miller; no GPU error.
+// Captures and measures: remote-results/gargantua-ground-*.png, gargantua-ground-<world>.json.
 import { afterAll, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 import { captureLoadedCharacter } from "./lib/character-ready";

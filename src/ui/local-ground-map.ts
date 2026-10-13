@@ -15,6 +15,34 @@ export interface LocalPlace {
 export const metresPerMapPixel = (lat: number, zoom: number, radiusM = WGS84_A) =>
   (((2 * Math.PI * radiusM) / 256) * Math.max(0.01, Math.cos(lat * D))) / 2 ** zoom;
 
+/** A contact's 512² ground raster and its box in the contact's local frame: built once, shared by every map that
+ *  shows it (the on-foot HUD's minimap and the flight HUD's ground track hold one each), dropped with the contact. */
+const RASTERS = new WeakMap<SceneryContact, { raster: HTMLCanvasElement; box: number[] }>();
+function rasterOf(c: SceneryContact): { raster: HTMLCanvasElement; box: number[] } {
+  const had = RASTERS.get(c);
+  if (had) return had;
+  const { f, u, reply } = c;
+  const N = 512,
+    at = f[2]! * 4;
+  const image = new ImageData(N, N);
+  for (let i = 0; i < N * N; i++) {
+    const px = u[at + i]!;
+    image.data[i * 4] = px & 255;
+    image.data[i * 4 + 1] = (px >>> 8) & 255;
+    image.data[i * 4 + 2] = (px >>> 16) & 255;
+    image.data[i * 4 + 3] = 255;
+  }
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = N;
+  cv.getContext("2d")!.putImageData(image, 0, 0);
+  const b = reply.bounds!;
+  const west = c.local(geodeticToCart(WGS84_A, WGS84_F, b[1] * D, b[0] * D, 0));
+  const east = c.local(geodeticToCart(WGS84_A, WGS84_F, b[3] * D, b[2] * D, 0));
+  const out = { raster: cv, box: [west[0], west[1], east[0] - west[0], east[1] - west[1]] };
+  RASTERS.set(c, out);
+  return out;
+}
+
 /** Nearby planisphere from the streamed source geometry. No extra map service, draw only when visible. */
 export class LocalGroundMap {
   readonly root = document.createElement("div");
@@ -124,25 +152,9 @@ export class LocalGroundMap {
     this.source = c;
     this.raster = null;
     if (!c) return;
-    const { f, u, reply } = c;
-    const N = 512,
-      at = f[2]! * 4;
-    const image = new ImageData(N, N);
-    for (let i = 0; i < N * N; i++) {
-      const px = u[at + i]!;
-      image.data[i * 4] = px & 255;
-      image.data[i * 4 + 1] = (px >>> 8) & 255;
-      image.data[i * 4 + 2] = (px >>> 16) & 255;
-      image.data[i * 4 + 3] = 255;
-    }
-    const cv = document.createElement("canvas");
-    cv.width = cv.height = N;
-    cv.getContext("2d")!.putImageData(image, 0, 0);
-    this.raster = cv;
-    const b = reply.bounds!;
-    const west = c.local(geodeticToCart(WGS84_A, WGS84_F, b[1] * D, b[0] * D, 0));
-    const east = c.local(geodeticToCart(WGS84_A, WGS84_F, b[3] * D, b[2] * D, 0));
-    this.rasterBox = [west[0], west[1], east[0] - west[0], east[1] - west[1]];
+    const r = rasterOf(c);
+    this.raster = r.raster;
+    this.rasterBox = r.box;
   }
   /** Crop the existing global atlas; wrap longitude and clip at the poles. No network tile service. */
   private drawPlanet(p: LocalPlace, W: number, H: number, mpp: number) {

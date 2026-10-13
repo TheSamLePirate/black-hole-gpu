@@ -166,7 +166,8 @@ export const KEYMAP: KeySection[] = [
     ],
   },
   {
-    title: "Camera — every mode",
+    // (not on foot: the walker's camera is its own — over the shoulder, never locked on a target nor a telescope)
+    title: "Camera — every mode but on foot",
     rows: [
       {
         keys: "V · ⇧V",

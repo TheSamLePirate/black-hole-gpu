@@ -1,7 +1,7 @@
 // Addresses on the Earth (PLAN-MODES-AAA M6): what the player types turned into places — Photon (komoot, from
-// OpenStreetMap: made for search-as-you-type, CORS open), Nominatim (OpenStreetMap's own) when Photon fails. Live
-// public sources, no key; at most one search a second (Nominatim's policy), the last words only, answers kept
-// for the session. The parsing is pure (tests/geocode.test.ts); the fetch is the browser's.
+// OpenStreetMap: made for search-as-you-type, CORS open), Nominatim (OpenStreetMap's own) when Photon fails, on an
+// explicit search only (Enter, TARS). Live public sources, no key; at most one request a second (Nominatim's
+// policy), the last words only, answers kept for the session. The parsing is pure (tests/geocode.test.ts); the fetch is the browser's.
 
 export interface GeoPlace {
   /** a short name, and the line under it (the city, the region, the country) */
@@ -101,29 +101,40 @@ export function parseCoords(q: string): { lat: number; lon: number } | null {
   return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { lat, lon } : null;
 }
 
-/** The searches made this session (the same words: the same answer, no second request). */
+/** The searches made this session (the same words: the same answer, no second request) — the answered ones only. */
 const kept = new Map<string, GeoPlace[]>();
-let lastAt = 0;
+/** when the next request may leave (one a second, every source) */
+let nextAt = 0;
+
+/** A request's turn: its slot reserved at once (two searches at the same time do not both pass), then waited for. */
+async function turn(signal?: AbortSignal): Promise<boolean> {
+  const now = Date.now();
+  const at = Math.max(now, nextAt);
+  nextAt = at + 1000;
+  if (at > now) await new Promise((r) => setTimeout(r, at - now));
+  return !signal?.aborted;
+}
 
 /**
- * Places for an address or a name: Photon first, Nominatim when Photon fails or finds nothing. At most one
- * request a second (a newer search supersedes: its `signal`). `near`: the map's centre, to rank the nearby first.
+ * Places for an address or a name: Photon first; Nominatim when Photon fails or finds nothing, and only when
+ * `fallback` is asked (OSMF's policy forbids search-as-you-type on Nominatim: the Atlas asks it on Enter, TARS on
+ * its own searches). At most one request a second (a newer search supersedes: its `signal`). `near`: the map's
+ * centre, to rank the nearby first.
  */
 export async function geocode(
   q: string,
-  o: { lang: "fr" | "en"; near?: { lat: number; lon: number }; signal?: AbortSignal; limit?: number },
+  o: { lang: "fr" | "en"; near?: { lat: number; lon: number }; signal?: AbortSignal; limit?: number; fallback?: boolean },
 ): Promise<GeoPlace[]> {
   const words = q.trim();
   if (words.length < 2) return [];
-  const key = `${o.lang}:${words.toLowerCase()}`;
+  const key = `${o.lang}:${o.fallback ? "+" : ""}:${words.toLowerCase()}`;
   const have = kept.get(key);
   if (have) return have;
-  const wait = 1000 - (Date.now() - lastAt);
-  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-  if (o.signal?.aborted) return [];
-  lastAt = Date.now();
   const limit = o.limit ?? 8;
   let out: GeoPlace[] = [];
+  // (an answer kept only when every source asked did answer: a network failure is tried again next time)
+  let answered = true;
+  if (!(await turn(o.signal))) return [];
   try {
     const u = new URL(PHOTON);
     u.searchParams.set("q", words);
@@ -136,11 +147,14 @@ export async function geocode(
     }
     const r = await fetch(u, { signal: o.signal });
     if (r.ok) out = parsePhoton(await r.json());
-  } catch (e) {
+    else answered = false;
+  } catch {
     if (o.signal?.aborted) return [];
-    void e;
+    answered = false;
   }
-  if (!out.length && !o.signal?.aborted) {
+  if (!out.length && o.fallback && !o.signal?.aborted) {
+    if (!(await turn(o.signal))) return [];
+    answered = true;
     try {
       const u = new URL(NOMINATIM);
       u.searchParams.set("format", "jsonv2");
@@ -149,10 +163,12 @@ export async function geocode(
       u.searchParams.set("accept-language", o.lang);
       const r = await fetch(u, { signal: o.signal });
       if (r.ok) out = parseNominatim(await r.json());
+      else answered = false;
     } catch {
       if (o.signal?.aborted) return [];
+      answered = false;
     }
   }
-  kept.set(key, out);
+  if (answered) kept.set(key, out);
   return out;
 }

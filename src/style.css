@@ -643,7 +643,7 @@ kbd {
 .asset-pill {
   position: fixed;
   left: 50%;
-  top: 62px;
+  top: calc(var(--tb-bottom, 52px) + 10px);
   z-index: 25;
   display: flex;
   align-items: center;
@@ -1110,7 +1110,7 @@ body.piloting #hint { display: none; }
 @media (prefers-reduced-motion: reduce) { .fl-warn .al-warning.fresh, .fl-warn .al-lamp.warning { animation: none; } }
 
 /* ---- target (top left, under the status pill): compact */
-.fl-target { top: 56px; left: 14px; width: 232px; padding: 7px 10px 8px; }
+.fl-target { top: calc(var(--tb-bottom, 52px) + 4px); left: 14px; width: 232px; padding: 7px 10px 8px; }
 .fl-target.empty { display: none; }
 .fl-tname { margin: 0 0 3px; }
 .fl-tname b { font: 700 17px var(--hud-font); letter-spacing: 0.12em; text-transform: uppercase; color: #ff9466; }
@@ -1120,7 +1120,7 @@ body.piloting #hint { display: none; }
 .fl-kv b.closing { color: #ffb0a0; }
 
 /* ---- the Ranger: status and telemetry (top right, under the settings button): compact */
-.fl-tel { top: 56px; right: 14px; width: 244px; padding: 7px 10px 8px; }
+.fl-tel { top: calc(var(--tb-bottom, 52px) + 4px); right: 14px; width: 244px; padding: 7px 10px 8px; }
 .fl-telc { display: none; }
 .fl-tel .fl-sub { display: none; }
 .fl-status { margin-bottom: 2px; }
@@ -1198,7 +1198,7 @@ body.piloting #hint { display: none; }
 .fl-hub-graph[data-state="off"] .fl-hub-gt { color: var(--hud-amber); }
 .fl-hub-gc { display: block; width: 100%; height: 96px; margin-top: 4px; pointer-events: auto; cursor: zoom-in; }
 /* the hub's graph opened large (a click on the small one): above the attitude ball, over the view */
-.fl-graphbig { left: 50%; top: 60px; transform: translateX(-50%); width: min(600px, calc(100vw - 32px)); pointer-events: auto; z-index: 4; }
+.fl-graphbig { left: 50%; top: calc(var(--tb-bottom, 52px) + 8px); transform: translateX(-50%); width: min(600px, calc(100vw - 32px)); pointer-events: auto; z-index: 4; }
 .fl-graphbig[hidden] { display: none; }
 .fl-graphbig .fl-title { margin-bottom: 2px; }
 .fl-gb-x { all: unset; cursor: pointer; margin-left: auto; padding: 0 4px; color: var(--hud-dim); font: 600 13px var(--hud-font); }
@@ -1207,7 +1207,7 @@ body.piloting #hint { display: none; }
 .fl-gb-about.off { color: var(--hud-amber); }
 .fl-gb-cv { display: block; width: 100%; height: 300px; cursor: crosshair; }
 /* the flight's report (game/report.ts): a card over the view's top, its grade, each figure judged */
-.fl-report { left: 50%; top: 150px; transform: translateX(-50%); width: 320px; pointer-events: auto; z-index: 4; }
+.fl-report { left: 50%; top: calc(var(--tb-bottom, 52px) + 98px); transform: translateX(-50%); width: 320px; pointer-events: auto; z-index: 4; }
 .fl-report[hidden] { display: none; }
 .fl-rp-what { font: 600 13px var(--hud-font); color: #e8f0fa; letter-spacing: 0.04em; }
 .fl-rp-grade { display: flex; align-items: baseline; gap: 10px; margin: 2px 0 8px; }
@@ -1440,7 +1440,7 @@ body.mobile.portrait .fl-hubcard { left: 50%; bottom: calc(100% + 4px); transfor
 .fl-root.mapview .m3-time .m3-mark { top: 5px; }
 
 /* ---- the docking aid (the space station near): under the mission bar, in the middle */
-.fl-dock { top: 138px; left: 50%; transform: translateX(-50%); min-width: 210px; padding: 6px 10px 8px; }
+.fl-dock { top: calc(var(--tb-bottom, 52px) + 86px); left: 50%; transform: translateX(-50%); min-width: 210px; padding: 6px 10px 8px; }
 .fl-dock[hidden] { display: none; }
 .fl-dock .fl-title::before { background: #5fffd0; box-shadow: 0 0 6px #5fffd0; }
 .fl-dock-port { font: 600 11px var(--hud-font); letter-spacing: 0.08em; color: rgba(214, 226, 242, 0.7); margin: 2px 0 4px; }
@@ -1448,7 +1448,7 @@ body.mobile.portrait .fl-hubcard { left: 50%; bottom: calc(100% + 4px); transfor
 .fl-dock-row b { font: 500 12px var(--mono); color: #fff; }
 .fl-dock-row b.ok { color: #5fffd0; }
 .fl-dock .fl-go { margin-top: 6px; width: 100%; }
-body.mobile .fl-dock { top: 92px; transform: translateX(-50%) scale(0.85); transform-origin: 50% 0; }
+body.mobile .fl-dock { top: calc(var(--tb-bottom, 52px) + 40px); transform: translateX(-50%) scale(0.85); transform-origin: 50% 0; }
 
 /* the automatic mission's captions: a film's lower third */
 .mission-caption {
@@ -1697,7 +1697,7 @@ body.hide-ui .subtitles { display: none; }
 .tp-hint { font: 400 11px var(--font); color: rgba(200, 210, 225, 0.5); }
 /* his presence while the console is closed: the emblem and what he is doing */
 .tars-presence {
-  position: fixed; left: 50%; top: 140px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 8px;
+  position: fixed; left: 50%; top: calc(var(--tb-bottom, 52px) + 88px); transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 8px;
   padding: 5px 12px 5px 8px; border-radius: 18px; cursor: pointer; max-width: min(520px, 90vw);
   background: rgba(6, 11, 19, 0.86); border: 1px solid rgba(var(--tc), 0.4); color: rgba(var(--tc), 0.95);
   font: 600 11.5px var(--hud-font); letter-spacing: 0.05em; box-shadow: 0 0 18px rgba(var(--tc), 0.12);
@@ -1705,7 +1705,7 @@ body.hide-ui .subtitles { display: none; }
 }
 .tp-presence-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* his cards over the view */
-.tars-display { position: fixed; left: max(16px, 19vw); top: 92px; z-index: 5; width: min(440px, 40vw); display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+.tars-display { position: fixed; left: max(16px, 19vw); top: calc(var(--tb-bottom, 52px) + 40px); z-index: 5; width: min(440px, 40vw); display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
 .tars-card {
   position: relative; pointer-events: auto; padding: 9px 12px 10px; border-radius: 9px;
   background: linear-gradient(180deg, rgba(8, 14, 24, 0.93), rgba(5, 9, 16, 0.88));
@@ -1735,7 +1735,7 @@ body.hide-ui .subtitles { display: none; }
 .tars-card p { margin: 8px 0 0; font: 400 12px/1.4 var(--font); color: rgba(220, 230, 245, 0.8); }
 /* the map open: its tablet on the left — the cards beside it */
 body.map-open .tars-display { left: 392px; }
-@media (max-width: 900px) { .tars-display { left: 12px; right: 12px; width: auto; top: 64px; } }
+@media (max-width: 900px) { .tars-display { left: 12px; right: 12px; width: auto; top: calc(var(--tb-bottom, 52px) + 12px); } }
 @media (prefers-reduced-motion: reduce) { .tars-panel, .tars-presence, .tars-actions li, .tp-proposal { animation: none; } .tp-wait::after, .tars-actions li.run .tp-mark, .tars-card footer::before { animation: none; } }
 body.reduce-motion .tars-panel, body.reduce-motion .tars-presence { animation: none; }
 
@@ -1758,7 +1758,7 @@ body.hide-ui .fl-root > :not(.fl-warn) { display: none; }
 }
 @media (max-width: 900px) {
   .fl-orbit, .fl-tel { display: none; }
-  .fl-right { bottom: auto; top: 56px; }
+  .fl-right { bottom: auto; top: calc(var(--tb-bottom, 52px) + 4px); }
   .fl-warpbox > span, .fl-viewname, .fl-planbtn > span:not(.fl-ic), .fl-placebtn > span:not(.fl-ic) { display: none; }
 }
 @media (max-width: 700px) {
@@ -1775,12 +1775,12 @@ body.hide-ui .fl-root > :not(.fl-warn) { display: none; }
 
 /* ---- game tools (F2): a window over the view, in the HUD's style */
 .gt-root {
-  position: fixed; top: 64px; left: 288px; z-index: 6; width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 88px);
+  position: fixed; top: calc(var(--tb-bottom, 52px) + 12px); left: 288px; z-index: 6; width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 88px);
   display: flex; flex-direction: column; font-family: var(--hud-font); color: var(--hud-text);
   background: linear-gradient(180deg, rgba(8, 13, 24, 0.95), rgba(6, 10, 18, 0.9));
 }
 .gt-root[hidden] { display: none; }
-@media (max-width: 760px) { .gt-root { left: 16px; top: 64px; } }
+@media (max-width: 760px) { .gt-root { left: 16px; top: calc(var(--tb-bottom, 52px) + 12px); } }
 .gt-head { display: flex; justify-content: space-between; align-items: center; margin: -8px -12px 0; }
 .gt-head .fl-title { margin: 0; flex: 1; border-bottom: none; }
 .gt-btn.gt-x { all: unset; cursor: pointer; width: 30px; height: 30px; display: grid; place-items: center; font: 600 18px var(--font); color: var(--hud-dim); }
@@ -2079,7 +2079,7 @@ html :focus-visible {
 @keyframes cp-in { from { opacity: 0; transform: translate(-50%, 8px); } }
 #cam-pop[hidden] { display: none; }
 /* (below the top bar, in every mode) */
-body.has-topbar #cam-pop, body.piloting #cam-pop { top: 64px; bottom: auto; }
+body.has-topbar #cam-pop, body.piloting #cam-pop { top: calc(var(--tb-bottom, 52px) + 12px); bottom: auto; }
 #cam-pop .cp-head { margin: -8px -14px 0; }
 #cam-pop .cp-x { all: unset; cursor: pointer; width: 24px; height: 24px; display: grid; place-items: center; font: 500 18px var(--font); color: var(--hud-dim); clip-path: none; min-height: 0; padding: 0; border: none; background: none; }
 #cam-pop .cp-x:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
@@ -2140,7 +2140,7 @@ body .sp-opener {
 }
 body .sp-opener:hover { border-color: var(--hud-edge-hi); background: linear-gradient(180deg, rgba(20, 34, 54, 0.9), rgba(10, 18, 30, 0.8)); }
 
-body .sp-toasts { top: 66px; }
+body .sp-toasts { top: calc(var(--tb-bottom, 52px) + 14px); }
 body.topbar-hidden:not(.piloting) .sp-toasts { top: 18px; }
 body .sp-toast {
   border-radius: 0; padding: 8px 18px 8px 14px;
@@ -2292,7 +2292,7 @@ body .sp-tooltip, #tip {
 .tb-handle .tb-ic { width: 14px; height: 14px; color: var(--hud-dim); }
 .tb-handle:hover { background: rgba(14, 24, 40, 0.95); }
 /* (the status pill under the bar, opened by the bar's ⓘ — I; shut, the bar says it all) */
-body.has-topbar:not(.topbar-hidden) #hud { top: 60px; }
+body.has-topbar:not(.topbar-hidden) #hud { top: calc(var(--tb-bottom, 52px) + 8px); }
 body.has-topbar #hud:not(.open) { visibility: hidden; }
 /* (the settings: the bar's ⚙ — the panel's own opener only when the bar is hidden) */
 body.has-topbar:not(.topbar-hidden) #panel.sp.collapsed { display: none; }
@@ -2416,7 +2416,7 @@ body.has-topbar:not(.topbar-hidden) #panel.sp.collapsed { display: none; }
 }
 @keyframes sp-in { from { opacity: 0; transform: translateY(8px); } }
 #sky-pop[hidden] { display: none; }
-body.has-topbar #sky-pop, body.piloting #sky-pop { top: 64px; bottom: auto; }
+body.has-topbar #sky-pop, body.piloting #sky-pop { top: calc(var(--tb-bottom, 52px) + 12px); bottom: auto; }
 #sky-pop .skp-head { margin: -8px -14px 0; padding: 8px 8px 0 14px; }
 #sky-pop .fl-title::before { background: var(--hud-cyan); box-shadow: 0 0 6px var(--hud-cyan); }
 #sky-pop .skp-x { all: unset; cursor: pointer; width: 24px; height: 24px; display: grid; place-items: center; font: 500 18px var(--font); color: var(--hud-dim); }
@@ -2579,8 +2579,8 @@ body.mobile .fl-cockpit { transform: translateX(-50%) scale(0.72); bottom: calc(
 body.mobile.portrait .fl-cockpit { transform: translateX(-50%) scale(0.82); bottom: calc(176px + env(safe-area-inset-bottom)); }
 
 /* the panels (the full HUD): smaller, in their corners */
-body.mobile .fl-target { top: 52px; left: 8px; transform: scale(0.72); transform-origin: 0 0; }
-body.mobile .fl-right { display: flex; top: 52px; bottom: auto; right: 8px; transform: scale(0.72); transform-origin: 100% 0; }
+body.mobile .fl-target { top: var(--tb-bottom, 52px); left: 8px; transform: scale(0.72); transform-origin: 0 0; }
+body.mobile .fl-right { display: flex; top: var(--tb-bottom, 52px); bottom: auto; right: 8px; transform: scale(0.72); transform-origin: 100% 0; }
 body.mobile.portrait .fl-right { top: auto; bottom: 380px; }
 body.mobile .fl-orbit, body.mobile .fl-tel { display: none; }
 
@@ -2649,15 +2649,15 @@ body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right));
 .fl-root.mapview .fl-mapbody { position: relative; flex: 1; height: 100%; }
 .fl-root.mapview .m3-stage, .fl-root.mapview .gt-stage { position: absolute; inset: 0; width: auto; height: auto; border-radius: 0; }
 /* (the tabs and the bar: over the free middle's top, the tabs left, the bar right) */
-.fl-root.mapview .fl-maptabs { position: absolute; z-index: 3; top: 62px; left: var(--fc-l); }
+.fl-root.mapview .fl-maptabs { position: absolute; z-index: 3; top: calc(var(--tb-bottom, 52px) + 10px); left: var(--fc-l); }
 /* (left clear of the tabs: 3D, Globe, Planisphere and the weather's toggle, ~300 px) */
-.fl-root.mapview .fl-mapbar { position: absolute; z-index: 3; top: 62px; right: var(--fc-r); left: calc(var(--fc-l) + 310px); justify-content: flex-end; flex-wrap: wrap; row-gap: 4px; }
+.fl-root.mapview .fl-mapbar { position: absolute; z-index: 3; top: calc(var(--tb-bottom, 52px) + 10px); right: var(--fc-r); left: calc(var(--fc-l) + 310px); justify-content: flex-end; flex-wrap: wrap; row-gap: 4px; }
 @media (max-width: 1500px) { .fl-root.mapview .fl-mapbar > .fl-label { display: none; } }
-.fl-root.mapview .m3-crumbs { top: 100px; left: var(--fc-l); right: auto; transform: none; justify-content: flex-start; }
-.fl-root.mapview .m3-menu { top: 100px; left: auto; right: var(--fc-r); }
+.fl-root.mapview .m3-crumbs { top: calc(var(--tb-bottom, 52px) + 48px); left: var(--fc-l); right: auto; transform: none; justify-content: flex-start; }
+.fl-root.mapview .m3-menu { top: calc(var(--tb-bottom, 52px) + 48px); left: auto; right: var(--fc-r); }
 /* (the timeline: over the strip) */
 .fl-root.mapview .m3-time { top: auto; bottom: 78px; left: calc(var(--fc-l) + 24px); right: calc(var(--fc-r) + 24px); width: auto; min-width: 0; transform: none; padding: 6px 10px; }
-.fl-root.mapview .gt-tag { left: auto; right: calc(var(--fc-r) + 4px); top: 100px; }
+.fl-root.mapview .gt-tag { left: auto; right: calc(var(--fc-r) + 4px); top: calc(var(--tb-bottom, 52px) + 48px); }
 .fl-root.mapview .gt-read { left: calc(var(--fc-l) + 4px); bottom: 82px; }
 /* the strip */
 .fl-mapstrip { display: none; }
@@ -2771,13 +2771,13 @@ body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right));
 .character-touch { display: none; gap: 6px; margin-top: 8px; touch-action: none; }
 @media (pointer: coarse) { .on-foot .character-touch { display: flex; justify-content: center; } .character-controls { display: none; } .character-hud { left: 12px; bottom: max(12px, env(safe-area-inset-bottom)); } }
 
-.on-foot .character-hud { bottom: auto; top: max(128px, env(safe-area-inset-top)); }
+.on-foot .character-hud { bottom: auto; top: max(calc(var(--tb-bottom, 52px) + 76px), env(safe-area-inset-top)); }
 
 /* ---- the on-foot HUD (ui/foothud.ts, PLAN-MODES-AAA M5): the compass under the top bar, the place bottom left,
    the minimap bottom right */
 .fh { position: fixed; inset: 0; pointer-events: none; z-index: 23; font-family: var(--hud-font); color: var(--hud-text); }
 .fh[hidden], .hide-ui .fh, .map-open .fh, body.photo .fh { display: none; }
-.fh-compass { position: absolute; top: 62px; left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); height: 58px; }
+.fh-compass { position: absolute; top: calc(var(--tb-bottom, 52px) + 10px); left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); height: 58px; }
 body.topbar-hidden .fh-compass { top: 26px; }
 .fh-card {
   position: absolute; left: 24px; bottom: max(24px, env(safe-area-inset-bottom)); min-width: 250px; padding: 10px 14px 11px;
@@ -2837,7 +2837,7 @@ body.topbar-hidden .fh-compass { top: 26px; }
 .on-foot .fl-root.mapview {display:block!important;}
 .on-foot.map-open .character-hud {display:none;}
 
-.local-map-controls { top: 116px; }
+.local-map-controls { top: calc(var(--tb-bottom, 52px) + 64px); }
 
 .scenery-hitboxes { position:fixed; pointer-events:none; z-index:25; overflow:hidden; }
 .scenery-hitboxes[hidden] { display:none; }

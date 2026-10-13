@@ -65,6 +65,9 @@ Gravité : **Critique** (à régler avant tout merge ou déjà exposé), **Haute
 2. ☐ Réglages par défaut : `sceneryHitboxes: false`.
 2b. ☑ Ancrage caméra (Z-V1 en premier : le décor tracé depuis le vaisseau est faux dans toutes les vues de vol), puis
    Z-V2 (streaming) et Z-V3 (sol vivant autour de la caméra). — fait : 3e57680, bd0652a
+2. ☑ Réglages par défaut : `sceneryHitboxes: false`. — fait : par défaut éteint, l’e2e l’allume lui-même, 44e8af7
+2b. ☐ Ancrage caméra (Z-V1 en premier : le décor tracé depuis le vaisseau est faux dans toutes les vues de vol), puis
+   Z-V2 (streaming) et Z-V3 (sol vivant autour de la caméra).
 2c. ☐ Profondeur d'occlusion fraîche à pleine résolution pour les passes rasterisées (Z-P1).
 3. ☐ Noyau : regarder l'A/B `trace-ab` (Bourget) une garde à la fois (manche à air, `waterMirror`/mer,
    `walkDistance`, niveaux d'imagerie), puis remettre les gardes `HAS_*`.
@@ -73,7 +76,7 @@ Gravité : **Critique** (à régler avant tout merge ou déjà exposé), **Haute
 6. ☐ Transitions de mode : piéton → libre, vue réalisateur, restauration à pied, touches à pied.
 7. ☐ Musique : sauter les mesures en retard, hystérésis des moments, synthèse des notes hors de la frame.
 8. ☐ TARS : `net()` avant les nouveaux téléportages, Nominatim seulement sur Entrée.
-9. ☐ Dépôt et site : LFS ou bucket pour les packs, garde de taille du site dans la CI, `check-forest` dans la CI.
+9. ☑ Dépôt et site : LFS ou bucket pour les packs, garde de taille du site dans la CI, `check-forest` dans la CI. — fait en partie : gardes et `check-forest` dans la CI ; LFS/bucket laissé à la décision de l'utilisateur (docs/ASSETS.md)
 
 ---
 
@@ -89,24 +92,28 @@ Gravité : **Critique** (à régler avant tout merge ou déjà exposé), **Haute
 ## Rendu GPU et sol
 
 ### Haute
-- ☐ **R-H1. Ombre du vaisseau sur le sol de la sonde de lumière lue en un point périmé.**
+- ☑ **R-H1. Ombre du vaisseau sur le sol de la sonde de lumière lue en un point périmé.**
   `trace.wgsl:6055` (`Eg *= shipShadow(EARTH_SHADOW_POINT)`), `:5899`, `:6585` (seule affectation, dans
   `earthNear`). Quand `earthGround` est atteint par `earthLook` (entrée env/sonde `:7740`, corps lointain `:1255`), le
   point vaut zéro, c'est-à-dire la caméra. Conséquence : dans le cockpit au soleil, tout le sol de la sonde reçoit
   l'ombre de la coque à la caméra, et l'ambiance du vaisseau, de l'astronaute et de `characterLight()` devient noire.
   *Correctif* : passer le point touché à `earthGround`, et sauter `shipShadow` dans l'entrée env.
 - ☑ **R-H2. Reprojection temporelle coupée pour toute translation supérieure à 1 mm sous 20 km.**
+  — fait : `EARTH_SHADOW_ON`, posé autour du seul `earthLook` d'`earthNear` ; la sonde et les corps lointains n'ont plus l'ombre, 665cac9
+- ☐ **R-H2. Reprojection temporelle coupée pour toute translation supérieure à 1 mm sous 20 km.**
   `renderer.ts:380-381, 3384-3390`. La marche fait environ 23 mm par image, et le vol bas ou le roulage davantage :
   pas d'historique, une copie pleine résolution par image, et la reprojection rigide (R4) qui suit devient du code
   mort dans le régime pour lequel elle a été écrite. `placeOnBody` utilise `M_METRES`, alors que le reste utilise
   `1476.625·massSolar`. *Correctif* : un seuil fondé sur la parallaxe du décor le plus proche, et le même facteur en mètres.
   — fait : seuil `taParallaxPx` (0,5 px) sur le déplacement rapporté à la hauteur au-dessus du relief (moins 60 m de décor), même facteur, f4f4093
 - ☐ **R-H3. `windsockShade` n'est plus retiré par `HAS_RWY`.** `trace.wgsl:6506` : `main` avait
+- ☑ **R-H3. `windsockShade` n'est plus retiré par `HAS_RWY`.** `trace.wgsl:6506` : `main` avait
   `if (HAS_RWY && WS.w > 0.5)` (vérifié). Toutes les variantes Terre portent donc `wxVeil`, `sunThrough`, la feuille
   et `sceneryShadow`. *Correctif* : `if ((HAS_RWY || HAS_SCENERY) && WS.w > 0.5)`.
+  — fait : `WS.w` n'est posé que par les manches/aéroports (`HAS_RWY`) et `worldScenery` (`HAS_SCENERY`), 665cac9
 
 ### Moyenne
-- ☐ **R-M1.** `waterMirror` et le calme (`trace.wgsl:6108-6110`, `:5521`) ne disparaissent que si le compilateur
+- ☑ **R-M1.** `waterMirror` et le calme (`trace.wgsl:6108-6110`, `:5521`) ne disparaissent que si le compilateur
   plie `0·x`, ce qui demande fast-math : sinon il reste une marche de 64 pas, une bissection, 3 `earthHeight` et
   `sceneryMirror`. `seaShade` évalue aussi un `gnoise` par pixel de mer même quand le calme vaut 0. *Correctif* : `HAS_SCENERY &&`.
 - ☐ **R-M2.** `sceneryShadow` (`trace.wgsl:5783, 4781, 6054`) lance des rayons d'ombre pour les faces tournées
@@ -119,6 +126,15 @@ Gravité : **Critique** (à régler avant tout merge ou déjà exposé), **Haute
 - ☐ **R-M4.** `timedVariant` ne journalise les compilations qu'avant la première image : celle de `|8192` est
   invisible dans les diagnostics.
 - ☑ **R-M5.** `earth-tiles.ts:298-317` : l'imagerie qui arrive après les hauteurs refait un `put()` (512 Ko), puis
+  `sceneryMirror`. `seaShade` évalue aussi un `gnoise` par pixel de mer même quand le calme vaut 0. *Correctif* : `HAS_SCENERY &&`. — fait : calme, miroir et `gnoise` des lacs derrière `HAS_SCENERY` (et `calm > 0`), 665cac9
+- ☑ **R-M2.** `sceneryShadow` (`trace.wgsl:5783, 4781, 6054`) lance des rayons d'ombre pour les faces tournées
+  dos au Soleil : parcours du BVH plus `forestQuery` jusqu'à 640 pas, pour rien. *Correctif* : sortir tôt si `dot(n,L) <= 0`. — fait, 665cac9
+- ☐ **R-M3.** Le cache ne garde que 2 clés de variantes (`renderer.ts:3159`), alors que les bits 4096 et 8192 changent
+  en cours de jeu (`earthScenery.clear()` tous les 8 km, pages de surface, météo, pistes) : on recompile en boucle,
+  plusieurs secondes à chaque fois. *Correctif* : environ 4 clés.
+- ☑ **R-M4.** `timedVariant` ne journalise les compilations qu'avant la première image : celle de `|8192` est
+  invisible dans les diagnostics. — fait : chaque compilation (entrée, qualité, clé, secondes), la cascade qualité comprise, ea44018
+- ☐ **R-M5.** `earth-tiles.ts:298-317` : l'imagerie qui arrive après les hauteurs refait un `put()` (512 Ko), puis
   `onChange` et `invalidate()`. Avec z9–13, jusqu'à 128 invalidations par remplissage de fenêtre, et une vue fixe
   qui ne finit jamais de converger pendant le chargement.
   — fait (constat corrigé) : le `put()` de l'imagerie ne change pas le rectangle valide, donc ni `onChange` ni
@@ -126,11 +142,11 @@ Gravité : **Critique** (à régler avant tout merge ou déjà exposé), **Haute
   Compteur `EarthTiles.imagery`, vue fixe redessinée au plus toutes les 0,5 s, b230bd1
 
 ### Basse
-- ☐ `earth-tiles.ts:493, 298` : écouteurs d'abandon jamais retirés (petite fuite par tuile).
-- ☐ `scenery.ts:96` détruit l'ancien tampon tout de suite, alors que `clear()` attend `onSubmittedWorkDone` : incohérent.
-- ☐ `earth-surface.ts` : 16 pages par région au maximum (`loadedAt`, `P.surface`, masque `valid`) sans assertion.
-- ☐ `ground-stones.ts:135` : `packStones()` alloue à chaque image (`character-renderer.ts:331`). `params()` de
-  `scenery.ts` et `earth-surface.ts` : un `Float32Array` par image.
+- ☑ `earth-tiles.ts:493, 298` : écouteurs d'abandon jamais retirés (petite fuite par tuile). — fait, ea44018
+- ☑ `scenery.ts:96` détruit l'ancien tampon tout de suite, alors que `clear()` attend `onSubmittedWorkDone` : incohérent. — fait : `retire()` commun, ea44018
+- ☑ `earth-surface.ts` : 16 pages par région au maximum (`loadedAt`, `P.surface`, masque `valid`) sans assertion. — fait : `SURFACE_PAGES`, région trop grande écartée, test du manifeste, ea44018
+- ☑ `ground-stones.ts:135` : `packStones()` alloue à chaque image (`character-renderer.ts:331`). `params()` de
+  `scenery.ts` et `earth-surface.ts` : un `Float32Array` par image. — fait : table et tableaux gardés, ea44018
 
 ### Diagnostics des items 4 et 5 de la campagne
 - **Item 4 (Bourget 35 → 44 ms, surface et décor coupés).** Candidats, du plus probable au moins probable :
@@ -170,7 +186,7 @@ Symptôme : les troncs sont parfois transparents à l'herbe qui est derrière eu
   juste. Le `depth32float` ne départage que les objets rasterisés entre eux, et seule l'herbe LOD 0 y écrit.
 
 ### Haute
-- ☐ **Z-P1. Profondeur périmée et jamais reprojetée en temps réel** (`trace.wgsl:7558-7568`, vérifié).
+- ☑ **Z-P1. Profondeur périmée et jamais reprojetée en temps réel** (`trace.wgsl:7558-7568`, vérifié).
   - **Mécanisme :**
     - Un rayon par bloc de 2 à 8 px, avec un décalage tournant (`renderer.ts:4665-4690`) et une gigue gaussienne (`trace.wgsl:7507`).
     - Seul le pixel tracé écrit `moments[idx] = vec2f(0, depth)`. Les autres gardent la profondeur d'il y a 1 à b²−1 images.
@@ -181,15 +197,16 @@ Symptôme : les troncs sont parfois transparents à l'herbe qui est derrière eu
     du ciel qui était derrière. Une herbe à 14 m devant un sol à 25 m passe le test et se dessine sur le tronc. Le défaut
     est pire avec un bloc de 3–4 et un lacet rapide, et disparaît à l'arrêt : d'où le « parfois ». Même chose sur le
     bord des bâtiments, et pour les pierres, le vaisseau, la station et Endurance.
-- ☐ **Z-P2. Image fixe : la profondeur est une moyenne** (`trace.wgsl:7575`,
+  - — fait : `sceneDepth` (f32, pleine résolution, passe `occlusion` de post.wgsl après `temporal`) ; pixel périmé = minimum des 4 rayons frais du réseau qui l'entourent ; lié à character/ship/station/endurance.wgsl à la place de `moments`, fe32eb3
+- ☑ **Z-P2. Image fixe : la profondeur est une moyenne** (`trace.wgsl:7575`,
   `mix(m.y, tr.depth, 1/na)`). Au bord d'un tronc qui se découpe sur le ciel, la moyenne part vers ~5e8 : il reste
-  une frange de 1–2 px où l'herbe passe, même caméra immobile.
+  une frange de 1–2 px où l'herbe passe, même caméra immobile. — fait : `moments.y` garde l'échantillon le plus proche en convergence (la profondeur de champ le lit aussi), fe32eb3
 
 ### Basse
 - ☐ La gigue fait alterner les pixels de bord entre la profondeur du tronc et celle du sol, alors que la couleur
-  est mélangée : les bords des troncs scintillent.
+  est mélangée : les bords des troncs scintillent. — non fait en mouvement : un pixel frais garde sa propre profondeur (prendre le minimum du voisinage rognerait l'herbe partout) ; à l'arrêt, le minimum de Z-P2 le règle
 - ☐ L'herbe des LOD > 0 n'écrit pas dans le `depth32float` (`character-renderer.ts:126, 737-745`), ce qui peut poser
-  problème entre les brins et l'astronaute ou les pierres.
+  problème entre les brins et l'astronaute ou les pierres. — non fait : vérifié, les LOD > 0 gardent le test (`depthCompare: "greater"`, écriture coupée) contre l'astronaute et les pierres dessinés avant ; seuls les brins lointains entre eux ne sont pas triés, par choix
 
 **Pour confirmer, sans changer le code :**
 1. `realtimeSubsampling: 1` et `temporalBlend: 1` : la transparence doit disparaître en tournant devant un tronc. Avec 4, elle doit empirer.
@@ -330,83 +347,94 @@ exprimées par rapport à la caméra, les empreintes, le patch de marche, et l'o
 ## UI et modes
 
 ### Haute
-- ☐ **U-H1. Les panneaux supposent une barre du haut sur une seule ligne.** `style.css:2568` (`tb-wrap`, hauteur
+- ☑ **U-H1. Les panneaux supposent une barre du haut sur une seule ligne.** `style.css:2568` (`tb-wrap`, hauteur
   auto, z 30). Les positions sont fixes à 56–66 px : `.fl-target`/`.fl-tel` (1113, 1123), `#hud` (2290), `cam-pop`/`sky-pop`
   (2082, 2414), `.sp-toasts` (2143), onglets de carte (2647-2655), `.fh-compass` (2775), `character-hud` (2769).
   Vers 900 px de large ou en français, la barre passe sur 2 ou 3 lignes et les recouvre. *Correctif* : `fit()` écrit
-  `--tb-bottom` et les positions utilisent `calc(var(--tb-bottom) + 8px)`.
+  `--tb-bottom` et les positions utilisent `calc(var(--tb-bottom) + 8px)`. — fait : `fit()` publie `--tb-bottom` (barre, ou poignée cachée), toutes les positions sous la barre en `calc(var(--tb-bottom, 52px) + …)`, a8dc981
 
 ### Moyenne
-- ☐ **U-M2.** `skyevents.ts:121-126, 170-189` : le calcul n'est jamais annulé, deux balayages ISS de 3 jours
-  tournent en parallèle, et l'ancien écrase `this.last`, que TARS lit avec `take()`.
-- ☐ **U-M3.** `livecapture.ts:122-157` : une exception dans `at()`/`grab()` laisse le panneau sur « LIVE »
+- ☑ **U-M2.** `skyevents.ts:121-126, 170-189` : le calcul n'est jamais annulé, deux balayages ISS de 3 jours
+  tournent en parallèle, et l'ancien écrase `this.last`, que TARS lit avec `take()`. — fait : chaque lecture a sa génération, la plus récente annule l'ancienne (balayage ISS compris), seule elle écrit `last` et remplit la page, fc8950b
+- ☑ **U-M3.** `livecapture.ts:122-157` : une exception dans `at()`/`grab()` laisse le panneau sur « LIVE »
   avec un Stop inopérant, sans Fermer, et le `VideoWriter` n'est jamais fermé. Rien n'empêche non plus de lancer en
-  même temps une vidéo du dialogue de rendu ou un rendu hors ligne (`exportRGBA` partagé).
-- ☐ **U-M4.** Infos à pied affichées 3 fois (`characterhud.ts:65-70`, `foothud.ts:185-195`, contexte de la barre
+  même temps une vidéo du dialogue de rendu ou un rendu hors ligne (`exportRGBA` partagé). — fait : erreur attrapée (ARRÊTÉ + raison, Fermer, encodeur fermé quoi qu'il arrive), capture en direct et rendu/vidéo exclusifs (`busy` du dialogue, refus côté ciel), a7fe296
+- ☑ **U-M4.** Infos à pied affichées 3 fois (`characterhud.ts:65-70`, `foothud.ts:185-195`, contexte de la barre
   `main.ts:3115-3122`, avec 4 ou 5 décimales selon l'endroit). Deux systèmes de traduction coexistent : `tr({fr,en})` en ligne
-  (characterhud, atlas, skyevents, hors de `tests/i18n.test.ts`) et `t()`.
-- ☐ **U-M5.** Touches à pied (`keymap.ts:430, 466-480`, vérifié) : Espace saute au lieu de mettre en pause, alors que
+  (characterhud, atlas, skyevents, hors de `tests/i18n.test.ts`) et `t()`. — fait : FootHud seul statut (CharacterHud = touches + bouton), contexte de la barre via `fmtLatLon` à 5 décimales, `tr({fr,en})` de characterhud/atlas/skyevents passés en `t()`/`tf()` (fr-modes.ts), fc8950b. Note : le statut de CharacterHud était déjà masqué à pied par le CSS
+- ☑ **U-M5.** Touches à pied (`keymap.ts:430, 466-480`, vérifié) : Espace saute au lieu de mettre en pause, alors que
   l'infobulle (`transport.ts:70`) dit « tous les modes ». V/C/Y (vue, viser, télescope) ne sont pas dans la
-  liste autorisée, contrairement à la règle « dans tous les modes ». À confirmer en jeu.
+  liste autorisée, contrairement à la règle « dans tous les modes ». À confirmer en jeu. — fait : Espace reste « sauter » à pied, l'infobulle et le titre de l'aide le disent ; V/C/Y non ajoutés : la caméra du piéton force `lookAt`/`telescope` à faux chaque image (character.ts placeView) et V changerait la monture du vaisseau posé ou la caméra libre, 4856276
 
 ### Basse
-- ☐ L'Atlas ne se ferme pas avec F8 (`atlas.ts:204`, le focus dans le champ fait ignorer la touche par `isTyping`).
-- ☐ L'Atlas reste bloqué sur « Recherche… » sous 3 caractères ou sur la Lune (`atlas.ts:271-287`).
-- ☐ La barre est remesurée toutes les 500 ms même sans changement, avec jusqu'à 3 mises en page forcées
-  (`main.ts:5006`, `topbar.ts:339-385`). *Correctif* : un `ResizeObserver`.
-- ☐ La vue HUD « bare » met encore à jour des panneaux cachés (`flighthud.ts:1797`).
-- ☐ Le raster 512² de `LocalGroundMap` est construit deux fois (`foothud.ts:92` et le HUD de vol).
-- ☐ `aria-label` est copié une seule fois depuis `data-tip` (`main.ts:5547`), puis n'est plus à jour.
-- ☐ `renderdialog.ts` (`runVideo`) : `const tf` masque l'import `tf()`.
-- ☐ `scenery-hitboxes.ts:58-92` alloue beaucoup à 30 Hz.
+- ☑ L'Atlas ne se ferme pas avec F8 (`atlas.ts:204`, le focus dans le champ fait ignorer la touche par `isTyping`). — fait : le champ ferme l'Atlas sur sa propre touche, fc8950b
+- ☑ L'Atlas reste bloqué sur « Recherche… » sous 3 caractères ou sur la Lune (`atlas.ts:271-287`). — fait : statut effacé (moins de 3 caractères, coordonnées, autre monde), recherche annulée au changement de monde, échec → « Aucune adresse », fc8950b
+- ☑ La barre est remesurée toutes les 500 ms même sans changement, avec jusqu'à 3 mises en page forcées
+  (`main.ts:5006`, `topbar.ts:339-385`). *Correctif* : un `ResizeObserver`. — fait : `ResizeObserver` sur la barre et ses groupes, mesure seulement si changé (repli toutes les 3 s), a8dc981
+- ☑ La vue HUD « bare » met encore à jour des panneaux cachés (`flighthud.ts:1797`). — fait : données air et mini-carte non dessinées en vue bare, 054dbaa
+- ☑ Le raster 512² de `LocalGroundMap` est construit deux fois (`foothud.ts:92` et le HUD de vol). — fait : raster partagé par `SceneryContact` (WeakMap), 054dbaa
+- ☑ `aria-label` est copié une seule fois depuis `data-tip` (`main.ts:5547`), puis n'est plus à jour. — fait : un `MutationObserver` sur `data-tip` met à jour l'`aria-label` qui en venait, a7fe296
+- ☑ `renderdialog.ts` (`runVideo`) : `const tf` masque l'import `tf()`. — fait : renommé `frameT`, a7fe296
+- ☑ `scenery-hitboxes.ts:58-92` alloue beaucoup à 30 Hz. — fait : axes calculés une fois, extrémités en scalaires, style posé seulement si la vue change, 054dbaa
 
 ## Musique et audio
 
 ### Haute
-- ☐ **A-H1. Rattrapage en rafale** (`music/engine.ts:242`, vérifié : aucun saut). Son coupé : `Music.update` sort
+- ☑ **A-H1. Rattrapage en rafale** (`music/engine.ts:242`, vérifié : aucun saut). Son coupé : `Music.update` sort
   avant `pump`, mais le contexte audio tourne toujours (`music.ts:117-119, 151-152`, gain à 0 seulement). Au retour du
   son, environ 150 mesures sont programmées d'un coup, avec des notes dans le passé : gel et grappe de notes très
   forte. Même chose, en plus petit, après une pause de plus de 0,4 s. *Correctif* : sauter les mesures entières
-  en retard, et arrêter la piste quand `ensure()` vaut null.
+  en retard, et arrêter la piste quand `ensure()` vaut null. — fait : mesures entières en retard sautées (et les tics),
+  notes déjà passées omises, `MusicEngine.halt()` quand la sortie est nulle (185077a, ba4086d)
 
 ### Moyenne
-- ☐ **A-M2.** `engine.ts:221-228` : `cancelScheduledValues(at futur)` efface la montée d'entrée, ce qui donne un silence puis
-  un « pop ». *Correctif* : `cancelAndHoldAtTime`.
-- ☐ **A-M3.** `score.ts:62-68` : les moments n'ont pas d'hystérésis (passage bas à 400 m et 140 m/s, plasma, finale). Le
-  thème bascule sans cesse, et chaque bascule construit une piste complète.
-- ☐ **A-M4.** `instruments.ts:407-421, 452-478, 496-530` : les tampons de notes sont synthétisés sur le thread principal
-  dans la frame (10 à 30 ms pour une note grave de piano), et le cache n'est jamais vidé (60 à 100 Mo).
+- ☑ **A-M2.** `engine.ts:221-228` : `cancelScheduledValues(at futur)` efface la montée d'entrée, ce qui donne un silence puis
+  un « pop ». *Correctif* : `cancelAndHoldAtTime`. — fait : `cancelAndHoldAtTime`, sinon rampe coupée à sa valeur (185077a)
+- ☑ **A-M3.** `score.ts:62-68` : les moments n'ont pas d'hystérésis (passage bas à 400 m et 140 m/s, plasma, finale). Le
+  thème bascule sans cesse, et chaque bascule construit une piste complète. — fait : seuils de sortie plus larges que
+  ceux d'entrée, et tenue minimale de 8 s sauf moment plus grave (76526e5)
+- ☑ **A-M4.** `instruments.ts:407-421, 452-478, 496-530` : les tampons de notes sont synthétisés sur le thread principal
+  dans la frame (10 à 30 ms pour une note grave de piano), et le cache n'est jamais vidé (60 à 100 Mo). — fait : notes
+  probables du thème rendues en tranches (2 ms/image + requestIdleCallback), mesure suivante composée 1,5 s avant,
+  piano grave et timbales à demi-fréquence, cache LRU plafonné à 64 Mo (185077a)
 
 ### Basse
-- ☐ Délai partagé réaccordé brutalement (`engine.ts:215-217`).
-- ☐ Code mort : `MusicEngine.solo`, `Music.skip`, `MOMENT_LIST`. Le solo du panneau écrase les sourdines de
-  l'utilisateur (`musicpanel.ts:310-314`).
-- ☐ Identifiants de thème enregistrés non vérifiés (`music.ts:85-91`).
-- ☐ Allocations par image quand le panneau est ouvert (`engine.ts:314, 178`, `musicpanel.ts:489`).
-- ☐ **Droits** : aucune mélodie connue n'est transcrite (vérifié contre Star Wars, la Marche impériale, Jurassic Park,
+- ☑ Délai partagé réaccordé brutalement (`engine.ts:215-217`). — fait : `setTargetAtTime` (185077a)
+- ☑ Code mort : `MusicEngine.solo`, `Music.skip`, `MOMENT_LIST`. Le solo du panneau écrase les sourdines de
+  l'utilisateur (`musicpanel.ts:310-314`). — fait : `skip` et `MOMENT_LIST` retirés, solo branché sur `prefs.solo`
+  (les sourdines restent) (ba4086d)
+- ☑ Identifiants de thème enregistrés non vérifiés (`music.ts:85-91`). — fait : `Music.checked()` (ba4086d)
+- ☑ Allocations par image quand le panneau est ouvert (`engine.ts:314, 178`, `musicpanel.ts:489`). — fait : tampon et
+  objet des niveaux réutilisés, `current` sans copie, dégradé créé une fois (185077a, ba4086d)
+- ☑ **Droits** : aucune mélodie connue n'est transcrite (vérifié contre Star Wars, la Marche impériale, Jurassic Park,
   E.T. et Interstellar). L'interface affiche « D'après {œuvre réelle} » (`musicpanel.ts:265-266, 449`) : à garder en
-  commentaire seulement.
+  commentaire seulement. — fait : `Theme.after` retiré (en commentaire), humeurs neutres EN/FR (f618807)
 
 ## TARS, données, réglages
 
 ### Moyenne
-- ☐ **T-M1.** Les nouveaux téléportages de TARS sautent la sauvegarde « Avant TARS » : `game-tools.ts:1425` (atlas
+- ☑ **T-M1.** Les nouveaux téléportages de TARS sautent la sauvegarde « Avant TARS » : `game-tools.ts:1425` (atlas
   go), `:1451` (sky_events go), `:505` (character start), `:1381` (set_mode foot), `main.ts:3563` (`atlasGo`). Or
-  l'en-tête (ligne 12) le promet.
-- ☐ **T-M2.** Nominatim sert de repli à la recherche pendant la frappe (`geocode.ts:145`, `atlas.ts:285-305`), ce
-  que la politique d'usage d'OSMF interdit. À n'utiliser que sur Entrée ou depuis TARS.
-- ☐ **T-M3.** `sceneryHitboxes: true` par défaut (`settings.ts:617`, vérifié) : des contours roses de
-  diagnostic pour tous les joueurs à pied.
+  l'en-tête (ligne 12) le promet. — fait : `net()` avant atlas go, sky_events take go/live, character start,
+  set_mode foot ; `atlasGo` de main.ts n’est appelé par TARS qu’à travers `atlas go` (le filet reste côté TARS,
+  pas sur le bouton du joueur), 387cf39
+- ☑ **T-M2.** Nominatim sert de repli à la recherche pendant la frappe (`geocode.ts:145`, `atlas.ts:285-305`), ce
+  que la politique d'usage d'OSMF interdit. À n'utiliser que sur Entrée ou depuis TARS. — fait : `geocode(…,
+  { fallback })`, Photon seul à la frappe, Nominatim sur Entrée sans résultat et pour TARS, 509e890
+- ☑ **T-M3.** `sceneryHitboxes: true` par défaut (`settings.ts:617`, vérifié) : des contours roses de
+  diagnostic pour tous les joueurs à pied. — fait : `false` par défaut, 44e8af7
 
 ### Basse
-- ☐ Le géocodeur met aussi les échecs en cache pour toute la session (`geocode.ts:156`, vérifié).
-- ☐ La limite d'une requête par seconde n'est pas atomique (`geocode.ts:121-124`).
-- ☐ Outil `character` (`game-tools.ts:478-524`) : pas d'`act()`, pas d'enum pour `body`, `start` vaut 0°/0° (la mer)
-  par défaut, et `orbit` remet `yaw` à 0.
-- ☐ Les descriptions des outils sont en retard sur leurs enums (`schedule`, `get_telemetry`).
-- ☐ Une sauvegarde est refusée en entier si `character` est mal formé (`save.ts:156-170`).
-- ☐ L'imagerie EOX s2cloudless 2021 est sous CC BY-NC-SA (`earth-tiles.ts:50`) : créditée, mais l'usage non commercial
-  et le partage à l'identique contraignent. La couche 2016 est sous CC BY.
+- ☑ Le géocodeur met aussi les échecs en cache pour toute la session (`geocode.ts:156`, vérifié). — fait : seules les réponses obtenues sont gardées, 509e890
+- ☑ La limite d'une requête par seconde n'est pas atomique (`geocode.ts:121-124`). — fait : créneau réservé avant l’attente, une par requête, 509e890
+- ☑ Outil `character` (`game-tools.ts:478-524`) : pas d'`act()`, pas d'enum pour `body`, `start` vaut 0°/0° (la mer)
+  par défaut, et `orbit` remet `yaw` à 0. — fait : `act()`, enum des mondes solides, lat/lon exigés, `orbit` partiel, 387cf39
+- ☑ Les descriptions des outils sont en retard sur leurs enums (`schedule`, `get_telemetry`). — fait : surface/scenery/grass/map et character/grass décrits, 387cf39
+- ☑ Une sauvegarde est refusée en entier si `character` est mal formé (`save.ts:156-170`). — fait : le marcheur est écarté et signalé (`caught`), 08d1490 + cc91659
+- ☑ L'imagerie EOX s2cloudless 2021 est sous CC BY-NC-SA (`earth-tiles.ts:50`) : créditée, mais l'usage non commercial
+  et le partage à l'identique contraignent. La couche 2016 est sous CC BY. — fait (documenté, couche gardée) : la
+  couche 2016 n’a pu être vérifiée hors réseau et `EOX_FIT` est ajusté sur 2021 ; contrainte écrite près d’`eoxUrl`
+  et dans docs/systemes/03, 49bab40
 
 **Vérifié bon** : `/earth-surface` dans server.ts (regex stricte), pas de SSRF, clés côté serveur, traductions FR
 de `t()` complètes, déclencheurs branchés, environ 100 POI contrôlés, décalages horaires des paysages corrects.
@@ -414,29 +442,30 @@ de `t()` complètes, déclencheurs branchés, environ 100 POI contrôlés, déca
 ## Tests, scripts, docs, dépôt
 
 ### Haute
-- ☐ **D-H1. 64 Mo de binaires sans LFS** : `assets/earth-surface/v1` 31,9 Mo, `assets/character` 23,7 Mo,
+- ☑ **D-H1. 64 Mo de binaires sans LFS** : `assets/earth-surface/v1` 31,9 Mo, `assets/character` 23,7 Mo,
   `docs/img` 6,8 Mo, `docs/perf` 1,0 Mo ; 96 Mo dans l'historique. Les packs sont adressés par contenu, donc
   chaque reconstruction ajoute environ 16 Mo. *Correctif* : LFS, ou une release/un bucket récupéré par
-  `build-pages.ts` d'après les hashes de `manifest.json`.
-- ☐ **D-H2. Site Pages proche de sa limite d'1 Go** (`pages.yml:166-168` dit « ~2 × 370 Mo », `_site` mesure déjà
+  `build-pages.ts` d'après les hashes de `manifest.json`. — fait : garde `scripts/check-repo-size.ts` (`bun run check:size`, CI `--base HEAD^1` : binaires suivis > 600 Mo ou un nouveau binaire > 8 Mo → échec), note docs/ASSETS.md (origine des packs, reconstruction, noms par contenu, LFS/bucket plus tard) ; ni réécriture d'historique ni LFS (décision de l'utilisateur), astronaute laissé en place, 19178c0
+- ☑ **D-H2. Site Pages proche de sa limite d'1 Go** (`pages.yml:166-168` dit « ~2 × 370 Mo », `_site` mesure déjà
   395 Mo au 11 oct.). Avec les packs et l'astronaute, on arrive à environ 900 Mo, et la prochaine région fera
-  échouer le déploiement. *Correctif* : une garde `du` dans la CI, ou des assets partagés entre `/` et `/test/`.
+  échouer le déploiement. *Correctif* : une garde `du` dans la CI, ou des assets partagés entre `/` et `/test/`. — fait : garde de taille du site dans pages.yml après l'assemblage (avertissement > 800 Mo ; > 900 Mo l'aperçu est retiré, main seul > 900 Mo échoue) ; partage `/`–`/test/` non fait (URL relatives à chaque répertoire, workers et portée du Service Worker propres, Pages sans liens), 19178c0
 
 ### Moyenne
-- ☐ **D-M1.** `earth-surface.e2e` « comparable GPU timings » n'affirme rien sur les temps (il ne fait qu'enregistrer)
-  et ne pouvait donc pas attraper la régression de 35 à 44 ms.
-- ☐ **D-M2.** `ground-details.e2e:38` : l'A/B de l'occulteur passe même quand `correct === missing`.
-- ☐ **D-M3.** `scripts/check-forest.ts` (WGSL contre TS au bit près) n'est ni dans la CI ni dans `check`.
+- ☑ **D-M1.** `earth-surface.e2e` « comparable GPU timings » n'affirme rien sur les temps (il ne fait qu'enregistrer)
+  et ne pouvait donc pas attraper la régression de 35 à 44 ms. — fait : budget `(satellite|materials) − off < 5 × max(1, off/40)` ms sur la médiane des frames GPU mesurées, attente `variantReady && calibrationReady` + 30 frames au lieu des 1,5 s, a5bcbbc
+- ☑ **D-M2.** `ground-details.e2e:38` : l'A/B de l'occulteur passe même quand `correct === missing`. — fait : si la coque recouvre l'astronaute sur > 200 px, l'occulteur doit en cacher au moins 10 % ; sinon seul le cas synthétique décide, a5bcbbc
+- ☑ **D-M3.** `scripts/check-forest.ts` (WGSL contre TS au bit près) n'est ni dans la CI ni dans `check`. — fait : `check-forest --rays 2000` dans verify et les deux étapes du site (sort 0 sans adaptateur), 19178c0
 - ☐ **D-M4.** character-aaa « devant le vaisseau posé » est rouge (refonte en contre-plongée en cours).
-- ☐ **D-M5.** `tests/score.test.ts:43-48` a perdu les bornes de hauteur et de niveau des notes.
+- ☑ **D-M5.** `tests/score.test.ts:43-48` a perdu les bornes de hauteur et de niveau des notes. — fait : chaque
+  thème composé (3 graines × 3 intensités × 64 mesures), notes dans le clavier, vélocité ≤ 1, effets bornés (76526e5)
 
 ### Basse
-- ☐ Pas de commentaire d'en-tête : earth-surface, gargantua-ground, ground-planets, scenery-hitboxes (e2e).
-- ☐ Absents de BH-API.md : `renderer.earthScenery.contact`, `renderer.streamingState.leadM`,
-  `earthSurface.colorView()`, `renderer.encodeCharacter`, `characterRenderer.model`.
-- ☐ Les captures `docs/img/earth-*` n'ont pas de crédit OSM/WorldCover/Sentinel-2/EOX.
-- ☐ L'aperçu `pages.yml:146` lance `bun test` sans junit. `build-earth-surface.ts:5` dépend d'un Python local et
-  d'un basisu non épinglé. `.pi/` n'est pas ignoré.
+- ☑ Pas de commentaire d'en-tête : earth-surface, gargantua-ground, ground-planets, scenery-hitboxes (e2e). — fait : earth-surface a5bcbbc, les trois autres 1d98705
+- ☑ Absents de BH-API.md : `renderer.earthScenery.contact`, `renderer.streamingState.leadM`,
+  `earthSurface.colorView()`, `renderer.encodeCharacter`, `characterRenderer.model`. — fait : les cinq entrées dans le tableau du renderer, 1d98705
+- ☑ Les captures `docs/img/earth-*` n'ont pas de crédit OSM/WorldCover/Sentinel-2/EOX. — fait : lignes de crédit sous les captures (PLAN-TERRE-PHOTOREALISTE.md, FORETS-BATIMENTS-WORLDWIDE.md), 1d98705
+- ☑ L'aperçu `pages.yml:146` lance `bun test` sans junit. `build-earth-surface.ts:5` dépend d'un Python local et
+  d'un basisu non épinglé. `.pi/` n'est pas ignoré. — fait : junit de l'aperçu (artefact junit-preview), basisu 2.50.0 épinglé et noté sous `encoder` dans le manifeste et le README, `BASISU`/`EARTH_BUILD_PYTHON` surchargent les chemins, `.pi/` ignoré, 19178c0
 
 **Vérifié bon** : la CI couvre typecheck, biome, check-wgsl et `bun test` ; `skipIf(!E2E)` partout ; nettoyage de
 headless-gpu ; aucun chemin `/Users` codé en dur ; aucun `.skip` ajouté ; les changements du harnais sont justifiés.

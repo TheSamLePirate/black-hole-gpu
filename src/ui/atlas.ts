@@ -10,7 +10,9 @@ import { compassPoint, fmtLatLon, greatCircle, POINTS } from "../game/geo";
 import { geocode, parseCoords, type GeoPlace } from "../game/geocode";
 import { isNight, terminatorLat } from "../game/mapproj";
 import { POI_KINDS, POIS, searchPois, type Poi, type PoiKind } from "../game/pois";
-import { t, tf, tr, type Text } from "../i18n";
+import { t, tf, tr } from "../i18n";
+import { effectiveBindings } from "../input/bindings";
+import { matchKey } from "../input/keymap";
 import { button, el, h, modal } from "./kit";
 import { MapView, type MapBody, type ToScreen } from "./mapview";
 
@@ -54,10 +56,10 @@ export interface AtlasHost {
   view?(scene: string): void;
 }
 
-const BODIES: { id: MapBody; name: Text }[] = [
-  { id: "earth", name: { fr: "Terre", en: "Earth" } },
-  { id: "moon", name: { fr: "Lune", en: "Moon" } },
-  { id: "mars", name: { fr: "Mars", en: "Mars" } },
+const BODIES: { id: MapBody; name: () => string }[] = [
+  { id: "earth", name: () => t("Earth") },
+  { id: "moon", name: () => t("Moon") },
+  { id: "mars", name: () => t("Mars") },
 ];
 const RADIUS_M: Record<MapBody, number> = { earth: 6_371_000, moon: 1_737_400, mars: 3_389_500 };
 
@@ -81,27 +83,12 @@ const KIND_COL: Record<PoiKind | "site" | "view" | "address" | "point", string> 
   point: "#ffffff",
 };
 
-const ACTION_TEXT: Record<AtlasAction, { label: Text; tip: Text }> = {
-  orbit: {
-    label: { fr: "En orbite au-dessus", en: "In orbit over it" },
-    tip: { fr: "Le vaisseau sur une orbite qui passe au-dessus, maintenant", en: "The craft on an orbit passing over it, now" },
-  },
-  land: {
-    label: { fr: "Y poser le vaisseau", en: "Set the craft down" },
-    tip: { fr: "Le vaisseau posé sur le sol, là", en: "The craft landed on the ground there" },
-  },
-  walk: {
-    label: { fr: "Y marcher", en: "Walk there" },
-    tip: { fr: "Le vaisseau posé, et vous à pied à côté", en: "The craft landed, and you on foot beside it" },
-  },
-  camera: {
-    label: { fr: "Caméra libre au-dessus", en: "Free camera above" },
-    tip: { fr: "La caméra libre au-dessus, regardant le lieu", en: "The free camera above it, looking at the place" },
-  },
-  tripod: {
-    label: { fr: "Trépied sur place", en: "Tripod there" },
-    tip: { fr: "La caméra posée sur son trépied, au sol, là", en: "The camera on its tripod, on the ground there" },
-  },
+const ACTION_TEXT: Record<AtlasAction, { label: () => string; tip: () => string }> = {
+  orbit: { label: () => t("In orbit over it"), tip: () => t("The craft on an orbit passing over it, now") },
+  land: { label: () => t("Set the craft down"), tip: () => t("The craft landed on the ground there") },
+  walk: { label: () => t("Walk there"), tip: () => t("The craft landed, and you on foot beside it") },
+  camera: { label: () => t("Free camera above"), tip: () => t("The free camera above it, looking at the place") },
+  tripod: { label: () => t("Tripod there"), tip: () => t("The camera on its tripod, on the ground there") },
 };
 
 export class AtlasPage {
@@ -149,7 +136,7 @@ export class AtlasPage {
     const tabs = el("div", "at-bodies");
     tabs.setAttribute("role", "tablist");
     for (const b of BODIES) {
-      const btn = button({ label: tr(b.name), testid: `atlas-body-${b.id}`, onClick: () => this.setBody(b.id) });
+      const btn = button({ label: b.name(), testid: `atlas-body-${b.id}`, onClick: () => this.setBody(b.id) });
       btn.setAttribute("role", "tab");
       this.tabs.set(b.id, btn);
       tabs.append(btn);
@@ -158,9 +145,18 @@ export class AtlasPage {
     this.input.value = o.query ?? "";
     this.input.oninput = () => this.search(this.input.value);
     this.input.onkeydown = (e) => {
+      // (the Atlas's own key closes it from its field too: the game's keys skip a field one types in)
+      if (matchKey(e, false, false, effectiveBindings())?.do === "atlas") {
+        e.preventDefault();
+        this.hide();
+        return;
+      }
       if (e.key === "Enter") {
         e.preventDefault();
-        (this.list.querySelector("button") as HTMLButtonElement | null)?.click();
+        const first = this.list.querySelector("button") as HTMLButtonElement | null;
+        // (nothing found as one typed: Enter asks again, OpenStreetMap's Nominatim too)
+        if (first) first.click();
+        else this.search(this.input.value, true);
       }
     };
     const side = h(
@@ -204,7 +200,7 @@ export class AtlasPage {
       const me = here.find((p) => p.body === body);
       if (me) this.map.flyTo(me.lat, me.lon, this.body === "earth" ? 5 : 3, 10);
     }
-    if (o.query) this.search(o.query);
+    if (o.query) this.search(o.query, true);
     this.input.focus();
   }
 
@@ -219,6 +215,11 @@ export class AtlasPage {
   }
 
   private setBody(b: MapBody, fit = true) {
+    // (another world: the Earth's address search in flight dropped, its "Searching…" with it)
+    if (b !== this.body) {
+      this.searching?.abort();
+      this.status.textContent = "";
+    }
     this.body = b;
     for (const [k, btn] of this.tabs) {
       btn.classList.toggle("on", k === b);
@@ -246,16 +247,16 @@ export class AtlasPage {
         .map((m) => m.source),
     ]);
     this.chips.replaceChildren();
-    const names: Record<string, Text> = {
-      ...POI_KINDS,
-      site: { fr: "Pistes et sites", en: "Runways and sites" },
-      view: { fr: "Points de vue", en: "Viewpoints" },
+    const names: Record<string, string> = {
+      ...Object.fromEntries(Object.entries(POI_KINDS).map(([k, v]) => [k, tr(v)])),
+      site: t("Runways and sites"),
+      view: t("Viewpoints"),
     };
     for (const k of Object.keys(names) as (PoiKind | "site" | "view")[]) {
       if (!present.has(k)) continue;
       const b = el("button", "at-chip");
       b.type = "button";
-      b.append(el("i", ""), el("span", "", tr(names[k]!)));
+      b.append(el("i", ""), el("span", "", names[k]!));
       (b.firstChild as HTMLElement).style.background = KIND_COL[k];
       b.classList.toggle("on", this.kinds.has(k));
       b.onclick = () => {
@@ -281,29 +282,43 @@ export class AtlasPage {
     return { body: p.body, lat: p.lat, lon: p.lon, name: p.name[lang], detail: p.about[lang], kind: p.kind, elevM: p.elevM };
   }
 
-  /** The search: the destinations at once; the Earth's addresses as one types (a second at most between two). */
-  private search(q: string) {
+  /**
+   * The search: the destinations at once; the Earth's addresses as one types (a second at most between two) —
+   * Photon only; `explicit` (Enter, a search given): at once, Nominatim when Photon finds nothing.
+   */
+  private search(q: string, explicit = false) {
     this.query = q;
     this.searching?.abort();
     this.found = [];
     this.fillList();
     const words = q.trim();
+    // (no addresses asked — too short, coordinates, another world —: the last search's word cleared)
+    this.status.textContent = "";
     if (this.body !== "earth" || words.length < 3 || parseCoords(words)) return;
     const ctl = new AbortController();
     this.searching = ctl;
     this.status.textContent = t("Searching the addresses…");
     const centre = this.map.placeAt(this.map.canvas.clientWidth / 2, this.map.canvas.clientHeight / 2);
     // (typing: the request waits for a pause)
-    setTimeout(() => {
-      if (ctl.signal.aborted) return;
-      void geocode(words, { lang: this.d.lang(), near: { lat: centre[0], lon: centre[1] }, signal: ctl.signal }).then((r) => {
+    setTimeout(
+      () => {
         if (ctl.signal.aborted) return;
-        this.found = r;
-        this.status.textContent = r.length ? "" : t("No address found");
-        this.fillList();
-        this.map.request();
-      });
-    }, 350);
+        const near = { lat: centre[0], lon: centre[1] };
+        void geocode(words, { lang: this.d.lang(), near, signal: ctl.signal, fallback: explicit }).then(
+          (r) => {
+            if (ctl.signal.aborted) return;
+            this.found = r;
+            this.status.textContent = r.length ? "" : t("No address found");
+            this.fillList();
+            this.map.request();
+          },
+          () => {
+            if (!ctl.signal.aborted) this.status.textContent = t("No address found");
+          },
+        );
+      },
+      explicit ? 0 : 350,
+    );
   }
 
   private fillList() {
@@ -441,8 +456,8 @@ export class AtlasPage {
       );
     for (const a of ATLAS_ACTIONS) {
       const b = button({
-        label: tr(ACTION_TEXT[a].label),
-        title: tr(ACTION_TEXT[a].tip),
+        label: ACTION_TEXT[a].label(),
+        title: ACTION_TEXT[a].tip(),
         kind: a === "walk" ? "primary" : "plain",
         testid: `atlas-go-${a}`,
         onClick: () => {

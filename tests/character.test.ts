@@ -88,7 +88,7 @@ test("Space jumps only on foot and the boarding shortcut remains available there
   expect(matchKey(e, true, false)?.do).toBe("playPause");
   expect(matchKey({ code: "KeyK", key: "K", shiftKey: true }, true, false, undefined, true)?.do).toBe("leaveShip");
 });
-test("save validation rejects malformed character payload before restoring anything", () => {
+test("save validation leaves a malformed character payload out before restoring anything", () => {
   const saved = {
     v: 2,
     name: "bad",
@@ -98,7 +98,8 @@ test("save validation rejects malformed character payload before restoring anyth
     ship: { piloting: false, hold: "none", auto: "none", throttle: 0, landed: null },
     character: { body: "earth", ours: true, q: [NaN, 0, 0] },
   };
-  expect(() => checkSave(saved)).toThrow("character");
+  // (the walker dropped and told, the flight still loads with the pilot on board)
+  expect(checkSave(saved).character).toBeUndefined();
 });
 
 test("Mann and Edmunds use the local proper-length frame and remain grounded", () => {

@@ -83,7 +83,8 @@ export interface Theme {
   name: string;
   /** in whose manner, and the score it is built on */
   manner: "zimmer" | "williams" | "richter";
-  after: string;
+  /** what it is and how it is made, in the game's own words (shown: no real work named — those only in the
+   *  comments here) */
   mood: string;
   bpm: number;
   /** beats a bar (3: a waltz's, Day One's), the grid's subdivisions a beat (3: triplets — a 6/8's or 12/8's feel) */
@@ -135,8 +136,8 @@ export const THEMES: Theme[] = [
     id: "event-horizon",
     name: "Event Horizon",
     manner: "zimmer",
-    after: "Interstellar — main theme",
-    mood: "Gargantua, after Interstellar's main theme: A minor, the VI7 – v6 – i – v65 loop, the organ's clock ticking on an E pedal in triplets, the organ and its pedal, the strings and the choir swelling",
+    // (after Interstellar — main theme — its harmony and form; named here only)
+    mood: "Gargantua: A minor, the VI7 – v6 – i – v65 loop, the organ's clock ticking on an E pedal in triplets, the organ and its pedal, the strings and the choir swelling",
     bpm: 96,
     grid: 3,
     root: 57,
@@ -168,8 +169,8 @@ export const THEMES: Theme[] = [
     id: "ascent",
     name: "Ascent",
     manner: "williams",
-    after: "Star Wars — main title",
-    mood: "The lift-off, after Star Wars's main title: B♭, a fanfare on the tonic, the big tune between the tonic and a chord of fourths on F, A♭ before the dominant, every phrase ending on it, a march in triplets, a lyrical middle for the strings and horns",
+    // (after Star Wars — main title — its harmony and form; named here only)
+    mood: "The lift-off: B♭, a fanfare on the tonic, the big tune between the tonic and a chord of fourths on F, A♭ before the dominant, every phrase ending on it, a march in triplets, a lyrical middle for the strings and horns",
     bpm: 104,
     grid: 3,
     root: 58,
@@ -213,8 +214,8 @@ export const THEMES: Theme[] = [
     id: "reentry",
     name: "Re-entry Fire",
     manner: "williams",
-    after: "The Imperial March",
-    mood: "The plasma, after the Imperial March: G minor, the low strings, horns and timpani on G minor and E♭ minor, then i – ♯iv – ♯v – i (all minor chords, a semitone off the expected ones), trumpets and trombones in the middle register, the snare",
+    // (after The Imperial March — its harmony and form; named here only)
+    mood: "The plasma: G minor, the low strings, horns and timpani on G minor and E♭ minor, then i – ♯iv – ♯v – i (all minor chords, a semitone off the expected ones), trumpets and trombones in the middle register, the snare",
     bpm: 104,
     root: 55,
     scale: "minor",
@@ -241,8 +242,8 @@ export const THEMES: Theme[] = [
     id: "final-approach",
     name: "Final Approach",
     manner: "williams",
-    after: "E.T. — the Lydian neighbour chord",
-    mood: "The final, in John Williams's lyrical manner: F, the tonic and its Lydian neighbour (II over the tonic's bass), a horn line doubled by the violins, the harp's arpeggios, soft timpani",
+    // (after E.T. — the Lydian neighbour chord — its harmony and form; named here only)
+    mood: "The final, lyrical: F, the tonic and its Lydian neighbour (II over the tonic's bass), a horn line doubled by the violins, the harp's arpeggios, soft timpani",
     bpm: 88,
     root: 65,
     scale: "lydian",
@@ -269,8 +270,8 @@ export const THEMES: Theme[] = [
     id: "wormhole",
     name: "Through the Throat",
     manner: "zimmer",
-    after: "Interstellar — The Wormhole; Dunkirk's Shepard tone",
-    mood: "The wormhole, after Interstellar: E minor, i – VI – III – VII, a Shepard tone rising without end, the organ's sixteenths, high violins, the choir and the taikos",
+    // (after Interstellar — The Wormhole; Dunkirk's Shepard tone — its harmony and form; named here only)
+    mood: "The wormhole: E minor, i – VI – III – VII, a Shepard tone rising without end, the organ's sixteenths, high violins, the choir and the taikos",
     bpm: 120,
     root: 64,
     scale: "minor",
@@ -298,8 +299,8 @@ export const THEMES: Theme[] = [
     id: "millers-tide",
     name: "Miller's Tide",
     manner: "zimmer",
-    after: "Interstellar — Mountains",
-    mood: "Miller, after Interstellar's Mountains: the tick every 1.25 s (an hour there, seven years on Earth), A minor, the organ low with Fmaj7 and G6, the strings and the horns swelling like the wave, booms",
+    // (after Interstellar — Mountains — its harmony and form; named here only)
+    mood: "Miller: the tick every 1.25 s (an hour there, seven years on Earth), A minor, the organ low with Fmaj7 and G6, the strings and the horns swelling like the wave, booms",
     bpm: 48,
     root: 57,
     scale: "minor",
@@ -327,8 +328,8 @@ export const THEMES: Theme[] = [
     id: "orbit-drift",
     name: "Earthlight",
     manner: "richter",
-    after: "On the Nature of Daylight",
-    mood: "In orbit, after Max Richter's On the Nature of Daylight: B♭ minor at 61 BPM, a ground bass under i – v6 – III6 – VI – VII looping unchanged, the low strings first, the violins' long melody later, built up and stripped back like a palindrome",
+    // (after On the Nature of Daylight — its harmony and form; named here only)
+    mood: "In orbit: B♭ minor at 61 BPM, a ground bass under i – v6 – III6 – VI – VII looping unchanged, the low strings first, the violins' long melody later, built up and stripped back like a palindrome",
     bpm: 61,
     root: 58,
     scale: "minor",
@@ -365,8 +366,8 @@ export const THEMES: Theme[] = [
     id: "low-pass",
     name: "Low Pass",
     manner: "williams",
-    after: "E.T. — Flying",
-    mood: "Flying low and fast, after E.T.'s Flying: C with its Lydian neighbour chord (D over C), the violins soaring, brass stabs, the strings' sixteenths, the harp and the celesta, timpani and cymbals",
+    // (after E.T. — Flying — its harmony and form; named here only)
+    mood: "Flying low and fast: C with its Lydian neighbour chord (D over C), the violins soaring, brass stabs, the strings' sixteenths, the harp and the celesta, timpani and cymbals",
     bpm: 132,
     root: 60,
     scale: "lydian",
@@ -396,8 +397,8 @@ export const THEMES: Theme[] = [
     id: "docking",
     name: "Soft Capture",
     manner: "zimmer",
-    after: "Interstellar — No Time for Caution",
-    mood: "Docking, after Interstellar's No Time for Caution: A minor, Am – F – C – G, the organ's sixteenths building, a clock ticking in eighths, the strings held, a horn line at the height, braams at the climax",
+    // (after Interstellar — No Time for Caution — its harmony and form; named here only)
+    mood: "Docking: A minor, Am – F – C – G, the organ's sixteenths building, a clock ticking in eighths, the strings held, a horn line at the height, braams at the climax",
     bpm: 104,
     root: 57,
     scale: "minor",
@@ -420,8 +421,8 @@ export const THEMES: Theme[] = [
     id: "deep-space",
     name: "Deep Space",
     manner: "zimmer",
-    after: "Interstellar — Day One",
-    mood: "Between the worlds, after Interstellar's Day One: A minor in 3/4, the piano's left hand in broken chords, a few notes over them, the organ and the choir held far away",
+    // (after Interstellar — Day One — its harmony and form; named here only)
+    mood: "Between the worlds: A minor in 3/4, the piano's left hand in broken chords, a few notes over them, the organ and the choir held far away",
     bpm: 92,
     beats: 3,
     root: 57,
@@ -449,8 +450,8 @@ export const THEMES: Theme[] = [
     id: "endurance",
     name: "Endurance",
     manner: "zimmer",
-    after: "Inception — Time",
-    mood: "The ship's theme, after Inception's Time: E minor at 60 BPM, Am – Em – G – D – Am – Cmaj7 – G – D (the Cmaj7 its lift), an insistent drum, the layers added one by one to the horns' climax, a solo piano to end",
+    // (after Inception — Time — its harmony and form; named here only)
+    mood: "The ship's theme: E minor at 60 BPM, Am – Em – G – D – Am – Cmaj7 – G – D (the Cmaj7 its lift), an insistent drum, the layers added one by one to the horns' climax, a solo piano to end",
     bpm: 60,
     root: 64,
     scale: "minor",
@@ -485,8 +486,8 @@ export const THEMES: Theme[] = [
     id: "new-worlds",
     name: "New Worlds",
     manner: "williams",
-    after: "Jurassic Park — main theme",
-    mood: "On foot on another world, after Jurassic Park's theme: B♭ major, reverently, I(add9) – V7sus4 to open, then I – IV – I (the IV resolving back home), only major chords, a hymn where chord and tune move together, low strings and horns first, the choir later, A♭ at the climaxes",
+    // (after Jurassic Park — main theme — its harmony and form; named here only)
+    mood: "On foot on another world: B♭ major, reverently, I(add9) – V7sus4 to open, then I – IV – I (the IV resolving back home), only major chords, a hymn where chord and tune move together, low strings and horns first, the choir later, A♭ at the climaxes",
     bpm: 76,
     root: 58,
     scale: "major",

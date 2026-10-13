@@ -43,7 +43,7 @@ Les 32 fichiers du Bourget représentent **15,52 MiB téléchargés**, ceux des 
 
 ### Préparation des packs
 
-Prérequis hors du navigateur : Python 3, Rasterio/GDAL et Basis Universal (`basisu`). Versions Python fixées dans [earth-surface-requirements.txt](../scripts/earth-surface-requirements.txt).
+Prérequis hors du navigateur : Python 3, Rasterio/GDAL et Basis Universal (`basisu` **2.50.0**, épinglé : le script refuse une autre version, notée avec ses options sous `encoder` dans le manifeste). Versions Python fixées dans [earth-surface-requirements.txt](../scripts/earth-surface-requirements.txt). `EARTH_BUILD_PYTHON` et `BASISU` désignent un autre interpréteur ou un autre binaire ; voir aussi [la taille du dépôt](ASSETS.md).
 
 ```sh
 python3 -m venv .cache/earth-build
@@ -95,6 +95,8 @@ Les [mesures brutes](perf/earth-surface-20261011.json) sont conservées avec les
 ![Cévennes : relief existant et couleur satellite](img/earth-surface/cevennes.png)
 
 [Capture en mode avion au Bourget](img/earth-surface/cockpit.png). Elle vérifie l'intégration dans la vue de vol ; l'interface de vol, les volumes et les assets de l'appareil sont ceux du jeu existant. Les pixels de 10 m restent visibles à proximité du sol.
+
+*Crédits des captures* : © ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), processed by ESA WorldCover consortium — [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Là où les tuiles de terrain sont affichées : Sentinel-2 cloudless 2021 by [EOX IT Services GmbH](https://s2maps.eu) (Contains modified Copernicus Sentinel data 2021), [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
 
 Vérifications effectuées : **740 tests unitaires passent**, aucun échec ; après la préparation définitive des packs, **33 tests ciblés** repassent. **4 tests e2e sol** passent avec le DEM réel, ainsi que les **12 tests e2e TARS**. Les scénarios couvrent les deux vrais packs, changement de région, mémoire libérée, mode avion, repli RGBA, adaptateur limité à 16 textures et worker de classes indisponible. `bun run check` passe, dont **9/9 shaders WGSL compilés** ; les builds local et Pages passent.
 
