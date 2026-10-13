@@ -90,7 +90,15 @@ const SCENERY_EXCLUSIONS = EARTH_RUNWAYS.map((r) => ({
   length: RUNWAY_LENGTH,
   halfWidth: 340,
 }));
-import { altitudeOver, bodyFixedOf, groundRelief, toBodyFixed, setGroundHeights, setGroundRelief } from "./system/our-surface";
+import {
+  altitudeOver,
+  bodyFixedOf,
+  groundRelief,
+  heightOverGround,
+  toBodyFixed,
+  setGroundHeights,
+  setGroundRelief,
+} from "./system/our-surface";
 import { EARTH_RM, earthHeightSampler, mapHeightSampler, tileFallbackSampler } from "./terrain";
 import { figureDiskShare, figureSourceElevation, flatteningOf, geodeticNormal, rayFigure, WGS84_A, WGS84_F } from "./system/ellipsoid";
 import { AIR_K, sunThroughY } from "./system/earth-air";
@@ -377,19 +385,17 @@ interface OfflineJob {
   fixedSteps?: string;
 }
 
-/** Near a body (below NEAR_BODY_M of its surface), a camera translation beyond TRANSLATION_M metres — a millimetre — breaks the temporal reprojection. */
-const TRANSLATION_M = 0.001;
-const NEAR_BODY_M = 20000;
+/** Trees and buildings stand above the ground [m]: the nearest scenery's distance taken this much under the camera's height. */
+const SCENERY_TOP_M = 60;
 
 /** The camera's eye on its near body's axes [its radii] (float64): where the tracer's rays start (trace.wgsl nearCam). */
-function earthEye(near: { centre: Vec3; axes: Vec3[] }): Vec3 {
+function bodyEye(near: { centre: Vec3; axes: Vec3[] }): Vec3 {
   return near.axes.map((a) => -(a[0]! * near.centre[0] + a[1]! * near.centre[1] + a[2]! * near.centre[2])) as Vec3;
 }
 
-/** The camera's place on its near body, in metres along the body's own axes: a rotation of the view leaves it unchanged. */
-function placeOnBody(near: { centre: Vec3; radius: number; axes: Vec3[] }): Vec3 {
-  const mR = near.radius * M_METRES;
-  return near.axes.map((a) => -(a[0]! * near.centre[0] + a[1]! * near.centre[1] + a[2]! * near.centre[2]) * mR) as Vec3;
+/** The camera's place on its near body, in metres along the body's own axes (mPerM: metres per M): a rotation of the view leaves it unchanged. */
+function placeOnBody(near: { centre: Vec3; radius: number; axes: Vec3[] }, mPerM: number): Vec3 {
+  return bodyEye(near).map((x) => x * near.radius * mPerM) as Vec3;
 }
 
 export class Renderer {
@@ -2483,7 +2489,7 @@ export class Renderer {
     // (near.centre, the mount's offset in): what is drawn, and the trees' and buildings' rays and shadows, start
     // there, never from the ship's centre (a spectator kilometres off, a flyby shot, the cockpit's 3.6 m)
     if (!o.probe) {
-      const eye = near?.index === earthK && this.earthMaps.tier ? earthEye(near) : null;
+      const eye = near?.index === earthK && this.earthMaps.tier ? bodyEye(near) : null;
       const onEarth = s.earthTerrain && !!eye;
       // (the camera off the Earth's near patch, the ship low over it — never a spectator's: main.ts —: the tiles
       // kept round the ship, the ground under its gear; the camera's place wins whenever it is on the Earth)
@@ -3342,9 +3348,23 @@ export class Renderer {
   reprojectGround = true;
   /** (the last reprojection: the camera standing still on the near body's ground) */
   taStill: { still: boolean; mMetres: number; turn: number } | null = null;
+  /** the camera's move that breaks the history: the nearest ground's or scenery's shift on the image [px] (a switch for comparisons) */
+  taParallaxPx = 0.5;
   /** the history is dropped on the next frame (a new scene, a jump) */
   resetTemporal() {
     this.taPrev = null;
+  }
+  /**
+   * How far the nearest of the near body's ground or scenery may be [m]: the camera's height over the ground
+   * (its relief where known), less the trees' and buildings' height where the Earth's scenery is drawn; a metre
+   * at least.
+   */
+  private nearestSurfaceM(near: { index: number; centre: Vec3; radius: number; axes: Vec3[] }, mPerM: number) {
+    const id = this.lastBodies[near.index]?.id;
+    const eye = bodyEye(near);
+    const h =
+      id && solarBody(id) ? heightOverGround(id, eye.map((x) => x * near.radius) as Vec3) : (Math.hypot(...eye) - 1) * near.radius * mPerM;
+    return Math.max(1, h - (id === "earth" && this.earthScenery.active ? SCENERY_TOP_M : 0));
   }
 
   /**
@@ -3404,15 +3424,19 @@ export class Renderer {
     const pre = preExposure(this.ev(s));
     const prev = this.taPrev;
     const ln = this.lastNear;
-    const at = ln ? placeOnBody(ln) : null;
-    // (the camera moved on its near body: the reprojection carries the image by the camera's rotation alone, so
-    // a tree 50 m away would hang in place while the camera walked — the frame is traced afresh instead)
-    // (high above the body — a vessel in orbit, nothing near enough for the parallax to show: the reprojection stays)
-    const low = at !== null && ln !== null && Math.hypot(...at) - ln.radius * M_METRES < NEAR_BODY_M;
+    const mPerM = 1476.625 * (s.massSolar || 1);
+    const at = ln ? placeOnBody(ln, mPerM) : null;
+    // (the camera moved on its near body: each pixel is carried by its depth — the parallax, the ground's rigid
+    // move (R4) —, but what the move uncovers, and a depth taken between rays, are wrong: the frame is traced
+    // afresh once the move shifts the nearest ground or scenery by more than taParallaxPx of a pixel. High above
+    // the body — a vessel in orbit, a cruise — the shift stays under it: the reprojection kept)
+    const shift = at && prev?.at ? Math.hypot(at[0] - prev.at[0], at[1] - prev.at[1], at[2] - prev.at[2]) : 0;
     const moved =
       !!prev &&
       (prev.at !== null || at !== null) &&
-      (prev.at === null || at === null || (low && Math.hypot(at[0] - prev.at[0], at[1] - prev.at[1], at[2] - prev.at[2]) > TRANSLATION_M));
+      (prev.at === null ||
+        at === null ||
+        (shift > 0 && shift / this.nearestSurfaceM(ln!, mPerM) > (this.taParallaxPx * 2 * tanH) / t.height));
     // (a jump: the other region, or the distance to the hole changed by more than 5 % in a frame, or a translation)
     const jumped = !prev || prev.region !== cam.region || Math.abs(cam.r - prev.r) > 0.05 * Math.max(cam.r, 1e-9) || moved;
     const on = s.temporalReprojection && this.taPhase === "realtime" && ta.valid && !jumped;
