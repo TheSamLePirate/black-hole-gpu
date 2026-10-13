@@ -26,7 +26,7 @@ import { shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
 import { controlMesh, MAX_CONTROLS, POSE_VEC4, poseData } from "./cockpit/controls";
 import { placardLevels } from "./cockpit/placards";
 import { cabinUniform, screenLights, type ScreenLight } from "./cockpit/lights";
-import { lampLevels, lampUniform, MAX_LAMPS, placeLamps, RANGER_LAMPS, type PlacedLamp } from "./ship-lights";
+import { F35_LAMPS, lampLevels, lampUniform, MAX_LAMPS, placeLamps, RANGER_LAMPS, type PlacedLamp } from "./ship-lights";
 import { GEAR_HINGES, gearMesh } from "./gear-mesh";
 import type { GpuProfiler } from "./gpuprof";
 import { cockpitHull, samplePoints, TriBVH, vesselHulls } from "./system/collide";
@@ -254,8 +254,8 @@ export class ShipRenderer {
   private cockpit: { mesh: Mesh; pivots: V3[]; solid: number; controls: Mesh } | null = null;
   /** the cabin's screens as lights (cockpit/lights.ts), from its mesh */
   private screenLights: ScreenLight[] = [];
-  /** the Ranger's lamps set on its hull (ship-lights.ts), how many lit now */
-  private lampsPlaced: PlacedLamp[] | null = null;
+  /** the craft's lamps set on its hull (ship-lights.ts: the Ranger's, the F-35's), how many lit now */
+  private lampsPlaced: Partial<Record<VesselId, PlacedLamp[]>> = {};
   private lampCount = 0;
   /** the controls' poses (cockpit/controls.ts: ship.wgsl Controls) */
   private ctlBuf: GPUBuffer | null = null;
@@ -1086,8 +1086,12 @@ export class ShipRenderer {
         // (which fire, how hard: jets.ts — the sound's the same)
         const level = jetLevel(V, J, i, th);
         if (level <= 0) continue;
-        const len = J.main ? (4 + 20 * level) * (1 - 0.45 * air) * V.flame : 1.2 + 1.6 * level;
-        out.set([...J.p, level, ...J.d, J.main ? 0 : 1, J.half[0], J.half[1], len, (i * 0.618) % 1, ...J.u, 0], n * JET_FLOATS);
+        // (an air-breathing engine's — the F-35's: kind 2 — its afterburner's share in u.w: the flame is the
+        // afterburner's, a few metres; dry, the exhaust is clear)
+        const jet = J.main && this.vessel === "f35";
+        const ab = jet ? Math.min(Math.max(((th.boost ?? 1) - 1) / 0.5, 0), 1) : 0;
+        const len = jet ? 2.5 + 8 * ab : J.main ? (4 + 20 * level) * (1 - 0.45 * air) * V.flame : 1.2 + 1.6 * level;
+        out.set([...J.p, level, ...J.d, jet ? 2 : J.main ? 0 : 1, J.half[0], J.half[1], len, (i * 0.618) % 1, ...J.u, ab], n * JET_FLOATS);
         // (the camera inside its proxy — the shader's frustum, a margin for the near plane)
         const spread = J.main ? 0.16 * (1 - air) + 0.03 * air : 0.45;
         const o = sub(this.camShip, J.p);
@@ -1128,23 +1132,27 @@ export class ShipRenderer {
       new Float32Array([v.gear?.ext ?? 0, gc[0] ?? 0, gc[1] ?? 0, gc[2] ?? 0, ...GEAR_HINGES.flatMap((h) => [...h.at, h.door])]),
     );
     if (v.controls && this.ctlBuf) this.device.queue.writeBuffer(this.ctlBuf, 0, v.controls);
-    // (the flown Ranger's lamps, those lit — ship.wgsl S.lampN, S.lamp)
+    // (the flown craft's lamps, those lit — ship.wgsl S.lampN, S.lamp: the Ranger's, the F-35's)
     {
-      const H = vesselHulls.ranger.bvh;
-      if (!this.lampsPlaced && H) this.lampsPlaced = placeLamps(H);
-      const on = this.flown && this.vessel === "ranger" && !!v.lamps && !!this.lampsPlaced;
+      const defs = this.vessel === "ranger" ? RANGER_LAMPS : this.vessel === "f35" ? F35_LAMPS : null;
+      const H = defs ? vesselHulls[this.vessel as "ranger" | "f35"].bvh : null;
+      if (defs && H && !this.lampsPlaced[this.vessel]) this.lampsPlaced[this.vessel] = placeLamps(H, defs);
+      const placed = this.lampsPlaced[this.vessel] ?? null;
+      const on = this.flown && !!defs && !!v.lamps && !!placed;
       // (each hidden by the hull from where the eye is — a ray against its triangles, not its depth drawn
       // again: that cost 1.3 ms a frame —, stopped 60 cm short: the lips round a lamp, a wingtip's own skin seen from above, do not hide it)
-      const levels = on ? lampLevels(RANGER_LAMPS, v.lamps!, v.lamps!.t) : [];
+      const levels = on ? lampLevels(defs!, v.lamps!, v.lamps!.t) : [];
+      // (the F-35's landing light rides its nose gear: lit only with the gear down)
+      if (on && this.vessel === "f35") defs!.forEach((L, i) => L.kind === "landing" && (v.jet?.gear ?? 1) < 0.97 && (levels[i] = 0));
       if (on && H)
-        this.lampsPlaced!.forEach((L, i) => {
+        placed!.forEach((L, i) => {
           if (!levels[i]) return;
           const e = this.camShip;
           const d = Math.hypot(L.p[0] - e[0], L.p[1] - e[1], L.p[2] - e[2]);
           const k = Math.max(d - 0.6, 0) / d;
           if (H.segment(e, [e[0] + (L.p[0] - e[0]) * k, e[1] + (L.p[1] - e[1]) * k, e[2] + (L.p[2] - e[2]) * k])) levels[i] = 0;
         });
-      const u = on ? lampUniform(this.lampsPlaced!, levels) : new Float32Array(4);
+      const u = on ? lampUniform(placed!, levels) : new Float32Array(4);
       this.lampCount = u[0]!;
       this.device.queue.writeBuffer(this.uniform, LAMPS_AT, u);
     }

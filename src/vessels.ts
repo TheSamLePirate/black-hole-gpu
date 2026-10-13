@@ -14,6 +14,8 @@ export const VESSEL_IDS: VesselId[] = ["ranger", "lander", "endurance", "f35"];
 /** The spacecraft: the fleet near the Earth, always somewhere (fleet.ts fleetStart). The F-35 is only where
  *  it is flown — put on a runway when chosen (controller/fleet.ts). */
 export type SpacecraftId = Exclude<VesselId, "f35">;
+/** The craft that fly as aeroplanes in the air (the plane law by default, a runway's take-off and landing). */
+export const isPlane = (id: VesselId) => id === "ranger" || id === "f35";
 export const SPACECRAFT: SpacecraftId[] = ["ranger", "lander", "endurance"];
 
 /** A docking port: the centre of its ring and the axis out of it (ship frame). */
@@ -70,6 +72,8 @@ export interface VesselDef {
   aero: VesselAero;
   /** built for the air: its three ways of flying there (plane, rocket, the flight computer's) */
   flies: boolean;
+  /** its wingtips (ship frame, the left one): where the tip vortices' trails start (contrails.ts) */
+  wingtip?: V3;
 }
 
 /** Attitude thrusters: a quad at each corner (lateral, up, down) and fore / aft pairs. */
@@ -209,6 +213,7 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     jets: RANGER_JETS,
     flame: 1,
     flies: true,
+    wingtip: [4.1, 0.44, -0.3],
     // a lifting body (8.3 m span, 14.8 m long, 91 m² of planform: the hull, scripts/hullsize): a flat
     // belly, a fine nose; the shield under the belly and round the nose (the Shuttle's tiles and RCC) —
     // 98 m/s at 16° on the approach, L/D ≈ 6 gliding, ≈ 1 at 40° in hypersonic flow
@@ -383,6 +388,7 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     jets: F35_JETS,
     flame: 0.35,
     flies: true,
+    wingtip: [5.36, 1.16, -3.0],
     // a fighter (42.7 m² of wing, aspect ratio 2.7; two canted fins of 4.6 m² each; the fuselage's
     // planform with the wing ~62 m²): low drag (C_D0 ≈ 0.021)
     aero: {

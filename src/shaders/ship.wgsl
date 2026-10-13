@@ -825,8 +825,11 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
     let L = lp - in.p;
     let d2 = dot(L, L);
     let ndl = max(dot(n, L * inverseSqrt(d2)), 0.0);
-    let tint = select(vec3f(1.0, 0.95, 0.88), vec3f(0.55, 0.72, 1.0), main);
-    jl += tint * (J.p.w * select(0.5, 2.2, main) * ndl / (d2 + select(0.08, 0.35, main)));
+    var tint = select(vec3f(1.0, 0.95, 0.88), vec3f(0.55, 0.72, 1.0), main);
+    var lv = J.p.w * select(0.5, 2.2, main);
+    // (a jet engine lights its surroundings by its afterburner alone: orange)
+    if (J.d.w > 1.5) { tint = vec3f(1.0, 0.6, 0.3); lv = 2.0 * J.u.w; }
+    jl += tint * (lv * ndl / (d2 + select(0.08, 0.35, main)));
   }
   // (resolved by the MSAA as c / (1 + L): a highlight's sample no longer outweighs the pixel's others —
   // the hardware's plain mean of HDR values left the lit edges jagged; compFs undoes it)
@@ -881,6 +884,8 @@ const CUBE = array<u32, 36>(0u, 2u, 1u, 1u, 2u, 3u, 4u, 5u, 6u, 5u, 7u, 6u, 0u, 
 
 /** The plume's half-extents (along the exit's width and height axes) at a distance s from the exit. */
 fn plumeRadius(J: Jet, s: f32) -> vec2f {
+  // (a jet engine's: a narrow column, its mixing layer widening slowly)
+  if (J.d.w > 1.5) { return J.a.xy * (1.0 + 0.05 * max(s, 0.0)); }
   if (J.d.w < 0.5) {
     // (vacuum: the exhaust flares out; in air it stays a column)
     let spread = mix(0.16, 0.03, clamp(S.jet.w, 0.0, 1.0));
@@ -964,7 +969,21 @@ fn plumeFs(in: POut) -> @location(0) vec4f {
     let fl = 0.8 + 0.2 * sin(ph + 2.1 * x.x) * sin(0.61 * ph + 1.7 * x.y + 1.3);
     var dens: f32;
     var col: vec3f;
-    if (main) {
+    if (J.d.w > 1.5) {
+      // an afterburning turbofan (the F-35's F135): dry, only the nozzle's hot throat glows dull; lit, a
+      // translucent blue-violet cone at the exit, then the shock diamonds — Mach disks a nozzle diameter
+      // and a half apart, yellow-white, fading orange down the column (u.w: the afterburner's share)
+      let ab = clamp(J.u.w, 0.0, 1.0);
+      let Dn = 2.0 * J.a.y;
+      let core = exp(-3.0 * q2);
+      let throat = exp(-s / 0.35) * exp(-2.0 * q2) * (0.15 + 0.35 * J.p.w);
+      let cone = exp(-s / (0.9 * Dn)) * core;
+      let disk = pow(0.5 + 0.5 * cos(6.2832 * (s - 0.6 * Dn) / (1.5 * Dn)), 6.0) * smoothstep(0.3 * Dn, 0.9 * Dn, s) * exp(-s / (2.6 * Dn));
+      let tail = exp(-s / (0.35 * L)) * (1.0 - smoothstep(0.6 * L, 0.85 * L, s)) * core;
+      dens = throat + ab * fl * (1.6 * cone + 3.0 * disk * core + 0.55 * tail);
+      col = mix(vec3f(1.0, 0.45, 0.12), vec3f(1.0, 0.86, 0.6), clamp(disk * 1.5, 0.0, 1.0));
+      col = mix(col, vec3f(0.42, 0.45, 1.0), clamp(cone * ab * 1.2 - disk, 0.0, 0.8));
+    } else if (main) {
       let fall = exp(-s / (0.28 * L)) * smoothstep(0.0, 0.2, s) * (1.0 - smoothstep(0.65 * L, 0.85 * L, s));
       let core = exp(-4.0 * q2);
       let hot = 0.22 + 5.5 * exp(-s / 1.1);
@@ -980,7 +999,7 @@ fn plumeFs(in: POut) -> @location(0) vec4f {
     }
     sum += col * (dens * dt);
   }
-  let gain = select(2.0, 0.8, main) * J.p.w;
+  let gain = select(select(2.0, 0.8, main) * J.p.w, 1.2, J.d.w > 1.5);
   return vec4f(sum * gain * S.jet.y, 0.0);
 }
 
@@ -1624,9 +1643,12 @@ fn fsJetGlass(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4
     let hv = normalize(l + gv);
     refl += sh[11].rgb * pow(clamp(dot(gn, hv), 0.0, 1.0), 800.0) * 40.0 * (1.0 - inFrame(l));
   }
-  // (the cover: the film's, more at grazing angles; the visor dark)
-  let cover = clamp(select(base.a * 0.9, 0.75, part == 34u) + 0.6 * F, 0.0, 0.97);
-  let tint = select(base.rgb, vec3f(0.01), part == 34u) * irradiance(gn) / PI * 0.35;
-  let o = (refl * F + tint * (1.0 - F)) * S.light.x;
+  // (the cover: the film's, more at grazing angles; the visor dark — the canopy seen from within it, its
+  // film thin against the bright day outside: a faint tint)
+  let within = 1.0 - smoothstep(0.9, 2.2, length(in.p));
+  let cover = clamp(select(base.a * mix(0.9, 0.22, within), 0.75, part == 34u) + 0.6 * F * mix(1.0, 0.4, within), 0.0, 0.97);
+  // (the film's own scattered light, as much as it covers — premultiplied)
+  let tint = select(base.rgb, vec3f(0.01), part == 34u) * irradiance(gn) / PI * 0.35 * cover;
+  let o = (refl * F * mix(1.0, 0.5, within) + tint * (1.0 - F)) * S.light.x;
   return vec4f(o / (1.0 + dot(o, vec3f(0.2126, 0.7152, 0.0722))), cover);
 }

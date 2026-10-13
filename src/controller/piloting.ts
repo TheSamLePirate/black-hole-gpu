@@ -25,7 +25,7 @@ import type { V3 } from "../cine/rig";
 import { upOf, viewBlend } from "./camrig";
 import { fleet } from "../fleet";
 import { fuelOn, loadShare } from "../engine";
-import { VESSELS } from "../vessels";
+import { isPlane, VESSELS } from "../vessels";
 import type { GamepadInput } from "../gamepad";
 import { mouth } from "../wormhole";
 import { gravityHome, ourState, repToHomeVec } from "../system/our-side";
@@ -588,7 +588,7 @@ function mountTarget(this: CameraController): MountPose {
 function settleMount(this: CameraController) {
   this.airFlight.reset(fleet.active);
   // (the Lander flies as a rocket unless told otherwise; the Ranger as a plane)
-  if (fleet.active !== "ranger" && this.s.flightMode === "plane") this.s.flightMode = "rocket";
+  if (!isPlane(fleet.active) && this.s.flightMode === "plane") this.s.flightMode = "rocket";
   this.rolling = null;
   this.lastMount = this.s.shipMount;
   // (a scene's attach point: the one a reset comes back to; the outside views at the craft's own distances)
@@ -1050,7 +1050,7 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
       })(),
       // (on the gear: rolling, or at rest on it)
       groundUp: (() => {
-        if (fleet.active !== "ranger" || !(this.rolling || this.ourLanded)) return undefined;
+        if (!isPlane(fleet.active) || !(this.rolling || this.ourLanded)) return undefined;
         const nv = this.ourNav(cam);
         if (!nv || !solidBody(nv.ref)) return undefined;
         // (in the camera's representation, as the autopilots' wants: nav.toRep)
@@ -1434,7 +1434,7 @@ function entryFrame(this: CameraController, cam: ReturnType<typeof cameraFrame>)
  *  Ranger 40°, a lifting body's; the Lander 65°, its shield to the flow). */
 function entryCraft(this: CameraController): EntryCraft {
   const D = Math.PI / 180;
-  return { aero: VESSELS[fleet.active].aero, mass: fleet.massProps().mass, alpha: (fleet.active === "ranger" ? 40 : 65) * D };
+  return { aero: VESSELS[fleet.active].aero, mass: fleet.massProps().mass, alpha: (isPlane(fleet.active) ? 40 : 65) * D };
 }
 
 /**
@@ -1467,7 +1467,7 @@ function entryStep(
   const va = sub3(fr.s.v, fr.env.ground(fr.s.x));
   const h = heightOf(fr.env, fr.s.x);
   const top = airTop(fr.env.atm);
-  const ranger = fleet.active === "ranger";
+  const ranger = isPlane(fleet.active);
   const name = BODY_NAMES[fr.body as Body] ?? fr.body;
   /**
    * The deorbit planned in the planner's worker (a second of predicted falls, off the frame loop) over the

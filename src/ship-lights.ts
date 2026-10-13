@@ -55,6 +55,26 @@ export const RANGER_LAMPS: LampDef[] = [
   },
 ];
 
+/** The F-35's (docs/PLAN-F35.md, F2): the navigation lights at its wingtips (the model's red and green lenses,
+ *  scripts/build-f35.py), white anticollision strobes on its fins' tips and wingtips, the taxi and landing
+ *  light on the nose gear's leg — lit with the gear down (ship.ts). */
+export const F35_LAMPS: LampDef[] = [
+  { id: "navLeft", kind: "nav", at: [5.36, 1.16, -2.75], out: [1, 0, 0], colour: [3, 0.18, 0.09] },
+  { id: "navRight", kind: "nav", at: [-5.36, 1.16, -2.75], out: [-1, 0, 0], colour: [0.24, 3, 0.9] },
+  { id: "navTail", kind: "nav", at: [0, 1.25, -7.0], out: [0, 0, -1], colour: [2.4, 2.3, 2] },
+  { id: "strobeLeft", kind: "strobe", at: [2.0, 2.8, -5.35], out: [0, 1, 0], colour: [4, 4, 4.4] },
+  { id: "strobeRight", kind: "strobe", at: [-2.0, 2.8, -5.35], out: [0, 1, 0], colour: [4, 4, 4.4] },
+  {
+    id: "landing",
+    kind: "landing",
+    at: [0, -0.4, 4.15],
+    out: [0, 0, 1],
+    colour: [6, 5.8, 5.2],
+    beam: norm([0, -0.08, 1]),
+    cone: Math.cos((12 * Math.PI) / 180),
+  },
+];
+
 /** The lamps the shader takes (ship.wgsl S.lamp: three vec4s each). */
 export const MAX_LAMPS = 8;
 

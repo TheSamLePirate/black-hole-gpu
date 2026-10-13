@@ -3837,7 +3837,7 @@ export class Renderer {
             dash: this.cockpitDash ?? undefined,
             controls: this.cockpitControls ?? undefined,
             gear: this.shipGear ?? undefined,
-            jet: s.vessel === "f35" ? this.jetPose : null,
+            jet: s.vessel === "f35" && this.jetPose ? { ...this.jetPose, ...this.jetForce } : null,
             cabin: lampsOf(s, this.cockpitGlow),
             lamps: { navLights: s.navLights, strobeLights: s.strobeLights, landingLights: s.landingLights, t: performance.now() / 1000 },
             mount: this.shipPose ?? (s.shipMount as Mount),
@@ -3972,6 +3972,8 @@ export class Renderer {
   shipGear: { ext: number; comp: number[] } | null = null;
   /** the flown F-35's moving parts (src/f35/pose.ts) */
   jetPose: import("./f35/model").F35Pose | null = null;
+  /** parts of it held where a test or a capture wants them (scripts/f35-shots.ts: __bh.renderer.jetForce) */
+  jetForce: Partial<import("./f35/model").F35Pose> = {};
   /** the cockpit's displays' mean colours (cockpit/lights.ts displayColours): the screens' light in the cabin */
   cockpitGlow: Float32Array | null = null;
 

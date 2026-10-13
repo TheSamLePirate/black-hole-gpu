@@ -29,7 +29,7 @@ import { aeroForces } from "../aero";
 import { GEAR, groundR, toGlobal } from "../landing";
 import { planPath, type ManeuverNode } from "../maneuver";
 import { fleet } from "../fleet";
-import { VESSELS, type VesselId } from "../vessels";
+import { isPlane, VESSELS, type VesselId } from "../vessels";
 import { mouth } from "../wormhole";
 import { ourState } from "../system/our-side";
 import type { OurPath } from "../system/our-predict";
@@ -1251,7 +1251,7 @@ function airInfo(this: CameraController) {
     gearDown: this.gearDown,
     gearExt: this.gearExt,
     gearWarn:
-      fleet.active === "ranger" &&
+      isPlane(fleet.active) &&
       A.inAir &&
       !this.gearDown &&
       !A.cfg.gear &&
@@ -1295,9 +1295,10 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
     // (from a little behind each exit: the exhaust condenses as it mixes)
     if (e > 0) V.jets.forEach((J, i) => J.main && src.push({ key: `e${i}`, p: at(lin(J.p, 1, J.d, 2)), kind: 0, str: e }));
     const wing = V.aero.wing;
-    if (fleet.active === "ranger" && wing && LA.out.q > 0) {
+    const tip = V.wingtip;
+    if (tip && wing && LA.out.q > 0) {
       const t = tipTrail(Math.abs(LA.out.L) / (LA.out.q * wing.S), LA.air.rho, LA.air.T, LA.speed);
-      if (t > 0) for (const sx of [1, -1]) src.push({ key: `t${sx}`, p: at([4.1 * sx, 0.44, -0.3]), kind: 1, str: t });
+      if (t > 0) for (const sx of [1, -1]) src.push({ key: `t${sx}`, p: at([tip[0] * sx, tip[1], tip[2]]), kind: 1, str: t });
     }
   }
   this.contrails.step(fr.now, fr.body, fr.env.carry, src);

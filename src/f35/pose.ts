@@ -12,8 +12,8 @@ type V3 = [number, number, number];
 export interface JetInputs {
   /** seconds since the last frame (real time: the actuators move in it) */
   dt: number;
-  /** the attitude commands — angular acceleration asked about x (left: > 0 the nose down), y (up: > 0 the
-   *  nose left), z (the nose: > 0 the right wing down) —, −1…1 */
+  /** the attitude commands as the flight computer gives them (pilot.ts: > 0 the nose up, the nose right, a
+   *  roll to the right — about the ship's x, y, z), −1…1 */
   torque: V3;
   /** the throttle 0…1, the afterburner lit */
   throttle: number;
@@ -27,7 +27,7 @@ export interface JetInputs {
   comp: V3;
   onGround: boolean;
   groundSpeed: number;
-  /** the nose wheel's steering, −1…1 (> 0: left) */
+  /** the nose wheel's steering, −1…1 (> 0: to the right) */
   steer: number;
   /** parked: on the ground, stopped, the engine at idle — the canopy may open */
   parked: boolean;
@@ -50,8 +50,8 @@ export class JetPoser {
     const p = this.pose;
     const dt = clamp(i.dt, 0, 0.25);
     const [pitch, yaw, roll] = [clamp(i.torque[0], -1, 1), clamp(i.torque[1], -1, 1), clamp(i.torque[2], -1, 1)];
-    // (the stabilators: pitch, and a share of the roll differentially)
-    const stab = pitch * TRAVEL.stab * 0.8;
+    // (the stabilators: the nose up — their trailing edges up —, and a share of the roll differentially)
+    const stab = -pitch * TRAVEL.stab * 0.8;
     const sRoll = roll * TRAVEL.stab * 0.35;
     p.stab = [toward(p.stab[0], stab + sRoll, RATE.stab, dt), toward(p.stab[1], stab - sRoll, RATE.stab, dt)];
     // (the flaperons: the roll, down together with the flaps — and drooped a little low and slow)
@@ -61,9 +61,9 @@ export class JetPoser {
       toward(p.flaperon[0], clamp(flap + fRoll, -TRAVEL.flaperon, TRAVEL.flaperon), RATE.flaperon, dt),
       toward(p.flaperon[1], clamp(flap - fRoll, -TRAVEL.flaperon, TRAVEL.flaperon), RATE.flaperon, dt),
     ];
-    // (the rudders: the yaw; toed in as an air brake — each trailing edge inwards)
+    // (the rudders: the nose right — their trailing edges right —; toed in as an air brake, each inwards)
     const toe = i.brake * 20 * D;
-    const r = yaw * TRAVEL.rudder;
+    const r = -yaw * TRAVEL.rudder;
     p.rudder = [
       toward(p.rudder[0], clamp(r - toe, -TRAVEL.rudder, TRAVEL.rudder), RATE.rudder, dt),
       toward(p.rudder[1], clamp(r + toe, -TRAVEL.rudder, TRAVEL.rudder), RATE.rudder, dt),
@@ -78,7 +78,7 @@ export class JetPoser {
       const w = i.onGround ? i.groundSpeed / WHEEL_R[k]! : 0;
       p.spin[k] = (p.spin[k]! + w * dt) % (2 * Math.PI);
     }
-    p.steer = toward(p.steer, i.onGround ? clamp(i.steer, -1, 1) * 20 * D : 0, RATE.steer, dt);
+    p.steer = toward(p.steer, i.onGround ? -clamp(i.steer, -1, 1) * 20 * D : 0, RATE.steer, dt);
     // the nozzle: wide at idle, closed at full dry thrust, open again with the afterburner
     const want = i.afterburner ? 1 : 0.45 * (1 - clamp(i.throttle, 0, 1));
     p.petals = toward(p.petals, want, RATE.petals, dt);
