@@ -1298,7 +1298,7 @@ export default {
   "Sky button": "Bouton Ciel",
   "The sky chart: every switch, the ecliptic, the opacity, go to a constellation or a star; hover a star for its card":
     "La carte du ciel : tous les interrupteurs, l'écliptique, l'opacité, aller à une constellation ou une étoile ; survolez une étoile pour sa fiche",
-  "Camera — every mode": "Caméra — tous les modes",
+  "Camera — every mode but on foot": "Caméra — tous les modes sauf à pied",
   "Next · previous view (without the ship: around · follow · free · tripod · free fall; the ship: its views)":
     "Vue suivante · précédente (sans vaisseau : autour · suivre · libre · trépied · chute libre ; avec le vaisseau : ses vues)",
   "Look at the target: the view locked on it, wherever the camera goes":
