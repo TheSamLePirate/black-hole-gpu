@@ -89,42 +89,44 @@ Gravité : **Critique** (à régler avant tout merge ou déjà exposé), **Haute
 ## Rendu GPU et sol
 
 ### Haute
-- ☐ **R-H1. Ombre du vaisseau sur le sol de la sonde de lumière lue en un point périmé.**
+- ☑ **R-H1. Ombre du vaisseau sur le sol de la sonde de lumière lue en un point périmé.**
   `trace.wgsl:6055` (`Eg *= shipShadow(EARTH_SHADOW_POINT)`), `:5899`, `:6585` (seule affectation, dans
   `earthNear`). Quand `earthGround` est atteint par `earthLook` (entrée env/sonde `:7740`, corps lointain `:1255`), le
   point vaut zéro, c'est-à-dire la caméra. Conséquence : dans le cockpit au soleil, tout le sol de la sonde reçoit
   l'ombre de la coque à la caméra, et l'ambiance du vaisseau, de l'astronaute et de `characterLight()` devient noire.
   *Correctif* : passer le point touché à `earthGround`, et sauter `shipShadow` dans l'entrée env.
+  — fait : `EARTH_SHADOW_ON`, posé autour du seul `earthLook` d'`earthNear` ; la sonde et les corps lointains n'ont plus l'ombre, 665cac9
 - ☐ **R-H2. Reprojection temporelle coupée pour toute translation supérieure à 1 mm sous 20 km.**
   `renderer.ts:380-381, 3384-3390`. La marche fait environ 23 mm par image, et le vol bas ou le roulage davantage :
   pas d'historique, une copie pleine résolution par image, et la reprojection rigide (R4) qui suit devient du code
   mort dans le régime pour lequel elle a été écrite. `placeOnBody` utilise `M_METRES`, alors que le reste utilise
   `1476.625·massSolar`. *Correctif* : un seuil fondé sur la parallaxe du décor le plus proche, et le même facteur en mètres.
-- ☐ **R-H3. `windsockShade` n'est plus retiré par `HAS_RWY`.** `trace.wgsl:6506` : `main` avait
+- ☑ **R-H3. `windsockShade` n'est plus retiré par `HAS_RWY`.** `trace.wgsl:6506` : `main` avait
   `if (HAS_RWY && WS.w > 0.5)` (vérifié). Toutes les variantes Terre portent donc `wxVeil`, `sunThrough`, la feuille
   et `sceneryShadow`. *Correctif* : `if ((HAS_RWY || HAS_SCENERY) && WS.w > 0.5)`.
+  — fait : `WS.w` n'est posé que par les manches/aéroports (`HAS_RWY`) et `worldScenery` (`HAS_SCENERY`), 665cac9
 
 ### Moyenne
-- ☐ **R-M1.** `waterMirror` et le calme (`trace.wgsl:6108-6110`, `:5521`) ne disparaissent que si le compilateur
+- ☑ **R-M1.** `waterMirror` et le calme (`trace.wgsl:6108-6110`, `:5521`) ne disparaissent que si le compilateur
   plie `0·x`, ce qui demande fast-math : sinon il reste une marche de 64 pas, une bissection, 3 `earthHeight` et
-  `sceneryMirror`. `seaShade` évalue aussi un `gnoise` par pixel de mer même quand le calme vaut 0. *Correctif* : `HAS_SCENERY &&`.
-- ☐ **R-M2.** `sceneryShadow` (`trace.wgsl:5783, 4781, 6054`) lance des rayons d'ombre pour les faces tournées
-  dos au Soleil : parcours du BVH plus `forestQuery` jusqu'à 640 pas, pour rien. *Correctif* : sortir tôt si `dot(n,L) <= 0`.
+  `sceneryMirror`. `seaShade` évalue aussi un `gnoise` par pixel de mer même quand le calme vaut 0. *Correctif* : `HAS_SCENERY &&`. — fait : calme, miroir et `gnoise` des lacs derrière `HAS_SCENERY` (et `calm > 0`), 665cac9
+- ☑ **R-M2.** `sceneryShadow` (`trace.wgsl:5783, 4781, 6054`) lance des rayons d'ombre pour les faces tournées
+  dos au Soleil : parcours du BVH plus `forestQuery` jusqu'à 640 pas, pour rien. *Correctif* : sortir tôt si `dot(n,L) <= 0`. — fait, 665cac9
 - ☐ **R-M3.** Le cache ne garde que 2 clés de variantes (`renderer.ts:3159`), alors que les bits 4096 et 8192 changent
   en cours de jeu (`earthScenery.clear()` tous les 8 km, pages de surface, météo, pistes) : on recompile en boucle,
   plusieurs secondes à chaque fois. *Correctif* : environ 4 clés.
-- ☐ **R-M4.** `timedVariant` ne journalise les compilations qu'avant la première image : celle de `|8192` est
-  invisible dans les diagnostics.
+- ☑ **R-M4.** `timedVariant` ne journalise les compilations qu'avant la première image : celle de `|8192` est
+  invisible dans les diagnostics. — fait : chaque compilation (entrée, qualité, clé, secondes), la cascade qualité comprise, ea44018
 - ☐ **R-M5.** `earth-tiles.ts:298-317` : l'imagerie qui arrive après les hauteurs refait un `put()` (512 Ko), puis
   `onChange` et `invalidate()`. Avec z9–13, jusqu'à 128 invalidations par remplissage de fenêtre, et une vue fixe
   qui ne finit jamais de converger pendant le chargement.
 
 ### Basse
-- ☐ `earth-tiles.ts:493, 298` : écouteurs d'abandon jamais retirés (petite fuite par tuile).
-- ☐ `scenery.ts:96` détruit l'ancien tampon tout de suite, alors que `clear()` attend `onSubmittedWorkDone` : incohérent.
-- ☐ `earth-surface.ts` : 16 pages par région au maximum (`loadedAt`, `P.surface`, masque `valid`) sans assertion.
-- ☐ `ground-stones.ts:135` : `packStones()` alloue à chaque image (`character-renderer.ts:331`). `params()` de
-  `scenery.ts` et `earth-surface.ts` : un `Float32Array` par image.
+- ☑ `earth-tiles.ts:493, 298` : écouteurs d'abandon jamais retirés (petite fuite par tuile). — fait, ea44018
+- ☑ `scenery.ts:96` détruit l'ancien tampon tout de suite, alors que `clear()` attend `onSubmittedWorkDone` : incohérent. — fait : `retire()` commun, ea44018
+- ☑ `earth-surface.ts` : 16 pages par région au maximum (`loadedAt`, `P.surface`, masque `valid`) sans assertion. — fait : `SURFACE_PAGES`, région trop grande écartée, test du manifeste, ea44018
+- ☑ `ground-stones.ts:135` : `packStones()` alloue à chaque image (`character-renderer.ts:331`). `params()` de
+  `scenery.ts` et `earth-surface.ts` : un `Float32Array` par image. — fait : table et tableaux gardés, ea44018
 
 ### Diagnostics des items 4 et 5 de la campagne
 - **Item 4 (Bourget 35 → 44 ms, surface et décor coupés).** Candidats, du plus probable au moins probable :
@@ -164,7 +166,7 @@ Symptôme : les troncs sont parfois transparents à l'herbe qui est derrière eu
   juste. Le `depth32float` ne départage que les objets rasterisés entre eux, et seule l'herbe LOD 0 y écrit.
 
 ### Haute
-- ☐ **Z-P1. Profondeur périmée et jamais reprojetée en temps réel** (`trace.wgsl:7558-7568`, vérifié).
+- ☑ **Z-P1. Profondeur périmée et jamais reprojetée en temps réel** (`trace.wgsl:7558-7568`, vérifié).
   - **Mécanisme :**
     - Un rayon par bloc de 2 à 8 px, avec un décalage tournant (`renderer.ts:4665-4690`) et une gigue gaussienne (`trace.wgsl:7507`).
     - Seul le pixel tracé écrit `moments[idx] = vec2f(0, depth)`. Les autres gardent la profondeur d'il y a 1 à b²−1 images.
@@ -175,15 +177,16 @@ Symptôme : les troncs sont parfois transparents à l'herbe qui est derrière eu
     du ciel qui était derrière. Une herbe à 14 m devant un sol à 25 m passe le test et se dessine sur le tronc. Le défaut
     est pire avec un bloc de 3–4 et un lacet rapide, et disparaît à l'arrêt : d'où le « parfois ». Même chose sur le
     bord des bâtiments, et pour les pierres, le vaisseau, la station et Endurance.
-- ☐ **Z-P2. Image fixe : la profondeur est une moyenne** (`trace.wgsl:7575`,
+  - — fait : `sceneDepth` (f32, pleine résolution, passe `occlusion` de post.wgsl après `temporal`) ; pixel périmé = minimum des 4 rayons frais du réseau qui l'entourent ; lié à character/ship/station/endurance.wgsl à la place de `moments`, fe32eb3
+- ☑ **Z-P2. Image fixe : la profondeur est une moyenne** (`trace.wgsl:7575`,
   `mix(m.y, tr.depth, 1/na)`). Au bord d'un tronc qui se découpe sur le ciel, la moyenne part vers ~5e8 : il reste
-  une frange de 1–2 px où l'herbe passe, même caméra immobile.
+  une frange de 1–2 px où l'herbe passe, même caméra immobile. — fait : `moments.y` garde l'échantillon le plus proche en convergence (la profondeur de champ le lit aussi), fe32eb3
 
 ### Basse
 - ☐ La gigue fait alterner les pixels de bord entre la profondeur du tronc et celle du sol, alors que la couleur
-  est mélangée : les bords des troncs scintillent.
+  est mélangée : les bords des troncs scintillent. — non fait en mouvement : un pixel frais garde sa propre profondeur (prendre le minimum du voisinage rognerait l'herbe partout) ; à l'arrêt, le minimum de Z-P2 le règle
 - ☐ L'herbe des LOD > 0 n'écrit pas dans le `depth32float` (`character-renderer.ts:126, 737-745`), ce qui peut poser
-  problème entre les brins et l'astronaute ou les pierres.
+  problème entre les brins et l'astronaute ou les pierres. — non fait : vérifié, les LOD > 0 gardent le test (`depthCompare: "greater"`, écriture coupée) contre l'astronaute et les pierres dessinés avant ; seuls les brins lointains entre eux ne sont pas triés, par choix
 
 **Pour confirmer, sans changer le code :**
 1. `realtimeSubsampling: 1` et `temporalBlend: 1` : la transparence doit disparaître en tournant devant un tronc. Avec 4, elle doit empirer.
