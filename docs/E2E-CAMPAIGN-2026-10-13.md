@@ -54,9 +54,8 @@ the review marks "non fait" (on branch `review-fixes`, merged here). Then:
 
 1. A full campaign on both Macs with the final tree (only targeted runs were made after the fixes; see the second
    round above for what passed where).
-2. The Moon's DEM arriving after a landing with the clock held: the landed craft is not put on it (730 m above at
-   0°, 0°), the walker is; and the on-foot HUD's altitude reads the coarse relief (docs/REVIEW-BRANCH-2026-10-13.md,
-   "Nouveaux constats").
+2. The Moon's DEM arriving after a landing: the landed craft is not put on it (730 m above at 0°, 0°), the walker is
+   (docs/REVIEW-BRANCH-2026-10-13.md, "Nouveaux constats").
 3. The first CI run of the new guards (pages.yml: fetch-depth 2, the size guard, check-forest on SwiftShader) and
    tests/earth-surface.test.ts, which times out at bun's 5 s default under load.
 4. LFS or a bucket for the binary packs: the user's decision (docs/ASSETS.md).

@@ -481,7 +481,8 @@ gpu-startup (4 variantes), grille de marche (f219a9e).
   ni avant ni après les correctifs.
 
 **Nouveaux constats, non corrigés**
-- ☐ Lune, horloge figée : quand le relief fin (MNT) arrive après l'atterrissage, le vaisseau posé reste sur le relief
-  grossier (730 m plus haut à 0°, 0°) ; le piéton, lui, descend sur le MNT. `status().altKm` passe à −0,74 km, « posé ».
-- ☐ HUD à pied : l'altitude affichée (ALT −741 m sur la Lune) se rapporte au relief grossier, pas au sol sous les pieds.
+- ☐ Lune : quand le relief fin (MNT) arrive après l'atterrissage, le vaisseau posé n'est pas reposé dessus (horloge
+  figée ou non) : `status().altKm` passe de −0,01 à −0,74 km en restant « posé », la coque reste sur le relief grossier
+  (730 m au-dessus du MNT à 0°, 0°), le piéton descend sur le MNT. (L'« ALT −741 m » du HUD à pied est juste : la
+  hauteur au-dessus du rayon moyen.)
 - ☐ Z-V3 au télescope : la portée de l'herbe n'est pas agrandie (il faudrait centrer le réseau sur le point visé).
