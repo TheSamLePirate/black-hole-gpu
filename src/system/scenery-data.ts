@@ -10,12 +10,15 @@ export const SCENERY_GRID = 512;
 export type SceneryMode = "off" | "balanced" | "high";
 export const D = Math.PI / 180;
 export const wrapLon = (v: number) => ((((v + 180) % 360) + 360) % 360) - 180;
-export type SceneryExclusion = { lat: number; lon: number; heading: number; length: number; halfWidth: number };
+/** a place kept clear of the scenery: a runway's strip (its heading, length and half width, 300 m past each end),
+ *  or a disc (`radius` [m]: a landscape's viewpoint, where the photographer stood) */
+export type SceneryExclusion = { lat: number; lon: number; heading: number; length: number; halfWidth: number; radius?: number };
 export function sceneryExcluded(lat: number, lon: number, zones: SceneryExclusion[]) {
   return zones.some((v) => {
     const north = (lat - v.lat) * 111320,
       east = wrapLon(lon - v.lon) * 111320 * Math.cos(v.lat * D),
       h = v.heading * D;
+    if (v.radius !== undefined) return north * north + east * east < v.radius * v.radius;
     const along = north * Math.cos(h) + east * Math.sin(h),
       across = east * Math.cos(h) - north * Math.sin(h);
     return along > -300 && along < v.length + 300 && Math.abs(across) < v.halfWidth;

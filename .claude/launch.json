@@ -17,6 +17,14 @@
         "scripts/dashboard/server.ts"
       ],
       "port": 4700
+    },
+    {
+      "name": "landscapes-compare",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "scripts/landscapes-compare.ts"
+      ],
+      "port": 4710
     }
   ]
 }

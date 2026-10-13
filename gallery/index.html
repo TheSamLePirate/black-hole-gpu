@@ -325,6 +325,35 @@
     }
   }
 
+  /* ------------------------------------------------------------ landscapes */
+  .land .shot img {
+    aspect-ratio: auto;
+  }
+  .land .photo {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 12px;
+    align-items: start;
+    padding: 10px;
+    border-radius: 10px;
+    background: var(--panel);
+    font-size: 12.5px;
+    color: #c9c6bf;
+  }
+  .land .photo img {
+    width: 120px;
+    height: auto;
+    border-radius: 4px;
+    background: #000;
+  }
+  .land .photo a {
+    color: var(--blue);
+  }
+  .land .verdict {
+    font: 11.5px/1.6 var(--mono);
+    color: var(--dim);
+  }
+
   /* ------------------------------------------------------------ comparison */
   .compare-block {
     display: grid;
@@ -865,6 +894,7 @@
     <a href="#moteur">Le moteur v2</a>
     <a href="#trou-de-ver">Le trou de ver</a>
     <a href="#compare">Interstellar</a>
+    <a href="#paysages">Les paysages</a>
     <a href="#simulateur">Le simulateur</a>
     <a href="#modele">Le modèle de calcul</a>
     <a href="#journal">Journal</a>
@@ -961,6 +991,15 @@
         </p>
       </div>
     </div>
+  </section>
+
+  <section id="paysages" aria-labelledby="paysages-title">
+    <div class="section-head">
+      <h2 id="paysages-title">Les paysages, d'après de vraies photographies</h2>
+      <p>Quatorze paysages d'exception refaits à partir d'une photographie de Wikimedia Commons : la caméra où le photographe se tenait, tournée comme il regardait (sommets nommés résolus sur le vrai relief, boussole EXIF ou relèvement du sujet), à l'heure du déclenchement et à la même focale. Le relief est celui des tuiles Terrarium, la couverture du sol celle d'ESA WorldCover, l'imagerie celle de Sentinel-2 (EOX s2cloudless), les bâtiments et les forêts ceux d'OpenStreetMap ; tout le reste — la lumière, le ciel, l'eau, les arbres — est calculé. La photographie d'origine est à côté de chaque rendu, avec ce qui la distingue de lui.</p>
+    </div>
+    <div class="plates" id="land-list"></div>
+    <p class="params">Données : relief © Mapzen / Terrarium (AWS Open Data) · ESA WorldCover 2021 (CC BY 4.0) · Copernicus Sentinel-2, EOX s2cloudless 2021 (CC BY-NC-SA 4.0) · © les contributeurs d'OpenStreetMap (ODbL) · OpenMapTiles. Les photographies restent sous la licence de leurs auteurs, nommés sous chacune.</p>
   </section>
 
   <section id="simulateur" aria-labelledby="sim-title">
@@ -1816,6 +1855,40 @@
       </figcaption>`;
     (p.v3 ? listV3 : p.v2 ? listV2 : list).append(fig);
   });
+
+  // ---------------------------------------------------------------- paysages (paysages.json : scripts/landscapes-gallery.ts)
+  const landList = document.getElementById("land-list");
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const num = (v, d = 1) => String(Number(v).toFixed(d)).replace(".", ",");
+  fetch("paysages.json")
+    .then((r) => (r.ok ? r.json() : []))
+    .then((lands) =>
+      lands.forEach((l, i) => {
+        const fig = document.createElement("figure");
+        fig.className = "plate land";
+        fig.id = `paysage-${l.slug}`;
+        const c = l.compare;
+        const verdict = c
+          ? `Comparé à la photographie : ligne d'horizon corrélée à ${num(c.skylineCorr, 2)}${c.headingErrDeg ? ` (au mieux ${num(c.skylineCorrAligned, 2)} en tournant de ${num(c.headingErrDeg)}°)` : ""}, hauteur ${num(c.pitchErrDeg)}°, contours à ${num(c.edgeCorr, 2)}.`
+          : "";
+        fig.innerHTML = `
+          <a class="shot" href="img/paysages/${l.slug}.jpg" aria-label="Agrandir : ${esc(l.title)}">
+            <img src="img/paysages/${l.slug}.jpg" alt="${esc(l.title)}, rendu du simulateur" loading="lazy" />
+          </a>
+          <figcaption>
+            <div class="pno">Paysage ${i + 1} sur ${lands.length}</div>
+            <h3>${esc(l.title)}</h3>
+            <p>${esc(l.text)}</p>
+            <div class="photo">
+              <a href="${l.photo.page}"><img src="${l.photo.thumb}" alt="La photographie d'origine" loading="lazy" referrerpolicy="no-referrer" /></a>
+              <div>La photographie d'origine : <a href="${l.photo.page}">${esc(l.photo.file)}</a>, ${esc(l.photo.author)}, ${esc(l.photo.licence)}.${l.photo.estimated ? ` <i>Estimé : ${esc(l.photo.estimated)}.</i>` : ""}${l.note ? `<br />${esc(l.note)}` : ""}</div>
+            </div>
+            <p class="params"><span>cap <b>${num(l.heading)}°</b></span><span>inclinaison <b>${num(l.pitch)}°</b></span><span>focale <b>${l.focal35} mm</b></span><span>champ <b>${num(l.fov)}°</b></span><span>UTC <b>${l.utc}</b></span></p>
+            ${verdict ? `<p class="verdict">${verdict}</p>` : ""}
+          </figcaption>`;
+        landList.append(fig);
+      }),
+    );
 
   // ---------------------------------------------------------------- comparaison
   const cmp = document.getElementById("compare-widget");

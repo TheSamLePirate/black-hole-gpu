@@ -1,0 +1,506 @@
+[
+  {
+    "slug": "earth-the-grand-canyon-from-hopi-point",
+    "scene": "Earth: the Grand Canyon from Hopi Point",
+    "title": "Le Grand Canyon",
+    "text": "Hopi Point sur la rive sud à 17:55 en septembre : la lumière du soir sur la Tour de Seth, les temples d'Horus, d'Osiris et de Shiva, le canyon profond de deux kilomètres en contrebas.",
+    "portrait": false,
+    "photo": {
+      "page": "https://commons.wikimedia.org/wiki/File:Grand_Canyon_Hopi_Point_Evening_Light_2013.jpg",
+      "file": "Grand_Canyon_Hopi_Point_Evening_Light_2013.jpg",
+      "thumb": "https://commons.wikimedia.org/wiki/Special:FilePath/Grand_Canyon_Hopi_Point_Evening_Light_2013.jpg?width=640",
+      "author": "Tuxyso",
+      "licence": "CC BY-SA 3.0",
+      "estimated": null
+    },
+    "at": [
+      36.074475,
+      -112.15494
+    ],
+    "heading": 349.7,
+    "headingFrom": "landmarks",
+    "pitch": -5.2,
+    "focal35": 61,
+    "fov": 22.3,
+    "utc": "2013-09-09 00:55",
+    "compare": {
+      "slug": "earth-the-grand-canyon-from-hopi-point",
+      "title": "The Grand Canyon",
+      "skylineCorr": -0.58,
+      "skylineOffsetPct": 6.4,
+      "pitchErrDeg": 1.4,
+      "headingErrDeg": 4,
+      "skylineCorrAligned": -0.362,
+      "edgeCorr": 0.261
+    },
+    "note": "Fidèle au cadrage : la rive nord et les temples au même endroit. La photo, voilée de nuages, est plus claire que la lumière du soir calculée."
+  },
+  {
+    "slug": "earth-the-matterhorn-from-the-riffelsee",
+    "scene": "Earth: the Matterhorn from the Riffelsee",
+    "title": "Le Cervin",
+    "text": "Depuis le Riffelsee, 2 757 m, un matin de juin : la face est du Cervin et l'arête du Hörnli au-delà du lac, à huit kilomètres.",
+    "portrait": true,
+    "photo": {
+      "page": "https://commons.wikimedia.org/wiki/File:Matterhorn_Riffelsee_2005-06-11.jpg",
+      "file": "Matterhorn_Riffelsee_2005-06-11.jpg",
+      "thumb": "https://commons.wikimedia.org/wiki/Special:FilePath/Matterhorn_Riffelsee_2005-06-11.jpg?width=640",
+      "author": "Dirk Beyer",
+      "licence": "CC BY-SA 3.0",
+      "estimated": null
+    },
+    "at": [
+      45.983417,
+      7.762778
+    ],
+    "heading": 265,
+    "headingFrom": "exif",
+    "pitch": 1,
+    "focal35": 51,
+    "fov": 38.9,
+    "utc": "2005-06-11 07:50",
+    "compare": {
+      "slug": "earth-the-matterhorn-from-the-riffelsee",
+      "title": "The Matterhorn",
+      "skylineCorr": 0.853,
+      "skylineOffsetPct": 3.6,
+      "pitchErrDeg": 1.4,
+      "headingErrDeg": 0.2,
+      "skylineCorrAligned": 0.853,
+      "edgeCorr": 0.366
+    },
+    "note": "Fidèle : la pyramide et son reflet dans le Riffelsee à la même place. La neige et la roche manquent de détail (le relief est à ~20 m)."
+  },
+  {
+    "slug": "earth-mont-blanc-from-the-lac-blanc",
+    "scene": "Earth: Mont Blanc from the Lac Blanc",
+    "title": "Le Mont Blanc",
+    "text": "Le lac Blanc au-dessus de Chamonix, 2 352 m, à midi en septembre : tout le massif de l'autre côté de la vallée — l'Aiguille Verte, la Mer de Glace, le Mont Blanc à 17 km.",
+    "portrait": false,
+    "photo": {
+      "page": "https://commons.wikimedia.org/wiki/File:Mont_Blanc_@_Lac_Blanc_@_Chamonix_(51486759213).jpg",
+      "file": "Mont_Blanc_@_Lac_Blanc_@_Chamonix_(51486759213).jpg",
+      "thumb": "https://commons.wikimedia.org/wiki/Special:FilePath/Mont_Blanc_%40_Lac_Blanc_%40_Chamonix_(51486759213).jpg?width=640",
+      "author": "Guilhem Vellut",
+      "licence": "CC BY 2.0",
+      "estimated": null
+    },
+    "at": [
+      45.981761,
+      6.891294
+    ],
+    "heading": 194.3,
+    "headingFrom": "photograph",
+    "pitch": -9,
+    "focal35": 23,
+    "fov": 55.1,
+    "utc": "2021-09-08 11:26",
+    "compare": {
+      "slug": "earth-mont-blanc-from-the-lac-blanc",
+      "title": "Mont Blanc",
+      "skylineCorr": 0.96,
+      "skylineOffsetPct": 0.1,
+      "pitchErrDeg": 0.1,
+      "headingErrDeg": 0.3,
+      "skylineCorrAligned": 0.961,
+      "edgeCorr": 0.35
+    },
+    "note": "Fidèle après correction (cap 7° plus à l'ouest, regard 12° plus bas) : la ligne de crêtes du massif épouse celle de la photo."
+  },
+  {
+    "slug": "earth-the-geirangerfjord-from-flydalsjuvet",
+    "scene": "Earth: the Geirangerfjord from Flydalsjuvet",
+    "title": "Le Geirangerfjord",
+    "text": "Flydalsjuvet en juin : Geiranger au fond du fjord, 300 m plus bas, le fjord qui serpente vers le nord-ouest entre ses parois.",
+    "portrait": false,
+    "photo": {
+      "page": "https://commons.wikimedia.org/wiki/File:View_of_Geiranger,_as_seen_from_Flydalsjuvet_Viewpoint_20150604_1.jpg",
+      "file": "View_of_Geiranger,_as_seen_from_Flydalsjuvet_Viewpoint_20150604_1.jpg",
+      "thumb": "https://commons.wikimedia.org/wiki/Special:FilePath/View_of_Geiranger%2C_as_seen_from_Flydalsjuvet_Viewpoint_20150604_1.jpg?width=640",
+      "author": "DXR",
+      "licence": "CC BY-SA 4.0",
+      "estimated": "the hour (the page gives the day only)"
+    },
+    "at": [
+      62.089903,
+      7.222863
+    ],
+    "heading": 322,
+    "headingFrom": "photograph",
+    "pitch": -4,
+    "focal35": 18,
+    "fov": 67.4,
+    "utc": "2015-06-04 16:00",
+    "compare": {
+      "slug": "earth-the-geirangerfjord-from-flydalsjuvet",
+      "title": "The Geirangerfjord",
+      "skylineCorr": 0.963,
+      "skylineOffsetPct": -0.3,
+      "pitchErrDeg": -0.2,
+      "headingErrDeg": -0.4,
+      "skylineCorrAligned": 0.964,
+      "edgeCorr": 0.275
+    },
+    "note": "Fidèle : la vallée, le lac du fond et les deux versants au même endroit."
+  },
+  {
+    "slug": "earth-reine-from-reinebringen",
+    "scene": "Earth: Reine from Reinebringen",
+    "title": "Reine, les Lofoten",
+    "text": "Depuis le sommet du Reinebringen, 448 m, un après-midi de juillet : les îlots et les cabanes rouges de Reine tout en bas, le fjord et les pics acérés des Lofoten autour.",
+    "portrait": false,
+    "photo": {
+      "page": "https://commons.wikimedia.org/wiki/File:Moskenes_Reinebringen_lub_2025-07-21_img02_Aussicht.jpg",
+      "file": "Moskenes_Reinebringen_lub_2025-07-21_img02_Aussicht.jpg",
+      "thumb": "https://commons.wikimedia.org/wiki/Special:FilePath/Moskenes_Reinebringen_lub_2025-07-21_img02_Aussicht.jpg?width=640",
+      "author": "Lukas Beck",
+      "licence": "CC BY 4.0",
+      "estimated": null
+    },
+    "at": [
+      67.927787,
+      13.073984
+    ],
+    "heading": 56,
+    "headingFrom": "photograph",
+    "pitch": -4,
+    "focal35": 56,
+    "fov": 24.2,
+    "utc": "2025-07-21 14:15",
+    "compare": {
+      "slug": "earth-reine-from-reinebringen",
+      "title": "Reine, the Lofoten",
+      "skylineCorr": 0.406,
+      "skylineOffsetPct": 38,
+      "pitchErrDeg": 9.2,
+      "headingErrDeg": -2,
+      "skylineCorrAligned": 0.556,
+      "edgeCorr": 0.14
+    },
+    "note": "Ne ressemble pas : le massif que la photo montre en face n'apparaît pas — la direction réelle de la prise de vue reste à retrouver."
+  },
+  {
+    "slug": "earth-kirkjufell-over-kirkjufellsfoss",
+    "scene": "Earth: Kirkjufell over Kirkjufellsfoss",
+    "title": "Kirkjufell",
+    "text": "Kirkjufellsfoss en juillet à 16:30 : la cascade devant, le cône du Kirkjufell derrière, soleil et grosses averses sur la péninsule de Snæfellsnes.",
+    "portrait": false,
+    "photo": {
+      "page": "https://commons.wikimedia.org/wiki/File:Kirkjufell,_Iceland,_20240714_1631_0713.jpg",
+      "file": "Kirkjufell,_Iceland,_20240714_1631_0713.jpg",
+      "thumb": "https://commons.wikimedia.org/wiki/Special:FilePath/Kirkjufell%2C_Iceland%2C_20240714_1631_0713.jpg?width=640",
+      "author": "Jakub Hałun",
+      "licence": "CC BY 4.0",
+      "estimated": null
+    },
+    "at": [
+      64.925962,
+      -23.312261
+    ],
+    "heading": 22,
+    "headingFrom": "photograph",
+    "pitch": 6,
+    "focal35": 24,
+    "fov": 53.1,
+    "utc": "2024-07-14 16:31",
+    "compare": {
+      "slug": "earth-kirkjufell-over-kirkjufellsfoss",
+      "title": "Kirkjufell",
+      "skylineCorr": 0.049,
+      "skylineOffsetPct": -2,
+      "pitchErrDeg": -1,
+      "headingErrDeg": 0.6,
+      "skylineCorrAligned": 0.051,
+      "edgeCorr": 0.12
+    },
+    "note": "Proche après correction (cap 14° plus à droite) : le cône à gauche du centre. La cascade du premier plan, trop petite pour le relief, manque."
+  },
+  {
+    "slug": "earth-lauterbrunnen-and-the-staubbach-falls",
+    "scene": "Earth: Lauterbrunnen and the Staubbach Falls",
+    "title": "Lauterbrunnen",
+    "text": "Lauterbrunnen à midi en septembre : le Staubbach qui tombe de 300 m depuis la paroi ouest de la vallée, l'auge glaciaire qui file vers le sud.",
+    "portrait": true,
+    "photo": {
+      "page": "https://commons.wikimedia.org/wiki/File:Staubbachfall_in_Lauterbrunnen_BE.jpg",
+      "file": "Staubbachfall_in_Lauterbrunnen_BE.jpg",
+      "thumb": "https://commons.wikimedia.org/wiki/Special:FilePath/Staubbachfall_in_Lauterbrunnen_BE.jpg?width=640",
+      "author": "JoachimKohler-HB",
+      "licence": "CC BY-SA 4.0",
+      "estimated": null
+    },
+    "at": [
+      46.594179,
+      7.907383
+    ],
+    "heading": 197,
+    "headingFrom": "subject",
+    "pitch": 12,
+    "focal35": 46,
+    "fov": 42.7,
+    "utc": "2019-09-21 10:46",
+    "compare": {
+      "slug": "earth-lauterbrunnen-and-the-staubbach-falls",
+      "title": "Lauterbrunnen",
+      "skylineCorr": -0.158,
+      "skylineOffsetPct": 12.9,
+      "pitchErrDeg": 5.5,
+      "headingErrDeg": 2.6,
+      "skylineCorrAligned": 0.162,
+      "edgeCorr": 0.018
+    },
+    "note": "Partiel : la falaise et la chute du Staubbach sont là ; les maisons ne sont que des volumes (OpenStreetMap)."
+  },
+  {
+    "slug": "earth-the-cuernos-del-paine",
+    "scene": "Earth: the Cuernos del Paine",
+    "title": "Torres del Paine",
+    "text": "Dans la vallée du Francés un après-midi d'avril : le granite des Cuernos del Paine et leurs coiffes d'ardoise noire, un kilomètre plus haut.",
+    "portrait": false,
+    "photo": {
+      "page": "https://commons.wikimedia.org/wiki/File:AOB_Torres_del_Paine_cuernos.jpg",
+      "file": "AOB_Torres_del_Paine_cuernos.jpg",
+      "thumb": "https://commons.wikimedia.org/wiki/Special:FilePath/AOB_Torres_del_Paine_cuernos.jpg?width=640",
+      "author": "Alfredo Olivares Bueno",
+      "licence": "CC BY 4.0",
+      "estimated": null
+    },
+    "at": [
+      -51.008533,
+      -73.052612
+    ],
+    "heading": 71.7,
+    "headingFrom": "subject",
+    "pitch": 8,
+    "focal35": 26,
+    "fov": 49.6,
+    "utc": "2025-04-12 18:59",
+    "compare": {
+      "slug": "earth-the-cuernos-del-paine",
+      "title": "Torres del Paine",
+      "skylineCorr": -0.756,
+      "skylineOffsetPct": -14.4,
+      "pitchErrDeg": -7.1,
+      "headingErrDeg": -12.4,
+      "skylineCorrAligned": -0.461,
+      "edgeCorr": 0.098
+    },
+    "note": "Partiel : la forêt qui couvrait le point de vue est dégagée, mais les aiguilles des Cuernos, trop fines pour le relief (~30 m), deviennent un massif arrondi."
+  },
+  {
+    "slug": "earth-fitz-roy-above-the-laguna-de-los-tres",
+    "scene": "Earth: Fitz Roy above the Laguna de los Tres",
+    "title": "Le Fitz Roy",
+    "text": "Sous la Laguna de los Tres à midi en décembre : les tours de granite du massif du Fitz Roy, le glacier de la Laguna Sucia à leurs pieds.",
+    "portrait": false,
+    "photo": {
+      "page": "https://commons.wikimedia.org/wiki/File:Fitz_Roy_massif_2015_1.JPG",
+      "file": "Fitz_Roy_massif_2015_1.JPG",
+      "thumb": "https://commons.wikimedia.org/wiki/Special:FilePath/Fitz_Roy_massif_2015_1.JPG?width=640",
+      "author": "Fredlyfish4",
+      "licence": "CC BY-SA 4.0",
+      "estimated": "the lens (a stitched panorama): the scene's field holds the massif"
+    },
+    "at": [
+      -49.281578,
+      -72.986686
+    ],
+    "heading": 285.6,
+    "headingFrom": "subject",
+    "pitch": 9,
+    "focal35": 24,
+    "fov": 53.1,
+    "utc": "2015-12-14 16:12",
+    "compare": {
+      "slug": "earth-fitz-roy-above-the-laguna-de-los-tres",
+      "title": "Fitz Roy",
+      "skylineCorr": -0.049,
+      "skylineOffsetPct": 20.4,
+      "pitchErrDeg": 10.8,
+      "headingErrDeg": 13.3,
+      "skylineCorrAligned": 0.532,
+      "edgeCorr": 0.038
+    },
+    "note": "Ne ressemble pas encore : une arête du premier plan cache la laguna ; le point de vue est à revoir."
+  },
+  {
+    "slug": "earth-mount-fuji-across-lake-kawaguchi",
+    "scene": "Earth: Mount Fuji across Lake Kawaguchi",
+    "title": "Le mont Fuji",
+    "text": "La rive du lac Kawaguchi en mars à midi : le cône enneigé du Fuji à 17 km au sud, au-delà de l'eau et du cap Ubuyagasaki.",
+    "portrait": false,
+    "photo": {
+      "page": "https://commons.wikimedia.org/wiki/File:Mount_Fuji_behind_Ubuyagasaki,_Fujikawaguchiko,_2016.jpg",
+      "file": "Mount_Fuji_behind_Ubuyagasaki,_Fujikawaguchiko,_2016.jpg",
+      "thumb": "https://commons.wikimedia.org/wiki/Special:FilePath/Mount_Fuji_behind_Ubuyagasaki%2C_Fujikawaguchiko%2C_2016.jpg?width=640",
+      "author": "DimiTalen",
+      "licence": "CC0",
+      "estimated": null
+    },
+    "at": [
+      35.513276,
+      138.76601
+    ],
+    "heading": 185,
+    "headingFrom": "exif",
+    "pitch": 4,
+    "focal35": 30,
+    "fov": 43.6,
+    "utc": "2016-03-27 03:16",
+    "compare": {
+      "slug": "earth-mount-fuji-across-lake-kawaguchi",
+      "title": "Mount Fuji",
+      "skylineCorr": 0.28,
+      "skylineOffsetPct": 18.7,
+      "pitchErrDeg": 8.2,
+      "headingErrDeg": 10.2,
+      "skylineCorrAligned": 0.385,
+      "edgeCorr": 0.4
+    },
+    "note": "Proche : les pins à gauche, le lac et le Fuji au fond ; le volcan paraît plus grand que sur la photo."
+  },
+  {
+    "slug": "earth-moraine-lake-and-the-valley-of-the-ten-peaks",
+    "scene": "Earth: Moraine Lake and the Valley of the Ten Peaks",
+    "title": "Moraine Lake",
+    "text": "Depuis le Rockpile un soir de juin : le lac turquoise sous la vallée des Dix Pics, le Deltaform et le Wenkchemna dans la lumière rasante.",
+    "portrait": false,
+    "photo": {
+      "page": "https://commons.wikimedia.org/wiki/File:Moraine_Lake_2018.jpg",
+      "file": "Moraine_Lake_2018.jpg",
+      "thumb": "https://commons.wikimedia.org/wiki/Special:FilePath/Moraine_Lake_2018.jpg?width=640",
+      "author": "WhyDon'tWeZJCDJ",
+      "licence": "CC BY-SA 4.0",
+      "estimated": null
+    },
+    "at": [
+      51.327483,
+      -116.180039
+    ],
+    "heading": 224.6,
+    "headingFrom": "exif",
+    "pitch": 5,
+    "focal35": 28,
+    "fov": 46.4,
+    "utc": "2018-06-14 01:19",
+    "compare": {
+      "slug": "earth-moraine-lake-and-the-valley-of-the-ten-peaks",
+      "title": "Moraine Lake",
+      "skylineCorr": 0.504,
+      "skylineOffsetPct": 34.9,
+      "pitchErrDeg": 16.2,
+      "headingErrDeg": 3.6,
+      "skylineCorrAligned": 0.698,
+      "edgeCorr": 0.015
+    },
+    "note": "Ne ressemble pas : une butte cache le lac et les Dix Pics — le Rockpile, trop petit pour le relief, n'élève pas la caméra."
+  },
+  {
+    "slug": "earth-the-dunes-of-sossusvlei",
+    "scene": "Earth: the dunes of Sossusvlei",
+    "title": "Sossusvlei",
+    "text": "Depuis la cuvette blanche de Deadvlei à 09:49 en août : les crêtes des dunes rouges et leurs ombres, au long téléobjectif.",
+    "portrait": false,
+    "photo": {
+      "page": "https://commons.wikimedia.org/wiki/File:Sossusvlei,_Namibia,_2018-08-06,_DD_040.jpg",
+      "file": "Sossusvlei,_Namibia,_2018-08-06,_DD_040.jpg",
+      "thumb": "https://commons.wikimedia.org/wiki/Special:FilePath/Sossusvlei%2C_Namibia%2C_2018-08-06%2C_DD_040.jpg?width=640",
+      "author": "Diego Delso",
+      "licence": "CC BY-SA 4.0",
+      "estimated": null
+    },
+    "at": [
+      -24.7588481,
+      15.2939213
+    ],
+    "heading": 86.8,
+    "headingFrom": "subject",
+    "pitch": 1,
+    "focal35": 150,
+    "fov": 9.1,
+    "utc": "2018-08-06 07:49",
+    "compare": {
+      "slug": "earth-the-dunes-of-sossusvlei",
+      "title": "Sossusvlei",
+      "skylineCorr": 0.046,
+      "skylineOffsetPct": -19.5,
+      "pitchErrDeg": -1.8,
+      "headingErrDeg": 0.2,
+      "skylineCorrAligned": 0.065,
+      "edgeCorr": 0.03
+    },
+    "note": "Ne ressemble pas : les dunes, plus fines que le relief, n'existent pas dans le terrain."
+  },
+  {
+    "slug": "earth-monument-valley-s-mittens",
+    "scene": "Earth: Monument Valley's Mittens",
+    "title": "Monument Valley",
+    "text": "Au-dessus de la vallée un après-midi de juillet : les buttes West Mitten, East Mitten et Merrick, de gauche à droite, sur le désert rouge.",
+    "portrait": false,
+    "photo": {
+      "page": "https://commons.wikimedia.org/wiki/File:Monument_Valley,_Arizona.jpg",
+      "file": "Monument_Valley,_Arizona.jpg",
+      "thumb": "https://commons.wikimedia.org/wiki/Special:FilePath/Monument_Valley%2C_Arizona.jpg?width=640",
+      "author": "Supercarwaar",
+      "licence": "CC BY-SA 4.0",
+      "estimated": null
+    },
+    "at": [
+      36.983487,
+      -110.107917
+    ],
+    "heading": 76,
+    "headingFrom": "subject",
+    "pitch": 2,
+    "focal35": 30,
+    "fov": 43.6,
+    "utc": "2015-07-27 22:30",
+    "compare": {
+      "slug": "earth-monument-valley-s-mittens",
+      "title": "Monument Valley",
+      "skylineCorr": 0.493,
+      "skylineOffsetPct": 9.8,
+      "pitchErrDeg": 4.3,
+      "headingErrDeg": 0,
+      "skylineCorrAligned": 0.493,
+      "edgeCorr": 0.096
+    },
+    "note": "Fidèle : les deux Mittens et Merrick Butte au même endroit, sur le même horizon."
+  },
+  {
+    "slug": "earth-mount-moran-from-oxbow-bend",
+    "scene": "Earth: Mount Moran from Oxbow Bend",
+    "title": "Oxbow Bend",
+    "text": "La boucle d'Oxbow Bend sur la Snake River un matin de juillet : le mont Moran et la chaîne des Teton au-delà de l'eau calme.",
+    "portrait": false,
+    "photo": {
+      "page": "https://commons.wikimedia.org/wiki/File:Oxbow_Bend_outlook_in_the_Grand_Teton_National_Park.jpg",
+      "file": "Oxbow_Bend_outlook_in_the_Grand_Teton_National_Park.jpg",
+      "thumb": "https://commons.wikimedia.org/wiki/Special:FilePath/Oxbow_Bend_outlook_in_the_Grand_Teton_National_Park.jpg?width=640",
+      "author": "Michael Gäbler",
+      "licence": "CC BY 3.0",
+      "estimated": "the moment and the lens (a 1980 slide, July only): a July morning, the ephemeris' years"
+    },
+    "at": [
+      43.865781,
+      -110.547636
+    ],
+    "heading": 255.4,
+    "headingFrom": "photograph",
+    "pitch": -6.5,
+    "focal35": 50,
+    "fov": 27,
+    "utc": "2026-07-15 13:30",
+    "compare": {
+      "slug": "earth-mount-moran-from-oxbow-bend",
+      "title": "Oxbow Bend",
+      "skylineCorr": 0.604,
+      "skylineOffsetPct": 1.2,
+      "pitchErrDeg": 0.3,
+      "headingErrDeg": 0.1,
+      "skylineCorrAligned": 0.606,
+      "edgeCorr": 0.066
+    },
+    "note": "Proche après correction (cap 4° à gauche, regard 9° plus bas) : le mont Moran et la rivière ; les fleurs du premier plan manquent."
+  }
+]

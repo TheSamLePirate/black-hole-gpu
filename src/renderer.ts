@@ -82,14 +82,27 @@ import { gpuDiagnostics } from "./gpu-diagnostics";
 import { EarthTiles, TILE_PARAM_VEC4S } from "./system/earth-tiles";
 import { EarthSurface, SURFACE_VEC4S, SURFACE_TEXTURE_LIMIT, surfaceShader } from "./system/earth-surface";
 import { EarthScenery, sceneryShader } from "./system/scenery";
-import { SCENERY_VEC4S, SCENERY_STORAGE_LIMIT } from "./system/scenery-data";
-const SCENERY_EXCLUSIONS = EARTH_RUNWAYS.map((r) => ({
-  lat: r.site.lat,
-  lon: r.site.lon,
-  heading: r.site.rwy ?? 0,
-  length: RUNWAY_LENGTH,
-  halfWidth: 340,
-}));
+import { SCENERY_VEC4S, SCENERY_STORAGE_LIMIT, type SceneryExclusion } from "./system/scenery-data";
+import { LANDSCAPES, LANDSCAPE_CLEARING_M } from "./system/landscapes";
+const SCENERY_EXCLUSIONS: SceneryExclusion[] = [
+  ...EARTH_RUNWAYS.map((r) => ({
+    lat: r.site.lat,
+    lon: r.site.lon,
+    heading: r.site.rwy ?? 0,
+    length: RUNWAY_LENGTH,
+    halfWidth: 340,
+  })),
+  // (the landscapes' viewpoints: no procedural tree where the photographer stood — the Cuernos del Paine's
+  // forest grew on the lookout and hid the massif)
+  ...LANDSCAPES.map((l) => ({
+    lat: l.at[0],
+    lon: l.at[1],
+    heading: 0,
+    length: 0,
+    halfWidth: 0,
+    radius: l.clearing ?? LANDSCAPE_CLEARING_M,
+  })),
+];
 import {
   altitudeOver,
   bodyFixedOf,

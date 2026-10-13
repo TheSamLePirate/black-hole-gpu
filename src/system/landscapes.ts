@@ -38,13 +38,21 @@ export interface Landscape {
   subject: [number, number];
   /** the view's direction [° from the north, eastwards]; none: the bearing to `subject` */
   heading?: number;
-  headingFrom: "landmarks" | "exif" | "subject";
+  /** where `heading` comes from; "photograph": the capture's skyline aligned on the photograph's
+   *  (scripts/landscapes-compare.html), the pitch with it */
+  headingFrom: "landmarks" | "exif" | "subject" | "photograph";
   /** the look above the level [°] */
   pitch: number;
+  /** the viewpoint's clearing of procedural trees [m] (LANDSCAPE_CLEARING_M when none: a lookout over a forest
+   *  the photo looks across needs more) */
+  clearing?: number;
   /** the scene's clouds (0: none — the photo's sky clear) */
   clouds?: number;
   photo: PhotoReference;
 }
+
+/** The viewpoint kept clear of procedural trees round where the photographer stood [m] (renderer's exclusions). */
+export const LANDSCAPE_CLEARING_M = 60;
 
 /** The vertical field of view [°] of a 35 mm equivalent focal length: 24 mm high, 36 mm in portrait. */
 export function fovOf35mm(focal: number, portrait = false): number {
@@ -126,8 +134,10 @@ export const LANDSCAPES: Landscape[] = [
     icon: "⛰",
     at: [45.981761, 6.891294],
     subject: [45.8327056, 6.8651706],
-    headingFrom: "subject",
-    pitch: 3,
+    // (checked against the photograph on 13 Oct 2026: the skyline matched at 0.96 turned 7° west, 12° lower — the lake fills the photo's lower half)
+    heading: 194.3,
+    headingFrom: "photograph",
+    pitch: -9,
     photo: {
       page: `${C}Mont_Blanc_@_Lac_Blanc_@_Chamonix_(51486759213).jpg`,
       author: "Guilhem Vellut",
@@ -144,8 +154,10 @@ export const LANDSCAPES: Landscape[] = [
     icon: "≈",
     at: [62.089903, 7.222863],
     subject: [62.1006277, 7.2058959],
-    headingFrom: "subject",
-    pitch: -8,
+    // (checked against the photograph: the skyline matched at 0.96 turned 1.5° left, 4° higher)
+    heading: 322,
+    headingFrom: "photograph",
+    pitch: -4,
     photo: {
       page: `${C}View_of_Geiranger,_as_seen_from_Flydalsjuvet_Viewpoint_20150604_1.jpg`,
       author: "DXR",
@@ -164,8 +176,10 @@ export const LANDSCAPES: Landscape[] = [
     icon: "⌂",
     at: [67.927787, 13.073984],
     subject: [67.9324675, 13.0887684],
-    headingFrom: "subject",
-    pitch: -18,
+    // (checked against the photograph: the massif across the water at eye level, not Reine below — the frame nearly level, turned 6°)
+    heading: 56,
+    headingFrom: "photograph",
+    pitch: -4,
     photo: {
       page: `${C}Moskenes_Reinebringen_lub_2025-07-21_img02_Aussicht.jpg`,
       author: "Lukas Beck",
@@ -183,7 +197,9 @@ export const LANDSCAPES: Landscape[] = [
     icon: "◮",
     at: [64.925962, -23.312261],
     subject: [64.9399465, -23.3074783],
-    headingFrom: "subject",
+    // (checked against the photograph: Kirkjufell's cone stands left of the middle, at 0.38 of the width — 14° right of the bearing to its summit)
+    heading: 22,
+    headingFrom: "photograph",
     pitch: 6,
     clouds: 0.6,
     photo: {
@@ -223,6 +239,9 @@ export const LANDSCAPES: Landscape[] = [
     icon: "♜",
     at: [-51.008533, -73.052612],
     subject: [-50.9989054, -73.0064441],
+    // (the forest the WorldCover map puts round the lookout, 500 m of it, hid the massif — the photo looks across open
+    // ground)
+    clearing: 500,
     headingFrom: "subject",
     pitch: 8,
     photo: {
@@ -339,8 +358,10 @@ export const LANDSCAPES: Landscape[] = [
     icon: "⛰",
     at: [43.865781, -110.547636],
     subject: [43.8352104, -110.7763248],
-    headingFrom: "subject",
-    pitch: 2,
+    // (checked against the photograph: the skyline matched at 0.63 turned 4° left, 8.8° lower — the river and its banks fill the lower half)
+    heading: 255.4,
+    headingFrom: "photograph",
+    pitch: -6.5,
     photo: {
       page: `${C}Oxbow_Bend_outlook_in_the_Grand_Teton_National_Park.jpg`,
       author: "Michael Gäbler",

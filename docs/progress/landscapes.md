@@ -1,22 +1,22 @@
 # Paysages d’exception — écarts capture / photo
 
-Remplir après `bun run e2e landscapes` (sur Mac), en ouvrant `remote-results/landscapes/index.html`.
+Rempli le 13 octobre 2026 : `bun run e2e landscapes` (sur Mac), puis `bun scripts/landscapes-compare.ts` (profil d'horizon et contours mesurés contre la photo, côte à côte) et `bun scripts/landscapes-gallery.ts` (la galerie). Mesures : corrélation des lignes d'horizon (1 : même silhouette) et des contours.
 Colonnes : **Cadrage** (le sujet au même endroit ? sinon corriger `heading`/`pitch` dans
 `src/system/landscapes.ts`), **Écarts** (lumière, sol, végétation, eau, neige, ciel → chantier du plan A–C).
 
 | Paysage | Référence | Cap | Inclinaison | Moment | Cadrage | Écarts → chantier |
 |---|---|---|---|---|---|---|
-| The Grand Canyon | [photo](https://commons.wikimedia.org/wiki/File:Grand_Canyon_Hopi_Point_Evening_Light_2013.jpg) | 349.7° (landmarks) | -5.2° | 2013-09-09T00:55Z | | |
-| The Matterhorn | [photo](https://commons.wikimedia.org/wiki/File:Matterhorn_Riffelsee_2005-06-11.jpg) | 265.0° (exif) | 1° | 2005-06-11T07:50Z | | |
-| Mont Blanc | [photo](https://commons.wikimedia.org/wiki/File:Mont_Blanc_@_Lac_Blanc_@_Chamonix_(51486759213).jpg) | 187.0° (subject) | 3° | 2021-09-08T11:26Z | | |
-| The Geirangerfjord | [photo](https://commons.wikimedia.org/wiki/File:View_of_Geiranger,_as_seen_from_Flydalsjuvet_Viewpoint_20150604_1.jpg) | 323.5° (subject) | -8° | 2015-06-04T16:00Z | | |
-| Reine, the Lofoten | [photo](https://commons.wikimedia.org/wiki/File:Moskenes_Reinebringen_lub_2025-07-21_img02_Aussicht.jpg) | 49.9° (subject) | -18° | 2025-07-21T14:15Z | | |
-| Kirkjufell | [photo](https://commons.wikimedia.org/wiki/File:Kirkjufell,_Iceland,_20240714_1631_0713.jpg) | 8.2° (subject) | 6° | 2024-07-14T16:31Z | | |
-| Lauterbrunnen | [photo](https://commons.wikimedia.org/wiki/File:Staubbachfall_in_Lauterbrunnen_BE.jpg) | 197.0° (subject) | 12° | 2019-09-21T10:46Z | | |
-| Torres del Paine | [photo](https://commons.wikimedia.org/wiki/File:AOB_Torres_del_Paine_cuernos.jpg) | 71.7° (subject) | 8° | 2025-04-12T18:59Z | | |
-| Fitz Roy | [photo](https://commons.wikimedia.org/wiki/File:Fitz_Roy_massif_2015_1.JPG) | 285.6° (subject) | 9° | 2015-12-14T16:12Z | | |
-| Mount Fuji | [photo](https://commons.wikimedia.org/wiki/File:Mount_Fuji_behind_Ubuyagasaki,_Fujikawaguchiko,_2016.jpg) | 185.0° (exif) | 4° | 2016-03-27T03:16Z | | |
-| Moraine Lake | [photo](https://commons.wikimedia.org/wiki/File:Moraine_Lake_2018.jpg) | 224.6° (exif) | 5° | 2018-06-14T01:19Z | | |
-| Sossusvlei | [photo](https://commons.wikimedia.org/wiki/File:Sossusvlei,_Namibia,_2018-08-06,_DD_040.jpg) | 86.8° (subject) | 1° | 2018-08-06T07:49Z | | |
-| Monument Valley | [photo](https://commons.wikimedia.org/wiki/File:Monument_Valley,_Arizona.jpg) | 76.0° (subject) | 2° | 2015-07-27T22:30Z | | |
-| Oxbow Bend | [photo](https://commons.wikimedia.org/wiki/File:Oxbow_Bend_outlook_in_the_Grand_Teton_National_Park.jpg) | 259.6° (subject) | 2° | 2026-07-15T13:30Z | | |
+| The Grand Canyon | [photo](https://commons.wikimedia.org/wiki/File:Grand_Canyon_Hopi_Point_Evening_Light_2013.jpg) | 349.7° (landmarks) | -5.2° | 2013-09-09T00:55Z | horizon r=-0.58, contours r=0.261 | Fidèle au cadrage : la rive nord et les temples au même endroit. La photo, voilée de nuages, est plus claire que la lumière du soir calculée. |
+| The Matterhorn | [photo](https://commons.wikimedia.org/wiki/File:Matterhorn_Riffelsee_2005-06-11.jpg) | 265° (exif) | 1° | 2005-06-11T07:50Z | horizon r=0.853, contours r=0.366 | Fidèle : la pyramide et son reflet dans le Riffelsee à la même place. La neige et la roche manquent de détail (le relief est à ~20 m). |
+| Mont Blanc | [photo](https://commons.wikimedia.org/wiki/File:Mont_Blanc_@_Lac_Blanc_@_Chamonix_(51486759213).jpg) | 194.3° (photograph) | -9° | 2021-09-08T11:26Z | horizon r=0.96, contours r=0.35 | Fidèle après correction (cap 7° plus à l'ouest, regard 12° plus bas) : la ligne de crêtes du massif épouse celle de la photo. |
+| The Geirangerfjord | [photo](https://commons.wikimedia.org/wiki/File:View_of_Geiranger,_as_seen_from_Flydalsjuvet_Viewpoint_20150604_1.jpg) | 322° (photograph) | -4° | 2015-06-04T16:00Z | horizon r=0.963, contours r=0.275 | Fidèle : la vallée, le lac du fond et les deux versants au même endroit. |
+| Reine, the Lofoten | [photo](https://commons.wikimedia.org/wiki/File:Moskenes_Reinebringen_lub_2025-07-21_img02_Aussicht.jpg) | 56° (photograph) | -4° | 2025-07-21T14:15Z | horizon r=0.406, contours r=0.14 | Ne ressemble pas : le massif que la photo montre en face n'apparaît pas — la direction réelle de la prise de vue reste à retrouver. |
+| Kirkjufell | [photo](https://commons.wikimedia.org/wiki/File:Kirkjufell,_Iceland,_20240714_1631_0713.jpg) | 22° (photograph) | 6° | 2024-07-14T16:31Z | horizon r=0.049, contours r=0.12 | Proche après correction (cap 14° plus à droite) : le cône à gauche du centre. La cascade du premier plan, trop petite pour le relief, manque. |
+| Lauterbrunnen | [photo](https://commons.wikimedia.org/wiki/File:Staubbachfall_in_Lauterbrunnen_BE.jpg) | 197° (subject) | 12° | 2019-09-21T10:46Z | horizon r=-0.158, contours r=0.018 | Partiel : la falaise et la chute du Staubbach sont là ; les maisons ne sont que des volumes (OpenStreetMap). |
+| Torres del Paine | [photo](https://commons.wikimedia.org/wiki/File:AOB_Torres_del_Paine_cuernos.jpg) | 71.7° (subject) | 8° | 2025-04-12T18:59Z | horizon r=-0.756, contours r=0.098 | Partiel : la forêt qui couvrait le point de vue est dégagée, mais les aiguilles des Cuernos, trop fines pour le relief (~30 m), deviennent un massif arrondi. |
+| Fitz Roy | [photo](https://commons.wikimedia.org/wiki/File:Fitz_Roy_massif_2015_1.JPG) | 285.6° (subject) | 9° | 2015-12-14T16:12Z | horizon r=-0.049, contours r=0.038 | Ne ressemble pas encore : une arête du premier plan cache la laguna ; le point de vue est à revoir. |
+| Mount Fuji | [photo](https://commons.wikimedia.org/wiki/File:Mount_Fuji_behind_Ubuyagasaki,_Fujikawaguchiko,_2016.jpg) | 185° (exif) | 4° | 2016-03-27T03:16Z | horizon r=0.28, contours r=0.4 | Proche : les pins à gauche, le lac et le Fuji au fond ; le volcan paraît plus grand que sur la photo. |
+| Moraine Lake | [photo](https://commons.wikimedia.org/wiki/File:Moraine_Lake_2018.jpg) | 224.6° (exif) | 5° | 2018-06-14T01:19Z | horizon r=0.504, contours r=0.015 | Ne ressemble pas : une butte cache le lac et les Dix Pics — le Rockpile, trop petit pour le relief, n'élève pas la caméra. |
+| Sossusvlei | [photo](https://commons.wikimedia.org/wiki/File:Sossusvlei,_Namibia,_2018-08-06,_DD_040.jpg) | 86.8° (subject) | 1° | 2018-08-06T07:49Z | horizon r=0.046, contours r=0.03 | Ne ressemble pas : les dunes, plus fines que le relief, n'existent pas dans le terrain. |
+| Monument Valley | [photo](https://commons.wikimedia.org/wiki/File:Monument_Valley,_Arizona.jpg) | 76° (subject) | 2° | 2015-07-27T22:30Z | horizon r=0.493, contours r=0.096 | Fidèle : les deux Mittens et Merrick Butte au même endroit, sur le même horizon. |
+| Oxbow Bend | [photo](https://commons.wikimedia.org/wiki/File:Oxbow_Bend_outlook_in_the_Grand_Teton_National_Park.jpg) | 255.4° (photograph) | -6.5° | 2026-07-15T13:30Z | horizon r=0.604, contours r=0.066 | Proche après correction (cap 4° à gauche, regard 9° plus bas) : le mont Moran et la rivière ; les fleurs du premier plan manquent. |

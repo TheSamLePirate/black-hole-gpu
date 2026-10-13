@@ -1,0 +1,166 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Landscapes: capture vs photograph</title>
+<!--
+  Each landscape's capture (remote-results/landscapes/<slug>.png, written by tests/e2e/landscapes) against its
+  photograph on Wikimedia Commons (loaded by this page, CORS: upload.wikimedia.org), both scaled to 360 px high at
+  the capture's frame. Measured:
+  - the skyline: in each column the first pixel from the top that is not sky (sky: bright, blue-ish or very even —
+    a column's run from the top whose luminance gradient stays small), as a share of the height; the two profiles'
+    mean offset (the framing's pitch), their correlation (the shape: heading and lens), and the horizontal shift that
+    best aligns them (the heading's error, in degrees through the vertical field);
+  - the edges: Sobel magnitude at 96 × 64, normalised; their correlation (the composition, whatever the light).
+  Serve the repository's root (bun scripts/landscapes-compare.ts) and open /scripts/landscapes-compare.html;
+  window.__results holds the figures.
+-->
+<style>
+  body { font: 13px system-ui; background: #111; color: #ddd; margin: 16px; }
+  h2 { margin: 22px 0 4px; font-size: 15px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  canvas { width: 100%; background: #222; }
+  .m { color: #9a9; font-family: ui-monospace, monospace; }
+  .bad { color: #f88; } .ok { color: #8f8; } .mid { color: #fd7; }
+</style>
+<h1>Landscapes: capture vs photograph</h1>
+<div id="out"></div>
+<script type="module">
+  const H = 360;
+  const list = await (await fetch("/remote-results/landscapes/list.json")).json();
+  const out = document.getElementById("out");
+  const load = (src, cors) =>
+    new Promise((ok, no) => {
+      const i = new Image();
+      if (cors) i.crossOrigin = "anonymous";
+      i.onload = () => ok(i);
+      i.onerror = () => no(new Error(`cannot load ${src}`));
+      i.src = src;
+    });
+  // (the image covering a W × H frame — centred, cropped as a camera of that frame's aspect would)
+  function draw(img, W) {
+    const c = document.createElement("canvas");
+    c.width = W;
+    c.height = H;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    const s = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+    const w = img.naturalWidth * s, h = img.naturalHeight * s;
+    g.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
+    return c;
+  }
+  function lum(c) {
+    const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+    const L = new Float32Array(c.width * c.height), B = new Float32Array(c.width * c.height);
+    for (let i = 0; i < L.length; i++) {
+      L[i] = (0.2126 * d[4 * i] + 0.7152 * d[4 * i + 1] + 0.0722 * d[4 * i + 2]) / 255;
+      B[i] = (d[4 * i + 2] - d[4 * i]) / 255;
+    }
+    return { L, B, W: c.width };
+  }
+  // (the skyline: from the top, the first row where the column leaves the sky — a strong vertical step in
+  // luminance, smoothed over 5 px, or a colour no longer the sky's at the top)
+  function skyline({ L, B, W }) {
+    const p = new Float32Array(W);
+    for (let x = 0; x < W; x++) {
+      let top = 0, n = 0;
+      for (let y = 2; y < 14; y++) (top += L[y * W + x]), n++;
+      top /= n;
+      let topB = 0;
+      for (let y = 2; y < 14; y++) topB += B[y * W + x];
+      topB /= 12;
+      let y = 14;
+      for (; y < H - 3; y++) {
+        const a = (L[(y - 2) * W + x] + L[(y - 1) * W + x]) / 2, b = (L[(y + 1) * W + x] + L[(y + 2) * W + x]) / 2;
+        const step = Math.abs(b - a), drift = Math.abs(L[y * W + x] - top), blue = Math.abs(B[y * W + x] - topB);
+        if (step > 0.06 || drift > 0.28 || blue > 0.18) break;
+      }
+      p[x] = y / H;
+    }
+    // (a median over 9 columns: a lone bird, a cloud's edge)
+    const m = new Float32Array(W);
+    for (let x = 0; x < W; x++) {
+      const w = [];
+      for (let k = -4; k <= 4; k++) w.push(p[Math.min(W - 1, Math.max(0, x + k))]);
+      m[x] = w.sort((a, b) => a - b)[4];
+    }
+    return m;
+  }
+  const corr = (a, b) => {
+    const n = a.length;
+    let ma = 0, mb = 0;
+    for (let i = 0; i < n; i++) (ma += a[i]), (mb += b[i]);
+    ma /= n; mb /= n;
+    let s = 0, sa = 0, sb = 0;
+    for (let i = 0; i < n; i++) (s += (a[i] - ma) * (b[i] - mb)), (sa += (a[i] - ma) ** 2), (sb += (b[i] - mb) ** 2);
+    return sa && sb ? s / Math.sqrt(sa * sb) : 0;
+  };
+  function edges(c, w = 96, h = 64) {
+    const s = document.createElement("canvas");
+    s.width = w; s.height = h;
+    s.getContext("2d").drawImage(c, 0, 0, w, h);
+    const { L } = lum(s);
+    const e = new Float32Array(w * h);
+    for (let y = 1; y < h - 1; y++)
+      for (let x = 1; x < w - 1; x++) {
+        const at = (i, j) => L[(y + j) * w + x + i];
+        const gx = at(1, -1) + 2 * at(1, 0) + at(1, 1) - at(-1, -1) - 2 * at(-1, 0) - at(-1, 1);
+        const gy = at(-1, 1) + 2 * at(0, 1) + at(1, 1) - at(-1, -1) - 2 * at(0, -1) - at(1, -1);
+        e[y * w + x] = Math.hypot(gx, gy);
+      }
+    return e;
+  }
+  const results = [];
+  for (const l of list) {
+    const sec = document.createElement("section");
+    sec.innerHTML = `<h2>${l.title}</h2><div class="row"></div><p class="m"></p>`;
+    out.append(sec);
+    const row = sec.querySelector(".row"), m = sec.querySelector(".m");
+    try {
+      const cap = await load(`/remote-results/landscapes/${l.slug}.png`, false);
+      const W = Math.round((H * cap.naturalWidth) / cap.naturalHeight);
+      // (the rendition's own address on upload.wikimedia.org — CORS open there; Special:FilePath's redirect is not)
+      const file = decodeURIComponent(l.page.split("/wiki/")[1]);
+      const api = `https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&prop=imageinfo&iiprop=url&iiurlwidth=1440&titles=${encodeURIComponent(file)}`;
+      const info = Object.values((await (await fetch(api)).json()).query.pages)[0].imageinfo[0];
+      const photo = await load(info.thumburl ?? info.url, true);
+      const a = draw(photo, W), b = draw(cap, W);
+      const pa = skyline(lum(a)), pb = skyline(lum(b));
+      // (the overlay: the photo's skyline red, the capture's cyan, over the capture dimmed)
+      const o = draw(cap, W), g = o.getContext("2d");
+      g.fillStyle = "rgba(0,0,0,0.45)";
+      g.fillRect(0, 0, W, H);
+      for (const [p, col] of [[pa, "#f44"], [pb, "#4ff"]]) {
+        g.strokeStyle = col; g.lineWidth = 2; g.beginPath();
+        p.forEach((v, x) => (x ? g.lineTo(x, v * H) : g.moveTo(x, v * H)));
+        g.stroke();
+      }
+      row.append(a, b, o);
+      let offset = 0;
+      for (let x = 0; x < W; x++) offset += pb[x] - pa[x];
+      offset /= W;
+      // (the shift aligning the profiles best, up to a sixth of the width each way)
+      let best = { s: 0, r: -2 };
+      for (let s = -Math.round(W / 6); s <= Math.round(W / 6); s += 2) {
+        const xa = [], xb = [];
+        for (let x = 0; x < W; x++) if (x + s >= 0 && x + s < W) xa.push(pa[x]), xb.push(pb[x + s]);
+        const r = corr(xa, xb);
+        if (r > best.r) best = { s, r };
+      }
+      const pxDeg = H / l.fov;
+      const r = { slug: l.slug, title: l.title,
+        skylineCorr: +corr(pa, pb).toFixed(3),
+        skylineOffsetPct: +(offset * 100).toFixed(1),
+        pitchErrDeg: +((offset * H) / pxDeg).toFixed(1),
+        headingErrDeg: +(best.s / pxDeg).toFixed(1),
+        skylineCorrAligned: +best.r.toFixed(3),
+        edgeCorr: +corr(edges(a), edges(b)).toFixed(3) };
+      results.push(r);
+      const cls = (v, good, fair) => (v >= good ? "ok" : v >= fair ? "mid" : "bad");
+      m.innerHTML = `skyline r = <span class="${cls(r.skylineCorr, 0.8, 0.5)}">${r.skylineCorr}</span> (aligned ${r.skylineCorrAligned} at ${r.headingErrDeg}° heading) · pitch offset ${r.pitchErrDeg}° (${r.skylineOffsetPct} % of the height) · edges r = <span class="${cls(r.edgeCorr, 0.5, 0.3)}">${r.edgeCorr}</span> · <a href="${l.page}" style="color:#9cf">photo</a>`;
+    } catch (e) {
+      m.innerHTML = `<span class="bad">${e.message}</span>`;
+      results.push({ slug: l.slug, error: String(e.message) });
+    }
+  }
+  window.__results = results;
+  // (kept beside the captures when served by scripts/landscapes-compare.ts)
+  fetch("/save", { method: "POST", body: JSON.stringify(results) }).catch(() => {});
+</script>
