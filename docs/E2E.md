@@ -162,7 +162,7 @@ so order matters within a file. Keep a file under ~2 min. Split a longer one.
 | `app.hold(code, ms, during?)` | a key held `ms`, `during()` run while down (push-to-talk) |
 | `app.type(text)` | text into the focused field (input-method style: no flight keys fire) |
 | `app.hit(sel)` | the element's centre, **proven to receive the pointer** (else throws with the elements in the way) |
-| `app.click(sel)` | a real mouse click at that proven point |
+| `app.click(sel)` | a real mouse click at that proven point. A top bar action or piece that does not fit the window is in the ⋯ menu: the click opens ⋯ and clicks its item there |
 | `app.mouse(type, x, y, o)` | raw `move` / `down` / `up` / `wheel` at CSS px (`button`, `deltaY`, `shift`) |
 | `app.touch(steps, stepMs)` | fingers: each step lists every finger's point; the first puts them down, the last lifts them |
 | `app.shot(file)` | a PNG of the page (write under `remote-results/` so remote runs bring it back) |

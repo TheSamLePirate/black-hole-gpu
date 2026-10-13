@@ -12,6 +12,7 @@
 // a load, a deletion, a teleport, the date, a scene — the game is saved as "Before TARS"; undo goes back.
 // Every result is short, and carries what the game said (its toasts) since the call.
 
+import type { GameMode } from "../game/modes";
 import type { Auto, Hold } from "../pilot";
 import type { CameraController } from "../controls";
 import type { Settings, Target } from "../settings";
@@ -31,6 +32,7 @@ import { MISSIONS } from "../game/missions";
 import { KEYMAP, type KeyAction } from "../input/keymap";
 import { MOUNTS, type Mount } from "../mounts";
 import { BODY_NAMES } from "../targeting";
+import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { SOLAR_BODIES, solarBody } from "../system/solar";
 import { FRENCH, tr, type Text } from "../i18n";
 import { findSettings, checkSetting } from "./settings-tools";
@@ -91,6 +93,7 @@ export interface GameHost {
   standOn(b?: Target): string | null;
   skyGoTo(kind: "constellation" | "star", index: number): void;
   map(on: boolean, tab?: "orbit" | "globe" | "map"): void;
+  localMap?: { state(): unknown; zoom(value: number): number };
   hudDensity(n: 0 | 1 | 2): void;
   open(panel: Panel): void;
   close(): void;
@@ -131,6 +134,68 @@ export interface GameHost {
   seeEclipse?(kind: "solar" | "lunar" | "transit", t: number, place: { lat: number; lon: number } | null): Promise<string | null>;
   /** the clouds of the day drawn over the Earth (the real weather's satellite mosaic: its date, its layer), or null */
   dayClouds?(): { date: string; layer: string } | null;
+  /** the game's mode (game/modes.ts): now, into another (why not, or null), the top bar shown or hidden */
+  mode?: { get(): GameMode; set(m: GameMode): string | null; hideBar(on: boolean): void };
+  /** the Atlas (ui/atlas.ts): the destinations and the Earth's addresses found; the game put at a place; the page */
+  atlas?: {
+    search(
+      q: string,
+      body?: "earth" | "moon" | "mars",
+    ): Promise<{ name: string; body: string; lat: number; lon: number; kind: string; detail?: string }[]>;
+    go(
+      to: "orbit" | "land" | "walk" | "camera" | "tripod",
+      p: { body: "earth" | "moon" | "mars"; lat: number; lon: number; name: string },
+    ): string | null;
+    open(o: { body?: "earth" | "moon" | "mars"; query?: string }): void;
+  };
+  /** the sky's events from where one stands on the Earth (ui/skyevents.ts): listed, taken a way, the page opened */
+  skyEvents?: {
+    list(): Promise<
+      | {
+          id: string;
+          title: string;
+          when: string | null;
+          detail: string;
+          look: { azDeg: number; altDeg: number; fovDeg: number; lensMm: number };
+          render: boolean;
+          transit?: boolean;
+        }[]
+      | null
+    >;
+    take(id: string, way: "go" | "live" | "render"): string | null;
+    open(): string | null;
+  };
+  /** a video (renderdialog.ts, PLAN-MODES-AAA M8): a shot filmed — a draft to test it, or the final —, its state, stopped */
+  video?: {
+    start(o: { shot: string; seconds?: number; fps?: number; draft?: boolean; format?: "mp4" | "webm" }): string | null;
+    state(): {
+      shot: string;
+      draft: boolean;
+      frame: number;
+      frames: number;
+      etaS: number;
+      width: number;
+      height: number;
+      format: string | null;
+    } | null;
+    stop(): void;
+    shots(): { id: string; label: string; available: boolean }[];
+  };
+  /** the offline capture (renderdialog.ts): the view now rendered converged, saved by itself; its state; stopped */
+  capture?: {
+    start(o: { preset?: string; width?: number; height?: number; spp?: number; save?: "png" | "png16" | "exr" | null }): string | null;
+    state(): {
+      active: boolean;
+      progress: number | null;
+      done: boolean;
+      width: number;
+      height: number;
+      spp: number;
+      autoSave: string | null;
+    };
+    stop(): void;
+    save(kind: "png" | "png16" | "exr"): void;
+  };
 }
 
 export const SCREENS = [
@@ -138,6 +203,7 @@ export const SCREENS = [
   "map_globe",
   "map_planisphere",
   "telemetry",
+  "character",
   "approach_chart",
   "flight_computer",
   "ship",
@@ -181,6 +247,10 @@ export const PANELS = [
   "planner",
   "sky",
   "camera",
+  "music",
+  "render",
+  "atlas",
+  "skyevents",
 ] as const;
 export type Panel = (typeof PANELS)[number];
 
@@ -211,6 +281,8 @@ const HOLDS: Hold[] = [
   "maneuver",
 ];
 const MOUNT_IDS = Object.keys(MOUNTS) as Mount[];
+/** the worlds one walks on (a solid surface: Gargantua's planets and ours) */
+const WALK_BODIES = GARGANTUA_SYSTEM.bodies.filter((b) => b.kind === "planet" && b.surface && b.surface.kind !== "gas").map((b) => b.id);
 
 const fold = (s: string) =>
   s
@@ -347,7 +419,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "get_state",
       description:
-        "The whole situation now: phase, status and orbit (km, m/s), fuel and Δv, target, next event, autopilot/hold/throttle, alerts, landing/runway state, mission, date, warp, view, craft. Call it before acting when unsure.",
+        "The whole situation now: phase, status and orbit (km, m/s), fuel and Δv, target, next event, autopilot/hold/throttle, alerts, landing/runway state, mission, date, warp, view, craft, satellite surface region/availability/memory and worldwide 3D scenery availability, counts and memory. Call it before acting when unsure.",
       run: () => {
         const st = tools.status();
         const rw = camera.runwayView?.();
@@ -374,18 +446,92 @@ export function gameTools(h: GameHost): Tool[] {
           mission: h.mission(),
           date: tools.date(),
           warp: { running: settings.animate, timesRealTime: round(settings.timeSpeed / h.realTimeSpeed(), 2), autoWarp: settings.autoWarp },
+          mode: h.mode?.get() ?? null,
           view: { ship: settings.ship, mount: settings.shipMount, spectating: camera.spectating, vessel: settings.vessel },
+          hud: { kind: settings.hudKind, views: settings.hudViews },
           gear: { down: camera.gearDown, flaps: camera.airFlight?.cfg.flaps, airBrake: camera.airBrake },
           docked: camera.docked,
+          surface: tools.perf({ gpu: false }).earthSurface,
+          scenery: tools.perf({ gpu: false }).earthScenery,
+          sceneryHitboxes: settings.sceneryHitboxes,
+          character: camera.character.state(),
+          grass: tools.perf({ gpu: false }).grass,
+          localMap: h.localMap?.state(),
+          streaming: tools.perf({ gpu: false }).streaming,
         };
       },
     },
     {
       name: "get_telemetry",
       description:
-        "Everything the cockpit and the hub know, now, in figures (degrees, metres, m/s, s): attitude (pitch, bank, heading, angle of attack, sideslip, stall AoA), air (height, airspeed, Mach, q, heat, load, skin temperatures and margins, wind), controls (throttle, thrust, surface deflections, flaps, air brake, gear, holds), autopilot (director, flight-computer command, launch goal), hub (its title, current step, rows, next, progress, cue: time to ignition and Δv left, callout, its graph's verdict on/off/wait and the fix), entry (phase, commanded bank and AoA, range and heading error to the site, miss, in corridor, planned peaks, reversal), approach (runway offset, height, PAPI whites 0–4, commanded vs flown ground path angle, height over the threshold, ground speed and airspeed, profile deviation, leg, flare, MLS, wind), descent (powered landing's command), burn (plan, cue), dock (offsets, signed actual and commanded closing rates in the rotating port frame), sky (the world under the camera, the Sun's and the Moon's altitude and azimuth — true and as seen through the Earth's air —, the refraction at the horizon and the air's refractivity). Ask only the groups you need.",
+        "Everything the cockpit and the hub know, now, in figures (degrees, metres, m/s, s): attitude (pitch, bank, heading, angle of attack, sideslip, stall AoA), air (height, airspeed, Mach, q, heat, load, skin temperatures and margins, wind), controls (throttle, thrust, surface deflections, flaps, air brake, gear, holds), autopilot (director, flight-computer command, launch goal), hub (its title, current step, rows, next, progress, cue: time to ignition and Δv left, callout, its graph's verdict on/off/wait and the fix), entry (phase, commanded bank and AoA, range and heading error to the site, miss, in corridor, planned peaks, reversal), approach (runway offset, height, PAPI whites 0–4, commanded vs flown ground path angle, height over the threshold, ground speed and airspeed, profile deviation, leg, flare, MLS, wind), descent (powered landing's command), burn (plan, cue), dock (offsets, signed actual and commanded closing rates in the rotating port frame), sky (the world under the camera, the Sun's and the Moon's altitude and azimuth — true and as seen through the Earth's air —, the refraction at the horizon and the air's refractivity). surface (regional satellite loading and memory), scenery (worldwide forests, OSM buildings/roads/railways/water/bridges, source layer/field inventory, cast-shadow state and ranges, counts, loading, memory and errors), character (on foot: the world, position, speed, vertical speed, grounded, height over the ground, time airborne, the craft's hull distance, the ground patch, the last error), grass (on the Earth on foot: on or why not, blades and stones drawn, loading, memory). map (local position, zoom, source availability and CPU drawing cost), streaming (bounded prediction distance and look-ahead time). Ask only the groups you need.",
       params: { groups: { type: "array", maxItems: TELEMETRY_GROUPS.length, items: { type: "string", enum: TELEMETRY_GROUPS } } },
-      run: (a) => telemetry(camera, (a.groups as TelemetryGroup[] | undefined)?.length ? (a.groups as TelemetryGroup[]) : TELEMETRY_GROUPS),
+      run: (a) =>
+        telemetry(
+          camera,
+          (a.groups as TelemetryGroup[] | undefined)?.length ? (a.groups as TelemetryGroup[]) : TELEMETRY_GROUPS,
+          tools.perf({ gpu: false }).earthSurface,
+          tools.perf({ gpu: false }).earthScenery,
+          tools.perf({ gpu: false }).grass,
+          h.localMap?.state(),
+          tools.perf({ gpu: false }).streaming,
+        ),
+    },
+    {
+      name: "character",
+      description:
+        "Walk on solid planets. disembark/board use the same safety checks as Shift+K; start places an explorer at geodetic lat/lon (both required) on body (default earth; saved first as 'Before TARS'); move lasts at most 10 seconds; jump, stop, orbit (the camera around the walker: only the yaw/pitch given change) and status. Grass runs only on Earth on foot. Units metres, seconds and degrees.",
+      params: {
+        action: { type: "string", enum: ["disembark", "board", "start", "move", "stop", "jump", "orbit", "status"] },
+        body: { type: "string", enum: WALK_BODIES },
+        lat: { type: "number", minimum: -90, maximum: 90 },
+        lon: { type: "number", minimum: -180, maximum: 180 },
+        forward: { type: "number", minimum: -1, maximum: 1 },
+        right: { type: "number", minimum: -1, maximum: 1 },
+        seconds: { type: "number", minimum: 0, maximum: 10 },
+        run: { type: "boolean" },
+        yaw: { type: "number", minimum: -180, maximum: 180 },
+        pitch: { type: "number", minimum: -8, maximum: 68 },
+      },
+      required: ["action"],
+      run: act((a) => {
+        const c = camera.character;
+        let error: string | null = null;
+        switch (a.action) {
+          case "disembark":
+            error = c.disembark();
+            break;
+          case "board":
+            error = c.board();
+            break;
+          case "start": {
+            const world = String(a.body ?? "earth");
+            // (no default place: 0°/0° is the sea off Africa)
+            if (a.lat === undefined || a.lon === undefined) error = "start needs lat and lon";
+            else if (!WALK_BODIES.includes(world)) error = `cannot walk on "${world}": ${WALK_BODIES.join(", ")}`;
+            else {
+              net();
+              error = c.start(world, Number(a.lat), Number(a.lon));
+            }
+            break;
+          }
+          case "move":
+            error = c.move(Number(a.forward ?? 0), Number(a.right ?? 0), Number(a.seconds ?? 1), !!a.run);
+            break;
+          case "stop":
+            c.move(0, 0, 0);
+            break;
+          case "jump":
+            c.jump();
+            break;
+          case "orbit":
+            if (a.yaw !== undefined) c.yaw = (Number(a.yaw) * Math.PI) / 180;
+            if (a.pitch !== undefined) c.pitch = (Number(a.pitch) * Math.PI) / 180;
+            break;
+        }
+        h.changed([]);
+        return { ...c.state(), ok: !error, error };
+      }),
     },
     {
       name: "list_places",
@@ -1207,22 +1353,182 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "interface",
       description:
-        "The interface: open a panel (settings, place, time, weather, eclipses — the eclipse calculator's page —, scenes, photo, controls, help, pause, planner: the flight computer's MISSION tab over the map, sky, camera) or close the one on top; the map (open, tab: orbit/globe/map); HUD density 0 full, 1 minimal, 2 clean; a screenshot (PNG download).",
+        "The interface: open a panel (settings, place, time, weather, eclipses — the eclipse calculator's page —, scenes, photo — the photo mode —, controls, help, pause, planner: the flight computer's MISSION tab over the map, sky, camera, music — the music console —, render — the offline render dialog) or close the one on top; the map (open, tab: orbit/globe/map; on the ground: local planisphere, mapZoom 0–21, default 18); HUD density 0 full, 1 minimal, 2 clean; the ship's HUD (hudKind: auto — by the flight —, atmo, space, approach) and where it shows (hudViews: chaseDorsal — the default —, outside, all; in the cockpit the cabin's screens); a screenshot (PNG download).",
       params: {
         open: { type: "string", enum: PANELS },
         close: { type: "boolean" },
         map: { type: "boolean" },
         mapTab: { type: "string", enum: ["orbit", "globe", "map"] },
+        mapZoom: {
+          type: "number",
+          minimum: 0,
+          maximum: 21,
+          description: "Local ground planisphere zoom, default 18; on foot or a landed craft.",
+        },
         hudDensity: { type: "number", minimum: 0, maximum: 2, integer: true },
+        hudKind: { type: "string", enum: ["auto", "atmo", "space", "approach"] },
+        hudViews: { type: "string", enum: ["chaseDorsal", "outside", "all"] },
         screenshot: { type: "boolean" },
       },
       run: act(async (a) => {
         if (a.close) h.close();
         if (a.open !== undefined) h.open(a.open as Panel);
         if (a.map !== undefined || a.mapTab !== undefined) h.map((a.map as boolean) ?? true, a.mapTab as never);
+        if (a.mapZoom !== undefined) {
+          h.map(true, "map");
+          h.localMap?.zoom(Number(a.mapZoom));
+        }
         if (a.hudDensity !== undefined) h.hudDensity(a.hudDensity as 0 | 1 | 2);
+        if (a.hudKind !== undefined || a.hudViews !== undefined) {
+          if (a.hudKind !== undefined) settings.hudKind = a.hudKind as Settings["hudKind"];
+          if (a.hudViews !== undefined) settings.hudViews = a.hudViews as Settings["hudViews"];
+          h.changed(["hudKind", "hudViews"]);
+        }
         if (a.screenshot) await h.screenshot();
         return "done";
+      }),
+    },
+    {
+      name: "set_mode",
+      description:
+        "The game's mode, as the top bar's tabs and F1–F4: ship (fly the craft — back on board, back from the spectator), foot (on foot: out of the landed, still craft; else set down on the solid world under the camera — far from any, place_ship or character start first), free (the free camera anywhere in the system; a ship flown flies on, its autopilots and plan), photo (the photo mode over the current one: the view alone, renders). bar: show or hide the top bar. Returns the mode now, or why not.",
+      params: {
+        mode: { type: "string", enum: ["ship", "foot", "free", "photo"] },
+        bar: { type: "string", enum: ["show", "hide"] },
+      },
+      run: act((a) => {
+        if (!h.mode) return { ok: false, error: "no modes here" };
+        if (a.bar) h.mode.hideBar(a.bar === "hide");
+        // (on foot may set the walker down elsewhere: the net first)
+        if (a.mode === "foot" && h.mode.get() !== "foot") net();
+        const error = a.mode ? h.mode.set(a.mode as GameMode) : null;
+        return { ok: !error, error, mode: h.mode.get() };
+      }),
+    },
+    {
+      name: "atlas",
+      description:
+        "The Atlas of the Earth, the Moon and Mars. search: the destinations (launch sites, summits, wonders, observatories, cities, poles; the Apollo sites, craters, seas; the rovers, volcanoes, canyons), the runways and viewpoints, and on the Earth any address or place name (OpenStreetMap) or coordinates — names, places [°], kinds. go: the game put at a place (lat, lon, or the first found for query): to orbit (an orbit over it now), land (the craft set down there), walk (landed, you on foot beside it), camera (the free camera above it, looking at it), tripod (the camera on the ground there). open: the Atlas's page, on a world, a search typed.",
+      params: {
+        action: { type: "string", enum: ["search", "go", "open"] },
+        query: { type: "string" },
+        body: { type: "string", enum: ["earth", "moon", "mars"] },
+        lat: { type: "number", minimum: -90, maximum: 90 },
+        lon: { type: "number", minimum: -180, maximum: 180 },
+        to: { type: "string", enum: ["orbit", "land", "walk", "camera", "tripod"] },
+      },
+      required: ["action"],
+      run: act(async (a) => {
+        const A = h.atlas;
+        if (!A) return { ok: false, error: "no Atlas here" };
+        const body = a.body as "earth" | "moon" | "mars" | undefined;
+        if (a.action === "open") {
+          A.open({ body, query: a.query as string | undefined });
+          return { ok: true };
+        }
+        const found = a.query ? await A.search(String(a.query), body) : [];
+        if (a.action === "search") return { ok: true, found: found.slice(0, 12) };
+        const p =
+          a.lat !== undefined && a.lon !== undefined
+            ? { body: body ?? "earth", lat: Number(a.lat), lon: Number(a.lon), name: String(a.query ?? `${a.lat}, ${a.lon}`) }
+            : found[0]
+              ? { body: found[0].body as "earth" | "moon" | "mars", lat: found[0].lat, lon: found[0].lon, name: found[0].name }
+              : null;
+        if (!p) return { ok: false, error: "no place: give lat and lon, or a query that finds one" };
+        net();
+        const error = A.go((a.to as "orbit" | "land" | "walk" | "camera" | "tripod" | undefined) ?? "camera", p);
+        return { ok: !error, error, place: p };
+      }),
+    },
+    {
+      name: "sky_events",
+      description:
+        "The sky's events from where one stands on the Earth (walking, the tripod, the free camera over the ground) and the way one looks: the star trails (circumpolar when the pole is up), the analemma, the Moon's path tonight, the next ISS pass, the ISS's closest approach to the Moon and the Sun (a transit when it crosses their disc), the next solar and lunar eclipses seen here, the next selenelion, the next transits of Mercury and Venus — each with its date (UTC), where to look (azimuth, altitude), the field and the lens. list: them all (takes a few seconds: the eclipses searched over 30 years). take (id from the list): go — the tripod set there at that time, aimed; live — its exposures taken one after the other in the game and stacked on screen (the pilot watches the event unfold; saved as a PNG or rendered at full quality after); render — the multiple exposure's full-quality dialog filled. open: the page.",
+      params: {
+        action: { type: "string", enum: ["list", "take", "open"] },
+        id: { type: "string" },
+        way: { type: "string", enum: ["go", "live", "render"] },
+      },
+      required: ["action"],
+      run: act(async (a) => {
+        const S = h.skyEvents;
+        if (!S) return { ok: false, error: "no sky events here" };
+        if (a.action === "open") {
+          const error = S.open();
+          return { ok: !error, error };
+        }
+        if (a.action === "list") {
+          const events = await S.list();
+          return events ? { ok: true, events } : { ok: false, error: "not on the Earth's ground: walk there (F2), or set the tripod (⇧T)" };
+        }
+        if (!a.id) return { ok: false, error: "take needs an id from the list" };
+        // (go and live move the tripod and the clock: the net first; render only fills a dialog)
+        if (a.way !== "render") net();
+        const error = S.take(String(a.id), (a.way as "go" | "live" | "render" | undefined) ?? "go");
+        return { ok: !error, error };
+      }),
+    },
+    {
+      name: "video",
+      description:
+        "A video of the view, in every mode — each frame an offline render. shot: live (the scene goes on from now as it would: the ship and its autopilot, the mission, the time), take (the take recorded live with ● on the time bar), orbit (the auto-orbit around the target), dive (to the horizon), journey (through the wormhole), director (the director's cameras on the ship flown: chase, orbit, pass, tracking). draft: true for a quick test — 640×360, 4 samples, seconds to minutes — played at once with a button for the final; false for the final at the render dialog's size and quality (minutes to hours: say so). seconds (1–600), fps (24, 30, 60), format (mp4, else webm). start, status (frame, frames, time left), stop, shots (which can film now). The pilot sees it when it is done (a draft plays by itself; a final is saved).",
+      params: {
+        action: { type: "string", enum: ["start", "status", "stop", "shots"] },
+        shot: { type: "string", enum: ["live", "take", "orbit", "dive", "journey", "director"] },
+        seconds: { type: "number", minimum: 1, maximum: 600 },
+        fps: { type: "number", minimum: 24, maximum: 60, integer: true, description: "24, 30 or 60" },
+        draft: { type: "boolean" },
+        format: { type: "string", enum: ["mp4", "webm"] },
+      },
+      required: ["action"],
+      run: act((a) => {
+        const V = h.video;
+        if (!V) return { ok: false, error: "no video here" };
+        if (a.action === "shots") return { ok: true, shots: V.shots() };
+        if (a.action === "status") return { ok: true, video: V.state() };
+        if (a.action === "stop") {
+          V.stop();
+          return { ok: true };
+        }
+        const error = V.start({
+          shot: String(a.shot ?? "orbit"),
+          seconds: a.seconds as number | undefined,
+          fps: a.fps as number | undefined,
+          draft: a.draft === undefined ? true : !!a.draft,
+          format: a.format as "mp4" | "webm" | undefined,
+        });
+        return { ok: !error, error, video: V.state() };
+      }),
+    },
+    {
+      name: "capture",
+      description:
+        "The offline capture, in every mode: the view now (the ship's, the walker's, the free camera's) rendered converged — noise-free, any size — and saved by itself as a PNG once done (save: png, png16, exr or none). start (preset: 'Mega photo · 8K reference'; or width, height, spp: 16 to 4096), status (progress 0…1, done), save (the picture now, as a kind), stop. A render takes from seconds to minutes: say so, then wait or let the pilot know when it is done (schedule on render).",
+      params: {
+        action: { type: "string", enum: ["start", "status", "save", "stop"] },
+        preset: { type: "string", enum: ["Mega photo · 8K reference"] },
+        width: { type: "number", minimum: 16, maximum: 16384, integer: true },
+        height: { type: "number", minimum: 16, maximum: 16384, integer: true },
+        spp: { type: "number", minimum: 16, maximum: 4096, integer: true },
+        save: { type: "string", enum: ["png", "png16", "exr", "none"] },
+      },
+      required: ["action"],
+      run: act((a) => {
+        const c = h.capture;
+        if (!c) return { ok: false, error: "no capture here" };
+        if (a.action === "start") {
+          const error = c.start({
+            preset: a.preset as string | undefined,
+            width: a.width as number | undefined,
+            height: a.height as number | undefined,
+            spp: a.spp as number | undefined,
+            save: a.save === "none" ? null : (a.save as "png" | "png16" | "exr" | undefined),
+          });
+          return { ok: !error, error, ...c.state() };
+        }
+        if (a.action === "save") c.save((a.save === "none" ? "png" : (a.save as "png" | "png16" | "exr" | undefined)) ?? "png");
+        if (a.action === "stop") c.stop();
+        return { ok: true, ...c.state() };
       }),
     },
     // ------------------------------------------------------------------ teleporting, saves, scenes
@@ -1387,9 +1693,25 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "wait",
       description:
-        "Wait while the game runs (warp it with `time` first for long waits): until the autopilot is off (its job done), landed (stopped on the ground), in_orbit (about `body` if given — else any), docked, the plan executed, a phase stage (orbit, air, entry, approach, ground…), or just seconds. Returns whether it was met and the state then — read it before saying what happened. At most maxSeconds of real time (default 120, max 900).",
+        "Wait while the game runs (warp it with `time` first for long waits): until the autopilot is off (its job done), landed (stopped on the ground), in_orbit (about `body` if given — else any), docked, the plan executed, a phase stage (orbit, air, entry, approach, ground…), surface_ready (surface streaming settled; read returned surface status for fallback/unsupported), scenery_ready (worldwide 3D streaming and fade settled; read returned scenery status for degraded/unsupported), character_grounded (on foot and touching ground), character_on_foot, character_boarded (back at the controls), or just seconds. Returns whether it was met and the state then — read it before saying what happened. At most maxSeconds of real time (default 120, max 900).",
       params: {
-        until: { type: "string", enum: ["autopilot_off", "landed", "in_orbit", "docked", "plan_done", "stage", "seconds"] },
+        until: {
+          type: "string",
+          enum: [
+            "autopilot_off",
+            "landed",
+            "in_orbit",
+            "docked",
+            "plan_done",
+            "stage",
+            "surface_ready",
+            "scenery_ready",
+            "character_grounded",
+            "character_on_foot",
+            "character_boarded",
+            "seconds",
+          ],
+        },
         stage: {
           type: "string",
           enum: ["ground", "air", "entry", "approach", "suborbital", "orbit", "escape", "docking", "kerr", "throat", "space"],
@@ -1406,6 +1728,16 @@ export function gameTools(h: GameHost): Tool[] {
         const about = () => !on || tools.status().soi === on;
         const done = (): boolean => {
           switch (a.until) {
+            case "character_grounded":
+              return camera.character.active && camera.character.grounded;
+            case "character_on_foot":
+              return camera.character.active;
+            case "character_boarded":
+              return !camera.character.active && camera.piloting;
+            case "scenery_ready":
+              return !tools.perf({ gpu: false }).earthScenery.pending;
+            case "surface_ready":
+              return !tools.perf({ gpu: false }).earthSurface.pending;
             case "autopilot_off":
               return camera.pilot.auto === "none";
             case "landed":
@@ -1430,6 +1762,11 @@ export function gameTools(h: GameHost): Tool[] {
           docked: { fr: "l'amarrage", en: "the docking" },
           plan_done: { fr: "le plan exécuté", en: "the plan flown" },
           stage: { fr: "la phase", en: "the phase" },
+          surface_ready: { fr: "le sol satellite chargé", en: "satellite ground settled" },
+          scenery_ready: { fr: "le paysage 3D chargé", en: "3D scenery settled" },
+          character_grounded: { fr: "le personnage au sol", en: "the character grounded" },
+          character_on_foot: { fr: "la sortie du vaisseau", en: "the character on foot" },
+          character_boarded: { fr: "le retour aux commandes", en: "the character boarded" },
           seconds: { fr: "le temps", en: "the time" },
         };
         const what = `${tr(words[String(a.until)] ?? { fr: String(a.until), en: String(a.until) })}${a.stage ? ` ${a.stage}` : ""}${on ? ` · ${String(a.body)}` : ""}`;
@@ -1464,7 +1801,10 @@ export function gameTools(h: GameHost): Tool[] {
                 },
                 pilot: tools.pilotState(),
                 phase: h.phase(),
+                ...(String(a.until).startsWith("character_") ? { character: camera.character.state() } : {}),
                 alerts: h.alerts(),
+                ...(a.until === "surface_ready" ? { surface: tools.perf({ gpu: false }).earthSurface } : {}),
+                ...(a.until === "scenery_ready" ? { scenery: tools.perf({ gpu: false }).earthScenery } : {}),
               });
             setTimeout(tick, 250);
           };
@@ -1630,7 +1970,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "schedule",
       description:
-        "Set yourself a rule that wakes you later, with what to do then (your own words, an instruction to yourself): on a change of the game — autopilot (to: a mode, or none = an autopilot ended), phase (to: orbit, air, entry, approach, ground…), hub_step, entry_phase, alert (to: warning/caution), soi (to: a body), landed, docked, report, deviation, eclipse (to: solar_partial, solar_total, solar_annular, lunar_partial, lunar_total or end: at the camera's place) —, every N minutes, at a game time (simTimeS, seconds), or in N seconds. once: fired a single time. Use it when the pilot asks you to watch, remind, check regularly or react to something.",
+        "Set yourself a rule that wakes you later, with what to do then (your own words, an instruction to yourself): on a change of the game — autopilot (to: a mode, or none = an autopilot ended), phase (to: orbit, air, entry, approach, ground…), hub_step, entry_phase, alert (to: warning/caution), soi (to: a body), landed, docked, report, deviation, eclipse (to: solar_partial, solar_total, solar_annular, lunar_partial, lunar_total or end: at the camera's place), mode (to: ship, foot, free, photo — the game's mode changed), render (to: done or stopped — an offline render ended), character (to: disembarked, boarded, landed, jump, unavailable), surface (the satellite imagery's region and status changed: to = region:status), scenery (the 3D scenery's place or status changed), grass (to: grass, outside-grass, loading, off, other-planet, above-ground, mask-unavailable), map (the map view or its zoom changed: to = view:zoom) —, every N minutes, at a game time (simTimeS, seconds), or in N seconds. once: fired a single time. Use it when the pilot asks you to watch, remind, check regularly or react to something.",
       params: {
         on: { type: "string", enum: [...EVENT_KINDS, "every", "at", "in"] },
         to: { type: "string" },

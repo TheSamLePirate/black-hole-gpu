@@ -403,29 +403,41 @@ fournisseur interne.
 **Écran tactile.** `TouchFlight` (manche, gaz, roulis) n’est actif qu’en vol, sur pointeur grossier,
 hors vue libre, sans planificateur ouvert et sans interface masquée.
 
-### 5. La barre d’outils, la barre de transport, le panneau caméra, les superpositions
+### 5. La barre du haut, la barre de transport, le panneau caméra, les superpositions
 
-**Barre d’outils** (`#toolbar`). Ses boutons sont branchés par la table `actions` de `main.ts:391` :
-scènes, caméra, jet, Ranger, cinéma (gorge liquide), guide d’ombre, ciel, outils, son, rendu, PNG,
-plein écran, masquer, aide. `syncButtons()` met à jour leurs états `active` et `muted`. Le bouton caméra
-affiche la vue et la cible ; `--body` le teinte de la couleur du corps visé. Si la barre déborde, la
-molette verticale la fait défiler latéralement (`wheelScrollsSideways`), car les souris Windows n’ont
-pas de molette horizontale. En vol, la barre est masquée (`body.piloting #toolbar`) ; le bouton « ⋯ »
-de la barre de mission la fait revenir (`body.show-tools`).
+**La barre du haut** (`ui/topbar.ts`, `#topbar`, PLAN-MODES-AAA M1). C’est la seule barre de l’application,
+présente dans tous les modes. De gauche à droite :
 
-**Barre de transport** (`transport.ts`). C’est un seul widget, **déplacé** selon le contexte :
+- l’emblème de TARS (il respire au repos, suit son état ; un clic ouvre sa console) ;
+- les quatre modes (`game/modes.ts`) : Vaisseau F1, À pied F2, Caméra libre F3, Photo F4 ;
+- le groupe du mode :
+  - vaisseau : les puces (HUD, SAS, maintien, autopilote), les horloges, l’appareil, le plan, la vue, la
+    trajectoire, la densité — les groupes `flightHud.bar` ;
+  - caméra libre : le bouton caméra (`#btn-camera`) ;
+  - à pied et photo : une ligne de contexte ;
+- le temps (la barre de transport) ;
+- les actions : placer, scènes, météo, éclipses, ciel, musique, son, capture, rendu, détails, aide, réglages
+  (et les outils en dev). Les boutons de la page gardent leurs id.
+  - Celles qui ne tiennent pas dans la largeur passent dans un menu ⋯, les moins utiles d’abord
+    (`overflowed`, pur).
+- un bouton pour la masquer : une poignée fine, avec TARS, la fait revenir (`kerr.topbar.hidden`).
 
-- hors vol, dans `#tp-dock` au-dessus de la barre d’outils ;
-- en vol, dans `flightHud.transportSlot`, en mode `compact` (sans l’horloge, que le HUD affiche).
+Le HUD de vol, son cadre sûr (`hud/safe.ts`) et ses panneaux (`hud/layout.ts`) se placent sous elle. La
+pastille d’état s’ouvre par le bouton ⓘ (I), le panneau des réglages par ⚙.
 
-La boucle fait le déplacement quand `flightHud.visible` change. Le bouton de distorsion ouvre un menu
+**Barre de transport** (`transport.ts`). C’est un seul widget, toujours dans la barre du haut :
+
+- hors vaisseau, complète, avec l’horloge ;
+- en vol, en mode `compact` (sans l’horloge : les horloges du HUD sont à côté).
+
+`syncMode` fait le changement quand le mode change. Le bouton de distorsion ouvre un menu
 avec tous les échelons de `warpLadder(settings)` : des multiples du temps réel, puis l’échelle
 « classique ». Au‑delà de 500 M/s, le vaisseau est « sur rails ». Le sous‑titre affiche, dans l’ordre
 de priorité : le mode de distorsion d’une manœuvre (`auto`, `held`, `manual`), puis la note des rails,
 puis la valeur en M/s. Le bouton AUTO (`settings.autoWarp`) n’apparaît que si un plan existe. Pendant
 l’exécution d’une manœuvre en distorsion automatique, `autoWarpHeld()` refuse toute distorsion
 manuelle. ● lance ou arrête une **prise** (`take.ts`) : la session en direct est enregistrée, plafonnée
-à 10 min, puis peut être rendue en vidéo depuis Render › Video.
+à 10 min, puis peut être rendue en vidéo depuis Rendu › Vidéo ou la barre photo (§ 6.3 sexies).
 
 **Panneau caméra** (`camerapanel.ts`, `#cam-pop`). Il réunit au même endroit :
 
@@ -534,15 +546,127 @@ redessiné 60 fois par seconde coûtait environ 6 ms par image.
 #### 6.3 Densité
 
 `density` vaut 0 (complet), 1 (minimal) ou 2 (épuré). Elle se change avec la touche `²` ou `` ` ``
-(code `Backquote`) ou le bouton de la barre de mission, et elle est mémorisée dans `kerr.hud-density`.
+(code `Backquote`) ou le bouton de la barre du haut, et elle est mémorisée dans `kerr.hud-density`.
 Sur téléphone, la valeur par défaut est 1. `setDensity` (utilisé par la mission automatique, qui force
 2 puis restaure) ne mémorise rien. Le CSS applique la densité à partir de `.fl-root[data-density]` :
 
 - 1 masque `.fl-tel`, `.fl-orbit`, `.fl-right` et `.fl-target` ;
-- 2 masque tout sauf `.fl-warn` et `.fl-mission`.
+- 2 masque tout sauf `.fl-warn` (la barre du haut reste).
 
 Les marqueurs du canvas `.fl-hud` restent visibles dans toutes les densités. Les rubans disparaissent à
 la densité 2 (`density < 2` dans `drawHud`).
+
+#### 6.3 bis Les trois HUD et les vues (`game/hudkind.ts`, `hud/kindhud.ts`, PLAN-MODES-AAA M4)
+
+- **Le type** (`settings.hudKind`, ⇧², la puce HUD de la barre) :
+  - **Atmosphère** : celui du chasseur (`hud/jethud.ts`), désormais pour tout vol dans l’air ; ses modes
+    s’engagent en mode avion seulement.
+  - **Spatial** : un bloc cyan à droite du centre — orbite autour du corps de la sphère d’influence, AP et PE
+    avec leurs temps, inclinaison, excentricité, période, le prochain événement (l’impact en rouge), la cible
+    et sa vitesse de rapprochement.
+  - **Approche** : hauteur radar et vitesse verticale en grand, écarts de plan et d’axe en points d’ILS
+    (d’après le guidage MLS de la piste, `game/mls.ts`), train, volets et aérofrein sous le centre (train
+    rentré bas : rouge clignotant), avec le guidage de piste et le viseur d’atterrissage vertical existants.
+- **Le choix automatique** : `hudKindOf` d’après la phase (air et rentrée → Atmosphère ; finale, approche,
+  stationnaire bas, au sol → Approche ; sinon Spatial). `HudKindChooser` ne change qu’après 1,5 s de
+  constance ; un type forcé s’applique tout de suite.
+- **Ce que chaque type retire** : `hudShownFor(phase, kind)` croise la matrice des phases avec `KIND_OUT`.
+- **Les vues** (`settings.hudViews`, `hudInView`) :
+  - par défaut, le HUD complet en vues poursuite et dorsale ;
+  - dans le cockpit, les écrans de la cabine sont les instruments ;
+  - les autres vues gardent les alertes, la fiche de l’autopilote, l’aide à l’amarrage, la barre du spectateur
+    et les menus (`.fl-root[data-view="bare"]`) ;
+  - les effets de vitesse restent dans toutes les vues.
+
+#### 6.3 ter Le HUD à pied (`ui/foothud.ts`, PLAN-MODES-AAA M5)
+
+Sur tout monde solide, quand on marche (et la carte complète fermée) :
+
+- **la boussole** sous la barre du haut : un ruban de cap de 120°, gradué tous les 5°, les points cardinaux
+  nommés ; l’appareil posé (or, avec sa distance), le Soleil, la Lune (sur Terre) et la cible à leurs azimuts
+  (`character.skyAzEl`), creux sous l’horizon, épinglés au bord quand ils sont hors du ruban ;
+- **la place**, en bas à gauche : le monde, la latitude et la longitude, l’altitude au-dessus du niveau de
+  référence et du sol, la vitesse, le cap, la distance et la direction de l’appareil (`character.place()`,
+  `game/geo.ts`) ;
+- **la minicarte**, en bas à droite : un disque de la carte locale (`LocalGroundMap` en mode `minimal` : le décor
+  de la Terre, le planisphère des autres mondes via `GroundTrack.atlas`), tourné avec la vue (la direction
+  regardée en haut), le nord sur son bord, l’appareil dessus ; la molette et ses + et − zooment (8 à 20), un
+  clic ouvre la carte complète (M). Son image n’est redessinée que si le marcheur bouge de quelques pixels ou
+  si elle zoome ; la rotation est celle du navigateur.
+
+#### 6.3 quater L’Atlas (`ui/atlas.ts`, `ui/mapview.ts`, PLAN-MODES-AAA M6)
+
+Une page plein écran (F8, la barre du haut, le menu pause, TARS) :
+
+- **les mondes** : la Terre en Web Mercator, d’après les tuiles de son imagerie (Blue Marble de NASA GIBS jusqu’au
+  niveau 8, Sentinel-2 cloudless d’EOX au-delà jusqu’au 13 — les mêmes sources publiques en direct que le décor ;
+  la tuile parente affichée pendant que la sienne arrive) ; la Lune et Mars en plate carrée, d’après leurs cartes
+  (2048 px tout de suite, 8192 px dès qu’on zoome) ;
+- **la carte** (`MapView`) : glisser, molette et pincement zooment autour du pointeur, double clic, vol animé vers
+  un lieu ; le monde remplit toujours la vue ; grille, nuit (assombrie, les lumières des villes de la Terre — VIIRS —
+  au travers, le terminateur tracé), noms placés sans chevauchement ;
+- **les destinations** (`game/pois.ts`) : bases de lancement, sommets, merveilles, observatoires, villes, pôles ;
+  sites Apollo, cratères, mers ; atterrisseurs, volcans, canyons, calottes de Mars — chacune avec son type et une
+  ligne ; s’y ajoutent les pistes et sites (`SITES`) et les points de vue des paysages ;
+- **la recherche** : les destinations par nom (les deux langues, sans accents), les coordonnées tapées, et sur Terre
+  les adresses par Photon pendant la frappe ; Nominatim en secours seulement sur Entrée ou depuis TARS (sa
+  politique d’usage interdit la recherche à la frappe) — `game/geocode.ts`, une requête par seconde au plus, les
+  réponses obtenues gardées pour la session ;
+- **un lieu choisi** (une marque, un résultat, n’importe quel point) : sa fiche (lieu, altitude, distance et
+  direction depuis vous, jour ou nuit) et ses actions — en orbite au-dessus (`tools.orbitOver`), y poser le
+  vaisseau (`land`), y marcher (`walk`), la caméra libre au-dessus (`cameraAt` : 30° de plongée, emportée par le
+  sol ; un spectateur si un vaisseau vole), un trépied sur place (`standOn`) ; « Cette vue » pour un point de vue
+  photographié ; « Demander à TARS ». Une mission en cours se termine après un second clic.
+
+#### 6.3 quinquies Le trépied et le ciel d’ici (`ui/skyevents.ts`, `ui/livecapture.ts`, `photo/skyevents.ts`, PLAN-MODES-AAA M7)
+
+- **⇧T à pied** pose le trépied là où l’on se tient, regardant du même côté (`tripodHere` → `cameraAt(…, { ground,
+  heading })`) : la caméra libre au sol, fixée à la Terre, le ciel tournant au-dessus.
+- **⇧F8** (la barre du haut, le menu pause, TARS) ouvre **le ciel d’ici** : depuis la Terre (à pied, sur le trépied,
+  ou la caméra libre à moins de 130 km du sol) et selon la vue, des cartes datées (UTC), chacune avec où regarder
+  (azimut, hauteur), le champ et l’objectif 24×36 équivalent :
+  - **filé d’étoiles** : autour du pôle s’il est à 10° au moins (circumpolaire), sinon dans l’axe de la vue
+    (relevée à 25°), quatre heures dès la nuit noire (Soleil à −12°) ;
+  - **analemme** : le Soleil à l’heure qu’il est si toute la figure reste au-dessus de l’horizon, sinon au premier
+    temps solaire moyen qui la garde (midi, 10 h, 14 h, 9 h, 15 h) — aucune dans les cercles polaires ;
+  - **la course de la Lune** ce soir ; **le prochain passage de l’ISS** visible ;
+  - **l’ISS au plus près de la Lune et du Soleil** sur trois jours (transit sous 0,26°, marqué ambre) ;
+  - **les prochaines éclipses de Soleil et de Lune vues d’ici**, **le prochain sélénélion** (la Lune éclipsée et le
+    Soleil tous deux dans la bande −1…+2° de l’horizon), **les transits de Mercure et de Vénus** (Soleil levé ici).
+  Les cartes arrivent au fil du calcul (le fil principal rendu à chaque groupe ; les éclipses par le worker du
+  planificateur, sur trente ans).
+- **Ses trois voies :**
+  - *Y aller* : l’horloge à cette date, le trépied au même lieu tourné vers (azimut, hauteur), le champ réglé ;
+  - *Le vivre* (`LiveCapture`) : les poses prises une à une dans le jeu (la date posée, la scène attendue —
+    `mxHost.settle` —, l’image exportée), empilées en « éclaircir » sur une carte en bas à droite qui grandit avec
+    l’événement, la progression, la pose et le temps restant ; le temps du jeu suspendu puis rendu ; à la fin,
+    l’empilement en PNG ou le rendu pleine qualité. L’ISS, que la scène ne dessine pas vue du sol, y est tracée
+    (`drawIssTrail` : sa traînée lumineuse, ou sa silhouette devant un disque) ;
+  - *Rendu* : la boîte des expositions multiples remplie (filé, analemme, Lune, ISS, éclipse ou transit).
+
+#### 6.3 sexies Le mode photo : rendus et films (`renderdialog.ts`, `ui/photo.ts`, `ui/videopreview.ts`, `video.ts`, PLAN-MODES-AAA M8)
+
+- **Le dialogue de rendu** est construit en TypeScript dans la langue de l’interface (`mountPanel`, ses ids
+  inchangés — `r-start`, `r-bar`, `v-source`… —, son style dans `style.css`) ; la page n’a plus de HTML statique.
+- **Une vidéo est une tâche** (`startVideo(job)` → pourquoi pas, ou null ; `videoState()`, `stopVideo()`,
+  `shots()`), demandée par le dialogue, la barre photo ou TARS. Chaque image est un rendu hors ligne de la scène à
+  cet instant ; les plans :
+  - `live` : la scène continue comme en direct (le vaisseau et son autopilote, la mission, le temps) ;
+  - `take` : la prise enregistrée (● sur la barre du temps) ;
+  - `orbit`, `dive`, `journey` : l’orbite automatique, la plongée, le voyage par le trou de ver ;
+  - `director` : les caméras du réalisateur sur le vaisseau piloté (la vue Director mise, puis rendue).
+- **Le brouillon** (`photo/videoplan.ts`) : le même plan dans 640×360 au plus (un portrait en 360×640), 4
+  échantillons, l’intégrateur RK4 à pas fixe, sans flou — le cadrage et le rythme jugés en quelques secondes. Il
+  s’ouvre de lui-même dans l’aperçu (`VideoPreview` : lecture en boucle, ses caractéristiques) avec « Enregistrer le
+  brouillon » et « Rendre la version finale » (le même plan, sa durée et sa cadence, à la taille et la qualité du
+  dialogue). Une version finale est enregistrée, puis montrée.
+- **Les formats** : MP4 (H.264) ou WebM (VP9, sinon VP8), au choix ; l’autre quand le navigateur ne sait pas
+  encoder le premier. Le WebM est écrit sans dépendance (`WebmWriter` : en-tête EBML, table de recherche, piste,
+  une grappe par image clé, index pour la navigation).
+- **La barre photo** gagne une rangée Vidéo : le plan (ceux qui ne peuvent filmer grisés), la durée, la cadence,
+  Brouillon et Rendu vidéo ; pendant le rendu, sa jauge, l’image en cours et le temps restant, Arrêter.
+- **Les expositions multiples animées** : la capture vécue (§ 6.3 quinquies) offre aussi son time-lapse — la
+  surimpression qui se construit pose après pose, environ quatre secondes, la dernière image tenue.
 
 #### 6.4 Les instruments
 

@@ -1,3 +1,4 @@
+import { LANDSCAPES, landscapeFov, photoUtc, viewHeading } from "./system/landscapes";
 import type { BodyView } from "./system/our-side";
 import type { WeatherPreset } from "./weather";
 import { M_SECONDS } from "./units";
@@ -301,6 +302,18 @@ export interface Settings {
   refraction: boolean; // the Earth's air bends the light from beyond it (PLAN-CIEL C3): the Sun, the Moon, the stars raised at the horizon
   autoWarp: boolean; // hub/manoeuvre sets warp; off: user's choice below its ceiling
   earthTerrain: boolean; // the Earth's real ground near the camera: elevation tiles streamed in (else the global map)
+  earthSurface: "off" | "satellite" | "materials"; // regional Sentinel-2 / WorldCover pilot; independent of physical relief
+  earthScenery: "off" | "balanced" | "high";
+  earthSceneryShadows: boolean;
+  sceneryHitboxes: boolean; // CPU collision wireframes, on foot only (diagnostic)
+  earthGrass: "off" | "balanced";
+  earthGrassDensity: number; // the share of the grass blades drawn (0.25 … 1; 1 the authored density)
+  earthGrassReach: number; // the vegetation drawn out to this distance from the astronaut [m] (8 … 30)
+  earthGrassWind: number; // the grass's sway (0 still … 2; 1 as authored)
+  walkSpeed: number; // on foot: the walking speed [m/s] (the walk clip keeps its pace at 1.4)
+  runSpeed: number; // on foot: the running speed [m/s] (held Shift)
+  jumpSpeed: number; // on foot: the jump's launch speed [m/s] (its height follows the local gravity)
+  characterDistance: number; // on foot: the camera's distance behind the character [m] (the wheel changes it; a wall shortens it)
   realtimeEps: number;
   realtimeSteps: number;
   qualityEps: number;
@@ -355,6 +368,27 @@ export interface Settings {
   /** the craft flown (vessels.ts): the Ranger, the Lander, the Endurance */
   vessel: "ranger" | "lander" | "endurance";
   shipMount: string; // attach point of the camera (ship.ts MOUNTS)
+  camSoft: "off" | "chase" | "hull"; // the hull views softened (controller/camrig.ts): none, the chase and the dorsal, every outside attach point on the hull
+  camBinding: "lockToTarget" | "lockNoRoll" | "worldUp" | "world"; // how the softened view's offset turns with the craft (Cinemachine's binding modes)
+  camDampPitch: number; // its rotation's damping on the pitch [s]
+  camDampYaw: number; // on the yaw [s]
+  camDampRoll: number; // on the roll [s]
+  camDampPos: number; // its position's damping [s]: left behind by the accelerations
+  camLookahead: number; // the aim led along the motion [s]
+  camScreenX: number; // the composer: the craft's place on the screen (−0.4 … 0.4 of the frame, right > 0)
+  camScreenY: number; // (up > 0)
+  camDutch: number; // the dutch angle [°]
+  camNoise: "none" | "handheld" | "shake" | "rumble" | "vibration"; // the noise profile (the softened views and the director's shots)
+  camNoiseAmp: number; // its amplitude gain
+  camNoiseFreq: number; // its frequency gain
+  camImpulse: number; // the impulses' gain: the touchdown, the boom, the latches, a wheel (0: none)
+  camBlend: "easeInOut" | "easeIn" | "easeOut" | "hardIn" | "hardOut" | "linear" | "cut"; // the blends between views (Cinemachine's default blend)
+  camBlendTime: number; // their time [s]
+  camSpeedFov: number; // the softened views' lens widened with the speed and the afterburner (its gain; 0: none)
+  cineShot: "auto" | "chase" | "orbit" | "pass" | "tracking" | "planet" | "system"; // the director's view (cine/brain.ts): its shot, or the director choosing
+  cineShake: number; // its noise: the air's buffeting, the engine's rumble, the hand (0 … 1)
+  cineDynamicFov: boolean; // its lens widened with the speed and the afterburner, the long lens on the still cameras
+  characterShoulder: number; // on foot: the camera over the right shoulder [m] (0: behind the head)
   shipAlbedo: number; // hull albedo (light grey paint in the film)
   shipMetal: number; // metalness of the plating (0 painted … 1 bare metal)
   shipRough: number; // roughness scale (lower: glossier)
@@ -392,6 +426,11 @@ export interface Settings {
   pathInView: boolean; // the ship's future path drawn in the view (the cyan tube; the map keeps it)
   // the HUD's aids over the view (ui/hud/symbology.ts): each shown where it helps, each can be turned off
   hudHorizon: boolean; // the horizon and the pitch ladder about the local vertical
+  speedLines: number; // the speed felt (ui/speedfx.ts): the air's streaks past the eye, the edges darkened (0: none)
+  gVignette: boolean; // a hard pull's grey-out (from 5 g, a tunnel at 9)
+  hudKind: "auto" | "atmo" | "space" | "approach"; // the ship's HUD (game/hudkind.ts): chosen by the flight's phase, or forced
+  hudViews: "chaseDorsal" | "outside" | "all"; // where the whole HUD shows: the chase and dorsal views, every outside view, everywhere
+  hudJet: "off" | "aviation" | "metric"; // plane mode in the air: a fighter's HUD (ui/hud/jethud.ts) in green — its tapes in knots and feet, or metric
   hudHeading: boolean; // the heading tape (the world's north)
   hudBank: boolean; // the bank scale and its pointer
   hudMarkers: boolean; // radial and normal marked in the view
@@ -426,6 +465,7 @@ export interface Settings {
   soundAmbience: number; // the cabin (life support, reaction wheels) and the wind
   soundUi: number; // the interface's clicks
   soundHeadphones: boolean; // headphones: the sources placed in 3D (HRTF); speakers: equal-power panning
+  groundAlerts: "full" | "reduced" | "off"; // the ground's warnings low in the air (game/gpws.ts): an airliner's every callout, a fighter's few, the last-moment pull-up alone
   voice: boolean; // the voices spoken (the landing's callouts, mission control, TARS — PLAN-TARS); off: subtitles alone
   soundVoice: number; // their volume, 0…1
   subtitles: boolean; // the line being said shown, its speaker named
@@ -571,6 +611,18 @@ export function defaultSettings(): Settings {
     refraction: true,
     autoWarp: true,
     earthTerrain: true,
+    earthSurface: "satellite",
+    earthScenery: "balanced",
+    earthSceneryShadows: true,
+    sceneryHitboxes: false,
+    earthGrass: "balanced",
+    earthGrassDensity: 1,
+    earthGrassReach: 28,
+    earthGrassWind: 1,
+    walkSpeed: 1.4,
+    runSpeed: 4,
+    jumpSpeed: 3.6,
+    characterDistance: 4.5,
     realtimeEps: 0.07,
     realtimeSteps: 600,
     qualityEps: 0.02,
@@ -620,6 +672,27 @@ export function defaultSettings(): Settings {
     ship: false,
     vessel: "ranger",
     shipMount: "quarter",
+    camSoft: "chase",
+    camBinding: "lockToTarget",
+    camDampPitch: 0.25,
+    camDampYaw: 0.25,
+    camDampRoll: 0.35,
+    camDampPos: 0.3,
+    camLookahead: 0.1,
+    camScreenX: 0,
+    camScreenY: 0,
+    camDutch: 0,
+    camNoise: "none",
+    camNoiseAmp: 1,
+    camNoiseFreq: 1,
+    camImpulse: 1,
+    camBlend: "easeInOut",
+    camBlendTime: 1.2,
+    camSpeedFov: 1,
+    cineShot: "auto",
+    cineShake: 0.5,
+    cineDynamicFov: true,
+    characterShoulder: 0.45,
     shipAlbedo: 0.6,
     shipMetal: 0.15,
     shipRough: 1,
@@ -654,6 +727,11 @@ export function defaultSettings(): Settings {
     soiRings: true,
     pathInView: true,
     hudHorizon: true,
+    hudKind: "auto",
+    hudViews: "chaseDorsal",
+    hudJet: "aviation",
+    speedLines: 0.7,
+    gVignette: true,
     hudHeading: true,
     hudBank: true,
     hudMarkers: true,
@@ -688,6 +766,7 @@ export function defaultSettings(): Settings {
     soundAmbience: 0.5,
     soundUi: 0.35,
     soundHeadphones: false,
+    groundAlerts: "reduced",
     voice: true,
     soundVoice: 0.9,
     subtitles: true,
@@ -1127,6 +1206,22 @@ export const presets: Record<string, Preset> = {
     time: (Date.UTC(2026, 7, 12, 7, 30) - Date.UTC(2067, 0, 1)) / 1000 / M_SECONDS,
     pose: { at: [44.233, 4.143], aim: [44.4262, 3.7391] },
   },
+  // ---- the exceptional landscapes (system/landscapes.ts): real photographs rebuilt — the camera where the
+  // photographer stood, the way they looked, at their moment, through their lens
+  ...Object.fromEntries(
+    LANDSCAPES.map((l): [string, Preset] => [
+      l.scene,
+      {
+        ...EARTH_VIEW,
+        ship: false,
+        target: "earth",
+        fov: landscapeFov(l),
+        earthClouds: l.clouds ?? 0,
+        time: (photoUtc(l.photo) - Date.UTC(2067, 0, 1)) / 1000 / M_SECONDS,
+        pose: { at: l.at, heading: viewHeading(l), off: [0, l.pitch] },
+      },
+    ]),
+  ),
   // ---- the solar system's worlds (group "solar"): each from its orbit (placed by its phase: the angle from
   // the point under the Sun) or from its ground; their surfaces from a few tens of km (their maps' detail)
   "Moon: Earthrise": {
@@ -1798,6 +1893,18 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   refraction: "pref",
   autoWarp: "scene",
   earthTerrain: "scene",
+  earthSurface: "scene",
+  earthScenery: "scene",
+  earthSceneryShadows: "scene",
+  sceneryHitboxes: "pref",
+  earthGrass: "pref",
+  earthGrassDensity: "pref",
+  earthGrassReach: "pref",
+  earthGrassWind: "pref",
+  walkSpeed: "pref",
+  runSpeed: "pref",
+  jumpSpeed: "pref",
+  characterDistance: "pref",
   realtimeEps: "pref",
   realtimeSteps: "pref",
   qualityEps: "pref",
@@ -1847,6 +1954,27 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   ship: "carried",
   vessel: "scene",
   shipMount: "carried",
+  camSoft: "pref",
+  camBinding: "pref",
+  camDampPitch: "pref",
+  camDampYaw: "pref",
+  camDampRoll: "pref",
+  camDampPos: "pref",
+  camLookahead: "pref",
+  camScreenX: "pref",
+  camScreenY: "pref",
+  camDutch: "pref",
+  camNoise: "pref",
+  camNoiseAmp: "pref",
+  camNoiseFreq: "pref",
+  camImpulse: "pref",
+  camBlend: "pref",
+  camBlendTime: "pref",
+  camSpeedFov: "pref",
+  cineShot: "pref",
+  cineShake: "pref",
+  cineDynamicFov: "pref",
+  characterShoulder: "pref",
   shipAlbedo: "carried",
   shipMetal: "carried",
   shipRough: "carried",
@@ -1880,6 +2008,11 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   soiRings: "pref",
   pathInView: "carried",
   hudHorizon: "pref",
+  hudKind: "pref",
+  hudViews: "pref",
+  hudJet: "pref",
+  speedLines: "pref",
+  gVignette: "pref",
   hudHeading: "pref",
   hudBank: "pref",
   hudMarkers: "pref",
@@ -1914,6 +2047,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   soundAmbience: "pref",
   soundUi: "pref",
   soundHeadphones: "pref",
+  groundAlerts: "pref",
   voice: "pref",
   soundVoice: "pref",
   subtitles: "pref",

@@ -1,0 +1,25 @@
+/* The sky's events from here (skyevents.ts, PLAN-MODES-AAA M7): in the kit's language — the place and the view
+   at the head, the events as cards in a grid (when, what, where to look, the lens; go there, live it, render),
+   the rare ones (an ISS transit, a selenelion) marked amber. */
+.se-frame { width: min(1080px, calc(100vw - 24px)); max-height: min(860px, calc(100vh - 24px)); padding: 12px 14px 14px; display: flex; flex-direction: column; }
+.se-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin: 6px 0 10px; font: 500 12px var(--mono); color: var(--k-dim); }
+.se-head b { font: 700 13px var(--mono); color: var(--k-text); }
+.se-list {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; min-height: 120px;
+  overflow-y: auto; overscroll-behavior: contain; padding-right: 2px;
+}
+.se-wait { grid-column: 1 / -1; padding: 18px 8px; color: var(--k-dim); font-style: italic; }
+.se-card { display: flex; flex-direction: column; padding: 10px 12px 12px; border: 1px solid var(--k-line); border-radius: 4px; background: rgba(160, 210, 255, 0.035); }
+.se-card:hover { border-color: var(--k-edge-hi); }
+.se-card.hot { border-color: rgba(255, 179, 92, 0.75); background: rgba(255, 179, 92, 0.08); }
+.se-title { margin: 0 0 2px; font: 700 14px var(--hud-font); letter-spacing: 0.06em; color: #fff; }
+.se-card.hot .se-title { color: #ffd39a; }
+.se-when { margin: 0 0 6px; font: 600 11.5px var(--mono); color: var(--k-on); }
+.se-detail { margin: 0 0 6px; font: 500 12.5px/1.4 var(--font, Inter, sans-serif); color: var(--k-text); flex: 1; }
+.se-view { margin: 0; font: 500 11px var(--mono); color: var(--k-dim); }
+.se-acts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
+.se-acts .k-btn { justify-content: center; font-size: 12px; }
+
+@media (max-width: 700px) {
+  .se-list { grid-template-columns: 1fr; }
+}

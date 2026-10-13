@@ -1,0 +1,947 @@
+{
+  "stats": {
+    "mode": "high",
+    "supported": true,
+    "status": "ready",
+    "pending": false,
+    "budgetLimited": true,
+    "lat": 48.96,
+    "lon": 2.5206151450880725,
+    "trees": 6261,
+    "buildings": 8000,
+    "footprintEdges": 48475,
+    "roads": 23516,
+    "railways": 237,
+    "waterways": 150,
+    "waterPolygons": 57,
+    "pavedPolygons": 40,
+    "bridges": 123,
+    "bridgePiers": 99,
+    "osmLayers": {
+      "aeroway": {
+        "features": 32,
+        "fields": [
+          "class",
+          "ref"
+        ]
+      },
+      "boundary": {
+        "features": 43,
+        "fields": [
+          "admin_level",
+          "disputed",
+          "maritime"
+        ]
+      },
+      "building": {
+        "features": 85,
+        "fields": [
+          "colour",
+          "render_height",
+          "render_min_height"
+        ]
+      },
+      "housenumber": {
+        "features": 2145,
+        "fields": [
+          "housenumber"
+        ]
+      },
+      "landcover": {
+        "features": 1836,
+        "fields": [
+          "class",
+          "subclass"
+        ]
+      },
+      "landuse": {
+        "features": 719,
+        "fields": [
+          "class"
+        ]
+      },
+      "place": {
+        "features": 220,
+        "fields": [
+          "class",
+          "name",
+          "name:af",
+          "name:ar",
+          "name:az",
+          "name:be",
+          "name:bg",
+          "name:bn",
+          "name:br",
+          "name:ca",
+          "name:co",
+          "name:cs",
+          "name:cy",
+          "name:da",
+          "name:de",
+          "name:el",
+          "name:en",
+          "name:eo",
+          "name:es",
+          "name:et",
+          "name:eu",
+          "name:fa",
+          "name:fi",
+          "name:fr",
+          "name:ga",
+          "name:gd",
+          "name:he",
+          "name:hi",
+          "name:hr",
+          "name:hu",
+          "name:hy",
+          "name:id",
+          "name:is",
+          "name:it",
+          "name:ja",
+          "name:kk",
+          "name:ko",
+          "name:ku",
+          "name:la",
+          "name:latin",
+          "name:lb",
+          "name:lt",
+          "name:lv",
+          "name:mk",
+          "name:mt",
+          "name:nl",
+          "name:oc",
+          "name:pl",
+          "name:pt",
+          "name:rm",
+          "name:ro",
+          "name:ru",
+          "name:sk",
+          "name:sl",
+          "name:sq",
+          "name:sr",
+          "name:sv",
+          "name:th",
+          "name:tr",
+          "name:uk",
+          "name:ur",
+          "name:vi",
+          "name:zh",
+          "name_de",
+          "name_en",
+          "name_int",
+          "rank"
+        ]
+      },
+      "poi": {
+        "features": 11085,
+        "fields": [
+          "agg_stop",
+          "class",
+          "indoor",
+          "layer",
+          "level",
+          "name",
+          "name:af",
+          "name:ar",
+          "name:br",
+          "name:ca",
+          "name:co",
+          "name:cs",
+          "name:cy",
+          "name:da",
+          "name:de",
+          "name:en",
+          "name:eo",
+          "name:es",
+          "name:et",
+          "name:eu",
+          "name:fa",
+          "name:fi",
+          "name:fr",
+          "name:ga",
+          "name:gd",
+          "name:he",
+          "name:hr",
+          "name:hu",
+          "name:id",
+          "name:is",
+          "name:it",
+          "name:ja",
+          "name:kk",
+          "name:ko",
+          "name:latin",
+          "name:lb",
+          "name:lt",
+          "name:lv",
+          "name:mk",
+          "name:nl",
+          "name:oc",
+          "name:pl",
+          "name:pt",
+          "name:rm",
+          "name:ro",
+          "name:ru",
+          "name:sk",
+          "name:sl",
+          "name:sv",
+          "name:tr",
+          "name:uk",
+          "name:ur",
+          "name:vi",
+          "name:zh",
+          "name_de",
+          "name_en",
+          "name_int",
+          "rank",
+          "subclass"
+        ]
+      },
+      "transportation": {
+        "features": 4676,
+        "fields": [
+          "access",
+          "bicycle",
+          "brunnel",
+          "class",
+          "foot",
+          "horse",
+          "indoor",
+          "layer",
+          "level",
+          "mtb_scale",
+          "official",
+          "oneway",
+          "ramp",
+          "service",
+          "subclass",
+          "surface"
+        ]
+      },
+      "transportation_name": {
+        "features": 2885,
+        "fields": [
+          "class",
+          "indoor",
+          "layer",
+          "level",
+          "name",
+          "name:latin",
+          "name_de",
+          "name_en",
+          "name_int",
+          "network",
+          "ref",
+          "ref_length",
+          "route_1_name",
+          "route_1_network",
+          "route_1_ref",
+          "route_2_name",
+          "route_2_network",
+          "route_2_ref",
+          "route_3_name",
+          "route_3_network",
+          "route_3_ref",
+          "subclass"
+        ]
+      },
+      "water": {
+        "features": 162,
+        "fields": [
+          "class",
+          "id",
+          "intermittent"
+        ]
+      },
+      "water_name": {
+        "features": 84,
+        "fields": [
+          "class",
+          "intermittent",
+          "name",
+          "name:latin",
+          "name_de",
+          "name_en",
+          "name_int"
+        ]
+      },
+      "waterway": {
+        "features": 280,
+        "fields": [
+          "brunnel",
+          "class",
+          "intermittent",
+          "name",
+          "name:latin",
+          "name_de",
+          "name_en",
+          "name_int"
+        ]
+      },
+      "mountain_peak": {
+        "features": 3,
+        "fields": [
+          "class",
+          "name",
+          "name:latin",
+          "name_de",
+          "name_en",
+          "name_int",
+          "rank"
+        ]
+      }
+    },
+    "shadows": true,
+    "shadowReceiverRangeM": 2000,
+    "shadowRayRangeM": 900,
+    "gpuBytes": 16777216,
+    "retiringGpuBytes": 0,
+    "coverPixels": 230895,
+    "rgbPixels": 262144,
+    "workerMs": 5445.800000000745,
+    "tileNetworkBytes": 3290652,
+    "uploadCpuMs": 0.6,
+    "lastError": null,
+    "coverage": "WorldCover 2021 land; OSM buildings, roads, railways, water and estimated bridges through OpenMapTiles; |latitude| ≤ 84°; coverage varies with source data",
+    "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), CC BY 4.0; © OpenMapTiles, Data from OpenStreetMap (ODbL), served by OpenFreeMap",
+    "sources": [
+      "https://esa-worldcover.org/en/data-access",
+      "https://docs.terrascope.be/Developers/WebServices/OGC/MapProxy.html",
+      "https://openfreemap.org",
+      "https://www.openstreetmap.org/copyright"
+    ]
+  },
+  "perf": {
+    "loopFps": 59.98,
+    "renderFps": 46.99,
+    "worstLoopMs": 24.6,
+    "gpuFrameMs": 18.4,
+    "gpuPassesMs": 71.57,
+    "gpuProfiled": 62,
+    "gpuSupported": true,
+    "image": "960×540",
+    "pixelRatio": 1,
+    "tier": {
+      "level": 2,
+      "capMpx": 2.2,
+      "label": "apple · metal-3 · 32 GB"
+    },
+    "renderScale": 1,
+    "quality": "game",
+    "budgetMs": 16,
+    "earthSurface": {
+      "mode": "satellite",
+      "supported": true,
+      "region": "bourget",
+      "label": "Le Bourget",
+      "year": 2021,
+      "sourceResolutionM": 10,
+      "format": "bc7",
+      "loaded": 16,
+      "pages": 16,
+      "pending": false,
+      "inflight": 0,
+      "failed": 0,
+      "lastError": null,
+      "status": "ready",
+      "gpuBytes": 39147264,
+      "uploadedBytes": 39147264,
+      "uploadCpuMs": 29.5,
+      "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), processed by ESA WorldCover consortium (CC BY 4.0)",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "sourceUrl": "https://esa-worldcover.org/en/data-access"
+    },
+    "earthScenery": {
+      "mode": "high",
+      "supported": true,
+      "status": "ready",
+      "pending": false,
+      "budgetLimited": true,
+      "lat": 48.96,
+      "lon": 2.5206151450880725,
+      "trees": 6261,
+      "buildings": 8000,
+      "footprintEdges": 48475,
+      "roads": 23516,
+      "railways": 237,
+      "waterways": 150,
+      "waterPolygons": 57,
+      "pavedPolygons": 40,
+      "bridges": 123,
+      "bridgePiers": 99,
+      "osmLayers": {
+        "aeroway": {
+          "features": 32,
+          "fields": [
+            "class",
+            "ref"
+          ]
+        },
+        "boundary": {
+          "features": 43,
+          "fields": [
+            "admin_level",
+            "disputed",
+            "maritime"
+          ]
+        },
+        "building": {
+          "features": 85,
+          "fields": [
+            "colour",
+            "render_height",
+            "render_min_height"
+          ]
+        },
+        "housenumber": {
+          "features": 2145,
+          "fields": [
+            "housenumber"
+          ]
+        },
+        "landcover": {
+          "features": 1836,
+          "fields": [
+            "class",
+            "subclass"
+          ]
+        },
+        "landuse": {
+          "features": 719,
+          "fields": [
+            "class"
+          ]
+        },
+        "place": {
+          "features": 220,
+          "fields": [
+            "class",
+            "name",
+            "name:af",
+            "name:ar",
+            "name:az",
+            "name:be",
+            "name:bg",
+            "name:bn",
+            "name:br",
+            "name:ca",
+            "name:co",
+            "name:cs",
+            "name:cy",
+            "name:da",
+            "name:de",
+            "name:el",
+            "name:en",
+            "name:eo",
+            "name:es",
+            "name:et",
+            "name:eu",
+            "name:fa",
+            "name:fi",
+            "name:fr",
+            "name:ga",
+            "name:gd",
+            "name:he",
+            "name:hi",
+            "name:hr",
+            "name:hu",
+            "name:hy",
+            "name:id",
+            "name:is",
+            "name:it",
+            "name:ja",
+            "name:kk",
+            "name:ko",
+            "name:ku",
+            "name:la",
+            "name:latin",
+            "name:lb",
+            "name:lt",
+            "name:lv",
+            "name:mk",
+            "name:mt",
+            "name:nl",
+            "name:oc",
+            "name:pl",
+            "name:pt",
+            "name:rm",
+            "name:ro",
+            "name:ru",
+            "name:sk",
+            "name:sl",
+            "name:sq",
+            "name:sr",
+            "name:sv",
+            "name:th",
+            "name:tr",
+            "name:uk",
+            "name:ur",
+            "name:vi",
+            "name:zh",
+            "name_de",
+            "name_en",
+            "name_int",
+            "rank"
+          ]
+        },
+        "poi": {
+          "features": 11085,
+          "fields": [
+            "agg_stop",
+            "class",
+            "indoor",
+            "layer",
+            "level",
+            "name",
+            "name:af",
+            "name:ar",
+            "name:br",
+            "name:ca",
+            "name:co",
+            "name:cs",
+            "name:cy",
+            "name:da",
+            "name:de",
+            "name:en",
+            "name:eo",
+            "name:es",
+            "name:et",
+            "name:eu",
+            "name:fa",
+            "name:fi",
+            "name:fr",
+            "name:ga",
+            "name:gd",
+            "name:he",
+            "name:hr",
+            "name:hu",
+            "name:id",
+            "name:is",
+            "name:it",
+            "name:ja",
+            "name:kk",
+            "name:ko",
+            "name:latin",
+            "name:lb",
+            "name:lt",
+            "name:lv",
+            "name:mk",
+            "name:nl",
+            "name:oc",
+            "name:pl",
+            "name:pt",
+            "name:rm",
+            "name:ro",
+            "name:ru",
+            "name:sk",
+            "name:sl",
+            "name:sv",
+            "name:tr",
+            "name:uk",
+            "name:ur",
+            "name:vi",
+            "name:zh",
+            "name_de",
+            "name_en",
+            "name_int",
+            "rank",
+            "subclass"
+          ]
+        },
+        "transportation": {
+          "features": 4676,
+          "fields": [
+            "access",
+            "bicycle",
+            "brunnel",
+            "class",
+            "foot",
+            "horse",
+            "indoor",
+            "layer",
+            "level",
+            "mtb_scale",
+            "official",
+            "oneway",
+            "ramp",
+            "service",
+            "subclass",
+            "surface"
+          ]
+        },
+        "transportation_name": {
+          "features": 2885,
+          "fields": [
+            "class",
+            "indoor",
+            "layer",
+            "level",
+            "name",
+            "name:latin",
+            "name_de",
+            "name_en",
+            "name_int",
+            "network",
+            "ref",
+            "ref_length",
+            "route_1_name",
+            "route_1_network",
+            "route_1_ref",
+            "route_2_name",
+            "route_2_network",
+            "route_2_ref",
+            "route_3_name",
+            "route_3_network",
+            "route_3_ref",
+            "subclass"
+          ]
+        },
+        "water": {
+          "features": 162,
+          "fields": [
+            "class",
+            "id",
+            "intermittent"
+          ]
+        },
+        "water_name": {
+          "features": 84,
+          "fields": [
+            "class",
+            "intermittent",
+            "name",
+            "name:latin",
+            "name_de",
+            "name_en",
+            "name_int"
+          ]
+        },
+        "waterway": {
+          "features": 280,
+          "fields": [
+            "brunnel",
+            "class",
+            "intermittent",
+            "name",
+            "name:latin",
+            "name_de",
+            "name_en",
+            "name_int"
+          ]
+        },
+        "mountain_peak": {
+          "features": 3,
+          "fields": [
+            "class",
+            "name",
+            "name:latin",
+            "name_de",
+            "name_en",
+            "name_int",
+            "rank"
+          ]
+        }
+      },
+      "shadows": true,
+      "shadowReceiverRangeM": 2000,
+      "shadowRayRangeM": 900,
+      "gpuBytes": 16777216,
+      "retiringGpuBytes": 0,
+      "coverPixels": 230895,
+      "rgbPixels": 262144,
+      "workerMs": 5445.800000000745,
+      "tileNetworkBytes": 3290652,
+      "uploadCpuMs": 0.6,
+      "lastError": null,
+      "coverage": "WorldCover 2021 land; OSM buildings, roads, railways, water and estimated bridges through OpenMapTiles; |latitude| ≤ 84°; coverage varies with source data",
+      "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), CC BY 4.0; © OpenMapTiles, Data from OpenStreetMap (ODbL), served by OpenFreeMap",
+      "sources": [
+        "https://esa-worldcover.org/en/data-access",
+        "https://docs.terrascope.be/Developers/WebServices/OGC/MapProxy.html",
+        "https://openfreemap.org",
+        "https://www.openstreetmap.org/copyright"
+      ]
+    },
+    "block": 2,
+    "cpu": [
+      {
+        "section": "render (encode, submit)",
+        "ms": 1.04,
+        "worst": 1.9
+      },
+      {
+        "section": "flight HUD (total)",
+        "ms": 0.96,
+        "worst": 2.8
+      },
+      {
+        "section": "flight figures (flightInfo)",
+        "ms": 0.53,
+        "worst": 0.7
+      },
+      {
+        "section": "HUD: markers & tapes",
+        "ms": 0.32,
+        "worst": 0.6
+      },
+      {
+        "section": "Ranger status",
+        "ms": 0.27,
+        "worst": 0.4
+      },
+      {
+        "section": "HUD: map",
+        "ms": 0.24,
+        "worst": 2.3
+      },
+      {
+        "section": "HUD: attitude ball",
+        "ms": 0.19,
+        "worst": 1.5
+      },
+      {
+        "section": "free-fall prediction",
+        "ms": 0.11,
+        "worst": 0.2
+      },
+      {
+        "section": "HUD: orbit panel",
+        "ms": 0.06,
+        "worst": 0.8
+      },
+      {
+        "section": "HUD: target & Ranger",
+        "ms": 0.06,
+        "worst": 0.5
+      },
+      {
+        "section": "HUD: text panels",
+        "ms": 0.04,
+        "worst": 0.5
+      },
+      {
+        "section": "HUD: telemetry",
+        "ms": 0.04,
+        "worst": 0.6
+      },
+      {
+        "section": "overlay (guide, marker)",
+        "ms": 0.02,
+        "worst": 0.1
+      },
+      {
+        "section": "sound",
+        "ms": 0.02,
+        "worst": 0.1
+      },
+      {
+        "section": "sky chart",
+        "ms": 0.01,
+        "worst": 0.1
+      },
+      {
+        "section": "panel & readouts",
+        "ms": 0,
+        "worst": 0.2
+      },
+      {
+        "section": "autosave",
+        "ms": 0,
+        "worst": 0.7
+      },
+      {
+        "section": "game tools window",
+        "ms": 0,
+        "worst": 0.1
+      },
+      {
+        "section": "flight (camera.update)",
+        "ms": 0,
+        "worst": 0
+      }
+    ],
+    "gpu": [
+      {
+        "pass": "trace",
+        "ms": 16.38,
+        "last": 15.5,
+        "frames": 62
+      },
+      {
+        "pass": "ship: shadow map",
+        "ms": 15.82,
+        "last": 15.61,
+        "frames": 30
+      },
+      {
+        "pass": "ship: shading (MSAA)",
+        "ms": 15.67,
+        "last": 18.6,
+        "frames": 62
+      },
+      {
+        "pass": "display",
+        "ms": 13.47,
+        "last": 18.37,
+        "frames": 62
+      },
+      {
+        "pass": "ship probe: trace",
+        "ms": 1,
+        "last": 0.58,
+        "frames": 16
+      },
+      {
+        "pass": "resolve",
+        "ms": 0.7,
+        "last": 0.31,
+        "frames": 62
+      },
+      {
+        "pass": "gather",
+        "ms": 0.62,
+        "last": 2.31,
+        "frames": 62
+      },
+      {
+        "pass": "temporal",
+        "ms": 0.41,
+        "last": 0.38,
+        "frames": 62
+      },
+      {
+        "pass": "ship probe: SH",
+        "ms": 0.27,
+        "last": 0.28,
+        "frames": 8
+      },
+      {
+        "pass": "ship probe: GGX",
+        "ms": 0.16,
+        "last": 0.18,
+        "frames": 8
+      },
+      {
+        "pass": "bloom down 1",
+        "ms": 0.15,
+        "last": 0.14,
+        "frames": 62
+      },
+      {
+        "pass": "light meter",
+        "ms": 0.13,
+        "last": 0.14,
+        "frames": 34
+      },
+      {
+        "pass": "stars",
+        "ms": 0.08,
+        "last": 0.03,
+        "frames": 62
+      },
+      {
+        "pass": "motion blur",
+        "ms": 0.07,
+        "last": 0.03,
+        "frames": 62
+      },
+      {
+        "pass": "bloom down 2",
+        "ms": 0.06,
+        "last": 0.06,
+        "frames": 62
+      },
+      {
+        "pass": "ship probe: mips",
+        "ms": 0.03,
+        "last": 0.03,
+        "frames": 8
+      },
+      {
+        "pass": "bloom down 3",
+        "ms": 0.03,
+        "last": 0.03,
+        "frames": 62
+      },
+      {
+        "pass": "bloom down 4",
+        "ms": 0.02,
+        "last": 0.02,
+        "frames": 62
+      },
+      {
+        "pass": "bloom down 5",
+        "ms": 0.02,
+        "last": 0.02,
+        "frames": 62
+      },
+      {
+        "pass": "bloom up 1",
+        "ms": 0.01,
+        "last": 0.01,
+        "frames": 62
+      },
+      {
+        "pass": "bloom up 2",
+        "ms": 0.01,
+        "last": 0.01,
+        "frames": 62
+      },
+      {
+        "pass": "bloom up 4",
+        "ms": 0.01,
+        "last": 0.01,
+        "frames": 62
+      },
+      {
+        "pass": "bloom up 3",
+        "ms": 0.01,
+        "last": 0.01,
+        "frames": 62
+      }
+    ]
+  },
+  "adapter": {
+    "vendor": "apple",
+    "architecture": "metal-3",
+    "device": "",
+    "description": "",
+    "fallback": false,
+    "features": [
+      "bgra8unorm-storage",
+      "chromium-experimental-subgroup-matrix",
+      "clip-distances",
+      "core-features-and-limits",
+      "depth-clip-control",
+      "depth32float-stencil8",
+      "dual-source-blending",
+      "float32-blendable",
+      "float32-filterable",
+      "indirect-first-instance",
+      "primitive-index",
+      "rg11b10ufloat-renderable",
+      "shader-f16",
+      "subgroup-size-control",
+      "subgroups",
+      "texture-component-swizzle",
+      "texture-compression-astc",
+      "texture-compression-astc-sliced-3d",
+      "texture-compression-bc",
+      "texture-compression-bc-sliced-3d",
+      "texture-compression-etc2",
+      "texture-compression-unaligned",
+      "texture-formats-tier1",
+      "texture-formats-tier2",
+      "timestamp-query"
+    ],
+    "limits": {
+      "maxStorageBuffersPerShaderStage": 10,
+      "maxSampledTexturesPerShaderStage": 48,
+      "maxBufferSize": 4294967292,
+      "maxStorageBufferBindingSize": 4294967292,
+      "maxTextureDimension2D": 16384,
+      "maxComputeInvocationsPerWorkgroup": 1024,
+      "maxComputeWorkgroupStorageSize": 32768,
+      "maxBindGroups": 4
+    }
+  }
+}

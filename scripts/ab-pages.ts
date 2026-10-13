@@ -53,10 +53,9 @@ async function press(cdp: Cdp, key: string, code: number) {
     key,
     code: key,
     windowsVirtualKeyCode: code,
-    nativeVirtualKeyCode: code,
     text,
   });
-  await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key, code: key, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code });
+  await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key, code: key, windowsVirtualKeyCode: code }); // (no native code: a Mac key code to CDP on macOS)
   await Bun.sleep(60);
 }
 

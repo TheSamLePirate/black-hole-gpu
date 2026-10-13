@@ -67,7 +67,13 @@ export class TransportBar {
       };
       return b;
     };
-    btn(this.play, ICON.play, t("Run / pause time — every mode (paused: the image refines)"), t("Space"), () => d.playPause());
+    btn(
+      this.play,
+      ICON.play,
+      t("Run / pause time — Space in every mode but on foot, where Space jumps (paused: the image refines)"),
+      t("Space"),
+      () => d.playPause(),
+    );
     const slower = btn(h("button", "tp-btn"), ICON.slower, t("Slower time"), ",", () => d.warp(-1));
     const faster = btn(h("button", "tp-btn"), ICON.faster, t("Faster time"), ".", () => d.warp(1));
     btn(this.rtBtn, "", t("Real time: a second per second"), "/", () => d.realTime());

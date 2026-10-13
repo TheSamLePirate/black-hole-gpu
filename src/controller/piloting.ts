@@ -8,7 +8,7 @@ import { GEARS, gearByItself, stepGear } from "../gear";
 import { basis, blToCartesian, cameraFrame, setHolePose, setHomePose, setRepPose, yawPitchRoll } from "../camera";
 import { TUNING } from "../game/tuning";
 import { isco, type Vec3 } from "../physics";
-import { BODY_NAMES, type Body, onOurSide } from "../targeting";
+import { BODY_NAMES, type Body, isCraft, onOurSide } from "../targeting";
 import { AIR_WARP } from "../flightair";
 import { brakingAccels } from "../descent";
 import { attitudeFor, CAPSULE, EntryGuidance, heightOf, type EntryCraft, type EntryResult, type EntryState } from "../entry";
@@ -18,7 +18,11 @@ import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
 import { aeroForces, airAt, airTop, entryInterface } from "../aero";
 import { GEAR, groundR, localAccel, localToZamo, planetFrame, toGlobal, toLocal, zamoBeta, zamoToLocal } from "../landing";
 import { circularSpeed, type FlightMode, type PilotInput } from "../pilot";
+import { JET } from "../game/jet";
 import { MOUNT_KEYS, MOUNTS, mountPose, shipToCamera, type M3, type Mount, type MountPose, type OutsideView } from "../mounts";
+import { blendCurve, blendPose } from "../cine/follow";
+import type { V3 } from "../cine/rig";
+import { upOf, viewBlend } from "./camrig";
 import { fleet } from "../fleet";
 import { fuelOn, loadShare } from "../engine";
 import { VESSELS } from "../vessels";
@@ -51,6 +55,7 @@ declare module "../controls" {
     newFlight: typeof newFlight;
     stepOffMount: typeof stepOffMount;
     standOn: typeof standOn;
+    groundBelow: typeof groundBelow;
     placeShipRep: typeof placeShipRep;
     moveOutside: typeof moveOutside;
     setLookRaw: typeof setLookRaw;
@@ -66,6 +71,8 @@ declare module "../controls" {
     refBeta: typeof refBeta;
     mountTarget: typeof mountTarget;
     settleMount: typeof settleMount;
+    rigidMount: typeof rigidMount;
+    holdMount: typeof holdMount;
     weatherPlace: typeof weatherPlace;
     runwayInUse: typeof runwayInUse;
     rainView: typeof rainView;
@@ -74,6 +81,7 @@ declare module "../controls" {
     shipMatrix: typeof shipMatrix;
     levelShip: typeof levelShip;
     shipAxesLocal: typeof shipAxesLocal;
+    drawnMatrix: typeof drawnMatrix;
     rotateC: typeof rotateC;
     pilotInput: typeof pilotInput;
     flyShip: typeof flyShip;
@@ -125,6 +133,9 @@ function setPilot(this: CameraController, on: boolean) {
     return;
   }
   if (this.cinematic === "orbit") this.setCinematic(null);
+  // (a travel of the free camera under way let go: flying, it waited, then went on from where it was when the
+  // controls were left — the view jumped back to it)
+  this.travel = null;
   this.flyMode = false;
   s.rotation = "free";
   if (!this.gravity) this.setGravity(true);
@@ -143,6 +154,10 @@ function setPilot(this: CameraController, on: boolean) {
  * caches). Before, a second glide began as the first had ended — mid-approach, gear up, braking.
  */
 function newFlight(this: CameraController) {
+  this.character.stop();
+  // (the view the new flight's own: a spectator out — walking or not — let go, its glide with it)
+  this.spectator = null;
+  this.specGlide = null;
   this.tunnelEntry = null;
   this.predictionContext = "";
   this.predictionGeneration++;
@@ -187,6 +202,41 @@ function newFlight(this: CameraController) {
   this.pilot.newFlight();
   this.hubCache = this.runwayCache = this.futureCache = this.kerrInfoCache = this.aimCache = null;
   this.contrails.clear();
+  this.rigidMount();
+}
+
+/**
+ * The view straight at its attach point, the rig's lag and any carry let go. A placement (placeAt, a scene)
+ * sets the camera's pose for the ship's through the attach point's own relation: the ship's attitude is the
+ * camera's turned by the pose the view has now (shipMatrix), so a softened view lagging behind the craft
+ * (controller/camrig.ts) put a placed ship off by its lag — a glide set at 120 m/s 4° nose-high flew 10° off
+ * its heading and into the ground —, and the view unwinding then turned the ship with it.
+ */
+function rigidMount(this: CameraController) {
+  this.camFollow.reset();
+  this.camKick = 1;
+  this.viewCarry = null;
+  this.mountAnim = null;
+  this.mountEff = null;
+  // (the director's shot let go: its last one — of the flight before, never saved — put a placed or reloaded
+  // craft tens of degrees, up to 180°, off; the director's view starts again from its fixed default)
+  this.cine.reset();
+  this.cineOn = false;
+  this.cineOut = null;
+  this.lastPose = this.mountTarget();
+}
+
+/**
+ * The camera held at a pose on the craft (its frame — a save's: the view as it was then): the craft's attitude is
+ * the camera's through it. The next frame's stepMount turns the camera onto the attach point's own pose, the craft
+ * kept where it points (a director's shot, a view dragged about the craft are not their defaults).
+ */
+function holdMount(this: CameraController, pose: MountPose) {
+  const p: MountPose = { eye: [...pose.eye], aim: [...pose.aim], ...(pose.up ? { up: [...pose.up] as Vec3 } : {}) };
+  this.mountAnim = null;
+  this.viewCarry = null;
+  this.mountEff = p;
+  this.lastPose = p;
 }
 
 /**
@@ -219,13 +269,14 @@ function stepOffMount(this: CameraController) {
 function standOn(this: CameraController, b?: Body): string | null {
   const s = this.s;
   // (tf: `t` is the time here)
-  if (this.piloting) return tf("The Ranger lands itself (the autopilot: 7) — leave it to set the camera down (⇧K)");
+  if (this.piloting) return tf("The Ranger lands itself (the autopilot: 7); landed, ⇧K takes you out on foot and ⇧T sets the tripod there");
   const w = this.rigWorld();
   if (!w) return tf("No world to stand on here");
   const t = this.nowTime();
-  const solid = (id: Body) => (w.ours ? solidBody(id) : ["miller", "mann", "edmunds"].includes(id));
+  const solid = (id: Body) => (w.ours ? solidBody(id) && !isCraft(id) && id !== "iss" : ["miller", "mann", "edmunds"].includes(id));
   const pick = (id: Body | null | undefined) => (id && solid(id) ? this.rigBody(id, w.ours, t) : null);
-  const ref = b ? pick(b) : (pick(s.target) ?? this.rigNearest(w.ours, w.X, t));
+  // (the nearest world — not a craft beside the camera, nearer in its own radii)
+  const ref = b ? pick(b) : (pick(s.target) ?? this.rigNearest(w.ours, w.X, t, solid));
   if (!ref || !solid(ref.id))
     return tf("Nothing solid to stand on — a planet or a moon on this side of the wormhole (Go to takes the camera through)");
   let up = unitV(sub3(w.X, ref.C));
@@ -260,6 +311,32 @@ function standOn(this: CameraController, b?: Body): string | null {
   this.activity = performance.now();
   this.onCinematicChange(this.cinematic);
   return null;
+}
+
+/**
+ * The solid world under the camera, near enough to set the explorer down on it (within `radii` of its radius
+ * from its surface): its id and the point under the camera (latitude, longitude [°]: the Earth's geodetic,
+ * the others' on their sphere) — the On foot mode's "walk here". Null: none (the hole, deep space, a gas giant).
+ */
+function groundBelow(this: CameraController, radii = 2): { body: Body; lat: number; lon: number } | null {
+  const w = this.rigWorld();
+  if (!w) return null;
+  const t = this.nowTime();
+  // (the worlds only: a craft beside the camera — the Ranger landed 50 m away — is nearer in its own radii, and no ground)
+  const isWorld = (b: Body) => (w.ours ? solidBody(b) && !isCraft(b) && b !== "iss" : ["miller", "mann", "edmunds"].includes(b));
+  const ref = this.rigNearest(w.ours, w.X, t, isWorld);
+  if (!ref) return null;
+  if ((Math.hypot(...sub3(w.X, ref.C)) - ref.R) / ref.R > radii) return null;
+  const deg = 180 / Math.PI;
+  if (w.ours) {
+    const q = toBodyFixed(ref.id, w.X, t);
+    const g = cartToGeodetic(1, flatteningOf(ref.id), unitV(q));
+    return { body: ref.id, lat: g.lat * deg, lon: g.lon * deg };
+  }
+  const F = planetFrame(ref.id as "miller" | "mann" | "edmunds", t, this.s.spin, this.s.massSolar);
+  const xi = toLocal(F, w.X, F.V).xi;
+  const r = Math.hypot(...xi);
+  return { body: ref.id, lat: Math.asin(xi[2] / r) * deg, lon: Math.atan2(xi[1], xi[0]) * deg };
 }
 
 /**
@@ -407,7 +484,7 @@ function aimShipViews(this: CameraController, dt: number) {
   const s = this.s;
   // (the ship's axes as the camera had them last frame: the pose drawn — the outside views' placement
   // depends on the aim itself)
-  const S = this.lastPose ? shipToCamera(this.lastPose, s.shipLookYaw, s.shipLookPitch).S : this.shipMatrix();
+  const S = this.drawnMatrix();
   this.shipAim = null;
   if (!s.lookAt || !this.piloting || this.cinematic) return;
   const cam = cameraFrame(s);
@@ -434,8 +511,7 @@ function flybyStep(this: CameraController, dt: number) {
   const s = this.s,
     F = this.flyby;
   const cam = cameraFrame(s);
-  const S = this.lastPose ? shipToCamera(this.lastPose, s.shipLookYaw, s.shipLookPitch).S : this.shipMatrix();
-  const ax = [0, 1, 2].map((i) => lin(lin(cam.right, S[0][i]!, cam.up, S[1][i]!), 1, cam.fwd, S[2][i]!)) as [Vec3, Vec3, Vec3];
+  const ax = this.shipAxesLocal(cam, this.drawnMatrix());
   const toShip = (E: Vec3): Vec3 => [dot3(E, ax[0]), dot3(E, ax[1]), dot3(E, ax[2])];
   const toLocal = (e: Vec3) => lin(lin(ax[0], e[0], ax[1], e[1]), 1, ax[2], e[2]);
   if (!F.E) F.E = toLocal(this.lastPose?.eye ?? F.eye);
@@ -492,6 +568,7 @@ function mountTarget(this: CameraController): MountPose {
     return { eye: o.eye, aim: lin(o.eye, 1, f, 10) };
   }
   if (v === "flyby") return { eye: this.flyby.eye, aim: V.centre };
+  if (v === "director") return this.cineOut ?? { eye: lin(V.centre, 1, [0, 0.25 * V.viewDist, -V.viewDist], 1), aim: V.centre };
   // (about the cabin: where the camera has moved to, looking along the nose — the look turns it)
   if (this.s.shipMount === "cabin") {
     const e = this.cabinCam.eye ?? mountPose("cockpit").eye;
@@ -527,9 +604,7 @@ function settleMount(this: CameraController) {
     fpitch: -5,
     fvel: [0, 0, 0] as Vec3,
   });
-  this.mountAnim = null;
-  this.mountEff = null;
-  this.lastPose = this.mountTarget();
+  this.rigidMount();
 }
 
 /** Eases the camera towards the chosen attach point; keeps the ship's attitude while it moves. */
@@ -577,15 +652,28 @@ function stepMount(this: CameraController, dt: number) {
     }
     if (v) this.setLookRaw(0, 0);
   }
-  const to = this.mountTarget();
+  // (the hull views softened by the rig — controller/camrig.ts —, the others as they are)
+  const to = this.camRigStep(this.mountTarget(), dt);
+  let pose: MountPose | null = this.softMount() ? to : null;
   if (this.mountAnim) {
+    // (the blend between two views — its curve and time the settings' —: the eye swung round the craft, the
+    // look slerped — never through the hull, never flipping between views that look opposite ways)
     const A = this.mountAnim;
-    A.t = Math.min(1, A.t + dt / 0.6);
-    const k = smoothstep(A.t);
-    const mix = (p: Vec3, q: Vec3) => lin(p, 1 - k, q, k);
-    this.mountEff = { eye: mix(A.from.eye, to.eye), aim: mix(A.from.aim, to.aim) };
-    if (A.t >= 1) (this.mountAnim = null), (this.mountEff = null);
-  } else this.mountEff = null;
+    const B = viewBlend(s);
+    A.t = Math.min(1, A.t + (B.style === "cut" ? 1 : dt / B.time));
+    const k = blendCurve(B.style, A.t);
+    const p = blendPose(
+      { eye: A.from.eye as V3, aim: A.from.aim as V3, up: upOf(A.from) as V3 },
+      { eye: to.eye as V3, aim: to.aim as V3, up: upOf(to) as V3 },
+      k,
+      VESSELS[fleet.active].centre as V3,
+    );
+    pose = A.t >= 1 ? (this.softMount() || to.up ? to : null) : { eye: p.eye, aim: p.aim, up: p.up };
+    if (A.t >= 1) this.mountAnim = null;
+  }
+  // (a teleport's view carried back to where it was, blended away)
+  if (this.viewCarry) pose = this.applyCarry(pose ?? to, dt);
+  this.mountEff = pose;
   if (s.ship && !this.cinematic) this.reorient(S0, this.shipMatrix());
   this.lastPose = this.shipPose();
 }
@@ -607,6 +695,12 @@ function reorient(this: CameraController, S0: M3, S1: M3) {
 
 function shipMatrix(this: CameraController): M3 {
   return shipToCamera(this.shipPose(), this.s.shipLookYaw, this.s.shipLookPitch).S;
+}
+
+/** The camera's axes in the ship's frame (rows) as the pose drawn last frame has them — the outside views'
+ *  placement depends on them —, else as now. */
+function drawnMatrix(this: CameraController): M3 {
+  return this.lastPose ? shipToCamera(this.lastPose, this.s.shipLookYaw, this.s.shipLookPitch).S : this.shipMatrix();
 }
 
 /**
@@ -638,8 +732,7 @@ function levelShip(this: CameraController, upZ: Vec3) {
 }
 
 /** The ship's axes (x left, y up, z nose) in the camera basis's local components. */
-function shipAxesLocal(this: CameraController, b: { right: Vec3; up: Vec3; fwd: Vec3 }): [Vec3, Vec3, Vec3] {
-  const S = this.shipMatrix();
+function shipAxesLocal(this: CameraController, b: { right: Vec3; up: Vec3; fwd: Vec3 }, S = this.shipMatrix()): [Vec3, Vec3, Vec3] {
   const ax = (i: number) => lin(lin(b.right, S[0]![i]!, b.up, S[1]![i]!), 1, b.fwd, S[2]![i]!);
   return [ax(0), ax(1), ax(2)];
 }
@@ -872,6 +965,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   const LA0 = this.airFlight.last;
   const AV = VESSELS[fleet.active].aero;
   const onWheels0 = !!this.rolling || !!this.local?.L.rolling;
+  // (the jet's systems — controller/jet.ts —: the autopilot's holds as the plane law's, the autothrottle)
+  const jetCmd = this.jetStep(inp, dtPilot);
   const airCtx =
     LA0 && LA0.out.q > 20
       ? {
@@ -886,6 +981,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
           gamma: this.pathAngle(cam),
           bank: (this.attitudeNow() as { bank?: number }).bank ?? 0,
           mach: LA0.out.mach,
+          gammaCmd: jetCmd.gamma,
+          bankCmd: jetCmd.bank,
         }
       : null;
   const sfCtx = mode === "sf" && this.pilot.auto === "none" && this.pilot.hold === "none" ? this.sfWant(cam, inp, dtPilot) : null;
@@ -918,7 +1015,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
       fwd: cam.fwd,
       beta: cam.beta,
       S: this.shipMatrix(),
-      thrust: this.thrustMax(),
+      // (the afterburner's: the dry thrust ×1.5)
+      thrust: this.thrustMax() * this.jetThrust(),
       tauRate,
       radialOut: this.radialOut(cam),
       refVel: this.speedMode === "target" ? (this.targetVelLocal(cam) ?? undefined) : this.ourNav(cam)?.refVelRep,
@@ -1058,7 +1156,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   if (this.pilot.auto === "burns" && this.fcBurns[0]?.firing)
     this.fcBurns[0].done = Math.max(this.fcBurns[0].done + along(entryAtt?.nose) * C_MPS, 0);
   // (the propellant: in the air the same thrust costs more of it — the Isp lowered by the pressure)
-  if (fuelOn(s)) this.spent += w / Math.max(this.pressureThrust(), 0.05);
+  // (the afterburner: three times the propellant for half again the thrust)
+  if (fuelOn(s)) this.spent += (w / Math.max(this.pressureThrust(), 0.05)) * (this.jetModes.ab ? JET.abFlow / JET.abThrust : 1);
   if (burn && this.nodeBurning) this.nodeDone = Math.max(this.nodeDone + along(burn.dir), 0);
   this.dockCheck();
   this.measureSpin();
@@ -1824,6 +1923,7 @@ export function installPiloting(C: { prototype: CameraController }) {
     newFlight,
     stepOffMount,
     standOn,
+    groundBelow,
     placeShipRep,
     moveOutside,
     setLookRaw,
@@ -1839,11 +1939,14 @@ export function installPiloting(C: { prototype: CameraController }) {
     refBeta,
     mountTarget,
     settleMount,
+    rigidMount,
+    holdMount,
     stepMount,
     reorient,
     shipMatrix,
     levelShip,
     shipAxesLocal,
+    drawnMatrix,
     rotateC,
     pilotInput,
     flyShip,

@@ -4,7 +4,8 @@ import type { Settings } from "./settings";
 import type { Simulation } from "./sim";
 import type { Take, TakeState } from "./take";
 import { fmtFactor, fmtWarp, realTimeSpeed, warpLadder } from "./clock";
-import { VideoWriter } from "./video";
+import { VIDEO_EXT, VideoWriter, type VideoFormat } from "./video";
+import { DRAFT_SPP, draftSize, SHOTS as SHOT_IDS, type Shot, videoFrames, videoName } from "./photo/videoplan";
 import { onEscape } from "./ui/keys";
 import { t, tf } from "./i18n";
 
@@ -72,15 +73,15 @@ const PRESETS: Record<string, { res: string; spp: string; integ: string; noise: 
   },
 };
 
-/** The video's shots: the scene going on from now (as live), a recorded take, or a cinematic. */
-const SHOTS = {
+/** The video's shots: the scene going on from now (as live), a recorded take, a camera move, the director's cameras. */
+const SHOTS: Record<Shot, string> = {
   live: t("Live: the scene goes on from now"),
   take: t("Recorded take"),
   orbit: t("Cinematic orbit around the target"),
-  journey: t("Journey through the wormhole"),
   dive: t("Dive to the horizon"),
+  journey: t("Journey through the wormhole"),
+  director: t("The director's cameras (a ship flown)"),
 };
-type Shot = keyof typeof SHOTS;
 const SHUTTERS: Record<string, number> = { Off: 0, "180° (half a frame)": 0.5, "360° (whole frame)": 1 };
 
 const BUDGETS: Record<string, number> = {
@@ -115,6 +116,130 @@ interface DialogDeps {
   fileStem: () => string;
   onActiveChange: (active: boolean) => void;
   camera: CameraController;
+  /** the director's cameras: whether they can film (a ship flown), and set — how to put the view back */
+  director?: { available(): boolean; set(): () => void };
+  /** a video done: shown, saved (else downloaded) */
+  onVideo?: (v: VideoDone) => void;
+  /** why the renderer cannot be taken now (a live capture grabbing the view), or null */
+  busy?: () => string | null;
+}
+
+/** A video asked (the dialog's, the photo bar's, TARS's): what is not given, the dialog's fields. */
+export interface VideoJob {
+  shot: Shot;
+  /** its length [s] (a take: its own) */
+  seconds?: number;
+  fps?: number;
+  /** the scene's time: as live, frozen (0), or a warp [M/s] */
+  rate?: "live" | number;
+  /** the shutter, a fraction of the frame's interval (motion blur) */
+  shutter?: number;
+  /** a draft: 640×360 at most, 4 samples, the fixed-step integrator — the shot and its timing tested in seconds */
+  draft?: boolean;
+  format?: VideoFormat;
+  /** the scene put back where it was after */
+  restore?: boolean;
+}
+
+/** A video done: its file and what it is. */
+export interface VideoDone {
+  /** what was asked (the final from a draft: the same, not a draft) */
+  job: VideoJob;
+  blob: Blob;
+  name: string;
+  shot: Shot;
+  draft: boolean;
+  format: VideoFormat;
+  width: number;
+  height: number;
+  fps: number;
+  frames: number;
+  seconds: number;
+}
+
+/** The video rendering now (null: none). */
+export interface VideoState {
+  shot: Shot;
+  draft: boolean;
+  format: VideoFormat | null;
+  width: number;
+  height: number;
+  /** the frame being rendered (from 0), of how many */
+  frame: number;
+  frames: number;
+  /** the time left [s] (NaN: not known yet) */
+  etaS: number;
+}
+
+const esc = (x: string) => x.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+
+/** The dialog's page, built in the interface's language (its ids are the dialog's handles, its classes style.css's). */
+function mountPanel(): HTMLElement {
+  const sec = document.createElement("section");
+  sec.id = "render";
+  sec.className = "glass";
+  sec.hidden = true;
+  sec.dataset.testid = "render";
+  const L = (label: string, control: string, title?: string) =>
+    `<label${title ? ` title="${esc(title)}"` : ""}>${esc(label)}${control}</label>`;
+  sec.innerHTML = `
+      <header>
+        <div>
+          <h2>${esc(t("Offline render"))}</h2>
+          <p>${esc(t("Scene frozen in time · any resolution · rendered progressively over many frames"))}</p>
+        </div>
+        <button id="render-close" class="icon" title="${esc(t("Hide (the render keeps running)"))}" aria-label="${esc(t("Hide (the render keeps running)"))}">✕</button>
+      </header>
+      <div class="form">
+        ${L(t("Preset"), '<select id="r-preset"></select>', t("Sets resolution, sampling and integrator for the purpose"))}
+        ${L(t("Resolution"), '<select id="r-res"></select>')}
+        <div class="pair">
+          ${L(t("Width"), '<input id="r-w" type="number" min="16" step="1" />')}
+          ${L(t("Height"), '<input id="r-h" type="number" min="16" step="1" />')}
+        </div>
+        ${L(t("Samples / pixel"), '<select id="r-spp"></select>')}
+        ${L(t("Geodesic integrator"), '<select id="r-int"></select>')}
+        ${L(t("Adaptive sampling (noise threshold)"), '<select id="r-noise"></select>', t("Stop sampling a pixel once the relative standard error of its mean falls below this value"))}
+        ${L(t("Motion-blur shutter [M]"), '<input id="r-shutter" type="number" min="0" step="0.5" value="0" />', t("Exposure time in units of M = GM/c³; samples are spread over it (motion blur of the flow)"))}
+        ${L(t("GPU budget"), '<select id="r-budget"></select>')}
+      </div>
+      <div class="progress"><div id="r-bar"></div></div>
+      <div id="r-status" role="status" aria-live="polite"></div>
+      <div class="actions">
+        <button id="r-start" class="primary">${esc(t("Start render"))}</button>
+        <button id="r-pause">${esc(t("Pause"))}</button>
+        <button id="r-stop">${esc(t("Close"))}</button>
+      </div>
+      <details id="r-video">
+        <summary>${esc(t("Video"))}</summary>
+        <div class="form">
+          ${L(t("Shot"), '<select id="v-source"></select>', t("What the video films: the scene as it goes on from now (the camera's mode, the ship and its autopilot, the mission — as live), a take recorded live (● on the time bar), a camera move, or the director's cameras"))}
+          <div class="pair">
+            ${L(t("Duration [s]"), '<input id="v-duration" type="number" min="1" max="600" step="1" value="24" />')}
+            ${L(t("Frame rate"), '<select id="v-fps"></select>')}
+          </div>
+          <div class="pair">
+            ${L(t("Time"), '<select id="v-rate"></select>', t("The scene's time during the video: the live warp, another one, or frozen (the camera moves in a still instant)"))}
+            ${L(t("Shutter"), '<select id="v-shutter"></select>', t("Motion blur of the flow: exposure as a fraction of the frame interval"))}
+          </div>
+          ${L(t("Format"), '<select id="v-format"></select>', t("MP4 (H.264) plays everywhere; WebM (VP9) is open — the other one when this browser cannot encode it"))}
+          <label class="check" title="${esc(t("After the video, the scene returns to where it was (else it goes on from the video's end)"))}"><input id="v-restore" type="checkbox" checked /> ${esc(t("Return to the start afterwards"))}</label>
+          <div id="v-note" class="note"></div>
+        </div>
+        <div class="actions">
+          <button id="v-draft" title="${esc(t("640×360, 4 samples: the shot and its timing in seconds, before the final render"))}">${esc(t("Draft"))}</button>
+          <button id="v-start" class="primary">${esc(t("Render video"))}</button>
+          <button id="v-stop">${esc(t("Stop"))}</button>
+        </div>
+      </details>
+      <div class="actions exports">
+        <span>${esc(t("Export"))}</span>
+        <button id="r-png" title="${esc(t("8-bit sRGB, tone-mapped"))}">PNG</button>
+        <button id="r-png16" title="${esc(t("16 bits per channel sRGB, tone-mapped, no dithering"))}">${esc(t("PNG 16-bit"))}</button>
+        <button id="r-exr" title="${esc(t("Linear scene radiance (half float), no bloom / tone mapping"))}">${esc(t("EXR (HDR)"))}</button>
+      </div>`;
+  document.body.append(sec);
+  return sec;
 }
 
 /**
@@ -123,7 +248,7 @@ interface DialogDeps {
  */
 export function setupRenderDialog(d: DialogDeps) {
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-  const panel = $<HTMLElement>("render");
+  const panel = document.getElementById("render") ?? mountPanel();
   const resSel = $<HTMLSelectElement>("r-res");
   const wIn = $<HTMLInputElement>("r-w");
   const hIn = $<HTMLInputElement>("r-h");
@@ -147,6 +272,8 @@ export function setupRenderDialog(d: DialogDeps) {
   const vRestore = $<HTMLInputElement>("v-restore");
   const vNote = $<HTMLElement>("v-note");
   const vShutter = $<HTMLSelectElement>("v-shutter");
+  const vFormat = $<HTMLSelectElement>("v-format");
+  const vDraft = $<HTMLButtonElement>("v-draft");
   const vStart = $<HTMLButtonElement>("v-start");
   const vStop = $<HTMLButtonElement>("v-stop");
 
@@ -161,6 +288,7 @@ export function setupRenderDialog(d: DialogDeps) {
   fill(presetSel, Object.keys(PRESETS), "Custom");
   fill(vFps, ["24", "30", "60"], "24");
   fill(vShutter, Object.keys(SHUTTERS), "180° (half a frame)");
+  vFormat.innerHTML = `<option value="mp4">${t("MP4 · H.264")}</option><option value="webm">${t("WebM · VP9")}</option>`;
 
   presetSel.onchange = () => {
     const p = PRESETS[presetSel.value];
@@ -204,6 +332,24 @@ export function setupRenderDialog(d: DialogDeps) {
   resSel.onchange = syncSize;
   wIn.onchange = hIn.onchange = syncSize;
 
+  // (a capture: the picture saved by itself once converged — the pause menu's, the bar's, TARS's; the box keeps
+  // the choice for a render started by hand)
+  const autoBox = document.createElement("input");
+  autoBox.type = "checkbox";
+  autoBox.id = "r-autosave";
+  {
+    const label = document.createElement("label");
+    label.className = "check";
+    label.title = t("Once the render has converged, the PNG is saved without a click");
+    label.append(autoBox, ` ${t("Save the PNG when done")}`);
+    status.after(label);
+  }
+  /** what the render saves by itself once converged; whether it has */
+  let autoSave: "png" | "png16" | "exr" | null = null;
+  let autoSaved = false;
+  /** a capture's own choice for the start it asks (undefined: the box's) */
+  let captureSave: "png" | "png16" | "exr" | null | undefined;
+
   let active = false;
   /** the offline render paused (its button: Resume) */
   let offPaused = false;
@@ -236,6 +382,9 @@ export function setupRenderDialog(d: DialogDeps) {
   };
 
   btnStart.onclick = () => {
+    if (video) return void (status.textContent = `⚠ ${t("A video is rendering: stop it first")}`);
+    const busy = d.busy?.();
+    if (busy) return void (status.textContent = `⚠ ${busy}`);
     syncSize();
     const integ = INTEGRATORS[intSel.value]!;
     const noise = noiseSel.value === "off" ? 0 : parseFloat(noiseSel.value) / 100;
@@ -252,6 +401,9 @@ export function setupRenderDialog(d: DialogDeps) {
       budgetMs: BUDGETS[budgetSel.value]!,
     };
     d.renderer.startOffline(d.settings, d.time(), opts);
+    autoSave = captureSave !== undefined ? captureSave : autoBox.checked ? "png" : null;
+    captureSave = undefined;
+    autoSaved = false;
     offPaused = false;
     btnPause.textContent = t("Pause");
     btnStart.textContent = t("Restart");
@@ -263,6 +415,7 @@ export function setupRenderDialog(d: DialogDeps) {
     btnPause.textContent = offPaused ? t("Resume") : t("Pause");
   };
   btnStop.onclick = () => {
+    autoSave = null;
     d.renderer.cancelOffline();
     btnStart.textContent = t("Start render");
     bar.style.width = "0%";
@@ -273,22 +426,32 @@ export function setupRenderDialog(d: DialogDeps) {
   // ------------------------------------------------------------------ video
   // Each frame is an offline render of the scene at that frame. The shot either goes on from now with
   // the simulation's own step (sim.ts: the camera's mode, the ship and its autopilots, the mission, the
-  // cinematics — as live, the user's keys left out), or replays a take recorded live (take.ts). Frames
-  // are encoded to H.264 in an MP4 as they come; the scene returns to where it was afterwards.
-  let video: { stop: boolean; label: string } | null = null;
+  // cinematics, the director's cameras — as live, the user's keys left out), or replays a take recorded live
+  // (take.ts). Frames are encoded (H.264 in an MP4, else VP9 in a WebM) as they come; the scene returns to where
+  // it was afterwards. A draft: the same shot small, at 4 samples, the fixed-step integrator — tested in seconds.
+  let video: (VideoState & { stop: boolean; label: string; started: number }) | null = null;
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   vStop.disabled = true;
   vStop.onclick = () => {
     if (video) video.stop = true;
   };
-  /** the shots: their names, what they need */
+  /** the shots: their names, whether they can film now */
+  const shots = () =>
+    SHOT_IDS.map((id) => ({
+      id,
+      label:
+        id === "take"
+          ? d.take.ready
+            ? tf("Recorded take ({0} s)", d.take.seconds.toFixed(1))
+            : t("Recorded take (none yet: ● on the time bar)")
+          : SHOTS[id],
+      available: id === "take" ? d.take.ready : id === "director" ? !!d.director?.available() : true,
+    }));
   const fillShots = () => {
-    const take = d.take.ready ? tf("Recorded take ({0} s)", d.take.seconds.toFixed(1)) : t("Recorded take (none yet: ● on the time bar)");
-    const keep = vSource.value;
-    vSource.innerHTML = (Object.keys(SHOTS) as Shot[])
-      .map((k) => `<option value="${k}"${k === "take" && !d.take.ready ? " disabled" : ""}>${k === "take" ? take : SHOTS[k]}</option>`)
-      .join("");
-    vSource.value = keep && !(keep === "take" && !d.take.ready) ? keep : d.take.ready ? "take" : "live";
+    const keep = vSource.value as Shot;
+    const list = shots();
+    vSource.innerHTML = list.map((x) => `<option value="${x.id}"${x.available ? "" : " disabled"}>${esc(x.label)}</option>`).join("");
+    vSource.value = list.find((x) => x.id === keep)?.available ? keep : d.take.ready ? "take" : "live";
     const s = d.settings;
     const rt = realTimeSpeed(s);
     const rates = warpLadder(s).filter((w) => w !== s.timeSpeed);
@@ -306,13 +469,17 @@ export function setupRenderDialog(d: DialogDeps) {
     vRate.disabled = take || !!video;
     if (take) vDuration.value = d.take.seconds.toFixed(1);
     vDuration.disabled = take || !!video;
+    vDraft.disabled = vStart.disabled = !!video;
+    vStop.disabled = !video;
     vNote.textContent = take
       ? t("The take replays what you did live — camera, ship, time — at the video's frame rate.")
       : vSource.value === "live"
         ? t("The scene goes on from now as it would live: the camera's mode, the ship and its autopilot, the mission, the time.")
-        : vRate.value === "0"
-          ? t("Time frozen: the camera moves through a still instant.")
-          : "";
+        : vSource.value === "director"
+          ? t("The director's cameras film the ship flown: chase, orbit, pass, tracking — the cuts its own.")
+          : vRate.value === "0"
+            ? t("Time frozen: the camera moves through a still instant.")
+            : "";
   };
   vSource.onchange = syncShot;
   vRate.onchange = syncShot;
@@ -331,43 +498,111 @@ export function setupRenderDialog(d: DialogDeps) {
     await writer.addFrame(px.data, px.width, px.height);
   };
 
-  vStart.onclick = async () => {
-    if (video) return;
+  /** The dialog's fields as a video asked. */
+  const formJob = (draft: boolean): VideoJob => ({
+    shot: vSource.value as Shot,
+    seconds: Number(vDuration.value) || 24,
+    fps: Number(vFps.value),
+    rate: vRate.value === "live" ? "live" : Number(vRate.value),
+    shutter: SHUTTERS[vShutter.value] ?? 0,
+    draft,
+    format: vFormat.value as VideoFormat,
+    restore: vRestore.checked,
+  });
+  vStart.onclick = () => {
+    const why = startVideo(formJob(false));
+    if (why) status.textContent = `⚠ ${why}`;
+  };
+  vDraft.onclick = () => {
+    const why = startVideo(formJob(true));
+    if (why) status.textContent = `⚠ ${why}`;
+  };
+
+  /** A video started (the dialog's, the photo bar's, TARS's): why not, or null — it renders on, its end told by
+   *  onVideo (else downloaded). */
+  function startVideo(job: VideoJob): string | null {
+    if (video) return t("A video is rendering: stop it first");
+    const busy = d.busy?.();
+    if (busy) return busy;
+    if (job.shot === "take" && !d.take.ready) return t("No take recorded yet: ● on the time bar");
+    if (job.shot === "director" && !d.director?.available()) return t("The director's cameras film a ship flown: fly one first (F1)");
+    // (a picture rendered or rendering: given way — the video takes the renderer)
+    if (active) {
+      autoSave = null;
+      d.renderer.cancelOffline();
+    }
+    void runVideo(job);
+    return null;
+  }
+
+  async function runVideo(job: VideoJob) {
     syncSize();
-    const w = size[0] & ~1;
-    const h = size[1] & ~1;
-    const fps = Number(vFps.value);
-    const shot = vSource.value as Shot;
-    if (shot === "take" && !d.take.ready) return;
-    const duration = shot === "take" ? d.take.seconds : Math.min(600, Math.max(1, Number(vDuration.value) || 24));
-    const cfg = await VideoWriter.supported(w, h, fps);
+    const shot = job.shot;
+    const draft = !!job.draft;
+    const fw = size[0] & ~1;
+    const fh = size[1] & ~1;
+    const [w, h] = draft ? draftSize(fw, fh) : [fw, fh];
+    const fps = job.fps ?? 24;
+    const seconds = shot === "take" ? d.take.seconds : Math.min(600, Math.max(1, job.seconds ?? 24));
+    let n = shot === "take" ? 0 : videoFrames(seconds, fps);
+    const run: NonNullable<typeof video> = {
+      shot,
+      draft,
+      format: null,
+      width: w,
+      height: h,
+      frame: 0,
+      frames: n,
+      etaS: Number.NaN,
+      stop: false,
+      label: "",
+      started: performance.now(),
+    };
+    video = run;
+    setActive(true);
+    syncShot();
+    const cfg = await VideoWriter.supported(w, h, fps, job.format ?? "mp4");
     if (!cfg) {
-      status.textContent = `⚠ ${tf("this browser cannot encode H.264 at {0}", `${w}×${h}`)}`;
+      video = null;
+      setActive(false);
+      syncShot();
+      status.textContent = `⚠ ${tf("this browser cannot encode a video at {0}", `${w}×${h}`)}`;
       return;
     }
     const writer = new VideoWriter(cfg, fps);
-    const run = (video = { stop: false, label: "" });
-    vStart.disabled = true;
-    vStop.disabled = false;
-    setActive(true);
-    syncShot();
+    run.format = writer.format;
     const s = d.settings;
     const cam = d.camera;
     const sim = d.sim;
-    const before = vRestore.checked ? d.snapshot() : null;
-    const shutter = SHUTTERS[vShutter.value] ?? 0;
-    const base = { ...options(), width: w, height: h };
-    const started = performance.now();
-    let n = Math.round(duration * fps);
+    const before = job.restore !== false ? d.snapshot() : null;
+    const undoDirector = shot === "director" ? d.director?.set() : undefined;
+    const shutter = job.shutter ?? 0.5;
+    const base: OfflineOptions = draft
+      ? {
+          width: w,
+          height: h,
+          spp: DRAFT_SPP,
+          tolerance: 0,
+          eps: 0.02,
+          maxSteps: 6000,
+          noiseThreshold: 0,
+          minSpp: DRAFT_SPP,
+          shutter: 0,
+          budgetMs: BUDGETS["Turbo (250 ms/frame)"]!,
+        }
+      : { ...options(), width: w, height: h };
     let error = "";
     const label = (i: number) => {
-      const per = i > 0 ? (performance.now() - started) / 1000 / i : NaN;
-      run.label = `🎞 ${tf("frame {0} / {1} · ETA {2}", i + 1, n, fmtDuration(per * (n - i)))} · `;
+      const per = i > 0 ? (performance.now() - run.started) / 1000 / i : Number.NaN;
+      run.frame = i;
+      run.frames = n;
+      run.etaS = per * (n - i);
+      run.label = `🎞 ${draft ? `${t("draft")} · ` : ""}${tf("frame {0} / {1} · ETA {2}", i + 1, n, fmtDuration(run.etaS))} · `;
     };
     try {
       if (shot === "take") {
         // the take: each video frame, the recorded frame nearest its time
-        let prevTime = NaN;
+        let prevTime = Number.NaN;
         for (const f of d.take.play(fps)) {
           if (run.stop) break;
           n = f.n;
@@ -376,18 +611,18 @@ export function setupRenderDialog(d: DialogDeps) {
           d.applyState(f.state);
           const dtM = Number.isFinite(prevTime) ? Math.abs(f.state.time - prevTime) : 0;
           prevTime = f.state.time;
-          await encodeFrame(run, writer, { ...base, shutter: shutter * dtM }, f.state.time);
+          await encodeFrame(run, writer, { ...base, shutter: draft ? 0 : shutter * dtM }, f.state.time);
         }
       } else {
         // the scene goes on: the simulation's step (1/60 s at most), the user's inputs left out
-        const rate = vRate.value === "live" ? s.timeSpeed : Number(vRate.value);
+        const rate = job.rate === undefined || job.rate === "live" ? s.timeSpeed : job.rate;
         const frozen = rate === 0;
         s.animate = !frozen;
         if (!frozen) s.timeSpeed = rate;
         cam.bulletTime = frozen;
         cam.scripted = true;
-        if (shot !== "live") {
-          if (shot === "journey") s.journeyDuration = duration; // (the journey fills the video)
+        if (shot === "orbit" || shot === "dive" || shot === "journey") {
+          if (shot === "journey") s.journeyDuration = seconds; // (the journey fills the video)
           cam.enabled = true;
           cam.setCinematic(shot);
           cam.enabled = false;
@@ -395,21 +630,35 @@ export function setupRenderDialog(d: DialogDeps) {
         let clock = 0;
         for (let i = 0; i < n && !run.stop; i++) {
           label(i);
-          const tf = i / fps;
+          const frameT = i / fps;
           cam.enabled = true;
-          while (clock < tf - 1e-9) {
-            const dt = Math.min(1 / 60, tf - clock);
+          while (clock < frameT - 1e-9) {
+            const dt = Math.min(1 / 60, frameT - clock);
             sim.step(dt);
             clock += dt;
           }
           sim.applyRender(cam.piloting && !cam.cinematic ? cam.flightInfo() : null);
           cam.enabled = false;
-          await encodeFrame(run, writer, { ...base, shutter: shutter * (frozen ? 0 : rate / fps) }, sim.time);
+          await encodeFrame(run, writer, { ...base, shutter: draft ? 0 : shutter * (frozen ? 0 : rate / fps) }, sim.time);
         }
       }
       if (!run.stop) {
         const blob = await writer.finish();
-        d.download(blob, `${d.fileStem()}-${shot}-${duration.toFixed(0)}s-${fps}fps.mp4`);
+        const done: VideoDone = {
+          job: { ...job, seconds, fps },
+          blob,
+          name: videoName(d.fileStem(), shot, seconds, fps, draft, VIDEO_EXT[writer.format]),
+          shot,
+          draft,
+          format: writer.format,
+          width: w,
+          height: h,
+          fps,
+          frames: n,
+          seconds,
+        };
+        if (d.onVideo) d.onVideo(done);
+        else d.download(blob, done.name);
       }
     } catch (e) {
       error = (e as Error).message;
@@ -419,15 +668,14 @@ export function setupRenderDialog(d: DialogDeps) {
     cam.scripted = false;
     cam.bulletTime = false;
     video = null;
-    vStart.disabled = false;
-    vStop.disabled = true;
     d.renderer.cancelOffline();
     btnStart.textContent = t("Start render");
     bar.style.width = "0%";
-    if (shot !== "live" && shot !== "take") {
+    if (shot === "orbit" || shot === "dive" || shot === "journey") {
       cam.enabled = true;
       cam.setCinematic(null);
     }
+    undoDirector?.();
     if (before) d.restore(before);
     setActive(false);
     syncShot();
@@ -435,8 +683,8 @@ export function setupRenderDialog(d: DialogDeps) {
       ? `⚠ ${tf("video failed: {0}", error)}`
       : run.stop
         ? t("video stopped")
-        : `✔ ${tf("video saved · {0} frames in {1}", n, fmtDuration((performance.now() - started) / 1000))}`;
-  };
+        : `✔ ${tf("video saved · {0} frames in {1}", n, fmtDuration((performance.now() - run.started) / 1000))}`;
+  }
 
   const stem = () => `${d.fileStem()}-${sppSel.value}spp`;
   const save = async (encode: () => Promise<Blob>, name: string) => {
@@ -446,9 +694,45 @@ export function setupRenderDialog(d: DialogDeps) {
       status.textContent = `⚠ ${error instanceof Error ? error.message : String(error)}`;
     }
   };
-  exports[0]!.onclick = () => save(() => d.renderer.exportPNG(d.settings), `${stem()}.png`);
-  exports[1]!.onclick = () => save(() => d.renderer.exportPNG16(d.settings), `${stem()}-16bit.png`);
-  exports[2]!.onclick = () => save(() => d.renderer.exportEXR(d.settings), `${stem()}-linear.exr`);
+  const saveAs = (kind: "png" | "png16" | "exr") =>
+    kind === "png"
+      ? save(() => d.renderer.exportPNG(d.settings), `${stem()}.png`)
+      : kind === "png16"
+        ? save(() => d.renderer.exportPNG16(d.settings), `${stem()}-16bit.png`)
+        : save(() => d.renderer.exportEXR(d.settings), `${stem()}-linear.exr`);
+  exports[0]!.onclick = () => saveAs("png");
+  exports[1]!.onclick = () => saveAs("png16");
+  exports[2]!.onclick = () => saveAs("exr");
+
+  /**
+   * A capture (the pause menu's, the top bar's, TARS's): the view now, rendered offline at once with the dialog's
+   * settings — or a preset, a size, the samples given —, saved by itself once converged. Why not, or null.
+   */
+  function capture(o: { preset?: string; width?: number; height?: number; spp?: number; save?: "png" | "png16" | "exr" | null } = {}) {
+    if (video) return t("A video is rendering: stop it first");
+    const busy = d.busy?.();
+    if (busy) return busy;
+    toggle(true);
+    if (o.preset && o.preset in PRESETS) {
+      presetSel.value = o.preset;
+      presetSel.onchange?.(new Event("change"));
+    }
+    if (o.width && o.height) {
+      resSel.value = "Custom";
+      wIn.value = String(Math.round(o.width));
+      hIn.value = String(Math.round(o.height));
+    }
+    if (o.spp) {
+      // (the nearest offered at or above it)
+      const offered = [...sppSel.options].map((x) => Number(x.value));
+      sppSel.value = String(offered.find((v) => v >= o.spp!) ?? offered[offered.length - 1]);
+    }
+    syncSize();
+    if (btnStart.disabled) return status.textContent;
+    captureSave = o.save === undefined ? "png" : o.save;
+    btnStart.click();
+    return null;
+  }
   $<HTMLButtonElement>("render-close").onclick = () => toggle(false);
 
   let unEscape: (() => void) | undefined;
@@ -470,6 +754,31 @@ export function setupRenderDialog(d: DialogDeps) {
 
   return {
     toggle,
+    capture,
+    /** a kind of picture saved now; the render stopped */
+    save: (kind: "png" | "png16" | "exr") => void saveAs(kind),
+    stop: () => btnStop.click(),
+    /** the render running, its size, whether it saves itself */
+    state: () => ({ active, video: !!video, autoSave, width: size[0], height: size[1], spp: Number(sppSel.value) }),
+    /** a video: started (why not, or null), its state, stopped; the shots and whether they can film now */
+    startVideo,
+    videoState: (): VideoState | null =>
+      video
+        ? {
+            shot: video.shot,
+            draft: video.draft,
+            format: video.format,
+            width: video.width,
+            height: video.height,
+            frame: video.frame,
+            frames: video.frames,
+            etaS: video.etaS,
+          }
+        : null,
+    stopVideo: () => {
+      if (video) video.stop = true;
+    },
+    shots,
     /** a take was recorded: offered as the video's shot */
     takeChanged: () => {
       if (video) return;
@@ -482,6 +791,11 @@ export function setupRenderDialog(d: DialogDeps) {
     size: () => ({ width: size[0], height: size[1] }),
     update(st: OfflineStatus) {
       for (const b of exports) b.disabled = !!st.error;
+      // (a capture converged: saved once)
+      if (st.done && autoSave && !autoSaved && !video) {
+        autoSaved = true;
+        void saveAs(autoSave);
+      }
       btnPause.disabled = !!st.error;
       if (st.error) {
         status.textContent = `⚠ ${st.error}`;

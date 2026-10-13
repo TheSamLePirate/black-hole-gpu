@@ -3,9 +3,11 @@
 // 256² PNGs, height = R·256 + G + B/256 − 32 768 m) — in nested levels, z 6 to 13 (2.4 km down to 19 m a
 // texel at the equator), each a window of 4 × 4 tiles kept round the camera.
 //
-// The levels up to z 8 (611 m) bring their imagery too, from NASA's GIBS (Global Imagery Browse
-// Services; public domain, CORS open): the Blue Marble Next Generation by day, VIIRS's city lights by
-// night — the same Web Mercator tiles —, four to eight times finer than the global maps.
+// Every level brings its imagery too: up to z 8 (611 m) from NASA's GIBS (Global Imagery Browse Services;
+// public domain, CORS open) — the Blue Marble Next Generation by day, VIIRS's city lights by night —, finer
+// (z 9 … 13, down to 19 m) from EOX's Sentinel-2 cloudless 2021 (10 m, CC BY-NC-SA 4.0, CORS open), its
+// colours brought into the Blue Marble's (eoxColour: a power law per channel fitted on nine places), its
+// nights the z 8 lights' parent tile, enlarged — the same Web Mercator tiles throughout.
 //
 // A level's window lives in one layer of a 1024² rg32uint array — its heights' float bits, its imagery
 // (rgba8: the day's colour in sRGB, the night's lights; 0: none) —, its tiles at their coordinates modulo
@@ -29,8 +31,10 @@ export const LEVELS = Z1 - Z0 + 1;
 export const TILE_PARAM_VEC4S = 1 + 2 * LEVELS;
 /** The data's own resolution [m] (SRTM's 1″): no finer, whatever the level's texel. */
 export const TILE_RES_MIN = 25;
-/** the finest level with imagery (GIBS: the Blue Marble's 500 m) */
-export const IMG_Z1 = 8;
+/** the finest level with imagery (EOX's Sentinel-2 cloudless, 10 m: every level) */
+export const IMG_Z1 = Z1;
+/** the finest level from GIBS (the Blue Marble's 500 m, VIIRS's lights): EOX's beyond */
+export const GIBS_Z1 = 8;
 
 const R = WGS84_A;
 const TAU = 2 * Math.PI;
@@ -43,6 +47,35 @@ export const dayUrl = (z: number, x: number, y: number) =>
   `${GIBS}/BlueMarble_NextGeneration/default/default/GoogleMapsCompatible_Level8/${z}/${y}/${x}.jpeg`;
 export const nightUrl = (z: number, x: number, y: number) =>
   `${GIBS}/VIIRS_Night_Lights/default/2016-01-01/GoogleMapsCompatible_Level8/${z}/${y}/${x}.png`;
+// (licence: s2cloudless 2021 is CC BY-NC-SA 4.0 — non-commercial use only, derivatives under the same licence;
+// credited in the panel, the Atlas and the setting's help. The plan allows NC sources; a commercial release needs
+// another layer — EOX's 2016 mosaic is CC BY 4.0, not checked here, and EOX_FIT would have to be fitted again:
+// docs/systemes/03-univers-ephemerides.md)
+export const eoxUrl = (z: number, x: number, y: number) =>
+  `https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2021_3857/default/GoogleMapsCompatible/${z}/${y}/${x}.jpg`;
+
+/**
+ * EOX's colours (a mosaic graded for the eye: hazier, bluer) into the Blue Marble's, whose colours the
+ * tracer's ground and the coarser levels have — per channel in linear light, b = g · e^k, fitted on nine
+ * places' z 8 tiles (forests, farmland, desert, tundra, cities: R² 0.96, 0.94, 0.86), where it was measured:
+ * the darker ground. Bright ground (snow, sand, rock, towns) is left as it is — the fit's extrapolation would
+ * tint it cyan —, the two blended by the pixel's luminance (no hue moved by a channel's own weight).
+ * sRGB 8-bit in, out.
+ */
+export const EOX_FIT = { gain: [0.894, 1.548, 3.877], power: [0.959, 1.205, 1.487] } as const;
+const srgbToLinear = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+const linearToSrgb = (v: number) => (v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055);
+const LIN = Float32Array.from({ length: 256 }, (_, i) => srgbToLinear(i / 255));
+const FIT = [0, 1, 2].map((c) => Float32Array.from(LIN, (v) => Math.min(1, EOX_FIT.gain[c]! * v ** EOX_FIT.power[c]!)));
+const TO_SRGB = Uint8Array.from({ length: 4096 }, (_, i) => Math.round(255 * linearToSrgb(i / 4095)));
+export function eoxColour(r: number, g: number, b: number): [number, number, number] {
+  const e = [LIN[r]!, LIN[g]!, LIN[b]!];
+  const lum = 0.2126 * e[0]! + 0.7152 * e[1]! + 0.0722 * e[2]!;
+  const x = Math.min(1, Math.max(0, (lum - 0.06) / 0.29)),
+    t = x * x * (3 - 2 * x);
+  const out = (c: number, v: number) => TO_SRGB[Math.round(4095 * Math.min(1, FIT[c]![v]! * (1 - t) + e[c]! * t))]!;
+  return [out(0, r), out(1, g), out(2, b)];
+}
 
 /** Mercator's y [tiles, 0 at the north edge] of a latitude's sine, at a level of n tiles. */
 const mercY = (sinLat: number, n: number) => (0.5 - Math.atanh(Math.min(Math.max(sinLat, -0.999999), 0.999999)) / TAU) * n;
@@ -75,9 +108,17 @@ interface Level {
 
 const slotOf = (x: number, y: number) => (((y % SPAN) + SPAN) % SPAN) * SPAN + (((x % SPAN) + SPAN) % SPAN);
 
-/** A tile's pixels (rgba, row by row), as they are in its file. */
-async function pixels(blob: Blob): Promise<Uint8ClampedArray> {
-  const img = await createImageBitmap(blob, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
+/** A tile's pixels (rgba, row by row), as they are in its file — or a square of it (x, y, side [px]) enlarged. */
+async function pixels(blob: Blob, crop?: [number, number, number]): Promise<Uint8ClampedArray> {
+  const o = { colorSpaceConversion: "none", premultiplyAlpha: "none" } as const;
+  const img = crop
+    ? await createImageBitmap(blob, crop[0], crop[1], crop[2], crop[2], {
+        ...o,
+        resizeWidth: TILE,
+        resizeHeight: TILE,
+        resizeQuality: "medium",
+      })
+    : await createImageBitmap(blob, o);
   const cv = new OffscreenCanvas(TILE, TILE);
   const ctx = cv.getContext("2d", { willReadFrequently: true })!;
   ctx.drawImage(img, 0, 0);
@@ -115,6 +156,9 @@ export class EarthTiles {
   /** heights of the global map (for a tile that will not load: terrain.ts, tileFallbackSampler) */
   fallback: ((q: Vec3) => number) | null = null;
   onChange: (() => void) | null = null;
+  /** bumped when a tile already drawn gets its imagery (its heights unchanged: not the stamp — the ground built
+   *  from them stays; the renderer redraws a still view for it, at most once in a while) */
+  imagery = 0;
   /** tiles loaded, failed (for the readouts) */
   loaded = 0;
   failed = 0;
@@ -181,7 +225,9 @@ export class EarthTiles {
    * Follows the camera: c, on the Earth's axes [its equatorial radii] (float64); pixAngle, a pixel's angle [rad] —
    * the levels wanted, those finer than the ground's footprint under the camera left as they are.
    */
-  update(c: Vec3 | null, pixAngle: number) {
+  private priorityLon = 0;
+  private prioritySinLat = 0;
+  update(c: Vec3 | null, pixAngle: number, lead: Vec3 = [0, 0, 0]) {
     if (!c) return this.clear();
     // (the camera's geodetic place: the tracer reads the tiles at the geodetic latitude)
     const g = cartToGeodetic(1, WGS84_F, c);
@@ -212,7 +258,10 @@ export class EarthTiles {
         this.complete(L);
       }
     }
-    this.request(cx0(this.lon), this.sinLat);
+    const ahead = cartToGeodetic(1, WGS84_F, c.map((v, i) => v + lead[i]!) as Vec3);
+    this.priorityLon = ahead.lon;
+    this.prioritySinLat = Math.sin(ahead.lat);
+    this.request(cx0(this.priorityLon), this.prioritySinLat);
   }
 
   /** Starts the loads: the coarse levels first, each from the camera outwards. */
@@ -247,15 +296,28 @@ export class EarthTiles {
     this.inflight.set(key, ctl);
     const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
     let h: Float32Array | null = null;
-    // (its imagery alongside, on the levels that have some: none if it will not come — the global maps there)
+    // (its imagery alongside, on the levels that have some: none if it will not come — the coarser level's
+    // there. Never waited for: the heights drawn as they come, the tile written again with its imagery — under
+    // its own time limit, given up with the tile)
     const xw = ((x % L.n) + L.n) % L.n;
-    const img = L.z <= IMG_Z1 ? imagery(L.z, xw, y, ctl.signal) : Promise.resolve(null);
-    let col: Uint32Array | null = null;
+    const imgCtl = new AbortController();
+    const imgTimer = setTimeout(() => imgCtl.abort(), TIMEOUT_MS);
+    const relay = () => imgCtl.abort();
+    ctl.signal.addEventListener("abort", relay, { once: true });
+    // (the relay removed once the imagery is in or given up: none left on the tile's signal)
+    const img = (L.z <= IMG_Z1 ? imagery(L.z, xw, y, imgCtl.signal) : Promise.resolve(null)).finally(() => {
+      clearTimeout(imgTimer);
+      ctl.signal.removeEventListener("abort", relay);
+    });
     try {
       const res = await fetch(tileUrl(L.z, xw, y), { signal: ctl.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      [h, col] = await Promise.all([res.blob().then(decode), img]);
+      const heights = await res.blob().then(decode);
+      h = heights;
       this.loaded++;
+      void img.then((col) => {
+        if (col && L.key[slotOf(x, y)] === key) this.put(L.z, x, y, heights, col);
+      });
     } catch (e) {
       if (!this.inflight.has(key)) return; // (cleared)
       const f = this.failures.get(key) ?? { n: 0, at: 0 };
@@ -263,7 +325,7 @@ export class EarthTiles {
       f.at = performance.now() + 3000 * f.n;
       this.failures.set(key, f);
       // (asked again once it may be: the image converged, no frame asks — the tile would wait for a move)
-      if (f.n < 2) setTimeout(() => this.request(cx0(this.lon), this.sinLat), 3000 * f.n + 10);
+      if (f.n < 2) setTimeout(() => this.request(cx0(this.priorityLon), this.prioritySinLat), 3000 * f.n + 10);
       // (twice failed: the global map's heights there, the level not held back)
       if (f.n >= 2) {
         h = this.fromFallback(L, x, y);
@@ -274,8 +336,8 @@ export class EarthTiles {
       clearTimeout(timer);
       if (this.inflight.get(key) === ctl) this.inflight.delete(key);
     }
-    if (h) this.put(L.z, x, y, h, col);
-    this.request(cx0(this.lon), this.sinLat);
+    if (h) this.put(L.z, x, y, h);
+    this.request(cx0(this.priorityLon), this.prioritySinLat);
   }
 
   /** A tile's heights in (z, x — unwrapped as its level's window has it —, y; 256² row by row [m]), with
@@ -284,6 +346,7 @@ export class EarthTiles {
     const L = this.levels[z - Z0];
     if (!L || !inside(L.want, x, y)) return;
     const s = slotOf(x, y);
+    if (col && inside(L.valid, x, y) && L.key[s] === this.keyOf(L, x, y)) this.imagery++;
     L.key[s] = this.keyOf(L, x, y);
     L.data[s] = h;
     const hb = new Uint32Array(h.buffer, h.byteOffset, h.length);
@@ -415,24 +478,72 @@ export class EarthTiles {
  * sharper, darker levels v as 0.07 + 0.93 · min(1.06 √v, 1) — its 99.5th percentile over the cities of
  * Japan, Europe and the United States at 1, as the map's.
  */
+// (the z 8 lights' tiles the finer levels share — a z 13 window's sixteen tiles under one or four of them:
+// fetched once, kept for the last few, never cancelled by one tile's abort)
+const parents = new Map<string, Promise<Blob>>();
+function parentBlob(url: string): Promise<Blob> {
+  let p = parents.get(url);
+  if (!p) {
+    p = fetch(url).then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.blob();
+    });
+    p.catch(() => parents.delete(url));
+    parents.set(url, p);
+    if (parents.size > 24) parents.delete(parents.keys().next().value!);
+  }
+  return p;
+}
 async function imagery(z: number, x: number, y: number, signal: AbortSignal): Promise<Uint32Array | null> {
   try {
-    const get = async (url: string) => {
+    const get = async (url: string, crop?: [number, number, number]) => {
+      // (the shared parent raced against this tile's own abort: a stalled request never holds the tile — nor its
+      // slot, nor the heights waiting on it)
+      if (crop) {
+        if (signal.aborted) throw new Error("aborted");
+        let stop = () => {};
+        const aborted = new Promise<never>((_, no) => {
+          stop = () => no(new Error("aborted"));
+          signal.addEventListener("abort", stop, { once: true });
+        });
+        // (its listener removed when the race is over, the parent's blob in or the tile given up)
+        try {
+          return pixels(await Promise.race([parentBlob(url), aborted]), crop);
+        } finally {
+          signal.removeEventListener("abort", stop);
+        }
+      }
       const res = await fetch(url, { signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return pixels(await res.blob());
     };
-    const [d, n] = await Promise.all([get(dayUrl(z, x, y)), get(nightUrl(z, x, y))]);
+    // (finer than GIBS: EOX's day; the lights' z 8 parent, the tile's square of it enlarged)
+    const fine = z > GIBS_Z1;
+    const night = nightOf(z, x, y);
+    const [d, n] = await Promise.all([
+      get(fine ? eoxUrl(z, x, y) : dayUrl(z, x, y)),
+      get(nightUrl(night.z, night.x, night.y), night.crop ?? undefined),
+    ]);
     const out = new Uint32Array(TILE * TILE);
     for (let i = 0; i < out.length; i++) {
       const v = (n[4 * i]! * n[4 * i + 3]!) / (255 * 255);
       const lights = v > 0 ? Math.round(255 * (0.07 + 0.93 * Math.min(1.06 * Math.sqrt(v), 1))) : 0;
-      out[i] = (Math.max(d[4 * i]!, 1) | (d[4 * i + 1]! << 8) | (d[4 * i + 2]! << 16) | (lights << 24)) >>> 0;
+      const [r, g, b] = fine ? eoxColour(d[4 * i]!, d[4 * i + 1]!, d[4 * i + 2]!) : [d[4 * i]!, d[4 * i + 1]!, d[4 * i + 2]!];
+      out[i] = (Math.max(r, 1) | (g << 8) | (b << 16) | (lights << 24)) >>> 0;
     }
     return out;
   } catch {
     return null;
   }
+}
+
+/** The night's lights for a tile: its own (to z 8), else its z 8 parent and the square of it the tile covers
+ *  (x, y, side [px]: enlarged to the tile). */
+export function nightOf(z: number, x: number, y: number): { z: number; x: number; y: number; crop: [number, number, number] | null } {
+  if (z <= GIBS_Z1) return { z, x, y, crop: null };
+  const k = z - GIBS_Z1,
+    side = TILE >> k;
+  return { z: GIBS_Z1, x: x >> k, y: y >> k, crop: [(x - ((x >> k) << k)) * side, (y - ((y >> k) << k)) * side, side] };
 }
 
 /** the reference's longitude in turns from −½ (Mercator's x over the level's width) */

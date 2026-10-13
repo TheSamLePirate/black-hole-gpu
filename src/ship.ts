@@ -38,6 +38,8 @@ export interface ShipInstance {
 }
 
 export interface ShipView {
+  /** Camera translation near a walking observer needs a fresh map each frame. */
+  forceShadow?: boolean;
   /** the craft flown (its mesh, its thrusters) */
   vessel?: VesselId;
   /** the other craft in view */
@@ -97,6 +99,8 @@ export interface Thrust {
   torque: V3;
   air: number;
   time: number;
+  /** the afterburner's thrust factor (1 or none: dry) — the main flame longer and brighter */
+  boost?: number;
 }
 
 /**
@@ -243,7 +247,7 @@ export class ShipRenderer {
   private vessel: VesselId = "ranger";
   /** a craft flown this frame (else only the others are drawn) */
   private flown = true;
-  /** the moments buffer bound into the per-target groups */
+  /** the occlusion depth bound into the per-target groups (a stand-in when none) */
   private momentsBuf: GPUBuffer | null = null;
   private shadowTex: GPUTexture;
   private pipes!: {
@@ -275,6 +279,11 @@ export class ShipRenderer {
 
   /** the ship's bounding sphere in the camera frame and the projection's half-extents (the scissor) */
   private onScreen: { c: V3; r: number; tx: number; ty: number; corners: V3[] } | null = null;
+  /** the probe's GGX pre-filtered radiance (mip = roughness · (specMips − 1)): the walking astronaut's reflections */
+  get envSpecView() {
+    return this.envSpec.createView();
+  }
+  readonly specMips = SPEC_MIPS;
   /** the shadow map's view (the tracer shadows the ground with it) */
   get shadowView() {
     return this.shadowTex.createView();
@@ -639,6 +648,20 @@ export class ShipRenderer {
     this.meshes[id] = { vbuf, ibuf, count: ni, bound: { c, r, lo, hi } };
   }
 
+  /** The vessel's box in its own frame (x left, y up, z nose) [m]: its mesh's, the Ranger's gear out with it — the
+   *  walking astronaut keeps out of it; null: its mesh not loaded. */
+  hullBound(id: VesselId): { lo: V3; hi: V3 } | null {
+    const m = this.meshes[id];
+    if (!m) return null;
+    const lo: V3 = [...m.bound.lo],
+      hi: V3 = [...m.bound.hi];
+    if (id === "ranger") {
+      const g = this.gearMesh().bound;
+      for (let k = 0; k < 3; k++) (lo[k] = Math.min(lo[k]!, g.lo[k]!)), (hi[k] = Math.max(hi[k]!, g.hi[k]!));
+    }
+    return { lo, hi };
+  }
+
   /** The Ranger's landing gear's mesh (gear-mesh.ts), made once. */
   private gearMesh(): Mesh {
     if (this.gearMeshBuf) return this.gearMeshBuf;
@@ -997,7 +1020,7 @@ export class ShipRenderer {
     const inCabin = !!(v.inside && this.flown && this.vessel === "ranger" && this.cockpit);
     this.inCabin = inCabin;
     const list: { id: VesselId; R: M3; t: V3; shadow: boolean; far: boolean }[] = this.flown
-      ? [{ id: this.vessel, R, t, shadow: true, far: false }]
+      ? [{ id: this.vessel, R, t, shadow: true, far: !!v.place }]
       : [];
     for (const o of v.others ?? [])
       if (list.length < MAX_INST && this.meshes[o.id]) list.push({ id: o.id, R: o.S, t: o.t, shadow: o.shadow, far: true });
@@ -1242,7 +1265,7 @@ export class ShipRenderer {
     hdr: GPUTexture,
     v: ShipView,
     occluder?: { depth: GPUTexture; rect: [number, number, number, number] },
-    moments?: GPUBuffer,
+    sceneDepth?: GPUBuffer,
   ) {
     if (!this.ready) return;
     // (none flown: only the others — the Ranger's mesh, always there, for the plumes' unused range)
@@ -1255,7 +1278,7 @@ export class ShipRenderer {
     const res = this.target(hdr);
     this.writeUniform(v, mesh);
     // (the image's size and the metres per M: the other craft's depths against the traced image's)
-    this.device.queue.writeBuffer(this.uniform, 240, new Float32Array([hdr.width, hdr.height, v.mPerM ?? 1, moments ? 1 : 0]));
+    this.device.queue.writeBuffer(this.uniform, 240, new Float32Array([hdr.width, hdr.height, v.mPerM ?? 1, sceneDepth ? 1 : 0]));
     // the box: the sphere's screen box within the image, its size rounded up (few re-allocations)
     const W = hdr.width,
       H = hdr.height;
@@ -1302,7 +1325,7 @@ export class ShipRenderer {
     }
     res.rect = [x0, y0, bw, bh];
     // (the self-shadowing, every other frame: the light turns slowly against the ship)
-    if (this.shadowTick++ % 2 === 0) {
+    if (v.forceShadow || this.shadowTick++ % 2 === 0) {
       const sp = enc.beginRenderPass(
         this.pass("ship: shadow map", {
           colorAttachments: [],
@@ -1353,7 +1376,7 @@ export class ShipRenderer {
     rp.setPipeline(this.pipes.ship);
     // (the traced image the craft are drawn over: its sharp reflections — ship.wgsl screenRefl —, its
     // depths: what hides the other craft)
-    const mb = moments ?? (this.momentsBuf ??= this.device.createBuffer({ size: 16, usage: GPUBufferUsage.STORAGE }));
+    const mb = sceneDepth ?? (this.momentsBuf ??= this.device.createBuffer({ size: 16, usage: GPUBufferUsage.STORAGE }));
     if (!res.bind || res.bindGen !== this.bindGen || res.bindMoments !== mb) {
       res.bind = this.device.createBindGroup({
         layout: this.pipes!.ship.getBindGroupLayout(0),

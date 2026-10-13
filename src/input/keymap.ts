@@ -10,11 +10,14 @@
 // Flight keys go by physical position (KeyboardEvent.code: Z Q S D on AZERTY, W A S D on QWERTY); the
 // scene's letters by the character typed (KeyboardEvent.key), as their names say.
 
-export type KeyLayer = "system" | "flight" | "time" | "scene";
+export type KeyLayer = "system" | "flight" | "time" | "scene" | "character";
 
 export type KeyAction =
   // system
   | "tools"
+  | "gameMode"
+  | "atlas"
+  | "skyEvents"
   | "pause"
   | "quickSave"
   | "quickLoad"
@@ -37,14 +40,18 @@ export type KeyAction =
   | "antigrav"
   | "flaps"
   | "airBrake"
+  | "jetSystem"
+  | "cineShot"
   | "gear"
   | "tars"
   | "pathInView"
   | "hudDensity"
+  | "hudKind"
   | "missions"
   | "stopFlight"
   | "ack"
   | "leaveShip"
+  | "characterJump"
   // time
   | "playPause"
   | "warp"
@@ -159,7 +166,8 @@ export const KEYMAP: KeySection[] = [
     ],
   },
   {
-    title: "Camera — every mode",
+    // (not on foot: the walker's camera is its own — over the shoulder, never locked on a target nor a telescope)
+    title: "Camera — every mode but on foot",
     rows: [
       {
         keys: "V · ⇧V",
@@ -197,7 +205,7 @@ export const KEYMAP: KeySection[] = [
       },
       {
         keys: "⇧T",
-        text: "Tripod on the ground: the target's world (else the nearest), level, facing the horizon",
+        text: "Tripod on the ground: the target's world (else the nearest), level, facing the horizon — on foot, where one stands, looking the same way",
         bind: [scene("t", "standOn", on)],
       },
     ],
@@ -232,7 +240,16 @@ export const KEYMAP: KeySection[] = [
       {
         keys: "Z · X",
         text: "Full throttle · cut (W · X on AZERTY) — on the entry autopilot's approach, full throttle goes around",
-        bind: [fly("KeyZ", "throttleFull"), fly("KeyX", "throttleCut")],
+        bind: [fly("KeyZ", "throttleFull", off), fly("KeyX", "throttleCut")],
+      },
+      {
+        keys: "⇧Z · ' · ⇧'",
+        text: "Plane mode, the jet's systems: afterburner (the throttle full, thrust ×1.5) · autopilot: the altitude and heading held (the stick flies through it; let go, the new ones held) · autothrottle: the speed held (⇧ Alt then set it) (' is ù on AZERTY)",
+        bind: [
+          fly("KeyZ", "jetSystem", { arg: "ab", shift: true }),
+          fly("Quote", "jetSystem", { arg: "ap", shift: false }),
+          fly("Quote", "jetSystem", { arg: "athr", shift: true }),
+        ],
       },
       {
         keys: "I K · J L · H N",
@@ -271,19 +288,13 @@ export const KEYMAP: KeySection[] = [
         bind: [fly("KeyV", "mount")],
       },
       {
-        keys: "F3",
-        text: "Spectator: a free camera, anywhere — the ship flies on, its autopilots and plan (F3 or V: back to it)",
-        bind: [fly("F3", "spectator")],
+        keys: "V (last view)",
+        text: "Spectator: a free camera, anywhere — the ship flies on, its autopilots and plan (the Free camera mode, F3; F1 or V: back to it)",
       },
       {
-        keys: "F6",
-        text: 'TARS: tap — write to him; hold — speak to him. Ask him anything, or ask him to do it: land us at Edwards, take us to the Moon, target Mars, warp ×1000, the cockpit view… (his honesty and humour: "honesty 70")',
-        bind: [fly("F6", "tars")],
-      },
-      {
-        keys: "F4",
+        keys: "⇧F4",
         text: "Autopilot: it flies, or it assists — you fly, its director on the HUD shows where to point, how much throttle",
-        bind: [fly("F4", "assist")],
+        bind: [fly("F4", "assist", on)],
       },
       {
         keys: "⇧R",
@@ -316,7 +327,16 @@ export const KEYMAP: KeySection[] = [
         bind: [fly("KeyG", "auto", { arg: "entry", shift: true })],
       },
       { keys: "⇧Y", text: "The future path in the view", bind: [fly("KeyY", "pathInView", on)] },
-      { keys: "²  (`)", text: "HUD density: full · minimal · clean view", bind: [fly("Backquote", "hudDensity")] },
+      {
+        keys: "\\",
+        text: "The Director view's shot: the director chooses · chase · slow orbit · fly-by · ground tracking · the planet's limb · the destination (` on a French Mac keyboard)",
+        bind: [fly("Backslash", "cineShot")],
+      },
+      {
+        keys: "²  (`) · ⇧²",
+        text: "HUD density: full · minimal · clean view · the HUD: automatic (by the flight) · Atmosphere · Space · Approach",
+        bind: [fly("Backquote", "hudDensity", off), fly("Backquote", "hudKind", on)],
+      },
       {
         keys: "O",
         text: "The flight computer's MISSION tab, over the map: a destination, a transfer, a rendezvous, through the wormhole — PLAN, then EXECUTE",
@@ -328,7 +348,7 @@ export const KEYMAP: KeySection[] = [
         bind: [fly("Backspace", "stopFlight")],
       },
       { keys: "Enter", text: "Acknowledges the master caution: the lamp out, the warning silent", bind: [fly("Enter", "ack")] },
-      { keys: "⇧K", text: "Leave the Ranger", bind: [fly("KeyK", "leaveShip", on)] },
+      { keys: "⇧K", text: "Disembark / board a landed craft (on foot: approach its access)", bind: [fly("KeyK", "leaveShip", on)] },
       { keys: "Drag · double-click", text: "Look around from the attach point · look ahead" },
       {
         keys: "Pad",
@@ -355,9 +375,34 @@ export const KEYMAP: KeySection[] = [
     rows: [
       { keys: "M · ⌘K", text: "Settings · search them (flying: ⇧M)" },
       {
-        keys: "F2",
+        keys: "F1 · F2 · F3 · F4",
+        text: "The game's modes: Ship · On foot · Free camera (anywhere in the system; a ship flies on) · Photo (renders, videos) — the top bar's tabs",
+        bind: [
+          codes("system", "F1", "gameMode", { arg: "ship", shift: false }),
+          codes("system", "F2", "gameMode", { arg: "foot", shift: false }),
+          codes("system", "F3", "gameMode", { arg: "free", shift: false }),
+          codes("system", "F4", "gameMode", { arg: "photo", shift: false }),
+        ],
+      },
+      {
+        keys: "F6",
+        text: 'TARS, in every mode: tap — write to him; hold — speak to him. Ask him anything, or ask him to do it: land us at Edwards, take us to the Moon, walk here, render this view, warp ×1000… (his honesty and humour: "honesty 70")',
+        bind: [codes("system", "F6", "tars")],
+      },
+      {
+        keys: "F8",
+        text: "The Atlas: the Earth, the Moon and Mars as maps — destinations, addresses, coordinates; in orbit over a place, landed, on foot, the free camera, a tripod",
+        bind: [codes("system", "F8", "atlas", { shift: false })],
+      },
+      {
+        keys: "⇧F8",
+        text: "The sky's events from here (on the Earth): star trails, analemma, the Moon, the ISS and its transits, eclipses, selenelion — go there, live it, render it",
+        bind: [codes("system", "F8", "skyEvents", { shift: true })],
+      },
+      {
+        keys: "F10",
         text: "Game tools (developers: a local build or ?dev) — status, placement, targets, time, performance",
-        bind: [codes("system", "F2", "tools")],
+        bind: [codes("system", "F10", "tools")],
       },
       { keys: "I", text: "Details & physical readouts", bind: [scene("i", "details")] },
       {
@@ -379,6 +424,14 @@ export const KEYMAP: KeySection[] = [
 ];
 
 /** Every binding, in the table's order. */
+KEYMAP.push({
+  title: "On foot",
+  rows: [
+    { keys: "W A S D · Shift", text: "Walk relative to the camera · run (remappable free-camera movement keys)" },
+    { keys: "Space", text: "Jump with the local gravity", bind: [codes("character", "Space", "characterJump")] },
+    { keys: "Drag · wheel", text: "Orbit the character · camera distance" },
+  ],
+});
 export const BINDINGS: KeyBind[] = KEYMAP.flatMap((s) => s.rows.flatMap((r) => r.bind ?? []));
 
 type KeyLike = Pick<KeyboardEvent, "code" | "key" | "shiftKey">;
@@ -403,11 +456,29 @@ export function matchIn(layer: KeyLayer, e: KeyLike, flying = false, list: KeyBi
  * key (it flies, nothing in the scene layer). `list`: the bindings as the player set them
  * (input/bindings.ts effectiveBindings), the defaults otherwise.
  */
-export function matchKey(e: KeyLike, flying: boolean, flightKey: boolean, list: KeyBind[] = BINDINGS): KeyBind | undefined {
+export function matchKey(
+  e: KeyLike,
+  flying: boolean,
+  flightKey: boolean,
+  list: KeyBind[] = BINDINGS,
+  character = false,
+): KeyBind | undefined {
   return (
     matchIn("system", e, false, list) ??
-    (flying ? matchIn("flight", e, false, list) : undefined) ??
+    (character
+      ? (matchIn("character", e, false, list) ??
+        (["leaveShip", "map"].includes(matchIn("flight", e, false, list)?.do ?? "") ? matchIn("flight", e, false, list) : undefined))
+      : flying
+        ? matchIn("flight", e, false, list)
+        : undefined) ??
     matchIn("time", e, false, list) ??
-    (flightKey ? undefined : matchIn("scene", e, flying, list))
+    (character
+      ? matchIn("scene", e, false, list) &&
+        ["help", "png", "fullscreen", "details", "toggleUi", "quality", "map", "standOn"].includes(matchIn("scene", e, false, list)!.do)
+        ? matchIn("scene", e, false, list)
+        : undefined
+      : flightKey
+        ? undefined
+        : matchIn("scene", e, flying, list))
   );
 }

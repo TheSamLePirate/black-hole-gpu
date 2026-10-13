@@ -7,6 +7,11 @@ export default {
   "In orbit": "En orbite",
   "On an orbit around the body": "Sur une orbite autour du corps",
   "Landed, on its gear": "Posé, sur son train",
+  "On foot": "À pied",
+  "Land the ship and step out: explore on foot": "Pose le vaisseau et sors : explore à pied",
+  "On {0}'s ground, on foot — the ship landed beside you, the walk starts at once":
+    "Au sol de {0}, à pied — le vaisseau posé à côté, la marche part tout de suite",
+  "No ground to walk on": "Pas de sol où marcher",
   "Beside it": "Auprès",
   "At rest beside the body: the hover autopilot holds the ship there":
     "Au repos auprès du corps : le maintien de position y garde le vaisseau",
@@ -69,17 +74,18 @@ export default {
   "+30 d": "+30 j",
   "Date and time: now, the start of the scene, a date chosen": "Date et heure : maintenant, le début de la scène, une date choisie",
   // ---- the spectator (controller/spectator.ts)
-  "Spectator: a free camera, anywhere — the ship flies on, its autopilots and plan (F3 or V: back to it)":
-    "Spectateur : une caméra libre, n'importe où — le vaisseau continue, ses autopilotes et son plan (F3 ou V : retour)",
+  "Spectator: a free camera, anywhere — the ship flies on, its autopilots and plan (the Free camera mode, F3; F1 or V: back to it)":
+    "Spectateur : une caméra libre, n'importe où — le vaisseau continue, ses autopilotes et son plan (le mode Caméra libre, F3 ; F1 ou V : retour)",
   "The spectator leaves a ship flown: fly one first (K)": "Le spectateur quitte un vaisseau piloté : pilotez-en un d'abord (K)",
-  "Spectator — a free camera: W A S D · Q E to move (⇧ faster), drag to turn; the ship flies on (F3 or V: back)":
-    "Spectateur — caméra libre : Z Q S D · A E pour bouger (⇧ plus vite), glisser pour tourner ; le vaisseau continue (F3 ou V : retour)",
+  "Spectator — a free camera: W A S D · Q E to move (⇧ faster), drag to turn; the ship flies on (F1 or V: back)":
+    "Spectateur — caméra libre : Z Q S D · A E pour bouger (⇧ plus vite), glisser pour tourner ; le vaisseau continue (F1 ou V : retour)",
   "Back on the ship": "De retour sur le vaisseau",
   "Following the ship: the camera carried with it": "Suit le vaisseau : la caméra emportée avec lui",
   "Free: the camera stays where it is — away to the planets (the keys' speed grows with the distance)":
     "Libre : la caméra reste où elle est — vers les planètes (la vitesse des touches croît avec la distance)",
   Spectator: "Spectateur",
-  "A free camera, anywhere — the ship flies on (F3)": "Une caméra libre, n'importe où — le vaisseau continue (F3)",
+  "A free camera, anywhere — the ship flies on (F3: the Free camera mode)":
+    "Une caméra libre, n'importe où — le vaisseau continue (F3 : le mode Caméra libre)",
   "Back to the ship": "Retour au vaisseau",
   "the ship beyond the wormhole": "le vaisseau de l'autre côté du trou de ver",
   "{0} at {1}": "{0} à {1}",

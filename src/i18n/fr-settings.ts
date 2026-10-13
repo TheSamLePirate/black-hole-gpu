@@ -1,5 +1,45 @@
 // French for the settings, the scenes and the keyboard sheet (keyed by the English: see src/i18n.ts).
 export default {
+  "Local source unavailable": "Source locale indisponible",
+  Centre: "Centrer",
+  "Walking speed": "Vitesse de marche",
+  "How fast the astronaut walks, in metres a second (1.4 by default, a brisk walk). The steps quicken with the pace; the stride stays that of the walking clip, so a much faster walk can slide the feet.":
+    "Vitesse de l'astronaute à la marche, en mètres par seconde (1,4 par défaut, une marche soutenue). Les pas s'accélèrent avec l'allure ; l'enjambée reste celle du cycle de marche, donc une marche beaucoup plus rapide peut faire glisser les pieds.",
+  "Running speed": "Vitesse de course",
+  "How fast the astronaut runs, held Shift, in metres a second (4 by default).":
+    "Vitesse de l'astronaute en course, Maj maintenu, en mètres par seconde (4 par défaut).",
+  "Jump speed": "Vitesse de saut",
+  "The speed the astronaut leaves the ground with, in metres a second (3.6 by default). The height reached follows the local gravity: the Moon's jump is six times the Earth's at the same speed.":
+    "Vitesse de décollage de l'astronaute, en mètres par seconde (3,6 par défaut). La hauteur atteinte suit la gravité locale : à vitesse égale, le saut sur la Lune va six fois plus haut que sur la Terre.",
+  "Camera distance on foot": "Distance de la caméra à pied",
+  "How far the camera stands behind the astronaut when it starts walking, in metres (4.5 by default). The mouse wheel changes it while walking; a wall or the ground brings it closer.":
+    "Distance de la caméra derrière l'astronaute au début de la marche, en mètres (4,5 par défaut). La molette la modifie à pied ; un mur ou le sol la rapproche.",
+  "Grass density": "Densité de l'herbe",
+  "Share of the blades drawn, from a quarter to all of them (about 180 a square metre near the astronaut in a meadow, thinned and widened with the distance). Fewer blades run faster on a weak GPU; the change shows at the next frame.":
+    "Part des brins dessinés, d’un quart à tous (environ 180 par mètre carré près de l’astronaute dans une prairie, éclaircis et élargis avec la distance). Moins de brins vont plus vite sur un GPU modeste ; le changement se voit à l’image suivante.",
+  "Grass reach": "Portée de l'herbe",
+  "How far from the astronaut the vegetation is drawn, in metres: the blades sink into the ground over its last 4 m. A shorter reach costs less; beyond it the satellite's ground carries on.":
+    "Jusqu’où la végétation est dessinée autour de l’astronaute, en mètres : les brins s’enfoncent dans le sol sur les 4 derniers mètres. Une portée plus courte coûte moins ; au-delà, le sol satellite prend le relais.",
+  "Grass sway": "Balancement de l'herbe",
+  "How much the vegetation leans and shivers in the weather's wind: 0 keeps it still, 1 is the wind as it blows, 2 doubles it. The astronaut's push and footprints stay.":
+    "L’inclinaison et le frémissement de la végétation dans le vent de la météo : 0 la garde immobile, 1 suit le vent tel qu’il souffle, 2 le double. La poussée et les traces de l’astronaute restent.",
+  "Grass on foot": "Herbe à pied",
+  "The living ground on foot on Earth: every blade made on the GPU each frame where WorldCover says something grows — meadows with flowers and seed heads, crops in rows with their ears, reeds in wetlands, tufts on scrub and bare ground, a forest floor, moss — coloured by the satellite's image, bare on roads, buildings, water and runways. The weather's wind travels over it, the astronaut pushes it aside and leaves footprints that rise again; lit like the suit, with the trees', the vessel's and the astronaut's shadows. Needs the terrain and the world scenery; nothing runs in flight.":
+    "Le sol vivant à pied sur Terre : chaque brin créé sur le GPU à chaque image là où WorldCover dit que quelque chose pousse — prairies fleuries avec leurs épillets, cultures en rangs avec leurs épis, roseaux des zones humides, touffes sur la garrigue et les sols nus, sous-bois, mousse —, teinté par l’image satellite, nu sur les routes, les bâtiments, l’eau et les pistes. Le vent de la météo le parcourt, l’astronaute l’écarte et y laisse des traces de pas qui se relèvent ; éclairé comme la combinaison, avec les ombres des arbres, du vaisseau et de l’astronaute. Demande le relief et le décor mondial ; rien ne tourne en vol.",
+  "Disembark / board a landed craft (on foot: approach its access)": "Sortir / entrer dans un vaisseau posé (à pied : approcher son accès)",
+  "On foot": "À pied",
+  "W A S D · Shift": "W A S D · Maj",
+  "Walk relative to the camera · run (remappable free-camera movement keys)":
+    "Marcher par rapport à la caméra · courir (touches de caméra libre configurables)",
+  "Jump with the local gravity": "Sauter avec la gravité locale",
+  "Drag · wheel": "Glisser · molette",
+  "Orbit the character · camera distance": "Tourner autour du personnage · distance de la caméra",
+  "World scenery": "Décor mondial",
+  "Scenery shadows": "Ombres du décor",
+  "Real forests and OSM buildings, roads, railways, rivers, lakes, paved airfields and 3D bridges through OpenFreeMap. Every tree of a world-fixed 7 m grid where WorldCover says trees grow — its kind from the climate (broadleaf, spruce, pine, palm, poplar, shrubs), its crown carved into leaf clumps near, with dappled shade — no limit on their number. Balanced: 2 km, 5,000 buildings, 16,000 surface features and 128 bridges; high: 3 km, 8,000 buildings, 24,000 surface features and 256 bridges. Shared 16 MiB GPU budget; worker preparation. Streamed below 12 km, between 84° S and 84° N. Enable terrain for volumes and networks. Building heights, road widths and bridge elevation/supports can be estimated. Source tiles simplify OSM and do not expose every tag. © ESA WorldCover / modified Copernicus Sentinel data (2021), CC BY 4.0. © OpenMapTiles, OpenStreetMap (ODbL), OpenFreeMap.":
+    "Forêts réelles et bâtiments, routes, voies ferrées, rivières, lacs, aérodromes revêtus et ponts 3D OSM via OpenFreeMap. Chaque arbre d'une grille fixe de 7 m, là où WorldCover dit que des arbres poussent — son espèce selon le climat (feuillus, épicéas, pins, palmiers, peupliers, arbustes), sa couronne creusée en touffes de feuilles de près, avec une ombre tachetée — sans limite de nombre. Équilibré : 2 km, 5 000 bâtiments, 16 000 éléments de surface et 128 ponts ; élevé : 3 km, 8 000 bâtiments, 24 000 éléments de surface et 256 ponts. Budget GPU partagé de 16 Mio ; préparation dans un worker. Chargé sous 12 km d'altitude, entre 84° S et 84° N. Activez le relief pour les volumes et les réseaux. Les hauteurs des bâtiments, largeurs des routes et l'élévation/les appuis des ponts peuvent être estimés. Les tuiles sources simplifient OSM et n'exposent pas toutes les balises. © ESA WorldCover / données Copernicus Sentinel modifiées (2021), CC BY 4.0. © OpenMapTiles, OpenStreetMap (ODbL), OpenFreeMap.",
+  "Trees, buildings and bridges cast shadows on the terrain and each other. One occlusion ray samples the finite solar disc; temporal accumulation softens the penumbra. Skylight remains in shadow. Balanced: receivers within 1.2 km and rays up to 500 m; high: 2 km and 900 m. Fades at the limit to bound GPU cost. Requires world scenery and terrain.":
+    "Arbres, bâtiments et ponts projettent leurs ombres sur le terrain et entre eux. Un rayon d’occlusion échantillonne le disque solaire ; l’accumulation temporelle adoucit la pénombre. La lumière du ciel reste présente dans l’ombre. Équilibré : surfaces à moins de 1,2 km et rayons jusqu’à 500 m ; haut : 2 km et 900 m. Atténuation en limite pour borner le coût GPU. Nécessite le décor mondial et le terrain.",
   Camera: "Caméra",
   Scene: "Scène",
   Matter: "Matière",
@@ -270,6 +310,165 @@ export default {
   "Disk light bent back onto the disk by the hole (Cunningham 1976), traced with one extra geodesic per disk hit and re-emitted with the albedo below: brightens the inner disk and the far side, strongest at high spin. Thin disk, quality passes; by default only in offline renders.":
     "Lumière du disque renvoyée sur le disque par le trou (Cunningham 1976), tracée avec une géodésique supplémentaire par impact sur le disque et réémise avec l'albédo ci-dessous : éclaircit le disque interne et la face lointaine, surtout à spin élevé. Disque mince, passes de qualité ; par défaut uniquement en rendu hors ligne.",
   Off: "Désactivé",
+  "Softened views": "Vues adoucies",
+  "The craft's outside views on its hull follow it as a film camera on a rig does: its jolts smoothed, its steady turns (the Endurance's spin) followed without lag, left behind a little by its accelerations. The craft flies the same: only the camera moves.":
+    "Les vues extérieures de l'appareil, fixées sur sa coque, le suivent comme une caméra de cinéma sur son support : ses secousses sont lissées, ses virages réguliers (la rotation de l'Endurance) suivis sans retard, et ses accélérations la laissent un peu en arrière. L'appareil vole de la même façon : seule la caméra bouge.",
+  "Camera rig": "Support de caméra",
+  "Chase and dorsal": "Poursuite et dorsale",
+  "The chase and the dorsal views follow the craft through the rig":
+    "Les vues de poursuite et dorsale suivent l'appareil via le support de caméra",
+  "Every hull view": "Toutes les vues de coque",
+  "Quarter, chase, dorsal, wing, belly, nose too": "Trois-quarts, poursuite, dorsale, aile, ventre, nez aussi",
+  "The attach points rigid on the hull": "Les points d'attache rigides sur la coque",
+  Binding: "Liaison",
+  "How the softened view's offset turns with the craft (Cinemachine's binding modes).":
+    "Comment le décalage de la vue adoucie tourne avec l'appareil (modes de liaison de Cinemachine).",
+  "Locked to the craft": "Solidaire de l'appareil",
+  "The view turns with the craft, its roll too": "La vue tourne avec l'appareil, son roulis aussi",
+  "Locked, no roll": "Solidaire, sans roulis",
+  "The view turns with the craft's nose, its top kept up": "La vue tourne avec le nez de l'appareil, le haut toujours relevé",
+  "World up": "Verticale du monde",
+  "The view follows the heading alone: the horizon level": "La vue suit le cap seul : l'horizon reste à niveau",
+  World: "Monde",
+  "The view's offset fixed in the world: the craft turns in it":
+    "Le décalage de la vue fixé dans le monde : l'appareil tourne à l'intérieur",
+  "Damping: pitch": "Amortissement : tangage",
+  "How long the view takes to follow the craft's pitching (0: rigid). Steady turns are followed without lag; only their changes are smoothed.":
+    "Le temps que met la vue à suivre le tangage de l'appareil (0 : rigide). Les virages réguliers sont suivis sans retard ; seuls leurs changements sont lissés.",
+  "Damping: yaw": "Amortissement : lacet",
+  "How long the view takes to follow the craft's yawing (0: rigid).":
+    "Le temps que met la vue à suivre le lacet de l'appareil (0 : rigide).",
+  "Damping: roll": "Amortissement : roulis",
+  "How long the view takes to follow the craft's roll (0: rigid).":
+    "Le temps que met la vue à suivre le roulis de l'appareil (0 : rigide).",
+  "Damping: position": "Amortissement : position",
+  "The view left behind by the craft's accelerations — the afterburner pulls away, a brake catches up (0: none).":
+    "La vue reste en arrière sous les accélérations de l'appareil : la postcombustion s'éloigne, un freinage la rattrape (0 : aucun).",
+  Lookahead: "Anticipation",
+  "The aim led along the motion: the view looks a little ahead of where the craft goes.":
+    "Le point visé est guidé par le mouvement : la vue regarde un peu devant là où va l'appareil.",
+  "Composer: screen x": "Composeur : x à l'écran",
+  "Where the craft sits across the frame (−0.4 left … 0.4 right of the centre).":
+    "Où se place l'appareil dans le cadre (−0,4 à gauche … 0,4 à droite du centre).",
+  "Composer: screen y": "Composeur : y à l'écran",
+  "Where the craft sits up the frame (−0.4 low … 0.4 high).": "Où se place l'appareil en hauteur dans le cadre (−0,4 bas … 0,4 haut).",
+  "Dutch angle": "Angle hollandais",
+  "The view rolled about its axis (a dutch tilt).": "La vue est roulée autour de son axe (une inclinaison hollandaise).",
+  "Noise profile": "Profil de bruit",
+  "The noise on the softened views and the director's shots (Cinemachine's noise profiles), its amplitude and frequency gains below.":
+    "Le bruit appliqué aux vues adoucies et aux plans du réalisateur (profils de bruit de Cinemachine), ses gains d'amplitude et de fréquence ci-dessous.",
+  Steady: "Stable",
+  "Hand-held": "Caméra à l'épaule",
+  "A slow drift, a hand on the camera": "Une lente dérive, une main sur la caméra",
+  Shake: "Secousse",
+  "A firm shake": "Une secousse franche",
+  Rumble: "Grondement",
+  "An engine's rumble": "Le grondement d'un moteur",
+  Vibration: "Vibration",
+  "A fine, fast vibration": "Une vibration fine et rapide",
+  "Noise amplitude": "Amplitude du bruit",
+  "The noise profile's amplitude gain.": "Le gain d'amplitude du profil de bruit.",
+  "Noise frequency": "Fréquence du bruit",
+  "The noise profile's frequency gain.": "Le gain de fréquence du profil de bruit.",
+  Impulses: "Impulsions",
+  "The camera jolted by the flight's events — a wheel touching, the touchdown, a sonic boom, the transonic shudder, the docking latches, a crash (0: none).":
+    "La caméra secouée par les événements du vol : un train qui touche le sol, l'atterrissage, un bang supersonique, le tremblement transsonique, les verrous d'amarrage, un crash (0 : aucun).",
+  Blend: "Fondu",
+  "How the camera goes from one view to the next (V, a vessel, the spectator, the director's shots): the curve of its blend — swung round the craft, never through it.":
+    "Le passage de la caméra d'une vue à l'autre (V, un vaisseau, le spectateur, les plans du réalisateur) : la courbe de son fondu, qui contourne l'appareil sans jamais le traverser.",
+  "Ease in and out": "Accélération et décélération",
+  "Ease in": "Accélération",
+  "Ease out": "Décélération",
+  "Hard in": "Arrivée franche",
+  "Hard out": "Départ franc",
+  Cut: "Coupe",
+  "Blend time": "Durée du fondu",
+  "How long a blend between views lasts.": "Durée d'un fondu entre deux vues.",
+  "Speed lens": "Objectif de vitesse",
+  "The softened views' field widened with the speed through the air and the afterburner (its gain; 0: none).":
+    "Le champ des vues adoucies s'élargit avec la vitesse dans l'air et la postcombustion (son gain ; 0 : aucun).",
+  "A theme at every moment, and between them one by the flight's context":
+    "Un thème à chaque instant, et entre les deux, un thème choisi selon le contexte du vol",
+  "A theme at the flight's great moments; silence between": "Un thème aux grands moments du vol ; silence entre les deux",
+  Adaptive: "Adaptative",
+  "Another melody": "Une autre mélodie",
+  "Back to the theme the flight chooses": "Retour au thème que choisit le vol",
+  Break: "Pont",
+  "Build-up": "Montée",
+  Choir: "Chœur",
+  "Click: listen · the box: in the playlist": "Clic : écouter · la case : dans la playlist",
+  Crossfade: "Fondu enchaîné",
+  "Deep space": "Espace lointain",
+  Defaults: "Valeurs par défaut",
+  Delay: "Écho",
+  Dorian: "dorien",
+  Drop: "Drop",
+  Energy: "Énergie",
+  "In the air": "En vol",
+  "In the playlist": "Dans la playlist",
+  "Intensity & variation": "Intensité et variation",
+  Intro: "Intro",
+  "Lift-off": "Décollage",
+  "Listen to the next theme": "Écouter le thème suivant",
+  "Listen to the previous theme": "Écouter le thème précédent",
+  "Listen to the theme shown · stop listening": "Écouter le thème affiché · arrêter l'écoute",
+  Listening: "Écoute",
+  "Low pass": "Rase-mottes",
+  Lydian: "lydien",
+  Master: "Master",
+  Mixer: "Table de mixage",
+  Mixolydian: "mixolydien",
+  Mode: "Mode",
+  Moments: "Moments",
+  "Music — the themes, listen, the mode, the mixer, which theme when":
+    "Musique — les thèmes, l'écoute, le mode, la table de mixage, quel thème quand",
+  "Music: the themes, listen, the mode, the mixer": "Musique : les thèmes, l'écoute, le mode, la table de mixage",
+  Mute: "Muet",
+  "No music": "Aucune musique",
+  "Nothing plays. Click a theme to listen, or choose the adaptive mode.":
+    "Rien ne joue. Cliquez sur un thème pour l'écouter, ou choisissez le mode adaptative.",
+  Organ: "Orgue",
+  Original: "Original",
+  Outro: "Outro",
+  Phrygian: "phrygien",
+  Playlist: "Playlist",
+  "Playlist: each theme": "Playlist : chaque thème",
+  "Re-entry": "Rentrée",
+  Reverb: "Réverbération",
+  "Silence — no moment now": "Silence — aucun moment en cours",
+  Solo: "Solo",
+  "The checked themes in turn, whatever the flight": "Les thèmes cochés à tour de rôle, quel que soit le vol",
+  "The flight's": "Celui du vol",
+  "The game's choice": "Le choix du jeu",
+  "The intensity follows the flight: the engine, the plasma, the speed, the ground near, the load, an alarm":
+    "L'intensité suit le vol : le moteur, le plasma, la vitesse, le sol proche, le facteur de charge, une alarme",
+  "The music's settings as they came: the mode, the themes, the mixer":
+    "Les réglages de la musique tels qu'ils étaient à l'origine : le mode, les thèmes, la table de mixage",
+  Themes: "Thèmes",
+  Transitions: "Transitions",
+  Variation: "Variation",
+  Verse: "Couplet",
+  "Which theme, when": "Quel thème, quand",
+  adaptive: "adaptative",
+  bar: "mesure",
+  "harmonic minor": "mineur harmonique",
+  major: "majeur",
+  minor: "mineur",
+  "Jet HUD": "HUD de chasseur",
+  "Speed effects": "Effets de vitesse",
+  "The speed felt in the air: streaks of moisture and dust rushing past the eye — more of them faster, low over the ground, with the afterburner; a turn sweeps them across the view — and the frame's edges darkened. 0: none.":
+    "La vitesse ressentie en vol : des traînées d'humidité et de poussière filant devant l'œil — plus nombreuses plus vite, près du sol, avec la postcombustion ; un virage les balaie dans la vue — et les bords de l'image assombris. 0 : aucun.",
+  "Grey-out under load": "Voile gris sous facteur de charge",
+  "A hard pull narrows and greys the view, as a pilot's: from 5 g, a tunnel at 9 — eased in over a second, out faster.":
+    "Une ressource serrée rétrécit et grise la vue, comme pour un pilote : dès 5 g, un tunnel à 9 — installé en une seconde, dissipé plus vite.",
+  "Flown as a plane in the air: a fighter's head-up display in green — the airspeed and altitude tapes, Mach, the load and its peak, the incidence, the vertical speed, the radar altitude, the autopilot's and autothrottle's modes and bugs, the throttle and the afterburner.":
+    "En vol, piloté en avion : le collimateur tête haute d'un chasseur, en vert — les échelles de vitesse et d'altitude, le Mach, le facteur de charge et son pic, l'incidence, la vitesse verticale, la hauteur radar, les modes et repères du pilote automatique et de l'auto-manette, la manette des gaz et la postcombustion.",
+  "Knots · feet": "Nœuds · pieds",
+  "As a fighter's: the speed in knots, the altitude in feet, the vertical speed in feet a minute":
+    "Comme un chasseur : la vitesse en nœuds, l'altitude en pieds, la vitesse verticale en pieds par minute",
+  Metric: "Métrique",
+  "The speed in m/s, the altitude in metres": "La vitesse en m/s, l'altitude en mètres",
+  "The HUD as in the other modes": "Le HUD comme dans les autres modes",
   Offline: "Hors ligne",
   "Only in offline renders (it multiplies the converged view's cost by ~6)":
     "Uniquement en rendu hors ligne (multiplie le coût de la vue convergée par ~6)",
@@ -549,8 +748,13 @@ export default {
   "The International Space Station (NASA's model) on its real orbit: its latest elements from CelesTrak, propagated with SGP4 — where it really is at the scene's date. Flying +XVV, its solar arrays turned to the Sun. The Ranger can dock at Harmony's ports (IDA-2 forward, IDA-3 zenith), rear first.":
     "La Station spatiale internationale (modèle de la NASA) sur son orbite réelle : ses derniers éléments de CelesTrak, propagés avec SGP4 — là où elle se trouve vraiment à la date de la scène. En vol +XVV, ses panneaux solaires tournés vers le Soleil. Le Ranger peut s'amarrer aux ports d'Harmony (IDA-2 avant, IDA-3 zénith), par l'arrière.",
   "Real terrain": "Relief réel",
-  "Near the Earth, its real ground: elevation tiles (SRTM's 30 m and national surveys, Mapzen's terrain tiles on AWS Open Data) streamed in around the camera, eight levels from 2.4 km down to 19 m — the mountains, valleys and cliffs where they are —, and down to 611 m NASA's imagery (GIBS: the Blue Marble by day, VIIRS's city lights by night). Off, or while they load: NOAA's global map (4.9 km) with drawn detail, the global day and night maps.":
-    "Près de la Terre, son vrai sol : tuiles d'altitude (SRTM à 30 m et relevés nationaux, tuiles de terrain de Mapzen sur AWS Open Data) chargées autour de la caméra, huit niveaux de 2.4 km à 19 m — les montagnes, vallées et falaises là où elles sont —, et jusqu'à 611 m l'imagerie de la NASA (GIBS : la Blue Marble le jour, les lumières des villes de VIIRS la nuit). Désactivé, ou pendant le chargement : la carte mondiale de la NOAA (4.9 km) avec détail dessiné, les cartes mondiales du jour et de la nuit.",
+  "Satellite ground": "Sol satellite",
+  Satellite: "Satellite",
+  "Satellite + materials": "Satellite + matériaux",
+  "Sentinel-2 annual composite and WorldCover 2021 at about 10 m, streamed below 20 km in two pilot regions: Le Bourget and Cévennes. Satellite preserves the real fields and roads; materials adds subtle class-guided detail near the ground. One regional GPU pack at a time (37.3 MiB compressed, 101.3 MiB RGBA fallback). © ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), processed by ESA WorldCover consortium. CC BY 4.0. Terrain elevation and aircraft contacts use their own height data.":
+    "Composite annuel Sentinel-2 et WorldCover 2021 à environ 10 m, chargés sous 20 km dans deux régions pilotes : Le Bourget et les Cévennes. Satellite conserve les vrais champs et routes ; matériaux ajoute un détail discret guidé par les classes près du sol. Un pack GPU régional à la fois (37,3 MiB compressés, 101,3 MiB en repli RGBA). © ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), processed by ESA WorldCover consortium. CC BY 4.0. Le relief et les contacts de l'avion utilisent leurs propres données d'altitude.",
+  "Near the Earth, its real ground: elevation tiles (SRTM's 30 m and national surveys, Mapzen's terrain tiles on AWS Open Data) streamed in around the camera, eight levels from 2.4 km down to 19 m — the mountains, valleys and cliffs where they are —, with their imagery: NASA's down to 611 m (GIBS: the Blue Marble by day, VIIRS's city lights by night), then the satellite's own down to 19 m (Sentinel-2 cloudless 2021 by EOX, 10 m, CC BY-NC-SA 4.0: forests, fields, rocks seen from the air). Off, or while they load: NOAA's global map (4.9 km) with drawn detail, the global day and night maps.":
+    "Près de la Terre, son vrai relief : des tuiles d'altitude (le SRTM à 30 m et des relevés nationaux, les tuiles de terrain de Mapzen sur AWS Open Data) chargées autour de la caméra, huit niveaux de 2,4 km à 19 m — montagnes, vallées et falaises là où elles sont —, avec leur imagerie : celle de la NASA jusqu'à 611 m (GIBS : la Blue Marble de jour, les lumières des villes de VIIRS la nuit), puis celle du satellite jusqu'à 19 m (Sentinel-2 cloudless 2021 d'EOX, 10 m, CC BY-NC-SA 4.0 : forêts, champs, roches vus d'avion). Désactivé, ou pendant le chargement : la carte mondiale de la NOAA (4,9 km) avec du détail dessiné, les cartes mondiales de jour et de nuit.",
   "Volumetric clouds": "Nuages volumétriques",
   "Near the Earth, its clouds are a volume — from 1.5 km to a top rising with the cover — marched along each ray: lit through themselves, their silhouettes on the horizon and their shadowed flanks. Off: a textured shell (faster).":
     "Près de la Terre, ses nuages forment un volume — de 1.5 km à un sommet qui monte avec la couverture — parcouru le long de chaque rayon : éclairés à travers eux-mêmes, leurs silhouettes sur l'horizon et leurs flancs ombrés. Désactivé : une coque texturée (plus rapide).",
@@ -800,13 +1004,16 @@ export default {
     "Au casque, les sources sont placées en 3D (HRTF) : le moteur derrière vous, un propulseur au-dessus, le vaisseau qui passe devant une caméra libre. Désactivé — enceintes —, un simple panoramique gauche–droite. L'effet Doppler d'un vaisseau qui passe s'entend dans les deux cas.",
   Interface: "Interface",
   Autosave: "Sauvegarde auto",
-  "Keeps the flight in this browser (every setting, the time, the pilot, the plan) and resumes it at the next visit. Named saves, files: the game tools (F2).":
-    "Conserve le vol dans ce navigateur (chaque réglage, l'heure, le pilote, le plan) et le reprend à la visite suivante. Sauvegardes nommées, fichiers : les outils de jeu (F2).",
+  "Keeps the flight in this browser (every setting, the time, the pilot, the plan) and resumes it at the next visit. Named saves, files: the game tools (F10).":
+    "Conserve le vol dans ce navigateur (chaque réglage, l'heure, le pilote, le plan) et le reprend à la visite suivante. Sauvegardes nommées, fichiers : les outils de jeu (F10).",
   "Saved games": "Parties sauvegardées",
   Every: "Toutes les",
   "Fly the Ranger: the film's journey, missions": "Pilotez le Ranger : le voyage du film, des missions",
   "Our planet from its ground and its orbits: its air, its night, the Sun, the Moon and the stars":
     "Notre planète depuis son sol et ses orbites : son air, sa nuit, le Soleil, la Lune et les étoiles",
+  Landscapes: "Paysages",
+  "The Earth's exceptional places rebuilt from real photographs: the same spot, the same direction, the same hour":
+    "Les lieux d'exception de la Terre recréés d'après de vraies photographies : le même endroit, la même direction, la même heure",
   "Solar system": "Système solaire",
   "Our worlds from their orbits and their grounds: the Moon, the planets, their moons":
     "Nos mondes depuis leurs orbites et leurs sols : la Lune, les planètes, leurs lunes",
@@ -878,6 +1085,48 @@ export default {
   "Saint-Jean-de-Valériscle": "Saint-Jean-de-Valériscle",
   "A summer morning in the Gard, 229 m: the Cévennes' foothills rolling towards Mont Lozère, 39 km to the north-west (EU-DEM's relief).":
     "Un matin d'été dans le Gard, 229 m : les contreforts des Cévennes ondulent vers le mont Lozère, à 39 km au nord-ouest (relief EU-DEM).",
+  "The Grand Canyon": "Le Grand Canyon",
+  "Hopi Point on the South Rim at 17:55 in September: the evening light on the Tower of Set, Horus, Osiris and Shiva Temples, the canyon two kilometres deep below.":
+    "Hopi Point sur la rive sud à 17:55 en septembre : la lumière du soir sur la Tour de Seth, les temples d'Horus, d'Osiris et de Shiva, le canyon profond de deux kilomètres en contrebas.",
+  "The Matterhorn": "Le Cervin",
+  "From the Riffelsee, 2 757 m, on a June morning: the Matterhorn's east face and Hörnli ridge across the lake, eight kilometres off.":
+    "Depuis le Riffelsee, 2 757 m, un matin de juin : la face est du Cervin et l'arête du Hörnli au-delà du lac, à huit kilomètres.",
+  "Mont Blanc": "Le Mont Blanc",
+  "The Lac Blanc above Chamonix, 2 352 m, at midday in September: the whole massif across the valley — the Aiguille Verte, the Mer de Glace, Mont Blanc 17 km away.":
+    "Le lac Blanc au-dessus de Chamonix, 2 352 m, à midi en septembre : tout le massif de l'autre côté de la vallée — l'Aiguille Verte, la Mer de Glace, le Mont Blanc à 17 km.",
+  "The Geirangerfjord": "Le Geirangerfjord",
+  "Flydalsjuvet in June: Geiranger at the fjord's head 300 m below, the fjord winding away north-west between its walls.":
+    "Flydalsjuvet en juin : Geiranger au fond du fjord, 300 m plus bas, le fjord qui serpente vers le nord-ouest entre ses parois.",
+  "Reine, the Lofoten": "Reine, les Lofoten",
+  "From Reinebringen's summit, 448 m, on a July afternoon: Reine's islets and red cabins far below, the fjord and the Lofoten's sharp peaks around.":
+    "Depuis le sommet du Reinebringen, 448 m, un après-midi de juillet : les îlots et les cabanes rouges de Reine tout en bas, le fjord et les pics acérés des Lofoten autour.",
+  Kirkjufell: "Kirkjufell",
+  "Kirkjufellsfoss in July at 16:30: the falls in front, Kirkjufell's cone behind, sun and heavy showers over the Snæfellsnes peninsula.":
+    "Kirkjufellsfoss en juillet à 16:30 : la cascade devant, le cône du Kirkjufell derrière, soleil et grosses averses sur la péninsule de Snæfellsnes.",
+  Lauterbrunnen: "Lauterbrunnen",
+  "Lauterbrunnen at midday in September: the Staubbach falling 300 m off the valley's sheer western wall, the glacial trough running south.":
+    "Lauterbrunnen à midi en septembre : le Staubbach qui tombe de 300 m depuis la paroi ouest de la vallée, l'auge glaciaire qui file vers le sud.",
+  "Torres del Paine": "Torres del Paine",
+  "In the Valle del Francés on an April afternoon: the Cuernos del Paine's granite and their black slate caps, a kilometre above.":
+    "Dans la vallée du Francés un après-midi d'avril : le granite des Cuernos del Paine et leurs coiffes d'ardoise noire, un kilomètre plus haut.",
+  "Fitz Roy": "Le Fitz Roy",
+  "Below the Laguna de los Tres at midday in December: the Fitz Roy massif's granite towers, the Laguna Sucia's glacier beneath them.":
+    "Sous la Laguna de los Tres à midi en décembre : les tours de granite du massif du Fitz Roy, le glacier de la Laguna Sucia à leurs pieds.",
+  "Mount Fuji": "Le mont Fuji",
+  "Lake Kawaguchi's shore in March at midday: Fuji's snow cone 17 km to the south over the water and the Ubuyagasaki cape.":
+    "La rive du lac Kawaguchi en mars à midi : le cône enneigé du Fuji à 17 km au sud, au-delà de l'eau et du cap Ubuyagasaki.",
+  "Moraine Lake": "Moraine Lake",
+  "From the Rockpile on a June evening: the turquoise lake below the Valley of the Ten Peaks, Deltaform and Wenkchemna in the low light.":
+    "Depuis le Rockpile un soir de juin : le lac turquoise sous la vallée des Dix Pics, le Deltaform et le Wenkchemna dans la lumière rasante.",
+  Sossusvlei: "Sossusvlei",
+  "From Deadvlei's white pan at 09:49 in August: the red dunes' crests and their shadows, through a long telephoto lens.":
+    "Depuis la cuvette blanche de Deadvlei à 09:49 en août : les crêtes des dunes rouges et leurs ombres, au long téléobjectif.",
+  "Monument Valley": "Monument Valley",
+  "Above the valley on a July afternoon: the West and East Mitten Buttes and Merrick Butte, left to right, on the red desert.":
+    "Au-dessus de la vallée un après-midi de juillet : les buttes West Mitten, East Mitten et Merrick, de gauche à droite, sur le désert rouge.",
+  "Oxbow Bend": "Oxbow Bend",
+  "The Snake River's Oxbow Bend on a July morning: Mount Moran and the Teton Range beyond the still water.":
+    "La boucle d'Oxbow Bend sur la Snake River un matin de juillet : le mont Moran et la chaîne des Teton au-delà de l'eau calme.",
   Earthrise: "Lever de Terre",
   "On the Moon's far edge, the gibbous Earth just over the horizon, the ground's craters and stones lit by a low Sun.":
     "Au bord de la face cachée de la Lune, la Terre gibbeuse juste au-dessus de l'horizon, les cratères et les pierres du sol éclairés par un Soleil rasant.",
@@ -1049,7 +1298,7 @@ export default {
   "Sky button": "Bouton Ciel",
   "The sky chart: every switch, the ecliptic, the opacity, go to a constellation or a star; hover a star for its card":
     "La carte du ciel : tous les interrupteurs, l'écliptique, l'opacité, aller à une constellation ou une étoile ; survolez une étoile pour sa fiche",
-  "Camera — every mode": "Caméra — tous les modes",
+  "Camera — every mode but on foot": "Caméra — tous les modes sauf à pied",
   "Next · previous view (without the ship: around · follow · free · tripod · free fall; the ship: its views)":
     "Vue suivante · précédente (sans vaisseau : autour · suivre · libre · trépied · chute libre ; avec le vaisseau : ses vues)",
   "Look at the target: the view locked on it, wherever the camera goes":
@@ -1082,8 +1331,8 @@ export default {
   "Free fall along the geodesic (the keys thrust) ⟷ free": "Chute libre le long de la géodésique (les touches poussent) ⟷ libre",
   "Auto-orbit · dive to the horizon · wormhole journey (they run with the time)":
     "Orbite auto · plongée vers l'horizon · voyage par le trou de ver (ils suivent le temps)",
-  "Tripod on the ground: the target's world (else the nearest), level, facing the horizon":
-    "Trépied au sol : le monde de la cible (sinon le plus proche), à niveau, face à l'horizon",
+  "Tripod on the ground: the target's world (else the nearest), level, facing the horizon — on foot, where one stands, looking the same way":
+    "Trépied au sol : le monde de la cible (sinon le plus proche), à niveau, face à l'horizon — à pied, là où l'on se tient, regardant du même côté",
   "Jet · shadow guide": "Jet · guide de l'ombre",
   "Cinematic mode: liquid wormhole surface": "Mode cinématique : surface liquide du trou de ver",
   "Ranger: camera on the spaceship · next view": "Ranger : caméra sur le vaisseau · vue suivante",
@@ -1266,4 +1515,13 @@ export default {
   "Show the frame rate": "Afficher les FPS",
   "A small counter in the top corner: the frames per second and the frame's time, refreshed twice a second.":
     "Un petit compteur dans le coin en haut : les images par seconde et le temps d'une image, mis à jour deux fois par seconde.",
+  "Planetary atlas": "Atlas planétaire",
+  "Loading planetary atlas…": "Chargement de l’atlas planétaire…",
+  "Reference grid — imagery unavailable": "Quadrillage de référence — imagerie indisponible",
+  "Pink collision hitboxes": "Volumes de collision roses",
+  "Collision hitboxes — waiting for scenery": "Collisions — chargement du décor",
+  trees: "arbres",
+  buildings: "bâtiments",
+  "On foot: show the actual CPU tree trunks, crowns and building collision volumes in pink, including courtyard boundaries. X-ray wireframe within 60 m; diagnostic only, disable after checking alignment.":
+    "À pied : affiche en rose les volumes réellement utilisés par les collisions CPU des troncs, couronnes et bâtiments, y compris les cours intérieures. Contours visibles à travers le décor dans un rayon de 60 m ; diagnostic à désactiver après vérification de l’alignement.",
 } satisfies Record<string, string>;

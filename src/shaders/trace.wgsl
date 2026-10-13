@@ -132,6 +132,10 @@ struct Params {
   // modulo the noise's period]; [5] the rain (PLAN-PLUIE P4): the ground's wetness (0…1), the rain now (0…1.3),
   // its clock [s] (held while the time is), unused
   wx: array<vec4f, 6>,
+  // regional Sentinel-2 / WorldCover: bounds and residency, page grid and gutter, materials and metre scale
+  surface: array<vec4f, 7>,
+  scenery: array<vec4f, 6>,
+  walk: array<vec4f,5>, // camera-relative shared walking heightfield, in the existing table buffer
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -152,6 +156,8 @@ override HAS_THICK: bool = true;  // the volumetric (thick) disk
 override HAS_BODIES: bool = true; // planets, moons, stars as bodies (and the near body's ground)
 override HAS_RWY: bool = true;    // runways near the camera (their grading and drawing: out of the kernel elsewhere)
 override HAS_SHADE: bool = true;  // a body's shadow falling on another now (P.shade, PLAN-CIEL C6: out of the kernel when none)
+override HAS_SCENERY: bool = true;
+override HAS_SURFACE: bool = true;
 override HAS_WX: bool = true;     // the weather near the camera (P.wx: its haze, fog, layers — out of the kernel in fair weather)
 // the hole's and the mouth's metrics (O13): off in our universe from afar — the camera beyond the mouth's
 // Dneg region, the region under a pixel —, every ray straight through our bodies to our sky, the Kerr and
@@ -170,7 +176,7 @@ const FLAG_REPROJECT = 16u;     // realtime under the temporal reprojection: the
 @group(0) @binding(1) var<storage, read_write> accum: array<vec4f>;
 @group(0) @binding(3) var bgTex: texture_2d<f32>;
 @group(0) @binding(4) var bgSamp: sampler;
-@group(0) @binding(5) var<storage, read_write> moments: array<vec2f>; // Σ luminance², depth (mean) per pixel
+@group(0) @binding(5) var<storage, read_write> moments: array<vec2f>; // Σ luminance², depth (the samples' nearest) per pixel
 @group(0) @binding(6) var<storage, read_write> stamps: array<u32>;  // frame of the last sample
 // the catalogue stars of a realtime frame, splatted where they fall (R8): 3 × u32 per pixel, fixed point
 // (radiance × P.camFwd.w — the pre-exposure × 2¹⁶), cleared before the frame (post.wgsl: stars)
@@ -3754,6 +3760,9 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
 // the terrain tiles' levels (rg32uint, 1024²): their heights' float bits [m]; up to z 8 their imagery
 // (rgba8: the day's sRGB, the night's lights; 0: none)
 @group(0) @binding(28) var earthTiles: texture_2d_array<u32>;
+@group(0) @binding(29) var surfaceColour: texture_2d_array<f32>;
+@group(0) @binding(30) var surfaceCover: texture_2d_array<u32>;
+@group(0) @binding(31) var surfaceSamp: sampler;
 // the body near the camera: its finer colour map and relief (src/system/hd-maps.ts; P.hd)
 @group(0) @binding(22) var hdColor: texture_2d<f32>;
 @group(0) @binding(23) var hdRelief: texture_2d<f32>;    // normal (east, south), ocean, height
@@ -4694,6 +4703,7 @@ var<private> RWY_HIT: vec4f = vec4f(0.0);
 // met exactly in the runway's own metres; sub-pixel beyond 3 km (none drawn there).
 var<private> WS: vec4f = vec4f(0.0);   // the hit's normal (the Earth's physical axes), w: on
 var<private> WS_A: vec3f = vec3f(0.0); // its albedo
+var<private> WS_T: vec3f = vec3f(0.0); // the light it lets through (leaves), over its albedo's sense
 // a ray from o (unit d, metres) against the cylinder from p0 along the unit ax, len long, r wide: x the
 // distance to it (−1: none), y along it (0 … 1) — from the ray's closest approach to the axis (the camera
 // kilometres away, the metres of the radius kept)
@@ -4717,6 +4727,7 @@ fn cylHit(o: vec3f, d: vec3f, p0: vec3f, ax: vec3f, len: f32, r: f32) -> vec2f {
 fn windsocks(d: vec3f, tMax: f32) -> f32 {
   var best = tMax;
   WS = vec4f(0.0);
+  WS_T = vec3f(0.0);
   let wv = P.runways[0].yzw;
   let U = length(wv);
   for (var k = 0u; k < rwyCount(); k++) {
@@ -4761,14 +4772,17 @@ fn windsocks(d: vec3f, tMax: f32) -> f32 {
 }
 // a windsock's light at q (its normal WS, albedo WS_A): the sun through the air (and the weather's decks),
 // the sky's; an airport's object its own light at night too (WS_E: the tower's cab, the terminal's windows)
-fn windsockShade(q: vec3f, Ls: vec3f, E: vec3f, h: f32) -> vec3f {
+fn windsockShade(q: vec3f, Ls: vec3f, E: vec3f, h: f32, view: vec3f) -> vec3f {
   let Lp = airPhysicalDirection(Ls);
   let mu0 = dot(geoQ(q), Lp);
   let vl = wxVeil(h, wxNear(q), 3u);
   let Ts = sunThrough(h, mu0);
   let sky = E * max(vec3f(0.06, 0.1, 0.19) * smoothstep(-0.18, 0.25, mu0), nightFloor(1.0, mu0));
-  let lit = E * Ts * max(dot(WS.xyz, Lp), 0.0) * vl.x + sky * 0.6 * vl.x + E * Ts * max(mu0, 0.0) * (vl.y - vl.x) * 0.6;
-  return WS_A / PI * lit + WS_E * (luminance(E) / PI) * 30.0 * (1.0 - smoothstep(-0.12, 0.06, mu0));
+  let lit = E * Ts * max(dot(WS.xyz, Lp), 0.0) * vl.x * sceneryShadow(Lp,WS.xyz) + sky * 0.6 * vl.x + E * Ts * max(mu0, 0.0) * (vl.y - vl.x) * 0.6;
+  // leaves against the Sun: the light through the crown's thin edge, brightest looking into the Sun
+  let rim = 1.0 - abs(dot(WS.xyz, view));
+  let through = WS_T / PI * E * Ts * vl.x * max(-dot(WS.xyz, Lp), 0.0) * rim * (0.3 + 0.7 * pow(max(dot(view, Lp), 0.0), 4.0));
+  return WS_A / PI * lit + through + WS_E * (luminance(E) / PI) * 30.0 * (1.0 - smoothstep(-0.12, 0.06, mu0));
 }
 
 // ---- The airport's buildings and its parked craft (PLAN-AEROPORTS A3), the published frame of each runway
@@ -4943,8 +4957,8 @@ fn tileImage(l: u32, i: vec2i) -> u32 {
   let t = (vec2i(P.tileL[2u * l].zw) + i) & vec2i(1023);
   return textureLoad(earthTiles, t, l, 0).g;
 }
-const TILE_IMG_LEVELS = 3u; // (z 6 … 8: src/system/earth-tiles.ts, IMG_Z1)
-// The tiles' imagery at q for a footprint foot [m] (src/system/earth-tiles.ts: GIBS): the finest level
+const TILE_IMG_LEVELS = 8u; // (z 6 … 13: src/system/earth-tiles.ts, IMG_Z1)
+// The tiles' imagery at q for a footprint foot [m] (src/system/earth-tiles.ts: GIBS, EOX's Sentinel-2): the finest level
 // within the footprint and the next coarser, blended by the footprint and towards their windows' edges
 // (as earthH); rgb the day's colour (linear), a the night's lights; w its weight — the global maps' the rest
 // (none beyond the windows, nor where a tile's imagery did not come)
@@ -5084,6 +5098,9 @@ fn earthHeightStepG(q: vec3f, foot: f32) -> f32 {
 }
 // the relief's own normal at q, no finer than the footprint
 fn earthNormalAt(q: vec3f, foot: f32) -> vec3f {
+  // (on foot: the shared walking grid's own normal where the ground was met on it, blended out at its rim)
+  let walk = walkNormal();
+  if (walk.w >= 0.999) { return walk.xyz; }
   // (no finer than 10 m: a float32 point of the unit sphere is good to ~0.4 m — finer differences would
   // show its steps, a grid)
   let e = max(foot, 10.0) / EARTH_RM;
@@ -5095,7 +5112,8 @@ fn earthNormalAt(q: vec3f, foot: f32) -> vec3f {
     let qi = select(select(q, normalize(q + t1 * e), i == 1), normalize(q + t2 * e), i == 2);
     hs[i] = earthHeight(qi, foot);
   }
-  return normalize(q - ((hs[1] - hs[0]) * t1 + (hs[2] - hs[0]) * t2) / (e * EARTH_RM));
+  let relief = normalize(q - ((hs[1] - hs[0]) * t1 + (hs[2] - hs[0]) * t2) / (e * EARTH_RM));
+  return select(relief, normalize(mix(relief, walk.xyz, walk.w)), walk.w > 0.0);
 }
 
 // The relief's shadow at a ground point p (its axes, radii) towards the sun Ls: marched up to ~50 km,
@@ -5127,7 +5145,48 @@ fn earthTerrainShadow(p: vec3f, Ls: vec3f, foot: f32) -> f32 {
 // The ray (its axes, radii) against the relief: marched from the relief's bounding shell, steps a
 // fraction of the height above the ground (and of the distance: the far horizon), then bisected; fpK:
 // the pixel's footprint per unit distance. < 0: missed.
+
+// where the last march step met the walking grid: its metres along right and forward, its weight (0: off it)
+var<private> WALK_AT:vec3f;
+// One height of the walking grid, its cell clamped to the grid.
+fn walkHeight(x:i32,z:i32)->f32 {
+ let size=i32(P.walk[2].w);let at=u32(clamp(z,0,size-1)*size+clamp(x,0,size-1));
+ return bodies[u32(P.walk[1].w)+at/4u][at%4u];
+}
+// CPU and GPU share this local metre grid. No extra storage binding; no per-frame readback.
+// The march reads its bilinear heights alone; the normal (walkNormal) only where the ground is shaded.
+fn walkDistance(rd:vec3f,t:f32)->vec2f {
+ WALK_AT=vec3f(0);
+ if(P.walk[0].w<.5){return vec2f(0);}
+ let direction=vec3f(rd.xy,rd.z/EARTH_AB);
+ let d=P.walk[0].xyz+vec3f(dot(direction,P.walk[1].xyz),dot(direction,P.walk[2].xyz),dot(direction,P.walk[3].xyz))*(t*EARTH_RM);
+ if(max(abs(d.x),abs(d.z))>=32){return vec2f(0);}
+ let size=u32(P.walk[2].w);let step=P.walk[3].w;let q=(d.xz+32)/step;let cell=min(vec2u(floor(q)),vec2u(size-2u));let f=q-vec2f(cell);
+ let x=i32(cell.x);let z=i32(cell.y);
+ let h=mix(mix(walkHeight(x,z),walkHeight(x+1,z),f.x),mix(walkHeight(x,z+1),walkHeight(x+1,z+1),f.x),f.y);
+ let w=1-smoothstep(30.0,32.0,max(abs(d.x),abs(d.z)));
+ WALK_AT=vec3f(d.xz,w);
+ return vec2f((d.y-h)/EARTH_RM,w);
+}
+// The walking grid's normal where the march met it (squashed space; w: its weight, 0 off the grid): the
+// heights' slopes at the four corners (central differences) interpolated — smooth across the 1 m cells,
+// where the bilinear surface's own normal jumps at each cell's edge (a faceted light near the feet).
+fn walkNormal()->vec4f {
+ if(P.walk[0].w<.5||WALK_AT.z<=0){return vec4f(0);}
+ let size=u32(P.walk[2].w);let step=P.walk[3].w;let q=(WALK_AT.xy+32)/step;let cell=min(vec2u(floor(q)),vec2u(size-2u));let f=q-vec2f(cell);
+ let x=i32(cell.x);let z=i32(cell.y);
+ var g=array<vec2f,4>();
+ for(var k=0;k<4;k++){
+  let cx=x+(k&1);let cz=z+(k>>1);
+  g[k]=vec2f(walkHeight(cx+1,cz)-walkHeight(cx-1,cz),walkHeight(cx,cz+1)-walkHeight(cx,cz-1))/(2*step);
+ }
+ let s=mix(mix(g[0],g[1],f.x),mix(g[2],g[3],f.x),f.y);
+ let normal=normalize(P.walk[2].xyz-P.walk[1].xyz*s.x-P.walk[3].xyz*s.y);
+ return vec4f(normalize(vec3f(normal.xy,normal.z/EARTH_AB)),WALK_AT.z);
+}
+
 fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
+  WALK_AT=vec3f(0);
   let Rs = 1.0 + 9600.0 / EARTH_RM;
   let b = dot(ro, rd);
   let off = ro - rd * b;
@@ -5162,11 +5221,13 @@ fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
     let foot = max(t * fpK * EARTH_RM, 0.05);
     let rad = (e + 2.0 * dot(A, v) + dot(v, v)) / (r + 1.0);
     var f = 0.0;
-    if (!band) {
+    let walk=walkDistance(rd,t);
+    if(walk.y>=.999){f=walk.x;band=true;}
+    else if (!band) {
       f = rad - (earthHeightStep(p / r, foot) + 9.0 * foot + 3.0) / EARTH_RM;
       band = f <= 0.0;
     }
-    if (band) { f = rad - earthHeight(p / r, foot) / EARTH_RM; }
+    if (band && walk.y<.999) { f = mix(rad - earthHeight(p / r, foot) / EARTH_RM,walk.x,walk.y); }
     if (f < 0.0) {
       // (between the last point above — its full height's f, or the margin's, a lower bound — and this one)
       var lo = tPrev;
@@ -5178,7 +5239,9 @@ fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
         let vm = o + rd * m;
         let pm = A + vm;
         let rm = length(pm);
-        let fm = (e + 2.0 * dot(A, vm) + dot(vm, vm)) / (rm + 1.0) - earthHeight(pm / rm, max(m * fpK * EARTH_RM, 0.05)) / EARTH_RM;
+        let walkM=walkDistance(rd,m);
+        var fm=walkM.x;
+        if(walkM.y<.999){fm=mix((e + 2.0 * dot(A, vm) + dot(vm, vm)) / (rm + 1.0) - earthHeight(pm / rm, max(m * fpK * EARTH_RM, 0.05)) / EARTH_RM,walkM.x,walkM.y);}
         if (fm < 0.0) { hi = m; fhi = fm; } else { lo = m; flo = fm; }
       }
       // (the root between the last two: the side above may have closed in on it, the one below not)
@@ -5428,7 +5491,9 @@ fn seaWaves(q: vec3f, tu: vec3f, tc: vec3f, footM: f32) -> SeaWaves {
   o.n = normalize(q - su * tu - sc * tc);
   return o;
 }
-fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: vec3f, footM: f32) -> vec3f {
+// calm: inland water (0 the open sea, 1 a sheltered lake: its fetch short — the wind's waves small, no swell,
+// no whitecaps); mirror: the world it reflects (waterMirror: rgb radiance, w its weight — the sky the rest)
+fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: vec3f, footM: f32, calm: f32, mirror: vec4f) -> vec3f {
   let normal = geoQ(q);
   let V = airPhysicalDirection(view);
   let Ls = airPhysicalDirection(light);
@@ -5446,10 +5511,17 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     U = mix(U, P.sea[0].w, b);
     tu = P.sea[0].xyz;
     let sw = seaWaves(normal, tu, P.sea[1].xyz, footM);
-    n = sw.n;
-    vu = sw.vu;
-    vc = sw.vc;
+    n = normalize(mix(sw.n, normal, calm));
+    vu = sw.vu * (1.0 - calm);
+    vc = sw.vc * (1.0 - calm);
     fine = 1.0 - 0.5 * b;
+  }
+  // (a lake's wind: the fetch's — a few hundred metres to kilometres — keeps its waves a ripple; cat's paws
+  // over it, a breath of wind here and not there — the open sea, calm 0, without its noise; no lakes without
+  // the scenery: out of the kernel)
+  if (HAS_SCENERY && calm > 0.0) {
+    let paws = 0.5 + 0.5 * gnoise(q * (EARTH_RM / 40.0) + vec3f(P.time.x * P.near5.w * 0.02));
+    U = mix(U, min(U * 0.3, 2.2) * paws + 0.15, calm);
   }
   let su2 = 0.00316 * U * fine + vu;
   let sc2 = (0.003 + 0.00192 * U) * fine + vc;
@@ -5474,21 +5546,367 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   let Fv = 0.02 + 0.98 * pow(1.0 - nv, 5.0);
   // (grazing, capped — no sparks along the limb)
   let glint = Eg * min(D * G * F / (4.0 * nv), 8.0);
-  let sea = under * (1.0 - Fv) + glint + Fv * sky * 1.5 / PI;
+  let sea = under * (1.0 - Fv) + glint + Fv * mix(sky * 1.5 / PI, mirror.rgb, mirror.w);
   // (the foam lit as a diffuse white of reflectance 0.6, by the sun and the sky; near, in patches over
   // ~8 m — on the same anchor —, their mean the cover)
-  var W = clamp(3.84e-6 * pow(U, 3.41), 0.0, 0.1);
+  var W = clamp(3.84e-6 * pow(U, 3.41), 0.0, 0.1) * (1.0 - calm);
   if (SEA_ON) {
     let u = dot(SEA_D, P.sea[0].xyz) + P.sea[2].x;
     let c = dot(SEA_D, P.sea[1].xyz) + P.sea[2].y;
     let pn = gnoiseI(vec3i(i32(P.sea[2].z) * 32, i32(P.sea[2].w) * 32, 7), vec3f(u, c, 0.0) / 8.0);
     let spots = clamp(W * 5.0 * smoothstep(0.35, 0.8, pn), 0.0, 1.0);
-    W = mix(W, spots, smoothstep(16.0, 4.0, footM) * P.sea[1].w);
+    W = mix(W, spots, smoothstep(16.0, 4.0, footM) * P.sea[1].w) * (1.0 - calm);
   }
   let foam = 0.6 / PI * (Eg * nl + sky);
   return mix(sea, foam, W);
 }
 
+// The world mirrored in calm water at q (a unit point of the squashed space; rd the camera's ray there): the
+// reflected ray over the real relief — its own march from the water, on the Earth's axes (a float keeps
+// ~0.4 m of them: enough for a mountain kilometres off) — and the shore's trees (sceneryMirror), the nearer
+// of the two lit by the sun on its slope and the sky, hazed by the distance as the air does. w 1 where it
+// met something; 0 (the sky's reflection then) where it rose into the sky.
+fn waterMirror(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, sky: vec3f, footM: f32) -> vec4f {
+  let r = reflect(rd, q);
+  if (dot(r, q) <= 0.0005) { return vec4f(0.0); }
+  let rp = airPhysicalDirection(r);
+  let Lp = airPhysicalDirection(Ls);
+  // (the water's surface: the relief there, the ray started 1.5 m above it — a float keeps ~0.8 m of a point
+  // of the unit sphere, and the march's cheap heights differ from the full ones: from the water itself, a
+  // grazing ray would meet it at once)
+  let p0 = q * (1.0 + (earthHeight(q, max(footM, 1.0)) + 1.5) / EARTH_RM);
+  let trees = sceneryMirror(rp, Ls, E, sky);
+  let tEnd = select(25000.0, trees.w, trees.w > 0.0) / EARTH_RM;
+  var t = 3.0 / EARTH_RM;
+  var tPrev = t;
+  var fPrev = -1.0;
+  var tHit = -1.0;
+  for (var i = 0; i < 64; i++) {
+    let p = p0 + r * t;
+    let rr = length(p);
+    let foot = max(footM, t * EARTH_RM * 0.003);
+    let f = rr - 1.0 - earthHeightStep(p / rr, foot) / EARTH_RM;
+    // (a crossing only once the ray has been above the ground: never the shore's own rounding)
+    if (f < 0.0 && fPrev > 0.0) {
+      // (bracketed: bisected on the full heights)
+      var lo = tPrev;
+      var hi = t;
+      for (var j = 0; j < 4; j++) {
+        let m = 0.5 * (lo + hi);
+        let pm = p0 + r * m;
+        let rm = length(pm);
+        if (rm - 1.0 - earthHeight(pm / rm, max(footM, m * EARTH_RM * 0.003)) / EARTH_RM < 0.0) { hi = m; } else { lo = m; }
+      }
+      tHit = 0.5 * (lo + hi);
+      break;
+    }
+    tPrev = t;
+    fPrev = f;
+    t += max(0.6 * abs(f), 0.01 * t + 2.0 / EARTH_RM);
+    if (t > tEnd) { break; }
+  }
+  if (tHit < 0.0) {
+    // (no ridge before the trees: the trees, or the sky)
+    if (trees.w > 0.0) { return vec4f(mix(trees.rgb, sky * 1.5 / PI, 1.0 - exp(-trees.w / 20000.0)), 1.0); }
+    return vec4f(0.0);
+  }
+  let ph = p0 + r * tHit;
+  let qh = normalize(ph);
+  let gqh = geoQ(qh);
+  let dM = tHit * EARTH_RM;
+  let foot = max(footM, dM * 0.003);
+  // (its colour as the ground's: the day's map and, near, the tiles' imagery)
+  let day = textureSampleLevel(earthCube, bgSamp, eCube(gqh), 0.0);
+  let img = earthImagery(gqh, foot);
+  let A = mix(day.rgb, img.c.rgb, img.w) * P.earth2.z;
+  // (its slope: three heights, as earthNormalAt — not the walking grid's)
+  let e = max(foot, 10.0) / EARTH_RM;
+  let t1 = normalize(cross(qh, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(qh.z) > 0.9)));
+  let t2 = cross(qh, t1);
+  let h0 = earthHeight(qh, foot);
+  let n = normalize(qh - ((earthHeight(normalize(qh + t1 * e), foot) - h0) * t1 + (earthHeight(normalize(qh + t2 * e), foot) - h0) * t2) / (e * EARTH_RM));
+  let nP = airPhysicalNormal(n);
+  let mu = dot(gqh, Lp);
+  let L = A / PI * (E * sunThrough(max(h0, 0.0), mu) * max(dot(nP, Lp), 0.0) + sky * 0.5 * (1.0 + dot(nP, gqh)));
+  return vec4f(mix(L, sky * 1.5 / PI, 1.0 - exp(-dM / 20000.0)), 1.0);
+}
+
+struct SurfaceImage { c: vec3f, w: f32, cover: u32 }
+// BEGIN_WORLD_SCENERY
+var<private> SC_POINT:vec3f=vec3f(0.0);
+var<private> SC_DISTANCE:f32=1e9;
+var<private> SC_SAMPLE:f32=0.0;
+// Worldwide scenery: one bounded storage buffer, stackless BVH; all distances are local metres.
+@group(0) @binding(32) var<storage, read> scenery: array<vec4f>;
+fn forestData(i:u32)->vec4f { return scenery[i]; }
+// BEGIN_FOREST_MODULE (shaders/forest.wgsl set in at load, src/forest-shader.ts: this stub draws no tree)
+struct ForestHit { t: f32, n: vec3f, kind: u32, part: u32, base: vec3f, height: f32, seed: f32, ao: f32 };
+fn forestQuery(o: vec3f, d: vec3f, tMax: f32, anyHit: bool, detail: f32) -> ForestHit { return ForestHit(tMax, vec3f(0.0), 0u, 0u, vec3f(0.0), 0.0, 0.0, 1.0); }
+struct ForestLook { albedo: vec3f, through: vec3f };
+fn forestLook(h: ForestHit, n: vec3f, p: vec3f, sat: vec4f) -> ForestLook { return ForestLook(vec3f(0.0), vec3f(0.0)); }
+// END_FOREST_MODULE
+fn sceneryLocal(d:vec3f)->vec3f { return vec3f(dot(d,P.scenery[0].xyz),dot(d,P.scenery[1].xyz),dot(d,P.scenery[2].xyz)); }
+fn sceneryGlobal(d:vec3f)->vec3f { return d.x*P.scenery[0].xyz+d.y*P.scenery[1].xyz+d.z*P.scenery[2].xyz; }
+fn sceneryColour(at:vec2i,n:u32)->vec3f {
+  let p=vec2u(clamp(at,vec2i(0),vec2i(i32(n)-1)));let idx=p.y*n+p.x;
+  let packed=bitcast<u32>(scenery[u32(scenery[0].z)+idx/4u][idx%4u]);
+  let c=vec3f(f32(packed&255u),f32((packed>>8u)&255u),f32((packed>>16u)&255u))/255.0;
+  return select(c/12.92,pow((c+0.055)/1.055,vec3f(2.4)),c>vec3f(0.04045));
+}
+fn sceneryImage(q:vec3f)->SurfaceImage {
+  var o=SurfaceImage(vec3f(0.0),0.0,0u);
+  if(!HAS_SCENERY || P.scenery[2].w<0.5 || P.scenery[5].y<0.5 || P.scenery[5].z<0.5){return o;}
+  let lon=atan2(q.y,q.x);
+  let delta=atan2(sin(lon-P.scenery[4].x),cos(lon-P.scenery[4].x));
+  let uv=vec2f(delta*P.scenery[4].z,(P.scenery[4].y-asin(clamp(q.z,-1.0,1.0)))*P.scenery[4].w);
+  if(any(uv<vec2f(0.0)) || any(uv>=vec2f(1.0))){return o;}
+  let n=u32(scenery[0].w);let at=vec2u(uv*f32(n));
+  let idx=at.y*n+at.x;let packed=bitcast<u32>(scenery[u32(scenery[0].z)+idx/4u][idx%4u]);
+  o.cover=packed>>24u;
+  if((packed&0xffffffu)==0u){return o;}
+  let grid=uv*f32(n)-.5;let a=vec2i(floor(grid));let w=fract(grid);
+  o.c=mix(mix(sceneryColour(a,n),sceneryColour(a+vec2i(1,0),n),w.x),mix(sceneryColour(a+vec2i(0,1),n),sceneryColour(a+vec2i(1,1),n),w.x),w.y);
+  let rim=min(min(uv.x,uv.y),min(1.0-uv.x,1.0-uv.y));
+  o.w=smoothstep(0.0,0.04,rim)*P.scenery[3].w;
+  return o;
+}
+// The satellite's colour at a frame point (east, north metres), its weight 0 where the raster has none.
+fn sceneryColourAt(xy:vec2f)->vec4f {
+  if(P.scenery[5].y<0.5 || P.scenery[5].z<0.5){return vec4f(0.0);}
+  let latC=P.scenery[4].y-0.5/P.scenery[4].w;
+  let uv=vec2f(0.5+xy.x/(6378137.0*cos(latC))*P.scenery[4].z,0.5-xy.y/6378137.0*P.scenery[4].w);
+  if(any(uv<vec2f(0.0)) || any(uv>=vec2f(1.0))){return vec4f(0.0);}
+  let n=u32(scenery[0].w);let grid=uv*f32(n)-.5;let a=vec2i(floor(grid));let w=fract(grid);
+  let c=mix(mix(sceneryColour(a,n),sceneryColour(a+vec2i(1,0),n),w.x),mix(sceneryColour(a+vec2i(0,1),n),sceneryColour(a+vec2i(1,1),n),w.x),w.y);
+  return vec4f(c,select(1.0,0.0,dot(c,vec3f(1.0))<=0.0));
+}
+struct SceneryHit { t:f32, normal:vec3f, albedo:vec3f, kind:f32, root:f32 };
+fn sceneryEllipsoid(o:vec3f,d:vec3f,c:vec3f,r:vec3f)->vec4f {
+  let p=(o-c)/r;let v=d/r;let a=dot(v,v);let b=dot(p,v);let det=b*b-a*(dot(p,p)-1.0);
+  if(det<0.0){return vec4f(-1.0);}
+  var t=(-b-sqrt(det))/a;if(t<0.001){t=(-b+sqrt(det))/a;}
+  if(t<0.001){return vec4f(-1.0);}
+  return vec4f(t,normalize((o+d*t-c)/(r*r)));
+}
+fn sceneryPolygon(p:vec2f,base:u32,count:u32)->bool {
+  var inside=false;
+  for(var i=0u;i<count;i++){
+    let e=scenery[base+3u+i];
+    if((e.y>p.y)!=(e.w>p.y)){
+      let x=e.x+(p.y-e.y)*(e.z-e.x)/(e.w-e.y);
+      if(p.x<x){inside=!inside;}
+    }
+  }
+  return inside;
+}
+fn sceneryQuery(o:vec3f,d:vec3f,limit:f32,shadow:bool)->SceneryHit {
+  var out=SceneryHit(limit,vec3f(0.0),vec3f(0.0),-1.0,0.0);
+  let inv=1.0/select(d,vec3f(1e-8),abs(d)<vec3f(1e-8));
+  let total=u32(scenery[0].x);var i=0u;
+  // Stackless escape indices make the CPU/GPU storage bound independent of density.
+  while(i<total){
+    let lo=scenery[4u+i*2u];let hi=scenery[5u+i*2u];
+    let a=(lo.xyz-o)*inv;let b=(hi.xyz-o)*inv;
+    let near=max(max(min(a,b).x,min(a,b).y),min(a,b).z);
+    let far=min(min(max(a,b).x,max(a,b).y),max(a,b).z);
+    if(far<max(near,0.0) || near>out.t){i=u32(lo.w);continue;}
+    if(hi.w<0.0){i++;continue;}
+    let base=u32(scenery[0].y+hi.w);let p=scenery[base];let alb=scenery[base+2u].xyz;
+    var h=vec4f(-1.0);
+    {
+      let count=u32(p.z);var best=out.t;
+      if(abs(d.z)>1e-7){
+        for(var cap=0u;cap<2u;cap++){
+          let z=select(p.x,p.y,cap==1u);let t=(z-o.z)/d.z;
+          if(t>0.001 && t<best && sceneryPolygon((o+d*t).xy,base,count)){
+            best=t;h=vec4f(t,0.0,0.0,select(-1.0,1.0,cap==1u));
+          }
+        }
+      }
+      for(var e=0u;e<count;e++){
+        let line=scenery[base+3u+e];let v=line.zw-line.xy;let den=d.x*v.y-d.y*v.x;
+        if(abs(den)<1e-7){continue;}
+        let q=line.xy-o.xy;let t=(q.x*v.y-q.y*v.x)/den;let u=(q.x*d.y-q.y*d.x)/den;
+        let z=o.z+d.z*t;
+        if(t>0.001 && t<best && u>=0.0 && u<=1.0 && z>=p.x && z<=p.y){
+          let norm=normalize(vec3f(v.y,-v.x,0.0));best=t;h=vec4f(t,select(norm,-norm,dot(norm,d)>0.0));
+        }
+      }
+    }
+    if(h.x>0.0 && h.x<out.t){out=SceneryHit(h.x,h.yzw,alb,p.w,select(p.z,p.x,p.w>.5));if(shadow){return out;}}
+    i++;
+  }
+  return out;
+}
+fn worldScenery(dW:vec3f,tMax:f32,rnd:f32)->f32 {
+  SC_DISTANCE=1e9;WS_T=vec3f(0.0);
+  if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5){return tMax;}
+  let d=sceneryLocal(dW);let o=P.scenery[3].xyz;
+  SC_SAMPLE=rnd;SC_POINT=o+d*tMax;SC_DISTANCE=tMax;
+  let hit=sceneryQuery(o,d,min(tMax,P.scenery[1].w),false);
+  let tree=forestQuery(o,d,hit.t,false,220.0);
+  if(tree.kind>0u){
+    let p=o+d*tree.t;
+    SC_POINT=p;SC_DISTANCE=tree.t;
+    var n=tree.n;var alb:vec3f;
+    let look=forestLook(tree,n,p,sceneryColourAt(tree.base.xy));
+    WS_T=look.through;
+    if(tree.part==1u){
+      // bark: furrowed along the trunk
+      alb=look.albedo*(.8+.2*gnoise(p*vec3f(5.0,5.0,.7)));
+    }else{
+      // (far, where the crown is its plain shape: clumps in the normal stand for the carving)
+      let far=smoothstep(150.0,260.0,tree.t);
+      let clump=vec3f(gnoise(p*.9),gnoise(p*.9+vec3f(17.1,3.7,-5.3)),gnoise(p*.9+vec3f(-8.3,11.9,2.1)));
+      n=normalize(n+.55*far*clump);
+      // leaves facing all ways: a fine flicker of their own
+      alb=look.albedo*(.8+.2*gnoise(p*5.3));
+    }
+    WS=vec4f(normalize(sceneryGlobal(n)),1.0);WS_A=alb;WS_E=vec3f(0.0);
+    return tree.t;
+  }
+  if(hit.kind<0.0){return tMax;}
+  let p=o+d*hit.t;
+  SC_POINT=p;SC_DISTANCE=hit.t;
+  let rough=0.85+0.15*gnoise(p*.65);
+  var alb=hit.albedo*rough;
+  if(hit.kind>.5 && hit.kind<1.5){
+    // Stable facade courses and recessed windows. Roofs keep their own dull surface.
+    let wall=abs(hit.normal.z)<.5;
+    let win=wall && p.z-hit.root>1.6 && fract((p.x+p.y)*.24)<.6 && fract((p.z-hit.root)/3.0)<.55;
+    alb=select(alb,vec3f(.045,.065,.075),win);
+    alb*=select(.72,1.0,wall);
+  }
+  WS=vec4f(normalize(sceneryGlobal(hit.normal)),1.0);WS_A=alb;WS_E=vec3f(0.0);
+  return hit.t;
+}
+
+// A ray to the finite solar disc: existing temporal accumulation integrates the penumbra.
+// Ambient skylight remains present in shadow. Any-hit traversal avoids finding the nearest blocker.
+// (a face turned away from the Sun: no ray — the BVH and up to 640 forest steps for a light its cosine
+// zeroes anyway — R-M2)
+fn sceneryShadow(light:vec3f,normal:vec3f)->f32 {
+  if(dot(light,normal)<=0.0){return 1.0;}
+  let reach=select(1200.0,2000.0,P.scenery[5].x>.5);
+  if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5 || P.scenery[5].w<.5 || SC_DISTANCE>reach || dot(light,P.scenery[2].xyz)<=.015){return 1.0;}
+  let sun=sceneryLocal(light);let n=sceneryLocal(normal);
+  let axis=normalize(cross(sun,select(vec3f(0.0,0.0,1.0),vec3f(0.0,1.0,0.0),abs(sun.z)>.9)));
+  let radius=.00465*sqrt(fract(SC_SAMPLE*7.31+.17));let phase=TAU*fract(SC_SAMPLE*13.73+.41);
+  let d=normalize(sun+radius*(axis*cos(phase)+cross(sun,axis)*sin(phase)));
+  let start=SC_POINT+n*.35+d*.15;let range=select(500.0,900.0,P.scenery[5].x>.5);
+  let h=sceneryQuery(start,d,range,true);
+  var blocked=h.kind>=0.0;
+  if(!blocked){blocked=forestQuery(start,d,range,true,select(0.0,60.0,SC_DISTANCE<180.0)).kind>0u;}
+  let fade=smoothstep(reach-200.0,reach,SC_DISTANCE);
+  return mix(select(1.0,0.0,blocked),1.0,fade);
+}
+struct ScenerySurface { color:vec3f, cover:f32, kind:f32 };
+fn scenerySurface(foot:f32)->ScenerySurface {
+  var out=ScenerySurface(vec3f(0.0),0.0,0.0);
+  if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5 || SC_DISTANCE>P.scenery[1].w){return out;}
+  let point=SC_POINT.xy;let aa=max(.12,foot*.75);let header=scenery[1];let total=u32(header.y);var i=0u;var priority=0.0;var dryIsland=false;
+  while(i<total){
+    let lo=scenery[u32(header.x)+i*2u];let hi=scenery[u32(header.x)+i*2u+1u];
+    if(any(point<lo.xy-vec2f(aa)) || any(point>hi.xy+vec2f(aa))){i=u32(lo.w);continue;}
+    if(hi.w<0.0){i++;continue;}
+    let base=u32(header.z+hi.w);let p=scenery[base];let size=scenery[base+1u];var color=scenery[base+2u].xyz;
+    var kind=p.w;var cover=0.0;var rank=1.0;
+    if(scenery[base+2u].w>.5){
+      cover=select(0.0,1.0,sceneryPolygon(point,base,u32(p.z)));
+      if(kind==4.0 && cover==0.0 && sceneryPolygon(point,base,u32(scenery[base+2u].w))){dryIsland=true;}
+    }else{
+      kind=size.y;let line=p.zw-p.xy;let len=max(length(line),.001);let along=clamp(dot(point-p.xy,line)/(len*len),0.0,1.0);
+      let distance=length(point-p.xy-line*along);
+      cover=1.0-smoothstep(max(0.0,size.x-aa),size.x+aa,distance);
+      rank=select(2.0,3.0,kind==2.0);
+      if(kind==1.0 && size.x>=3.5 && foot<2.0){
+        let stripe=1.0-smoothstep(.09,.09+aa,distance);
+        let dash=1.0-smoothstep(3.0-aa,3.0+aa,(along*len)%9.0);
+        color=mix(color,vec3f(.65,.64,.56),stripe*dash);
+      }
+      if(kind==2.0 && foot<1.5){
+        let rail=1.0-smoothstep(.06,.06+aa,abs(distance-.72));
+        let sleeper=1.0-smoothstep(.18,.18+aa,(along*len)%.7);
+        color=mix(color,vec3f(.18,.15,.10),sleeper);color=mix(color,vec3f(.42),rail);
+      }
+    }
+    if(cover>0.0 && (rank>priority || (rank==priority && cover>out.cover))){priority=rank;out=ScenerySurface(color,cover,kind);}
+    i++;
+  }
+  if(dryIsland && out.kind==3.0){out.cover=0.0;}
+  out.cover*=P.scenery[3].w*smoothstep(P.scenery[1].w,P.scenery[1].w-300.0,SC_DISTANCE);
+  return out;
+}
+
+// The shore's trees in calm water (waterMirror): the reflected ray (physical) from the water's point here
+// (SC_POINT) through the forest grid, near; their light (the sun on their leaves, the sky) and distance [m]
+// (−1: none)
+fn sceneryMirror(rp:vec3f,Ls:vec3f,E:vec3f,sky:vec3f)->vec4f {
+  if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5 || SC_DISTANCE>2500.0){return vec4f(0.0,0.0,0.0,-1.0);}
+  let d=sceneryLocal(rp);
+  let h=forestQuery(SC_POINT+vec3f(0.0,0.0,0.05),d,1500.0,false,0.0);
+  if(h.kind==0u){return vec4f(0.0,0.0,0.0,-1.0);}
+  let p=SC_POINT+d*h.t;
+  let look=forestLook(h,h.n,p,sceneryColourAt(h.base.xy));
+  let Lp=airPhysicalDirection(Ls);let nG=normalize(sceneryGlobal(h.n));let up=P.scenery[2].xyz;
+  let L=look.albedo/PI*(E*sunThrough(max(p.z,0.0),dot(up,Lp))*max(dot(nG,Lp),0.0)+sky*0.5*(1.0+dot(nG,up)));
+  return vec4f(L,h.t);
+}
+// END_WORLD_SCENERY
+
+fn surfaceImage(q: vec3f, fx: vec3f, fy: vec3f) -> SurfaceImage {
+  var out = sceneryImage(q);
+  if (!HAS_SURFACE || P.surface[2].w < 0.5) { return out; }
+  let grid = vec2f(atan2(q.y, q.x) - P.surface[0].x, P.surface[0].y - asin(clamp(q.z, -1.0, 1.0))) * P.surface[0].z;
+  let dims = vec2i(P.surface[1].xy);
+  let at = vec2i(floor(grid));
+  if (any(at < vec2i(0)) || any(at >= dims)) { return out; }
+  let layer = at.y * dims.x + at.x;
+  let valid = u32(P.surface[0].w);
+  if ((valid & (1u << u32(layer))) == 0u) { return out; }
+  let local = fract(grid);
+  let uv = local * P.surface[1].w + P.surface[1].z;
+  let rho2 = max(dot(q.xy, q.xy), 1e-6);
+  let east = vec3f(-q.y, q.x, 0.0) / rho2;
+  let latScale = inverseSqrt(max(1.0 - q.z*q.z, 1e-6));
+  let gradX = vec2f(dot(east, fx), -fx.z * latScale) * P.surface[0].z * P.surface[1].w;
+  let gradY = vec2f(dot(east, fy), -fy.z * latScale) * P.surface[0].z * P.surface[1].w;
+  let c = textureSampleGrad(surfaceColour, surfaceSamp, uv, layer, gradX, gradY);
+  // Fade across an unresident neighbour; no per-page fade once adjacent pages are resident.
+  var edge = 1.0;
+  let blend = 2.0 / (P.surface[2].x * P.surface[1].w);
+  if (at.x == 0 || (valid & (1u << u32(max(layer-1, 0)))) == 0u) { edge *= smoothstep(0.0, blend, local.x); }
+  if (at.x == dims.x-1 || (valid & (1u << u32(layer+1))) == 0u) { edge *= smoothstep(0.0, blend, 1.0-local.x); }
+  if (at.y == 0 || (valid & (1u << u32(max(layer-dims.x, 0)))) == 0u) { edge *= smoothstep(0.0, blend, local.y); }
+  if (at.y == dims.y-1 || (valid & (1u << u32(layer+dims.x))) == 0u) { edge *= smoothstep(0.0, blend, 1.0-local.y); }
+  let rim = min(min(grid.x, grid.y), min(f32(dims.x)-grid.x, f32(dims.y)-grid.y));
+  edge *= smoothstep(0.0, 0.025, rim);
+  out.c = c.rgb;
+  out.cover = textureLoad(surfaceCover, vec2i(uv * P.surface[2].x), layer, 0).r;
+  let age = P.surface[2].w - 1.0 - P.surface[3u + u32(layer)/4u][u32(layer)%4u];
+  out.w = edge * smoothstep(0.0, 0.35, age) * c.a * select(0.0, 1.0, out.cover > 0u);
+  return out;
+}
+
+fn surfaceMaterial(q: vec3f, cover: u32, footM: f32) -> vec3f {
+  if (P.surface[2].y < 0.5 || footM > 20.0) { return vec3f(1.0); }
+  // Class-guided small detail only: preserve the real parcel/road layout in the satellite colour.
+  let fine = smoothstep(8.0, 1.0, footM);
+  var amplitude = 0.0;
+  var scaleM = 2.0;
+  if (cover == 10u || cover == 20u || cover == 95u) { amplitude = 0.12; scaleM = 12.0; }
+  if (cover == 30u || cover == 40u || cover == 90u || cover == 100u) { amplitude = 0.04 * fine; }
+  if (cover == 60u || cover == 70u) { amplitude = 0.07 * fine; }
+  if (amplitude == 0.0) { return vec3f(1.0); }
+  let filtered = smoothstep(scaleM * 2.0, scaleM * 0.5, footM);
+  return vec3f(1.0 + amplitude * filtered * (gnoise(q * (EARTH_RM / scaleM)) * 2.0 - 1.0));
+}
+
+// (the camera's own ray's ground point [m, from the camera], for the Ranger's shadow — set by earthNear alone: the
+// light probe's rays and a far body's ground, through earthLook too, had the camera's point — zero, or a pixel's
+// left over —, and the whole probe's ground took the hull's shadow: the cockpit's ambient black in the sun — R-H1)
+var<private> EARTH_SHADOW_POINT:vec3f;
+var<private> EARTH_SHADOW_ON: bool = false;
 fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, hG: f32) -> vec3f {
   // (the maps at the geodetic latitude — q the squashed space's —, the geometry at q)
   let gq = geoQ(q);
@@ -5499,11 +5917,15 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   var lvl = 0.0;
   if (HAS_RWY && RWY_HIT.w > 0.5) { lvl = runwayGrade(gq).y; }
   let sea0 = smoothstep(0.35, 0.65, rel.b);
-  let ocean = sea0 * (1.0 - lvl);
+  let osm=scenerySurface(max(length(fx),length(fy))*EARTH_RM);
+  let osmWater=select(0.0,osm.cover,osm.kind==3.0 || osm.kind==4.0);
+  let ocean = max(sea0,osmWater) * (1.0 - lvl);
   // (near, the tiles' imagery over the maps: four to eight times finer)
   let img = earthImagery(gq, max(length(fx), length(fy)) * EARTH_RM);
   var A = mix(day.rgb, img.c.rgb, img.w) * P.earth2.z;
   A = mix(A, vec3f(0.11, 0.12, 0.065) * P.earth2.z, sea0 * lvl);
+  let surface = surfaceImage(gq, fx, fy);
+  A = mix(A, surface.c * P.earth2.z, surface.w);
   // (the relief: east and north components; the map's is faint — strengthened, P.earth.w)
   var east = vec3f(-q.y, q.x, 0.0);
   east = select(normalize(east), vec3f(0.0, 1.0, 0.0), dot(east, east) < 1e-10);
@@ -5521,8 +5943,8 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   // (near: the ground's own materials from its height and slope — snow above the snow line (lower towards
   // the poles, ragged), bare rock on the steep faces of the mountains; blended in as the map's texel
   // grows under the pixel)
-  if (footM < texelM && ocean < 1.0) {
-    let k = smoothstep(texelM, 0.3 * texelM, footM) * (1.0 - ocean);
+  if (footM < texelM && ocean < 1.0 && surface.w < 0.999) {
+    let k = smoothstep(texelM, 0.3 * texelM, footM) * (1.0 - ocean) * (1.0 - surface.w);
     let slope = 1.0 - clamp(dot(n, q), 0.0, 1.0);
     let lat = abs(asin(clamp(gq.z, -1.0, 1.0))) * 57.29578;
     let snowLine = snowLineAt(lat) + 300.0 * gnoise(q * 3000.0);
@@ -5532,6 +5954,8 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
     A = mix(A, vec3f(0.16, 0.145, 0.13) * (0.8 + 0.4 * gnoise(q * 40000.0)), rock * k);
     A = mix(A, vec3f(0.82, 0.84, 0.88), snow * k);
   }
+  if (surface.w > 0.0) { A *= mix(vec3f(1.0), surfaceMaterial(gq, surface.cover, footM), surface.w); }
+  A=mix(A,osm.color,osm.cover);
   // (a runway: its pavement and markings over the ground, flat; its lights added below)
   var rwyLamps = vec3f(0.0);
   // (the paving's cover here and its coordinates on its runway [m, along and across]: the rain's puddles
@@ -5637,6 +6061,8 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
     wxVl = wxVeil(hG, wg, 3u);
   }
   var Eg = E * sunThrough(hG, mu0) * shade * sunSeen(q * (1.0 + hG / (EARTH_RM * earthSq(q))), Ls);
+  Eg *= sceneryShadow(physicalLs,physicalNormal);
+  if (EARTH_SHADOW_ON) { Eg *= shipShadow(EARTH_SHADOW_POINT); }
   // (near, the mountains' shadows: a peak between the sun and the valley)
   let footS = max(length(fx), length(fy)) * EARTH_RM;
   if (footS < 2.0 * EARTH_RM * TAU / f32(textureDimensions(earthElev).x) && mu0 > -0.05 && ocean < 1.0) {
@@ -5687,7 +6113,14 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   }
   // the sea (seaShade): the sun's glint off its wind-roughened slopes, the sky mirrored, the whitecaps
   if (ocean > 0.0) {
-    col = mix(col, seaShade(q, V, Ls, Eg, sky, col, footM), ocean);
+    // (inland water — OSM's lakes and rivers off the sea's map —: calm, a lake more than a river; near, the
+    // world mirrored in it)
+    // (HAS_SCENERY: without it the calm is 0 only at run time — 0 · x does not fold without fast-math —, and
+    // waterMirror's march, bisection and sceneryMirror stayed in the kernel — R-M1)
+    let calm = select(0.0, osmWater * (1.0 - sea0) * select(0.6, 0.92, osm.kind == 4.0), HAS_SCENERY);
+    var mirror = vec4f(0.0);
+    if (HAS_SCENERY && calm > 0.3 && footM < 40.0) { mirror = waterMirror(q, rd, Ls, E, sky, footM); }
+    col = mix(col, seaShade(q, V, Ls, Eg, sky, col, footM, calm, mirror), ocean);
   }
   // the cities at night (sodium's orange, whiter at their hearts), fading into the twilight
   let lights = mix(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r, img.c.a, img.w);
@@ -6082,8 +6515,10 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
     let ph = ro + rd * tHit;
     let q = normalize(ph);
     let fp = fp0 + fpK * tHit;
-    if (HAS_RWY && WS.w > 0.5) {
-      G = windsockShade(q, Ls, E, max(airHeight(ph), 0.0));
+    // (WS.w: a windsock, an airport's building — HAS_RWY — or a tree, a building of the world's scenery —
+    // HAS_SCENERY — met: without either, windsockShade and all it calls compile out — R-H3)
+    if ((HAS_RWY || HAS_SCENERY) && WS.w > 0.5) {
+      G = windsockShade(q, Ls, E, max(airHeight(ph), 0.0), airPhysicalDirection(rd));
     } else if (earth) {
       G = earthGround(q, rd, Ls, E, earthFoot(q, rd, gx, fp), earthFoot(q, rd, gy, fp), max(airHeight(ph), 0.0));
     } else {
@@ -6154,14 +6589,18 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
     let tm = airportScenery(dp / length(dp), select(1e7, t * kM, t > 0.0));
     if (WS.w > 0.5) { t = tm / kM; } else { WS = ws; WS_A = wa; }
   }
+  if (isEarth(k)) { let dp = vec3f(rd.xy, rd.z / ab); let kM = length(dp) * EARTH_RM; let tm = worldScenery(dp / length(dp), select(1e7, t * kM, t > 0.0),rnd); if (tm < select(1e7, t * kM, t > 0.0)) { t = tm / kM; } }
   if (HAS_RWY) { RWY_HIT = vec4f(vec3f(rd.xy, rd.z / ab) * (t * EARTH_RM), select(0.0, 1.0, isEarth(k) && t > 0.0 && rwyCount() > 0u && WS.w < 0.5)); }
   let lt = nearLight(k);
   SEA_ON = isEarth(k) && t > 0.0 && P.sea[1].w > 0.0 && WS.w < 0.5;
   SEA_D = toBody(look) * (t / m * P.near4.w);
   WX_W = select(0.0, P.wx[0].x, HAS_WX && isEarth(k) && earthOn());
   WX_Q = normalize(ro);
+  EARTH_SHADOW_POINT=look*(max(t,0.0)/m*P.near4.w);
+  EARTH_SHADOW_ON = true;
   let e = earthLook(k, ro, rd, t, normalize(squashed(toBody(lt.dir), ab)), lt.e, squashed(toBody(P.camRight.xyz), ab), squashed(toBody(P.camUp.xyz), ab),
     0.0, pixFoot(), fract(rnd * 7.31 + 0.37), P.earth4.w > 0.5);
+  EARTH_SHADOW_ON = false;
   SEA_ON = false;
   WX_W = 0.0;
   WS = vec4f(0.0);
@@ -7150,7 +7589,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     let na = accum[idx].a + 1.0;
     accum[idx] += vec4f(col, 1.0);
     let m = moments[idx];
-    moments[idx] = vec2f(m.x + l * l, mix(m.y, tr.depth, 1.0 / na));
+    // (the depth: the nearest of the samples — the opaque one —, not their mean: by a trunk against the sky the
+    // mean went towards 5e8 M, and the grass behind showed through a fringe of 1–2 px, the camera held)
+    moments[idx] = vec2f(m.x + l * l, select(min(m.y, tr.depth), tr.depth, na < 1.5));
     if (polOn) { polAcc[idx] += qu; }
   } else {
     accum[idx] = vec4f(col, 1.0);

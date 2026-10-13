@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { keyCatalog, resolveBody, resolveSite } from "../src/ai/game-tools";
+import { type GameHost, keyCatalog, resolveBody, resolveSite } from "../src/ai/game-tools";
 import { checkSetting, findSettings } from "../src/ai/settings-tools";
 import { orderReply, parseOrders } from "../src/ai/offline-orders";
 import { defaultSettings } from "../src/settings";
@@ -59,6 +59,16 @@ test("settings found by words in either language; values checked against the sch
   expect(checkSetting("nope", 1, s).ok).toBe(false);
   // (a choice by its label)
   expect(checkSetting("flightMode", "Plane", s)).toEqual({ ok: true, value: "plane" });
+  expect(findSettings("worldcover", s).map((d) => d.key)).toContain("earthSurface");
+  expect(checkSetting("earthSurface", "materials", s)).toEqual({ ok: true, value: "materials" });
+  expect(checkSetting("earthSurface", "ultra", s).ok).toBe(false);
+  expect(findSettings("openstreetmap", s).map((d) => d.key)).toContain("earthScenery");
+  expect(checkSetting("earthScenery", "high", s)).toEqual({ ok: true, value: "high" });
+  expect(checkSetting("earthScenery", "ultra", s).ok).toBe(false);
+  expect(findSettings("hitbox", s).map((d) => d.key)).toContain("sceneryHitboxes");
+  expect(checkSetting("sceneryHitboxes", "false", s)).toEqual({ ok: true, value: false });
+  expect(checkSetting("earthSceneryShadows", false, s)).toEqual({ ok: true, value: false });
+  expect(checkSetting("earthSceneryShadows", "false", s)).toEqual({ ok: true, value: false });
 });
 
 test("offline: the common orders turned into the tools' calls (A4); questions are not orders", () => {
@@ -160,6 +170,18 @@ test("every game action as a / command: read by position or by name, completed a
   expect(gameCall("/gear up", tools)).toEqual({ tool: "controls", args: { gear: false } });
   expect(gameCall("/throttle 0,5", tools)).toEqual({ tool: "controls", args: { throttle: 0.5 } });
   expect(gameCall("/set music off", tools)).toEqual({ tool: "set_settings", args: { changes: [{ key: "music", value: "off" }] } });
+  expect(gameCall("/surface materials", tools)).toEqual({
+    tool: "set_settings",
+    args: { changes: [{ key: "earthSurface", value: "materials" }] },
+  });
+  expect(gameCall("/scenery balanced", tools)).toEqual({
+    tool: "set_settings",
+    args: { changes: [{ key: "earthScenery", value: "balanced" }] },
+  });
+  expect(gameCall("/sceneryshadows false", tools)).toEqual({
+    tool: "set_settings",
+    args: { changes: [{ key: "earthSceneryShadows", value: "false" }] },
+  });
   expect(gameCall("/date +24", tools)).toEqual({ tool: "set_date", args: { hours: 24 } });
   expect(gameCall("/tool camera shipView=true", tools)).toEqual({ tool: "camera", args: { shipView: true } });
   expect(gameCall("/gear up down", tools)).toEqual({ error: 'too many arguments: "down"' });
@@ -171,7 +193,11 @@ test("every game action as a / command: read by position or by name, completed a
     screens: [],
     scenes: [],
     saves: [],
-    settings: [{ key: "music", label: "Musique", values: ["true", "false"] }],
+    settings: [
+      { key: "music", label: "Musique", values: ["true", "false"] },
+      { key: "earthSurface", label: "Sol satellite", values: ["off", "satellite", "materials"] },
+      { key: "earthScenery", label: "Forêts et bâtiments", values: ["off", "balanced", "high"] },
+    ],
     sky: [],
     keys: [],
     tools,
@@ -181,6 +207,8 @@ test("every game action as a / command: read by position or by name, completed a
   expect(completeGame("/teleport glide bou", ctx)!.map((s) => s.text)).toEqual(['/teleport glide "Paris - Le Bourget" ']);
   expect(completeGame("/view ch", ctx)!.map((s) => s.label)).toEqual(["chase"]);
   expect(completeGame("/set music ", ctx)!.map((s) => s.label)).toEqual(["true", "false"]);
+  expect(completeGame("/surface m", ctx)!.map((s) => s.label)).toEqual(["materials"]);
+  expect(completeGame("/scenery h", ctx)!.map((s) => s.label)).toEqual(["high"]);
   expect(completeGame("/tool cam", ctx)!.map((s) => s.label)).toEqual(["camera"]);
   expect(completeGame("/tool camera sh", ctx)!.map((s) => s.label)).toEqual(["shipView="]);
   expect(completeGame("/tool camera mount=co", ctx)!.map((s) => s.label)).toEqual(["mount=cockpit"]);
@@ -229,6 +257,36 @@ test("the sky in TARS's telemetry (PLAN-CIEL C3): the Sun's and the Moon's heigh
   };
   const cam = { skyInfo: () => sky } as unknown as import("../src/controls").CameraController;
   expect(telemetry(cam, ["sky"])).toEqual({ sky });
+});
+
+test("TARS reads surface availability, waits for settled fallback, and can be woken", async () => {
+  const { gameTools } = await import("../src/ai/game-tools");
+  const { EVENT_KINDS } = await import("../src/ai/triggers");
+  const surface = { status: "degraded", loaded: 8, failed: 8, pending: false, gpuBytes: 39_000_000 };
+  const scenery = { status: "degraded", trees: 12000, buildings: 300, pending: false, gpuBytes: 16 * 1024 ** 2, lastError: "offline" };
+  const host = {
+    camera: {},
+    settings: defaultSettings(),
+    tools: {
+      perf: () => ({ earthSurface: surface, earthScenery: scenery }),
+      status: () => ({ soiName: "Earth", status: "air", altKm: 1, orbit: null }),
+      pilotState: () => ({}),
+    },
+    now: () => 1000,
+    progress() {},
+    phase: () => "air",
+    alerts: () => [],
+  } as unknown as GameHost;
+  const tools = gameTools(host),
+    signal = new AbortController().signal;
+  const result = await tools.find((t) => t.name === "get_telemetry")!.run({ groups: ["surface"] }, signal);
+  expect(result).toEqual({ surface });
+  const waited = await tools.find((t) => t.name === "wait")!.run({ until: "surface_ready" }, signal);
+  expect(waited).toMatchObject({ met: true, surface });
+  expect(EVENT_KINDS).toContain("surface");
+  expect(await tools.find((t) => t.name === "get_telemetry")!.run({ groups: ["scenery"] }, signal)).toEqual({ scenery });
+  expect(await tools.find((t) => t.name === "wait")!.run({ until: "scenery_ready" }, signal)).toMatchObject({ met: true, scenery });
+  expect(EVENT_KINDS).toContain("scenery");
 });
 
 test("the eclipse calculator for TARS (PLAN-CIEL C5): find_eclipses, eclipse_local, their / commands", async () => {
@@ -441,4 +499,125 @@ test("TARS reads signed descent commands, threshold profile height and actual do
   expect(tel.descent).toMatchObject({ command: { vHorMs: 5, vVertMs: -2, sinkMs: 2, doi: true } });
   expect(tel.approach).toMatchObject({ heightOverThresholdM: 250, profileDeviationM: 0, groundSpeedMs: 100, airspeedMs: 110 });
   expect(tel.dock).toMatchObject({ closingMs: -0.1, askedClosingMs: -0.1 });
+});
+
+test("planetary character actions, telemetry, waits, events and commands are reachable by TARS", async () => {
+  const { gameTools, SCREENS } = await import("../src/ai/game-tools");
+  const { EVENT_KINDS } = await import("../src/ai/triggers");
+  const { GAME_COMMANDS } = await import("../src/ai/game-commands");
+  const calls: string[] = [];
+  const character = {
+    active: true,
+    grounded: true,
+    state: () => ({ active: true, body: "moon", grounded: true }),
+    disembark: () => {
+      calls.push("disembark");
+      return null;
+    },
+    board: () => {
+      calls.push("board");
+      return null;
+    },
+    start: (b: string, lat: number, lon: number) => {
+      calls.push(`start ${b} ${lat} ${lon}`);
+      return null;
+    },
+    move: () => null,
+    jump: () => calls.push("jump"),
+    yaw: 0,
+    pitch: 0,
+  };
+  const host = {
+    camera: { character, piloting: true },
+    settings: {},
+    tools: {
+      perf: () => ({ grass: { roots: 123 } }),
+      status: () => ({ soiName: "Moon", label: "ground", altKm: 0, orbit: null }),
+      pilotState: () => ({}),
+      save: (name: string) => calls.push(`save ${name}`),
+    },
+    changed: () => {},
+    now: () => 0,
+    progress: () => {},
+    phase: () => null,
+    alerts: () => [],
+    log: () => [],
+  } as unknown as GameHost;
+  const tools = gameTools(host),
+    signal = new AbortController().signal;
+  expect(await tools.find((t) => t.name === "character")!.run({ action: "disembark" }, signal)).toMatchObject({ ok: true, body: "moon" });
+  expect(calls).toEqual(["disembark"]);
+  // (start: no default place, a solid world only, the net first)
+  const char = tools.find((t) => t.name === "character")!;
+  expect(await char.run({ action: "start", body: "moon" }, signal)).toMatchObject({ ok: false });
+  expect(await char.run({ action: "start", body: "jupiter", lat: 0, lon: 0 }, signal)).toMatchObject({ ok: false });
+  expect(calls).toEqual(["disembark"]);
+  expect(await char.run({ action: "start", body: "moon", lat: 20, lon: 30 }, signal)).toMatchObject({ ok: true });
+  expect(calls.slice(1)).toEqual(["save Before TARS", "start moon 20 30"]);
+  // (orbit: only what is given changes)
+  character.yaw = 1;
+  character.pitch = 0.5;
+  await char.run({ action: "orbit", pitch: 30 }, signal);
+  expect(character.yaw).toBe(1);
+  expect(character.pitch).toBeCloseTo(Math.PI / 6, 9);
+  expect(await tools.find((t) => t.name === "get_telemetry")!.run({ groups: ["character", "grass"] }, signal)).toEqual({
+    character: character.state(),
+    grass: { roots: 123 },
+  });
+  expect(await tools.find((t) => t.name === "wait")!.run({ until: "character_grounded" }, signal)).toMatchObject({ met: true });
+  expect(EVENT_KINDS).toContain("character");
+  expect(SCREENS).toContain("character");
+  expect(GAME_COMMANDS.find((c) => c.name === "walk")?.tool).toBe("character");
+});
+
+test("TARS can zoom and read the local map and streaming priority", async () => {
+  const { gameTools } = await import("../src/ai/game-tools");
+  const { GAME_COMMANDS } = await import("../src/ai/game-commands");
+  const { EVENT_KINDS } = await import("../src/ai/triggers");
+  let zoom = 18;
+  const host = {
+    settings: {},
+    camera: { character: { state: () => ({}) } },
+    tools: { perf: () => ({ streaming: { leadM: 650 } }) },
+    localMap: { state: () => ({ zoom }), zoom: (v: number) => (zoom = v) },
+    map: () => {},
+    changed: () => {},
+    log: () => [],
+  } as unknown as import("../src/ai/game-tools").GameHost;
+  const tools = gameTools(host),
+    signal = new AbortController().signal;
+  await tools.find((t) => t.name === "interface")!.run({ mapZoom: 19 }, signal);
+  expect(zoom).toBe(19);
+  expect(await tools.find((t) => t.name === "get_telemetry")!.run({ groups: ["map", "streaming"] }, signal)).toEqual({
+    map: { zoom: 19 },
+    streaming: { leadM: 650 },
+  });
+  expect(GAME_COMMANDS.find((c) => c.name === "mapzoom")?.tool).toBe("interface");
+  expect(EVENT_KINDS).toContain("map");
+});
+
+test("TARS's new teleports save 'Before TARS' first: atlas go, sky event go/live, on foot", async () => {
+  const { gameTools, UNDO_SAVE } = await import("../src/ai/game-tools");
+  const calls: string[] = [];
+  let mode = "ship";
+  const host = {
+    settings: {},
+    camera: { character: { state: () => ({}) } },
+    tools: { save: (n: string) => calls.push(`save ${n}`) },
+    atlas: { search: async () => [], go: (to: string) => (calls.push(`go ${to}`), null), open: () => {} },
+    skyEvents: { take: (id: string, way: string) => (calls.push(`take ${id} ${way}`), null), list: async () => [], open: () => null },
+    mode: { get: () => mode, set: (m: string) => (calls.push(`mode ${m}`), (mode = m), null), hideBar: () => {} },
+    changed: () => {},
+    log: () => [],
+  } as unknown as GameHost;
+  const tools = gameTools(host),
+    signal = new AbortController().signal;
+  const run = (name: string, a: Record<string, unknown>) => tools.find((t) => t.name === name)!.run(a, signal);
+  await run("atlas", { action: "go", lat: 45, lon: 6, to: "walk" });
+  await run("sky_events", { action: "take", id: "trails", way: "go" });
+  await run("sky_events", { action: "take", id: "trails", way: "render" });
+  await run("set_mode", { mode: "foot" });
+  await run("set_mode", { mode: "foot" });
+  const save = `save ${UNDO_SAVE}`;
+  expect(calls).toEqual([save, "go walk", save, "take trails go", "take trails render", save, "mode foot", "mode foot"]);
 });

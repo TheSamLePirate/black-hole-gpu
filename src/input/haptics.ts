@@ -71,8 +71,12 @@ export class Haptics {
     this.send({ ...r, ms: 140 });
   }
 
+  /** told of each impulse (the camera's jolt — controller/camrig.ts camImpulse), felt or not */
+  onImpulse: ((kind: ImpulseKind, k: number) => void) | null = null;
+
   /** An impulse (`k` scales it, 0…1), at once. */
   impulse(kind: ImpulseKind, k = 1, now = performance.now()) {
+    this.onImpulse?.(kind, k);
     const I = IMPULSES[kind];
     const r = { strong: clamp01(I.strong * k), weak: clamp01(I.weak * k), ms: I.ms };
     this.impulseUntil = now + I.ms;

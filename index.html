@@ -52,71 +52,16 @@
 
     <div id="panel"></div>
 
+    <!-- the app's buttons: moved into the top bar at start, their ids kept (src/ui/topbar.ts) -->
     <nav id="toolbar" class="glass">
       <button id="btn-scenes" data-tip="Scenes — every black hole, the wormhole, Gargantua and the game's missions"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6" /><rect x="13.5" y="3.5" width="7" height="7" rx="1.6" /><rect x="3.5" y="13.5" width="7" height="7" rx="1.6" /><circle cx="17" cy="17" r="3.2" class="fill" /></svg><span>Scenes</span></button>
       <span class="sep"></span>
       <button id="btn-camera" data-tip="Camera — placement, look at the target, lens & telescope, target, cinematics" data-key="V"><svg viewBox="0 0 24 24"><path d="M3 8.5a2 2 0 0 1 2-2h2.2l1.6-2h6.4l1.6 2H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><circle cx="12" cy="12.5" r="3.6" /></svg><span class="cam-mode">Around</span><span class="cam-target">Gargantua</span></button>
       <span class="sep"></span>
+      <button id="btn-music" data-tip="Music — the themes, listen, the mode, the mixer, which theme when"><svg viewBox="0 0 24 24"><path d="M9 18V6l11-2v12" /><circle cx="6.5" cy="18" r="2.5" class="fill" /><circle cx="17.5" cy="16" r="2.5" class="fill" /></svg><span>Music</span></button>
       <button id="btn-sky" data-tip="Sky chart — constellations, star names, equatorial &amp; horizontal grids (U: grids)" data-key="N"><svg viewBox="0 0 24 24"><circle cx="5" cy="17" r="1.5" class="fill" /><circle cx="10" cy="8" r="1.5" class="fill" /><circle cx="17" cy="11" r="1.5" class="fill" /><circle cx="19.5" cy="4.5" r="1.1" class="fill" /><path d="M5 17l5-9 7 3 2.5-6.5" /></svg><span>Sky</span></button>
-      <button id="btn-photo" data-tip="Photo mode — the view alone: exposure, lens, depth of field, PNG, offline render"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="2" /><circle cx="12" cy="13" r="3.5" /><path d="M8 6l1.5-2h5L16 6" /></svg><span>Photo</span></button>
       <button id="btn-help" data-tip="Keyboard & mouse" data-key="?"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M9.6 9.3a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2 1-1.2 1.9v.4" /><circle cx="12" cy="17.2" r="0.9" class="fill" /></svg><span>Help</span></button>
     </nav>
-
-    <section id="render" class="glass" hidden>
-      <header>
-        <div>
-          <h2>Offline render</h2>
-          <p>Scene frozen in time · any resolution · rendered progressively over many frames</p>
-        </div>
-        <button id="render-close" class="icon" title="Hide (the render keeps running)">✕</button>
-      </header>
-      <div class="form">
-        <label title="Sets resolution, sampling and integrator for the purpose">Preset<select id="r-preset"></select></label>
-        <label>Resolution<select id="r-res"></select></label>
-        <div class="pair">
-          <label>Width<input id="r-w" type="number" min="16" step="1" /></label>
-          <label>Height<input id="r-h" type="number" min="16" step="1" /></label>
-        </div>
-        <label>Samples / pixel<select id="r-spp"></select></label>
-        <label>Geodesic integrator<select id="r-int"></select></label>
-        <label title="Stop sampling a pixel once the relative standard error of its mean falls below this value">Adaptive sampling (noise threshold)<select id="r-noise"></select></label>
-        <label title="Exposure time in units of M = GM/c³; samples are spread over it (motion blur of the flow)">Motion-blur shutter [M]<input id="r-shutter" type="number" min="0" step="0.5" value="0" /></label>
-        <label>GPU budget<select id="r-budget"></select></label>
-      </div>
-      <div class="progress"><div id="r-bar"></div></div>
-      <div id="r-status"></div>
-      <div class="actions">
-        <button id="r-start" class="primary">Start render</button>
-        <button id="r-pause">Pause</button>
-        <button id="r-stop">Close</button>
-      </div>
-      <details id="r-video">
-        <summary>Video</summary>
-        <div class="form">
-          <label title="What the video films: the scene as it goes on from now (the camera's mode, the ship and its autopilot, the mission — as live), a take recorded live (● on the time bar), or a cinematic">Shot<select id="v-source"></select></label>
-          <div class="pair">
-            <label>Duration [s]<input id="v-duration" type="number" min="1" max="600" step="1" value="24" /></label>
-            <label>Frame rate<select id="v-fps"></select></label>
-          </div>
-          <div class="pair">
-            <label title="The scene's time during the video: the live warp, another one, or frozen (the camera moves in a still instant)">Time<select id="v-rate"></select></label>
-            <label title="Motion blur of the flow: exposure as a fraction of the frame interval">Shutter<select id="v-shutter"></select></label>
-          </div>
-          <label class="check" title="After the video, the scene returns to where it was (else it goes on from the video's end)"><input id="v-restore" type="checkbox" checked /> Return to the start afterwards</label>
-          <div id="v-note" class="note"></div>
-        </div>
-        <div class="actions">
-          <button id="v-start" class="primary">Render video (MP4)</button>
-          <button id="v-stop">Stop</button>
-        </div>
-      </details>
-      <div class="actions exports">
-        <span>Export</span>
-        <button id="r-png" title="8-bit sRGB, tone-mapped">PNG</button>
-        <button id="r-png16" title="16 bits per channel sRGB, tone-mapped, no dithering">PNG 16-bit</button>
-        <button id="r-exr" title="Linear scene radiance (half float), no bloom / tone mapping">EXR (HDR)</button>
-      </div>
-    </section>
 
     <div id="tip" role="tooltip" hidden></div>
     <div id="hint" hidden>

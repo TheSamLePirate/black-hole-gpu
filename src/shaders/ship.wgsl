@@ -248,7 +248,7 @@ fn envSH(@builtin(local_invocation_id) lid: vec3u) {
 @group(0) @binding(8) var shadowSamp: sampler_comparison;
 @group(0) @binding(9) var<storage, read> jets: array<Jet>;
 @group(0) @binding(10) var scene: texture_2d<f32>; // the traced image the ship is drawn over (× pre-exposure)
-@group(0) @binding(11) var<storage, read> moments: array<vec2f>; // Σ l², the traced depth [M]
+@group(0) @binding(11) var<storage, read> sceneDepth: array<f32>; // the traced occlusion depth [M] (post.wgsl occlusion)
 @group(0) @binding(12) var<storage, read> inst: array<Inst>;
 @group(0) @binding(13) var albedoMap: texture_2d<f32>; // the Lander's paint (sRGB)
 @group(0) @binding(14) var normalMap: texture_2d<f32>; // its tangent-space normals (v down the image)
@@ -608,7 +608,7 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   if (I.flags.z > 0.5 && S.img.w > 0.5) {
     let px = vec2f((in.p.x / (in.p.z * S.proj.x) + 1.0) * 0.5, (1.0 - in.p.y / (in.p.z * S.proj.y)) * 0.5) * S.img.xy;
     let q = vec2u(clamp(px, vec2f(0.0), S.img.xy - 1.0));
-    if (moments[q.y * u32(S.img.x) + q.x].y * S.img.z < length(in.p) * 0.999) { discard; }
+    if (sceneDepth[q.y * u32(S.img.x) + q.x] * S.img.z < length(in.p) * 0.999) { discard; }
   }
   let side = select(-1.0, 1.0, front);
   let ng = normalize(in.n) * side;       // geometric (smoothed) normal, camera frame
@@ -1198,7 +1198,7 @@ fn trailFs(in: TOut) -> @location(0) vec4f {
   if (S.img.w > 0.5 && in.p.z > 0.0) {
     let px = vec2f((in.p.x / (in.p.z * S.proj.x) + 1.0) * 0.5, (1.0 - in.p.y / (in.p.z * S.proj.y)) * 0.5) * S.img.xy;
     let q = vec2u(clamp(px, vec2f(0.0), S.img.xy - 1.0));
-    if (moments[q.y * u32(S.img.x) + q.x].y * S.img.z < dist) { discard; }
+    if (sceneDepth[q.y * u32(S.img.x) + q.x] * S.img.z < dist) { discard; }
   }
   // across a round tube: the chord through it, a soft edge; puffs along it (fixed in the air) and
   // ragged edges, the wingtips' a twisting thread
@@ -1258,7 +1258,7 @@ fn lampVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> L
   if (S.img.w > 0.5 && c.z > 0.0) {
     let px = vec2f((c.x / (c.z * S.proj.x) + 1.0) * 0.5, (1.0 - c.y / (c.z * S.proj.y)) * 0.5) * S.img.xy;
     let q = vec2u(clamp(px, vec2f(0.0), S.img.xy - 1.0));
-    let dt = moments[q.y * u32(S.img.x) + q.x].y * S.img.z;
+    let dt = sceneDepth[q.y * u32(S.img.x) + q.x] * S.img.z;
     if (dt > 1.0 && dt < length(c) - 0.5) {
       o.clip = vec4f(0.0, 0.0, 2.0, 1.0);
       return o;

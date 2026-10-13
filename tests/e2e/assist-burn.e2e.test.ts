@@ -20,7 +20,7 @@ describe.skipIf(!E2E)("a burn flown by hand, assisted", () => {
   test("CIRC assisted: counted down, lit by hand, its Δv followed, cut at the cue — circular", async () => {
     // (an orbit 300 × 420 km, the apoapsis a few minutes ahead)
     await app.js(`__bh.game.orbit("earth", { peKm: 300, apKm: 420, inc: 20, nu: 165 })`);
-    await app.press("F4", "F4");
+    await app.press("F4", "F4", { shift: true });
     expect(await app.js<boolean>("__bh.camera.pilot.assist")).toBe(true);
     const sp0 = await app.js<number>("__bh.camera.spent");
     await app.press("Digit9", "9");

@@ -1,3 +1,4 @@
+import { LocalGroundMap, type LocalPlace } from "./local-ground-map";
 // The ground track: where the Ranger is over the world it orbits — a globe (orthographic, the world's
 // map lit by the Sun, turning under the ship) or a planisphere (equirectangular, the day and the night)
 // — with the track it left, the one ahead (the free-fall path predicted, the planned one through the
@@ -98,6 +99,8 @@ interface Scene {
 }
 
 export class GroundTrack {
+  readonly localMap = new LocalGroundMap();
+  localPlace: () => LocalPlace | null = () => null;
   readonly stage = h("div", "gt-stage");
   private canvas = h("canvas", "gt-canvas");
   /** the marks and the graticule: on the GPU when there is one, else on the canvas */
@@ -140,12 +143,15 @@ export class GroundTrack {
     | null = null;
 
   constructor(private s: Settings) {
-    this.stage.append(this.canvas, this.tag, this.read);
+    this.stage.append(this.canvas, this.tag, this.read, this.localMap.root);
+    this.localMap.root.hidden = true;
     this.bindPointer();
   }
 
   /** The world the ship is over (in its sphere of influence, not the Sun, not Gargantua), or null. */
   worldOf(i: Info): string | null {
+    const local = this.localPlace();
+    if (local) return local.body;
     const st = i.status;
     if (!st) return null;
     if (st.side === "ours") {
@@ -166,14 +172,44 @@ export class GroundTrack {
 
   /** Each frame, whatever the map shows: the track left keeps being recorded. */
   observe(i: Info, t: number) {
+    if (this.localPlace()) return;
     const id = this.worldOf(i);
     if (!id) return;
     const q = i.status!.side === "gargantua" ? unit(this.theirXi(i, id, t)) : onMap(id, toBodyFixed(id, i.X as V3, t));
     this.record(id, q, t);
   }
 
+  /** A body's planisphere for a map of its own (the on-foot minimap): the image, or why not yet. */
+  atlas(body: string): { surface: HTMLCanvasElement | null; surfaceStatus: "ready" | "loading" | "unavailable" } {
+    const tex = this.texture(body);
+    return { surface: tex?.img ?? null, surfaceStatus: tex ? "ready" : this.tex.get(body) === "loading" ? "loading" : "unavailable" };
+  }
+  drawLocal(place: LocalPlace) {
+    this.canvas.style.visibility = "hidden";
+    this.read.hidden = this.tag.hidden = true;
+    if (this.gpu) this.gpu.canvas.style.display = "none";
+    this.redraw = () => {
+      const current = this.localPlace();
+      if (current) this.drawLocal(current);
+    };
+    const surface = this.texture(place.body);
+    this.localMap.update({
+      ...place,
+      surface: surface?.img,
+      surfaceStatus: surface ? "ready" : this.tex.get(place.body) === "loading" ? "loading" : "unavailable",
+    });
+  }
   draw(i: Info, time: number) {
     this.redraw = () => this.draw(i, time);
+    const local = this.mode === "map" ? this.localPlace() : null;
+    this.localMap.root.hidden = !local;
+    this.canvas.style.visibility = local ? "hidden" : "";
+    this.read.hidden = this.tag.hidden = !!local;
+    if (local) {
+      if (this.gpu) this.gpu.canvas.style.display = "none";
+      this.drawLocal(local);
+      return;
+    }
     this.wxDays = daysOf(time);
     const sc = this.scene(i, time);
     if (!this.paint(sc) || !sc?.ship) {
@@ -450,7 +486,10 @@ export class GroundTrack {
       this.raster.key = "";
       this.redraw?.();
     };
-    img.onerror = () => this.tex.set(id, "none");
+    img.onerror = () => {
+      this.tex.set(id, "none");
+      this.redraw?.();
+    };
     img.src = planetMapUrl(m);
     return null;
   }

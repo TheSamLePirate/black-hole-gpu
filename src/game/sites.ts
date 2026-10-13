@@ -98,6 +98,20 @@ export const EARTH_RUNWAYS: RunwayFrame[] = SITES.filter((s) => s.body === "eart
   const across = north.map((n, i) => -n * Math.sin(h) + east[i]! * Math.cos(h)) as [number, number, number];
   return { site: s, p, along, across, origin: geodeticToCart(WGS84_A, WGS84_F, la, lo, 0), elev: s.elev ?? 0 };
 });
+/**
+ * A ground point [m, body-fixed] on a runway's pavement or its shoulders (45 m either side of its axis, 60 m past
+ * its ends): nothing grows there — the grass round it does (an airfield's).
+ */
+export function runwayPaved(q: [number, number, number]): boolean {
+  for (const r of EARTH_RUNWAYS) {
+    const d: [number, number, number] = [q[0] - r.origin[0], q[1] - r.origin[1], q[2] - r.origin[2]];
+    if (Math.abs(d[0]) > 6000 || Math.abs(d[1]) > 6000 || Math.abs(d[2]) > 6000) continue;
+    const a = d[0] * r.along[0] + d[1] * r.along[1] + d[2] * r.along[2];
+    const c = d[0] * r.across[0] + d[1] * r.across[1] + d[2] * r.across[2];
+    if (a > -60 && a < RUNWAY_LENGTH + 60 && Math.abs(c) < RUNWAY_HALF_WIDTH + 15) return true;
+  }
+  return false;
+}
 /** a runway's grading's figures [m] (the shader's runwayGrade holds the same: change both) */
 export const RUNWAY_GRADE = { levelPast: 300, levelEase: 600, levelSide: 320, levelSideEase: 300 } as const;
 const ease = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));

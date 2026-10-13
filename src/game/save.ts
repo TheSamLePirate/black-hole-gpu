@@ -1,3 +1,4 @@
+import type { CharacterSave } from "../controller/character";
 // Saved games: the whole state of a flight (every setting at full precision, the scene's time, the
 // pilot's modes, the ground under the ship, the flight plan) — kept in the browser (an automatic save
 // resumed at the next visit, named slots), exported and imported as JSON files. The URL no longer
@@ -30,6 +31,7 @@ export interface GameSave {
   /** the game's settings: the scene and what it carried (not the player's own) */
   settings: Partial<Settings>;
   time: number;
+  character?: CharacterSave | null;
   ship: {
     piloting: boolean;
     sas: boolean;
@@ -53,6 +55,10 @@ export interface GameSave {
       trim: { t: number; dv: number } | null;
       plan: { heat: number; shield: number; g: number } | null;
     } | null;
+    /** the camera on the craft (its frame: the eye, the aim, the up) when saved — the craft's attitude is the
+     *  camera's through it: a director's shot, a view dragged about the craft are not their defaults (older
+     *  saves: none — the attach point's own) */
+    view?: { eye: [number, number, number]; aim: [number, number, number]; up?: [number, number, number] } | null;
   };
   /** the fleet: the craft flown, the ones coasting, the docks (older saves: none — the craft the settings
    *  name is the one flown, the others where the scene puts them) */
@@ -125,7 +131,8 @@ const isVec = (x: unknown) => Array.isArray(x) && x.length === 3 && x.every(isNu
 /**
  * A save checked on the way in (a file, a link, the browser's storage): the fields the game needs, of
  * the kinds it needs — the time, the ship's modes, the ground, the plan (throws with the first fault:
- * a corrupted save must not half-load a flight); settings of the wrong kind repaired to defaults.
+ * a corrupted save must not half-load a flight); settings of the wrong kind repaired to defaults, a malformed
+ * walker or fleet left out.
  */
 export function checkSave(x: unknown): GameSave {
   const fault = (why: string): never => {
@@ -152,12 +159,31 @@ export function checkSave(x: unknown): GameSave {
     }
   }
   if (repaired.length) caught("save", new Error(`settings repaired to their defaults: ${repaired.join(", ")}`));
+  if (g.character) {
+    const c = g.character;
+    if (
+      typeof c.body !== "string" ||
+      typeof c.ours !== "boolean" ||
+      !isVec(c.q) ||
+      !isVec(c.forward) ||
+      (c.heading !== undefined && !isVec(c.heading)) ||
+      ![c.yaw, c.pitch, c.distance, c.vertical].every(isNum) ||
+      c.distance < 0.3 ||
+      c.distance > 8
+    ) {
+      // (a walker that is not one is left out, told: the flight still loads, with the pilot on board)
+      caught("save", new Error("the character left out: malformed"));
+      delete g.character;
+    }
+  }
   const sh = g.ship;
   if (!sh || typeof sh !== "object") fault("ship");
   if (typeof sh.piloting !== "boolean" || typeof sh.hold !== "string" || typeof sh.auto !== "string") fault("ship's modes");
   if (!isNum(sh.throttle) || sh.throttle < 0 || sh.throttle > 1) fault("throttle");
   if (sh.landed !== null && (typeof sh.landed?.body !== "string" || !isVec(sh.landed.q))) fault("ground");
   if (g.plan !== null && g.plan !== undefined && !Array.isArray(g.plan.nodes)) fault("plan");
+  if (sh.view != null && (!isVec(sh.view.eye) || !isVec(sh.view.aim) || (sh.view.up !== undefined && !isVec(sh.view.up))))
+    fault("ship's view");
   if (sh.tunnelEntry !== undefined && sh.tunnelEntry !== "ours" && sh.tunnelEntry !== "gargantua") fault("tunnel entry side");
   if (g.plan?.universe !== undefined && g.plan.universe !== "ours" && g.plan.universe !== "gargantua") fault("plan universe");
   // (a fleet that is not one — a foreign file's — is left out, told: the flight still loads, the others

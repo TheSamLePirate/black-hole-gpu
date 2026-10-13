@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
-// The handovers (C8) by real input, for each autopilot where it flies: engaged, then F4 — assisted, the
-// director out, the autopilot still engaged, the throttle the pilot's from where the engine was; F4 again —
+// The handovers (C8) by real input, for each autopilot where it flies: engaged, then ⇧F4 — assisted, the
+// director out, the autopilot still engaged, the throttle the pilot's from where the engine was; ⇧F4 again —
 // the autopilot flies, no director; and again, with the card's own button. Each from a place the game's
 // tools set up (the take-off from the Cape, the landing and the hold over the Moon, CIRC and a node in orbit,
 // the entry's glide onto Kennedy).
@@ -43,7 +43,7 @@ describe.skipIf(!E2E)("auto ⇄ assisted for every autopilot", () => {
       expect(await app.js<boolean>("!!__bh.camera.pilot.director")).toBe(false);
       // assisted: the director out, the autopilot kept, the throttle where the engine was
       const engine = await app.js<number>("__bh.camera.pilot.engineNow");
-      await app.press("F4", "F4");
+      await app.press("F4", "F4", { shift: true });
       await app.waitFor("!!__bh.camera.pilot.director", 5_000);
       expect(await app.js<string>("__bh.camera.pilot.auto")).toBe(c.auto);
       expect(Math.abs((await app.js<number>("__bh.camera.pilot.throttle")) - engine)).toBeLessThan(0.15);
@@ -53,10 +53,10 @@ describe.skipIf(!E2E)("auto ⇄ assisted for every autopilot", () => {
       await app.waitFor("!__bh.camera.pilot.director", 5_000);
       expect(await app.js<boolean>("__bh.camera.pilot.assist")).toBe(false);
       expect(await app.js<string>("__bh.camera.pilot.auto")).toBe(c.auto);
-      // (and F4 both ways once more)
-      await app.press("F4", "F4");
+      // (and ⇧F4 both ways once more)
+      await app.press("F4", "F4", { shift: true });
       await app.waitFor("!!__bh.camera.pilot.director", 5_000);
-      await app.press("F4", "F4");
+      await app.press("F4", "F4", { shift: true });
       await app.waitFor("!__bh.camera.pilot.director", 5_000);
     }, 120_000);
 });

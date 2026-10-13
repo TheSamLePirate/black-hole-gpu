@@ -1,6 +1,9 @@
+import type { CameraFrame } from "../src/camera";
+import type { GpuBody } from "../src/system/scene-bodies";
+import { sideToRep } from "../src/wormhole";
 import { expect, test } from "bun:test";
 import type { Vec3 } from "../src/physics";
-import { seenFrom } from "../src/system/local-patch";
+import { seenFrom, ourPatch } from "../src/system/local-patch";
 
 // The local patch places a nearby body where the camera sees it (src/system/local-patch.ts).
 
@@ -85,4 +88,29 @@ test("the hole's bending of a straight way: a planet's patch kept, a star behind
   expect(holeBending([20, 0, 0], [10, 0, 0])).toBe(0);
   // the weak-field limit through the whole line: 4M/b
   expect(holeBending([-1e7, 50, 0], [1e7, 50, 0])).toBeCloseTo(4 / 50, 6);
+});
+
+// A rotating surface and its centre have different velocities. They must not be shifted
+// by a light-time measured to the centre when the camera stands beside a physical collider.
+const surfaceBody = { id: "earth", pos: [100, 0, 0], radius: 1, where: 2, kind: 1, light: -1, pole: [0, 0, 1], spin: 0.4 } as GpuBody;
+const surfaceCamera = (distance: number, beta: Vec3): CameraFrame =>
+  ({ region: "throat", r: 100 + distance, ell: -100 - distance, n: [1, 0, 0], beta }) as CameraFrame;
+test("near a rotating surface, native meshes and terrain share instantaneous physical coordinates", () => {
+  const cam = surfaceCamera(1 + 5 / 6378137, [0, 465 / 299792458, 0]);
+  const expected = sideToRep(-1, cam.n, [100 - cam.r, 0, 0]);
+  const patch = ourPatch(cam, [surfaceBody], 1, () => [0, 0, 0])!;
+  expect(patch.centre).toEqual(expected);
+  const staticPatch = ourPatch({ ...cam, beta: [0, 0, 0] }, [surfaceBody], 1)!;
+  expect(patch.axes).toEqual(staticPatch.axes);
+  expect(ourPatch(cam, [surfaceBody], 1, () => [0, 0.0001, 0])!.centre).toEqual(expected);
+});
+test("above the surface patch and at relativistic speeds, the optical retarded view is preserved", () => {
+  for (const [distance, beta] of [
+    [5, [0, 0.00001, 0]],
+    [1.001, [0, 0.5, 0]],
+  ] as [number, Vec3][]) {
+    const cam = surfaceCamera(distance, beta),
+      x = sideToRep(-1, cam.n, [100 - cam.r, 0, 0]);
+    expect(ourPatch(cam, [surfaceBody], 1)!.centre).toEqual(seenFrom(x, [0, 0, 0], beta));
+  }
 });

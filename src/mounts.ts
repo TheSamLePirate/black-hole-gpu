@@ -31,6 +31,16 @@ export const MOUNTS = {
   flyby: { label: t("Fly-by, the ship passing"), short: t("Fly-by"), eye: [22, 6, 40], aim: [0, 1.5, 0], outside: "flyby" },
   // (the docking camera of what the ship docks to — the space station, another craft: on the nearest
   // port's axis, looking out at the ship coming in, moving with it; elsewhere, around the ship)
+  // (the film's cameras — cine/brain.ts: a chase that lags the turns, a fly-by, a launch tracked from the
+  // ground, the planet's limb behind the craft, the destination behind it, a slow orbit — the director
+  // choosing among them by the flight's phase, or one held: settings.cineShot)
+  director: {
+    label: t("Director: the film's cameras — chase, fly-by, launch tracking, the planet, the destination"),
+    short: t("Director"),
+    eye: [0, 9, -42],
+    aim: [0, 1.5, 0],
+    outside: "director",
+  },
   station: {
     label: t("Docking camera, on the target's port (the ISS, a craft)"),
     short: t("Port cam"),
@@ -40,7 +50,7 @@ export const MOUNTS = {
   },
 } satisfies Record<string, { label: string; short: string; eye: V3; aim: V3; outside?: OutsideView }>;
 /** The views from outside the ship: around it, free, a fly-by. */
-export type OutsideView = "around" | "free" | "flyby" | "station";
+export type OutsideView = "around" | "free" | "flyby" | "station" | "director";
 export type Mount = keyof typeof MOUNTS;
 export const MOUNT_KEYS = Object.keys(MOUNTS) as Mount[];
 
@@ -48,6 +58,8 @@ export const MOUNT_KEYS = Object.keys(MOUNTS) as Mount[];
 export interface MountPose {
   eye: V3;
   aim: V3;
+  /** the camera's up (ship frame; none: the ship's own — the director's shots keep the horizon) */
+  up?: V3;
 }
 
 /** The craft flown (vessels.ts): its own places for the attach points on the hull. */
@@ -74,12 +86,13 @@ const norm = (a: V3): V3 => {
  * positive: to the right / up).
  */
 export function shipToCamera(m: Mount | MountPose, lookYaw = 0, lookPitch = 0): { S: M3; t: V3 } {
-  const { eye, aim } = typeof m === "string" ? mountPose(m) : m;
+  const { eye, aim, up: upWant } = typeof m === "string" ? mountPose(m) : m;
   const fwd = norm(sub(aim, eye));
   // the ship's right (−x) on the screen's right: like the tracer's camera basis, (right, up, forward)
   // is left-handed in a right-handed frame (the screen's x right, y up, z into it); looking straight up
   // or down the ship (the Lander's hatch camera), its nose at the image's top
-  const right = norm(cross(fwd, Math.abs(fwd[1]) > 0.98 ? [0, 0, 1] : [0, 1, 0]));
+  const wu = upWant && Math.hypot(...cross(fwd, upWant)) > 0.05 ? upWant : null;
+  const right = norm(cross(fwd, wu ?? (Math.abs(fwd[1]) > 0.98 ? [0, 0, 1] : [0, 1, 0])));
   const up = cross(right, fwd);
   let S: M3 = [right, up, fwd];
   if (lookYaw || lookPitch) {

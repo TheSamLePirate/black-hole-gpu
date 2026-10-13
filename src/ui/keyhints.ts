@@ -17,12 +17,13 @@ const key = (code: string, qwerty: string) => {
 };
 
 const HINTS = {
+  // (the free camera, PLAN-MODES-AAA: its placements, the tripod and the sky's events, the Atlas, the other modes)
   free: (): Hint[] => [
     ["V", { fr: "vue suivante", en: "next view" }],
     ["Tab", { fr: "cible suivante", en: "next target" }],
-    ["C", { fr: "regarder la cible", en: "look at the target" }],
-    ["Y", { fr: "télescope", en: "telescope" }],
-    ["K", { fr: "piloter le Ranger", en: "fly the Ranger" }],
+    ["⇧T · ⇧F8", { fr: "trépied au sol · le ciel d'ici", en: "tripod on the ground · the sky from here" }],
+    ["F8", { fr: "Atlas : y aller", en: "Atlas: go there" }],
+    ["F1 · F2 · F4", { fr: "vaisseau · à pied · photo", en: "ship · on foot · photo" }],
   ],
   cinematic: (): Hint[] => [
     ["⌫", { fr: "arrêter la cinématique", en: "stop the cinematic" }],
@@ -44,7 +45,7 @@ const HINTS = {
   ],
   auto: (): Hint[] => [
     ["⌫", { fr: "reprendre les commandes", en: "take the controls" }],
-    ["F4", { fr: "assisté : vous pilotez, guidé par l'autopilote", en: "assisted: you fly, the autopilot guiding" }],
+    ["⇧F4", { fr: "assisté : vous pilotez, guidé par l'autopilote", en: "assisted: you fly, the autopilot guiding" }],
     ["F3", { fr: "caméra libre — le vaisseau continue", en: "free camera — the ship flies on" }],
     ["M", { fr: "carte", en: "map" }],
     [". ,", { fr: "accélérer · ralentir le temps", en: "time warp faster · slower" }],
@@ -69,7 +70,7 @@ const HINTS = {
     ],
     ["Caps", { fr: "précision", en: "precision" }],
     [key("KeyB", "B"), { fr: "amarrage automatique", en: "automatic docking" }],
-    ["F4", { fr: "assisté : vous pilotez, guidé", en: "assisted: you fly, guided" }],
+    ["⇧F4", { fr: "assisté : vous pilotez, guidé", en: "assisted: you fly, guided" }],
     ["⌫", { fr: "rendre les commandes", en: "release the controls" }],
   ],
   docked: (): Hint[] => [

@@ -489,8 +489,8 @@ export default {
   "Constellation · {0}": "Constellation · {0}",
 
   // ---- the transport bar (ui/transport.ts)
-  "Run / pause time — every mode (paused: the image refines)":
-    "Lancer / suspendre le temps — dans tous les modes (en pause : l'image s'affine)",
+  "Run / pause time — Space in every mode but on foot, where Space jumps (paused: the image refines)":
+    "Lancer / suspendre le temps — Espace dans tous les modes sauf à pied, où Espace fait sauter (en pause : l'image s'affine)",
   Space: "Espace",
   "Slower time": "Temps plus lent",
   "Faster time": "Temps plus rapide",
@@ -555,4 +555,19 @@ export default {
   "alt {0}": "alt {0}",
   "Click: a place": "Clic : un lieu",
   WIND: "VENT",
+  // ---- on foot (controller/character.ts)
+  "You cannot walk on this surface.": "Cette surface ne permet pas la marche.",
+  "Unknown body, or no solid surface.": "Corps inconnu ou surface non solide.",
+  "The ground is still loading: try again in a moment.": "Chargement des données de sol : réessayez dans un instant.",
+  "The exit is in the water.": "Le point de sortie est dans l’eau.",
+  "The exit is blocked.": "Le point de sortie est obstrué.",
+  "This surface cannot be walked on.": "Surface non marchable.",
+  "Fly a landed vessel first.": "Il faut piloter un vaisseau posé.",
+  "Land the vessel before going out.": "Posez le vaisseau avant de sortir.",
+  "The vessel must be almost still.": "Le vaisseau doit être presque immobile.",
+  "No clear, solid exit near the vessel.": "Aucune sortie dégagée et solide près du vaisseau.",
+  "The vessel must be landed.": "Le vaisseau doit être posé.",
+  "Come closer to the vessel's hatch (3 m).": "Approchez-vous de l’accès du vaisseau (3 m).",
+  "The vessel is moving too fast.": "Le vaisseau se déplace trop vite.",
+  "The astronaut is not on foot.": "Le personnage n’est pas à pied.",
 } satisfies Record<string, string>;

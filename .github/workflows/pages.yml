@@ -39,8 +39,10 @@ jobs:
     permissions:
       contents: read
     steps:
+      # (the merge and its base: the binaries the pull request adds, checked below)
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 2
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2
       - uses: actions/cache@v4
@@ -50,8 +52,12 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bunx biome ci .
-      # (the shaders through the browser's own WebGPU compiler: SwiftShader on the runner)
+      # (the binaries' budgets — docs/ASSETS.md)
+      - run: bun scripts/check-repo-size.ts --base HEAD^1
+      # (the shaders through the browser's own WebGPU compiler: SwiftShader on the runner; the forests' tracer
+      # against its TypeScript twin — both exit 0 without an adapter)
       - run: bun scripts/check-wgsl.ts
+      - run: bun scripts/check-forest.ts --rays 2000
       - run: bun test --reporter=junit --reporter-outfile=junit.xml
       - if: always()
         uses: actions/upload-artifact@v4
@@ -69,7 +75,7 @@ jobs:
     permissions:
       contents: read
     outputs:
-      preview: ${{ steps.preview.outcome == 'success' && env.PREVIEW_PATH || '' }}
+      preview: ${{ steps.assemble.outputs.preview == 'yes' && env.PREVIEW_PATH || '' }}
       main: ${{ steps.revisions.outputs.main }}
     steps:
       - uses: oven-sh/setup-bun@v2
@@ -106,10 +112,12 @@ jobs:
           test_sha=$(resolve_ref "$PREVIEW_BRANCH")
           echo "main=$main_sha" >> "$GITHUB_OUTPUT"
           echo "test=$test_sha" >> "$GITHUB_OUTPUT"
+      # (each with its parent: the binaries its last commit adds, checked below)
       - uses: actions/checkout@v4
         with:
           ref: ${{ steps.revisions.outputs.main }}
           path: main-src
+          fetch-depth: 2
           persist-credentials: false
       # (a preview that cannot be checked out fails its verification below: reported, left out)
       - uses: actions/checkout@v4
@@ -118,6 +126,7 @@ jobs:
         with:
           ref: ${{ steps.revisions.outputs.test }}
           path: test-src
+          fetch-depth: 2
           persist-credentials: false
       - uses: actions/cache@v4
         with:
@@ -125,11 +134,14 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('main-src/bun.lock') }}
       - name: Verify and build the exact main revision → the root
         working-directory: main-src
+        # (the size and forest checks where the revision has them: a branch from before them builds without)
         run: |
           bun install --frozen-lockfile
           bun run typecheck
           bunx biome ci .
+          if [ -f scripts/check-repo-size.ts ]; then bun scripts/check-repo-size.ts --base HEAD^1; fi
           bun scripts/check-wgsl.ts
+          if [ -f scripts/check-forest.ts ]; then bun scripts/check-forest.ts --rays 2000; fi
           bun test --reporter=junit --reporter-outfile=junit.xml
           bun run build:pages
       - if: always()
@@ -149,9 +161,17 @@ jobs:
           bun install --frozen-lockfile
           bun run typecheck
           bunx biome ci .
+          if [ -f scripts/check-repo-size.ts ]; then bun scripts/check-repo-size.ts --base HEAD^1; fi
           bun scripts/check-wgsl.ts
-          bun test
+          if [ -f scripts/check-forest.ts ]; then bun scripts/check-forest.ts --rays 2000; fi
+          bun test --reporter=junit --reporter-outfile=junit.xml
           bun run build:pages
+      - if: always() && steps.preview.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-preview
+          path: test-src/junit.xml
+          if-no-files-found: ignore
       - name: Report a failed preview
         if: steps.preview.outcome == 'failure'
         run: |
@@ -160,17 +180,42 @@ jobs:
           echo "> [!WARNING]" >> "$GITHUB_STEP_SUMMARY"
           echo "> $msg" >> "$GITHUB_STEP_SUMMARY"
       # (the two builds' identical hashed assets are not shared: each app's URLs are relative to its
-      # own directory, and Pages serves no links — the site is about twice one build, ~2 × 370 MB
-      # against Pages' 1 GB limit)
+      # own directory — its bundle, its workers, its Service Worker's precache and scope —, and Pages
+      # serves no links; sharing would mean rewriting the preview's URLs to ../, for files its own
+      # build may not have. The site is about twice one build, against Pages' 1 GB limit: the guard
+      # below — past 800 MB a warning, past 900 MB the preview left out, and main alone past 900 MB
+      # fails before deploying; docs/ASSETS.md)
       - name: Assemble the site
+        id: assemble
         run: |
+          set -euo pipefail
           mkdir -p _site
           cp -a main-src/_site/. _site/
+          preview=no
           if [ "${{ steps.preview.outcome }}" = success ]; then
             mkdir -p "_site/$PREVIEW_PATH"
             cp -a test-src/_site/. "_site/$PREVIEW_PATH/"
+            preview=yes
           fi
-          du -sh _site
+          size_mb() { echo $(( $(du -sb _site | cut -f1) / 1000000 )); }
+          size=$(size_mb)
+          if [ "$size" -gt 900 ] && [ "$preview" = yes ]; then
+            msg="the site with /$PREVIEW_PATH/ comes to $size MB (over 900 MB of Pages' 1 GB): deployed with main alone"
+            echo "::warning title=Preview not deployed::$msg"
+            echo "> [!WARNING]" >> "$GITHUB_STEP_SUMMARY"
+            echo "> $msg" >> "$GITHUB_STEP_SUMMARY"
+            rm -rf "_site/$PREVIEW_PATH"
+            preview=no
+            size=$(size_mb)
+          fi
+          echo "site: $size MB (preview: $preview)" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$size" -gt 900 ]; then
+            echo "::error title=Site size::the site comes to $size MB, over 900 MB of Pages' 1 GB limit (docs/ASSETS.md)"
+            exit 1
+          elif [ "$size" -gt 800 ]; then
+            echo "::warning title=Site size::the site comes to $size MB, past 800 MB of Pages' 1 GB limit (docs/ASSETS.md)"
+          fi
+          echo "preview=$preview" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

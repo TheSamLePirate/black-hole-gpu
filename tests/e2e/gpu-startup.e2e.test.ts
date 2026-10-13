@@ -30,6 +30,7 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
       width: 320,
       height: 240,
       initScript: `(() => {
+        Object.defineProperty(GPUSupportedLimits.prototype,"maxStorageBuffersPerShaderStage",{get(){return 8;},configurable:true});
         const original = GPUAdapter.prototype.requestDevice;
         GPUAdapter.prototype.requestDevice = function (desc) {
           globalThis.__asked = desc?.requiredLimits?.maxStorageBuffersPerShaderStage ?? null;
@@ -389,7 +390,7 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
     }
   }, 300_000);
 
-  test("variants retain the most recently used scene (A, B, A, C)", async () => {
+  test("variants retain the four most recently used scenes (A, B, A, C, D, E)", async () => {
     const app = await App.boot({
       hash: scene,
       width: 320,
@@ -412,7 +413,7 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
         renderer.completedFrames = 1;
         renderer.variantQueue = { run: async (current, compile) => current() ? compile() : null };
         renderer.mkVariant = async () => null;
-        for (const key of [1, 2, 1, 4]) { renderer.featureKey = key; renderer.traceVariant("rt"); }
+        for (const key of [1, 2, 1, 4, 8, 16]) { renderer.featureKey = key; renderer.traceVariant("rt"); }
         return [...renderer.variants.keys()];
       })()`);
       const integration = await app.js<{
@@ -447,7 +448,8 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
       expect(integration.still.captured.sampleIndex).toBe(16);
       expect(integration.auto.stats.phase).toBe("converged");
       expect(integration.auto.stats.targetSpp).toBe(16);
-      expect(result).toEqual([1, 4]);
+      // (four keys kept, the least recently used dropped: 2 — the A asked again stays)
+      expect(result).toEqual([1, 4, 8, 16]);
       expect(await app.js<boolean>("__prematureOptional")).toBe(false);
       expect(app.cdp.errors).toEqual([]);
     } finally {

@@ -1,0 +1,10 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`the hash: fixed values (forest.wgsl computes the same bits), spread evenly 1`] = `
+[
+  817759070,
+  1980241032,
+  554729034,
+  516310744,
+]
+`;

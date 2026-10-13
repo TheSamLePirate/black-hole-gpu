@@ -91,7 +91,8 @@ const BODY: Record<string, Text> = {
 const nameOf = (id: string) => (BODY[id] ? tr(BODY[id]!) : id);
 const bare = (id: string) => nameOf(id).replace(/^(la |le |l'|the )/, "");
 
-const TYPES: Record<string, Text> = {
+/** The eclipses' kinds and types, named (the sky's events' cards too: ui/skyevents.ts). */
+export const TYPES: Record<string, Text> = {
   "solar-total": { fr: "Éclipse totale de Soleil", en: "Total solar eclipse" },
   "solar-annular": { fr: "Éclipse annulaire de Soleil", en: "Annular solar eclipse" },
   "solar-hybrid": { fr: "Éclipse hybride de Soleil", en: "Hybrid solar eclipse" },

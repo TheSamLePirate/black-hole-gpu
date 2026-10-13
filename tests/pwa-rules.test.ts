@@ -30,6 +30,9 @@ test("a request's kind: hashed assets, the shell, the tiles, the elements, the r
       SITE,
     ),
   ).toBe("tile");
+  expect(classify("https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2021_3857/default/GoogleMapsCompatible/13/2924/4266.jpg", SITE)).toBe(
+    "tile",
+  );
   expect(classify("https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=json", SITE)).toBe("elements");
   expect(classify("https://openrouter.ai/api/v1/chat/completions", SITE)).toBe("pass");
   expect(classify(`${O}/__snapshot?name=x`, `${O}/`)).toBe("pass");
@@ -100,4 +103,15 @@ test("a legacy shell: the site's older build is the site's to drop, never the pr
   expect(ownsLegacyShell(site, TEST)).toBe(false);
   expect(ownsLegacyShell(test, TEST)).toBe(true);
   expect(ownsLegacyShell(test, SITE)).toBe(false);
+});
+test("regional surface pages are bounded tiles within their own scope", () => {
+  const base = "https://example.org/";
+  expect(classify(`${base}earth-surface/v1/bourget/1-2-aabbccdd.ktx2`, base)).toBe("tile");
+  expect(classify(`${base}test/earth-surface/v1/bourget/1-2-aabbccdd.classes.gz`, `${base}test/`)).toBe("tile");
+  expect(classify("https://tiles.openfreemap.org/planet/latest/14/8298/5636.pbf", base)).toBe("tile");
+  expect(classify("https://mapproxy.terrascope.be/mapproxy/service?REQUEST=GetMap&LAYERS=esa-worldcover-map-10m-2021-v2_map", base)).toBe(
+    "tile",
+  );
+  expect(classify("https://mapproxy.terrascope.be/mapproxy/service?REQUEST=GetCapabilities", base)).toBe("pass");
+  expect(classify(`${base}test/earth-surface/v1/bourget/1-2-aabbccdd.ktx2`, base, "GET", ["earth-surface", "docs"])).toBe("pass");
 });

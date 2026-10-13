@@ -1,5 +1,6 @@
 // The CameraController — telemetry: the one view of the flight every display reads (FlightInfo).
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import type { JetModes } from "../game/jet";
 import { blToCartesian, cameraFrame } from "../camera";
 import { horizon, isco, photonOrbits, type Vec3 } from "../physics";
 import { bodyCentre, bodyVelocity, ourTarget } from "../targeting";
@@ -168,6 +169,13 @@ export interface FlightInfo {
   /** its frame's figures (landing.ts) */
   surface: ReturnType<CameraController["surfaceInfo"]>;
   air: ReturnType<CameraController["airInfo"]>;
+  /** the straight flight path's seconds to the ground (our worlds, low; Infinity else — game/gpws.ts) */
+  terrainAhead: number;
+  /** the jet's systems (plane mode, in the air — game/jet.ts): the altitude over the sea [m], the throttle,
+   *  the modes engaged */
+  jet: { alt: number; throttle: number; modes: JetModes } | null;
+  /** the gear (down, its extension 0…1), the flaps (0, 0.5, 1), the air brake (0…1): the Approach HUD's */
+  gear: { down: boolean; ext: number; flaps: number; brake: number };
   entry: ReturnType<CameraController["entryInfo"]>;
   // ---- the target
   /** the selected target: distance (centre to centre, flat map) and range rate (> 0: receding) */
@@ -328,6 +336,13 @@ function flightInfo(this: CameraController): FlightInfo {
     /** near a planet: its frame's figures (landing.ts) */
     surface: this.surfaceInfo(),
     air: this.airInfo(),
+    terrainAhead: this.local ? Infinity : this.terrainAheadNow(),
+    gear: { down: this.gearDown, ext: this.gearExt, flaps: this.airFlight.cfg.flaps ?? 0, brake: this.airBrake },
+    jet: (() => {
+      // (in the air, however it is flown: the Atmosphere HUD's figures — its modes engage in plane mode only)
+      const f = this.jetFigures();
+      return f ? { alt: f.h, throttle: this.pilot.engineNow, modes: { ...this.jetModes } } : null;
+    })(),
     entry: this.entryInfo(),
     /** the engine and the tank */
     engine: { kind: s.engine, max: this.thrustMax(), fuel: fuelOn(s) ? tank(s, this.spent) : null },

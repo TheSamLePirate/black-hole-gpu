@@ -24,6 +24,9 @@ import { altitudeOver, figureUp, fromBodyFixed, groundAboveSphere, groundVelocit
 import { M_METRES, solarBody } from "../system/solar";
 import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 
+import { blendCurve, lookQ, qAxes, qSlerp } from "../cine/follow";
+import type { V3 } from "../cine/rig";
+import { viewBlend } from "./camrig";
 import type { CameraController } from "../controls";
 import { add3, clamp, unitV } from "./util";
 
@@ -88,10 +91,11 @@ function rigBody(this: CameraController, b: Body | null, ours: boolean, t: numbe
 }
 
 /** The body nearest the camera (in its radii from its surface), within 40 of them. */
-function rigNearest(this: CameraController, ours: boolean, X: Vec3, t: number) {
+function rigNearest(this: CameraController, ours: boolean, X: Vec3, t: number, only?: (b: Body) => boolean) {
   let best: ReturnType<CameraController["rigBody"]> = null;
   let bd = 40;
   for (const b of availableBodies(this.s, cameraFrame(this.s))) {
+    if (only && !only(b)) continue;
     const r = this.rigBody(b, ours, t);
     if (!r) continue;
     const d = (Math.hypot(...sub3(X, r.C)) - r.R) / r.R;
@@ -103,6 +107,17 @@ function rigNearest(this: CameraController, ours: boolean, X: Vec3, t: number) {
 /** Places the camera (world vectors) moving at V (coordinate velocity: the body's). */
 function rigPlace(this: CameraController, ours: boolean, X: Vec3, fwd: Vec3, up: Vec3, V: Vec3) {
   const s = this.s;
+  // (a new aim: turned to from where the view looked — controller/camrig.ts's blend)
+  const T = this.rig.turn;
+  if (T) {
+    T.t = Math.min(1, T.t + this.rig.dt / T.T);
+    const B = viewBlend(s);
+    const q = qSlerp(T.q, lookQ(fwd as V3, up as V3), blendCurve(B.style === "cut" ? "easeInOut" : B.style, T.t));
+    const [, y, z] = qAxes(q);
+    fwd = z as Vec3;
+    up = y as Vec3;
+    if (T.t >= 1) this.rig.turn = null;
+  }
   if (ours) setHomePose(s, X, fwd, up, V);
   else {
     const f = sphericalFrame(X);
@@ -150,6 +165,7 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
     return false;
   }
   R.on = true;
+  R.dt = dt;
   const key = `${mode}|${s.target}|${ref.id}|${w.ours}`;
   // (the camera from the body, both now)
   const rel = sub3(w.X, this.rigBody(ref.id, w.ours, tNow)!.C);
@@ -168,6 +184,8 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
     R.el = (Math.asin(clamp(rel[2] / d, -1, 1)) * 180) / Math.PI;
     R.fixed = mode === "tripod" ? this.rigFix(ref.id, w.ours, w.X, tNow) : null;
     R.look = null;
+    // (the view turned to its new aim from where it looked)
+    R.turn = R.placed ? { q: lookQ(w.fwd as V3, w.up as V3), t: 0, T: Math.max(0.5, viewBlend(s).time) } : null;
   }
   // the keys' speed: 0.8 × the height above the surface per second (a metre at least), Shift × 3
   // (fixed on the world: from where it is fixed — the camera's last place is a frame behind the world)
@@ -215,7 +233,22 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
   // put again — not rewritten, the round trip's last bits would move it each frame, and a paused image
   // would never refine)
   const stamp = () =>
-    [t, key, R.az, R.el, R.alt, R.yawOff, R.pitchOff, ...R.off, ...(R.fixed ?? []), s.lookAt, this.poseKey(), s.velR, s.velT].join();
+    [
+      t,
+      key,
+      R.az,
+      R.el,
+      R.alt,
+      R.yawOff,
+      R.pitchOff,
+      ...R.off,
+      ...(R.fixed ?? []),
+      s.lookAt,
+      this.poseKey(),
+      s.velR,
+      s.velT,
+      R.turn?.t ?? 1,
+    ].join();
   if (step.every((x) => x === 0) && !move.some((x) => x !== 0) && R.stamp === stamp()) return true;
   if (mode === "orbit") {
     // around: the keys too — forwards / back the distance, sideways and up / down about it

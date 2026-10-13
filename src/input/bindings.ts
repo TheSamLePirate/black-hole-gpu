@@ -122,16 +122,24 @@ export function currentKey(defaultCode: string): KeyRef {
   return { code: defaultCode };
 }
 
-/** The free camera's held keys now: code → [forward, right, up, roll]. */
-export function freeCameraKeys(): Record<string, [number, number, number, number]> {
-  const out: Record<string, [number, number, number, number]> = {};
+/** the free camera's keys as last built (read several times a frame: built again only when a key is rebound) */
+let camKeys: Record<string, readonly [number, number, number, number]> | null = null;
+/** The free camera's held keys now: code → [forward, right, up, roll] (shared: read, not changed). */
+export function freeCameraKeys(): Readonly<Record<string, readonly [number, number, number, number]>> {
+  if (camKeys) return camKeys;
+  const out: Record<string, readonly [number, number, number, number]> = {};
   for (const [a, v] of Object.entries(CAM_VECTORS) as [HeldAxis, [number, number, number, number]][]) out[heldCode(a)] = v;
+  camKeys = out;
   return out;
 }
 
 /** The overrides' context: a key may serve once in each (flying, on foot — the system and the time in both). */
 const context = (layer: KeyLayer | "held-flight" | "held-free"): ("fly" | "foot")[] =>
-  layer === "flight" || layer === "held-flight" ? ["fly"] : layer === "scene" || layer === "held-free" ? ["foot"] : ["fly", "foot"];
+  layer === "flight" || layer === "held-flight"
+    ? ["fly"]
+    : layer === "scene" || layer === "character" || layer === "held-free"
+      ? ["foot"]
+      : ["fly", "foot"];
 
 export interface Remappable {
   id: string;
@@ -164,7 +172,7 @@ export function remappables(): Remappable[] {
     out.push({
       id: bindId(b),
       label: actionLabel(b),
-      group: b.layer === "flight" ? "fly" : b.layer,
+      group: b.layer === "flight" ? "fly" : b.layer === "character" ? "free" : b.layer,
       now: e.code ? { code: e.code[0] } : { key: e.key![0] },
       def: b.code ? { code: b.code[0] } : { key: b.key![0] },
       shift: b.shift,
@@ -207,6 +215,7 @@ export function resetBindings() {
 export const customised = () => Object.keys(overrides).length > 0;
 
 function save() {
+  camKeys = null;
   store.setJSON(STORE, overrides);
 }
 
@@ -253,6 +262,11 @@ const ACTION_LABELS: Partial<Record<KeyAction, Text>> = {
   antigrav: { fr: "Antigravité", en: "Antigravity" },
   flaps: { fr: "Volets", en: "Flaps" },
   airBrake: { fr: "Aérofreins", en: "Air brake" },
+  cineShot: { fr: "Plan de la vue réalisateur", en: "The Director view's shot" },
+  jetSystem: {
+    fr: "Systèmes du jet (postcombustion, pilote automatique, auto-manette)",
+    en: "Jet systems (afterburner, autopilot, autothrottle)",
+  },
   gear: { fr: "Train d'atterrissage", en: "Landing gear" },
   tars: { fr: "Parler à TARS", en: "Talk to TARS" },
   pathInView: { fr: "Trajectoire dans la vue", en: "Path in the view" },
@@ -260,6 +274,7 @@ const ACTION_LABELS: Partial<Record<KeyAction, Text>> = {
   missions: { fr: "Ordinateur de vol (missions)", en: "Flight computer (missions)" },
   stopFlight: { fr: "Rendre les commandes", en: "Release the controls" },
   ack: { fr: "Acquitter l'alarme", en: "Acknowledge the caution" },
+  characterJump: { fr: "Sauter", en: "Jump" },
   leaveShip: { fr: "Sortir du vaisseau", en: "Leave the ship" },
   playPause: { fr: "Lecture / pause du temps", en: "Run / pause time" },
   realTime: { fr: "Temps réel", en: "Real time" },
@@ -319,8 +334,8 @@ function actionLabel(b: KeyBind): Text {
 }
 
 /** The key of a flight action now (its first binding, as the player set it), printed — "⇧G", "P" — or null. */
-export function keyFor(action: KeyAction, arg?: string): string | null {
-  const b = BINDINGS.find((x) => x.layer === "flight" && x.do === action && (arg === undefined || x.arg === arg));
+export function keyFor(action: KeyAction, arg?: string, layer: KeyLayer = "flight"): string | null {
+  const b = BINDINGS.find((x) => x.layer === layer && x.do === action && (arg === undefined || x.arg === arg));
   if (!b) return null;
   const e = effective(b);
   const k = e.code ? { code: e.code[0]! } : e.key ? { key: e.key[0]! } : null;

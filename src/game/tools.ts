@@ -101,6 +101,7 @@ export class GameTools {
       "soi()                         the sphere of influence the ship is in, and the chain of its primaries",
       "orbit(body, {altKm, peKm, apKm, inc, raan, argPe, nu, retrograde})   put the Ranger in orbit",
       "land(body, lat, lon)          put it on the ground (our solid bodies)",
+      "walk(body, lat, lon)          on foot: the ship landed there, the astronaut out beside it (third person)",
       "near(body, {altKm, rM})       beside a body at rest (the hover autopilot holds it there)",
       "hoverOver(body, lat, lon, altKm)   over a place of a ground, at rest over it, hovering (G lands it)",
       "wormhole('ours'|'gargantua', dM)   before a mouth of the wormhole, at rest",
@@ -222,6 +223,12 @@ export class GameTools {
     c.setPilot(true);
     c.newFlight();
     c.setOurLanded(p.landed ?? null);
+    if (p.localLanded) {
+      const F = planetFrame(p.localLanded.body, this.ctx.time(), s.spin, s.massSolar);
+      c.local = { F, L: { xi: [...p.localLanded.xi], w: [0, 0, 0], landed: true }, key: c.poseKeyNow() };
+      c.landed = true;
+      c.gearDown = true;
+    }
     c.sync();
     this.ctx.refresh();
     this.log.add("place", p.note, this.ctx.time());
@@ -348,6 +355,18 @@ export class GameTools {
       return this.placeAt(theirGroundAt(body, q, this.ctx.time(), s.spin, s.massSolar));
     }
     return this.placeAt(ourGroundPose(body, lat, lon, this.ctx.time()));
+  }
+
+  /**
+   * On foot at latitude and east longitude [°]: the ship landed there (as land()), then the astronaut
+   * steps out beside it, walking — the third-person controller. A spot refused (water, an obstruction)
+   * leaves the ship landed and says why: the astronaut is not put down.
+   */
+  walk(body: string, lat = 0, lon = 0) {
+    const note = this.land(body, lat, lon);
+    const refused = this.ctx.camera.character.disembark(body);
+    if (refused) throw new Error(`the ship landed, but no walk from it: ${refused}`);
+    return note;
   }
 
   /**
@@ -577,6 +596,8 @@ export class GameTools {
                 plan: c.entryRun.plan ?? null,
               }
             : null,
+        // (the camera on the craft: its attitude is the camera's through it — a director's shot is not saved)
+        view: c.piloting && s.ship ? structuredClone(c.lastPose ?? c.shipPose()) : null,
       },
       // (the fleet as it flies: the craft flown, the others' coasts, the docks — reloaded, the craft flown
       // is not "switched to": a Lander saved over Kennedy once reloaded in its 500 km orbit)
@@ -584,6 +605,7 @@ export class GameTools {
       plan: c.plan.nodes.length
         ? { nodes: c.plan.nodes.map((n) => ({ ...n })), note: c.plan.note, mission: c.ourMission, universe: c.plan.universe }
         : null,
+      character: c.character.snapshot(),
       camera: { gravity: c.gravity && !c.piloting },
     };
   }
@@ -633,6 +655,8 @@ export class GameTools {
       }
       p.hold = save.ship.hold;
       if (save.ship.auto !== "none" && (save.ship.auto !== "node" || save.plan)) p.auto = save.ship.auto;
+      // (the craft as it pointed: through the camera's pose on it then — the director's shot, a view dragged)
+      if (save.ship.view) c.holdMount(save.ship.view);
     }
     c.setOurLanded(save.ship.landed);
     // (the entry's site: the save's, not the nearest pass's — a deorbit to Le Bourget reloaded to Baikonur;
@@ -647,6 +671,7 @@ export class GameTools {
       if (c.gravity) [s.velR, s.velT, s.velP] = vel as [number, number, number];
     }
     c.sync();
+    if (save.character) c.character.restore(save.character);
     this.ctx.scene?.set(save.scene ?? null);
     this.ctx.refresh();
     if (!o.quiet) this.log.add("save", `Loaded "${save.name}" — ${save.summary}`, save.time);
@@ -714,6 +739,11 @@ export class GameTools {
       renderScale: this.ctx.renderScale(),
       quality: s.quality,
       budgetMs: s.realtimeBudget,
+      earthSurface: r.earthSurface.stats(),
+      earthScenery: r.earthScenery.stats(),
+      streaming: r.streamingState,
+      character: this.ctx.camera.character.state(),
+      grass: r.characterRenderer.stats(),
       block: r.realtimeBlockNow,
       cpu: cpuProf.table().map((c) => ({ section: c.label, ms: r2(c.ms), worst: r2(c.max) })),
       gpu: r.prof.table().map((p) => ({ pass: p.label, ms: r2(p.ms), last: r2(p.last), frames: p.n })),

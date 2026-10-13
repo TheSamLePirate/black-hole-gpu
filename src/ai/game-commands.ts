@@ -52,6 +52,83 @@ export interface GameCommand {
 const M = (name: string, desc: Text): GameCommand => ({ name, tool: "camera", fixed: { mount: name }, desc });
 
 export const GAME_COMMANDS: GameCommand[] = [
+  {
+    name: "mapzoom",
+    tool: "interface",
+    args: [{ param: "mapZoom" }],
+    desc: { fr: "Zoom de la carte locale (0–21, défaut 18)", en: "Local map zoom (0–21, default 18)" },
+  },
+  // the game's modes (F1–F4) and its top bar
+  {
+    name: "play",
+    tool: "set_mode",
+    args: [{ param: "mode" }],
+    desc: {
+      fr: "Le mode de jeu : ship, foot (à pied), free (caméra libre), photo",
+      en: "The game's mode: ship, foot, free (camera), photo",
+    },
+  },
+  {
+    name: "bar",
+    tool: "set_mode",
+    args: [{ param: "bar" }],
+    desc: { fr: "La barre du haut : show, hide", en: "The top bar: show, hide" },
+  },
+  {
+    name: "atlas",
+    tool: "atlas",
+    fixed: { action: "open" },
+    args: [{ param: "query", rest: true }],
+    desc: { fr: "L'Atlas : la Terre, la Lune, Mars — une recherche", en: "The Atlas: the Earth, the Moon, Mars — a search" },
+  },
+  {
+    name: "visit",
+    tool: "atlas",
+    fixed: { action: "go", to: "camera" },
+    args: [{ param: "query", rest: true }],
+    desc: {
+      fr: "La caméra libre au-dessus d'un lieu (destination, adresse)",
+      en: "The free camera above a place (a destination, an address)",
+    },
+  },
+  {
+    name: "skyevents",
+    tool: "sky_events",
+    fixed: { action: "open" },
+    desc: {
+      fr: "Le ciel d'ici : filés, analemme, Lune, ISS, éclipses, sélénélion — y aller, le vivre, le rendre",
+      en: "The sky from here: trails, analemma, the Moon, the ISS, eclipses, selenelion — go, live, render",
+    },
+  },
+  {
+    name: "draft",
+    tool: "video",
+    fixed: { action: "start", draft: true },
+    args: [{ param: "shot" }],
+    desc: {
+      fr: "Vidéo brouillon (640×360, rapide) : live, take, orbit, dive, journey, director",
+      en: "A draft video (640×360, quick): live, take, orbit, dive, journey, director",
+    },
+  },
+  {
+    name: "video",
+    tool: "video",
+    fixed: { action: "start", draft: false },
+    args: [{ param: "shot" }],
+    desc: {
+      fr: "Vidéo finale, à la taille et la qualité du rendu : live, take, orbit, dive, journey, director",
+      en: "The final video, at the render's size and quality: live, take, orbit, dive, journey, director",
+    },
+  },
+  {
+    name: "capture",
+    tool: "capture",
+    fixed: { action: "start" },
+    desc: {
+      fr: "Capture : la vue de cet instant rendue hors ligne, enregistrée en PNG",
+      en: "Capture: this instant's view rendered offline, saved as a PNG",
+    },
+  },
   // the target, the views
   {
     name: "target",
@@ -71,6 +148,7 @@ export const GAME_COMMANDS: GameCommand[] = [
   M("quarter", { fr: "Vue trois-quarts (film)", en: "Quarter view (film)" }),
   M("around", { fr: "Vue autour du vaisseau", en: "View around the ship" }),
   M("flyby", { fr: "Vue de passage", en: "Fly-by view" }),
+  M("director", { fr: "Vue réalisateur (caméras de film)", en: "Director view (the film's cameras)" }),
   { name: "shipview", tool: "camera", fixed: { shipView: true }, desc: { fr: "Retour à la vue vaisseau", en: "Back to the ship's view" } },
   {
     name: "spectator",
@@ -97,6 +175,15 @@ export const GAME_COMMANDS: GameCommand[] = [
     tool: "camera",
     args: [{ param: "cinematic" }],
     desc: { fr: "Une cinématique (orbit, dive, journey, none)", en: "A cinematic (orbit, dive, journey, none)" },
+  },
+  {
+    name: "walk",
+    tool: "character",
+    args: [{ param: "action" }, { param: "body", from: "body" }, { param: "lat" }, { param: "lon" }],
+    desc: {
+      fr: "Marcher : start, disembark, board, move, stop, jump, orbit, status",
+      en: "Walk: start, disembark, board, move, stop, jump, orbit, status",
+    },
   },
   // flying
   {
@@ -276,6 +363,34 @@ export const GAME_COMMANDS: GameCommand[] = [
     tool: "set_settings",
     args: [{ param: "quality" }],
     desc: { fr: "La qualité (low … game)", en: "The quality (low … game)" },
+  },
+  {
+    name: "surface",
+    tool: "set_settings",
+    fixed: { key: "earthSurface" },
+    args: [{ param: "value", from: "settingValue" }],
+    desc: { fr: "Le sol satellite (off, satellite, materials)", en: "Satellite ground (off, satellite, materials)" },
+  },
+  {
+    name: "scenery",
+    tool: "set_settings",
+    fixed: { key: "earthScenery" },
+    args: [{ param: "value", from: "settingValue" }],
+    desc: { fr: "Décor mondial OSM et forêts (off, balanced, high)", en: "Worldwide OSM scenery and forests (off, balanced, high)" },
+  },
+  {
+    name: "grass",
+    tool: "set_settings",
+    fixed: { key: "earthGrass" },
+    args: [{ param: "value", from: "settingValue" }],
+    desc: { fr: "Herbe à pied : off, balanced", en: "Grass on foot: off, balanced" },
+  },
+  {
+    name: "sceneryshadows",
+    tool: "set_settings",
+    fixed: { key: "earthSceneryShadows" },
+    args: [{ param: "value", from: "settingValue" }],
+    desc: { fr: "Ombres du décor (true, false)", en: "Scenery shadows (true, false)" },
   },
   {
     name: "press",

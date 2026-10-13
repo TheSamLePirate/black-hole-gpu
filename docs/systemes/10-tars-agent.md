@@ -45,17 +45,37 @@ Le branchement est dans `src/main.ts` : `tarsTools` (le `GameHost`), `tarsTrigge
 
 ---
 
+## Dans tous les modes (PLAN-MODES-AAA M2)
+
+TARS est là en vaisseau, à pied, en caméra libre et en mode photo :
+
+- **F6** est dans la couche système du clavier : tapé, il ouvre le champ ; tenu, il écoute. L'emblème de la barre
+  du haut ouvre aussi la console.
+- **Ce qu'il sait** (`TarsState`, joint à chaque question) :
+  - le vol quand un appareil est piloté ;
+  - toujours le mode (`mode`) ;
+  - à pied (`foot`) : le monde, la latitude et la longitude, l'altitude au-dessus du niveau de référence et du sol,
+    le cap de la vue, la vitesse, la distance et le relèvement de l'appareil posé ;
+  - en caméra libre (`view`) : le monde le plus proche et l'altitude au-dessus, la cible, la visée, le télescope,
+    l'objectif, une cinématique, le spectateur ;
+  - en mode photo et pendant un rendu (`photo`) : le mode sous la photo, l'avancement du rendu ; la vidéo en cours
+    (son plan, brouillon ou non, son image sur combien, le temps restant) ; la capture vécue (ses poses faites).
+- **Hors ligne**, ses réponses écrites savent aussi « où sommes-nous » et « à quelle vitesse » à pied et en caméra
+  libre (`game/tars.ts`).
+- **Sa boucle d'une seconde** tourne dans tous les modes : le mode et la fin d'un rendu sont des événements, ses
+  règles horaires se déclenchent aussi hors pilotage ; les événements du vol restent ceux du vol.
+
 ## Flux
 
 ```mermaid
 flowchart LR
-  Q["Le joueur<br/>F6 tapé · F6 tenu (micro)"] --> P[Console<br/>ui/tars-panel.ts]
+  Q["Le joueur, dans tous les modes<br/>F6 tapé · F6 tenu (micro) · l'emblème de la barre"] --> P[Console<br/>ui/tars-panel.ts]
   P -- "/commande de jeu" --> GC[game-commands.ts] --> T
   P -- "/commande d'agent" --> TC[tars-commands.ts]
   P -- question --> A[TarsAgent<br/>tars-agent.ts]
-  W[Événements du jeu<br/>autopilote · phase · hub · alerte…] --> TR[Triggers] --> B{Budget} --> A
+  W[Événements du jeu<br/>mode · autopilote · phase · hub · alerte · rendu…] --> TR[Triggers] --> B{Budget} --> A
   A --> L[Agent.turn<br/>agent.ts] <--> OR[(OpenRouter)]
-  L --> T[43 outils<br/>game-tools.ts] --> G[Le jeu<br/>GameHost dans main.ts]
+  L --> T[Ses outils<br/>game-tools.ts] --> G[Le jeu<br/>GameHost dans main.ts]
   T -- spawn_agents --> S[Sous-agents<br/>lecture seule] <--> OR
   T -- show_* --> D[Cartes<br/>ui/tars/display.ts]
   A --> M[(Mémoire<br/>kerr.tars.memory)]
@@ -94,7 +114,13 @@ flowchart LR
 | Lire | `get_state`, `get_telemetry`, `list_places`, `list_bodies`, `get_weather`, `find_settings`, `list_saves_and_scenes`, `get_log`, `get_flight_report`, `list_keys` |
 | Piloter | `autopilot`, `hold`, `controls`, `flight_action`, `set_craft` |
 | Naviguer | `set_target`, `plan_maneuver`, `plan_mission`, `manage_plan` |
-| Temps, vues, interface | `time`, `set_date`, `camera`, `sky`, `interface` |
+| Modes, temps, vues, interface | `set_mode` (vaisseau, à pied, caméra libre, photo ; la barre du haut affichée ou cachée), `time`, `set_date`, `camera`, `sky`, `interface` (panneaux, dont musique, rendu, Atlas et ciel d'ici) |
+| À pied | `character` (descendre, monter à bord, marcher, sauter, regarder) |
+| Atlas | `atlas` (chercher une destination, une piste, un point de vue, une adresse sur Terre ou des coordonnées ; y aller : en orbite, posé, à pied, caméra libre, trépied ; ouvrir la page), `/atlas`, `/visit` |
+| Ciel, éclipses, photo | `find_eclipses` (le calculateur : toutes les éclipses d'une période — solaires, lunaires, transits — et ce qu'on en voit d'un lieu), `eclipse_local` (une éclipse vue d'un lieu : contacts, maximum, magnitude, hauteurs), `go_see_eclipse` (y emmener le joueur : la date, le lieu, la vue), `iss_passes` (les passages visibles de l'ISS), `multiple_exposure` (une surimpression : filé, analemme, phases d'une éclipse, Lune, ISS), `weather_at` (la météo réelle d'un lieu à une date) |
+| Ciel d’ici | `sky_events` (lister les événements depuis là où l’on se tient sur Terre — filés, analemme, Lune, passage et transits de l’ISS, éclipses, sélénélion, transits de Mercure et Vénus — avec date, visée et objectif ; en prendre un : `go` y aller, `live` le vivre en poses empilées, `render` le rendu pleine qualité ; ouvrir la page), `/skyevents` |
+| Capture | `capture` (la vue de l'instant rendue hors ligne, convergée, enregistrée seule en PNG, PNG 16 bits ou EXR ; son avancement ; arrêt), `/capture` |
+| Vidéo | `video` (filmer la vue : `live`, `take`, `orbit`, `dive`, `journey`, `director` ; brouillon rapide 640×360 lu aussitôt, ou version finale à la taille et la qualité du rendu ; durée, cadence, MP4 ou WebM ; avancement ; arrêt ; les plans possibles maintenant), `/draft`, `/video` |
 | Lieux, parties | `place_ship`, `saves`, `start_scene` |
 | Tout le reste | `set_settings` (tout réglage, vérifié au schéma), `press_key` (toute touche) |
 | Attendre, parler | `wait`, `say` |
@@ -170,7 +196,8 @@ direct.
 ## Les réveils (`triggers.ts`, `budget.ts`)
 
 - **Événements** : `autopilot`, `phase`, `hub_step`, `entry_phase`, `alert`, `soi`, `landed`, `docked`,
-  `report`, `deviation`. Les règles horaires : `every` (toutes les N min), `at` (une heure du jeu),
+  `report`, `deviation`, `eclipse`, `surface`, `scenery`, `character`, `grass`, `map`, `mode` (le mode de jeu a
+  changé) et `render` (un rendu hors ligne s'est terminé ou a été arrêté ; une vidéo : sa seule fin, `from` `video`). Les règles horaires : `every` (toutes les N min), `at` (une heure du jeu),
   `in` (dans N s).
 - **5 réflexes**, désactivables mais jamais supprimés : fin d'un autopilote, phase de la rentrée, alerte
   grave, écart (graphe du hub hors couloir, rentrée hors couloir, PAPI tout rouge ou tout blanc en
@@ -199,9 +226,13 @@ les outils de `READ_TOOLS` (lecture, et les deux planificateurs). Les planificat
   `/mode`, `/plan`, `/cost`, `/budget`, `/status`, `/telemetry`, `/show`, `/stop`, `/undo`, `/retry`,
   `/export`, `/memory`, `/forget`, `/agents`, `/wakes`, `/reflexes`, `/voice`, `/skill`, `/dock`,
   `/login`, `/key`, `/logout`.
-- **`/` de jeu** (`game-commands.ts`) : 67 commandes exécutées par ses outils **sans le modèle** (donc
+- **`/` de jeu** (`game-commands.ts`) : les commandes exécutées par ses outils **sans le modèle** (donc
   sans coût, et hors ligne aussi). Leurs arguments se donnent par position (`/teleport orbit Lune 100`)
-  ou par nom (`altKm=100`). `/tool <outil> clé=valeur` appelle n'importe lequel des 43 outils.
+  ou par nom (`altKm=100`). `/tool <outil> clé=valeur` appelle n'importe lequel de ses outils. `/play ship|foot|free|photo`
+  change de mode, `/bar show|hide` montre ou cache la barre du haut. Les autres : la caméra (`/view`, `/shipview`,
+  `/spectator`, `/goto`, `/lookat`, `/cinematic`, `/constellations`), le vol (`/flightmode`, `/release`, `/autowarp`),
+  le HUD (`/density`), les parties (`/deletesave`), l'Atlas (`/atlas`, `/visit`), le ciel d'ici (`/skyevents`), les
+  images (`/capture`, `/draft`, `/video`) — `/help` les liste toutes avec leur ligne.
 - **La complétion** : `complete(texte, ctx)` propose, en tapant, les commandes par leur début, puis les
   valeurs de l'argument en cours (modèles, écrans, corps, sites, vues, scènes, sauvegardes, réglages et
   leurs valeurs, touches, constellations) ; `@` complète un corps, un site, un écran, un réglage. Le
@@ -221,8 +252,10 @@ les outils de `READ_TOOLS` (lecture, et les deux planificateurs). Les planificat
 - **Le champ** : la puce du mode, l'autocomplétion au-dessus (↑ ↓, Tab, Entrée, Échap), le micro.
   Le panneau est en `overflow: visible` pour que la fenêtre de complétion ne soit pas coupée ; c'est
   `.tp-body` qui défile.
-- **Fermée**, sa présence (une pastille sous la barre de mission) montre ce qu'il fait ; un clic rouvre
+- **Fermée**, sa présence (une pastille sous la barre du haut) montre ce qu'il fait ; un clic rouvre
   la console.
+- **Son emblème dans la barre du haut** (`ui/topbar.ts`), dans tous les modes, et dans la poignée quand la
+  barre est cachée : il respire au repos et suit son état (`TarsPanel.mirror`). Un clic ouvre la console.
 - **Le suivi** : un autopilote ou un plan qu'il a lancé est suivi après la fin du tour, puis l'issue est
   dite (« En orbite autour de la Lune : 100 par 101 km. »).
 

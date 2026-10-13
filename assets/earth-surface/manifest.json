@@ -1,0 +1,210 @@
+{
+  "version": 1,
+  "year": 2021,
+  "size": 1024,
+  "gutter": 2,
+  "sourceBands": [
+    "B04",
+    "B03",
+    "B02",
+    "B08"
+  ],
+  "reflectanceScale": 0.0001,
+  "regions": [
+    {
+      "id": "bourget",
+      "label": "Le Bourget",
+      "west": 2.3,
+      "north": 49.16,
+      "step": 0.08,
+      "columns": 4,
+      "rows": 4,
+      "pages": [
+        {
+          "name": "0-0",
+          "color": "0-0-8f5d4c86.ktx2",
+          "cover": "0-0-9b9573e9.classes.gz"
+        },
+        {
+          "name": "1-0",
+          "color": "1-0-a1eb18a4.ktx2",
+          "cover": "1-0-e0717f84.classes.gz"
+        },
+        {
+          "name": "2-0",
+          "color": "2-0-b262bb35.ktx2",
+          "cover": "2-0-6a9ad284.classes.gz"
+        },
+        {
+          "name": "3-0",
+          "color": "3-0-5f2552b7.ktx2",
+          "cover": "3-0-efdb6f33.classes.gz"
+        },
+        {
+          "name": "0-1",
+          "color": "0-1-f57b74eb.ktx2",
+          "cover": "0-1-85e56bc1.classes.gz"
+        },
+        {
+          "name": "1-1",
+          "color": "1-1-c20ed7bf.ktx2",
+          "cover": "1-1-463f1451.classes.gz"
+        },
+        {
+          "name": "2-1",
+          "color": "2-1-68ce5f17.ktx2",
+          "cover": "2-1-2a213fea.classes.gz"
+        },
+        {
+          "name": "3-1",
+          "color": "3-1-798e01a3.ktx2",
+          "cover": "3-1-710544c8.classes.gz"
+        },
+        {
+          "name": "0-2",
+          "color": "0-2-4f93b7a1.ktx2",
+          "cover": "0-2-1ceea75e.classes.gz"
+        },
+        {
+          "name": "1-2",
+          "color": "1-2-2a54c27c.ktx2",
+          "cover": "1-2-7f1eb6a7.classes.gz"
+        },
+        {
+          "name": "2-2",
+          "color": "2-2-89e554c6.ktx2",
+          "cover": "2-2-c0201f03.classes.gz"
+        },
+        {
+          "name": "3-2",
+          "color": "3-2-bbf5b366.ktx2",
+          "cover": "3-2-d367c6d9.classes.gz"
+        },
+        {
+          "name": "0-3",
+          "color": "0-3-764dbe2d.ktx2",
+          "cover": "0-3-be4d6b45.classes.gz"
+        },
+        {
+          "name": "1-3",
+          "color": "1-3-a317c431.ktx2",
+          "cover": "1-3-2e953807.classes.gz"
+        },
+        {
+          "name": "2-3",
+          "color": "2-3-3eecea2b.ktx2",
+          "cover": "2-3-7fc7a312.classes.gz"
+        },
+        {
+          "name": "3-3",
+          "color": "3-3-fa519b5d.ktx2",
+          "cover": "3-3-fadd0b73.classes.gz"
+        }
+      ],
+      "sources": [
+        "https://esa-worldcover-s2.s3.eu-central-1.amazonaws.com/rgbnir/2021/N48/ESA_WorldCover_10m_2021_v200_N48E002_S2RGBNIR.tif",
+        "https://esa-worldcover-s2.s3.eu-central-1.amazonaws.com/rgbnir/2021/N49/ESA_WorldCover_10m_2021_v200_N49E002_S2RGBNIR.tif",
+        "https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/2021/map/ESA_WorldCover_10m_2021_v200_N48E000_Map.tif"
+      ]
+    },
+    {
+      "id": "cevennes",
+      "label": "Cévennes",
+      "west": 4.02,
+      "north": 44.34,
+      "step": 0.08,
+      "columns": 4,
+      "rows": 4,
+      "pages": [
+        {
+          "name": "0-0",
+          "color": "0-0-e625c645.ktx2",
+          "cover": "0-0-7df4b853.classes.gz"
+        },
+        {
+          "name": "1-0",
+          "color": "1-0-95970112.ktx2",
+          "cover": "1-0-b9b0025b.classes.gz"
+        },
+        {
+          "name": "2-0",
+          "color": "2-0-b0f86eae.ktx2",
+          "cover": "2-0-801fe397.classes.gz"
+        },
+        {
+          "name": "3-0",
+          "color": "3-0-4a449dbd.ktx2",
+          "cover": "3-0-4c6e7404.classes.gz"
+        },
+        {
+          "name": "0-1",
+          "color": "0-1-9abf5d12.ktx2",
+          "cover": "0-1-0bcd29a5.classes.gz"
+        },
+        {
+          "name": "1-1",
+          "color": "1-1-6c126670.ktx2",
+          "cover": "1-1-2502fe5d.classes.gz"
+        },
+        {
+          "name": "2-1",
+          "color": "2-1-514779a2.ktx2",
+          "cover": "2-1-e5ab7e9e.classes.gz"
+        },
+        {
+          "name": "3-1",
+          "color": "3-1-d46f90cf.ktx2",
+          "cover": "3-1-85d1c639.classes.gz"
+        },
+        {
+          "name": "0-2",
+          "color": "0-2-9c7b4b21.ktx2",
+          "cover": "0-2-078fb0f9.classes.gz"
+        },
+        {
+          "name": "1-2",
+          "color": "1-2-670d945d.ktx2",
+          "cover": "1-2-659737c7.classes.gz"
+        },
+        {
+          "name": "2-2",
+          "color": "2-2-bcc8ea5c.ktx2",
+          "cover": "2-2-67b6e970.classes.gz"
+        },
+        {
+          "name": "3-2",
+          "color": "3-2-867a2fac.ktx2",
+          "cover": "3-2-7be01f8b.classes.gz"
+        },
+        {
+          "name": "0-3",
+          "color": "0-3-aa76bc74.ktx2",
+          "cover": "0-3-b6232ad3.classes.gz"
+        },
+        {
+          "name": "1-3",
+          "color": "1-3-b06161a6.ktx2",
+          "cover": "1-3-e38f59ca.classes.gz"
+        },
+        {
+          "name": "2-3",
+          "color": "2-3-0470d3f1.ktx2",
+          "cover": "2-3-f1b06fe6.classes.gz"
+        },
+        {
+          "name": "3-3",
+          "color": "3-3-3e73acfe.ktx2",
+          "cover": "3-3-324fe509.classes.gz"
+        }
+      ],
+      "sources": [
+        "https://esa-worldcover-s2.s3.eu-central-1.amazonaws.com/rgbnir/2021/N44/ESA_WorldCover_10m_2021_v200_N44E004_S2RGBNIR.tif",
+        "https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/2021/map/ESA_WorldCover_10m_2021_v200_N42E003_Map.tif"
+      ]
+    }
+  ],
+  "encoder": {
+    "basisu": "2.50.0",
+    "flags": "-uastc -uastc_level 1 -uastc_rdo_l 1.0 -ktx2 -ktx2_zstandard_level 18 -mipmap"
+  }
+}

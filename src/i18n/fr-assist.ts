@@ -24,9 +24,9 @@ export default {
   "Clear of the wormhole region, {0} M from Gargantua": "Sortie de la région du trou de ver, à {0} M de Gargantua",
   "Autopilot: it flies, or it assists — you fly, its director on the HUD shows where to point, how much throttle":
     "Autopilote : il vole, ou il assiste — vous pilotez, son directeur dans le HUD montre où pointer, combien de poussée",
-  "Assisted: you fly — the director (the ring) shows where to point, the throttle to set; F4: the autopilot flies":
-    "Assisté : vous pilotez — le directeur (l'anneau) montre où pointer, la poussée à régler ; F4 : l'autopilote vole",
-  "The autopilots fly again (F4: assisted)": "Les autopilotes volent de nouveau (F4 : assisté)",
+  "Assisted: you fly — the director (the ring) shows where to point, the throttle to set; ⇧F4: the autopilot flies":
+    "Assisté : vous pilotez — le directeur (l'anneau) montre où pointer, la poussée à régler ; ⇧F4 : l'autopilote vole",
+  "The autopilots fly again (⇧F4: assisted)": "Les autopilotes volent de nouveau (⇧F4 : assisté)",
   ASSISTED: "ASSISTÉ",
   AUTO: "AUTO",
   "WARP: HUB": "WARP : HUB",
@@ -37,9 +37,9 @@ export default {
     "Warp géré par le hub — clic : vous le réglez dans la limite de sa consigne",
   "Warp managed by the hub — use WARP on its card to take control":
     "Warp géré par le hub — utilisez WARP sur sa carte pour prendre la main",
-  "Assisted: you fly, the director shows its commands — click: the autopilot flies (F4)":
-    "Assisté : vous pilotez, le directeur montre ses commandes — clic : l'autopilote vole (F4)",
-  "The autopilot flies — click: you fly it, assisted (F4)": "L'autopilote vole — clic : vous pilotez, assisté (F4)",
+  "Assisted: you fly, the director shows its commands — click: the autopilot flies (⇧F4)":
+    "Assisté : vous pilotez, le directeur montre ses commandes — clic : l'autopilote vole (⇧F4)",
+  "The autopilot flies — click: you fly it, assisted (⇧F4)": "L'autopilote vole — clic : vous pilotez, assisté (⇧F4)",
   "TURN TO THE CUE": "TOURNEZ VERS LA CIBLE",
   "THROTTLE {0} %": "POUSSÉE {0} %",
   "CUT THE THROTTLE": "COUPEZ LA POUSSÉE",

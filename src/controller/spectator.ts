@@ -1,3 +1,5 @@
+import { planetFrame, toLocal } from "../landing";
+import { properBodyAxes } from "../system/local-patch";
 // The spectator: a free camera away from the ship — anywhere, to the planets, through the wormhole —
 // while the ship flies on exactly as it was (its physics, its autopilots, its plan, the warp: the
 // settings stay the ship's). A second, headless controller over its own settings (`view`): the main
@@ -9,13 +11,17 @@
 
 import { CameraController } from "../controls";
 import type { Settings } from "../settings";
-import { setHolePose, setHomePose } from "../camera";
+import { cameraFrame, setHolePose, setHomePose } from "../camera";
 import { M_METRES } from "../system/solar";
 import type { Vec3 } from "../physics";
 import type { M3 } from "../mounts";
 import { shipToCamera } from "../mounts";
 import { freeCameraKeys } from "../input/bindings";
 import { sphericalFrame } from "../wormhole";
+import { blendCurve, qFromAxes } from "../cine/follow";
+import { cross3, type V3 } from "../cine/rig";
+import { viewBlend } from "./camrig";
+import { unitV } from "./util";
 
 declare module "../controls" {
   interface CameraController {
@@ -67,19 +73,27 @@ function startSpectator(this: CameraController): boolean {
   const view = structuredClone(this.s);
   Object.assign(view, { ship: false, rotation: "free", lookAt: false, telescope: false, motion: "static" } satisfies Partial<Settings>);
   const sp = new CameraController(this.canvas, view, () => {}, true);
-  // (at the ship's centre and on its axes, as the settings are: moved back behind it, a little up)
+  // (where the view is — the eye on its attach point, looking as it looks: no cut —, then glided back behind the
+  // ship and a little up)
   const w = sp.rigWorld();
+  const eyeOff: Vec3 = [0, 0, 0];
   if (w) {
+    const P = this.shipPose();
+    const S = shipToCamera(P, this.s.shipLookYaw, this.s.shipLookPitch).S;
+    const e = S.map((row) => row[0]! * P.eye[0] + row[1]! * P.eye[1] + row[2]! * P.eye[2]);
+    for (let i = 0; i < 3; i++) eyeOff[i] = w.right[i]! * e[0]! + w.up[i]! * e[1]! + w.fwd[i]! * e[2]!;
     const k = 1 / M_METRES;
-    const X = [0, 1, 2].map((i) => w.X[i]! - w.fwd[i]! * BACK_M * k + w.up[i]! * UP_M * k) as Vec3;
+    const X = [0, 1, 2].map((i) => w.X[i]! + eyeOff[i]! * k) as Vec3;
     if (w.ours) setHomePose(view, X, w.fwd, w.up, [0, 0, 0]);
     else setHolePose(view, X, w.fwd, w.up, [0, 0, 0]);
   }
   sp.sync();
   this.spectator = sp;
   this.spectatorFollow = true;
-  this.specOff = [-BACK_M * (w?.fwd[0] ?? 0), -BACK_M * (w?.fwd[1] ?? 0), -BACK_M * (w?.fwd[2] ?? 0)];
-  if (w) for (let i = 0; i < 3; i++) this.specOff[i]! += UP_M * w.up[i]!;
+  const back: Vec3 = [-BACK_M * (w?.fwd[0] ?? 0), -BACK_M * (w?.fwd[1] ?? 0), -BACK_M * (w?.fwd[2] ?? 0)];
+  if (w) for (let i = 0; i < 3; i++) back[i]! += UP_M * w.up[i]!;
+  this.specOff = [...eyeOff];
+  this.specGlide = { from: [...eyeOff], to: back, t: 0, T: Math.max(0.6, viewBlend(this.s).time) };
   this.specVel = [0, 0, 0];
   return true;
 }
@@ -99,13 +113,30 @@ function setSpectatorFollow(this: CameraController, on: boolean) {
   } else sp.sync();
 }
 
-/** Back to the ship (its view as it was). */
+/** Back to the ship (its view as it was) — carried from where the spectator was, blended onto it. */
 function stopSpectator(this: CameraController) {
+  const sp = this.spectator;
+  if (!sp) return;
+  const cam = cameraFrame(this.s);
+  const nav = this.ourNav(cam);
+  const w = sp.rigWorld();
   this.spectator = null;
+  this.specGlide = null;
+  if (!nav || !w || !w.ours) return;
+  const up = unitV(nav.toRep(w.up)) as V3,
+    fwd = unitV(nav.toRep(w.fwd)) as V3;
+  const p = nav.toRep(w.X).map((x) => x * M_METRES) as V3;
+  this.carryCommit({ q: qFromAxes(cross3(up, fwd), up, fwd), p }, Math.max(0.8, viewBlend(this.s).time));
 }
 
 /** The settings the renderer draws: the spectator's, or the ship's. */
 function viewSettings(this: CameraController): Settings {
+  // On foot, a paused/frozen scene still applies material and quality edits without advancing physics.
+  if (this.character.active && this.spectator) {
+    const v = this.spectator.s as unknown as Record<string, unknown>;
+    const s = this.s as unknown as Record<string, unknown>;
+    for (const k of Object.keys(s)) if (!VIEW_KEYS.has(k as keyof Settings) && v[k] !== s[k]) v[k] = s[k];
+  }
   return this.spectator?.s ?? this.s;
 }
 /** The controller of the view: the spectator's, or this one. */
@@ -127,6 +158,9 @@ function advanceSpectator(this: CameraController, dt: number, time: number | und
   sp.codes = this.codes;
   sp.enabled = this.enabled;
   sp.padFrame = pad ?? null;
+  // (the scene's time, also while it follows the ship and its own update is not run: its clock left NaN, nowTime
+  // read 0 — the bodies where they were at the scene's start: no ground under a tripod, no sky's events)
+  if (time !== undefined) sp.time = time;
   const at = this.shipFromView();
   sp.nearShip = at ? at.dist / M_METRES : Infinity;
   if (this.spectatorFollow && this.followShip(sp, dt, pad)) return true;
@@ -146,6 +180,12 @@ function followShip(this: CameraController, sp: CameraController, dt: number, pa
     sp.sync();
     return false;
   }
+  // (a walk just left: the offset from where its view stood, at the ship's own time now)
+  if (this.specRebase) {
+    const X = this.specRebase(this.nowTime());
+    this.specRebase = null;
+    this.specOff = [0, 1, 2].map((i) => (X[i]! - a.X[i]!) * M_METRES) as Vec3;
+  }
   const move = [0, 0, 0, 0];
   const keys = freeCameraKeys();
   for (const c of this.codes) {
@@ -154,6 +194,18 @@ function followShip(this: CameraController, sp: CameraController, dt: number, pa
   }
   if (pad) for (let i = 0; i < 4; i++) move[i] = Math.max(-1, Math.min(1, move[i]! + pad.move[i]!));
   const fast = this.codes.has("ShiftLeft") || this.codes.has("ShiftRight") || !!pad?.fast;
+  // (out of the ship: from its eye back behind it, eased — the keys wait for it)
+  const G = this.specGlide;
+  if (G) {
+    G.t = Math.min(1, G.t + dt / G.T);
+    const k = blendCurve(viewBlend(this.s).style === "cut" ? "easeInOut" : viewBlend(this.s).style, G.t);
+    // (arched over the hull: lifted along the view's up on the way — not through the cabin's roof first)
+    const b0 = sp.rigWorld();
+    const lift = Math.sin(Math.PI * k) * UP_M * 0.8;
+    this.specOff = [0, 1, 2].map((i) => G.from[i]! + (G.to[i]! - G.from[i]!) * k + (b0?.up[i] ?? 0) * lift) as Vec3;
+    for (let i = 0; i < 4; i++) move[i] = 0;
+    if (G.t >= 1) this.specGlide = null;
+  }
   const d = Math.hypot(...this.specOff);
   const v = Math.max(0.8 * d, 2) * sp.flySpeed * (fast ? 3 : 1);
   const want = [0, 1, 2].map((i) => (b.fwd[i]! * move[0]! + b.right[i]! * move[1]! + b.up[i]! * move[2]!) * v);
@@ -206,6 +258,16 @@ function shipFromView(this: CameraController): { S: M3; t: Vec3; dist: number } 
   const viewW = [b.right, b.up, b.fwd];
   const dot = (p: Vec3, q: Vec3) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
   const S = viewW.map((c) => [dot(c, ax[0]!), dot(c, ax[1]!), dot(c, ax[2]!)]) as M3;
+  if (!a.ours && this.character.active && !this.character.ours) {
+    const F = planetFrame(this.character.body, this.nowTime(), this.s.spin, this.s.massSolar);
+    const ship = toLocal(F, a.X, [0, 0, 0]).xi,
+      eye = toLocal(F, b.X, [0, 0, 0]).xi;
+    const delta = ship.map((x, i) => (x - eye[i]!) * F.mPerM) as Vec3;
+    const cam = cameraFrame(sp.s),
+      axes = properBodyAxes(F, cam);
+    const z = [0, 1, 2].map((i) => axes.reduce((sum, axis, j) => sum + axis[i]! * delta[j]!, 0)) as Vec3;
+    return { S, t: [dot(z, cam.right), dot(z, cam.up), dot(z, cam.fwd)], dist: Math.hypot(...delta) };
+  }
   const d = [0, 1, 2].map((i) => (a.X[i]! - b.X[i]!) * M_METRES) as Vec3;
   const t = viewW.map((c) => dot(c, d)) as Vec3;
   return { S, t, dist: Math.hypot(...d) };

@@ -19,7 +19,10 @@ describe.skipIf(!E2E)("the docking assisted", () => {
 
   test("the ring's DOCK, assisted then flown: the phase explained, the corridor, the contact counted down", async () => {
     await Bun.sleep(1500);
-    await app.press("F4", "F4");
+    await app.press("F4", "F4", { shift: true });
+    // (the scene opens on the docking camera, where the HUD is bare — the ring shows in the chase and dorsal
+    // views only (hudInView): ⇧V four times, to the dorsal)
+    for (let i = 0; i < 4; i++) await app.press("KeyV", "v", { shift: true });
     await app.click(`[data-testid=ring-dock]`);
     await app.waitFor(`__bh.camera.pilot.auto === "dock" && __bh.camera.hubInfo()?.graph?.kind === "dock"`, 10_000);
     expect(await app.js<number>("__bh.camera.pilot.throttle")).toBe(0);

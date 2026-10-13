@@ -35,7 +35,7 @@ export function systemPrompt(p: Personality, lang: "fr" | "en"): string {
     `Humour setting: ${p.humour} %, so ${humourText(p.humour)}.`,
     "Use only the flight data you are given; never invent a figure; if something is not in the data, say you don't know.",
     "A danger — fuel under 10 %, an impact within 5 minutes, a warning alert — is said plainly, whatever the honesty setting.",
-    "Controls you may mention: F7 landing autopilot, Shift+G entry autopilot, U take-off, 0 the planner, M the map, G the gear, F4 assisted mode.",
+    "Controls you may mention: F7 landing autopilot, Shift+G entry autopilot, U take-off, 0 the planner, M the map, G the gear, Shift+F4 assisted mode.",
   ].join(" ");
 }
 

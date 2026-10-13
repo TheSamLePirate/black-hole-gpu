@@ -901,6 +901,9 @@ function zoomStep(this: CameraController, dy: number, alt: boolean) {
   if (!alt && this.piloting && !this.cinematic && this.outsideView() === "around") {
     // outside, around the ship: the wheel sets the camera's distance (12 m … 20 km)
     this.outside.dist = clamp(this.outside.dist * Math.exp(dy * 0.0015), 12, 20000);
+  } else if (!alt && this.piloting && !this.cinematic && this.outsideView() === "director") {
+    // the director's view: the wheel sets its shots' distances (a third … ten times)
+    this.cineZoom = clamp(this.cineZoom * Math.exp(dy * 0.0015), 0.35, 10);
   } else if (alt || this.gravity || this.piloting) {
     this.zoomLens(Math.exp(dy * 0.001));
   } else if (this.s.rotation === "free" && !this.cinematic) {

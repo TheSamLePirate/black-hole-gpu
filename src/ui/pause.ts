@@ -23,6 +23,17 @@ const T = {
   settings: { fr: "Réglages", en: "Settings" },
   controls: { fr: "Commandes", en: "Controls" },
   photo: { fr: "Mode photo", en: "Photo mode" },
+  capture: { fr: "Capture (rendu hors ligne)", en: "Capture (offline render)" },
+  captureHint: {
+    fr: "la vue de cet instant, rendue sans bruit, enregistrée en PNG",
+    en: "this instant's view, rendered noise-free, saved as a PNG",
+  },
+  render: { fr: "Rendu…", en: "Render…" },
+  atlas: { fr: "Atlas", en: "Atlas" },
+  atlasHint: { fr: "la Terre, la Lune, Mars : y aller", en: "the Earth, the Moon, Mars: go there" },
+  sky: { fr: "Le ciel d'ici", en: "The sky from here" },
+  skyHint: { fr: "filés, analemme, ISS, éclipses : les vivre", en: "trails, analemma, ISS, eclipses: live them" },
+  renderHint: { fr: "une image ou une vidéo : taille, échantillons, plan", en: "a picture or a video: size, samples, shot" },
   title2: { fr: "Écran titre", en: "Title screen" },
   back: { fr: "Retour", en: "Back" },
   name: { fr: "Nom de la sauvegarde", en: "Save name" },
@@ -49,6 +60,13 @@ export interface PauseDeps {
   /** the controls screen (its back: this menu again) */
   controls(): void;
   photo(): void;
+  /** the offline capture of the view now (saved once converged), and the render dialog */
+  capture(): void;
+  render(): void;
+  /** the Atlas (ui/atlas.ts) */
+  atlas(): void;
+  /** the sky's events from here (ui/skyevents.ts) */
+  skyEvents(): void;
   /** placing the ship (ui/placepanel.ts) */
   place(): void;
   /** the date and time (ui/timepanel.ts) */
@@ -122,9 +140,13 @@ export class PauseMenu {
       "nav",
       { class: "pm-list", "aria-label": tr(T.title) },
       this.item(tr(T.resume), () => this.close(), { testid: "pause-resume" }),
+      this.item(tr(T.capture), () => this.leaveFor(this.d.capture), { hint: tr(T.captureHint), testid: "pause-capture", kind: "primary" }),
+      this.item(tr(T.render), () => this.leaveFor(this.d.render), { hint: tr(T.renderHint), testid: "pause-render" }),
       this.item(tr(T.save), () => this.savePage(), { testid: "pause-save" }),
       this.item(tr(T.load), () => this.loadPage(), { testid: "pause-load" }),
       this.item(t("Download graphics diagnostic"), downloadGpuDiagnostic, { testid: "pause-graphics-diagnostic" }),
+      this.item(tr(T.atlas), () => this.leaveFor(this.d.atlas), { hint: tr(T.atlasHint), testid: "pause-atlas" }),
+      this.item(tr(T.sky), () => this.leaveFor(this.d.skyEvents), { hint: tr(T.skyHint), testid: "pause-sky" }),
       this.item(tr(T.place), () => this.leaveFor(this.d.place), { testid: "pause-place" }),
       this.item(tr(T.time), () => this.leaveFor(this.d.time), { testid: "pause-time" }),
       this.item(tr(T.weather), () => this.leaveFor(this.d.weather), { testid: "pause-weather" }),

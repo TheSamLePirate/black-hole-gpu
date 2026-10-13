@@ -1,0 +1,18 @@
+/* Living a capture (livecapture.ts, PLAN-MODES-AAA M7): a card at the bottom right over the game — the stack
+   growing as the event unfolds, its progress, the exposure and the time left; at the end, its ways. */
+.lc {
+  position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 60;
+  width: min(420px, calc(100vw - 32px)); padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 6px;
+}
+.lc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.lc-head .k-title { margin: 0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lc-rec { flex: none; padding: 2px 7px; border-radius: 3px; font: 700 10.5px var(--hud-font); letter-spacing: 0.16em; color: #fff; background: #d8433a; animation: lc-blink 1.2s steps(2, start) infinite; }
+.lc.done .lc-rec { animation: none; background: rgba(111, 210, 255, 0.25); color: var(--k-on); }
+@keyframes lc-blink { to { opacity: 0.35; } }
+.lc-canvas { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; border-radius: 3px; background: #000; }
+.lc-bar { height: 3px; border-radius: 2px; background: rgba(160, 210, 255, 0.14); overflow: hidden; }
+.lc-bar i { display: block; height: 100%; width: 0; background: var(--k-on); transition: width 0.25s; }
+.lc-line, .lc-left { font: 500 11.5px var(--mono); color: var(--k-dim); }
+.lc-left:empty { display: none; }
+.lc-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+@media (prefers-reduced-motion: reduce) { .lc-rec { animation: none; } }

@@ -1,5 +1,5 @@
 // The view's free frame: where the HUD may draw its marks without falling under the interface — below
-// the mission bar, above the hub and its attitude ball, off the sides. Measured on the page (the bars
+// the top bar, above the hub and its attitude ball, off the sides. Measured on the page (the bars
 // move with the window, the density, a phone's rotation), at most four times a second: the marks at
 // the screen's edge, the target's lock and the heading tape all keep to it.
 
@@ -29,14 +29,14 @@ export function safeFrame(now = performance.now()): SafeFrame {
     const r = e.getBoundingClientRect();
     return r.width && r.height ? r : null;
   };
-  // (flying: the mission bar on top, the hub with the ball at the bottom; on foot: the dock)
-  const bar = shown(".fl-root:not([hidden]) .fl-mission");
-  const ball = shown(".fl-root:not([hidden]) .fl-cockpit") ?? shown("#toolbar");
+  // (the top bar — every mode —, the hub with the ball at the bottom while flying)
+  const bar = shown("#topbar");
+  const ball = shown(".fl-root:not([hidden]) .fl-cockpit");
   cache = {
     top: Math.max(bar ? bar.bottom + 16 : 56, 56),
     bottom: Math.max(ball ? innerHeight - ball.top + 12 : 70, 70),
     // (flying, the speed and altitude tapes stand on each side)
-    side: bar ? 120 : 60,
+    side: document.querySelector(".fl-root:not([hidden])") ? 120 : 60,
   };
   return cache;
 }

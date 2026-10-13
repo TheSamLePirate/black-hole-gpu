@@ -26,6 +26,8 @@
 .pm-item:focus::before { content: "▸"; position: absolute; left: 4px; color: var(--k-on); }
 .pm-item { position: relative; }
 .pm-hint { font: 500 11px var(--mono); letter-spacing: 0; text-transform: none; color: var(--k-dim); }
+/* (the primary item: its dark label on the light fill — the hint too, as dark) */
+.k-btn.primary .pm-hint { color: rgba(11, 18, 32, 0.8); }
 .pm-foot { margin: 2px 0 0; font: 500 11px var(--mono); color: var(--k-dim); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .pm-row { display: flex; gap: 8px; }
 .pm-input {
@@ -58,7 +60,7 @@
 .pm-save-acts { display: flex; gap: 6px; flex: none; }
 .pm-empty { margin: 8px 0; color: var(--k-dim); font: italic 500 12px var(--font); }
 /* paused: the HUD's clocks and the toolbar dim under the menu */
-body.paused .fl-root, body.paused #toolbar { filter: saturate(0.6) brightness(0.8); }
+body.paused .fl-root, body.paused #topbar { filter: saturate(0.6) brightness(0.8); }
 
 /* ---------------------------------------------------------------- the title screen */
 .ts-root {
@@ -107,8 +109,8 @@ body.paused .fl-root, body.paused #toolbar { filter: saturate(0.6) brightness(0.
 .ts-lang .k-btn { padding: 3px 8px; }
 .ts-version { margin-left: auto; }
 /* the title over the scene: the flight's instruments, the tools and the toasts out of sight */
-body.title-open .fl-root, body.title-open .fl-hud, body.title-open #toolbar, body.title-open #hud, body.title-open #panel,
-body.title-open #overlay, body.title-open .sp-toasts, body.title-open #hint, body.title-open .tp-root, body.title-open #tp-dock { display: none !important; }
+body.title-open .fl-root, body.title-open .fl-hud, body.title-open #topbar, body.title-open .tb-handle, body.title-open #hud, body.title-open #panel,
+body.title-open #overlay, body.title-open .sp-toasts, body.title-open #hint, body.title-open .tp-root { display: none !important; }
 
 /* ---------------------------------------------------------------- the mission selector */
 .ms-root {
@@ -260,7 +262,9 @@ body.hide-ui .kh, body.title-open .kh, body.paused .kh, body.mobile .kh, body.ma
 .tb-log-empty { color: var(--k-dim); font-style: italic; }
 
 /* ---------------------------------------------------------------- photo mode (ui/photo.ts) */
-body.photo :is(.fl-root, .fl-hud, #toolbar, #hud, #panel, #overlay, .kh, #cam-pop, #sky-pop, #sky-card, #tp-dock, #hint) { display: none !important; }
+body.photo :is(.fl-root, .fl-hud, #hud, #panel, #overlay, .kh, #cam-pop, #sky-pop, #sky-card, #hint) { display: none !important; }
+/* (the photo bar hidden — H —: the top bar goes with it, the picture alone) */
+body.photo:has(.ph-bar.ph-hidden) :is(#topbar, .tb-handle) { display: none !important; }
 .ph-bar {
   position: fixed;
   left: 50%;
@@ -283,31 +287,21 @@ body.photo :is(.fl-root, .fl-hud, #toolbar, #hud, #panel, #overlay, .kh, #cam-po
 .ph-ctl input[type="range"] { width: 110px; accent-color: var(--k-on); }
 .ph-val { min-width: 58px; font: var(--k-font-value); color: #eef5ff; }
 .ph-keys { display: flex; align-items: center; gap: 4px; font: 500 11px var(--mono); color: var(--k-dim); }
-
-/* ---------------------------------------------------------------- photo mode (ui/photo.ts) */
-body.photo :is(.fl-root, .fl-hud, #toolbar, #hud, #panel, #overlay, .kh, #cam-pop, #sky-pop, #sky-card, #tp-dock, #hint) { display: none !important; }
-.ph-bar {
-  position: fixed;
-  left: 50%;
-  bottom: 18px;
-  transform: translateX(-50%);
-  z-index: var(--z-popover);
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px 14px;
-  max-width: calc(100vw - 32px);
-  box-sizing: border-box;
-  padding: 10px 16px;
-  transition: opacity 0.25s, transform 0.25s;
+/* (the film row: the shot, its length and rate, a draft or the final, its progress) */
+.ph-video { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 12px; padding-top: 8px; border-top: 1px solid var(--k-line); }
+.ph-sel, .ph-num {
+  all: unset; box-sizing: border-box; padding: 4px 8px; border-radius: var(--k-r); border: 1px solid var(--k-ctl-edge);
+  background: rgba(0, 0, 0, 0.35); color: var(--k-text); font: var(--k-font-value); cursor: pointer;
 }
-.ph-bar.ph-hidden { opacity: 0; transform: translate(-50%, 12px); pointer-events: none; }
-.ph-title { font-size: 12px; margin-right: 4px; }
-.ph-ctl { display: flex; align-items: center; gap: 8px; }
-.ph-lab { font: 600 11px var(--hud-font); letter-spacing: 0.14em; text-transform: uppercase; color: var(--k-dim); }
-.ph-ctl input[type="range"] { width: 110px; accent-color: var(--k-on); }
-.ph-val { min-width: 58px; font: var(--k-font-value); color: #eef5ff; }
-.ph-keys { display: flex; align-items: center; gap: 4px; font: 500 11px var(--mono); color: var(--k-dim); }
+.ph-sel:focus-visible, .ph-num:focus-visible { border-color: var(--k-on-edge); }
+.ph-sel:disabled, .ph-num:disabled { opacity: 0.5; cursor: default; }
+.ph-sel option { background: #151823; }
+.ph-num { width: 64px; cursor: text; }
+.ph-meter { width: 120px; height: 4px; border-radius: 2px; background: rgba(160, 210, 255, 0.14); overflow: hidden; }
+.ph-meter i { display: block; height: 100%; width: 0; background: var(--k-on); transition: width 0.25s; }
+.ph-meter[hidden], .ph-video .k-btn[hidden] { display: none; }
+.ph-prog { font: 500 11.5px var(--mono); color: var(--k-text); }
+.ph-prog:empty { display: none; }
 
 /* ---------------------------------------------------------------- the controls screen (ui/controls-screen.ts) */
 .cs { width: min(980px, calc(100vw - 32px)); max-height: calc(100vh - 40px); box-sizing: border-box; padding: 18px 20px 16px; display: flex; flex-direction: column; gap: 12px; }

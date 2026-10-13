@@ -1,6 +1,7 @@
 // The CameraController — free flight and gravity: the camera's and the ship's integrators.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import { recorder } from "../game/recorder";
+import { terrainAhead } from "../game/gpws";
 import { gradeLanding } from "../game/report";
 import { advanceToMouth, driftToGlue } from "../system/wormhole-flight";
 import { BELLY, GEARS, gearForces, mulM3, tippedOver, touchdownVerdict, worldTensor, type GearOut } from "../gear";
@@ -48,6 +49,7 @@ declare module "../controls" {
     flyHome: typeof flyHome;
     stableOrbit: typeof stableOrbit;
     ourSurfaceInfo: typeof ourSurfaceInfo;
+    terrainAheadNow: typeof terrainAheadNow;
     setOurLanded: typeof setOurLanded;
     reportLanding: typeof reportLanding;
     reportLandingDue: typeof reportLandingDue;
@@ -756,6 +758,22 @@ function ourSurfaceInfo(this: CameraController) {
   };
 }
 
+/**
+ * Our universe, low over a world's ground: the seconds before the straight flight path — along the
+ * velocity over the ground — meets it (game/gpws.ts terrainAhead: the ground ahead, a hill, a ridge, not
+ * the free fall's impact a wing never follows). Infinity: none within 20 s, high (over 3 km), landed.
+ */
+function terrainAheadNow(this: CameraController): number {
+  const nav = this.ourNav(cameraFrame(this.s));
+  if (!nav || nav.ref === "sun" || this.ourLanded || this.rolling || !solidBody(nav.ref)) return Infinity;
+  const id = nav.ref;
+  if (gearHeight(id, nav.X, nav.t) > 3000) return Infinity;
+  const va = sub3(nav.V, groundVelocity(id, nav.X, nav.t));
+  // (va in c: a second's step in M — the ground's frame frozen at now: 20 s of the Earth's turn is ~1 m)
+  const k = C_MPS / M_METRES;
+  return terrainAhead((s) => gearHeight(id, [nav.X[0] + va[0] * k * s, nav.X[1] + va[1] * k * s, nav.X[2] + va[2] * k * s], nav.t));
+}
+
 /** Puts the ship down on a body's ground (a scene's start). */
 function setOurLanded(this: CameraController, l: { body: string; q: Vec3 } | null) {
   this.ourLanded = l;
@@ -835,6 +853,7 @@ export function installMotion(C: { prototype: CameraController }) {
     flyHome,
     stableOrbit,
     ourSurfaceInfo,
+    terrainAheadNow,
     setOurLanded,
     reportLanding,
     reportLandingDue,

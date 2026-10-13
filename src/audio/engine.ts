@@ -165,6 +165,9 @@ export class SoundEngine {
     eq2: BiquadFilterNode;
     fan: GainNode;
     beepPan: PannerNode;
+    /** where the beeps are placed (the panner's position read back lags: a panner with nothing playing through it
+     *  runs no automation — its value stays where it was) */
+    beepAt: number[];
     g: number;
     nextHiss: number;
     nextBreath: number;
@@ -322,7 +325,7 @@ export class SoundEngine {
                   ? { g: this.stn.gain.gain.value, x: this.stn.pan.positionX.value, z: this.stn.pan.positionZ.value }
                   : null,
                 g: this.cab.g,
-                beep: [this.cab.beepPan.positionX.value, this.cab.beepPan.positionY.value, this.cab.beepPan.positionZ.value],
+                beep: [...this.cab.beepAt],
               }
             : null,
           clusters: this.clusters.map((c) => ({
@@ -452,7 +455,7 @@ export class SoundEngine {
       o.start();
     }
     fanLP.connect(fan).connect(ambience);
-    this.cab = { eq1, eq2, fan, beepPan, g: 1, nextHiss: 0, nextBreath: 0, breathing: false };
+    this.cab = { eq1, eq2, fan, beepPan, beepAt: [0, 0, -1], g: 1, nextHiss: 0, nextBreath: 0, breathing: false };
 
     this.white = this.noise(ctx, 2, "white");
     this.brown = this.noise(ctx, 4, "brown");
@@ -1002,6 +1005,7 @@ export class SoundEngine {
       set(C.eq2.gain, hear === "cabin" ? 4 : 0, 0.3);
       set(C.fan.gain, cabin ? 0.012 : 0, 0.5);
       const pp = cabin && s.panel ? s.panel : [0, 0, -1];
+      C.beepAt = [pp[0]!, pp[1]!, pp[2]!];
       set(C.beepPan.positionX, pp[0]!, 0.05);
       set(C.beepPan.positionY, pp[1]!, 0.05);
       set(C.beepPan.positionZ, pp[2]!, 0.05);

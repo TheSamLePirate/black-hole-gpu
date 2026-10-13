@@ -72,8 +72,8 @@ describe.skipIf(!E2E)("the real weather: an airfield's METAR", () => {
     await app.waitFor(`document.querySelector(".wx-says").textContent.includes("LFPB 080600Z")`, 3000);
     // (the image: the tracer's fog from it — its extinction, 3.912 / 300 m)
     await Bun.sleep(1500);
-    // (wx[0].z, the weather block the params' last six vec4s)
-    expect(await app.js<number>(`(() => { const f = __bh.renderer.paramsF; return f[f.length - 24 + 2]; })()`)).toBeCloseTo(3.912 / 300, 5);
+    // (the weather block's z: wx[0].z)
+    expect(await app.js<number>(`__bh.renderer.weatherBlock[2]`)).toBeCloseTo(3.912 / 300, 5);
     await app.press("Escape");
   }, 150_000);
 

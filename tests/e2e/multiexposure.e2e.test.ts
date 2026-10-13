@@ -59,6 +59,7 @@ describe.skipIf(!E2E)("the multiple exposure", () => {
     if (await app.js<boolean>(`document.body.classList.contains("photo")`)) await app.click("[data-testid=photo-back]");
     await app.waitFor(`!document.body.classList.contains("photo")`, 3_000);
     await app.click("[data-testid=hud-eclipses]");
+    await app.waitFor(`!!document.querySelector("[data-testid=ec-tab-earth]")`, 10_000);
     await app.click("[data-testid=ec-tab-earth]");
     await app.waitFor(`!!document.querySelector('[data-testid=ec-row][data-id^="solar:2026-08-12"]')`, 60_000);
     await app.click('[data-testid=ec-row][data-id^="solar:2026-08-12"]');

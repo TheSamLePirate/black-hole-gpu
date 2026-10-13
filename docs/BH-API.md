@@ -230,6 +230,57 @@ Holds the render scale for the image (0.25 … 1, values out of range are clampe
 
 Puts the camera out of the ship as a free spectator (`on: true`; the ship goes on flying) or back into it (`false`). Returns whether the spectator is out. Refused with a toast ("fly one first (K)") when no craft is being flown: the spectator starts only from a piloted ship (`startSpectator` in `controller/spectator.ts`). No e2e test calls it.
 
+### `__bh.mode` → object
+
+The game's four modes (`src/game/modes.ts`, the top bar `src/ui/topbar.ts`; PLAN-MODES-AAA M1):
+
+- `"ship"`: a craft flown, the view on it.
+- `"foot"`: walking (the third-person explorer).
+- `"free"`: the free camera anywhere in the system. With a ship flown it is the spectator, and the ship flies on.
+- `"photo"`: the photo mode, opened over one of the other three.
+
+The mode is read each frame from `settings.ship`, `camera.piloting`, `camera.spectating`, `camera.character.active`
+and the photo mode. The top bar's tabs, F1–F4, TARS's `set_mode` tool and `/play` change it through the same
+plan (`planMode`).
+
+### `__bh.mode.get()` → `"ship" | "foot" | "free" | "photo"`
+
+The mode now (`modeOf`).
+
+### `__bh.mode.set(m)` → string \| null
+
+Puts the game in a mode, without a toast. Returns why it was refused, or `null`. The steps:
+
+- **ship:**
+  - from the photo mode, it is closed;
+  - on foot, the explorer boards (at the hatch, within 3 m) or else stops walking, the view carried back onto the
+    craft;
+  - from the spectator, the view goes back on board;
+  - with no ship in the scene, the Ranger is put in.
+- **foot:**
+  - out of a landed craft at rest (`disembark`);
+  - else the explorer is set down on the solid world under the camera (`camera.groundBelow()`, within 2 radii).
+  - Refused far from any ground, or during an offline render.
+- **free:**
+  - with a ship flown, the spectator;
+  - from foot, the walker's camera stays out where it was (the spectator with a ship; the free camera without
+    one).
+- **photo:** the photo mode over the current mode. Leaving it (Esc, or any other mode) goes back to that mode.
+
+### `__bh.mode.state()` → `ModeState`
+
+What the mode is read from: `{ ship, piloting, spectating, onFoot, photo, photoOver, landedStill, groundBelow,
+rendering }`. `groundBelow` is the id of the solid world under the camera, or `null`.
+
+### `__bh.mode.bar()` → `{ mode, hidden }`
+
+The top bar: the mode its tabs show, and whether it is hidden (the slim handle with TARS shown instead).
+
+### `__bh.mode.hideBar(on: boolean)` → void
+
+Hides the top bar (`true`) or shows it again (`false`). The choice is remembered in the browser
+(`kerr.topbar.hidden`).
+
 ### `__bh.snapshot(name?: string)` → Promise<Response>
 
 Exports the current view as a PNG (`renderer.exportPNG(settings)`) and POSTs it to the dev server at `/__snapshot?name=…` (`snapshots/<name>.png`, default name `"snapshot"`). The POST goes to `server.ts`, which answers 404 `disabled` outside dev (the `fetch` does not throw). Run it in the dev server only.
@@ -336,7 +387,22 @@ The renderer (`src/renderer.ts`). The members the tests read:
 | `generation` | number | the renderer's generation (see `gpu.generation`) |
 | `pipelineStatus` | object | the compile states: `general`, `quality`, `qualityError`, `lut`, `lutQuality` (`"pending"`, `"ready"`… ) |
 | `variantReady` | boolean | the scene's specialised tracer compiled (or none needed) |
-| `earthSettled` | boolean | the Earth's maps and terrain tiles are in and nothing is loading |
+| `weatherBlock` | Float32Array | the weather near the camera's 24 params (the weight, the decks, the ground's height, the drift, the rain: `weatherParams`), as the tracer reads them (its offset in `paramsF` moves with the other blocks: read it here) |
+| `earthSettled` | boolean | the Earth's maps, terrain, requested surface pages and worldwide scenery are settled (failed requests use fallback) |
+| `earthSurface.stats()` | object | Regional Sentinel-2/WorldCover: `mode`, `supported`, `region`, `year`, `sourceResolutionM`, `format`, `loaded`, `pages`, `pending`, `inflight`, `failed`, `lastError`, `status`, `gpuBytes`, cumulative `uploadedBytes` and `uploadCpuMs`, `credit`. `settings.earthSurface`: `off`, `satellite`, `materials`; see [PLAN-TERRE-PHOTOREALISTE.md](PLAN-TERRE-PHOTOREALISTE.md). |
+| `earthSurface.colorView()` | GPUTextureView | a new view of the regional colour pages (a `2d-array`, one layer a page; the 1 × 1 placeholder without a region; viewed as `rgba8unorm-srgb` in the RGBA transcoding fallback). The fallback test reads its `label`; a view to bind in a test's own pass. |
+| `earthScenery.stats()` | object | Worldwide WorldCover forests and OpenStreetMap scenery: `mode`, `supported`, `status`, `pending`, `lat`, `lon`, `trees` (the procedural forest's trees), `forestCells` (its grid's cells, one tree at most each), `forestCellM` (a cell's side [m]), `buildings`, `footprintEdges`, `roads`, `railways`, `waterways` (segment counts), `waterPolygons`, `pavedPolygons`, `bridges`, `bridgePiers`, `osmLayers` (feature counts and field names), `shadows`, `shadowReceiverRangeM`, `shadowRayRangeM`, `budgetLimited`, `gpuBytes`, `retiringGpuBytes`, `coverPixels`, `rgbPixels`, `workerMs` (network included), `tileNetworkBytes` (all scenery responses), cumulative `uploadCpuMs`, `lastError`, `coverage`, `credit`, `sources`. `settings.earthScenery`: `off`, `balanced`, `high`; `settings.earthSceneryShadows`: boolean. Data readiness does not imply shader readiness: wait for `variantReady` and completed frames before capturing. See [FORETS-BATIMENTS-WORLDWIDE.md](FORETS-BATIMENTS-WORLDWIDE.md). |
+| `earthScenery.contact` | SceneryContact \| null | the CPU's copy of the scenery the GPU draws (src/system/scenery-contact.ts; null until a reply is in, or with the scenery off): `reply` (`lat`, `lon`, `bounds` — west, south, east, north —, `rgbPixels`), the packed buffer as `f` (Float32Array) and `u` (Uint32Array; the WorldCover raster's 512 × 512 pixels from `f[2] * 4`, class << 24 \| satellite sRGB), `forest`, `bytes`; `local(q)` (a world point in metres → the cache's east/north/up metres), `cover(q)`, `vegetation(q)` (`{ cover, rgb }`: 0 where nothing grows — a road, a building, water), `grass(q)`, `excluded(q)`, `at(q, radius, height, step)` (the walker's capsule: blocked, highest support), `collisionLines(q, range)` (the pink colliders). The walker collides against it; the e2e tests search its raster for a class (grass-aaa, scenery-hitboxes). |
+| `streamingState` | `{ leadM, lookAheadSeconds }` | how far ahead of the ship, along its horizontal velocity, the Earth's tiles are asked for [m]: up to `lookAheadSeconds` (6 s) of flight and at most 650 m, 0 on foot, below 5 m/s or away from the Earth (src/system/streaming-focus.ts). Also in `game.perf().streaming`. |
+| `characterRenderer.stats()` | object | native skinned astronaut readiness/error, triangles, joints, mesh/texture bytes and CPU pose time; the living ground — round the ground under the camera, with or without a walker (a free camera, a tripod, a photo, a landed ship's cockpit): `active` (the astronaut or the grass drawn), `reason` (`off`, `other-planet` — the camera, or the walker, off the Earth —, `above-ground` — the camera more than 25 m over the ground —, `mask-unavailable`, `loading` — its ground grid not yet built —, `outside-grass` — nothing grows round the camera —, `grass`), `blades` (drawn at each level: near, middle, far — read back a few times a second), `roots` (their sum), `stones` (the stones drawn round the camera, ground-stones.ts), `maxRoots` and `lodCapacity` (the levels' capacities), `lattice` (the GPU lattice's points a side), `pending`, `groundCells` (cells of the 1 m ground grid where something grows), `groundCpuMs`, resident `rootBytes`/`indexBytes`, depth/shadow/occluder bytes, CPU times; `probe` (lit by the light probe round the camera), `shipShadow` (the landed vessel's shadow map read). |
+| `characterRenderer.footprints()` | Promise<object> | the footprints' ring read back: `cells` pressed over 0.3 (12.5 cm cells), the `deepest`, their `mean` — they rise again over ~9 s |
+| `characterRenderer.grassGround` | GrassGround | the CPU's ground grid under the grass, round the ground under the camera: `frame` (its fixed frame), `centre`, `heights`, `cells` (kind << 24 \| satellite sRGB), `ready`, `stamp`, `vegetated`, `remaining` |
+| `characterLight()` | Promise<object \| null> | on foot, with a fresh probe: the light the astronaut stands in, read back from the probe — `key` and `sky` (irradiance luminances on a surface facing up, tracer units), `cosine` (the Sun's height), `shadowDepth` (the key's share of the light: how dark his shadow is — near 1 on an airless world, lower under a sky, 0 at night) |
+| `characterRenderer.occluder` | object \| null | the astronaut on foot or the grass drawn: their distance texture (`rg16float`, distance × coverage, coverage) and its rect; the vessel drawn after them is hidden behind them (ship.wgsl's occluder, the station's otherwise). |
+| `characterRenderer.model` | AstronautModel | the licensed astronaut (src/character-model.ts, assets/character): `ready` (mesh, rig, clips and textures on the GPU), `error` (string \| null — a failed load; the procedural suit stays drawn), `count` (indices), `vertices`/`indices`/`bones`/`texture` (its GPU resources), `stats()`. Loaded on first use on foot; tests wait for `model.ready \|\| model.error`. |
+| `encodeCharacter(enc, target, s)` | method (private) | encodes the astronaut, the grass and the stones into a frame (called by the frame's encoder on foot). Tests replace it with a no-op for an A/B without the character, and put it back. |
+| `ship.hullBound(id)` | `{ lo, hi }` \| null | the vessel's box in its own frame [m], the Ranger's gear included; null until its mesh is loaded. |
+| `calibrationReady` | boolean | requested resources settled and no pending shader compilation; failures can still use fallback. Capture tests additionally require successful source statuses, lighting shader and model readiness. |
 | `tier` | `{ level, capMpx, label }` | the hardware tier and its pixel budget |
 | `adapter` | object \| null | the GPU adapter: `vendor`, `architecture`, `device`, `description`, `fallback`, `features` (sorted), `limits` |
 | `device` | GPUDevice | the WebGPU device (private in the source; read at run time: `device.features.has(…)`, `device.limits`) |
@@ -1006,6 +1072,35 @@ a speed in c × 299792458 = m/s. Frames: the **home frame** is our universe (our
 origin): positions in M, velocities in c, times in M of the sim clock (`__bh.time()`). The **body-fixed** frame turns with a body.
 The **hole frame** is Gargantua's Cartesian frame (Boyer–Lindquist `r, θ, φ` in M on the hole's side).
 
+### `__bh.camera.character` → PlanetCharacter
+
+Independent explorer, in planet-fixed metres. Call after `__bh.freeze(true)` and advance with `__bh.step(dt)`.
+The piloted vessel stays in place on the surface; `camera.piloting` can remain true while the explorer owns the view.
+
+| member | meaning |
+|---|---|
+| `start(body, lat=0, lon=0)` | Explore a solid body's geodetic location, degrees north/east; returns null or refusal reason. Earth requires known dry ground. |
+| `disembark()` / `board()` / `toggle()` | Same physical action as the configurable Shift+K key: parked, slow craft, clear dry exit and access within 3 m for boarding. Null on success or reason. |
+| `move(forward, right, seconds=1, run=false)` | Camera-relative input −1…1, at most 10 real seconds; zero stops movement. |
+| `jump()` | Asks a jump, integrated with local gravity; Space invokes this only on foot. Made at once on the ground or within `COYOTE_S` (0.12 s) of walking off an edge; asked in the air, kept `JUMP_BUFFER_S` (0.15 s) and made on landing. In the air the velocity follows the input at `AIR_RESPONSE` (2.5/s) instead of `GROUND_RESPONSE` (14/s). |
+| `orbit(dx, dy)` / `zoom(delta)` | Camera orbit input and wheel distance; `yaw`, `pitch` radians, `distance` metres. |
+| `stop()` / `releaseInput()` | End exploration and release view, or only stop held inputs. TARS `character(stop)` stops movement rather than ending the explorer. |
+| `state()` | `active`, `body`, `ours`, `positionM`, `speedMs` (along the ground: the gait's pace — a jump in place is 0), `verticalMs`, `grounded`, `heightM`, `accessDistanceM`, `airborneS` (time off the ground), `dipM` (the legs' give on landing, ≤ 0), `hull` (`{ distanceM, half }`: the landed vessel's box and the astronaut's distance to it; null when unknown), `cpuMs`, `groundPatch` readiness/grid/bytes/CPU, `error`. Infinity access distance serializes to null when no landed craft is reachable. Refusals are English, shown in French with a French interface. |
+| `vesselHull()` | The flown, landed vessel's box in the walk's metres (`centre`, `axes`, `half`), from its mesh with the gear out (`renderer.ship.hullBound`); the walk, the orbit camera and the exits keep out of it. Null when no vessel is landed on this body or its mesh is not loaded. |
+| `hullBounds` | `() => { lo, hi } \| null`: the vessel's box in its own frame (x left, y up, z nose) [m]; wired to `renderer.ship.hullBound(settings.vessel)` by the page. |
+| `snapshot()` / `restore(saved)` | Save/restore position, heading, orientation, camera distance and vertical velocity. |
+| `frame()` | Camera-relative origin/axes in metres and body-fixed position, speed, phase, `airborne`, `dip` and time for the renderer. |
+| `groundPatch` | Shared CPU/GPU Earth heightfield; `ready`, `size` (17 coarse, 65 refined), `stamp`, `values`, `cpuMs`. |
+
+```js
+__bh.camera.character.start('moon', 0, 0);
+__bh.camera.character.move(1, 0, 2);
+__bh.step(1 / 60);
+__bh.camera.character.state();
+```
+
+*Used in:* `tests/e2e/character.e2e.test.ts`. [Implementation and strict capture protocol](THIRD-PERSON-IMPLEMENTATION.md).
+
 ### `__bh.camera` → CameraController (the flight controller)
 
 The camera and the ship flown. About 480 members (src/controls.ts, plus src/controller/*.ts mixed in). Only the members tests
@@ -1448,28 +1543,64 @@ from the Earth and dropped when that delay (the light's time divided by the warp
 
 ### `__bh.music` → Music
 
-The score (`src/audio/music.ts`, the pieces in `src/audio/score.ts`), synthesized in the game's audio context on the
-music bus (nothing downloaded). One piece per moment: `liftoff`, `entry`, `final`, `wormhole`, `gargantua`,
-`miller`. A moment's piece fades in, its chords turn every `chordS`, and it fades out when the moment is over; a new
-moment crossfades. `update(m)` is called every frame with the moment now, or `null` for silence (main.ts passes `null` when the sound or the
-music setting is off, or there is no moment). Without an output (no audio context yet) `update` does nothing, and `moment` is not set.
+The music system (`src/audio/music.ts`; the themes, composer, instruments and engine in `src/audio/music/`; the
+moments and contexts in `src/audio/score.ts`; its console in `src/ui/musicpanel.ts`). It is synthesized in the
+game's audio context on the music bus, so nothing is downloaded.
+
+**Themes.** Twelve orchestral themes in Hans Zimmer's, John Williams's and Max Richter's manners (their melodies
+the game's own), each in its own key, mode and tempo, composed bar by bar with a form (intro, verse, build, drop,
+break). The orchestra's sections, each a bus in the mixer: percussion, basses, strings, ostinato, brass, melody,
+harp and celesta (`keys`), organ and choir. The energy comes from the section and the flight's intensity.
+
+**What plays:**
+
+- in the **moments** mode (the default), a theme at each moment: `liftoff`, `entry`, `final`, `wormhole`,
+  `gargantua`, `miller`, `docking`, `lowpass`; silence otherwise;
+- in the **adaptive** mode, the moments plus a theme between them by context: `orbit`, `deep`, `air`, `ground`,
+  `onFoot`;
+- in the **playlist** mode, the checked themes in turn;
+- `listen(id)` overrides all of them.
+
+**Updating.**
+
+- `update(m, {context, intensity, enabled})` is called every frame. With the music off (`enabled` false),
+  `moment` is null.
+- Themes change on the bar, crossfaded.
+- Without an output (no audio context yet, or the sound off), `update` lets every theme go at once and
+  forgets the theme asked: when the output is back the theme starts again, not caught up. Bars left behind by a
+  long pause are skipped, not played at once.
 
 | member | type | meaning |
 |---|---|---|
-| `update(m)` | `(m: Moment \| null) => void` | the moment now (called each frame) |
-| `stop()` | `() => void` | silences the score now |
-| `moment` | `Moment \| null` | the moment playing now (null: silence) |
+| `update(m, o?)` | `(m: Moment \| null, o?: { context?, intensity?, enabled? }) => void` | the moment, context and intensity now (called each frame) |
+| `stop()` | `() => void` | silences the music now, and stops listening |
+| `listen(id)` | `(id: string \| null) => void` | plays a theme over the game's choice (null: the game's choice again) |
+| `state()` | `() => MusicState` | what plays: theme, name, bpm, section, bar, beat, energy, intensity, chord, mode, moment, context, preview |
+| `levels()` | `() => Record<Layer, number> \| null` | each layer's level (dBFS RMS) |
+| `analyser()` | `() => AnalyserNode \| null` | the master's spectrum |
+| `prefs` | `MusicPrefs` | the panel's preferences: mode, map, mix, muted, solo (a section heard alone, the mutes kept under it; null: none), intensity, seed, playlist, playlistS, fade — checked when read from the browser (unknown theme ids and sections dropped, numbers clamped) |
+| `save()` | `() => void` | keeps `prefs` in the browser (`kerr.music`) and applies the mixer |
+| `moment` | `Moment \| null` | the moment now (null: none, or the music off) |
+| `context` | `Context \| null` | the context now (the adaptive mode's) |
+| `preview` | `string \| null` | the theme listened to from the panel |
+| `wanted` | `string \| null` | the theme asked now |
+| `flight` | `number` | the flight's intensity last given |
 | `notes` | `number` | notes started so far |
 | `ticks` | `number` | the ticks started so far (Miller's tick, every 1.25 s) |
 
 ```js
-// on Miller: its piece and its tick, heard on the music bus
+// on Miller: its theme and its tick, heard on the music bus
 await app.waitFor(`__bh.music.moment === "miller"`, 10_000);
 const t0 = await app.js(`__bh.music.ticks`);
 await Bun.sleep(5000);
 const n = (await app.js(`__bh.music.ticks`)) - t0; // about 4
+// a theme listened to from the panel
+await app.js(`(__bh.music.listen("ascent"), true)`);
 ```
-*Used in:* `tests/e2e/music.e2e.test.ts` (on Miller: the ticks counted over 5 s, the music bus level; off in orbit: silence)
+*Used in:*
+
+- `tests/e2e/music.e2e.test.ts`: on Miller, the ticks counted over 5 s and the music bus level; in orbit, silence.
+- `tests/e2e/music-panel.e2e.test.ts`: the console, listening, the mixer, every theme.
 
 ### `__bh.tars` → object
 
@@ -1732,3 +1863,26 @@ await app.js(`__bh.bench.vram()?.peakMiB ?? null`);
 
 ---
 
+
+### Ground exploration diagnostics
+
+`__bh.game.perf().streaming` gives `leadM` and `lookAheadSeconds` (maximum 6 seconds, 650 metres).
+`__bh.renderer.characterRenderer.occluder` is what the vessel reads to stay behind the astronaut and the grass (see the renderer's table): a coverage-weighted distance, so a blade's soft edge does not punch a hole in the hull.
+`__bh.renderer.onFoot` disables predictive flight streaming in character view; `streamVelocity` is Earth-fixed m/s
+relative to rotating ground. TARS `get_state.localMap` and telemetry group `map` expose body, coordinates, zoom,
+source readiness, pan metres and last CPU draw time. `interface({mapZoom:18})` opens the local ground planisphere;
+`/mapzoom 18` is its positional command. See [corrections](CORRECTIONS-DETAILS-SOL-VOL.md).
+
+### `__bh.game.walk(body, lat = 0, lon = 0)` → string
+
+The placement panel's On foot mode: lands the current vessel, then disembarks next to it. Latitude and longitude
+are degrees. A refused exit throws while leaving the vessel landed. Uses the existing solid-ground/obstruction
+checks and the character controller. Retains the owner's recent placement implementation.
+
+### Placement au sol des mondes de Gargantua
+
+`__bh.game.land("mann", lat, lon)` (aussi `miller`, `edmunds`) initialise immédiatement
+`__bh.camera.local.L.landed` et les coordonnées propres de contact. **⇧K** peut sortir
+sans étape physique préalable. `__bh.game.walk(body, lat, lon)` pose le vaisseau puis sort.
+Miller autorise la marche sur son plan marin de contact, entre les vagues choisies par le placement.
+Les vagues restent visuelles ; les surfaces gazeuses restent refusées.

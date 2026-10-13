@@ -64,7 +64,8 @@ describe.skipIf(!E2E)("the rain", () => {
       `(__bh.game.pause(true), document.body.classList.add("hide-ui"), document.querySelectorAll("canvas.fl-hud").forEach((c) => (c.style.visibility = "hidden")), true)`,
     );
     // (the image refining while the time holds: compared once it has)
-    await app.waitFor(`__bh.renderer.lastPhase === "converged"`, 60_000);
+    // (32 samples: 6 s here, 90 s on the mini — 0.4 a second at its 1920×1080, the scenery traced)
+    await app.waitFor(`__bh.renderer.lastPhase === "converged"`, 150_000);
     await Bun.sleep(500);
     const c0 = await app.js<number>("__bh.renderer.rainClock");
     const a = await clip();
@@ -76,5 +77,5 @@ describe.skipIf(!E2E)("the rain", () => {
     await app.js("(__bh.game.pause(false), true)");
     await Bun.sleep(1000);
     expect(await app.js<number>("__bh.renderer.rainClock")).toBeGreaterThan(c0 + 0.5);
-  }, 60_000);
+  }, 200_000);
 });

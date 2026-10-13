@@ -96,3 +96,31 @@ test("his remarks unasked: rare — two minutes apart, a moment once in five; th
   for (let k = 0; k < 20; k++) if (q.remark("landed-A", k * 400_000, { honesty: 90, humour: 0 })) quiet++;
   expect(quiet).toBe(0);
 });
+
+test("in every mode (PLAN-MODES-AAA M2): on foot the place and the craft, the free camera where it is", () => {
+  const t = new Tars(7);
+  const off = { ...S, body: null, altKm: null, speed: null, status: null };
+  const foot = {
+    ...off,
+    mode: "foot",
+    foot: {
+      body: "Moon",
+      lat: 0.6741,
+      lon: 23.4729,
+      altM: -1920,
+      aglM: 0,
+      viewDeg: 90,
+      speedMs: 1.4,
+      craft: { distM: 42, bearingDeg: 181 },
+    },
+  };
+  expect(t.answer("Where are we?", foot, plain).text).toBe(
+    "On foot on Moon, at 0.674° N 23.473° E, -1,920 metres up. The craft is 42 metres away, to the south.",
+  );
+  expect(t.answer("vitesse ?", foot, plain).text).toBe("1.4 metres per second, on foot.");
+  const view = { lookAt: false, telescope: false, fovDeg: 60, cinematic: null, spectator: false };
+  const free = { ...off, mode: "free", view: { ...view, near: "Mars", altKm: 3200, target: "Mars" } };
+  expect(t.answer("où suis-je ?", free, plain).text).toBe("Free camera, 3,200 kilometres above Mars, looking at Mars.");
+  const far = { ...off, mode: "free", view: { ...view, near: null, altKm: null, target: "Gargantua" } };
+  expect(t.answer("where?", far, plain).text).toBe("Free camera, far from everything, looking at Gargantua.");
+});

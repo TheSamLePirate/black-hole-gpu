@@ -21,7 +21,7 @@ export interface BhMember {
  * The big live objects (settings, camera, renderer, sim, fleet, tars, …) are documented by their main
  * members only: their own schemas and classes are their reference.
  */
-export const NAMESPACES = ["game", "bench", "iss", "sky", "gpu", "hud", "sys", "pwa", "tarsVoice", "tars"] as const;
+export const NAMESPACES = ["game", "bench", "iss", "sky", "gpu", "hud", "sys", "pwa", "tarsVoice", "tars", "mode"] as const;
 
 /** Page code: the members of __bh (top level, then the namespaces' own), as a JSON-able list. */
 export const WALK = `(() => {

@@ -1,0 +1,4692 @@
+[
+  {
+    "place": {
+      "name": "cevennes",
+      "lat": 44.2,
+      "lon": 4.15,
+      "alt": 1.2
+    },
+    "volumes": false,
+    "trace": {
+      "median": 8.837157,
+      "p10": 8.167668,
+      "p90": 10.291634,
+      "samples": 180
+    },
+    "times": [
+      8.207833,
+      8.13021,
+      8.438621,
+      8.101168,
+      8.354706,
+      8.270041,
+      8.523828,
+      8.385914,
+      8.246249,
+      8.38258,
+      8.935113,
+      9.133028,
+      9.472023,
+      11.348117,
+      8.861615,
+      9.119903,
+      9.599271,
+      10.95825,
+      8.53862,
+      8.858615,
+      9.206859,
+      9.680144,
+      10.340634,
+      10.843335,
+      9.006903,
+      9.003113,
+      9.497771,
+      10.074137,
+      9.492231,
+      10.757835,
+      8.452371,
+      8.71745,
+      9.244901,
+      9.709893,
+      10.934917,
+      8.594911,
+      8.166501,
+      8.081293,
+      8.126001,
+      8.153209,
+      8.410205,
+      8.223209,
+      8.124251,
+      8.220042,
+      8.376414,
+      8.167668,
+      8.335873,
+      8.267374,
+      8.117793,
+      8.635369,
+      8.85674,
+      8.289583,
+      8.429246,
+      9.066778,
+      8.209458,
+      8.613368,
+      8.090376,
+      8.340623,
+      8.733907,
+      9.285608,
+      8.137751,
+      8.964698,
+      8.263748,
+      8.858782,
+      8.432913,
+      9.126985,
+      8.172916,
+      8.519911,
+      8.673118,
+      8.344915,
+      8.222499,
+      8.642993,
+      8.940823,
+      9.432398,
+      9.682352,
+      12.668389,
+      9.365815,
+      9.786267,
+      9.230442,
+      9.907306,
+      10.717295,
+      8.902281,
+      8.489329,
+      9.052278,
+      8.139667,
+      8.742408,
+      9.271692,
+      8.61691,
+      9.103486,
+      8.394914,
+      8.240166,
+      8.420496,
+      8.411372,
+      8.363747,
+      8.122418,
+      8.365205,
+      8.346498,
+      8.296374,
+      8.631077,
+      8.261083,
+      8.217208,
+      8.649118,
+      8.191542,
+      8.867948,
+      8.124876,
+      8.496163,
+      8.17075,
+      8.895406,
+      8.301041,
+      8.337165,
+      8.20379,
+      9.113236,
+      8.289583,
+      8.410788,
+      8.55462,
+      8.935988,
+      9.200443,
+      9.670687,
+      10.886459,
+      10.885918,
+      8.7142,
+      9.172527,
+      8.034753,
+      8.180125,
+      8.146875,
+      8.124043,
+      8.093418,
+      8.266832,
+      8.290999,
+      8.66641,
+      9.009612,
+      9.567396,
+      8.458746,
+      8.424164,
+      8.743825,
+      9.042237,
+      9.172152,
+      9.766435,
+      10.020472,
+      11.248537,
+      8.263749,
+      8.729617,
+      9.063695,
+      9.106154,
+      9.734976,
+      11.203746,
+      8.688284,
+      9.021237,
+      9.377149,
+      9.911891,
+      10.736753,
+      9.430356,
+      10.14122,
+      10.014515,
+      10.433508,
+      8.485496,
+      8.837157,
+      9.040779,
+      8.974238,
+      10.092013,
+      9.170068,
+      9.753809,
+      10.263343,
+      10.291634,
+      9.888183,
+      10.049972,
+      10.83671,
+      8.496328,
+      8.882739,
+      9.183402,
+      9.468481,
+      10.734127,
+      10.332842,
+      10.190761,
+      8.721908,
+      8.95828,
+      9.3189,
+      9.70281,
+      10.210594,
+      10.378758
+    ],
+    "perf": {
+      "loopFps": 60.02,
+      "renderFps": 60.02,
+      "worstLoopMs": 4.2,
+      "gpuFrameMs": 12.8,
+      "gpuPassesMs": 22.68,
+      "gpuProfiled": 180,
+      "gpuSupported": true,
+      "image": "960×540",
+      "pixelRatio": 1,
+      "tier": {
+        "level": 2,
+        "capMpx": 2.2,
+        "label": "apple · metal-3 · 32 GB"
+      },
+      "renderScale": 1,
+      "quality": "high",
+      "budgetMs": 30,
+      "earthSurface": {
+        "mode": "satellite",
+        "supported": true,
+        "region": "cevennes",
+        "label": "Cévennes",
+        "year": 2021,
+        "sourceResolutionM": 10,
+        "format": "bc7",
+        "loaded": 16,
+        "pages": 16,
+        "pending": false,
+        "inflight": 0,
+        "failed": 0,
+        "lastError": null,
+        "status": "ready",
+        "gpuBytes": 39147264,
+        "uploadedBytes": 39147264,
+        "uploadCpuMs": 14.3,
+        "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), processed by ESA WorldCover consortium (CC BY 4.0)",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "sourceUrl": "https://esa-worldcover.org/en/data-access"
+      },
+      "earthScenery": {
+        "mode": "balanced",
+        "supported": true,
+        "status": "ready",
+        "pending": false,
+        "budgetLimited": false,
+        "lat": 44.2,
+        "lon": 4.149750287207894,
+        "trees": 12436,
+        "buildings": 4310,
+        "footprintEdges": 25564,
+        "gpuBytes": 16777216,
+        "retiringGpuBytes": 0,
+        "coverPixels": 245281,
+        "rgbPixels": 262144,
+        "workerMs": 4415.699999999255,
+        "tileNetworkBytes": 1540347,
+        "uploadCpuMs": 1.2,
+        "lastError": null,
+        "coverage": "WorldCover 2021 land; OpenStreetMap buildings; |latitude| ≤ 84°; coverage varies with source data",
+        "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), CC BY 4.0; © OpenMapTiles, Data from OpenStreetMap (ODbL), served by OpenFreeMap",
+        "sources": [
+          "https://esa-worldcover.org/en/data-access",
+          "https://docs.terrascope.be/Developers/WebServices/OGC/MapProxy.html",
+          "https://openfreemap.org",
+          "https://www.openstreetmap.org/copyright"
+        ]
+      },
+      "block": 2,
+      "cpu": [
+        {
+          "section": "render (encode, submit)",
+          "ms": 0.72,
+          "worst": 3.1
+        },
+        {
+          "section": "sky chart",
+          "ms": 0.04,
+          "worst": 0.2
+        },
+        {
+          "section": "overlay (guide, marker)",
+          "ms": 0.02,
+          "worst": 0.1
+        },
+        {
+          "section": "free-fall prediction",
+          "ms": 0.01,
+          "worst": 0.1
+        },
+        {
+          "section": "panel & readouts",
+          "ms": 0.01,
+          "worst": 0.1
+        },
+        {
+          "section": "game tools window",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight HUD (total)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: map",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight (camera.update)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: markers & tapes",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "autosave",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight figures (flightInfo)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: attitude ball",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "Ranger status",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: orbit panel",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: target & Ranger",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "sound",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: text panels",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: telemetry",
+          "ms": 0,
+          "worst": 0
+        }
+      ],
+      "gpu": [
+        {
+          "pass": "display",
+          "ms": 10.65,
+          "last": 11.52,
+          "frames": 180
+        },
+        {
+          "pass": "trace",
+          "ms": 9.72,
+          "last": 10.38,
+          "frames": 180
+        },
+        {
+          "pass": "temporal",
+          "ms": 0.13,
+          "last": 0.14,
+          "frames": 180
+        },
+        {
+          "pass": "light meter",
+          "ms": 0.11,
+          "last": 0.13,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 1",
+          "ms": 0.1,
+          "last": 0.12,
+          "frames": 180
+        },
+        {
+          "pass": "resolve",
+          "ms": 0.08,
+          "last": 0.09,
+          "frames": 180
+        },
+        {
+          "pass": "gather",
+          "ms": 0.07,
+          "last": 0.08,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 2",
+          "ms": 0.06,
+          "last": 0.06,
+          "frames": 180
+        },
+        {
+          "pass": "stars",
+          "ms": 0.03,
+          "last": 0.03,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 3",
+          "ms": 0.03,
+          "last": 0.03,
+          "frames": 180
+        },
+        {
+          "pass": "motion blur",
+          "ms": 0.03,
+          "last": 0.03,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 4",
+          "ms": 0.01,
+          "last": 0.02,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 5",
+          "ms": 0.01,
+          "last": 0.02,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 1",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 2",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 4",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 3",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        }
+      ]
+    },
+    "calibrationReady": true
+  },
+  {
+    "place": {
+      "name": "cevennes",
+      "lat": 44.2,
+      "lon": 4.15,
+      "alt": 1.2
+    },
+    "volumes": true,
+    "trace": {
+      "median": 9.020029,
+      "p10": 8.86749,
+      "p90": 9.529729,
+      "samples": 180
+    },
+    "times": [
+      8.808908,
+      9.348442,
+      9.063362,
+      8.914364,
+      9.227776,
+      9.020029,
+      9.040362,
+      8.91178,
+      8.895698,
+      8.945989,
+      9.171693,
+      8.784783,
+      8.912822,
+      9.094986,
+      9.175819,
+      9.070027,
+      9.091653,
+      8.900031,
+      8.910781,
+      8.955405,
+      9.033363,
+      8.933572,
+      8.936613,
+      8.834365,
+      8.862907,
+      8.856115,
+      9.082987,
+      8.871282,
+      8.823699,
+      8.979988,
+      9.211485,
+      9.072487,
+      9.004029,
+      8.772491,
+      9.181859,
+      9.041612,
+      9.074611,
+      8.891073,
+      8.998238,
+      8.7602,
+      8.923321,
+      8.863864,
+      9.132902,
+      8.836533,
+      8.906739,
+      8.957114,
+      9.028446,
+      9.092694,
+      9.065737,
+      9.097111,
+      9.040612,
+      9.377649,
+      9.112944,
+      9.049112,
+      9.059653,
+      8.949822,
+      8.962613,
+      8.922655,
+      9.123319,
+      9.192693,
+      9.114319,
+      9.014071,
+      8.978738,
+      8.949905,
+      9.055486,
+      9.073402,
+      8.986446,
+      9.493438,
+      9.141736,
+      9.101027,
+      9.178568,
+      9.007697,
+      8.824573,
+      9.110444,
+      9.089694,
+      9.057403,
+      9.332941,
+      9.620145,
+      9.876516,
+      11.06804,
+      9.529729,
+      9.527897,
+      9.829767,
+      11.514824,
+      9.094402,
+      9.684352,
+      9.184901,
+      9.359898,
+      9.769143,
+      10.496799,
+      9.889849,
+      10.16497,
+      9.89439,
+      10.01768,
+      8.939322,
+      9.423773,
+      9.03207,
+      9.017154,
+      8.949823,
+      9.124569,
+      9.549813,
+      10.589172,
+      9.218819,
+      9.371232,
+      10.033597,
+      9.638228,
+      10.105929,
+      8.974073,
+      8.977696,
+      9.562771,
+      9.017196,
+      8.848407,
+      9.061236,
+      9.027904,
+      8.958279,
+      8.949197,
+      9.068987,
+      8.950655,
+      9.061612,
+      9.045779,
+      8.98632,
+      8.996613,
+      8.947864,
+      9.030112,
+      8.969905,
+      8.983862,
+      9.000488,
+      9.000612,
+      8.923781,
+      9.042155,
+      8.939197,
+      9.146403,
+      8.977946,
+      9.026904,
+      8.987571,
+      9.004279,
+      8.878905,
+      9.094402,
+      9.035321,
+      8.821782,
+      9.110361,
+      8.866197,
+      8.953947,
+      9.118195,
+      9.008528,
+      8.974613,
+      8.913323,
+      8.937572,
+      9.005654,
+      9.045445,
+      8.877656,
+      9.059945,
+      9.026112,
+      8.937739,
+      9.023903,
+      8.894905,
+      9.000446,
+      9.06857,
+      8.976113,
+      8.872573,
+      8.894447,
+      8.86749,
+      8.977988,
+      8.835324,
+      8.889364,
+      9.076111,
+      8.738491,
+      9.013862,
+      8.954489,
+      8.912072,
+      9.033737,
+      8.892031,
+      8.966155,
+      8.889031,
+      9.019445,
+      9.022237,
+      8.915906,
+      9.041945,
+      8.822532,
+      9.042071
+    ],
+    "perf": {
+      "loopFps": 59.94,
+      "renderFps": 59.94,
+      "worstLoopMs": 3.3,
+      "gpuFrameMs": 12.3,
+      "gpuPassesMs": 19.15,
+      "gpuProfiled": 180,
+      "gpuSupported": true,
+      "image": "960×540",
+      "pixelRatio": 1,
+      "tier": {
+        "level": 2,
+        "capMpx": 2.2,
+        "label": "apple · metal-3 · 32 GB"
+      },
+      "renderScale": 1,
+      "quality": "high",
+      "budgetMs": 30,
+      "earthSurface": {
+        "mode": "satellite",
+        "supported": true,
+        "region": "cevennes",
+        "label": "Cévennes",
+        "year": 2021,
+        "sourceResolutionM": 10,
+        "format": "bc7",
+        "loaded": 16,
+        "pages": 16,
+        "pending": false,
+        "inflight": 0,
+        "failed": 0,
+        "lastError": null,
+        "status": "ready",
+        "gpuBytes": 39147264,
+        "uploadedBytes": 39147264,
+        "uploadCpuMs": 14.3,
+        "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), processed by ESA WorldCover consortium (CC BY 4.0)",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "sourceUrl": "https://esa-worldcover.org/en/data-access"
+      },
+      "earthScenery": {
+        "mode": "balanced",
+        "supported": true,
+        "status": "ready",
+        "pending": false,
+        "budgetLimited": false,
+        "lat": 44.2,
+        "lon": 4.149750287207894,
+        "trees": 12436,
+        "buildings": 4310,
+        "footprintEdges": 25564,
+        "gpuBytes": 16777216,
+        "retiringGpuBytes": 0,
+        "coverPixels": 245281,
+        "rgbPixels": 262144,
+        "workerMs": 4415.699999999255,
+        "tileNetworkBytes": 1540347,
+        "uploadCpuMs": 1.2,
+        "lastError": null,
+        "coverage": "WorldCover 2021 land; OpenStreetMap buildings; |latitude| ≤ 84°; coverage varies with source data",
+        "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), CC BY 4.0; © OpenMapTiles, Data from OpenStreetMap (ODbL), served by OpenFreeMap",
+        "sources": [
+          "https://esa-worldcover.org/en/data-access",
+          "https://docs.terrascope.be/Developers/WebServices/OGC/MapProxy.html",
+          "https://openfreemap.org",
+          "https://www.openstreetmap.org/copyright"
+        ]
+      },
+      "block": 2,
+      "cpu": [
+        {
+          "section": "render (encode, submit)",
+          "ms": 1.44,
+          "worst": 3
+        },
+        {
+          "section": "sky chart",
+          "ms": 0.04,
+          "worst": 0.1
+        },
+        {
+          "section": "overlay (guide, marker)",
+          "ms": 0.03,
+          "worst": 0.3
+        },
+        {
+          "section": "panel & readouts",
+          "ms": 0.02,
+          "worst": 0.2
+        },
+        {
+          "section": "free-fall prediction",
+          "ms": 0.01,
+          "worst": 0.1
+        },
+        {
+          "section": "game tools window",
+          "ms": 0,
+          "worst": 0.1
+        },
+        {
+          "section": "autosave",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight HUD (total)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: map",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight (camera.update)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: markers & tapes",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight figures (flightInfo)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: attitude ball",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "Ranger status",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: orbit panel",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: target & Ranger",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "sound",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: text panels",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: telemetry",
+          "ms": 0,
+          "worst": 0
+        }
+      ],
+      "gpu": [
+        {
+          "pass": "display",
+          "ms": 9.61,
+          "last": 9.49,
+          "frames": 180
+        },
+        {
+          "pass": "trace",
+          "ms": 8.96,
+          "last": 9.04,
+          "frames": 180
+        },
+        {
+          "pass": "temporal",
+          "ms": 0.12,
+          "last": 0.12,
+          "frames": 180
+        },
+        {
+          "pass": "light meter",
+          "ms": 0.1,
+          "last": 0.1,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 1",
+          "ms": 0.09,
+          "last": 0.09,
+          "frames": 180
+        },
+        {
+          "pass": "resolve",
+          "ms": 0.07,
+          "last": 0.07,
+          "frames": 180
+        },
+        {
+          "pass": "gather",
+          "ms": 0.06,
+          "last": 0.06,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 2",
+          "ms": 0.05,
+          "last": 0.05,
+          "frames": 180
+        },
+        {
+          "pass": "stars",
+          "ms": 0.03,
+          "last": 0.03,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 3",
+          "ms": 0.02,
+          "last": 0.02,
+          "frames": 180
+        },
+        {
+          "pass": "motion blur",
+          "ms": 0.02,
+          "last": 0.02,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 4",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 5",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 1",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 2",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 4",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 3",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        }
+      ]
+    },
+    "calibrationReady": true
+  },
+  {
+    "place": {
+      "name": "cevennes",
+      "lat": 44.2,
+      "lon": 4.15,
+      "alt": 1.2
+    },
+    "volumes": false,
+    "trace": {
+      "median": 9.110361,
+      "p10": 8.257749,
+      "p90": 10.3448,
+      "samples": 180
+    },
+    "times": [
+      8.48858,
+      8.20325,
+      8.575244,
+      9.233192,
+      10.85025,
+      8.206832,
+      8.460121,
+      8.758075,
+      9.691435,
+      9.959599,
+      10.226968,
+      8.187334,
+      8.774616,
+      9.085112,
+      9.8481,
+      8.818365,
+      9.834975,
+      8.186042,
+      8.48412,
+      8.804324,
+      9.032862,
+      9.61477,
+      10.176429,
+      12.821971,
+      9.908682,
+      9.756226,
+      10.232176,
+      10.330217,
+      10.641962,
+      9.571604,
+      10.349759,
+      10.174469,
+      9.21436,
+      9.751059,
+      10.3448,
+      10.805335,
+      9.070111,
+      8.84824,
+      8.414414,
+      8.075586,
+      8.559286,
+      8.727825,
+      8.826115,
+      8.14371,
+      8.497079,
+      8.215084,
+      8.232208,
+      8.495287,
+      8.204834,
+      8.647327,
+      8.463163,
+      8.132376,
+      8.30779,
+      8.346998,
+      8.747241,
+      8.489245,
+      8.172166,
+      8.287874,
+      8.512828,
+      8.762492,
+      8.284414,
+      8.111418,
+      8.409496,
+      8.573744,
+      9.259318,
+      8.255082,
+      8.840865,
+      9.488356,
+      9.483855,
+      9.874224,
+      10.31651,
+      11.931609,
+      9.2944,
+      8.261416,
+      8.257749,
+      8.285749,
+      8.6792,
+      9.110361,
+      9.43544,
+      10.916208,
+      8.774534,
+      8.912864,
+      8.962697,
+      9.885307,
+      8.264582,
+      8.927448,
+      8.784616,
+      9.18036,
+      9.14386,
+      8.383081,
+      9.112277,
+      9.556937,
+      8.985071,
+      8.597661,
+      9.286733,
+      8.333956,
+      8.693534,
+      8.202459,
+      9.02128,
+      8.308623,
+      9.040612,
+      8.113292,
+      8.818449,
+      8.591327,
+      8.632576,
+      8.628409,
+      8.438371,
+      8.726201,
+      9.150026,
+      9.624603,
+      9.395607,
+      8.948405,
+      9.278025,
+      9.630978,
+      10.120678,
+      10.350425,
+      11.848111,
+      8.836698,
+      9.575104,
+      8.222917,
+      8.381289,
+      8.847656,
+      9.394981,
+      9.584978,
+      10.254886,
+      13.488169,
+      9.892432,
+      10.145011,
+      10.413132,
+      10.334217,
+      11.134663,
+      8.655868,
+      9.370232,
+      9.396482,
+      10.091263,
+      9.366608,
+      10.278593,
+      9.984973,
+      10.545464,
+      9.37919,
+      10.015889,
+      10.775377,
+      9.056112,
+      9.402439,
+      10.308259,
+      8.38283,
+      8.706701,
+      9.381691,
+      8.476038,
+      9.435023,
+      8.433579,
+      9.005196,
+      8.877448,
+      9.319315,
+      9.901599,
+      10.074513,
+      10.810793,
+      11.239037,
+      8.842698,
+      9.381482,
+      9.692019,
+      9.972598,
+      11.03454,
+      9.148194,
+      9.441315,
+      9.812559,
+      10.189386,
+      8.902906,
+      8.907739,
+      9.321608,
+      9.775642,
+      10.912792,
+      9.142569,
+      9.551938,
+      9.792601,
+      10.14597,
+      8.193584,
+      8.698242,
+      9.444189,
+      8.39308
+    ],
+    "perf": {
+      "loopFps": 59.98,
+      "renderFps": 59.98,
+      "worstLoopMs": 2.2,
+      "gpuFrameMs": 11.1,
+      "gpuPassesMs": 18.2,
+      "gpuProfiled": 180,
+      "gpuSupported": true,
+      "image": "960×540",
+      "pixelRatio": 1,
+      "tier": {
+        "level": 2,
+        "capMpx": 2.2,
+        "label": "apple · metal-3 · 32 GB"
+      },
+      "renderScale": 1,
+      "quality": "high",
+      "budgetMs": 30,
+      "earthSurface": {
+        "mode": "satellite",
+        "supported": true,
+        "region": "cevennes",
+        "label": "Cévennes",
+        "year": 2021,
+        "sourceResolutionM": 10,
+        "format": "bc7",
+        "loaded": 16,
+        "pages": 16,
+        "pending": false,
+        "inflight": 0,
+        "failed": 0,
+        "lastError": null,
+        "status": "ready",
+        "gpuBytes": 39147264,
+        "uploadedBytes": 39147264,
+        "uploadCpuMs": 14.3,
+        "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), processed by ESA WorldCover consortium (CC BY 4.0)",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "sourceUrl": "https://esa-worldcover.org/en/data-access"
+      },
+      "earthScenery": {
+        "mode": "balanced",
+        "supported": true,
+        "status": "ready",
+        "pending": false,
+        "budgetLimited": false,
+        "lat": 44.2,
+        "lon": 4.149750287207894,
+        "trees": 12436,
+        "buildings": 4310,
+        "footprintEdges": 25564,
+        "gpuBytes": 16777216,
+        "retiringGpuBytes": 0,
+        "coverPixels": 245281,
+        "rgbPixels": 262144,
+        "workerMs": 4415.699999999255,
+        "tileNetworkBytes": 1540347,
+        "uploadCpuMs": 1.2,
+        "lastError": null,
+        "coverage": "WorldCover 2021 land; OpenStreetMap buildings; |latitude| ≤ 84°; coverage varies with source data",
+        "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), CC BY 4.0; © OpenMapTiles, Data from OpenStreetMap (ODbL), served by OpenFreeMap",
+        "sources": [
+          "https://esa-worldcover.org/en/data-access",
+          "https://docs.terrascope.be/Developers/WebServices/OGC/MapProxy.html",
+          "https://openfreemap.org",
+          "https://www.openstreetmap.org/copyright"
+        ]
+      },
+      "block": 2,
+      "cpu": [
+        {
+          "section": "render (encode, submit)",
+          "ms": 0.88,
+          "worst": 1.7
+        },
+        {
+          "section": "sky chart",
+          "ms": 0.04,
+          "worst": 0.2
+        },
+        {
+          "section": "overlay (guide, marker)",
+          "ms": 0.02,
+          "worst": 0.2
+        },
+        {
+          "section": "panel & readouts",
+          "ms": 0,
+          "worst": 0.1
+        },
+        {
+          "section": "free-fall prediction",
+          "ms": 0,
+          "worst": 0.1
+        },
+        {
+          "section": "game tools window",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "autosave",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight HUD (total)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: map",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight (camera.update)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: markers & tapes",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight figures (flightInfo)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: attitude ball",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "Ranger status",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: orbit panel",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: target & Ranger",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "sound",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: text panels",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: telemetry",
+          "ms": 0,
+          "worst": 0
+        }
+      ],
+      "gpu": [
+        {
+          "pass": "display",
+          "ms": 10.2,
+          "last": 9.17,
+          "frames": 180
+        },
+        {
+          "pass": "trace",
+          "ms": 9.37,
+          "last": 8.39,
+          "frames": 180
+        },
+        {
+          "pass": "temporal",
+          "ms": 0.13,
+          "last": 0.12,
+          "frames": 180
+        },
+        {
+          "pass": "light meter",
+          "ms": 0.1,
+          "last": 0.1,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 1",
+          "ms": 0.1,
+          "last": 0.09,
+          "frames": 180
+        },
+        {
+          "pass": "resolve",
+          "ms": 0.08,
+          "last": 0.07,
+          "frames": 180
+        },
+        {
+          "pass": "gather",
+          "ms": 0.07,
+          "last": 0.06,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 2",
+          "ms": 0.05,
+          "last": 0.05,
+          "frames": 180
+        },
+        {
+          "pass": "stars",
+          "ms": 0.03,
+          "last": 0.03,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 3",
+          "ms": 0.03,
+          "last": 0.02,
+          "frames": 180
+        },
+        {
+          "pass": "motion blur",
+          "ms": 0.03,
+          "last": 0.02,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 4",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 5",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 1",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 2",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 4",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 3",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        }
+      ]
+    },
+    "calibrationReady": true
+  },
+  {
+    "place": {
+      "name": "cevennes",
+      "lat": 44.2,
+      "lon": 4.15,
+      "alt": 1.2
+    },
+    "volumes": true,
+    "trace": {
+      "median": 9.046654,
+      "p10": 8.871405,
+      "p90": 9.577229,
+      "samples": 180
+    },
+    "times": [
+      9.087278,
+      9.268276,
+      9.513688,
+      10.689128,
+      9.056445,
+      9.250192,
+      8.989862,
+      9.383357,
+      9.32015,
+      9.215819,
+      8.986571,
+      9.150111,
+      9.017237,
+      9.005737,
+      9.026654,
+      9.060319,
+      9.180152,
+      9.055946,
+      9.101695,
+      9.031821,
+      9.234984,
+      9.116695,
+      8.894657,
+      9.259401,
+      8.966238,
+      9.07157,
+      9.094821,
+      9.244359,
+      9.447231,
+      9.082445,
+      9.438981,
+      9.822808,
+      11.588615,
+      8.819532,
+      9.314066,
+      8.846781,
+      8.998612,
+      9.535438,
+      10.006514,
+      8.938656,
+      9.030445,
+      8.997447,
+      8.895823,
+      8.86199,
+      9.030821,
+      8.839324,
+      8.863322,
+      9.046654,
+      9.072237,
+      8.874739,
+      9.023904,
+      8.918989,
+      9.405772,
+      9.577229,
+      10.093929,
+      10.396966,
+      10.124053,
+      10.434258,
+      10.3973,
+      9.551812,
+      8.91303,
+      8.88624,
+      8.871405,
+      8.833532,
+      9.100319,
+      9.570896,
+      9.074904,
+      8.903114,
+      8.995987,
+      8.830658,
+      8.997321,
+      9.012404,
+      9.102195,
+      9.070945,
+      9.037238,
+      8.996821,
+      9.152152,
+      8.95403,
+      8.880281,
+      8.914072,
+      9.064528,
+      8.827199,
+      8.924906,
+      8.906489,
+      8.886989,
+      9.173944,
+      9.854725,
+      9.127694,
+      9.718184,
+      9.20161,
+      9.366315,
+      8.933489,
+      8.971529,
+      9.22086,
+      9.18486,
+      9.53973,
+      9.951556,
+      11.44095,
+      9.217818,
+      8.981529,
+      9.28715,
+      8.97453,
+      9.070528,
+      8.886365,
+      8.866282,
+      9.245734,
+      9.034987,
+      8.922448,
+      9.144945,
+      9.156193,
+      9.042446,
+      8.987655,
+      8.958739,
+      8.923155,
+      8.961322,
+      8.92728,
+      8.726908,
+      9.53973,
+      9.019862,
+      8.982321,
+      9.311066,
+      9.71481,
+      8.829907,
+      9.06482,
+      9.362857,
+      8.900739,
+      8.932447,
+      8.766283,
+      8.952906,
+      9.260693,
+      8.827407,
+      9.102944,
+      9.007737,
+      8.902281,
+      9.00928,
+      9.083528,
+      9.511938,
+      8.868114,
+      8.957571,
+      9.039987,
+      9.240692,
+      9.566145,
+      8.929696,
+      8.914573,
+      9.059112,
+      8.97982,
+      8.919072,
+      9.181693,
+      8.901489,
+      8.869407,
+      9.154651,
+      9.053821,
+      8.822574,
+      9.315858,
+      9.017821,
+      8.895198,
+      8.893406,
+      9.027154,
+      9.204276,
+      8.876197,
+      9.028362,
+      9.334357,
+      9.658311,
+      9.065528,
+      9.044404,
+      8.87149,
+      9.02407,
+      8.941238,
+      8.847073,
+      9.023904,
+      9.118861,
+      9.087403,
+      8.964363,
+      9.284691,
+      9.977973,
+      9.257734,
+      9.703144,
+      10.301426,
+      9.163652,
+      9.212692
+    ],
+    "perf": {
+      "loopFps": 59.98,
+      "renderFps": 59.98,
+      "worstLoopMs": 3.2,
+      "gpuFrameMs": 11.5,
+      "gpuPassesMs": 19.61,
+      "gpuProfiled": 180,
+      "gpuSupported": true,
+      "image": "960×540",
+      "pixelRatio": 1,
+      "tier": {
+        "level": 2,
+        "capMpx": 2.2,
+        "label": "apple · metal-3 · 32 GB"
+      },
+      "renderScale": 1,
+      "quality": "high",
+      "budgetMs": 30,
+      "earthSurface": {
+        "mode": "satellite",
+        "supported": true,
+        "region": "cevennes",
+        "label": "Cévennes",
+        "year": 2021,
+        "sourceResolutionM": 10,
+        "format": "bc7",
+        "loaded": 16,
+        "pages": 16,
+        "pending": false,
+        "inflight": 0,
+        "failed": 0,
+        "lastError": null,
+        "status": "ready",
+        "gpuBytes": 39147264,
+        "uploadedBytes": 39147264,
+        "uploadCpuMs": 14.3,
+        "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), processed by ESA WorldCover consortium (CC BY 4.0)",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "sourceUrl": "https://esa-worldcover.org/en/data-access"
+      },
+      "earthScenery": {
+        "mode": "balanced",
+        "supported": true,
+        "status": "ready",
+        "pending": false,
+        "budgetLimited": false,
+        "lat": 44.2,
+        "lon": 4.149750287207894,
+        "trees": 12436,
+        "buildings": 4310,
+        "footprintEdges": 25564,
+        "gpuBytes": 16777216,
+        "retiringGpuBytes": 0,
+        "coverPixels": 245281,
+        "rgbPixels": 262144,
+        "workerMs": 4415.699999999255,
+        "tileNetworkBytes": 1540347,
+        "uploadCpuMs": 1.2,
+        "lastError": null,
+        "coverage": "WorldCover 2021 land; OpenStreetMap buildings; |latitude| ≤ 84°; coverage varies with source data",
+        "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), CC BY 4.0; © OpenMapTiles, Data from OpenStreetMap (ODbL), served by OpenFreeMap",
+        "sources": [
+          "https://esa-worldcover.org/en/data-access",
+          "https://docs.terrascope.be/Developers/WebServices/OGC/MapProxy.html",
+          "https://openfreemap.org",
+          "https://www.openstreetmap.org/copyright"
+        ]
+      },
+      "block": 2,
+      "cpu": [
+        {
+          "section": "render (encode, submit)",
+          "ms": 1.12,
+          "worst": 2.7
+        },
+        {
+          "section": "sky chart",
+          "ms": 0.03,
+          "worst": 0.1
+        },
+        {
+          "section": "overlay (guide, marker)",
+          "ms": 0.02,
+          "worst": 0.2
+        },
+        {
+          "section": "free-fall prediction",
+          "ms": 0.01,
+          "worst": 0.1
+        },
+        {
+          "section": "panel & readouts",
+          "ms": 0.01,
+          "worst": 0.2
+        },
+        {
+          "section": "game tools window",
+          "ms": 0,
+          "worst": 0.1
+        },
+        {
+          "section": "autosave",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight HUD (total)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: map",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight (camera.update)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: markers & tapes",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight figures (flightInfo)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: attitude ball",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "Ranger status",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: orbit panel",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: target & Ranger",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "sound",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: text panels",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: telemetry",
+          "ms": 0,
+          "worst": 0
+        }
+      ],
+      "gpu": [
+        {
+          "pass": "display",
+          "ms": 10.02,
+          "last": 9.78,
+          "frames": 180
+        },
+        {
+          "pass": "trace",
+          "ms": 9.3,
+          "last": 9.21,
+          "frames": 180
+        },
+        {
+          "pass": "temporal",
+          "ms": 0.12,
+          "last": 0.11,
+          "frames": 180
+        },
+        {
+          "pass": "light meter",
+          "ms": 0.1,
+          "last": 0.1,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 1",
+          "ms": 0.09,
+          "last": 0.09,
+          "frames": 180
+        },
+        {
+          "pass": "resolve",
+          "ms": 0.07,
+          "last": 0.07,
+          "frames": 180
+        },
+        {
+          "pass": "gather",
+          "ms": 0.06,
+          "last": 0.06,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 2",
+          "ms": 0.05,
+          "last": 0.05,
+          "frames": 180
+        },
+        {
+          "pass": "stars",
+          "ms": 0.03,
+          "last": 0.03,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 3",
+          "ms": 0.02,
+          "last": 0.03,
+          "frames": 180
+        },
+        {
+          "pass": "motion blur",
+          "ms": 0.02,
+          "last": 0.02,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 4",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 5",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 1",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 2",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 4",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 3",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        }
+      ]
+    },
+    "calibrationReady": true
+  },
+  {
+    "place": {
+      "name": "cevennes",
+      "lat": 44.2,
+      "lon": 4.15,
+      "alt": 1.2
+    },
+    "volumes": false,
+    "trace": {
+      "median": 9.171526,
+      "p10": 8.268249,
+      "p90": 10.447757,
+      "samples": 180
+    },
+    "times": [
+      8.333748,
+      8.516787,
+      9.345399,
+      9.127485,
+      9.590604,
+      8.611118,
+      9.329648,
+      9.35044,
+      9.030987,
+      8.995821,
+      8.275374,
+      8.264374,
+      8.431455,
+      8.16571,
+      8.398164,
+      8.236958,
+      8.297707,
+      8.387747,
+      8.891739,
+      9.221985,
+      10.751878,
+      9.8376,
+      8.479245,
+      8.840615,
+      9.348275,
+      9.608479,
+      9.080904,
+      9.345148,
+      9.089487,
+      9.270275,
+      9.398648,
+      9.339108,
+      9.942182,
+      10.641337,
+      8.229791,
+      8.597869,
+      8.984446,
+      9.49998,
+      9.951848,
+      9.583479,
+      8.109543,
+      8.152293,
+      8.644577,
+      9.594478,
+      9.753311,
+      8.445913,
+      8.920364,
+      8.175667,
+      8.526745,
+      8.881114,
+      8.893989,
+      9.403481,
+      11.555198,
+      8.226541,
+      8.338915,
+      8.268249,
+      8.519412,
+      8.489787,
+      8.320914,
+      9.088903,
+      8.527829,
+      8.541454,
+      8.60341,
+      9.46423,
+      8.53312,
+      8.835157,
+      9.254276,
+      8.137585,
+      8.667284,
+      8.314915,
+      8.350332,
+      8.438122,
+      8.671659,
+      9.161776,
+      11.140247,
+      10.713128,
+      8.890531,
+      9.539438,
+      8.711117,
+      9.06707,
+      8.154043,
+      8.453162,
+      8.901572,
+      9.409897,
+      10.417632,
+      8.846115,
+      9.345191,
+      8.199916,
+      8.459996,
+      8.962156,
+      9.349942,
+      10.753128,
+      8.739533,
+      8.7622,
+      8.163708,
+      8.307499,
+      8.163583,
+      8.361289,
+      8.621078,
+      9.240484,
+      8.740324,
+      9.325357,
+      9.366732,
+      9.50698,
+      8.844115,
+      9.231942,
+      9.467772,
+      10.055471,
+      8.988238,
+      9.511897,
+      10.23976,
+      8.259249,
+      8.391163,
+      9.171526,
+      10.460215,
+      11.021415,
+      9.230442,
+      9.919724,
+      9.790435,
+      9.835141,
+      10.728003,
+      10.447757,
+      10.508505,
+      11.005999,
+      10.485715,
+      11.182705,
+      9.88339,
+      10.138261,
+      9.610686,
+      10.350717,
+      9.992181,
+      10.656754,
+      11.443825,
+      8.495453,
+      8.932655,
+      9.155236,
+      9.714227,
+      10.045347,
+      10.546422,
+      9.456606,
+      9.798684,
+      9.56052,
+      10.220344,
+      9.542605,
+      9.819683,
+      10.184844,
+      8.869782,
+      9.223401,
+      8.767866,
+      9.309608,
+      10.159345,
+      8.546994,
+      8.978904,
+      9.442314,
+      10.129637,
+      9.300899,
+      9.103819,
+      10.061596,
+      9.262109,
+      9.575104,
+      8.749075,
+      9.271276,
+      10.170637,
+      8.183666,
+      8.795366,
+      8.940322,
+      9.202985,
+      9.894974,
+      10.045306,
+      10.61563,
+      9.213276,
+      9.644061,
+      8.338332,
+      8.539827,
+      9.135777,
+      9.859559,
+      10.812793,
+      9.698519,
+      8.090627,
+      8.263415
+    ],
+    "perf": {
+      "loopFps": 60.06,
+      "renderFps": 60.06,
+      "worstLoopMs": 4,
+      "gpuFrameMs": 11,
+      "gpuPassesMs": 17.98,
+      "gpuProfiled": 180,
+      "gpuSupported": true,
+      "image": "960×540",
+      "pixelRatio": 1,
+      "tier": {
+        "level": 2,
+        "capMpx": 2.2,
+        "label": "apple · metal-3 · 32 GB"
+      },
+      "renderScale": 1,
+      "quality": "high",
+      "budgetMs": 30,
+      "earthSurface": {
+        "mode": "satellite",
+        "supported": true,
+        "region": "cevennes",
+        "label": "Cévennes",
+        "year": 2021,
+        "sourceResolutionM": 10,
+        "format": "bc7",
+        "loaded": 16,
+        "pages": 16,
+        "pending": false,
+        "inflight": 0,
+        "failed": 0,
+        "lastError": null,
+        "status": "ready",
+        "gpuBytes": 39147264,
+        "uploadedBytes": 39147264,
+        "uploadCpuMs": 14.3,
+        "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), processed by ESA WorldCover consortium (CC BY 4.0)",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "sourceUrl": "https://esa-worldcover.org/en/data-access"
+      },
+      "earthScenery": {
+        "mode": "balanced",
+        "supported": true,
+        "status": "ready",
+        "pending": false,
+        "budgetLimited": false,
+        "lat": 44.2,
+        "lon": 4.149750287207894,
+        "trees": 12436,
+        "buildings": 4310,
+        "footprintEdges": 25564,
+        "gpuBytes": 16777216,
+        "retiringGpuBytes": 0,
+        "coverPixels": 245281,
+        "rgbPixels": 262144,
+        "workerMs": 4415.699999999255,
+        "tileNetworkBytes": 1540347,
+        "uploadCpuMs": 1.2,
+        "lastError": null,
+        "coverage": "WorldCover 2021 land; OpenStreetMap buildings; |latitude| ≤ 84°; coverage varies with source data",
+        "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), CC BY 4.0; © OpenMapTiles, Data from OpenStreetMap (ODbL), served by OpenFreeMap",
+        "sources": [
+          "https://esa-worldcover.org/en/data-access",
+          "https://docs.terrascope.be/Developers/WebServices/OGC/MapProxy.html",
+          "https://openfreemap.org",
+          "https://www.openstreetmap.org/copyright"
+        ]
+      },
+      "block": 2,
+      "cpu": [
+        {
+          "section": "render (encode, submit)",
+          "ms": 1.08,
+          "worst": 3.6
+        },
+        {
+          "section": "sky chart",
+          "ms": 0.05,
+          "worst": 0.2
+        },
+        {
+          "section": "overlay (guide, marker)",
+          "ms": 0.02,
+          "worst": 0.2
+        },
+        {
+          "section": "panel & readouts",
+          "ms": 0.01,
+          "worst": 0.2
+        },
+        {
+          "section": "free-fall prediction",
+          "ms": 0.01,
+          "worst": 0.1
+        },
+        {
+          "section": "game tools window",
+          "ms": 0,
+          "worst": 0.1
+        },
+        {
+          "section": "autosave",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight HUD (total)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: map",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight (camera.update)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: markers & tapes",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight figures (flightInfo)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: attitude ball",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "Ranger status",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: orbit panel",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: target & Ranger",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "sound",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: text panels",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: telemetry",
+          "ms": 0,
+          "worst": 0
+        }
+      ],
+      "gpu": [
+        {
+          "pass": "display",
+          "ms": 10.09,
+          "last": 9.08,
+          "frames": 180
+        },
+        {
+          "pass": "trace",
+          "ms": 9.26,
+          "last": 8.26,
+          "frames": 180
+        },
+        {
+          "pass": "temporal",
+          "ms": 0.12,
+          "last": 0.12,
+          "frames": 180
+        },
+        {
+          "pass": "light meter",
+          "ms": 0.11,
+          "last": 0.1,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 1",
+          "ms": 0.1,
+          "last": 0.09,
+          "frames": 180
+        },
+        {
+          "pass": "resolve",
+          "ms": 0.08,
+          "last": 0.07,
+          "frames": 180
+        },
+        {
+          "pass": "gather",
+          "ms": 0.07,
+          "last": 0.06,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 2",
+          "ms": 0.05,
+          "last": 0.05,
+          "frames": 180
+        },
+        {
+          "pass": "stars",
+          "ms": 0.03,
+          "last": 0.03,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 3",
+          "ms": 0.03,
+          "last": 0.02,
+          "frames": 180
+        },
+        {
+          "pass": "motion blur",
+          "ms": 0.02,
+          "last": 0.02,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 4",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 5",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 1",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 2",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 4",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 3",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        }
+      ]
+    },
+    "calibrationReady": true
+  },
+  {
+    "place": {
+      "name": "tokyo",
+      "lat": 35.68,
+      "lon": 139.76,
+      "alt": 0.4
+    },
+    "volumes": false,
+    "trace": {
+      "median": 7.646801,
+      "p10": 7.542718,
+      "p90": 8.229791,
+      "samples": 180
+    },
+    "times": [
+      7.832464,
+      7.663091,
+      7.804797,
+      7.584884,
+      7.787465,
+      7.671092,
+      7.674383,
+      7.511219,
+      7.652174,
+      7.540009,
+      7.642384,
+      7.734048,
+      7.595467,
+      7.684133,
+      7.666092,
+      7.768881,
+      8.366832,
+      8.806281,
+      8.945239,
+      8.909364,
+      7.654343,
+      7.819714,
+      8.483371,
+      8.229791,
+      7.553134,
+      7.610218,
+      7.965879,
+      8.116292,
+      7.773965,
+      7.90042,
+      8.256791,
+      7.570134,
+      7.813964,
+      8.079877,
+      8.088709,
+      7.900047,
+      8.367706,
+      9.930349,
+      10.03718,
+      9.348483,
+      7.570802,
+      7.608175,
+      7.613842,
+      7.780465,
+      8.074918,
+      8.375997,
+      7.70705,
+      7.883796,
+      7.753465,
+      8.39058,
+      8.343497,
+      7.551635,
+      7.593967,
+      7.544218,
+      7.802298,
+      7.92917,
+      7.618259,
+      7.837256,
+      8.170625,
+      7.492845,
+      7.972878,
+      7.573634,
+      7.596926,
+      7.713548,
+      8.034377,
+      7.62055,
+      7.685548,
+      7.521843,
+      7.59051,
+      7.686383,
+      7.750756,
+      7.491553,
+      7.571759,
+      7.546885,
+      7.542718,
+      7.722758,
+      8.199459,
+      7.627383,
+      7.684841,
+      7.487218,
+      7.658926,
+      7.603509,
+      7.780797,
+      7.604259,
+      7.538176,
+      7.594509,
+      7.542385,
+      7.60905,
+      7.632383,
+      7.597134,
+      7.719049,
+      7.544094,
+      7.730632,
+      7.686508,
+      7.54776,
+      7.606092,
+      7.595134,
+      7.603175,
+      7.54651,
+      7.870963,
+      7.812463,
+      8.437246,
+      9.415565,
+      9.093986,
+      9.64727,
+      8.568829,
+      7.575593,
+      7.608676,
+      7.630425,
+      7.685633,
+      7.695424,
+      7.708423,
+      7.543385,
+      7.841256,
+      7.606884,
+      7.443177,
+      7.670217,
+      7.54855,
+      7.646801,
+      7.581342,
+      7.624967,
+      7.590842,
+      7.501343,
+      7.635676,
+      7.542427,
+      7.66805,
+      7.643468,
+      7.693341,
+      7.668008,
+      7.6758,
+      7.683549,
+      7.575009,
+      7.739257,
+      7.639093,
+      7.557426,
+      7.560885,
+      7.603259,
+      7.712674,
+      7.622467,
+      7.869255,
+      7.496345,
+      7.577842,
+      7.611593,
+      7.934045,
+      7.511969,
+      7.614342,
+      7.497761,
+      7.589135,
+      7.779131,
+      7.873797,
+      7.613967,
+      7.774257,
+      7.640884,
+      7.963419,
+      7.694007,
+      7.531301,
+      7.54926,
+      7.58351,
+      7.809798,
+      7.600842,
+      7.634758,
+      7.679967,
+      7.752257,
+      7.620176,
+      7.570677,
+      7.562427,
+      7.526343,
+      7.615341,
+      7.552469,
+      7.529885,
+      7.650049,
+      7.632718,
+      7.545968,
+      7.611759,
+      7.724049,
+      7.554468,
+      7.579676,
+      7.594759,
+      7.637383,
+      7.657258
+    ],
+    "perf": {
+      "loopFps": 60.05,
+      "renderFps": 60.05,
+      "worstLoopMs": 3.4,
+      "gpuFrameMs": 10.2,
+      "gpuPassesMs": 16.77,
+      "gpuProfiled": 180,
+      "gpuSupported": true,
+      "image": "960×540",
+      "pixelRatio": 1,
+      "tier": {
+        "level": 2,
+        "capMpx": 2.2,
+        "label": "apple · metal-3 · 32 GB"
+      },
+      "renderScale": 1,
+      "quality": "high",
+      "budgetMs": 30,
+      "earthSurface": {
+        "mode": "satellite",
+        "supported": true,
+        "region": null,
+        "label": null,
+        "year": 2021,
+        "sourceResolutionM": 10,
+        "format": "bc7",
+        "loaded": 0,
+        "pages": 0,
+        "pending": false,
+        "inflight": 0,
+        "failed": 0,
+        "lastError": null,
+        "status": "outside-pilots",
+        "gpuBytes": 5,
+        "uploadedBytes": 39147264,
+        "uploadCpuMs": 14.3,
+        "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), processed by ESA WorldCover consortium (CC BY 4.0)",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "sourceUrl": "https://esa-worldcover.org/en/data-access"
+      },
+      "earthScenery": {
+        "mode": "balanced",
+        "supported": true,
+        "status": "ready",
+        "pending": false,
+        "budgetLimited": true,
+        "lat": 35.68,
+        "lon": 139.7596859240657,
+        "trees": 2766,
+        "buildings": 5000,
+        "footprintEdges": 26086,
+        "gpuBytes": 16777216,
+        "retiringGpuBytes": 0,
+        "coverPixels": 246429,
+        "rgbPixels": 262144,
+        "workerMs": 3116.300000000745,
+        "tileNetworkBytes": 5250745,
+        "uploadCpuMs": 2.2,
+        "lastError": null,
+        "coverage": "WorldCover 2021 land; OpenStreetMap buildings; |latitude| ≤ 84°; coverage varies with source data",
+        "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), CC BY 4.0; © OpenMapTiles, Data from OpenStreetMap (ODbL), served by OpenFreeMap",
+        "sources": [
+          "https://esa-worldcover.org/en/data-access",
+          "https://docs.terrascope.be/Developers/WebServices/OGC/MapProxy.html",
+          "https://openfreemap.org",
+          "https://www.openstreetmap.org/copyright"
+        ]
+      },
+      "block": 2,
+      "cpu": [
+        {
+          "section": "render (encode, submit)",
+          "ms": 1.11,
+          "worst": 3.1
+        },
+        {
+          "section": "sky chart",
+          "ms": 0.04,
+          "worst": 0.1
+        },
+        {
+          "section": "overlay (guide, marker)",
+          "ms": 0.02,
+          "worst": 0.2
+        },
+        {
+          "section": "free-fall prediction",
+          "ms": 0.01,
+          "worst": 0.1
+        },
+        {
+          "section": "panel & readouts",
+          "ms": 0,
+          "worst": 0.2
+        },
+        {
+          "section": "game tools window",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "autosave",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight HUD (total)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: map",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight (camera.update)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: markers & tapes",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight figures (flightInfo)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: attitude ball",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "Ranger status",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: orbit panel",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: target & Ranger",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "sound",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: text panels",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: telemetry",
+          "ms": 0,
+          "worst": 0
+        }
+      ],
+      "gpu": [
+        {
+          "pass": "display",
+          "ms": 8.46,
+          "last": 8.48,
+          "frames": 180
+        },
+        {
+          "pass": "trace",
+          "ms": 7.62,
+          "last": 7.66,
+          "frames": 180
+        },
+        {
+          "pass": "temporal",
+          "ms": 0.12,
+          "last": 0.12,
+          "frames": 180
+        },
+        {
+          "pass": "light meter",
+          "ms": 0.1,
+          "last": 0.1,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 1",
+          "ms": 0.09,
+          "last": 0.09,
+          "frames": 180
+        },
+        {
+          "pass": "resolve",
+          "ms": 0.07,
+          "last": 0.07,
+          "frames": 180
+        },
+        {
+          "pass": "gather",
+          "ms": 0.06,
+          "last": 0.08,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 2",
+          "ms": 0.05,
+          "last": 0.05,
+          "frames": 180
+        },
+        {
+          "pass": "stars",
+          "ms": 0.03,
+          "last": 0.03,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 3",
+          "ms": 0.02,
+          "last": 0.02,
+          "frames": 180
+        },
+        {
+          "pass": "motion blur",
+          "ms": 0.02,
+          "last": 0.02,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 4",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 5",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 1",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 2",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 3",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 4",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        }
+      ]
+    },
+    "calibrationReady": true
+  },
+  {
+    "place": {
+      "name": "tokyo",
+      "lat": 35.68,
+      "lon": 139.76,
+      "alt": 0.4
+    },
+    "volumes": true,
+    "trace": {
+      "median": 8.013544,
+      "p10": 7.932629,
+      "p90": 8.164543,
+      "samples": 180
+    },
+    "times": [
+      8.405122,
+      8.286708,
+      8.018543,
+      8.095127,
+      8.346582,
+      7.874714,
+      8.206,
+      8.134209,
+      8.07346,
+      7.938754,
+      8.291458,
+      7.972253,
+      8.338747,
+      7.972503,
+      7.98217,
+      7.986086,
+      8.128918,
+      8.243915,
+      7.96192,
+      7.996128,
+      7.949921,
+      8.017835,
+      7.921963,
+      7.949879,
+      8.130876,
+      7.961086,
+      7.893588,
+      7.975378,
+      7.944379,
+      7.927671,
+      8.287123,
+      8.109336,
+      8.047627,
+      8.521495,
+      8.033544,
+      8.140542,
+      8.23025,
+      8.068793,
+      8.058752,
+      7.969421,
+      7.970961,
+      7.895171,
+      8.021836,
+      7.94542,
+      7.943545,
+      7.986294,
+      7.877339,
+      7.986421,
+      7.885171,
+      7.943254,
+      7.981128,
+      7.87863,
+      8.022795,
+      8.063544,
+      7.973003,
+      7.990128,
+      7.957213,
+      7.989628,
+      8.132459,
+      7.977338,
+      7.936837,
+      7.868589,
+      8.196042,
+      7.939421,
+      8.235041,
+      7.968796,
+      7.993295,
+      7.930879,
+      7.893547,
+      7.950629,
+      8.207625,
+      8.032585,
+      7.981253,
+      8.114001,
+      8.028794,
+      7.982712,
+      8.027295,
+      8.032168,
+      8.270789,
+      8.00667,
+      8.056918,
+      8.005378,
+      8.08596,
+      8.014752,
+      8.153251,
+      7.964712,
+      8.193542,
+      8.035586,
+      8.082084,
+      8.044544,
+      8.104752,
+      8.026044,
+      8.007669,
+      8.032335,
+      8.024543,
+      8.081001,
+      7.990213,
+      7.904546,
+      7.966962,
+      8.108417,
+      8.028919,
+      7.993545,
+      7.950962,
+      7.993295,
+      7.88667,
+      8.010169,
+      8.030086,
+      7.927546,
+      8.03871,
+      7.921004,
+      8.127751,
+      8.106001,
+      7.959919,
+      7.955212,
+      8.164543,
+      7.942753,
+      7.963669,
+      8.115918,
+      8.324373,
+      8.137334,
+      8.045753,
+      8.037212,
+      8.162751,
+      8.058168,
+      8.064335,
+      7.994044,
+      8.10371,
+      8.083752,
+      8.010211,
+      8.079626,
+      7.995378,
+      7.99367,
+      8.004753,
+      8.096834,
+      8.054002,
+      8.079793,
+      8.153667,
+      8.064127,
+      7.941962,
+      8.140751,
+      8.078919,
+      8.013544,
+      8.084461,
+      8.034835,
+      8.205916,
+      8.009462,
+      8.07646,
+      8.068877,
+      7.993545,
+      7.984128,
+      8.045294,
+      7.934503,
+      8.09246,
+      7.932629,
+      7.970503,
+      7.993794,
+      7.988503,
+      7.999503,
+      8.012293,
+      7.970837,
+      7.995587,
+      7.985961,
+      8.060627,
+      8.079293,
+      7.897795,
+      7.983878,
+      7.984253,
+      8.214249,
+      7.988461,
+      7.985545,
+      7.999419,
+      8.016378,
+      7.950712,
+      8.076877,
+      8.073336,
+      8.073418,
+      7.952254,
+      8.036295,
+      7.883087,
+      8.129168
+    ],
+    "perf": {
+      "loopFps": 59.99,
+      "renderFps": 59.99,
+      "worstLoopMs": 2.7,
+      "gpuFrameMs": 11.1,
+      "gpuPassesMs": 17.72,
+      "gpuProfiled": 180,
+      "gpuSupported": true,
+      "image": "960×540",
+      "pixelRatio": 1,
+      "tier": {
+        "level": 2,
+        "capMpx": 2.2,
+        "label": "apple · metal-3 · 32 GB"
+      },
+      "renderScale": 1,
+      "quality": "high",
+      "budgetMs": 30,
+      "earthSurface": {
+        "mode": "satellite",
+        "supported": true,
+        "region": null,
+        "label": null,
+        "year": 2021,
+        "sourceResolutionM": 10,
+        "format": "bc7",
+        "loaded": 0,
+        "pages": 0,
+        "pending": false,
+        "inflight": 0,
+        "failed": 0,
+        "lastError": null,
+        "status": "outside-pilots",
+        "gpuBytes": 5,
+        "uploadedBytes": 39147264,
+        "uploadCpuMs": 14.3,
+        "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), processed by ESA WorldCover consortium (CC BY 4.0)",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "sourceUrl": "https://esa-worldcover.org/en/data-access"
+      },
+      "earthScenery": {
+        "mode": "balanced",
+        "supported": true,
+        "status": "ready",
+        "pending": false,
+        "budgetLimited": true,
+        "lat": 35.68,
+        "lon": 139.7596859240657,
+        "trees": 2766,
+        "buildings": 5000,
+        "footprintEdges": 26086,
+        "gpuBytes": 16777216,
+        "retiringGpuBytes": 0,
+        "coverPixels": 246429,
+        "rgbPixels": 262144,
+        "workerMs": 3116.300000000745,
+        "tileNetworkBytes": 5250745,
+        "uploadCpuMs": 2.2,
+        "lastError": null,
+        "coverage": "WorldCover 2021 land; OpenStreetMap buildings; |latitude| ≤ 84°; coverage varies with source data",
+        "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), CC BY 4.0; © OpenMapTiles, Data from OpenStreetMap (ODbL), served by OpenFreeMap",
+        "sources": [
+          "https://esa-worldcover.org/en/data-access",
+          "https://docs.terrascope.be/Developers/WebServices/OGC/MapProxy.html",
+          "https://openfreemap.org",
+          "https://www.openstreetmap.org/copyright"
+        ]
+      },
+      "block": 2,
+      "cpu": [
+        {
+          "section": "render (encode, submit)",
+          "ms": 1.22,
+          "worst": 2.1
+        },
+        {
+          "section": "sky chart",
+          "ms": 0.05,
+          "worst": 0.2
+        },
+        {
+          "section": "autosave",
+          "ms": 0.03,
+          "worst": 0.9
+        },
+        {
+          "section": "overlay (guide, marker)",
+          "ms": 0.03,
+          "worst": 0.2
+        },
+        {
+          "section": "free-fall prediction",
+          "ms": 0.01,
+          "worst": 0.1
+        },
+        {
+          "section": "panel & readouts",
+          "ms": 0.01,
+          "worst": 0.2
+        },
+        {
+          "section": "game tools window",
+          "ms": 0,
+          "worst": 0.1
+        },
+        {
+          "section": "flight HUD (total)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: map",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight (camera.update)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: markers & tapes",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight figures (flightInfo)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: attitude ball",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "Ranger status",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: orbit panel",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: target & Ranger",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "sound",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: text panels",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: telemetry",
+          "ms": 0,
+          "worst": 0
+        }
+      ],
+      "gpu": [
+        {
+          "pass": "display",
+          "ms": 8.79,
+          "last": 8.95,
+          "frames": 180
+        },
+        {
+          "pass": "trace",
+          "ms": 8.02,
+          "last": 8.13,
+          "frames": 180
+        },
+        {
+          "pass": "temporal",
+          "ms": 0.12,
+          "last": 0.12,
+          "frames": 180
+        },
+        {
+          "pass": "light meter",
+          "ms": 0.1,
+          "last": 0.1,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 1",
+          "ms": 0.09,
+          "last": 0.09,
+          "frames": 180
+        },
+        {
+          "pass": "resolve",
+          "ms": 0.07,
+          "last": 0.07,
+          "frames": 180
+        },
+        {
+          "pass": "gather",
+          "ms": 0.06,
+          "last": 0.06,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 2",
+          "ms": 0.05,
+          "last": 0.05,
+          "frames": 180
+        },
+        {
+          "pass": "stars",
+          "ms": 0.03,
+          "last": 0.03,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 3",
+          "ms": 0.02,
+          "last": 0.03,
+          "frames": 180
+        },
+        {
+          "pass": "motion blur",
+          "ms": 0.02,
+          "last": 0.02,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 4",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 5",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 1",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 3",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 2",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 4",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        }
+      ]
+    },
+    "calibrationReady": true
+  },
+  {
+    "place": {
+      "name": "tokyo",
+      "lat": 35.68,
+      "lon": 139.76,
+      "alt": 0.4
+    },
+    "volumes": false,
+    "trace": {
+      "median": 7.66305,
+      "p10": 7.520761,
+      "p90": 8.318498,
+      "samples": 180
+    },
+    "times": [
+      7.738299,
+      7.717674,
+      7.703049,
+      7.599425,
+      7.635092,
+      7.679923,
+      7.661508,
+      7.595925,
+      7.593009,
+      7.747798,
+      7.661383,
+      7.664883,
+      7.680758,
+      7.535718,
+      7.765132,
+      7.599426,
+      7.980045,
+      7.996461,
+      8.684784,
+      9.413523,
+      7.86288,
+      7.749548,
+      7.574343,
+      7.571634,
+      7.556344,
+      7.510302,
+      7.523052,
+      7.600134,
+      7.528802,
+      7.613841,
+      7.464427,
+      7.605134,
+      7.622092,
+      7.569592,
+      7.777756,
+      7.578719,
+      7.715049,
+      7.627717,
+      7.521844,
+      7.496052,
+      7.680883,
+      7.60455,
+      7.780924,
+      7.629259,
+      7.489885,
+      7.638301,
+      7.602467,
+      7.683216,
+      7.766673,
+      7.600592,
+      7.548801,
+      7.482386,
+      7.797923,
+      7.575344,
+      7.656924,
+      7.916087,
+      8.753159,
+      8.993071,
+      7.551218,
+      7.499885,
+      7.648716,
+      7.807172,
+      7.90763,
+      8.25804,
+      7.525719,
+      7.704842,
+      7.499218,
+      8.03896,
+      7.542052,
+      7.424179,
+      7.55351,
+      7.606801,
+      7.579426,
+      7.616675,
+      7.597301,
+      7.469678,
+      7.487261,
+      7.66305,
+      7.583134,
+      7.573385,
+      7.792839,
+      7.908004,
+      7.520761,
+      7.526301,
+      7.604051,
+      7.53855,
+      7.783798,
+      7.548843,
+      7.522719,
+      7.53526,
+      7.541676,
+      7.509552,
+      7.465845,
+      7.622342,
+      7.851713,
+      7.637924,
+      7.879587,
+      7.551717,
+      7.711674,
+      7.634341,
+      7.79634,
+      7.959046,
+      8.409246,
+      8.876405,
+      9.019738,
+      8.397414,
+      8.876323,
+      8.318498,
+      8.80699,
+      8.170209,
+      8.675743,
+      8.566244,
+      8.709659,
+      8.613035,
+      8.517787,
+      9.03682,
+      7.564592,
+      8.044086,
+      8.367497,
+      7.934379,
+      7.795964,
+      7.974586,
+      7.767756,
+      7.626259,
+      8.065377,
+      7.97417,
+      8.131876,
+      8.038044,
+      7.978419,
+      7.914046,
+      7.794422,
+      7.769464,
+      7.90038,
+      7.962879,
+      7.53576,
+      7.540093,
+      7.560676,
+      7.742674,
+      7.6328,
+      7.689092,
+      7.722799,
+      7.636384,
+      7.451844,
+      7.700258,
+      7.525886,
+      7.597592,
+      7.710382,
+      7.605676,
+      7.599217,
+      7.702717,
+      7.587675,
+      7.541594,
+      8.034794,
+      8.221125,
+      8.772032,
+      7.800839,
+      7.49897,
+      7.598969,
+      7.544885,
+      7.620884,
+      7.794881,
+      7.506469,
+      7.691091,
+      7.509844,
+      7.519886,
+      7.677092,
+      7.761048,
+      7.600009,
+      7.706757,
+      7.657591,
+      7.791589,
+      7.971296,
+      7.707258,
+      7.64405,
+      7.978046,
+      7.566218,
+      8.028336,
+      7.811423,
+      8.040002,
+      7.794381
+    ],
+    "perf": {
+      "loopFps": 59.94,
+      "renderFps": 59.94,
+      "worstLoopMs": 3.6,
+      "gpuFrameMs": 10.3,
+      "gpuPassesMs": 17.01,
+      "gpuProfiled": 180,
+      "gpuSupported": true,
+      "image": "960×540",
+      "pixelRatio": 1,
+      "tier": {
+        "level": 2,
+        "capMpx": 2.2,
+        "label": "apple · metal-3 · 32 GB"
+      },
+      "renderScale": 1,
+      "quality": "high",
+      "budgetMs": 30,
+      "earthSurface": {
+        "mode": "satellite",
+        "supported": true,
+        "region": null,
+        "label": null,
+        "year": 2021,
+        "sourceResolutionM": 10,
+        "format": "bc7",
+        "loaded": 0,
+        "pages": 0,
+        "pending": false,
+        "inflight": 0,
+        "failed": 0,
+        "lastError": null,
+        "status": "outside-pilots",
+        "gpuBytes": 5,
+        "uploadedBytes": 39147264,
+        "uploadCpuMs": 14.3,
+        "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), processed by ESA WorldCover consortium (CC BY 4.0)",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "sourceUrl": "https://esa-worldcover.org/en/data-access"
+      },
+      "earthScenery": {
+        "mode": "balanced",
+        "supported": true,
+        "status": "ready",
+        "pending": false,
+        "budgetLimited": true,
+        "lat": 35.68,
+        "lon": 139.7596859240657,
+        "trees": 2766,
+        "buildings": 5000,
+        "footprintEdges": 26086,
+        "gpuBytes": 16777216,
+        "retiringGpuBytes": 0,
+        "coverPixels": 246429,
+        "rgbPixels": 262144,
+        "workerMs": 3116.300000000745,
+        "tileNetworkBytes": 5250745,
+        "uploadCpuMs": 2.2,
+        "lastError": null,
+        "coverage": "WorldCover 2021 land; OpenStreetMap buildings; |latitude| ≤ 84°; coverage varies with source data",
+        "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), CC BY 4.0; © OpenMapTiles, Data from OpenStreetMap (ODbL), served by OpenFreeMap",
+        "sources": [
+          "https://esa-worldcover.org/en/data-access",
+          "https://docs.terrascope.be/Developers/WebServices/OGC/MapProxy.html",
+          "https://openfreemap.org",
+          "https://www.openstreetmap.org/copyright"
+        ]
+      },
+      "block": 2,
+      "cpu": [
+        {
+          "section": "render (encode, submit)",
+          "ms": 1.51,
+          "worst": 3.1
+        },
+        {
+          "section": "sky chart",
+          "ms": 0.04,
+          "worst": 0.3
+        },
+        {
+          "section": "overlay (guide, marker)",
+          "ms": 0.02,
+          "worst": 0.2
+        },
+        {
+          "section": "panel & readouts",
+          "ms": 0.01,
+          "worst": 0.4
+        },
+        {
+          "section": "free-fall prediction",
+          "ms": 0.01,
+          "worst": 0.1
+        },
+        {
+          "section": "game tools window",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "autosave",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight HUD (total)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: map",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight (camera.update)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: markers & tapes",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight figures (flightInfo)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: attitude ball",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "Ranger status",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: orbit panel",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: target & Ranger",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "sound",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: text panels",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: telemetry",
+          "ms": 0,
+          "worst": 0
+        }
+      ],
+      "gpu": [
+        {
+          "pass": "display",
+          "ms": 8.14,
+          "last": 8.59,
+          "frames": 180
+        },
+        {
+          "pass": "trace",
+          "ms": 7.79,
+          "last": 7.79,
+          "frames": 180
+        },
+        {
+          "pass": "temporal",
+          "ms": 0.12,
+          "last": 0.12,
+          "frames": 180
+        },
+        {
+          "pass": "light meter",
+          "ms": 0.1,
+          "last": 0.1,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 1",
+          "ms": 0.09,
+          "last": 0.09,
+          "frames": 180
+        },
+        {
+          "pass": "resolve",
+          "ms": 0.07,
+          "last": 0.07,
+          "frames": 180
+        },
+        {
+          "pass": "gather",
+          "ms": 0.06,
+          "last": 0.06,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 2",
+          "ms": 0.05,
+          "last": 0.05,
+          "frames": 180
+        },
+        {
+          "pass": "stars",
+          "ms": 0.03,
+          "last": 0.03,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 3",
+          "ms": 0.02,
+          "last": 0.02,
+          "frames": 180
+        },
+        {
+          "pass": "motion blur",
+          "ms": 0.02,
+          "last": 0.02,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 4",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 5",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 1",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 2",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 3",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 4",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        }
+      ]
+    },
+    "calibrationReady": true
+  },
+  {
+    "place": {
+      "name": "tokyo",
+      "lat": 35.68,
+      "lon": 139.76,
+      "alt": 0.4
+    },
+    "volumes": true,
+    "trace": {
+      "median": 8.028752,
+      "p10": 7.927255,
+      "p90": 8.292541,
+      "samples": 180
+    },
+    "times": [
+      7.968087,
+      8.069585,
+      7.951837,
+      7.898921,
+      7.90788,
+      8.006503,
+      8.08371,
+      7.949379,
+      8.062586,
+      8.055085,
+      8.161167,
+      8.065751,
+      8.031128,
+      8.174375,
+      8.039502,
+      8.117126,
+      8.02342,
+      8.05671,
+      8.09196,
+      8.014336,
+      7.996877,
+      8.121251,
+      7.920047,
+      7.938253,
+      8.065419,
+      8.006295,
+      8.255624,
+      8.009711,
+      8.878699,
+      8.090168,
+      7.953503,
+      7.984045,
+      8.041961,
+      8.221707,
+      8.077293,
+      7.927255,
+      8.022336,
+      7.956338,
+      8.020961,
+      7.933378,
+      7.93217,
+      8.02371,
+      7.956379,
+      7.952838,
+      8.073294,
+      8.100793,
+      8.133293,
+      8.063585,
+      7.997586,
+      7.965253,
+      8.001003,
+      8.119918,
+      8.066919,
+      8.197167,
+      8.09671,
+      8.079585,
+      8.036252,
+      8.198666,
+      8.12496,
+      8.166459,
+      7.927421,
+      8.186917,
+      8.089127,
+      8.139793,
+      7.912504,
+      8.009044,
+      8.221584,
+      7.942046,
+      7.947546,
+      8.011794,
+      8.159209,
+      8.626702,
+      7.93292,
+      7.96717,
+      8.134168,
+      7.973461,
+      7.952629,
+      7.985295,
+      8.078709,
+      7.939713,
+      7.947921,
+      7.944379,
+      7.946338,
+      7.889088,
+      8.022045,
+      7.987045,
+      8.059586,
+      7.956629,
+      7.89092,
+      7.998961,
+      8.094835,
+      7.919462,
+      7.896337,
+      8.424454,
+      8.022502,
+      7.90513,
+      7.868339,
+      8.005461,
+      8.007045,
+      7.999753,
+      8.06896,
+      7.885671,
+      8.006045,
+      7.948961,
+      7.946546,
+      7.898922,
+      8.005294,
+      8.019503,
+      7.950504,
+      7.938586,
+      8.043752,
+      8.021587,
+      8.039669,
+      8.172084,
+      8.292541,
+      8.040627,
+      8.071252,
+      8.385414,
+      9.066445,
+      8.048252,
+      8.101668,
+      7.99417,
+      7.945711,
+      8.367706,
+      7.886922,
+      7.913504,
+      8.033419,
+      8.033253,
+      8.147543,
+      8.042419,
+      7.937421,
+      8.002253,
+      8.003543,
+      7.993545,
+      8.592285,
+      8.864157,
+      8.375372,
+      8.059919,
+      8.53212,
+      8.913822,
+      8.194625,
+      8.486496,
+      8.950946,
+      8.045002,
+      8.418663,
+      8.238209,
+      8.476662,
+      8.534829,
+      8.016295,
+      7.987711,
+      8.000961,
+      8.364206,
+      8.165793,
+      8.071752,
+      8.149666,
+      7.993711,
+      8.076001,
+      7.976628,
+      8.06746,
+      8.028752,
+      8.094501,
+      8.10246,
+      8.070794,
+      7.972628,
+      7.884254,
+      8.090711,
+      8.022211,
+      7.980544,
+      7.908254,
+      7.989378,
+      7.989253,
+      8.092127,
+      8.08546,
+      8.738075,
+      8.065044,
+      7.992211,
+      7.89213,
+      7.981836,
+      8.081168,
+      8.151792
+    ],
+    "perf": {
+      "loopFps": 60.06,
+      "renderFps": 60.06,
+      "worstLoopMs": 4,
+      "gpuFrameMs": 10.7,
+      "gpuPassesMs": 17.77,
+      "gpuProfiled": 180,
+      "gpuSupported": true,
+      "image": "960×540",
+      "pixelRatio": 1,
+      "tier": {
+        "level": 2,
+        "capMpx": 2.2,
+        "label": "apple · metal-3 · 32 GB"
+      },
+      "renderScale": 1,
+      "quality": "high",
+      "budgetMs": 30,
+      "earthSurface": {
+        "mode": "satellite",
+        "supported": true,
+        "region": null,
+        "label": null,
+        "year": 2021,
+        "sourceResolutionM": 10,
+        "format": "bc7",
+        "loaded": 0,
+        "pages": 0,
+        "pending": false,
+        "inflight": 0,
+        "failed": 0,
+        "lastError": null,
+        "status": "outside-pilots",
+        "gpuBytes": 5,
+        "uploadedBytes": 39147264,
+        "uploadCpuMs": 14.3,
+        "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), processed by ESA WorldCover consortium (CC BY 4.0)",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "sourceUrl": "https://esa-worldcover.org/en/data-access"
+      },
+      "earthScenery": {
+        "mode": "balanced",
+        "supported": true,
+        "status": "ready",
+        "pending": false,
+        "budgetLimited": true,
+        "lat": 35.68,
+        "lon": 139.7596859240657,
+        "trees": 2766,
+        "buildings": 5000,
+        "footprintEdges": 26086,
+        "gpuBytes": 16777216,
+        "retiringGpuBytes": 0,
+        "coverPixels": 246429,
+        "rgbPixels": 262144,
+        "workerMs": 3116.300000000745,
+        "tileNetworkBytes": 5250745,
+        "uploadCpuMs": 2.2,
+        "lastError": null,
+        "coverage": "WorldCover 2021 land; OpenStreetMap buildings; |latitude| ≤ 84°; coverage varies with source data",
+        "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), CC BY 4.0; © OpenMapTiles, Data from OpenStreetMap (ODbL), served by OpenFreeMap",
+        "sources": [
+          "https://esa-worldcover.org/en/data-access",
+          "https://docs.terrascope.be/Developers/WebServices/OGC/MapProxy.html",
+          "https://openfreemap.org",
+          "https://www.openstreetmap.org/copyright"
+        ]
+      },
+      "block": 2,
+      "cpu": [
+        {
+          "section": "render (encode, submit)",
+          "ms": 1.32,
+          "worst": 2.6
+        },
+        {
+          "section": "sky chart",
+          "ms": 0.04,
+          "worst": 0.3
+        },
+        {
+          "section": "autosave",
+          "ms": 0.03,
+          "worst": 0.8
+        },
+        {
+          "section": "overlay (guide, marker)",
+          "ms": 0.02,
+          "worst": 0.1
+        },
+        {
+          "section": "free-fall prediction",
+          "ms": 0.01,
+          "worst": 0.3
+        },
+        {
+          "section": "panel & readouts",
+          "ms": 0.01,
+          "worst": 0.1
+        },
+        {
+          "section": "game tools window",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight HUD (total)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: map",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight (camera.update)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: markers & tapes",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight figures (flightInfo)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: attitude ball",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "Ranger status",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: orbit panel",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: target & Ranger",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "sound",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: text panels",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: telemetry",
+          "ms": 0,
+          "worst": 0
+        }
+      ],
+      "gpu": [
+        {
+          "pass": "display",
+          "ms": 8.52,
+          "last": 8.96,
+          "frames": 180
+        },
+        {
+          "pass": "trace",
+          "ms": 8.08,
+          "last": 8.15,
+          "frames": 180
+        },
+        {
+          "pass": "temporal",
+          "ms": 0.12,
+          "last": 0.12,
+          "frames": 180
+        },
+        {
+          "pass": "light meter",
+          "ms": 0.11,
+          "last": 0.11,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 1",
+          "ms": 0.09,
+          "last": 0.09,
+          "frames": 180
+        },
+        {
+          "pass": "resolve",
+          "ms": 0.07,
+          "last": 0.08,
+          "frames": 180
+        },
+        {
+          "pass": "gather",
+          "ms": 0.06,
+          "last": 0.06,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 2",
+          "ms": 0.05,
+          "last": 0.05,
+          "frames": 180
+        },
+        {
+          "pass": "stars",
+          "ms": 0.03,
+          "last": 0.03,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 3",
+          "ms": 0.02,
+          "last": 0.03,
+          "frames": 180
+        },
+        {
+          "pass": "motion blur",
+          "ms": 0.02,
+          "last": 0.02,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 4",
+          "ms": 0.01,
+          "last": 0.02,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 5",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 1",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 2",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 4",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 3",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        }
+      ]
+    },
+    "calibrationReady": true
+  },
+  {
+    "place": {
+      "name": "tokyo",
+      "lat": 35.68,
+      "lon": 139.76,
+      "alt": 0.4
+    },
+    "volumes": false,
+    "trace": {
+      "median": 7.825464,
+      "p10": 7.573385,
+      "p90": 8.863198,
+      "samples": 180
+    },
+    "times": [
+      8.412122,
+      8.740284,
+      8.629868,
+      8.7062,
+      8.561995,
+      8.247207,
+      8.707992,
+      8.690868,
+      8.18725,
+      8.366122,
+      7.510803,
+      8.049252,
+      8.302832,
+      8.891364,
+      7.654508,
+      7.743216,
+      7.611217,
+      7.660675,
+      7.693717,
+      7.719299,
+      7.60105,
+      7.853755,
+      7.723632,
+      8.265707,
+      7.719466,
+      7.931504,
+      7.645343,
+      7.615883,
+      7.565968,
+      7.566592,
+      7.757797,
+      8.404579,
+      8.703992,
+      9.033487,
+      8.02621,
+      8.346123,
+      8.830824,
+      10.228302,
+      7.849339,
+      8.308665,
+      8.65491,
+      8.086627,
+      9.036071,
+      8.484204,
+      8.585411,
+      8.072959,
+      7.530344,
+      7.653176,
+      7.797547,
+      7.588967,
+      7.47422,
+      7.581217,
+      7.635216,
+      7.594884,
+      7.534552,
+      7.540718,
+      7.524843,
+      7.50497,
+      8.036044,
+      7.586259,
+      7.611675,
+      7.603592,
+      7.573385,
+      7.542969,
+      7.594301,
+      7.76934,
+      7.769007,
+      7.636133,
+      7.737215,
+      7.503178,
+      7.569718,
+      7.622383,
+      7.811756,
+      7.676467,
+      8.654409,
+      8.443704,
+      8.941031,
+      8.377663,
+      8.117168,
+      8.634161,
+      8.731491,
+      8.376122,
+      9.188027,
+      8.070334,
+      8.528745,
+      8.695242,
+      8.499246,
+      8.608285,
+      9.200152,
+      7.934087,
+      8.42658,
+      8.863198,
+      9.030529,
+      8.212458,
+      8.95003,
+      7.756465,
+      8.110918,
+      8.530494,
+      9.01907,
+      8.038128,
+      8.495453,
+      10.142386,
+      8.02596,
+      8.362289,
+      9.2994,
+      9.157611,
+      7.720174,
+      8.157167,
+      7.664092,
+      7.774839,
+      7.577134,
+      7.633008,
+      7.768549,
+      7.539635,
+      7.655299,
+      7.614009,
+      7.662758,
+      7.57401,
+      7.573635,
+      7.611008,
+      7.576052,
+      7.708466,
+      7.665008,
+      7.664716,
+      7.687258,
+      7.748549,
+      7.772215,
+      7.676424,
+      7.60605,
+      7.591801,
+      7.697383,
+      7.566885,
+      7.605342,
+      7.658633,
+      7.733007,
+      7.707632,
+      7.55426,
+      7.756049,
+      7.5993,
+      7.667758,
+      7.801381,
+      7.849047,
+      7.586592,
+      7.650508,
+      7.716299,
+      7.750173,
+      7.704007,
+      7.711173,
+      7.563009,
+      7.564802,
+      7.973961,
+      7.825464,
+      8.112711,
+      8.334663,
+      9.766684,
+      7.640966,
+      8.234082,
+      8.647618,
+      8.547369,
+      9.551229,
+      7.642341,
+      8.254332,
+      8.206333,
+      8.768657,
+      8.528578,
+      7.620426,
+      8.082711,
+      8.498078,
+      8.848782,
+      9.388024,
+      7.985461,
+      8.567827,
+      8.901947,
+      8.276624,
+      8.684326,
+      9.895933,
+      8.247499,
+      8.273791,
+      7.929837,
+      7.722965
+    ],
+    "perf": {
+      "loopFps": 60.13,
+      "renderFps": 60.13,
+      "worstLoopMs": 3,
+      "gpuFrameMs": 10.1,
+      "gpuPassesMs": 17.02,
+      "gpuProfiled": 180,
+      "gpuSupported": true,
+      "image": "960×540",
+      "pixelRatio": 1,
+      "tier": {
+        "level": 2,
+        "capMpx": 2.2,
+        "label": "apple · metal-3 · 32 GB"
+      },
+      "renderScale": 1,
+      "quality": "high",
+      "budgetMs": 30,
+      "earthSurface": {
+        "mode": "satellite",
+        "supported": true,
+        "region": null,
+        "label": null,
+        "year": 2021,
+        "sourceResolutionM": 10,
+        "format": "bc7",
+        "loaded": 0,
+        "pages": 0,
+        "pending": false,
+        "inflight": 0,
+        "failed": 0,
+        "lastError": null,
+        "status": "outside-pilots",
+        "gpuBytes": 5,
+        "uploadedBytes": 39147264,
+        "uploadCpuMs": 14.3,
+        "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), processed by ESA WorldCover consortium (CC BY 4.0)",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "sourceUrl": "https://esa-worldcover.org/en/data-access"
+      },
+      "earthScenery": {
+        "mode": "balanced",
+        "supported": true,
+        "status": "ready",
+        "pending": false,
+        "budgetLimited": true,
+        "lat": 35.68,
+        "lon": 139.7596859240657,
+        "trees": 2766,
+        "buildings": 5000,
+        "footprintEdges": 26086,
+        "gpuBytes": 16777216,
+        "retiringGpuBytes": 0,
+        "coverPixels": 246429,
+        "rgbPixels": 262144,
+        "workerMs": 3116.300000000745,
+        "tileNetworkBytes": 5250745,
+        "uploadCpuMs": 2.2,
+        "lastError": null,
+        "coverage": "WorldCover 2021 land; OpenStreetMap buildings; |latitude| ≤ 84°; coverage varies with source data",
+        "credit": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021), CC BY 4.0; © OpenMapTiles, Data from OpenStreetMap (ODbL), served by OpenFreeMap",
+        "sources": [
+          "https://esa-worldcover.org/en/data-access",
+          "https://docs.terrascope.be/Developers/WebServices/OGC/MapProxy.html",
+          "https://openfreemap.org",
+          "https://www.openstreetmap.org/copyright"
+        ]
+      },
+      "block": 2,
+      "cpu": [
+        {
+          "section": "render (encode, submit)",
+          "ms": 1.26,
+          "worst": 2.8
+        },
+        {
+          "section": "sky chart",
+          "ms": 0.03,
+          "worst": 0.3
+        },
+        {
+          "section": "overlay (guide, marker)",
+          "ms": 0.02,
+          "worst": 0.1
+        },
+        {
+          "section": "free-fall prediction",
+          "ms": 0.01,
+          "worst": 0.1
+        },
+        {
+          "section": "panel & readouts",
+          "ms": 0,
+          "worst": 0.1
+        },
+        {
+          "section": "autosave",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "game tools window",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight HUD (total)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: map",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight (camera.update)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: markers & tapes",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "flight figures (flightInfo)",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: attitude ball",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "Ranger status",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: orbit panel",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: target & Ranger",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "sound",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: text panels",
+          "ms": 0,
+          "worst": 0
+        },
+        {
+          "section": "HUD: telemetry",
+          "ms": 0,
+          "worst": 0
+        }
+      ],
+      "gpu": [
+        {
+          "pass": "display",
+          "ms": 9.21,
+          "last": 8.66,
+          "frames": 180
+        },
+        {
+          "pass": "trace",
+          "ms": 8.39,
+          "last": 7.72,
+          "frames": 180
+        },
+        {
+          "pass": "temporal",
+          "ms": 0.12,
+          "last": 0.12,
+          "frames": 180
+        },
+        {
+          "pass": "light meter",
+          "ms": 0.1,
+          "last": 0.1,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 1",
+          "ms": 0.09,
+          "last": 0.09,
+          "frames": 180
+        },
+        {
+          "pass": "resolve",
+          "ms": 0.07,
+          "last": 0.07,
+          "frames": 180
+        },
+        {
+          "pass": "gather",
+          "ms": 0.06,
+          "last": 0.06,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 2",
+          "ms": 0.05,
+          "last": 0.05,
+          "frames": 180
+        },
+        {
+          "pass": "stars",
+          "ms": 0.03,
+          "last": 0.03,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 3",
+          "ms": 0.02,
+          "last": 0.02,
+          "frames": 180
+        },
+        {
+          "pass": "motion blur",
+          "ms": 0.02,
+          "last": 0.02,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 4",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom down 5",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 1",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 2",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 3",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        },
+        {
+          "pass": "bloom up 4",
+          "ms": 0.01,
+          "last": 0.01,
+          "frames": 180
+        }
+      ]
+    },
+    "calibrationReady": true
+  }
+]

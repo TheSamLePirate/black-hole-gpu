@@ -34,12 +34,10 @@ test("in Kerr (a = 0.9), inclined and eccentric, thrust on and off: the axes sta
   const beta: [number, number, number] = [0.05, 0.1, 0.3];
   let st = fromZamo(14, 1.1, 0.3, beta, a);
   const sp = [spinFromZamo(st, a, beta, [0, 0.6, 0.8]), spinFromZamo(st, a, beta, [1, 0, 0])];
-  let t = 0;
   for (let k = 0; k < 6; k++) {
     const r = advance(st, a, 60, 0.05, k % 2 ? 0.002 : 0, [0.3, 0.5, 0.8], undefined, 1e-9, sp);
     expect(r.stopped).toBe(false);
     st = r.st;
-    t += 60;
   }
   const g = kerrMetricBL(st.r, st.th, a);
   const u = fourVelocity(st, a);

@@ -16,4 +16,5 @@ export const PATH_CHUNK = 16;
 export const TABLE_SH = MAX_BODIES * BODY_VEC4;
 export const TABLE_LUT = TABLE_SH + SH_VEC4S;
 export const TABLE_PATH = TABLE_LUT + BB_LUT_SIZE + SYNC_LUT_SIZE;
-export const TABLE_VEC4S = TABLE_PATH + PATH_MAX + PATH_MAX / PATH_CHUNK;
+export const TABLE_WALK = TABLE_PATH + PATH_MAX + PATH_MAX / PATH_CHUNK;
+export const TABLE_VEC4S = TABLE_WALK + Math.ceil((65 * 65) / 4);

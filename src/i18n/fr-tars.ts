@@ -51,6 +51,16 @@ export default {
   "Silence by default; the score comes only at the flight's great moments — the lift-off, the entry's plasma, the final, the wormhole, near Gargantua, on Miller (its tick, the film's motif) —, an organ and pads synthesized live, faded in and out.":
     "Le silence par défaut ; la musique ne vient qu'aux grands moments du vol — le décollage, le plasma de la rentrée, la finale, le trou de ver, près de Gargantua, sur Miller (son tic-tac, le motif du film) —, un orgue et des nappes synthétisés en direct, en fondu.",
   "Voice volume": "Volume des voix",
+  "Ground alerts": "Alertes sol",
+  "The ground's warnings low in the air. The ground ahead is read along the flight path — a hill, a ridge —, not the free fall a wing never follows: flying low on the wings is quiet until the ground really comes.":
+    "Les alertes du sol à basse altitude. Le sol devant est lu le long de la trajectoire — une colline, une crête —, pas la chute libre qu'une aile ne suit jamais : voler bas sur ses ailes reste silencieux jusqu'à ce que le sol arrive vraiment.",
+  Airliner: "Avion de ligne",
+  "Every callout: the radio heights, the sink rate, the ground 14 s ahead, the pull-up 7 s ahead":
+    "Toutes les annonces : les hauteurs radio, le taux de chute, le sol à 14 s, le « pull up » à 7 s",
+  Fighter: "Chasseur",
+  "The ground 7 s ahead, the pull-up 4 s ahead; the heights and the sink rate only set to land (the gear down, the flaps out, on a final)":
+    "Le sol à 7 s, le « pull up » à 4 s ; les hauteurs et le taux de chute seulement en configuration d'atterrissage (train sorti, volets sortis, en finale)",
+  "Only the pull-up, the ground 2.5 s ahead": "Seulement le « pull up », le sol à 2,5 s",
   Subtitles: "Sous-titres",
   "The voices spoken: the landing's callouts (heights, minimums, sink rate), mission control by radio, TARS. The system's voices (the browser's, the computer's), in the interface's language. Off: their subtitles alone.":
     "Les voix parlées : les annonces de l'atterrissage (hauteurs, minimums, taux de chute), le contrôle de mission par radio, TARS. Les voix du système (du navigateur, de l'ordinateur), dans la langue de l'interface. Désactivé : leurs sous-titres seuls.",
@@ -66,8 +76,8 @@ export default {
   "TARS humour": "Humour de TARS",
   'His dry asides, his jokes when asked, his remarks unasked. 0: none. Also by asking him: "humour 50".':
     "Ses apartés pince-sans-rire, ses blagues sur demande, ses remarques spontanées. 0 : aucun. Aussi en le lui demandant : « humour 50 ».",
-  'TARS: tap — write to him; hold — speak to him. Ask him anything, or ask him to do it: land us at Edwards, take us to the Moon, target Mars, warp ×1000, the cockpit view… (his honesty and humour: "honesty 70")':
-    "TARS : tapé — lui écrire ; tenu — lui parler. Demandez-lui tout, ou de le faire : pose-nous à Edwards, emmène-nous sur la Lune, vise Mars, le temps ×1000, la vue cockpit… (son honnêteté et son humour : « honnêteté 70 »)",
+  'TARS, in every mode: tap — write to him; hold — speak to him. Ask him anything, or ask him to do it: land us at Edwards, take us to the Moon, walk here, render this view, warp ×1000… (his honesty and humour: "honesty 70")':
+    "TARS, dans tous les modes : tapé — lui écrire ; tenu — lui parler. Demandez-lui tout, ou de le faire : pose-nous à Edwards, emmène-nous sur la Lune, marche ici, fais le rendu de cette vue, le temps ×1000… (son honnêteté et son humour : « honnêteté 70 »)",
   "{0} seconds": "{0} secondes",
   "{0} minutes": "{0} minutes",
   "{0} hours": "{0} heures",

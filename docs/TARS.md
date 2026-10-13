@@ -9,6 +9,20 @@ Tout est synthétisé ou tiré du système : rien à télécharger. TARS peut au
 
 ## Les fichiers
 
+Le sol satellite régional est accessible par `set_settings` (`earthSurface=off|satellite|materials`) et la commande `/surface`, avec complétion. TARS peut afficher le panneau des réglages, lire `get_state.surface` ou `get_telemetry({groups:["surface"]})`, attendre `wait({until:"surface_ready"})` et recevoir un événement `surface` lors d'un changement de région ou de statut. L'attente retourne aussi les erreurs et le repli éventuel : « terminé » ne signifie pas que toutes les pages sont disponibles. Détails et budgets : [PLAN-TERRE-PHOTOREALISTE.md](PLAN-TERRE-PHOTOREALISTE.md).
+
+Le décor mondial (forêts, bâtiments, routes, voies ferrées, eaux et ponts) passe par `set_settings` (`earthScenery=off|balanced|high`) ou `/scenery`, avec complétion. Les ombres sont activables via `earthSceneryShadows` ou `/sceneryshadows true|false`. TARS lit `get_state.scenery`, `get_telemetry({groups:["scenery"]})`, les comptes d'objets et de réseaux, les couches/champs OSM effectivement reçus (`osmLayers`), la portée des ombres, la mémoire, les erreurs et la limitation par budget. `wait({until:"scenery_ready"})` attend le streaming et le fondu : lire le statut retourné, notamment `degraded` ou `unsupported-storage-limit`. L'événement `scenery` le réveille lors d'un changement de centre ou de statut ; le panneau des réglages affiche les options et leurs crédits. [Implémentation, couverture et mesures](FORETS-BATIMENTS-WORLDWIDE.md).
+
+L’exploration à pied passe par `character` (`start`, `disembark`, `board`, `move`, `jump`, `stop`, `orbit`, `status`) et `/walk`.
+`start` exige `lat` et `lon` sur un monde solide (`body`, la Terre par défaut) ; `orbit` ne change que le `yaw`/`pitch` donné.
+`move` accepte `forward`, `right`, `seconds` (maximum 10) et `run` ; `stop` arrête la marche.
+`/grass off|balanced` ou `set_settings(earthGrass)` active l’herbe exclusivement dans les prairies terrestres en vue personnage.
+TARS lit `get_state.character`, `get_state.grass` et les groupes de télémétrie `character`/`grass`, y compris mémoire,
+coût CPU, racines et chargement du modèle. Il affiche `show_screen(character)`, attend `character_grounded`,
+`character_on_foot` ou `character_boarded` et reçoit les événements `character`/`grass`.
+Les captures de validation attendent aussi les shaders et toutes les données nécessaires : un streaming arrêté
+peut avoir échoué. [Détails, budgets et limites](THIRD-PERSON-IMPLEMENTATION.md).
+
 | Fichier | Rôle |
 |---|---|
 | `src/audio/voice.ts` | pur pour sa file : qui parle, dans quel ordre (la plus urgente coupe les autres, une même ligne pas deux fois, une ligne périmée abandonnée) ; `Speech` : les voix Web Speech du système, choisies par langue, ou la voix de TARS |
@@ -146,7 +160,7 @@ Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A9, B1–B7, C1–C6). L
 - **Il montre** : des graphes (les canaux de l'enregistreur en direct, ou ses propres séries), des fiches de chiffres, et les vrais écrans du jeu (la carte, la tablette, un écran du cockpit, le rapport de vol) ; trois cartes au plus sur la vue, fermées par leur ×.
 - **Ordres et propositions** : un ordre (« pose-nous », « vise Mars ») s'exécute sans confirmation ; « propose-moi un plan pour… » donne un plan chiffré, sans rien exécuter, avec ACCEPTER / REFUSER (ou « oui » / « non ») — accepté, il l'exécute.
 - **L'arrêter** : Échap, « stop », ou une nouvelle question.
-- **Le filet** : avant ce qui ne se défait pas (charger, déplacer, changer la date, une scène), la partie est sauvegardée sous « Before TARS » ; « annule » y revient.
+- **Le filet** : avant ce qui ne se défait pas (charger, déplacer — `place_ship`, `atlas go`, `sky_events take` go/live, `character start`, `set_mode foot` —, changer la date, une scène), la partie est sauvegardée sous « Before TARS » ; « annule » y revient.
 - **Sa mémoire** : la conversation gardée d'une visite à l'autre, dans ce navigateur seulement (jamais dans une sauvegarde, les réglages, un export). 24 échanges mot pour mot, les plus vieux résumés par le modèle ; ses notes (votre nom, vos préférences). Dans le champ F6 : leur nombre et « effacer » ; ou « oublie tout ».
 - **Le modèle** : réglage « Modèle de TARS » — GLM-5.3 Flash par défaut (le moins cher), Claude Haiku 5.5, GPT-6 Luna, DeepSeek V4.1 Flash, Gemini 3.8 Flash, Claude Sonnet 5.5. Un vol vers la Lune mené par TARS a coûté 0,0012 $ avec GLM.
 - **Hors ligne** (sans clé, sans réseau, ou le réglage coupé) : les ordres courants compris en français et en anglais — poser, décoller, circulariser, amarrer, la cible, le train, le temps, les vues, la carte, sauvegarder, annuler, téléporter en orbite, oublier — exécutés par les mêmes outils ; une question garde ses phrases écrites.
@@ -202,3 +216,17 @@ Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A9, B1–B7, C1–C6). L
   - 0,4 s de silence autour de chaque phrase ;
   - un décodage déterministe ;
   - la mesure validée d'abord sur les voix du système.
+
+La carte au sol est locale, au zoom 18 initial : `/mapzoom 18` ou `interface({mapZoom:18})` ouvre et règle
+le planisphère d’un personnage ou d’un vaisseau posé. `get_state.localMap` et `get_telemetry({groups:["map"]})`
+exposent coordonnées, zoom, source disponible, déplacement du centre et coût CPU. L’événement `map` suit
+l’ouverture et le zoom. Le groupe `streaming` indique l’avance des chargements dans la direction du vol,
+bornée à six secondes et 650 m. [Analyse et validation](CORRECTIONS-DETAILS-SOL-VOL.md).
+
+Le planisphère au sol fonctionne sur toutes les surfaces marchables. Le zoom va de 0 à 21 ; les atlas
+planétaires disponibles sont réutilisés, et les mondes sans atlas affichent un quadrillage explicite.
+L’état `map` indique aussi `radiusM` et `sourceStatus` (`ready`, `loading`, `unavailable`).
+
+Les volumes de collision des arbres et bâtiments se visualisent en rose à pied sur Terre (éteint par défaut) :
+`/set sceneryHitboxes true` (désactiver avec `false`), ou `set_settings` avec la même clé.
+`find_settings("hitbox")` retrouve l’interrupteur et `get_state.sceneryHitboxes` indique son état.

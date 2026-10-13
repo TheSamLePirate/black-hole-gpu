@@ -43,6 +43,9 @@ test("a corrupted save is refused with its fault", () => {
   expect(() => checkSave({ ...save(), time: "soon" })).toThrow(/time/);
   expect(() => checkSave({ ...save(), ship: { ...save().ship, throttle: 2 } })).toThrow(/throttle/);
   expect(() => checkSave({ ...save(), ship: { ...save().ship, landed: { body: "earth", q: [1, 2] } } })).toThrow(/ground/);
+  // (the camera's pose on the craft: optional, a pose when given)
+  expect(() => checkSave({ ...save(), ship: { ...save().ship, view: { eye: [0, 1, 2], aim: [0, 0] } } })).toThrow(/view/);
+  expect(checkSave({ ...save(), ship: { ...save().ship, view: { eye: [0, 9, -42], aim: [0, 1.5, 0], up: [0, 1, 0] } } }).ship.view).toBeTruthy();
   expect(() => checkSave({ ...save(), plan: { nodes: "x" } })).toThrow(/plan/);
   expect(() => parseSave("not json")).toThrow();
 });
@@ -146,4 +149,13 @@ test("the fleet and the entry's site travel with a save; a foreign fleet is left
   expect(bad.ship.entrySite).toBe("Paris - Le Bourget");
   // (an older save: no fleet, no site — loaded as before)
   expect(checkSave(JSON.parse(JSON.stringify(save()))).fleet).toBeUndefined();
+});
+
+test("a walker saved on foot travels with a save; a malformed one is left out, the flight still loads", () => {
+  const character = { body: "moon", ours: true, q: [1, 2, 3], forward: [0, 0, 1], yaw: 0.1, pitch: 0.2, distance: 4.5, vertical: 0 };
+  const g = { ...save(), character } as GameSave;
+  expect(parseSave(JSON.stringify(g)).character).toEqual(character as GameSave["character"]);
+  const bad = parseSave(JSON.stringify({ ...g, character: { ...character, q: [1, 2] } }));
+  expect(bad.character).toBeUndefined();
+  expect(bad.ship).toEqual(g.ship);
 });

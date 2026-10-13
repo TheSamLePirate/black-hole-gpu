@@ -37,7 +37,7 @@ describe.skipIf(!E2E)("smoke: in flight (Artemis, low Earth orbit)", () => {
   });
 
   test("the radial wheel: Tab held opens it, the pointer picks, Tab released does it; a tap is the next target", async () => {
-    const tab = { code: "Tab", key: "Tab", windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9 };
+    const tab = { code: "Tab", key: "Tab", windowsVirtualKeyCode: 9 };
     await app.cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", ...tab });
     await app.waitFor(`!!document.querySelector("[data-testid=wheel]")`, 3000);
     // (the third of eight sectors, to the right of the centre: retrograde)
@@ -215,7 +215,7 @@ describe.skipIf(!E2E)("smoke: in flight (Artemis, low Earth orbit)", () => {
   });
 
   test("the settings: a real click on the opener opens them, Escape closes them", async () => {
-    await app.click(".sp-opener");
+    await app.click("[data-testid=topbar-settings]");
     await app.waitFor(`!document.getElementById("panel").classList.contains("collapsed")`);
     await app.press("Escape");
     expect(await app.js<boolean>(`document.getElementById("panel").classList.contains("collapsed")`)).toBe(true);

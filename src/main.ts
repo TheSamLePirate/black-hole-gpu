@@ -1,3 +1,18 @@
+import { SceneryHitboxes } from "./ui/scenery-hitboxes";
+import { planetFrame, toLocal } from "./landing";
+import { cartToGeodetic, WGS84_A, WGS84_F } from "./system/ellipsoid";
+import { groundVelocity } from "./system/our-surface";
+import { CharacterHud } from "./ui/characterhud";
+import { FootHud, type CompassMark } from "./ui/foothud";
+import { AtlasPage, type AtlasAction, type AtlasPlace } from "./ui/atlas";
+import { azAltAt } from "./eclipse/earth-moon";
+import { LiveCapture } from "./ui/livecapture";
+import { lensMm } from "./photo/skyevents";
+import { SkyEventsPage, type SkyPlace } from "./ui/skyevents";
+import { POIS, searchPois } from "./game/pois";
+import { geocode, parseCoords } from "./game/geocode";
+import { LANDSCAPES } from "./system/landscapes";
+import type { MapBody } from "./ui/mapview";
 import { poseData } from "./cockpit/controls";
 import { GEARS } from "./gear";
 import { ControlTravel, controlStates } from "./cockpit/state";
@@ -7,7 +22,7 @@ import { CockpitInput } from "./cockpit/input";
 import { cockpitTarget } from "./cockpit/pointer";
 import { CockpitTip } from "./ui/cockpit-tip";
 import { cockpitHull } from "./system/collide";
-import { prefetchSkyAssets, Renderer, type FrameStats } from "./renderer";
+import { prefetchSkyAssets, Renderer, type FrameStats, type OfflineStatus } from "./renderer";
 import { swappable } from "./util/swappable";
 import { downloadGpuDiagnostic, globalErrorRouter, gpuDiagnostics } from "./gpu-diagnostics";
 import { horizon, isco } from "./physics";
@@ -42,7 +57,7 @@ import {
   skyMarks,
 } from "./photo/plans";
 import { type MoonPathOptions, moonPathPlan, type TrailsOptions, trailsPlan } from "./photo/sky-series";
-import { drawIssTrail, issPasses, issPhotoPlan } from "./photo/iss-pass";
+import { drawIssTrail, issPasses, issPhotoPlan, issSight } from "./photo/iss-pass";
 import { transits } from "./eclipse/moons";
 import { MultiExposureDialog } from "./ui/multiexposure";
 import { bestPlace } from "./eclipse/details";
@@ -54,6 +69,11 @@ import { MenuPad } from "./ui/padnav";
 import { RadialWheel, type WheelItem } from "./ui/wheel";
 import { Tablet } from "./ui/tablet";
 import { PhotoMode } from "./ui/photo";
+import { TB_ICONS, TopBar, modeName } from "./ui/topbar";
+import { fmtLatLon, greatCircle } from "./game/geo";
+import { hudKindName, nextHudKind } from "./game/hudkind";
+import { GAME_MODES, baseMode, modeOf, planMode, type GameMode, type ModeState, type ModeStep } from "./game/modes";
+import { POSE_KEYS } from "./controller/util";
 import { readPrefs, writePrefs } from "./game/prefs";
 import { events } from "./game/events";
 import { phaseOf, phaseText, PhaseWatcher } from "./game/phase";
@@ -71,6 +91,7 @@ import { Mission } from "./mission";
 import { physicalReadouts } from "./readouts";
 import {
   aimAngles,
+  altAzOf,
   buildChart,
   chartOn,
   chartOptions,
@@ -88,6 +109,9 @@ import { SettingsPanel } from "./ui/panel";
 import { type ChoiceDef, SCHEMA, SCHEMA_BY_KEY } from "./ui/schema";
 import { loadFromUrl } from "./urlstate";
 import { setupRenderDialog } from "./renderdialog";
+import { VideoPreview } from "./ui/videopreview";
+import { h } from "./ui/kit";
+import { SHOTS as SHOT_IDS, type Shot } from "./photo/videoplan";
 import { fmtDate, GameTools } from "./game/tools";
 import { rangerStatus, type RangerStatus } from "./game/status";
 import { GameToolsWindow, rangerView } from "./ui/gametools";
@@ -104,15 +128,20 @@ import { sitesOf, SITES } from "./game/sites";
 import { Splash } from "./ui/splash";
 import { SceneGallery } from "./ui/scenes";
 import { SoundDirector } from "./audio/director";
+import { haptics } from "./input/haptics";
+import type { TravelGoal } from "./controller/travel";
+import type { Vec3 } from "./physics";
 import { sound } from "./audio/engine";
 import { Speech, voiceScore } from "./audio/voice";
 import { synthesize } from "./audio/formant";
 import { phonemes } from "./audio/g2p";
 import { Subtitles } from "./ui/subtitles";
 import { Callouts } from "./game/callouts";
+import { gpwsOf } from "./game/gpws";
 import { Capcom } from "./game/capcom";
 import { Music } from "./audio/music";
-import { ScoreDirector } from "./audio/score";
+import { MusicPanel } from "./ui/musicpanel";
+import { type Context, flightIntensity, type Moment, ScoreDirector } from "./audio/score";
 import { Tars, type TarsMoment, type TarsState } from "./game/tars";
 import { TarsPanel, type TarsPanelHost } from "./ui/tars-panel";
 import { AGENT_MODELS, connect as orConnect, finishFromFragment, OpenRouter, openRouterKey } from "./ai/openrouter";
@@ -143,7 +172,7 @@ import { TransportBar } from "./ui/transport";
 import { Take, type TakeState } from "./take";
 import { BODY_COLOURS, CameraPanel, fmtHeight, VIEW_HELP, VIEW_LABEL, VIEWS, type View } from "./ui/camerapanel";
 import { defaultAltKm, ourMouthPose, ourOrbitPose } from "./game/place";
-import { EPOCH_DATE, solarBody, solarState, M_METRES, utcOf } from "./system/solar";
+import { bodyAxes, EPOCH_DATE, solarBody, solarState, M_METRES, utcOf } from "./system/solar";
 import { plan } from "./system/plan-client";
 import { C_MPS, M_SECONDS } from "./units";
 import { mouth, setSceneTime } from "./wormhole";
@@ -215,30 +244,6 @@ let firstFrameAt: number | null = null;
 /** the Kerr Bench's page (…/#bench): its GPU memory counted from the first allocation */
 const benchPage = /[#&]bench\b/.test(location.hash);
 if (benchPage) installVramHook();
-
-/**
- * A row that overflows sideways scrolls with a plain (vertical) mouse wheel too — Windows mice have
- * no horizontal wheel, and a hidden scroll bar leaves no other way.
- */
-function wheelScrollsSideways(el: HTMLElement) {
-  const edges = () => {
-    el.classList.toggle("more-l", el.scrollLeft > 1);
-    el.classList.toggle("more-r", el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
-  };
-  el.addEventListener("scroll", edges, { passive: true });
-  new ResizeObserver(edges).observe(el);
-  el.addEventListener(
-    "wheel",
-    (e) => {
-      if (e.ctrlKey || Math.abs(e.deltaX) >= Math.abs(e.deltaY) || el.scrollWidth <= el.clientWidth + 1) return;
-      const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? el.clientWidth : 1;
-      const before = el.scrollLeft;
-      el.scrollLeft += e.deltaY * k;
-      if (el.scrollLeft !== before) e.preventDefault();
-    },
-    { passive: false },
-  );
-}
 
 function fail(msg: string) {
   document.getElementById("loading")?.remove();
@@ -464,6 +469,8 @@ async function main() {
   });
   /** the scene's time and the step that moves everything (sim.ts: the live loop, the automation, the video) */
   const sim = new Simulation(settings, camera, renderer);
+  const characterHud = new CharacterHud(camera, (text) => panel.toast(text));
+  const sceneryHitboxes = new SceneryHitboxes();
   /** the take recorder (take.ts): the live view recorded, rendered afterwards as a video */
   const take = new Take();
 
@@ -550,6 +557,19 @@ async function main() {
   });
   // the offline cache and the install (PLAN-MONDE M1): off on the dev server's hot reload
   const pwa = installPwa({ toast: (m) => panel.toast(m), dev: DEV && !/[?&]sw=1/.test(location.search) });
+  // (the flight's jolts felt by the camera too — Cinemachine's impulses: controller/camrig.ts)
+  haptics.onImpulse = (kind, k) => {
+    const J = {
+      wheel: [0.35, 0.25, 12],
+      joint: [0.08, 0.15, 14],
+      boom: [0.6, 0.5, 7],
+      transonic: [0.45, 0.8, 9],
+      dock: [0.4, 0.4, 8],
+      undock: [0.25, 0.3, 8],
+      crash: [1, 0.9, 6],
+    }[kind];
+    if (J) camera.camImpulse(J[0]! * k, J[1], J[2]);
+  };
   const audio = new SoundDirector(settings);
   // the voices (PLAN-TARS T1): who speaks in what order, the system's speech, the subtitles, the radio heard
   // round mission control's lines
@@ -566,6 +586,8 @@ async function main() {
   // the score (PLAN-TARS T4): silence, but at the flight's great moments
   const score = new ScoreDirector();
   const music = new Music(() => sound.musicOut());
+  /** the music's cue this frame (the flight's moment, context and intensity — set where they are known) */
+  let musicCue: { m: Moment | null; context: Context | null; intensity: number } = { m: null, context: null, intensity: 0.5 };
   // TARS (PLAN-TARS T5b): asked by F6, answering from the flight's state; his remarks unasked
   const tars = new Tars(Math.floor(Math.random() * 2 ** 31));
   let tarsView: TarsState | null = null;
@@ -578,8 +600,9 @@ async function main() {
   const openRouter = new OpenRouter(undefined, undefined, () => settings.tarsModel);
   const tarsOnline = new TarsOnline(openRouter);
   let tarsBusy = false;
-  const tarsNow = (): TarsState =>
-    tarsView ?? {
+  // (what he knows in every mode: the flight while one is flown, the mode's own situation always — PLAN-MODES-AAA M2)
+  const tarsNow = (): TarsState => ({
+    ...((camera.piloting ? tarsView : null) ?? {
       body: null,
       altKm: null,
       status: null,
@@ -593,7 +616,71 @@ async function main() {
       stage: null,
       auto: camera.pilot.auto,
       dtau: null,
-    };
+    }),
+    ...tarsSituation(),
+  });
+  /** The mode's situation for TARS: on foot the place, the free camera where it is and what it looks at, the photo
+   *  mode and a render running. */
+  function tarsSituation(): Partial<TarsState> {
+    const mode = gameMode();
+    const r1 = (v: number, k = 1) => Math.round(v * 10 ** k) / 10 ** k;
+    const out: Partial<TarsState> = { mode, foot: null, view: null, photo: null };
+    const p = camera.character.place();
+    if (p) {
+      const v = flightHud.ground.localPlace?.()?.vessel ?? null;
+      const g = v ? greatCircle(p.lat, p.lon, v.lat, v.lon, p.radiusM) : null;
+      out.foot = {
+        body: p.body,
+        lat: r1(p.lat, 5),
+        lon: r1(p.lon, 5),
+        altM: Math.round(p.altM),
+        aglM: r1(p.aglM),
+        viewDeg: Math.round(p.viewDeg),
+        speedMs: r1(p.speedMs),
+        craft: g ? { distM: Math.round(g.dist), bearingDeg: Math.round(g.bearingDeg) } : null,
+      };
+    } else if (mode !== "ship") {
+      const vc = camera.viewController();
+      const vs = camera.viewSettings();
+      const w = vc.rigWorld();
+      const n = w ? vc.rigNearest(w.ours, w.X, vc.nowTime()) : null;
+      const mPerUnit = w?.ours ? M_METRES : 1476.625 * settings.massSolar;
+      out.view = {
+        near: n ? (BODY_NAMES[n.id as Target] ?? n.id) : null,
+        altKm: n && w ? r1(((Math.hypot(w.X[0] - n.C[0], w.X[1] - n.C[1], w.X[2] - n.C[2]) - n.R) * mPerUnit) / 1e3, 1) : null,
+        target: BODY_NAMES[vs.target] ?? vs.target,
+        lookAt: vs.lookAt,
+        telescope: vs.telescope,
+        fovDeg: r1(vs.fov),
+        cinematic: camera.cinematic ?? null,
+        spectator: camera.spectating,
+      };
+    }
+    const video = renderDialog.videoState();
+    const live = liveCapture.state();
+    if (mode === "photo" || renderer.offlineActive || video || live)
+      out.photo = {
+        open: mode === "photo",
+        over: mode === "photo" ? baseMode(modeState()) : null,
+        render:
+          renderer.offlineActive && lastOffline && !video
+            ? { progress: r1(lastOffline.progress, 3), width: lastOffline.width, height: lastOffline.height, done: lastOffline.done }
+            : null,
+        video: video
+          ? {
+              shot: video.shot,
+              draft: video.draft,
+              frame: video.frame + 1,
+              frames: video.frames,
+              leftS: Number.isFinite(video.etaS) ? Math.round(video.etaS) : null,
+            }
+          : null,
+        live,
+      };
+    return out;
+  }
+  /** the offline render's last status (the render dialog's; TARS's) */
+  let lastOffline: OfflineStatus | null = null;
   const online = () => settings.tarsOnline && !!openRouterKey.get() && navigator.onLine !== false;
   // TARS the agent (PLAN-TARS-AGENT): the whole game as his tools (built once everything is declared, below),
   // his memory kept in this browser
@@ -710,6 +797,12 @@ async function main() {
   const tarsWakesOn = () => online() && settings.tarsWake;
   // (one waking per event, every rule it woke in it; a waking left waiting more than 90 s let go: stale)
   const tarsWakeQueue: { rules: Trigger[]; e: GameEvent | null; at: number }[] = [];
+  camera.character.contact = () => (settings.earthTerrain && renderer.earthScenery.supported ? renderer.earthScenery.contact : null);
+  camera.character.terrainRevision = () => renderer.earthTiles.stamp;
+  camera.character.surface = (body, q) => body !== "earth" || renderer.earthLandAt(q);
+  camera.character.hullBounds = () => renderer.ship.hullBound(settings.vessel);
+  camera.character.obstacles = (q, r) => renderer.characterRenderer.stoneBlocks(q, r);
+  camera.character.onEvent = (to, detail) => tarsEvent({ kind: "character", to, detail });
   const tarsEvent = (e: GameEvent) => {
     const rules = tarsTriggers.match(e);
     if (!rules.length) return;
@@ -727,70 +820,110 @@ async function main() {
     off: string;
     papi: string;
     eclipse: string;
+    surface: string;
+    scenery: string;
+    grass: string;
   } | null = null;
+  let tarsMapSeen: string | null = null;
+  let tarsModeSeen: GameMode | null = null;
+  let tarsRenderSeen = "";
+  /** the last video ended with its file (not stopped): its end told as done */
+  let tarsVideoDone = false;
   let tarsSpentSeen = 0;
   setInterval(() => {
     // (what OpenRouter cost since: the budget's)
     tarsBudget.add(openRouter.spent - tarsSpentSeen);
     tarsSpentSeen = openRouter.spent;
-    if (!camera.piloting) return void (tarsSeen = null);
-    const st = tools.status();
-    // (what he follows — B4: the hub's card mirrored on his console)
-    const hub = camera.hubInfo?.() ?? null;
-    tarsPanel.follow(
-      hub
-        ? {
-            title: hub.title,
-            step: hub.phase,
-            progress: hub.bar,
-            rows: hub.rows as [string, string, string?][],
-            next: hub.next,
-            callout: hub.say?.length ? hub.say.join(" · ") : null,
-            verdict: hub.graph?.state ?? null,
-            fix: hub.graph?.fix,
-          }
-        : null,
-    );
-    const now = {
-      auto: camera.pilot.auto,
-      entry: camera.entryRun?.phase ?? "",
-      hub: hub?.phase ?? "",
-      alerts: new Set(flightHud.alerts.map((a) => `${a.level}:${a.id}`)),
-      soi: st.soi,
-      landed: camera.landed && !camera.rolling,
-      docked: camera.docked,
-      // (the deviations: the hub's graph out of its corridor, the entry out of its own, the approach's PAPI all
-      // white or all red on final)
-      off: hub?.graph?.state === "off" ? `${hub.graph.kind}` : camera.entryRun?.inCorr === false ? "entry" : "",
-      papi: (() => {
-        const r = camera.runwayView?.();
-        return r?.final && (r.papi === 0 || r.papi === 4) ? (r.papi === 0 ? "low" : "high") : "";
-      })(),
-      // (an eclipse at the camera's place: its phase — PLAN-CIEL C11)
-      eclipse:
-        (camera as unknown as { skyInfo?: () => { eclipse?: { phase: string } } | null }).skyInfo?.()?.eclipse?.phase.replace("none", "") ??
-        "",
-    };
-    const was = tarsSeen;
-    tarsSeen = now;
-    if (was) {
-      if (now.auto !== was.auto) tarsEvent({ kind: "autopilot", from: was.auto, to: now.auto });
-      if (now.entry !== was.entry && now.entry) tarsEvent({ kind: "entry_phase", from: was.entry, to: now.entry });
-      if (now.hub !== was.hub && now.hub) tarsEvent({ kind: "hub_step", from: was.hub, to: now.hub, detail: hub?.title });
-      for (const a of now.alerts) if (!was.alerts.has(a)) tarsEvent({ kind: "alert", to: a.split(":")[0], detail: a.split(":")[1] });
-      if (now.soi !== was.soi) tarsEvent({ kind: "soi", from: was.soi, to: now.soi });
-      if (now.landed && !was.landed) tarsEvent({ kind: "landed", to: st.soi });
-      if (now.docked && !was.docked) tarsEvent({ kind: "docked" });
-      if (now.off && now.off !== was.off) tarsEvent({ kind: "deviation", to: now.off, detail: hub?.graph?.fix ?? hub?.graph?.about });
-      if (now.eclipse !== was.eclipse)
-        tarsEvent({
-          kind: "eclipse",
-          from: was.eclipse || "none",
-          to: now.eclipse || "end",
-          detail: now.eclipse ? `an eclipse phase here: ${now.eclipse}` : `the eclipse here is over (${was.eclipse})`,
-        });
-      if (now.papi && now.papi !== was.papi)
-        tarsEvent({ kind: "deviation", to: "approach", detail: `PAPI ${now.papi === "low" ? "all red: too low" : "all white: too high"}` });
+    const mapKey = `${flightHud.mapView}:${flightHud.ground.localMap.zoom}`;
+    if (tarsMapSeen !== null && mapKey !== tarsMapSeen) tarsEvent({ kind: "map", from: tarsMapSeen, to: mapKey });
+    tarsMapSeen = mapKey;
+    // (every mode: the mode's changes, a render's end — PLAN-MODES-AAA M2)
+    const modeNow = gameMode();
+    if (tarsModeSeen !== null && modeNow !== tarsModeSeen) tarsEvent({ kind: "mode", from: tarsModeSeen, to: modeNow });
+    tarsModeSeen = modeNow;
+    // (a video's frames are renders each: its end alone is told — "video" to "done" or "stopped")
+    const renderNow = renderDialog.videoState() ? "video" : renderer.offlineActive ? (lastOffline?.done ? "done" : "running") : "";
+    if (tarsRenderSeen === "running" && renderNow !== "running")
+      tarsEvent({ kind: "render", from: "running", to: renderNow === "done" || lastOffline?.done ? "done" : "stopped" });
+    else if (tarsRenderSeen === "video" && renderNow !== "video")
+      tarsEvent({ kind: "render", from: "video", to: tarsVideoDone ? "done" : "stopped" });
+    if (renderNow === "video") tarsVideoDone = false;
+    tarsRenderSeen = renderNow;
+    // (the flight's own, while one is flown)
+    if (!camera.piloting) {
+      // (his console's hub card cleared once the flight is left)
+      if (tarsSeen) tarsPanel.follow(null);
+      tarsSeen = null;
+    } else {
+      const st = tools.status();
+      // (what he follows — B4: the hub's card mirrored on his console)
+      const hub = camera.hubInfo?.() ?? null;
+      tarsPanel.follow(
+        hub
+          ? {
+              title: hub.title,
+              step: hub.phase,
+              progress: hub.bar,
+              rows: hub.rows as [string, string, string?][],
+              next: hub.next,
+              callout: hub.say?.length ? hub.say.join(" · ") : null,
+              verdict: hub.graph?.state ?? null,
+              fix: hub.graph?.fix,
+            }
+          : null,
+      );
+      const now = {
+        auto: camera.pilot.auto,
+        entry: camera.entryRun?.phase ?? "",
+        hub: hub?.phase ?? "",
+        alerts: new Set(flightHud.alerts.map((a) => `${a.level}:${a.id}`)),
+        soi: st.soi,
+        landed: camera.landed && !camera.rolling,
+        docked: camera.docked,
+        surface: `${renderer.earthSurface.stats().region ?? "none"}:${renderer.earthSurface.stats().status}`,
+        grass: renderer.characterRenderer.stats().reason,
+        scenery: `${renderer.earthScenery.stats().lat ?? "none"}:${renderer.earthScenery.stats().lon ?? "none"}:${renderer.earthScenery.stats().status}:${settings.earthSceneryShadows}`,
+        // (the deviations: the hub's graph out of its corridor, the entry out of its own, the approach's PAPI all
+        // white or all red on final)
+        off: hub?.graph?.state === "off" ? `${hub.graph.kind}` : camera.entryRun?.inCorr === false ? "entry" : "",
+        papi: (() => {
+          const r = camera.runwayView?.();
+          return r?.final && (r.papi === 0 || r.papi === 4) ? (r.papi === 0 ? "low" : "high") : "";
+        })(),
+        // (an eclipse at the camera's place: its phase — PLAN-CIEL C11)
+        eclipse:
+          (camera as unknown as { skyInfo?: () => { eclipse?: { phase: string } } | null })
+            .skyInfo?.()
+            ?.eclipse?.phase.replace("none", "") ?? "",
+      };
+      const was = tarsSeen;
+      tarsSeen = now;
+      if (was) {
+        if (now.auto !== was.auto) tarsEvent({ kind: "autopilot", from: was.auto, to: now.auto });
+        if (now.entry !== was.entry && now.entry) tarsEvent({ kind: "entry_phase", from: was.entry, to: now.entry });
+        if (now.hub !== was.hub && now.hub) tarsEvent({ kind: "hub_step", from: was.hub, to: now.hub, detail: hub?.title });
+        for (const a of now.alerts) if (!was.alerts.has(a)) tarsEvent({ kind: "alert", to: a.split(":")[0], detail: a.split(":")[1] });
+        if (now.soi !== was.soi) tarsEvent({ kind: "soi", from: was.soi, to: now.soi });
+        if (now.landed && !was.landed) tarsEvent({ kind: "landed", to: st.soi });
+        if (now.docked && !was.docked) tarsEvent({ kind: "docked" });
+        if (now.surface !== was.surface) tarsEvent({ kind: "surface", from: was.surface, to: now.surface });
+        if (now.grass !== was.grass) tarsEvent({ kind: "grass", from: was.grass, to: now.grass });
+        if (now.scenery !== was.scenery) tarsEvent({ kind: "scenery", from: was.scenery, to: now.scenery });
+        if (now.off && now.off !== was.off) tarsEvent({ kind: "deviation", to: now.off, detail: hub?.graph?.fix ?? hub?.graph?.about });
+        if (now.eclipse !== was.eclipse)
+          tarsEvent({
+            kind: "eclipse",
+            from: was.eclipse || "none",
+            to: now.eclipse || "end",
+            detail: now.eclipse ? `an eclipse phase here: ${now.eclipse}` : `the eclipse here is over (${was.eclipse})`,
+          });
+        if (now.papi && now.papi !== was.papi)
+          tarsEvent({
+            kind: "deviation",
+            to: "approach",
+            detail: `PAPI ${now.papi === "low" ? "all red: too low" : "all white: too high"}`,
+          });
+      }
     }
     for (const r of tarsTriggers.due(sim.time * 4.925490947e-6 * settings.massSolar))
       if (!tarsWakeQueue.some((q) => q.rules.includes(r))) {
@@ -1489,6 +1622,7 @@ async function main() {
     "btn-tools": () => DEV_TOOLS && toolsWin.toggle(),
     "btn-scenes": () => scenes.toggle(),
     "btn-sound": () => toggleSound(),
+    "btn-music": () => musicPanel.toggle(),
     "btn-camera": () => {
       camPanel!.toggle();
       syncCameraButton();
@@ -1517,14 +1651,12 @@ async function main() {
     "btn-full": () => fullscreen(),
     "btn-hide": () => toggleUi(),
     "hud-toggle": () => setHudOpen(!$("hud").classList.contains("open")),
-    "btn-photo": () => openPhoto(),
     "btn-help": () => panel.showShortcuts(),
     "btn-render": () => renderDialog.toggle(),
   };
   // (the dock's buttons — ui: Camera, Scenes, Sky, Photo, Help; the other actions are keys, the wheel's
   // sectors and the settings)
   for (const [id, fn] of Object.entries(actions)) document.getElementById(id)?.addEventListener("click", fn);
-  wheelScrollsSideways($("toolbar"));
   /** Next / previous target, named in a toast (or why there is nothing else to pick). */
   function nextTarget(dir: 1 | -1) {
     const list = camera.availableTargets();
@@ -1567,7 +1699,7 @@ async function main() {
   }
   /** A cinematic on or off (the dive and the journey are the free camera's). */
   function cinematic(c: "orbit" | "dive" | "journey") {
-    if (settings.ship && c !== "orbit") return panel.toast(t("The dive and the journey are the free camera's — leave the Ranger (⇧K)"));
+    if (settings.ship && c !== "orbit") return panel.toast(t("The dive and the journey are the free camera's — K puts the Ranger away"));
     camera.setCinematic(camera.cinematic === c ? null : c);
     if (camera.cinematic && !settings.animate) panel.toast(t("Cinematics run with the time — Space runs it"));
     refreshGui();
@@ -1593,6 +1725,35 @@ async function main() {
    * Takes the free camera to a body — anywhere in the world, through the wormhole too: in orbit around
    * it (a planet, a moon: a few radii up), around it. Why it cannot, or null.
    */
+  /**
+   * The view travelled to a goal (controller/travel.ts) — the spectator's, or the free camera's, placed at once
+   * when it cannot (another universe) —, then around it.
+   */
+  function travelTo(goal: (time: number) => TravelGoal, then: () => void): string | null {
+    const S = camera.viewSettings();
+    const C = viewCamera();
+    C.setCinematic(null);
+    if (C.gravity) C.setGravity(false);
+    C.setOurLanded(null);
+    const finish = () => {
+      S.motion = "geodesic";
+      C.setOurLanded(null);
+      C.sync();
+      S.rotation = "orbit";
+      then();
+      refreshGui();
+      touch();
+    };
+    if (!camera.spectating && C.startTravel(goal, finish)) {
+      touch();
+      return null;
+    }
+    const g = goal(sim.time);
+    setHomePose(S, g.X, g.fwd, g.up, g.V);
+    finish();
+    return null;
+  }
+
   function goTo(b: Target): string | null {
     if (settings.ship && !camera.spectating) return t("The Ranger flies there: the planner (O), the autopilot (0: approach)");
     // (a spectator out: it goes, the ship flies on — the view's settings and controller)
@@ -1614,58 +1775,40 @@ async function main() {
       // with it, around it
       if (!(S.system === "gargantua" && S.wormhole))
         return t("The craft fly in our universe (through the wormhole of the Gargantua-system scenes)");
-      const p = fleet.pose(b, sim.time);
-      if (!p) return tf("The {0}: not known now", BODY_NAMES[b]);
+      if (!fleet.pose(b, sim.time)) return tf("The {0}: not known now", BODY_NAMES[b]);
       const R = craftRadius(b);
       const o = [1.1 * R, 0.8 * R, -1.9 * R];
-      const X = [0, 1, 2].map((k) => p.X[k]! + (p.ax[0][k]! * o[0]! + p.ax[1][k]! * o[1]! + p.ax[2][k]! * o[2]!) / M_METRES) as [
-        number,
-        number,
-        number,
-      ];
-      const d = [p.X[0] - X[0], p.X[1] - X[1], p.X[2] - X[2]];
-      const l = Math.hypot(...d);
-      C.setCinematic(null);
-      if (C.gravity) C.setGravity(false);
-      setHomePose(S, X, [d[0]! / l, d[1]! / l, d[2]! / l], p.ax[1], p.V);
-      S.motion = "geodesic";
-      C.setOurLanded(null);
-      C.sync();
-      S.rotation = "orbit";
-      C.selectTarget(b, { focus: true });
-      panel.toast(tf("Camera: around the {0}", BODY_NAMES[b]));
-      refreshGui();
-      touch();
-      return null;
+      const goal = (time: number): TravelGoal => {
+        const p = fleet.pose(b, time) ?? fleet.pose(b, sim.time)!;
+        const X = [0, 1, 2].map((k) => p.X[k]! + (p.ax[0][k]! * o[0]! + p.ax[1][k]! * o[1]! + p.ax[2][k]! * o[2]!) / M_METRES) as Vec3;
+        const d = [p.X[0] - X[0], p.X[1] - X[1], p.X[2] - X[2]];
+        const l = Math.hypot(...d);
+        return { X, fwd: [d[0]! / l, d[1]! / l, d[2]! / l], up: p.ax[1], V: p.V, C: p.X };
+      };
+      return travelTo(goal, () => {
+        C.selectTarget(b, { focus: true });
+        panel.toast(tf("Camera: around the {0}", BODY_NAMES[b]));
+      });
     }
     if (b === "iss") {
       // the space station: the C 110 m off it — behind, to starboard, above —, moving with it,
       // around it
       if (!(S.system === "gargantua" && S.wormhole && S.iss))
         return t("The space station flies in our universe (through the wormhole of the Gargantua-system scenes)");
-      const st = issTrack.peek(sim.time);
-      if (!st) return t("The space station: no orbit known at this date");
-      const A = issAxes(st.X, st.V, sim.time);
+      if (!issTrack.peek(sim.time)) return t("The space station: no orbit known at this date");
       const o = [-70, 60, -55];
-      const X = [0, 1, 2].map((k) => st.X[k]! + (A[0][k]! * o[0]! + A[1][k]! * o[1]! + A[2][k]! * o[2]!) / M_METRES) as [
-        number,
-        number,
-        number,
-      ];
-      const d = [st.X[0] - X[0], st.X[1] - X[1], st.X[2] - X[2]];
-      const l = Math.hypot(...d);
-      C.setCinematic(null);
-      if (C.gravity) C.setGravity(false);
-      setHomePose(S, X, [d[0]! / l, d[1]! / l, d[2]! / l], [-A[2]![0]!, -A[2]![1]!, -A[2]![2]!], st.V);
-      S.motion = "geodesic";
-      C.setOurLanded(null);
-      C.sync();
-      S.rotation = "orbit";
-      C.selectTarget("iss", { focus: true });
-      panel.toast(t("Camera: around the ISS"));
-      refreshGui();
-      touch();
-      return null;
+      const goal = (time: number): TravelGoal => {
+        const st = issTrack.peek(time) ?? issTrack.peek(sim.time)!;
+        const A = issAxes(st.X, st.V, time);
+        const X = [0, 1, 2].map((k) => st.X[k]! + (A[0][k]! * o[0]! + A[1][k]! * o[1]! + A[2][k]! * o[2]!) / M_METRES) as Vec3;
+        const d = [st.X[0] - X[0], st.X[1] - X[1], st.X[2] - X[2]];
+        const l = Math.hypot(...d);
+        return { X, fwd: [d[0]! / l, d[1]! / l, d[2]! / l], up: [-A[2]![0]!, -A[2]![1]!, -A[2]![2]!], V: st.V, C: st.X };
+      };
+      return travelTo(goal, () => {
+        C.selectTarget("iss", { focus: true });
+        panel.toast(t("Camera: around the ISS"));
+      });
     }
     const id = b === "hole" ? "gargantua" : b;
     const u = universeOf(id);
@@ -1691,6 +1834,17 @@ async function main() {
               S.massSolar,
             );
       if (C.gravity) C.setGravity(false);
+      // (our worlds: travelled to — controller/travel.ts —, Gargantua's: placed)
+      if (p.frame === "ours" && u === "ours") {
+        const goal = (time: number): TravelGoal => {
+          const q = ourOrbitPose({ body: id, altKm: alt }, time);
+          return { X: q.X, fwd: q.fwd, up: q.up, V: q.vel, C: ourState(id, time).pos };
+        };
+        return travelTo(goal, () => {
+          C.selectTarget(b, { focus: true });
+          panel.toast(tf("Camera: around {0}", BODY_NAMES[b]));
+        });
+      }
       if (p.frame === "ours") setHomePose(S, p.X, p.fwd, p.up, p.vel);
       else setHolePose(S, p.X, p.fwd, p.up, p.vel);
       S.motion = "geodesic";
@@ -1708,10 +1862,13 @@ async function main() {
   }
   /** The camera set down on a world, on its tripod, looking at the horizon (⇧T; the camera panel). */
   function standOn(b?: Target): string | null {
-    if (settings.ship) return t("The Ranger lands itself (the autopilot) — leave it (⇧K) to set the camera down");
-    const why = camera.standOn(b as Parameters<typeof camera.standOn>[0]);
+    // (the spectator's camera stands where it is; the Ranger flown lands itself)
+    if (settings.ship && !camera.spectating)
+      return t("The Ranger lands itself (the autopilot: 7); landed, ⇧K takes you out on foot and ⇧T sets the tripod there");
+    const vc = camera.viewController();
+    const why = vc.standOn(b as Parameters<typeof vc.standOn>[0]);
     if (why) return why;
-    const on = camera.rigStatus()?.body;
+    const on = vc.rigStatus()?.body;
     panel.toast(
       tf("Tripod on {0} — drag to look around, the keys walk it, V another view", on ? BODY_NAMES[on as Target] : t("the ground")),
     );
@@ -1903,20 +2060,28 @@ async function main() {
    * on — its autopilots, its plan; off: the view back on the ship as it was.
    */
   function setSpectator(on: boolean) {
+    if (camera.character.active) {
+      if (!on) {
+        const err = camera.character.board();
+        if (err) panel.toast(err);
+      }
+      return;
+    }
     if (on === camera.spectating) return;
     if (on && !camera.startSpectator()) {
       panel.toast(t("The spectator leaves a ship flown: fly one first (K)"));
       return;
     }
     if (!on) camera.stopSpectator();
-    renderer.resetTemporal(); // (a cut: no history across it)
+    // (no cut: the view glides out of the ship and is carried back onto it — controller/spectator.ts — the
+    // image's history kept across)
     renderer.shipPlace = null;
     renderer.shipFocus = null;
     syncButtons();
     touch();
     panel.toast(
       on
-        ? t("Spectator — a free camera: W A S D · Q E to move (⇧ faster), drag to turn; the ship flies on (F3 or V: back)")
+        ? t("Spectator — a free camera: W A S D · Q E to move (⇧ faster), drag to turn; the ship flies on (F1 or V: back)")
         : t("Back on the ship"),
     );
   }
@@ -1947,8 +2112,8 @@ async function main() {
     else if (camera.pilot.auto !== "none") camera.pilot.hold = "none";
     panel.toast(
       camera.pilot.assist
-        ? t("Assisted: you fly — the director (the ring) shows where to point, the throttle to set; F4: the autopilot flies")
-        : t("The autopilots fly again (F4: assisted)"),
+        ? t("Assisted: you fly — the director (the ring) shows where to point, the throttle to set; ⇧F4: the autopilot flies")
+        : t("The autopilots fly again (⇧F4: assisted)"),
     );
   }
 
@@ -2178,8 +2343,64 @@ async function main() {
     clearPlan: () => camera.clearPlan(),
     pathInView: togglePathInView,
     tools: () => toolsWin.toggle(),
+    hudKind: () => keyActions.hudKind(new KeyboardEvent("keydown")),
     execute: () => pilotAuto(camera.transfer || camera.pilot.auto === "transfer" ? "transfer" : "node"),
   });
+  flightHud.ground.localPlace = () => {
+    const ch = camera.character;
+    const body = ch.active ? ch.body : (camera.ourLanded?.body ?? (camera.landed ? camera.local?.F.id : null));
+    if (!body) return null;
+    const geo = (q: [number, number, number]) => {
+      const g = cartToGeodetic(WGS84_A, body === "earth" ? WGS84_F : 0, q);
+      return { lat: (g.lat * 180) / Math.PI, lon: (g.lon * 180) / Math.PI };
+    };
+    const sb = solarBody(body);
+    const frame = sb ? null : planetFrame(body, sim.time, settings.spin, settings.massSolar);
+    const pose = camera.activePoseNow();
+    const ship =
+      pose && (camera.ourLanded?.body === body || camera.local?.F.id === body)
+        ? geo(
+            frame
+              ? (toLocal(frame, pose.X, [0, 0, 0]).xi.map((v) => v * frame.mPerM) as [number, number, number])
+              : (toBodyFixed(body, pose.X, sim.time).map((v) => v * M_METRES) as [number, number, number]),
+          )
+        : null;
+    const radiusM = sb ? sb.radius * M_METRES : frame!.R * frame!.mPerM;
+    const point = ch.active ? geo(ch.q) : (ship ?? (camera.local ? geo(camera.local.L.xi) : null));
+    return point
+      ? { body, radiusM, ...point, vessel: ch.active ? ship : null, contact: body === "earth" ? renderer.earthScenery.contact : null }
+      : null;
+  };
+  let localMapAt = 0;
+  // the on-foot HUD (ui/foothud.ts, PLAN-MODES-AAA M5): the compass, the place, the minimap
+  const footHud = new FootHud({
+    place: () => camera.character.place(),
+    craft: () => flightHud.ground.localPlace?.()?.vessel ?? null,
+    marks: () => {
+      const ch = camera.character;
+      const out: CompassMark[] = [];
+      const time = camera.nowTime();
+      const sky = (id: string, label: string, col: string) => {
+        if (id === ch.body || !solarBody(id)) return;
+        const a = ch.skyAzEl(ourState(id, time).pos);
+        if (a) out.push({ id, label, az: a.az, col, below: a.el < 0 });
+      };
+      sky("sun", t("SUN"), "#ffe08a");
+      if (ch.body === "earth") sky("moon", t("MOON"), "#dfe6f0");
+      if (settings.target !== "sun" && settings.target !== "moon")
+        sky(settings.target, (BODY_NAMES[settings.target] ?? settings.target).toUpperCase(), "#7cd6ff");
+      return out;
+    },
+    local: () => {
+      const p = flightHud.ground.localPlace?.();
+      return p ? { ...p, ...(p.body === "earth" && p.contact ? {} : flightHud.ground.atlas(p.body)) } : null;
+    },
+    bodyName: (id) => BODY_NAMES[id as Target] ?? id,
+    openMap: () => {
+      if (!flightHud.mapView) flightHud.toggleMapView();
+    },
+  });
+
   // the flight computer, over the full-screen map (ui/fc/computer.ts)
   let openMissions = () => {};
   const flightComputer = new FlightComputer({
@@ -2279,10 +2500,14 @@ async function main() {
       return s ? { site: s.runway ? camera.runwayInUse(s) : s, craft: null } : null;
     },
   });
-  // the transport bar (ui/transport.ts): over the toolbar, in the mission bar while flying
-  const tpDock = document.createElement("div");
-  tpDock.id = "tp-dock";
-  document.body.append(tpDock);
+  // the top bar (ui/topbar.ts, PLAN-MODES-AAA M1): the app's one bar in every mode — the modes, the mode's
+  // group (the ship's: the flight HUD's chips, clocks, craft and views), the time, the actions, TARS
+  const topBar = new TopBar({ setMode: (m) => void setGameMode(m), tars: () => tarsPanel.toggle() });
+  for (const e of topBar.emblems) tarsPanel.mirror(e);
+  topBar.shipModes.append(flightHud.bar.modes);
+  topBar.shipClocks.append(flightHud.bar.clocks);
+  topBar.shipActs.append(flightHud.bar.acts);
+  // the transport bar (ui/transport.ts): the time, in the top bar (compact flying: the HUD's clocks beside it)
   transport = new TransportBar({
     settings,
     time: () => sim.time,
@@ -2297,7 +2522,7 @@ async function main() {
     toggleAutoWarp,
     openTime: () => timePanel.open(),
   });
-  transport.mount(tpDock, false);
+  transport.mount(topBar.time, false);
   /** Starts or stops recording a take (● on the time bar). */
   function toggleTake() {
     if (renderer.offlineActive) return panel.toast(t("A render is running"));
@@ -2358,10 +2583,28 @@ async function main() {
     hudDensity = flightHud.density;
     flightHud.setDensity(2); // clean: the view, the captions, the warnings
   };
-  const flying = () => camera.piloting && !camera.cinematic && !renderer.offlineActive;
-  panel.flightKeys = (e) => flying() && (e.key === "m" || e.key === "M") && !e.shiftKey;
+  const flying = () => camera.piloting && !camera.cinematic && !renderer.offlineActive && !camera.character.active;
+  panel.flightKeys = (e) => (flying() || camera.character.active) && (e.key === "m" || e.key === "M") && !e.shiftKey;
   camera.onPadAction = (a) => {
     if (renderer.offlineActive) return;
+    if (camera.character.active) {
+      if (a === "focus") camera.character.jump();
+      else if (a === "rotation") {
+        const error = camera.character.board();
+        if (error) panel.toast(error);
+      } else if (a === "settings") (pauseMenu ??= makePauseMenu()).open();
+      else if (a === "recentre") camera.character.yaw = 0;
+      else if (a === "dpadUp") camera.character.zoom(-120);
+      else if (a === "dpadDown") camera.character.zoom(120);
+      touch();
+      return;
+    }
+    if (a === "rotation" && (camera.ourLanded || camera.landed)) {
+      const error = camera.character.disembark();
+      if (error) panel.toast(error);
+      touch();
+      return;
+    }
     if (flying()) {
       // in the Ranger: A SAS, B cut the engine, X prograde, Y retrograde, R3 look ahead
       const pa: Partial<Record<typeof a, () => void>> = {
@@ -2473,7 +2716,14 @@ async function main() {
       settings: () => panel.toggle(true),
       help: () => actions["btn-help"]!(),
       controls: () => controlsScreen.open(),
-      photo: () => openPhoto(),
+      photo: () => void setGameMode("photo"),
+      capture: () => {
+        const why = renderDialog.capture();
+        if (why) panel.toast(why);
+      },
+      render: () => renderDialog.toggle(true),
+      atlas: () => atlas.open(),
+      skyEvents: () => void skyEventsToggle(),
       place: () => placePanel.open(),
       time: () => timePanel.open(),
       weather: () => weatherPanel.open(),
@@ -2501,6 +2751,11 @@ async function main() {
   // the keyboard: input/keymap.ts says which key does what (and draws the help); here, what it does
   const keyActions: Record<KeyAction, (e: KeyboardEvent, arg?: string) => void> = {
     tools: () => DEV_TOOLS && toolsWin.toggle(),
+    gameMode: (e, m) => {
+      if (!e.repeat) setGameMode(m as GameMode);
+    },
+    atlas: () => (atlas.isOpen ? atlas.hide() : atlas.open()),
+    skyEvents: () => void skyEventsToggle(),
     // (held flight keys: translation, throttle — read each frame by the controller)
     held: () => {},
     throttleFull: () => {
@@ -2565,6 +2820,12 @@ async function main() {
       cfg.flaps = cfg.flaps === 0.5 ? 1 : cfg.flaps === 1 ? 0 : 0.5;
       panel.toast(cfg.flaps === 0 ? t("Flaps up") : cfg.flaps === 0.5 ? t("Flaps half") : t("Flaps full"));
     },
+    cineShot: () => {
+      // (the Director view's shot — the view itself put on if another was)
+      if (settings.shipMount !== "director") setMount("director");
+      else panel.toast(camera.cineNextShot());
+    },
+    jetSystem: (_, a) => panel.toast(camera.jetToggle(a === "ab" ? "ab" : a === "athr" ? "athr" : "ap")),
     airBrake: () => {
       camera.airBrake = camera.airBrake > 0 ? 0 : 1;
       panel.toast(camera.airBrake > 0 ? t("Air brake out") : t("Air brake in"));
@@ -2573,13 +2834,30 @@ async function main() {
     tars: (e) => tarsKey(e),
     pathInView: () => togglePathInView(),
     hudDensity: () => panel.toast(flightHud.cycleDensity()),
+    hudKind: () => {
+      settings.hudKind = nextHudKind(settings.hudKind);
+      onSettingsChange(["hudKind"]);
+      refreshGui();
+      panel.toast(tf("HUD: {0}", hudKindName(settings.hudKind)));
+    },
     missions: () => openMissions(),
     stopFlight: () => releaseControls(),
     ack: () => flightHud.acknowledge(),
     pause: () => (pauseMenu ??= makePauseMenu()).open(),
     quickSave: () => quickSave(),
     quickLoad: () => quickLoad(),
-    leaveShip: () => actions["btn-ship"]!(),
+    leaveShip: (e) => {
+      if (e.repeat || !camera.enabled) return;
+      const error = camera.character.toggle();
+      if (error) panel.toast(error);
+      else {
+        touch();
+        syncButtons();
+      }
+    },
+    characterJump: (e) => {
+      if (!e.repeat && camera.enabled) camera.character.jump();
+    },
     // time, in every mode
     playPause: () => playPause(),
     warp: (_, d) => warp(d === "1" ? 1 : -1),
@@ -2604,7 +2882,8 @@ async function main() {
     dive: () => cinematic("dive"),
     journey: () => cinematic("journey"),
     standOn: () => {
-      const why = standOn();
+      // (on foot: the tripod where the walker stands, looking where the view looked — PLAN-MODES-AAA M7)
+      const why = camera.character.active ? tripodHere() : standOn();
       if (why) panel.toast(why);
     },
     fall: () => setView(view() === "fall" ? "free" : "fall"),
@@ -2702,7 +2981,156 @@ async function main() {
       png: () => void savePNG(),
       render: () => renderDialog.toggle(),
       multi: () => void mxDialog.open(),
+      video: {
+        shots: () => renderDialog.shots(),
+        start: (o) => renderDialog.startVideo(o),
+        stop: () => renderDialog.stopVideo(),
+        state: () => renderDialog.videoState(),
+      },
+      toast: (x) => panel.toast(x),
     })).open();
+
+  // ---- the four modes (game/modes.ts, PLAN-MODES-AAA M1): the ship, on foot, the free camera, photo — read from
+  // the state each frame, changed by the top bar's tabs, F1–F4, TARS (set_mode) and __bh.mode
+  /** the mode the photo mode was opened over (it goes back to it) */
+  let photoOver: Exclude<GameMode, "photo"> | null = null;
+  function modeState(ground = false): ModeState {
+    const pil = camera.piloting;
+    return {
+      ship: settings.ship,
+      piloting: pil,
+      spectating: camera.spectating && !camera.character.active,
+      onFoot: camera.character.active,
+      photo: !!photoMode?.isOpen,
+      photoOver,
+      landedStill: pil && !!(camera.ourLanded || camera.landed) && (camera.airInfo?.()?.speed ?? 0) <= 0.5,
+      groundBelow: ground && !camera.character.active ? (camera.viewController().groundBelow()?.body ?? null) : null,
+      rendering: renderer.offlineActive,
+    };
+  }
+  const gameMode = (): GameMode => modeOf(modeState());
+  /** The walk left for the ship or the free camera: with a ship flown, the walker's camera stays out as the
+   *  spectator (carried back onto the ship for the Ship mode); without one, the free camera where it stood. */
+  function leaveWalk(to: "ship" | "free") {
+    const ch = camera.character;
+    if (camera.piloting) {
+      ch.stop({ keepView: true });
+      if (to === "ship") camera.stopSpectator();
+    } else {
+      const v = camera.spectator?.s;
+      if (v) {
+        for (const k of [...POSE_KEYS, "velR", "velT", "velP", "motion"] as const)
+          (settings as unknown as Record<string, unknown>)[k] = v[k];
+        settings.rotation = "free";
+        settings.lookAt = false;
+      }
+      ch.stop();
+      camera.sync();
+    }
+    syncButtons();
+    touch();
+  }
+  /** One step of a change of mode (`below`: the ground under the view when the change began); why it failed, or null. */
+  function runModeStep(step: ModeStep, from: ModeState, below: ReturnType<CameraController["groundBelow"]>): string | null {
+    switch (step) {
+      case "openPhoto":
+        photoOver = baseMode(from);
+        openPhoto();
+        return null;
+      case "closePhoto":
+        photoMode?.close();
+        photoOver = null;
+        return null;
+      case "startSpectator":
+        setSpectator(true);
+        return camera.spectating ? null : t("The spectator leaves a ship flown: fly one first (K)");
+      case "stopSpectator":
+        setSpectator(false);
+        return null;
+      case "board":
+        return camera.character.board();
+      case "stopWalking":
+        leaveWalk(planned === "ship" ? "ship" : "free");
+        return null;
+      case "disembark": {
+        if (camera.spectating) setSpectator(false);
+        const err = camera.character.disembark();
+        if (!err) touch(), syncButtons();
+        return err;
+      }
+      case "walkHere": {
+        // (a spectator out: its view becomes the walker's — character.ts prepare)
+        if (!below) return t("On foot: no ground near the camera — the Atlas puts the explorer anywhere");
+        const err = camera.character.start(below.body, below.lat, below.lon);
+        if (!err) touch(), syncButtons();
+        return err;
+      }
+      case "shipOn":
+      case "shipOff":
+        if (settings.ship !== (step === "shipOn")) actions["btn-ship"]!();
+        return null;
+    }
+  }
+  let planned: GameMode | null = null;
+  /** The game into a mode (the steps of game/modes.ts planMode); why not, or null. */
+  function setGameMode(to: GameMode, quiet = false): string | null {
+    const below = camera.character.active ? null : camera.viewController().groundBelow();
+    const from = { ...modeState(), groundBelow: below?.body ?? null };
+    const p = planMode(from, to, { hatch: camera.character.active && camera.character.accessDistance() <= 3 });
+    if ("refused" in p) {
+      const why = t(p.refused);
+      if (!quiet) panel.toast(why);
+      return why;
+    }
+    planned = to;
+    try {
+      for (const step of p.steps) {
+        const err = runModeStep(step, from, below);
+        if (err) {
+          if (!quiet) panel.toast(err);
+          return err;
+        }
+      }
+    } finally {
+      planned = null;
+    }
+    syncMode();
+    if (p.steps.length && !quiet && to !== "photo") panel.toast(tf("Mode: {0}", modeName(to)));
+    return null;
+  }
+  /** The top bar in the mode now: its tab, its groups, the time's bar (compact flying: the HUD's clocks). */
+  let shownMode: GameMode | null = null;
+  let modeLineAt = 0;
+  function syncMode(now = performance.now()) {
+    const m = gameMode();
+    if (m !== shownMode) {
+      shownMode = m;
+      topBar.setMode(m);
+      transport!.mount(topBar.time, m === "ship");
+      if (m !== "photo") photoOver = null;
+    }
+    if (now - modeLineAt < 250) return;
+    modeLineAt = now;
+    // (the mode's line: on foot, the world and the place; photo, the way back)
+    if (m === "foot") {
+      const p = flightHud.ground.localPlace?.();
+      // (the place as the on-foot HUD's card writes it: five decimals, the longitude wrapped)
+      topBar.setContext(
+        p ? (BODY_NAMES[p.body as Target] ?? p.body) : t("On foot"),
+        p ? fmtLatLon(p.lat, p.lon, 5, [t("N"), t("S"), t("E"), t("W")]) : "",
+      );
+    } else if (m === "photo") topBar.setContext(t("Photo"), tf("Esc: back to {0}", modeName(baseMode(modeState()))));
+    else topBar.setContext("");
+    topBar.setIcon("btn-sound", settings.sound ? TB_ICONS.sound : TB_ICONS.mute, !settings.sound);
+    // (the tabs a change would refuse now: dimmed, the reason in their tips)
+    const st = modeState(true);
+    // (the hatch near: once for every tab)
+    const hatch = camera.character.active && camera.character.accessDistance() <= 3;
+    for (const k of GAME_MODES) {
+      const p = k === m ? null : planMode(st, k, { hatch });
+      topBar.setAvailable(k, p && "refused" in p ? t(p.refused) : null);
+    }
+  }
 
   // the radial wheel (ui/wheel.ts): Tab held opens it, released does the sector pointed at; a tap is
   // still the next target
@@ -2803,7 +3231,7 @@ async function main() {
     // (the keys as the player set them — input/bindings.ts)
     // (a spectator out: its keys move it — not the ship's flight keys)
     const camKey = e.code in freeCameraKeys();
-    const b = matchKey(e, flying() && !(camera.spectating && camKey), camKey, effectiveBindings());
+    const b = matchKey(e, flying() && !(camera.spectating && camKey), camKey, effectiveBindings(), camera.character.active);
     if (!b) return;
     e.preventDefault();
     keyActions[b.do](e, b.arg);
@@ -2874,6 +3302,34 @@ async function main() {
       touch();
       touchDisplay();
     },
+    // (the director's cameras: the ship flown, its Director view put on — the scene's snapshot puts the view back)
+    director: {
+      available: () => settings.ship && camera.piloting && !camera.spectating,
+      set: () => {
+        const was = settings.shipMount as Mount;
+        setMount("director");
+        return () => {
+          if (settings.shipMount === "director" && was !== "director") setMount(was);
+        };
+      },
+    },
+    // (a draft: seen at once; a final: saved, then seen)
+    onVideo: (v) => {
+      tarsVideoDone = true;
+      if (!v.draft) {
+        download(v.blob, v.name);
+        panel.toast(tf("Video saved · {0}", v.name));
+      }
+      videoPreview.show(v);
+    },
+    // (a live capture grabs the view each exposure: one user of the renderer's export at a time)
+    busy: () => (liveCapture.running ? t("A live capture is running: stop it first") : null),
+  });
+  const videoPreview = new VideoPreview({
+    download: (b, name) => download(b, name),
+    final: (v) => renderDialog.startVideo({ ...v.job, draft: false }),
+    shotName: (v) => renderDialog.shots().find((x) => x.id === v.shot)?.label ?? v.shot,
+    finalSize: () => renderDialog.size(),
   });
 
   // -------------------------------------------------------------------- saved state
@@ -2969,6 +3425,159 @@ async function main() {
     },
   });
   flightHud.onPlace = () => placePanel.open();
+  // the Atlas (ui/atlas.ts, PLAN-MODES-AAA M6): the Earth, the Moon and Mars as maps, their destinations, the
+  // addresses — the game put there (in orbit, landed, on foot, the free camera, a tripod)
+  const ATLAS_ORBIT_KM: Record<MapBody, number> = { earth: 400, moon: 100, mars: 300 };
+  /** The game ready for a placement on our worlds: a mission ended (said), our universe loaded, the walk left. */
+  function atlasReady() {
+    const m = MISSIONS.find((q) => q.scene === currentScene);
+    if (m || mission.active) {
+      mission.stop(t("Mission ended — the ship placed"));
+      currentScene = null;
+    }
+    if (!settings.wormhole || settings.system !== "gargantua") applyPreset("Earth: the Blue Marble");
+  }
+  /**
+   * The free camera above a place (a spectator when a ship flies — it flies on): `altKm` up, south of it, looking at
+   * it 30° down, carried with the ground; or `ground`: on its tripod there, looking along `heading` (north by
+   * default), `pitch` up from the horizon. Why not, or null.
+   */
+  function cameraAt(
+    body: string,
+    lat: number,
+    lon: number,
+    o: { altKm?: number; ground?: boolean; heading?: number; pitch?: number } = {},
+  ): string | null {
+    atlasReady();
+    if (camera.character.active) leaveWalk("free");
+    if (settings.ship && camera.piloting && !camera.spectating) {
+      setSpectator(true);
+      if (!camera.spectating) return t("The spectator leaves a ship flown: fly one first (K)");
+    }
+    const vc = camera.viewController();
+    const time = vc.nowTime();
+    const alt = o.ground ? 0.03 : (o.altKm ?? (body === "earth" ? 3 : 8));
+    const R = (solarBody(body)!.radius * M_METRES) / 1e3;
+    const back = o.ground ? 0 : (alt / Math.tan((30 * Math.PI) / 180) / R) * (180 / Math.PI);
+    const v = bodyView(
+      time,
+      o.ground
+        ? { body, at: [lat, lon], altKm: alt, heading: o.heading ?? 0 }
+        : { body, at: [Math.max(-89.9, lat - back), lon], altKm: alt, aim: [lat, lon] },
+    );
+    vc.setCinematic(null);
+    if (vc.gravity) vc.setGravity(false);
+    vc.setOurLanded(null);
+    vc.s.lookAt = false;
+    vc.s.telescope = false;
+    vc.setRotation("free");
+    vc.rigPlace(true, v.X, v.fwd, v.up, groundVelocity(body, v.X, time));
+    if (o.ground) {
+      const why = vc.standOn(body as Body);
+      if (why) return why;
+      // (the look raised off the horizon: the tripod then holds it, fixed on the ground)
+      const w = o.pitch ? vc.rigWorld() : null;
+      if (w) {
+        const a = (o.pitch! * Math.PI) / 180;
+        const fwd = w.fwd.map((f, i) => f * Math.cos(a) + w.up[i]! * Math.sin(a)) as Vec3;
+        const up = w.up.map((u, i) => u * Math.cos(a) - w.fwd[i]! * Math.sin(a)) as Vec3;
+        vc.rigPlace(w.ours, w.X, fwd, up, groundVelocity(body, w.X, time));
+      }
+    }
+    refreshGui();
+    touch();
+    return null;
+  }
+  /** The tripod where the walker stands, looking where the view looked (PLAN-MODES-AAA M7): why not, or null. */
+  function tripodHere(): string | null {
+    const ch = camera.character;
+    const p = ch.place();
+    if (!p) return t("Tripod here: walk on a world first (F2)");
+    if (!ch.ours) return t("The tripod stands on our worlds: the Earth, the Moon, Mars and the others");
+    const why = cameraAt(p.body, p.lat, p.lon, { ground: true, heading: p.viewDeg });
+    if (!why)
+      panel.toast(
+        tf("Tripod on {0}, looking {1}° — the sky's events from here (⇧F8)", BODY_NAMES[p.body as Target] ?? p.body, Math.round(p.viewDeg)),
+      );
+    return why;
+  }
+  const atlas = new AtlasPage({
+    lang: () => lang,
+    subsolar: (body) => {
+      const time = camera.nowTime();
+      const q = toBodyFixed(body, ourState("sun", time).pos, time);
+      const r = Math.hypot(...q);
+      return r > 0 ? { lat: (Math.asin(q[2] / r) * 180) / Math.PI, lon: (Math.atan2(q[1], q[0]) * 180) / Math.PI } : null;
+    },
+    here: () => {
+      const out: { body: string; lat: number; lon: number; who: "craft" | "walker" | "camera" }[] = [];
+      const time = camera.nowTime();
+      const sub = (body: string, X: Vec3) => {
+        const q = toBodyFixed(body, X, time);
+        const g = cartToGeodetic(1, body === "earth" ? WGS84_F : 0, q.map((v) => v / Math.hypot(...q)) as Vec3);
+        return { lat: (g.lat * 180) / Math.PI, lon: (g.lon * 180) / Math.PI };
+      };
+      const ours = ["earth", "moon", "mars"];
+      const p = camera.character.place();
+      if (p && ours.includes(p.body)) out.push({ body: p.body, lat: p.lat, lon: p.lon, who: "walker" });
+      if (settings.ship && camera.piloting) {
+        const st = tools.status();
+        const pose = camera.activePoseNow();
+        if (pose && st.side === "ours" && ours.includes(st.soi)) out.push({ body: st.soi, ...sub(st.soi, pose.X as Vec3), who: "craft" });
+      }
+      if (!p && (!settings.ship || camera.spectating)) {
+        const g = camera.viewController().groundBelow(40);
+        if (g && ours.includes(g.body)) out.push({ body: g.body, lat: g.lat, lon: g.lon, who: "camera" });
+      }
+      return out;
+    },
+    marks: () => [
+      ...SITES.filter((x) => x.body === "earth" || x.body === "moon" || x.body === "mars").map((x) => ({
+        body: x.body as MapBody,
+        lat: x.lat,
+        lon: x.lon,
+        name: x.name,
+        detail: x.icao ? `${x.icao}${x.runway ? ` · ${t("runway")} ${x.rwy ?? ""}` : ""}` : t("Landing site"),
+        elevM: x.elev,
+        source: "site" as const,
+      })),
+      ...LANDSCAPES.map((l) => ({
+        body: "earth" as MapBody,
+        lat: l.at[0],
+        lon: l.at[1],
+        name: t(l.title),
+        detail: t(l.description),
+        scene: l.scene,
+        source: "view" as const,
+      })),
+    ],
+    go: (to, p) => atlasGo(to, p),
+    mission: () => {
+      const m = MISSIONS.find((q) => q.scene === currentScene);
+      return m ? tr(m.title) : mission.active ? t("The Interstellar journey") : null;
+    },
+    ask: (q) => {
+      tarsPanel.show();
+      tarsPanelAsk(q);
+    },
+    view: (scene) => applyPreset(scene),
+  });
+  /** The game put at a place of the Atlas: why not, or null. */
+  function atlasGo(to: AtlasAction, p: AtlasPlace): string | null {
+    try {
+      if (to === "camera" || to === "tripod") return cameraAt(p.body, p.lat, p.lon, { ground: to === "tripod" });
+      atlasReady();
+      if (camera.character.active) camera.character.stop();
+      if (to === "orbit") tools.orbitOver(p.body, p.lat, p.lon, { altKm: ATLAS_ORBIT_KM[p.body] });
+      else if (to === "land") tools.land(p.body, p.lat, p.lon);
+      else tools.walk(p.body, p.lat, p.lon);
+      refreshGui();
+      touch();
+      return null;
+    } catch (e) {
+      return (e as Error).message;
+    }
+  }
   // the date and time (ui/timepanel.ts): the transport bar's clock, the pause menu
   const timePanel = new TimePanel({ tools, settings, sceneStart: () => sceneStart, toast: (x) => panel.toast(x) });
   // the weather (ui/weatherpanel.ts, PLAN-METEO W2): the HUD's Weather button, the pause menu
@@ -3008,6 +3617,242 @@ async function main() {
     },
   });
   flightHud.onEclipses = () => eclipses.open();
+  // the sky's events from here (ui/skyevents.ts, PLAN-MODES-AAA M7): from where one stands on the Earth (walking, on
+  // the tripod, the free camera over the ground) and the way one looks — each event gone to (the tripod set, the
+  // time, the aim), lived (its exposures taken and stacked in the game: ui/livecapture.ts) or rendered
+  /** Where one stands on the Earth's ground and the way the view looks (null: not there). */
+  function skyPlace(): SkyPlace | null {
+    const cam = cameraFrame(settings);
+    const hz = horizonAt(settings, cam, sim.time);
+    const look = hz ? altAzOf(hz, cam.fwd as Vec3) : null;
+    const view = look ? { az: look[1], alt: look[0] } : { az: 0, alt: 0 };
+    const p = camera.character.place();
+    if (p) return p.body === "earth" ? { lat: p.lat, lon: p.lon, view: { ...view, az: p.viewDeg } } : null;
+    if (settings.ship && !camera.spectating) return null;
+    const g = camera.viewController().groundBelow(0.02);
+    return g && g.body === "earth" ? { lat: g.lat, lon: g.lon, view } : null;
+  }
+  /** The tripod at a place of the Earth, the clock at a time, looking at (az, alt) through a field [°]: why not, or null. */
+  function skyAim(lat: number, lon: number, o: { ms: number; az: number; alt: number; fov: number }): string | null {
+    try {
+      tools.setDate(new Date(o.ms).toISOString());
+    } catch (e) {
+      return (e as Error).message;
+    }
+    const why = cameraAt("earth", lat, lon, { ground: true, heading: o.az, pitch: o.alt });
+    if (why) return why;
+    camera.setFov(o.fov);
+    touch();
+    return null;
+  }
+  const liveCapture = new LiveCapture({
+    at: async (ms, first) => {
+      tools.setDate(new Date(ms).toISOString());
+      await mxHost.settle(first);
+    },
+    grab: () => renderer.exportRGBA(settings),
+    download: (b, name) => download(b, name),
+    hold: () => {
+      const was = settings.animate;
+      playPause(false);
+      return was;
+    },
+    release: (was) => playPause(was as boolean),
+  });
+  const skyEvents = new SkyEventsPage({
+    place: skyPlace,
+    now: () => utcOf(sim.time),
+    azAlt: (id, lat, lon, ms) => azAltAt(id, (lat * Math.PI) / 180, (lon * Math.PI) / 180, 0, ms),
+    iss: (lat, lon, ms) => issSight(lat, lon, ms),
+    issPasses: (lat, lon, from, days) => issPasses(lat, lon, from, days),
+    search: async (q) => {
+      const r = (await plan({ kind: "eclipses", q })) as { events: EclipseEvent[] } | { error: string };
+      if ("error" in r) throw new Error(r.error);
+      return r;
+    },
+    aim: (o) => {
+      const p = skyPlace();
+      const why = p && skyAim(p.lat, p.lon, o);
+      if (why) panel.toast(why);
+    },
+    live: (o) => {
+      const p = skyPlace();
+      if (!p) return;
+      if (renderer.offlineActive || renderDialog.videoState()) return void panel.toast(t("A render is running"));
+      const why = skyAim(p.lat, p.lon, { ms: o.times[0]!, az: o.az, alt: o.alt, fov: o.fov });
+      if (why) return void panel.toast(why);
+      // (the station: its streak since the last exposure, as a long exposure catches it — the scene does not draw it
+      // from the ground)
+      const view = { az: o.az, alt: o.alt, fov: o.fov };
+      const overlay = o.iss
+        ? (data: Uint8Array, w: number, h: number, i: number) => {
+            const to = o.times[i]!;
+            const from = i > 0 ? o.times[i - 1]! : to - 1e3;
+            const track = Array.from({ length: 41 }, (_, k) => issSight(p.lat, p.lon, from + ((to - from) * k) / 40)).filter(
+              (x): x is NonNullable<typeof x> => !!x,
+            );
+            drawIssTrail(new Uint8ClampedArray(data.buffer, data.byteOffset, data.length), w, h, view, track, { dark: o.iss === "dark" });
+          }
+        : undefined;
+      void liveCapture.run({ title: o.title, times: o.times, stem: o.stem, render: o.render, overlay });
+    },
+    render: (kind, fill) => void mxDialog.open({ kind, fill }),
+  });
+  /** The sky's events from here, opened or closed: why not, or null. */
+  function skyEventsToggle(): string | null {
+    if (skyEvents.isOpen) return skyEvents.hide(), null;
+    const why = skyEvents.open();
+    if (why) panel.toast(why);
+    return why;
+  }
+  // (the music panel — ui/musicpanel.ts —: the toolbar's Music, the flight HUD's)
+  const musicPanel = new MusicPanel({
+    music,
+    settings,
+    changed: (keys) => onSettingsChange(keys),
+    // (listening: the sound and the music on — the click itself starts the audio context)
+    startSound: () => {
+      if (settings.sound && settings.music) return;
+      settings.sound = true;
+      settings.music = true;
+      audio.applyMix();
+      onSettingsChange(["sound", "music"]);
+    },
+  });
+  flightHud.onMusic = () => musicPanel.toggle();
+  // the top bar's actions (ui/topbar.ts): the page's toolbar buttons moved in with their ids, the bar's own —
+  // the least used go first into its ⋯ menu when the window is narrow
+  {
+    const btn = (id: string) => document.getElementById(id) as HTMLButtonElement;
+    // (the page's buttons moved in: their tooltips in the interface's language)
+    btn("btn-camera").dataset.tip = t("Camera — placement, look at the target, lens & telescope, target, cinematics");
+    $("hud-toggle").dataset.tip = t("Details and physical readouts");
+    topBar.freeSlot.append(btn("btn-camera"));
+    topBar.add({
+      id: "btn-atlas",
+      label: t("Atlas: the Earth, the Moon and Mars — destinations, addresses; go there"),
+      icon: TB_ICONS.atlas,
+      key: "F8",
+      run: () => atlas.open(),
+      prio: 1,
+      testid: "topbar-atlas",
+    });
+    topBar.add({
+      id: "btn-tripod",
+      label: t("Tripod: the camera set down on the ground — on foot, where you stand, looking the same way"),
+      icon: TB_ICONS.tripod,
+      key: "⇧T",
+      run: () => keyActions.standOn(new KeyboardEvent("keydown")),
+      modes: ["foot", "free"],
+      prio: 3,
+      testid: "topbar-tripod",
+    });
+    topBar.add({
+      id: "btn-skyevents",
+      label: t("The sky's events from here: trails, analemma, the Moon, the ISS, eclipses — go there, live it, render it"),
+      icon: TB_ICONS.skyEvents,
+      key: "⇧F8",
+      run: () => void skyEventsToggle(),
+      prio: 3,
+      testid: "topbar-skyevents",
+    });
+    topBar.add({
+      id: "btn-place",
+      label: t("Place: in orbit, on a ground, on foot, beside a body"),
+      icon: TB_ICONS.place,
+      run: () => placePanel.open(),
+      prio: 2,
+      testid: "hud-place",
+    });
+    topBar.add({
+      id: "btn-scenes",
+      label: t("Scenes"),
+      tip: t("Scenes — every black hole, the wormhole, Gargantua and the game's missions"),
+      button: btn("btn-scenes"),
+      prio: 4,
+    });
+    topBar.add({
+      id: "btn-weather",
+      label: t("The weather"),
+      icon: TB_ICONS.weather,
+      run: () => weatherPanel.open(),
+      prio: 6,
+      testid: "hud-weather",
+    });
+    topBar.add({
+      id: "btn-eclipses",
+      label: t("Eclipses"),
+      icon: TB_ICONS.eclipse,
+      run: () => eclipses.open(),
+      prio: 6,
+      testid: "hud-eclipses",
+    });
+    topBar.add({
+      id: "btn-sky",
+      label: t("Sky chart"),
+      tip: t("Sky chart — constellations, star names, equatorial & horizontal grids (U: grids)"),
+      button: btn("btn-sky"),
+      key: "N",
+      prio: 5,
+    });
+    topBar.add({
+      id: "btn-music",
+      label: t("Music"),
+      tip: t("Music — the themes, listen, the mode, the mixer, which theme when"),
+      button: btn("btn-music"),
+      prio: 3,
+    });
+    topBar.add({
+      id: "btn-sound",
+      label: t("Sound on / off"),
+      icon: TB_ICONS.sound,
+      run: () => toggleSound(),
+      prio: 3,
+      testid: "topbar-sound",
+    });
+    topBar.add({
+      id: "btn-capture",
+      label: t("Capture: this view rendered offline, saved as a PNG once converged"),
+      icon: TB_ICONS.capture,
+      run: () => {
+        const why = renderDialog.capture();
+        if (why) panel.toast(why);
+      },
+      prio: 3,
+      testid: "topbar-capture",
+    });
+    topBar.add({
+      id: "btn-render",
+      label: t("Offline render: a picture or a video"),
+      icon: TB_ICONS.render,
+      run: () => renderDialog.toggle(),
+      prio: 5,
+    });
+    topBar.add({
+      id: "btn-info",
+      label: t("Details and physical readouts"),
+      icon: TB_ICONS.info,
+      key: "I",
+      run: () => actions["hud-toggle"]!(),
+      prio: 8,
+    });
+    topBar.add({ id: "btn-help", label: t("Keyboard & mouse"), button: btn("btn-help"), key: "?", prio: 7 });
+    topBar.add({
+      id: "btn-settings",
+      label: t("Settings"),
+      icon: TB_ICONS.settings,
+      key: "M",
+      run: () => panel.toggle(),
+      prio: 1,
+      testid: "topbar-settings",
+    });
+    if (DEV_TOOLS)
+      topBar.add({ id: "btn-tools", label: t("Game tools"), icon: TB_ICONS.tools, key: "F10", run: () => toolsWin.toggle(), prio: 9 });
+    // the ship's least used controls (ui/flighthud.ts): the ⋯ menu takes them when narrow, like the actions
+    topBar.overflowable(flightHud.barPieces);
+    // (the page's bar, emptied)
+    document.getElementById("toolbar")?.remove();
+  }
   // multiple exposures (photo/multiexposure.ts, PLAN-CIEL C8–C10): a tripod's series rendered offline and
   // blended — the analemma, an eclipse's phases, the stars' trails; the game put back after
   const mxSnapshot = () => ({
@@ -3516,6 +4361,14 @@ async function main() {
       if (flightHud.mapView !== on) flightHud.toggleMapView();
       if (on && tab) flightHud.setMapTab(tab);
     },
+    localMap: {
+      state: () => flightHud.ground.localMap.state(),
+      zoom: (value) => {
+        if (!flightHud.ground.localPlace()) throw new Error("The local map requires an explorer or a landed craft");
+        flightHud.drawLocalMap();
+        return flightHud.ground.localMap.setZoom(value);
+      },
+    },
     hudDensity: (n) => flightHud.setDensity(n),
     open: (p) => {
       const open: Record<typeof p, () => void> = {
@@ -3525,13 +4378,17 @@ async function main() {
         weather: () => weatherPanel.open(),
         eclipses: () => eclipses.open(),
         scenes: () => scenes.open(),
-        photo: () => openPhoto(),
+        photo: () => void setGameMode("photo"),
         controls: () => controlsScreen.open(),
         help: () => actions["btn-help"]!(),
         pause: () => keyActions.pause(new KeyboardEvent("keydown")),
         planner: () => openMissions(),
         sky: () => actions["btn-sky"]!(),
         camera: () => actions["btn-camera"]!(),
+        music: () => musicPanel.toggle(true),
+        render: () => renderDialog.toggle(true),
+        atlas: () => atlas.open(),
+        skyevents: () => void skyEvents.open(),
       };
       open[p]();
     },
@@ -3547,6 +4404,63 @@ async function main() {
     memory: tarsMemory,
     now: () => performance.now(),
     dayClouds: () => renderer.dayCloudsOf,
+    mode: { get: () => gameMode(), set: (m) => setGameMode(m), hideBar: (on) => topBar.hide(on) },
+    video: {
+      start: (o) => {
+        if (!(SHOT_IDS as readonly string[]).includes(o.shot)) return `no shot "${o.shot}" — ${SHOT_IDS.join(", ")}`;
+        return renderDialog.startVideo({ ...o, shot: o.shot as Shot });
+      },
+      state: () => renderDialog.videoState(),
+      stop: () => renderDialog.stopVideo(),
+      shots: () => renderDialog.shots(),
+    },
+    skyEvents: {
+      list: async () =>
+        (await skyEvents.events())?.map((e) => ({
+          id: e.id,
+          title: e.title,
+          when: e.when ? new Date(e.when).toISOString() : null,
+          detail: e.detail,
+          look: {
+            azDeg: Math.round(e.view.az),
+            altDeg: Math.round(e.view.alt),
+            fovDeg: +e.view.fov.toFixed(1),
+            lensMm: Math.round(lensMm(e.view.fov)),
+          },
+          render: !!e.render,
+          ...(e.highlight && e.id.startsWith("iss-") ? { transit: true } : {}),
+        })) ?? null,
+      take: (id, way) => skyEvents.take(id, way),
+      open: () => skyEvents.open(),
+    },
+    atlas: {
+      search: async (q, body) => {
+        const out: { name: string; body: string; lat: number; lon: number; kind: string; detail?: string }[] = [];
+        const c = parseCoords(q);
+        if (c) out.push({ name: q, body: body ?? "earth", ...c, kind: "coordinates" });
+        for (const p of searchPois(q, POIS, body))
+          out.push({ name: p.name[lang], body: p.body, lat: p.lat, lon: p.lon, kind: p.kind, detail: p.about[lang] });
+        for (const x of SITES)
+          if ((!body || x.body === body) && x.name.toLowerCase().includes(q.toLowerCase()))
+            out.push({ name: x.name, body: x.body, lat: x.lat, lon: x.lon, kind: "site" });
+        if ((!body || body === "earth") && !c && out.length < 3)
+          for (const g of await geocode(q, { lang, fallback: true }).catch(() => []))
+            out.push({ name: g.name, body: "earth", lat: g.lat, lon: g.lon, kind: g.kind || "address", detail: g.detail });
+        return out;
+      },
+      go: (to, p) => atlasGo(to, { ...p }),
+      open: (o) => atlas.open(o),
+    },
+    capture: {
+      start: (o) => renderDialog.capture(o),
+      state: () => {
+        const r = renderDialog.state();
+        const st = renderer.offlineActive ? lastOffline : null;
+        return { ...r, active: renderer.offlineActive, progress: st ? st.progress : null, done: !!st?.done };
+      },
+      stop: () => renderDialog.stop(),
+      save: (k) => renderDialog.save(k),
+    },
     utcNow: () => utcOf(sim.time),
     multiExposure: (r) => mxDialog.open({ kind: r.kind, run: r }),
     issPasses: (lat, lon, from, days) => issPasses(lat, lon, from, days),
@@ -3566,6 +4480,10 @@ async function main() {
         if (!flightHud.mapView) flightHud.toggleMapView();
         if (tab) flightHud.setMapTab(tab);
       };
+      if (name === "character") {
+        characterHud.show();
+        return "character HUD";
+      }
       if (name.startsWith("map_")) {
         map(name === "map_3d" ? "orbit" : name === "map_globe" ? "globe" : "map");
         return `map: ${name.slice(4)}`;
@@ -3775,6 +4693,13 @@ async function main() {
       setSpectator(on);
       return camera.spectating;
     },
+    mode: {
+      get: () => gameMode(),
+      set: (m: GameMode) => setGameMode(m, true),
+      state: () => modeState(true),
+      bar: () => ({ mode: topBar.mode, hidden: topBar.hidden }),
+      hideBar: (on: boolean) => topBar.hide(on),
+    },
     pwa,
     forceScale: (x: number | null) => {
       forcedScale = x === null ? null : Math.min(Math.max(x, 0.25), 1);
@@ -3791,6 +4716,18 @@ async function main() {
   const fpsMeter = Object.assign(document.createElement("div"), { className: "fps-meter", hidden: true });
   fpsMeter.dataset.testid = "fps-meter";
   document.body.append(fpsMeter);
+  const sceneryCredit = Object.assign(document.createElement("div"), { className: "scenery-credit", hidden: true });
+  const creditLink = (label: string, href: string) =>
+    Object.assign(document.createElement("a"), { textContent: label, href, target: "_blank", rel: "noopener" });
+  sceneryCredit.append(
+    "© ESA WorldCover / Copernicus 2021 · ",
+    creditLink("CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/"),
+    " · © OpenMapTiles · ",
+    creditLink("© OpenStreetMap", "https://www.openstreetmap.org/copyright"),
+    " · ",
+    creditLink("OpenFreeMap", "https://openfreemap.org"),
+  );
+  document.body.append(sceneryCredit);
   let fpsAcc = 0;
   let fpsN = 0;
   let fps = 0;
@@ -3839,6 +4776,17 @@ async function main() {
     }
     // what the renderer draws of the flight (the ship, its flames, the predicted path) — an offline job
     // or a video holds its own
+    characterHud.update(now);
+    footHud.show(camera.character.active && !flightHud.mapView);
+    footHud.update(now);
+    sceneryHitboxes.update(
+      now,
+      camera.character,
+      renderer.earthScenery.contact,
+      settings.fov,
+      settings.sceneryHitboxes && !flightHud.mapView,
+      canvas,
+    );
     const pil = flying();
     const info = pil ? cpuProf.time("flight figures (flightInfo)", () => camera.flightInfo()) : null;
     if (!renderer.offlineActive && cpuProf.time("free-fall prediction", () => sim.applyRender(info))) changed = true;
@@ -3864,7 +4812,19 @@ async function main() {
       settings.fpsCap > 0 && !renderer.offlineActive && now - renderedAt < 1000 / settings.fpsCap - 0.25 * (renderer.refreshMs || 4);
     if (!capped) cpuProf.time("sky chart", () => updateChart());
     skyPanel.refresh();
-    renderer.shipFocus = camera.spectating ? shipFocus() : null;
+    // (the flown ship's ground, kept for its gear — a spectator's too, the view gone thousands of km: the Moon's
+    // finer maps pinned, the Earth's tiles round it when the view is off the Earth. What is drawn on the Earth —
+    // tiles, surface, scenery, their shadows — follows the camera whenever it is there; the streaming's lead, the
+    // camera's own motion: renderer.ts)
+    renderer.shipFocus = camera.piloting && !camera.character.active ? shipFocus() : null;
+    const ridden = renderer.shipFocus?.body === "earth" && !camera.spectating ? camera.activePoseNow() : null;
+    if (ridden) {
+      const ground = groundVelocity("earth", ridden.X, sim.time);
+      renderer.carrierVelocity = bodyAxes(solarBody("earth")!, sim.time).map((a) =>
+        a.reduce((sum, v, i) => sum + v * (ridden.V[i]! - ground[i]!) * 299792458, 0),
+      ) as [number, number, number];
+    } else renderer.carrierVelocity = null;
+    renderer.onFoot = camera.character.active;
     // (the rain where the view is: the spectator's camera away from the ship — in orbit, under another sky —
     // has its own, or none)
     const viewer = camera.viewController();
@@ -3891,7 +4851,7 @@ async function main() {
       sim.timeDirty = false;
       displayChanged = false;
       lastStats = st;
-      if (st.offline) renderDialog.update(st.offline);
+      if (st.offline) renderDialog.update((lastOffline = st.offline));
       if (renderer.completedFrames !== measuredFrames) {
         measuredFrames = renderer.completedFrames;
         gpuEma = gpuEma ? 0.9 * gpuEma + 0.1 * renderer.lastGpuMs : renderer.lastGpuMs;
@@ -4034,6 +4994,8 @@ async function main() {
       }
     }
     cpuProf.time("overlay (guide, marker)", () => viewOverlay.draw(chart && !renderer.offlineActive ? chart : null, chartKey));
+    const hideSceneryCredit = !renderer.earthScenery.active;
+    if (sceneryCredit.hidden !== hideSceneryCredit) sceneryCredit.hidden = hideSceneryCredit;
     applyTuning(settings);
     cpuProf.time("game tools window", () => toolsWin.tick());
     saveTimer += dt;
@@ -4045,9 +5007,13 @@ async function main() {
       cpuProf.time("autosave", () => tools.autosaveNow());
     }
     if (soon) saveSoon = false;
-    if (flightHud.visible !== pil) {
-      flightHud.show(pil);
-      transport!.mount(pil ? flightHud.transportSlot : tpDock, pil);
+    const hudVisible = pil || (camera.character.active && flightHud.mapView);
+    if (flightHud.visible !== hudVisible) flightHud.show(hudVisible);
+    syncMode(now);
+    topBar.fit();
+    if (camera.character.active && flightHud.mapView && now - localMapAt > 50) {
+      flightHud.drawLocalMap();
+      localMapAt = now;
     }
     // (a touch screen: the stick, the throttle, roll — outside, free, the fingers move the camera; the
     // map open, they move the map — the stick would sit on the flight computer's panel)
@@ -4086,7 +5052,11 @@ async function main() {
     );
     // (the keys that matter now: not over a menu, a clean HUD or a hidden interface)
     keyHints.update(
-      settings.keyHints && !paused && !document.body.classList.contains("hide-ui") && (!pil || flightHud.density < 2)
+      settings.keyHints &&
+        !camera.character.active &&
+        !paused &&
+        !document.body.classList.contains("hide-ui") &&
+        (!pil || flightHud.density < 2)
         ? phaseWatch.current
         : null,
       now,
@@ -4169,6 +5139,7 @@ async function main() {
           alerts: flightHud.alerts,
           now: performance.now(),
           auto: camera.pilot.auto,
+          gpws: gpwsOf(info, settings.groundAlerts),
         }))
           voice.say(l);
       }
@@ -4210,18 +5181,36 @@ async function main() {
         for (let k = capcomDue.length - 1; k >= 0; k--) if (capcomDue[k]!.at <= wall) voice.say(capcomDue.splice(k, 1)[0]!.line);
         // (the score: the moment's piece — none: silence)
         const ph2 = phaseWatch.current;
-        const moment = score.moment({
+        const plasmaNow = A?.inAir ? Math.min(Math.max((Math.log10(Math.max(A.heat, 1)) - 4.6) / 1.7, 0), 1) : 0;
+        const soiR = status.soi ? solarBody(status.soi)?.radius : undefined;
+        const scoreIn = {
           now: wall / 1000,
           mode: ph2?.mode ?? null,
           stage: ph2?.stage ?? null,
           side: status.side,
-          plasma: A?.inAir ? Math.min(Math.max((Math.log10(Math.max(A.heat, 1)) - 4.6) / 1.7, 0), 1) : 0,
+          plasma: plasmaNow,
           final: !!camera.entryRun?.app?.final,
           agl: info.surface?.alt ?? Number.POSITIVE_INFINITY,
           r: info.region === "hole" ? info.r : Number.POSITIVE_INFINITY,
           body: status.soi ?? null,
-        });
-        music.update(settings.sound && settings.music ? moment : null);
+          docking: !!camera.dockAuto || (!!info.dock && !info.dock.docked && info.dock.range < 300),
+          inAir: !!A?.inAir,
+          airspeed: A?.inAir ? A.speed : 0,
+          nearWorld: soiR !== undefined && Number.isFinite(status.altKm) && status.altKm < (7 * soiR * M_METRES) / 1e3,
+        };
+        const moment = score.moment(scoreIn);
+        musicCue = {
+          m: moment,
+          context: score.context(scoreIn),
+          intensity: flightIntensity({
+            throttle: camera.pilot.engineNow,
+            plasma: plasmaNow,
+            mach: A?.inAir ? A.mach : 0,
+            agl: info.surface?.alt ?? Number.POSITIVE_INFINITY,
+            g: A?.inAir ? (A.g ?? 1) : 1,
+            alarm: flightHud.alerts.some((a) => a.level === "warning"),
+          }),
+        };
         // (TARS — PLAN-TARS T5b —: what he knows of the flight, for when he is asked; his remarks unasked)
         const fuel = info.engine.fuel;
         tarsView = {
@@ -4320,6 +5309,7 @@ async function main() {
               ? shipToCamera(renderer.shipPose, settings.shipLookYaw, settings.shipLookPitch)
               : null,
           spectator: camera.spectating,
+          standing: camera.cine.shot === "pass" || camera.cine.shot === "tracking",
           thrust: renderer.shipThrust,
           gear: camera.gearLast,
           groundWind: camera.weatherNow?.wind.u10 ?? 0,
@@ -4339,6 +5329,11 @@ async function main() {
         rain: renderer.rain && !renderer.rain.dust && settings.animate && !frozen && !paused ? renderer.rain.rain : 0,
       });
     }
+    // (the music — audio/music.ts —: every frame, whatever is flown or not: the flight's cue when it is known,
+    // walking on a world, else none — the panel's listening over it)
+    if (camera.character.active) musicCue = { m: null, context: "onFoot", intensity: 0.4 };
+    else if (!(settings.ship && camera.piloting && !camera.spectating)) musicCue = { m: null, context: null, intensity: 0.5 };
+    music.update(musicCue.m, { context: musicCue.context, intensity: musicCue.intensity, enabled: settings.sound && settings.music });
     hudTimer += dt;
     if (hudTimer > 0.15 && lastStats) {
       hudTimer = 0;
@@ -4413,7 +5408,7 @@ async function main() {
       },
       photo: () => {
         started = true;
-        openPhoto();
+        setGameMode("photo");
       },
       settings: () => {
         started = true;
@@ -4558,6 +5553,13 @@ async function main() {
   // flight HUD shows its own)
   for (const el of document.querySelectorAll<HTMLElement>("[data-tip]"))
     if (!el.getAttribute("aria-label")) el.setAttribute("aria-label", el.dataset.tip!);
+  // (a tip changed later — a mode's tab refused, its reason in it —: the name read out follows, where it was the tip)
+  new MutationObserver((ms) => {
+    for (const m of ms) {
+      const el = m.target as HTMLElement;
+      if (el.dataset.tip && el.getAttribute("aria-label") === m.oldValue) el.setAttribute("aria-label", el.dataset.tip);
+    }
+  }).observe(document.body, { subtree: true, attributeFilter: ["data-tip"], attributeOldValue: true });
   let tipEl: HTMLElement | null = null;
   // (clicked: no tip for that element until the pointer leaves it — a button redrawn under the
   // pointer, its label changed, would otherwise bring its tip back over what it opened)
@@ -4584,6 +5586,15 @@ async function main() {
   const hintSeen = store.get(HINT_KEY) === "1";
   if (!hintSeen && !matchMedia("(hover: none)").matches) {
     const hint = $("hint");
+    // (in the interface's language)
+    hint.replaceChildren(
+      ...[
+        [t("Drag"), t("to orbit")],
+        [t("Wheel"), t("to zoom")],
+        [t("Click"), t("a body to target it")],
+      ].map(([k, what]) => h("span", {}, h("b", {}, k!), ` ${what}`)),
+      h("span", {}, h("kbd", {}, "?"), ` ${t("all shortcuts")}`),
+    );
     const dismiss = () => {
       hint.classList.add("gone");
       setTimeout(() => (hint.hidden = true), 700);

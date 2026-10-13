@@ -6,6 +6,7 @@
 import type { Settings } from "../settings";
 import { t } from "../i18n";
 import type { RangerStatus } from "../game/status";
+import { type GpwsFlight, gpwsOf } from "../game/gpws";
 import { gameLog } from "../game/log";
 import { fleet } from "../fleet";
 import { GEARS, type GearOut } from "../gear";
@@ -24,8 +25,22 @@ export interface FlightSnapshot {
   precision: boolean;
   landed: boolean;
   plan: { nodes: { t: number }[]; burning: boolean; now: number } | null;
-  surface: { air: number; vVert: number; vHor: number } | null;
-  air?: { heat: number; mach: number; inAir: boolean; g?: number; hull?: number } | null;
+  surface: { air: number; vVert: number; vHor: number; alt?: number; landed?: boolean; rolling?: boolean } | null;
+  air?: {
+    heat: number;
+    mach: number;
+    inAir: boolean;
+    g?: number;
+    hull?: number;
+    q?: number;
+    stalled?: boolean;
+    mode?: string;
+    gearDown?: boolean;
+    flaps?: number;
+  } | null;
+  /** the approach flown (its final), the straight flight path's seconds to the ground (game/gpws.ts) */
+  entry?: { app: { final?: boolean } | null } | null;
+  terrainAhead?: number;
   /** the engines' proper acceleration [c²/M] (the load in vacuum) */
   accel?: number;
   engine: { fuel: { empty: boolean; fraction: number } | null };
@@ -123,7 +138,7 @@ export class SoundDirector {
       "pointerover",
       (e: PointerEvent) => {
         const t = e.target as HTMLElement | null;
-        const b = t?.closest?.("#toolbar button, .sg-card, .fl-btn");
+        const b = t?.closest?.("#topbar button, .tb-menu button, .sg-card, .fl-btn");
         if (b && !b.contains(e.relatedTarget as Node | null)) this.cue("hover");
       },
       { passive: true },
@@ -311,6 +326,8 @@ export class SoundDirector {
       groundWind?: number;
       /** the rain where the view is (PLAN-PLUIE P5; 0: none, or the time held) */
       rain?: number;
+      /** the view a still camera's (the director's fly-by, its tracking shot): the boom heard standing */
+      standing?: boolean;
     },
   ) {
     const s = this.s;
@@ -401,7 +418,7 @@ export class SoundDirector {
     // through Mach 1 in the air, aboard (and on the views riding with the ship): the airframe's shudder —
     // one's own boom is never heard (S7); the boom is a standing listener's, its Mach cone sweeping it
     const M = info.air?.inAir ? info.air.mach : 0;
-    const standing = !!o.spectator || s.shipMount === "flyby";
+    const standing = !!o.spectator || s.shipMount === "flyby" || (s.shipMount === "director" && !!o.standing);
     if (this.mach < 1 !== M < 1 && this.mach > 0 && M > 0 && Math.abs(M - this.mach) < 0.2 && !standing) {
       this.cue("transonic");
       haptics.impulse("transonic");
@@ -417,11 +434,14 @@ export class SoundDirector {
     if (!burning && p.burning) this.cue("burn-end");
     if (now.low && !p.low) this.cue("error");
     if (now.empty && !p.empty) this.cue("error");
-    // alarms: a collision course (the horizon, a body), the ground coming fast
+    // alarms: a collision course (the horizon, a body), the ground coming. Low over the ground (3 km), the
+    // ground's own warnings (game/gpws.ts): on the wings, the ground ahead along the flight path — the free
+    // fall's impact, always seconds away low on the wings, rang the whole of a low flight —; falling, its
+    // closure. Higher, the free fall's impact within 45 s.
     const impact = status?.next?.kind === "impact" ? status.next.inS : Infinity;
     const horizon = info.path?.fate === "horizon";
-    sound.alarm("collision", s.sound && !info.landed && (horizon || impact < 45), "warning");
-    const descent = sf && !info.landed && sf.vVert < -12 && Number.isFinite(sf.vVert) && status?.status === "flight";
-    sound.alarm("terrain", s.sound && !!descent && !(impact < 45), "caution");
+    const g = gpwsOf(info as GpwsFlight, s.groundAlerts ?? "reduced");
+    sound.alarm("collision", s.sound && !info.landed && (horizon || (g.low ? g.pullUp : impact < 45)), "warning");
+    sound.alarm("terrain", s.sound && !info.landed && g.terrain && !g.pullUp, "caution");
   }
 }

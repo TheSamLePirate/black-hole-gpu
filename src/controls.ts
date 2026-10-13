@@ -1,4 +1,7 @@
 import type { MlsReading } from "./game/mls";
+import { Autothrottle, type JetModes, noJetModes } from "./game/jet";
+import { CineBrain } from "./cine/brain";
+import { Follow } from "./cine/follow";
 import type { CockpitInput } from "./cockpit/input";
 import type { cameraFrame } from "./camera";
 import type { RealInfo } from "./realweather";
@@ -43,7 +46,12 @@ import { installRig } from "./controller/rig";
 import { installLowthrust } from "./controller/lowthrust";
 import { installJourney } from "./controller/journey";
 import { installTelemetry } from "./controller/telemetry";
+import { PlanetCharacter } from "./controller/character";
 import { installSpectator } from "./controller/spectator";
+import { installJet } from "./controller/jet";
+import { installCine } from "./controller/cine";
+import { installCamRig } from "./controller/camrig";
+import { installTravel } from "./controller/travel";
 import { isTyping } from "./controller/util";
 export { FLIGHT_KEYS, LANDING, TELE_MIN, finalGate, isTyping, landingProfile, wrapYaw } from "./controller/util";
 export type { LandingFix } from "./controller/util";
@@ -360,10 +368,16 @@ export class CameraController {
    * the camera away from the ship, anywhere —, the ship flying on as it was; null: the view is the ship's.
    */
   spectator: CameraController | null = null;
+  readonly character = new PlanetCharacter(this);
   /** the spectator follows the ship (carried with it; its offset from it [m, world axes] and that offset's rate), or is free */
   spectatorFollow = true;
   specOff: [number, number, number] = [0, 0, 0];
   specVel: [number, number, number] = [0, 0, 0];
+  /** the spectator gliding out of the ship: its offset from the eye's to behind the ship [m] */
+  specGlide: { from: [number, number, number]; to: [number, number, number]; t: number; T: number } | null = null;
+  /** a walk left for the free camera: where its view stands, as a world point at a time — the follow's offset taken
+   *  from it at the next frame, once the ship's own place there is known (the ship's rig lags a walk's length) */
+  specRebase: ((time: number) => [number, number, number]) | null = null;
   /** a spectator's distance to the flown ship [M] (its keys' speed scales with it too: slow by the ship) */
   nearShip = Infinity;
   /** a headless controller's pad this frame, polled by the main one (undefined: poll its own) */
@@ -435,6 +449,10 @@ export class CameraController {
     // fly mode: the mouse turns the camera like in a game (right = turn right, up = look up)
     document.addEventListener("mousemove", (e) => {
       if (!this.flyMode || !this.enabled) return;
+      if (this.character.active) {
+        this.character.orbit(e.movementX, e.movementY);
+        return;
+      }
       // (a spectator out: the mouse turns its view)
       const v = this.spectator ?? this;
       const k = 0.12 * Math.min(1, v.s.fov / 60);
@@ -451,6 +469,7 @@ export class CameraController {
       this.codes.delete(e.code);
     });
     addEventListener("blur", () => {
+      this.character.releaseInput();
       this.keys.clear();
       this.codes.clear();
     });
@@ -522,6 +541,10 @@ export class CameraController {
   }
 
   onDown = (e: PointerEvent) => {
+    if (this.character.active && this.enabled) {
+      this.character.pointer(e, "down");
+      return;
+    }
     // (a spectator out: the pointer is its)
     if (this.spectator) {
       this.spectator.onDown(e);
@@ -566,6 +589,10 @@ export class CameraController {
   };
 
   onUp = (e: PointerEvent) => {
+    if (this.character.active) {
+      this.character.pointer(e, "up");
+      return;
+    }
     // (a spectator out: the pointer is its)
     if (this.spectator) {
       this.spectator.onUp(e);
@@ -634,6 +661,10 @@ export class CameraController {
   };
 
   onMove = (e: PointerEvent) => {
+    if (this.character.active) {
+      if (this.enabled) this.character.pointer(e, "move");
+      return;
+    }
     // (a spectator out: the pointer is its)
     if (this.spectator) {
       this.spectator.onMove(e);
@@ -704,6 +735,11 @@ export class CameraController {
   };
 
   onWheel = (e: WheelEvent) => {
+    if (this.character.active) {
+      e.preventDefault();
+      if (this.enabled) this.character.zoom(e.deltaY);
+      return;
+    }
     // (a spectator out: the pointer is its — following the ship, the wheel sets its distance to it)
     if (this.spectator) {
       e.preventDefault();
@@ -867,6 +903,38 @@ export class CameraController {
 
   /** The air brake asked for (0 … 1). */
   airBrake = 0;
+  /** the director's view (mounts.ts "director", cine/brain.ts — controller/cine.ts): its brain, its pose this
+   *  frame (ship frame), the lens's field before it took the lens, the wheel's distance factor, its clock [s] */
+  readonly cine = new CineBrain();
+  cineOut: MountPose | null = null;
+  cineOn = false;
+  /** the director's field this frame (null: off) */
+  cineFov: number | null = null;
+  /** the hull views' rig (controller/camrig.ts): its follow, its clock [s], the speed's widening; the player's
+   *  field kept aside while a view sets the lens */
+  readonly camFollow = new Follow();
+  camClock = 0;
+  camKick = 1;
+  lensBase: number | null = null;
+  /** the camera's travel to a body or a craft (controller/travel.ts): from where it was, its goal, its time */
+  travel: {
+    X0: [number, number, number];
+    f0: [number, number, number];
+    u0: [number, number, number];
+    goal: (t: number) => import("./controller/travel").TravelGoal;
+    done: () => void;
+    t: number;
+    T: number;
+  } | null = null;
+  /** a teleport's view carried back to where it was, blended away (controller/camrig.ts carryCommit) */
+  viewCarry: { dq: [number, number, number, number]; dp: [number, number, number]; t: number; T: number; style: string } | null = null;
+  cineZoom = 1;
+  cineClock = 0;
+  /** the jet's systems (plane mode — game/jet.ts, controller/jet.ts): the autopilot's altitude and heading
+   *  holds, the autothrottle, the afterburner; the stick flying through the holds (pitch, roll) */
+  jetModes: JetModes = noJetModes();
+  readonly jetAthr = new Autothrottle();
+  jetCws = { pitch: false, roll: false, thr: Number.NaN };
 
   /** On the ground and rolling (our side): the body under the wheels. */
   rolling: { body: string } | null = null;
@@ -954,6 +1022,11 @@ export class CameraController {
     checked: number;
     /** Commanded ring closing rate in the docking telemetry's rotating target frame [m/s]. */
     askedClosing?: number;
+    /** the warp's step by the range (10, 5, 2, 1), held within a band (no flicker on a threshold); the warp
+     *  now, eased to it, and the scene's time it was set at */
+    warpStep?: number;
+    warpNow?: number;
+    warpT?: number;
   } | null = null;
 
   /** Warp the pilot asked for, while the rails (or a glide) hold it lower (null: none held back). */
@@ -1025,6 +1098,10 @@ export class CameraController {
     stamp: "",
     /** where the last placement put the camera (moved since by something else: the rig starts afresh) */
     placed: "",
+    /** a new behaviour or target: the view turned from where it looked to its new aim, eased (its
+     *  orientation then, the blend's time) — no snap */
+    turn: null as { q: [number, number, number, number]; t: number; T: number } | null,
+    dt: 0,
   };
 
   /**
@@ -1205,3 +1282,7 @@ installLowthrust(CameraController);
 installJourney(CameraController);
 installTelemetry(CameraController);
 installSpectator(CameraController);
+installJet(CameraController);
+installCine(CameraController);
+installCamRig(CameraController);
+installTravel(CameraController);

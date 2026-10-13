@@ -45,18 +45,24 @@ describe.skipIf(!E2E)("accessibility and pointer", () => {
   });
 
   test("the settings open: every control named", async () => {
-    await app.click(".sp-opener");
+    await app.click("[data-testid=topbar-settings]");
     await app.waitFor(`!document.getElementById("panel").classList.contains("collapsed")`);
     expect(await app.js<string[]>(UNNAMED)).toEqual([]);
     await app.press("Escape");
   });
 
-  test("on foot (the toolbar, the camera panel): every control named, no invisible layer", async () => {
+  test("on foot (the toolbar), then the free camera (its camera panel): every control named, no invisible layer", async () => {
+    // (⇧K goes out of a craft that is landed: from orbit it only says so)
+    await app.js(`(__bh.game.land("moon", 0, 0), __bh.step(0), __bh.touch(), true)`);
     await app.press("KeyK", "K", { shift: true });
-    await app.waitFor("!__bh.camera.piloting");
+    // (on foot the craft stays flown — camera.piloting kept, BH-API: the explorer owns the view)
+    await app.waitFor("__bh.camera.character.active");
     await Bun.sleep(600);
     expect(await app.js<string[]>(UNNAMED)).toEqual([]);
     expect(await app.js<string[]>(INVISIBLE)).toEqual([]);
+    // (the camera panel: the free camera's own, on its group of the top bar — PLAN-MODES-AAA M1: F3 from the walk)
+    await app.press("F3", "F3");
+    await app.waitFor(`__bh.mode.get() === "free"`);
     await app.click("#btn-camera");
     await app.waitFor(`!document.getElementById("cam-pop").hidden`);
     expect(await app.js<string[]>(UNNAMED)).toEqual([]);
@@ -66,7 +72,7 @@ describe.skipIf(!E2E)("accessibility and pointer", () => {
   test("accessibility settings: the interface scaled, the markers' palette, nothing blinking", async () => {
     await app.js(`(__bh.game.set("uiScale", 1.25), __bh.game.set("hudPalette", "okabe"), __bh.game.set("reduceMotion", true), 1)`);
     const r = await app.js<{ zoom: string; still: boolean; anim: string }>(`(() => {
-      const p = document.getElementById("toolbar");
+      const p = document.getElementById("topbar");
       return { zoom: getComputedStyle(p).zoom, still: document.body.classList.contains("reduce-motion"),
         anim: getComputedStyle(document.querySelector(".k-btn, button")).animationName };
     })()`);
@@ -110,7 +116,9 @@ describe.skipIf(!E2E)("a11y: in French", () => {
     expect(await app.js<string>(`document.querySelector(".fl-badge").textContent`)).toBe("EN ORBITE");
     expect(await app.js<string>("__bh.game.status().label")).toBe("IN ORBIT");
     const text = await app.js<string>("document.body.innerText");
-    for (const w of ["autour de Terre", "temps réel", "réglages", "Échap"]) expect(text.toLowerCase()).toContain(w.toLowerCase());
+    for (const w of ["autour de Terre", "temps réel", "Échap"]) expect(text.toLowerCase()).toContain(w.toLowerCase());
+    // (the settings are the bar's icon — its name in French in its label, not in the text)
+    expect(await app.js<string>(`document.querySelector("[data-testid=topbar-settings]").getAttribute("aria-label")`)).toBe("Réglages");
     expect(app.cdp.errors).toEqual([]);
   });
 });
