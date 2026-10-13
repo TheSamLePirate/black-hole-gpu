@@ -2542,13 +2542,14 @@ export class Renderer {
       this.earthScenery.shadows = s.earthSceneryShadows;
       this.earthScenery.season(utcOf(time));
       // (imagery come in over tiles already drawn — their heights unchanged, no onChange: a still view kept
-      // its colours without them —: drawn anew at most every half second, once for all those in — up to a
-      // hundred while a window fills, each would restart it; a moving view shows them as it goes)
+      // its colours without them —: a converged view drawn anew, at most every half second, once for all those
+      // in. Not one still refining: restarted at each arrival, on a slow machine whose tiles stream for minutes it
+      // never converged — the samples to come read the imagery anyway; a moving view shows them as it goes)
       const now = performance.now();
-      if (t === this.live && this.earthTiles.imagery !== this.imagerySeen && now - this.imageryAt > 500) {
+      if (t === this.live && this.earthTiles.imagery !== this.imagerySeen && now - this.imageryAt > 500 && this.lastPhase === "converged") {
         this.imagerySeen = this.earthTiles.imagery;
         this.imageryAt = now;
-        if (this.lastPhase !== "realtime" && !this.offline) queueMicrotask(() => this.invalidate());
+        if (!this.offline) queueMicrotask(() => this.invalidate());
       }
     }
     f.set(this.earthTiles.params(), 69 * 4);
