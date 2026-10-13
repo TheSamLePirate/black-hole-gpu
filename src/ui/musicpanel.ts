@@ -118,6 +118,9 @@ export class MusicPanel {
   private unEscape?: () => void;
   private raf = 0;
   private spec = new Uint8Array(1024);
+  /** the spectrum's gradient, made again only when the canvas's height changes */
+  private grad: CanvasGradient | null = null;
+  private gradH = 0;
 
   constructor(private d: MusicPanelDeps) {
     if (!document.getElementById("music-pop-css")) {
@@ -305,11 +308,11 @@ export class MusicPanel {
         mute.classList.toggle("on", P.muted.includes(l));
         this.save();
       };
-      const solo = h("button", this.soloOf() === l ? "on" : "", "S") as HTMLButtonElement;
+      // (the solo apart from the mutes: un-soloed, the player's mutes are as they were)
+      const solo = h("button", P.solo === l ? "on" : "", "S") as HTMLButtonElement;
       solo.title = t("Solo");
       solo.onclick = () => {
-        const on = this.soloOf() !== l;
-        P.muted = on ? LAYERS.filter((x) => x !== l) : [];
+        P.solo = P.solo === l ? null : l;
         this.save();
         this.build();
       };
@@ -388,11 +391,6 @@ export class MusicPanel {
     const row = h("div", "mp-row");
     row.append(reset);
     this.el.append(row);
-  }
-
-  private soloOf(): Layer | null {
-    const m = this.d.music.prefs.muted;
-    return m.length === LAYERS.length - 1 ? (LAYERS.find((l) => !m.includes(l)) ?? null) : null;
   }
 
   private listen(id: string | null) {
@@ -481,6 +479,14 @@ export class MusicPanel {
       a.getByteFrequencyData(this.spec);
       const n = 64;
       const sr = a.context.sampleRate;
+      if (!this.grad || this.gradH !== H) {
+        this.grad = g.createLinearGradient(0, H, 0, 0);
+        this.grad.addColorStop(0, "#2f7fd8");
+        this.grad.addColorStop(0.6, "#9a6cff");
+        this.grad.addColorStop(1, "#ff7a9a");
+        this.gradH = H;
+      }
+      g.fillStyle = this.grad;
       for (let i = 0; i < n; i++) {
         const f0 = 30 * (16000 / 30) ** (i / n),
           f1 = 30 * (16000 / 30) ** ((i + 1) / n);
@@ -490,11 +496,6 @@ export class MusicPanel {
         for (let b = b0; b < b1 && b < this.spec.length; b++) m = Math.max(m, this.spec[b]!);
         const hgt = (m / 255) * H;
         const x = (i / n) * W;
-        const grad = g.createLinearGradient(0, H, 0, 0);
-        grad.addColorStop(0, "#2f7fd8");
-        grad.addColorStop(0.6, "#9a6cff");
-        grad.addColorStop(1, "#ff7a9a");
-        g.fillStyle = grad;
         g.fillRect(x + 1, H - hgt, W / n - 2, hgt);
       }
     }
