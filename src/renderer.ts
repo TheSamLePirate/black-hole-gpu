@@ -3151,10 +3151,12 @@ export class Renderer {
     return () => this.variants.get(key) === slot && !this.lost && (key === this.cameraKey || key === this.aheadKey);
   }
 
-  /** a key's realtime kernel is there — its own, or an earlier scene's covering it —, or never will be (its
-   *  compile failed or hung: the general kernel draws) */
+  /** a key's realtime kernel is there — its own, an earlier scene's covering it, or the general one (every
+   *  feature in: it draws the scene while the specialised compiles, as before the bits were held) —, or never will
+   *  be (its compile failed or hung). Waiting for the specialised kernel itself held the scenery back for minutes
+   *  on a cold shader cache (32 s for its main entry, 23 s for its probe, queued behind others) */
   private kernelReady(key: number) {
-    if (key === FEATURES_ALL) return true;
+    if (key === FEATURES_ALL || this.tracePipeline) return true;
     const v = this.variants.get(key);
     return !!v?.rt || !!v?.failed || !!v?.rtGivenUp || !!this.coveringVariant(key, "rt");
   }
