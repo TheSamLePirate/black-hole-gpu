@@ -3,6 +3,8 @@ import { App, E2E, stopServer } from "./lib/app";
 import { captureLoadedCharacter } from "./lib/character-ready";
 // Loaded Earth: independent character/ship depths, a hull shadow receiver, local map at zoom 18 and real zoom gestures.
 afterAll(stopServer);
+// (the astronaut's pixels the hull must cross for the live A/B to count — below, the pose decides nothing)
+const OVERLAP_MIN = 200;
 test.skipIf(!E2E)(
   "landed explorer, vessel depth and shadow, local map at zoom 18",
   async () => {
@@ -36,6 +38,11 @@ test.skipIf(!E2E)(
       await app.js("(()=>{delete __bh.renderer.characterRenderer.occluder;return true;})()");
       await Bun.write("remote-results/ground-depth-ab.json", JSON.stringify({ correct, missing }, null, 2));
       expect(correct).toBeLessThanOrEqual(missing + 5);
+      // (a pose where the hull crosses the astronaut — `missing`, its pixels over hers when the ship ignores her — must
+      // hide a real share of them: some may stay, the gear standing before her; a pose that barely crosses her proves
+      // nothing here, the synthetic occluder below then carries the test alone)
+      if (missing > OVERLAP_MIN) expect(missing - correct).toBeGreaterThan(Math.max(5, 0.1 * missing));
+      else console.log(`ground-details: the hull crosses the astronaut on ${missing} px only — the synthetic occluder decides`);
       // A controlled foreground occluder at 1 m proves the ship reads it even when this
       // vessel pose happens to overlap only foreground gear (which must remain visible).
       await app.js(

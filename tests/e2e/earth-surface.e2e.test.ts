@@ -1,3 +1,9 @@
+// The regional surface packs (Sentinel-2 colour + WorldCover classes, assets/earth-surface/v1): the Bourget pack
+// loads complete, renders in "satellite" and "materials", and costs the frame no more than its budget against "off"
+// (each at blocks 1 and 2); the Cévennes pack replaces it, a low flight in the cockpit keeps it, and switching off
+// releases its GPU memory. Then the fallbacks: RGBA transcoding without compressed formats, a 16-texture adapter,
+// a missing classification worker. Captures and measures: remote-results/earth-surface-*.png, earth-surface-perf.json
+// (SURFACE_LIVE_TERRAIN=1: with the live terrain tiles, earth-surface-perf-terrain.json).
 import { afterAll, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
@@ -20,6 +26,11 @@ const ready = (app: App, region = "bourget") =>
     90_000,
   );
 const liveTerrain = process.env.SURFACE_LIVE_TERRAIN === "1";
+type Measure = { mode: string; block: number; completedDurations: number[] };
+const median = (xs: number[]) => {
+  const s = [...xs].sort((a, b) => a - b);
+  return s.length ? s[Math.floor(s.length / 2)]! : Number.NaN;
+};
 
 test.skipIf(!E2E)(
   "real regional packs render, switch and release; comparable GPU timings",
@@ -39,34 +50,48 @@ test.skipIf(!E2E)(
       if (liveTerrain) await app.waitFor("__bh.renderer.earthTiles.pending === 0", 90_000);
       expect(await app.js<string>("__bh.renderer.earthSurface.stats().region")).toBe("bourget");
       expect(await app.js<number>("__bh.renderer.earthSurface.stats().failed")).toBe(0);
-      const measures: unknown[] = [];
+      const measures: Measure[] = [];
       for (const block of [1, 2]) {
         await app.js(`(() => { __bh.settings.realtimeSubsampling=${block}; __bh.touch(); return true; })()`);
         for (const mode of ["off", "satellite", "materials", "off"]) {
           await app.js(`(() => { __bh.settings.earthSurface=${JSON.stringify(mode)}; __bh.touch(); return true; })()`);
           if (mode !== "off") await ready(app);
-          await app.waitFor("__bh.renderer.variantReady", 60_000);
-          // Warm through the page fades, shader compilation and all uploads before timing steady state.
-          await app.js("new Promise(r => setTimeout(r, 1500))");
+          // Warm through the shader compilation, the uploads and the page fades before timing steady state (the kernel
+          // and its calibration settled, then frames drawn — the fades' own time — rather than a fixed delay)
+          await app.waitFor("__bh.renderer.variantReady && __bh.renderer.calibrationReady", 120_000);
+          const warm = await app.js<number>("__bh.renderer.completedFrames");
+          await app.waitFor(`__bh.renderer.completedFrames >= ${warm + 30}`, 60_000);
           // (every frame profiled while measured — 2–3 % of GPU time: one in eight was ~480 frames drawn for 60, 22 s
           // at this view's 22 fps on the M1 Max — 44 ms of GPU since the Oct 12 ground work, 35 ms on Oct 11 — and
           // never within a minute on the mini, whose kiosk draws 1920×1080 whatever the test asks)
           await app.js(
-            "(() => { __bh.game.perf(); __bh.renderer.prof.every = 1; __bh.renderer.prof.reset();window.__profT0=performance.now(); return true; })()",
+            "(() => { __bh.game.perf(); __bh.renderer.prof.every = 1; __bh.renderer.prof.reset();window.__profT0=performance.now(); window.__profF0=__bh.renderer.completedFrames; return true; })()",
           );
           await app.waitFor(
             "__bh.renderer.prof.frames>=60 || (__bh.renderer.prof.frames>=12 && performance.now()-window.__profT0>45000)",
             60_000,
           );
-          measures.push(
-            await app.js(`({mode:${JSON.stringify(mode)}, block:${block}, perf:__bh.game.perf({gpu:false}), adapter:__bh.renderer.adapter,
+          const m =
+            await app.js<Measure>(`({mode:${JSON.stringify(mode)}, block:${block}, perf:__bh.game.perf({gpu:false}), adapter:__bh.renderer.adapter,
           terrain:{enabled:${liveTerrain}, pending:__bh.renderer.earthTiles.pending, finest:__bh.renderer.earthTiles.finest},
-          completedDurations:__bh.renderer.frameTelemetry.durationsMs})`),
-          );
+          completedDurations:__bh.renderer.frameTelemetry.durationsMs.slice(-Math.max(1, __bh.renderer.completedFrames-window.__profF0))})`);
+          measures.push(m);
           if (block === 1) await app.shot(`remote-results/earth-surface-${mode}.png`);
         }
       }
       await Bun.write(`remote-results/earth-surface-perf${liveTerrain ? "-terrain" : ""}.json`, JSON.stringify(measures, null, 2));
+      // (the budget: each surface mode against the frame without it, at each block — the median of the GPU frames
+      // measured, the two "off" runs averaged; scaled by the frame's own cost without the surface as in grass-aaa,
+      // so the mini's 1920×1080 kiosk is held to the same share as this Mac at 960×540)
+      for (const block of [1, 2]) {
+        const at = (mode: string) => measures.filter((m) => m.block === block && m.mode === mode).map((m) => median(m.completedDurations));
+        const frameOff = at("off").reduce((a, b) => a + b, 0) / at("off").length;
+        for (const mode of ["satellite", "materials"]) {
+          const cost = at(mode)[0]! - frameOff;
+          console.log(`earth surface ${mode}, block ${block}: ${cost.toFixed(1)} ms over ${frameOff.toFixed(1)} ms`);
+          expect(cost).toBeLessThan(5 * Math.max(1, frameOff / 40));
+        }
+      }
       await app.js("window.__surfaceTick = false");
       await scene(app, 44.2, 4.15);
       await ready(app, "cevennes");
