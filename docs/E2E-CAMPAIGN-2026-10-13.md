@@ -28,6 +28,28 @@ Status before the last commit: **here**, every file passes except one test (belo
 last recheck (`20261013-083725-recheck-mini`) ran **before** the last fixes (modes tab, forest-aaa size,
 frame time bounds).
 
+## Second round (13 Oct, afternoon): the review, its fixes, the campaign again
+
+The branch was reviewed whole (docs/REVIEW-BRANCH-2026-10-13.md, eight areas) and every finding fixed except those
+the review marks "non fait" (on branch `review-fixes`, merged here). Then:
+
+- **Full campaigns on the pre-fix tree** (aa54318): here 81/86 files (the 5 failures pass alone: load), the mini 81/86.
+- **Targeted runs on the fixed tree**, here and on the mini, each failure traced to its cause:
+  - regressions the fixes brought, fixed: the walk left for the free camera unfollowed it (the tripod's ground gone,
+    sky-events); the hull rig's lag held when paused (a still view never converged, rain); the scenery's kernel gate
+    held trees back for minutes on a cold shader cache (fallback to the general kernel again); the ship's own ground
+    dropped while spectating (spectator); the streaming lead measured 0 with a held clock (ground-details);
+  - tests made sound: character-aaa (the Moon's DEM arriving mid-test, the hull's box vs mesh, the hull behind him by
+    geometry — the dark belly made the pixel A/B blind), audio-space (a panner with nothing playing runs no
+    automation: the engine reports where it places the beeps), grass-aaa (the scene round the place waited for; cost
+    on/off/on/off), gpu-startup (four variants kept), the walking grid's unit test (built until published).
+- Item 4 (Bourget GPU): trace-ab, 1.44 Mpx at block 4: 11 Oct → now +8 % (19.5 → 21.1 ms), the finer EOX imagery
+  drawn at z 9–13 (the 11 Oct build had none there); the review's gates: −2 % (noise level).
+- Item 5 (stall when the scenery is ready, Cape Canaveral): not reproduced on the pre-fix tree (worst frame 161 ms);
+  now 170 ms, ready at 4.8 s.
+- Items 2, 3, 6, 7: done (character-aaa redesigned from below, grass budget scaled by the frame's own cost, the top
+  bar's actions held in place, the lane worktrees removed).
+
 ## Left to do
 
 1. **Re-run on both Macs** with the current tree:

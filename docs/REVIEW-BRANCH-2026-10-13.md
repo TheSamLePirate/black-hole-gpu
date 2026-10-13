@@ -60,29 +60,29 @@ Gravité : **Critique** (à régler avant tout merge ou déjà exposé), **Haute
 
 ## Plan d'action proposé (ordre)
 
-1. ☐ Astronaute : décision de l'utilisateur. Le sortir de l'historique des branches distantes, le servir depuis
+1. ☑ Astronaute : gardé (décision de l'utilisateur : il possède la licence). — décision de l'utilisateur. Le sortir de l'historique des branches distantes, le servir depuis
    un stockage privé, et vérifier si la licence permet de servir les fichiers transcodés.
-2. ☐ Réglages par défaut : `sceneryHitboxes: false`.
+2. ☑ Réglages par défaut : `sceneryHitboxes: false`.
 2b. ☑ Ancrage caméra (Z-V1 en premier : le décor tracé depuis le vaisseau est faux dans toutes les vues de vol), puis
    Z-V2 (streaming) et Z-V3 (sol vivant autour de la caméra). — fait : 3e57680, bd0652a
 2. ☑ Réglages par défaut : `sceneryHitboxes: false`. — fait : par défaut éteint, l’e2e l’allume lui-même, 44e8af7
-2b. ☐ Ancrage caméra (Z-V1 en premier : le décor tracé depuis le vaisseau est faux dans toutes les vues de vol), puis
+2b. ☑ Ancrage caméra (Z-V1 en premier : le décor tracé depuis le vaisseau est faux dans toutes les vues de vol), puis
    Z-V2 (streaming) et Z-V3 (sol vivant autour de la caméra).
-2c. ☐ Profondeur d'occlusion fraîche à pleine résolution pour les passes rasterisées (Z-P1).
-3. ☐ Noyau : regarder l'A/B `trace-ab` (Bourget) une garde à la fois (manche à air, `waterMirror`/mer,
+2c. ☑ Profondeur d'occlusion fraîche à pleine résolution pour les passes rasterisées (Z-P1).
+3. ☑ Noyau : regarder l'A/B `trace-ab` (Bourget) une garde à la fois (manche à air, `waterMirror`/mer,
    `walkDistance`, niveaux d'imagerie), puis remettre les gardes `HAS_*`.
-4. ☐ Variantes : précompiler `|8192`/`|4096`, garder 4 clés en cache, journaliser toutes les compilations.
-5. ☐ Reprojection : seuil de translation lié à la parallaxe, et facteur en mètres cohérent avec la masse.
-6. ☐ Transitions de mode : piéton → libre, vue réalisateur, restauration à pied, touches à pied.
-7. ☐ Musique : sauter les mesures en retard, hystérésis des moments, synthèse des notes hors de la frame.
-8. ☐ TARS : `net()` avant les nouveaux téléportages, Nominatim seulement sur Entrée.
+4. ☑ Variantes : précompiler `|8192`/`|4096`, garder 4 clés en cache, journaliser toutes les compilations.
+5. ☑ Reprojection : seuil de translation lié à la parallaxe, et facteur en mètres cohérent avec la masse.
+6. ☑ Transitions de mode : piéton → libre, vue réalisateur, restauration à pied, touches à pied.
+7. ☑ Musique : sauter les mesures en retard, hystérésis des moments, synthèse des notes hors de la frame.
+8. ☑ TARS : `net()` avant les nouveaux téléportages, Nominatim seulement sur Entrée.
 9. ☑ Dépôt et site : LFS ou bucket pour les packs, garde de taille du site dans la CI, `check-forest` dans la CI. — fait en partie : gardes et `check-forest` dans la CI ; LFS/bucket laissé à la décision de l'utilisateur (docs/ASSETS.md)
 
 ---
 
 ## Critique
 
-- ☐ **C1. Astronaute commercial dans un dépôt public.** `assets/character/README.md:1-6`,
+- ☑ **C1. Astronaute commercial dans un dépôt public.** — décision de l'utilisateur (13 oct.) : gardé, il possède la licence ; rien d'autre à faire ici. `assets/character/README.md:1-6`,
   `assets/character/*.ktx2`, `astronaut.bin` (23,7 Mo). `gh repo view` confirme que le dépôt est PUBLIC. Les fichiers sont sur
   `origin/codex/earth-photorealistic` et `origin/codex/ground-fixes-b42a483`. Ils sont aussi copiés dans les
   builds Pages et serveur, donc téléchargeables. Le dépôt n'a pas de fichier LICENSE.
@@ -100,13 +100,6 @@ Gravité : **Critique** (à régler avant tout merge ou déjà exposé), **Haute
   *Correctif* : passer le point touché à `earthGround`, et sauter `shipShadow` dans l'entrée env.
 - ☑ **R-H2. Reprojection temporelle coupée pour toute translation supérieure à 1 mm sous 20 km.**
   — fait : `EARTH_SHADOW_ON`, posé autour du seul `earthLook` d'`earthNear` ; la sonde et les corps lointains n'ont plus l'ombre, 665cac9
-- ☐ **R-H2. Reprojection temporelle coupée pour toute translation supérieure à 1 mm sous 20 km.**
-  `renderer.ts:380-381, 3384-3390`. La marche fait environ 23 mm par image, et le vol bas ou le roulage davantage :
-  pas d'historique, une copie pleine résolution par image, et la reprojection rigide (R4) qui suit devient du code
-  mort dans le régime pour lequel elle a été écrite. `placeOnBody` utilise `M_METRES`, alors que le reste utilise
-  `1476.625·massSolar`. *Correctif* : un seuil fondé sur la parallaxe du décor le plus proche, et le même facteur en mètres.
-  — fait : seuil `taParallaxPx` (0,5 px) sur le déplacement rapporté à la hauteur au-dessus du relief (moins 60 m de décor), même facteur, f4f4093
-- ☐ **R-H3. `windsockShade` n'est plus retiré par `HAS_RWY`.** `trace.wgsl:6506` : `main` avait
 - ☑ **R-H3. `windsockShade` n'est plus retiré par `HAS_RWY`.** `trace.wgsl:6506` : `main` avait
   `if (HAS_RWY && WS.w > 0.5)` (vérifié). Toutes les variantes Terre portent donc `wxVeil`, `sunThrough`, la feuille
   et `sceneryShadow`. *Correctif* : `if ((HAS_RWY || HAS_SCENERY) && WS.w > 0.5)`.
@@ -116,30 +109,17 @@ Gravité : **Critique** (à régler avant tout merge ou déjà exposé), **Haute
 - ☑ **R-M1.** `waterMirror` et le calme (`trace.wgsl:6108-6110`, `:5521`) ne disparaissent que si le compilateur
   plie `0·x`, ce qui demande fast-math : sinon il reste une marche de 64 pas, une bissection, 3 `earthHeight` et
   `sceneryMirror`. `seaShade` évalue aussi un `gnoise` par pixel de mer même quand le calme vaut 0. *Correctif* : `HAS_SCENERY &&`.
-- ☐ **R-M2.** `sceneryShadow` (`trace.wgsl:5783, 4781, 6054`) lance des rayons d'ombre pour les faces tournées
-  dos au Soleil : parcours du BVH plus `forestQuery` jusqu'à 640 pas, pour rien. *Correctif* : sortir tôt si `dot(n,L) <= 0`.
 - ☑ **R-M3.** Le cache ne garde que 2 clés de variantes (`renderer.ts:3159`), alors que les bits 4096 et 8192 changent
   en cours de jeu (`earthScenery.clear()` tous les 8 km, pages de surface, météo, pistes) : on recompile en boucle,
   plusieurs secondes à chaque fois. *Correctif* : environ 4 clés.
   — fait : 4 clés ; la clé `|4096`/`|8192` compilée d'avance dès la demande des données, les bits allumés seulement
   une fois son noyau prêt (paramètres à zéro d'ici là, l'image posée attend) — item 5 de la campagne, b230bd1
-- ☐ **R-M4.** `timedVariant` ne journalise les compilations qu'avant la première image : celle de `|8192` est
-  invisible dans les diagnostics.
 - ☑ **R-M5.** `earth-tiles.ts:298-317` : l'imagerie qui arrive après les hauteurs refait un `put()` (512 Ko), puis
   `sceneryMirror`. `seaShade` évalue aussi un `gnoise` par pixel de mer même quand le calme vaut 0. *Correctif* : `HAS_SCENERY &&`. — fait : calme, miroir et `gnoise` des lacs derrière `HAS_SCENERY` (et `calm > 0`), 665cac9
 - ☑ **R-M2.** `sceneryShadow` (`trace.wgsl:5783, 4781, 6054`) lance des rayons d'ombre pour les faces tournées
   dos au Soleil : parcours du BVH plus `forestQuery` jusqu'à 640 pas, pour rien. *Correctif* : sortir tôt si `dot(n,L) <= 0`. — fait, 665cac9
-- ☐ **R-M3.** Le cache ne garde que 2 clés de variantes (`renderer.ts:3159`), alors que les bits 4096 et 8192 changent
-  en cours de jeu (`earthScenery.clear()` tous les 8 km, pages de surface, météo, pistes) : on recompile en boucle,
-  plusieurs secondes à chaque fois. *Correctif* : environ 4 clés.
 - ☑ **R-M4.** `timedVariant` ne journalise les compilations qu'avant la première image : celle de `|8192` est
   invisible dans les diagnostics. — fait : chaque compilation (entrée, qualité, clé, secondes), la cascade qualité comprise, ea44018
-- ☐ **R-M5.** `earth-tiles.ts:298-317` : l'imagerie qui arrive après les hauteurs refait un `put()` (512 Ko), puis
-  `onChange` et `invalidate()`. Avec z9–13, jusqu'à 128 invalidations par remplissage de fenêtre, et une vue fixe
-  qui ne finit jamais de converger pendant le chargement.
-  — fait (constat corrigé) : le `put()` de l'imagerie ne change pas le rectangle valide, donc ni `onChange` ni
-  `invalidate()` ; le vrai défaut était l'inverse (une vue fixe convergée gardait ses couleurs sans l'imagerie).
-  Compteur `EarthTiles.imagery`, vue fixe redessinée au plus toutes les 0,5 s, b230bd1
 
 ### Basse
 - ☑ `earth-tiles.ts:493, 298` : écouteurs d'abandon jamais retirés (petite fuite par tuile). — fait, ea44018
@@ -455,7 +435,7 @@ de `t()` complètes, déclencheurs branchés, environ 100 POI contrôlés, déca
   et ne pouvait donc pas attraper la régression de 35 à 44 ms. — fait : budget `(satellite|materials) − off < 5 × max(1, off/40)` ms sur la médiane des frames GPU mesurées, attente `variantReady && calibrationReady` + 30 frames au lieu des 1,5 s, a5bcbbc
 - ☑ **D-M2.** `ground-details.e2e:38` : l'A/B de l'occulteur passe même quand `correct === missing`. — fait : si la coque recouvre l'astronaute sur > 200 px, l'occulteur doit en cacher au moins 10 % ; sinon seul le cas synthétique décide, a5bcbbc
 - ☑ **D-M3.** `scripts/check-forest.ts` (WGSL contre TS au bit près) n'est ni dans la CI ni dans `check`. — fait : `check-forest --rays 2000` dans verify et les deux étapes du site (sort 0 sans adaptateur), 19178c0
-- ☐ **D-M4.** character-aaa « devant le vaisseau posé » est rouge (refonte en contre-plongée en cours).
+- ☑ **D-M4.** character-aaa « devant le vaisseau posé » est rouge (refonte en contre-plongée en cours). — fait : relief fin de la Lune attendu, « dedans » mesuré au maillage près, coque derrière lui par géométrie + astronaute par A/B de pixels (7208027) ; 4/4 ici.
 - ☑ **D-M5.** `tests/score.test.ts:43-48` a perdu les bornes de hauteur et de niveau des notes. — fait : chaque
   thème composé (3 graines × 3 intensités × 64 mesures), notes dans le clavier, vélocité ≤ 1, effets bornés (76526e5)
 
@@ -469,3 +449,39 @@ de `t()` complètes, déclencheurs branchés, environ 100 POI contrôlés, déca
 
 **Vérifié bon** : la CI couvre typecheck, biome, check-wgsl et `bun test` ; `skipIf(!E2E)` partout ; nettoyage de
 headless-gpu ; aucun chemin `/Users` codé en dur ; aucun `.skip` ajouté ; les changements du harnais sont justifiés.
+
+## Vérification des correctifs (13 oct., après-midi)
+
+Branche `review-fixes` : les 7 branches de correction fusionnées, typecheck et biome propres, 15/15 shaders compilés
+(Apple), tests unitaires verts. E2E ciblés ici et sur le mini, chaque échec tracé jusqu'à sa cause.
+
+**Régressions introduites par les correctifs, trouvées par les e2e et corrigées**
+- ☑ P-H1 coupait le suivi du spectateur en quittant la marche : la caméra libre restait fixe dans l'espace pendant
+  que la Terre filait, le trépied perdait son sol (sky-events, 3 tests). Suivi gardé, décalage repris de l'endroit
+  où était la vue, à la première image où le vaisseau est à jour (`specRebase`, 2b487e8).
+- ☑ P-M4 gardait le retard du rig en pause : en pause la caméra reçoit encore des pas réels, le retard décroissait
+  sans se figer, une vue fixe ne convergeait plus (rain). Retiré (14f5032) ; le cerveau du réalisateur garde sa
+  dernière vue.
+- ☑ R-M3 retenait les bits décor/surface jusqu'à leur noyau spécialisé : 145 s sans arbres à Cape Canaveral sur un
+  cache de shaders froid (32 s + 23 s de compilation). Le noyau général dessine en attendant, comme avant (59cf4ac).
+- ☑ Z-V2 retirait le sol du vaisseau en vue spectateur (cartes fines de la Lune lâchées sous le train : spectator) ;
+  l'avance de streaming mesurée image à image valait 0 horloge figée (ground-details). Le vaisseau reste un point de
+  préchargement de son propre sol ; l'avance reprend la vitesse du vaisseau quand la caméra est portée par lui
+  (`carrierVelocity`, 1ab5a0a).
+
+**Tests rendus fiables** : character-aaa (7208027), audio-space (le panner sans signal ne calcule pas ses
+automatisations : 92e54c0), grass-aaa (scène autour du lieu attendue, coût on/off/on/off : 15b469e, 533c3ed),
+gpu-startup (4 variantes), grille de marche (f219a9e).
+
+**Mesures**
+- Item 4 (Bourget, surface et décor coupés, 1,44 Mpx, bloc 4, `trace-ab` 3 répétitions) : 11 oct. → maintenant
+  19,5 → 21,1 ms (+8 %), l'imagerie EOX z 9–13 désormais dessinée (absente du build du 11 oct.) ; avant → après les
+  correctifs de cette revue : −2 % (au niveau du bruit).
+- Item 5 (décor de Cape Canaveral prêt) : prêt à 4,8 s, pire image 170 ms ; le blocage de 4 s ne se reproduit pas,
+  ni avant ni après les correctifs.
+
+**Nouveaux constats, non corrigés**
+- ☐ Lune, horloge figée : quand le relief fin (MNT) arrive après l'atterrissage, le vaisseau posé reste sur le relief
+  grossier (730 m plus haut à 0°, 0°) ; le piéton, lui, descend sur le MNT. `status().altKm` passe à −0,74 km, « posé ».
+- ☐ HUD à pied : l'altitude affichée (ALT −741 m sur la Lune) se rapporte au relief grossier, pas au sol sous les pieds.
+- ☐ Z-V3 au télescope : la portée de l'herbe n'est pas agrandie (il faudrait centrer le réseau sur le point visé).
