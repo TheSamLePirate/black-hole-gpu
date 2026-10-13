@@ -32,6 +32,7 @@ import { MISSIONS } from "../game/missions";
 import { KEYMAP, type KeyAction } from "../input/keymap";
 import { MOUNTS, type Mount } from "../mounts";
 import { BODY_NAMES } from "../targeting";
+import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { SOLAR_BODIES, solarBody } from "../system/solar";
 import { FRENCH, tr, type Text } from "../i18n";
 import { findSettings, checkSetting } from "./settings-tools";
@@ -280,6 +281,8 @@ const HOLDS: Hold[] = [
   "maneuver",
 ];
 const MOUNT_IDS = Object.keys(MOUNTS) as Mount[];
+/** the worlds one walks on (a solid surface: Gargantua's planets and ours) */
+const WALK_BODIES = GARGANTUA_SYSTEM.bodies.filter((b) => b.kind === "planet" && b.surface && b.surface.kind !== "gas").map((b) => b.id);
 
 const fold = (s: string) =>
   s
@@ -461,7 +464,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "get_telemetry",
       description:
-        "Everything the cockpit and the hub know, now, in figures (degrees, metres, m/s, s): attitude (pitch, bank, heading, angle of attack, sideslip, stall AoA), air (height, airspeed, Mach, q, heat, load, skin temperatures and margins, wind), controls (throttle, thrust, surface deflections, flaps, air brake, gear, holds), autopilot (director, flight-computer command, launch goal), hub (its title, current step, rows, next, progress, cue: time to ignition and Δv left, callout, its graph's verdict on/off/wait and the fix), entry (phase, commanded bank and AoA, range and heading error to the site, miss, in corridor, planned peaks, reversal), approach (runway offset, height, PAPI whites 0–4, commanded vs flown ground path angle, height over the threshold, ground speed and airspeed, profile deviation, leg, flare, MLS, wind), descent (powered landing's command), burn (plan, cue), dock (offsets, signed actual and commanded closing rates in the rotating port frame), sky (the world under the camera, the Sun's and the Moon's altitude and azimuth — true and as seen through the Earth's air —, the refraction at the horizon and the air's refractivity). surface (regional satellite loading and memory), scenery (worldwide forests, OSM buildings/roads/railways/water/bridges, source layer/field inventory, cast-shadow state and ranges, counts, loading, memory and errors). map (local position, zoom, source availability and CPU drawing cost), streaming (bounded prediction distance and look-ahead time). Ask only the groups you need.",
+        "Everything the cockpit and the hub know, now, in figures (degrees, metres, m/s, s): attitude (pitch, bank, heading, angle of attack, sideslip, stall AoA), air (height, airspeed, Mach, q, heat, load, skin temperatures and margins, wind), controls (throttle, thrust, surface deflections, flaps, air brake, gear, holds), autopilot (director, flight-computer command, launch goal), hub (its title, current step, rows, next, progress, cue: time to ignition and Δv left, callout, its graph's verdict on/off/wait and the fix), entry (phase, commanded bank and AoA, range and heading error to the site, miss, in corridor, planned peaks, reversal), approach (runway offset, height, PAPI whites 0–4, commanded vs flown ground path angle, height over the threshold, ground speed and airspeed, profile deviation, leg, flare, MLS, wind), descent (powered landing's command), burn (plan, cue), dock (offsets, signed actual and commanded closing rates in the rotating port frame), sky (the world under the camera, the Sun's and the Moon's altitude and azimuth — true and as seen through the Earth's air —, the refraction at the horizon and the air's refractivity). surface (regional satellite loading and memory), scenery (worldwide forests, OSM buildings/roads/railways/water/bridges, source layer/field inventory, cast-shadow state and ranges, counts, loading, memory and errors), character (on foot: the world, position, speed, vertical speed, grounded, height over the ground, time airborne, the craft's hull distance, the ground patch, the last error), grass (on the Earth on foot: on or why not, blades and stones drawn, loading, memory). map (local position, zoom, source availability and CPU drawing cost), streaming (bounded prediction distance and look-ahead time). Ask only the groups you need.",
       params: { groups: { type: "array", maxItems: TELEMETRY_GROUPS.length, items: { type: "string", enum: TELEMETRY_GROUPS } } },
       run: (a) =>
         telemetry(
@@ -477,10 +480,10 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "character",
       description:
-        "Walk on solid planets. disembark/board use the same safety checks as Shift+K; start places an explorer at geodetic lat/lon; move lasts at most 10 seconds; jump, stop, orbit and status. Grass runs only on Earth on foot. Units metres, seconds and degrees.",
+        "Walk on solid planets. disembark/board use the same safety checks as Shift+K; start places an explorer at geodetic lat/lon (both required) on body (default earth; saved first as 'Before TARS'); move lasts at most 10 seconds; jump, stop, orbit (the camera around the walker: only the yaw/pitch given change) and status. Grass runs only on Earth on foot. Units metres, seconds and degrees.",
       params: {
         action: { type: "string", enum: ["disembark", "board", "start", "move", "stop", "jump", "orbit", "status"] },
-        body: { type: "string" },
+        body: { type: "string", enum: WALK_BODIES },
         lat: { type: "number", minimum: -90, maximum: 90 },
         lon: { type: "number", minimum: -180, maximum: 180 },
         forward: { type: "number", minimum: -1, maximum: 1 },
@@ -491,7 +494,7 @@ export function gameTools(h: GameHost): Tool[] {
         pitch: { type: "number", minimum: -8, maximum: 68 },
       },
       required: ["action"],
-      run: (a) => {
+      run: act((a) => {
         const c = camera.character;
         let error: string | null = null;
         switch (a.action) {
@@ -501,9 +504,17 @@ export function gameTools(h: GameHost): Tool[] {
           case "board":
             error = c.board();
             break;
-          case "start":
-            error = c.start(body(a.body ?? "earth") ?? "earth", Number(a.lat ?? 0), Number(a.lon ?? 0));
+          case "start": {
+            const world = String(a.body ?? "earth");
+            // (no default place: 0°/0° is the sea off Africa)
+            if (a.lat === undefined || a.lon === undefined) error = "start needs lat and lon";
+            else if (!WALK_BODIES.includes(world)) error = `cannot walk on "${world}": ${WALK_BODIES.join(", ")}`;
+            else {
+              net();
+              error = c.start(world, Number(a.lat), Number(a.lon));
+            }
             break;
+          }
           case "move":
             error = c.move(Number(a.forward ?? 0), Number(a.right ?? 0), Number(a.seconds ?? 1), !!a.run);
             break;
@@ -514,13 +525,13 @@ export function gameTools(h: GameHost): Tool[] {
             c.jump();
             break;
           case "orbit":
-            c.yaw = (Number(a.yaw ?? 0) * Math.PI) / 180;
-            c.pitch = (Number(a.pitch ?? 12) * Math.PI) / 180;
+            if (a.yaw !== undefined) c.yaw = (Number(a.yaw) * Math.PI) / 180;
+            if (a.pitch !== undefined) c.pitch = (Number(a.pitch) * Math.PI) / 180;
             break;
         }
         h.changed([]);
         return { ...c.state(), ok: !error, error };
-      },
+      }),
     },
     {
       name: "list_places",
@@ -1388,6 +1399,8 @@ export function gameTools(h: GameHost): Tool[] {
       run: act((a) => {
         if (!h.mode) return { ok: false, error: "no modes here" };
         if (a.bar) h.mode.hideBar(a.bar === "hide");
+        // (on foot may set the walker down elsewhere: the net first)
+        if (a.mode === "foot" && h.mode.get() !== "foot") net();
         const error = a.mode ? h.mode.set(a.mode as GameMode) : null;
         return { ok: !error, error, mode: h.mode.get() };
       }),
@@ -1422,6 +1435,7 @@ export function gameTools(h: GameHost): Tool[] {
               ? { body: found[0].body as "earth" | "moon" | "mars", lat: found[0].lat, lon: found[0].lon, name: found[0].name }
               : null;
         if (!p) return { ok: false, error: "no place: give lat and lon, or a query that finds one" };
+        net();
         const error = A.go((a.to as "orbit" | "land" | "walk" | "camera" | "tripod" | undefined) ?? "camera", p);
         return { ok: !error, error, place: p };
       }),
@@ -1448,6 +1462,8 @@ export function gameTools(h: GameHost): Tool[] {
           return events ? { ok: true, events } : { ok: false, error: "not on the Earth's ground: walk there (F2), or set the tripod (⇧T)" };
         }
         if (!a.id) return { ok: false, error: "take needs an id from the list" };
+        // (go and live move the tripod and the clock: the net first; render only fills a dialog)
+        if (a.way !== "render") net();
         const error = S.take(String(a.id), (a.way as "go" | "live" | "render" | undefined) ?? "go");
         return { ok: !error, error };
       }),
@@ -1954,7 +1970,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "schedule",
       description:
-        "Set yourself a rule that wakes you later, with what to do then (your own words, an instruction to yourself): on a change of the game — autopilot (to: a mode, or none = an autopilot ended), phase (to: orbit, air, entry, approach, ground…), hub_step, entry_phase, alert (to: warning/caution), soi (to: a body), landed, docked, report, deviation, eclipse (to: solar_partial, solar_total, solar_annular, lunar_partial, lunar_total or end: at the camera's place), mode (to: ship, foot, free, photo — the game's mode changed), render (to: done or stopped — an offline render ended), character (to: disembarked, boarded…) —, every N minutes, at a game time (simTimeS, seconds), or in N seconds. once: fired a single time. Use it when the pilot asks you to watch, remind, check regularly or react to something.",
+        "Set yourself a rule that wakes you later, with what to do then (your own words, an instruction to yourself): on a change of the game — autopilot (to: a mode, or none = an autopilot ended), phase (to: orbit, air, entry, approach, ground…), hub_step, entry_phase, alert (to: warning/caution), soi (to: a body), landed, docked, report, deviation, eclipse (to: solar_partial, solar_total, solar_annular, lunar_partial, lunar_total or end: at the camera's place), mode (to: ship, foot, free, photo — the game's mode changed), render (to: done or stopped — an offline render ended), character (to: disembarked, boarded, landed, jump, unavailable), surface (the satellite imagery's region and status changed: to = region:status), scenery (the 3D scenery's place or status changed), grass (to: grass, outside-grass, loading, off, other-planet, above-ground, mask-unavailable), map (the map view or its zoom changed: to = view:zoom) —, every N minutes, at a game time (simTimeS, seconds), or in N seconds. once: fired a single time. Use it when the pilot asks you to watch, remind, check regularly or react to something.",
       params: {
         on: { type: "string", enum: [...EVENT_KINDS, "every", "at", "in"] },
         to: { type: "string" },

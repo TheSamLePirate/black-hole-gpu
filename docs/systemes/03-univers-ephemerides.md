@@ -454,6 +454,13 @@ Terrarium 256² (`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/z/x/y.
 - `params()` remplit les vec4 69 à 85 des paramètres du traceur (`P.tiles`, `P.tileL`) ; `stamp`
   change quand un rectangle valide change.
 
+**Licence de l’imagerie fine** (z 9 … 13, `eoxUrl`) : Sentinel-2 cloudless **2021** d’EOX, sous
+**CC BY-NC-SA 4.0** — usage **non commercial** seulement, et toute œuvre dérivée (une capture, une vidéo, une
+tuile recolorée redistribuée) sous la même licence ; le crédit est affiché (le panneau, l’Atlas, l’aide du
+réglage). C’est la décision du plan (`PLAN-MONDE-VIVANT-AAA.md` : sources NC permises). Une diffusion commerciale
+demande une autre source : le millésime 2016 d’EOX est sous CC BY 4.0, mais sa couche n’a pas été vérifiée
+ici (identifiant WMTS, couverture, et `EOX_FIT` qui a été ajusté sur 2021 serait à refaire).
+
 `heightAt(q, foot)` reproduit exactement l’échantillonnage du shader (`earthTiles`, `tileSample`) :
 niveau le plus fin dans l’empreinte et le suivant, mélange par l’empreinte et vers les bords de fenêtre
 (`edge` : 0 à 2 px du bord, plein à 48 px), bilinéaire ou B-spline cubique quand le texel dépasse deux

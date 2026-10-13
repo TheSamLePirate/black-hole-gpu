@@ -4443,7 +4443,7 @@ async function main() {
           if ((!body || x.body === body) && x.name.toLowerCase().includes(q.toLowerCase()))
             out.push({ name: x.name, body: x.body, lat: x.lat, lon: x.lon, kind: "site" });
         if ((!body || body === "earth") && !c && out.length < 3)
-          for (const g of await geocode(q, { lang }).catch(() => []))
+          for (const g of await geocode(q, { lang, fallback: true }).catch(() => []))
             out.push({ name: g.name, body: "earth", lat: g.lat, lon: g.lon, kind: g.kind || "address", detail: g.detail });
         return out;
       },

@@ -609,8 +609,9 @@ Une page plein écran (F8, la barre du haut, le menu pause, TARS) :
   sites Apollo, cratères, mers ; atterrisseurs, volcans, canyons, calottes de Mars — chacune avec son type et une
   ligne ; s’y ajoutent les pistes et sites (`SITES`) et les points de vue des paysages ;
 - **la recherche** : les destinations par nom (les deux langues, sans accents), les coordonnées tapées, et sur Terre
-  les adresses par Photon (Nominatim en secours — `game/geocode.ts`, une requête par seconde au plus, gardées pour
-  la session) ;
+  les adresses par Photon pendant la frappe ; Nominatim en secours seulement sur Entrée ou depuis TARS (sa
+  politique d’usage interdit la recherche à la frappe) — `game/geocode.ts`, une requête par seconde au plus, les
+  réponses obtenues gardées pour la session ;
 - **un lieu choisi** (une marque, un résultat, n’importe quel point) : sa fiche (lieu, altitude, distance et
   direction depuis vous, jour ou nuit) et ses actions — en orbite au-dessus (`tools.orbitOver`), y poser le
   vaisseau (`land`), y marcher (`walk`), la caméra libre au-dessus (`cameraAt` : 30° de plongée, emportée par le

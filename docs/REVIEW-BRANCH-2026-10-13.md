@@ -62,7 +62,7 @@ Gravité : **Critique** (à régler avant tout merge ou déjà exposé), **Haute
 
 1. ☐ Astronaute : décision de l'utilisateur. Le sortir de l'historique des branches distantes, le servir depuis
    un stockage privé, et vérifier si la licence permet de servir les fichiers transcodés.
-2. ☐ Réglages par défaut : `sceneryHitboxes: false`.
+2. ☑ Réglages par défaut : `sceneryHitboxes: false`. — fait : par défaut éteint, l’e2e l’allume lui-même, 44e8af7
 2b. ☐ Ancrage caméra (Z-V1 en premier : le décor tracé depuis le vaisseau est faux dans toutes les vues de vol), puis
    Z-V2 (streaming) et Z-V3 (sol vivant autour de la caméra).
 2c. ☐ Profondeur d'occlusion fraîche à pleine résolution pour les passes rasterisées (Z-P1).
@@ -385,23 +385,28 @@ exprimées par rapport à la caméra, les empreintes, le patch de marche, et l'o
 ## TARS, données, réglages
 
 ### Moyenne
-- ☐ **T-M1.** Les nouveaux téléportages de TARS sautent la sauvegarde « Avant TARS » : `game-tools.ts:1425` (atlas
+- ☑ **T-M1.** Les nouveaux téléportages de TARS sautent la sauvegarde « Avant TARS » : `game-tools.ts:1425` (atlas
   go), `:1451` (sky_events go), `:505` (character start), `:1381` (set_mode foot), `main.ts:3563` (`atlasGo`). Or
-  l'en-tête (ligne 12) le promet.
-- ☐ **T-M2.** Nominatim sert de repli à la recherche pendant la frappe (`geocode.ts:145`, `atlas.ts:285-305`), ce
-  que la politique d'usage d'OSMF interdit. À n'utiliser que sur Entrée ou depuis TARS.
-- ☐ **T-M3.** `sceneryHitboxes: true` par défaut (`settings.ts:617`, vérifié) : des contours roses de
-  diagnostic pour tous les joueurs à pied.
+  l'en-tête (ligne 12) le promet. — fait : `net()` avant atlas go, sky_events take go/live, character start,
+  set_mode foot ; `atlasGo` de main.ts n’est appelé par TARS qu’à travers `atlas go` (le filet reste côté TARS,
+  pas sur le bouton du joueur), 387cf39
+- ☑ **T-M2.** Nominatim sert de repli à la recherche pendant la frappe (`geocode.ts:145`, `atlas.ts:285-305`), ce
+  que la politique d'usage d'OSMF interdit. À n'utiliser que sur Entrée ou depuis TARS. — fait : `geocode(…,
+  { fallback })`, Photon seul à la frappe, Nominatim sur Entrée sans résultat et pour TARS, 509e890
+- ☑ **T-M3.** `sceneryHitboxes: true` par défaut (`settings.ts:617`, vérifié) : des contours roses de
+  diagnostic pour tous les joueurs à pied. — fait : `false` par défaut, 44e8af7
 
 ### Basse
-- ☐ Le géocodeur met aussi les échecs en cache pour toute la session (`geocode.ts:156`, vérifié).
-- ☐ La limite d'une requête par seconde n'est pas atomique (`geocode.ts:121-124`).
-- ☐ Outil `character` (`game-tools.ts:478-524`) : pas d'`act()`, pas d'enum pour `body`, `start` vaut 0°/0° (la mer)
-  par défaut, et `orbit` remet `yaw` à 0.
-- ☐ Les descriptions des outils sont en retard sur leurs enums (`schedule`, `get_telemetry`).
-- ☐ Une sauvegarde est refusée en entier si `character` est mal formé (`save.ts:156-170`).
-- ☐ L'imagerie EOX s2cloudless 2021 est sous CC BY-NC-SA (`earth-tiles.ts:50`) : créditée, mais l'usage non commercial
-  et le partage à l'identique contraignent. La couche 2016 est sous CC BY.
+- ☑ Le géocodeur met aussi les échecs en cache pour toute la session (`geocode.ts:156`, vérifié). — fait : seules les réponses obtenues sont gardées, 509e890
+- ☑ La limite d'une requête par seconde n'est pas atomique (`geocode.ts:121-124`). — fait : créneau réservé avant l’attente, une par requête, 509e890
+- ☑ Outil `character` (`game-tools.ts:478-524`) : pas d'`act()`, pas d'enum pour `body`, `start` vaut 0°/0° (la mer)
+  par défaut, et `orbit` remet `yaw` à 0. — fait : `act()`, enum des mondes solides, lat/lon exigés, `orbit` partiel, 387cf39
+- ☑ Les descriptions des outils sont en retard sur leurs enums (`schedule`, `get_telemetry`). — fait : surface/scenery/grass/map et character/grass décrits, 387cf39
+- ☑ Une sauvegarde est refusée en entier si `character` est mal formé (`save.ts:156-170`). — fait : le marcheur est écarté et signalé (`caught`), 08d1490 + cc91659
+- ☑ L'imagerie EOX s2cloudless 2021 est sous CC BY-NC-SA (`earth-tiles.ts:50`) : créditée, mais l'usage non commercial
+  et le partage à l'identique contraignent. La couche 2016 est sous CC BY. — fait (documenté, couche gardée) : la
+  couche 2016 n’a pu être vérifiée hors réseau et `EOX_FIT` est ajusté sur 2021 ; contrainte écrite près d’`eoxUrl`
+  et dans docs/systemes/03, 49bab40
 
 **Vérifié bon** : `/earth-surface` dans server.ts (regex stricte), pas de SSRF, clés côté serveur, traductions FR
 de `t()` complètes, déclencheurs branchés, environ 100 POI contrôlés, décalages horaires des paysages corrects.

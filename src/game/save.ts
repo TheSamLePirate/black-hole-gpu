@@ -127,7 +127,8 @@ const isVec = (x: unknown) => Array.isArray(x) && x.length === 3 && x.every(isNu
 /**
  * A save checked on the way in (a file, a link, the browser's storage): the fields the game needs, of
  * the kinds it needs — the time, the ship's modes, the ground, the plan (throws with the first fault:
- * a corrupted save must not half-load a flight); settings of the wrong kind repaired to defaults.
+ * a corrupted save must not half-load a flight); settings of the wrong kind repaired to defaults, a malformed
+ * walker or fleet left out.
  */
 export function checkSave(x: unknown): GameSave {
   const fault = (why: string): never => {
@@ -165,8 +166,11 @@ export function checkSave(x: unknown): GameSave {
       ![c.yaw, c.pitch, c.distance, c.vertical].every(isNum) ||
       c.distance < 0.3 ||
       c.distance > 8
-    )
-      fault("character");
+    ) {
+      // (a walker that is not one is left out, told: the flight still loads, with the pilot on board)
+      caught("save", new Error("the character left out: malformed"));
+      delete g.character;
+    }
   }
   const sh = g.ship;
   if (!sh || typeof sh !== "object") fault("ship");
