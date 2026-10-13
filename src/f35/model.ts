@@ -12,6 +12,10 @@ export const PART_HINGE = 1;
 export const PART_TRACK = 2;
 export const PART_WHEEL = 3;
 export const PART_PETAL = 4;
+/** a segment of the three-bearing swivel module (the F-35B's nozzle), a lift fan's stage, a marker (no vertices) */
+export const PART_SWIVEL = 5;
+export const PART_FAN = 6;
+export const PART_MARKER = 7;
 
 export interface F35Part {
   name: string;
@@ -52,7 +56,7 @@ const NAMES = {
 export function parseF35(buf: ArrayBuffer): F35Mesh {
   const magic = new TextDecoder().decode(new Uint8Array(buf, 0, 4));
   if (magic !== "F35B") throw new Error("bad f35.bin");
-  const [, nv, ni] = new Uint32Array(buf, 4, 3) as unknown as [number, number, number];
+  const [ver, nv, ni] = new Uint32Array(buf, 4, 3) as unknown as [number, number, number];
   const b = new Float32Array(buf, 16, 6);
   const [np, K] = new Uint32Array(buf, 40, 2) as unknown as [number, number];
   let off = 48;
@@ -81,10 +85,16 @@ export function parseF35(buf: ArrayBuffer): F35Mesh {
     tracks.push(new Float32Array(buf.slice(off, off + K * 48)));
     off += K * 48;
   }
+  // (v2: the parts' names, JSON)
+  if (ver >= 2) {
+    const n = new Uint32Array(buf, off, 1)[0]!;
+    const names = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, off + 4, n))) as string[];
+    parts.forEach((p, i) => (p.name = names[i] ?? `part ${i}`));
+    off += 4 + n;
+  } else nameParts(parts);
   const verts = new Float32Array(buf.slice(off, off + nv * 40));
   off += nv * 40;
   const idx = new Uint32Array(buf.slice(off, off + ni * 4));
-  nameParts(parts);
   return { verts, idx, lo: [b[0]!, b[1]!, b[2]!], hi: [b[3]!, b[4]!, b[5]!], parts, tracks, K };
 }
 
@@ -142,6 +152,11 @@ export interface F35Pose {
   petals: number;
   /** the pilot drawn (not in the cockpit's view) */
   pilot: boolean;
+  /** the F-35B's short take-off and vertical landing: its doors open 0…1 (the lift fan's, the inlets', the roll
+   *  posts'), its nozzle swivelled down 0…1 (95°), its lift fan's turn [rad] */
+  stovl: number;
+  nozzle: number;
+  fan: number;
 }
 
 export const restPose = (): F35Pose => ({
@@ -156,6 +171,9 @@ export const restPose = (): F35Pose => ({
   canopy: 0,
   petals: 0,
   pilot: true,
+  stovl: 0,
+  nozzle: 0,
+  fan: 0,
 });
 
 /** 3 × 4 affine maps (rows) */
@@ -218,6 +236,40 @@ function trackAt(m: F35Mesh, k: number, s: number): M34 {
   return o;
 }
 
+/** The swivel's segments' own maps for a swivel 0…1: the first's (the duct's own turn, then its bearing's), the
+ *  second's (its bearing's, back). */
+function swivel(m: F35Mesh, s: number): Map<number, M34> {
+  const out = new Map<number, M34>();
+  const segs = m.parts.map((p, i) => [p, i] as const).filter(([p]) => p.kind === PART_SWIVEL);
+  if (segs.length < 2 || s <= 0) return out;
+  const psi = Math.min(s, 1) * Math.PI;
+  const [[A, ia], [B, ib]] = segs as [readonly [F35Part, number], readonly [F35Part, number]];
+  const RA = turnAbout(A.pivot, A.axis, psi * A.a);
+  const RB = turnAbout(B.pivot, B.axis, psi * B.a);
+  // (where the exit points: the duct's axis — aft — through both)
+  const R = mul(RA, RB);
+  const e: V3 = [-R[2]!, -R[6]!, -R[10]!];
+  // (turned about the duct's axis — z — so it points straight down: −y)
+  const chi = -Math.PI / 2 - Math.atan2(e[1], e[0]);
+  const roll = Math.hypot(e[0], e[1]) > 1e-6 ? turnAbout(A.pivot, [0, 0, 1], chi) : ident();
+  out.set(ia, mul(roll, RA));
+  out.set(ib, RB);
+  return out;
+}
+
+/** The nozzle's exit now (ship frame): its centre and the way the jet leaves — the swivel's marker, posed. */
+export function nozzleExit(m: F35Mesh, mats: Float32Array): { p: V3; d: V3 } | null {
+  const i = m.parts.findIndex((p) => p.kind === PART_MARKER && p.name === "nozzle exit");
+  if (i < 0) return null;
+  const P = m.parts[i]!;
+  const M = mats.subarray(i * 12, i * 12 + 12);
+  const ap = (v: V3, w: number): V3 =>
+    [0, 1, 2].map((r) => M[r * 4]! * v[0] + M[r * 4 + 1]! * v[1] + M[r * 4 + 2]! * v[2] + w * M[r * 4 + 3]!) as V3;
+  const d = ap(P.axis, 0);
+  const l = Math.hypot(...d) || 1;
+  return { p: ap(P.pivot, 1), d: [d[0] / l, d[1] / l, d[2] / l] };
+}
+
 /** Looks the named parts up once per mesh. */
 const lookups = new WeakMap<F35Mesh, Record<keyof typeof NAMES, number[]>>();
 function names(m: F35Mesh) {
@@ -248,8 +300,22 @@ export function partMatrices(m: F35Mesh, pose: F35Pose, out = new Float32Array(m
   L.flaperon.forEach((i, s) => hinge(i, pose.flaperon[s]!));
   L.lef.forEach((i, s) => hinge(i, pose.lef[s]!));
   L.rudder.forEach((i, s) => hinge(i, pose.rudder[s]!));
+  // (the doors of the F-35B's vertical flight: open with the conversion; the bay's with the nozzle)
+  const doorOpen = (name: string) =>
+    name.startsWith("nozzle bay door")
+      ? Math.min(1, pose.nozzle * 4)
+      : name.startsWith("lift fan") || name.startsWith("auxiliary inlet") || name.startsWith("roll post")
+        ? pose.stovl
+        : -1;
+  // (the three-bearing swivel: half a turn about each oblique bearing, opposite ways, at the full swivel; the
+  // first bearing turns the whole about the duct to keep the exit in the vertical plane)
+  const sw = swivel(m, pose.nozzle);
   m.parts.forEach((p, i) => {
-    if (p.kind === PART_TRACK) own[i] = trackAt(m, p.track, pose.gear);
+    const open = p.kind === PART_HINGE ? doorOpen(p.name) : -1;
+    if (open >= 0) own[i] = turnAbout(p.pivot, p.axis, p.b * Math.min(Math.max(open, 0), 1));
+    else if (p.kind === PART_SWIVEL) own[i] = sw.get(i) ?? ident();
+    else if (p.kind === PART_FAN) own[i] = turnAbout(p.pivot, p.axis, pose.fan * p.a);
+    else if (p.kind === PART_TRACK) own[i] = trackAt(m, p.track, pose.gear);
     else if (p.kind === PART_HINGE && p.name === "canopy") own[i] = turnAbout(p.pivot, p.axis, p.b * Math.min(Math.max(pose.canopy, 0), 1));
     else if (p.kind === PART_PETAL) own[i] = turnAbout(p.pivot, p.axis, 0.2 * Math.min(Math.max(pose.petals, 0), 1));
     else if (p.name === "pilot" && !pose.pilot) own[i] = new Float32Array(12);

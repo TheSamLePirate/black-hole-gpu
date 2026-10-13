@@ -13,6 +13,7 @@ import { altitudeOver, solidBody } from "../system/our-surface";
 import { C_MPS, M_METRES } from "../units";
 import { VESSELS } from "../vessels";
 import { wetRatio } from "../f35/engine";
+import { STOVL } from "../f35/stovl";
 import type { CameraController } from "../controls";
 
 declare module "../controls" {
@@ -44,6 +45,8 @@ function jetThrust(this: CameraController): number {
   const T = VESSELS[fleet.active].turbofan;
   if (T) {
     const e = this.jetAir();
+    // (the F-35B's lift fan engaged: its shaft's power a thrust of its own — 184 kN of the 120 dry)
+    if (this.stovl.clutch > 0) return 1 + (STOVL.boost - 1) * this.stovl.clutch;
     return 1 + (wetRatio(T, e.mach, e.sigma) - 1) * this.abLevel;
   }
   return this.jetModes.ab ? JET.abThrust : 1;
@@ -105,6 +108,7 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
   const none = { gamma: null, bank: null };
   // (a turbofan's afterburner lights up and goes out over its own time)
   const T = VESSELS[fleet.active].turbofan;
+  if (this.stovl.on) m.ab = false;
   const abOn = m.ab && jetReady(this);
   this.abLevel = T ? Math.min(Math.max(this.abLevel + (abOn ? 1 : -1) * (dt / T.light), 0), 1) : abOn ? 1 : 0;
   if (!jetReady(this)) {

@@ -20,14 +20,16 @@ Run with Blender (its glTF importer evaluates the gear's skins and its clip):
  4. written in the ship's frame (x to its left, y up, z its nose; metres — the model is 1.87 × the real
     craft: 10.7 m span, 15.4 m long), the belly (gear up) at y = 0.
 
-Binary (little endian, gzip): "F35B", u32 version 1, u32 vertex count, u32 index count, 6 × f32 bounds
+Binary (little endian, gzip): "F35B", u32 version 2, u32 vertex count, u32 index count, 6 × f32 bounds
 (min, max of the extended pose), u32 part count, u32 track samples K; per part 16 f32 — kind (0 still,
-1 hinge, 2 track, 3 wheel, 4 petal), parent part (−1: none), pivot xyz, axis xyz, a, b (kind-dependent:
-a hinge's travel down / up [rad], a wheel's radius, a petal's ring radius), track index (−1: none), side
-(+1 left, −1 right, 0 centre), 0, 0, 0, 0 —; per track K × 12 f32 (an affine map, rows of 3 × 4: extended
-pose → the pose at extension k / (K − 1)); then the vertices (10 × f32: position, normal, material — 30
-the airframe's layer, 31 the atlas's, 32 the canopy's glass, 33 the lights, 34 the visor —, part + ambient
-occlusion × 0.999, UV in its layer) and u32 indices.
+1 hinge, 2 track, 3 wheel, 4 petal, 5 a swivel bearing's segment, 6 a fan's stage, 7 a marker: no vertices),
+parent part (−1: none), pivot xyz, axis xyz, a, b (kind-dependent: a hinge's travel down / up [rad], a wheel's
+radius, a petal's ring radius, a bearing's or a stage's turning sense), track index (−1: none), side (+1 left,
+−1 right, 0 centre), 0, 0, 0, 0 —; per track K × 12 f32 (an affine map, rows of 3 × 4: extended pose → the pose
+at extension k / (K − 1)); u32 byte length then the parts' names (JSON, padded to 4 bytes); then the vertices
+(10 × f32: position, normal, material — 30 the airframe's layer, 31 the atlas's, 32 the canopy's glass, 33 the
+lights, 34 the visor, 35 a plain dark metal (the lift fan) —, part + ambient occlusion × 0.999, UV in its layer)
+and u32 indices.
 """
 import bpy, bmesh, gzip, json, math, os, struct, sys, time
 import numpy as np
@@ -338,8 +340,85 @@ for side, sx in (("left", 1), ("right", -1)):
                a=math.radians(30), b=math.radians(30), side=s)
     carve(bm, fin, [(A, nrm)], pid)
     log(f"  {side}: stabilator {len(stab)}, flap {len(lef)}, wing {len(wing)}, fin {len(fin)} faces")
+
+# -- the F-35B's own (docs/PLAN-F35.md, F4): the lift fan's doors — the big one on the spine behind the canopy,
+# hinged at its rear, its front raised into the air; the two auxiliary inlet doors behind it; the two under the
+# belly, opened outwards —, the roll posts' doors under the wing roots, the doors of the bay the swivelling
+# nozzle swings down through. Each cut out of the airframe's skin where it faces (its normal) and lies.
+def skin(lo, hi, up):
+    """the airframe's faces (still the airframe's) facing up (or down) whose box meets the box lo…hi — the cut
+    then trims them to it (a face larger than the door is taken too)"""
+    out = []
+    for f in bm.faces:
+        facing = f.normal.z > 0.35 if up else f.normal.z < -0.35
+        if f[pl] != P_AIRFRAME or not facing:
+            continue
+        vs = [v.co for v in f.verts]
+        if all(max(v[i] for v in vs) >= lo[i] and min(v[i] for v in vs) <= hi[i] for i in range(3)):
+            out.append(f)
+    return out
+FAN = (0.0, -4.9)  # the lift fan's axis (model x, y)
+door = skin((-1.0, -6.2, 3.3), (1.0, -3.6, 4.3), True)
+pid = part("lift fan door", 1, pivot=model_pivot((0, -3.6, 4.03)), axis=(1, 0, 0), a=0.0, b=math.radians(68))
+carve(bm, door, [((0, -6.2, 0), (0, 1, 0)), ((0, -3.6, 0), (0, -1, 0)), ((1.0, 0, 0), (-1, 0, 0)), ((-1.0, 0, 0), (1, 0, 0))], pid)
+for sx, side in ((1, "left"), (-1, "right")):
+    aux = skin((min(sx * 0.2, sx * 0.8), -3.4, 3.3), (max(sx * 0.2, sx * 0.8), -2.6, 4.3), True)
+    pid = part(f"auxiliary inlet door {side}", 1, pivot=model_pivot((sx * 0.5, -2.6, 3.93)), axis=(1, 0, 0), a=0.0, b=math.radians(40), side=sx)
+    carve(bm, aux, [((0, -3.4, 0), (0, 1, 0)), ((0, -2.6, 0), (0, -1, 0)), ((sx * 0.2, 0, 0), (sx, 0, 0)), ((sx * 0.8, 0, 0), (-sx, 0, 0))], pid)
+    low = skin((min(0, sx * 0.95), -5.9, -0.2), (max(0, sx * 0.95), -3.9, 1.2), False)
+    pid = part(f"lift fan lower door {side}", 1, pivot=model_pivot((sx * 0.95, -4.9, 0.42)), axis=(0, 1, 0), a=0.0, b=math.radians(85), side=sx)
+    carve(bm, low, [((0, -5.9, 0), (0, 1, 0)), ((0, -3.9, 0), (0, -1, 0)), ((0, 0, 0), (sx, 0, 0)), ((sx * 0.95, 0, 0), (-sx, 0, 0))], pid)
+    # (under the wing root, outboard of the intake: its underside from 4.3 out)
+    post = skin((min(sx * 4.4, sx * 5.0), 2.5, 1.4), (max(sx * 4.4, sx * 5.0), 3.3, 2.0), False)
+    pid = part(f"roll post door {side}", 1, pivot=model_pivot((sx * 5.0, 2.9, 1.78)), axis=(0, 1, 0), a=0.0, b=math.radians(75), side=sx)
+    carve(bm, post, [((0, 2.5, 0), (0, 1, 0)), ((0, 3.3, 0), (0, -1, 0)), ((sx * 4.4, 0, 0), (sx, 0, 0)), ((sx * 5.0, 0, 0), (-sx, 0, 0))], pid)
+    bay = skin((min(0, sx * 1.3), 9.0, -0.2), (max(0, sx * 1.3), 14.0, 1.6), False)
+    pid = part(f"nozzle bay door {side}", 1, pivot=model_pivot((sx * 1.3, 9.8, 1.6)), axis=(0, 1, 0), a=0.0, b=math.radians(100), side=sx)
+    carve(bm, bay, [((0, 9.0, 0), (0, 1, 0)), ((0, 0, 0), (sx, 0, 0)), ((sx * 1.3, 0, 0), (-sx, 0, 0))], pid)
+log("  the STOVL doors cut")
 emit(bm, [s.material.name for s in o.material_slots], None)
 bm.free()
+
+# -- the lift fan: its well under the doors (a cylinder from the belly to the spine) and its two counter-rotating
+# stages of blades (generated: the model has none) — a plain dark metal, material 35
+def add_tris(tris, normals, pid, mat=35):
+    P = np.array(tris, np.float64).reshape(-1, 3, 3)
+    N = np.array(normals, np.float64).reshape(-1, 3, 3)
+    n = len(P)
+    corners.append((to_ship(P), dir_to_ship(N), np.zeros((n, 3, 2)), np.full(n, mat), np.full(n, pid)))
+R_FAN = 1.15
+well_t, well_n = [], []
+SEG = 40
+for k in range(SEG):
+    a0, a1 = 2 * math.pi * k / SEG, 2 * math.pi * (k + 1) / SEG
+    p = [(FAN[0] + R_FAN * math.cos(a), FAN[1] + R_FAN * math.sin(a)) for a in (a0, a1)]
+    nn = [(-math.cos(a), -math.sin(a), 0) for a in (a0, a1)]
+    z0, z1 = 0.45, 3.95
+    q = [(p[0][0], p[0][1], z0), (p[1][0], p[1][1], z0), (p[1][0], p[1][1], z1), (p[0][0], p[0][1], z1)]
+    well_t += [q[0], q[2], q[1], q[0], q[3], q[2]]
+    well_n += [nn[0], nn[1], nn[1], nn[0], nn[0], nn[1]]
+P_WELL = part("lift fan well")
+add_tris(well_t, well_n, P_WELL)
+for stage, z, turn in ((1, 3.05, 1), (2, 2.55, -1)):
+    pid = part(f"lift fan stage {stage}", 6, pivot=model_pivot((FAN[0], FAN[1], z)), axis=dir_to_ship(np.array((0, 0, 1.0))), a=turn)
+    t, nrm = [], []
+    for k in range(28):
+        a = 2 * math.pi * k / 28
+        tw = math.radians(35) * turn
+        for r0, r1 in ((0.32, 1.12),):
+            e = lambda r, da, dz: (FAN[0] + r * math.cos(a + da), FAN[1] + r * math.sin(a + da), z + dz)
+            w = 0.09
+            q = [e(r0, -w / r0, -0.06), e(r1, -w / r1 * 0.6, -0.04), e(r1, w / r1 * 0.6, 0.04), e(r0, w / r0, 0.06)]
+            t += [q[0], q[1], q[2], q[0], q[2], q[3]]
+            n_ = (math.sin(tw) * -math.sin(a), math.sin(tw) * math.cos(a), math.cos(tw))
+            nrm += [n_] * 6
+    # (its hub: a disc)
+    for k in range(20):
+        a0, a1 = 2 * math.pi * k / 20, 2 * math.pi * (k + 1) / 20
+        t += [(FAN[0], FAN[1], z + 0.02), (FAN[0] + 0.33 * math.cos(a0), FAN[1] + 0.33 * math.sin(a0), z + 0.02), (FAN[0] + 0.33 * math.cos(a1), FAN[1] + 0.33 * math.sin(a1), z + 0.02)]
+        nrm += [(0, 0, 1)] * 3
+    add_tris(t, nrm, pid)
+log("  the lift fan generated")
 
 # -- the landing gear: the legs on their tracks, their wheels turning on them; the doors
 WHEELS = {"Object_47": ((-0.05, -7.465, -1.71), 0.47, (-0.22, 0.12)),
@@ -381,6 +460,7 @@ for name in ["Object_9", "Object_45", "Object_21", "Object_13", "Object_25", "Ob
     o = bpy.data.objects[name]
     bm = take(o, None)
     pl = bm.faces.layers.int.new("part")
+    bm.faces.layers.int.new("cand")
     if name in ("Object_17", "Object_29", "Object_41"):
         pid = P_PILOT
         for f in bm.faces:
@@ -409,6 +489,25 @@ for name in ["Object_9", "Object_45", "Object_21", "Object_13", "Object_25", "Ob
                 pid = P_NOZZLE
             for f in pc:
                 f[pl] = pid
+        # the three-bearing swivel module: the nozzle's duct cut by two planes tilted 23.75° from its section
+        # (opposite ways); the segment between them turned half a turn about the first's normal, the last
+        # back about the second's, the whole about the duct's axis: the exit swings down through 95°, the cuts
+        # sealed all the while (src/f35/model.ts)
+        PHI = math.radians(23.75)
+        cA = (0.0, 9.05, NOZ_C[2])
+        cB = (0.0, 9.75, NOZ_C[2])
+        nA = (0.0, math.cos(PHI), -math.sin(PHI))
+        nB = (0.0, math.cos(PHI), math.sin(PHI))
+        P_SEG1 = part("nozzle segment 1", 5, parent=P_NOZZLE, pivot=model_pivot(cA), axis=dir_to_ship(np.array(nA)), a=1)
+        duct = [f for f in bm.faces if f[pl] == P_NOZZLE]
+        carve(bm, duct, [(cA, nA)], P_SEG1)
+        P_SEG2 = part("nozzle segment 2", 5, parent=P_SEG1, pivot=model_pivot(cB), axis=dir_to_ship(np.array(nB)), a=-1)
+        carve(bm, [f for f in bm.faces if f[pl] == P_SEG1], [(cB, nB)], P_SEG2)
+        for p_ in PARTS:
+            if p_[0] == "petal":
+                p_[2] = P_SEG2
+        # (the exit: its centre and the way the jet leaves — a marker, no vertices: the plume follows it)
+        part("nozzle exit", 7, parent=P_SEG2, pivot=model_pivot((0.0, 11.55, NOZ_C[2])), axis=dir_to_ship(np.array((0, 1.0, 0))))
     else:
         for f in bm.faces:
             f[pl] = P_AIRFRAME
@@ -448,6 +547,11 @@ for i, p in enumerate(PARTS):
     want = np.array((1.0, 0, 0)) if p[0].startswith("rudder") else np.array((0, 1.0, 0)) if p[0] == "canopy" else np.array((0, -1.0, 0))
     if p[0].startswith("leading-edge"):
         want = np.array((0, -1.0, 0))  # (its leading edge, forward of the hinge, down)
+    # (the doors open: those on the spine up, those underneath down — and outwards)
+    if p[0] in ("lift fan door",) or p[0].startswith("auxiliary"):
+        want = np.array((0, 1.0, 0))
+    if p[0].startswith(("lift fan lower", "roll post", "nozzle bay")):
+        want = np.array((0, -1.0, 0))
     if np.dot(np.cross(np.array(p[4]), c - np.array(p[3])), want) < 0:
         p[4] = [-x for x in p[4]]
 log("vertices", len(first), "indices", len(IDX))
@@ -481,12 +585,16 @@ log("ambient occlusion baked")
 lo = V_P.min(0)
 hi = V_P.max(0)
 out = bytearray()
-out += b"F35B" + struct.pack("<3I", 1, len(V_P), len(IDX)) + struct.pack("<6f", *lo, *hi)
+out += b"F35B" + struct.pack("<3I", 2, len(V_P), len(IDX)) + struct.pack("<6f", *lo, *hi)
 out += struct.pack("<2I", len(PARTS), K)
 for name, kind, parent, piv, axis, a, b, trk, side in PARTS:
     out += struct.pack("<16f", kind, parent, *piv, *axis, a, b, trk, side, 0, 0, 0, 0)
 for T in TRACKS:
     out += np.asarray(T, np.float32).tobytes()
+# (v2: the parts' names, JSON, padded to 4 bytes)
+names = json.dumps([p[0] for p in PARTS]).encode()
+names += b" " * ((4 - len(names) % 4) % 4)
+out += struct.pack("<I", len(names)) + names
 V = np.zeros((len(V_P), 10), np.float32)
 V[:, 0:3] = V_P
 V[:, 3:6] = V_N

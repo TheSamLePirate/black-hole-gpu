@@ -2828,7 +2828,8 @@ async function main() {
       if (settings.shipMount !== "director") setMount("director");
       else panel.toast(camera.cineNextShot());
     },
-    jetSystem: (_, a) => panel.toast(camera.jetToggle(a === "ab" ? "ab" : a === "athr" ? "athr" : "ap")),
+    jetSystem: (_, a) =>
+      panel.toast(a === "stovl" ? camera.stovlToggle() : camera.jetToggle(a === "ab" ? "ab" : a === "athr" ? "athr" : "ap")),
     airBrake: () => {
       camera.airBrake = camera.airBrake > 0 ? 0 : 1;
       panel.toast(camera.airBrake > 0 ? t("Air brake out") : t("Air brake in"));
@@ -5147,7 +5148,10 @@ async function main() {
             onGround,
             groundSpeed: speed,
             steer: onGround ? (th?.torque[1] ?? 0) : 0,
-            parked: onGround && speed < 0.5 && (th?.throttle ?? 0) <= 0.02,
+            parked: onGround && speed < 0.5 && (th?.throttle ?? 0) <= 0.02 && !camera.stovl.on,
+            stovl: camera.stovl.conv,
+            nozzle: camera.stovl.swivel,
+            fan: camera.stovl.fan,
           });
         }
         // (the cockpit's controls: each where the flight has it, lit by its mode — PLAN-COCKPIT)

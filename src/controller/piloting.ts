@@ -943,7 +943,9 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   // (the rigid body: its wheels' and thrusters' torque about each axis — what turns it at the tuning's
   // rate alone, full of propellant —, over its inertia now: lighter, it turns faster; docked, slower;
   // about its long axis faster than end over end)
-  const torque = V0.rg.map((k) => V0.agility * V0.mass * k * k * tune.acc) as Vec3;
+  // (the F-35B converted: its roll posts, the fan and the nozzle modulated — reaction controls as the engine runs)
+  const agility = V0.agility + (fleet.active === "f35" ? 0.9 * this.stovl.clutch * Math.max(this.pilot.engineNow, 0.2) : 0);
+  const torque = V0.rg.map((k) => agility * V0.mass * k * k * tune.acc) as Vec3;
   const ag = Math.min(...[0, 1, 2].map((i) => torque[i]! / mp.I[i]![i]!)) / tune.acc;
   TUNING.turnAccel = tune.acc * ag;
   TUNING.turnRate = tune.rate * Math.min(1, 1.4 * Math.sqrt(ag));
@@ -969,6 +971,9 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   const onWheels0 = !!this.rolling || !!this.local?.L.rolling;
   // (the jet's systems — controller/jet.ts —: the autopilot's holds as the plane law's, the autothrottle)
   const jetCmd = this.jetStep(inp, dtPilot);
+  // (the F-35B's STOVL mode — controller/stovl.ts —: the thrust's direction, the hover law; its input the stick's
+  // left to the pilot — none when the hover law takes it)
+  const vt = this.stovlStep(cam, inp, dtPilot);
   const airCtx =
     LA0 && LA0.out.q > 20
       ? {
@@ -1015,6 +1020,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
     {
       air: airCtx,
       sf: sfCtx,
+      thrustDir: vt.thrustDir,
+      vtol: this.pilot.auto === "none" ? vt.vtol : undefined,
       dt: dtPilot,
       right: cam.right,
       up: cam.up,
@@ -1069,7 +1076,7 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
           ? 1 - Math.exp(-((s.animate ? s.timeSpeed * dt : 0) * Msec) / VESSELS[fleet.active].spool)
           : 1,
     },
-    inp,
+    vt.inp,
   );
   TUNING.turnAccel = tune.acc;
   TUNING.turnRate = tune.rate;

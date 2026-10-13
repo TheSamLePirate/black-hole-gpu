@@ -19,7 +19,7 @@ import f35Normal0 from "../assets/f35/f35-normal-0.ktx2";
 import f35Normal1 from "../assets/f35/f35-normal-1.ktx2";
 import f35Mr0 from "../assets/f35/f35-mr-0.ktx2";
 import f35Mr1 from "../assets/f35/f35-mr-1.ktx2";
-import { parseF35, partMatrices, restPose, type F35Mesh, type F35Pose } from "./f35/model";
+import { nozzleExit, parseF35, partMatrices, restPose, type F35Mesh, type F35Pose } from "./f35/model";
 import { ktxLevels, ktxTarget, writeLevels } from "./system/ktx2";
 
 import { shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
@@ -246,6 +246,8 @@ export class ShipRenderer {
   private jetMesh: F35Mesh | null = null;
   private jetMaps: { albedo: GPUTexture; normal: GPUTexture; mr: GPUTexture } | null = null;
   private jetMapsLoading = false;
+  /** the flown F-35's nozzle exit now (ship frame): where its plume starts, which way */
+  private jetExit: { p: V3; d: V3 } | null = null;
   /** this frame's draws: mesh, and whether in the shadow map */
   private draws: { mesh: Mesh; shadow: boolean; cabin?: boolean; inst: number }[] = [];
   /** the Ranger's landing gear (gear-mesh.ts), made at its first draw */
@@ -1082,13 +1084,16 @@ export class ShipRenderer {
       const V = VESSELS[this.vessel];
       const defs: JetDef[] = V.jets;
       for (let i = 0; i < defs.length && n < MAX_JETS; i++) {
-        const J = defs[i]!;
+        let J = defs[i]!;
         // (which fire, how hard: jets.ts — the sound's the same)
         const level = jetLevel(V, J, i, th);
         if (level <= 0) continue;
         // (an air-breathing engine's — the F-35's: kind 2 — its afterburner's share in u.w: the flame is the
         // afterburner's, a few metres; dry, the exhaust is clear)
         const jet = J.main && this.vessel === "f35";
+        // (the F-35B's nozzle swivelled: the plume from its exit, along it)
+        const ex = jet ? this.jetExit : null;
+        if (ex) J = { ...J, p: ex.p, d: ex.d };
         const ab = jet ? Math.min(Math.max(((th.boost ?? 1) - 1) / 0.5, 0), 1) : 0;
         const len = jet ? 2.5 + 8 * ab : J.main ? (4 + 20 * level) * (1 - 0.45 * air) * V.flame : 1.2 + 1.6 * level;
         out.set([...J.p, level, ...J.d, jet ? 2 : J.main ? 0 : 1, J.half[0], J.half[1], len, (i * 0.618) % 1, ...J.u, ab], n * JET_FLOATS);
@@ -1197,7 +1202,9 @@ export class ShipRenderer {
         parts = MAX_INST + jetSlot++ * MAX_PARTS;
         let pose = i === 0 && this.flown ? (v.jet ?? restPose()) : restPose();
         if (i === 0 && v.inside) pose = { ...pose, pilot: false };
-        this.writeParts(partMatrices(this.jetMesh, pose), parts);
+        const mats = partMatrices(this.jetMesh, pose);
+        this.writeParts(mats, parts);
+        if (i === 0) this.jetExit = nozzleExit(this.jetMesh, mats);
       }
       this.instData.set([kind[it.id], it.shadow ? 1 : 0, it.far ? 1 : 0, parts], i * INST_FLOATS + 16);
       this.draws.push({ mesh: me, shadow: it.shadow, cabin: i === 0 && inCabin, inst: i });

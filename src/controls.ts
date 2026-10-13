@@ -49,6 +49,7 @@ import { installTelemetry } from "./controller/telemetry";
 import { PlanetCharacter } from "./controller/character";
 import { installSpectator } from "./controller/spectator";
 import { installJet } from "./controller/jet";
+import { installStovl, noStovl, type StovlState } from "./controller/stovl";
 import { installCine } from "./controller/cine";
 import { installCamRig } from "./controller/camrig";
 import { installTravel } from "./controller/travel";
@@ -937,6 +938,8 @@ export class CameraController {
   jetModes: JetModes = noJetModes();
   /** the afterburner lit 0…1 (a turbofan's light-up — controller/jet.ts) */
   abLevel = 0;
+  /** the F-35B's STOVL mode (controller/stovl.ts) */
+  stovl: StovlState = noStovl();
   readonly jetAthr = new Autothrottle();
   jetCws = { pitch: false, roll: false, thr: Number.NaN };
 
@@ -1287,6 +1290,7 @@ installJourney(CameraController);
 installTelemetry(CameraController);
 installSpectator(CameraController);
 installJet(CameraController);
+installStovl(CameraController);
 installCine(CameraController);
 installCamRig(CameraController);
 installTravel(CameraController);

@@ -153,6 +153,12 @@ export interface FlightContext {
   /** the main engine's answer this frame: the share of the way from its thrust to the throttle's
    *  (1 − e^(−dt/τ) over the frame's flight time; 1 or none: at once) */
   spoolK?: number;
+  /** the thrust's direction on the ship's axes (x left, y up, z the nose; unit) — none: along the nose (the
+   *  F-35B's swivelling nozzle and lift fan: controller/stovl.ts) */
+  thrustDir?: V3;
+  /** the F-35B's hover law: the attitude it holds (local: the nose, the top) and the throttle it sets — the
+   *  stick's and the throttle keys' input its own */
+  vtol?: { nose: V3; up: V3; throttle: number };
   /** the RCS translation's share (0: none — an aircraft's turbofan has no thrusters to slide it) */
   rcs?: number;
   /**
@@ -491,6 +497,11 @@ export class FlightComputer {
     // vertical: on an airless world it lifts off at once and pitches up clear of the ground, on the Earth
     // it rolls, the wings lifting it)
     if (point && this.auto !== "none") point = onGround(point);
+    // (the F-35B's hover law: its attitude held)
+    if (c.vtol && this.auto === "none") {
+      point = toC(c.vtol.nose);
+      upC = toC(c.vtol.up);
+    }
     if (point && c.levelUp && !upC) upC = toC(c.levelUp);
     // ---- attitude: rate command (fly-by-wire), holds point the nose, SAS damps
     // (the camera frame is left-handed relative to the ship's: a positive rotation about its x axis
@@ -616,7 +627,9 @@ export class FlightComputer {
 
     // ---- thrust: main engine along the nose, RCS translation along the ship's axes
     if (flown && !c.sf) {
-      this.throttle = clamp(this.throttle + inp.throttle * (this.precision ? 0.15 : 0.6) * dt, 0, 1);
+      this.throttle = c.vtol
+        ? clamp(c.vtol.throttle, 0, 1)
+        : clamp(this.throttle + inp.throttle * (this.precision ? 0.15 : 0.6) * dt, 0, 1);
       throttle = this.throttle;
       const rcsMax = TUNING.rcs * c.thrust;
       // (the ship's right is −x)
@@ -646,7 +659,9 @@ export class FlightComputer {
     // (the gimbal's reach: a few degrees off the nose — never a burn's thrust turned round with a
     // burn that reversed, the engine still running down)
     const gimballed = c.gimbal && point && throttle > 0 && dot(Z, point) > 0.985;
-    const accC = add(scale(gimballed ? point! : Z, throttle * c.thrust), rcsC);
+    // (the thrust along its own direction — the F-35B's nozzle swivelled, its lift fan —, else the nose)
+    const tdC = c.thrustDir ? add(add(scale(X, c.thrustDir[0]), scale(Y, c.thrustDir[1])), scale(Z, c.thrustDir[2])) : null;
+    const accC = add(scale(gimballed ? point! : (tdC ?? Z), throttle * c.thrust), rcsC);
     const acc = fromC(accC);
     this.accel = len(acc);
     return { rot, acc, burn: this.burn };

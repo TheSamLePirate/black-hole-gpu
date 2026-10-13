@@ -114,6 +114,8 @@ export type AlertInput = Pick<
   landedOn?: FlightInfo["landedOn"];
   /** the time running */
   animate: boolean;
+  /** the F-35B's STOVL mode (none: not converted) */
+  stovl?: FlightInfo["stovl"];
   /** a coordinate time [M] in words (the horizon's countdown) */
   fmtM: (t: number) => string;
 };
@@ -155,6 +157,13 @@ export function alertsOf(i: AlertInput): Alert[] {
   }
   // the tank
   const fuel = i.engine.fuel;
+  const sv = i.stovl ?? null;
+  if (sv) {
+    if (sv.hover && sv.heavy) add("stovl-heavy", "warning", t("TOO HEAVY TO HOVER · BURN FUEL"));
+    else if (sv.hover) add("stovl", "advisory", tf("HOVER · VZ {0} M/S", sv.vz.toFixed(1)));
+    else if (sv.on && sv.conv < 1) add("stovl", "advisory", tf("STOVL · CONVERTING {0} %", Math.round(sv.conv * 100)));
+    else if (sv.on) add("stovl", "advisory", tf("STOVL · NOZZLE {0}°", Math.round(sv.swivel * 95)));
+  }
   const je = i.engine.jet;
   if (je) {
     // (an aircraft's fuel: bingo at a fifth — enough to come back and land —, the engine out when none)

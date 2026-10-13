@@ -73,7 +73,7 @@ try {
       const deg = (a) => Array.isArray(a) ? a.map((x) => x * D) : a;
       const p = {};
       for (const k of ["stab", "flaperon", "lef", "rudder"]) if (f[k]) p[k] = deg(f[k]);
-      for (const k of ["canopy", "petals", "gear"]) if (f[k] !== undefined) p[k] = f[k];
+      for (const k of ["canopy", "petals", "gear", "stovl", "nozzle", "fan"]) if (f[k] !== undefined) p[k] = f[k];
       __bh.renderer.jetForce = p;
       document.body.classList.add("hide-ui");
       document.querySelectorAll("canvas.fl-hud").forEach((e) => (e.style.visibility = "hidden"));

@@ -33,6 +33,10 @@ export interface JetInputs {
   steer: number;
   /** parked: on the ground, stopped, the engine at idle — the canopy may open */
   parked: boolean;
+  /** the STOVL mode (controller/stovl.ts): its doors 0…1, its nozzle's swivel 0…1, its lift fan's turn [rad] */
+  stovl?: number;
+  nozzle?: number;
+  fan?: number;
 }
 
 const D = Math.PI / 180;
@@ -87,6 +91,9 @@ export class JetPoser {
     p.petals = toward(p.petals, want, RATE.petals, dt);
     // the canopy: raised parked, lowered otherwise (some 8 s to travel)
     p.canopy = toward(p.canopy, i.parked ? 1 : 0, RATE.canopy, dt);
+    p.stovl = i.stovl ?? 0;
+    p.nozzle = i.nozzle ?? 0;
+    p.fan = i.fan ?? 0;
     return p;
   }
 }

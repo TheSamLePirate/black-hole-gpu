@@ -718,6 +718,8 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
       coat = 0.0;
       if (part == 33u) { emit = albedo * 1.5; }
     }
+    // (the F-35B's lift fan, its well: generated — a plain dark metal)
+    case 35u: { albedo = vec3f(0.07, 0.07, 0.075); metal = 0.85; rough = 0.42 + 0.1 * grime; coat = 0.0; }
     // the Endurance's parts (as endurance.wgsl): metal, non-metal panels, glass, tiles, lights, interior,
     // the rolling shuttle
     case 20u: { albedo = vec3f(0.72) * (1.0 - 0.18 * grime); metal = 1.0; rough = 0.38 + 0.12 * grime; coat = 0.0; }

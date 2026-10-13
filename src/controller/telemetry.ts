@@ -175,6 +175,9 @@ export interface FlightInfo {
   /** the jet's systems (plane mode, in the air — game/jet.ts): the altitude over the sea [m], the throttle,
    *  the modes engaged */
   jet: { alt: number; throttle: number; modes: JetModes } | null;
+  /** the F-35B's STOVL mode (controller/stovl.ts): on, converted 0…1, the nozzle's swivel 0…1, the hover law
+   *  flying, the vertical speed it holds [m/s], too heavy to hover */
+  stovl: { on: boolean; conv: number; swivel: number; hover: boolean; vz: number; heavy: boolean } | null;
   /** the gear (down, its extension 0…1), the flaps (0, 0.5, 1), the air brake (0…1): the Approach HUD's */
   gear: { down: boolean; ext: number; flaps: number; brake: number };
   entry: ReturnType<CameraController["entryInfo"]>;
@@ -345,6 +348,17 @@ function flightInfo(this: CameraController): FlightInfo {
       return f ? { alt: f.h, throttle: this.pilot.engineNow, modes: { ...this.jetModes } } : null;
     })(),
     entry: this.entryInfo(),
+    stovl:
+      fleet.active === "f35" && (this.stovl.on || this.stovl.conv > 0)
+        ? {
+            on: this.stovl.on,
+            conv: this.stovl.conv,
+            swivel: this.stovl.swivel,
+            hover: this.stovl.hover,
+            vz: this.stovl.vz,
+            heavy: this.stovl.heavy,
+          }
+        : null,
     /** the engine and the tank */
     engine: (() => {
       const V = VESSELS[fleet.active];

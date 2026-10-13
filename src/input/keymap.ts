@@ -252,6 +252,11 @@ export const KEYMAP: KeySection[] = [
         ],
       },
       {
+        keys: "⇧B",
+        text: "F-35B: STOVL mode — the lift fan, the nozzle swivelled down; below 65 m/s the hover law: the stick a speed over the ground, ⇧ Alt a vertical speed, let go held in place",
+        bind: [fly("KeyB", "jetSystem", { arg: "stovl", shift: true })],
+      },
+      {
         keys: "I K · J L · H N",
         text: "RCS translation: down/up · left/right · forward/back",
         bind: [fly(["KeyI", "KeyJ", "KeyL", "KeyH", "KeyN"], "held"), fly("KeyK", "held", off)],
@@ -274,7 +279,7 @@ export const KEYMAP: KeySection[] = [
           fly("Digit0", "auto", { arg: "orbit", shift: true }),
           fly("F7", "auto", { arg: "land" }),
           fly("KeyU", "auto", { arg: "takeoff" }),
-          fly("KeyB", "auto", { arg: "dock" }),
+          fly("KeyB", "auto", { arg: "dock", shift: false }),
         ],
       },
       {
