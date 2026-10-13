@@ -335,6 +335,9 @@ export class Follow {
       let want = scale3(this.acc, -o.posDamp * o.posDamp);
       if (len3(want) > reach) want = scale3(unit3(want), reach);
       eye = add3(eye, this.disp.step(want, o.posDamp, dt));
+    } else if (o.posDamp > 0 && this.disp.x) {
+      // (no time — the scene paused —: the lag held where it was, not dropped at once)
+      eye = add3(eye, this.disp.x);
     } else this.disp.reset([0, 0, 0]);
     // ---- the lookahead: the aim led along the motion (at most a fifth of the view's distance)
     if (o.lookahead > 0) {

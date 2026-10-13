@@ -596,6 +596,8 @@ export class GameTools {
                 plan: c.entryRun.plan ?? null,
               }
             : null,
+        // (the camera on the craft: its attitude is the camera's through it — a director's shot is not saved)
+        view: c.piloting && s.ship ? structuredClone(c.lastPose ?? c.shipPose()) : null,
       },
       // (the fleet as it flies: the craft flown, the others' coasts, the docks — reloaded, the craft flown
       // is not "switched to": a Lander saved over Kennedy once reloaded in its 500 km orbit)
@@ -653,6 +655,8 @@ export class GameTools {
       }
       p.hold = save.ship.hold;
       if (save.ship.auto !== "none" && (save.ship.auto !== "node" || save.plan)) p.auto = save.ship.auto;
+      // (the craft as it pointed: through the camera's pose on it then — the director's shot, a view dragged)
+      if (save.ship.view) c.holdMount(save.ship.view);
     }
     c.setOurLanded(save.ship.landed);
     // (the entry's site: the save's, not the nearest pass's — a deorbit to Le Bourget reloaded to Baikonur;

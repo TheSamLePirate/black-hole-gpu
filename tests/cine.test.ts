@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { CineBrain, type CineContext, holdFor, lensFor, PLAYLIST, phaseOf } from "../src/cine/brain";
+import { CineBrain, type CineContext, GROUND_CLEARANCE, holdFor, lensFor, PLAYLIST, phaseOf } from "../src/cine/brain";
 import { dot3, fbm, len3, Spring3, sub3, type V3 } from "../src/cine/rig";
 
 // (a craft flying east — x — level, up z, 250 m/s, 300 m over the ground)
@@ -128,8 +128,8 @@ describe("the shots", () => {
     const b = new CineBrain();
     const up = (h: number) => ctx({ launch: true, agl: h, vel: [0, 0, 80], q: 0, mach: 0 });
     const o0 = b.update(up(10), { ...ask, shot: "tracking" }, 1 / 30);
-    // (2 m over the ground: 8 m under the craft — then the craft's first frame of climb away from it)
-    expect(o0.eye[2]).toBeCloseTo(-8 - 80 / 30, 6);
+    // (2 m over the ground: 8 m under the craft — planted where it stands, not under the ground)
+    expect(o0.eye[2]).toBeCloseTo(-8, 6);
     let o = o0;
     for (let k = 0; k < 30 * 30; k++) o = b.update(up(10 + (80 * k) / 30), { ...ask, shot: "tracking" }, 1 / 30);
     expect(o.fov).toBeLessThan(o0.fov);
@@ -197,5 +197,29 @@ describe("the director", () => {
 describe("the lens for a subject", () => {
   test("a 20 m craft 1 km away filling a third of the frame: ~3.4°", () => {
     expect(lensFor(20, 1000, 1 / 3, 0.5, 60)).toBeCloseTo(3.44, 1);
+  });
+});
+
+describe("the director paused, kept over the ground", () => {
+  test("no time: the last view held — no spring snapped, no turn back onto the nose", () => {
+    const b = new CineBrain();
+    // (climbing to the left of the nose: the chase behind the way it goes, not the nose)
+    const c = ctx({ vel: [150, 150, 0] });
+    let o = b.update(c, { ...ask, shot: "chase" }, 1 / 30);
+    for (let k = 0; k < 60; k++) o = b.update(c, { ...ask, shot: "chase" }, 1 / 30);
+    // (paused: the velocity read with no warp — zero —, no time)
+    const p = b.update(ctx({ vel: [0, 0, 0] }), { ...ask, shot: "chase" }, 0);
+    expect(len3(sub3(p.eye, o.eye))).toBeLessThan(1e-9);
+    expect(len3(sub3(p.aim, o.aim))).toBeLessThan(1e-9);
+  });
+  test("a steep climb near the ground: the chase's eye stays over it", () => {
+    const b = new CineBrain();
+    // (climbing at 70° 3 m over the ground: behind the way it goes is under the ground)
+    const k = Math.PI / 180;
+    const c = ctx({ vel: [100 * Math.cos(70 * k), 0, 100 * Math.sin(70 * k)], agl: 3, q: 1000, mach: 0.3 });
+    for (let i = 0; i < 90; i++) {
+      const o = b.update(c, { ...ask, shot: "chase" }, 1 / 30);
+      expect(c.agl + dot3(o.eye, c.up!)).toBeGreaterThanOrEqual(GROUND_CLEARANCE - 1e-9);
+    }
   });
 });

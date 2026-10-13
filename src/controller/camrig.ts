@@ -59,9 +59,7 @@ export interface ViewWorld {
 /** The craft's orientation on the local axes (its left, up, nose), the camera's pose on it now. */
 function shipQ(this: CameraController): Q {
   const s = this.s;
-  const b = basis(s.yaw, s.pitch, s.roll);
-  const S = this.shipMatrix();
-  const ax = [0, 1, 2].map((i) => lin(lin(b.right, S[0][i]!, b.up, S[1][i]!), 1, b.fwd, S[2][i]!)) as [V3, V3, V3];
+  const ax = this.shipAxesLocal(basis(s.yaw, s.pitch, s.roll)) as [V3, V3, V3];
   return qFromAxes(ax[0], ax[1], ax[2]);
 }
 
@@ -197,8 +195,7 @@ function camRigStep(this: CameraController, to: MountPose, dt: number): MountPos
   const cam = cameraFrame(s);
   const b = basis(s.yaw, s.pitch, s.roll);
   // (the craft's axes as the camera has them now — the pose drawn last —, on the local axes)
-  const S = this.lastPose ? shipToCamera(this.lastPose, s.shipLookYaw, s.shipLookPitch).S : this.shipMatrix();
-  const ax = [0, 1, 2].map((i) => lin(lin(b.right, S[0][i]!, b.up, S[1][i]!), 1, b.fwd, S[2][i]!)) as [V3, V3, V3];
+  const ax = this.shipAxesLocal(b, this.drawnMatrix()) as [V3, V3, V3];
   const q = qFromAxes(ax[0], ax[1], ax[2]);
   const V = VESSELS[fleet.active];
   const centre = lin(lin(ax[0], V.centre[0], ax[1], V.centre[1]), 1, ax[2], V.centre[2]) as V3;
