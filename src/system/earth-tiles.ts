@@ -47,6 +47,10 @@ export const dayUrl = (z: number, x: number, y: number) =>
   `${GIBS}/BlueMarble_NextGeneration/default/default/GoogleMapsCompatible_Level8/${z}/${y}/${x}.jpeg`;
 export const nightUrl = (z: number, x: number, y: number) =>
   `${GIBS}/VIIRS_Night_Lights/default/2016-01-01/GoogleMapsCompatible_Level8/${z}/${y}/${x}.png`;
+// (licence: s2cloudless 2021 is CC BY-NC-SA 4.0 — non-commercial use only, derivatives under the same licence;
+// credited in the panel, the Atlas and the setting's help. The plan allows NC sources; a commercial release needs
+// another layer — EOX's 2016 mosaic is CC BY 4.0, not checked here, and EOX_FIT would have to be fitted again:
+// docs/systemes/03-univers-ephemerides.md)
 export const eoxUrl = (z: number, x: number, y: number) =>
   `https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2021_3857/default/GoogleMapsCompatible/${z}/${y}/${x}.jpg`;
 
