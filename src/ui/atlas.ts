@@ -160,7 +160,10 @@ export class AtlasPage {
     this.input.onkeydown = (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        (this.list.querySelector("button") as HTMLButtonElement | null)?.click();
+        const first = this.list.querySelector("button") as HTMLButtonElement | null;
+        // (nothing found as one typed: Enter asks again, OpenStreetMap's Nominatim too)
+        if (first) first.click();
+        else this.search(this.input.value, true);
       }
     };
     const side = h(
@@ -204,7 +207,7 @@ export class AtlasPage {
       const me = here.find((p) => p.body === body);
       if (me) this.map.flyTo(me.lat, me.lon, this.body === "earth" ? 5 : 3, 10);
     }
-    if (o.query) this.search(o.query);
+    if (o.query) this.search(o.query, true);
     this.input.focus();
   }
 
@@ -281,8 +284,11 @@ export class AtlasPage {
     return { body: p.body, lat: p.lat, lon: p.lon, name: p.name[lang], detail: p.about[lang], kind: p.kind, elevM: p.elevM };
   }
 
-  /** The search: the destinations at once; the Earth's addresses as one types (a second at most between two). */
-  private search(q: string) {
+  /**
+   * The search: the destinations at once; the Earth's addresses as one types (a second at most between two) —
+   * Photon only; `explicit` (Enter, a search given): at once, Nominatim when Photon finds nothing.
+   */
+  private search(q: string, explicit = false) {
     this.query = q;
     this.searching?.abort();
     this.found = [];
@@ -294,16 +300,20 @@ export class AtlasPage {
     this.status.textContent = t("Searching the addresses…");
     const centre = this.map.placeAt(this.map.canvas.clientWidth / 2, this.map.canvas.clientHeight / 2);
     // (typing: the request waits for a pause)
-    setTimeout(() => {
-      if (ctl.signal.aborted) return;
-      void geocode(words, { lang: this.d.lang(), near: { lat: centre[0], lon: centre[1] }, signal: ctl.signal }).then((r) => {
+    setTimeout(
+      () => {
         if (ctl.signal.aborted) return;
-        this.found = r;
-        this.status.textContent = r.length ? "" : t("No address found");
-        this.fillList();
-        this.map.request();
-      });
-    }, 350);
+        const near = { lat: centre[0], lon: centre[1] };
+        void geocode(words, { lang: this.d.lang(), near, signal: ctl.signal, fallback: explicit }).then((r) => {
+          if (ctl.signal.aborted) return;
+          this.found = r;
+          this.status.textContent = r.length ? "" : t("No address found");
+          this.fillList();
+          this.map.request();
+        });
+      },
+      explicit ? 0 : 350,
+    );
   }
 
   private fillList() {
