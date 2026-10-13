@@ -15,6 +15,9 @@ export const SURFACE_SIZE = 1024;
 export const SURFACE_GUTTER = 2;
 export const SURFACE_LEVELS = 11;
 export const SURFACE_YEAR = 2021;
+/** A region's pages at most: the valid mask (a float of P.surface, exact to 24 bits — the shader reads 16) and
+ *  their arrival times (P.surface's four last vec4s) hold 16 — a larger region in the manifest is left out. */
+export const SURFACE_PAGES = 16;
 /** The existing tracer + far-field LUT uses 16 sampled textures; this optional path adds two. */
 export const SURFACE_TEXTURE_LIMIT = 18;
 export function surfaceShader(code: string, supported: boolean): string {
@@ -35,6 +38,7 @@ export function surfaceRegion(lon: number, lat: number, margin = 0): SurfaceRegi
   return (
     regions.find(
       (r) =>
+        r.rows * r.columns <= SURFACE_PAGES &&
         lon >= r.west - margin &&
         lon < r.west + r.columns * r.step + margin &&
         lat <= r.north + margin &&
@@ -110,7 +114,7 @@ export class EarthSurface {
   private attempts: number[] = [];
   /** when a failed page is tried again [ms, performance.now()]: 2 s, doubled each time, a minute at most */
   private retryAt: number[] = [];
-  private loadedAt = new Float32Array(16);
+  private loadedAt = new Float32Array(SURFACE_PAGES);
   private started = performance.now();
   private jobs = new Set<number>();
   private failed = new Set<number>();
@@ -304,24 +308,26 @@ export class EarthSurface {
     }
   }
 
+  /** the tracer's params (P.surface), one array written again each frame (none allocated per frame) */
+  private paramsOut = new Float32Array(SURFACE_VEC4S * 4);
   params(): Float32Array {
+    const o = this.paramsOut;
     const r = this.region;
-    if (!r || !this.valid || this.mode === "off") return new Float32Array(SURFACE_VEC4S * 4);
-    return new Float32Array([
-      r.west / DEG,
-      r.north / DEG,
-      DEG / r.step,
-      this.valid,
-      r.columns,
-      r.rows,
-      SURFACE_GUTTER / SURFACE_SIZE,
-      CORE / SURFACE_SIZE,
-      SURFACE_SIZE,
-      this.mode === "materials" ? 1 : 0,
-      (r.step * 111320) / CORE,
-      (performance.now() - this.started) / 1000 + 1,
-      ...this.loadedAt,
-    ]);
+    if (!r || !this.valid || this.mode === "off") return o.fill(0);
+    o[0] = r.west / DEG;
+    o[1] = r.north / DEG;
+    o[2] = DEG / r.step;
+    o[3] = this.valid;
+    o[4] = r.columns;
+    o[5] = r.rows;
+    o[6] = SURFACE_GUTTER / SURFACE_SIZE;
+    o[7] = CORE / SURFACE_SIZE;
+    o[8] = SURFACE_SIZE;
+    o[9] = this.mode === "materials" ? 1 : 0;
+    o[10] = (r.step * 111320) / CORE;
+    o[11] = (performance.now() - this.started) / 1000 + 1;
+    o.set(this.loadedAt, 12);
+    return o;
   }
 
   get active() {

@@ -14,7 +14,8 @@ struct U {
   shipBound:vec4f,
 };
 @group(0) @binding(0) var<uniform> u:U;
-@group(0) @binding(1) var<storage,read> moments:array<vec2f>;
+// The traced scene's occlusion depth [M] per pixel (post.wgsl occlusion: fresh each frame, the nearest sample).
+@group(0) @binding(1) var<storage,read> sceneDepth:array<f32>;
 struct Command {vertices:u32, instances:atomic<u32>, first:u32, base:u32};
 @group(0) @binding(4) var<storage,read_write> commands:array<Command>;
 @group(0) @binding(5) var shadow:texture_depth_2d;
@@ -110,7 +111,7 @@ fn ggx(N:vec3f,V:vec3f,L:vec3f,rough:f32,f0:vec3f)->vec3f{
 struct Out { @location(0) color:vec4f, @location(1) occluder:vec4f };
 @fragment fn fs(v:V,@builtin(front_facing) front:bool)->Out {
  let pixel=vec2u(v.clip.xy);let at=min(pixel.y,u32(u.image.y)-1u)*u32(u.image.x)+min(pixel.x,u32(u.image.x)-1u);
- if(moments[at].y*u.image.z<length(v.p)-.025){discard;}
+ if(sceneDepth[at]*u.image.z<length(v.p)-.025){discard;}
  let eye=normalize(-v.p);var n=normalize(v.n);if(dot(n,eye)<0){n=-n;}
  var color=vec3f(.56,.6,.62);var rough=.8;var f0=vec3f(.04);
  if(v.material<.5){ // Woven pressure suit: subtle seam courses and microfabric.
@@ -134,7 +135,7 @@ struct Out { @location(0) color:vec4f, @location(1) occluder:vec4f };
 // the shadow takes the key's share away, the contact a part of the ambient's under the feet — the same
 // physics on the Earth (a soft shadow under a blue sky), the Moon (black: no air) or under clouds (faint).
 @fragment fn groundShadow(@builtin(position) pixel:vec4f)->@location(0) vec4f {
- let at=u32(pixel.y)*u32(u.image.x)+u32(pixel.x);let distance=moments[at].y*u.image.z;
+ let at=u32(pixel.y)*u32(u.image.x)+u32(pixel.x);let distance=sceneDepth[at]*u.image.z;
  if(distance<=0||distance>35){return vec4f(1);}
  let ndc=vec2f(pixel.x/u.image.x*2-1,1-pixel.y/u.image.y*2);let p=normalize(vec3f(ndc* u.view.xy,1))*distance;
  let delta=p-u.origin.xyz;let h=dot(delta,u.up.xyz);let r=length(delta-u.up.xyz*h);
@@ -165,7 +166,7 @@ fn skin(v:SkinIn)->SkinV{
 @vertex fn skinShadowVs(v:SkinIn)->@builtin(position) vec4f {return vec4f(lightClip(skin(v).p),1);}
 @fragment fn skinFs(v:SkinV,@builtin(front_facing) front:bool)->Out{
  let ip=vec2u(v.clip.xy);let at=min(ip.y,u32(u.image.y)-1u)*u32(u.image.x)+min(ip.x,u32(u.image.x)-1u);
- if(moments[at].y*u.image.z<length(v.p)-.025){discard;}
+ if(sceneDepth[at]*u.image.z<length(v.p)-.025){discard;}
  let layer=select(4i,0i,v.material==0u);
  let color=pow(textureSample(materialMaps,materialSampler,v.uv,layer).rgb,vec3f(2.2));
  let metal=textureSample(materialMaps,materialSampler,v.uv,layer+1).r;
@@ -484,7 +485,7 @@ fn bezierTangent(p0:vec3f,p1:vec3f,p2:vec3f,p3:vec3f,t:f32)->vec3f{let s=1-t;ret
 }
 @fragment fn grassFs(v:GV,@builtin(front_facing) front:bool)->Out{
  let pixel=vec2u(v.clip.xy);let at=min(pixel.y,u32(u.image.y)-1u)*u32(u.image.x)+min(pixel.x,u32(u.image.x)-1u);
- if(moments[at].y*u.image.z<length(v.p)-.03){discard;}
+ if(sceneDepth[at]*u.image.z<length(v.p)-.03){discard;}
  let edgeWidth=max(fwidth(v.blade.x),.001);let coverage=(1-smoothstep(1-edgeWidth,1+edgeWidth,abs(v.blade.x)))*v.coverage;
  if(coverage<.004){discard;}
  let t=saturate(v.blade.y);let k=u32(v.info.x+.5);let head=v.info.w;
@@ -578,7 +579,7 @@ struct SV { @builtin(position) clip:vec4f, @location(0) p:vec3f, @location(1) up
 }
 @fragment fn stoneFs(v:SV)->Out{
  let pixel=vec2u(v.clip.xy);let at=min(pixel.y,u32(u.image.y)-1u)*u32(u.image.x)+min(pixel.x,u32(u.image.x)-1u);
- if(moments[at].y*u.image.z<length(v.p)-.03){discard;}
+ if(sceneDepth[at]*u.image.z<length(v.p)-.03){discard;}
  let s=stonesIn[v.i];
  // faceted: the face's own normal
  var n=normalize(cross(dpdx(v.p),dpdy(v.p)));let eye=normalize(-v.p);if(dot(n,eye)<0){n=-n;}

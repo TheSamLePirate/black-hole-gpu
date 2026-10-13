@@ -511,7 +511,7 @@ export class CharacterRenderer {
   encode(
     enc: GPUCommandEncoder,
     target: GPUTexture,
-    moments: GPUBuffer,
+    sceneDepth: GPUBuffer,
     c: PlanetCharacter,
     frame: CharacterFrame,
     light: CharacterLight,
@@ -579,8 +579,8 @@ export class CharacterRenderer {
     set(U_SHIP, probe.shipBound && ax ? [...probe.shipBound.c, probe.shipBound.r] : [0, 0, 0, 0]);
     this.d.queue.writeBuffer(this.uniform, 0, u);
     this.prepareGrass(c, frame, contact, revision, grass, world, light, height, cam);
-    // (the bind groups follow their resources: a new moments buffer, scenery buffer or probe — made again)
-    const resources = [moments, sceneryBuffer, probe.sh, probe.env, probe.shipShadow];
+    // (the bind groups follow their resources: a new occlusion depth buffer, scenery buffer or probe — made again)
+    const resources = [sceneDepth, sceneryBuffer, probe.sh, probe.env, probe.shipShadow];
     if (resources.some((r, i) => r !== this.probeKey[i])) {
       this.probeKey = resources;
       this.groups.clear();
@@ -590,7 +590,7 @@ export class CharacterRenderer {
         case 0:
           return { buffer: this.uniform };
         case 1:
-          return { buffer: moments };
+          return { buffer: sceneDepth };
         case 4:
           return { buffer: this.commands };
         case 5:

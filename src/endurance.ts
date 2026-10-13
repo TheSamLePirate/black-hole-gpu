@@ -143,7 +143,7 @@ export class EnduranceRenderer {
   /** redraws once a finer level has arrived */
   onLoaded: () => void = () => {};
   private uniform: GPUBuffer;
-  private bind: { g: GPUBindGroup; moments: GPUBuffer } | null = null;
+  private bind: { g: GPUBindGroup; sceneDepth: GPUBuffer } | null = null;
   private pipe: GPURenderPipeline;
   private comp: GPURenderPipeline;
   private box: Box | null = null;
@@ -256,9 +256,18 @@ export class EnduranceRenderer {
 
   /**
    * Draws it for an image (W × H) and composites it into `hdr` (mip 0): the camera frame, the scene's
-   * time, the moments buffer holding the traced depth, the pre-exposure and the display-referred glow.
+   * time, the occlusion depth (renderer: sceneDepth, post.wgsl occlusion), the pre-exposure and the display-referred glow.
    */
-  encode(enc: GPUCommandEncoder, hdr: GPUTexture, moments: GPUBuffer, s: Settings, cam: CameraFrame, t: number, pre: number, glow: number) {
+  encode(
+    enc: GPUCommandEncoder,
+    hdr: GPUTexture,
+    sceneDepth: GPUBuffer,
+    s: Settings,
+    cam: CameraFrame,
+    t: number,
+    pre: number,
+    glow: number,
+  ) {
     this.rect = [0, 0, 0, 0];
     if (!this.ready || cam.region !== "hole") return;
     const W = hdr.width,
@@ -317,14 +326,14 @@ export class EnduranceRenderer {
     const d = this.device;
     const mesh = this.meshFor(bw);
     if (!mesh) return;
-    if (this.bind?.moments !== moments) {
+    if (this.bind?.sceneDepth !== sceneDepth) {
       this.bind = {
-        moments,
+        sceneDepth,
         g: d.createBindGroup({
           layout: this.pipe.getBindGroupLayout(0),
           entries: [
             { binding: 0, resource: { buffer: this.uniform } },
-            { binding: 1, resource: { buffer: moments } },
+            { binding: 1, resource: { buffer: sceneDepth } },
           ],
         }),
       };

@@ -247,7 +247,7 @@ export class ShipRenderer {
   private vessel: VesselId = "ranger";
   /** a craft flown this frame (else only the others are drawn) */
   private flown = true;
-  /** the moments buffer bound into the per-target groups */
+  /** the occlusion depth bound into the per-target groups (a stand-in when none) */
   private momentsBuf: GPUBuffer | null = null;
   private shadowTex: GPUTexture;
   private pipes!: {
@@ -1265,7 +1265,7 @@ export class ShipRenderer {
     hdr: GPUTexture,
     v: ShipView,
     occluder?: { depth: GPUTexture; rect: [number, number, number, number] },
-    moments?: GPUBuffer,
+    sceneDepth?: GPUBuffer,
   ) {
     if (!this.ready) return;
     // (none flown: only the others — the Ranger's mesh, always there, for the plumes' unused range)
@@ -1278,7 +1278,7 @@ export class ShipRenderer {
     const res = this.target(hdr);
     this.writeUniform(v, mesh);
     // (the image's size and the metres per M: the other craft's depths against the traced image's)
-    this.device.queue.writeBuffer(this.uniform, 240, new Float32Array([hdr.width, hdr.height, v.mPerM ?? 1, moments ? 1 : 0]));
+    this.device.queue.writeBuffer(this.uniform, 240, new Float32Array([hdr.width, hdr.height, v.mPerM ?? 1, sceneDepth ? 1 : 0]));
     // the box: the sphere's screen box within the image, its size rounded up (few re-allocations)
     const W = hdr.width,
       H = hdr.height;
@@ -1376,7 +1376,7 @@ export class ShipRenderer {
     rp.setPipeline(this.pipes.ship);
     // (the traced image the craft are drawn over: its sharp reflections — ship.wgsl screenRefl —, its
     // depths: what hides the other craft)
-    const mb = moments ?? (this.momentsBuf ??= this.device.createBuffer({ size: 16, usage: GPUBufferUsage.STORAGE }));
+    const mb = sceneDepth ?? (this.momentsBuf ??= this.device.createBuffer({ size: 16, usage: GPUBufferUsage.STORAGE }));
     if (!res.bind || res.bindGen !== this.bindGen || res.bindMoments !== mb) {
       res.bind = this.device.createBindGroup({
         layout: this.pipes!.ship.getBindGroupLayout(0),

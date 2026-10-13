@@ -304,6 +304,13 @@ interface Target {
   height: number;
   accum: GPUBuffer;
   moments: GPUBuffer;
+  /**
+   * the occlusion depth the raster passes test against (one f32 [M] a pixel; post.wgsl occlusion, after the
+   * temporal pass: fresh each frame — a stale pixel's own depth is the ground a trunk now covers)
+   */
+  sceneDepth: GPUBuffer;
+  /** its pass's bind group (made on first use) */
+  sceneDepthBind: GPUBindGroup | null;
   stamps: GPUBuffer;
   gather: GPUBuffer;
   hdr: GPUTexture;
@@ -413,6 +420,7 @@ export class Renderer {
   private postAtrous!: GPUComputePipeline;
   private postTemporal!: GPUComputePipeline;
   private postMotion!: GPUComputePipeline;
+  private postOcclusion!: GPUComputePipeline;
   private postStars!: GPUComputePipeline;
   private noise3d!: GPUTexture;
   private noiseSampler!: GPUSampler;
@@ -937,6 +945,7 @@ export class Renderer {
       mkPost("atrous").then((p) => (this.postAtrous = p)),
       mkPost("temporal").then((p) => (this.postTemporal = p)),
       mkPost("motionBlur").then((p) => (this.postMotion = p)),
+      mkPost("occlusion").then((p) => (this.postOcclusion = p)),
       mkPost("stars").then((p) => (this.postStars = p)),
       mkPost("beamV").then((p) => (this.postBeamV = p)),
       mkPost("meter").then((p) => (this.meterPipeline = p)),
@@ -1604,6 +1613,7 @@ export class Renderer {
     const polGridBuf = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const accum = d.createBuffer({ size: px * 16, usage: GPUBufferUsage.STORAGE });
     const moments = d.createBuffer({ size: px * 8, usage: GPUBufferUsage.STORAGE }); // Σ l², depth
+    const sceneDepth = d.createBuffer({ size: px * 4, usage: GPUBufferUsage.STORAGE }); // the occlusion depth
     const stamps = d.createBuffer({ size: px * 4, usage: GPUBufferUsage.STORAGE });
     // realtime reconstruction of stale pixels (live view only): horizontal pass of the gather
     const gather = d.createBuffer({ size: live ? px * 16 : 16, usage: GPUBufferUsage.STORAGE });
@@ -1633,6 +1643,8 @@ export class Renderer {
       height,
       accum,
       moments,
+      sceneDepth,
+      sceneDepthBind: null,
       stamps,
       gather,
       stars,
@@ -1667,7 +1679,19 @@ export class Renderer {
 
   private destroyTarget(t: Target | null) {
     if (!t) return;
-    for (const b of [t.accum, t.moments, t.stamps, t.gather, t.stars, t.resolveBuf, t.shipRect, t.polAcc, t.polGrid, t.polGridBuf])
+    for (const b of [
+      t.accum,
+      t.moments,
+      t.sceneDepth,
+      t.stamps,
+      t.gather,
+      t.stars,
+      t.resolveBuf,
+      t.shipRect,
+      t.polAcc,
+      t.polGrid,
+      t.polGridBuf,
+    ])
       b.destroy();
     this.ship.forget(t.hdr);
     t.dof?.tex.destroy();
@@ -3089,7 +3113,7 @@ export class Renderer {
   private qualityCascade(key: number, slot: NonNullable<ReturnType<Renderer["variants"]["get"]>>) {
     slot.qBusy = true;
     const current = this.wanted(key, slot);
-    const compile = (entry: "main" | "lut") => this.variantQueue.run(current, () => this.mkVariant(key, entry, true));
+    const compile = (entry: "main" | "lut") => this.variantQueue.run(current, () => this.timedVariant(key, entry, true));
     const run = async () => {
       if (!slot.q) {
         slot.q = await compile("main");
@@ -3114,14 +3138,17 @@ export class Renderer {
     return null;
   }
 
-  /** mkVariant, its compile time in the diagnostic while the first image waits for it */
-  private async timedVariant(key: number, entry: "main" | "env" | "lut") {
+  /** mkVariant, its key and compile time in the diagnostic — every one, not only those the first image
+   *  waits for: a scene's feature bit switching on in flight (the scenery's 8192) recompiles for seconds (R-M4) */
+  private async timedVariant(key: number, entry: "main" | "env" | "lut", quality = false) {
     const t0 = performance.now();
-    const p = await this.mkVariant(key, entry, false);
-    if (!this.firstFrameDoneAt) {
-      gpuDiagnostics.record("pipeline-compiled", `tracer ${entry}, features ${key}: ${((performance.now() - t0) / 1000).toFixed(1)} s`);
-      if (entry === "main") gpuDiagnostics.enter("first-frame");
-    }
+    const p = await this.mkVariant(key, entry, quality);
+    const s = ((performance.now() - t0) / 1000).toFixed(1);
+    gpuDiagnostics.record(
+      "pipeline-compiled",
+      `tracer ${entry}${quality ? " (quality)" : ""}, features ${key}: ${s} s${this.firstFrameDoneAt ? "" : ", before the first image"}`,
+    );
+    if (!this.firstFrameDoneAt && entry === "main" && !quality) gpuDiagnostics.enter("first-frame");
     return p;
   }
 
@@ -3590,6 +3617,28 @@ export class Renderer {
     enc.copyTextureToTexture({ texture: t.blur.tex }, { texture: t.hdr, mipLevel: 0 }, [t.width, t.height]);
   }
 
+  /**
+   * The occlusion depth (post.wgsl occlusion): each pixel's own traced depth where a ray landed this frame,
+   * else the nearest of the fresh rays that enclose it — what the astronaut, the grass, the stones, the
+   * vessels, the station and the Endurance are hidden by. moments.y stays the depth of field's.
+   */
+  private encodeSceneDepth(enc: GPUCommandEncoder, t: Target) {
+    t.sceneDepthBind ??= this.device.createBindGroup({
+      layout: this.postOcclusion.getBindGroupLayout(0),
+      entries: [
+        { binding: 5, resource: { buffer: t.resolveBuf } },
+        { binding: 6, resource: { buffer: t.stamps } },
+        { binding: 11, resource: { buffer: t.moments } },
+        { binding: 24, resource: { buffer: t.sceneDepth } },
+      ],
+    });
+    const pass = enc.beginComputePass(this.prof.pass("occlusion depth"));
+    pass.setPipeline(this.postOcclusion);
+    pass.setBindGroup(0, t.sceneDepthBind);
+    pass.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+    pass.end();
+  }
+
   private encodeDenoise(enc: GPUCommandEncoder, t: Target, s: Settings) {
     const d = this.device;
     if (!t.denoise) {
@@ -3650,6 +3699,8 @@ export class Renderer {
       // denoise right after the resolve; beam after the downsampling chain, before the bloom upsampling
       if (s && i === r0 && s.denoise && this.accumulated(t)) this.encodeDenoise(enc, t, s);
       if (s && i === r0 && t === this.live && this.encodeTemporal(enc, t, s) && s.motionBlur > 0) this.encodeMotionBlur(enc, t);
+      // the occlusion depth the raster passes below test against (Z-P1: fresh, not the stale pixels' own)
+      if (s && i === r0) this.encodeSceneDepth(enc, t);
       // the space station, where it is on its orbit (before the Ranger: its glass reflects it)
       if (s && i === r0) this.encodeStation(enc, t, s);
       if (s && i === r0) this.encodeCharacter(enc, t, s);
@@ -3689,7 +3740,7 @@ export class Renderer {
           // (on foot: the astronaut and the grass before it hide the hull — else the station, before it in orbit)
           this.characterRenderer.occluder ??
             (this.station.depthTexture() ? { depth: this.station.depthTexture()!, rect: this.station.rect } : undefined),
-          t.moments,
+          t.sceneDepth,
         );
         // (where it was drawn: the display reads its image there, the bloom too)
         const rect = new Float32Array(this.ship.rectFor(t.hdr));
@@ -3711,7 +3762,7 @@ export class Renderer {
             );
         } else {
           const pre = preExposure(this.ev(s));
-          this.endurance.encode(enc, t.hdr, t.moments, s, this.lastCam, this.lastTime, pre, pre / 2 ** this.ev(s));
+          this.endurance.encode(enc, t.hdr, t.sceneDepth, s, this.lastCam, this.lastTime, pre, pre / 2 ** this.ev(s));
         }
       }
       if (s && i === r0 + t.bloomLevels - 1) this.encodeBeam(enc, t, s);
@@ -3910,7 +3961,7 @@ export class Renderer {
     this.characterRenderer.encode(
       enc,
       target.hdr,
-      target.moments,
+      target.sceneDepth,
       c,
       frame,
       {
@@ -4118,7 +4169,7 @@ export class Renderer {
       pre: preExposure(this.ev(s)),
       mPerM: mR,
     };
-    this.station.encode(enc, t.hdr, t.moments, view);
+    this.station.encode(enc, t.hdr, t.sceneDepth, view);
   }
 
   /**

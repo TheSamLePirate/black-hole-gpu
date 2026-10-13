@@ -4,6 +4,7 @@ import manifest from "../assets/earth-surface/manifest.json";
 import {
   EarthSurface,
   SURFACE_LEVELS,
+  SURFACE_PAGES,
   SURFACE_SIZE,
   SURFACE_VEC4S,
   surfaceBytes,
@@ -271,4 +272,10 @@ test("16-texture shader omits optional bindings and samples", async () => {
   expect(fallback).not.toContain("var surfaceCover");
   expect(fallback).not.toContain("var surfaceSamp");
   expect(surfaceShader(trace, true)).toBe(trace);
+});
+
+// (the valid mask and the pages' arrival times in P.surface hold 16 pages: every region of the manifest fits)
+test("every surface region has at most SURFACE_PAGES pages, and the params hold their arrival times", () => {
+  for (const r of manifest.regions) expect(r.rows * r.columns).toBeLessThanOrEqual(SURFACE_PAGES);
+  expect(SURFACE_VEC4S * 4).toBe(12 + SURFACE_PAGES);
 });
