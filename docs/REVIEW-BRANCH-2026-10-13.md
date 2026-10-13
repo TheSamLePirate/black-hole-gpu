@@ -73,7 +73,7 @@ Gravité : **Critique** (à régler avant tout merge ou déjà exposé), **Haute
 6. ☐ Transitions de mode : piéton → libre, vue réalisateur, restauration à pied, touches à pied.
 7. ☐ Musique : sauter les mesures en retard, hystérésis des moments, synthèse des notes hors de la frame.
 8. ☐ TARS : `net()` avant les nouveaux téléportages, Nominatim seulement sur Entrée.
-9. ☐ Dépôt et site : LFS ou bucket pour les packs, garde de taille du site dans la CI, `check-forest` dans la CI.
+9. ☑ Dépôt et site : LFS ou bucket pour les packs, garde de taille du site dans la CI, `check-forest` dans la CI. — fait en partie : gardes et `check-forest` dans la CI ; LFS/bucket laissé à la décision de l'utilisateur (docs/ASSETS.md)
 
 ---
 
@@ -400,29 +400,29 @@ de `t()` complètes, déclencheurs branchés, environ 100 POI contrôlés, déca
 ## Tests, scripts, docs, dépôt
 
 ### Haute
-- ☐ **D-H1. 64 Mo de binaires sans LFS** : `assets/earth-surface/v1` 31,9 Mo, `assets/character` 23,7 Mo,
+- ☑ **D-H1. 64 Mo de binaires sans LFS** : `assets/earth-surface/v1` 31,9 Mo, `assets/character` 23,7 Mo,
   `docs/img` 6,8 Mo, `docs/perf` 1,0 Mo ; 96 Mo dans l'historique. Les packs sont adressés par contenu, donc
   chaque reconstruction ajoute environ 16 Mo. *Correctif* : LFS, ou une release/un bucket récupéré par
-  `build-pages.ts` d'après les hashes de `manifest.json`.
-- ☐ **D-H2. Site Pages proche de sa limite d'1 Go** (`pages.yml:166-168` dit « ~2 × 370 Mo », `_site` mesure déjà
+  `build-pages.ts` d'après les hashes de `manifest.json`. — fait : garde `scripts/check-repo-size.ts` (`bun run check:size`, CI `--base HEAD^1` : binaires suivis > 600 Mo ou un nouveau binaire > 8 Mo → échec), note docs/ASSETS.md (origine des packs, reconstruction, noms par contenu, LFS/bucket plus tard) ; ni réécriture d'historique ni LFS (décision de l'utilisateur), astronaute laissé en place, 19178c0
+- ☑ **D-H2. Site Pages proche de sa limite d'1 Go** (`pages.yml:166-168` dit « ~2 × 370 Mo », `_site` mesure déjà
   395 Mo au 11 oct.). Avec les packs et l'astronaute, on arrive à environ 900 Mo, et la prochaine région fera
-  échouer le déploiement. *Correctif* : une garde `du` dans la CI, ou des assets partagés entre `/` et `/test/`.
+  échouer le déploiement. *Correctif* : une garde `du` dans la CI, ou des assets partagés entre `/` et `/test/`. — fait : garde de taille du site dans pages.yml après l'assemblage (avertissement > 800 Mo ; > 900 Mo l'aperçu est retiré, main seul > 900 Mo échoue) ; partage `/`–`/test/` non fait (URL relatives à chaque répertoire, workers et portée du Service Worker propres, Pages sans liens), 19178c0
 
 ### Moyenne
-- ☐ **D-M1.** `earth-surface.e2e` « comparable GPU timings » n'affirme rien sur les temps (il ne fait qu'enregistrer)
-  et ne pouvait donc pas attraper la régression de 35 à 44 ms.
-- ☐ **D-M2.** `ground-details.e2e:38` : l'A/B de l'occulteur passe même quand `correct === missing`.
-- ☐ **D-M3.** `scripts/check-forest.ts` (WGSL contre TS au bit près) n'est ni dans la CI ni dans `check`.
+- ☑ **D-M1.** `earth-surface.e2e` « comparable GPU timings » n'affirme rien sur les temps (il ne fait qu'enregistrer)
+  et ne pouvait donc pas attraper la régression de 35 à 44 ms. — fait : budget `(satellite|materials) − off < 5 × max(1, off/40)` ms sur la médiane des frames GPU mesurées, attente `variantReady && calibrationReady` + 30 frames au lieu des 1,5 s, a5bcbbc
+- ☑ **D-M2.** `ground-details.e2e:38` : l'A/B de l'occulteur passe même quand `correct === missing`. — fait : si la coque recouvre l'astronaute sur > 200 px, l'occulteur doit en cacher au moins 10 % ; sinon seul le cas synthétique décide, a5bcbbc
+- ☑ **D-M3.** `scripts/check-forest.ts` (WGSL contre TS au bit près) n'est ni dans la CI ni dans `check`. — fait : `check-forest --rays 2000` dans verify et les deux étapes du site (sort 0 sans adaptateur), 19178c0
 - ☐ **D-M4.** character-aaa « devant le vaisseau posé » est rouge (refonte en contre-plongée en cours).
 - ☐ **D-M5.** `tests/score.test.ts:43-48` a perdu les bornes de hauteur et de niveau des notes.
 
 ### Basse
-- ☐ Pas de commentaire d'en-tête : earth-surface, gargantua-ground, ground-planets, scenery-hitboxes (e2e).
-- ☐ Absents de BH-API.md : `renderer.earthScenery.contact`, `renderer.streamingState.leadM`,
-  `earthSurface.colorView()`, `renderer.encodeCharacter`, `characterRenderer.model`.
-- ☐ Les captures `docs/img/earth-*` n'ont pas de crédit OSM/WorldCover/Sentinel-2/EOX.
-- ☐ L'aperçu `pages.yml:146` lance `bun test` sans junit. `build-earth-surface.ts:5` dépend d'un Python local et
-  d'un basisu non épinglé. `.pi/` n'est pas ignoré.
+- ☑ Pas de commentaire d'en-tête : earth-surface, gargantua-ground, ground-planets, scenery-hitboxes (e2e). — fait : earth-surface a5bcbbc, les trois autres 1d98705
+- ☑ Absents de BH-API.md : `renderer.earthScenery.contact`, `renderer.streamingState.leadM`,
+  `earthSurface.colorView()`, `renderer.encodeCharacter`, `characterRenderer.model`. — fait : les cinq entrées dans le tableau du renderer, 1d98705
+- ☑ Les captures `docs/img/earth-*` n'ont pas de crédit OSM/WorldCover/Sentinel-2/EOX. — fait : lignes de crédit sous les captures (PLAN-TERRE-PHOTOREALISTE.md, FORETS-BATIMENTS-WORLDWIDE.md), 1d98705
+- ☑ L'aperçu `pages.yml:146` lance `bun test` sans junit. `build-earth-surface.ts:5` dépend d'un Python local et
+  d'un basisu non épinglé. `.pi/` n'est pas ignoré. — fait : junit de l'aperçu (artefact junit-preview), basisu 2.50.0 épinglé et noté sous `encoder` dans le manifeste et le README, `BASISU`/`EARTH_BUILD_PYTHON` surchargent les chemins, `.pi/` ignoré, 19178c0
 
 **Vérifié bon** : la CI couvre typecheck, biome, check-wgsl et `bun test` ; `skipIf(!E2E)` partout ; nettoyage de
 headless-gpu ; aucun chemin `/Users` codé en dur ; aucun `.skip` ajouté ; les changements du harnais sont justifiés.
