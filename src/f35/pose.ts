@@ -12,9 +12,11 @@ type V3 = [number, number, number];
 export interface JetInputs {
   /** seconds since the last frame (real time: the actuators move in it) */
   dt: number;
-  /** the attitude commands as the flight computer gives them (pilot.ts: > 0 the nose up, the nose right, a
-   *  roll to the right — about the ship's x, y, z), −1…1 */
+  /** the angular accelerations the flight computer asks, as shares of its authority, and the turn rates as
+   *  shares of those its stick asks — > 0 the nose up, the nose right, a roll to the right —, −1…1: the
+   *  surfaces deflected for both (a steady roll keeps its flaperons out) */
   torque: V3;
+  rates: V3;
   /** the throttle 0…1, the afterburner lit */
   throttle: number;
   afterburner: boolean;
@@ -49,7 +51,8 @@ export class JetPoser {
   step(i: JetInputs): F35Pose {
     const p = this.pose;
     const dt = clamp(i.dt, 0, 0.25);
-    const [pitch, yaw, roll] = [clamp(i.torque[0], -1, 1), clamp(i.torque[1], -1, 1), clamp(i.torque[2], -1, 1)];
+    const c = (k: number) => clamp(0.55 * i.torque[k]! + 0.75 * i.rates[k]!, -1, 1);
+    const [pitch, yaw, roll] = [c(0), c(1), c(2)];
     // (the stabilators: the nose up — their trailing edges up —, and a share of the roll differentially)
     const stab = -pitch * TRAVEL.stab * 0.8;
     const sRoll = roll * TRAVEL.stab * 0.35;

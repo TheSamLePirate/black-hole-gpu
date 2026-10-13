@@ -95,11 +95,16 @@ export class Fleet {
   activePose: (() => (Pose & { t: number }) | null) | null = null;
   /** the rapidity each craft's engines have spent since its tank was filled (the propellant gauge) */
   spent: Partial<Record<VesselId, number>> = {};
+  /** an aircraft's fuel left [kg] (VESSELS[…].fuelKg: the F-35's) — none: full */
+  fuel: Partial<Record<VesselId, number>> = {};
   /** the tanks' model (the scene's exhaust speed and mass ratio); null: no propellant counted */
   tanks: { exhaust: number; massRatio: number } | null = null;
 
   /** A craft's mass now over its full mass: its propellant burnt (engine.ts). */
   massLeft(id: VesselId): number {
+    // (an aircraft: its fuel burnt, not a rocket's propellant)
+    const V = VESSELS[id];
+    if (V.fuelKg) return (V.mass - V.fuelKg + Math.max(this.fuel[id] ?? V.fuelKg, 0)) / V.mass;
     return this.tanks ? massLeft(this.tanks, this.spent[id] ?? 0) : 1;
   }
 
@@ -302,7 +307,7 @@ export class Fleet {
       const v = VESSELS[id];
       const left = this.massLeft(id);
       const m = v.mass * left;
-      const prop = this.tanks ? v.mass * (1 - 1 / Math.max(this.tanks.massRatio, 1)) : 0;
+      const prop = v.fuelKg ?? (this.tanks ? v.mass * (1 - 1 / Math.max(this.tanks.massRatio, 1)) : 0);
       const dry = v.mass - prop;
       // (full: com; the tank's share burnt: the dry centre plus what is left at the tank)
       const comDry = prop > 0 ? lin(v.com, v.mass / dry, v.tank, -prop / dry) : v.com;

@@ -935,6 +935,8 @@ export class CameraController {
   /** the jet's systems (plane mode — game/jet.ts, controller/jet.ts): the autopilot's altitude and heading
    *  holds, the autothrottle, the afterburner; the stick flying through the holds (pitch, roll) */
   jetModes: JetModes = noJetModes();
+  /** the afterburner lit 0…1 (a turbofan's light-up — controller/jet.ts) */
+  abLevel = 0;
   readonly jetAthr = new Autothrottle();
   jetCws = { pitch: false, roll: false, thr: Number.NaN };
 

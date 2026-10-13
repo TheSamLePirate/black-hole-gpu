@@ -21,6 +21,7 @@ import {
 } from "../targeting";
 import { fromZamo, step as geoStep, toZamo } from "../geodesic";
 import { engineThrust, fuelOn, loadShare, pressureFactor, tank } from "../engine";
+import { dryThrust } from "../f35/engine";
 import { followDv, type V3 as KV3 } from "../fc/kepler";
 import type { Burn } from "../fc/ops";
 import { apsisLeft, circLeft, periodLeft, planeLeft, kHohmann } from "../fc/kerr-ops";
@@ -101,6 +102,7 @@ declare module "../controls" {
     fromZamo: typeof fromZamoMethod;
     thrustMax: typeof thrustMax;
     pressureThrust: typeof pressureThrust;
+    jetAir: typeof jetAir;
     refuel: typeof refuel;
     holeOmega: typeof holeOmega;
   }
@@ -1670,6 +1672,14 @@ function fromZamoMethod(this: CameraController, cam: ReturnType<typeof cameraFra
 /** The engine's maximum proper acceleration now [c²/M]: none once the tank is empty. */
 function thrustMax(this: CameraController) {
   const s = this.s;
+  // (an aircraft's turbofan — the F-35's —: its dry thrust from the air it breathes, over its mass now;
+  // none without fuel, nor out of the air)
+  const J = VESSELS[fleet.active];
+  if (J.turbofan) {
+    if ((fleet.fuel[fleet.active] ?? J.fuelKg ?? 1) <= 0) return 0;
+    const e = this.jetAir();
+    return ((dryThrust(J.turbofan, e.mach, e.sigma) / fleet.massProps().mass) * 1476.625 * s.massSolar) / C_MPS ** 2;
+  }
   if (fuelOn(s) && tank(s, this.spent).empty) return 0;
   // (the craft flown: its own engines' force — a share of the crew setting's at full tanks —, over its
   // assembly's mass now: the craft docked to it pushed along, the propellant burnt lightening it; in the
@@ -1681,6 +1691,14 @@ function thrustMax(this: CameraController) {
   // Ranger broken up; the Cinema engine's fictional thousands of g are borne by nothing — engine.ts)
   if (loadShare(s) <= 0) return a;
   return Math.min(a, (0.85 * V.aero.gMax * G0 * 1476.625 * s.massSolar) / C_MPS ** 2);
+}
+
+/** The air an aircraft's engine breathes now: its Mach number and the density over sea level's (on the
+ *  ground before the air's first sample: the sea's). */
+function jetAir(this: CameraController): { mach: number; sigma: number } {
+  const L = this.airFlight.last;
+  if (L && L.air.rho > 0) return { mach: L.speed / Math.max(L.air.a, 1), sigma: L.air.rho / 1.225 };
+  return { mach: 0, sigma: this.ourLanded || this.rolling ? 1 : 0 };
 }
 
 /** The main engine's thrust over its vacuum thrust here: the ambient pressure on its exit (engine.ts). */
@@ -1696,6 +1714,7 @@ function pressureThrust(this: CameraController) {
 /** Fills the tank again. */
 function refuel(this: CameraController) {
   this.spent = 0;
+  delete fleet.fuel[fleet.active];
 }
 
 /** Angular rate of a circular orbit around the hole through C (the frame a body there turns with). */
@@ -1746,6 +1765,7 @@ export function installPlan(C: { prototype: CameraController }) {
     fromZamo: fromZamoMethod,
     thrustMax,
     pressureThrust,
+    jetAir,
     refuel,
     holeOmega,
   });

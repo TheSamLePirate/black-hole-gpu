@@ -64,7 +64,7 @@ try {
       s.shipMount = ${JSON.stringify(v.mount)};
       ${v.fov ? `s.fov = ${v.fov};` : ""}
       ${v.look ? `s.shipLookYaw = ${v.look[0]}; s.shipLookPitch = ${v.look[1]};` : ""}
-      ${v.js ?? ""};
+      { ${v.js ?? ""} }
       for (let i = 0; i < ${v.frames ?? 90}; i++) {
         if (${JSON.stringify(v.mount)} === "around") Object.assign(c.outside, { yaw: ${v.yaw ?? 0}, pitch: ${v.pitch ?? 10}, dist: ${v.dist ?? 18} });
         __bh.step(1 / 30);

@@ -8,6 +8,7 @@
 
 import type { V3 } from "./mounts";
 import type { VesselAero } from "./aero";
+import { F135, type TurbofanDef } from "./f35/engine";
 
 export type VesselId = "ranger" | "lander" | "endurance" | "f35";
 export const VESSEL_IDS: VesselId[] = ["ranger", "lander", "endurance", "f35"];
@@ -74,6 +75,13 @@ export interface VesselDef {
   flies: boolean;
   /** its wingtips (ship frame, the left one): where the tip vortices' trails start (contrails.ts) */
   wingtip?: V3;
+  /** an aircraft's engine — an afterburning turbofan (src/f35/engine.ts) — instead of a rocket's: its thrust
+   *  from the air it breathes; its fuel [kg] (in `mass`, burnt by the engine's consumption: no rocket tank) */
+  turbofan?: TurbofanDef;
+  fuelKg?: number;
+  /** its flight control system (pilot.ts's plane law): the rates the stick asks (pitch, yaw, roll) [rad/s],
+   *  the load factor's limits [g] and the angle of attack's [rad] */
+  fbw?: { rates: V3; gMax: number; gMin: number; alphaMax: number };
 }
 
 /** Attitude thrusters: a quad at each corner (lateral, up, down) and fore / aft pairs. */
@@ -365,14 +373,19 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     },
   },
   // the F-35B (assets/f35: scripts/build-f35.py — 15.4 m long, 10.7 m span, its belly gear up at y = 0, the
-  // wheels 1.17 m under it): 14.7 t empty, 6.1 t of fuel, the pilot — some 20 t as it leaves the ramp
+  // wheels 1.17 m under it): 14.7 t empty, the pilot and his kit, 6.1 t of fuel — 20.9 t as it leaves the ramp
   f35: {
     id: "f35",
     name: "F-35B",
-    mass: 20e3,
+    mass: 14650 + 150 + 6125,
+    fuelKg: 6125,
+    turbofan: F135,
+    // (the stick's rates: 30°/s in pitch, 10°/s of sideslip's yaw, 190°/s of roll; +7 / −3 g; 27° of
+    // angle of attack — the wing's own limit here, its lift past it falling)
+    fbw: { rates: [0.52, 0.18, 3.3], gMax: 7, gMin: -3, alphaMax: 0.47 },
     accel: 1,
     slThrust: 1,
-    spool: 1.2,
+    spool: F135.spool,
     gyr: 3.2,
     // (a fighter's: long, its wings short — least about the nose; F-16's scaled: 0.22 L, 0.24 L, 0.1 L)
     rg: [3.4, 3.7, 1.6],
@@ -391,10 +404,13 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     wingtip: [5.36, 1.16, -3.0],
     // a fighter (42.7 m² of wing, aspect ratio 2.7; two canted fins of 4.6 m² each; the fuselage's
     // planform with the wing ~62 m²): low drag (C_D0 ≈ 0.021)
+    // (the nose's face nearly nothing — a fine nose, its drag in cdA0; the lift slope the whole craft's
+    // over the wing's area, its body and chines included: 3.8/rad — the F-16's 4)
     aero: {
-      area: [28, 62, 4.5],
-      cdA0: 0.9,
-      wing: { S: 42.7, AR: 2.68, cla: 3.5, stall: 0.6, e: 0.8, dihedral: -0.03 },
+      area: [20, 62, 0.25],
+      cdA0: 0.62,
+      wave: 0.95,
+      wing: { S: 42.7, AR: 2.68, cla: 3.8, stall: 0.45, e: 0.8, dihedral: -0.03 },
       fin: { S: 9.2, cla: 2.4, at: [0, 1.6, -4.2] },
       cp: [
         [0, 0.3, -1.0],
@@ -403,13 +419,15 @@ export const VESSELS: Record<VesselId, VesselDef> = {
       ],
       cw: [0, 0, -0.35],
       curve: [0, 0.1, 0.4],
-      damp: [5, 5, 0.6],
+      // (the roll's damping the wing halves' own — aero.ts —: little more)
+      damp: [1.5, 1.5, 0.03],
       len: 15.4,
       noseR: 0.25,
       shield: null,
       hull: { tMax: 480, cap: 8e3, eps: 0.85 },
-      gMax: 7,
-      ctrl: [0.5, 0.2, 1.6],
+      // (it breaks past 1.5 × its limit: the flight control system holds it at 7)
+      gMax: 10.5,
+      ctrl: [0.6, 0.25, 2.2],
     },
     mounts: {
       // (the pilot's eyes: in the helmet the model sits — scripts/build-f35.py)

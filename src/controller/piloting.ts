@@ -26,6 +26,7 @@ import { upOf, viewBlend } from "./camrig";
 import { fleet } from "../fleet";
 import { fuelOn, loadShare } from "../engine";
 import { isPlane, VESSELS } from "../vessels";
+import { fuelFlow } from "../f35/engine";
 import type { GamepadInput } from "../gamepad";
 import { mouth } from "../wormhole";
 import { gravityHome, ourState, repToHomeVec } from "../system/our-side";
@@ -186,6 +187,7 @@ function newFlight(this: CameraController) {
   // (the tanks full again: every craft's; the weather drawn anew at the flight's first moment — the same
   // flight, the same gusts; nothing of the last flight's gear — its spoilers, its steering, its springs)
   fleet.spent = {};
+  fleet.fuel = {};
   this.groundSpoilers = false;
   this.noseSteer = 0;
   this.turnOnGear = false;
@@ -973,7 +975,9 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
           mode,
           alpha: LA0.out.alpha,
           beta: LA0.out.beta,
-          auth: AV.ctrl.map((k) => Math.min((k * LA0.out.q) / 1000, 4)) as Vec3,
+          // (a fighter's surfaces — the F-35's stabilators and flaperons —: authority to roll at 190°/s against
+          // its wings' own damping, 14 rad/s² at most; a spacecraft's 4)
+          auth: AV.ctrl.map((k) => Math.min((k * LA0.out.q) / 1000, VESSELS[fleet.active].fbw ? 14 : 4)) as Vec3,
           path: this.airFlight.pathRate.map((x) => -x) as Vec3,
           ground: onWheels0,
           stall: AV.wing?.stall ?? 0.35,
@@ -981,6 +985,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
           gamma: this.pathAngle(cam),
           bank: (this.attitudeNow() as { bank?: number }).bank ?? 0,
           mach: LA0.out.mach,
+          speed: LA0.speed,
+          fbw: VESSELS[fleet.active].fbw,
           gammaCmd: jetCmd.gamma,
           bankCmd: jetCmd.bank,
         }
@@ -1056,7 +1062,12 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
         // (in the camera's representation, as the autopilots' wants: nav.toRep)
         return unitV(nv.toRep(figureUp(nv.ref, nv.X, nv.t))) as [number, number, number];
       })(),
-      spoolK: s.engine === "crew" ? 1 - Math.exp(-((s.animate ? s.timeSpeed * dt : 0) * Msec) / VESSELS[fleet.active].spool) : 1,
+      // (a turbofan's spool always: its own lag, whatever the scene's engine)
+      rcs: VESSELS[fleet.active].turbofan ? 0 : 1,
+      spoolK:
+        s.engine === "crew" || VESSELS[fleet.active].turbofan
+          ? 1 - Math.exp(-((s.animate ? s.timeSpeed * dt : 0) * Msec) / VESSELS[fleet.active].spool)
+          : 1,
     },
     inp,
   );
@@ -1157,7 +1168,18 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
     this.fcBurns[0].done = Math.max(this.fcBurns[0].done + along(entryAtt?.nose) * C_MPS, 0);
   // (the propellant: in the air the same thrust costs more of it — the Isp lowered by the pressure)
   // (the afterburner: three times the propellant for half again the thrust)
-  if (fuelOn(s)) this.spent += (w / Math.max(this.pressureThrust(), 0.05)) * (this.jetModes.ab ? JET.abFlow / JET.abThrust : 1);
+  // (an aircraft's turbofan: its fuel by its consumption — the thrust it gives now, the dry share and the
+  // afterburner's — in seconds of the flight)
+  const TF = VESSELS[fleet.active].turbofan;
+  if (TF) {
+    const e = this.jetAir();
+    const mass = fleet.massProps().mass;
+    const toMs2 = C_MPS ** 2 / (1476.625 * s.massSolar);
+    const dry = this.pilot.engineNow * this.thrustMax() * toMs2 * mass;
+    const thrust = dry * this.jetThrust();
+    const left = fleet.fuel[fleet.active] ?? VESSELS[fleet.active].fuelKg ?? 0;
+    if (e.sigma > 0) fleet.fuel[fleet.active] = Math.max(0, left - fuelFlow(TF, thrust, dry, e.sigma) * dTau * Msec);
+  } else if (fuelOn(s)) this.spent += (w / Math.max(this.pressureThrust(), 0.05)) * (this.jetModes.ab ? JET.abFlow / JET.abThrust : 1);
   if (burn && this.nodeBurning) this.nodeDone = Math.max(this.nodeDone + along(burn.dir), 0);
   this.dockCheck();
   this.measureSpin();

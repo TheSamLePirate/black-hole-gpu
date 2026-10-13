@@ -121,7 +121,8 @@ export interface FlightInfo {
     drift: Dir;
   };
   /** the engine and the tank */
-  engine: { kind: Settings["engine"]; max: number; fuel: ReturnType<typeof tank> | null };
+  /** (an aircraft's turbofan: `fuel` its tank's share — fraction, empty; `jet` its fuel [kg], full [kg]) */
+  engine: { kind: Settings["engine"]; max: number; fuel: ReturnType<typeof tank> | null; jet?: { kg: number; full: number } | null };
   speedMode: CameraController["speedMode"];
   precision: boolean;
   // ---- the map: position, velocity, nose and view (flat map: the hole's frame, or our home frame)
@@ -345,7 +346,19 @@ function flightInfo(this: CameraController): FlightInfo {
     })(),
     entry: this.entryInfo(),
     /** the engine and the tank */
-    engine: { kind: s.engine, max: this.thrustMax(), fuel: fuelOn(s) ? tank(s, this.spent) : null },
+    engine: (() => {
+      const V = VESSELS[fleet.active];
+      if (!V.turbofan) return { kind: s.engine, max: this.thrustMax(), fuel: fuelOn(s) ? tank(s, this.spent) : null, jet: null };
+      const full = V.fuelKg ?? 0;
+      const kg = fleet.fuel[fleet.active] ?? full;
+      const fraction = full > 0 ? kg / full : 0;
+      return {
+        kind: s.engine,
+        max: this.thrustMax(),
+        fuel: { budget: 0, left: 0, dvLeft: 0, fraction, empty: kg <= 0 },
+        jet: { kg, full },
+      };
+    })(),
     /** the selected target: distance (centre to centre, flat map) and range rate (> 0: receding) */
     target: s.target,
     targetDist: NaN,

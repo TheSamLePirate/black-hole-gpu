@@ -12,6 +12,7 @@ import type { PilotInput } from "../pilot";
 import { altitudeOver, solidBody } from "../system/our-surface";
 import { C_MPS, M_METRES } from "../units";
 import { VESSELS } from "../vessels";
+import { wetRatio } from "../f35/engine";
 import type { CameraController } from "../controls";
 
 declare module "../controls" {
@@ -39,6 +40,12 @@ function jetFigures(this: CameraController): { h: number; hdg: number; V: number
 
 /** The afterburner's thrust factor now (1: dry). */
 function jetThrust(this: CameraController): number {
+  // (an aircraft's own turbofan — the F-35's —: its afterburner's factor where it flies, lit by degrees)
+  const T = VESSELS[fleet.active].turbofan;
+  if (T) {
+    const e = this.jetAir();
+    return 1 + (wetRatio(T, e.mach, e.sigma) - 1) * this.abLevel;
+  }
   return this.jetModes.ab ? JET.abThrust : 1;
 }
 
@@ -96,6 +103,10 @@ function jetToggle(this: CameraController, what: "ap" | "athr" | "ab"): string {
 function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: number | null; bank: number | null } {
   const m = this.jetModes;
   const none = { gamma: null, bank: null };
+  // (a turbofan's afterburner lights up and goes out over its own time)
+  const T = VESSELS[fleet.active].turbofan;
+  const abOn = m.ab && jetReady(this);
+  this.abLevel = T ? Math.min(Math.max(this.abLevel + (abOn ? 1 : -1) * (dt / T.light), 0), 1) : abOn ? 1 : 0;
   if (!jetReady(this)) {
     if (m.alt !== null || m.hdg !== null || m.spd !== null || m.ab) this.jetModes = noJetModes();
     return none;

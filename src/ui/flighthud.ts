@@ -3896,7 +3896,10 @@ export class FlightHud {
     if (R) {
       R.thr.textContent = `${Math.round(thrK * 100)}%${i.precision ? ` ${t("FINE")}` : ""}`;
       R.g.textContent = i.accel > 0 ? fmtG(i.accel * gUnit) : "0 g";
-      R.eng.textContent = `${i.engine.kind === "crew" ? t("CREW") : t("CINEMA")} ${fmtG(i.engine.max * gUnit)}${fu ? ` · ${fu.empty ? t("TANK EMPTY") : `${t("PROP")} ${Math.round(fu.fraction * 100)}% · Δv ${fmtDvLeft(fu.dvLeft)}`}` : ""}`;
+      const je = i.engine.jet;
+      R.eng.textContent = je
+        ? `F135 · ${je.kg <= 0 ? t("FLAMEOUT") : tf("FUEL {0} kg", Math.round(je.kg).toLocaleString())}`
+        : `${i.engine.kind === "crew" ? t("CREW") : t("CINEMA")} ${fmtG(i.engine.max * gUnit)}${fu ? ` · ${fu.empty ? t("TANK EMPTY") : `${t("PROP")} ${Math.round(fu.fraction * 100)}% · Δv ${fmtDvLeft(fu.dvLeft)}`}` : ""}`;
       R.eng.classList.toggle("hot", !!fu && (fu.empty || fu.fraction < 0.15));
     }
     // rotation rates: short bars (pitch right side, yaw bottom)

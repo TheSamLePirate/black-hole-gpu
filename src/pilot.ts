@@ -126,6 +126,10 @@ export interface FlightContext {
      *  (null: the plane law's own — those it had when let go) */
     gammaCmd?: number | null;
     bankCmd?: number | null;
+    /** the speed through the air [m/s], and the craft's flight control system (vessels.ts fbw: its rates, its
+     *  load factor's and angle of attack's limits) — none: the plane law's defaults */
+    speed?: number;
+    fbw?: { rates: V3; gMax: number; gMin: number; alphaMax: number };
   } | null;
   /** the sci-fi flight computer: the velocity it flies (local 3-velocity), the feed-forward against
    *  gravity and the air (local, proper acceleration), the attitude it holds (local), and the part of
@@ -149,6 +153,8 @@ export interface FlightContext {
   /** the main engine's answer this frame: the share of the way from its thrust to the throttle's
    *  (1 − e^(−dt/τ) over the frame's flight time; 1 or none: at once) */
   spoolK?: number;
+  /** the RCS translation's share (0: none — an aircraft's turbofan has no thrusters to slide it) */
+  rcs?: number;
   /**
    * the rigid body (phase 2): its inertia tensor on the ship's axes [kg m²] and the most torque its
    * wheels and thrusters give about each [kg m² rad/s²] — the angular accelerations τ/I, and Euler's
@@ -394,7 +400,7 @@ export class FlightComputer {
       const T = Math.max(1.2 * c.tauRate, 1e-3);
       const A = add(scale(add(toU(c.want.beta), scale(toU(c.beta), -1)), 1 / T), c.want.ff);
       const a = len(A);
-      const rcsMax = TUNING.rcs * c.thrust;
+      const rcsMax = TUNING.rcs * c.thrust * (c.rcs ?? 1);
       rcsC = toC(a > rcsMax ? scale(A, rcsMax / a) : A);
       throttle = 0;
       if (c.dock) {
@@ -502,8 +508,11 @@ export class FlightComputer {
     const axisAcc = (i: number) => (I && tq ? tq[i]! / I[i]![i]! : TUNING.turnAccel);
     // (on its own gear, the surfaces' authority no more than the wheels' and thrusters' own: a stiff
     // control against stiff springs would fight them frame by frame)
+    // (a craft without wheels or thrusters to speak of — a fighter —: its surfaces up to 1.6 rad/s² on the
+    // gear, as the Ranger's wheels give it: enough to rotate it for the take-off)
+    const gearAcc = (i: number) => Math.min(A3[i]!, Math.max(axisAcc(i), c.air?.fbw ? 1.6 : 0));
     const acc3: V3 = c.onGear
-      ? [axisAcc(0) + Math.min(A3[0]!, axisAcc(0)), axisAcc(1) + Math.min(A3[1]!, axisAcc(1)), axisAcc(2) + Math.min(A3[2]!, axisAcc(2))]
+      ? [axisAcc(0) + gearAcc(0), axisAcc(1) + gearAcc(1), axisAcc(2) + gearAcc(2)]
       : [axisAcc(0) + A3[0]!, axisAcc(1) + A3[1]!, axisAcc(2) + A3[2]!];
     const planeLaw = !!c.air && c.air.mode === "plane" && c.air.q > 300 && !point && this.hold === "none" && flown;
     if (!planeLaw || inp.pitch !== 0) (this.gammaHold = null), (this.alphaHold = null);
@@ -513,8 +522,8 @@ export class FlightComputer {
       // path is held — the climb angle it had (more lift in a bank), no sideslip (the rudder
       // coordinates), the bank kept — the nose turning with the path; the stall kept off
       const P = c.air!;
-      const rates: V3 = [0.35, 0.14, 1.2];
-      const stallSafe = alphaLimit(P.stall, P.mach);
+      const rates: V3 = P.fbw?.rates ?? [0.35, 0.14, 1.2];
+      const stallSafe = P.fbw ? Math.max(P.fbw.alphaMax, alphaLimit(P.stall, P.mach)) : alphaLimit(P.stall, P.mach);
       if (this.gammaHold === null && inp.pitch === 0) this.gammaHold = P.gamma;
       if (P.gammaCmd != null && inp.pitch === 0) this.gammaHold = P.gammaCmd;
       const gdot = this.gammaPrev !== null && dt > 0 ? (P.gamma - this.gammaPrev) / dt : 0;
@@ -529,6 +538,13 @@ export class FlightComputer {
         want[0] = P.path[0] - 1.5 * (P.alpha - this.alphaHold);
       } else want[0] = P.path[0] + 1.2 * ((this.gammaHold ?? P.gamma) - P.gamma) - 1.5 * gdot;
       if (P.alpha > stallSafe) want[0] = Math.min(want[0], P.path[0] - 2 * (P.alpha - stallSafe));
+      // (a fighter's flight control system: the load factor held within its limits — the pitch rate that
+      // turns the path at g·(n − cos γ cos φ)/V, at most)
+      if (P.fbw && !P.ground && (P.speed ?? 0) > 20) {
+        const g1 = Math.cos(P.gamma) * Math.cos(P.bank);
+        const k = 9.80665 / P.speed!;
+        want[0] = clamp(want[0], (P.fbw.gMin - g1) * k, (P.fbw.gMax - g1) * k);
+      }
       // (on its own gear the nose wheel steers it: the rudder only as the pedals ask)
       want[1] = P.ground ? (c.onGear && manual[1] === 0 ? this.omega[1] : manual[1] * 0.3) : P.path[1] - 2 * P.beta + manual[1] * rates[1];
       if (this.bankHold === null && inp.roll === 0) this.bankHold = Math.abs(P.bank) < 0.105 ? 0 : P.bank;
@@ -581,7 +597,7 @@ export class FlightComputer {
       }
       // (no faster than 1.5 × the commanded rate — but a turn the craft has past it kept, only slowed: docked
       // to the tumbling Endurance, the assembly's 18°/s were cut to its 1.5 × 0.9°/s at once)
-      const lim = Math.max(1.5 * TUNING.turnRate, Math.abs(this.omega[i]!));
+      const lim = Math.max(1.5 * TUNING.turnRate, Math.abs(this.omega[i]!), planeLaw && c.air!.fbw ? 1.3 * c.air!.fbw.rates[i]! : 0);
       this.omega[i] = clamp(this.omega[i]! + d, -lim, lim);
       if (Math.abs(this.omega[i]!) < 1e-5 && want[i] === 0) this.omega[i] = 0;
     }

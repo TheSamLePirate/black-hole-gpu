@@ -5132,7 +5132,11 @@ async function main() {
           const speed = status?.speed ?? 0;
           renderer.jetPose = jetPoser.step({
             dt,
-            torque: th?.torque ?? [0, 0, 0],
+            // (the pilot's: the roll left-positive — pilot.ts —; here right-positive)
+            torque: th ? [th.torque[0], th.torque[1], -th.torque[2]] : [0, 0, 0],
+            rates: ((r) => [camera.pilot.omega[0] / r[0], camera.pilot.omega[1] / r[1], -camera.pilot.omega[2] / r[2]])(
+              VESSELS.f35.fbw!.rates,
+            ) as [number, number, number],
             throttle: th?.throttle ?? 0,
             afterburner: (th?.boost ?? 1) > 1.01,
             alpha: L?.out.alpha ?? 0,

@@ -284,6 +284,9 @@ export interface VesselAero {
   area: V3;
   /** skin friction and base drag, C_D·A [m²] */
   cdA0: number;
+  /** a supersonic shape's wave drag kept past the transonic peak: the zero-lift drag's plateau × (1 + wave)
+   *  from Mach 1.15 on (a fighter's: its area ruling's, its intakes'); none: the transonic bump alone */
+  wave?: number;
   /** the wing (in the xz plane): area [m²], aspect ratio, lift slope [/rad], stall angle [rad], Oswald's e;
    *  its dihedral [rad] (its halves tilted up: a sideslip rolls the craft away from it) */
   wing?: { S: number; AR: number; cla: number; stall: number; e: number; dihedral?: number };
@@ -414,7 +417,7 @@ export function aeroForces(A: VesselAero, v: V3, air: Air, w: V3 = [0, 0, 0], cf
   }
   // skin friction, base drag, brake and gear; the transonic rise
   const extra = A.cdA0 + (cfg.brake ?? 0) * 0.04 * A.area[1] + (cfg.gear ? 0.012 * A.area[1] : 0);
-  const wave = 1 + 1.4 * Math.exp(-(((M - 1.05) / 0.22) ** 2)) + 0.4 * smooth(0.9, 1.3, M) * (1 - smooth(2, 5, M));
+  const wave = 1 + 1.4 * Math.exp(-(((M - 1.05) / 0.22) ** 2)) + (0.4 + (A.wave ?? 0)) * smooth(0.9, 1.3, M) * (1 - smooth(2, 5, M));
   // (the zero-lift drag — the box's and the friction's — raised through Mach 1)
   const boxD = -(F[0] * u[0] + F[1] * u[1] + F[2] * u[2]);
   const D0 = q * extra + (boxD + q * extra) * (wave - 1);
