@@ -4733,6 +4733,8 @@ async function main() {
   let fps = 0;
   let hudTimer = 0;
   let frozen = false;
+  /** the ground's heights last seen (renderer.groundStamp) */
+  let groundSeen = "";
   /** the pause menu (or the title screen) open: the simulation holds, the image refines */
   let paused = false;
   const menuPad = new MenuPad();
@@ -4825,6 +4827,13 @@ async function main() {
       ) as [number, number, number];
     } else renderer.carrierVelocity = null;
     renderer.onFoot = camera.character.active;
+    // (finer heights come in under what stands on the ground — a scene's tripod placed on the coarse relief, inside
+    // the Grand Canyon's rim: set on them at once, the clock held or not — a step of no time, as the flight's own)
+    const groundNow = renderer.groundStamp;
+    if (groundNow !== groundSeen) {
+      groundSeen = groundNow;
+      if (camera.ourLanded && !camera.character.active) camera.fall(0, [0, 0, 0], false);
+    }
     // (the rain where the view is: the spectator's camera away from the ship — in orbit, under another sky —
     // has its own, or none)
     const viewer = camera.viewController();

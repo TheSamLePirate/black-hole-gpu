@@ -47,6 +47,12 @@ test.skipIf(!E2E)(
         const status = await app.js<{ ready: boolean }>(readiness);
         expect(status.ready).toBe(true);
         await Bun.write(`${OUT}/${slug}.json`, JSON.stringify({ landscape: l, readiness: status }, null, 2));
+        // (the picture alone, as the photograph is: the interface hidden — the data's credits go with the gallery's
+        // captions —, a few frames for the page to draw without it)
+        await app.js(
+          `(()=>{document.body.classList.add("hide-ui");document.querySelectorAll("canvas.fl-hud").forEach((c)=>(c.style.visibility="hidden"));__bh.touch();return true;})()`,
+        );
+        await app.js("new Promise((r) => setTimeout(r, 600))");
         await app.shot(`${OUT}/${slug}.png`);
         expect(await app.js<number>("__bh.renderer.gpuErrors")).toBe(0);
         expect(app.cdp.errors).toEqual([]);

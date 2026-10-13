@@ -4677,6 +4677,11 @@ export class Renderer {
   completedFrames = 0;
   firstFrameDoneAt = 0;
   private completedDurations: number[] = [];
+  /** what the ground's heights are made of now (the Earth's terrain tiles, a world's finer relief): it changes
+   *  when finer heights come in — what stood on the coarser ground is set on them (main.ts) */
+  get groundStamp() {
+    return `${this.earthTiles.stamp}:${this.hdMap.name ?? ""}:${this.hdMap.dem ? 1 : 0}`;
+  }
   get frameTelemetry() {
     return { completedFrames: this.completedFrames, firstFrameDoneAt: this.firstFrameDoneAt, durationsMs: [...this.completedDurations] };
   }
