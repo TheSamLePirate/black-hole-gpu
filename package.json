@@ -20,6 +20,7 @@
     "format": "biome format --write .",
     "check": "biome ci . && tsc --noEmit && bun scripts/check-wgsl.ts",
     "check:forest": "bun scripts/check-forest.ts",
+    "check:size": "bun scripts/check-repo-size.ts --base origin/main",
     "e2e": "bun scripts/e2e.ts",
     "remote": "bun scripts/remote.ts",
     "dashboard": "bun scripts/dashboard/server.ts",

@@ -76,3 +76,6 @@ remote-results/
 
 # the flight lab's campaigns (scripts/flightlab.ts)
 /flight-results/
+
+# a local coding agent's working files (its plans)
+.pi/

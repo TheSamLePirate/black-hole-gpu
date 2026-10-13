@@ -202,5 +202,9 @@
         "https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/2021/map/ESA_WorldCover_10m_2021_v200_N42E003_Map.tif"
       ]
     }
-  ]
+  ],
+  "encoder": {
+    "basisu": "2.50.0",
+    "flags": "-uastc -uastc_level 1 -uastc_rdo_l 1.0 -ktx2 -ktx2_zstandard_level 18 -mipmap"
+  }
 }

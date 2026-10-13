@@ -43,7 +43,7 @@ Les 32 fichiers du Bourget représentent **15,52 MiB téléchargés**, ceux des 
 
 ### Préparation des packs
 
-Prérequis hors du navigateur : Python 3, Rasterio/GDAL et Basis Universal (`basisu`). Versions Python fixées dans [earth-surface-requirements.txt](../scripts/earth-surface-requirements.txt).
+Prérequis hors du navigateur : Python 3, Rasterio/GDAL et Basis Universal (`basisu` **2.50.0**, épinglé : le script refuse une autre version, notée avec ses options sous `encoder` dans le manifeste). Versions Python fixées dans [earth-surface-requirements.txt](../scripts/earth-surface-requirements.txt). `EARTH_BUILD_PYTHON` et `BASISU` désignent un autre interpréteur ou un autre binaire ; voir aussi [la taille du dépôt](ASSETS.md).
 
 ```sh
 python3 -m venv .cache/earth-build

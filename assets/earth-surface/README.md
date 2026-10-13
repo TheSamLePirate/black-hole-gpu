@@ -18,3 +18,10 @@ The 2021 date is fixed; the simulation date does not update these annual images.
 `regions.json` is the build input; `manifest.json` is the committed runtime index.
 At most 16 pages per region; hashes address the prepared files independently of
 the app build. See [implementation and budgets](../../docs/PLAN-TERRE-PHOTOREALISTE.md).
+
+Rebuilding needs Python 3 with `scripts/earth-surface-requirements.txt` (the venv
+`.cache/earth-build`, or any interpreter named by `EARTH_BUILD_PYTHON`) and Basis Universal
+**2.50.0** (`basisu`, or the binary named by `BASISU`): the script refuses another version, since a
+new encoder writes new bytes, new hashes and a whole new pack in the history. The version and flags
+used are recorded under `encoder` in `manifest.json`. See also
+[assets and repository size](../../docs/ASSETS.md).
