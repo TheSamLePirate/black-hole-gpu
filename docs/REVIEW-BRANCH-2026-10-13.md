@@ -316,35 +316,35 @@ exprimées par rapport à la caméra, les empreintes, le patch de marche, et l'o
 ## UI et modes
 
 ### Haute
-- ☐ **U-H1. Les panneaux supposent une barre du haut sur une seule ligne.** `style.css:2568` (`tb-wrap`, hauteur
+- ☑ **U-H1. Les panneaux supposent une barre du haut sur une seule ligne.** `style.css:2568` (`tb-wrap`, hauteur
   auto, z 30). Les positions sont fixes à 56–66 px : `.fl-target`/`.fl-tel` (1113, 1123), `#hud` (2290), `cam-pop`/`sky-pop`
   (2082, 2414), `.sp-toasts` (2143), onglets de carte (2647-2655), `.fh-compass` (2775), `character-hud` (2769).
   Vers 900 px de large ou en français, la barre passe sur 2 ou 3 lignes et les recouvre. *Correctif* : `fit()` écrit
-  `--tb-bottom` et les positions utilisent `calc(var(--tb-bottom) + 8px)`.
+  `--tb-bottom` et les positions utilisent `calc(var(--tb-bottom) + 8px)`. — fait : `fit()` publie `--tb-bottom` (barre, ou poignée cachée), toutes les positions sous la barre en `calc(var(--tb-bottom, 52px) + …)`, a8dc981
 
 ### Moyenne
-- ☐ **U-M2.** `skyevents.ts:121-126, 170-189` : le calcul n'est jamais annulé, deux balayages ISS de 3 jours
-  tournent en parallèle, et l'ancien écrase `this.last`, que TARS lit avec `take()`.
-- ☐ **U-M3.** `livecapture.ts:122-157` : une exception dans `at()`/`grab()` laisse le panneau sur « LIVE »
+- ☑ **U-M2.** `skyevents.ts:121-126, 170-189` : le calcul n'est jamais annulé, deux balayages ISS de 3 jours
+  tournent en parallèle, et l'ancien écrase `this.last`, que TARS lit avec `take()`. — fait : chaque lecture a sa génération, la plus récente annule l'ancienne (balayage ISS compris), seule elle écrit `last` et remplit la page, fc8950b
+- ☑ **U-M3.** `livecapture.ts:122-157` : une exception dans `at()`/`grab()` laisse le panneau sur « LIVE »
   avec un Stop inopérant, sans Fermer, et le `VideoWriter` n'est jamais fermé. Rien n'empêche non plus de lancer en
-  même temps une vidéo du dialogue de rendu ou un rendu hors ligne (`exportRGBA` partagé).
-- ☐ **U-M4.** Infos à pied affichées 3 fois (`characterhud.ts:65-70`, `foothud.ts:185-195`, contexte de la barre
+  même temps une vidéo du dialogue de rendu ou un rendu hors ligne (`exportRGBA` partagé). — fait : erreur attrapée (ARRÊTÉ + raison, Fermer, encodeur fermé quoi qu'il arrive), capture en direct et rendu/vidéo exclusifs (`busy` du dialogue, refus côté ciel), a7fe296
+- ☑ **U-M4.** Infos à pied affichées 3 fois (`characterhud.ts:65-70`, `foothud.ts:185-195`, contexte de la barre
   `main.ts:3115-3122`, avec 4 ou 5 décimales selon l'endroit). Deux systèmes de traduction coexistent : `tr({fr,en})` en ligne
-  (characterhud, atlas, skyevents, hors de `tests/i18n.test.ts`) et `t()`.
-- ☐ **U-M5.** Touches à pied (`keymap.ts:430, 466-480`, vérifié) : Espace saute au lieu de mettre en pause, alors que
+  (characterhud, atlas, skyevents, hors de `tests/i18n.test.ts`) et `t()`. — fait : FootHud seul statut (CharacterHud = touches + bouton), contexte de la barre via `fmtLatLon` à 5 décimales, `tr({fr,en})` de characterhud/atlas/skyevents passés en `t()`/`tf()` (fr-modes.ts), fc8950b. Note : le statut de CharacterHud était déjà masqué à pied par le CSS
+- ☑ **U-M5.** Touches à pied (`keymap.ts:430, 466-480`, vérifié) : Espace saute au lieu de mettre en pause, alors que
   l'infobulle (`transport.ts:70`) dit « tous les modes ». V/C/Y (vue, viser, télescope) ne sont pas dans la
-  liste autorisée, contrairement à la règle « dans tous les modes ». À confirmer en jeu.
+  liste autorisée, contrairement à la règle « dans tous les modes ». À confirmer en jeu. — fait : Espace reste « sauter » à pied, l'infobulle et le titre de l'aide le disent ; V/C/Y non ajoutés : la caméra du piéton force `lookAt`/`telescope` à faux chaque image (character.ts placeView) et V changerait la monture du vaisseau posé ou la caméra libre, 4856276
 
 ### Basse
-- ☐ L'Atlas ne se ferme pas avec F8 (`atlas.ts:204`, le focus dans le champ fait ignorer la touche par `isTyping`).
-- ☐ L'Atlas reste bloqué sur « Recherche… » sous 3 caractères ou sur la Lune (`atlas.ts:271-287`).
-- ☐ La barre est remesurée toutes les 500 ms même sans changement, avec jusqu'à 3 mises en page forcées
-  (`main.ts:5006`, `topbar.ts:339-385`). *Correctif* : un `ResizeObserver`.
-- ☐ La vue HUD « bare » met encore à jour des panneaux cachés (`flighthud.ts:1797`).
-- ☐ Le raster 512² de `LocalGroundMap` est construit deux fois (`foothud.ts:92` et le HUD de vol).
-- ☐ `aria-label` est copié une seule fois depuis `data-tip` (`main.ts:5547`), puis n'est plus à jour.
-- ☐ `renderdialog.ts` (`runVideo`) : `const tf` masque l'import `tf()`.
-- ☐ `scenery-hitboxes.ts:58-92` alloue beaucoup à 30 Hz.
+- ☑ L'Atlas ne se ferme pas avec F8 (`atlas.ts:204`, le focus dans le champ fait ignorer la touche par `isTyping`). — fait : le champ ferme l'Atlas sur sa propre touche, fc8950b
+- ☑ L'Atlas reste bloqué sur « Recherche… » sous 3 caractères ou sur la Lune (`atlas.ts:271-287`). — fait : statut effacé (moins de 3 caractères, coordonnées, autre monde), recherche annulée au changement de monde, échec → « Aucune adresse », fc8950b
+- ☑ La barre est remesurée toutes les 500 ms même sans changement, avec jusqu'à 3 mises en page forcées
+  (`main.ts:5006`, `topbar.ts:339-385`). *Correctif* : un `ResizeObserver`. — fait : `ResizeObserver` sur la barre et ses groupes, mesure seulement si changé (repli toutes les 3 s), a8dc981
+- ☑ La vue HUD « bare » met encore à jour des panneaux cachés (`flighthud.ts:1797`). — fait : données air et mini-carte non dessinées en vue bare, 054dbaa
+- ☑ Le raster 512² de `LocalGroundMap` est construit deux fois (`foothud.ts:92` et le HUD de vol). — fait : raster partagé par `SceneryContact` (WeakMap), 054dbaa
+- ☑ `aria-label` est copié une seule fois depuis `data-tip` (`main.ts:5547`), puis n'est plus à jour. — fait : un `MutationObserver` sur `data-tip` met à jour l'`aria-label` qui en venait, a7fe296
+- ☑ `renderdialog.ts` (`runVideo`) : `const tf` masque l'import `tf()`. — fait : renommé `frameT`, a7fe296
+- ☑ `scenery-hitboxes.ts:58-92` alloue beaucoup à 30 Hz. — fait : axes calculés une fois, extrémités en scalaires, style posé seulement si la vue change, 054dbaa
 
 ## Musique et audio
 

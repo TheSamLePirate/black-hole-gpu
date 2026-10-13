@@ -71,7 +71,7 @@ import { RadialWheel, type WheelItem } from "./ui/wheel";
 import { Tablet } from "./ui/tablet";
 import { PhotoMode } from "./ui/photo";
 import { TB_ICONS, TopBar, modeName } from "./ui/topbar";
-import { greatCircle } from "./game/geo";
+import { fmtLatLon, greatCircle } from "./game/geo";
 import { hudKindName, nextHudKind } from "./game/hudkind";
 import { GAME_MODES, baseMode, modeOf, planMode, type GameMode, type ModeState, type ModeStep } from "./game/modes";
 import { POSE_KEYS } from "./controller/util";
@@ -3115,10 +3115,10 @@ async function main() {
     // (the mode's line: on foot, the world and the place; photo, the way back)
     if (m === "foot") {
       const p = flightHud.ground.localPlace?.();
-      const ns = (v: number, a: string, b: string) => `${Math.abs(v).toFixed(4)}° ${v >= 0 ? a : b}`;
+      // (the place as the on-foot HUD's card writes it: five decimals, the longitude wrapped)
       topBar.setContext(
         p ? (BODY_NAMES[p.body as Target] ?? p.body) : t("On foot"),
-        p ? `${ns(p.lat, t("N"), t("S"))} ${ns(p.lon, t("E"), t("W"))}` : "",
+        p ? fmtLatLon(p.lat, p.lon, 5, [t("N"), t("S"), t("E"), t("W")]) : "",
       );
     } else if (m === "photo") topBar.setContext(t("Photo"), tf("Esc: back to {0}", modeName(baseMode(modeState()))));
     else topBar.setContext("");
@@ -3321,6 +3321,8 @@ async function main() {
       }
       videoPreview.show(v);
     },
+    // (a live capture grabs the view each exposure: one user of the renderer's export at a time)
+    busy: () => (liveCapture.running ? t("A live capture is running: stop it first") : null),
   });
   const videoPreview = new VideoPreview({
     download: (b, name) => download(b, name),
@@ -3675,6 +3677,7 @@ async function main() {
     live: (o) => {
       const p = skyPlace();
       if (!p) return;
+      if (renderer.offlineActive || renderDialog.videoState()) return void panel.toast(t("A render is running"));
       const why = skyAim(p.lat, p.lon, { ms: o.times[0]!, az: o.az, alt: o.alt, fov: o.fov });
       if (why) return void panel.toast(why);
       // (the station: its streak since the last exposure, as a long exposure catches it — the scene does not draw it
@@ -4414,7 +4417,7 @@ async function main() {
       list: async () =>
         (await skyEvents.events())?.map((e) => ({
           id: e.id,
-          title: e.title.en,
+          title: e.title,
           when: e.when ? new Date(e.when).toISOString() : null,
           detail: e.detail,
           look: {
@@ -5546,6 +5549,13 @@ async function main() {
   // flight HUD shows its own)
   for (const el of document.querySelectorAll<HTMLElement>("[data-tip]"))
     if (!el.getAttribute("aria-label")) el.setAttribute("aria-label", el.dataset.tip!);
+  // (a tip changed later — a mode's tab refused, its reason in it —: the name read out follows, where it was the tip)
+  new MutationObserver((ms) => {
+    for (const m of ms) {
+      const el = m.target as HTMLElement;
+      if (el.dataset.tip && el.getAttribute("aria-label") === m.oldValue) el.setAttribute("aria-label", el.dataset.tip);
+    }
+  }).observe(document.body, { subtree: true, attributeFilter: ["data-tip"], attributeOldValue: true });
   let tipEl: HTMLElement | null = null;
   // (clicked: no tip for that element until the pointer leaves it — a button redrawn under the
   // pointer, its label changed, would otherwise bring its tip back over what it opened)

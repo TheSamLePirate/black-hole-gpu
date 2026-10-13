@@ -120,6 +120,8 @@ interface DialogDeps {
   director?: { available(): boolean; set(): () => void };
   /** a video done: shown, saved (else downloaded) */
   onVideo?: (v: VideoDone) => void;
+  /** why the renderer cannot be taken now (a live capture grabbing the view), or null */
+  busy?: () => string | null;
 }
 
 /** A video asked (the dialog's, the photo bar's, TARS's): what is not given, the dialog's fields. */
@@ -381,6 +383,8 @@ export function setupRenderDialog(d: DialogDeps) {
 
   btnStart.onclick = () => {
     if (video) return void (status.textContent = `⚠ ${t("A video is rendering: stop it first")}`);
+    const busy = d.busy?.();
+    if (busy) return void (status.textContent = `⚠ ${busy}`);
     syncSize();
     const integ = INTEGRATORS[intSel.value]!;
     const noise = noiseSel.value === "off" ? 0 : parseFloat(noiseSel.value) / 100;
@@ -518,6 +522,8 @@ export function setupRenderDialog(d: DialogDeps) {
    *  onVideo (else downloaded). */
   function startVideo(job: VideoJob): string | null {
     if (video) return t("A video is rendering: stop it first");
+    const busy = d.busy?.();
+    if (busy) return busy;
     if (job.shot === "take" && !d.take.ready) return t("No take recorded yet: ● on the time bar");
     if (job.shot === "director" && !d.director?.available()) return t("The director's cameras film a ship flown: fly one first (F1)");
     // (a picture rendered or rendering: given way — the video takes the renderer)
@@ -624,10 +630,10 @@ export function setupRenderDialog(d: DialogDeps) {
         let clock = 0;
         for (let i = 0; i < n && !run.stop; i++) {
           label(i);
-          const tf = i / fps;
+          const frameT = i / fps;
           cam.enabled = true;
-          while (clock < tf - 1e-9) {
-            const dt = Math.min(1 / 60, tf - clock);
+          while (clock < frameT - 1e-9) {
+            const dt = Math.min(1 / 60, frameT - clock);
             sim.step(dt);
             clock += dt;
           }
@@ -704,6 +710,8 @@ export function setupRenderDialog(d: DialogDeps) {
    */
   function capture(o: { preset?: string; width?: number; height?: number; spp?: number; save?: "png" | "png16" | "exr" | null } = {}) {
     if (video) return t("A video is rendering: stop it first");
+    const busy = d.busy?.();
+    if (busy) return busy;
     toggle(true);
     if (o.preset && o.preset in PRESETS) {
       presetSel.value = o.preset;

@@ -12,7 +12,7 @@ import type { IssPass } from "../photo/iss-pass";
 import { frame } from "../photo/plans";
 import { angSep, closestApproach, DISC_RADIUS, lensMm, selenelionAt, shotTimes, trailsAim, type AzAlt } from "../photo/skyevents";
 import { fmtLatLon } from "../game/geo";
-import { t, tf, tr, type Text } from "../i18n";
+import { t, tf, tr } from "../i18n";
 import { TYPES } from "./eclipses";
 import type { MxKind, MxRequest } from "./multiexposure";
 import { button, el, h, modal } from "./kit";
@@ -62,7 +62,8 @@ export interface SkyEventsHost {
 /** An event of the list: its card's figures and its ways. */
 export interface Ev {
   id: string;
-  title: Text;
+  /** its name, in the interface's language */
+  title: string;
   when: number | null;
   detail: string;
   view: { az: number; alt: number; fov: number };
@@ -76,12 +77,14 @@ export interface Ev {
 
 const HOUR = 3600e3;
 const DAY = 24 * HOUR;
-const TOWARD: Record<"north" | "east" | "south" | "west", Text> = {
-  north: { fr: "le nord", en: "the north" },
-  east: { fr: "l'est", en: "the east" },
-  south: { fr: "le sud", en: "the south" },
-  west: { fr: "l'ouest", en: "the west" },
+const TOWARD: Record<"north" | "east" | "south" | "west", () => string> = {
+  north: () => t("the north"),
+  east: () => t("the east"),
+  south: () => t("the south"),
+  west: () => t("the west"),
 };
+/** An eclipse's type's name (the eclipse calculator's), in the interface's language */
+const typeName = (k: string) => (TYPES[k] ? tr(TYPES[k]) : undefined);
 const fmtDate = (ms: number) => new Date(ms).toISOString().slice(0, 16).replace("T", " ");
 
 /** The ways to an event: the tripod set there, its exposures lived in the game, rendered at full quality. */
@@ -90,10 +93,11 @@ export type SkyWay = "go" | "live" | "render";
 export class SkyEventsPage {
   private close: (() => void) | null = null;
   private list = el("div", "se-list");
-  /** the events last computed (TARS's ways to them) */
+  /** the events last computed (TARS's ways to them): the latest reading's only */
   private last: Ev[] = [];
-  /** the page's reading (a reopened page's cards are its own) */
-  private run = 0;
+  /** the reading now (a new one cancels the one before: two three-day ISS sweeps never run side by side) */
+  private gen = 0;
+  private current: Promise<Ev[]> | null = null;
 
   constructor(private d: SkyEventsHost) {}
 
@@ -122,11 +126,8 @@ export class SkyEventsPage {
       onClose: () => (this.close = null),
     });
     this.close = m.close;
-    // (the cards as they come: the page not held while the sky is read)
-    const run = ++this.run;
-    void this.compute(p, now, (evs, done) => {
-      if (this.close && run === this.run) this.fill(evs, done);
-    });
+    // (the cards as they come, the page not held while the sky is read — compute fills the open page)
+    void this.compute(p, now);
     return null;
   }
 
@@ -156,7 +157,7 @@ export class SkyEventsPage {
     const at = e.when ?? this.d.now();
     const r = e.render;
     this.d.live({
-      title: tr(e.title),
+      title: e.title,
       times: e.times,
       ...e.view,
       stem: `kerr-${e.id}-${fmtDate(at).slice(0, 10)}`,
@@ -165,11 +166,20 @@ export class SkyEventsPage {
     });
   }
 
+  /** All the events from a place: a new reading, the one before cancelled (its caller given the new one's). */
+  private compute(p: SkyPlace, now: number): Promise<Ev[]> {
+    const run = this.reading(p, now, ++this.gen);
+    this.current = run;
+    return run;
+  }
+
   /**
-   * All the events from a place, by groups — a frame given back between them (the ISS's are a few hundred
-   * milliseconds each), the eclipses searched meanwhile by the worker; `part`: the list so far, sorted by date.
+   * A reading, by groups — a frame given back between them (the ISS's are a few hundred milliseconds each), the
+   * eclipses searched meanwhile by the worker; the open page filled with the list so far, sorted by date. A newer
+   * reading started: this one stops at its next frame, `last` and the page left to the newer one.
    */
-  private async compute(p: SkyPlace, now: number, part?: (evs: Ev[], done: boolean) => void): Promise<Ev[]> {
+  private async reading(p: SkyPlace, now: number, gen: number): Promise<Ev[]> {
+    const live = () => gen === this.gen;
     const eclipses = this.eclipseEvents(p, now);
     const out: Ev[] = [];
     const groups: (() => Ev[] | Promise<Ev[]>)[] = [
@@ -177,14 +187,17 @@ export class SkyEventsPage {
       () => this.analemma(p, now),
       () => this.moonPath(p, now),
       () => this.issPass(p, now),
-      () => this.issNear(p, now),
+      () => this.issNear(p, now, live),
       () => eclipses,
     ];
     for (const [i, g] of groups.entries()) {
       await new Promise((r) => setTimeout(r, 0));
-      out.push(...(await g()));
+      if (!live()) return this.current ?? [];
+      const evs = await g();
+      if (!live()) return this.current ?? [];
+      out.push(...evs);
       this.last = [...out].sort((a, b) => (a.when ?? now) - (b.when ?? now));
-      part?.(this.last, i === groups.length - 1);
+      if (this.close) this.fill(this.last, i === groups.length - 1);
     }
     return this.last;
   }
@@ -196,15 +209,12 @@ export class SkyEventsPage {
     const dusk = this.darkFrom(lat, lon, now);
     return {
       id: "trails",
-      title:
-        tr0.toward === "pole"
-          ? { fr: "Filé d'étoiles circumpolaire", en: "Circumpolar star trails" }
-          : { fr: "Filé d'étoiles", en: "Star trails" },
+      title: tr0.toward === "pole" ? t("Circumpolar star trails") : t("Star trails"),
       when: dusk,
       detail:
         tr0.toward === "pole"
           ? tf("Around the pole, {0}° up — four hours", Math.round(tr0.aim.alt))
-          : tf("Along the view, toward {0} — four hours", tr(TOWARD[tr0.toward])),
+          : tf("Along the view, toward {0} — four hours", TOWARD[tr0.toward]()),
       view: { ...tr0.aim, fov: 60 },
       times: shotTimes(dusk, dusk + 4 * HOUR, 48),
       render: { kind: "trails", fill: { lat, lon, hours: 4, toward: tr0.toward, date: dusk } },
@@ -231,7 +241,7 @@ export class SkyEventsPage {
       return [
         {
           id: "analemma",
-          title: { fr: "Analemme", en: "Analemma" },
+          title: t("Analemma"),
           when: first,
           detail: tf("The Sun at {0} UTC, every fortnight for a year", hhmm),
           view: frame(suns, 16 / 9),
@@ -253,7 +263,7 @@ export class SkyEventsPage {
     return [
       {
         id: "moon",
-        title: { fr: "La course de la Lune", en: "The Moon's path" },
+        title: t("The Moon's path"),
         when: up[0]!.ms,
         detail: tf("{0} exposures while it is up", up.length),
         view: frame(
@@ -277,7 +287,7 @@ export class SkyEventsPage {
     return [
       {
         id: "iss",
-        title: { fr: "Passage de l'ISS", en: "ISS pass" },
+        title: t("ISS pass"),
         when: pass.seenFrom,
         detail: tf("Up to {0}° · magnitude {1}", Math.round(pass.maxAlt), pass.mag.toFixed(1)),
         view: frame(pts, 16 / 9),
@@ -300,7 +310,7 @@ export class SkyEventsPage {
    * nearest moment of each refined every half second around it (a transit lasts a second: the closest is what the
    * place sees — a few kilometres aside, it crosses the disc). A frame given back each day.
    */
-  private async issNear(p: SkyPlace, now: number): Promise<Ev[]> {
+  private async issNear(p: SkyPlace, now: number, live: () => boolean): Promise<Ev[]> {
     const { lat, lon } = p;
     const out: Ev[] = [];
     type Near = ReturnType<typeof closestApproach>;
@@ -320,7 +330,10 @@ export class SkyEventsPage {
       coarse[body] = null;
     };
     for (let ms = now; ms < now + 3 * DAY; ms += 30e3) {
-      if (ms > now && (ms - now) % (6 * HOUR) === 0) await new Promise((r) => setTimeout(r, 0));
+      if (ms > now && (ms - now) % (6 * HOUR) === 0) {
+        await new Promise((r) => setTimeout(r, 0));
+        if (!live()) return out;
+      }
       const s = this.d.iss(lat, lon, ms);
       for (const body of BODIES) {
         if (!s || s.alt < 5) {
@@ -344,11 +357,11 @@ export class SkyEventsPage {
         title:
           body === "moon"
             ? transit
-              ? { fr: "L'ISS devant la Lune", en: "The ISS across the Moon" }
-              : { fr: "L'ISS près de la Lune", en: "The ISS by the Moon" }
+              ? t("The ISS across the Moon")
+              : t("The ISS by the Moon")
             : transit
-              ? { fr: "L'ISS devant le Soleil", en: "The ISS across the Sun" }
-              : { fr: "L'ISS près du Soleil", en: "The ISS by the Sun" },
+              ? t("The ISS across the Sun")
+              : t("The ISS by the Sun"),
         when: a.t,
         detail: transit
           ? tf("A transit: {0}° from its centre — a second and a half, a solar filter for the Sun", a.sep.toFixed(2))
@@ -379,7 +392,7 @@ export class SkyEventsPage {
       const sun = this.d.azAlt("sun", lat, lon, solar.t);
       out.push({
         id: "solar",
-        title: TYPES[`solar-${solar.here?.type ?? solar.type}`] ?? { fr: "Éclipse de Soleil", en: "Solar eclipse" },
+        title: typeName(`solar-${solar.here?.type ?? solar.type}`) ?? t("Solar eclipse"),
         when: solar.t,
         detail: tf("Here: magnitude {0}, the Sun {1}° up", (solar.here?.magnitude ?? solar.magnitude).toFixed(2), Math.round(sun.alt)),
         view: { ...sun, fov: 3 },
@@ -398,7 +411,7 @@ export class SkyEventsPage {
       const pts = span.map((ms) => this.d.azAlt("moon", lat, lon, ms)).filter((m) => m.alt > -1);
       out.push({
         id: "lunar",
-        title: TYPES[`lunar-${lunar.type}`] ?? { fr: "Éclipse de Lune", en: "Lunar eclipse" },
+        title: typeName(`lunar-${lunar.type}`) ?? t("Lunar eclipse"),
         when: lunar.t,
         detail: tf("The Moon {0}° up at the greatest", Math.round(lunar.here?.moonAlt ?? 0)),
         view: pts.length ? frame(pts, 16 / 9) : { ...this.d.azAlt("moon", lat, lon, lunar.t), fov: 30 },
@@ -412,7 +425,7 @@ export class SkyEventsPage {
       if (!s) continue;
       out.push({
         id: "selenelion",
-        title: { fr: "Sélénélion", en: "Selenelion" },
+        title: t("Selenelion"),
         when: s.t,
         detail: tf(
           "The eclipsed Moon on the horizon at {0}°, the Sun rising or setting opposite at {1}°",
@@ -431,10 +444,7 @@ export class SkyEventsPage {
       if (tr0?.kind !== "transit") continue;
       out.push({
         id: `transit-${planet}`,
-        title:
-          planet === "mercury"
-            ? { fr: "Transit de Mercure", en: "Transit of Mercury" }
-            : { fr: "Transit de Vénus", en: "Transit of Venus" },
+        title: planet === "mercury" ? t("Transit of Mercury") : t("Transit of Venus"),
         when: tr0.t,
         detail: tf("Across the Sun for {0} h — a solar filter", ((tr0.end - tr0.start) / HOUR).toFixed(1)),
         view: { ...this.d.azAlt("sun", lat, lon, tr0.t), fov: 1 },
@@ -453,7 +463,7 @@ export class SkyEventsPage {
       card.dataset.testid = `sky-event-${e.id}`;
       const lens = Math.round(lensMm(e.view.fov));
       card.append(
-        el("h3", "se-title", tr(e.title)),
+        el("h3", "se-title", e.title),
         el("p", "se-when", e.when ? `${fmtDate(e.when)} UTC` : ""),
         el("p", "se-detail", e.detail),
         el(

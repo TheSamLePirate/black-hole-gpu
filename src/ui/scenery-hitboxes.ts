@@ -15,6 +15,8 @@ export class SceneryHitboxes {
   private anchor: Vec3 = [Infinity, Infinity, Infinity];
   private geometry: ReturnType<SceneryContact["collisionLines"]> | null = null;
   private at = -Infinity;
+  /** the view's box the overlay was last placed on */
+  private box = "";
   constructor() {
     this.root.className = "scenery-hitboxes";
     this.root.dataset.testid = "scenery-hitboxes";
@@ -43,7 +45,11 @@ export class SceneryHitboxes {
     const W = rect.width,
       H = rect.height,
       dpr = Math.min(devicePixelRatio, 2);
-    Object.assign(this.root.style, { left: `${rect.left}px`, top: `${rect.top}px`, width: `${W}px`, height: `${H}px` });
+    const box = `${rect.left},${rect.top},${W},${H}`;
+    if (box !== this.box) {
+      this.box = box;
+      Object.assign(this.root.style, { left: `${rect.left}px`, top: `${rect.top}px`, width: `${W}px`, height: `${H}px` });
+    }
     if (this.canvas.width !== Math.round(W * dpr) || this.canvas.height !== Math.round(H * dpr)) {
       this.canvas.width = Math.round(W * dpr);
       this.canvas.height = Math.round(H * dpr);
@@ -59,33 +65,42 @@ export class SceneryHitboxes {
       const weights = [dot(v, right), dot(v, up), dot(v, c.forward)];
       return [0, 1, 2].map((i) => weights.reduce((sum, w, j) => sum + w * frame.axes[j]![i]!, 0)) as Vec3;
     };
-    const axes = [sf.east, sf.north, sf.up].map(transform);
-    const point = (i: number): Vec3 => {
-      const v = geometry.vertices;
-      const x = v[i]! - local[0],
-        y = v[i + 1]! - local[1],
-        z = v[i + 2]! - local[2];
-      return [0, 1, 2].map((k) => frame.origin[k]! + axes[0]![k]! * x + axes[1]![k]! * y + axes[2]![k]! * z) as Vec3;
-    };
+    // (the scenery's east, north and up in the view's frame, and its origin: each vertex mapped with scalars — no
+    // arrays per point, thousands of segments thirty times a second)
+    const [e, n, u] = [sf.east, sf.north, sf.up].map(transform) as [Vec3, Vec3, Vec3];
+    const o = frame.origin;
+    const v = geometry.vertices;
     const focal = H / (2 * Math.tan((fov * Math.PI) / 360)),
       near = 0.05;
     ctx.strokeStyle = "#ff42ba";
     ctx.lineWidth = 1.4;
     ctx.globalAlpha = 0.85;
     ctx.beginPath();
-    for (let i = 0; i < geometry.vertices.length; i += 6) {
-      let a = point(i),
-        b = point(i + 3);
-      if (a[2] < near && b[2] < near) continue;
-      if (a[2] < near || b[2] < near) {
-        if (b[2] < near) [a, b] = [b, a];
-        const k = (near - a[2]) / (b[2] - a[2]);
-        a = [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, near];
+    for (let i = 0; i < v.length; i += 6) {
+      let x = v[i]! - local[0],
+        y = v[i + 1]! - local[1],
+        z = v[i + 2]! - local[2];
+      let a0 = o[0]! + e[0] * x + n[0] * y + u[0] * z,
+        a1 = o[1]! + e[1] * x + n[1] * y + u[1] * z,
+        a2 = o[2]! + e[2] * x + n[2] * y + u[2] * z;
+      x = v[i + 3]! - local[0];
+      y = v[i + 4]! - local[1];
+      z = v[i + 5]! - local[2];
+      let b0 = o[0]! + e[0] * x + n[0] * y + u[0] * z,
+        b1 = o[1]! + e[1] * x + n[1] * y + u[1] * z,
+        b2 = o[2]! + e[2] * x + n[2] * y + u[2] * z;
+      if (a2 < near && b2 < near) continue;
+      if (a2 < near || b2 < near) {
+        if (b2 < near) [a0, a1, a2, b0, b1, b2] = [b0, b1, b2, a0, a1, a2];
+        const k = (near - a2) / (b2 - a2);
+        a0 += (b0 - a0) * k;
+        a1 += (b1 - a1) * k;
+        a2 = near;
       }
-      const ax = W / 2 + (a[0] / a[2]) * focal,
-        ay = H / 2 - (a[1] / a[2]) * focal,
-        bx = W / 2 + (b[0] / b[2]) * focal,
-        by = H / 2 - (b[1] / b[2]) * focal;
+      const ax = W / 2 + (a0 / a2) * focal,
+        ay = H / 2 - (a1 / a2) * focal,
+        bx = W / 2 + (b0 / b2) * focal,
+        by = H / 2 - (b1 / b2) * focal;
       if (Math.max(ax, bx) < 0 || Math.min(ax, bx) > W || Math.max(ay, by) < 0 || Math.min(ay, by) > H) continue;
       ctx.moveTo(ax, ay);
       ctx.lineTo(bx, by);
