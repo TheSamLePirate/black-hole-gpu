@@ -2558,19 +2558,16 @@ body.mobile.portrait #topbar { flex-wrap: wrap; justify-content: center; row-gap
 body.mobile.portrait #topbar .tb-time { order: 9; flex-basis: 100%; justify-content: center; border-left: none; }
 body.mobile.portrait .fl-chip { padding: 5px 4px; gap: 4px; font-size: 11px; letter-spacing: 0.02em; }
 body.mobile.portrait .fl-viewbtn .fl-caret { display: none; }
-/* (a narrow window, touch or not: the mode's groups can't share one row — the names shortened, the bar wrapped,
-   its height its rows') */
-@media (max-width: 900px) {
-  #topbar .tb-tab-name, #topbar .tb-tars-name, .fl-viewname, .fl-planbtn > span:not(.fl-ic) { display: none; }
-  .tp-rec, .tp-sep:last-of-type { display: none; }
-  .fl-chip { padding: 5px 4px; gap: 4px; font-size: 11px; letter-spacing: 0.02em; }
-}
-@media (max-width: 760px) {
-  #topbar { flex-wrap: wrap; justify-content: center; row-gap: 2px; height: auto; min-height: 44px; }
-  #topbar .tb-time { order: 9; flex-basis: 100%; justify-content: center; border-left: none; }
-  #topbar .tb-tab-name, #topbar .tb-tars-name, .fl-viewname, .fl-planbtn > span:not(.fl-ic) { display: none; }
-  .fl-chip { padding: 5px 4px; gap: 4px; font-size: 11px; letter-spacing: 0.02em; }
-}
+/* (the bar measured too wide for the window — ui/topbar.ts fit —, after its actions and the mode's least used
+   pieces went into ⋯: the names shortened; then still too wide, its groups on rows of their own) */
+#topbar.tb-compact .tb-tab-name, #topbar.tb-compact .tb-tars-name, #topbar.tb-compact .fl-viewname,
+#topbar.tb-compact .fl-planbtn > span:not(.fl-ic) { display: none; }
+#topbar.tb-compact .fl-chip { padding: 5px 4px; gap: 4px; font-size: 11px; letter-spacing: 0.02em; }
+#topbar.tb-compact #btn-camera { max-width: 150px; }
+#topbar.tb-compact #btn-camera .cam-target { overflow: hidden; text-overflow: ellipsis; }
+#topbar.tb-wrap { flex-wrap: wrap; justify-content: center; row-gap: 2px; height: auto; min-height: 44px; }
+#topbar.tb-wrap .tb-time { order: 9; flex-basis: 100%; justify-content: center; border-left: none; }
+#topbar.tb-wrap .tp { flex-wrap: wrap; justify-content: center; row-gap: 2px; height: auto; max-width: 100%; }
 
 /* the attitude ball: between the stick and the throttle; upright, above them */
 body.mobile .fl-cockpit { transform: translateX(-50%) scale(0.72); bottom: calc(2px + env(safe-area-inset-bottom)); }

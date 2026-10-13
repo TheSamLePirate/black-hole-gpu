@@ -48,10 +48,16 @@ test.skipIf(!E2E)(
           await app.waitFor("__bh.renderer.variantReady", 60_000);
           // Warm through the page fades, shader compilation and all uploads before timing steady state.
           await app.js("new Promise(r => setTimeout(r, 1500))");
-          await app.js("(() => { __bh.game.perf(); __bh.renderer.prof.reset(); return true; })()");
-          // (60 frames profiled, one in 8: ~480 drawn — at this view's 22 fps on the M1 Max, 44 ms of GPU since the
-          // Oct 12 ground work (28 fps, 35 ms on Oct 11), 22 s and more: 30 s was too short)
-          await app.waitFor("__bh.renderer.prof.frames >= 60", 60_000);
+          // (every frame profiled while measured — 2–3 % of GPU time: one in eight was ~480 frames drawn for 60, 22 s
+          // at this view's 22 fps on the M1 Max — 44 ms of GPU since the Oct 12 ground work, 35 ms on Oct 11 — and
+          // never within a minute on the mini, whose kiosk draws 1920×1080 whatever the test asks)
+          await app.js(
+            "(() => { __bh.game.perf(); __bh.renderer.prof.every = 1; __bh.renderer.prof.reset();window.__profT0=performance.now(); return true; })()",
+          );
+          await app.waitFor(
+            "__bh.renderer.prof.frames>=60 || (__bh.renderer.prof.frames>=12 && performance.now()-window.__profT0>45000)",
+            60_000,
+          );
           measures.push(
             await app.js(`({mode:${JSON.stringify(mode)}, block:${block}, perf:__bh.game.perf({gpu:false}), adapter:__bh.renderer.adapter,
           terrain:{enabled:${liveTerrain}, pending:__bh.renderer.earthTiles.pending, finest:__bh.renderer.earthTiles.finest},

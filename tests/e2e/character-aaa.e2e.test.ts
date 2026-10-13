@@ -133,7 +133,14 @@ test.skipIf(!E2E)(
       const light: Record<string, { key: number; sky: number; cosine: number; shadowDepth: number }> = {};
       // (the light where he stands, the probe settled: a few of its refreshes)
       const measure = async (body: string, lat: number, lon: number) => {
-        const error = await app.js<string | null>(`__bh.camera.character.start('${body}', ${lat}, ${lon})`);
+        // (back on the Earth after the Moon and Mars its maps come in again: "the ground is still loading — try again
+        // in a moment", as the game says; the M1 takes seconds)
+        let error = await app.js<string | null>(`__bh.camera.character.start('${body}', ${lat}, ${lon})`);
+        for (let k = 0; k < 120 && error && /loading/i.test(error); k++) {
+          await app.js("(()=>{__bh.step(0);__bh.touch();return true;})()");
+          await Bun.sleep(500);
+          error = await app.js<string | null>(`__bh.camera.character.start('${body}', ${lat}, ${lon})`);
+        }
         expect(error).toBeNull();
         await app.js("(()=>{for(let i=0;i<30;i++)__bh.step(1/60);__bh.touch();return true;})()");
         await app.waitFor("__bh.renderer.characterRenderer.model.ready && __bh.renderer.characterRenderer.stats().probe", 180_000);

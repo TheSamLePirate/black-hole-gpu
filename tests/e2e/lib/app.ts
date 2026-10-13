@@ -245,7 +245,16 @@ export class App {
       await this.click(`.tb-menu [data-action="${action}"]`);
       return;
     }
-    const { x, y } = await this.hit(selector);
+    // (aimed at a still target: the top bar is centred, its buttons slide when its content's width changes — a
+    // chip's text, a clock —; aimed once, the press could land on the neighbour (the mini: Place pressed, the
+    // sky chart opened))
+    let { x, y } = await this.hit(selector);
+    for (let k = 0; k < 10; k++) {
+      await Bun.sleep(40);
+      const again = await this.hit(selector);
+      if (Math.abs(again.x - x) < 1 && Math.abs(again.y - y) < 1) break;
+      ({ x, y } = again);
+    }
     await this.cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
     await this.cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount: 1 });
     await this.cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", clickCount: 1 });

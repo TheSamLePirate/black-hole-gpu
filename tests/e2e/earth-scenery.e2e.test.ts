@@ -1,5 +1,8 @@
 import { afterAll, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+
+// (each measure profiles every frame — prof.every = 1, 2–3 % of GPU time: one in eight, the M1's kiosk at
+// 1920×1080 — the screen's size whatever the test asks — never had 60 profiled in a minute)
 afterAll(stopServer);
 test.skipIf(!E2E)(
   "riverbanks and bridge volumes share illuminated terrain and water",
@@ -19,8 +22,11 @@ test.skipIf(!E2E)(
       expect(stats.bridges).toBeGreaterThan(0);
       expect(stats.waterPolygons).toBeGreaterThan(0);
       expect(stats.shadows).toBe(true);
-      await app.js("(()=>{__bh.renderer.prof.reset();return true;})()");
-      await app.waitFor("__bh.renderer.prof.frames>=60", 60000);
+      await app.js("(()=>{__bh.renderer.prof.every=1;__bh.renderer.prof.reset();window.__profT0=performance.now();return true;})()");
+      await app.waitFor(
+        "__bh.renderer.prof.frames>=60 || (__bh.renderer.prof.frames>=12 && performance.now()-window.__profT0>45000)",
+        60000,
+      );
       await app.shot("remote-results/earth-scenery-seine.png");
       await Bun.write("remote-results/earth-scenery-seine.json", JSON.stringify(stats, null, 2));
       expect(await app.js<number>("__bh.renderer.gpuErrors")).toBe(0);
@@ -76,8 +82,13 @@ test.skipIf(!E2E)(
         await app.waitFor("__bh.renderer.variantReady", 180000);
         await app.waitFor("__bh.renderer.earthTiles.pending===0", 90000);
         await app.js("new Promise(r=>setTimeout(r,1500))");
-        await app.js("(()=>{__bh.game.perf();__bh.renderer.prof.reset();return true;})()");
-        await app.waitFor("__bh.renderer.prof.frames>=60", 60000);
+        await app.js(
+          "(()=>{__bh.game.perf();__bh.renderer.prof.every=1;__bh.renderer.prof.reset();window.__profT0=performance.now();return true;})()",
+        );
+        await app.waitFor(
+          "__bh.renderer.prof.frames>=60 || (__bh.renderer.prof.frames>=12 && performance.now()-window.__profT0>45000)",
+          60000,
+        );
         await app.shot(`remote-results/earth-scenery-${place.name}.png`);
         if (place.name === "paris") {
           for (const shadows of [false, true]) {
@@ -109,8 +120,13 @@ test.skipIf(!E2E)(
           for (const volumes of [false, true, false]) {
             await app.js(`(()=>{window.__sceneVolumesOff=${!volumes};__bh.touch();return true;})()`);
             await app.js("new Promise(r=>setTimeout(r,1000))");
-            await app.js("(()=>{__bh.game.perf();__bh.renderer.prof.reset();return true;})()");
-            await app.waitFor("__bh.renderer.prof.frames>=90", 60000);
+            await app.js(
+              "(()=>{__bh.game.perf();__bh.renderer.prof.every=1;__bh.renderer.prof.reset();window.__profT0=performance.now();return true;})()",
+            );
+            await app.waitFor(
+              "__bh.renderer.prof.frames>=90 || (__bh.renderer.prof.frames>=12 && performance.now()-window.__profT0>45000)",
+              60000,
+            );
             reports.push({
               place,
               volumes,
@@ -170,8 +186,13 @@ test.skipIf(!E2E)(
       );
       await app.waitFor("__bh.renderer.variantReady", 180000);
       await app.waitFor("__bh.renderer.earthTiles.pending===0 && !__bh.renderer.earthSurface.pending", 90000);
-      await app.js("(()=>{__bh.game.perf();__bh.renderer.prof.reset();return true;})()");
-      await app.waitFor("__bh.renderer.prof.frames>=60", 60000);
+      await app.js(
+        "(()=>{__bh.game.perf();__bh.renderer.prof.every=1;__bh.renderer.prof.reset();window.__profT0=performance.now();return true;})()",
+      );
+      await app.waitFor(
+        "__bh.renderer.prof.frames>=60 || (__bh.renderer.prof.frames>=12 && performance.now()-window.__profT0>45000)",
+        60000,
+      );
       expect(await app.js<string>("__bh.camera.flightModeNow()")).toBe("plane");
       expect(await app.js<number>("__bh.renderer.earthScenery.stats().buildings")).toBeGreaterThan(100);
       expect(await app.js<number>("__bh.renderer.earthScenery.stats().gpuBytes")).toBe(16 * 1024 ** 2);

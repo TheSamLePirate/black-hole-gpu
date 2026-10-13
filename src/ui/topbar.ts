@@ -341,32 +341,47 @@ export class TopBar {
     if (this.hidden || (!now && at - this.fitAt < 500)) return;
     this.fitAt = at;
     const shown = this.items.filter(({ el }) => !el.classList.contains("tb-off"));
+    // (what yields, in turn, until the bar fits the window: the actions and the mode's least used pieces into ⋯;
+    // then the names shortened — tb-compact —; then the groups on rows of their own — tb-wrap. Measured, not
+    // guessed from the width: a mode's groups, a scene's chips and the language change what fits)
+    this.el.classList.remove("tb-compact", "tb-wrap");
+    let r = this.layout(shown);
+    if (!r.fits) {
+      this.el.classList.add("tb-compact");
+      r = this.layout(shown);
+    }
+    if (!r.fits) {
+      this.el.classList.add("tb-wrap");
+      r = this.layout(shown);
+    }
+    const over = r.over;
+    shown.forEach(({ el }, i) => el.classList.toggle("tb-over", over[i]!));
+    this.more.hidden = !over.some(Boolean);
+    const sig = over.join() + this.el.className;
+    if (sig !== this.lastFit) {
+      this.lastFit = sig;
+      if (!this.menu.hidden) this.fillMenu();
+    }
+    if (!this.menu.hidden) for (const live of this.liveValues) live();
+  }
+
+  /** Which of the items go into ⋯ for the bar as it is styled now, and whether it then fits. */
+  private layout(shown: BarItem[]): { over: boolean[]; fits: boolean } {
     for (const { el } of shown) el.classList.remove("tb-over");
     this.more.hidden = false;
     // (the content's own width: the bar's box is capped at the window's)
     const W = Math.max(this.el.getBoundingClientRect().width, this.el.scrollWidth);
     const max = innerWidth - 16;
     const widths = shown.map(({ el }) => el.getBoundingClientRect().width + 2);
-    // (a narrow window wraps the bar, each group on its row — style.css: the actions' row alone must fit, with
-    // ⋯ and the hide button; the mode's pieces keep their own rows)
+    // (wrapped — tb-wrap, or upright on a touch screen —, each group on its row: the actions' row alone must fit,
+    // with ⋯ and the hide button; the mode's pieces keep their own rows)
     const wrap = getComputedStyle(this.el).flexWrap === "wrap";
-    const fixed = wrap
-      ? this.hideBtn.getBoundingClientRect().width + 24
-      : W - widths.reduce((a, w) => a + w, 0) - this.more.getBoundingClientRect().width;
-    const over = overflowed(
-      fixed,
-      shown.map(({ prio, el }, i) => (wrap && !el.classList.contains("tb-btn") ? { w: 0, prio: 0 } : { w: widths[i]!, prio })),
-      max,
-      36,
-    );
-    shown.forEach(({ el }, i) => el.classList.toggle("tb-over", over[i]!));
-    this.more.hidden = !over.some(Boolean);
-    const sig = over.join();
-    if (sig !== this.lastFit) {
-      this.lastFit = sig;
-      if (!this.menu.hidden) this.fillMenu();
-    }
-    if (!this.menu.hidden) for (const live of this.liveValues) live();
+    const moreW = this.more.getBoundingClientRect().width;
+    const fixed = wrap ? this.hideBtn.getBoundingClientRect().width + 24 : W - widths.reduce((a, w) => a + w, 0) - moreW;
+    const items = shown.map(({ prio, el }, i) => (wrap && !el.classList.contains("tb-btn") ? { w: 0, prio: 0 } : { w: widths[i]!, prio }));
+    const over = overflowed(fixed, items, max, 36);
+    const left = fixed + items.reduce((a, it, i) => a + (over[i] ? 0 : it.w), 0) + (over.some(Boolean) ? 36 : 0);
+    return { over, fits: wrap || left <= max };
   }
 
   private toggleMenu() {

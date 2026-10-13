@@ -43,6 +43,10 @@ test.skipIf(!E2E)(
           `(()=>{const e=document.querySelector('[data-testid="scenery-hitboxes"]');return e&&!e.hidden&&Number(e.dataset.${kind === "tree" ? "trees" : "buildings"})>0&&Number(e.dataset.segments)>0;})()`,
           120000,
         );
+        // (the eye the GPU drew: a few frames completed after the steps — the M1 draws slowly)
+        const drawn = await app.js<number>("__bh.renderer.completedFrames");
+        await app.js("(()=>{__bh.touch();return true;})()");
+        await app.waitFor(`__bh.renderer.completedFrames >= ${drawn + 4}`, 60_000);
         const alignment = await app.js<{ distanceM: number; cpu: number[]; gpu: number[] }>(
           `(()=>{const c=__bh.camera.character,f=c.frame(),contact=__bh.renderer.earthScenery.contact;const dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0),cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];const up=c.up(),right=cross(c.forward,up),basis=[right,up,c.forward],w=f.axes.map(a=>dot(f.origin,a));const eye=c.q.map((x,i)=>x-basis.reduce((s,b,j)=>s+b[i]*w[j],0));const cpu=contact.local(eye),params=__bh.renderer.earthScenery.params(),gpu=Array.from(params.slice(12,15));return {cpu,gpu,distanceM:Math.hypot(...cpu.map((x,i)=>x-gpu[i]))};})()`,
         );

@@ -35,10 +35,11 @@ async function settle(app: App) {
   const grassIn = "__bh.renderer.characterRenderer.stats().reason!=='loading' && !__bh.renderer.characterRenderer.stats().pending";
   await app.waitFor(grassIn, 120_000);
   await app.waitFor("__bh.renderer.variantReady && __bh.renderer.calibrationReady", 240_000);
-  // (the kernel's compile can outlast a scenery refresh: the grass in again before the frames counted)
-  await app.waitFor(grassIn, 120_000);
   const frame = await app.js<number>("__bh.renderer.completedFrames");
   await app.waitFor(`__bh.renderer.completedFrames >= ${frame + 20}`, 60_000);
+  // (the grass's ground is built over frames and begun again when the scenery refreshes — after the kernel's
+  // compile, after those frames: in again, last)
+  await app.waitFor(grassIn, 120_000);
 }
 
 test.skipIf(!E2E)(

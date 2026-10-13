@@ -8,8 +8,6 @@ import { App, E2E, stopServer } from "./lib/app";
 
 describe.skipIf(!E2E)("the four modes and the top bar", () => {
   let app: App;
-  const mode = () => app.js<string>("__bh.mode.get()");
-  const tab = () => app.js<string | null>(`document.querySelector("#topbar .tb-tab.on")?.dataset.mode ?? null`);
   const settle = () => app.js("(()=>{for(let i=0;i<10;i++)__bh.step(1/30);__bh.touch();return true;})()");
   beforeAll(async () => {
     app = await App.boot({ width: 1440, height: 900, hash: `scene=${encodeURIComponent("Earth: the Blue Marble")}`, tiles: false });
@@ -22,7 +20,7 @@ describe.skipIf(!E2E)("the four modes and the top bar", () => {
   });
 
   test("the bar in the free camera: its tab lit, TARS, the time, the actions", async () => {
-    expect(await mode()).toBe("free");
+    await app.waitFor(`__bh.mode.get() === ${JSON.stringify("free")}`, 10_000);
     await app.waitFor(`document.querySelector("#topbar .tb-tab.on")?.dataset.mode === "free"`, 3_000);
     const r = await app.js<{ shown: boolean; tars: boolean; time: boolean; camera: boolean; inside: boolean }>(`(() => {
       const b = document.getElementById("topbar"), r = b.getBoundingClientRect();
@@ -35,28 +33,28 @@ describe.skipIf(!E2E)("the four modes and the top bar", () => {
   test("F1: the ship put in and flown; F3: the spectator; F1: back on board", async () => {
     await app.press("F1", "F1");
     await settle();
-    expect(await mode()).toBe("ship");
-    expect(await tab()).toBe("ship");
+    await app.waitFor(`__bh.mode.get() === ${JSON.stringify("ship")}`, 10_000);
+    await app.waitFor(`document.querySelector("#topbar .tb-tab.on")?.dataset.mode === "ship"`, 10_000);
     expect(await app.js<boolean>(`!!document.querySelector("#topbar .tb-ship .fl-chip")`)).toBe(true);
     await app.press("F3", "F3");
     await settle();
-    expect(await mode()).toBe("free");
+    await app.waitFor(`__bh.mode.get() === ${JSON.stringify("free")}`, 10_000);
     expect(await app.js<boolean>("__bh.camera.spectating")).toBe(true);
     await app.press("F1", "F1");
     await settle();
-    expect(await mode()).toBe("ship");
+    await app.waitFor(`__bh.mode.get() === ${JSON.stringify("ship")}`, 10_000);
     expect(await app.js<boolean>("__bh.camera.spectating")).toBe(false);
   }, 60_000);
 
   test("F4: the photo mode over the ship; Esc: back to the ship", async () => {
     await app.press("F4", "F4");
     await app.waitFor(`document.body.classList.contains("photo")`, 3_000);
-    expect(await mode()).toBe("photo");
-    expect(await tab()).toBe("photo");
+    await app.waitFor(`__bh.mode.get() === ${JSON.stringify("photo")}`, 10_000);
+    await app.waitFor(`document.querySelector("#topbar .tb-tab.on")?.dataset.mode === "photo"`, 10_000);
     await app.press("Escape", "Escape");
     await app.waitFor(`!document.body.classList.contains("photo")`, 3_000);
     await settle();
-    expect(await mode()).toBe("ship");
+    await app.waitFor(`__bh.mode.get() === ${JSON.stringify("ship")}`, 10_000);
   }, 30_000);
 
   test("on foot: out of the landed craft (F2), the free camera from the walker's view (F3), back on board (F1)", async () => {
@@ -64,7 +62,7 @@ describe.skipIf(!E2E)("the four modes and the top bar", () => {
     await settle();
     await app.press("F2", "F2");
     await settle();
-    expect(await mode()).toBe("foot");
+    await app.waitFor(`__bh.mode.get() === ${JSON.stringify("foot")}`, 10_000);
     expect(await app.js<boolean>("__bh.camera.character.active")).toBe(true);
     await app.waitFor(`/°/.test(document.querySelector("[data-testid=topbar-context]")?.textContent ?? "")`, 5_000);
     // (the on-foot HUD — M5: the compass, the place with the craft's distance, the minimap zoomed by its +)
@@ -85,11 +83,11 @@ describe.skipIf(!E2E)("the four modes and the top bar", () => {
     expect(st.foot?.craft?.distM ?? Infinity).toBeLessThan(200);
     await app.press("F3", "F3");
     await settle();
-    expect(await mode()).toBe("free");
+    await app.waitFor(`__bh.mode.get() === ${JSON.stringify("free")}`, 10_000);
     expect(await app.js<boolean>("__bh.camera.character.active")).toBe(false);
     await app.press("F1", "F1");
     await settle();
-    expect(await mode()).toBe("ship");
+    await app.waitFor(`__bh.mode.get() === ${JSON.stringify("ship")}`, 10_000);
   }, 120_000);
 
   test("hidden by its button, brought back by its handle (TARS in it), remembered", async () => {
@@ -113,7 +111,7 @@ describe.skipIf(!E2E)("the four modes and the top bar", () => {
     for (const m of ["foot", "free", "ship"]) {
       if (m !== "foot") await app.js(`__bh.mode.set(${JSON.stringify(m)})`);
       await settle();
-      expect(await mode()).toBe(m);
+      await app.waitFor(`__bh.mode.get() === ${JSON.stringify(m)}`, 10_000);
       const r = await capture({ action: "start", width: 320, height: 180, spp: 16, save: "none" });
       expect(r).toMatchObject({ ok: true, active: true });
       await app.waitFor(`document.getElementById("r-bar").classList.contains("done")`, 120_000);

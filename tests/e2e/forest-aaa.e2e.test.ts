@@ -51,8 +51,12 @@ test.skipIf(!E2E)(
           await app.js("new Promise(r=>setTimeout(r,1500))");
           // the frame's cost with the forest and without the scenery at all (its share: the trees, the shadows)
           const frame = async () => {
-            await app.js("(()=>{__bh.renderer.prof.reset();return true;})()");
-            await app.waitFor("__bh.renderer.prof.frames>=90", 90000);
+            // (every frame profiled while measured: one in eight never reached 90 on the mini's 1920×1080 kiosk)
+            await app.js("(()=>{__bh.renderer.prof.every=1;__bh.renderer.prof.reset();window.__profT0=performance.now();return true;})()");
+            await app.waitFor(
+              "__bh.renderer.prof.frames>=90 || (__bh.renderer.prof.frames>=12 && performance.now()-window.__profT0>45000)",
+              90000,
+            );
             return app.js<{ frameMs?: number; gpuMs?: number }>("__bh.game.perf()");
           };
           const withTrees = await frame();
@@ -69,10 +73,11 @@ test.skipIf(!E2E)(
                 Buffer.from(await Bun.file(`remote-results/forest-aaa-${place.name}-${v}.png`).arrayBuffer()).toString("base64"),
               ),
             );
+            // (the shots at their own size — the mini's kiosk draws 1920×1080 —, sampled as at 1280×720)
             shade =
               await app.js(`(async()=>{const images=await Promise.all(${JSON.stringify(shots)}.map(async b=>createImageBitmap(await(await fetch("data:image/png;base64,"+b)).blob())));
-              const c=new OffscreenCanvas(1280,720),ctx=c.getContext("2d");const data=images.map(im=>{ctx.drawImage(im,0,0);im.close();return ctx.getImageData(0,0,1280,720).data;});
-              let darker=0,total=0;for(let y=360;y<720;y+=2)for(let x=0;x<1280;x+=2){const p=(y*1280+x)*4;
+              const W=images[0].width,H=images[0].height,c=new OffscreenCanvas(W,H),ctx=c.getContext("2d");const data=images.map(im=>{ctx.drawImage(im,0,0);im.close();return ctx.getImageData(0,0,W,H).data;});
+              let darker=0,total=0;const step=Math.max(2,Math.round(2*W/1280));for(let y=H>>1;y<H;y+=step)for(let x=0;x<W;x+=step){const p=(y*W+x)*4;
               const a=.2126*data[0][p]+.7152*data[0][p+1]+.0722*data[0][p+2],b=.2126*data[1][p]+.7152*data[1][p+1]+.0722*data[1][p+2];
               if(b-a>6)darker++;total++;}return {darker,total};})()`);
             expect((shade as { darker: number }).darker).toBeGreaterThan(500);
