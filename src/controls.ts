@@ -422,6 +422,9 @@ export class CameraController {
   time = NaN;
   prevTime = NaN;
   shipTime = NaN;
+  /** the time the frame being made will be drawn at, when another clock sets it (a spectator: the flown ship's,
+   *  which the scene's clock follows); NaN: this controller's own, now + dt × the warp */
+  frameEnd = NaN;
   /** Orbit mode: the camera's orientation relative to the aim at the target. */
   offset: Quat | null = null;
   /** yaw/pitch/roll as last written by the tracking (any other change updates the offset). */

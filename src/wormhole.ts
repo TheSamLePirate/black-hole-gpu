@@ -267,6 +267,8 @@ let sceneTime = 0;
 export function setSceneTime(t: number) {
   sceneTime = t;
 }
+/** The scene's clock: the instant the frame on screen shows (between two frames: the one the views were placed for). */
+export const sceneClock = () => sceneTime;
 
 type MouthKeys = WormholeKeys | "whDist" | "whIncl" | "whAzimuth" | "whOrbit" | "whPhase" | "spin" | "disk" | "diskOuter";
 

@@ -729,6 +729,10 @@ export class PlanetCharacter {
     this.camDistance = reach < this.camDistance ? reach : this.camDistance + (reach - this.camDistance) * (1 - Math.exp(-dt * 8));
     const q = add(target, away, this.camDistance);
     this.camQ = q;
+    // (the view's clock: the instant it is placed for — the scene's after this step —; left where the walk
+    // began, its own reads — the ground under it for ⇧T's tripod, the sky's events from here — read the Earth of
+    // then, kilometres from the Earth drawn)
+    sp.time = time;
     if (this.ours) {
       const X = this.world(q, time);
       sp.rigPlace(true, X, unit(sub(this.world(target, time), X)), this.worldVector(up, time), groundVelocity(this.body, X, time));

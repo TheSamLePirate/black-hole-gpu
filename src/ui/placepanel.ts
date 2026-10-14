@@ -31,8 +31,9 @@ export interface PlaceHost {
   mission(): string | null;
   /** ends it: the controls the player's */
   endMission(): void;
-  /** the scene lacks the game's world (the solar system behind the wormhole, Gargantua's planets): loads it */
-  ensureWorld(): void;
+  /** the placement made (main.ts placeShip: the game's world loaded if the scene lacks it, the walker back
+   *  aboard, the panels redrawn): its note */
+  place(f: () => string): string;
 }
 
 const nameOf = (id: string) => (BODY_NAMES as Record<string, string>)[id === "gargantua" ? "hole" : id] ?? id;
@@ -458,8 +459,7 @@ export class PlacePanel {
     }
     confirm.replaceChildren();
     try {
-      this.host.ensureWorld();
-      f();
+      this.host.place(() => String(f() ?? ""));
       this.close?.();
     } catch (e) {
       err.textContent = (e as Error).message ?? String(e);

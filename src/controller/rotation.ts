@@ -33,7 +33,7 @@ import { lensesOf } from "../lenses";
 import { shipToCamera } from "../mounts";
 import { fleet } from "../fleet";
 import type { VesselId } from "../vessels";
-import { ellOfR, mouth, sphericalFrame, toMouth } from "../wormhole";
+import { ellOfR, mouth, sceneClock, sphericalFrame, toMouth } from "../wormhole";
 import { repToHomeVec } from "../system/our-side";
 import { issAxes, issTrack, m34unapply, partTransforms, station, stationAngles } from "../system/iss";
 import { stationHulls, vesselHulls } from "../system/collide";
@@ -58,6 +58,7 @@ declare module "../controls" {
     lockView: typeof lockView;
     craftSurfaceDistance: typeof craftSurfaceDistance;
     nowTime: typeof nowTime;
+    viewTime: typeof viewTime;
     shipClock: typeof shipClock;
     aim: typeof aim;
     startFocus: typeof startFocus;
@@ -349,6 +350,17 @@ function craftSurfaceDistance(this: CameraController, id: VesselId, cam: ReturnT
 function nowTime(this: CameraController) {
   if (Number.isFinite(this.shipTime)) return this.shipTime;
   return Number.isFinite(this.time) ? this.time : 0;
+}
+
+/**
+ * The instant the view stands for, read outside the frame's own step (a key, a click, TARS, the HUD): the scene's
+ * clock — where the view was placed for, the frame on screen —, not the step's start the controller's own clock
+ * still says (a frame behind: at a high warp kilometres of the ground's turning, ⇧T's tripod set off the walker's
+ * place); a controller with no scene running (a test's): its own.
+ */
+function viewTime(this: CameraController) {
+  const t = sceneClock();
+  return Number.isFinite(t) && Number.isFinite(this.time) ? t : this.nowTime();
 }
 
 /**
@@ -930,6 +942,7 @@ export function installRotation(C: { prototype: CameraController }) {
     lockView,
     craftSurfaceDistance,
     nowTime,
+    viewTime,
     shipClock,
     aim,
     startFocus,

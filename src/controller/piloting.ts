@@ -274,7 +274,7 @@ function standOn(this: CameraController, b?: Body): string | null {
   if (this.piloting) return tf("The Ranger lands itself (the autopilot: 7); landed, ⇧K takes you out on foot and ⇧T sets the tripod there");
   const w = this.rigWorld();
   if (!w) return tf("No world to stand on here");
-  const t = this.nowTime();
+  const t = this.viewTime();
   const solid = (id: Body) => (w.ours ? solidBody(id) && !isCraft(id) && id !== "iss" : ["miller", "mann", "edmunds"].includes(id));
   const pick = (id: Body | null | undefined) => (id && solid(id) ? this.rigBody(id, w.ours, t) : null);
   // (the nearest world — not a craft beside the camera, nearer in its own radii)
@@ -324,7 +324,7 @@ function standOn(this: CameraController, b?: Body): string | null {
 function groundBelow(this: CameraController, radii = 2): { body: Body; lat: number; lon: number } | null {
   const w = this.rigWorld();
   if (!w) return null;
-  const t = this.nowTime();
+  const t = this.viewTime();
   // (the worlds only: a craft beside the camera — the Ranger landed 50 m away — is nearer in its own radii, and no ground)
   const isWorld = (b: Body) => (w.ours ? solidBody(b) && !isCraft(b) && b !== "iss" : ["miller", "mann", "edmunds"].includes(b));
   const ref = this.rigNearest(w.ours, w.X, t, isWorld);

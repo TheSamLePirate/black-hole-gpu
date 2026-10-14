@@ -73,6 +73,9 @@ function startSpectator(this: CameraController): boolean {
   const view = structuredClone(this.s);
   Object.assign(view, { ship: false, rotation: "free", lookAt: false, telescope: false, motion: "static" } satisfies Partial<Settings>);
   const sp = new CameraController(this.canvas, view, () => {}, true);
+  // (the scene's clock from the start: left NaN, its nowTime read 0 — the worlds where they were when the scene
+  // began, a tripod set at once stood on the Earth of then, a million kilometres from the Earth drawn)
+  sp.time = this.nowTime();
   // (where the view is — the eye on its attach point, looking as it looks: no cut —, then glided back behind the
   // ship and a little up)
   const w = sp.rigWorld();
@@ -165,6 +168,9 @@ function advanceSpectator(this: CameraController, dt: number, time: number | und
   // (the scene's time, also while it follows the ship and its own update is not run: its clock left NaN, nowTime
   // read 0 — the bodies where they were at the scene's start: no ground under a tripod, no sky's events)
   if (time !== undefined) sp.time = time;
+  // (its frame drawn at the ship's clock — the scene's follows it, behind the warp asked when the ship's steps run
+  // short —: the tripod placed for that instant, not for now + dt × the warp)
+  sp.frameEnd = this.shipClock() ?? Number.NaN;
   const at = this.shipFromView();
   sp.nearShip = at ? at.dist / M_METRES : Infinity;
   if (this.spectatorFollow && this.followShip(sp, dt, pad)) return true;

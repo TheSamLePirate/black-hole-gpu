@@ -157,7 +157,7 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
   // (the simulation moves its clock on after this step): the camera placed for that. Placed for now, it
   // lagged the world it stands on by a frame's motion — 30 km/s × a frame: the ground shook
   const tNow = this.nowTime();
-  const t = tNow + (s.animate && s.timeSpeed > 0 ? dt * s.timeSpeed : 0);
+  const t = Number.isFinite(this.frameEnd) ? this.frameEnd : tNow + (s.animate && s.timeSpeed > 0 ? dt * s.timeSpeed : 0);
   // the body it moves with: the target (around, following), else the nearest (free: the nearest now,
   // taking over when much nearer; the tripod: the one it stands on)
   let ref = mode === "orbit" || mode === "follow" ? this.rigBody(s.target, w.ours, t) : this.rigBody(R.ref, w.ours, t);
@@ -306,9 +306,11 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
       // the view free: fixed on the ground, turning with it (the sky wheels overhead — a time-lapse's
       // camera); turned by the user, fixed again as it is then
       const now = [s.yaw, s.pitch, s.roll].join();
-      const dir = (v: Vec3) => this.rigFix(ref.id, w.ours, lin(X, 1, v, ref.R), t);
+      // (the look as it is now — placed for now, read on the ground then: read at the frame's end, it lost a
+      // frame of the world's turning at each turn by the user, the view held on the stars at a high warp)
+      const dir = (v: Vec3) => this.rigFix(ref.id, w.ours, lin(w.X, 1, v, ref.R), tNow);
       if (!R.look || R.lookKey !== now) {
-        const o = this.rigFix(ref.id, w.ours, X, t),
+        const o = this.rigFix(ref.id, w.ours, w.X, tNow),
           f = dir(w.fwd),
           u = dir(w.up);
         R.look = o && f && u ? { f: sub3(f, o), u: sub3(u, o) } : null;

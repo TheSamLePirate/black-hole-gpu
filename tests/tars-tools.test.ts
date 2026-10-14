@@ -621,3 +621,59 @@ test("TARS's new teleports save 'Before TARS' first: atlas go, sky event go/live
   const save = `save ${UNDO_SAVE}`;
   expect(calls).toEqual([save, "go walk", save, "take trails go", "take trails render", save, "mode foot", "mode foot"]);
 });
+
+test("place_ship by a place's name: a runway exactly, an address through the Atlas's search, the ways to be put there", async () => {
+  const { gameTools, UNDO_SAVE } = await import("../src/ai/game-tools");
+  const calls: string[] = [];
+  const searched: string[] = [];
+  const host = {
+    settings: {},
+    camera: { character: { state: () => ({}) } },
+    tools: {
+      save: (n: string) => calls.push(`save ${n}`),
+      land: (b: string, la: number, lo: number) => `land ${b} ${la} ${lo}`,
+      walk: (b: string, la: number, lo: number) => `walk ${b} ${la} ${lo}`,
+      orbitOver: (b: string, la: number, lo: number, o: { altKm?: number }) => `over ${b} ${la} ${lo} ${o.altKm}`,
+      lineUp: (n: string, m: number) => `lineup ${n} ${m}`,
+      flyAt: (la: number, lo: number, agl: number, hdg: number, v: number, b: string) => `fly ${b} ${la} ${lo} ${agl} ${hdg} ${v}`,
+    },
+    atlas: {
+      search: async (q: string, body?: string) => {
+        searched.push(`${q}|${body ?? ""}`);
+        return q === "Tour Eiffel"
+          ? [{ name: "Tour Eiffel", body: "earth", lat: 48.8582599, lon: 2.2945006, kind: "tourism/attraction" }]
+          : [];
+      },
+      go: () => null,
+      open: () => {},
+    },
+    // (the one way the game places: the walker back aboard, the panels redrawn — here, marked)
+    place: (f: () => string) => `placed: ${f()}`,
+    changed: () => {},
+    log: () => [],
+  } as unknown as GameHost;
+  const tools = gameTools(host),
+    signal = new AbortController().signal;
+  const run = (a: Record<string, unknown>) => tools.find((t) => t.name === "place_ship")!.run(a, signal);
+  // (an address: the Atlas's search, its WGS84 place kept whole)
+  expect(await run({ mode: "ground", query: "Tour Eiffel" })).toBe("Tour Eiffel: placed: land earth 48.8582599 2.2945006");
+  expect(await run({ mode: "walk", query: "Tour Eiffel" })).toBe("Tour Eiffel: placed: walk earth 48.8582599 2.2945006");
+  expect(await run({ mode: "orbit_over", query: "Tour Eiffel", altKm: 420 })).toBe(
+    "Tour Eiffel: placed: over earth 48.8582599 2.2945006 420",
+  );
+  // (a runway by its ICAO code: no search; lined up on it, or a plane flown over it)
+  expect(await run({ mode: "lineup", query: "KEDW", alongM: 300 })).toBe(
+    "Edwards Air Force Base: placed: lineup Edwards Air Force Base 300",
+  );
+  expect(String(await run({ mode: "fly", query: "KEDW", aglM: 900, headingDeg: 220, speedMs: 180 }))).toContain(
+    "fly earth 34.905 -117.884 900 220 180",
+  );
+  expect(searched).toEqual(["Tour Eiffel|", "Tour Eiffel|", "Tour Eiffel|"]);
+  // (nothing by that name: said, nothing saved nor moved)
+  const before = calls.length;
+  await expect(run({ mode: "ground", query: "Nowhere-at-all" })).rejects.toThrow(/nothing found/);
+  expect(calls.length).toBe(before);
+  // (lined up needs a runway)
+  await expect(run({ mode: "lineup", query: "Tour Eiffel" })).rejects.toThrow(/runway/);
+  expect(calls.filter((c) => c === `save ${UNDO_SAVE}`).length).toBeGreaterThan(0);
+});

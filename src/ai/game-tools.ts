@@ -136,6 +136,9 @@ export interface GameHost {
   dayClouds?(): { date: string; layer: string } | null;
   /** the game's mode (game/modes.ts): now, into another (why not, or null), the top bar shown or hidden */
   mode?: { get(): GameMode; set(m: GameMode): string | null; hideBar(on: boolean): void };
+  /** the ship placed as the Place panel and the Atlas place it (main.ts placeShip: a mission ended, the game's
+   *  world loaded, the walker back aboard, the panels redrawn): its note */
+  place?(f: () => string): string;
   /** the Atlas (ui/atlas.ts): the destinations and the Earth's addresses found; the game put at a place; the page */
   atlas?: {
     search(
@@ -402,6 +405,34 @@ export function gameTools(h: GameHost): Tool[] {
     const b = resolveBody(String(name));
     if (!b) throw new Error(`no body named "${name}" — list_bodies lists them`);
     return b;
+  };
+  /**
+   * The place a tool names — `site` (a runway or site), `query` (a site, a destination, an address on the Earth,
+   * coordinates: the Atlas's search, WGS84), or `body` with `lat`/`lon` —, or null when none is named (a mode that
+   * needs none: orbit, near, wormhole).
+   */
+  const placeOf = async (a: Args): Promise<{ body: string; lat: number; lon: number; name?: string; site?: Site } | null> => {
+    const on = a.body !== undefined ? body(a.body) : undefined;
+    if (a.site !== undefined) {
+      const site = resolveSite(String(a.site), on);
+      if (!site) throw new Error(`no site named "${a.site}" — list_places lists them`);
+      return { body: site.body, lat: site.lat, lon: site.lon, name: site.name, site };
+    }
+    if (a.query !== undefined) {
+      const q = String(a.query);
+      // (a runway named exactly or by its ICAO code; a part of a name — "Paris" — is the Atlas's to find: the city first)
+      const n = fold(q);
+      const site = SITES.find((s) => (!on || s.body === on) && (fold(s.name) === n || s.icao?.toLowerCase() === n));
+      if (site) return { body: site.body, lat: site.lat, lon: site.lon, name: site.name, site };
+      const world = on === "earth" || on === "moon" || on === "mars" ? on : undefined;
+      if (on && !world) throw new Error(`places by name are on the Earth, the Moon and Mars — on ${on}, give lat/lon`);
+      const hit = (await h.atlas?.search(q, world))?.[0];
+      if (!hit) throw new Error(`nothing found for "${q}"${world ? ` on ${world}` : ""}`);
+      const found = SITES.find((s) => s.body === hit.body && s.name === hit.name);
+      return { body: hit.body, lat: hit.lat, lon: hit.lon, name: hit.name, site: found };
+    }
+    if (on !== undefined) return { body: on, lat: (a.lat as number) ?? 0, lon: (a.lon as number) ?? 0 };
+    return null;
   };
   const autoOn = (a: Auto) => {
     if (a === "none") {
@@ -1535,9 +1566,13 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "place_ship",
       description:
-        "Teleport the ship (saved first as 'Before TARS'; a mission running ends). mode: orbit (body, altKm or peKm/apKm, incDeg, retrograde; about Gargantua rM), orbit_over (an orbit passing over lat/lon now), ground (body, lat, lon; or site), near (beside a body at rest, altKm), wormhole (side: ours/gargantua), glide (onto a runway: site, distKm, altKm, speedMs — the entry autopilot lands it), hover (body, lat, lon or site, altKm — at rest over it).",
+        "Teleport the ship (saved first as 'Before TARS'; a mission running ends; on foot, back aboard first). Where: a place by name — `query`: a runway or site, a destination (summits, launch sites, Apollo sites, craters, rovers…), any address or place name on the Earth (OpenStreetMap, WGS84), or coordinates typed —, or `site` (a runway), or body + lat/lon. mode: orbit (body, altKm or peKm/apKm, incDeg, retrograde; about Gargantua rM), orbit_over (an orbit passing over the place now, altKm, incDeg), ground (set down there, on its gear; on a runway lined up), walk (set down there and step out on foot), lineup (on a runway's threshold ready to take off: site or query, alongM), fly (a plane flying over the place: aglM, headingDeg, speedMs), near (beside a body at rest, altKm), wormhole (side: ours/gargantua), glide (onto a runway: site, distKm, altKm, speedMs — the entry autopilot lands it), hover (the place, altKm — at rest over it).",
       params: {
-        mode: { type: "string", enum: ["orbit", "orbit_over", "ground", "near", "wormhole", "glide", "hover"] },
+        mode: {
+          type: "string",
+          enum: ["orbit", "orbit_over", "ground", "walk", "lineup", "fly", "near", "wormhole", "glide", "hover"],
+        },
+        query: { type: "string" },
         body: { type: "string" },
         site: { type: "string" },
         altKm: { type: "number", minimum: 0, maximum: 1e7 },
@@ -1551,46 +1586,62 @@ export function gameTools(h: GameHost): Tool[] {
         side: { type: "string", enum: ["ours", "gargantua"] },
         distKm: { type: "number", minimum: 2, maximum: 2000 },
         speedMs: { type: "number", minimum: 50, maximum: 8000 },
+        alongM: { type: "number", minimum: 0, maximum: 5000 },
+        aglM: { type: "number", minimum: 30, maximum: 20000 },
+        headingDeg: { type: "number", minimum: 0, maximum: 360 },
       },
       required: ["mode"],
-      run: act((a) => {
+      run: act(async (a) => {
+        const where = await placeOf(a);
         net();
-        const site = a.site !== undefined ? resolveSite(String(a.site)) : null;
-        if (a.site !== undefined && !site) throw new Error(`no site named "${a.site}" — list_places lists them`);
-        const b = () =>
-          site
-            ? site.body
-            : a.body !== undefined
-              ? body(a.body)
-              : (() => {
-                  throw new Error("give a body or a site");
-                })();
-        const lat = () => (site ? site.lat : ((a.lat as number) ?? 0));
-        const lon = () => (site ? site.lon : ((a.lon as number) ?? 0));
-        switch (a.mode) {
-          case "orbit":
-            return tools.orbit(b(), {
-              altKm: a.altKm as number,
-              peKm: a.peKm as number,
-              apKm: a.apKm as number,
-              inc: a.incDeg as number,
-              retrograde: a.retrograde as boolean,
-              rM: a.rM as number,
-            });
-          case "orbit_over":
-            return tools.orbitOver(b(), lat(), lon(), { altKm: a.altKm as number, inc: a.incDeg as number });
-          case "ground":
-            return tools.land(b(), lat(), lon());
-          case "near":
-            return tools.near(b(), { altKm: a.altKm as number, rM: a.rM as number });
-          case "wormhole":
-            return tools.wormhole((a.side as "ours") ?? "ours");
-          case "glide":
-            if (!site) throw new Error("glide needs a runway site");
-            return tools.glideTo(site.name, (a.distKm as number) ?? 80, (a.altKm as number) ?? 25, (a.speedMs as number) ?? 750);
-          default:
-            return tools.hoverOver(b(), lat(), lon(), (a.altKm as number) ?? 1.5);
-        }
+        const b = () => {
+          if (where) return where.body;
+          throw new Error("give a place: query, site, or body with lat/lon");
+        };
+        const lat = () => where?.lat ?? 0;
+        const lon = () => where?.lon ?? 0;
+        const site = where?.site ?? null;
+        const run = (): string => {
+          switch (a.mode) {
+            case "orbit":
+              return tools.orbit(b(), {
+                altKm: a.altKm as number,
+                peKm: a.peKm as number,
+                apKm: a.apKm as number,
+                inc: a.incDeg as number,
+                retrograde: a.retrograde as boolean,
+                rM: a.rM as number,
+              });
+            case "orbit_over":
+              return tools.orbitOver(b(), lat(), lon(), {
+                altKm: a.altKm as number,
+                peKm: a.peKm as number,
+                apKm: a.apKm as number,
+                inc: a.incDeg as number,
+                retrograde: a.retrograde as boolean,
+              });
+            case "ground":
+              return tools.land(b(), lat(), lon());
+            case "walk":
+              return tools.walk(b(), lat(), lon());
+            case "lineup":
+              if (!site?.runway) throw new Error("lineup needs a runway (site or query naming one) — list_places lists them");
+              return tools.lineUp(site.name, (a.alongM as number) ?? 60);
+            case "fly":
+              return tools.flyAt(lat(), lon(), (a.aglM as number) ?? 600, (a.headingDeg as number) ?? 0, (a.speedMs as number) ?? 200, b());
+            case "near":
+              return tools.near(b(), { altKm: a.altKm as number, rM: a.rM as number });
+            case "wormhole":
+              return tools.wormhole((a.side as "ours") ?? "ours");
+            case "glide":
+              if (!site?.runway) throw new Error("glide needs a runway site");
+              return tools.glideTo(site.name, (a.distKm as number) ?? 80, (a.altKm as number) ?? 25, (a.speedMs as number) ?? 750);
+            default:
+              return tools.hoverOver(b(), lat(), lon(), (a.altKm as number) ?? 1.5);
+          }
+        };
+        const note = h.place ? h.place(run) : run();
+        return where?.name ? `${where.name}: ${note}` : note;
       }),
     },
     {

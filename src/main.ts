@@ -3485,9 +3485,7 @@ async function main() {
       mission.stop(t("Mission ended — the ship placed"));
       currentScene = null;
     },
-    ensureWorld: () => {
-      if (!settings.wormhole || settings.system !== "gargantua") applyPreset("Earth: the Blue Marble");
-    },
+    place: (f) => placeShip(f),
   });
   flightHud.onPlace = () => placePanel.open();
   // a plane's flight plan (ui/routepanel.ts, PLAN-F35 F8): its waypoints on the map, NAV flying it
@@ -3520,6 +3518,18 @@ async function main() {
     if (!settings.wormhole || settings.system !== "gargantua") applyPreset("Earth: the Blue Marble");
   }
   /**
+   * The ship placed — the Place panel, the Atlas, TARS: one way. A mission running ended, the game's world loaded,
+   * the walker back aboard; then the placement, the panels redrawn. Its note.
+   */
+  function placeShip(f: () => string): string {
+    atlasReady();
+    if (camera.character.active) camera.character.stop();
+    const note = f();
+    refreshGui();
+    touch();
+    return note;
+  }
+  /**
    * The free camera above a place (a spectator when a ship flies — it flies on): `altKm` up, south of it, looking at
    * it 30° down, carried with the ground; or `ground`: on its tripod there, looking along `heading` (north by
    * default), `pitch` up from the horizon. Why not, or null.
@@ -3538,7 +3548,7 @@ async function main() {
     }
     releaseFollow();
     const vc = camera.viewController();
-    const time = vc.nowTime();
+    const time = vc.viewTime();
     const alt = o.ground ? 0.03 : (o.altKm ?? (body === "earth" ? 3 : 8));
     const R = (solarBody(body)!.radius * M_METRES) / 1e3;
     const back = o.ground ? 0 : (alt / Math.tan((30 * Math.PI) / 180) / R) * (180 / Math.PI);
@@ -3594,7 +3604,7 @@ async function main() {
     },
     here: () => {
       const out: { body: string; lat: number; lon: number; who: "craft" | "walker" | "camera" }[] = [];
-      const time = camera.nowTime();
+      const time = camera.viewTime();
       const sub = (body: string, X: Vec3) => {
         const q = toBodyFixed(body, X, time);
         // (the craft's nadir: its own geodetic latitude, at its height — WGS84 on the Earth)
@@ -3650,13 +3660,13 @@ async function main() {
   function atlasGo(to: AtlasAction, p: AtlasPlace): string | null {
     try {
       if (to === "camera" || to === "tripod") return cameraAt(p.body, p.lat, p.lon, { ground: to === "tripod" });
-      atlasReady();
-      if (camera.character.active) camera.character.stop();
-      if (to === "orbit") tools.orbitOver(p.body, p.lat, p.lon, { altKm: ATLAS_ORBIT_KM[p.body] });
-      else if (to === "land") tools.land(p.body, p.lat, p.lon);
-      else tools.walk(p.body, p.lat, p.lon);
-      refreshGui();
-      touch();
+      placeShip(() =>
+        to === "orbit"
+          ? tools.orbitOver(p.body, p.lat, p.lon, { altKm: ATLAS_ORBIT_KM[p.body] })
+          : to === "land"
+            ? tools.land(p.body, p.lat, p.lon)
+            : tools.walk(p.body, p.lat, p.lon),
+      );
       return null;
     } catch (e) {
       return (e as Error).message;
