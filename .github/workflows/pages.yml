@@ -328,7 +328,7 @@ jobs:
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           if git fetch -q --depth=1 origin deploy; then git checkout -q -b deploy FETCH_HEAD; else git checkout -q --orphan deploy; fi
           # (the room server's image kept as rooms.yml last set it — none yet: its block left out)
-          ROOMS=$(grep -o 'ghcr.io/[^ "]*:rooms-[^ "]*' compose.yml 2>/dev/null | head -1 || true)
+          ROOMS=$( (grep -E '^ +image: ghcr\.io/[^ ]*:rooms-' compose.yml 2>/dev/null || true) | head -1 | awk '{print $2}' | tr -d ';"')
           sh ../deploy/render-compose.sh "$REF" "$ROOMS" > compose.yml
           git add compose.yml
           git commit -q -m "deploy: $REF (main ${MAIN:0:7})"
