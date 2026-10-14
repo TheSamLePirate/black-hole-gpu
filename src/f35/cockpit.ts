@@ -78,7 +78,7 @@ export function pcdData(
     spool: c.pilot.engineNow,
     ab: c.abLevel,
     thrust,
-    flow: V.turbofan && fuel > 0 ? fuelFlow(V.turbofan, thrust, dry, Math.max(e.sigma, 0.1)) : 0,
+    flow: V.turbofan && fuel > 0 ? fuelFlow(V.turbofan, thrust, dry, Math.max(e.sigma, 0.1), e.mach) : 0,
     fuel,
     fuelFull: V.fuelKg ?? 0,
     mass,
@@ -120,7 +120,7 @@ export function avionicsData(c: CameraController, s: Settings) {
   const dry = c.pilot.engineNow * c.thrustMax() * toMs2 * mass;
   const thrust = dry * c.jetThrust();
   const fuel = fleet.fuel.f35 ?? V.fuelKg ?? 0;
-  const flow = V.turbofan && fuel > 0 ? fuelFlow(V.turbofan, thrust, dry, Math.max(e.sigma, 0.1)) : 0;
+  const flow = V.turbofan && fuel > 0 ? fuelFlow(V.turbofan, thrust, dry, Math.max(e.sigma, 0.1), e.mach) : 0;
   const m = c.jetModes;
   return {
     spool: c.pilot.engineNow,

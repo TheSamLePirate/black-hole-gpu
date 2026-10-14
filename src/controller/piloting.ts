@@ -1199,7 +1199,7 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
     const left = fleet.fuel[fleet.active] ?? VESSELS[fleet.active].fuelKg ?? 0;
     // (the F-35's tanks never empty, the setting on)
     if (e.sigma > 0 && !(fleet.active === "f35" && s.f35InfiniteFuel))
-      fleet.fuel[fleet.active] = Math.max(0, left - fuelFlow(TF, thrust, dry, e.sigma) * dTau * Msec);
+      fleet.fuel[fleet.active] = Math.max(0, left - fuelFlow(TF, thrust, dry, e.sigma, e.mach) * dTau * Msec);
   } else if (fuelOn(s)) this.spent += (w / Math.max(this.pressureThrust(), 0.05)) * (this.jetModes.ab ? JET.abFlow / JET.abThrust : 1);
   if (burn && this.nodeBurning) this.nodeDone = Math.max(this.nodeDone + along(burn.dir), 0);
   this.dockCheck();

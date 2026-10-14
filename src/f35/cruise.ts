@@ -30,7 +30,7 @@ export function cruiseDrag(h: number, v: number, mass: number): number {
 /** The fuel flow [kg/s] cruising there (a mass: the plan's mean, by default half the fuel burnt). */
 export function cruiseBurn(h: number, v: number, mass = VESSELS.f35.mass - 0.5 * (VESSELS.f35.fuelKg ?? 0)): number {
   const def = VESSELS.f35.turbofan as TurbofanDef;
-  const sigma = isa(h).rho / 1.225;
+  const { rho, a } = isa(h);
   const D = cruiseDrag(h, v, mass);
-  return fuelFlow(def, D, Infinity, sigma);
+  return fuelFlow(def, D, Infinity, rho / 1.225, v / a);
 }

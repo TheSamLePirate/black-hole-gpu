@@ -119,7 +119,7 @@ pertinent.
 
 ### V — Le vrai F-35 (vol, manœuvres, loi de pilotage)
 
-- **V1. Le domaine de vol mesuré.** Un banc (`tests/f35-envelope.test.ts`) qui mesure le virage soutenu et
+- **V1. Le domaine de vol mesuré.** *Fait le 2026-10-15 — [fiche](progress/aviation/V1.md) : traînée induite, poussée stratosphérique et consommation calées, deux écarts laissés à V2 et V3.* Un banc (`tests/f35-envelope.test.ts`) qui mesure le virage soutenu et
   instantané, le taux de roulis, la montée, l'accélération de Mach 0,8 à 1,2, le plafond, la vitesse maxi, la
   finesse et l'incidence maxi, comparés aux valeurs publiées du F-35B, avec l'écart de chacune.
   *Fini quand* la table d'écarts est écrite et que chaque valeur est à ±10 % (ou l'écart expliqué).

@@ -414,7 +414,7 @@ export const VESSELS: Record<VesselId, VesselDef> = {
       area: [20, 62, 0.25],
       cdA0: 0.62,
       wave: 0.95,
-      wing: { S: 42.7, AR: 2.68, cla: 3.8, stall: 0.45, e: 0.8, dihedral: -0.03 },
+      wing: { S: 42.7, AR: 2.68, cla: 3.8, stall: 0.45, e: 0.7, dihedral: -0.03 },
       fin: { S: 9.2, cla: 2.4, at: [0, 1.6, -4.2] },
       cp: [
         [0, 0.3, -1.0],

@@ -32,8 +32,17 @@ export const F135: TurbofanDef = {
   light: 0.6,
 };
 
-/** The density's share at sea level that the engine breathes: σ^0.75 (a turbofan's lapse with height). */
-const lapse = (sigma: number) => Math.max(sigma, 0) ** 0.75;
+/** the density's share at the tropopause (11 km, ISA) */
+const SIGMA_TROP = 0.2971;
+/**
+ * The share of its sea-level thrust the engine keeps with the density: σ^0.75 in the troposphere (the air colder
+ * as it thins, the engine's pressure ratio up); above the tropopause, the temperature constant, as the density
+ * itself (a turbofan's lapse — its ceiling some 50 000 ft, the F-35's published one).
+ */
+const lapse = (sigma: number) => {
+  const s = Math.max(sigma, 0);
+  return s >= SIGMA_TROP ? s ** 0.75 : SIGMA_TROP ** 0.75 * (s / SIGMA_TROP);
+};
 
 /** Its dry thrust available at full throttle [N]: the density's lapse, the ram's rise past Mach 0.6. */
 export function dryThrust(def: TurbofanDef, mach: number, sigma: number): number {
@@ -53,11 +62,16 @@ export function wetRatio(def: TurbofanDef, mach: number, sigma: number): number 
   return d > 0 ? wetThrust(def, mach, sigma) / d : 1;
 }
 
+/** the dry consumption's rise with the flight's Mach number (a low-bypass turbofan's ram drag: ~1.2× at Mach 0.85) */
+export const TSFC_MACH = 0.25;
+
 /**
- * The fuel it burns [kg/s] for a thrust: the throttle's dry share at the dry consumption, the afterburner's
- * part at its own; a floor at idle (the engine running, the thrust nil).
+ * The fuel it burns [kg/s] for a thrust at a Mach number: the throttle's dry share at the dry consumption (rising
+ * with the speed — the air taken in at speed costs its momentum), the afterburner's part at its own; a floor at
+ * idle (the engine running, the thrust nil).
  */
-export function fuelFlow(def: TurbofanDef, thrust: number, dryPart: number, sigma: number): number {
+export function fuelFlow(def: TurbofanDef, thrust: number, dryPart: number, sigma: number, mach = 0): number {
   const idle = 0.12 * Math.max(sigma, 0.1);
-  return Math.max(idle, def.tsfcDry * Math.min(thrust, dryPart) + def.tsfcWet * Math.max(thrust - dryPart, 0));
+  const dry = def.tsfcDry * (1 + TSFC_MACH * Math.max(mach, 0));
+  return Math.max(idle, dry * Math.min(thrust, dryPart) + def.tsfcWet * Math.max(thrust - dryPart, 0));
 }
