@@ -1,10 +1,12 @@
-# The server's stack (docs/DEPLOY.md). The CI writes this file to the `deploy` branch with the image it
-# has just pushed in place of ghcr.io/thesamlepirate/black-hole-gpu:3f82549-382.1; the server's Portainer polls that branch and redeploys on a change.
+# The server's stack (docs/DEPLOY.md). The CI writes this file to the `deploy` branch with the images it
+# has pushed in place of the two placeholders (deploy/render-compose.sh): the site's (pages.yml) and the
+# room server's (rooms.yml — its block left out until it has an image); the server's Portainer polls that
+# branch and redeploys on a change (only the service whose image changed is recreated).
 # (Portainer 2.9 runs docker-compose v1: the version key is kept)
 version: "3.8"
 services:
   kerr:
-    image: ghcr.io/thesamlepirate/black-hole-gpu:3f82549-382.1
+    image: ghcr.io/thesamlepirate/black-hole-gpu:5de87aa-384.1
     ports:
       - "3000:80"
     restart: unless-stopped
