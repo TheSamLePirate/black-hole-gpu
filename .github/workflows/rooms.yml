@@ -65,7 +65,8 @@ jobs:
           git fetch -q --depth=1 origin deploy
           git checkout -q -b deploy FETCH_HEAD
           # (the site's image kept as pages.yml last set it)
-          KERR=$(grep -o 'ghcr.io/[^ "]*:[0-9a-f]\{7\}-[0-9][^ "]*' compose.yml | head -1)
+          # (read from the service's image line only: the old file's comment named it too, with a ';')
+          KERR=$(grep -E '^ +image: ghcr\.io/[^ ]*:[0-9a-f]{7}-[0-9]' compose.yml | head -1 | awk '{print $2}' | tr -d ';"')
           if [ -z "$KERR" ]; then echo "no site image on the deploy branch"; exit 1; fi
           sh ../deploy/render-compose.sh "$KERR" "$REF" > compose.yml
           git add compose.yml
