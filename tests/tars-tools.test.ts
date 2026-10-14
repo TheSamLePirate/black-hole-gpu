@@ -677,3 +677,81 @@ test("place_ship by a place's name: a runway exactly, an address through the Atl
   await expect(run({ mode: "lineup", query: "Tour Eiffel" })).rejects.toThrow(/runway/);
   expect(calls.filter((c) => c === `save ${UNDO_SAVE}`).length).toBeGreaterThan(0);
 });
+
+test("TARS reaches the rest of the game: the flight plan, the F-35's flights, the music, a save shared, a live capture stopped", async () => {
+  const { gameTools, PANELS } = await import("../src/ai/game-tools");
+  const { newPlan } = await import("../src/game/flightplan");
+  const calls: string[] = [];
+  const nav = { route: newPlan(), lnav: null as null | { active: number; directTo(i: number): void }, on: { l: false, v: false } };
+  const host = {
+    settings: {},
+    camera: {
+      character: { state: () => ({}) },
+      nav,
+      routeChanged: () => {
+        calls.push("routeChanged");
+        nav.lnav = { active: 0, directTo: (i: number) => calls.push(`direct ${i}`) };
+      },
+      geoNow: () => ({ lat: 34.9, lon: -117.9, alt: 3000, gs: 200, track: 0, vs: 0 }),
+    },
+    tools: {
+      save: (n: string) => calls.push(`save ${n}`),
+      shareLink: () => "https://x/#g=abc",
+      exportSave: (n?: string) => calls.push(`export ${n ?? "now"}`),
+      autosaveNow: () => calls.push("autosave"),
+    },
+    atlas: {
+      search: async (q: string) =>
+        q === "Mojave" ? [{ name: "Mojave Air and Space Port", body: "earth", lat: 35.06, lon: -118.15, kind: "aeroway" }] : [],
+      go: () => null,
+      open: () => {},
+    },
+    f35: {
+      fields: () => [{ icao: "KEDW", name: "Edwards Air Force Base" }],
+      prepare: (o: { field: string; start?: string }) => `ready ${o.field} ${o.start}`,
+      challenges: () => [{ id: "machloop", title: "Mach Loop", kind: "gates", par: 95, best: null }],
+      fights: () => [{ id: "bvr", title: "BVR" }],
+      fly: (id: string) => `${id}: started`,
+      abort: () => "none running",
+    },
+    music: {
+      state: () => ({ playing: true }),
+      themes: () => [{ id: "event", name: "Event Horizon" }],
+      set: (o: object) => JSON.stringify(o),
+    },
+    skyEvents: { take: () => null, list: async () => [], open: () => null, stopLive: () => "no live capture running" },
+    changed: () => {},
+    log: () => [],
+  } as unknown as GameHost;
+  const tools = gameTools(host),
+    signal = new AbortController().signal;
+  const run = (name: string, a: Record<string, unknown>) => tools.find((t) => t.name === name)!.run(a, signal) as Promise<any>;
+  // (the plan: a field by its code, a place by its name, coordinates; the cruise; direct to; LNAV on)
+  await run("flight_plan", { action: "add", query: "KEDW" });
+  await run("flight_plan", { action: "add", query: "Mojave", altM: 3000 });
+  let v = await run("flight_plan", { action: "add", lat: 36, lon: -117, spdMs: 220 });
+  expect(v.waypoints.map((w: { name: string }) => w.name)).toEqual(["KEDW", "Mojave Air an", "WP03"].map((n) => n.slice(0, 12)));
+  expect(v.waypoints[1].altM).toBe(3000);
+  v = await run("flight_plan", { action: "cruise", altM: 11000, spdMs: 250 });
+  expect([v.cruiseAltM, v.cruiseSpdMs]).toEqual([11000, 250]);
+  v = await run("flight_plan", { action: "nav", lnav: true, vnav: true });
+  expect([v.lnav, v.vnav]).toEqual([true, true]);
+  await run("flight_plan", { action: "direct", index: 2 });
+  expect(calls).toContain("direct 2");
+  v = await run("flight_plan", { action: "remove", index: 0 });
+  expect(v.waypoints.length).toBe(2);
+  await expect(run("flight_plan", { action: "remove", index: 9 })).rejects.toThrow(/no waypoint/);
+  // (the F-35: its fields, a flight prepared, its challenges, one flown)
+  expect(await run("f35", { action: "fields" })).toEqual([{ icao: "KEDW", name: "Edwards Air Force Base" }]);
+  expect(await run("f35", { action: "prepare", field: "KEDW", start: "final" })).toBe("ready KEDW final");
+  expect((await run("f35", { action: "challenges" })).fights[0].id).toBe("bvr");
+  // (the music, a save shared and exported, a live capture asked to stop when none runs)
+  expect(await run("music", { action: "set", listen: "none", auto: true })).toBe(JSON.stringify({ listen: null, intensity: null }));
+  expect(await run("saves", { action: "share" })).toEqual({ link: "https://x/#g=abc" });
+  await run("saves", { action: "export" });
+  expect(calls).toContain("export now");
+  expect(await run("sky_events", { action: "stop_live" })).toEqual({ ok: false, error: "no live capture running" });
+  // (every page TARS can open, the F-35's and the observatory's among them)
+  for (const p of ["observe", "multiexposure", "flighthub", "route", "challenges", "title"])
+    expect(PANELS as readonly string[]).toContain(p);
+});

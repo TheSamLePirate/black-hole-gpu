@@ -109,20 +109,8 @@ export class ChallengePanel {
 
   /** A fight flown: the F-35 at its start over the range, its tanks full, its loadout, the world running. */
   fight(d: Scenario) {
-    const T = this.host.tools;
-    const C = this.host.camera;
     try {
-      if (fleet.active !== "f35") T.set("vessel", "f35");
-      C.nav.on = { l: false, v: false };
-      C.challengeAbort();
-      const D = Math.PI / 180;
-      const lat = d.anchor.lat + d.start.n / (D * 6_371_008.8);
-      const lon = d.anchor.lon + d.start.e / (D * 6_371_008.8 * Math.cos(d.anchor.lat * D));
-      T.flyAt(lat, lon, d.start.agl, d.start.hdg, d.start.speed);
-      C.airFlight.cfg.flaps = 0;
-      C.pilot.throttle = C.pilot.engineNow = 0.85;
-      fleet.fuel.f35 = VESSELS.f35.fuelKg ?? 0;
-      C.combatStart(d);
+      flyFight(this.host, d);
       this.close?.();
     } catch (e) {
       this.host.toast(String((e as Error).message ?? e));
@@ -131,39 +119,61 @@ export class ChallengePanel {
 
   /** A challenge flown: the F-35 at its start, its tanks full, the judge running. */
   go(d: ChallengeDef) {
-    const T = this.host.tools;
-    const C = this.host.camera;
     try {
-      if (fleet.active !== "f35") T.set("vessel", "f35");
-      C.nav.on = { l: false, v: false };
-      if (C.combat) C.combatEnd();
-      const s = d.start;
-      if ("field" in s) {
-        // (a final: 3° down to the aim point, at the reference speed, the gear down, full flaps)
-        T.glideTo(s.field, s.final, (s.final * 1000 * Math.tan((3 * Math.PI) / 180)) / 1000 + 0.02, 78);
-        if (C.pilot.auto !== "none") C.pilot.setAuto(C.pilot.auto);
-        C.pilot.auto = "none";
-        C.gearInit = true;
-        C.gearDown = true;
-        C.gearExt = 1;
-        C.airFlight.cfg.flaps = 1;
-        C.pilot.throttle = C.pilot.engineNow = 0.42;
-      } else {
-        T.flyAt(s.lat, s.lon, s.agl, s.hdg, s.speed);
-        C.airFlight.cfg.flaps = 0;
-        C.pilot.throttle = C.pilot.engineNow = d.kind === "vertical" ? 0.55 : 0.85;
-        // (the vertical landing: the STOVL mode converting at once — the lift fan's doors open)
-        if (d.kind === "vertical") {
-          C.stovl.on = true;
-          C.gearDown = true;
-          C.gearExt = 1;
-        }
-      }
-      fleet.fuel.f35 = VESSELS.f35.fuelKg ?? 0;
-      C.challengeStart(d);
+      flyChallenge(this.host, d);
       this.close?.();
     } catch (e) {
       this.host.toast(String((e as Error).message ?? e));
     }
   }
+}
+
+/** A fight flown — the Challenges card and TARS: the F-35 at its start over the range, its tanks full, its loadout. */
+export function flyFight(host: ChallengeHost, d: Scenario) {
+  const T = host.tools;
+  const C = host.camera;
+  if (fleet.active !== "f35") T.set("vessel", "f35");
+  C.nav.on = { l: false, v: false };
+  C.challengeAbort();
+  const D = Math.PI / 180;
+  const lat = d.anchor.lat + d.start.n / (D * 6_371_008.8);
+  const lon = d.anchor.lon + d.start.e / (D * 6_371_008.8 * Math.cos(d.anchor.lat * D));
+  T.flyAt(lat, lon, d.start.agl, d.start.hdg, d.start.speed);
+  C.airFlight.cfg.flaps = 0;
+  C.pilot.throttle = C.pilot.engineNow = 0.85;
+  fleet.fuel.f35 = VESSELS.f35.fuelKg ?? 0;
+  C.combatStart(d);
+}
+
+/** A challenge flown — the Challenges card and TARS: the F-35 at its start, its tanks full, the judge running. */
+export function flyChallenge(host: ChallengeHost, d: ChallengeDef) {
+  const T = host.tools;
+  const C = host.camera;
+  if (fleet.active !== "f35") T.set("vessel", "f35");
+  C.nav.on = { l: false, v: false };
+  if (C.combat) C.combatEnd();
+  const s = d.start;
+  if ("field" in s) {
+    // (a final: 3° down to the aim point, at the reference speed, the gear down, full flaps)
+    T.glideTo(s.field, s.final, (s.final * 1000 * Math.tan((3 * Math.PI) / 180)) / 1000 + 0.02, 78);
+    if (C.pilot.auto !== "none") C.pilot.setAuto(C.pilot.auto);
+    C.pilot.auto = "none";
+    C.gearInit = true;
+    C.gearDown = true;
+    C.gearExt = 1;
+    C.airFlight.cfg.flaps = 1;
+    C.pilot.throttle = C.pilot.engineNow = 0.42;
+  } else {
+    T.flyAt(s.lat, s.lon, s.agl, s.hdg, s.speed);
+    C.airFlight.cfg.flaps = 0;
+    C.pilot.throttle = C.pilot.engineNow = d.kind === "vertical" ? 0.55 : 0.85;
+    // (the vertical landing: the STOVL mode converting at once — the lift fan's doors open)
+    if (d.kind === "vertical") {
+      C.stovl.on = true;
+      C.gearDown = true;
+      C.gearExt = 1;
+    }
+  }
+  fleet.fuel.f35 = VESSELS.f35.fuelKg ?? 0;
+  C.challengeStart(d);
 }

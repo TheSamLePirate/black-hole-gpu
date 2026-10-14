@@ -96,14 +96,27 @@ en images.
   - Sirius au meilleur moment par TARS, suivie ;
   - Saturne au meilleur moment par un clic.
 
-## O4 — TARS : le reste du jeu (à venir)
+## O4 — TARS : le reste du jeu (ce commit)
 
-Ce que l'audit trouve encore hors de portée de TARS :
-- la préparation d'un vol F-35 ;
-- le plan de vol (points de route) et les défis ;
-- la musique (mode, thème, intensité, mélange) ;
-- l'export, l'import et le partage d'une partie ;
-- l'arrêt d'une capture en direct ;
-- la météo par préréglage ;
-- l'écran titre ;
-- le préréglage graphique.
+L'audit des 51 outils de TARS contre toutes les fonctions du jeu (panneaux, touches, `__bh`, `GameTools`) a trouvé
+ce qui restait hors de sa portée. C'est maintenant couvert :
+- **`f35`** : les terrains, la préparation d'un vol (`prepare` : terrain, départ aligné / en finale / en croisière,
+  heure du terrain, météo, carburant, plan vers un terrain d'arrivée), les défis et combats avec leurs meilleurs
+  scores et médailles, l'un d'eux lancé (`fly`), abandonné (`abort`). La carte « Préparer un vol » et la page des
+  défis passent par les mêmes fonctions (`prepareFlight`, `flyChallenge`, `flyFight`) que TARS.
+- **`flight_plan`** : afficher, ajouter un point par nom (terrain, lieu, adresse) ou coordonnées avec ses
+  contraintes d'altitude et de vitesse, retirer, vider, la croisière et la réserve, direct vers un point,
+  LNAV/VNAV.
+- **`music`** : l'état, les thèmes, le mode (moments, adaptative, liste), un thème écouté, l'intensité (ou celle du
+  vol), le niveau d'une couche, la couper.
+- **`saves`** : `export` (fichier téléchargé), `import` (le texte d'un fichier), `share` (un lien), `autosave`.
+- **`sky_events`** : `stop_live` (la capture en direct arrêtée).
+- **`interface`** ouvre aussi l'Atlas, le ciel d'ici, l'observatoire, la surimpression, la préparation de vol, le
+  plan de vol, les défis, l'écran titre.
+
+Tests : `tars-tools` (le plan de vol par code de terrain, par nom et par coordonnées, la croisière, LNAV/VNAV, le
+direct ; le F-35, la musique, le partage, la capture arrêtée, les pages) ; e2e `tars-reach` :
+- un vol F-35 préparé à Edwards, son plan édité et volé en LNAV ;
+- un défi lancé puis abandonné ;
+- la musique réglée, chaque nouvelle page ouverte par TARS ;
+- la partie partagée en lien.

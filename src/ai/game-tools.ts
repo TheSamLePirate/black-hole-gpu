@@ -158,6 +158,22 @@ export interface GameHost {
     look(q: string, at?: number | "best"): string | null;
     open(q?: string): void;
   };
+  /** the F-35's flights (ui/flighthub.ts, ui/challengepanel.ts): its airfields, a flight set up, the challenges and fights
+   *  (their bests), one flown, the one running given up */
+  f35?: {
+    fields(): { icao: string | null; name: string }[];
+    prepare(o: { field: string; start?: string; hour?: string; weather?: string; fuel?: number; dest?: string }): string;
+    challenges(): { id: string; title: string; kind: string; par: number; best: { score: number; medal: string | null } | null }[];
+    fights(): { id: string; title: string }[];
+    fly(id: string): string;
+    abort(): string;
+  };
+  /** the music (audio/music.ts): its state, its themes, its mode, a theme listened to, its intensity, its mixer */
+  music?: {
+    state(): object;
+    themes(): { id: string; name: string }[];
+    set(o: { mode?: string; listen?: string | null; intensity?: number | null; layer?: string; level?: number; mute?: boolean }): string;
+  };
   /** the Atlas (ui/atlas.ts): the destinations and the Earth's addresses found; the game put at a place; the page */
   atlas?: {
     search(
@@ -186,6 +202,8 @@ export interface GameHost {
     >;
     take(id: string, way: "go" | "live" | "render"): string | null;
     open(): string | null;
+    /** the live capture running stopped: why not (none running), or null */
+    stopLive?(): string | null;
   };
   /** a video (renderdialog.ts, PLAN-MODES-AAA M8): a shot filmed — a draft to test it, or the final —, its state, stopped */
   video?: {
@@ -273,6 +291,12 @@ export const PANELS = [
   "render",
   "atlas",
   "skyevents",
+  "observe",
+  "multiexposure",
+  "flighthub",
+  "route",
+  "challenges",
+  "title",
 ] as const;
 export type Panel = (typeof PANELS)[number];
 
@@ -1419,7 +1443,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "interface",
       description:
-        "The interface: open a panel (settings, place, time, weather, eclipses — the eclipse calculator's page —, scenes, photo — the photo mode —, controls, help, pause, planner: the flight computer's MISSION tab over the map, sky, camera, music — the music console —, render — the offline render dialog) or close the one on top; the map (open, tab: orbit/globe/map; on the ground: local planisphere, mapZoom 0–21, default 18); HUD density 0 full, 1 minimal, 2 clean; the ship's HUD (hudKind: auto — by the flight —, atmo, space, approach) and where it shows (hudViews: chaseDorsal — the default —, outside, all; in the cockpit the cabin's screens); a screenshot (PNG download).",
+        "The interface: open a panel (settings, place, time, weather, eclipses — the eclipse calculator's page —, scenes, photo — the photo mode —, controls, help, pause, planner: the flight computer's MISSION tab over the map, sky, camera, music — the music console —, render — the offline render dialog, atlas, skyevents, observe — the observatory —, multiexposure, flighthub — the F-35's flight preparation —, route — its flight plan —, challenges, title — the title screen) or close the one on top; the map (open, tab: orbit/globe/map; on the ground: local planisphere, mapZoom 0–21, default 18); HUD density 0 full, 1 minimal, 2 clean; the ship's HUD (hudKind: auto — by the flight —, atmo, space, approach) and where it shows (hudViews: chaseDorsal — the default —, outside, all; in the cockpit the cabin's screens); a screenshot (PNG download).",
       params: {
         open: { type: "string", enum: PANELS },
         close: { type: "boolean" },
@@ -1509,9 +1533,9 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "sky_events",
       description:
-        "The sky's events from where one stands on the Earth (walking, the tripod, the free camera over the ground) and the way one looks: the star trails (circumpolar when the pole is up), the analemma, the Moon's path tonight, the next ISS pass, the ISS's closest approach to the Moon and the Sun (a transit when it crosses their disc), the next solar and lunar eclipses seen here, the next selenelion, the next transits of Mercury and Venus — each with its date (UTC), where to look (azimuth, altitude), the field and the lens. list: them all (takes a few seconds: the eclipses searched over 30 years). take (id from the list): go — the tripod set there at that time, aimed; live — its exposures taken one after the other in the game and stacked on screen (the pilot watches the event unfold; saved as a PNG or rendered at full quality after); render — the multiple exposure's full-quality dialog filled. open: the page.",
+        "The sky's events from where one stands on the Earth (walking, the tripod, the free camera over the ground) and the way one looks: the star trails (circumpolar when the pole is up), the analemma, the Moon's path tonight, the next ISS pass, the ISS's closest approach to the Moon and the Sun (a transit when it crosses their disc), the next solar and lunar eclipses seen here, the next selenelion, the next transits of Mercury and Venus — each with its date (UTC), where to look (azimuth, altitude), the field and the lens. list: them all (takes a few seconds: the eclipses searched over 30 years). take (id from the list): go — the tripod set there at that time, aimed; live — its exposures taken one after the other in the game and stacked on screen (the pilot watches the event unfold; saved as a PNG or rendered at full quality after); render — the multiple exposure's full-quality dialog filled. stop_live: the live capture running stopped (what it stacked kept on screen). open: the page.",
       params: {
-        action: { type: "string", enum: ["list", "take", "open"] },
+        action: { type: "string", enum: ["list", "take", "open", "stop_live"] },
         id: { type: "string" },
         way: { type: "string", enum: ["go", "live", "render"] },
       },
@@ -1521,6 +1545,10 @@ export function gameTools(h: GameHost): Tool[] {
         if (!S) return { ok: false, error: "no sky events here" };
         if (a.action === "open") {
           const error = S.open();
+          return { ok: !error, error };
+        }
+        if (a.action === "stop_live") {
+          const error = S.stopLive?.() ?? "not available";
           return { ok: !error, error };
         }
         if (a.action === "list") {
@@ -1598,6 +1626,182 @@ export function gameTools(h: GameHost): Tool[] {
       }),
     },
     // ------------------------------------------------------------------ teleporting, saves, scenes
+    {
+      name: "f35",
+      description:
+        "The F-35B's flights. fields: the airfields a flight starts from. prepare: a flight set up and started at once — field (ICAO or name), start (runway: lined up; final: on a 15 km final; cruise: 40 km out), hour (now, dawn, morning, noon, dusk, night — the airfield's own), weather (real, fair, cloudy, overcast, rain, storm, windy, fog), fuel (0.05–1 of full), dest (an arrival field: a flight plan to it, flown with flight_plan / LNAV). challenges: the challenges (Mach Loop, Rainbow Canyon, the slalom, the landings, the aerobatics) and fights with their bests and medals. fly: a challenge or a fight by its id, started (the F-35 at its start, tanks full, the judge or the aggressors running). abort: the challenge or fight running given up.",
+      params: {
+        action: { type: "string", enum: ["fields", "prepare", "challenges", "fly", "abort"] },
+        field: { type: "string" },
+        start: { type: "string", enum: ["runway", "final", "cruise"] },
+        hour: { type: "string", enum: ["now", "dawn", "morning", "noon", "dusk", "night"] },
+        weather: { type: "string", enum: ["real", "fair", "cloudy", "overcast", "rain", "storm", "windy", "fog"] },
+        fuel: { type: "number", minimum: 0.05, maximum: 1 },
+        dest: { type: "string" },
+        id: { type: "string" },
+      },
+      required: ["action"],
+      run: act((a) => {
+        const F = h.f35;
+        if (!F) return { error: "not available" };
+        switch (a.action) {
+          case "fields":
+            return F.fields();
+          case "challenges":
+            return { challenges: F.challenges(), fights: F.fights() };
+          case "prepare":
+            if (!a.field) throw new Error("prepare needs a field (f35 fields lists them)");
+            net();
+            return F.prepare({
+              field: String(a.field),
+              start: a.start as string | undefined,
+              hour: a.hour as string | undefined,
+              weather: a.weather as string | undefined,
+              fuel: a.fuel as number | undefined,
+              dest: a.dest as string | undefined,
+            });
+          case "fly":
+            if (!a.id) throw new Error("fly needs an id (f35 challenges lists them)");
+            net();
+            return F.fly(String(a.id));
+          default:
+            return F.abort();
+        }
+      }),
+    },
+    {
+      name: "flight_plan",
+      description:
+        "A plane's flight plan (the F-35): its waypoints over the Earth, flown by LNAV (lateral) and VNAV (vertical) on the autopilot. show: the plan (waypoints with their altitude and speed constraints, the cruise level and speed, the reserve, LNAV/VNAV on, the active point). add: a waypoint — query (an airfield, a place, an address, coordinates) or lat/lon, its altM and spdMs constraints, at an index (default the end). remove (index), clear, cruise (altM, spdMs, reserveKg), direct (index: flown direct from here), nav (lnav, vnav: on or off).",
+      params: {
+        action: { type: "string", enum: ["show", "add", "remove", "clear", "cruise", "direct", "nav"] },
+        query: { type: "string" },
+        lat: { type: "number", minimum: -90, maximum: 90 },
+        lon: { type: "number", minimum: -180, maximum: 360 },
+        altM: { type: "number", minimum: 0, maximum: 20000 },
+        spdMs: { type: "number", minimum: 30, maximum: 700 },
+        reserveKg: { type: "number", minimum: 0, maximum: 8000 },
+        index: { type: "number", minimum: 0, maximum: 99, integer: true },
+        lnav: { type: "boolean" },
+        vnav: { type: "boolean" },
+      },
+      required: ["action"],
+      run: act(async (a) => {
+        const N = camera.nav;
+        const R = N.route;
+        const changed = () => camera.routeChanged();
+        const view = () => ({
+          waypoints: R.wps.map((w, i) => ({
+            i,
+            name: w.name,
+            lat: round(w.lat, 4),
+            lon: round(w.lon, 4),
+            altM: w.alt ?? null,
+            spdMs: w.spd ?? null,
+          })),
+          cruiseAltM: R.cruiseAlt,
+          cruiseSpdMs: R.cruiseSpd,
+          reserveKg: R.reserveKg,
+          lnav: N.on.l,
+          vnav: N.on.v,
+          active: N.lnav?.active ?? null,
+        });
+        const idx = (i: unknown) => {
+          const n = Number(i);
+          if (!Number.isInteger(n) || n < 0 || n >= R.wps.length) throw new Error(`no waypoint ${i} — ${R.wps.length} in the plan`);
+          return n;
+        };
+        switch (a.action) {
+          case "show":
+            return view();
+          case "add": {
+            let p: { name: string; lat: number; lon: number } | null = null;
+            if (a.query !== undefined) {
+              const q = String(a.query);
+              const site = SITES.find((s) => s.body === "earth" && (s.icao?.toLowerCase() === q.toLowerCase() || fold(s.name) === fold(q)));
+              if (site) p = { name: site.icao ?? site.name, lat: site.lat, lon: site.lon };
+              else {
+                const hit = (await h.atlas?.search(q, "earth"))?.[0];
+                if (!hit) throw new Error(`nothing found for "${q}"`);
+                p = { name: hit.name.slice(0, 12), lat: hit.lat, lon: hit.lon };
+              }
+            } else if (a.lat !== undefined && a.lon !== undefined)
+              p = { name: `WP${String(R.wps.length + 1).padStart(2, "0")}`, lat: Number(a.lat), lon: Number(a.lon) };
+            if (!p) throw new Error("add needs a query or lat/lon");
+            const field = SITES.find((s) => s.body === "earth" && s.runway && Math.hypot(s.lat - p!.lat, s.lon - p!.lon) < 0.02);
+            const wp = {
+              ...p,
+              ...(a.altM !== undefined ? { alt: Number(a.altM) } : {}),
+              ...(a.spdMs !== undefined ? { spd: Number(a.spdMs) } : {}),
+              ...(field ? { field: { icao: field.icao, elev: field.elev ?? 0, rwy: field.rwy } } : {}),
+            };
+            const at = a.index !== undefined ? Math.min(Number(a.index), R.wps.length) : R.wps.length;
+            R.wps.splice(at, 0, wp);
+            changed();
+            return view();
+          }
+          case "remove":
+            R.wps.splice(idx(a.index), 1);
+            changed();
+            return view();
+          case "clear":
+            R.wps.length = 0;
+            N.on = { l: false, v: false };
+            changed();
+            return view();
+          case "cruise":
+            if (a.altM !== undefined) R.cruiseAlt = Number(a.altM);
+            if (a.spdMs !== undefined) R.cruiseSpd = Number(a.spdMs);
+            if (a.reserveKg !== undefined) R.reserveKg = Number(a.reserveKg);
+            changed();
+            return view();
+          case "direct": {
+            const i = idx(a.index);
+            const here = camera.geoNow();
+            if (!here) throw new Error("not flying over the Earth");
+            if (!N.lnav) changed();
+            N.lnav?.directTo(i, here);
+            return view();
+          }
+          default:
+            if (!R.wps.length && (a.lnav || a.vnav)) throw new Error("no waypoints: add some first");
+            if (a.lnav !== undefined) N.on.l = !!a.lnav;
+            if (a.vnav !== undefined) N.on.v = !!a.vnav;
+            if (!N.lnav && (N.on.l || N.on.v)) changed();
+            return view();
+        }
+      }),
+    },
+    {
+      name: "music",
+      description:
+        "The music. state: what plays (the theme, its section, bar, chord, intensity, the mode). themes: the themes. set — mode (moments: at the flight's great moments; adaptive: following the context; playlist), listen (a theme's id played now; 'none': back to the game's choice), intensity (0–1; omitted with 'auto': the flight's), a layer's level (layer: perc, bass, strings, ostinato, brass, melody, keys, organ, choir or master; level 0–2), mute (with layer: muted or not).",
+      params: {
+        action: { type: "string", enum: ["state", "themes", "set"] },
+        mode: { type: "string", enum: ["moments", "adaptive", "playlist"] },
+        listen: { type: "string" },
+        intensity: { type: "number", minimum: 0, maximum: 1 },
+        auto: { type: "boolean" },
+        layer: { type: "string" },
+        level: { type: "number", minimum: 0, maximum: 2 },
+        mute: { type: "boolean" },
+      },
+      required: ["action"],
+      run: act((a) => {
+        const M = h.music;
+        if (!M) return { error: "not available" };
+        if (a.action === "state") return M.state();
+        if (a.action === "themes") return M.themes();
+        return M.set({
+          mode: a.mode as string | undefined,
+          listen: a.listen === undefined ? undefined : a.listen === "none" ? null : String(a.listen),
+          intensity: a.auto ? null : (a.intensity as number | undefined),
+          layer: a.layer as string | undefined,
+          level: a.level as number | undefined,
+          mute: a.mute as boolean | undefined,
+        });
+      }),
+    },
     {
       name: "observe",
       description:
@@ -1722,8 +1926,12 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "saves",
       description:
-        "Saved games: save (a name), load (a name; the current game saved first as 'Before TARS'), delete, or undo: back to 'Before TARS' (the state before TARS's last teleport, load, date change or scene).",
-      params: { action: { type: "string", enum: ["save", "load", "delete", "undo"] }, name: { type: "string" } },
+        "Saved games: save (a name), load (a name; the current game saved first as 'Before TARS'), delete, undo: back to 'Before TARS' (the state before TARS's last teleport, load, date change or scene); export (a name, or the game now: downloaded as a file), import (json: a save's file text; loaded and kept), share (a link that opens the game as it is now), autosave (the autosave written now).",
+      params: {
+        action: { type: "string", enum: ["save", "load", "delete", "undo", "export", "import", "share", "autosave"] },
+        name: { type: "string" },
+        json: { type: "string" },
+      },
       required: ["action"],
       run: act((a) => {
         const name = a.name !== undefined ? String(a.name) : undefined;
@@ -1737,6 +1945,18 @@ export function gameTools(h: GameHost): Tool[] {
           case "delete":
             if (!name) throw new Error("delete needs a name");
             return tools.deleteSave(name);
+          case "export":
+            tools.exportSave(name);
+            return `exported ${name ?? "the game now"} (a file downloaded)`;
+          case "import":
+            if (!a.json) throw new Error("import needs json: a save file's text");
+            net();
+            return tools.importSave(String(a.json));
+          case "share":
+            return { link: tools.shareLink() };
+          case "autosave":
+            tools.autosaveNow();
+            return "autosaved";
           default:
             return tools.load(UNDO_SAVE);
         }

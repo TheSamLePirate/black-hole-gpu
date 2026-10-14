@@ -121,7 +121,8 @@ flowchart LR
 | Ciel d’ici | `sky_events` (lister les événements depuis là où l’on se tient sur Terre — filés, analemme, Lune, passage et transits de l’ISS, éclipses, sélénélion, transits de Mercure et Vénus — avec date, visée et objectif ; en prendre un : `go` y aller, `live` le vivre en poses empilées, `render` le rendu pleine qualité ; ouvrir la page), `/skyevents` |
 | Capture | `capture` (la vue de l'instant rendue hors ligne, convergée, enregistrée seule en PNG, PNG 16 bits ou EXR ; son avancement ; arrêt), `/capture` |
 | Vidéo | `video` (filmer la vue : `live`, `take`, `orbit`, `dive`, `journey`, `director` ; brouillon rapide 640×360 lu aussitôt, ou version finale à la taille et la qualité du rendu ; durée, cadence, MP4 ou WebM ; avancement ; arrêt ; les plans possibles maintenant), `/draft`, `/video` |
-| Lieux, parties | `place_ship` (par `query` : piste, destination, adresse sur Terre, coordonnées — WGS84 ; modes orbite, orbite au-dessus, sol, à pied, aligné, en vol, à côté, trou de ver, plané, stationnaire), `saves`, `start_scene` |
+| F-35, plan de vol, musique | `f35` (les terrains, un vol préparé — terrain, départ, heure, météo, carburant, arrivée —, les défis et combats, leurs meilleurs, l'un lancé ou abandonné), `flight_plan` (les points de route par nom ou coordonnées, leurs contraintes, la croisière, la réserve, direct, LNAV/VNAV), `music` (mode, thème écouté, intensité, couches) |
+| Lieux, parties | `place_ship` (par `query` : piste, destination, adresse sur Terre, coordonnées — WGS84 ; modes orbite, orbite au-dessus, sol, à pied, aligné, en vol, à côté, trou de ver, plané, stationnaire), `saves` (aussi exporter, importer, partager en lien, sauvegarde auto), `start_scene` |
 | Tout le reste | `set_settings` (tout réglage, vérifié au schéma), `press_key` (toute touche) |
 | Attendre, parler | `wait`, `say` |
 | Montrer, proposer | `show_chart`, `show_card`, `show_screen`, `hide_display`, `propose_plan` |

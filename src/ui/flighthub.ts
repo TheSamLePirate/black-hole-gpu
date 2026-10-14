@@ -165,69 +165,108 @@ export class FlightHub {
     root.append(foot);
   }
 
-  /** The flight set up: the F-35, the hour, the weather, the place, the fuel, the plan. */
+  /** The flight set up as the card has it, then flown. */
   go() {
-    const H = this.host;
-    const T = H.tools;
-    const F = this.field;
     try {
-      if (fleet.active !== "f35") T.set("vessel", "f35");
-      if (this.hour !== "now") {
-        // (the airfield's mean solar hour → UTC, on the scene's day)
-        const day = T.date().slice(0, 10);
-        const utc = (((HOURS[this.hour] - F.lon / 15) % 24) + 24) % 24;
-        const hh = Math.floor(utc),
-          mm = Math.floor((utc - hh) * 60);
-        T.setDate(`${day}T${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
-      }
-      if (this.wx && this.wx !== H.settings.weather) {
-        H.settings.weather = this.wx;
-        H.weatherChanged();
-      }
-      const name = F.name;
-      if (this.start === "runway") T.lineUp(name);
-      else if (this.start === "final") T.glideTo(name, 15, 0.9, 110);
-      else T.glideTo(name, 40, 6, 230);
-      // (the fuel after the placing: it fills the tanks)
-      const full = VESSELS.f35.fuelKg ?? 0;
-      fleet.fuel.f35 = full * this.fuel;
-      const C = H.camera;
-      if (this.start !== "runway") {
-        // (in the air: flown by hand — the glide's entry autopilot let go —, the engine at the power that
-        // holds the speed; on final the gear down and half flaps, cruising clean)
-        if (C.pilot.auto !== "none") C.pilot.setAuto(C.pilot.auto);
-        C.pilot.auto = "none";
-        const fin = this.start === "final";
-        C.pilot.throttle = C.pilot.engineNow = fin ? 0.5 : 0.62;
-        C.gearInit = true;
-        C.gearDown = fin;
-        C.gearExt = fin ? 1 : 0;
-        C.airFlight.cfg.flaps = fin ? 0.5 : 0;
-      }
-      if (this.dest) {
-        const D = FIELDS.find((f) => (f.icao ?? f.name) === this.dest)!;
-        const R = newPlan();
-        const wp = (f: typeof F) => ({
-          name: f.icao ?? f.name,
-          lat: f.lat,
-          lon: f.lon,
-          field: { icao: f.icao, elev: f.elev ?? 0, rwy: f.rwy },
-        });
-        R.wps = D === F ? [wp(F)] : [wp(F), wp(D)];
-        C.nav.route = R;
-        C.nav.on = { l: false, v: false };
-        C.routeChanged();
-      }
-      H.toast(
-        tf(
-          "Ready: {0} — {1}",
-          F.icao ?? F.name,
-          this.start === "runway" ? t("lined up") : this.start === "final" ? t("on final") : t("cruising"),
-        ),
+      this.host.toast(
+        prepareFlight(this.host, {
+          field: this.field.icao ?? this.field.name,
+          start: this.start,
+          hour: this.hour,
+          weather: this.wx,
+          fuel: this.fuel,
+          dest: this.dest,
+        }),
       );
       this.close?.();
     } catch (e) {
-      H.toast(String((e as Error).message ?? e));
+      this.host.toast(String((e as Error).message ?? e));
     }
   }
+}
+
+/** What a flight is set up with: the airfield (its ICAO or a part of its name), the start, the hour of its day, the
+ *  weather (none: as it is), the fuel's share, an arrival field for the plan (none: no plan). */
+export interface FlightSetup {
+  field: string;
+  start?: Start;
+  hour?: Hour;
+  weather?: WeatherPreset | null;
+  fuel?: number;
+  dest?: string | null;
+}
+export const FLIGHT_STARTS: Start[] = ["runway", "final", "cruise"];
+export const FLIGHT_HOURS: Hour[] = ["now", "dawn", "morning", "noon", "dusk", "night"];
+export const FLIGHT_WEATHER = WX;
+/** The airfields a flight can start from, by ICAO and name. */
+export const flightFields = () => FIELDS.map((f) => ({ icao: f.icao ?? null, name: f.name }));
+const fieldOf = (q: string) => {
+  const n = q.trim().toLowerCase();
+  return (
+    FIELDS.find((f) => f.icao?.toLowerCase() === n || f.name.toLowerCase() === n) ??
+    FIELDS.find((f) => f.name.toLowerCase().includes(n)) ??
+    null
+  );
+};
+
+/**
+ * A flight set up — the Flight hub's card and TARS's prepare_flight: the F-35 at an airfield (lined up on its runway
+ * in use, on a 15 km final, cruising 40 km out), the hour of the airfield's own day, the weather, the fuel aboard,
+ * a plan to an arrival field. Its line; an unknown field or start: thrown.
+ */
+export function prepareFlight(H: HubHost, o: FlightSetup): string {
+  const T = H.tools;
+  const F = fieldOf(o.field);
+  if (!F) throw new Error(`no airfield "${o.field}"`);
+  const start = o.start ?? "runway",
+    hour = o.hour ?? "now";
+  if (fleet.active !== "f35") T.set("vessel", "f35");
+  if (hour !== "now") {
+    // (the airfield's mean solar hour → UTC, on the scene's day)
+    const day = T.date().slice(0, 10);
+    const utc = (((HOURS[hour] - F.lon / 15) % 24) + 24) % 24;
+    const hh = Math.floor(utc),
+      mm = Math.floor((utc - hh) * 60);
+    T.setDate(`${day}T${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`);
+  }
+  if (o.weather && o.weather !== H.settings.weather) {
+    H.settings.weather = o.weather;
+    H.weatherChanged();
+  }
+  const name = F.name;
+  if (start === "runway") T.lineUp(name);
+  else if (start === "final") T.glideTo(name, 15, 0.9, 110);
+  else T.glideTo(name, 40, 6, 230);
+  // (the fuel after the placing: it fills the tanks)
+  const full = VESSELS.f35.fuelKg ?? 0;
+  fleet.fuel.f35 = full * Math.min(Math.max(o.fuel ?? 1, 0.05), 1);
+  const C = H.camera;
+  if (start !== "runway") {
+    // (in the air: flown by hand — the glide's entry autopilot let go —, the engine at the power that
+    // holds the speed; on final the gear down and half flaps, cruising clean)
+    if (C.pilot.auto !== "none") C.pilot.setAuto(C.pilot.auto);
+    C.pilot.auto = "none";
+    const fin = start === "final";
+    C.pilot.throttle = C.pilot.engineNow = fin ? 0.5 : 0.62;
+    C.gearInit = true;
+    C.gearDown = fin;
+    C.gearExt = fin ? 1 : 0;
+    C.airFlight.cfg.flaps = fin ? 0.5 : 0;
+  }
+  if (o.dest) {
+    const D = fieldOf(o.dest);
+    if (!D) throw new Error(`no airfield "${o.dest}"`);
+    const R = newPlan();
+    const wp = (f: typeof F) => ({
+      name: f.icao ?? f.name,
+      lat: f.lat,
+      lon: f.lon,
+      field: { icao: f.icao, elev: f.elev ?? 0, rwy: f.rwy },
+    });
+    R.wps = D === F ? [wp(F)] : [wp(F), wp(D)];
+    C.nav.route = R;
+    C.nav.on = { l: false, v: false };
+    C.routeChanged();
+  }
+  return tf("Ready: {0} — {1}", F.icao ?? F.name, start === "runway" ? t("lined up") : start === "final" ? t("on final") : t("cruising"));
 }

@@ -50,8 +50,12 @@ import { TitleScreen } from "./ui/title";
 import { MissionSelect } from "./ui/missions";
 import { PlacePanel } from "./ui/placepanel";
 import { RoutePanel } from "./ui/routepanel";
-import { FlightHub } from "./ui/flighthub";
-import { ChallengePanel } from "./ui/challengepanel";
+import { CHALLENGES } from "./game/challenges";
+import { SCENARIOS } from "./game/scenarios";
+import { bests as challengeBests } from "./controller/challenge";
+import { type Layer as MusicLayer, LAYERS as MUSIC_LAYERS, THEMES as MUSIC_THEMES } from "./audio/music/themes";
+import { FLIGHT_HOURS, FLIGHT_STARTS, FLIGHT_WEATHER, FlightHub, flightFields, type HubHost, prepareFlight } from "./ui/flighthub";
+import { ChallengePanel, type ChallengeHost, flyChallenge, flyFight } from "./ui/challengepanel";
 import { TimePanel } from "./ui/timepanel";
 import { WeatherPanel } from "./ui/weatherpanel";
 import { RealWeather } from "./realweather";
@@ -3636,7 +3640,7 @@ async function main() {
   // a plane's flight plan (ui/routepanel.ts, PLAN-F35 F8): its waypoints on the map, NAV flying it
   const routePanel = new RoutePanel({ camera, toast: (s) => panel.toast(s) });
   // a flight prepared (ui/flighthub.ts): the F-35 at an airfield, its hour, its weather, its fuel, its plan
-  const flightHub = new FlightHub({
+  const hubHost: HubHost = {
     tools,
     settings,
     camera,
@@ -3647,9 +3651,11 @@ async function main() {
     },
     toast: (s) => panel.toast(s),
     openRoute: () => routePanel.open(),
-  });
+  };
+  const flightHub = new FlightHub(hubHost);
   // the F-35's challenges (ui/challengepanel.ts, PLAN-F35 F9): gate courses, graded landings, aerobatics
-  const challengePanel = new ChallengePanel({ tools, camera, toast: (s) => panel.toast(s) });
+  const challengeHost: ChallengeHost = { tools, camera, toast: (s) => panel.toast(s) };
+  const challengePanel = new ChallengePanel(challengeHost);
   // the Atlas (ui/atlas.ts, PLAN-MODES-AAA M6): the Earth, the Moon and Mars as maps, their destinations, the
   // addresses — the game put there (in orbit, landed, on foot, the free camera, a tripod)
   const ATLAS_ORBIT_KM: Record<MapBody, number> = { earth: 400, moon: 100, mars: 300 };
@@ -4867,6 +4873,12 @@ async function main() {
         render: () => renderDialog.toggle(true),
         atlas: () => atlas.open(),
         skyevents: () => void skyEvents.open(),
+        observe: () => openObserve(),
+        multiexposure: () => openMultiExposure(),
+        flighthub: () => flightHub.open(),
+        route: () => routePanel.open(),
+        challenges: () => challengePanel.open(),
+        title: () => titleScreen?.open(),
       };
       open[p]();
     },
@@ -4910,6 +4922,11 @@ async function main() {
         })) ?? null,
       take: (id, way) => skyEvents.take(id, way),
       open: () => skyEvents.open(),
+      stopLive: () => {
+        if (!liveCapture.running) return "no live capture running";
+        liveCapture.close();
+        return null;
+      },
     },
     atlas: {
       search: async (q, body) => {
@@ -4941,6 +4958,88 @@ async function main() {
     },
     utcNow: () => utcOf(sim.time),
     multiExposure: (r) => mxDialog.open({ kind: r.kind, run: r }),
+    f35: {
+      fields: () => flightFields(),
+      prepare: (o) => {
+        const start = o.start as (typeof FLIGHT_STARTS)[number] | undefined;
+        const hour = o.hour as (typeof FLIGHT_HOURS)[number] | undefined;
+        const weather = o.weather as (typeof FLIGHT_WEATHER)[number] | undefined;
+        if (start && !FLIGHT_STARTS.includes(start)) throw new Error(`start: ${FLIGHT_STARTS.join(", ")}`);
+        if (hour && !FLIGHT_HOURS.includes(hour)) throw new Error(`hour: ${FLIGHT_HOURS.join(", ")}`);
+        if (weather && !FLIGHT_WEATHER.includes(weather)) throw new Error(`weather: ${FLIGHT_WEATHER.join(", ")}`);
+        const note = placeShip(() => prepareFlight(hubHost, { field: o.field, start, hour, weather, fuel: o.fuel, dest: o.dest }));
+        return note;
+      },
+      challenges: () => {
+        const B = challengeBests();
+        return CHALLENGES.map((d) => ({
+          id: d.id,
+          title: tr(d.title),
+          kind: d.kind,
+          par: d.par,
+          best: B[d.id] ? { score: B[d.id]!.score, medal: B[d.id]!.medal ?? null } : null,
+        }));
+      },
+      fights: () => SCENARIOS.map((d) => ({ id: d.id, title: tr(d.title) })),
+      fly: (id) => {
+        const c = CHALLENGES.find((d) => d.id === id);
+        const f = SCENARIOS.find((d) => d.id === id);
+        if (!c && !f) throw new Error(`no challenge or fight "${id}" — f35 challenges lists them`);
+        placeShip(() => {
+          if (c) flyChallenge(challengeHost, c);
+          else flyFight(challengeHost, f!);
+          return "";
+        });
+        return `${tr((c ?? f)!.title)}: started`;
+      },
+      abort: () => {
+        if (camera.combat) {
+          camera.combatEnd();
+          return "the fight given up";
+        }
+        if (camera.chal) {
+          camera.challengeAbort();
+          return "the challenge given up";
+        }
+        return "none running";
+      },
+    },
+    music: {
+      state: () => ({ ...music.state(), intensitySet: music.prefs.intensity, mix: music.prefs.mix, muted: music.prefs.muted }),
+      themes: () => MUSIC_THEMES.map((x) => ({ id: x.id, name: x.name })),
+      set: (o) => {
+        const P = music.prefs;
+        const said: string[] = [];
+        if (o.mode) {
+          if (!["moments", "adaptive", "playlist"].includes(o.mode)) throw new Error("mode: moments, adaptive, playlist");
+          P.mode = o.mode as typeof P.mode;
+          said.push(`mode ${o.mode}`);
+        }
+        if (o.listen !== undefined) {
+          if (o.listen && !MUSIC_THEMES.some((x) => x.id === o.listen)) throw new Error(`no theme "${o.listen}" — music themes lists them`);
+          music.listen(o.listen);
+          said.push(o.listen ? `listening to ${o.listen}` : "the game's choice");
+        }
+        if (o.intensity !== undefined) {
+          P.intensity = o.intensity;
+          said.push(o.intensity === null ? "intensity: the flight's" : `intensity ${o.intensity}`);
+        }
+        if (o.layer) {
+          if (o.layer !== "master" && !(MUSIC_LAYERS as string[]).includes(o.layer))
+            throw new Error(`layer: master, ${MUSIC_LAYERS.join(", ")}`);
+          if (o.level !== undefined) (P.mix as unknown as Record<string, number>)[o.layer] = o.level;
+          if (o.mute !== undefined && o.layer !== "master")
+            P.muted = o.mute ? [...new Set([...P.muted, o.layer as MusicLayer])] : P.muted.filter((l) => l !== o.layer);
+          said.push(`${o.layer}${o.level !== undefined ? ` ${o.level}` : ""}${o.mute !== undefined ? (o.mute ? " muted" : " heard") : ""}`);
+        }
+        music.save();
+        if (!settings.music) {
+          settings.music = true;
+          onSettingsChange(["music"]);
+        }
+        return said.join(", ") || "nothing changed";
+      },
+    },
     framedView: () => framedView(),
     observe: {
       when: (q, o) => {
