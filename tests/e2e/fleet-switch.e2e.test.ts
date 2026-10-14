@@ -33,4 +33,23 @@ describe.skipIf(!E2E)("switching craft through the F-35", () => {
     }
     console.log(`  ${seen.join(" → ")}`);
   }, 120_000);
+
+  test("the Ranger gliding low on a final, the F-35 chosen: no NaN, no false contact", async () => {
+    await app.js(`(() => { __bh.settings.vessel = "ranger"; return 1; })()`);
+    await Bun.sleep(2500);
+    await app.js(`(() => { __bh.game.glideTo("Edwards", 15, 1.2, 140); return 1; })()`);
+    await Bun.sleep(2500);
+    await app.js(`(() => { __bh.settings.vessel = "f35"; return 1; })()`);
+    await Bun.sleep(3000);
+    const r = await app.js<{ a: string; label: string; nan: boolean; contact: boolean }>(`(() => {
+      const s = __bh.settings;
+      const toasts = [...document.querySelectorAll("[class*=toast]")].map((e) => e.textContent).join(" ");
+      return { a: __bh.fleet.active, label: __bh.game.status().label, nan: [s.inclination, s.azimuth, s.yaw, s.pitch].some((x) => !Number.isFinite(x)),
+        contact: /Contact with .*NaN/.test(toasts) };
+    })()`);
+    console.log(`  ${JSON.stringify(r)}`);
+    expect(r.a).toBe("f35");
+    expect(r.nan).toBe(false);
+    expect(r.contact).toBe(false);
+  }, 60_000);
 });

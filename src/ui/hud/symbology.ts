@@ -1157,7 +1157,26 @@ function drawRunway(
   const wind = rw.wind && rw.wind.u10 >= 0.5 ? rw.wind : null;
   const boxH = (rw.gRef !== null && rw.gam !== null ? 70 : 54) + (rw.papi !== null ? 16 : 0) + (wind ? 30 : 0);
   const want: Box = { x: (W / 2 - Math.min(W, H) * 0.44) / dpr - 96, y: (H / 2 - 10 * dpr) / dpr - 28, w: 192, h: boxH, id: "runway" };
-  const at = fit(want, "up", { reach: 240 }) ?? fit(want, "down", { reach: 240 }) ?? want;
+  // (the jet HUD's tapes — drawn on this canvas, not panels: jethud.ts's geometry — kept clear too, the card
+  // moved left of them first)
+  const jt: Box[] = F.i.jet
+    ? (() => {
+        const off = Math.min(W * 0.3, Math.max(190 * dpr, Math.min(W, H) * 0.36));
+        const half = Math.min(H * 0.22, 150 * dpr);
+        return ([-1, 1] as const).map((sd) => ({
+          x: (W / 2 + sd * off) / dpr - 90,
+          y: (H / 2 - half) / dpr - 14,
+          w: 180,
+          h: (2 * half) / dpr + 28,
+          id: `jet${sd}`,
+        }));
+      })()
+    : [];
+  const at =
+    fit(want, "left", { reach: 320, others: jt }) ??
+    fit(want, "up", { reach: 260, others: jt }) ??
+    fit(want, "down", { reach: 260, others: jt }) ??
+    want;
   drawn.push(at);
   const x = (at.x + 96) * dpr,
     y = (at.y + 28) * dpr;

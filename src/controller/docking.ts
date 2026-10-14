@@ -252,7 +252,8 @@ function stationContact(this: CameraController, p0: NonNullable<ReturnType<Camer
     if (!h.bvh) continue;
     const q0 = fleet.pose(id, p0.t),
       q1 = fleet.pose(id, p1.t);
-    if (!q0 || !q1 || Math.hypot(...sub3(p1.X, q1.X)) * M_METRES > h.radius + R + 50) continue;
+    // (out of reach — or its place unknown: a NaN failed every "farther than", the craft taken as touching)
+    if (!q0 || !q1 || !(Math.hypot(...sub3(p1.X, q1.X)) * M_METRES <= h.radius + R + 50)) continue;
     obstacles.push({ id, parts: [{ bvh: h.bvh, M0: I34, M1: I34 }], A0: q0.ax, A1: q1.ax, X0: q0.X, X1: q1.X, V1: q1.V, om: [0, 0, 0] });
   }
   if (!obstacles.length) return;
@@ -348,6 +349,8 @@ function stationContact(this: CameraController, p0: NonNullable<ReturnType<Camer
       }
     }
   }
+  // (nothing set from a contact that cannot be reckoned)
+  if (!X.every(Number.isFinite) || !V.every(Number.isFinite)) return;
   setHomePose(s, X, unitV(repToHomeVec(w, cam.ell, cam.n, cam.fwd)), unitV(repToHomeVec(w, cam.ell, cam.n, cam.up)), V);
   this.pilot.omega = [0, 0, 0];
   this.sync();

@@ -151,6 +151,14 @@ export class Fleet {
 
   /** A coasting craft's pose at t: Kepler around its body, its attitude held (`exact`: as the flight flies it beyond a few seconds). */
   private coast(f: FreeState, t: number, exact = true): Pose {
+    const P = this.coastRaw(f, t, exact);
+    // (a coast that cannot be reckoned — a craft left low in the air, its arc through the ground —: where it
+    // was left, carried by nothing, rather than NaN in every display and the contacts)
+    if (P.X.every(Number.isFinite) && P.V.every(Number.isFinite) && P.ax.every((a) => a.every(Number.isFinite))) return P;
+    return { X: f.X, V: f.V, ax: f.ax };
+  }
+
+  private coastRaw(f: FreeState, t: number, exact = true): Pose {
     // (left on a ground: where the body has carried it)
     if (f.ground) {
       const G = f.ground;
