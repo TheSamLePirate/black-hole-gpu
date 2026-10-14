@@ -180,11 +180,13 @@ describe("in space (R6)", () => {
       v: o.v.map((x: number) => x * C_MPS) as [number, number, number],
     };
   };
-  test("a coasting craft carried along its orbit — exact far past its sample, its other pulls added — a ghost by real time", () => {
+  test("a coasting craft carried along its orbit — exact far past its sample, its other pulls reckoned here — a ghost by real time", () => {
     const reg = new RemoteRegistry();
     reg.env.kepler = kepler;
+    // (its other pulls reckoned by the reader's own model — the sender's measured one, noisy, not taken)
     const a: [number, number, number] = [0.01, -0.002, 0.004];
-    reg.push(sample(1000, [6_771_000, 0, 0], [0, 7672, 0], { frame: 1, flags: FLAG_COAST, a }), 0.01);
+    reg.env.pert = () => a;
+    reg.push(sample(1000, [6_771_000, 0, 0], [0, 7672, 0], { frame: 1, flags: FLAG_COAST, a: [5, 5, 5] }), 0.01);
     const tr = reg.track(2)!;
     // (a quarter of an hour on: the Kepler orbit, plus ½·a·t²)
     const dt = 900;

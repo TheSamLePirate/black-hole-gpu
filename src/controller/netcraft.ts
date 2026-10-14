@@ -25,6 +25,8 @@ declare module "../controls" {
   interface CameraController {
     netOwn: typeof netOwn;
     netOwnState: typeof netOwnState;
+    netMouthCam: typeof netMouthCam;
+    netClockRate: typeof netClockRate;
     netShips: typeof netShips;
     netPlaceBeside: typeof netPlaceBeside;
     netWalkerHome: typeof netWalkerHome;
@@ -167,6 +169,29 @@ function holeView(c: CameraController) {
   };
 }
 
+/**
+ * Where the wormhole's mouth on our side of it is, from the camera (its axes [m]) — the way to those on the other
+ * side (R8): ours by the Sun, from our worlds; the far one, from Gargantua's.
+ */
+function netMouthCam(this: CameraController): { at: Vec3; dist: number } | null {
+  const H = homeView(this);
+  if (H) {
+    const at = H.toCam(scale(H.nav.X, -M_METRES));
+    return { at, dist: Math.hypot(...at) };
+  }
+  const V = holeView(this);
+  if (!V) return null;
+  const C = mouth(this.s).C as Vec3;
+  const at = scale(V.toCam([0, 1, 2].map((k) => C[k]! - V.X[k]!) as Vec3), V.mR);
+  return { at, dist: Math.hypot(...at) };
+}
+
+/** Our proper time's rate against the room's clock (the coordinate time): dτ/dt — Gargantua's pull, the speed. */
+function netClockRate(this: CameraController): number {
+  const cam = cameraFrame(this.s);
+  return cam.region === "hole" ? cam.zamo.alpha / cam.gamma : 1 / cam.gamma;
+}
+
 /** The others' craft on Gargantua's side, near ours (R8): on the camera's axes from the hole's map. */
 function netShipsHole(c: CameraController, states: CraftState[]): NetShip[] {
   const V = holeView(c);
@@ -273,6 +298,7 @@ function netOwn(this: CameraController): NetOwn | null {
 
 /** A sample's craft in the home frame at scene time t [M]: its place [M] and velocity [c]; null: not on our worlds. */
 export function netStateHome(s: CraftState, t: number): { pos: Vec3; vel: Vec3 } | null {
+  if (s.frame === NET_FRAME_HOLE) return null;
   const body = NET_BODIES[s.body];
   const b = body ? solarBody(body) : null;
   if (!body || !b) return null;
@@ -402,7 +428,8 @@ function netShips(
   for (const s of states) {
     const id = kindOf(s.kind);
     const body = NET_BODIES[s.body];
-    if (!id || !body || !solarBody(body)) continue;
+    // (one on Gargantua's side — the hole's map —: not on our worlds; its tag on the wormhole's mouth)
+    if (!id || !body || !solarBody(body) || s.frame === NET_FRAME_HOLE) continue;
     // its place and axes in the home frame: on a body's ground or in its air (fixed to it), or in space (the
     // body's inertial frame: the home frame's axes about its centre)
     const ax = quatAxes(s.q);
@@ -531,5 +558,5 @@ function netPlaceBeside(
 }
 
 export function installNetcraft(Ctl: { prototype: CameraController }) {
-  Object.assign(Ctl.prototype, { netOwn, netOwnState, netShips, netPlaceBeside, netWalkerHome, netOwnWalker });
+  Object.assign(Ctl.prototype, { netOwn, netOwnState, netMouthCam, netClockRate, netShips, netPlaceBeside, netWalkerHome, netOwnWalker });
 }

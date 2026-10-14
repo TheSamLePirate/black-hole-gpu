@@ -2796,6 +2796,10 @@ async function main() {
       observe: () => openObserve(),
       network: () => openNetwork(),
       networkShown: () => settings.netMenu,
+      networkState: () => {
+        const r = netPanel.net?.room;
+        return r ? tf("In room {0} · {1} aboard", r.code, r.members.length) : null;
+      },
       place: () => placePanel.open(),
       time: () => timePanel.open(),
       weather: () => weatherPanel.open(),

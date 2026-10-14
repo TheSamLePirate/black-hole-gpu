@@ -417,7 +417,19 @@ l'assemblage pour l'hôte (il vole avec la sienne) ; le train et les feux d'un R
   devient passager (ses caméras et ses écrans gardés) ; chacun reprend son engin au désamarrage.
 - **Vérifié** : deux Rangers amarrés à l'Endurance à 50 ms et 2 % de pertes, sans à-coups.
 
-### R8 — Gargantua et finitions
+### R8 — Gargantua et finitions ✅ (2026-10-14)
+
+*Fait* : du côté de Gargantua, un engin envoyé sur la carte du trou (la carte plate de Boyer–Lindquist en mètres,
+sa vitesse de coordonnée, ses axes : le repère 2), les autres près du nôtre ramenés dans le repère propre de la
+caméra (plat sur les mètres qui les séparent) — dessinés, étiquetés, « À côté » ; l'accélération mesurée plus
+écrêtée à 400 m/s² de ce côté (une orbite de Miller est tirée à 6 km/s²) ; ceux de l'autre côté du trou de ver
+signalés sur sa bouche (« près de Gargantua — par le trou de ver ») ; le temps propre de chacun sur son étiquette
+quand il s'écarte de celui de la salle (τ ×0,85 en orbite de Miller). **La dilatation : décision de
+l'utilisateur (2026-10-14) — une horloge commune** (le temps de coordonnée de la salle pour tous ; celui qui
+est près de Miller voit son temps propre ralentir, rien ne sort de la salle). *Reporté* : les marqueurs déviés
+par la lentille au-delà de quelques kilomètres (ils pointent en ligne droite) ; le train et les feux d'un
+Ranger distant.
+
 - Les autres engins des deux côtés du trou de ver : rendu près de Gargantua dans le repère local de la
   caméra, marqueurs déviés par la lentille au-delà, « de l'autre côté » à travers la gorge.
 - La dilatation avec une horloge par salle : un joueur dans une forte dilatation (Miller) quitte l'horloge

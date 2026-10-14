@@ -83,6 +83,8 @@ export interface PauseDeps {
   /** playing together (ui/netpanel.ts), and whether its menu is shown (Settings › Network) */
   network?(): void;
   networkShown?(): boolean;
+  /** the room one is in, said in the item's hint (its code, how many) — none: out of a room */
+  networkState?(): string | null;
   /** placing the ship (ui/placepanel.ts) */
   place(): void;
   /** the date and time (ui/timepanel.ts) */
@@ -170,7 +172,10 @@ export class PauseMenu {
         ? this.item(tr(T.observe), () => this.leaveFor(() => this.d.observe?.()), { hint: tr(T.observeHint), testid: "pause-observe" })
         : null,
       this.d.network && (this.d.networkShown?.() ?? true)
-        ? this.item(tr(T.network), () => this.leaveFor(() => this.d.network?.()), { hint: tr(T.networkHint), testid: "pause-network" })
+        ? this.item(tr(T.network), () => this.leaveFor(() => this.d.network?.()), {
+            hint: this.d.networkState?.() ?? tr(T.networkHint),
+            testid: "pause-network",
+          })
         : null,
       this.item(tr(T.place), () => this.leaveFor(this.d.place), { testid: "pause-place" }),
       this.item(tr(T.time), () => this.leaveFor(this.d.time), { testid: "pause-time" }),

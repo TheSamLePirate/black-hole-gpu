@@ -81,6 +81,8 @@ interface TrackEnv {
   pace: number;
   /** a coasting craft carried along its orbit about a body (inertial frame, m and m/s) by dt [s]; null: none */
   kepler: ((body: number, p: V3, v: V3, dt: number) => { p: V3; v: V3 } | null) | null;
+  /** the body's pull besides its centre's at p (its flattening: J2…) at scene time t [m/s²] — the game's own model */
+  pert?: ((body: number, p: V3, t: number) => V3) | null;
 }
 
 /** One craft's samples and their reading. */
@@ -147,11 +149,13 @@ export class RemoteTrack {
     const b = b0 && b0.frame === a.frame && b0.body === a.body ? b0 : undefined;
     const P = Math.max(1, this.env.pace);
     // a coasting craft (no thrust, out of the air): carried along its orbit — exact at any warp
-    const K = a.frame === 1 && a.flags & FLAG_COAST && t >= a.t ? this.env.kepler?.(a.body, a.p, a.v, t - a.t) : null;
+    // (one left in the world by one away: along its orbit whatever it was doing when he left)
+    const coast = (a.flags & FLAG_COAST) !== 0;
+    const K = a.frame === 1 && (coast || this.persist) && t >= a.t ? this.env.kepler?.(a.body, a.p, a.v, t - a.t) : null;
     if (K) {
       const dt = t - a.t;
-      // (its orbit's other pulls — the body's flattening, the Moon, the Sun —, as its pilot measured them)
-      const g = a.a;
+      // (its body's other pulls — its flattening —, reckoned here by the game's own model, as for ours)
+      const g = this.env.pert?.(a.body, K.p, t) ?? ([0, 0, 0] as V3);
       return {
         slot: this.slot,
         t,
@@ -227,6 +231,13 @@ export class RemoteTrack {
   at(t: number): CraftState | null {
     const r = this.raw(t);
     if (!r) return null;
+    // (one left in the world: carried on from where it was ten seconds of the scene ago — its pulls taken step by
+    // step, not one guess stretched over hours)
+    const L = this.latest;
+    if (this.persist && L && r.frame === 1 && t - L.t > 10) {
+      this.samples.length = 0;
+      this.samples.push({ ...L, t, p: r.p, v: r.v, q: r.q });
+    }
     const k = Math.exp(-Math.max(0, t - this.corrAt) / (this.smooth * Math.max(1, this.env.pace)));
     const p: V3 = [r.p[0] + this.corr[0] * k, r.p[1] + this.corr[1] * k, r.p[2] + this.corr[2] * k];
     this.last = { t, p };

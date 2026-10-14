@@ -59,6 +59,8 @@ describe.skipIf(!E2E)("a spectator", () => {
 
   test("Ana's panel: the room's QR code for a screen to add, a spectator's link", async () => {
     await a.js(`(() => { __bh.net.open(); return 1; })()`);
+    await a.waitFor(`!!document.querySelector("[data-testid=net-tab-screens]")`, 10_000);
+    await a.click(`[data-testid="net-tab-screens"]`);
     await a.waitFor(`!!document.querySelector("[data-testid=net-qr] svg")`, 10_000);
     const link = await a.js<string>(`document.querySelector(".netp-link").textContent`);
     console.log(`  the QR's link: ${link}`);

@@ -31,7 +31,7 @@ describe.skipIf(!E2E)("together by Gargantua", () => {
   });
 
   test("Ana in orbit about Miller, Ben 200 m off her right: each sees the other there", async () => {
-    console.log(`  ${await a.js<string>(`__bh.game.orbit("miller")`)}`);
+    console.log(`  ${await a.js<string>(`__bh.game.orbit("miller", { altKm: 400 })`)}`);
     const placed = await a.js<number>(`__bh.sim.time * 492.549`);
     await b.waitFor(
       `(() => { const s = __bh.net.net.remotes.track(${sa})?.latest; return !!s && s.t > ${placed} + 0.2 && s.frame === 2; })()`,
@@ -54,4 +54,16 @@ describe.skipIf(!E2E)("together by Gargantua", () => {
       await a.shot(`${shots}/miller-a.png`);
     }
   }, 120_000);
+
+  test("Ben back in our solar system: each sees the other through the wormhole — Ana's slow clock said", async () => {
+    await b.js(`(() => { __bh.game.orbit("earth", { altKm: 400 }); return 1; })()`);
+    await b.waitFor(`__bh.net.session.tags.some((g) => g.kind.includes("Gargantua"))`, 30_000);
+    await a.waitFor(`__bh.net.session.tags.some((g) => g.kind.includes("solar system"))`, 30_000);
+    const tb = await b.js<string>(`__bh.net.session.tags.map((g) => g.name + " · " + g.kind).join(", ")`);
+    const ta = await a.js<string>(`__bh.net.session.tags.map((g) => g.name + " · " + g.kind).join(", ")`);
+    console.log(`  Ben's tags: ${tb}`);
+    console.log(`  Ana's tags: ${ta}`);
+    expect(tb).toContain("τ ×");
+    if (shots) await b.shot(`${shots}/mouth-b.png`);
+  }, 60_000);
 });

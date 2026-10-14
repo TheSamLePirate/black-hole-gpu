@@ -40,6 +40,8 @@ describe.skipIf(!E2E)("a battle", () => {
 
   test("the match started from the panel: a countdown on both, then both on the ring, head-on", async () => {
     await a.js(`(() => { __bh.net.open(); return 1; })()`);
+    await a.waitFor(`!!document.querySelector("[data-testid=net-tab-match]")`, 10_000);
+    await a.click(`[data-testid="net-tab-match"]`);
     await a.waitFor(`!!document.querySelector("[data-testid=nm-start]")`, 10_000);
     await a.click(`[data-testid="nm-start"]`);
     for (const p of [a, b]) await p.waitFor(`__bh.net.match.phase === "countdown"`, 10_000);

@@ -7,6 +7,20 @@ Deux à quatre joueurs dans un même monde, avec des spectateurs et des écrans 
 reste entier : rien ne se connecte tant que le joueur ne demande pas une salle, et le code réseau
 (`net.js`, 13 Ko) n'est chargé qu'à ce moment.
 
+## Démarrer
+
+1. **Ouvrir le panneau Réseau** : **Échap** (le menu pause) → **Réseau — jouer ensemble** ; ou **Tab maintenu**
+   (la roue) → **Réseau**. (Le panneau peut être masqué : Réglages › Réseau.)
+2. **Votre nom et votre couleur** en haut du panneau.
+3. **Créer une salle** (un nom, un mot de passe facultatifs) → son **code de six lettres** s'affiche, avec
+   **Copier le lien**. Envoyez le code ou le lien aux autres.
+4. **Les autres** : le même panneau → **Rejoindre une salle**, le code (et le mot de passe s'il y en a un), le
+   rôle — **Pilote**, **Spectateur** ou **Instruments** ; ou simplement en ouvrant le lien. Un téléphone ou une
+   tablette : l'onglet **Écrans** affiche un **QR code** à scanner.
+5. **En salle**, le badge en haut à gauche (● CODE · joueurs · latence) rouvre le panneau : onglets **Équipage**
+   (Suivre, À côté, volumes), **Match** (combats, courses, atterrissages), **Voix** (micro), **Écrans**.
+6. **Quitter la salle** en bas du panneau ; **Reprendre mon engin** au retour dans une salle.
+
 ## Les salles (R0)
 
 - **Réseau — jouer ensemble** (le menu pause, la roue) : un pseudo et une couleur ; **Créer une salle**
@@ -188,6 +202,23 @@ sa part reçue ; Ana partie : son Endurance sur son orbite, Ben s'y amarre ; Ana
 Pas encore : un engin libre partagé (l'Endurance de la salle) avec des baux ; la masse de l'assemblage pour
 l'hôte ; le train et les feux d'un Ranger distant.
 
+## Près de Gargantua (R8)
+
+- **Du côté de Gargantua**, chaque engin est envoyé sur la carte du trou (la carte plate de Boyer–Lindquist, sa
+  vitesse de coordonnée) ; les autres près du vôtre sont ramenés dans le repère propre de votre caméra —
+  dessinés, étiquetés, **À côté** y fonctionne aussi (en orbite de Miller, au tiers de la vitesse de la lumière,
+  à 200 m d'une aile).
+- **Par le trou de ver** : ceux de l'autre côté sont signalés sur sa bouche (« près de Gargantua — par le trou de
+  ver », « dans notre système solaire — par le trou de ver »).
+- **Une horloge** pour la salle — son temps de coordonnée — : près de Miller votre temps propre ralentit, et votre
+  étiquette le dit aux autres (τ ×0,85 sur une orbite de 400 km autour de Miller).
+
+Mesuré sur kerr-mini (`tests/e2e/net-gargantua`) : deux Rangers autour de Miller, chacun vu à 206 m de l'autre ;
+Ben revenu près de la Terre : Ana signalée sur la bouche avec le rythme de son horloge.
+
+Pas encore : les marqueurs déviés par la lentille au loin (ils pointent en ligne droite) ; le train et les feux
+d'un Ranger distant.
+
 ## Comment ça marche
 
 - **Le serveur de salles** (`server/rooms.ts`, Bun, SQLite) : les salles et leurs membres, l'horloge, les
@@ -213,7 +244,7 @@ deux pages à 0,3 ms près.
 
 ## Tests
 
-De bout en bout aussi : `tests/e2e/net-dock` (s'amarrer ensemble, les contacts, le monde persistant), `tests/e2e/net-space` (en orbite ensemble, le warp de la salle, les cibles), `tests/e2e/net-walk` (à pied ensemble, un passager), `tests/e2e/net-flight` (deux F-35 : vus à 8 km, sur le radar, le lien direct, À côté —
+De bout en bout aussi : `tests/e2e/net-gargantua` (près de Gargantua, par le trou de ver), `tests/e2e/net-dock` (s'amarrer ensemble, les contacts, le monde persistant), `tests/e2e/net-space` (en orbite ensemble, le warp de la salle, les cibles), `tests/e2e/net-walk` (à pied ensemble, un passager), `tests/e2e/net-flight` (deux F-35 : vus à 8 km, sur le radar, le lien direct, À côté —
 la patrouille, le même écart vu des deux côtés —, la postcombustion vue). Unitaires : `tests/net-core.test.ts` (les échantillons, l'horloge sous 200 ms et 5 % de pertes, Hermite au
 centimètre, le lissage, le vol du robot), `tests/net-rooms.test.ts` (un vrai serveur : salles, limites, mots
 de passe, la place reprise à la reconnexion, la suppression par le propriétaire, les salles gardées après un

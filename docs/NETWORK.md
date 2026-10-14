@@ -7,6 +7,20 @@ Two to four players in one world, spectators and instrument screens beside them.
 whole: nothing connects until the player asks for a room, and the network's code (`net.js`, 13 KB) is
 loaded only then.
 
+## Getting started
+
+1. **Open the Network panel**: **Esc** (the pause menu) → **Network — play together**; or **hold Tab** (the
+   wheel) → **Network**. (The panel can be hidden: Settings › Network.)
+2. **Your name and colour** at the top of the panel.
+3. **Create a room** (a name, a password, both optional) → its **six-letter code** shows, with **Copy the
+   link**. Send the code or the link to the others.
+4. **The others**: the same panel → **Join a room**, the code (and the password if any), the role — **Pilot**,
+   **Spectator** or **Instruments**; or just open the link. A phone or a tablet: the **Screens** tab shows a **QR
+   code** to scan.
+5. **In a room**, the badge at the top left (● CODE · players · latency) opens the panel again: tabs **Crew**
+   (Follow, Beside, volumes), **Match** (fights, races, landings), **Voice** (microphone), **Screens**.
+6. **Leave the room** at the panel's foot; **Back to my craft** when you come back to a room.
+
 ## Rooms (R0)
 
 - **Network — play together** (the pause menu, the wheel): a name and a colour; **Create a room** (a name
@@ -172,6 +186,21 @@ her Endurance on its orbit, Ben docks to it; Ana back on it, 3.6 m from Ben.
 Not yet: a shared free craft (the room's own Endurance) with leases; the assembly's mass for the host; a
 remote Ranger's gear and lamps.
 
+## By Gargantua (R8)
+
+- **On Gargantua's side** each craft is sent on the hole's map (Boyer–Lindquist's flat map, its coordinate
+  velocity); the others near yours are brought into your camera's rest frame — drawn, tagged, **Beside** works
+  there too (in orbit about Miller at a third of the speed of light, 200 m off a wing).
+- **Through the wormhole**: those on the other side are tagged on its mouth ("by Gargantua — through the
+  wormhole", "in our solar system — through the wormhole").
+- **One clock** for the room — its coordinate time —: by Miller your proper time runs slower, and your tag says so
+  to the others (τ ×0.85 in a 400 km orbit about Miller).
+
+Measured on kerr-mini (`tests/e2e/net-gargantua`): two Rangers about Miller, each seen 206 m from the other; Ben
+back by the Earth: Ana tagged on the mouth with her clock's rate.
+
+Not yet: the markers bent by the lens far off (they point straight); a remote Ranger's gear and lamps.
+
 ## How it works
 
 - **The room server** (`server/rooms.ts`, Bun, SQLite): the rooms and their members, the clock, the room's
@@ -196,7 +225,7 @@ late (95 %: 27 ms), the others shown 60–75 ms late, the two pages' clocks with
 
 ## Tests
 
-End to end too: `tests/e2e/net-dock` (docking together, contacts, the persistent world), `tests/e2e/net-space` (in orbit together, the room's warp, targets), `tests/e2e/net-walk` (on foot together, a passenger's ride), `tests/e2e/net-flight` (two F-35s: seen 8 km off, on the radar, the direct link, Beside —
+End to end too: `tests/e2e/net-gargantua` (by Gargantua, through the wormhole), `tests/e2e/net-dock` (docking together, contacts, the persistent world), `tests/e2e/net-space` (in orbit together, the room's warp, targets), `tests/e2e/net-walk` (on foot together, a passenger's ride), `tests/e2e/net-flight` (two F-35s: seen 8 km off, on the radar, the direct link, Beside —
 formation, the same gap seen by both —, the afterburner seen). Unit: `tests/net-core.test.ts` (the samples, the clock under 200 ms and 5 % lost, the Hermite within a
 centimetre, the smoothing, the bot's flight), `tests/net-rooms.test.ts` (a real server: rooms, limits,
 passwords, a reconnection's slot, the owner's delete, the rooms kept across a restart). End to end:

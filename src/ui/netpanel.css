@@ -1,50 +1,110 @@
 /* Playing together (ui/netpanel.ts): the network's panel and the room's badge, in the kit's language. */
-.netp-frame { width: min(620px, calc(100vw - 32px)); padding: 16px 18px 18px; }
-.netp { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
-.netp-sub { margin-top: 6px; font: var(--k-font-label); letter-spacing: 0.12em; text-transform: uppercase; color: var(--k-amber); }
+.netp-frame { width: min(680px, calc(100vw - 32px)); padding: 16px 18px 14px; }
+.netp { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.netp-sub { margin-top: 2px; font: var(--k-font-label); letter-spacing: 0.16em; text-transform: uppercase; color: var(--k-amber); }
+.netp-lab { font: var(--k-font-label); letter-spacing: 0.18em; text-transform: uppercase; color: var(--k-dim); }
+.netp-hint { margin: 0; color: var(--k-dim); font: 400 12px/1.4 var(--font); }
+.netp-grow { flex: 1 1 auto; }
 .netp-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .netp-in {
   flex: 1 1 120px; min-width: 0; padding: 7px 9px; border: 1px solid var(--k-ctl-edge); border-radius: var(--k-r);
   background: var(--k-ctl-bg); color: var(--k-text); font: 500 13px/1.2 var(--font);
 }
-select.netp-in { flex: 0 0 auto; }
+select.netp-in { flex: 0 0 auto; cursor: pointer; }
+.netp-in:hover { border-color: rgba(160, 210, 255, 0.3); }
 .netp-in:focus { outline: none; border-color: var(--k-on-edge); box-shadow: 0 0 0 2px rgba(111, 210, 255, 0.18); }
-.netp-codein { flex: 0 0 104px; font: 600 15px/1.2 var(--mono); letter-spacing: 0.16em; text-transform: uppercase; }
-.netp-swatches { display: flex; gap: 6px; }
-.netp-swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; }
-.netp-swatch.on { border-color: #fff; box-shadow: 0 0 8px rgba(255, 255, 255, 0.4); }
-.netp-room { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--k-edge-hi); border-radius: var(--k-r); background: var(--k-on-bg); }
-.netp-room .netp-sub { grid-column: 1 / -1; margin: 0; color: var(--k-text); text-transform: none; letter-spacing: 0.02em; font: var(--k-font-title); }
-.netp-code { font: 700 28px/1.1 var(--mono); letter-spacing: 0.22em; color: var(--k-on); }
-.netp-members, .netp-known { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.netp-members li, .netp-known li { display: flex; gap: 10px; align-items: center; padding: 6px 10px; border: 1px solid var(--k-line); border-radius: var(--k-r); background: var(--k-ctl-bg); font: 500 13px/1.2 var(--font); color: var(--k-text); }
-.netp-members li.me { border-color: var(--k-on-edge); }
-.netp-members em, .netp-known em { margin-left: auto; font: var(--k-font-value); font-style: normal; color: var(--k-dim); }
-.netp-known b { font: 600 13px/1.2 var(--mono); letter-spacing: 0.12em; color: var(--k-on); }
+.netp-codein { flex: 0 0 auto; font: 600 18px/1.2 var(--mono); letter-spacing: 0.22em; text-transform: uppercase; text-align: center; }
+/* who one is */
+.netp-me { gap: 10px; flex-wrap: nowrap; }
+.netp-me .netp-name { flex: 1 1 auto; }
+.netp-swatches { display: flex; gap: 6px; flex: none; }
+.netp-swatch { width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 2px solid rgba(0, 0, 0, 0.4); cursor: pointer; transition: transform 0.12s; }
+.netp-swatch:hover { transform: scale(1.12); }
+.netp-swatch.on { border-color: #fff; box-shadow: 0 0 8px rgba(255, 255, 255, 0.45); }
+.netp-swatch:focus-visible { outline: 1px solid var(--k-on-edge); outline-offset: 2px; }
+/* out of a room: a new one, joining one */
+.netp-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.netp-card { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--k-line); border-radius: var(--k-r); background: rgba(255, 255, 255, 0.025); }
+.netp-card .netp-in { flex: none; }
+.netp-card > .k-btn { align-self: flex-start; margin-top: 2px; }
+@media (max-width: 640px) { .netp-cards { grid-template-columns: 1fr; } }
+/* the room one is in */
+.netp-room { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--k-edge-hi); border-radius: var(--k-r); background: linear-gradient(180deg, rgba(111, 210, 255, 0.12), rgba(111, 210, 255, 0.04)); }
+.netp-roomhead { display: flex; align-items: center; gap: 8px; }
+.netp-roomname { font: var(--k-font-title); letter-spacing: 0.08em; color: var(--k-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.netp-coderow { display: flex; align-items: center; gap: 12px; }
+.netp-code { font: 700 30px/1.05 var(--mono); letter-spacing: 0.24em; color: var(--k-on); text-shadow: 0 0 14px rgba(111, 210, 255, 0.35); user-select: all; }
+.netp-chip { padding: 2px 7px; border: 1px solid var(--k-ctl-edge); border-radius: 999px; font: 600 10px/1.2 var(--hud-font); letter-spacing: 0.12em; text-transform: uppercase; font-style: normal; color: var(--k-dim); white-space: nowrap; }
+.netp-pace { display: flex; align-items: center; gap: 10px; padding-top: 6px; border-top: 1px solid var(--k-line); font: var(--k-font-value); color: var(--k-text); }
+.netp-pace b { color: var(--k-on); }
+.netp-offer { color: var(--k-amber); }
+/* the room's tabs */
+.netp-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--k-line); }
+.netp-tab {
+  all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px 8px;
+  border-bottom: 2px solid transparent; font: 600 11px/1.2 var(--hud-font); letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--k-dim); cursor: pointer;
+}
+.netp-tab:hover { color: var(--k-text); }
+.netp-tab:focus-visible { outline: 1px solid var(--k-on-edge); outline-offset: -1px; }
+.netp-tab.on { color: #fff; border-bottom-color: var(--k-on); }
+.netp-tabbadge { font: 600 10px/1 var(--mono); font-style: normal; color: var(--k-on); }
+.netp-pane { display: flex; flex-direction: column; gap: 10px; min-height: 120px; }
+/* the crew */
+.netp-members, .netp-known { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.netp-members li { display: grid; grid-template-columns: auto auto 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--k-line); border-radius: var(--k-r); background: var(--k-ctl-bg); }
+.netp-members li.me { border-color: rgba(111, 210, 255, 0.45); background: rgba(111, 210, 255, 0.06); }
+.netp-who { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.netp-whoname { display: flex; align-items: center; gap: 8px; font: 600 13.5px/1.2 var(--font); color: var(--k-text); }
+.netp-whoname > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.netp-whosub { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.netp-acts { display: flex; align-items: center; gap: 6px; }
+.netp-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; box-shadow: 0 0 6px currentColor; }
+.netp-aboard { font: var(--k-font-value); font-style: normal; color: var(--k-amber); }
+.netp-route { font: var(--k-font-value); color: var(--k-dim); }
+/* the rooms one knows */
+.netp-known li { display: grid; grid-template-columns: auto 1fr auto auto auto auto; gap: 10px; align-items: center; padding: 6px 10px; border: 1px solid var(--k-line); border-radius: var(--k-r); background: var(--k-ctl-bg); font: 500 13px/1.2 var(--font); color: var(--k-text); }
+.netp-known b { font: 600 13px/1.2 var(--mono); letter-spacing: 0.14em; color: var(--k-on); }
 .netp-known span { color: var(--k-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.netp-aboard { font-style: normal; color: var(--k-amber); font-size: 0.85em; }
-.netp-route { font: var(--k-font-value); color: var(--k-on); opacity: 0.8; }
-.netp-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.netp-when { font: var(--k-font-value); color: var(--k-dim); }
 .netp-stat { margin: 0; font: var(--k-font-value); color: var(--k-dim); }
-.netp-server { margin: 6px 0 0; font: 500 10.5px/1.2 var(--mono); color: rgba(176, 196, 222, 0.4); }
-.netp > .k-btn { align-self: flex-start; }
+.netp-foot { display: flex; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px solid var(--k-line); }
+.netp-server { margin: 0; font: 500 10.5px/1.2 var(--mono); color: rgba(176, 196, 222, 0.4); }
+.netp-pane > .k-btn { align-self: flex-start; }
+@media (max-width: 560px) {
+  .netp-members li { grid-template-columns: auto auto 1fr; }
+  .netp-acts { grid-column: 1 / -1; justify-content: flex-end; }
+}
 
 .net-badge {
   /* (beside the target's card, clear of the heading tape at the top's middle) */
   position: fixed; top: 62px; left: 306px; z-index: var(--z-chrome, 20);
-  padding: 4px 12px; border: 1px solid var(--k-edge-hi, rgba(120, 205, 255, 0.55)); border-radius: 999px;
-  background: rgba(5, 9, 16, 0.78); color: #9fe3ff; font: 600 12px/1.2 var(--mono); letter-spacing: 0.06em; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 9px; border: 1px solid var(--k-edge-hi, rgba(120, 205, 255, 0.55)); border-radius: 999px;
+  background: rgba(5, 9, 16, 0.82); color: #9fe3ff; font: 600 12px/1.2 var(--mono); letter-spacing: 0.06em; cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
 }
+.net-badge:hover { background: rgba(14, 26, 42, 0.92); border-color: var(--k-on, #6fd2ff); }
+.net-badge:focus-visible { outline: 1px solid var(--k-on-edge); outline-offset: 2px; }
 .net-badge[hidden] { display: none; }
-.net-badge[data-status="offline"], .net-badge[data-status="connecting"] { color: var(--k-amber, #ffb35c); border-color: rgba(255, 179, 92, 0.6); }
+.nb-led { width: 8px; height: 8px; border-radius: 50%; background: #8dff9a; box-shadow: 0 0 6px #8dff9a; }
+.nb-code { letter-spacing: 0.16em; color: #fff; }
+.nb-n::before { content: "\25CF\25CF "; font-size: 7px; vertical-align: 1px; color: rgba(159, 227, 255, 0.6); }
+.nb-ms { color: rgba(159, 227, 255, 0.7); }
+.nb-mic { color: rgba(176, 196, 222, 0.5); }
+.nb-mic.on { color: #8dff9a; text-shadow: 0 0 6px #8dff9a; }
+.nb-offer { padding: 1px 6px; border-radius: 999px; background: rgba(255, 179, 92, 0.18); color: var(--k-amber, #ffb35c); }
+.nb-off { color: var(--k-amber, #ffb35c); }
+.net-badge[data-status="offline"], .net-badge[data-status="connecting"] { border-color: rgba(255, 179, 92, 0.6); }
+.net-badge[data-status="offline"] .nb-led, .net-badge[data-status="connecting"] .nb-led { background: var(--k-amber, #ffb35c); box-shadow: 0 0 6px var(--k-amber, #ffb35c); }
 body.hide-ui .net-badge, body.title-open .net-badge { display: none; }
 @media (max-width: 900px) { .net-badge { left: 50%; top: auto; bottom: 12px; transform: translateX(-50%); } }
 .netp-talk { font-style: normal; color: rgba(176, 196, 222, 0.25); font-size: 11px; }
 .netp-talk.on { color: #8dff9a; text-shadow: 0 0 8px #8dff9a; }
-.netp-vol { width: 80px; accent-color: var(--k-on); }
+.netp-vol { width: 78px; accent-color: var(--k-on); cursor: pointer; }
 .netp-voice { display: flex; flex-direction: column; gap: 8px; }
 .netp-qrrow { align-items: flex-start; flex-wrap: nowrap; }
-.netp-qr { flex: none; width: 140px; height: 140px; }
+.netp-qr { flex: none; width: 160px; height: 160px; padding: 6px; border-radius: var(--k-r); background: #fff; }
 .netp-qr svg { width: 100%; height: 100%; display: block; border-radius: 3px; }
 .netp-qrside { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .netp-link { font: 500 11px/1.3 var(--mono); color: var(--k-dim); word-break: break-all; }

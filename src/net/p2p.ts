@@ -20,6 +20,8 @@ export interface PeerLink {
   audio: RTCRtpTransceiver | null;
   /** his voice, once it came */
   voice: MediaStream | null;
+  /** when our offer went [performance.now() ms] */
+  offeredAt: number;
 }
 
 export type SignalData = { sdp?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit };
@@ -72,6 +74,7 @@ export class PeerMesh {
       bytes: { up: 0, down: 0 },
       audio: null,
       voice: null,
+      offeredAt: performance.now(),
     };
     // (his voice: its track given a stream of its own)
     pc.ontrack = (e) => {
@@ -184,6 +187,13 @@ export class PeerMesh {
 
   /** each link's round trip and route, from its selected candidate pair */
   private async measure() {
+    // (an offer left unanswered — lost on its way, its peer not ready —: made again, 8 s on)
+    const me = this.o.self();
+    for (const L of [...this.peers.values()])
+      if (me < L.slot && L.state === "connecting" && L.pc.signalingState === "have-local-offer" && performance.now() - L.offeredAt > 8000) {
+        this.drop(L.slot);
+        void this.offer(L.slot);
+      }
     for (const L of this.peers.values()) {
       if (L.state !== "open") continue;
       try {

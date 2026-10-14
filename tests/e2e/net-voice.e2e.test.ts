@@ -43,6 +43,8 @@ describe.skipIf(!E2E)("the voices", () => {
   test("the microphones on (a click each): each one's voice received by the other", async () => {
     for (const p of [a, b]) {
       await p.js(`(() => { __bh.net.voice.prefs.sameRoomMute = false; __bh.net.open(); return 1; })()`);
+      await p.waitFor(`!!document.querySelector("[data-testid=net-tab-voice]")`, 10_000);
+      await p.click(`[data-testid="net-tab-voice"]`);
       await p.waitFor(`!!document.querySelector("[data-testid=net-voice]")`, 10_000);
       await p.click(`[data-testid="net-voice"]`);
       await p.waitFor(`__bh.net.voice.on`, 10_000);
@@ -59,11 +61,9 @@ describe.skipIf(!E2E)("the voices", () => {
     }
     await b.waitFor(`__bh.net.voice.speaking(${sa})`, 20_000);
     await b.waitFor(`__bh.net.voice.quindars >= 2`, 20_000);
-    const r = await b.js<{ q: number; talkA: boolean }>(
-      `({ q: __bh.net.voice.quindars, talkA: !!document.querySelector("[data-testid=net-talk-${sa}].on") || __bh.net.voice.speaking(${sa}) })`,
-    );
-    console.log(`  Ben: Ana speaking, ${r.q} Quindar tones`);
-    expect(r.talkA).toBe(true);
+    // (her voice comes and goes — the phrase's pauses —: shown speaking again within a few seconds)
+    await b.waitFor(`!!document.querySelector("[data-testid=net-talk-${sa}].on") || __bh.net.voice.speaking(${sa})`, 10_000);
+    console.log(`  Ben: Ana speaking, ${await b.js<number>(`__bh.net.voice.quindars`)} Quindar tones`);
     expect(await a.js<boolean>(`__bh.net.voice.talking || true`)).toBe(true);
     // (and the other way)
     await a.waitFor(`__bh.net.voice.speaking(${sb})`, 20_000);

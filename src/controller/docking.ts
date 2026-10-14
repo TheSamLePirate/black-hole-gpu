@@ -51,6 +51,8 @@ declare module "../controls" {
  */
 export interface NetDockTarget {
   id: `net:${number}`;
+  /** in space (its sample's inertial frame): docked to, touched; on a ground or in an air, neither */
+  space: boolean;
   title: string;
   kind: VesselId;
   used: Set<number>;
@@ -152,7 +154,7 @@ function dockGeometry(this: CameraController, only?: { target: DockTarget; port?
   }
   // other players' craft (R7): where their samples have them, their free ports
   for (const N of netDock.targets()) {
-    if (only && only.target !== N.id) continue;
+    if (!N.space || (only && only.target !== N.id)) continue;
     const P = N.pose(t);
     if (!P || Math.hypot(...sub3(P.X, nav.X)) * M_METRES > 5200) continue;
     targets.push({
@@ -326,7 +328,8 @@ function stationContact(this: CameraController, p0: NonNullable<ReturnType<Camer
   // other players' craft (R7): where their samples have them over the step
   for (const N of netDock.targets()) {
     const h = vesselHulls[N.kind];
-    if (!h.bvh) continue;
+    // (in space only: on a ground, in an air, a touch is the flight's — the fights' collisions)
+    if (!h.bvh || !N.space) continue;
     const q0 = N.pose(p0.t),
       q1 = N.pose(p1.t);
     if (!q0 || !q1 || !(Math.hypot(...sub3(p1.X, q1.X)) * M_METRES <= h.radius + R + 50)) continue;

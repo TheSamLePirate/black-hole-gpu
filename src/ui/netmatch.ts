@@ -67,7 +67,16 @@ const WEAPON: Record<string, string> = {
   collision: "✶",
 };
 
-export const MODE_NAMES: Record<MatchMode, () => string> = {
+export /** each mode in a line (the room panel's) */
+const MODE_ABOUT: Record<MatchMode, () => string> = {
+  coop: () => t("Together against drones or aggressors flown by the host"),
+  ffa: () => t("Everyone for himself, in F-35s: the most kills wins"),
+  teams: () => t("Two teams of two, in F-35s: the team with the most kills"),
+  race: () => t("Through the gates, each in his craft: the best time wins"),
+  landing: () => t("Each lands on the runway: the best graded landing wins"),
+};
+
+const MODE_NAMES: Record<MatchMode, () => string> = {
   coop: () => t("Together against the aggressors"),
   ffa: () => t("Everyone for himself"),
   teams: () => t("Two teams"),
@@ -440,6 +449,8 @@ export class NetMatch {
     const m = this.match!;
     this.endEl.replaceChildren();
     this.endEl.hidden = false;
+    // (the ranking over the view: the room's panel, if open, out of its way)
+    this.d.panel.closePanel();
     const list = h("ol", "nm-rank");
     for (const r of this.final ?? []) {
       const li = h("li", r.slot === this.me ? "me" : "");
@@ -689,12 +700,18 @@ export class NetMatch {
     const box = h("div", "nm-panel");
     const m = this.match;
     if (m && this.phase !== "over") {
-      box.append(h("div", "netp-sub", t("Match")), h("p", "netp-stat", `${MODE_NAMES[m.mode]()} — ${this.titleOf(m)}`));
+      const run = h("div", "nm-running");
+      run.append(h("span", "nm-live", t("Under way")), h("b", "", MODE_NAMES[m.mode]()), h("span", "", this.titleOf(m)));
+      box.append(run);
       if (m.host === this.me)
         box.append(button({ label: t("End the match"), kind: "danger", testid: "nm-stop", onClick: () => this.stop() }));
+      else box.append(h("p", "netp-hint", t("The one who started it ends it.")));
       return box;
     }
-    if (this.net?.room?.role !== "pilot") return box;
+    if (this.net?.room?.role !== "pilot") {
+      box.append(h("p", "netp-hint", t("Matches are started by the pilots: spectators and screens follow them.")));
+      return box;
+    }
     const F = this.form;
     const mode = h("select", "netp-in");
     mode.dataset.testid = "nm-mode";
@@ -761,14 +778,28 @@ export class NetMatch {
       kills.append(o);
     }
     kills.addEventListener("change", () => (F.scoreLimit = Number(kills.value)));
-    const row1 = h("div", "netp-row");
-    row1.append(mode, what);
-    const row2 = h("div", "netp-row nm-rules");
-    row2.append(inf.l, inv.l, ff.l, em.l, mins, kills);
+    // (labelled fields; the mode said in a line; the weapons' rules only where weapons fly)
+    const field = (label: string, ctl: HTMLElement) => {
+      const f = h("label", "nm-field");
+      f.append(h("span", "netp-lab", label), ctl);
+      return f;
+    };
+    const about = h("p", "netp-hint nm-about", MODE_ABOUT[F.mode]());
+    const grid = h("div", "nm-grid");
+    grid.append(field(t("Mode"), mode), field(t("Event"), what), field(t("Duration"), mins), field(t("Score"), kills));
+    const rules = h("div", "netp-row nm-rules");
+    rules.append(inf.l, inv.l, ff.l, em.l);
+    const fighting = () => F.mode === "coop" || F.mode === "ffa" || F.mode === "teams";
+    const shape = () => {
+      about.textContent = MODE_ABOUT[F.mode]();
+      rules.hidden = !fighting();
+      (kills.closest(".nm-field") as HTMLElement | null)?.toggleAttribute("hidden", F.mode !== "ffa" && F.mode !== "teams");
+    };
+    mode.addEventListener("change", shape);
     box.append(
-      h("div", "netp-sub", t("A match")),
-      row1,
-      row2,
+      grid,
+      about,
+      rules,
       button({
         label: t("Start the match"),
         kind: "primary",
@@ -787,6 +818,7 @@ export class NetMatch {
         },
       }),
     );
+    shape();
     return box;
   }
 }

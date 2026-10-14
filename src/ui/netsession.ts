@@ -32,6 +32,7 @@ import { netRadar } from "./hud/symbology";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "../system/ellipsoid";
 import { C_MPS, M_METRES, M_SECONDS } from "../units";
 import { keplerProp } from "../system/our-plan";
+import { zonalAccel } from "../system/geopotential";
 import { solarBody } from "../system/solar";
 import { vesselHulls } from "../system/collide";
 import { dockedFrame, type VesselId, VESSELS } from "../vessels";
@@ -56,13 +57,14 @@ function parkedAt(p: Vec3, fwd: Vec3) {
   return { lat: g.lat * D, lon: g.lon * D, heading: (Math.atan2(dot(fwd, east), dot(fwd, north)) * D + 360) % 360 };
 }
 
-/** the acceleration measured on a craft in space [m/s²] less the pull of its body's centre: the rest of its pull */
-function perturbation(own: { body: number; p: Vec3 }, acc: Vec3): Vec3 {
-  const b = solarBody(NET_BODIES[own.body] ?? "");
-  const r = Math.hypot(...own.p);
-  if (!b || !(r > 0)) return [0, 0, 0];
-  const mu = b.mass * C_MPS * C_MPS * M_METRES;
-  return [0, 1, 2].map((k) => clamp(acc[k]! + (mu * own.p[k]!) / r ** 3, -1, 1)) as Vec3;
+/** a body's pull at p (its inertial frame [m]) besides its centre's — its flattening: J2, J3, J4 — at scene time t
+ *  [s], in m/s² (the game's own model: geopotential.ts) */
+function pertOf(body: number, p: Vec3, t: number): Vec3 {
+  const id = NET_BODIES[body] ?? "";
+  const b = solarBody(id);
+  if (!b) return [0, 0, 0];
+  const z = zonalAccel(id, b.mass, scale3(p, 1 / M_METRES), t / M_SECONDS);
+  return z ? scale3(z as Vec3, (C_MPS * C_MPS) / M_METRES) : [0, 0, 0];
 }
 
 /** a coasting craft carried along its orbit about a body (the body's inertial frame, m and m/s) by dt [s] */
@@ -171,8 +173,7 @@ export class NetSession {
   sent = 0;
   /** the last sample sent coasting (R6): whether, what — the orbit the others carry us on —, its other pulls */
   private coastSent = false;
-  private lastCoast: { t: number; body: number; p: Vec3; v: Vec3; a: Vec3 } | null = null;
-  private coastA: Vec3 = [0, 0, 0];
+  private lastCoast: { t: number; body: number; p: Vec3; v: Vec3 } | null = null;
 
   constructor(private d: NetSessionDeps) {
     // the others' craft as targets (R6): the HUD's, the rendezvous', the map's
@@ -194,6 +195,7 @@ export class NetSession {
         .filter((sh) => !sh.ghost && this.links.get(sh.slot)?.host !== me)
         .map((sh) => ({
           id: `net:${sh.slot}` as const,
+          space: sh.state.frame === 1,
           title: this.awayNames.has(sh.slot)
             ? tf("{0}'s {1} (away)", this.awayNames.get(sh.slot)!.name, VESSELS[sh.id].name)
             : tf("{0}'s {1}", this.nameOf(sh.slot), VESSELS[sh.id].name),
@@ -396,6 +398,31 @@ export class NetSession {
       };
     });
     this.tags.push(...walkerTags);
+    // (those on the other side of the wormhole: a tag on its mouth, the way to them)
+    const seen = new Set(this.tags.map((g) => g.slot));
+    const mouthAt = c.netMouthCam();
+    const byHole = mouthAt ? c.netOwnState()?.frame === 2 : false;
+    if (mouthAt)
+      for (const st of states) {
+        if (seen.has(st.slot) || st.ghost || st.kind === 4) continue;
+        const there = (st.frame === 2) !== byHole;
+        if (!there) continue;
+        seen.add(st.slot);
+        this.tags.push({
+          slot: st.slot,
+          name: this.nameOf(st.slot),
+          colour: members.get(st.slot)?.colour ?? "#ffffff",
+          at: mouthAt.at,
+          dist: mouthAt.dist,
+          ghost: false,
+          kind: st.frame === 2 ? t("by Gargantua — through the wormhole") : t("in our solar system — through the wormhole"),
+        });
+      }
+    // (their clocks: a proper time far off the room's — by Gargantua — said on their tags; R8)
+    for (const g of this.tags) {
+      const tau = this.tel.get(g.slot)?.tau;
+      if (tau !== undefined && tau < 0.95) g.kind += ` · τ ×${tau < 0.01 ? tau.toExponential(1) : tau.toFixed(2)}`;
+    }
     // our walker, 15 times a second (a pilot's: on foot, his craft parked beside — both sent)
     const W = net.room.role === "pilot" && !this.follow ? c.netOwnWalker() : null;
     if (W && now - this.walkSentAt > 1 / 15) {
@@ -509,8 +536,10 @@ export class NetSession {
     const off =
       coast && LC && LC.body === own.body
         ? (() => {
+            // (as the others reckon it: Kepler, and the body's flattening at the place — remote.ts)
             const k = keplerOf(LC.body, LC.p, LC.v, st - LC.t);
-            return k ? Math.hypot(...k.p.map((x, i) => x + 0.5 * LC.a[i]! * (st - LC.t) ** 2 - own.p[i]!)) : Infinity;
+            const g = k ? pertOf(LC.body, k.p, st) : null;
+            return k && g ? Math.hypot(...k.p.map((x, i) => x + 0.5 * g[i]! * (st - LC.t) ** 2 - own.p[i]!)) : Infinity;
           })()
         : Infinity;
     if (now - this.lastSend < 1 / rate - 0.002 && coast === this.coastSent && !(coast && off > 20)) return;
@@ -520,8 +549,7 @@ export class NetSession {
     const J = this.d.jetIn();
     const cmd = (k: number) => (J ? clamp(0.55 * J.torque[k]! + 0.75 * J.rates[k]!, -1, 1) : 0);
     const boost = th?.boost ?? 1;
-    this.coastA = coast ? perturbation(own, this.acc) : [0, 0, 0];
-    this.lastCoast = coast ? { t: st, body: own.body, p: own.p, v: own.v, a: this.coastA } : null;
+    this.lastCoast = coast ? { t: st, body: own.body, p: own.p, v: own.v } : null;
     net.sendCraft({
       // (stamped with our scene's time: the pose's)
       t: this.d.sceneTime(),
@@ -535,7 +563,8 @@ export class NetSession {
       w: this.spin,
       // (coasting: what pulls it besides the body's centre — its flattening, the Moon, the Sun —, added by the others
       // to the Kepler orbit they carry it on)
-      a: onGnd ? [0, 0, 0] : coast ? this.coastA : this.acc,
+      // (coasting: none — the others reckon its pulls with the game's own model)
+      a: onGnd || coast ? [0, 0, 0] : this.acc,
       vis: {
         throttle: th?.throttle ?? 0,
         boost,
@@ -568,6 +597,8 @@ export class NetSession {
           gear: c.gearExt,
           flaps: c.airFlight.cfg.flaps ?? 0,
           brake: c.airFlight.cfg.brake ?? 0,
+          // (our proper time's rate against the room's clock — R8: by Gargantua, slow)
+          tau: Math.round(c.netClockRate() * 1e4) / 1e4,
         },
       });
     }
@@ -587,6 +618,7 @@ export class NetSession {
     // (the others' tracks: read at the room's pace, a coasting craft carried along its orbit)
     net.remotes.env.pace = Math.max(1, net.roomWarp());
     net.remotes.env.kepler ??= keplerOf;
+    net.remotes.env.pert ??= pertOf;
     if (!net.clock.synced) return;
     const tr = net.roomNow();
     const W = net.roomWarp();

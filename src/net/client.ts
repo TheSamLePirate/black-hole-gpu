@@ -282,7 +282,9 @@ export class NetClient {
         this.emit("clock", m.clock);
         return;
       case "signal":
-        void this.mesh?.onSignal(m.from, m.data as SignalData);
+        // (come before our links were set — joining, the ICE servers still asked for —: kept for them)
+        if (this.mesh) void this.mesh.onSignal(m.from, m.data as SignalData);
+        else if (this.earlySignals.length < 64) this.earlySignals.push({ from: m.from, data: m.data as SignalData });
         return;
       case "error":
         if (m.re !== undefined && this.pending.has(m.re)) {
@@ -302,8 +304,12 @@ export class NetClient {
     }
   }
 
+  /** the links' signals come before the links were set (joining) */
+  private earlySignals: { from: number; data: SignalData }[] = [];
+
   private setRoom(r: Room | null) {
     this.room = r;
+    if (!r) this.earlySignals = [];
     this.remotes.clear();
     this.mesh?.close();
     this.mesh = null;
@@ -318,6 +324,7 @@ export class NetClient {
       });
       if (this.micTrack) this.mesh.setMic(this.micTrack);
       this.mesh.sync(r.members.map((x) => x.slot));
+      for (const e of this.earlySignals.splice(0)) void this.mesh.onSignal(e.from, e.data);
     }
     this.emit("room", r);
   }
