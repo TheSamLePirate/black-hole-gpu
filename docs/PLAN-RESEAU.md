@@ -1,493 +1,382 @@
-# Plan — réseau : la 2ᵉ vue et le jeu à plusieurs
+# Plan — le jeu en réseau (2 à 4 joueurs)
 
-Demande (2026-10-02) : 
-- **Vue en réseau** : un 2ᵉ appareil (ordinateur, tablette, téléphone) devient une 2ᵉ caméra, synchronisée avec le monde.
-- **Jeu en réseau** : être plusieurs dans le même monde.
+*Réécrit le 2026-10-14 sur la branche `reseau`. Il remplace le plan du 2026-10-02 (phases N0–N9, jamais
+commencé). Ses décisions encore valables sont reprises ici.*
 
-Le tout de la meilleure qualité possible, dans le système solaire **et** dans celui de Gargantua.
+Demande (2026-10-14) : jouer à 2–4, **très réactif**, de qualité AAA :
+- voler ensemble sur la planète (combat, défis, duels) ;
+- voler ensemble dans le système solaire ;
+- une caméra spectateur en réseau (2ᵉ vue) ;
+- les personnages à pied sur la planète ;
+- s'amarrer ensemble.
 
-Décisions de l'utilisateur :
-- **2ᵉ appareil** : il fait son propre rendu (WebGPU) et peut aussi servir d'**écran instruments** (carte 3D, ground track, écrans cockpit). Sa caméra est **libre**, avec tous les modes de la caméra classique. Il **regarde seulement** : il n'agit pas sur la partie.
-- **Public** : entre amis, à distance et dans la même pièce. **4 joueurs au maximum.**
-- **Infra** : le serveur dédié de l'utilisateur (en France, `samlepirate.org` derrière nginx-proxy-manager, Portainer, HTTPS). Cloudflare est accepté si besoin.
-- **Temps** : **hybride**. Les joueurs ensemble partagent une horloge, sinon chacun a son sous-espace.
-  - Le warp commun se décide **au vote**.
-  - Un joueur dans une forte dilatation (Miller) **sort automatiquement de la bulle** et vit son temps propre en ×1. Les autres le retrouvent « des années plus tard », comme dans le film.
-- **Persistance** : **monde persistant**, une salle par partie, conservée tant qu'on ne la supprime pas.
-- **Engins** : **chacun son Ranger**. Tout engin libre est pilotable par n'importe qui, Endurance comprise.
-- **Interactions** : collisions et amarrages entre joueurs.
-- **Destruction** : on **réapparaît où l'on veut**.
-- **Voix** entre joueurs par WebRTC (ajoutée le 2026-10-02).
-- **Le réseau est une option** (2026-10-03) : on peut toujours jouer seul, exactement comme aujourd'hui. Voir « Solo ou réseau ».
+## Décisions de l'utilisateur
 
-## État de départ (exploration du 2026-10-02, revue le 2026-10-03 à `e9b772f`)
+| Sujet | Décision |
+|---|---|
+| Ordre | Fondations, puis **voler ensemble sur Terre** d'abord ; l'espace et l'amarrage ensuite |
+| Transport | Serveur de salles Bun (WebSocket) **et** WebRTC direct entre joueurs pour les poses, avec repli sur le WebSocket |
+| Autorité en combat | **Les clients** : chacun fait foi pour son avion, le tireur est favorisé (compensation de latence), l'IA tourne chez l'hôte. Pas d'anti-triche, on est entre amis |
+| Temps dans l'espace | **Une horloge par salle** : baisse du warp immédiate pour tous, hausse au vote |
+| Modes sur Terre | Coopération contre l'IA · chacun pour soi · équipes 2 contre 2 · courses et concours d'atterrissage |
+| Salles | **Sessions** (les matchs) et **monde persistant** (gardé jusqu'à sa suppression) |
+| Voix | **Tôt**, avec le WebRTC : effet radio, bips Quindar, activation vocale |
+| Adresse | **`https://stream.samlepirate.org/`** (hôte nginx-proxy-manager, certificat déjà en place) |
+| À pied | Se voir marcher ; monter à bord de l'engin d'un ami comme passager |
+| Spectateur | Ordinateur, tablette ou téléphone (QR code), écran instruments |
+| Engins | **Au choix de chacun**, plusieurs exemplaires du même type ; les combats imposent le F-35 |
 
-- **Le jeu n'est pas déterministe d'une machine à l'autre.**
-  - Le pas `dt` suit l'horloge murale, borné à 0,1 s (`main.ts:1558`).
-  - Le nombre de sous-pas dépend du framerate (`controls.ts:1356`).
-  - Le planificateur tourne en worker asynchrone. Depuis la refonte du vol, ses tâches `deorbit` et `guide` pilotent la rentrée, cadencées par `performance.now()`.
-  - Les hauteurs du sol viennent des tuiles chargées autour de chaque caméra.
-  - Le TLE de l'ISS est téléchargé par chaque client.
-  - → **On synchronise l'état, pas les commandes** : pas de lockstep possible.
-- **Les corps sont déterministes en `t`** : DE440, orbites de Kerr, `endurancePose`. Ils ne transitent jamais par le réseau, chacun les recalcule.
-- **Le vaisseau piloté est la caméra.** Sa pose est dans `Settings` (`setHolePose`, `setRepPose`, `setHomePose` dans `camera.ts`).
-  - Le lancer de rayons part toujours du vaisseau.
-  - Les vues extérieures ne déplacent l'œil que de quelques km (`renderer.ts:1448`).
-- **L'horloge de la scène suit l'intégrateur du vaisseau** (`sim.ts:56`, `shipClock`).
-  - Dans l'air, le pilote a un sous-pas propre : `dtPilot = dt·min(warp, 4)` (`controls.ts:2655`).
-  - Le warp `timeSpeed` est en **temps coordonnée**.
-  - Chaque vaisseau a son temps propre (`properTime`).
-- **Les engins non pilotés sont dessinés comme des « autres »** (`renderer.shipOthers`), avec trois limites :
-  - de notre côté seulement (`region === "throat" && ell < 0`) ;
-  - à moins de 60 km ;
-  - 8 instances au maximum (`MAX_INST`, `ship.ts:100`).
-- **La flotte** (`fleet.ts`) :
-  - Il n'existe que 3 `VesselId` (ranger, lander, endurance).
-  - Les engins libres sont **sur rails képlériens** (`keplerProp`), donc déterministes en `t`.
-  - Les amarrages sont des `links`.
-- **Sérialisation existante** :
-  - `GameSave` (`game/save.ts`) contient presque tout l'instantané, mais pas la flotte (`Fleet.toJSON()` jamais appelé), ni le pistage local de l'ISS, ni `pilot.omega`.
-  - `load()` garde déjà les réglages propres à chaque appareil.
-  - `Take` (`take.ts`) enregistre les différences de `Settings` image par image : c'est le modèle du flux « marionnette ».
-- **Aucun code réseau.** `server.ts` est un `Bun.serve` sans WebSocket. GitHub Pages est statique.
-- **Mobile** :
-  - WebGPU tourne sur Safari 26 (iOS/iPadOS) et sur Chrome Android.
-  - Un téléphone est en tier 1 (0,9 Mpx).
-  - **WebGPU exige HTTPS**, donc un téléphone ne peut pas utiliser `http://192.168.x.x`.
-- **Refonte du vol et de la carte terminée** : PLAN-ATMOSPHERE-ORDINATEUR P1–P9 et PLAN-CARTE C1–C8. `controls.ts` fait maintenant **7 400 lignes**. Ce qu'elles ajoutent et qui concerne le réseau :
-  - **Les autopilotes écrivent `s.timeSpeed` à chaque image** :
-    - plafond ×4 dans l'air (`AIR_WARP`, `flightair.ts:18`, `controls.ts:2649`) ;
-    - rentrée : attente à ×1000, poussée à ×1, chute à ×500, puis ×4 dans l'air, et ×1 sous 1 500 m (`controls.ts:3018-3058`, `3544`) ;
-    - poussées du calculateur de vol (`controls.ts:3486`).
-    - Le warp n'est plus « une décision du joueur » : c'est aussi une décision des autopilotes.
-  - **État visuel propre au vaisseau piloté** :
-    - le renderer reçoit `shipReentry` (plasma, peau chaude), `shipContrails` et `shake` par `sim.applyRender` (`sim.ts:75-120`) ;
-    - `ship.ts` ne dessine plasma, lueur, jets et traînées **que pour l'engin piloté** (`this.flown`, `ship.ts:754, 823`) ;
-    - il n'y a qu'un bloc d'uniformes de rentrée et un seul tampon de traînée.
-  - **Les traînées de condensation sont une histoire, pas un état instantané** (`contrails.ts`, avancé dans `applyRender`).
-  - **Mode de vol, antigravité et dégâts sont des réglages globaux** (`Settings.flightMode`, `antigrav`, `damage`, `settings.ts:258-260`), pas des propriétés de chaque engin.
-  - **Une seule instance** d'`AirFlight` (thermique, volets, aérofreins, train, panne, g), d'`entryRun`, d'`entrySite`, de `fcBurns` et de `launchGoal`. Deux autopilotes nouveaux : `entry` et `burns`.
-  - **Destruction en solo** (`onCraftLost`, `main.ts:1424`) : **pause globale** (`settings.animate = false`), puis « reprendre » recharge l'instantané pris à l'entrée dans l'air. On **remonte donc le temps**.
-  - **Le regard du cockpit** (`syncLook` / `markLook`, `controls.ts:1328`, `2217-2240`) : si seuls les angles du regard changent, la caméra tourne et le vaisseau reste. Si la pose change aussi, tout est pris tel quel.
-  - **Carte, HUD et calculateur de vol sont bien découplés** :
-    - `Map3D.draw(Info)` avec `MapHost` ;
-    - `FlightHud(s, actions)` ;
-    - `FlightComputer(FcHost)`.
-    - Ils ne lisent que `Info` (= `flightInfo()` + sonde + statut) et `Settings`.
-    - La carte GPU emprunte le device et les cartes de planètes du renderer (`renderer.mapGpuSource()`). Sans renderer, elle se rabat sur Canvas 2D.
-    - La carte et le ground track codent en dur `CRAFT = ["ranger","lander","endurance"]` (`map3d/scene.ts:23`), avec la Terre comme parent.
-  - **Son** :
-    - le grondement de rentrée et le vent vont directement dans le bus `listener`, pas dans `engine` ;
-    - le director a besoin de `info.air` ;
-    - `Mix` ne compte que master, beeps, engines, ambience, ui.
-  - **Documentation d'architecture** : `docs/systemes/` (README, fiches 01–09). La fiche 04 §8–9 couvre la flotte et tous les limiteurs de warp, la fiche 08 la boucle, la fiche 09 le son, le serveur et Pages. Ses numéros de ligne ont dérivé : le code fait foi.
+Repris du plan d'octobre :
+- **4 pilotes** et **8 appareils** au plus par salle.
+- **Le solo reste entier** : aucune connexion sans action du joueur, le code réseau chargé à la demande.
+- **Déploiement** par la branche `deploy` interrogée par Portainer, qui n'est pas exposé ([DEPLOY.md](DEPLOY.md)).
+- **coturn** sur le serveur pour le relais TURN, Cloudflare TURN en secours éventuel.
+- Réapparaître où l'on veut après une destruction ; en multijoueur, ni pause globale ni retour en arrière.
+
+## État du code (analyse du 2026-10-14, `845b470`)
+
+**Aucun code réseau.** Le seul WebSocket est le relais Deepgram de `server.ts`. Il n'y a ni `src/net`, ni
+BroadcastChannel, ni WebRTC. Le serveur de production ne sert que des fichiers statiques (nginx).
+
+### Ce qui aide
+- **Des F-35 distants animés sont possibles.** `ship.ts` dessine 24 instances (`MAX_INST`), dont 8 F-35
+  (`JET_SLOTS`) avec leurs pièces propres à chacun : train, gouvernes, verrière, tuyère, trappes STOVL
+  (`partMatrices(jetMesh, it.jet)`). Il suffit de leur donner un `F35Pose` (`f35/model.ts`), que `JetPoser`
+  (`f35/pose.ts`) construit à partir d'une quinzaine de grandeurs.
+- **Le modèle d'injection existe.** `renderer.combatOthers` place déjà les F-35 ennemis dans la vue, relatifs
+  à la caméra (`controller/combat.ts` `combatShips`).
+- **L'astronaute est un vrai personnage** : maillage CGTrader de 70 os, trois animations mêlées (repos,
+  marche, course), pieds posés par IK (`character-model.ts`, `character-ik.ts`), physique à 120 Hz
+  (`controller/character.ts`).
+- **Une seconde caméra existe** : le spectateur est un `CameraController` sans écouteurs, avec ses propres
+  réglages (`controller/spectator.ts`). C'est le modèle de la caméra en réseau.
+- **Les corps et l'ISS se calculent à partir de `t`** : DE440, Kepler, SGP4. Ils ne transitent jamais.
+- **Le pas fixe `__bh.step`** (`automation.ts`) et l'horloge de vol `frameclock.ts` montrent comment
+  découpler la simulation de l'image.
+- **Les tests de bout en bout** lancent déjà plusieurs Chrome isolés dans un même test (port et profil
+  propres à chacun, `tests/e2e/lib/cdp.ts`), localement ou sur kerr-mini (`scripts/remote.ts`).
+- **La chaîne de déploiement** GHCR → branche `deploy` → Portainer fonctionne (`pages.yml` job `server`).
+
+### Ce qui bloque
+1. **Pas de déterminisme d'une machine à l'autre.** Le pas suit l'horloge murale (`main.ts`,
+   `dt = min(0.1, …)`), les sous-pas le framerate (`controller/lens.ts` `subCap`), et il y a 19 écritures de
+   `s.timeSpeed` dont 9 dans `controller/plan.ts`. Le combat tire au sort avec `Math.random`
+   (`game/combat.ts`, `rand` jamais injecté). Les tuiles du sol diffèrent selon les machines.
+   → **On synchronise l'état, jamais les commandes.**
+2. **Un seul engin par type.** `VesselId = "ranger" | "lander" | "endurance" | "f35"` (`vessels.ts:13`)
+   indexe toute la flotte : `free`, `fuel`, `payload`, `links`, les coques, les types du rendu. Deux Rangers
+   ne peuvent pas coexister dans `fleet`.
+3. **Le vaisseau piloté est la caméra.** Sa pose est dans `Settings` (`camera.ts` `setHomePose`…). Le
+   suivi du spectateur et `shipFromView` lisent le contrôleur local (`spectator.ts`). Aucune API ne dit
+   « suivre la pose X ».
+4. **Les effets ne valent que pour l'engin piloté** (`ship.ts`) : panaches et postcombustion
+   (`writeJets(this.flown ? …)`, un seul `jetBuf`), plasma de rentrée (`writeReentry`, un seul bloc),
+   traînées (un seul `Contrails`), feux, train du Ranger (`v.gear` pour toutes les instances).
+5. **Le combat ne connaît qu'un humain** (`game/combat.ts`) : `damage`, `stores`, `lock`, `seen`, `firing`
+   uniques, le joueur codé `-1`, `owner: "blue" | "red"`, l'IA ne vise que lui, `isGround = !q.ai` confond
+   « avion » et « piloté par l'IA », les identifiants viennent d'un compteur unique.
+6. **Les défis et les combats sont locaux** : horloge `C.t += dtPilot`, records dans `localStorage`, réglages
+   relus chaque image (`opts`).
+7. **Un seul astronaute** : un tampon d'os, un `evaluate()`, `frame()` qui dépend de `c.spectator`
+   (`character-renderer.ts`, `renderer.ts`).
+8. **Les autres engins** ne sont dessinés que de notre côté du trou de ver et à moins de 60 km
+   (`renderer.ts` `fleetOthers`) ; le sol et les bâtiments ne se chargent qu'autour de la caméra locale
+   (règle « tout est ancré à la caméra »).
+9. **L'instantané est incomplet** (`game/save.ts` `GameSave`) : il manque `pilot.omega`, le train, le
+   carburant, les modes du F-35, le STOVL, l'état de l'air, l'amarrage, le combat.
 
 ## Architecture
 
 ### Solo ou réseau
-
-**Le jeu solo reste le jeu par défaut, et reste entier sans réseau.** Le réseau ne s'active que sur une action explicite du joueur.
-- **Aucune connexion au démarrage.**
-  - La page ne contacte `samlepirate.org` que lorsqu'on crée ou rejoint une salle, ou qu'on ajoute un écran.
-  - Pas de télémétrie, pas de « présence ».
-  - Si le serveur est absent ou en panne, le solo ne s'en aperçoit pas.
-- **Le code réseau est chargé à la demande.**
-  - Le module réseau est un bundle à part (`net.js`, chargé par URL comme `plan-worker.js`, ou par `import()` dynamique avec `--splitting`, à trancher en N0).
-  - Le solo ne télécharge ni ne compile une ligne de réseau.
-  - La taille du bundle solo est mesurée avant et après.
-- **En solo, les accroches sont transparentes** :
-  - `wantWarp()` applique directement ;
-  - l'horloge suit le vaisseau comme aujourd'hui ;
-  - `onCraftLost` garde la pause et le « reprendre avant l'entrée » ;
-  - les autopilotes, les sauvegardes et l'autosave sont inchangés.
-- **Les façons d'entrer en réseau**, toutes dans un menu **Réseau** (panneau et écran d'accueil) :
-  - **Ajouter un écran** : depuis une partie solo, un QR code ouvre une salle **privée** (sans autre pilote) pour une 2ᵉ vue ou un écran instruments. Le jeu reste « solo » pour tout le reste (pas de vote de warp, destruction du solo).
-  - **Ouvrir ma partie au réseau** : la partie solo en cours devient une salle (instantané envoyé au serveur), et des amis peuvent la rejoindre comme pilotes.
-  - **Rejoindre une salle** : code, lien ou QR.
-  - **Mes salles** : reprendre une salle persistante, ou la supprimer.
-- **Quitter le réseau** :
-  - Quitter une salle ramène à sa partie solo, telle qu'on l'avait laissée.
-  - Les mondes des salles et les sauvegardes solo sont **séparés** : une salle ne réécrit jamais l'autosave solo.
-  - Option : « garder une copie en solo » crée une sauvegarde solo à partir de l'état de la salle (son vaisseau, son `t`).
-- **Pendant une coupure réseau** : on continue de voler en local, avec un bandeau « hors ligne ». La reconnexion est automatique.
-- **Un réglage Réseau** dans les paramètres permet de **masquer entièrement** le menu et les boutons réseau.
-
-### Un monde fait de lignes d'univers
-
-**Chaque engin est une ligne d'univers** : une suite d'échantillons datés en temps coordonnée `t`. Chaque échantillon contient :
-- **l'état** : position et vitesse en float64, attitude en quaternion, vitesse angulaire ;
-- **le repère** :
-  - corps X de notre côté (Kepler autour du parent) ;
-  - Kerr en Boyer-Lindquist avec la 4-vitesse ;
-  - gorge du trou de ver (ℓ, n) ;
-  - posé sur le corps X à lat/lon ;
-- **l'état visuel et sonore** (de quoi alimenter le rendu et le director audio du client distant) :
-  - poussée de chaque moteur et RCS ;
-  - rentrée : plasma, peau chaude (le contenu de `Reentry`, `ship.ts:87`) ;
-  - air : densité, Mach, `cl` (coefficient de portance) — de quoi **recalculer les traînées de condensation sur place** ;
-  - thermique (bouclier, coque), g ;
-  - mode de vol (fusée, avion, calculateur) et antigravité, **par engin** ;
-  - train, volets, aérofreins : aujourd'hui sans effet visuel, sauf les manches du cockpit, transmis pour l'avenir ;
-  - autopilote actif et sa phase (`entry`, `burns`, `node`…) ;
-  - état d'amarrage, dégâts, destruction.
-- Le flux marionnette n'est **pas** `Take` : `TakeState` n'a ni rentrée, ni traînées, ni secousses. `Take` reste le modèle (une différence de réglages par image), mais le flux réseau a son propre format.
-
-**Lire une ligne d'univers à un instant `t` :**
-- **Dans l'historique** : on interpole avec une spline d'Hermite, dans le repère du corps le plus proche.
-- **Au-delà du dernier échantillon** : on propage avec la physique, sans jamais extrapoler en ligne droite.
-  - Kepler de notre côté (`keplerProp`) ;
-  - géodésique côté Gargantua (`geodesic.ts`) ;
-  - au sol, on colle le vaisseau au terrain **local** (les tuiles diffèrent selon les machines).
-- **Débit** :
-  - **En croisière ou en warp sur rails, un message par changement d'orbite suffit.** La position reste exacte même à ×4747.
-  - En vol propulsé, on envoie 20 Hz (~4 Ko/s par engin). Les échantillons ne sont émis que quand la prédiction s'écarte de la réalité : on fait du *dead reckoning* sur la physique.
-- **Rafraîchissement** : chaque appareil affiche chaque engin à **son propre** `t`. Un engin dont l'état n'est pas encore connu à ce `t` (dans votre futur, ou joueur déconnecté) apparaît en **fantôme** translucide, sur sa trajectoire propagée.
-
-### Le temps : bulles et sous-espaces
-
-- **Bulle** : un groupe de joueurs qui partagent une horloge en temps coordonnée.
-  - L'horloge de la bulle mène le jeu. L'intégrateur du vaisseau avance **jusqu'à** l'heure de la bulle. Aujourd'hui c'est l'inverse (`shipClock`).
-  - La dérive entre machines est corrigée en modulant `timeSpeed` de ±1 %. C'est invisible et il n'y a jamais de saut.
-- **Le warp au vote** :
-  - Une **hausse** est proposée à la bulle et **appliquée si tout le monde accepte**. Délai de 10 s, au-delà c'est un refus.
-  - Une **baisse est immédiate** pour toute la bulle, sans vote (sécurité : manœuvre, atterrissage).
-  - **Après un refus**, le demandeur peut « partir seul » : il quitte la bulle et devient son propre sous-espace.
-- **Un arbitre du warp.** Les autopilotes écrivent `s.timeSpeed` à chaque image ; en multijoueur, ces écritures deviennent des **souhaits**.
-  - Dans l'accroche « horloge », chaque écriture passe par une fonction unique `wantWarp(x, raison)`. En solo, elle applique directement : rien ne change.
-  - En bulle, l'arbitre décide :
-    - **une baisse** (plafond ×4 dans l'air, poussée à ×1, vol plané sous 1 500 m) s'applique **tout de suite à toute la bulle** ;
-    - **une hausse** (attente de rentrée à ×1000, chute à ×500, croisière) **dépose un vote**.
-  - En attendant le vote, l'autopilote continue au warp courant. Ses phases attendent des conditions sur le temps coordonnée, donc l'attente dure seulement plus longtemps. À vérifier phase par phase en N5.
-  - Conséquence acceptée : un joueur qui fait sa rentrée tient toute la bulle à ×4 pendant la traversée de l'air. Les autres peuvent quitter la bulle s'ils veulent accélérer.
-- **Dilatation** (décision 3b) :
-  - En multijoueur, le ×1 d'un joueur est **son temps propre**.
-  - Une bulle n'admet que des joueurs dont les rythmes `dτ/dt` concordent (tolérance à régler, ~1 %).
-  - Si un joueur descend sur Miller (`dτ/dt ≈ 1/60 000`), il **sort automatiquement** de la bulle. Son horloge coordonnée file alors ×60 000.
-- **Rattrapage** : on ne remonte jamais le temps. Celui qui est dans le passé peut avancer jusqu'au `t` d'un autre, et ils reforment une bulle. Exemple :
-  - Romilly, resté en orbite, voit le joueur remonté de Miller arriver « 23 ans plus tard ».
-  - Il le voit en fantôme tant qu'il n'a pas rattrapé.
-  - Le rattrapage est une avance rapide **qu'il vit**.
-- **Causalité des engins partagés** :
-  - **Un engin piloté appartient à son pilote.**
-  - **Un engin libre n'est modifiable** (prendre les commandes, s'y amarrer, le heurter) **que par quelqu'un dont le `t` est postérieur à son dernier événement**.
-  - Ceux qui sont dans son passé le voient suivre sa ligne d'univers, verrouillé, jusqu'à ce qu'ils rattrapent.
-- **Historique conservé** : seulement à partir du plus petit `t` des joueurs de la salle, puisque personne ne peut voir plus tôt. Le stockage reste donc borné.
-
-### Autorité
-
-- **Chaque joueur fait autorité sur l'engin qu'il pilote.** Il n'y a pas d'anti-triche : on est entre amis.
-  - Il n'existe toujours **qu'un seul vaisseau simulé par machine**, le `CameraController` local.
-  - Les autres engins sont des **proxys cinématiques** : on ne refond pas le contrôleur, qui suppose un seul vaisseau.
-- **Le serveur fait autorité sur** :
-  - les bulles et les votes de warp ;
-  - les **baux** des engins (qui pilote quoi) ;
-  - l'ISS (un seul TLE pour tous) ;
-  - la persistance ;
-  - l'instantané d'entrée dans la salle.
-- **Collision** :
-  - Celui qui la détecte (`stationContact` étendu aux proxys) envoie les deux états à l'instant `t`.
-  - L'impulsion est partagée selon les masses, comme aujourd'hui.
-  - Chaque pilote applique sa part.
-- **Amarrage** :
-  - L'assemblage a **un seul pilote**, celui qui manœuvrait.
-  - L'autre devient **passager** : il garde ses caméras et ses écrans.
-  - Au désamarrage, chacun reprend son engin.
-- **Destruction** :
-  - En multijoueur, **ni pause globale ni retour en arrière** : on ne réutilise pas le « reprendre avant l'entrée » du solo, qui remonte le temps. Le solo garde son comportement.
-  - La ligne d'univers se termine par un événement « détruit ».
-  - Un menu **Réapparaître** propose un Ranger neuf **où l'on veut**, en réutilisant le placement des outils de jeu (`game/place.ts`) :
-    - sur un pas de tir ;
-    - en orbite autour de n'importe quel corps ;
-    - près d'un ami ;
-    - à bord de l'Endurance (sur un port libre).
-- **Réglages de la salle**, fixés à sa création et identiques pour tous :
-  - « sans dégâts » (`damage`) ;
-  - délai de la lumière ;
-  - coupure radio.
-  - Le mode de vol et l'antigravité restent **propres à chaque engin** (choisis par son pilote).
-
-### Les places dans une salle
-
-| Place | Ce qu'elle fait | Son horloge |
-|---|---|---|
-| **Pilote** (4 au maximum) | pilote son Ranger ou tout engin libre | sa bulle |
-| **Observateur** | caméra libre avec **tous** les modes classiques : orbite, libre, trépied, look-at, télescope, plongée, et les mounts attachés à **n'importe quel** engin (cockpit, chase, fly-by…) | celle du joueur qu'il suit |
-| **Instruments** | carte 3D, ground track, écrans cockpit d'un joueur, en lecture seule | celle du joueur suivi |
-
-- **8 appareils au maximum par salle** : 4 pilotes, plus des observateurs et des écrans instruments.
-- **Rejoindre une salle** :
-  - Un QR code ou un lien `https://thesamlepirate.github.io/black-hole-gpu/#join=CODE` ouvre la page en HTTPS.
-  - L'appareil reçoit l'instantané : scène, `GameSave` + flotte, TLE, lignes d'univers.
-  - Il choisit sa place.
-  - Il garde sa qualité, son son et son tier.
-- **Caméra attachée à l'engin d'un autre** : le rendu place la caméra à l'origine du vaisseau piloté. L'engin suivi est donc **rejoué en marionnette**, avec les mounts et le regard propres à l'observateur.
-  - La marionnette écrit la pose **et** le regard ensemble, par le même chemin que `syncLook`.
-  - Elle alimente aussi `shipReentry`, la secousse et les traînées (recalculées sur place), et le **director audio** : l'observateur entend le grondement de la rentrée qu'il regarde.
-- **Caméra libre** : `s.ship = false`, et tous les engins sont dessinés comme des « autres ».
-
-### Rendu des autres engins (le chantier dur)
-
-- **Lever les limites de `shipOthers`.** Il faut passer de « notre côté, 60 km, 8 instances » à « des deux côtés, sans limite de distance, ~12 instances » :
-  - 4 Rangers ;
-  - le Lander, l'Endurance, l'ISS ;
-  - de la marge.
-- **Près de Gargantua** : à quelques centaines de km, l'espace est plat à 10⁻⁹ près (M ≈ 1,5·10¹¹ m). On exprime l'écart en coordonnées BL dans le repère local de la caméra (ZAMO, puis boost). Le maillage s'affiche exactement, ombres et sonde de lumière comprises.
-- **Au-delà** (engin plus petit qu'un pixel) : on affiche un **marqueur HUD dont la direction est déviée par la lentille gravitationnelle**, grâce à `bodyLook` étendu à une position quelconque. On peut voir l'image d'un ami tordue par le trou noir. À travers la gorge du trou de ver, un marqueur indique « de l'autre côté ».
-- **Leur rentrée et leurs traînées aussi** : aujourd'hui `ship.ts` ne les dessine que pour l'engin piloté.
-  - Il faut passer à des **données de rentrée par instance** (plasma, peau chaude, jets) dans `ShipInstance`.
-  - Il faut **un tampon de traînée par engin**, recalculé sur place à partir des échantillons.
-  - La rentrée d'un ami se voit alors depuis le sol ou depuis l'orbite.
-- **Les autres engins sont aussi des cibles HUD et des objets sur la carte 3D**, avec le pseudo et la couleur du joueur.
-  - La liste codée en dur `CRAFT` de la carte et du ground track (`map3d/scene.ts:23`) devient la liste des engins de la salle, avec leur vrai parent (pas toujours la Terre).
+- **Le solo reste le jeu par défaut, identique à aujourd'hui.**
+  - Aucune requête vers `stream.samlepirate.org` sans action du joueur (vérifié dans l'onglet réseau).
+  - Le code réseau est une entrée à part (`net.js`, construite comme les workers par
+    `scripts/build-pages.ts`), chargée par `import()` au premier usage. La taille du bundle solo est mesurée
+    avant et après chaque phase.
+  - En solo, chaque accroche est transparente : `wantWarp()` applique, l'horloge suit le vaisseau,
+    `onCraftLost` garde la pause et le « reprendre avant l'entrée ».
+- **Le menu Réseau** (menu pause, écran d'accueil, roue) : *Créer une salle*, *Rejoindre* (code, lien
+  `#join=CODE`, QR), *Mes salles*, *Ajouter un écran*, *Quitter*.
+- **Quitter** ramène à la partie solo telle qu'on l'avait laissée : les mondes des salles ne réécrivent
+  jamais l'autosave solo.
+- **Coupure** : on continue de voler en local avec un bandeau « hors ligne », reconnexion automatique.
+- **Un réglage Réseau** masque entièrement le menu et les boutons.
 
 ### Transport
+- **Le serveur de salles** (`server/rooms.ts`, Bun, `Bun.serve` + WebSocket, `bun:sqlite`) :
+  - salons, présence, signalisation WebRTC, horloge de la salle, votes, baux, scores, persistance ;
+  - relais des poses quand le direct échoue ;
+  - identifiants TURN de courte durée (HMAC partagé avec coturn).
+- **Le direct (WebRTC DataChannel)** entre joueurs, en maillage (4 pilotes : 6 liens ; 8 appareils : 28) :
+  - canal **non fiable et non ordonné** pour les poses (`maxRetransmits: 0`) : pas d'attente de reprise
+    comme sur TCP ;
+  - canal **fiable et ordonné** pour les événements de combat ;
+  - ICE : candidats locaux et mDNS (même pièce, ~1 ms), STUN puis TURN sur coturn (CGNAT des téléphones
+    en 4G/5G) ;
+  - repli automatique et transparent sur le WebSocket si le lien direct tombe.
+- **Même machine** (2ᵉ fenêtre) : `BroadcastChannel`, sans réseau.
+- **Objectifs mesurés** :
+  - aller-retour serveur ≤ 40 ms entre amis en France ; lien direct ≤ 30 ms à distance, ≤ 5 ms en local ;
+  - délai d'affichage d'un autre joueur (latence + tampon) : **≤ 80 ms** en direct, ≤ 120 ms par le serveur ;
+  - débit ≤ 20 Ko/s montants par joueur en combat.
 
-- **Serveur de salles en Bun** (`server/net.ts`), avec `Bun.serve` et WebSocket :
-  - signalisation, relais, autorité, persistance ;
-  - `bun:sqlite` pour les salles et les lignes d'univers.
-  - Il partage le code du dépôt : protocole, propagation, tests.
-  - En dev, le même module se branche sur `server.ts`.
-- **À distance** : tout passe par le WebSocket. Le serveur est en France, donc ~10–30 ms entre amis français, et un tampon d'interpolation de ~100 ms rend les vues fluides.
-- **Dans la même pièce** : **WebRTC direct** entre appareils.
-  - Les candidats locaux et mDNS suffisent, sans TURN.
-  - Les poses passent en canal non fiable et non ordonné, avec ~1 ms de latence et un tampon réduit à ~30 ms.
-  - Si la connexion directe échoue, on revient automatiquement au WebSocket.
-- **Les données du jeu n'ont besoin d'aucun port UDP.** À distance, elles passent par le serveur, qui est proche.
-- **La voix, en revanche, va en direct d'un joueur à l'autre, à distance aussi** (voir « La voix »).
-  - Elle passe par STUN (gratuit), et par un relais TURN quand la connexion directe est impossible.
-  - Ce cas est fréquent sur les téléphones en 4G/5G, dont l'opérateur partage les adresses (CGNAT).
-- **Même machine** (2ᵉ fenêtre sur un 2ᵉ écran) : `BroadcastChannel`, sans réseau.
-- **Protocole** :
-  - binaire (`Float64Array` pour les états) et versionné ;
-  - le serveur accepte les versions N et N−1 ;
-  - un client obsolète est invité à recharger la page ;
-  - l'instantané est en JSON compressé (`CompressionStream`).
-- **Synchro d'horloge** : échanges à la NTP sur le canal, puis filtrage du décalage et de la dérive.
-- **Labo réseau** : latence, gigue et pertes simulées dans la couche de transport (réglage de dev) pour tester à 200 ms et 5 % de pertes.
+### Protocole
+- **Binaire et versionné** (`src/net/proto.ts`, partagé client/serveur) : un octet de type, la version au
+  handshake. Le serveur accepte N et N−1 ; un client plus vieux est invité à recharger (le service worker
+  peut garder une ancienne page un moment : `src/pwa.ts`).
+- **Messages** : `hello/welcome` (version, sha de build, pseudo, couleur), `roster`, `ping/pong` (horloge),
+  `sample` (pose d'un engin ou d'un marcheur), `event` (tir, coup, destruction, apparition, train…),
+  `vote`, `lease`, `session` (mode, équipes, compte à rebours, scores), `snapshot` (JSON compressé par
+  `CompressionStream`), `signal` (offre/réponse/ICE), `chat`.
+- **Échantillon d'engin** (~100 octets) :
+  - `t` (f64, horloge de la salle) ; repère : corps + type (fixe au corps près du sol, inertiel centré sur
+    le corps dans l'espace) ;
+  - position (f64 × 3), vitesse (f32 × 3), attitude (quaternion « smallest-three » 3 × 16 bits),
+    vitesse angulaire (f32 × 3), accélération (f16 × 3) ;
+  - bloc visuel : manette, postcombustion, train, volets, aérofreins, STOVL (conversion, tuyère,
+    soufflante), manche, α, `cl`, Mach, feux, au sol, rentrée (plasma, peau), drapeaux.
+- **Repères** : près d'un corps, **fixe au corps** (ECEF WGS84 sur Terre, `bodyFixedOf`), pour qu'un engin
+  posé ou à basse altitude soit exact quelle que soit la rotation ; dans l'espace, inertiel centré sur le
+  corps dominant. Chaque client convertit vers son repère de rendu.
+- **Cadence adaptative** : 30 Hz en vol, 60 Hz en combat rapproché (< 5 km d'un adversaire), 2 Hz posé,
+  un message par changement d'orbite sur rails. Un échantillon part aussi dès que la prédiction des autres
+  s'écarte du réel (0,5 m, 0,5°) : du *dead reckoning* côté émetteur.
 
-### La voix
+### Horloge
+- **L'horloge de la salle** : `t = t₀ + warp · (heure du serveur − h₀)`, chaque changement de warp étant un
+  événement daté.
+- **Synchro** à la NTP : rafales de pings au départ puis toutes les 2 s, filtre médian, décalage et dérive.
+- **Le jeu suit l'horloge de la salle sans saut** : `timeSpeed` modulé de ±1 % pour rattraper l'écart.
+  Aujourd'hui c'est l'inverse (la scène suit l'intégrateur du vaisseau, `sim.ts` `shipClock`) : l'accroche
+  « horloge » fait avancer le vaisseau jusqu'au `t` de la salle.
+- **Sur Terre (R1–R3)** : warp ×1 imposé en session, la pause n'arrête que son propre écran.
+- **L'arbitre du warp** (`wantWarp(x, raison)`) arrive en R6 : en salle, une baisse s'applique tout de suite à
+  tous, une hausse dépose un vote (10 s, tous d'accord).
 
-- **Réseau : chaque joueur parle directement à chacun des autres (maillage WebRTC), sans serveur audio.**
-  - Avec au plus 8 appareils, cela fait au plus ~220 kb/s montants par personne qui parle. Un serveur de mixage audio (SFU : LiveKit, mediasoup) ne s'impose pas, et il exigerait des ports UDP.
-  - **Le serveur ne fait que la mise en relation** (signalisation) sur le WebSocket existant. **Il ne transporte ni n'enregistre jamais l'audio.**
-- **Connexion (ICE)** :
-  - en premier lieu, connexion directe (candidats locaux, ou STUN sur notre propre coturn) ;
-  - sinon, relais **TURN** : **coturn sur le Kimsufi** (voir « Hébergement »).
-    - Le serveur est dédié, avec une IP publique et sans box devant : il suffit d'ouvrir les ports.
-    - Aucun compte tiers. Une heure de voix pèse ~15 Mo par flux.
-    - **Identifiants de courte durée** (« TURN REST API ») : coturn et le serveur Bun partagent un secret, et le serveur fabrique pour chaque joueur un identifiant HMAC valable quelques heures. Le secret ne quitte jamais le serveur.
-  - **Secours retenu** : le TURN Cloudflare (l'utilisateur a un compte) (TLS sur le port 443, gratuit jusqu'à 1 To/mois), ajouté à la liste des serveurs ICE **après** coturn.
-    - Il ne sert qu'aux réseaux qui bloquent l'UDP (Wi-Fi d'hôtel, d'entreprise, d'école).
-    - Il aide aussi un ami à l'étranger : il entre sur le réseau Cloudflare au plus près de chez lui.
-  - **Latence** : le relais ne sert que quand la connexion directe échoue (~10–30 % des cas, davantage en 4G). Entre amis en France, coturn chez OVH et Cloudflare se valent à 5–20 ms près, ce qui est inaudible face aux ~100–150 ms d'une voix par Internet. Mesure prévue en N6 avec `getStats`, sur les deux relais.
-- **Qualité** :
-  - codec Opus 48 kHz mono, 32–40 kb/s ;
-  - FEC intégrée (corrige les paquets perdus), DTX (rien n'est émis pendant les silences), trames de 20 ms ;
-  - au micro : annulation d'écho, réduction de bruit, gain automatique ;
-  - les statistiques (`getStats`) mesurent latence, gigue et pertes, et s'affichent dans un indicateur de liaison.
-- **Façons de parler** :
-  - **activation vocale par défaut** (seuil réglable), **push-to-talk** (touche à choisir hors des touches de vol AZERTY), ou micro ouvert ;
-  - couper ou régler le volume de chaque joueur ;
-  - choix du micro ;
-  - **qui parle** : pseudo allumé dans le HUD et sur la carte ;
-  - témoin visible quand le micro est ouvert.
-- **Dans le moteur sonore** (`src/audio/engine.ts`) :
-  - les voix arrivent sur un nouveau bus **voix** du mélange, avec son propre curseur ;
-  - les moteurs et l'ambiance baissent quand quelqu'un parle ;
-  - **effet radio, actif par défaut**, quand l'interlocuteur est dans un autre engin : bande passante téléphonique, légère saturation, souffle, **bips Quindar** d'Apollo au début et à la fin de chaque prise de parole ;
-  - voix claire, avec la petite réverbération de la cabine, quand on est dans le même engin (amarrés, passagers).
-- **Options réalistes, désactivées par défaut** :
-  - **délai de la lumière** selon la distance : Terre–Lune 1,3 s, Terre–Mars 3 à 22 min ;
-  - **coupure radio pendant le plasma de rentrée** ;
-  - pas de liaison directe à travers le trou de ver.
-- **Même pièce** :
-  - Deux appareils sur le même réseau local ne s'échangent **pas** la voix (on s'entend déjà), sinon il y aurait de l'écho et des larsens. La détection se fait par la connexion directe locale.
-  - **Les observateurs et écrans instruments n'ont pas de voix par défaut** : un réglage les active.
-- **Vie privée** :
-  - le micro n'est demandé que lorsqu'on active la voix ;
-  - rien n'est enregistré ;
-  - les exports vidéo (prises, rendus) n'incluent jamais les voix.
-- **Navigateurs** :
-  - Chrome n'envoie un flux distant dans Web Audio que s'il est aussi rattaché à un élément `<audio>` (muet).
-  - Sur iOS, il faut `navigator.audioSession.type = "play-and-record"`, sinon le son sort par l'écouteur du téléphone, à faible volume.
-  - Le contexte audio ne démarre qu'après un geste de l'utilisateur.
+### Afficher les autres
+- **Interpolation** : chaque engin distant est affiché à `t − délai` ; le délai s'adapte à la gigue mesurée
+  (30–60 ms en direct, 60–100 ms par le serveur). Spline d'Hermite entre deux échantillons, avec les
+  vitesses.
+- **Au-delà du dernier échantillon** : prolongation par la physique, jamais en ligne droite. En vol, un
+  virage à vitesse angulaire et accélération constantes, pendant 250 ms au plus, puis l'engin passe en
+  **fantôme** translucide. Sur rails, Kepler (`keplerProp`). Au sol, collé au terrain **local**.
+- **Correction douce** : un écart entre la prédiction et un nouvel échantillon est résorbé en 150–300 ms,
+  sans à-coup.
+- **Le registre des engins distants** (`src/net/remote.ts`) alimente une liste `renderer.netOthers`, à côté
+  de `combatOthers` et que `sim.ts` n'écrase pas. Un `JetPoser` par F-35 distant donne ses gouvernes, son
+  train, sa tuyère.
+- **Les effets par instance** (`ship.ts`) : panaches et postcombustion, plasma et peau chaude, feux, train
+  du Ranger ; des traînées par engin, recalculées sur place à partir de `cl`, α, la vitesse et la manette
+  reçus (`controller/computer.ts` `contrailsFrame`).
+- **Au loin** : au-delà de 60 km ou sous un pixel, un marqueur HUD avec pseudo et couleur ; sur la carte et
+  le radar, chaque joueur avec son pseudo.
 
-### Salles et persistance
+### Autorité
+- **Chaque joueur fait foi pour son engin** et pour son marcheur.
+- **Le serveur fait foi** pour les salles, l'horloge, les votes, les baux (qui pilote quoi), les sessions
+  (équipes, scores, compte à rebours), la persistance, l'ISS (un seul TLE pour tous).
+- **L'hôte d'une session** (le créateur, ou le suivant s'il part) fait tourner l'IA (agresseurs, site SA-11,
+  drones) et la diffuse comme des engins.
+- **Combat, le tireur favorisé** :
+  - **Canon** : les obus sont testés **chez le tireur**, contre les autres tels qu'il les voit (leurs poses
+    interpolées). Le coup part en événement `hit` (cible, dégâts, point d'impact). La cible applique les
+    dégâts. C'est la compensation de latence « favoriser le tireur ».
+  - **Missiles** : le lanceur guide et fuse son missile contre la pose interpolée de la cible, et diffuse
+    son état (10–20 Hz) pour que tous le voient, avec la traînée. La cible reçoit l'alerte missile depuis ce
+    flux.
+  - **Leurres** : un événement daté. Le lanceur fait apparaître les leurres à la position et à l'heure
+    reçues (recalées), et son missile les pèse une fois chacun, comme aujourd'hui.
+  - **L'IA** est touchée chez le tireur et ses dégâts sont appliqués par l'hôte.
+  - **Le tirage au sort** (dispersion, leurres) se fait avec un générateur à graine par joueur, transmise à
+    l'événement.
+- **Destruction** : un événement « détruit », l'épave suit sa chute, puis le menu **Réapparaître** (sur la
+  piste, au point de départ du match, près d'un ami, où l'on veut). Ni pause ni retour en arrière.
 
-- **Gestion des salles** :
-  - Créer une salle donne un code et un **jeton de propriétaire** gardé dans le `localStorage` de l'appareil.
-  - « Mes salles » liste les codes connus de l'appareil.
-  - Le propriétaire peut **supprimer** une salle.
-  - Pas de comptes, des pseudos. Mot de passe de salle en option.
-- **Ce que le serveur conserve** : les lignes d'univers, les baux, les bulles, l'horloge et la position de chacun.
-- **Joueur déconnecté** : son engin reste dans le monde, figé à son `t` (sous-espace en pause) ou propagé en fantôme pour les autres. Il reprend là où il était.
+### Salles et sessions
+- **Salle** : un code de 6 caractères, un **jeton de propriétaire** (gardé dans `localStorage`), un mot de
+  passe optionnel, 4 pilotes et 8 appareils au plus. Pas de comptes : un pseudo et une couleur.
+- **Monde persistant** : la salle garde la dernière pose de chaque engin (posé, en orbite, stationné), les
+  baux, l'heure de la salle et la position de chacun. Elle vit jusqu'à sa suppression par son propriétaire.
+- **Session** : un match dans la salle (coopération, chacun pour soi, équipes, course, atterrissage) avec
+  ses règles fixées par l'hôte et **verrouillées** pour tous (munitions infinies, invulnérable, carburant,
+  niveau de l'IA, missiles ennemis, tir ami), ses équipes, son compte à rebours, ses scores, son tableau de
+  fin. Les records de la salle sont gardés.
 
-### Hébergement (serveur de l'utilisateur)
+### Hébergement
+- **Image** `ghcr.io/thesamlepirate/black-hole-gpu-rooms` (`deploy/Dockerfile.rooms`, `oven/bun`), avec un
+  volume `/data` pour SQLite.
+- **`deploy/compose.yml`** (compose v1 pour Portainer 2.9) : le service `kerr` existant, le service
+  `rooms` (port hôte 3001), puis `coturn` en R2 (`network_mode: host`).
+- **CI** (`pages.yml`, job `server`) : construit l'image `rooms` quand `server/` ou `src/net/` ont changé,
+  remplace un 2ᵉ jeton `ROOMS_IMAGE` dans `compose.yml` de la branche `deploy`. Portainer l'interroge toutes
+  les 2 min : le serveur peut avoir 2 min de retard sur la page, ce que couvre la compatibilité N/N−1.
+- **nginx-proxy-manager** (à faire par l'utilisateur) : l'hôte `stream.samlepirate.org` vers `host:3001`,
+  case *Websockets Support* cochée.
+- **coturn** (R2, à faire par l'utilisateur) : ouvrir 3478/udp, 3478/tcp et 49160–49200/udp sur le serveur
+  et, si le Network Firewall OVH est actif, dans l'espace client. Secret partagé dans les variables de la
+  stack Portainer, jamais dans le dépôt. Relais interdit vers les réseaux privés (`denied-peer-ip`).
+- **Origines acceptées** : `https://samlepirate.org`, `https://thesamlepirate.github.io`, `localhost`.
+- **Arrêt propre** : le serveur prévient, écrit SQLite et s'arrête ; les clients continuent en local et se
+  reconnectent seuls.
+- **Le service worker** ne met jamais en cache `stream.samlepirate.org` (`src/pwa/rules.ts`).
 
-- **Conteneur** : `oven/bun`, avec un volume `/data` pour SQLite. La stack Portainer est décrite dans `server/compose.yml`.
-- **nginx-proxy-manager** :
-  - hôte **`samlepirate.org`** : le service écoute en `wss://samlepirate.org/…` ;
-  - si la racine sert déjà un site, on ajoute une *Custom location* `/bh-net/` vers le conteneur ;
-  - case **« Websockets Support »** cochée, certificat Let's Encrypt.
-- **coturn** (même stack, `network_mode: host`, car le relais a besoin des vrais ports et de l'IP publique) :
-  - ports : `3478` en UDP et TCP (STUN et TURN), et une petite plage de relais en UDP, `49160–49200` (largement assez pour 8 appareils) ;
-  - pas de TURN-TLS sur 443 : le port est pris par nginx-proxy-manager, et c'est inutile entre amis (à la maison comme en 4G, l'UDP sortant passe) ;
-  - réglages de sécurité :
-    - `use-auth-secret` / `static-auth-secret`, `realm=samlepirate.org`, `external-ip` = l'IP du Kimsufi ;
-    - **relais interdit vers les réseaux privés** (`denied-peer-ip` 10/8, 172.16/12, 192.168/16, 127/8, et leurs équivalents IPv6), `no-multicast-peers`, `no-cli` ;
-    - quotas par utilisateur et débit plafonné ;
-  - **pare-feu du Kimsufi** (`ufw` ou `nftables`) : ouvrir 3478/udp, 3478/tcp et 49160–49200/udp. Si le **Network Firewall** OVH est activé dans l'espace client, y ajouter les mêmes règles.
-  - **Anti-DDoS OVH (VAC)** : il est toujours actif et n'entre en jeu qu'en cas d'attaque. Le trafic voix est minuscule, on vérifie seulement qu'un appel passe en relais forcé.
-- **Secrets** (variables d'environnement de la stack Portainer, jamais dans le dépôt) :
-  - le secret partagé avec coturn ;
-  - l'identifiant et le jeton de la **clé TURN Cloudflare** (à créer dans le tableau de bord, rubrique Realtime › TURN, au moment de N6).
-  - Le serveur Bun demande à l'API Cloudflare des identifiants de courte durée et les envoie aux joueurs avec ceux de coturn.
-- **Origines acceptées** : `https://thesamlepirate.github.io` et `localhost`.
-- **Déploiement : le serveur d'abord, la page ensuite.** La CI (`pages.yml`) enchaîne :
-  1. `bun test` ;
-  2. **si `server/` ou `src/net/` ont changé** : construction de l'image `ghcr.io/thesamlepirate/black-hole-gpu-net`, étiquetée par commit et `latest`, et poussée sur GHCR avec le `GITHUB_TOKEN` (aucun secret en plus) ;
-  3. **redéploiement de la stack** par l'API de Portainer avec `pullImage`, à l'aide d'un jeton d'accès Portainer (secret GitHub `PORTAINER_TOKEN`). Le webhook de stack est réservé à l'édition Business. Puis la CI attend que `/health` réponde avec la nouvelle version ;
-  4. déploiement de Pages.
-  - Une poussée qui ne touche pas au serveur ne le redémarre pas. Les joueurs ne sont donc pas déconnectés à chaque commit.
-- **Alternative sans exposer Portainer** : une stack « depuis Git » en interrogation périodique (édition Community).
-  - Portainer construit l'image sur le Kimsufi.
-  - Le Dockerfile ne copie que `server/` et `src/net/`. Quand ces fichiers sont inchangés, l'image est identique et le conteneur n'est pas recréé.
-  - En contrepartie, le serveur peut avoir quelques minutes de retard sur la page, ce que la compatibilité N/N−1 doit couvrir.
-- **Redémarrage sans casse** :
-  - le serveur prévient (« mise à jour »), écrit SQLite et s'arrête proprement ;
-  - les clients continuent de voler en local, se reconnectent tout seuls et resynchronisent leurs lignes d'univers.
-- **Installation initiale (une seule fois, guide dans `server/README.md`)** :
-  - créer la stack dans Portainer (`server/compose.yml` : `bh-net` + `coturn/coturn`) ;
-  - renseigner les variables secrètes ;
-  - ajouter l'hôte dans nginx-proxy-manager ;
-  - ouvrir les ports de coturn ;
-  - ajouter `PORTAINER_TOKEN` aux secrets du dépôt.
-- **Adresse du serveur dans l'app** : `wss://samlepirate.org/bh-net/` par défaut. `#server=` permet de la changer (dev). En local, `bun --hot server.ts` monte le même module réseau.
-
-## Accroches dans le code existant
-
-La refonte du vol (P1–P9) et celle de la carte (C1–C8) sont terminées : plus personne ne travaille en parallèle sur ces fichiers.
-- **N0 n'utilise que des fichiers nouveaux** : `src/net/*`, `server/*`.
-- **Les accroches dans le code existant sont regroupées et minces.** Cinq accroches :
-  - **état** : l'engin piloté exporte son échantillon de ligne d'univers, à partir de `flightInfo()` (`air`, autopilote) et des champs de `sim.applyRender` ;
-  - **horloge** : le vaisseau avance jusqu'à un `t` imposé (`shipTime`, et le sous-pas de l'air) ;
-  - **warp** : toutes les écritures de `s.timeSpeed` des autopilotes passent par `wantWarp()` ;
-  - **marionnette** : pose, regard (`syncLook`), rentrée, secousse et traînées appliqués sans intégrer ;
-  - **autres** : les proxys entrent dans `fleet`, `others`, `ShipInstance` (rentrée par instance) et la liste des engins de la carte.
-- **Destruction** : `onCraftLost` reçoit une branche multijoueur (événement + Réapparaître) à la place de la pause et du retour à l'instantané.
-- **Si un autre chantier reprend ces fichiers** : les accroches se posent entre deux de ses phases commitées.
-- **Le réseau lit ce que la physique expose et ne la réimplémente jamais.** Les nouveautés de la physique (modes avion, fusée, SF, plasma, chaleur, destruction `craftlost`) deviennent des champs du protocole : la rentrée d'un ami s'affiche avec son plasma.
+### Tests
+- **Unitaires** (`bun test`) : codage du protocole, convergence de l'horloge à 200 ms et 5 % de pertes,
+  erreur de l'interpolation et de la prolongation face à l'intégrateur, combat à plusieurs joueurs avec
+  graine, logique des salles et des sessions, baux.
+- **Labo réseau** : latence, gigue et pertes simulées dans la couche de transport (`#netlab=`), pour tester
+  à 200 ms et 5 % de pertes.
+- **Robot** (`src/net/bot.ts`) : un faux joueur sans rendu (Bun) qui vole un circuit, un virage serré ou
+  une orbite, et peut tirer. On teste seul, en continu.
+- **Bout en bout** : `tests/e2e/lib/room.ts` démarre le serveur de salles local (`ROOMS_URL`) et 2 à 4
+  `App` dans la même salle ; `__bh.net` (salle, liens, latences, engins distants). Captures synchronisées de
+  plusieurs appareils côte à côte pour les planches. À 4 Chrome, sur kerr-mini sans affichage (un seul GPU
+  partagé ici).
 
 ## Phases
 
-Chaque phase donne un commit et une fiche `docs/progress/NNN_*.jpg`. La vérification passe par des captures CDP synchronisées de deux appareils, côte à côte.
+Chaque phase donne un ou plusieurs commits sur `reseau`, une planche `docs/progress/reseau/`, la doc en
+anglais et en français, et repasse les tests solo existants (vol de référence réseau coupé).
 
-### N0 — Fondations (`src/net/`, `server/`, testé)
-- Protocole binaire versionné ; messages pour l'instantané, les échantillons, les événements, les votes et les baux.
-- Synchro d'horloge (décalage, dérive).
-- Lignes d'univers : stockage, interpolation d'Hermite, propagation Kepler et Kerr, fantômes.
-- **Solo intact** :
-  - module réseau dans un bundle séparé, chargé à la demande ;
-  - aucune requête réseau sans action du joueur (vérifié dans l'onglet réseau de la page en solo) ;
-  - taille du bundle solo mesurée.
-- Instantané complet : `GameSave` + flotte + TLE, et l'état de vol absent aujourd'hui de `GameSave` : `pilot.omega`, autopilote et sa phase (`entryRun`, `entrySite`, `fcBurns`, `launchGoal`), état de l'air (thermique, volets, aérofreins, train).
-- Labo réseau.
-- Serveur de salles Bun + SQLite, Dockerfile, compose (`bh-net` + coturn), job CI image GHCR + redéploiement Portainer, `/health`, guide d'installation `server/README.md`.
-- Tests `bun test` :
-  - précision de la propagation par rapport à l'intégrateur ;
-  - convergence de l'horloge à 200 ms et 5 % de pertes ;
-  - causalité des baux ;
-  - élagage de l'historique.
-- **Client bot** : un faux joueur (Bun, sans rendu) qui vole une orbite scriptée, pour tester seul.
+### R0 — Fondations
+- `src/net/` : protocole, horloge, transport WebSocket, registre des engins distants, interpolation et
+  prolongation, labo réseau ; chargé à la demande.
+- `server/rooms.ts` : salles, présence, persistance SQLite, horloge, `/health`, `/version` ; branché aussi
+  sur `server.ts` en dev.
+- Déploiement : `deploy/Dockerfile.rooms`, service `rooms` dans `compose.yml`, CI ; l'hôte
+  `stream.samlepirate.org` dans NPM.
+- Menu **Réseau** (créer, rejoindre, mes salles, quitter), pseudo et couleur.
+- Robot, `tests/e2e/lib/room.ts`, `__bh.net`.
+- **Vérifié** : deux navigateurs et un robot dans une salle sur `stream.samlepirate.org` ; l'horloge à
+  ±2 ms ; aucune requête réseau en solo ; taille du bundle solo inchangée.
 
-### N1 — L'observateur miroir
-- Menu **Réseau**, commande **Ajouter un écran** : 2ᵉ fenêtre sur la même machine (`BroadcastChannel`), puis appareil distant par QR code, dans une salle privée.
-- L'hôte diffuse sa pose et son état visuel. L'observateur rejoue le vaisseau en marionnette, avec **tous les mounts**, son propre regard et sa propre qualité.
-- La marionnette inclut la rentrée (plasma, peau chaude), la secousse, les traînées recalculées sur place, et le son : le director est nourri par le `info.air` reçu.
-- **Vérification** : hôte et téléphone côte à côte, écart de temps mesuré, écran fluide au warp maximum.
+### R1 — Voler ensemble sur Terre
+- Chaque joueur choisit son engin (F-35, Ranger, Lander…) et apparaît sur un aérodrome de la salle ; les
+  autres sont des engins distants, plusieurs exemplaires du même type compris (ils restent hors de `fleet`).
+- WebRTC : signalisation par le serveur, canaux non fiable et fiable, repli WebSocket, indicateur de liaison.
+- Rendu des autres : F-35 animés par `JetPoser`, effets par instance (panaches, postcombustion, vapeur et
+  traînées, feux, train), pseudos, marqueurs au loin, radar et carte.
+- Warp ×1 imposé en session ; la pause n'arrête que son écran.
+- Collisions joueur-joueur simples (contact détecté chez chacun, chacun applique sa part).
+- **Vérifié** : deux F-35 en patrouille serrée, captures des deux écrans à la même heure de salle ; délai
+  d'affichage mesuré (objectif ≤ 80 ms en direct) ; coupure du Wi-Fi puis reprise ; 4 joueurs et le robot
+  sur kerr-mini.
 
-### N2 — La caméra libre de l'observateur, des deux côtés
-- `s.ship = false`, et le vaisseau suivi devient un proxy.
-- `shipOthers` est levé : les deux côtés, rendu local près de Gargantua, marqueurs avec lentille au-delà.
-- Rentrée et traînées **par instance** dans `ship.ts` : on voit le plasma de l'hôte depuis le sol.
-- Tous les modes classiques sur l'observateur : télescope sur l'hôte, trépied, look-at, plongée.
-- **Vérification** : l'Endurance de l'hôte filmée depuis l'orbite de Miller et depuis la Terre. Le marqueur dévié est comparé à `bodyLook`.
+### R2 — La voix
+- Audio WebRTC sur les mêmes liens, Opus 48 kHz mono avec FEC et DTX, annulation d'écho et réduction de
+  bruit.
+- coturn dans la stack, identifiants de courte durée fabriqués par le serveur.
+- Activation vocale par défaut, push-to-talk (une touche hors des touches de vol AZERTY et de F6 de TARS),
+  volume et coupure par joueur, qui parle (pseudo allumé au HUD et sur la carte).
+- Bus **voix** dans `src/audio/engine.ts` ; moteurs et ambiance baissés pendant la parole ; effet radio et
+  bips Quindar d'un engin à l'autre, voix claire dans le même engin ; pas de voix entre appareils de la même
+  pièce.
+- **Vérifié** : 3 Chrome sans affichage avec micro simulé, relais forcé (`iceTransportPolicy: "relay"`), un
+  téléphone en 4G ; latence de bout en bout < 150 ms.
 
-### N3 — WebRTC dans la même pièce
-- Signalisation par le serveur, connexion directe et canal non fiable, repli automatique.
-- **Vérification** : latence mesurée sur le réseau local, coupure du Wi-Fi puis reprise.
+### R3 — Combats, courses et atterrissages
+- `CombatWorld` à plusieurs joueurs : `players` (dégâts, emports, verrou, tir), cibles de type `human`,
+  `owner` = joueur, identifiants préfixés par joueur, IA qui choisit sa cible parmi les joueurs,
+  générateurs à graine.
+- Tir favorisé (canon, missiles, leurres) et événements comme décrit plus haut ; IA chez l'hôte.
+- Sessions :
+  - **coopération** : les 4 combats existants (drones, duel, interception, frappe) à plusieurs, l'IA
+    renforcée selon le nombre ;
+  - **chacun pour soi** et **équipes 2 contre 2** : réapparition au cercle de départ, IFF sur le radar et au
+    HUD (couleurs d'équipe), tir ami en option, tableau des scores (victoires, coups, précision) ;
+  - **courses** de portes : départ au compte à rebours de la salle, les autres visibles en direct, temps
+    intermédiaires, classement ;
+  - **concours d'atterrissage** : chacun son tour ou ensemble, notes diffusées, classement.
+- Règles de la session verrouillées pour tous ; records de la salle.
+- **Vérifié** : un duel au canon à 100 ms de latence simulée, les coups comptés des deux côtés ; un AIM-9X
+  leurré par des leurres lancés de l'autre machine ; une course à 3 avec le robot.
 
-### N4 — L'écran instruments
-- Canal de télémétrie à 2–5 Hz : nœuds, trajectoire prédite, cible, sphère d'influence, autopilote, carburant, aéro/thermique.
-- La carte 3D, le ground track et les écrans cockpit tournent en mode lecture seule sur ces données.
-  - Les accroches existent déjà : `Map3D.draw(Info)`, `FlightHud`, `FlightComputer(FcHost)`. Les actions (`act`) sont désactivées.
-- **Taille** :
-  - `Info` contient les trajectoires prédites complètes (jusqu'à 12 000 pas) et le candidat du calculateur.
-  - On les **décime** : polylignes simplifiées, et transmises seulement quand elles changent.
-  - Le côté lecture du calculateur de vol (contexte, plan, budget Δv, sites, état de l'autopilote, missions) fait partie du flux.
-- **Carte GPU** : elle emprunte le device et les cartes de planètes du renderer.
-  - Un appareil seulement « instruments » ouvre un **renderer allégé**, qui a le device et les cartes mais pas de lancer de rayons.
-  - Sinon, la carte se rabat sur Canvas 2D.
+### R4 — Spectateur et écran instruments
+- **Spectateur** : rejoindre sans piloter (`s.ship = false`), choisir un joueur à suivre.
+  - Le spectateur reçoit une « source de pose » : il suit l'engin distant avec **tous** les points de vue
+    (cockpit, poursuite, fly-by, trépied, libre, télescope, plongée).
+  - L'engin suivi est rejoué en marionnette : pose et regard ensemble (comme `syncLook`), rentrée, secousse,
+    traînées recalculées, et le son (le director nourri par l'état de l'air reçu).
+- **Ajouter un écran** : 2ᵉ fenêtre (`BroadcastChannel`) ou appareil distant par QR code, dans une salle
+  privée ; tablette et téléphone en tier bas.
+- **Écran instruments** : carte 3D, radar, ground track, écrans du cockpit (PCD) d'un joueur, en lecture
+  seule, par un canal de télémétrie à 2–5 Hz (trajectoires décimées).
+- **Vérifié** : un téléphone suit un F-35 en vue cockpit, captures côte à côte, écart de temps mesuré.
 
-### N5 — Multijoueur v1 (une bulle)
-- Places de pilote, un Ranger par joueur (`VesselId` → instances), baux, prendre les commandes de tout engin libre.
-- Arbitre du warp (`wantWarp`) : les baisses des autopilotes s'appliquent à toute la bulle, leurs hausses sont mises au vote. Chaque autopilote est vérifié (rentrée, calculateur, transferts) en attente de vote.
-- Mode de vol et antigravité par engin. « Sans dégâts » devient un réglage de la salle. Destruction sans pause ni retour en arrière.
-- Proxys des autres, cibles HUD, carte, pseudos et couleurs.
-- Une bulle, warp au vote, persistance (créer, rejoindre, lister, supprimer une salle), menu **Réapparaître**.
-- **Ouvrir ma partie au réseau**, **Rejoindre**, **Quitter** (retour à la partie solo), « garder une copie en solo ». Mondes des salles séparés des sauvegardes solo.
-- **Vérification** : 3 navigateurs et un bot en orbite basse, un rendez-vous au HUD.
+### R5 — À pied ensemble
+- Le rendu de plusieurs astronautes : un tampon d'os par marcheur (4 au plus en plus du sien), `evaluate()`
+  pour chacun, ombre et IK des pieds sur le sol **local**.
+- L'échantillon du marcheur : corps, position fixe au corps, cap, vitesse, phase d'animation, en l'air,
+  accroupi ; 15 Hz.
+- Pseudo au-dessus de chacun ; descendre de son engin et y remonter vus par les autres.
+- **Monter à bord d'un ami** : on devient passager, avec la vue de sa cabine ou de son cockpit (le mode
+  spectateur de R4, attaché à son engin) ; on descend quand il est posé.
+- **Vérifié** : deux astronautes qui marchent l'un vers l'autre sur la piste d'Edwards, puis l'un monte dans
+  le F-35 de l'autre et vole en passager.
 
-### N6 — La voix
-- Maillage WebRTC audio, STUN et TURN sur coturn (identifiants de courte durée fabriqués par le serveur), Opus avec FEC et DTX.
-- coturn ajouté à la stack Portainer, ports ouverts sur le Kimsufi.
-- Activation vocale, push-to-talk, volume par joueur, indicateurs de qui parle.
-- Bus voix dans le moteur sonore (ajouté à `Mix`). Pendant la parole, on baisse `listener` (moteurs, grondement de rentrée, vent) et `ambience`. Le bus `room` sert de réverbération « même engin ». effet radio et bips Quindar, voix claire dans le même engin.
-- Pas de voix entre appareils de la même pièce. Options réalistes : délai de la lumière, coupure pendant le plasma.
-- **Vérification** :
-  - 3 onglets Chrome headless (micro simulé) ;
-  - le relais TURN forcé (`iceTransportPolicy: "relay"`) ;
-  - un téléphone en 4G ;
-  - latence de bout en bout mesurée (`getStats`) : objectif < 150 ms à distance.
+### R6 — Ensemble dans le système solaire
+- L'arbitre du warp `wantWarp()` : les 19 écritures de `timeSpeed` y passent ; en salle, baisse immédiate
+  pour tous, hausse au vote ; chaque autopilote vérifié avec un warp plus lent que demandé (rentrée,
+  calculateur de vol, transferts).
+- Engins sur rails : un échantillon par changement d'orbite, propagation Kepler (position exacte même à
+  ×4747) ; marqueurs au-delà de 60 km.
+- Les autres joueurs sont des cibles (HUD, rendez-vous, carte 3D, sphères d'influence).
+- **Vérifié** : deux Rangers lancés du même pas de tir, un rendez-vous en orbite basse au HUD.
 
-### N7 — Le temps hybride
-- Bulles et sous-espaces, sortie automatique en forte dilatation (le ×1 en temps propre), fantômes, rattrapage, verrous de causalité.
-- **Vérification** : le scénario « Romilly ». Un joueur descend sur Miller 1 h, l'autre reste en orbite et rattrape les 23 ans.
+### R7 — Amarrage et engins multiples
+- **Refonte de la flotte** : des identifiants d'engin (`ranger#2`…) à la place de `VesselId` dans `fleet`
+  (`free`, `fuel`, `payload`, `links`), les coques et les types du rendu restant indexés par type.
+- **Baux** tenus par le serveur : un engin piloté appartient à son pilote, un engin libre (l'Endurance,
+  l'ISS…) se prend en premier arrivé.
+- **Collisions** avec les engins distants (`controller/docking.ts` `stationContact`) : celui qui détecte
+  envoie les deux états, chacun applique sa part selon les masses.
+- **Amarrage** : la capture est décidée par celui qui manœuvre ; l'assemblage a un seul pilote, l'autre
+  devient passager (ses caméras et ses écrans gardés) ; chacun reprend son engin au désamarrage.
+- **Vérifié** : deux Rangers amarrés à l'Endurance à 50 ms et 2 % de pertes, sans à-coups.
 
-### N8 — Les interactions
-- Collisions joueur-joueur, amarrages et assemblages (pilote et passager), transfert de bail, Endurance partagée.
-- **Vérification** : amarrage de deux Rangers sur l'Endurance à 50 ms et 2 % de pertes, sans à-coups.
+### R8 — Gargantua et finitions
+- Les autres engins des deux côtés du trou de ver : rendu près de Gargantua dans le repère local de la
+  caméra, marqueurs déviés par la lentille au-delà, « de l'autre côté » à travers la gorge.
+- La dilatation avec une horloge par salle : un joueur dans une forte dilatation (Miller) quitte l'horloge
+  de la salle et la rejoint quand les autres l'ont rattrapé. À rediscuter avant la phase.
+- Finitions de l'interface, réglages réseau, aide en anglais et en français.
 
-### N9 — Gargantua au complet, finitions
-- Joueurs de part et d'autre du trou de ver, l'Endurance analytique ou libre, Mann, Edmunds.
-- Finitions de l'interface.
+## Accroches dans le code existant
+
+Le réseau lit ce que la physique expose et ne la réimplémente jamais. Les accroches sont minces et
+regroupées :
+
+| Accroche | Où | Phase |
+|---|---|---|
+| État de l'engin piloté à émettre | `controller/fleet.ts` `activePoseNow`, les entrées de `JetPoser` (`main.ts`) | R1 |
+| Engins distants dans le rendu | `renderer.ts` (`shipOthers`, nouvelle `netOthers`), `sim.ts` | R1 |
+| Effets par instance | `ship.ts` (`writeJets`, `writeReentry`, contrails, feux, train) | R1 |
+| Radar, HUD, carte | `controller/combat.ts` `combatHud`, `ui/hud/symbology.ts`, carte 3D | R1 |
+| Horloge imposée | `sim.ts` (`shipClock`), sous-pas de l'air (`controller/piloting.ts`) | R1 |
+| Combat à plusieurs | `game/combat.ts`, `controller/combat.ts`, `game/scenarios.ts` | R3 |
+| Défis synchronisés | `controller/challenge.ts`, `game/challenges.ts` | R3 |
+| Source de pose du spectateur | `controller/spectator.ts` (`followShip`, `shipFromView`) | R4 |
+| Plusieurs astronautes | `character-model.ts`, `character-renderer.ts`, `controller/character.ts` | R5 |
+| Arbitre du warp | les 19 écritures de `timeSpeed` (`controller/plan.ts`, `piloting.ts`…) | R6 |
+| Identifiants d'engin, baux, amarrage | `vessels.ts`, `fleet.ts`, `controller/docking.ts` | R7 |
+| Destruction en multijoueur | `onCraftLost` (`main.ts`) | R1 |
+| Instantané complet | `game/save.ts`, `game/tools.ts` (`snapshot`, `load`) | R0 |
 
 ## Risques
+- **Régression du solo** : les tests existants et un vol de référence repassent à chaque phase, réseau coupé.
+- **Le coût GPU des effets par instance** (panaches, traînées de 4 F-35) : mesuré avec la méthode de
+  `docs/PLAN-F35.md` (vues figées, `__bh.game.perf({ gpu: true })`).
+- **Le sol diffère d'une machine à l'autre** (tuiles chargées autour de chaque caméra) : un engin posé est
+  collé au terrain local, et l'écart reste invisible à la distance où on le voit.
+- **Les autopilotes en attente de vote** (R6) : chaque phase doit tolérer un warp plus lent.
+- **La refonte de la flotte** (R7) touche beaucoup de fichiers : elle vient tard, une fois les engins distants
+  éprouvés.
+- **Safari et les téléphones** : WebGPU, WebRTC et l'audio sur iOS (`audioSession`, démarrage du son).
+- **Le CGNAT des réseaux mobiles** : dépend du TURN (coturn, Cloudflare en secours).
+- **Un autre agent travaille sur main** : la branche `reseau` est rebasée régulièrement ; les accroches dans
+  `main.ts`, `controls.ts` et `renderer.ts` restent petites pour limiter les conflits.
 
-- **Régression du solo** : chaque phase repasse les tests existants et un vol solo de référence (décollage, orbite, rentrée), réseau désactivé.
-- **Le mode marionnette, l'horloge imposée et l'arbitre du warp dans `controls.ts`** (7 400 lignes, un seul vaisseau supposé) : beaucoup d'écritures de `timeSpeed` à faire passer par `wantWarp`, sans casser le solo.
-- **Les autopilotes en attente de vote** : chaque phase doit tolérer un warp plus lent que demandé.
-- **Les proxys près du trou noir** : repère local, ombres, sonde de lumière.
-- **Le coût sur téléphone** : tier 1, chargement des tuiles et des cartes HD. Un observateur en télescope sur Miller reste du lancer de rayons complet.
-- **Safari** : particularités de WebGPU et de WebRTC sur iOS (routage audio, démarrage du son).
-- **Voix** :
-  - les réseaux mobiles en CGNAT dépendent du TURN (coturn sur le Kimsufi, Cloudflare en secours) ;
-  - les appareils dans la même pièce risquent l'écho si la détection du réseau local échoue (réglage manuel en secours).
-
-## Décisions complémentaires (2026-10-02)
-
-- Une baisse de warp est immédiate pour toute la bulle.
-- Une salle accueille 8 appareils au maximum.
-- Le serveur est sur `samlepirate.org` : un **Kimsufi d'OVH**, avec IP publique. Le TURN de la voix tourne sur la même machine (coturn) ; Cloudflare reste un secours éventuel.
-- **Voix par WebRTC** : ajoutée en phase N6. Les phases suivantes sont renumérotées (N7 temps hybride, N8 interactions, N9 Gargantua).
-- Relais de la voix : **coturn sur le Kimsufi en principal, TURN Cloudflare en secours**.
-- Voix : **activation vocale** et **effet radio** activés par défaut.
-- Déploiement : **Portainer Community, accessible depuis Internet**, donc la méthode « la CI pousse » est retenue :
-  - image GHCR, puis redéploiement par l'API Portainer, puis Pages ;
-  - le jeton `PORTAINER_TOKEN` appartient à un **utilisateur Portainer dédié à la CI** (non administrateur, avec accès à la seule stack réseau), pour que le secret GitHub ne donne pas les clés de tout le serveur.
-- **Revue du 2026-10-03** (27 commits depuis `c9f3d88` : vol, rentrée, calculateur, carte GPU) :
-  - l'architecture tient ;
-  - ajouts : arbitre du warp, rentrée et traînées par instance, réglages de salle, destruction sans retour en arrière, télémétrie décimée, renderer allégé pour la carte ;
-  - le chantier vol + carte est terminé, la contrainte de cohabitation tombe.
-- Accepté : pendant la rentrée d'un joueur, la bulle reste à ×4 dans l'air. Les autres peuvent quitter la bulle pour accélérer.
-- Le travail commence par N0 **quand l'utilisateur donne le feu vert**.
+## À faire par l'utilisateur
+- R0 : l'hôte `stream.samlepirate.org` dans nginx-proxy-manager vers `host:3001`, *Websockets Support* coché.
+- R2 : ouvrir 3478/udp, 3478/tcp et 49160–49200/udp (et dans le Network Firewall OVH s'il est actif) ; le
+  secret de coturn dans les variables de la stack Portainer.
