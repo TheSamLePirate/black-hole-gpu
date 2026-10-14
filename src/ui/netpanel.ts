@@ -9,6 +9,7 @@ import { loadNet, netLoaded, netParams, serverUrl, type NetModule } from "../net
 import { store } from "../util/storage";
 import { button, el as h, modal } from "./kit";
 import { netRadar } from "./hud/symbology";
+import type { NetMatch } from "./netmatch";
 import type { NetSession } from "./netsession";
 
 type Client = InstanceType<NetModule["NetClient"]>;
@@ -85,6 +86,8 @@ export class NetPanel {
   net: Client | null = null;
   /** flying together this frame (ui/netsession.ts): the others placed, ours sent, the teleport */
   session: NetSession | null = null;
+  /** the room's match (ui/netmatch.ts) */
+  match: NetMatch | null = null;
   private close: (() => void) | null = null;
   private body: HTMLElement | null = null;
   private badge = h("button", "net-badge");
@@ -128,8 +131,8 @@ export class NetPanel {
     // (the link's figures kept fresh while the panel is open)
     // (not while one types: the field would be made again under the caret)
     this.pulse = setInterval(() => {
-      if (this.net?.room && !(document.activeElement instanceof HTMLInputElement && this.body?.contains(document.activeElement)))
-        this.render();
+      const f = document.activeElement;
+      if (this.net?.room && !((f instanceof HTMLInputElement || f instanceof HTMLSelectElement) && this.body?.contains(f))) this.render();
     }, 1000);
   }
 
@@ -225,6 +228,11 @@ export class NetPanel {
       }
       this.host.toast(tf("Room {0} deleted", k.code));
     });
+  }
+
+  /** the panel closed (a match started from it) */
+  closePanel() {
+    this.close?.();
   }
 
   /** the others on the F-35's radar this frame (tests) */
@@ -331,7 +339,9 @@ export class NetPanel {
           : t("offline — reconnecting"),
       );
       stat.dataset.testid = "net-stat";
-      B.append(card, list, stat, button({ label: t("Leave the room"), kind: "danger", testid: "net-leave", onClick: () => this.leave() }));
+      B.append(card, list, stat);
+      if (this.match) B.append(this.match.section());
+      B.append(button({ label: t("Leave the room"), kind: "danger", testid: "net-leave", onClick: () => this.leave() }));
     } else {
       // create
       const rname = h("input", "netp-in");

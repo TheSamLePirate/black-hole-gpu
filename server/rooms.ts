@@ -52,6 +52,8 @@ interface RoomRec {
 interface Live {
   rec: RoomRec;
   peers: Map<number, ServerWebSocket<Peer>>;
+  /** the match running, as its last start or end was said (docs/PLAN-RESEAU.md R3): a newcomer told at once */
+  match?: { from: number; ev: Record<string, unknown> };
 }
 
 export interface RoomsOptions {
@@ -244,6 +246,7 @@ export function createRooms(o: RoomsOptions) {
         dirty.add(code);
         send(ws, { type: "joined", re: m.id, code, name: l.rec.name, slot, clock: l.rec.clock, members: members(l) });
         roster(l);
+        if (l.match) send(ws, { type: "event", from: l.match.from, ev: l.match.ev as never });
         return;
       }
       case "leave":
@@ -291,6 +294,11 @@ export function createRooms(o: RoomsOptions) {
         if (!ev || typeof ev.kind !== "string") return;
         const msg = JSON.stringify({ type: "event", from: P.slot, ev } satisfies ServerMsg);
         if (msg.length > 16_384) return;
+        // (a match's start or end: kept for those who come in later)
+        if (ev.kind === "match" || ev.kind === "matchEnd") {
+          const l = live.get(P.room);
+          if (l) l.match = ev.kind === "match" ? { from: P.slot, ev } : undefined;
+        }
         ws.publish(`room:${P.room}`, msg);
         return;
       }

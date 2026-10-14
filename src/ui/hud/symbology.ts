@@ -110,6 +110,8 @@ export interface SymInfo {
       seen: boolean;
       ground: boolean;
       closing: number;
+      /** a team-mate in a match (docs/PLAN-RESEAU.md R3): blue, never a shot's */
+      friendly?: boolean;
     }[];
     missiles: { d: V3; dist: number; red: boolean; motor: boolean }[];
     rounds: V3[];
@@ -123,6 +125,10 @@ export interface SymInfo {
     gunHot: boolean;
     infinite: boolean;
     radar: RadarData;
+    /** the hit marker: a hit of the player's this moment, a kill */
+    hitMark?: "hit" | "kill" | null;
+    /** shot down in a match, waiting to fly again */
+    down?: boolean;
   } | null;
   /** a plane's flight plan: the active waypoint (its bearing [° true], its distance [m]) */
   nav?: { name: string; brg: number; dist: number; on: boolean } | null;
@@ -1871,11 +1877,43 @@ function drawCombat(
     const p = pr(d);
     if (p) ctx.fillRect(p[0] - 1.2 * dpr, p[1] - 1.2 * dpr, 2.4 * dpr, 2.4 * dpr);
   }
+  // the hit marker: four ticks round the centre — a hit; thick and red — a kill
+  if (K.hitMark) {
+    const kill = K.hitMark === "kill";
+    const c = [W / 2, H / 2],
+      a = 9 * dpr,
+      b = (kill ? 22 : 17) * dpr;
+    stroke(
+      () => {
+        for (const [sx, sy] of [
+          [1, 1],
+          [1, -1],
+          [-1, 1],
+          [-1, -1],
+        ]) {
+          ctx.moveTo(c[0]! + sx! * a, c[1]! + sy! * a);
+          ctx.lineTo(c[0]! + sx! * b, c[1]! + sy! * b);
+        }
+      },
+      kill ? RED : "rgba(255, 255, 255, 0.95)",
+      kill ? 3.2 : 2,
+    );
+  }
   // the targets
   for (const q of K.targets) {
     const p = pr(q.d);
     // (locked: amber — red when a shot is good, its box doubled)
-    const col = !q.alive ? "rgba(160, 160, 160, 0.7)" : q.locked ? (K.shoot ? RED : AMB) : q.seen ? GRN : "rgba(90, 255, 140, 0.45)";
+    const col = !q.alive
+      ? "rgba(160, 160, 160, 0.7)"
+      : q.friendly
+        ? "rgba(110, 200, 255, 0.95)"
+        : q.locked
+          ? K.shoot
+            ? RED
+            : AMB
+          : q.seen
+            ? GRN
+            : "rgba(90, 255, 140, 0.45)";
     if (p && p[0] > 0 && p[0] < W && p[1] > 0 && p[1] < H) {
       const s = (q.locked ? 16 : 11) * dpr;
       if (q.ground) {

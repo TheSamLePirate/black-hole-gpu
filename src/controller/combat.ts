@@ -18,11 +18,13 @@ import {
   loadoutMass,
   MISSILES,
   type CombatEvent,
+  type CombatOptions,
   type MissileKind,
   type Player,
   type V3,
 } from "../game/combat";
 import { enu } from "../game/challenges";
+import type { MatchRules } from "../game/match";
 import type { Scenario } from "../game/scenarios";
 import { t, tf, tr } from "../i18n";
 import { bodyFixedOf, groundRelief } from "../system/our-surface";
@@ -63,6 +65,16 @@ export interface CombatState {
   say: string | null;
   /** the player's state last frame (the HUD's) */
   last: Player | null;
+  /** a match's fight (docs/PLAN-RESEAU.md R3, ui/netmatch.ts): its rules the room's, the aggressors run by the
+   *  host (not this world, a guest's), its end and the player's respawn the match's */
+  net: { host: boolean; rules: MatchRules } | null;
+  /** shot down in a match, waiting to fly again: since [s of the fight] */
+  downAt: number | null;
+  /** the countermeasures dropped this frame (where, how fast, which way up): sent to the others */
+  cmOut: { p: V3; v: V3; up: V3 }[];
+  /** the last hit of the player's shots, the last kill [s of the fight] (the HUD's hit marker) */
+  hitAt: number;
+  killAt: number;
 }
 
 const dotV = (a: V3 | Vec3, b: V3 | Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -70,6 +82,15 @@ const unitV = (a: V3): V3 => {
   const l = Math.hypot(...a) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];
 };
+
+/** A match's rules as the world's options. */
+const optsOf = (r: MatchRules): CombatOptions => ({
+  infinite: r.infinite,
+  invulnerable: r.invulnerable,
+  skill: r.skill,
+  enemyMissiles: r.enemyMissiles,
+  friendlyFire: r.friendlyFire,
+});
 
 /** Results kept: the best time of each fight won [s]. */
 export function combatBests(): Record<string, { time: number; at: string }> {
@@ -86,12 +107,16 @@ function groundAt(anchor: { lat: number; lon: number }) {
 }
 
 /** A fight begun (the craft already placed at its start — ui/challengepanel.ts). */
-function combatStart(this: CameraController, def: Scenario) {
+function combatStart(this: CameraController, def: Scenario, net: { host: boolean; rules: MatchRules } | null = null) {
   const L = LOADOUTS[def.loadout];
   const world = new CombatWorld(def.targets, L, groundAt(def.anchor));
-  // (the F-35's settings: the stores, the damage, the aggressors' skill and missiles)
+  // (the F-35's settings: the stores, the damage, the aggressors' skill and missiles — a match's: its rules)
   const s = this.s;
-  world.opts = { infinite: s.f35InfiniteAmmo, invulnerable: s.f35Invulnerable, skill: s.f35AiSkill, enemyMissiles: s.f35EnemyMissiles };
+  world.opts = net
+    ? optsOf(net.rules)
+    : { infinite: s.f35InfiniteAmmo, invulnerable: s.f35Invulnerable, skill: s.f35AiSkill, enemyMissiles: s.f35EnemyMissiles };
+  // (a guest's world: the aggressors are the host's — placed from his, a hit on one sent to him)
+  if (net && !net.host) world.markRemote();
   this.combat = {
     def,
     world,
@@ -104,6 +129,11 @@ function combatStart(this: CameraController, def: Scenario) {
     events: [],
     say: tr(def.title),
     last: null,
+    net,
+    downAt: null,
+    cmOut: [],
+    hitAt: -1,
+    killAt: -1,
   };
   // (the stores' mass on the jet — fleet.ts: the payload)
   fleet.payload.f35 = loadoutMass(L);
@@ -160,7 +190,11 @@ function combatTrigger(this: CameraController, what: "fire" | "lock" | "weapon" 
     }
     return tf("Weapon: {0} ({1} left)", C.weapon === "jdam" ? "GBU-32 JDAM" : MISSILES[C.weapon].name, W.stores[C.weapon]);
   }
-  if (what === "cm") return W.countermeasure(P) ? null : t("Countermeasures: none left");
+  if (what === "cm") {
+    if (!W.countermeasure(P)) return t("Countermeasures: none left");
+    C.cmOut.push({ p: [...P.p], v: [...P.v], up: [...P.up] });
+    return null;
+  }
   // fire
   if (C.weapon === "jdam") {
     const q = W.target(W.lock);
@@ -194,18 +228,32 @@ function combatStep(this: CameraController, dt: number) {
   const W = C.world;
   // (the settings changed in the fight: taken at once)
   const s = this.s;
-  W.opts = { infinite: s.f35InfiniteAmmo, invulnerable: s.f35Invulnerable, skill: s.f35AiSkill, enemyMissiles: s.f35EnemyMissiles };
-  W.firing = this.codes.has("Space") || this.gunTrigger;
+  W.opts = C.net
+    ? optsOf(C.net.rules)
+    : { infinite: s.f35InfiniteAmmo, invulnerable: s.f35Invulnerable, skill: s.f35AiSkill, enemyMissiles: s.f35EnemyMissiles };
+  // (shot down in a match: no gun until flying again)
+  W.firing = C.downAt === null && (this.codes.has("Space") || this.gunTrigger);
   const ev = W.step(dt, P);
   fleet.payload.f35 = loadoutMass(W.stores);
   C.events.push(...ev);
   for (const e of ev) {
     if (e.kind === "explode") C.booms.push({ p: e.p, t: C.t, size: e.size });
-    else if (e.kind === "kill") C.say = tf("Splash — {0}", e.name);
+    else if (e.kind === "kill") {
+      C.say = tf("Splash — {0}", e.name);
+      C.killAt = C.t;
+    } else if (e.kind === "hit" && e.on !== "player" && e.damage > 0) C.hitAt = C.t;
     else if (e.kind === "launch" && e.who === "red") C.say = e.missile === "sam" ? t("SAM launch! Defend") : t("Missile launch! Defend");
     else if (e.kind === "hit" && e.on === "player") C.say = tf("Hit — damage {0} %", Math.round(W.damage));
   }
   C.booms = C.booms.filter((b) => C.t - b.t < 8);
+  // (a match's fight: its end the match's — the host's call —, the player shot down waits to fly again)
+  if (C.net) {
+    if (!W.alive && C.downAt === null) {
+      C.downAt = C.t;
+      C.booms.push({ p: [...P.p], t: C.t, size: 1.5 });
+    }
+    return;
+  }
   const won = W.targets.every((q) => !q.alive);
   if (!W.alive) {
     C.status = "lost";
@@ -320,6 +368,9 @@ function combatHud(this: CameraController, Cm: (v: Vec3 | null) => Vec3 | null) 
     shoot,
     gunHot,
     infinite: W.opts.infinite,
+    /** the hit marker: a hit of the player's this quarter second, a kill this second */
+    hitMark: (C.t - C.killAt < 1 ? "kill" : C.t - C.hitAt < 0.25 ? "hit" : null) as "hit" | "kill" | null,
+    down: C.downAt !== null,
     radar: {
       contacts: W.targets
         .filter((q) => q.alive || W.t - q.diedAt < 3)
@@ -334,6 +385,15 @@ function combatHud(this: CameraController, Cm: (v: Vec3 | null) => Vec3 | null) 
             locked: q.id === W.lock,
             seen: W.seen.includes(q.id),
             name: q.name,
+            // (another player: a team-mate's blue, an enemy's red)
+            colour:
+              q.peer === undefined
+                ? undefined
+                : q.friendly
+                  ? "rgba(110, 200, 255, 1)"
+                  : q.id === W.lock
+                    ? "rgba(255, 70, 60, 1)"
+                    : "rgba(255, 140, 110, 1)",
           };
         }),
       missiles: W.missiles.filter((m) => m.alive).map((m) => ({ ...hu(rel(m.p)), trk: trk(m.v), red: m.owner === "red" })),
@@ -358,6 +418,7 @@ function combatHud(this: CameraController, Cm: (v: Vec3 | null) => Vec3 | null) 
         locked: q.id === W.lock,
         seen: W.seen.includes(q.id),
         ground: isGround(q),
+        friendly: q.friendly,
         closing:
           -(rel(q.p)[0] * (q.v[0] - P.v[0]) + rel(q.p)[1] * (q.v[1] - P.v[1]) + rel(q.p)[2] * (q.v[2] - P.v[2])) /
           Math.max(Math.hypot(...rel(q.p)), 1),

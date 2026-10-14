@@ -135,6 +135,8 @@ export interface NetShip {
   thrust: { throttle: number; boost: number; air: number };
   /** heading up from the flown craft's nose: right, ahead, up [m]; its track over the ground [rad, from the nose] */
   radar: { x: number; y: number; dz: number; trk: number | null };
+  /** from the flown craft in the local east, north, up [m], its velocity, nose and top there (a fight's frame) */
+  enu: { r: Vec3; v: Vec3; fwd: Vec3; up: Vec3 };
   state: CraftState;
 }
 
@@ -205,7 +207,9 @@ function netShips(this: CameraController, states: CraftState[], dt: number, rang
     const vH = E.toHome(s.v);
     const ve = dot(vH, E3),
       vn = dot(vH, N3);
+    const loc = (h: Vec3): Vec3 => [dot(h, E3), dot(h, N3), dot(h, U3)];
     out.push({
+      enu: { r: [e, n, u], v: loc(vH), fwd: loc(axesHome[2]), up: loc(axesHome[1]) },
       radar: { x: e * cp - n * sp, y: e * sp + n * cp, dz: u, trk: Math.hypot(ve, vn) > 5 ? Math.atan2(ve, vn) - psi : null },
       slot: s.slot,
       id,

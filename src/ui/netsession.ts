@@ -54,6 +54,8 @@ export class NetSession {
   tags: NetTag[] = [];
   /** the others' craft this frame */
   ships: NetShip[] = [];
+  /** the slots not shown now (shot down in a match, waiting to fly again — ui/netmatch.ts) */
+  hidden = new Map<number, boolean>();
   private lastSend = -1;
   private prev: { at: number; v: Vec3; ax: [Vec3, Vec3, Vec3] } | null = null;
   private acc: Vec3 = [0, 0, 0];
@@ -105,7 +107,10 @@ export class NetSession {
     }
     // the others
     const states = net.remotes.states(net.roomNow()).filter((s) => !s.ghost || s.ahead < 10);
-    this.ships = c.netShips(states, dt);
+    this.ships = c.netShips(
+      states.filter((s) => !this.hidden.has(s.slot)),
+      dt,
+    );
     R.netOthers = this.ships.filter((s) => !s.ghost).map((s) => ({ id: s.id, rel: s.rel, axes: s.axes, jet: s.jet, thrust: s.thrust }));
     const members = new Map(net.room.members.map((m) => [m.slot, m]));
     // (on the F-35's radar: each other in his colour, his track, his height against ours)

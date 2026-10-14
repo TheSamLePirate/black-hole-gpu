@@ -134,6 +134,8 @@ export interface CombatOptions {
   /** the aggressors: their turn's g, their reactions, their shots' pace */
   skill: "easy" | "normal" | "ace";
   enemyMissiles: boolean;
+  /** a match's (docs/PLAN-RESEAU.md R3): one's own team's craft hurt by one's shots */
+  friendlyFire?: boolean;
 }
 /** Each skill's factors: the g the aggressors pull, the time between their shots, their gun's dispersion. */
 export const SKILL = {
@@ -182,6 +184,14 @@ export interface Target {
   ai?: { mode: "patrol" | "engage" | "defend" | "extend"; centre: V3; missiles: number; nextShot: number; speed: number; gMax: number };
   /** a SAM site's: its next shot's time, its missiles left */
   site?: { nextShot: number; missiles: number };
+  /** another player (docs/PLAN-RESEAU.md R3): his slot — his craft placed each frame from the network, his damage
+   *  his own (a hit on him sent to him) */
+  peer?: number;
+  /** a target another runs (the host's aggressors on a guest's world): placed from the network, not stepped, a
+   *  hit on it sent to the host */
+  remote?: boolean;
+  /** one of ours (a team-mate): not locked, not hurt unless friendly fire */
+  friendly?: boolean;
 }
 
 export interface Missile {
@@ -198,6 +208,8 @@ export interface Missile {
   alive: boolean;
   /** decoys already weighed (each once) */
   seen: Set<number>;
+  /** another's (docs/PLAN-RESEAU.md R3): placed from the network, not stepped; its key there */
+  remote?: string;
 }
 
 export interface Bomb {
@@ -229,6 +241,17 @@ export interface Player {
   v: V3;
   fwd: V3;
   up: V3;
+}
+
+/** A hit on a target another runs (a player, the host's aggressor): sent to him, applied there. */
+export interface NetHit {
+  /** the player's slot, or the aggressor's id (the host's) */
+  peer?: number;
+  target?: number;
+  damage: number;
+  by: MissileKind | "gun" | "jdam";
+  /** an aggressor's (the host's world): a kill no player's */
+  ai?: boolean;
 }
 
 /** What happened in a step (for the sounds, the voices, the HUD). */
@@ -278,6 +301,8 @@ export class CombatWorld {
   /** the player's options (the F-35's settings): stores never spent, no damage taken, the aggressors' skill,
    *  their missiles and the SAM's fired or not */
   opts: CombatOptions = { infinite: false, invulnerable: false, skill: "normal", enemyMissiles: true };
+  /** the hits on targets others run, to send (docs/PLAN-RESEAU.md R3) — taken by the controller */
+  netHits: NetHit[] = [];
   private nextId = 1;
   private gunAcc = 0;
   private ground = new Map<string, number>();
@@ -344,7 +369,7 @@ export class CombatWorld {
   scan(P: Player) {
     this.seen = this.targets
       .filter((q) => {
-        if (!q.alive) return false;
+        if (!q.alive || q.friendly) return false;
         const r = sub(q.p, P.p);
         const d = len(r);
         const range = 150_000 * (q.rcs / 5) ** 0.25;
@@ -411,7 +436,7 @@ export class CombatWorld {
     let best: Target | null = null,
       bd = Infinity;
     for (const q of this.targets) {
-      if (!q.alive || isGround(q)) continue;
+      if (!q.alive || isGround(q) || q.friendly) continue;
       const r = sub(q.p, P.p);
       const d = len(r);
       if (d < range && dot(unit(r), P.fwd) > Math.cos(cone) && d < bd) (best = q), (bd = d);
@@ -493,7 +518,7 @@ export class CombatWorld {
       const hitOn = (c: V3, R: number) => segDist(p0, r.p, c) < R;
       if (r.owner === "blue") {
         for (const q of this.targets)
-          if (q.alive && hitOn(q.p, q.ai ? GUN.hitR : 12)) {
+          if (q.alive && !(q.friendly && !this.opts.friendlyFire) && hitOn(q.p, isGround(q) ? 12 : GUN.hitR)) {
             this.damageTarget(q, GUN.damage, "gun", ev);
             r.t = Infinity;
             break;
@@ -501,13 +526,27 @@ export class CombatWorld {
       } else if (hitOn(P.p, GUN.hitR)) {
         this.hurtPlayer(GUN.damage * 0.8, "gun", ev);
         r.t = Infinity;
-      }
+      } else
+        for (const q of this.targets)
+          if (q.peer !== undefined && q.alive && hitOn(q.p, GUN.hitR)) {
+            // (an aggressor's round on another player — the host's world: sent to him)
+            this.damageTarget(q, GUN.damage * 0.8, "gun", ev, true);
+            r.t = Infinity;
+            break;
+          }
       if (r.p[2] < this.groundZ(r.p[0], r.p[1])) r.t = Infinity;
     }
     this.rounds = this.rounds.filter((r) => r.t < GUN.life);
   }
 
-  private damageTarget(q: Target, dmg: number, by: MissileKind | "gun" | "jdam", ev: CombatEvent[]) {
+  private damageTarget(q: Target, dmg: number, by: MissileKind | "gun" | "jdam", ev: CombatEvent[], fromAi = false) {
+    // (another's craft, another's aggressor: the hit seen here — its marker —, applied by him)
+    if (q.peer !== undefined || q.remote) {
+      if (q.friendly && !this.opts.friendlyFire && !fromAi) return;
+      this.netHits.push({ peer: q.peer, target: q.remote ? q.id : undefined, damage: dmg, by, ai: fromAi || undefined });
+      ev.push({ kind: "hit", on: q.id, by, damage: dmg });
+      return;
+    }
     q.hp -= dmg;
     ev.push({ kind: "hit", on: q.id, by, damage: dmg });
     if (q.hp <= 0 && q.alive) {
@@ -517,6 +556,119 @@ export class CombatWorld {
       ev.push({ kind: "explode", p: [...q.p], size: q.ai ? 1 : q.kind === "bunker" ? 3 : 2 });
       if (this.lock === q.id) this.lock = null;
     }
+  }
+
+  /** A hit on the player from another (docs/PLAN-RESEAU.md R3): taken as one of the world's own. */
+  hurt(dmg: number, by: MissileKind | "gun" | "jdam"): CombatEvent[] {
+    const ev: CombatEvent[] = [];
+    this.hurtPlayer(dmg, by === "jdam" ? "gun" : by, ev);
+    return ev;
+  }
+
+  /** Another's decoys (his flare and chaff, where he dropped them): our missiles may chase them too. */
+  addDecoys(p: V3, v: V3, up: V3 = [0, 0, 1]) {
+    for (const kind of ["flare", "chaff"] as const)
+      this.decoys.push({ id: this.nextId++, p: [...p], v: add(mul(v, 0.85), mul(up, -15)), t: 0, kind });
+  }
+
+  /** A hit on one of this world's own targets from another (a guest's shot at the host's aggressor). */
+  hitTarget(id: number, dmg: number, by: MissileKind | "gun" | "jdam"): CombatEvent[] {
+    const ev: CombatEvent[] = [];
+    const q = this.target(id);
+    if (q && q.alive && q.peer === undefined && !q.remote) this.damageTarget(q, dmg, by, ev);
+    return ev;
+  }
+
+  /** The player back in the fight (a match's respawn): his damage gone, his stores as loaded. */
+  respawn(loadout: Loadout) {
+    this.damage = 0;
+    this.stores = { ...loadout };
+    this.lock = null;
+    this.firing = false;
+  }
+
+  /**
+   * The other players as targets (docs/PLAN-RESEAU.md R3): each placed where the network says, his team-mates
+   * friendly; those gone removed. Their ids: 10 000 + their slot.
+   */
+  setPeers(list: { slot: number; name: string; p: V3; v: V3; fwd: V3; up: V3; alive: boolean; friendly: boolean }[]) {
+    const ids = new Set(list.map((x) => 10_000 + x.slot));
+    this.targets = this.targets.filter((q) => q.peer === undefined || ids.has(q.id));
+    for (const x of list) {
+      const id = 10_000 + x.slot;
+      let q = this.target(id);
+      if (!q) {
+        q = {
+          id,
+          kind: "fighter",
+          name: x.name,
+          p: x.p,
+          v: x.v,
+          fwd: x.fwd,
+          up: x.up,
+          hp: 100,
+          alive: x.alive,
+          diedAt: NaN,
+          rcs: 4,
+          peer: x.slot,
+        };
+        this.targets.push(q);
+      }
+      if (q.alive && !x.alive) q.diedAt = this.t;
+      Object.assign(q, { name: x.name, p: x.p, v: x.v, fwd: x.fwd, up: x.up, alive: x.alive, friendly: x.friendly });
+      if (!q.alive && this.lock === id) this.lock = null;
+    }
+  }
+
+  /** The host's aggressors on a guest's world: their state from the network (they are not stepped here). */
+  setRemoteTargets(list: { id: number; p: V3; v: V3; fwd: V3; up: V3; alive: boolean }[]) {
+    for (const x of list) {
+      const q = this.target(x.id);
+      if (!q) continue;
+      q.remote = true;
+      if (q.alive && !x.alive) q.diedAt = this.t;
+      Object.assign(q, { p: x.p, v: x.v, fwd: x.fwd, up: x.up, alive: x.alive });
+    }
+  }
+
+  /** Every aggressor here run by another (a guest's world): none stepped, each hit sent. */
+  markRemote() {
+    for (const q of this.targets) if (q.peer === undefined) q.remote = true;
+  }
+
+  /**
+   * The others' missiles in flight (docs/PLAN-RESEAU.md R3): drawn, warned of when chasing the player — not
+   * stepped here (their shooter's world guides and fuzes them). Those no longer sent removed.
+   */
+  setRemoteMissiles(list: { key: string; kind: MissileKind; p: V3; v: V3; atMe: boolean; red: boolean; target?: number | null }[]) {
+    const keys = new Set(list.map((m) => m.key));
+    this.missiles = this.missiles.filter((m) => !m.remote || keys.has(m.remote));
+    for (const x of list) {
+      let m = this.missiles.find((y) => y.remote === x.key);
+      if (!m) {
+        m = {
+          id: this.nextId++,
+          kind: x.kind,
+          owner: x.red ? "red" : "blue",
+          from: 0,
+          p: x.p,
+          v: x.v,
+          t: 0,
+          target: null,
+          alive: true,
+          seen: new Set(),
+          remote: x.key,
+        };
+        this.missiles.push(m);
+      }
+      // (its target: the player — warned —, or an aggressor here — which defends against it)
+      Object.assign(m, { p: x.p, v: x.v, target: x.atMe ? -1 : (x.target ?? null), alive: true });
+    }
+  }
+
+  /** Our missiles flying (ours, and the aggressors' on the host's world): to send. `peerOf`: a target id → its slot. */
+  ownMissiles(): Missile[] {
+    return this.missiles.filter((m) => m.alive && !m.remote);
   }
 
   private hurtPlayer(dmg: number, by: MissileKind | "gun", ev: CombatEvent[]) {
@@ -545,6 +697,11 @@ export class CombatWorld {
   private stepMissiles(dt: number, P: Player, ev: CombatEvent[]) {
     for (const m of this.missiles) {
       if (!m.alive) continue;
+      // (another's: carried along its velocity until its next sample)
+      if (m.remote) {
+        m.p = add(m.p, mul(m.v, dt));
+        continue;
+      }
       const M = MISSILES[m.kind];
       m.t += dt;
       // (its seeker looks at the decoys in its cone, each once: one may draw it off)
@@ -577,7 +734,7 @@ export class CombatWorld {
           if (m.target === -1) this.hurtPlayer(M.damage * (1 - (close / M.fuze) * 0.4), m.kind, ev);
           else if (m.target !== null && m.target > 0) {
             const q = this.target(m.target);
-            if (q) this.damageTarget(q, M.damage * (1 - (close / M.fuze) * 0.4), m.kind, ev);
+            if (q) this.damageTarget(q, M.damage * (1 - (close / M.fuze) * 0.4), m.kind, ev, m.owner === "red");
           }
           continue;
         }
@@ -636,16 +793,32 @@ export class CombatWorld {
   /** The aggressors: patrol an orbit, engage the player in its range — pursuit, a lead for the gun —, defend
    *  against a missile chasing (beam it, decoys), fire their missiles and their gun; the SAM site fires on what
    *  flies over 150 m above the ground within its reach. */
-  private stepAi(dt: number, P: Player, ev: CombatEvent[]) {
+  private stepAi(dt: number, Pl: Player, ev: CombatEvent[]) {
+    // (the players it may go after: this one — while alive — and the others in a match; the nearest)
+    const players: { p: V3; v: V3; ref: number }[] = [
+      ...(this.alive ? [{ p: Pl.p, v: Pl.v, ref: -1 }] : []),
+      ...this.targets.filter((q) => q.peer !== undefined && q.alive).map((q) => ({ p: q.p, v: q.v, ref: q.id })),
+    ];
+    const nearest = (from: V3) => {
+      let best = players[0] ?? null,
+        bd = Infinity;
+      for (const x of players) {
+        const d = len(sub(x.p, from));
+        if (d < bd) (best = x), (bd = d);
+      }
+      return best;
+    };
     for (const q of this.targets) {
-      if (!q.alive) continue;
+      if (!q.alive || q.remote || q.peer !== undefined) continue;
+      const T = nearest(q.p);
+      if (!T) continue;
+      const P = T;
       if (q.site) {
         const r = sub(P.p, q.p);
         const d = len(r);
         const agl = P.p[2] - this.groundZ(P.p[0], P.p[1]);
         if (
           this.opts.enemyMissiles &&
-          this.alive &&
           q.site.missiles > 0 &&
           this.t > q.site.nextShot &&
           d < MISSILES.sam.rMax &&
@@ -662,7 +835,7 @@ export class CombatWorld {
             p: add(q.p, [0, 0, 5]),
             v: mul(unit(add(unit(r), [0, 0, 0.6])), 60),
             t: 0,
-            target: -1,
+            target: T.ref,
             alive: true,
             seen: new Set(),
           };
@@ -677,7 +850,7 @@ export class CombatWorld {
       const d = len(r);
       // (a missile chasing it: defend — beam it and decoy)
       const threat = this.missiles.find((m) => m.alive && m.owner === "blue" && m.target === q.id && len(sub(m.p, q.p)) < 12_000);
-      if (q.kind === "fighter") A.mode = threat ? "defend" : this.alive && d < 40_000 ? "engage" : "patrol";
+      if (q.kind === "fighter") A.mode = threat ? "defend" : d < 40_000 ? "engage" : "patrol";
       let want: V3;
       if (A.mode === "defend" && threat) {
         // (perpendicular to the missile's line, level, a decoy each second and a half)
@@ -710,7 +883,7 @@ export class CombatWorld {
             p: add(q.p, mul(q.up, -2)),
             v: [...q.v],
             t: 0,
-            target: -1,
+            target: T.ref,
             alive: true,
             seen: new Set(),
           };
@@ -760,7 +933,7 @@ export class CombatWorld {
 const M_KEEP = 120;
 
 /** Whether a target sits on the ground (a site, a vehicle, a building). */
-export const isGround = (q: Target) => !q.ai;
+export const isGround = (q: Target) => !q.ai && q.peer === undefined;
 
 /** The least distance from c to the segment a → b. */
 export function segDist(a: V3, b: V3, c: V3): number {

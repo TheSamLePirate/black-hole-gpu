@@ -45,6 +45,7 @@ import { matchKey, type KeyAction } from "./input/keymap";
 import { installBh } from "./automation";
 import { netParams } from "./net/load";
 import { NetPanel } from "./ui/netpanel";
+import { NetMatch } from "./ui/netmatch";
 import { NetSession } from "./ui/netsession";
 import type { JetInputs } from "./f35/pose";
 import { installPwa } from "./pwa";
@@ -3681,6 +3682,9 @@ async function main() {
     sceneTime: () => sim.time * M_SECONDS,
   });
   netPanel.session = netSession;
+  // a match in the room (ui/netmatch.ts — docs/PLAN-RESEAU.md R3): fights, teams, races, landings together
+  const netMatch = new NetMatch({ camera, tools, panel: netPanel, session: netSession, toast: (s) => panel.toast(s) });
+  netPanel.match = netMatch;
   // the Atlas (ui/atlas.ts, PLAN-MODES-AAA M6): the Earth, the Moon and Mars as maps, their destinations, the
   // addresses — the game put there (in orbit, landed, on foot, the free camera, a tripod)
   const ATLAS_ORBIT_KM: Record<MapBody, number> = { earth: 400, moon: 100, mars: 300 };
@@ -5480,6 +5484,7 @@ async function main() {
     const info = pil ? cpuProf.time("flight figures (flightInfo)", () => camera.flightInfo()) : null;
     // (flying together: ours sent, the others placed — before the render's figures: their contrails come with ours — ui/netsession.ts)
     netSession.frame(dt);
+    netMatch.frame();
     viewOverlay.netTags = netSession.tags;
     if (netSession.ships.length) changed = true;
     if (!renderer.offlineActive && cpuProf.time("free-fall prediction", () => sim.applyRender(info))) changed = true;
@@ -6180,8 +6185,9 @@ async function main() {
     const joinCode = netParams.get("join");
     if (joinCode && settings.netMenu) {
       started = true;
+      // (the panel shown while joining, closed once in: the keys back to the flight)
       netPanel.open();
-      void netPanel.join(joinCode);
+      void netPanel.join(joinCode).then(() => netPanel.net?.room && netPanel.closePanel());
     } else if (!shared && !(scene && presets[scene]) && !benchPage) {
       titleScreen.open();
       void splash.gone.then(() => titleScreen?.focusFirst());
