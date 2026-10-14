@@ -322,7 +322,14 @@ reste dans son propre monde : le tireur juge ses coups, la victime applique les 
 - **Vérifié** : un duel au canon à 100 ms de latence simulée, les coups comptés des deux côtés ; un AIM-9X
   leurré par des leurres lancés de l'autre machine ; une course à 3 avec le robot.
 
-### R4 — Spectateur et écran instruments
+### R4 — Spectateur et écran instruments ✅ (2026-10-14)
+
+*Fait* : la marionnette (`controls.ts` `puppet`/`puppetStep` : la pose du joueur suivi à la place du vol, son
+type, ses gouvernes, sa flamme, sa télémétrie), Suivre, spectateur et écran instruments par le lien, la caméra
+de mort en match, « Ajouter un écran » avec un QR code maison (`src/net/qr.ts`). *Reporté* : la prédiction de
+trajectoire et la route du pilote chez le spectateur ; la caméra libre sans engin (`s.ship = false`) — la vue
+libre autour de l'engin suivi en tient lieu.
+
 - **Spectateur** : rejoindre sans piloter (`s.ship = false`), choisir un joueur à suivre.
   - Le spectateur reçoit une « source de pose » : il suit l'engin distant avec **tous** les points de vue
     (cockpit, poursuite, fly-by, trépied, libre, télescope, plongée).

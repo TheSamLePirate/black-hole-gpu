@@ -207,6 +207,7 @@ export class NetMatch {
 
   private reset() {
     const C = this.d.camera;
+    if (this.d.session.follow?.why === "killcam") this.d.session.setFollow(null);
     if (this.begun && C.combat?.net) C.combatEnd();
     this.match = null;
     this.sheet = null;
@@ -303,6 +304,8 @@ export class NetMatch {
       C.killAt = C.t;
       C.say = tf("Splash — {0}", this.nameOf(slot));
     }
+    // (shot down by another: the kill cam — his craft followed until we fly again)
+    if (slot === this.me && by !== null && by >= 0 && by !== this.me) this.d.session.setFollow(by, "killcam");
   }
 
   private addFeed(text: string, colour: string) {
@@ -622,6 +625,7 @@ export class NetMatch {
 
   private respawn() {
     const m = this.match!;
+    if (this.d.session.follow?.why === "killcam") this.d.session.setFollow(null);
     const C = this.d.camera;
     const CB = C.combat!;
     const sc = scenarioOf(m)!;

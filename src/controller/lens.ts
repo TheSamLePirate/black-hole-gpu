@@ -246,7 +246,10 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
       // (the view is the spectator's)
     } else if (this.outsideView() === "free") this.moveOutside(dt, move, fast, boost);
     else if (s.shipMount === "cabin") this.moveCabin(dt, move, fast);
-    this.flyShip(dt, pad);
+    // (a puppet — another player's craft followed —: its pose, not a flight)
+    if (!this.puppetStep()) this.flyShip(dt, pad);
+    // (a fight's clock and world run on while a puppet — the kill cam's wait)
+    else if (this.combat) this.combatStep(dt);
     this.flyVel = [0, 0, 0];
   } else if (this.travel) {
     // (travelling to a body or a craft: placed at the frame's end — travelStep, below)

@@ -3,7 +3,7 @@ import { Autothrottle, type JetModes, noJetModes } from "./game/jet";
 import { CineBrain } from "./cine/brain";
 import { Follow } from "./cine/follow";
 import type { CockpitInput } from "./cockpit/input";
-import type { cameraFrame } from "./camera";
+import { setHomePose, type cameraFrame } from "./camera";
 import type { RealInfo } from "./realweather";
 import type { WeatherState } from "./weather";
 import type { FlightReport } from "./game/report";
@@ -502,6 +502,46 @@ export class CameraController {
       this.keys.clear();
       this.codes.clear();
     });
+  }
+
+  /**
+   * The craft flown as a puppet (docs/PLAN-RESEAU.md R4: a spectator following another player, a kill cam): its
+   * place, velocity and axes (home frame, units of c, its nose and top) given each frame instead of its flight —
+   * every view on it as on one's own. Null: flown.
+   */
+  puppet:
+    | (() => {
+        X: [number, number, number];
+        vel: [number, number, number];
+        fwd: [number, number, number];
+        up: [number, number, number];
+      } | null)
+    | null = null;
+
+  /** The puppet's pose this frame set as the flown craft's (through the view's mount, as placeAt does); false: none. */
+  puppetStep(): boolean {
+    const P = this.puppet?.();
+    if (!P) return false;
+    // (his craft's kind ours: the switch flyShip makes, made here — the puppet placed over it at once)
+    if (this.s.vessel !== fleet.active) this.switchVessel(this.s.vessel);
+    // (set down nowhere of ours: where he is — the landed state the switch may have left dropped)
+    if (this.landed || this.ourLanded) {
+      this.setOurLanded(null);
+      this.landed = false;
+    }
+    const S = this.shipMatrix();
+    const { up, fwd: f } = P;
+    const left: [number, number, number] = [up[1] * f[2] - up[2] * f[1], up[2] * f[0] - up[0] * f[2], up[0] * f[1] - up[1] * f[0]];
+    const ax = [left, up, f];
+    const cam = (k: number): [number, number, number] => {
+      const v = [0, 1, 2].map((i) => ax[0]![i]! * S[k]![0]! + ax[1]![i]! * S[k]![1]! + ax[2]![i]! * S[k]![2]!) as [number, number, number];
+      const l = Math.hypot(...v) || 1;
+      return [v[0] / l, v[1] / l, v[2] / l];
+    };
+    setHomePose(this.s, P.X, cam(2), cam(1), P.vel);
+    this.s.anchor = "wormhole";
+    this.sync();
+    return true;
   }
 
   /** Call after the distance was changed from elsewhere (GUI, preset). */

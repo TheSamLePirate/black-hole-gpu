@@ -97,7 +97,10 @@ describe.skipIf(!E2E)("a battle", () => {
     for (const p of [a, b])
       await p.waitFor(`__bh.net.match.sheet.row(${sb}).kills === 1 && __bh.net.match.sheet.row(${sa}).deaths === 1`, 10_000);
     console.log(`  ${await b.js<string>(`[...document.querySelectorAll(".nm-feed-row")].map((e) => e.textContent).join(" | ")`)}`);
+    // (the kill cam: Ana's view on Ben's craft while she waits)
+    expect(await a.js<number | null>(`__bh.net.session.follow?.slot ?? null`)).toBe(sb);
     await a.waitFor(`__bh.camera.combat.downAt === null`, 15_000);
+    expect(await a.js<boolean>(`__bh.net.session.follow === null && __bh.camera.puppet === null`)).toBe(true);
     expect(await a.js<number>(`__bh.camera.combat.world.damage`)).toBe(0);
   }, 90_000);
 

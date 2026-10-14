@@ -93,6 +93,27 @@ départ.
 Mesuré sur kerr-mini (`tests/e2e/net-voice`, deux pages, une phrase enregistrée comme micro de chacun) : la voix
 de chacun reçue par l'autre à −8 à −12 dBFS, allumée « parle », deux bips Quindar ; le même réseau coupé.
 
+## Suivre un autre, les écrans ajoutés (R4)
+
+- **Suivre** (le panneau de la salle, pour chaque pilote) : votre engin devient sa marionnette — placé là où il
+  est à chaque image, son type, ses gouvernes, son train, sa tuyère et sa flamme, ses instruments (sa
+  télémétrie quatre fois par seconde : le carburant, la manette, le train, les volets, l'aérofrein) —, **toutes
+  les vues** du jeu sur lui (le cockpit et son écran panoramique, la poursuite, le fly-by, la vue libre autour
+  de lui…) ; vos propres échantillons ne sont pas envoyés.
+- **Un spectateur** (le lien de la salle avec `&role=spectator`, ou le rôle du panneau) suit aussitôt le premier
+  pilote ; **un écran instruments** (`&role=instruments`) aussi, dans son cockpit.
+- **La caméra de mort** : abattu en match par un autre, on suit son avion jusqu'à ce qu'on revole.
+- **Ajouter un écran** (le panneau de la salle) : le lien de la salle en **QR code** — l'appareil photo d'un
+  téléphone ou d'une tablette l'ouvre (en HTTPS : samlepirate.org) — comme spectateur, écran instruments ou
+  pilote ; le code est le nôtre (`src/net/qr.ts`, mode octet, correction M, versions 1–10, vérifié module par
+  module contre la bibliothèque Python qrcode).
+
+Mesuré sur kerr-mini (`tests/e2e/net-spectate`) : l'engin suivi à 1–11 m de là où son pilote l'a (lu à 0,1 s
+d'écart), son train posé d'après le sien, le HUD et le cockpit du F-35 ; le pilote ne voit personne.
+
+Pas encore : la prédiction de chute libre du spectateur (« IMPACT … ») est celle de son propre engin (sans
+portance), pas celle du pilote ; la route et les modes du pilote automatique ne sont que sur l'écran du pilote.
+
 ## Comment ça marche
 
 - **Le serveur de salles** (`server/rooms.ts`, Bun, SQLite) : les salles et leurs membres, l'horloge, les

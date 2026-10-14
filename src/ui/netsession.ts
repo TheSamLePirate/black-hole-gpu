@@ -76,6 +76,18 @@ export class NetSession {
   ships: NetShip[] = [];
   /** the slots not shown now (shot down in a match, waiting to fly again — ui/netmatch.ts) */
   hidden = new Map<number, boolean>();
+  /**
+   * The player followed (docs/PLAN-RESEAU.md R4): our craft his puppet — every view on him, his surfaces, his
+   * flame, his instruments (his telemetry) —; why: a spectator's choice, a match's kill cam. Null: none.
+   */
+  follow: { slot: number; why: "spectate" | "killcam" } | null = null;
+  /** the followed craft's pose and engines this frame (main.ts: the renderer's flown craft's) */
+  followJet: NetShip["jet"] | null = null;
+  followThrust: NetShip["thrust"] | null = null;
+  /** his instruments' figures (his telemetry, 4 times a second) */
+  private tel = new Map<number, Record<string, number>>();
+  private telAt = 0;
+  private telBound: unknown = null;
   private lastSend = -1;
   private prev: { at: number; v: Vec3; ax: [Vec3, Vec3, Vec3] } | null = null;
   private acc: Vec3 = [0, 0, 0];
@@ -102,6 +114,7 @@ export class NetSession {
     const net = this.net;
     const R = this.d.renderer;
     if (!net?.room) {
+      if (this.follow) this.unfollow();
       if (R.netOthers.length) R.netOthers = [];
       if (this.tags.length) this.tags = [];
       if (this.ships.length) this.ships = [];
@@ -132,10 +145,32 @@ export class NetSession {
     }
     // the others
     const states = net.remotes.states(net.roomNow()).filter((s) => !s.ghost || s.ahead < 10);
-    this.ships = c.netShips(
-      states.filter((s) => !this.hidden.has(s.slot)),
+    // (his telemetry heard: our instruments show his)
+    if (this.telBound !== net) {
+      this.telBound = net;
+      net.on("event", ({ from, ev }) => {
+        if ((ev as { kind?: string }).kind === "tel") this.tel.set(from, (ev as unknown as { v: Record<string, number> }).v);
+      });
+    }
+    const F = this.follow;
+    if (F && !net.room.members.some((m) => m.slot === F.slot)) this.unfollow();
+    // (a spectator, an instruments screen: the first pilot followed — the instruments in his cockpit)
+    if (!this.follow && net.room.role !== "pilot") {
+      const p = net.room.members.filter((m) => m.role === "pilot" && net.remotes.tracks.has(m.slot)).sort((a, b) => a.slot - b.slot)[0];
+      if (p) {
+        this.setFollow(p.slot);
+        if (net.room.role === "instruments") this.d.settings.shipMount = "cockpit";
+      }
+    }
+    const all = c.netShips(
+      states.filter((s) => !this.hidden.has(s.slot) || s.slot === this.follow?.slot),
       dt,
     );
+    const followed = this.follow ? (all.find((s) => s.slot === this.follow!.slot) ?? null) : null;
+    this.ships = all.filter((s) => s.slot !== this.follow?.slot);
+    // (his state read straight — the craft placed even when ours is far from the Earth: a spectator in orbit)
+    const fstate = this.follow ? (states.find((s) => s.slot === this.follow!.slot) ?? null) : null;
+    this.puppetFrame(followed, fstate);
     R.netOthers = this.ships.filter((s) => !s.ghost).map((s) => ({ id: s.id, rel: s.rel, axes: s.axes, jet: s.jet, thrust: s.thrust }));
     const members = new Map(net.room.members.map((m) => [m.slot, m]));
     // (on the F-35's radar: each other in his colour, his track, his height against ours)
@@ -187,8 +222,8 @@ export class NetSession {
           break;
         }
       }
-    // ours, when due
-    if (net.room.role !== "pilot") return;
+    // ours, when due (not while our craft is another's puppet)
+    if (net.room.role !== "pilot" || this.follow) return;
     const own = c.netOwn();
     if (!own) {
       this.prev = null;
@@ -256,6 +291,84 @@ export class NetSession {
       },
     });
     this.sent++;
+    // (our instruments' figures for those who follow us: 4 times a second)
+    if (now - this.telAt > 0.25) {
+      this.telAt = now;
+      net.event({
+        kind: "tel",
+        v: {
+          fuel: Math.round(fleet.fuel[fleet.active] ?? 0),
+          thr: Math.round((c.pilot.throttle ?? 0) * 1000) / 1000,
+          eng: Math.round((c.pilot.engineNow ?? 0) * 1000) / 1000,
+          gear: c.gearExt,
+          flaps: c.airFlight.cfg.flaps ?? 0,
+          brake: c.airFlight.cfg.brake ?? 0,
+        },
+      });
+    }
+  }
+
+  /** Follow another player (our craft his puppet), or stop. */
+  setFollow(slot: number | null, why: "spectate" | "killcam" = "spectate") {
+    if (slot === null) return this.unfollow();
+    this.follow = { slot, why };
+  }
+
+  private unfollow() {
+    this.follow = null;
+    this.followJet = null;
+    this.followThrust = null;
+    this.d.camera.puppet = null;
+  }
+
+  /** The followed craft as ours this frame: his kind, his pose (the puppet's), his surfaces and flame, his figures. */
+  private puppetFrame(sh: NetShip | null, st: CraftState | null) {
+    const c = this.d.camera;
+    if (!this.follow || !st) {
+      if (this.follow && !st) c.puppet = null;
+      this.followJet = null;
+      this.followThrust = null;
+      return;
+    }
+    if (!this.d.settings.ship) this.d.tools.set("ship", true);
+    const kinds = ["ranger", "lander", "endurance", "f35"] as const;
+    const kind = kinds[st.kind];
+    if (kind && fleet.active !== kind) {
+      try {
+        this.d.tools.set("vessel", kind);
+      } catch {
+        /* not here */
+      }
+    }
+    c.puppet = () => c.netPlaceBeside(st, 0);
+    this.followJet = sh?.jet ?? null;
+    this.followThrust = sh?.thrust ?? null;
+    const slot = this.follow.slot;
+    const T = this.tel.get(slot);
+    if (T) {
+      if (kind) fleet.fuel[kind] = T.fuel ?? fleet.fuel[kind];
+      c.pilot.throttle = T.thr ?? c.pilot.throttle;
+      c.pilot.engineNow = T.eng ?? c.pilot.engineNow;
+      c.gearExt = T.gear ?? c.gearExt;
+      c.gearDown = (T.gear ?? 0) > 0.5;
+      c.airFlight.cfg.flaps = T.flaps ?? 0;
+      c.airFlight.cfg.brake = T.brake ?? 0;
+    }
+  }
+
+  /** After the render's figures: the followed craft's flame (the renderer's flown craft's engines are his). */
+  afterRender() {
+    const th = this.followThrust;
+    if (!th || !this.follow) return;
+    const R = this.d.renderer;
+    R.shipThrust = {
+      throttle: th.throttle,
+      boost: th.boost,
+      air: th.air,
+      force: [0, 0, 0],
+      torque: [0, 0, 0],
+      time: performance.now() / 1000,
+    };
   }
 
   /** The others in the room with a craft now (the teleport's choice). */

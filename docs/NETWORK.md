@@ -83,6 +83,26 @@ guest's AIM-9X downing one, the kill his on both; the racers 72 m apart at the s
 Measured on kerr-mini (`tests/e2e/net-voice`, two pages, a spoken phrase as each microphone): each one's
 voice received by the other at −8 to −12 dBFS, shown speaking, two Quindar tones; the same network's muted.
 
+## Following another, the screens added (R4)
+
+- **Follow** (the room panel, each pilot): your craft becomes his puppet — placed where he is each frame,
+  his kind, his surfaces, gear, nozzle and flame, his instruments (his telemetry four times a second: the
+  fuel, the throttle, the gear, the flaps, the air brake) —, **every view** of the game on it (the cockpit and
+  its panoramic display, the chase, the fly-by, the free one around him…); your own samples not sent.
+- **A spectator** (the room link with `&role=spectator`, or the panel's role) follows the first pilot at once;
+  **an instruments screen** (`&role=instruments`) too, in his cockpit.
+- **The kill cam**: shot down in a match by another, his craft followed until you fly again.
+- **Add a screen** (the room panel): the room's link as a **QR code** — a phone's or a tablet's camera opens it
+  (over HTTPS: samlepirate.org) — as a spectator, an instruments screen or a pilot; the code is ours
+  (`src/net/qr.ts`, byte mode, correction M, versions 1–10, checked module by module against Python's
+  qrcode).
+
+Measured on kerr-mini (`tests/e2e/net-spectate`): the followed craft within 1–11 m of where its pilot has it
+(read 0.1 s apart), its gear posed from his, the F-35's HUD and cockpit; the pilot sees nobody.
+
+Not yet: the spectator's free-fall prediction ("IMPACT …") is his own craft's (no lift), not the pilot's;
+the instruments' route and autopilot modes are the pilot's own only on his screen.
+
 ## How it works
 
 - **The room server** (`server/rooms.ts`, Bun, SQLite): the rooms and their members, the clock, the room's

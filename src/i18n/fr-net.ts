@@ -109,4 +109,9 @@ export default {
   "Radio effect and Quindar tones": "Effet radio et bips Quindar",
   "Not the devices on my network (one room)": "Pas les appareils de mon réseau (même pièce)",
   Voice: "Voix",
+  // following another (R4)
+  "Stop following": "Ne plus suivre",
+  Follow: "Suivre",
+  "Every view on {0}'s craft, his instruments": "Toutes les vues sur l'engin de {0}, ses instruments",
+  "Add a screen": "Ajouter un écran",
 } satisfies Record<string, string>;

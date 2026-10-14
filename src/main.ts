@@ -5534,6 +5534,8 @@ async function main() {
     viewOverlay.netTags = netSession.tags.map((g) => (netVoice.speaking(g.slot) ? { ...g, name: `◉ ${g.name}` } : g));
     if (netSession.ships.length) changed = true;
     if (!renderer.offlineActive && cpuProf.time("free-fall prediction", () => sim.applyRender(info))) changed = true;
+    // (another player followed: his flame as the flown craft's — ui/netsession.ts)
+    netSession.afterRender();
     // (a take records what the view shows: the settings, the clocks, what the renderer draws of the flight)
     if (take.recording && !renderer.offlineActive) {
       const ok = take.capture(camera.viewSettings(), {
@@ -5887,6 +5889,8 @@ async function main() {
               fan: camera.stovl.fan,
             }),
           );
+          // (another player followed: his surfaces, his gear, his nozzle — ui/netsession.ts)
+          if (netSession.followJet) renderer.jetPose = netSession.followJet;
         } else jetIn = null;
         // (the F-35's panoramic display, seen from its seat: drawn at 10 Hz, onto the dashboard)
         if (settings.vessel === "f35" && (settings.shipMount === "cockpit" || settings.shipMount === "cabin")) {
@@ -6233,7 +6237,10 @@ async function main() {
       started = true;
       // (the panel shown while joining, closed once in: the keys back to the flight)
       netPanel.open();
-      void netPanel.join(joinCode).then(() => netPanel.net?.room && netPanel.closePanel());
+      const role = netParams.get("role");
+      void netPanel
+        .join(joinCode, role === "spectator" || role === "instruments" ? role : "pilot")
+        .then(() => netPanel.net?.room && netPanel.closePanel());
     } else if (!shared && !(scene && presets[scene]) && !benchPage) {
       titleScreen.open();
       void splash.gone.then(() => titleScreen?.focusFirst());

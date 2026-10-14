@@ -1,0 +1,10 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`the matrices as checked against the reference 1`] = `
+[
+  "21:e85cf7a3",
+  "33:d0c89379",
+  "37:d605331e",
+  "57:9ffd0f23",
+]
+`;

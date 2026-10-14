@@ -6,3 +6,4 @@ export { NetClock } from "./clock";
 export * as proto from "./proto";
 export { RemoteRegistry, RemoteTrack, type CraftState } from "./remote";
 export { parseLab, type LabSettings } from "./transport";
+export { qr, qrSvg } from "./qr";

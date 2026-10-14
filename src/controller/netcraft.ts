@@ -234,19 +234,21 @@ function netShips(this: CameraController, states: CraftState[], dt: number, rang
  * its velocity, its attitude — in the home frame, for tools.placeAt. Null: not on the Earth.
  */
 function netPlaceBeside(this: CameraController, s: CraftState, gap: number) {
-  const E = earthView(this);
-  if (!E) return null;
+  // (the Earth's axes now alone — wherever our craft is: a spectator in orbit takes another's place on the ground)
+  const t = this.nowTime();
+  if (!Number.isFinite(t) || !this.s.wormhole) return null;
+  const A = bodyAxes(solarBody("earth")!, t);
+  const toHome = (b: Vec3): Vec3 => [0, 1, 2].map((i) => b[0] * A[0][i]! + b[1] * A[1][i]! + b[2] * A[2][i]!) as Vec3;
   const ax = quatAxes(s.q);
   const pE: Vec3 = [s.p[0] + ax.right[0] * gap, s.p[1] + ax.right[1] * gap, s.p[2] + ax.right[2] * gap];
-  const t = E.nav.t;
   const X = fromBodyFixed("earth", scale(pE, 1 / M_METRES), t);
   const g = groundVelocity("earth", X, t);
-  const v = scale(E.toHome(s.v), 1 / C_MPS);
+  const v = scale(toHome(s.v), 1 / C_MPS);
   return {
     X,
     vel: [g[0] + v[0], g[1] + v[1], g[2] + v[2]] as Vec3,
-    fwd: unit(E.toHome(ax.fwd)),
-    up: unit(E.toHome(ax.up)),
+    fwd: unit(toHome(ax.fwd)),
+    up: unit(toHome(ax.up)),
   };
 }
 

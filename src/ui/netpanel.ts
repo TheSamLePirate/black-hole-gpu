@@ -233,6 +233,42 @@ export class NetPanel {
     });
   }
 
+  /** the role a screen added joins as (the QR code's link) */
+  private screenRole: Role = "spectator";
+
+  /**
+   * Add a screen: the room's link as a QR code — a phone's, a tablet's camera opens it — for a spectator (every
+   * view on a pilot), an instruments screen (his cockpit's) or a pilot.
+   */
+  private screenSection(code: string) {
+    const box = h("div", "netp-screen");
+    const role = h("select", "netp-in");
+    role.dataset.testid = "net-screen-role";
+    for (const r of ["spectator", "instruments", "pilot"] as Role[]) {
+      const o = h("option", "", ROLE_NAMES[r]());
+      o.value = r;
+      o.selected = r === this.screenRole;
+      role.append(o);
+    }
+    role.addEventListener("change", () => {
+      this.screenRole = role.value as Role;
+      this.render();
+    });
+    const link = `${this.link(code)}${this.screenRole === "pilot" ? "" : `&role=${this.screenRole}`}`;
+    const img = h("div", "netp-qr");
+    img.dataset.testid = "net-qr";
+    void loadNet().then((N) => {
+      img.innerHTML = N.qrSvg(link, 3);
+    });
+    const text = h("small", "netp-link", link);
+    const col = h("div", "netp-qrside");
+    col.append(role, text);
+    const row = h("div", "netp-row netp-qrrow");
+    row.append(img, col);
+    box.append(h("div", "netp-sub", t("Add a screen")), row);
+    return box;
+  }
+
   /** The voice's section: the microphone on or off, how it opens (our voice, a key held, always), the radio, the
    *  devices of one network not heard. */
   private voiceSection(V: NetVoice) {
@@ -406,8 +442,24 @@ export class NetPanel {
           vol.addEventListener("input", () => V.setVolume(m.slot, Number(vol.value)));
           li.append(vol);
         }
+        // (another pilot followed: every view on him, his instruments — a spectator's, anyone's)
+        if (m.slot !== room.slot && m.role === "pilot") {
+          const following = this.session?.follow?.slot === m.slot;
+          li.append(
+            button({
+              label: following ? t("Stop following") : t("Follow"),
+              on: following,
+              title: tf("Every view on {0}'s craft, his instruments", m.name),
+              testid: `net-follow-${m.slot}`,
+              onClick: () => {
+                this.session?.setFollow(following ? null : m.slot);
+                this.render();
+              },
+            }),
+          );
+        }
         // (the tests': beside another — off its right wing, at its speed)
-        if (m.slot !== room.slot && m.role === "pilot")
+        if (m.slot !== room.slot && m.role === "pilot" && room.role === "pilot")
           li.append(
             button({
               label: t("Beside"),
@@ -432,6 +484,7 @@ export class NetPanel {
       );
       stat.dataset.testid = "net-stat";
       B.append(card, list, stat);
+      B.append(this.screenSection(room.code));
       if (this.voice) B.append(this.voiceSection(this.voice));
       if (this.match) B.append(this.match.section());
       B.append(button({ label: t("Leave the room"), kind: "danger", testid: "net-leave", onClick: () => this.leave() }));
