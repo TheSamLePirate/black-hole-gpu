@@ -7,6 +7,7 @@
 import { cameraFrame } from "../camera";
 import { fleet } from "../fleet";
 import { JET, jetCommands, noJetModes } from "../game/jet";
+import { formGrace } from "./formation";
 import { t, tf } from "../i18n";
 import type { PilotInput } from "../pilot";
 import { altitudeOver, solidBody } from "../system/our-surface";
@@ -64,6 +65,11 @@ function jetReady(c: CameraController) {
 function jetToggle(this: CameraController, what: "ap" | "athr" | "ab"): string {
   if (!jetReady(this)) return t("The jet's systems: in plane mode (F)");
   const m = this.jetModes;
+  // (the holds or the autothrottle taken while in formation: the formation let go, them on as they are)
+  if (this.form && what !== "ab") {
+    this.formOff();
+    return t("Formation off — altitude, heading and speed held");
+  }
   if (what === "ab") {
     m.ab = !m.ab;
     if (m.ab) {
@@ -112,7 +118,8 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
   const abOn = m.ab && jetReady(this);
   this.abLevel = T ? Math.min(Math.max(this.abLevel + (abOn ? 1 : -1) * (dt / T.light), 0), 1) : abOn ? 1 : 0;
   if (!jetReady(this)) {
-    if (m.alt !== null || m.hdg !== null || m.spd !== null || m.ab) this.jetModes = noJetModes();
+    if (this.form && !formGrace(this.form)) this.formOff(t("Formation off — not flown as a plane"));
+    if (!this.form && (m.alt !== null || m.hdg !== null || m.spd !== null || m.ab)) this.jetModes = noJetModes();
     return none;
   }
   // (the throttle moved by another hand — full, cut, the lever, a hold of the computer's —: the autothrottle off)
@@ -121,11 +128,27 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
   if (m.ab && this.pilot.throttle < 0.95) m.ab = false;
   const f = this.jetFigures();
   if (!f || this.rolling || this.pilot.auto !== "none") {
+    if (this.form && (this.pilot.auto !== "none" || !formGrace(this.form)))
+      this.formOff(this.pilot.auto !== "none" ? t("Formation off — the autopilot") : t("Formation off — on the ground"));
     m.alt = m.hdg = m.spd = null;
     this.jetCws.thr = Number.NaN;
     return none;
   }
   const cws = this.jetCws;
+  // (a formation flown: its bank, its flight path, its speed — the holds' own laws left aside)
+  const fm = this.formStep(inp, f);
+  if (fm) {
+    cws.pitch = cws.roll = false;
+    // (the afterburner when the dry engine at full cannot keep up — he speeds up, we are behind —, out once eased)
+    if (!m.ab && this.pilot.throttle >= 0.98 && fm.acc > 1.2) {
+      m.ab = true;
+      this.pilot.throttle = 1;
+    } else if (m.ab && fm.acc < 0.3) m.ab = false;
+    const aFull = ((this.thrustMax() * C_MPS ** 2) / M_METRES) * this.jetThrust();
+    this.pilot.throttle = this.jetAthr.step(this.pilot.throttle, f.V, fm.spd, aFull, dt);
+    cws.thr = this.pilot.throttle;
+    return { gamma: fm.gamma, bank: fm.bank };
+  }
   if (m.alt !== null) {
     if (inp.pitch !== 0) cws.pitch = true;
     else if (cws.pitch) {

@@ -19,6 +19,7 @@ import {
   quatAxes,
 } from "../controller/netcraft";
 import { netDock } from "../controller/docking";
+import { bankAccel, formationBank } from "../game/formation";
 import { type Body, isNetTarget, netTargetId, netTargets } from "../targeting";
 import { fleet } from "../fleet";
 import type { JetInputs } from "../f35/pose";
@@ -237,6 +238,7 @@ export class NetSession {
     const R = this.d.renderer;
     if (!net?.room) {
       if (this.follow) this.unfollow();
+      if (this.d.camera.form) this.d.camera.formOff(t("Formation off — out of the room"));
       roomPace.cap = Infinity;
       roomPace.ease = 1;
       roomPace.note = "";
@@ -981,6 +983,80 @@ export class NetSession {
    * Our craft put beside another's (the tests'): `gap` metres off its right wing, at its speed and attitude —
    * in formation; on the ground, parked beside it. Says what it did.
    */
+  /**
+   * Formation flight on another's craft (game/formation.ts): our jet's systems flying a slot off his wing —
+   * `side` his right or left, `back` behind him (15 m), `up` above [m], the gap clear of both wingspans by 15 m —, he read off the network each
+   * frame (his track at our scene's time, his acceleration over its last second). Far off (> 20 km) or on
+   * the ground: Beside first, then the formation. Again on the same one: off.
+   */
+  /** the player whose wing we fly in formation, null: none */
+  formSlot(): number | null {
+    return this.d.camera.form?.slot ?? null;
+  }
+
+  formation(slot: number, o: { side?: "right" | "left"; gap?: number; back?: number; up?: number } = {}): string {
+    const c = this.d.camera;
+    if (c.form?.slot === slot) {
+      c.formOff();
+      return t("Formation off — altitude, heading and speed held");
+    }
+    if (!this.net?.room) return t("Not in a room");
+    const p = this.others().find((x) => x.slot === slot);
+    if (!p) return t("No such player in the room");
+    const s = p.state;
+    if (!s || s.frame !== 0 || s.body !== 0 || (s.flags & 1) !== 0)
+      return tf("{0} is not flying in the Earth's air — formation in the air only", p.name);
+    if (!VESSELS[fleet.active].flies) return t("Formation: a craft that flies (the F-35, the Ranger)");
+    const half = (id: string) => (id === "f35" ? 5.4 : id === "ranger" ? 12 : id === "lander" ? 8 : 40);
+    const kinds = ["ranger", "lander", "endurance", "f35"];
+    // (an echelon: clear of both wingspans by 15 m, 15 m back — room for his roll into a turn, a gust)
+    const gap = o.gap ?? half(kinds[s.kind] ?? "f35") + half(fleet.active) + 15;
+    // (in his air, near enough to rejoin: from where we are — else Beside first)
+    const own = c.netOwn();
+    const far = !own || !c.jetFigures() || Math.hypot(...[0, 1, 2].map((k) => s.p[k]! - own.p[k]!)) > 20_000;
+    if (far) {
+      const n = this.d.tools.placings;
+      const said = this.teleport(slot, gap);
+      if (this.d.tools.placings === n) return said;
+    }
+    this.d.settings.flightMode = "plane";
+    const tr = () => this.net?.remotes.track(slot);
+    // (his turn from his bank — eased over a quarter second, his roll's own shake left out — and led by his roll's
+    // rate 0.8 s on: ours to answer it takes about that)
+    let phi = Number.NaN,
+      roll = 0,
+      at = Number.NaN;
+    c.form = {
+      slot,
+      name: p.name,
+      at: { right: o.side === "left" ? -gap : gap, back: o.back ?? 15, up: o.up ?? 0 },
+      since: performance.now() / 1000,
+      armed: false,
+      last: null,
+      lead: () => {
+        const T = tr();
+        const now = this.d.sceneTime();
+        const W = T?.at(now);
+        if (!W || W.ghost || W.frame !== 0 || W.body !== 0 || (W.flags & 1) !== 0) return null;
+        // (his acceleration over the last second: his turns, his speed's changes — the samples' noise averaged)
+        const W0 = T!.at(now - 1);
+        const a = W0 && !W0.ghost ? [0, 1, 2].map((k) => W.v[k]! - W0.v[k]!) : [0, 0, 0];
+        const ax = quatAxes(W.q);
+        const raw = formationBank(W.p, ax.up, ax.right);
+        if (Number.isFinite(phi) && now > at) {
+          const dt = now - at;
+          const next = phi + (raw - phi) * Math.min(1, dt / 0.25);
+          roll += ((next - phi) / dt - roll) * Math.min(1, dt / 0.5);
+          phi = next;
+        } else if (!Number.isFinite(phi)) phi = raw;
+        at = now;
+        return { p: W.p, v: W.v, a, fwd: ax.fwd, aLat: bankAccel(phi + roll * 0.8) };
+      },
+    };
+    const where = o.side === "left" ? tf("off {0}'s left wing", p.name) : tf("off {0}'s right wing", p.name);
+    return tf("Formation {0} — {1} m", where, Math.round(gap));
+  }
+
   teleport(slot: number, gap?: number): string {
     // (not before our scene is on the room's clock: set on it after, we would be carried off his place)
     if (!this.net?.clock.synced || this.timedRoom !== this.net.room?.code) return t("The room's clock is still being set — a moment");

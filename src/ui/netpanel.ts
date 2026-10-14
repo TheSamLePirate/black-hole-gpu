@@ -405,6 +405,14 @@ export class NetPanel {
     return said;
   }
 
+  /** Formation flight on another's craft (ui/netsession.ts formation), said. */
+  formation(slot: number, o?: { side?: "right" | "left"; gap?: number; back?: number; up?: number }) {
+    const said = this.session?.formation(slot, o) ?? t("Not in a room");
+    this.host.toast(said);
+    this.close?.();
+    return said;
+  }
+
   link(code: string) {
     return `${location.origin}${location.pathname}#join=${code}`;
   }
@@ -645,6 +653,19 @@ export class NetPanel {
             testid: `net-tp-${m.slot}`,
             onClick: () => this.teleport(m.slot),
           }),
+          // (formation: the autopilot flying a slot off his wing — rejoining from where we are, Beside first if far)
+          (() => {
+            const on = this.session?.formSlot() === m.slot;
+            return button({
+              label: on ? t("Leave formation") : t("Formation"),
+              on,
+              title: on
+                ? t("The formation let go: altitude, heading and speed held")
+                : tf("The autopilot flies off {0}'s right wing and holds it there (the stick lets go)", m.name),
+              testid: `net-form-${m.slot}`,
+              onClick: () => this.formation(m.slot),
+            });
+          })(),
         );
       li.append(acts);
       list.append(li);

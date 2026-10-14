@@ -48,6 +48,25 @@ reste entier : rien ne se connecte tant que le joueur ne demande pas une salle, 
   seconde de retard le mettrait 50 m en arrière à 250 m/s).
 - **À côté** (le panneau de la salle, pour chaque autre pilote) : votre engin placé à sa droite, à sa vitesse,
   son cap et son altitude — en patrouille ; au sol, garé à côté de lui. `__bh.net.teleport(slot, écart?)`.
+- **Formation** (le panneau de la salle, pour chaque autre pilote en vol dans l'air de la Terre ; à nouveau :
+  coupée) : votre pilote automatique vole en échelon à sa droite — à 15 m de ses ailes et des vôtres (26 m
+  entre deux F-35), 15 m en arrière — et s'y tient, ses virages et ses changements de vitesse suivis ; le HUD
+  affiche `FORM ANA 4 M` (son nom, la distance au poste). Il rejoint d'où vous êtes (3 km en deux minutes, en
+  ralentissant de lui-même — l'aérofrein quand le ralenti ne suffit pas — pour ne pas dépasser) ; au-delà de
+  20 km, ou au sol : À côté d'abord. Le manche, les gaz, les touches du pilote automatique ou un autre pilote
+  automatique la coupent : l'altitude, le cap et la vitesse sont alors tenus. Elle n'entre jamais à portée de
+  ses ailes : à sa hauteur à moins de 14 m, elle repousse vers l'extérieur, et pour passer de son autre côté
+  elle passe derrière lui (35 m). `__bh.net.formation(slot, { side?, gap?, back?, up? })`. La loi
+  (`game/formation.ts`) : chaque axe de son repère une boucle amortie sur l'écart au poste, la vitesse de
+  rapprochement plafonnée et assez lente pour s'y arrêter ; son virage d'après son inclinaison, aussitôt
+  (anticipé par sa vitesse de roulis), ses changements de vitesse d'après sa trajectoire ; l'inclinaison, la
+  pente et la vitesse de l'auto-manette volées par la loi avion.
+  Mesuré sur kerr-mini (`tests/e2e/net-formation-ap`, vent léger) : parti 3,2 km derrière et 1 km sur le côté,
+  au poste en 115 s puis tenu à 4 m ; le virage de 90° d'Ana à 30° d'inclinaison, Ben à l'intérieur, 7 à 13 m
+  au pire pendant sa mise en virage, puis 6 m ; son accélération de 220 à 250 m/s, 12 à 14 m au pire (sa
+  postcombustion), puis 6 m ; depuis 55 km, À côté puis au poste à 8 m. En air calme, leader régulier : moins
+  d'un mètre.
+  ![Ben en formation à droite d'Ana](progress/net/form-b.jpg)
 - **Le temps de la salle** : ×1 (temps réel) pour tous, un warp demandé est refusé ; en entrant, la scène est
   mise à l'heure de la salle (le même Soleil) si elle en est à plus d'une minute.
 - **Les liens directs** : un canal de données WebRTC vers chaque autre page — sans ordre, jamais renvoyé —,
@@ -257,7 +276,7 @@ deux pages à 0,3 ms près.
 
 ## Tests
 
-De bout en bout aussi : `tests/e2e/net-gargantua` (près de Gargantua, par le trou de ver), `tests/e2e/net-dock` (s'amarrer ensemble, les contacts, le monde persistant), `tests/e2e/net-space` (en orbite ensemble, le warp de la salle, les cibles), `tests/e2e/net-walk` (à pied ensemble, un passager), `tests/e2e/net-moon` (à pied sur la Lune, À côté à pied), `tests/e2e/net-formation` (deux Mac en patrouille, la dérive), `tests/e2e/net-flight` (deux F-35 : vus à 8 km, sur le radar, le lien direct, À côté —
+De bout en bout aussi : `tests/e2e/net-gargantua` (près de Gargantua, par le trou de ver), `tests/e2e/net-dock` (s'amarrer ensemble, les contacts, le monde persistant), `tests/e2e/net-space` (en orbite ensemble, le warp de la salle, les cibles), `tests/e2e/net-walk` (à pied ensemble, un passager), `tests/e2e/net-moon` (à pied sur la Lune, À côté à pied), `tests/e2e/net-formation` (deux Mac en patrouille, la dérive), `tests/e2e/net-formation-ap` (le pilote automatique de formation : rejoindre, virer, accélérer, couper, de loin), `tests/e2e/net-flight` (deux F-35 : vus à 8 km, sur le radar, le lien direct, À côté —
 la patrouille, le même écart vu des deux côtés —, la postcombustion vue). Unitaires : `tests/net-core.test.ts` (les échantillons, l'horloge sous 200 ms et 5 % de pertes, Hermite au
 centimètre, le lissage, le vol du robot), `tests/net-rooms.test.ts` (un vrai serveur : salles, limites, mots
 de passe, la place reprise à la reconnexion, la suppression par le propriétaire, les salles gardées après un

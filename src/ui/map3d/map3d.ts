@@ -1489,7 +1489,8 @@ export class Map3D {
     // ---- orbits
     const tgt = i.target;
     for (const b of sc.bodies) {
-      if (!b.orbit) continue;
+      // (none, or an empty one — another's craft flying in the air)
+      if (!b.orbit?.length) continue;
       const par = b.parent ? sc.byId.get(b.parent) : null;
       // (a moon's orbit only once it spreads on the screen)
       if (par) {

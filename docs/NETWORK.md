@@ -45,6 +45,22 @@ loaded only then.
   him 50 m behind at 250 m/s).
 - **Beside** (the room panel, each other pilot): your craft put off his right wing at his speed, his heading
   and his height — in formation; on the ground, parked beside him. `__bh.net.teleport(slot, gap?)`.
+- **Formation** (the room panel, each other pilot flying in the Earth's air; again: off): your autopilot flies
+  an echelon off his right wing — clear of both wingspans by 15 m (26 m between two F-35s), 15 m back — and
+  holds it, his turns and his speed's changes followed; the HUD says `FORM ANA 4 M` (his name, the slot's
+  distance). From where you are it rejoins (3 km in two minutes, slowing on its own — the air brake when idle
+  is not enough — not to overshoot); farther than 20 km, or on the ground: Beside first. The stick, the
+  throttle, the autopilot's keys or another autopilot let it go: the altitude, heading and speed then held.
+  It never comes within reach of his wings: abreast of him closer than 14 m it is pushed out, and to cross to
+  his other side it goes behind him (35 m). `__bh.net.formation(slot, { side?, gap?, back?, up? })`.
+  The law (`game/formation.ts`): each axis of his frame a damped loop on the slot's error, its closing speed
+  capped and slow enough to stop on it; his turn from his bank at once (led by his roll's rate), his speed's
+  changes from his track; the bank, the flight path and the autothrottle's speed flown by the plane law.
+  Measured on kerr-mini (`tests/e2e/net-formation-ap`, the light wind): 3.2 km behind and 1 km aside, on the
+  slot in 115 s and held within 4 m; Ana's 90° turn at 30° of bank with Ben on the inside, 7–13 m at worst as
+  she rolls in, then 6 m; her speed-up from 220 to 250 m/s, 12–14 m at worst (his afterburner), then 6 m; from
+  55 km, Beside then on the slot within 8 m. In calm air with a steady leader: under a metre.
+  ![Ben in formation on Ana's right wing](progress/net/form-b.jpg)
 - **The room's time**: ×1 (real time) for everyone, a warp asked refused; joining sets the scene on the
   room's hour (the same Sun) when it is more than a minute off.
 - **The direct links**: a WebRTC data channel to each other page — unordered, never resent —, set up through
@@ -236,7 +252,7 @@ late (95 %: 27 ms), the others shown 60–75 ms late, the two pages' clocks with
 
 ## Tests
 
-End to end too: `tests/e2e/net-gargantua` (by Gargantua, through the wormhole), `tests/e2e/net-dock` (docking together, contacts, the persistent world), `tests/e2e/net-space` (in orbit together, the room's warp, targets), `tests/e2e/net-walk` (on foot together, a passenger's ride), `tests/e2e/net-moon` (on foot on the Moon, Beside on foot), `tests/e2e/net-formation` (two Macs in formation, the drift), `tests/e2e/net-flight` (two F-35s: seen 8 km off, on the radar, the direct link, Beside —
+End to end too: `tests/e2e/net-gargantua` (by Gargantua, through the wormhole), `tests/e2e/net-dock` (docking together, contacts, the persistent world), `tests/e2e/net-space` (in orbit together, the room's warp, targets), `tests/e2e/net-walk` (on foot together, a passenger's ride), `tests/e2e/net-moon` (on foot on the Moon, Beside on foot), `tests/e2e/net-formation` (two Macs in formation, the drift), `tests/e2e/net-formation-ap` (the formation's autopilot: rejoin, turn, speed-up, let go, from afar), `tests/e2e/net-flight` (two F-35s: seen 8 km off, on the radar, the direct link, Beside —
 formation, the same gap seen by both —, the afterburner seen). Unit: `tests/net-core.test.ts` (the samples, the clock under 200 ms and 5 % lost, the Hermite within a
 centimetre, the smoothing, the bot's flight), `tests/net-rooms.test.ts` (a real server: rooms, limits,
 passwords, a reconnection's slot, the owner's delete, the rooms kept across a restart). End to end:

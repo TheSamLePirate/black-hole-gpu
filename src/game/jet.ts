@@ -39,6 +39,9 @@ export interface JetModes {
   /** the flight plan's guidance moving the holds' targets (controller/fplan.ts; the displays' copy only) */
   lnav?: boolean;
   vnav?: boolean;
+  /** a formation flown (controller/formation.ts): the leader's name, the slot's distance [m] (the displays' copy) */
+  form?: string;
+  formDist?: number;
 }
 export const noJetModes = (): JetModes => ({ alt: null, hdg: null, spd: null, ab: false });
 
@@ -87,6 +90,11 @@ export function jetCommands(m: JetModes, f: { h: number; hdg: number; V: number 
 /** The annunciators (the HUD's top line): the modes engaged and their targets, in the units shown. */
 export function jetAnnunciators(m: JetModes, u: { alt: (m: number) => string; spd: (v: number) => string }): string[] {
   const out: string[] = [];
+  if (m.form) {
+    out.push(`FORM ${m.form.toUpperCase()}${m.formDist !== undefined ? ` ${u.alt(m.formDist)}` : ""}`);
+    if (m.ab) out.push("AB");
+    return out;
+  }
   if (m.alt !== null) out.push(`${m.vnav ? "VNAV " : "ALT "}${u.alt(m.alt)}`);
   if (m.hdg !== null && m.lnav) out.push("LNAV");
   else if (m.hdg !== null) out.push(`HDG ${String(Math.round(((m.hdg / D) % 360) + 360) % 360).padStart(3, "0")}`);
