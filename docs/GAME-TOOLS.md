@@ -83,6 +83,7 @@ __bh.game.glideTo("Kennedy", 80, 25, 750)           // the Ranger on a runway's 
 __bh.game.glideTo("Kennedy", 40, 8, 300, { acrossKm: 10, headingDeg: -30 })  // 10 km right of the line, its course 30° left of the runway's
 __bh.game.hoverOver("moon", 0.674, 23.473, 1.5)     // 1.5 km over Tranquility Base, at rest over it, hovering — G lands it
 __bh.game.orbitOver("earth", 48.86, 2.35, { altKm: 400, inc: 51.6 })  // an orbit passing over Paris now
+// (the latitude is WGS84 geodetic, as an address or a GPS gives it: the ship's geodetic nadir is that place)
 __bh.game.orbitTarget()                             // around the current target
 __bh.game.placeAt({ frame, X, vel, fwd, up })        // at a state (home frame / the hole's map)
 __bh.game.target("saturn"); __bh.game.targets(); __bh.game.soi(); __bh.game.bodies("gargantua")

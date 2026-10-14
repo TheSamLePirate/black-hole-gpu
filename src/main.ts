@@ -1,6 +1,6 @@
 import { SceneryHitboxes } from "./ui/scenery-hitboxes";
 import { planetFrame, toLocal } from "./landing";
-import { cartToGeodetic, WGS84_A, WGS84_F } from "./system/ellipsoid";
+import { cartToGeodetic, flatteningOf, WGS84_A, WGS84_F } from "./system/ellipsoid";
 import { groundVelocity } from "./system/our-surface";
 import { CharacterHud } from "./ui/characterhud";
 import { FootHud, type CompassMark } from "./ui/foothud";
@@ -3597,7 +3597,8 @@ async function main() {
       const time = camera.nowTime();
       const sub = (body: string, X: Vec3) => {
         const q = toBodyFixed(body, X, time);
-        const g = cartToGeodetic(1, body === "earth" ? WGS84_F : 0, q.map((v) => v / Math.hypot(...q)) as Vec3);
+        // (the craft's nadir: its own geodetic latitude, at its height — WGS84 on the Earth)
+        const g = cartToGeodetic(solarBody(body)!.radius, flatteningOf(body), q);
         return { lat: (g.lat * 180) / Math.PI, lon: (g.lon * 180) / Math.PI };
       };
       const ours = ["earth", "moon", "mars"];

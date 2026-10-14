@@ -33,6 +33,16 @@
 .pp-pick { display: flex; flex-direction: column; gap: 4px; }
 .pp-pick .gt-stage { height: 240px; border: 1px solid var(--k-line); border-radius: var(--k-r); }
 .pp-picknote { font: var(--k-font-value); color: var(--k-on); }
+/* the search by name: a destination, a runway, coordinates, an address */
+.pp-find { display: flex; flex-direction: column; gap: 4px; }
+.pp-find-status { font: var(--k-font-value); color: var(--k-dim); }
+.pp-find-status:empty { display: none; }
+.pp-find-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 168px; overflow-y: auto; }
+.pp-find-list:empty { display: none; }
+.pp-find-item { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: baseline; gap: 8px; padding: 4px 8px; border-radius: var(--k-r); cursor: pointer; }
+.pp-find-item:hover, .pp-find-item:focus-visible { background: var(--k-ctl-bg); }
+.pp-find-item b { font: 600 12.5px/1.3 var(--font); color: var(--k-text); white-space: nowrap; }
+.pp-find-item small { font: 11.5px/1.3 var(--font); color: var(--k-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .pp-sites { display: flex; flex-wrap: wrap; gap: 5px; }
 .pp-sites .pp-site { font-weight: 500; letter-spacing: 0.06em; text-transform: none; }
 .pp-note { margin: 0; font: 13px/1.4 var(--font); color: var(--k-dim); }

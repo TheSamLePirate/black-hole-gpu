@@ -31,6 +31,7 @@ import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { rangerStatus, type RangerStatus } from "./status";
 import {
   orbitOver,
+  overPlace,
   ourGroundPose,
   ourGroundPoseOn,
   ourMouthPose,
@@ -545,9 +546,23 @@ export class GameTools {
    * the inclination raised to the latitude if lower; the rest as orbit() takes it.
    */
   orbitOver(body: string, lat: number, lon: number, o: Omit<OrbitPlacement, "body" | "raan" | "nu"> = {}) {
-    const D = Math.PI / 180;
-    const q: V3 = [Math.cos(lat * D) * Math.cos(lon * D), Math.cos(lat * D) * Math.sin(lon * D), Math.sin(lat * D)];
-    const w = orbitOver(body, q, this.ctx.time(), { inc: o.inc ?? 0, argPe: o.argPe ?? 0, retrograde: !!o.retrograde });
+    // (over the place's geodetic normal, at the orbit's height there: an eccentric one's found again once the
+    // anomaly over the place is known)
+    const t = this.ctx.time();
+    // (the heights as ourOrbitPose reads them)
+    const alt = o.altKm ?? defaultAltKm(body),
+      h1 = o.peKm ?? alt,
+      h2 = o.apKm ?? o.peKm ?? alt;
+    const pe = Math.min(h1, h2),
+      ap = Math.max(h1, h2);
+    const R = ((solarBody(body)?.radius ?? 0) * M_METRES) / 1e3;
+    const e = (ap - pe) / (ap + pe + 2 * R);
+    let hKm = pe;
+    let w = orbitOver(body, overPlace(body, lat, lon, hKm) as V3, t, { inc: o.inc ?? 0, argPe: o.argPe ?? 0, retrograde: !!o.retrograde });
+    for (let k = 0; k < 2 && e > 1e-9; k++) {
+      hKm = ((R + pe) * (1 + e)) / (1 + e * Math.cos((w.nu * Math.PI) / 180)) - R;
+      w = orbitOver(body, overPlace(body, lat, lon, hKm) as V3, t, { inc: o.inc ?? 0, argPe: o.argPe ?? 0, retrograde: !!o.retrograde });
+    }
     return this.orbit(body, { ...o, inc: w.inc, raan: w.raan, nu: w.nu });
   }
 

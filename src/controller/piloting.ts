@@ -333,7 +333,8 @@ function groundBelow(this: CameraController, radii = 2): { body: Body; lat: numb
   const deg = 180 / Math.PI;
   if (w.ours) {
     const q = toBodyFixed(ref.id, w.X, t);
-    const g = cartToGeodetic(1, flatteningOf(ref.id), unitV(q));
+    // (the point's own geodetic latitude — its nadir on the ellipsoid —, not its direction's at the surface)
+    const g = cartToGeodetic(solarBody(ref.id)!.radius, flatteningOf(ref.id), q);
     return { body: ref.id, lat: g.lat * deg, lon: g.lon * deg };
   }
   const F = planetFrame(ref.id as "miller" | "mann" | "edmunds", t, this.s.spin, this.s.massSolar);

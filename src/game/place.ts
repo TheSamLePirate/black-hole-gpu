@@ -9,7 +9,7 @@ import { properBodyAxes } from "../system/local-patch";
 import type { Vec3 } from "../physics";
 import { eclipticOf, poleAxes, solarBody, solarState, spinVector, M_METRES, SOLAR_BODIES } from "../system/solar";
 import { soiOf } from "../system/our-side";
-import { figureUp, fromBodyFixed, groundPointOf, groundVelocity, heightOverGround, solidBody } from "../system/our-surface";
+import { bodyFixedOf, figureUp, fromBodyFixed, groundPointOf, groundVelocity, heightOverGround, solidBody } from "../system/our-surface";
 import { body as sysBody, GARGANTUA_SYSTEM } from "../system/bodies";
 import { circularOrbit } from "../system/kerr-orbits";
 import { GEAR as HOLE_GEAR, groundR, localToZamo, planetFrame, toGlobal, zamoBeta } from "../landing";
@@ -226,6 +226,26 @@ export function ourGroundPoseOn(
   const fp = sub(f0, [n[0] * dot(f0, n), n[1] * dot(f0, n), n[2] * dot(f0, n)]);
   // (its height over the ground at its centre kept: on a slope more than the gear's — each wheel on the ground)
   return { ...base, X, vel: groundVelocity(id, X, t), fwd: dir(fp), up: dir(n), landed: { body: id, q: qc, h: heightOverGround(id, qc) } };
+}
+
+/**
+ * The direction over a place (latitude, east longitude [°]) at a distance from the body's centre [the body's
+ * radius + `hKm`, as an orbit's heights are counted], as orbitOver() takes it: on our worlds the point that far
+ * out on the place's normal — the Earth's geodetic one (WGS84: the latitudes an address, a map, a GPS give), so
+ * the ship's nadir is the place, not a point 0.19° off it —; on Gargantua's, the direction on its frame's sphere.
+ */
+export function overPlace(id: string, lat: number, lon: number, hKm: number): Vec3 {
+  const D = Math.PI / 180;
+  if (universeOf(id) !== "ours") return [Math.cos(lat * D) * Math.cos(lon * D), Math.cos(lat * D) * Math.sin(lon * D), Math.sin(lat * D)];
+  const r = solarBody(id)!.radius + hKm * KM;
+  let hM = hKm * 1e3;
+  let q = bodyFixedOf(id, lat, lon, hM);
+  // (the height on the normal that puts it at that radius: a few metres off after the first, nothing after three)
+  for (let k = 0; k < 3; k++) {
+    hM += (r - Math.hypot(...q)) * M_METRES;
+    q = bodyFixedOf(id, lat, lon, hM);
+  }
+  return q;
 }
 
 /**

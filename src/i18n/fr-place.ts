@@ -32,6 +32,10 @@ export default {
   "Click the world: the place to land": "Cliquez le monde : le lieu où se poser",
   "The orbit passes over {0} now": "L'orbite passe au-dessus de {0} maintenant",
   "Click the world: the orbit will pass over it now": "Cliquez le monde : l'orbite y passera maintenant",
+  "Click the world or search a place: where to land": "Cliquez le monde ou cherchez un lieu : où se poser",
+  "Click the world or search a place: the orbit will pass over it now":
+    "Cliquez le monde ou cherchez un lieu : l'orbite y passera maintenant",
+  "Search a place": "Chercher un lieu",
   "Before our mouth of the wormhole, beyond Saturn: at rest, the mouth targeted, the hover autopilot on":
     "Devant notre bouche du trou de ver, au-delà de Saturne : au repos, la bouche en cible, le maintien de position engagé",
   "Before the far mouth, Gargantua beyond it: at rest, the mouth targeted, the hover autopilot on":

@@ -1,5 +1,7 @@
 import { test, expect } from "bun:test";
-import { orbitOver, ourOrbitPose } from "../src/game/place";
+import { orbitOver, ourOrbitPose, overPlace } from "../src/game/place";
+import { cartToGeodetic, flatteningOf } from "../src/system/ellipsoid";
+import { solarBody } from "../src/system/solar";
 import { bodyFixedOf, toBodyFixed } from "../src/system/our-surface";
 
 const D = Math.PI / 180;
@@ -28,5 +30,25 @@ test("orbitOver puts the ship over the place picked", () => {
     // (on the place's direction from the centre — the Earth's geocentric latitude, 0.19° at most off its geodetic one)
     expect(la).toBeCloseTo(latLon(q)[0]!, 4);
     expect(((lo! - lon + 540) % 360) - 180).toBeCloseTo(0, 4);
+  }
+});
+
+// a place given by its WGS84 latitude (an address, a map, a GPS): the ship's nadir is that place to the
+// millionth of a degree — not the point 0.19° off it the place's latitude read on the sphere would give
+test("orbitOver over a geodetic place: the ship's geodetic nadir is the place", () => {
+  const t = 109.6;
+  for (const [body, lat, lon, inc, h] of [
+    ["earth", 48.8584, 2.2945, 51.6, 400],
+    ["earth", 45, -73.6, 98, 800],
+    ["earth", -33.8568, 151.2153, 0, 35_786],
+    ["moon", -43.3, -11.4, 0, 100],
+  ] as const) {
+    const q = overPlace(body, lat, lon, h);
+    const o = orbitOver(body, q as [number, number, number], t, { inc, argPe: 0, retrograde: false });
+    const p = ourOrbitPose({ body, altKm: h, inc: o.inc, raan: o.raan, nu: o.nu }, t);
+    const R = solarBody(body)!.radius;
+    const g = cartToGeodetic(R, flatteningOf(body), toBodyFixed(body, p.X, t));
+    expect(g.lat / D).toBeCloseTo(lat, 6);
+    expect(((g.lon / D - lon + 540) % 360) - 180).toBeCloseTo(0, 6);
   }
 });

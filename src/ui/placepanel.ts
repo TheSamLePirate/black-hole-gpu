@@ -1,19 +1,23 @@
 // Placing the ship (the HUD's Place button, the radial wheel, the pause menu): in orbit around any body,
 // on a ground, beside a body at rest, before the wormhole on either side — over the game's tools
 // (src/game/tools.ts: orbit, orbitOver, land, near, wormhole). A mission running ends, once confirmed;
-// a scene without the game's world (a bare Kerr view) loads it first.
+// a scene without the game's world (a bare Kerr view) loads it first. The place found by its name too: a
+// destination, a runway, coordinates typed, an address on the Earth (game/geocode.ts — WGS84 latitudes, as
+// the ground and the orbit over it take them).
 
 import "./placepanel.css";
 import type { GameTools } from "../game/tools";
 import { defaultAltKm, THEIR_IDS } from "../game/place";
 import { SITES } from "../game/sites";
+import { geocode, parseCoords } from "../game/geocode";
+import { POI_KINDS, POIS, searchPois } from "../game/pois";
 import { M_METRES, SOLAR_BODIES } from "../system/solar";
 import { solidBody } from "../system/our-surface";
 import { body as systemBody, GARGANTUA_SYSTEM } from "../system/bodies";
 import { mouth } from "../wormhole";
 import { BODY_NAMES } from "../targeting";
 import type { Settings } from "../settings";
-import { t, tf } from "../i18n";
+import { lang, t, tf, tr } from "../i18n";
 import { GroundTrack } from "./groundtrack";
 import { button, el as h, modal } from "./kit";
 
@@ -68,10 +72,14 @@ export class PlacePanel {
 
   private closed() {
     this.close = null;
+    this.searching?.abort();
+    this.searching = null;
     clearInterval(this.timer);
     this.picker.onPick = null;
   }
   private timer = 0;
+  /** the address search under way (a newer one, the panel closed: dropped) */
+  private searching: AbortController | null = null;
 
   private build(root: HTMLElement) {
     const T = this.host.tools;
@@ -110,8 +118,8 @@ export class PlacePanel {
       nearAlt = num(1000, "1", 0),
       nearM = num(12, "0.1", 2),
       dRho = num(4, "0.5", 1.5),
-      lat = num(0, "0.001"),
-      lon = num(0, "0.001");
+      lat = num(0, "any"),
+      lon = num(0, "any");
     const retro = h("input") as HTMLInputElement;
     retro.type = "checkbox";
     const retroBox = h("label", "pp-check");
@@ -134,6 +142,19 @@ export class PlacePanel {
     const pickNote = h("div", "pp-picknote");
     pickBox.append(this.picker.stage, pickNote);
     const sites = h("div", "pp-sites");
+    // ---- the search: a destination, a runway, coordinates, an address (the Earth's)
+    const findBox = h("div", "pp-find");
+    const findIn = h("input", "pp-in pp-find-in") as HTMLInputElement;
+    findIn.type = "search";
+    findIn.placeholder = t("A destination, an address, coordinates…");
+    findIn.setAttribute("data-testid", "place-search");
+    findIn.setAttribute("aria-label", t("Search a place"));
+    const findStatus = h("div", "pp-find-status");
+    const findList = h("ul", "pp-find-list");
+    findList.setAttribute("data-testid", "place-results");
+    findBox.append(findIn, findStatus, findList);
+    /** the place found by its name (the globe clicked, the latitude typed: none) */
+    let placeName: string | null = null;
     // ---- what will happen, a refusal, the button
     const note = h("p", "pp-note");
     const err = h("p", "pp-err");
@@ -155,6 +176,7 @@ export class PlacePanel {
       bodies,
       sides,
       params,
+      findBox,
       pickBox,
       sites,
       note,
@@ -184,21 +206,25 @@ export class PlacePanel {
     const drawPick = () => {
       const show = (this.where === "orbit" || this.where === "ground" || this.where === "walk") && pickable();
       pickBox.hidden = !show;
+      findBox.hidden = !show || !ours();
       if (!show) return;
       this.picker.drawWorld(this.body, T.now());
+      const at = this.at ? (placeName ? `${placeName} (${fmtAt(this.at)})` : fmtAt(this.at)) : "";
       pickNote.textContent =
         this.where === "ground" || this.where === "walk"
           ? this.at
-            ? tf("Landing at {0}", fmtAt(this.at))
-            : t("Click the world: the place to land")
+            ? tf("Landing at {0}", at)
+            : t("Click the world or search a place: where to land")
           : this.at
-            ? tf("The orbit passes over {0} now", fmtAt(this.at))
-            : t("Click the world: the orbit will pass over it now");
+            ? tf("The orbit passes over {0} now", at)
+            : t("Click the world or search a place: the orbit will pass over it now");
     };
-    const setAt = (la: number, lo: number, centre = false) => {
+    const setAt = (la: number, lo: number, centre = false, name: string | null = null) => {
+      placeName = name;
       this.at = [la, lo];
-      lat.value = la.toFixed(3);
-      lon.value = lo.toFixed(3);
+      // (shown to the millionth of a degree — 0.1 m —; the place itself kept whole, as found or clicked)
+      if (document.activeElement !== lat) lat.value = String(+la.toFixed(6));
+      if (document.activeElement !== lon) lon.value = String(+lo.toFixed(6));
       this.picker.pick = [Math.cos(la * D) * Math.cos(lo * D), Math.cos(la * D) * Math.sin(lo * D), Math.sin(la * D)];
       if (centre) this.picker.centre(this.picker.pick);
       if (this.where === "orbit" && Math.abs(la) > +inc.value) inc.value = (Math.ceil(Math.abs(la) * 10) / 10).toFixed(1);
@@ -207,6 +233,82 @@ export class PlacePanel {
     };
     this.picker.onPick = (p) => setAt(Math.asin(Math.max(-1, Math.min(1, p[2]))) / D, Math.atan2(p[1], p[0]) / D);
     lat.oninput = lon.oninput = () => setAt(+lat.value, +lon.value);
+
+    /**
+     * The places by that name on this world: coordinates typed, its destinations and runways at once; on the
+     * Earth, its addresses as one types (Photon, a pause first) — `explicit` (Enter): at once, Nominatim when
+     * Photon finds nothing.
+     */
+    const search = (explicit = false) => {
+      this.searching?.abort();
+      this.searching = null;
+      const q = findIn.value.trim();
+      const id = this.body;
+      const rows: { name: string; sub: string; lat: number; lon: number }[] = [];
+      const c = q ? parseCoords(q) : null;
+      if (c) rows.push({ name: fmtAt([c.lat, c.lon]), sub: t("Coordinates"), ...c });
+      if (q) {
+        if (id === "earth" || id === "moon" || id === "mars")
+          for (const p of searchPois(q, POIS, id).slice(0, 8))
+            rows.push({ name: tr(p.name), sub: tr(POI_KINDS[p.kind]), lat: p.lat, lon: p.lon });
+        const w = q.toLowerCase();
+        for (const x of SITES)
+          if (x.body === id && (x.name.toLowerCase().includes(w) || x.icao?.toLowerCase() === w))
+            rows.push({ name: x.name, sub: t("Runway or site"), lat: x.lat, lon: x.lon });
+      }
+      const show = (more: typeof rows) => {
+        findList.replaceChildren();
+        // (OpenStreetMap's same place under several entries: once)
+        const seen = new Set<string>();
+        const all = [...rows, ...more].filter((r) => {
+          const k = `${r.name}|${r.lat.toFixed(3)}|${r.lon.toFixed(3)}`;
+          return !seen.has(k) && !!seen.add(k);
+        });
+        for (const r of all.slice(0, 14)) {
+          const b = h("button", "pp-find-item") as HTMLButtonElement;
+          b.type = "button";
+          b.setAttribute("data-testid", "place-result");
+          b.onclick = () => setAt(r.lat, r.lon, true, r.name);
+          b.append(h("b", "", r.name), h("small", "", r.sub));
+          const li = h("li", "");
+          li.append(b);
+          findList.append(li);
+        }
+      };
+      show([]);
+      findStatus.textContent = q && !rows.length && (id !== "earth" || q.length < 3 || c) ? t("Nothing by that name here") : "";
+      if (id !== "earth" || q.length < 3 || c) return;
+      const ctl = new AbortController();
+      this.searching = ctl;
+      findStatus.textContent = t("Searching the addresses…");
+      // (near the place picked, else the ship's: the nearer first)
+      const near = this.at ? { lat: this.at[0], lon: this.at[1] } : undefined;
+      setTimeout(
+        () => {
+          if (ctl.signal.aborted) return;
+          void geocode(q, { lang, near, signal: ctl.signal, fallback: explicit }).then(
+            (r) => {
+              if (ctl.signal.aborted) return;
+              show(r.map((g) => ({ name: g.name, sub: g.detail || g.kind, lat: g.lat, lon: g.lon })));
+              findStatus.textContent = r.length || rows.length ? "" : t("No address found");
+            },
+            () => {
+              if (!ctl.signal.aborted) findStatus.textContent = rows.length ? "" : t("No address found");
+            },
+          );
+        },
+        explicit ? 0 : 350,
+      );
+    };
+    findIn.oninput = () => search();
+    findIn.onkeydown = (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      // (the first place found taken; none yet: asked again at once, OpenStreetMap's Nominatim too)
+      const first = findList.querySelector("button") as HTMLButtonElement | null;
+      if (first) first.click();
+      else search(true);
+    };
 
     const fillSites = () => {
       sites.replaceChildren();
@@ -270,6 +372,7 @@ export class PlacePanel {
     const pickBody = (id: string) => {
       this.body = id;
       this.at = null;
+      placeName = null;
       this.picker.pick = null;
       const a = ours() ? defaultAltKm(id) : 100;
       alt.value = apo.value = String(a);
@@ -277,6 +380,8 @@ export class PlacePanel {
       // (two radii above it: three from its centre — the approach's stand-off)
       nearAlt.value = String(Math.round(sb ? (2 * sb.radius * M_METRES) / 1e3 : 1000));
       layout();
+      // (the same words looked for on the new world)
+      search();
     };
     const whereBtns = WHERE.map(([w, label, tip]) => {
       const b = button({ label, title: tip, testid: `place-${w}`, onClick: () => ((this.where = w), (this.at = null), layout()) });
@@ -314,9 +419,9 @@ export class PlacePanel {
         case "near":
           return isHole() ? T.near("gargantua", { rM: Math.max(+nearM.value, 2) }) : T.near(id, { altKm: Math.max(+nearAlt.value, 0) });
         case "ground":
-          return T.land(id, +lat.value, +lon.value);
+          return T.land(id, this.at?.[0] ?? +lat.value, this.at?.[1] ?? +lon.value);
         case "walk":
-          return T.walk(id, +lat.value, +lon.value);
+          return T.walk(id, this.at?.[0] ?? +lat.value, this.at?.[1] ?? +lon.value);
         default: {
           if (isHole()) return T.orbit("gargantua", { rM: Math.max(+rM.value, 2), retrograde: retro.checked });
           const o = { peKm: Math.max(+alt.value, 0), apKm: Math.max(+apo.value, +alt.value), inc: +inc.value, retrograde: retro.checked };

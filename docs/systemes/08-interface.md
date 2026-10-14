@@ -617,6 +617,18 @@ Une page plein écran (F8, la barre du haut, le menu pause, TARS) :
   vaisseau (`land`), y marcher (`walk`), la caméra libre au-dessus (`cameraAt` : 30° de plongée, emportée par le
   sol ; un spectateur si un vaisseau vole), un trépied sur place (`standOn`) ; « Cette vue » pour un point de vue
   photographié ; « Demander à TARS ». Une mission en cours se termine après un second clic.
+- **la même recherche dans « Placer le vaisseau »** (`ui/placepanel.ts`, en orbite, au sol, à pied, sur nos
+  mondes) : coordonnées tapées, destinations et pistes du monde choisi, adresses de la Terre (Photon à la frappe,
+  Nominatim sur Entrée) ; un résultat choisi fixe le lieu (le globe s’y tourne, la note le nomme). Le lieu est
+  gardé entier — les champs l’affichent au millionième de degré — : posé ou à pied, le vaisseau est à quelques
+  centimètres de la coordonnée trouvée.
+- **exactitude WGS84** : Photon et Nominatim (OpenStreetMap) donnent des latitudes **géodésiques** WGS84, celles
+  du sol du jeu (`bodyFixedOf`, a = 6 378 137 m, f = 1/298,257223563). Le sol les prend telles quelles ;
+  l’orbite au-dessus (`tools.orbitOver`) vise le point situé sur la normale géodésique du lieu, à la distance du
+  centre de l’orbite à cet endroit (`place.overPlace`, l’anomalie d’une orbite excentrique trouvée en deux
+  passes) : le nadir géodésique du vaisseau est le lieu au milliardième de degré (avant : la latitude lue sur
+  la sphère, jusqu’à 0,19° — 21 km — à côté). Le point « vous êtes ici » de l’Atlas et `groundBelow` prennent
+  la latitude géodésique du point lui-même, à sa hauteur, plus celle de sa direction ramenée au sol.
 
 #### 6.3 quinquies Le trépied et le ciel d’ici (`ui/skyevents.ts`, `ui/livecapture.ts`, `photo/skyevents.ts`, PLAN-MODES-AAA M7)
 
