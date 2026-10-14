@@ -3667,7 +3667,8 @@ async function main() {
   const challengeHost: ChallengeHost = { tools, camera, toast: (s) => panel.toast(s) };
   const challengePanel = new ChallengePanel(challengeHost);
   // playing together (ui/netpanel.ts, docs/PLAN-RESEAU.md): the network loaded only when a room is asked for
-  const netPanel = new NetPanel({ time: () => sim.time, build: "", toast: (s) => panel.toast(s) });
+  // (a room's clock in the scene's seconds — sim.time is in M)
+  const netPanel = new NetPanel({ time: () => sim.time * M_SECONDS, build: "", toast: (s) => panel.toast(s) });
   const openNetwork = () => (settings.netMenu ? netPanel.open() : panel.toast(t("The network's menu is off (Settings › Network)")));
   const netSession = new NetSession({
     camera,
@@ -3677,6 +3678,7 @@ async function main() {
     panel: netPanel,
     toast: (s) => panel.toast(s),
     jetIn: () => jetIn,
+    sceneTime: () => sim.time * M_SECONDS,
   });
   netPanel.session = netSession;
   // the Atlas (ui/atlas.ts, PLAN-MODES-AAA M6): the Earth, the Moon and Mars as maps, their destinations, the

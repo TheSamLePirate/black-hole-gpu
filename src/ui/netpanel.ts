@@ -8,6 +8,7 @@ import { t, tf } from "../i18n";
 import { loadNet, netLoaded, netParams, serverUrl, type NetModule } from "../net/load";
 import { store } from "../util/storage";
 import { button, el as h, modal } from "./kit";
+import { netRadar } from "./hud/symbology";
 import type { NetSession } from "./netsession";
 
 type Client = InstanceType<NetModule["NetClient"]>;
@@ -226,6 +227,11 @@ export class NetPanel {
     });
   }
 
+  /** the others on the F-35's radar this frame (tests) */
+  radar() {
+    return netRadar;
+  }
+
   /** Our craft put beside another's (ui/netsession.ts), said. */
   teleport(slot: number, gap?: number) {
     const said = this.session?.teleport(slot, gap) ?? t("Not in a room");
@@ -289,7 +295,17 @@ export class NetPanel {
         const li = h("li", m.slot === room.slot ? "me" : "");
         const dot = h("i", "netp-dot");
         dot.style.background = m.colour;
-        li.append(dot, h("span", "", m.name), h("em", "", ROLE_NAMES[m.role]?.() ?? m.role));
+        // (how its samples come: straight — the same network, through a NAT, a relay — or through the server)
+        const L = net.mesh?.peers.get(m.slot);
+        const route =
+          m.slot === room.slot
+            ? ""
+            : L?.state === "open"
+              ? `${L.route === "host" ? t("direct, local") : L.route === "relay" ? t("relayed") : t("direct")}${Number.isFinite(L.rtt) ? ` · ${Math.round(L.rtt)} ms` : ""}`
+              : t("via the server");
+        const r = h("small", "netp-route", route);
+        r.dataset.testid = `net-route-${m.slot}`;
+        li.append(dot, h("span", "", m.name), r, h("em", "", ROLE_NAMES[m.role]?.() ?? m.role));
         // (the tests': beside another — off its right wing, at its speed)
         if (m.slot !== room.slot && m.role === "pilot")
           li.append(

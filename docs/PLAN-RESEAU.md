@@ -258,7 +258,15 @@ utile quand on rejoint un monde avec ses engins. Voir [NETWORK.md](NETWORK.md).
 - **Vérifié** : deux navigateurs et un robot dans une salle sur `stream.samlepirate.org` ; l'horloge à
   ±2 ms ; aucune requête réseau en solo ; taille du bundle solo inchangée.
 
-### R1 — Voler ensemble sur Terre
+### R1 — Voler ensemble sur Terre ✅ (2026-10-14)
+
+*Fait* : les engins des autres en coordonnées fixes de la Terre, **affichés au présent** (prédiction par leur
+mouvement plutôt qu'un retard d'interpolation : la patrouille serrée l'exige), F-35 posés par leurs commandes
+(protocole v2, 104 octets), flammes, traînées et vapeur comme les nôtres, étiquettes, radar, WebRTC direct
+avec repli, ×1 imposé (`timeSpeed` est en M/s), l'heure de la salle à l'entrée, **À côté** (ailier à droite, à
+sa vitesse). *Reporté* : les collisions (R3), le train et les feux du Ranger d'un autre, l'instantané et les
+engins des absents (R7). Voir [NETWORK.md](NETWORK.md).
+
 - Chaque joueur choisit son engin (F-35, Ranger, Lander…) et apparaît sur un aérodrome de la salle ; les
   autres sont des engins distants, plusieurs exemplaires du même type compris (ils restent hors de `fleet`).
 - WebRTC : signalisation par le serveur, canaux non fiable et fiable, repli WebSocket, indicateur de liaison.

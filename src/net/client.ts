@@ -18,6 +18,7 @@ import {
   roomTime,
   type ServerMsg,
 } from "./proto";
+import { DEFAULT_ICE, p2pAvailable, PeerMesh, type SignalData } from "./p2p";
 import { RemoteRegistry } from "./remote";
 import { LabLink, type LabSettings, type Link, type Payload, WsLink } from "./transport";
 
@@ -38,6 +39,9 @@ export interface NetOptions {
   now?: () => number;
   /** a link of one's own (tests) */
   link?: (url: string) => Link;
+  /** the players' direct links (WebRTC): off, the samples ride the server alone (the network lab turns them off) */
+  p2p?: boolean;
+  ice?: RTCIceServer[];
 }
 
 export interface Room {
@@ -65,6 +69,11 @@ export class NetClient {
   readonly remotes = new RemoteRegistry();
   /** the server's version once welcomed */
   server = { v: 0, build: "" };
+  /** the direct links to the room's others (WebRTC), null: none */
+  mesh: PeerMesh | null = null;
+  /** samples sent through the server (some peer not reached directly) and straight */
+  relayed = 0;
+  direct = 0;
   private link: Link | null = null;
   private seq = 0;
   private reqId = 0;
@@ -214,11 +223,15 @@ export class NetClient {
         if (this.room) {
           this.room.members = m.members;
           for (const slot of this.remotes.tracks.keys()) if (!m.members.some((x) => x.slot === slot)) this.remotes.drop(slot);
+          this.mesh?.sync(m.members.map((x) => x.slot));
         }
         this.emit("roster", m.members);
         return;
       case "event":
         this.emit("event", { from: m.from, ev: m.ev });
+        return;
+      case "signal":
+        void this.mesh?.onSignal(m.from, m.data as SignalData);
         return;
       case "error":
         if (m.re !== undefined && this.pending.has(m.re)) {
@@ -241,6 +254,18 @@ export class NetClient {
   private setRoom(r: Room | null) {
     this.room = r;
     this.remotes.clear();
+    this.mesh?.close();
+    this.mesh = null;
+    // (the direct links: each other member reached by WebRTC — not under the network lab, not in Bun)
+    if (r && this.o.p2p !== false && !this.o.lab && p2pAvailable()) {
+      this.mesh = new PeerMesh({
+        self: () => this.room?.slot ?? -1,
+        signal: (to, data) => this.sendMsg({ type: "signal", to, data }),
+        onData: (buf) => this.onMessage(buf),
+        ice: this.o.ice ?? DEFAULT_ICE,
+      });
+      this.mesh.sync(r.members.map((x) => x.slot));
+    }
     this.emit("room", r);
   }
 
@@ -298,7 +323,15 @@ export class NetClient {
   sendCraft(s: Omit<CraftSample, "slot" | "seq" | "t"> & { t?: number }) {
     if (!this.room || !this.link?.open) return;
     const full: CraftSample = { ...s, slot: this.room.slot, seq: this.seq++ & 0xffff, t: s.t ?? this.roomNow() };
-    this.link.send(encodeCraft(full));
+    const buf = encodeCraft(full);
+    // (straight to each peer reached; through the server as well while one is not — a duplicate is dropped)
+    const reached = this.mesh?.send(buf) ?? new Set<number>();
+    const others = this.room.members.filter((m) => m.slot !== this.room!.slot);
+    if (reached.size) this.direct++;
+    if (others.some((m) => !reached.has(m.slot))) {
+      this.link.send(buf);
+      this.relayed++;
+    }
   }
 
   get bytes() {

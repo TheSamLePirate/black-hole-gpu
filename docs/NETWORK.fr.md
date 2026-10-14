@@ -21,6 +21,33 @@ reste entier : rien ne se connecte tant que le joueur ne demande pas une salle, 
   supprime ; son horloge continue quand personne n'y est.
 - **Réglages › Réseau › Menu Réseau** désactivé : aucune trace du réseau dans le jeu.
 
+## Voler ensemble sur Terre (R1)
+
+- **Chacun pilote son engin** (le F-35, le Ranger, le Lander…, plusieurs du même type) : ceux des autres sont
+  dessinés là où ils sont — les gouvernes, le train, la tuyère et les trappes STOVL d'un F-35 bougent comme
+  les commandes de son pilote, sa flamme de postcombustion, les traînées de ses moteurs, les fils de ses
+  saumons et sa nappe de vapeur sous facteur de charge —, leur pseudo, leur engin et leur distance au-dessus
+  d'eux (une flèche au bord de l'écran hors champ), sur le radar du F-35 dans leur couleur avec leur route et
+  leur hauteur par rapport à la nôtre.
+- **Affichés au présent** : prolongés depuis leur dernier échantillon par leur mouvement (vitesse,
+  accélération, rotation), un désaccord résorbé en douceur — un ailier à 25 m vole à 25 m (un cinquième de
+  seconde de retard le mettrait 50 m en arrière à 250 m/s).
+- **À côté** (le panneau de la salle, pour chaque autre pilote) : votre engin placé à sa droite, à sa vitesse,
+  son cap et son altitude — en patrouille ; au sol, garé à côté de lui. `__bh.net.teleport(slot, écart?)`.
+- **Le temps de la salle** : ×1 (temps réel) pour tous, un warp demandé est refusé ; en entrant, la scène est
+  mise à l'heure de la salle (le même Soleil) si elle en est à plus d'une minute.
+- **Les liens directs** : un canal de données WebRTC vers chaque autre page — sans ordre, jamais renvoyé —,
+  établi par le serveur de salles, les échantillons en direct (1–3 ms sur un même réseau), par le serveur tant
+  qu'un pair n'est pas joint ; le panneau dit comment arrivent ceux de chacun (direct, local · relayé · via le
+  serveur).
+
+Mesuré sur kerr-mini (`tests/e2e/net-flight`, deux pages) : un lien direct local de 1–3 ms ; les deux F-35 en
+patrouille se voient à 27,6–27,7 m ; la postcombustion du leader vue allumée chez l'ailier.
+
+Pas encore : les collisions entre joueurs (R3, avec les dégâts des combats), le train et les feux du Ranger
+d'un autre (une uniforme de l'engin piloté), les engins des joueurs partis gardés dans le monde de la salle
+(R7).
+
 ## Comment ça marche
 
 - **Le serveur de salles** (`server/rooms.ts`, Bun, SQLite) : les salles et leurs membres, l'horloge, les
@@ -46,7 +73,8 @@ deux pages à 0,3 ms près.
 
 ## Tests
 
-Unitaires : `tests/net-core.test.ts` (les échantillons, l'horloge sous 200 ms et 5 % de pertes, Hermite au
+De bout en bout aussi : `tests/e2e/net-flight` (deux F-35 : vus à 8 km, sur le radar, le lien direct, À côté —
+la patrouille, le même écart vu des deux côtés —, la postcombustion vue). Unitaires : `tests/net-core.test.ts` (les échantillons, l'horloge sous 200 ms et 5 % de pertes, Hermite au
 centimètre, le lissage, le vol du robot), `tests/net-rooms.test.ts` (un vrai serveur : salles, limites, mots
 de passe, la place reprise à la reconnexion, la suppression par le propriétaire, les salles gardées après un
 redémarrage). De bout en bout : `tests/e2e/net-rooms` (la page solo intacte, une salle depuis le menu pause,

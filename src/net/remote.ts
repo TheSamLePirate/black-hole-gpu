@@ -215,6 +215,8 @@ export class RemoteRegistry {
     if (!tr) this.tracks.set(s.slot, (tr = new RemoteTrack(s.slot, this.o)));
     const prev = tr.latest;
     tr.push(s);
+    // (a duplicate — the same sample come both ways, direct and through the server — or a late one: no news)
+    if (prev && s.t <= prev.t) return;
     // (the delay: late enough for the next sample — its lateness plus the spacing between two)
     const gap = prev && s.t > prev.t ? s.t - prev.t : 0;
     if (Number.isFinite(lateness)) {

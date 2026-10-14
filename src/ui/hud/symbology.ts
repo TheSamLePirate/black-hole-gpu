@@ -31,6 +31,9 @@ type V3 = [number, number, number];
 /** What the symbology needs from the flight (a slice of FlightHud's Info). */
 /** A fight's radar picture (controller/combat.ts): heading up — x right, y ahead [m] —, each contact's track
  *  turned from the nose's heading [rad] (null: still). */
+/** the room's others on the radar's scope this frame (ui/netsession.ts writes it; heading up, metres) */
+export const netRadar: RadarData = { contacts: [], missiles: [] };
+
 export interface RadarData {
   contacts: {
     x: number;
@@ -42,6 +45,8 @@ export interface RadarData {
     locked: boolean;
     seen: boolean;
     name: string;
+    /** a player's (docs/PLAN-RESEAU.md R1): drawn in his colour, a friend's */
+    colour?: string;
   }[];
   missiles: { x: number; y: number; trk: number | null; red: boolean }[];
 }
@@ -528,6 +533,8 @@ export function drawSymbology(F: SymFrame) {
   if (i.chal) drawChallenge(F, pr, stroke, text);
   if (i.avionics && s.f35Avionics && pilotView) drawAvionics(F, i.avionics, text, hmdRgb);
   if (i.combat) drawCombat(F, pr, stroke, text);
+  // (flying together, out of a fight or a course: the others on the scope, each in his colour — ui/netsession.ts)
+  else if (!i.chal && i.avionics && s.f35Radar && netRadar.contacts.length) drawRadar(F, netRadar, null, text, stroke);
   if (i.dock && i.dockGuide && !i.dock.docked && s.hudDock && on(F, "dock") && F.density < 2) drawDock(F, pr, stroke, text, inside);
 
   // ---- in the air: the angle of attack, the energy, the sideslip, the load, the flight director
@@ -2217,13 +2224,15 @@ function drawRadar(
   // the targets
   for (const c of R?.contacts ?? []) {
     const [px, py, out] = at(c.x, c.y);
-    const col = !c.alive
-      ? "rgba(160, 160, 160, 0.7)"
-      : c.locked
-        ? "rgba(255, 70, 60, 1)"
-        : c.seen
-          ? "rgba(255, 120, 90, 0.95)"
-          : "rgba(255, 120, 90, 0.5)";
+    const col = c.colour
+      ? c.colour
+      : !c.alive
+        ? "rgba(160, 160, 160, 0.7)"
+        : c.locked
+          ? "rgba(255, 70, 60, 1)"
+          : c.seen
+            ? "rgba(255, 120, 90, 0.95)"
+            : "rgba(255, 120, 90, 0.5)";
     ctx.fillStyle = col;
     if (c.air) {
       // (a chevron along its track)
@@ -2253,10 +2262,8 @@ function drawRadar(
         text(`${dz >= 0 ? "+" : ""}${dz}`, px + 9 * dpr, py + 8 * dpr, col, 9.5, "left", true);
       }
     } else ctx.fillRect(px - 4.5 * dpr, py - 4.5 * dpr, 9 * dpr, 9 * dpr);
-    if (c.locked) {
-      stroke(() => ctx.arc(px, py, 11 * dpr, 0, 2 * Math.PI), col, 1.6);
-      text(c.name, px, py - 16 * dpr, col, 10, "center", true);
-    }
+    if (c.locked) stroke(() => ctx.arc(px, py, 11 * dpr, 0, 2 * Math.PI), col, 1.6);
+    if (c.locked || c.colour) text(c.name, px, py - 16 * dpr, col, 10, "center", true);
   }
   // the missiles: a dot and its way
   for (const m of R?.missiles ?? []) {

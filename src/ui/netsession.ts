@@ -15,6 +15,8 @@ import { shipToCamera } from "../mounts";
 import type { CraftState } from "../net/remote";
 import type { Renderer } from "../renderer";
 import type { Settings } from "../settings";
+import { netRadar } from "./hud/symbology";
+import { M_SECONDS } from "../units";
 import { VESSELS } from "../vessels";
 import type { NetPanel } from "./netpanel";
 
@@ -41,6 +43,8 @@ export interface NetSessionDeps {
   toast(s: string): void;
   /** the F-35's flight controls' inputs this frame (main.ts: the poser's), null: not the F-35 */
   jetIn(): JetInputs | null;
+  /** the scene's time [s] */
+  sceneTime(): number;
 }
 
 const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
@@ -55,6 +59,8 @@ export class NetSession {
   private acc: Vec3 = [0, 0, 0];
   private spin: Vec3 = [0, 0, 0];
   private warpSaid = false;
+  /** the room whose clock the scene was set on */
+  private timedRoom = "";
   /** samples sent, for the link's figures */
   sent = 0;
 
@@ -73,11 +79,22 @@ export class NetSession {
       if (this.tags.length) this.tags = [];
       if (this.ships.length) this.ships = [];
       if (netFrame.ships.length) netFrame.ships = [];
+      if (netRadar.contacts.length) netRadar.contacts = [];
       this.prev = null;
       return;
     }
     const c = this.d.camera;
     const now = performance.now() / 1000;
+    // (the room's hour, the scene's: on joining, a scene more than a minute off set on the room's clock —
+    // the same Sun, the same sky for everyone)
+    if (this.timedRoom !== net.room.code && net.clock.synced) {
+      this.timedRoom = net.room.code;
+      const tr = net.roomNow();
+      if (Number.isFinite(tr) && Math.abs(tr - this.d.sceneTime()) > 60) {
+        this.d.tools.setDate(tr / M_SECONDS);
+        this.d.toast(t("The scene set on the room's hour"));
+      }
+    }
     // (a room flies at ×1 — real time: timeSpeed is in M per second —, its time everyone's; a warp asked is
     // refused, said once)
     const rt = realTimeSpeed(this.d.settings);
@@ -91,6 +108,18 @@ export class NetSession {
     this.ships = c.netShips(states, dt);
     R.netOthers = this.ships.filter((s) => !s.ghost).map((s) => ({ id: s.id, rel: s.rel, axes: s.axes, jet: s.jet, thrust: s.thrust }));
     const members = new Map(net.room.members.map((m) => [m.slot, m]));
+    // (on the F-35's radar: each other in his colour, his track, his height against ours)
+    netRadar.contacts = this.ships
+      .filter((s) => !s.ghost)
+      .map((s) => ({
+        ...s.radar,
+        air: !(s.state.flags & 1),
+        alive: true,
+        locked: false,
+        seen: true,
+        name: members.get(s.slot)?.name ?? `#${s.slot}`,
+        colour: members.get(s.slot)?.colour ?? "#ffffff",
+      }));
     const eye =
       this.d.settings.ship && R.shipPose
         ? shipToCamera(R.shipPose, this.d.settings.shipLookYaw, this.d.settings.shipLookPitch).t

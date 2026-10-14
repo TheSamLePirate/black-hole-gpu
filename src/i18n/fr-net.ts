@@ -54,4 +54,9 @@ export default {
   "Not in a room": "Pas dans une salle",
   Beside: "À côté",
   "Put my craft off {0}'s right wing, at its speed": "Placer mon engin à droite de {0}, à sa vitesse",
+  "direct, local": "direct, local",
+  relayed: "relayé",
+  direct: "direct",
+  "via the server": "via le serveur",
+  "The scene set on the room's hour": "La scène est mise à l'heure de la salle",
 } satisfies Record<string, string>;

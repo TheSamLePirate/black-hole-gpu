@@ -133,6 +133,8 @@ export interface NetShip {
   jet?: F35Pose;
   /** its engines: throttle 0–1, afterburner (1: dry), the air about it 0–1 */
   thrust: { throttle: number; boost: number; air: number };
+  /** heading up from the flown craft's nose: right, ahead, up [m]; its track over the ground [rad, from the nose] */
+  radar: { x: number; y: number; dz: number; trk: number | null };
   state: CraftState;
 }
 
@@ -150,6 +152,13 @@ function netShips(this: CameraController, states: CraftState[], dt: number, rang
   const E = earthView(this);
   if (!E) return [];
   const out: NetShip[] = [];
+  // (the flown craft's heading: its nose over the local east and north)
+  const E3 = E.fr.east as Vec3,
+    N3 = E.fr.north as Vec3,
+    U3 = E.fr.up as Vec3;
+  const nose = E.fr.fromLocal(this.shipAxesLocal(E.cam)[2] as Vec3) as Vec3;
+  const psi = Math.atan2(dot(nose, E3), dot(nose, N3));
+  const [cp, sp] = [Math.cos(psi), Math.sin(psi)];
   for (const s of states) {
     const id = kindOf(s.kind);
     if (!id || s.body !== 0 || s.frame !== 0) continue;
@@ -192,7 +201,12 @@ function netShips(this: CameraController, states: CraftState[], dt: number, rang
       };
     }
     const h = Math.hypot(...s.p) - 6_371_000;
+    const [e, n, u] = [dot(relHome, E3), dot(relHome, N3), dot(relHome, U3)];
+    const vH = E.toHome(s.v);
+    const ve = dot(vH, E3),
+      vn = dot(vH, N3);
     out.push({
+      radar: { x: e * cp - n * sp, y: e * sp + n * cp, dz: u, trk: Math.hypot(ve, vn) > 5 ? Math.atan2(ve, vn) - psi : null },
       slot: s.slot,
       id,
       rel: E.toCam(relHome),

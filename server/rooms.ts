@@ -276,6 +276,15 @@ export function createRooms(o: RoomsOptions) {
         }
         return send(ws, { type: "info", re: m.id, rooms });
       }
+      case "signal": {
+        // (a WebRTC offer, answer or candidate: to the member named, nobody else)
+        if (!P.room) return fail(ws, "not-in-room", "Not in a room");
+        const l = live.get(P.room);
+        const to = l?.peers.get(Number(m.to));
+        const msg = JSON.stringify({ type: "signal", from: P.slot, data: m.data } satisfies ServerMsg);
+        if (to && to !== ws && msg.length <= 16_384) to.send(msg);
+        return;
+      }
       case "event": {
         if (!P.room) return fail(ws, "not-in-room", "Not in a room");
         const ev = m.ev && typeof m.ev === "object" ? m.ev : null;

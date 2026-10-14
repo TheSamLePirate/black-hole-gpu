@@ -49,7 +49,9 @@ export type ClientMsg =
   | { type: "delete"; id: number; code: string; owner: string }
   | { type: "info"; id: number; codes: string[] }
   | { type: "profile"; name: string; colour: string }
-  | { type: "event"; ev: NetEvent };
+  | { type: "event"; ev: NetEvent }
+  /** a WebRTC signal to another member (src/net/p2p.ts): relayed to it alone */
+  | { type: "signal"; to: number; data: unknown };
 
 // ---- the server → the page
 export type ServerMsg =
@@ -61,6 +63,7 @@ export type ServerMsg =
   | { type: "info"; re: number; rooms: RoomInfo[] }
   | { type: "roster"; members: Member[] }
   | { type: "event"; from: number; ev: NetEvent }
+  | { type: "signal"; from: number; data: unknown }
   | { type: "error"; re?: number; code: ErrorCode; msg: string };
 
 export type ErrorCode = "update" | "unknown-room" | "full" | "pilots-full" | "password" | "owner" | "bad" | "not-in-room" | "limit";

@@ -23,7 +23,7 @@ describe.skipIf(!E2E)("flying together", () => {
     code = await a.js<string>(`__bh.net.net.room.code`);
     b = await App.boot({ width: 1280, height: 800, hash: `scene=game:artemis&join=${code}`, tiles: false });
     await b.waitFor(`__bh.net?.net?.room?.code === "${code}" && __bh.camera.piloting`, 120_000);
-    await b.js(`(() => { __bh.game.setDate("2067-06-21T17:30"); __bh.net.setName("Ben"); return 1; })()`);
+    await b.js(`(() => { __bh.net.setName("Ben"); return 1; })()`);
     await fly(b, 34.95, -117.8, 180);
   }, 300_000);
   afterAll(() => {
@@ -31,6 +31,12 @@ describe.skipIf(!E2E)("flying together", () => {
     a?.close();
     stopServer();
   });
+
+  test("the joining page set on the room's hour: the same Sun", async () => {
+    const [ta, tb] = [await a.js<number>(`__bh.sim.time * 492.5490947`), await b.js<number>(`__bh.sim.time * 492.5490947`)];
+    console.log(`  scene time A ${ta.toFixed(1)} s, B ${tb.toFixed(1)} s`);
+    expect(Math.abs(ta - tb)).toBeLessThan(30);
+  }, 30_000);
 
   test("each sees the other's F-35 some 10 km off, its name tag over it", async () => {
     for (const p of [a, b]) await p.waitFor(`__bh.renderer.netOthers.length === 1`, 20_000);
@@ -42,6 +48,31 @@ describe.skipIf(!E2E)("flying together", () => {
     expect(r.d).toBeGreaterThan(3000);
     expect(r.d).toBeLessThan(15_000);
     expect(r.tags).toBe(1);
+    // (on the F-35's radar scope: the other, his name)
+    const radar = await a.js<{ name: string; d: number }[]>(
+      `__bh.net.radar().contacts.map((c) => ({ name: c.name, d: Math.hypot(c.x, c.y) }))`,
+    );
+    console.log(`  A's radar: ${radar.map((c) => `${c.name} ${(c.d / 1000).toFixed(1)} km`).join(", ")}`);
+    expect(radar.length).toBe(1);
+    expect(radar[0]!.name).toBe("Ben");
+  }, 60_000);
+
+  test("the direct link: WebRTC between the two pages, the samples straight to each other", async () => {
+    for (const p of [a, b]) await p.waitFor(`[...(__bh.net.net.mesh?.peers.values() ?? [])].some((l) => l.state === "open")`, 30_000);
+    await Bun.sleep(3000);
+    for (const [n, p] of [
+      ["A", a],
+      ["B", b],
+    ] as const) {
+      const r = await p.js<{ route: string; rtt: number; down: number; direct: number; relayed: number; late: number }>(`(() => {
+        const n = __bh.net.net; const L = [...n.mesh.peers.values()][0];
+        return { route: L.route, rtt: L.rtt, down: L.bytes.down, direct: n.direct, relayed: n.relayed, late: n.remotes.late50 * 1000 }; })()`);
+      console.log(
+        `  ${n}: ${r.route} link, rtt ${r.rtt.toFixed(1)} ms, ${r.down} bytes in straight; sent ${r.direct} straight, ${r.relayed} through the server; samples ${r.late.toFixed(0)} ms late`,
+      );
+      expect(r.down).toBeGreaterThan(1000);
+      expect(r.direct).toBeGreaterThan(10);
+    }
   }, 60_000);
 
   test("Beside (a click in the room panel): B off A's right wing, at its speed — seen so on both", async () => {
@@ -86,6 +117,9 @@ describe.skipIf(!E2E)("flying together", () => {
         ["a", a],
         ["b", b],
       ] as const) {
+        console.log(
+          `  ${n.toUpperCase()}'s HUD: ${await p.js<string>(`__bh.settings.hudKind + " / " + (document.querySelector(".fl-root")?.dataset.kind ?? "?")`)}`,
+        );
         const tags = await p.js<string>(
           `JSON.stringify(__bh.net.session.tags.map((g) => [g.name, Math.round(g.dist), g.at.map(Math.round)]))`,
         );
