@@ -128,6 +128,7 @@ export default {
   Names: "Noms",
   "Searching the addresses…": "Recherche des adresses…",
   "No address found": "Aucune adresse trouvée",
+  "The address service does not answer — try again in a moment": "Le service d'adresses ne répond pas — réessayez dans un instant",
   Coordinates: "Coordonnées",
   "Runway or site": "Piste ou site",
   Viewpoint: "Point de vue",

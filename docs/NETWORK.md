@@ -54,6 +54,13 @@ loaded only then.
 Measured on kerr-mini (`tests/e2e/net-flight`, two pages): a direct local link, 1–3 ms; the two F-35s in
 formation each see the other 27.6–27.7 m off; the leader's afterburner seen lit on the wingman's screen.
 
+Two Macs, the room server in production between them (`tests/e2e/net-formation`: the leader here, the wingman
+on kerr-mini, both on the autopilot's 3000 m, 090°, 220 m/s, logs side by side by the room's time, 3 min):
+- in calm air the gap stays 40.0–40.1 m (drift 4 cm): the two pages fly the same flight;
+- in the light wind (its turbulence each craft's own) it opens from 40 to ~105 m in 3 min (≈50 m back, 35 m
+  out) — as two real jets on their autopilots would: they hold the air's speed and a heading, not a place;
+- whatever the gap, each page draws the other where he is to 2–5 cm (at most 9 cm).
+
 Not yet: another's Ranger gear and lights (a
 uniform of the flown craft's), the crafts of the players gone kept in the room's world (R7).
 
@@ -131,6 +138,10 @@ the instruments' route and autopilot modes are the pilot's own only on his scree
   own craft back where you left it (to the decimetre).
 - The others' craft are placed from your camera wherever it is — on foot 14 km from your own craft, the one
   beside you stands beside you.
+- **On the Moon, on Mars** too: a craft landed there is sent fixed to that ground (not coasting: it no longer
+  drifts on the others' screens), its astronaut walks there.
+- **Beside** a player on foot: you on foot beside him (2.5 m to his right, facing as he does), your craft
+  parked by his if it stands on that ground.
 
 Measured on kerr-mini (`tests/e2e/net-walk`): two astronauts 12 m apart on Edwards' apron, each seen by the
 other at the right distance; one walks 3 s — seen moving at 1.1–1.3 m/s; he boards the other's F-35 (his view
@@ -225,7 +236,7 @@ late (95 %: 27 ms), the others shown 60–75 ms late, the two pages' clocks with
 
 ## Tests
 
-End to end too: `tests/e2e/net-gargantua` (by Gargantua, through the wormhole), `tests/e2e/net-dock` (docking together, contacts, the persistent world), `tests/e2e/net-space` (in orbit together, the room's warp, targets), `tests/e2e/net-walk` (on foot together, a passenger's ride), `tests/e2e/net-flight` (two F-35s: seen 8 km off, on the radar, the direct link, Beside —
+End to end too: `tests/e2e/net-gargantua` (by Gargantua, through the wormhole), `tests/e2e/net-dock` (docking together, contacts, the persistent world), `tests/e2e/net-space` (in orbit together, the room's warp, targets), `tests/e2e/net-walk` (on foot together, a passenger's ride), `tests/e2e/net-moon` (on foot on the Moon, Beside on foot), `tests/e2e/net-formation` (two Macs in formation, the drift), `tests/e2e/net-flight` (two F-35s: seen 8 km off, on the radar, the direct link, Beside —
 formation, the same gap seen by both —, the afterburner seen). Unit: `tests/net-core.test.ts` (the samples, the clock under 200 ms and 5 % lost, the Hermite within a
 centimetre, the smoothing, the bot's flight), `tests/net-rooms.test.ts` (a real server: rooms, limits,
 passwords, a reconnection's slot, the owner's delete, the rooms kept across a restart). End to end:

@@ -175,6 +175,10 @@ export default {
   "Back to your craft": "De retour à votre engin",
   "Back to my craft": "Reprendre mon engin",
   "Where you left your craft in this room": "Là où vous avez laissé votre engin dans cette salle",
+  // beside another on foot
+  "{0} walks where we cannot follow": "{0} marche là où l'on ne peut pas le suivre",
+  "Parked by {0}'s craft": "Garé près de l'engin de {0}",
+  "On foot beside {0}": "À pied à côté de {0}",
   // docking together (R7)
   "{0}'s {1}": "{1} de {0}",
   "{0} docked to your {1}": "{0} s'est amarré à votre {1}",

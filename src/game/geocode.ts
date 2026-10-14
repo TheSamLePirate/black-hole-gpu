@@ -170,5 +170,12 @@ export async function geocode(
     }
   }
   if (answered) kept.set(key, out);
+  geocodeState.unreachable = !answered && !out.length;
   return out;
 }
+
+/** the last search: its address service did not answer (down, or limiting us) — said apart from "nothing found" */
+export const geocodeState = { unreachable: false };
+
+/** what to say of an empty answer: none found, or the service not answering */
+export const noAddress = () => (geocodeState.unreachable ? "unreachable" : "none");

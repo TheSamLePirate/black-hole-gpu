@@ -5321,7 +5321,10 @@ async function main() {
       panel.toast(tf("{0} — back on the nearest runway in 4 s", why));
       net.event({ kind: "crash", why, with: collidedWith });
       collidedWith = null;
+      // (placed again meanwhile — beside another, the Place panel, the atlas —: that place kept, no runway)
+      const placed = tools.placings;
       setTimeout(() => {
+        if (tools.placings !== placed) return;
         try {
           tools.lineUp();
           camera.airFlight.reset(fleet.active);

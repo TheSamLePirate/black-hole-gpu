@@ -354,6 +354,22 @@ function netOwnState(this: CameraController): NetOwnState | null {
   if (!H || body < 0) return null;
   const nav = H.nav;
   const ax = this.shipAxesLocal(H.cam).map((a) => H.fromLocal(a as Vec3)) as [Vec3, Vec3, Vec3];
+  // (landed on another body — the Moon, Mars —: fixed to its ground, as on the Earth's — sent on an orbit, the
+  // others' Kepler carried it off)
+  if ((this.landed || this.ourLanded) && solidBody(nav.ref)) {
+    const A = bodyAxes(solarBody(nav.ref)!, nav.t);
+    const toB = (h: Vec3): Vec3 => unit([dot(h, A[0]), dot(h, A[1]), dot(h, A[2])]);
+    return {
+      frame: 0,
+      body,
+      p: scale(toBodyFixed(nav.ref, nav.X, nav.t) as Vec3, M_METRES),
+      v: [0, 0, 0],
+      fwd: toB(ax[2]),
+      up: toB(ax[1]),
+      right: toB(scale(ax[0], -1)),
+      h: 0,
+    };
+  }
   const p = [0, 1, 2].map((k) => (nav.X[k]! - nav.refPos[k]!) * M_METRES) as Vec3;
   return {
     frame: 1,

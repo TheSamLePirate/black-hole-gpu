@@ -520,7 +520,8 @@ export class NetSession {
     }
     this.prev = { at: now, st, frame: own.frame, v: own.v, ax };
     const speed = Math.hypot(...own.v);
-    const onGnd = own.frame === 0 && ground;
+    // (on the Earth: its ground as the collisions read it; landed elsewhere — the Moon, Mars —: on it)
+    const onGnd = own.frame === 0 && (own.body === 0 ? ground : true);
     const parked = onGnd && speed < 0.5;
     const near = this.ships.some((s) => s.dist < 5000);
     const th = this.d.renderer.shipThrust;
@@ -939,6 +940,33 @@ export class NetSession {
     return tf("On {0}'s {1}, {2} m out", N.title, hp.name, Math.round(dist));
   }
 
+  /**
+   * Beside another on foot (R5): our craft parked by his on that ground (when his stands there), then on foot
+   * 2.5 m off his right, facing his way. Says what it did.
+   */
+  private besideOnFoot(name: string, W: CraftState, craft: CraftState | null): string {
+    const c = this.d.camera;
+    const body = NET_BODIES[W.body];
+    if (!body) return tf("{0} walks where we cannot follow", name);
+    if (craft && craft.body === W.body && craft.frame === 0 && craft.flags & 1) {
+      const half = (id: string) => (id === "f35" ? 5.4 : id === "ranger" ? 12 : id === "lander" ? 8 : 40);
+      const place = c.netPlaceBeside(craft, half(kindOf(craft.kind) ?? "f35") + half(fleet.active) + 8);
+      if (place) {
+        this.d.tools.placeAt({ ...place, frame: place.frame ?? "ours", note: tf("Parked by {0}'s craft", name) });
+        c.pilot.auto = "none";
+        c.gearInit = true;
+        c.gearDown = true;
+        c.gearExt = 1;
+        c.pilot.throttle = 0;
+      }
+    }
+    const ax = quatAxes(W.q);
+    const at = [0, 1, 2].map((k) => W.p[k]! + ax.right[k]! * 2.5) as Vec3;
+    const err = c.character.startAt(body, at, ax.fwd);
+    this.prev = null;
+    return err ?? tf("On foot beside {0}", name);
+  }
+
   /** The others in the room with a craft now (the teleport's choice). */
   others(): { slot: number; name: string; state: CraftState | null }[] {
     const net = this.net;
@@ -958,6 +986,9 @@ export class NetSession {
     if (!this.net?.clock.synced || this.timedRoom !== this.net.room?.code) return t("The room's clock is still being set — a moment");
     const o = this.others().find((x) => x.slot === slot);
     if (!o) return t("No such player in the room");
+    // (he walks: we walk beside him — our craft parked by his, if his stands on that ground)
+    const W = this.net.remotes.track(slot, true)?.at(this.d.sceneTime());
+    if (W && !W.ghost) return this.besideOnFoot(o.name, W, o.state);
     if (!o.state) return tf("{0} has no craft on our worlds now", o.name);
     const c = this.d.camera;
     const s = o.state;

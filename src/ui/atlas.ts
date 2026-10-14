@@ -7,7 +7,7 @@
 
 import "./atlas.css";
 import { compassPoint, fmtLatLon, greatCircle, POINTS } from "../game/geo";
-import { geocode, parseCoords, type GeoPlace } from "../game/geocode";
+import { geocode, noAddress, parseCoords, type GeoPlace } from "../game/geocode";
 import { isNight, terminatorLat } from "../game/mapproj";
 import { POI_KINDS, POIS, searchPois, type Poi, type PoiKind } from "../game/pois";
 import { t, tf, tr } from "../i18n";
@@ -308,12 +308,18 @@ export class AtlasPage {
           (r) => {
             if (ctl.signal.aborted) return;
             this.found = r;
-            this.status.textContent = r.length ? "" : t("No address found");
+            this.status.textContent = r.length
+              ? ""
+              : noAddress() === "unreachable"
+                ? t("The address service does not answer — try again in a moment")
+                : t("No address found");
             this.fillList();
             this.map.request();
           },
           () => {
-            if (!ctl.signal.aborted) this.status.textContent = t("No address found");
+            if (!ctl.signal.aborted)
+              this.status.textContent =
+                noAddress() === "unreachable" ? t("The address service does not answer — try again in a moment") : t("No address found");
           },
         );
       },

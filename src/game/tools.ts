@@ -206,10 +206,14 @@ export class GameTools {
     }
   }
 
+  /** how many times the craft was placed (a placing awaited — the room's runway after a loss — let go by a later one) */
+  placings = 0;
+
   /** Puts the Ranger at a pose (see place.ts) and restarts its flight there. */
   placeAt(p: Pose) {
     const s = this.ctx.settings,
       c = this.ctx.camera;
+    this.placings++;
     this.shipOn();
     // (the pose is the craft's — its nose, its top —: the camera's own axes from them through the view's
     // mount, as a craft flown to is placed — fleet.ts placeOnPose —; set as the camera's, the chase view's

@@ -9,7 +9,7 @@ import "./placepanel.css";
 import type { GameTools } from "../game/tools";
 import { defaultAltKm, THEIR_IDS } from "../game/place";
 import { SITES } from "../game/sites";
-import { geocode, parseCoords } from "../game/geocode";
+import { geocode, noAddress, parseCoords } from "../game/geocode";
 import { POI_KINDS, POIS, searchPois } from "../game/pois";
 import { M_METRES, SOLAR_BODIES } from "../system/solar";
 import { solidBody } from "../system/our-surface";
@@ -291,10 +291,20 @@ export class PlacePanel {
             (r) => {
               if (ctl.signal.aborted) return;
               show(r.map((g) => ({ name: g.name, sub: g.detail || g.kind, lat: g.lat, lon: g.lon })));
-              findStatus.textContent = r.length || rows.length ? "" : t("No address found");
+              findStatus.textContent =
+                r.length || rows.length
+                  ? ""
+                  : noAddress() === "unreachable"
+                    ? t("The address service does not answer — try again in a moment")
+                    : t("No address found");
             },
             () => {
-              if (!ctl.signal.aborted) findStatus.textContent = rows.length ? "" : t("No address found");
+              if (!ctl.signal.aborted)
+                findStatus.textContent = rows.length
+                  ? ""
+                  : noAddress() === "unreachable"
+                    ? t("The address service does not answer — try again in a moment")
+                    : t("No address found");
             },
           );
         },

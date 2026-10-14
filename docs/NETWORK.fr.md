@@ -58,6 +58,15 @@ reste entier : rien ne se connecte tant que le joueur ne demande pas une salle, 
 Mesuré sur kerr-mini (`tests/e2e/net-flight`, deux pages) : un lien direct local de 1–3 ms ; les deux F-35 en
 patrouille se voient à 27,6–27,7 m ; la postcombustion du leader vue allumée chez l'ailier.
 
+Deux Mac, le serveur de salles de production entre eux (`tests/e2e/net-formation` : le leader ici, l'ailier
+sur kerr-mini, tous deux au pilote automatique 3000 m, cap 090, 220 m/s, journaux mis côte à côte sur l'heure
+de la salle, 3 min) :
+- en air calme l'écart reste de 40,0 à 40,1 m (dérive 4 cm) : les deux pages volent le même vol ;
+- par vent léger (sa turbulence propre à chaque engin) il s'ouvre de 40 à ~105 m en 3 min (≈50 m en arrière,
+  35 m sur le côté) — comme deux vrais jets au pilote automatique : ils tiennent une vitesse air et un cap, pas
+  une place ;
+- quel que soit l'écart, chaque page dessine l'autre là où il est à 2–5 cm près (9 cm au plus).
+
 Pas encore : le train et les feux du Ranger
 d'un autre (une uniforme de l'engin piloté), les engins des joueurs partis gardés dans le monde de la salle
 (R7).
@@ -142,6 +151,10 @@ portance), pas celle du pilote ; la route et les modes du pilote automatique ne 
   engin revient là où vous l'aviez laissé (au décimètre).
 - Les engins des autres sont placés depuis votre caméra où qu'elle soit — à pied à 14 km de votre engin, celui
   d'à côté est bien à côté.
+- **Sur la Lune, sur Mars** aussi : un engin posé y est envoyé fixé à ce sol (non plus en vol libre : il ne
+  dérive plus chez les autres), son astronaute y marche.
+- **À côté** d'un joueur à pied : vous à pied à côté de lui (2,5 m à sa droite, tourné comme lui), votre engin
+  garé près du sien s'il est posé sur ce sol.
 
 Mesuré sur kerr-mini (`tests/e2e/net-walk`) : deux astronautes à 12 m l'un de l'autre sur le parking
 d'Edwards, chacun vu par l'autre à la bonne distance ; l'un marche 3 s — vu se déplacer à 1,1–1,3 m/s ; il
@@ -244,7 +257,7 @@ deux pages à 0,3 ms près.
 
 ## Tests
 
-De bout en bout aussi : `tests/e2e/net-gargantua` (près de Gargantua, par le trou de ver), `tests/e2e/net-dock` (s'amarrer ensemble, les contacts, le monde persistant), `tests/e2e/net-space` (en orbite ensemble, le warp de la salle, les cibles), `tests/e2e/net-walk` (à pied ensemble, un passager), `tests/e2e/net-flight` (deux F-35 : vus à 8 km, sur le radar, le lien direct, À côté —
+De bout en bout aussi : `tests/e2e/net-gargantua` (près de Gargantua, par le trou de ver), `tests/e2e/net-dock` (s'amarrer ensemble, les contacts, le monde persistant), `tests/e2e/net-space` (en orbite ensemble, le warp de la salle, les cibles), `tests/e2e/net-walk` (à pied ensemble, un passager), `tests/e2e/net-moon` (à pied sur la Lune, À côté à pied), `tests/e2e/net-formation` (deux Mac en patrouille, la dérive), `tests/e2e/net-flight` (deux F-35 : vus à 8 km, sur le radar, le lien direct, À côté —
 la patrouille, le même écart vu des deux côtés —, la postcombustion vue). Unitaires : `tests/net-core.test.ts` (les échantillons, l'horloge sous 200 ms et 5 % de pertes, Hermite au
 centimètre, le lissage, le vol du robot), `tests/net-rooms.test.ts` (un vrai serveur : salles, limites, mots
 de passe, la place reprise à la reconnexion, la suppression par le propriétaire, les salles gardées après un
