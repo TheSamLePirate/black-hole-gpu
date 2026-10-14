@@ -170,6 +170,16 @@ export class ObservePage {
     };
     search.addEventListener("input", filter);
     search.addEventListener("keydown", (e) => {
+      // (Escape in the field: the search emptied, then the page closed — the game's Escape skips a field one types in)
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        if (search.value) {
+          search.value = "";
+          filter();
+        } else this.hide();
+        return;
+      }
       if (e.key !== "Enter") return;
       e.preventDefault();
       const first = items.find((it) => !rows.get(it.key)!.row.hidden);

@@ -303,6 +303,16 @@ export class PlacePanel {
     };
     findIn.oninput = () => search();
     findIn.onkeydown = (e) => {
+      // (Escape in the field: the search emptied, then the panel closed — the game's Escape skips a field one types in)
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        if (findIn.value) {
+          findIn.value = "";
+          search();
+        } else this.close?.();
+        return;
+      }
       if (e.key !== "Enter") return;
       e.preventDefault();
       // (the first place found taken; none yet: asked again at once, OpenStreetMap's Nominatim too)

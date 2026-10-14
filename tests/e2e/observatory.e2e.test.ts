@@ -131,4 +131,16 @@ describe.skipIf(!E2E)("the observatory", () => {
     expect(alt).toBeGreaterThan(9);
     if (SHOTS) await app.shot(`${SHOTS}/observe-saturn.png`);
   }, 90_000);
+
+  test("Escape in its search: the search emptied first, then the page closed", async () => {
+    await app.press("KeyY", "Y", { shift: true });
+    await app.waitFor(`!!document.querySelector("[data-testid=observe]")`, 5_000);
+    await app.click("[data-testid=observe-search]");
+    await app.type("Mars");
+    await app.press("Escape");
+    expect(await app.js<string>(`document.querySelector("[data-testid=observe-search]").value`)).toBe("");
+    expect(await app.js<boolean>(`!!document.querySelector("[data-testid=observe]")`)).toBe(true);
+    await app.press("Escape");
+    await app.waitFor(`!document.querySelector("[data-testid=observe]")`, 3_000);
+  }, 30_000);
 });
