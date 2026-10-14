@@ -67,8 +67,12 @@ export function drawTelescope(ctx: CanvasRenderingContext2D, W: number, H: numbe
   const halfW = (W / H) * v.fov * 3600;
   const step = SCALE_ARCSEC.filter((a) => a <= 0.2 * halfW).at(-1) ?? SCALE_ARCSEC[0]!;
   const stepPx = (step / 3600) * pxPerDeg;
-  const gap = Math.min(W, H) * 0.035;
-  const arm = Math.min(W, H) * 0.16;
+  // (open round the target's disc when it is at the centre — a planet framed, the wormhole's mouth and the other
+  // universe in it: the arms outside what one looks at, not across it)
+  const disc =
+    v.target?.ndc && Math.hypot(v.target.ndc[0] * (W / H), v.target.ndc[1]) < 0.05 ? ((v.target.ang * 180) / Math.PI) * pxPerDeg : 0;
+  const gap = Math.max(Math.min(W, H) * 0.035, disc > 6 * k ? disc + 12 * k : 0);
+  const arm = Math.min(gap + Math.min(W, H) * 0.125, Math.min(W, H) * 0.48);
   ctx.strokeStyle = "rgba(210, 236, 255, 0.55)";
   ctx.lineWidth = 1 * k;
   ctx.beginPath();

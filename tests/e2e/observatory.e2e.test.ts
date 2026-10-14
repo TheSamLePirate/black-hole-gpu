@@ -41,6 +41,10 @@ describe.skipIf(!E2E)("the observatory", () => {
       return { deg: Math.acos(Math.min(1, c)) * 180 / Math.PI, fov: v.s.fov, target: String(v.s.target), tele: !!v.s.telescope };
     })()`);
 
+  /** a TARS tool run as the model calls it */
+  const tool = (name: string, args: object) =>
+    app.js(`__bh.tars.tools().find((t) => t.name === ${JSON.stringify(name)}).run(${JSON.stringify(args)}, new AbortController().signal)`);
+
   test("on foot, Y: the tripod where he stands, the telescope on it", async () => {
     await app.press("KeyY", "y");
     await Bun.sleep(1500);
@@ -143,4 +147,27 @@ describe.skipIf(!E2E)("the observatory", () => {
     await app.press("Escape");
     await app.waitFor(`!document.querySelector("[data-testid=observe]")`, 3_000);
   }, 30_000);
+
+  test("the wormhole: found as Gargantua, at its best near Saturn — its mouth framed whole, the other universe in it", async () => {
+    await tool("observe", { action: "look", name: "Gargantua", at: "best" });
+    await Bun.sleep(3000);
+    const a = await off("wormhole");
+    const seen = await app.js<number>(`__bh.camera.viewController().targetInfo().seen * 180 / Math.PI`);
+    console.log(`  wormhole: ${a.deg.toFixed(4)}° off, its mouth ${(2 * seen).toFixed(3)}° across in a ${a.fov.toFixed(2)}° field`);
+    expect(a.target).toBe("wormhole");
+    expect(a.tele).toBe(true);
+    // (the mouth framed: three of its diameters in the field)
+    expect(a.fov).toBeCloseTo(6 * seen, 1);
+    expect(a.deg).toBeLessThan(a.fov / 20);
+    expect(await app.js<number>(`__bh.mx.framedView().alt`)).toBeGreaterThan(9);
+    if (SHOTS) await app.shot(`${SHOTS}/observe-wormhole.png`);
+    // (Gargantua itself as the target, beyond the mouth: the mouth framed — not a point at the narrowest field)
+    await app.js(
+      `(() => { const v = __bh.camera.viewController(); v.setTelescope(false); v.selectTarget("hole", { focus: false }); v.setTelescope(true); return 1; })()`,
+    );
+    await Bun.sleep(2500);
+    const g = await off("wormhole");
+    expect(g.target).toBe("hole");
+    expect(g.fov).toBeGreaterThan(1);
+  }, 60_000);
 });

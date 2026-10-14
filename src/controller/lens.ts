@@ -79,8 +79,13 @@ function setTelescope(this: CameraController, on: boolean) {
     this.teleSaved = { fov: this.fovTarget ?? s.fov, lookAt: s.lookAt };
     if (!s.lookAt) this.setLookAt(true);
     const info = this.targetInfo();
-    const want = info && info.ang > 0 ? ((info.ang * 360) / Math.PI) * 3 : s.fov / 8;
-    this.fovTarget = clamp(want, TELE_MIN, Math.min(20, s.fov));
+    // (a body beyond the wormhole, from our side: its mouth framed — targetInfo's `seen` —, not a point at its
+    // centre at the narrowest field)
+    const ang = info?.seen ?? 0;
+    const want = ang > 0 ? ((ang * 360) / Math.PI) * 3 : s.fov / 8;
+    // (the target framed whatever the field it is taken from — 20° at most: bounded by the field in use, a
+    // telescope taken off Saturn at 0.02° onto the wormhole's mouth, 0.9° across, stayed at 0.02°)
+    this.fovTarget = clamp(want, TELE_MIN, 20);
   } else {
     const sv = this.teleSaved;
     this.fovTarget = clamp(sv ? sv.fov : Math.max(s.fov, 40), 1, 150);

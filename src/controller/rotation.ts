@@ -27,6 +27,7 @@ import {
   starOrbitRadius,
   isCraft,
   isOurs,
+  onOurSide,
 } from "../targeting";
 import type { Lens } from "../geodesic";
 import { lensesOf } from "../lenses";
@@ -172,13 +173,19 @@ function targetInfo(this: CameraController) {
   const aim = this.aim(cam);
   if (!aim) return null;
   const dist = bodyDistance(s, cam, s.target, this.nowTime());
+  const ang = angularRadius(s, s.target, dist);
+  // (from our side, a body beyond the wormhole — Gargantua, its worlds, its star — shows in the mouth: what one
+  // frames and looks at is the mouth, the other universe in it)
+  const through = onOurSide(s, cam) && s.target !== "wormhole" && !isOurs(s.target);
   return {
     body: s.target,
     name: BODY_NAMES[s.target],
     look: aim.look,
     lensed: aim.lensed,
     dist,
-    ang: angularRadius(s, s.target, dist),
+    ang,
+    /** the angular radius of what shows it in the view [rad]: its own, or the wormhole's mouth's */
+    seen: through ? angularRadius(s, "wormhole", dist) : ang,
     cam,
   };
 }

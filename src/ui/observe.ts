@@ -56,9 +56,24 @@ export function observeCatalog(): ObserveItem[] {
 }
 
 /** An item by a name or key, either language ("Jupiter", "Lune", "Sirius", "ISS", "wormhole"). */
+/** Other names for what is seen through the wormhole's mouth (Gargantua, its system, a black hole) — the mouth. */
+const THROUGH_THE_MOUTH = [
+  "gargantua",
+  "trou noir",
+  "black hole",
+  "hole",
+  "trou de ver",
+  "embouchure",
+  "mouth",
+  "miller",
+  "mann",
+  "edmunds",
+];
+
 export function findObservable(q: string, list = observeCatalog()): ObserveItem | null {
   const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
   const n = fold(q);
+  if (THROUGH_THE_MOUTH.some((a) => n === a || n.startsWith(`${a} `))) return list.find((x) => x.key === "wormhole") ?? null;
   return (
     list.find((x) => fold(x.key) === n || fold(x.name) === n || fold(x.key.replace(/^star:/, "")) === n) ??
     list.find((x) => fold(x.name).startsWith(n) || fold(x.key).startsWith(n)) ??

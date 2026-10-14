@@ -120,3 +120,20 @@ direct ; le F-35, la musique, le partage, la capture arrêtée, les pages) ; e2e
 - un défi lancé puis abandonné ;
 - la musique réglée, chaque nouvelle page ouverte par TARS ;
 - la partie partagée en lien.
+
+## O5 — Le trou de ver au télescope
+
+Depuis la Terre, l'embouchure se lève et se couche près de Saturne, à 10 UA. L'observatoire et TARS la trouvent
+aussi sous les noms « Gargantua », « trou noir », « embouchure » (Miller, Mann et Edmunds aussi : on les voit à
+travers elle). Le télescope la cadre entière (0,91° de large, dans un champ de 2,73°), et l'on y voit l'autre
+univers : le disque de Gargantua vu par la tranche, lentillé. Choisir Gargantua lui-même comme cible cadre aussi
+l'embouchure (`targetInfo().seen`), au lieu de viser un point au champ minimal.
+
+Deux défauts corrigés en chemin :
+- Le réticule s'ouvre maintenant autour du disque de la cible ; ses branches passaient en travers de ce qu'on
+  regarde.
+- Repointé d'une cible à une autre, le télescope ne pouvait que zoomer : venu de Saturne à 0,02°, il restait à
+  0,02° sur l'embouchure.
+
+Test e2e `observatory` : « Gargantua » au meilleur moment, l'embouchure cadrée sur trois diamètres et centrée,
+puis Gargantua comme cible, cadré par l'embouchure.
