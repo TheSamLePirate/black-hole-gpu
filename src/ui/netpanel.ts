@@ -11,6 +11,7 @@ import { button, el as h, modal } from "./kit";
 import { netRadar } from "./hud/symbology";
 import type { NetMatch } from "./netmatch";
 import type { NetSession } from "./netsession";
+import type { NetVoice } from "./netvoice";
 
 type Client = InstanceType<NetModule["NetClient"]>;
 type Role = "pilot" | "spectator" | "instruments";
@@ -88,6 +89,8 @@ export class NetPanel {
   session: NetSession | null = null;
   /** the room's match (ui/netmatch.ts) */
   match: NetMatch | null = null;
+  /** the players' voices (ui/netvoice.ts) */
+  voice: NetVoice | null = null;
   private close: (() => void) | null = null;
   private body: HTMLElement | null = null;
   private badge = h("button", "net-badge");
@@ -162,7 +165,7 @@ export class NetPanel {
     this.badge.dataset.status = n.status;
     this.badge.textContent =
       n.status === "online"
-        ? `● ${r.code} · ${r.members.length} · ${Math.round(n.clock.rtt)} ms`
+        ? `● ${r.code} · ${r.members.length} · ${Math.round(n.clock.rtt)} ms${this.voice?.on ? (this.voice.talking ? " · ◉" : " · ○") : ""}`
         : `● ${r.code} · ${t("offline — reconnecting")}`;
     this.badge.title = tf("Room {0}: {1}", r.code, r.members.map((m) => m.name).join(", "));
   }
@@ -228,6 +231,81 @@ export class NetPanel {
       }
       this.host.toast(tf("Room {0} deleted", k.code));
     });
+  }
+
+  /** The voice's section: the microphone on or off, how it opens (our voice, a key held, always), the radio, the
+   *  devices of one network not heard. */
+  private voiceSection(V: NetVoice) {
+    const box = h("div", "netp-voice");
+    const P = V.prefs;
+    const mode = h("select", "netp-in");
+    mode.dataset.testid = "net-voice-mode";
+    for (const [k, label] of [
+      ["vad", t("Voice activation")],
+      ["ptt", t("Push to talk")],
+      ["open", t("Always open")],
+    ] as const) {
+      const o = h("option", "", label);
+      o.value = k;
+      o.selected = P.mode === k;
+      mode.append(o);
+    }
+    mode.addEventListener("change", () => {
+      P.mode = mode.value as typeof P.mode;
+      V.save();
+      this.render();
+    });
+    const toggle = button({
+      label: V.on ? t("Microphone off") : t("Microphone on"),
+      kind: V.on ? "danger" : "primary",
+      testid: "net-voice",
+      onClick: () =>
+        void (V.on ? (V.disable(), Promise.resolve(true)) : V.enable()).then(() => {
+          this.render();
+          this.updateBadge();
+        }),
+    });
+    const row = h("div", "netp-row");
+    row.append(toggle, mode);
+    if (P.mode === "ptt") {
+      const key = button({
+        label: P.pttKey ? tf("Key: {0}", P.pttKey.replace(/^Key|^Digit/, "")) : t("Choose the key…"),
+        testid: "net-voice-key",
+        onClick: () => {
+          key.textContent = t("Press a key…");
+          const grab = (e: KeyboardEvent) => {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            removeEventListener("keydown", grab, true);
+            if (e.code !== "Escape") P.pttKey = e.code;
+            V.save();
+            this.render();
+          };
+          addEventListener("keydown", grab, true);
+        },
+      });
+      row.append(key);
+    }
+    const check = (label: string, on: boolean, set: (v: boolean) => void, id: string) => {
+      const l = h("label", "nm-check");
+      const c = h("input");
+      c.type = "checkbox";
+      c.checked = on;
+      c.dataset.testid = id;
+      c.addEventListener("change", () => {
+        set(c.checked);
+        V.save();
+      });
+      l.append(c, h("span", "", label));
+      return l;
+    };
+    const row2 = h("div", "netp-row nm-rules");
+    row2.append(
+      check(t("Radio effect and Quindar tones"), P.radio, (v) => (P.radio = v), "net-voice-radio"),
+      check(t("Not the devices on my network (one room)"), P.sameRoomMute, (v) => (P.sameRoomMute = v), "net-voice-same"),
+    );
+    box.append(h("div", "netp-sub", t("Voice")), row, row2);
+    return box;
   }
 
   /** the panel closed (a match started from it) */
@@ -313,7 +391,21 @@ export class NetPanel {
               : t("via the server");
         const r = h("small", "netp-route", route);
         r.dataset.testid = `net-route-${m.slot}`;
-        li.append(dot, h("span", "", m.name), r, h("em", "", ROLE_NAMES[m.role]?.() ?? m.role));
+        const V = this.voice;
+        const talk = h("i", `netp-talk${(m.slot === room.slot ? V?.talking : V?.speaking(m.slot)) ? " on" : ""}`, "◉");
+        talk.dataset.testid = `net-talk-${m.slot}`;
+        li.append(dot, talk, h("span", "", m.name), r, h("em", "", ROLE_NAMES[m.role]?.() ?? m.role));
+        if (V && m.slot !== room.slot) {
+          const vol = h("input", "netp-vol");
+          vol.type = "range";
+          vol.min = "0";
+          vol.max = "1.5";
+          vol.step = "0.05";
+          vol.value = String(V.volume(m.slot));
+          vol.title = t("Volume");
+          vol.addEventListener("input", () => V.setVolume(m.slot, Number(vol.value)));
+          li.append(vol);
+        }
         // (the tests': beside another — off its right wing, at its speed)
         if (m.slot !== room.slot && m.role === "pilot")
           li.append(
@@ -340,6 +432,7 @@ export class NetPanel {
       );
       stat.dataset.testid = "net-stat";
       B.append(card, list, stat);
+      if (this.voice) B.append(this.voiceSection(this.voice));
       if (this.match) B.append(this.match.section());
       B.append(button({ label: t("Leave the room"), kind: "danger", testid: "net-leave", onClick: () => this.leave() }));
     } else {

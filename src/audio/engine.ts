@@ -282,13 +282,31 @@ export class SoundEngine {
     const g = (n: GainNode, v: number) => n.gain.setTargetAtTime(v, t, 0.05);
     g(this.busses.master, enabled ? this.mix.master : 0);
     g(this.busses.beeps, this.mix.beeps);
-    g(this.busses.engine, this.mix.engines);
-    g(this.busses.rcs, this.mix.engines);
-    g(this.busses.ambience, this.mix.ambience);
+    // (another player speaking — docs/PLAN-RESEAU.md R2 —: the engines, the ambience and the score under him)
+    g(this.busses.engine, this.mix.engines * this.duckF);
+    g(this.busses.rcs, this.mix.engines * this.duckF);
+    g(this.busses.ambience, this.mix.ambience * this.duckF);
     g(this.busses.ui, this.mix.ui);
     g(this.busses.voice, this.mix.voice);
-    g(this.busses.music, this.mix.music);
+    g(this.busses.music, this.mix.music * this.duckF);
     if (enabled && !document.hidden) void this.ctx.resume();
+  }
+
+  private duckF = 1;
+
+  /** The players' voices (docs/PLAN-RESEAU.md R2): the context and the voice bus to play them on — null before
+   *  the first gesture started the sound. */
+  voiceInput(): { ctx: AudioContext; bus: GainNode } | null {
+    this.start();
+    return this.ctx && this.busses ? { ctx: this.ctx, bus: this.busses.voice } : null;
+  }
+
+  /** Someone speaking: the engines, the ambience and the score lowered (−8 dB) under him; or back. */
+  duck(on: boolean) {
+    const f = on ? 0.4 : 1;
+    if (f === this.duckF) return;
+    this.duckF = f;
+    this.setMix({});
   }
 
   /** Headphones (the panners in HRTF: sources ahead, behind, above) or speakers (equal-power). */

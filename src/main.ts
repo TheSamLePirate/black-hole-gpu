@@ -47,6 +47,7 @@ import { netParams } from "./net/load";
 import { NetPanel } from "./ui/netpanel";
 import { NetMatch } from "./ui/netmatch";
 import { NetSession } from "./ui/netsession";
+import { NetVoice } from "./ui/netvoice";
 import type { JetInputs } from "./f35/pose";
 import { installPwa } from "./pwa";
 import { PauseMenu } from "./ui/pause";
@@ -3706,6 +3707,9 @@ async function main() {
     camera.onCraftLost?.(why);
   };
   netPanel.match = netMatch;
+  // the players' voices (ui/netvoice.ts — docs/PLAN-RESEAU.md R2)
+  const netVoice = new NetVoice(netPanel, (s) => panel.toast(s));
+  netPanel.voice = netVoice;
   // the Atlas (ui/atlas.ts, PLAN-MODES-AAA M6): the Earth, the Moon and Mars as maps, their destinations, the
   // addresses — the game put there (in orbit, landed, on foot, the free camera, a tripod)
   const ATLAS_ORBIT_KM: Record<MapBody, number> = { earth: 400, moon: 100, mars: 300 };
@@ -5525,7 +5529,9 @@ async function main() {
     // (flying together: ours sent, the others placed — before the render's figures: their contrails come with ours — ui/netsession.ts)
     netSession.frame(dt);
     netMatch.frame();
-    viewOverlay.netTags = netSession.tags;
+    netVoice.frame();
+    // (who speaks: a mark before his name)
+    viewOverlay.netTags = netSession.tags.map((g) => (netVoice.speaking(g.slot) ? { ...g, name: `◉ ${g.name}` } : g));
     if (netSession.ships.length) changed = true;
     if (!renderer.offlineActive && cpuProf.time("free-fall prediction", () => sim.applyRender(info))) changed = true;
     // (a take records what the view shows: the settings, the clocks, what the renderer draws of the flight)

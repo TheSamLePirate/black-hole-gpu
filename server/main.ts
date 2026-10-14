@@ -7,7 +7,11 @@ const port = Number(process.env.PORT ?? 3001);
 const dir = process.env.DATA ?? "./data";
 await Bun.$`mkdir -p ${dir}`.quiet();
 const build = process.env.BUILD_SHA ?? "dev";
-const rooms = createRooms({ db: `${dir}/rooms.sqlite`, build, origin: defaultOrigin });
+// (the TURN relay: coturn's shared secret and its addresses, from the stack's environment — none: STUN alone)
+const turn = process.env.TURN_SECRET
+  ? { secret: process.env.TURN_SECRET, urls: (process.env.TURN_URLS ?? "turn:stream.samlepirate.org:3478?transport=udp,turn:stream.samlepirate.org:3478?transport=tcp").split(",") }
+  : null;
+const rooms = createRooms({ db: `${dir}/rooms.sqlite`, build, origin: defaultOrigin, turn });
 
 const server = Bun.serve({
   port,

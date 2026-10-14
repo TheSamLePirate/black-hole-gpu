@@ -153,3 +153,23 @@ describe("the room server", () => {
     c.close();
   });
 });
+
+describe("the TURN relay's credentials", () => {
+  test("STUN alone without a secret; with one, a username of an expiry and the device, its HMAC-SHA1", async () => {
+    const r = createRooms({ db: ":memory:", turn: { secret: "s3cret", urls: ["turn:example.org:3478"] } });
+    const srv = Bun.serve({ port: 0, fetch: (req, s) => r.upgrade(req, s as never), websocket: r.websocket });
+    const c = new NetClient({ url: `ws://127.0.0.1:${srv.port}/`, build: "t", id: { device: "dev-1", name: "T", colour: "#ffffff" } });
+    const { code } = await c.create("Ice", 0);
+    expect(code.length).toBe(6);
+    const S = c.iceServers!;
+    expect(S[0]!.urls).toContain("stun:");
+    const T = S.find((x) => String(x.urls).includes("turn:"))!;
+    expect(T.username).toMatch(/^\d+:dev-1$/);
+    const want = new Bun.CryptoHasher("sha1", "s3cret").update(T.username!).digest("base64");
+    expect(T.credential).toBe(want);
+    expect(Number(T.username!.split(":")[0]) * 1000 - Date.now()).toBeGreaterThan(5 * 3600 * 1000);
+    c.close();
+    r.close();
+    srv.stop(true);
+  });
+});

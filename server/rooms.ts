@@ -66,6 +66,8 @@ export interface RoomsOptions {
   now?: () => number;
   /** rooms at most */
   maxRooms?: number;
+  /** the TURN relay (coturn, its REST API's shared secret): credentials of a few hours made for each page */
+  turn?: { secret: string; urls: string[] } | null;
 }
 
 const sha256 = (s: string) => new Bun.CryptoHasher("sha256").update(s).digest("hex");
@@ -287,6 +289,17 @@ export function createRooms(o: RoomsOptions) {
         const msg = JSON.stringify({ type: "signal", from: P.slot, data: m.data } satisfies ServerMsg);
         if (to && to !== ws && msg.length <= 16_384) to.send(msg);
         return;
+      }
+      case "ice": {
+        // (STUN for all; the server's TURN — coturn's "use-auth-secret" — with a username of an expiry and the
+        // device, its password that username's HMAC-SHA1 under the shared secret: valid 6 hours)
+        const servers: { urls: string | string[]; username?: string; credential?: string }[] = [{ urls: "stun:stun.cloudflare.com:3478" }];
+        if (o.turn?.secret && o.turn.urls.length) {
+          const username = `${Math.floor(now() / 1000) + 6 * 3600}:${P.device.slice(0, 32)}`;
+          const credential = new Bun.CryptoHasher("sha1", o.turn.secret).update(username).digest("base64");
+          servers.push({ urls: o.turn.urls, username, credential });
+        }
+        return send(ws, { type: "ice", re: m.id, servers });
       }
       case "event": {
         if (!P.room) return fail(ws, "not-in-room", "Not in a room");

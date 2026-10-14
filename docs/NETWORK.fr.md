@@ -75,6 +75,24 @@ cible à 15 km, la victoire sur les deux feuilles ; les drones de l'hôte dans l
 près ; l'AIM-9X de l'invité en abat un, la victoire est la sienne des deux côtés ; les coureurs à 72 m au
 départ.
 
+## Les voix (R2)
+
+- **Activer le micro** (le panneau de la salle) : le navigateur demande une fois ; notre voix part sur chaque
+  lien direct (WebRTC, Opus — écho annulé, bruit réduit). Elle s'ouvre **à la voix** (par défaut, un seuil),
+  **en tenant une touche** (appuyer pour parler : la touche choisie dans le panneau — aucune des touches de vol
+  n'est libre) ou **toujours**.
+- **Chacun entendu par radio** d'un engin à l'autre : la bande d'un casque, un peu de saturation, un souffle
+  pendant qu'il parle, les **bips Quindar** au début (2 525 Hz) et à la fin (2 475 Hz) de chaque prise de
+  parole, comme pour Apollo ; les moteurs, l'ambiance et la musique baissés sous sa voix (−8 dB) ; qui parle
+  allumé dans le panneau (◉) et sur son étiquette ; le volume de chacun.
+- **Deux appareils d'un même réseau ne s'entendent pas** (ils sont dans la même pièce : l'écho) — une case
+  pour les entendre.
+- Le relais (TURN) pour les téléphones en 4G : le coturn du serveur, une fois activé ([DEPLOY.md](DEPLOY.md)) ;
+  STUN seul d'ici là.
+
+Mesuré sur kerr-mini (`tests/e2e/net-voice`, deux pages, une phrase enregistrée comme micro de chacun) : la voix
+de chacun reçue par l'autre à −8 à −12 dBFS, allumée « parle », deux bips Quindar ; le même réseau coupé.
+
 ## Comment ça marche
 
 - **Le serveur de salles** (`server/rooms.ts`, Bun, SQLite) : les salles et leurs membres, l'horloge, les

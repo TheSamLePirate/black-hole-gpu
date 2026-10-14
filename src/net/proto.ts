@@ -51,7 +51,9 @@ export type ClientMsg =
   | { type: "profile"; name: string; colour: string }
   | { type: "event"; ev: NetEvent }
   /** a WebRTC signal to another member (src/net/p2p.ts): relayed to it alone */
-  | { type: "signal"; to: number; data: unknown };
+  | { type: "signal"; to: number; data: unknown }
+  /** the ICE servers to reach the others with: STUN, and the server's TURN with credentials of a few hours */
+  | { type: "ice"; id: number };
 
 // ---- the server → the page
 export type ServerMsg =
@@ -64,6 +66,7 @@ export type ServerMsg =
   | { type: "roster"; members: Member[] }
   | { type: "event"; from: number; ev: NetEvent }
   | { type: "signal"; from: number; data: unknown }
+  | { type: "ice"; re: number; servers: { urls: string | string[]; username?: string; credential?: string }[] }
   | { type: "error"; re?: number; code: ErrorCode; msg: string };
 
 export type ErrorCode = "update" | "unknown-room" | "full" | "pilots-full" | "password" | "owner" | "bad" | "not-in-room" | "limit";

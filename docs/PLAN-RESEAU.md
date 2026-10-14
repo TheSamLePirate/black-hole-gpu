@@ -278,7 +278,14 @@ engins des absents (R7). Voir [NETWORK.md](NETWORK.md).
   d'affichage mesuré (objectif ≤ 80 ms en direct) ; coupure du Wi-Fi puis reprise ; 4 joueurs et le robot
   sur kerr-mini.
 
-### R2 — La voix
+### R2 — La voix ✅ (2026-10-14)
+
+*Fait* : l'audio sur les liens WebRTC (un émetteur-récepteur ouvert avec le lien, pas de renégociation), le
+micro (activation vocale, touche à choisir, toujours), la radio, les bips Quindar, la baisse des moteurs, qui
+parle, le volume de chacun, pas de voix sur un même réseau ; les identifiants TURN de courte durée fabriqués
+par le serveur. *En attente de l'utilisateur* : coturn (ouvrir 3478/udp+tcp et 49160–49200/udp, `TURN_SECRET`
+dans Portainer, décommenter le service) — voir [DEPLOY.md](DEPLOY.md).
+
 - Audio WebRTC sur les mêmes liens, Opus 48 kHz mono avec FEC et DTX, annulation d'écho et réduction de
   bruit.
 - coturn dans la stack, identifiants de courte durée fabriqués par le serveur.

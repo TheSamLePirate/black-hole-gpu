@@ -38,3 +38,7 @@ select.netp-in { flex: 0 0 auto; }
 .net-badge[data-status="offline"], .net-badge[data-status="connecting"] { color: var(--k-amber, #ffb35c); border-color: rgba(255, 179, 92, 0.6); }
 body.hide-ui .net-badge, body.title-open .net-badge { display: none; }
 @media (max-width: 900px) { .net-badge { left: 50%; top: auto; bottom: 12px; transform: translateX(-50%); } }
+.netp-talk { font-style: normal; color: rgba(176, 196, 222, 0.25); font-size: 11px; }
+.netp-talk.on { color: #8dff9a; text-shadow: 0 0 8px #8dff9a; }
+.netp-vol { width: 80px; accent-color: var(--k-on); }
+.netp-voice { display: flex; flex-direction: column; gap: 8px; }

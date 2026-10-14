@@ -60,6 +60,7 @@ type Events = {
   event: { from: number; ev: NetEvent };
   error: { code: string; msg: string };
   room: Room | null;
+  voice: { slot: number; stream: MediaStream | null };
 };
 
 export class NetClient {
@@ -71,6 +72,14 @@ export class NetClient {
   server = { v: 0, build: "" };
   /** the direct links to the room's others (WebRTC), null: none */
   mesh: PeerMesh | null = null;
+  /** the ICE servers the room server gave (STUN, its TURN) */
+  iceServers: RTCIceServer[] | null = null;
+  /** our microphone, sent on every direct link (R2) */
+  micTrack: MediaStreamTrack | null = null;
+  setMic(track: MediaStreamTrack | null) {
+    this.micTrack = track;
+    this.mesh?.setMic(track);
+  }
   /** samples sent through the server (some peer not reached directly) and straight */
   relayed = 0;
   direct = 0;
@@ -175,13 +184,13 @@ export class NetClient {
     this.link?.send(JSON.stringify(m));
   }
 
-  private request<T extends ServerMsg>(m: ClientMsg & { id: number }): Promise<T> {
+  private request<T extends ServerMsg>(m: ClientMsg & { id: number }, timeout = 10_000): Promise<T> {
     return new Promise((ok, ko) => {
       this.pending.set(m.id, { ok: ok as (m: ServerMsg) => void, ko });
       this.sendMsg(m);
       setTimeout(() => {
         if (this.pending.delete(m.id)) ko(new Error("timeout"));
-      }, 10_000);
+      }, timeout);
     });
   }
 
@@ -262,8 +271,10 @@ export class NetClient {
         self: () => this.room?.slot ?? -1,
         signal: (to, data) => this.sendMsg({ type: "signal", to, data }),
         onData: (buf) => this.onMessage(buf),
-        ice: this.o.ice ?? DEFAULT_ICE,
+        ice: this.o.ice ?? this.iceServers ?? DEFAULT_ICE,
+        onVoice: (slot, stream) => this.emit("voice", { slot, stream }),
       });
+      if (this.micTrack) this.mesh.setMic(this.micTrack);
       this.mesh.sync(r.members.map((x) => x.slot));
     }
     this.emit("room", r);
@@ -280,6 +291,14 @@ export class NetClient {
   async join(code: string, role: Role = "pilot", password?: string): Promise<Room> {
     await this.connect();
     const j = await this.request<Extract<ServerMsg, { type: "joined" }>>({ type: "join", id: ++this.reqId, code, role, password });
+    // (the ICE servers — STUN, the server's TURN with fresh credentials — before the direct links open)
+    if (!this.o.ice)
+      try {
+        const ice = await this.request<Extract<ServerMsg, { type: "ice" }>>({ type: "ice", id: ++this.reqId }, 2000);
+        this.iceServers = ice.servers as RTCIceServer[];
+      } catch {
+        /* an older server: STUN alone */
+      }
     const r: Room = { code: j.code, name: j.name, slot: j.slot, role, clock: j.clock, members: j.members, password };
     this.setRoom(r);
     this.emit("roster", j.members);

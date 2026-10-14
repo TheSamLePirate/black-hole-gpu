@@ -16,6 +16,10 @@ export interface PeerLink {
   route: string;
   pending: RTCIceCandidateInit[];
   bytes: { up: number; down: number };
+  /** the voice's transceiver (docs/PLAN-RESEAU.md R2): our microphone sent on it, his voice received */
+  audio: RTCRtpTransceiver | null;
+  /** his voice, once it came */
+  voice: MediaStream | null;
 }
 
 export type SignalData = { sdp?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit };
@@ -28,6 +32,8 @@ export interface MeshOptions {
   /** a sample come straight from a peer */
   onData: (buf: ArrayBuffer) => void;
   ice: RTCIceServer[];
+  /** another's voice come (a stream to play), or gone (null) */
+  onVoice?: (slot: number, stream: MediaStream | null) => void;
 }
 
 /** STUN only for now (Cloudflare's, no account): TURN — coturn on the server — comes with the voice (R2). */
@@ -55,7 +61,24 @@ export class PeerMesh {
 
   private link(slot: number): PeerLink {
     const pc = new RTCPeerConnection({ iceServers: this.o.ice });
-    const L: PeerLink = { slot, pc, ch: null, state: "new", rtt: Number.NaN, route: "", pending: [], bytes: { up: 0, down: 0 } };
+    const L: PeerLink = {
+      slot,
+      pc,
+      ch: null,
+      state: "new",
+      rtt: Number.NaN,
+      route: "",
+      pending: [],
+      bytes: { up: 0, down: 0 },
+      audio: null,
+      voice: null,
+    };
+    // (his voice: its track given a stream of its own)
+    pc.ontrack = (e) => {
+      if (e.track.kind !== "audio") return;
+      L.voice = e.streams[0] ?? new MediaStream([e.track]);
+      this.o.onVoice?.(slot, L.voice);
+    };
     pc.onicecandidate = (e) => e.candidate && this.o.signal(slot, { candidate: e.candidate.toJSON() });
     pc.ondatachannel = (e) => this.channel(L, e.channel);
     pc.onconnectionstatechange = () => {
@@ -91,6 +114,9 @@ export class PeerMesh {
   private async offer(slot: number) {
     const L = this.link(slot);
     this.channel(L, L.pc.createDataChannel("pose", { ordered: false, maxRetransmits: 0 }));
+    // (the voice's line opened with the link — no renegotiation when a microphone comes)
+    L.audio = L.pc.addTransceiver("audio", { direction: "sendrecv" });
+    if (this.mic) void L.audio.sender.replaceTrack(this.mic);
     L.state = "connecting";
     try {
       await L.pc.setLocalDescription(await L.pc.createOffer());
@@ -112,6 +138,12 @@ export class PeerMesh {
           L = this.link(from);
           L.state = "connecting";
           await L.pc.setRemoteDescription(data.sdp);
+          // (the offer's voice line: ours sends too)
+          L.audio = L.pc.getTransceivers().find((t) => t.receiver.track.kind === "audio") ?? null;
+          if (L.audio) {
+            L.audio.direction = "sendrecv";
+            if (this.mic) await L.audio.sender.replaceTrack(this.mic);
+          }
           await L.pc.setLocalDescription(await L.pc.createAnswer());
           this.o.signal(from, { sdp: L.pc.localDescription!.toJSON() });
         } else if (L && L.pc.signalingState === "have-local-offer") await L.pc.setRemoteDescription(data.sdp);
@@ -123,6 +155,15 @@ export class PeerMesh {
     } catch {
       /* a stale signal: the link sets itself up again */
     }
+  }
+
+  /** our microphone's track (null: none sent) */
+  private mic: MediaStreamTrack | null = null;
+
+  /** Our microphone on every link (null: silence). */
+  setMic(track: MediaStreamTrack | null) {
+    this.mic = track;
+    for (const L of this.peers.values()) if (L.audio) void L.audio.sender.replaceTrack(track).catch(() => {});
   }
 
   /** A sample to every peer reached directly; the slots reached. */
@@ -165,6 +206,7 @@ export class PeerMesh {
     const L = this.peers.get(slot);
     if (!L) return;
     this.peers.delete(slot);
+    if (L.voice) this.o.onVoice?.(slot, null);
     try {
       L.ch?.close();
       L.pc.close();

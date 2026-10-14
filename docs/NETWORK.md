@@ -67,6 +67,22 @@ Measured on kerr-mini (`tests/e2e/net-battle`, `net-coop`): the AIM-120 fired at
 helmet at 15 km, the kill on both score sheets; the host's drones on the guest's world within a metre; the
 guest's AIM-9X downing one, the kill his on both; the racers 72 m apart at the start.
 
+## The voices (R2)
+
+- **Microphone on** (the room panel): the browser asks once; our voice sent on each direct link (WebRTC,
+  Opus — echo cancelled, noise suppressed). It opens **by our voice** (the default, a threshold), **by a key
+  held** (push to talk: the key chosen in the panel — no key of the flight's is free) or **always**.
+- **Each other heard through a radio** from craft to craft: a headset's band, a little drive, a hiss while
+  he speaks, the **Quindar tones** at the start (2 525 Hz) and the end (2 475 Hz) of each transmission, as
+  Apollo's; the engines, the ambience and the score lowered under him (−8 dB); who speaks lit in the panel
+  (◉) and on his name tag; each one's volume.
+- **Two devices on one network are not heard** (they are in one room: an echo) — a checkbox to hear them.
+- The relay (TURN) for the phones on 4G: the server's coturn, once turned on ([DEPLOY.md](DEPLOY.md)); STUN
+  alone until then.
+
+Measured on kerr-mini (`tests/e2e/net-voice`, two pages, a spoken phrase as each microphone): each one's
+voice received by the other at −8 to −12 dBFS, shown speaking, two Quindar tones; the same network's muted.
+
 ## How it works
 
 - **The room server** (`server/rooms.ts`, Bun, SQLite): the rooms and their members, the clock, the room's

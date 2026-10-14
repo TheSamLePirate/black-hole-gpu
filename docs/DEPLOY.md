@@ -43,6 +43,20 @@ Portainer ─► recreates the `rooms` service alone (port 3001, its rooms in th
 - A page is told to reload when its protocol is older than the server's previous one; the server can lag
   the page by Portainer's poll (2 min), which the protocol's N/N−1 covers.
 
+### The TURN relay (coturn) — when the voices and the direct links must cross a carrier's NAT
+
+Most players reach each other directly (STUN); a phone on 4G/5G often cannot (CGNAT) and then needs a relay.
+To turn it on:
+
+1. Choose a secret (`openssl rand -hex 32`) and set it as `TURN_SECRET` in the `kerr` stack's environment in
+   Portainer (never in the repository).
+2. Open on the server (ufw/nftables, and the OVH Network Firewall if it is on): `3478/udp`, `3478/tcp`,
+   `49160-49200/udp`.
+3. Uncomment the `coturn` service in `deploy/compose.yml` (it runs on the host's network: the relay needs the
+   real ports) and push: the room server then hands each page TURN credentials of 6 hours (an expiry and
+   the device as the username, its HMAC-SHA1 under the secret as the password — coturn's
+   `use-auth-secret`), relaying to private networks refused.
+
 ## Rolling back
 
 Revert the last commit(s) on `deploy` (or push a commit naming an older tag): Portainer redeploys that
