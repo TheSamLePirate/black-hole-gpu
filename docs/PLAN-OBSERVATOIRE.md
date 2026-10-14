@@ -137,3 +137,24 @@ Deux défauts corrigés en chemin :
 
 Test e2e `observatory` : « Gargantua » au meilleur moment, l'embouchure cadrée sur trois diamètres et centrée,
 puis Gargantua comme cible, cadré par l'embouchure.
+
+## O6 — La mesure spot du télescope
+
+Une option du télescope, activée par défaut : interrupteur « Mesure spot » dans le panneau Caméra (à côté de
+« Cadrer la cible ») et dans les réglages, `camera` `spot` pour TARS. Le bandeau du télescope affiche « SPOT ».
+- **Ce que mesure le posemètre** : le seul disque de la cible, l'embouchure pour un corps au-delà du trou de ver
+  (`post.wgsl` meter : sa grille de 64 × 64 posée sur le carré du disque, les cases hors du disque écartées).
+- **Exposition** : les 1,5 % les plus brillants du disque sont mis juste sous le blanc.
+- **Point noir** : la médiane du ciel derrière la cible devient le noir de l'image (`display.wgsl`). Un objet faible
+  ressort ainsi lumineux sur fond noir, comme après le traitement d'une photo astronomique, plutôt que sur un voile
+  gris. Pas d'effet Purkinje : c'est l'image d'un capteur, pas de l'œil.
+- **Garde-fous** :
+  - le spot ne dépasse jamais de plus de 6 EV la mesure de l'image entière ;
+  - une lecture « brûlée à plat » (tout dans un ou deux paliers : le tampon plein à une exposition trop poussée) fait
+    redescendre l'exposition. Un voile de nuages lu comme l'objet avait poussé l'exposition de 10 EV et l'y bloquait ;
+  - changer de cible, prendre ou couper le spot recale l'exposition d'un coup.
+- Le panneau Caméra agit maintenant sur la vue affichée (télescope, verrouillage, cible du spectateur), plus sur celle
+  du vaisseau qu'il a quitté.
+
+Test e2e `observatory` (nuit claire) : le trou de ver mesuré en spot — le cœur de l'embouchure plusieurs fois au-dessus
+de son ciel, le point noir posé —, puis sans spot (toute l'image), puis le spot repris.

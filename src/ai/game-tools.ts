@@ -1352,13 +1352,14 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "camera",
       description:
-        "The camera (only what is given): shipView: back to the ship's view (from the spectator, a cinematic, the map); mount = a view on the ship (cockpit, cabin, quarter, chase, dorsal, wing, belly, rear, dock, around, free, flyby, station); spectator: a free camera anywhere, the ship flying on; view (without the ship): orbit, follow, free, tripod, fall; lookAt: locked on the target; telescope; fovDeg; cinematic: orbit/dive/journey/none; goTo: fly the free camera to a body; standOn: a tripod on a body's ground.",
+        "The camera (only what is given): shipView: back to the ship's view (from the spectator, a cinematic, the map); mount = a view on the ship (cockpit, cabin, quarter, chase, dorsal, wing, belly, rear, dock, around, free, flyby, station); spectator: a free camera anywhere, the ship flying on; view (without the ship): orbit, follow, free, tripod, fall; lookAt: locked on the target; telescope; spot: the telescope's spot meter (the exposure set by the target's disc alone — a faint object, the wormhole's mouth, drawn bright; on by default); fovDeg; cinematic: orbit/dive/journey/none; goTo: fly the free camera to a body; standOn: a tripod on a body's ground.",
       params: {
         mount: { type: "string", enum: MOUNT_IDS },
         spectator: { type: "boolean" },
         view: { type: "string", enum: ["orbit", "follow", "free", "tripod", "fall"] },
         lookAt: { type: "boolean" },
         telescope: { type: "boolean" },
+        spot: { type: "boolean" },
         fovDeg: { type: "number", minimum: 0.02, maximum: 150 },
         cinematic: { type: "string", enum: ["orbit", "dive", "journey", "none"] },
         goTo: { type: "string" },
@@ -1382,6 +1383,10 @@ export function gameTools(h: GameHost): Tool[] {
         if (a.view !== undefined) h.setView(a.view as never);
         if (a.lookAt !== undefined) h.lookAt(a.lookAt as boolean);
         if (a.telescope !== undefined) h.telescope(a.telescope as boolean);
+        if (a.spot !== undefined) {
+          camera.viewController().s.telescopeSpot = settings.telescopeSpot = a.spot as boolean;
+          h.changed(["telescopeSpot"]);
+        }
         if (a.fovDeg !== undefined) camera.setFov(a.fovDeg as number);
         if (a.cinematic !== undefined) h.cinematic(a.cinematic === "none" ? null : (a.cinematic as "orbit"));
         if (a.goTo !== undefined) {
@@ -1398,6 +1403,7 @@ export function gameTools(h: GameHost): Tool[] {
           view: settings.rotation,
           lookAt: settings.lookAt,
           telescope: settings.telescope,
+          spot: settings.telescopeSpot,
           notes,
         };
       }),

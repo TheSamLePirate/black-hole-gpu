@@ -149,6 +149,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "telescope telephoto zoom lens magnification tele scope reticle",
   },
   {
+    key: "telescopeSpot",
+    type: "toggle",
+    section: "camera",
+    group: "View",
+    label: "Telescope spot meter",
+    effect: "none",
+    help: "The telescope's light meter reads the target's disc alone — not the whole image: a faint galaxy, the wormhole's mouth and the other universe in it drawn bright on the black sky, the Moon not burnt. Off: the whole image is metered, as the eye sees it. Needs the automatic exposure.",
+    keywords: "spot meter metering exposure telescope target disc bright faint",
+  },
+  {
     key: "target",
     type: "choice",
     section: "camera",

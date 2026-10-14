@@ -13,7 +13,8 @@ describe.skipIf(!E2E)("the observatory", () => {
   beforeAll(async () => {
     app = await App.boot({ hash: "scene=game:artemis", width: 1280, height: 800, lang: "fr", tiles: false });
     await app.waitFor("__bh.camera.piloting", 120_000);
-    await app.js(`(__bh.game.setDate("2026-01-10T21:00:00Z"), true)`);
+    // (a clear night: the sky's things seen as they are — the game's weather would put clouds over them)
+    await app.js(`(__bh.game.setDate("2026-01-10T21:00:00Z"), __bh.settings.weather = "fair", __bh.settings.earthClouds = 0, true)`);
     await app.js(
       `__bh.tars.tools().find((t) => t.name === "place_ship").run({ mode: "walk", query: "48.40, 2.70" }, new AbortController().signal)`,
     );
@@ -160,7 +161,26 @@ describe.skipIf(!E2E)("the observatory", () => {
     expect(a.fov).toBeCloseTo(6 * seen, 1);
     expect(a.deg).toBeLessThan(a.fov / 20);
     expect(await app.js<number>(`__bh.mx.framedView().alt`)).toBeGreaterThan(9);
+    // (the spot meter — on by default —: the mouth's disc metered alone; off, the whole night image: a few stops
+    // darker. Read as the exposure the meter settles on, and the readout says SPOT)
+    const ev = async () => {
+      await Bun.sleep(3500);
+      return app.js<number>(`__bh.renderer.autoExposureEV`);
+    };
+    const spotOn = await ev();
+    const read = await app.js<{ core: number; sky: number } | null>(`__bh.renderer.spotRead`);
+    expect(await app.js<boolean>(`!!__bh.renderer.meterSpot`)).toBe(true);
+    // (the mouth's core well over the sky behind it: the black point set there, the other universe on black)
+    expect(read!.core / read!.sky).toBeGreaterThan(2);
     if (SHOTS) await app.shot(`${SHOTS}/observe-wormhole.png`);
+    await tool("camera", { spot: false });
+    const spotOff = await ev();
+    expect(await app.js<boolean>(`!!__bh.renderer.meterSpot`)).toBe(false);
+    if (SHOTS) await app.shot(`${SHOTS}/observe-wormhole-nospot.png`);
+    console.log(
+      `  the mouth metered: spot ${spotOn.toFixed(2)} EV (its core ${(read!.core / read!.sky).toFixed(0)}× its sky), the whole image ${spotOff.toFixed(2)} EV`,
+    );
+    await tool("camera", { spot: true });
     // (Gargantua itself as the target, beyond the mouth: the mouth framed — not a point at the narrowest field)
     await app.js(
       `(() => { const v = __bh.camera.viewController(); v.setTelescope(false); v.selectTarget("hole", { focus: false }); v.setTelescope(true); return 1; })()`,

@@ -181,6 +181,7 @@ export interface Settings {
   azimuth: number; // degrees
   fov: number; // vertical, degrees
   telescope: boolean; // the telephoto / telescope: fields down to 0.02°, the view held on the target, a reticle
+  telescopeSpot: boolean; // the telescope's spot meter: the exposure set by the target's disc alone (a faint galaxy, the wormhole's mouth, the Moon on a dark sky)
   yaw: number;
   pitch: number;
   roll: number;
@@ -520,6 +521,7 @@ export function defaultSettings(): Settings {
     azimuth: 0,
     fov: 45,
     telescope: false,
+    telescopeSpot: true,
     yaw: 0,
     pitch: 0,
     roll: 0,
@@ -1820,6 +1822,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   azimuth: "scene",
   fov: "scene",
   telescope: "scene",
+  telescopeSpot: "pref",
   yaw: "scene",
   pitch: "scene",
   roll: "scene",

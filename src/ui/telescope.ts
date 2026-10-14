@@ -45,6 +45,8 @@ export interface TelescopeView {
   /** metres per M */
   mPerM: number;
   tracking: boolean;
+  /** the spot meter on (the exposure set by the target's disc) */
+  spot?: boolean;
 }
 
 const SCALE_ARCSEC = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 18000, 36000];
@@ -111,7 +113,7 @@ export function drawTelescope(ctx: CanvasRenderingContext2D, W: number, H: numbe
 
   // the readout: the lens, then the target; the scale bar under them
   const f = focalLength(v.fov);
-  const lens = `TELESCOPE · ${f >= 1e4 ? `${(f / 1e3).toFixed(f >= 1e5 ? 0 : 1)} m` : `${Math.round(f)} mm`} · FIELD ${fmtAngle(v.fov)} · ×${(f / 50).toPrecision(f / 50 >= 100 ? 3 : 2)}`;
+  const lens = `TELESCOPE · ${f >= 1e4 ? `${(f / 1e3).toFixed(f >= 1e5 ? 0 : 1)} m` : `${Math.round(f)} mm`} · FIELD ${fmtAngle(v.fov)} · ×${(f / 50).toPrecision(f / 50 >= 100 ? 3 : 2)}${v.spot ? " · SPOT" : ""}`;
   const lines = [lens];
   if (v.target) {
     const t = v.target;

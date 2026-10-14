@@ -201,17 +201,26 @@ export class CameraPanel {
     this.refresh();
   }
 
+  /** The view's controller and settings: a spectator's when one is out (the tripod while a ship flies on: its lock,
+   *  its telescope, its target are its own — the panel's buttons turned the ship's view, unseen). */
+  private viewOf() {
+    const c = this.d.camera.viewController();
+    return { s: c.s, c };
+  }
+
   /** What the panel shows depends on: rebuilt when it changes (the camera's mode, the target…). */
   private key() {
     const s = this.d.settings,
       c = this.d.camera;
+    const v = this.viewOf().s;
     return [
       s.ship,
       s.shipMount,
       this.d.view(),
-      s.lookAt,
-      s.telescope,
-      s.target,
+      v.lookAt,
+      v.telescope,
+      v.telescopeSpot,
+      v.target,
       c.flyMode,
       c.cinematic,
       s.motion,
@@ -337,7 +346,7 @@ export class CameraPanel {
   }
 
   private looks() {
-    const { settings: s, camera: c } = this.d;
+    const { s, c } = this.viewOf();
     const sec = this.section(t("View"));
     const row = h("div", "cp-chips");
     const around = !s.ship && this.d.view() === "orbit";
@@ -396,8 +405,7 @@ export class CameraPanel {
   }
 
   private lens() {
-    const s = this.d.settings,
-      c = this.d.camera;
+    const { s, c } = this.viewOf();
     const sec = this.section(s.telescope ? t("Telescope") : t("Lens"), t("wheel · Alt+wheel"));
     const [lo, hi] = s.telescope ? SCOPE_RANGE : LENS_RANGE;
     const r = this.lensRange;
@@ -427,15 +435,27 @@ export class CameraPanel {
       b.append(h("span", "", t("Frame the target")));
       b.onclick = () => {
         const info = c.targetInfo();
-        if (info && info.ang > 0) c.setFov(Math.min(20, Math.max(TELE_MIN, ((info.ang * 360) / Math.PI) * 3)));
+        if (info && info.seen > 0) c.setFov(Math.min(20, Math.max(TELE_MIN, ((info.seen * 360) / Math.PI) * 3)));
       };
-      presets.prepend(b);
+      // (its spot meter: the exposure set by the target's disc alone)
+      const spot = h("button", "cp-chip cp-lens", t("Spot meter"));
+      spot.classList.toggle("on", s.telescopeSpot);
+      spot.setAttribute("aria-pressed", String(s.telescopeSpot));
+      spot.setAttribute("data-testid", "cp-tele-spot");
+      spot.title = t("The exposure set by the target's disc alone — a faint object drawn bright on the black sky");
+      spot.onclick = () => {
+        // (a preference: the game's settings — a spectator's copies it each frame)
+        this.d.settings.telescopeSpot = s.telescopeSpot = !s.telescopeSpot;
+        this.d.changed?.(["telescopeSpot"]);
+        this.refresh?.();
+      };
+      presets.prepend(b, spot);
     }
     sec.append(row, presets);
   }
 
   private targets() {
-    const { settings: s, camera: c } = this.d;
+    const { s, c } = this.viewOf();
     const sec = this.section(t("Target"), t("Tab · click it in the view"));
     const search = h("input", "cp-search") as HTMLInputElement;
     search.type = "search";

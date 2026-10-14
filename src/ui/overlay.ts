@@ -374,6 +374,7 @@ export class ViewOverlay {
       fov: this.settings.fov,
       mPerM: 1476.625 * this.settings.massSolar,
       tracking: this.settings.lookAt,
+      spot: this.settings.telescopeSpot && this.settings.autoExposure,
       target: info ? { name: info.name, ang: info.seen, dist: info.dist, ndc: ndc ? [ndc[0], ndc[1]] : null } : null,
     };
   }

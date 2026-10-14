@@ -3,6 +3,7 @@ import { planetFrame, toLocal } from "./landing";
 import { cartToGeodetic, flatteningOf, WGS84_A, WGS84_F } from "./system/ellipsoid";
 import { setSceneryContact } from "./system/scenery-contact";
 import { setDrawnRefractivity } from "./system/refraction";
+import { projectLook } from "./shadow";
 import { groundVelocity } from "./system/our-surface";
 import { CharacterHud } from "./ui/characterhud";
 import { FootHud, type CompassMark } from "./ui/foothud";
@@ -3942,6 +3943,25 @@ async function main() {
     now: () => utcOf(sim.time),
     aim: (o, at) => observeAt(o, at),
   });
+  /**
+   * The telescope's spot meter (its option, on by default): where the target's disc is in the image — its centre
+   * (fractions of the width and the height) and its radius (a fraction of the height; the mouth's for a body beyond
+   * the wormhole, a little round a point) —; null: the image's own meter (no telescope, the option off, the target
+   * out of the view).
+   */
+  function telescopeSpot(): { x: number; y: number; r: number; key: string } | null {
+    const vs = camera.viewSettings();
+    if (!vs.telescope || !vs.telescopeSpot || !vs.autoExposure) return null;
+    const info = camera.viewController().targetInfo();
+    if (!info) return null;
+    const tanH = Math.tan((vs.fov * Math.PI) / 360);
+    const ndc = projectLook(info.cam, info.look, tanH, canvas.width / Math.max(canvas.height, 1));
+    if (!ndc) return null;
+    const r = Math.min(Math.max(Math.tan(info.seen) / tanH / 2, 0.02), 0.5);
+    const x = (ndc[0] + 1) / 2,
+      y = (1 - ndc[1]) / 2;
+    return x + r < 0 || x - r > 1 || y + r < 0 || y - r > 1 ? null : { x, y, r, key: String(vs.target) };
+  }
   /** The observatory opened (a search typed), or why not. */
   function openObserve(query = "") {
     if (observePage.isOpen) return void observePage.hide();
@@ -5481,6 +5501,7 @@ async function main() {
     const viewer = camera.viewController();
     viewer.weatherReal = camera.weatherReal;
     renderer.rain = viewer.rainView();
+    renderer.meterSpot = telescopeSpot();
     const st = capped
       ? null
       : cpuProf.time("render (encode, submit)", () =>

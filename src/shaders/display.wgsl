@@ -10,7 +10,8 @@ struct Display {
   img: vec4f,   // image W, H [px], polarization fraction drawn at full tick length, radio colour map (0/1)
   lod: vec4f,   // mip level of the HDR image to display (instrument beam), the Ranger drawn (0/1), depth of field (0/1), sharpening (RCAS, 0…1)
   ship: vec4f,  // the Ranger's box in the image [px]: x, y, width, height (its image holds only that)
-  eye: vec4f,   // the Purkinje shift's strength (0 none … 1 the eye's), unused ×3
+  eye: vec4f,   // the Purkinje shift's strength (0 none … 1 the eye's), the telescope spot's black point (exposed;
+                // 0: none), unused ×2
   rain: vec4f,  // the rain (PLAN-METEO W5): its strength (0 none … 1.3), a clock [s], in the cabin (1: the
                 // canopy's drops) + 2 for Mars's dust (W6: grains, not drops), the vertical field's half tangent
   rainV: vec4f, // the drops' velocity relative to the camera [m/s, its axes: right, up, forward], their speed
@@ -687,6 +688,8 @@ fn fs(in: VSOut) -> @location(0) vec4f {
     if (tm == 4u) { c = c * (1.0 - 0.3 * D.flags.y) + b * (2.5 * D.flags.y); } else { c = mix(c, b, D.flags.y); }
     if (D.hdr.z > 0.0) { c += D.hdr.z * (lensFlare(uv) + lensDirtGlow(uvOut, uv)) / max(D.size.z, 1e-30); }
     c *= D.size.z;
+    // (the telescope's spot meter: the sky behind its target taken as black — a faint object stretched bright on it)
+    if (D.eye.y > 0.0) { c = max(c - vec3f(D.eye.y), vec3f(0.0)) / (1.0 - min(D.eye.y, 0.5)); }
     // (the eye at night — Purkinje: adapted to the dark (eye.x: from the exposure's level) the rods take
     // over, blind to red, keen on blue-green — the dim parts bluer and greyer, as one sees a moonlit
     // field; the bright lights still seen by the cones, in their colours)

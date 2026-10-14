@@ -413,18 +413,31 @@ fn up(@builtin(global_invocation_id) gid: vec3u) {
 // as a histogram of log₂ — bin b holds log₂ L ∈ [b/1.5 − 48, (b+1)/1.5 − 48); bin 0: black
 // ---------------------------------------------------------------------------------------------
 @group(0) @binding(20) var<storage, read_write> hist: array<atomic<u32>, 128>;
+// the spot meter (the telescope's): the disc read alone — its centre (fractions of the width, the height), its
+// radius (a fraction of the height); w > 0: on — the grid laid over the disc's square, the cells out of it not counted
+@group(0) @binding(22) var<uniform> spot: vec4f;
 
 @compute @workgroup_size(8, 8)
 fn meter(@builtin(global_invocation_id) gid: vec3u) {
   if (gid.x >= 64u || gid.y >= 64u) { return; }
   let size = textureDimensions(src, 0);
+  let on = spot.w > 0.0;
+  let sz = vec2f(size);
+  // (the cell's place in the image [px]: the whole of it, or the spot's square)
+  let cellOf = select(
+    (vec2f(gid.xy) + 0.5) / 64.0 * sz,
+    spot.xy * sz + ((vec2f(gid.xy) + 0.5) / 64.0 * 2.0 - 1.0) * spot.z * sz.y,
+    on,
+  );
+  if (on && length(cellOf - spot.xy * sz) > spot.z * sz.y) { return; }
+  let cell = select(sz / 64.0, vec2f(2.0 * spot.z * sz.y / 64.0), on);
   // (each cell's mean over 4 × 4 points spread across it — not one point: a star or the Sun landing on
   // a grid point made the exposure pump)
   var l = 0.0;
   for (var j = 0u; j < 16u; j++) {
-    let o = (vec2f(f32(j & 3u), f32(j >> 2u)) + 0.5) / 4.0;
-    let p = vec2u((vec2f(gid.xy) + o) / 64.0 * vec2f(size));
-    l += dot(textureLoad(src, min(p, size - 1u), 0).rgb, vec3f(0.2126, 0.7152, 0.0722));
+    let o = (vec2f(f32(j & 3u), f32(j >> 2u)) + 0.5) / 4.0 - 0.5;
+    let p = vec2u(clamp(cellOf + o * cell, vec2f(0.0), sz - 1.0));
+    l += dot(textureLoad(src, p, 0).rgb, vec3f(0.2126, 0.7152, 0.0722));
   }
   l /= 16.0;
   var b = 0u;

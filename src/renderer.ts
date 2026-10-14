@@ -607,6 +607,18 @@ export class Renderer {
   private histBuf!: GPUBuffer;
   private histStage!: GPUBuffer;
   private meterPending = false;
+  /** the telescope's spot meter (main.ts sets it each frame): the target's disc — its centre (fractions of the
+   *  width, the height) and its radius (a fraction of the height) —, the exposure set by it alone; null: the image's */
+  meterSpot: { x: number; y: number; r: number; key?: string } | null = null;
+  /** what the spot last metered (a target's name; "": none): another one, the exposure found again at once */
+  private spotKey = "";
+  private spotBuf!: GPUBuffer;
+  /** the reading in flight was a spot's */
+  private meterSpotUsed = false;
+  /** the spot meter's sky behind the target [radiance]: the telescope's black point (0: none) */
+  private spotSky = 0;
+  /** the spot meter's last reading (the tests') */
+  spotRead: { core: number; sky: number; total: number; m: number; gain: number; hist: number[] } | null = null;
   private meterPre = 1;
   private meterSkyUsed = 0;
   /** the auto exposure the meter's sky threshold was scaled with */
@@ -1009,6 +1021,7 @@ export class Renderer {
     ]).then(() => {});
     this.histBuf = device.createBuffer({ size: 512, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
     this.histStage = device.createBuffer({ size: 512, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+    this.spotBuf = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
 
     // (the tracer's read-only tables, one buffer — gpu-tables.ts, PLAN-MONDE M9: the bodies; after them the
     // light probe's harmonics, copied there on the GPU — see dispatchEnv —; the colours' LUTs; the path)
@@ -2697,7 +2710,14 @@ export class Renderer {
     // (the eye: the night's Purkinje shift — display.wgsl eye.x —, by how dark the scene the exposure
     // adapts to is: daylight EV ~14.4, night ~16.3 — the shadows of a sunlit day stay in colour)
     const scotopic = Math.min(Math.max((this.ev(s) - 15) / 1.2, 0), 1);
-    this.device.queue.writeBuffer(this.displayBuf, 128, new Float32Array([s.purkinje * scotopic, 0, 0, 0]));
+    // (the telescope's spot — a sensor's frame, not the eye's —: no Purkinje shift; its black point, the sky behind
+    // the target as the frame exposes it, a little under it)
+    const spot = target === this.live && this.meterSpot && this.spotSky > 0;
+    this.device.queue.writeBuffer(
+      this.displayBuf,
+      128,
+      new Float32Array([spot ? 0 : s.purkinje * scotopic, spot ? 0.92 * this.spotSky * 2 ** this.ev(s) : 0, 0, 0]),
+    );
     // (the rain — W5, display.wgsl rainLook —: its strength, a clock [s], in the cabin (its canopy's drops),
     // the vertical field's half tangent; the drops' velocity on the camera's axes [m/s], their speed)
     const r = target === this.live ? this.rain : null;
@@ -3940,6 +3960,16 @@ export class Renderer {
     // the light meter, on the live view (the scene: the Ranger is composited at display)
     if (s?.autoExposure && t === this.live && !this.meterPending) {
       this.device.queue.writeBuffer(this.histBuf, 0, new Uint32Array(128));
+      const sp = this.meterSpot;
+      // (another target, the spot taken or let go: its exposure found at once — not eased from the last one's,
+      // seconds of a burnt or a black frame)
+      const key = sp ? (sp.key ?? "spot") : "";
+      if (key !== this.spotKey) {
+        this.spotKey = key;
+        this.autoEVSet = false;
+      }
+      this.meterSpotUsed = !!sp;
+      this.device.queue.writeBuffer(this.spotBuf, 0, new Float32Array(sp ? [sp.x, sp.y, sp.r, 1] : [0, 0, 0, 0]));
       const pass = enc.beginComputePass(this.prof.pass("light meter"));
       pass.setPipeline(this.meterPipeline);
       pass.setBindGroup(
@@ -3949,6 +3979,7 @@ export class Renderer {
           entries: [
             { binding: 0, resource: t.hdr.createView({ baseMipLevel: 0, mipLevelCount: 1 }) },
             { binding: 20, resource: { buffer: this.histBuf } },
+            { binding: 22, resource: { buffer: this.spotBuf } },
           ],
         }),
       );
@@ -4601,10 +4632,44 @@ export class Renderer {
     }
     let m = this.meterIncident > 0 ? 0.4 / this.meterIncident : 2 ** this.autoEV;
     if (Lhi > 0) m = Math.min(m, 6 / Lhi);
+    // (the telescope's spot: the target's disc alone — its brightest part put just under white, the sky behind it
+    // kept dark: a faint galaxy, the wormhole's mouth and the other universe in it drawn bright, the Moon not burnt.
+    // Its brightest three per mille: the object's core however little of the disc it fills — at two per cent the
+    // night's glow round a small object was read, and the whole field went grey)
+    if (!this.meterSpotUsed) this.spotSky = 0;
+    if (this.meterSpotUsed) {
+      const quantile = (q: number) => {
+        let a = 0;
+        for (let b = 127; b >= 1; b--) {
+          const before = a;
+          a += h[b]!;
+          if (a >= q * total) return within(b, before, q * total);
+        }
+        return 0;
+      };
+      const core = quantile(0.015),
+        sky = quantile(0.5);
+      // (a frame burnt flat — the image's own buffer full at an exposure pushed too far: every cell in a bin or two,
+      // no contrast left to read — stepped down until it shows again; the spot never more than 6 EV over what the
+      // image's own meter asks: a cloud's veil read as the object pushed it 10 EV and locked it there)
+      const filled = h.reduce((a, c) => Math.max(a, c), 0);
+      const flat = filled > 0.9 * total;
+      const base = m;
+      if (flat) m = 2 ** (this.autoEV - 4);
+      else if (core > 0) m = 0.85 / (this.meterGain * core);
+      m = Math.min(m, base * 2 ** 6);
+      // (the sky behind it — the night's own glow in front of a faint object, a few times dimmer than its core —:
+      // its median taken as the black point, as an astrophotographer stretches a frame; the object then bright on
+      // black, not on a grey veil. Not past half the way to white: a disc with no object in it stays a sky)
+      if (sky > 0) m = Math.min(m, 0.5 / (this.meterGain * sky));
+      // (an object over its sky, however thin a haze or a cloud's veil it shows through: stretched on black)
+      this.spotSky = !flat && sky > 0 && core > 1.15 * sky ? sky : 0;
+      this.spotRead = { core, sky, total, m, gain: this.meterGain, hist: Array.from(h) };
+    }
     // (in the Earth's air, its sky is the scene, not a backdrop: a camera's meter besides — no more than a
     // fiftieth of the image over white once the tone map's own gain is in (a sunset's glow round the sun;
     // the disk itself is fewer pixels). Only ever less exposure: night and space as the light sets them)
-    if (this.meterInAir) {
+    if (this.meterInAir && !this.meterSpotUsed) {
       let acc2 = 0;
       for (let b = 127; b >= 1; b--) {
         const before = acc2;

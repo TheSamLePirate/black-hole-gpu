@@ -367,4 +367,10 @@ export default {
   Planets: "Planètes",
   "Moons and dwarf worlds": "Lunes et planètes naines",
   "Bright stars": "Étoiles brillantes",
+  "Telescope spot meter": "Mesure spot du télescope",
+  "The telescope's light meter reads the target's disc alone — not the whole image: a faint galaxy, the wormhole's mouth and the other universe in it drawn bright on the black sky, the Moon not burnt. Off: the whole image is metered, as the eye sees it. Needs the automatic exposure.":
+    "Le posemètre du télescope ne lit que le disque de la cible — pas toute l'image : une galaxie faible, l'embouchure du trou de ver et l'autre univers qu'on y voit rendus lumineux sur le ciel noir, la Lune pas brûlée. Coupée : toute l'image est mesurée, comme l'œil la voit. Demande l'exposition automatique.",
+  "Spot meter": "Mesure spot",
+  "The exposure set by the target's disc alone — a faint object drawn bright on the black sky":
+    "L'exposition réglée sur le disque de la cible seul — un objet faible rendu lumineux sur le ciel noir",
 } satisfies Record<string, string>;
