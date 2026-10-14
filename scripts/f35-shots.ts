@@ -58,6 +58,8 @@ try {
   })()`);
   // (the ground's relief and imagery round the runway, the F-35's maps)
   await Bun.sleep(15_000);
+  // (the ray tracer compiled for the scene — a changed shader takes a minute or so)
+  await app.waitFor(`!document.body.innerText.includes("Compiling the ray tracer")`, 240_000).catch(() => {});
   for (const v of views) {
     await app.js(`(async () => {
       const s = __bh.settings, c = __bh.camera;

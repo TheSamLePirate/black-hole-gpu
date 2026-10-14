@@ -4514,7 +4514,9 @@ fn lampV(d: vec2f) -> f32 {
   let fa = LAMP_F.xy;
   let fb = LAMP_F.zw;
   let det = fa.x * fb.y - fa.y * fb.x;
-  if (abs(det) < 0.16) { return exp(-0.5 * dot(d, d) / 0.16) * (0.16 / 0.16); }
+  // (near: the lamp's own disc, 0.4 m across, its edge a few centimetres soft — a Gaussian's tails, ×3 000 at
+  // night, painted metres of glowing ground round each lamp by the runway)
+  if (abs(det) < 0.16) { return smoothstep(0.24, 0.16, length(d)); }
   let u = (d.x * fb.y - d.y * fb.x) / det;
   let v = (fa.x * d.y - fa.y * d.x) / det;
   return exp(-0.5 * (u * u + v * v) / 0.36) / (6.2832 * 0.36 * abs(det));
