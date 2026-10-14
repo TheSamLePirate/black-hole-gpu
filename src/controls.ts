@@ -23,7 +23,7 @@ import type { DescentCmd } from "./descent";
 import { dvLocal, type ManeuverNode, type PlanPath } from "./maneuver";
 import type { Mount, MountPose } from "./mounts";
 import type { AssistGraph } from "./ui/hud/graph";
-import { fleet } from "./fleet";
+import { fleet, type Pose } from "./fleet";
 import type { VesselId } from "./vessels";
 import { type GamepadInput, sharedPad, type PadAction } from "./gamepad";
 import { PadControls } from "./input/devices";
@@ -39,7 +39,7 @@ import { installMotion } from "./controller/motion";
 import { installPiloting } from "./controller/piloting";
 import { installComputer } from "./controller/computer";
 import { installFleet } from "./controller/fleet";
-import { installDocking } from "./controller/docking";
+import { installDocking, type NetDocked } from "./controller/docking";
 import { installPlan } from "./controller/plan";
 import { installPlanet } from "./controller/planet";
 import { installRig } from "./controller/rig";
@@ -105,9 +105,13 @@ export type PoseKeys = "anchor" | "whL" | "distance" | "inclination" | "azimuth"
 
 /** The docking aid: the nearest free port in reach (the station's, a craft's) and the flown assembly's
  *  nearest free port against it. */
+/** what a craft docks to: the station, one of the fleet's craft, another player's ("net:<slot>", R7) */
+export type DockTarget = VesselId | "iss" | `net:${number}`;
+
 export interface DockInfo {
-  /** what it docks to, its name, its port (index, name) */
-  target: VesselId | "iss";
+  /** what it docks to, its name, its port (index, name); its kind (another player's: the craft he flies) */
+  target: DockTarget;
+  kind: VesselId | "iss";
   title: string;
   port: number;
   name: string;
@@ -1089,8 +1093,11 @@ export class CameraController {
   /** Docked to the station (directly, or through craft docked to it): the station carries the flown
    *  craft; a push of the engine or the thrusters undocks. */
   get docked() {
-    return this.s.ship && fleet.heldByStation();
+    return this.s.ship && (fleet.heldByStation() || !!this.netDocked);
   }
+  /** held to another player's craft (docs/PLAN-RESEAU.md R7, controller/docking.ts); where it held ours last */
+  netDocked: NetDocked | null = null;
+  netHostLast: { P: Pose; t: number; at: number } | null = null;
 
   /**
    * The docking autopilot (B, or the end of a rendezvous): what it docks to and its port, what it is
@@ -1098,7 +1105,7 @@ export class CameraController {
    * way to the port's axis is clear (and when that was last looked at).
    */
   dockAuto: {
-    target: VesselId | "iss";
+    target: DockTarget;
     port: number;
     phase: string;
     att: { nose: Vec3; up: Vec3; rate?: Vec3 } | null;

@@ -10,6 +10,7 @@ import {
   encodeCraft,
   type Member,
   MSG_CRAFT,
+  MSG_KEEP,
   type NetEvent,
   PROTO_VERSION,
   type Role,
@@ -66,7 +67,11 @@ type Events = {
   room: Room | null;
   voice: { slot: number; stream: MediaStream | null };
   clock: Room["clock"];
+  world: NetClient["away"];
 };
+
+/** the craft of those away are read as slots from here on (R7) */
+export const AWAY_SLOT = 200;
 
 export class NetClient {
   status: NetStatus = "off";
@@ -79,6 +84,11 @@ export class NetClient {
   mesh: PeerMesh | null = null;
   /** the ICE servers the room server gave (STUN, its TURN) */
   iceServers: RTCIceServer[] | null = null;
+  /** when a sample last went to the server (the persistent world's: kept a second apart) */
+  private keptAt = -1e9;
+  /** the persistent world (R7): the craft of those away, as each left it; ours as we left it last time */
+  away: { device: string; name: string; colour: string; seen: number; sample: CraftSample }[] = [];
+  mine: CraftSample | null = null;
   /** the room's pace said before the room was set (joining) */
   private lastClock: { clock: RoomClock; wants: Record<number, number> } | null = null;
   /** our microphone, sent on every direct link (R2) */
@@ -238,7 +248,9 @@ export class NetClient {
       case "roster":
         if (this.room) {
           this.room.members = m.members;
-          for (const tr of [...this.remotes.tracks.values()]) if (!m.members.some((x) => x.slot === tr.slot)) this.remotes.drop(tr.slot);
+          // (the craft of those away — slots from 200 — stay: the world's)
+          for (const tr of [...this.remotes.tracks.values()])
+            if (tr.slot < AWAY_SLOT && !m.members.some((x) => x.slot === tr.slot)) this.remotes.drop(tr.slot);
           this.mesh?.sync(m.members.map((x) => x.slot));
         }
         this.emit("roster", m.members);
@@ -246,6 +258,20 @@ export class NetClient {
       case "event":
         this.emit("event", { from: m.from, ev: m.ev });
         return;
+      case "world": {
+        const dec = (b64: string) => {
+          const b = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+          b[0] = MSG_CRAFT;
+          return decodeCraft(b);
+        };
+        this.away = m.away.flatMap((a) => {
+          const sample = dec(a.sample);
+          return sample ? [{ device: a.device, name: a.name, colour: a.colour, seen: a.seen, sample }] : [];
+        });
+        if (m.mine) this.mine = dec(m.mine);
+        this.emit("world", this.away);
+        return;
+      }
       case "clock":
         if (this.room) {
           // (a change set ahead: the pace running now kept until it comes)
@@ -413,6 +439,12 @@ export class NetClient {
     if (others.some((m) => !reached.has(m.slot))) {
       this.link.send(buf);
       this.relayed++;
+      this.keptAt = this.now();
+    } else if (this.now() - this.keptAt > 1000 && s.kind !== 4) {
+      // (all reached directly: the server kept up to date all the same — a second apart —, the world's, R7)
+      new Uint8Array(buf)[0] = MSG_KEEP;
+      this.link.send(buf);
+      this.keptAt = this.now();
     }
   }
 

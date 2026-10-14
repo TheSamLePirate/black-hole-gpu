@@ -389,7 +389,24 @@ cibles (`net:<emplacement>` : HUD, verrouillage, rendez-vous, carte 3D avec leur
 - Les autres joueurs sont des cibles (HUD, rendez-vous, carte 3D, sphères d'influence).
 - **Vérifié** : deux Rangers lancés du même pas de tir, un rendez-vous en orbite basse au HUD.
 
-### R7 — Amarrage et engins multiples
+### R7 — Amarrage et engins multiples ✅ (2026-10-14)
+
+*Fait* : sans refondre la flotte — chaque joueur garde la sienne, plusieurs engins d'un même type volant ensemble
+par les échantillons —, les engins des autres comme cibles d'amarrage (`controller/docking.ts` `netDock` : leur
+type, leurs ports libres, leur pose à tout instant — propagée par Kepler) : le HUD et l'autopilote DOCK sur eux ;
+la capture tenue par un seul des deux (le plus léger sur le plus lourd, à masse égale le dernier venu — les deux
+pages s'accordent), le visiteur porté par l'engin de l'hôte (`netDocked`, comme à la station : sa pose celle de
+l'hôte composée avec le cadre des ports ; ses caméras et ses écrans gardés), l'hôte le dessinant sur sa propre
+pose (rigide, sans retard) ; le désamarrage (UNDOCK, une poussée) : les ressorts à 5 cm/s ; les contacts entre
+engins (`stationContact`) : celui qui touche prend sa part, l'autre reçoit la sienne (selon les masses) ; les
+collisions « en vol » de R3 limitées à l'air terrestre ; le **monde persistant** : le serveur garde le dernier
+échantillon de chaque engin (une trame « à garder » par seconde quand les liens sont directs) — l'engin d'un
+absent reste là où il l'a laissé, ou sur son orbite (Kepler), visible, ciblable, amarrable ; revenu, « Reprendre
+mon engin » le replace où il est. *Reporté* : les baux d'un engin libre partagé (l'Endurance de la salle
+plutôt que celle de chacun) et la refonte `VesselId` → identifiants d'engin qu'ils demandent ; la masse de
+l'assemblage pour l'hôte (il vole avec la sienne) ; le train et les feux d'un Ranger distant (des effets propres
+à l'engin piloté dans le rendu).
+
 - **Refonte de la flotte** : des identifiants d'engin (`ranger#2`…) à la place de `VesselId` dans `fleet`
   (`free`, `fuel`, `payload`, `links`), les coques et les types du rendu restant indexés par type.
 - **Baux** tenus par le serveur : un engin piloté appartient à son pilote, un engin libre (l'Endurance,

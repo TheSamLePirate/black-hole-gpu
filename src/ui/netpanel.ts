@@ -147,6 +147,7 @@ export class NetPanel {
     net.on("status", () => this.refresh());
     net.on("roster", () => this.refresh());
     net.on("room", () => this.refresh());
+    net.on("world", () => this.refresh());
     net.on("error", (e) => this.host.toast(ERRORS[e.code]?.() ?? e.msg));
     this.net = net;
     return net;
@@ -496,6 +497,19 @@ export class NetPanel {
       B.append(this.screenSection(room.code));
       if (this.voice) B.append(this.voiceSection(this.voice));
       if (this.match) B.append(this.match.section());
+      // (our craft as we left it in this room — R7 —: taken back)
+      if (this.net?.mine && room.role === "pilot" && this.session)
+        B.append(
+          button({
+            label: t("Back to my craft"),
+            title: t("Where you left your craft in this room"),
+            testid: "net-resume",
+            onClick: () => {
+              this.host.toast(this.session!.resume());
+              this.render();
+            },
+          }),
+        );
       B.append(button({ label: t("Leave the room"), kind: "danger", testid: "net-leave", onClick: () => this.leave() }));
     } else {
       // create

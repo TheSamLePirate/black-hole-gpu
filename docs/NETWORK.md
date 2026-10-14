@@ -150,6 +150,28 @@ formation kept (169 m); Ben slows to ×10 then ×1: at once for both, both withi
 
 Not yet: a pace following the proper time (Gargantua's dilation: R8); a date change in a room.
 
+## Docking together, the persistent world (R7)
+
+- **Docking to another's craft**: target him (Tab, the map), fly in on the docking HUD or engage **DOCK** (B):
+  the autopilot brings you onto his free port as onto the station's. At the capture the lighter craft latches
+  onto the heavier (at one mass the later comer): it is **held** by his — its place his composed with the
+  ports', its cameras and screens kept —; he flies the assembly and sees you on his port, rigid. **UNDOCK** (or
+  a push): the springs part you at 5 cm/s.
+- **Contacts**: a craft striking another's hull bounces off it; the other gets its share of the blow (by their
+  masses). (The mid-air collisions of the fights stay in the Earth's air.)
+- **The persistent world**: the room keeps each one's craft as he left it — parked where it stood, or on its
+  orbit (carried on by Kepler): the others see it ("Ana (away)"), target it, dock to it. Back in the room,
+  **Back to my craft** (the room panel) puts you on it where it is now.
+
+Measured on kerr-mini (`tests/e2e/net-dock`): Ben's Ranger drifting at 15 cm/s onto Ana's Endurance's fore hub:
+latched, held within a millimetre of where her craft carries him, seen on her hub (14.7 m from her centre);
+Ana moved 1 km: Ben with her (1.5 cm); undocked: 0.2 m apart 4 s on; the DOCK autopilot from 25 m to the
+capture; off the axis at 0.5 m/s: "Contact with Ana's Endurance · 0.42 m/s", her share received; Ana gone:
+her Endurance on its orbit, Ben docks to it; Ana back on it, 3.6 m from Ben.
+
+Not yet: a shared free craft (the room's own Endurance) with leases; the assembly's mass for the host; a
+remote Ranger's gear and lamps.
+
 ## How it works
 
 - **The room server** (`server/rooms.ts`, Bun, SQLite): the rooms and their members, the clock, the room's
@@ -174,7 +196,7 @@ late (95 %: 27 ms), the others shown 60–75 ms late, the two pages' clocks with
 
 ## Tests
 
-End to end too: `tests/e2e/net-space` (in orbit together, the room's warp, targets), `tests/e2e/net-walk` (on foot together, a passenger's ride), `tests/e2e/net-flight` (two F-35s: seen 8 km off, on the radar, the direct link, Beside —
+End to end too: `tests/e2e/net-dock` (docking together, contacts, the persistent world), `tests/e2e/net-space` (in orbit together, the room's warp, targets), `tests/e2e/net-walk` (on foot together, a passenger's ride), `tests/e2e/net-flight` (two F-35s: seen 8 km off, on the radar, the direct link, Beside —
 formation, the same gap seen by both —, the afterburner seen). Unit: `tests/net-core.test.ts` (the samples, the clock under 200 ms and 5 % lost, the Hermite within a
 centimetre, the smoothing, the bot's flight), `tests/net-rooms.test.ts` (a real server: rooms, limits,
 passwords, a reconnection's slot, the owner's delete, the rooms kept across a restart). End to end:

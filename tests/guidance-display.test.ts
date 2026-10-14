@@ -67,6 +67,7 @@ for (const [along, lateral, angle, axial, rotation] of [
     const expected = axial - rotation * lateral;
     const g: DockInfo = {
       target: "iss",
+      kind: "iss",
       title: "ISS",
       port: 0,
       name: "port",

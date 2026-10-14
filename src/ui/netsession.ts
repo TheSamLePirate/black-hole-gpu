@@ -6,7 +6,19 @@
 
 import { fmtFactor, realTimeSpeed, roomPace } from "../clock";
 import type { CameraController } from "../controls";
-import { axesQuat, kindIndex, kindOf, NET_BODIES, NET_COAST, netFrame, type NetShip, netStateHome, quatAxes } from "../controller/netcraft";
+import {
+  axesQuat,
+  kindIndex,
+  kindOf,
+  NET_BODIES,
+  NET_COAST,
+  netDockPose,
+  netFrame,
+  type NetShip,
+  netStateHome,
+  quatAxes,
+} from "../controller/netcraft";
+import { netDock } from "../controller/docking";
 import { type Body, isNetTarget, netTargetId, netTargets } from "../targeting";
 import { fleet } from "../fleet";
 import type { JetInputs } from "../f35/pose";
@@ -22,12 +34,15 @@ import { C_MPS, M_METRES, M_SECONDS } from "../units";
 import { keplerProp } from "../system/our-plan";
 import { solarBody } from "../system/solar";
 import { vesselHulls } from "../system/collide";
-import { type VesselId, VESSELS } from "../vessels";
+import { dockedFrame, type VesselId, VESSELS } from "../vessels";
 import type { NetPanel } from "./netpanel";
 
 type Vec3 = [number, number, number];
 
 /** A name tag over another's craft (ui/overlay.ts draws it): its place on the camera's axes from the eye. */
+/** the craft of those away are read as slots from here on (src/net/client.ts AWAY_SLOT, R7) */
+const AWAY_SLOT = 200;
+
 /** a craft's door off its side [m] (controller/character.ts accessOffset) */
 const ACCESS: Record<VesselId, number> = { ranger: 9, lander: 13, endurance: 75, f35: 8 };
 
@@ -172,7 +187,43 @@ export class NetSession {
       const st = this.net?.remotes.track(slotOf(id))?.raw(t * M_SECONDS);
       return st ? netStateHome(st, t) : null;
     };
+    // the others' craft to dock to and to meet (R7): their ports held by those docked to them
+    netDock.targets = () => {
+      const me = this.net?.room?.slot;
+      return this.ships
+        .filter((sh) => !sh.ghost && this.links.get(sh.slot)?.host !== me)
+        .map((sh) => ({
+          id: `net:${sh.slot}` as const,
+          title: this.awayNames.has(sh.slot)
+            ? tf("{0}'s {1} (away)", this.awayNames.get(sh.slot)!.name, VESSELS[sh.id].name)
+            : tf("{0}'s {1}", this.nameOf(sh.slot), VESSELS[sh.id].name),
+          kind: sh.id,
+          used: new Set([...this.links.values()].filter((l) => l.host === sh.slot).map((l) => l.port)),
+          pose: (t: number) => {
+            const st = this.net?.remotes.track(sh.slot)?.raw(t * M_SECONDS);
+            return st ? netDockPose(st, t) : null;
+          },
+        }));
+    };
+    netDock.slot = () => this.net?.room?.slot ?? -1;
+    netDock.onDock = (d) => {
+      const host = slotOf(d.id as Body);
+      const me = this.net?.room?.slot ?? -1;
+      this.links.set(me, { host, port: d.port, ownPort: d.ownPort, c: d.c, ax: d.ax });
+      this.net?.event({ kind: "dock", to: host, port: d.port, ownPort: d.ownPort, c: d.c, ax: d.ax });
+    };
+    netDock.onUndock = (id) => {
+      this.links.delete(this.net?.room?.slot ?? -1);
+      this.net?.event({ kind: "undock", to: slotOf(id as Body) });
+    };
+    netDock.onBump = (id, dv) => this.net?.event({ kind: "bump", to: slotOf(id as Body), dv: dv.map((x) => Math.round(x * 1000) / 1000) });
   }
+
+  /** the blows another's craft dealt ours (R7) */
+  bumped = 0;
+
+  /** who is docked to whom (R7): a guest's slot → his host's, the ports, his frame in the host's [m] */
+  links = new Map<number, { host: number; port: number; ownPort: number; c: Vec3; ax: [Vec3, Vec3, Vec3] }>();
 
   private get net() {
     return this.d.panel.net;
@@ -211,12 +262,36 @@ export class NetSession {
     // (his telemetry heard: our instruments show his)
     if (this.telBound !== net) {
       this.telBound = net;
+      // the persistent world (R7): the craft of those away, each where he left it (on its orbit, carried on)
+      const placeAway = () => {
+        for (const tr of [...net.remotes.tracks.values()]) if (tr.slot >= AWAY_SLOT) net.remotes.drop(tr.slot);
+        this.awayNames.clear();
+        net.away.forEach((a, i) => {
+          net.remotes.setAway(AWAY_SLOT + i, a.sample);
+          this.awayNames.set(AWAY_SLOT + i, { name: a.name, colour: a.colour });
+        });
+      };
+      placeAway();
+      net.on("world", placeAway);
       net.on("event", ({ from, ev }) => {
         const e = ev as { kind?: string; to?: number };
         if (e.kind === "tel") this.tel.set(from, (ev as unknown as { v: Record<string, number> }).v);
         else if (e.kind === "board" && typeof e.to === "number") {
           this.aboard.set(from, e.to);
           if (e.to === net.room?.slot) this.d.toast(tf("{0} is aboard", this.nameOf(from)));
+        } else if (e.kind === "dock" && typeof e.to === "number") {
+          const d = ev as unknown as { port: number; ownPort: number; c: Vec3; ax: [Vec3, Vec3, Vec3] };
+          this.links.set(from, { host: e.to, port: d.port, ownPort: d.ownPort, c: d.c, ax: d.ax });
+          if (e.to === net.room?.slot) this.d.toast(tf("{0} docked to your {1}", this.nameOf(from), VESSELS[fleet.active].name));
+        } else if (e.kind === "undock") {
+          if (this.links.get(from)?.host === net.room?.slot) this.d.toast(tf("{0} undocked", this.nameOf(from)));
+          this.links.delete(from);
+        } else if (e.kind === "bump" && e.to === net.room?.slot) {
+          const dv = (ev as unknown as { dv: Vec3 }).dv;
+          if (Array.isArray(dv) && dv.length === 3) {
+            this.d.camera.netBumped(dv);
+            this.bumped++;
+          }
         } else if (e.kind === "alight") {
           if (this.aboard.get(from) === net.room?.slot) this.d.toast(tf("{0} got off", this.nameOf(from)));
           this.aboard.delete(from);
@@ -227,6 +302,8 @@ export class NetSession {
     if (F && !net.room.members.some((m) => m.slot === F.slot)) this.unfollow();
     if (isNetTarget(this.d.settings.target) && !net.room.members.some((m) => netTargetId(m.slot) === this.d.settings.target))
       this.d.settings.target = "earth";
+    for (const [g, l] of this.links)
+      if (!net.room.members.some((m) => m.slot === g) || !net.room.members.some((m) => m.slot === l.host)) this.links.delete(g);
     for (const [p, q] of this.aboard)
       if (!net.room.members.some((m) => m.slot === p) || !net.room.members.some((m) => m.slot === q)) this.aboard.delete(p);
     // (a spectator, an instruments screen: the first pilot followed — the instruments in his cockpit)
@@ -237,9 +314,13 @@ export class NetSession {
         if (net.room.role === "instruments") this.d.settings.shipMount = "cockpit";
       }
     }
+    // (those docked to our craft: held on it)
+    const attached = new Map([...this.links].filter(([, l]) => l.host === net.room!.slot).map(([g, l]) => [g, { c: l.c, ax: l.ax }]));
     const all = c.netShips(
       states.filter((s) => !this.hidden.has(s.slot) || s.slot === this.follow?.slot),
       dt,
+      Infinity,
+      attached,
     );
     // the others on foot: in the home frame, the renderer brings them onto its camera
     R.netWalkers = states
@@ -266,8 +347,8 @@ export class NetSession {
         alive: true,
         locked: false,
         seen: true,
-        name: members.get(s.slot)?.name ?? `#${s.slot}`,
-        colour: members.get(s.slot)?.colour ?? "#ffffff",
+        name: this.nameOf(s.slot),
+        colour: members.get(s.slot)?.colour ?? this.awayNames.get(s.slot)?.colour ?? "#ffffff",
       }));
     const eye =
       this.d.settings.ship && R.shipPose
@@ -293,8 +374,8 @@ export class NetSession {
       const D = drawn.get(s.slot);
       return {
         slot: s.slot,
-        name: m?.name ?? `#${s.slot}`,
-        colour: m?.colour ?? "#ffffff",
+        name: this.nameOf(s.slot),
+        colour: m?.colour ?? this.awayNames.get(s.slot)?.colour ?? "#ffffff",
         at: D?.at ?? ([s.rel[0] + eye[0], s.rel[1] + eye[1], s.rel[2] + eye[2]] as Vec3),
         dist: D?.dist ?? s.dist,
         ghost: s.ghost,
@@ -353,8 +434,10 @@ export class NetSession {
     const ground = onGround(c, ownNow?.h);
     if (ownNow && this.ownAt && Math.hypot(...ownNow.p.map((x, k) => x - this.ownAt![k]!)) > 500) this.placedAt = now;
     this.ownAt = ownNow?.p ?? null;
-    if (!ground && ownNow && now - this.collidedAt > 5 && now - this.placedAt > 2)
+    // (in the Earth's air only: in space a touch is the docking's contact — its bounce, its share of the blow)
+    if (!ground && ownNow && ownNow.h < 100_000 && now - this.collidedAt > 5 && now - this.placedAt > 2)
       for (const sh of this.ships) {
+        if (sh.state.frame !== 0) continue;
         const reach = 0.55 * (vesselHulls[sh.id].radius + vesselHulls[fleet.active].radius);
         const touching =
           !sh.ghost && !(sh.state.flags & 1) && sh.dist < reach && sh.state.ahead < 0.3 && steady(net.remotes.track(sh.slot)?.samples);
@@ -569,7 +652,40 @@ export class NetSession {
   }
 
   private nameOf(slot: number) {
+    const away = this.awayNames.get(slot);
+    if (away) return tf("{0} (away)", away.name);
     return this.net?.room?.members.find((m) => m.slot === slot)?.name ?? `#${slot}`;
+  }
+
+  /** the craft of those away (R7): their pseudo-slots' names and colours */
+  awayNames = new Map<number, { name: string; colour: string }>();
+
+  /**
+   * Back to our craft as we left it in this room (R7): its kind, its place — parked where it stood, or on its orbit
+   * carried on to now. Says what it did.
+   */
+  resume(): string {
+    const net = this.net;
+    const S = net?.mine;
+    const id = S ? kindOf(S.kind) : null;
+    if (!net?.room || !S || !id) return t("No craft of yours in this room's world");
+    if (!net.clock.synced || this.timedRoom !== net.room.code) return t("The room's clock is still being set — a moment");
+    const c = this.d.camera;
+    const st = net.remotes.stateOf(S, this.d.sceneTime());
+    if (!st) return t("No craft of yours in this room's world");
+    if (fleet.active !== id) this.d.tools.set("vessel", id);
+    const place = c.netPlaceBeside(st, 0);
+    if (!place) return t("The teleport needs your craft on our side of the wormhole");
+    const ground = (st.flags & 1) !== 0;
+    this.d.tools.placeAt({ frame: "ours", ...place, note: t("Back to your craft") });
+    c.pilot.auto = "none";
+    c.gearInit = true;
+    c.gearDown = ground || st.vis.gear > 0.5;
+    c.gearExt = c.gearDown ? 1 : 0;
+    c.pilot.throttle = 0;
+    net.mine = null;
+    this.prev = null;
+    return t("Back to your craft");
   }
 
   /** Another's craft by us on foot (R5): the nearest landed one whose door (either side) is within 4 m, or
@@ -739,6 +855,44 @@ export class NetSession {
       torque: [0, 0, 0],
       time: performance.now() / 1000,
     };
+  }
+
+  /**
+   * Our craft put on the axis of another's free docking port (the tests', R7): `dist` metres out, its own port
+   * facing it, closing at `closing` m/s; with its velocity and turn. Says what it did.
+   */
+  placeAtPort(slot: number, dist = 20, closing = 0): string {
+    const N = netDock.targets().find((q) => q.id === `net:${slot}`);
+    if (!N) return t("No such player in the room");
+    const t0 = this.d.camera.nowTime();
+    const H = N.pose(t0);
+    const k = VESSELS[N.kind].ports.findIndex((_, i) => !N.used.has(i));
+    const gp = VESSELS[fleet.active].ports[0];
+    if (!H || k < 0 || !gp) return t("No free port to dock to");
+    const hp = VESSELS[N.kind].ports[k]!;
+    const on = (A: [Vec3, Vec3, Vec3], v: Vec3): Vec3 => [0, 1, 2].map((i) => A[0][i]! * v[0] + A[1][i]! * v[1] + A[2][i]! * v[2]) as Vec3;
+    const D = dockedFrame(gp, hp, [0, 1, 0]);
+    const ha = on(H.ax, hp.axis);
+    const X = [0, 1, 2].map((i) => H.X[i]! + (on(H.ax, D.c)[i]! + ha[i]! * dist) / M_METRES) as Vec3;
+    const ax = D.ax.map((col) => on(H.ax, col)) as [Vec3, Vec3, Vec3];
+    const r = [0, 1, 2].map((i) => X[i]! - H.X[i]!) as Vec3;
+    const w = H.w ?? [0, 0, 0];
+    const wr: Vec3 = [w[1] * r[2] - w[2] * r[1], w[2] * r[0] - w[0] * r[2], w[0] * r[1] - w[1] * r[0]];
+    const vel = [0, 1, 2].map((i) => H.V[i]! + wr[i]! - (ha[i]! * closing) / C_MPS) as Vec3;
+    this.d.tools.placeAt({
+      frame: "ours",
+      X,
+      vel,
+      fwd: ax[2],
+      up: ax[1],
+      note: tf("On {0}'s {1}, {2} m out", N.title, hp.name, Math.round(dist)),
+    });
+    const c = this.d.camera;
+    if (c.pilot.auto !== "none") c.pilot.setAuto(c.pilot.auto);
+    c.pilot.auto = "none";
+    c.pilot.throttle = 0;
+    this.prev = null;
+    return tf("On {0}'s {1}, {2} m out", N.title, hp.name, Math.round(dist));
   }
 
   /** The others in the room with a craft now (the teleport's choice). */

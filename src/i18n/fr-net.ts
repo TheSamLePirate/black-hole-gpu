@@ -124,6 +124,20 @@ export default {
   "Your craft is back where you left it": "Votre engin est revenu là où vous l'aviez laissé",
   "aboard {0}'s craft": "à bord de l'engin de {0}",
   "{0} aboard": "{0} à bord",
+  // the persistent world (R7)
+  "{0} (away)": "{0} (absent)",
+  "{0}'s {1} (away)": "{1} de {0} (absent)",
+  "No craft of yours in this room's world": "Aucun engin à vous dans le monde de cette salle",
+  "Back to your craft": "De retour à votre engin",
+  "Back to my craft": "Reprendre mon engin",
+  "Where you left your craft in this room": "Là où vous avez laissé votre engin dans cette salle",
+  // docking together (R7)
+  "{0}'s {1}": "{1} de {0}",
+  "{0} docked to your {1}": "{0} s'est amarré à votre {1}",
+  "{0} undocked": "{0} s'est désamarré",
+  "No free port to dock to": "Aucun port libre où s'amarrer",
+  "Docked to another's craft — UNDOCK first": "Amarré à l'engin d'un autre — DÉSAMARRER d'abord",
+  "On {0}'s {1}, {2} m out": "Sur {1} de {0}, à {2} m",
   // the room's warp (R6)
   "The room's clock is still being set — a moment": "L'horloge de la salle se règle encore — un instant",
   "paused by {0}": "en pause par {0}",

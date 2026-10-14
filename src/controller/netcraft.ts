@@ -12,7 +12,7 @@ import { fromBodyFixed, groundVelocity, solidBody, toBodyFixed } from "../system
 import { bodyAxes, solarBody } from "../system/solar";
 import { ourState, repToHomeVec } from "../system/our-side";
 import { mouth } from "../wormhole";
-import { C_MPS, M_METRES } from "../units";
+import { C_MPS, M_METRES, M_SECONDS } from "../units";
 import { VESSEL_IDS, type VesselId } from "../vessels";
 import type { CameraController } from "../controls";
 
@@ -212,6 +212,23 @@ export function netStateHome(s: CraftState, t: number): { pos: Vec3; vel: Vec3 }
   };
 }
 
+/** A sample's craft as the docking reads a pose at scene time t [M] (R7): place [M], velocity [c], axes (left, up,
+ *  nose: home), its turn [rad per M]. */
+export function netDockPose(s: CraftState, t: number): { X: Vec3; V: Vec3; ax: [Vec3, Vec3, Vec3]; w: Vec3 } | null {
+  const H = netStateHome(s, t);
+  const body = NET_BODIES[s.body];
+  if (!H || !body) return null;
+  const A = s.frame === 0 ? bodyAxes(solarBody(body)!, t) : null;
+  const toHome = (b: Vec3): Vec3 => (A ? ([0, 1, 2].map((i) => b[0] * A[0][i]! + b[1] * A[1][i]! + b[2] * A[2][i]!) as Vec3) : b);
+  const ax = quatAxes(s.q);
+  return {
+    X: H.pos,
+    V: H.vel,
+    ax: [unit(toHome(scale(ax.right, -1))), unit(toHome(ax.up)), unit(toHome(ax.fwd))],
+    w: scale(toHome(s.w as Vec3), M_SECONDS),
+  };
+}
+
 /** Our craft as the network sends it, anywhere on our side (R6): fixed to the Earth in its air or on its ground (R1);
  *  elsewhere in the inertial frame of the body whose sphere it is in — the home frame's axes about its centre. */
 export interface NetOwnState extends NetOwn {
@@ -277,9 +294,19 @@ const posers = new Map<number, { poser: JetPoser; fan: number }>();
  * The others' craft on the Earth for the renderer: each from the flown craft, on the camera's axes, its axes
  * there; an F-35's moving parts as its flight controls move them. Those beyond `range` [m] left out.
  */
-function netShips(this: CameraController, states: CraftState[], dt: number, range = Infinity): NetShip[] {
+function netShips(
+  this: CameraController,
+  states: CraftState[],
+  dt: number,
+  range = Infinity,
+  attached?: Map<number, { c: Vec3; ax: [Vec3, Vec3, Vec3] }>,
+): NetShip[] {
   const H = homeView(this);
   if (!H) return [];
+  // (those docked to our craft — R7 —: held on it, rigid, from our own pose — not from their samples, a
+  // latency behind)
+  const mine = attached?.size ? (this.shipAxesLocal(H.cam).map((a) => H.fromLocal(a as Vec3)) as [Vec3, Vec3, Vec3]) : null;
+  const on = (A: [Vec3, Vec3, Vec3], v: Vec3): Vec3 => [0, 1, 2].map((k) => A[0][k]! * v[0] + A[1][k]! * v[1] + A[2][k]! * v[2]) as Vec3;
   const E = earthView(this);
   const t = H.nav.t;
   const out: NetShip[] = [];
@@ -312,6 +339,11 @@ function netShips(this: CameraController, states: CraftState[], dt: number, rang
       axesHome = [scale(ax.right, -1), ax.up, ax.fwd];
       vH = s.v as Vec3;
       h = Math.hypot(...s.p) - solarBody(body)!.radius * M_METRES;
+    }
+    const link = mine ? attached!.get(s.slot) : undefined;
+    if (link && mine) {
+      X = [0, 1, 2].map((k) => H.nav.X[k]! + on(mine, link.c)[k]! / M_METRES) as Vec3;
+      axesHome = link.ax.map((col) => unit(on(mine, col))) as [Vec3, Vec3, Vec3];
     }
     const relHome = [0, 1, 2].map((k) => (X[k]! - H.nav.X[k]!) * M_METRES) as Vec3;
     const dist = Math.hypot(...relHome);

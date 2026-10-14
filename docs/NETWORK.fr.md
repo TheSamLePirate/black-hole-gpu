@@ -165,6 +165,29 @@ marqueur à 6 400 km.
 Pas encore : un pas qui suive le temps propre (la dilatation de Gargantua : R8) ; un changement de date en
 salle.
 
+## S'amarrer ensemble, le monde persistant (R7)
+
+- **S'amarrer à l'engin d'un autre** : ciblez-le (Tab, la carte), approchez au HUD d'amarrage ou enclenchez
+  **DOCK** (B) : l'autopilote vous amène sur son port libre comme sur celui de la station. À la capture, l'engin
+  le plus léger s'accroche au plus lourd (à masse égale, le dernier arrivé) : il est **tenu** par l'autre — sa
+  place celle de l'hôte composée avec celle des ports, ses caméras et ses écrans gardés — ; l'hôte pilote
+  l'assemblage et vous voit sur son port, rigide. **DÉSAMARRER** (ou une poussée) : les ressorts vous écartent à
+  5 cm/s.
+- **Les contacts** : un engin qui heurte la coque d'un autre rebondit ; l'autre reçoit sa part du choc (selon
+  leurs masses). (Les collisions en vol des combats restent dans l'air terrestre.)
+- **Le monde persistant** : la salle garde l'engin de chacun tel qu'il l'a laissé — garé là où il était, ou
+  sur son orbite (porté par Kepler) : les autres le voient (« Ana (absent) »), le ciblent, s'y amarrent. De
+  retour dans la salle, **Reprendre mon engin** (le panneau de la salle) vous remet dessus, là où il est.
+
+Mesuré sur kerr-mini (`tests/e2e/net-dock`) : le Ranger de Ben dérivant à 15 cm/s sur le moyeu avant de
+l'Endurance d'Ana : accroché, tenu à moins d'un millimètre de là où son engin le porte, vu sur son moyeu (à
+14,7 m de son centre) ; Ana déplacée d'1 km : Ben avec elle (1,5 cm) ; désamarré : 0,2 m d'écart 4 s après ;
+l'autopilote DOCK de 25 m à la capture ; hors de l'axe à 0,5 m/s : « Contact avec l'Endurance d'Ana · 0,42 m/s »,
+sa part reçue ; Ana partie : son Endurance sur son orbite, Ben s'y amarre ; Ana revenue dessus, à 3,6 m de Ben.
+
+Pas encore : un engin libre partagé (l'Endurance de la salle) avec des baux ; la masse de l'assemblage pour
+l'hôte ; le train et les feux d'un Ranger distant.
+
 ## Comment ça marche
 
 - **Le serveur de salles** (`server/rooms.ts`, Bun, SQLite) : les salles et leurs membres, l'horloge, les
@@ -190,7 +213,7 @@ deux pages à 0,3 ms près.
 
 ## Tests
 
-De bout en bout aussi : `tests/e2e/net-space` (en orbite ensemble, le warp de la salle, les cibles), `tests/e2e/net-walk` (à pied ensemble, un passager), `tests/e2e/net-flight` (deux F-35 : vus à 8 km, sur le radar, le lien direct, À côté —
+De bout en bout aussi : `tests/e2e/net-dock` (s'amarrer ensemble, les contacts, le monde persistant), `tests/e2e/net-space` (en orbite ensemble, le warp de la salle, les cibles), `tests/e2e/net-walk` (à pied ensemble, un passager), `tests/e2e/net-flight` (deux F-35 : vus à 8 km, sur le radar, le lien direct, À côté —
 la patrouille, le même écart vu des deux côtés —, la postcombustion vue). Unitaires : `tests/net-core.test.ts` (les échantillons, l'horloge sous 200 ms et 5 % de pertes, Hermite au
 centimètre, le lissage, le vol du robot), `tests/net-rooms.test.ts` (un vrai serveur : salles, limites, mots
 de passe, la place reprise à la reconnexion, la suppression par le propriétaire, les salles gardées après un

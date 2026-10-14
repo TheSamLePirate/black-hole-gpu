@@ -6,7 +6,7 @@ import { recorder } from "../game/recorder";
 import { gradeDocking } from "../game/report";
 import { cameraFrame, setHomePose } from "../camera";
 import type { Vec3 } from "../physics";
-import { type Body, isCraft } from "../targeting";
+import { BODY_NAMES, type Body, isCraft, isNetTarget } from "../targeting";
 import type { MountPose } from "../mounts";
 import { fleet, type Pose } from "../fleet";
 import { dockedFrame, VESSEL_IDS, VESSELS, type VesselId } from "../vessels";
@@ -19,7 +19,7 @@ import { C_MPS, M_METRES, M_SECONDS } from "../units";
 import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 import { frameNow } from "../frameclock";
 
-import type { CameraController, DockInfo } from "../controls";
+import type { CameraController, DockInfo, DockTarget } from "../controls";
 import { onAxesV, unitV } from "./util";
 
 declare module "../controls" {
@@ -35,7 +35,45 @@ declare module "../controls" {
     dockWant: typeof dockWant;
     targetBlocks: typeof targetBlocks;
     ownTurn: typeof ownTurn;
+    netCapture: typeof netCapture;
+    flyNetDocked: typeof flyNetDocked;
+    netUndock: typeof netUndock;
+    netHostPose: typeof netHostPose;
+    netBumped: typeof netBumped;
   }
+}
+
+/**
+ * Other players' craft to dock to (docs/PLAN-RESEAU.md R7), filled by the room (ui/netsession.ts): each one's id
+ * ("net:<slot>"), name, kind (its ports, its hull), the ports already held, its pose at a scene time [M] (home
+ * frame: place, velocity, axes, turn). And what the room is told: a capture on one (the guest's frame in the
+ * host's), a letting go, a blow's share for the other.
+ */
+export interface NetDockTarget {
+  id: `net:${number}`;
+  title: string;
+  kind: VesselId;
+  used: Set<number>;
+  pose: (t: number) => Pose | null;
+}
+export const netDock: {
+  targets: () => NetDockTarget[];
+  /** our slot in the room */
+  slot?: () => number;
+  onDock?: (d: { id: `net:${number}`; port: number; ownPort: number; c: Vec3; ax: [Vec3, Vec3, Vec3] }) => void;
+  onUndock?: (id: `net:${number}`) => void;
+  onBump?: (id: `net:${number}`, dv: Vec3) => void;
+} = { targets: () => [] };
+
+/** Held to another player's craft (R7): which, its kind, the ports, the guest's frame in the host's [m]. */
+export interface NetDocked {
+  id: `net:${number}`;
+  title: string;
+  kind: VesselId;
+  port: number;
+  ownPort: number;
+  c: Vec3;
+  ax: [Vec3, Vec3, Vec3];
 }
 
 /**
@@ -45,7 +83,7 @@ declare module "../controls" {
  * port's axis and across it, the closing rate, the drift across, the angle between the two ports'
  * axes (docked, they face each other). Null: nothing within 5 km, or not on our side.
  */
-function dockGeometry(this: CameraController, only?: { target: VesselId | "iss"; port?: number }): DockInfo | null {
+function dockGeometry(this: CameraController, only?: { target: DockTarget; port?: number }): DockInfo | null {
   const s = this.s;
   const cam = cameraFrame(s);
   const nav = this.ourNav(cam);
@@ -67,7 +105,14 @@ function dockGeometry(this: CameraController, only?: { target: VesselId | "iss";
   }
   if (!own.length) return null;
   // what it can dock to: its pose, its turn (the station's: once an orbit), its free ports
-  const targets: { id: VesselId | "iss"; title: string; P: Pose; om: Vec3; ports: { k: number; name: string; c: Vec3; a: Vec3 }[] }[] = [];
+  const targets: {
+    id: DockTarget;
+    kind: VesselId | "iss";
+    title: string;
+    P: Pose;
+    om: Vec3;
+    ports: { k: number; name: string; c: Vec3; a: Vec3 }[];
+  }[] = [];
   if (s.iss && station.ports.length && (!only || only.target === "iss")) {
     const st = issTrack.state(t, nav.X);
     if (st && issTrack.near) {
@@ -78,6 +123,7 @@ function dockGeometry(this: CameraController, only?: { target: VesselId | "iss";
       const used = fleet.usedPorts("iss");
       targets.push({
         id: "iss",
+        kind: "iss",
         title: "ISS",
         P: { X: st.X, V: st.V, ax: A },
         om: lin(cross(r, v), 1 / dot3(r, r), r, 0),
@@ -94,12 +140,29 @@ function dockGeometry(this: CameraController, only?: { target: VesselId | "iss";
     const used = fleet.usedPorts(id);
     targets.push({
       id,
+      kind: id,
       title: VESSELS[id].name,
       P,
       // (its turn as it coasts — the tumbling Endurance's: its ports' points move with it)
       om: P.w ?? [0, 0, 0],
       ports: VESSELS[id].ports.flatMap((p, k) =>
         used.has(k) ? [] : [{ k, name: p.name, c: lin(P.X, 1, onAxesV(P.ax, p.centre), m), a: onAxesV(P.ax, p.axis) }],
+      ),
+    });
+  }
+  // other players' craft (R7): where their samples have them, their free ports
+  for (const N of netDock.targets()) {
+    if (only && only.target !== N.id) continue;
+    const P = N.pose(t);
+    if (!P || Math.hypot(...sub3(P.X, nav.X)) * M_METRES > 5200) continue;
+    targets.push({
+      id: N.id,
+      kind: N.kind,
+      title: N.title,
+      P,
+      om: P.w ?? [0, 0, 0],
+      ports: VESSELS[N.kind].ports.flatMap((p, k) =>
+        N.used.has(k) ? [] : [{ k, name: p.name, c: lin(P.X, 1, onAxesV(P.ax, p.centre), m), a: onAxesV(P.ax, p.axis) }],
       ),
     });
   }
@@ -125,6 +188,7 @@ function dockGeometry(this: CameraController, only?: { target: VesselId | "iss";
         const spin = (Math.hypot(...sub3(this.ownTurn(me.ax), T.om)) / M_SECONDS) * (180 / Math.PI);
         best = {
           target: T.id,
+          kind: T.kind,
           title: T.title,
           port: tp.k,
           name: tp.name,
@@ -210,7 +274,9 @@ function stationContact(this: CameraController, p0: NonNullable<ReturnType<Camer
   // the obstacles: each with its parts (a hierarchy in its rest frame, the part's frame → the
   // obstacle's at t0 and t1), its frame (home axes, centre) at t0 and t1, its velocity field at t1
   interface Obstacle {
-    id: VesselId | "iss";
+    id: DockTarget;
+    /** another player's: its kind, its mass [kg] */
+    net?: { kind: VesselId; mass: number; title: string };
     parts: { bvh: TriBVH; M0: M34; M1: M34 }[];
     A0: [Vec3, Vec3, Vec3];
     A1: [Vec3, Vec3, Vec3];
@@ -256,6 +322,25 @@ function stationContact(this: CameraController, p0: NonNullable<ReturnType<Camer
     // (out of reach — or its place unknown: a NaN failed every "farther than", the craft taken as touching)
     if (!q0 || !q1 || !(Math.hypot(...sub3(p1.X, q1.X)) * M_METRES <= h.radius + R + 50)) continue;
     obstacles.push({ id, parts: [{ bvh: h.bvh, M0: I34, M1: I34 }], A0: q0.ax, A1: q1.ax, X0: q0.X, X1: q1.X, V1: q1.V, om: [0, 0, 0] });
+  }
+  // other players' craft (R7): where their samples have them over the step
+  for (const N of netDock.targets()) {
+    const h = vesselHulls[N.kind];
+    if (!h.bvh) continue;
+    const q0 = N.pose(p0.t),
+      q1 = N.pose(p1.t);
+    if (!q0 || !q1 || !(Math.hypot(...sub3(p1.X, q1.X)) * M_METRES <= h.radius + R + 50)) continue;
+    obstacles.push({
+      id: N.id,
+      net: { kind: N.kind, mass: VESSELS[N.kind].mass, title: N.title },
+      parts: [{ bvh: h.bvh, M0: I34, M1: I34 }],
+      A0: q0.ax,
+      A1: q1.ax,
+      X0: q0.X,
+      X1: q1.X,
+      V1: q1.V,
+      om: q1.w ?? [0, 0, 0],
+    });
   }
   if (!obstacles.length) return;
   let best: { t: number; n: Vec3; o: Obstacle } | null = null;
@@ -334,16 +419,23 @@ function stationContact(this: CameraController, p0: NonNullable<ReturnType<Camer
   if (vn < 0) {
     // (a craft coasting takes its share: the blow split by the masses; the station, docked craft: none)
     const mMe = fleet.massProps().mass;
-    const free = o.id !== "iss" && !fleet.assembly(o.id).includes("iss");
-    const mO = free ? fleet.assembly(o.id).reduce((a, v) => a + (v === "iss" ? 0 : VESSELS[v as VesselId].mass), 0) : Infinity;
+    const own = o.net ? null : (o.id as VesselId | "iss");
+    const free = !!own && own !== "iss" && !fleet.assembly(own).includes("iss");
+    const mO = o.net
+      ? o.net.mass
+      : free
+        ? fleet.assembly(own!).reduce((a, v) => a + (v === "iss" ? 0 : VESSELS[v as VesselId].mass), 0)
+        : Infinity;
     const kMe = Number.isFinite(mO) ? mO / (mMe + mO) : 1;
     const vt = lin(vrel, 1, N, -vn);
     // (the closing speed turned back by a third, the slide damped — relative to the obstacle)
     const dvRel = lin(lin(N, -1.3 * vn, vt, -0.3), 1, [0, 0, 0], 0);
     V = lin(p1.V, 1, dvRel, kMe);
+    // (another player's craft: his share sent to him — he applies it to his)
+    if (o.net) netDock.onBump?.(o.id as `net:${number}`, lin(dvRel, -(1 - kMe) * C_MPS, dvRel, 0));
     if (free) {
       const Q = fleet.pose(o.id as VesselId, p1.t);
-      const anchor = fleet.assembly(o.id).find((v) => v !== "iss" && fleet.free[v as VesselId]) as VesselId | undefined;
+      const anchor = fleet.assembly(own!).find((v) => v !== "iss" && fleet.free[v as VesselId]) as VesselId | undefined;
       if (Q && anchor) {
         const QA = fleet.pose(anchor, p1.t)!;
         fleet.setFree(anchor, { X: QA.X, V: lin(QA.Vc ?? QA.V, 1, dvRel, -(1 - kMe)), ax: QA.ax, w: QA.w }, p1.t, fleet.free[anchor]?.com);
@@ -358,7 +450,8 @@ function stationContact(this: CameraController, p0: NonNullable<ReturnType<Camer
   const now = performance.now();
   if (now - this.lastContactMsg > 1500) {
     this.lastContactMsg = now;
-    this.onPilotMessage?.(`Contact with the ${o.id === "iss" ? "ISS" : VESSELS[o.id].name} · ${(Math.abs(vn) * C_MPS).toFixed(2)} m/s`);
+    const what = o.id === "iss" ? "ISS" : o.net ? o.net.title : VESSELS[o.id as VesselId].name;
+    this.onPilotMessage?.(`Contact with ${o.net ? what : `the ${what}`} · ${(Math.abs(vn) * C_MPS).toFixed(2)} m/s`);
   }
 }
 
@@ -373,6 +466,9 @@ function dockCheck(this: CameraController) {
   this.dockInfo = g && g.range < 5000 ? g : null;
   this.dockedView = this.linkView();
   if (!g || this.docked) return;
+  // (another player's craft: one of the two latches on — the lighter one onto the heavier, at one mass the later
+  // comer's slot onto the earlier's: both pages agree; the host neither latches nor bounces — the guest does)
+  if (isNetTarget(g.target) && !netGuest(g)) return;
   // (just undocked: no capture until the rings are a metre clear)
   if (this.undocking) {
     if (g.range < 1) return;
@@ -412,38 +508,41 @@ function dockCheck(this: CameraController) {
                 : g.along <= -0.6
                   ? `${(-g.along).toFixed(2)} m into the port — 0.6 at most`
                   : `moving away at ${(-g.closing).toFixed(2)} m/s`;
-      this.onPilotMessage?.(`Bounced off the ${g.title}'s port · ${why}`);
+      this.onPilotMessage?.(`Bounced off ${theTitle(g)}'s port · ${why}`);
     }
     return;
   }
   if (!capture) return;
+  // (another player's craft: held to it — it flies the assembly; the room told)
+  if (isNetTarget(g.target)) return this.netCapture(g, speed);
   // captured: the rings together, the axes facing, the roll kept — the craft whose port it is held on
   // the target's (its frame in the target's)
   const t = nav.t;
-  const host = g.target === "iss" ? station.ports[g.port]! : VESSELS[g.target].ports[g.port]!;
+  const host = g.kind === "iss" ? station.ports[g.port]! : VESSELS[g.kind].ports[g.port]!;
+  const tg = g.target as VesselId | "iss";
   const guest = VESSELS[g.own].ports[g.ownPort]!;
   const ownPose = fleet.posesFrom(fleet.active, this.activePoseNow()!, t).get(g.own)!;
   const toT = (v: Vec3): Vec3 => [dot3(v, g.A[0]), dot3(v, g.A[1]), dot3(v, g.A[2])];
   const { c, ax } = dockedFrame(guest, host, toT(ownPose.ax[1]));
   // (the momenta shared: the assembly's velocity, the target coasting — the station holds what docks to it)
   const mMe = fleet.massProps().mass;
-  const tgtGroup = g.target === "iss" ? [] : fleet.assembly(g.target);
-  const held = g.target === "iss" || tgtGroup.includes("iss");
+  const tgtGroup = tg === "iss" ? [] : fleet.assembly(tg);
+  const held = tg === "iss" || tgtGroup.includes("iss");
   const mT = tgtGroup.reduce((a, v) => a + (v === "iss" ? 0 : VESSELS[v as VesselId].mass), 0);
-  const tgtPose = g.target === "iss" ? null : fleet.pose(g.target, t);
+  const tgtPose = tg === "iss" ? null : fleet.pose(tg, t);
   // (their turns shared too: the assembly's the inertia-weighted mean of the two — the flown assembly's and
   // the target's, each about its own centre: the tumbling Endurance keeps turning with the Ranger on it)
   const wMe = this.ownTurn(ownPose.ax);
   const wT = tgtPose?.w ?? ([0, 0, 0] as Vec3);
   const iMe = fleet.massProps().inertia;
-  const iT = g.target === "iss" ? 0 : fleet.massProps(g.target).inertia;
+  const iT = tg === "iss" ? 0 : fleet.massProps(tg).inertia;
   const wAll = held ? null : lin(wMe, iMe / (iMe + iT), wT, iT / (iMe + iT));
-  fleet.links.push({ a: g.target, b: g.own, pa: g.port, pb: g.ownPort, c, ax });
+  fleet.links.push({ a: tg, b: g.own, pa: g.port, pb: g.ownPort, c, ax });
   for (const v of fleet.assembly(fleet.active)) if (v !== "iss") delete fleet.free[v as VesselId];
   if (!held && tgtPose) {
     // the flown craft where the link puts it, from the target (it does not jump)
     const V = lin(nav.V, mMe / (mMe + mT), tgtPose.V, mT / (mMe + mT));
-    const P = fleet.posesFrom(g.target, { X: tgtPose.X, V, ax: tgtPose.ax }, t).get(fleet.active)!;
+    const P = fleet.posesFrom(tg, { X: tgtPose.X, V, ax: tgtPose.ax }, t).get(fleet.active)!;
     // (the latches pull the craft onto the port — up to 10° and 30 cm —: the view carried, eased onto it, and a
     // jolt)
     const before = this.viewWorld();
@@ -533,10 +632,148 @@ function flyDocked(this: CameraController, dt: number) {
 }
 
 /**
+ * Captured on another player's craft (docs/PLAN-RESEAU.md R7): the rings together, the axes facing, the roll kept
+ * — our craft held on his (its frame in his), he flies the assembly; our momentum his (his craft is his: it
+ * goes on as he flies it). The room told; the capture graded as any.
+ */
+function netCapture(this: CameraController, g: DockInfo, speed: number) {
+  const id = g.target as `net:${number}`;
+  const N = netDock.targets().find((q) => q.id === id);
+  if (!N) return;
+  const host = VESSELS[N.kind].ports[g.port]!;
+  const guest = VESSELS[g.own].ports[g.ownPort]!;
+  const me = this.activePoseNow();
+  if (!me) return;
+  const toT = (v: Vec3): Vec3 => [dot3(v, g.A[0]), dot3(v, g.A[1]), dot3(v, g.A[2])];
+  const { c, ax } = dockedFrame(guest, host, toT(me.ax[1]));
+  this.netDocked = { id, title: N.title, kind: N.kind, port: g.port, ownPort: g.ownPort, c, ax };
+  this.pilot.auto = "none";
+  this.pilot.throttle = 0;
+  this.pilot.omega = [0, 0, 0];
+  this.dockInfo = null;
+  // (the latches pull us onto his port: the view carried, eased onto it)
+  const before = this.viewWorld();
+  const P = this.netHostPose(this.nowTime());
+  if (P) this.placeOnPose(P);
+  this.carryCommit(before, 0.6);
+  netDock.onDock?.({ id, port: g.port, ownPort: g.ownPort, c, ax });
+  this.onPilotMessage?.(`Docked to ${g.title} · ${g.name} · ${speed.toFixed(2)} m/s`);
+  const S = recorder.samples;
+  this.onFlightReport?.(
+    gradeDocking({
+      target: g.title,
+      port: g.name,
+      closing: speed,
+      lateral: g.lateral,
+      angle: g.angle,
+      spin: g.spin,
+      dv: this.spent * C_MPS,
+      flightS: S.length > 1 ? S[S.length - 1]!.t - S[0]!.t : Number.NaN,
+    }),
+  );
+}
+
+/** What it docks to, as a sentence names it: "the ISS", "the Endurance" — another player's, his: "Ana's Endurance". */
+const theTitle = (g: DockInfo) => (isNetTarget(g.target) ? g.title : `the ${g.title}`);
+
+/** Whether we are the one to latch onto another player's craft (R7): the lighter assembly, or at one mass the
+ *  higher slot. */
+function netGuest(g: DockInfo) {
+  const mine = fleet.massProps().mass;
+  const theirs = g.kind === "iss" ? Infinity : VESSELS[g.kind].mass;
+  if (Math.abs(mine - theirs) > 1e-3 * Math.max(mine, theirs)) return mine < theirs;
+  return (netDock.slot?.() ?? 0) > Number(String(g.target).slice(4));
+}
+
+/** Our craft where the other player's carries it at t [M] (his pose, our frame in his: rigid, his turn's ω × r). */
+function netHostPose(this: CameraController, t: number): Pose | null {
+  const D = this.netDocked;
+  const N = D ? netDock.targets().find((q) => q.id === D.id) : null;
+  const H = N?.pose(t);
+  if (!D || !H) return null;
+  const on = (A: [Vec3, Vec3, Vec3], v: Vec3): Vec3 => lin(lin(A[0], v[0], A[1], v[1]), 1, A[2], v[2]);
+  const X = lin(H.X, 1, on(H.ax, D.c), 1 / M_METRES);
+  const ax = D.ax.map((col: Vec3) => unitV(on(H.ax, col))) as [Vec3, Vec3, Vec3];
+  const V = H.w ? lin(H.V, 1, cross(H.w, sub3(X, H.X)), 1) : H.V;
+  return { X, V, ax, w: H.w };
+}
+
+/** Held to another player's craft: ours where his carries it, this frame — as on the station (flyDocked). */
+function flyNetDocked(this: CameraController, dt: number) {
+  const s = this.s;
+  const t0 = this.nowTime();
+  const simDt = s.animate ? timeRate(s) * dt : 0;
+  const t1 = t0 + simDt;
+  let P = this.netHostPose(t1);
+  // (his samples a moment late: carried on from the last place held, 3 s at most; his craft gone — he left the
+  // room —: let go)
+  const L = this.netHostLast;
+  if (P) this.netHostLast = { P, t: t1, at: performance.now() };
+  else if (L && performance.now() - L.at < 3000) P = { ...L.P, X: lin(L.P.X, 1, L.P.V, t1 - L.t) };
+  if (!P) return this.netUndock();
+  const S = this.shipMatrix();
+  const camAx = (k: number) => lin(lin(P.ax[0], S[k]![0], P.ax[1], S[k]![1]), 1, P.ax[2], S[k]![2]);
+  setHomePose(s, P.X, unitV(camAx(2)), unitV(camAx(1)), P.V);
+  s.motion = "geodesic";
+  this.pilot.omega = [0, 0, 0];
+  this.properTime += simDt;
+  this.shipTime = t1;
+  this.sync();
+}
+
+/** Another player's craft struck ours (R7): our share of the blow [m/s, home frame], as he reckoned it. */
+function netBumped(this: CameraController, dv: Vec3) {
+  if (this.docked || !dv.every(Number.isFinite) || Math.hypot(...dv) > 50) return;
+  const s = this.s;
+  const cam = cameraFrame(s);
+  const nav = this.ourNav(cam);
+  if (!nav) return;
+  const w = mouth(s).w;
+  setHomePose(
+    s,
+    nav.X,
+    unitV(repToHomeVec(w, cam.ell, cam.n, cam.fwd)),
+    unitV(repToHomeVec(w, cam.ell, cam.n, cam.up)),
+    lin(nav.V, 1, dv, 1 / C_MPS),
+  );
+  this.pilot.omega = [0, 0, 0];
+  this.sync();
+  this.onPilotMessage?.(`Struck · ${Math.hypot(...dv).toFixed(2)} m/s`);
+}
+
+/** Let go of another player's craft: the springs push ours 5 cm/s away from its port; the room told. */
+function netUndock(this: CameraController) {
+  const D = this.netDocked;
+  if (!D) return;
+  this.netDocked = null;
+  this.netHostLast = null;
+  this.undocking = true;
+  const s = this.s;
+  const cam = cameraFrame(s);
+  const P = this.netHostPose(this.nowTime()) ?? this.activePoseNow();
+  if (P) {
+    const out = onAxesV(P.ax, VESSELS[fleet.active].ports[D.ownPort]?.axis ?? [0, 0, -1]);
+    const V = lin(P.V, 1, out, -0.05 / C_MPS);
+    setHomePose(
+      s,
+      P.X,
+      unitV(repToHomeVec(mouth(s).w, cam.ell, cam.n, cam.fwd)),
+      unitV(repToHomeVec(mouth(s).w, cam.ell, cam.n, cam.up)),
+      V,
+    );
+    this.sync();
+  }
+  if (this.pilot.auto === "dock") this.pilot.auto = "none";
+  netDock.onUndock?.(D.id);
+  this.onPilotMessage?.(`Undocked from ${D.title}`);
+}
+
+/**
  * Lets the flown craft go of what it is docked to (its own links; the springs push it 5 cm/s away
  * from the first port): what is left coasts (or stays on the station), as its own assembly.
  */
 function undock(this: CameraController) {
+  if (this.netDocked) return this.netUndock();
   const me = fleet.active;
   const mine = fleet.links.filter((l) => l.a === me || l.b === me);
   if (!mine.length) return;
@@ -606,7 +843,7 @@ function dockWant(
   const s = this.s;
   if (!this.dockAuto) {
     // (the target's port if it is in reach, else the nearest)
-    const want = s.target === "iss" || isCraft(s.target) ? (s.target as VesselId | "iss") : null;
+    const want = s.target === "iss" || isCraft(s.target) || isNetTarget(s.target) ? (s.target as DockTarget) : null;
     const g0 = (want ? this.dockGeometry({ target: want }) : null) ?? this.dockGeometry();
     if (!g0 || g0.range > 3000)
       return say("Docking: within 3 km of a free port — the ISS's, a craft's (a PLAN with it as the target brings the ship 200 m off it)");
@@ -623,12 +860,15 @@ function dockWant(
       checked: -1e9,
     };
     this.onPilotMessage?.(
-      `Docking autopilot · the ${g0.title}'s ${g0.name} · ${g0.range < 1000 ? `${g0.range.toFixed(0)} m` : `${(g0.range / 1000).toFixed(2)} km`}`,
+      `Docking autopilot · ${theTitle(g0)}'s ${g0.name} · ${g0.range < 1000 ? `${g0.range.toFixed(0)} m` : `${(g0.range / 1000).toFixed(2)} km`}`,
     );
   }
   const D = this.dockAuto;
   const g = this.dockGeometry({ target: D.target, port: D.port });
-  if (!g) return say(`Docking: the ${D.target === "iss" ? "ISS" : VESSELS[D.target].name} is out of reach`);
+  if (!g)
+    return say(
+      `Docking: the ${D.target === "iss" ? "ISS" : isNetTarget(D.target) ? BODY_NAMES[D.target as Body] : VESSELS[D.target as VesselId].name} is out of reach`,
+    );
   const C = C_MPS;
   const a = g.a,
     A = g.A;
@@ -733,11 +973,11 @@ function dockWant(
     const now = frameNow();
     if (now - D.checked > 250) {
       D.checked = now;
-      D.blocked = this.targetBlocks(D.target, g.ring, G, nav.t, g);
+      D.blocked = this.targetBlocks(g.kind, g.ring, G, nav.t, g);
     }
     let P = G;
     if (D.blocked) {
-      const Rm = D.target === "iss" ? 130 : vesselHulls[D.target].radius + 60;
+      const Rm = g.kind === "iss" ? 130 : vesselHulls[g.kind].radius + 60;
       const Rs = Rm / M_METRES;
       const u = unitV(sub3(g.ring, g.tgt.X)),
         gd = unitV(sub3(lin(g.c, 1, a, Rm / M_METRES), g.tgt.X));
@@ -753,11 +993,7 @@ function dockWant(
     const dist = Math.hypot(...to);
     const sp = Math.min(3, Math.sqrt(2 * 0.03 * dist), 0.1 * dist);
     want = dist > 1e-6 ? lin(to, sp / dist, to, 0) : [0, 0, 0];
-    D.phase = D.blocked
-      ? D.target === "iss"
-        ? "AROUND THE STATION"
-        : `AROUND THE ${VESSELS[D.target].name.toUpperCase()}`
-      : "TO THE AXIS";
+    D.phase = D.blocked ? (g.kind === "iss" ? "AROUND THE STATION" : `AROUND THE ${g.title.toUpperCase()}`) : "TO THE AXIS";
   }
   // (the ring's motion is the ship's and its own turn's: turning with the tumbling Endurance, the Ranger's
   // ring, 1.1 m off its roll axis, circles — the ship's velocity is the ring's wanted less ω × r, its
@@ -816,6 +1052,11 @@ function ownTurn(this: CameraController, ax: [Vec3, Vec3, Vec3]): Vec3 {
 /** Puts these methods on the controller's prototype (controls.ts, once). */
 export function installDocking(C: { prototype: CameraController }) {
   Object.assign(C.prototype, {
+    netCapture,
+    flyNetDocked,
+    netUndock,
+    netHostPose,
+    netBumped,
     dockGeometry,
     stationCam,
     contactPose,

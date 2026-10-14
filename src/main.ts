@@ -2289,7 +2289,8 @@ async function main() {
     panel.toast(camera.pilot.hold === "none" ? t("Attitude hold off") : tf("Hold: {0}", HOLD_NAMES[h]));
   }
   function pilotAuto(a: Auto) {
-    if (a === "dock" && camera.docked) return panel.toast(t("Docked to the ISS — UNDOCK first"));
+    if (a === "dock" && camera.docked)
+      return panel.toast(camera.netDocked ? t("Docked to another's craft — UNDOCK first") : t("Docked to the ISS — UNDOCK first"));
     camera.pilot.setAuto(a);
     panel.toast(camera.pilot.auto === "none" ? t("Autopilot off") : tf("Autopilot: {0}", AUTO_NAMES[a]));
   }

@@ -15,6 +15,8 @@ import {
   MAX_PILOTS,
   type Member,
   MSG_CRAFT,
+  MSG_KEEP,
+  type AwayCraft,
   normCode,
   PROTO_MIN,
   PROTO_VERSION,
@@ -38,6 +40,8 @@ export interface Peer {
   rate: { at: number; n: number };
   /** the warp this pilot asks for (×, docs/PLAN-RESEAU.md R6): the room runs at the slowest asked */
   want: number;
+  /** his craft's last sample (R7: left in the world when he goes) */
+  last: Uint8Array | null;
 }
 
 interface RoomRec {
@@ -48,8 +52,8 @@ interface RoomRec {
   clock: RoomClock;
   created: number;
   used: number;
-  /** the devices seen in it: their last name and colour (R1: their craft) */
-  world: Record<string, { name: string; colour: string; seen: number }>;
+  /** the devices seen in it: their last name and colour, their craft as they left it (R7: its last sample, base64) */
+  world: Record<string, { name: string; colour: string; seen: number; craft?: string }>;
 }
 
 interface Live {
@@ -131,7 +135,23 @@ export function createRooms(o: RoomsOptions) {
       .query("INSERT OR REPLACE INTO rooms (code, name, owner, pass, clock, world, created, used) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
       .run(r.code, r.name, r.owner, r.pass, JSON.stringify(r.clock), JSON.stringify(r.world), r.created, r.used);
   // (written every 2 s at most, and when the server stops)
+  /** each one's craft as it is now kept in the room's world (its last sample) */
+  const keep = (l: Live) => {
+    for (const w of l.peers.values())
+      if (w.data.last && l.rec.world[w.data.device])
+        l.rec.world[w.data.device]!.craft = Buffer.from(w.data.last).toString("base64");
+  };
+  /** the craft of those away (R7): to everyone in the room — and to a newcomer his own, as he left it */
+  const world = (l: Live, joiner?: ServerWebSocket<Peer>) => {
+    const here = new Set([...l.peers.values()].map((w) => w.data.device));
+    const away: AwayCraft[] = Object.entries(l.rec.world)
+      .filter(([d, e]) => !here.has(d) && e.craft)
+      .map(([device, e]) => ({ device, name: e.name, colour: e.colour, seen: e.seen, sample: e.craft! }));
+    for (const w of l.peers.values())
+      send(w, { type: "world", away, mine: w === joiner ? l.rec.world[w.data.device]?.craft : undefined });
+  };
   const flush = () => {
+    for (const l of live.values()) if (l.peers.size) keep(l), dirty.add(l.rec.code);
     for (const code of dirty) {
       const l = live.get(code);
       if (l) save(l.rec);
@@ -193,12 +213,18 @@ export function createRooms(o: RoomsOptions) {
     ws.data.room = null;
     ws.unsubscribe(`room:${code}`);
     if (!l) return;
+    // (his craft left in the world as it is)
+    if (ws.data.last && l.rec.world[ws.data.device]) {
+      l.rec.world[ws.data.device]!.craft = Buffer.from(ws.data.last).toString("base64");
+      l.rec.world[ws.data.device]!.seen = now();
+    }
     if (l.peers.get(ws.data.slot) === ws) l.peers.delete(ws.data.slot);
     l.rec.used = now();
     dirty.add(code);
     if (l.peers.size) {
       roster(l);
       rewarp(l, true);
+      world(l);
     } else {
       // (nobody left: the world runs on at ×1 until someone comes back)
       if (l.rec.clock.warp !== 1) {
@@ -288,12 +314,14 @@ export function createRooms(o: RoomsOptions) {
         l.peers.set(slot, ws);
         ws.subscribe(`room:${code}`);
         l.rec.used = now();
-        l.rec.world[P.device] = { name: P.name, colour: P.colour, seen: now() };
+        l.rec.world[P.device] = { ...l.rec.world[P.device], name: P.name, colour: P.colour, seen: now() };
+        P.last = null;
         dirty.add(code);
         send(ws, { type: "joined", re: m.id, code, name: l.rec.name, slot, clock: l.rec.clock, members: members(l) });
         roster(l);
         if (l.match) send(ws, { type: "event", from: l.match.from, ev: l.match.ev as never });
         rewarp(l, true);
+        world(l, ws);
         return;
       }
       case "warp": {
@@ -377,7 +405,7 @@ export function createRooms(o: RoomsOptions) {
     upgrade(req: Request, server: Server<Peer>): Response | undefined {
       const origin = req.headers.get("origin");
       if (origin && !(o.origin ?? (() => true))(origin)) return new Response("forbidden", { status: 403 });
-      const data: Peer = { kind: "rooms", hello: false, device: "", name: "", colour: "", role: "pilot", slot: -1, room: null, rate: { at: 0, n: 0 }, want: 1 };
+      const data: Peer = { kind: "rooms", hello: false, device: "", name: "", colour: "", role: "pilot", slot: -1, room: null, rate: { at: 0, n: 0 }, want: 1, last: null };
       return server.upgrade(req, { data }) ? undefined : new Response("expected a WebSocket", { status: 426 });
     },
     websocket: {
@@ -396,12 +424,18 @@ export function createRooms(o: RoomsOptions) {
         }
         // a craft's sample: its slot stamped, passed on to the room's others
         const P = ws.data;
-        if (!P.room || raw.byteLength !== CRAFT_BYTES || raw[0] !== MSG_CRAFT) return;
+        if (!P.room || raw.byteLength !== CRAFT_BYTES || (raw[0] !== MSG_CRAFT && raw[0] !== MSG_KEEP)) return;
         const t = now();
         if (t - P.rate.at > 1000) P.rate = { at: t, n: 0 };
         if (++P.rate.n > 150) return;
         raw[1] = P.slot;
-        ws.publish(`room:${P.room}`, raw);
+        // (his craft's — not his walker's — kept: the world's, when he goes)
+        if (raw[14] !== 4) {
+          P.last ??= new Uint8Array(CRAFT_BYTES);
+          P.last.set(raw);
+          P.last[0] = MSG_CRAFT;
+        }
+        if (raw[0] === MSG_CRAFT) ws.publish(`room:${P.room}`, raw);
       },
       close(ws: ServerWebSocket<Peer>) {
         leave(ws);

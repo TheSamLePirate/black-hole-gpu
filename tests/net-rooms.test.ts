@@ -101,6 +101,40 @@ describe("the room server", () => {
     for (const x of [a, b, c, d]) x.close();
   });
 
+  test("the persistent world (R7): a craft left where its pilot went, shown to the others; his again when he is back", async () => {
+    const a = client("Ana", "dev-ana-world");
+    const b = client("Ben", "dev-ben-world");
+    const { code } = await a.create("World", 0);
+    await b.join(code);
+    await until(() => a.clock.synced && b.clock.synced);
+    for (let k = 0; k < 5; k++) {
+      a.sendCraft({
+        frame: 1,
+        body: 0,
+        kind: 0,
+        flags: 16,
+        p: [6_771_000 + k, 0, 0],
+        v: [0, 7672, 0],
+        q: [0, 0, 0, 1],
+        w: [0, 0, 0],
+        a: [0, 0, 0],
+        vis: emptyVisual(),
+      });
+      await Bun.sleep(30);
+    }
+    a.leave();
+    await until(() => b.away.length === 1);
+    expect(b.away[0]!.name).toBe("Ana");
+    expect(b.away[0]!.sample.p[0]).toBeCloseTo(6_771_004, 0);
+    expect(b.away[0]!.sample.frame).toBe(1);
+    // (Ana back: her craft hers again — no longer away)
+    await a.join(code);
+    await until(() => !!a.mine && b.away.length === 0);
+    expect(a.mine!.p[0]).toBeCloseTo(6_771_004, 0);
+    a.close();
+    b.close();
+  });
+
   test("a craft's sample passed on to the others, its slot stamped; read back", async () => {
     const a = client("Ana");
     const b = client("Ben");

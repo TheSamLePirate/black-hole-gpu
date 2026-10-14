@@ -86,6 +86,8 @@ interface TrackEnv {
 /** One craft's samples and their reading. */
 export class RemoteTrack {
   readonly samples: CraftSample[] = [];
+  /** a craft left in the world by one away (R7): never a ghost — it stays where he left it, or on its orbit */
+  persist = false;
   /** the error being taken in (shown − true), and the time it was measured */
   private corr: V3 = [0, 0, 0];
   private corrAt = 0;
@@ -164,7 +166,7 @@ export class RemoteTrack {
         vis: a.vis,
         ahead: b ? 0 : Math.max(0, dt),
         // (its samples a second apart: a ghost once 5 s of real time passed without one)
-        ghost: !b && dt > 5 * P,
+        ghost: !this.persist && !b && dt > 5 * P,
       };
     }
     if (b && t >= a.t) {
@@ -217,7 +219,7 @@ export class RemoteTrack {
       w: a.w,
       vis: a.vis,
       ahead: Math.max(0, dt),
-      ghost: dt > this.maxAhead * 4 * P,
+      ghost: !this.persist && dt > this.maxAhead * 4 * P,
     };
   }
 
@@ -282,6 +284,23 @@ export class RemoteRegistry {
   drop(slot: number) {
     this.tracks.delete(trackKey(slot));
     this.tracks.delete(trackKey(slot, true));
+  }
+
+  /** a craft left by one away (R7): its track at a slot of its own, its last sample, never a ghost */
+  setAway(slot: number, s: CraftSample) {
+    const key = trackKey(slot);
+    const tr = new RemoteTrack(slot, this.o, this.env);
+    tr.persist = true;
+    tr.push({ ...s, slot });
+    this.tracks.set(key, tr);
+  }
+
+  /** a sample's craft at scene time t — carried along its orbit, or where it stood — (R7: our craft as we left it) */
+  stateOf(s: CraftSample, t: number): CraftState | null {
+    const tr = new RemoteTrack(s.slot, this.o, this.env);
+    tr.persist = true;
+    tr.push(s);
+    return tr.raw(t);
   }
 
   /** a player's craft's track (or his walker's) */

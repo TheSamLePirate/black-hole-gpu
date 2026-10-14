@@ -71,8 +71,20 @@ export type ServerMsg =
   | { type: "signal"; from: number; data: unknown }
   | { type: "ice"; re: number; servers: { urls: string | string[]; username?: string; credential?: string }[] }
   | { type: "error"; re?: number; code: ErrorCode; msg: string }
+  /** the persistent world (R7): the craft of those away, as each left it (its last sample, base64), and ours as we
+   *  left it last time (on joining) */
+  | { type: "world"; away: AwayCraft[]; mine?: string }
   /** the room's clock changed pace, or a pilot's ask did: the clock, each pilot's ask by slot (R6) */
   | { type: "clock"; clock: RoomClock; wants: Record<number, number> };
+
+/** a craft left in the room's world by one away (R7): who, when, its last sample (base64) */
+export interface AwayCraft {
+  device: string;
+  name: string;
+  colour: string;
+  seen: number;
+  sample: string;
+}
 
 export type ErrorCode = "update" | "unknown-room" | "full" | "pilots-full" | "password" | "owner" | "bad" | "not-in-room" | "limit";
 
@@ -84,6 +96,9 @@ export interface NetEvent {
 
 // ---- the binary samples
 export const MSG_CRAFT = 1;
+/** the same sample for the server alone, kept, not passed on — the persistent world (R7): sent a second apart
+ *  when the others are all reached directly */
+export const MSG_KEEP = 2;
 
 /** the sample's frame: fixed to its body (near it: ECEF on the Earth), or inertial centred on it */
 export const FRAME_FIXED = 0;
