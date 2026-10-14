@@ -12,7 +12,7 @@ services:
     restart: unless-stopped
 # rooms-begin
   rooms:
-    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-1e5a4f9-13.1
+    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-e8a0d3a-14.1
     ports:
       - "3001:3001"
     volumes:
@@ -22,18 +22,19 @@ services:
       - TURN_SECRET=${TURN_SECRET:-}
     stop_grace_period: 10s
     restart: unless-stopped
-  # the TURN relay for the voices and the direct links through a carrier's NAT (docs/DEPLOY.md): on, once
-  # TURN_SECRET is set in the stack's environment and 3478/udp+tcp, 49160-49200/udp are open on the server
-  # coturn:
-  #   image: coturn/coturn:4.6
-  #   network_mode: host
-  #   command: >-
-  #     -n --listening-port=3478 --min-port=49160 --max-port=49200 --use-auth-secret
-  #     --static-auth-secret=${TURN_SECRET} --realm=samlepirate.org --no-cli --no-multicast-peers
-  #     --denied-peer-ip=10.0.0.0-10.255.255.255 --denied-peer-ip=172.16.0.0-172.31.255.255
-  #     --denied-peer-ip=192.168.0.0-192.168.255.255 --denied-peer-ip=127.0.0.0-127.255.255.255
-  #     --user-quota=12 --total-quota=60 --max-bps=200000
-  #   restart: unless-stopped
+  # the TURN relay for the voices and the direct links through a carrier's NAT (docs/DEPLOY.md): TURN_SECRET in
+  # the stack's environment, 3478/udp+tcp and 49160-49200/udp open on the server
+  coturn:
+    image: coturn/coturn:4.6
+    network_mode: host
+    command: >-
+      -n --listening-port=3478 --min-port=49160 --max-port=49200 --use-auth-secret
+      --static-auth-secret=${TURN_SECRET} --realm=samlepirate.org --fingerprint --no-tls --no-dtls
+      --no-cli --no-multicast-peers --log-file=stdout
+      --denied-peer-ip=10.0.0.0-10.255.255.255 --denied-peer-ip=172.16.0.0-172.31.255.255
+      --denied-peer-ip=192.168.0.0-192.168.255.255 --denied-peer-ip=127.0.0.0-127.255.255.255
+      --user-quota=12 --total-quota=60 --max-bps=200000
+    restart: unless-stopped
 volumes:
   rooms-data: {}
 # rooms-end
