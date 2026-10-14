@@ -191,6 +191,9 @@ export class RemoteTrack {
   }
 }
 
+/** a track's key: a player's craft, his walker beside it */
+export const trackKey = (slot: number, walker = false) => slot * 8 + (walker ? 1 : 0);
+
 /**
  * The room's others: a track per slot, read at the room's time (`lead` 0: predicted to now) or a delay
  * behind it (`lead` "delay": late enough for the next sample, interpolated). The delay follows how late the
@@ -211,8 +214,9 @@ export class RemoteRegistry {
 
   /** a sample, and how late it came [s] (its arrival's room time − its own time) */
   push(s: CraftSample, lateness: number) {
-    let tr = this.tracks.get(s.slot);
-    if (!tr) this.tracks.set(s.slot, (tr = new RemoteTrack(s.slot, this.o)));
+    const key = trackKey(s.slot, s.kind === 4);
+    let tr = this.tracks.get(key);
+    if (!tr) this.tracks.set(key, (tr = new RemoteTrack(s.slot, this.o)));
     const prev = tr.latest;
     tr.push(s);
     // (a duplicate — the same sample come both ways, direct and through the server — or a late one: no news)
@@ -231,8 +235,15 @@ export class RemoteRegistry {
     }
   }
 
+  /** a player's tracks gone (his craft's, his walker's) */
   drop(slot: number) {
-    this.tracks.delete(slot);
+    this.tracks.delete(trackKey(slot));
+    this.tracks.delete(trackKey(slot, true));
+  }
+
+  /** a player's craft's track (or his walker's) */
+  track(slot: number, walker = false) {
+    return this.tracks.get(trackKey(slot, walker));
   }
 
   clear() {

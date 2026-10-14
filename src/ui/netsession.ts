@@ -6,7 +6,7 @@
 
 import { realTimeSpeed } from "../clock";
 import type { CameraController } from "../controls";
-import { axesQuat, kindIndex, netFrame, type NetShip } from "../controller/netcraft";
+import { axesQuat, kindIndex, kindOf, netFrame, type NetShip, quatAxes } from "../controller/netcraft";
 import { fleet } from "../fleet";
 import type { JetInputs } from "../f35/pose";
 import type { GameTools } from "../game/tools";
@@ -16,14 +16,28 @@ import type { CraftState } from "../net/remote";
 import type { Renderer } from "../renderer";
 import type { Settings } from "../settings";
 import { netRadar } from "./hud/symbology";
+import { cartToGeodetic, WGS84_A, WGS84_F } from "../system/ellipsoid";
 import { M_SECONDS } from "../units";
 import { vesselHulls } from "../system/collide";
-import { VESSELS } from "../vessels";
+import { type VesselId, VESSELS } from "../vessels";
 import type { NetPanel } from "./netpanel";
 
 type Vec3 = [number, number, number];
 
 /** A name tag over another's craft (ui/overlay.ts draws it): its place on the camera's axes from the eye. */
+/** a craft's door off its side [m] (controller/character.ts accessOffset) */
+const ACCESS: Record<VesselId, number> = { ranger: 9, lander: 13, endurance: 75, f35: 8 };
+
+/** an Earth-fixed place [m] and nose → geodetic latitude, longitude, heading [°] */
+function parkedAt(p: Vec3, fwd: Vec3) {
+  const g = cartToGeodetic(WGS84_A, WGS84_F, p);
+  const north: Vec3 = [-Math.sin(g.lat) * Math.cos(g.lon), -Math.sin(g.lat) * Math.sin(g.lon), Math.cos(g.lat)];
+  const east: Vec3 = [-Math.sin(g.lon), Math.cos(g.lon), 0];
+  const D = 180 / Math.PI;
+  const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  return { lat: g.lat * D, lon: g.lon * D, heading: (Math.atan2(dot(fwd, east), dot(fwd, north)) * D + 360) % 360 };
+}
+
 export interface NetTag {
   slot: number;
   name: string;
@@ -80,7 +94,18 @@ export class NetSession {
    * The player followed (docs/PLAN-RESEAU.md R4): our craft his puppet — every view on him, his surfaces, his
    * flame, his instruments (his telemetry) —; why: a spectator's choice, a match's kill cam. Null: none.
    */
-  follow: { slot: number; why: "spectate" | "killcam" } | null = null;
+  follow: { slot: number; why: "spectate" | "killcam" | "passenger" } | null = null;
+  /** who is aboard whose craft (R5): a passenger's slot → the pilot's */
+  aboard = new Map<number, number>();
+  /** our own craft as we left it parked to board another's: put back there when we get off */
+  private parkedOwn: { kind: VesselId; lat: number; lon: number; heading: number } | null = null;
+  /** getting off, its second step due (alightStep) */
+  private alighting: {
+    at: number;
+    park: { lat: number; lon: number; heading: number } | null;
+    door: Vec3 | null;
+    fwd: Vec3;
+  } | null = null;
   /** the followed craft's pose and engines this frame (main.ts: the renderer's flown craft's) */
   followJet: NetShip["jet"] | null = null;
   followThrust: NetShip["thrust"] | null = null;
@@ -94,6 +119,8 @@ export class NetSession {
   private spin: Vec3 = [0, 0, 0];
   private warpSaid = false;
   private collidedAt = -1e9;
+  private walkSentAt = -1;
+  private walkPrev: Vec3 | null = null;
   /** our place last frame [m, the Earth's], when it last jumped (a placement), the frames each other has touched */
   private ownAt: number[] | null = null;
   private placedAt = -1e9;
@@ -115,7 +142,9 @@ export class NetSession {
     const R = this.d.renderer;
     if (!net?.room) {
       if (this.follow) this.unfollow();
+      if (R.netWalkers.length) R.netWalkers = [];
       if (R.netOthers.length) R.netOthers = [];
+      if (R.netShipsCam.length) R.netShipsCam = [];
       if (this.tags.length) this.tags = [];
       if (this.ships.length) this.ships = [];
       if (netFrame.ships.length) netFrame.ships = [];
@@ -125,6 +154,7 @@ export class NetSession {
     }
     const c = this.d.camera;
     const now = performance.now() / 1000;
+    this.alightStep(now);
     // (the room's hour, the scene's: on joining, a scene more than a minute off set on the room's clock —
     // the same Sun, the same sky for everyone)
     if (this.timedRoom !== net.room.code && net.clock.synced) {
@@ -149,14 +179,24 @@ export class NetSession {
     if (this.telBound !== net) {
       this.telBound = net;
       net.on("event", ({ from, ev }) => {
-        if ((ev as { kind?: string }).kind === "tel") this.tel.set(from, (ev as unknown as { v: Record<string, number> }).v);
+        const e = ev as { kind?: string; to?: number };
+        if (e.kind === "tel") this.tel.set(from, (ev as unknown as { v: Record<string, number> }).v);
+        else if (e.kind === "board" && typeof e.to === "number") {
+          this.aboard.set(from, e.to);
+          if (e.to === net.room?.slot) this.d.toast(tf("{0} is aboard", this.nameOf(from)));
+        } else if (e.kind === "alight") {
+          if (this.aboard.get(from) === net.room?.slot) this.d.toast(tf("{0} got off", this.nameOf(from)));
+          this.aboard.delete(from);
+        }
       });
     }
     const F = this.follow;
     if (F && !net.room.members.some((m) => m.slot === F.slot)) this.unfollow();
+    for (const [p, q] of this.aboard)
+      if (!net.room.members.some((m) => m.slot === p) || !net.room.members.some((m) => m.slot === q)) this.aboard.delete(p);
     // (a spectator, an instruments screen: the first pilot followed — the instruments in his cockpit)
     if (!this.follow && net.room.role !== "pilot") {
-      const p = net.room.members.filter((m) => m.role === "pilot" && net.remotes.tracks.has(m.slot)).sort((a, b) => a.slot - b.slot)[0];
+      const p = net.room.members.filter((m) => m.role === "pilot" && !!net.remotes.track(m.slot)).sort((a, b) => a.slot - b.slot)[0];
       if (p) {
         this.setFollow(p.slot);
         if (net.room.role === "instruments") this.d.settings.shipMount = "cockpit";
@@ -166,12 +206,21 @@ export class NetSession {
       states.filter((s) => !this.hidden.has(s.slot) || s.slot === this.follow?.slot),
       dt,
     );
+    // the others on foot: in the home frame, the renderer brings them onto its camera
+    R.netWalkers = states
+      .filter((s) => s.kind === 4 && !s.ghost && !this.hidden.has(s.slot))
+      .map((s) => c.netWalkerHome(s))
+      .filter((w): w is NonNullable<typeof w> => !!w);
+    // (no one on foot: their last tags gone — the renderer places them only while someone walks)
+    if (!R.netWalkers.length) R.netWalkersCam = [];
     const followed = this.follow ? (all.find((s) => s.slot === this.follow!.slot) ?? null) : null;
     this.ships = all.filter((s) => s.slot !== this.follow?.slot);
     // (his state read straight — the craft placed even when ours is far from the Earth: a spectator in orbit)
     const fstate = this.follow ? (states.find((s) => s.slot === this.follow!.slot) ?? null) : null;
     this.puppetFrame(followed, fstate);
-    R.netOthers = this.ships.filter((s) => !s.ghost).map((s) => ({ id: s.id, rel: s.rel, axes: s.axes, jet: s.jet, thrust: s.thrust }));
+    R.netOthers = this.ships
+      .filter((s) => !s.ghost)
+      .map((s) => ({ slot: s.slot, id: s.id, rel: s.rel, axes: s.axes, X: s.X, axesHome: s.axesHome, jet: s.jet, thrust: s.thrust }));
     const members = new Map(net.room.members.map((m) => [m.slot, m]));
     // (on the F-35's radar: each other in his colour, his track, his height against ours)
     netRadar.contacts = this.ships
@@ -189,18 +238,75 @@ export class NetSession {
       this.d.settings.ship && R.shipPose
         ? shipToCamera(R.shipPose, this.d.settings.shipLookYaw, this.d.settings.shipLookPitch).t
         : ([0, 0, 0] as Vec3);
+    // (their name tags: over the walkers' heads too — where the renderer put them last frame)
+    const walkerTags: NetTag[] = R.netWalkersCam.map((w) => {
+      const m = members.get(w.slot);
+      return {
+        slot: w.slot,
+        name: m?.name ?? `#${w.slot}`,
+        colour: m?.colour ?? "#ffffff",
+        at: w.at,
+        dist: w.dist,
+        ghost: false,
+        kind: t("on foot"),
+      };
+    });
+    // (where the renderer drew each last — from its camera: a walker's far from his craft —, else from ours)
+    const drawn = new Map(R.netShipsCam.map((d) => [d.slot, d]));
     this.tags = this.ships.map((s) => {
       const m = members.get(s.slot);
+      const D = drawn.get(s.slot);
       return {
         slot: s.slot,
         name: m?.name ?? `#${s.slot}`,
         colour: m?.colour ?? "#ffffff",
-        at: [s.rel[0] + eye[0], s.rel[1] + eye[1], s.rel[2] + eye[2]] as Vec3,
-        dist: s.dist,
+        at: D?.at ?? ([s.rel[0] + eye[0], s.rel[1] + eye[1], s.rel[2] + eye[2]] as Vec3),
+        dist: D?.dist ?? s.dist,
         ghost: s.ghost,
-        kind: VESSELS[s.id].name,
+        kind: [
+          VESSELS[s.id].name,
+          ...[...this.aboard].filter(([, q]) => q === s.slot).map(([p]) => tf("{0} aboard", members.get(p)?.name ?? `#${p}`)),
+        ].join(" · "),
       };
     });
+    this.tags.push(...walkerTags);
+    // our walker, 15 times a second (a pilot's: on foot, his craft parked beside — both sent)
+    const W = net.room.role === "pilot" && !this.follow ? c.netOwnWalker() : null;
+    if (W && now - this.walkSentAt > 1 / 15) {
+      const h = now - this.walkSentAt;
+      this.walkSentAt = now;
+      const v: Vec3 = this.walkPrev && h < 0.5 ? ([0, 1, 2].map((k) => (W.p[k]! - this.walkPrev![k]!) / h) as Vec3) : [0, 0, 0];
+      this.walkPrev = W.p;
+      net.sendCraft({
+        frame: 0,
+        body: W.body,
+        kind: 4,
+        flags: W.grounded ? 1 : 0,
+        p: W.p,
+        v,
+        q: axesQuat(W.fwd, W.up, W.right),
+        w: [0, 0, 0],
+        a: [0, 0, 0],
+        vis: {
+          throttle: 0,
+          boost: 1,
+          gear: 0,
+          flaps: 0,
+          brake: 0,
+          stovl: 0,
+          fan: 0,
+          nozzle: 0,
+          pitch: 0,
+          roll: 0,
+          yaw: 0,
+          steer: 0,
+          comp: 0,
+          alpha: 0,
+          cl: 0,
+          mach: W.speed / 100,
+        },
+      });
+    } else if (!W) this.walkPrev = null;
     // (a mid-air collision: our hull and another's touching, both flying — each side finds its own. Not on a
     // placement's heels — ours or his: a craft put somewhere jumps, its old and new samples a moment apart —:
     // his samples fresh and steady, our place steady 2 s, the touch two frames running)
@@ -212,7 +318,7 @@ export class NetSession {
       for (const sh of this.ships) {
         const reach = 0.55 * (vesselHulls[sh.id].radius + vesselHulls[fleet.active].radius);
         const touching =
-          !sh.ghost && !(sh.state.flags & 1) && sh.dist < reach && sh.state.ahead < 0.3 && steady(net.remotes.tracks.get(sh.slot)?.samples);
+          !sh.ghost && !(sh.state.flags & 1) && sh.dist < reach && sh.state.ahead < 0.3 && steady(net.remotes.track(sh.slot)?.samples);
         const n = touching ? (this.touch.get(sh.slot) ?? 0) + 1 : 0;
         this.touch.set(sh.slot, n);
         if (n >= 2) {
@@ -309,12 +415,124 @@ export class NetSession {
   }
 
   /** Follow another player (our craft his puppet), or stop. */
-  setFollow(slot: number | null, why: "spectate" | "killcam" = "spectate") {
+  setFollow(slot: number | null, why: "spectate" | "killcam" | "passenger" = "spectate") {
     if (slot === null) return this.unfollow();
     this.follow = { slot, why };
   }
 
+  private nameOf(slot: number) {
+    return this.net?.room?.members.find((m) => m.slot === slot)?.name ?? `#${slot}`;
+  }
+
+  /** Another's craft by us on foot (R5): the nearest landed one whose door (either side) is within 4 m, or
+   *  its hull within 2 m; null: none. */
+  private craftNear(): { slot: number; state: CraftState; d: number } | null {
+    const net = this.net;
+    const ch = this.d.camera.character;
+    if (!net?.room || !ch.active || !ch.ours || ch.body !== "earth") return null;
+    const now = net.roomNow();
+    let best: { slot: number; state: CraftState; d: number } | null = null;
+    for (const m of net.room.members) {
+      if (m.slot === net.room.slot) continue;
+      const s = net.remotes.track(m.slot)?.at(now);
+      const id = s && !s.ghost ? kindOf(s.kind) : null;
+      if (!s || !id) continue;
+      const ax = quatAxes(s.q);
+      const off = ACCESS[id];
+      const dist = (o: number) => Math.hypot(...[0, 1, 2].map((k) => ch.q[k]! - (s.p[k]! + ax.right[k]! * o)));
+      const d = Math.min(dist(off), dist(-off));
+      const reach = d < 4 || dist(0) < vesselHulls[id].radius + 2;
+      if (reach && (!best || d < best.d)) best = { slot: m.slot, state: s, d };
+    }
+    return best;
+  }
+
+  /**
+   * ⇧K in a room (docs/PLAN-RESEAU.md R5): aboard another's craft, off it — landed and still —, on foot at its
+   * door; on foot by another's landed craft, aboard it as his passenger (every view his, his instruments, his
+   * flight). What it did or why not (a toast); undefined: not ours (our own craft's hatch, no one near).
+   */
+  boardToggle(): string | undefined {
+    const net = this.net;
+    if (!net?.room) return undefined;
+    if (this.follow?.why === "passenger") return this.alight();
+    const c = this.d.camera;
+    const near = this.craftNear();
+    if (!near) return undefined;
+    // (our own hatch nearer: ours)
+    if (c.character.accessDistance() <= 3 && c.character.accessDistance() < near.d) return undefined;
+    const name = this.nameOf(near.slot);
+    if (!(near.state.flags & 1) || Math.hypot(...near.state.v) > 0.5) return tf("{0}'s craft must be landed and still", name);
+    const own = c.netOwn();
+    this.parkedOwn = own ? { kind: fleet.active, ...parkedAt(own.p, own.fwd) } : null;
+    c.character.stop();
+    this.setFollow(near.slot, "passenger");
+    net.event({ kind: "board", to: near.slot });
+    return tf("Aboard {0}'s craft — ⇧K to get off once landed", name);
+  }
+
+  /** Off the craft we ride in, at its door — landed and still —; our own craft back where we left it. */
+  private alight(): string {
+    const net = this.net!;
+    const F = this.follow!;
+    const s = net.remotes.track(F.slot)?.at(net.roomNow());
+    const name = this.nameOf(F.slot);
+    const id = s ? kindOf(s.kind) : null;
+    if (s && id && (!(s.flags & 1) || Math.hypot(...s.v) > 0.5)) return tf("Wait until {0}'s craft is landed and still", name);
+    this.unfollow();
+    // our own craft where we left it — then, a moment later (its place read again), on foot at the door
+    const P = this.parkedOwn;
+    this.parkedOwn = null;
+    if (P) {
+      if (fleet.active !== P.kind) this.d.tools.set("vessel", P.kind);
+      this.park(P.lat, P.lon, P.heading);
+    }
+    const ax = s && id ? quatAxes(s.q) : null;
+    this.alighting = {
+      at: performance.now() / 1000,
+      park: P,
+      door: ax && id ? ([0, 1, 2].map((k) => s!.p[k]! + ax.right[k]! * ACCESS[id]) as Vec3) : null,
+      fwd: ax?.fwd ?? [0, 0, 1],
+    };
+    return tf("Off {0}'s craft", name);
+  }
+
+  /** our craft parked on its gear (its ground gone: left where it is) */
+  private park(lat: number, lon: number, heading: number) {
+    const c = this.d.camera;
+    try {
+      this.d.tools.parkAt("earth", lat, lon, heading, t("Your craft is back where you left it"));
+      c.pilot.auto = "none";
+      c.gearInit = true;
+      c.gearDown = true;
+      c.gearExt = 1;
+      c.pilot.throttle = 0;
+    } catch {
+      /* its ground gone */
+    }
+  }
+
+  /** Getting off, its second step (a few frames on): our craft's place read — the pose's point and the craft's own
+   *  origin some metres apart: put again, that offset taken out —, then on foot at the door, its nose ahead. */
+  private alightStep(now: number) {
+    const A = this.alighting;
+    if (!A || now - A.at < 0.2) return;
+    this.alighting = null;
+    const c = this.d.camera;
+    const got = A.park ? c.netOwn() : null;
+    if (A.park && got) {
+      const g = parkedAt(got.p, got.fwd);
+      if (Math.hypot(g.lat - A.park.lat, g.lon - A.park.lon) > 2e-6)
+        this.park(2 * A.park.lat - g.lat, 2 * A.park.lon - g.lon, A.park.heading);
+    }
+    if (A.door) {
+      const err = c.character.startAt("earth", A.door, A.fwd);
+      if (err) this.d.toast(err);
+    }
+  }
+
   private unfollow() {
+    if (this.follow?.why === "passenger" && this.net?.room) this.net.event({ kind: "alight", to: this.follow.slot });
     this.follow = null;
     this.followJet = null;
     this.followThrust = null;
@@ -340,7 +558,11 @@ export class NetSession {
         /* not here */
       }
     }
-    c.puppet = () => c.netPlaceBeside(st, 0);
+    const ground = (st.flags & 1) !== 0;
+    c.puppet = () => {
+      const P = c.netPlaceBeside(st, 0);
+      return P && { ...P, ground };
+    };
     this.followJet = sh?.jet ?? null;
     this.followThrust = sh?.thrust ?? null;
     const slot = this.follow.slot;
@@ -378,7 +600,7 @@ export class NetSession {
     const now = net.roomNow();
     return net.room.members
       .filter((m) => m.slot !== net.room!.slot)
-      .map((m) => ({ slot: m.slot, name: m.name, state: net.remotes.tracks.get(m.slot)?.at(now) ?? null }));
+      .map((m) => ({ slot: m.slot, name: m.name, state: net.remotes.track(m.slot)?.at(now) ?? null }));
   }
 
   /**

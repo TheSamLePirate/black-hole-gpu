@@ -8,7 +8,7 @@ import { cameraFrame } from "../camera";
 import type { F35Pose } from "../f35/model";
 import { JetPoser } from "../f35/pose";
 import type { CraftState } from "../net/remote";
-import { fromBodyFixed, groundVelocity, toBodyFixed } from "../system/our-surface";
+import { fromBodyFixed, groundVelocity, solidBody, toBodyFixed } from "../system/our-surface";
 import { bodyAxes, solarBody } from "../system/solar";
 import { C_MPS, M_METRES } from "../units";
 import { VESSEL_IDS, type VesselId } from "../vessels";
@@ -22,7 +22,53 @@ declare module "../controls" {
     netOwn: typeof netOwn;
     netShips: typeof netShips;
     netPlaceBeside: typeof netPlaceBeside;
+    netWalkerHome: typeof netWalkerHome;
+    netOwnWalker: typeof netOwnWalker;
   }
+}
+
+/** the bodies a sample names (src/net/proto.ts BODIES — kept apart: the solo bundle holds no protocol) */
+export const NET_BODIES = ["earth", "moon", "sun", "mercury", "venus", "mars", "jupiter", "saturn", "uranus", "neptune"];
+
+export interface NetWalkerHome {
+  slot: number;
+  /** his place (home frame, M), his axes there (right, up, forward), his speed [m/s], in the air or not */
+  X: Vec3;
+  axes: [Vec3, Vec3, Vec3];
+  speed: number;
+  airborne: boolean;
+}
+
+/** Another on foot in the home frame (the renderer brings him onto its camera's axes); null: not on our worlds. */
+function netWalkerHome(this: CameraController, s: CraftState): NetWalkerHome | null {
+  const body = NET_BODIES[s.body];
+  if (!body || !solidBody(body) || !this.s.wormhole) return null;
+  const t = this.nowTime();
+  if (!Number.isFinite(t)) return null;
+  const A = bodyAxes(solarBody(body)!, t);
+  const toHome = (b: Vec3): Vec3 => [0, 1, 2].map((i) => b[0] * A[0][i]! + b[1] * A[1][i]! + b[2] * A[2][i]!) as Vec3;
+  const ax = quatAxes(s.q);
+  return {
+    slot: s.slot,
+    X: fromBodyFixed(body, scale(s.p as Vec3, 1 / M_METRES), t),
+    axes: [unit(toHome(ax.right)), unit(toHome(ax.up)), unit(toHome(ax.fwd))],
+    speed: Math.hypot(...s.v),
+    airborne: !(s.flags & 1),
+  };
+}
+
+/** Our walker as the network sends it: his body, his place on it [m, its own axes], his heading; null: not walking. */
+function netOwnWalker(
+  this: CameraController,
+): { body: number; p: Vec3; fwd: Vec3; up: Vec3; right: Vec3; grounded: boolean; speed: number } | null {
+  const ch = this.character;
+  if (!ch.active || !ch.ours) return null;
+  const body = NET_BODIES.indexOf(ch.body);
+  if (body < 0) return null;
+  const up = ch.up() as Vec3;
+  const fwd = unit(ch.forward as Vec3);
+  const right = unit([fwd[1] * up[2] - fwd[2] * up[1], fwd[2] * up[0] - fwd[0] * up[2], fwd[0] * up[1] - fwd[1] * up[0]]);
+  return { body, p: [...ch.q] as Vec3, fwd, up, right, grounded: ch.grounded, speed: ch.speed };
 }
 
 /** the network's kinds (src/net/proto.ts KINDS) → the craft */
@@ -125,8 +171,10 @@ export interface NetShip {
   /** from the flown craft's origin on the camera's axes [m]; its axes there (left, top, nose) */
   rel: Vec3;
   axes: [Vec3, Vec3, Vec3];
-  /** the same in the home frame (the contrails') */
+  /** the same in the home frame (the contrails'); its place there [M] (the renderer's, from its own camera: a
+   *  walker's far from the craft) */
   relHome: Vec3;
+  X: Vec3;
   axesHome: [Vec3, Vec3, Vec3];
   dist: number;
   ghost: boolean;
@@ -216,6 +264,7 @@ function netShips(this: CameraController, states: CraftState[], dt: number, rang
       rel: E.toCam(relHome),
       axes: axesHome.map((a) => E.toCam(a)) as [Vec3, Vec3, Vec3],
       relHome,
+      X: [0, 1, 2].map((k) => E.nav.X[k]! + relHome[k]! / M_METRES) as Vec3,
       axesHome,
       dist,
       ghost: s.ghost,
@@ -253,5 +302,5 @@ function netPlaceBeside(this: CameraController, s: CraftState, gap: number) {
 }
 
 export function installNetcraft(Ctl: { prototype: CameraController }) {
-  Object.assign(Ctl.prototype, { netOwn, netShips, netPlaceBeside });
+  Object.assign(Ctl.prototype, { netOwn, netShips, netPlaceBeside, netWalkerHome, netOwnWalker });
 }

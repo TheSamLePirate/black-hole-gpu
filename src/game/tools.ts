@@ -529,6 +529,13 @@ export class GameTools {
     return this.placeAt(ourGroundPoseOn(body, lat, lo, t, GEARS[fleet.active]?.legs ?? null, heading, GEAR));
   }
 
+  /** Parked on its gear at latitude, east longitude [°] and a heading [°] — where it was left (no runway's
+   *  lining up, no moving aside: docs/PLAN-RESEAU.md R5, our craft back after riding in another's). */
+  parkAt(body: string, lat: number, lon: number, heading: number, note?: string) {
+    const P = ourGroundPoseOn(body, lat, lon, this.ctx.time(), GEARS[fleet.active]?.legs ?? null, heading, GEAR);
+    return this.placeAt(note ? { ...P, note } : P);
+  }
+
   /**
    * On foot at latitude and east longitude [°]: the ship landed there (as land()), then the astronaut
    * steps out beside it, walking — the third-person controller. A spot refused (water, an obstruction)

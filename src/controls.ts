@@ -507,7 +507,8 @@ export class CameraController {
   /**
    * The craft flown as a puppet (docs/PLAN-RESEAU.md R4: a spectator following another player, a kill cam): its
    * place, velocity and axes (home frame, units of c, its nose and top) given each frame instead of its flight —
-   * every view on it as on one's own. Null: flown.
+   * every view on it as on one's own; `ground`: it stands on its gear (its phase "landed" — no false lift-off called).
+   * Null: flown.
    */
   puppet:
     | (() => {
@@ -515,6 +516,7 @@ export class CameraController {
         vel: [number, number, number];
         fwd: [number, number, number];
         up: [number, number, number];
+        ground?: boolean;
       } | null)
     | null = null;
 
@@ -524,11 +526,9 @@ export class CameraController {
     if (!P) return false;
     // (his craft's kind ours: the switch flyShip makes, made here — the puppet placed over it at once)
     if (this.s.vessel !== fleet.active) this.switchVessel(this.s.vessel);
-    // (set down nowhere of ours: where he is — the landed state the switch may have left dropped)
-    if (this.landed || this.ourLanded) {
-      this.setOurLanded(null);
-      this.landed = false;
-    }
+    // (set down nowhere of ours: where he is — the landed state the switch may have left dropped; landed as his is)
+    if (this.ourLanded) this.setOurLanded(null);
+    this.landed = !!P.ground;
     const S = this.shipMatrix();
     const { up, fwd: f } = P;
     const left: [number, number, number] = [up[1] * f[2] - up[2] * f[1], up[2] * f[0] - up[0] * f[2], up[0] * f[1] - up[1] * f[0]];

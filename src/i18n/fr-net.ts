@@ -114,4 +114,15 @@ export default {
   Follow: "Suivre",
   "Every view on {0}'s craft, his instruments": "Toutes les vues sur l'engin de {0}, ses instruments",
   "Add a screen": "Ajouter un écran",
+  "on foot": "à pied",
+  // aboard another's craft (R5)
+  "{0} is aboard": "{0} est à bord",
+  "{0} got off": "{0} est descendu",
+  "{0}'s craft must be landed and still": "L'engin de {0} doit être posé et immobile",
+  "Aboard {0}'s craft — ⇧K to get off once landed": "À bord de l'engin de {0} — ⇧K pour descendre une fois posé",
+  "Wait until {0}'s craft is landed and still": "Attendez que l'engin de {0} soit posé et immobile",
+  "Off {0}'s craft": "Descendu de l'engin de {0}",
+  "Your craft is back where you left it": "Votre engin est revenu là où vous l'aviez laissé",
+  "aboard {0}'s craft": "à bord de l'engin de {0}",
+  "{0} aboard": "{0} à bord",
 } satisfies Record<string, string>;

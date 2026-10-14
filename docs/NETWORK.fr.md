@@ -114,6 +114,29 @@ d'écart), son train posé d'après le sien, le HUD et le cockpit du F-35 ; le p
 Pas encore : la prédiction de chute libre du spectateur (« IMPACT … ») est celle de son propre engin (sans
 portance), pas celle du pilote ; la route et les modes du pilote automatique ne sont que sur l'écran du pilote.
 
+## À pied ensemble (R5)
+
+- **Marcher** (⇧K hors d'un engin posé, ou le mode À pied) : les autres voient votre astronaute — le vrai, son
+  corps articulé, sa démarche (marche, course, virage, saut) d'après votre vitesse —, là où vous marchez sur la
+  Terre, votre nom au-dessus de lui (« à pied ») ; votre engin garé se voit aussi. 15 échantillons par seconde,
+  sa place et sa vitesse prédites au présent comme celles des engins.
+- **Monter à bord d'un ami** (⇧K à pied près de l'engin posé d'un autre — à moins de 4 m de l'une de ses
+  portes, ou 2 m de sa coque) : vous voyagez en **passager** — son engin est le vôtre sous toutes les vues, ses
+  instruments, son vol ; le pilote en est averti (« Ben est à bord »), le panneau de la salle et son étiquette
+  le disent. Votre propre engin reste garé où il était.
+- **Descendre** (⇧K une fois son engin posé et immobile) : à pied à sa porte de droite, son nez devant ; votre
+  engin revient là où vous l'aviez laissé (au décimètre).
+- Les engins des autres sont placés depuis votre caméra où qu'elle soit — à pied à 14 km de votre engin, celui
+  d'à côté est bien à côté.
+
+Mesuré sur kerr-mini (`tests/e2e/net-walk`) : deux astronautes à 12 m l'un de l'autre sur le parking
+d'Edwards, chacun vu par l'autre à la bonne distance ; l'un marche 3 s — vu se déplacer à 1,1–1,3 m/s ; il
+monte dans le F-35 de l'autre (sa vue à moins de 0,1 m de lui, posé : aucun faux décollage annoncé), descend à
+8 m de lui, son propre F-35 retrouvé à 14 km à 0,1 m près.
+
+Pas encore : l'herbe désactivée, les autres à pied ne sont dessinés que si vous marchez aussi ; le passager a
+la vue du pilote (pas de second siège modélisé).
+
 ## Comment ça marche
 
 - **Le serveur de salles** (`server/rooms.ts`, Bun, SQLite) : les salles et leurs membres, l'horloge, les
@@ -139,7 +162,7 @@ deux pages à 0,3 ms près.
 
 ## Tests
 
-De bout en bout aussi : `tests/e2e/net-flight` (deux F-35 : vus à 8 km, sur le radar, le lien direct, À côté —
+De bout en bout aussi : `tests/e2e/net-walk` (à pied ensemble, un passager), `tests/e2e/net-flight` (deux F-35 : vus à 8 km, sur le radar, le lien direct, À côté —
 la patrouille, le même écart vu des deux côtés —, la postcombustion vue). Unitaires : `tests/net-core.test.ts` (les échantillons, l'horloge sous 200 ms et 5 % de pertes, Hermite au
 centimètre, le lissage, le vol du robot), `tests/net-rooms.test.ts` (un vrai serveur : salles, limites, mots
 de passe, la place reprise à la reconnexion, la suppression par le propriétaire, les salles gardées après un

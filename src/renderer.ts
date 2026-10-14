@@ -1,4 +1,5 @@
 import { streamingLead, aheadFocus } from "./system/streaming-focus";
+import type { NetWalkerHome } from "./controller/netcraft";
 import { CharacterRenderer, type GrassView } from "./character-renderer";
 import type { PlanetCharacter } from "./controller/character";
 import { dot as dot3 } from "./math/vec3";
@@ -4110,9 +4111,48 @@ export class Renderer {
     };
   }
 
+  /** the others on foot (docs/PLAN-RESEAU.md R5 — ui/netsession.ts): in the home frame; brought here onto the
+   *  camera's axes for the character's renderer (and their name tags) */
+  netWalkers: NetWalkerHome[] = [];
+  /** their places from the camera this frame [m, its axes] (their name tags') */
+  netWalkersCam: { slot: number; at: Vec3; dist: number }[] = [];
+
+  /** The others on foot from the camera (as the fleet's others are: our side of the throat). */
+  private netWalkersOnCamera(s: Settings): CharacterRenderer["remoteWalkers"] {
+    const cam = this.lastCam;
+    this.netWalkersCam = [];
+    if (!this.netWalkers.length || !cam || s.system !== "gargantua" || !s.wormhole || cam.region !== "throat" || cam.ell >= 0) return [];
+    const w = mouth(s).w;
+    const Xc = homeOf(w, cam.ell, cam.n);
+    const mR = 1476.625 * (s.massSolar || 1);
+    const toCam = (v: Vec3): Vec3 => {
+      const r = homeToRep(w, cam.ell, cam.n, v);
+      return [dot3(r, cam.right), dot3(r, cam.up), dot3(r, cam.fwd)];
+    };
+    const unitV = (v: Vec3): Vec3 => {
+      const l = Math.hypot(...v) || 1;
+      return [v[0] / l, v[1] / l, v[2] / l];
+    };
+    const out: CharacterRenderer["remoteWalkers"] = [];
+    for (const o of this.netWalkers) {
+      const origin = toCam([o.X[0] - Xc[0], o.X[1] - Xc[1], o.X[2] - Xc[2]]).map((c) => c * mR) as Vec3;
+      const dist = Math.hypot(...origin);
+      if (dist > 3000) continue;
+      const axes = o.axes.map((a) => unitV(toCam(a))) as [Vec3, Vec3, Vec3];
+      out.push({ key: o.slot, origin, axes, speed: o.speed, airborne: o.airborne });
+      this.netWalkersCam.push({
+        slot: o.slot,
+        at: [origin[0] + axes[1][0] * 2, origin[1] + axes[1][1] * 2, origin[2] + axes[1][2] * 2],
+        dist,
+      });
+    }
+    return out;
+  }
+
   private encodeCharacter(enc: GPUCommandEncoder, target: Target, s: Settings) {
     const c = this.character,
       frame = c?.frame() ?? null;
+    this.characterRenderer.remoteWalkers = this.netWalkersOnCamera(s);
     // (the astronaut where he walks; the living ground round the camera on the Earth, with him or without)
     const view = s.earthGrass !== "off" ? this.grassView() : null;
     const cam = this.lastCam;
@@ -4202,9 +4242,13 @@ export class Renderer {
   /** the others' craft (docs/PLAN-RESEAU.md R1 — controller/netcraft.ts, ui/netsession.ts): each from the flown
    *  craft's origin on the camera's axes [m], its axes on them, an F-35's pose, its engines */
   netOthers: {
+    slot: number;
     id: VesselId;
     rel: Vec3;
     axes: [Vec3, Vec3, Vec3];
+    /** its place [M] and axes (left, top, nose) in the home frame: placed from the camera, wherever it is */
+    X: Vec3;
+    axesHome: [Vec3, Vec3, Vec3];
     jet?: F35Pose;
     thrust?: { throttle: number; boost: number; air: number };
   }[] = [];
@@ -4214,20 +4258,43 @@ export class Renderer {
     return extra.length ? [...extra, ...this.fleetOthers(s)] : this.fleetOthers(s);
   }
 
-  /** The others' craft as instances: their place from the eye, their axes, their engines; near ones in the
-   *  shadow map (a wingman's shadow on the flown craft, and its on his). */
+  /** where the others' craft were drawn last (their tags): over each, from the eye [m] */
+  netShipsCam: { slot: number; at: Vec3; dist: number }[] = [];
+
+  /** The others' craft as instances: their place from the camera (as the fleet's: a walker far from his own craft
+   *  sees another's beside him), their axes, their engines; near ones in the shadow map (a wingman's shadow on the
+   *  flown craft, and its on his). */
   private netShips(s: Settings): ShipInstance[] {
-    if (!this.netOthers.length || !s.ship || !this.shipPose) return [];
-    const eye = shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t;
-    return this.netOthers.map((o) => ({
-      id: o.id,
-      S: [0, 1, 2].map((k) => [o.axes[0][k]!, o.axes[1][k]!, o.axes[2][k]!]) as [Vec3, Vec3, Vec3],
-      t: [o.rel[0] + eye[0], o.rel[1] + eye[1], o.rel[2] + eye[2]] as Vec3,
-      shadow: Math.hypot(...o.rel) < vesselHulls[o.id].radius + vesselHulls[s.vessel].radius + 60,
-      jet: o.jet,
-      thrust: o.thrust,
-      far: true,
-    }));
+    this.netShipsCam = [];
+    const cam = this.lastCam;
+    if (!this.netOthers.length || !cam || s.system !== "gargantua" || !s.wormhole || cam.region !== "throat" || cam.ell >= 0) return [];
+    const w = mouth(s).w;
+    const Xc = homeOf(w, cam.ell, cam.n);
+    const mR = 1476.625 * (s.massSolar || 1);
+    const toCam = (v: Vec3): Vec3 => {
+      const r = homeToRep(w, cam.ell, cam.n, v);
+      return [dot3(r, cam.right), dot3(r, cam.up), dot3(r, cam.fwd)];
+    };
+    const unitV = (v: Vec3): Vec3 => {
+      const l = Math.hypot(...v) || 1;
+      return [v[0] / l, v[1] / l, v[2] / l];
+    };
+    const eye = s.ship && this.shipPose ? shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t : ([0, 0, 0] as Vec3);
+    return this.netOthers.map((o) => {
+      const t = toCam([o.X[0] - Xc[0], o.X[1] - Xc[1], o.X[2] - Xc[2]]).map((c, k) => c * mR + eye[k]!) as Vec3;
+      const a = o.axesHome.map((v) => unitV(toCam(v))) as [Vec3, Vec3, Vec3];
+      const sep = Math.hypot(...t.map((c, k) => c - eye[k]!));
+      this.netShipsCam.push({ slot: o.slot, at: t, dist: Math.hypot(...t) });
+      return {
+        id: o.id,
+        S: [0, 1, 2].map((k) => [a[0][k]!, a[1][k]!, a[2][k]!]) as [Vec3, Vec3, Vec3],
+        t,
+        shadow: sep < vesselHulls[o.id].radius + vesselHulls[s.vessel].radius + 60,
+        jet: o.jet,
+        thrust: o.thrust,
+        far: true,
+      };
+    });
   }
 
   /** The fight's aircraft as instances: their place from the eye, their axes. */

@@ -103,6 +103,29 @@ Measured on kerr-mini (`tests/e2e/net-spectate`): the followed craft within 1–
 Not yet: the spectator's free-fall prediction ("IMPACT …") is his own craft's (no lift), not the pilot's;
 the instruments' route and autopilot modes are the pilot's own only on his screen.
 
+## On foot together (R5)
+
+- **Walking** (⇧K out of a landed craft, or the On foot mode): the others see your astronaut — the real one,
+  his skinned body, his gait (walk, run, the turn, a jump) from your speed —, where you walk on the Earth, your
+  name over his head ("on foot"); your parked craft is seen too. Samples 15 times a second, his place and
+  speed predicted to now as the craft are.
+- **Board a friend's craft** (⇧K on foot by another's landed craft — within 4 m of either door, or 2 m of its
+  hull): you ride in it as his **passenger** — his craft yours to see from every view, his instruments, his
+  flight; the pilot is told ("Ben is aboard"), the room panel and his name tag say so. Your own craft is left
+  parked where it was.
+- **Get off** (⇧K once his craft is landed and still): on foot at its right-hand door, its nose ahead; your
+  own craft back where you left it (to the decimetre).
+- The others' craft are placed from your camera wherever it is — on foot 14 km from your own craft, the one
+  beside you stands beside you.
+
+Measured on kerr-mini (`tests/e2e/net-walk`): two astronauts 12 m apart on Edwards' apron, each seen by the
+other at the right distance; one walks 3 s — seen moving at 1.1–1.3 m/s; he boards the other's F-35 (his view
+on it within 0.1 m, landed: no false lift-off called), gets off 8 m from it, his own F-35 back 14 km away
+within 0.1 m.
+
+Not yet: with the grass turned off, the others on foot are drawn only while you walk too; a passenger's
+seat is the pilot's view (no second seat modelled).
+
 ## How it works
 
 - **The room server** (`server/rooms.ts`, Bun, SQLite): the rooms and their members, the clock, the room's
@@ -127,7 +150,7 @@ late (95 %: 27 ms), the others shown 60–75 ms late, the two pages' clocks with
 
 ## Tests
 
-End to end too: `tests/e2e/net-flight` (two F-35s: seen 8 km off, on the radar, the direct link, Beside —
+End to end too: `tests/e2e/net-walk` (on foot together, a passenger's ride), `tests/e2e/net-flight` (two F-35s: seen 8 km off, on the radar, the direct link, Beside —
 formation, the same gap seen by both —, the afterburner seen). Unit: `tests/net-core.test.ts` (the samples, the clock under 200 ms and 5 % lost, the Hermite within a
 centimetre, the smoothing, the bot's flight), `tests/net-rooms.test.ts` (a real server: rooms, limits,
 passwords, a reconnection's slot, the owner's delete, the rooms kept across a restart). End to end:

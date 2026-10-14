@@ -231,7 +231,7 @@ export class NetClient {
       case "roster":
         if (this.room) {
           this.room.members = m.members;
-          for (const slot of this.remotes.tracks.keys()) if (!m.members.some((x) => x.slot === slot)) this.remotes.drop(slot);
+          for (const tr of [...this.remotes.tracks.values()]) if (!m.members.some((x) => x.slot === tr.slot)) this.remotes.drop(tr.slot);
           this.mesh?.sync(m.members.map((x) => x.slot));
         }
         this.emit("roster", m.members);

@@ -431,6 +431,15 @@ export class NetPanel {
         const talk = h("i", `netp-talk${(m.slot === room.slot ? V?.talking : V?.speaking(m.slot)) ? " on" : ""}`, "◉");
         talk.dataset.testid = `net-talk-${m.slot}`;
         li.append(dot, talk, h("span", "", m.name), r, h("em", "", ROLE_NAMES[m.role]?.() ?? m.role));
+        // (aboard another's craft — R5)
+        const S = this.session;
+        const ride = m.slot === room.slot ? (S?.follow?.why === "passenger" ? S.follow.slot : undefined) : S?.aboard.get(m.slot);
+        if (ride !== undefined) {
+          const pilot = room.members.find((x) => x.slot === ride)?.name ?? `#${ride}`;
+          const b = h("em", "netp-aboard", tf("aboard {0}'s craft", pilot));
+          b.dataset.testid = `net-aboard-${m.slot}`;
+          li.append(b);
+        }
         if (V && m.slot !== room.slot) {
           const vol = h("input", "netp-vol");
           vol.type = "range";

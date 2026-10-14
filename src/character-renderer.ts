@@ -1,5 +1,5 @@
 import type { GpuProfiler } from "./gpuprof";
-import { AstronautModel } from "./character-model";
+import { AstronautModel, WalkerAnim } from "./character-model";
 import shader from "./shaders/character.wgsl" with { type: "text" };
 import { withForest } from "./forest-shader";
 import { bouldersNear, packStones, STONE_CAPACITY, STONE_LATTICE, STONE_SPACING, STONE_VERTICES, stoneMesh } from "./ground-stones";
@@ -193,6 +193,13 @@ export class CharacterRenderer {
   private size = "";
   /** the bind groups by pipeline (made again when a resource they hold changes) */
   private groups = new Map<string, GPUBindGroup>();
+  /**
+   * The others on foot (docs/PLAN-RESEAU.md R5 — ui/netsession.ts): each one's place from the camera and his axes
+   * on its axes (right, up, forward) [m], his speed, in the air or not; drawn as the player's own astronaut.
+   */
+  remoteWalkers: { key: number; origin: Vec3; axes: [Vec3, Vec3, Vec3]; speed: number; airborne: boolean }[] = [];
+  /** each one's animation and his uniform (his place in it) */
+  private remotes = new Map<number, { anim: WalkerAnim; uniform: GPUBuffer; data: Float32Array<ArrayBuffer> }>();
   private shadowView: GPUTextureView;
   private probeLit = false;
   private shipShadowed = false;
@@ -566,7 +573,8 @@ export class CharacterRenderer {
     world: GrassWorld = { wind: null, paved: () => false },
   ) {
     const began = performance.now();
-    if (walker && !this.model.ready && !this.model.error) void this.model.load();
+    const others = this.remoteWalkers;
+    if ((walker || others.length) && !this.model.ready && !this.model.error) void this.model.load();
     // (on the ground, the feet on the ground under them: a slope's rise at each foot)
     if (walker && this.model.ready) {
       const { c, frame } = walker;
@@ -630,9 +638,30 @@ export class CharacterRenderer {
     set(U_PROBE + 2, [...(ax?.[2] ?? [0, 0, 1]), 0]);
     set(U_SHIP, probe.shipBound && ax ? [...probe.shipBound.c, probe.shipBound.r] : [0, 0, 0, 0]);
     this.d.queue.writeBuffer(this.uniform, 0, u);
+    // the others on foot: each his animation, his uniform — the frame's own with his place and axes in it
+    for (const k of this.remotes.keys()) if (!others.some((o) => o.key === k)) this.remotes.delete(k);
+    if (this.model.ready)
+      for (const o of others) {
+        let R = this.remotes.get(o.key);
+        if (!R) {
+          R = {
+            anim: new WalkerAnim(this.d),
+            uniform: this.d.createBuffer({ size: u.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }),
+            data: new Float32Array(u.length),
+          };
+          this.remotes.set(o.key, R);
+        }
+        this.model.evaluate(performance.now() / 1000, o.speed, o.airborne, null, R.anim);
+        R.data.set(u);
+        R.data.set([...add(o.origin, o.axes[1], R.anim.footDrop), 0], 2 * 4);
+        R.data.set([...o.axes[0], Math.min(1, o.speed / 4)], 3 * 4);
+        R.data.set([...o.axes[1], performance.now() / 1000], 4 * 4);
+        R.data.set([...o.axes[2], 0], 5 * 4);
+        this.d.queue.writeBuffer(R.uniform, 0, R.data);
+      }
     this.prepareGrass(view, walker, contact, revision, grass, world, light, height);
     // (none walking and nothing growing round the camera: nothing drawn — the vessel finds no occluder)
-    if (!walker && !this.grassOn) {
+    if (!walker && !this.grassOn && !(others.length && this.model.ready)) {
       this.active = false;
       this.cpuMs = performance.now() - began;
       return;
@@ -710,12 +739,37 @@ export class CharacterRenderer {
       return g;
     };
     const lit = [0, 1, 5, 6, 8, 9, 10, 11, 12];
+    // (another on foot: the same bindings, his uniform in place of the frame's — kept with the others, cleared with them)
+    const remoteGroup = (pipe: GPURenderPipeline, slot: string, bindings: number[], key: number, uniform: GPUBuffer) => {
+      const k = `${slot}#${key}`;
+      let g = this.groups.get(k);
+      if (!g) {
+        g = this.d.createBindGroup({
+          layout: pipe.getBindGroupLayout(0),
+          entries: bindings.map((binding) => ({ binding, resource: binding === 0 ? { buffer: uniform } : resource(binding, 0) })),
+        });
+        this.groups.set(k, g);
+      }
+      return g;
+    };
+    const drawOthers = (p: GPURenderPassEncoder, pipe: GPURenderPipeline, slot: string, bindings: number[], maps: boolean) => {
+      if (!this.model.ready) return;
+      for (const [key, R] of this.remotes) {
+        p.setPipeline(pipe);
+        p.setBindGroup(0, remoteGroup(pipe, slot, bindings, key, R.uniform));
+        p.setBindGroup(1, this.bonesGroup(pipe, `${slot}-bones#${key}`, maps, R.anim.bones));
+        p.setVertexBuffer(0, this.model.vertices!);
+        p.setIndexBuffer(this.model.indices!, "uint32");
+        p.drawIndexed(this.model.count);
+      }
+    };
     const shadowPass = enc.beginRenderPass({
       ...prof.pass("character solar shadow"),
       colorAttachments: [],
       depthStencilAttachment: { view: this.shadowView, depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" },
     });
     // (none walking: the map cleared all the same — no astronaut's shadow left on the grass)
+    drawOthers(shadowPass, this.skinShadow, "skin-shadow", [0], false);
     if (walker && this.model.ready) {
       shadowPass.setPipeline(this.skinShadow);
       shadowPass.setBindGroup(0, group(this.skinShadow, "skin-shadow", [0]));
@@ -785,6 +839,7 @@ export class CharacterRenderer {
       ],
       depthStencilAttachment: { view: this.depth!.createView(), depthClearValue: 0, depthLoadOp: "clear", depthStoreOp: "discard" },
     });
+    drawOthers(pass, this.skinPipe, "skin", lit, true);
     if (walker && this.model.ready) {
       pass.setPipeline(this.skinPipe);
       pass.setBindGroup(0, group(this.skinPipe, "skin", lit));
@@ -863,13 +918,13 @@ export class CharacterRenderer {
     return { cells, deepest, mean: cells ? sum / cells : 0 };
   }
   /** The astronaut's group 1: its bones (and for the lit pass its maps). */
-  private bonesGroup(pipe: GPURenderPipeline, slot: string, maps: boolean) {
+  private bonesGroup(pipe: GPURenderPipeline, slot: string, maps: boolean, bones: GPUBuffer = this.model.bones) {
     let g = this.groups.get(slot);
     if (!g) {
       g = this.d.createBindGroup({
         layout: pipe.getBindGroupLayout(1),
         entries: [
-          { binding: 0, resource: { buffer: this.model.bones } },
+          { binding: 0, resource: { buffer: bones } },
           ...(maps
             ? [
                 { binding: 1, resource: this.model.sampler },

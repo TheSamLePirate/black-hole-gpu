@@ -341,7 +341,18 @@ libre autour de l'engin suivi en tient lieu.
   seule, par un canal de télémétrie à 2–5 Hz (trajectoires décimées).
 - **Vérifié** : un téléphone suit un F-35 en vue cockpit, captures côte à côte, écart de temps mesuré.
 
-### R5 — À pied ensemble
+### R5 — À pied ensemble ✅ (2026-10-14)
+
+*Fait* : l'animation des marcheurs sortie de l'astronaute (`WalkerAnim` : os, démarche, pieds — un par
+marcheur), les autres dessinés avec leurs os, leurs ombres, leur IK des pieds (`CharacterRenderer.remoteWalkers`),
+l'échantillon du marcheur (genre 4, 15 Hz, clés de piste distinctes de son engin), son nom ; ⇧K près de l'engin
+posé d'un autre : passager (la marionnette de R4, l'état posé de l'engin suivi gardé — ni faux décollage, ni
+« EN VOL »), le pilote averti, le panneau et l'étiquette ; ⇧K posé : à pied à sa porte, notre engin garé de
+nouveau à sa place (au décimètre : l'écart entre le point de pose et l'origine de l'engin mesuré puis retiré) ;
+les engins des autres placés depuis la caméra du rendu (un marcheur loin de son engin les voyait autour de son
+engin). *Reporté* : la phase d'animation et l'accroupi dans l'échantillon (déduits de la vitesse) ; un second
+siège (le passager a la vue du pilote).
+
 - Le rendu de plusieurs astronautes : un tampon d'os par marcheur (4 au plus en plus du sien), `evaluate()`
   pour chacun, ombre et IK des pieds sur le sol **local**.
 - L'échantillon du marcheur : corps, position fixe au corps, cap, vitesse, phase d'animation, en l'air,

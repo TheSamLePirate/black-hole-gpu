@@ -2939,6 +2939,14 @@ async function main() {
     quickLoad: () => quickLoad(),
     leaveShip: (e) => {
       if (e.repeat || !camera.enabled) return;
+      // (in a room: aboard another's craft or off it — docs/PLAN-RESEAU.md R5)
+      const aboard = netSession.boardToggle();
+      if (aboard !== undefined) {
+        panel.toast(aboard);
+        touch();
+        syncButtons();
+        return;
+      }
       const error = camera.character.toggle();
       if (error) panel.toast(error);
       else {
@@ -5958,26 +5966,29 @@ async function main() {
         const A = info.air;
         const rv = camera.entryRun?.app?.final ? camera.runwayView() : null;
         const ph = phaseWatch.current;
-        capcomDue.push(
-          ...capcom.update({
-            now: wall,
-            side: status.side,
-            stage: ph?.stage ?? null,
-            mode: ph?.mode ?? null,
-            callsign: VESSELS[fleet.active].name,
-            orbit: status.orbit ? { apKm: status.orbit.apKm, peKm: status.orbit.peKm } : null,
-            entry: camera.entryRun?.phase ?? null,
-            site: camera.entryRun?.site?.name ?? null,
-            final: rv ? { rwy: rv.rwy, wind: rv.wind ? { from: rv.wind.from, u10: rv.wind.u10 } : null } : null,
-            plasma: A?.inAir ? Math.min(Math.max((Math.log10(Math.max(A.heat, 1)) - 4.6) / 1.7, 0), 1) : 0,
-            stopped: !!camera.ourLanded && !camera.rolling,
-            docked: !!info.links.length,
-            grade: lastGrade,
-            failed: !!camera.airFlight.failure,
-            lightS: earthLight.s,
-            warp: settings.timeSpeed * Msec,
-          }),
-        );
+        // (another's craft ours — a spectator's, a passenger's —: his flight, not ours to call)
+        if (camera.puppet) capcom.reset();
+        else
+          capcomDue.push(
+            ...capcom.update({
+              now: wall,
+              side: status.side,
+              stage: ph?.stage ?? null,
+              mode: ph?.mode ?? null,
+              callsign: VESSELS[fleet.active].name,
+              orbit: status.orbit ? { apKm: status.orbit.apKm, peKm: status.orbit.peKm } : null,
+              entry: camera.entryRun?.phase ?? null,
+              site: camera.entryRun?.site?.name ?? null,
+              final: rv ? { rwy: rv.rwy, wind: rv.wind ? { from: rv.wind.from, u10: rv.wind.u10 } : null } : null,
+              plasma: A?.inAir ? Math.min(Math.max((Math.log10(Math.max(A.heat, 1)) - 4.6) / 1.7, 0), 1) : 0,
+              stopped: !!camera.ourLanded && !camera.rolling,
+              docked: !!info.links.length,
+              grade: lastGrade,
+              failed: !!camera.airFlight.failure,
+              lightS: earthLight.s,
+              warp: settings.timeSpeed * Msec,
+            }),
+          );
         for (let k = capcomDue.length - 1; k >= 0; k--) if (capcomDue[k]!.at <= wall) voice.say(capcomDue.splice(k, 1)[0]!.line);
         // (the score: the moment's piece — none: silence)
         const ph2 = phaseWatch.current;

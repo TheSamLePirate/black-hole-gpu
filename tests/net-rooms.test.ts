@@ -85,8 +85,8 @@ describe("the room server", () => {
       });
       await Bun.sleep(33);
     }
-    await until(() => (b.remotes.tracks.get(0)?.samples.length ?? 0) >= 9);
-    expect(b.remotes.tracks.has(1)).toBe(false);
+    await until(() => (b.remotes.track(0)?.samples.length ?? 0) >= 9);
+    expect(b.remotes.track(1)).toBeUndefined();
     const s = b.remotes.states(b.roomNow())[0]!;
     expect(s.slot).toBe(0);
     expect(s.kind).toBe(3);

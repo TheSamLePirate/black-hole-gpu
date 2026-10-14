@@ -94,7 +94,7 @@ describe.skipIf(!E2E)("the network's rooms", () => {
 
   test("the bot's samples read back on the page, moving at its speed", async () => {
     const slot = bot!.net.room!.slot;
-    await a.waitFor(`(__bh.net.net.remotes.tracks.get(${slot})?.samples.length ?? 0) > 20`, 10_000);
+    await a.waitFor(`(__bh.net.net.remotes.track(${slot})?.samples.length ?? 0) > 20`, 10_000);
     const r = await a.js<{ d: number; dt: number; delay: number; ghost: boolean; l50: number; l95: number }>(`(async () => {
       const n = __bh.net.net;
       const s0 = n.remotes.states(n.roomNow()).find((s) => s.slot === ${slot});
@@ -113,6 +113,8 @@ describe.skipIf(!E2E)("the network's rooms", () => {
   }, 30_000);
 
   test("the second page leaves: two members left", async () => {
+    // (its panel closed once in by the link: opened again)
+    await b!.js(`(() => { __bh.net.open(); return 1; })()`);
     await b!.waitFor(`!!document.querySelector("[data-testid=net-leave]")`, 5000);
     await b!.click(`[data-testid="net-leave"]`);
     await a.waitFor(`__bh.net.net.room.members.length === 2`, 10_000);

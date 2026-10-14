@@ -260,6 +260,12 @@ export class PlanetCharacter {
       return t("This surface cannot be walked on.");
     }
   }
+  /** On foot at a body-fixed point [m] facing `forward` (body-fixed) — out of another player's craft at its door
+   *  (docs/PLAN-RESEAU.md R5). */
+  startAt(body: string, q: Vec3, forward: Vec3) {
+    this.lastTime = this.c.viewTime();
+    return this.prepare(body, true, q, forward);
+  }
   /** `forcedBody`: the body known from the placement (the panel's On foot mode) — a Gargantua-world
    *  landing is a hole-frame pose without a landed state, the inference would fail. */
   disembark(forcedBody?: string) {
