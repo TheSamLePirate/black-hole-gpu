@@ -797,7 +797,7 @@ export class CameraController {
   teleSaved: { fov: number; lookAt: boolean } | null = null;
 
   /** our universe: resting on a body's ground (its own coordinates) */
-  ourLanded: { body: string; q: Vec3 } | null = null;
+  ourLanded: { body: string; q: Vec3; h?: number } | null = null;
 
   /** where the ship rests in our universe (a saved game keeps it) */
   get ourLandedOn() {

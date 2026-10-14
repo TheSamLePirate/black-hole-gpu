@@ -3,7 +3,9 @@
 // simulation frozen and stepped, offline renders and videos posted to the dev server, the bench.
 //   __bh.settings.spin = 0.5; __bh.touch()
 //   __bh.game.help()
-import { bodyFixedOf, groundRelief, toBodyFixed } from "./system/our-surface";
+import { bodyFixedOf, GEAR, gearHeight, groundRelief, toBodyFixed } from "./system/our-surface";
+import { EARTH_RUNWAYS } from "./game/sites";
+import { GEARS } from "./gear";
 import { cartToGeodetic, flatteningOf } from "./system/ellipsoid";
 import { M_METRES, M_SECONDS, solarBody } from "./system/solar";
 import { gpuDiagnostics } from "./gpu-diagnostics";
@@ -462,6 +464,14 @@ export function installBh(c: BhContext) {
           const k = path.times.length - 1;
           return { X: path.pts[k]!, V: path.vels[k]!, t: path.times[k]! };
         },
+        /** a point of the home frame [M] on a body's own turning axes [M] (tests: a craft against a runway) */
+        bodyFixed: (id: string, X: [number, number, number], t: number) => toBodyFixed(id, X, t),
+        /** a home-frame point's height over a body's ground as drawn and flown [m] (the gear's measure: tests) */
+        heightOverGround: (id: string, X: [number, number, number], t: number) => gearHeight(id, X, t) + GEAR,
+        /** the craft's gear (gear.ts GEARS: each leg on the craft's axes) */
+        gears: () => GEARS,
+        /** the Earth's runways as drawn (sites.ts EARTH_RUNWAYS: threshold, landing direction — WGS84) */
+        runways: () => EARTH_RUNWAYS,
         /** where the camera is over the body it is nearest, our side: its geodetic latitude, longitude [°]
          *  and height over the ellipsoid [m] (null: about the hole, or by the Sun alone) */
         geodetic: () => {

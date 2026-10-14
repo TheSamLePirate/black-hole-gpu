@@ -11,6 +11,7 @@
 //   await __bh.game.audit({ planner: true })
 
 import { fleet } from "../fleet";
+import { GEARS } from "../gear";
 import { setMountVessel } from "../mounts";
 import type { Settings, Target } from "../settings";
 import { defaultSettings, pickSettings, QUALITY } from "../settings";
@@ -22,13 +23,15 @@ import { betaToCoord, planetFrame, toGlobal, toLocal, zamoBeta } from "../landin
 import { BODY_NAMES } from "../targeting";
 import { EPOCH_DATE, M_METRES, M_SECONDS, SOLAR_BODIES, solarBody, solarState, spinVector } from "../system/solar";
 import { bodyFixedOf, fromBodyFixed, GEAR, gearHeight, groundVelocity } from "../system/our-surface";
-import { SITES } from "./sites";
+import { EARTH_RUNWAYS, RUNWAY_LENGTH, SITES } from "./sites";
+import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
 import { ourState, soiOf } from "../system/our-side";
 import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { rangerStatus, type RangerStatus } from "./status";
 import {
   orbitOver,
   ourGroundPose,
+  ourGroundPoseOn,
   ourMouthPose,
   ourNearPose,
   ourOrbitPose,
@@ -206,6 +209,24 @@ export class GameTools {
     const s = this.ctx.settings,
       c = this.ctx.camera;
     this.shipOn();
+    // (the pose is the craft's — its nose, its top —: the camera's own axes from them through the view's
+    // mount, as a craft flown to is placed — fleet.ts placeOnPose —; set as the camera's, the chase view's
+    // look down tilted the craft 5–7° nose up on its gear, the cockpit's another way)
+    {
+      // (the view's mount at its place — not still easing from another craft's —: the craft's axes through it)
+      c.settleMount();
+      const S = c.shipMatrix();
+      const up = p.up,
+        f = p.fwd;
+      const left: V3 = [up[1] * f[2] - up[2] * f[1], up[2] * f[0] - up[0] * f[2], up[0] * f[1] - up[1] * f[0]];
+      const ax: [V3, V3, V3] = [left, up, f];
+      const cam = (k: number): V3 => {
+        const v: V3 = [0, 1, 2].map((i) => ax[0][i]! * S[k]![0]! + ax[1][i]! * S[k]![1]! + ax[2][i]! * S[k]![2]!) as V3;
+        const l = Math.hypot(...v) || 1;
+        return [v[0] / l, v[1] / l, v[2] / l];
+      };
+      p = { ...p, fwd: cam(2), up: cam(1) };
+    }
     // (docked, the craft would stay where its station carries it: let go of its links first — no push, it
     // is moved anyway)
     if (c.docked) fleet.links = fleet.links.filter((l) => l.a !== fleet.active && l.b !== fleet.active);
@@ -219,6 +240,8 @@ export class GameTools {
       setRepPose(s, { l: ellOfR(mouth(s).w, r), n: [p.X[0] / r, p.X[1] / r, p.X[2] / r], fwd: p.fwd, up: p.up, vel: p.vel });
     } else setHolePose(s, p.X, p.fwd, p.up, p.vel);
     s.motion = "geodesic";
+    // (a view still carried from a craft just left — controller/camrig.ts —: dropped, the place is this one)
+    c.viewCarry = null;
     c.setCinematic(null);
     c.setPilot(true);
     c.newFlight();
@@ -261,18 +284,20 @@ export class GameTools {
       }
     }
     const site = this.ctx.camera.runwayInUse(found);
-    // (a point along the runway: its threshold moved alongM down its heading — metres on the sphere, close
-    // enough over a hundred metres)
-    const D = Math.PI / 180;
-    const R = 6.371e6;
-    const h = (site.rwy ?? 0) * D;
-    const at = (m: number): [number, number] => [
-      site.lat + (m * Math.cos(h)) / R / D,
-      site.lon + (m * Math.sin(h)) / (R * Math.cos(site.lat * D)) / D,
-    ];
-    const [lat, lon] = at(alongM);
+    // (a point along the runway as it is drawn — its WGS84 frame, sites.ts EARTH_RUNWAYS: the threshold, the
+    // landing direction —, alongM past the end in use; the nose down its axis: a sphere's lat/lon steps put it
+    // 0.3° off, 24 m from the axis at the far end)
+    const R = EARTH_RUNWAYS.find((r) => r.site.name === found.name)!;
+    const rev = !!site.reverse;
+    const pt = (m: number): [number, number] => {
+      const k = rev ? RUNWAY_LENGTH - m : m;
+      const q = R.origin.map((o, i) => o + R.along[i]! * k) as V3;
+      const geo = cartToGeodetic(WGS84_A, WGS84_F, q);
+      return [(geo.lat * 180) / Math.PI, (geo.lon * 180) / Math.PI];
+    };
+    const [lat, lon] = pt(alongM);
     const g = ourGroundPose("earth", lat, lon, t);
-    const ahead = fromBodyFixed("earth", bodyFixedOf("earth", ...at(alongM + 200), 0), t);
+    const ahead = fromBodyFixed("earth", bodyFixedOf("earth", ...pt(alongM + 200), 0), t);
     const d: V3 = [ahead[0] - g.X[0], ahead[1] - g.X[1], ahead[2] - g.X[2]];
     const k = d[0] * g.up[0] + d[1] * g.up[1] + d[2] * g.up[2];
     const f: V3 = [d[0] - k * g.up[0], d[1] - k * g.up[1], d[2] - k * g.up[2]];
@@ -451,7 +476,27 @@ export class GameTools {
       const q: V3 = [Math.cos(lat * D) * Math.cos(lon * D), Math.cos(lat * D) * Math.sin(lon * D), Math.sin(lat * D)];
       return this.placeAt(theirGroundAt(body, q, this.ctx.time(), s.spin, s.massSolar));
     }
-    return this.placeAt(ourGroundPose(body, lat, lon, this.ctx.time()));
+    // (on a runway of the Earth — a site's place, a click on the strip —: lined up on it, on its axis, its
+    // nose down the end in use, that far along it)
+    if (body === "earth") {
+      const D = Math.PI / 180;
+      const q = geodeticToCart(WGS84_A, WGS84_F, lat * D, lon * D, 0);
+      for (const R of EARTH_RUNWAYS) {
+        const d = q.map((x, i) => x - R.origin[i]!);
+        const a = d[0]! * R.along[0] + d[1]! * R.along[1] + d[2]! * R.along[2];
+        const c = d[0]! * R.across[0] + d[1]! * R.across[1] + d[2]! * R.across[2];
+        if (a < -200 || a > RUNWAY_LENGTH + 200 || Math.abs(c) > 150) continue;
+        const rev = !!this.ctx.camera.runwayInUse(R.site).reverse;
+        // (near either end — the site's own place is its published threshold —: at the start of the end in use,
+        // ready to take off; elsewhere on the strip, where it was set)
+        const along = a < 400 || a > RUNWAY_LENGTH - 400 ? 60 : Math.min(Math.max(rev ? RUNWAY_LENGTH - a : a, 60), RUNWAY_LENGTH - 60);
+        return this.lineUp(R.site.name, along);
+      }
+    }
+    // (on its gear, as the ground under each leg has it — a slope tilts it —, its nose where it pointed)
+    const hd = (this.ctx.camera.attitudeNow() as { heading?: number }).heading;
+    const heading = Number.isFinite(hd) ? (hd! * 180) / Math.PI : 90;
+    return this.placeAt(ourGroundPoseOn(body, lat, lon, this.ctx.time(), GEARS[fleet.active]?.legs ?? null, heading, GEAR));
   }
 
   /**

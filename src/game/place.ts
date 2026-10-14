@@ -9,7 +9,7 @@ import { properBodyAxes } from "../system/local-patch";
 import type { Vec3 } from "../physics";
 import { eclipticOf, poleAxes, solarBody, solarState, spinVector, M_METRES, SOLAR_BODIES } from "../system/solar";
 import { soiOf } from "../system/our-side";
-import { figureUp, fromBodyFixed, groundPointOf, groundVelocity, solidBody } from "../system/our-surface";
+import { figureUp, fromBodyFixed, groundPointOf, groundVelocity, heightOverGround, solidBody } from "../system/our-surface";
 import { body as sysBody, GARGANTUA_SYSTEM } from "../system/bodies";
 import { circularOrbit } from "../system/kerr-orbits";
 import { GEAR as HOLE_GEAR, groundR, localToZamo, planetFrame, toGlobal, zamoBeta } from "../landing";
@@ -36,7 +36,8 @@ export interface Pose {
   fwd: Vec3;
   up: Vec3;
   /** landed on a body: its id and the place in its own (turning) coordinates */
-  landed?: { body: string; q: Vec3 };
+  /** set down: on its body's axes [M]; `h` its origin's height over the ground there [m] (none: the gear's) */
+  landed?: { body: string; q: Vec3; h?: number };
   /** Landed proper local coordinates on a Gargantua world. */
   localLanded?: { body: string; xi: Vec3 };
   /** a line for the log */
@@ -129,6 +130,102 @@ export function ourGroundPose(id: string, lat: number, lon: number, t: number): 
     landed: { body: id, q },
     note: `${b.name}: landed at ${lat.toFixed(2)}°, ${lon.toFixed(2)}°`,
   };
+}
+
+/**
+ * Set down on the ground where its gear stands (our solid worlds): the relief sampled under each leg — the
+ * craft's footprints, `legs` on its own axes (x left, z the nose) —, a plane through them (least squares), the
+ * craft on it: its top that plane's normal, its gear's height over it at its centre, its nose `headingDeg`
+ * (from the north) laid along it. A runway graded flat: level; a hillside: tilted as its wheels or feet sit.
+ * No legs: the figure's normal (as ourGroundPose).
+ */
+export function ourGroundPoseOn(
+  id: string,
+  lat: number,
+  lon: number,
+  t: number,
+  legs: { at: Vec3 }[] | null,
+  headingDeg = 90,
+  gear = 0,
+): Pose {
+  const base = ourGroundPose(id, lat, lon, t);
+  const D = Math.PI / 180;
+  // (the frame at the place, on the body's axes: geodetic up, north, east)
+  const la = lat * D,
+    lo = lon * D;
+  const n0: Vec3 = [Math.cos(la) * Math.cos(lo), Math.cos(la) * Math.sin(lo), Math.sin(la)];
+  const north: Vec3 = [-Math.sin(la) * Math.cos(lo), -Math.sin(la) * Math.sin(lo), Math.cos(la)];
+  const east: Vec3 = [-Math.sin(lo), Math.cos(lo), 0];
+  const h = headingDeg * D;
+  const f0: Vec3 = [0, 1, 2].map((i) => north[i]! * Math.cos(h) + east[i]! * Math.sin(h)) as Vec3;
+  const l0 = cross(n0, f0);
+  const g0 = groundPointOf(id, lat, lon, 0);
+  const R = (solarBody(id)?.radius ?? 1) * M_METRES;
+  // (each footprint's ground: its height over the place's plane, where it stands on the craft's axes)
+  const pts = (legs ?? []).map((L) => {
+    const off: Vec3 = [0, 1, 2].map((i) => l0[i]! * L.at[0]! + f0[i]! * L.at[2]!) as Vec3;
+    const dn = dot(off, north),
+      de = dot(off, east);
+    const q = groundPointOf(id, lat + dn / R / D, lon + de / (R * Math.cos(la)) / D, 0);
+    const d = sub(q, g0).map((x) => x * M_METRES) as Vec3;
+    return { x: L.at[0]!, y: L.at[2]!, z: dot(d, n0) };
+  });
+  let n = n0,
+    a = 0;
+  if (pts.length >= 3) {
+    // (z = a + b x + c y by least squares: the normal n0 − b l0 − c f0)
+    const N = pts.length;
+    let sx = 0,
+      sy = 0,
+      sz = 0,
+      sxx = 0,
+      syy = 0,
+      sxy = 0,
+      sxz = 0,
+      syz = 0;
+    for (const p of pts) {
+      sx += p.x;
+      sy += p.y;
+      sz += p.z;
+      sxx += p.x * p.x;
+      syy += p.y * p.y;
+      sxy += p.x * p.y;
+      sxz += p.x * p.z;
+      syz += p.y * p.z;
+    }
+    // (centred: the normal equations of b, c; a the mean height less their part)
+    const mx = sx / N,
+      my = sy / N,
+      mz = sz / N;
+    const Cxx = sxx / N - mx * mx,
+      Cyy = syy / N - my * my,
+      Cxy = sxy / N - mx * my;
+    const Cxz = sxz / N - mx * mz,
+      Cyz = syz / N - my * mz;
+    const det = Cxx * Cyy - Cxy * Cxy;
+    if (Math.abs(det) > 1e-9) {
+      const b = (Cxz * Cyy - Cyz * Cxy) / det,
+        c = (Cyz * Cxx - Cxz * Cxy) / det;
+      a = mz - b * mx - c * my;
+      const m = [0, 1, 2].map((i) => n0[i]! - b * l0[i]! - c * f0[i]!) as Vec3;
+      const lm = Math.hypot(...m);
+      n = [m[0] / lm, m[1] / lm, m[2] / lm];
+    }
+  }
+  // (the craft's centre: on the plane over the place, its gear's height along the plane's normal)
+  const qc: Vec3 = [0, 1, 2].map((i) => g0[i]! + (n0[i]! * a + n[i]! * gear) / M_METRES) as Vec3;
+  const X = fromBodyFixed(id, qc, t);
+  const dir = (v: Vec3): Vec3 => {
+    const e = 1e-9;
+    const P = fromBodyFixed(id, [qc[0] + v[0] * e, qc[1] + v[1] * e, qc[2] + v[2] * e], t);
+    const d = sub(P, X);
+    const l = Math.hypot(...d) || 1;
+    return [d[0] / l, d[1] / l, d[2] / l];
+  };
+  // (the nose along the plane)
+  const fp = sub(f0, [n[0] * dot(f0, n), n[1] * dot(f0, n), n[2] * dot(f0, n)]);
+  // (its height over the ground at its centre kept: on a slope more than the gear's — each wheel on the ground)
+  return { ...base, X, vel: groundVelocity(id, X, t), fwd: dir(fp), up: dir(n), landed: { body: id, q: qc, h: heightOverGround(id, qc) } };
 }
 
 /**

@@ -284,7 +284,8 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     // (to 5 cm: the gear's stroke is 0.45 m — set a metre low, as 1 m allowed with the old 6 m legs, the
     // Ranger sat on its bottomed oleos and was flung up as it moved off — PLAN-COCKPIT K4b)
     // (on its belly — gear up —: its belly on the ground, not its gear's height)
-    const off = (this.onBelly ? 0 : GEAR) - heightOverGround(L.body, L.q);
+    // (set down on a slope: its own height — each wheel on the ground —, kept as the ground comes)
+    const off = (this.onBelly ? 0 : (L.h ?? GEAR)) - heightOverGround(L.body, L.q);
     if (Math.abs(off) > 0.05) {
       const k = 1 + off / M_METRES / qr;
       L.q = [L.q[0] * k, L.q[1] * k, L.q[2] * k];
