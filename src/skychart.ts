@@ -17,6 +17,7 @@ import { homeToRep, ourState } from "./system/our-side";
 import { eclOf, equatorOfDate } from "./system/orientation";
 import { bodyPole, M_METRES, SOLAR_BODIES, utcOf } from "./system/solar";
 import { apparentAltitude } from "./system/refraction";
+import { cartToGeodetic, flatteningOf } from "./system/ellipsoid";
 import { tdbOf } from "./system/timescale";
 import { mouth } from "./wormhole";
 import { cross, dot, lin } from "./math/vec3";
@@ -102,8 +103,18 @@ export function horizonOf(X: Vec3, t: number): Horizon | null {
     const r = Math.hypot(X[0] - C[0], X[1] - C[1], X[2] - C[2]);
     const h = (r - b.radius) / b.radius;
     if (h >= bh) continue;
-    const zenith = unit([X[0] - C[0], X[1] - C[1], X[2] - C[2]]);
     const pole = bodyPole(b, t);
+    // (the zenith is the figure's normal there — the Earth's geodetic up, WGS84: the altitudes and azimuths a
+    // map, a GPS, an ephemeris give —, not the direction from its centre, 0.19° off it at 45°)
+    const d: Vec3 = [X[0] - C[0], X[1] - C[1], X[2] - C[2]];
+    const zp = dot(d, pole);
+    const rho = Math.hypot(d[0] - zp * pole[0], d[1] - zp * pole[1], d[2] - zp * pole[2]);
+    const f = flatteningOf(b.id);
+    let zenith = unit(d);
+    if (f > 0 && rho > 1e-30) {
+      const la = cartToGeodetic(b.radius, f, [rho, 0, zp]).lat;
+      zenith = [0, 1, 2].map((i) => ((d[i]! - zp * pole[i]!) / rho) * Math.cos(la) + pole[i]! * Math.sin(la)) as Vec3;
+    }
     let east = cross(pole, zenith);
     if (Math.hypot(...east) < 1e-9) east = cross([0, 0, 1], zenith);
     east = unit(east);

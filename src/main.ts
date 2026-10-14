@@ -1,6 +1,7 @@
 import { SceneryHitboxes } from "./ui/scenery-hitboxes";
 import { planetFrame, toLocal } from "./landing";
 import { cartToGeodetic, flatteningOf, WGS84_A, WGS84_F } from "./system/ellipsoid";
+import { setSceneryContact } from "./system/scenery-contact";
 import { groundVelocity } from "./system/our-surface";
 import { CharacterHud } from "./ui/characterhud";
 import { FootHud, type CompassMark } from "./ui/foothud";
@@ -33,7 +34,8 @@ import { downloadGpuDiagnostic, globalErrorRouter, gpuDiagnostics } from "./gpu-
 import { horizon, isco } from "./physics";
 import { cameraFrame, repPose, setHolePose, setHomePose, switchAnchor } from "./camera";
 import { bodyView, earthGround, earthStart, ourState, referenceBody, saturnDeparture, tiltAway } from "./system/our-side";
-import { toBodyFixed } from "./system/our-surface";
+import { fromBodyFixed, toBodyFixed } from "./system/our-surface";
+import { lin as lin3, sub as sub3 } from "./math/vec3";
 import { theirFlightPose, theirGroundPose, theirOrbitPose, universeOf } from "./game/place";
 import { CameraController, isTyping } from "./controls";
 import { effectiveBindings, freeCameraKeys } from "./input/bindings";
@@ -60,14 +62,16 @@ import {
   eclipseLayout,
   eclipsePlan,
   type EclipseSeqOptions,
+  type Framing,
   MX_EV,
+  outsideView,
   placeFrames,
   skyMarks,
 } from "./photo/plans";
 import { type MoonPathOptions, moonPathPlan, type TrailsOptions, trailsPlan } from "./photo/sky-series";
 import { drawIssTrail, issPasses, issPhotoPlan, issSight } from "./photo/iss-pass";
 import { transits } from "./eclipse/moons";
-import { MultiExposureDialog } from "./ui/multiexposure";
+import { type MxKind, MultiExposureDialog } from "./ui/multiexposure";
 import { bestPlace } from "./eclipse/details";
 import type { EclipseEvent } from "./eclipse/search";
 import { skyNow } from "./system/sky-now";
@@ -105,6 +109,7 @@ import {
   chartOptions,
   CONSTELLATIONS,
   horizonAt,
+  horizonOf,
   lookOf,
   NAMED_STARS,
   pickChart,
@@ -806,6 +811,8 @@ async function main() {
   // (one waking per event, every rule it woke in it; a waking left waiting more than 90 s let go: stale)
   const tarsWakeQueue: { rules: Trigger[]; e: GameEvent | null; at: number }[] = [];
   camera.character.contact = () => (settings.earthTerrain && renderer.earthScenery.supported ? renderer.earthScenery.contact : null);
+  // (the same scenery for a tripod's stand: controller/rig.ts)
+  setSceneryContact(() => camera.character.contact());
   camera.character.terrainRevision = () => renderer.earthTiles.stamp;
   camera.character.surface = (body, q) => body !== "earth" || renderer.earthLandAt(q);
   camera.character.hullBounds = () => renderer.ship.hullBound(settings.vessel);
@@ -1487,6 +1494,8 @@ async function main() {
     const kept = exposedForOurSide ? KEEP_ON_PRESET.filter((k) => k !== "exposure" && k !== "bgIntensity") : KEEP_ON_PRESET;
     const keep = Object.fromEntries(kept.map((k) => [k, settings[k]]));
     exposedForOurSide = pose !== undefined;
+    // (a scene is a cut: its view placed as it is, not turned to from the one before)
+    camera.rig.cut = true;
     mission.stop();
     // (a scene without the ship: the view is placed, not falling)
     if (!(preset.ship ?? settings.ship) && (camera.piloting || camera.gravity)) camera.setPilot(false);
@@ -2750,6 +2759,7 @@ async function main() {
       render: () => renderDialog.toggle(true),
       atlas: () => atlas.open(),
       skyEvents: () => void skyEventsToggle(),
+      multiExposure: () => openMultiExposure(),
       place: () => placePanel.open(),
       time: () => timePanel.open(),
       weather: () => weatherPanel.open(),
@@ -3018,7 +3028,7 @@ async function main() {
       playPause: (on) => playPause(on),
       png: () => void savePNG(),
       render: () => renderDialog.toggle(),
-      multi: () => void mxDialog.open(),
+      multi: () => openMultiExposure(),
       video: {
         shots: () => renderDialog.shots(),
         start: (o) => renderDialog.startVideo(o),
@@ -3212,6 +3222,12 @@ async function main() {
       { label: { fr: "Vue", en: "View" }, key: "V", run: () => nextView(1) },
       { label: { fr: "Regarder la cible", en: "Look at target" }, key: "C", on: settings.lookAt, run: toggleLookAt },
       { label: { fr: "Télescope", en: "Telescope" }, key: "Y", on: settings.telescope, run: toggleTelescope },
+      ...(framedView()
+        ? [
+            { label: { fr: "Le ciel d'ici", en: "The sky from here" }, key: "⇧F8", run: () => void skyEventsToggle() },
+            { label: { fr: "Surimpression", en: "Multiple exposure" }, run: () => openMultiExposure() },
+          ]
+        : []),
       {
         label: { fr: "Scène", en: "Scene" },
         sub: [
@@ -3327,15 +3343,17 @@ async function main() {
       time: sim.time,
       water: renderer.water.clock,
       ev: renderer.autoExposureEV,
+      view: viewHold(),
     }),
     restore: (x) => {
-      const b = x as { save: GameSave; settings: Settings; time: number; water: number; ev: number };
+      const b = x as { save: GameSave; settings: Settings; time: number; water: number; ev: number; view: ReturnType<typeof viewHold> };
       tools.load(b.save, { quiet: true });
       Object.assign(settings, b.settings);
       sim.setTime(b.time);
       renderer.water.clock = b.water;
       renderer.autoExposureEV = b.ev;
       camera.sync();
+      if (b.view) viewBack(b.view);
       refreshGui();
       touch();
       touchDisplay();
@@ -3587,7 +3605,8 @@ async function main() {
     const p = ch.place();
     if (!p) return t("Tripod here: walk on a world first (F2)");
     if (!ch.ours) return t("The tripod stands on our worlds: the Earth, the Moon, Mars and the others");
-    const why = cameraAt(p.body, p.lat, p.lon, { ground: true, heading: p.viewDeg });
+    // (looking as his camera looked: its height over the horizon kept, not levelled)
+    const why = cameraAt(p.body, p.lat, p.lon, { ground: true, heading: p.viewDeg, pitch: framedView()?.alt });
     if (!why)
       panel.toast(
         tf("Tripod on {0}, looking {1}° — the sky's events from here (⇧F8)", BODY_NAMES[p.body as Target] ?? p.body, Math.round(p.viewDeg)),
@@ -3714,17 +3733,32 @@ async function main() {
   // the sky's events from here (ui/skyevents.ts, PLAN-MODES-AAA M7): from where one stands on the Earth (walking, on
   // the tripod, the free camera over the ground) and the way one looks — each event gone to (the tripod set, the
   // time, the aim), lived (its exposures taken and stacked in the game: ui/livecapture.ts) or rendered
+  /**
+   * The view framed on the Earth's ground — on foot (his shoulder's camera), on the tripod, the free camera near the
+   * ground —: where it stands (its own place, geodetic), the way it looks (the screen's centre: azimuth from the north,
+   * altitude [°]) and its vertical field [°]; null elsewhere (flying a ship, off the Earth). What a multiple exposure
+   * takes "from this view", the sky's events "from here".
+   */
+  function framedView(): { lat: number; lon: number; az: number; alt: number; fov: number } | null {
+    if (settings.ship && camera.piloting && !camera.spectating && !camera.character.active) return null;
+    const vc = camera.viewController();
+    const g = vc.groundBelow(0.02);
+    if (!g || g.body !== "earth") return null;
+    // (the view's place and look on the home axes — the camera's own frame is the wormhole's representation)
+    const w = vc.rigWorld();
+    const hz = w?.ours ? horizonOf(w.X, vc.viewTime()) : null;
+    if (!w || !hz) return null;
+    const [alt, az] = altAzOf(hz, w.fwd);
+    return { lat: g.lat, lon: g.lon, az, alt, fov: camera.viewSettings().fov };
+  }
   /** Where one stands on the Earth's ground and the way the view looks (null: not there). */
   function skyPlace(): SkyPlace | null {
-    const cam = cameraFrame(settings);
-    const hz = horizonAt(settings, cam, sim.time);
-    const look = hz ? altAzOf(hz, cam.fwd as Vec3) : null;
-    const view = look ? { az: look[1], alt: look[0] } : { az: 0, alt: 0 };
+    const v = framedView();
+    if (!v) return null;
+    // (on foot: from where he stands, facing as he faces — his camera is over his shoulder)
     const p = camera.character.place();
-    if (p) return p.body === "earth" ? { lat: p.lat, lon: p.lon, view: { ...view, az: p.viewDeg } } : null;
-    if (settings.ship && !camera.spectating) return null;
-    const g = camera.viewController().groundBelow(0.02);
-    return g && g.body === "earth" ? { lat: g.lat, lon: g.lon, view } : null;
+    if (p) return p.body === "earth" ? { lat: p.lat, lon: p.lon, view: { az: p.viewDeg, alt: v.alt } } : null;
+    return { lat: v.lat, lon: v.lon, view: { az: v.az, alt: v.alt } };
   }
   /** The tripod at a place of the Earth, the clock at a time, looking at (az, alt) through a field [°]: why not, or null. */
   function skyAim(lat: number, lon: number, o: { ms: number; az: number; alt: number; fov: number }): string | null {
@@ -3791,6 +3825,7 @@ async function main() {
       void liveCapture.run({ title: o.title, times: o.times, stem: o.stem, render: o.render, overlay });
     },
     render: (kind, fill) => void mxDialog.open({ kind, fill }),
+    fromView: () => openMultiExposure(),
   });
   /** The sky's events from here, opened or closed: why not, or null. */
   function skyEventsToggle(): string | null {
@@ -3849,6 +3884,15 @@ async function main() {
       run: () => void skyEventsToggle(),
       prio: 3,
       testid: "topbar-skyevents",
+    });
+    topBar.add({
+      id: "btn-multiexposure",
+      label: t("Multiple exposure from this view: an analemma, star trails, the Moon's way, an eclipse, the ISS — framed as you framed it"),
+      icon: TB_ICONS.multiExposure,
+      run: () => openMultiExposure(),
+      modes: ["foot", "free", "photo"],
+      prio: 3,
+      testid: "topbar-multiexposure",
     });
     topBar.add({
       id: "btn-place",
@@ -3949,11 +3993,56 @@ async function main() {
   }
   // multiple exposures (photo/multiexposure.ts, PLAN-CIEL C8–C10): a tripod's series rendered offline and
   // blended — the analemma, an eclipse's phases, the stars' trails; the game put back after
+  /**
+   * The view as the player framed it on the Earth's ground — a tripod, the free camera, a spectator's — its place
+   * and its look on the Earth's own axes, how it is held, its lens: given back as it was after a series or a video
+   * (the walker is the save's own). Null: none framed there.
+   */
+  function viewHold() {
+    if (camera.character.active || !framedView()) return null;
+    const vc = camera.viewController();
+    const w = vc.rigWorld();
+    if (!w?.ours) return null;
+    const t = vc.viewTime();
+    const q = toBodyFixed("earth", w.X, t);
+    const dir = (v: Vec3) => sub3(toBodyFixed("earth", lin3(w.X, 1, v, 1e-6), t), q);
+    const s = vc.s;
+    return {
+      spectating: camera.spectating,
+      q,
+      f: dir(w.fwd),
+      u: dir(w.up),
+      rotation: s.rotation,
+      standH: vc.rig.standH,
+      fov: s.fov,
+      lookAt: s.lookAt,
+      telescope: s.telescope,
+      target: s.target,
+    };
+  }
+  /** A view held, given back at the scene's clock as restored. */
+  function viewBack(h: NonNullable<ReturnType<typeof viewHold>>) {
+    if (h.spectating && !camera.spectating) setSpectator(true);
+    const vc = camera.viewController();
+    const t = vc.viewTime();
+    const X = fromBodyFixed("earth", h.q, t);
+    const to = (d: Vec3): Vec3 => {
+      const v = sub3(fromBodyFixed("earth", lin3(h.q, 1, d, 1), t), X);
+      const l = Math.hypot(...v);
+      return [v[0] / l, v[1] / l, v[2] / l];
+    };
+    vc.rig.cut = true;
+    vc.rigPlace(true, X, to(h.f), to(h.u), groundVelocity("earth", X, t));
+    Object.assign(vc.s, { rotation: h.rotation, fov: h.fov, lookAt: h.lookAt, telescope: h.telescope, target: h.target });
+    vc.rig.key = "";
+    vc.rig.standH = h.standH;
+  }
   const mxSnapshot = () => ({
     save: tools.snapshot("before the multiple exposure"),
     settings: { ...settings },
     time: sim.time,
     ev: renderer.autoExposureEV,
+    view: viewHold(),
   });
   const mxHost: MxHost = {
     settings,
@@ -4010,26 +4099,32 @@ async function main() {
       sim.setTime(b.time);
       renderer.autoExposureEV = b.ev;
       camera.sync();
+      // (the view as it was framed: its tripod, its look, its lens)
+      if (b.view) viewBack(b.view);
       refreshGui();
       touch();
       touchDisplay();
     },
     active: (on) => {
+      // (the player's hands off the view, the game's on it: each frame's tripod set and aimed by the rig)
       camera.enabled = !on;
+      camera.placedByGame = on;
+      if (on) {
+        camera.keys.clear();
+        camera.codes.clear();
+      }
       document.body.classList.toggle("offline", on);
       touch();
     },
   };
-  /** An analemma made (its options as the dialog gives them; the place and the date default to the game's). */
-  const runAnalemma = (
-    o: Partial<Omit<Parameters<typeof analemmaPlan>[0], "template">> & { width?: number; height?: number; spp?: number; mask?: boolean },
-    progress: (p: { done: number; total: number; label: string }) => void = () => {},
-    signal = { stop: false },
-  ) => {
+  /** What a framing of the player's own leaves out of the image: how many of the subject's places (the Suns, the
+   *  phases, the Moons, the station's way), of how many — none asked when the series framed itself. */
+  const framedOut = (asked: Framing | undefined, view: Framing, pts: { az: number; alt: number }[], aspect: number) =>
+    asked ? { n: outsideView(view, pts, aspect), of: pts.length } : undefined;
+  /** An analemma planned (its options as the dialog gives them; the place and the date default to the game's). */
+  const planAnalemma = (o: Partial<Omit<Parameters<typeof analemmaPlan>[0], "template">> & { width?: number; height?: number }) => {
     const p = camera.weatherPlace();
-    const width = o.width ?? 1200,
-      height = o.height ?? 1600;
-    const plan = analemmaPlan({
+    return analemmaPlan({
       lat: o.lat ?? (p?.body === "earth" ? p.lat : 48.86),
       lon: o.lon ?? (p?.body === "earth" ? p.lon : 2.35),
       minutesUtc: o.minutesUtc ?? 12 * 60,
@@ -4037,16 +4132,34 @@ async function main() {
       cadence: o.cadence ?? 7,
       count: o.count,
       base: o.base ?? "dusk",
-      aspect: width / height,
+      aspect: (o.width ?? 1200) / (o.height ?? 1600),
       template: mxTemplate(),
       sunEV: o.sunEV ?? 9,
+      view: o.view,
     });
+  };
+  /** An analemma made (its options as the dialog gives them; the place and the date default to the game's). */
+  const runAnalemma = (
+    o: Partial<Omit<Parameters<typeof analemmaPlan>[0], "template">> & { width?: number; height?: number; spp?: number; mask?: boolean },
+    progress: (p: { done: number; total: number; label: string }) => void = () => {},
+    signal = { stop: false },
+  ) => {
+    const width = o.width ?? 1200,
+      height = o.height ?? 1600;
+    const plan = planAnalemma(o);
     const marks = analemmaMarks(plan.suns, plan.view, width, height);
+    const outside = framedOut(
+      o.view,
+      plan.view,
+      plan.suns.filter((x) => x.alt > -1),
+      width / height,
+    );
     const frames = o.mask === false ? plan.frames : placeFrames(plan.frames, marks, 2);
     return runExposures(mxHost, frames, { width, height, spp: o.spp ?? 2, baseSpp: 32 }, progress, signal).then((r) => ({
       ...r,
       view: plan.view,
       marks,
+      outside,
     }));
   };
   /** An eclipse's sequence planned (PLAN-CIEL C9): the nearest solar or lunar eclipse to a date, from a place. */
@@ -4081,6 +4194,7 @@ async function main() {
       phaseEV: o.phaseEV ?? (kind === "solar" ? MX_EV.sun : MX_EV.moon),
       centralComp: o.centralComp ?? MX_EV.central,
       insets: o.insets,
+      view: o.view,
     });
   };
   /** An eclipse's sequence made. */
@@ -4141,11 +4255,13 @@ async function main() {
       central: of.central,
     }));
     const frames = o.mask === false ? plan.frames : placeFrames(plan.frames, marks);
+    const outside = framedOut(o.view, plan.view, plan.moments, width / height);
     return runExposures(mxHost, frames, { width, height, spp: o.spp ?? 4, baseSpp: 32 }, progress, signal).then((r) => ({
       ...r,
       view: plan.view,
       eclipse: plan.eclipse,
       marks,
+      outside,
     }));
   };
   /** The star trails made (PLAN-CIEL C10): hours of a night's frames from the tripod. */
@@ -4169,6 +4285,7 @@ async function main() {
       template: mxTemplate(o.sky ?? "clear"),
       comp: o.comp ?? -1.5,
       comet: o.comet ?? false,
+      view: o.view,
     });
     if (!plan) return Promise.reject(new Error("No dark night there then (the Sun never goes 12° under the horizon)"));
     return runExposures(mxHost, plan.frames, { width, height, spp: o.spp ?? 2 }, progress, signal).then((r) => ({
@@ -4183,10 +4300,22 @@ async function main() {
     progress: (p: { done: number; total: number; label: string }) => void = () => {},
     signal = { stop: false },
   ) => {
-    const p = camera.weatherPlace();
     const width = o.width ?? 1920,
       height = o.height ?? 1080;
-    const plan = moonPathPlan({
+    const plan = planMoonPath(o);
+    if (!plan) return Promise.reject(new Error("The Moon is not up then"));
+    const marks = skyMarks(plan.moments, plan.view, width, height).map(({ of, ...m }) => ({ ...m, hidden: of.lit }));
+    const outside = framedOut(o.view, plan.view, plan.moments, width / height);
+    return runExposures(mxHost, placeFrames(plan.frames, marks), { width, height, spp: o.spp ?? 4, baseSpp: 32 }, progress, signal).then(
+      (r) => ({ ...r, view: plan.view, marks, outside }),
+    );
+  };
+  /** The Moon's way planned. */
+  const planMoonPath = (
+    o: Partial<Omit<MoonPathOptions, "template" | "aspect">> & { width?: number; height?: number; sky?: "game" | "clear" },
+  ) => {
+    const p = camera.weatherPlace();
+    return moonPathPlan({
       mode: o.mode ?? "night",
       lat: o.lat ?? (p?.body === "earth" ? p.lat : 48.86),
       lon: o.lon ?? (p?.body === "earth" ? p.lon : 2.35),
@@ -4197,18 +4326,44 @@ async function main() {
       minutesUtc: o.minutesUtc,
       framing: o.framing ?? "landscape",
       base: o.base ?? ((o.mode ?? "night") === "night" ? "middle" : "none"),
-      aspect: width / height,
+      aspect: (o.width ?? 1920) / (o.height ?? 1080),
       template: mxTemplate(o.sky ?? "clear"),
       comp: o.comp ?? 0,
+      view: o.view,
     });
-    if (!plan) return Promise.reject(new Error("The Moon is not up then"));
-    const marks = skyMarks(plan.moments, plan.view, width, height).map(({ of, ...m }) => ({ ...m, hidden: of.lit }));
-    return runExposures(mxHost, placeFrames(plan.frames, marks), { width, height, spp: o.spp ?? 4, baseSpp: 32 }, progress, signal).then(
-      (r) => ({ ...r, view: plan.view, marks }),
-    );
   };
   /** The station's passes seen from a place over days (PLAN-CIEL C10). */
   const issPassesHere = (lat: number, lon: number, from: number, days = 10) => issPasses(lat, lon, from, days);
+  /** An ISS pass planned: the pass nearest the date asked (those of the day before to ten days on), its photograph. */
+  const planIss = (o: {
+    lat?: number;
+    lon?: number;
+    date?: number;
+    framing?: "landscape" | "sky";
+    width?: number;
+    height?: number;
+    sky?: "game" | "clear";
+    view?: Framing;
+  }) => {
+    const p = camera.weatherPlace();
+    const lat = o.lat ?? (p?.body === "earth" ? p.lat : 48.86),
+      lon = o.lon ?? (p?.body === "earth" ? p.lon : 2.35);
+    const at = o.date ?? utcOf(sim.time);
+    const passes = issPasses(lat, lon, at - 86400e3, 11);
+    if (!passes.length) throw new Error("No ISS pass seen from there in those days");
+    const pass = passes.reduce((a, b) => (Math.abs(b.top - at) < Math.abs(a.top - at) ? b : a));
+    const plan = issPhotoPlan({
+      lat,
+      lon,
+      pass,
+      framing: o.framing ?? "landscape",
+      aspect: (o.width ?? 1920) / (o.height ?? 1080),
+      template: mxTemplate(o.sky ?? "clear"),
+      comp: -2,
+      view: o.view,
+    });
+    return { plan, pass };
+  };
   /** An ISS pass photographed: the landscape at its middle, its trail laid over it. */
   const runIss = async (
     o: {
@@ -4222,40 +4377,72 @@ async function main() {
       height?: number;
       spp?: number;
       sky?: "game" | "clear";
+      view?: Framing;
     },
     progress: (p: { done: number; total: number; label: string }) => void = () => {},
     signal = { stop: false },
   ) => {
-    const p = camera.weatherPlace();
     const width = o.width ?? 1920,
       height = o.height ?? 1080;
-    const lat = o.lat ?? (p?.body === "earth" ? p.lat : 48.86),
-      lon = o.lon ?? (p?.body === "earth" ? p.lon : 2.35);
-    const at = o.date ?? utcOf(sim.time);
-    // (the pass nearest the date asked: those of the day before to ten days on)
-    const passes = issPasses(lat, lon, at - 86400e3, 11);
-    if (!passes.length) throw new Error("No ISS pass seen from there in those days");
-    const pass = passes.reduce((a, b) => (Math.abs(b.top - at) < Math.abs(a.top - at) ? b : a));
-    const plan = issPhotoPlan({
-      lat,
-      lon,
-      pass,
-      framing: o.framing ?? "landscape",
-      aspect: width / height,
-      template: mxTemplate(o.sky ?? "clear"),
-      comp: -2,
-    });
+    const { plan, pass } = planIss(o);
     const r = await runExposures(mxHost, plan.frames, { width, height, spp: o.spp ?? 4, baseSpp: 32 }, progress, signal);
     drawIssTrail(r.data, width, height, plan.view, plan.track, { dashes: o.dashes, exposure: o.exposure });
     // (its ends and its highest, for the labels)
     const pick = [plan.track[0]!, plan.track.reduce((a, b) => (b.alt > a.alt ? b : a)), plan.track.at(-1)!];
     const marks = skyMarks(pick, plan.view, width, height).map(({ of: _, ...m }) => ({ ...m, r: 3 }));
-    return { ...r, view: plan.view, marks, pass };
+    const outside = framedOut(o.view, plan.view, plan.track, width / height);
+    return { ...r, view: plan.view, marks, pass, outside };
   };
+  /** The multiple exposure's dialog — the photo bar, the top bar, the wheel, the pause menu, the sky's events —: taken
+   *  "from this view" when one is framed on the Earth's ground. */
+  function openMultiExposure(kind?: MxKind) {
+    void mxDialog.open(kind ? { kind } : {});
+  }
   const mxDialog = new MultiExposureDialog({
     place: () => {
       const p = camera.weatherPlace();
       return p && p.body === "earth" ? { lat: p.lat, lon: p.lon } : null;
+    },
+    view: () => framedView(),
+    // (before a series is run from the player's framing: what of its subject that framing leaves out)
+    outside: async (r) => {
+      if (!r.view) return null;
+      const o = { ...r, base: undefined, sky: r.sky };
+      const aspect = r.width / r.height;
+      if (r.kind === "analemma") {
+        const p = planAnalemma({ ...o, minutesUtc: r.minutesUtc, start: r.start, cadence: r.cadence });
+        return (
+          framedOut(
+            r.view,
+            p.view,
+            p.suns.filter((x) => x.alt > -1),
+            aspect,
+          ) ?? null
+        );
+      }
+      if (r.kind === "eclipse") {
+        const p = planEclipse({
+          kind: r.eclipse === "lunar" ? "lunar" : "solar",
+          date: r.date,
+          lat: r.lat,
+          lon: r.lon,
+          before: r.before,
+          after: r.after,
+          width: r.width,
+          height: r.height,
+          view: r.view,
+        });
+        return p ? (framedOut(r.view, p.view, p.moments, aspect) ?? null) : null;
+      }
+      if (r.kind === "moon") {
+        const p = planMoonPath({ ...o, mode: r.mode, base: undefined });
+        return p ? (framedOut(r.view, p.view, p.moments, aspect) ?? null) : null;
+      }
+      if (r.kind === "iss") {
+        const { plan: p } = planIss(o);
+        return framedOut(r.view, p.view, p.track, aspect) ?? null;
+      }
+      return null;
     },
     now: () => utcOf(sim.time),
     run: (r, progress, signal) => {
@@ -4278,6 +4465,7 @@ async function main() {
             width: r.width,
             height: r.height,
             spp: r.spp,
+            view: r.view,
           },
           progress,
           signal,
@@ -4297,6 +4485,7 @@ async function main() {
             width: r.width,
             height: r.height,
             spp: r.spp,
+            view: r.view,
           },
           progress,
           signal,
@@ -4318,6 +4507,7 @@ async function main() {
             width: r.width,
             height: r.height,
             spp: r.spp,
+            view: r.view,
           },
           progress,
           signal,
@@ -4335,6 +4525,7 @@ async function main() {
             width: r.width,
             height: r.height,
             spp: r.spp,
+            view: r.view,
           },
           progress,
           signal,
@@ -4557,6 +4748,7 @@ async function main() {
     },
     utcNow: () => utcOf(sim.time),
     multiExposure: (r) => mxDialog.open({ kind: r.kind, run: r }),
+    framedView: () => framedView(),
     issPasses: (lat, lon, from, days) => issPasses(lat, lon, from, days),
     seeEclipse: async (kind, t, place) => {
       const r = await plan<{ events: EclipseEvent[] } | { error: string }>({
@@ -4771,7 +4963,19 @@ async function main() {
       voiceSynth: async (text: string, model: string) => (await deepgramVoice.synth(text, model))?.length ?? 0,
     },
     skyLoading,
-    mx: { runAnalemma, runEclipse, runTrails, runMoonPath, runIss, issPasses: issPassesHere, planEclipse, host: mxHost, dialog: mxDialog },
+    mx: {
+      runAnalemma,
+      runEclipse,
+      runTrails,
+      runMoonPath,
+      runIss,
+      issPasses: issPassesHere,
+      planEclipse,
+      host: mxHost,
+      dialog: mxDialog,
+      /** the view framed on the Earth's ground ("from this view"), or null */
+      framedView,
+    },
     touch,
     resize,
     refreshGui,

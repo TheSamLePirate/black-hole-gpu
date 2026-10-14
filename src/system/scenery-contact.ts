@@ -199,3 +199,52 @@ export class SceneryContact {
     return { blocked, support };
   }
 }
+
+/** The scenery the game stands in now (main.ts sets it: the Earth's near the camera, when drawn), for what is not
+ *  the walker's — a tripod's stand. */
+let current: () => SceneryContact | null = () => null;
+export function setSceneryContact(f: () => SceneryContact | null) {
+  current = f;
+}
+export const sceneryContact = () => current();
+
+/**
+ * A stand clear of what is there — `free(p)`: a person can stand at p (no building, no tree, no craft parked) —:
+ * the feet [m, body-fixed] themselves if free, else the nearest free place in rings of `step` metres out to `reach`
+ * along the ground (`ground`: a point set down on it), or null — none (a city block wider than the reach).
+ * A tripod set by its coordinates in a city stood inside a building, or by the craft it came in, in its hull.
+ */
+export function clearStand(
+  free: (p: Vec3) => boolean,
+  feet: Vec3,
+  up: Vec3,
+  ground: (p: Vec3) => Vec3,
+  o: { reach?: number; step?: number } = {},
+): Vec3 | null {
+  if (free(feet)) return feet;
+  // (the ground's own two directions there)
+  const ref: Vec3 = Math.abs(up[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
+  const k = dot(ref, up);
+  const n0 = [ref[0] - k * up[0], ref[1] - k * up[1], ref[2] - k * up[2]];
+  const nl = Math.hypot(n0[0]!, n0[1]!, n0[2]!) || 1;
+  const north: Vec3 = [n0[0]! / nl, n0[1]! / nl, n0[2]! / nl];
+  const east: Vec3 = [north[1] * up[2] - north[2] * up[1], north[2] * up[0] - north[0] * up[2], north[0] * up[1] - north[1] * up[0]];
+  const reach = o.reach ?? 250,
+    step = o.step ?? 2;
+  for (let r = step; r <= reach; r += step) {
+    // (a sample every ~2 m round the ring)
+    const n = Math.max(8, Math.ceil((2 * Math.PI * r) / 2));
+    for (let i = 0; i < n; i++) {
+      const a = (2 * Math.PI * i) / n;
+      const ca = Math.cos(a) * r,
+        sa = Math.sin(a) * r;
+      const p = ground([
+        feet[0] + north[0] * ca + east[0] * sa,
+        feet[1] + north[1] * ca + east[1] * sa,
+        feet[2] + north[2] * ca + east[2] * sa,
+      ]);
+      if (free(p)) return p;
+    }
+  }
+  return null;
+}

@@ -164,6 +164,7 @@ function advanceSpectator(this: CameraController, dt: number, time: number | und
   sp.flySpeed = this.flySpeed;
   sp.flyMode = this.flyMode;
   sp.enabled = this.enabled;
+  sp.placedByGame = this.placedByGame;
   sp.padFrame = pad ?? null;
   // (the scene's time, also while it follows the ship and its own update is not run: its clock left NaN, nowTime
   // read 0 — the bodies where they were at the scene's start: no ground under a tripod, no sky's events)

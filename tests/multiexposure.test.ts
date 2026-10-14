@@ -355,3 +355,66 @@ test("a close frame turned north up, darkened only where its planet is", () => {
   expect(Math.abs(dark![1] - 32)).toBeLessThan(3);
   expect(Math.abs(dark![0] - 20)).toBeLessThan(3);
 });
+
+test("from the player's view: its framing kept for every frame, what it leaves out counted", async () => {
+  const { outsideView } = await import("../src/photo/plans");
+  const { trailsPlan } = await import("../src/photo/sky-series");
+  // (an analemma framed by hand: due south, 40° up, a 60° field — every Sun's frame on that tripod)
+  const view = { az: 180, alt: 40, fov: 60 };
+  const plan = analemmaPlan({ ...PARIS, base: "dusk", aspect: 0.75, template: {} as Preset, sunEV: 9, view });
+  expect(plan.view).toEqual(view);
+  for (const f of plan.frames) {
+    const pose = f.preset.pose as { at: number[]; heading: number; off: number[] };
+    expect(pose.heading).toBe(180);
+    expect(pose.off[1]).toBe(40);
+    expect(f.preset.fov).toBe(60);
+  }
+  // (the figure spans 18°–64° up: a 60° field 40° up holds it whole; aimed east, all of it out)
+  const up = plan.suns.filter((s) => s.alt > -1);
+  expect(outsideView(view, up, 0.75)).toBe(0);
+  expect(outsideView({ az: 90, alt: 10, fov: 30 }, up, 0.75)).toBe(up.length);
+  // (a narrow field: the solstices' Suns cut off, the equinoxes' kept)
+  const narrow = outsideView({ az: 180, alt: 41, fov: 20 }, up, 0.75);
+  expect(narrow).toBeGreaterThan(0);
+  expect(narrow).toBeLessThan(up.length);
+  // (the star trails: the player's aim and field, not `toward` and its field)
+  const tr = trailsPlan({
+    lat: 48.86,
+    lon: 2.35,
+    date: Date.UTC(2026, 0, 10, 18),
+    hours: 2,
+    count: 4,
+    toward: "pole",
+    fov: 70,
+    aspect: 16 / 9,
+    template: {} as Preset,
+    comp: -1.5,
+    comet: false,
+    view: { az: 250, alt: 25, fov: 42 },
+  })!;
+  expect(tr.view).toEqual({ az: 250, alt: 25, fov: 42 });
+  for (const f of tr.frames) {
+    expect((f.preset.pose as { heading: number }).heading).toBe(250);
+    expect(f.preset.fov).toBe(42);
+  }
+});
+
+test("a tripod's stand cleared: kept when free, else the nearest free place along the ground", async () => {
+  const { clearStand } = await import("../src/system/scenery-contact");
+  const up: [number, number, number] = [0, 0, 1];
+  const ground = (p: [number, number, number]): [number, number, number] => [p[0], p[1], 0];
+  // (a building 20 m square about the origin, a craft parked 30 m east)
+  const free = (p: number[]) => !(Math.abs(p[0]!) < 10 && Math.abs(p[1]!) < 10) && Math.hypot(p[0]! - 30, p[1]!) > 8;
+  expect(clearStand(free, [50, 0, 0], up, ground)).toEqual([50, 0, 0]);
+  const out = clearStand(free, [0, 0, 0], up, ground)!;
+  expect(free(out)).toBe(true);
+  // (out of the building by its nearest side, not farther than a ring's step past it)
+  expect(Math.max(Math.abs(out[0]), Math.abs(out[1]))).toBeGreaterThanOrEqual(10);
+  expect(Math.hypot(out[0], out[1])).toBeLessThan(13);
+  // (beside the craft: out of its 8 m)
+  const by = clearStand(free, [31, 0, 0], up, ground)!;
+  expect(Math.hypot(by[0] - 30, by[1])).toBeGreaterThan(8);
+  expect(Math.hypot(by[0] - 31, by[1])).toBeLessThan(10);
+  // (nowhere free within the reach: none)
+  expect(clearStand(() => false, [0, 0, 0], up, ground, { reach: 6 })).toBeNull();
+});

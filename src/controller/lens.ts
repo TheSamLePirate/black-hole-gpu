@@ -116,7 +116,8 @@ function zoomBy(this: CameraController, f: number) {
  * star moves). Returns true when the camera changed.
  */
 function update(this: CameraController, dt: number, time?: number): boolean {
-  if (!this.enabled) return false;
+  // (the player's hands off: no step — unless the view is still being placed by the game, a series' frames)
+  if (!this.enabled && !this.placedByGame) return false;
   this.syncLook();
   try {
     return this.step(dt, time);

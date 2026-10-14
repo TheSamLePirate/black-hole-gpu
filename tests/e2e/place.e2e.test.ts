@@ -55,6 +55,9 @@ describe.skipIf(!E2E)("placing the ship", () => {
     // (boarded again: the flight HUD, and its Place button, back for the next placements)
     await app.click("[data-testid=character-board]");
     await app.waitFor(`!__bh.camera.character.active`);
+    // (the top bar laid out for the ship again: the walker's buttons gone, the Place button back where it goes)
+    await app.waitFor(`__bh.mode.get() === "ship"`);
+    await Bun.sleep(800);
   });
 
   test("no mission left: before the far mouth at once; Escape closes the panel", async () => {

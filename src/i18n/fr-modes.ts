@@ -329,4 +329,7 @@ export default {
   Selenelion: "Sélénélion",
   "Transit of Mercury": "Transit de Mercure",
   "Transit of Venus": "Transit de Vénus",
+  "Multiple exposure from this view": "Surimpression depuis cette vue",
+  "Multiple exposure from this view: an analemma, star trails, the Moon's way, an eclipse, the ISS — framed as you framed it":
+    "Surimpression depuis cette vue : analemme, filé d'étoiles, course de la Lune, éclipse, ISS — cadrés comme vous les avez cadrés",
 } satisfies Record<string, string>;

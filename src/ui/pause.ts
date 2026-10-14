@@ -33,6 +33,11 @@ const T = {
   atlasHint: { fr: "la Terre, la Lune, Mars : y aller", en: "the Earth, the Moon, Mars: go there" },
   sky: { fr: "Le ciel d'ici", en: "The sky from here" },
   skyHint: { fr: "filés, analemme, ISS, éclipses : les vivre", en: "trails, analemma, ISS, eclipses: live them" },
+  multi: { fr: "Surimpression", en: "Multiple exposure" },
+  multiHint: {
+    fr: "depuis la vue cadrée : analemme, filé d'étoiles, Lune, éclipse",
+    en: "from the view framed: analemma, trails, Moon, eclipse",
+  },
   renderHint: { fr: "une image ou une vidéo : taille, échantillons, plan", en: "a picture or a video: size, samples, shot" },
   title2: { fr: "Écran titre", en: "Title screen" },
   back: { fr: "Retour", en: "Back" },
@@ -67,6 +72,8 @@ export interface PauseDeps {
   atlas(): void;
   /** the sky's events from here (ui/skyevents.ts) */
   skyEvents(): void;
+  /** a multiple exposure (ui/multiexposure.ts): from the view framed, when there is one */
+  multiExposure?(): void;
   /** placing the ship (ui/placepanel.ts) */
   place(): void;
   /** the date and time (ui/timepanel.ts) */
@@ -147,6 +154,9 @@ export class PauseMenu {
       this.item(t("Download graphics diagnostic"), downloadGpuDiagnostic, { testid: "pause-graphics-diagnostic" }),
       this.item(tr(T.atlas), () => this.leaveFor(this.d.atlas), { hint: tr(T.atlasHint), testid: "pause-atlas" }),
       this.item(tr(T.sky), () => this.leaveFor(this.d.skyEvents), { hint: tr(T.skyHint), testid: "pause-sky" }),
+      this.d.multiExposure
+        ? this.item(tr(T.multi), () => this.leaveFor(() => this.d.multiExposure?.()), { hint: tr(T.multiHint), testid: "pause-multi" })
+        : null,
       this.item(tr(T.place), () => this.leaveFor(this.d.place), { testid: "pause-place" }),
       this.item(tr(T.time), () => this.leaveFor(this.d.time), { testid: "pause-time" }),
       this.item(tr(T.weather), () => this.leaveFor(this.d.weather), { testid: "pause-weather" }),

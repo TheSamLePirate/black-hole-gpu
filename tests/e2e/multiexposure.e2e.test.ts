@@ -12,7 +12,7 @@ describe.skipIf(!E2E)("the multiple exposure", () => {
   beforeAll(async () => {
     app = await App.boot({ hash: "scene=game:artemis", width: 1440, height: 900, lang: "fr", tiles: true });
     await app.waitFor("__bh.camera.piloting", 30_000);
-    await app.js(`(__bh.game.land("earth", 48.86, 2.35), __bh.game.setDate("2026-01-01T12:00:00Z"), true)`);
+    await app.js(`(__bh.game.land("earth", 48.8556, 2.2986), __bh.game.setDate("2026-01-01T12:00:00Z"), true)`);
     await Bun.sleep(1500);
   }, 120_000);
   afterAll(() => {
@@ -29,6 +29,9 @@ describe.skipIf(!E2E)("the multiple exposure", () => {
     await app.click("[data-testid=photo-multi]");
     await app.waitFor(`!!document.querySelector("[data-testid=multi-exposure]")`, 3_000);
     expect(await app.js<boolean>(`document.querySelector("[data-testid=mx-analemma]").classList.contains("on")`)).toBe(true);
+    // (the series framing itself: "from this view" off — the photo mode's view is wherever it looked)
+    if (await app.js<boolean>(`!!document.querySelector("[data-testid=mx-from-view]")?.checked`))
+      await app.click("[data-testid=mx-from-view]");
     await app.js(
       `(() => { const r = document.querySelector("[data-testid=mx-cadence]"); r.value = "10"; r.dispatchEvent(new Event("input")); return 1; })()`,
     );
@@ -93,7 +96,7 @@ describe.skipIf(!E2E)("the multiple exposure", () => {
 
   test("the night's series from the dialog: an ISS pass (its list, its trail) and the lunar analemma (its loop, its labels)", async () => {
     await app.js(
-      `(__bh.game.setDate("2026-10-10T12:00:00Z"), void __bh.mx.dialog.open({ kind: "iss", fill: { lat: 48.86, lon: 2.35 } }), true)`,
+      `(__bh.game.setDate("2026-10-10T12:00:00Z"), void __bh.mx.dialog.open({ kind: "iss", fill: { lat: 48.8556, lon: 2.2986 } }), true)`,
     );
     await app.waitFor(`document.querySelector("[data-testid=mx-iss-list]")?.options.length > 1`, 60_000);
     // (the brightest offered first)
@@ -112,7 +115,7 @@ describe.skipIf(!E2E)("the multiple exposure", () => {
     expect(trail).toBeGreaterThan(1500);
     await app.press("Escape");
     await app.js(
-      `(void __bh.mx.dialog.open({ kind: "moon", fill: { lat: 48.86, lon: 2.35, date: Date.UTC(2026, 9, 1), mode: "lunar", framing: "sky", days: 20 } }), true)`,
+      `(void __bh.mx.dialog.open({ kind: "moon", fill: { lat: 48.8556, lon: 2.2986, date: Date.UTC(2026, 9, 1), mode: "lunar", framing: "sky", days: 20 } }), true)`,
     );
     expect(await app.js<string>(`document.querySelector("[data-testid=mx-moon-base]").value`)).toBe("none");
     await app.click("[data-testid=mx-start]");
@@ -142,4 +145,62 @@ describe.skipIf(!E2E)("the multiple exposure", () => {
     expect(await app.js<string>(`document.querySelector(".mx-status").textContent`)).toMatch(/5 poses fusionnées/);
     await app.press("Escape");
   }, 400_000);
+
+  test("from this view: the tripod framed by hand, the dialog from the top bar takes its place, aim and field; a subject outside said first", async () => {
+    await app.js(`(__bh.game.setDate("2026-01-10T20:00:00Z"), true)`);
+    await app.js(
+      `__bh.tars.tools().find((t) => t.name === "atlas").run({ action: "go", body: "earth", lat: 48.8556, lon: 2.2986, to: "tripod" }, new AbortController().signal)`,
+    );
+    await Bun.sleep(2500);
+    // (framed by hand: turned, raised, a 50° field)
+    await app.js(`(() => { const s = __bh.camera.viewController().s; s.yaw += 40; s.pitch += 20; s.fov = 50; return 1; })()`);
+    await Bun.sleep(1500);
+    // (the view's aim as the screen has it: its centre's azimuth and altitude)
+    const v = await app.js<{ az: number; alt: number }>(`(() => {
+      const c = __bh.camera.viewController(), w = c.rigWorld(), t = __bh.sim.time, S = __bh.sys;
+      const q = S.bodyFixed("earth", w.X, t), f = S.bodyFixed("earth", w.X.map((x, i) => x + w.fwd[i] * 1e-7), t);
+      const d = f.map((x, i) => x - q[i]), D = Math.PI / 180, lat = Math.atan2(q[2], Math.hypot(q[0], q[1]) * (1 - 0.0066943799901413165)), lon = Math.atan2(q[1], q[0]);
+      const up = [Math.cos(lat) * Math.cos(lon), Math.cos(lat) * Math.sin(lon), Math.sin(lat)];
+      const east = [-Math.sin(lon), Math.cos(lon), 0], north = [-Math.sin(lat) * Math.cos(lon), -Math.sin(lat) * Math.sin(lon), Math.cos(lat)];
+      const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2], n = Math.hypot(...d);
+      return { alt: Math.asin(dot(d, up) / n) / D, az: ((Math.atan2(dot(d, east), dot(d, north)) / D) + 360) % 360 };
+    })()`);
+    await app.click("[data-testid=topbar-multiexposure]");
+    await app.waitFor(`!!document.querySelector("[data-testid=multi-exposure]")`, 5_000);
+    // (taken from this view: checked, its place and its framing the view's — the fields that would choose them off)
+    expect(await app.js<boolean>(`document.querySelector("[data-testid=mx-from-view]").checked`)).toBe(true);
+    expect(await app.js<boolean>(`document.querySelector("[data-testid=mx-lat]").disabled`)).toBe(true);
+    const label = await app.js<string>(`document.querySelector("[data-testid=mx-from-view]").parentElement.textContent`);
+    const [az, alt] = (label.match(/(-?\d+)°/g) ?? []).map((x) => Number.parseInt(x, 10));
+    expect(Math.abs(((az! - v.az + 540) % 360) - 180)).toBeLessThanOrEqual(1);
+    expect(Math.abs(alt! - v.alt)).toBeLessThanOrEqual(1);
+    expect(label).toContain("50°");
+    // (the analemma at noon, framed where the Suns are not: said before minutes of rendering, two ways out)
+    await app.click("[data-testid=mx-analemma]");
+    await app.click("[data-testid=mx-start]");
+    await app.waitFor(`!!document.querySelector("[data-testid=mx-start-anyway]")`, 15_000);
+    expect(await app.js<string>(`document.querySelector(".mx-status").textContent`)).toMatch(/hors de votre cadrage/);
+    expect(await app.js<boolean>(`!!document.querySelector("[data-testid=mx-frame-for-me]")`)).toBe(true);
+    // (the star trails from it: forty frames, in this framing)
+    await app.click("[data-testid=mx-trails]");
+    await app.js(
+      `(() => { const e = document.querySelector("[data-testid=mx-count]"); e.value = "40"; e.dispatchEvent(new Event("change")); return 1; })()`,
+    );
+    expect(await app.js<boolean>(`document.querySelector("[data-testid=mx-toward]").disabled`)).toBe(true);
+    await app.click("[data-testid=mx-start]");
+    await app.waitFor(`!!document.querySelector("[data-testid=mx-image]")`, 300_000);
+    expect(await app.js<string>(`document.querySelector(".mx-status").textContent`)).toMatch(/40 poses fusionnées/);
+    const stars = await app.js<number>(`(() => {
+      const c = document.querySelector("[data-testid=mx-image]"), d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+      let n = 0;
+      for (let k = 0; k < d.length; k += 4) if (d[k] + d[k + 1] + d[k + 2] > 300) n++;
+      return n;
+    })()`);
+    // (the arcs drawn: thousands of lit pixels)
+    expect(stars).toBeGreaterThan(3000);
+    await app.press("Escape");
+    // (the tripod given back as it was framed)
+    const after = await app.js<number>(`__bh.camera.viewController().s.fov`);
+    expect(after).toBeCloseTo(50, 0);
+  }, 420_000);
 });

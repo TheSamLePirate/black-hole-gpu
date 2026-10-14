@@ -57,6 +57,9 @@ export interface MxRequest {
   /** the ISS: an interval shooting's dashes (frames of `exposure` s, a second's gap) */
   dashes?: boolean;
   exposure?: number;
+  /** "from this view": the player's own framing kept (its aim from the north, its altitude, its vertical field [°]) —
+   *  the place is then the view's own (lat, lon) */
+  view?: { az: number; alt: number; fov: number };
   width: number;
   height: number;
   spp: number;
@@ -93,11 +96,18 @@ export interface MxResult {
   /** the star trails' night span [ms UTC]; the ISS pass shown */
   span?: { from: number; to: number };
   pass?: MxPass;
+  /** a framing of the player's own: how many of the subject's places fell outside it, of how many */
+  outside?: { n: number; of: number };
 }
 
 export interface MxDialogHost {
   /** the player's place on the Earth [°] and the game's date [ms UTC] */
   place(): { lat: number; lon: number } | null;
+  /** the view framed on the Earth's ground (on foot, the tripod, the free camera near it): its place [°], its aim
+   *  (azimuth from the north, altitude) and its vertical field [°]; null: none (flying, elsewhere) */
+  view?(): { lat: number; lon: number; az: number; alt: number; fov: number } | null;
+  /** before a series from the player's framing: how many of its subject's places fall outside it, of how many (null: none to say) */
+  outside?(r: MxRequest): Promise<{ n: number; of: number } | null>;
   now(): number;
   /** the series run: its progress, a stop; the image */
   run(r: MxRequest, progress: (p: { done: number; total: number; label: string }) => void, signal: { stop: boolean }): Promise<MxResult>;
@@ -305,12 +315,19 @@ export class MultiExposureDialog {
   }
 
   /** The dialog, on a kind; its fields filled (the eclipse calculator's), or given and run at once (TARS). */
-  open(o: { kind?: MxKind; run?: Partial<MxRequest>; fill?: Partial<MxRequest> } = {}): Promise<{ rendered: number } | null> {
+  open(
+    o: { kind?: MxKind; run?: Partial<MxRequest>; fill?: Partial<MxRequest> } = {},
+  ): Promise<{ rendered: number; outside?: { n: number; of: number } } | null> {
     this.close?.();
     let kind: MxKind = o.kind ?? "analemma";
     // (a request given — TARS's, the calculator's — shown in the fields too)
     const run = { ...o.fill, ...o.run };
-    const here = this.host.place() ?? { lat: 48.86, lon: 2.35 };
+    // (the view framed now: taken "from this view" when asked — TARS's run.view — or when the dialog opens on the
+    // ground with nothing filled for it: the photo bar's, the tripod's, the pause menu's)
+    const framed = run.view
+      ? { lat: run.lat ?? this.host.place()?.lat ?? 48.86, lon: run.lon ?? this.host.place()?.lon ?? 2.35, ...run.view }
+      : (this.host.view?.() ?? null);
+    const here = framed ?? this.host.place() ?? { lat: 48.86, lon: 2.35 };
     const place = { lat: run.lat ?? here.lat, lon: run.lon ?? here.lon };
     const now = new Date(run.start ?? this.host.now());
     const at = run.minutesUtc ?? 720;
@@ -344,9 +361,43 @@ export class MultiExposureDialog {
       i.checked = on;
       return { el: h("label", { class: "mx-check-row" }, i, tr(label)), input: i };
     };
+    // "from this view": the place, the aim and the field the camera has — the series' own framing left
+    const fromView = check(
+      framed
+        ? {
+            fr: `Depuis cette vue — azimut ${Math.round(framed.az)}°, hauteur ${Math.round(framed.alt)}°, champ ${framed.fov.toFixed(framed.fov < 10 ? 1 : 0)}° (${Math.round(12 / Math.tan((framed.fov * Math.PI) / 360))} mm)`,
+            en: `From this view — azimuth ${Math.round(framed.az)}°, altitude ${Math.round(framed.alt)}°, field ${framed.fov.toFixed(framed.fov < 10 ? 1 : 0)}° (${Math.round(12 / Math.tan((framed.fov * Math.PI) / 360))} mm)`,
+          }
+        : { fr: "Depuis cette vue", en: "From this view" },
+      !!framed && (!!run.view || (!o.fill && !o.run)),
+      "mx-from-view",
+    );
+    fromView.input.disabled = !framed;
+    if (!framed)
+      fromView.el.title = tr({
+        fr: "Cadrez d'abord depuis le sol de la Terre : à pied, sur le trépied (⇧T) ou la caméra libre près du sol",
+        en: "Frame it first from the Earth's ground: on foot, on the tripod (⇧T) or the free camera near the ground",
+      });
     // the place, the size, the quality: every kind's
-    const lat = num({ fr: "Latitude (°)", en: "Latitude (°)" }, Math.round(place.lat * 100) / 100, "0.01", -90, 90, "mx-lat");
-    const lon = num({ fr: "Longitude (°)", en: "Longitude (°)" }, Math.round(place.lon * 100) / 100, "0.01", -180, 180, "mx-lon");
+    // (the place kept whole — shown to the ten-thousandth of a degree, 11 m —: rounded to the hundredth, a tripod on the
+    // Champ de Mars became one by the Seine, a kilometre off; typed over, the place typed)
+    const exact = (v: number, label: Text, min: number, max: number, testid: string) => {
+      const round = (x: number) => String(Math.round(x * 1e4) / 1e4);
+      const f = num(label, Number(round(v)), "0.0001", min, max, testid);
+      let whole = v;
+      let shown = f.input.value;
+      return {
+        el: f.el,
+        input: f.input,
+        get: () => (f.input.value === shown ? whole : f.get()),
+        set: (x: number) => {
+          whole = x;
+          f.input.value = shown = round(x);
+        },
+      };
+    };
+    const lat = exact(place.lat, { fr: "Latitude (°)", en: "Latitude (°)" }, -90, 90, "mx-lat");
+    const lon = exact(place.lon, { fr: "Longitude (°)", en: "Longitude (°)" }, -180, 180, "mx-lon");
     const size = h("select", { "data-testid": "mx-size" }) as HTMLSelectElement;
     SIZES.forEach((s, i) => size.append(h("option", { value: String(i) }, s.label)));
     const sizeFor = (k: MxKind) => (size.value = k === "analemma" ? "0" : "1");
@@ -646,10 +697,31 @@ export class MultiExposureDialog {
     });
     eList.addEventListener("change", syncBase);
     for (const i of [lat.input, lon.input]) i.addEventListener("change", () => kind === "eclipse" && void fillList());
+    // (from this view: the place is the view's, its aim and field the series' — the framing's own choices off)
+    const syncView = () => {
+      const on = fromView.input.checked && !!framed;
+      if (on && framed) {
+        lat.set(framed.lat);
+        lon.set(framed.lon);
+      }
+      for (const x of [lat.input, lon.input, framing, toward, fovSel]) x.disabled = on;
+      // (an eclipse from this view: in the tripod's sky — a row, the Earth's shadow and a transit lay their own)
+      if (on && layout.value !== "sky") layout.value = "sky";
+      if (on && eKind.value === "transit") eKind.value = "solar";
+      (eKind.options[2] as HTMLOptionElement).disabled = on;
+      layout.disabled = on || eKind.value === "transit";
+    };
+    fromView.input.addEventListener("change", () => {
+      syncView();
+      if (kind === "eclipse") void fillList();
+      if (kind === "iss") void fillPasses();
+    });
     const drawForm = () => {
       form.replaceChildren();
       const k = KINDS.find((x) => x.id === kind)!;
       form.append(el("p", "mx-hint", tr(k.hint)));
+      if (framed) form.append(fromView.el);
+      syncView();
       if (!this.ready.has(kind)) {
         form.append(el("p", "mx-hint soon", tr({ fr: "Bientôt.", en: "Soon." })));
         return;
@@ -759,6 +831,11 @@ export class MultiExposureDialog {
         if (this.running) return;
         kind = k.id;
         for (const x of cards.querySelectorAll<HTMLElement>(".mx-kind")) x.classList.toggle("on", x === b);
+        // (another kind: a warning said for the last one gone, Start back)
+        if (actions.querySelector("[data-testid=mx-start-anyway]")) {
+          actions.replaceChildren(start, stop);
+          status.textContent = "";
+        }
         sizeFor(kind);
         sppFor(kind);
         drawForm();
@@ -770,7 +847,16 @@ export class MultiExposureDialog {
     drawForm();
     const request = (): MxRequest => {
       const s = SIZES[Number(size.value)]!;
-      const common = { kind, lat: lat.get(), lon: lon.get(), width: s.w, height: s.h, spp: Number(spp.value) };
+      const v = fromView.input.checked && framed ? framed : null;
+      const common = {
+        kind,
+        lat: v ? v.lat : lat.get(),
+        lon: v ? v.lon : lon.get(),
+        ...(v ? { view: { az: v.az, alt: v.alt, fov: v.fov } } : {}),
+        width: s.w,
+        height: s.h,
+        spp: Number(spp.value),
+      };
       if (kind === "eclipse")
         return {
           ...common,
@@ -846,11 +932,47 @@ export class MultiExposureDialog {
         ...o.run,
       };
     };
-    let resolve: (r: { rendered: number } | null) => void = () => {};
-    const done = new Promise<{ rendered: number } | null>((ok) => (resolve = ok));
+    type Done = { rendered: number; outside?: { n: number; of: number } } | null;
+    let resolve: (r: Done) => void = () => {};
+    const done = new Promise<Done>((ok) => (resolve = ok));
+    // (a framing of the player's own leaving some of the subject out: said before the series runs — minutes of
+    // rendering —, run anyway or framed by the series; once said, Start runs)
+    let warned = "";
     const go = async () => {
       if (this.running || !this.ready.has(kind)) return;
+      const ask = request();
+      const key = JSON.stringify(ask);
+      if (ask.view && this.host.outside && warned !== key) {
+        const out = await this.host.outside(ask).catch(() => null);
+        if (out && out.n > 0) {
+          warned = key;
+          status.textContent = tr({
+            fr: `${out.n} sur ${out.of} tomberaient hors de votre cadrage.`,
+            en: `${out.n} of ${out.of} would fall outside your framing.`,
+          });
+          actions.replaceChildren(
+            button({
+              label: tr({ fr: "Lancer quand même", en: "Start anyway" }),
+              kind: "primary",
+              testid: "mx-start-anyway",
+              onClick: () => void go(),
+            }),
+            button({
+              label: tr({ fr: "Laisser la série cadrer", en: "Let the series frame it" }),
+              testid: "mx-frame-for-me",
+              onClick: () => {
+                fromView.input.checked = false;
+                syncView();
+                void go();
+              },
+            }),
+            stop,
+          );
+          return;
+        }
+      }
       this.running = true;
+      actions.replaceChildren(start, stop);
       this.signal = { stop: false };
       start.disabled = true;
       stop.disabled = false;
@@ -879,12 +1001,19 @@ export class MultiExposureDialog {
         if (r.marks) drawLabels(g, r.marks, labelsOf(req, r), r.width, r.height);
         preview.replaceChildren(c);
         const hid = r.hidden?.length ?? 0;
+        const out = r.outside?.n ?? 0;
         status.textContent =
           tr({ fr: `${r.rendered} poses fusionnées.`, en: `${r.rendered} exposures blended.` }) +
           (hid
             ? tr({
                 fr: ` ${hid} disque${hid > 1 ? "s" : ""} derrière le relief, laissé${hid > 1 ? "s" : ""} de côté.`,
                 en: ` ${hid} disc${hid > 1 ? "s" : ""} behind the ground, left out.`,
+              })
+            : "") +
+          (out
+            ? tr({
+                fr: ` ${out} sur ${r.outside!.of} hors de votre cadrage — élargissez le champ ou tournez la vue, ou laissez la série cadrer.`,
+                en: ` ${out} of ${r.outside!.of} outside your framing — widen the field or turn the view, or let the series frame it.`,
               })
             : "");
         const save = button({
@@ -895,7 +1024,7 @@ export class MultiExposureDialog {
             c.toBlob((b) => b && this.host.download(b, `kerr-${kind}-${new Date().toISOString().slice(0, 10)}.png`), "image/png"),
         });
         actions.replaceChildren(start, stop, save);
-        resolve({ rendered: r.rendered });
+        resolve({ rendered: r.rendered, outside: r.outside });
       } catch (e) {
         status.textContent = `⚠ ${e instanceof Error ? e.message : String(e)}`;
         resolve(null);

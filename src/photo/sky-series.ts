@@ -84,6 +84,9 @@ export interface TrailsOptions {
   comp: number;
   /** a comet's tail: the older frames dimmer, each arc brightening to its head */
   comet: boolean;
+  /** the player's own framing ("from this view": the place, the aim and the field the camera has): kept as it
+   *  is, the subject where it falls in it — else `toward` and `fov` */
+  view?: Framing;
 }
 
 /** The star trails' frames and view (null: no dark night there then — a summer near the poles). */
@@ -93,11 +96,12 @@ export function trailsPlan(o: TrailsOptions): { frames: Exposure[]; view: Framin
   if (!night) return null;
   const to = Math.min(night.to, night.from + o.hours * HOUR);
   const pole = Math.abs(o.lat);
-  const az = { pole: o.lat >= 0 ? 0 : 180, north: 0, east: 90, south: 180, west: 270 }[o.toward];
+  let az = { pole: o.lat >= 0 ? 0 : 180, north: 0, east: 90, south: 180, west: 270 }[o.toward];
   // (the horizon a little over the frame's foot; toward the pole, the pole in it if the field allows)
   let alt = o.fov / 2 - 4;
   if (o.toward === "pole") alt = Math.min(Math.max(alt, pole + 8 - o.fov / 2), Math.max(pole, alt));
-  const view: Framing = { az, alt, fov: o.fov };
+  if (o.view) [az, alt] = [o.view.az, o.view.alt];
+  const view: Framing = { az, alt, fov: o.view?.fov ?? o.fov };
   const n = Math.max(2, Math.round(o.count));
   const frames: Exposure[] = [];
   for (let i = 0; i < n; i++) {
@@ -107,7 +111,7 @@ export function trailsPlan(o: TrailsOptions): { frames: Exposure[]; view: Framin
         ...o.template,
         ship: false,
         target: "earth",
-        fov: o.fov,
+        fov: view.fov,
         bloom: 0,
         lensFlare: 0,
         time: tOf(ms),
@@ -148,6 +152,9 @@ export interface MoonPathOptions {
   template: Preset;
   /** the Moons' compensation [EV] on their meter */
   comp: number;
+  /** the player's own framing ("from this view": the place, the aim and the field the camera has): kept as it
+   *  is, the subject where it falls in it — else framed for it */
+  view?: Framing;
 }
 
 /** A moment of the Moon's way: when, its place (geometric) [°], its lit share. */
@@ -212,8 +219,9 @@ export function moonPathPlan(o: MoonPathOptions): { frames: Exposure[]; view: Fr
   const moments = moonMoments(o);
   if (!moments.length) return null;
   const pts = moments.map((m) => ({ az: m.az, alt: m.alt }));
-  const az0 = frame(pts, o.aspect).az;
-  const view = o.framing === "landscape" ? frame([...pts, { az: az0, alt: -3 }], o.aspect, 5) : frame(pts, o.aspect, 4);
+  const view =
+    o.view ??
+    (o.framing === "landscape" ? frame([...pts, { az: frame(pts, o.aspect).az, alt: -3 }], o.aspect, 5) : frame(pts, o.aspect, 4));
   const scene = (ms: number): Preset => ({
     ...o.template,
     ship: false,

@@ -223,6 +223,9 @@ export class CameraController {
   cinematic: Cinematic = null;
   /** Input is ignored while disabled (e.g. during an offline render). */
   enabled = true;
+  /** the player's hands off (enabled false) but the view still placed by the game each frame — a multiple
+   *  exposure's frames: their tripods set, carried, aimed by the rig as the series applies them */
+  placedByGame = false;
   vAz = 0; // °/s
   vInc = 0;
   vYaw = 0;
@@ -1129,6 +1132,11 @@ export class CameraController {
     fixed: null as Vec3 | null,
     /** tripod: its height over the ground [m] (none: 1.7 m — set by the up and down keys) */
     standH: undefined as number | undefined,
+    /** tripod: the scenery and the stand it was last cleared against (controller/rig.ts: not read again while both hold) */
+    clearOf: null as object | null,
+    clearAt: "",
+    /** the next placement a cut, not a turn from the aim before (a scene applied, a multiple exposure's frame) */
+    cut: false,
     /** the tripod's free view: its forward and up on the body's own axes (as offsets from its foot) */
     look: null as { f: Vec3; u: Vec3 } | null,
     lookKey: "",

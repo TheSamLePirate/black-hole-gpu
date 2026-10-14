@@ -36,6 +36,9 @@ import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 import { blendCurve, lookQ, qAxes, qSlerp } from "../cine/follow";
 import type { V3 } from "../cine/rig";
 import { viewBlend } from "./camrig";
+import { clearStand, sceneryContact } from "../system/scenery-contact";
+import { fleet } from "../fleet";
+import { VESSEL_IDS } from "../vessels";
 import type { CameraController } from "../controls";
 import { add3, clamp, unitV } from "./util";
 
@@ -141,6 +144,22 @@ function rigPlace(this: CameraController, ours: boolean, X: Vec3, fwd: Vec3, up:
   this.rig.placed = [s.anchor, s.whL, s.distance, s.inclination, s.azimuth].join();
 }
 
+/** How far a tripod stands from a craft parked [m, from its centre]: outside the longest hull that lands — the
+ *  F-35's 15.4 m, half of it and a little —, a walker's place beside the craft (9 m off) kept. */
+const CRAFT_CLEAR_M = 8;
+/** The crafts standing within 100 m of a place on the Earth [M, body-fixed]: their centres [m, body-fixed]. */
+function parkedNear(q: Vec3, t: number, mR: number): Vec3[] {
+  const out: Vec3[] = [];
+  for (const v of VESSEL_IDS) {
+    // (its place as drawn, not integrated afresh: a parked craft's is its ground's)
+    const p = fleet.pose(v, t, false, false);
+    if (!p) continue;
+    const c = toBodyFixed("earth", p.X as Vec3, t);
+    if (Math.hypot(c[0] - q[0], c[1] - q[1], c[2] - q[2]) * mR < 100) out.push([c[0] * mR, c[1] * mR, c[2] * mR]);
+  }
+  return out;
+}
+
 /** One frame of the rig; false: not its to move (the classic camera then does). */
 function rigStep(this: CameraController, dt: number, move: number[], fast: boolean, boost = 1): boolean {
   const s = this.s;
@@ -194,7 +213,9 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
     R.fixed = mode === "tripod" ? this.rigFix(ref.id, w.ours, w.X, tNow) : null;
     R.look = null;
     // (the view turned to its new aim from where it looked)
-    R.turn = R.placed ? { q: lookQ(w.fwd as V3, w.up as V3), t: 0, T: Math.max(0.5, viewBlend(s).time) } : null;
+    // (a scene, a multiple exposure's frame: a cut — no turn from the aim before)
+    R.turn = R.placed && !R.cut ? { q: lookQ(w.fwd as V3, w.up as V3), t: 0, T: Math.max(0.5, viewBlend(s).time) } : null;
+    R.cut = false;
   }
   // the keys' speed: 0.8 × the height above the surface per second (a metre at least), Shift × 3
   // (fixed on the world: from where it is fixed — the camera's last place is a frame behind the world)
@@ -259,6 +280,31 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
         if (Math.abs(hm - want) > 0.3) R.fixed = this.rigFix(ref.id, w.ours, lin(ref.C, 1, r, (ground + want / mR) / l), t) ?? R.fixed;
       }
     }
+    // (a tripod in a town or by a craft parked: stood clear of the buildings, the trees, the hulls — set by its
+    // coordinates it stood inside one, a multiple exposure's frames of walls —; read again when the scenery near it
+    // comes in, the tripod moves, or a while has passed (a craft lands, takes off))
+    if (mode === "tripod" && w.ours && ref.id === "earth" && R.fixed) {
+      const C = sceneryContact();
+      const crafts = parkedNear(R.fixed, t, mR);
+      const stamp = `${R.fixed.join()}|${crafts.length}`;
+      if (R.clearOf !== C || R.clearAt !== stamp) {
+        const hStand = R.standH ?? 1.7;
+        const q = R.fixed.map((x) => x * mR) as Vec3;
+        const up = unitV(q);
+        const feet = lin(q, 1, up, -hStand);
+        const onGround = (p: Vec3): Vec3 => {
+          const u = unitV(p);
+          return lin(u, ref.R * mR + groundAboveSphere(ref.id, lin(u, ref.R, u, 0)), u, 0);
+        };
+        const free = (p: Vec3) =>
+          !(C?.at(p, 0.3, 1.8, 0.4).blocked ?? false) &&
+          crafts.every((c) => Math.hypot(p[0] - c[0], p[1] - c[1], p[2] - c[2]) > CRAFT_CLEAR_M);
+        const F = clearStand(free, feet, up, onGround);
+        if (F && F !== feet) R.fixed = lin(F, 1 / mR, unitV(F), hStand / mR);
+        R.clearOf = C;
+        R.clearAt = `${R.fixed.join()}|${crafts.length}`;
+      }
+    }
   }
   // (the same time, no key, nothing changed since the last placement: the camera is where it would be
   // put again — not rewritten, the round trip's last bits would move it each frame, and a paused image
@@ -280,7 +326,9 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
       s.velT,
       R.turn?.t ?? 1,
     ].join();
-  if (step.every((x) => x === 0) && !move.some((x) => x !== 0) && R.stamp === stamp()) return true;
+  // (not while a turn runs: its own progress is in the stamp — skipped, a still scene's turn never went on, the view
+  // left on the aim before: a multiple exposure's close frames aimed where the last one was)
+  if (!R.turn && step.every((x) => x === 0) && !move.some((x) => x !== 0) && R.stamp === stamp()) return true;
   if (mode === "orbit") {
     // around: the keys too — forwards / back the distance, sideways and up / down about it
     R.alt = clamp(R.alt * Math.exp(-move[0]! * dt * (fast ? 3 : 1)), 1 / mR, 1e6);

@@ -235,13 +235,23 @@ export class App {
    * A real mouse click at the element's centre. A bar action that does not fit the window's width is in the top
    * bar's ⋯ menu (ui/topbar.ts): the menu opens by a click on ⋯, and the action is clicked there.
    */
-  async click(selector: string) {
+  async click(selector: string, tries = 3): Promise<void> {
     const action = await this.js<string | null>(`(() => {
       const el = document.querySelector(${JSON.stringify(selector)});
       return el && el.classList.contains("tb-over") ? el.id : null;
     })()`);
     if (action) {
       if (await this.js<boolean>(`document.querySelector(".tb-menu").hidden`)) await this.click("[data-testid=topbar-more]");
+      // (the bar laid out again meanwhile — a mode's buttons shown, a chip's text —: the button back in it, not in
+      // the menu any more; the menu closed and the button looked for again)
+      const inMenu = await this.js<boolean>(`!!document.querySelector('.tb-menu [data-action="${action}"]')`);
+      if (!inMenu && tries > 0) {
+        await this.js(
+          `(() => { const m = document.querySelector(".tb-menu"); if (m && !m.hidden) document.querySelector("[data-testid=topbar-more]")?.click(); return 1; })()`,
+        );
+        await Bun.sleep(150);
+        return this.click(selector, tries - 1);
+      }
       await this.click(`.tb-menu [data-action="${action}"]`);
       return;
     }

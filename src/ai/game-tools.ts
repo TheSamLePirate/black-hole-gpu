@@ -126,7 +126,10 @@ export interface GameHost {
   /** the game's date now [ms UTC] */
   utcNow?(): number;
   /** a multiple exposure made (PLAN-CIEL C8–C10: its dialog opened, the series run): how many exposures, or null */
-  multiExposure?(r: import("../ui/multiexposure").MxRequest): Promise<{ rendered: number } | null>;
+  multiExposure?(r: import("../ui/multiexposure").MxRequest): Promise<{ rendered: number; outside?: { n: number; of: number } } | null>;
+  /** the view framed on the Earth's ground now (on foot, the tripod, the free camera near it): its place [°], its aim
+   *  (azimuth from the north, altitude) and vertical field [°]; null: none */
+  framedView?(): { lat: number; lon: number; az: number; alt: number; fov: number } | null;
   /** the ISS's visible passes from a place over days from a date (photo/iss-pass.ts) */
   issPasses?(lat: number, lon: number, from: number, days: number): import("../photo/iss-pass").IssPass[];
   /** taken to see an eclipse (PLAN-CIEL C7): the one of that kind nearest a date (within 3 days), from a place
@@ -650,9 +653,10 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "multiple_exposure",
       description:
-        "Make a multiple-exposure photograph (several renders from one fixed tripod blended into one image, shown to the player with a Download button). 'trails': star trails over hours of a dark night (`date` its evening, `hours`, `count` frames 40–160, `toward` the pole or a quarter, `fov`, `comet`). 'moon': the Moon's way — `mode` night (every `step` min, `span` h about its highest), daily (each day at `time` UTC for `days`), lunar (each lunar day: the lunar analemma). 'iss': the ISS's trail on its visible pass nearest `date` (iss_passes lists them; `dashes` for an interval shooting's gaps). 'analemma': the Sun at the same UTC time every N days for a year from a place, its figure-eight over the landscape. 'eclipse': a solar or lunar eclipse seen from a place — `before` phases, the central one (totality, ring or greatest), `after` phases, each disc taken through a telephoto and laid where it was in the sky, over the landscape (the totality's own twilight, or dusk) or black; the eclipse nearest `date` that is seen from there (find_eclipses gives them). It takes from seconds to a few minutes; the player sees its progress. Place: lat/lon or a site; default the player's.",
+        "Make a multiple-exposure photograph (several renders from one fixed tripod blended into one image, shown to the player with a Download button). 'trails': star trails over hours of a dark night (`date` its evening, `hours`, `count` frames 40–160, `toward` the pole or a quarter, `fov`, `comet`). 'moon': the Moon's way — `mode` night (every `step` min, `span` h about its highest), daily (each day at `time` UTC for `days`), lunar (each lunar day: the lunar analemma). 'iss': the ISS's trail on its visible pass nearest `date` (iss_passes lists them; `dashes` for an interval shooting's gaps). 'analemma': the Sun at the same UTC time every N days for a year from a place, its figure-eight over the landscape. 'eclipse': a solar or lunar eclipse seen from a place — `before` phases, the central one (totality, ring or greatest), `after` phases, each disc taken through a telephoto and laid where it was in the sky, over the landscape (the totality's own twilight, or dusk) or black; the eclipse nearest `date` that is seen from there (find_eclipses gives them). It takes from seconds to a few minutes; the player sees its progress. Place: lat/lon or a site; default the player's. fromView: from the view the player framed on the Earth's ground (on foot, the tripod, the free camera near it) — its place, its aim and its field kept, the series not framing itself (the answer says how much of the subject falls outside it).",
       params: {
         kind: { type: "string", enum: ["analemma", "eclipse", "trails", "moon", "iss"] },
+        fromView: { type: "boolean", description: "from the camera's framing now (its place, aim and field), not one the series chooses" },
         hours: { type: "number", description: "trails: hours of the night (default 3)" },
         count: { type: "number", description: "trails: frames, 40–160 (default 80)" },
         toward: {
@@ -720,13 +724,19 @@ export function gameTools(h: GameHost): Tool[] {
       required: ["kind"],
       run: async (a) => {
         if (!h.multiExposure) return { error: "not available" };
+        const framed = a.fromView ? (h.framedView?.() ?? null) : null;
+        if (a.fromView && !framed)
+          return {
+            error:
+              "no view framed on the Earth's ground: walk, set the tripod (camera view tripod) or take the free camera near the ground first",
+          };
         const site = a.site ? resolveSite(String(a.site), "earth") : null;
         const here = camera.weatherPlace?.();
-        const lat = site?.lat ?? (a.lat !== undefined ? Number(a.lat) : here?.body === "earth" ? here.lat : 48.86);
-        const lon = site?.lon ?? (a.lon !== undefined ? Number(a.lon) : here?.body === "earth" ? here.lon : 2.35);
+        const lat = framed?.lat ?? site?.lat ?? (a.lat !== undefined ? Number(a.lat) : here?.body === "earth" ? here.lat : 48.86);
+        const lon = framed?.lon ?? site?.lon ?? (a.lon !== undefined ? Number(a.lon) : here?.body === "earth" ? here.lon : 2.35);
         const now = h.utcNow?.() ?? Date.now();
         const clamp = (v: unknown, d: number, lo: number, hi: number) => Math.min(Math.max(Number(v ?? d), lo), hi);
-        let r: { rendered: number } | null;
+        let r: { rendered: number; outside?: { n: number; of: number } } | null;
         const dateOf = (d: unknown) => (d ? Date.parse(String(d)) : now);
         const common = {
           lat,
@@ -735,6 +745,7 @@ export function gameTools(h: GameHost): Tool[] {
           height: 1080,
           framing: a.framing === "sky" ? ("sky" as const) : ("landscape" as const),
           sky: a.sky === "game" ? ("game" as const) : ("clear" as const),
+          ...(framed ? { view: { az: framed.az, alt: framed.alt, fov: framed.fov } } : {}),
         };
         if (a.kind === "trails" || a.kind === "moon" || a.kind === "iss") {
           const date = dateOf(a.date);
@@ -789,8 +800,10 @@ export function gameTools(h: GameHost): Tool[] {
             kind: "eclipse",
             lat,
             lon,
-            eclipse: a.eclipse === "lunar" ? "lunar" : a.eclipse === "transit" ? "transit" : "solar",
-            layout: a.eclipse === "transit" ? "transit" : ((a.layout as "sky" | "strip" | "shadow" | undefined) ?? "sky"),
+            ...(framed ? { view: common.view } : {}),
+            eclipse: a.eclipse === "lunar" ? "lunar" : a.eclipse === "transit" && !framed ? "transit" : "solar",
+            // (from the player's view: in the tripod's sky — a row, the shadow's map, a transit lay their own)
+            layout: framed ? "sky" : a.eclipse === "transit" ? "transit" : ((a.layout as "sky" | "strip" | "shadow" | undefined) ?? "sky"),
             planet: a.planet === "mercury" || a.planet === "venus" ? a.planet : undefined,
             date,
             before: clamp(a.before, 5, 0, 10),
@@ -814,6 +827,7 @@ export function gameTools(h: GameHost): Tool[] {
             kind: "analemma",
             lat,
             lon,
+            ...(framed ? { view: common.view } : {}),
             minutesUtc: (hh ?? 12) * 60 + (mm ?? 0),
             start: a.from ? Date.parse(String(a.from)) : now,
             cadence: clamp(a.cadence, 7, 1, 10),
@@ -826,7 +840,12 @@ export function gameTools(h: GameHost): Tool[] {
           });
         }
         return r
-          ? { ok: true, exposures: r.rendered, shown: "the image is in the Multiple exposure dialog (Download PNG)" }
+          ? {
+              ok: true,
+              exposures: r.rendered,
+              shown: "the image is in the Multiple exposure dialog (Download PNG)",
+              ...(r.outside?.n ? { outsideFraming: `${r.outside.n} of ${r.outside.of} outside the player's framing` } : {}),
+            }
           : { error: "stopped, failed, or no such eclipse seen from there (see the dialog's message)" };
       },
     },

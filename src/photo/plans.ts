@@ -41,6 +41,9 @@ export interface AnalemmaOptions {
   template: Preset;
   /** the Sun's exposures [EV, fixed]: dark — the sky black, its disc a dot */
   sunEV: number;
+  /** the player's own framing ("from this view": the place, the aim and the field the camera has): kept as it
+   *  is, the subject where it falls in it — else framed for it */
+  view?: Framing;
 }
 
 export interface Framing {
@@ -87,6 +90,15 @@ export function frame(points: { az: number; alt: number }[], aspect: number, mar
   return { az, alt, fov };
 }
 
+/** How many of the points of the sky (azimuth, altitude [°]) fall outside a view's image of `aspect` — what a
+ *  framing of the player's own leaves out (the Suns of an analemma, an eclipse's phases, the Moon's way). */
+export function outsideView(view: Framing, points: { az: number; alt: number }[], aspect: number): number {
+  return points.filter((p) => {
+    const q = projectSky(view, p.az, p.alt, 1000 * aspect, 1000);
+    return !q || q[0] < 0 || q[0] > 1000 * aspect || q[1] < 0 || q[1] > 1000;
+  }).length;
+}
+
 /** The frames, the base last (lighten keeps the brightest whatever the order). */
 export const baseLast = (f: Exposure[]) => [...f.filter((x) => x.blend !== "base"), ...f.filter((x) => x.blend === "base")];
 
@@ -118,8 +130,7 @@ export function analemmaPlan(o: AnalemmaOptions): { frames: Exposure[]; view: Fr
   const up = suns.filter((s) => s.alt > -1);
   // (the horizon in the frame too, under the figure: the landscape the Suns stand over)
   const pts = up.length ? up : suns;
-  const az0 = frame(pts, o.aspect).az;
-  const view = frame([...pts, { az: az0, alt: -4 }], o.aspect, 4);
+  const view = o.view ?? frame([...pts, { az: frame(pts, o.aspect).az, alt: -4 }], o.aspect, 4);
   const scene = (ms: number): Preset => ({
     ...o.template,
     ship: false,
@@ -230,6 +241,9 @@ export interface EclipseSeqOptions {
   centralComp: number;
   /** each disc taken close (a telephoto's frame, its own meter) and laid at its place — default; off: the wide view's frames */
   insets?: boolean;
+  /** the player's own framing ("from this view": the place, the aim and the field the camera has): kept as it
+   *  is, the subject where it falls in it — else framed for it */
+  view?: Framing;
 }
 
 /** A moment of an eclipse's sequence: when, the body's place (geometric) [°], its disc's share hidden, the central one. */
@@ -311,8 +325,9 @@ export function eclipsePlan(
   const moments = eclipseMoments(e, o.lat, o.lon, o.before, o.after);
   if (!moments.length) return null;
   const pts = moments.map((m) => ({ az: m.az, alt: m.alt }));
-  const az0 = frame(pts, o.aspect).az;
-  const view = o.framing === "landscape" ? frame([...pts, { az: az0, alt: -3 }], o.aspect, 4) : frame(pts, o.aspect, 3);
+  const view =
+    o.view ??
+    (o.framing === "landscape" ? frame([...pts, { az: frame(pts, o.aspect).az, alt: -3 }], o.aspect, 4) : frame(pts, o.aspect, 3));
   const body = o.kind === "solar" ? "sun" : "moon";
   const scene = (ms: number): Preset => ({
     ...o.template,

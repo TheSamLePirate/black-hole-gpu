@@ -109,6 +109,9 @@ export interface IssPhotoOptions {
   template: Preset;
   /** the base's compensation [EV] */
   comp: number;
+  /** the player's own framing ("from this view": the place, the aim and the field the camera has): kept as it
+   *  is, the subject where it falls in it — else framed for it */
+  view?: Framing;
 }
 
 /** The pass's photograph: the base frame (the landscape at its middle), the view, the station's way (every half second). */
@@ -123,9 +126,9 @@ export function issPhotoPlan(o: IssPhotoOptions): { frames: Exposure[]; view: Fr
     return o.framing === "landscape" ? frame([...pts, { az: az0, alt: -3 }], o.aspect, 6) : frame(pts, o.aspect, 5);
   };
   const all = track.filter((_, i) => i % 10 === 0).map((s) => ({ az: s.az, alt: s.alt }));
-  let view = fit(all);
+  let view = o.view ?? fit(all);
   // (a pass high overhead spans more sky than a lens holds: its bright high part framed, its ends running out)
-  if (view.fov >= 139) {
+  if (!o.view && view.fov >= 139) {
     const top = Math.max(...all.map((p) => p.alt));
     view = fit(all.filter((p) => p.alt > Math.min(top * 0.5, 30)));
   }
