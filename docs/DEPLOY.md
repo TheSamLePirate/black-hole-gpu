@@ -52,8 +52,8 @@ To turn it on:
    Portainer (never in the repository).
 2. Open on the server (ufw/nftables, and the OVH Network Firewall if it is on): `3478/udp`, `3478/tcp`,
    `49160-49200/udp`.
-3. Uncomment the `coturn` service in `deploy/compose.yml` (it runs on the host's network: the relay needs the
-   real ports) and push: the room server then hands each page TURN credentials of 6 hours (an expiry and
+3. The `coturn` service in `deploy/compose.yml` (on since 2026-10-14; it runs on the host's network: the relay
+   needs the real ports): the room server then hands each page TURN credentials of 6 hours (an expiry and
    the device as the username, its HMAC-SHA1 under the secret as the password — coturn's
    `use-auth-secret`), relaying to private networks refused.
 
