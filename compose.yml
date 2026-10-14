@@ -12,7 +12,7 @@ services:
     restart: unless-stopped
 # rooms-begin
   rooms:
-    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-656b3dc-1.1
+    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-74ed1fd-2.1
     ports:
       - "3001:3001"
     volumes:
