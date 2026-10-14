@@ -58,7 +58,13 @@ describe.skipIf(!E2E)("flying together", () => {
   }, 60_000);
 
   test("the direct link: WebRTC between the two pages, the samples straight to each other", async () => {
-    for (const p of [a, b]) await p.waitFor(`[...(__bh.net.net.mesh?.peers.values() ?? [])].some((l) => l.state === "open")`, 30_000);
+    for (const p of [a, b])
+      await p.waitFor(`[...(__bh.net.net.mesh?.peers.values() ?? [])].some((l) => l.state === "open")`, 30_000).catch(async (e) => {
+        console.log(
+          `  diag ${await p.js<string>(`JSON.stringify({ mesh: !!__bh.net.net.mesh, ice: __bh.net.net.iceServers, peers: [...(__bh.net.net.mesh?.peers.values() ?? [])].map((l) => ({ slot: l.slot, state: l.state, pc: l.pc.connectionState, ice: l.pc.iceConnectionState, sig: l.pc.signalingState, ch: l.ch?.readyState })), members: __bh.net.net.room.members.map((m) => m.slot), me: __bh.net.net.room.slot })`)}`,
+        );
+        throw e;
+      });
     await Bun.sleep(3000);
     for (const [n, p] of [
       ["A", a],

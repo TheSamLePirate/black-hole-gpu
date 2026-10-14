@@ -4243,6 +4243,8 @@ export class Renderer {
    *  craft's origin on the camera's axes [m], its axes on them, an F-35's pose, its engines */
   netOthers: {
     slot: number;
+    /** Gargantua's side (R8): rel and axes already on the camera's axes (the hole's map, its rest frame) */
+    side?: "hole";
     id: VesselId;
     rel: Vec3;
     axes: [Vec3, Vec3, Vec3];
@@ -4267,6 +4269,21 @@ export class Renderer {
   private netShips(s: Settings): ShipInstance[] {
     this.netShipsCam = [];
     const cam = this.lastCam;
+    // (Gargantua's side — R8 —: placed from the camera already, on its axes)
+    if (this.netOthers.length && cam?.region === "hole") {
+      const eye = s.ship && this.shipPose ? shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t : ([0, 0, 0] as Vec3);
+      return this.netOthers
+        .filter((o) => o.side === "hole")
+        .map((o) => ({
+          id: o.id,
+          S: [0, 1, 2].map((k) => [o.axes[0][k]!, o.axes[1][k]!, o.axes[2][k]!]) as [Vec3, Vec3, Vec3],
+          t: [o.rel[0] + eye[0], o.rel[1] + eye[1], o.rel[2] + eye[2]] as Vec3,
+          shadow: Math.hypot(...o.rel) < vesselHulls[o.id].radius + vesselHulls[s.vessel].radius + 60,
+          jet: o.jet,
+          thrust: o.thrust,
+          far: true,
+        }));
+    }
     if (!this.netOthers.length || !cam || s.system !== "gargantua" || !s.wormhole || cam.region !== "throat" || cam.ell >= 0) return [];
     const w = mouth(s).w;
     const Xc = homeOf(w, cam.ell, cam.n);
@@ -4280,21 +4297,23 @@ export class Renderer {
       return [v[0] / l, v[1] / l, v[2] / l];
     };
     const eye = s.ship && this.shipPose ? shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t : ([0, 0, 0] as Vec3);
-    return this.netOthers.map((o) => {
-      const t = toCam([o.X[0] - Xc[0], o.X[1] - Xc[1], o.X[2] - Xc[2]]).map((c, k) => c * mR + eye[k]!) as Vec3;
-      const a = o.axesHome.map((v) => unitV(toCam(v))) as [Vec3, Vec3, Vec3];
-      const sep = Math.hypot(...t.map((c, k) => c - eye[k]!));
-      this.netShipsCam.push({ slot: o.slot, at: t, dist: Math.hypot(...t) });
-      return {
-        id: o.id,
-        S: [0, 1, 2].map((k) => [a[0][k]!, a[1][k]!, a[2][k]!]) as [Vec3, Vec3, Vec3],
-        t,
-        shadow: sep < vesselHulls[o.id].radius + vesselHulls[s.vessel].radius + 60,
-        jet: o.jet,
-        thrust: o.thrust,
-        far: true,
-      };
-    });
+    return this.netOthers
+      .filter((o) => o.side !== "hole")
+      .map((o) => {
+        const t = toCam([o.X[0] - Xc[0], o.X[1] - Xc[1], o.X[2] - Xc[2]]).map((c, k) => c * mR + eye[k]!) as Vec3;
+        const a = o.axesHome.map((v) => unitV(toCam(v))) as [Vec3, Vec3, Vec3];
+        const sep = Math.hypot(...t.map((c, k) => c - eye[k]!));
+        this.netShipsCam.push({ slot: o.slot, at: t, dist: Math.hypot(...t) });
+        return {
+          id: o.id,
+          S: [0, 1, 2].map((k) => [a[0][k]!, a[1][k]!, a[2][k]!]) as [Vec3, Vec3, Vec3],
+          t,
+          shadow: sep < vesselHulls[o.id].radius + vesselHulls[s.vessel].radius + 60,
+          jet: o.jet,
+          thrust: o.thrust,
+          far: true,
+        };
+      });
   }
 
   /** The fight's aircraft as instances: their place from the eye, their axes. */

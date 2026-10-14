@@ -4,14 +4,16 @@
 // for the renderer (their place from the flown craft, their axes, an F-35's moving parts posed as their
 // flight controls move them), and a place beside one of them (the teleport of the tests).
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
-import { cameraFrame } from "../camera";
+import { blToCartesian, cameraFrame } from "../camera";
 import type { F35Pose } from "../f35/model";
 import { JetPoser } from "../f35/pose";
 import type { CraftState } from "../net/remote";
 import { fromBodyFixed, groundVelocity, solidBody, toBodyFixed } from "../system/our-surface";
 import { bodyAxes, solarBody } from "../system/solar";
 import { ourState, repToHomeVec } from "../system/our-side";
-import { mouth } from "../wormhole";
+import { betaToCoord, zamoBeta } from "../landing";
+import { mapToRest } from "../system/local-patch";
+import { mouth, sphericalFrame } from "../wormhole";
 import { C_MPS, M_METRES, M_SECONDS } from "../units";
 import { VESSEL_IDS, type VesselId } from "../vessels";
 import type { CameraController } from "../controls";
@@ -139,6 +141,83 @@ function homeView(c: CameraController) {
   };
 }
 
+/** a sample's frame on Gargantua's side (R8): the hole's map — Boyer–Lindquist's flat Cartesian map [m], the
+ *  coordinate velocity [m/s], the axes on the map */
+export const NET_FRAME_HOLE = 2;
+
+/**
+ * The hole's map seen from the flown craft on Gargantua's side (R8): our place on it [M], a map displacement onto
+ * the camera's axes (its rest frame: proper lengths — flat over the few kilometres a craft is seen at), a ZAMO
+ * direction (the camera's own vectors') onto the map; metres per M.
+ */
+function holeView(c: CameraController) {
+  const cam = cameraFrame(c.s);
+  if (cam.region !== "hole") return null;
+  const X = blToCartesian(cam.r, cam.theta, cam.phi) as Vec3;
+  const f = sphericalFrame(X);
+  return {
+    cam,
+    X,
+    mR: 1476.625 * (c.s.massSolar || 1),
+    toCam: (d: Vec3): Vec3 => {
+      const r = mapToRest(d, cam) as Vec3;
+      return [dot(r, cam.right as Vec3), dot(r, cam.up as Vec3), dot(r, cam.fwd as Vec3)];
+    },
+    toMap: (z: Vec3): Vec3 => unit([0, 1, 2].map((i) => z[0] * f.er[i]! + z[1] * f.et[i]! + z[2] * f.ep[i]!) as Vec3),
+  };
+}
+
+/** The others' craft on Gargantua's side, near ours (R8): on the camera's axes from the hole's map. */
+function netShipsHole(c: CameraController, states: CraftState[]): NetShip[] {
+  const V = holeView(c);
+  netFrame.ships = [];
+  if (!V) return [];
+  const out: NetShip[] = [];
+  for (const s of states) {
+    const id = kindOf(s.kind);
+    if (!id || s.frame !== NET_FRAME_HOLE) continue;
+    const d = [0, 1, 2].map((k) => s.p[k]! / V.mR - V.X[k]!) as Vec3;
+    const rel = scale(V.toCam(d), V.mR);
+    const ax = quatAxes(s.q);
+    const axes = [scale(ax.right, -1), ax.up, ax.fwd].map((a) => unit(V.toCam(a))) as [Vec3, Vec3, Vec3];
+    const Vv = s.vis;
+    out.push({
+      side: "hole",
+      enu: { r: [0, 0, 0], v: [0, 0, 0], fwd: [0, 1, 0], up: [0, 0, 1] },
+      radar: { x: 0, y: 0, dz: 0, trk: null },
+      slot: s.slot,
+      id,
+      rel,
+      axes,
+      relHome: [0, 0, 0],
+      X: [Number.NaN, Number.NaN, Number.NaN],
+      axesHome: axes,
+      dist: Math.hypot(...rel),
+      ghost: s.ghost,
+      thrust: { throttle: Vv.throttle, boost: Math.max(1, Vv.boost), air: 0 },
+      state: s,
+    });
+  }
+  return out;
+}
+
+/** Our craft on Gargantua's side as the network sends it (R8): the hole's map. */
+function netOwnHole(c: CameraController): NetOwnState | null {
+  const V = holeView(c);
+  if (!V || !c.s.ship) return null;
+  const ax = c.shipAxesLocal(V.cam).map((a) => V.toMap(a as Vec3)) as [Vec3, Vec3, Vec3];
+  return {
+    frame: 2,
+    body: 0,
+    p: scale(V.X, V.mR),
+    v: scale(betaToCoord(V.X, V.cam.beta as Vec3, c.s.spin) as Vec3, C_MPS),
+    fwd: ax[2],
+    up: ax[1],
+    right: scale(ax[0], -1),
+    h: (Math.hypot(...V.X) - 1) * V.mR,
+  };
+}
+
 /** The Earth's frame now, seen from the flown craft: its axes, our place on them, the camera's mapping. */
 function earthView(c: CameraController) {
   const cam = cameraFrame(c.s);
@@ -232,8 +311,8 @@ export function netDockPose(s: CraftState, t: number): { X: Vec3; V: Vec3; ax: [
 /** Our craft as the network sends it, anywhere on our side (R6): fixed to the Earth in its air or on its ground (R1);
  *  elsewhere in the inertial frame of the body whose sphere it is in — the home frame's axes about its centre. */
 export interface NetOwnState extends NetOwn {
-  /** 0: fixed to the body, 1: its inertial frame */
-  frame: 0 | 1;
+  /** 0: fixed to the body, 1: its inertial frame, 2: Gargantua's side — the hole's map (R8) */
+  frame: 0 | 1 | 2;
   /** NET_BODIES' index */
   body: number;
 }
@@ -244,6 +323,7 @@ function netOwnState(this: CameraController): NetOwnState | null {
   if (own && own.h < 100_000) return { ...own, frame: 0, body: 0 };
   if (!this.s.ship) return null;
   const H = homeView(this);
+  if (!H) return netOwnHole(this);
   const body = H ? NET_BODIES.indexOf(H.nav.ref) : -1;
   if (!H || body < 0) return null;
   const nav = H.nav;
@@ -263,6 +343,8 @@ function netOwnState(this: CameraController): NetOwnState | null {
 
 export interface NetShip {
   slot: number;
+  /** Gargantua's side (R8: the hole's map — rel/axes on the camera's axes, no home frame) or ours */
+  side?: "hole";
   id: VesselId;
   /** from the flown craft's origin on the camera's axes [m]; its axes there (left, top, nose) */
   rel: Vec3;
@@ -302,7 +384,7 @@ function netShips(
   attached?: Map<number, { c: Vec3; ax: [Vec3, Vec3, Vec3] }>,
 ): NetShip[] {
   const H = homeView(this);
-  if (!H) return [];
+  if (!H) return netShipsHole(this, states);
   // (those docked to our craft — R7 —: held on it, rigid, from our own pose — not from their samples, a
   // latency behind)
   const mine = attached?.size ? (this.shipAxesLocal(H.cam).map((a) => H.fromLocal(a as Vec3)) as [Vec3, Vec3, Vec3]) : null;
@@ -409,7 +491,26 @@ function netShips(
  * A place beside another craft (the teleport of the tests): `gap` metres off its right (negative: its left),
  * its velocity, its attitude — in the home frame, for tools.placeAt. Null: not on the Earth.
  */
-function netPlaceBeside(this: CameraController, s: CraftState, gap: number) {
+function netPlaceBeside(
+  this: CameraController,
+  s: CraftState,
+  gap: number,
+): { frame?: "hole"; X: Vec3; vel: Vec3; fwd: Vec3; up: Vec3 } | null {
+  // (Gargantua's side — R8 —: on the hole's map, his velocity as the ZAMO's β there)
+  if (s.frame === NET_FRAME_HOLE) {
+    const mR = 1476.625 * (this.s.massSolar || 1);
+    const ax = quatAxes(s.q);
+    const X = [0, 1, 2].map((k) => (s.p[k]! + ax.right[k]! * gap) / mR) as Vec3;
+    const b = zamoBeta(X, scale(s.v as Vec3, 1 / C_MPS), this.s.spin) as Vec3;
+    const f = sphericalFrame(X);
+    return {
+      frame: "hole",
+      X,
+      vel: [0, 1, 2].map((i) => b[0] * f.er[i]! + b[1] * f.et[i]! + b[2] * f.ep[i]!) as Vec3,
+      fwd: unit(ax.fwd),
+      up: unit(ax.up),
+    };
+  }
   // (the body's axes now alone — wherever our craft is: a spectator in orbit takes another's place on the ground)
   const t = this.nowTime();
   if (!Number.isFinite(t) || !this.s.wormhole) return null;

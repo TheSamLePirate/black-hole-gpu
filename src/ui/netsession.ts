@@ -336,7 +336,17 @@ export class NetSession {
     this.puppetFrame(followed, fstate);
     R.netOthers = this.ships
       .filter((s) => !s.ghost && s.dist < 60_000)
-      .map((s) => ({ slot: s.slot, id: s.id, rel: s.rel, axes: s.axes, X: s.X, axesHome: s.axesHome, jet: s.jet, thrust: s.thrust }));
+      .map((s) => ({
+        slot: s.slot,
+        side: s.side,
+        id: s.id,
+        rel: s.rel,
+        axes: s.axes,
+        X: s.X,
+        axesHome: s.axesHome,
+        jet: s.jet,
+        thrust: s.thrust,
+      }));
     const members = new Map(net.room.members.map((m) => [m.slot, m]));
     // (on the F-35's radar: each other in his colour, his track, his height against ours)
     netRadar.contacts = this.ships
@@ -475,7 +485,9 @@ export class NetSession {
         w[2] += (e0[0] * e1[1] - e0[1] * e1[0]) / (2 * h);
       }
       for (let i = 0; i < 3; i++) {
-        this.acc[i] = this.acc[i]! + (clamp(a[i]!, -400, 400) - this.acc[i]!) * k;
+        // (a glitch cut, not a pull: by Gargantua an orbit about Miller is pulled 6 km/s² — R8)
+        const aMax = own.frame === 2 ? 1e5 : 400;
+        this.acc[i] = this.acc[i]! + (clamp(a[i]!, -aMax, aMax) - this.acc[i]!) * k;
         this.spin[i] = this.spin[i]! + (clamp(w[i]!, -10, 10) - this.spin[i]!) * k;
       }
     }
@@ -924,7 +936,7 @@ export class NetSession {
     const place = c.netPlaceBeside(s, g);
     if (!place) return t("The teleport needs your craft on our side of the wormhole");
     const ground = (s.flags & 1) !== 0;
-    this.d.tools.placeAt({ frame: "ours", ...place, note: tf("Beside {0}", o.name) });
+    this.d.tools.placeAt({ ...place, frame: place.frame ?? "ours", note: tf("Beside {0}", o.name) });
     if (c.pilot.auto !== "none") c.pilot.setAuto(c.pilot.auto);
     c.pilot.auto = "none";
     c.gearInit = true;
