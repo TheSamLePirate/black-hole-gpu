@@ -50,6 +50,9 @@ export interface ShipInstance {
   jet?: F35Pose;
   /** hidden where the traced image holds something nearer (default: yes) */
   far?: boolean;
+  /** another's engines (docs/PLAN-RESEAU.md R1): its main jets drawn as the flown craft's are — throttle 0–1,
+   *  the afterburner's factor (1: dry), the air about it 0–1 */
+  thrust?: { throttle: number; boost: number; air: number };
 }
 
 export interface ShipView {
@@ -1184,6 +1187,59 @@ export class ShipRenderer {
     if (n) this.device.queue.writeBuffer(this.jetBuf, 0, out, 0, n * JET_FLOATS);
   }
 
+  /**
+   * The others' main jets (docs/PLAN-RESEAU.md R1), after the flown craft's in the same buffer: each brought
+   * from its craft's frame into the flown craft's (the jets' pass draws them there) — an F-35's from its
+   * nozzle's exit as its pose has it, its afterburner's flame with its boost.
+   */
+  private appendJets(
+    lit: { id: VesselId; R: M3; t: V3; thrust: NonNullable<ShipInstance["thrust"]>; exit: { p: V3; d: V3 } | null }[],
+    R0: M3,
+    t0: V3,
+    time: number,
+  ) {
+    const out = this.jetData;
+    let n = this.jetCount;
+    const first = n;
+    // (a camera-frame point and vector → the flown craft's frame: R0ᵀ (x − t0))
+    const back = (w: V3): V3 => [0, 1, 2].map((j) => R0[0]![j]! * w[0] + R0[1]![j]! * w[1] + R0[2]![j]! * w[2]) as V3;
+    for (const r of lit) {
+      const V = VESSELS[r.id];
+      const air = Math.min(Math.max(r.thrust.air, 0), 1);
+      V.jets.forEach((J0, i) => {
+        if (!J0.main || n >= MAX_JETS) return;
+        const level = jetLevel(V, J0, i, {
+          throttle: r.thrust.throttle,
+          boost: r.thrust.boost,
+          force: [0, 0, 0],
+          torque: [0, 0, 0],
+          time,
+          air,
+        });
+        if (level <= 0) return;
+        const jet = r.id === "f35";
+        const J = jet && r.exit ? { ...J0, p: r.exit.p, d: r.exit.d } : J0;
+        const ab = jet ? Math.min(Math.max((r.thrust.boost - 1) / 0.5, 0), 1) : 0;
+        const len = jet ? 2.5 + 8 * ab : (4 + 20 * level) * (1 - 0.45 * air) * V.flame;
+        const toCam = (q: V3): V3 => [dot(r.R[0]!, q), dot(r.R[1]!, q), dot(r.R[2]!, q)];
+        const pc = toCam(J.p);
+        const p = back([pc[0] + r.t[0] - t0[0], pc[1] + r.t[1] - t0[1], pc[2] + r.t[2] - t0[2]]);
+        const d = back(toCam(J.d));
+        const u = back(toCam(J.u));
+        out.set([...p, level, ...d, jet ? 2 : 0, J.half[0], J.half[1], len, (i * 0.618 + n * 0.37) % 1, ...u, ab], n * JET_FLOATS);
+        const spread = 0.16 * (1 - air) + 0.03 * air;
+        const o = sub(this.camShip, p);
+        const sAx = dot(o, d);
+        const rad = (h: number) => (h + Math.max(sAx, 0) * spread) * 1.45 + 0.35;
+        this.jetInside[n] =
+          sAx > -0.45 && sAx < 0.85 * len + 0.3 && Math.abs(dot(o, u)) < rad(J.half[0]) && Math.abs(dot(o, cross(d, u))) < rad(J.half[1]);
+        n++;
+      });
+    }
+    if (n > first) this.device.queue.writeBuffer(this.jetBuf, first * JET_FLOATS * 4, out, first * JET_FLOATS, (n - first) * JET_FLOATS);
+    this.jetCount = n;
+  }
+
   private writeUniform(v: ShipView, mesh: Mesh) {
     this.bound = mesh.bound;
     const { S: R, t } = v.place ?? shipToCamera(v.mount, v.look[0], v.look[1]);
@@ -1255,12 +1311,14 @@ export class ShipRenderer {
     if (v.inside && this.flown && this.vessel === "ranger") this.loadCockpit();
     const inCabin = !!(v.inside && this.flown && this.vessel === "ranger" && this.cockpit);
     this.inCabin = inCabin;
-    const list: { id: VesselId; R: M3; t: V3; shadow: boolean; far: boolean; jet?: F35Pose }[] = this.flown
+    const list: { id: VesselId; R: M3; t: V3; shadow: boolean; far: boolean; jet?: F35Pose; thrust?: ShipInstance["thrust"] }[] = this.flown
       ? [{ id: this.vessel, R, t, shadow: true, far: !!v.place }]
       : [];
     for (const o of v.others ?? [])
       if (list.length < MAX_INST && this.meshes[o.id])
-        list.push({ id: o.id, R: o.S, t: o.t, shadow: o.shadow, far: o.far ?? true, jet: o.jet });
+        list.push({ id: o.id, R: o.S, t: o.t, shadow: o.shadow, far: o.far ?? true, jet: o.jet, thrust: o.thrust });
+    // (the others' engines firing: their jets after the flown craft's — appendJets)
+    const lit: { id: VesselId; R: M3; t: V3; thrust: NonNullable<ShipInstance["thrust"]>; exit: { p: V3; d: V3 } | null }[] = [];
     this.draws = [];
     const corners: V3[] = [];
     // (the shadow map's sphere: about the flown craft and those near it)
@@ -1278,7 +1336,8 @@ export class ShipRenderer {
         const mats = partMatrices(this.jetMesh, pose);
         this.writeParts(mats, parts);
         if (i === 0) this.jetExit = nozzleExit(this.jetMesh, mats);
-      }
+        else if (it.thrust) lit.push({ id: it.id, R: it.R, t: it.t, thrust: it.thrust, exit: nozzleExit(this.jetMesh, mats) });
+      } else if (i > 0 && it.thrust) lit.push({ id: it.id, R: it.R, t: it.t, thrust: it.thrust, exit: null });
       this.instData.set([kind[it.id], it.shadow ? 1 : 0, it.far ? 1 : 0, parts], i * INST_FLOATS + 16);
       this.draws.push({ mesh: me, shadow: it.shadow, cabin: i === 0 && inCabin, inst: i });
       // (the Ranger's landing gear, out: drawn with it — its own mesh, the craft's instance)
@@ -1329,6 +1388,7 @@ export class ShipRenderer {
     ];
     ax.forEach((a, i) => m.set([...a, 0], 36 + 4 * i));
     m.set([0, 0, 1, 1], 48); // (the whole image: encodeShip narrows it to the ship's box)
+    if (lit.length && this.flown) this.appendJets(lit, R, t, v.thrust?.time ?? 0);
     m.set([this.jetCount, v.glow ?? 1, v.thrust?.time ?? 0, v.thrust?.air ?? 0], 52);
     this.device.queue.writeBuffer(this.uniform, 0, m);
     this.writeReentry(v.reentry, mesh);

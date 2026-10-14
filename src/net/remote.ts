@@ -1,7 +1,8 @@
-// The others' craft read at a time (docs/PLAN-RESEAU.md, « Afficher les autres »): each shown a little in the
-// past — late enough for the next sample to be there —, a Hermite spline between two samples (their
-// velocities), beyond the last one carried on by its motion (velocity, acceleration, spin) for a moment
-// then a ghost; a new sample that disagrees with what was shown taken in smoothly, never a jump.
+// The others' craft read at a time (docs/PLAN-RESEAU.md, « Afficher les autres »): each shown now — carried
+// from its last sample by its motion (velocity, acceleration, spin): a wingman 25 m off flies 25 m off, not
+// the 50 m behind a fifth of a second's delay would put him at 250 m/s —, a Hermite spline between two
+// samples when read in the past, a ghost once its samples stopped; a new sample that disagrees with what was
+// shown taken in smoothly, never a jump.
 
 import type { CraftSample, Visual } from "./proto";
 
@@ -85,7 +86,7 @@ export class RemoteTrack {
     readonly slot: number,
     o: TrackOptions = {},
   ) {
-    this.maxAhead = o.maxAhead ?? 0.25;
+    this.maxAhead = o.maxAhead ?? 1;
     this.smooth = o.smooth ?? 0.15;
   }
 
@@ -191,13 +192,16 @@ export class RemoteTrack {
 }
 
 /**
- * The room's others: a track per slot, read at the room's time less a delay that follows how late the
- * samples come (their lateness and their spacing, the slowest of the recent ones).
+ * The room's others: a track per slot, read at the room's time (`lead` 0: predicted to now) or a delay
+ * behind it (`lead` "delay": late enough for the next sample, interpolated). The delay follows how late the
+ * samples come (their lateness and their spacing, the slowest of the recent ones) — measured either way.
  */
 export class RemoteRegistry {
   readonly tracks = new Map<number, RemoteTrack>();
   /** the delay the others are shown with [s] */
   delay = 0.1;
+  /** shown predicted to now (0), or interpolated behind by the delay */
+  lead: 0 | "delay" = 0;
   /** how late the samples come [s]: median and 95th percentile of the recent ones */
   late50 = 0;
   late95 = 0;
@@ -238,7 +242,7 @@ export class RemoteRegistry {
   states(now: number): CraftState[] {
     const out: CraftState[] = [];
     for (const tr of this.tracks.values()) {
-      const s = tr.at(now - this.delay);
+      const s = tr.at(this.lead === 0 ? now : now - this.delay);
       if (s) out.push(s);
     }
     return out;

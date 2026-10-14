@@ -25,9 +25,9 @@ loaded only then.
   events, the craft samples passed on. In production at `wss://stream.samlepirate.org/`
   ([DEPLOY.md](DEPLOY.md)); in dev and in the tests on the page's own server at `/net` (`#server=` picks
   another, `?prodnet` the production one from localhost).
-- **The protocol** (`src/net/proto.ts`): JSON for the room's business, 100-byte binary samples for the
+- **The protocol** (`src/net/proto.ts`): JSON for the room's business, 104-byte binary samples for the
   craft (float64 position, velocity, attitude, spin, acceleration, what the craft shows: throttle,
-  afterburner, gear, flaps, STOVL, stick, α, CL, Mach).
+  afterburner, gear, flaps, STOVL, the flight controls' commands, α, CL, Mach).
 - **The clock** (`src/net/clock.ts`): NTP's exchange, the offset of the fastest eighth of the last 64
   exchanges; within a millisecond between two pages on one machine.
 - **The others** (`src/net/remote.ts`): shown a little in the past — late enough for the next sample —, a

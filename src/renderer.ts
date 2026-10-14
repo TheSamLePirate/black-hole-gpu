@@ -4199,9 +4199,35 @@ export class Renderer {
    *  [m], its axes on them, its pose */
   combatOthers: { id: VesselId; rel: Vec3; axes: [Vec3, Vec3, Vec3]; jet?: F35Pose; hidden?: boolean }[] = [];
 
+  /** the others' craft (docs/PLAN-RESEAU.md R1 — controller/netcraft.ts, ui/netsession.ts): each from the flown
+   *  craft's origin on the camera's axes [m], its axes on them, an F-35's pose, its engines */
+  netOthers: {
+    id: VesselId;
+    rel: Vec3;
+    axes: [Vec3, Vec3, Vec3];
+    jet?: F35Pose;
+    thrust?: { throttle: number; boost: number; air: number };
+  }[] = [];
+
   private shipOthers(s: Settings): ShipInstance[] {
-    const extra = this.combatShips(s);
+    const extra = [...this.netShips(s), ...this.combatShips(s)];
     return extra.length ? [...extra, ...this.fleetOthers(s)] : this.fleetOthers(s);
+  }
+
+  /** The others' craft as instances: their place from the eye, their axes, their engines; near ones in the
+   *  shadow map (a wingman's shadow on the flown craft, and its on his). */
+  private netShips(s: Settings): ShipInstance[] {
+    if (!this.netOthers.length || !s.ship || !this.shipPose) return [];
+    const eye = shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t;
+    return this.netOthers.map((o) => ({
+      id: o.id,
+      S: [0, 1, 2].map((k) => [o.axes[0][k]!, o.axes[1][k]!, o.axes[2][k]!]) as [Vec3, Vec3, Vec3],
+      t: [o.rel[0] + eye[0], o.rel[1] + eye[1], o.rel[2] + eye[2]] as Vec3,
+      shadow: Math.hypot(...o.rel) < vesselHulls[o.id].radius + vesselHulls[s.vessel].radius + 60,
+      jet: o.jet,
+      thrust: o.thrust,
+      far: true,
+    }));
   }
 
   /** The fight's aircraft as instances: their place from the eye, their axes. */

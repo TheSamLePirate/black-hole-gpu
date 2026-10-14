@@ -8,6 +8,7 @@ import { t, tf } from "../i18n";
 import { loadNet, netLoaded, netParams, serverUrl, type NetModule } from "../net/load";
 import { store } from "../util/storage";
 import { button, el as h, modal } from "./kit";
+import type { NetSession } from "./netsession";
 
 type Client = InstanceType<NetModule["NetClient"]>;
 type Role = "pilot" | "spectator" | "instruments";
@@ -81,6 +82,8 @@ const why = (e: unknown) => {
 export class NetPanel {
   /** the network's client, once a room was asked for */
   net: Client | null = null;
+  /** flying together this frame (ui/netsession.ts): the others placed, ours sent, the teleport */
+  session: NetSession | null = null;
   private close: (() => void) | null = null;
   private body: HTMLElement | null = null;
   private badge = h("button", "net-badge");
@@ -160,7 +163,7 @@ export class NetPanel {
     this.badge.title = tf("Room {0}: {1}", r.code, r.members.map((m) => m.name).join(", "));
   }
 
-  private setName(name: string, colour = this.id.colour) {
+  setName(name: string, colour = this.id.colour) {
     this.id.name = name.slice(0, 24);
     this.id.colour = colour;
     store.setJSON(ID_KEY, this.id);
@@ -223,6 +226,14 @@ export class NetPanel {
     });
   }
 
+  /** Our craft put beside another's (ui/netsession.ts), said. */
+  teleport(slot: number, gap?: number) {
+    const said = this.session?.teleport(slot, gap) ?? t("Not in a room");
+    this.host.toast(said);
+    this.close?.();
+    return said;
+  }
+
   link(code: string) {
     return `${location.origin}${location.pathname}#join=${code}`;
   }
@@ -279,6 +290,16 @@ export class NetPanel {
         const dot = h("i", "netp-dot");
         dot.style.background = m.colour;
         li.append(dot, h("span", "", m.name), h("em", "", ROLE_NAMES[m.role]?.() ?? m.role));
+        // (the tests': beside another — off its right wing, at its speed)
+        if (m.slot !== room.slot && m.role === "pilot")
+          li.append(
+            button({
+              label: t("Beside"),
+              title: tf("Put my craft off {0}'s right wing, at its speed", m.name),
+              testid: `net-tp-${m.slot}`,
+              onClick: () => this.teleport(m.slot),
+            }),
+          );
         list.append(li);
       }
       const stat = h(

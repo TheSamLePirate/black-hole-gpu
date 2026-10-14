@@ -42,6 +42,7 @@ import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 import { frameNow } from "../frameclock";
 import { t, tf } from "../i18n";
 
+import { netFrame } from "./netcraft";
 import type { CameraController } from "../controls";
 import { LANDING, clamp, finalGate, fmtDur, landingProfile, spinAxis, unitV } from "./util";
 
@@ -1323,6 +1324,54 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
       }
     }
   }
+  // (the others' craft — docs/PLAN-RESEAU.md R1, controller/netcraft.ts —: their engines' trails, their
+  // wingtips' threads and their vapour sheets, from where they are and how hard they pull, in this air)
+  const NS = netFrame.ships;
+  const sfn = NS.length && LA && LA.air.rho > 0 ? this.sfFrame(cam) : null;
+  if (sfn && LA)
+    for (const o of NS) {
+      if (o.ghost || o.dist > 30_000) continue;
+      const toHere = (h: Vec3): Vec3 => {
+        const l = Math.hypot(...h);
+        return l < 1e-9 ? [0, 0, 0] : (fr.fromLocal(sfn.toLocal(lin(h, 1 / l, h, 0))).map((c) => c * l) as Vec3);
+      };
+      const base = lin(x, 1, toHere(o.relHome), 1);
+      const oa = o.axesHome.map((a) => fr.fromLocal(sfn.toLocal(a))) as [Vec3, Vec3, Vec3];
+      const atO = (q: Vec3): Vec3 => [0, 1, 2].map((k) => base[k]! + oa[0][k]! * q[0] + oa[1][k]! * q[1] + oa[2][k]! * q[2]) as Vec3;
+      const OV = VESSELS[o.id];
+      const vis = o.state.vis;
+      const speed = Math.hypot(...o.state.v);
+      const key = `n${o.slot}`;
+      const e = engineTrail(vis.throttle, LA.air.rho, LA.air.T, LA.air.gas.R);
+      if (e > 0) OV.jets.forEach((J, i) => J.main && src.push({ key: `${key}e${i}`, p: atO(lin(J.p, 1, J.d, 2)), kind: 0, str: e }));
+      const tip = OV.wingtip;
+      const cl = Math.abs(vis.cl);
+      if (tip && OV.aero.wing && speed > 30) {
+        const tt = tipTrail(cl, LA.air.rho, LA.air.T, speed);
+        if (tt > 0)
+          for (const sx of [1, -1])
+            src.push({ key: `${key}t${sx}`, p: atO([tip[0] * sx, tip[1], tip[2]]), kind: OV.vapour ? 3 : 1, str: tt });
+        const vp = this.s.f35Vapour === false ? undefined : OV.vapour;
+        if (vp) {
+          const sh = sheetTrail(cl, LA.air.rho, LA.air.T, speed);
+          if (sh > 0)
+            for (const sx of [1, -1])
+              for (let k = 0; k < 6; k++) {
+                const f = k / 5;
+                const q: Vec3 = [
+                  (vp.root[0] + (vp.tip[0] - vp.root[0]) * f) * sx,
+                  vp.root[1] + (vp.tip[1] - vp.root[1]) * f,
+                  vp.root[2] + (vp.tip[2] - vp.root[2]) * f,
+                ];
+                src.push({ key: `${key}v${sx}${k}`, p: atO(q), kind: 2, str: sh * (0.7 + 0.3 * Math.sin(3 * f)) });
+              }
+          const apx = tipTrail(cl * Math.min(Math.max((vis.alpha * (Math.PI / 180) - 0.22) / 0.2, 0), 1), LA.air.rho, LA.air.T, speed);
+          if (apx > 0)
+            for (const sx of [1, -1])
+              src.push({ key: `${key}x${sx}`, p: atO([vp.apex[0] * sx, vp.apex[1], vp.apex[2]]), kind: 3, str: apx });
+        }
+      }
+    }
   // (a fight's missiles: their motors' smoke — controller/combat.ts —, at their place from the craft in the
   // local east, north, up)
   const CB = this.combat;

@@ -24,7 +24,7 @@ const sample = (t: number, p: [number, number, number], v: [number, number, numb
 });
 
 describe("the craft's sample", () => {
-  test("100 bytes round trip: float64 positions exact, the rest within its steps", () => {
+  test("104 bytes round trip: float64 positions exact, the rest within its steps", () => {
     const s = sample(812_345_678.123456, [-2_430_601.8273, -4_702_442.1102, 3_546_587.3561], [231.5, -12.25, 3.125], {
       q: [0.1, -0.2, 0.3, Math.sqrt(1 - 0.14)],
       w: [0.01, 0.2, -0.3],
@@ -36,15 +36,18 @@ describe("the craft's sample", () => {
         boost: 1.4,
         gear: 1,
         stovl: 0.5,
-        nozzle: -45,
-        stickX: -0.3,
+        nozzle: 0.6,
+        roll: -0.3,
+        yaw: 0.5,
+        steer: -1,
+        comp: 0.12,
         alpha: 7.25,
         cl: 0.62,
         mach: 0.93,
       },
     });
     const b = encodeCraft(s);
-    expect(b.byteLength).toBe(100);
+    expect(b.byteLength).toBe(104);
     const r = decodeCraft(b)!;
     expect(r.t).toBe(s.t);
     expect(r.p).toEqual(s.p);
@@ -53,9 +56,13 @@ describe("the craft's sample", () => {
     for (let k = 0; k < 4; k++) expect(Math.abs(r.q[k]! - s.q[k]!)).toBeLessThan(1e-4);
     expect(Math.abs(r.vis.throttle - 0.85)).toBeLessThan(0.004);
     expect(r.vis.boost).toBeCloseTo(1.4, 2);
-    expect(r.vis.nozzle).toBe(-45);
+    expect(r.vis.nozzle).toBeCloseTo(0.6, 2);
     expect(r.vis.alpha).toBeCloseTo(7.25, 2);
     expect(r.vis.mach).toBeCloseTo(0.93, 3);
+    expect(r.vis.roll).toBeCloseTo(-0.3, 2);
+    expect(r.vis.yaw).toBeCloseTo(0.5, 2);
+    expect(r.vis.steer).toBe(-1);
+    expect(r.vis.comp).toBeCloseTo(0.12, 2);
     expect(decodeCraft(new Uint8Array(50))).toBeNull();
   });
 
@@ -134,12 +141,12 @@ describe("the others read", () => {
     const e = Math.hypot(...[0, 1, 2].map((k) => s.p[k]! - at(last + 0.1)[k]!));
     expect(e).toBeLessThan(0.02);
     expect(s.ahead).toBeCloseTo(0.1, 6);
-    expect(tr.raw(last + 0.5)!.ghost).toBe(false);
-    expect(tr.raw(last + 1.5)!.ghost).toBe(true);
+    expect(tr.raw(last + 2)!.ghost).toBe(false);
+    expect(tr.raw(last + 4.5)!.ghost).toBe(true);
   });
 
   test("a disagreement taken in smoothly, not a jump", () => {
-    const tr = new RemoteTrack(1, { smooth: 0.15 });
+    const tr = new RemoteTrack(1, { smooth: 0.15, maxAhead: 0.25 });
     tr.push(sample(0, [0, 0, 0], [100, 0, 0]));
     tr.push(sample(0.1, [10, 0, 0], [100, 0, 0]));
     // shown ahead to 0.2 (x = 20), then the truth says it stopped at 12

@@ -45,6 +45,8 @@ import { matchKey, type KeyAction } from "./input/keymap";
 import { installBh } from "./automation";
 import { netParams } from "./net/load";
 import { NetPanel } from "./ui/netpanel";
+import { NetSession } from "./ui/netsession";
+import type { JetInputs } from "./f35/pose";
 import { installPwa } from "./pwa";
 import { PauseMenu } from "./ui/pause";
 import { ControlsScreen } from "./ui/controls-screen";
@@ -2332,6 +2334,8 @@ async function main() {
   const cockpitTravel = new ControlTravel();
   /** the F-35's moving parts, eased at their actuators' rates (src/f35/pose.ts) */
   const jetPoser = new JetPoser();
+  /** the F-35's flight controls' inputs this frame (the network sends its commands — ui/netsession.ts) */
+  let jetIn: JetInputs | null = null;
   /** the F-35's panoramic cockpit display (src/f35/pcd.ts) */
   const jetPcd = new Pcd();
   const flightHud = new FlightHud(settings, {
@@ -3665,6 +3669,16 @@ async function main() {
   // playing together (ui/netpanel.ts, docs/PLAN-RESEAU.md): the network loaded only when a room is asked for
   const netPanel = new NetPanel({ time: () => sim.time, build: "", toast: (s) => panel.toast(s) });
   const openNetwork = () => (settings.netMenu ? netPanel.open() : panel.toast(t("The network's menu is off (Settings › Network)")));
+  const netSession = new NetSession({
+    camera,
+    renderer,
+    settings,
+    tools,
+    panel: netPanel,
+    toast: (s) => panel.toast(s),
+    jetIn: () => jetIn,
+  });
+  netPanel.session = netSession;
   // the Atlas (ui/atlas.ts, PLAN-MODES-AAA M6): the Earth, the Moon and Mars as maps, their destinations, the
   // addresses — the game put there (in orbit, landed, on foot, the free camera, a tripod)
   const ATLAS_ORBIT_KM: Record<MapBody, number> = { earth: 400, moon: 100, mars: 300 };
@@ -5462,6 +5476,10 @@ async function main() {
     );
     const pil = flying();
     const info = pil ? cpuProf.time("flight figures (flightInfo)", () => camera.flightInfo()) : null;
+    // (flying together: ours sent, the others placed — before the render's figures: their contrails come with ours — ui/netsession.ts)
+    netSession.frame(dt);
+    viewOverlay.netTags = netSession.tags;
+    if (netSession.ships.length) changed = true;
     if (!renderer.offlineActive && cpuProf.time("free-fall prediction", () => sim.applyRender(info))) changed = true;
     // (a take records what the view shows: the settings, the clocks, what the renderer draws of the flight)
     if (take.recording && !renderer.offlineActive) {
@@ -5792,29 +5810,31 @@ async function main() {
           const L = camera.airFlight.last;
           const onGround = !!camera.gearLast && camera.gearLast.contact > 0;
           const speed = status?.speed ?? 0;
-          renderer.jetPose = jetPoser.step({
-            dt,
-            // (the pilot's: the roll left-positive — pilot.ts —; here right-positive)
-            torque: th ? [th.torque[0], th.torque[1], -th.torque[2]] : [0, 0, 0],
-            rates: ((r) => [camera.pilot.omega[0] / r[0], camera.pilot.omega[1] / r[1], -camera.pilot.omega[2] / r[2]])(
-              VESSELS.f35.fbw!.rates,
-            ) as [number, number, number],
-            throttle: th?.throttle ?? 0,
-            afterburner: (th?.boost ?? 1) > 1.01,
-            alpha: L?.out.alpha ?? 0,
-            flaps: camera.airFlight.cfg.flaps ?? 0,
-            brake: camera.airFlight.cfg.brake ?? 0,
-            gear: camera.gearExt,
-            comp: legs.map((Lg, k) => Math.min(Math.max(gl?.[k]?.comp ?? 0, 0), Lg.stroke)) as [number, number, number],
-            onGround,
-            groundSpeed: speed,
-            steer: onGround ? (th?.torque[1] ?? 0) : 0,
-            parked: onGround && speed < 0.5 && (th?.throttle ?? 0) <= 0.02 && !camera.stovl.on,
-            stovl: camera.stovl.conv,
-            nozzle: camera.stovl.swivel,
-            fan: camera.stovl.fan,
-          });
-        }
+          renderer.jetPose = jetPoser.step(
+            (jetIn = {
+              dt,
+              // (the pilot's: the roll left-positive — pilot.ts —; here right-positive)
+              torque: th ? [th.torque[0], th.torque[1], -th.torque[2]] : [0, 0, 0],
+              rates: ((r) => [camera.pilot.omega[0] / r[0], camera.pilot.omega[1] / r[1], -camera.pilot.omega[2] / r[2]])(
+                VESSELS.f35.fbw!.rates,
+              ) as [number, number, number],
+              throttle: th?.throttle ?? 0,
+              afterburner: (th?.boost ?? 1) > 1.01,
+              alpha: L?.out.alpha ?? 0,
+              flaps: camera.airFlight.cfg.flaps ?? 0,
+              brake: camera.airFlight.cfg.brake ?? 0,
+              gear: camera.gearExt,
+              comp: legs.map((Lg, k) => Math.min(Math.max(gl?.[k]?.comp ?? 0, 0), Lg.stroke)) as [number, number, number],
+              onGround,
+              groundSpeed: speed,
+              steer: onGround ? (th?.torque[1] ?? 0) : 0,
+              parked: onGround && speed < 0.5 && (th?.throttle ?? 0) <= 0.02 && !camera.stovl.on,
+              stovl: camera.stovl.conv,
+              nozzle: camera.stovl.swivel,
+              fan: camera.stovl.fan,
+            }),
+          );
+        } else jetIn = null;
         // (the F-35's panoramic display, seen from its seat: drawn at 10 Hz, onto the dashboard)
         if (settings.vessel === "f35" && (settings.shipMount === "cockpit" || settings.shipMount === "cabin")) {
           const al = alertsOf({ ...info, status, animate: settings.animate, fmtM: () => "" }).map((a) => ({

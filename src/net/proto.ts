@@ -3,8 +3,9 @@
 // craft's samples (many, droppable). Nothing here imports the game: the server's image copies src/net/ alone.
 
 /** the protocol's version: the server takes this one and the one before, an older page is told to reload */
-export const PROTO_VERSION = 1;
-export const PROTO_MIN = PROTO_VERSION - 1;
+export const PROTO_VERSION = 2;
+/** (v1's samples were 100 bytes: not passed on any more) */
+export const PROTO_MIN = 2;
 
 /** a room's devices and pilots at most */
 export const MAX_DEVICES = 8;
@@ -99,13 +100,17 @@ export interface Visual {
   gear: number;
   flaps: number;
   brake: number;
-  /** STOVL conversion, lift fan 0–1; the nozzle's swivel [°] */
+  /** STOVL: its doors open 0–1, the lift fan running 0–1, the nozzle swivelled down 0–1 */
   stovl: number;
   fan: number;
   nozzle: number;
-  /** the stick, −1–1 */
-  stickX: number;
-  stickY: number;
+  /** the flight controls' commands, −1–1: pitch (nose up +), roll (right +), yaw (nose right +); the nose wheel's steering */
+  pitch: number;
+  roll: number;
+  yaw: number;
+  steer: number;
+  /** the gear's oleos, their mean compression [m, 0–0.5] */
+  comp: number;
   /** angle of attack [°], lift coefficient, Mach */
   alpha: number;
   cl: number;
@@ -134,13 +139,13 @@ export interface CraftSample {
   vis: Visual;
 }
 
-export const CRAFT_BYTES = 100;
+export const CRAFT_BYTES = 104;
 
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Number.isFinite(x) ? x : 0));
 const u8 = (x: number, scale: number) => Math.round(clamp(x * scale, 0, 255));
 const i8 = (x: number, scale: number) => Math.round(clamp(x * scale, -127, 127));
 
-/** A craft's sample on the wire: 100 bytes, little-endian. */
+/** A craft's sample on the wire: 104 bytes, little-endian. */
 export function encodeCraft(s: CraftSample): ArrayBuffer {
   const b = new ArrayBuffer(CRAFT_BYTES);
   const d = new DataView(b);
@@ -169,12 +174,15 @@ export function encodeCraft(s: CraftSample): ArrayBuffer {
   d.setUint8(88, u8(V.brake, 255));
   d.setUint8(89, u8(V.stovl, 255));
   d.setUint8(90, u8(V.fan, 255));
-  d.setInt8(91, i8(V.nozzle, 1));
-  d.setInt8(92, i8(V.stickX, 127));
-  d.setInt8(93, i8(V.stickY, 127));
+  d.setInt8(91, i8(V.nozzle, 127));
+  d.setInt8(92, i8(V.pitch, 127));
+  d.setInt8(93, i8(V.roll, 127));
   d.setInt16(94, Math.round(clamp(V.alpha * 100, -32767, 32767)), true);
   d.setInt16(96, Math.round(clamp(V.cl * 1000, -32767, 32767)), true);
   d.setUint16(98, Math.round(clamp(V.mach * 1000, 0, 65535)), true);
+  d.setInt8(100, i8(V.yaw, 127));
+  d.setInt8(101, i8(V.steer, 127));
+  d.setUint8(102, u8(V.comp, 510));
   return b;
 }
 
@@ -206,12 +214,15 @@ export function decodeCraft(b: ArrayBuffer | Uint8Array): CraftSample | null {
       brake: d.getUint8(88) / 255,
       stovl: d.getUint8(89) / 255,
       fan: d.getUint8(90) / 255,
-      nozzle: d.getInt8(91),
-      stickX: d.getInt8(92) / 127,
-      stickY: d.getInt8(93) / 127,
+      nozzle: d.getInt8(91) / 127,
+      pitch: d.getInt8(92) / 127,
+      roll: d.getInt8(93) / 127,
       alpha: d.getInt16(94, true) / 100,
       cl: d.getInt16(96, true) / 1000,
       mach: d.getUint16(98, true) / 1000,
+      yaw: d.getInt8(100) / 127,
+      steer: d.getInt8(101) / 127,
+      comp: d.getUint8(102) / 510,
     },
   };
 }
@@ -225,8 +236,11 @@ export const emptyVisual = (): Visual => ({
   stovl: 0,
   fan: 0,
   nozzle: 0,
-  stickX: 0,
-  stickY: 0,
+  pitch: 0,
+  roll: 0,
+  yaw: 0,
+  steer: 0,
+  comp: 0,
   alpha: 0,
   cl: 0,
   mach: 0,

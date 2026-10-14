@@ -17,9 +17,12 @@ import { BODY_COLOURS } from "./camerapanel";
 import { drawLock, lockKey } from "./targethud";
 import { FONT, MONO } from "./hudkit";
 import { safeFrame } from "./hud/safe";
+import type { NetTag } from "./netsession";
 
 export class ViewOverlay {
   private key = "";
+  /** the others' name tags (ui/netsession.ts — docs/PLAN-RESEAU.md R1) */
+  netTags: NetTag[] = [];
   constructor(
     private overlay: HTMLCanvasElement,
     _settings: Settings,
@@ -45,9 +48,11 @@ export class ViewOverlay {
     const hover = this.camera.hover;
     const ship = this.shipMarker();
     const tele = this.telescopeView(cam);
+    const tags = this.netTagsDrawn();
     const key =
-      guide || this.camera.flyMode || marker || lock || hover || ship || tele || sky
+      guide || this.camera.flyMode || marker || lock || hover || ship || tele || sky || tags.length
         ? [
+            tags.map((g) => `${g.slot}:${g.x.toFixed(0)},${g.y.toFixed(0)},${g.label}`).join(";"),
             lock
               ? lockKey(lock.v, this.overlay.width, this.overlay.height, Math.tan((this.settings.fov * Math.PI) / 360)) +
                 lock.alpha.toFixed(2)
@@ -98,6 +103,7 @@ export class ViewOverlay {
     }
     if (hover && hover.body !== marker?.body && !(lock && hover.body === this.settings.target)) this.drawHover(ctx, hover);
     if (ship) this.drawShipMarker(ctx, ship);
+    if (tags.length && !tele) this.drawNetTags(ctx, tags);
     if (!guide) return;
     const tanH = Math.tan((this.settings.fov * Math.PI) / 360);
     const aspect = this.overlay.width / this.overlay.height;
@@ -206,6 +212,75 @@ export class ViewOverlay {
       ctx.fill();
       ctx.rotate(-m.dir);
       ctx.fillText(m.label, 0, 22 * k);
+    }
+    ctx.restore();
+  }
+
+  /**
+   * The others' name tags where they are drawn (docs/PLAN-RESEAU.md R1): on screen, over the craft (its size
+   * on the screen lifts the tag clear of it); off it, at the edge towards it with an arrow. Their name, the
+   * craft and the distance; "signal lost" when its samples stopped.
+   */
+  private netTagsDrawn() {
+    if (!this.netTags.length || this.renderer.offlineActive || document.body.classList.contains("hide-ui")) return [];
+    const W = this.overlay.width,
+      H = this.overlay.height,
+      k = devicePixelRatio;
+    const tanH = Math.tan((this.settings.fov * Math.PI) / 360);
+    const fmt = (d: number) => (d < 1000 ? `${Math.round(d)} m` : `${(d / 1000).toFixed(d < 10_000 ? 1 : 0)} km`);
+    return this.netTags.map((g) => {
+      const [x, y, z] = g.at;
+      const label = `${g.name} · ${g.kind} · ${g.ghost ? "…" : fmt(g.dist)}`;
+      if (z > 1) {
+        const px = ((x / z / (tanH * (W / H)) + 1) / 2) * W,
+          py = ((1 - y / z / tanH) / 2) * H;
+        // (lifted by the craft's half-size on the screen: some 7 m)
+        const lift = Math.min(160 * k, Math.max(14 * k, (7 / z / tanH) * (H / 2)));
+        if (px > 0 && px < W && py > 0 && py < H) return { ...g, x: px, y: py - lift, label, on: true, dir: 0 };
+      }
+      const dir = Math.atan2(-y, x);
+      const m = 40 * k;
+      const r = Math.min((W / 2 - m) / Math.abs(Math.cos(dir) || 1e-9), (H / 2 - m) / Math.abs(Math.sin(dir) || 1e-9));
+      return { ...g, x: W / 2 + Math.cos(dir) * r, y: H / 2 + Math.sin(dir) * r, label, on: false, dir };
+    });
+  }
+
+  private drawNetTags(ctx: CanvasRenderingContext2D, tags: ReturnType<ViewOverlay["netTagsDrawn"]>) {
+    const k = devicePixelRatio;
+    ctx.save();
+    ctx.font = `600 ${11 * k}px ${MONO}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    for (const g of tags) {
+      ctx.globalAlpha = g.ghost ? 0.45 : 1;
+      ctx.fillStyle = g.colour;
+      ctx.strokeStyle = g.colour;
+      ctx.lineWidth = 1.5 * k;
+      if (g.on) {
+        // (a caret pointing down at the craft, the tag above it)
+        ctx.beginPath();
+        ctx.moveTo(g.x - 5 * k, g.y - 6 * k);
+        ctx.lineTo(g.x, g.y);
+        ctx.lineTo(g.x + 5 * k, g.y - 6 * k);
+        ctx.stroke();
+      } else {
+        ctx.save();
+        ctx.translate(g.x, g.y);
+        ctx.rotate(g.dir);
+        ctx.beginPath();
+        ctx.moveTo(10 * k, 0);
+        ctx.lineTo(-5 * k, -6 * k);
+        ctx.lineTo(-5 * k, 6 * k);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+      const w = ctx.measureText(g.label).width + 10 * k;
+      const ty = g.on ? g.y - 9 * k : g.y - 12 * k;
+      ctx.fillStyle = "rgba(4, 8, 14, 0.62)";
+      ctx.fillRect(g.x - w / 2, ty - 15 * k, w, 16 * k);
+      ctx.fillStyle = g.colour;
+      ctx.fillText(g.label, g.x, ty);
     }
     ctx.restore();
   }

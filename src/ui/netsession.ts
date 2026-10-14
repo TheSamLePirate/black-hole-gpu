@@ -1,0 +1,219 @@
+// Flying together (docs/PLAN-RESEAU.md, R1) — the frame's side of the network, in the game's bundle: our craft
+// sent to the room (30 times a second, 60 near another, twice when parked), its motion's derivatives measured
+// between frames; the others brought onto the camera's axes for the renderer, their name tags for the overlay
+// and the HUD; the room's time at ×1; a place beside another (the teleport of the tests). The client itself
+// (src/net/) is the network module's, loaded when a room was asked for.
+
+import { realTimeSpeed } from "../clock";
+import type { CameraController } from "../controls";
+import { axesQuat, kindIndex, netFrame, type NetShip } from "../controller/netcraft";
+import { fleet } from "../fleet";
+import type { JetInputs } from "../f35/pose";
+import type { GameTools } from "../game/tools";
+import { t, tf } from "../i18n";
+import { shipToCamera } from "../mounts";
+import type { CraftState } from "../net/remote";
+import type { Renderer } from "../renderer";
+import type { Settings } from "../settings";
+import { VESSELS } from "../vessels";
+import type { NetPanel } from "./netpanel";
+
+type Vec3 = [number, number, number];
+
+/** A name tag over another's craft (ui/overlay.ts draws it): its place on the camera's axes from the eye. */
+export interface NetTag {
+  slot: number;
+  name: string;
+  colour: string;
+  /** right, up, forward from the eye [m] */
+  at: Vec3;
+  dist: number;
+  ghost: boolean;
+  kind: string;
+}
+
+export interface NetSessionDeps {
+  camera: CameraController;
+  renderer: Renderer;
+  settings: Settings;
+  tools: GameTools;
+  panel: NetPanel;
+  toast(s: string): void;
+  /** the F-35's flight controls' inputs this frame (main.ts: the poser's), null: not the F-35 */
+  jetIn(): JetInputs | null;
+}
+
+const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
+
+export class NetSession {
+  /** the name tags this frame */
+  tags: NetTag[] = [];
+  /** the others' craft this frame */
+  ships: NetShip[] = [];
+  private lastSend = -1;
+  private prev: { at: number; v: Vec3; ax: [Vec3, Vec3, Vec3] } | null = null;
+  private acc: Vec3 = [0, 0, 0];
+  private spin: Vec3 = [0, 0, 0];
+  private warpSaid = false;
+  /** samples sent, for the link's figures */
+  sent = 0;
+
+  constructor(private d: NetSessionDeps) {}
+
+  private get net() {
+    return this.d.panel.net;
+  }
+
+  /** The frame: our sample sent when due, the others placed, the room's ×1. */
+  frame(dt: number) {
+    const net = this.net;
+    const R = this.d.renderer;
+    if (!net?.room) {
+      if (R.netOthers.length) R.netOthers = [];
+      if (this.tags.length) this.tags = [];
+      if (this.ships.length) this.ships = [];
+      if (netFrame.ships.length) netFrame.ships = [];
+      this.prev = null;
+      return;
+    }
+    const c = this.d.camera;
+    const now = performance.now() / 1000;
+    // (a room flies at ×1 — real time: timeSpeed is in M per second —, its time everyone's; a warp asked is
+    // refused, said once)
+    const rt = realTimeSpeed(this.d.settings);
+    if (Math.abs(this.d.settings.timeSpeed - rt) > rt * 1e-6) {
+      c.requestWarp(rt);
+      if (!this.warpSaid) this.d.toast(t("In a room the time runs at ×1 for everyone"));
+      this.warpSaid = true;
+    }
+    // the others
+    const states = net.remotes.states(net.roomNow()).filter((s) => !s.ghost || s.ahead < 10);
+    this.ships = c.netShips(states, dt);
+    R.netOthers = this.ships.filter((s) => !s.ghost).map((s) => ({ id: s.id, rel: s.rel, axes: s.axes, jet: s.jet, thrust: s.thrust }));
+    const members = new Map(net.room.members.map((m) => [m.slot, m]));
+    const eye =
+      this.d.settings.ship && R.shipPose
+        ? shipToCamera(R.shipPose, this.d.settings.shipLookYaw, this.d.settings.shipLookPitch).t
+        : ([0, 0, 0] as Vec3);
+    this.tags = this.ships.map((s) => {
+      const m = members.get(s.slot);
+      return {
+        slot: s.slot,
+        name: m?.name ?? `#${s.slot}`,
+        colour: m?.colour ?? "#ffffff",
+        at: [s.rel[0] + eye[0], s.rel[1] + eye[1], s.rel[2] + eye[2]] as Vec3,
+        dist: s.dist,
+        ghost: s.ghost,
+        kind: VESSELS[s.id].name,
+      };
+    });
+    // ours, when due
+    if (net.room.role !== "pilot") return;
+    const own = c.netOwn();
+    if (!own) {
+      this.prev = null;
+      return;
+    }
+    // (the motion's derivatives, measured: the velocity's change, the axes' turn — eased over a few frames)
+    const ax: [Vec3, Vec3, Vec3] = [own.fwd, own.up, own.right];
+    if (this.prev && now > this.prev.at) {
+      const h = now - this.prev.at;
+      const k = 1 - Math.exp(-h / 0.08);
+      const a = [0, 1, 2].map((i) => (own.v[i]! - this.prev!.v[i]!) / h) as Vec3;
+      // (ω = ½ Σ eᵢ × eᵢ' / h: the triad's turn)
+      const w: Vec3 = [0, 0, 0];
+      for (let j = 0; j < 3; j++) {
+        const e0 = this.prev.ax[j]!,
+          e1 = ax[j]!;
+        w[0] += (e0[1] * e1[2] - e0[2] * e1[1]) / (2 * h);
+        w[1] += (e0[2] * e1[0] - e0[0] * e1[2]) / (2 * h);
+        w[2] += (e0[0] * e1[1] - e0[1] * e1[0]) / (2 * h);
+      }
+      for (let i = 0; i < 3; i++) {
+        this.acc[i] = this.acc[i]! + (clamp(a[i]!, -400, 400) - this.acc[i]!) * k;
+        this.spin[i] = this.spin[i]! + (clamp(w[i]!, -10, 10) - this.spin[i]!) * k;
+      }
+    }
+    this.prev = { at: now, v: own.v, ax };
+    const ground = !!c.gearLast && c.gearLast.contact > 0;
+    const speed = Math.hypot(...own.v);
+    const parked = ground && speed < 0.5;
+    const near = this.ships.some((s) => s.dist < 5000);
+    const rate = parked ? 2 : near ? 60 : 30;
+    if (now - this.lastSend < 1 / rate - 0.002) return;
+    this.lastSend = now;
+    const th = this.d.renderer.shipThrust;
+    const L = c.airFlight.last;
+    const J = this.d.jetIn();
+    const cmd = (k: number) => (J ? clamp(0.55 * J.torque[k]! + 0.75 * J.rates[k]!, -1, 1) : 0);
+    const boost = th?.boost ?? 1;
+    net.sendCraft({
+      frame: 0,
+      body: 0,
+      kind: kindIndex(fleet.active),
+      flags: (ground ? 1 : 0) | (parked ? 2 : 0) | (this.d.settings.navLights ? 4 : 0) | (boost > 1.01 ? 8 : 0),
+      p: own.p,
+      v: own.v,
+      q: axesQuat(own.fwd, own.up, own.right),
+      w: this.spin,
+      a: ground ? [0, 0, 0] : this.acc,
+      vis: {
+        throttle: th?.throttle ?? 0,
+        boost,
+        gear: c.gearExt,
+        flaps: c.airFlight.cfg.flaps ?? 0,
+        brake: c.airFlight.cfg.brake ?? 0,
+        stovl: J?.stovl ?? 0,
+        fan: c.stovl?.on ? 1 : 0,
+        nozzle: J?.nozzle ?? 0,
+        pitch: cmd(0),
+        yaw: cmd(1),
+        roll: cmd(2),
+        steer: J?.steer ?? 0,
+        comp: J ? (J.comp[0] + J.comp[1] + J.comp[2]) / 3 : 0,
+        alpha: ((L?.out.alpha ?? 0) * 180) / Math.PI,
+        cl: L?.out.cl ?? 0,
+        mach: L?.out.mach ?? 0,
+      },
+    });
+    this.sent++;
+  }
+
+  /** The others in the room with a craft now (the teleport's choice). */
+  others(): { slot: number; name: string; state: CraftState | null }[] {
+    const net = this.net;
+    if (!net?.room) return [];
+    const now = net.roomNow();
+    return net.room.members
+      .filter((m) => m.slot !== net.room!.slot)
+      .map((m) => ({ slot: m.slot, name: m.name, state: net.remotes.tracks.get(m.slot)?.at(now) ?? null }));
+  }
+
+  /**
+   * Our craft put beside another's (the tests'): `gap` metres off its right wing, at its speed and attitude —
+   * in formation; on the ground, parked beside it. Says what it did.
+   */
+  teleport(slot: number, gap?: number): string {
+    const o = this.others().find((x) => x.slot === slot);
+    if (!o) return t("No such player in the room");
+    if (!o.state) return tf("{0} has no craft on the Earth now", o.name);
+    const c = this.d.camera;
+    const s = o.state;
+    // (clear of both wingspans: the other's half, ours, a margin)
+    const half = (id: string) => (id === "f35" ? 5.4 : id === "ranger" ? 12 : id === "lander" ? 8 : 40);
+    const kinds = ["ranger", "lander", "endurance", "f35"];
+    const g = gap ?? half(kinds[s.kind] ?? "f35") + half(fleet.active) + 8;
+    const place = c.netPlaceBeside(s, g);
+    if (!place) return t("The teleport needs your craft near the Earth");
+    const ground = (s.flags & 1) !== 0;
+    this.d.tools.placeAt({ frame: "ours", ...place, note: tf("Beside {0}", o.name) });
+    if (c.pilot.auto !== "none") c.pilot.setAuto(c.pilot.auto);
+    c.pilot.auto = "none";
+    c.gearInit = true;
+    c.gearDown = ground || s.vis.gear > 0.5;
+    c.gearExt = c.gearDown ? 1 : 0;
+    c.pilot.throttle = ground ? 0 : s.vis.throttle;
+    this.prev = null;
+    return ground ? tf("On the ground beside {0}", o.name) : tf("In formation off {0}'s right wing — {1} m", o.name, Math.round(g));
+  }
+}

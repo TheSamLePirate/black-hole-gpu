@@ -28,8 +28,8 @@ reste entier : rien ne se connecte tant que le joueur ne demande pas une salle, 
   `wss://stream.samlepirate.org/` ([DEPLOY.md](DEPLOY.md)) ; en dev et dans les tests, sur le serveur de
   la page, en `/net` (`#server=` en choisit un autre, `?prodnet` celui de production depuis localhost).
 - **Le protocole** (`src/net/proto.ts`) : du JSON pour la vie de la salle, des échantillons binaires de
-  100 octets pour les engins (position en float64, vitesse, attitude, rotation, accélération, ce que montre
-  l'engin : manette, postcombustion, train, volets, STOVL, manche, α, CL, Mach).
+  104 octets pour les engins (position en float64, vitesse, attitude, rotation, accélération, ce que montre
+  l'engin : manette, postcombustion, train, volets, STOVL, commandes de vol, α, CL, Mach).
 - **L'horloge** (`src/net/clock.ts`) : l'échange de NTP, le décalage du huitième le plus rapide des 64
   derniers échanges ; à moins d'une milliseconde entre deux pages sur une même machine.
 - **Les autres** (`src/net/remote.ts`) : affichés un peu dans le passé — assez pour que l'échantillon

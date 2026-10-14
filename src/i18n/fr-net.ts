@@ -43,4 +43,15 @@ export default {
   "Your rooms": "Vos salles",
   "Connecting…": "Connexion…",
   "Server: {0}": "Serveur : {0}",
+  // flying together (R1: ui/netsession.ts)
+  "In a room the time runs at ×1 for everyone": "Dans une salle, le temps s'écoule à ×1 pour tout le monde",
+  "No such player in the room": "Aucun joueur de ce nom dans la salle",
+  "{0} has no craft on the Earth now": "{0} n'a pas d'engin sur Terre en ce moment",
+  "The teleport needs your craft near the Earth": "La téléportation demande que votre engin soit près de la Terre",
+  "Beside {0}": "À côté de {0}",
+  "On the ground beside {0}": "Au sol, à côté de {0}",
+  "In formation off {0}'s right wing — {1} m": "En formation à droite de {0} — {1} m",
+  "Not in a room": "Pas dans une salle",
+  Beside: "À côté",
+  "Put my craft off {0}'s right wing, at its speed": "Placer mon engin à droite de {0}, à sa vitesse",
 } satisfies Record<string, string>;
