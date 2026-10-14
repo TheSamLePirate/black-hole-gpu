@@ -53,7 +53,10 @@ export type ClientMsg =
   /** a WebRTC signal to another member (src/net/p2p.ts): relayed to it alone */
   | { type: "signal"; to: number; data: unknown }
   /** the ICE servers to reach the others with: STUN, and the server's TURN with credentials of a few hours */
-  | { type: "ice"; id: number };
+  | { type: "ice"; id: number }
+  /** the warp this pilot asks for (× real time; 0: paused) — the room runs at the slowest asked (R6); `at`: when
+   *  he slowed to it himself [server's ms] — the room's slowdown dated then */
+  | { type: "warp"; want: number; at?: number };
 
 // ---- the server → the page
 export type ServerMsg =
@@ -67,7 +70,9 @@ export type ServerMsg =
   | { type: "event"; from: number; ev: NetEvent }
   | { type: "signal"; from: number; data: unknown }
   | { type: "ice"; re: number; servers: { urls: string | string[]; username?: string; credential?: string }[] }
-  | { type: "error"; re?: number; code: ErrorCode; msg: string };
+  | { type: "error"; re?: number; code: ErrorCode; msg: string }
+  /** the room's clock changed pace, or a pilot's ask did: the clock, each pilot's ask by slot (R6) */
+  | { type: "clock"; clock: RoomClock; wants: Record<number, number> };
 
 export type ErrorCode = "update" | "unknown-room" | "full" | "pilots-full" | "password" | "owner" | "bad" | "not-in-room" | "limit";
 

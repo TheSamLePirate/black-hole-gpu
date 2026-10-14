@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { NetClock } from "../src/net/clock";
 import { type CraftSample, decodeCraft, emptyVisual, encodeCraft, roomTime } from "../src/net/proto";
-import { RemoteRegistry, RemoteTrack } from "../src/net/remote";
+import { FLAG_COAST, RemoteRegistry, RemoteTrack } from "../src/net/remote";
+import { keplerProp } from "../src/system/our-plan";
+import { solarBody } from "../src/system/solar";
+import { C_MPS, M_METRES, M_SECONDS } from "../src/units";
 
 // PLAN-RESEAU R0: the protocol's samples, the clock under a made-up network, the others read between and
 // beyond their samples.
@@ -165,6 +168,39 @@ describe("the others read", () => {
     expect(reg.delay).toBeGreaterThan(0.08);
     expect(reg.delay).toBeLessThan(0.11);
     expect(reg.states(4).length).toBe(1);
+  });
+});
+
+describe("in space (R6)", () => {
+  const mu = solarBody("earth")!.mass;
+  const kepler = (_b: number, p: [number, number, number], v: [number, number, number], dt: number) => {
+    const o = keplerProp(mu, p.map((x) => x / M_METRES) as never, v.map((x) => x / C_MPS) as never, dt / M_SECONDS);
+    return {
+      p: o.r.map((x: number) => x * M_METRES) as [number, number, number],
+      v: o.v.map((x: number) => x * C_MPS) as [number, number, number],
+    };
+  };
+  test("a coasting craft carried along its orbit — exact far past its sample, its other pulls added — a ghost by real time", () => {
+    const reg = new RemoteRegistry();
+    reg.env.kepler = kepler;
+    const a: [number, number, number] = [0.01, -0.002, 0.004];
+    reg.push(sample(1000, [6_771_000, 0, 0], [0, 7672, 0], { frame: 1, flags: FLAG_COAST, a }), 0.01);
+    const tr = reg.track(2)!;
+    // (a quarter of an hour on: the Kepler orbit, plus ½·a·t²)
+    const dt = 900;
+    const k = kepler(0, [6_771_000, 0, 0], [0, 7672, 0], dt);
+    const s = tr.raw(1000 + dt)!;
+    for (let i = 0; i < 3; i++) expect(Math.abs(s.p[i]! - (k.p[i]! + 0.5 * a[i]! * dt * dt))).toBeLessThan(1e-3);
+    expect(Math.hypot(...s.p)).toBeGreaterThan(6.7e6);
+    // (no sample for 900 s of the scene: at ×1 a ghost; at ×1000 — 0.9 s of real time — not)
+    expect(s.ghost).toBe(true);
+    reg.env.pace = 1000;
+    expect(tr.raw(1000 + dt)!.ghost).toBe(false);
+    // (not coasting — thrusting —: the short extrapolation as on the Earth)
+    const reg2 = new RemoteRegistry();
+    reg2.env.kepler = kepler;
+    reg2.push(sample(1000, [6_771_000, 0, 0], [0, 7672, 0], { frame: 1 }), 0.01);
+    expect(reg2.track(2)!.raw(1000.5)!.p[1]).toBeCloseTo(3836, 0);
   });
 });
 

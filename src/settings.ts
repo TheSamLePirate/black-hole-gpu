@@ -70,7 +70,8 @@ export const OUR_TARGETS: OurBody[] = [
   "charon",
 ];
 /** "iss": the International Space Station, on its real orbit around the Earth (system/iss.ts); "ranger",
- *  "lander", "endurance": the fleet's craft not flown (fleet.ts) */
+ *  "lander", "endurance": the fleet's craft not flown (fleet.ts). (Another player's craft in a room, "net:<slot>",
+ *  is one too at run time: targeting.ts netTargetId — docs/PLAN-RESEAU.md R6) */
 export type Target = "hole" | "star" | "wormhole" | "barycentre" | SystemBody | OurBody | "iss" | "ranger" | "lander" | "endurance" | "f35";
 export type RenderMode = "physical" | "redshift" | "temperature" | "order" | "steps";
 export type ShiftMode = "full" | "gravitational" | "noBeaming" | "none";

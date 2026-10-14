@@ -10,7 +10,7 @@ import type { Settings } from "../../settings";
 import { EPOCH_DATE, SOLAR_BODIES, solarState, eclipticOf, M_SECONDS } from "../../system/solar";
 import { GARGANTUA_SYSTEM } from "../../system/bodies";
 import { bodyState, meanMotion } from "../../system/ephemeris";
-import { barycentre, bodyHill, starCentre, starOmega } from "../../targeting";
+import { barycentre, bodyHill, starCentre, starOmega, isNetTarget, netTargets, type Body } from "../../targeting";
 import { mouth } from "../../wormhole";
 import { isco, horizon, photonOrbits } from "../../physics";
 import { OUR_COLOURS } from "../hudkit";
@@ -18,14 +18,19 @@ import { issAxes, issOrbit, issTrack } from "../../system/iss";
 import { M_METRES, solarBody } from "../../system/solar";
 import { fleet } from "../../fleet";
 import { keplerProp } from "../../system/our-plan";
+import { ourState } from "../../system/our-side";
 import { VESSEL_IDS, VESSELS, type VesselId } from "../../vessels";
 import { t } from "../../i18n";
 
 const isCraftId = (id: string): id is VesselId => (VESSEL_IDS as readonly string[]).includes(id);
+/** a craft of the map: the station, the fleet's, another player's (R6) */
+export const isMapCraft = (id: string) => id === "iss" || isCraftId(id) || isNetTarget(id);
 
 /** A place in our universe's home frame at t: a body of the solar system's, the space station's, a craft's. */
 export function ourPos(id: string, t: number): V3 {
   if (id === "iss") return (issTrack.peek(t)?.X ?? solarState("earth", t).pos) as V3;
+  // (another player's: where his samples have him — a coasting craft along its orbit)
+  if (isNetTarget(id)) return (netTargets.state(id as Body, t)?.pos ?? solarState("earth", t).pos) as V3;
   // (a drawing's: the analytic coast — fleet.ts pose)
   if (isCraftId(id)) return (fleet.pose(id, t, false, false)?.X ?? solarState("earth", t).pos) as V3;
   return solarState(id, t).pos as V3;
@@ -41,7 +46,7 @@ const TRACK_STEP = 120 / M_SECONDS;
  */
 export function ourTrack(id: string, times: number[]): V3[] {
   const n = times.length;
-  if (id === "iss" || isCraftId(id) || n < 3) return times.map((t) => ourPos(id, t));
+  if (isMapCraft(id) || n < 3) return times.map((t) => ourPos(id, t));
   const out: V3[] = new Array(n);
   out[0] = ourPos(id, times[0]!);
   let a = 0;
@@ -278,6 +283,38 @@ export function ourScene(t0: number, mouthRadius = 0.05): MapScene {
       period: T,
     });
   }
+  // the other players' craft in a room (docs/PLAN-RESEAU.md R6): each where his samples have him, his orbit about
+  // the Earth when he is bound to it, his name and colour
+  for (const id of netTargets.list()) {
+    const st = netTargets.state(id, t0);
+    if (!st) continue;
+    // (about the Earth as the game flies it — its ephemeris —, drawn about the map's Earth)
+    const E = pos.get("earth")!;
+    const Es = ourState("earth", t0);
+    const r0 = sub(st.pos as V3, Es.pos as V3),
+      v0 = sub(st.vel as V3, Es.vel as V3);
+    const eps = (v0[0] ** 2 + v0[1] ** 2 + v0[2] ** 2) / 2 - mu / Math.hypot(...r0);
+    const bound = eps < 0 && Math.hypot(...r0) * M_METRES > 6.45e6;
+    const T = bound ? 2 * Math.PI * Math.sqrt((-mu / (2 * eps)) ** 3 / mu) : 0;
+    const orbit = bound ? Array.from({ length: 97 }, (_, j) => add(keplerProp(mu, r0, v0, (T * j) / 96).r as V3, E)) : [];
+    const n = [r0[1] * v0[2] - r0[2] * v0[1], r0[2] * v0[0] - r0[0] * v0[2], r0[0] * v0[1] - r0[1] * v0[0]];
+    const nl = Math.hypot(...n) || 1;
+    bodies.push({
+      id,
+      name: netTargets.name(id),
+      kind: "moon",
+      parent: "earth",
+      pos: add(E, r0),
+      radius: 40 / M_METRES,
+      col: netTargets.colour(id),
+      pole: [n[0]! / nl, n[1]! / nl, n[2]! / nl],
+      soi: 0,
+      orbit,
+      orbitOff: [0, 0, 0],
+      light: "sun",
+      period: T || 1,
+    });
+  }
   return {
     universe: "ours",
     bodies,
@@ -435,7 +472,7 @@ export const dateOf = (t: number) => new Date(EPOCH_DATE + t * M_SECONDS * 1000)
 export function bodyPosAt(sc: MapScene, s: Settings, id: string, t: number): V3 | null {
   if (sc.universe === "ours") {
     if (id === "wormhole") return [0, 0, 0];
-    return SOLAR_BODIES.some((b) => b.id === id) || id === "iss" || isCraftId(id) ? ourPos(id, t) : null;
+    return SOLAR_BODIES.some((b) => b.id === id) || isMapCraft(id) ? ourPos(id, t) : null;
   }
   const o = sc.origin(t);
   if (id === "hole") return sub([0, 0, 0], o);

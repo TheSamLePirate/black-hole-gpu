@@ -18,6 +18,7 @@ import {
   normCode,
   PROTO_MIN,
   PROTO_VERSION,
+  roomTime,
   type Role,
   type RoomClock,
   type RoomInfo,
@@ -35,6 +36,8 @@ export interface Peer {
   room: string | null;
   /** binary frames this second (a page gone mad is cut off) */
   rate: { at: number; n: number };
+  /** the warp this pilot asks for (×, docs/PLAN-RESEAU.md R6): the room runs at the slowest asked */
+  want: number;
 }
 
 interface RoomRec {
@@ -94,6 +97,9 @@ export const defaultOrigin = (o: string) => {
   }
 };
 
+/** a change of the room's pace takes effect this long after it is decided [ms] */
+const WARP_LEAD = 150;
+
 export function createRooms(o: RoomsOptions) {
   const now = o.now ?? (() => performance.timeOrigin + performance.now());
   const build = o.build ?? "dev";
@@ -151,6 +157,35 @@ export function createRooms(o: RoomsOptions) {
     for (const w of l.peers.values()) send(w, m);
   };
 
+  /** the warp each pilot asks for, by slot */
+  const wants = (l: Live): Record<number, number> => {
+    const out: Record<number, number> = {};
+    for (const w of l.peers.values()) if (w.data.role === "pilot") out[w.data.slot] = w.data.want;
+    return out;
+  };
+  /**
+   * The room's warp (docs/PLAN-RESEAU.md R6): the slowest any pilot asks for — one slowing down slows everyone at
+   * once; a faster one waits until every pilot asks for it too (the vote). Its clock carried on from now at the new
+   * pace; everyone told (with each one's ask: the votes). `say`: told even unchanged (an ask changed).
+   */
+  const rewarp = (l: Live, say: boolean, slowedAt?: number) => {
+    const asks = Object.values(wants(l));
+    const w = asks.length ? Math.min(...asks) : l.rec.clock.warp;
+    const c = l.rec.clock;
+    if (w !== c.warp) {
+      // (a slowdown dated when its pilot slowed — his page did at once: the others, a little ahead, ease back —;
+      // a speed-up set a little ahead — every page told before it comes —: all at one instant of the server's clock)
+      const t = now();
+      const h = w < c.warp && Number.isFinite(slowedAt) ? Math.max(Math.min(slowedAt!, t), t - 1000, c.h0) : t + WARP_LEAD;
+      l.rec.clock = { t0: roomTime(c, h), h0: h, warp: w };
+      dirty.add(l.rec.code);
+      say = true;
+    }
+    if (!say) return;
+    const m: ServerMsg = { type: "clock", clock: l.rec.clock, wants: wants(l) };
+    for (const p of l.peers.values()) send(p, m);
+  };
+
   const leave = (ws: ServerWebSocket<Peer>) => {
     const code = ws.data.room;
     if (!code) return;
@@ -161,8 +196,15 @@ export function createRooms(o: RoomsOptions) {
     if (l.peers.get(ws.data.slot) === ws) l.peers.delete(ws.data.slot);
     l.rec.used = now();
     dirty.add(code);
-    if (l.peers.size) roster(l);
-    else {
+    if (l.peers.size) {
+      roster(l);
+      rewarp(l, true);
+    } else {
+      // (nobody left: the world runs on at ×1 until someone comes back)
+      if (l.rec.clock.warp !== 1) {
+        const h = now();
+        l.rec.clock = { t0: roomTime(l.rec.clock, h), h0: h, warp: 1 };
+      }
       save(l.rec);
       dirty.delete(code);
       live.delete(code);
@@ -239,6 +281,8 @@ export function createRooms(o: RoomsOptions) {
           while (l.peers.has(slot)) slot++;
         }
         P.role = m.role === "spectator" || m.role === "instruments" ? m.role : "pilot";
+        // (a newcomer asks for the room's pace: his page takes it — his own ask comes after)
+        P.want = l.rec.clock.warp;
         P.slot = slot;
         P.room = code;
         l.peers.set(slot, ws);
@@ -249,6 +293,16 @@ export function createRooms(o: RoomsOptions) {
         send(ws, { type: "joined", re: m.id, code, name: l.rec.name, slot, clock: l.rec.clock, members: members(l) });
         roster(l);
         if (l.match) send(ws, { type: "event", from: l.match.from, ev: l.match.ev as never });
+        rewarp(l, true);
+        return;
+      }
+      case "warp": {
+        if (!P.room) return fail(ws, "not-in-room", "Not in a room");
+        const l = live.get(P.room);
+        const w = Number(m.want);
+        if (!l || !Number.isFinite(w)) return;
+        P.want = Math.max(0, Math.min(1e7, w));
+        rewarp(l, true, Number(m.at));
         return;
       }
       case "leave":
@@ -323,7 +377,7 @@ export function createRooms(o: RoomsOptions) {
     upgrade(req: Request, server: Server<Peer>): Response | undefined {
       const origin = req.headers.get("origin");
       if (origin && !(o.origin ?? (() => true))(origin)) return new Response("forbidden", { status: 403 });
-      const data: Peer = { kind: "rooms", hello: false, device: "", name: "", colour: "", role: "pilot", slot: -1, room: null, rate: { at: 0, n: 0 } };
+      const data: Peer = { kind: "rooms", hello: false, device: "", name: "", colour: "", role: "pilot", slot: -1, room: null, rate: { at: 0, n: 0 }, want: 1 };
       return server.upgrade(req, { data }) ? undefined : new Response("expected a WebSocket", { status: 426 });
     },
     websocket: {

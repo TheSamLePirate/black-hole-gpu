@@ -10,7 +10,7 @@ import type { CameraController } from "./controls";
 import type { Renderer } from "./renderer";
 import type { Settings } from "./settings";
 import type { FlightInfo as FullFlightInfo } from "./controller/telemetry";
-import { warpFactor } from "./clock";
+import { timeRate, warpFactor } from "./clock";
 import { setSceneTime } from "./wormhole";
 
 /** The flight figures the renderer takes from (controller/telemetry.ts): the re-entry glow. */
@@ -50,8 +50,8 @@ export class Simulation {
     setSceneTime(this.time); // (an orbiting wormhole mouth: where it is now)
     const moved = this.camera.update(dt, this.time);
     this.mission?.update(dt);
-    if (s.animate && s.timeSpeed > 0) {
-      this.time = this.camera.shipClock() ?? this.time + dt * s.timeSpeed;
+    if (s.animate && timeRate(s) > 0) {
+      this.time = this.camera.shipClock() ?? this.time + dt * timeRate(s);
       this.play += dt;
       this.timeDirty = true;
       // the liquid throat's waves: at their own pace while time runs (slower in slow motion)

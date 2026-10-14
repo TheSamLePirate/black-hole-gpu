@@ -52,6 +52,10 @@ export interface Room {
   clock: RoomClock;
   members: Member[];
   password?: string;
+  /** the warp each pilot asks for (×, by slot): the room runs at the slowest (R6) */
+  wants: Record<number, number>;
+  /** the clock before a change set ahead, until it comes */
+  clockPrev?: RoomClock;
 }
 
 type Events = {
@@ -61,6 +65,7 @@ type Events = {
   error: { code: string; msg: string };
   room: Room | null;
   voice: { slot: number; stream: MediaStream | null };
+  clock: Room["clock"];
 };
 
 export class NetClient {
@@ -74,6 +79,8 @@ export class NetClient {
   mesh: PeerMesh | null = null;
   /** the ICE servers the room server gave (STUN, its TURN) */
   iceServers: RTCIceServer[] | null = null;
+  /** the room's pace said before the room was set (joining) */
+  private lastClock: { clock: RoomClock; wants: Record<number, number> } | null = null;
   /** our microphone, sent on every direct link (R2) */
   micTrack: MediaStreamTrack | null = null;
   setMic(track: MediaStreamTrack | null) {
@@ -239,6 +246,15 @@ export class NetClient {
       case "event":
         this.emit("event", { from: m.from, ev: m.ev });
         return;
+      case "clock":
+        if (this.room) {
+          // (a change set ahead: the pace running now kept until it comes)
+          if (m.clock.h0 > this.clock.serverNow(this.now())) this.room.clockPrev = this.room.clock;
+          this.room.clock = m.clock;
+          this.room.wants = m.wants;
+        } else this.lastClock = m;
+        this.emit("clock", m.clock);
+        return;
       case "signal":
         void this.mesh?.onSignal(m.from, m.data as SignalData);
         return;
@@ -299,7 +315,19 @@ export class NetClient {
       } catch {
         /* an older server: STUN alone */
       }
-    const r: Room = { code: j.code, name: j.name, slot: j.slot, role, clock: j.clock, members: j.members, password };
+    // (the room's pace said right after joining — while the ICE servers were asked for —: taken)
+    const C = this.lastClock;
+    this.lastClock = null;
+    const r: Room = {
+      code: j.code,
+      name: j.name,
+      slot: j.slot,
+      role,
+      clock: C?.clock ?? j.clock,
+      members: j.members,
+      password,
+      wants: C?.wants ?? {},
+    };
     this.setRoom(r);
     this.emit("roster", j.members);
     return r;
@@ -333,9 +361,44 @@ export class NetClient {
     if (this.room) this.sendMsg({ type: "event", ev });
   }
 
+  /** The warp we ask for (× real time; 0: paused): the room runs at its pilots' slowest (R6). A slowdown of ours is
+   *  ours at once — the room's dated now —; the others ease back onto it. */
+  warp(want: number) {
+    if (!this.room) return;
+    const h = this.clock.serverNow(this.now());
+    const cur = this.clockNow(h);
+    if (want < cur.warp) {
+      this.room.clockPrev = undefined;
+      this.room.clock = { t0: roomTime(cur, h), h0: h, warp: want };
+    }
+    this.sendMsg({ type: "warp", want, at: want < cur.warp ? h : undefined });
+  }
+
+  /** the room's time at an instant of our clock (performance.now() [ms]: a frame's) [s] */
+  roomAt(localMs: number): number {
+    if (!this.room) return Number.NaN;
+    const h = this.clock.serverNow(localMs);
+    return roomTime(this.clockNow(h), h);
+  }
+
+  /** the room's clock running now: a change set ahead not come yet — the one before */
+  private clockNow(h: number) {
+    const r = this.room!;
+    if (r.clockPrev && h < r.clock.h0) return r.clockPrev;
+    r.clockPrev = undefined;
+    return r.clock;
+  }
+
+  /** the room's pace now (× real time) */
+  roomWarp(): number {
+    return this.room ? this.clockNow(this.clock.serverNow(this.now())).warp : 1;
+  }
+
   /** the room's time now [s] */
   roomNow(): number {
-    return this.room ? roomTime(this.room.clock, this.clock.serverNow(this.now())) : Number.NaN;
+    if (!this.room) return Number.NaN;
+    const h = this.clock.serverNow(this.now());
+    return roomTime(this.clockNow(h), h);
   }
 
   /** Our craft's sample, sent to the room (its slot, its sequence and its time stamped here). */

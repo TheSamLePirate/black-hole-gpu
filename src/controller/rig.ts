@@ -1,5 +1,6 @@
 // The CameraController — the camera rig: the mounts, the views of the ship.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { timeRate } from "../clock";
 import { blToCartesian, cameraFrame, homePosition, setHolePose, setHomePose } from "../camera";
 import type { Vec3 } from "../physics";
 import {
@@ -182,7 +183,7 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
   // (the simulation moves its clock on after this step): the camera placed for that. Placed for now, it
   // lagged the world it stands on by a frame's motion — 30 km/s × a frame: the ground shook
   const tNow = this.nowTime();
-  const t = Number.isFinite(this.frameEnd) ? this.frameEnd : tNow + (s.animate && s.timeSpeed > 0 ? dt * s.timeSpeed : 0);
+  const t = Number.isFinite(this.frameEnd) ? this.frameEnd : tNow + (s.animate && timeRate(s) > 0 ? dt * timeRate(s) : 0);
   // the body it moves with: the target (around, following), else the nearest (free: the nearest now,
   // taking over when much nearer; the tripod: the one it stands on)
   let ref = mode === "orbit" || mode === "follow" ? this.rigBody(s.target, w.ours, t) : this.rigBody(R.ref, w.ours, t);

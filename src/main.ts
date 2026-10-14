@@ -2219,6 +2219,11 @@ async function main() {
   /** Time warp one rung faster or slower (clock.ts: slow motion, real time's multiples, then the classic
    *  ladder — beyond 500 M/s the ship rides on rails). Paused, the warp is set for when time runs again. */
   function warp(dir: 1 | -1) {
+    // (in a room, a faster warp asked by another: warping up accepts it — docs/PLAN-RESEAU.md R6)
+    if (dir > 0 && netSession.acceptWarp()) {
+      audio.cue("warp-up", 0);
+      return;
+    }
     if (autoWarpHeld()) return;
     const next = stepWarp(settings, dir);
     if (next !== settings.timeSpeed) audio.cue(dir > 0 ? "warp-up" : "warp-down", warpLadder(settings).indexOf(next));

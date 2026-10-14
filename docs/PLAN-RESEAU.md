@@ -363,7 +363,24 @@ siège (le passager a la vue du pilote).
 - **Vérifié** : deux astronautes qui marchent l'un vers l'autre sur la piste d'Edwards, puis l'un monte dans
   le F-35 de l'autre et vole en passager.
 
-### R6 — Ensemble dans le système solaire
+### R6 — Ensemble dans le système solaire ✅ (2026-10-14)
+
+*Fait* : le pas de la salle — au lieu de faire passer les 19 écritures de `timeSpeed` par un arbitre, le temps
+avance partout par `timeRate()` (`clock.ts` : seul, le warp demandé ; en salle, le pas de la salle, recalé sur
+son horloge de ×0,5 à ×2), `timeSpeed` restant la demande de chacun, son vote ; le serveur tient l'horloge
+(`warp` par pilote, la salle au plus lent : une baisse datée de l'instant où son pilote a ralenti — les autres,
+un peu en avance, ralentissent pour la rejoindre —, une hausse quand tous la demandent, programmée 150 ms en
+avance pour tous ; une salle vide repasse à ×1) ; « ×100 demandé — on attend Ben » dans la barre du temps, une
+hausse proposée acceptée en accélérant ; les échantillons datés au temps de scène de l'émetteur, lus à celui
+du récepteur (une horloge décalée ne déplace plus personne) ; hors de l'air terrestre (au-dessus de 100 km)
+le repère inertiel du corps dont on est dans la sphère, un engin sans poussée envoyé « en roue libre » — 1 à
+30 Hz selon le warp, à l'instant où il quitte l'orbite que les autres lui prêtent (placé, poussé) — et propagé
+par Kepler chez les autres (avec son accélération non képlérienne mesurée : J2, la Lune, le Soleil) ; les
+engins dessinés depuis la caméra jusqu'à 60 km, au-delà une étiquette avec leur distance ; les autres comme
+cibles (`net:<emplacement>` : HUD, verrouillage, rendez-vous, carte 3D avec leur orbite), « À côté » en orbite.
+*Reporté* : un pas de la salle qui suive le temps propre (la dilatation : R8) ; le changement de date en salle
+(le pilote qui saisit une date : à proposer à la salle).
+
 - L'arbitre du warp `wantWarp()` : les 19 écritures de `timeSpeed` y passent ; en salle, baisse immédiate
   pour tous, hausse au vote ; chaque autopilote vérifié avec un warp plus lent que demandé (rentrée,
   calculateur de vol, transferts).

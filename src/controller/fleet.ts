@@ -1,5 +1,6 @@
 // The CameraController — the fleet: the craft flown and switched.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { timeRate } from "../clock";
 import { cameraFrame, setHomePose } from "../camera";
 import type { Vec3 } from "../physics";
 import { type Body, onOurSide } from "../targeting";
@@ -214,7 +215,7 @@ function switchVessel(this: CameraController, id: VesselId): string | null {
   // pilot's rates: per second of the pilot's clock, the other way round from the right-hand rule)
   this.placeOnPose(fleet.flownAssembly().length > 1 && to.Vc ? { ...to, V: to.Vc } : to);
   this.spin = null;
-  if (to.w && Math.hypot(...to.w) > 0) this.pilot.omega = to.ax.map((a) => -dot3(to.w!, a) * s.timeSpeed) as Vec3;
+  if (to.w && Math.hypot(...to.w) > 0) this.pilot.omega = to.ax.map((a) => -dot3(to.w!, a) * timeRate(s)) as Vec3;
   this.dockInfo = null;
   this.carryCommit(before, Math.max(1.2, viewBlend(s).time * 1.5));
   // (the target now flown, or docked to it: the body it orbits instead)

@@ -44,10 +44,9 @@ export default {
   "Connecting…": "Connexion…",
   "Server: {0}": "Serveur : {0}",
   // flying together (R1: ui/netsession.ts)
-  "In a room the time runs at ×1 for everyone": "Dans une salle, le temps s'écoule à ×1 pour tout le monde",
   "No such player in the room": "Aucun joueur de ce nom dans la salle",
-  "{0} has no craft on the Earth now": "{0} n'a pas d'engin sur Terre en ce moment",
-  "The teleport needs your craft near the Earth": "La téléportation demande que votre engin soit près de la Terre",
+  "{0} has no craft on our worlds now": "{0} n'a pas d'engin de notre côté en ce moment",
+  "The teleport needs your craft on our side of the wormhole": "La téléportation demande que votre engin soit de notre côté du trou de ver",
   "Beside {0}": "À côté de {0}",
   "On the ground beside {0}": "Au sol, à côté de {0}",
   "In formation off {0}'s right wing — {1} m": "En formation à droite de {0} — {1} m",
@@ -125,4 +124,11 @@ export default {
   "Your craft is back where you left it": "Votre engin est revenu là où vous l'aviez laissé",
   "aboard {0}'s craft": "à bord de l'engin de {0}",
   "{0} aboard": "{0} à bord",
+  // the room's warp (R6)
+  "The room's clock is still being set — a moment": "L'horloge de la salle se règle encore — un instant",
+  "paused by {0}": "en pause par {0}",
+  "the room": "la salle",
+  "{0} asked — waiting for {1}": "{0} demandé — on attend {1}",
+  "{0} asks for {1} — warp up to accept": "{0} demande {1} — accélérez pour accepter",
+  "{0} asks for {1}": "{0} demande {1}",
 } satisfies Record<string, string>;

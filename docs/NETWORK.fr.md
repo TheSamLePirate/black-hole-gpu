@@ -137,6 +137,34 @@ monte dans le F-35 de l'autre (sa vue à moins de 0,1 m de lui, posé : aucun fa
 Pas encore : l'herbe désactivée, les autres à pied ne sont dessinés que si vous marchez aussi ; le passager a
 la vue du pilote (pas de second siège modélisé).
 
+## Ensemble dans l'espace (R6)
+
+- **Le warp de la salle** : le warp de chaque pilote est son vote ; la salle tourne au plus lent demandé. Une
+  baisse est immédiate pour tous (datée de l'instant où son pilote a ralenti) ; une hausse attend que tous les
+  pilotes la demandent — « ×100 demandé — on attend Ben » dans la barre du temps, « Ana demande ×100 —
+  accélérez pour accepter » chez Ben (accélérer l'accepte) ; elle part alors au même instant pour tous. Une pause
+  met la salle en pause (« en pause par Ana ») ; une salle vide continue à ×1.
+- **Une horloge** : chaque scène est tenue sur celle de la salle (recalée de la moitié au double du pas, remise
+  dessus d'un coup si un onglet a été mis de côté) ; les échantillons portent le temps de scène de leur émetteur
+  et sont lus à celui du lecteur — une horloge un peu décalée ne déplace personne.
+- **En orbite** : au-dessus de 100 km (ou hors de la sphère de la Terre), un engin est envoyé dans le repère
+  inertiel du corps dont il est dans la sphère ; en roue libre (sans poussée), il est porté le long de son orbite
+  (Kepler, plus les attractions autres que le centre du corps que son pilote mesure — l'aplatissement de la
+  Terre, la Lune, le Soleil —) entre ses échantillons, de 1 à 30 par seconde selon le warp, un aussitôt quand il
+  quitte l'orbite que les autres lui prêtent.
+- **Vus** : dessinés jusqu'à 60 km, au-delà une étiquette avec la distance (des milliers de km) ; **cibles**
+  (Tab, la carte, un clic) : la distance et la vitesse de rapprochement du HUD, le verrouillage, le rendez-vous,
+  la carte 3D avec l'orbite de chacun ; **À côté** fonctionne en orbite (à 200 m de l'aile, à la même vitesse).
+
+Mesuré sur kerr-mini (`tests/e2e/net-space`) : deux Rangers à 200 m l'un de l'autre sur une orbite de 400 km ;
+le ×100 d'Ana tenu à ×1 jusqu'à ce que Ben accepte, puis 500 s de scène à ×100 — les deux scènes à moins de
+0,1 s de l'horloge de la salle, la patrouille gardée (169 m) ; Ben ralentit à ×10 puis ×1 : immédiat pour les
+deux, les deux à moins d'une seconde ; Ben ciblé : les 168 m du HUD = ceux de la vue ; à un quart d'orbite : un
+marqueur à 6 400 km.
+
+Pas encore : un pas qui suive le temps propre (la dilatation de Gargantua : R8) ; un changement de date en
+salle.
+
 ## Comment ça marche
 
 - **Le serveur de salles** (`server/rooms.ts`, Bun, SQLite) : les salles et leurs membres, l'horloge, les
@@ -162,7 +190,7 @@ deux pages à 0,3 ms près.
 
 ## Tests
 
-De bout en bout aussi : `tests/e2e/net-walk` (à pied ensemble, un passager), `tests/e2e/net-flight` (deux F-35 : vus à 8 km, sur le radar, le lien direct, À côté —
+De bout en bout aussi : `tests/e2e/net-space` (en orbite ensemble, le warp de la salle, les cibles), `tests/e2e/net-walk` (à pied ensemble, un passager), `tests/e2e/net-flight` (deux F-35 : vus à 8 km, sur le radar, le lien direct, À côté —
 la patrouille, le même écart vu des deux côtés —, la postcombustion vue). Unitaires : `tests/net-core.test.ts` (les échantillons, l'horloge sous 200 ms et 5 % de pertes, Hermite au
 centimètre, le lissage, le vol du robot), `tests/net-rooms.test.ts` (un vrai serveur : salles, limites, mots
 de passe, la place reprise à la reconnexion, la suppression par le propriétaire, les salles gardées après un

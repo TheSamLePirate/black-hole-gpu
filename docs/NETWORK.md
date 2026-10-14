@@ -126,6 +126,30 @@ within 0.1 m.
 Not yet: with the grass turned off, the others on foot are drawn only while you walk too; a passenger's
 seat is the pilot's view (no second seat modelled).
 
+## Together in space (R6)
+
+- **The room's warp**: each pilot's warp is his vote; the room runs at the slowest asked. A slowdown is at once
+  for everyone (dated when its pilot slowed); a speed-up waits until every pilot asks for it — "×100 asked —
+  waiting for Ben" in the time bar, "Ana asks for ×100 — warp up to accept" on Ben's (warping up accepts it);
+  then it starts at one instant for all. A pause pauses the room ("paused by Ana"); an empty room runs on at ×1.
+- **One clock**: each scene is kept on the room's (eased from half to twice the pace, set on it at once if a tab
+  was put aside); the samples carry their sender's scene time and are read at the reader's — a clock a little off
+  misplaces nobody.
+- **In orbit**: above 100 km (or out of the Earth's sphere) a craft is sent in the inertial frame of the body
+  whose sphere it is in; coasting (no thrust) it is carried along its orbit (Kepler, plus the pulls besides the
+  body's centre its pilot measures — the Earth's flattening, the Moon, the Sun —) between its samples, 1 to 30 a
+  second as the warp runs faster, one at once when it leaves the orbit the others carry it on.
+- **Seen**: drawn within 60 km, beyond a tag with the distance (thousands of km); **targets** (Tab, the map, a
+  click): the HUD's distance and closing rate, the lock, the rendezvous, the 3D map with each one's orbit;
+  **Beside** works in orbit (200 m off the wing, at the same velocity).
+
+Measured on kerr-mini (`tests/e2e/net-space`): two Rangers 200 m apart in a 400 km orbit; Ana's ×100 held at
+×1 until Ben accepts, then 500 s of the scene at ×100 — both scenes within 0.1 s of the room's clock, the
+formation kept (169 m); Ben slows to ×10 then ×1: at once for both, both within 1 s; Ben targeted: the HUD's
+168 m = the view's; a quarter orbit away: a marker 6 400 km off.
+
+Not yet: a pace following the proper time (Gargantua's dilation: R8); a date change in a room.
+
 ## How it works
 
 - **The room server** (`server/rooms.ts`, Bun, SQLite): the rooms and their members, the clock, the room's
@@ -150,7 +174,7 @@ late (95 %: 27 ms), the others shown 60–75 ms late, the two pages' clocks with
 
 ## Tests
 
-End to end too: `tests/e2e/net-walk` (on foot together, a passenger's ride), `tests/e2e/net-flight` (two F-35s: seen 8 km off, on the radar, the direct link, Beside —
+End to end too: `tests/e2e/net-space` (in orbit together, the room's warp, targets), `tests/e2e/net-walk` (on foot together, a passenger's ride), `tests/e2e/net-flight` (two F-35s: seen 8 km off, on the radar, the direct link, Beside —
 formation, the same gap seen by both —, the afterburner seen). Unit: `tests/net-core.test.ts` (the samples, the clock under 200 ms and 5 % lost, the Hermite within a
 centimetre, the smoothing, the bot's flight), `tests/net-rooms.test.ts` (a real server: rooms, limits,
 passwords, a reconnection's slot, the owner's delete, the rooms kept across a restart). End to end:

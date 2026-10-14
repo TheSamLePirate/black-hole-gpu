@@ -4,7 +4,7 @@
 // in the mission bar while flying (the flight HUD gives it its slot).
 
 import type { Settings } from "../settings";
-import { fmtClock, fmtFactor, fmtWarp, realTimeSpeed, secondsPerM, warpFactor, warpLadder } from "../clock";
+import { fmtClock, fmtFactor, fmtWarp, realTimeSpeed, roomPace, secondsPerM, warpFactor, warpLadder } from "../clock";
 import { el as h } from "./kit";
 import { t, tf } from "../i18n";
 
@@ -160,18 +160,34 @@ export class TransportBar {
     const note = this.d.railsNote();
     const nw = this.d.nodeWarp();
     const clock = fmtClock(s, now);
-    const key = [s.animate, s.timeSpeed, s.massSolar, clock.main, clock.sub, rec.on, Math.floor(rec.seconds), note, nw, s.autoWarp].join();
+    // (in a room: the pace the room runs at, when it holds ours back — docs/PLAN-RESEAU.md R6)
+    const shown = Number.isFinite(roomPace.cap) ? { ...s, timeSpeed: roomPace.cap } : s;
+    const key = [
+      s.animate,
+      s.timeSpeed,
+      s.massSolar,
+      clock.main,
+      clock.sub,
+      rec.on,
+      Math.floor(rec.seconds),
+      note,
+      nw,
+      s.autoWarp,
+      roomPace.cap,
+      roomPace.note,
+    ].join();
     if (!force && key === this.last) return;
     this.last = key;
     this.play.innerHTML = svg(s.animate ? ICON.pause : ICON.play);
     this.play.classList.toggle("paused", !s.animate);
     this.el.classList.toggle("paused", !s.animate);
     const x = warpFactor(s);
-    this.warpMain.textContent = s.animate ? fmtWarp(s) : `❚❚ ${fmtWarp(s, false)}`;
+    this.warpMain.textContent = s.animate && roomPace.cap > 0 ? fmtWarp(shown) : `❚❚ ${fmtWarp(shown, false)}`;
     const man =
       nw === "auto" ? t("auto · manoeuvre") : nw === "held" ? t("max · manoeuvre") : nw === "manual" ? t("yours · manoeuvre") : "";
     this.warpSub.textContent =
-      man || (note ? tf("rails ↓ {0}", note) : s.timeSpeed > 500 ? t("on rails") : `${+s.timeSpeed.toPrecision(3)} M/s`);
+      roomPace.note || man || (note ? tf("rails ↓ {0}", note) : s.timeSpeed > 500 ? t("on rails") : `${+s.timeSpeed.toPrecision(3)} M/s`);
+    this.warpSub.title = roomPace.note;
     this.warpBtn.classList.toggle("held", !!note || nw === "held");
     this.autoBtn.hidden = !nw;
     this.autoBtn.classList.toggle("on", s.autoWarp);

@@ -1,5 +1,6 @@
 // The CameraController — docking: the ports, the approach, the contact.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { timeRate } from "../clock";
 import { TUNING } from "../game/tuning";
 import { recorder } from "../game/recorder";
 import { gradeDocking } from "../game/report";
@@ -450,7 +451,7 @@ function dockCheck(this: CameraController) {
     this.carryCommit(before, 0.6);
     // (the assembly turning: the pilot's rates — per second of its clock, the other way round from the
     // right-hand rule — on the flown craft's axes)
-    if (wAll && Math.hypot(...wAll) > 0) this.pilot.omega = P.ax.map((a) => -dot3(wAll, a) * s.timeSpeed) as Vec3;
+    if (wAll && Math.hypot(...wAll) > 0) this.pilot.omega = P.ax.map((a) => -dot3(wAll, a) * timeRate(s)) as Vec3;
   } else if (held) {
     // held by the station: at once where it carries the craft, at its port's velocity — not the approach's
     // until the next frame's hold: a craft let go before it (undocked at once) once kept the 9 cm/s it
@@ -513,7 +514,7 @@ function linkView(this: CameraController): { c: Vec3; a: Vec3; X: Vec3; sh: [Vec
 function flyDocked(this: CameraController, dt: number) {
   const s = this.s;
   const t0 = this.nowTime();
-  const simDt = s.animate ? s.timeSpeed * dt : 0;
+  const simDt = s.animate ? timeRate(s) * dt : 0;
   const t1 = t0 + simDt;
   const cam = cameraFrame(s);
   const w = mouth(s).w;
@@ -700,7 +701,7 @@ function dockWant(
   const cap = Math.max(1, D.warpNow) * real;
   this.setHubWarp(cap);
   // (the target's turn as the pilot's rates at the warp now set — not the last frame's)
-  D.att = { nose: attNose, up: attUp, rate: sh.map((x) => -dot3(g.om, x) * s.timeSpeed) as Vec3 };
+  D.att = { nose: attNose, up: attUp, rate: sh.map((x) => -dot3(g.om, x) * timeRate(s)) as Vec3 };
   D.set = s.timeSpeed;
   // (the lateral gain within what the velocity loop follows at this warp: damped)
   const Ts = 1.2 * s.timeSpeed * M_SECONDS;

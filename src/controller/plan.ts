@@ -1,5 +1,6 @@
 // The CameraController — rails and the flight plan: nodes, burns, predictions.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { timeRate } from "../clock";
 import { blToCartesian, cameraFrame } from "../camera";
 import { horizon, isco, coordToZamo, zamoToCoord, type Vec3 } from "../physics";
 import { SYSTEM_BODIES, type Target } from "../settings";
@@ -1449,7 +1450,7 @@ function nodeBurn(
       w = Math.min(w, Math.max(burnT / 20, realTime), Math.max(rest / 4, realTime));
     }
     this.setNodeWarp(w);
-    const perFrame = aMax * s.timeSpeed * dt * dtau;
+    const perFrame = aMax * timeRate(s) * dt * dtau;
     // (done: within a thousandth of the node's Δv — our universe's burns are km/s, 10⁻⁵ c: there,
     // within a cm/s; assisted, within what a hand cuts — 0.2 % or 10 cm/s — and the engine cut)
     // (the cue to cut comes as early as the engine's run-down: cut at the cue, the run-down gives the rest)

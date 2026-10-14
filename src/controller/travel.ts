@@ -4,6 +4,7 @@
 // way and then onto the framing, the curve and time the blend's (settings.camBlend). The destination's pose
 // asked at each frame's time: a moving planet, a craft on its orbit, met where they are.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { timeRate } from "../clock";
 import { setHomePose } from "../camera";
 import { blendCurve, lookQ, qAxes, qSlerp } from "../cine/follow";
 import { add3, cross3, dot3, len3, scale3, sub3, unit3, type V3 } from "../cine/rig";
@@ -86,7 +87,7 @@ function travelStep(this: CameraController, dt: number): boolean {
   if (!tr) return false;
   const s = this.s;
   tr.t = Math.min(1, tr.t + dt / tr.T);
-  const tEnd = (Number.isFinite(this.time) ? this.time : 0) + (s.animate ? s.timeSpeed * dt : 0);
+  const tEnd = (Number.isFinite(this.time) ? this.time : 0) + (s.animate ? timeRate(s) * dt : 0);
   const g = tr.goal(tEnd);
   const B = viewBlend(s);
   const k = blendCurve(B.style === "cut" ? "easeInOut" : B.style, tr.t);

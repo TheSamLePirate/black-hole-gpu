@@ -1,4 +1,5 @@
 import { tunnelEntrySide } from "../system/wormhole-map";
+import { timeRate } from "../clock";
 import { weatherAt, windFromAt } from "../weather";
 import { recorder } from "../game/recorder";
 import { tunnelState } from "../wormhole";
@@ -524,7 +525,7 @@ function flybyStep(this: CameraController, dt: number) {
   const c = C_MPS;
   const vRel = sub3(cam.beta, this.refBeta(cam));
   const v = Math.hypot(...vRel) * c;
-  const dtSec = s.animate ? s.timeSpeed * dt * 4.925490947e-6 * s.massSolar : 0;
+  const dtSec = s.animate ? timeRate(s) * dt * 4.925490947e-6 * s.massSolar : 0;
   F.E = lin(F.E, 1, vRel, -c * dtSec);
   const D = clamp(v * 3.5, 60, 2500);
   if (v * dtSec > 0.3 * D) F.E = toLocal([0, 7, -45]);
@@ -922,7 +923,7 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
         const lat = (Math.asin(q[2] / ql) * 180) / Math.PI,
           lon = (Math.atan2(q[1], q[0]) * 180) / Math.PI;
         const Msec0 = 4.925490947e-6 * s.massSolar;
-        const dtSec = s.animate ? s.timeSpeed * dt * Msec0 : 0;
+        const dtSec = s.animate ? timeRate(s) * dt * Msec0 : 0;
         const V = this.airFlight.last?.speed ?? 0;
         // (the weather over this place — weather.ts: the setting's preset, a draw, the airfields' report)
         const wx = (this.weatherNow = weatherAt(s, { body: nav.ref, lat, lon }, daysOf(nav.t), this.weatherReal));
@@ -940,7 +941,7 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   fleet.tanks = fuelOn(s) ? { exhaust: s.exhaust, massRatio: s.massRatio } : null;
   if (this.pilot.auto !== "node") this.rails(cam);
   const burn = this.pilot.auto === "node" ? this.nodeBurn(cam, dt, dtau) : null;
-  const tauRate = s.animate ? s.timeSpeed * dtau : 0;
+  const tauRate = s.animate ? timeRate(s) * dtau : 0;
   // the craft's own turning, slower in an assembly (its wheels and thrusters against the assembly's
   // moment of inertia)
   const V0 = VESSELS[fleet.active];
@@ -969,7 +970,7 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   if (thick && this.pilot.auto !== "none" && this.pilot.auto !== "node")
     this.hubWarpLimit = Math.min(this.hubWarpLimit ?? Infinity, AIR_WARP / Msec);
   if (!thick) this.airWarpSaid = false;
-  const dtPilot = thick ? dt * Math.min(s.timeSpeed * Msec, AIR_WARP) : dt;
+  const dtPilot = thick ? dt * Math.min(timeRate(s) * Msec, AIR_WARP) : dt;
   // the flight law in the air (the plane's surfaces; the sci-fi computer's commanded velocity)
   const mode = this.flightModeNow();
   const LA0 = this.airFlight.last;
@@ -1058,7 +1059,7 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
       snap:
         (this.pilot.auto !== "none" &&
           ((s.engine === "crew" && cam.region === "hole") || onOurSide(s, cam)) &&
-          s.timeSpeed * dt * 4.925490947e-6 * s.massSolar > 20) ||
+          timeRate(s) * dt * 4.925490947e-6 * s.massSolar > 20) ||
         (this.nodeBurning && onOurSide(s, cam)),
       // (assisted: the pilot's nose and engine — none held on the burn for it)
       gimbal: this.nodeBurning && onOurSide(s, cam) && !this.pilot.assist,
@@ -1084,7 +1085,7 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
       rcs: VESSELS[fleet.active].turbofan ? 0 : 1,
       spoolK:
         s.engine === "crew" || VESSELS[fleet.active].turbofan
-          ? 1 - Math.exp(-((s.animate ? s.timeSpeed * dt : 0) * Msec) / VESSELS[fleet.active].spool)
+          ? 1 - Math.exp(-((s.animate ? timeRate(s) * dt : 0) * Msec) / VESSELS[fleet.active].spool)
           : 1,
     },
     vt.inp,
@@ -1114,7 +1115,7 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   } else if (this.local?.L.rolling) this.groundAttitude(localToZamo(unitV(this.local.L.xi)));
   // (an assembly turns about its centre of mass: the flown craft's centre swings round it)
   if (before) this.turnAboutCom(before, mp.com);
-  const simDt = s.animate ? s.timeSpeed * dt : 0;
+  const simDt = s.animate ? timeRate(s) * dt : 0;
   const tau0 = this.properTime;
   const pre = simDt > 0 ? this.contactPose() : null;
   // the configuration: on the wheels, the engine idle, the spoilers out (the lift dumped, braking);

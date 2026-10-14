@@ -10,6 +10,8 @@ import { JetPoser } from "../f35/pose";
 import type { CraftState } from "../net/remote";
 import { fromBodyFixed, groundVelocity, solidBody, toBodyFixed } from "../system/our-surface";
 import { bodyAxes, solarBody } from "../system/solar";
+import { ourState, repToHomeVec } from "../system/our-side";
+import { mouth } from "../wormhole";
 import { C_MPS, M_METRES } from "../units";
 import { VESSEL_IDS, type VesselId } from "../vessels";
 import type { CameraController } from "../controls";
@@ -20,12 +22,16 @@ const D = Math.PI / 180;
 declare module "../controls" {
   interface CameraController {
     netOwn: typeof netOwn;
+    netOwnState: typeof netOwnState;
     netShips: typeof netShips;
     netPlaceBeside: typeof netPlaceBeside;
     netWalkerHome: typeof netWalkerHome;
     netOwnWalker: typeof netOwnWalker;
   }
 }
+
+/** a sample's flag: coasting in space — its orbit carries it (src/net/remote.ts FLAG_COAST, R6) */
+export const NET_COAST = 16;
 
 /** the bodies a sample names (src/net/proto.ts BODIES — kept apart: the solo bundle holds no protocol) */
 export const NET_BODIES = ["earth", "moon", "sun", "mercury", "venus", "mars", "jupiter", "saturn", "uranus", "neptune"];
@@ -112,6 +118,27 @@ export function axesQuat(f: Vec3, u: Vec3, r: Vec3): [number, number, number, nu
   return [(m02 + m20) / s, (m12 + m21) / s, s / 4, (m10 - m01) / s];
 }
 
+/** The home frame seen from the flown craft, anywhere on our side: our place, the camera's mapping both ways. */
+function homeView(c: CameraController) {
+  const cam = cameraFrame(c.s);
+  const nav = c.ourNav(cam);
+  if (!nav) return null;
+  const w = mouth(c.s).w;
+  return {
+    cam,
+    nav,
+    /** a home vector → the camera's axes (right, up, forward), its length kept */
+    toCam: (h: Vec3): Vec3 => {
+      const l = Math.hypot(...h);
+      if (l < 1e-9) return [0, 0, 0];
+      const v = unit(nav.toRep(scale(h, 1 / l)) as Vec3);
+      return [dot(v, cam.right as Vec3) * l, dot(v, cam.up as Vec3) * l, dot(v, cam.fwd as Vec3) * l];
+    },
+    /** a camera-local direction → the home frame's */
+    fromLocal: (v: Vec3): Vec3 => unit(repToHomeVec(w, cam.ell, cam.n, v) as Vec3),
+  };
+}
+
 /** The Earth's frame now, seen from the flown craft: its axes, our place on them, the camera's mapping. */
 function earthView(c: CameraController) {
   const cam = cameraFrame(c.s);
@@ -165,6 +192,58 @@ function netOwn(this: CameraController): NetOwn | null {
   return { p: E.p0, v: E.toEarth(E.fr.vRel as Vec3), fwd, up, right, h: E.fr.h };
 }
 
+/** A sample's craft in the home frame at scene time t [M]: its place [M] and velocity [c]; null: not on our worlds. */
+export function netStateHome(s: CraftState, t: number): { pos: Vec3; vel: Vec3 } | null {
+  const body = NET_BODIES[s.body];
+  const b = body ? solarBody(body) : null;
+  if (!body || !b) return null;
+  if (s.frame === 0) {
+    if (!solidBody(body)) return null;
+    const A = bodyAxes(b, t);
+    const pos = fromBodyFixed(body, scale(s.p as Vec3, 1 / M_METRES), t);
+    const g = groundVelocity(body, pos, t);
+    const v = [0, 1, 2].map((i) => (s.v[0] * A[0][i]! + s.v[1] * A[1][i]! + s.v[2] * A[2][i]!) / C_MPS) as Vec3;
+    return { pos, vel: [g[0] + v[0], g[1] + v[1], g[2] + v[2]] };
+  }
+  const B = ourState(body, t);
+  return {
+    pos: [0, 1, 2].map((k) => B.pos[k]! + s.p[k]! / M_METRES) as Vec3,
+    vel: [0, 1, 2].map((k) => B.vel[k]! + s.v[k]! / C_MPS) as Vec3,
+  };
+}
+
+/** Our craft as the network sends it, anywhere on our side (R6): fixed to the Earth in its air or on its ground (R1);
+ *  elsewhere in the inertial frame of the body whose sphere it is in — the home frame's axes about its centre. */
+export interface NetOwnState extends NetOwn {
+  /** 0: fixed to the body, 1: its inertial frame */
+  frame: 0 | 1;
+  /** NET_BODIES' index */
+  body: number;
+}
+
+function netOwnState(this: CameraController): NetOwnState | null {
+  // (in the Earth's air — below 100 km — or on its ground: fixed to it; above, its inertial frame)
+  const own = this.netOwn();
+  if (own && own.h < 100_000) return { ...own, frame: 0, body: 0 };
+  if (!this.s.ship) return null;
+  const H = homeView(this);
+  const body = H ? NET_BODIES.indexOf(H.nav.ref) : -1;
+  if (!H || body < 0) return null;
+  const nav = H.nav;
+  const ax = this.shipAxesLocal(H.cam).map((a) => H.fromLocal(a as Vec3)) as [Vec3, Vec3, Vec3];
+  const p = [0, 1, 2].map((k) => (nav.X[k]! - nav.refPos[k]!) * M_METRES) as Vec3;
+  return {
+    frame: 1,
+    body,
+    p,
+    v: [0, 1, 2].map((k) => (nav.V[k]! - nav.refVel[k]!) * C_MPS) as Vec3,
+    fwd: ax[2],
+    up: ax[1],
+    right: scale(ax[0], -1),
+    h: Math.hypot(...p) - (solarBody(nav.ref)?.radius ?? 0) * M_METRES,
+  };
+}
+
 export interface NetShip {
   slot: number;
   id: VesselId;
@@ -198,30 +277,48 @@ const posers = new Map<number, { poser: JetPoser; fan: number }>();
  * The others' craft on the Earth for the renderer: each from the flown craft, on the camera's axes, its axes
  * there; an F-35's moving parts as its flight controls move them. Those beyond `range` [m] left out.
  */
-function netShips(this: CameraController, states: CraftState[], dt: number, range = 60_000): NetShip[] {
+function netShips(this: CameraController, states: CraftState[], dt: number, range = Infinity): NetShip[] {
+  const H = homeView(this);
+  if (!H) return [];
   const E = earthView(this);
-  if (!E) return [];
+  const t = H.nav.t;
   const out: NetShip[] = [];
-  // (the flown craft's heading: its nose over the local east and north)
-  const E3 = E.fr.east as Vec3,
-    N3 = E.fr.north as Vec3,
-    U3 = E.fr.up as Vec3;
-  const nose = E.fr.fromLocal(this.shipAxesLocal(E.cam)[2] as Vec3) as Vec3;
+  // (near the Earth: the flown craft's heading — its nose over the local east and north —, the radar's frame)
+  const E3 = (E?.fr.east ?? [1, 0, 0]) as Vec3,
+    N3 = (E?.fr.north ?? [0, 1, 0]) as Vec3,
+    U3 = (E?.fr.up ?? [0, 0, 1]) as Vec3;
+  const nose = E ? (E.fr.fromLocal(this.shipAxesLocal(E.cam)[2] as Vec3) as Vec3) : N3;
   const psi = Math.atan2(dot(nose, E3), dot(nose, N3));
   const [cp, sp] = [Math.cos(psi), Math.sin(psi)];
   for (const s of states) {
     const id = kindOf(s.kind);
-    if (!id || s.body !== 0 || s.frame !== 0) continue;
-    const dE: Vec3 = [s.p[0] - E.p0[0], s.p[1] - E.p0[1], s.p[2] - E.p0[2]];
-    const dist = Math.hypot(...dE);
-    if (dist > range) continue;
+    const body = NET_BODIES[s.body];
+    if (!id || !body || !solarBody(body)) continue;
+    // its place and axes in the home frame: on a body's ground or in its air (fixed to it), or in space (the
+    // body's inertial frame: the home frame's axes about its centre)
     const ax = quatAxes(s.q);
-    // (the renderer's axes: x the left, y the top, z the nose)
-    const axesHome = [scale(ax.right, -1), ax.up, ax.fwd].map((a) => E.toHome(a)) as [Vec3, Vec3, Vec3];
-    const relHome = E.toHome(dE);
+    let X: Vec3, axesHome: [Vec3, Vec3, Vec3], vH: Vec3, h: number;
+    if (s.frame === 0) {
+      if (!solidBody(body)) continue;
+      const A = bodyAxes(solarBody(body)!, t);
+      const toHome = (b: Vec3): Vec3 => [0, 1, 2].map((i) => b[0] * A[0][i]! + b[1] * A[1][i]! + b[2] * A[2][i]!) as Vec3;
+      X = fromBodyFixed(body, scale(s.p as Vec3, 1 / M_METRES), t);
+      axesHome = [scale(ax.right, -1), ax.up, ax.fwd].map(toHome) as [Vec3, Vec3, Vec3];
+      vH = toHome(s.v as Vec3);
+      h = Math.hypot(...s.p) - solarBody(body)!.radius * M_METRES;
+    } else {
+      const B = ourState(body, t);
+      X = [0, 1, 2].map((k) => B.pos[k]! + s.p[k]! / M_METRES) as Vec3;
+      axesHome = [scale(ax.right, -1), ax.up, ax.fwd];
+      vH = s.v as Vec3;
+      h = Math.hypot(...s.p) - solarBody(body)!.radius * M_METRES;
+    }
+    const relHome = [0, 1, 2].map((k) => (X[k]! - H.nav.X[k]!) * M_METRES) as Vec3;
+    const dist = Math.hypot(...relHome);
+    if (dist > range) continue;
     const V = s.vis;
     let jet: F35Pose | undefined;
-    if (id === "f35") {
+    if (id === "f35" && dist < 60_000) {
       let P = posers.get(s.slot);
       if (!P) posers.set(s.slot, (P = { poser: new JetPoser(), fan: 0 }));
       const ground = (s.flags & 1) !== 0;
@@ -250,9 +347,7 @@ function netShips(this: CameraController, states: CraftState[], dt: number, rang
         }),
       };
     }
-    const h = Math.hypot(...s.p) - 6_371_000;
     const [e, n, u] = [dot(relHome, E3), dot(relHome, N3), dot(relHome, U3)];
-    const vH = E.toHome(s.v);
     const ve = dot(vH, E3),
       vn = dot(vH, N3);
     const loc = (h: Vec3): Vec3 => [dot(h, E3), dot(h, N3), dot(h, U3)];
@@ -261,10 +356,10 @@ function netShips(this: CameraController, states: CraftState[], dt: number, rang
       radar: { x: e * cp - n * sp, y: e * sp + n * cp, dz: u, trk: Math.hypot(ve, vn) > 5 ? Math.atan2(ve, vn) - psi : null },
       slot: s.slot,
       id,
-      rel: E.toCam(relHome),
-      axes: axesHome.map((a) => E.toCam(a)) as [Vec3, Vec3, Vec3],
+      rel: H.toCam(relHome),
+      axes: axesHome.map((a) => H.toCam(a)) as [Vec3, Vec3, Vec3],
       relHome,
-      X: [0, 1, 2].map((k) => E.nav.X[k]! + relHome[k]! / M_METRES) as Vec3,
+      X,
       axesHome,
       dist,
       ghost: s.ghost,
@@ -283,24 +378,25 @@ function netShips(this: CameraController, states: CraftState[], dt: number, rang
  * its velocity, its attitude — in the home frame, for tools.placeAt. Null: not on the Earth.
  */
 function netPlaceBeside(this: CameraController, s: CraftState, gap: number) {
-  // (the Earth's axes now alone — wherever our craft is: a spectator in orbit takes another's place on the ground)
+  // (the body's axes now alone — wherever our craft is: a spectator in orbit takes another's place on the ground)
   const t = this.nowTime();
   if (!Number.isFinite(t) || !this.s.wormhole) return null;
-  const A = bodyAxes(solarBody("earth")!, t);
-  const toHome = (b: Vec3): Vec3 => [0, 1, 2].map((i) => b[0] * A[0][i]! + b[1] * A[1][i]! + b[2] * A[2][i]!) as Vec3;
+  const H = netStateHome(s, t);
+  const body = NET_BODIES[s.body];
+  if (!H || !body) return null;
+  // (his axes in the home frame: a body's turning ones on its ground and in its air, the home frame's in space)
+  const A = s.frame === 0 ? bodyAxes(solarBody(body)!, t) : null;
+  const toHome = (b: Vec3): Vec3 => (A ? ([0, 1, 2].map((i) => b[0] * A[0][i]! + b[1] * A[1][i]! + b[2] * A[2][i]!) as Vec3) : b);
   const ax = quatAxes(s.q);
-  const pE: Vec3 = [s.p[0] + ax.right[0] * gap, s.p[1] + ax.right[1] * gap, s.p[2] + ax.right[2] * gap];
-  const X = fromBodyFixed("earth", scale(pE, 1 / M_METRES), t);
-  const g = groundVelocity("earth", X, t);
-  const v = scale(toHome(s.v), 1 / C_MPS);
+  const right = unit(toHome(ax.right));
   return {
-    X,
-    vel: [g[0] + v[0], g[1] + v[1], g[2] + v[2]] as Vec3,
+    X: [0, 1, 2].map((k) => H.pos[k]! + (right[k]! * gap) / M_METRES) as Vec3,
+    vel: H.vel,
     fwd: unit(toHome(ax.fwd)),
     up: unit(toHome(ax.up)),
   };
 }
 
 export function installNetcraft(Ctl: { prototype: CameraController }) {
-  Object.assign(Ctl.prototype, { netOwn, netShips, netPlaceBeside, netWalkerHome, netOwnWalker });
+  Object.assign(Ctl.prototype, { netOwn, netOwnState, netShips, netPlaceBeside, netWalkerHome, netOwnWalker });
 }

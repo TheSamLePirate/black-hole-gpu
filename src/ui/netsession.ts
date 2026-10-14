@@ -4,9 +4,10 @@
 // and the HUD; the room's time at ×1; a place beside another (the teleport of the tests). The client itself
 // (src/net/) is the network module's, loaded when a room was asked for.
 
-import { realTimeSpeed } from "../clock";
+import { fmtFactor, realTimeSpeed, roomPace } from "../clock";
 import type { CameraController } from "../controls";
-import { axesQuat, kindIndex, kindOf, netFrame, type NetShip, quatAxes } from "../controller/netcraft";
+import { axesQuat, kindIndex, kindOf, NET_BODIES, NET_COAST, netFrame, type NetShip, netStateHome, quatAxes } from "../controller/netcraft";
+import { type Body, isNetTarget, netTargetId, netTargets } from "../targeting";
 import { fleet } from "../fleet";
 import type { JetInputs } from "../f35/pose";
 import type { GameTools } from "../game/tools";
@@ -17,7 +18,9 @@ import type { Renderer } from "../renderer";
 import type { Settings } from "../settings";
 import { netRadar } from "./hud/symbology";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "../system/ellipsoid";
-import { M_SECONDS } from "../units";
+import { C_MPS, M_METRES, M_SECONDS } from "../units";
+import { keplerProp } from "../system/our-plan";
+import { solarBody } from "../system/solar";
 import { vesselHulls } from "../system/collide";
 import { type VesselId, VESSELS } from "../vessels";
 import type { NetPanel } from "./netpanel";
@@ -37,6 +40,24 @@ function parkedAt(p: Vec3, fwd: Vec3) {
   const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   return { lat: g.lat * D, lon: g.lon * D, heading: (Math.atan2(dot(fwd, east), dot(fwd, north)) * D + 360) % 360 };
 }
+
+/** the acceleration measured on a craft in space [m/s²] less the pull of its body's centre: the rest of its pull */
+function perturbation(own: { body: number; p: Vec3 }, acc: Vec3): Vec3 {
+  const b = solarBody(NET_BODIES[own.body] ?? "");
+  const r = Math.hypot(...own.p);
+  if (!b || !(r > 0)) return [0, 0, 0];
+  const mu = b.mass * C_MPS * C_MPS * M_METRES;
+  return [0, 1, 2].map((k) => clamp(acc[k]! + (mu * own.p[k]!) / r ** 3, -1, 1)) as Vec3;
+}
+
+/** a coasting craft carried along its orbit about a body (the body's inertial frame, m and m/s) by dt [s] */
+function keplerOf(body: number, p: Vec3, v: Vec3, dt: number): { p: Vec3; v: Vec3 } | null {
+  const b = solarBody(NET_BODIES[body] ?? "");
+  if (!b || !(b.mass > 0)) return null;
+  const o = keplerProp(b.mass, scale3(p, 1 / M_METRES), scale3(v, 1 / C_MPS), dt / M_SECONDS);
+  return { p: scale3(o.r as Vec3, M_METRES), v: scale3(o.v as Vec3, C_MPS) };
+}
+const scale3 = (a: Vec3, k: number): Vec3 => [a[0] * k, a[1] * k, a[2] * k];
 
 export interface NetTag {
   slot: number;
@@ -114,23 +135,44 @@ export class NetSession {
   private telAt = 0;
   private telBound: unknown = null;
   private lastSend = -1;
-  private prev: { at: number; v: Vec3; ax: [Vec3, Vec3, Vec3] } | null = null;
+  private prev: { at: number; st: number; frame: number; v: Vec3; ax: [Vec3, Vec3, Vec3] } | null = null;
   private acc: Vec3 = [0, 0, 0];
   private spin: Vec3 = [0, 0, 0];
-  private warpSaid = false;
   private collidedAt = -1e9;
   private walkSentAt = -1;
   private walkPrev: Vec3 | null = null;
+  private walkPrevSt = 0;
   /** our place last frame [m, the Earth's], when it last jumped (a placement), the frames each other has touched */
   private ownAt: number[] | null = null;
   private placedAt = -1e9;
   private touch = new Map<number, number>();
   /** the room whose clock the scene was set on */
   private timedRoom = "";
+  /** our warp ask last told the room (×), when; the last time the scene was set on the room's clock */
+  private wantSent = Number.NaN;
+  private wantAt = -1e9;
+  private resyncAt = -1e9;
   /** samples sent, for the link's figures */
   sent = 0;
+  /** the last sample sent coasting (R6): whether, what — the orbit the others carry us on —, its other pulls */
+  private coastSent = false;
+  private lastCoast: { t: number; body: number; p: Vec3; v: Vec3; a: Vec3 } | null = null;
+  private coastA: Vec3 = [0, 0, 0];
 
-  constructor(private d: NetSessionDeps) {}
+  constructor(private d: NetSessionDeps) {
+    // the others' craft as targets (R6): the HUD's, the rendezvous', the map's
+    const slotOf = (id: Body) => Number(String(id).slice(4));
+    netTargets.list = () => this.ships.filter((s) => !s.ghost).map((s) => netTargetId(s.slot));
+    netTargets.name = (id) => this.nameOf(slotOf(id));
+    netTargets.colour = (id) => {
+      const c = this.net?.room?.members.find((m) => m.slot === slotOf(id))?.colour ?? "#ffffff";
+      return [1, 3, 5].map((i) => Number.parseInt(c.slice(i, i + 2), 16) || 255).join(", ");
+    };
+    netTargets.state = (id, t) => {
+      const st = this.net?.remotes.track(slotOf(id))?.raw(t * M_SECONDS);
+      return st ? netStateHome(st, t) : null;
+    };
+  }
 
   private get net() {
     return this.d.panel.net;
@@ -142,6 +184,12 @@ export class NetSession {
     const R = this.d.renderer;
     if (!net?.room) {
       if (this.follow) this.unfollow();
+      roomPace.cap = Infinity;
+      roomPace.ease = 1;
+      roomPace.note = "";
+      this.wantSent = Number.NaN;
+      // (a player targeted: gone with the room)
+      if (isNetTarget(this.d.settings.target)) this.d.settings.target = "earth";
       if (R.netWalkers.length) R.netWalkers = [];
       if (R.netOthers.length) R.netOthers = [];
       if (R.netShipsCam.length) R.netShipsCam = [];
@@ -155,26 +203,11 @@ export class NetSession {
     const c = this.d.camera;
     const now = performance.now() / 1000;
     this.alightStep(now);
-    // (the room's hour, the scene's: on joining, a scene more than a minute off set on the room's clock —
-    // the same Sun, the same sky for everyone)
-    if (this.timedRoom !== net.room.code && net.clock.synced) {
-      this.timedRoom = net.room.code;
-      const tr = net.roomNow();
-      if (Number.isFinite(tr) && Math.abs(tr - this.d.sceneTime()) > 60) {
-        this.d.tools.setDate(tr / M_SECONDS);
-        this.d.toast(t("The scene set on the room's hour"));
-      }
-    }
-    // (a room flies at ×1 — real time: timeSpeed is in M per second —, its time everyone's; a warp asked is
-    // refused, said once)
-    const rt = realTimeSpeed(this.d.settings);
-    if (Math.abs(this.d.settings.timeSpeed - rt) > rt * 1e-6) {
-      c.requestWarp(rt);
-      if (!this.warpSaid) this.d.toast(t("In a room the time runs at ×1 for everyone"));
-      this.warpSaid = true;
-    }
+    this.pace(net, now);
     // the others
-    const states = net.remotes.states(net.roomNow()).filter((s) => !s.ghost || s.ahead < 10);
+    // (each other's craft at our scene's time — what we draw; the samples carry their sender's — R6: a clock a
+    // little off the room's misplaces nobody)
+    const states = net.remotes.states(this.d.sceneTime()).filter((s) => !s.ghost || s.ahead < 10);
     // (his telemetry heard: our instruments show his)
     if (this.telBound !== net) {
       this.telBound = net;
@@ -192,6 +225,8 @@ export class NetSession {
     }
     const F = this.follow;
     if (F && !net.room.members.some((m) => m.slot === F.slot)) this.unfollow();
+    if (isNetTarget(this.d.settings.target) && !net.room.members.some((m) => netTargetId(m.slot) === this.d.settings.target))
+      this.d.settings.target = "earth";
     for (const [p, q] of this.aboard)
       if (!net.room.members.some((m) => m.slot === p) || !net.room.members.some((m) => m.slot === q)) this.aboard.delete(p);
     // (a spectator, an instruments screen: the first pilot followed — the instruments in his cockpit)
@@ -219,12 +254,12 @@ export class NetSession {
     const fstate = this.follow ? (states.find((s) => s.slot === this.follow!.slot) ?? null) : null;
     this.puppetFrame(followed, fstate);
     R.netOthers = this.ships
-      .filter((s) => !s.ghost)
+      .filter((s) => !s.ghost && s.dist < 60_000)
       .map((s) => ({ slot: s.slot, id: s.id, rel: s.rel, axes: s.axes, X: s.X, axesHome: s.axesHome, jet: s.jet, thrust: s.thrust }));
     const members = new Map(net.room.members.map((m) => [m.slot, m]));
     // (on the F-35's radar: each other in his colour, his track, his height against ours)
     netRadar.contacts = this.ships
-      .filter((s) => !s.ghost)
+      .filter((s) => !s.ghost && s.dist < 60_000)
       .map((s) => ({
         ...s.radar,
         air: !(s.state.flags & 1),
@@ -275,9 +310,13 @@ export class NetSession {
     if (W && now - this.walkSentAt > 1 / 15) {
       const h = now - this.walkSentAt;
       this.walkSentAt = now;
-      const v: Vec3 = this.walkPrev && h < 0.5 ? ([0, 1, 2].map((k) => (W.p[k]! - this.walkPrev![k]!) / h) as Vec3) : [0, 0, 0];
+      // (his velocity per second of the scene's time, as the others carry him on: at a warp, his steps slow on it)
+      const hs = this.d.sceneTime() - this.walkPrevSt;
+      this.walkPrevSt = this.d.sceneTime();
+      const v: Vec3 = this.walkPrev && h < 0.5 && hs > 0 ? ([0, 1, 2].map((k) => (W.p[k]! - this.walkPrev![k]!) / hs) as Vec3) : [0, 0, 0];
       this.walkPrev = W.p;
       net.sendCraft({
+        t: this.d.sceneTime(),
         frame: 0,
         body: W.body,
         kind: 4,
@@ -330,16 +369,18 @@ export class NetSession {
       }
     // ours, when due (not while our craft is another's puppet)
     if (net.room.role !== "pilot" || this.follow) return;
-    const own = c.netOwn();
+    const own = c.netOwnState();
     if (!own) {
       this.prev = null;
       return;
     }
     // (the motion's derivatives, measured: the velocity's change, the axes' turn — eased over a few frames)
     const ax: [Vec3, Vec3, Vec3] = [own.fwd, own.up, own.right];
-    if (this.prev && now > this.prev.at) {
-      const h = now - this.prev.at;
-      const k = 1 - Math.exp(-h / 0.08);
+    // (per second of the scene's time — the others carry it on in the room's: at a warp, not per second of ours)
+    const st = this.d.sceneTime();
+    if (this.prev && now > this.prev.at && st > this.prev.st && own.frame === this.prev.frame) {
+      const h = st - this.prev.st;
+      const k = 1 - Math.exp(-(now - this.prev.at) / 0.08);
       const a = [0, 1, 2].map((i) => (own.v[i]! - this.prev!.v[i]!) / h) as Vec3;
       // (ω = ½ Σ eᵢ × eᵢ' / h: the triad's turn)
       const w: Vec3 = [0, 0, 0];
@@ -355,28 +396,51 @@ export class NetSession {
         this.spin[i] = this.spin[i]! + (clamp(w[i]!, -10, 10) - this.spin[i]!) * k;
       }
     }
-    this.prev = { at: now, v: own.v, ax };
+    this.prev = { at: now, st, frame: own.frame, v: own.v, ax };
     const speed = Math.hypot(...own.v);
-    const parked = ground && speed < 0.5;
+    const onGnd = own.frame === 0 && ground;
+    const parked = onGnd && speed < 0.5;
     const near = this.ships.some((s) => s.dist < 5000);
-    const rate = parked ? 2 : near ? 60 : 30;
-    if (now - this.lastSend < 1 / rate - 0.002) return;
-    this.lastSend = now;
     const th = this.d.renderer.shipThrust;
+    // (in space, no thrust: its orbit carries it — a sample a second, the others propagate it; at once when it
+    // changes — docs/PLAN-RESEAU.md R6)
+    const coast = own.frame === 1 && (th?.throttle ?? 0) < 0.005 && !c.pilot.engineNow;
+    // (coasting: oftener as the room's warp runs faster — its orbit's own pull besides Kepler's stays small between two)
+    const warpNow = net.roomWarp();
+    const rate = parked ? 2 : coast ? clamp(warpNow / 20, 1, 30) : near ? 60 : 30;
+    // (coasting: also at once when we are no longer where the others carry us — a placing, a push: our orbit
+    // changed)
+    const LC = this.lastCoast;
+    const off =
+      coast && LC && LC.body === own.body
+        ? (() => {
+            const k = keplerOf(LC.body, LC.p, LC.v, st - LC.t);
+            return k ? Math.hypot(...k.p.map((x, i) => x + 0.5 * LC.a[i]! * (st - LC.t) ** 2 - own.p[i]!)) : Infinity;
+          })()
+        : Infinity;
+    if (now - this.lastSend < 1 / rate - 0.002 && coast === this.coastSent && !(coast && off > 20)) return;
+    this.lastSend = now;
+    this.coastSent = coast;
     const L = c.airFlight.last;
     const J = this.d.jetIn();
     const cmd = (k: number) => (J ? clamp(0.55 * J.torque[k]! + 0.75 * J.rates[k]!, -1, 1) : 0);
     const boost = th?.boost ?? 1;
+    this.coastA = coast ? perturbation(own, this.acc) : [0, 0, 0];
+    this.lastCoast = coast ? { t: st, body: own.body, p: own.p, v: own.v, a: this.coastA } : null;
     net.sendCraft({
-      frame: 0,
-      body: 0,
+      // (stamped with our scene's time: the pose's)
+      t: this.d.sceneTime(),
+      frame: own.frame,
+      body: own.body,
       kind: kindIndex(fleet.active),
-      flags: (ground ? 1 : 0) | (parked ? 2 : 0) | (this.d.settings.navLights ? 4 : 0) | (boost > 1.01 ? 8 : 0),
+      flags: (onGnd ? 1 : 0) | (parked ? 2 : 0) | (this.d.settings.navLights ? 4 : 0) | (boost > 1.01 ? 8 : 0) | (coast ? NET_COAST : 0),
       p: own.p,
       v: own.v,
       q: axesQuat(own.fwd, own.up, own.right),
       w: this.spin,
-      a: ground ? [0, 0, 0] : this.acc,
+      // (coasting: what pulls it besides the body's centre — its flattening, the Moon, the Sun —, added by the others
+      // to the Kepler orbit they carry it on)
+      a: onGnd ? [0, 0, 0] : coast ? this.coastA : this.acc,
       vis: {
         throttle: th?.throttle ?? 0,
         boost,
@@ -414,6 +478,90 @@ export class NetSession {
     }
   }
 
+  /**
+   * The room's clock (docs/PLAN-RESEAU.md R6): on joining, the scene set on the room's hour and our warp on its
+   * pace; then, every frame, the warp we ask for told to the room (the pilots': the room runs at the slowest asked
+   * — a speed-up waits for everyone's), and the scene's time kept on the room's — never faster than its pace,
+   * eased onto its clock (from half to twice its pace), set on it at once if it fell far off (a stall, a tab put
+   * aside).
+   */
+  private pace(net: NonNullable<NetPanel["net"]>, now: number) {
+    const room = net.room!;
+    const s = this.d.settings;
+    const rt = realTimeSpeed(s);
+    // (the others' tracks: read at the room's pace, a coasting craft carried along its orbit)
+    net.remotes.env.pace = Math.max(1, net.roomWarp());
+    net.remotes.env.kepler ??= keplerOf;
+    if (!net.clock.synced) return;
+    const tr = net.roomNow();
+    const W = net.roomWarp();
+    if (this.timedRoom !== room.code) {
+      this.timedRoom = room.code;
+      this.wantSent = Number.NaN;
+      const off = tr - this.d.sceneTime();
+      if (Number.isFinite(tr) && Math.abs(off) > 0.25) {
+        this.d.tools.setDate(tr / M_SECONDS);
+        if (Math.abs(off) > 60) this.d.toast(t("The scene set on the room's hour"));
+      }
+      // (the room's pace taken as ours: our ask is the room's — nobody slowed by our coming)
+      if (W > 0) this.d.camera.requestWarp(W * rt);
+      s.animate = true;
+    }
+    // our ask (a pilot's), when it changed
+    const want = s.animate ? s.timeSpeed / rt : 0;
+    // (a slowdown at once — the air's limit, a pause —; a speed-up at most 5 times a second)
+    if (
+      room.role === "pilot" &&
+      !(Math.abs(want - this.wantSent) <= 1e-3 * Math.max(1, want)) &&
+      (want < this.wantSent || now - this.wantAt > 0.2)
+    ) {
+      this.wantSent = want;
+      this.wantAt = now;
+      net.warp(Math.round(want * 1e4) / 1e4);
+    }
+    // the scene on the room's clock (as at this frame's instant: the step brought the scene to it)
+    const e = this.d.sceneTime() - net.roomAt(Number(document.timeline.currentTime ?? performance.now()));
+    this.lag = e;
+    if (Math.abs(e) > Math.max(30, 10 * W) && now - this.resyncAt > 5) {
+      this.resyncAt = now;
+      this.d.tools.setDate(tr / M_SECONDS);
+      this.d.toast(t("The scene set on the room's hour"));
+    }
+    roomPace.cap = W * rt;
+    roomPace.ease = W > 0 ? clamp(1 - e / (2 * W), 0.5, 2) : 1;
+    // (what holds the room: the paused, the slowest, those asked to follow a speed-up)
+    const names = (f: (w: number) => boolean) =>
+      room.members.filter((m) => m.role === "pilot" && m.slot !== room.slot && f(room.wants[m.slot] ?? W)).map((m) => m.name);
+    const mine = room.wants[room.slot] ?? want;
+    roomPace.note =
+      W === 0
+        ? tf("paused by {0}", names((w) => w === 0).join(", ") || t("the room"))
+        : mine > W * 1.001
+          ? tf("{0} asked — waiting for {1}", fmtFactor(mine), names((w) => w < mine * 0.999).join(", "))
+          : "";
+    // (a speed-up asked by another: offered to us)
+    const ask = Math.max(0, ...room.members.filter((m) => m.role === "pilot" && m.slot !== room.slot).map((m) => room.wants[m.slot] ?? 0));
+    const offer = room.role === "pilot" && ask > W * 1.001 && want < ask * 0.999 ? { warp: ask, by: names((w) => w === ask) } : null;
+    if (offer && offer.warp !== this.offer?.warp)
+      this.d.toast(tf("{0} asks for {1} — warp up to accept", offer.by.join(", "), fmtFactor(offer.warp)));
+    this.offer = offer;
+    if (offer && !roomPace.note) roomPace.note = tf("{0} asks for {1}", offer.by.join(", "), fmtFactor(offer.warp));
+  }
+
+  /** our scene's time less the room's, at the end of the frame's step [s] (R6) */
+  lag = 0;
+
+  /** a faster warp another pilot asks for, offered to us (accepted: ours too) */
+  offer: { warp: number; by: string[] } | null = null;
+
+  /** Accept the warp offered: ours set to it — the room speeds up once every pilot asks for it. */
+  acceptWarp() {
+    if (!this.offer) return false;
+    this.d.camera.requestWarp(this.offer.warp * realTimeSpeed(this.d.settings));
+    this.d.settings.animate = true;
+    return true;
+  }
+
   /** Follow another player (our craft his puppet), or stop. */
   setFollow(slot: number | null, why: "spectate" | "killcam" | "passenger" = "spectate") {
     if (slot === null) return this.unfollow();
@@ -430,7 +578,7 @@ export class NetSession {
     const net = this.net;
     const ch = this.d.camera.character;
     if (!net?.room || !ch.active || !ch.ours || ch.body !== "earth") return null;
-    const now = net.roomNow();
+    const now = this.d.sceneTime();
     let best: { slot: number; state: CraftState; d: number } | null = null;
     for (const m of net.room.members) {
       if (m.slot === net.room.slot) continue;
@@ -475,7 +623,7 @@ export class NetSession {
   private alight(): string {
     const net = this.net!;
     const F = this.follow!;
-    const s = net.remotes.track(F.slot)?.at(net.roomNow());
+    const s = net.remotes.track(F.slot)?.at(this.d.sceneTime());
     const name = this.nameOf(F.slot);
     const id = s ? kindOf(s.kind) : null;
     if (s && id && (!(s.flags & 1) || Math.hypot(...s.v) > 0.5)) return tf("Wait until {0}'s craft is landed and still", name);
@@ -597,7 +745,7 @@ export class NetSession {
   others(): { slot: number; name: string; state: CraftState | null }[] {
     const net = this.net;
     if (!net?.room) return [];
-    const now = net.roomNow();
+    const now = this.d.sceneTime();
     return net.room.members
       .filter((m) => m.slot !== net.room!.slot)
       .map((m) => ({ slot: m.slot, name: m.name, state: net.remotes.track(m.slot)?.at(now) ?? null }));
@@ -608,9 +756,11 @@ export class NetSession {
    * in formation; on the ground, parked beside it. Says what it did.
    */
   teleport(slot: number, gap?: number): string {
+    // (not before our scene is on the room's clock: set on it after, we would be carried off his place)
+    if (!this.net?.clock.synced || this.timedRoom !== this.net.room?.code) return t("The room's clock is still being set — a moment");
     const o = this.others().find((x) => x.slot === slot);
     if (!o) return t("No such player in the room");
-    if (!o.state) return tf("{0} has no craft on the Earth now", o.name);
+    if (!o.state) return tf("{0} has no craft on our worlds now", o.name);
     const c = this.d.camera;
     const s = o.state;
     // (clear of both wingspans: the other's half, ours, a margin)
@@ -618,7 +768,7 @@ export class NetSession {
     const kinds = ["ranger", "lander", "endurance", "f35"];
     const g = gap ?? half(kinds[s.kind] ?? "f35") + half(fleet.active) + 8;
     const place = c.netPlaceBeside(s, g);
-    if (!place) return t("The teleport needs your craft near the Earth");
+    if (!place) return t("The teleport needs your craft on our side of the wormhole");
     const ground = (s.flags & 1) !== 0;
     this.d.tools.placeAt({ frame: "ours", ...place, note: tf("Beside {0}", o.name) });
     if (c.pilot.auto !== "none") c.pilot.setAuto(c.pilot.auto);

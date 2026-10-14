@@ -64,6 +64,43 @@ describe("the room server", () => {
     b.close();
   });
 
+  test("the room's warp (R6): a slowdown at once for all, a speed-up only once every pilot asks for it", async () => {
+    const a = client("Ana");
+    const b = client("Ben");
+    const c = client("Cid");
+    const { code } = await a.create("Warp", 0);
+    await b.join(code);
+    await c.join(code, "spectator");
+    await until(() => a.clock.synced && b.clock.synced && c.clock.synced);
+    expect(a.room!.clock.warp).toBe(1);
+    // (Ana asks ×100: Ben still asks ×1 — the room stays at ×1, her ask seen by all)
+    a.warp(100);
+    await until(() => b.room!.wants[0] === 100);
+    expect(b.room!.clock.warp).toBe(1);
+    // (Ben accepts: ×100 for all, the clock carried on from where it was — no jump)
+    const before = b.roomNow();
+    b.warp(100);
+    await until(() => a.room!.clock.warp === 100 && c.room!.clock.warp === 100);
+    expect(Math.abs(b.roomNow() - before)).toBeLessThan(5);
+    await Bun.sleep(200);
+    expect(Math.abs(a.roomNow() - b.roomNow())).toBeLessThan(0.5);
+    // (Ben slows to ×10: at once for all; a spectator's ask counts for nothing)
+    c.warp(1e6);
+    b.warp(10);
+    await until(() => a.room!.clock.warp === 10);
+    // (Ben gone: Ana alone asks ×100 — the room at her pace)
+    b.leave();
+    await until(() => a.room!.clock.warp === 100);
+    // (nobody left: the world runs on at ×1)
+    a.leave();
+    c.leave();
+    await Bun.sleep(50);
+    const d = client("Dan");
+    const rd = await d.join(code);
+    expect(rd.clock.warp).toBe(1);
+    for (const x of [a, b, c, d]) x.close();
+  });
+
   test("a craft's sample passed on to the others, its slot stamped; read back", async () => {
     const a = client("Ana");
     const b = client("Ben");

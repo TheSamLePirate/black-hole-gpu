@@ -66,10 +66,21 @@ function mixVisual(a: Visual, b: Visual, u: number): Visual {
 }
 
 export interface TrackOptions {
-  /** carried past the last sample at most [s], then a ghost */
+  /** carried past the last sample at most [s of real time], then a ghost */
   maxAhead?: number;
-  /** a disagreement taken in over [s] */
+  /** a disagreement taken in over [s of real time] */
   smooth?: number;
+}
+
+/** a sample's flag: coasting — no thrust, out of the air: its orbit alone carries it (R6) */
+export const FLAG_COAST = 16;
+
+/** what the registry lends its tracks: the room's pace, the orbits' propagation */
+interface TrackEnv {
+  /** the scene's seconds per real second (the room's warp; 1 at ×1) */
+  pace: number;
+  /** a coasting craft carried along its orbit about a body (inertial frame, m and m/s) by dt [s]; null: none */
+  kepler: ((body: number, p: V3, v: V3, dt: number) => { p: V3; v: V3 } | null) | null;
 }
 
 /** One craft's samples and their reading. */
@@ -85,6 +96,7 @@ export class RemoteTrack {
   constructor(
     readonly slot: number,
     o: TrackOptions = {},
+    private env: TrackEnv = { pace: 1, kepler: null },
   ) {
     this.maxAhead = o.maxAhead ?? 1;
     this.smooth = o.smooth ?? 0.15;
@@ -98,10 +110,13 @@ export class RemoteTrack {
       S.push(s);
       S.sort((a, b) => a.t - b.t);
     } else S.push(s);
-    // (2 s of history are enough to read behind)
-    while (S.length > 2 && S[0]!.t < s.t - 2) S.shift();
-    // the shown position measured against the new truth: the gap taken in smoothly from here
-    if (this.last) {
+    // (2 s of history are enough to read behind — of real time: the room's warp stretches them)
+    while (S.length > 2 && S[0]!.t < s.t - 2 * Math.max(1, this.env.pace)) S.shift();
+    // the shown position measured against the new truth: the gap taken in smoothly from here (not across a change
+    // of frame: a craft gone out of the air, into another's sphere)
+    const prev = S.length > 1 ? S[S.length - 2]! : null;
+    if (prev && (prev.frame !== s.frame || prev.body !== s.body)) this.corr = [0, 0, 0];
+    else if (this.last) {
       const raw = this.raw(this.last.t);
       if (raw) {
         const e: V3 = [this.last.p[0] - raw.p[0], this.last.p[1] - raw.p[1], this.last.p[2] - raw.p[2]];
@@ -125,7 +140,33 @@ export class RemoteTrack {
     let i = S.length - 1;
     while (i > 0 && S[i]!.t > t) i--;
     const a = S[i]!;
-    const b = S[i + 1];
+    const b0 = S[i + 1];
+    // (between two samples of different frames — out of the air, another's sphere —: no curve across them)
+    const b = b0 && b0.frame === a.frame && b0.body === a.body ? b0 : undefined;
+    const P = Math.max(1, this.env.pace);
+    // a coasting craft (no thrust, out of the air): carried along its orbit — exact at any warp
+    const K = a.frame === 1 && a.flags & FLAG_COAST && t >= a.t ? this.env.kepler?.(a.body, a.p, a.v, t - a.t) : null;
+    if (K) {
+      const dt = t - a.t;
+      // (its orbit's other pulls — the body's flattening, the Moon, the Sun —, as its pilot measured them)
+      const g = a.a;
+      return {
+        slot: this.slot,
+        t,
+        frame: a.frame,
+        body: a.body,
+        kind: a.kind,
+        flags: a.flags,
+        p: [0, 1, 2].map((k) => K.p[k]! + 0.5 * g[k]! * dt * dt) as V3,
+        v: [0, 1, 2].map((k) => K.v[k]! + g[k]! * dt) as V3,
+        q: spin(a.q, a.w, Math.min(dt, this.maxAhead * P)),
+        w: a.w,
+        vis: a.vis,
+        ahead: b ? 0 : Math.max(0, dt),
+        // (its samples a second apart: a ghost once 5 s of real time passed without one)
+        ghost: !b && dt > 5 * P,
+      };
+    }
     if (b && t >= a.t) {
       // between two samples: the cubic Hermite on the positions and velocities, the attitude slerped
       const h = b.t - a.t;
@@ -160,7 +201,7 @@ export class RemoteTrack {
     }
     // beyond the last sample (or before the first): carried by its motion, a while
     const dt = t - a.t;
-    const c = Math.max(-this.maxAhead, Math.min(this.maxAhead, dt));
+    const c = Math.max(-this.maxAhead * P, Math.min(this.maxAhead * P, dt));
     const p = [0, 1, 2].map((k) => a.p[k]! + a.v[k]! * c + 0.5 * a.a[k]! * c * c) as V3;
     const v = [0, 1, 2].map((k) => a.v[k]! + a.a[k]! * c) as V3;
     return {
@@ -176,7 +217,7 @@ export class RemoteTrack {
       w: a.w,
       vis: a.vis,
       ahead: Math.max(0, dt),
-      ghost: dt > this.maxAhead * 4,
+      ghost: dt > this.maxAhead * 4 * P,
     };
   }
 
@@ -184,7 +225,7 @@ export class RemoteTrack {
   at(t: number): CraftState | null {
     const r = this.raw(t);
     if (!r) return null;
-    const k = Math.exp(-Math.max(0, t - this.corrAt) / this.smooth);
+    const k = Math.exp(-Math.max(0, t - this.corrAt) / (this.smooth * Math.max(1, this.env.pace)));
     const p: V3 = [r.p[0] + this.corr[0] * k, r.p[1] + this.corr[1] * k, r.p[2] + this.corr[2] * k];
     this.last = { t, p };
     return { ...r, p };
@@ -209,6 +250,8 @@ export class RemoteRegistry {
   late50 = 0;
   late95 = 0;
   private late: number[] = [];
+  /** the room's pace and the orbits' propagation, lent to every track (R6) */
+  readonly env: TrackEnv = { pace: 1, kepler: null };
 
   constructor(private o: TrackOptions & { minDelay?: number; maxDelay?: number } = {}) {}
 
@@ -216,7 +259,7 @@ export class RemoteRegistry {
   push(s: CraftSample, lateness: number) {
     const key = trackKey(s.slot, s.kind === 4);
     let tr = this.tracks.get(key);
-    if (!tr) this.tracks.set(key, (tr = new RemoteTrack(s.slot, this.o)));
+    if (!tr) this.tracks.set(key, (tr = new RemoteTrack(s.slot, this.o, this.env)));
     const prev = tr.latest;
     tr.push(s);
     // (a duplicate — the same sample come both ways, direct and through the server — or a late one: no news)

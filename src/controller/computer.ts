@@ -1,5 +1,6 @@
 // The CameraController — the flight computer's operations.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { timeRate } from "../clock";
 import { cameraFrame } from "../camera";
 import type { Vec3 } from "../physics";
 import type { Target } from "../settings";
@@ -1134,7 +1135,7 @@ function rolloutSteer(this: CameraController, upL: Vec3, dt: number, yawIn: numb
     this.noseSteer = -clamp(1.5 * a, -lock, lock);
     return;
   }
-  const simS = this.s.timeSpeed * dt * 4.925490947e-6 * this.s.massSolar;
+  const simS = timeRate(this.s) * dt * 4.925490947e-6 * this.s.massSolar;
   const step = clamp(a, -4 * D * simS, 4 * D * simS);
   if (Math.abs(step) > 1e-7) this.rotateC(lin(U, step, U, 0));
   this.pilot.omega[1] = 0;

@@ -1,5 +1,6 @@
 // The CameraController — the lens and the telescope.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { timeRate } from "../clock";
 import { cameraFrame } from "../camera";
 import { horizon } from "../physics";
 import type { Settings } from "../settings";
@@ -240,7 +241,7 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   this.rig.on = false; // (set again below while the rig moves the camera)
   // (no craft flown: the others coasting flown to the frame's end all the same — their integrator's, not the
   // analytic coast's then the integrator's again 5 s on: a jump)
-  if (!this.piloting && s.animate && Number.isFinite(this.time) && s.timeSpeed > 0) fleet.stepFree(this.time + s.timeSpeed * dt);
+  if (!this.piloting && s.animate && Number.isFinite(this.time) && timeRate(s) > 0) fleet.stepFree(this.time + timeRate(s) * dt);
   if (pilotNow) {
     if (away) {
       // (the view is the spectator's)
@@ -259,7 +260,7 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
     this.flyVel = [0, 0, 0];
   } else if (this.gravity && free) {
     // free fall along the Kerr geodesic in step with the scene's time; the keys thrust
-    const simDt = s.animate ? s.timeSpeed * dt : 0;
+    const simDt = s.animate ? timeRate(s) * dt : 0;
     if (simDt > 0) this.fall(simDt, [move[0], move[1], move[2]], fast);
     this.flyVel = [0, 0, 0];
   } else if (free) {
@@ -341,7 +342,7 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   else this.offset = null;
   // the spectator, after the ship (its frame's pose): its own flight
   const viewMoved = this.character.active
-    ? this.character.step(s.animate ? dt : 0, this.shipClock() ?? this.time + (s.animate ? dt * s.timeSpeed : 0), pad)
+    ? this.character.step(s.animate ? dt : 0, this.shipClock() ?? this.time + (s.animate ? dt * timeRate(s) : 0), pad)
     : this.spectator
       ? this.advanceSpectator(dt, time, pad)
       : false;

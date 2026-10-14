@@ -19,7 +19,19 @@ import { bodyCentre, BODY_NAMES, starCentre, type Body } from "../../targeting";
 import type { Target } from "../../settings";
 import { FONT, fmtDist, fmtDur, fmtDv, fmtLen, fmtShort, marker, MONO, niceStep, RED } from "../hudkit";
 import { MapCamera, add, cross, dot, len, norm, planeBasis, scale, sub, type V3 } from "./camera";
-import { bodyPosAt, dateOf, lineage, ourPos, ourScene, ourTrack, theirScene, type MapBody, type MapScene, type Universe } from "./scene";
+import {
+  bodyPosAt,
+  dateOf,
+  isMapCraft,
+  lineage,
+  ourPos,
+  ourScene,
+  ourTrack,
+  theirScene,
+  type MapBody,
+  type MapScene,
+  type Universe,
+} from "./scene";
 import type { Info } from "../flighthud";
 import { extensionHorizon, type Extension } from "../../system/our-extend";
 import { extendTheirs } from "../../system/their-extend";
@@ -31,7 +43,6 @@ import { store } from "../../util/storage";
 import { el as h } from "../kit";
 import { t, tf, tr } from "../../i18n";
 import { longPress, Pinch, reach } from "../pinch";
-import { VESSEL_IDS } from "../../vessels";
 
 export interface MapHost {
   readonly s: Settings;
@@ -342,7 +353,7 @@ export class Map3D {
    * are not all on the same side yet).
    */
   private extClosest(e: Extension, id: string, ours = this.universe === "ours"): { i: number; d: number } | null {
-    if (ours !== (!!solarBody(id) || id === "iss" || (VESSEL_IDS as string[]).includes(id))) return null;
+    if (ours !== (!!solarBody(id) || isMapCraft(id))) return null;
     let m = this.pathMemo.get(e);
     if (!m) this.pathMemo.set(e, (m = new Map()));
     const key = `ca:${ours ? "o" : "g"}:${id}`;
@@ -1519,7 +1530,7 @@ export class Map3D {
       if (p.x < -60 * dpr || p.y < -60 * dpr || p.x > cw + 60 * dpr || p.y > ch + 60 * dpr) continue;
       const r = rw(b.pos, b.radius) * p.k;
       // (on the GPU: textured, lit — the station and the craft stay the canvas's dots)
-      const craft = b.id === "iss" || (VESSEL_IDS as string[]).includes(b.id);
+      const craft = isMapCraft(b.id);
       if (G && craft) pt.disc(p.x, p.y, Math.max(r, 3.2 * dpr), `rgba(${b.col}, 0.95)`, "rgba(0, 0, 0, 0.5)", 1 * dpr);
       else if (!G || !this.gpuBody(G, sc, b, tp, dpr, pw, rw)) this.drawBody(ctx, sc, b, p, r, dpr, pw, rw);
       const shown = Math.max(r, b.kind === "star" ? 5 * dpr : moon ? 2 * dpr : 3.2 * dpr);
@@ -2597,12 +2608,7 @@ export class Map3D {
       }
     }
     // the target where the plan meets it
-    if (
-      i.ourArrive &&
-      i.ourArrive.body !== "wormhole" &&
-      (solarBody(i.ourArrive.body) || i.ourArrive.body === "iss" || (VESSEL_IDS as string[]).includes(i.ourArrive.body)) &&
-      plan
-    ) {
+    if (i.ourArrive && i.ourArrive.body !== "wormhole" && (solarBody(i.ourArrive.body) || isMapCraft(i.ourArrive.body)) && plan) {
       const q = P(FA(ourPos(i.ourArrive.body, i.ourArrive.t), i.ourArrive.t));
       if (q.ok) {
         this.paint.disc(q.x, q.y, 6 * dpr, null, "rgba(255, 170, 80, 0.9)", 1.2 * dpr, [2 * dpr, 2 * dpr]);

@@ -10,6 +10,16 @@ import { EPOCH_DATE, M_SECONDS } from "./system/solar";
 export const secondsPerM = (s: Pick<Settings, "massSolar">) => 4.925490947e-6 * s.massSolar;
 /** The time speed of real time (1 s per s) [M/s]. */
 export const realTimeSpeed = (s: Pick<Settings, "massSolar">) => 1 / secondsPerM(s);
+/**
+ * The room's hold on the scene's pace (docs/PLAN-RESEAU.md R6): in a room, time runs at the room's pace (`cap`
+ * [M/s]) — the speed asked (`timeSpeed`) is one's vote —, eased onto the
+ * room's clock (`ease`, near 1); `note`: what holds it (the transport bar's). Alone: Infinity and 1 — the speed asked.
+ */
+export const roomPace = { cap: Infinity, ease: 1, note: "" };
+/** The speed the scene's time runs at now [M/s]: the one every step integrates — alone, the warp asked; in a room,
+ *  the room's (ours a vote: one's own slowdown comes when the room's does, at the same instant for everyone). */
+export const timeRate = (s: Pick<Settings, "timeSpeed">) => (Number.isFinite(roomPace.cap) ? roomPace.cap : s.timeSpeed) * roomPace.ease;
+
 /** The time speed as a multiple of real time. */
 export const warpFactor = (s: Pick<Settings, "massSolar" | "timeSpeed">) => s.timeSpeed * secondsPerM(s);
 

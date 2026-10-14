@@ -4,6 +4,7 @@
 // frame: the craft keeps its attitude, the camera moves — stepMount's reorient), the lens taken while it is on
 // and given back after.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { timeRate } from "../clock";
 import { cameraFrame } from "../camera";
 import { SHOTS, type CineContext, type Shot } from "../cine/brain";
 import type { NoiseProfile } from "../cine/follow";
@@ -109,7 +110,7 @@ function cineStep(this: CameraController, dt: number) {
     this.cine.reset();
   }
   const Msec = 4.925490947e-6 * s.massSolar;
-  const dtSim = s.animate ? s.timeSpeed * dt * Msec : 0;
+  const dtSim = s.animate ? timeRate(s) * dt * Msec : 0;
   const dtCam = s.animate ? dt : 0;
   this.cineClock += dtCam;
   const { c, ax } = this.cineContext(dtCam > 0 ? dtSim / dtCam : 0);
