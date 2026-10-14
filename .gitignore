@@ -80,6 +80,9 @@ remote-results/
 # a local coding agent's working files (its plans)
 .pi/
 
+# the carriers, airliners and ships as supplied (Kiev GLB, Ford / Charles de Gaulle / container ship FBX, A320,
+# CRJ-900: docs/PLAN-AVIATION-AAA.md); the app will use their builds
+assets/porte-avion/
 # the F-35's source model as supplied (128 MB) and its build's working files (scripts/build-f35.py); the app
 # uses assets/f35
 assets/airplanes/
