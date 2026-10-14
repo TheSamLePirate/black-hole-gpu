@@ -14,8 +14,8 @@ Portainer (stack "kerr", from the `deploy` branch, polling) ─► new commit �
 ```
 
 - **`deploy/`** — the Dockerfile, the nginx configuration (hashed files cached a year, the page, the
-  Service Worker and the JSON files `no-cache`; the KTX2 and manifest types), and the compose template
-  (`IMAGE` replaced by the CI).
+  Service Worker and the JSON files `no-cache`; the KTX2 and manifest types), the compose template
+  and `render-compose.sh`, which fills in its two images (the site's, the room server's).
 - **The `deploy` branch** — written by the CI only, one commit per deployment. It moves only once the
   image is pushed, and each image has its own tag: Portainer never redeploys before the image exists,
   and a new tag is always pulled.
@@ -23,6 +23,25 @@ Portainer (stack "kerr", from the `deploy` branch, polling) ─► new commit �
   `compose.yml`, automatic updates by polling. The container publishes port 3000, which the Nginx Proxy
   Manager serves as samlepirate.org (TLS there).
 - **The image** — the GHCR package must be public (the server pulls it without credentials).
+
+## The room server (stream.samlepirate.org)
+
+The network's rooms ([PLAN-RESEAU.md](PLAN-RESEAU.md)): `server/main.ts` in Bun, the same stack, its own
+service.
+
+```
+push main / reseau touching server/, src/net/ ─► rooms.yml: the network's tests, deploy/Dockerfile.rooms
+                           → ghcr.io/thesamlepirate/black-hole-gpu:rooms-<sha>-<run> (the site's public package)
+                         ─► a commit on `deploy`: compose.yml naming it beside the site's image
+Portainer ─► recreates the `rooms` service alone (port 3001, its rooms in the `rooms-data` volume)
+```
+
+- **Both workflows write `deploy`**, one at a time (concurrency group `deploy-branch`); each keeps the
+  other's image as it found it. Until the room server has an image, its block is left out.
+- **Nginx Proxy Manager**: the host `stream.samlepirate.org` → `host:3001`, *Websockets Support* on.
+- **Checked by** `https://stream.samlepirate.org/health` (`{ ok, v, build, rooms, live, peers }`).
+- A page is told to reload when its protocol is older than the server's previous one; the server can lag
+  the page by Portainer's poll (2 min), which the protocol's N/N−1 covers.
 
 ## Rolling back
 

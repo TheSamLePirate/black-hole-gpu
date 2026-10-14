@@ -10,6 +10,8 @@ await $`rm -rf _site`;
 await $`bun build ./index.html --outdir _site --minify --define __KERR_SUBPATH__=${JSON.stringify(subpath)}`;
 // (the flight planner's worker, loaded by URL next to the page)
 await $`bun build ./src/system/plan-worker.ts --outfile _site/plan-worker.js --minify --target browser`;
+// (the network, loaded when the player asks for it — src/net/load.ts)
+await $`bun build ./src/net/index.ts --outfile _site/net.js --minify --target browser`;
 // (the rocket engine's AudioWorklet — PLAN-AUDIO S2)
 await $`bun build ./src/audio/engine-worklet.ts --outfile _site/audio-worklet.js --minify --target browser`;
 // (the KTX2 transcoder's worker and its WebAssembly)

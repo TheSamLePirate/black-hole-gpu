@@ -238,7 +238,15 @@ BroadcastChannel, ni WebRTC. Le serveur de production ne sert que des fichiers s
 Chaque phase donne un ou plusieurs commits sur `reseau`, une planche `docs/progress/reseau/`, la doc en
 anglais et en français, et repasse les tests solo existants (vol de référence réseau coupé).
 
-### R0 — Fondations
+### R0 — Fondations ✅ (2026-10-14)
+
+*Fait* : `src/net/` (protocole, horloge, transport et labo, registre des autres, client, robot, chargé à la
+demande : `net.js` 13 Ko, le bundle solo +11 Ko d'interface), `server/` (salles, SQLite, `/health`), le
+panneau Réseau et son badge, `#join=`, `__bh.net`, la CI `rooms.yml` et `deploy/Dockerfile.rooms`.
+Mesuré sur kerr-mini : horloges à 0,3 ms, autres affichés à 60–75 ms. L'attitude passe en 4 × int16
+(pas 3·10⁻⁵ rad) plutôt qu'en « smallest-three ». **Reporté à R1** : l'instantané complet (`GameSave`),
+utile quand on rejoint un monde avec ses engins. Voir [NETWORK.md](NETWORK.md).
+
 - `src/net/` : protocole, horloge, transport WebSocket, registre des engins distants, interpolation et
   prolongation, labo réseau ; chargé à la demande.
 - `server/rooms.ts` : salles, présence, persistance SQLite, horloge, `/health`, `/version` ; branché aussi
@@ -360,7 +368,7 @@ regroupées :
 | Arbitre du warp | les 19 écritures de `timeSpeed` (`controller/plan.ts`, `piloting.ts`…) | R6 |
 | Identifiants d'engin, baux, amarrage | `vessels.ts`, `fleet.ts`, `controller/docking.ts` | R7 |
 | Destruction en multijoueur | `onCraftLost` (`main.ts`) | R1 |
-| Instantané complet | `game/save.ts`, `game/tools.ts` (`snapshot`, `load`) | R0 |
+| Instantané complet | `game/save.ts`, `game/tools.ts` (`snapshot`, `load`) | R1 |
 
 ## Risques
 - **Régression du solo** : les tests existants et un vol de référence repassent à chaque phase, réseau coupé.

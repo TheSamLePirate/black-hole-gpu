@@ -43,6 +43,8 @@ import { CameraController, isTyping } from "./controls";
 import { effectiveBindings, freeCameraKeys } from "./input/bindings";
 import { matchKey, type KeyAction } from "./input/keymap";
 import { installBh } from "./automation";
+import { netParams } from "./net/load";
+import { NetPanel } from "./ui/netpanel";
 import { installPwa } from "./pwa";
 import { PauseMenu } from "./ui/pause";
 import { ControlsScreen } from "./ui/controls-screen";
@@ -2780,6 +2782,8 @@ async function main() {
       skyEvents: () => void skyEventsToggle(),
       multiExposure: () => openMultiExposure(),
       observe: () => openObserve(),
+      network: () => openNetwork(),
+      networkShown: () => settings.netMenu,
       place: () => placePanel.open(),
       time: () => timePanel.open(),
       weather: () => weatherPanel.open(),
@@ -3362,6 +3366,7 @@ async function main() {
       { label: { fr: "Piloter", en: "Fly" }, key: "K", run: () => actions["btn-ship"]!() },
       { label: { fr: "Placer le vaisseau", en: "Place the ship" }, run: () => placePanel.open() },
       { label: { fr: "Voler en F-35", en: "Fly the F-35" }, run: () => flightHub.open() },
+      ...(settings.netMenu ? [{ label: { fr: "Réseau", en: "Network" }, run: openNetwork }] : []),
       { label: { fr: "Défis F-35", en: "F-35 challenges" }, run: () => challengePanel.open() },
       {
         label: { fr: "Cinématique", en: "Cinematic" },
@@ -3657,6 +3662,9 @@ async function main() {
   // the F-35's challenges (ui/challengepanel.ts, PLAN-F35 F9): gate courses, graded landings, aerobatics
   const challengeHost: ChallengeHost = { tools, camera, toast: (s) => panel.toast(s) };
   const challengePanel = new ChallengePanel(challengeHost);
+  // playing together (ui/netpanel.ts, docs/PLAN-RESEAU.md): the network loaded only when a room is asked for
+  const netPanel = new NetPanel({ time: () => sim.time, build: "", toast: (s) => panel.toast(s) });
+  const openNetwork = () => (settings.netMenu ? netPanel.open() : panel.toast(t("The network's menu is off (Settings › Network)")));
   // the Atlas (ui/atlas.ts, PLAN-MODES-AAA M6): the Earth, the Moon and Mars as maps, their destinations, the
   // addresses — the game put there (in orbit, landed, on foot, the free camera, a tripod)
   const ATLAS_ORBIT_KM: Record<MapBody, number> = { earth: 400, moon: 100, mars: 300 };
@@ -5282,6 +5290,7 @@ async function main() {
     mission,
     cockpitScreens,
     flight: { hub: flightHub, route: routePanel, challenges: challengePanel },
+    net: netPanel,
     audio,
     voice,
     capcom,
@@ -6145,7 +6154,13 @@ async function main() {
       version: () => appVersion,
     });
     // (after the title, the game's own state: a flight resumed or not, the same)
-    if (!shared && !(scene && presets[scene]) && !benchPage) {
+    // (a room's link: straight into the game, the room joined)
+    const joinCode = netParams.get("join");
+    if (joinCode && settings.netMenu) {
+      started = true;
+      netPanel.open();
+      void netPanel.join(joinCode);
+    } else if (!shared && !(scene && presets[scene]) && !benchPage) {
       titleScreen.open();
       void splash.gone.then(() => titleScreen?.focusFirst());
     } else started = true;

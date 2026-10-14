@@ -1,4 +1,5 @@
 import index from "./index.html";
+import { createRooms, type Peer } from "./server/rooms";
 
 const port = Number(process.env.PORT ?? 3000);
 // (started by a test or the flight lab — tests/e2e/lib/app.ts — for its own run: gone with its parent, never
@@ -35,6 +36,10 @@ function deepgramRelay(path: "listen" | "speak", names: string[]) {
   };
 }
 
+// the network's rooms (docs/PLAN-RESEAU.md) on this server's /net: dev and the tests fly against them here;
+// kept in a file in dev, in memory otherwise (production's rooms live at stream.samlepirate.org)
+const rooms = createRooms({ db: dev ? "snapshots/rooms-dev.sqlite" : ":memory:", build: "local" });
+
 const server = Bun.serve({
   port,
   routes: {
@@ -55,6 +60,14 @@ const server = Bun.serve({
       if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
       return new Response(await r.outputs[0]!.text(), { headers: { "content-type": "text/javascript" } });
     },
+    // The network, loaded when the player asks for it (src/net/load.ts)
+    "/net.js": async () => {
+      const r = await Bun.build({ entrypoints: ["./src/net/index.ts"], target: "browser", minify: !dev });
+      if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
+      return new Response(await r.outputs[0]!.text(), { headers: { "content-type": "text/javascript" } });
+    },
+    "/net": ((req: Request, srv: Parameters<typeof rooms.upgrade>[1]) =>
+      req.headers.get("upgrade")?.toLowerCase() === "websocket" ? rooms.upgrade(req, srv) : Response.json(rooms.health())) as never,
     // The rocket engine's AudioWorklet (PLAN-AUDIO S2), bundled on its own
     "/audio-worklet.js": async () => {
       const r = await Bun.build({ entrypoints: ["./src/audio/engine-worklet.ts"], target: "browser", minify: !dev });
@@ -137,6 +150,7 @@ const server = Bun.serve({
   websocket: {
     // the page's side opened: Deepgram's opened with the key, what came before it queued
     open(ws) {
+      if ((ws.data as unknown as Peer).kind === "rooms") return;
       const r = ws.data as unknown as Relay;
       const up = new WebSocket(`wss://api.deepgram.com/v1/${r.path}?${r.query}`, {
         headers: { Authorization: `Token ${DEEPGRAM}` },
@@ -152,11 +166,13 @@ const server = Bun.serve({
       up.onerror = () => ws.close(1011, "deepgram");
     },
     message(ws, m) {
+      if ((ws.data as unknown as Peer).kind === "rooms") return rooms.websocket.message(ws as never, m as never);
       const r = ws.data as unknown as Relay;
       if (r.up?.readyState === WebSocket.OPEN) r.up.send(m);
       else r.queue.push(m);
     },
     close(ws) {
+      if ((ws.data as unknown as Peer).kind === "rooms") return rooms.websocket.close(ws as never);
       const r = ws.data as unknown as Relay;
       if (r.up && r.up.readyState <= WebSocket.OPEN) r.up.close();
     },

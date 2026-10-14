@@ -35,6 +35,8 @@ const T = {
   skyHint: { fr: "filés, analemme, ISS, éclipses : les vivre", en: "trails, analemma, ISS, eclipses: live them" },
   multi: { fr: "Surimpression", en: "Multiple exposure" },
   observe: { fr: "Observatoire", en: "Observatory" },
+  network: { fr: "Réseau — jouer ensemble", en: "Network — play together" },
+  networkHint: { fr: "2 à 4 joueurs, un spectateur", en: "2 to 4 players, a spectator" },
   observeHint: { fr: "ce qu'il y a à voir d'ici, et quand — le télescope", en: "what to see from here, and when — the telescope" },
   multiHint: {
     fr: "depuis la vue cadrée : analemme, filé d'étoiles, Lune, éclipse",
@@ -78,6 +80,9 @@ export interface PauseDeps {
   multiExposure?(): void;
   /** the observatory (ui/observe.ts): what to see from the Earth's ground, and when */
   observe?(): void;
+  /** playing together (ui/netpanel.ts), and whether its menu is shown (Settings › Network) */
+  network?(): void;
+  networkShown?(): boolean;
   /** placing the ship (ui/placepanel.ts) */
   place(): void;
   /** the date and time (ui/timepanel.ts) */
@@ -163,6 +168,9 @@ export class PauseMenu {
         : null,
       this.d.observe
         ? this.item(tr(T.observe), () => this.leaveFor(() => this.d.observe?.()), { hint: tr(T.observeHint), testid: "pause-observe" })
+        : null,
+      this.d.network && (this.d.networkShown?.() ?? true)
+        ? this.item(tr(T.network), () => this.leaveFor(() => this.d.network?.()), { hint: tr(T.networkHint), testid: "pause-network" })
         : null,
       this.item(tr(T.place), () => this.leaveFor(this.d.place), { testid: "pause-place" }),
       this.item(tr(T.time), () => this.leaveFor(this.d.time), { testid: "pause-time" }),

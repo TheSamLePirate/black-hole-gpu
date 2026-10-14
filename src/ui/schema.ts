@@ -4146,6 +4146,16 @@ export const SCHEMA: ControlDef[] = [
     help: "The helmet's symbology: how bright.",
     keywords: "hmd helmet brightness",
   },
+  {
+    key: "netMenu",
+    type: "toggle",
+    section: "game",
+    group: "Network",
+    label: "Network menu",
+    effect: "none",
+    help: "Playing together (the pause menu, the wheel, a room's badge). Off: no trace of the network — the game never connects unless asked.",
+    keywords: "network multiplayer online room friends together",
+  },
 ];
 
 export const SCHEMA_BY_KEY = new Map(SCHEMA.map((d) => [d.key, d]));

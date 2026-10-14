@@ -1,0 +1,39 @@
+/* Playing together (ui/netpanel.ts): the network's panel and the room's badge, in the kit's language. */
+.netp-frame { width: min(620px, calc(100vw - 32px)); padding: 16px 18px 18px; }
+.netp { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.netp-sub { margin-top: 6px; font: var(--k-font-label); letter-spacing: 0.12em; text-transform: uppercase; color: var(--k-amber); }
+.netp-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.netp-in {
+  flex: 1 1 120px; min-width: 0; padding: 7px 9px; border: 1px solid var(--k-ctl-edge); border-radius: var(--k-r);
+  background: var(--k-ctl-bg); color: var(--k-text); font: 500 13px/1.2 var(--font);
+}
+select.netp-in { flex: 0 0 auto; }
+.netp-in:focus { outline: none; border-color: var(--k-on-edge); box-shadow: 0 0 0 2px rgba(111, 210, 255, 0.18); }
+.netp-codein { flex: 0 0 104px; font: 600 15px/1.2 var(--mono); letter-spacing: 0.16em; text-transform: uppercase; }
+.netp-swatches { display: flex; gap: 6px; }
+.netp-swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; }
+.netp-swatch.on { border-color: #fff; box-shadow: 0 0 8px rgba(255, 255, 255, 0.4); }
+.netp-room { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--k-edge-hi); border-radius: var(--k-r); background: var(--k-on-bg); }
+.netp-room .netp-sub { grid-column: 1 / -1; margin: 0; color: var(--k-text); text-transform: none; letter-spacing: 0.02em; font: var(--k-font-title); }
+.netp-code { font: 700 28px/1.1 var(--mono); letter-spacing: 0.22em; color: var(--k-on); }
+.netp-members, .netp-known { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.netp-members li, .netp-known li { display: flex; gap: 10px; align-items: center; padding: 6px 10px; border: 1px solid var(--k-line); border-radius: var(--k-r); background: var(--k-ctl-bg); font: 500 13px/1.2 var(--font); color: var(--k-text); }
+.netp-members li.me { border-color: var(--k-on-edge); }
+.netp-members em, .netp-known em { margin-left: auto; font: var(--k-font-value); font-style: normal; color: var(--k-dim); }
+.netp-known b { font: 600 13px/1.2 var(--mono); letter-spacing: 0.12em; color: var(--k-on); }
+.netp-known span { color: var(--k-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.netp-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.netp-stat { margin: 0; font: var(--k-font-value); color: var(--k-dim); }
+.netp-server { margin: 6px 0 0; font: 500 10.5px/1.2 var(--mono); color: rgba(176, 196, 222, 0.4); }
+.netp > .k-btn { align-self: flex-start; }
+
+.net-badge {
+  /* (beside the target's card, clear of the heading tape at the top's middle) */
+  position: fixed; top: 62px; left: 306px; z-index: var(--z-chrome, 20);
+  padding: 4px 12px; border: 1px solid var(--k-edge-hi, rgba(120, 205, 255, 0.55)); border-radius: 999px;
+  background: rgba(5, 9, 16, 0.78); color: #9fe3ff; font: 600 12px/1.2 var(--mono); letter-spacing: 0.06em; cursor: pointer;
+}
+.net-badge[hidden] { display: none; }
+.net-badge[data-status="offline"], .net-badge[data-status="connecting"] { color: var(--k-amber, #ffb35c); border-color: rgba(255, 179, 92, 0.6); }
+body.hide-ui .net-badge, body.title-open .net-badge { display: none; }
+@media (max-width: 900px) { .net-badge { left: 50%; top: auto; bottom: 12px; transform: translateX(-50%); } }

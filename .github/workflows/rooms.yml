@@ -1,0 +1,74 @@
+name: Room server
+
+# The network's room server (docs/PLAN-RESEAU.md, server/, src/net/) on the dedicated server, behind
+# stream.samlepirate.org: its tests, its image on GHCR (the site's own public package, tagged rooms-…), then
+# the `deploy` branch names it beside the site's image — the server's Portainer polls the branch and
+# recreates the room server alone. Only when the server's code changed: the players are not cut off by every
+# push. (pages.yml keeps the image named here when it deploys the site.)
+
+on:
+  push:
+    branches: [main, reseau]
+    paths:
+      - "server/**"
+      - "src/net/**"
+      - "deploy/Dockerfile.rooms"
+      - "deploy/compose.yml"
+      - "deploy/render-compose.sh"
+      - ".github/workflows/rooms.yml"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  rooms:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    concurrency:
+      group: deploy-branch
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: The network's tests
+        run: bun test tests/net-core.test.ts tests/net-rooms.test.ts
+      - name: Build and push the image
+        id: image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          tag="rooms-${GITHUB_SHA:0:7}-${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker build -f deploy/Dockerfile.rooms --build-arg "BUILD_SHA=${GITHUB_SHA:0:7}" -t "$image:$tag" -t "$image:rooms-latest" .
+          docker push "$image:$tag"
+          docker push "$image:rooms-latest"
+          echo "ref=$image:$tag" >> "$GITHUB_OUTPUT"
+      - name: Point the deploy branch at it
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ steps.image.outputs.ref }}
+        run: |
+          set -euo pipefail
+          git init -q deploy-branch
+          cd deploy-branch
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch -q --depth=1 origin deploy
+          git checkout -q -b deploy FETCH_HEAD
+          # (the site's image kept as pages.yml last set it)
+          KERR=$(grep -o 'ghcr.io/[^ "]*:[0-9a-f]\{7\}-[0-9][^ "]*' compose.yml | head -1)
+          if [ -z "$KERR" ]; then echo "no site image on the deploy branch"; exit 1; fi
+          sh ../deploy/render-compose.sh "$KERR" "$REF" > compose.yml
+          git add compose.yml
+          git commit -q -m "deploy: rooms $REF (${GITHUB_REF_NAME} ${GITHUB_SHA:0:7})"
+          git push -q origin deploy
+          echo "rooms: $REF" >> "$GITHUB_STEP_SUMMARY"
