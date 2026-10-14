@@ -11,6 +11,8 @@ import { blinkOn } from "../clock";
 
 /** The jet's green (r, g, b) — what the ladder, the heading and the rest take in the jet's style. */
 export const JET_GREEN = "110, 255, 150";
+/** The helmet's symbology's colours (the F-35's setting, f35HmdColor). */
+export const HMD_RGB = { green: JET_GREEN, amber: "255, 196, 92", cyan: "120, 225, 255", white: "236, 242, 248" } as const;
 const AMBER = "#ffc85a";
 const RED = "#ff5a46";
 
@@ -34,6 +36,9 @@ export interface JetHudInfo {
   /** the F-35's helmet (its HMD: no head-up glass — the values boxed, no tapes): its fuel [kg] and full, its
    *  STOVL hover (the speed over the ground [m/s], the vertical speed held [m/s]) */
   hmd?: { fuel: number; full: number; hover: { gs: number; vz: number } | null; stovl: string | null };
+  /** the symbology's colour ("r, g, b") and brightness (the F-35's settings) */
+  rgb?: string;
+  bright?: number;
   /** the flight plan's active waypoint: its name, its distance [m], NAV engaged */
   wp?: { name: string; dist: number; on: boolean } | null;
 }
@@ -74,7 +79,10 @@ export function drawJetHud(
 ) {
   const { ctx, W, H, dpr, compact } = o;
   const U = jetUnits(o.units);
-  const G = (a: number) => `rgba(${JET_GREEN}, ${a})`;
+  // (the helmet's colour and brightness — the F-35's settings —, else the fighter HUD's green)
+  const RGB = J.rgb ?? JET_GREEN;
+  const BR = J.bright ?? 1;
+  const G = (a: number) => `rgba(${RGB}, ${(a * BR).toFixed(3)})`;
   const cx = W / 2,
     cy = H / 2;
   // (the tapes' distance from the centre, their height — within the HUD's glass)

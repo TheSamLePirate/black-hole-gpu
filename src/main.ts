@@ -2785,6 +2785,13 @@ async function main() {
   };
 
   // the keyboard: input/keymap.ts says which key does what (and draws the help); here, what it does
+  /** The F-35 flown: a rocket's functions (orbital holds, roll alignment, the orbital autopilots, the
+   *  antigravity) are not its own — said, not done. */
+  const jetOnly = () => {
+    if (!camera.piloting || fleet.active !== "f35") return false;
+    panel.toast(t("Not on the F-35: a spacecraft's function"));
+    return true;
+  };
   const keyActions: Record<KeyAction, (e: KeyboardEvent, arg?: string) => void> = {
     tools: () => DEV_TOOLS && toolsWin.toggle(),
     gameMode: (e, m) => {
@@ -2809,13 +2816,14 @@ async function main() {
       panel.toast(camera.pilot.precision ? t("Precision controls") : t("Normal controls"));
     },
     sas: () => pilotSas(),
-    roll: () => pilotRoll(),
+    roll: () => (jetOnly() ? undefined : pilotRoll()),
     resetShipView: () => {
       panel.toast(camera.resetShipView()); // (the camera back to the attach points)
       refreshGui();
     },
-    hold: (_, h) => pilotHold(h as Hold),
-    auto: (_, a) => pilotAuto(a as Auto),
+    hold: (_, h) => (jetOnly() ? undefined : pilotHold(h as Hold)),
+    // (the F-35: its own take-off and landing; the orbital autopilots are a rocket's)
+    auto: (_, a) => (a !== "takeoff" && a !== "land" && jetOnly() ? undefined : pilotAuto(a as Auto)),
     map: () => flightHud.toggleMapView(),
     mount: (e) => {
       // (the views' cycle goes through the spectator: after the last of the ship's, before its first)
@@ -2835,7 +2843,14 @@ async function main() {
       // the flight law in the air: rocket → plane → the sci-fi flight computer
       const V = VESSELS[fleet.active];
       if (!V.flies) panel.toast(tf("The {0} is no aircraft: it flies as a rocket", V.name));
-      else {
+      // (the F-35: a fighter, flown by its own flight control laws — no rocket's, no sci-fi computer's)
+      else if (fleet.active === "f35") {
+        if (settings.flightMode !== "plane") {
+          settings.flightMode = "plane";
+          onSettingsChange(["flightMode"]);
+        }
+        panel.toast(t("The F-35 flies by its own flight control laws"));
+      } else {
         const order: Settings["flightMode"][] = ["rocket", "plane", "sf"];
         settings.flightMode = order[(order.indexOf(settings.flightMode) + 1) % 3]!;
         onSettingsChange(["flightMode"]);
@@ -2843,6 +2858,7 @@ async function main() {
       }
     },
     antigrav: () => {
+      if (jetOnly()) return;
       settings.antigrav = !settings.antigrav;
       onSettingsChange(["antigrav"]);
       panel.toast(
@@ -2921,7 +2937,12 @@ async function main() {
       camera.resetView();
       touch();
     },
-    target: (e) => (camera.combat?.status === "run" ? combatSay(camera.combatTrigger("lock")) : nextTarget(e.shiftKey ? -1 : 1)),
+    target: (e) =>
+      camera.combat?.status === "run"
+        ? combatSay(camera.combatTrigger("lock"))
+        : camera.piloting && fleet.active === "f35"
+          ? undefined
+          : nextTarget(e.shiftKey ? -1 : 1),
     png: () => savePNG(),
     fullscreen: () => fullscreen(),
     lookAt: () => toggleLookAt(),
@@ -3183,8 +3204,86 @@ async function main() {
   // the radial wheel (ui/wheel.ts): Tab held opens it, released does the sector pointed at; a tap is
   // still the next target
   const wheel = new RadialWheel();
+  /** The F-35's wheel: its own systems — no rocket's holds, no flight computer's autopilots, no planets. */
+  const jetWheel = (): WheelItem[] => {
+    const M = camera.jetModes;
+    const C = camera.combat?.status === "run" ? camera.combat : null;
+    const say = (s: string | null) => s && panel.toast(s);
+    return [
+      {
+        label: { fr: "Pilote auto", en: "Autopilot" },
+        on: M.alt !== null || M.hdg !== null || M.spd !== null || camera.nav.on.l,
+        sub: [
+          {
+            label: { fr: "Altitude et cap", en: "Altitude & heading" },
+            key: "'",
+            on: M.alt !== null,
+            run: () => say(camera.jetToggle("ap")),
+          },
+          { label: { fr: "Auto-manette", en: "Autothrottle" }, key: "⇧'", on: M.spd !== null, run: () => say(camera.jetToggle("athr")) },
+          {
+            label: { fr: "NAV (plan de vol)", en: "NAV (flight plan)" },
+            key: "⇧M",
+            on: camera.nav.on.l,
+            run: () => say(camera.navToggle()),
+          },
+          {
+            label: { fr: "Décollage auto", en: "Auto take-off" },
+            key: "U",
+            on: camera.pilot.auto === "takeoff",
+            run: () => pilotAuto("takeoff"),
+          },
+        ],
+      },
+      { label: { fr: "Postcombustion", en: "Afterburner" }, key: "⇧W", on: M.ab, run: () => say(camera.jetToggle("ab")) },
+      { label: { fr: "STOVL", en: "STOVL" }, key: "⇧B", on: camera.stovl.on, run: () => say(camera.stovlToggle()) },
+      {
+        label: { fr: "Train, volets", en: "Gear, flaps" },
+        sub: [
+          { label: { fr: "Train", en: "Gear" }, key: "G", on: camera.gearDown, run: () => setGear(!camera.gearDown) },
+          {
+            label: { fr: "Volets", en: "Flaps" },
+            key: "P",
+            on: (camera.airFlight.cfg.flaps ?? 0) > 0,
+            run: () => keyActions.flaps(new KeyboardEvent("keydown")),
+          },
+          {
+            label: { fr: "Aérofreins", en: "Air brake" },
+            key: "⇧P",
+            on: camera.airBrake > 0,
+            run: () => keyActions.airBrake(new KeyboardEvent("keydown")),
+          },
+        ],
+      },
+      ...(C
+        ? [
+            {
+              label: { fr: "Armes", en: "Weapons" },
+              sub: [
+                { label: { fr: "Arme suivante", en: "Next weapon" }, key: "=", run: () => say(camera.combatTrigger("weapon")) },
+                { label: { fr: "Verrouiller", en: "Lock" }, key: "Tab", run: () => say(camera.combatTrigger("lock")) },
+                { label: { fr: "Leurres", en: "Decoys" }, key: "−", run: () => say(camera.combatTrigger("cm")) },
+                { label: { fr: "Fin du combat", en: "End the fight" }, run: () => camera.combatEnd() },
+              ],
+            },
+          ]
+        : []),
+      { label: { fr: "Plan de vol", en: "Flight plan" }, key: "⇧O", on: camera.nav.on.l, run: () => routePanel.open() },
+      {
+        label: { fr: "Défis et combats", en: "Challenges & fights" },
+        on: !!C || camera.chal?.status === "run",
+        run: () => challengePanel.open(),
+      },
+      { label: { fr: "Préparer un vol", en: "Prepare a flight" }, run: () => flightHub.open() },
+      { label: { fr: "Carte", en: "Map" }, key: "M", on: flightHud.mapView, run: () => flightHud.toggleMapView() },
+      { label: { fr: "Vue", en: "View" }, key: "V", run: () => keyActions.mount(new KeyboardEvent("keydown")) },
+      { label: { fr: "Photo", en: "Photo" }, run: openPhoto },
+    ];
+  };
+
   const wheelItems = (): WheelItem[] => {
     const P = camera.pilot;
+    if (flying() && fleet.active === "f35") return jetWheel();
     if (flying())
       return [
         { label: { fr: "SAS", en: "SAS" }, key: "T", on: P.sas, run: pilotSas },
@@ -3264,6 +3363,13 @@ async function main() {
   let tabTimer = 0;
   let tabShift = false;
   addEventListener("keydown", (e: KeyboardEvent) => {
+    // (held: the key's repeats swallowed — they went on to the bindings and stepped through the targets while
+    // the wheel opened)
+    if (e.key === "Tab" && e.repeat && !isTyping(e)) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      return;
+    }
     if (e.key !== "Tab" || e.repeat || isTyping(e) || titleScreen?.isOpen || paused) return;
     e.preventDefault();
     e.stopImmediatePropagation();
@@ -3281,6 +3387,8 @@ async function main() {
       clearTimeout(tabTimer);
       tabTimer = 0;
       if (camera.combat?.status === "run" && camera.piloting) combatSay(camera.combatTrigger("lock"));
+      // (the F-35 flown: no planets to step through — its Tab the radar's, in a fight)
+      else if (camera.piloting && fleet.active === "f35") panel.toast(t("Tab: the radar's lock in a fight — held: the wheel"));
       else nextTarget(tabShift ? -1 : 1);
     } else if (wheel.isOpen) {
       if (wheel.selected >= 0) wheel.activate();
@@ -5398,6 +5506,7 @@ async function main() {
         ? phaseWatch.current
         : null,
       now,
+      fleet.active === "f35" ? (camera.combat?.status === "run" ? "fight" : "plane") : null,
     );
     if (pil && info) {
       // the cockpit's screens: the telemetry, drawn (a few times a second, while the cabin is seen)

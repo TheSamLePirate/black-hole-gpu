@@ -223,6 +223,8 @@ export class ViewOverlay {
     // of the view down to the flare)
     const rw = this.camera.piloting ? this.camera.runwayView() : null;
     if (rw && rw.agl < 20e3) return null;
+    // (the F-35 flown: no body to aim at — its radar and its own symbology mark what matters)
+    if (this.camera.piloting && this.settings.vessel === "f35") return null;
     const v = this.camera.lockView();
     if (!v || !v.dir.every(Number.isFinite)) return null;
     return { v: { ...v, colour: v.colour || BODY_COLOURS[v.id as Target] || "" }, alpha };

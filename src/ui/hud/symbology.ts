@@ -16,7 +16,9 @@ import { blinkOn } from "../clock";
 import type { HudItem } from "./declutter";
 import { safeFrame } from "./safe";
 import { type Box, drawn, fit } from "./layout";
-import { drawJetHud, JET_GREEN, type JetHudInfo } from "./jethud";
+import { drawJetHud, HMD_RGB, JET_GREEN, type JetHudInfo } from "./jethud";
+import type { avionicsData } from "../../f35/cockpit";
+import { alertsOf, type AlertInput } from "./alerts";
 import type { HudKind } from "../../game/hudkind";
 import { drawApproachHud, drawSpaceHud, type ApproachHudInfo, type SpaceHudInfo } from "./kindhud";
 import { t, tf } from "../../i18n";
@@ -27,7 +29,26 @@ const on = (F: { show?: Record<HudItem, boolean> }, k: HudItem) => !F.show || F.
 type V3 = [number, number, number];
 
 /** What the symbology needs from the flight (a slice of FlightHud's Info). */
+/** A fight's radar picture (controller/combat.ts): heading up — x right, y ahead [m] —, each contact's track
+ *  turned from the nose's heading [rad] (null: still). */
+export interface RadarData {
+  contacts: {
+    x: number;
+    y: number;
+    dz: number;
+    trk: number | null;
+    air: boolean;
+    alive: boolean;
+    locked: boolean;
+    seen: boolean;
+    name: string;
+  }[];
+  missiles: { x: number; y: number; trk: number | null; red: boolean }[];
+}
+
 export interface SymInfo {
+  /** the F-35's avionics (f35/cockpit.ts): its status block on the helmet */
+  avionics?: ReturnType<typeof avionicsData> | null;
   S: number[][];
   /** where the ship is (the hole's region: its lensed tube may draw the path instead) */
   region?: string;
@@ -61,6 +82,7 @@ export interface SymInfo {
     result: { text: string; medal: string | null } | null;
     figures: { idx: number; list: string[]; marks: number[] } | null;
     gates: { c: (V3 | null)[]; k: number; n: number; dist: number }[];
+    radar: { contacts: { x: number; y: number; gate: number; next: boolean; trk: number | null }[] } | null;
   } | null;
   /** a fight flown (controller/combat.ts): every vector on the camera's axes from the craft [m] */
   combat?: {
@@ -92,6 +114,10 @@ export interface SymInfo {
     fall: V3 | null;
     threats: { d: V3; dist: number }[];
     gunReady: boolean;
+    shoot: boolean;
+    gunHot: boolean;
+    infinite: boolean;
+    radar: RadarData;
   } | null;
   /** a plane's flight plan: the active waypoint (its bearing [° true], its distance [m]) */
   nav?: { name: string; brg: number; dist: number; on: boolean } | null;
@@ -252,7 +278,9 @@ export function drawSymbology(F: SymFrame) {
   const atmo = F.kind ? F.kind === "atmo" || (helmet && F.kind === "approach") : A0?.mode === "plane";
   // (the F-35B in its STOVL mode keeps it to a hover: its helmet's symbology down to no speed at all)
   const jet = s.hudJet !== "off" && pilotView && atmo && i.jet && A0?.inAir && (A0.q > 20 || !!i.stovl?.on) ? i.jet : null;
-  LADDER = jet ? JET_GREEN : CYAN;
+  // (the F-35's helmet: its colour the setting's)
+  const hmdRgb = helmet && s.vessel === "f35" ? (HMD_RGB[s.f35HmdColor] ?? JET_GREEN) : JET_GREEN;
+  LADDER = jet ? hmdRgb : CYAN;
   const S = i.S;
   const nose: V3 = [S[0]![2]!, S[1]![2]!, S[2]![2]!];
 
@@ -498,6 +526,7 @@ export function drawSymbology(F: SymFrame) {
   if (i.plan && i.plan.nodes.length && s.hudBurn && on(F, "burn") && !F.outside && F.density < 2)
     drawBurn(F, pr, stroke, text, inside, nose);
   if (i.chal) drawChallenge(F, pr, stroke, text);
+  if (i.avionics && s.f35Avionics && pilotView) drawAvionics(F, i.avionics, text, hmdRgb);
   if (i.combat) drawCombat(F, pr, stroke, text);
   if (i.dock && i.dockGuide && !i.dock.docked && s.hudDock && on(F, "dock") && F.density < 2) drawDock(F, pr, stroke, text, inside);
 
@@ -521,6 +550,8 @@ export function drawSymbology(F: SymFrame) {
         throttle: jet.throttle,
         modes: jet.modes,
         wp: i.nav ?? null,
+        rgb: hmdRgb,
+        bright: helmet && s.vessel === "f35" ? s.f35HmdBrightness : 1,
         // (the F-35: its helmet's symbology — the values boxed, its fuel, its hover)
         hmd: i.engine?.jet
           ? {
@@ -563,7 +594,8 @@ export function drawSymbology(F: SymFrame) {
   }
 
   // ---- the orbital markers the view lacked: radial, normal
-  if (s.hudMarkers && on(F, "markers")) {
+  // (not for the F-35: an orbit's directions mean nothing to it — its flight path marker is the air's)
+  if (s.hudMarkers && on(F, "markers") && !i.avionics) {
     const r = 11 * dpr;
     // (the target: the lock's ring, name, distance and edge arrow already — targethud.ts)
     for (const k of ["radialOut", "radialIn", "normal", "antinormal"] as const) {
@@ -577,7 +609,7 @@ export function drawSymbology(F: SymFrame) {
   }
 
   // ---- what leaves the screen: an arrow at its edge, its glyph beside it
-  if (s.hudEdge && on(F, "edge")) {
+  if (s.hudEdge && on(F, "edge") && !i.avionics) {
     const m = 46 * dpr;
     // (the retrograde too when the prograde is off the screen as well — turned side-on, as before a
     // deorbit burn: the way to either end of the flight path)
@@ -1744,6 +1776,8 @@ function drawChallenge(
       text(`${g.n}`, x, y + 22 * dpr, col, 13, "center", true);
     }
   }
+  // the radar: the course's next gates, the pad
+  if (F.s.f35Radar && C.radar) drawRadar(F, null, C.radar.contacts, text, stroke);
   // the banner
   const y = F.top + (F.compact ? 64 : 150) * dpr;
   const mm = Math.floor(C.time / 60),
@@ -1833,7 +1867,8 @@ function drawCombat(
   // the targets
   for (const q of K.targets) {
     const p = pr(q.d);
-    const col = !q.alive ? "rgba(160, 160, 160, 0.7)" : q.locked ? AMB : q.seen ? GRN : "rgba(90, 255, 140, 0.45)";
+    // (locked: amber — red when a shot is good, its box doubled)
+    const col = !q.alive ? "rgba(160, 160, 160, 0.7)" : q.locked ? (K.shoot ? RED : AMB) : q.seen ? GRN : "rgba(90, 255, 140, 0.45)";
     if (p && p[0] > 0 && p[0] < W && p[1] > 0 && p[1] < H) {
       const s = (q.locked ? 16 : 11) * dpr;
       if (q.ground) {
@@ -1882,13 +1917,40 @@ function drawCombat(
       text(`${q.name} ${(q.dist / 1000).toFixed(1)}`, x, y + 22 * dpr, AMB, 12, "center", true);
     }
   }
-  // the gun's pipper on the lead
+  // the gun's pipper on the lead — red, GUNS, when it sits on the target within the gun's reach
   const L = K.lead ? pr(K.lead) : null;
   if (L && K.gunReady) {
-    stroke(() => ctx.arc(L[0], L[1], 26 * dpr, 0, 2 * Math.PI), K.firing ? AMB : GRN, 1.6);
-    ctx.fillStyle = K.firing ? AMB : GRN;
+    const pc = K.gunHot ? RED : K.firing ? AMB : GRN;
+    stroke(() => ctx.arc(L[0], L[1], 26 * dpr, 0, 2 * Math.PI), pc, K.gunHot ? 2.4 : 1.6);
+    if (K.gunHot) stroke(() => ctx.arc(L[0], L[1], 34 * dpr, 0, 2 * Math.PI), pc, 1.2);
+    ctx.fillStyle = pc;
     ctx.beginPath();
     ctx.arc(L[0], L[1], 2.5 * dpr, 0, 2 * Math.PI);
+    ctx.fill();
+    if (K.gunHot && blink) text("GUNS", L[0], L[1] - 46 * dpr, RED, 16, "center", true);
+  }
+  // the missile's steering: the allowable steering error's circle about the nose, the dot the target's way —
+  // red, SHOOT, when the shot is good
+  const nose: V3 = [i.S[0]![2]!, i.S[1]![2]!, i.S[2]![2]!];
+  const lk = K.targets.find((q) => q.locked && q.alive);
+  const pn = pr(nose);
+  if (lk && pn && K.weapon !== "jdam") {
+    const R = 64 * dpr;
+    const c = K.shoot ? RED : AMB;
+    stroke(() => ctx.arc(pn[0], pn[1], R, 0, 2 * Math.PI), c, K.shoot ? 2.2 : 1.3, K.shoot ? undefined : [6, 5]);
+    // (the dot: the target's angle off the nose — 60° at the circle's rim)
+    const dl = Math.hypot(...lk.d) || 1;
+    const ang = Math.acos(Math.max(-1, Math.min(1, (lk.d[0] * nose[0] + lk.d[1] * nose[1] + lk.d[2] * nose[2]) / dl)));
+    const pt = pr(lk.d);
+    let dx = pt ? pt[0] - pn[0] : lk.d[0],
+      dy = pt ? pt[1] - pn[1] : -lk.d[1];
+    const l = Math.hypot(dx, dy) || 1;
+    const rr = Math.min((ang / ((60 * Math.PI) / 180)) * R, R);
+    dx = (dx / l) * rr;
+    dy = (dy / l) * rr;
+    ctx.fillStyle = c;
+    ctx.beginPath();
+    ctx.arc(pn[0] + dx, pn[1] + dy, 5 * dpr, 0, 2 * Math.PI);
     ctx.fill();
   }
   // the bomb's fall point: a cross on the ground
@@ -1933,7 +1995,9 @@ function drawCombat(
     ctx.lineTo(x - 14 * dpr, y(Z.range) + 6 * dpr);
     ctx.fill();
     text(`${(Z.range / 1000).toFixed(1)}`, x - 18 * dpr, y(Z.range), Z.inRange ? AMB : GRN, 11, "right", true);
-    if (Z.inRange && blink) text("SHOOT", W / 2, H * 0.62, AMB, 18, "center", true);
+    if (K.shoot) {
+      if (blink) text("SHOOT", W / 2, H * 0.62, RED, 22, "center", true);
+    } else if (Z.inRange) text("IN RANGE · TURN", W / 2, H * 0.62, AMB, 14, "center", true);
   }
   // the missile warning: its bearings on a ring, MISSILE flashing
   if (K.threats.length) {
@@ -1959,15 +2023,18 @@ function drawCombat(
   const xb = W / 2;
   const S = K.stores;
   const sel = (w: string, s: string) => (K.weapon === w ? `[${s}]` : s);
-  text(
-    `${sel("aim9x", `9X ${S.aim9x}`)}  ${sel("aim120", `120 ${S.aim120}`)}  ${sel("jdam", `JDAM ${S.jdam}`)}  GUN ${S.gun}  CM ${S.flares}`,
-    xb,
-    yb,
-    GRN,
-    13,
-    "center",
-    true,
-  );
+  if (!F.s.f35WeaponPanel || F.compact)
+    text(
+      `${sel("aim9x", `9X ${S.aim9x}`)}  ${sel("aim120", `120 ${S.aim120}`)}  ${sel("jdam", `JDAM ${S.jdam}`)}  GUN ${S.gun}  CM ${S.flares}`,
+      xb,
+      yb,
+      GRN,
+      13,
+      "center",
+      true,
+    );
+  else drawWeapons(F, text);
+  if (F.s.f35Radar) drawRadar(F, K.radar, null, text, stroke);
   const mm = Math.floor(K.t / 60),
     ss = String(Math.floor(K.t % 60)).padStart(2, "0");
   text(
@@ -1981,4 +2048,358 @@ function drawCombat(
   );
   if (K.damage > 0) text(`DAMAGE ${Math.round(K.damage)} %`, xb, yb + 20 * dpr, K.damage > 60 ? RED : AMB, 13, "center", true);
   if (K.result) text(K.result, W / 2, H * 0.32, K.status === "won" ? "#ffd23f" : RED, 22, "center", true);
+}
+
+/**
+ * The weapons' panel (a fight): each store carried — its count as marks, the gun's rounds as a bar —, the one
+ * chosen arrowed and boxed, empty ones red; ∞ with the infinite ammunition; the countermeasures; ARM.
+ */
+function drawWeapons(
+  F: SymFrame,
+  text: (t: string, x: number, y: number, col: string, size: number, align?: CanvasTextAlign, mono?: boolean) => void,
+) {
+  const { ctx, W, H, dpr, i } = F;
+  const K = i.combat!;
+  const S = K.stores;
+  const x0 = W - (F.compact ? 190 : 250) * dpr,
+    y0 = H * 0.36;
+  const w = 220 * dpr,
+    rowH = 30 * dpr;
+  const rows: { id: string; name: string; n: number; max: number; bar?: boolean }[] = [
+    { id: "gun", name: "GUN 25MM", n: S.gun, max: 220, bar: true },
+    { id: "aim9x", name: "AIM-9X", n: S.aim9x, max: 2 },
+    { id: "aim120", name: "AIM-120C", n: S.aim120, max: 4 },
+    { id: "jdam", name: "GBU-32", n: S.jdam, max: 2 },
+    { id: "cm", name: "CMDS", n: S.flares, max: 30, bar: true },
+  ];
+  ctx.fillStyle = "rgba(2, 12, 8, 0.62)";
+  ctx.fillRect(x0 - 10 * dpr, y0 - 26 * dpr, w + 20 * dpr, rows.length * rowH + 36 * dpr);
+  text(
+    K.firing ? "ARM · FIRING" : "ARM",
+    x0,
+    y0 - 12 * dpr,
+    K.firing ? "rgba(255, 70, 60, 1)" : "rgba(90, 255, 140, 0.95)",
+    11,
+    "left",
+    true,
+  );
+  if (K.infinite) text("∞", x0 + w, y0 - 12 * dpr, "rgba(255, 210, 63, 1)", 15, "right", true);
+  rows.forEach((r, k) => {
+    const y = y0 + k * rowH + 10 * dpr;
+    const on = K.weapon === r.id || (r.id === "gun" && K.firing);
+    const empty = r.n <= 0 && !K.infinite;
+    const col = empty ? "rgba(255, 70, 60, 0.95)" : on ? "rgba(255, 210, 63, 1)" : "rgba(90, 255, 140, 0.9)";
+    if (K.weapon === r.id) {
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1.5 * dpr;
+      ctx.strokeRect(x0 - 6 * dpr, y - 12 * dpr, w + 12 * dpr, 24 * dpr);
+      text("▶", x0 - 16 * dpr, y, col, 12, "right", true);
+    }
+    text(r.name, x0, y, col, 12.5, "left", true);
+    const nx = x0 + 104 * dpr;
+    if (r.bar) {
+      // (a bar: the rounds or the cartridges left)
+      const bw = 80 * dpr,
+        f = K.infinite ? 1 : Math.max(0, Math.min(1, r.n / r.max));
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1 * dpr;
+      ctx.strokeRect(nx, y - 5 * dpr, bw, 10 * dpr);
+      ctx.fillStyle = col;
+      ctx.fillRect(nx, y - 5 * dpr, bw * f, 10 * dpr);
+      text(K.infinite ? "∞" : String(r.n), x0 + w, y, col, 12, "right", true);
+    } else {
+      // (marks: one a store, hollow when gone)
+      for (let j = 0; j < r.max; j++) {
+        ctx.beginPath();
+        ctx.rect(nx + j * 16 * dpr, y - 6 * dpr, 10 * dpr, 12 * dpr);
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1.2 * dpr;
+        ctx.stroke();
+        if (K.infinite || j < r.n) {
+          ctx.fillStyle = col;
+          ctx.fill();
+        }
+      }
+      text(K.infinite ? "∞" : String(r.n), x0 + w, y, col, 12, "right", true);
+    }
+  });
+}
+
+/**
+ * The radar's scope (a fight, a challenge): heading up, the craft at its centre; range rings, the scan's ±60°,
+ * each contact by its kind — an aircraft a chevron pointing its way, its height's difference in hundreds of
+ * metres; a ground target a square; a gate a bar across its way, the next one bright —, the missiles (red: at
+ * the craft, cyan: its own) with their tracks, the lock ringed. Its range the setting's, or the one that holds
+ * the lock and the nearest contacts.
+ */
+function drawRadar(
+  F: SymFrame,
+  R: RadarData | null,
+  gates: { x: number; y: number; gate: number; next: boolean; trk: number | null }[] | null,
+  text: (t: string, x: number, y: number, col: string, size: number, align?: CanvasTextAlign, mono?: boolean) => void,
+  stroke: (draw: () => void, col: string, lw: number, dash?: number[]) => void,
+) {
+  const { ctx, H, dpr, s } = F;
+  const rad = (F.compact ? 86 : 118) * dpr;
+  // (bottom left, clear of the craft in the chase view; the key hints stand above it — .jet-hud)
+  const cx = (F.compact ? 16 : 26) * dpr + rad,
+    cy = H - (F.compact ? 24 : 34) * dpr - rad;
+  const GR = "rgba(90, 255, 140, ";
+  // (the range: the setting's, or the smallest step holding the lock, else the nearest few)
+  const pts = [...(R?.contacts.filter((c) => c.alive) ?? []), ...(gates ?? [])];
+  let range = s.f35RadarRange === "auto" ? 0 : Number(s.f35RadarRange) * 1000;
+  if (!range) {
+    const lockC = R?.contacts.find((c) => c.locked);
+    const need = lockC
+      ? Math.hypot(lockC.x, lockC.y)
+      : Math.min(
+          ...pts
+            .map((c) => Math.hypot(c.x, c.y))
+            .sort((a, b) => a - b)
+            .slice(0, 3)
+            .concat([Infinity]),
+        ) || 10_000;
+    const far = lockC
+      ? need
+      : Math.max(
+          ...pts
+            .map((c) => Math.hypot(c.x, c.y))
+            .sort((a, b) => a - b)
+            .slice(0, 3),
+          1,
+        );
+    range = [10_000, 20_000, 40_000, 80_000, 160_000].find((r) => r > Math.max(need, far) * 1.1) ?? 160_000;
+  }
+  const k = rad / range;
+  // the scope: its disc, its rings, its compass ticks, the scan's limits
+  ctx.save();
+  ctx.fillStyle = "rgba(2, 12, 8, 0.66)";
+  ctx.beginPath();
+  ctx.arc(cx, cy, rad + 6 * dpr, 0, 2 * Math.PI);
+  ctx.fill();
+  for (const f of [1 / 3, 2 / 3, 1]) stroke(() => ctx.arc(cx, cy, rad * f, 0, 2 * Math.PI), `${GR}${f === 1 ? 0.6 : 0.3})`, 1);
+  const scan = (60 * Math.PI) / 180;
+  stroke(
+    () => {
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.sin(scan) * rad, cy - Math.cos(scan) * rad);
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx - Math.sin(scan) * rad, cy - Math.cos(scan) * rad);
+    },
+    `${GR}0.25)`,
+    1,
+    [4, 4],
+  );
+  text(`${Math.round(range / 1000)} KM`, cx + rad, cy + rad + 2 * dpr, `${GR}0.9)`, 10.5, "right", true);
+  text("RDR", cx - rad, cy + rad + 2 * dpr, `${GR}0.9)`, 10.5, "left", true);
+  // (clipped to the disc: a contact beyond the range on its rim)
+  const at = (x: number, y: number): [number, number, boolean] => {
+    const d = Math.hypot(x, y) * k;
+    const out = d > rad;
+    const f = out ? rad / d : 1;
+    return [cx + x * k * f, cy - y * k * f, out];
+  };
+  // gates: a bar across the way they are flown, numbered
+  for (const g of gates ?? []) {
+    const [px, py] = at(g.x, g.y);
+    const col = g.next ? "rgba(255, 210, 63, 1)" : "rgba(111, 210, 255, 0.8)";
+    const a = g.trk ?? 0;
+    stroke(
+      () => {
+        ctx.moveTo(px - Math.cos(a) * 7 * dpr, py - Math.sin(a) * 7 * dpr);
+        ctx.lineTo(px + Math.cos(a) * 7 * dpr, py + Math.sin(a) * 7 * dpr);
+      },
+      col,
+      g.next ? 3 : 2,
+    );
+    if (g.gate) text(String(g.gate), px + 9 * dpr, py - 8 * dpr, col, 10, "left", true);
+  }
+  // the targets
+  for (const c of R?.contacts ?? []) {
+    const [px, py, out] = at(c.x, c.y);
+    const col = !c.alive
+      ? "rgba(160, 160, 160, 0.7)"
+      : c.locked
+        ? "rgba(255, 70, 60, 1)"
+        : c.seen
+          ? "rgba(255, 120, 90, 0.95)"
+          : "rgba(255, 120, 90, 0.5)";
+    ctx.fillStyle = col;
+    if (c.air) {
+      // (a chevron along its track)
+      const a = c.trk ?? 0;
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(a);
+      ctx.beginPath();
+      ctx.moveTo(0, -8 * dpr);
+      ctx.lineTo(5.5 * dpr, 6 * dpr);
+      ctx.lineTo(0, 2.5 * dpr);
+      ctx.lineTo(-5.5 * dpr, 6 * dpr);
+      ctx.closePath();
+      ctx.fill();
+      // (its speed vector: a tick ahead)
+      if (c.trk !== null) {
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1.2 * dpr;
+        ctx.beginPath();
+        ctx.moveTo(0, -8 * dpr);
+        ctx.lineTo(0, -18 * dpr);
+        ctx.stroke();
+      }
+      ctx.restore();
+      if (!out && c.alive) {
+        const dz = Math.round(c.dz / 100);
+        text(`${dz >= 0 ? "+" : ""}${dz}`, px + 9 * dpr, py + 8 * dpr, col, 9.5, "left", true);
+      }
+    } else ctx.fillRect(px - 4.5 * dpr, py - 4.5 * dpr, 9 * dpr, 9 * dpr);
+    if (c.locked) {
+      stroke(() => ctx.arc(px, py, 11 * dpr, 0, 2 * Math.PI), col, 1.6);
+      text(c.name, px, py - 16 * dpr, col, 10, "center", true);
+    }
+  }
+  // the missiles: a dot and its way
+  for (const m of R?.missiles ?? []) {
+    const [px, py] = at(m.x, m.y);
+    const col = m.red ? "rgba(255, 50, 40, 1)" : "rgba(120, 225, 255, 1)";
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.arc(px, py, 3 * dpr, 0, 2 * Math.PI);
+    ctx.fill();
+    if (m.trk !== null) {
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1.2 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(px + Math.sin(m.trk) * 12 * dpr, py - Math.cos(m.trk) * 12 * dpr);
+      ctx.stroke();
+    }
+  }
+  // the craft: at the centre, its nose up
+  ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 8 * dpr);
+  ctx.lineTo(cx + 6 * dpr, cy + 6 * dpr);
+  ctx.lineTo(cx, cy + 3 * dpr);
+  ctx.lineTo(cx - 6 * dpr, cy + 6 * dpr);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * The F-35's avionics block (top left, in the helmet's colour): the engine — its spool, the throttle, the thrust,
+ * the afterburner —, the fuel — its gauge, the flow, the time left, the bingo (red past it) —, the configuration,
+ * the autopilot's modes lit, the load against its limit, the STOVL, the damage in a fight, the cautions.
+ */
+function drawAvionics(
+  F: SymFrame,
+  A: NonNullable<SymInfo["avionics"]>,
+  text: (t: string, x: number, y: number, col: string, size: number, align?: CanvasTextAlign, mono?: boolean) => void,
+  rgb: string,
+) {
+  const { ctx, dpr, i, s } = F;
+  const br = s.f35HmdBrightness ?? 1;
+  const G = (a: number) => `rgba(${rgb}, ${(a * br).toFixed(3)})`;
+  const AMB = "rgba(255, 190, 60, 1)",
+    RED = "rgba(255, 70, 60, 1)";
+  const x = (F.compact ? 10 : 16) * dpr,
+    w = 250 * dpr;
+  let y = F.top + (F.compact ? 40 : 60) * dpr;
+  const lh = 17 * dpr;
+  const lines: (() => void)[] = [];
+  const row = (draw: (y: number) => void) => lines.push(() => (draw(y), (y += lh)));
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
+  // the engine
+  row((y) => {
+    text(`ENG ${pct(A.spool)}`, x, y, G(0.95), 12, "left", true);
+    text(`THR ${pct(A.throttle)}`, x + 86 * dpr, y, G(0.95), 12, "left", true);
+    text(`${Math.round(A.thrustKn)} kN`, x + w, y, G(0.95), 12, "right", true);
+  });
+  if (A.ab > 0.05) row((y) => text(`AFTERBURNER ${pct(A.ab)}`, x, y, AMB, 12, "left", true));
+  // the fuel: a gauge, the flow, the time left
+  row((y) => {
+    const f = A.full > 0 ? A.fuel / A.full : 0;
+    const low = A.bingo !== null ? A.fuel < A.bingo : f < 0.2;
+    const col = A.infiniteFuel ? G(0.95) : low ? RED : G(0.95);
+    text(A.infiniteFuel ? "FUEL ∞" : `FUEL ${Math.round(A.fuel).toLocaleString("en").replace(/,/g, " ")} kg`, x, y, col, 12, "left", true);
+    const gx = x + 140 * dpr,
+      gw = 70 * dpr;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 1 * dpr;
+    ctx.strokeRect(gx, y - 5 * dpr, gw, 10 * dpr);
+    ctx.fillStyle = col;
+    ctx.fillRect(gx, y - 5 * dpr, gw * Math.max(0, Math.min(1, A.infiniteFuel ? 1 : f)), 10 * dpr);
+    // (the bingo's mark on the gauge)
+    if (A.bingo !== null && A.full > 0) {
+      const bx = gx + gw * Math.min(1, A.bingo / A.full);
+      ctx.fillStyle = "rgba(255, 92, 244, 1)";
+      ctx.fillRect(bx - 1 * dpr, y - 8 * dpr, 2 * dpr, 16 * dpr);
+    }
+  });
+  row((y) => {
+    const min = A.flow > 0 ? A.fuel / A.flow / 60 : Infinity;
+    text(`${Math.round(A.flow * 60)} kg/min`, x, y, G(0.8), 11, "left", true);
+    if (!A.infiniteFuel && Number.isFinite(min))
+      text(`${Math.floor(min / 60)}:${String(Math.floor(min % 60)).padStart(2, "0")} LEFT`, x + 104 * dpr, y, G(0.8), 11, "left", true);
+    if (A.bingo !== null)
+      text(
+        `BINGO ${Math.round(A.bingo)}`,
+        x + w,
+        y,
+        A.fuel < A.bingo && !A.infiniteFuel ? RED : "rgba(255, 92, 244, 1)",
+        11,
+        "right",
+        true,
+      );
+  });
+  // the configuration
+  row((y) => {
+    const gear = A.gear > 0.99 ? "GEAR DN" : A.gear < 0.01 ? "GEAR UP" : "GEAR ···";
+    text(gear, x, y, A.gear > 0.01 && A.gear < 0.99 ? AMB : A.gear > 0.99 ? G(0.95) : G(0.6), 11.5, "left", true);
+    text(`FLAPS ${A.flaps >= 1 ? "FULL" : A.flaps > 0 ? "½" : "UP"}`, x + 86 * dpr, y, A.flaps > 0 ? G(0.95) : G(0.6), 11.5, "left", true);
+    text(A.brake > 0 ? "SPDBRK" : "", x + w, y, AMB, 11.5, "right", true);
+  });
+  // the autopilot's modes: lit when engaged
+  row((y) => {
+    const modes: [string, boolean][] = [
+      ["ALT", A.ap.alt],
+      ["HDG", A.ap.hdg],
+      ["A/T", A.ap.spd],
+      ["LNAV", A.ap.lnav],
+      ["VNAV", A.ap.vnav],
+    ];
+    let mx = x;
+    for (const [m, on] of modes) {
+      if (on) {
+        ctx.fillStyle = G(0.22);
+        ctx.fillRect(mx - 2 * dpr, y - 8 * dpr, (m.length * 8 + 6) * dpr, 16 * dpr);
+      }
+      text(m, mx, y, on ? G(1) : G(0.35), 11.5, "left", true);
+      mx += (m.length * 8 + 12) * dpr;
+    }
+  });
+  // the load against its limit
+  const g = i.air?.g ?? 1;
+  row((y) => {
+    text(`G ${g.toFixed(1)}`, x, y, Math.abs(g) > A.gLimit * 0.95 ? RED : g > A.gLimit * 0.8 ? AMB : G(0.95), 12, "left", true);
+    text(`LIM ${A.gLimit.toFixed(1)}`, x + 70 * dpr, y, G(0.6), 11, "left", true);
+    if (A.stovl) text(A.stovl, x + w, y, "rgba(120, 225, 255, 1)", 12, "right", true);
+  });
+  if (A.damage > 0) row((y) => text(`DAMAGE ${Math.round(A.damage)}%`, x, y, A.damage > 60 ? RED : AMB, 12.5, "left", true));
+  // the cautions: the warnings red, the cautions amber (the three most urgent)
+  const al = alertsOf({ ...(i as unknown as AlertInput), animate: s.animate, fmtM: () => "" })
+    .filter((a) => a.level !== "advisory")
+    .slice(0, 3);
+  for (const a of al) row((y) => text(`▲ ${a.text}`, x, y, a.level === "warning" ? RED : AMB, 11, "left", true));
+  // the panel behind, then its lines
+  const h = (lines.length + 1) * lh;
+  ctx.fillStyle = "rgba(2, 12, 8, 0.6)";
+  ctx.fillRect(x - 8 * dpr, y - 16 * dpr, w + 16 * dpr, h + 4 * dpr);
+  ctx.strokeStyle = G(0.35);
+  ctx.lineWidth = 1 * dpr;
+  ctx.strokeRect(x - 8 * dpr, y - 16 * dpr, w + 16 * dpr, h + 4 * dpr);
+  text("F-35B · AVIONICS", x, y - 4 * dpr, G(0.7), 10, "left", true);
+  y += lh;
+  for (const l of lines) l();
 }

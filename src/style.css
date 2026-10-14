@@ -1746,6 +1746,9 @@ body.hide-ui .fl-root > :not(.fl-warn) { display: none; }
 /* a view the HUD does not show in (game/hudkind.ts hudInView — the cockpit: its own screens; the film's views):
    the warnings, the autopilot's card, the docking aid, the spectator's bar, the menus and the report stay */
 .fl-root[data-view="bare"]:not(.mapview) > :is(.fl-target, .fl-tel, .fl-orbit, .fl-right, .fl-airdata) { display: none !important; }
+/* the F-35 flown: no rocket's panels — the target among the planets, the orbit's potential, the attitude ball
+   and its holds (its helmet carries the attitude) */
+.fl-root[data-craft="jet"] :is(.fl-target, .fl-orbit), .fl-root[data-craft="jet"] .fl-cockpit > :not(.fl-hubcard) { display: none !important; }
 .fl-root[data-view="bare"]:not(.mapview) .fl-cockpit > :not(.fl-hubcard) { display: none !important; }
 
 /* smaller screens: the least needed go first, the rest shrinks */
@@ -2843,3 +2846,4 @@ body.topbar-hidden .fh-compass { top: 26px; }
 .scenery-hitboxes[hidden] { display:none; }
 .scenery-hitboxes canvas { width:100%; height:100%; display:block; }
 .scenery-hitboxes > div { position:absolute; top:185px; left:16px; color:#ff68c8; background:#07131ddd; padding:7px 10px; font:12px monospace; }
+.fl-chip[hidden] { display: none !important; }

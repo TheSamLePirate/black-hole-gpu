@@ -109,3 +109,35 @@ export function pcdData(
     alerts,
   };
 }
+
+/** The helmet's avionics block (the F-35's status, ui/hud/symbology.ts drawAvionics): its engine, its fuel and the
+ *  bingo, its configuration, its autopilot's modes, its STOVL, its damage in a fight. */
+export function avionicsData(c: CameraController, s: Settings) {
+  const V = VESSELS.f35;
+  const mass = fleet.massProps().mass;
+  const toMs2 = C_MPS ** 2 / (1476.625 * s.massSolar);
+  const e = c.jetAir();
+  const dry = c.pilot.engineNow * c.thrustMax() * toMs2 * mass;
+  const thrust = dry * c.jetThrust();
+  const fuel = fleet.fuel.f35 ?? V.fuelKg ?? 0;
+  const flow = V.turbofan && fuel > 0 ? fuelFlow(V.turbofan, thrust, dry, Math.max(e.sigma, 0.1)) : 0;
+  const m = c.jetModes;
+  return {
+    spool: c.pilot.engineNow,
+    throttle: c.pilot.throttle,
+    thrustKn: thrust / 1000,
+    ab: c.abLevel,
+    fuel,
+    full: V.fuelKg ?? 0,
+    flow,
+    bingo: c.routeBingo(),
+    infiniteFuel: s.f35InfiniteFuel,
+    gear: c.gearExt,
+    flaps: c.airFlight.cfg.flaps ?? 0,
+    brake: c.airBrake,
+    ap: { alt: m.alt !== null, hdg: m.hdg !== null, spd: m.spd !== null, lnav: c.nav.on.l, vnav: c.nav.on.v },
+    stovl: c.stovl.on ? (c.stovl.hover ? "HOVER" : c.stovl.conv < 1 ? "CONV" : "STOVL") : null,
+    damage: c.combat?.world.damage ?? 0,
+    gLimit: s.f35GLimit,
+  };
+}

@@ -65,6 +65,12 @@ export interface CombatState {
   last: Player | null;
 }
 
+const dotV = (a: V3 | Vec3, b: V3 | Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const unitV = (a: V3): V3 => {
+  const l = Math.hypot(...a) || 1;
+  return [a[0] / l, a[1] / l, a[2] / l];
+};
+
 /** Results kept: the best time of each fight won [s]. */
 export function combatBests(): Record<string, { time: number; at: string }> {
   return store.getJSON<Record<string, { time: number; at: string }>>(BEST_KEY, {});
@@ -83,6 +89,9 @@ function groundAt(anchor: { lat: number; lon: number }) {
 function combatStart(this: CameraController, def: Scenario) {
   const L = LOADOUTS[def.loadout];
   const world = new CombatWorld(def.targets, L, groundAt(def.anchor));
+  // (the F-35's settings: the stores, the damage, the aggressors' skill and missiles)
+  const s = this.s;
+  world.opts = { infinite: s.f35InfiniteAmmo, invulnerable: s.f35Invulnerable, skill: s.f35AiSkill, enemyMissiles: s.f35EnemyMissiles };
   this.combat = {
     def,
     world,
@@ -183,6 +192,9 @@ function combatStep(this: CameraController, dt: number) {
   if (!P) return;
   C.last = P;
   const W = C.world;
+  // (the settings changed in the fight: taken at once)
+  const s = this.s;
+  W.opts = { infinite: s.f35InfiniteAmmo, invulnerable: s.f35Invulnerable, skill: s.f35AiSkill, enemyMissiles: s.f35EnemyMissiles };
   W.firing = this.codes.has("Space") || this.gunTrigger;
   const ev = W.step(dt, P);
   fleet.payload.f35 = loadoutMass(W.stores);
@@ -292,7 +304,40 @@ function combatHud(this: CameraController, Cm: (v: Vec3 | null) => Vec3 | null) 
   const threats = W.missiles.filter((m) => m.alive && m.owner === "red" && m.target === -1);
   const lead = lockT && lockT.alive && !isGround(lockT) ? gunLead(P, lockT) : null;
   const zone = lockT && C.weapon !== "jdam" ? launchZone(C.weapon, P, lockT) : null;
+  // (heading up: the radar's frame — x right, y ahead [m], a track turned from the nose's heading)
+  const psi = Math.atan2(P.fwd[0], P.fwd[1]);
+  const cs = Math.cos(psi),
+    sn = Math.sin(psi);
+  const hu = (r: V3) => ({ x: r[0] * cs - r[1] * sn, y: r[0] * sn + r[1] * cs });
+  const trk = (v: V3) => (Math.hypot(v[0], v[1]) > 3 ? Math.atan2(v[0], v[1]) - psi : null);
+  // (the shot's cue: a missile in its zone and its seeker's cone — the 9X's helmet-cued 60°, the 120's radar 60°
+  // —; the gun's: the lead within 15 mrad of the nose, the target within 1.2 km)
+  const off = lockT ? Math.acos(Math.min(1, Math.max(-1, dotV(unitV(rel(lockT.p)), P.fwd)))) : Math.PI;
+  const shoot = !!zone && zone.inRange && W.stores[C.weapon] > 0 && off < (60 * Math.PI) / 180;
+  const leadErr = lead ? Math.acos(Math.min(1, Math.max(-1, dotV(lead.dir, P.fwd)))) : Math.PI;
+  const gunHot = !!lead && !!lockT && Math.hypot(...rel(lockT.p)) < 1200 && leadErr < 0.015 && W.stores.gun > 0;
   return {
+    shoot,
+    gunHot,
+    infinite: W.opts.infinite,
+    radar: {
+      contacts: W.targets
+        .filter((q) => q.alive || W.t - q.diedAt < 3)
+        .map((q) => {
+          const r = rel(q.p);
+          return {
+            ...hu(r),
+            dz: r[2],
+            trk: trk(q.v),
+            air: !isGround(q),
+            alive: q.alive,
+            locked: q.id === W.lock,
+            seen: W.seen.includes(q.id),
+            name: q.name,
+          };
+        }),
+      missiles: W.missiles.filter((m) => m.alive).map((m) => ({ ...hu(rel(m.p)), trk: trk(m.v), red: m.owner === "red" })),
+    },
     title: tr(C.def.title),
     t: C.t,
     limit: C.def.limit,

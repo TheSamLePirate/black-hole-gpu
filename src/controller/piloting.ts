@@ -1001,7 +1001,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
           bank: (this.attitudeNow() as { bank?: number }).bank ?? 0,
           mach: LA0.out.mach,
           speed: LA0.speed,
-          fbw: VESSELS[fleet.active].fbw,
+          // (the F-35: its load limit the setting's)
+          fbw: fleet.active === "f35" && VESSELS.f35.fbw ? { ...VESSELS.f35.fbw, gMax: s.f35GLimit } : VESSELS[fleet.active].fbw,
           gammaCmd: jetCmd.gamma,
           bankCmd: jetCmd.bank,
         }
@@ -1195,7 +1196,9 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
     const dry = this.pilot.engineNow * this.thrustMax() * toMs2 * mass;
     const thrust = dry * this.jetThrust();
     const left = fleet.fuel[fleet.active] ?? VESSELS[fleet.active].fuelKg ?? 0;
-    if (e.sigma > 0) fleet.fuel[fleet.active] = Math.max(0, left - fuelFlow(TF, thrust, dry, e.sigma) * dTau * Msec);
+    // (the F-35's tanks never empty, the setting on)
+    if (e.sigma > 0 && !(fleet.active === "f35" && s.f35InfiniteFuel))
+      fleet.fuel[fleet.active] = Math.max(0, left - fuelFlow(TF, thrust, dry, e.sigma) * dTau * Msec);
   } else if (fuelOn(s)) this.spent += (w / Math.max(this.pressureThrust(), 0.05)) * (this.jetModes.ab ? JET.abFlow / JET.abThrust : 1);
   if (burn && this.nodeBurning) this.nodeDone = Math.max(this.nodeDone + along(burn.dir), 0);
   this.dockCheck();

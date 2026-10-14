@@ -183,6 +183,7 @@ body.title-open #overlay, body.title-open .sp-toasts, body.title-open #hint, bod
 }
 .kh.show { opacity: 1; transform: none; transition-duration: 0.25s; }
 .kh.flying { bottom: 196px; }
+.jet-hud .kh.flying { bottom: 300px; }
 .kh-row { display: flex; align-items: center; gap: 8px; font: 600 12px var(--hud-font); letter-spacing: 0.04em; color: var(--k-text); }
 .kh-row .k-kbd { min-width: 1.8em; }
 body.hide-ui .kh, body.title-open .kh, body.paused .kh, body.mobile .kh, body.map-open .kh { display: none; }

@@ -118,4 +118,60 @@ export default {
   "In a fight (the F-35's): the gun (held — the pause on Esc then) · the weapon chosen released · the radar's lock on the next target · the next weapon (AIM-9X, AIM-120, JDAM) · a flare and chaff":
     "En combat (F-35) : le canon (maintenu — la pause sur Échap alors) · l'arme choisie tirée · le verrou radar sur la cible suivante · l'arme suivante (AIM-9X, AIM-120, JDAM) · un leurre IR et des paillettes",
   "Space · Enter · Tab · = · −": "Espace · Entrée · Tab · = · −",
+  // the F-35's settings, its HUD and its keys
+  "G effects": "Effets du facteur de charge",
+  "The pilot's sight under load: grey then black past ~5.5 g held a while, red under −1.5 g — the felt load lagging the real one.":
+    "La vue du pilote sous facteur de charge : grise puis noire au-delà de ~5,5 g tenus un moment, rouge sous −1,5 g — la charge ressentie en retard sur la vraie.",
+  Vapour: "Vapeur",
+  "The air condensing as the wing pulls hard in moist air: the sheet over the wing, the threads at the wingtips and the apex.":
+    "L'air qui se condense quand l'aile tire fort dans l'air humide : la nappe sur l'aile, les fils aux saumons et à l'apex.",
+  "G limit": "Limite de facteur de charge",
+  "The flight control laws' load limit [g] (the F-35B's: 7). Higher: tighter turns, the grey-out sooner.":
+    "La limite de charge des commandes de vol [g] (celle du F-35B : 7). Plus haut : des virages plus serrés, le voile gris plus tôt.",
+  "Infinite fuel": "Carburant infini",
+  "The tanks never empty: the afterburner as long as one likes.":
+    "Les réservoirs ne se vident jamais : la postcombustion aussi longtemps qu'on veut.",
+  "Infinite ammunition": "Munitions infinies",
+  "In a fight: the gun's rounds, the missiles, the bombs and the countermeasures never spent (∞ on the weapons' panel).":
+    "En combat : les obus du canon, les missiles, les bombes et les leurres jamais épuisés (∞ sur le panneau des armes).",
+  Invulnerable: "Invulnérable",
+  "In a fight: hits counted, no damage taken.": "En combat : les coups comptés, aucun dégât subi.",
+  Aggressors: "Agresseurs",
+  "The enemy fighters' skill: how hard they turn, how often they shoot, how well they aim. Taken at a fight's start.":
+    "L'habileté des chasseurs ennemis : la vigueur de leurs virages, la fréquence de leurs tirs, leur précision. Prise au début d'un combat.",
+  Easy: "Facile",
+  "Gentle turns, slow to shoot, poor aim": "Virages doux, tirs lents, visée médiocre",
+  Ace: "As",
+  "Hard turns, quick shots, sharp aim": "Virages serrés, tirs rapides, visée précise",
+  "Enemy missiles": "Missiles ennemis",
+  "The aggressors' and the SAM site's missiles fired at you (off: their guns only).":
+    "Les missiles des agresseurs et du site SAM tirés sur vous (désactivé : leurs canons seulement).",
+  "Radar scope": "Écran radar",
+  "In a fight, on the helmet: the radar's scope — the contacts and the way they fly, the missiles, the lock, the range rings.":
+    "En combat, dans le casque : l'écran radar — les contacts et leur direction de vol, les missiles, le verrou, les cercles de distance.",
+  "Radar range": "Portée radar",
+  "The scope's range: set, or chosen by itself to hold the lock and the nearest threats.":
+    "La portée de l'écran : fixée, ou choisie d'elle-même pour garder le verrou et les menaces les plus proches.",
+  "10 km": "10 km",
+  "20 km": "20 km",
+  "40 km": "40 km",
+  "80 km": "80 km",
+  "160 km": "160 km",
+  "Weapons panel": "Panneau des armes",
+  "In a fight: the stores carried, the one chosen, the gun's rounds left as a bar.":
+    "En combat : les emports, celui choisi, les obus restants du canon en barre.",
+  "Avionics status": "État de l'avionique",
+  "On the helmet: the engine, the fuel and the bingo, the configuration, the autopilot's modes, the cautions.":
+    "Dans le casque : le moteur, le carburant et le bingo, la configuration, les modes du pilote automatique, les alarmes.",
+  "Helmet colour": "Couleur du casque",
+  "The helmet's symbology: its colour.": "La symbologie du casque : sa couleur.",
+  Green: "Vert",
+  Amber: "Ambre",
+  Cyan: "Cyan",
+  White: "Blanc",
+  "Helmet brightness": "Luminosité du casque",
+  "The helmet's symbology: how bright.": "La symbologie du casque : son intensité.",
+  "Not on the F-35: a spacecraft's function": "Pas sur le F-35 : une fonction de vaisseau spatial",
+  "The F-35 flies by its own flight control laws": "Le F-35 vole avec ses propres commandes de vol",
+  "Tab: the radar's lock in a fight — held: the wheel": "Tab : le verrou radar en combat — maintenu : la roue",
 };

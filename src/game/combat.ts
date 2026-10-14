@@ -127,6 +127,21 @@ export const GUN = { rounds: 220, rate: 55, muzzle: 1040, spread: 1.6e-3, hitR: 
 export const JDAM = { blast: 35, damage: 400, gMax: 3, cd: 4e-5 };
 
 /** A loadout: the weapons carried (the bays' four stations, the gun pod, the wings' two outer ones). */
+/** The player's options in a fight (the F-35's settings). */
+export interface CombatOptions {
+  infinite: boolean;
+  invulnerable: boolean;
+  /** the aggressors: their turn's g, their reactions, their shots' pace */
+  skill: "easy" | "normal" | "ace";
+  enemyMissiles: boolean;
+}
+/** Each skill's factors: the g the aggressors pull, the time between their shots, their gun's dispersion. */
+export const SKILL = {
+  easy: { g: 0.6, reload: 1.8, spread: 2 },
+  normal: { g: 1, reload: 1, spread: 1 },
+  ace: { g: 1.25, reload: 0.6, spread: 0.6 },
+} as const;
+
 export interface Loadout {
   id: "aa" | "ag" | "gun";
   aim120: number;
@@ -260,6 +275,9 @@ export class CombatWorld {
   /** the radar: its lock (a target's id) and the targets it sees */
   lock: number | null = null;
   seen: number[] = [];
+  /** the player's options (the F-35's settings): stores never spent, no damage taken, the aggressors' skill,
+   *  their missiles and the SAM's fired or not */
+  opts: CombatOptions = { infinite: false, invulnerable: false, skill: "normal", enemyMissiles: true };
   private nextId = 1;
   private gunAcc = 0;
   private ground = new Map<string, number>();
@@ -367,8 +385,10 @@ export class CombatWorld {
     if (kind === "aim9x" && tgt === null) tgt = this.boresight(P, MISSILES.aim9x.fov / 2, MISSILES.aim9x.rMax);
     // (nothing for its seeker — none locked, none before the nose within reach —: not fired)
     if (tgt === null) return null;
-    if (kind === "aim120") this.stores.aim120--;
-    else this.stores.aim9x--;
+    if (!this.opts.infinite) {
+      if (kind === "aim120") this.stores.aim120--;
+      else this.stores.aim9x--;
+    }
     // (dropped from the bay, or off the rail, at the jet's velocity, a little below)
     const m: Missile = {
       id: this.nextId++,
@@ -402,7 +422,7 @@ export class CombatWorld {
   /** A JDAM released towards a point (the lock's, or where it would fall unguided). */
   drop(P: Player, aim: V3): Bomb | null {
     if (this.stores.jdam <= 0) return null;
-    this.stores.jdam--;
+    if (!this.opts.infinite) this.stores.jdam--;
     const b: Bomb = { id: this.nextId++, p: add(P.p, mul(P.up, -1.5)), v: [...P.v], aim, alive: true };
     this.bombs.push(b);
     return b;
@@ -411,7 +431,7 @@ export class CombatWorld {
   /** Countermeasures: a flare and a chaff bundle out behind. */
   countermeasure(P: Player) {
     if (this.stores.flares <= 0) return false;
-    this.stores.flares--;
+    if (!this.opts.infinite) this.stores.flares--;
     for (const kind of ["flare", "chaff"] as const)
       this.decoys.push({ id: this.nextId++, p: add(P.p, mul(P.fwd, -6)), v: add(mul(P.v, 0.85), mul(P.up, -15)), t: 0, kind });
     return true;
@@ -453,7 +473,7 @@ export class CombatWorld {
     this.gunAcc += dt * GUN.rate;
     while (this.gunAcc >= 1 && this.stores.gun > 0) {
       this.gunAcc -= 1;
-      this.stores.gun--;
+      if (!this.opts.infinite) this.stores.gun--;
       // (the pod's line: along the nose, a little dispersion)
       const s = GUN.spread;
       const right = unit(cross(P.fwd, P.up));
@@ -501,6 +521,10 @@ export class CombatWorld {
 
   private hurtPlayer(dmg: number, by: MissileKind | "gun", ev: CombatEvent[]) {
     if (!this.alive) return;
+    if (this.opts.invulnerable) {
+      ev.push({ kind: "hit", on: "player", by, damage: 0 });
+      return;
+    }
     this.damage = Math.min(100, this.damage + dmg);
     ev.push({ kind: "hit", on: "player", by, damage: dmg });
     if (!this.alive) ev.push({ kind: "playerDown" });
@@ -619,7 +643,15 @@ export class CombatWorld {
         const r = sub(P.p, q.p);
         const d = len(r);
         const agl = P.p[2] - this.groundZ(P.p[0], P.p[1]);
-        if (this.alive && q.site.missiles > 0 && this.t > q.site.nextShot && d < MISSILES.sam.rMax && d > MISSILES.sam.rMin && agl > 150) {
+        if (
+          this.opts.enemyMissiles &&
+          this.alive &&
+          q.site.missiles > 0 &&
+          this.t > q.site.nextShot &&
+          d < MISSILES.sam.rMax &&
+          d > MISSILES.sam.rMin &&
+          agl > 150
+        ) {
           q.site.missiles--;
           q.site.nextShot = this.t + 25;
           const m: Missile = {
@@ -660,9 +692,16 @@ export class CombatWorld {
         want = unit(sub(add(P.p, mul(P.v, tof)), q.p));
         // (its missile: the player before its nose within reach)
         const off = Math.acos(clamp(dot(unit(r), q.fwd), -1, 1));
-        if (A.missiles > 0 && this.t > A.nextShot && d < MISSILES.r73.rMax * 0.8 && d > MISSILES.r73.rMin && off < 25 * D) {
+        if (
+          this.opts.enemyMissiles &&
+          A.missiles > 0 &&
+          this.t > A.nextShot &&
+          d < MISSILES.r73.rMax * 0.8 &&
+          d > MISSILES.r73.rMin &&
+          off < 25 * D
+        ) {
           A.missiles--;
-          A.nextShot = this.t + 18;
+          A.nextShot = this.t + 18 * SKILL[this.opts.skill].reload;
           const m: Missile = {
             id: this.nextId++,
             kind: "r73",
@@ -684,7 +723,7 @@ export class CombatWorld {
             p: add(q.p, mul(q.fwd, 8)),
             v: add(
               q.v,
-              mul(unit(add(q.fwd, [(this.rand() - 0.5) * 0.01, (this.rand() - 0.5) * 0.01, (this.rand() - 0.5) * 0.01])), GUN.muzzle),
+              mul(unit(add(q.fwd, [0, 1, 2].map(() => (this.rand() - 0.5) * 0.01 * SKILL[this.opts.skill].spread) as V3)), GUN.muzzle),
             ),
             t: 0,
             owner: "red",
@@ -705,7 +744,7 @@ export class CombatWorld {
       const u = unit(q.v);
       const turn = sub(want, mul(u, dot(want, u)));
       const tl = len(turn);
-      const rate = Math.min((A.gMax * G) / sp, tl > 1e-6 ? Math.acos(clamp(dot(want, u), -1, 1)) / dt : 0);
+      const rate = Math.min((A.gMax * SKILL[this.opts.skill].g * G) / sp, tl > 1e-6 ? Math.acos(clamp(dot(want, u), -1, 1)) / dt : 0);
       const nu = tl > 1e-6 ? unit(add(u, mul(unit(turn), rate * dt))) : u;
       const speed = sp + clamp(A.speed - sp, -10 * dt, 10 * dt);
       q.v = mul(nu, speed);

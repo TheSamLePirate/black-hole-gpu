@@ -389,6 +389,20 @@ export interface Settings {
   cineShake: number; // its noise: the air's buffeting, the engine's rumble, the hand (0 … 1)
   flightShake: number; // a plane's view shaken by its flight: the runway, the buffet, Mach 1, the afterburner, the touchdown (0 … 1)
   heatHaze: boolean; // the jet's heat haze: the background shimmering through its hot exhaust
+  f35GEffects: boolean; // the F-35: the grey-out and the red-out under load
+  f35Vapour: boolean; // the F-35: the vapour sheet and threads pulling hard
+  f35GLimit: number; // the F-35: its flight control laws' load limit [g]
+  f35InfiniteFuel: boolean; // the F-35: the tanks never empty
+  f35InfiniteAmmo: boolean; // the F-35 in a fight: the stores never spent
+  f35Invulnerable: boolean; // the F-35 in a fight: no damage taken
+  f35AiSkill: "easy" | "normal" | "ace"; // the aggressors' skill
+  f35EnemyMissiles: boolean; // the aggressors' and the SAM's missiles fired
+  f35Radar: boolean; // the radar's scope on the helmet in a fight
+  f35RadarRange: "auto" | "10" | "20" | "40" | "80" | "160"; // its range [km]
+  f35WeaponPanel: boolean; // the weapons' panel in a fight
+  f35Avionics: boolean; // the avionics' status block on the helmet
+  f35HmdColor: "green" | "amber" | "cyan" | "white"; // the helmet's symbology's colour
+  f35HmdBrightness: number; // its brightness (0.3 … 1)
   cineDynamicFov: boolean; // its lens widened with the speed and the afterburner, the long lens on the still cameras
   characterShoulder: number; // on foot: the camera over the right shoulder [m] (0: behind the head)
   shipAlbedo: number; // hull albedo (light grey paint in the film)
@@ -695,6 +709,20 @@ export function defaultSettings(): Settings {
     cineShake: 0.5,
     flightShake: 0.7,
     heatHaze: true,
+    f35GEffects: true,
+    f35Vapour: true,
+    f35GLimit: 7,
+    f35InfiniteFuel: false,
+    f35InfiniteAmmo: false,
+    f35Invulnerable: false,
+    f35AiSkill: "normal",
+    f35EnemyMissiles: true,
+    f35Radar: true,
+    f35RadarRange: "auto",
+    f35WeaponPanel: true,
+    f35Avionics: true,
+    f35HmdColor: "green",
+    f35HmdBrightness: 1,
     cineDynamicFov: true,
     characterShoulder: 0.45,
     shipAlbedo: 0.6,
@@ -1981,6 +2009,20 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   cineShake: "pref",
   flightShake: "pref",
   heatHaze: "pref",
+  f35GEffects: "pref",
+  f35Vapour: "pref",
+  f35GLimit: "pref",
+  f35InfiniteFuel: "pref",
+  f35InfiniteAmmo: "pref",
+  f35Invulnerable: "pref",
+  f35AiSkill: "pref",
+  f35EnemyMissiles: "pref",
+  f35Radar: "pref",
+  f35RadarRange: "pref",
+  f35WeaponPanel: "pref",
+  f35Avionics: "pref",
+  f35HmdColor: "pref",
+  f35HmdBrightness: "pref",
   cineDynamicFov: "pref",
   characterShoulder: "pref",
   shipAlbedo: "carried",

@@ -1755,6 +1755,14 @@ export class FlightHud {
     this.view = hudInView(this.s.shipMount, this.s.hudViews, !!this.spectating);
     if (this.root.dataset.view !== this.view) this.root.dataset.view = this.view;
     if (this.root.dataset.kind !== this.kind) this.root.dataset.kind = this.kind;
+    // (the craft flown: the F-35's HUD without the rocket's panels — the target among the planets, the orbit's
+    // potential, the attitude ball and its holds —: flighthud.css)
+    const jet = info.vessel === "f35" ? "jet" : "";
+    if (this.root.dataset.craft !== jet) {
+      this.root.dataset.craft = jet;
+      // (the key hints stand above the radar scope: menus.css)
+      document.body.classList.toggle("jet-hud", !!jet);
+    }
     this.lastTime = time;
     if (!this.start) this.start = { t: time, tau: info.properTime };
     this.record(info, time);
@@ -1776,7 +1784,8 @@ export class FlightHud {
     if (!bare) this.drawAirData(info);
     this.drawDock(info);
     const tasks: [string, number, () => void][] = [];
-    if (this.density < 2 && !full && !bare) tasks.push(["ball", 20, () => cpuProf.time("HUD: attitude ball", () => this.drawBall(info))]);
+    if (this.density < 2 && !full && !bare && !jet)
+      tasks.push(["ball", 20, () => cpuProf.time("HUD: attitude ball", () => this.drawBall(info))]);
     if (full) tasks.push(["strip", 8, () => this.drawStrip(info)]);
     if (this.density === 0 || full) {
       if (!full && !bare) {
@@ -1786,7 +1795,7 @@ export class FlightHud {
           () => cpuProf.time("HUD: target & Ranger", () => (this.drawTargetInstr(info), this.drawRangerInstr(info))),
         ]);
         tasks.push(["tel", 10, () => cpuProf.time("HUD: telemetry", () => this.drawTelemetry())]);
-        tasks.push(["orbit", 10, () => cpuProf.time("HUD: orbit panel", () => this.drawPotential(info))]);
+        if (!jet) tasks.push(["orbit", 10, () => cpuProf.time("HUD: orbit panel", () => this.drawPotential(info))]);
       }
       // (the full-screen map, or its animation, every frame; the ground track: the globe dragged)
       if (bare) {
@@ -1924,6 +1933,8 @@ export class FlightHud {
       auto = `${AUTO_NAMES[i.auto].toUpperCase()} · ${phase}${Number.isFinite(i.dv) ? ` Δv ${fmtDvC(i.dv)}` : ""}`;
     }
     setChip("auto", i.auto !== "none", auto);
+    // (the F-35: no orbital hold, no rocket autopilot — its own AP modes are in its avionics)
+    M.hold!.hidden = M.auto!.hidden = i.vessel === "f35";
     const st = this.start ?? { t: time, tau: i.properTime };
     const dt = time - st.t,
       dtau = i.properTime - st.tau;
@@ -2397,7 +2408,7 @@ export class FlightHud {
           flow: [0, 0, 0],
           level: 0,
           g: A.g ?? 1,
-          greyOut: true,
+          greyOut: s.vessel !== "f35" || s.f35GEffects,
         });
       return;
     }
@@ -2414,7 +2425,9 @@ export class FlightHud {
     const level =
       (s.speedLines ?? 0.7) *
       speedFxLevel({ speed: A.speed, rho: A.rho, agl: i.surface?.alt ?? Number.NaN, boost: i.jet?.modes.ab ? 1.5 : 1 });
-    this.speedFx.draw(ctx, { W, H, dpr, fov: s.fov, dt, M, flow, level, g: A.g ?? 1, greyOut: s.gVignette !== false });
+    // (the F-35's: its own setting — G effects)
+    const grey = s.gVignette !== false && (s.vessel !== "f35" || s.f35GEffects);
+    this.speedFx.draw(ctx, { W, H, dpr, fov: s.fov, dt, M, flow, level, g: A.g ?? 1, greyOut: grey });
   }
 
   private drawHud(i: Info) {
@@ -2526,7 +2539,7 @@ export class FlightHud {
     // the assisted autopilot's director: where it would point the nose, its top, its throttle, its thrusters
     if (i.director) this.drawDirector(ctx, i, W, H, dpr, tanH, asp);
     // (the F-35's helmet: its own boxed figures — the game's tapes left out)
-    if (this.density < 2 && !helmet) {
+    if (this.density < 2 && !helmet && i.vessel !== "f35") {
       // each tape in the free band between the panels above and below it on its side (a phone: between
       // the mission bar and the touch controls, smaller)
       const phone = isMobile();
@@ -2567,7 +2580,12 @@ export class FlightHud {
     const A = i.air;
     // (not standing still on the ground: α and β of a craft parked in the wind are noise)
     const parked = !!(i.landed || i.surface?.landed);
-    const show = !!A && !parked && (A.inAir || A.mode === "sf" || A.margins.shield > 0.4 || A.margins.hull > 0.4) && this.density < 2;
+    const show =
+      !!A &&
+      !parked &&
+      i.vessel !== "f35" &&
+      (A.inAir || A.mode === "sf" || A.margins.shield > 0.4 || A.margins.hull > 0.4) &&
+      this.density < 2;
     this.airData.hidden = !show;
     if (!show || !A) return;
     const d = 180 / Math.PI;
@@ -3029,7 +3047,8 @@ export class FlightHud {
     }
     const st = i.status;
     if (!st) return;
-    const o = st.orbit;
+    // (the F-35: its height and speed — an orbit, its impact and its dials mean nothing to a fighter)
+    const o = i.vessel === "f35" ? null : st.orbit;
     const { ctx, dpr, W, reg } = this.instr(this.stCanvas, o ? (st.next ? 192 : 174) : 70);
     const S = (v: number) => v * dpr;
     const km = (x: number) =>

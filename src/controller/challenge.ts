@@ -250,7 +250,31 @@ function challengeHud(this: CameraController, C3: (v: V3 | null) => V3 | null) {
     }
   }
   const time = d.kind === "gates" ? C.t + C.missed * MISS_PENALTY + C.over : C.t;
+  // (the radar's frame — heading up, x right, y ahead [m]: the course's gates ahead, the next first; the pad)
+  const hd = (this.attitudeNow() as { heading?: number }).heading ?? 0;
+  const cs = Math.cos(hd),
+    sn = Math.sin(hd);
+  const radar =
+    g && C.status === "run"
+      ? {
+          contacts: [
+            ...C.gates.slice(C.next, C.next + 6).map((G, k) => {
+              const [e, n] = enu(g, G);
+              return { x: e * cs - n * sn, y: e * sn + n * cs, gate: k + C.next + 1, next: k === 0, trk: G.hdg * D - hd };
+            }),
+            ...(d.pad
+              ? [
+                  (() => {
+                    const [e, n] = enu(g, d.pad!);
+                    return { x: e * cs - n * sn, y: e * sn + n * cs, gate: 0, next: true, trk: null };
+                  })(),
+                ]
+              : []),
+          ],
+        }
+      : null;
   return {
+    radar,
     title: tr(d.title),
     kind: d.kind,
     time,

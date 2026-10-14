@@ -1,5 +1,6 @@
 // The CameraController — telemetry: the one view of the flight every display reads (FlightInfo).
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { avionicsData } from "../f35/cockpit";
 import type { JetModes } from "../game/jet";
 import { blToCartesian, cameraFrame } from "../camera";
 import { horizon, isco, photonOrbits, type Vec3 } from "../physics";
@@ -182,6 +183,8 @@ export interface FlightInfo {
   jet: { alt: number; throttle: number; modes: JetModes } | null;
   /** a plane's flight plan (controller/fplan.ts): the active waypoint's name, its bearing [° true], its distance [m], NAV engaged */
   nav: { name: string; brg: number; dist: number; on: boolean } | null;
+  /** the F-35's avionics' status (f35/cockpit.ts avionicsData), null: not the F-35 */
+  avionics: ReturnType<typeof avionicsData> | null;
   /** a challenge flown: its banner, its next gates (controller/challenge.ts) */
   chal: ReturnType<CameraController["challengeHud"]>;
   /** a fight flown: its targets, missiles, lead, zone, warnings (controller/combat.ts) */
@@ -296,7 +299,8 @@ function flightInfo(this: CameraController): FlightInfo {
       radialIn: C(R && lin(R, -1, R, 0)),
       normal: C(normal),
       antinormal: C(normal && lin(normal, -1, normal, 0)),
-      target: C(this.targetDir(cam)),
+      // (the F-35 flown: no planet to aim at — its targets are its radar's)
+      target: fleet.active === "f35" ? null : C(this.targetDir(cam)),
       burn: C(this.pilot.burn),
       maneuver: C(this.maneuverDir(cam)),
       // velocity relative to the target (approach, docking)
@@ -359,6 +363,7 @@ function flightInfo(this: CameraController): FlightInfo {
       return f ? { alt: f.h, throttle: this.pilot.engineNow, modes: { ...this.jetModes, lnav: this.nav.on.l, vnav: this.nav.on.v } } : null;
     })(),
     chal: this.challengeHud(C),
+    avionics: fleet.active === "f35" ? avionicsData(this, s) : null,
     combat: this.combatHud(C),
     nav: (() => {
       const N = this.nav,

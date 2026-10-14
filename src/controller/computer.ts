@@ -1303,7 +1303,7 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
       if (t > 0)
         for (const sx of [1, -1]) src.push({ key: `t${sx}`, p: at([tip[0] * sx, tip[1], tip[2]]), kind: V.vapour ? 3 : 1, str: t });
       // (a fighter's: the vapour sheet over each wing pulling hard, its apex vortices at a high incidence)
-      const vp = V.vapour;
+      const vp = this.s.f35Vapour === false && fleet.active === "f35" ? undefined : V.vapour;
       if (vp) {
         const sh = sheetTrail(cl, LA.air.rho, LA.air.T, LA.speed);
         if (sh > 0)
