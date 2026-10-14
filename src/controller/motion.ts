@@ -651,7 +651,8 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
   s.motion = "geodesic";
   this.sync();
   // (the touchdown, for whoever marks it — a challenge's judge: controller/challenge.ts)
-  if (touched) this.lastTouch = { n: (this.lastTouch?.n ?? 0) + 1, sink: touched.speed, along: touched.vh ?? 0, gear: touched.gear ?? "hull" };
+  if (touched)
+    this.lastTouch = { n: (this.lastTouch?.n ?? 0) + 1, sink: touched.speed, along: touched.vh ?? 0, gear: touched.gear ?? "hull" };
   if (touched?.gear) {
     // the gear's verdict (gear.ts): landed, a hard landing that damaged it, a collapse, tipped over
     this.landed = true;

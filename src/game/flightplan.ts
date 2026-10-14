@@ -279,7 +279,11 @@ export function vnav(p: FlightPlan, i: number, distTo: number, alt: number, gs: 
   const spd = w.spd ?? p.cruiseSpd;
   const descending = target < alt - 30;
   // (descending: on the path — the vertical speed the ground speed's 3°, more if above it)
-  const vs = descending ? -Math.max(gs * tg, 5) - Math.min((alt - target) * 0.02, 40) : target > alt + 30 ? Math.min((target - alt) * 0.05 + 10, 60) : 0;
+  const vs = descending
+    ? -Math.max(gs * tg, 5) - Math.min((alt - target) * 0.02, 40)
+    : target > alt + 30
+      ? Math.min((target - alt) * 0.05 + 10, 60)
+      : 0;
   return {
     alt: target,
     vs,

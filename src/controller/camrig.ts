@@ -254,7 +254,7 @@ function shakePose(this: CameraController, pose: MountPose, dt: number): MountPo
   const mach = L ? L.speed / Math.max(L.air.a, 1) : 0;
   const dense = L ? clamp(L.air.rho / 0.4, 0, 1) : 0;
   const contact = this.gearLast?.contact ?? 0;
-  const jolt = contact > 0 && this.shakeContact === 0 && !!L && L.speed > 20 ? 1.4 : 0;
+  const jolt = contact > 0 && this.shakeContact === 0 && L && L.speed > 20 ? 1.4 : 0;
   this.shakeContact = contact;
   const sh = this.camShake.step(
     {

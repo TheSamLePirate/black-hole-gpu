@@ -62,7 +62,13 @@ export class FlightHub {
   open() {
     if (this.close) return;
     const root = h("div", "fhb");
-    const m = modal({ title: t("Prepare a flight — F-35B"), body: [root], cls: "fhb-frame", testid: "flight-hub", onClose: () => (this.close = null) });
+    const m = modal({
+      title: t("Prepare a flight — F-35B"),
+      body: [root],
+      cls: "fhb-frame",
+      testid: "flight-hub",
+      onClose: () => (this.close = null),
+    });
     this.close = m.close;
     this.wx = this.host.settings.weather;
     this.build(root);
@@ -88,7 +94,13 @@ export class FlightHub {
   private build(root: HTMLElement) {
     const fieldItems = FIELDS.map((f) => [f.icao ?? f.name, f.icao ?? f.name, f.name] as [string, string, string]);
     root.append(
-      this.seg(t("Airfield"), fieldItems, () => this.field.icao ?? this.field.name, (v) => (this.field = FIELDS.find((f) => (f.icao ?? f.name) === v)!), "fhb-field"),
+      this.seg(
+        t("Airfield"),
+        fieldItems,
+        () => this.field.icao ?? this.field.name,
+        (v) => (this.field = FIELDS.find((f) => (f.icao ?? f.name) === v)!),
+        "fhb-field",
+      ),
       this.seg<Start>(
         t("Start"),
         [
@@ -143,7 +155,11 @@ export class FlightHub {
     );
     const foot = h("div", "fhb-foot");
     foot.append(
-      h("p", "fhb-note", t("The plan to an airfield: a direct leg at the cruise level — edit it after (⇧O): waypoints, altitudes, speeds.")),
+      h(
+        "p",
+        "fhb-note",
+        t("The plan to an airfield: a direct leg at the cruise level — edit it after (⇧O): waypoints, altitudes, speeds."),
+      ),
       button({ label: t("Fly"), kind: "primary", testid: "fhb-go", onClick: () => this.go() }),
     );
     root.append(foot);
@@ -191,13 +207,24 @@ export class FlightHub {
       if (this.dest) {
         const D = FIELDS.find((f) => (f.icao ?? f.name) === this.dest)!;
         const R = newPlan();
-        const wp = (f: typeof F) => ({ name: f.icao ?? f.name, lat: f.lat, lon: f.lon, field: { icao: f.icao, elev: f.elev ?? 0, rwy: f.rwy } });
+        const wp = (f: typeof F) => ({
+          name: f.icao ?? f.name,
+          lat: f.lat,
+          lon: f.lon,
+          field: { icao: f.icao, elev: f.elev ?? 0, rwy: f.rwy },
+        });
         R.wps = D === F ? [wp(F)] : [wp(F), wp(D)];
         C.nav.route = R;
         C.nav.on = { l: false, v: false };
         C.routeChanged();
       }
-      H.toast(tf("Ready: {0} — {1}", F.icao ?? F.name, this.start === "runway" ? t("lined up") : this.start === "final" ? t("on final") : t("cruising")));
+      H.toast(
+        tf(
+          "Ready: {0} — {1}",
+          F.icao ?? F.name,
+          this.start === "runway" ? t("lined up") : this.start === "final" ? t("on final") : t("cruising"),
+        ),
+      );
       this.close?.();
     } catch (e) {
       H.toast(String((e as Error).message ?? e));

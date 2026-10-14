@@ -8,7 +8,20 @@
 import { cameraFrame } from "../camera";
 import { fleet } from "../fleet";
 import { restPose, type F35Pose } from "../f35/model";
-import { CombatWorld, fallPoint, gunLead, isGround, launchZone, LOADOUTS, loadoutMass, MISSILES, type CombatEvent, type MissileKind, type Player, type V3 } from "../game/combat";
+import {
+  CombatWorld,
+  fallPoint,
+  gunLead,
+  isGround,
+  launchZone,
+  LOADOUTS,
+  loadoutMass,
+  MISSILES,
+  type CombatEvent,
+  type MissileKind,
+  type Player,
+  type V3,
+} from "../game/combat";
 import { enu } from "../game/challenges";
 import type { Scenario } from "../game/scenarios";
 import { t, tf, tr } from "../i18n";
@@ -123,7 +136,9 @@ function combatTrigger(this: CameraController, what: "fire" | "lock" | "weapon" 
   if (what === "lock") {
     const id = W.cycleLock(P);
     const q = W.target(id);
-    return q ? tf("Locked: {0} · {1} km", q.name, (Math.hypot(q.p[0] - P.p[0], q.p[1] - P.p[1], q.p[2] - P.p[2]) / 1000).toFixed(1)) : t("Lock dropped");
+    return q
+      ? tf("Locked: {0} · {1} km", q.name, (Math.hypot(q.p[0] - P.p[0], q.p[1] - P.p[1], q.p[2] - P.p[2]) / 1000).toFixed(1))
+      : t("Lock dropped");
   }
   if (what === "weapon") {
     const order: WeaponSel[] = ["aim9x", "aim120", "jdam"];
@@ -195,7 +210,9 @@ function combatStep(this: CameraController, dt: number) {
       all[C.def.id] = { time: C.t, at: new Date().toISOString() };
       store.set(BEST_KEY, JSON.stringify(all));
     }
-    C.result = tf("{0} — won in {1}", tr(C.def.title), `${Math.floor(C.t / 60)}:${String(Math.floor(C.t % 60)).padStart(2, "0")}`) + (best ? ` · ${t("best")}` : "");
+    C.result =
+      tf("{0} — won in {1}", tr(C.def.title), `${Math.floor(C.t / 60)}:${String(Math.floor(C.t % 60)).padStart(2, "0")}`) +
+      (best ? ` · ${t("best")}` : "");
     C.say = C.result;
   } else if (C.t > C.def.limit) {
     C.status = "lost";
@@ -296,7 +313,9 @@ function combatHud(this: CameraController, Cm: (v: Vec3 | null) => Vec3 | null) 
         locked: q.id === W.lock,
         seen: W.seen.includes(q.id),
         ground: isGround(q),
-        closing: -(rel(q.p)[0] * (q.v[0] - P.v[0]) + rel(q.p)[1] * (q.v[1] - P.v[1]) + rel(q.p)[2] * (q.v[2] - P.v[2])) / Math.max(Math.hypot(...rel(q.p)), 1),
+        closing:
+          -(rel(q.p)[0] * (q.v[0] - P.v[0]) + rel(q.p)[1] * (q.v[1] - P.v[1]) + rel(q.p)[2] * (q.v[2] - P.v[2])) /
+          Math.max(Math.hypot(...rel(q.p)), 1),
       })),
     missiles: W.missiles
       .filter((m) => m.alive)

@@ -71,7 +71,15 @@ export interface PcdData {
   fields: PcdField[];
   /** the flight plan (game/flightplan.ts): its points, the active one, NAV engaged, to the active: distance [m],
    *  time [s], cross-track [m]; the bingo [kg] (null: none planned) */
-  route: { wps: { name: string; lat: number; lon: number }[]; active: number; l: boolean; v: boolean; dist: number; ete: number; xtk: number } | null;
+  route: {
+    wps: { name: string; lat: number; lon: number }[];
+    active: number;
+    l: boolean;
+    v: boolean;
+    dist: number;
+    ete: number;
+    xtk: number;
+  } | null;
   bingo: number | null;
   alerts: { text: string; level: "warning" | "caution" | "advisory" }[];
 }
@@ -218,8 +226,12 @@ export class Pcd {
     const nl = !!d.route?.l && ap.hdg !== null,
       nv = !!d.route?.v && ap.alt !== null;
     const row1: (readonly [string, string])[] = [
-      nv ? [`VNAV ${Math.round(ap.alt! * FT)}`, C.magenta] : on(ap.alt !== null, ap.alt !== null ? `ALT ${Math.round(ap.alt * FT)}` : "ALT"),
-      nl ? ["LNAV", C.magenta] : on(ap.hdg !== null, ap.hdg !== null ? `HDG ${String(Math.round((((ap.hdg / D) % 360) + 360) % 360)).padStart(3, "0")}` : "HDG"),
+      nv
+        ? [`VNAV ${Math.round(ap.alt! * FT)}`, C.magenta]
+        : on(ap.alt !== null, ap.alt !== null ? `ALT ${Math.round(ap.alt * FT)}` : "ALT"),
+      nl
+        ? ["LNAV", C.magenta]
+        : on(ap.hdg !== null, ap.hdg !== null ? `HDG ${String(Math.round((((ap.hdg / D) % 360) + 360) % 360)).padStart(3, "0")}` : "HDG"),
       on(ap.spd !== null, ap.spd !== null ? `A/T ${Math.round(ap.spd * KT)}` : "A/T"),
       [d.stovl?.on ? (d.stovl.hover ? "HOVER" : "STOVL") : "CTOL", d.stovl?.on ? C.cyan : C.white],
     ];
@@ -375,10 +387,14 @@ export class Pcd {
       });
       const w = rt.wps[rt.active];
       if (w) {
-        const brg = (Math.atan2(
-          Math.sin((w.lon - d.lon) * D) * Math.cos(w.lat * D),
-          Math.cos(d.lat * D) * Math.sin(w.lat * D) - Math.sin(d.lat * D) * Math.cos(w.lat * D) * Math.cos((w.lon - d.lon) * D),
-        ) / D + 360) % 360;
+        const brg =
+          (Math.atan2(
+            Math.sin((w.lon - d.lon) * D) * Math.cos(w.lat * D),
+            Math.cos(d.lat * D) * Math.sin(w.lat * D) - Math.sin(d.lat * D) * Math.cos(w.lat * D) * Math.cos((w.lon - d.lon) * D),
+          ) /
+            D +
+            360) %
+          360;
         const ete = Number.isFinite(rt.ete) ? `${Math.floor(rt.ete / 60)}:${String(Math.floor(rt.ete % 60)).padStart(2, "0")}` : "--:--";
         this.text(
           `${rt.l ? "LNAV" : "RTE"}${rt.v ? "/VNAV" : ""} ▸ ${w.name}  ${String(Math.round(brg)).padStart(3, "0")}°  ${(rt.dist / NM).toFixed(1)} NM  ${ete}`,
@@ -387,7 +403,8 @@ export class Pcd {
           C.magenta,
           24,
         );
-        if (rt.l) this.text(`XTK ${(Math.abs(rt.xtk) / NM).toFixed(1)}${rt.xtk > 0 ? "R" : "L"}`, r.x + r.w - 16, r.y + 88, C.magenta, 22, "right");
+        if (rt.l)
+          this.text(`XTK ${(Math.abs(rt.xtk) / NM).toFixed(1)}${rt.xtk > 0 ? "R" : "L"}`, r.x + r.w - 16, r.y + 88, C.magenta, 22, "right");
       }
     }
     // the ground track's line, the ownship

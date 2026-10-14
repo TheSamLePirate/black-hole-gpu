@@ -266,10 +266,7 @@ export const KEYMAP: KeySection[] = [
       {
         keys: "Space · Enter · Tab · = · −",
         text: "In a fight (the F-35's): the gun (held — the pause on Esc then) · the weapon chosen released · the radar's lock on the next target · the next weapon (AIM-9X, AIM-120, JDAM) · a flare and chaff",
-        bind: [
-          fly("Equal", "combat", { arg: "weapon" }),
-          fly(["Minus", "IntlBackslash"], "combat", { arg: "cm" }),
-        ],
+        bind: [fly("Equal", "combat", { arg: "weapon" }), fly(["Minus", "IntlBackslash"], "combat", { arg: "cm" })],
       },
       {
         keys: "I K · J L · H N",
@@ -367,7 +364,11 @@ export const KEYMAP: KeySection[] = [
         text: "Releases the controls: stops the mission, the hold and the autopilot",
         bind: [fly("Backspace", "stopFlight")],
       },
-      { keys: "Enter", text: "Acknowledges the master caution: the lamp out, the warning silent (in a fight: the weapon released)", bind: [fly("Enter", "ack")] },
+      {
+        keys: "Enter",
+        text: "Acknowledges the master caution: the lamp out, the warning silent (in a fight: the weapon released)",
+        bind: [fly("Enter", "ack")],
+      },
       { keys: "⇧K", text: "Disembark / board a landed craft (on foot: approach its access)", bind: [fly("KeyK", "leaveShip", on)] },
       { keys: "Drag · double-click", text: "Look around from the attach point · look ahead" },
       {

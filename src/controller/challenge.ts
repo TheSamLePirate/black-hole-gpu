@@ -210,7 +210,8 @@ function challengeStep(this: CameraController, dt: number) {
       lat: g.lat,
       lon: g.lon,
     });
-    if (f) C.say = tf("{0}: {1}/10", tr(f.figure === "roll" ? { fr: "Tonneau", en: "Roll" } : { fr: "Boucle", en: "Loop" }), f.marks.toFixed(1));
+    if (f)
+      C.say = tf("{0}: {1}/10", tr(f.figure === "roll" ? { fr: "Tonneau", en: "Roll" } : { fr: "Boucle", en: "Loop" }), f.marks.toFixed(1));
     if (C.aero.done) finish(this, C.aero.total(), Object.fromEntries(C.aero.marks.map((m, i) => [`${C.aero!.figures[i]}${i + 1}`, m])));
     if (C.t > 300) fail(this, t("out of time"));
   }

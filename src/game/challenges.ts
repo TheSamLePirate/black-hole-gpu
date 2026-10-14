@@ -47,37 +47,37 @@ export interface ChallengeDef {
 const MACH_LOOP: Gate[] = [
   { lat: 52.7335, lon: -3.8395, agl: 120, hdg: 205, w: 260, h: 160 },
   { lat: 52.7005, lon: -3.8605, agl: 110, hdg: 200, w: 240, h: 150 },
-  { lat: 52.6725, lon: -3.8640, agl: 110, hdg: 150, w: 260, h: 150 },
+  { lat: 52.6725, lon: -3.864, agl: 110, hdg: 150, w: 260, h: 150 },
   { lat: 52.6515, lon: -3.8425, agl: 110, hdg: 175, w: 260, h: 150 },
-  { lat: 52.6070, lon: -3.8460, agl: 120, hdg: 175, w: 300, h: 170 },
-  { lat: 52.6205, lon: -3.7600, agl: 120, hdg: 70, w: 300, h: 170 },
-  { lat: 52.6470, lon: -3.7080, agl: 120, hdg: 40, w: 300, h: 170 },
-  { lat: 52.7030, lon: -3.6820, agl: 110, hdg: 0, w: 280, h: 160 },
-  { lat: 52.7240, lon: -3.6930, agl: 110, hdg: 330, w: 260, h: 160 },
-  { lat: 52.7360, lon: -3.7450, agl: 120, hdg: 285, w: 260, h: 160 },
-  { lat: 52.7360, lon: -3.8000, agl: 120, hdg: 265, w: 280, h: 160 },
+  { lat: 52.607, lon: -3.846, agl: 120, hdg: 175, w: 300, h: 170 },
+  { lat: 52.6205, lon: -3.76, agl: 120, hdg: 70, w: 300, h: 170 },
+  { lat: 52.647, lon: -3.708, agl: 120, hdg: 40, w: 300, h: 170 },
+  { lat: 52.703, lon: -3.682, agl: 110, hdg: 0, w: 280, h: 160 },
+  { lat: 52.724, lon: -3.693, agl: 110, hdg: 330, w: 260, h: 160 },
+  { lat: 52.736, lon: -3.745, agl: 120, hdg: 285, w: 260, h: 160 },
+  { lat: 52.736, lon: -3.8, agl: 120, hdg: 265, w: 280, h: 160 },
 ];
 
 /** Rainbow Canyon (Death Valley, the "Jedi Transition"): from the Panamint Springs side's mouth, up the canyon past
  *  Father Crowley Point, east. */
 const RAINBOW: Gate[] = [
-  { lat: 36.3395, lon: -117.5880, agl: 90, hdg: 75, w: 220, h: 120 },
-  { lat: 36.3440, lon: -117.5700, agl: 80, hdg: 60, w: 200, h: 110 },
-  { lat: 36.3530, lon: -117.5540, agl: 80, hdg: 55, w: 200, h: 110 },
-  { lat: 36.3600, lon: -117.5380, agl: 80, hdg: 80, w: 200, h: 110 },
-  { lat: 36.3620, lon: -117.5170, agl: 90, hdg: 95, w: 220, h: 120 },
+  { lat: 36.3395, lon: -117.588, agl: 90, hdg: 75, w: 220, h: 120 },
+  { lat: 36.344, lon: -117.57, agl: 80, hdg: 60, w: 200, h: 110 },
+  { lat: 36.353, lon: -117.554, agl: 80, hdg: 55, w: 200, h: 110 },
+  { lat: 36.36, lon: -117.538, agl: 80, hdg: 80, w: 200, h: 110 },
+  { lat: 36.362, lon: -117.517, agl: 90, hdg: 95, w: 220, h: 120 },
 ];
 
 /** Over Rogers Dry Lake at Edwards: a slalom low and fast, the lake's flat floor under it. */
 const ROGERS: Gate[] = [
-  { lat: 34.930, lon: -117.830, agl: 40, hdg: 20, w: 120, h: 60 },
+  { lat: 34.93, lon: -117.83, agl: 40, hdg: 20, w: 120, h: 60 },
   { lat: 34.958, lon: -117.818, agl: 40, hdg: 20, w: 120, h: 60 },
   { lat: 34.986, lon: -117.808, agl: 30, hdg: 10, w: 100, h: 50 },
   { lat: 35.012, lon: -117.812, agl: 30, hdg: 350, w: 100, h: 50 },
-  { lat: 35.032, lon: -117.830, agl: 40, hdg: 300, w: 120, h: 60 },
-  { lat: 35.030, lon: -117.862, agl: 40, hdg: 230, w: 120, h: 60 },
+  { lat: 35.032, lon: -117.83, agl: 40, hdg: 300, w: 120, h: 60 },
+  { lat: 35.03, lon: -117.862, agl: 40, hdg: 230, w: 120, h: 60 },
   { lat: 35.005, lon: -117.875, agl: 30, hdg: 200, w: 100, h: 50 },
-  { lat: 34.975, lon: -117.880, agl: 25, hdg: 190, w: 90, h: 45 },
+  { lat: 34.975, lon: -117.88, agl: 25, hdg: 190, w: 90, h: 45 },
 ];
 
 export const CHALLENGES: ChallengeDef[] = [
@@ -89,7 +89,7 @@ export const CHALLENGES: ChallengeDef[] = [
       en: "The Welsh valleys round Cadair Idris, below 250 m: eleven gates, anticlockwise.",
     },
     kind: "gates",
-    start: { lat: 52.7520, lon: -3.8160, agl: 150, hdg: 215, speed: 220 },
+    start: { lat: 52.752, lon: -3.816, agl: 150, hdg: 215, speed: 220 },
     gates: MACH_LOOP,
     ceiling: 250,
     par: 230,
@@ -99,10 +99,10 @@ export const CHALLENGES: ChallengeDef[] = [
     title: { fr: "Rainbow Canyon", en: "Rainbow Canyon" },
     brief: {
       fr: "La « Jedi Transition » de la vallée de la Mort : cinq portes au fond du canyon, sous 200 m.",
-      en: "Death Valley's \"Jedi Transition\": five gates down in the canyon, below 200 m.",
+      en: 'Death Valley\'s "Jedi Transition": five gates down in the canyon, below 200 m.',
     },
     kind: "gates",
-    start: { lat: 36.3330, lon: -117.6160, agl: 120, hdg: 75, speed: 200 },
+    start: { lat: 36.333, lon: -117.616, agl: 120, hdg: 75, speed: 200 },
     gates: RAINBOW,
     ceiling: 200,
     par: 52,
@@ -115,7 +115,7 @@ export const CHALLENGES: ChallengeDef[] = [
       en: "Against the clock just over Edwards' dry lake: eight gates, ever lower.",
     },
     kind: "gates",
-    start: { lat: 34.900, lon: -117.845, agl: 80, hdg: 20, speed: 230 },
+    start: { lat: 34.9, lon: -117.845, agl: 80, hdg: 20, speed: 230 },
     gates: ROGERS,
     ceiling: 150,
     par: 72,
@@ -139,7 +139,7 @@ export const CHALLENGES: ChallengeDef[] = [
       en: "STOVL mode (⇧B), a hover then down on the pad beside the runway: precision, softness, no drift.",
     },
     kind: "vertical",
-    start: { lat: 34.880, lon: -117.905, agl: 300, hdg: 40, speed: 70 },
+    start: { lat: 34.88, lon: -117.905, agl: 300, hdg: 40, speed: 70 },
     pad: { lat: 34.9035, lon: -117.8805 },
     par: 85,
   },
@@ -151,7 +151,7 @@ export const CHALLENGES: ChallengeDef[] = [
       en: "A roll, a loop, a roll: the heading and height held through the rolls, the loop round and in its plane.",
     },
     kind: "aero",
-    start: { lat: 34.95, lon: -117.70, agl: 3000, hdg: 90, speed: 240 },
+    start: { lat: 34.95, lon: -117.7, agl: 3000, hdg: 90, speed: 240 },
     figures: ["roll", "loop", "roll"],
     par: 85,
   },
@@ -176,7 +176,11 @@ export interface GateAbs extends Gate {
  * else where — across [m, > 0 right of its centre flying through], up [m from its centre] — and whether
  * inside its frame. Crossed forwards only (its heading's way).
  */
-export function gateCrossing(g: GateAbs, a: LL & { alt: number }, b: LL & { alt: number }): { across: number; up: number; inside: boolean } | null {
+export function gateCrossing(
+  g: GateAbs,
+  a: LL & { alt: number },
+  b: LL & { alt: number },
+): { across: number; up: number; inside: boolean } | null {
   const [ea, na] = enu(g, a),
     [eb, nb] = enu(g, b);
   const h = g.hdg * D;

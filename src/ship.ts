@@ -1259,7 +1259,8 @@ export class ShipRenderer {
       ? [{ id: this.vessel, R, t, shadow: true, far: !!v.place }]
       : [];
     for (const o of v.others ?? [])
-      if (list.length < MAX_INST && this.meshes[o.id]) list.push({ id: o.id, R: o.S, t: o.t, shadow: o.shadow, far: o.far ?? true, jet: o.jet });
+      if (list.length < MAX_INST && this.meshes[o.id])
+        list.push({ id: o.id, R: o.S, t: o.t, shadow: o.shadow, far: o.far ?? true, jet: o.jet });
     this.draws = [];
     const corners: V3[] = [];
     // (the shadow map's sphere: about the flown craft and those near it)

@@ -73,7 +73,17 @@ export interface SymInfo {
     stores: { aim120: number; aim9x: number; jdam: number; gun: number; flares: number };
     damage: number;
     firing: boolean;
-    targets: { d: V3; dist: number; name: string; kind: string; alive: boolean; locked: boolean; seen: boolean; ground: boolean; closing: number }[];
+    targets: {
+      d: V3;
+      dist: number;
+      name: string;
+      kind: string;
+      alive: boolean;
+      locked: boolean;
+      seen: boolean;
+      ground: boolean;
+      closing: number;
+    }[];
     missiles: { d: V3; dist: number; red: boolean; motor: boolean }[];
     rounds: V3[];
     booms: { d: V3; dist: number; age: number; size: number }[];
@@ -1685,7 +1695,15 @@ function drawChallenge(
         g.k === 0 ? 3 : 2,
       );
       const top: [number, number] = [(P[2]![0] + P[3]![0]) / 2, (P[2]![1] + P[3]![1]) / 2];
-      text(g.k === 0 ? `${g.n} · ${(g.dist / 1000).toFixed(1)} km` : String(g.n), top[0], top[1] - 12 * dpr, col, g.k === 0 ? 14 : 11, "center", true);
+      text(
+        g.k === 0 ? `${g.n} · ${(g.dist / 1000).toFixed(1)} km` : String(g.n),
+        top[0],
+        top[1] - 12 * dpr,
+        col,
+        g.k === 0 ? 14 : 11,
+        "center",
+        true,
+      );
     } else if (g.k === 0) {
       // (out of view: an arrow at the edge, towards it)
       const v = g.c.filter((d): d is V3 => !!d).reduce((a, d) => [a[0] + d[0], a[1] + d[1], a[2] + d[2]] as V3, [0, 0, 0] as V3);
@@ -1715,7 +1733,14 @@ function drawChallenge(
   if (C.kind === "gates") parts.push(`${Math.min(C.next + 1, C.count)}/${C.count}`);
   if (C.missed) parts.push(`+${C.missed * 10} s`);
   if (C.over > 0.05) parts.push(`▲ ${C.over.toFixed(1)} s`);
-  if (C.figures) parts.push(C.figures.list.map((f, k) => (k < C.figures!.idx ? `${f.toUpperCase()} ${C.figures!.marks[k]}` : k === C.figures!.idx ? `[${f.toUpperCase()}]` : f)).join(" · "));
+  if (C.figures)
+    parts.push(
+      C.figures.list
+        .map((f, k) =>
+          k < C.figures!.idx ? `${f.toUpperCase()} ${C.figures!.marks[k]}` : k === C.figures!.idx ? `[${f.toUpperCase()}]` : f,
+        )
+        .join(" · "),
+    );
   text(parts.join("   "), W / 2, y, "rgba(255, 210, 63, 1)", 14, "center", true);
   if (C.result) {
     const medal = C.result.medal;
@@ -1752,7 +1777,10 @@ function drawCombat(
     const fade = Math.max(0, 1 - b.age / 8);
     const g = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], r);
     g.addColorStop(0, `rgba(255, ${Math.round(200 + 55 * heat)}, ${Math.round(150 * heat)}, ${0.95 * heat + 0.25 * fade})`);
-    g.addColorStop(0.45, `rgba(${Math.round(255 * heat + 70 * (1 - heat))}, ${Math.round(110 * heat + 66 * (1 - heat))}, ${Math.round(30 * heat + 60 * (1 - heat))}, ${0.8 * heat + 0.45 * fade})`);
+    g.addColorStop(
+      0.45,
+      `rgba(${Math.round(255 * heat + 70 * (1 - heat))}, ${Math.round(110 * heat + 66 * (1 - heat))}, ${Math.round(30 * heat + 60 * (1 - heat))}, ${0.8 * heat + 0.45 * fade})`,
+    );
     g.addColorStop(1, "rgba(60, 56, 52, 0)");
     ctx.fillStyle = g;
     ctx.beginPath();
@@ -1790,17 +1818,29 @@ function drawCombat(
     if (p && p[0] > 0 && p[0] < W && p[1] > 0 && p[1] < H) {
       const s = (q.locked ? 16 : 11) * dpr;
       if (q.ground) {
-        stroke(() => {
-          ctx.moveTo(p[0], p[1] - s);
-          ctx.lineTo(p[0] + s, p[1]);
-          ctx.lineTo(p[0], p[1] + s);
-          ctx.lineTo(p[0] - s, p[1]);
-          ctx.closePath();
-        }, col, q.locked ? 2.2 : 1.5);
+        stroke(
+          () => {
+            ctx.moveTo(p[0], p[1] - s);
+            ctx.lineTo(p[0] + s, p[1]);
+            ctx.lineTo(p[0], p[1] + s);
+            ctx.lineTo(p[0] - s, p[1]);
+            ctx.closePath();
+          },
+          col,
+          q.locked ? 2.2 : 1.5,
+        );
       } else stroke(() => ctx.rect(p[0] - s, p[1] - s, 2 * s, 2 * s), col, q.locked ? 2.2 : 1.5);
       if (q.locked) {
         stroke(() => ctx.arc(p[0], p[1], s * 1.6, 0, 2 * Math.PI), col, 1.5);
-        text(`${q.name}  ${(q.dist / 1000).toFixed(1)} km  ${q.closing >= 0 ? "+" : ""}${Math.round(q.closing)} m/s`, p[0], p[1] + s + 18 * dpr, col, 12, "center", true);
+        text(
+          `${q.name}  ${(q.dist / 1000).toFixed(1)} km  ${q.closing >= 0 ? "+" : ""}${Math.round(q.closing)} m/s`,
+          p[0],
+          p[1] + s + 18 * dpr,
+          col,
+          12,
+          "center",
+          true,
+        );
       } else if (q.seen) text((q.dist / 1000).toFixed(1), p[0], p[1] + s + 12 * dpr, col, 10, "center", true);
       if (!q.alive) text("SPLASH", p[0], p[1] - s - 8 * dpr, col, 11, "center", true);
     } else if (q.locked && q.alive) {
@@ -1835,12 +1875,16 @@ function drawCombat(
   // the bomb's fall point: a cross on the ground
   const fp = K.fall ? pr(K.fall) : null;
   if (fp) {
-    stroke(() => {
-      ctx.moveTo(fp[0] - 14 * dpr, fp[1]);
-      ctx.lineTo(fp[0] + 14 * dpr, fp[1]);
-      ctx.moveTo(fp[0], fp[1] - 14 * dpr);
-      ctx.lineTo(fp[0], fp[1] + 14 * dpr);
-    }, GRN, 1.6);
+    stroke(
+      () => {
+        ctx.moveTo(fp[0] - 14 * dpr, fp[1]);
+        ctx.lineTo(fp[0] + 14 * dpr, fp[1]);
+        ctx.moveTo(fp[0], fp[1] - 14 * dpr);
+        ctx.lineTo(fp[0], fp[1] + 14 * dpr);
+      },
+      GRN,
+      1.6,
+    );
     text("CCIP", fp[0] + 18 * dpr, fp[1] - 10 * dpr, GRN, 10, "left", true);
   }
   // the launch zone: a scale on the right — its least and its reach, the range now —, SHOOT in range
@@ -1851,14 +1895,18 @@ function drawCombat(
       y1 = H * 0.62;
     const top = Math.max(Z.rMax * 1.3, Z.range * 1.05, 1);
     const y = (r: number) => y1 - (y1 - y0) * Math.min(r / top, 1);
-    stroke(() => {
-      ctx.moveTo(x, y(0));
-      ctx.lineTo(x, y(top));
-      ctx.moveTo(x - 8 * dpr, y(Z.rMax));
-      ctx.lineTo(x + 8 * dpr, y(Z.rMax));
-      ctx.moveTo(x - 8 * dpr, y(Z.rMin));
-      ctx.lineTo(x + 8 * dpr, y(Z.rMin));
-    }, GRN, 1.4);
+    stroke(
+      () => {
+        ctx.moveTo(x, y(0));
+        ctx.lineTo(x, y(top));
+        ctx.moveTo(x - 8 * dpr, y(Z.rMax));
+        ctx.lineTo(x + 8 * dpr, y(Z.rMax));
+        ctx.moveTo(x - 8 * dpr, y(Z.rMin));
+        ctx.lineTo(x + 8 * dpr, y(Z.rMin));
+      },
+      GRN,
+      1.4,
+    );
     ctx.fillStyle = Z.inRange ? AMB : GRN;
     ctx.beginPath();
     ctx.moveTo(x - 4 * dpr, y(Z.range));
@@ -1903,7 +1951,15 @@ function drawCombat(
   );
   const mm = Math.floor(K.t / 60),
     ss = String(Math.floor(K.t % 60)).padStart(2, "0");
-  text(`${K.title.toUpperCase()}  ${mm}:${ss}  · ${K.targets.filter((q) => q.alive).length} ${K.targets.length > 1 ? "TGTS" : "TGT"}`, xb, yb - 20 * dpr, GRN, 12, "center", true);
+  text(
+    `${K.title.toUpperCase()}  ${mm}:${ss}  · ${K.targets.filter((q) => q.alive).length} ${K.targets.length > 1 ? "TGTS" : "TGT"}`,
+    xb,
+    yb - 20 * dpr,
+    GRN,
+    12,
+    "center",
+    true,
+  );
   if (K.damage > 0) text(`DAMAGE ${Math.round(K.damage)} %`, xb, yb + 20 * dpr, K.damage > 60 ? RED : AMB, 13, "center", true);
   if (K.result) text(K.result, W / 2, H * 0.32, K.status === "won" ? "#ffd23f" : RED, 22, "center", true);
 }

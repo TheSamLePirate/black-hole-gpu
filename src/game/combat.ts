@@ -51,13 +51,73 @@ export interface MissileDef {
 export const MISSILES: Record<MissileKind, MissileDef> = {
   // (AIM-120C AMRAAM: Mach 4, some 100 km head-on at height; its own radar in the last 15 km — here its
   // seeker a radar's from the launch, the jet's lock datalinked)
-  aim120: { name: "AIM-120C", accel: 230, burn: 8, drag: 2.2e-5, gMax: 35, nav: 4, fov: 40 * D, fuze: 12, life: 75, seeker: "radar", decoy: 0.18, damage: 120, rMax: 55_000, rMin: 1500 },
+  aim120: {
+    name: "AIM-120C",
+    accel: 230,
+    burn: 8,
+    drag: 2.2e-5,
+    gMax: 35,
+    nav: 4,
+    fov: 40 * D,
+    fuze: 12,
+    life: 75,
+    seeker: "radar",
+    decoy: 0.18,
+    damage: 120,
+    rMax: 55_000,
+    rMin: 1500,
+  },
   // (AIM-9X Sidewinder: an imaging infrared seeker, 90° off the nose with the helmet's cue, 50 g)
-  aim9x: { name: "AIM-9X", accel: 260, burn: 5, drag: 4e-5, gMax: 50, nav: 4, fov: 60 * D, fuze: 8, life: 30, seeker: "ir", decoy: 0.12, damage: 110, rMax: 14_000, rMin: 400 },
+  aim9x: {
+    name: "AIM-9X",
+    accel: 260,
+    burn: 5,
+    drag: 4e-5,
+    gMax: 50,
+    nav: 4,
+    fov: 60 * D,
+    fuze: 8,
+    life: 30,
+    seeker: "ir",
+    decoy: 0.12,
+    damage: 110,
+    rMax: 14_000,
+    rMin: 400,
+  },
   // (a surface-to-air missile: an SA-11 class's radar-guided one)
-  sam: { name: "SA-11", accel: 200, burn: 12, drag: 2e-5, gMax: 25, nav: 3.5, fov: 35 * D, fuze: 15, life: 70, seeker: "radar", decoy: 0.3, damage: 120, rMax: 32_000, rMin: 3000 },
+  sam: {
+    name: "SA-11",
+    accel: 200,
+    burn: 12,
+    drag: 2e-5,
+    gMax: 25,
+    nav: 3.5,
+    fov: 35 * D,
+    fuze: 15,
+    life: 70,
+    seeker: "radar",
+    decoy: 0.3,
+    damage: 120,
+    rMax: 32_000,
+    rMin: 3000,
+  },
   // (the aggressors' infrared missile: an R-73 class's)
-  r73: { name: "R-73", accel: 240, burn: 5, drag: 4.5e-5, gMax: 40, nav: 3.5, fov: 45 * D, fuze: 8, life: 25, seeker: "ir", decoy: 0.35, damage: 120, rMax: 10_000, rMin: 400 },
+  r73: {
+    name: "R-73",
+    accel: 240,
+    burn: 5,
+    drag: 4.5e-5,
+    gMax: 40,
+    nav: 3.5,
+    fov: 45 * D,
+    fuze: 8,
+    life: 25,
+    seeker: "ir",
+    decoy: 0.35,
+    damage: 120,
+    rMax: 10_000,
+    rMin: 400,
+  },
 };
 
 /** The gun: the GAU-22/A's 25 mm, 3 300 rounds a minute, 1 040 m/s; its rounds' spread [rad], its hit's
@@ -269,7 +329,7 @@ export class CombatWorld {
         if (!q.alive) return false;
         const r = sub(q.p, P.p);
         const d = len(r);
-        const range = 150_000 * Math.pow(q.rcs / 5, 0.25);
+        const range = 150_000 * (q.rcs / 5) ** 0.25;
         if (d > range) return false;
         if (dot(unit(r), P.fwd) < Math.cos(60 * D)) return false;
         return true;
@@ -562,7 +622,18 @@ export class CombatWorld {
         if (this.alive && q.site.missiles > 0 && this.t > q.site.nextShot && d < MISSILES.sam.rMax && d > MISSILES.sam.rMin && agl > 150) {
           q.site.missiles--;
           q.site.nextShot = this.t + 25;
-          const m: Missile = { id: this.nextId++, kind: "sam", owner: "red", from: q.id, p: add(q.p, [0, 0, 5]), v: mul(unit(add(unit(r), [0, 0, 0.6])), 60), t: 0, target: -1, alive: true, seen: new Set() };
+          const m: Missile = {
+            id: this.nextId++,
+            kind: "sam",
+            owner: "red",
+            from: q.id,
+            p: add(q.p, [0, 0, 5]),
+            v: mul(unit(add(unit(r), [0, 0, 0.6])), 60),
+            t: 0,
+            target: -1,
+            alive: true,
+            seen: new Set(),
+          };
           this.missiles.push(m);
           ev.push({ kind: "launch", who: "red", missile: "sam", id: m.id });
         }
@@ -592,13 +663,32 @@ export class CombatWorld {
         if (A.missiles > 0 && this.t > A.nextShot && d < MISSILES.r73.rMax * 0.8 && d > MISSILES.r73.rMin && off < 25 * D) {
           A.missiles--;
           A.nextShot = this.t + 18;
-          const m: Missile = { id: this.nextId++, kind: "r73", owner: "red", from: q.id, p: add(q.p, mul(q.up, -2)), v: [...q.v], t: 0, target: -1, alive: true, seen: new Set() };
+          const m: Missile = {
+            id: this.nextId++,
+            kind: "r73",
+            owner: "red",
+            from: q.id,
+            p: add(q.p, mul(q.up, -2)),
+            v: [...q.v],
+            t: 0,
+            target: -1,
+            alive: true,
+            seen: new Set(),
+          };
           this.missiles.push(m);
           ev.push({ kind: "launch", who: "red", missile: "r73", id: m.id });
         }
         // (its gun: within 900 m, the player within 3° of its line)
         if (d < 900 && off < 3 * D && Math.floor(this.t * 20) !== Math.floor((this.t - dt) * 20))
-          this.rounds.push({ p: add(q.p, mul(q.fwd, 8)), v: add(q.v, mul(unit(add(q.fwd, [(this.rand() - 0.5) * 0.01, (this.rand() - 0.5) * 0.01, (this.rand() - 0.5) * 0.01])), GUN.muzzle)), t: 0, owner: "red" });
+          this.rounds.push({
+            p: add(q.p, mul(q.fwd, 8)),
+            v: add(
+              q.v,
+              mul(unit(add(q.fwd, [(this.rand() - 0.5) * 0.01, (this.rand() - 0.5) * 0.01, (this.rand() - 0.5) * 0.01])), GUN.muzzle),
+            ),
+            t: 0,
+            owner: "red",
+          });
       } else {
         // (patrol: a circle of 5 km about its centre, its height held)
         const c = sub(A.centre, q.p);
@@ -657,7 +747,11 @@ export function gunLead(P: Player, q: { p: V3; v: V3 }): { dir: V3; tof: number 
 
 /** A missile's launch zone against a target: its range now [m], its reach (closing speed allowed for) and its
  *  least; in range when between them. */
-export function launchZone(kind: MissileKind, P: Player, q: { p: V3; v: V3 }): { range: number; rMax: number; rMin: number; inRange: boolean } {
+export function launchZone(
+  kind: MissileKind,
+  P: Player,
+  q: { p: V3; v: V3 },
+): { range: number; rMax: number; rMin: number; inRange: boolean } {
   const M = MISSILES[kind];
   const r = sub(q.p, P.p);
   const range = len(r);

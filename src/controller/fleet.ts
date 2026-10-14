@@ -156,9 +156,10 @@ function switchVessel(this: CameraController, id: VesselId): string | null {
   const to = fleet.pose(id, t);
   // (the F-35 is where it is flown: chosen, it is put on a runway — the nearest — by the page's hook)
   if (!to && id === "f35" && this.onJetStart) {
+    // (the craft left — its assembly with it — coasts where it is, as any craft left: it can be flown again)
     const old = fleet.active;
-    for (const v of fleet.assembly(old)) if (v !== "iss") delete fleet.free[v];
-    fleet.links = fleet.links.filter((l) => l.a !== old && l.b !== old);
+    const me = this.activePoseNow();
+    if (me && !fleet.assembly(old).includes("iss")) fleet.setFree(old, me, t, this.coastCom());
     fleet.active = id;
     s.vessel = id;
     setMountVessel(id);
@@ -197,6 +198,12 @@ function switchVessel(this: CameraController, id: VesselId): string | null {
   this.ourMission = null;
   this.outside.dist = VESSELS[id].viewDist;
   this.settleMount();
+  // (the craft left was on its wheels or landed — the F-35 on a runway —: the new one flies from its own pose,
+  // not held to that ground)
+  this.ourLanded = null;
+  this.rolling = null;
+  this.landed = false;
+  this.local = null;
   // (an assembly flown: the camera's velocity its centre of mass's; turning, it keeps turning — the
   // pilot's rates: per second of the pilot's clock, the other way round from the right-hand rule)
   this.placeOnPose(fleet.flownAssembly().length > 1 && to.Vc ? { ...to, V: to.Vc } : to);

@@ -63,7 +63,7 @@ export class RoutePanel {
     // (the view: the route, or the craft, or the first airfield)
     const g = this.host.camera.geoNow();
     const W = this.route.wps;
-    const at = W.length ? W[0]! : g ?? FIELDS[0]!;
+    const at = W.length ? W[0]! : (g ?? FIELDS[0]!);
     requestAnimationFrame(() => map.flyTo(at.lat, at.lon, 7, 1));
     this.refresh();
     this.timer = window.setInterval(() => {
@@ -230,9 +230,27 @@ export class RoutePanel {
     };
     const cruise = h("div", "rp-cruise");
     cruise.append(
-      num(t("Cruise level"), "m", () => R.cruiseAlt, (v) => (R.cruiseAlt = v), 100),
-      num(t("Cruise speed"), "m/s", () => R.cruiseSpd, (v) => (R.cruiseSpd = Math.max(v, 60)), 5),
-      num(t("Reserve"), "kg", () => R.reserveKg, (v) => (R.reserveKg = v), 50),
+      num(
+        t("Cruise level"),
+        "m",
+        () => R.cruiseAlt,
+        (v) => (R.cruiseAlt = v),
+        100,
+      ),
+      num(
+        t("Cruise speed"),
+        "m/s",
+        () => R.cruiseSpd,
+        (v) => (R.cruiseSpd = Math.max(v, 60)),
+        5,
+      ),
+      num(
+        t("Reserve"),
+        "kg",
+        () => R.reserveKg,
+        (v) => (R.reserveKg = v),
+        50,
+      ),
     );
     const tools = h("div", "rp-tools");
     const fieldSel = h("select", "rp-in rp-sel");
@@ -297,7 +315,14 @@ export class RoutePanel {
         this.summary();
       },
     });
-    foot.append(h("p", "rp-note", t("Click the map: a waypoint (on an airfield: the airfield), after the one selected. Click a waypoint: select it.")), this.navBtn);
+    foot.append(
+      h(
+        "p",
+        "rp-note",
+        t("Click the map: a waypoint (on an airfield: the airfield), after the one selected. Click a waypoint: select it."),
+      ),
+      this.navBtn,
+    );
     side.append(cruise, tools, this.list, this.sum, foot);
   }
 

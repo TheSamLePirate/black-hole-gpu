@@ -55,8 +55,13 @@ export class CamShake {
     // (the runway: its roughness's pace with the speed — 3 Hz at 10 m/s to 14 Hz at 80 —, its size too)
     const rv = Math.min(i.roll / 80, 1.2);
     const rollF = 3 + 11 * Math.min(rv, 1);
-    let pitch = 0.0028 * rv * band(t, rollF, 1.3) + 0.004 * bf * band(t, 7, 4.1) + 0.0022 * tr * band(t, 13, 2.2) + 0.0008 * ab * band(t, 24, 5.5);
-    let yaw = 0.0018 * rv * band(t, rollF * 0.8, 0.7) + 0.0025 * bf * band(t, 5.3, 1.9) + 0.0012 * tr * band(t, 11, 3.3) + 0.0005 * ab * band(t, 21, 6.1);
+    let pitch =
+      0.0028 * rv * band(t, rollF, 1.3) + 0.004 * bf * band(t, 7, 4.1) + 0.0022 * tr * band(t, 13, 2.2) + 0.0008 * ab * band(t, 24, 5.5);
+    const yaw =
+      0.0018 * rv * band(t, rollF * 0.8, 0.7) +
+      0.0025 * bf * band(t, 5.3, 1.9) +
+      0.0012 * tr * band(t, 11, 3.3) +
+      0.0005 * ab * band(t, 21, 6.1);
     let roll = 0.002 * rv * band(t, rollF * 0.6, 2.9) + 0.006 * bf * band(t, 4.1, 0.4) + 0.0015 * tr * band(t, 9, 7.7);
     // (the touchdown: the head pressed down, then a ringing)
     pitch -= 0.022 * this.j * (0.6 + 0.4 * band(t, 9, 8.8));

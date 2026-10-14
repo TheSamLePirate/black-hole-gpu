@@ -30,7 +30,18 @@ describe.skipIf(!E2E)("the F-35's flight plan", () => {
       await app.click(`[data-testid="${id}"]`);
     await app.shot(`${process.env.E2E_SHOTS ?? "/tmp"}/f35-flight-hub.png`);
     await app.click("[data-testid=fhb-go]");
-    const r = await app.js<{ v: string; wx: string; fuel: number; alt: number; lat: number; lon: number; hourLocal: number; route: string[]; auto: string; gear: boolean }>(`(() => {
+    const r = await app.js<{
+      v: string;
+      wx: string;
+      fuel: number;
+      alt: number;
+      lat: number;
+      lon: number;
+      hourLocal: number;
+      route: string[];
+      auto: string;
+      gear: boolean;
+    }>(`(() => {
       for (let i = 0; i < 5; i++) __bh.step(1 / 30);
       const c = __bh.camera; const g = c.geoNow(); const d = new Date(__bh.game.date().replace(" ", "T") + "Z");
       return { v: __bh.fleet.active, wx: __bh.settings.weather, fuel: __bh.fleet.fuel.f35, alt: g.alt, lat: g.lat, lon: g.lon,
@@ -80,7 +91,9 @@ describe.skipIf(!E2E)("the F-35's flight plan", () => {
   }, 60_000);
 
   test("⇧M: NAV flies it — each point passed, the arrival's altitude and speed, its end over the field", async () => {
-    await app.js(`(() => { const R = __bh.camera.nav.route; R.wps[3].alt = 2500; R.wps[3].spd = 160; __bh.camera.routeChanged(); return 1; })()`);
+    await app.js(
+      `(() => { const R = __bh.camera.nav.route; R.wps[3].alt = 2500; R.wps[3].spd = 160; __bh.camera.routeChanged(); return 1; })()`,
+    );
     await app.press("KeyM", "M", { shift: true });
     expect(await app.js<boolean>(`__bh.camera.nav.on.l && __bh.camera.nav.on.v`)).toBe(true);
     const r = await app.js<{ log: string[]; passed: number[]; end: number; alt: number; spd: number; ann: string }>(`(() => {

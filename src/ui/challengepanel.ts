@@ -35,7 +35,13 @@ export class ChallengePanel {
   open() {
     if (this.close) return;
     const root = h("div", "chp");
-    const m = modal({ title: t("Challenges and fights — F-35B"), body: [root], cls: "chp-frame", testid: "challenge-panel", onClose: () => (this.close = null) });
+    const m = modal({
+      title: t("Challenges and fights — F-35B"),
+      body: [root],
+      cls: "chp-frame",
+      testid: "challenge-panel",
+      onClose: () => (this.close = null),
+    });
     this.close = m.close;
     const B = bests();
     for (const d of CHALLENGES) {
@@ -61,12 +67,18 @@ export class ChallengePanel {
       const card = h("div", "chp-card chp-fight");
       const best = CB[d.id];
       const L = LOADOUTS[d.loadout];
-      const load = [L.aim120 && `${L.aim120} AIM-120`, L.aim9x && `${L.aim9x} AIM-9X`, L.jdam && `${L.jdam} GBU-32`, `${L.gun} × 25 mm`].filter(Boolean).join(" · ");
+      const load = [L.aim120 && `${L.aim120} AIM-120`, L.aim9x && `${L.aim9x} AIM-9X`, L.jdam && `${L.jdam} GBU-32`, `${L.gun} × 25 mm`]
+        .filter(Boolean)
+        .join(" · ");
       card.append(
         h("b", "chp-name", tr(d.title)),
         h("p", "chp-brief", tr(d.brief)),
         h("span", "chp-par", load),
-        h("span", "chp-best", best ? `${Math.floor(best.time / 60)}:${String(Math.floor(best.time % 60)).padStart(2, "0")}` : t("not flown")),
+        h(
+          "span",
+          "chp-best",
+          best ? `${Math.floor(best.time / 60)}:${String(Math.floor(best.time % 60)).padStart(2, "0")}` : t("not flown"),
+        ),
         button({ label: t("Fight"), kind: "primary", testid: `chp-fight-${d.id}`, onClick: () => this.fight(d) }),
       );
       root.append(card);

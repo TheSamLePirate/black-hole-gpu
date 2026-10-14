@@ -4177,14 +4177,16 @@ export class Renderer {
   private combatShips(s: Settings): ShipInstance[] {
     if (!this.combatOthers.length || !s.ship || !this.shipPose) return [];
     const eye = shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t;
-    return this.combatOthers.filter((o) => !o.hidden).map((o) => ({
-      id: o.id,
-      S: [0, 1, 2].map((k) => [o.axes[0][k]!, o.axes[1][k]!, o.axes[2][k]!]) as [Vec3, Vec3, Vec3],
-      t: [o.rel[0] + eye[0], o.rel[1] + eye[1], o.rel[2] + eye[2]] as Vec3,
-      shadow: false,
-      jet: o.jet,
-      far: false,
-    }));
+    return this.combatOthers
+      .filter((o) => !o.hidden)
+      .map((o) => ({
+        id: o.id,
+        S: [0, 1, 2].map((k) => [o.axes[0][k]!, o.axes[1][k]!, o.axes[2][k]!]) as [Vec3, Vec3, Vec3],
+        t: [o.rel[0] + eye[0], o.rel[1] + eye[1], o.rel[2] + eye[2]] as Vec3,
+        shadow: false,
+        jet: o.jet,
+        far: false,
+      }));
   }
 
   private fleetOthers(s: Settings): ShipInstance[] {

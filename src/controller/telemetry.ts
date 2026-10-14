@@ -122,7 +122,12 @@ export interface FlightInfo {
   };
   /** the engine and the tank */
   /** (an aircraft's turbofan: `fuel` its tank's share — fraction, empty; `jet` its fuel [kg], full [kg]) */
-  engine: { kind: Settings["engine"]; max: number; fuel: ReturnType<typeof tank> | null; jet?: { kg: number; full: number; bingo?: number } | null };
+  engine: {
+    kind: Settings["engine"];
+    max: number;
+    fuel: ReturnType<typeof tank> | null;
+    jet?: { kg: number; full: number; bingo?: number } | null;
+  };
   speedMode: CameraController["speedMode"];
   precision: boolean;
   // ---- the map: position, velocity, nose and view (flat map: the hole's frame, or our home frame)

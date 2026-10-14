@@ -1,5 +1,14 @@
 import { expect, test } from "bun:test";
-import { AeroJudge, CHALLENGES, courseMedal, gateCrossing, landingMarks, marksMedal, verticalMarks, type GateAbs } from "../src/game/challenges";
+import {
+  AeroJudge,
+  CHALLENGES,
+  courseMedal,
+  gateCrossing,
+  landingMarks,
+  marksMedal,
+  verticalMarks,
+  type GateAbs,
+} from "../src/game/challenges";
 
 const D = Math.PI / 180;
 const M = 1 / 111_195; // degrees of latitude per metre
@@ -71,7 +80,15 @@ test("aerobatics: a clean roll and a round loop recognised and marked high; a sl
     const g = Math.atan2(Math.sin(th), Math.abs(Math.cos(th)));
     const heading = Math.cos(th) >= 0 ? 90 * D : 270 * D;
     const east = R * Math.sin(th);
-    lp = J.step({ t: (t += 0.1), bank: Math.cos(th) >= 0 ? 0 : Math.PI, heading, gamma: th > 2 * Math.PI ? 0 : g, alt: 3000 + R * (1 - Math.cos(th)), lat: 35, lon: -117 + east / (111_195 * Math.cos(35 * D)) });
+    lp = J.step({
+      t: (t += 0.1),
+      bank: Math.cos(th) >= 0 ? 0 : Math.PI,
+      heading,
+      gamma: th > 2 * Math.PI ? 0 : g,
+      alt: 3000 + R * (1 - Math.cos(th)),
+      lat: 35,
+      lon: -117 + east / (111_195 * Math.cos(35 * D)),
+    });
   }
   expect(lp?.figure).toBe("loop");
   expect(lp!.marks).toBeGreaterThan(9);
@@ -83,6 +100,12 @@ test("aerobatics: a clean roll and a round loop recognised and marked high; a sl
   for (let k = 0; k < 5; k++) S.step({ ...base, t: (t += 0.1), bank: 0 });
   let q = null;
   for (let k = 1; k <= 25 && !q; k++)
-    q = S.step({ ...base, t: (t += 0.1), heading: (90 + k * 0.8) * D, alt: 3000 - k * 6, bank: Math.atan2(Math.sin(k * 18 * D), Math.cos(k * 18 * D)) });
+    q = S.step({
+      ...base,
+      t: (t += 0.1),
+      heading: (90 + k * 0.8) * D,
+      alt: 3000 - k * 6,
+      bank: Math.atan2(Math.sin(k * 18 * D), Math.cos(k * 18 * D)),
+    });
   expect(q!.marks).toBeLessThan(5);
 });

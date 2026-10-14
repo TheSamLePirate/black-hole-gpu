@@ -3,7 +3,10 @@ import { CombatWorld, fallPoint, gunLead, launchZone, LOADOUTS, type Player, typ
 
 const flat = () => 0;
 /** a seeded random (the tests' draws the same each run) */
-const seeded = (s = 1) => () => ((s = (s * 16807) % 2147483647) / 2147483647);
+const seeded =
+  (s = 1) =>
+  () =>
+    (s = (s * 16807) % 2147483647) / 2147483647;
 
 /** The player flying level east at a speed and height, its nose along. */
 const level = (p: V3, speed = 250): Player => ({ p, v: [speed, 0, 0], fwd: [1, 0, 0], up: [0, 0, 1] });

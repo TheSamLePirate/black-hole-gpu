@@ -4862,7 +4862,10 @@ async function main() {
           panel.toast(CB.say);
           CB.say = null;
         }
-        sound.combatFrame(CB.world.firing && CB.world.stores.gun > 0, CB.world.missiles.some((m) => m.alive && m.owner === "red" && m.target === -1));
+        sound.combatFrame(
+          CB.world.firing && CB.world.stores.gun > 0,
+          CB.world.missiles.some((m) => m.alive && m.owner === "red" && m.target === -1),
+        );
         for (const e of CB.events) {
           if (e.kind === "launch") sound.combatCue(e.who === "blue" ? "launch" : "enemyLaunch");
           else if (e.kind === "explode" && CB.last) {

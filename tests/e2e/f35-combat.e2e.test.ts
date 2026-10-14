@@ -22,14 +22,22 @@ describe.skipIf(!E2E)("the F-35's fights", () => {
     await app.js(`(() => { __bh.flight.challenges.open(); return 1; })()`);
     await app.waitFor(`!!document.querySelector("[data-testid=challenge-panel]")`, 5000);
     await app.click(`[data-testid="chp-fight-drones"]`);
-    await app.js(`(() => { const c = __bh.camera; for (let i = 0; i < 10; i++) __bh.step(1 / 30); c.jetToggle("ap"); c.jetToggle("athr"); __bh.freeze(false); return 1; })()`);
+    await app.js(
+      `(() => { const c = __bh.camera; for (let i = 0; i < 10; i++) __bh.step(1 / 30); c.jetToggle("ap"); c.jetToggle("athr"); __bh.freeze(false); return 1; })()`,
+    );
     await app.press("Tab");
     await app.press("Equal", "=");
-    const pre = await app.js<{ lock: number | null; weapon: string }>(`({ lock: __bh.camera.combat.world.lock, weapon: __bh.camera.combat.weapon })`);
+    const pre = await app.js<{ lock: number | null; weapon: string }>(
+      `({ lock: __bh.camera.combat.world.lock, weapon: __bh.camera.combat.weapon })`,
+    );
     expect(pre.lock).not.toBeNull();
     expect(pre.weapon).toBe("aim120");
     await app.press("Enter");
-    const r = await app.js<{ fired: number; log: string[]; kills: number }>(`(() => { __bh.freeze(true); const c = __bh.camera; const W = c.combat.world; const log = [];
+    const r = await app.js<{
+      fired: number;
+      log: string[];
+      kills: number;
+    }>(`(() => { __bh.freeze(true); const c = __bh.camera; const W = c.combat.world; const log = [];
       for (let k = 0; k < 60 * 30 && W.targets.every((q) => q.alive); k++) { __bh.step(1 / 30); if (c.combat.say) { log.push(c.combat.say); c.combat.say = null; } }
       return { fired: 4 - W.stores.aim120, log, kills: W.targets.filter((q) => !q.alive).length }; })()`);
     console.log(`  ${r.log.join(" · ")}`);
@@ -57,7 +65,9 @@ describe.skipIf(!E2E)("the F-35's fights", () => {
   test("the guns duel: the aggressor drawn as an instance before the player", async () => {
     await app.js(`(() => { __bh.camera.combatEnd(); __bh.flight.challenges.open(); return 1; })()`);
     await app.click(`[data-testid="chp-fight-guns"]`);
-    const n = await app.js<number>(`(() => { __bh.freeze(true); for (let i = 0; i < 5; i++) __bh.step(1 / 30); return __bh.renderer.combatOthers.length; })()`);
+    const n = await app.js<number>(
+      `(() => { __bh.freeze(true); for (let i = 0; i < 5; i++) __bh.step(1 / 30); return __bh.renderer.combatOthers.length; })()`,
+    );
     expect(n).toBe(1);
   }, 60_000);
 });
