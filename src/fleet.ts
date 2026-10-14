@@ -13,7 +13,7 @@ import type { Vec3 } from "./physics";
 import { keplerProp } from "./system/our-plan";
 import { ourState, referenceBody } from "./system/our-side";
 import { coastHome, stableOrbitOf } from "./system/our-coast";
-import { gearHeight, railsDecay, solidBody } from "./system/our-surface";
+import { fromBodyFixed, gearHeight, groundVelocity, railsDecay, solidBody, toBodyFixed } from "./system/our-surface";
 import { M_METRES, M_SECONDS, solarBody } from "./system/solar";
 import { issAxes, issOrbit, issTrack } from "./system/iss";
 import { dockedFrame, VESSELS, VESSEL_IDS, type SpacecraftId, type VesselId } from "./vessels";
@@ -41,7 +41,13 @@ export interface FreeState extends Pose {
   t: number;
   ref: string;
   com?: Vec3;
+  /** left on a ground (the F-35 on a runway, a craft landed): its place and its axes in the body's turning
+   *  frame — carried by the body, not coasting through it */
+  ground?: { body: string; q: Vec3; ax: [Vec3, Vec3, Vec3] };
 }
+
+/** A step off a grounded craft's place along an axis [M] — its axes kept in the body's frame (some 150 m). */
+const GROUND_EPS = 1e-9;
 
 /** v turned by the rotation vector r (Rodrigues) */
 function rotate(v: Vec3, r: Vec3): Vec3 {
@@ -145,6 +151,17 @@ export class Fleet {
 
   /** A coasting craft's pose at t: Kepler around its body, its attitude held (`exact`: as the flight flies it beyond a few seconds). */
   private coast(f: FreeState, t: number, exact = true): Pose {
+    // (left on a ground: where the body has carried it)
+    if (f.ground) {
+      const G = f.ground;
+      const X = fromBodyFixed(G.body, G.q, t);
+      const ax = G.ax.map((a) => {
+        const d = sub(fromBodyFixed(G.body, lin(G.q, 1, a, GROUND_EPS), t), X);
+        const l = Math.hypot(...d) || 1;
+        return lin(d, 1 / l, d, 0);
+      }) as [Vec3, Vec3, Vec3];
+      return { X, V: groundVelocity(G.body, X, t), ax };
+    }
     const mu = solarBody(f.ref)?.mass ?? solarBody("earth")!.mass;
     const B0 = ourState(f.ref, f.t),
       B1 = ourState(f.ref, t);
@@ -408,7 +425,7 @@ export class Fleet {
   stepFree(t: number) {
     for (const id of VESSEL_IDS) {
       const f = this.free[id];
-      if (!f || !(t > f.t)) continue;
+      if (!f || !(t > f.t) || f.ground) continue;
       const com = f.com ?? [0, 0, 0];
       const C0 = lin(f.X, 1, onAxes(f.ax, com), 1 / M_METRES);
       const ref = referenceBody(C0, f.t);
@@ -425,11 +442,21 @@ export class Fleet {
   /** Sets a craft coasting from a pose (the body it coasts around: the Earth near it, else the Sun). */
   /** Sets a craft coasting: its pose, its assembly's centre-of-mass velocity `Vc` (default: its own
    *  velocity), the assembly's turn and that centre in its frame [m]. */
-  setFree(id: VesselId, p: Pose, t: number, com: Vec3 = [0, 0, 0]) {
+  setFree(id: VesselId, p: Pose, t: number, com: Vec3 = [0, 0, 0], ground?: string) {
     const E = ourState("earth", t);
     const near = Math.hypot(...sub(p.X, E.pos)) * M_METRES < 1.5e9;
     const w = p.w && Math.hypot(...p.w) > 0 ? p.w : undefined;
-    this.free[id] = { X: p.X, V: p.Vc ?? p.V, ax: p.ax, w, com, t, ref: near ? "earth" : "sun" };
+    // (on a ground: held to it in its turning frame — its axes as points a little off its place)
+    let g: FreeState["ground"];
+    if (ground) {
+      const q = toBodyFixed(ground, p.X, t);
+      const ax = p.ax.map((a) => {
+        const d = sub(toBodyFixed(ground, lin(p.X, 1, a, GROUND_EPS), t), q);
+        return lin(d, 1 / GROUND_EPS, d, 0);
+      }) as [Vec3, Vec3, Vec3];
+      g = { body: ground, q, ax };
+    }
+    this.free[id] = { X: p.X, V: p.Vc ?? p.V, ax: p.ax, w: g ? undefined : w, com, t, ref: near ? "earth" : "sun", ground: g };
   }
 
   /** A link's other craft frame relative to one: b's centre and axes in a's frame, from their poses. */

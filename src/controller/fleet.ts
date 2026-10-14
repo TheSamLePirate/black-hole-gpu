@@ -26,6 +26,7 @@ declare module "../controls" {
     moveCabin: typeof moveCabin;
     placeOnPose: typeof placeOnPose;
     switchVessel: typeof switchVessel;
+    groundBody: typeof groundBody;
     placeNearPort: typeof placeNearPort;
     cycleVessel: typeof cycleVessel;
   }
@@ -145,6 +146,11 @@ function placeOnPose(this: CameraController, p: Pose) {
  * it, or is held by the station); the camera onto the new one, at the same kind of attach point. Why
  * not, or null.
  */
+/** The ground the flown craft stands on (landed or rolling), or undefined: in flight. */
+function groundBody(this: CameraController): string | undefined {
+  return this.ourLanded?.body ?? this.rolling?.body ?? undefined;
+}
+
 function switchVessel(this: CameraController, id: VesselId): string | null {
   const s = this.s;
   if (id === fleet.active) return null;
@@ -159,7 +165,7 @@ function switchVessel(this: CameraController, id: VesselId): string | null {
     // (the craft left — its assembly with it — coasts where it is, as any craft left: it can be flown again)
     const old = fleet.active;
     const me = this.activePoseNow();
-    if (me && !fleet.assembly(old).includes("iss")) fleet.setFree(old, me, t, this.coastCom());
+    if (me && !fleet.assembly(old).includes("iss")) fleet.setFree(old, me, t, this.coastCom(), this.groundBody());
     fleet.active = id;
     s.vessel = id;
     setMountVessel(id);
@@ -181,7 +187,7 @@ function switchVessel(this: CameraController, id: VesselId): string | null {
   const before = this.viewWorld();
   const group = fleet.assembly(old);
   // (the craft left: its assembly coasts as it — unless the new one or the station holds it)
-  if (me && !group.includes(id) && !group.includes("iss")) fleet.setFree(old, me, t, this.coastCom());
+  if (me && !group.includes(id) && !group.includes("iss")) fleet.setFree(old, me, t, this.coastCom(), this.groundBody());
   for (const v of fleet.assembly(id)) if (v !== "iss") delete fleet.free[v];
   fleet.active = id;
   s.vessel = id;
@@ -272,6 +278,7 @@ export function installFleet(C: { prototype: CameraController }) {
     moveCabin,
     placeOnPose,
     switchVessel,
+    groundBody,
     placeNearPort,
     cycleVessel,
   });
