@@ -52,6 +52,22 @@ describe.skipIf(!E2E)("set down on the ground", () => {
     expect(Math.abs(r.off)).toBeLessThan(1);
   }, 60_000);
 
+  test("another craft parked there: the next one set clear of it, no contact", async () => {
+    const r = await app.js<{ dRun: number; dHill: number }>(`(() => {
+      __bh.freeze(true); const F = __bh.fleet, mR = 1476.625 * __bh.settings.massSolar;
+      const dist = () => { const t = __bh.sim.time, a = F.pose("f35", t), b = F.pose("ranger", t); return Math.hypot(...a.X.map((x, i) => x - b.X[i])) * mR; };
+      __bh.settings.vessel = "f35"; for (let i = 0; i < 5; i++) __bh.step(1 / 30); __bh.game.lineUp("Edwards"); for (let i = 0; i < 5; i++) __bh.step(1 / 30);
+      __bh.settings.vessel = "ranger"; for (let i = 0; i < 5; i++) __bh.step(1 / 30); __bh.game.lineUp("Edwards"); for (let i = 0; i < 30; i++) __bh.step(1 / 30);
+      const dRun = dist();
+      __bh.settings.vessel = "f35"; for (let i = 0; i < 5; i++) __bh.step(1 / 30); __bh.game.land("earth", 35.3335, 138.70); for (let i = 0; i < 5; i++) __bh.step(1 / 30);
+      __bh.settings.vessel = "ranger"; for (let i = 0; i < 5; i++) __bh.step(1 / 30); __bh.game.land("earth", 35.3335, 138.70); for (let i = 0; i < 30; i++) __bh.step(1 / 30);
+      return { dRun, dHill: dist() };
+    })()`);
+    console.log(`  parked apart: ${r.dRun.toFixed(0)} m on the runway, ${r.dHill.toFixed(0)} m on the hill`);
+    expect(r.dRun).toBeGreaterThan(60);
+    expect(r.dHill).toBeGreaterThan(45);
+  }, 60_000);
+
   for (const v of ["f35", "ranger"])
     test(`the ${v}: on a runway and on Mount Fuji's flank, every leg on the ground`, async () => {
       const flat = await legs(v, 34.9046, -117.8844);

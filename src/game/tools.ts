@@ -11,6 +11,7 @@
 //   await __bh.game.audit({ planner: true })
 
 import { fleet } from "../fleet";
+import { VESSEL_IDS } from "../vessels";
 import { GEARS } from "../gear";
 import { setMountVessel } from "../mounts";
 import type { Settings, Target } from "../settings";
@@ -295,6 +296,21 @@ export class GameTools {
       const geo = cartToGeodetic(WGS84_A, WGS84_F, q);
       return [(geo.lat * 180) / Math.PI, (geo.lon * 180) / Math.PI];
     };
+    // (another craft parked there — the F-35 left on the runway —: further down it, clear of it — 90 m on
+    // until none is within 60 m)
+    const alongM0 = alongM;
+    for (let k = 0; k < 20; k++) {
+      const [la, lo] = pt(alongM);
+      // (on the ground there — not on the ellipsoid: Edwards stands 700 m over it)
+      const P = ourGroundPose("earth", la, lo, t).X;
+      const near = VESSEL_IDS.some((v) => {
+        if (v === fleet.active) return false;
+        const q = fleet.pose(v, t);
+        return !!q && Math.hypot(q.X[0] - P[0], q.X[1] - P[1], q.X[2] - P[2]) * M_METRES < 60;
+      });
+      if (!near || alongM > RUNWAY_LENGTH - 300) break;
+      alongM += 90;
+    }
     const [lat, lon] = pt(alongM);
     const g = ourGroundPose("earth", lat, lon, t);
     const ahead = fromBodyFixed("earth", bodyFixedOf("earth", ...pt(alongM + 200), 0), t);
@@ -305,7 +321,7 @@ export class GameTools {
     return this.placeAt({
       ...g,
       fwd: [f[0] / l, f[1] / l, f[2] / l],
-      note: `${site.name}: lined up, runway ${Math.round((site.rwy ?? 0) / 10)}`,
+      note: `${site.name}: lined up, runway ${Math.round((site.rwy ?? 0) / 10)}${alongM > alongM0 + 1 ? ` — ${Math.round(alongM)} m down it, clear of a parked craft` : ""}`,
     });
   }
 
@@ -496,7 +512,20 @@ export class GameTools {
     // (on its gear, as the ground under each leg has it — a slope tilts it —, its nose where it pointed)
     const hd = (this.ctx.camera.attitudeNow() as { heading?: number }).heading;
     const heading = Number.isFinite(hd) ? (hd! * 180) / Math.PI : 90;
-    return this.placeAt(ourGroundPoseOn(body, lat, lon, this.ctx.time(), GEARS[fleet.active]?.legs ?? null, heading, GEAR));
+    // (another craft parked there: a little aside — 70 m east until none is within 50 m)
+    const t = this.ctx.time();
+    let lo = lon;
+    for (let k = 0; k < 10; k++) {
+      const P = ourGroundPose(body, lat, lo, t).X;
+      const near = VESSEL_IDS.some((v) => {
+        if (v === fleet.active) return false;
+        const q = fleet.pose(v, t);
+        return !!q && Math.hypot(q.X[0] - P[0], q.X[1] - P[1], q.X[2] - P[2]) * M_METRES < 50;
+      });
+      if (!near) break;
+      lo += 70 / ((solarBody(body)?.radius ?? 1) * M_METRES * Math.cos((lat * Math.PI) / 180)) / (Math.PI / 180);
+    }
+    return this.placeAt(ourGroundPoseOn(body, lat, lo, t, GEARS[fleet.active]?.legs ?? null, heading, GEAR));
   }
 
   /**
