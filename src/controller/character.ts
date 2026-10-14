@@ -178,7 +178,9 @@ export class PlanetCharacter {
     this.q = q;
     this.groundPatch.clear();
     this.shipCache = { at: -1, frame: null, hull: null };
-    this.lastTime = this.c.nowTime();
+    // (set between frames — a placing, a load, TARS —: the scene's clock, the instant the vessel was put at; the
+    // controller's own was the last frame's, months off after a date jumped)
+    this.lastTime = this.c.viewTime();
     const foot = restoring ? q : this.ground(q);
     if (ours && this.surface(body, foot) === null) {
       Object.assign(this, prev);
@@ -241,7 +243,7 @@ export class PlanetCharacter {
     return null;
   }
   start(body: string, lat = 0, lon = 0) {
-    this.lastTime = this.c.nowTime();
+    this.lastTime = this.c.viewTime();
     if (solarBody(body) && !solidBody(body)) return this.fail(t("You cannot walk on this surface."));
     if (solidBody(body)) return this.prepare(body, true, scale(groundPointOf(body, lat, lon, 0), M_METRES), [0, 0, 1]);
     try {
@@ -269,7 +271,7 @@ export class PlanetCharacter {
     if (!body) return this.fail(t("Land the vessel before going out."));
     const h = c.airInfo?.();
     if (h && h.speed > 0.5) return this.fail(t("The vessel must be almost still."));
-    this.lastTime = c.nowTime();
+    this.lastTime = c.viewTime();
     let f: Vec3;
     if (w.ours) {
       const A = bodyAxes(solarBody(body)!, this.lastTime);
@@ -292,7 +294,7 @@ export class PlanetCharacter {
   private accessPoints(): Vec3[] {
     const w = this.c.rigWorld();
     if (!w || w.ours !== this.ours) return [];
-    const t = this.c.nowTime(),
+    const t = this.c.viewTime(),
       C = shipToCamera(this.c.shipPose(), this.c.s.shipLookYaw, this.c.s.shipLookPitch).S;
     const axes: [Vec3, Vec3, Vec3] = [w.right, w.up, w.fwd];
     const rightWorld = add(add(scale(axes[0], C[0][0]), axes[1], C[1][0]), axes[2], C[2][0]);
@@ -334,7 +336,8 @@ export class PlanetCharacter {
     if ((this.c.ourLanded?.body ?? this.c.local?.F.id) !== this.body) return null;
     const w = this.c.rigWorld();
     if (!w || w.ours !== this.ours) return null;
-    const time = this.c.nowTime(),
+    // (walking, in the frame's step: the ship's clock; set out between frames: the scene's)
+    const time = this.active ? this.c.nowTime() : this.c.viewTime(),
       m = this.metres(),
       S = shipToCamera(this.c.shipPose(), this.c.s.shipLookYaw, this.c.s.shipLookPitch).S;
     // (a ship-frame vector in the world: its camera components, on the camera's world axes)
@@ -819,7 +822,7 @@ export class PlanetCharacter {
       // (restored in the air: no coyote jump there)
       this.airTime = this.grounded ? 0 : COYOTE_S;
       this.camPivot.reset(s.pivot ? ([...s.pivot] as V3) : null);
-      this.placeView(this.c.nowTime(), 0);
+      this.placeView(this.c.viewTime(), 0);
     }
     return err;
   }

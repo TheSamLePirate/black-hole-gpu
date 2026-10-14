@@ -331,6 +331,8 @@ The real sky's loading (`renderer.loadSky()`), resolved once it is in (it redraw
 
 The multiple-exposure runners the game wires into the automation (PLAN-CIEL C8): `runAnalemma`, `runEclipse`, `runTrails`, `runMoonPath`, `runIss`, `issPasses`, `planEclipse`, and the `host` and `dialog` objects of the multiple-exposure feature. This entry only names them; their own arguments are not documented here.
 
+`__bh.mx.framedView()` → `{ lat, lon, az, alt, fov } | null`: the view framed on the Earth's ground (on foot, the tripod, the free camera near the ground) — its own geodetic place [°], its aim (azimuth from the north, altitude, from the geodetic zenith) and its vertical field [°]; null when the view is not on the Earth's ground (flying a ship). What a multiple exposure takes "from this view". *Used in:* `tests/e2e/multiexposure.e2e.test.ts`, `tests/e2e/observatory.e2e.test.ts`.
+
 ### `__bh.graphicsDiagnostic()` → object
 
 The GPU diagnostic report (`gpu-diagnostics.ts`): `version`, `timestamp`, `status`, `stage`, `elapsedMs`, the adapter and the events (`events[].message`), and `previousIncompleteSession` when the last session ended unexpectedly. The same report the page downloads as `graphics-diagnostic.json`.

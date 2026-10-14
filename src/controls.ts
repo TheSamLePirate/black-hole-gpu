@@ -1137,6 +1137,9 @@ export class CameraController {
     clearAt: "",
     /** the next placement a cut, not a turn from the aim before (a scene applied, a multiple exposure's frame) */
     cut: false,
+    /** a tripod tracking a star: its direction [unit, home frame] held at the view's centre as the sky turns (a
+     *  telescope's mount); turned by the player, free again */
+    star: null as Vec3 | null,
     /** the tripod's free view: its forward and up on the body's own axes (as offsets from its foot) */
     look: null as { f: Vec3; u: Vec3 } | null,
     lookKey: "",

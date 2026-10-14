@@ -3,6 +3,7 @@
 import { blToCartesian, cameraFrame, homePosition, setHolePose, setHomePose } from "../camera";
 import type { Vec3 } from "../physics";
 import {
+  aberrateRep,
   availableBodies,
   bodyCentre,
   bodyDistance,
@@ -30,13 +31,14 @@ import {
   solidBody,
   toBodyFixed,
 } from "../system/our-surface";
-import { M_METRES, solarBody } from "../system/solar";
+import { M_METRES, seenFrom, solarBody } from "../system/solar";
 import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 
 import { blendCurve, lookQ, qAxes, qSlerp } from "../cine/follow";
 import type { V3 } from "../cine/rig";
 import { viewBlend } from "./camrig";
 import { clearStand, sceneryContact } from "../system/scenery-contact";
+import { drawnRefractivity, refractDirection } from "../system/refraction";
 import { fleet } from "../fleet";
 import { VESSEL_IDS } from "../vessels";
 import type { CameraController } from "../controls";
@@ -54,6 +56,7 @@ declare module "../controls" {
     rigFix: typeof rigFix;
     rigUnfix: typeof rigUnfix;
     rigStatus: typeof rigStatus;
+    groundHold: typeof groundHold;
     surfaceDistance: typeof surfaceDistance;
     nearestBody: typeof nearestBody;
     followFF: typeof followFF;
@@ -143,6 +146,9 @@ function rigPlace(this: CameraController, ours: boolean, X: Vec3, fwd: Vec3, up:
   this.written = "";
   this.rig.placed = [s.anchor, s.whL, s.distance, s.inclination, s.azimuth].join();
 }
+
+/** A direction as the Earth's air shows it from a place (its zenith): the refraction the frame is drawn with. */
+const refracted = (id: Body, d: Vec3, zen: Vec3): Vec3 => (id === "earth" ? (refractDirection(d, zen, drawnRefractivity()) as Vec3) : d);
 
 /** How far a tripod stands from a craft parked [m, from its centre]: outside the longest hull that lands — the
  *  F-35's 15.4 m, half of it and a little —, a walker's place beside the craft (9 m off) kept. */
@@ -354,6 +360,20 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
       // the view free: fixed on the ground, turning with it (the sky wheels overhead — a time-lapse's
       // camera); turned by the user, fixed again as it is then
       const now = [s.yaw, s.pitch, s.roll].join();
+      // (a star tracked: held at the centre, level on the place's geodetic up — turned by the player, let go)
+      if (R.star && R.lookKey && R.lookKey !== now) R.star = null;
+      if (R.star && w.ours) {
+        const zen = figureUp(ref.id, X, t);
+        // (where it is seen: aberrated by the view's own motion — the Earth's — 20″ off its catalogue's place)
+        const f = refracted(ref.id, aberrateRep(R.star, V), zen);
+        let u = sub3(zen, lin(f, dot3(zen, f), f, 0));
+        if (Math.hypot(...u) < 1e-6) u = sub3(w.up, lin(f, dot3(w.up, f), f, 0));
+        this.rigPlace(w.ours, X, f, unitV(u), V);
+        R.look = null;
+        R.lookKey = [s.yaw, s.pitch, s.roll].join();
+        R.stamp = stamp();
+        return true;
+      }
       // (the look as it is now — placed for now, read on the ground then: read at the frame's end, it lost a
       // frame of the world's turning at each turn by the user, the view held on the stars at a high warp)
       const dir = (v: Vec3) => this.rigFix(ref.id, w.ours, lin(w.X, 1, v, ref.R), tNow);
@@ -382,9 +402,11 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
       return true;
     }
     // aiming at the target (its centre; the hole: its place), the local vertical up, then the offsets
-    const T = w.ours ? ourTarget(s, s.target, t).pos : bodyCentre(s, s.target, t);
+    // (on our side, where it is seen — as the frame draws it: where its light now arriving left it, aberrated by the
+    // view's own motion, the Earth's 30 km/s among it; its place of now was 20″ and more off, half a telescope's field)
+    const T = w.ours ? (solarBody(s.target) ? seenFrom(s.target, t, X).pos : ourTarget(s, s.target, t).pos) : bodyCentre(s, s.target, t);
     const up0 = w.ours && isOurBody(ref.id) ? figureUp(ref.id, X, t) : unitV(sub3(X, ref.C));
-    let fwd = unitV(sub3(T, X));
+    let fwd = w.ours ? refracted(ref.id, aberrateRep(unitV(sub3(T, X)), V), up0) : unitV(sub3(T, X));
     if (Math.abs(dot3(fwd, up0)) > 0.999) fwd = unitV(cross(up0, [0, 0, 1]));
     const east = unitV(cross(fwd, up0));
     const yo = (R.yawOff * Math.PI) / 180,
@@ -428,6 +450,35 @@ function rigUnfix(this: CameraController, id: Body, ours: boolean, q: Vec3, t: n
   if (!["miller", "mann", "edmunds"].includes(id)) return null;
   const F = planetFrame(id, t, s.spin, s.massSolar);
   return toGlobal(F, { xi: q, w: [0, 0, 0], landed: true });
+}
+
+/**
+ * The view held on a world's ground — a tripod, the free camera carried by the ground —, for a jump of the clock: its
+ * place and its look on the world's own axes now, and how to put it back there at another time (the world moved on
+ * its orbit and turned: a tripod left where the world was stood a day's travel off it, adrift). Null: not on a ground.
+ */
+function groundHold(this: CameraController): ((t1: number) => void) | null {
+  const w = this.rigWorld();
+  if (!w) return null;
+  const t0 = this.viewTime();
+  const solid = (b: Body) => (w.ours ? solidBody(b) && !isCraft(b) && b !== "iss" : ["miller", "mann", "edmunds"].includes(b));
+  const ref = this.rigNearest(w.ours, w.X, t0, solid);
+  if (!ref || (Math.hypot(...sub3(w.X, ref.C)) - ref.R) / ref.R > 0.03) return null;
+  const q = this.rigFix(ref.id, w.ours, w.X, t0);
+  const qf = this.rigFix(ref.id, w.ours, lin(w.X, 1, w.fwd, ref.R * 1e-6), t0);
+  const qu = this.rigFix(ref.id, w.ours, lin(w.X, 1, w.up, ref.R * 1e-6), t0);
+  if (!q || !qf || !qu) return null;
+  return (t1) => {
+    const P = this.rigUnfix(ref.id, w.ours, q, t1),
+      F = this.rigUnfix(ref.id, w.ours, qf, t1),
+      U = this.rigUnfix(ref.id, w.ours, qu, t1);
+    if (!P || !F || !U) return;
+    this.rig.cut = true;
+    this.rigPlace(w.ours, P.X, unitV(sub3(F.X, P.X)), unitV(sub3(U.X, P.X)), P.V);
+    // (fixed again from there at the next frame, on the new clock)
+    this.rig.key = "";
+    this.rig.lookKey = "";
+  };
 }
 
 /** What carries the camera (the rig's body) and its height above it [M], for the panel. */
@@ -506,6 +557,7 @@ export function installRig(C: { prototype: CameraController }) {
     rigFix,
     rigUnfix,
     rigStatus,
+    groundHold,
     surfaceDistance,
     nearestBody,
     followFF,

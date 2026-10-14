@@ -142,6 +142,22 @@ export interface GameHost {
   /** the ship placed as the Place panel and the Atlas place it (main.ts placeShip: a mission ended, the game's
    *  world loaded, the walker back aboard, the panels redrawn): its note */
   place?(f: () => string): string;
+  /** the observatory (ui/observe.ts, system/observing.ts): from where one stands on the Earth's ground — a thing's
+   *  windows (when it is up, in a sky dark enough for it, its best moment), the telescope taken to it, the page */
+  observe?: {
+    when(
+      q: string,
+      o: { from?: number; days?: number },
+    ):
+      | {
+          name: string;
+          now: { alt: number; az: number } | null;
+          windows: { from: number; to: number; best: number; alt: number; az: number; sky: string }[];
+        }
+      | string;
+    look(q: string, at?: number | "best"): string | null;
+    open(q?: string): void;
+  };
   /** the Atlas (ui/atlas.ts): the destinations and the Earth's addresses found; the game put at a place; the page */
   atlas?: {
     search(
@@ -1582,6 +1598,46 @@ export function gameTools(h: GameHost): Tool[] {
       }),
     },
     // ------------------------------------------------------------------ teleporting, saves, scenes
+    {
+      name: "observe",
+      description:
+        "The observatory, from where the player stands on the Earth's ground (walking, the tripod, the free camera near the ground): any planet, moon, dwarf world, the Sun (filtered), the Moon, the ISS, a bright star by name, the wormhole (Gargantua beyond it). when: its windows over `days` (default 14; the ISS 10) from a date (default now) — when it is above the horizon in a sky dark enough for it, its best moment (the highest) with its altitude, azimuth and the sky (day/twilight/night), and where it is now. look: the telescope taken to it — at: 'now' (default), 'best' (the clock set to its next best moment) or an ISO date; on foot the tripod is set where they stand first; a star is tracked at the view's centre. open: the observatory page, a search typed.",
+      params: {
+        action: { type: "string", enum: ["when", "look", "open"] },
+        name: { type: "string", description: "Jupiter, Lune, Saturn, Sirius, Bételgeuse, ISS, wormhole…" },
+        at: { type: "string", description: "look: now, best, or an ISO date" },
+        from: { type: "string", description: "when: from this ISO date (default the game's)" },
+        days: { type: "number", minimum: 1, maximum: 120 },
+      },
+      required: ["action"],
+      run: act((a) => {
+        const O = h.observe;
+        if (!O) return { error: "not available" };
+        if (a.action === "open") return O.open(a.name ? String(a.name) : undefined), "the observatory opened";
+        if (a.name === undefined) throw new Error("give a name: a planet, a moon, a star, the ISS, the wormhole");
+        if (a.action === "when") {
+          const from = a.from ? Date.parse(String(a.from)) : undefined;
+          if (from !== undefined && !Number.isFinite(from)) throw new Error(`not a date: ${a.from}`);
+          const r = O.when(String(a.name), { from, days: a.days as number | undefined });
+          if (typeof r === "string") throw new Error(r);
+          const iso = (ms: number) => `${new Date(ms).toISOString().slice(0, 16)}Z`;
+          const deg = (x: number) => Math.round(x * 10) / 10;
+          return {
+            name: r.name,
+            now: r.now ? { altDeg: deg(r.now.alt), azDeg: deg(r.now.az) } : null,
+            windows: r.windows
+              .slice(0, 12)
+              .map((w) => ({ from: iso(w.from), to: iso(w.to), best: iso(w.best), altDeg: deg(w.alt), azDeg: deg(w.az), sky: w.sky })),
+          };
+        }
+        const at = a.at === undefined || a.at === "now" ? undefined : a.at === "best" ? ("best" as const) : Date.parse(String(a.at));
+        if (typeof at === "number" && !Number.isFinite(at)) throw new Error(`not a date: ${a.at}`);
+        if (at !== undefined) net();
+        const why = O.look(String(a.name), at);
+        if (why) throw new Error(why);
+        return `the telescope on ${a.name}`;
+      }),
+    },
     {
       name: "place_ship",
       description:

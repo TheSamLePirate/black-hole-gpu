@@ -23,6 +23,8 @@ import { bodyTrack } from "./system/ephemeris";
 import { cameraRay, zamoToCamera } from "./shadow";
 import { fromMouth, mouth, repToHole, sphericalFrame, toMouth, traceDneg } from "./wormhole";
 import { DEG } from "./units";
+import { drawnRefractivity, refractDirection } from "./system/refraction";
+import { figureUp } from "./system/our-surface";
 import { cross, dot, lin, normalize as norm, sub } from "./math/vec3";
 
 export type Body = Target;
@@ -621,7 +623,19 @@ export function bodyLook(s: Settings, cam: CameraFrame, body0: Body, time: numbe
     // (a body of the solar system where the light shows it — as it is drawn: the Sun 20″ off its
     // place of now, a tenth of the telescope's narrowest field)
     const home = cameraHome(s, cam);
-    const d = sub(solarBody(body0) ? seenFrom(body0, time, home).pos : ourTarget(s, body0, time).pos, home);
+    let d = sub(solarBody(body0) ? seenFrom(body0, time, home).pos : ourTarget(s, body0, time).pos, home);
+    // (in the Earth's air: raised by its refraction, as the frame draws it — a telescope's reticle round the disc)
+    const E = ourState("earth", time).pos;
+    const R = solarBody("earth")!.radius;
+    if (s.refraction && Math.hypot(...sub(home, E)) < R * 1.016 && body0 !== "earth") {
+      const l = Math.hypot(...d);
+      const r = refractDirection(
+        [d[0] / l, d[1] / l, d[2] / l],
+        figureUp("earth", home, time) as [number, number, number],
+        drawnRefractivity(),
+      );
+      d = [r[0] * l, r[1] * l, r[2] * l];
+    }
     return { look: ourLook(s, cam, d), lensed: false };
   }
   const body = holeProxy(body0);

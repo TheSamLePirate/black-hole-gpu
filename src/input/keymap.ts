@@ -67,6 +67,7 @@ export type KeyAction =
   | "fullscreen"
   | "lookAt"
   | "telescope"
+  | "observe"
   | "autoOrbit"
   | "dive"
   | "journey"
@@ -177,7 +178,16 @@ export const KEYMAP: KeySection[] = [
         bind: [scene("v", "nextView")],
       },
       { keys: "C", text: "Look at the target: the view locked on it, wherever the camera goes", bind: [scene("c", "lookAt", off)] },
-      { keys: "Y", text: "Telescope: fields down to 0.02°, held on the target (the wheel zooms)", bind: [scene("y", "telescope")] },
+      {
+        keys: "Y",
+        text: "Telescope: fields down to 0.02°, held on the target (the wheel zooms) — on foot, the tripod set where you stand first",
+        bind: [scene("y", "telescope", off)],
+      },
+      {
+        keys: "⇧Y",
+        text: "The observatory: what to see from the Earth's ground — when it is up, at its best — and the telescope taken to it",
+        bind: [scene("y", "observe", on)],
+      },
       {
         keys: "Tab · ⇧Tab",
         text: "Next · previous target (or click it in the view) — held: the radial wheel (views, holds, autopilots)",
@@ -495,7 +505,9 @@ export function matchKey(
     matchIn("time", e, false, list) ??
     (character
       ? matchIn("scene", e, false, list) &&
-        ["help", "png", "fullscreen", "details", "toggleUi", "quality", "map", "standOn"].includes(matchIn("scene", e, false, list)!.do)
+        ["help", "png", "fullscreen", "details", "toggleUi", "quality", "map", "standOn", "telescope", "observe"].includes(
+          matchIn("scene", e, false, list)!.do,
+        )
         ? matchIn("scene", e, false, list)
         : undefined
       : flightKey

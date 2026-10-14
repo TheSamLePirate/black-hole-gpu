@@ -42,6 +42,9 @@ export const TB_ICONS = {
   tripod: '<path d="M12 4.5v5M12 9.5l-6 10M12 9.5l6 10M12 9.5v10"/><rect x="8.5" y="3" width="7" height="4" rx="1" class="f"/>',
   skyEvents:
     '<path d="M4.5 19a7.5 7.5 0 0 1 15 0M7.5 19a4.5 4.5 0 0 1 9 0"/><circle cx="12" cy="19" r="1.1" class="f"/><path d="M17.5 3.5l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z" class="f"/>',
+  /** the observatory: a telescope on its tripod, a star */
+  observe:
+    '<path d="M5 12.5l11-5 1.6 3.4-11 5z"/><path d="M10.5 14.5l-3 6M10.5 14.5l3 6"/><path d="M19 3.5l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z" class="f"/>',
   /** a multiple exposure: three discs stacked along an arc over a horizon */
   multiExposure:
     '<path d="M3.5 19.5h17"/><circle cx="6.5" cy="14.5" r="1.6" class="f"/><circle cx="12" cy="9.5" r="1.6" class="f"/><circle cx="17.5" cy="14.5" r="1.6" class="f"/><path d="M6.5 14.5Q12 4.5 17.5 14.5" stroke-dasharray="1.2 2"/>',

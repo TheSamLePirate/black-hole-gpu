@@ -4,7 +4,8 @@
 /* ---------------------------------------------------------------- pause */
 .pm-scrim { background: rgba(2, 4, 8, 0.55); }
 .pm {
-  width: min(440px, calc(100vw - 32px));
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
   box-sizing: border-box;
   padding: 18px 20px 16px;
   display: flex;
@@ -12,15 +13,28 @@
   gap: 12px;
 }
 .pm-title { font-size: 16px; letter-spacing: 0.32em; }
-.pm-list { display: flex; flex-direction: column; gap: 6px; }
+/* (two columns where there is room; every item reachable on a short screen: the list scrolls, the title stays) */
+.pm-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px;
+}
+.pm-list > :first-child { grid-column: 1 / -1; }
+@media (max-width: 640px) {
+  .pm-list { grid-template-columns: 1fr; }
+}
 .pm-item {
   justify-content: flex-start;
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
-  padding: 10px 14px;
-  font-size: 14px;
-  letter-spacing: 0.2em;
+  padding: 9px 14px;
+  font-size: 13.5px;
+  letter-spacing: 0.18em;
 }
 .pm-item:focus-visible, .pm-item:focus, .pm-item:hover:not(:disabled) { color: #fff; border-color: var(--k-on-edge); background: var(--k-on-bg); box-shadow: 0 0 12px rgba(111, 210, 255, 0.2) inset; outline: none; }
 .pm-item:focus::before { content: "▸"; position: absolute; left: 4px; color: var(--k-on); }

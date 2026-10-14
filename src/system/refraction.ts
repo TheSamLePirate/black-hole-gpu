@@ -54,3 +54,30 @@ export function bennett(apparentAlt: number): number {
   const deg = (apparentAlt * 180) / Math.PI;
   return ((1 / Math.tan(((deg + 7.31 / (deg + 4.4)) * Math.PI) / 180)) * Math.PI) / (180 * 60);
 }
+
+/** The air's refractivity the frame is drawn with now (main.ts sets it: the renderer's, from the weather's temperature;
+ *  0: no refraction drawn) — for what aims where the frame shows things (a tripod's telescope). */
+let drawnN0: () => number = () => seaRefractivity();
+export function setDrawnRefractivity(f: () => number) {
+  drawnN0 = f;
+}
+export const drawnRefractivity = () => drawnN0();
+
+/**
+ * A direction [unit] as the air shows it from a place whose zenith is `zen`: raised in the vertical plane by the
+ * refraction of an air of refractivity N0 — 16″ at 46°, half a degree at the horizon —; under the horizon, or N0 0:
+ * unchanged.
+ */
+export function refractDirection(d: [number, number, number], zen: [number, number, number], N0: number): [number, number, number] {
+  if (!(N0 > 0)) return d;
+  const s = Math.max(-1, Math.min(1, d[0] * zen[0] + d[1] * zen[1] + d[2] * zen[2]));
+  const alt = Math.asin(s);
+  if (alt < -0.05) return d;
+  const h = [d[0] - s * zen[0], d[1] - s * zen[1], d[2] - s * zen[2]];
+  const hl = Math.hypot(h[0]!, h[1]!, h[2]!);
+  if (hl < 1e-9) return d;
+  const a = apparentAltitude(alt, 0, N0);
+  const v: [number, number, number] = [0, 1, 2].map((i) => (h[i]! / hl) * Math.cos(a) + zen[i]! * Math.sin(a)) as [number, number, number];
+  const l = Math.hypot(...v);
+  return [v[0] / l, v[1] / l, v[2] / l];
+}

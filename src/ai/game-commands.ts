@@ -480,6 +480,26 @@ export const GAME_COMMANDS: GameCommand[] = [
     desc: { fr: "Les passages visibles de l'ISS d'ici (7 jours)", en: "The ISS's visible passes from here (7 days)" },
   },
   {
+    name: "when",
+    tool: "observe",
+    fixed: { action: "when" },
+    args: [{ param: "name", rest: true }],
+    desc: {
+      fr: "Quand un astre est visible d'ici, et au mieux : /when Jupiter, /when Sirius, /when ISS",
+      en: "When a thing of the sky is seen from here, and at its best: /when Jupiter, /when Sirius, /when ISS",
+    },
+  },
+  {
+    name: "observe",
+    tool: "observe",
+    fixed: { action: "look", at: "best" },
+    args: [{ param: "name", rest: true }],
+    desc: {
+      fr: "Le télescope sur un astre, au meilleur moment (l'horloge y va) : /observe Saturne",
+      en: "The telescope on a thing of the sky at its best moment (the clock taken there): /observe Saturn",
+    },
+  },
+  {
     name: "issphoto",
     tool: "multiple_exposure",
     fixed: { kind: "iss" },

@@ -1,0 +1,33 @@
+/* The observatory (observe.ts): in the kit's language — the place and the date at the head, a search, the things
+   to see in groups, a row each (its name, where it stands now, its next window, two ways to it); those up now lit. */
+.ob-frame { width: min(980px, calc(100vw - 24px)); max-height: min(860px, calc(100vh - 24px)); padding: 12px 14px 14px; display: flex; flex-direction: column; }
+.ob-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin: 6px 0 8px; font: 500 12px var(--mono); color: var(--k-dim); }
+.ob-head b { font: 700 13px var(--mono); color: var(--k-text); }
+.ob-search {
+  all: unset; box-sizing: border-box; width: 100%; padding: 7px 10px; margin-bottom: 6px;
+  border-radius: var(--k-r); border: 1px solid var(--k-ctl-edge); background: var(--k-ctl-bg); font: var(--k-font-value); color: var(--k-text);
+}
+.ob-search:focus-visible { border-color: var(--k-on-edge); }
+.ob-status { margin: 0 0 6px; font: 13px/1.4 var(--font); color: var(--k-amber); }
+.ob-status:empty { display: none; }
+.ob-list { overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 3px; padding-right: 2px; min-height: 120px; }
+.ob-group { margin: 10px 0 2px; font: var(--k-font-label); letter-spacing: 0.12em; text-transform: uppercase; color: var(--k-dim); }
+.ob-row {
+  display: grid; grid-template-columns: minmax(110px, 1.1fr) minmax(110px, 0.9fr) minmax(200px, 2.2fr) auto; align-items: center; gap: 4px 10px;
+  padding: 5px 8px; border-radius: 4px; border: 1px solid transparent;
+}
+.ob-row:hover { border-color: var(--k-line); background: rgba(160, 210, 255, 0.035); }
+.ob-row.up .ob-name { color: var(--k-on); }
+.ob-row[hidden] { display: none; }
+.ob-name { font: 700 13px var(--hud-font); letter-spacing: 0.04em; color: var(--k-text); }
+.ob-now { font: 500 11.5px var(--mono); color: var(--k-dim); }
+.ob-row.up .ob-now { color: var(--k-text); }
+.ob-when { font: 500 11.5px var(--mono); color: var(--k-dim); }
+.ob-acts { display: flex; gap: 6px; }
+.ob-acts .k-btn { padding: 4px 8px; font-size: 11px; }
+
+@media (max-width: 760px) {
+  .ob-row { grid-template-columns: 1fr 1fr; }
+  .ob-when { grid-column: 1 / -1; }
+  .ob-acts { grid-column: 1 / -1; }
+}

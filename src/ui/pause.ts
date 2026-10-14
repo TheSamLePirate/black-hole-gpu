@@ -34,6 +34,8 @@ const T = {
   sky: { fr: "Le ciel d'ici", en: "The sky from here" },
   skyHint: { fr: "filés, analemme, ISS, éclipses : les vivre", en: "trails, analemma, ISS, eclipses: live them" },
   multi: { fr: "Surimpression", en: "Multiple exposure" },
+  observe: { fr: "Observatoire", en: "Observatory" },
+  observeHint: { fr: "ce qu'il y a à voir d'ici, et quand — le télescope", en: "what to see from here, and when — the telescope" },
   multiHint: {
     fr: "depuis la vue cadrée : analemme, filé d'étoiles, Lune, éclipse",
     en: "from the view framed: analemma, trails, Moon, eclipse",
@@ -74,6 +76,8 @@ export interface PauseDeps {
   skyEvents(): void;
   /** a multiple exposure (ui/multiexposure.ts): from the view framed, when there is one */
   multiExposure?(): void;
+  /** the observatory (ui/observe.ts): what to see from the Earth's ground, and when */
+  observe?(): void;
   /** placing the ship (ui/placepanel.ts) */
   place(): void;
   /** the date and time (ui/timepanel.ts) */
@@ -156,6 +160,9 @@ export class PauseMenu {
       this.item(tr(T.sky), () => this.leaveFor(this.d.skyEvents), { hint: tr(T.skyHint), testid: "pause-sky" }),
       this.d.multiExposure
         ? this.item(tr(T.multi), () => this.leaveFor(() => this.d.multiExposure?.()), { hint: tr(T.multiHint), testid: "pause-multi" })
+        : null,
+      this.d.observe
+        ? this.item(tr(T.observe), () => this.leaveFor(() => this.d.observe?.()), { hint: tr(T.observeHint), testid: "pause-observe" })
         : null,
       this.item(tr(T.place), () => this.leaveFor(this.d.place), { testid: "pause-place" }),
       this.item(tr(T.time), () => this.leaveFor(this.d.time), { testid: "pause-time" }),

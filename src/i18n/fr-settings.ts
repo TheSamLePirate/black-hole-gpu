@@ -1315,6 +1315,10 @@ export default {
     "Regarder la cible : la vue verrouillée dessus, où que la caméra aille",
   "Telescope: fields down to 0.02°, held on the target (the wheel zooms)":
     "Télescope : champs jusqu'à 0.02°, maintenu sur la cible (la molette zoome)",
+  "Telescope: fields down to 0.02°, held on the target (the wheel zooms) — on foot, the tripod set where you stand first":
+    "Télescope : champs jusqu'à 0.02°, maintenu sur la cible (la molette zoome) — à pied, le trépied posé là où vous êtes d'abord",
+  "The observatory: what to see from the Earth's ground — when it is up, at its best — and the telescope taken to it":
+    "L'observatoire : ce qu'il y a à voir depuis le sol de la Terre — quand c'est levé, au meilleur moment — et le télescope pointé dessus",
   "Tab · ⇧Tab": "Tab · ⇧Tab",
   "Next · previous target (or click it in the view) — held: the radial wheel (views, holds, autopilots)":
     "Cible suivante · précédente (ou cliquez-la dans la vue) — maintenu : la roue radiale (vues, maintiens, pilotes auto)",

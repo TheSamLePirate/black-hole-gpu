@@ -59,6 +59,8 @@ export interface SkyEventsHost {
   render(kind: MxKind, fill: Partial<MxRequest>): void;
   /** the multiple exposure's dialog from the view as it is framed now (its place, its aim, its field) */
   fromView?(): void;
+  /** the observatory: everything to see from here, when, the telescope */
+  observe?(): void;
 }
 
 /** An event of the list: its card's figures and its ways. */
@@ -118,6 +120,16 @@ export class SkyEventsPage {
       { class: "se-head" },
       el("b", "", fmtLatLon(p.lat, p.lon, 4, [t("N"), t("S"), t("E"), t("W")])),
       el("span", "", tf("looking {0}° · {1}° up · {2} UTC", Math.round(p.view.az), Math.round(p.view.alt), fmtDate(now))),
+      this.d.observe
+        ? button({
+            label: t("The observatory"),
+            testid: "sky-observe",
+            onClick: () => {
+              this.hide();
+              this.d.observe?.();
+            },
+          })
+        : null,
       this.d.fromView
         ? button({
             label: t("Multiple exposure from this view"),

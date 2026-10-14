@@ -105,6 +105,14 @@ export default {
   SW: "SO",
   W: "O",
   NW: "NO",
+  NNE: "NNE",
+  ENE: "ENE",
+  ESE: "ESE",
+  SSE: "SSE",
+  SSW: "SSO",
+  WSW: "OSO",
+  WNW: "ONO",
+  NNW: "NNO",
   // the Atlas (PLAN-MODES-AAA M6)
   Atlas: "Atlas",
   "The Atlas: the Earth, the Moon and Mars as maps — destinations, addresses, coordinates; in orbit over a place, landed, on foot, the free camera, a tripod":
@@ -332,4 +340,31 @@ export default {
   "Multiple exposure from this view": "Surimpression depuis cette vue",
   "Multiple exposure from this view: an analemma, star trails, the Moon's way, an eclipse, the ISS — framed as you framed it":
     "Surimpression depuis cette vue : analemme, filé d'étoiles, course de la Lune, éclipse, ISS — cadrés comme vous les avez cadrés",
+  // the observatory (ui/observe.ts)
+  "The telescope from the Earth: stand on its ground first — walking, on the tripod, or the free camera over it":
+    "Le télescope depuis la Terre : posez-vous d'abord sur son sol — à pied, sur le trépied, ou la caméra libre au-dessus",
+  "{0} — held at the centre as the sky turns; drag to let it go":
+    "{0} — tenue au centre pendant que le ciel tourne ; faites glisser pour la lâcher",
+  "Telescope on {0} — the wheel zooms, Y leaves": "Télescope sur {0} — la molette zoome, Y le quitte",
+  "The observatory: what to see from here and when — the telescope taken to it":
+    "L'observatoire : ce qu'il y a à voir d'ici et quand — le télescope pointé dessus",
+  "The observatory": "L'observatoire",
+  "The observatory: what to see from here, and when": "L'observatoire : ce qu'il y a à voir d'ici, et quand",
+  "Wormhole (Gargantua beyond it)": "Trou de ver (Gargantua au-delà)",
+  today: "aujourd'hui",
+  "{0} {1}–{2} UTC · best {3} at {4}° {5}": "{0} {1}–{2} UTC · au mieux {3} à {4}° {5}",
+  "A planet, a moon, a star, the ISS…": "Une planète, une lune, une étoile, l'ISS…",
+  "Look now": "Viser maintenant",
+  "Go to its best": "Au meilleur moment",
+  "now {0}° {1}": "maintenant {0}° {1}",
+  "below the horizon": "sous l'horizon",
+  "its orbit unknown": "son orbite inconnue",
+  "Not seen from here now: the telescope aims there all the same": "Pas visible d'ici maintenant : le télescope y vise quand même",
+  "{0} UTC": "{0} UTC",
+  "no pass seen from here in ten days": "aucun passage visible d'ici en dix jours",
+  "not seen from here for two months": "pas visible d'ici avant deux mois",
+  "The Sun, the Moon, the ISS": "Le Soleil, la Lune, l'ISS",
+  Planets: "Planètes",
+  "Moons and dwarf worlds": "Lunes et planètes naines",
+  "Bright stars": "Étoiles brillantes",
 } satisfies Record<string, string>;

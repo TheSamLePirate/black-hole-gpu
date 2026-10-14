@@ -2,6 +2,7 @@ import { SceneryHitboxes } from "./ui/scenery-hitboxes";
 import { planetFrame, toLocal } from "./landing";
 import { cartToGeodetic, flatteningOf, WGS84_A, WGS84_F } from "./system/ellipsoid";
 import { setSceneryContact } from "./system/scenery-contact";
+import { setDrawnRefractivity } from "./system/refraction";
 import { groundVelocity } from "./system/our-surface";
 import { CharacterHud } from "./ui/characterhud";
 import { FootHud, type CompassMark } from "./ui/foothud";
@@ -72,6 +73,8 @@ import { type MoonPathOptions, moonPathPlan, type TrailsOptions, trailsPlan } fr
 import { drawIssTrail, issPasses, issPhotoPlan, issSight } from "./photo/iss-pass";
 import { transits } from "./eclipse/moons";
 import { type MxKind, MultiExposureDialog } from "./ui/multiexposure";
+import { findObservable, ObservePage } from "./ui/observe";
+import { nextSeen, type Observable, seenWindows, spotOf } from "./system/observing";
 import { bestPlace } from "./eclipse/details";
 import type { EclipseEvent } from "./eclipse/search";
 import { skyNow } from "./system/sky-now";
@@ -813,6 +816,8 @@ async function main() {
   camera.character.contact = () => (settings.earthTerrain && renderer.earthScenery.supported ? renderer.earthScenery.contact : null);
   // (the same scenery for a tripod's stand: controller/rig.ts)
   setSceneryContact(() => camera.character.contact());
+  // (the air's bending as the frame draws it, for the telescope's aim)
+  setDrawnRefractivity(() => (settings.refraction ? renderer.refractivity(camera.viewSettings()) : 0));
   camera.character.terrainRevision = () => renderer.earthTiles.stamp;
   camera.character.surface = (body, q) => body !== "earth" || renderer.earthLandAt(q);
   camera.character.hullBounds = () => renderer.ship.hullBound(settings.vessel);
@@ -1681,14 +1686,15 @@ async function main() {
   }
 
   function nextTarget(dir: 1 | -1) {
-    const list = camera.availableTargets();
+    const vc = camera.viewController();
+    const list = vc.availableTargets();
     if (list.length < 2) {
-      panel.toast(tf("Only {0} here — turn on the companion star or the wormhole, or pick a scene", BODY_NAMES[settings.target]));
+      panel.toast(tf("Only {0} here — turn on the companion star or the wormhole, or pick a scene", BODY_NAMES[vc.s.target]));
       return;
     }
-    camera.cycleTarget(dir);
+    vc.cycleTarget(dir);
     camera.pad.rumble(0.1, 0.3, 50);
-    panel.toast(tf("Target: {0}  ({1} / {2})", BODY_NAMES[settings.target], list.indexOf(settings.target) + 1, list.length));
+    panel.toast(tf("Target: {0}  ({1} / {2})", BODY_NAMES[vc.s.target], list.indexOf(vc.s.target) + 1, list.length));
   }
   // ---- the camera: its view (a placement, falling freely), the look, the cinematics — one set of commands
   // for the camera panel, the keys and the controller
@@ -1727,18 +1733,26 @@ async function main() {
     refreshGui();
     touch();
   }
+  // (the view's own: a spectator's — the tripod, the free camera while a ship flies on — has its target, its lock and
+  // its lens; they were the ship's, the tripod's Y and C turning the ship's view the player did not see)
   function toggleLookAt() {
-    camera.setLookAt(!settings.lookAt);
-    panel.toast(settings.lookAt ? tf("View locked on {0}", BODY_NAMES[settings.target]) : t("View free"));
+    const vc = camera.viewController();
+    vc.setLookAt(!vc.s.lookAt);
+    panel.toast(vc.s.lookAt ? tf("View locked on {0}", BODY_NAMES[vc.s.target]) : t("View free"));
     refreshGui();
     touch();
   }
   function toggleTelescope() {
-    camera.setTelescope(!settings.telescope);
+    // (on foot: the tripod set where he stands, at his eyes, then the telescope on it)
+    if (camera.character.active && !settings.telescope) {
+      const why = tripodHere();
+      if (why) return void panel.toast(why);
+    }
+    const vc = camera.viewController();
+    vc.rig.star = null;
+    vc.setTelescope(!vc.s.telescope);
     panel.toast(
-      settings.telescope
-        ? tf("Telescope on {0} — the wheel zooms (to a 0.02° field), Y leaves", BODY_NAMES[settings.target])
-        : t("Telescope off"),
+      vc.s.telescope ? tf("Telescope on {0} — the wheel zooms (to a 0.02° field), Y leaves", BODY_NAMES[vc.s.target]) : t("Telescope off"),
     );
     refreshGui();
     touch();
@@ -2760,6 +2774,7 @@ async function main() {
       atlas: () => atlas.open(),
       skyEvents: () => void skyEventsToggle(),
       multiExposure: () => openMultiExposure(),
+      observe: () => openObserve(),
       place: () => placePanel.open(),
       time: () => timePanel.open(),
       weather: () => weatherPanel.open(),
@@ -2947,6 +2962,7 @@ async function main() {
     fullscreen: () => fullscreen(),
     lookAt: () => toggleLookAt(),
     telescope: () => toggleTelescope(),
+    observe: () => openObserve(),
     autoOrbit: () => cinematic("orbit"),
     dive: () => cinematic("dive"),
     journey: () => cinematic("journey"),
@@ -3324,6 +3340,7 @@ async function main() {
       ...(framedView()
         ? [
             { label: { fr: "Le ciel d'ici", en: "The sky from here" }, key: "⇧F8", run: () => void skyEventsToggle() },
+            { label: { fr: "Observatoire", en: "Observatory" }, key: "⇧Y", run: () => openObserve() },
             { label: { fr: "Surimpression", en: "Multiple exposure" }, run: () => openMultiExposure() },
           ]
         : []),
@@ -3403,7 +3420,9 @@ async function main() {
     // (the keys as the player set them — input/bindings.ts)
     // (a spectator out: its keys move it — not the ship's flight keys)
     const camKey = e.code in freeCameraKeys();
-    const b = matchKey(e, flying() && !(camera.spectating && camKey), camKey, effectiveBindings(), camera.character.active);
+    // (a spectator on its tripod: an observer — the view's keys (Y, ⇧Y, C, Tab…), not the craft's it left)
+    const observer = camera.spectating && camera.viewController().s.rotation === "tripod";
+    const b = matchKey(e, flying() && !observer && !(camera.spectating && camKey), camKey, effectiveBindings(), camera.character.active);
     if (!b) return;
     e.preventDefault();
     keyActions[b.do](e, b.arg);
@@ -3868,6 +3887,61 @@ async function main() {
     if (p) return p.body === "earth" ? { lat: p.lat, lon: p.lon, view: { az: p.viewDeg, alt: v.alt } } : null;
     return { lat: v.lat, lon: v.lon, view: { az: v.az, alt: v.alt } };
   }
+  /**
+   * The telescope taken to a thing of the sky from where one stands on the Earth's ground (on foot: the tripod set
+   * where he stands first), the clock at `at` [ms UTC] when given: a body, the ISS, the wormhole — the target, held
+   * (the lock) and framed (the telescope); a star — tracked at the view's centre through a two-degree field. Why not,
+   * or null.
+   */
+  function observeAt(o: Observable, at?: number): string | null {
+    if (camera.character.active) {
+      const why = tripodHere();
+      if (why) return why;
+    } else if (!framedView())
+      return t("The telescope from the Earth: stand on its ground first — walking, on the tripod, or the free camera over it");
+    if (at !== undefined) tools.setDate(new Date(at).toISOString());
+    const vc = camera.viewController();
+    // (on its ground: the tripod, the view held there)
+    if (vc.s.rotation !== "tripod") {
+      const why = vc.standOn("earth" as Body);
+      if (why) return why;
+    }
+    if (o.kind === "star") {
+      if (vc.s.telescope) vc.setTelescope(false);
+      if (vc.s.lookAt) vc.setLookAt(false);
+      vc.rig.star = [...o.v] as Vec3;
+      // (its look not yet the player's: not let go at the first frame for a turn it did not make)
+      vc.rig.lookKey = "";
+      vc.setFov(2);
+      panel.toast(tf("{0} — held at the centre as the sky turns; drag to let it go", o.name));
+    } else {
+      vc.rig.star = null;
+      const id = (o.kind === "body" ? o.id : o.kind) as Target;
+      if (vc.s.target !== id && !vc.selectTarget(id, { focus: false })) return tf("{0} is not in this universe", BODY_NAMES[id] ?? id);
+      if (!vc.s.lookAt) vc.setLookAt(true);
+      // (framed again for this one: its size, not the last one's)
+      if (vc.s.telescope) vc.setTelescope(false);
+      vc.setTelescope(true);
+      panel.toast(tf("Telescope on {0} — the wheel zooms, Y leaves", BODY_NAMES[id] ?? id));
+    }
+    refreshGui();
+    touch();
+    return null;
+  }
+  const observePage = new ObservePage({
+    place: () => {
+      const p = skyPlace();
+      return p ? { lat: p.lat, lon: p.lon } : null;
+    },
+    now: () => utcOf(sim.time),
+    aim: (o, at) => observeAt(o, at),
+  });
+  /** The observatory opened (a search typed), or why not. */
+  function openObserve(query = "") {
+    if (observePage.isOpen) return void observePage.hide();
+    const why = observePage.open(query);
+    if (why) panel.toast(why);
+  }
   /** The tripod at a place of the Earth, the clock at a time, looking at (az, alt) through a field [°]: why not, or null. */
   function skyAim(lat: number, lon: number, o: { ms: number; az: number; alt: number; fov: number }): string | null {
     try {
@@ -3934,6 +4008,7 @@ async function main() {
     },
     render: (kind, fill) => void mxDialog.open({ kind, fill }),
     fromView: () => openMultiExposure(),
+    observe: () => openObserve(),
   });
   /** The sky's events from here, opened or closed: why not, or null. */
   function skyEventsToggle(): string | null {
@@ -3992,6 +4067,16 @@ async function main() {
       run: () => void skyEventsToggle(),
       prio: 3,
       testid: "topbar-skyevents",
+    });
+    topBar.add({
+      id: "btn-observe",
+      label: t("The observatory: what to see from here and when — the telescope taken to it"),
+      icon: TB_ICONS.observe,
+      key: "⇧Y",
+      run: () => openObserve(),
+      modes: ["foot", "free", "photo"],
+      prio: 3,
+      testid: "topbar-observe",
     });
     topBar.add({
       id: "btn-multiexposure",
@@ -4857,6 +4942,27 @@ async function main() {
     utcNow: () => utcOf(sim.time),
     multiExposure: (r) => mxDialog.open({ kind: r.kind, run: r }),
     framedView: () => framedView(),
+    observe: {
+      when: (q, o) => {
+        const it = findObservable(q);
+        if (!it) return `nothing called "${q}" to look at — a planet, a moon, a star, the ISS, the wormhole`;
+        const p = skyPlace();
+        if (!p) return "not on the Earth's ground: walk, set the tripod, or take the free camera near the ground first";
+        const from = o.from ?? utcOf(sim.time);
+        const days = o.days ?? (it.o.kind === "iss" ? 10 : 14);
+        return { name: it.name, now: spotOf(it.o, p.lat, p.lon, utcOf(sim.time)), windows: seenWindows(it.o, p.lat, p.lon, from, days) };
+      },
+      look: (q, at) => {
+        const it = findObservable(q);
+        if (!it) return `nothing called "${q}" to look at`;
+        if (at !== "best") return observeAt(it.o, at);
+        const p = skyPlace();
+        if (!p) return "not on the Earth's ground";
+        const w = nextSeen(it.o, p.lat, p.lon, utcOf(sim.time), 60);
+        return w ? observeAt(it.o, w.best) : `${it.name} is not seen from here for two months`;
+      },
+      open: (q) => openObserve(q ?? ""),
+    },
     issPasses: (lat, lon, from, days) => issPasses(lat, lon, from, days),
     seeEclipse: async (kind, t, place) => {
       const r = await plan<{ events: EclipseEvent[] } | { error: string }>({

@@ -694,9 +694,13 @@ export class GameTools {
     c.fcClear();
     if (c.pilot.auto === "entry") c.pilot.setAuto("entry");
     c.entryRun = null;
+    // (the view on a world's ground — a tripod, a spectator's — carried with it to the new time)
+    const view = c.viewController();
+    const ground = view !== c || !s.ship ? view.groundHold() : null;
     this.ctx.setTime(t1);
     carry?.();
     c.sync();
+    ground?.(t1);
     this.ctx.refresh();
     const note = `Clock set to ${fmtDate(t1)}${planned ? " — the plan made on the old clock dropped" : ""}`;
     this.log.add("info", note, t1);
