@@ -1742,7 +1742,14 @@ async function main() {
    * The view travelled to a goal (controller/travel.ts) — the spectator's, or the free camera's, placed at once
    * when it cannot (another universe) —, then around it.
    */
+  /** A spectator placed elsewhere (a tripod, a travel, a place on the Atlas): no longer following the ship —
+   *  else the next frame put it back at the ship and its offset. */
+  function releaseFollow() {
+    if (camera.spectating && camera.spectatorFollow) camera.setSpectatorFollow(false);
+  }
+
   function travelTo(goal: (time: number) => TravelGoal, then: () => void): string | null {
+    releaseFollow();
     const S = camera.viewSettings();
     const C = viewCamera();
     C.setCinematic(null);
@@ -1768,6 +1775,7 @@ async function main() {
   }
 
   function goTo(b: Target): string | null {
+    releaseFollow();
     if (settings.ship && !camera.spectating) return t("The Ranger flies there: the planner (O), the autopilot (0: approach)");
     // (a spectator out: it goes, the ship flies on — the view's settings and controller)
     const S = camera.viewSettings();
@@ -1878,6 +1886,7 @@ async function main() {
     // (the spectator's camera stands where it is; the Ranger flown lands itself)
     if (settings.ship && !camera.spectating)
       return t("The Ranger lands itself (the autopilot: 7); landed, ⇧K takes you out on foot and ⇧T sets the tripod there");
+    releaseFollow();
     const vc = camera.viewController();
     const why = vc.standOn(b as Parameters<typeof vc.standOn>[0]);
     if (why) return why;
@@ -3527,6 +3536,7 @@ async function main() {
       setSpectator(true);
       if (!camera.spectating) return t("The spectator leaves a ship flown: fly one first (K)");
     }
+    releaseFollow();
     const vc = camera.viewController();
     const time = vc.nowTime();
     const alt = o.ground ? 0.03 : (o.altKm ?? (body === "earth" ? 3 : 8));

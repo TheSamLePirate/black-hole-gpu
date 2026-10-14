@@ -156,6 +156,10 @@ function advanceSpectator(this: CameraController, dt: number, time: number | und
   for (const k of Object.keys(s)) if (!VIEW_KEYS.has(k as keyof Settings) && v[k] !== s[k]) v[k] = s[k];
   sp.keys = this.keys;
   sp.codes = this.codes;
+  // (the flight speed's setting — the camera panel's, the wheel's in mouse-look — and the mouse-look itself:
+  // the page's controller's, the spectator's too)
+  sp.flySpeed = this.flySpeed;
+  sp.flyMode = this.flyMode;
   sp.enabled = this.enabled;
   sp.padFrame = pad ?? null;
   // (the scene's time, also while it follows the ship and its own update is not run: its clock left NaN, nowTime
@@ -207,7 +211,8 @@ function followShip(this: CameraController, sp: CameraController, dt: number, pa
     if (G.t >= 1) this.specGlide = null;
   }
   const d = Math.hypot(...this.specOff);
-  const v = Math.max(0.8 * d, 2) * sp.flySpeed * (fast ? 3 : 1);
+  // (a share of its distance from the ship already: the boost no more than × 4)
+  const v = Math.max(0.8 * d, 2) * sp.flySpeed * (fast ? 3 : 1) * Math.min(this.boostNow(), 4);
   const want = [0, 1, 2].map((i) => (b.fwd[i]! * move[0]! + b.right[i]! * move[1]! + b.up[i]! * move[2]!) * v);
   const ease = 1 - Math.exp(-dt / 0.12);
   for (let i = 0; i < 3; i++) {

@@ -274,7 +274,7 @@ export const KEYMAP: KeySection[] = [
         bind: [fly(["KeyI", "KeyJ", "KeyL", "KeyH", "KeyN"], "held"), fly("KeyK", "held", off)],
       },
       { keys: "Caps Lock", text: "Precision controls (fine rotation, throttle, RCS)", bind: [fly("CapsLock", "precision")] },
-      { keys: "T", text: "SAS: stability assist", bind: [fly("KeyT", "sas")] },
+      { keys: "T", text: "SAS: stability assist", bind: [fly("KeyT", "sas", { shift: false })] },
       { keys: "R", text: "Roll alignment: wings in the orbital plane while the nose is held", bind: [fly("KeyR", "roll", off)] },
       {
         keys: "1 – 7",

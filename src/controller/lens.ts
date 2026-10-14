@@ -225,6 +225,7 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   if (pad) for (let i = 0; i < 4; i++) move[i] = clamp(move[i]! + pad.move[i]!, -1, 1);
   const fast = this.codes.has("ShiftLeft") || this.codes.has("ShiftRight") || !!pad?.fast;
   const free = this.cinematic !== "dive" && this.cinematic !== "journey";
+  const boost = this.travelBoost(dt, move);
   if (move.some((x) => x !== 0) && this.cinematic === "orbit") this.setCinematic(null);
   if (move[3] && free && !pilotNow) this.rotateView(0, 0, move[3] * 70 * dt);
   // moving the camera (flight, free fall) re-expresses its orientation: not a turn by the user,
@@ -237,14 +238,14 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   if (pilotNow) {
     if (away) {
       // (the view is the spectator's)
-    } else if (this.outsideView() === "free") this.moveOutside(dt, move, fast);
+    } else if (this.outsideView() === "free") this.moveOutside(dt, move, fast, boost);
     else if (s.shipMount === "cabin") this.moveCabin(dt, move, fast);
     this.flyShip(dt, pad);
     this.flyVel = [0, 0, 0];
   } else if (this.travel) {
     // (travelling to a body or a craft: placed at the frame's end — travelStep, below)
     this.flyVel = [0, 0, 0];
-  } else if (!this.gravity && free && this.rigStep(dt, move, fast)) {
+  } else if (!this.gravity && free && this.rigStep(dt, move, fast, boost)) {
     // the rig moves the camera (around a body, following it, carried by it, on a tripod)
     this.flyVel = [0, 0, 0];
   } else if (this.gravity && free) {
@@ -254,7 +255,7 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
     this.flyVel = [0, 0, 0];
   } else if (free) {
     // kinematic flight with inertia: the velocity eases towards the keys' target (~0.12 s)
-    const target = (fast ? 3 : 0.8) * this.flySpeed;
+    const target = (fast ? 3 : 0.8) * this.flySpeed * boost;
     const ease = 1 - Math.exp(-dt / 0.12);
     for (let i = 0; i < 3; i++) this.flyVel[i]! += (move[i]! * target - this.flyVel[i]!) * ease;
     if (Math.hypot(...this.flyVel) > 1e-3 * this.flySpeed) this.fly(this.flyVel, dt);

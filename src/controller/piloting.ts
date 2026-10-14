@@ -309,6 +309,7 @@ function standOn(this: CameraController, b?: Body): string | null {
   s.rotation = "tripod";
   this.rigPlace(w.ours, X, f, up, V);
   this.rig.key = ""; // (the tripod fixed where it now stands)
+  this.rig.standH = undefined; // (its height over the ground: a person's, 1.7 m)
   this.leveling = false;
   this.activity = performance.now();
   this.onCinematicChange(this.cinematic);
@@ -359,12 +360,14 @@ function placeShipRep(this: CameraController, l: number, n: Vec3, vel: Vec3, nos
 
 /**
  * Outside, free: the keys move the camera along its own axes (Z Q S D, A E on AZERTY; Shift faster),
- * its speed eased (~0.15 s), a fifth of its distance from the ship per second (5 m/s at least).
+ * its speed eased (~0.15 s), a fifth of its distance from the ship per second (5 m/s at least), the flight
+ * speed's setting and the keys' boost (held: faster) on it.
  */
-function moveOutside(this: CameraController, dt: number, move: number[], fast: boolean) {
+function moveOutside(this: CameraController, dt: number, move: number[], fast: boolean, boost = 1) {
   const o = this.outside;
   const S = shipToCamera(this.mountTarget(), 0, 0).S;
-  const v = Math.max(5, 0.2 * Math.hypot(...o.eye)) * (fast ? 5 : 1);
+  // (its speed already a share of its distance — doubling every few seconds —: the boost no more than × 4)
+  const v = Math.max(5, 0.2 * Math.hypot(...o.eye)) * (fast ? 5 : 1) * this.flySpeed * Math.min(boost, 4);
   const want = lin(lin(S[2], move[0]! * v, S[0], move[1]! * v), 1, S[1], move[2]! * v);
   o.fvel = lin(o.fvel, 1, sub3(want, o.fvel), 1 - Math.exp(-dt / 0.15));
   if (Math.hypot(...o.fvel) < 1e-3) {
@@ -372,9 +375,9 @@ function moveOutside(this: CameraController, dt: number, move: number[], fast: b
     return;
   }
   const e = lin(o.eye, 1, o.fvel, dt);
-  // (no farther than 50 km from the ship)
+  // (no farther than 20 000 km from the ship: past that, the spectator — V — goes anywhere)
   const l = Math.hypot(...e);
-  o.eye = l > 5e4 ? lin(e, 5e4 / l, e, 0) : e;
+  o.eye = l > 2e7 ? lin(e, 2e7 / l, e, 0) : e;
   this.activity = performance.now();
 }
 
@@ -648,7 +651,7 @@ function stepMount(this: CameraController, dt: number) {
         p0 = A ? Math.asin(clamp(-A[1], -1, 1)) * deg : 0;
       // (from a mount on the hull: out to a view of the whole ship, the same side of it)
       const fromOutside = !!(MOUNTS[prevMount as Mount] as { outside?: string } | undefined)?.outside;
-      this.outside.dist = clamp(fromOutside ? l : Math.max(l, VESSELS[fleet.active].viewDist), 12, 20000);
+      this.outside.dist = clamp(fromOutside ? l : Math.max(l, VESSELS[fleet.active].viewDist), 12, 2e6);
       this.outside.yaw = wrapDeg(Math.atan2(e[0], -e[2]) * deg - y0);
       this.outside.pitch = clamp(Math.asin(clamp(e[1] / l, -1, 1)) * deg - p0, -85, 85);
     }

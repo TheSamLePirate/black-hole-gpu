@@ -250,6 +250,19 @@ export class CameraController {
   flyMode = false;
   /** Speed multiplier of free flight (wheel in fly mode). */
   flySpeed = 1;
+  /** how long a key that moves the view has been held [s] — the travel's boost grows with it */
+  moveHeld = 0;
+
+  /** The keys' travel boost this frame: ×1 at a tap, growing with the time held (×3 after 2 s, ×11 after
+   *  5 s, ×41 after 10 s … ×500) — a touch to place the view, a long press to cross a region. */
+  travelBoost(dt: number, move: number[]): number {
+    if (move[0] || move[1] || move[2]) this.moveHeld += dt;
+    else this.moveHeld = 0;
+    return this.boostNow();
+  }
+  boostNow(): number {
+    return Math.min(1 + 0.4 * this.moveHeld * this.moveHeld, 500);
+  }
   /** Gravity: the camera is a massive body following Kerr geodesics; the flight keys thrust. */
   gravity = false;
   /** Current flight velocity in the camera's axes (forward, right, up), in units of the distance scale per second. */
@@ -1111,6 +1124,8 @@ export class CameraController {
     off: [0, 0, 0] as Vec3,
     /** tripod: the place on the body's own axes (ours [M]; Gargantua's worlds: their frame's ξ) */
     fixed: null as Vec3 | null,
+    /** tripod: its height over the ground [m] (none: 1.7 m — set by the up and down keys) */
+    standH: undefined as number | undefined,
     /** the tripod's free view: its forward and up on the body's own axes (as offsets from its foot) */
     look: null as { f: Vec3; u: Vec3 } | null,
     lookKey: "",

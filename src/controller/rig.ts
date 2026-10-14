@@ -20,7 +20,16 @@ import { planetFrame, toGlobal, toLocal, zamoBeta } from "../landing";
 import { toU } from "../pilot";
 import { mouth, sphericalFrame } from "../wormhole";
 import { ourState, repToHomeVec } from "../system/our-side";
-import { altitudeOver, figureUp, fromBodyFixed, groundAboveSphere, groundVelocity, solidBody, toBodyFixed } from "../system/our-surface";
+import {
+  altitudeOver,
+  figureUp,
+  fromBodyFixed,
+  gearHeight,
+  groundAboveSphere,
+  groundVelocity,
+  solidBody,
+  toBodyFixed,
+} from "../system/our-surface";
 import { M_METRES, solarBody } from "../system/solar";
 import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 
@@ -133,7 +142,7 @@ function rigPlace(this: CameraController, ours: boolean, X: Vec3, fwd: Vec3, up:
 }
 
 /** One frame of the rig; false: not its to move (the classic camera then does). */
-function rigStep(this: CameraController, dt: number, move: number[], fast: boolean): boolean {
+function rigStep(this: CameraController, dt: number, move: number[], fast: boolean, boost = 1): boolean {
   const s = this.s;
   const R = this.rig;
   const mode = s.rotation;
@@ -199,7 +208,14 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
     ),
     (Number.isFinite(this.nearShip) ? 2 : 1) / mR,
   );
-  const v = 0.8 * h * this.flySpeed * (fast ? 3 : 1);
+  // (the keys held: the boost — a tripod's 1.4 m/s at a tap, hundreds of m/s held a while)
+  // (near a solid world of ours: no more than the height over its ground as drawn and flown — the gear's —: the
+  // sphere and its relief alone made a tripod's 1.7 m some hundreds, its keys a few hundred m/s)
+  const body = this.rigBody(ref.id, w.ours, tNow);
+  const hg = w.ours && body && solidBody(ref.id) && h * mR < 1e5 ? Math.max(gearHeight(ref.id, w.X, tNow), 1) / mR : Infinity;
+  // (a tripod walks at 4 m/s at least — its 1.7 m would make it a stroll's 1.4 —, the boost on that)
+  const hv = mode === "tripod" ? Math.max(Math.min(h, hg), 5 / mR) : Math.min(h, hg);
+  const v = 0.8 * hv * this.flySpeed * (fast ? 3 : 1) * boost;
   const want = lin(lin(w.fwd, move[0]! * v, w.right, move[1]! * v), 1, w.up, move[2]! * v);
   R.vel = lin(R.vel, 1, sub3(want, R.vel), 1 - Math.exp(-dt / 0.12));
   if (!move.some((x) => x !== 0) && Math.hypot(...R.vel) < 1e-3 * h) R.vel = [0, 0, 0]; // (glided to a stop: a thousandth of the height per second)
@@ -228,6 +244,21 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
     const P = this.rigUnfix(ref.id, w.ours, R.fixed, t);
     const F = P && floor(P.X);
     if (P && F !== P.X) R.fixed = this.rigFix(ref.id, w.ours, F!, t) ?? R.fixed;
+    // (a tripod: held at its height over the ground — 1.7 m, or where the up and down keys took it —, as the
+    // ground under it comes with its maps or as it walks over a hill or into a valley: set down before the
+    // relief was known, it stood hundreds of metres over it, its keys as fast as that height)
+    const G = mode === "tripod" && R.fixed ? this.rigUnfix(ref.id, w.ours, R.fixed, t) : null;
+    if (G && w.ours && solidBody(ref.id)) {
+      const r = sub3(G.X, ref.C);
+      const l = Math.hypot(...r);
+      const ground = ref.R + groundAboveSphere(ref.id, toBodyFixed(ref.id, G.X, t)) / mR;
+      const hm = (l - ground) * mR;
+      if (move[2]) R.standH = Math.max(hm, 1);
+      else if (hm < 2e4) {
+        const want = R.standH ?? 1.7;
+        if (Math.abs(hm - want) > 0.3) R.fixed = this.rigFix(ref.id, w.ours, lin(ref.C, 1, r, (ground + want / mR) / l), t) ?? R.fixed;
+      }
+    }
   }
   // (the same time, no key, nothing changed since the last placement: the camera is where it would be
   // put again — not rewritten, the round trip's last bits would move it each frame, and a paused image
