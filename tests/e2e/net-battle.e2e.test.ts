@@ -48,7 +48,8 @@ describe.skipIf(!E2E)("a battle", () => {
       await p.js(
         `(() => { const c = __bh.camera; c.jetToggle("ap"); c.jetToggle("athr"); __bh.settings.shipMount = "chase"; return 1; })()`,
       );
-    await Bun.sleep(1500);
+    // (each other's samples coming again — a page compiles its tracer for the new place)
+    for (const p of [a, b]) await p.waitFor(`__bh.renderer.netOthers.length === 1`, 60_000);
     const d = await a.js<number>(`Math.hypot(...__bh.renderer.netOthers[0].rel)`);
     console.log(`  Ana and Ben ${(d / 1000).toFixed(1)} km apart`);
     expect(d).toBeGreaterThan(12_000);
@@ -57,6 +58,7 @@ describe.skipIf(!E2E)("a battle", () => {
   }, 60_000);
 
   test("Ben: Tab locks Ana, = the AIM-120, Enter fires it — Ana's helmet warns of it", async () => {
+    await b.waitFor(`__bh.camera.combat.world.targets.some((q) => q.peer === ${sa} && q.alive)`, 30_000);
     await b.press("Tab");
     await b.waitFor(`__bh.camera.combat.world.lock === ${10_000 + sa}`, 5000);
     await b.press("Equal", "=");
@@ -72,7 +74,26 @@ describe.skipIf(!E2E)("a battle", () => {
   }, 60_000);
 
   test("the AIM-120 hits Ana: shot down, the kill Ben's on both sheets; she flies again", async () => {
-    await a.waitFor(`__bh.camera.combat.downAt !== null`, 60_000);
+    // (a miss happens — two pages on one GPU, their samples in fits —: another shot, three at most)
+    for (let k = 0; k < 3; k++) {
+      const down = await a
+        .waitFor(`__bh.camera.combat.downAt !== null`, 35_000)
+        .then(() => true)
+        .catch(() => false);
+      if (down) break;
+      console.log(`  shot ${k + 1} missed — again`);
+      await b.press("Tab");
+      await b.press("Enter");
+    }
+    await a.waitFor(`__bh.camera.combat.downAt !== null`, 1000);
+    await Bun.sleep(1500);
+    for (const [n, p] of [
+      ["A", a],
+      ["B", b],
+    ] as const)
+      console.log(
+        `  ${n}'s log: ${await p.js<string>(`__bh.net.match.log.join(" / ")`)} · feed: ${await p.js<string>(`[...document.querySelectorAll(".nm-feed-row")].map((e) => e.textContent).join(" | ")`)}`,
+      );
     for (const p of [a, b])
       await p.waitFor(`__bh.net.match.sheet.row(${sb}).kills === 1 && __bh.net.match.sheet.row(${sa}).deaths === 1`, 10_000);
     console.log(`  ${await b.js<string>(`[...document.querySelectorAll(".nm-feed-row")].map((e) => e.textContent).join(" | ")`)}`);

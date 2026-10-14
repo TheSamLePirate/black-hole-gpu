@@ -17,6 +17,7 @@ import type { Renderer } from "../renderer";
 import type { Settings } from "../settings";
 import { netRadar } from "./hud/symbology";
 import { M_SECONDS } from "../units";
+import { vesselHulls } from "../system/collide";
 import { VESSELS } from "../vessels";
 import type { NetPanel } from "./netpanel";
 
@@ -45,9 +46,28 @@ export interface NetSessionDeps {
   jetIn(): JetInputs | null;
   /** the scene's time [s] */
   sceneTime(): number;
+  /** a mid-air collision with another's craft (main.ts: destroyed — a match's: shot down by it) */
+  onCollide(slot: number, name: string): void;
 }
 
 const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
+
+/** On the ground: the gear touching, the craft set down (parked: no gear contact then), or within 3 m of it. */
+const onGround = (c: CameraController, h: number | undefined) => (c.gearLast?.contact ?? 0) > 0 || !!c.landed || (h ?? 99) < 3;
+
+/** Another's last three samples consistent with one another (each where the one before's motion put it, within
+ *  50 m): not a placement's jump. */
+function steady(S: { t: number; p: number[]; v: number[] }[] | undefined) {
+  if (!S || S.length < 3) return false;
+  for (let i = S.length - 2; i < S.length; i++) {
+    const a = S[i - 1]!,
+      b = S[i]!;
+    const h = b.t - a.t;
+    if (h <= 0 || h > 1) return false;
+    if (Math.hypot(...b.p.map((x, k) => x - a.p[k]! - a.v[k]! * h)) > 50) return false;
+  }
+  return true;
+}
 
 export class NetSession {
   /** the name tags this frame */
@@ -61,6 +81,11 @@ export class NetSession {
   private acc: Vec3 = [0, 0, 0];
   private spin: Vec3 = [0, 0, 0];
   private warpSaid = false;
+  private collidedAt = -1e9;
+  /** our place last frame [m, the Earth's], when it last jumped (a placement), the frames each other has touched */
+  private ownAt: number[] | null = null;
+  private placedAt = -1e9;
+  private touch = new Map<number, number>();
   /** the room whose clock the scene was set on */
   private timedRoom = "";
   /** samples sent, for the link's figures */
@@ -141,6 +166,27 @@ export class NetSession {
         kind: VESSELS[s.id].name,
       };
     });
+    // (a mid-air collision: our hull and another's touching, both flying — each side finds its own. Not on a
+    // placement's heels — ours or his: a craft put somewhere jumps, its old and new samples a moment apart —:
+    // his samples fresh and steady, our place steady 2 s, the touch two frames running)
+    const ownNow = c.netOwn();
+    const ground = onGround(c, ownNow?.h);
+    if (ownNow && this.ownAt && Math.hypot(...ownNow.p.map((x, k) => x - this.ownAt![k]!)) > 500) this.placedAt = now;
+    this.ownAt = ownNow?.p ?? null;
+    if (!ground && ownNow && now - this.collidedAt > 5 && now - this.placedAt > 2)
+      for (const sh of this.ships) {
+        const reach = 0.55 * (vesselHulls[sh.id].radius + vesselHulls[fleet.active].radius);
+        const touching =
+          !sh.ghost && !(sh.state.flags & 1) && sh.dist < reach && sh.state.ahead < 0.3 && steady(net.remotes.tracks.get(sh.slot)?.samples);
+        const n = touching ? (this.touch.get(sh.slot) ?? 0) + 1 : 0;
+        this.touch.set(sh.slot, n);
+        if (n >= 2) {
+          this.collidedAt = now;
+          this.touch.clear();
+          this.d.onCollide(sh.slot, members.get(sh.slot)?.name ?? `#${sh.slot}`);
+          break;
+        }
+      }
     // ours, when due
     if (net.room.role !== "pilot") return;
     const own = c.netOwn();
@@ -169,7 +215,6 @@ export class NetSession {
       }
     }
     this.prev = { at: now, v: own.v, ax };
-    const ground = !!c.gearLast && c.gearLast.contact > 0;
     const speed = Math.hypot(...own.v);
     const parked = ground && speed < 0.5;
     const near = this.ships.some((s) => s.dist < 5000);

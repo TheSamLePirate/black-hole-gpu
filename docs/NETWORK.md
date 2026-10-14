@@ -40,8 +40,32 @@ loaded only then.
 Measured on kerr-mini (`tests/e2e/net-flight`, two pages): a direct local link, 1–3 ms; the two F-35s in
 formation each see the other 27.6–27.7 m off; the leader's afterburner seen lit on the wingman's screen.
 
-Not yet: collisions between players (R3, with the fights' damage), another's Ranger gear and lights (a
+Not yet: another's Ranger gear and lights (a
 uniform of the flown craft's), the crafts of the players gone kept in the room's world (R7).
+
+## Matches (R3)
+
+- **A match** (the room panel, a pilot: the mode, what is flown, the rules — infinite ammunition,
+  invulnerable, friendly fire, enemy missiles, the time, the kill limit): **everyone for himself**, **two teams**
+  (blue and red, dealt in turn), **together against the aggressors** (the four fights), a **gate race**, a
+  **landing contest**. An 8 s countdown on the room's clock, then each pilot put at his start: the arena's ring
+  of 8 km over Rogers Dry Lake facing its middle, the teams abreast 15 km apart, the fight's start abreast,
+  the race in echelon (60 m right, 40 m back), the landing in trail 2.5 km apart.
+- **In the fight**: the others in your world where the network puts them — team-mates blue, never locked,
+  never hurt unless friendly fire —; **your shots judged by you** (a hit on another sent to him, his damage
+  his); the host's aggressors going after the nearest pilot, run on his world, sent to the others with their
+  missiles; **every pilot's missiles sent** — drawn with their smoke, the missile warning when one chases you —;
+  your countermeasures drawing the others' missiles too.
+- **Shot down**: said to all (the kill feed: *Ben ✕ Ana · AIM-120*), the kill counted, back in the fight 5 s
+  later on your place of the ring; a **mid-air collision** between two players destroys both (out of a match:
+  no pause, back on the nearest runway 4 s later).
+- **The HUD**: the hit marker (four ticks; a kill: thick and red), the score bar (the mode, the clock, the
+  scores or the teams'), the big words (the countdown, *GO*, *shot down by … — back in 4 s*), the end's
+  ranking; a newcomer told of the match running.
+
+Measured on kerr-mini (`tests/e2e/net-battle`, `net-coop`): the AIM-120 fired at 15 km seen on the target's
+helmet at 15 km, the kill on both score sheets; the host's drones on the guest's world within a metre; the
+guest's AIM-9X downing one, the kill his on both; the racers 72 m apart at the start.
 
 ## How it works
 

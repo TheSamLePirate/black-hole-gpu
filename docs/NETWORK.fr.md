@@ -44,9 +44,36 @@ reste entier : rien ne se connecte tant que le joueur ne demande pas une salle, 
 Mesuré sur kerr-mini (`tests/e2e/net-flight`, deux pages) : un lien direct local de 1–3 ms ; les deux F-35 en
 patrouille se voient à 27,6–27,7 m ; la postcombustion du leader vue allumée chez l'ailier.
 
-Pas encore : les collisions entre joueurs (R3, avec les dégâts des combats), le train et les feux du Ranger
+Pas encore : le train et les feux du Ranger
 d'un autre (une uniforme de l'engin piloté), les engins des joueurs partis gardés dans le monde de la salle
 (R7).
+
+## Les matchs (R3)
+
+- **Un match** (le panneau de la salle, un pilote : le mode, ce qu'on vole, les règles — munitions infinies,
+  invulnérable, tir ami, missiles ennemis, la durée, la limite de victoires) : **chacun pour soi**, **deux
+  équipes** (bleus et rouges, distribués à tour de rôle), **ensemble contre les agresseurs** (les quatre
+  combats), une **course de portes**, un **concours d'atterrissage**. Un compte à rebours de 8 s sur l'horloge
+  de la salle, puis chaque pilote placé à son départ : le cercle de 8 km de l'arène au-dessus du lac Rogers,
+  face au centre, les équipes de front à 15 km l'une de l'autre, le départ du combat de front, la course en
+  échelon (60 m à droite, 40 m en arrière), l'atterrissage en file à 2,5 km.
+- **En combat** : les autres dans votre monde, là où le réseau les place — les équipiers en bleu, jamais
+  verrouillés, jamais touchés sans tir ami — ; **vos tirs jugés chez vous** (un coup sur un autre lui est
+  envoyé, ses dégâts sont les siens) ; les agresseurs de l'hôte visent le pilote le plus proche, tournent sur
+  son monde et sont envoyés aux autres avec leurs missiles ; **les missiles de chaque pilote sont envoyés** —
+  dessinés avec leur fumée, l'alerte missile quand l'un vous poursuit — ; vos leurres trompent aussi les
+  missiles des autres.
+- **Abattu** : annoncé à tous (le fil : *Ben ✕ Ana · AIM-120*), la victoire comptée, de retour au combat 5 s
+  plus tard à votre place du cercle ; une **collision en vol** entre deux joueurs les détruit tous les deux
+  (hors match : pas de pause, retour sur la piste la plus proche 4 s plus tard).
+- **Le HUD** : le marqueur de coup (quatre traits ; une victoire : épais et rouge), la barre de score (le
+  mode, le chrono, les scores ou ceux des équipes), les grands mots (le compte à rebours, *GO*, *abattu par …
+  — retour dans 4 s*), le classement final ; un arrivant est informé du match en cours.
+
+Mesuré sur kerr-mini (`tests/e2e/net-battle`, `net-coop`) : l'AIM-120 tiré à 15 km vu dans le casque de la
+cible à 15 km, la victoire sur les deux feuilles ; les drones de l'hôte dans le monde de l'invité à un mètre
+près ; l'AIM-9X de l'invité en abat un, la victoire est la sienne des deux côtés ; les coureurs à 72 m au
+départ.
 
 ## Comment ça marche
 

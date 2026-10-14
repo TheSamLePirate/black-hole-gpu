@@ -137,4 +137,16 @@ describe.skipIf(!E2E)("flying together", () => {
     console.log(`  B sees A's boost ${boost.toFixed(2)}`);
     expect(boost).toBeGreaterThan(1.05);
   }, 60_000);
+
+  test("a mid-air collision (B put 2 m off A's wing): both destroyed, back on a runway, no pause", async () => {
+    const slotA = await a.js<number>(`__bh.net.net.room.slot`);
+    await b.js(`(() => { __bh.net.teleport(${slotA}, 2); return 1; })()`);
+    // (both destroyed — whoever found it first —, both back on a runway: low, at rest)
+    for (const p of [a, b])
+      await p.waitFor(`(() => { const g = __bh.camera.geoNow(); return !!g && g.alt < 1500 && g.gs < 5; })()`, 20_000);
+    for (const p of [a, b]) expect(await p.js<boolean>(`__bh.settings.animate !== false`)).toBe(true);
+    const g = await b.js<{ alt: number; gs: number }>(`__bh.camera.geoNow()`);
+    console.log(`  B after the collision: ${g.alt.toFixed(0)} m, ${g.gs.toFixed(1)} m/s — on a runway`);
+    expect(g.gs).toBeLessThan(5);
+  }, 60_000);
 });

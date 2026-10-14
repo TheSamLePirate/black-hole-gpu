@@ -92,4 +92,8 @@ export default {
   "no kill limit": "sans limite de victoires",
   "A match": "Un match",
   "Start the match": "Lancer le match",
+  "{0}: {1}": "{0} : {1}",
+  destroyed: "détruit",
+  "Mid-air collision with {0}": "Collision en vol avec {0}",
+  "{0} — back on the nearest runway in 4 s": "{0} — retour sur la piste la plus proche dans 4 s",
 } satisfies Record<string, string>;

@@ -290,7 +290,15 @@ engins des absents (R7). Voir [NETWORK.md](NETWORK.md).
 - **Vérifié** : 3 Chrome sans affichage avec micro simulé, relais forcé (`iceTransportPolicy: "relay"`), un
   téléphone en 4G ; latence de bout en bout < 150 ms.
 
-### R3 — Combats, courses et atterrissages
+### R3 — Combats, courses et atterrissages ✅ (2026-10-14)
+
+*Fait* : le monde de combat à plusieurs (`game/combat.ts` : pairs, cibles distantes, missiles distants, coups
+envoyés, IA visant le pilote le plus proche), les matchs (`game/match.ts`, `ui/netmatch.ts` : cinq modes,
+règles verrouillées, compte à rebours, départs, scores, fin décidée par l'hôte, réapparition), marqueur de
+coup, fil des éliminations, barre, classement ; collisions en vol (destruction sans pause en salle). Chacun
+reste dans son propre monde : le tireur juge ses coups, la victime applique les dégâts. Voir
+[NETWORK.md](NETWORK.md).
+
 - `CombatWorld` à plusieurs joueurs : `players` (dégâts, emports, verrou, tir), cibles de type `human`,
   `owner` = joueur, identifiants préfixés par joueur, IA qui choisit sa cible parmi les joueurs,
   générateurs à graine.

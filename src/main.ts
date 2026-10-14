@@ -3680,10 +3680,31 @@ async function main() {
     toast: (s) => panel.toast(s),
     jetIn: () => jetIn,
     sceneTime: () => sim.time * M_SECONDS,
+    // (a mid-air collision: in a match's fight, shot down; else the craft destroyed — the room's way: craftLost)
+    onCollide: (slot, name) => collide(slot, name),
   });
   netPanel.session = netSession;
   // a match in the room (ui/netmatch.ts — docs/PLAN-RESEAU.md R3): fights, teams, races, landings together
-  const netMatch = new NetMatch({ camera, tools, panel: netPanel, session: netSession, toast: (s) => panel.toast(s) });
+  const netMatch = new NetMatch({
+    camera,
+    tools,
+    panel: netPanel,
+    session: netSession,
+    toast: (s) => panel.toast(s),
+    collide: (slot, name) => collide(slot, name),
+  });
+  /** the other craft we went through (said with our loss: his side goes down too) */
+  let collidedWith: number | null = null;
+  /** A mid-air collision (either side's finding): in a match's fight, shot down; else the craft destroyed, whatever
+   *  the damage setting — two craft through each other. */
+  const collide = (slot: number, name: string) => {
+    if (netMatch.inFight()) return netMatch.collision(slot);
+    if (camera.airFlight.failure) return;
+    collidedWith = slot;
+    const why = tf("Mid-air collision with {0}", name);
+    camera.airFlight.failure = why;
+    camera.onCraftLost?.(why);
+  };
   netPanel.match = netMatch;
   // the Atlas (ui/atlas.ts, PLAN-MODES-AAA M6): the Earth, the Moon and Mars as maps, their destinations, the
   // addresses — the game put there (in orbit, landed, on foot, the free camera, a tripod)
@@ -5269,6 +5290,25 @@ async function main() {
     entryPoint = tools.snapshot("before the entry");
   });
   events.on("craftLost", ({ why }) => {
+    // (in a room: no pause, no going back in time — the others fly on —: said to them, set down again on the
+    // nearest runway a few seconds later)
+    const net = netPanel.net;
+    if (net?.room) {
+      netMatch.log.push(`${net.roomNow().toFixed(1)} lost: ${why}`);
+      camera.onPilotMessage?.(why);
+      panel.toast(tf("{0} — back on the nearest runway in 4 s", why));
+      net.event({ kind: "crash", why, with: collidedWith });
+      collidedWith = null;
+      setTimeout(() => {
+        try {
+          tools.lineUp();
+          camera.airFlight.reset(fleet.active);
+        } catch (e) {
+          panel.toast(String((e as Error).message ?? e));
+        }
+      }, 4000);
+      return;
+    }
     settings.animate = false;
     camera.onPilotMessage?.(why);
     craftLost.show(why, {

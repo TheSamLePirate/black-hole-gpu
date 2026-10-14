@@ -40,6 +40,8 @@ export interface NetMatchDeps {
   panel: NetPanel;
   session: NetSession;
   toast(s: string): void;
+  /** a collision another found with our craft (main.ts: ours destroyed too) */
+  collide(slot: number, name: string): void;
 }
 
 type Client = NonNullable<NetPanel["net"]>;
@@ -55,7 +57,15 @@ interface CombatState {
 const r1 = (x: number) => Math.round(x * 10) / 10;
 const r3 = (x: number) => Math.round(x * 1000) / 1000;
 const fmtClock = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, "0")}`;
-const WEAPON: Record<string, string> = { aim9x: "AIM-9X", aim120: "AIM-120", r73: "R-73", sam: "SAM", gun: "GUN", jdam: "JDAM" };
+const WEAPON: Record<string, string> = {
+  aim9x: "AIM-9X",
+  aim120: "AIM-120",
+  r73: "R-73",
+  sam: "SAM",
+  gun: "GUN",
+  jdam: "JDAM",
+  collision: "✶",
+};
 
 export const MODE_NAMES: Record<MatchMode, () => string> = {
   coop: () => t("Together against the aggressors"),
@@ -69,6 +79,8 @@ export class NetMatch {
   match: Match | null = null;
   sheet: ScoreSheet | null = null;
   phase: "idle" | "countdown" | "run" | "over" = "idle";
+  /** what happened, for the tests and the curious: each downing, when */
+  log: string[] = [];
   /** the ranking said at the end */
   final: { slot: number; name: string; line: string }[] | null = null;
   private bound: Client | null = null;
@@ -81,6 +93,7 @@ export class NetMatch {
   private lastHitFrom: number | null = null;
   private lastHitAt = -1;
   private lastHitBy = "";
+  private collidedWith: number | null = null;
   private prevDamage = 0;
   /** the aggressors whose fall was said (the host's) */
   private announced = new Set<number>();
@@ -208,6 +221,15 @@ export class NetMatch {
   private onEvent(from: number, ev: Record<string, unknown>) {
     const kind = ev.kind;
     if (kind === "match") return this.begin(ev.m as Match);
+    // (another's craft destroyed out of a match: said, hidden until it is set down again)
+    if (kind === "crash") {
+      // (a collision with us: our side down too — whoever found it first)
+      if (ev.with === this.me) this.d.collide(from, this.nameOf(from));
+      this.d.toast(tf("{0}: {1}", this.nameOf(from), String(ev.why ?? t("destroyed"))));
+      this.d.session.hidden.set(from, true);
+      setTimeout(() => this.d.session.hidden.delete(from), 5000);
+      return;
+    }
     if (!this.match) return;
     const W = this.d.camera.combat?.world;
     switch (kind) {
@@ -245,6 +267,8 @@ export class NetMatch {
       case "aiDown":
         return this.onAiDown(Number(ev.id), ev.by as number | null, String(ev.name ?? ""));
       case "down":
+        // (a collision with us in the fight: our side down too)
+        if (ev.with === this.me) this.collision(from);
         return this.onDown(Number(ev.slot), ev.by as number | null, String(ev.weapon ?? ""));
       case "cm":
         if (W) W.addDecoys(ev.p as V3, ev.v as V3, ev.up as V3);
@@ -267,6 +291,7 @@ export class NetMatch {
   }
 
   private onDown(slot: number, by: number | null, weapon: string) {
+    this.log.push(`${(this.net?.roomNow() ?? 0).toFixed(1)} down ${slot} by ${by} ${weapon} (${this.phase})`);
     this.sheet?.apply({ kind: "down", slot, by });
     const net = this.net;
     if (net && this.match) this.down.set(slot, net.roomNow() + this.match.rules.respawn + 1);
@@ -283,6 +308,22 @@ export class NetMatch {
   private addFeed(text: string, colour: string) {
     this.feed.unshift({ text, at: performance.now(), colour });
     this.feed = this.feed.slice(0, 5);
+  }
+
+  /** In a match's fight now (a collision is a shot down there) */
+  inFight() {
+    return this.phase === "run" && !!this.d.camera.combat?.net;
+  }
+
+  /** A mid-air collision in a match's fight: shot down — nobody's kill. */
+  collision(slot: number) {
+    const C = this.d.camera.combat;
+    if (!C?.net || C.downAt !== null) return;
+    this.collidedWith = slot;
+    this.lastHitFrom = null;
+    this.lastHitBy = "collision";
+    C.events.push(...C.world.hurt(1000, "gun"));
+    C.say = tf("Mid-air collision with {0}", this.nameOf(slot));
   }
 
   // ---------------------------------------------------------------------------------- its course
@@ -555,7 +596,8 @@ export class NetMatch {
       // shot down: said to all; flown again after the wait
       if (C.downAt !== null && !this.downSent) {
         this.downSent = true;
-        net.event({ kind: "down", slot: me, by: this.lastHitFrom, weapon: this.lastHitBy });
+        net.event({ kind: "down", slot: me, by: this.lastHitFrom, weapon: this.lastHitBy, with: this.collidedWith ?? undefined });
+        this.collidedWith = null;
         this.onDown(me, this.lastHitFrom, this.lastHitBy);
       }
       if (C.downAt !== null && C.t - C.downAt > m.rules.respawn) this.respawn();
