@@ -6,6 +6,7 @@
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import { cameraFrame } from "../camera";
 import { fleet } from "../fleet";
+import { interceptCues } from "../game/intercept";
 import { Radar, type RadarObject, type RadarOwn, type Track, type V3 } from "../game/radar";
 import { t, tf } from "../i18n";
 import { bodyFixedOf, groundRelief } from "../system/our-surface";
@@ -110,11 +111,13 @@ function radarStep(this: CameraController, dt: number) {
   if (!fix) {
     // (on the ground, another craft: off — its tracks gone)
     if (this.radar.tracks.size || this.radar.lock) this.radar.reset();
+    this.radarObjects = [];
     return;
   }
   this.radarT += dt;
   const objects: RadarObject[] = [];
   for (const src of this.radarSources.values()) for (const o of src(fix)) objects.push(o);
+  this.radarObjects = objects;
   const masked = maskedBy(fix);
   // (a fight begun: its targets swept at once)
   if (this.radarSweep && objects.length) {
@@ -207,6 +210,8 @@ function radarHud(this: CameraController) {
           /** its heading, its ground speed */
           hdg: (Math.atan2(lockT.v[0], lockT.v[1]) + 2 * Math.PI) % (2 * Math.PI),
           gs: Math.hypot(lockT.v[0], lockT.v[1]),
+          /** the intercept's cues (game/intercept.ts): the collision course, the pursuit, the aspect, the merge */
+          icpt: interceptCues(lockT.r, lockT.v, fix.own.v),
         }
       : null,
   };

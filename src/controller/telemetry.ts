@@ -189,7 +189,7 @@ export interface FlightInfo {
   /** a challenge flown: its banner, its next gates (controller/challenge.ts) */
   chal: ReturnType<CameraController["challengeHud"]>;
   /** the F-35's radar: its picture and its lock (controller/radar.ts) */
-  radar: (ReturnType<CameraController["radarHud"]> & { lock?: { cam?: Vec3 | null } | null }) | null;
+  radar: (ReturnType<CameraController["radarHud"]> & { lock?: { cam?: Vec3 | null; collCam?: Vec3 | null } | null }) | null;
   /** the pilot's eyes and body (game/gstrain.ts) */
   body: { grey: number; black: number; red: number; strain: number; gloc: boolean; felt: number };
   /** an aerobatic figure flown: its banner, its cue, its entry, its guide, its result (controller/aerobatics.ts) */
@@ -375,7 +375,11 @@ function flightInfo(this: CameraController): FlightInfo {
       const R = this.radarHud();
       if (!R?.lock) return R;
       const M = enuToCam(this, C);
-      return { ...R, lock: { ...R.lock, cam: M ? M(R.lock.r) : null } };
+      const k = R.lock.icpt.coll;
+      return {
+        ...R,
+        lock: { ...R.lock, cam: M ? M(R.lock.r) : null, collCam: M && k ? M([k[0]! * 5000, k[1]! * 5000, k[2]! * 5000]) : null },
+      };
     })(),
     // (the pilot's eyes and body: the grey-out, the black-out, the red-out, the straining, G-LOC)
     body: (() => {

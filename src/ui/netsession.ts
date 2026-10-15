@@ -1049,6 +1049,7 @@ export class NetSession {
       if (this.d.tools.placings === n) return said;
     }
     this.d.settings.flightMode = "plane";
+    if (c.icpt) c.icptOff();
     const tr = () => this.net?.remotes.track(slot);
     // (his turn from his bank — eased over a quarter second, his roll's own shake left out — and led by his roll's
     // rate 0.8 s on: ours to answer it takes about that)

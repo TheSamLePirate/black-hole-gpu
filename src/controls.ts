@@ -52,7 +52,9 @@ import { type AeroRun, installAerobatics } from "./controller/aerobatics";
 import type { FigureId } from "./game/aerobatics";
 import { GStrain } from "./game/gstrain";
 import { installRadar, Radar, type RadarSource } from "./controller/radar";
+import type { RadarObject } from "./game/radar";
 import { type FormState, installFormation } from "./controller/formation";
+import { type IcptState, installIntercept } from "./controller/intercept";
 import { installJet } from "./controller/jet";
 import { installFplan, noNav, type NavState } from "./controller/fplan";
 import { installChallenge, type ChalState } from "./controller/challenge";
@@ -1024,6 +1026,8 @@ export class CameraController {
   jetCws = { pitch: false, roll: false, thr: Number.NaN };
   /** a formation flown on another's craft (game/formation.ts — controller/formation.ts), null: none */
   form: FormState | null = null;
+  /** the INTERCEPT autopilot on the radar's lock (controller/intercept.ts), null: none */
+  icpt: IcptState | null = null;
   /** an aerobatic figure flown — the program's demonstration or the player's, judged (controller/aerobatics.ts) —,
    *  and one asked, begun at the next frame in the air (the craft just placed) */
   aero: AeroRun | null = null;
@@ -1036,6 +1040,8 @@ export class CameraController {
   /** a whole sweep asked (a fight begun) */
   radarSweep = false;
   readonly radarSources = new Map<string, RadarSource>();
+  /** the sources' things at the radar's last frame (the picture shared: an intercept's target out of the beam) */
+  radarObjects: RadarObject[] = [];
   /** a plane's flight plan and its guidance (game/flightplan.ts — controller/fplan.ts) */
   nav: NavState = noNav();
   /** a challenge flown (game/challenges.ts — controller/challenge.ts), null: none */
@@ -1408,6 +1414,7 @@ installTelemetry(CameraController);
 installSpectator(CameraController);
 installJet(CameraController);
 installFormation(CameraController);
+installIntercept(CameraController);
 installAerobatics(CameraController);
 installRadar(CameraController);
 installFplan(CameraController);

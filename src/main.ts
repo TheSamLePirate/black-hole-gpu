@@ -3326,6 +3326,7 @@ async function main() {
           { label: { fr: "Verrou suivant", en: "Next lock" }, key: "Tab", run: () => say(camera.radarLockNext()) },
           { label: { fr: `Mode (${camera.radar.mode})`, en: `Mode (${camera.radar.mode})` }, run: () => say(camera.radarMode()) },
           { label: { fr: "Lâcher le verrou", en: "Drop the lock" }, run: () => (camera.radar.unlock(), say(t("Lock dropped"))) },
+          { label: { fr: "Intercepter", en: "Intercept" }, key: "⇧Tab", on: !!camera.icpt, run: () => say(camera.icptStart()) },
         ],
       },
       { label: { fr: "Plan de vol", en: "Flight plan" }, key: "⇧O", on: camera.nav.on.l, run: () => routePanel.open() },
@@ -3448,7 +3449,9 @@ async function main() {
       // (a tap: the next target — in a fight, the radar's next lock)
       clearTimeout(tabTimer);
       tabTimer = 0;
-      if (camera.combat?.status === "run" && camera.piloting) combatSay(camera.combatTrigger("lock"));
+      // (⇧Tab in the F-35: the INTERCEPT autopilot on the lock — controller/intercept.ts)
+      if (tabShift && camera.piloting && fleet.active === "f35") panel.toast(camera.icptStart());
+      else if (camera.combat?.status === "run" && camera.piloting) combatSay(camera.combatTrigger("lock"));
       // (the F-35 flown: no planets to step through — its Tab the radar's next lock)
       else if (camera.piloting && fleet.active === "f35") panel.toast(camera.radarLockNext());
       else nextTarget(tabShift ? -1 : 1);

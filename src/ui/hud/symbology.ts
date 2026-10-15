@@ -20,6 +20,7 @@ import { drawJetHud, HMD_RGB, JET_GREEN, type JetHudInfo } from "./jethud";
 import type { avionicsData } from "../../f35/cockpit";
 import { alertsOf, type AlertInput } from "./alerts";
 import type { HudKind } from "../../game/hudkind";
+import type { InterceptCues } from "../../game/intercept";
 import { drawApproachHud, drawSpaceHud, type ApproachHudInfo, type SpaceHudInfo } from "./kindhud";
 import { t, tf } from "../../i18n";
 
@@ -60,7 +61,17 @@ export interface RadarPicture {
   mode: string;
   beam: number;
   contacts: RadarData["contacts"];
-  lock: { name: string; iff: string; range: number; closure: number; alt: number; cam?: V3 | null } | null;
+  lock: {
+    name: string;
+    iff: string;
+    range: number;
+    closure: number;
+    alt: number;
+    cam?: V3 | null;
+    /** the collision course on the camera's axes (a point 5 km along it) */
+    collCam?: V3 | null;
+    icpt?: InterceptCues;
+  } | null;
 }
 
 export interface SymInfo {
@@ -578,6 +589,7 @@ export function drawSymbology(F: SymFrame) {
       i.radar,
     );
   if (i.radar?.lock && !i.combat) drawLockBox(F, pr, stroke, text, i.radar.lock);
+  if (i.radar?.lock?.icpt) drawIntercept(F, pr, stroke, text, i.radar.lock, i.radar.lock.icpt);
   if (i.dock && i.dockGuide && !i.dock.docked && s.hudDock && on(F, "dock") && F.density < 2) drawDock(F, pr, stroke, text, inside);
 
   // ---- in the air: the angle of attack, the energy, the sideslip, the load, the flight director
@@ -2487,6 +2499,44 @@ function drawLockBox(
     ctx.restore();
     text(label, x, y + 20 * dpr, col, 11, "center", true);
   }
+}
+
+/** The intercept's cues on the lock (game/intercept.ts): the collision course's steering cue (a circle on the way
+ *  to meet it, its heading), and under the HUD's centre the heading to fly, the merge's time, the aspect, the
+ *  pursuit, the crossing angle. */
+function drawIntercept(
+  F: SymFrame,
+  pr: (d: V3 | null | undefined) => [number, number] | null,
+  stroke: (draw: () => void, col: string, lw: number, dash?: number[]) => void,
+  text: (t: string, x: number, y: number, col: string, size: number, align?: CanvasTextAlign, mono?: boolean) => void,
+  L: NonNullable<RadarPicture["lock"]>,
+  I: InterceptCues,
+) {
+  const { ctx, W, H, dpr } = F;
+  const col = "rgba(120, 255, 170, 1)";
+  const p = L.collCam ? pr(L.collCam) : null;
+  if (p && p[0] > 0 && p[0] < W && p[1] > 0 && p[1] < H) {
+    const r = 9 * dpr;
+    stroke(() => ctx.arc(p[0], p[1], r, 0, 2 * Math.PI), col, 1.6);
+    stroke(
+      () => {
+        ctx.moveTo(p[0], p[1] - r);
+        ctx.lineTo(p[0], p[1] - r - 8 * dpr);
+      },
+      col,
+      1.6,
+    );
+    ctx.fillStyle = col;
+    ctx.fillRect(p[0] - 1.5 * dpr, p[1] - 1.5 * dpr, 3 * dpr, 3 * dpr);
+  }
+  const hdg = (a: number | null) => (a === null ? "---" : String(Math.round((a * 180) / Math.PI + 360) % 360).padStart(3, "0"));
+  const tti =
+    I.tti === null || !Number.isFinite(I.tti) || I.tti > 5999
+      ? "--:--"
+      : `${Math.floor(I.tti / 60)}:${String(Math.floor(I.tti % 60)).padStart(2, "0")}`;
+  const pur = I.pursuit === "PURE" ? "PURE" : `${I.pursuit} ${Math.round(I.pursuitDeg)}°`;
+  const line = `INTC ${hdg(I.collHdg)}  TTI ${tti}  AA ${Math.round(I.aspect)}${I.side}  ${pur}  HCA ${Math.round(I.hca)}`;
+  text(line, W / 2, H * 0.78, col, 11, "center", true);
 }
 
 /**

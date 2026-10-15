@@ -70,6 +70,10 @@ function jetToggle(this: CameraController, what: "ap" | "athr" | "ab"): string {
     this.formOff();
     return t("Formation off — altitude, heading and speed held");
   }
+  if (this.icpt && what !== "ab") {
+    this.icptOff();
+    return t("Intercept off — altitude, heading and speed held");
+  }
   if (what === "ab") {
     m.ab = !m.ab;
     if (m.ab) {
@@ -119,6 +123,7 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
   this.abLevel = T ? Math.min(Math.max(this.abLevel + (abOn ? 1 : -1) * (dt / T.light), 0), 1) : abOn ? 1 : 0;
   if (!jetReady(this)) {
     if (this.form && !formGrace(this.form)) this.formOff(t("Formation off — not flown as a plane"));
+    if (this.icpt) this.icptOff(t("Intercept off — not flown as a plane"));
     if (!this.form && (m.alt !== null || m.hdg !== null || m.spd !== null || m.ab)) this.jetModes = noJetModes();
     return none;
   }
@@ -130,13 +135,14 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
   if (!f || this.rolling || this.pilot.auto !== "none") {
     if (this.form && (this.pilot.auto !== "none" || !formGrace(this.form)))
       this.formOff(this.pilot.auto !== "none" ? t("Formation off — the autopilot") : t("Formation off — on the ground"));
+    if (this.icpt) this.icptOff(this.pilot.auto !== "none" ? t("Intercept off — the autopilot") : t("Intercept off — on the ground"));
     m.alt = m.hdg = m.spd = null;
     this.jetCws.thr = Number.NaN;
     return none;
   }
   const cws = this.jetCws;
   // (a formation flown: its bank, its flight path, its speed — the holds' own laws left aside)
-  const fm = this.formStep(inp, f);
+  const fm = this.icptStep(inp, f) ?? this.formStep(inp, f);
   if (fm) {
     cws.pitch = cws.roll = false;
     // (the afterburner when the dry engine at full cannot keep up — he speeds up, we are behind —, out once eased)

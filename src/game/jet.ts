@@ -42,6 +42,8 @@ export interface JetModes {
   /** a formation flown (controller/formation.ts): the leader's name, the slot's distance [m] (the displays' copy) */
   form?: string;
   formDist?: number;
+  /** an intercept flown (controller/intercept.ts): its phase and target (the displays' copy) */
+  icpt?: string;
 }
 export const noJetModes = (): JetModes => ({ alt: null, hdg: null, spd: null, ab: false });
 
@@ -90,6 +92,11 @@ export function jetCommands(m: JetModes, f: { h: number; hdg: number; V: number 
 /** The annunciators (the HUD's top line): the modes engaged and their targets, in the units shown. */
 export function jetAnnunciators(m: JetModes, u: { alt: (m: number) => string; spd: (v: number) => string }): string[] {
   const out: string[] = [];
+  if (m.icpt) {
+    out.push(`${m.icpt}${m.formDist !== undefined ? ` ${u.alt(m.formDist)}` : ""}`);
+    if (m.ab) out.push("AB");
+    return out;
+  }
   if (m.form) {
     out.push(`FORM ${m.form.toUpperCase()}${m.formDist !== undefined ? ` ${u.alt(m.formDist)}` : ""}`);
     if (m.ab) out.push("AB");

@@ -181,6 +181,7 @@ pertinent.
     pour l'identifier à vue.
 
   *Fini quand* l'interception d'un avion de ligne réel à 80 km se fait seule jusqu'à la patrouille à 300 m.
+  *Fait le 2026-10-15 — [fiche](progress/aviation/C2.md) : repères au HUD (INTC, TTI, AA, poursuite, HCA, repère de pilotage) ; INTERCEPT (⇧Tab) : conversion par l'arrière, jonction et patrouille 300 m derrière à gauche par la loi de formation ; 80 km de face → patrouille en 309 s, tenue à 9 m ; un drone en orbite aussi. L'avion de ligne réel attend la phase T.*
 - **C3. Où tirer.**
   - Au canon, le collimateur **calcule la position future de la cible** avec sa vitesse **et son
     accélération** (son virage), le temps de vol des obus, leur chute et la vitesse de l'avion.
