@@ -6,7 +6,7 @@
 version: "3.8"
 services:
   kerr:
-    image: ghcr.io/thesamlepirate/black-hole-gpu:285286a-405.1
+    image: ghcr.io/thesamlepirate/black-hole-gpu:3240228-406.1
     ports:
       - "3000:80"
     restart: unless-stopped
@@ -20,6 +20,11 @@ services:
     # (the TURN relay's shared secret — the stack's environment in Portainer; unset: STUN alone)
     environment:
       - TURN_SECRET=${TURN_SECRET:-}
+      # (the real traffic's relay — server/traffic.ts: aisstream.io's key, OpenSky's client credentials; unset: the
+      # aircraft from adsb.lol alone, no ships)
+      - AISSTREAM_API_KEY=${AISSTREAM_API_KEY:-}
+      - OPENSKY_CLIENT_ID=${OPENSKY_CLIENT_ID:-}
+      - OPENSKY_CLIENT_SECRET=${OPENSKY_CLIENT_SECRET:-}
     stop_grace_period: 10s
     restart: unless-stopped
   # the TURN relay for the voices and the direct links through a carrier's NAT (docs/DEPLOY.md): TURN_SECRET in
