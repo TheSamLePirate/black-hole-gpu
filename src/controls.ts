@@ -1044,6 +1044,9 @@ export class CameraController {
   traffic: TrafficFeed | null = null;
   /** the real traffic's clock [s since 1970] (none: the wall's — a test's own) */
   trafficClock?: () => number;
+  /** the real traffic's own clock [s since 1970]: the frames' time — still while the game is paused (its image
+   *  converges), catching the wall clock up after (controller/traffic.ts trafficStep) */
+  trafficT?: number;
   /** our AI wingmen (controller/wingmen.ts), null: none flying */
   wing: WingState | null = null;
   /** the room's others' AI wingmen (their host flies them): by his slot, their states and when heard [s] */

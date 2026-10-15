@@ -1,7 +1,7 @@
 // The app under test, driven as a player would: a production server of its own (no hot reload), real
 // key and mouse events by the DevTools protocol — and every click proven to land on its element
 // (an invisible overlay once swallowed the pointer while scripted .click() calls kept passing).
-import { type Cdp, launch, SHOW } from "./cdp";
+import { type Cdp, launch } from "./cdp";
 import { recorder } from "./telemetry";
 
 const KEYCODES: Record<string, number> = {
@@ -151,10 +151,12 @@ export class App {
       180_000,
     );
     this.lastLoadMs = performance.now() - t0;
-    // (on the mini's screen — kiosk —: the frame rate shown in its corner, the game's own meter: who watches
+    // (the frame rate shown in its corner, the game's own meter — on every run, the screenshots too: who watches
     // sees how the test runs; a player's preference, kept across scenes. Not when the page failed to start)
-    if (SHOW === "kiosk" && !startupFailure) await this.js("(__bh.settings.showFps = true, true)").catch(() => {});
+    if (!startupFailure) await this.js("(__bh.settings.showFps = true, true)").catch(() => {});
     if (this.recorded && !startupFailure) await recorder.attach(this, this.file).catch((e) => console.error(`e2e telemetry: ${e}`));
+    // (the scene's own ray tracer compiled before the test begins — not its stale first image)
+    if (!startupFailure) await this.settled(120_000);
     await Bun.sleep(1500);
   }
 
@@ -321,7 +323,22 @@ export class App {
     await Bun.sleep(100);
   }
 
+  /** Waits for the scene's own ray tracer — renderer.tracerSettled: compiled, none compiling ahead, the
+   *  "Compiling the ray tracer" pill down —, then three frames drawn with it, so its image is the one on screen. */
+  async settled(timeoutMs = 180_000) {
+    const ok = await this.waitFor("__bh.renderer.tracerSettled", timeoutMs).then(
+      () => true,
+      () => false,
+    );
+    if (!ok) console.error("e2e: the scene's ray tracer still compiling — looked at anyway");
+    await this.js(
+      "new Promise((r) => { let n = 0; const f = () => (++n >= 3 ? r(1) : requestAnimationFrame(f)); requestAnimationFrame(f); })",
+    );
+  }
+
+  /** A screenshot — once the scene's ray tracer is compiled (settled): never the stale image the pill covers. */
   async shot(file: string) {
+    await this.settled();
     const r = await this.cdp.send<{ data: string }>("Page.captureScreenshot", { format: "png" });
     await Bun.write(file, Buffer.from(r.data, "base64"));
   }

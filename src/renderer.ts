@@ -5,6 +5,10 @@ import type { PlanetCharacter } from "./controller/character";
 import { dot as dot3 } from "./math/vec3";
 import { sphericalFrame } from "./wormhole";
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
+import seafftWGSL from "./shaders/seafft.wgsl" with { type: "text" };
+import { SEA_TEXTURE_LIMIT, SeaFft, seaShader } from "./sea/fft-gpu";
+import { normalQuantile, seaCascades, seaSystems } from "./sea/spectrum";
+import { MarineFeed, type SeaState, windSea } from "./sea/marine";
 import { forestSource, withForest } from "./forest-shader";
 import { lampsOf } from "./cockpit/lights";
 import { EARTH_RUNWAYS, landingEnd, RUNWAY_HALF_WIDTH, RUNWAY_LENGTH, runwayGrade, runwayPaved } from "./game/sites";
@@ -176,7 +180,9 @@ const WX_DRIFT_PERIOD = 204800;
 const BASE_PARAM_VEC4S = 69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S + SEA_VEC4S + 1 + 1 + SHADE_VEC4S + WX_VEC4S;
 /** the ships' wakes near the camera: a count, then eight ships, two each (trace.wgsl: Params.wake, seaWake) */
 const WAKE_VEC4S = 17;
-const PARAM_VEC4S = BASE_PARAM_VEC4S + SURFACE_VEC4S + SCENERY_VEC4S + 5 + WAKE_VEC4S;
+/** the sea's FFT waves (trace.wgsl: Params.seafft) */
+const SEAFFT_VEC4S = 4;
+const PARAM_VEC4S = BASE_PARAM_VEC4S + SURFACE_VEC4S + SCENERY_VEC4S + 5 + WAKE_VEC4S + SEAFFT_VEC4S;
 /**
  * The sea's twelve wave trains near the camera (trace.wgsl: seaWaves): wavenumbers in whole units of
  * 2π/1024 m on the wind's axes (along, across) — exact from an anchor of whole kilometres, in float32 —,
@@ -595,6 +601,21 @@ export class Renderer {
   readonly earthSurface: EarthSurface;
   readonly earthScenery: EarthScenery;
   private surfaceSampler: GPUSampler;
+  /** the sea's FFT waves (null: the device takes no more textures — the trains then), their sampler */
+  readonly seaFft: SeaFft | null;
+  private seaSampler: GPUSampler;
+  /** the sea's state about the camera (the marine model's, else the wind's), the spectrum's key, the waves' clock */
+  private marine = new MarineFeed();
+  seaState: SeaState | null = null;
+  /** a sea imposed (the tests', a scene's: null — the marine model's, else the wind's) */
+  seaOverride: SeaState | null = null;
+  private seaKey = "";
+  private seaFftT = 0;
+  private seaFftDue = false;
+  /** the choppiness of the FFT's crests */
+  private seaLambda = 0.9;
+  /** the sea's significant height about the camera [m] (the ships' motion — controller/seatraffic.ts) */
+  seaHs = 1;
   private earthWant: EarthTier | null = null;
   /** the finest Earth tier this GPU's memory held (lowered when one ran out) */
   private earthCap: EarthTier | "none" = "high";
@@ -773,9 +794,28 @@ export class Renderer {
     device: GPUDevice,
     context: GPUCanvasContext,
     format: GPUTextureFormat,
-    src: { trace: string; display: string; post: string; sky: string; ship: string; endurance: string; station: string; overlay: string },
+    src: {
+      trace: string;
+      display: string;
+      post: string;
+      sky: string;
+      ship: string;
+      endurance: string;
+      station: string;
+      overlay: string;
+      seafft: string;
+    },
   ) {
     this.device = device;
+    // (the sea's FFT waves: where the device takes their texture — sea/fft-gpu.ts)
+    this.seaFft = device.limits.maxSampledTexturesPerShaderStage >= SEA_TEXTURE_LIMIT ? new SeaFft(device, src.seafft) : null;
+    this.seaSampler = device.createSampler({
+      magFilter: "linear",
+      minFilter: "linear",
+      mipmapFilter: "linear",
+      addressModeU: "repeat",
+      addressModeV: "repeat",
+    });
     this.context = context;
     this.sdrFormat = format;
     this.traceSource = src.trace;
@@ -815,6 +855,12 @@ export class Renderer {
         { binding: 28, visibility: C, texture: { sampleType: "uint", viewDimension: "2d-array" } },
         ...(device.limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT
           ? [{ binding: 32, visibility: C, buffer: { type: "read-only-storage" } as GPUBufferBindingLayout }]
+          : []),
+        ...(device.limits.maxSampledTexturesPerShaderStage >= SEA_TEXTURE_LIMIT
+          ? [
+              { binding: 33, visibility: C, texture: { sampleType: "float", viewDimension: "2d-array" } as GPUTextureBindingLayout },
+              { binding: 34, visibility: C, sampler: { type: "filtering" } as GPUSamplerBindingLayout },
+            ]
           : []),
         ...(device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT
           ? [
@@ -1387,7 +1433,7 @@ export class Renderer {
         maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
         maxBufferSize: adapter.limits.maxBufferSize,
         maxTextureDimension2D: adapter.limits.maxTextureDimension2D,
-        maxSampledTexturesPerShaderStage: Math.min(SURFACE_TEXTURE_LIMIT, adapter.limits.maxSampledTexturesPerShaderStage),
+        maxSampledTexturesPerShaderStage: Math.min(SEA_TEXTURE_LIMIT, adapter.limits.maxSampledTexturesPerShaderStage),
         maxStorageBuffersPerShaderStage: Math.min(SCENERY_STORAGE_LIMIT, adapter.limits.maxStorageBuffersPerShaderStage),
       },
     });
@@ -1412,13 +1458,17 @@ export class Renderer {
     loading.done("gpu");
     gpuDiagnostics.enter("shader-download");
     const src = {
-      trace: sceneryShader(
-        surfaceShader(
-          withForest(await wgsl(traceWGSL), await wgsl(forestSource)),
-          device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT,
+      trace: seaShader(
+        sceneryShader(
+          surfaceShader(
+            withForest(await wgsl(traceWGSL), await wgsl(forestSource)),
+            device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT,
+          ),
+          device.limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT,
         ),
-        device.limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT,
+        device.limits.maxSampledTexturesPerShaderStage >= SEA_TEXTURE_LIMIT,
       ),
+      seafft: await wgsl(seafftWGSL),
       display: await wgsl(displayWGSL),
       post: await wgsl(postWGSL),
       sky: await wgsl(skyWGSL),
@@ -1815,6 +1865,12 @@ export class Renderer {
         { binding: 26, resource: this.ship.shadowView },
         { binding: 28, resource: this.earthTiles.texture.createView({ dimension: "2d-array" }) },
         ...(this.earthScenery.supported ? [{ binding: 32, resource: { buffer: this.earthScenery.buffer } }] : []),
+        ...(this.seaFft
+          ? [
+              { binding: 33, resource: this.seaFft.texture.createView({ dimension: "2d-array" }) },
+              { binding: 34, resource: this.seaSampler },
+            ]
+          : []),
         ...(this.earthSurface.supported
           ? [
               { binding: 29, resource: this.earthSurface.colorView() },
@@ -1853,6 +1909,12 @@ export class Renderer {
         { binding: 26, resource: this.ship.shadowView },
         { binding: 28, resource: this.earthTiles.texture.createView({ dimension: "2d-array" }) },
         ...(this.earthScenery.supported ? [{ binding: 32, resource: { buffer: this.earthScenery.buffer } }] : []),
+        ...(this.seaFft
+          ? [
+              { binding: 33, resource: this.seaFft.texture.createView({ dimension: "2d-array" }) },
+              { binding: 34, resource: this.seaSampler },
+            ]
+          : []),
         ...(this.earthSurface.supported
           ? [
               { binding: 29, resource: this.earthSurface.colorView() },
@@ -2621,6 +2683,8 @@ export class Renderer {
         });
       }
     }
+    // the sea's FFT waves (Params.seafft): its spectrum renewed when the sea changes, its frame's waves due
+    f.set(this.seaFftParams(!o.probe, time, tSec, s), wat + WAKE_VEC4S * 4);
     f[61 * 4 + 1] = sunAng; // (earth4.y)
     f[61 * 4 + 2] = this.marsDust(s, near, bodies, time); // (earth4.z)
     if (!o.probe) this.marsDustNow = f[61 * 4 + 2]!;
@@ -2947,6 +3011,7 @@ export class Renderer {
     s: Settings,
   ): Float32Array {
     const out = new Float32Array(SEA_VEC4S * 4);
+    this.seaHere = null;
     if (!near || near.index !== earthK || !(altKm < 30)) return out;
     // (in metres as the shader has it: P.near4.w)
     const mR = near.radius * 1476.625 * s.massSolar;
@@ -2965,6 +3030,7 @@ export class Renderer {
     const tc = [up[1]! * tu[2]! - up[2]! * tu[1]!, up[2]! * tu[0]! - up[0]! * tu[2]!, up[0]! * tu[1]! - up[1]! * tu[0]!];
     const U = Math.max(wx.u10, 0.5);
     const weight = Math.min(Math.max((30 - altKm) / 15, 0), 1);
+    this.seaHere = { U, to, lat, lon, weight };
     const uc = cb[0]! * tu[0]! + cb[1]! * tu[1]! + cb[2]! * tu[2]!;
     const cc = cb[0]! * tc[0]! + cb[1]! * tc[1]! + cb[2]! * tc[2]!;
     const u0 = Math.round(uc / 1024) * 1024,
@@ -2984,6 +3050,53 @@ export class Renderer {
       const phase = (Math.sqrt(9.81 * k) * tSec + w.phase0) % (2 * Math.PI);
       out.set([w.n[0], w.n[1], a, phase], 12 + 4 * i);
     });
+    return out;
+  }
+
+  /** the wind and the place the sea's waves are drawn for this frame (seaParams; null: no sea near) */
+  private seaHere: { U: number; to: number; lat: number; lon: number; weight: number } | null = null;
+
+  /**
+   * The sea's FFT waves for this frame (trace.wgsl: Params.seafft; sea/fft-gpu.ts): the sea's state about the camera
+   * — the marine model's (sea/marine.ts), else the sea the wind raises —, its spectrum renewed when it changes (its
+   * frame the wind's way: the trains' and the wakes' axes), the waves at the clock now due before the tracer; the
+   * Cox–Munk slopes' variance finer than the cascades (what they leave of it — a quarter at least: the capillaries).
+   */
+  private seaFftParams(frame: boolean, time: number, tSec: number, s: Settings): Float32Array {
+    const out = new Float32Array(SEAFFT_VEC4S * 4);
+    const H = this.seaHere;
+    if (!this.seaFft || !s.seaFft || !H || H.weight <= 0) return out;
+    const state = this.seaOverride ?? this.marine.peek(H.lat, H.lon, utcOf(time)) ?? windSea(H.U, H.to);
+    this.seaState = state;
+    this.seaHs = Math.hypot(state.wind.hs, state.swell.hs);
+    const r = (x: number, k: number) => Math.round(x * k);
+    const deg = (a: number) => r(((a * 180) / Math.PI + 360) % 360, 0.2);
+    const key = [
+      r(state.wind.hs, 10),
+      r(state.wind.tp, 4),
+      deg(state.wind.to),
+      r(state.swell.hs, 10),
+      r(state.swell.tp, 2),
+      deg(state.swell.to),
+      deg(H.to),
+    ].join();
+    if (key !== this.seaKey) {
+      this.seaKey = key;
+      this.seaFft.setSpectrum(seaCascades(seaSystems(state, H.to), 1));
+    }
+    // (the waves at this clock due before the next trace — the probe's params and the frame's alike: the same sea)
+    if (frame || !this.seaFftDue) this.seaFftT = tSec;
+    this.seaFftDue = true;
+    const st = this.seaFft.stats;
+    const cmU = 0.00316 * H.U,
+      cmC = 0.003 + 0.00192 * H.U;
+    out.set([1, this.seaLambda, Math.sqrt(st.height), 0], 0);
+    out.set([1024, 128, 16, 256], 4);
+    // (the whitecaps' threshold on the Jacobian: its spread from the long cascades' slopes — J ≈ 1 + λ k h —, the
+    // level under which lies Monahan's cover at this wind)
+    const sJ = this.seaLambda * Math.sqrt(st.slope01);
+    const W = Math.min(Math.max(3.84e-6 * H.U ** 3.41, 1e-5), 0.1);
+    out.set([Math.max(cmU - st.slopeX, 0.25 * cmU), Math.max(cmC - st.slopeZ, 0.25 * cmC), 1 + sJ * normalQuantile(W), sJ], 8);
     return out;
   }
 
@@ -3342,6 +3455,11 @@ export class Renderer {
   /** the trace's passes encoded; false: no kernel for the scene yet (still compiling) — nothing traced */
   private dispatchTrace(enc: GPUCommandEncoder, t: Target, x: number, y: number, quality: boolean): boolean {
     this.cameraKey = this.featureKey;
+    // (the sea's FFT waves of this frame first: the tracer samples them)
+    if (this.seaFftDue && this.seaFft) {
+      this.seaFft.encode(enc, this.seaFftT, this.seaLambda, this.prof.pass("sea fft"));
+      this.seaFftDue = false;
+    }
     // (the far field's LUT first: every realtime frame, once an epoch while a still view refines —
     // skipped while its pipeline is still compiling in the background, the epoch left unmarked so
     // the next frame tries again)
@@ -4942,6 +5060,21 @@ export class Renderer {
   effectiveQuality(s: Settings) {
     return effectiveQuality(s, this.tier);
   }
+  /**
+   * Whether the image is the scene's own (the tests wait for it before they look): the first frame out, the scene's
+   * specialised kernel there (or given up — the general one drawing), none still compiling ahead (the surface's,
+   * the scenery's), the "compiling the ray tracer" pill gone.
+   */
+  get tracerSettled(): boolean {
+    // (a kernel compiling ahead — the surface's, the scenery's, asked: its data may wait longer than its compile)
+    if (!this.firstFrameDoneAt || this.sceneTracerShown || (this.aheadKey >= 0 && !this.kernelReady(this.aheadKey))) return false;
+    // (the pills the player sees: "Compiling the ray tracer…" — the first image's, the scene's)
+    if (loading.isActive("pipelines") || loading.isActive("scene-tracer")) return false;
+    if (this.featureKey === FEATURES_ALL) return !!this.tracePipeline;
+    const v = this.variants.get(this.featureKey);
+    return !!v?.rt || !!v?.failed || !!v?.rtGivenUp;
+  }
+
   /** Optional pipeline states are observable without starting a compilation. */
   get pipelineStatus() {
     return {

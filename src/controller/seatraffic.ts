@@ -117,7 +117,7 @@ let cache: { at: number; list: SeaCraft[]; of: unknown } = { at: -1, list: [], o
 function seaNow(this: CameraController): SeaCraft[] {
   const F = this.traffic;
   if (!F || !F.ships.size) return [];
-  const now = this.trafficClock ? this.trafficClock() : Date.now() / 1000;
+  const now = this.trafficClock ? this.trafficClock() : (this.trafficT ?? Date.now() / 1000);
   if (cache.at === now && cache.of === F) return cache.list;
   const td = now - Math.max(0, this.s.trafficDelay ?? 0);
   const hs = this.seaHs ?? 1;

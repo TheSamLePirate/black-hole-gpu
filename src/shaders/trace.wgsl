@@ -140,6 +140,10 @@ struct Params {
   // from the camera on the Earth's axes [m] and its length [m]; its bow's way (its length its beam [m]) and its
   // speed [m/s]
   wake: array<vec4f, 17>,
+  // the sea's FFT waves (renderer: seaFftParams; sea/fft-gpu.ts; seaWavesFft): [0] on, choppiness, the height's
+  // standard deviation [m], unused; [1] the cascades' periods [m], N; [2] the slopes' variance finer than the
+  // cascades (along the wind, across it: Cox–Munk's share the cascades leave), unused ×2; [3] unused
+  seafft: array<vec4f, 4>,
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -681,6 +685,8 @@ var<private> FOOT_FAR: f32 = 1.0;
 // (the sea seen near: the point from the camera [m, the Earth's axes, unsquashed] — earthNear sets it)
 var<private> SEA_ON: bool = false;
 var<private> SEA_D: vec3f;
+// the sea's depth under the point shaded [m] (earthGround: ETOPO's height, negative at sea)
+var<private> SEA_DEPTH: f32 = 50.0; // (none yet: build-earth-relief.py clips the seas' depths at 0)
 var<private> SPLAT: bool = false;
 var<private> SPLAT_POS: vec2f;
 var<private> SPLAT_CELL: vec2f;
@@ -3767,6 +3773,9 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
 @group(0) @binding(29) var surfaceColour: texture_2d_array<f32>;
 @group(0) @binding(30) var surfaceCover: texture_2d_array<u32>;
 @group(0) @binding(31) var surfaceSamp: sampler;
+// the sea's FFT waves (M1, sea/fft-gpu.ts): its three cascades' two layers each and their mips, sampled repeating
+@group(0) @binding(33) var seaFft: texture_2d_array<f32>;
+@group(0) @binding(34) var seaSamp: sampler;
 // the body near the camera: its finer colour map and relief (src/system/hd-maps.ts; P.hd)
 @group(0) @binding(22) var hdColor: texture_2d<f32>;
 @group(0) @binding(23) var hdRelief: texture_2d<f32>;    // normal (east, south), ocean, height
@@ -5461,7 +5470,8 @@ fn smithBeckmann(c: f32, m2: f32) -> f32 {
 // 1 % at 10 m/s, 4 % at 15), their foam a diffuse white. Near (seaWaves), the waves longer than a few
 // pixels drawn — the surface's normal — and the rest of their slopes' variance left to the glint's (LEAN):
 // the same sea, resolved where it can be.
-struct SeaWaves { n: vec3f, vu: f32, vc: f32, m: f32 };
+// (foam: the FFT's surface's Jacobian there — 1 the flat sea, under ~0.5 folding —; h its height [m])
+struct SeaWaves { n: vec3f, vu: f32, vc: f32, m: f32, foam: f32, h: f32 };
 // The resolved waves at the point SEA_D: twelve trains (P.sea), their slopes summed where the pixel
 // resolves them (longer than ~4 footprints, faded from 6 to 2), their variance kept where it does not.
 // Crossing trains alone draw a lattice: their crests bent (the point displaced ±10 m over ~128 m), their
@@ -5577,6 +5587,94 @@ fn seaWake(up: vec3f, footM: f32) -> SeaWake {
   return o;
 }
 
+// The FFT's waves at the point SEA_D (M1; sea/fft-gpu.ts — compiled in where the device takes its texture, else
+// the trains): the point the crests' sideways displacement brought here found (one step back along the two long
+// cascades' displacement), then each cascade's slopes at the mip its footprint asks (its texels a 256th of its
+// period): their mean the normal's, their second moment less the mean's square the slopes' variance the pixel
+// does not resolve (LEAN); where the surface folds (its Jacobian under ~0.5, the long cascades' summed) the crests
+// break white.
+// (seaWavesFft begin)
+fn seaWavesFft(q: vec3f, tu: vec3f, tc: vec3f, footM: f32) -> SeaWaves {
+  var o: SeaWaves;
+  o.m = P.sea[1].w;
+  var x = vec2f(dot(SEA_D, P.sea[0].xyz) + P.sea[2].x, dot(SEA_D, P.sea[1].xyz) + P.sea[2].y);
+  let foot = max(footM, 1e-3);
+  var dsum = vec2f(0.0);
+  for (var i = 0u; i < 2u; i++) {
+    let L = P.seafft[1][i];
+    let lod = max(log2(foot * 256.0 / L), 0.0);
+    dsum += textureSampleLevel(seaFft, seaSamp, x / L, i32(2u * i), lod).xz;
+  }
+  x -= dsum * o.m;
+  var su = 0.0;
+  var sc = 0.0;
+  var J = 1.0;
+  var h = 0.0;
+  for (var i = 0u; i < 3u; i++) {
+    let L = P.seafft[1][i];
+    let lod = max(log2(foot * 256.0 / L), 0.0);
+    let s = textureSampleLevel(seaFft, seaSamp, x / L, i32(2u * i + 1u), lod);
+    su += s.x;
+    sc += s.y;
+    o.vu += max(s.z - s.x * s.x, 0.0);
+    o.vc += max(s.w - s.y * s.y, 0.0);
+    if (i < 2u) {
+      let d = textureSampleLevel(seaFft, seaSamp, x / L, i32(2u * i), lod);
+      J += d.w - 1.0;
+      h += d.y;
+    }
+  }
+  o.n = normalize(q - (su * tu + sc * tc) * o.m);
+  o.vu *= o.m * o.m;
+  o.vc *= o.m * o.m;
+  o.foam = 1.0 + (J - 1.0) * o.m;
+  o.h = h * o.m;
+  return o;
+}
+// The sea's height [m] at d from the camera (the Earth's axes [m]), seen from s metres: the two long cascades'.
+fn seaHeightAt(d: vec3f, s: f32) -> f32 {
+  let x = vec2f(dot(d, P.sea[0].xyz) + P.sea[2].x, dot(d, P.sea[1].xyz) + P.sea[2].y);
+  var h = 0.0;
+  for (var i = 0u; i < 2u; i++) {
+    let L = P.seafft[1][i];
+    let lod = max(log2(max(s * 0.0015, 0.05) * 256.0 / L), 0.0);
+    h += textureSampleLevel(seaFft, seaSamp, x / L, i32(2u * i), lod).y;
+  }
+  return h * P.sea[1].w;
+}
+// The sea as a surface near a low camera (M1: its waves' relief — a crest hides what lies behind it): the ray met
+// against the FFT's heights instead of the mean sea, under 600 m and within 4 km — marched from where it is a few
+// spreads over the sea to where it is as far under (it must cross it there), the crossing bisected. t, m: the
+// distance to the mean sea as earthNear has it and its scale; the distance to the waves returned.
+fn seaSurfaceHit(look: vec3f, t: f32, m: f32) -> f32 {
+  let lb = toBody(look);
+  let up = cross(P.sea[0].xyz, P.sea[1].xyz);
+  let D = t / m * P.near4.w;
+  let sinE = -dot(lb, up);
+  if (sinE <= 1e-4 || D > 4000.0) { return t; }
+  let hc = D * sinE;
+  if (hc > 600.0) { return t; }
+  let Hm = 4.0 * P.seafft[0].z + 0.3;
+  let sa = max(D * (1.0 - Hm / hc), 0.0);
+  let sb = D * (1.0 + Hm / hc);
+  var a = sa;
+  for (var i = 1; i <= 24; i++) {
+    let b = sa + (sb - sa) * f32(i) / 24.0;
+    if (hc - b * sinE - seaHeightAt(lb * b, b) <= 0.0) {
+      var lo = a;
+      var hi = b;
+      for (var j = 0; j < 6; j++) {
+        let mid = 0.5 * (lo + hi);
+        if (hc - mid * sinE - seaHeightAt(lb * mid, mid) <= 0.0) { hi = mid; } else { lo = mid; }
+      }
+      return t * (0.5 * (lo + hi)) / D;
+    }
+    a = b;
+  }
+  return t;
+}
+// (seaWavesFft end)
+
 // calm: inland water (0 the open sea, 1 a sheltered lake: its fetch short — the wind's waves small, no swell,
 // no whitecaps); mirror: the world it reflects (waterMirror: rgb radiance, w its weight — the sky the rest)
 fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: vec3f, footM: f32, calm: f32, mirror: vec4f) -> vec3f {
@@ -5592,12 +5690,33 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   // (the share of Cox–Munk's variance in slopes finer than the resolved range: half)
   var fine = 1.0;
   var wk: SeaWake;
+  // (the Cox–Munk slopes' variance the drawn waves leave: half of it with the trains; with the FFT, the finer
+  // than its cascades' — renderer: seaFftParams)
+  var tailU = -1.0;
+  var tailC = -1.0;
+  var crest = 0.0;
+  var crestH = 0.0;
   if (SEA_ON) {
     // (near: the flight's own wind — the waves and the glint as the pilot feels it —, the trains drawn)
     let b = P.sea[1].w;
     U = mix(U, P.sea[0].w, b);
     tu = P.sea[0].xyz;
-    let sw = seaWaves(normal, tu, P.sea[1].xyz, footM);
+    var sw: SeaWaves;
+    if (P.seafft[0].x > 0.5) {
+      sw = seaWavesFft(normal, tu, P.sea[1].xyz, footM);
+      tailU = P.seafft[2].x;
+      tailC = P.seafft[2].y;
+      // (whitecaps where the surface folds most: its Jacobian under the threshold that gives Monahan's cover at
+      // this wind — renderer: seaFftParams —, in streaks along the wind)
+      let Jt = P.seafft[2].z;
+      let u = dot(SEA_D, tu) + P.sea[2].x;
+      let c = dot(SEA_D, P.sea[1].xyz) + P.sea[2].y;
+      let st = gnoiseI(vec3i(i32(P.sea[2].z) * 32, i32(P.sea[2].w) * 32, 13), vec3f(u / 9.0, c / 2.5, 0.0));
+      crest = smoothstep(Jt + 0.1, Jt - 0.18, sw.foam) * clamp(0.55 + 0.9 * st, 0.0, 1.0) * (1.0 - calm);
+      crestH = sw.h;
+    } else {
+      sw = seaWaves(normal, tu, P.sea[1].xyz, footM);
+    }
     n = normalize(mix(sw.n, normal, calm));
     vu = sw.vu * (1.0 - calm);
     vc = sw.vc * (1.0 - calm);
@@ -5617,8 +5736,13 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     let paws = 0.5 + 0.5 * gnoise(q * (EARTH_RM / 40.0) + vec3f(P.time.x * P.near5.w * 0.02));
     U = mix(U, min(U * 0.3, 2.2) * paws + 0.15, calm);
   }
-  let su2 = 0.00316 * U * fine + vu;
-  let sc2 = (0.003 + 0.00192 * U) * fine + vc;
+  var su2 = 0.00316 * U * fine + vu;
+  var sc2 = (0.003 + 0.00192 * U) * fine + vc;
+  if (tailU >= 0.0) {
+    let b = P.sea[1].w;
+    su2 = mix(0.00316 * U, tailU, b) * (1.0 - 0.6 * wk.calm * b) + vu;
+    sc2 = mix(0.003 + 0.00192 * U, tailC, b) * (1.0 - 0.6 * wk.calm * b) + vc;
+  }
   let tun = normalize(tu - n * dot(n, tu));
   let tcn = cross(n, tun);
   let H = normalize(Ls + V);
@@ -5640,7 +5764,29 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   let Fv = 0.02 + 0.98 * pow(1.0 - nv, 5.0);
   // (grazing, capped — no sparks along the limb)
   let glint = Eg * min(D * G * F / (4.0 * nv), 8.0);
-  let sea = under * (1.0 - Fv) + glint + Fv * mix(sky * 1.5 / PI, mirror.rgb, mirror.w);
+  // (the sky it mirrors brighter towards the horizon than overhead — some three times on a clear day —: a wave's
+  // face turned to the horizon shines, its back mirrors the darker zenith — what shows the waves from above)
+  let rr = reflect(-V, n);
+  var skyR = sky * (1.5 / PI) * (1.75 - 1.15 * sqrt(clamp(dot(rr, normal), 0.0, 1.0)));
+  var water = under;
+  if (SEA_ON) {
+    let b = P.sea[1].w;
+    // (near: the real sky mirrored — the light probe about the craft, its clouds; a ray the waves send under the
+    // horizon mirrors the horizon's sky)
+    let rUp = normalize(rr + normal * max(0.02 - dot(rr, normal), 0.0));
+    skyR = mix(skyR, probeRadiance(camAxes(fromBody(rUp))), b);
+    // (the water's own colour, from the light into it: the open sea's dark blue — its depth not in the relief
+    // map, the bed's turquoise not drawn)
+    let Ein = Eg * max(dot(normal, Ls), 0.0) + sky;
+    water = mix(under, Ein * vec3f(0.004, 0.017, 0.040) / PI, b);
+  }
+  var sea = water * (1.0 - Fv) + glint + Fv * mix(skyR, mirror.rgb, mirror.w);
+  // (the light through a wave's crest, green-blue, seen against the Sun: the crest's height over the sea's spread)
+  if (tailU >= 0.0 && P.seafft[0].z > 0.0) {
+    let back = pow(clamp(dot(V, -Ls) * 0.5 + 0.5, 0.0, 1.0), 4.0);
+    let lift = clamp(crestH / (2.0 * P.seafft[0].z), 0.0, 1.0);
+    sea += vec3f(0.01, 0.07, 0.06) * Eg * max(dot(normal, Ls), 0.0) * back * lift * (1.0 - Fv);
+  }
   // (the foam lit as a diffuse white of reflectance 0.6, by the sun and the sky; near, in patches over
   // ~8 m — on the same anchor —, their mean the cover)
   var W = clamp(3.84e-6 * pow(U, 3.41), 0.0, 0.1) * (1.0 - calm);
@@ -5649,7 +5795,12 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     let c = dot(SEA_D, P.sea[1].xyz) + P.sea[2].y;
     let pn = gnoiseI(vec3i(i32(P.sea[2].z) * 32, i32(P.sea[2].w) * 32, 7), vec3f(u, c, 0.0) / 8.0);
     let spots = clamp(W * 5.0 * smoothstep(0.35, 0.8, pn), 0.0, 1.0);
-    W = mix(W, spots, smoothstep(16.0, 4.0, footM) * P.sea[1].w) * (1.0 - calm);
+    if (tailU >= 0.0) {
+      // (the FFT's breaking crests where it resolves them — Monahan's mean cover beyond)
+      W = mix(W, crest, smoothstep(30.0, 6.0, footM) * P.sea[1].w);
+    } else {
+      W = mix(W, spots, smoothstep(16.0, 4.0, footM) * P.sea[1].w) * (1.0 - calm);
+    }
     W = max(W, wk.foam * P.sea[1].w);
   }
   let foam = 0.6 / PI * (Eg * nl + sky);
@@ -6215,7 +6366,12 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
     let calm = select(0.0, osmWater * (1.0 - sea0) * select(0.6, 0.92, osm.kind == 4.0), HAS_SCENERY);
     var mirror = vec4f(0.0);
     if (HAS_SCENERY && calm > 0.3 && footM < 40.0) { mirror = waterMirror(q, rd, Ls, E, sky, footM); }
-    col = mix(col, seaShade(q, V, Ls, Eg, sky, col, footM, calm, mirror), ocean);
+    // (the sea's own footprint: its ellipse's mean axis — not its longest, stretched tens of times at a grazing
+    // view, every wave then averaged away —, and of the full image the realtime tiles fill over frames, not of a
+    // whole tile)
+    let footSea = sqrt(length(fx) * length(fy)) * EARTH_RM / sqrt(max(FOOT, 1.0));
+    SEA_DEPTH = max(-rel.w, 0.0);
+    col = mix(col, seaShade(q, V, Ls, Eg, sky, col, footSea, calm, mirror), ocean);
   }
   // the cities at night (sodium's orange, whiter at their hearts), fading into the twilight
   let lights = mix(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r, img.c.a, img.w);
@@ -6687,6 +6843,10 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   if (isEarth(k)) { let dp = vec3f(rd.xy, rd.z / ab); let kM = length(dp) * EARTH_RM; let tm = worldScenery(dp / length(dp), select(1e7, t * kM, t > 0.0),rnd); if (tm < select(1e7, t * kM, t > 0.0)) { t = tm / kM; } }
   if (HAS_RWY) { RWY_HIT = vec4f(vec3f(rd.xy, rd.z / ab) * (t * EARTH_RM), select(0.0, 1.0, isEarth(k) && t > 0.0 && rwyCount() > 0u && WS.w < 0.5)); }
   let lt = nearLight(k);
+  // (the sea's waves in relief near a low camera — over the sea only: its mean level met, h ≈ 0)
+  if (isEarth(k) && t > 0.0 && P.seafft[0].x > 0.5 && P.sea[1].w > 0.0 && WS.w < 0.5 && earthOn()) {
+    if (abs(length(ro + rd * t) - 1.0) * EARTH_RM < 3.0) { t = seaSurfaceHit(look, t, m); }
+  }
   SEA_ON = isEarth(k) && t > 0.0 && P.sea[1].w > 0.0 && WS.w < 0.5;
   SEA_D = toBody(look) * (t / m * P.near4.w);
   WX_W = select(0.0, P.wx[0].x, HAS_WX && isEarth(k) && earthOn());

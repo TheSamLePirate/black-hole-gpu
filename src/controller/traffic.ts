@@ -198,7 +198,7 @@ function trafficNow(this: CameraController): TrafficCraft[] {
   const F = this.traffic;
   if (!F || !F.planes.size) return [];
   // (the real traffic's time: the wall clock's — a test's own)
-  const now = this.trafficClock ? this.trafficClock() : Date.now() / 1000;
+  const now = this.trafficClock ? this.trafficClock() : (this.trafficT ?? Date.now() / 1000);
   // (the same moment: the same list — the radar, the renderer and the overlay all read it)
   if (cache.at === now && cache.of === F) return cache.list;
   const td = now - Math.max(0, this.s.trafficDelay ?? 0);
@@ -360,7 +360,15 @@ function trafficForm(this: CameraController): string {
 
 /** A frame of the traffic: the aircraft followed (a formation's lead, the radar's lock) asked fresh; its radar
  *  source (the aircraft about us, neutral, answering). */
-function trafficStep(this: CameraController) {
+function trafficStep(this: CameraController, dt = 0) {
+  // (its clock: on with the frames — paused, the game's frames stop and so does it: every motion still, the image
+  // converging —, behind the wall clock after a pause catching it up half again as fast; far behind, set to it)
+  const wall = Date.now() / 1000;
+  if (this.trafficT === undefined || wall - this.trafficT > 900 || this.trafficT > wall) this.trafficT = wall;
+  else {
+    this.trafficT += dt;
+    this.trafficT += Math.min(Math.max(wall - this.trafficT, 0), 0.5 * dt);
+  }
   if (this.traffic) {
     const lock = this.radar.lock?.startsWith("trf:") ? this.radar.lock.slice(4) : null;
     this.traffic.focus = this.form?.trafficId ?? lock;

@@ -406,6 +406,7 @@ export interface Settings {
   formPos: number;
   wingmen: number; // the AI wingmen flying with the F-35 (controller/wingmen.ts): 0 to 3
   traffic: boolean; // the real air and sea traffic about the craft (traffic/feed.ts, the relay server/traffic.ts)
+  seaFft: boolean; // the sea's waves by FFT (sea/fft-gpu.ts: three cascades, their foam and relief) — off: the twelve trains
   trafficDelay: number; // the real aircraft drawn this far behind the real time [s] (0: live, carried on from their last report; a minute: on their smoothed path)
   f35EnemyMissiles: boolean; // the aggressors' and the SAM's missiles fired
   f35Radar: boolean; // the radar's scope on the helmet in a fight
@@ -738,6 +739,7 @@ export function defaultSettings(): Settings {
     wingmen: 0,
     traffic: true,
     trafficDelay: 60,
+    seaFft: true,
     f35EnemyMissiles: true,
     f35Radar: true,
     f35RadarRange: "auto",
@@ -2049,6 +2051,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   wingmen: "pref",
   traffic: "pref",
   trafficDelay: "pref",
+  seaFft: "pref",
   f35EnemyMissiles: "pref",
   f35Radar: "pref",
   f35RadarRange: "pref",

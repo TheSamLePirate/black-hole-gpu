@@ -993,7 +993,7 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   // (our AI wingmen: flown, in the fight — controller/wingmen.ts)
   this.wingStep?.(dtPilot);
   // (the real traffic: on the radar — controller/traffic.ts)
-  this.trafficStep?.();
+  this.trafficStep?.(dtPilot);
   this.seaStep?.();
   // (the F-35's radar: its sweep, its tracks — controller/radar.ts)
   this.radarStep(dtPilot);

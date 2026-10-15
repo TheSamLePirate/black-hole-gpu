@@ -32,6 +32,11 @@ class LoadTracker {
   private queued = false;
 
   /** Registers a stage (again: re-opens it, e.g. assets reloaded later). */
+  /** Whether a stage is showing now (its pill up: a compile, a download) — what the tests wait out. */
+  isActive(id: string): boolean {
+    return this.stages.get(id)?.state === "active";
+  }
+
   stage(id: string, label: string, o: { weight?: number; indeterminate?: boolean; eta?: number } = {}) {
     const s: Stage = {
       id,

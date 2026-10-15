@@ -278,6 +278,8 @@ pertinent.
 
   *Fini quand* une comparaison côte à côte avec des photos de référence (mer calme, force 5, tempête, contre-jour)
   est jugée bonne, et que le coût GPU est mesuré sur M1 Max et sur le mini.
+
+  *Fait le 2026-10-15 — [fiche](progress/aviation/M1.md) : JONSWAP mer du vent + houle (Open-Meteo marine, sinon le vent) en trois cascades FFT 256² sur le GPU, moutons par le jacobien, relief des vagues près de l'avion, ciel réel reflété (sonde), empreinte de pixel de la mer corrigée ; coût mesuré (passe FFT 0,33 ms M1 Max, 1,71 ms M1). Reste : ton jugement sur les quatre mers, la couleur selon la profondeur (relief sans bathymétrie).*
 - **M2. Les porte-avions.**
   - **Le Kiev** à l'échelle (273 m), tel quel (39 000 triangles, détaillé ; les Yak-38 et hélicoptères posés
     sur le pont gardés comme décor ou retirés, selon leurs maillages).

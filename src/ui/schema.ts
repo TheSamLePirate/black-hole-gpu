@@ -4147,6 +4147,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "traffic real aircraft airliners ships ais adsb opensky",
   },
   {
+    key: "seaFft",
+    type: "toggle",
+    section: "sky",
+    group: "The Earth",
+    label: "Sea waves by FFT",
+    effect: "none",
+    help: "The sea's waves computed each frame from the real sea state (its wind sea and swell): from the long swell to the ripples, their whitecaps where they break, their relief near a low aircraft. Off: twelve simple wave trains, lighter for small GPUs.",
+    keywords: "sea ocean waves fft swell whitecaps foam water",
+  },
+  {
     key: "trafficDelay",
     type: "choice",
     section: "game",

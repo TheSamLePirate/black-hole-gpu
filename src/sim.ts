@@ -133,6 +133,8 @@ export class Simulation {
     r.combatOthers = [...c.combatShips(), ...c.wingShips(), ...c.trafficShips(), ...c.seaShips()];
     // the ships' wakes on the sea (controller/seatraffic.ts; trace.wgsl seaWake)
     r.seaWakes = c.seaWakes();
+    // (the sea's height about us — the renderer's, from the marine model or the wind —: the ships' motion)
+    c.seaHs = r.seaHs;
     if (!s.animate) return changed;
     const pl = info?.surface?.plasma;
     r.shipPlasma = pl && pl.level > 0 ? [...pl.flow, pl.level] : [0, 0, 1, 0];

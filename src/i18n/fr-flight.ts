@@ -40,6 +40,9 @@ export default {
   "Aircraft delayed": "Avions en différé",
   "How far behind the real time the real aircraft are drawn: delayed, each flies the smoothest path through its known positions (its turns, its climbs as they were), banked and nose-up as the flight's laws ask; live, it is carried on from its last report and corrected at each new one.":
     "De combien de temps les avions réels sont montrés en retard sur le temps réel : en différé, chacun vole la trajectoire la plus lisse par ses positions connues (ses virages, ses montées tels qu'ils ont été), incliné et cabré comme le veulent les lois du vol ; en direct, il est prolongé depuis son dernier message et corrigé à chaque nouveau.",
+  "Sea waves by FFT": "Vagues de la mer par FFT",
+  "The sea's waves computed each frame from the real sea state (its wind sea and swell): from the long swell to the ripples, their whitecaps where they break, their relief near a low aircraft. Off: twelve simple wave trains, lighter for small GPUs.":
+    "Les vagues de la mer calculées à chaque image d'après l'état réel de la mer (mer du vent et houle) : de la longue houle aux vaguelettes, leurs moutons où elles déferlent, leur relief près d'un avion à basse altitude. Désactivé : douze trains de vagues simples, plus légers pour les petits GPU.",
   "1 min": "1 min",
   "2 min": "2 min",
   "Formation on the lock: lock an airliner first (Tab)": "Formation sur la cible : verrouillez d'abord un avion de ligne (Tab)",
