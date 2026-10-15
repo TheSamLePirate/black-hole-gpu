@@ -877,6 +877,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   this.hubWarpLimit = null;
   this.railsCap = Infinity;
   const inp = this.pilotInput(pad);
+  // (an aerobatic figure: its program's stick in a demonstration, the player's followed — controller/aerobatics.ts)
+  this.aeroStep(inp, dt);
   // (the docking autopilot ended — docked, stopped: the pilot's warp back)
   if (this.pilot.auto !== "dock" && this.dockAuto) {
     if (s.timeSpeed === this.dockAuto.set) this.giveBackWarp(this.dockAuto.warp);

@@ -15,6 +15,7 @@ import frVoices from "./i18n/fr-voices";
 import frModes from "./i18n/fr-modes";
 import frRoute from "./i18n/fr-route";
 import frNet from "./i18n/fr-net";
+import frAero from "./i18n/fr-aero";
 
 export type Lang = "fr" | "en";
 export type Text = Record<Lang, string>;
@@ -69,6 +70,7 @@ addFrench(frVoices);
 addFrench(frModes);
 addFrench(frRoute);
 addFrench(frNet);
+addFrench(frAero);
 addFrench(frMain);
 addFrench(frHud);
 addFrench(frPlace);

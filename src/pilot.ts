@@ -213,6 +213,20 @@ export interface FlightOutput {
 // (turning rate, angular acceleration, RCS authority: game/tuning.ts, from the settings)
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
+/** The fighter's law's incidence at the lift's peak [rad], and the stick's share past which it asks more. */
+export const LAW_ALPHA_PEAK = 35 * (Math.PI / 180);
+export const LAW_ALPHA_STICK = 0.5;
+/** The incidence a fighter's law bounds the stick to [rad]: the lift's peak to half the stick, its limit at full aft;
+ *  pushed, −10° to −20°. */
+export function lawAlpha(stick: number, alphaMax: number): number {
+  const over = Math.max(0, (Math.abs(stick) - LAW_ALPHA_STICK) / (1 - LAW_ALPHA_STICK));
+  return stick > 0 ? LAW_ALPHA_PEAK + (alphaMax - LAW_ALPHA_PEAK) * over : -(10 + 10 * over) * (Math.PI / 180);
+}
+/** The stick that asks the incidence α [rad] of a fighter's law (past the lift's peak). */
+export function stickForAlpha(alpha: number, alphaMax: number): number {
+  return LAW_ALPHA_STICK + (1 - LAW_ALPHA_STICK) * clamp((alpha - LAW_ALPHA_PEAK) / (alphaMax - LAW_ALPHA_PEAK), 0, 1);
+}
+
 /** Hermite's smooth step from a to b. */
 const smoothstep = (a: number, b: number, x: number) => {
   const t = clamp((x - a) / (b - a), 0, 1);
@@ -575,7 +589,13 @@ export class FlightComputer {
         const nCmd = manual[0] > 0 ? 1 + manual[0] * (P.fbw.gMax - 1) : 1 + -manual[0] * (P.fbw.gMin - 1);
         // (its integral: the load the speed's bleed takes away made up — held while the incidence is at its limit)
         if (P.alpha < (P.fbw.alphaMax ?? 1) - 0.02) this.nInt = clamp(this.nInt + (nCmd - P.nz) * dt, -1, 1);
-        want[0] = P.path[0] + (9.80665 / P.speed!) * (4 * (nCmd - P.nz) + 3 * this.nInt);
+        const wantN = P.path[0] + (9.80665 / P.speed!) * (4 * (nCmd - P.nz) + 3 * this.nInt);
+        // (and an incidence, a bound: the lift's peak to half the stick, its limit at full aft; −10° to −20°
+        // forward — slow, past the lift's peak, the load would ask more incidence for less lift: the incidence
+        // asked holds it there, the stricter of the two flown)
+        const aCmd = lawAlpha(manual[0], P.fbw.alphaMax);
+        const wantA = P.path[0] + 2 * (aCmd - P.alpha);
+        want[0] = manual[0] > 0 ? Math.min(wantN, wantA) : Math.max(wantN, wantA);
       } else if (manual[0] !== 0) want[0] = P.path[0] + manual[0] * rates[0];
       else if (P.mach > 4) {
         // (hypersonic: the angle of attack held — the shield kept to the flow, as an entry is flown)
