@@ -2,6 +2,7 @@
 // at any path, /health and /version; SQLite in $DATA; stopped cleanly (the rooms written) on SIGTERM.
 
 import { createRooms, defaultOrigin } from "./rooms";
+import { createTraffic } from "./traffic";
 
 const port = Number(process.env.PORT ?? 3001);
 const dir = process.env.DATA ?? "./data";
@@ -12,11 +13,19 @@ const turn = process.env.TURN_SECRET
   ? { secret: process.env.TURN_SECRET, urls: (process.env.TURN_URLS ?? "turn:stream.samlepirate.org:3478?transport=udp,turn:stream.samlepirate.org:3478?transport=tcp").split(",") }
   : null;
 const rooms = createRooms({ db: `${dir}/rooms.sqlite`, build, origin: defaultOrigin, turn });
+// (the real traffic's relay — server/traffic.ts —: its keys in the stack's environment, none in a page)
+const traffic = createTraffic({
+  aisKey: process.env.AISSTREAM_API_KEY || undefined,
+  openskyId: process.env.OPENSKY_CLIENT_ID || undefined,
+  openskySecret: process.env.OPENSKY_CLIENT_SECRET || undefined,
+  log: (m) => console.log(m),
+});
 
 const server = Bun.serve({
   port,
-  fetch(req, srv) {
+  async fetch(req, srv) {
     const url = new URL(req.url);
+    if (url.pathname.startsWith("/traffic")) return (await traffic.handle(req, srv.requestIP(req)?.address)) ?? new Response(null, { status: 404 });
     if (url.pathname === "/health") return Response.json(rooms.health(), { headers: { "access-control-allow-origin": "*" } });
     if (url.pathname === "/version") return Response.json({ build }, { headers: { "access-control-allow-origin": "*" } });
     if (req.headers.get("upgrade")?.toLowerCase() === "websocket") return rooms.upgrade(req, srv);
@@ -27,6 +36,7 @@ const server = Bun.serve({
 
 const stop = () => {
   rooms.close();
+  traffic.close();
   server.stop(true);
   process.exit(0);
 };

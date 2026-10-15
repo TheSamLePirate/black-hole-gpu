@@ -1,5 +1,6 @@
 import index from "./index.html";
 import { createRooms, type Peer } from "./server/rooms";
+import { createTraffic } from "./server/traffic";
 
 const port = Number(process.env.PORT ?? 3000);
 // (started by a test or the flight lab — tests/e2e/lib/app.ts — for its own run: gone with its parent, never
@@ -40,6 +41,12 @@ function deepgramRelay(path: "listen" | "speak", names: string[]) {
 // kept in a file in dev, in memory otherwise (production's rooms live at stream.samlepirate.org)
 const rooms = createRooms({ db: dev ? "snapshots/rooms-dev.sqlite" : ":memory:", build: "local" });
 
+const traffic = createTraffic({
+  aisKey: process.env.AISSTREAM_API_KEY,
+  openskyId: process.env.OPENSKY_CLIENT_ID,
+  openskySecret: process.env.OPENSKY_CLIENT_SECRET,
+  log: (m) => console.log(m),
+});
 const server = Bun.serve({
   port,
   routes: {
@@ -66,6 +73,9 @@ const server = Bun.serve({
       if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
       return new Response(await r.outputs[0]!.text(), { headers: { "content-type": "text/javascript" } });
     },
+    // (the real traffic — server/traffic.ts, T1 —: the keys of .env, here as on the room server)
+    "/traffic/*": ((req: Request, srv: { requestIP(r: Request): { address: string } | null }) =>
+      traffic.handle(req, srv.requestIP(req)?.address)) as never,
     "/net": ((req: Request, srv: Parameters<typeof rooms.upgrade>[1]) =>
       req.headers.get("upgrade")?.toLowerCase() === "websocket" ? rooms.upgrade(req, srv) : Response.json(rooms.health())) as never,
     // The rocket engine's AudioWorklet (PLAN-AUDIO S2), bundled on its own

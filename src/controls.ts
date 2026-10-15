@@ -56,6 +56,7 @@ import type { RadarObject } from "./game/radar";
 import { type FormState, installFormation } from "./controller/formation";
 import { type IcptState, installIntercept } from "./controller/intercept";
 import { installOrders } from "./controller/orders";
+import type { TrafficFeed } from "./traffic/feed";
 import { installWingmen, type RemoteWing, type WingState } from "./controller/wingmen";
 import type { Order } from "./game/orders";
 import type { Racetrack } from "./game/racetrack";
@@ -1037,6 +1038,8 @@ export class CameraController {
   holdPat: { fix: { lat: number; lon: number }; R: Racetrack } | null = null;
   /** an order given as the flight's leader: where it goes (the room, our AI wingmen) */
   readonly orderSinks = new Map<string, (o: Order) => void>();
+  /** the real traffic about us (traffic/feed.ts — main.ts asks it), null: none */
+  traffic: TrafficFeed | null = null;
   /** our AI wingmen (controller/wingmen.ts), null: none flying */
   wing: WingState | null = null;
   /** the room's others' AI wingmen (their host flies them): by his slot, their states and when heard [s] */

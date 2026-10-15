@@ -33,4 +33,8 @@ export default {
   "AI wingmen": "Ailiers IA",
   "F-35s flying with yours in the Earth's air — Two, Three, Four — each its place in the formation chosen, flown with the real aircraft's forces; they obey the leader's orders (Tab held › Flight), call their contacts, fight in a fight and can be lost.":
     "Des F-35 qui volent avec le vôtre dans l'air de la Terre — Deux, Trois, Quatre — chacun à son poste dans la formation choisie, volés avec les forces du vrai avion ; ils obéissent aux ordres du leader (Tab maintenu › Patrouille), annoncent leurs contacts, se battent en combat et peuvent être perdus.",
+  Traffic: "Trafic",
+  "Real traffic": "Trafic réel",
+  "The real aircraft (ADS-B: adsb.lol, OpenSky) and ships (AIS: aisstream.io) about your craft, live — through the game's relay, refreshed every few seconds. Off: none asked. Offline: none.":
+    "Les avions (ADS-B : adsb.lol, OpenSky) et les navires (AIS : aisstream.io) réels autour de votre appareil, en direct — par le relais du jeu, rafraîchis toutes les quelques secondes. Désactivé : rien n'est demandé. Hors ligne : rien.",
 } satisfies Record<string, string>;

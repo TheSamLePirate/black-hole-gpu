@@ -57,6 +57,19 @@ To turn it on:
    the device as the username, its HMAC-SHA1 under the secret as the password — coturn's
    `use-auth-secret`), relaying to private networks refused.
 
+### The real traffic's relay (aircraft and ships) — `server/traffic.ts`
+
+The room server also answers `/traffic/air`, `/traffic/sea` and `/traffic/health` (CORS open) for the pages: the
+aircraft from adsb.lol (no key), OpenSky when adsb.lol fails, the ships from aisstream.io on one connection. Set
+in the `kerr` stack's environment in Portainer (never in the repository):
+
+- `AISSTREAM_API_KEY` — aisstream.io's key (unset: no ships);
+- `OPENSKY_CLIENT_ID`, `OPENSKY_CLIENT_SECRET` — OpenSky's OAuth2 client credentials (unset: anonymous, fewer
+  credits).
+
+Checked by `https://stream.samlepirate.org/traffic/health` (`ais`, `opensky` true once set; `aisOpen` while a page
+looks at the sea). In development the dev server serves the same from `.env`.
+
 ## Rolling back
 
 Revert the last commit(s) on `deploy` (or push a commit naming an older tag): Portainer redeploys that

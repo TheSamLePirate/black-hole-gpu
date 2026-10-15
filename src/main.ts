@@ -226,6 +226,7 @@ import { applyPalette } from "./ui/hudkit";
 import { lang, t, tf, tr } from "./i18n";
 import { ORDERS, type OrderId } from "./game/orders";
 import { FORMATION_IDS, FORMATIONS } from "./game/formations";
+import { TrafficFeed } from "./traffic/feed";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>("view");
@@ -5556,6 +5557,12 @@ async function main() {
     creditLink("OpenFreeMap", "https://openfreemap.org"),
   );
   document.body.append(sceneryCredit);
+  // (the real traffic — traffic/feed.ts, T1 —: asked of the relay about the flown craft, its sources credited)
+  const trafficFeed = new TrafficFeed();
+  camera.traffic = trafficFeed;
+  const trafficCredit = Object.assign(document.createElement("div"), { className: "scenery-credit traffic-credit", hidden: true });
+  trafficCredit.dataset.testid = "traffic-credit";
+  document.body.append(trafficCredit);
   let fpsAcc = 0;
   let fpsN = 0;
   let fps = 0;
@@ -5658,6 +5665,15 @@ async function main() {
     const info = pil ? cpuProf.time("flight figures (flightInfo)", () => camera.flightInfo()) : null;
     // (flying together: ours sent, the others placed — before the render's figures: their contrails come with ours — ui/netsession.ts)
     netSession.frame(dt);
+    // (the real traffic about us: asked when due — off by the setting, offline, far from the Earth)
+    trafficFeed.tick(now / 1000, settings.traffic && camera.piloting ? camera.geoNow() : null, settings.traffic);
+    {
+      const live =
+        trafficFeed.status === "live" && trafficFeed.attribution.length > 0 && (trafficFeed.planes.size > 0 || trafficFeed.ships.size > 0);
+      const txt = live ? trafficFeed.attribution.join(" · ") : "";
+      if (trafficCredit.textContent !== txt) trafficCredit.textContent = txt;
+      trafficCredit.hidden = !live;
+    }
     netMatch.frame();
     netVoice.frame();
     // (who speaks: a mark before his name)

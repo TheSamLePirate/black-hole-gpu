@@ -405,6 +405,7 @@ export interface Settings {
   formSpacing: Spacing;
   formPos: number;
   wingmen: number; // the AI wingmen flying with the F-35 (controller/wingmen.ts): 0 to 3
+  traffic: boolean; // the real air and sea traffic about the craft (traffic/feed.ts, the relay server/traffic.ts)
   f35EnemyMissiles: boolean; // the aggressors' and the SAM's missiles fired
   f35Radar: boolean; // the radar's scope on the helmet in a fight
   f35RadarRange: "auto" | "10" | "20" | "40" | "80" | "160"; // its range [km]
@@ -734,6 +735,7 @@ export function defaultSettings(): Settings {
     formSpacing: "normal",
     formPos: 2,
     wingmen: 0,
+    traffic: true,
     f35EnemyMissiles: true,
     f35Radar: true,
     f35RadarRange: "auto",
@@ -2043,6 +2045,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   formSpacing: "pref",
   formPos: "pref",
   wingmen: "pref",
+  traffic: "pref",
   f35EnemyMissiles: "pref",
   f35Radar: "pref",
   f35RadarRange: "pref",

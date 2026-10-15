@@ -234,6 +234,8 @@ pertinent.
     poussés aux pages par WebSocket.
   - Cache, quotas respectés, attribution (ODbL, conditions d'OpenSky et d'aisstream).
   - **Désactivable**, et absent hors ligne.
+
+  *Fait le 2026-10-15 — [fiche](progress/aviation/T1.md) : relais (dev et serveur des salles) adsb.lol → OpenSky (OAuth2), aisstream en une connexion qui suit les zones ; flux de la page (5 s/10 s), désactivable, crédits ; 49 avions réels au-dessus de Paris en jeu. Clés à mettre dans la pile Portainer.*
 - **T2. Les avions dans le ciel.**
   - Les modèles A320 et CRJ-900 (et des variantes à l'échelle pour 737, 777, A350, jets d'affaires, avions
     légers, hélicoptères), avec leurs feux (navigation, anticollision, atterrissage) et des traînées de

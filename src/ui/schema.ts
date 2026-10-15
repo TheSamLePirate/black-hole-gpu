@@ -4137,6 +4137,16 @@ export const SCHEMA: ControlDef[] = [
     ],
   },
   {
+    key: "traffic",
+    type: "toggle",
+    section: "game",
+    group: "Traffic",
+    label: "Real traffic",
+    effect: "none",
+    help: "The real aircraft (ADS-B: adsb.lol, OpenSky) and ships (AIS: aisstream.io) about your craft, live — through the game's relay, refreshed every few seconds. Off: none asked. Offline: none.",
+    keywords: "traffic real aircraft airliners ships ais adsb opensky",
+  },
+  {
     key: "wingmen",
     type: "choice",
     section: "game",
