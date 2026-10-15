@@ -19,11 +19,14 @@ import { button, el as h, modal } from "./kit";
 import { AIR_MISSIONS } from "../game/airmissions";
 import { briefMission, flyMission } from "./airmission";
 import type { MissionSpec } from "../game/mission";
+import { dropMission, myMissions } from "./missioneditor";
 
 export interface ChallengeHost {
   tools: GameTools;
   camera: CameraController;
   toast(s: string): void;
+  /** the mission editor (P3): a mission made, or one edited */
+  editMission?(spec?: MissionSpec): void;
 }
 
 const MEDAL: Record<string, string> = { gold: "🥇", silver: "🥈", bronze: "🥉" };
@@ -98,20 +101,55 @@ export class ChallengePanel {
       );
       root.append(card);
     }
-    // the missions (PLAN-AVIATION-AAA P1): briefed, then flown
+    // the missions (PLAN-AVIATION-AAA P1): briefed, then flown; made, edited, kept (P3)
     root.append(h("h4", "chp-h", t("Missions")));
-    for (const m of AIR_MISSIONS) {
-      const spec = m.make();
-      const card = h("div", "chp-card chp-fight");
-      card.append(
+    const edit = this.host.editMission;
+    const card = (spec: MissionSpec, mine: boolean) => {
+      const c = h("div", "chp-card chp-fight");
+      c.append(
         h("b", "chp-name", spec.title),
         h("p", "chp-brief", spec.brief),
         h("span", "chp-par", tf("{0} objectives", spec.objectives.filter((o) => !o.optional).length)),
         h("span", "chp-best", spec.limit ? tf("{0} min", Math.round(spec.limit / 60)) : ""),
         button({ label: t("Briefing"), kind: "primary", testid: `chp-msn-${spec.id}`, onClick: () => this.mission(spec) }),
       );
-      root.append(card);
-    }
+      if (edit)
+        c.append(
+          button({
+            label: t("Edit"),
+            testid: `chp-edit-${spec.id}`,
+            onClick: () => {
+              this.close?.();
+              edit(spec);
+            },
+          }),
+        );
+      if (mine)
+        c.append(
+          button({
+            label: t("Remove"),
+            kind: "danger",
+            onClick: () => {
+              dropMission(spec.id);
+              c.remove();
+            },
+          }),
+        );
+      root.append(c);
+    };
+    for (const m of AIR_MISSIONS) card(m.make(), false);
+    for (const spec of myMissions()) card(spec, true);
+    if (edit)
+      root.append(
+        button({
+          label: t("Make a mission"),
+          testid: "chp-msn-new",
+          onClick: () => {
+            this.close?.();
+            edit();
+          },
+        }),
+      );
     // the fights
     root.append(h("h4", "chp-h", t("Combat")));
     const CB = combatBests();

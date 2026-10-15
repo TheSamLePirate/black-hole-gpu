@@ -12,6 +12,8 @@
 // a load, a deletion, a teleport, the date, a scene — the game is saved as "Before TARS"; undo goes back.
 // Every result is short, and carries what the game said (its toasts) since the call.
 
+import type { MissionSpec } from "../game/mission";
+import { completeMission, type Resolver, type Sketch } from "../game/missionedit";
 import type { GameMode } from "../game/modes";
 import type { Auto, Hold } from "../pilot";
 import type { CameraController } from "../controls";
@@ -160,6 +162,19 @@ export interface GameHost {
       | string;
     look(q: string, at?: number | "best"): string | null;
     open(q?: string): void;
+  };
+  /** the missions (PLAN-AVIATION-AAA P1–P3 — ui/airmission.ts, ui/missioneditor.ts): listed, one flown (its id or
+   *  its spec), the one flown, given up, its map, the editor, a mission kept, its link */
+  missions?: {
+    list(): { id: string; title: string; mine: boolean }[];
+    spec(id: string): MissionSpec;
+    fly(x: string | MissionSpec): string;
+    state(): object | null;
+    abort(): void;
+    map(): void;
+    edit(spec?: MissionSpec): void;
+    keep(spec: MissionSpec): void;
+    link(spec: MissionSpec): string;
   };
   /** the F-35's flights (ui/flighthub.ts, ui/challengepanel.ts): its airfields, a flight set up, the challenges and fights
    *  (their bests), one flown, the one running given up */
@@ -1724,6 +1739,69 @@ export function gameTools(h: GameHost): Tool[] {
         if (!a.order) throw new Error("order needs an order");
         if (a.order === "shape" && !a.shape) throw new Error("shape needs a shape");
         return c.flightOrder(a.order as OrderId, a.shape as string | undefined);
+      }),
+    },
+    {
+      name: "mission",
+      description:
+        'Missions: flights with objectives, scored out of 20 at their debrief, flown solo or with the room. list: the game\'s and the pilot\'s own. fly: one by its id, at once (its briefing skipped). create: a new one from the pilot\'s words, as JSON in `mission` — {title?, brief?, units: [{id, kind: sam|truck|bunker|drone|fighter|airliner|traffic|carrier, name?, at: {lat, lon, alt? (m over the sea)} or {place: an airfield\'s ICAO or a town}, hdg?, speed?, side?: hostile|friend|neutral, match?: {callsign} (kind traffic: a real flight taken over — that callsign, else the nearest heard), carrier?: ford|kiev|implacable, later?: true (set by a trigger\'s spawn)}], objectives: [{kind: reach (at {place|lat/lon, radius?}) | destroy (units: [ids]) | escort (unit, until: {place|lat/lon}, within? m) | protect (unit, seconds) | identify (unit, within? m) | land (carrier: unit id, or at), text?, optional?: true (a bonus), after?: another objective\'s id}], triggers?: [{id, when: {time: s} | {done: objective id} | {near: {unit, within}} | {enter: {lat, lon, radius}}, do: [{say: text} | {spawn: unit} | {course: {unit, hdg?, alt?, speed?, to?: {lat, lon, alt?}}} | {side: {unit, side}} | {squawk: {unit, off}} | {win: true} | {fail: why}]}], start?: {place or lat/lon, alt (m over the sea), hdg, speed (m/s), variant: B|C, loadout: aa|ag|gun} (leave it out unless the pilot names where to start: then it is where the craft flies now), time?: {localHour}, weather?: {preset: fair|cloudy|overcast|rain|storm|fog|windy}, limit?: s}. Places by name are found; an airliner or a real flight escorted to a place is sent there; the words left out are made. Kept among the pilot\'s missions, then flown (fly: false — opened in the editor instead). E.g. \'an escort of the A320 AFR123 to Nice\': {"units":[{"id":"a","kind":"traffic","match":{"callsign":"AFR123"}}],"objectives":[{"kind":"escort","unit":"a","until":{"place":"Nice"}}]}. status: the mission flown and its objectives. abort: given up. map: the mission map opened. edit: the editor (on a mission\'s id, else a new one). link: a mission\'s link to share (id).',
+      params: {
+        action: { type: "string", enum: ["list", "fly", "create", "status", "abort", "map", "edit", "link"] },
+        id: { type: "string" },
+        mission: { type: "string", description: "create: the mission as JSON" },
+        fly: { type: "boolean", description: "create: fly it at once (default) or open it in the editor" },
+      },
+      required: ["action"],
+      run: act(async (a) => {
+        const M = h.missions;
+        if (!M) throw new Error("no missions here");
+        switch (a.action) {
+          case "list":
+            return M.list();
+          case "fly":
+            if (!a.id) throw new Error("fly needs an id (mission list)");
+            return M.fly(String(a.id));
+          case "status":
+            return M.state() ?? "No mission flown";
+          case "abort":
+            M.abort();
+            return "Mission abandoned";
+          case "map":
+            M.map();
+            return "The mission map is open";
+          case "edit":
+            M.edit(a.id ? M.spec(String(a.id)) : undefined);
+            return "The mission editor is open";
+          case "link":
+            if (!a.id) throw new Error("link needs an id (mission list)");
+            return M.link(M.spec(String(a.id)));
+          default: {
+            let sketch: Sketch;
+            try {
+              sketch = JSON.parse(String(a.mission ?? ""));
+            } catch {
+              throw new Error("create needs the mission as JSON in `mission`");
+            }
+            const g = camera.geoNow();
+            const here = g ? { lat: g.lat, lon: g.lon, alt: g.alt, hdg: (g.track * 180) / Math.PI, speed: g.gs } : undefined;
+            const resolve: Resolver = async (name) => {
+              // (an airfield by its exact name or ICAO — "Nice" is not Venice —, else the Atlas's search)
+              const n = fold(name);
+              const site = SITES.find((s) => s.body === "earth" && (fold(s.name) === n || s.icao?.toLowerCase() === n));
+              if (site) return { lat: site.lat, lon: site.lon, name: site.icao ?? site.name };
+              const hit = (await h.atlas?.search(name, "earth"))?.[0];
+              return hit ? { lat: hit.lat, lon: hit.lon, name: hit.name.split(",")[0]! } : null;
+            };
+            const { spec, errors } = await completeMission(sketch, { here, resolve });
+            if (!spec) throw new Error(errors.join("; "));
+            M.keep(spec);
+            if (a.fly === false) {
+              M.edit(spec);
+              return { opened: spec.title, objectives: spec.objectives.map((o) => o.text) };
+            }
+            return { flown: M.fly(spec), title: spec.title, objectives: spec.objectives.map((o) => o.text), link: M.link(spec) };
+          }
+        }
       }),
     },
     {

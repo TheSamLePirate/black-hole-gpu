@@ -342,6 +342,8 @@ pertinent.
 - **P3. Créer ses missions.** Un éditeur dans le jeu (poser les objectifs sur la carte, régler les conditions),
   partageable par lien ; et **TARS crée une mission à la voix** (« une escorte de l'A320 AFR123 jusqu'à
   Nice »).
+
+  *P3 fait le 2026-10-15 — [fiche](progress/aviation/P3.md) : l'éditeur de missions sur la carte (départ, lieux, unités placés et glissés ; conditions, objectifs par unité, apparitions, messages ; voler, garder, exporter, coller), le lien `#mission=` qui ouvre le jeu sur le briefing, et l'outil `mission` de TARS qui crée une mission à partir des mots du pilote (lieux trouvés, départ où l'on vole) — « escorter l'A320 AFR123 jusqu'à Nice » créée et lancée en direct.*
 - **P4. Les procédures.**
   - L'**ILS à 3°** pour le F-35, avec ses repères ; les départs et arrivées ; l'attente en hippodrome.
   - L'approche du porte-avions (cas I, II, III).

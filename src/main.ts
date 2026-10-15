@@ -62,10 +62,12 @@ import { SCENARIOS } from "./game/scenarios";
 import { bests as challengeBests } from "./controller/challenge";
 import { type Layer as MusicLayer, LAYERS as MUSIC_LAYERS, THEMES as MUSIC_THEMES } from "./audio/music/themes";
 import { FLIGHT_HOURS, FLIGHT_STARTS, FLIGHT_WEATHER, FlightHub, flightFields, type HubHost, prepareFlight } from "./ui/flighthub";
+import { keepMission, MissionEditor, missionLink, myMissions } from "./ui/missioneditor";
+import { missionFromHash } from "./game/missionedit";
 import { MissionMap } from "./ui/missionmap";
 import { briefMission, debriefMission, flyMission, MissionHud } from "./ui/airmission";
 import { AIR_MISSIONS } from "./game/airmissions";
-import { checkMission } from "./game/mission";
+import { checkMission, type MissionSpec } from "./game/mission";
 import { ChallengePanel, type ChallengeHost, flyChallenge, flyFight, flyFigure } from "./ui/challengepanel";
 import { aeroBests } from "./controller/aerobatics";
 import { FIGURE_ORDER, FIGURES, type FigureId } from "./game/aerobatics";
@@ -3785,10 +3787,16 @@ async function main() {
   };
   const flightHub = new FlightHub(hubHost);
   // the F-35's challenges (ui/challengepanel.ts, PLAN-F35 F9): gate courses, graded landings, aerobatics
-  const challengeHost: ChallengeHost = { tools, camera, toast: (s) => panel.toast(s) };
+  const challengeHost: ChallengeHost = { tools, camera, toast: (s) => panel.toast(s), editMission: (spec) => missionEditor.open(spec) };
   const challengePanel = new ChallengePanel(challengeHost);
   // a mission (ui/airmission.ts — PLAN-AVIATION-AAA P1): its words said and shown, its objectives on screen, its debrief
   const missionMap = new MissionMap({ camera, toast: (s) => panel.toast(s) });
+  // (made, edited — P3)
+  const missionEditor = new MissionEditor({
+    camera,
+    toast: (s) => panel.toast(s),
+    fly: (spec) => briefMission(spec, () => airMissions.fly(spec)),
+  });
   const missionHud = new MissionHud(camera, () => missionMap.open());
   camera.onMissionSay = (text) => {
     panel.toast(text);
@@ -3800,9 +3808,9 @@ async function main() {
   };
   const missionSpec = (x: string | unknown) => {
     if (typeof x === "string") {
-      const m = AIR_MISSIONS.find((d) => d.id === x);
-      if (!m) throw new Error(`no mission "${x}" — ${AIR_MISSIONS.map((d) => d.id).join(", ")}`);
-      return m.make();
+      const m = AIR_MISSIONS.find((d) => d.id === x)?.make() ?? myMissions().find((d) => d.id === x);
+      if (!m) throw new Error(`no mission "${x}" — ${[...AIR_MISSIONS.map((d) => d.id), ...myMissions().map((d) => d.id)].join(", ")}`);
+      return m;
     }
     const { spec, errors } = checkMission(x);
     if (!spec) throw new Error(errors.join("; "));
@@ -3825,6 +3833,10 @@ async function main() {
     },
     last: () => camera.missionLast ?? null,
     map: missionMap,
+    editor: missionEditor,
+    /** a mission's link (the page's address with it) */
+    link: (x: string | unknown) => missionLink(missionSpec(x)),
+    mine: () => myMissions(),
   };
   // playing together (ui/netpanel.ts, docs/PLAN-RESEAU.md): the network loaded only when a room is asked for
   // (a room's clock in the scene's seconds — sim.time is in M)
@@ -5194,6 +5206,20 @@ async function main() {
     },
     utcNow: () => utcOf(sim.time),
     multiExposure: (r) => mxDialog.open({ kind: r.kind, run: r }),
+    missions: {
+      list: () => [
+        ...AIR_MISSIONS.map((d) => ({ id: d.id, title: d.make().title, mine: false })),
+        ...myMissions().map((m) => ({ id: m.id, title: m.title, mine: true })),
+      ],
+      spec: (id) => missionSpec(id),
+      fly: (x) => airMissions.fly(x),
+      state: () => airMissions.state(),
+      abort: () => camera.missionAbort(),
+      map: () => missionMap.open(),
+      edit: (spec) => missionEditor.open(spec),
+      keep: (spec) => keepMission(spec),
+      link: (spec) => missionLink(spec),
+    },
     f35: {
       fields: () => flightFields(),
       prepare: (o) => {
@@ -6396,12 +6422,23 @@ async function main() {
     } catch (e) {
       panel.toast(tf("That link's saved game could not be read: {0}", (e as Error).message));
     }
+    // (a shared mission — P3: #mission=…, in our worlds, briefed at once)
+    let linked: MissionSpec | null = null;
+    try {
+      linked = missionFromHash(hash);
+    } catch (e) {
+      panel.toast(tf("That link's mission could not be read: {0}", (e as Error).message));
+    }
     const last = autosave.get();
     // (the flight saved last loaded behind the title screen: Continue only lifts it)
     let resumed: string | null = null;
     try {
       if (shared) panel.toast(tf("Shared flight: {0}", tools.load(shared)));
-      else if (scene && presets[scene]) applyPreset(scene);
+      else if (linked) {
+        applyPreset(scene && presets[scene] ? scene : "game:artemis");
+        const spec = linked;
+        void splash.gone.then(() => briefMission(spec, () => airMissions.fly(spec)));
+      } else if (scene && presets[scene]) applyPreset(scene);
       else if (hash.length <= 1 && last && settings.autosave) {
         tools.load(last, { quiet: true });
         resumed = last.summary;
@@ -6462,7 +6499,7 @@ async function main() {
       void netPanel
         .join(joinCode, role === "spectator" || role === "instruments" ? role : "pilot")
         .then(() => netPanel.net?.room && netPanel.closePanel());
-    } else if (!shared && !(scene && presets[scene]) && !benchPage) {
+    } else if (!shared && !linked && !(scene && presets[scene]) && !benchPage) {
       titleScreen.open();
       void splash.gone.then(() => titleScreen?.focusFirst());
     } else started = true;
