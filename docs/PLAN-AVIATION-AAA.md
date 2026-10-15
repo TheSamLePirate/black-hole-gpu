@@ -145,7 +145,7 @@ pertinent.
 
   *Fini quand* chaque loi a son test de réponse (échelon de manche : dépassement, temps de montée, limites
   tenues).
-- **V4. Les figures.**
+- **V4. Les figures.** *Fait le 2026-10-15 — [fiche](progress/aviation/V4.md) : dix figures démontrées, jugées et enseignées, la boîte de voltige ; démonstrations notées de 18,7 à 20/20.*
   - La bibliothèque : looping, Immelmann, split-S, tonneau barriqué, tonneau rapide, huit cubain, passage à
     haute incidence, virage de Herbst (« J-turn »), vrille et sortie, glissade sur la queue, vol dos.
   - Chacune est **jugée** (sa trace comparée à la figure idéale : ronde, symétrique, cap de sortie, altitude

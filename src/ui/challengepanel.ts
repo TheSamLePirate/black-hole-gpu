@@ -5,7 +5,9 @@
 import "./challengepanel.css";
 import type { CameraController } from "../controls";
 import { bests } from "../controller/challenge";
+import { AERO_BOX, aeroBests } from "../controller/aerobatics";
 import { combatBests } from "../controller/combat";
+import { FIGURE_ORDER, FIGURES, type FigureId } from "../game/aerobatics";
 import { LOADOUTS } from "../game/combat";
 import { SCENARIOS, type Scenario } from "../game/scenarios";
 import { fleet } from "../fleet";
@@ -57,6 +59,39 @@ export class ChallengePanel {
         h("span", "chp-par", par),
         h("span", "chp-best", bestTxt),
         button({ label: t("Fly"), kind: "primary", testid: `chp-go-${d.id}`, onClick: () => this.go(d) }),
+      );
+      root.append(card);
+    }
+    // the aerobatic figures: watched (flown by their program) or flown, judged; the box
+    root.append(h("h4", "chp-h", t("Aerobatics")));
+    const AB = aeroBests();
+    const box = h("div", "chp-card chp-aero");
+    box.append(
+      h("b", "chp-name", t("The aerobatic box")),
+      h(
+        "p",
+        "chp-brief",
+        t("Five figures in a row — loop, aileron roll, Immelmann, split-S, barrel roll — each judged out of 20: out of 100 together."),
+      ),
+      h("span", "chp-par", AERO_BOX.map((id) => t(FIGURES[id].name)).join(" · ")),
+      h("span", "chp-best", AB.box !== undefined ? `${AB.box.toFixed(1)}/100` : t("not flown")),
+      button({ label: t("Fly"), kind: "primary", testid: "chp-aero-box", onClick: () => this.figure("box", "judge") }),
+    );
+    root.append(box);
+    for (const id of FIGURE_ORDER) {
+      const F = FIGURES[id];
+      const card = h("div", "chp-card chp-aero");
+      card.append(
+        h("b", "chp-name", t(F.name)),
+        h("p", "chp-brief", t(F.brief)),
+        h(
+          "span",
+          "chp-par",
+          tf("entry {0} m/s · {1} m", F.entry.v, F.entry.agl) + (F.entry.law === "direct" ? ` · ${t("direct law")}` : ""),
+        ),
+        h("span", "chp-best", AB[id] !== undefined ? `${AB[id]!.toFixed(1)}/20` : t("not flown")),
+        button({ label: t("Watch"), testid: `chp-aero-demo-${id}`, onClick: () => this.figure(id, "demo") }),
+        button({ label: t("Fly"), kind: "primary", testid: `chp-aero-${id}`, onClick: () => this.figure(id, "judge") }),
       );
       root.append(card);
     }
@@ -117,6 +152,16 @@ export class ChallengePanel {
     }
   }
 
+  /** An aerobatic figure — watched or flown —, or the box: the F-35 placed at its entry, the program or the judge on. */
+  figure(id: FigureId | "box", mode: "demo" | "judge") {
+    try {
+      flyFigure(this.host, id, mode);
+      this.close?.();
+    } catch (e) {
+      this.host.toast(String((e as Error).message ?? e));
+    }
+  }
+
   /** A challenge flown: the F-35 at its start, its tanks full, the judge running. */
   go(d: ChallengeDef) {
     try {
@@ -143,6 +188,31 @@ export function flyFight(host: ChallengeHost, d: Scenario) {
   C.pilot.throttle = C.pilot.engineNow = 0.85;
   fleet.fuel.f35 = VESSELS.f35.fuelKg ?? 0;
   C.combatStart(d);
+}
+
+/** Where the figures are flown: over the Mojave's dry lakes, east, the desert below. */
+const AERO_SPOT = { lat: 35.05, lon: -117.75, hdg: 90 };
+
+/** An aerobatic figure — the Challenges card and TARS: the F-35 at its entry (its speed, its height and some), its
+ *  tanks full, its law the figure's (the spin's demonstration sets the direct one itself), begun at the next frame. */
+export function flyFigure(host: ChallengeHost, id: FigureId | "box", mode: "demo" | "judge") {
+  const T = host.tools;
+  const C = host.camera;
+  if (fleet.active !== "f35") T.set("vessel", "f35");
+  C.nav.on = { l: false, v: false };
+  if (C.combat) C.combatEnd();
+  C.challengeAbort();
+  C.aeroStop();
+  const F = FIGURES[id === "box" ? AERO_BOX[0]! : id];
+  T.flyAt(AERO_SPOT.lat, AERO_SPOT.lon, F.entry.agl + 800, AERO_SPOT.hdg, F.entry.v);
+  C.airFlight.cfg.flaps = 0;
+  C.gearDown = false;
+  C.gearExt = 0;
+  C.pilot.throttle = C.pilot.engineNow = 0.85;
+  // (the player's spin: the direct law set for its entry)
+  if (mode === "judge" && F.entry.law === "direct") C.s.f35Law = "direct";
+  fleet.fuel.f35 = VESSELS.f35.fuelKg ?? 0;
+  C.aeroPending = { id, mode };
 }
 
 /** A challenge flown — the Challenges card and TARS: the F-35 at its start, its tanks full, the judge running. */

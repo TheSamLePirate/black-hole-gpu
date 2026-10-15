@@ -4,10 +4,12 @@
 // figure's start (east, north, up), its axes there.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import {
+  type AeroCmd,
   type AeroState,
   FIGURES,
   type FigureId,
   type FigureMarks,
+  cueIndex,
   figureStep,
   gammaOf,
   judgeFigure,
@@ -18,6 +20,7 @@ import { cameraFrame } from "../camera";
 import { t, tf } from "../i18n";
 import type { PilotInput } from "../pilot";
 import { fleet } from "../fleet";
+import { store } from "../util/storage";
 import { VESSELS } from "../vessels";
 import type { CameraController } from "../controls";
 
@@ -27,7 +30,24 @@ declare module "../controls" {
     aeroStart: typeof aeroStart;
     aeroStep: typeof aeroStep;
     aeroStop: typeof aeroStop;
+    aeroHud: typeof aeroHud;
   }
+}
+
+/** The aerobatic box: five figures flown in a row by the player, each judged, out of 100 together. */
+export const AERO_BOX: FigureId[] = ["loop", "aileronRoll", "immelmann", "splitS", "barrelRoll"];
+
+const BEST_KEY = "kerr.aero.best";
+/** The best marks kept: each figure's /20, the box's /100. */
+export function aeroBests(): Record<string, number> {
+  return store.getJSON<Record<string, number>>(BEST_KEY, {});
+}
+function keepBest(id: string, score: number): boolean {
+  const all = aeroBests();
+  if (!(score > (all[id] ?? -1))) return false;
+  all[id] = score;
+  store.setJSON(BEST_KEY, all);
+  return true;
 }
 
 type V3 = [number, number, number];
@@ -54,6 +74,12 @@ export interface AeroRun {
   law0: "normal" | "direct";
   /** the place in the air's frame [m] (the air's own motion through the figure integrated) */
   pa: V3;
+  /** the program's command this frame — flown in a demonstration, shown as the guide in the player's */
+  cmd: AeroCmd | null;
+  /** a sequence (the aerobatic box): its figures, the one flown, the marks so far */
+  seq: { ids: FigureId[]; idx: number; marks: number[] } | null;
+  /** the time it ended [s] (its result shown a while) */
+  doneAt: number;
 }
 
 const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -94,12 +120,17 @@ function aeroState(this: CameraController, run: Pick<AeroRun, "o" | "E" | "N" | 
 }
 
 /** A figure begun: flown by its program (demo), or armed for the player — judged once its entry is met. */
-function aeroStart(this: CameraController, id: FigureId, mode: "demo" | "judge"): string {
+function aeroStart(this: CameraController, id: FigureId | "box", mode: "demo" | "judge"): string {
   const o = this.netOwn();
   if (!o || !this.airFlight.inAir || fleet.active !== "f35") return t("The figures: in the F-35, in the air");
   const U = unit(o.p as V3);
   const E = unit(cross([0, 0, 1], U));
   const N = cross(U, E);
+  const seq = id === "box" ? { ids: AERO_BOX, idx: 0, marks: [] as number[] } : null;
+  if (id === "box") {
+    id = AERO_BOX[0]!;
+    mode = "judge";
+  }
   this.aero = {
     id,
     mode,
@@ -113,15 +144,20 @@ function aeroStart(this: CameraController, id: FigureId, mode: "demo" | "judge")
     tr: [],
     result: null,
     say: null,
-    law0: this.s.f35Law,
+    // (the law to put back: the normal one after a figure flown in the direct one)
+    law0: FIGURES[id].entry.law === "direct" ? "normal" : this.s.f35Law,
     pa: [0, 0, 0],
+    cmd: null,
+    seq,
+    doneAt: 0,
   };
   // (the jet's holds and the computer's autopilot off: the program's stick, or the player's)
   this.jetModes = { alt: null, hdg: null, spd: null, ab: false };
   if (this.pilot.auto !== "none") this.pilot.setAuto(this.pilot.auto);
   const F = FIGURES[id];
-  this.aero.say =
-    mode === "demo"
+  this.aero.say = seq
+    ? tf("The aerobatic box: {0} figures — first, {1}", seq.ids.length, t(F.name))
+    : mode === "demo"
       ? tf("{0} — watch: {1}", t(F.name), t(F.cues[0]!))
       : tf("{0} — entry: {1} m/s ±{2}, {3} m over the ground; {4}", t(F.name), F.entry.v, F.entry.vTol, F.entry.agl, t(F.cues[0]!));
   return this.aero.say;
@@ -141,8 +177,21 @@ function aeroStop(this: CameraController, why?: string) {
  * its program stepped — flown, or followed —, its end judged.
  */
 function aeroStep(this: CameraController, inp: PilotInput, dt: number) {
+  // (one asked as the craft was placed: begun once it flies)
+  if (this.aeroPending && this.airFlight.inAir && this.airFlight.last) {
+    const P = this.aeroPending;
+    this.aeroPending = null;
+    this.aeroStart(P.id, P.mode);
+  }
   const A = this.aero;
-  if (!A || A.status === "done" || !(dt > 0)) return;
+  if (!A || !(dt > 0)) return;
+  if (A.status === "done") {
+    // (its result shown a while, then gone — or the box's next figure armed)
+    A.t += dt;
+    if (A.seq && A.seq.idx < A.seq.ids.length - 1 && A.t - A.doneAt > 4) return nextInBox(this, A);
+    if (A.t - A.doneAt > 15) this.aero = null;
+    return;
+  }
   A.t += dt;
   const s = this.aeroState(A);
   if (!s) return this.aeroStop(t("Figure abandoned — not in the air"));
@@ -171,9 +220,12 @@ function aeroStep(this: CameraController, inp: PilotInput, dt: number) {
   for (let k = 0; k < 3; k++) A.pa[k]! += (-u[0] * s.right[k]! + u[1] * s.up[k]! + u[2] * s.fwd[k]!) * L.speed * dt;
   A.tr.push(s);
   const phase = A.mem.phase;
+  const cue = cueIndex(A.id, A.mem);
   const cmd = figureStep(A.id, s, A.mem);
   s.phase = phase;
-  if (A.mem.phase !== phase && F.cues[A.mem.phase]) A.say = t(F.cues[A.mem.phase]!);
+  A.cmd = cmd;
+  const cue2 = cueIndex(A.id, A.mem);
+  if (cue2 !== cue && F.cues[cue2]) A.say = t(F.cues[cue2]!);
   if (A.mode === "demo" && cmd) {
     inp.pitch = cmd.pitch;
     inp.roll = cmd.roll;
@@ -195,16 +247,65 @@ function aeroStep(this: CameraController, inp: PilotInput, dt: number) {
     this.airBrake = 0;
   }
   A.result = lapsed ? null : judgeFigure(A.id, A.tr);
+  A.doneAt = A.t;
+  const best = A.mode === "judge" && A.result ? keepBest(A.id, A.result.score) : false;
   A.say = A.result
     ? tf(
         "{0}: {1}/20{2}",
         t(F.name),
         A.result.score.toFixed(1),
         A.result.notes.length ? ` — ${A.result.notes.map((n) => t(n)).join(" · ")}` : "",
-      )
+      ) + (best ? ` · ${t("best")}` : "")
     : tf("{0}: lapsed — too long", t(F.name));
+  if (A.seq) {
+    A.seq.marks.push(A.result?.score ?? 0);
+    if (A.seq.idx >= A.seq.ids.length - 1) {
+      const total = A.seq.marks.reduce((x, y) => x + y, 0);
+      const boxBest = keepBest("box", total);
+      A.say = tf("The aerobatic box: {0}/100{1}", total.toFixed(1), boxBest ? ` · ${t("best")}` : "");
+    }
+  }
+}
+
+/** The box's next figure armed where the last one left the craft. */
+function nextInBox(c: CameraController, A: AeroRun) {
+  const seq = A.seq!;
+  const id = seq.ids[seq.idx + 1]!;
+  c.aeroStart(id, "judge");
+  if (c.aero) {
+    c.aero.seq = { ...seq, idx: seq.idx + 1 };
+    c.aero.say = tf("Figure {0}/{1}: {2} — entry: {3} m/s, level", seq.idx + 2, seq.ids.length, t(FIGURES[id].name), FIGURES[id].entry.v);
+  }
+}
+
+/** What the HUD shows of the figure: its name, its clock, its cue, its entry (armed), the guide, its result. */
+function aeroHud(this: CameraController) {
+  const A = this.aero;
+  if (!A) return null;
+  const F = FIGURES[A.id];
+  const s = A.tr.at(-1);
+  const g = A.cmd;
+  // (the guide: the load the program would ask — its stick through the law, back to a load —, the roll's way)
+  const gMax = s?.gMax ?? 7,
+    gMin = s?.gMin ?? -3;
+  const load = g ? (g.pitch >= 0 ? 1 + g.pitch * (gMax - 1) : 1 + -g.pitch * (gMin - 1)) : null;
+  const L = this.airFlight.last;
+  return {
+    title: t(F.name),
+    mode: A.mode,
+    status: A.status,
+    t: A.status === "done" ? A.doneAt : A.t,
+    cue: t(F.cues[A.status === "armed" ? 0 : cueIndex(A.id, A.mem)]!),
+    entry:
+      A.status === "armed"
+        ? { v: F.entry.v, vTol: F.entry.vTol, vNow: L?.speed ?? 0, agl: F.entry.agl, law: F.entry.law, lawNow: this.s.f35Law }
+        : null,
+    guide: A.status === "fly" && g ? { load, roll: Math.abs(g.roll) > 0.15 ? Math.sign(g.roll) : 0, nNow: s?.nz ?? 0 } : null,
+    result: A.status === "done" ? (A.result ? { score: A.result.score, notes: A.result.notes.map((n) => t(n)) } : null) : null,
+    seq: A.seq ? { idx: A.seq.idx, n: A.seq.ids.length, total: A.seq.marks.reduce((x, y) => x + y, 0) } : null,
+  };
 }
 
 export function installAerobatics(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { aeroState, aeroStart, aeroStep, aeroStop });
+  Object.assign(C.prototype, { aeroState, aeroStart, aeroStep, aeroStop, aeroHud });
 }

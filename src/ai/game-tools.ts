@@ -167,6 +167,10 @@ export interface GameHost {
     fights(): { id: string; title: string }[];
     fly(id: string): string;
     abort(): string;
+    /** the aerobatic figures (game/aerobatics.ts): their ids, names, what they are, their entries and bests; one
+     *  watched (flown by its program before the player) or flown by the player and judged; the box */
+    figures(): { id: string; name: string; brief: string; entry: object; best: number | null }[];
+    figure(id: string, mode: "watch" | "fly"): string;
   };
   /** the music (audio/music.ts): its state, its themes, its mode, a theme listened to, its intensity, its mixer */
   music?: {
@@ -1635,9 +1639,10 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "f35",
       description:
-        "The F-35B's flights. fields: the airfields a flight starts from. prepare: a flight set up and started at once — field (ICAO or name), start (runway: lined up; final: on a 15 km final; cruise: 40 km out), hour (now, dawn, morning, noon, dusk, night — the airfield's own), weather (real, fair, cloudy, overcast, rain, storm, windy, fog), fuel (0.05–1 of full), dest (an arrival field: a flight plan to it, flown with flight_plan / LNAV). challenges: the challenges (Mach Loop, Rainbow Canyon, the slalom, the landings, the aerobatics) and fights with their bests and medals. fly: a challenge or a fight by its id, started (the F-35 at its start, tanks full, the judge or the aggressors running). abort: the challenge or fight running given up.",
+        "The F-35B's flights. fields: the airfields a flight starts from. prepare: a flight set up and started at once — field (ICAO or name), start (runway: lined up; final: on a 15 km final; cruise: 40 km out), hour (now, dawn, morning, noon, dusk, night — the airfield's own), weather (real, fair, cloudy, overcast, rain, storm, windy, fog), fuel (0.05–1 of full), dest (an arrival field: a flight plan to it, flown with flight_plan / LNAV). challenges: the challenges (Mach Loop, Rainbow Canyon, the slalom, the landings, the aerobatics) and fights with their bests and medals. fly: a challenge or a fight by its id, started (the F-35 at its start, tanks full, the judge or the aggressors running). abort: the challenge or fight running given up. figures: the aerobatic figures (loop, immelmann, splitS, aileronRoll, barrelRoll, cuban8, inverted, highAlpha, reversal, spin) with their entries and bests. figure: one by its id (or \"box\": five in a row, out of 100) — mode watch: the autopilot flies it before the player, the cues said; mode fly: the F-35 placed at its entry, the player flies it, judged out of 20 (the HUD shows the load to pull and the roll's way).",
       params: {
-        action: { type: "string", enum: ["fields", "prepare", "challenges", "fly", "abort"] },
+        action: { type: "string", enum: ["fields", "prepare", "challenges", "fly", "abort", "figures", "figure"] },
+        mode: { type: "string", enum: ["watch", "fly"] },
         field: { type: "string" },
         start: { type: "string", enum: ["runway", "final", "cruise"] },
         hour: { type: "string", enum: ["now", "dawn", "morning", "noon", "dusk", "night"] },
@@ -1670,6 +1675,12 @@ export function gameTools(h: GameHost): Tool[] {
             if (!a.id) throw new Error("fly needs an id (f35 challenges lists them)");
             net();
             return F.fly(String(a.id));
+          case "figures":
+            return { figures: F.figures() };
+          case "figure":
+            if (!a.id) throw new Error("figure needs an id (f35 figures lists them) or box");
+            net();
+            return F.figure(String(a.id), a.mode === "watch" ? "watch" : "fly");
           default:
             return F.abort();
         }

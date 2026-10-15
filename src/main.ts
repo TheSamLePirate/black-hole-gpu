@@ -62,7 +62,9 @@ import { SCENARIOS } from "./game/scenarios";
 import { bests as challengeBests } from "./controller/challenge";
 import { type Layer as MusicLayer, LAYERS as MUSIC_LAYERS, THEMES as MUSIC_THEMES } from "./audio/music/themes";
 import { FLIGHT_HOURS, FLIGHT_STARTS, FLIGHT_WEATHER, FlightHub, flightFields, type HubHost, prepareFlight } from "./ui/flighthub";
-import { ChallengePanel, type ChallengeHost, flyChallenge, flyFight } from "./ui/challengepanel";
+import { ChallengePanel, type ChallengeHost, flyChallenge, flyFight, flyFigure } from "./ui/challengepanel";
+import { aeroBests } from "./controller/aerobatics";
+import { FIGURE_ORDER, FIGURES, type FigureId } from "./game/aerobatics";
 import { TimePanel } from "./ui/timepanel";
 import { WeatherPanel } from "./ui/weatherpanel";
 import { RealWeather } from "./realweather";
@@ -5083,7 +5085,28 @@ async function main() {
         });
         return `${tr((c ?? f)!.title)}: started`;
       },
+      figures: () => {
+        const B = aeroBests();
+        return FIGURE_ORDER.map((id) => {
+          const F = FIGURES[id];
+          return { id, name: t(F.name), brief: t(F.brief), entry: F.entry, best: B[id] ?? null };
+        });
+      },
+      figure: (id, mode) => {
+        if (id !== "box" && !FIGURE_ORDER.includes(id as FigureId)) throw new Error(`no figure "${id}" — f35 figures lists them`);
+        placeShip(() => {
+          flyFigure(challengeHost, id as FigureId | "box", mode === "watch" ? "demo" : "judge");
+          return "";
+        });
+        return id === "box"
+          ? "the aerobatic box: armed — five figures"
+          : `${t(FIGURES[id as FigureId].name)}: ${mode === "watch" ? "flown by the autopilot" : "armed for the player"}`;
+      },
       abort: () => {
+        if (camera.aero) {
+          camera.aeroStop();
+          return "the figure given up";
+        }
         if (camera.combat) {
           camera.combatEnd();
           return "the fight given up";
@@ -5505,6 +5528,11 @@ async function main() {
       if (camera.chal?.say) {
         panel.toast(camera.chal.say);
         camera.chal.say = null;
+      }
+      // (an aerobatic figure: its cues, its marks)
+      if (camera.aero?.say) {
+        panel.toast(camera.aero.say);
+        camera.aero.say = null;
       }
       // (a fight: what it says, what is heard — the gun, the launches, the explosions at their distance, the
       // missile warning)

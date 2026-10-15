@@ -89,6 +89,18 @@ export interface SymInfo {
     gates: { c: (V3 | null)[]; k: number; n: number; dist: number }[];
     radar: { contacts: { x: number; y: number; gate: number; next: boolean; trk: number | null }[] } | null;
   } | null;
+  /** an aerobatic figure flown (controller/aerobatics.ts): its banner, its cue, its entry, the guide, its result */
+  aero?: {
+    title: string;
+    mode: string;
+    status: string;
+    t: number;
+    cue: string;
+    entry: { v: number; vTol: number; vNow: number; agl: number; law: string; lawNow: string } | null;
+    guide: { load: number | null; roll: number; nNow: number } | null;
+    result: { score: number; notes: string[] } | null;
+    seq: { idx: number; n: number; total: number } | null;
+  } | null;
   /** a fight flown (controller/combat.ts): every vector on the camera's axes from the craft [m] */
   combat?: {
     title: string;
@@ -537,6 +549,7 @@ export function drawSymbology(F: SymFrame) {
   if (i.plan && i.plan.nodes.length && s.hudBurn && on(F, "burn") && !F.outside && F.density < 2)
     drawBurn(F, pr, stroke, text, inside, nose);
   if (i.chal) drawChallenge(F, pr, stroke, text);
+  if (i.aero) drawAero(F, text);
   if (i.avionics && s.f35Avionics && pilotView) drawAvionics(F, i.avionics, text, hmdRgb);
   if (i.combat) drawCombat(F, pr, stroke, text);
   // (flying together, out of a fight or a course: the others on the scope, each in his colour — ui/netsession.ts)
@@ -1814,6 +1827,51 @@ function drawChallenge(
     const col = medal === "gold" ? "#ffd23f" : medal === "silver" ? "#d8e2ea" : medal === "bronze" ? "#d08a4a" : "#ff6a5a";
     text(C.result.text, W / 2, H * 0.32, col, 22, "center", true);
   }
+}
+
+/** An aerobatic figure (controller/aerobatics.ts): its banner (its name, its clock, the box's count), its cue, its
+ *  entry's window while armed, the guide — the load its program would pull, the roll's way —, its marks. */
+function drawAero(
+  F: SymFrame,
+  text: (t: string, x: number, y: number, col: string, size: number, align?: CanvasTextAlign, mono?: boolean) => void,
+) {
+  const { W, H, dpr, i } = F;
+  const A = i.aero!;
+  const GOLD = "rgba(255, 210, 63, 1)";
+  const y = F.top + (F.compact ? 64 : 150) * dpr;
+  const parts = [A.title.toUpperCase(), `${A.t.toFixed(1)} s`];
+  if (A.mode === "demo") parts.push("DEMO");
+  if (A.seq) parts.push(`${A.seq.idx + 1}/${A.seq.n} · ${A.seq.total.toFixed(1)}`);
+  text(parts.join("   "), W / 2, y, GOLD, 14, "center", true);
+  if (A.status !== "done") text(A.cue, W / 2, y + 20 * dpr, "rgba(160, 255, 200, 0.95)", 13, "center", true);
+  if (A.entry) {
+    const okV = Math.abs(A.entry.vNow - A.entry.v) <= A.entry.vTol;
+    const lawOk = A.entry.law === A.entry.lawNow;
+    const txt = `ENTRY ${A.entry.v}±${A.entry.vTol} M/S · NOW ${Math.round(A.entry.vNow)} · LEVEL, WINGS LEVEL${lawOk ? "" : ` · ${A.entry.law.toUpperCase()} LAW`}`;
+    text(txt, W / 2, y + 40 * dpr, okV && lawOk ? "rgba(160, 255, 200, 0.95)" : "rgba(255, 200, 90, 1)", 13, "center", true);
+  }
+  if (A.guide && A.guide.load !== null) {
+    // (the guide, under the flight path: the load to pull — green when held within half a g —, the roll's way)
+    const near = Math.abs(A.guide.nNow - A.guide.load) < 0.5;
+    const g = A.guide.load >= 0 ? `PULL ${A.guide.load.toFixed(1)} G` : `PUSH ${A.guide.load.toFixed(1)} G`;
+    const roll = A.guide.roll > 0 ? "   ROLL ▶" : A.guide.roll < 0 ? "◀ ROLL   " : "";
+    const label = A.guide.roll < 0 ? `${roll}${g}` : `${g}${roll}`;
+    text(label, W / 2, H * 0.72, near ? "rgba(160, 255, 200, 0.95)" : "rgba(255, 200, 90, 1)", 15, "center", true);
+  }
+  if (A.result) {
+    text(
+      `${A.title.toUpperCase()}  ${A.result.score.toFixed(1)}/20`,
+      W / 2,
+      H * 0.32,
+      A.result.score >= 18 ? "#ffd23f" : A.result.score >= 14 ? "#d8e2ea" : "#ff9a6a",
+      22,
+      "center",
+      true,
+    );
+    A.result.notes
+      .slice(0, 3)
+      .forEach((n, k) => text(n, W / 2, H * 0.32 + (26 + 18 * k) * dpr, "rgba(230, 240, 245, 0.9)", 13, "center", false));
+  } else if (A.status === "done") text(`${A.title.toUpperCase()} — LAPSED`, W / 2, H * 0.32, "#ff6a5a", 22, "center", true);
 }
 
 /** A fight (controller/combat.ts): the explosions, the smoke-less motors' glow, the gun's tracers, the targets

@@ -10,6 +10,16 @@ export default {
   "{0} — go: {1}": "{0} — c'est parti : {1}",
   "{0}: lapsed — too long": "{0} : expirée — trop longue",
   "{0}: {1}/20{2}": "{0} : {1}/20{2}",
+  "The aerobatic box: {0} figures — first, {1}": "La boîte de voltige : {0} figures — d'abord, {1}",
+  "The aerobatic box: {0}/100{1}": "La boîte de voltige : {0}/100{1}",
+  "Figure {0}/{1}: {2} — entry: {3} m/s, level": "Figure {0}/{1} : {2} — entrée : {3} m/s, en palier",
+  Aerobatics: "Voltige",
+  "The aerobatic box": "La boîte de voltige",
+  "Five figures in a row — loop, aileron roll, Immelmann, split-S, barrel roll — each judged out of 20: out of 100 together.":
+    "Cinq figures à la suite — looping, tonneau rapide, Immelmann, split-S, tonneau barriqué — chacune jugée sur 20 : sur 100 en tout.",
+  "entry {0} m/s · {1} m": "entrée {0} m/s · {1} m",
+  "direct law": "loi directe",
+  Watch: "Regarder",
   Loop: "Looping",
   "A whole circle in the vertical plane, wings level all the way round, back at the entry's height and heading.":
     "Un cercle entier dans le plan vertical, ailes à plat tout du long, retour à la hauteur et au cap d'entrée.",

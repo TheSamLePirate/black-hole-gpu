@@ -49,6 +49,7 @@ import { installTelemetry } from "./controller/telemetry";
 import { PlanetCharacter } from "./controller/character";
 import { installSpectator } from "./controller/spectator";
 import { type AeroRun, installAerobatics } from "./controller/aerobatics";
+import type { FigureId } from "./game/aerobatics";
 import { type FormState, installFormation } from "./controller/formation";
 import { installJet } from "./controller/jet";
 import { installFplan, noNav, type NavState } from "./controller/fplan";
@@ -1021,8 +1022,10 @@ export class CameraController {
   jetCws = { pitch: false, roll: false, thr: Number.NaN };
   /** a formation flown on another's craft (game/formation.ts — controller/formation.ts), null: none */
   form: FormState | null = null;
-  /** an aerobatic figure flown — the program's demonstration or the player's, judged (controller/aerobatics.ts) */
+  /** an aerobatic figure flown — the program's demonstration or the player's, judged (controller/aerobatics.ts) —,
+   *  and one asked, begun at the next frame in the air (the craft just placed) */
   aero: AeroRun | null = null;
+  aeroPending: { id: FigureId | "box"; mode: "demo" | "judge" } | null = null;
   /** a plane's flight plan and its guidance (game/flightplan.ts — controller/fplan.ts) */
   nav: NavState = noNav();
   /** a challenge flown (game/challenges.ts — controller/challenge.ts), null: none */

@@ -602,6 +602,19 @@ export function figureStep(id: FigureId, s: AeroState, m: PilotMem): AeroCmd | n
   }
 }
 
+/** The cue to say at this point of the figure (FigureDef.cues' index): its phase's, finer within a loop. */
+export function cueIndex(id: FigureId, m: PilotMem): number {
+  const ph = m.phase;
+  switch (id) {
+    case "loop":
+      return ph < 1 ? 0 : ph === 1 ? (m.loopAng > 2.2 && m.loopAng < 4.2 ? 2 : 1) : 3;
+    case "cuban8":
+      return ph <= 1 ? 1 : ph <= 3 ? 2 : ph <= 5 ? 3 : 4;
+    default:
+      return Math.min(ph, FIGURES[id].cues.length - 1);
+  }
+}
+
 // ------------------------------------------------------------------------------------------------- the judge
 
 /** The least-squares circle through points of a plane (2D): its centre and radius. */
