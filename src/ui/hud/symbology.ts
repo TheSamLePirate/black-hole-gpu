@@ -177,6 +177,8 @@ export interface SymInfo {
   nav?: { name: string; brg: number; dist: number; on: boolean } | null;
   /** an ILS approach: the runway, the needles [dots — null: not received], the distance [km], its phase */
   ils?: { id: string; loc: number | null; gs: number | null; dme: number; phase: string; auto: boolean } | null;
+  /** the Auto-GCAS's and Auto-ACAS's state: flying up, the ground near, an escape */
+  gcas?: { flyUp: boolean; near: boolean; escape: string | null } | null;
   /** the beginner's ring: where the jet is aimed (its heading and flight path [rad]) */
   aimRing?: { hdg: number; gamma: number } | null;
   /** a mission's objective (its bearing [° true], its distance [m], its height over ours [m]) */
@@ -695,6 +697,29 @@ export function drawSymbology(F: SymFrame) {
       stroke,
       text,
     );
+
+  // ---- the Auto-GCAS (A2): its chevrons closing on the centre as the ground nears, met when it flies up; the
+  // Auto-ACAS's escape said
+  if (i.gcas && pilotView && (i.gcas.near || i.gcas.flyUp || i.gcas.escape)) {
+    const cx = W / 2,
+      cy = H / 2;
+    const col = i.gcas.flyUp || i.gcas.escape ? "#ff5a46" : "#ffc85a";
+    const gap = (i.gcas.flyUp ? 18 : 60) * dpr;
+    if (i.gcas.flyUp || i.gcas.near)
+      for (const sx of [-1, 1])
+        stroke(
+          () => {
+            const x0 = cx + sx * gap;
+            ctx.moveTo(x0 + sx * 40 * dpr, cy - 22 * dpr);
+            ctx.lineTo(x0, cy);
+            ctx.lineTo(x0 + sx * 40 * dpr, cy + 22 * dpr);
+          },
+          col,
+          3,
+        );
+    const label = i.gcas.flyUp ? "AUTO GCAS — FLY UP" : i.gcas.escape ? `AUTO ACAS — ${i.gcas.escape}` : "";
+    if (label) text(label, cx, cy - 46 * dpr, col, 15, "center", true);
+  }
 
   // ---- an ILS approach (P4): its needles about the view's centre — the glideslope's on the right, the localizer's
   // below —, the runway, the distance, the mode

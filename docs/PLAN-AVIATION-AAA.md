@@ -365,6 +365,8 @@ pertinent.
   *A1 fait le 2026-10-15 — [fiche](progress/aviation/A1.md) : le réglage « Assistance » (manuel = loi directe, réaliste, assisté = gaz automatiques + 20° d'incidence, débutant = l'anneau de visée que le manche déplace et que l'avion rejoint), et ⇧X, le retour au vol stable à tous les niveaux.*
 - **A2. Les protections du vrai F-35.** L'**Auto-GCAS** (la ressource automatique avant le sol, qui existe sur
   l'avion) et l'**Auto-ACAS** (l'évitement des collisions en vol).
+
+  *A2 fait le 2026-10-15 — [fiche](progress/aviation/A2.md) : l'Auto-GCAS (la ressource prévue sur le relief dix fois par seconde, prise au dernier moment, ailes à plat puis 5 g, rendue une fois un palier dégagé) et l'Auto-ACAS (un conflit à moins de 150 m dans les 8 s, évité verticalement), au HUD ; forcés aux niveaux assistés — le Mont-Blanc franchi par la ressource et un A320 croisé à 217 m dans le navigateur.*
 - **A3. Les nouveaux modes.**
   - Approche ILS, appontage vertical, interception, formation (fait), orbite ou hippodrome sur un point.
   - **Suivi de terrain** (vol à très basse altitude), rendez-vous avec un ravitailleur, démonstration de

@@ -53,4 +53,14 @@ export default {
   "Recovery: wings level, climbing": "Rétablissement : ailes à plat, en montée",
   "Recovery: off — the stick": "Rétablissement coupé — le manche",
   "Recovery: stable — altitude, heading and speed held": "Rétablissement : stable — altitude, cap et vitesse tenus",
+  "Auto-GCAS · Auto-ACAS": "Auto-GCAS · Auto-ACAS",
+  "The real F-35's protections: the Auto-GCAS takes over at the last moment before the ground (wings level, a 5 g pull until climbing clear) and gives it back; the Auto-ACAS escapes another aircraft on a collision course, up or down. Always on in the assisted levels; not with the direct law, the gear down, in a formation or an approach.":
+    "Les protections du vrai F-35 : l'Auto-GCAS prend la main au dernier moment avant le sol (ailes à plat, ressource à 5 g jusqu'à monter dégagé) puis la rend ; l'Auto-ACAS évite un autre avion en route de collision, vers le haut ou le bas. Toujours actives aux niveaux assistés ; pas en loi directe, train sorti, en formation ni en approche.",
+  "Auto-GCAS: off": "Auto-GCAS : coupé",
+  "Auto-GCAS: fly up": "Auto-GCAS : ressource",
+  "Auto-GCAS: recovered — yours": "Auto-GCAS : dégagé — à vous",
+  "Auto-ACAS: {0} — {1}": "Auto-ACAS : {0} — {1}",
+  climb: "montée",
+  descend: "descente",
+  "Auto-ACAS: clear of conflict — yours": "Auto-ACAS : conflit résolu — à vous",
 } satisfies Record<string, string>;

@@ -1009,6 +1009,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   this.carrierStep?.();
   // (the F-35's radar: its sweep, its tracks — controller/radar.ts)
   this.radarStep(dtPilot);
+  // (the Auto-GCAS and the Auto-ACAS: the ground and the others foreseen — controller/gcas.ts)
+  this.gcasStep(dtPilot);
   // (the F-35B's STOVL mode — controller/stovl.ts —: the thrust's direction, the hover law; its input the stick's
   // left to the pilot — none when the hover law takes it)
   const vt = this.stovlStep(cam, inp, dtPilot);

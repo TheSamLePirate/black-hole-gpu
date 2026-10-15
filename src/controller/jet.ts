@@ -151,6 +151,7 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
   // level's auto-throttle)
   this.assistThrottle(f);
   const fm =
+    this.gcasJet(inp) ??
     this.assistJet(inp, f, dt, "recover") ??
     this.icptStep(inp, f) ??
     this.trapJet(inp) ??

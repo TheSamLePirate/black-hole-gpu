@@ -4027,6 +4027,17 @@ export const SCHEMA: ControlDef[] = [
     keywords: "g limit load factor fly by wire fcs",
   },
   {
+    key: "f35AutoProtect",
+    type: "toggle",
+    section: "game",
+    group: "F-35",
+    label: "Auto-GCAS · Auto-ACAS",
+    effect: "none",
+    enabled: (s) => s.ship && s.vessel === "f35",
+    help: "The real F-35's protections: the Auto-GCAS takes over at the last moment before the ground (wings level, a 5 g pull until climbing clear) and gives it back; the Auto-ACAS escapes another aircraft on a collision course, up or down. Always on in the assisted levels; not with the direct law, the gear down, in a formation or an approach.",
+    keywords: "gcas acas ground collision avoidance pull up fly up terrain protection traffic",
+  },
+  {
     key: "f35Assist",
     type: "choice",
     section: "game",
