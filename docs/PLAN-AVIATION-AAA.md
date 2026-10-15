@@ -371,6 +371,8 @@ pertinent.
   - Approche ILS, appontage vertical, interception, formation (fait), orbite ou hippodrome sur un point.
   - **Suivi de terrain** (vol à très basse altitude), rendez-vous avec un ravitailleur, démonstration de
     voltige, « voler vers le point cliqué ».
+
+  *A3 fait le 2026-10-15 — [fiche](progress/aviation/A3.md) : l'orbite sur un point (sa loi d'inclinaison : 3 947–3 978 m pour 4 km), l'hippodrome sur un point, le suivi de terrain 100/150/300 m (le « ski toe » sur le relief devant : la vallée de l'Arve à 132–386 m), le rendez-vous en pré-contact avec un ravitailleur, le sous-menu « Modes du pilote automatique » et l'outil `jet_mode` de TARS ; ILS, appontage vertical, interception, formation, voltige et « voler vers » déjà faits.*
 - **A4. L'instructeur.** Pendant chaque approche et chaque figure, les écarts annoncés au bon moment (« trop
   haut », « vitesse », « incidence »), puis un débriefing chiffré.
 

@@ -35,7 +35,7 @@ declare module "../controls" {
 /** The relief's height at a place [m], on a 250 m grid, kept ten seconds (finer tiles come in meanwhile). */
 const cache = new Map<string, number>();
 let cacheAt = 0;
-function ground(lat: number, lon: number) {
+export function ground(lat: number, lon: number) {
   const now = performance.now();
   if (now - cacheAt > 10_000) {
     cache.clear();
@@ -111,7 +111,14 @@ function gcasStep(this: CameraController, dt: number) {
   const others: AcasOther[] = (this.radarObjects ?? [])
     // (our own wingmen and the room's in formation with us — their close slots flown on purpose — left out, as the
     // real one's formation logic does)
-    .filter((o) => o.kind === "air" && !o.id.startsWith("wng:") && !o.id.startsWith("rwg:"))
+    .filter(
+      (o) =>
+        o.kind === "air" &&
+        !o.id.startsWith("wng:") &&
+        !o.id.startsWith("rwg:") &&
+        // (the aircraft joined on purpose — an intercept's shadow, a tanker's pre-contact —: not a conflict)
+        !(this.icpt && this.icpt.id === o.id && this.icpt.phase !== "run" && this.icpt.phase !== "turn"),
+    )
     .map((o) => ({ id: o.id, name: o.name, r: o.r, vRel: [o.v[0] - own.v[0], o.v[1] - own.v[1], o.v[2] - own.v[2]] }));
   // (escaping: kept on until the closest approach foreseen is twice the conflict's — not let go at its edge)
   const k = acasConflict(others, S.escape ? 2 * ACAS.miss : ACAS.miss);

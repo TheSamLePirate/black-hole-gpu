@@ -63,4 +63,16 @@ export default {
   climb: "montée",
   descend: "descente",
   "Auto-ACAS: clear of conflict — yours": "Auto-ACAS : conflit résolu — à vous",
+  "Orbit: in the air": "Orbite : en vol",
+  "Orbit: {0} km, to the {1}": "Orbite : {0} km, vers la {1}",
+  "Terrain following off — the altitude held": "Suivi de terrain coupé — l'altitude tenue",
+  "Terrain following: in the air": "Suivi de terrain : en vol",
+  "Terrain following: {0} m over the ground": "Suivi de terrain : {0} m au-dessus du sol",
+  "Tanker: in the air": "Ravitailleur : en vol",
+  "Tanker: TEXACO 11, 25 km ahead at 7 000 m — the rendezvous to pre-contact":
+    "Ravitailleur : TEXACO 11, 25 km devant à 7 000 m — rendez-vous en pré-contact",
+  "Orbit and terrain following off": "Orbite et suivi de terrain coupés",
+  "Pre-contact on {0} — 50 m behind, 10 m below": "Pré-contact sur {0} — 50 m derrière, 10 m dessous",
+  "Rendezvous: {0} · {1} km": "Rendez-vous : {0} · {1} km",
+  "Orbit off — the stick": "Orbite coupée — le manche",
 } satisfies Record<string, string>;

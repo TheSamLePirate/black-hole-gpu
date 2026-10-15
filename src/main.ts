@@ -64,6 +64,7 @@ import { type Layer as MusicLayer, LAYERS as MUSIC_LAYERS, THEMES as MUSIC_THEME
 import { FLIGHT_HOURS, FLIGHT_STARTS, FLIGHT_WEATHER, FlightHub, flightFields, type HubHost, prepareFlight } from "./ui/flighthub";
 import { keepMission, MissionEditor, missionLink, myMissions } from "./ui/missioneditor";
 import { missionFromHash } from "./game/missionedit";
+import { MODES as JET_MODES } from "./game/jetmodes";
 import { MissionMap } from "./ui/missionmap";
 import { briefMission, debriefMission, flyMission, MissionHud } from "./ui/airmission";
 import { AIR_MISSIONS } from "./game/airmissions";
@@ -3361,6 +3362,8 @@ async function main() {
       },
       // (the flight's leader: its orders — controller/orders.ts)
       { label: { fr: "Patrouille", en: "Flight" }, sub: orderItems() },
+      // (the F-35's autopilot modes — A3)
+      { label: { fr: "Modes du pilote automatique", en: "Autopilot modes" }, sub: modeItems() },
       { label: { fr: "Plan de vol", en: "Flight plan" }, key: "⇧O", on: camera.nav.on.l, run: () => routePanel.open() },
       { label: { fr: "Carte de mission", en: "Mission map" }, on: !!camera.mission, run: () => missionMap.open() },
       {
@@ -3381,6 +3384,45 @@ async function main() {
   };
 
   /** The leader's orders as a wheel (F2): each to the room's wingmen and the AI's; the formations a wheel of their own. */
+  /** The F-35's autopilot modes (A3 — controller/jetmodes.ts): the orbit, the hold, the terrain following, the tanker,
+   *  the ILS, a point flown to on the map, the aerobatics' demonstrations. */
+  const modeItems = (): WheelItem[] => {
+    const say = (s: string | null) => s && panel.toast(s);
+    const g = () => camera.geoNow();
+    return [
+      {
+        label: { fr: "Orbite ici (droite)", en: "Orbit here (right)" },
+        on: !!camera.orbitMode,
+        run: () => say(camera.orbitStart({ dir: 1 })),
+      },
+      { label: { fr: "Orbite ici (gauche)", en: "Orbit here (left)" }, run: () => say(camera.orbitStart({ dir: -1 })) },
+      {
+        label: { fr: "Hippodrome ici", en: "Hold here" },
+        on: !!camera.holdPat,
+        run: () => {
+          const p = g();
+          if (p) say(camera.holdStart({ lat: p.lat, lon: p.lon }, p.track));
+        },
+      },
+      {
+        label: { fr: "Suivi de terrain", en: "Terrain following" },
+        on: camera.tfAgl != null,
+        sub: [
+          ...JET_MODES.tfHeights.map((h) => ({
+            label: { fr: `${h} m`, en: `${h} m` },
+            on: camera.tfAgl === h,
+            run: () => say(camera.tfStart(h)),
+          })),
+          { label: { fr: "Coupé", en: "Off" }, run: () => say(camera.tfStart(null)) },
+        ],
+      },
+      { label: { fr: "Ravitailleur", en: "Tanker" }, on: !!camera.icpt?.slot, run: () => say(camera.tankerStart()) },
+      { label: { fr: "Approche ILS", en: "ILS approach" }, on: !!camera.ilsRun, run: () => say(camera.ilsStart()) },
+      { label: { fr: "Voler vers… (carte)", en: "Fly to… (map)" }, run: () => missionMap.open() },
+      { label: { fr: "Voltige (démonstration)", en: "Aerobatics (demonstration)" }, run: () => challengePanel.open() },
+      { label: { fr: "Modes coupés", en: "Modes off" }, run: () => say(camera.modesOff()) },
+    ];
+  };
   const orderItems = (): WheelItem[] => {
     const say = (s: string | null) => s && panel.toast(s);
     const order = (id: OrderId, arg?: string) => say(camera.flightOrder(id, arg));

@@ -193,7 +193,7 @@ export interface Target {
     speed: number;
     gMax: number;
     course?: { hdg: number; alt: number };
-    route?: { pts: V3[]; next: number };
+    route?: { pts: V3[]; next: number; loop?: boolean };
   };
   /** the mesh it is drawn with (a mission's airliner: "a320"; else the F-35's) */
   mesh?: string;
@@ -296,6 +296,8 @@ export interface TargetSpec {
   friendly?: boolean;
   /** an airliner's way: its route's points (east, north, height over the ground [m]); else its heading held */
   route?: [number, number, number][];
+  /** its route flown round and round (a tanker's racetrack) */
+  routeLoop?: boolean;
   mesh?: string;
 }
 
@@ -379,7 +381,9 @@ export class CombatWorld {
             speed,
             gMax: S.gMax,
             course: airliner ? { hdg: s.hdg ?? 0, alt: p[2] } : undefined,
-            route: s.route?.length ? { pts: s.route.map(([e, n, a]) => [e, n, this.groundZ(e, n) + a] as V3), next: 0 } : undefined,
+            route: s.route?.length
+              ? { pts: s.route.map(([e, n, a]) => [e, n, this.groundZ(e, n) + a] as V3), next: 0, loop: s.routeLoop }
+              : undefined,
           }
         : undefined,
       site: s.kind === "sam" ? { nextShot: 8, missiles: S.missiles } : undefined,
@@ -965,6 +969,7 @@ export class CombatWorld {
         if (R && R.next < R.pts.length) {
           const to = sub(R.pts[R.next]!, q.p);
           if (len([to[0], to[1], 0]) < 1500) R.next++;
+          if (R.next >= R.pts.length && R.loop) R.next = 0;
           const tgt = R.pts[Math.min(R.next, R.pts.length - 1)]!;
           const dd = sub(tgt, q.p);
           want = unit([dd[0], dd[1], clamp(dd[2] / Math.max(len([dd[0], dd[1], 0]), 3000), -0.12, 0.12)]);

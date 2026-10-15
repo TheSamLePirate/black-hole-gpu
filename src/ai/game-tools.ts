@@ -1744,6 +1744,46 @@ export function gameTools(h: GameHost): Tool[] {
       }),
     },
     {
+      name: "jet_mode",
+      description:
+        "The F-35's autopilot modes. orbit: circles over a point (lat/lon, else one radius to the side so it is on it at once; radiusKm — by default the 40° bank's at its speed, 4 km at least; dir right or left), its altitude and speed held. hold: the racetrack over a point (lat/lon, else here) inbound on a course (inboundDeg, else the track). tf: terrain following aglM over the ground (100, 150, 300 — 0 off): the ground ahead cleared, the valleys followed, the heading still the autopilot's or NAV's. tanker: a tanker (TEXACO 11) set 25 km ahead at 7 000 m on its racetrack and joined to its pre-contact slot, 50 m behind and 10 m below. off: the orbit and the terrain following let go. Also: approach (the ILS), mission map (fly to a point), the challenges' aerobatic demonstrations.",
+      params: {
+        action: { type: "string", enum: ["orbit", "hold", "tf", "tanker", "off"] },
+        lat: { type: "number" },
+        lon: { type: "number" },
+        radiusKm: { type: "number", minimum: 1, maximum: 50 },
+        dir: { type: "string", enum: ["right", "left"] },
+        inboundDeg: { type: "number" },
+        aglM: { type: "number", minimum: 0, maximum: 1000 },
+      },
+      required: ["action"],
+      run: act((a) => {
+        const c = camera;
+        switch (a.action) {
+          case "orbit":
+            return c.orbitStart({
+              lat: a.lat as number | undefined,
+              lon: a.lon as number | undefined,
+              radius: a.radiusKm ? Number(a.radiusKm) * 1000 : undefined,
+              dir: a.dir === "left" ? -1 : 1,
+            });
+          case "hold": {
+            const g = c.geoNow();
+            if (!g) throw new Error("hold: in the air");
+            const fix =
+              a.lat !== undefined && a.lon !== undefined ? { lat: Number(a.lat), lon: Number(a.lon) } : { lat: g.lat, lon: g.lon };
+            return c.holdStart(fix, a.inboundDeg !== undefined ? (Number(a.inboundDeg) * Math.PI) / 180 : g.track);
+          }
+          case "tf":
+            return c.tfStart(a.aglM ? Number(a.aglM) : null);
+          case "tanker":
+            return c.tankerStart();
+          default:
+            return c.modesOff();
+        }
+      }),
+    },
+    {
       name: "approach",
       description:
         "The F-35's instrument approaches and procedures. ils: an ILS approach flown by the autopilot to a runway (field: ICAO or name, else the nearest within 150 km; its end into the wind) — to the initial fix 18.5 km out, the localizer and the 3° glideslope captured, the gear and flaps at the final fix, minimums at 60 m (not stable: the missed approach, round again), the flare, braked to a stop, graded out of 20; hold: laps of the racetrack at the initial fix first (0: none; 99: until cleared). clear: out of the hold, the approach begun. off: the approach given up (the needles gone). status: the approach flown (its phase, the needles in dots, the distance) and the last one's grade. procedures: the flight plan given its departure's fix (after an airfield it starts from) and its arrival's (the initial and final fixes before the airfield it ends at) — LNAV then hands over to the ILS at the initial fix.",

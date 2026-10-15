@@ -4,6 +4,7 @@
 // measure, and locked again once the beam finds it. The stick, the throttle, another autopilot: off, the holds
 // kept as they are.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import type { FormSlot } from "../game/formation";
 import type { FormCraft } from "../game/formation";
 import { type IcptOut, type IcptPhase, interceptStep } from "../game/intercept";
 import { t, tf } from "../i18n";
@@ -32,6 +33,9 @@ export interface IcptState {
   braked?: boolean;
   /** the shadow said */
   said?: boolean;
+  /** its slot when not the shadow's (a tanker's pre-contact — controller/jetmodes.ts), what it is called then */
+  slot?: FormSlot;
+  slotName?: string;
 }
 
 /** carried on without a measure at most this long [s] — then lost */
@@ -114,19 +118,19 @@ function icptStep(
   }
   const o = this.netOwn();
   if (!L || !o) return this.icptOff(tf("Intercept off — {0} lost", I.name)), null;
-  const r = interceptStep(o, f.V, f.h, L, I.phase);
+  const r = interceptStep(o, f.V, f.h, L, I.phase, I.slot);
   I.phase = r.phase;
   I.last = r;
   I.armed = true;
   if (r.phase === "shadow" && !I.said) {
     I.said = true;
-    this.onPilotMessage?.(tf("Shadowing {0} — 300 m behind, on its left", I.name));
+    this.onPilotMessage?.(I.slotName ?? tf("Shadowing {0} — 300 m behind, on its left", I.name));
   }
   // (the holds shown — and kept when it goes off)
   m.alt = Math.round(f.h);
   m.hdg = Number.isFinite(f.hdg) ? f.hdg : null;
   m.spd = r.spd;
-  m.icpt = `${I.phase === "run" || I.phase === "turn" ? "ICPT" : I.phase === "join" ? "JOIN" : "SHDW"} ${I.name.toUpperCase()}`;
+  m.icpt = `${I.phase === "run" || I.phase === "turn" ? "ICPT" : I.phase === "join" ? "JOIN" : I.slot ? "PRE-CONTACT" : "SHDW"} ${I.name.toUpperCase()}`;
   m.formDist = r.dist;
   if (r.brake > 0 || I.braked) {
     this.airBrake = r.brake;

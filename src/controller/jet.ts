@@ -157,6 +157,7 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
     this.trapJet(inp) ??
     this.ilsJet(inp) ??
     this.formStep(inp, f, dt) ??
+    this.orbitJet(f) ??
     this.assistJet(inp, f, dt, "aim");
   if (fm) {
     cws.pitch = cws.roll = false;
@@ -187,6 +188,8 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
   // (a break, a hold — the leader's orders: controller/orders.ts —; the flight plan's guidance: the holds' targets —
   // controller/fplan.ts)
   this.orderStep(inp, f);
+  // (the new modes — controller/jetmodes.ts —: the orbit's heading, the tanker's rendezvous)
+  this.modesStep(inp, f);
   this.navStep(inp, f);
   if (m.spd !== null) {
     // (the throttle keys: the speed selected)
@@ -197,7 +200,9 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
   }
   cws.thr = this.pilot.throttle;
   const c = jetCommands(m, f);
-  return { gamma: cws.pitch ? null : c.gamma, bank: cws.roll ? null : c.bank };
+  // (the terrain following's flight path in place of the altitude hold's)
+  const tfg = this.tfCommand(f);
+  return { gamma: cws.pitch ? null : (tfg ?? c.gamma), bank: cws.roll ? null : c.bank };
 }
 
 export function installJet(C: { prototype: CameraController }) {

@@ -47,7 +47,9 @@ export interface JetModes {
   /** the heading hold's bank at most [rad] when not the usual (a break's hard turn — controller/orders.ts) */
   bankMax?: number;
   /** a break or a hold flown (the displays' copy) */
-  order?: "BRK" | "HOLD";
+  order?: "BRK" | "HOLD" | "ORBIT";
+  /** the terrain following's height over the ground [m] (controller/jetmodes.ts — A3; the displays' copy) */
+  tf?: number;
 }
 export const noJetModes = (): JetModes => ({ alt: null, hdg: null, spd: null, ab: false });
 
@@ -107,7 +109,8 @@ export function jetAnnunciators(m: JetModes, u: { alt: (m: number) => string; sp
     return out;
   }
   if (m.order) out.push(m.order);
-  if (m.alt !== null) out.push(`${m.vnav ? "VNAV " : "ALT "}${u.alt(m.alt)}`);
+  if (m.tf !== undefined) out.push(`TF ${u.alt(m.tf)}`);
+  else if (m.alt !== null) out.push(`${m.vnav ? "VNAV " : "ALT "}${u.alt(m.alt)}`);
   if (m.hdg !== null && m.lnav) out.push("LNAV");
   else if (m.hdg !== null) out.push(`HDG ${String(Math.round(((m.hdg / D) % 360) + 360) % 360).padStart(3, "0")}`);
   if (m.spd !== null) out.push(`A/T ${u.spd(m.spd)}`);
