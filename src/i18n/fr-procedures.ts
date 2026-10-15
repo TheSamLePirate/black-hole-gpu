@@ -37,4 +37,20 @@ export default {
   "{0}, Mother: Charlie. Case I — the initial, the break.": "{0}, Mother : Charlie. Cas I — l'initiale, le break.",
   "Carrier landing on {0} — {1}": "Appontage sur {0} — {1}",
   "straight in": "approche directe",
+  Assistance: "Assistance",
+  "How much the F-35 helps. Manual: the direct law, the stick on the surfaces. Realistic: the real aircraft, its law and its limits. Assisted: the throttle a speed (auto-throttle), 20° of incidence at most, the ground's protection always on. Beginner: aim — the stick moves a ring where the jet goes, it flies there. ⇧X: back to stable flight in any.":
+    "Combien le F-35 aide. Manuel : la loi directe, le manche sur les gouvernes. Réaliste : le vrai avion, sa loi et ses limites. Assisté : les gaz deviennent une vitesse (automanette), 20° d'incidence au plus, la protection du sol toujours active. Débutant : on vise — le manche déplace un anneau, l'avion y va. ⇧X : retour au vol stable, à tous les niveaux.",
+  "The direct law: stalls and spins possible": "La loi directe : décrochages et vrilles possibles",
+  Realistic: "Réaliste",
+  "The real F-35: its law and its limits": "Le vrai F-35 : sa loi et ses limites",
+  Assisted: "Assisté",
+  "Auto-throttle, 20° of incidence, the ground's protection": "Automanette, 20° d'incidence, protection du sol",
+  Beginner: "Débutant",
+  "Aim: the jet flies where the ring is": "On vise : l'avion va où est l'anneau",
+  "Full throttle · cut (W · X on AZERTY) — on the entry autopilot's approach, full throttle goes around · the F-35: back to stable flight (wings level, a gentle climb, a safe speed; then the holds)":
+    "Plein gaz · réduit (W · X en AZERTY) — en approche du pilote automatique de rentrée, plein gaz remet les gaz · le F-35 : retour au vol stable (ailes à plat, légère montée, vitesse sûre ; puis les maintiens)",
+  "Recovery: in the air, flown as a plane": "Rétablissement : en vol, en mode avion",
+  "Recovery: wings level, climbing": "Rétablissement : ailes à plat, en montée",
+  "Recovery: off — the stick": "Rétablissement coupé — le manche",
+  "Recovery: stable — altitude, heading and speed held": "Rétablissement : stable — altitude, cap et vitesse tenus",
 } satisfies Record<string, string>;

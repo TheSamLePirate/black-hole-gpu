@@ -177,6 +177,8 @@ export interface SymInfo {
   nav?: { name: string; brg: number; dist: number; on: boolean } | null;
   /** an ILS approach: the runway, the needles [dots — null: not received], the distance [km], its phase */
   ils?: { id: string; loc: number | null; gs: number | null; dme: number; phase: string; auto: boolean } | null;
+  /** the beginner's ring: where the jet is aimed (its heading and flight path [rad]) */
+  aimRing?: { hdg: number; gamma: number } | null;
   /** a mission's objective (its bearing [° true], its distance [m], its height over ours [m]) */
   msn?: { name: string; brg: number; dist: number; dz: number } | null;
   /** the F-35B's STOVL mode (controller/telemetry.ts) */
@@ -502,6 +504,30 @@ export function drawSymbology(F: SymFrame) {
       caret(bearing(i.dirs.target), COL.target!, true);
       // (the flight plan's active waypoint: magenta, the route's colour)
       caret(i.nav ? i.nav.brg : null, "#ff4fd8", true);
+      // (the beginner's ring — A1: where the jet is aimed, a cyan ring with its four ticks; the jet flies to it)
+      const ar = i.aimRing;
+      if (ar) {
+        const p = pr(comb(comb(north, Math.cos(ar.hdg), east, Math.sin(ar.hdg)), Math.cos(ar.gamma), up, Math.sin(ar.gamma)));
+        if (inside(p, 20 * dpr)) {
+          const R = 16 * dpr;
+          stroke(() => ctx.arc(p![0], p![1], R, 0, 2 * Math.PI), "#6fe8ff", 2);
+          stroke(
+            () => {
+              for (const [dx, dy] of [
+                [1, 0],
+                [-1, 0],
+                [0, 1],
+                [0, -1],
+              ] as const) {
+                ctx.moveTo(p![0] + dx * R, p![1] + dy * R);
+                ctx.lineTo(p![0] + dx * (R + 8 * dpr), p![1] + dy * (R + 8 * dpr));
+              }
+            },
+            "#6fe8ff",
+            2,
+          );
+        }
+      }
       // (a mission's objective — P2: amber on the tape, and where it is in the view, ringed, its name and distance)
       const m = i.msn;
       caret(m ? m.brg : null, "#ffb03a", true);

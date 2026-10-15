@@ -1,4 +1,5 @@
 import { tunnelEntrySide } from "../system/wormhole-map";
+import { ASSIST } from "./assistlevel";
 import { timeRate } from "../clock";
 import { weatherAt, windFromAt } from "../weather";
 import { recorder } from "../game/recorder";
@@ -1037,9 +1038,18 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
           // (the F-35: its load limit the setting's — 4 g at most with the gear down, its doors and struts)
           fbw:
             fleet.active === "f35" && VESSELS.f35.fbw
-              ? { ...VESSELS.f35.fbw, gMax: this.gearDown ? Math.min(4, s.f35GLimit) : s.f35GLimit }
+              ? {
+                  ...VESSELS.f35.fbw,
+                  gMax: this.gearDown ? Math.min(4, s.f35GLimit) : s.f35GLimit,
+                  // (assisted, beginner: 20° of incidence at most — the stall kept well away — controller/assistlevel.ts)
+                  alphaMax:
+                    s.f35Assist === "assisted" || s.f35Assist === "beginner"
+                      ? Math.min(VESSELS.f35.fbw.alphaMax, ASSIST.alphaMax)
+                      : VESSELS.f35.fbw.alphaMax,
+                }
               : VESSELS[fleet.active].fbw,
-          law: fleet.active === "f35" ? s.f35Law : "normal",
+          // (manual: the direct law)
+          law: fleet.active === "f35" ? (s.f35Assist === "manual" ? "direct" : s.f35Law) : "normal",
           nz: LA0.out.F[1] / (fleet.massProps().mass * 9.80665),
           gammaCmd: jetCmd.gamma,
           bankCmd: jetCmd.bank,

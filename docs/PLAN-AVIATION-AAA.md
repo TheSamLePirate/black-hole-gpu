@@ -361,6 +361,8 @@ pertinent.
   - **Assisté** : trim automatique, gaz automatiques, protection contre le décrochage et le sol, retour au vol
     stable d'une touche.
   - **Débutant** : on vise, l'avion y va.
+
+  *A1 fait le 2026-10-15 — [fiche](progress/aviation/A1.md) : le réglage « Assistance » (manuel = loi directe, réaliste, assisté = gaz automatiques + 20° d'incidence, débutant = l'anneau de visée que le manche déplace et que l'avion rejoint), et ⇧X, le retour au vol stable à tous les niveaux.*
 - **A2. Les protections du vrai F-35.** L'**Auto-GCAS** (la ressource automatique avant le sol, qui existe sur
   l'avion) et l'**Auto-ACAS** (l'évitement des collisions en vol).
 - **A3. Les nouveaux modes.**

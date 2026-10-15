@@ -2949,9 +2949,11 @@ async function main() {
       panel.toast(
         a === "stovl"
           ? camera.stovlToggle()
-          : a === "nav"
-            ? camera.navToggle()
-            : camera.jetToggle(a === "ab" ? "ab" : a === "athr" ? "athr" : "ap"),
+          : a === "recover"
+            ? camera.recoverStart()
+            : a === "nav"
+              ? camera.navToggle()
+              : camera.jetToggle(a === "ab" ? "ab" : a === "athr" ? "athr" : "ap"),
       ),
     route: () => routePanel.open(),
     airBrake: () => {

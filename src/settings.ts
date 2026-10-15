@@ -397,6 +397,7 @@ export interface Settings {
   f35Breathing: boolean; // the F-35: the pilot's breathing in his mask, heard from the cockpit
   f35GLimit: number; // the F-35: its flight control laws' load limit [g]
   f35Law: "normal" | "direct"; // the F-35: its flight control law — the real one, or the stick on the surfaces (no computer)
+  f35Assist: "manual" | "realistic" | "assisted" | "beginner"; // the F-35's assistance (A1): the direct law · the real one · auto-throttle, 20° of incidence, the ground's protection · aimed: the stick moves where it goes
   f35InfiniteFuel: boolean; // the F-35: the tanks never empty
   f35Variant: "B" | "C"; // the F-35: the B (short take-off, vertical landing) or the C (the carrier's: catapult, wires)
   f35InfiniteAmmo: boolean; // the F-35 in a fight: the stores never spent
@@ -730,6 +731,7 @@ export function defaultSettings(): Settings {
     f35Breathing: true,
     f35GLimit: 7,
     f35Law: "normal",
+    f35Assist: "realistic",
     f35InfiniteFuel: false,
     f35Variant: "B",
     f35InfiniteAmmo: false,
@@ -2043,6 +2045,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   f35Breathing: "pref",
   f35GLimit: "pref",
   f35Law: "pref",
+  f35Assist: "pref",
   f35InfiniteFuel: "pref",
   f35Variant: "pref",
   f35InfiniteAmmo: "pref",

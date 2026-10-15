@@ -190,6 +190,8 @@ export interface FlightInfo {
   msn: { name: string; brg: number; dist: number; dz: number } | null;
   /** an ILS approach (controller/ils.ts — P4): the runway, the needles [dots], the distance [km], its phase */
   ils: ReturnType<CameraController["ilsInfo"]>;
+  /** the beginner's ring (controller/assistlevel.ts — A1): the heading and the flight path it asks [rad] */
+  aimRing: { hdg: number; gamma: number } | null;
   /** the F-35's avionics' status (f35/cockpit.ts avionicsData), null: not the F-35 */
   avionics: ReturnType<typeof avionicsData> | null;
   /** a challenge flown: its banner, its next gates (controller/challenge.ts) */
@@ -412,6 +414,7 @@ function flightInfo(this: CameraController): FlightInfo {
       return { name: m.name, brg: (Math.atan2(y, x) / D + 360) % 360, dist, dz: m.alt - g.alt - (dist * dist) / (2 * 6_371_008.8) };
     })(),
     ils: this.ilsRun ? this.ilsInfo() : null,
+    aimRing: this.aimRing ? { ...this.aimRing } : null,
     entry: this.entryInfo(),
     stovl:
       fleet.active === "f35" && (this.stovl.on || this.stovl.conv > 0)

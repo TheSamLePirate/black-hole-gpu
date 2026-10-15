@@ -251,9 +251,13 @@ export const KEYMAP: KeySection[] = [
         bind: [fly(["ShiftLeft", "ShiftRight", "AltLeft", "AltRight", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"], "held")],
       },
       {
-        keys: "Z · X",
-        text: "Full throttle · cut (W · X on AZERTY) — on the entry autopilot's approach, full throttle goes around",
-        bind: [fly("KeyZ", "throttleFull", off), fly("KeyX", "throttleCut")],
+        keys: "Z · X · ⇧X",
+        text: "Full throttle · cut (W · X on AZERTY) — on the entry autopilot's approach, full throttle goes around · the F-35: back to stable flight (wings level, a gentle climb, a safe speed; then the holds)",
+        bind: [
+          fly("KeyZ", "throttleFull", off),
+          fly("KeyX", "throttleCut", off),
+          fly("KeyX", "jetSystem", { arg: "recover", shift: true }),
+        ],
       },
       {
         keys: "⇧Z · ' · ⇧'",
