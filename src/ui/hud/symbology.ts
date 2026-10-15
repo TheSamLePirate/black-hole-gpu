@@ -175,6 +175,8 @@ export interface SymInfo {
   } | null;
   /** a plane's flight plan: the active waypoint (its bearing [° true], its distance [m]) */
   nav?: { name: string; brg: number; dist: number; on: boolean } | null;
+  /** an ILS approach: the runway, the needles [dots — null: not received], the distance [km], its phase */
+  ils?: { id: string; loc: number | null; gs: number | null; dme: number; phase: string; auto: boolean } | null;
   /** a mission's objective (its bearing [° true], its distance [m], its height over ours [m]) */
   msn?: { name: string; brg: number; dist: number; dz: number } | null;
   /** the F-35B's STOVL mode (controller/telemetry.ts) */
@@ -668,6 +670,10 @@ export function drawSymbology(F: SymFrame) {
       text,
     );
 
+  // ---- an ILS approach (P4): its needles about the view's centre — the glideslope's on the right, the localizer's
+  // below —, the runway, the distance, the mode
+  if (i.ils && pilotView && on(F, "heading")) drawIls(F, i.ils, text);
+
   // ---- the HUD's kind (game/hudkind.ts): the Space HUD's orbit block, the Approach HUD's radar altitude, its
   // deviations, its gear and flaps (the Atmosphere's: the fighter's, above)
   if (F.kind === "space" && pilotView && !F.compact && i.status && !i.status.kerr && i.region !== "hole")
@@ -1121,6 +1127,73 @@ function edgeAt(W: number, H: number, dpr: number, dx: number, dy: number): [num
  * the diamond below; right of the axis, it to the left. Out of a station's coverage, its scale grey and no
  * diamond. The distance to the touchdown point under the azimuth's.
  */
+/** The ILS's needles (game/ils.ts): two scales of two dots each way, their diamonds magenta (hollow: not received);
+ *  its runway, its distance and its phase under the localizer's. */
+function drawIls(F: SymFrame, L: NonNullable<SymInfo["ils"]>, text: Text) {
+  const { ctx, dpr, W, H } = F;
+  const s = Math.min(W, H);
+  const cx = W / 2,
+    cy = H / 2;
+  const dot = 0.045 * s;
+  const col = "rgba(120, 255, 170, 0.9)";
+  ctx.save();
+  ctx.lineWidth = 1.5 * dpr;
+  ctx.strokeStyle = col;
+  const ex = cx + 0.3 * s,
+    ly = cy + 0.3 * s;
+  for (let j = -2; j <= 2; j++) {
+    if (!j) continue;
+    ctx.beginPath();
+    ctx.arc(ex, cy + j * dot, 3.2 * dpr, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx + j * dot, ly, 3.2 * dpr, 0, 2 * Math.PI);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.moveTo(ex - 10 * dpr, cy);
+  ctx.lineTo(ex + 10 * dpr, cy);
+  ctx.moveTo(cx, ly - 10 * dpr);
+  ctx.lineTo(cx, ly + 10 * dpr);
+  ctx.stroke();
+  const diamond = (x: number, y: number, filled: boolean) => {
+    const r = 7 * dpr;
+    ctx.beginPath();
+    ctx.moveTo(x, y - r);
+    ctx.lineTo(x + r, y);
+    ctx.lineTo(x, y + r);
+    ctx.lineTo(x - r, y);
+    ctx.closePath();
+    ctx.strokeStyle = "#ff6ee6";
+    ctx.fillStyle = "#ff6ee6";
+    if (filled) ctx.fill();
+    else ctx.stroke();
+  };
+  // (the glideslope above us: its diamond up — fly up; the course right: its diamond right)
+  diamond(ex, cy - (L.gs ?? 0) * dot, L.gs !== null);
+  diamond(cx + (L.loc ?? 0) * dot, ly, L.loc !== null);
+  const phase: Record<string, string> = {
+    toIaf: "IAF",
+    hold: "HOLD",
+    intercept: "LOC",
+    final: "LOC GS",
+    flare: "FLARE",
+    rollout: "ROLL",
+    missed: "GA",
+  };
+  const U = unitsFor(F.s);
+  text(
+    `${L.id}  ${U.dist(L.dme * 1000).toFixed(1)} ${U.distName}  ${L.auto ? "AP " : ""}${phase[L.phase] ?? ""}`,
+    cx,
+    ly + 24 * dpr,
+    col,
+    12,
+    "center",
+    true,
+  );
+  ctx.restore();
+}
+
 function drawMls(F: SymFrame, rw: RunwayView, text: Text) {
   const { ctx, dpr, W, H } = F;
   const m = rw.mls;

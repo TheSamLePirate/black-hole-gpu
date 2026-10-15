@@ -293,6 +293,15 @@ export class RoutePanel {
         },
       }),
       button({
+        label: t("Procedures"),
+        testid: "rp-procs",
+        title: t("The departure's and the arrival's fixes; the plan's end flown as an ILS approach"),
+        onClick: () => {
+          this.host.toast(this.host.camera.routeProcedures());
+          this.changed();
+        },
+      }),
+      button({
         label: t("Clear"),
         kind: "danger",
         onClick: () => {

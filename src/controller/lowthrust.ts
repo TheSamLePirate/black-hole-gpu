@@ -63,7 +63,7 @@ import { dockClosingMark, nominalDockClosing } from "../docking-guidance";
 import { t, tf } from "../i18n";
 
 import type { CameraController, FutureView, HubInfo, HubRow, LowThrust, RunwayView } from "../controls";
-import { LANDING, clamp, fmtDur, landingProfile, smoothstep, spinAxis, unitV, type LandingFix } from "./util";
+import { LANDING, clamp, fmtDur, jetProfile, landingProfile, smoothstep, spinAxis, unitV, type LandingFix } from "./util";
 import { burnGraph, type AssistGraph } from "../ui/hud/graph";
 import { entryCorridor, heightOf as heightOfEntry } from "../entry";
 import { brakingAccels, descentCommand, descentCurve, V_TD, V_TRANS } from "../descent";
@@ -1610,6 +1610,8 @@ function descentCard(this: CameraController, sf: SurfaceLike): HubInfo {
  * and the threshold marked; the director's — the glide's error, the flare's countdown.
  */
 function glideAssist(this: CameraController, rw: RunwayView): Pick<HubInfo, "graph" | "say"> {
+  // (the F-35: the ILS's straight 3° — controller/util.ts jetProfile)
+  const prof0 = fleet.active === "f35" ? jetProfile : landingProfile;
   const fix = rw.fix!;
   // (the height the profile reads — over the threshold on the autopilot's final — for the trace, the curve, the dot)
   const hRw = rw.hp ?? rw.agl;
@@ -1626,7 +1628,7 @@ function glideAssist(this: CameraController, rw: RunwayView): Pick<HubInfo, "gra
   const x0 = Math.min(tr[0]?.[0] ?? rw.along / 1e3, rw.along / 1e3) * 1e3 - 500;
   const sp = Math.max(rw.manual ? rw.speed : (rw.groundSpeed ?? rw.speed), 50);
   const xs = Array.from({ length: 64 }, (_, i) => x0 + ((td - x0) * i) / 63);
-  const prof = (x: number) => landingProfile(x, hRw, sp, fix).h;
+  const prof = (x: number) => prof0(x, hRw, sp, fix).h;
   const band = (x: number) => Math.tan(Math.PI / 180) * Math.max(td - x, 200);
   const ideal = xs.map((x) => [x / 1e3, prof(x)] as [number, number]);
   const dev = (Math.atan2(hRw - prof(rw.along), Math.max(td - rw.along, 200)) * 180) / Math.PI;
@@ -2613,6 +2615,8 @@ function runwayView(this: CameraController): RunwayView | null {
 }
 
 function runwayCompute(this: CameraController): RunwayView | null {
+  // (the F-35: the ILS's straight 3° — controller/util.ts jetProfile)
+  const prof0 = fleet.active === "f35" ? jetProfile : landingProfile;
   const cam = cameraFrame(this.s);
   const fr = this.entryFrame(cam);
   if (!fr) return null;
@@ -2684,10 +2688,10 @@ function runwayCompute(this: CameraController): RunwayView | null {
   // the craft once set the PAPI "high" over a rise while the autopilot sat on its profile. A hand-flown final's
   // profile is built on the ground's height, and read on it)
   const hRef: number = app?.final && typeof app.hp === "number" && Number.isFinite(app.hp) ? app.hp : agl;
-  let fix: LandingFix | null = app?.final ? (R?.gOuter ?? landingProfile(sAl, hRef, Math.max(app.speed, 50)).fix) : null;
+  let fix: LandingFix | null = app?.final ? (R?.gOuter ?? prof0(sAl, hRef, Math.max(app.speed, 50)).fix) : null;
   if (manual) {
     const MF = this.manualFix?.site === site.name ? this.manualFix.fix : null;
-    const L0 = landingProfile(sAl, agl, Math.max(vh, 50), MF ?? undefined);
+    const L0 = prof0(sAl, agl, Math.max(vh, 50), MF ?? undefined);
     fix = L0.fix;
     if (!MF) this.manualFix = { site: site.name, fix };
   } else if (!app?.final) this.manualFix = null;
@@ -2701,7 +2705,7 @@ function runwayCompute(this: CameraController): RunwayView | null {
   let profileH: number | null = null;
   if (fix) {
     const sp = Math.max(app?.final ? app.speed : vh, 50);
-    const L = landingProfile(sAl, hRef, sp, fix);
+    const L = prof0(sAl, hRef, sp, fix);
     aimX = app?.final && R?.prof ? R.prof.aim : L.aim;
     profileH = app?.final && R?.prof ? R.prof.h : L.h;
     if (manual) gRef = Math.atan(L.slope);
@@ -2714,7 +2718,7 @@ function runwayCompute(this: CameraController): RunwayView | null {
     for (let k = 1; k <= 5; k++) {
       const xk = sAl + k * 1500;
       if (xk > LANDING.td - 300) break;
-      const hk = landingProfile(xk, hRef, sp, fix).h;
+      const hk = prof0(xk, hRef, sp, fix).h;
       // (the site's frame is in metres: the gate hk up its local vertical)
       const corner = (b: number, dh: number) => see(lin(at(xk, b), 1, tu, hk + dh));
       gates.push([corner(-100, -40), corner(100, -40), corner(100, 40), corner(-100, 40)]);

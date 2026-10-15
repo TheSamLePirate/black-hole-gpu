@@ -19,6 +19,7 @@ import frAero from "./i18n/fr-aero";
 import frRadar from "./i18n/fr-radar";
 import frFlight from "./i18n/fr-flight";
 import frMission from "./i18n/fr-mission";
+import frProcedures from "./i18n/fr-procedures";
 
 export type Lang = "fr" | "en";
 export type Text = Record<Lang, string>;
@@ -77,6 +78,7 @@ addFrench(frAero);
 addFrench(frRadar);
 addFrench(frFlight);
 addFrench(frMission);
+addFrench(frProcedures);
 addFrench(frMain);
 addFrench(frHud);
 addFrench(frPlace);

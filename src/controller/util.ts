@@ -163,6 +163,17 @@ export function landingProfile(
 }
 
 /**
+ * A jet's landing profile (the F-35's — P4: game/ils.ts): the ILS's straight 3° glideslope to its antenna 300 m past
+ * the threshold, the last 14 m the flare's — the same shape as `landingProfile`'s, its arguments but `x` unread.
+ */
+export function jetProfile(x: number, _h = 0, _v = 0, _fixed?: LandingFix): ReturnType<typeof landingProfile> {
+  const tg = Math.tan((3 * Math.PI) / 180);
+  const h = Math.max((300 - x) * tg, 0);
+  const fix = { go: 3 * (Math.PI / 180), lb: 0 };
+  return { h, slope: h > 0 ? -tg : 0, phase: h <= 0 ? "rollout" : h < 14 ? "flare" : "inner", fix, freeze: true, aim: 300 };
+}
+
+/**
  * The height [m] the approach brings the craft to over the final's start, `start` m before the threshold:
  * on the steep slope's nominal angle through the corner — a final begun there flies its own profile (the
  * steep slope following the craft, 19° at most), not a dive onto it.

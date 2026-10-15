@@ -184,6 +184,13 @@ function navStep(this: CameraController, inp: PilotInput, f: { h: number; hdg: n
   if (o.passed >= 0) {
     const nx = N.route.wps[o.active];
     N.say = tf("{0} passed — {1} next", N.route.wps[o.passed]?.name ?? "", nx?.name ?? "");
+    // (the arrival's initial fix passed — P4: the plan's end flown as an ILS approach to its runway)
+    const end = N.route.wps.at(-1);
+    if (/^IAF\d\d$/.test(N.route.wps[o.passed]?.name ?? "") && end?.field && N.on.l) {
+      N.on = { l: false, v: false };
+      N.say = this.ilsStart(end.field.icao ?? end.name);
+      return;
+    }
   }
   if (o.done) {
     N.on = { l: false, v: false };

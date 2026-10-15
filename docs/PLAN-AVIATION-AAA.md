@@ -349,6 +349,8 @@ pertinent.
   - L'approche du porte-avions (cas I, II, III).
   - Les hippodromes de ravitaillement, si le ravitaillement en vol entre au plan (S).
 
+  *P4a fait le 2026-10-15 — [fiche](progress/aviation/P4a.md) : l'approche ILS à 3° du F-35 par le pilote automatique (IAF, attente en hippodrome, localizer, glide, train au FAF, minimums et remise des gaz, arrondi, arrêt, note sur 20), ses aiguilles au HUD, l'aide d'atterrissage sur le glide à 3° ; les points de départ et d'arrivée ajoutés au plan, la fin du plan passée à l'ILS — 20/20 à 469 m du seuil dans le navigateur.*
+
 ### A — Pilotes automatiques avancés, assistances, manuel
 
 - **A1. Les niveaux d'assistance.**

@@ -3362,6 +3362,11 @@ async function main() {
       { label: { fr: "Plan de vol", en: "Flight plan" }, key: "⇧O", on: camera.nav.on.l, run: () => routePanel.open() },
       { label: { fr: "Carte de mission", en: "Mission map" }, on: !!camera.mission, run: () => missionMap.open() },
       {
+        label: { fr: "Approche ILS", en: "ILS approach" },
+        on: !!camera.ilsRun,
+        run: () => panel.toast(camera.ilsRun ? (camera.ilsOff(), t("ILS approach off")) : camera.ilsStart()),
+      },
+      {
         label: { fr: "Défis, combats, missions", en: "Challenges, fights, missions" },
         on: !!C || camera.chal?.status === "run" || !!camera.mission,
         run: () => challengePanel.open(),
@@ -3446,6 +3451,11 @@ async function main() {
           ? [
               { label: { fr: "Plan de vol", en: "Flight plan" }, key: "⇧O", on: camera.nav.on.l, run: () => routePanel.open() },
               { label: { fr: "Carte de mission", en: "Mission map" }, on: !!camera.mission, run: () => missionMap.open() },
+              {
+                label: { fr: "Approche ILS", en: "ILS approach" },
+                on: !!camera.ilsRun,
+                run: () => panel.toast(camera.ilsRun ? (camera.ilsOff(), t("ILS approach off")) : camera.ilsStart()),
+              },
               { label: { fr: "Préparer un vol", en: "Prepare a flight" }, run: () => flightHub.open() },
               { label: { fr: "Défis", en: "Challenges" }, on: camera.chal?.status === "run", run: () => challengePanel.open() },
             ]

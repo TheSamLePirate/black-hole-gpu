@@ -1,0 +1,27 @@
+// French for the procedures and the assistances (docs/PLAN-AVIATION-AAA.md, P4, A1, A2) — keyed by the English.
+export default {
+  "ILS approach off": "Approche ILS coupée",
+  "ILS: holding at the initial fix": "ILS : attente au point d'approche initiale",
+  "ILS: localizer captured": "ILS : localizer capturé",
+  "ILS: glideslope captured": "ILS : glide capturé",
+  "ILS: gear down, flaps": "ILS : train sorti, volets",
+  Flare: "Arrondi",
+  "Go around — the missed approach": "Remise des gaz — approche interrompue",
+  Touchdown: "Toucher",
+  "ILS: the F-35": "ILS : en F-35",
+  "ILS: in the air": "ILS : en vol",
+  "ILS: no runway called {0}": "ILS : aucune piste nommée {0}",
+  "ILS: no runway within 150 km": "ILS : aucune piste à moins de 150 km",
+  "{0} approach: hold at the initial fix, expect the ILS {1}": "{0} approche : attendez au point initial, prévoyez l'ILS {1}",
+  "{0} approach: cleared ILS {1}": "{0} approche : autorisé ILS {1}",
+  "ILS approach: {0}, {1} km": "Approche ILS : {0}, {1} km",
+  "ILS: no approach flown": "ILS : aucune approche en cours",
+  "Cleared ILS {0}": "Autorisé ILS {0}",
+  "ILS: the autopilot off — the needles still shown": "ILS : pilote automatique coupé — les aiguilles restent affichées",
+  "ILS {0}: {1}/20 — touchdown {2} m in, {3} m off the centreline": "ILS {0} : {1}/20 — toucher à {2} m du seuil, {3} m de l'axe",
+  "Procedures: a plan from an airfield or to one": "Procédures : un plan qui part d'un terrain ou y arrive",
+  "Procedures: {0}": "Procédures : {0}",
+  Procedures: "Procédures",
+  "The departure's and the arrival's fixes; the plan's end flown as an ILS approach":
+    "Les points de départ et d'arrivée ; la fin du plan volée en approche ILS",
+} satisfies Record<string, string>;

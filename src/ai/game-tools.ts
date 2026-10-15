@@ -1742,6 +1742,33 @@ export function gameTools(h: GameHost): Tool[] {
       }),
     },
     {
+      name: "approach",
+      description:
+        "The F-35's instrument approaches and procedures. ils: an ILS approach flown by the autopilot to a runway (field: ICAO or name, else the nearest within 150 km; its end into the wind) — to the initial fix 18.5 km out, the localizer and the 3° glideslope captured, the gear and flaps at the final fix, minimums at 60 m (not stable: the missed approach, round again), the flare, braked to a stop, graded out of 20; hold: laps of the racetrack at the initial fix first (0: none; 99: until cleared). clear: out of the hold, the approach begun. off: the approach given up (the needles gone). status: the approach flown (its phase, the needles in dots, the distance) and the last one's grade. procedures: the flight plan given its departure's fix (after an airfield it starts from) and its arrival's (the initial and final fixes before the airfield it ends at) — LNAV then hands over to the ILS at the initial fix.",
+      params: {
+        action: { type: "string", enum: ["ils", "clear", "off", "status", "procedures"] },
+        field: { type: "string" },
+        hold: { type: "number", minimum: 0, maximum: 99 },
+      },
+      required: ["action"],
+      run: act((a) => {
+        const c = camera;
+        switch (a.action) {
+          case "ils":
+            return c.ilsStart(a.field ? String(a.field) : undefined, { hold: a.hold === 99 ? Infinity : Number(a.hold ?? 0) });
+          case "clear":
+            return c.ilsClear();
+          case "off":
+            c.ilsOff();
+            return "ILS approach off";
+          case "procedures":
+            return c.routeProcedures();
+          default:
+            return { flown: c.ilsInfo(), last: c.ilsLast ?? null };
+        }
+      }),
+    },
+    {
       name: "mission",
       description:
         'Missions: flights with objectives, scored out of 20 at their debrief, flown solo or with the room. list: the game\'s and the pilot\'s own. fly: one by its id, at once (its briefing skipped). create: a new one from the pilot\'s words, as JSON in `mission` — {title?, brief?, units: [{id, kind: sam|truck|bunker|drone|fighter|airliner|traffic|carrier, name?, at: {lat, lon, alt? (m over the sea)} or {place: an airfield\'s ICAO or a town}, hdg?, speed?, side?: hostile|friend|neutral, match?: {callsign} (kind traffic: a real flight taken over — that callsign, else the nearest heard), carrier?: ford|kiev|implacable, later?: true (set by a trigger\'s spawn)}], objectives: [{kind: reach (at {place|lat/lon, radius?}) | destroy (units: [ids]) | escort (unit, until: {place|lat/lon}, within? m) | protect (unit, seconds) | identify (unit, within? m) | land (carrier: unit id, or at), text?, optional?: true (a bonus), after?: another objective\'s id}], triggers?: [{id, when: {time: s} | {done: objective id} | {near: {unit, within}} | {enter: {lat, lon, radius}}, do: [{say: text} | {spawn: unit} | {course: {unit, hdg?, alt?, speed?, to?: {lat, lon, alt?}}} | {side: {unit, side}} | {squawk: {unit, off}} | {win: true} | {fail: why}]}], start?: {place or lat/lon, alt (m over the sea), hdg, speed (m/s), variant: B|C, loadout: aa|ag|gun} (leave it out unless the pilot names where to start: then it is where the craft flies now), time?: {localHour}, weather?: {preset: fair|cloudy|overcast|rain|storm|fog|windy}, limit?: s}. Places by name are found; an airliner or a real flight escorted to a place is sent there; the words left out are made. Kept among the pilot\'s missions, then flown (fly: false — opened in the editor instead). E.g. \'an escort of the A320 AFR123 to Nice\': {"units":[{"id":"a","kind":"traffic","match":{"callsign":"AFR123"}}],"objectives":[{"kind":"escort","unit":"a","until":{"place":"Nice"}}]}. status: the mission flown and its objectives. abort: given up. map: the mission map opened. edit: the editor (on a mission\'s id, else a new one). link: a mission\'s link to share (id).',
