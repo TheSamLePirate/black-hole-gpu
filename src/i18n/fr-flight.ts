@@ -46,4 +46,22 @@ export default {
   "1 min": "1 min",
   "2 min": "2 min",
   "Formation on the lock: lock an airliner first (Tab)": "Formation sur la cible : verrouillez d'abord un avion de ligne (Tab)",
+  "Deck landing: the F-35B's": "Appontage : celui du F-35B",
+  "Deck landing: that carrier is not at sea": "Appontage : ce porte-avions n'est pas en mer",
+  "Deck landing: the deck's map still loading": "Appontage : la carte du pont se charge encore",
+  "Deck landing: too heavy to hover — {0} t, {1} t at most: {2} kg of fuel to burn":
+    "Appontage : trop lourd pour le stationnaire — {0} t, {1} t au plus : {2} kg de carburant à brûler",
+  "{0}, Mother: Charlie. Recover up the port side to the spot aft of the island.":
+    "{0}, ici Mother : Charlie. Récupération par bâbord, sur la tache derrière l'îlot.",
+  "Deck landing on {0}": "Appontage sur {0}",
+  "Deck landing off — the carrier lost": "Appontage coupé — porte-avions perdu",
+  "Deck landing off — the stick": "Appontage coupé — le manche",
+  "Paddles: contact. Slow up the port side.": "Paddles : contact. Ralentissez le long de bâbord.",
+  "Paddles: hovering alongside — steady.": "Paddles : stationnaire le long du bord — stable.",
+  "Paddles: stable. Cleared across.": "Paddles : stable. Autorisé à traverser.",
+  "Paddles: over the spot. Cleared to land.": "Paddles : au-dessus de la tache. Autorisé à vous poser.",
+  "Paddles: touchdown — {0}, {1} m off the spot, {2} m/s.": "Paddles : posé — {0}, à {1} m de la tache, {2} m/s.",
+  OK: "OK",
+  Fair: "Passable",
+  "No grade": "Non noté",
 } satisfies Record<string, string>;

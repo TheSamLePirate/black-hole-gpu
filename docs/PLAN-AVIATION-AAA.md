@@ -311,6 +311,8 @@ pertinent.
   *Fini quand* le pilote automatique se pose sur le pont qui tangue, et que les qualifications de jour, de nuit et
   par mer forte ont leur note.
 
+  *M3a fait le 2026-10-15 — [fiche](progress/aviation/M3a.md) : l'appontage vertical automatique du F-35B (point d'entrée, remontée le long de bâbord, conversion, stationnaire le long du bord, traversée, descente sur la tache d'un pont qui tangue), l'officier d'appontage à la radio et sa note, la tache entourée de feux ; posé à 0,01–0,07 m de la tache sur les trois porte-avions, par mer de 1,5 à 3 m.*
+
 ### P — Plans de vol, missions, carte
 
 - **P1. Le moteur de missions.** Une mission est **une donnée** (JSON). Elle peut prendre **un vol ou un navire

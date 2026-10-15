@@ -22,6 +22,7 @@ import {
   readDeck,
   toDeck,
 } from "../game/carrier";
+import { VL_SPOT } from "../game/deckland";
 import type { RadarObject } from "../game/radar";
 import { daysOf, bodyAxes, solarBody, utcOf, M_METRES } from "../system/solar";
 import { fromBodyFixed, groundVelocity, type Platform, setPlatforms } from "../system/our-surface";
@@ -361,6 +362,16 @@ function carrierOverlay(this: CameraController, fmtSpd: (ms: number) => string):
         }
         for (let k = 1; k <= 5; k++)
           lights.push({ at: at([L.ramp[0], spec.deck - k * 1.2, L.ramp[1] - 0.6]), colour: amber, on: true, size: 0.8 });
+      }
+    }
+    // (the F-35B's recovery flown: its landing spot ringed on the deck — amber, green once cleared to land)
+    const R = this.deckRun;
+    if (R && R.kind === sp.kind) {
+      const [sx, sz] = VL_SPOT[sp.kind];
+      const lit = R.phase === "descend" ? green : amber;
+      for (let k = 0; k < 16; k++) {
+        const a = (k / 16) * 2 * Math.PI;
+        lights.push({ at: at([sx + 5 * Math.cos(a), spec.deck + 0.1, sz + 5 * Math.sin(a)]), colour: lit, on: true, size: 0.5 });
       }
     }
     if (night)

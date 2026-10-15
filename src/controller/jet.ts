@@ -144,6 +144,8 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
     return none;
   }
   const cws = this.jetCws;
+  // (a deck's recovery flown: its holds set — controller/deckland.ts)
+  this.deckJet(inp);
   // (a formation flown: its bank, its flight path, its speed — the holds' own laws left aside)
   const fm = this.icptStep(inp, f) ?? this.formStep(inp, f, dt);
   if (fm) {

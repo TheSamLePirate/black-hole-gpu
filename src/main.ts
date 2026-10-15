@@ -2295,6 +2295,11 @@ async function main() {
     panel.toast(camera.pilot.hold === "none" ? t("Attitude hold off") : tf("Hold: {0}", HOLD_NAMES[h]));
   }
   function pilotAuto(a: Auto) {
+    // (the F-35B's landing near a carrier: on its deck — controller/deckland.ts)
+    if (a === "land" && fleet.active === "f35") {
+      const said = camera.deckLand();
+      if (said) return panel.toast(said);
+    }
     if (a === "dock" && camera.docked)
       return panel.toast(camera.netDocked ? t("Docked to another's craft — UNDOCK first") : t("Docked to the ISS — UNDOCK first"));
     camera.pilot.setAuto(a);

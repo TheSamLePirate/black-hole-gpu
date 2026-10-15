@@ -101,6 +101,9 @@ export interface HoverCmd {
   fwd: number;
   side: number;
   heading: number;
+  /** an autopilot's velocity over the ground asked (local frame, its vertical part too — a deck's landing:
+   *  controller/deckland.ts): the stick and the throttle keys then ask nothing */
+  want?: V3;
 }
 
 export interface HoverOut {
@@ -131,17 +134,20 @@ const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
 export function hoverStep(i: HoverInputs, cmd: HoverCmd): HoverOut {
   // (the stick pushed: faster forward, pulled: slower — then backwards; let go, the speed eased to a hover
   // at 2.5 m/s², as the real law's translational rate command brings it to a stop over a point)
-  if (i.pitch !== 0) cmd.fwd = clamp(cmd.fwd - i.pitch * 5 * i.dt, -12, 75);
-  else cmd.fwd -= clamp(cmd.fwd, -2.5 * i.dt, 2.5 * i.dt);
-  cmd.side = i.roll * 10;
-  cmd.heading += i.yaw * 0.35 * i.dt;
+  if (!cmd.want) {
+    if (i.pitch !== 0) cmd.fwd = clamp(cmd.fwd - i.pitch * 5 * i.dt, -12, 75);
+    else cmd.fwd -= clamp(cmd.fwd, -2.5 * i.dt, 2.5 * i.dt);
+    cmd.side = i.roll * 10;
+    cmd.heading += i.yaw * 0.35 * i.dt;
+  }
   const hd = unit(lin(i.north, Math.cos(cmd.heading), i.east, Math.sin(cmd.heading)));
   const right = cross(hd, i.up);
   // (the vertical speed: up or down by the throttle keys, held at zero let go; near the ground a descent eased
   // to a touchdown's 1.5 m/s)
   let vz = i.throttle * 4;
   if (i.h < 15 && vz < 0) vz = Math.max(vz, -Math.max(1.5, 0.25 * i.h));
-  const want = lin(lin(hd, cmd.fwd, right, cmd.side), 1, i.up, vz);
+  if (cmd.want) vz = dot(cmd.want, i.up);
+  const want = cmd.want ?? lin(lin(hd, cmd.fwd, right, cmd.side), 1, i.up, vz);
   const err = lin(want, 1, i.v, -1);
   // (the acceleration asked: the error closed over ~1.5 s, no more than 4 m/s² across, 3 up or down)
   const eu = dot(err, i.up);
@@ -166,8 +172,9 @@ export function hoverStep(i: HoverInputs, cmd: HoverCmd): HoverOut {
   const n = Math.hypot(Fu, Ff, Fs);
   let throttle = i.thrustMax > 0 ? (n * i.mass) / i.thrustMax : 0;
   const heavy = (i.mass * Math.hypot(...i.grav)) / Math.max(i.thrustMax, 1) > 0.98;
-  // (on its wheels, nothing asked up: the engine back to idle, the craft set down)
-  if (i.onGround && vz <= 0) throttle = 0.12;
+  // (on its wheels, nothing asked up: the throttle closed — the engine at idle, the wheels braked: at 12 % it rolled
+  // on, off a carrier's bow)
+  if (i.onGround && vz <= 0) throttle = 0;
   const nose0 = lin(hd, Math.cos(pitch), i.up, Math.sin(pitch));
   const top0 = lin(i.up, Math.cos(pitch), hd, -Math.sin(pitch));
   // (banked right: the top towards the right — nose × top is the right)

@@ -105,6 +105,16 @@ function stovlStep(
         const hl = Math.hypot(...hd) || 1;
         S.cmd = { fwd: (fr.vRel[0] * hd[0] + fr.vRel[1] * hd[1] + fr.vRel[2] * hd[2]) / hl, side: 0, heading };
       }
+      // (a deck's recovery flying: its velocity over the ground and its heading — controller/deckland.ts)
+      const dk = this.deckHover(inp);
+      if (dk) {
+        S.cmd.want = dk.want;
+        S.cmd.heading = dk.heading;
+      } else if (S.cmd.want) {
+        S.cmd.want = undefined;
+        S.cmd.fwd = 0;
+        S.cmd.side = 0;
+      }
       const mass = fleet.massProps().mass;
       const toMs2 = C_MPS ** 2 / (1476.625 * this.s.massSolar);
       const o = hoverStep(

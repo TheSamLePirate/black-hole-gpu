@@ -1728,9 +1728,9 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "carrier",
       description:
-        "The carriers at sea (the Gerald R. Ford: catapults and wires; the Kiev and the Implacable: short take-offs and vertical landings), each with two frigates as escort, steaming into the wind at their speed, the same in a room for everyone. spawn: one set off (kind; at lat/lon, else 4 km ahead of the craft; heading [°], else into the wind). land: the flown craft set down on its deck (x across — port + —, z along — bow + — [m]; else aft of its island), carried along with it. status: those at sea, where, their speed. clear: none at sea any more.",
+        "The carriers at sea (the Gerald R. Ford: catapults and wires; the Kiev and the Implacable: short take-offs and vertical landings), each with two frigates as escort, steaming into the wind at their speed, the same in a room for everyone. spawn: one set off (kind; at lat/lon, else 4 km ahead of the craft; heading [°], else into the wind). land: the flown craft set down on its deck (x across — port + —, z along — bow + — [m]; else aft of its island), carried along with it. recover: the F-35B's autopilot lands it there as a real one does — up the port side, a hover alongside, across over the spot, down — the LSO calling it and grading the touchdown (the nearest carrier, else kind; light enough to hover: some 2 t of fuel at most). status: those at sea, where, their speed. clear: none at sea any more.",
       params: {
-        action: { type: "string", enum: ["spawn", "land", "status", "clear"] },
+        action: { type: "string", enum: ["spawn", "land", "recover", "status", "clear"] },
         kind: { type: "string", enum: ["ford", "kiev", "implacable"] },
         lat: { type: "number" },
         lon: { type: "number" },
@@ -1753,6 +1753,7 @@ export function gameTools(h: GameHost): Tool[] {
           c.carrierClear();
           return "No carrier at sea";
         }
+        if (a.action === "recover") return c.deckLand(a.kind as "ford" | "kiev" | "implacable" | undefined) ?? "No carrier within 30 km";
         const kind = (a.kind ?? "ford") as "ford" | "kiev" | "implacable";
         if (a.action === "spawn")
           return c.carrierSpawn(kind, {
