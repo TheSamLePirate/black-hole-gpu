@@ -155,7 +155,7 @@ pertinent.
 
   *Fini quand* le pilote automatique vole chaque figure et que le juge note 18/20 ou plus sa propre
   démonstration.
-- **V5. Sentir l'avion.**
+- **V5. Sentir l'avion.** *Fait le 2026-10-15 — [fiche](progress/aviation/V5.md) : corps du pilote (fatigue, voile noir, G-LOC, voile rouge enfin), respiration au masque, grondement du tremblement, « Bingo fuel », « Angle of attack », manette ; le maintien d'inclinaison corrigé à la verticale.*
   - Tremblement, voile gris et voile noir aux g soutenus (sobres, à régler) ; la respiration du pilote
     (reportée en F7).
   - Les alarmes vocales du F-35 (« PULL UP », alarmes d'altitude et de vitesse).

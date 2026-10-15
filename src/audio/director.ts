@@ -37,7 +37,11 @@ export interface FlightSnapshot {
     mode?: string;
     gearDown?: boolean;
     flaps?: number;
+    /** the buffet at high incidence 0…1, the dynamic pressure's share in it */
+    buffet?: number;
   } | null;
+  /** the pilot's body (game/gstrain.ts): the load felt [g], passed out */
+  body?: { felt: number; gloc: boolean } | null;
   /** the approach flown (its final), the straight flight path's seconds to the ground (game/gpws.ts) */
   entry?: { app: { final?: boolean } | null } | null;
   terrainAhead?: number;
@@ -281,6 +285,8 @@ export class SoundDirector {
   /** The load the crew feels [g]: the air's on the airframe, else the engines' push (in vacuum). */
   private felt(info: FlightSnapshot | null) {
     if (!info) return 1;
+    // (a fighter's pilot: the load at his eyes, lagging — game/gstrain.ts)
+    if (fleet.active === "f35" && info.body) return info.body.felt;
     if (info.air?.inAir && info.air.g !== undefined) return info.air.g;
     const gUnit = 2.99792458e8 ** 2 / (1476.625 * this.s.massSolar) / 9.80665;
     return (info.accel ?? 0) * gUnit;
@@ -376,6 +382,10 @@ export class SoundDirector {
       live: o.live,
       rain: o.rain ?? 0,
       jet: flying ? (o.jet ?? null) : null,
+      // (the F-35's pilot in his mask, from its cockpit; G-LOC; the wing's buffet, by the dynamic pressure)
+      mask: flying && fleet.active === "f35" && s.f35Breathing && hearing(s.shipMount, !!o.spectator) === "cabin",
+      out: flying && !!info?.body?.gloc && s.f35GEffects,
+      buffet: flying ? (info?.air?.buffet ?? 0) * Math.min((info?.air?.q ?? 0) / 4000, 1) : 0,
     });
     if (!flying || !info) {
       sound.alarm("collision", false);

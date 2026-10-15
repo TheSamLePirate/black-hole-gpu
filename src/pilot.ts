@@ -629,7 +629,12 @@ export class FlightComputer {
           ? this.omega[1]
           : manual[1] * 0.3
         : P.path[1] - kb * P.beta + manual[1] * rates[1] * (1 - pedalRoll);
-      if (this.bankHold === null && inp.roll === 0) this.bankHold = Math.abs(P.bank) < 0.105 ? 0 : P.bank;
+      // (the bank held is a help of ordinary flight: steep — past 60° of climb or dive — or past 70° of bank (a
+      // loop's top, a roll), the bank means nothing to hold — Euler's flips 180° through the vertical —: the stick
+      // let go asks no roll at all, the bank taken again once back to ordinary flight)
+      const ordinary = Math.abs(P.gamma) < 1.05 && Math.abs(P.bank) < 1.22;
+      if (!ordinary && P.bankCmd == null) this.bankHold = null;
+      if (this.bankHold === null && inp.roll === 0 && ordinary) this.bankHold = Math.abs(P.bank) < 0.105 ? 0 : P.bank;
       if (P.bankCmd != null && inp.roll === 0) this.bankHold = P.bankCmd;
       // (the bank: right is +; the pilot's roll: left is +)
       // (on the ground the wings held level — the ailerons into a crosswind, as a pilot's)
@@ -641,7 +646,14 @@ export class FlightComputer {
         ? Math.min(rates[2] * (1 - 0.85 * smoothstep(0.26, 0.7, Math.abs(P.alpha))), 0.35 / Math.max(ta, 0.05)) *
           (1 - 0.8 * smoothstep(0.05, 0.17, Math.abs(P.beta)))
         : rates[2];
-      want[2] = manual[2] !== 0 ? manual[2] * rollMax : P.ground ? 0.4 * P.bank : 1.2 * (P.bank - (this.bankHold ?? P.bank));
+      want[2] =
+        manual[2] !== 0
+          ? manual[2] * rollMax
+          : P.ground
+            ? 0.4 * P.bank
+            : this.bankHold === null && P.bankCmd == null
+              ? 0
+              : 1.2 * (P.bank - (this.bankHold ?? P.bank));
       if (pedalRoll > 0 && manual[1] !== 0) {
         want[2] = clamp(want[2] - manual[1] * pedalRoll * rollMax, -rollMax, rollMax);
         this.bankHold = null;

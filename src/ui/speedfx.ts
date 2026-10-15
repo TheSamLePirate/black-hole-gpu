@@ -21,27 +21,8 @@ export function speedFxLevel(o: { speed: number; rho: number; agl: number; boost
 /** The grey-out's strength (0 … 1) at a load [g]: from 5 g, full at 9. */
 export const greyOut = (g: number) => Math.min(Math.max((g - 5) / 4, 0), 1);
 
-/**
- * The load felt at the pilot's eyes (docs/PLAN-F35.md, F7): the blood's pressure there lags the load — the heart
- * and the anti-g suit catch up in seconds (faster as the load eases) —, so a brief pull is borne where a held one
- * greys the view: from 5.5 g felt (the suit and the straining), black by 9.5; and under a negative load the blood
- * rushes to the head: a red-out past −1.5 g.
- */
-export class GStrain {
-  felt = 1;
-  step(g: number, dt: number) {
-    if (!Number.isFinite(g)) return this;
-    const tau = g > this.felt ? 2.4 : 0.9;
-    this.felt += (g - this.felt) * Math.min(1, Math.max(dt, 0) / tau);
-    return this;
-  }
-  get grey() {
-    return Math.min(Math.max((this.felt - 5.5) / 4, 0), 1);
-  }
-  get red() {
-    return Math.min(Math.max((-this.felt - 1.5) / 2, 0), 1);
-  }
-}
+// (the load at the pilot's eyes — game/gstrain.ts —, here for its tests)
+export { GStrain } from "../game/gstrain";
 
 type V3 = [number, number, number];
 const N = 140;
@@ -63,7 +44,6 @@ export class SpeedFx {
   private p: V3[] = [];
   private seed: number[] = [];
   private grey = 0;
-  private strain = new GStrain();
   constructor() {
     let s = 12345;
     const rnd = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648) * 2 - 1;
@@ -89,7 +69,8 @@ export class SpeedFx {
       M: [V3, V3, V3];
       flow: V3;
       level: number;
-      g: number;
+      /** the pilot's eyes (game/gstrain.ts, the controller's): the grey-out, the black-out, the red-out 0…1 */
+      body: { grey: number; black: number; red: number } | null;
       greyOut: boolean;
     },
   ) {
@@ -138,9 +119,9 @@ export class SpeedFx {
     }
     // ---- the edges darkened with the speed, the grey-out of a hard pull (the load felt at the eyes: GStrain), the
     // field narrowing to a tunnel, the colours washed out; the red-out of a negative load
-    const st = this.strain.step(o.g, o.dt);
-    this.grey = o.greyOut ? st.grey : 0;
-    const red = o.greyOut ? st.red : 0;
+    const B = o.greyOut && o.body ? o.body : { grey: 0, black: 0, red: 0 };
+    this.grey = B.grey;
+    const red = B.red;
     if (this.grey > 0.25) {
       ctx.fillStyle = `rgba(70, 70, 70, ${Math.min(0.55, (this.grey - 0.25) * 0.8).toFixed(3)})`;
       ctx.fillRect(0, 0, W, H);
@@ -161,6 +142,20 @@ export class SpeedFx {
       gr.addColorStop(1, `rgba(${this.grey > 0.3 ? "28, 28, 28" : "0, 0, 0"}, ${Math.min(0.92, edge).toFixed(3)})`);
       ctx.fillStyle = gr;
       ctx.fillRect(0, 0, W, H);
+    }
+    // (the black-out: the tunnel closing to a point, then nothing — G-LOC)
+    if (B.black > 0.01) {
+      const R = Math.hypot(W, H);
+      const inner = R * 0.32 * (1 - B.black) ** 1.5;
+      const gr = ctx.createRadialGradient(W / 2, H / 2, inner, W / 2, H / 2, inner + R * (0.06 + 0.25 * (1 - B.black)));
+      gr.addColorStop(0, "rgba(0, 0, 0, 0)");
+      gr.addColorStop(1, "rgba(0, 0, 0, 1)");
+      ctx.fillStyle = gr;
+      ctx.fillRect(0, 0, W, H);
+      if (B.black > 0.85) {
+        ctx.fillStyle = `rgba(0, 0, 0, ${((B.black - 0.85) / 0.15).toFixed(3)})`;
+        ctx.fillRect(0, 0, W, H);
+      }
     }
   }
 }

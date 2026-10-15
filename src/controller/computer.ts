@@ -1228,6 +1228,10 @@ function airInfo(this: CameraController) {
     glow: L?.air.gas.glow ?? null,
     lift: L?.out.L ?? 0,
     drag: L?.out.D ?? 0,
+    // (the normal load, signed [g]; the buffet 0…1 — high incidence —; the incidence too high without the computer)
+    nz: L ? L.out.F[1] / (fleet.massProps().mass * 9.80665) : 1,
+    buffet: L?.out.buffet ?? 0,
+    aoaWarn: !!L && fleet.active === "f35" && this.s.f35Law === "direct" && Math.abs(L.out.alpha) > 0.52,
     // (past the wing's lift peak — but the F-35 on its own law flies there under control, to 50°: no stall to say)
     stalled: (L?.out.stalled ?? false) && !(fleet.active === "f35" && this.s.f35Law === "normal" && this.flightModeNow() === "plane"),
     h: L?.h ?? NaN,

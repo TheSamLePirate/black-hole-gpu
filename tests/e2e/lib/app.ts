@@ -222,6 +222,9 @@ export class App {
     const r = await this.js<{ ok: boolean; x: number; y: number; stack: string[] }>(`(() => {
       const el = document.querySelector(${JSON.stringify(selector)});
       if (!el) return { ok: false, x: 0, y: 0, stack: ["(absent)"] };
+      // (out of its scrolled box's view — a long panel's card —: scrolled to, as a player would)
+      const b0 = el.getBoundingClientRect();
+      if (b0.bottom > innerHeight || b0.top < 0) el.scrollIntoView({ block: "center", behavior: "instant" });
       const b = el.getBoundingClientRect(), x = b.left + b.width / 2, y = b.top + b.height / 2;
       const top = document.elementFromPoint(x, y);
       const d = (e) => e.tagName.toLowerCase() + (e.id ? "#" + e.id : "") + (typeof e.className === "string" && e.className ? "." + e.className.trim().split(/\\s+/).join(".") : "");

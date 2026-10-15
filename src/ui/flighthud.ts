@@ -2407,7 +2407,7 @@ export class FlightHud {
           ],
           flow: [0, 0, 0],
           level: 0,
-          g: A.g ?? 1,
+          body: i.body ?? null,
           greyOut: s.vessel !== "f35" || s.f35GEffects,
         });
       return;
@@ -2427,7 +2427,7 @@ export class FlightHud {
       speedFxLevel({ speed: A.speed, rho: A.rho, agl: i.surface?.alt ?? Number.NaN, boost: i.jet?.modes.ab ? 1.5 : 1 });
     // (the F-35's: its own setting — G effects)
     const grey = s.gVignette !== false && (s.vessel !== "f35" || s.f35GEffects);
-    this.speedFx.draw(ctx, { W, H, dpr, fov: s.fov, dt, M, flow, level, g: A.g ?? 1, greyOut: grey });
+    this.speedFx.draw(ctx, { W, H, dpr, fov: s.fov, dt, M, flow, level, body: i.body ?? null, greyOut: grey });
   }
 
   private drawHud(i: Info) {

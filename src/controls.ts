@@ -50,6 +50,7 @@ import { PlanetCharacter } from "./controller/character";
 import { installSpectator } from "./controller/spectator";
 import { type AeroRun, installAerobatics } from "./controller/aerobatics";
 import type { FigureId } from "./game/aerobatics";
+import { GStrain } from "./game/gstrain";
 import { type FormState, installFormation } from "./controller/formation";
 import { installJet } from "./controller/jet";
 import { installFplan, noNav, type NavState } from "./controller/fplan";
@@ -1026,6 +1027,8 @@ export class CameraController {
    *  and one asked, begun at the next frame in the air (the craft just placed) */
   aero: AeroRun | null = null;
   aeroPending: { id: FigureId | "box"; mode: "demo" | "judge" } | null = null;
+  /** the load at the pilot's eyes: the grey-out, the black-out, the red-out, G-LOC (game/gstrain.ts) */
+  readonly gStrain = new GStrain();
   /** a plane's flight plan and its guidance (game/flightplan.ts — controller/fplan.ts) */
   nav: NavState = noNav();
   /** a challenge flown (game/challenges.ts — controller/challenge.ts), null: none */

@@ -103,6 +103,11 @@ export interface EngineState {
   /** an aircraft's turbofan (the F-35's — docs/PLAN-F35.md, F6) instead of a rocket: its core's spool 0…1, its
    *  thrust over its full wet thrust 0…1, its afterburner lit 0…1, its lift fan's power 0…1 */
   jet?: { spool: number; thrust: number; ab: number; fan: number } | null;
+  /** a fighter's pilot in his mask (the F-35 from its cockpit): his breathing heard at rest too; passed out (G-LOC) */
+  mask?: boolean;
+  out?: boolean;
+  /** the buffet of a wing at high incidence, 0…1 (its rumble through the airframe) */
+  buffet?: number;
 }
 
 /** Where the main engine is from the ear (audio/space.ts): its place in the listener's frame [m], its
@@ -188,8 +193,11 @@ export class SoundEngine {
     windBP: BiquadFilterNode;
     roar: GainNode;
     hiss: GainNode;
+    buffet: GainNode;
   } | null = null;
   private last: EngineState | null = null;
+  /** passed out last frame (G-LOC: a gasp as he comes to) */
+  private wasOut = false;
   /** the audio clock at the last update [s] */
   private lastT = 0;
   /** the ground (S5): the rolling's rumble, the tyres' hiss, the brakes' squeal (all at the wheels), the wind
@@ -818,7 +826,20 @@ export class SoundEngine {
       .connect(new BiquadFilterNode(ctx, { type: "bandpass", frequency: 2800, Q: 0.6 }))
       .connect(hiss)
       .connect(this.busses.listener);
-    this.amb = { hum, air, wheel, wheelOsc, wheelOsc2, wind, windBP, roar, hiss };
+    // the buffet at high incidence (V5): the flow breaking off the wing — a low, shaken rumble through the airframe
+    const buf = ctx.createGain();
+    buf.gain.value = 0;
+    const bufShake = ctx.createGain();
+    bufShake.gain.value = 1;
+    const bufMod = ctx.createGain();
+    bufMod.gain.value = 0.7;
+    this.loop(this.slow, 11).connect(bufMod).connect(bufShake.gain);
+    this.loop(this.brown, 0.9)
+      .connect(new BiquadFilterNode(ctx, { type: "lowpass", frequency: 110, Q: 1.2 }))
+      .connect(bufShake)
+      .connect(buf)
+      .connect(this.busses.listener);
+    this.amb = { hum, air, wheel, wheelOsc, wheelOsc2, wind, windBP, roar, hiss, buffet: buf };
   }
 
   /** The rain (PLAN-PLUIE P5), synthesized: two patters — drops striking, sparse and dense —, each a few
@@ -1163,12 +1184,17 @@ export class SoundEngine {
           C.nextHiss = t + 25 + 20 * Math.random();
         }
       }
-      // (breathing against the load: past 4 g, out of it under 3.6; faster and harder as it grows)
-      C.breathing = cabin && live > 0 && (C.breathing ? C.g > 3.6 : C.g > 4);
+      // (breathing against the load: past 4 g, out of it under 3.6; faster and harder as it grows — a fighter
+      // pilot's mask: heard at rest too, calm, some 14 a minute; passed out: nothing, a gasp as he comes to)
+      const strained = C.breathing ? C.g > 3.6 : C.g > 4;
+      C.breathing = cabin && live > 0 && !s.out && (strained || !!s.mask);
+      if (s.out) C.nextBreath = t + 0.5;
+      else if (this.wasOut && cabin) this.breath(0.32, 0.6);
+      this.wasOut = !!s.out;
       if (C.breathing && t > C.nextBreath) {
-        const k = Math.min((C.g - 3.6) / 4, 1);
-        this.breath(0.12 + 0.3 * k, k);
-        C.nextBreath = t + Math.max(3.2 - 1.8 * k, 1.2);
+        const k = strained ? Math.min((C.g - 3.6) / 4, 1) : 0;
+        this.breath(strained ? 0.12 + 0.3 * k : 0.05, k);
+        C.nextBreath = t + (strained ? Math.max(3.2 - 1.8 * k, 1.2) : 4.1 + 0.6 * Math.random());
       }
     }
 
@@ -1237,6 +1263,7 @@ export class SoundEngine {
     set(a.windBP.frequency, 200 + clamp(s.airspeed / 2000) * 1800, 0.3);
     set(a.roar.gain, aboard * 2.2 * clamp(s.plasma ?? 0) ** 1.5, 0.3);
     set(a.hiss.gain, aboard * 0.18 * clamp(s.plasma ?? 0) ** 2, 0.3);
+    set(a.buffet.gain, aboard * (s.inside ? 1.6 : 0.6) * clamp(s.buffet ?? 0) ** 1.5, 0.15);
 
     // the rain (P5): outside, its hiss and the drops on the ground; in the cabin, the canopy drummed — the
     // drops met faster in flight: denser and louder with the speed, a roar past ~100 m/s

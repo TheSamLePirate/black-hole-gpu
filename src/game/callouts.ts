@@ -79,6 +79,8 @@ const SPOKEN: Record<string, () => string> = {
   stall: () => t("Stall! Stall!"),
   "fuel-empty": () => t("Fuel empty"),
   "fuel-low": () => t("Fuel low"),
+  bingo: () => t("Bingo fuel"),
+  aoa: () => t("Angle of attack"),
   shield: () => t("Shield temperature"),
   hull: () => t("Hull temperature"),
   load: () => t("Overload"),

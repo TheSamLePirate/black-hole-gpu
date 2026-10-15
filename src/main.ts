@@ -3636,6 +3636,20 @@ async function main() {
     scene: { get: () => currentScene, set: (n) => (currentScene = n && presets[n] ? n : null) },
   });
   const toolsWin = new GameToolsWindow(tools, settings);
+  // the gamepad's rumble in flight (docs/PLAN-AVIATION-AAA.md, V5): the wing's buffet, a touchdown, at most every 150 ms
+  let padFeltAt = 0;
+  let padTouch = -1;
+  const padFeel = (nowMs: number) => {
+    if (!camera.pad.connected || !camera.piloting || nowMs - padFeltAt < 150) return;
+    const L = camera.airFlight.last;
+    const buffet = L ? (L.out.buffet ?? 0) * Math.min(L.out.q / 4000, 1) : 0;
+    const touch = camera.lastTouch && camera.lastTouch.n !== padTouch ? camera.lastTouch : null;
+    if (camera.lastTouch) padTouch = camera.lastTouch.n;
+    const strong = Math.max(0.6 * buffet, touch ? Math.min(touch.sink / 3, 1) : 0);
+    if (strong < 0.05) return;
+    padFeltAt = nowMs;
+    camera.pad.rumble(strong, 0.4 * buffet, touch ? 220 : 170);
+  };
   // (the F-35 chosen: on the runway nearest the craft flown — docs/PLAN-F35.md)
   // (a click in the F-35's cockpit: its panoramic display touched — cockpit/pick.ts, material 36)
   camera.onJetTouch = (nx, ny) => {
@@ -5534,6 +5548,8 @@ async function main() {
         panel.toast(camera.aero.say);
         camera.aero.say = null;
       }
+      // (the gamepad felt in the hands — V5: the buffet's shaking, a touchdown's jolt; six times a second at most)
+      padFeel(now);
       // (a fight: what it says, what is heard — the gun, the launches, the explosions at their distance, the
       // missile warning)
       const CB = camera.combat;

@@ -120,8 +120,11 @@ export default {
   "Space · Enter · Tab · = · −": "Espace · Entrée · Tab · = · −",
   // the F-35's settings, its HUD and its keys
   "G effects": "Effets du facteur de charge",
-  "The pilot's sight under load: grey then black past ~5.5 g held a while, red under −1.5 g — the felt load lagging the real one.":
-    "La vue du pilote sous facteur de charge : grise puis noire au-delà de ~5,5 g tenus un moment, rouge sous −1,5 g — la charge ressentie en retard sur la vraie.",
+  "The pilot's sight under load: grey then black past ~5.5 g held a while (sooner as he tires), red under −1.5 g — the felt load lagging the real one; the black-out held, he passes out (G-LOC) some eight seconds, his hands off the controls.":
+    "La vue du pilote sous charge : grise puis noire au-delà de ~5,5 g tenus un moment (plus tôt quand il fatigue), rouge sous −1,5 g — la charge ressentie en retard sur la réelle ; le voile noir tenu, il perd connaissance (G-LOC) huit secondes environ, les mains lâchant les commandes.",
+  "Pilot's breathing": "Respiration du pilote",
+  "From the cockpit, the pilot's breathing in his mask: calm at rest, faster and straining under load — the anti-g manoeuvre's grunts —, silent if he passes out.":
+    "Depuis le cockpit, la respiration du pilote dans son masque : calme au repos, plus rapide et forcée sous charge — les grognements de la manœuvre anti-g —, muette s'il perd connaissance.",
   Vapour: "Vapeur",
   "The air condensing as the wing pulls hard in moist air: the sheet over the wing, the threads at the wingtips and the apex.":
     "L'air qui se condense quand l'aile tire fort dans l'air humide : la nappe sur l'aile, les fils aux saumons et à l'apex.",

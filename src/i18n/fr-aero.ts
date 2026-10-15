@@ -114,5 +114,15 @@ export default {
   "slow to recover: let go of everything": "sortie lente : lâchez tout",
   "the exit's height off the entry's": "la hauteur de sortie s'écarte de celle d'entrée",
   slow: "lent",
+  "Bingo fuel": "Bingo carburant",
+  "Angle of attack": "Incidence",
+  "ANGLE OF ATTACK": "INCIDENCE",
+  "Without its flight control computer the F-35's incidence is past 30°: its lift past its peak, its fins blanketed — a departure, a spin, near.":
+    "Sans son calculateur de vol, l'incidence du F-35 dépasse 30° : sa portance au-delà de son maximum, ses dérives masquées — un départ, une vrille, tout près.",
+  "Stick forward, the rudder neutral; or back to the normal law (Game › F-35 › Control law).":
+    "Manche en avant, palonnier au neutre ; ou retour à la loi normale (Jeu › F-35 › Loi de pilotage).",
+  "The fuel left is what takes you home with its reserve.": "Le carburant restant est celui qui vous ramène avec sa réserve.",
+  "Head home now: cruise at its best height and speed, the afterburner off.":
+    "Rentrez maintenant : croisière à la meilleure altitude et vitesse, postcombustion coupée.",
   "a lot of height to pull out": "beaucoup de hauteur perdue à la ressource",
 } satisfies Record<string, string>;

@@ -74,6 +74,18 @@ function helpOf(id: string): { why: string; todo: string } {
         why: t("No propellant left: the main engine and the thrusters are out."),
         todo: t("Coast; an orbit lasts. Settings: the sci-fi antigravity, or place the ship (Place)."),
       };
+    case "aoa":
+      return {
+        why: t(
+          "Without its flight control computer the F-35's incidence is past 30°: its lift past its peak, its fins blanketed — a departure, a spin, near.",
+        ),
+        todo: t("Stick forward, the rudder neutral; or back to the normal law (Game › F-35 › Control law)."),
+      };
+    case "bingo":
+      return {
+        why: t("The fuel left is what takes you home with its reserve."),
+        todo: t("Head home now: cruise at its best height and speed, the afterburner off."),
+      };
     case "fuel-low":
       return {
         why: t("Less than a tenth of the propellant is left."),
@@ -152,6 +164,8 @@ export function alertsOf(i: AlertInput): Alert[] {
     if (air.margins.g > 0.75)
       add("load", air.margins.g > 0.92 ? "warning" : "caution", tf("LOAD {0} g · {1}", air.g.toFixed(1), pc(air.margins.g)));
     if (air.stalled && air.mach < 3) add("stall", "warning", t("STALL"));
+    // (the F-35 without its computer, its incidence past 30°: the departure near)
+    if (air.aoaWarn) add("aoa", "warning", t("ANGLE OF ATTACK"));
     if (air.gearWarn) add("gear", "warning", t("GEAR UP · TOO LOW"));
     if (air.heat > 5e4) add("plasma", "advisory", tf("PLASMA · {0} W/cm² · MACH {1}", (air.heat / 1e4).toFixed(0), air.mach.toFixed(1)));
   }
@@ -168,7 +182,7 @@ export function alertsOf(i: AlertInput): Alert[] {
   if (je) {
     // (an aircraft's fuel: bingo — its flight plan's, the fuel home with its reserve; else a fifth —, the engine out when none)
     if (je.kg <= 0) add("fuel-empty", "warning", t("FLAMEOUT · NO FUEL"));
-    else if (je.kg < (je.bingo ?? 0.2 * je.full)) add("fuel-low", "caution", tf("BINGO FUEL · {0} kg", Math.round(je.kg)));
+    else if (je.kg < (je.bingo ?? 0.2 * je.full)) add("bingo", "caution", tf("BINGO FUEL · {0} kg", Math.round(je.kg)));
   } else if (fuel?.empty) add("fuel-empty", "warning", t("PROPELLANT EXHAUSTED"));
   else if (fuel && fuel.fraction < 0.1) add("fuel-low", "caution", tf("PROPELLANT LOW · {0} %", Math.round(fuel.fraction * 100)));
   // the hole

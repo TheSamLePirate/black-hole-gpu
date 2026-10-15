@@ -156,6 +156,7 @@ function setPilot(this: CameraController, on: boolean) {
  * caches). Before, a second glide began as the first had ended — mid-approach, gear up, braking.
  */
 function newFlight(this: CameraController) {
+  this.gStrain.reset();
   this.character.stop();
   // (the view the new flight's own: a spectator out — walking or not — let go, its glide with it)
   this.spectator = null;
@@ -877,6 +878,11 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   this.hubWarpLimit = null;
   this.railsCap = Infinity;
   const inp = this.pilotInput(pad);
+  // (G-LOC — the F-35's G effects on —: the pilot out, his hands off the controls; his law flies on)
+  if (this.gStrain.gloc && fleet.active === "f35" && s.f35GEffects) {
+    inp.pitch = inp.roll = inp.yaw = inp.throttle = 0;
+    inp.tx = inp.ty = inp.tz = 0;
+  }
   // (an aerobatic figure: its program's stick in a demonstration, the player's followed — controller/aerobatics.ts)
   this.aeroStep(inp, dt);
   // (the docking autopilot ended — docked, stopped: the pilot's warp back)
@@ -1234,6 +1240,9 @@ function airAfter(this: CameraController, dtSec: number, acc: Vec3, dtPilot: num
   const was = this.airFlight.failure;
   const alpha = this.airFlight.after(dtSec, thrust, mp.mass, mp.I, s.damage);
   if (this.airFlight.inAir) for (let i = 0; i < 3; i++) this.pilot.omega[i] = this.pilot.omega[i]! - alpha[i]! * dtPilot;
+  // (the pilot's eyes: the normal load, signed — the air's force up the craft's top over its weight)
+  const L = this.airFlight.last;
+  this.gStrain?.step(this.airFlight.inAir && L ? L.out.F[1] / (mp.mass * 9.80665) : 1, dtPilot);
   if (this.airFlight.failure && !was) this.onCraftLost?.(this.airFlight.failure);
 }
 

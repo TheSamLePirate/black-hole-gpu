@@ -187,6 +187,8 @@ export interface FlightInfo {
   avionics: ReturnType<typeof avionicsData> | null;
   /** a challenge flown: its banner, its next gates (controller/challenge.ts) */
   chal: ReturnType<CameraController["challengeHud"]>;
+  /** the pilot's eyes and body (game/gstrain.ts) */
+  body: { grey: number; black: number; red: number; strain: number; gloc: boolean; felt: number };
   /** an aerobatic figure flown: its banner, its cue, its entry, its guide, its result (controller/aerobatics.ts) */
   aero: ReturnType<CameraController["aeroHud"]>;
   /** a fight flown: its targets, missiles, lead, zone, warnings (controller/combat.ts) */
@@ -365,6 +367,11 @@ function flightInfo(this: CameraController): FlightInfo {
       return f ? { alt: f.h, throttle: this.pilot.engineNow, modes: { ...this.jetModes, lnav: this.nav.on.l, vnav: this.nav.on.v } } : null;
     })(),
     chal: this.challengeHud(C),
+    // (the pilot's eyes and body: the grey-out, the black-out, the red-out, the straining, G-LOC)
+    body: (() => {
+      const B = this.gStrain;
+      return { grey: B.grey, black: B.black, red: B.red, strain: B.strain, gloc: B.gloc, felt: B.felt };
+    })(),
     aero: this.aeroHud(),
     avionics: fleet.active === "f35" ? avionicsData(this, s) : null,
     combat: this.combatHud(C),
