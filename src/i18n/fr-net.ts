@@ -196,8 +196,8 @@ export default {
   Formation: "Formation",
   "Leave formation": "Quitter la formation",
   "The formation let go: altitude, heading and speed held": "La formation lâchée : altitude, cap et vitesse tenus",
-  "The autopilot flies off {0}'s right wing and holds it there (the stick lets go)":
-    "Le pilote automatique vole à droite de {0} et s'y tient (le manche le lâche)",
+  "The autopilot flies our place in the formation chosen on {0} and holds it there (the stick lets go)":
+    "Le pilote automatique vole notre poste dans la formation choisie sur {0} et s'y tient (le manche le lâche)",
   "Formation off — altitude, heading and speed held": "Formation coupée — altitude, cap et vitesse tenus",
   "Formation off — the stick": "Formation coupée — le manche",
   "Formation off — the throttle": "Formation coupée — la manette des gaz",

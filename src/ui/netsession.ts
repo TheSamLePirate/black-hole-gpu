@@ -38,6 +38,7 @@ import { solarBody } from "../system/solar";
 import { vesselHulls } from "../system/collide";
 import { dockedFrame, type VesselId, VESSELS } from "../vessels";
 import type { NetPanel } from "./netpanel";
+import { formationLabel, formSlotFor } from "../controller/formation";
 
 type Vec3 = [number, number, number];
 
@@ -1056,10 +1057,21 @@ export class NetSession {
     let phi = Number.NaN,
       roll = 0,
       at = Number.NaN;
+    // (the place: as asked — a side, a gap —, else ours in the formation chosen, its close slots widened to the
+    // two craft's spans)
+    const S = this.d.settings;
+    const legacy = o.side !== undefined || o.gap !== undefined || o.back !== undefined || o.up !== undefined;
+    const place = legacy
+      ? { right: o.side === "left" ? -gap : gap, back: o.back ?? 15, up: o.up ?? 0 }
+      : formSlotFor(S.formShape, S.formPos, S.formSpacing, gap / 26);
     c.form = {
       slot,
       name: p.name,
-      at: { right: o.side === "left" ? -gap : gap, back: o.back ?? 15, up: o.up ?? 0 },
+      at: place,
+      shape: legacy ? undefined : S.formShape,
+      pos: S.formPos,
+      spacing: S.formSpacing,
+      kspan: gap / 26,
       since: performance.now() / 1000,
       armed: false,
       last: null,
@@ -1083,6 +1095,7 @@ export class NetSession {
         return { p: W.p, v: W.v, a, fwd: ax.fwd, aLat: bankAccel(phi + roll * 0.8) };
       },
     };
+    if (!legacy) return tf("Formation {0} on {1} — #{2}", formationLabel(S.formShape), p.name, S.formPos);
     const where = o.side === "left" ? tf("off {0}'s left wing", p.name) : tf("off {0}'s right wing", p.name);
     return tf("Formation {0} — {1} m", where, Math.round(gap));
   }

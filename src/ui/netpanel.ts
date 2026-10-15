@@ -661,7 +661,7 @@ export class NetPanel {
               on,
               title: on
                 ? t("The formation let go: altitude, heading and speed held")
-                : tf("The autopilot flies off {0}'s right wing and holds it there (the stick lets go)", m.name),
+                : tf("The autopilot flies our place in the formation chosen on {0} and holds it there (the stick lets go)", m.name),
               testid: `net-form-${m.slot}`,
               onClick: () => this.formation(m.slot),
             });

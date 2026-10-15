@@ -142,7 +142,7 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
   }
   const cws = this.jetCws;
   // (a formation flown: its bank, its flight path, its speed — the holds' own laws left aside)
-  const fm = this.icptStep(inp, f) ?? this.formStep(inp, f);
+  const fm = this.icptStep(inp, f) ?? this.formStep(inp, f, dt);
   if (fm) {
     cws.pitch = cws.roll = false;
     // (the afterburner when the dry engine at full cannot keep up — he speeds up, we are behind —, out once eased)

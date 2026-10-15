@@ -2,6 +2,7 @@ import { LANDSCAPES, landscapeFov, photoUtc, viewHeading } from "./system/landsc
 import type { BodyView } from "./system/our-side";
 import type { WeatherPreset } from "./weather";
 import { M_SECONDS } from "./units";
+import type { FormationId, Spacing } from "./game/formations";
 
 export type Motion = "static" | "orbit" | "infall" | "forward" | "geodesic" | "comoving" | "barycentric";
 /** The camera's placement (controls.ts): around the target, following it, free (carried by the nearest
@@ -400,6 +401,9 @@ export interface Settings {
   f35InfiniteAmmo: boolean; // the F-35 in a fight: the stores never spent
   f35Invulnerable: boolean; // the F-35 in a fight: no damage taken
   f35AiSkill: "easy" | "normal" | "ace"; // the aggressors' skill
+  formShape: FormationId; // the formation flown (game/formations.ts): its shape, its spacing, our place in it (2…4)
+  formSpacing: Spacing;
+  formPos: number;
   f35EnemyMissiles: boolean; // the aggressors' and the SAM's missiles fired
   f35Radar: boolean; // the radar's scope on the helmet in a fight
   f35RadarRange: "auto" | "10" | "20" | "40" | "80" | "160"; // its range [km]
@@ -725,6 +729,9 @@ export function defaultSettings(): Settings {
     f35InfiniteAmmo: false,
     f35Invulnerable: false,
     f35AiSkill: "normal",
+    formShape: "echelonR",
+    formSpacing: "normal",
+    formPos: 2,
     f35EnemyMissiles: true,
     f35Radar: true,
     f35RadarRange: "auto",
@@ -2030,6 +2037,9 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   f35InfiniteAmmo: "pref",
   f35Invulnerable: "pref",
   f35AiSkill: "pref",
+  formShape: "pref",
+  formSpacing: "pref",
+  formPos: "pref",
   f35EnemyMissiles: "pref",
   f35Radar: "pref",
   f35RadarRange: "pref",

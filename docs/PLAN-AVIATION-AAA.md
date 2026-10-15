@@ -206,6 +206,7 @@ pertinent.
 - **F1. Les formations.** Échelon droite et gauche, « fingertip », ligne de front, colonne (« trail »), patrouille
   de combat étalée, triangle, losange à 4. Chaque place a son numéro ; un tableau de postes par formation, avec
   l'écartement (serré, normal, large). La loi de formation existante vole chaque poste.
+  *Fait le 2026-10-15 — [fiche](progress/aviation/F1.md) : 8 formations, postes 2–4, 3 écartements, réglages et Formation du salon ; loi de formation intégrée près du poste (1 m en air calme, 3,6 m en turbulence légère).*
 - **F2. Les ordres du leader**, par une roue (une touche), à la voix (TARS), au HOTAS :
   - rejoindre, changer de formation, serrer, s'écarter ;
   - attaquer ma cible, engager les hostiles, me couvrir ;

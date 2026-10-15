@@ -68,6 +68,12 @@ export const FORM = {
   crossBack: 35,
   /** under this speed [m/s] the leader's frame is his nose's, not his track's */
   slowV: 20,
+  /** near the slot (within `iNear` [m]): the errors along and up integrated — the autothrottle's and the flight
+   *  path hold's own biases taken off — at these gains [1/s²], [1/s], wound at most to `iMax` [m s] */
+  iNear: 30,
+  kiA: 0.02,
+  kiU: 0.04,
+  iMax: 60,
 } as const;
 
 /** A craft's bank [rad] (> 0: right wing down) from its attitude — its top and right wing — at its place `p` (against
@@ -101,7 +107,7 @@ export interface FormOut {
 /**
  * A frame of the formation: our craft `o` (its speed through the air V [m/s]), the leader `L`, the slot.
  */
-export function formationStep(o: FormCraft, V: number, L: FormCraft, slot: FormSlot): FormOut {
+export function formationStep(o: FormCraft, V: number, L: FormCraft, slot: FormSlot, mem?: { iA: number; iU: number }, dt = 0): FormOut {
   // (the leader's frame: the up at his place, his track flat — his nose when slow —, his right)
   const up = unit(L.p);
   const along = (w: V3) => sub(w, scale(up, dot(w, up)));
@@ -140,7 +146,13 @@ export function formationStep(o: FormCraft, V: number, L: FormCraft, slot: FormS
   const eA = dot(e, fwd),
     eC = dot(e, right),
     eU = dot(e, up);
-  const aA = loop(eA, dot(vr, fwd), FORM.wA, FORM.vA, FORM.stopA, dot(aL, fwd));
+  // (near the slot, the steady errors integrated; farther, let go)
+  if (mem) {
+    const near = Math.hypot(eA, eU, dot(e, right)) < FORM.iNear;
+    mem.iA = near ? clamp(mem.iA + eA * dt, -FORM.iMax, FORM.iMax) : mem.iA * 0.98;
+    mem.iU = near ? clamp(mem.iU + eU * dt, -FORM.iMax, FORM.iMax) : mem.iU * 0.98;
+  }
+  const aA = loop(eA, dot(vr, fwd), FORM.wA, FORM.vA, FORM.stopA, dot(aL, fwd)) + (mem ? FORM.kiA * mem.iA : 0);
   let aC = loop(eC, dot(vr, right), FORM.wC, FORM.vC, FORM.stopC, aLat);
   // (the keep-out: abreast of him within reach of his wings — pushed out on the side we are, whatever the slot
   // asks: his turn's roll-in, a gust, a rejoin cutting in)
@@ -159,7 +171,7 @@ export function formationStep(o: FormCraft, V: number, L: FormCraft, slot: FormS
   // (the climb: the leader's own vertical speed and the slot's height closed at wU — the plane law holds a
   // flight path, a vertical speed: one order less)
   const Vs = Math.max(V, 30);
-  const vs = dot(L.v, up) + clamp(FORM.wU * eU, -FORM.vU, FORM.vU);
+  const vs = dot(L.v, up) + clamp(FORM.wU * eU + (mem ? FORM.kiU * mem.iU : 0), -FORM.vU, FORM.vU);
   const gamma = clamp(Math.asin(clamp(vs / Vs, -1, 1)), -JET.gammaMax, JET.gammaMax);
   const dist = Math.hypot(eA, eC, eU);
   return {

@@ -4,7 +4,8 @@
 // autopilot of the computer's, the leader lost: off, the altitude, heading and speed then held.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import { type FormCraft, type FormOut, type FormSlot, formationStep } from "../game/formation";
-import { t, tf } from "../i18n";
+import { FORMATIONS, type FormationId, formationSlot, type Spacing } from "../game/formations";
+import { t, tf, tr } from "../i18n";
 import type { PilotInput } from "../pilot";
 import type { CameraController } from "../controls";
 
@@ -28,6 +29,34 @@ export interface FormState {
   last: FormOut | null;
   /** the air brake set by the formation (put back in at its end) */
   braked?: boolean;
+  /** the formation flown (game/formations.ts — none: a slot asked as such), our place, its spacing; the close
+   *  slots' widening for the two craft's spans (1: two F-35s) */
+  shape?: FormationId;
+  pos?: number;
+  spacing?: Spacing;
+  kspan?: number;
+  /** the law's integrals near the slot (game/formation.ts) */
+  mem?: { iA: number; iU: number };
+}
+
+/** A place in a formation, its close slots widened by `kspan` (the two craft's spans over two F-35s'). */
+export function formSlotFor(shape: FormationId, pos: number, spacing: Spacing, kspan = 1): FormSlot {
+  const s = formationSlot(shape, pos, spacing);
+  return FORMATIONS[shape].close ? { right: s.right * kspan, back: s.back * Math.max(kspan, 1), up: s.up } : s;
+}
+
+/** A formation's name in the language shown. */
+export const formationLabel = (id: FormationId) => tr(FORMATIONS[id]);
+
+/** The formation flown changed (an order, the settings): its shape, spacing or our place — the slot moved to it.
+ *  What to say (null: not in one of the table's). */
+export function formReshape(F: FormState | null, o: { shape?: FormationId; spacing?: Spacing; pos?: number }): string | null {
+  if (!F || !F.shape) return null;
+  F.shape = o.shape ?? F.shape;
+  F.spacing = o.spacing ?? F.spacing ?? "normal";
+  F.pos = o.pos ?? F.pos ?? 2;
+  F.at = formSlotFor(F.shape, F.pos, F.spacing, F.kspan ?? 1);
+  return formationLabel(F.shape);
 }
 
 const now = () => performance.now() / 1000;
@@ -43,16 +72,21 @@ function formStep(
   this: CameraController,
   inp: PilotInput,
   f: { h: number; hdg: number; V: number },
+  dt = 0,
 ): { gamma: number; bank: number; spd: number; acc: number } | null {
   const F = this.form;
   if (!F) return null;
   const m = this.jetModes;
   if (inp.pitch !== 0 || inp.roll !== 0) return this.formOff(t("Formation off — the stick")), null;
   if (inp.throttle !== 0 || (F.armed && m.spd === null)) return this.formOff(t("Formation off — the throttle")), null;
+  // (the formation chosen changed meanwhile — the settings, a leader's order —: our slot moved to it)
+  const S = this.s;
+  if (F.shape && (F.shape !== S.formShape || F.spacing !== S.formSpacing || F.pos !== S.formPos))
+    formReshape(F, { shape: S.formShape, spacing: S.formSpacing, pos: S.formPos });
   const L = F.lead();
   const o = this.netOwn();
   if (!L || !o) return this.formOff(tf("Formation off — {0} lost", F.name)), null;
-  const r = formationStep(o, f.V, L, F.at);
+  const r = formationStep(o, f.V, L, F.at, (F.mem ??= { iA: 0, iU: 0 }), dt);
   // (placed elsewhere meanwhile, or he far beyond a rejoin)
   if (r.dist > FORM_RANGE) return this.formOff(tf("Formation off — {0} too far", F.name)), null;
   F.last = r;

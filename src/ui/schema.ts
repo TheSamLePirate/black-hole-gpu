@@ -5,6 +5,7 @@ import { MOUNTS } from "../mounts";
 import { AGENT_MODELS } from "../ai/openrouter";
 import { AURA_VOICES, type AuraVoice } from "../audio/aura-voices";
 import { voiceHint } from "../i18n/fr-voices";
+import { FORMATION_IDS, FORMATIONS } from "../game/formations";
 
 /** What a setting affects: a re-trace, only the final resolve, nothing, or the canvas size. */
 export type Effect = "scene" | "display" | "none" | "resize";
@@ -4089,6 +4090,50 @@ export const SCHEMA: ControlDef[] = [
       { value: "easy", label: "Easy", hint: "Gentle turns, slow to shoot, poor aim" },
       { value: "normal", label: "Normal" },
       { value: "ace", label: "Ace", hint: "Hard turns, quick shots, sharp aim" },
+    ],
+  },
+  {
+    key: "formShape",
+    type: "choice",
+    section: "game",
+    group: "Formation",
+    label: "Formation",
+    style: "select",
+    effect: "none",
+    help: "The formation flown (the room's Formation, the wingmen): each place numbered — the leader 1, his wingman 2, the element 3 and 4 — and flown by the formation autopilot. The leader's orders change it for the whole flight.",
+    keywords: "formation echelon fingertip vic diamond line abreast trail spread wingman",
+    options: FORMATION_IDS.map((id) => ({ value: id, label: FORMATIONS[id].en })),
+  },
+  {
+    key: "formSpacing",
+    type: "choice",
+    section: "game",
+    group: "Formation",
+    label: "Spacing",
+    style: "segmented",
+    effect: "none",
+    help: "How far apart the places are: tight, normal (a wingspan and 15 m in the close formations, some 300 m to 1.5 km in the tactical ones), wide.",
+    keywords: "formation spacing tight wide close",
+    options: [
+      { value: "tight", label: "Tight" },
+      { value: "normal", label: "Normal" },
+      { value: "wide", label: "Wide" },
+    ],
+  },
+  {
+    key: "formPos",
+    type: "choice",
+    section: "game",
+    group: "Formation",
+    label: "My place",
+    style: "segmented",
+    effect: "none",
+    help: "Our number in the flight when we fly on another's wing: 2 his wingman, 3 the element's leader, 4 the element's wingman.",
+    keywords: "formation place position number wingman element",
+    options: [
+      { value: 2, label: "#2" },
+      { value: 3, label: "#3" },
+      { value: 4, label: "#4" },
     ],
   },
   {
