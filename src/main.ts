@@ -227,6 +227,7 @@ import { lang, t, tf, tr } from "./i18n";
 import { ORDERS, type OrderId } from "./game/orders";
 import { FORMATION_IDS, FORMATIONS } from "./game/formations";
 import { TrafficFeed } from "./traffic/feed";
+import { unitsFor } from "./ui/unitsys";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>("view");
@@ -3336,6 +3337,8 @@ async function main() {
           { label: { fr: `Mode (${camera.radar.mode})`, en: `Mode (${camera.radar.mode})` }, run: () => say(camera.radarMode()) },
           { label: { fr: "Lâcher le verrou", en: "Drop the lock" }, run: () => (camera.radar.unlock(), say(t("Lock dropped"))) },
           { label: { fr: "Intercepter", en: "Intercept" }, key: "⇧Tab", on: !!camera.icpt, run: () => say(camera.icptStart()) },
+          // (in formation with the airliner locked — the real traffic: controller/traffic.ts)
+          { label: { fr: "Formation sur la cible", en: "Formation on the lock" }, run: () => say(camera.trafficForm()) },
         ],
       },
       // (the flight's leader: its orders — controller/orders.ts)
@@ -5677,6 +5680,8 @@ async function main() {
     netMatch.frame();
     netVoice.frame();
     // (who speaks: a mark before his name)
+    // (the real traffic's labels and lights — controller/traffic.ts)
+    viewOverlay.trafficMarks = settings.traffic && camera.piloting ? camera.trafficOverlay(unitsFor(settings).fAlt) : [];
     viewOverlay.netTags = netSession.tags.map((g) => (netVoice.speaking(g.slot) ? { ...g, name: `◉ ${g.name}` } : g));
     if (netSession.ships.length) changed = true;
     if (!renderer.offlineActive && cpuProf.time("free-fall prediction", () => sim.applyRender(info))) changed = true;

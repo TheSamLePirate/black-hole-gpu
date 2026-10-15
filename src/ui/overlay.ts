@@ -18,11 +18,14 @@ import { drawLock, lockKey } from "./targethud";
 import { FONT, MONO } from "./hudkit";
 import { safeFrame } from "./hud/safe";
 import type { NetTag } from "./netsession";
+import type { TrafficMark } from "../controller/traffic";
 
 export class ViewOverlay {
   private key = "";
   /** the others' name tags (ui/netsession.ts — docs/PLAN-RESEAU.md R1) */
   netTags: NetTag[] = [];
+  /** the real traffic's labels and lights (controller/traffic.ts — docs/PLAN-AVIATION-AAA.md T2) */
+  trafficMarks: TrafficMark[] = [];
   constructor(
     private overlay: HTMLCanvasElement,
     _settings: Settings,
@@ -49,9 +52,11 @@ export class ViewOverlay {
     const ship = this.shipMarker();
     const tele = this.telescopeView(cam);
     const tags = this.netTagsDrawn();
+    const traffic = this.trafficDrawn();
     const key =
-      guide || this.camera.flyMode || marker || lock || hover || ship || tele || sky || tags.length
+      guide || this.camera.flyMode || marker || lock || hover || ship || tele || sky || tags.length || traffic.length
         ? [
+            traffic.map((m) => `${m.x.toFixed(0)},${m.y.toFixed(0)},${m.lights.length}`).join(";"),
             tags.map((g) => `${g.slot}:${g.x.toFixed(0)},${g.y.toFixed(0)},${g.label}`).join(";"),
             lock
               ? lockKey(lock.v, this.overlay.width, this.overlay.height, Math.tan((this.settings.fov * Math.PI) / 360)) +
@@ -103,6 +108,7 @@ export class ViewOverlay {
     }
     if (hover && hover.body !== marker?.body && !(lock && hover.body === this.settings.target)) this.drawHover(ctx, hover);
     if (ship) this.drawShipMarker(ctx, ship);
+    if (traffic.length && !tele) this.drawTraffic(ctx, traffic);
     if (tags.length && !tele) this.drawNetTags(ctx, tags);
     if (!guide) return;
     const tanH = Math.tan((this.settings.fov * Math.PI) / 360);
@@ -243,6 +249,72 @@ export class ViewOverlay {
       const r = Math.min((W / 2 - m) / Math.abs(Math.cos(dir) || 1e-9), (H / 2 - m) / Math.abs(Math.sin(dir) || 1e-9));
       return { ...g, x: W / 2 + Math.cos(dir) * r, y: H / 2 + Math.sin(dir) * r, label, on: false, dir };
     });
+  }
+
+  /** The traffic on the screen: each aircraft's lights lit now and, within 40 km, its label over it. */
+  private trafficDrawn() {
+    if (!this.trafficMarks.length || this.renderer.offlineActive || document.body.classList.contains("hide-ui")) return [];
+    const W = this.overlay.width,
+      H = this.overlay.height,
+      k = devicePixelRatio;
+    const tanH = Math.tan((this.settings.fov * Math.PI) / 360);
+    const pr = (v: readonly number[]): [number, number] | null => {
+      const [x, y, z] = v as [number, number, number];
+      if (z < 1) return null;
+      const px = ((x / z / (tanH * (W / H)) + 1) / 2) * W,
+        py = ((1 - y / z / tanH) / 2) * H;
+      return px > -20 && px < W + 20 && py > -20 && py < H + 20 ? [px, py] : null;
+    };
+    // (each mark from the craft, the camera standing off it — the eye's place: as the renderer places the meshes)
+    const s = this.settings;
+    const eye = s.ship && this.renderer.shipPose ? shipToCamera(this.renderer.shipPose, s.shipLookYaw, s.shipLookPitch).t : [0, 0, 0];
+    const ofEye = (v: readonly number[]) => [v[0]! + eye[0]!, v[1]! + eye[1]!, v[2]! + eye[2]!];
+    const out: { x: number; y: number; label: string | null; lights: { x: number; y: number; colour: string; r: number }[] }[] = [];
+    for (const m of this.trafficMarks) {
+      const c = pr(ofEye(m.at));
+      if (!c) continue;
+      // (each light a glow some 1.5 m across, never under two pixels)
+      const lights = m.lights
+        .filter((l) => l.on)
+        .map((l) => {
+          const p = pr(ofEye(l.at));
+          // (a lamp's glow some 35 cm across its lens, a point of light far off — never a ball near)
+          const r = Math.min(9 * k * l.size, Math.max(1.6 * k, ((0.35 * l.size) / m.dist / tanH) * (H / 2)));
+          return p ? { x: p[0], y: p[1], colour: l.colour, r } : null;
+        })
+        .filter((l): l is NonNullable<typeof l> => !!l);
+      const lift = Math.min(120 * k, Math.max(12 * k, (20 / m.dist / tanH) * (H / 2)));
+      out.push({ x: c[0], y: c[1] - lift, label: m.dist < 40_000 ? m.label : null, lights });
+    }
+    return out;
+  }
+
+  private drawTraffic(ctx: CanvasRenderingContext2D, marks: ReturnType<ViewOverlay["trafficDrawn"]>) {
+    const k = devicePixelRatio;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (const m of marks)
+      for (const l of m.lights) {
+        const g = ctx.createRadialGradient(l.x, l.y, 0, l.x, l.y, l.r * 2.5);
+        g.addColorStop(0, l.colour);
+        g.addColorStop(0.35, l.colour.replace(/, 1\)$/, ", 0.45)"));
+        g.addColorStop(1, l.colour.replace(/, 1\)$/, ", 0)"));
+        ctx.fillStyle = g;
+        ctx.fillRect(l.x - l.r * 2.5, l.y - l.r * 2.5, l.r * 5, l.r * 5);
+      }
+    ctx.globalCompositeOperation = "source-over";
+    ctx.font = `600 ${10 * k}px ${MONO}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    for (const m of marks) {
+      if (!m.label) continue;
+      const w = ctx.measureText(m.label).width + 8 * k;
+      ctx.fillStyle = "rgba(4, 8, 14, 0.55)";
+      ctx.fillRect(m.x - w / 2, m.y - 14 * k, w, 14 * k);
+      ctx.fillStyle = "rgba(230, 236, 244, 0.95)";
+      ctx.fillText(m.label, m.x, m.y - 2 * k);
+    }
+    ctx.restore();
   }
 
   private drawNetTags(ctx: CanvasRenderingContext2D, tags: ReturnType<ViewOverlay["netTagsDrawn"]>) {

@@ -38,7 +38,7 @@ import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
 import shipWGSL from "./shaders/ship.wgsl" with { type: "text" };
 import enduranceWGSL from "./shaders/endurance.wgsl" with { type: "text" };
 import stationWGSL from "./shaders/station.wgsl" with { type: "text" };
-import { ENV_H, ShipRenderer, type Reentry, type ShipInstance, type Thrust } from "./ship";
+import { ENV_H, ShipRenderer, type Reentry, type ShipInstance, type ShipMeshId, type Thrust } from "./ship";
 import type { VesselId } from "./vessels";
 import type { F35Pose } from "./f35/model";
 import { fleet } from "./fleet";
@@ -4237,7 +4237,7 @@ export class Renderer {
 
   /** a fight's aircraft (controller/combat.ts — sim.ts): each from the flown craft's origin on the camera's axes
    *  [m], its axes on them, its pose */
-  combatOthers: { id: VesselId; rel: Vec3; axes: [Vec3, Vec3, Vec3]; jet?: F35Pose; hidden?: boolean }[] = [];
+  combatOthers: { id: ShipMeshId; rel: Vec3; axes: [Vec3, Vec3, Vec3]; jet?: F35Pose; hidden?: boolean; far?: boolean }[] = [];
 
   /** the others' craft (docs/PLAN-RESEAU.md R1 — controller/netcraft.ts, ui/netsession.ts): each from the flown
    *  craft's origin on the camera's axes [m], its axes on them, an F-35's pose, its engines */
@@ -4328,7 +4328,9 @@ export class Renderer {
         t: [o.rel[0] + eye[0], o.rel[1] + eye[1], o.rel[2] + eye[2]] as Vec3,
         shadow: false,
         jet: o.jet,
-        far: false,
+        // (a fight's aircraft always over the image; the traffic's hidden behind what it holds nearer — a cloud, a
+        // mountain)
+        far: o.far ?? false,
       }));
   }
 

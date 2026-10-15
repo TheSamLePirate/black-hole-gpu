@@ -263,6 +263,7 @@ fn envSH(@builtin(local_invocation_id) lid: vec3u) {
 @group(0) @binding(24) var jetMr: texture_2d_array<f32>;
 // its panoramic cockpit display's picture (src/f35/pcd.ts: drawn on a canvas, sRGB)
 @group(0) @binding(25) var jetScreen: texture_2d<f32>;
+@group(0) @binding(26) var trafficAlbedo: texture_2d_array<f32>; // the airliners' paint (sRGB; a layer each)
 @group(1) @binding(0) var stationDepth: texture_2d<f32>; // the station's box: distance [m], coverage
 
 struct VIn {
@@ -720,6 +721,16 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
       coat = 0.0;
       if (part == 33u) { emit = albedo * 1.5; }
     }
+    // the real traffic's airliners (ship.ts AIRLINERS): their livery's colour (a layer each), a glossy painted
+    // skin; their lights' lenses a clear glass
+    case 40u, 41u: {
+      let layer = select(1, 0, part == 40u);
+      albedo = textureSampleGrad(trafficAlbedo, mapSamp, in.uv, layer, duvx, duvy).rgb;
+      metal = 0.15;
+      rough = 0.32 + 0.1 * grime;
+      coat = 0.45 * coat;
+    }
+    case 42u: { albedo = vec3f(0.03); metal = 0.0; rough = 0.08; coat = 0.0; }
     // the F-35's panoramic display: its picture's light under a glass (dark, smooth: the cockpit reflected)
     case 36u: {
       albedo = vec3f(0.01);

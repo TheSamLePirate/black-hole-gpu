@@ -243,7 +243,8 @@ export class NetSession {
     const R = this.d.renderer;
     if (!net?.room) {
       if (this.follow) this.unfollow();
-      if (this.d.camera.form) this.d.camera.formOff(t("Formation off — out of the room"));
+      // (a formation on another player — not on an airliner of the traffic, slot −1 —: let go out of the room)
+      if (this.d.camera.form && this.d.camera.form.slot >= 0) this.d.camera.formOff(t("Formation off — out of the room"));
       roomPace.cap = Infinity;
       roomPace.ease = 1;
       roomPace.note = "";

@@ -102,17 +102,12 @@ function finalLeader(c: ReturnType<typeof flight>["c"]) {
   const A = enuAxes(th.lat, th.lon);
   const fwd = [0, 1, 2].map((k) => A.e[k]! * Math.sin(hdg) + A.n[k]! * Math.cos(hdg));
   const right = [0, 1, 2].map((k) => A.e[k]! * Math.cos(hdg) - A.n[k]! * Math.sin(hdg));
-  // (the radial through the threshold: its height over the mean radius as the controller reads it)
-  const e0 = ecef(th.lat, th.lon, 0);
-  const R0 = Math.hypot(...e0);
-  const radial = e0.map((x) => x / R0);
+  // (on the WGS84 Earth: the threshold's point at its height, carried along the runway's way)
   const st = { x: -9000, v: 75, t: 0 };
   const pos = () => {
     const h = st.x < 0 ? -st.x * Math.tan(3 * D) : 0;
-    const r = 6_371_008.8 + elev + 1.17 + h;
-    const q = [0, 1, 2].map((k) => radial[k]! * r + fwd[k]! * st.x);
-    const l = Math.hypot(...q);
-    return q.map((x) => (x / l) * r);
+    const e0 = ecef(th.lat, th.lon, elev + 1.17 + h);
+    return [0, 1, 2].map((k) => e0[k]! + fwd[k]! * st.x);
   };
   const own = () => {
     const p = pos();

@@ -58,6 +58,7 @@ import { type IcptState, installIntercept } from "./controller/intercept";
 import { installOrders } from "./controller/orders";
 import type { TrafficFeed } from "./traffic/feed";
 import { installWingmen, type RemoteWing, type WingState } from "./controller/wingmen";
+import { installTraffic } from "./controller/traffic";
 import type { Order } from "./game/orders";
 import type { Racetrack } from "./game/racetrack";
 import { installJet } from "./controller/jet";
@@ -1040,6 +1041,8 @@ export class CameraController {
   readonly orderSinks = new Map<string, (o: Order) => void>();
   /** the real traffic about us (traffic/feed.ts — main.ts asks it), null: none */
   traffic: TrafficFeed | null = null;
+  /** the real traffic's clock [s since 1970] (none: the wall's — a test's own) */
+  trafficClock?: () => number;
   /** our AI wingmen (controller/wingmen.ts), null: none flying */
   wing: WingState | null = null;
   /** the room's others' AI wingmen (their host flies them): by his slot, their states and when heard [s] */
@@ -1435,6 +1438,7 @@ installFormation(CameraController);
 installIntercept(CameraController);
 installOrders(CameraController);
 installWingmen(CameraController);
+installTraffic(CameraController);
 installAerobatics(CameraController);
 installRadar(CameraController);
 installFplan(CameraController);

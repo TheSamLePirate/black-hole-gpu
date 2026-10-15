@@ -40,6 +40,8 @@ export interface FormState {
   kspan?: number;
   /** the law's integrals near the slot (game/formation.ts) */
   mem?: { iA: number; iU: number };
+  /** on an aircraft of the real traffic (controller/traffic.ts): its id (asked fresh each second) */
+  trafficId?: string;
   /** far off (beyond 3 km): the intercept's run to the slot first (game/intercept.ts), then the formation law */
   phase?: IcptPhase;
   /** the slot flown now (moving to `at` without a jump — game/formflow.ts), a tactical formation's turn */

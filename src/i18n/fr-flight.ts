@@ -37,4 +37,10 @@ export default {
   "Real traffic": "Trafic réel",
   "The real aircraft (ADS-B: adsb.lol, OpenSky) and ships (AIS: aisstream.io) about your craft, live — through the game's relay, refreshed every few seconds. Off: none asked. Offline: none.":
     "Les avions (ADS-B : adsb.lol, OpenSky) et les navires (AIS : aisstream.io) réels autour de votre appareil, en direct — par le relais du jeu, rafraîchis toutes les quelques secondes. Désactivé : rien n'est demandé. Hors ligne : rien.",
+  "Aircraft delayed": "Avions en différé",
+  "How far behind the real time the real aircraft are drawn: delayed, each flies the smoothest path through its known positions (its turns, its climbs as they were), banked and nose-up as the flight's laws ask; live, it is carried on from its last report and corrected at each new one.":
+    "De combien de temps les avions réels sont montrés en retard sur le temps réel : en différé, chacun vole la trajectoire la plus lisse par ses positions connues (ses virages, ses montées tels qu'ils ont été), incliné et cabré comme le veulent les lois du vol ; en direct, il est prolongé depuis son dernier message et corrigé à chaque nouveau.",
+  "1 min": "1 min",
+  "2 min": "2 min",
+  "Formation on the lock: lock an airliner first (Tab)": "Formation sur la cible : verrouillez d'abord un avion de ligne (Tab)",
 } satisfies Record<string, string>;

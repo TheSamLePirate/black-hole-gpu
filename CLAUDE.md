@@ -104,3 +104,15 @@ bun --hot ./index.ts
 ```
 
 For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
+
+## The Earth is WGS84 — everywhere
+
+On and near the Earth, every position, altitude and ground height goes through the WGS84 ellipsoid (the game's
+Earth figure: `src/system/ellipsoid.ts` — `WGS84_A`, `WGS84_F`, `cartToGeodetic`, `geodeticToCart`;
+`bodyFixedOf("earth", lat, lon, h)`; `heightOverGround`, `groundRelief` — the relief over that figure).
+
+- Never take an altitude as `|p| − 6 371 008.8` (a sphere of mean radius) nor place a point at `R + h` along its
+  radius: the ellipsoid's radius differs from the mean one by up to ±11 km (≈ 0 near 35°, −5 km at Paris).
+- Latitude and longitude are geodetic (WGS84), heights over the ellipsoid (ADS-B's geometric altitude, GNSS's).
+- Flat local approximations (east/north offsets over a few tens of km) are fine for distances; heights and
+  ground contact are always geodetic.

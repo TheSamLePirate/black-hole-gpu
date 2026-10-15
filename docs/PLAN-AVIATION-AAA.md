@@ -247,6 +247,8 @@ pertinent.
 
   *Fini quand* on vole en patrouille avec un avion de ligne réel au-dessus de Paris, son immatriculation lue
   sur l'étiquette.
+
+  *Fait le 2026-10-15 — [fiche](progress/aviation/T2.md) : A320 et CRJ-900 (chaque type à sa longueur), feux aux saumons, traînées ; le trafic montré une minute en différé sur son vol reconstruit (vitesse, route, vario lissés puis intégrés ; virage coordonné, incidence par la portance) ; en patrouille avec DJT101 F-HBUZ (A321neo réel) au-dessus de Paris, tenu à 10,8 m. Écarts : pas de roulage au sol, une livrée par modèle.*
 - **T3. Les bateaux sur la mer.**
   - Le porte-conteneurs converti, plus des variantes (pétrolier, ferry, chalutier, voilier), à la taille
     donnée par l'AIS.

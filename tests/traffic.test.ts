@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { createTraffic, fromAdsbLol, fromOpenSky, ingestAis, type Ship } from "../server/traffic";
+import { createTraffic, fromAdsbLol, fromOpenSky, fromReadsbTrace, ingestAis, type Ship } from "../server/traffic";
 import { TrafficFeed, trafficBase } from "../src/traffic/feed";
 
 // The real traffic's relay and feed (docs/PLAN-AVIATION-AAA.md, T1; server/traffic.ts, traffic/feed.ts): the
 // sources' records in SI; a tile asked once for many; OpenSky when adsb.lol fails, its token once; the ships of
-// ONE aisstream connection, its subscription following the zones; a page asking too fast slowed; the page's feed —
-// its pace, its reports kept two deep, off and offline.
+// ONE aisstream connection, its subscription following the zones; a page asking too fast slowed; adsb.lol's pace
+// kept; an aircraft's recent trace; the page's feed — its pace, its reports' history, the followed one's trace, off
+// and offline.
 
 const ADSB = {
   hex: "3949ED",
@@ -89,20 +90,25 @@ function relay(adsbUp = true) {
     if (String(url).includes("/token")) return Response.json({ access_token: "tok", expires_in: 1800 });
     return Response.json({ time: t, states: [["4b1814", "SWR1234 ", "CH", t, t, 2.4, 48.9, 9000, false, 230, 45, 0, null, 9100]] });
   }) as unknown as typeof fetch;
-  const T = createTraffic({ fetch: get, openskyId: "id", openskySecret: "secret", now: () => t });
+  const T = createTraffic({ fetch: get, openskyId: "id", openskySecret: "secret", now: () => t, sleep: async (s) => void (t += s) });
   return { T, asks, tick: (s: number) => (t += s) };
 }
 
 describe("the relay", () => {
-  test("a tile asked once for many pages; the radius kept; again after its 4 s", async () => {
+  test("a tile asked once for many pages; the radius kept; again after its 15 s", async () => {
     const { T, asks, tick } = relay();
     const [a, b] = await Promise.all([T.air(48.85, 2.35, 50), T.air(48.86, 2.36, 50)]);
     expect(asks.filter((u) => u.includes("adsb.lol")).length).toBe(1);
     expect(a.planes.map((p) => p.cs)).toEqual(["AFR357E"]);
     expect(b.src).toBe("adsb.lol");
-    tick(5);
+    tick(16);
     await T.air(48.85, 2.35, 50);
     expect(asks.filter((u) => u.includes("adsb.lol")).length).toBe(2);
+    // (adsb.lol's pace: another tile at once waits its 10 s — its clock run on by the wait)
+    const t0 = (await T.handle(new Request("http://x/traffic/health")))!;
+    expect(t0.status).toBe(200);
+    await T.air(40, 2, 50);
+    expect(asks.filter((u) => u.includes("adsb.lol")).length).toBe(3);
     T.close();
   });
 
@@ -177,7 +183,7 @@ describe("the relay", () => {
 });
 
 describe("the page's feed", () => {
-  test("asked every 5 s (the air), 10 s (the sea); its reports two deep; live; off clears; offline", async () => {
+  test("asked every 15 s (the air), 10 s (the sea); its reports' history; live; off clears; offline", async () => {
     const asked: string[] = [];
     let n = 0;
     const get = async (url: string) => {
@@ -198,11 +204,12 @@ describe("the page's feed", () => {
     F.tick(2, { lat: 48.85, lon: 2.35 }, true);
     await Bun.sleep(5);
     expect(asked.length).toBe(2);
-    F.tick(5.1, { lat: 48.85, lon: 2.35 }, true);
+    F.tick(15.1, { lat: 48.85, lon: 2.35 }, true);
     await Bun.sleep(5);
     expect(asked.filter((u) => u.includes("/air")).length).toBe(2);
     const T = F.planes.get("3949ed")!;
     expect(T.prev).not.toBeNull();
+    expect(T.hist.map((q) => q.t)).toEqual([T.prev!.t, T.p.t]);
     expect(F.status).toBe("live");
     // (credited: the air's — it gave aircraft —, not the sea's — no ship)
     expect(F.attribution).toEqual(["ADS-B: adsb.lol"]);
@@ -215,5 +222,62 @@ describe("the page's feed", () => {
     expect(trafficBase({ hostname: "samlepirate.org", protocol: "https:", host: "samlepirate.org" })).toBe(
       "https://stream.samlepirate.org",
     );
+  });
+});
+
+describe("the aircraft followed", () => {
+  test("its recent trace: readsb's points (an absent field not 0); the feed's focus asks it, its points into its history in time's order, its name kept", async () => {
+    // (readsb's trace: [s after its timestamp, lat, lon, baro ft | "ground", gs kt, track, flags, baro fpm, details,
+    // source, geometric ft, geometric fpm, ias, roll])
+    const J = {
+      icao: "3949ed",
+      r: "F-GSPN",
+      t: "B772",
+      timestamp: 2000,
+      trace: [
+        [0, 48.8, 2.3, 7000, 280, 90, 0, -500, { flight: "AFR357E ", category: "A5" }, "adsb_icao", 7700, -600, null, null],
+        [10, 48.8, 2.35, 6950, 281, 91, 0, -500, null, "adsb_icao", null, null, null, 2.5],
+        [20, 48.8, 2.4, "ground", 20, 90, 0, null, null, "adsb_icao", null, null, null, null],
+      ],
+    };
+    const P = fromReadsbTrace("3949ed", J);
+    expect(P.map((q) => q.t)).toEqual([2000, 2010, 2020]);
+    expect(P[0]!.cs).toBe("AFR357E");
+    expect(P[0]!.alt).toBeCloseTo(7700 * 0.3048, 3);
+    // (the second's geometric altitude absent: its barometric and the last difference — not 0)
+    expect(P[1]!.alt).toBeCloseTo(7650 * 0.3048, 3);
+    expect(P[1]!.vs).toBeCloseTo((-500 * 0.3048) / 60, 3);
+    expect(P[2]!.gnd).toBe(true);
+    // the relay: gzipped as adsb.lol serves it
+    const asks: string[] = [];
+    const get = (async (url: string) => {
+      asks.push(String(url));
+      return new Response(Bun.gzipSync(new TextEncoder().encode(JSON.stringify(J))));
+    }) as unknown as typeof fetch;
+    const T = createTraffic({ fetch: get, now: () => 2100, sleep: async () => {} });
+    const r = (await T.handle(new Request("http://x/traffic/trace?id=3949ED"), "1.2.3.4"))!;
+    const j = (await r.json()) as { trace: { t: number }[] };
+    expect(j.trace.length).toBe(3);
+    expect(asks[0]).toContain("/traces/ed/trace_recent_3949ed.json");
+    T.close();
+    // the page's feed: a tile's report (its registration), then the focus's trace — older points among them
+    const feedGet = async (url: string) => {
+      if (url.includes("/trace")) return Response.json({ trace: fromReadsbTrace("3949ed", { ...J, r: "", t: "" }) });
+      return Response.json({ planes: [{ ...fromAdsbLol(ADSB, 2015)! }] });
+    };
+    const F = new TrafficFeed(
+      () => "http://relay",
+      feedGet,
+      () => true,
+    );
+    F.tick(0, { lat: 48.85, lon: 2.35 }, true);
+    await Bun.sleep(5);
+    F.focus = "3949ed";
+    F.tick(1, { lat: 48.85, lon: 2.35 }, true);
+    await Bun.sleep(5);
+    const R = F.planes.get("3949ed")!;
+    expect(R.hist.map((q) => q.t)).toEqual([2000, 2010, 2014.5, 2020]);
+    expect(R.p.t).toBe(2020);
+    expect(R.p.reg).toBe("F-GSPN");
   });
 });

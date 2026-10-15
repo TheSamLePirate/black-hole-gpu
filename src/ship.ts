@@ -34,6 +34,20 @@ import { cockpitHull, samplePoints, TriBVH, vesselHulls } from "./system/collide
 import { cabinHitOf } from "./cockpit/pick";
 import { MAX_SEGMENTS, SEG_FLOATS } from "./contrails";
 import { VESSELS, type JetDef, type VesselId } from "./vessels";
+import a320Url from "../assets/traffic/a320.bin";
+import a320MapUrl from "../assets/traffic/a320.jpg";
+import crj900Url from "../assets/traffic/crj900.bin";
+import crj900MapUrl from "../assets/traffic/crj900.jpg";
+
+/** The real traffic's airliners (scripts/build-airliners.ts, docs/PLAN-AVIATION-AAA.md T2): drawn as the craft are. */
+export type AirlinerId = "a320" | "crj900";
+/** A mesh the craft's pass draws: a craft's, an airliner's. */
+export type ShipMeshId = VesselId | AirlinerId;
+const AIRLINERS: Record<AirlinerId, { bin: string; map: string; layer: number }> = {
+  a320: { bin: a320Url, map: a320MapUrl, layer: 0 },
+  crj900: { bin: crj900Url, map: crj900MapUrl, layer: 1 },
+};
+const isAirliner = (id: ShipMeshId): id is AirlinerId => id === "a320" || id === "crj900";
 import { jetLevel } from "./jets";
 import { cross, dot, sub } from "./math/vec3";
 
@@ -42,7 +56,7 @@ type V3 = [number, number, number];
 /** Another craft in view: its axes' images in the camera frame (rows: the camera's axes on the craft's,
  *  as shipToCamera's S) and its origin there [m]; whether it is in the shadow map (near the flown one). */
 export interface ShipInstance {
-  id: VesselId;
+  id: ShipMeshId;
   S: M3;
   t: V3;
   shadow: boolean;
@@ -246,8 +260,11 @@ export class ShipRenderer {
   /** the last frame's camera: its axes in the ship's frame (rows) and the projection's half-extents */
   private lastCam: { R: M3; tanX: number; tanY: number } | null = null;
   /** the craft's meshes (loaded when first seen) */
-  private meshes: Partial<Record<VesselId, Mesh>> = {};
-  private loadingMesh = new Set<VesselId>();
+  private meshes: Partial<Record<ShipMeshId, Mesh>> = {};
+  private loadingMesh = new Set<ShipMeshId>();
+  /** the airliners' colour maps (a layer each — AIRLINERS), loaded with the first of them */
+  private trafficMaps: GPUTexture | null = null;
+  private trafficMapsLoading = false;
   /** the instances' transforms and flags (the flown craft first) */
   private instBuf: GPUBuffer;
   private instData = new Float32Array((MAX_INST + JET_SLOTS * MAX_PARTS) * INST_FLOATS);
@@ -695,16 +712,67 @@ export class ShipRenderer {
   private getter: (url: string) => Promise<Response> = fetch;
 
   /** Whether a craft's mesh is there (starting its download if not). */
-  has(id: VesselId) {
+  has(id: ShipMeshId) {
     if (this.meshes[id]) return true;
     if (!this.loadingMesh.has(id) && this.ready) {
       this.loadingMesh.add(id);
-      this.loadVessel(id).then(
+      (isAirliner(id) ? this.loadAirliner(id) : this.loadVessel(id)).then(
         () => this.onLoaded?.(),
-        (e) => console.error(`${VESSELS[id].name}:`, e),
+        (e) => console.error(`${isAirliner(id) ? id : VESSELS[id].name}:`, e),
       );
     }
     return false;
+  }
+
+  /**
+   * An airliner's mesh (assets/traffic/*.bin, "TRFC": the common layout already — position, normal, material,
+   * AO, UV), its bounds; the colour maps' array with the first.
+   */
+  private async loadAirliner(id: AirlinerId) {
+    const d = this.device;
+    const buf = await this.getter(AIRLINERS[id].bin).then((r) => r.arrayBuffer());
+    if (new TextDecoder().decode(new Uint8Array(buf, 0, 4)) !== "TRFC") throw new Error(`bad mesh for ${id}`);
+    const u32 = new Uint32Array(buf, 0, 4);
+    const nv = u32[2]!,
+      ni = u32[3]!;
+    const b = new Float32Array(buf, 16, 6);
+    const lo: V3 = [b[0]!, b[1]!, b[2]!],
+      hi: V3 = [b[3]!, b[4]!, b[5]!];
+    const verts = new Float32Array(buf, 40, nv * 10);
+    const idx = new Uint32Array(buf, 40 + nv * 40, ni);
+    const vbuf = d.createBuffer({ size: verts.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+    d.queue.writeBuffer(vbuf, 0, verts);
+    const ibuf = d.createBuffer({ size: idx.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
+    d.queue.writeBuffer(ibuf, 0, idx);
+    const c: V3 = [0, 1, 2].map((j) => (lo[j]! + hi[j]!) / 2) as V3;
+    this.meshes[id] = { vbuf, ibuf, count: ni, bound: { c, r: Math.hypot(...sub(hi, lo)) / 2, lo, hi } };
+    if (!this.trafficMapsLoading) {
+      this.trafficMapsLoading = true;
+      await this.loadTrafficMaps();
+    }
+  }
+
+  /** The airliners' colour maps: one array, a layer each, its mipmaps made from the image. */
+  private async loadTrafficMaps() {
+    const d = this.device;
+    const ids = Object.keys(AIRLINERS) as AirlinerId[];
+    const imgs = await Promise.all(ids.map(async (id) => createImageBitmap(await this.getter(AIRLINERS[id].map).then((r) => r.blob()))));
+    const size = 2048;
+    const levels = Math.floor(Math.log2(size)) + 1;
+    const t = d.createTexture({
+      size: [size, size, ids.length],
+      format: "rgba8unorm-srgb",
+      mipLevelCount: levels,
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+    });
+    for (let i = 0; i < ids.length; i++)
+      for (let l = 0; l < levels; l++) {
+        const w = Math.max(1, size >> l);
+        const bm = await createImageBitmap(imgs[i]!, { resizeWidth: w, resizeHeight: w, resizeQuality: "high" });
+        d.queue.copyExternalImageToTexture({ source: bm }, { texture: t, mipLevel: l, origin: [0, 0, AIRLINERS[ids[i]!].layer] }, [w, w]);
+      }
+    this.trafficMaps = t;
+    this.bind();
   }
   /** (a mesh arrived: the renderer redraws) */
   onLoaded?: () => void;
@@ -1082,6 +1150,11 @@ export class ShipRenderer {
       { binding: 23, resource: jm.normal.createView({ dimension: "2d-array" }) },
       { binding: 24, resource: jm.mr.createView({ dimension: "2d-array" }) },
       { binding: 25, resource: this.jetScreenTexture().createView() },
+      // (the airliners' paint: a light grey until it loads)
+      {
+        binding: 26,
+        resource: (this.trafficMaps ?? dummyArray([200, 202, 206, 255], "rgba8unorm-srgb")).createView({ dimension: "2d-array" }),
+      },
     ];
     this.bindGen++;
 
@@ -1305,13 +1378,14 @@ export class ShipRenderer {
     m.set([v.albedo, v.metal, v.rough, SPEC_MIPS], 20);
     // the instances: the flown craft, then the others in view whose mesh is there — their transforms,
     // their kind, whether they are in the shadow map and hidden by what the traced image holds nearer
-    const kind = { ranger: 0, lander: 1, endurance: 2, f35: 3 } as const;
+    const kind = { ranger: 0, lander: 1, endurance: 2, f35: 3, a320: 4, crj900: 5 } as const;
     let jetSlot = 0;
     // (inside the Ranger: its cabin instead of its hull)
     if (v.inside && this.flown && this.vessel === "ranger") this.loadCockpit();
     const inCabin = !!(v.inside && this.flown && this.vessel === "ranger" && this.cockpit);
     this.inCabin = inCabin;
-    const list: { id: VesselId; R: M3; t: V3; shadow: boolean; far: boolean; jet?: F35Pose; thrust?: ShipInstance["thrust"] }[] = this.flown
+    const list: { id: ShipMeshId; R: M3; t: V3; shadow: boolean; far: boolean; jet?: F35Pose; thrust?: ShipInstance["thrust"] }[] = this
+      .flown
       ? [{ id: this.vessel, R, t, shadow: true, far: !!v.place }]
       : [];
     for (const o of v.others ?? [])
@@ -1336,8 +1410,8 @@ export class ShipRenderer {
         const mats = partMatrices(this.jetMesh, pose);
         this.writeParts(mats, parts);
         if (i === 0) this.jetExit = nozzleExit(this.jetMesh, mats);
-        else if (it.thrust) lit.push({ id: it.id, R: it.R, t: it.t, thrust: it.thrust, exit: nozzleExit(this.jetMesh, mats) });
-      } else if (i > 0 && it.thrust) lit.push({ id: it.id, R: it.R, t: it.t, thrust: it.thrust, exit: null });
+        else if (it.thrust) lit.push({ id: "f35", R: it.R, t: it.t, thrust: it.thrust, exit: nozzleExit(this.jetMesh, mats) });
+      } else if (i > 0 && it.thrust && !isAirliner(it.id)) lit.push({ id: it.id, R: it.R, t: it.t, thrust: it.thrust, exit: null });
       this.instData.set([kind[it.id], it.shadow ? 1 : 0, it.far ? 1 : 0, parts], i * INST_FLOATS + 16);
       this.draws.push({ mesh: me, shadow: it.shadow, cabin: i === 0 && inCabin, inst: i });
       // (the Ranger's landing gear, out: drawn with it — its own mesh, the craft's instance)

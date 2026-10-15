@@ -27,6 +27,8 @@ export interface Plane {
   hdg: number | null;
   vs: number;
   roll: number | null;
+  /** its track's rate [°/s] (ADS-B's, when given) */
+  rate?: number | null;
   /** on the ground */
   gnd: boolean;
   /** when its position was measured [s since 1970] */
@@ -57,6 +59,8 @@ export interface TrafficOpts {
   openskyId?: string;
   openskySecret?: string;
   fetch?: typeof fetch;
+  /** waits [s] (adsb.lol's pace; tests: none) */
+  sleep?: (s: number) => Promise<void>;
   WebSocket?: typeof WebSocket;
   now?: () => number;
   log?: (s: string) => void;
@@ -68,7 +72,14 @@ const ATTR_AIR = "ADS-B: adsb.lol (ODbL 1.0) · OpenSky Network";
 const ATTR_SEA = "AIS: aisstream.io";
 const CORS = { "access-control-allow-origin": "*", "cache-control": "no-store" };
 /** the air's tile cache [s] (adsb.lol's, OpenSky's), the largest radius served [km], the ships kept [s] */
-const AIR_TTL = 4;
+const AIR_TTL = 15;
+/** adsb.lol's pace: an ask every this [s] at most across the relay (it refuses more); after a refusal, none for this
+ *  [s]; a wait longer than this [s]: the other source instead */
+const ADSB_GAP = 10;
+const ADSB_REST = 60;
+const ADSB_WAIT = 16;
+/** a trace's cache [s] */
+const TRACE_TTL = 15;
 const SKY_TTL = 15;
 const R_MAX = 250;
 const SHIP_KEEP = 15 * 60;
@@ -99,6 +110,7 @@ export function fromAdsbLol(a: Record<string, unknown>, now: number): Plane | nu
     hdg: Number.isFinite(Number(a.true_heading)) ? Number(a.true_heading) : null,
     vs: Number.isFinite(rate) ? (rate * FT) / 60 : 0,
     roll: Number.isFinite(Number(a.roll)) ? Number(a.roll) : null,
+    rate: Number.isFinite(Number(a.track_rate)) ? Number(a.track_rate) : null,
     gnd,
     t: now - (Number.isFinite(seen) ? seen : 0),
     src: "adsb.lol",
@@ -129,6 +141,88 @@ export function fromOpenSky(s: unknown[], now: number): Plane | null {
     t: Number(s[3] ?? now),
     src: "opensky",
   };
+}
+
+/** A response's JSON, gzip or not (adsb.lol's traces are files kept gzipped, sent so). */
+async function readJson(r: Response): Promise<unknown> {
+  const b = new Uint8Array(await r.arrayBuffer());
+  const txt = b[0] === 0x1f && b[1] === 0x8b ? new TextDecoder().decode(Bun.gunzipSync(b)) : new TextDecoder().decode(b);
+  return JSON.parse(txt);
+}
+
+/** A field's number; absent (null, as a trace leaves one): NaN, not 0. */
+const num = (x: unknown) => (x === null || x === undefined || x === "" ? Number.NaN : Number(x));
+
+/** readsb's recent trace (adsb.lol's) → its points, oldest first. A point: [s after its timestamp, lat, lon, baro alt
+ *  ft or "ground", gs kt, track, flags, baro rate fpm, details, source, geometric alt ft, geometric rate fpm, ias, roll]. */
+export function fromReadsbTrace(hex: string, j0: unknown): Plane[] {
+  const j = j0 as { timestamp?: number; r?: string; t?: string; trace?: unknown[][] };
+  const T0 = Number(j.timestamp ?? 0);
+  let cs = "";
+  let delta = 0;
+  const out: Plane[] = [];
+  for (const q of j.trace ?? []) {
+    const d = q[8] as { flight?: string; category?: string } | null;
+    if (d?.flight) cs = d.flight.trim();
+    const lat = Number(q[1]),
+      lon = Number(q[2]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    const gnd = q[3] === "ground";
+    const baro = num(q[3]),
+      geom = num(q[10]);
+    // (the geometric altitude; where only the barometric is given, it and the last known difference)
+    if (Number.isFinite(geom) && Number.isFinite(baro)) delta = geom - baro;
+    const altFt = Number.isFinite(geom) ? geom : Number.isFinite(baro) ? baro + delta : 0;
+    const rate = Number.isFinite(num(q[11])) ? num(q[11]) : num(q[7]);
+    out.push({
+      id: hex,
+      cs,
+      reg: String(j.r ?? ""),
+      type: String(j.t ?? ""),
+      cat: d?.category ?? "",
+      lat,
+      lon,
+      alt: gnd ? 0 : altFt * FT,
+      gs: Number(q[4] ?? 0) * KT,
+      trk: Number(q[5] ?? 0),
+      hdg: null,
+      vs: Number.isFinite(rate) ? (rate * FT) / 60 : 0,
+      roll: Number.isFinite(num(q[13])) ? num(q[13]) : null,
+      gnd,
+      t: T0 + Number(q[0]),
+      src: "adsb.lol",
+    });
+  }
+  return out;
+}
+
+/** OpenSky's track → its points (its waypoints: [time, lat, lon, baro alt m, track, on ground]; the speeds from
+ *  the waypoints themselves). */
+export function fromOpenSkyTrack(hex: string, j: { callsign?: string; path?: unknown[][] }): Plane[] {
+  const P = (j.path ?? []).map((w) => ({ t: Number(w[0]), lat: Number(w[1]), lon: Number(w[2]), alt: Number(w[3] ?? 0), trk: Number(w[4] ?? 0), gnd: !!w[5] }));
+  return P.map((w, i) => {
+    const a = P[Math.max(0, i - 1)]!,
+      b = P[Math.min(P.length - 1, i + 1)]!;
+    const dt = Math.max(b.t - a.t, 1);
+    return {
+      id: hex,
+      cs: String(j.callsign ?? "").trim(),
+      reg: "",
+      type: "",
+      cat: "",
+      lat: w.lat,
+      lon: w.lon,
+      alt: w.gnd ? 0 : w.alt,
+      gs: (km(a, b) * 1000) / dt,
+      trk: w.trk,
+      hdg: null,
+      vs: (b.alt - a.alt) / dt,
+      roll: null,
+      gnd: w.gnd,
+      t: w.t,
+      src: "opensky" as const,
+    };
+  });
 }
 
 /** An AIS message from aisstream → a ship's update merged into `ships` (its position, or its static data). */
@@ -193,6 +287,24 @@ export function createTraffic(o: TrafficOpts = {}) {
   const tiles = new Map<string, { at: number; planes: Plane[]; src: string; run?: Promise<void> }>();
   let token: { value: string; until: number } | null = null;
   const stats = { adsbOk: 0, adsbErr: 0, skyOk: 0, skyErr: 0, aisMsgs: 0, aisOpen: false, aisErr: "" };
+  const sleep = o.sleep ?? ((s: number) => Bun.sleep(s * 1000));
+  // adsb.lol's pace: the asks spaced across the relay, a refusal a minute's rest
+  let adsbNext = 0;
+  let adsbRest = 0;
+  async function adsb(url: string): Promise<Response> {
+    const t = now();
+    if (t < adsbRest) throw new Error("adsb.lol resting");
+    const wait = Math.max(0, adsbNext - t);
+    if (wait > ADSB_WAIT) throw new Error("adsb.lol busy");
+    adsbNext = Math.max(t, adsbNext) + ADSB_GAP;
+    if (wait > 0) await sleep(wait);
+    const r = await get(url, { headers: { "user-agent": "kerr-traffic-relay (samlepirate.org)" } });
+    if (r.status === 429) {
+      adsbRest = now() + ADSB_REST;
+      throw new Error("adsb.lol 429");
+    }
+    return r;
+  }
   // the pages' pace: by address, the last asks
   const pace = new Map<string, number[]>();
 
@@ -213,9 +325,7 @@ export function createTraffic(o: TrafficOpts = {}) {
   async function fetchTile(lat: number, lon: number, rKm: number): Promise<{ planes: Plane[]; src: string }> {
     const nm = Math.min(250, Math.max(5, Math.ceil(rKm / 1.852)));
     try {
-      const r = await get(`https://api.adsb.lol/v2/lat/${lat.toFixed(3)}/lon/${lon.toFixed(3)}/dist/${nm}`, {
-        headers: { "user-agent": "kerr-traffic-relay (samlepirate.org)" },
-      });
+      const r = await adsb(`https://api.adsb.lol/v2/lat/${lat.toFixed(3)}/lon/${lon.toFixed(3)}/dist/${nm}`);
       if (!r.ok) throw new Error(`adsb.lol ${r.status}`);
       const j = (await r.json()) as { ac?: Record<string, unknown>[]; now?: number };
       const t = Number.isFinite(Number(j.now)) ? Number(j.now) / 1000 : now();
@@ -240,6 +350,86 @@ export function createTraffic(o: TrafficOpts = {}) {
     stats.skyOk++;
     const t = Number(j.time ?? now());
     return { planes: (j.states ?? []).map((s) => fromOpenSky(s, t)).filter((p): p is Plane => !!p), src: "opensky" };
+  }
+
+  // one aircraft followed (a formation's lead, a lock): its own record, fresh — a second's cache
+  const singles = new Map<string, { at: number; plane: Plane | null; run?: Promise<void> }>();
+  async function plane(id: string): Promise<Plane | null> {
+    const hex = id.toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 6);
+    if (hex.length !== 6) return null;
+    let S = singles.get(hex);
+    if (!S || now() - S.at > 1) {
+      if (!S?.run) {
+        const run = (async () => {
+          let p: Plane | null = null;
+          try {
+            const r = await adsb(`https://api.adsb.lol/v2/hex/${hex}`);
+            if (!r.ok) throw new Error(`adsb.lol ${r.status}`);
+            const j = (await r.json()) as { ac?: Record<string, unknown>[]; now?: number };
+            const t = Number.isFinite(Number(j.now)) ? Number(j.now) / 1000 : now();
+            p = j.ac?.[0] ? fromAdsbLol(j.ac[0], t) : null;
+            stats.adsbOk++;
+          } catch (e) {
+            stats.adsbErr++;
+            log(`traffic: ${String(e)} — OpenSky for ${hex}`);
+            const tk = await openskyToken().catch(() => null);
+            const r = await get(`https://opensky-network.org/api/states/all?icao24=${hex}`, tk ? { headers: { authorization: `Bearer ${tk}` } } : {});
+            if (r.ok) {
+              const j = (await r.json()) as { time?: number; states?: unknown[][] };
+              p = j.states?.[0] ? fromOpenSky(j.states[0], Number(j.time ?? now())) : null;
+              stats.skyOk++;
+            } else stats.skyErr++;
+          }
+          singles.set(hex, { at: now(), plane: p });
+        })().catch(() => {
+          singles.set(hex, { at: now(), plane: S?.plane ?? null });
+        });
+        singles.set(hex, { ...(S ?? { at: 0, plane: null }), run });
+      }
+      await singles.get(hex)!.run;
+      S = singles.get(hex)!;
+    }
+    if (singles.size > 500) for (const [k, v] of singles) if (now() - v.at > 60) singles.delete(k);
+    return S.plane;
+  }
+
+  // one aircraft's last quarter of an hour: adsb.lol's recent trace (readsb's: a point at each change, a few seconds
+  // apart), else OpenSky's track — cached 15 s
+  const traces = new Map<string, { at: number; pts: Plane[]; run?: Promise<void> }>();
+  async function trace(id: string): Promise<Plane[]> {
+    const hex = id.toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 6);
+    if (hex.length !== 6) return [];
+    let S = traces.get(hex);
+    if (!S || now() - S.at > TRACE_TTL) {
+      if (!S?.run) {
+        const run = (async () => {
+          let pts: Plane[] = [];
+          try {
+            const r = await adsb(`https://adsb.lol/data/traces/${hex.slice(-2)}/trace_recent_${hex}.json`);
+            if (!r.ok) throw new Error(`adsb.lol trace ${r.status}`);
+            pts = fromReadsbTrace(hex, await readJson(r));
+            stats.adsbOk++;
+          } catch (e) {
+            stats.adsbErr++;
+            log(`traffic: ${String(e)} — OpenSky's track for ${hex}`);
+            const tk = await openskyToken().catch(() => null);
+            const r = await get(`https://opensky-network.org/api/tracks/all?icao24=${hex}&time=0`, tk ? { headers: { authorization: `Bearer ${tk}` } } : {});
+            if (r.ok) {
+              pts = fromOpenSkyTrack(hex, (await r.json()) as { callsign?: string; path?: unknown[][] });
+              stats.skyOk++;
+            } else stats.skyErr++;
+          }
+          traces.set(hex, { at: now(), pts });
+        })().catch(() => {
+          traces.set(hex, { at: now(), pts: S?.pts ?? [] });
+        });
+        traces.set(hex, { ...(S ?? { at: 0, pts: [] }), run });
+      }
+      await traces.get(hex)!.run;
+      S = traces.get(hex)!;
+    }
+    if (traces.size > 300) for (const [k, v] of traces) if (now() - v.at > 300) traces.delete(k);
+    return S.pts;
   }
 
   /** The aircraft within `rKm` of a place: its tile's (half a degree, by radius) from the cache or fetched. */
@@ -364,6 +554,15 @@ export function createTraffic(o: TrafficOpts = {}) {
     const u = new URL(req.url);
     if (!u.pathname.startsWith("/traffic")) return null;
     if (req.method === "OPTIONS") return new Response(null, { headers: { ...CORS, "access-control-allow-methods": "GET" } });
+    if (u.pathname === "/traffic/trace") {
+      if (tooFast(`${who}:trace`)) return Response.json({ error: "slow down" }, { status: 429, headers: CORS });
+      return Response.json({ t: now(), trace: await trace(u.searchParams.get("id") ?? ""), attribution: ATTR_AIR }, { headers: CORS });
+    }
+    if (u.pathname === "/traffic/plane") {
+      if (tooFast(`${who}:plane`)) return Response.json({ error: "slow down" }, { status: 429, headers: CORS });
+      const p = await plane(u.searchParams.get("id") ?? "");
+      return Response.json({ t: now(), plane: p, attribution: ATTR_AIR }, { headers: CORS });
+    }
     if (u.pathname === "/traffic/health")
       return Response.json({ ...stats, tiles: tiles.size, ships: ships.size, zones: zones.size, ais: !!o.aisKey, opensky: !!o.openskyId }, { headers: CORS });
     const lat = Number(u.searchParams.get("lat")),
@@ -388,6 +587,8 @@ export function createTraffic(o: TrafficOpts = {}) {
   return {
     handle,
     air,
+    plane,
+    trace,
     sea,
     stats,
     ships,

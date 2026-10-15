@@ -4147,6 +4147,23 @@ export const SCHEMA: ControlDef[] = [
     keywords: "traffic real aircraft airliners ships ais adsb opensky",
   },
   {
+    key: "trafficDelay",
+    type: "choice",
+    section: "game",
+    group: "Traffic",
+    label: "Aircraft delayed",
+    style: "segmented",
+    effect: "none",
+    help: "How far behind the real time the real aircraft are drawn: delayed, each flies the smoothest path through its known positions (its turns, its climbs as they were), banked and nose-up as the flight's laws ask; live, it is carried on from its last report and corrected at each new one.",
+    keywords: "traffic delay live interpolation smooth history",
+    options: [
+      { value: 0, label: "Live" },
+      { value: 30, label: "30 s" },
+      { value: 60, label: "1 min" },
+      { value: 120, label: "2 min" },
+    ],
+  },
+  {
     key: "wingmen",
     type: "choice",
     section: "game",

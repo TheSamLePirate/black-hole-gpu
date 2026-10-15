@@ -6,7 +6,7 @@
 // their radio — the orders acknowledged, the contacts called, Fox, Splash, hit, down —; drawn, on the radar by
 // the datalink, sent to the room (the host flies them).
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
-import { AiJet, AIJET, type AiCmd, headingOf } from "../game/aijet";
+import { AiJet, AIJET, type AiCmd, type Ground, headingOf } from "../game/aijet";
 import { bankAccel, type FormCraft, type FormSlot, formationBank } from "../game/formation";
 import { type CrossTurn, crossTurnNew, crossTurnStep, easeSlot, landingSlot, TAKEOFF, TAKEOFF_SLOTS } from "../game/formflow";
 import { formSlotFor } from "./formation";
@@ -124,14 +124,14 @@ export interface WingState {
 
 const nameOf = (k: number) => tr(NAMES[k] ?? { fr: `${k}`, en: `${k}` });
 
-/** Its place now: geodetic latitude, longitude [°], its height over the ground [m]. */
+/** Its place now: geodetic latitude, longitude [°], its altitude over the sea (the WGS84 ellipsoid — the Earth's
+ *  figure) and its height over the ground [m] (the relief over that figure). */
 function geoOf(p: readonly number[]): { lat: number; lon: number; agl: number; alt: number } {
   const g = cartToGeodetic(WGS84_A, WGS84_F, p as V3);
   const lat = (g.lat * 180) / Math.PI,
     lon = (g.lon * 180) / Math.PI;
   const ground = groundRelief("earth", bodyFixedOf("earth", lat, lon, 0));
-  const alt = Math.hypot(p[0]!, p[1]!, p[2]!) - R_MEAN;
-  return { lat, lon, alt, agl: alt - ground };
+  return { lat, lon, alt: g.h, agl: g.h - ground };
 }
 
 /** The local east, north, up at a place (fixed to the Earth). */
@@ -181,9 +181,9 @@ function leaderOf(c: CameraController): (FormCraft & { ground: boolean; agl: num
 }
 
 /** The ground's height under a place [m over the mean radius]. */
-const groundAt = (p: readonly number[]) => {
+const groundAt: Ground = (p) => {
   const g = geoOf(p);
-  return g.alt - g.agl;
+  return { alt: g.alt, agl: g.agl };
 };
 
 /** The wingmen made up to the setting's count: the missing ones at their places about the leader, at his velocity. */
@@ -213,7 +213,8 @@ function muster(c: CameraController, L: FormCraft & { ground: boolean; hdg: numb
       W.runway = { p0: [...o.p], hdg: L.hdg, rollAt: null };
       // (on its wheels on the ground there, stopped, the brakes on)
       const l = Math.hypot(...p);
-      p = p.map((x) => (x / l) * (R_MEAN + groundAt(p) + AIJET.gear));
+      const above = geoOf(p).agl - AIJET.gear;
+      p = p.map((x) => (x / l) * (l - above));
       J.p = p;
       J.gnd = { hdg: L.hdg };
       J.alpha = 0;

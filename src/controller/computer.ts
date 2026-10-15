@@ -27,7 +27,7 @@ import {
   type KerrOrbit,
 } from "../fc/kerr-ops";
 import { issOrbit } from "../system/iss";
-import { aeroForces } from "../aero";
+import { aeroForces, airAt } from "../aero";
 import { GEAR, groundR, toGlobal } from "../landing";
 import { planPath, type ManeuverNode } from "../maneuver";
 import { fleet } from "../fleet";
@@ -1378,6 +1378,35 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
         }
       }
     }
+  // (the real traffic — controller/traffic.ts —: the airliners' engines' trails in the air where each flies — its
+  // own height's cold —, within 30 km)
+  const TR = this.traffic?.planes.size ? this.trafficNow() : [];
+  const sft = TR.length ? this.sfFrame(cam) : null;
+  const own = TR.length ? this.netOwn() : null;
+  if (sft && own) {
+    const [E, N, U] = [sft.east, sft.north, sft.up].map((v) => fr.fromLocal(sft.toLocal(v as Vec3))) as [Vec3, Vec3, Vec3];
+    const Uo = own.p.map((c) => c / Math.hypot(...own.p));
+    const Eo = [-Uo[1]!, Uo[0]!, 0].map((c, _, a) => c / (Math.hypot(a[0]!, a[1]!) || 1));
+    const No = [Uo[1]! * Eo[2]! - Uo[2]! * Eo[1]!, Uo[2]! * Eo[0]! - Uo[0]! * Eo[2]!, Uo[0]! * Eo[1]! - Uo[1]! * Eo[0]!];
+    const atm = solarBody("earth")!.atmosphere;
+    for (const c of TR) {
+      if (c.gnd || c.alt < 6000 || !c.mesh) continue;
+      const d0 = c.p.map((v, k) => v - own.p[k]!);
+      if (Math.hypot(d0[0]!, d0[1]!, d0[2]!) > 30_000) continue;
+      const air = airAt(atm, c.alt);
+      const e = engineTrail(0.8, air.rho, air.T, air.gas.R);
+      if (e <= 0) continue;
+      // (its two engines under its wings, a third of the half span out, a little behind)
+      for (const sx of [1, -1]) {
+        const q = c.p.map((v, k) => v + c.right[k]! * sx * c.span * 0.17 - c.up[k]! * 1.5 - c.fwd[k]! * c.len * 0.1);
+        const r = q.map((v, k) => v - own.p[k]!);
+        const re = r[0]! * Eo[0]! + r[1]! * Eo[1]! + r[2]! * Eo[2]!,
+          rn = r[0]! * No[0]! + r[1]! * No[1]! + r[2]! * No[2]!,
+          ru = r[0]! * Uo[0]! + r[1]! * Uo[1]! + r[2]! * Uo[2]!;
+        src.push({ key: `a${c.id}${sx}`, p: [0, 1, 2].map((k) => x[k]! + E[k]! * re + N[k]! * rn + U[k]! * ru) as Vec3, kind: 0, str: e });
+      }
+    }
+  }
   // (a fight's missiles: their motors' smoke — controller/combat.ts —, at their place from the craft in the
   // local east, north, up)
   const CB = this.combat;

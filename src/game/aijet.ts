@@ -7,6 +7,7 @@
 
 import { aeroForces, airAt, type Atmosphere, type V3 } from "../aero";
 import { dryThrust, F135, fuelFlow, wetThrust } from "../f35/engine";
+import { cartToGeodetic, WGS84_A, WGS84_F } from "../system/ellipsoid";
 import { VESSELS } from "../vessels";
 import { Autothrottle, JET } from "./jet";
 
@@ -22,8 +23,7 @@ const cross = (a: readonly number[], b: readonly number[]) => [
 const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
 const D = Math.PI / 180;
 const G = 9.80665;
-/** the Earth's mean radius [m] and its gravity's parameter [m³/s²] */
-const RE = 6_371_008.8;
+/** the Earth's gravity's parameter [m³/s²] */
 const GM = 3.986004418e14;
 
 export const AIJET = {
@@ -92,9 +92,9 @@ export class AiJet {
     return V.mass - (V.fuelKg ?? 0) + Math.max(this.fuel, 0);
   }
 
-  /** its height over the mean radius [m] */
+  /** its altitude over the sea [m] (the WGS84 ellipsoid's — CLAUDE.md) */
   get h() {
-    return len(this.p) - RE;
+    return cartToGeodetic(WGS84_A, WGS84_F, this.p as V3).h;
   }
 
   /** its speed [m/s] */
@@ -133,7 +133,7 @@ export class AiJet {
   /**
    * A step of `dt` [s] flying the commands in the Earth's air `atm`: sub-stepped at 60 Hz at most.
    */
-  step(dt: number, cmd: AiCmd, atm: Atmosphere | null | undefined, ground?: (p: readonly number[]) => number) {
+  step(dt: number, cmd: AiCmd, atm: Atmosphere | null | undefined, ground?: Ground) {
     const n = Math.max(1, Math.ceil(dt * 60));
     const h = dt / n;
     for (let i = 0; i < n; i++) {
@@ -145,10 +145,10 @@ export class AiJet {
 
   /** On its wheels: steered to its heading, its thrust against the drag and the wheels' friction (the brakes'),
    *  rotated past its speed; airborne once its lift carries it. */
-  private roll(dt: number, cmd: AiCmd, atm: Atmosphere | null | undefined, ground?: (p: readonly number[]) => number) {
+  private roll(dt: number, cmd: AiCmd, atm: Atmosphere | null | undefined, ground?: Ground) {
     const G0 = this.gnd!;
     const L = enu(this.p);
-    const air = airAt(atm, this.h);
+    const air = airAt(atm, ground ? ground(this.p).alt : this.h);
     const V = this.V;
     this.mach = V / air.a;
     this.q = 0.5 * air.rho * V * V;
@@ -184,7 +184,7 @@ export class AiJet {
     for (let k = 0; k < 3; k++) this.p[k] = this.p[k]! + this.v[k]! * dt;
     // (kept on its wheels over the ground)
     if (ground) {
-      const r = RE + ground(this.p) + AIJET.gear;
+      const r = len(this.p) - (ground(this.p).agl - AIJET.gear);
       this.p = scale(unit(this.p), r);
     }
     // (its lift past its weight, rotated: airborne)
@@ -194,8 +194,8 @@ export class AiJet {
     }
   }
 
-  private sub(dt: number, cmd: AiCmd, atm: Atmosphere | null | undefined, ground?: (p: readonly number[]) => number) {
-    const air = airAt(atm, this.h);
+  private sub(dt: number, cmd: AiCmd, atm: Atmosphere | null | undefined, ground?: Ground) {
+    const air = airAt(atm, ground ? ground(this.p).alt : this.h);
     const V = this.V;
     this.mach = V / air.a;
     this.q = 0.5 * air.rho * V * V;
@@ -242,19 +242,23 @@ export class AiJet {
     }
     // (the ground reached: on its wheels if gently — a landing —, else crashed)
     if (ground) {
-      const above = len(this.p) - RE - ground(this.p) - AIJET.gear;
+      const above = ground(this.p).agl - AIJET.gear;
       if (above < 0) {
         const U = unit(this.p);
         const sink = -dot(this.v, U);
         if (sink < AIJET.sinkMax && Math.abs(this.phi) < 15 * D) {
           this.gnd = { hdg: headingOf(this.p, this.v) };
-          this.p = scale(U, RE + ground(this.p) + AIJET.gear);
+          this.p = scale(U, len(this.p) - above);
           this.v = [0, 1, 2].map((k) => this.v[k]! + U[k]! * sink);
         } else this.crashed = true;
       }
     }
   }
 }
+
+/** The ground under a place (fixed to the Earth [m]): the place's altitude over the sea (the ellipsoid) and its
+ *  height over the ground [m]. */
+export type Ground = (p: readonly number[]) => { alt: number; agl: number };
 
 /** The local east, north, up at a place (fixed to the Earth). */
 function enu(p: readonly number[]) {
