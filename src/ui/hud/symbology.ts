@@ -153,6 +153,11 @@ export interface SymInfo {
     }[];
     missiles: { d: V3; dist: number; red: boolean; motor: boolean }[];
     rounds: V3[];
+    /** the tracers: a streak each (its head, its tail) */
+    tracers?: [V3, V3][];
+    /** the gun's funnel: the stream's edges a wingspan apart, the nearest first; the solution's range, flight, reach */
+    funnel?: { l: V3; r: V3; range: number }[];
+    gun?: { range: number; tof: number; inRange: boolean } | null;
     booms: { d: V3; dist: number; age: number; size: number }[];
     lead: V3 | null;
     zone: { range: number; rMax: number; rMin: number; inRange: boolean } | null;
@@ -1968,11 +1973,43 @@ function drawCombat(
     ctx.arc(p[0], p[1], r, 0, 2 * Math.PI);
     ctx.fill();
   }
-  // the gun's tracers
+  // the gun's tracers: each fifth round a streak, the others a spark
   ctx.fillStyle = "rgba(255, 220, 120, 0.95)";
   for (const d of K.rounds) {
     const p = pr(d);
-    if (p) ctx.fillRect(p[0] - 1.2 * dpr, p[1] - 1.2 * dpr, 2.4 * dpr, 2.4 * dpr);
+    if (p) ctx.fillRect(p[0] - 1 * dpr, p[1] - 1 * dpr, 2 * dpr, 2 * dpr);
+  }
+  for (const [h, tl] of K.tracers ?? []) {
+    const a = pr(h),
+      b = pr(tl);
+    if (a && b)
+      stroke(
+        () => {
+          ctx.moveTo(a[0], a[1]);
+          ctx.lineTo(b[0], b[1]);
+        },
+        "rgba(255, 200, 90, 0.95)",
+        2.2,
+      );
+  }
+  // the gun's funnel (the trigger held, or the target within 1.5 km): the stream of the rounds fired along the
+  // gun's line, its edges a wingspan apart — the target fitting between them is at their range
+  const F2 = K.funnel ?? [];
+  if (F2.length > 2 && K.gunReady && (K.firing || (K.gun && K.gun.range < 1500))) {
+    for (const side of ["l", "r"] as const) {
+      const pts = F2.filter((f) => f.range > 150 && f.range < 1600)
+        .map((f) => pr(f[side]))
+        .filter((x): x is [number, number] => !!x);
+      if (pts.length > 1)
+        stroke(
+          () => {
+            ctx.moveTo(pts[0]![0], pts[0]![1]);
+            for (const p of pts.slice(1)) ctx.lineTo(p[0], p[1]);
+          },
+          GRN,
+          1.4,
+        );
+    }
   }
   // the hit marker: four ticks round the centre — a hit; thick and red — a kill
   if (K.hitMark) {
@@ -2070,6 +2107,32 @@ function drawCombat(
     ctx.arc(L[0], L[1], 2.5 * dpr, 0, 2 * Math.PI);
     ctx.fill();
     if (K.gunHot && blink) text("GUNS", L[0], L[1] - 46 * dpr, RED, 16, "center", true);
+    // (the range bar: an arc from 12 o'clock, clockwise, a whole turn 2 km; the reach's tick at 1.2 km)
+    const G2 = K.gun;
+    if (G2) {
+      const R = 30 * dpr;
+      const a0 = -Math.PI / 2;
+      stroke(() => ctx.arc(L[0], L[1], R, a0, a0 + 2 * Math.PI * Math.min(G2.range / 2000, 1)), pc, 3);
+      const ar = a0 + 2 * Math.PI * (1200 / 2000);
+      stroke(
+        () => {
+          ctx.moveTo(L[0] + Math.cos(ar) * (R - 4 * dpr), L[1] + Math.sin(ar) * (R - 4 * dpr));
+          ctx.lineTo(L[0] + Math.cos(ar) * (R + 6 * dpr), L[1] + Math.sin(ar) * (R + 6 * dpr));
+        },
+        pc,
+        1.6,
+      );
+      const U = unitsFor(F.s);
+      text(
+        `${Math.round(U.sys === "metric" ? G2.range : U.alt(G2.range))} ${U.altName}${G2.inRange ? "  IN RANGE" : ""}`,
+        L[0],
+        L[1] + 48 * dpr,
+        G2.inRange ? pc : AMB,
+        12,
+        "center",
+        true,
+      );
+    }
   }
   // the missile's steering: the allowable steering error's circle about the nose, the dot the target's way —
   // red, SHOOT, when the shot is good

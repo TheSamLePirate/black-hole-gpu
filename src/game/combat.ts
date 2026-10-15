@@ -8,6 +8,8 @@
 
 export type V3 = [number, number, number];
 
+import { roundStep } from "./gunsight";
+
 const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const mul = (a: V3, k: number): V3 => [a[0] * k, a[1] * k, a[2] * k];
@@ -512,9 +514,8 @@ export class CombatWorld {
   private stepRounds(dt: number, P: Player, ev: CombatEvent[]) {
     for (const r of this.rounds) {
       const p0 = r.p;
-      r.v = add(r.v, [0, 0, -G * dt]);
-      r.v = mul(r.v, 1 - 2.5e-4 * len(r.v) * dt);
-      r.p = add(r.p, mul(r.v, dt));
+      // (its fall and its drag: the gun's sight counts on the same — game/gunsight.ts)
+      roundStep(r, dt);
       r.t += dt;
       // (a hit: the segment flown passing within the hit radius of a target — or of the player, a red round)
       const hitOn = (c: V3, R: number) => segDist(p0, r.p, c) < R;

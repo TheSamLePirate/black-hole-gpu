@@ -11,7 +11,6 @@ import { restPose, type F35Pose } from "../f35/model";
 import {
   CombatWorld,
   fallPoint,
-  gunLead,
   isGround,
   launchZone,
   LOADOUTS,
@@ -24,6 +23,7 @@ import {
   type V3,
 } from "../game/combat";
 import { enu } from "../game/challenges";
+import { type GunState, gunFunnel, gunSolution, SIGHT, trackAccel } from "../game/gunsight";
 import type { MatchRules } from "../game/match";
 import type { Scenario } from "../game/scenarios";
 import { t, tf, tr } from "../i18n";
@@ -75,6 +75,8 @@ export interface CombatState {
   /** the last hit of the player's shots, the last kill [s of the fight] (the HUD's hit marker) */
   hitAt: number;
   killAt: number;
+  /** the gun's sight (game/gunsight.ts): the craft's last states (the funnel's), the lock's acceleration measured */
+  gun?: { hist: GunState[]; meas: { id: number | null; v: V3 | null; a: V3; t: number } };
 }
 
 const dotV = (a: V3 | Vec3, b: V3 | Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -266,6 +268,13 @@ function combatStep(this: CameraController, dt: number) {
   // (shot down in a match: no gun until flying again)
   W.firing = C.downAt === null && (this.codes.has("Space") || this.gunTrigger);
   const ev = W.step(dt, P);
+  // (the gun's sight: the craft's states for the funnel, the lock's turn measured)
+  const Gs = (C.gun ??= { hist: [], meas: { id: null, v: null, a: [0, 0, 0], t: 0 } });
+  Gs.hist.push({ t: C.t, p: [...P.p], v: [...P.v], fwd: [...P.fwd] });
+  while (Gs.hist.length && Gs.hist[0]!.t < C.t - SIGHT.funnelSpan - 0.2) Gs.hist.shift();
+  const lk = W.target(W.lock);
+  if (Gs.meas.id !== (lk?.id ?? null)) Gs.meas = { id: lk?.id ?? null, v: null, a: [0, 0, 0], t: C.t };
+  if (lk?.alive) trackAccel(Gs.meas, lk.v, C.t);
   fleet.payload.f35 = loadoutMass(W.stores);
   C.events.push(...ev);
   for (const e of ev) {
@@ -382,7 +391,14 @@ function combatHud(this: CameraController, Cm: (v: Vec3 | null) => Vec3 | null) 
   const rel = (p: V3): V3 => [p[0] - P.p[0], p[1] - P.p[1], p[2] - P.p[2]];
   const lockT = W.target(W.lock);
   const threats = W.missiles.filter((m) => m.alive && m.owner === "red" && m.target === -1);
-  const lead = lockT && lockT.alive && !isGround(lockT) ? gunLead(P, lockT) : null;
+  // (the gun's: where to shoot — the lock's velocity and its turn over the rounds' flight —, its funnel, its tracers)
+  const meas = C.gun?.meas;
+  const lead =
+    lockT && lockT.alive && !isGround(lockT)
+      ? gunSolution(P, { p: lockT.p, v: lockT.v, a: meas && meas.id === lockT.id ? meas.a : null })
+      : null;
+  const span = lockT?.kind === "drone" ? 3.5 : 10.7;
+  const funnel = C.gun ? gunFunnel(C.gun.hist, C.t, P.p) : [];
   const zone = lockT && C.weapon !== "jdam" ? launchZone(C.weapon, P, lockT) : null;
   // (heading up: the radar's frame — x right, y ahead [m], a track turned from the nose's heading)
   const psi = Math.atan2(P.fwd[0], P.fwd[1]);
@@ -395,7 +411,7 @@ function combatHud(this: CameraController, Cm: (v: Vec3 | null) => Vec3 | null) 
   const off = lockT ? Math.acos(Math.min(1, Math.max(-1, dotV(unitV(rel(lockT.p)), P.fwd)))) : Math.PI;
   const shoot = !!zone && zone.inRange && W.stores[C.weapon] > 0 && off < (60 * Math.PI) / 180;
   const leadErr = lead ? Math.acos(Math.min(1, Math.max(-1, dotV(lead.dir, P.fwd)))) : Math.PI;
-  const gunHot = !!lead && !!lockT && Math.hypot(...rel(lockT.p)) < 1200 && leadErr < 0.015 && W.stores.gun > 0;
+  const gunHot = !!lead && !!lockT && lead.inRange && leadErr < 0.015 && W.stores.gun > 0;
   return {
     shoot,
     gunHot,
@@ -459,6 +475,24 @@ function combatHud(this: CameraController, Cm: (v: Vec3 | null) => Vec3 | null) 
       .filter((m) => m.alive)
       .map((m) => ({ d: M(rel(m.p)), dist: Math.hypot(...rel(m.p)), red: m.owner === "red", motor: m.t < MISSILES[m.kind].burn })),
     rounds: W.rounds.slice(-60).map((r) => M(rel(r.p))),
+    /** the tracers: each fifth round a streak (its place, where it was 40 ms before) */
+    tracers: W.rounds
+      .filter((r) => r.owner === "blue")
+      .slice(-80)
+      .filter((_, k) => k % 5 === 0)
+      .map((r) => [M(rel(r.p)), M(rel([r.p[0] - r.v[0] * 0.04, r.p[1] - r.v[1] * 0.04, r.p[2] - r.v[2] * 0.04]))] as [Vec3, Vec3]),
+    /** the funnel: the stream's two edges a wingspan apart (the lock's, a fighter's), the nearest first */
+    funnel: funnel
+      .slice()
+      .reverse()
+      .map((f) => {
+        const los = unitV(rel(f.p));
+        const side = unitV([los[1], -los[0], 0]);
+        const e = (k: number): V3 => [f.p[0] + side[0] * k, f.p[1] + side[1] * k, f.p[2]];
+        return { l: M(rel(e(-span / 2))), r: M(rel(e(span / 2))), range: f.range };
+      }),
+    /** the gun's solution: the range, the rounds' time of flight, within the reach */
+    gun: lead ? { range: lead.range, tof: lead.tof, inRange: lead.inRange } : null,
     booms: C.booms.map((b) => ({ d: M(rel(b.p)), dist: Math.hypot(...rel(b.p)), age: C.t - b.t, size: b.size })),
     lead: lead ? M(lead.dir) : null,
     zone,

@@ -82,7 +82,13 @@ test("the tower on the final: the runway and the wind, at once; the wheels stopp
   // (imperial: in knots)
   const imp = fly([
     { stage: "approach", entry: "glide", site: "Edwards Air Force Base", final: null, units: "imperial" },
-    { stage: "approach", entry: "glide", site: "Edwards Air Force Base", final: { rwy: 220, wind: { from: 235, u10: 5 } }, units: "imperial" },
+    {
+      stage: "approach",
+      entry: "glide",
+      site: "Edwards Air Force Base",
+      final: { rwy: 220, wind: { from: 235, u10: 5 } },
+      units: "imperial",
+    },
   ]);
   expect(imp.out[0]!.text).toBe("Ranger, Edwards Air Force Base tower. Runway 22, wind 240 at 10 knots, cleared to land.");
 });

@@ -190,6 +190,7 @@ pertinent.
 
   *Fini quand*, sur une cible qui vire à 5 g, le taux de coups au but en visant le réticule dépasse 60 % au
   banc (le tireur parfait).
+  *Fait le 2026-10-15 — [fiche](progress/aviation/C3.md) : position future par la vitesse et l'accélération, temps de vol et visée résolus avec la balistique du combat ; réticule, barre de distance, IN RANGE, entonnoir, traçantes ; au banc à 5 g, avec 5 mrad d'erreur de visée : 100 / 100 / 86 % à 400 / 700 / 1 000 m (l'ancien : 100 / 9 / 0 %).*
 - **C4. L'IA vole le vrai avion.** Les chasseurs IA sont pilotés par le même modèle de vol et la même loi que le
   joueur, au lieu d'un point matériel.
   - Combat tournoyant offensif et défensif : ciseaux, yo-yo, gestion de l'énergie.
