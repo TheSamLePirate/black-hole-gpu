@@ -46,7 +46,7 @@ const cross = (a: readonly number[], b: readonly number[]) => [
   a[2]! * b[0]! - a[0]! * b[2]!,
   a[0]! * b[1]! - a[1]! * b[0]!,
 ];
-const wrap = (a: number) => a - 2 * Math.PI * Math.floor((a + Math.PI) / (2 * Math.PI));
+export const wrap = (a: number) => a - 2 * Math.PI * Math.floor((a + Math.PI) / (2 * Math.PI));
 
 /** A traffic aircraft now: who it is, its mesh and size, its place, velocity and axes (fixed to the Earth). */
 export interface TrafficCraft {
@@ -74,7 +74,7 @@ const RATE_MAX = 3 * D;
 const AHEAD_MAX = 30;
 
 /** The local east, north, up at a geodetic place (WGS84). */
-function enuAt(lat: number, lon: number) {
+export function enuAt(lat: number, lon: number) {
   const la = lat * D,
     lo = lon * D;
   return {
@@ -120,11 +120,11 @@ const KNOTS_MAX = 100;
 const BANK_MAX = 30 * D;
 const ROLL_RATE = 7 * D;
 const BANK_LAG = 1;
-const R_EQ = 6_378_137;
+export const R_EQ = 6_378_137;
 const E2 = WGS84_F * (2 - WGS84_F);
 
 /** The WGS84 radii at a latitude [°]: the meridian's, the prime vertical's [m]. */
-function radii(lat: number) {
+export function radii(lat: number) {
   const s = Math.sin(lat * D);
   const w = 1 - E2 * s * s;
   return { M: (WGS84_A * (1 - E2)) / w ** 1.5, N: WGS84_A / Math.sqrt(w) };
@@ -168,7 +168,7 @@ function pathOf(hist: readonly Plane[], rest: (q: Plane) => number) {
 }
 
 /** The place fixed to the Earth [m] of a geodetic place offset east, north [m], at an altitude [m] (WGS84). */
-function placeOf(lat: number, lon: number, e: number, n: number, alt: number): number[] {
+export function placeOf(lat: number, lon: number, e: number, n: number, alt: number): number[] {
   const la = lat + n / (D * R_EQ);
   const lo = lon + e / (D * R_EQ * Math.cos(lat * D));
   return geodeticToCart(WGS84_A, WGS84_F, la * D, lo * D, alt) as number[];

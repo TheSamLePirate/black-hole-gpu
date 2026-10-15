@@ -279,7 +279,7 @@ export class ViewOverlay {
         .map((l) => {
           const p = pr(ofEye(l.at));
           // (a lamp's glow some 35 cm across its lens, a point of light far off — never a ball near)
-          const r = Math.min(9 * k * l.size, Math.max(1.6 * k, ((0.35 * l.size) / m.dist / tanH) * (H / 2)));
+          const r = Math.min(9 * k * l.size, Math.max(1.6 * k * Math.sqrt(l.size), ((0.35 * l.size) / m.dist / tanH) * (H / 2)));
           return p ? { x: p[0], y: p[1], colour: l.colour, r } : null;
         })
         .filter((l): l is NonNullable<typeof l> => !!l);

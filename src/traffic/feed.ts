@@ -17,8 +17,10 @@ export interface TrackedPlane {
   hist: Plane[];
   heard: number;
 }
+/** A tracked ship: its last report, its reports in time's order (the last quarter of an hour), when heard. */
 export interface TrackedShip {
   s: Ship;
+  hist: Ship[];
   heard: number;
 }
 
@@ -130,6 +132,29 @@ export class TrafficFeed {
     this.planes.set(p.id, { p: newest, prev: hist.length > 1 ? hist.at(-2)! : (T?.p ?? null), hist, heard: now });
   }
 
+  /** A ship's report taken: into its history (in time's order, a report a second at most), its name, type and size
+   *  kept from before when a report leaves them out. */
+  private mergeShip(s: Ship, now: number) {
+    const T = this.ships.get(s.mmsi);
+    if (T) {
+      s.name ||= T.s.name;
+      s.type ||= T.s.type;
+      s.len ||= T.s.len;
+      s.beam ||= T.s.beam;
+      s.dest ||= T.s.dest;
+    }
+    const hist = T?.hist ?? [];
+    if (Number.isFinite(s.lat) && !hist.some((q) => Math.abs(q.t - s.t) < 1)) {
+      let i = hist.length;
+      while (i > 0 && hist[i - 1]!.t > s.t) i--;
+      hist.splice(i, 0, s);
+      const last = hist.at(-1)!.t;
+      while (hist.length > 2 && last - hist[0]!.t > FEED.history) hist.shift();
+    }
+    const newest = hist.at(-1) ?? s;
+    this.ships.set(s.mmsi, { s: { ...newest, name: s.name, type: s.type, len: s.len, beam: s.beam, dest: s.dest }, hist, heard: now });
+  }
+
   private async askTrace(id: string, now: number) {
     this.busy.plane = true;
     try {
@@ -162,7 +187,7 @@ export class TrafficFeed {
       if (!res.ok) throw new Error(`${what} ${res.status}`);
       const j = (await res.json()) as { planes?: Plane[]; ships?: Ship[]; attribution?: string };
       if (what === "air") for (const p of j.planes ?? []) this.merge(p, now);
-      else for (const s of j.ships ?? []) this.ships.set(s.mmsi, { s, heard: now });
+      else for (const s of j.ships ?? []) this.mergeShip(s, now);
       if (j.attribution) this.credit[what] = j.attribution;
       this.status = "live";
       this.error = "";

@@ -136,6 +136,10 @@ struct Params {
   surface: array<vec4f, 7>,
   scenery: array<vec4f, 6>,
   walk: array<vec4f,5>, // camera-relative shared walking heightfield, in the existing table buffer
+  // the ships' wakes near the camera (renderer: wakeParams; seaWake): [0] their count; then two each — the ship
+  // from the camera on the Earth's axes [m] and its length [m]; its bow's way (its length its beam [m]) and its
+  // speed [m/s]
+  wake: array<vec4f, 17>,
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -5493,6 +5497,86 @@ fn seaWaves(q: vec3f, tu: vec3f, tc: vec3f, footM: f32) -> SeaWaves {
   o.n = normalize(q - su * tu - sc * tc);
   return o;
 }
+// The ships' wakes at the point SEA_D (P.wake; controller/seatraffic.ts): g the slope they add (the Earth's axes),
+// foam their white water, calm how much they smooth the small waves. Each ship's Kelvin pattern, standing in its
+// frame: in the 19.47° wedge aft of its bow, at a point x aft and y abeam (r = |y|/x), the waves of the two angles
+// θ the phase is stationary at (2r·tan²θ − tanθ + r = 0 — the transverse waves and the divergent), their phase
+// φ = k₀(x cosθ + |y| sinθ)/cos²θ (k₀ = g/U²: the transverse wavelength 2πU²/g), their height falling as
+// 1/√(distance), raised along the cusps; faded where the pixel does not resolve them. Behind its stern its
+// turbulent wake — a band of foam a beam or two wide, broadening and fading over some lengths — and a smoothed
+// strip wider and longer; its bow wave's foam along its sides forward.
+struct SeaWake { g: vec3f, foam: f32, calm: f32 };
+fn seaWake(up: vec3f, footM: f32) -> SeaWake {
+  var o: SeaWake;
+  let n = u32(P.wake[0].x + 0.5);
+  if (n == 0u) { return o; }
+  let u = dot(SEA_D, P.sea[0].xyz) + P.sea[2].x;
+  let c = dot(SEA_D, P.sea[1].xyz) + P.sea[2].y;
+  let anchor = vec3i(i32(P.sea[2].z) * 32, i32(P.sea[2].w) * 32, 11);
+  let tclock = P.time.x * P.near5.w;
+  for (var i = 0u; i < min(n, 8u); i++) {
+    let A = P.wake[1u + 2u * i];
+    let B = P.wake[2u + 2u * i];
+    let L = A.w;
+    let beam = max(length(B.xyz), 1.0);
+    let f = B.xyz / beam;
+    let U = max(B.w, 0.5);
+    let side = normalize(cross(up, f));
+    // (from its bow: x aft, y abeam)
+    let rel = SEA_D - (A.xyz + f * (0.5 * L));
+    let x = -dot(rel, f);
+    let y = dot(rel, side);
+    let ay = abs(y);
+    let reach = 40.0 * L + 2500.0;
+    if (x < -0.2 * L || x > reach || ay > 0.42 * max(x, 0.0) + 2.0 * beam + 20.0) { continue; }
+    let k0 = 9.81 / (U * U);
+    let fr = smoothstep(0.8, 3.0, U);
+    // (its white water: a big hull's, under way — a yacht's at a walking pace hardly any)
+    let churn = smoothstep(1.5, 6.0, U) * (0.35 + 0.65 * smoothstep(15.0, 80.0, L));
+    // the Kelvin waves
+    if (x > 0.0) {
+      let r = ay / x;
+      let a0 = min(0.006 * L + 0.1, 1.6) * fr * sqrt(L / (x + L)) * exp(-x / reach * 2.0);
+      let edge = smoothstep(0.40, 0.354, r) * (1.0 + 1.5 * smoothstep(0.29, 0.354, r));
+      let disc = sqrt(max(1.0 - 8.0 * r * r, 0.0));
+      let rr = max(r, 1e-4);
+      for (var j = 0; j < 2; j++) {
+        let tt = select((1.0 + disc) / (4.0 * rr), (1.0 - disc) / (4.0 * rr), j == 0);
+        let th = atan(tt);
+        let ct = cos(th);
+        let st = sin(th);
+        let kk = k0 / (ct * ct);
+        let lam = TAU / kk;
+        // (the divergent waves faint on the axis — short there —, both faded where unresolved)
+        let res = smoothstep(2.0 * footM, 6.0 * footM, lam) * select(smoothstep(0.05, 0.25, r), 1.0, j == 0);
+        let ph = kk * (x * ct + ay * st);
+        let a = a0 * edge * res * select(0.7, 1.0, j == 0);
+        let dh = -a * sin(ph) * kk;
+        // (∂h/∂x, ∂h/∂|y|) → the Earth's axes: x grows aft (−f), y along side
+        o.g += dh * (ct * -f + st * sign(y) * side);
+      }
+    }
+    // the turbulent wake aft of the stern and its smoothed strip; the bow wave along its sides
+    let xs = x - L;
+    if (xs > -0.1 * L) {
+      let xw = max(xs, 0.0);
+      let w = 0.5 * beam * sqrt(1.0 + xw / (4.0 * beam));
+      let life = 3.0 * L + 80.0;
+      let pn = gnoiseI(anchor, vec3f(u, c, tclock * 0.05) / 5.0);
+      let band = smoothstep(w, 0.45 * w, ay) * exp(-xw / life) * churn;
+      o.foam = max(o.foam, band * clamp(0.5 + 0.6 * pn, 0.0, 1.0) * 0.75);
+      o.calm = max(o.calm, smoothstep(1.8 * w, w, ay) * exp(-xw / (2.0 * life)) * churn * 0.7);
+    }
+    if (x > 0.0 && x < 0.6 * L) {
+      let bw = 0.5 * beam + 0.06 * x + 1.0;
+      let bow = smoothstep(bw + 3.0 + 0.04 * x, bw, ay) * smoothstep(0.5 * beam - 1.0, 0.5 * beam + 0.5, ay);
+      let pn = gnoiseI(anchor + vec3i(0, 0, 4), vec3f(u, c, tclock * 0.1) / 3.0);
+      o.foam = max(o.foam, bow * smoothstep(0.6 * L, 0.05 * L, x) * churn * clamp(0.5 + 0.7 * pn, 0.0, 1.0));
+    }
+  }
+  return o;
+}
+
 // calm: inland water (0 the open sea, 1 a sheltered lake: its fetch short — the wind's waves small, no swell,
 // no whitecaps); mirror: the world it reflects (waterMirror: rgb radiance, w its weight — the sky the rest)
 fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: vec3f, footM: f32, calm: f32, mirror: vec4f) -> vec3f {
@@ -5507,6 +5591,7 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   var vc = 0.0;
   // (the share of Cox–Munk's variance in slopes finer than the resolved range: half)
   var fine = 1.0;
+  var wk: SeaWake;
   if (SEA_ON) {
     // (near: the flight's own wind — the waves and the glint as the pilot feels it —, the trains drawn)
     let b = P.sea[1].w;
@@ -5517,6 +5602,13 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     vu = sw.vu * (1.0 - calm);
     vc = sw.vc * (1.0 - calm);
     fine = 1.0 - 0.5 * b;
+    // (the ships' wakes: their waves, their smoothed strips)
+    wk = seaWake(normal, footM);
+    n = normalize(n - wk.g * b);
+    let sm = 1.0 - 0.6 * wk.calm * b;
+    fine *= sm;
+    vu *= sm;
+    vc *= sm;
   }
   // (a lake's wind: the fetch's — a few hundred metres to kilometres — keeps its waves a ripple; cat's paws
   // over it, a breath of wind here and not there — the open sea, calm 0, without its noise; no lakes without
@@ -5558,6 +5650,7 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     let pn = gnoiseI(vec3i(i32(P.sea[2].z) * 32, i32(P.sea[2].w) * 32, 7), vec3f(u, c, 0.0) / 8.0);
     let spots = clamp(W * 5.0 * smoothstep(0.35, 0.8, pn), 0.0, 1.0);
     W = mix(W, spots, smoothstep(16.0, 4.0, footM) * P.sea[1].w) * (1.0 - calm);
+    W = max(W, wk.foam * P.sea[1].w);
   }
   let foam = 0.6 / PI * (Eg * nl + sky);
   return mix(sea, foam, W);

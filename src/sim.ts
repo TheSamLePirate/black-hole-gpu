@@ -130,7 +130,9 @@ export class Simulation {
     // the condensation trails (kept in the air: paused, as they were) — and a fight's missiles' smoke
     r.shipContrails = c.contrailsFrame();
     // a fight's aircraft (controller/combat.ts)
-    r.combatOthers = [...c.combatShips(), ...c.wingShips(), ...c.trafficShips()];
+    r.combatOthers = [...c.combatShips(), ...c.wingShips(), ...c.trafficShips(), ...c.seaShips()];
+    // the ships' wakes on the sea (controller/seatraffic.ts; trace.wgsl seaWake)
+    r.seaWakes = c.seaWakes();
     if (!s.animate) return changed;
     const pl = info?.surface?.plasma;
     r.shipPlasma = pl && pl.level > 0 ? [...pl.flow, pl.level] : [0, 0, 1, 0];

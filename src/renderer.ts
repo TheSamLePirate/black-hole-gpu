@@ -174,7 +174,9 @@ const DANJON_SCALE = 0.99834 * (1 + 1 / 85);
 /** the weather's clouds drift on a noise of this period [m] (trace.wgsl: wxAt) */
 const WX_DRIFT_PERIOD = 204800;
 const BASE_PARAM_VEC4S = 69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S + SEA_VEC4S + 1 + 1 + SHADE_VEC4S + WX_VEC4S;
-const PARAM_VEC4S = BASE_PARAM_VEC4S + SURFACE_VEC4S + SCENERY_VEC4S + 5;
+/** the ships' wakes near the camera: a count, then eight ships, two each (trace.wgsl: Params.wake, seaWake) */
+const WAKE_VEC4S = 17;
+const PARAM_VEC4S = BASE_PARAM_VEC4S + SURFACE_VEC4S + SCENERY_VEC4S + 5 + WAKE_VEC4S;
 /**
  * The sea's twelve wave trains near the camera (trace.wgsl: seaWaves): wavenumbers in whole units of
  * 2π/1024 m on the wind's axes (along, across) — exact from an anchor of whole kilometres, in float32 —,
@@ -2602,6 +2604,23 @@ export class Renderer {
         this.walkStamp = walking.stamp;
       }
     }
+    // the ships' wakes (controller/seatraffic.ts seaWakes): each from the eye on the Earth's axes [m] (float64 here)
+    const wat = at + 20;
+    f.fill(0, wat, wat + WAKE_VEC4S * 4);
+    if (!o.probe && this.seaWakes.length && near?.index === earthK && altKm < 30) {
+      // (the camera on the Earth's axes [m]: the trace's own — seaParams's —, not the craft's: an orbiting view's eye
+      // is a hundred metres off it)
+      const mR = near.radius * 1476.625 * s.massSolar;
+      const q = near.axes.map((a) => -(a[0]! * near.centre[0]! + a[1]! * near.centre[1]! + a[2]! * near.centre[2]!) * mR);
+      {
+        const list = this.seaWakes.slice(0, 8);
+        f[wat] = list.length;
+        list.forEach((w, i) => {
+          f.set([w.p[0] - q[0]!, w.p[1] - q[1]!, w.p[2] - q[2]!, w.len], wat + 4 + 8 * i);
+          f.set([w.fwd[0] * w.beam, w.fwd[1] * w.beam, w.fwd[2] * w.beam, w.U], wat + 8 + 8 * i);
+        });
+      }
+    }
     f[61 * 4 + 1] = sunAng; // (earth4.y)
     f[61 * 4 + 2] = this.marsDust(s, near, bodies, time); // (earth4.z)
     if (!o.probe) this.marsDustNow = f[61 * 4 + 2]!;
@@ -4238,6 +4257,8 @@ export class Renderer {
   /** a fight's aircraft (controller/combat.ts — sim.ts): each from the flown craft's origin on the camera's axes
    *  [m], its axes on them, its pose */
   combatOthers: { id: ShipMeshId; rel: Vec3; axes: [Vec3, Vec3, Vec3]; jet?: F35Pose; hidden?: boolean; far?: boolean }[] = [];
+  /** the ships under way near the camera, for their wakes (controller/seatraffic.ts seaWakes) */
+  seaWakes: { p: Vec3; fwd: Vec3; U: number; len: number; beam: number }[] = [];
 
   /** the others' craft (docs/PLAN-RESEAU.md R1 — controller/netcraft.ts, ui/netsession.ts): each from the flown
    *  craft's origin on the camera's axes [m], its axes on them, an F-35's pose, its engines */

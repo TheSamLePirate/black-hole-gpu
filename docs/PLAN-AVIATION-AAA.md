@@ -254,6 +254,8 @@ pertinent.
     donnée par l'AIS.
   - Leurs **sillages** (le sillage de Kelvin dans le shader de la mer), leurs feux la nuit.
   - L'interpolation entre deux positions (route et vitesse fond).
+
+  *Fait le 2026-10-15 — [fiche](progress/aviation/T3.md) : porte-conteneurs fourni (proue trouvée par sa flottaison) et pétrolier, ferry/chalutier/voilier dessinés, à la taille AIS ; une minute en différé sur leur route lissée, la proue sur le cap vrai ; roulis/tangage/pilonnement ; sillage de Kelvin, sillage turbulent et vague d'étrave dans le shader de la mer ; feux de navigation la nuit, étiquettes, radar. Relais de production sans ses clés (Portainer).*
 - **T4. Le trafic simulé et l'histoire.**
   - Là où rien n'est reçu (hors ligne, en plein océan, une autre date), un trafic plausible : les airways entre
     aéroports, les rails de navigation.

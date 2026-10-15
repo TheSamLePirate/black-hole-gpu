@@ -730,6 +730,21 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
       rough = 0.32 + 0.1 * grime;
       coat = 0.45 * coat;
     }
+    // the ships (scripts/build-ships.ts): the container ship's hull, bridge, containers on their maps (layers 2–4) —
+    // painted steel, weathered —; the drawn ships' paints: antifouling, white, navy, deck, sailcloth, steel, orange
+    case 44u, 45u, 46u: {
+      albedo = textureSampleGrad(trafficAlbedo, mapSamp, in.uv, i32(part) - 42, duvx, duvy).rgb;
+      metal = 0.05;
+      rough = 0.55 + 0.15 * grime;
+      coat = 0.0;
+    }
+    case 47u: { albedo = vec3f(0.30, 0.05, 0.035); metal = 0.0; rough = 0.7; coat = 0.0; }
+    case 48u: { albedo = vec3f(0.72, 0.72, 0.69); metal = 0.0; rough = 0.45 + 0.15 * grime; coat = 0.2 * coat; }
+    case 49u: { albedo = vec3f(0.025, 0.045, 0.11); metal = 0.0; rough = 0.4; coat = 0.2 * coat; }
+    case 50u: { albedo = vec3f(0.16, 0.19, 0.16); metal = 0.0; rough = 0.8; coat = 0.0; }
+    case 51u: { albedo = vec3f(0.82, 0.81, 0.77); metal = 0.0; rough = 0.85; coat = 0.0; }
+    case 52u: { albedo = vec3f(0.32, 0.33, 0.35); metal = 0.6; rough = 0.45; coat = 0.0; }
+    case 53u: { albedo = vec3f(0.62, 0.22, 0.04); metal = 0.0; rough = 0.5; coat = 0.1 * coat; }
     case 42u: { albedo = vec3f(0.03); metal = 0.0; rough = 0.08; coat = 0.0; }
     // the F-35's panoramic display: its picture's light under a glass (dark, smooth: the cockpit reflected)
     case 36u: {

@@ -994,6 +994,7 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   this.wingStep?.(dtPilot);
   // (the real traffic: on the radar — controller/traffic.ts)
   this.trafficStep?.();
+  this.seaStep?.();
   // (the F-35's radar: its sweep, its tracks — controller/radar.ts)
   this.radarStep(dtPilot);
   // (the F-35B's STOVL mode — controller/stovl.ts —: the thrust's direction, the hover law; its input the stick's

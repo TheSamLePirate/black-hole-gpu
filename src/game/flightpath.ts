@@ -158,7 +158,7 @@ const STEP = 0.25;
  * smoothed; their integral from the first report; the misfit to the reported places smoothed into its correction.
  * A report without its velocity: its speed and track from its neighbours' places.
  */
-export function fitFlight(knots: readonly FlightKnot[], o: Partial<typeof FLIGHT> = {}): FlightPath {
+export function fitFlight(knots: readonly FlightKnot[], o: Partial<Record<keyof typeof FLIGHT, number>> = {}): FlightPath {
   const P = { ...FLIGHT, ...o };
   const n = knots.length;
   const t = knots.map((k) => k.t);

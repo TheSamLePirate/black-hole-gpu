@@ -38,16 +38,34 @@ import a320Url from "../assets/traffic/a320.bin";
 import a320MapUrl from "../assets/traffic/a320.jpg";
 import crj900Url from "../assets/traffic/crj900.bin";
 import crj900MapUrl from "../assets/traffic/crj900.jpg";
+import cargoUrl from "../assets/traffic/cargo.bin";
+import tankerUrl from "../assets/traffic/tanker.bin";
+import ferryUrl from "../assets/traffic/ferry.bin";
+import trawlerUrl from "../assets/traffic/trawler.bin";
+import sailboatUrl from "../assets/traffic/sailboat.bin";
+import cargoHullUrl from "../assets/traffic/cargo-hull.jpg";
+import cargoBridgeUrl from "../assets/traffic/cargo-bridge.jpg";
+import cargoBoxesUrl from "../assets/traffic/cargo-boxes.jpg";
 
-/** The real traffic's airliners (scripts/build-airliners.ts, docs/PLAN-AVIATION-AAA.md T2): drawn as the craft are. */
+/** The real traffic's airliners (scripts/build-airliners.ts, docs/PLAN-AVIATION-AAA.md T2) and ships
+ *  (scripts/build-ships.ts, T3): drawn as the craft are. */
 export type AirlinerId = "a320" | "crj900";
-/** A mesh the craft's pass draws: a craft's, an airliner's. */
-export type ShipMeshId = VesselId | AirlinerId;
-const AIRLINERS: Record<AirlinerId, { bin: string; map: string; layer: number }> = {
-  a320: { bin: a320Url, map: a320MapUrl, layer: 0 },
-  crj900: { bin: crj900Url, map: crj900MapUrl, layer: 1 },
+export type ShipTypeId = "cargo" | "tanker" | "ferry" | "trawler" | "sailboat";
+export type TrafficMeshId = AirlinerId | ShipTypeId;
+/** A mesh the craft's pass draws: a craft's, an airliner's, a ship's. */
+export type ShipMeshId = VesselId | TrafficMeshId;
+const TRAFFIC_MESHES: Record<TrafficMeshId, string> = {
+  a320: a320Url,
+  crj900: crj900Url,
+  cargo: cargoUrl,
+  tanker: tankerUrl,
+  ferry: ferryUrl,
+  trawler: trawlerUrl,
+  sailboat: sailboatUrl,
 };
-const isAirliner = (id: ShipMeshId): id is AirlinerId => id === "a320" || id === "crj900";
+/** The traffic's colour maps, a layer each (ship.wgsl: the materials 40, 41, 44–46). */
+const TRAFFIC_MAPS = [a320MapUrl, crj900MapUrl, cargoHullUrl, cargoBridgeUrl, cargoBoxesUrl];
+const isTraffic = (id: ShipMeshId): id is TrafficMeshId => id in TRAFFIC_MESHES;
 import { jetLevel } from "./jets";
 import { cross, dot, sub } from "./math/vec3";
 
@@ -262,7 +280,7 @@ export class ShipRenderer {
   /** the craft's meshes (loaded when first seen) */
   private meshes: Partial<Record<ShipMeshId, Mesh>> = {};
   private loadingMesh = new Set<ShipMeshId>();
-  /** the airliners' colour maps (a layer each — AIRLINERS), loaded with the first of them */
+  /** the traffic's colour maps (a layer each — TRAFFIC_MAPS), loaded with the first of its meshes */
   private trafficMaps: GPUTexture | null = null;
   private trafficMapsLoading = false;
   /** the instances' transforms and flags (the flown craft first) */
@@ -716,21 +734,21 @@ export class ShipRenderer {
     if (this.meshes[id]) return true;
     if (!this.loadingMesh.has(id) && this.ready) {
       this.loadingMesh.add(id);
-      (isAirliner(id) ? this.loadAirliner(id) : this.loadVessel(id)).then(
+      (isTraffic(id) ? this.loadTraffic(id) : this.loadVessel(id)).then(
         () => this.onLoaded?.(),
-        (e) => console.error(`${isAirliner(id) ? id : VESSELS[id].name}:`, e),
+        (e) => console.error(`${isTraffic(id) ? id : VESSELS[id].name}:`, e),
       );
     }
     return false;
   }
 
   /**
-   * An airliner's mesh (assets/traffic/*.bin, "TRFC": the common layout already — position, normal, material,
-   * AO, UV), its bounds; the colour maps' array with the first.
+   * A traffic's mesh — an airliner's, a ship's (assets/traffic/*.bin, "TRFC": the common layout already —
+   * position, normal, material, AO, UV) —, its bounds; the colour maps' array with the first.
    */
-  private async loadAirliner(id: AirlinerId) {
+  private async loadTraffic(id: TrafficMeshId) {
     const d = this.device;
-    const buf = await this.getter(AIRLINERS[id].bin).then((r) => r.arrayBuffer());
+    const buf = await this.getter(TRAFFIC_MESHES[id]).then((r) => r.arrayBuffer());
     if (new TextDecoder().decode(new Uint8Array(buf, 0, 4)) !== "TRFC") throw new Error(`bad mesh for ${id}`);
     const u32 = new Uint32Array(buf, 0, 4);
     const nv = u32[2]!,
@@ -752,24 +770,23 @@ export class ShipRenderer {
     }
   }
 
-  /** The airliners' colour maps: one array, a layer each, its mipmaps made from the image. */
+  /** The traffic's colour maps: one array, a layer each, its mipmaps made from the image. */
   private async loadTrafficMaps() {
     const d = this.device;
-    const ids = Object.keys(AIRLINERS) as AirlinerId[];
-    const imgs = await Promise.all(ids.map(async (id) => createImageBitmap(await this.getter(AIRLINERS[id].map).then((r) => r.blob()))));
+    const imgs = await Promise.all(TRAFFIC_MAPS.map(async (url) => createImageBitmap(await this.getter(url).then((r) => r.blob()))));
     const size = 2048;
     const levels = Math.floor(Math.log2(size)) + 1;
     const t = d.createTexture({
-      size: [size, size, ids.length],
+      size: [size, size, TRAFFIC_MAPS.length],
       format: "rgba8unorm-srgb",
       mipLevelCount: levels,
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
     });
-    for (let i = 0; i < ids.length; i++)
+    for (let i = 0; i < TRAFFIC_MAPS.length; i++)
       for (let l = 0; l < levels; l++) {
         const w = Math.max(1, size >> l);
         const bm = await createImageBitmap(imgs[i]!, { resizeWidth: w, resizeHeight: w, resizeQuality: "high" });
-        d.queue.copyExternalImageToTexture({ source: bm }, { texture: t, mipLevel: l, origin: [0, 0, AIRLINERS[ids[i]!].layer] }, [w, w]);
+        d.queue.copyExternalImageToTexture({ source: bm }, { texture: t, mipLevel: l, origin: [0, 0, i] }, [w, w]);
       }
     this.trafficMaps = t;
     this.bind();
@@ -1378,7 +1395,19 @@ export class ShipRenderer {
     m.set([v.albedo, v.metal, v.rough, SPEC_MIPS], 20);
     // the instances: the flown craft, then the others in view whose mesh is there — their transforms,
     // their kind, whether they are in the shadow map and hidden by what the traced image holds nearer
-    const kind = { ranger: 0, lander: 1, endurance: 2, f35: 3, a320: 4, crj900: 5 } as const;
+    const kind = {
+      ranger: 0,
+      lander: 1,
+      endurance: 2,
+      f35: 3,
+      a320: 4,
+      crj900: 5,
+      cargo: 6,
+      tanker: 7,
+      ferry: 8,
+      trawler: 9,
+      sailboat: 10,
+    } as const;
     let jetSlot = 0;
     // (inside the Ranger: its cabin instead of its hull)
     if (v.inside && this.flown && this.vessel === "ranger") this.loadCockpit();
@@ -1411,7 +1440,7 @@ export class ShipRenderer {
         this.writeParts(mats, parts);
         if (i === 0) this.jetExit = nozzleExit(this.jetMesh, mats);
         else if (it.thrust) lit.push({ id: "f35", R: it.R, t: it.t, thrust: it.thrust, exit: nozzleExit(this.jetMesh, mats) });
-      } else if (i > 0 && it.thrust && !isAirliner(it.id)) lit.push({ id: it.id, R: it.R, t: it.t, thrust: it.thrust, exit: null });
+      } else if (i > 0 && it.thrust && !isTraffic(it.id)) lit.push({ id: it.id, R: it.R, t: it.t, thrust: it.thrust, exit: null });
       this.instData.set([kind[it.id], it.shadow ? 1 : 0, it.far ? 1 : 0, parts], i * INST_FLOATS + 16);
       this.draws.push({ mesh: me, shadow: it.shadow, cabin: i === 0 && inCabin, inst: i });
       // (the Ranger's landing gear, out: drawn with it — its own mesh, the craft's instance)
