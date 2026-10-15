@@ -1008,8 +1008,13 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
           mach: LA0.out.mach,
           speed: LA0.speed,
           // (the F-35: its load limit the setting's)
-          fbw: fleet.active === "f35" && VESSELS.f35.fbw ? { ...VESSELS.f35.fbw, gMax: s.f35GLimit } : VESSELS[fleet.active].fbw,
+          // (the F-35: its load limit the setting's — 4 g at most with the gear down, its doors and struts)
+          fbw:
+            fleet.active === "f35" && VESSELS.f35.fbw
+              ? { ...VESSELS.f35.fbw, gMax: this.gearDown ? Math.min(4, s.f35GLimit) : s.f35GLimit }
+              : VESSELS[fleet.active].fbw,
           law: fleet.active === "f35" ? s.f35Law : "normal",
+          nz: LA0.out.F[1] / (fleet.massProps().mass * 9.80665),
           gammaCmd: jetCmd.gamma,
           bankCmd: jetCmd.bank,
         }

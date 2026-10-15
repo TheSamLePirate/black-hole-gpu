@@ -133,7 +133,7 @@ pertinent.
   Le F-35 réel tient **50° d'incidence** sous contrôle.
   *Fini quand* une vrille entretenue et un super-décrochage sont possibles **sans** le calculateur, et que le
   calculateur les empêche.
-- **V3. Les lois de pilotage du vrai F-35.**
+- **V3. Les lois de pilotage du vrai F-35.** *Fait le 2026-10-15 — [fiche](progress/aviation/V3.md) : le manche commande un facteur de charge (7 g en 0,4 s), la pente capturée une fois stabilisée, 4 g train sorti ; le domaine de vol sans écart.*
   - **Normale** : « carefree » ; limites de facteur de charge et d'incidence, résistance au départ en vrille,
     virage coordonné.
   - **Approche** : vitesse/incidence tenues, trajectoire au manche.

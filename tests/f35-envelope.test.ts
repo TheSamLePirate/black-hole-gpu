@@ -143,18 +143,20 @@ describe("the F-35B's flight envelope", () => {
       d: 2,
     });
     let best = { v: 0, rate: 0, alpha: 0 };
-    for (const v of [140, 170, 200, 230]) {
+    for (const v of [170, 200, 230, 260]) {
       const p = E.pull(4000, v);
       if (p.rate > best.rate) best = { v, rate: p.rate, alpha: p.alpha };
     }
+    // (7 g at its corner: g √(n² − 1) / V — some 17°/s at 230 m/s)
     row({
       what: `Instantaneous turn, best (at ${best.v} m/s), 4 km`,
       got: best.rate,
       unit: "°/s",
-      ref: "~20 (a 7 g corner)",
+      ref: "~17 (7 g at a 230 m/s corner)",
       src: SRC.none,
+      lo: 15,
+      hi: 21,
       d: 1,
-      gap: best.rate < 18 ? "V3: the pitch law commands a rate, the load builds slowly" : undefined,
     });
     const slow = E.pull(4000, 140);
     row({

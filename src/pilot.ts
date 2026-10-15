@@ -132,6 +132,8 @@ export interface FlightContext {
     fbw?: { rates: V3; gMax: number; gMin: number; alphaMax: number };
     /** the flight control law: the computer's (rates, holds, limits), or "direct" — the stick on the surfaces */
     law?: "normal" | "direct";
+    /** the normal load factor now [g]: the air's force up the craft's top over its weight */
+    nz?: number;
   } | null;
   /** the sci-fi flight computer: the velocity it flies (local 3-velocity), the feed-forward against
    *  gravity and the air (local, proper acceleration), the attitude it holds (local), and the part of
@@ -325,6 +327,8 @@ export class FlightComputer {
   bankHold: number | null = null;
   /** the direct law's pitch trim [rad/s²]: the elevator's set that holds the pitch with the stick let go */
   pitchTrim = 0;
+  /** the load law's integral [g s]: the load the speed's bleed takes away, made up */
+  nInt = 0;
   /** what fired last step (the sound follows it): the main engine's throttle as applied, the RCS
    *  (fraction of its authority, the push sideways in the ship's frame: + to its right), the
    *  attitude effort (angular acceleration / the most the wheels give, 0…1) */
@@ -347,6 +351,7 @@ export class FlightComputer {
     this.alphaHold = null;
     this.bankHold = null;
     this.pitchTrim = 0;
+    this.nInt = 0;
     this.fired = { throttle: 0, rcs: 0, rcsSide: 0, turn: 0, yaw: 0, at: 0, force: [0, 0, 0], torque: [0, 0, 0] };
   }
 
@@ -537,6 +542,7 @@ export class FlightComputer {
       : [axisAcc(0) + A3[0]!, axisAcc(1) + A3[1]!, axisAcc(2) + A3[2]!];
     const planeLaw = !!c.air && c.air.mode === "plane" && c.air.q > 300 && !point && this.hold === "none" && flown;
     if (!planeLaw || inp.pitch !== 0) (this.gammaHold = null), (this.alphaHold = null);
+    if (!planeLaw || inp.pitch === 0) this.nInt = 0;
     if (!planeLaw || inp.roll !== 0) this.bankHold = null;
     const direct = planeLaw && c.air!.law === "direct" && !c.air!.ground;
     if (direct) {
@@ -553,18 +559,31 @@ export class FlightComputer {
       const P = c.air!;
       const rates: V3 = P.fbw?.rates ?? [0.35, 0.14, 1.2];
       const stallSafe = P.fbw ? Math.max(P.fbw.alphaMax, alphaLimit(P.stall, P.mach)) : alphaLimit(P.stall, P.mach);
-      if (this.gammaHold === null && inp.pitch === 0) this.gammaHold = P.gamma;
-      if (P.gammaCmd != null && inp.pitch === 0) this.gammaHold = P.gammaCmd;
       const gdot = this.gammaPrev !== null && dt > 0 ? (P.gamma - this.gammaPrev) / dt : 0;
       this.gammaPrev = P.gamma;
+      // (let go: a fighter's law asks 1 g first — the path stops curving —, its angle taken once it has: not the
+      // angle it had while still turning, overshot then pushed back to)
+      const settling = !!P.fbw && P.nz !== undefined && !P.ground && Math.abs(gdot) > 0.03;
+      if (this.gammaHold === null && inp.pitch === 0 && !settling) this.gammaHold = P.gamma;
+      if (P.gammaCmd != null && inp.pitch === 0) this.gammaHold = P.gammaCmd;
       // (on its own gear, the springs set the pitch — the nose lowered onto its wheel, held back to 3°/s
       // as a pilot's back pressure does: no slam —, unless the stick asks)
       if (P.ground) want[0] = c.onGear && manual[0] === 0 ? Math.max(this.omega[0], -0.05) : manual[0] * rates[0];
-      else if (manual[0] !== 0) want[0] = P.path[0] + manual[0] * rates[0];
+      else if (manual[0] !== 0 && P.fbw && P.nz !== undefined && (P.speed ?? 0) > 20) {
+        // (a fighter's law: the stick asks a load — 1 g at rest, its limit at full aft, its negative one at full
+        // forward —, the pitch rate the path's plus what builds the incidence towards it: 7 g in about a second)
+        const nCmd = manual[0] > 0 ? 1 + manual[0] * (P.fbw.gMax - 1) : 1 + -manual[0] * (P.fbw.gMin - 1);
+        // (its integral: the load the speed's bleed takes away made up — held while the incidence is at its limit)
+        if (P.alpha < (P.fbw.alphaMax ?? 1) - 0.02) this.nInt = clamp(this.nInt + (nCmd - P.nz) * dt, -1, 1);
+        want[0] = P.path[0] + (9.80665 / P.speed!) * (4 * (nCmd - P.nz) + 3 * this.nInt);
+      } else if (manual[0] !== 0) want[0] = P.path[0] + manual[0] * rates[0];
       else if (P.mach > 4) {
         // (hypersonic: the angle of attack held — the shield kept to the flow, as an entry is flown)
         if (this.alphaHold === null) this.alphaHold = P.alpha;
         want[0] = P.path[0] - 1.5 * (P.alpha - this.alphaHold);
+      } else if (this.gammaHold === null && P.fbw && P.nz !== undefined && (P.speed ?? 0) > 20) {
+        const g1 = Math.cos(P.gamma) * Math.cos(P.bank);
+        want[0] = P.path[0] + (9.80665 / P.speed!) * 4 * (g1 - P.nz);
       } else want[0] = P.path[0] + 1.2 * ((this.gammaHold ?? P.gamma) - P.gamma) - 1.5 * gdot;
       if (P.alpha > stallSafe) want[0] = Math.min(want[0], P.path[0] - 2 * (P.alpha - stallSafe));
       // (a fighter's flight control system: the load factor held within its limits — the pitch rate that
@@ -572,7 +591,13 @@ export class FlightComputer {
       if (P.fbw && !P.ground && (P.speed ?? 0) > 20) {
         const g1 = Math.cos(P.gamma) * Math.cos(P.bank);
         const k = 9.80665 / P.speed!;
-        want[0] = clamp(want[0], (P.fbw.gMin - g1) * k, (P.fbw.gMax - g1) * k);
+        // (the holds' and the computer's asks kept within the limits as path rates; the stick's load command is its
+        // own — and whatever asked, the load measured held under the limits)
+        if (manual[0] === 0 || P.nz === undefined) want[0] = clamp(want[0], (P.fbw.gMin - g1) * k, (P.fbw.gMax - g1) * k);
+        if (P.nz !== undefined) {
+          if (P.nz > P.fbw.gMax) want[0] = Math.min(want[0], P.path[0] - 3 * k * (P.nz - P.fbw.gMax));
+          if (P.nz < P.fbw.gMin) want[0] = Math.max(want[0], P.path[0] + 3 * k * (P.fbw.gMin - P.nz));
+        }
       }
       // (on its own gear the nose wheel steers it: the rudder only as the pedals ask)
       // (the sideslip fought harder as the incidence grows — a fighter's departure resistance)
