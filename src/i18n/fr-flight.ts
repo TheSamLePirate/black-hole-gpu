@@ -64,4 +64,15 @@ export default {
   OK: "OK",
   Fair: "Passable",
   "No grade": "Non noté",
+  "Take-off off — the stick": "Décollage coupé — le manche",
+  "Take-off: {0} m of deck clear, {1} m needed at {2} t — and too heavy to rise vertically ({3} t at most)":
+    "Décollage : {0} m de pont dégagé, {1} m nécessaires à {2} t — et trop lourd pour décoller verticalement ({3} t au plus)",
+  "{0}, Mother: cleared for a vertical take-off. Converting.": "{0}, ici Mother : autorisé au décollage vertical. Conversion.",
+  "{0}, Mother: cleared for a short take-off, {1} m of deck. Converting.":
+    "{0}, ici Mother : autorisé au décollage court, {1} m de pont. Conversion.",
+  "Vertical take-off from {0}": "Décollage vertical de {0}",
+  "Short take-off from {0}": "Décollage court de {0}",
+  "Short take-off off — the stick": "Décollage court coupé — le manche",
+  "Mother: airborne. Good launch.": "Mother : en vol. Beau décollage.",
+  "Short take-off done — STOVL mode off": "Décollage terminé — mode STOVL coupé",
 } satisfies Record<string, string>;

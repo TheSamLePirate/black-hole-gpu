@@ -86,6 +86,67 @@ export function portEdge(D: DeckMap, z: number): number {
   return x;
 }
 
+/** The deck's run clear ahead of z along x [m of its frame]: the last z with the deck still level under the wheels
+ *  and nothing standing within `half` [m] either side (the wings' half span — an island, a mast); its end. */
+export function bowEnd(D: DeckMap, x: number, z0 = D.z0, half = 6): number {
+  let z = Number.NaN;
+  for (let k = Math.ceil(z0); k < D.z0 + D.nz * D.cell; k++) {
+    const h = deckHeight(D, x, k);
+    if (!(Number.isFinite(h) && Math.abs(h - D.freeboard) < 1.5)) {
+      if (Number.isFinite(z)) break;
+      continue;
+    }
+    let clear = true;
+    for (let dx = -half; dx <= half && clear; dx += 1) {
+      const s = deckHeight(D, x + dx, k);
+      if (Number.isFinite(s) && s > D.freeboard + 1.5) clear = false;
+    }
+    if (!clear) break;
+    z = k;
+  }
+  return z;
+}
+
+/** Where a short take-off starts on each deck (x its port, z its bow [m]): a lane clear of the island to the
+ *  bow — on the Kiev, port of its island, along its after deck; on the Implacable, a little to port. */
+export const STO_LANE: Record<CarrierId, [number, number]> = {
+  ford: [10, -60],
+  kiev: [4, -105],
+  implacable: [3, -90],
+};
+
+/** The F-35B's short take-off from a deck (STO): the lift fan's conversion braked; the run, the nozzle aft (all
+ *  its thrust along — the fan unloading the wheels); the rotation, at its speed or the bow near, the nozzle
+ *  down and the stick back; once off, the nozzle back aft as it speeds up; past the conversion's end, conventional. */
+export const STO = {
+  /** the deck's run its weight needs [m] (at 20.9 t, full tanks: some 150 m with the wind over the deck; as the
+   *  square of the mass) */
+  run: (mass: number) => 150 * (mass / 20_900) ** 2,
+  /** a vertical take-off: up at, to [m over the deck]; then forward, its acceleration [m/s²] */
+  liftRate: 3,
+  liftTo: 25,
+  accel: 2.5,
+  vRotate: 52,
+  bowMargin: 45,
+  rotateSwivel: 0.62,
+  rotatePitch: 0.6,
+  vClean: 100,
+  climb: 150,
+};
+export type StoPhase = "convert" | "roll" | "rotate" | "lift" | "accel" | "climb";
+export interface StoRun {
+  kind: CarrierId;
+  phase: StoPhase;
+  t: number;
+  /** the deck's run left before the bow [m], where it lifted off (deck z) */
+  bow: number;
+  off?: number;
+  /** a vertical take-off (the deck's run too short for the weight, light enough to hover): up, then away */
+  vto?: boolean;
+  /** the accel's start [s of the run] */
+  t0?: number;
+}
+
 /** A deck point's velocity fixed to the Earth [m/s] (the ship's, its turn's: its heave, pitch, roll). */
 export function deckVelocity(P: CarrierPose, q: readonly number[]): V3 {
   const r = sub(q, P.p);

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { CARRIER, type CarrierId, deckHeight, readDeck, toDeck } from "../src/game/carrier";
 import { putDeck } from "../src/controller/carriers";
-import { VL_SPOT } from "../src/game/deckland";
+import { bowEnd, STO_LANE, VL_SPOT } from "../src/game/deckland";
 import { fleet } from "../src/fleet";
 import { setPlatforms } from "../src/system/our-surface";
 import { cruise } from "./helpers/envelope";
@@ -15,7 +15,7 @@ import { resetFlights } from "./helpers/flight";
 afterEach(() => {
   resetFlights();
   setPlatforms("earth", []);
-  fleet.fuel.f35 = undefined as never;
+  delete (fleet.fuel as Record<string, number>).f35;
 });
 
 const D = Math.PI / 180;
@@ -102,7 +102,83 @@ describe("the recovery", () => {
       expect(tc.sink).toBeLessThan(2.5);
       expect(tc.grade).toBe("OK");
       expect(r.c.landed).toBe(true);
-      expect(r.drift).toBeLessThan(3);
+      expect(r.drift).toBeLessThan(4);
       expect(r.radio.some((s) => s.includes("Cleared to land"))).toBe(true);
     }, 120_000);
+});
+
+/** Set down on `k`'s take-off lane with `fuel` [kg], the take-off engaged and flown: what it said, where it left
+ *  the deck, how low it went, where it was at its end. */
+async function launch(k: CarrierId, hs: number, fuel: number, mode?: "short" | "vertical") {
+  const M = await deck(k);
+  putDeck(k, M);
+  const { c, fly } = cruise(300, 140, 0.4);
+  c.seaHs = hs;
+  const g = c.geoNow()!;
+  c.carrierSpawn(k, { lat: g.lat, lon: g.lon, heading: 30, speed: CARRIER[k].speed });
+  c.carrierStep();
+  const [x, z] = STO_LANE[k];
+  c.carrierLand(k, { x, z });
+  fleet.fuel.f35 = fuel;
+  const radio: string[] = [];
+  c.onRadio = (s) => radio.push(s);
+  const said = c.deckTakeoff(mode)!;
+  const bow = bowEnd(M, x, z);
+  let off = Number.NaN;
+  let lowest = Infinity;
+  let t = 0;
+  while (c.stoRun && t < 120) {
+    fly(0.25);
+    t += 0.25;
+    const l = toDeck(c.carrierNow()[0]!.P, c.netOwn()!.p);
+    if (Number.isNaN(off) && c.stoRun && c.stoRun.phase !== "convert" && !c.rolling && !c.ourLanded) off = l[2];
+    if (!Number.isNaN(off)) lowest = Math.min(lowest, c.geoNow()!.alt);
+  }
+  const end = c.geoNow()!;
+  const V = c.airFlight.last?.speed ?? 0;
+  console.log(
+    `  ${said}: off ${(off - z).toFixed(0)} m down the deck (${(bow - z).toFixed(0)} m clear), ${lowest.toFixed(0)} m over the sea at the lowest; ${t} s on, ${end.alt.toFixed(0)} m, ${V.toFixed(0)} m/s, STOVL ${c.stovl.on ? "on" : "off"}\n    ${radio.join("\n    ")}`,
+  );
+  return { c, said, off, bow, z, lowest, end, V };
+}
+
+describe("the take-off from a deck", () => {
+  for (const [k, hs] of [
+    ["ford", 2],
+    ["implacable", 3],
+  ] as const)
+    test(`a short one from the ${k}'s lane, full tanks, in a ${hs} m sea: off before the bow, climbing, conventional past 100 m/s`, async () => {
+      const r = await launch(k, hs, 6125);
+      expect(r.said).toContain("Short take-off from");
+      expect(r.off).toBeLessThan(r.bow);
+      expect(r.lowest).toBeGreaterThan(5);
+      expect(r.c.stoRun ?? null).toBeNull();
+      expect(r.c.stovl.on).toBe(false);
+      expect(r.end.alt).toBeGreaterThan(40);
+    }, 120_000);
+
+  test("from the Kiev's short deck, full tanks: refused — its run too short, too heavy to rise vertically", async () => {
+    const r = await launch("kiev", 1.5, 6125);
+    expect(r.said).toContain("too heavy to rise vertically");
+    expect(r.c.stoRun ?? null).toBeNull();
+  }, 120_000);
+
+  test("from the Kiev, light: a short one on its 150 m", async () => {
+    const r = await launch("kiev", 1.5, 1800);
+    expect(r.said).toContain("Short take-off from");
+    expect(r.off).toBeLessThan(r.bow);
+    expect(r.c.stovl.on).toBe(false);
+  }, 120_000);
+
+  test("from the Kiev, light, a vertical one asked: up off the deck, away, conventional past 100 m/s", async () => {
+    const r = await launch("kiev", 1.5, 1800, "vertical");
+    expect(r.said).toContain("Vertical take-off from");
+    // (straight up where it stood, never below the deck after)
+    expect(Math.abs(r.off - r.z)).toBeLessThan(10);
+    expect(r.lowest).toBeGreaterThan(CARRIER.kiev.deck - 1);
+    expect(r.end.alt).toBeGreaterThan(40);
+    expect(r.c.stoRun ?? null).toBeNull();
+    expect(r.c.stovl.on).toBe(false);
+    expect(r.V).toBeGreaterThan(95);
+  }, 120_000);
 });

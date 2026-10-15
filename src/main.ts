@@ -2300,6 +2300,11 @@ async function main() {
       const said = camera.deckLand();
       if (said) return panel.toast(said);
     }
+    // (the F-35B's take-off from a carrier's deck: a short one — controller/deckland.ts)
+    if (a === "takeoff" && fleet.active === "f35") {
+      const said = camera.deckTakeoff();
+      if (said) return panel.toast(said);
+    }
     if (a === "dock" && camera.docked)
       return panel.toast(camera.netDocked ? t("Docked to another's craft — UNDOCK first") : t("Docked to the ISS — UNDOCK first"));
     camera.pilot.setAuto(a);

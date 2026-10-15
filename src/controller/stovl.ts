@@ -33,6 +33,8 @@ export interface StovlState {
   cmd: HoverCmd | null;
   vz: number;
   heavy: boolean;
+  /** a swivel held 0…1 (a short take-off's schedule — controller/deckland.ts): the hover law not engaged meanwhile */
+  hold?: number | null;
 }
 export const noStovl = (): StovlState => ({
   on: false,
@@ -83,7 +85,7 @@ function stovlStep(
   // (the lift fan's turn, drawn: its rpm with the engine's)
   S.fan = (S.fan + d * 2 * Math.PI * 4.3 * S.clutch * (0.25 + 0.75 * this.pilot.engineNow)) % (2 * Math.PI * 64);
   const v = this.airFlight.last?.speed ?? 0;
-  if (!S.on || S.conv < 0.95) S.hover = false;
+  if (!S.on || S.conv < 0.95 || (S.hold ?? null) !== null) S.hover = false;
   else if (!S.hover && v < STOVL.vHover) S.hover = true;
   else if (S.hover && v > STOVL.vRelease) S.hover = false;
   let swivel = 0;
@@ -145,8 +147,9 @@ function stovlStep(
     }
   } else {
     S.cmd = null;
-    // (converted, flying conventionally: the nozzle partly down as it slows — the semi-jet-borne transition)
-    if (S.on) swivel = clamp((105 - v) / 50, 0, 0.7) * S.conv;
+    // (converted, flying conventionally: the nozzle partly down as it slows — the semi-jet-borne transition; a short
+    // take-off's own schedule held)
+    if (S.on) swivel = (S.hold ?? clamp((105 - v) / 50, 0, 0.7)) * S.conv;
   }
   // (the nozzle's bearings turn at their own rate: 95° in some 2.5 s)
   S.swivel = toward(S.swivel, swivel, 0.4, d);

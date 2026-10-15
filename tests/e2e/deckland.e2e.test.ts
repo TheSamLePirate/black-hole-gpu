@@ -82,4 +82,33 @@ describe.skipIf(!E2E)("the F-35B's recovery on a carrier", () => {
     await shot("deck-down");
     await app.js(`(__bh.freeze(false), 1)`);
   }, 360_000);
+
+  test("a short take-off from the Ford's lane, full tanks: rolling, off before the bow, climbing; then a vertical one, light", async () => {
+    await app.js(`(() => { const c = __bh.camera; c.carrierLand("ford", { x: 10, z: -60 }); __bh.fleet.fuel.f35 = 6125; return 1; })()`);
+    await Bun.sleep(1500);
+    const said = await app.js<string>(`__bh.camera.deckTakeoff()`);
+    console.log(`  ${said}`);
+    expect(said).toContain("Short take-off from");
+    await around(250, 6, 60);
+    await app.waitFor(`__bh.camera.stoRun?.phase === "roll"`, 30_000);
+    await Bun.sleep(3500);
+    await shot("sto-roll");
+    await app.js(`(() => { __bh.settings.shipMount = "chase"; return 1; })()`);
+    await app.waitFor(`__bh.camera.stoRun?.phase === "climb" || !__bh.camera.stoRun`, 30_000);
+    await Bun.sleep(1200);
+    await shot("sto-off-the-bow");
+    await app.waitFor(`!__bh.camera.stoRun`, 60_000);
+    const g = await app.js<{ alt: number }>(`__bh.camera.geoNow()`);
+    console.log(`  climbing away at ${g.alt.toFixed(0)} m, STOVL ${(await app.js<boolean>("__bh.camera.stovl.on")) ? "on" : "off"}`);
+    expect(g.alt).toBeGreaterThan(30);
+    // (light: straight up off the deck)
+    await app.js(`(() => { const c = __bh.camera; c.carrierLand("ford", { x: 10, z: -60 }); __bh.fleet.fuel.f35 = 1800; return 1; })()`);
+    await Bun.sleep(1500);
+    expect(await app.js<string>(`__bh.camera.deckTakeoff("vertical")`)).toContain("Vertical take-off");
+    await around(240, 8, 70);
+    await app.waitFor(`__bh.camera.stoRun?.phase === "accel" || !__bh.camera.stoRun`, 40_000);
+    await shot("vto-up");
+    await app.waitFor(`!__bh.camera.stoRun`, 90_000);
+    expect(await app.js<number>(`__bh.camera.geoNow().alt`)).toBeGreaterThan(30);
+  }, 300_000);
 });
