@@ -256,6 +256,20 @@ export class NetPanel {
   /** the role a screen added joins as (the QR code's link) */
   private screenRole: Role = "spectator";
 
+  crewLink(code = this.net?.room?.code): string | null {
+    if (!code) return null;
+    return `${new URL("crew/", location.href).href}#join=${code}${netParams.get("server") ? `&server=${encodeURIComponent(netParams.get("server")!)}` : ""}`;
+  }
+
+  /** The same screens panel for TARS: a lightweight instruments link and QR. */
+  showCrew() {
+    this.screenRole = "instruments";
+    this.tab = "screens";
+    this.open();
+    this.render();
+    return this.crewLink();
+  }
+
   /**
    * Add a screen: the room's link as a QR code — a phone's, a tablet's camera opens it — for a spectator (every
    * view on a pilot), an instruments screen (his cockpit's) or a pilot.
@@ -274,7 +288,10 @@ export class NetPanel {
       this.screenRole = role.value as Role;
       this.render();
     });
-    const link = `${this.link(code)}${this.screenRole === "pilot" ? "" : `&role=${this.screenRole}`}`;
+    const link =
+      this.screenRole === "instruments"
+        ? this.crewLink(code)!
+        : `${this.link(code)}${this.screenRole === "pilot" ? "" : `&role=${this.screenRole}`}`;
     const img = h("div", "netp-qr");
     img.dataset.testid = "net-qr";
     void loadNet().then((N) => {

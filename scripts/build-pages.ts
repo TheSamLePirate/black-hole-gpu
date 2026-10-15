@@ -8,6 +8,8 @@ import { $ } from "bun";
 const subpath = process.env.KERR_SUBPATH ?? "";
 await $`rm -rf _site`;
 await $`bun build ./index.html --outdir _site --minify --define __KERR_SUBPATH__=${JSON.stringify(subpath)}`;
+// Independent shell: assets stay under crew/, outside the simulator's precache.
+await $`bun build ./crew/index.html --outdir _site/crew --minify --define __KERR_SUBPATH__=${JSON.stringify(subpath)}`;
 // (the flight planner's worker, loaded by URL next to the page)
 await $`bun build ./src/system/plan-worker.ts --outfile _site/plan-worker.js --minify --target browser`;
 // (the network, loaded when the player asks for it — src/net/load.ts)

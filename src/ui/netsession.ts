@@ -5,6 +5,9 @@
 // (src/net/) is the network module's, loaded when a room was asked for.
 
 import { fmtFactor, realTimeSpeed, roomPace } from "../clock";
+import { crewSnapshot } from "./crew-feed";
+import type { Info } from "./flighthud";
+import type { RangerStatus } from "../game/status";
 import type { CameraController } from "../controls";
 import type { CarrierSpawn } from "../game/carrier";
 import {
@@ -131,6 +134,17 @@ function steady(S: { t: number; p: number[]; v: number[] }[] | undefined) {
 }
 
 export class NetSession {
+  private crewSent = -Infinity;
+
+  /** At most 4 Hz, only while an instruments screen is present. No simulator on that screen. */
+  instruments(info: Info, status: RangerStatus | null) {
+    const net = this.net;
+    const now = performance.now();
+    if (!net?.room || net.room.role !== "pilot" || this.follow || !this.d.camera.piloting || now - this.crewSent < 250) return;
+    if (!net.room.members.some((m) => m.role === "instruments")) return;
+    this.crewSent = now;
+    net.event({ kind: "instruments", data: crewSnapshot(this.d.camera, info, status, this.d.sceneTime()) });
+  }
   /** the name tags this frame */
   tags: NetTag[] = [];
   /** the others' craft this frame */

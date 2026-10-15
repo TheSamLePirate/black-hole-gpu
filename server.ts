@@ -1,4 +1,5 @@
 import index from "./index.html";
+import crew from "./crew/index.html";
 import { createRooms, type Peer } from "./server/rooms";
 import { createTraffic } from "./server/traffic";
 
@@ -51,6 +52,9 @@ const server = Bun.serve({
   port,
   routes: {
     "/": index,
+    "/crew": () => Response.redirect("/crew/", 302),
+    "/crew/": crew,
+    "/crew/index.html": crew,
     // Dev only: the page can POST a rendered PNG here (window.__bh.snapshot()) for offline inspection.
     "/__snapshot": {
       POST: async (req) => {
