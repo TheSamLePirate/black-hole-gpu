@@ -41,7 +41,7 @@ describe("the landing spots", () => {
   });
 });
 
-/** From 9 km off, the recovery on `k` in a sea of `hs` [m]; what the LSO said, where it stood 20 s after. */
+/** From 9 km off, the recovery on `k` in a sea of `hs` [m]; what the LSO said, how it settled and stayed. */
 async function recover(k: CarrierId, hs: number, fuel = 1800) {
   putDeck(k, await deck(k));
   const { c, fly } = cruise(300, 140, 0.4);
@@ -66,11 +66,23 @@ async function recover(k: CarrierId, hs: number, fuel = 1800) {
     fly(1);
     t++;
   }
+  // (still on the deck once the engine is down to idle: from 5 s after the touchdown to 20 — before, it spools down
+  // and the craft settles on its brakes, a few metres)
   const where = () => toDeck(c.carrierNow()[0]!.P, c.netOwn()!.p);
   const w0 = where();
-  fly(20);
+  fly(5);
+  const w5 = where();
+  fly(15);
   const w1 = where();
-  return { c, said, radio, t, last: c.deckLast, drift: Math.hypot(w1[0] - w0[0], w1[2] - w0[2]) };
+  return {
+    c,
+    said,
+    radio,
+    t,
+    last: c.deckLast,
+    settle: Math.hypot(w5[0] - w0[0], w5[2] - w0[2]),
+    drift: Math.hypot(w1[0] - w5[0], w1[2] - w5[2]),
+  };
 }
 
 describe("the recovery", () => {
@@ -95,14 +107,15 @@ describe("the recovery", () => {
       const r = await recover(k, hs);
       const tc = r.last!;
       console.log(
-        `  ${r.said}: down in ${r.t} s, ${Math.hypot(tc.dx, tc.dz).toFixed(2)} m off the spot at ${tc.sink.toFixed(2)} m/s — ${tc.grade}; 20 s after, ${r.drift.toFixed(2)} m on\n    ${r.radio.join("\n    ")}`,
+        `  ${r.said}: down in ${r.t} s, ${Math.hypot(tc.dx, tc.dz).toFixed(2)} m off the spot at ${tc.sink.toFixed(2)} m/s — ${tc.grade}; settled ${r.settle.toFixed(2)} m on its brakes, then ${r.drift.toFixed(2)} m in 15 s\n    ${r.radio.join("\n    ")}`,
       );
       expect(tc).toBeTruthy();
       expect(Math.hypot(tc.dx, tc.dz)).toBeLessThan(2.5);
       expect(tc.sink).toBeLessThan(2.5);
       expect(tc.grade).toBe("OK");
       expect(r.c.landed).toBe(true);
-      expect(r.drift).toBeLessThan(4);
+      expect(r.settle).toBeLessThan(6);
+      expect(r.drift).toBeLessThan(0.5);
       expect(r.radio.some((s) => s.includes("Cleared to land"))).toBe(true);
     }, 120_000);
 });
