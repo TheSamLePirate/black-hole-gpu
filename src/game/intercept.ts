@@ -98,8 +98,12 @@ export function interceptCues(r: V3, vt: V3, vo: V3): InterceptCues {
 export const ICPT = {
   /** the shadow's slot: behind it, on its left, level [m] */
   slot: { right: -60, back: 300, up: 0 } as FormSlot,
-  /** the run's bank at most [rad] (its turn's radius counts on it) */
+  /** the run's bank at most [rad] (its turn's radius counts on it); a formation's rejoin's (2 g level) */
   bankMax: 45 * D,
+  rejoinBank: 60 * D,
+  /** a turn of more than `turnSlowErr` [rad] to fly: at most this speed [m/s] (a fighter's turn — its radius) */
+  turnSlowErr: 45 * D,
+  turnSpd: 230,
   /** the run's heading gain [bank per radian off] */
   hdgGain: 2,
   /** the run's speed: over the target's — at most, at least [m/s]; the deceleration the closing counts on [m/s²];
@@ -152,7 +156,20 @@ export interface IcptOut {
  * target `T` (fixed to the Earth [m], [m/s]), the phase now. The run steered by heading, its speed set by the
  * distance; joined, the formation law.
  */
-export function interceptStep(o: FormCraft, V: number, h: number, T: FormCraft, phase: IcptPhase, slot: FormSlot = ICPT.slot): IcptOut {
+export function interceptStep(
+  o: FormCraft,
+  V: number,
+  h: number,
+  T: FormCraft,
+  phase: IcptPhase,
+  slot: FormSlot = ICPT.slot,
+  mem?: { iA: number; iU: number },
+  dt = 0,
+  /** a formation's rejoin (controller/formation.ts): harder turns at a turning speed, the room to turn taken only
+   *  coming towards its track, slower than it when ahead of the slot */
+  rejoin = false,
+): IcptOut {
+  const bankMax = rejoin ? ICPT.rejoinBank : ICPT.bankMax;
   const up = unit(T.p);
   const flat = (w: V3) => sub(w, scale(up, dot(w, up)));
   const vtH = flat(T.v);
@@ -173,7 +190,7 @@ export function interceptStep(o: FormCraft, V: number, h: number, T: FormCraft, 
   if ((ph === "run" || ph === "turn") && dist < ICPT.joinDist && (hca < ICPT.joinHca || turning)) ph = "join";
   else if ((ph === "join" || ph === "shadow") && (dist > ICPT.runDist || (hca > ICPT.runHca && !turning))) ph = "run";
   if (ph === "join" || ph === "shadow") {
-    const F = formationStep(o, V, T, slot);
+    const F = formationStep(o, V, T, slot, mem, dt);
     if (F.dist < ICPT.shadowDist) ph = "shadow";
     else if (ph === "shadow" && F.dist > 2 * ICPT.shadowDist) ph = "join";
     return { phase: ph, bank: F.bank, gamma: F.gamma, spd: F.spd, brake: F.brake, acc: F.acc, dist, aspect, err: 0, form: F };
@@ -182,7 +199,7 @@ export function interceptStep(o: FormCraft, V: number, h: number, T: FormCraft, 
   // its angle that way, its radius at our speed)
   const ofw = len(ohV) > 1 ? unit(ohV) : fwdT;
   const orr = cross(ofw, up);
-  const R = (V * V) / (G * Math.tan(ICPT.bankMax));
+  const R = (V * V) / (G * Math.tan(bankMax));
   const ang = Math.atan2(dot(fwdT, orr), dot(fwdT, ofw));
   const turnSide = hca > 90 ? Math.sign(-Math.sign(lat) * dot(rightT, orr)) || 1 : Math.sign(ang) || 1;
   const turnAng = turnSide > 0 ? (ang >= 0 ? ang : ang + 2 * Math.PI) : ang <= 0 ? -ang : 2 * Math.PI - ang;
@@ -205,7 +222,9 @@ export function interceptStep(o: FormCraft, V: number, h: number, T: FormCraft, 
   // the run: the room to turn onto its track — the turn's radius at our speed and the run's bank, by the angle
   // between the tracks: two radii head on, one across it, none alongside — taken to its side
   const side = Math.sign(lat) || Math.sign(slot.right) || -1;
-  const disp = turning ? Math.abs(slot.right) : Math.max(R * (1 - Math.cos(hca * D)), Math.abs(slot.right));
+  // (only coming towards its track: flying away from it — a break —, the turn back is room enough)
+  const away = rejoin && Math.sign(lat) * dot(ohV, rightT) > 0.3 * len(ohV);
+  const disp = turning || away ? Math.abs(slot.right) : Math.max(R * (1 - Math.cos(hca * D)), Math.abs(slot.right));
   const Q = [0, 1, 2].map((k) => T.p[k]! + rightT[k]! * side * disp - fwdT[k]! * slot.back + up[k]! * slot.up);
   // (its collision course: the point flies with it)
   const rq = flat(sub(Q, o.p));
@@ -219,14 +238,20 @@ export function interceptStep(o: FormCraft, V: number, h: number, T: FormCraft, 
     const toTrack = Math.sign(-Math.sign(lat) * dot(rightT, orr));
     if (toTrack !== 0) err = toTrack * Math.abs(err);
   }
-  const bank = ph === "turn" ? turnSide * ICPT.bankMax : clamp(ICPT.hdgGain * err, -ICPT.bankMax, ICPT.bankMax);
+  const bank = ph === "turn" ? turnSide * bankMax : clamp(ICPT.hdgGain * err, -bankMax, bankMax);
   // (its speed: head on — before its beam — a little over its, to turn tight; behind, the closing by the
   // distance, slow enough to stop on the slot)
+  // (ahead of the slot on its way — a rejoin after a break, the slot behind us —: slower than it, let it come)
+  const ahead = dot(sub(o.p, S0), fwdT);
   const over =
-    aspect > 90
-      ? ICPT.overHead
-      : clamp(ICPT.overMin + Math.sqrt(2 * ICPT.stopA * Math.max(dist - ICPT.joinDist / 2, 0)), ICPT.overMin, ICPT.overMax);
-  const spd = clamp(vT + over, ICPT.vMin, ICPT.vMax);
+    rejoin && ahead > 0 && hca < 90
+      ? -clamp(ahead / 40, 20, 80)
+      : aspect > 90
+        ? ICPT.overHead
+        : clamp(ICPT.overMin + Math.sqrt(2 * ICPT.stopA * Math.max(dist - ICPT.joinDist / 2, 0)), ICPT.overMin, ICPT.overMax);
+  // (a big turn to fly — after a break, the run's lead turn —: at most the turning speed)
+  const big = rejoin && (ph === "turn" || Math.abs(err) > ICPT.turnSlowErr);
+  const spd = Math.min(clamp(vT + over, ICPT.vMin, ICPT.vMax), big ? Math.max(ICPT.turnSpd, vT) : Infinity);
   const acc = clamp(JET.spdGain * (spd - V), -JET.accMax, 3 * JET.accMax);
   // (its height: the slot's)
   const hT = h + dot(sub(Q, o.p), up);

@@ -224,6 +224,8 @@ import { BenchScreen } from "./ui/bench";
 import { setSteady } from "./ui/clock";
 import { applyPalette } from "./ui/hudkit";
 import { lang, t, tf, tr } from "./i18n";
+import { ORDERS, type OrderId } from "./game/orders";
+import { FORMATION_IDS, FORMATIONS } from "./game/formations";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>("view");
@@ -2608,6 +2610,8 @@ async function main() {
   }
   // (the controller's news, onto the game's bus — game/events.ts — and from it to whoever shows them)
   camera.onPilotMessage = (text) => events.emit("pilotMessage", { text, t: sim.time });
+  // (the flight's radio: a leader's orders heard, the wingmen's answers — F2, F3)
+  camera.onRadio = (text) => voice.say({ text, speaker: "tower", priority: 2 });
   camera.onAirEntry = () => events.emit("airEntry", { t: sim.time });
   camera.onCraftLost = (why) => events.emit("craftLost", { why, t: sim.time });
   // (the flight's end graded — game/report.ts —: the HUD's card, a line in the journal)
@@ -2835,6 +2839,10 @@ async function main() {
     return true;
   };
   const keyActions: Record<KeyAction, (e: KeyboardEvent, arg?: string) => void> = {
+    // (the flight's leader: the orders' wheel — F2)
+    orders: (e) => {
+      if (!e.repeat && flying()) wheel.open(orderItems(), { fr: "Patrouille", en: "Flight" });
+    },
     tools: () => DEV_TOOLS && toolsWin.toggle(),
     gameMode: (e, m) => {
       if (!e.repeat) setGameMode(m as GameMode);
@@ -3329,6 +3337,8 @@ async function main() {
           { label: { fr: "Intercepter", en: "Intercept" }, key: "⇧Tab", on: !!camera.icpt, run: () => say(camera.icptStart()) },
         ],
       },
+      // (the flight's leader: its orders — controller/orders.ts)
+      { label: { fr: "Patrouille", en: "Flight" }, sub: orderItems() },
       { label: { fr: "Plan de vol", en: "Flight plan" }, key: "⇧O", on: camera.nav.on.l, run: () => routePanel.open() },
       {
         label: { fr: "Défis et combats", en: "Challenges & fights" },
@@ -3342,6 +3352,32 @@ async function main() {
     ];
   };
 
+  /** The leader's orders as a wheel (F2): each to the room's wingmen and the AI's; the formations a wheel of their own. */
+  const orderItems = (): WheelItem[] => {
+    const say = (s: string | null) => s && panel.toast(s);
+    const order = (id: OrderId, arg?: string) => say(camera.flightOrder(id, arg));
+    const item = (id: OrderId): WheelItem => ({ label: { fr: ORDERS[id].fr, en: ORDERS[id].en }, run: () => order(id) });
+    return [
+      item("rejoin"),
+      {
+        label: { fr: "Formation", en: "Formation" },
+        sub: FORMATION_IDS.map((id) => ({
+          label: { fr: FORMATIONS[id].fr, en: FORMATIONS[id].en },
+          on: settings.formShape === id,
+          run: () => order("shape", id),
+        })),
+      },
+      item("tighten"),
+      item("loosen"),
+      item("attack"),
+      item("engage"),
+      item("cover"),
+      item("hold"),
+      item("rtb"),
+      item("breakL"),
+      item("breakR"),
+    ];
+  };
   const wheelItems = (): WheelItem[] => {
     const P = camera.pilot;
     if (flying() && fleet.active === "f35") return jetWheel();

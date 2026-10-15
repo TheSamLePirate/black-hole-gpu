@@ -30,6 +30,7 @@ export type KeyAction =
   | "roll"
   | "resetShipView"
   | "hold"
+  | "orders"
   | "auto"
   | "map"
   | "mount"
@@ -277,6 +278,11 @@ export const KEYMAP: KeySection[] = [
         keys: "Space · Enter · Tab · = · −",
         text: "In a fight (the F-35's): the gun (held — the pause on Esc then) · the weapon chosen released · the radar's lock on the next target · the next weapon (AIM-9X, AIM-120, JDAM) · a flare and chaff",
         bind: [fly("Equal", "combat", { arg: "weapon" }), fly(["Minus", "IntlBackslash"], "combat", { arg: "cm" })],
+      },
+      {
+        keys: "Tab held › Flight · F13",
+        text: "The flight's leader: the orders' wheel (rejoin, formation, tighten, loosen, attack my target, engage, cover me, hold here, RTB, break) — to the room's wingmen and the AI wingmen; its key (F13) given another in the controls, or a HOTAS button",
+        bind: [fly("F13", "orders")],
       },
       {
         keys: "I K · J L · H N",

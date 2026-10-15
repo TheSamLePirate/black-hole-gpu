@@ -213,6 +213,8 @@ pertinent.
   - tenir ici (un hippodrome), rentrer à la base, dégagement à gauche ou à droite.
 
   En réseau, l'ordre s'affiche chez le joueur humain (et s'exécute s'il est en formation).
+
+  *Fait le 2026-10-15 — [fiche](progress/aviation/F2.md) : 11 ordres et leurs appels radio ; roue (Tab › Patrouille, action F13 réassignable/HOTAS), TARS (outil et hors ligne) ; reçus en réseau, exécutés en formation (forme, écartement, dégagement, attente étagée, retour base, rejoindre) ; ralliement lointain par la course de C2.*
 - **F3. Les ailiers IA**, en solo comme en réseau (l'hôte les fait voler).
   - Un à trois F-35 qui volent avec le vrai modèle, tiennent leur poste et obéissent aux ordres.
   - Ils annoncent leurs contacts, se battent (C4) et peuvent être perdus.

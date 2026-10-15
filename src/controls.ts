@@ -55,6 +55,9 @@ import { installRadar, Radar, type RadarSource } from "./controller/radar";
 import type { RadarObject } from "./game/radar";
 import { type FormState, installFormation } from "./controller/formation";
 import { type IcptState, installIntercept } from "./controller/intercept";
+import { installOrders } from "./controller/orders";
+import type { Order } from "./game/orders";
+import type { Racetrack } from "./game/racetrack";
 import { installJet } from "./controller/jet";
 import { installFplan, noNav, type NavState } from "./controller/fplan";
 import { installChallenge, type ChalState } from "./controller/challenge";
@@ -1028,6 +1031,13 @@ export class CameraController {
   form: FormState | null = null;
   /** the INTERCEPT autopilot on the radar's lock (controller/intercept.ts), null: none */
   icpt: IcptState | null = null;
+  /** a break being flown (its heading), a hold (its fix, its racetrack) — the leader's orders (controller/orders.ts) */
+  brk: { hdg: number } | null = null;
+  holdPat: { fix: { lat: number; lon: number }; R: Racetrack } | null = null;
+  /** an order given as the flight's leader: where it goes (the room, our AI wingmen) */
+  readonly orderSinks = new Map<string, (o: Order) => void>();
+  /** a radio call heard (a leader's order, a wingman's answer): said aloud */
+  onRadio?: (text: string) => void;
   /** an aerobatic figure flown — the program's demonstration or the player's, judged (controller/aerobatics.ts) —,
    *  and one asked, begun at the next frame in the air (the craft just placed) */
   aero: AeroRun | null = null;
@@ -1415,6 +1425,7 @@ installSpectator(CameraController);
 installJet(CameraController);
 installFormation(CameraController);
 installIntercept(CameraController);
+installOrders(CameraController);
 installAerobatics(CameraController);
 installRadar(CameraController);
 installFplan(CameraController);

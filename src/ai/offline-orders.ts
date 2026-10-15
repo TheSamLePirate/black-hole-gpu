@@ -85,6 +85,30 @@ export function parseOrders(text: string): Order[] {
   if (/\b(pause|mets en pause|fige le temps)\b/.test(q)) add("time", { running: false });
   else if (/\b(reprends|relance le temps|resume|unpause)\b/.test(q)) add("time", { running: true });
 
+  // the flight's orders (F2: the leader's — flight_lead)
+  const lead = (order: string, shape?: string) => add("flight_lead", { action: "order", order, ...(shape ? { shape } : {}) });
+  if (/\b(degage[sz]?|break)\b.*\b(a gauche|left)\b/.test(q)) lead("breakL");
+  else if (/\b(degage[sz]?|break)\b.*\b(a droite|right)\b/.test(q)) lead("breakR");
+  const SHAPES: [RegExp, string][] = [
+    [/\b(losange|diamond)\b/, "diamond"],
+    [/\bechelon (a )?droite|echelon right\b/, "echelonR"],
+    [/\bechelon (a )?gauche|echelon left\b/, "echelonL"],
+    [/\bfinger ?tip|finger four\b/, "fingertip"],
+    [/\b(triangle|vic)\b/, "vic"],
+    [/\bligne de front|line abreast\b/, "line"],
+    [/\b(colonne|trail)\b/, "trail"],
+    [/\b(patrouille etalee|combat spread)\b/, "spread"],
+  ];
+  for (const [re, id] of SHAPES) if (re.test(q)) lead("shape", id);
+  if (/\b(rejoignez|rejoins|rejoin)\b/.test(q)) lead("rejoin");
+  if (/\b(serrez|resserrez|tighten)\b/.test(q)) lead("tighten");
+  else if (/\b(ecartez|desserrez|spread out|loosen)\b/.test(q)) lead("loosen");
+  if (/\b(attaquez|attack) (ma cible|my target)\b/.test(q)) lead("attack");
+  else if (/\b(engagez|engage)\b/.test(q) && !/autopilot|pilote/.test(q)) lead("engage");
+  if (/\b(couvrez[- ]moi|cover me)\b/.test(q)) lead("cover");
+  if (/\b(attente ici|tenez ici|hold here)\b/.test(q)) lead("hold");
+  if (/\b(retour (a la )?base|rentrez|rtb|return to base)\b/.test(q)) lead("rtb");
+
   // the views, the map
   if (/\b(vue|view|camera)\b/.test(q)) for (const [re, m] of MOUNT_WORDS) if (re.test(q)) add("camera", { mount: m }), void 0;
   if (/\b(ouvre|montre|affiche|open|show)\b.*\b(carte|map)\b/.test(q)) add("interface", { map: true });

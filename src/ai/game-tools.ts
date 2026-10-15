@@ -57,6 +57,8 @@ import { SUBAGENTS_MAX, type SubResult, type SubTask } from "./subagents";
 import { type AttitudeSampler, TARS_CHANNELS, TELEMETRY_GROUPS, telemetry, type TarsChannel, type TelemetryGroup } from "./telemetry";
 import { liveSeries } from "../ui/tars/display";
 import { CHANNELS, type RecKey } from "../game/recorder";
+import { ORDER_IDS, type OrderId } from "../game/orders";
+import { FORMATION_IDS } from "../game/formations";
 
 export const UNDO_SAVE = "Before TARS";
 
@@ -1684,6 +1686,31 @@ export function gameTools(h: GameHost): Tool[] {
           default:
             return F.abort();
         }
+      }),
+    },
+    {
+      name: "flight_lead",
+      description:
+        "The flight the player leads (a patrouille of two to four: the room's pilots flying in formation on him, his AI wingmen). order: an order given as its leader, said on the radio and carried out by the wingmen in formation — rejoin, shape (a formation: echelonR, echelonL, fingertip, vic, diamond, line, trail, spread), tighten, loosen, attack (his radar's lock), engage (the hostiles), cover (him), hold (a racetrack over where he is), rtb (home to the nearest airfield), breakL, breakR (a hard 90° turn). status: the formation, its spacing, his place in another's, the wingmen.",
+      params: {
+        action: { type: "string", enum: ["order", "status"] },
+        order: { type: "string", enum: ORDER_IDS },
+        shape: { type: "string", enum: FORMATION_IDS },
+      },
+      required: ["action"],
+      run: act((a) => {
+        const c = h.camera;
+        if (a.action === "status")
+          return {
+            formation: c.s.formShape,
+            spacing: c.s.formSpacing,
+            myPlace: c.s.formPos,
+            inFormationOn: c.form?.name ?? null,
+            flying: c.brk ? "break" : c.holdPat ? "hold" : c.form ? "formation" : null,
+          };
+        if (!a.order) throw new Error("order needs an order");
+        if (a.order === "shape" && !a.shape) throw new Error("shape needs a shape");
+        return c.flightOrder(a.order as OrderId, a.shape as string | undefined);
       }),
     },
     {

@@ -44,6 +44,10 @@ export interface JetModes {
   formDist?: number;
   /** an intercept flown (controller/intercept.ts): its phase and target (the displays' copy) */
   icpt?: string;
+  /** the heading hold's bank at most [rad] when not the usual (a break's hard turn — controller/orders.ts) */
+  bankMax?: number;
+  /** a break or a hold flown (the displays' copy) */
+  order?: "BRK" | "HOLD";
 }
 export const noJetModes = (): JetModes => ({ alt: null, hdg: null, spd: null, ab: false });
 
@@ -55,8 +59,8 @@ export function altHoldGamma(h: number, hT: number, V: number): number {
 }
 
 /** The heading hold's bank [rad] (right > 0): towards the heading (clockwise from north). */
-export function hdgHoldBank(hdg: number, hT: number): number {
-  return clamp(JET.hdgGain * wrapPi(hT - hdg), -JET.bankMax, JET.bankMax);
+export function hdgHoldBank(hdg: number, hT: number, max: number = JET.bankMax): number {
+  return clamp(JET.hdgGain * wrapPi(hT - hdg), -max, max);
 }
 
 /** The autothrottle: the throttle moved so the speed comes to its target, its acceleration measured (the
@@ -85,7 +89,7 @@ export class Autothrottle {
 export function jetCommands(m: JetModes, f: { h: number; hdg: number; V: number }): { gamma: number | null; bank: number | null } {
   return {
     gamma: m.alt !== null && Number.isFinite(f.h) ? altHoldGamma(f.h, m.alt, f.V) : null,
-    bank: m.hdg !== null && Number.isFinite(f.hdg) ? hdgHoldBank(f.hdg, m.hdg) : null,
+    bank: m.hdg !== null && Number.isFinite(f.hdg) ? hdgHoldBank(f.hdg, m.hdg, m.bankMax) : null,
   };
 }
 
@@ -102,6 +106,7 @@ export function jetAnnunciators(m: JetModes, u: { alt: (m: number) => string; sp
     if (m.ab) out.push("AB");
     return out;
   }
+  if (m.order) out.push(m.order);
   if (m.alt !== null) out.push(`${m.vnav ? "VNAV " : "ALT "}${u.alt(m.alt)}`);
   if (m.hdg !== null && m.lnav) out.push("LNAV");
   else if (m.hdg !== null) out.push(`HDG ${String(Math.round(((m.hdg / D) % 360) + 360) % 360).padStart(3, "0")}`);

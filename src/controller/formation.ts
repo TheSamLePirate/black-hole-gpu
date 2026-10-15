@@ -3,7 +3,8 @@
 // plane law's bank and flight path and sets the autothrottle's speed; the stick, the throttle keys or lever, an
 // autopilot of the computer's, the leader lost: off, the altitude, heading and speed then held.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
-import { type FormCraft, type FormOut, type FormSlot, formationStep } from "../game/formation";
+import type { FormCraft, FormOut, FormSlot } from "../game/formation";
+import { ICPT, type IcptPhase, interceptStep } from "../game/intercept";
 import { FORMATIONS, type FormationId, formationSlot, type Spacing } from "../game/formations";
 import { t, tf, tr } from "../i18n";
 import type { PilotInput } from "../pilot";
@@ -37,6 +38,8 @@ export interface FormState {
   kspan?: number;
   /** the law's integrals near the slot (game/formation.ts) */
   mem?: { iA: number; iU: number };
+  /** far off (beyond 3 km): the intercept's run to the slot first (game/intercept.ts), then the formation law */
+  phase?: IcptPhase;
 }
 
 /** A place in a formation, its close slots widened by `kspan` (the two craft's spans over two F-35s'). */
@@ -86,7 +89,24 @@ function formStep(
   const L = F.lead();
   const o = this.netOwn();
   if (!L || !o) return this.formOff(tf("Formation off — {0} lost", F.name)), null;
-  const r = formationStep(o, f.V, L, F.at, (F.mem ??= { iA: 0, iU: 0 }), dt);
+  // (the slot far off — a rejoin, after a break —: the intercept's run to it, its turn onto his track; within 3 km
+  // and on his way, the formation law)
+  const slotAt = [0, 1, 2].map((k) => L.p[k]!);
+  F.phase ??= Math.hypot(...[0, 1, 2].map((k) => slotAt[k]! - o.p[k]!)) > ICPT.joinDist ? "run" : "join";
+  const I = interceptStep(o, f.V, f.h, L, F.phase, F.at, (F.mem ??= { iA: 0, iU: 0 }), dt, true);
+  F.phase = I.phase === "shadow" ? "join" : I.phase;
+  const r: FormOut = I.form ?? {
+    bank: I.bank,
+    gamma: I.gamma,
+    spd: I.spd,
+    brake: I.brake,
+    acc: I.acc,
+    along: 0,
+    cross: 0,
+    up: 0,
+    dist: I.dist,
+    closing: 0,
+  };
   // (placed elsewhere meanwhile, or he far beyond a rejoin)
   if (r.dist > FORM_RANGE) return this.formOff(tf("Formation off — {0} too far", F.name)), null;
   F.last = r;

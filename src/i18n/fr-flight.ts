@@ -19,4 +19,13 @@ export default {
   "Line abreast": "Ligne de front",
   Trail: "Colonne",
   "Combat spread": "Patrouille étalée",
+  "The flight's leader: the orders' wheel (rejoin, formation, tighten, loosen, attack my target, engage, cover me, hold here, RTB, break) — to the room's wingmen and the AI wingmen; its key (F13) given another in the controls, or a HOTAS button":
+    "Le leader de la patrouille : la roue des ordres (rejoindre, formation, serrer, s'écarter, attaquer ma cible, engager, me couvrir, tenir ici, rentrer, dégagement) — aux ailiers du salon et aux ailiers IA ; sa touche (F13) à réassigner dans les commandes, ou un bouton du HOTAS",
+  "Tab held › Flight · F13": "Tab maintenu › Patrouille · F13",
+  "Attack: lock a target first (Tab)": "Attaque : verrouillez d'abord une cible (Tab)",
+  "Hold: in the air": "Attente : en vol",
+  "The break: in the air": "Le dégagement : en vol",
+  "Holding — inbound {0}°": "En attente — axe d'arrivée {0}°",
+  "RTB: in the air": "Retour base : en vol",
+  "RTB — {0}, {1} km, course {2}°": "Retour base — {0}, {1} km, route {2}°",
 } satisfies Record<string, string>;

@@ -39,6 +39,7 @@ import { vesselHulls } from "../system/collide";
 import { dockedFrame, type VesselId, VESSELS } from "../vessels";
 import type { NetPanel } from "./netpanel";
 import { formationLabel, formSlotFor } from "../controller/formation";
+import { orderOf } from "../game/orders";
 
 type Vec3 = [number, number, number];
 
@@ -259,6 +260,8 @@ export class NetSession {
     }
     const c = this.d.camera;
     const now = performance.now() / 1000;
+    // (our orders as the flight's leader: sent to the room)
+    if (!c.orderSinks.has("net")) c.orderSinks.set("net", (o) => this.net?.room && this.net.event({ kind: "order", o }));
     this.alightStep(now);
     this.pace(net, now);
     // the others
@@ -282,7 +285,16 @@ export class NetSession {
       net.on("event", ({ from, ev }) => {
         const e = ev as { kind?: string; to?: number };
         if (e.kind === "tel") this.tel.set(from, (ev as unknown as { v: Record<string, number> }).v);
-        else if (e.kind === "board" && typeof e.to === "number") {
+        else if (e.kind === "order") {
+          // (a leader's order — F2: heard, carried out in formation on him; "rejoin" heard out of one: on his wing)
+          const o = orderOf((ev as unknown as { o: unknown }).o);
+          if (!o) return;
+          const cam = this.d.camera;
+          const said = cam.orderHeard(o, { name: this.nameOf(from), slot: from });
+          cam.onPilotMessage?.(said);
+          cam.onRadio?.(said);
+          if (o.id === "rejoin" && cam.form?.slot !== from && VESSELS[fleet.active].flies) this.formation(from);
+        } else if (e.kind === "board" && typeof e.to === "number") {
           this.aboard.set(from, e.to);
           if (e.to === net.room?.slot) this.d.toast(tf("{0} is aboard", this.nameOf(from)));
         } else if (e.kind === "dock" && typeof e.to === "number") {
@@ -1051,6 +1063,8 @@ export class NetSession {
     }
     this.d.settings.flightMode = "plane";
     if (c.icpt) c.icptOff();
+    c.brk = c.holdPat = null;
+    c.jetModes.bankMax = c.jetModes.order = undefined;
     const tr = () => this.net?.remotes.track(slot);
     // (his turn from his bank — eased over a quarter second, his roll's own shake left out — and led by his roll's
     // rate 0.8 s on: ours to answer it takes about that)

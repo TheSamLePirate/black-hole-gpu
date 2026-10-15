@@ -88,6 +88,9 @@ function jetToggle(this: CameraController, what: "ap" | "athr" | "ab"): string {
   if (!f || this.rolling) return t("The autopilot's holds: in the air");
   if (this.pilot.auto !== "none") this.pilot.setAuto(this.pilot.auto);
   if (what === "ap") {
+    // (a break's, a hold's flying let go with the holds)
+    this.brk = this.holdPat = null;
+    m.bankMax = m.order = undefined;
     if (m.alt !== null || m.hdg !== null) {
       m.alt = m.hdg = null;
       return t("Autopilot off");
@@ -169,7 +172,9 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
       if (Number.isFinite(f.hdg)) m.hdg = f.hdg;
     }
   }
-  // (the flight plan's guidance: the holds' targets — controller/fplan.ts)
+  // (a break, a hold — the leader's orders: controller/orders.ts —; the flight plan's guidance: the holds' targets —
+  // controller/fplan.ts)
+  this.orderStep(inp, f);
   this.navStep(inp, f);
   if (m.spd !== null) {
     // (the throttle keys: the speed selected)
