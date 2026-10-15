@@ -15,6 +15,7 @@ import { t, tf } from "../i18n";
 import { VESSELS } from "../vessels";
 import { MapView } from "./mapview";
 import { button, el as h, modal } from "./kit";
+import { unitsFor } from "./unitsys";
 
 export interface RouteHost {
   camera: CameraController;
@@ -22,7 +23,6 @@ export interface RouteHost {
 }
 
 const D = Math.PI / 180;
-const NM = 1852;
 const FIELDS = SITES.filter((s) => s.body === "earth" && s.runway);
 const deg = (r: number) => ((Math.round(r / D) % 360) + 360) % 360;
 const hms = (s: number) => (Number.isFinite(s) ? `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}` : "—");
@@ -361,7 +361,11 @@ export class RoutePanel {
         return inp;
       };
       const g = lg[i - 1];
-      const leg = h("span", "rp-leg", g ? `${String(deg(g.course)).padStart(3, "0")}° ${(g.dist / NM).toFixed(0)} NM` : t("start"));
+      const leg = h(
+        "span",
+        "rp-leg",
+        g ? `${String(deg(g.course)).padStart(3, "0")}° ${unitsFor(this.host.camera.s).fDist(g.dist, 0)}` : t("start"),
+      );
       const sel = () => {
         this.sel = this.sel === i ? -1 : i;
         this.map?.flyTo(w.lat, w.lon, this.map.zoom);
@@ -430,7 +434,7 @@ export class RoutePanel {
     const bingo = c.routeBingo();
     const o = N.last.l;
     const cells: [string, string, string?][] = [
-      [t("Distance"), `${(dist / NM).toFixed(0)} NM · ${(dist / 1000).toFixed(0)} km`],
+      [t("Distance"), unitsFor(c.s).fDist(dist, 0)],
       [t("Flight time"), hms(f?.time ?? dist / R.cruiseSpd)],
     ];
     if (f) {
@@ -444,7 +448,7 @@ export class RoutePanel {
     if ((N.on.l || N.on.v) && o) {
       const w = R.wps[o.active];
       const ete = Number.isFinite(o.ete) ? `${Math.floor(o.ete / 60)}:${String(Math.floor(o.ete % 60)).padStart(2, "0")}` : "—";
-      cells.push([t("Active"), `${w?.name ?? "—"} · ${(o.dist / NM).toFixed(1)} NM · ${ete}`, "act"]);
+      cells.push([t("Active"), `${w?.name ?? "—"} · ${unitsFor(c.s).fDist(o.dist)} · ${ete}`, "act"]);
     }
     S.replaceChildren(
       ...cells.map(([k, v, cls]) => {

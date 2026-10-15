@@ -3,7 +3,7 @@
 export default {
   "The figures: in the F-35, in the air": "Les figures : en F-35, en vol",
   "{0} — watch: {1}": "{0} — regardez : {1}",
-  "{0} — entry: {1} m/s ±{2}, {3} m over the ground; {4}": "{0} — entrée : {1} m/s ±{2}, {3} m au-dessus du sol ; {4}",
+  "{0} — entry: {1} ±{2}, {3} over the ground; {4}": "{0} — entrée : {1} ±{2}, {3} au-dessus du sol ; {4}",
   "Figure abandoned — not in the air": "Figure abandonnée — pas en vol",
   "This figure: in the direct law": "Cette figure : en loi directe",
   "This figure: on the F-35's law": "Cette figure : avec la loi du F-35",
@@ -23,21 +23,21 @@ export default {
   Loop: "Looping",
   "A whole circle in the vertical plane, wings level all the way round, back at the entry's height and heading.":
     "Un cercle entier dans le plan vertical, ailes à plat tout du long, retour à la hauteur et au cap d'entrée.",
-  "Full power, 450 kt, wings level": "Pleins gaz, 450 kt, ailes à plat",
+  "Full power, {v}, wings level": "Pleins gaz, {v}, ailes à plat",
   "Pull 4–5 g": "Tirez 4 à 5 g",
   "Over the top: lighter, keep the circle round": "Au sommet : plus léger, gardez le cercle rond",
   "Back to level: same height, same heading": "Retour en palier : même hauteur, même cap",
   Immelmann: "Immelmann",
   "Half a loop up, then half a roll on top: higher, the heading reversed, upright.":
     "Un demi-looping vers le haut, puis un demi-tonneau au sommet : plus haut, le cap inversé, à l'endroit.",
-  "Full power, 450 kt": "Pleins gaz, 450 kt",
+  "Full power, {v}": "Pleins gaz, {v}",
   "Pull 4–5 g, wings level": "Tirez 4 à 5 g, ailes à plat",
   "Inverted on top, horizon level: half a roll": "Sur le dos au sommet, horizon à plat : un demi-tonneau",
   "Upright, the heading reversed": "À l'endroit, le cap inversé",
   "Split-S": "Split-S",
   "Half a roll to inverted, then half a loop down: lower, the heading reversed, upright.":
     "Un demi-tonneau sur le dos, puis un demi-looping vers le bas : plus bas, le cap inversé, à l'endroit.",
-  "300 kt, high enough": "300 kt, assez haut",
+  "{v}, high enough": "{v}, assez haut",
   "Half a roll to inverted": "Un demi-tonneau sur le dos",
   "Pull 4 g through the vertical": "Tirez 4 g à travers la verticale",
   "Level, the heading reversed": "En palier, le cap inversé",
@@ -49,7 +49,7 @@ export default {
   "Barrel roll": "Tonneau barriqué",
   "A roll around a line ahead — a corkscrew — back on the entry's heading and height.":
     "Un tonneau autour d'une ligne devant soi — un tire-bouchon — retour au cap et à la hauteur d'entrée.",
-  "Level, 400 kt": "En palier, 400 kt",
+  "Level, {v}": "En palier, {v}",
   "Roll steadily and pull: hard upright, light inverted": "Roulez régulièrement en tirant : fort à l'endroit, léger sur le dos",
   "Keep the roll going round": "Continuez le roulis jusqu'au bout",
   "Back level, same heading": "Retour en palier, même cap",
@@ -76,7 +76,7 @@ export default {
   "7 g reversal": "Renversement à 7 g",
   "The heading reversed as fast as the F-35 turns: at its corner speed, 7 g, banked 82°, its height kept.":
     "Le cap inversé aussi vite que tourne le F-35 : à sa vitesse de coin, 7 g, incliné à 82°, sa hauteur tenue.",
-  "450 kt, full power": "450 kt, pleins gaz",
+  "{v}, full power": "{v}, pleins gaz",
   "Roll to 82° and pull 7 g": "Inclinez à 82° et tirez 7 g",
   "Hold the height, the nose on the horizon": "Tenez la hauteur, le nez sur l'horizon",
   "Heading reversed: roll out": "Cap inversé : remettez les ailes à plat",

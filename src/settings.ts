@@ -451,7 +451,8 @@ export interface Settings {
   gVignette: boolean; // a hard pull's grey-out (from 5 g, a tunnel at 9)
   hudKind: "auto" | "atmo" | "space" | "approach"; // the ship's HUD (game/hudkind.ts): chosen by the flight's phase, or forced
   hudViews: "chaseDorsal" | "outside" | "all"; // where the whole HUD shows: the chase and dorsal views, every outside view, everywhere
-  hudJet: "off" | "aviation" | "metric"; // plane mode in the air: a fighter's HUD (ui/hud/jethud.ts) in green — its tapes in knots and feet, or metric
+  hudJet: "on" | "off"; // plane mode in the air: a fighter's HUD (ui/hud/jethud.ts) in green — in the units chosen
+  units: "metric" | "imperial"; // the units shown everywhere (ui/unitsys.ts): metres, m/s, km — or feet, knots, nautical miles
   hudHeading: boolean; // the heading tape (the world's north)
   hudBank: boolean; // the bank scale and its pointer
   hudMarkers: boolean; // radial and normal marked in the view
@@ -770,7 +771,8 @@ export function defaultSettings(): Settings {
     hudHorizon: true,
     hudKind: "auto",
     hudViews: "chaseDorsal",
-    hudJet: "aviation",
+    hudJet: "on",
+    units: "metric",
     speedLines: 0.7,
     gVignette: true,
     hudHeading: true,
@@ -2074,6 +2076,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   hudKind: "pref",
   hudViews: "pref",
   hudJet: "pref",
+  units: "pref",
   speedLines: "pref",
   gVignette: "pref",
   hudHeading: "pref",

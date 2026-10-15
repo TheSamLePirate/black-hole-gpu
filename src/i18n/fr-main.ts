@@ -125,7 +125,7 @@ export default {
   "F-35B: STOVL mode — the lift fan, the nozzle swivelled down; below 65 m/s the hover law: the stick a speed over the ground, ⇧ Alt a vertical speed, let go held in place":
     "F-35B : mode STOVL — la soufflante, la tuyère pivotée vers le bas ; sous 65 m/s la loi de vol stationnaire : le manche une vitesse sol, ⇧ Alt une vitesse verticale, lâchés le point tenu",
   "STOVL: the F-35B's": "STOVL : celui du F-35B",
-  "STOVL: below 250 kt": "STOVL : sous 250 kt",
+  "STOVL: below {0}": "STOVL : sous {0}",
   "STOVL mode: converting — the lift fan engaging": "Mode STOVL : conversion — la soufflante s'embraye",
   "STOVL mode off: conventional flight": "Mode STOVL coupé : vol conventionnel",
   "Plane mode, the jet's systems: afterburner (the throttle full, thrust ×1.5) · autopilot: the altitude and heading held (the stick flies through it; let go, the new ones held) · autothrottle: the speed held (⇧ Alt then set it) (' is ù on AZERTY)":

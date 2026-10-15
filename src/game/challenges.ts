@@ -124,8 +124,8 @@ export const CHALLENGES: ChallengeDef[] = [
     id: "landing",
     title: { fr: "Atterrissage noté", en: "Graded landing" },
     brief: {
-      fr: "Finale de 12 km à Edwards : toucher doux, au point visé (300 m), sur l'axe, à la vitesse de référence (140 kt).",
-      en: "A 12 km final at Edwards: a soft touchdown, on the aim point (300 m), on the centreline, at the reference speed (140 kt).",
+      fr: "Finale de 12 km à Edwards : toucher doux, au point visé (300 m), sur l'axe, à la vitesse de référence (72 m/s).",
+      en: "A 12 km final at Edwards: a soft touchdown, on the aim point (300 m), on the centreline, at the reference speed (72 m/s).",
     },
     kind: "landing",
     start: { field: "Edwards", final: 12 },

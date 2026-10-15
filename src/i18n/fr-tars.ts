@@ -17,6 +17,7 @@ export default {
   "{0}, Houston. Copy the burn.": "{0}, Houston. Bien reçu la poussée.",
   "wind calm": "vent calme",
   "wind {0} at {1} knots": "vent {0}, {1} nœuds",
+  "wind {0} at {1} metres a second": "vent {0}, {1} mètres par seconde",
   "{0}, {1} tower. Runway {2}, {3}, cleared to land.": "{0}, tour de {1}. Piste {2}, {3}, autorisé à atterrir.",
   "Textbook.": "Du travail de manuel.",
   "Nice landing.": "Bel atterrissage.",

@@ -3138,15 +3138,29 @@ export const SCHEMA: ControlDef[] = [
     effect: "none",
     help: "Flown as a plane in the air: a fighter's head-up display in green — the airspeed and altitude tapes, Mach, the load and its peak, the incidence, the vertical speed, the radar altitude, the autopilot's and autothrottle's modes and bugs, the throttle and the afterburner.",
     options: [
-      {
-        value: "aviation",
-        label: "Knots · feet",
-        hint: "As a fighter's: the speed in knots, the altitude in feet, the vertical speed in feet a minute",
-      },
-      { value: "metric", label: "Metric", hint: "The speed in m/s, the altitude in metres" },
+      { value: "on", label: "On", hint: "In the units chosen (Units)" },
       { value: "off", label: "Off", hint: "The HUD as in the other modes" },
     ],
     keywords: "hud jet fighter green tape airspeed altitude knots feet mach g radar autopilot afterburner",
+  },
+  {
+    key: "units",
+    type: "choice",
+    section: "game",
+    group: "HUD aids",
+    label: "Units",
+    style: "segmented",
+    effect: "none",
+    help: "The units shown and said everywhere — the HUDs, the cockpit's displays, the radar, the flight plan, the challenges, the messages and TARS. The physics is the same.",
+    options: [
+      { value: "metric", label: "Metric", hint: "Metres, metres a second, kilometres" },
+      {
+        value: "imperial",
+        label: "Imperial",
+        hint: "As a fighter's: feet, knots, nautical miles, feet a minute",
+      },
+    ],
+    keywords: "units metric imperial knots feet nautical miles metres kilometres",
   },
   {
     key: "hudHorizon",

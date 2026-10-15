@@ -465,11 +465,14 @@ export default {
     "Une ressource serrée rétrécit et grise la vue, comme pour un pilote : dès 5 g, un tunnel à 9 — installé en une seconde, dissipé plus vite.",
   "Flown as a plane in the air: a fighter's head-up display in green — the airspeed and altitude tapes, Mach, the load and its peak, the incidence, the vertical speed, the radar altitude, the autopilot's and autothrottle's modes and bugs, the throttle and the afterburner.":
     "En vol, piloté en avion : le collimateur tête haute d'un chasseur, en vert — les échelles de vitesse et d'altitude, le Mach, le facteur de charge et son pic, l'incidence, la vitesse verticale, la hauteur radar, les modes et repères du pilote automatique et de l'auto-manette, la manette des gaz et la postcombustion.",
-  "Knots · feet": "Nœuds · pieds",
-  "As a fighter's: the speed in knots, the altitude in feet, the vertical speed in feet a minute":
-    "Comme un chasseur : la vitesse en nœuds, l'altitude en pieds, la vitesse verticale en pieds par minute",
+  "In the units chosen (Units)": "Dans les unités choisies (Unités)",
+  Units: "Unités",
+  "The units shown and said everywhere — the HUDs, the cockpit's displays, the radar, the flight plan, the challenges, the messages and TARS. The physics is the same.":
+    "Les unités affichées et dites partout — les HUD, les écrans du cockpit, le radar, le plan de vol, les défis, les messages et TARS. La physique reste la même.",
   Metric: "Métrique",
-  "The speed in m/s, the altitude in metres": "La vitesse en m/s, l'altitude en mètres",
+  "Metres, metres a second, kilometres": "Mètres, mètres par seconde, kilomètres",
+  Imperial: "Impérial",
+  "As a fighter's: feet, knots, nautical miles, feet a minute": "Comme un chasseur : pieds, nœuds, milles nautiques, pieds par minute",
   "The HUD as in the other modes": "Le HUD comme dans les autres modes",
   Offline: "Hors ligne",
   "Only in offline renders (it multiplies the converged view's cost by ~6)":

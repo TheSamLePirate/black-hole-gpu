@@ -6040,6 +6040,7 @@ async function main() {
         else
           capcomDue.push(
             ...capcom.update({
+              units: settings.units,
               now: wall,
               side: status.side,
               stage: ph?.stage ?? null,

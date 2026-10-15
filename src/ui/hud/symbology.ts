@@ -21,6 +21,7 @@ import type { avionicsData } from "../../f35/cockpit";
 import { alertsOf, type AlertInput } from "./alerts";
 import type { HudKind } from "../../game/hudkind";
 import type { InterceptCues } from "../../game/intercept";
+import { unitsFor } from "../unitsys";
 import { drawApproachHud, drawSpaceHud, type ApproachHudInfo, type SpaceHudInfo } from "./kindhud";
 import { t, tf } from "../../i18n";
 
@@ -597,7 +598,7 @@ export function drawSymbology(F: SymFrame) {
   if (A && A.u && A.q > 20 && pilotView) drawAir(F, A, pr, stroke, text, up, fpx);
   if (jet && A && i.surface)
     drawJetHud(
-      { ctx, W, H, dpr, compact: !!F.compact, top: F.top, units: s.hudJet === "metric" ? "metric" : "aviation" },
+      { ctx, W, H, dpr, compact: !!F.compact, top: F.top, units: s.units === "imperial" ? "aviation" : "metric" },
       {
         speed: A.speed ?? 0,
         mach: A.mach ?? 0,
@@ -642,7 +643,7 @@ export function drawSymbology(F: SymFrame) {
   if (F.kind === "approach" && pilotView && i.surface && !(helmet && jet)) {
     const mls = F.runway?.mls;
     drawApproachHud(
-      { ctx, W, H, dpr, units: s.hudJet === "aviation" ? "aviation" : "metric" },
+      { ctx, W, H, dpr, units: s.units === "imperial" ? "aviation" : "metric" },
       {
         radar: i.surface.alt,
         vs: i.surface.vVert,
@@ -2474,8 +2475,9 @@ function drawLockBox(
           ? "rgba(235, 240, 245, 1)"
           : "rgba(255, 215, 80, 1)";
   const p = L.cam ? pr(L.cam) : null;
-  const kt = L.closure / 0.514444;
-  const label = `${L.name.toUpperCase()}  ${(L.range / 1852).toFixed(1)} NM  ${kt >= 0 ? "+" : ""}${Math.round(kt)} KT  ${Math.round(L.alt / 0.3048 / 100) * 100} FT`;
+  const U = unitsFor(F.s);
+  const cl = U.spd(L.closure);
+  const label = `${L.name.toUpperCase()}  ${U.dist(L.range).toFixed(1)} ${U.distName}  ${cl >= 0 ? "+" : ""}${Math.round(cl)} ${U.spdName}  ${Math.round(U.alt(L.alt) / 100) * 100} ${U.altName}`;
   if (p && p[0] > 0 && p[0] < W && p[1] > 0 && p[1] < H) {
     const s = 14 * dpr;
     stroke(() => ctx.rect(p[0] - s, p[1] - s, 2 * s, 2 * s), col, 2);

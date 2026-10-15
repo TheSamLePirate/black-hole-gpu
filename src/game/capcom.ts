@@ -12,6 +12,8 @@ import type { VoiceLine } from "../audio/voice";
 export interface CapcomInput {
   /** the wall's clock [ms] */
   now: number;
+  /** the units said (settings.units: metric unless imperial) */
+  units?: "metric" | "imperial";
   /** which universe: Houston hears only ours */
   side: "ours" | "gargantua" | "throat";
   /** the flight's stage and mode (game/phase.ts), null: not flying */
@@ -135,7 +137,9 @@ export class Capcom {
       const wind =
         !w || w.u10 < 1.5
           ? t("wind calm")
-          : tf("wind {0} at {1} knots", String(Math.round(w.from / 10) * 10 || 360).padStart(3, "0"), Math.round(w.u10 * 1.944));
+          : i.units === "imperial"
+            ? tf("wind {0} at {1} knots", String(Math.round(w.from / 10) * 10 || 360).padStart(3, "0"), Math.round(w.u10 * 1.944))
+            : tf("wind {0} at {1} metres a second", String(Math.round(w.from / 10) * 10 || 360).padStart(3, "0"), Math.round(w.u10));
       tower("cleared", tf("{0}, {1} tower. Runway {2}, {3}, cleared to land.", cs, i.site, rwy, wind));
     }
 

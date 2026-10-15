@@ -6,6 +6,7 @@
 // attitude, the checklists. Pure drawing from a PcdData — no state of the flight read here.
 
 import { PCD_H, PCD_W } from "./pcd-size";
+import { type Units, type UnitSys, unitsOf } from "../ui/unitsys";
 
 type V3 = [number, number, number];
 
@@ -24,6 +25,8 @@ export interface PcdField {
 /** What the display shows (SI, radians; null: not known). */
 export interface PcdData {
   time: Date;
+  /** the units shown (settings.units: metric unless imperial) */
+  units?: UnitSys;
   /** where: latitude, longitude [°], altitude over the sea and the ground [m] */
   lat: number;
   lon: number;
@@ -127,17 +130,16 @@ const PW = (PCD_W - 2 * SIDE - GAP * (PORTALS + 1)) / PORTALS;
 const PH = PORTAL_END - TOP - GAP * 2;
 const HEAD = 46;
 const D = Math.PI / 180;
-const NM = 1852;
-const KT = 1.943844;
-const FT = 1 / 0.3048;
 
 export class Pcd {
   readonly canvas = new OffscreenCanvas(PCD_W, PCD_H);
   private g = this.canvas.getContext("2d")!;
   /** each portal's page */
   pages: PcdPage[] = ["TSD", "FCS", "ENG", "FUEL"];
-  /** the TSD's range [NM] */
+  /** the TSD's range [the distance's unit: km, or NM] */
   range = 20;
+  /** the units shown (each draw's) */
+  private u: Units = unitsOf("metric");
   private last = -Infinity;
   private dirty = true;
 
@@ -174,6 +176,7 @@ export class Pcd {
   draw(d: PcdData, now: number): boolean {
     if (!this.dirty && now - this.last < 100) return false;
     this.last = now;
+    this.u = unitsOf(d.units);
     this.dirty = false;
     const g = this.g;
     g.save();
@@ -240,12 +243,12 @@ export class Pcd {
       nv = !!d.route?.v && ap.alt !== null;
     const row1: (readonly [string, string])[] = [
       nv
-        ? [`VNAV ${Math.round(ap.alt! * FT)}`, C.magenta]
-        : on(ap.alt !== null, ap.alt !== null ? `ALT ${Math.round(ap.alt * FT)}` : "ALT"),
+        ? [`VNAV ${Math.round(this.u.alt(ap.alt!))}`, C.magenta]
+        : on(ap.alt !== null, ap.alt !== null ? `ALT ${Math.round(this.u.alt(ap.alt))}` : "ALT"),
       nl
         ? ["LNAV", C.magenta]
         : on(ap.hdg !== null, ap.hdg !== null ? `HDG ${String(Math.round((((ap.hdg / D) % 360) + 360) % 360)).padStart(3, "0")}` : "HDG"),
-      on(ap.spd !== null, ap.spd !== null ? `A/T ${Math.round(ap.spd * KT)}` : "A/T"),
+      on(ap.spd !== null, ap.spd !== null ? `A/T ${Math.round(this.u.spd(ap.spd))}` : "A/T"),
       [d.stovl?.on ? (d.stovl.hover ? "HOVER" : "STOVL") : "CTOL", d.stovl?.on ? C.cyan : C.white],
     ];
     const row2: (readonly [string, string])[] = [
@@ -315,7 +318,7 @@ export class Pcd {
     const g = this.g;
     const cx = r.x + r.w / 2,
       cy = r.y + r.h * 0.68;
-    const px = (r.h * 0.6) / (this.range * NM);
+    const px = (r.h * 0.6) / (this.range * this.u.distM);
     // (a point's place: east and north of the ownship [m] → turned heading up)
     const R = 6.371e6;
     const where = (lat: number, lon: number): [number, number] => {
@@ -410,14 +413,21 @@ export class Pcd {
           360;
         const ete = Number.isFinite(rt.ete) ? `${Math.floor(rt.ete / 60)}:${String(Math.floor(rt.ete % 60)).padStart(2, "0")}` : "--:--";
         this.text(
-          `${rt.l ? "LNAV" : "RTE"}${rt.v ? "/VNAV" : ""} ▸ ${w.name}  ${String(Math.round(brg)).padStart(3, "0")}°  ${(rt.dist / NM).toFixed(1)} NM  ${ete}`,
+          `${rt.l ? "LNAV" : "RTE"}${rt.v ? "/VNAV" : ""} ▸ ${w.name}  ${String(Math.round(brg)).padStart(3, "0")}°  ${this.u.dist(rt.dist).toFixed(1)} ${this.u.distName}  ${ete}`,
           r.x + 16,
           r.y + 58,
           C.magenta,
           24,
         );
         if (rt.l)
-          this.text(`XTK ${(Math.abs(rt.xtk) / NM).toFixed(1)}${rt.xtk > 0 ? "R" : "L"}`, r.x + r.w - 16, r.y + 88, C.magenta, 22, "right");
+          this.text(
+            `XTK ${this.u.dist(Math.abs(rt.xtk)).toFixed(1)}${rt.xtk > 0 ? "R" : "L"}`,
+            r.x + r.w - 16,
+            r.y + 88,
+            C.magenta,
+            22,
+            "right",
+          );
       }
     }
     // the tracks (the radar's, the datalink's): the NATO shapes — a friend's half circle (blue), a hostile's
@@ -490,7 +500,7 @@ export class Pcd {
     const near = nearest(d);
     if (near) {
       this.text(
-        `${near.f.icao ?? near.f.name.slice(0, 8)}  ${String(Math.round(near.brg)).padStart(3, "0")}°  ${(near.dist / NM).toFixed(1)} NM`,
+        `${near.f.icao ?? near.f.name.slice(0, 8)}  ${String(Math.round(near.brg)).padStart(3, "0")}°  ${this.u.dist(near.dist).toFixed(1)} ${this.u.distName}`,
         r.x + 16,
         r.y + 26,
         C.cyan,
@@ -512,7 +522,7 @@ export class Pcd {
     g.strokeRect(r.x + r.w - 96, yb - 22, 80, 44);
     this.text("−", r.x + 56, yb, C.white, 32, "center", true);
     this.text("+", r.x + r.w - 56, yb, C.white, 32, "center", true);
-    this.text(`${this.range} NM`, cx, yb, C.white, 26, "center", true);
+    this.text(`${this.range} ${this.u.distName}`, cx, yb, C.white, 26, "center", true);
   }
 
   /** The flight controls: the craft from above, each surface's deflection drawn and written; the load, the
@@ -653,8 +663,8 @@ export class Pcd {
       C.white,
       26,
     );
-    const rng = Number.isFinite(min) ? (d.gs * min * 60) / NM : 0;
-    this.text(`RANGE ${rng.toFixed(0)} NM`, tx, r.y + 300, C.white, 26);
+    const rng = Number.isFinite(min) ? this.u.dist(d.gs * min * 60) : 0;
+    this.text(`RANGE ${rng.toFixed(0)} ${this.u.distName}`, tx, r.y + 300, C.white, 26);
     this.text(`GW ${(d.mass / 1000).toFixed(1)} T`, tx, r.y + 360, C.cyan, 26, "left", true);
   }
 
@@ -740,13 +750,16 @@ export class Pcd {
       lon = `${d.lon >= 0 ? "E" : "W"} ${Math.abs(d.lon).toFixed(4)}°`;
     const rows: [string, string][] = [
       ["POS", `${lat}  ${lon}`],
-      ["ALT", `${Math.round(d.alt * FT).toLocaleString("en")} FT`],
-      ["RALT", `${Math.round(d.agl * FT).toLocaleString("en")} FT`],
-      ["GS", `${Math.round(d.gs * KT)} KT`],
-      ["TAS", `${Math.round(d.tas * KT)} KT  M${d.mach.toFixed(2)}`],
-      ["VS", `${Math.round(d.vs * FT * 60)} FPM`],
+      ["ALT", `${Math.round(this.u.alt(d.alt)).toLocaleString("en")} ${this.u.altName}`],
+      ["RALT", `${Math.round(this.u.alt(d.agl)).toLocaleString("en")} ${this.u.altName}`],
+      ["GS", `${Math.round(this.u.spd(d.gs))} ${this.u.spdName}`],
+      ["TAS", `${Math.round(this.u.spd(d.tas))} ${this.u.spdName}  M${d.mach.toFixed(2)}`],
+      ["VS", `${Math.round(this.u.vs(d.vs))} ${this.u.vsName}`],
       ["TRK", `${String(Math.round((((d.track / D) % 360) + 360) % 360)).padStart(3, "0")}°`],
-      ["WIND", d.wind ? `${String(Math.round(d.wind.from)).padStart(3, "0")}° / ${Math.round(d.wind.speed * KT)} KT` : "--"],
+      [
+        "WIND",
+        d.wind ? `${String(Math.round(d.wind.from)).padStart(3, "0")}° / ${Math.round(this.u.spd(d.wind.speed))} ${this.u.spdName}` : "--",
+      ],
     ];
     rows.forEach(([a, b], i) => {
       this.text(a, r.x + 26, r.y + 40 + i * 46, C.grey, 24);
@@ -757,7 +770,7 @@ export class Pcd {
       const eta = d.gs > 5 ? near.dist / d.gs / 60 : Infinity;
       this.text(`→ ${near.f.icao ?? ""} ${near.f.name.slice(0, 22)}`, r.x + 26, r.y + 430, C.cyan, 24, "left", true);
       this.text(
-        `${String(Math.round(near.brg)).padStart(3, "0")}°  ${(near.dist / NM).toFixed(1)} NM  ETA ${Number.isFinite(eta) ? `${eta.toFixed(0)} MIN` : "--"}`,
+        `${String(Math.round(near.brg)).padStart(3, "0")}°  ${this.u.dist(near.dist).toFixed(1)} ${this.u.distName}  ETA ${Number.isFinite(eta) ? `${eta.toFixed(0)} MIN` : "--"}`,
         r.x + 26,
         r.y + 474,
         C.white,
@@ -806,8 +819,8 @@ export class Pcd {
     g.lineTo(cx + R * 0.15, cy);
     g.lineTo(cx + R * 0.08, cy + 14);
     g.stroke();
-    this.text(`${Math.round(d.tas * KT)} KT`, r.x + 30, r.y + r.h - 40, C.white, 28, "left", true);
-    this.text(`${Math.round(d.alt * FT)} FT`, r.x + r.w - 30, r.y + r.h - 40, C.white, 28, "right", true);
+    this.text(`${Math.round(this.u.spd(d.tas))} ${this.u.spdName}`, r.x + 30, r.y + r.h - 40, C.white, 28, "left", true);
+    this.text(`${Math.round(this.u.alt(d.alt))} ${this.u.altName}`, r.x + r.w - 30, r.y + r.h - 40, C.white, 28, "right", true);
   }
 
   /** The checklists: each item checked from the flight's state. */
@@ -844,7 +857,7 @@ export class Pcd {
               items: [
                 ["GEAR DOWN (G)", d.gear > 0.99],
                 ["FLAPS FULL (P)", d.flaps >= 1],
-                ["SPEED < 160 KT", d.tas * KT < 160],
+                [`SPEED < ${Math.round(this.u.spd(82.3))} ${this.u.spdName}`, d.tas < 82.3],
                 ["AOA 10–14°", d.alpha > 10 * D && d.alpha < 14 * D],
                 ["FUEL > BINGO", d.fuel > 0.2 * d.fuelFull],
               ],

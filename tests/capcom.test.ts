@@ -76,8 +76,15 @@ test("the tower on the final: the runway and the wind, at once; the wheels stopp
     ["cleared", "tower"],
     ["wheels", "mission"],
   ]);
-  expect(out[0]!.text).toBe("Ranger, Edwards Air Force Base tower. Runway 22, wind 240 at 10 knots, cleared to land.");
+  // (metric by default: the wind in metres a second)
+  expect(out[0]!.text).toBe("Ranger, Edwards Air Force Base tower. Runway 22, wind 240 at 5 metres a second, cleared to land.");
   expect(out[1]!.text).toBe("Ranger, Houston. Wheels stop. Textbook.");
+  // (imperial: in knots)
+  const imp = fly([
+    { stage: "approach", entry: "glide", site: "Edwards Air Force Base", final: null, units: "imperial" },
+    { stage: "approach", entry: "glide", site: "Edwards Air Force Base", final: { rwy: 220, wind: { from: 235, u10: 5 } }, units: "imperial" },
+  ]);
+  expect(imp.out[0]!.text).toBe("Ranger, Edwards Air Force Base tower. Runway 22, wind 240 at 10 knots, cleared to land.");
 });
 
 test("Gargantua's side: the signal lost going in, nothing from Houston there, found again coming home", () => {

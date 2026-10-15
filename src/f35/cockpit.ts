@@ -57,6 +57,7 @@ export function pcdData(
   const st = c.stovl;
   const m = c.jetModes;
   return {
+    units: s.units,
     time: date,
     lat: (geo.lat * 180) / Math.PI,
     lon: (geo.lon * 180) / Math.PI,

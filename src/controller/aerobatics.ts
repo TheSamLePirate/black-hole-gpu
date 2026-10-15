@@ -18,11 +18,18 @@ import {
 } from "../game/aerobatics";
 import { cameraFrame } from "../camera";
 import { t, tf } from "../i18n";
+import { unitsFor } from "../ui/unitsys";
 import type { PilotInput } from "../pilot";
 import { fleet } from "../fleet";
 import { store } from "../util/storage";
 import { VESSELS } from "../vessels";
 import type { CameraController } from "../controls";
+
+/** A figure's cue, in the language and the units shown: its entry's speed for "{v}". */
+function cueText(c: CameraController, F: { cues: readonly string[]; entry: { v: number } }, i: number): string {
+  const q = F.cues[i];
+  return q ? t(q).replace("{v}", unitsFor(c.s).fSpd(F.entry.v)) : "";
+}
 
 declare module "../controls" {
   interface CameraController {
@@ -158,8 +165,15 @@ function aeroStart(this: CameraController, id: FigureId | "box", mode: "demo" | 
   this.aero.say = seq
     ? tf("The aerobatic box: {0} figures — first, {1}", seq.ids.length, t(F.name))
     : mode === "demo"
-      ? tf("{0} — watch: {1}", t(F.name), t(F.cues[0]!))
-      : tf("{0} — entry: {1} m/s ±{2}, {3} m over the ground; {4}", t(F.name), F.entry.v, F.entry.vTol, F.entry.agl, t(F.cues[0]!));
+      ? tf("{0} — watch: {1}", t(F.name), cueText(this, F, 0))
+      : tf(
+          "{0} — entry: {1} ±{2}, {3} over the ground; {4}",
+          t(F.name),
+          unitsFor(this.s).fSpd(F.entry.v),
+          unitsFor(this.s).fSpd(F.entry.vTol),
+          unitsFor(this.s).fAlt(F.entry.agl),
+          cueText(this, F, 0),
+        );
   return this.aero.say;
 }
 
@@ -211,7 +225,7 @@ function aeroStep(this: CameraController, inp: PilotInput, dt: number) {
     A.t = 0;
     A.pa = [0, 0, 0];
     A.status = "fly";
-    A.say = tf("{0} — go: {1}", t(F.name), t(F.cues[0]!));
+    A.say = tf("{0} — go: {1}", t(F.name), cueText(this, F, 0));
     return;
   }
   // (the air's frame: the motion through the air — the craft's axes times its air's direction — integrated)
@@ -225,7 +239,7 @@ function aeroStep(this: CameraController, inp: PilotInput, dt: number) {
   s.phase = phase;
   A.cmd = cmd;
   const cue2 = cueIndex(A.id, A.mem);
-  if (cue2 !== cue && F.cues[cue2]) A.say = t(F.cues[cue2]!);
+  if (cue2 !== cue && F.cues[cue2]) A.say = cueText(this, F, cue2);
   if (A.mode === "demo" && cmd) {
     inp.pitch = cmd.pitch;
     inp.roll = cmd.roll;
@@ -295,7 +309,7 @@ function aeroHud(this: CameraController) {
     mode: A.mode,
     status: A.status,
     t: A.status === "done" ? A.doneAt : A.t,
-    cue: t(F.cues[A.status === "armed" ? 0 : cueIndex(A.id, A.mem)]!),
+    cue: cueText(this, F, A.status === "armed" ? 0 : cueIndex(A.id, A.mem)),
     entry:
       A.status === "armed"
         ? { v: F.entry.v, vTol: F.entry.vTol, vNow: L?.speed ?? 0, agl: F.entry.agl, law: F.entry.law, lawNow: this.s.f35Law }

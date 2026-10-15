@@ -16,6 +16,9 @@ export function readPrefs(): Partial<Settings> {
     store.getJSON<{ v?: number; settings?: Record<string, unknown> } | null>(AUTO_KEY, null)?.settings ??
     {};
   const d = defaultSettings() as unknown as Record<string, unknown>;
+  // (the jet HUD's old choice — its units with it, "aviation" or "metric" —: on; the units now one setting for
+  // everything, metric unless imperial is chosen)
+  if (kept.hudJet === "aviation" || kept.hudJet === "metric") kept.hudJet = "on";
   const out: Record<string, unknown> = {};
   for (const k of settingKeys("pref")) if (k in kept && typeof kept[k] === typeof d[k]) out[k] = kept[k];
   return out as Partial<Settings>;

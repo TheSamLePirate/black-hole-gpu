@@ -6,7 +6,8 @@
 import { cameraFrame } from "../camera";
 import { fleet } from "../fleet";
 import { hoverStep, STOVL, thrustDir, type HoverCmd } from "../f35/stovl";
-import { t } from "../i18n";
+import { t, tf } from "../i18n";
+import { unitsFor } from "../ui/unitsys";
 import type { PilotInput } from "../pilot";
 import { C_MPS } from "../units";
 import type { CameraController } from "../controls";
@@ -48,12 +49,12 @@ export const noStovl = (): StovlState => ({
 const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
 const toward = (x: number, to: number, rate: number, dt: number) => x + clamp(to - x, -rate * dt, rate * dt);
 
-/** ⇧B: the STOVL mode on or off (below 250 kt, the F-35B only). What to say. */
+/** ⇧B: the STOVL mode on or off (below 250 kt — 129 m/s —, the F-35B only). What to say. */
 function stovlToggle(this: CameraController): string {
   if (fleet.active !== "f35") return t("STOVL: the F-35B's");
   const S = this.stovl;
   const v = this.airFlight.last?.speed ?? 0;
-  if (!S.on && v > STOVL.vConvert) return t("STOVL: below 250 kt");
+  if (!S.on && v > STOVL.vConvert) return tf("STOVL: below {0}", unitsFor(this.s).fSpd(STOVL.vConvert));
   S.on = !S.on;
   if (S.on) this.jetModes.ab = false;
   return S.on ? t("STOVL mode: converting — the lift fan engaging") : t("STOVL mode off: conventional flight");
