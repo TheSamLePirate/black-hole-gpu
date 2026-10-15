@@ -218,6 +218,8 @@ pertinent.
 - **F3. Les ailiers IA**, en solo comme en réseau (l'hôte les fait voler).
   - Un à trois F-35 qui volent avec le vrai modèle, tiennent leur poste et obéissent aux ordres.
   - Ils annoncent leurs contacts, se battent (C4) et peuvent être perdus.
+
+  *Fait le 2026-10-15 — [fiche](progress/aviation/F3.md) : avion IA aux forces du vrai F-35 (aero.ts, F135) volé à la manière de la loi ; 1–3 ailiers en formation, tous les ordres, combat (AIM-120/9X, abattus possibles), radio, liaison, réseau (l'hôte les fait voler) ; losange tenu à 1,3 m, 2 drones abattus.*
 - **F4. Les manœuvres de patrouille.** Décollage et atterrissage en patrouille, virages en formation (« cross-under »),
   changements de formation fluides, un passage en losange pour les spectateurs.
 

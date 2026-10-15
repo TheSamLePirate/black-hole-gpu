@@ -623,6 +623,57 @@ export class CombatWorld {
     }
   }
 
+  /**
+   * Our AI wingmen in the fight (controller/wingmen.ts, F3): each a team-mate the aggressors go after (a peer of
+   * a negative slot: −2 for Two…), placed each frame, a hit on it kept in netHits for its own damage. Their ids:
+   * 20 000 + their place.
+   */
+  setWingmen(list: { k: number; name: string; p: V3; v: V3; fwd: V3; up: V3; alive: boolean }[]) {
+    const ids = new Set(list.map((x) => 20_000 + x.k));
+    this.targets = this.targets.filter((q) => !(q.peer !== undefined && q.peer < 0) || ids.has(q.id));
+    for (const x of list) {
+      const id = 20_000 + x.k;
+      let q = this.target(id);
+      if (!q) {
+        q = {
+          id,
+          kind: "fighter",
+          name: x.name,
+          p: x.p,
+          v: x.v,
+          fwd: x.fwd,
+          up: x.up,
+          hp: 100,
+          alive: x.alive,
+          diedAt: NaN,
+          rcs: 4,
+          peer: -x.k,
+        };
+        this.targets.push(q);
+      }
+      if (q.alive && !x.alive) q.diedAt = this.t;
+      Object.assign(q, { p: x.p, v: x.v, fwd: x.fwd, up: x.up, alive: x.alive, friendly: true });
+    }
+  }
+
+  /** A missile fired by one of ours that is not the player (an AI wingman): its own stores counted by it. */
+  launchFrom(from: { p: V3; v: V3; up: V3 }, kind: MissileKind, target: number, fromId: number): Missile {
+    const m: Missile = {
+      id: this.nextId++,
+      kind,
+      owner: "blue",
+      from: fromId,
+      p: add(from.p, mul(from.up, -2)),
+      v: add(from.v, mul(from.up, -3)),
+      t: 0,
+      target,
+      alive: true,
+      seen: new Set(),
+    };
+    this.missiles.push(m);
+    return m;
+  }
+
   /** The host's aggressors on a guest's world: their state from the network (they are not stepped here). */
   setRemoteTargets(list: { id: number; p: V3; v: V3; fwd: V3; up: V3; alive: boolean }[]) {
     for (const x of list) {

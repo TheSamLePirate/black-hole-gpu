@@ -3358,6 +3358,15 @@ async function main() {
     const order = (id: OrderId, arg?: string) => say(camera.flightOrder(id, arg));
     const item = (id: OrderId): WheelItem => ({ label: { fr: ORDERS[id].fr, en: ORDERS[id].en }, run: () => order(id) });
     return [
+      // (the AI wingmen: none to three, in turn — controller/wingmen.ts)
+      {
+        label: { fr: `Ailiers IA (${settings.wingmen})`, en: `AI wingmen (${settings.wingmen})` },
+        on: settings.wingmen > 0,
+        run: () => {
+          settings.wingmen = (settings.wingmen + 1) % 4;
+          say(settings.wingmen ? tf("AI wingmen: {0}", settings.wingmen) : t("AI wingmen: none"));
+        },
+      },
       item("rejoin"),
       {
         label: { fr: "Formation", en: "Formation" },

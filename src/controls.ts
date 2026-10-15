@@ -56,6 +56,7 @@ import type { RadarObject } from "./game/radar";
 import { type FormState, installFormation } from "./controller/formation";
 import { type IcptState, installIntercept } from "./controller/intercept";
 import { installOrders } from "./controller/orders";
+import { installWingmen, type RemoteWing, type WingState } from "./controller/wingmen";
 import type { Order } from "./game/orders";
 import type { Racetrack } from "./game/racetrack";
 import { installJet } from "./controller/jet";
@@ -1036,6 +1037,10 @@ export class CameraController {
   holdPat: { fix: { lat: number; lon: number }; R: Racetrack } | null = null;
   /** an order given as the flight's leader: where it goes (the room, our AI wingmen) */
   readonly orderSinks = new Map<string, (o: Order) => void>();
+  /** our AI wingmen (controller/wingmen.ts), null: none flying */
+  wing: WingState | null = null;
+  /** the room's others' AI wingmen (their host flies them): by his slot, their states and when heard [s] */
+  readonly remoteWings = new Map<number, { at: number; name: string; list: RemoteWing[] }>();
   /** a radio call heard (a leader's order, a wingman's answer): said aloud */
   onRadio?: (text: string) => void;
   /** an aerobatic figure flown — the program's demonstration or the player's, judged (controller/aerobatics.ts) —,
@@ -1426,6 +1431,7 @@ installJet(CameraController);
 installFormation(CameraController);
 installIntercept(CameraController);
 installOrders(CameraController);
+installWingmen(CameraController);
 installAerobatics(CameraController);
 installRadar(CameraController);
 installFplan(CameraController);

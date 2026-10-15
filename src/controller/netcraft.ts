@@ -244,7 +244,7 @@ function netOwnHole(c: CameraController): NetOwnState | null {
 }
 
 /** The Earth's frame now, seen from the flown craft: its axes, our place on them, the camera's mapping. */
-function earthView(c: CameraController) {
+export function earthView(c: CameraController) {
   const cam = cameraFrame(c.s);
   const nav = c.ourNav(cam);
   const fr = c.sfFrame(cam);

@@ -1691,10 +1691,11 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "flight_lead",
       description:
-        "The flight the player leads (a patrouille of two to four: the room's pilots flying in formation on him, his AI wingmen). order: an order given as its leader, said on the radio and carried out by the wingmen in formation — rejoin, shape (a formation: echelonR, echelonL, fingertip, vic, diamond, line, trail, spread), tighten, loosen, attack (his radar's lock), engage (the hostiles), cover (him), hold (a racetrack over where he is), rtb (home to the nearest airfield), breakL, breakR (a hard 90° turn). status: the formation, its spacing, his place in another's, the wingmen.",
+        "The flight the player leads (a patrouille of two to four: the room's pilots flying in formation on him, his AI wingmen). wingmen: how many AI wingmen fly with his F-35 (count 0–3: Two, Three, Four — they muster at their places in the air). order: an order given as its leader, said on the radio and carried out by the wingmen in formation — rejoin, shape (a formation: echelonR, echelonL, fingertip, vic, diamond, line, trail, spread), tighten, loosen, attack (his radar's lock), engage (the hostiles), cover (him), hold (a racetrack over where he is), rtb (home to the nearest airfield), breakL, breakR (a hard 90° turn). status: the formation, its spacing, his place in another's, the wingmen.",
       params: {
-        action: { type: "string", enum: ["order", "status"] },
+        action: { type: "string", enum: ["order", "status", "wingmen"] },
         order: { type: "string", enum: ORDER_IDS },
+        count: { type: "number", minimum: 0, maximum: 3 },
         shape: { type: "string", enum: FORMATION_IDS },
       },
       required: ["action"],
@@ -1707,7 +1708,18 @@ export function gameTools(h: GameHost): Tool[] {
             myPlace: c.s.formPos,
             inFormationOn: c.form?.name ?? null,
             flying: c.brk ? "break" : c.holdPat ? "hold" : c.form ? "formation" : null,
+            wingmen: (c.wing?.list ?? []).map((w) => ({
+              place: w.k,
+              mode: w.mode,
+              alive: w.alive,
+              hp: w.hp,
+              slotOffM: Math.round(w.dist),
+            })),
           };
+        if (a.action === "wingmen") {
+          c.s.wingmen = Math.min(Math.max(Math.round(Number(a.count ?? 0)), 0), 3);
+          return `AI wingmen: ${c.s.wingmen}`;
+        }
         if (!a.order) throw new Error("order needs an order");
         if (a.order === "shape" && !a.shape) throw new Error("shape needs a shape");
         return c.flightOrder(a.order as OrderId, a.shape as string | undefined);

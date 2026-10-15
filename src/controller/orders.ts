@@ -59,6 +59,8 @@ function flightOrder(this: CameraController, id: OrderId, arg?: string): string 
   }
   if (id === "shape" || id === "rejoin") o.spacing = s.formSpacing;
   for (const sink of this.orderSinks.values()) sink(o);
+  // (our AI wingmen: they carry it out, they answer)
+  this.wingOrder?.(o);
   return orderCall(o);
 }
 

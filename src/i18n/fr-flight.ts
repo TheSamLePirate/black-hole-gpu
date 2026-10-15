@@ -28,4 +28,9 @@ export default {
   "Holding — inbound {0}°": "En attente — axe d'arrivée {0}°",
   "RTB: in the air": "Retour base : en vol",
   "RTB — {0}, {1} km, course {2}°": "Retour base — {0}, {1} km, route {2}°",
+  "AI wingmen: {0}": "Ailiers IA : {0}",
+  "AI wingmen: none": "Ailiers IA : aucun",
+  "AI wingmen": "Ailiers IA",
+  "F-35s flying with yours in the Earth's air — Two, Three, Four — each its place in the formation chosen, flown with the real aircraft's forces; they obey the leader's orders (Tab held › Flight), call their contacts, fight in a fight and can be lost.":
+    "Des F-35 qui volent avec le vôtre dans l'air de la Terre — Deux, Trois, Quatre — chacun à son poste dans la formation choisie, volés avec les forces du vrai avion ; ils obéissent aux ordres du leader (Tab maintenu › Patrouille), annoncent leurs contacts, se battent en combat et peuvent être perdus.",
 } satisfies Record<string, string>;

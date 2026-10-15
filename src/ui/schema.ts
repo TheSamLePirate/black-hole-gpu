@@ -4137,6 +4137,23 @@ export const SCHEMA: ControlDef[] = [
     ],
   },
   {
+    key: "wingmen",
+    type: "choice",
+    section: "game",
+    group: "Formation",
+    label: "AI wingmen",
+    style: "segmented",
+    effect: "none",
+    help: "F-35s flying with yours in the Earth's air — Two, Three, Four — each its place in the formation chosen, flown with the real aircraft's forces; they obey the leader's orders (Tab held › Flight), call their contacts, fight in a fight and can be lost.",
+    keywords: "wingmen ai flight formation escort",
+    options: [
+      { value: 0, label: "None" },
+      { value: 1, label: "1" },
+      { value: 2, label: "2" },
+      { value: 3, label: "3" },
+    ],
+  },
+  {
     key: "f35EnemyMissiles",
     type: "toggle",
     section: "game",

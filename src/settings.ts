@@ -404,6 +404,7 @@ export interface Settings {
   formShape: FormationId; // the formation flown (game/formations.ts): its shape, its spacing, our place in it (2…4)
   formSpacing: Spacing;
   formPos: number;
+  wingmen: number; // the AI wingmen flying with the F-35 (controller/wingmen.ts): 0 to 3
   f35EnemyMissiles: boolean; // the aggressors' and the SAM's missiles fired
   f35Radar: boolean; // the radar's scope on the helmet in a fight
   f35RadarRange: "auto" | "10" | "20" | "40" | "80" | "160"; // its range [km]
@@ -732,6 +733,7 @@ export function defaultSettings(): Settings {
     formShape: "echelonR",
     formSpacing: "normal",
     formPos: 2,
+    wingmen: 0,
     f35EnemyMissiles: true,
     f35Radar: true,
     f35RadarRange: "auto",
@@ -2040,6 +2042,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   formShape: "pref",
   formSpacing: "pref",
   formPos: "pref",
+  wingmen: "pref",
   f35EnemyMissiles: "pref",
   f35Radar: "pref",
   f35RadarRange: "pref",

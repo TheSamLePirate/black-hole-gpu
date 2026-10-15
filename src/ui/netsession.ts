@@ -40,6 +40,7 @@ import { dockedFrame, type VesselId, VESSELS } from "../vessels";
 import type { NetPanel } from "./netpanel";
 import { formationLabel, formSlotFor } from "../controller/formation";
 import { orderOf } from "../game/orders";
+import { type RemoteWing, wingsOut } from "../controller/wingmen";
 
 type Vec3 = [number, number, number];
 
@@ -155,6 +156,8 @@ export class NetSession {
   private telAt = 0;
   private telBound: unknown = null;
   private lastSend = -1;
+  /** when our AI wingmen were last sent [s] */
+  private wingSent = 0;
   private prev: { at: number; st: number; frame: number; v: Vec3; ax: [Vec3, Vec3, Vec3] } | null = null;
   private acc: Vec3 = [0, 0, 0];
   private spin: Vec3 = [0, 0, 0];
@@ -262,6 +265,32 @@ export class NetSession {
     const now = performance.now() / 1000;
     // (our orders as the flight's leader: sent to the room)
     if (!c.orderSinks.has("net")) c.orderSinks.set("net", (o) => this.net?.room && this.net.event({ kind: "order", o }));
+    // (our AI wingmen sent to the room, 10 times a second — we fly them; the others' heard, a stale host's dropped)
+    if (c.wing?.list.length && now - this.wingSent > 0.1) {
+      this.wingSent = now;
+      net.event({ kind: "wng", w: wingsOut(c) });
+    }
+    for (const [slot, R] of c.remoteWings) if (now - R.at > 3) c.remoteWings.delete(slot);
+    if (!c.radarSources.has("rwg"))
+      c.radarSources.set("rwg", (fix) =>
+        [...c.remoteWings.entries()].flatMap(([slot, R]) =>
+          R.list.map((w) => ({
+            id: `rwg:${slot}:${w.k}`,
+            r: fix.toLocal(w.p as [number, number, number]),
+            v: [0, 1, 2].map((i) => (i === 0 ? fix.E : i === 1 ? fix.N : fix.U).reduce((s, x, k) => s + x * w.v[k]!, 0)) as [
+              number,
+              number,
+              number,
+            ],
+            rcs: 4,
+            kind: "air" as const,
+            iff: "friend" as const,
+            name: `${R.name} ${w.k}`,
+            squawk: true,
+            offboard: true,
+          })),
+        ),
+      );
     this.alightStep(now);
     this.pace(net, now);
     // the others
@@ -285,7 +314,17 @@ export class NetSession {
       net.on("event", ({ from, ev }) => {
         const e = ev as { kind?: string; to?: number };
         if (e.kind === "tel") this.tel.set(from, (ev as unknown as { v: Record<string, number> }).v);
-        else if (e.kind === "order") {
+        else if (e.kind === "wng") {
+          // (another's AI wingmen — F3: his host's flying, drawn and on our radar here)
+          const list = (ev as unknown as { w?: unknown }).w;
+          if (!Array.isArray(list)) return;
+          const ok = (a: unknown, n = 3) => Array.isArray(a) && a.length === n && a.every((x) => Number.isFinite(x));
+          this.d.camera.remoteWings.set(from, {
+            at: performance.now() / 1000,
+            name: this.nameOf(from),
+            list: (list as RemoteWing[]).filter((w) => Number.isFinite(w.k) && ok(w.p) && ok(w.v) && ok(w.f) && ok(w.u)).slice(0, 3),
+          });
+        } else if (e.kind === "order") {
           // (a leader's order — F2: heard, carried out in formation on him; "rejoin" heard out of one: on his wing)
           const o = orderOf((ev as unknown as { o: unknown }).o);
           if (!o) return;
