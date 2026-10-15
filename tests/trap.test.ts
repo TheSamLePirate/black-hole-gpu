@@ -23,6 +23,7 @@ afterEach(() => {
 
 const D = Math.PI / 180;
 const L = LANDING.ford!;
+const L0 = L;
 const A = axisOf(L);
 const deckY = CARRIER.ford.deck;
 /** A deck point s along the landing axis from the aim [m], e across it to port, h over the deck. */
@@ -57,7 +58,7 @@ describe("the wires and the grade", () => {
 });
 
 /** The F-35C over the sea off the Ford (put 9 km ahead of it, crossing its track) or near it. */
-async function setUp(hs: number, fuel: number, ahead = 9000) {
+async function setUp(hs: number, fuel: number, ahead = 9000, turn = 40) {
   putDeck("ford", readDeck(await Bun.file("assets/carriers/ford.deck.bin").arrayBuffer()));
   applyF35Variant("C");
   const run = cruise(300, 140, 0.4);
@@ -70,7 +71,7 @@ async function setUp(hs: number, fuel: number, ahead = 9000) {
   c.carrierSpawn("ford", {
     lat: g.lat + (ahead * Math.cos(g.track)) / 111_195,
     lon: g.lon + (ahead * Math.sin(g.track)) / (111_195 * Math.cos(g.lat * D)),
-    heading: g.track / D + 40,
+    heading: g.track / D + turn,
     speed: 14.4,
   });
   c.carrierStep();
@@ -122,7 +123,7 @@ describe("the recovery on the wires", () => {
 
   test("from 9 km off in a 1.5 m sea: onto the axis, down the glide path, a wire caught, stopped within the gear's run, graded", async () => {
     const s = await setUp(1.5, 3000);
-    const said = s.c.trapLand("ford")!;
+    const said = s.c.trapLand("ford", { case: "straight" })!;
     const r = fly(s.c, s.fly, 400);
     const last = s.c.trapLast!;
     console.log(
@@ -137,7 +138,7 @@ describe("the recovery on the wires", () => {
   test("its hook up: a bolter — off, round again —; down, trapped on the next pass", async () => {
     const s = await setUp(1, 3000);
     s.c.hookUp = true;
-    s.c.trapLand("ford");
+    s.c.trapLand("ford", { case: "straight" });
     let t = 0;
     while (t < 300 && s.c.trapRun?.phase !== "bolter") s.fly(0.25), (t += 0.25);
     const bolter = s.c.trapRun?.phase === "bolter";
@@ -151,4 +152,60 @@ describe("the recovery on the wires", () => {
     expect(s.radio.some((x) => /bolter/i.test(x))).toBe(true);
     expect(last.wire).toBeGreaterThan(0);
   }, 180_000);
+
+  /** A recovery by its case from `ahead` m off: the legs flown in order, trapped. */
+  async function byCase(cs: "I" | "II" | "III", ahead: number, tMax: number, turn = 40) {
+    const s = await setUp(1, 3000, ahead, turn);
+    const said = s.c.trapLand("ford", { case: cs })!;
+    const legs: string[] = s.c.trapRun?.leg ? [s.c.trapRun.leg] : [];
+    const r = fly(
+      s.c,
+      (dt) => {
+        s.fly(dt);
+        const L = s.c.trapRun?.leg;
+        if (L && legs.at(-1) !== L) legs.push(L);
+        const R = s.c.trapRun;
+        if (process.env.TRACE && R && Math.round(R.t * 4) % 40 === 0) {
+          const P = s.c.carrierNow()[0]!.P;
+          const l = toDeck(P, s.c.netOwn()!.p);
+          const h = axisOf(L0).at(l[0], l[2]);
+          console.log(
+            R.phase,
+            R.leg,
+            R.loc ? "LOC" : "",
+            h.s.toFixed(0),
+            h.e.toFixed(0),
+            l[1].toFixed(0),
+            (s.c.airFlight.last?.speed ?? 0).toFixed(0),
+          );
+        }
+      },
+      tMax,
+    );
+    const last = s.c.trapLast;
+    console.log(
+      `  ${said}: ${legs.join(" → ")}; trapped in ${r.t} s — the ${last?.wire}-wire, ${last?.grade}\n    ${s.radio.join("\n    ")}`,
+    );
+    return { legs, last, radio: s.radio };
+  }
+
+  test("Case I: the initial 3 NM astern, up the ship's course, the break past the bow, the downwind, the 180, the groove — trapped", async () => {
+    // (astern of the ship on its course, 7 km: the initial ahead)
+    const r = await byCase("I", 7000, 900, 0);
+    expect(r.legs).toEqual(["initial", "upwind", "break", "downwind", "the180", "groove"]);
+    expect(r.last?.wire).toBeGreaterThan(0);
+    expect(r.radio.join(" ")).toMatch(/Initial.*break.*Abeam.*180.*roger ball/is);
+  }, 240_000);
+
+  test("Case III: out of the marshal, down the final bearing to the platform, dirty at ten miles, the glide path — trapped", async () => {
+    const r = await byCase("III", 30_000, 900);
+    expect(r.legs).toEqual(["marshal", "penetration", "groove"]);
+    expect(r.last?.wire).toBeGreaterThan(0);
+  }, 240_000);
+
+  test("Case II: the descent to ten miles, then the initial and the break — trapped", async () => {
+    const r = await byCase("II", 30_000, 1200);
+    expect(r.legs).toEqual(["penetration", "initial", "upwind", "break", "downwind", "the180", "groove"]);
+    expect(r.last?.wire).toBeGreaterThan(0);
+  }, 300_000);
 });

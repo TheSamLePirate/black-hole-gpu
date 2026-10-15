@@ -24,4 +24,17 @@ export default {
   Procedures: "Procédures",
   "The departure's and the arrival's fixes; the plan's end flown as an ILS approach":
     "Les points de départ et d'arrivée ; la fin du plan volée en approche ILS",
+  "F-35C commencing — out of marshal": "F-35C, je quitte le marshal",
+  "Ten miles — dirty up, the platform at 1 200 ft": "Dix nautiques — train, volets, crosse ; palier à 1 200 ft",
+  "Initial, three miles": "Initiale, trois nautiques",
+  "The break": "Le break",
+  "Abeam — gear, flaps, hook": "Par le travers — train, volets, crosse",
+  "The 180 — into the groove": "Le 180 — vers le groove",
+  "{0}, Mother: Case III recovery. Marshal on the final bearing, 21 miles, angels 6.":
+    "{0}, Mother : récupération cas III. Marshal dans l'axe final, 21 nautiques, angels 6.",
+  "{0}, Mother: Case II recovery. Descend to ten miles, then the initial.":
+    "{0}, Mother : récupération cas II. Descendez jusqu'à dix nautiques, puis l'initiale.",
+  "{0}, Mother: Charlie. Case I — the initial, the break.": "{0}, Mother : Charlie. Cas I — l'initiale, le break.",
+  "Carrier landing on {0} — {1}": "Appontage sur {0} — {1}",
+  "straight in": "approche directe",
 } satisfies Record<string, string>;

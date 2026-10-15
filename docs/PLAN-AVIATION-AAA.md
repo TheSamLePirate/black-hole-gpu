@@ -351,6 +351,8 @@ pertinent.
 
   *P4a fait le 2026-10-15 — [fiche](progress/aviation/P4a.md) : l'approche ILS à 3° du F-35 par le pilote automatique (IAF, attente en hippodrome, localizer, glide, train au FAF, minimums et remise des gaz, arrondi, arrêt, note sur 20), ses aiguilles au HUD, l'aide d'atterrissage sur le glide à 3° ; les points de départ et d'arrivée ajoutés au plan, la fin du plan passée à l'ILS — 20/20 à 469 m du seuil dans le navigateur.*
 
+  *P4b fait le 2026-10-15 — **P4 fini** — [fiche](progress/aviation/P4b.md) : les cas I (initiale, break, downwind, 180, groove), II (descente puis break) et III (marshal, descente, palier à 1 200 ft, plan) du porte-avions, choisis par l'heure et le temps ou imposés — tous trois appontés du premier passage ; le train embarqué du F-35C.*
+
 ### A — Pilotes automatiques avancés, assistances, manuel
 
 - **A1. Les niveaux d'assistance.**

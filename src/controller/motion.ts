@@ -1,5 +1,6 @@
 // The CameraController — free flight and gravity: the camera's and the ship's integrators.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { f35Variant } from "../f35/variant";
 import { recorder } from "../game/recorder";
 import { terrainAhead } from "../game/gpws";
 import { gradeLanding } from "../game/report";
@@ -677,7 +678,9 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
           const vin = sub3(Vin, gv);
           const sink = -dot3(vin, n) * C_MPS;
           const vh = Math.hypot(...lin(vin, 1, n, -dot3(vin, n))) * C_MPS;
-          const verdict = touchdownVerdict(sink, TUNING.crashSpeed, s.gearForgiving);
+          // (the F-35C's gear a carrier's: built for some 7.6 m/s down — the deck met without a flare)
+          const crash = fleet.active === "f35" && f35Variant() === "C" ? Math.max(TUNING.crashSpeed, 8) : TUNING.crashSpeed;
+          const verdict = touchdownVerdict(sink, crash, s.gearForgiving);
           // (back on the gear within half a second of leaving it, gently — a leg lifted for a sub-step as the
           // craft turns onto its other legs, a tyre's skip —: the same touchdown, not a new one said)
           const rebound = verdict === "landed" && (t - this.offGround) * secM < 0.5;

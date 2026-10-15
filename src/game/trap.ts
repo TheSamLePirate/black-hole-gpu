@@ -6,6 +6,7 @@
 
 import { CARRIER, type CarrierId, type CarrierPose, type CarrierSpawn, fromDeck, LANDING, type LandingArea, toDeck } from "./carrier";
 import { deckVelocity, enuOf } from "./deckland";
+import { holdRadius, type Racetrack, racetrackHeading } from "./racetrack";
 
 type V3 = [number, number, number];
 
@@ -101,7 +102,40 @@ export interface TrapRun {
   loc?: boolean;
   /** why it was waved off (the glide path's error, the line-up, the distance) */
   why?: string;
+  /** the recovery's case (P4): I — the overhead break, day and clear —, II — the descent then the break —, III —
+   *  the marshal and the straight-in, night or weather —; straight: the straight-in from the gate (the quals') */
+  case?: RecoveryCase;
+  /** its leg now (the pattern's; "groove": handed to the final's intercept) */
+  leg?: CaseLeg;
+  /** laps in the marshal's hold left (Case III) */
+  marshal?: number;
+  holdS?: number;
+  /** the height held until the glide path is met [m over the sea] (the platform's: Case III, II) */
+  platform?: number;
 }
+
+export type RecoveryCase = "I" | "II" | "III" | "straight";
+export type CaseLeg = "initial" | "upwind" | "break" | "downwind" | "the180" | "marshal" | "penetration" | "groove";
+
+/** The patterns' figures [m, m/s]: Case I's initial 3 NM astern at 800 ft, 350 kt; the break past the bow; the
+ *  downwind at 600 ft, 1.2 NM abeam to port; the 180 begun 600 m past abeam the aim; Case III's marshal 21 NM astern
+ *  on the final bearing at 6 000 ft, the descent to 1 200 ft by 10 NM (dirty there), the platform held to the
+ *  glide path; Case II's descent to 800 ft by 10 NM, then the initial. */
+export const CASE = {
+  initial: 5500,
+  initialH: 245,
+  initialV: 180,
+  breakPast: 900,
+  downwindH: 185,
+  abeam: 2200,
+  start180: 1300,
+  marshal: 39_000,
+  marshalH: 1830,
+  tenMiles: 18_500,
+  platformH: 365,
+  caseIIH: 245,
+  descentV: 130,
+};
 
 export const newTrapRun = (kind: CarrierId): TrapRun => ({
   kind,
@@ -199,9 +233,18 @@ export function trapStep(
       R.phase = "inbound";
       R.ball = false;
       R.loc = false;
+      // (a pattern's bolter: round again by its own way — upwind to the break; Case III's, down the final bearing)
+      if (R.case && R.case !== "straight") {
+        R.leg = R.case === "III" ? "penetration" : "upwind";
+        R.platform = undefined;
+      }
       R.worst = { X: [0, 0], IM: [0, 0], IC: [0, 0], AR: [0, 0] };
     }
     return { gamma: 8 * D, bank: 0, spd: vApp + 20, full: true };
+  }
+  if (R.phase === "inbound" && R.case && R.case !== "straight" && R.leg && R.leg !== "groove") {
+    const out = casePattern(R, own, { aim, axH, U, E, N, vDeck, deckY, P, glide: L.glide, lineup, eRate }, vApp, dt);
+    if (out) return out;
   }
   if (R.phase === "inbound") {
     const gate = add(aim, add(scale(axH, -TRAP.gate), scale(U, TRAP.gate * Math.tan(L.glide * D) + 30)));
@@ -216,8 +259,10 @@ export function trapStep(
     const along = dot(sub(own.p, aim), axH);
     // (the intercept, once begun, kept on to 1.2 km: else, crossing back and forth over 2.5 km, it went round and
     // round between it and the gate)
-    if (along < -2500 && Math.abs(lineup) < 3000) R.loc = true;
-    if (R.loc && (along > -1200 || Math.abs(lineup) > 4000)) R.loc = false;
+    // (a pattern's groove — after Case I's 180 — handed over in close: latched from 1 800 m, kept to 400 m)
+    const groove = R.leg === "groove" && R.case !== "straight";
+    if (along < (groove ? -900 : -2500) && Math.abs(lineup) < 3000) R.loc = true;
+    if (R.loc && (along > (groove ? -400 : -1200) || Math.abs(lineup) > 4000)) R.loc = false;
     if (R.loc) {
       const axisBrg = bearing(axH);
       // (the gap foreseen 8 s on — the turn onto it begun before it, as a pilot leads a localizer's)
@@ -225,10 +270,12 @@ export function trapStep(
       let dw = want - bearing(vh);
       dw = Math.atan2(Math.sin(dw), Math.cos(dw));
       // (on it: near it, along it, not crossing it fast — else the final's 20° of bank could not stop the crossing)
-      if (Math.abs(lineup) < 60 && Math.abs(eRate) < 6 && dot(vh, axH) > 0.96 * len(vh)) R.phase = "final";
+      // (and with a platform held — Case III —, once the glide path has come down to it)
+      const pathMet = R.platform === undefined || deckY - along * Math.tan(L.glide * D) <= dot(sub(own.p, aim), U) + deckY + 15;
+      if (Math.abs(lineup) < 60 && Math.abs(eRate) < 6 && dot(vh, axH) > 0.96 * len(vh) && pathMet) R.phase = "final";
       // (down to the glide path's height for where it is along the axis — a little over it —, slowing to the
       // approach's speed: on the final already settled)
-      const hT = deckY + -along * Math.tan(L.glide * D) + 20;
+      const hT = Math.min(deckY + -along * Math.tan(L.glide * D) + 20, R.platform ?? Infinity);
       const hNow = dot(sub(own.p, aim), U) + deckY;
       const gammaL = clamp(Math.atan2(hT - hNow, 1500), -6 * D, 4 * D);
       return { gamma: gammaL, bank: clamp(1.5 * dw, -25 * D, 25 * D), spd: vApp + 8, full: false };
@@ -286,6 +333,157 @@ export function trapStep(
   }
   if (call) R.said = { at: R.t, what: call };
   return { gamma, bank, spd: vApp, full: false, call };
+}
+
+/**
+ * A frame of a recovery's pattern (P4 — Case I, II, III) until its groove, the ship's moving frame read as the final's
+ * is (its stabilised pose): what to fly, or null once handed to the final's intercept.
+ */
+function casePattern(
+  R: TrapRun,
+  own: { p: readonly number[]; v: readonly number[] },
+  G: {
+    aim: V3;
+    axH: V3;
+    U: V3;
+    E: V3;
+    N: V3;
+    vDeck: V3;
+    deckY: number;
+    P: CarrierPose;
+    glide: number;
+    lineup: number;
+    eRate: number;
+  },
+  vApp: number,
+  dt: number,
+): TrapOut | null {
+  const { aim, axH, U, E, N, vDeck, deckY } = G;
+  const level = (w: readonly number[]) => {
+    const f = sub(w, scale(U, dot(w, U)));
+    return scale(f, 1 / (len(f) || 1));
+  };
+  const bow = level(G.P.bow);
+  const port = level(G.P.port);
+  const bearing = (w: readonly number[]) => Math.atan2(dot(w, E), dot(w, N));
+  const rel = sub(own.p, aim);
+  const s = dot(rel, bow);
+  const x = dot(rel, port);
+  const h = dot(rel, U) + deckY;
+  const vh = sub(own.v, scale(U, dot(own.v, U)));
+  const trk = bearing(vh);
+  const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+  const steer = (want: number, max = 30 * D) => clamp(2 * wrap(want - trk), -max, max);
+  const climbTo = (hT: number, run = 2500, lo = -6, hi = 6) => clamp(Math.atan2(hT - h, run), lo * D, hi * D);
+  /** to a point moving with the ship (led by where it will be on our arrival) */
+  const toward = (T: V3) => {
+    const e = sub(T, own.p);
+    const d = len(sub(e, scale(U, dot(e, U))));
+    const lead = add(T, scale(vDeck, d / Math.max(len(vh) - dot(vDeck, level(vh)), 30)));
+    return { brg: bearing(sub(lead, own.p)), d };
+  };
+  switch (R.leg) {
+    case "marshal": {
+      // (the marshal: its fix on the final bearing astern, a hold there as many laps as asked; inside it already and
+      // none asked: the descent from here)
+      const fix = add(aim, scale(axH, -CASE.marshal));
+      const t = toward(fix);
+      const along = dot(rel, axH);
+      if (!R.marshal && along > -CASE.marshal + 2000) {
+        R.leg = "penetration";
+        return { gamma: 0, bank: 0, spd: CASE.descentV, full: false, call: "Commencing" };
+      }
+      if (t.d > 2500 && !R.holdS) return { gamma: climbTo(CASE.marshalH), bank: steer(t.brg), spd: CASE.descentV, full: false };
+      R.holdS = (R.holdS ?? 0) + dt;
+      const inb = bearing(axH);
+      const T: Racetrack = { inbound: inb, leg: 8000, radius: holdRadius(Math.max(len(vh), 100)) };
+      const pf = sub(own.p, fix);
+      const hd = racetrackHeading(T, [dot(pf, E), dot(pf, N)], 1500);
+      if (t.d < 1500 && Math.cos(wrap(trk - inb)) > 0.8 && R.holdS > 60) {
+        R.marshal = Math.max((R.marshal ?? 0) - 1, 0);
+        R.holdS = 1e-3;
+        if (!R.marshal) {
+          R.leg = "penetration";
+          return { gamma: 0, bank: 0, spd: CASE.descentV, full: false, call: "Commencing" };
+        }
+      }
+      return { gamma: climbTo(CASE.marshalH), bank: steer(hd.hdg), spd: CASE.descentV, full: false };
+    }
+    case "penetration": {
+      // (down the final bearing to ten miles — 1 200 ft for Case III, dirty there; 800 ft for Case II, then the
+      // initial)
+      const hT = R.case === "III" ? CASE.platformH : CASE.caseIIH;
+      const ten = add(aim, scale(axH, -CASE.tenMiles));
+      const along = dot(rel, axH);
+      const t = toward(ten);
+      if (along > -CASE.tenMiles - 1500 && Math.abs(G.lineup) < 3000) {
+        if (R.case === "III") {
+          R.leg = "groove";
+          R.platform = CASE.platformH;
+          return null;
+        }
+        R.leg = "initial";
+        return { gamma: climbTo(hT), bank: 0, spd: CASE.initialV, full: false };
+      }
+      const call = R.case === "III" && t.d < 4000 ? "Platform" : undefined;
+      const gamma = climbTo(hT, Math.max(t.d * 0.6, 2500), -8, 4);
+      return { gamma, bank: steer(t.brg), spd: CASE.descentV, full: false, call };
+    }
+    case "initial": {
+      const T = add(add(aim, scale(bow, -CASE.initial)), scale(U, CASE.initialH - deckY));
+      const t = toward(T);
+      if (t.d < 900 || (s > -CASE.initial && s < -1000 && Math.abs(x) < 900 && Math.cos(wrap(trk - bearing(bow))) > 0.9)) {
+        R.leg = "upwind";
+        return { gamma: climbTo(CASE.initialH), bank: steer(bearing(bow)), spd: CASE.initialV, full: false, call: "Initial" };
+      }
+      return { gamma: climbTo(CASE.initialH), bank: steer(t.brg), spd: CASE.initialV, full: false };
+    }
+    case "upwind": {
+      // (up the ship's course over its starboard side, to the break past the bow)
+      if (s > CASE.breakPast) {
+        R.leg = "break";
+        return { gamma: 0, bank: -60 * D, spd: vApp + 15, full: false, call: "Break" };
+      }
+      const want = bearing(bow) + clamp(0.0008 * (x + 150), -20 * D, 20 * D);
+      return { gamma: climbTo(CASE.initialH), bank: steer(want), spd: CASE.initialV, full: false };
+    }
+    case "break": {
+      // (a hard level turn to port, slowing, down to the downwind's height; out of it on the reciprocal course)
+      const recip = bearing(bow) + Math.PI;
+      if (Math.abs(wrap(trk - recip)) < 15 * D) {
+        R.leg = "downwind";
+        return { gamma: climbTo(CASE.downwindH), bank: 0, spd: vApp, full: false, call: "Abeam" };
+      }
+      return { gamma: climbTo(CASE.downwindH, 3000), bank: -60 * D, spd: vApp + 15, full: false };
+    }
+    case "downwind": {
+      // (the reciprocal course 1.2 NM abeam to port, at 600 ft, on speed; the 180 begun past abeam the aim)
+      if (s < -CASE.start180) {
+        R.leg = "the180";
+        return { gamma: climbTo(150), bank: -27 * D, spd: vApp, full: false, call: "The 180" };
+      }
+      const want = bearing(bow) + Math.PI + clamp(0.0008 * (x - CASE.abeam), -20 * D, 20 * D);
+      return { gamma: climbTo(CASE.downwindH), bank: steer(want), spd: vApp, full: false };
+    }
+    case "the180": {
+      // (a descending turn to port onto the angled deck's axis, its bank for a 1.1 km radius; into the groove when
+      // nearly on it)
+      // (its radius half our distance abeam the angled deck's axis — round onto it —; handed to the groove's
+      // intercept once the track closes it at 40°, the localizer's law leading the roll-out)
+      const ax = bearing(axH);
+      const off = Math.abs(wrap(trk - ax));
+      if (off < 12 * D || (off < 40 * D && Math.abs(G.lineup) < 150)) {
+        R.leg = "groove";
+        return null;
+      }
+      // (the radius that rolls out on the axis — the gap closed as the heading comes round: gap = r (1 − cos off))
+      const v = Math.max(len(vh), 50);
+      const r = Math.max(Math.abs(G.lineup), 100) / Math.max(1 - Math.cos(off), 0.05);
+      const bank = -clamp(Math.atan2(v * v, 9.80665 * r), 12 * D, 40 * D);
+      return { gamma: climbTo(130, 1500), bank, spd: vApp, full: false };
+    }
+  }
+  return null;
 }
 
 /** Where the craft's reference point and attitude are as the catapult's shuttle holds it (the deck's frame). */

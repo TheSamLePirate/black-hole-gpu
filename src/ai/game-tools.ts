@@ -14,6 +14,8 @@
 
 import type { MissionSpec } from "../game/mission";
 import { completeMission, type Resolver, type Sketch } from "../game/missionedit";
+import type { RecoveryCase } from "../game/trap";
+import { f35Variant } from "../f35/variant";
 import type { GameMode } from "../game/modes";
 import type { Auto, Hold } from "../pilot";
 import type { CameraController } from "../controls";
@@ -1834,11 +1836,13 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "carrier",
       description:
-        "The carriers at sea (the Gerald R. Ford: catapults and wires; the Kiev and the Implacable: short take-offs and vertical landings), each with two frigates as escort, steaming into the wind at their speed, the same in a room for everyone. spawn: one set off (kind; at lat/lon, else 4 km ahead of the craft; heading [°], else into the wind). qual: a carrier qualification flown by the autopilot (qual: day, night — the clock set to night there —, sea — a heavy sea, a swell of 4.4 m —; passes, else 4), graded pass by pass by the LSO, its average said: qualified at 3.0. land: the flown craft set down on its deck (x across — port + —, z along — bow + — [m]; else aft of its island), carried along with it. recover: the F-35B's autopilot lands it there as a real one does — up the port side, a hover alongside, across over the spot, down — the LSO calling it and grading the touchdown (the nearest carrier, else kind; light enough to hover: some 2 t of fuel at most). takeoff: the F-35B off the deck it stands on — a short take-off when the deck's run allows its weight (some 150 m full), else vertical when light enough (vertical: true asks for it). status: those at sea, where, their speed. clear: none at sea any more.",
+        "The carriers at sea (the Gerald R. Ford: catapults and wires; the Kiev and the Implacable: short take-offs and vertical landings), each with two frigates as escort, steaming into the wind at their speed, the same in a room for everyone. spawn: one set off (kind; at lat/lon, else 4 km ahead of the craft; heading [°], else into the wind). qual: a carrier qualification flown by the autopilot (qual: day, night — the clock set to night there —, sea — a heavy sea, a swell of 4.4 m —; passes, else 4), graded pass by pass by the LSO, its average said: qualified at 3.0. land: the flown craft set down on its deck (x across — port + —, z along — bow + — [m]; else aft of its island), carried along with it. recover: the F-35B's autopilot lands it there as a real one does — up the port side, a hover alongside, across over the spot, down — the LSO calling it and grading the touchdown (the nearest carrier, else kind; light enough to hover: some 2 t of fuel at most); the F-35C's recovery onto the Ford's wires by its case (case: I — the initial 3 NM astern, the break past the bow, the downwind, the 180, the groove —, II — the descent to ten miles then the break —, III — the marshal 21 NM astern on the final bearing, marshal: laps of its hold, then down to the platform, dirty at ten miles, the glide path —, straight: from the gate; else by the hour and the weather: night or a low ceiling III, clouds II, else I). takeoff: the F-35B off the deck it stands on — a short take-off when the deck's run allows its weight (some 150 m full), else vertical when light enough (vertical: true asks for it). status: those at sea, where, their speed. clear: none at sea any more.",
       params: {
         action: { type: "string", enum: ["spawn", "land", "recover", "takeoff", "qual", "status", "clear"] },
         vertical: { type: "boolean" },
         qual: { type: "string", enum: ["day", "night", "sea"] },
+        case: { type: "string", enum: ["I", "II", "III", "straight"] },
+        marshal: { type: "number", minimum: 0, maximum: 5 },
         passes: { type: "number" },
         kind: { type: "string", enum: ["ford", "kiev", "implacable"] },
         lat: { type: "number" },
@@ -1862,7 +1866,15 @@ export function gameTools(h: GameHost): Tool[] {
           c.carrierClear();
           return "No carrier at sea";
         }
-        if (a.action === "recover") return c.deckLand(a.kind as "ford" | "kiev" | "implacable" | undefined) ?? "No carrier within 30 km";
+        if (a.action === "recover") {
+          // (the F-35C's recovery by its case — P4: I the break, II the descent then the break, III the marshal)
+          if (a.case && f35Variant() === "C")
+            return (
+              c.trapLand(a.kind as "ford" | undefined, { case: a.case as RecoveryCase, marshal: a.marshal as number | undefined }) ??
+              "No carrier with wires within 30 km"
+            );
+          return c.deckLand(a.kind as "ford" | "kiev" | "implacable" | undefined) ?? "No carrier within 30 km";
+        }
         if (a.action === "takeoff") return c.deckTakeoff(a.vertical ? "vertical" : undefined) ?? "Not on a carrier's deck";
         if (a.action === "qual") {
           // (the qualification's hour where we are: by day, by night — local solar time —, its wind and sea)

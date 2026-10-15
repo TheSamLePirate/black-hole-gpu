@@ -19,6 +19,7 @@ import {
   newTrapRun,
   type TrapGrade,
   type TrapOut,
+  type RecoveryCase,
   type TrapRun,
   trapStep,
   wireCaught,
@@ -73,6 +74,12 @@ const SAY: Record<string, () => string> = {
   "Come left.": () => t("Paddles: come left."),
   "Wave off, wave off!": () => t("Paddles: wave off, wave off!"),
   "Bolter, bolter, bolter!": () => t("Paddles: bolter, bolter, bolter!"),
+  Commencing: () => t("F-35C commencing — out of marshal"),
+  Platform: () => t("Ten miles — dirty up, the platform at 1 200 ft"),
+  Initial: () => t("Initial, three miles"),
+  Break: () => t("The break"),
+  Abeam: () => t("Abeam — gear, flaps, hook"),
+  "The 180": () => t("The 180 — into the groove"),
 };
 
 /** A carrier with wires near, and our place on it: its spawn and pose, our reference point, nose and top on its frame. */
@@ -97,7 +104,7 @@ function nearWires(c: CameraController, within = 6000) {
  * The F-35C's recovery engaged on a carrier with wires (`kind`, else the nearest within 30 km): the autopilot to the
  * gate astern, down the glide path at its approach speed, the hook and the gear down. What to say; null: none near.
  */
-function trapLand(this: CameraController, kind?: CarrierId): string | null {
+function trapLand(this: CameraController, kind?: CarrierId, o: { case?: RecoveryCase; marshal?: number } = {}): string | null {
   const near = this.carrierNow()
     .filter((c) => (!kind || c.sp.kind === kind) && LANDING[c.sp.kind])
     .map((c) => {
@@ -124,8 +131,38 @@ function trapLand(this: CameraController, kind?: CarrierId): string | null {
     if (h.s < -800 && h.s > -5000 && Math.abs(h.e) < 150 && head > 0.95) this.trapRun.phase = "final";
   }
   this.gearDown = true;
-  this.onRadio?.(tf("{0}, Mother: Charlie. Case I, the wires — the ball at three-quarters of a mile.", "F-35C"));
-  return tf("Carrier landing on {0}", CARRIER[near.c.sp.kind].name);
+  // (the recovery's case: the one asked, else by the light and the weather — night or a low ceiling: III; clouds: II)
+  const R = this.trapRun;
+  if (R.phase !== "final") {
+    const cs = o.case ?? recoveryCase(this);
+    R.case = cs;
+    R.leg = cs === "I" ? "initial" : cs === "II" ? "penetration" : cs === "III" ? "marshal" : undefined;
+    R.marshal = o.marshal ?? 0;
+  }
+  const name = CARRIER[near.c.sp.kind].name;
+  this.onRadio?.(
+    R.case === "III"
+      ? tf("{0}, Mother: Case III recovery. Marshal on the final bearing, 21 miles, angels 6.", "F-35C")
+      : R.case === "II"
+        ? tf("{0}, Mother: Case II recovery. Descend to ten miles, then the initial.", "F-35C")
+        : R.case === "I"
+          ? tf("{0}, Mother: Charlie. Case I — the initial, the break.", "F-35C")
+          : tf("{0}, Mother: Charlie. Case I, the wires — the ball at three-quarters of a mile.", "F-35C"),
+  );
+  return tf("Carrier landing on {0} — {1}", name, R.case && R.case !== "straight" ? `Case ${R.case}` : t("straight in"));
+}
+
+/** The recovery's case for the hour and the weather there: night (the sun down at the ship) or a low ceiling — III;
+ *  clouds — II; else I. */
+function recoveryCase(c: CameraController): RecoveryCase {
+  const g = c.geoNow();
+  const utcH = (((utcOf(c.nowTime()) / 3.6e6) % 24) + 24) % 24;
+  const local = g ? (((utcH + g.lon / 15) % 24) + 24) % 24 : 12;
+  if (local < 6.5 || local > 19.5) return "III";
+  const w = c.s.weather;
+  if (w === "overcast" || w === "rain" || w === "storm" || w === "fog") return "III";
+  if (w === "cloudy" || w === "windy") return "II";
+  return "I";
 }
 
 /** The run's guidance this frame (worked out once). */

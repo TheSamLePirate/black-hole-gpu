@@ -151,7 +151,7 @@ function qualStep(this: CameraController, dt: number) {
     return;
   }
   if ((this.geoNow()?.alt ?? 0) > 40) {
-    if (Q.variant === "C") this.trapLand(Q.kind);
+    if (Q.variant === "C") this.trapLand(Q.kind, { case: "straight" });
     else this.deckLand(Q.kind);
   }
 }
