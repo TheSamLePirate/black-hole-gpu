@@ -6,8 +6,9 @@
 // their radio — the orders acknowledged, the contacts called, Fox, Splash, hit, down —; drawn, on the radar by
 // the datalink, sent to the room (the host flies them).
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
-import { AiJet, type AiCmd, headingOf } from "../game/aijet";
-import { bankAccel, type FormCraft, formationBank } from "../game/formation";
+import { AiJet, AIJET, type AiCmd, headingOf } from "../game/aijet";
+import { bankAccel, type FormCraft, type FormSlot, formationBank } from "../game/formation";
+import { type CrossTurn, crossTurnNew, crossTurnStep, easeSlot, landingSlot, TAKEOFF, TAKEOFF_SLOTS } from "../game/formflow";
 import { formSlotFor } from "./formation";
 import { type IcptPhase, interceptStep } from "../game/intercept";
 import { altHoldGamma, hdgHoldBank, wrapPi } from "../game/jet";
@@ -46,7 +47,7 @@ const NAMES: Record<number, { fr: string; en: string }> = {
   4: { fr: "Quatre", en: "Four" },
 };
 
-export type WingMode = "form" | "free" | "break" | "hold" | "rtb" | "cover" | "attack" | "engage";
+export type WingMode = "form" | "free" | "break" | "hold" | "rtb" | "cover" | "attack" | "engage" | "ground" | "approach" | "rollout";
 
 /** An AI wingman: its place (2…4), its craft, what it does, its state for each mode, its health and stores. */
 export interface Wingman {
@@ -72,6 +73,9 @@ export interface Wingman {
   /** its slot's distance [m] (in formation, in cover), its last commands */
   dist: number;
   cmd: AiCmd | null;
+  /** the slot flown now (moving to the formation's — game/formflow.ts), its tactical turn's state */
+  now: FormSlot | null;
+  turn: CrossTurn;
 }
 
 /** Another's AI wingman as the room sends it (10 times a second): its place, its velocity, its nose and top. */
@@ -110,6 +114,12 @@ export interface WingState {
   away: number;
   /** the leader's place last frame (a placing — a fight's start, a teleport —: mustered again about him) */
   lastP: number[] | null;
+  /** a formation take-off: the runway's line (the leader's place and heading when mustered), when he began his roll */
+  runway?: { p0: number[]; hdg: number; rollAt: number | null };
+  /** a formation landing: the leader on his final last frame; where he touched down and his heading (those still in
+   *  the air then fly their own approach to it) */
+  wasFinal?: boolean;
+  td?: { p: number[]; hdg: number } | null;
 }
 
 const nameOf = (k: number) => tr(NAMES[k] ?? { fr: `${k}`, en: `${k}` });
@@ -147,15 +157,37 @@ function radio(c: CameraController, text: string) {
   c.onRadio?.(text);
 }
 
-/** The leader (the flown craft) as the formation law reads it; null: not flying in the Earth's air. */
-function leaderOf(c: CameraController): FormCraft | null {
+/** The leader (the flown craft) as the formation law reads it, on the ground or flying (his height over it, on a
+ *  final: his gear down, low, coming down); null: not near the Earth. */
+function leaderOf(c: CameraController): (FormCraft & { ground: boolean; agl: number; final: boolean; hdg: number }) | null {
   const o = c.netOwn();
-  if (!o || !c.airFlight.inAir) return null;
-  return { p: o.p, v: o.v, fwd: o.fwd, aLat: bankAccel(formationBank(o.p, o.up, o.right)) };
+  if (!o) return null;
+  const ground = !!(c.ourLanded || c.rolling);
+  if (!ground && !c.airFlight.inAir) return null;
+  const agl = geoOf(o.p).agl;
+  const U = o.p.map((x) => x / Math.hypot(...o.p));
+  const vs = dot(o.v, U);
+  const hdg = headingOf(o.p, Math.hypot(o.v[0]!, o.v[1]!, o.v[2]!) > 5 ? o.v : o.fwd);
+  return {
+    p: o.p,
+    v: o.v,
+    fwd: o.fwd,
+    aLat: ground ? 0 : bankAccel(formationBank(o.p, o.up, o.right)),
+    ground,
+    agl,
+    final: !ground && c.gearDown && agl < 600 && vs < 0.5,
+    hdg,
+  };
 }
 
+/** The ground's height under a place [m over the mean radius]. */
+const groundAt = (p: readonly number[]) => {
+  const g = geoOf(p);
+  return g.alt - g.agl;
+};
+
 /** The wingmen made up to the setting's count: the missing ones at their places about the leader, at his velocity. */
-function muster(c: CameraController, L: FormCraft) {
+function muster(c: CameraController, L: FormCraft & { ground: boolean; hdg: number }) {
   const S = c.s;
   const W = (c.wing ??= { list: [], called: new Set(), callAt: -1e9, t: 0, away: 0, lastP: null });
   // (the leader placed elsewhere — moved 3 km in a frame —: his wingmen with him, at their places)
@@ -164,15 +196,34 @@ function muster(c: CameraController, L: FormCraft) {
   const want = Math.min(Math.max(Math.round(S.wingmen ?? 0), 0), 3);
   W.list = W.list.filter((w) => w.k <= want + 1);
   const o = c.netOwn()!;
+  // (on the ground: mustered only stopped — lined up for a formation take-off, on the runway beside and behind him)
+  const vL = Math.hypot(o.v[0]!, o.v[1]!, o.v[2]!);
+  if (L.ground && vL > 5) return;
+  const R = enuAxes(o.p);
+  const fwdG = [0, 1, 2].map((i) => R.E[i]! * Math.sin(L.hdg) + R.N[i]! * Math.cos(L.hdg));
+  const rightG = [0, 1, 2].map((i) => R.E[i]! * Math.cos(L.hdg) - R.N[i]! * Math.sin(L.hdg));
   for (let k = 2; k <= want + 1; k++) {
     if (W.list.some((w) => w.k === k)) continue;
-    const slot = formSlotFor(S.formShape, k, S.formSpacing);
-    const p = [0, 1, 2].map((i) => o.p[i]! + o.right[i]! * slot.right - o.fwd[i]! * slot.back + o.up[i]! * slot.up);
+    const slot = L.ground ? TAKEOFF_SLOTS[k]! : formSlotFor(S.formShape, k, S.formSpacing);
+    let p = L.ground
+      ? [0, 1, 2].map((i) => o.p[i]! + rightG[i]! * slot.right - fwdG[i]! * slot.back)
+      : [0, 1, 2].map((i) => o.p[i]! + o.right[i]! * slot.right - o.fwd[i]! * slot.back + o.up[i]! * slot.up);
+    const J = new AiJet(p, L.ground ? [0, 0, 0] : o.v);
+    if (L.ground) {
+      W.runway = { p0: [...o.p], hdg: L.hdg, rollAt: null };
+      // (on its wheels on the ground there, stopped, the brakes on)
+      const l = Math.hypot(...p);
+      p = p.map((x) => (x / l) * (R_MEAN + groundAt(p) + AIJET.gear));
+      J.p = p;
+      J.gnd = { hdg: L.hdg };
+      J.alpha = 0;
+      J.throttle = 0;
+    }
     const g = geoOf(p);
     W.list.push({
       k,
-      jet: new AiJet(p, o.v),
-      mode: "form",
+      jet: J,
+      mode: L.ground ? "ground" : "form",
       phase: "join",
       mem: { iA: 0, iU: 0 },
       hdg: headingOf(p, o.v),
@@ -189,6 +240,8 @@ function muster(c: CameraController, L: FormCraft) {
       alive: true,
       dist: 0,
       cmd: null,
+      now: { ...slot },
+      turn: crossTurnNew(),
     });
     radio(c, tr({ fr: `${nameOf(k)}, en place`, en: `${nameOf(k)}, in position` }));
   }
@@ -227,6 +280,13 @@ function wingStep(this: CameraController, dt: number) {
   const Wg = this.wing!;
   Wg.away = 0;
   Wg.t += dt;
+  // (the leader down off his final: his touchdown kept — the wingmen still in the air land on it)
+  if (L.ground && Wg.wasFinal && !Wg.td) {
+    Wg.td = { p: [...L.p], hdg: L.hdg };
+    for (const w of Wg.list) if (w.alive && !w.jet.gnd && w.mode === "form") w.mode = "approach";
+  }
+  if (!L.ground && !L.final) Wg.td = null;
+  Wg.wasFinal = L.final || (L.ground && !!Wg.wasFinal);
   const atm = solarBody("earth")!.atmosphere;
   const C = this.combat;
   const CW = C?.status === "run" ? C.world : null;
@@ -254,15 +314,81 @@ function wingStep(this: CameraController, dt: number) {
     const g = geoOf(J.p);
     let cmd: AiCmd;
     const formCmd = (shape = S.formShape, spacing = S.formSpacing): AiCmd => {
-      const slot = formSlotFor(shape, w.k, spacing);
+      // (on his final: the landing's places; else the formation's — a tactical one's sides swapped in his turns —,
+      // the slot flown moving to it without a jump, across him under and behind)
+      const base = L.final ? landingSlot(w.k) : formSlotFor(shape, w.k, spacing);
+      const target = L.final ? base : crossTurnStep(w.turn, shape, L.hdg, L.aLat ?? 0, base);
+      w.now = easeSlot(w.now ?? target, target, dt);
+      const slot = w.now;
       const r = interceptStep({ p: J.p, v: J.v, fwd: J.axes().fwd }, J.V, g.alt, L, w.phase, slot, w.mem, dt, true);
       w.phase = r.phase === "shadow" ? "join" : r.phase;
       w.dist = r.dist;
       return { bank: r.bank, gamma: r.gamma, spd: r.spd, ab: r.acc > 1.2 ? true : undefined };
     };
+    // (down on the runway on his final: the roll-out)
+    if (J.gnd && w.mode !== "ground" && w.mode !== "rollout") {
+      w.mode = "rollout";
+      radio(this, tr({ fr: `${nameOf(w.k)}, posé`, en: `${nameOf(w.k)}, touchdown` }));
+    }
     switch (w.mode) {
       case "form":
         cmd = formCmd();
+        break;
+      case "ground": {
+        // the formation take-off: the brakes on until the leader rolls (the second element 8 s after him), then
+        // full power on his runway's line — Two holding its place beside him —, rotated at 70 m/s
+        const R0 = Wg.runway;
+        if (!J.gnd || !R0) {
+          w.mode = "form";
+          w.phase = "join";
+          w.now = null;
+          cmd = formCmd();
+          break;
+        }
+        const vL = Math.hypot(L.v[0]!, L.v[1]!, L.v[2]!);
+        if (R0.rollAt === null && vL > 3) R0.rollAt = Wg.t;
+        const go = R0.rollAt !== null && Wg.t - R0.rollAt >= (w.k >= 3 ? TAKEOFF.delay : 0);
+        const E = enuAxes(R0.p0);
+        const fwdR = [0, 1, 2].map((i) => E.E[i]! * Math.sin(R0.hdg) + E.N[i]! * Math.cos(R0.hdg));
+        const rightR = [0, 1, 2].map((i) => E.E[i]! * Math.cos(R0.hdg) - E.N[i]! * Math.sin(R0.hdg));
+        const slot = TAKEOFF_SLOTS[w.k]!;
+        const off = [0, 1, 2].map((i) => J.p[i]! - R0.p0[i]!);
+        const lat = dot(off, rightR) - slot.right;
+        const gHdg = R0.hdg - Math.max(-5 * D, Math.min(5 * D, 0.01 * lat));
+        if (!go) cmd = { bank: 0, gamma: 0, spd: 0, brake: true, gHdg };
+        else if (w.k === 2) {
+          const err =
+            dot(
+              [0, 1, 2].map((i) => L.p[i]! - R0.p0[i]!),
+              fwdR,
+            ) -
+            slot.back -
+            dot(off, fwdR);
+          cmd = { bank: 0, gamma: 0, spd: Math.max(0, vL + 0.5 * err), ab: err > 10 || vL > 40, gHdg, rotate: J.V > TAKEOFF.vRotate };
+        } else cmd = { bank: 0, gamma: 0, spd: 999, ab: true, gHdg, rotate: J.V > TAKEOFF.vRotate };
+        break;
+      }
+      case "approach": {
+        // its own approach to the leader's touchdown (its place across kept): the runway's line, 3° down to it, the
+        // flare under 12 m, 75 m/s
+        const T = Wg.td!;
+        const E = enuAxes(T.p);
+        const fwdR = [0, 1, 2].map((i) => E.E[i]! * Math.sin(T.hdg) + E.N[i]! * Math.cos(T.hdg));
+        const rightR = [0, 1, 2].map((i) => E.E[i]! * Math.cos(T.hdg) - E.N[i]! * Math.sin(T.hdg));
+        const off = [0, 1, 2].map((i) => J.p[i]! - T.p[i]!);
+        const along = dot(off, fwdR);
+        const lat = dot(off, rightR) - landingSlot(w.k).right;
+        const want = Math.max(-along, 0) * Math.tan(3 * D);
+        const flare = g.agl < 12;
+        const gamma = flare ? -0.8 * D : Math.max(-6 * D, Math.min(1 * D, -3 * D + ((want - g.agl) / Math.max(J.V, 50)) * 0.8));
+        const hdg = T.hdg - Math.max(-15 * D, Math.min(15 * D, 0.004 * lat + (0.04 * dot(J.v, rightR)) / Math.max(J.V, 1)));
+        cmd = { bank: hdgHoldBank(headingOf(J.p, J.v), hdg, 25 * D), gamma, spd: 75 };
+        break;
+      }
+      case "rollout":
+        // (on the runway: braked to a stop, its heading kept)
+        cmd = { bank: 0, gamma: 0, spd: 0, brake: true, gHdg: J.gnd?.hdg };
+        if (!J.gnd) w.mode = "form";
         break;
       case "cover":
         // (the combat spread, high and wide: eyes on the leader's six)
@@ -336,10 +462,9 @@ function wingStep(this: CameraController, dt: number) {
         cmd = holdCmd(w, w.hdg, w.alt, Math.max(200, J.V));
     }
     w.cmd = cmd;
-    J.step(dt, cmd, atm);
+    J.step(dt, cmd, atm, groundAt);
     // (the ground: lost)
-    const g2 = geoOf(J.p);
-    if (g2.agl < 0) {
+    if (J.crashed) {
       w.alive = false;
       radio(this, tr({ fr: `${nameOf(w.k)} s'est écrasé`, en: `${nameOf(w.k)} crashed` }));
     }
@@ -490,6 +615,7 @@ function wingOrder(this: CameraController, o: Order) {
     switch (o.id) {
       case "rejoin":
       case "shape":
+      case "show":
       case "tighten":
       case "loosen":
         w.mode = "form";

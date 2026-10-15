@@ -4,7 +4,19 @@
 
 import type { FormationId, Spacing } from "./formations";
 
-export type OrderId = "rejoin" | "shape" | "tighten" | "loosen" | "attack" | "engage" | "cover" | "hold" | "rtb" | "breakL" | "breakR";
+export type OrderId =
+  | "rejoin"
+  | "shape"
+  | "tighten"
+  | "loosen"
+  | "attack"
+  | "engage"
+  | "cover"
+  | "hold"
+  | "rtb"
+  | "breakL"
+  | "breakR"
+  | "show";
 
 export const ORDER_IDS: OrderId[] = [
   "rejoin",
@@ -18,6 +30,7 @@ export const ORDER_IDS: OrderId[] = [
   "rtb",
   "breakL",
   "breakR",
+  "show",
 ];
 
 /** An order as sent: its kind and what it needs — the formation, the spacing, the leader's lock, the hold's fix and
@@ -46,6 +59,11 @@ export const ORDERS: Record<OrderId, { fr: string; en: string; call: { fr: strin
   rtb: { fr: "Rentrer à la base", en: "Return to base", call: { fr: "Patrouille, retour base", en: "Flight, RTB" } },
   breakL: { fr: "Dégagement à gauche", en: "Break left", call: { fr: "Dégagez à gauche !", en: "Break left!" } },
   breakR: { fr: "Dégagement à droite", en: "Break right", call: { fr: "Dégagez à droite !", en: "Break right!" } },
+  show: {
+    fr: "Passage en losange",
+    en: "Diamond pass",
+    call: { fr: "Patrouille, losange serré pour le passage", en: "Flight, tight diamond for the pass" },
+  },
 };
 
 /** Whether a wingman in formation carries it out by flying (the others: heard, his own to carry out). */
@@ -61,6 +79,7 @@ export const FLOWN: Record<OrderId, boolean> = {
   rtb: true,
   breakL: true,
   breakR: true,
+  show: true,
 };
 
 /** An order read off the network (a stranger's fields checked); null: not one. */

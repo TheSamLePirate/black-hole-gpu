@@ -141,7 +141,15 @@ describe("heard in formation, carried out", () => {
     expect(said).toBe("Ana : Flight, go Diamond");
     expect(c.s.formShape).toBe("diamond");
     expect(c.form!.at.right).toBeLessThan(0);
-    step(40);
+    let k = 0;
+    step(40, () => {
+      if (process.env.DBG && k++ % 60 === 0) {
+        const F = c.form!;
+        console.log(
+          `    ${(k / 30).toFixed(0)}s now ${JSON.stringify(Object.values(F.now ?? {}).map((x) => Math.round(x)))} dist ${F.last?.dist.toFixed(1)} along ${F.last?.along.toFixed(1)} cross ${F.last?.cross.toFixed(1)} up ${F.last?.up.toFixed(1)} phase ${F.phase}`,
+        );
+      }
+    });
     console.log(`  diamond #2 reached: ${c.form!.last!.dist.toFixed(1)} m off`);
     expect(c.form!.last!.dist).toBeLessThan(5);
   }, 120_000);

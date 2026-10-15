@@ -222,6 +222,7 @@ pertinent.
   *Fait le 2026-10-15 — [fiche](progress/aviation/F3.md) : avion IA aux forces du vrai F-35 (aero.ts, F135) volé à la manière de la loi ; 1–3 ailiers en formation, tous les ordres, combat (AIM-120/9X, abattus possibles), radio, liaison, réseau (l'hôte les fait voler) ; losange tenu à 1,3 m, 2 drones abattus.*
 - **F4. Les manœuvres de patrouille.** Décollage et atterrissage en patrouille, virages en formation (« cross-under »),
   changements de formation fluides, un passage en losange pour les spectateurs.
+  *Fait le 2026-10-15 — [fiche](progress/aviation/F4.md) : transitions fluides (dessous et derrière), virages croisés des formations tactiques, décollage et atterrissage en patrouille (avion IA au sol), passage en losange avec la caméra de passage.*
 
 ### T — Le ciel et la mer vivants (trafic réel et simulé)
 

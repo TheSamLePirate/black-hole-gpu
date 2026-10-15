@@ -1691,7 +1691,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "flight_lead",
       description:
-        "The flight the player leads (a patrouille of two to four: the room's pilots flying in formation on him, his AI wingmen). wingmen: how many AI wingmen fly with his F-35 (count 0–3: Two, Three, Four — they muster at their places in the air). order: an order given as its leader, said on the radio and carried out by the wingmen in formation — rejoin, shape (a formation: echelonR, echelonL, fingertip, vic, diamond, line, trail, spread), tighten, loosen, attack (his radar's lock), engage (the hostiles), cover (him), hold (a racetrack over where he is), rtb (home to the nearest airfield), breakL, breakR (a hard 90° turn). status: the formation, its spacing, his place in another's, the wingmen.",
+        "The flight the player leads (a patrouille of two to four: the room's pilots flying in formation on him, his AI wingmen). wingmen: how many AI wingmen fly with his F-35 (count 0–3: Two, Three, Four — they muster at their places in the air). order: an order given as its leader, said on the radio and carried out by the wingmen in formation — rejoin, shape (a formation: echelonR, echelonL, fingertip, vic, diamond, line, trail, spread), tighten, loosen, attack (his radar's lock), engage (the hostiles), cover (him), hold (a racetrack over where he is), rtb (home to the nearest airfield), breakL, breakR (a hard 90° turn), show (the tight diamond for a pass, the fly-by camera). status: the formation, its spacing, his place in another's, the wingmen.",
       params: {
         action: { type: "string", enum: ["order", "status", "wingmen"] },
         order: { type: "string", enum: ORDER_IDS },

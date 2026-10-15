@@ -5,6 +5,8 @@
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import type { FormCraft, FormOut, FormSlot } from "../game/formation";
 import { ICPT, type IcptPhase, interceptStep } from "../game/intercept";
+import { type CrossTurn, crossTurnNew, crossTurnStep, easeSlot } from "../game/formflow";
+import { headingOf } from "../game/aijet";
 import { FORMATIONS, type FormationId, formationSlot, type Spacing } from "../game/formations";
 import { t, tf, tr } from "../i18n";
 import type { PilotInput } from "../pilot";
@@ -40,6 +42,9 @@ export interface FormState {
   mem?: { iA: number; iU: number };
   /** far off (beyond 3 km): the intercept's run to the slot first (game/intercept.ts), then the formation law */
   phase?: IcptPhase;
+  /** the slot flown now (moving to `at` without a jump — game/formflow.ts), a tactical formation's turn */
+  now?: FormSlot;
+  turn?: CrossTurn;
 }
 
 /** A place in a formation, its close slots widened by `kspan` (the two craft's spans over two F-35s'). */
@@ -93,7 +98,12 @@ function formStep(
   // and on his way, the formation law)
   const slotAt = [0, 1, 2].map((k) => L.p[k]!);
   F.phase ??= Math.hypot(...[0, 1, 2].map((k) => slotAt[k]! - o.p[k]!)) > ICPT.joinDist ? "run" : "join";
-  const I = interceptStep(o, f.V, f.h, L, F.phase, F.at, (F.mem ??= { iA: 0, iU: 0 }), dt, true);
+  // (the slot: a tactical formation's sides swapped in his turns, moved to without a jump — across him under and
+  // behind)
+  const hdgL = headingOf(L.p, L.v);
+  const target = F.shape ? crossTurnStep((F.turn ??= crossTurnNew()), F.shape, hdgL, L.aLat ?? 0, F.at) : F.at;
+  F.now = dt > 0 ? easeSlot(F.now ?? target, target, dt) : (F.now ?? target);
+  const I = interceptStep(o, f.V, f.h, L, F.phase, F.now, (F.mem ??= { iA: 0, iU: 0 }), dt, true);
   F.phase = I.phase === "shadow" ? "join" : I.phase;
   const r: FormOut = I.form ?? {
     bank: I.bank,

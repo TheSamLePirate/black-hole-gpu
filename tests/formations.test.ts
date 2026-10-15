@@ -43,12 +43,12 @@ describe("the table", () => {
 
 /** A leader flying east from 150 m before our F-35 (9 km, 220 m/s), level, then banked 30° to the left: its craft
  *  for the formation, fixed to the Earth, as `t` [s] runs. */
-function leader(c: ReturnType<typeof cruise>["c"], turnAt: number) {
+function leader(c: ReturnType<typeof cruise>["c"], turnAt: number, turnFor = Infinity) {
   const fix = c.radarFix()!;
   const R0 = Math.hypot(...fix.p);
   const V = 220;
   const st = { x: 150, y: 0, psi: 90 * D, t: 0 };
-  const phi = () => (st.t >= turnAt ? -30 * D : 0);
+  const phi = () => (st.t >= turnAt && st.t < turnAt + turnFor ? -30 * D : 0);
   const at = (): FormCraft => {
     const q = [0, 1, 2].map((k) => fix.p[k]! + fix.E[k]! * st.x + fix.N[k]! * st.y);
     const l = Math.hypot(...q);
@@ -133,8 +133,6 @@ describe("flown to its place", () => {
     ["echelonL", 3],
     ["vic", 3],
     ["trail", 2],
-    ["line", 3],
-    ["spread", 2],
   ] as const)
     test(`${FORMATIONS[shape].en} #${pos}: reached, held straight and in a 30° turn`, () => {
       const r = flown(shape, pos);
@@ -144,10 +142,52 @@ describe("flown to its place", () => {
       expect(r.on).toBe(true);
       expect(r.reached).toBeLessThan(90);
       expect(r.straight).toBeLessThan(2);
-      // (a tactical one's outside place flies faster in the turn, its inside one slower: held within a third of its
-      // distance — its geometry kept by the crossings of F4)
-      const s = formationSlot(shape, pos);
-      expect(r.turn).toBeLessThan(FORMATIONS[shape].close ? 12 : Math.hypot(s.right, s.back, s.up) / 3);
+      expect(r.turn).toBeLessThan(12);
+    }, 120_000);
+
+  for (const [shape, pos] of [
+    ["line", 3],
+    ["spread", 2],
+  ] as const)
+    test(`${FORMATIONS[shape].en} #${pos}, the leader's 90° turn: past 60° the sides swapped (a cross turn), then held there`, () => {
+      const { c, fly } = cruise(9000, 220, 0.7);
+      c.s.wind = 0;
+      c.jetToggle("ap");
+      c.jetToggle("athr");
+      c.s.formShape = shape;
+      c.s.formPos = pos;
+      c.s.formSpacing = "normal";
+      // (30° of bank: 1.47°/s at 220 m/s — 90° in 61 s)
+      const L = leader(c, 60, 61);
+      c.form = {
+        slot: 99,
+        name: "LEAD",
+        at: formationSlot(shape, pos),
+        shape,
+        pos,
+        spacing: "normal",
+        kspan: 1,
+        since: 0,
+        armed: false,
+        last: null,
+        lead: L.at,
+      };
+      const run = (sec: number) => {
+        for (let i = 0; i < sec * 30; i++) {
+          L.step(1 / 30);
+          fly(1 / 30);
+        }
+      };
+      run(60);
+      const side0 = Math.sign(c.form!.now!.right);
+      run(61);
+      run(90);
+      const side1 = Math.sign(c.form!.now!.right);
+      console.log(
+        `  ${FORMATIONS[shape].en} #${pos}: the side ${side0 > 0 ? "right" : "left"} → ${side1 > 0 ? "right" : "left"}; ${c.form!.last!.dist.toFixed(1)} m off after the turn`,
+      );
+      expect(side1).toBe(-side0);
+      expect(c.form!.last!.dist).toBeLessThan(10);
     }, 120_000);
 
   test("in the light wind's turbulence: diamond #4 held within 8 m", () => {

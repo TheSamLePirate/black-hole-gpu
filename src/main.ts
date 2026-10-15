@@ -3385,6 +3385,14 @@ async function main() {
       item("rtb"),
       item("breakL"),
       item("breakR"),
+      // (the pass for the spectators: the tight diamond, the camera standing ahead on the way — the fly-by's)
+      {
+        label: { fr: ORDERS.show.fr, en: ORDERS.show.en },
+        run: () => {
+          order("show");
+          setTimeout(() => (settings.shipMount = "flyby"), 4000);
+        },
+      },
     ];
   };
   const wheelItems = (): WheelItem[] => {

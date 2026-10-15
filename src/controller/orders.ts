@@ -42,9 +42,11 @@ export function orderCall(o: Order): string {
 function flightOrder(this: CameraController, id: OrderId, arg?: string): string {
   const s = this.s;
   const o: Order = { id };
-  if (id === "shape") {
-    o.shape = (arg as Order["shape"]) ?? s.formShape;
+  if (id === "shape" || id === "show") {
+    // (the pass: the diamond, tight)
+    o.shape = id === "show" ? "diamond" : ((arg as Order["shape"]) ?? s.formShape);
     s.formShape = o.shape!;
+    if (id === "show") s.formSpacing = "tight";
   } else if (id === "tighten" || id === "loosen") {
     s.formSpacing = spacingStep(s.formSpacing, id === "tighten" ? -1 : 1);
     o.spacing = s.formSpacing;
@@ -57,7 +59,7 @@ function flightOrder(this: CameraController, id: OrderId, arg?: string): string 
     o.fix = { lat: g.lat, lon: g.lon };
     o.inbound = g.track;
   }
-  if (id === "shape" || id === "rejoin") o.spacing = s.formSpacing;
+  if (id === "shape" || id === "rejoin" || id === "show") o.spacing = s.formSpacing;
   for (const sink of this.orderSinks.values()) sink(o);
   // (our AI wingmen: they carry it out, they answer)
   this.wingOrder?.(o);
@@ -75,6 +77,7 @@ function orderHeard(this: CameraController, o: Order, from: { name: string; slot
   const s = this.s;
   switch (o.id) {
     case "shape":
+    case "show":
       if (o.shape) s.formShape = o.shape;
       if (o.spacing) s.formSpacing = o.spacing;
       formReshape(F, { shape: s.formShape, spacing: s.formSpacing });

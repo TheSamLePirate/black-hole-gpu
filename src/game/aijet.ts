@@ -38,6 +38,15 @@ export const AIJET = {
   kGamma: 1.2,
   /** the bank loop's gain [1/s] */
   kPhi: 3,
+  /** on the ground: the wheels under the craft's origin [m]; the rolling and the braking friction; the nose wheel's
+   *  turn [rad/s]; the rotation's incidence [rad] and rate [rad/s]; a touchdown's sink at most [m/s] */
+  gear: 1.17,
+  muRoll: 0.025,
+  muBrake: 0.4,
+  steer: 6 * D,
+  alphaRot: 10 * D,
+  rotRate: 3 * D,
+  sinkMax: 4,
 } as const;
 
 /** The commands: the bank [rad], the flight path angle [rad], the speed [m/s] (the autothrottle's), the
@@ -47,6 +56,10 @@ export interface AiCmd {
   gamma: number;
   spd: number;
   ab?: boolean;
+  /** on the ground: the heading to steer [rad], the brakes, the rotation (the nose up for the lift-off) */
+  gHdg?: number;
+  brake?: boolean;
+  rotate?: boolean;
 }
 
 export class AiJet {
@@ -63,6 +76,9 @@ export class AiJet {
   n = 1;
   mach = 0;
   q = 0;
+  /** on the ground (its heading [rad]; null: flying); touched the ground too hard or off a runway: crashed */
+  gnd: { hdg: number } | null = null;
+  crashed = false;
   private athr = new Autothrottle();
 
   constructor(p: readonly number[], v: readonly number[], fuel = VESSELS.f35.fuelKg ?? 6000) {
@@ -90,7 +106,12 @@ export class AiJet {
    *  by the bank about it */
   axes(): { fwd: number[]; up: number[]; right: number[] } {
     const up0 = unit(this.p);
-    const u = this.V > 1 ? unit(this.v) : unit(cross(up0, [0, 0, 1]));
+    const L = enu(this.p);
+    const u = this.gnd
+      ? [0, 1, 2].map((k) => L.E[k]! * Math.sin(this.gnd!.hdg) + L.N[k]! * Math.cos(this.gnd!.hdg))
+      : this.V > 1
+        ? unit(this.v)
+        : unit(cross(up0, [0, 0, 1]));
     const r0 = unit(cross(u, up0));
     const l0 = cross(r0, u);
     const c = Math.cos(this.phi),
@@ -112,13 +133,68 @@ export class AiJet {
   /**
    * A step of `dt` [s] flying the commands in the Earth's air `atm`: sub-stepped at 60 Hz at most.
    */
-  step(dt: number, cmd: AiCmd, atm: Atmosphere | null | undefined) {
+  step(dt: number, cmd: AiCmd, atm: Atmosphere | null | undefined, ground?: (p: readonly number[]) => number) {
     const n = Math.max(1, Math.ceil(dt * 60));
     const h = dt / n;
-    for (let i = 0; i < n; i++) this.sub(h, cmd, atm);
+    for (let i = 0; i < n; i++) {
+      if (this.crashed) return;
+      if (this.gnd) this.roll(h, cmd, atm, ground);
+      else this.sub(h, cmd, atm, ground);
+    }
   }
 
-  private sub(dt: number, cmd: AiCmd, atm: Atmosphere | null | undefined) {
+  /** On its wheels: steered to its heading, its thrust against the drag and the wheels' friction (the brakes'),
+   *  rotated past its speed; airborne once its lift carries it. */
+  private roll(dt: number, cmd: AiCmd, atm: Atmosphere | null | undefined, ground?: (p: readonly number[]) => number) {
+    const G0 = this.gnd!;
+    const L = enu(this.p);
+    const air = airAt(atm, this.h);
+    const V = this.V;
+    this.mach = V / air.a;
+    this.q = 0.5 * air.rho * V * V;
+    const m = this.mass;
+    G0.hdg += clamp(wrap((cmd.gHdg ?? G0.hdg) - G0.hdg), -AIJET.steer * dt, AIJET.steer * dt);
+    this.phi = 0;
+    this.alpha = cmd.rotate ? Math.min(this.alpha + AIJET.rotRate * dt, AIJET.alphaRot) : Math.max(this.alpha - AIJET.rotRate * dt, 0);
+    const d = [0, 1, 2].map((k) => L.E[k]! * Math.sin(G0.hdg) + L.N[k]! * Math.cos(G0.hdg));
+    this.v = scale(d, V);
+    const A = this.axes();
+    const left = scale(A.right, -1);
+    const out = aeroForces(VESSELS.f35.aero, [dot(this.v, left), dot(this.v, A.up), dot(this.v, A.fwd)] as V3, air);
+    const Fw = [0, 1, 2].map((k) => left[k]! * out.F[0] + A.up[k]! * out.F[1] + A.fwd[k]! * out.F[2]);
+    const lift = dot(Fw, L.U);
+    const drag = -dot(Fw, d);
+    const sigma = air.rho / 1.225;
+    const dry = dryThrust(F135, this.mach, sigma);
+    const wet = wetThrust(F135, this.mach, sigma);
+    // (the take-off's run: full power at once — the autothrottle's eased acceleration is a cruise's)
+    this.throttle = cmd.brake
+      ? 0
+      : cmd.spd > V + 60
+        ? Math.min(1, this.throttle + dt / F135.spool)
+        : this.athr.step(this.throttle, V, cmd.spd, dry / m, dt);
+    const wantAb = !cmd.brake && (cmd.ab ?? false);
+    this.ab = clamp(this.ab + (wantAb ? 1 : -1) * (dt / F135.light), 0, 1);
+    const T = this.fuel > 0 ? this.throttle * dry + this.ab * (wet - dry) : 0;
+    this.fuel -= fuelFlow(F135, T, dry, sigma, this.mach) * dt;
+    const W = m * G;
+    const fric = (cmd.brake ? AIJET.muBrake : AIJET.muRoll) * Math.max(W - lift, 0);
+    const Vn = Math.max(0, V + ((T * Math.cos(this.alpha) - drag - (V > 0.1 ? fric : 0)) / m) * dt);
+    this.v = scale(d, Vn);
+    for (let k = 0; k < 3; k++) this.p[k] = this.p[k]! + this.v[k]! * dt;
+    // (kept on its wheels over the ground)
+    if (ground) {
+      const r = RE + ground(this.p) + AIJET.gear;
+      this.p = scale(unit(this.p), r);
+    }
+    // (its lift past its weight, rotated: airborne)
+    if (lift > W * 1.02 && this.alpha > AIJET.alphaRot * 0.6) {
+      this.gnd = null;
+      this.v = [0, 1, 2].map((k) => this.v[k]! + L.U[k]! * 1);
+    }
+  }
+
+  private sub(dt: number, cmd: AiCmd, atm: Atmosphere | null | undefined, ground?: (p: readonly number[]) => number) {
     const air = airAt(atm, this.h);
     const V = this.V;
     this.mach = V / air.a;
@@ -164,7 +240,28 @@ export class AiJet {
       this.v[k] = this.v[k]! + a[k]! * dt;
       this.p[k] = this.p[k]! + this.v[k]! * dt;
     }
+    // (the ground reached: on its wheels if gently — a landing —, else crashed)
+    if (ground) {
+      const above = len(this.p) - RE - ground(this.p) - AIJET.gear;
+      if (above < 0) {
+        const U = unit(this.p);
+        const sink = -dot(this.v, U);
+        if (sink < AIJET.sinkMax && Math.abs(this.phi) < 15 * D) {
+          this.gnd = { hdg: headingOf(this.p, this.v) };
+          this.p = scale(U, RE + ground(this.p) + AIJET.gear);
+          this.v = [0, 1, 2].map((k) => this.v[k]! + U[k]! * sink);
+        } else this.crashed = true;
+      }
+    }
   }
+}
+
+/** The local east, north, up at a place (fixed to the Earth). */
+function enu(p: readonly number[]) {
+  const U = unit(p);
+  const E = unit([-U[1]!, U[0]!, 0]);
+  const N = cross(U, E);
+  return { E, N, U };
 }
 
 const wrap = (a: number) => a - 2 * Math.PI * Math.floor((a + Math.PI) / (2 * Math.PI));

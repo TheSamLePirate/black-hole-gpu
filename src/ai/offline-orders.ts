@@ -99,7 +99,8 @@ export function parseOrders(text: string): Order[] {
     [/\b(colonne|trail)\b/, "trail"],
     [/\b(patrouille etalee|combat spread)\b/, "spread"],
   ];
-  for (const [re, id] of SHAPES) if (re.test(q)) lead("shape", id);
+  if (/\b(passage en losange|diamond pass)\b/.test(q)) lead("show");
+  else for (const [re, id] of SHAPES) if (re.test(q)) lead("shape", id);
   if (/\b(rejoignez|rejoins|rejoin)\b/.test(q)) lead("rejoin");
   if (/\b(serrez|resserrez|tighten)\b/.test(q)) lead("tighten");
   else if (/\b(ecartez|desserrez|spread out|loosen)\b/.test(q)) lead("loosen");
