@@ -147,7 +147,7 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
   // (a deck's recovery flown: its holds set — controller/deckland.ts)
   this.deckJet(inp);
   // (a formation flown: its bank, its flight path, its speed — the holds' own laws left aside)
-  const fm = this.icptStep(inp, f) ?? this.formStep(inp, f, dt);
+  const fm = this.icptStep(inp, f) ?? this.trapJet(inp) ?? this.formStep(inp, f, dt);
   if (fm) {
     cws.pitch = cws.roll = false;
     // (the afterburner when the dry engine at full cannot keep up — he speeds up, we are behind —, out once eased)

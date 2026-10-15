@@ -44,7 +44,7 @@ export const LANDING: Partial<Record<CarrierId, LandingArea>> = {
       [5.1, -87],
       [6.9, -75],
     ],
-    aim: [6.0, -81],
+    aim: [4.0, -94],
     glide: 3.5,
     iflols: [38, 20, -60],
   },

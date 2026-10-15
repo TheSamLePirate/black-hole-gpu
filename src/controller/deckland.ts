@@ -18,6 +18,7 @@ import {
   VL_SPOT,
 } from "../game/deckland";
 import { fleet } from "../fleet";
+import { f35Variant } from "../f35/variant";
 import { STOVL } from "../f35/stovl";
 import { C_MPS } from "../units";
 import { t, tf } from "../i18n";
@@ -56,6 +57,8 @@ const memo = new WeakMap<DeckRun, { at: number; out: DeckOut | null }>();
  */
 function deckLand(this: CameraController, kind?: CarrierId): string | null {
   if (fleet.active !== "f35") return t("Deck landing: the F-35B's");
+  // (the F-35C: on the wires — controller/trap.ts)
+  if (f35Variant() === "C") return this.trapLand(kind);
   const o = this.netOwn();
   const near = this.carrierNow()
     .filter((c) => !kind || c.sp.kind === kind)
@@ -234,6 +237,8 @@ function onCarrier(c: CameraController): { kind: CarrierId; l: [number, number, 
  *  weight, else vertical when light enough to hover (or as asked); what to say; null: not on a deck. */
 function deckTakeoff(this: CameraController, mode?: "short" | "vertical"): string | null {
   if (fleet.active !== "f35") return null;
+  // (the F-35C: by catapult — controller/trap.ts)
+  if (f35Variant() === "C") return this.catLaunch();
   const on = onCarrier(this);
   if (!on || !(this.ourLanded || this.rolling)) return null;
   const bow = bowEnd(on.D, on.l[0], on.l[2]);

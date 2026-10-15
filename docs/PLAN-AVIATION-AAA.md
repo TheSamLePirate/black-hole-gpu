@@ -315,6 +315,8 @@ pertinent.
 
   *M3b fait le 2026-10-15 — [fiche](progress/aviation/M3b.md) : le décollage court automatique du F-35B (conversion freins serrés, roulage tuyère vers l'arrière, rotation, transition) depuis un couloir dégagé de chaque pont — 151 m sur le Ford réservoirs pleins —, ou vertical s'il est assez léger quand le pont est trop court, refusé sinon.*
 
+  *M3c fait le 2026-10-15 — [fiche](progress/aviation/M3c.md) : la variante F-35C (aile de 62 m², 9 t de carburant, crosse) ; la catapulte avant du Ford (72 m/s par rapport au pont, montée tenue au lâcher) ; les trois brins pris par la crosse, l'arrêt en une centaine de mètres moteur plein gaz, le bolter ; l'approche automatique alignée sur la piste oblique qui bouge et sur le plan de 3,5° stabilisé ; l'officier d'appontage qui guide et note chaque passage (OK souligné, OK, Passable, B, Non noté, WO, Coupé) — brin 2, OK, dans le navigateur.*
+
 ### P — Plans de vol, missions, carte
 
 - **P1. Le moteur de missions.** Une mission est **une donnée** (JSON). Elle peut prendre **un vol ou un navire

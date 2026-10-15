@@ -12,6 +12,9 @@ import type { Settings } from "./settings";
 import type { FlightInfo as FullFlightInfo } from "./controller/telemetry";
 import { timeRate, warpFactor } from "./clock";
 import { setSceneTime } from "./wormhole";
+import { applyF35Variant } from "./f35/variant";
+import { fleet } from "./fleet";
+import { VESSELS } from "./vessels";
 
 /** The flight figures the renderer takes from (controller/telemetry.ts): the re-entry glow. */
 type FlightInfo = Pick<FullFlightInfo, "surface" | "air"> | null;
@@ -135,6 +138,8 @@ export class Simulation {
     r.seaWakes = [...c.carrierWakes(), ...c.seaWakes()];
     // (the sea's height about us — the renderer's, from the marine model or the wind —: the ships' motion)
     c.seaHs = r.seaHs;
+    // (the F-35's variant as set — its figures, the tanks filled on a change)
+    if (applyF35Variant(s.f35Variant)) fleet.fuel.f35 = VESSELS.f35.fuelKg ?? 0;
     if (!s.animate) return changed;
     const pl = info?.surface?.plasma;
     r.shipPlasma = pl && pl.level > 0 ? [...pl.flow, pl.level] : [0, 0, 1, 0];

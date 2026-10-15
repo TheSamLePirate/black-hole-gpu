@@ -266,7 +266,18 @@ function fallStep(this: CameraController, simDt: number, keys: Vec3, fast: boole
 
 /** Where the craft comes to rest on a body: its body-fixed place — and on a carrier's deck (a platform under it,
  *  within 2 m), its place on the deck's own frame, carried along with it. */
-export type Landed = { body: string; q: Vec3; h?: number; deck?: { pl: Platform; l: Vec3 } };
+export type Landed = { body: string; q: Vec3; h?: number; deck?: { pl: Platform; l: Vec3; cat?: CatStroke } };
+/** A catapult holding the craft (controller/trap.ts): its way on the deck's frame, where the stroke started, run
+ *  along it [m] at [m/s] by a pull [m/s²], its length [m]; fired. Held, the engine at full does not roll it off. */
+export interface CatStroke {
+  dirL: Vec3;
+  l0: Vec3;
+  s: number;
+  v: number;
+  a: number;
+  len: number;
+  fired: boolean;
+}
 function landedAt(ground: string, X: Vec3, t: number): Landed {
   const q = toBodyFixed(ground, X, t);
   const pu = platformUnder(ground, q, t);
@@ -309,7 +320,9 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     const gSurf = OUR_BODIES.find((q) => q.id === L.body)!.mass / Math.hypot(...sub3(now.Xq, ourState(L.body, t0).pos)) ** 2;
     const along = Math.hypot(...lin(dvT, 1, upL, -dot3(dvT, upL)));
     const rolls = flown && VESSELS[fleet.active].lands && along > 0.02 * gSurf * simDt;
-    if (dot3(dvT, upL) > gSurf * simDt * 1.001 || rolls) {
+    // (on a catapult: held by its shuttle — the engine at full does not roll it; fired, run along its stroke)
+    const cat = Dk.cat;
+    if (!cat && (dot3(dvT, upL) > gSurf * simDt * 1.001 || rolls)) {
       this.ourLanded = null;
       this.landed = false;
       X = now.Xq;
@@ -317,6 +330,11 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
       if (!(rolls && dot3(dvT, upL) <= gSurf * simDt * 1.001)) this.onPilotMessage?.(`Lift-off from ${BODY_NAMES[L.body as Body]}`);
     } else {
       const t1 = t0 + simDt;
+      if (cat?.fired) {
+        cat.v += cat.a * simDt * (M_METRES / C_MPS);
+        cat.s = Math.min(cat.s + cat.v * simDt * (M_METRES / C_MPS), cat.len);
+        Dk.l = [0, 1, 2].map((i) => cat.l0[i]! + cat.dirL[i]! * cat.s) as Vec3;
+      }
       const next = at(t1);
       const A1 = bodyAxes(solarBody(L.body)!, t1);
       const home1 = (v: Vec3): Vec3 => [0, 1, 2].map((i) => v[0] * A1[0]![i]! + v[1] * A1[1]![i]! + v[2] * A1[2]![i]!) as Vec3;
@@ -326,9 +344,18 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
       const carry = (d: Vec3) => unitV(home1(Dk.pl.dirToFixed(Dk.pl.dirToLocal(fixed0(d), t0), t1)));
       L.q = next.q;
       this.properTime += simDt;
-      setHomePose(s, next.Xq, carry(fwd), carry(up), next.V);
+      // (the stroke's speed along the deck, on the deck's own; at its end the shuttle lets go: flying)
+      const Vc = cat?.fired ? lin(next.V, 1, home1(Dk.pl.dirToFixed(cat.dirL, t1)), cat.v / C_MPS) : next.V;
+      setHomePose(s, next.Xq, carry(fwd), carry(up), Vc);
       s.motion = "geodesic";
       this.landed = true;
+      if (cat?.fired && cat.s >= cat.len) {
+        this.ourLanded = null;
+        this.landed = false;
+        this.rolling = null;
+        this.offGround = t1;
+        this.onCatEnd?.(cat.v);
+      }
       this.sync();
       return t1;
     }
@@ -436,7 +463,9 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     return lin(gearOut.F, kA / mass, gearOut.F, 0);
   };
   const accAt = (Xq: Vec3, Vq: Vec3, tq: number, gq: typeof g) => {
-    const aG = gearAt(Xq, Vq, tq);
+    // (an arresting wire caught: its pull along the deck — controller/trap.ts —, with the gear's)
+    const aW = this.trapWire ? this.trapAccel(Xq, Vq, tq) : null;
+    const aG = aW ? lin(gearAt(Xq, Vq, tq), 1, aW, kA) : gearAt(Xq, Vq, tq);
     if (!aero) return lin(gq.acc, 1, aG, 1);
     const h = altitudeOver(ref, Xq, tq);
     // (the wing's height over the ground: its ground effect — the reference point is the gear's height up)

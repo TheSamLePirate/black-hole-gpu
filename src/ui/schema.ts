@@ -4043,6 +4043,22 @@ export const SCHEMA: ControlDef[] = [
     ],
   },
   {
+    key: "f35Variant",
+    type: "choice",
+    section: "game",
+    group: "F-35",
+    label: "Variant",
+    style: "segmented",
+    effect: "none",
+    enabled: (s) => s.ship && s.vessel === "f35",
+    help: "The F-35B — short take-offs and vertical landings, its lift fan — or the F-35C, the carrier's: a larger wing, more fuel, a tailhook, launched by catapult and stopped by the wires. The tanks filled on a change.",
+    keywords: "variant f-35c f-35b carrier catapult hook wires stovl",
+    options: [
+      { value: "B", label: "F-35B", hint: "Short take-off, vertical landing" },
+      { value: "C", label: "F-35C", hint: "Catapult and wires" },
+    ],
+  },
+  {
     key: "f35InfiniteFuel",
     type: "toggle",
     section: "game",

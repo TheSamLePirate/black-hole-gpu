@@ -887,6 +887,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   this.aeroStep(inp, dt);
   // (a short take-off from a deck: its throttle, its rotation — controller/deckland.ts)
   this.stoStep(inp, dt);
+  // (the F-35C's hook, the wires, the catapult — controller/trap.ts)
+  this.trapFrame(dt);
   // (the docking autopilot ended — docked, stopped: the pilot's warp back)
   if (this.pilot.auto !== "dock" && this.dockAuto) {
     if (s.timeSpeed === this.dockAuto.set) this.giveBackWarp(this.dockAuto.warp);

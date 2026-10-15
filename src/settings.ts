@@ -398,6 +398,7 @@ export interface Settings {
   f35GLimit: number; // the F-35: its flight control laws' load limit [g]
   f35Law: "normal" | "direct"; // the F-35: its flight control law — the real one, or the stick on the surfaces (no computer)
   f35InfiniteFuel: boolean; // the F-35: the tanks never empty
+  f35Variant: "B" | "C"; // the F-35: the B (short take-off, vertical landing) or the C (the carrier's: catapult, wires)
   f35InfiniteAmmo: boolean; // the F-35 in a fight: the stores never spent
   f35Invulnerable: boolean; // the F-35 in a fight: no damage taken
   f35AiSkill: "easy" | "normal" | "ace"; // the aggressors' skill
@@ -730,6 +731,7 @@ export function defaultSettings(): Settings {
     f35GLimit: 7,
     f35Law: "normal",
     f35InfiniteFuel: false,
+    f35Variant: "B",
     f35InfiniteAmmo: false,
     f35Invulnerable: false,
     f35AiSkill: "normal",
@@ -2042,6 +2044,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   f35GLimit: "pref",
   f35Law: "pref",
   f35InfiniteFuel: "pref",
+  f35Variant: "pref",
   f35InfiniteAmmo: "pref",
   f35Invulnerable: "pref",
   f35AiSkill: "pref",

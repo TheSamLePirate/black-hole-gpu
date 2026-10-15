@@ -5,6 +5,7 @@
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import { cameraFrame } from "../camera";
 import { fleet } from "../fleet";
+import { f35Variant } from "../f35/variant";
 import { hoverStep, STOVL, thrustDir, type HoverCmd } from "../f35/stovl";
 import { t, tf } from "../i18n";
 import { unitsFor } from "../ui/unitsys";
@@ -53,7 +54,7 @@ const toward = (x: number, to: number, rate: number, dt: number) => x + clamp(to
 
 /** ⇧B: the STOVL mode on or off (below 250 kt — 129 m/s —, the F-35B only). What to say. */
 function stovlToggle(this: CameraController): string {
-  if (fleet.active !== "f35") return t("STOVL: the F-35B's");
+  if (fleet.active !== "f35" || f35Variant() !== "B") return t("STOVL: the F-35B's");
   const S = this.stovl;
   const v = this.airFlight.last?.speed ?? 0;
   if (!S.on && v > STOVL.vConvert) return tf("STOVL: below {0}", unitsFor(this.s).fSpd(STOVL.vConvert));
