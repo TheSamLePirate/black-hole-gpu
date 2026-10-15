@@ -102,4 +102,14 @@ export default {
   "{0}, Mother: on cat {1}. Tension — run it up.": "{0}, ici Mother : catapulte {1}. Tension — plein gaz.",
   "Catapult {0} on {1}": "Catapulte {0} de {1}",
   "Shooter: launch!": "Shooter : lancement !",
+  "Carrier qualification: the F-35's": "Qualification d'appontage : celle du F-35",
+  "Carrier qualification: the F-35C's on the Ford, its wires": "Qualification d'appontage : celle du F-35C sur le Ford, ses brins",
+  "Mother: {0} qualification on {1} — {2} passes. Charlie.": "Mother : qualification {0} sur {1} — {2} passages. Charlie.",
+  "{0} qualification on {1}": "Qualification {0} sur {1}",
+  "Mother: hot pump — {0} kg.": "Mother : ravitaillement moteur tournant — {0} kg.",
+  "Mother: {0} qualification — {1} passes, {2} average: qualified.": "Mother : qualification {0} — {1} passages, moyenne {2} : qualifié.",
+  "Mother: {0} qualification — {1} passes, {2} average: not qualified.":
+    "Mother : qualification {0} — {1} passages, moyenne {2} : non qualifié.",
+  "Heavy sea": "Mer forte",
+  Day: "Jour",
 } satisfies Record<string, string>;

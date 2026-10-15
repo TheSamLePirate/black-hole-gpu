@@ -889,6 +889,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   this.stoStep(inp, dt);
   // (the F-35C's hook, the wires, the catapult — controller/trap.ts)
   this.trapFrame(dt);
+  // (a carrier qualification: its passes counted, its next leg — controller/quals.ts)
+  this.qualStep(dt);
   // (the docking autopilot ended — docked, stopped: the pilot's warp back)
   if (this.pilot.auto !== "dock" && this.dockAuto) {
     if (s.timeSpeed === this.dockAuto.set) this.giveBackWarp(this.dockAuto.warp);
@@ -1226,7 +1228,9 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
     const mass = fleet.massProps().mass;
     const toMs2 = C_MPS ** 2 / (1476.625 * s.massSolar);
     const dry = this.pilot.engineNow * this.thrustMax() * toMs2 * mass;
-    const thrust = dry * this.jetThrust();
+    // (the F-35B's lift fan: driven by the engine's shaft — its thrust no afterburner's: the engine's own fuel; counted
+    // as an afterburner's, a hover burnt 9 kg/s, four times the real one's)
+    const thrust = this.stovl.clutch > 0 ? dry : dry * this.jetThrust();
     const left = fleet.fuel[fleet.active] ?? VESSELS[fleet.active].fuelKg ?? 0;
     // (the F-35's tanks never empty, the setting on)
     if (e.sigma > 0 && !(fleet.active === "f35" && s.f35InfiniteFuel))

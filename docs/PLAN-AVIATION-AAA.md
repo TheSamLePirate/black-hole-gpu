@@ -317,6 +317,8 @@ pertinent.
 
   *M3c fait le 2026-10-15 — [fiche](progress/aviation/M3c.md) : la variante F-35C (aile de 62 m², 9 t de carburant, crosse) ; la catapulte avant du Ford (72 m/s par rapport au pont, montée tenue au lâcher) ; les trois brins pris par la crosse, l'arrêt en une centaine de mètres moteur plein gaz, le bolter ; l'approche automatique alignée sur la piste oblique qui bouge et sur le plan de 3,5° stabilisé ; l'officier d'appontage qui guide et note chaque passage (OK souligné, OK, Passable, B, Non noté, WO, Coupé) — brin 2, OK, dans le navigateur.*
 
+  *M3d fait le 2026-10-15 — **M3 fini** — [fiche](progress/aviation/M3d.md) : les qualifications de jour, de nuit et par mer forte (houle de 4,4 m imposée), quatre passages notés chacune, enchaînés par le pilote automatique (catapulte ou décollage court, tour, approche, ravitaillement moteur tournant) ou volés par le pilote ; qualifiés : F-35C 3,50 / 3,50 / 3,75, F-35B 4,00.*
+
 ### P — Plans de vol, missions, carte
 
 - **P1. Le moteur de missions.** Une mission est **une donnée** (JSON). Elle peut prendre **un vol ou un navire

@@ -15,7 +15,7 @@ export const HOOK = { back: 7.2, down: 1.08, run: 100, gMax: 4.5, reach: 0.9 };
 
 /** The approach: its speed's lift coefficient (on-speed: some 12° of incidence); the gate on the axis astern [m];
  *  in close [m]; the wave-off's limits (low [°], off the axis [m]). */
-export const TRAP = { clApp: 1.0, gate: 4500, close: 450, waveLow: -1.4, waveLineup: 15 };
+export const TRAP = { clApp: 1.0, gate: 6000, close: 450, waveLow: -1.4, waveLineup: 15 };
 
 /** The catapults (their frame: from where the shuttle holds the nose wheel, their way, their stroke [m]) and the
  *  speed over the deck at its end [m/s]. */
@@ -99,6 +99,8 @@ export interface TrapRun {
   down?: number;
   /** intercepting the axis astern (a localizer's way) */
   loc?: boolean;
+  /** why it was waved off (the glide path's error, the line-up, the distance) */
+  why?: string;
 }
 
 export const newTrapRun = (kind: CarrierId): TrapRun => ({
@@ -171,6 +173,8 @@ export function trapStep(
   const dist = Math.max(-h.s, 1);
   const err = Math.atan2(own.hook[1]! - deckY, dist) / D - L.glide;
   const lineup = h.e;
+  // (our speed across the axis, to port [m/s])
+  const eRate = dot(vRel, sub(fromDeck(P, [L.aim[0] + A.across[0], deckY, L.aim[1] + A.across[1]]), aim));
   if (R.phase === "done" || R.phase === "trapped") return null;
   // on the deck: full power (a bolter's insurance) until the wire takes it; past the last wire, a bolter
   if (own.down && (R.phase === "final" || R.phase === "touch")) {
@@ -216,12 +220,18 @@ export function trapStep(
     if (R.loc && (along > -1200 || Math.abs(lineup) > 4000)) R.loc = false;
     if (R.loc) {
       const axisBrg = bearing(axH);
-      const want = axisBrg + clamp(0.0006 * lineup, -45 * D, 45 * D);
+      // (the gap foreseen 8 s on — the turn onto it begun before it, as a pilot leads a localizer's)
+      const want = axisBrg + clamp(0.0015 * (lineup + 8 * eRate), -45 * D, 45 * D);
       let dw = want - bearing(vh);
       dw = Math.atan2(Math.sin(dw), Math.cos(dw));
-      if (Math.abs(lineup) < 120 && dot(vh, axH) > 0.93 * len(vh)) R.phase = "final";
-      const gammaL = clamp(Math.atan2(dot(e, U), Math.max(d, 600)), -6 * D, 6 * D);
-      return { gamma: gammaL, bank: clamp(1.5 * dw, -25 * D, 25 * D), spd: vApp + 25, full: false };
+      // (on it: near it, along it, not crossing it fast — else the final's 20° of bank could not stop the crossing)
+      if (Math.abs(lineup) < 60 && Math.abs(eRate) < 6 && dot(vh, axH) > 0.96 * len(vh)) R.phase = "final";
+      // (down to the glide path's height for where it is along the axis — a little over it —, slowing to the
+      // approach's speed: on the final already settled)
+      const hT = deckY + -along * Math.tan(L.glide * D) + 20;
+      const hNow = dot(sub(own.p, aim), U) + deckY;
+      const gammaL = clamp(Math.atan2(hT - hNow, 1500), -6 * D, 4 * D);
+      return { gamma: gammaL, bank: clamp(1.5 * dw, -25 * D, 25 * D), spd: vApp + 8, full: false };
     }
     const hdg = bearing(sub(lead, own.p));
     const now = bearing(vh);
@@ -232,7 +242,6 @@ export function trapStep(
     return { gamma, bank, spd: d > 6000 ? 140 : vApp + 25, full: false };
   }
   // the final: lined up on the axis as it moves, down the glide path at the approach speed
-  const eRate = dot(vRel, scale(sub(fromDeck(P, [L.aim[0] + A.across[0], deckY, L.aim[1] + A.across[1]]), aim), 1));
   // (two loops: the speed across the axis asked by the gap — 20 m/s at most —, the bank closing that speed's error)
   const eRateWant = clamp(-0.1 * lineup, -25, 25);
   const aLat = 0.35 * (eRateWant - eRate);
@@ -241,7 +250,8 @@ export function trapStep(
   const closing = Math.max(dot(vRel, axH), 10);
   // (the path's descent, the height's error closed over some 5 s; in close no flare — the deck's ground effect
   // floated it high over the ramp —: a little more down)
-  const vzRel = -closing * Math.tan(L.glide * D) - (dist < 400 ? 0.32 : 0.2) * (Math.tan(err * D) * dist);
+  // (and over the ramp, the deck's ground effect floating it high: a little more down)
+  const vzRel = -closing * Math.tan(L.glide * D) - (dist < 400 ? 0.32 : 0.2) * (Math.tan(err * D) * dist) - (dist < 200 ? 0.4 : 0);
   const vz = vzRel + dot(vDeck, U);
   const vg = len(sub(own.v, scale(U, dot(own.v, U))));
   const gamma = Math.atan2(vz, Math.max(vg, 1));
@@ -257,6 +267,7 @@ export function trapStep(
   }
   // (the wave-off: low in close, or far off the axis)
   if (dist < TRAP.close && (err < TRAP.waveLow || Math.abs(lineup) > TRAP.waveLineup)) {
+    R.why = `${err.toFixed(2)}° ${lineup.toFixed(1)} m at ${dist.toFixed(0)} m`;
     R.phase = "waveoff";
     R.grade = "WO";
     return { gamma: 8 * D, bank: 0, spd: vApp + 20, full: true, call: "Wave off, wave off!" };

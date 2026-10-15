@@ -137,6 +137,7 @@ export class Simulation {
     // the ships' wakes on the sea (controller/seatraffic.ts; trace.wgsl seaWake)
     r.seaWakes = [...c.carrierWakes(), ...c.seaWakes()];
     // (the sea's height about us — the renderer's, from the marine model or the wind —: the ships' motion)
+    r.seaSwell = c.seaSwell ?? null;
     c.seaHs = r.seaHs;
     // (the F-35's variant as set — its figures, the tanks filled on a change)
     if (applyF35Variant(s.f35Variant)) fleet.fuel.f35 = VESSELS.f35.fuelKg ?? 0;

@@ -610,6 +610,8 @@ export class Renderer {
   seaState: SeaState | null = null;
   /** a sea imposed (the tests', a scene's: null — the marine model's, else the wind's) */
   seaOverride: SeaState | null = null;
+  /** a swell's height imposed [m] (a qualification's heavy sea), else none */
+  seaSwell: number | null = null;
   private seaKey = "";
   private seaFftT = 0;
   private seaFftDue = false;
@@ -3070,7 +3072,9 @@ export class Renderer {
     const out = new Float32Array(SEAFFT_VEC4S * 4);
     const H = this.seaHere;
     if (!this.seaFft || !s.seaFft || !H || H.weight <= 0) return out;
-    const state = this.seaOverride ?? this.marine.peek(H.lat, H.lon, utcOf(time)) ?? windSea(H.U, H.to);
+    const base = this.seaOverride ?? this.marine.peek(H.lat, H.lon, utcOf(time)) ?? windSea(H.U, H.to);
+    // (a swell imposed — a heavy sea's qualification: controller/quals.ts —, from the wind's way)
+    const state = this.seaSwell ? { ...base, swell: { hs: this.seaSwell, tp: 11, to: H.to } } : base;
     this.seaState = state;
     this.seaHs = Math.hypot(state.wind.hs, state.swell.hs);
     const r = (x: number, k: number) => Math.round(x * k);

@@ -17,6 +17,7 @@ import type { Auto, Hold } from "../pilot";
 import type { CameraController } from "../controls";
 import type { Settings, Target } from "../settings";
 import type { GameTools } from "../game/tools";
+import { type QualId, QUALS, utcHourAt } from "../game/quals";
 import type { FlightPhase } from "../game/phase";
 import type { FlightReport } from "../game/report";
 import type { LogEvent } from "../game/log";
@@ -1728,10 +1729,12 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "carrier",
       description:
-        "The carriers at sea (the Gerald R. Ford: catapults and wires; the Kiev and the Implacable: short take-offs and vertical landings), each with two frigates as escort, steaming into the wind at their speed, the same in a room for everyone. spawn: one set off (kind; at lat/lon, else 4 km ahead of the craft; heading [°], else into the wind). land: the flown craft set down on its deck (x across — port + —, z along — bow + — [m]; else aft of its island), carried along with it. recover: the F-35B's autopilot lands it there as a real one does — up the port side, a hover alongside, across over the spot, down — the LSO calling it and grading the touchdown (the nearest carrier, else kind; light enough to hover: some 2 t of fuel at most). takeoff: the F-35B off the deck it stands on — a short take-off when the deck's run allows its weight (some 150 m full), else vertical when light enough (vertical: true asks for it). status: those at sea, where, their speed. clear: none at sea any more.",
+        "The carriers at sea (the Gerald R. Ford: catapults and wires; the Kiev and the Implacable: short take-offs and vertical landings), each with two frigates as escort, steaming into the wind at their speed, the same in a room for everyone. spawn: one set off (kind; at lat/lon, else 4 km ahead of the craft; heading [°], else into the wind). qual: a carrier qualification flown by the autopilot (qual: day, night — the clock set to night there —, sea — a heavy sea, a swell of 4.4 m —; passes, else 4), graded pass by pass by the LSO, its average said: qualified at 3.0. land: the flown craft set down on its deck (x across — port + —, z along — bow + — [m]; else aft of its island), carried along with it. recover: the F-35B's autopilot lands it there as a real one does — up the port side, a hover alongside, across over the spot, down — the LSO calling it and grading the touchdown (the nearest carrier, else kind; light enough to hover: some 2 t of fuel at most). takeoff: the F-35B off the deck it stands on — a short take-off when the deck's run allows its weight (some 150 m full), else vertical when light enough (vertical: true asks for it). status: those at sea, where, their speed. clear: none at sea any more.",
       params: {
-        action: { type: "string", enum: ["spawn", "land", "recover", "takeoff", "status", "clear"] },
+        action: { type: "string", enum: ["spawn", "land", "recover", "takeoff", "qual", "status", "clear"] },
         vertical: { type: "boolean" },
+        qual: { type: "string", enum: ["day", "night", "sea"] },
+        passes: { type: "number" },
         kind: { type: "string", enum: ["ford", "kiev", "implacable"] },
         lat: { type: "number" },
         lon: { type: "number" },
@@ -1756,6 +1759,17 @@ export function gameTools(h: GameHost): Tool[] {
         }
         if (a.action === "recover") return c.deckLand(a.kind as "ford" | "kiev" | "implacable" | undefined) ?? "No carrier within 30 km";
         if (a.action === "takeoff") return c.deckTakeoff(a.vertical ? "vertical" : undefined) ?? "Not on a carrier's deck";
+        if (a.action === "qual") {
+          // (the qualification's hour where we are: by day, by night — local solar time —, its wind and sea)
+          const id = (a.qual ?? "day") as QualId;
+          const g = c.geoNow();
+          if (g) {
+            const d = new Date(`${h.tools.date().replace(" ", "T")}Z`);
+            d.setUTCHours(0, Math.round(utcHourAt(QUALS[id].hour, g.lon) * 60), 0, 0);
+            h.tools.setDate(d.toISOString());
+          }
+          return c.qualStart(id, { auto: true, passes: a.passes as number | undefined });
+        }
         const kind = (a.kind ?? "ford") as "ford" | "kiev" | "implacable";
         if (a.action === "spawn")
           return c.carrierSpawn(kind, {

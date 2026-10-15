@@ -47,7 +47,7 @@ declare module "../controls" {
   interface CameraController {
     trapRun?: (TrapRun & { manual?: boolean }) | null;
     trapWire?: TrapWire | null;
-    trapLast?: { grade: TrapGrade; wire: number; points: number; kind: CarrierId } | null;
+    trapLast?: { grade: TrapGrade; wire: number; points: number; kind: CarrierId; worst?: TrapRun["worst"] } | null;
     catRun?: { t: number; phase: "tension" | "stroke" | "airborne"; cat: number; air?: number } | null;
     trapHook?: { kind: CarrierId; h: Vec3 } | null;
     /** the tailhook raised (down with the gear, else): no wire caught — a touch-and-go, a bolter */
@@ -236,7 +236,7 @@ function trapFrame(this: CameraController, dt: number) {
       run.phase = "trapped";
       const g = gradePass(run);
       run.grade = g;
-      this.trapLast = { grade: g, wire: W.wire, points: GRADE_POINTS[g], kind: w.sp.kind };
+      this.trapLast = { grade: g, wire: W.wire, points: GRADE_POINTS[g], kind: w.sp.kind, worst: run.worst };
       this.onRadio?.(
         tf(
           "Paddles: {0}, {1}-wire.",
@@ -296,7 +296,10 @@ function catLaunch(this: CameraController, n = 0): string | null {
   const at = catStart(kind, n);
   const cat = CATS[kind]![n]!;
   if (!at || !deckOf(kind)) return t("Catapult: the deck's map still loading");
+  // (taxied to the catapult: its fuel kept — the placing's new flight fills the tanks)
+  const fuel = fleet.fuel.f35;
   const said = this.carrierLand(kind, { x: at.l[0], z: at.l[2], facing: 0 });
+  if (fuel !== undefined) fleet.fuel.f35 = fuel;
   if (!said.startsWith("On")) return said;
   const Dk = this.ourLanded?.deck;
   if (!Dk) return null;
