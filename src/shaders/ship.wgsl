@@ -80,10 +80,17 @@ struct Ship {
   // round)
   lampN: vec4f,
   lamp: array<vec4f, 24>,
+  // the second shadow map's sphere (the nearest carrier's: its own half of the map — writeUniform), in C
+  bound2: vec4f,
+  // the sea under the craft, for their reflections in it (C: n·p = d its plane — the ellipsoid's h = 0 —, n up;
+  // 0: none): its normal, d; its significant height [m], a clock [s], unused × 2
+  sea: vec4f,
+  seaK: vec4f,
 };
 
 // A craft drawn: craft → camera frame, then its kind (0 Ranger, 1 Lander, 2 Endurance, 3 F-35), in the shadow
-// map (1), hidden by what the traced image holds nearer (1: the craft not flown), and — an F-35 — where its
+// map (1: the flown craft's, 2: the carrier's — both shadow it), hidden by what the traced image holds nearer
+// (bit 0: the craft not flown) and mirrored in the sea (bit 1), and — an F-35 — where its
 // parts' maps start in this same array (src/f35/model.ts: one record a part, its map in the first three
 // columns of `model`, the translation in the fourth)
 struct Inst {
@@ -286,6 +293,9 @@ struct VOut {
   @location(7) @interpolate(flat) ii: u32,
 };
 
+// the pipeline drawing the craft's images in the sea (ship.ts: pipes.mirror)
+override MIRROR: bool = false;
+
 // the near plane [m] (reversed depth: 1 there, 0 at infinity)
 const NEAR = 0.01;
 
@@ -410,7 +420,8 @@ fn depthVs(v: VIn, @builtin(instance_index) ii: u32) -> DOut {
 }
 
 @vertex
-fn vs(v: VIn, @builtin(instance_index) ii: u32) -> VOut {
+fn vs(v: VIn, @builtin(instance_index) ii: u32) -> VOut { return shipVertex(v, ii); }
+fn shipVertex(v: VIn, ii: u32) -> VOut {
   var o: VOut;
   let M = inst[ii].model;
   let pos = shipPos(v, ii);
@@ -430,27 +441,45 @@ fn vs(v: VIn, @builtin(instance_index) ii: u32) -> VOut {
   return o;
 }
 
+// The craft mirrored in the sea (S.sea: its plane in C): drawn under it — the camera's view of the image a calm
+// sea makes —, its triangles' winding reversed (the pipeline's front faces clockwise); fs shades the real
+// point seen from the mirrored camera (MIRROR)
+fn seaMirror(p: vec3f) -> vec3f { return p - 2.0 * (dot(S.sea.xyz, p) - S.sea.w) * S.sea.xyz; }
+@vertex
+fn mirrorVs(v: VIn, @builtin(instance_index) ii: u32) -> VOut {
+  var o = shipVertex(v, ii);
+  o.p = seaMirror(o.p);
+  o.clip = project(o.p);
+  return o;
+}
+
 // C → the probe's axes, and back
 fn toProbe(v: vec3f) -> vec3f { return v.x * S.probeX.xyz + v.y * S.probeY.xyz + v.z * S.probeZ.xyz; }
 fn fromProbe(d: vec3f) -> vec3f { return vec3f(dot(d, S.probeX.xyz), dot(d, S.probeY.xyz), dot(d, S.probeZ.xyz)); }
 
 // Orthographic view of the ship from the dominant light (direction sh[9].xyz, towards the light):
 // x, y ∈ [−1, 1] across the bounding sphere, depth 0 on the light's side.
-fn lightClip(p: vec3f) -> vec3f {
+// The map is two, side by side (ship.ts: SHADOW × 2): the left half about the flown craft and those near it
+// (S.bound), the right about the nearest carrier (S.bound2) — its 300 m there, a texel 15 cm.
+fn lightClipB(p: vec3f, b: vec4f) -> vec3f {
   let l = fromProbe(sh[9].xyz);
   let e1 = normalize(cross(l, select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(l.y) > 0.9)));
   let e2 = cross(l, e1);
-  let q = p - S.bound.xyz;
-  let R = S.bound.w;
+  let q = p - b.xyz;
+  let R = b.w;
   return vec3f(dot(q, e1) / R, dot(q, e2) / R, 0.5 - 0.5 * dot(q, l) / R);
 }
+fn lightClip(p: vec3f) -> vec3f { return lightClipB(p, S.bound); }
 
 @vertex
 fn shadowVs(v: VIn, @builtin(instance_index) ii: u32) -> @builtin(position) vec4f {
   // (the cockpit's glass lets the light in: out of the map)
   if (abs(v.mat - 71.0) < 0.5) { return vec4f(2.0, 2.0, 2.0, 1.0); }
   let q = select(v.pos, (jetMap(v, ii) * vec4f(v.pos, 1.0)).xyz, isJet(v.mat));
-  return vec4f(lightClip((inst[ii].model * vec4f(q, 1.0)).xyz), 1.0);
+  // (its half: the sphere holds the caster — none crosses into the other)
+  let second = inst[ii].flags.y > 1.5;
+  let c = lightClipB((inst[ii].model * vec4f(q, 1.0)).xyz, select(S.bound, S.bound2, second));
+  return vec4f(c.x * 0.5 + select(-0.5, 0.5, second), c.y, c.z, 1.0);
 }
 
 fn irradiance(n: vec3f) -> vec3f {
@@ -517,20 +546,33 @@ fn screenRefl(r: vec3f, a: f32) -> vec4f {
   return vec4f(acc / 6.0 / max(S.light.z, 1e-30), w);
 }
 
-// Poisson-disk PCF (8 taps, each a bilinear 2×2 comparison), normal-offset bias
-fn shadowAt(p: vec3f, ng: vec3f, l: vec3f) -> f32 {
-  let q = lightClip(p + ng * 0.05 + l * 0.02);
+// Poisson-disk PCF (8 taps, each a bilinear 2×2 comparison), normal-offset bias — in one half of the map
+// (its sphere b: the offsets and the bias in its own texels — the carrier's a hundred times the craft's metres)
+fn shadowHalf(p: vec3f, ng: vec3f, l: vec3f, b: vec4f, second: bool) -> f32 {
+  if (b.w <= 0.0) { return 1.0; }
+  let k = select(1.0, b.w / 20.0, second);
+  let q = lightClipB(p + (ng * 0.05 + l * 0.02) * k, b);
   let uv = vec2f(0.5 + 0.5 * q.x, 0.5 - 0.5 * q.y);
   if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) { return 1.0; }
   let texel = 1.0 / vec2f(textureDimensions(shadowTex));
+  let lo = vec2f(select(0.0, 0.5, second), 0.0) + texel;
+  let hi = vec2f(select(0.5, 1.0, second), 1.0) - texel;
+  let at = vec2f(uv.x * 0.5 + select(0.0, 0.5, second), uv.y);
+  let bias = select(0.0015, 0.12 / (2.0 * b.w), second);
+  // (a receiver beyond the map's depth — the deck behind the craft, along the light — is behind all that is in it:
+  // held at its far end, it is lit unless something of it stands between; else the map's square fell on the deck)
+  let zr = min(q.z, 0.998);
   let taps = array<vec2f, 8>(
     vec2f(-0.613, 0.617), vec2f(0.170, -0.040), vec2f(-0.299, -0.792), vec2f(0.645, 0.493),
     vec2f(-0.651, -0.118), vec2f(0.422, -0.810), vec2f(0.035, 0.950), vec2f(0.934, -0.208));
   var s = 0.0;
   for (var i = 0; i < 8; i++) {
-    s += textureSampleCompareLevel(shadowTex, shadowSamp, uv + taps[i] * texel * 2.5, q.z - 0.0015);
+    s += textureSampleCompareLevel(shadowTex, shadowSamp, clamp(at + taps[i] * texel * 2.5, lo, hi), zr - bias);
   }
   return s / 8.0;
+}
+fn shadowAt(p: vec3f, ng: vec3f, l: vec3f) -> f32 {
+  return shadowHalf(p, ng, l, S.bound, false) * shadowHalf(p, ng, l, S.bound2, true);
 }
 
 fn hash3(p: vec3i) -> f32 {
@@ -628,8 +670,38 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let I = inst[in.ii];
   let model = I.model;
   let kind = u32(I.flags.x + 0.5);
-  // (a craft not flown: hidden where the traced image holds something nearer — a planet, the disk)
-  if (I.flags.z > 0.5 && S.img.w > 0.5) {
+  // (mirrored: the real point pR, seen from the mirrored camera — pS from it —; else both in.p)
+  var pR = in.p;
+  var pS = in.p;
+  var seaW = 1.0;
+  if (MIRROR) {
+    pR = seaMirror(in.p);
+    pS = in.p - 2.0 * dot(S.sea.xyz, in.p) * S.sea.xyz;
+    // (what was under the sea mirrors nothing)
+    let hR = dot(S.sea.xyz, pR) - S.sea.w;
+    if (hR < 0.0) { discard; }
+    // (the sea met along the ray: there the image shows — where the traced image holds the sea, nothing nearer)
+    let u = normalize(in.p);
+    let cu = -dot(u, S.sea.xyz);
+    if (cu <= 0.0) { discard; }
+    let tSea = -S.sea.w / cu;
+    if (S.img.w > 0.5) {
+      let px = vec2f((in.p.x / (in.p.z * S.proj.x) + 1.0) * 0.5, (1.0 - in.p.y / (in.p.z * S.proj.y)) * 0.5) * S.img.xy;
+      let q = vec2u(clamp(px, vec2f(0.0), S.img.xy - 1.0));
+      // (the waves' crests nearer than the mean level by their height over the ray's slope: a grazing ray meets
+      // them tens of metres short)
+      if (sceneDepth[q.y * u32(S.img.x) + q.x] * S.img.z < tSea - (2.0 + 1.5 * S.seaK.x) / max(cu, 0.02)) { discard; }
+    }
+    // (its share: the water's Fresnel there — 2 % looking down, most of it grazing —; the waves break it into
+    // bands, more as they grow and the higher the point stands over the water)
+    let F = 0.02 + 0.98 * pow(1.0 - cu, 5.0);
+    let hs = max(S.seaK.x, 0.05);
+    let band = vnoise(vec3f(in.q.x * 0.05, in.q.y * 1.6 / (0.3 + hs) + in.q.z * 0.05, S.seaK.y * 0.7));
+    let rough = clamp(hs / 2.5, 0.0, 1.0);
+    seaW = F * exp(-hR * hs / 200.0) * mix(1.0, smoothstep(0.25, 0.65, band), 0.2 + 0.4 * rough);
+    if (seaW < 0.003) { discard; }
+  } else if ((u32(I.flags.z + 0.5) & 1u) == 1u && S.img.w > 0.5) {
+    // (a craft not flown: hidden where the traced image holds something nearer — a planet, the disk)
     let px = vec2f((in.p.x / (in.p.z * S.proj.x) + 1.0) * 0.5, (1.0 - in.p.y / (in.p.z * S.proj.y)) * 0.5) * S.img.xy;
     let q = vec2u(clamp(px, vec2f(0.0), S.img.xy - 1.0));
     if (sceneDepth[q.y * u32(S.img.x) + q.x] * S.img.z < length(in.p) * 0.999) { discard; }
@@ -745,6 +817,24 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
     case 51u: { albedo = vec3f(0.82, 0.81, 0.77); metal = 0.0; rough = 0.85; coat = 0.0; }
     case 52u: { albedo = vec3f(0.32, 0.33, 0.35); metal = 0.6; rough = 0.45; coat = 0.0; }
     case 53u: { albedo = vec3f(0.62, 0.22, 0.04); metal = 0.0; rough = 0.5; coat = 0.1 * coat; }
+    case 54u: { albedo = vec3f(0.16, 0.17, 0.18); metal = 0.0; rough = 0.55 + 0.15 * grime; coat = 0.1 * coat; }
+    // the carriers (scripts/build-carriers.ts): their decks, hulls, islands on their maps (the traffic's array, after
+    // its five layers); every other part flat, its colour in its UV (r, g packed in u — 0…255 each —, b in v)
+    case 80u, 81u, 82u, 83u, 84u, 85u, 86u: {
+      albedo = textureSampleGrad(trafficAlbedo, mapSamp, in.uv, 5 + i32(part) - 80, duvx, duvy).rgb;
+      metal = 0.1;
+      rough = 0.6 + 0.15 * grime;
+      coat = 0.0;
+    }
+    case 90u: {
+      let rg = in.uv.x;
+      let g = floor(rg / 256.0 + 1e-3);
+      // (the mean of an sRGB map: to linear)
+      albedo = pow(clamp(vec3f((rg - 256.0 * g) / 255.0, g / 255.0, in.uv.y), vec3f(0.0), vec3f(1.0)), vec3f(2.2));
+      metal = 0.2;
+      rough = 0.55;
+      coat = 0.0;
+    }
     case 42u: { albedo = vec3f(0.03); metal = 0.0; rough = 0.08; coat = 0.0; }
     // the F-35's panoramic display: its picture's light under a glass (dark, smooth: the cockpit reflected)
     case 36u: {
@@ -777,7 +867,7 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let ao = pow(clamp(in.ao, 0.0, 1.0), 0.8) * mix(1.0, 0.55, seamDepth * bumpOn);
 
   // ---- lighting
-  let v = normalize(-in.p);
+  let v = normalize(-pS);
   let nv = clamp(dot(n, v), 1e-4, 1.0);
   let r = reflect(-v, n);
   // reflections below the geometric surface (bumped normals at grazing angles) fade out
@@ -790,7 +880,7 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let specW = select(dom.w * smoothstep(0.5, 0.95, dot(r, dom.xyz)), 0.0, keyOn);
   // (a craft away from the flown one is not in its shadow map)
   let shOn = I.flags.y > 0.5;
-  let sd = select(1.0, shadowAt(in.p, ng, dom.xyz), shOn);
+  let sd = select(1.0, shadowAt(pR, ng, dom.xyz), shOn);
   let occD = mix(1.0, sd, dirW) * ao;
   let so = clamp(pow(nv + ao, exp2(-16.0 * rough - 1.0)) - 1.0 + ao, 0.0, 1.0); // specular occlusion (Lagarde)
   let occS = so * horizon * horizon * mix(1.0, sd, specW);
@@ -827,7 +917,7 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
     // (the bumped normal facing the light on a face turned away from it: no light)
     let face = smoothstep(-0.02, 0.08, dot(ng, l));
     if (nl > 0.0 && face > 0.0 && dot(Ek, Ek) > 0.0) {
-      let vis = select(1.0, shadowAt(in.p, ng, l), shOn) * face;
+      let vis = select(1.0, shadowAt(pR, ng, l), shOn) * face;
       let hv = normalize(l + v);
       let nh = clamp(dot(n, hv), 0.0, 1.0);
       let vh = clamp(dot(v, hv), 0.0, 1.0);
@@ -862,7 +952,7 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
     let main = J.d.w < 0.5;
     let src = J.p.xyz + J.d.xyz * select(0.25, 0.9, main);
     let lp = (S.model * vec4f(src, 1.0)).xyz;
-    let L = lp - in.p;
+    let L = lp - pR;
     let d2 = dot(L, L);
     let ndl = max(dot(n, L * inverseSqrt(d2)), 0.0);
     var tint = select(vec3f(1.0, 0.95, 0.88), vec3f(0.55, 0.72, 1.0), main);
@@ -883,7 +973,7 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
     }
   }
   let o = col * S.light.x + (dif * jl * ao * own + emit * 2.0) * S.jet.y;
-  return vec4f(o / (1.0 + dot(o, vec3f(0.2126, 0.7152, 0.0722))), 1.0);
+  return vec4f(o / (1.0 + dot(o, vec3f(0.2126, 0.7152, 0.0722))), 1.0) * seaW;
 }
 
 // ------------------------------------------------------------------------------------ thrusters
@@ -1443,7 +1533,7 @@ fn shadowCabin(p: vec3f, ng: vec3f, l: vec3f) -> f32 {
   var sum = 0.0;
   for (var i = 0; i < 4; i++) {
     let o = vec2f(select(-1.0, 1.0, (i & 1) == 1), select(-1.0, 1.0, (i & 2) == 2)) * 1.2;
-    sum += textureSampleCompareLevel(shadowTex, shadowSamp, uv + o * texel, q.z - 0.0015);
+    sum += textureSampleCompareLevel(shadowTex, shadowSamp, vec2f(uv.x * 0.5, uv.y) + o * texel, q.z - 0.0015);
   }
   return sum * 0.25;
 }

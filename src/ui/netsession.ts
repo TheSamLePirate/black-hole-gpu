@@ -6,6 +6,7 @@
 
 import { fmtFactor, realTimeSpeed, roomPace } from "../clock";
 import type { CameraController } from "../controls";
+import type { CarrierSpawn } from "../game/carrier";
 import {
   axesQuat,
   kindIndex,
@@ -158,6 +159,7 @@ export class NetSession {
   private lastSend = -1;
   /** when our AI wingmen were last sent [s] */
   private wingSent = 0;
+  private cvSent = 0;
   private prev: { at: number; st: number; frame: number; v: Vec3; ax: [Vec3, Vec3, Vec3] } | null = null;
   private acc: Vec3 = [0, 0, 0];
   private spin: Vec3 = [0, 0, 0];
@@ -272,6 +274,12 @@ export class NetSession {
       net.event({ kind: "wng", w: wingsOut(c) });
     }
     for (const [slot, R] of c.remoteWings) if (now - R.at > 3) c.remoteWings.delete(slot);
+    // (the carriers at sea sent to the room every 5 s — their course a function of the room's clock: the same
+    // carrier on every page, one joining later told too)
+    if (c.carriers?.length && now - this.cvSent > 5) {
+      this.cvSent = now;
+      net.event({ kind: "cv", list: c.carriers });
+    }
     if (!c.radarSources.has("rwg"))
       c.radarSources.set("rwg", (fix) =>
         [...c.remoteWings.entries()].flatMap(([slot, R]) =>
@@ -325,6 +333,20 @@ export class NetSession {
             name: this.nameOf(from),
             list: (list as RemoteWing[]).filter((w) => Number.isFinite(w.k) && ok(w.p) && ok(w.v) && ok(w.f) && ok(w.u)).slice(0, 3),
           });
+        } else if (e.kind === "cv") {
+          // (another's carriers — M2: each kind the one set off first, the room's)
+          const list = (ev as unknown as { list?: unknown }).list;
+          if (!Array.isArray(list)) return;
+          const cam = this.d.camera;
+          const ok = (x: CarrierSpawn) =>
+            ["ford", "kiev", "implacable"].includes(x?.kind) &&
+            [x.lat, x.lon, x.heading, x.speed, x.t0, x.seed].every((v) => Number.isFinite(v));
+          const mine = new Map((cam.carriers ?? []).map((x) => [x.kind, x]));
+          for (const x of (list as CarrierSpawn[]).filter(ok).slice(0, 3)) {
+            const had = mine.get(x.kind);
+            if (!had || x.t0 < had.t0) mine.set(x.kind, { ...x });
+          }
+          cam.carriers = [...mine.values()];
         } else if (e.kind === "order") {
           // (a leader's order — F2: heard, carried out in formation on him; "rejoin" heard out of one: on his wing)
           const o = orderOf((ev as unknown as { o: unknown }).o);

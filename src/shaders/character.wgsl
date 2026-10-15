@@ -66,7 +66,8 @@ fn shipShadowAt(p:vec3f)->f32{
  let e1=normalize(cross(l,select(vec3f(0,1,0),vec3f(1,0,0),abs(l.y)>.9)));let e2=cross(l,e1);
  let q=p-u.shipBound.xyz;let c=vec3f(dot(q,e1)/R,dot(q,e2)/R,.5-.5*dot(q,l)/R);
  if(abs(c.x)>=1||abs(c.y)>=1){return 1;}
- let dims=vec2i(textureDimensions(shipShadowMap));let px=vec2i(vec2f(.5+.5*c.x,.5-.5*c.y)*vec2f(dims));
+ // (the map's left half: the flown craft's — ship.wgsl lightClipB)
+ let full=vec2i(textureDimensions(shipShadowMap));let dims=vec2i(full.x/2,full.y);let px=vec2i(vec2f(.5+.5*c.x,.5-.5*c.y)*vec2f(dims));
  var lit=0.0;
  for(var j=-1;j<=1;j++){for(var i=-1;i<=1;i++){let d=textureLoad(shipShadowMap,clamp(px+vec2i(i,j),vec2i(0),dims-1),0);lit+=select(0.0,1.0,d>=.9999||c.z<=d+.004);}}
  return lit/9;

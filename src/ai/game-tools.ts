@@ -1726,6 +1726,44 @@ export function gameTools(h: GameHost): Tool[] {
       }),
     },
     {
+      name: "carrier",
+      description:
+        "The carriers at sea (the Gerald R. Ford: catapults and wires; the Kiev and the Implacable: short take-offs and vertical landings), each with two frigates as escort, steaming into the wind at their speed, the same in a room for everyone. spawn: one set off (kind; at lat/lon, else 4 km ahead of the craft; heading [°], else into the wind). land: the flown craft set down on its deck (x across — port + —, z along — bow + — [m]; else aft of its island), carried along with it. status: those at sea, where, their speed. clear: none at sea any more.",
+      params: {
+        action: { type: "string", enum: ["spawn", "land", "status", "clear"] },
+        kind: { type: "string", enum: ["ford", "kiev", "implacable"] },
+        lat: { type: "number" },
+        lon: { type: "number" },
+        heading: { type: "number" },
+        x: { type: "number" },
+        z: { type: "number" },
+      },
+      required: ["action"],
+      run: act((a) => {
+        const c = h.camera;
+        if (a.action === "status")
+          return c.carrierNow().map(({ sp, P }) => ({
+            kind: sp.kind,
+            lat: +P.lat.toFixed(4),
+            lon: +P.lon.toFixed(4),
+            headingDeg: Math.round((sp.heading * 180) / Math.PI),
+            speedKt: Math.round(sp.speed * 1.943844),
+          }));
+        if (a.action === "clear") {
+          c.carrierClear();
+          return "No carrier at sea";
+        }
+        const kind = (a.kind ?? "ford") as "ford" | "kiev" | "implacable";
+        if (a.action === "spawn")
+          return c.carrierSpawn(kind, {
+            lat: a.lat as number | undefined,
+            lon: a.lon as number | undefined,
+            heading: a.heading as number | undefined,
+          });
+        return c.carrierLand(kind, { x: a.x as number | undefined, z: a.z as number | undefined });
+      }),
+    },
+    {
       name: "flight_plan",
       description:
         "A plane's flight plan (the F-35): its waypoints over the Earth, flown by LNAV (lateral) and VNAV (vertical) on the autopilot. show: the plan (waypoints with their altitude and speed constraints, the cruise level and speed, the reserve, LNAV/VNAV on, the active point). add: a waypoint — query (an airfield, a place, an address, coordinates) or lat/lon, its altM and spdMs constraints, at an index (default the end). remove (index), clear, cruise (altM, spdMs, reserveKg), direct (index: flown direct from here), nav (lnav, vnav: on or off).",

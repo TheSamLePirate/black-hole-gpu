@@ -35,6 +35,7 @@ const M = {
   sail: 51,
   metal: 52,
   accent: 53,
+  grey: 54,
   glass: 42,
 } as const;
 
@@ -323,6 +324,30 @@ class Builder {
   b.box(-0.15, 0.15, 7.4, 13, 5, 5.3, M.metal);
   b.box(-0.1, 0.1, 6, 6.2, -6, 5, M.metal);
   await write("trawler", b.m);
+}
+
+// the frigate (a carrier's escort): 135 m, 17 m beam, its deck 7 m over its 5 m draught, haze grey; its gun
+// forward, its bridge and mast, its funnel, its hangar and helicopter deck aft
+{
+  const b = new Builder();
+  const L = 135,
+    B = 17;
+  b.hull(L, B, -5, 7, M.grey, 1.2);
+  // its superstructure: bridge forward of amidships, then the funnel, the hangar
+  b.box(-6.5, 6.5, 7, 12, 8, 34, M.grey, M.grey, 0.4);
+  b.box(-5.5, 5.5, 12, 15.5, 22, 32, M.grey, M.grey, 0.3);
+  b.windows(-5.5, 5.5, 13.6, 14.8, 30, 32.05);
+  b.box(-6, 6, 7, 13, -26, 8, M.grey, M.grey, 0.3);
+  b.box(-2.5, 2.5, 13, 20, -6, 2, M.grey, M.navy, 0.5);
+  // its mast, its radar
+  b.box(-0.5, 0.5, 15.5, 32, 25, 26, M.metal);
+  b.box(-2.5, 2.5, 25, 26, 24.5, 26.5, M.metal);
+  // its gun forward
+  b.box(-1.8, 1.8, 7, 9.2, 40, 44, M.grey, M.grey, 0.4);
+  b.box(-0.18, 0.18, 8, 8.4, 44, 51, M.metal);
+  // its helicopter deck aft: a dark square, a white circle's ring of boxes
+  b.box(-7.5, 7.5, 7, 7.15, -60, -28, M.deck);
+  await write("frigate", b.m);
 }
 
 // the sailing boat: 12 m, 3.8 m beam; its fin keel, its mast 16 m, its mainsail and its jib (both faces)

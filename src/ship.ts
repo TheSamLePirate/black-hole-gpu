@@ -43,15 +43,28 @@ import tankerUrl from "../assets/traffic/tanker.bin";
 import ferryUrl from "../assets/traffic/ferry.bin";
 import trawlerUrl from "../assets/traffic/trawler.bin";
 import sailboatUrl from "../assets/traffic/sailboat.bin";
+import frigateUrl from "../assets/traffic/frigate.bin";
 import cargoHullUrl from "../assets/traffic/cargo-hull.jpg";
 import cargoBridgeUrl from "../assets/traffic/cargo-bridge.jpg";
 import cargoBoxesUrl from "../assets/traffic/cargo-boxes.jpg";
+import fordUrl from "../assets/carriers/ford.bin";
+import kievUrl from "../assets/carriers/kiev.bin";
+import implacableUrl from "../assets/carriers/implacable.bin";
+import ford0Url from "../assets/carriers/ford-0.jpg";
+import ford1Url from "../assets/carriers/ford-1.jpg";
+import ford2Url from "../assets/carriers/ford-2.jpg";
+import kiev0Url from "../assets/carriers/kiev-0.jpg";
+import kiev1Url from "../assets/carriers/kiev-1.jpg";
+import implacable0Url from "../assets/carriers/implacable-0.jpg";
+import implacable1Url from "../assets/carriers/implacable-1.jpg";
 
 /** The real traffic's airliners (scripts/build-airliners.ts, docs/PLAN-AVIATION-AAA.md T2) and ships
  *  (scripts/build-ships.ts, T3): drawn as the craft are. */
 export type AirlinerId = "a320" | "crj900";
-export type ShipTypeId = "cargo" | "tanker" | "ferry" | "trawler" | "sailboat";
-export type TrafficMeshId = AirlinerId | ShipTypeId;
+export type ShipTypeId = "cargo" | "tanker" | "ferry" | "trawler" | "sailboat" | "frigate";
+/** The carriers (scripts/build-carriers.ts, docs/PLAN-AVIATION-AAA.md M2). */
+export type CarrierId = "ford" | "kiev" | "implacable";
+export type TrafficMeshId = AirlinerId | ShipTypeId | CarrierId;
 /** A mesh the craft's pass draws: a craft's, an airliner's, a ship's. */
 export type ShipMeshId = VesselId | TrafficMeshId;
 const TRAFFIC_MESHES: Record<TrafficMeshId, string> = {
@@ -62,9 +75,16 @@ const TRAFFIC_MESHES: Record<TrafficMeshId, string> = {
   ferry: ferryUrl,
   trawler: trawlerUrl,
   sailboat: sailboatUrl,
+  frigate: frigateUrl,
+  ford: fordUrl,
+  kiev: kievUrl,
+  implacable: implacableUrl,
 };
-/** The traffic's colour maps, a layer each (ship.wgsl: the materials 40, 41, 44–46). */
+/** The traffic's colour maps, a layer each (ship.wgsl: the materials 40, 41, 44–46); the carriers' after them
+ *  (80–86), added with the first carrier drawn. */
 const TRAFFIC_MAPS = [a320MapUrl, crj900MapUrl, cargoHullUrl, cargoBridgeUrl, cargoBoxesUrl];
+const CARRIER_MAPS = [ford0Url, ford1Url, ford2Url, kiev0Url, kiev1Url, implacable0Url, implacable1Url];
+const isCarrier = (id: ShipMeshId): id is CarrierId => id === "ford" || id === "kiev" || id === "implacable";
 const isTraffic = (id: ShipMeshId): id is TrafficMeshId => id in TRAFFIC_MESHES;
 import { jetLevel } from "./jets";
 import { cross, dot, sub } from "./math/vec3";
@@ -82,6 +102,11 @@ export interface ShipInstance {
   jet?: F35Pose;
   /** hidden where the traced image holds something nearer (default: yes) */
   far?: boolean;
+  /** a carrier (docs/PLAN-AVIATION-AAA.md M2): the nearest one has the shadow map's second half — its shadow on
+   *  its deck, on the craft there, on the sea —, the craft's shadows falling on it */
+  big?: boolean;
+  /** mirrored in the sea (a ship: always; else the view's sea.flown) */
+  mirror?: boolean;
   /** another's engines (docs/PLAN-RESEAU.md R1): its main jets drawn as the flown craft's are — throttle 0–1,
    *  the afterburner's factor (1: dry), the air about it 0–1 */
   thrust?: { throttle: number; boost: number; air: number };
@@ -90,6 +115,9 @@ export interface ShipInstance {
 export interface ShipView {
   /** Camera translation near a walking observer needs a fresh map each frame. */
   forceShadow?: boolean;
+  /** the sea about the camera, the craft mirrored in it: its plane (camera axes: n·p = d, n up — the ellipsoid's
+   *  h = 0 —), its significant height [m], a clock [s], the flown craft (and the aircraft near it) over the sea */
+  sea?: { n: V3; d: number; hs: number; t: number; flown: boolean } | null;
   /** the craft flown (its mesh, its thrusters) */
   vessel?: VesselId;
   /** the other craft in view */
@@ -175,9 +203,11 @@ const MAX_JETS = 40;
 /** the craft drawn at once, at most */
 const MAX_INST = 24;
 /** ship.wgsl's Ship: up to the gear's hinges 512 bytes, then the cabin's light (S.cab, S.scr: 1 + 8 × 3 vec4s) */
-const SHIP_UNIFORM_BYTES = 512 + 16 + 8 * 3 * 16 + 16 + MAX_LAMPS * 3 * 16;
 /** where the lamps start in it (S.lampN) */
 const LAMPS_AT = 512 + 16 + 8 * 3 * 16;
+/** after them: the carrier's shadow sphere, the sea's plane and state (S.bound2, S.sea, S.seaK) */
+const SEA_AT = LAMPS_AT + 16 + MAX_LAMPS * 3 * 16;
+const SHIP_UNIFORM_BYTES = SEA_AT + 3 * 16;
 const INST_FLOATS = 20;
 /** the F-35's parts (src/f35/model.ts) at most, and how many F-35s drawn with their parts posed */
 const MAX_PARTS = 160;
@@ -242,6 +272,12 @@ interface ShipTargetRes {
   jetGlassHdr?: GPUTexture;
   /** the station's depth bound (group 1), and which texture it holds */
   occBind?: { tex: GPUTexture; g: GPUBindGroup };
+  /** the images in the sea's (pipes.mirror's own layouts): its bind groups, as the shading's */
+  mirrorBind?: GPUBindGroup;
+  mirrorGen?: number;
+  mirrorMoments?: GPUBuffer;
+  mirrorHdr?: GPUTexture;
+  mirrorOcc?: { tex: GPUTexture; g: GPUBindGroup };
 }
 
 export class ShipRenderer {
@@ -282,7 +318,7 @@ export class ShipRenderer {
   private loadingMesh = new Set<ShipMeshId>();
   /** the traffic's colour maps (a layer each — TRAFFIC_MAPS), loaded with the first of its meshes */
   private trafficMaps: GPUTexture | null = null;
-  private trafficMapsLoading = false;
+  private trafficMapsLayers = 0;
   /** the instances' transforms and flags (the flown craft first) */
   private instBuf: GPUBuffer;
   private instData = new Float32Array((MAX_INST + JET_SLOTS * MAX_PARTS) * INST_FLOATS);
@@ -353,7 +389,7 @@ export class ShipRenderer {
   /** the flown F-35's nozzle exit now (ship frame): where its plume starts, which way */
   private jetExit: { p: V3; d: V3 } | null = null;
   /** this frame's draws: mesh, and whether in the shadow map */
-  private draws: { mesh: Mesh; shadow: boolean; cabin?: boolean; inst: number }[] = [];
+  private draws: { mesh: Mesh; shadow: boolean; cabin?: boolean; inst: number; mirror?: boolean }[] = [];
   /** the Ranger's landing gear (gear-mesh.ts), made at its first draw */
   private gearMeshBuf: Mesh | null = null;
   /** the cockpit (the Ranger's cabin): its mesh, its sticks' pivots; loading */
@@ -387,6 +423,7 @@ export class ShipRenderer {
     sh: GPUComputePipeline;
     ship: GPURenderPipeline;
     shadow: GPURenderPipeline;
+    mirror: GPURenderPipeline;
     comp: GPURenderPipeline;
     plume: GPURenderPipeline;
     plumeIn: GPURenderPipeline;
@@ -423,6 +460,11 @@ export class ShipRenderer {
   get shadowBound(): { c: V3; r: number } | null {
     return this.onScreen ? { c: this.onScreen.c, r: this.onScreen.r } : null;
   }
+  /** the nearest carrier's sphere (the map's second half), as last drawn; null: none */
+  get shadowBound2(): { c: V3; r: number } | null {
+    return this.bound2;
+  }
+  private bound2: { c: V3; r: number } | null = null;
 
   /** The pixels the ship can cover on a w × h target: [x, y, w, h] (the whole target when the camera is inside its sphere). */
   private scissor(w: number, h: number): [number, number, number, number] {
@@ -491,8 +533,9 @@ export class ShipRenderer {
       addressModeV: "repeat",
       maxAnisotropy: 8,
     });
+    // (two maps side by side: the flown craft's, the nearest carrier's — ship.wgsl lightClipB)
     this.shadowTex = d.createTexture({
-      size: [SHADOW, SHADOW],
+      size: [2 * SHADOW, SHADOW],
       format: "depth32float",
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
@@ -529,6 +572,16 @@ export class ShipRenderer {
         // (reversed depth in float: a hatch at a metre and a craft tens of kilometres off, both exact;
         // after the depth pre-pass: the nearest surface only)
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater-equal" },
+        multisample: { count: 4 },
+      }),
+      // the craft's images in the sea: under it, mirrored (their winding reversed), after the craft — nearer than
+      // them nothing is drawn —, their depth their own
+      mirror: d.createRenderPipeline({
+        layout: "auto",
+        vertex: { ...vertex, entryPoint: "mirrorVs" },
+        fragment: { module, entryPoint: "fs", targets: [{ format: "rgba16float" }], constants: { MIRROR: 1 } },
+        primitive: { topology: "triangle-list", cullMode: "back", frontFace: "cw" },
+        depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
         multisample: { count: 4 },
       }),
       shadow: d.createRenderPipeline({
@@ -764,30 +817,36 @@ export class ShipRenderer {
     d.queue.writeBuffer(ibuf, 0, idx);
     const c: V3 = [0, 1, 2].map((j) => (lo[j]! + hi[j]!) / 2) as V3;
     this.meshes[id] = { vbuf, ibuf, count: ni, bound: { c, r: Math.hypot(...sub(hi, lo)) / 2, lo, hi } };
-    if (!this.trafficMapsLoading) {
-      this.trafficMapsLoading = true;
-      await this.loadTrafficMaps();
+    // (the maps: the traffic's with its first mesh; again with the carriers' with the first carrier)
+    const want = isCarrier(id) ? TRAFFIC_MAPS.length + CARRIER_MAPS.length : TRAFFIC_MAPS.length;
+    if (want > this.trafficMapsLayers) {
+      this.trafficMapsLayers = want;
+      await this.loadTrafficMaps(want);
     }
   }
 
   /** The traffic's colour maps: one array, a layer each, its mipmaps made from the image. */
-  private async loadTrafficMaps() {
+  private async loadTrafficMaps(layers: number) {
     const d = this.device;
-    const imgs = await Promise.all(TRAFFIC_MAPS.map(async (url) => createImageBitmap(await this.getter(url).then((r) => r.blob()))));
+    const urls = [...TRAFFIC_MAPS, ...CARRIER_MAPS].slice(0, layers);
+    const imgs = await Promise.all(urls.map(async (url) => createImageBitmap(await this.getter(url).then((r) => r.blob()))));
+    // (a later, larger array asked meanwhile: this one dropped)
+    if (layers < this.trafficMapsLayers) return;
     const size = 2048;
     const levels = Math.floor(Math.log2(size)) + 1;
     const t = d.createTexture({
-      size: [size, size, TRAFFIC_MAPS.length],
+      size: [size, size, urls.length],
       format: "rgba8unorm-srgb",
       mipLevelCount: levels,
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
     });
-    for (let i = 0; i < TRAFFIC_MAPS.length; i++)
+    for (let i = 0; i < urls.length; i++)
       for (let l = 0; l < levels; l++) {
         const w = Math.max(1, size >> l);
         const bm = await createImageBitmap(imgs[i]!, { resizeWidth: w, resizeHeight: w, resizeQuality: "high" });
         d.queue.copyExternalImageToTexture({ source: bm }, { texture: t, mipLevel: l, origin: [0, 0, i] }, [w, w]);
       }
+    this.trafficMaps?.destroy();
     this.trafficMaps = t;
     this.bind();
   }
@@ -1407,22 +1466,50 @@ export class ShipRenderer {
       ferry: 8,
       trawler: 9,
       sailboat: 10,
+      ford: 11,
+      kiev: 12,
+      implacable: 13,
+      frigate: 14,
     } as const;
     let jetSlot = 0;
     // (inside the Ranger: its cabin instead of its hull)
     if (v.inside && this.flown && this.vessel === "ranger") this.loadCockpit();
     const inCabin = !!(v.inside && this.flown && this.vessel === "ranger" && this.cockpit);
     this.inCabin = inCabin;
-    const list: { id: ShipMeshId; R: M3; t: V3; shadow: boolean; far: boolean; jet?: F35Pose; thrust?: ShipInstance["thrust"] }[] = this
-      .flown
-      ? [{ id: this.vessel, R, t, shadow: true, far: !!v.place }]
-      : [];
+    const sea = v.sea ?? null;
+    const list: {
+      id: ShipMeshId;
+      R: M3;
+      t: V3;
+      shadow: boolean;
+      far: boolean;
+      jet?: F35Pose;
+      thrust?: ShipInstance["thrust"];
+      big?: boolean;
+      mirror: boolean;
+    }[] = this.flown ? [{ id: this.vessel, R, t, shadow: true, far: !!v.place, mirror: !!sea?.flown }] : [];
     for (const o of v.others ?? [])
       if (list.length < MAX_INST && this.meshes[o.id])
-        list.push({ id: o.id, R: o.S, t: o.t, shadow: o.shadow, far: o.far ?? true, jet: o.jet, thrust: o.thrust });
+        list.push({
+          id: o.id,
+          R: o.S,
+          t: o.t,
+          shadow: o.shadow,
+          far: o.far ?? true,
+          jet: o.jet,
+          thrust: o.thrust,
+          big: o.big,
+          mirror: !!sea && (o.mirror ?? sea.flown),
+        });
+    // (the nearest carrier within 20 km: the map's second half)
+    let big = -1;
+    list.forEach((it, i) => {
+      if (it.big && Math.hypot(...it.t) < 20_000 && (big < 0 || Math.hypot(...it.t) < Math.hypot(...list[big]!.t))) big = i;
+    });
     // (the others' engines firing: their jets after the flown craft's — appendJets)
     const lit: { id: VesselId; R: M3; t: V3; thrust: NonNullable<ShipInstance["thrust"]>; exit: { p: V3; d: V3 } | null }[] = [];
     this.draws = [];
+    this.bound2 = null;
     const corners: V3[] = [];
     // (the shadow map's sphere: about the flown craft and those near it)
     let sc: V3 | null = null,
@@ -1441,17 +1528,34 @@ export class ShipRenderer {
         if (i === 0) this.jetExit = nozzleExit(this.jetMesh, mats);
         else if (it.thrust) lit.push({ id: "f35", R: it.R, t: it.t, thrust: it.thrust, exit: nozzleExit(this.jetMesh, mats) });
       } else if (i > 0 && it.thrust && !isTraffic(it.id)) lit.push({ id: it.id, R: it.R, t: it.t, thrust: it.thrust, exit: null });
-      this.instData.set([kind[it.id], it.shadow ? 1 : 0, it.far ? 1 : 0, parts], i * INST_FLOATS + 16);
-      this.draws.push({ mesh: me, shadow: it.shadow, cabin: i === 0 && inCabin, inst: i });
+      // (in the shadow maps: the first half's — 1 —, the second's — 2 —; hidden behind the traced image — bit 0 —,
+      // mirrored in the sea — bit 1)
+      const second = i === big;
+      this.instData.set([kind[it.id], it.shadow ? 1 : second ? 2 : 0, (it.far ? 1 : 0) + (it.mirror ? 2 : 0), parts], i * INST_FLOATS + 16);
+      this.draws.push({
+        mesh: me,
+        shadow: it.shadow || second,
+        cabin: i === 0 && inCabin,
+        inst: i,
+        mirror: it.mirror && !(i === 0 && inCabin),
+      });
       // (the Ranger's landing gear, out: drawn with it — its own mesh, the craft's instance)
       const gear = it.id === "ranger" && !(i === 0 && inCabin) && (v.gear?.ext ?? 0) > 0 ? this.gearMesh() : null;
       if (gear) this.draws.push({ mesh: gear, shadow: it.shadow, inst: i });
       for (const b of gear ? [me.bound, gear.bound] : [me.bound])
         for (let k = 0; k < 8; k++) {
           const q: V3 = [k & 1 ? b.hi[0] : b.lo[0], k & 2 ? b.hi[1] : b.lo[1], k & 4 ? b.hi[2] : b.lo[2]];
-          corners.push([dot(it.R[0]!, q) + it.t[0], dot(it.R[1]!, q) + it.t[1], dot(it.R[2]!, q) + it.t[2]]);
+          const c: V3 = [dot(it.R[0]!, q) + it.t[0], dot(it.R[1]!, q) + it.t[1], dot(it.R[2]!, q) + it.t[2]];
+          corners.push(c);
+          // (its image in the sea: on the screen too)
+          if (it.mirror && sea) {
+            const h = dot(sea.n, c) - sea.d;
+            if (h > 0) corners.push([c[0] - 2 * h * sea.n[0], c[1] - 2 * h * sea.n[1], c[2] - 2 * h * sea.n[2]]);
+          }
         }
       const b = me.bound;
+      if (second)
+        this.bound2 = { c: [dot(it.R[0]!, b.c) + it.t[0], dot(it.R[1]!, b.c) + it.t[1], dot(it.R[2]!, b.c) + it.t[2]], r: b.r * 1.02 };
       if (!it.shadow) return;
       const cc: V3 = [dot(it.R[0]!, b.c) + it.t[0], dot(it.R[1]!, b.c) + it.t[1], dot(it.R[2]!, b.c) + it.t[2]];
       if (!sc) (sc = cc), (sr = b.r);
@@ -1494,6 +1598,19 @@ export class ShipRenderer {
     if (lit.length && this.flown) this.appendJets(lit, R, t, v.thrust?.time ?? 0);
     m.set([this.jetCount, v.glow ?? 1, v.thrust?.time ?? 0, v.thrust?.air ?? 0], 52);
     this.device.queue.writeBuffer(this.uniform, 0, m);
+    const b2 = this.bound2 as { c: V3; r: number } | null;
+    this.device.queue.writeBuffer(
+      this.uniform,
+      SEA_AT,
+      new Float32Array([
+        ...(b2 ? [...b2.c, b2.r] : [0, 0, 0, 0]),
+        ...(sea ? [...sea.n, sea.d] : [0, 1, 0, -1e9]),
+        sea?.hs ?? 0,
+        sea?.t ?? 0,
+        0,
+        0,
+      ]),
+    );
     this.writeReentry(v.reentry, mesh);
     const tr = this.flown ? v.contrails : null;
     this.trailCount = tr ? Math.min(tr.n, MAX_SEGMENTS) : 0;
@@ -1789,7 +1906,8 @@ export class ShipRenderer {
     }
     res.rect = [x0, y0, bw, bh];
     // (the self-shadowing, every other frame: the light turns slowly against the ship)
-    if (v.forceShadow || this.shadowTick++ % 2 === 0) {
+    // (a carrier in the map: each frame — it moves across the view, its shadow with it)
+    if (v.forceShadow || this.bound2 || this.shadowTick++ % 2 === 0) {
       const sp = enc.beginRenderPass(
         this.pass("ship: shadow map", {
           colorAttachments: [],
@@ -1857,6 +1975,35 @@ export class ShipRenderer {
       rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
       rp.drawIndexed(dr.mesh.solid ?? dr.mesh.count, 1, 0, 0, dr.inst);
     });
+    // the craft's images in the sea, where nothing else is drawn
+    const mirrored = v.sea ? this.draws.filter((dr) => dr.mirror) : [];
+    if (mirrored.length) {
+      if (!res.mirrorBind || res.mirrorGen !== this.bindGen || res.mirrorMoments !== mb || res.mirrorHdr !== hdr) {
+        res.mirrorBind = this.device.createBindGroup({
+          layout: this.pipes.mirror.getBindGroupLayout(0),
+          entries: [...this.shipEntries!, { binding: 10, resource: hdr.createView() }, { binding: 11, resource: { buffer: mb } }],
+        });
+        res.mirrorGen = this.bindGen;
+        res.mirrorMoments = mb;
+        res.mirrorHdr = hdr;
+      }
+      if (res.mirrorOcc?.tex !== occTex)
+        res.mirrorOcc = {
+          tex: occTex,
+          g: this.device.createBindGroup({
+            layout: this.pipes.mirror.getBindGroupLayout(1),
+            entries: [{ binding: 0, resource: occTex.createView() }],
+          }),
+        };
+      rp.setPipeline(this.pipes.mirror);
+      rp.setBindGroup(0, res.mirrorBind);
+      rp.setBindGroup(1, res.mirrorOcc.g);
+      for (const dr of mirrored) {
+        rp.setVertexBuffer(0, dr.mesh.vbuf);
+        rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
+        rp.drawIndexed(dr.mesh.solid ?? dr.mesh.count, 1, 0, 0, dr.inst);
+      }
+    }
     // the F-35's glass, over all that (its canopy, the helmet's visor)
     const glassy = this.draws.filter((dr) => !dr.cabin && dr.mesh.solid !== undefined && dr.mesh.solid < dr.mesh.count);
     if (glassy.length) {

@@ -31,10 +31,12 @@ import {
   heightOverGround,
   groundSpeeds,
   groundVelocity,
+  platformUnder,
+  type Platform,
   solidBody,
   toBodyFixed,
 } from "../system/our-surface";
-import { solarBody } from "../system/solar";
+import { bodyAxes, solarBody } from "../system/solar";
 import { C_MPS, G0, M_METRES } from "../units";
 import { add as axpy, cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 
@@ -262,6 +264,17 @@ function fallStep(this: CameraController, simDt: number, keys: Vec3, fast: boole
   return t0 + drift.elapsed;
 }
 
+/** Where the craft comes to rest on a body: its body-fixed place — and on a carrier's deck (a platform under it,
+ *  within 2 m), its place on the deck's own frame, carried along with it. */
+export type Landed = { body: string; q: Vec3; h?: number; deck?: { pl: Platform; l: Vec3 } };
+function landedAt(ground: string, X: Vec3, t: number): Landed {
+  const q = toBodyFixed(ground, X, t);
+  const pu = platformUnder(ground, q, t);
+  if (!pu || pu.h > GEAR + 2) return { body: ground, q };
+  const qm: Vec3 = [q[0] * M_METRES, q[1] * M_METRES, q[2] * M_METRES];
+  return { body: ground, q, deck: { pl: pu.pl, l: pu.pl.toLocal(qm, t) } };
+}
+
 /**
  * Our universe far from the mouth (flat): velocity Verlet in the home frame's Cartesian
  * coordinates, the attitude fixed against the stars; a body met: the ship rests on it.
@@ -275,7 +288,51 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
   // (this frame's thrust: the velocity change the engines made before the fall)
   const dvT = sub3(V, repToHomeVec(w, p.l, p.n, p.vel));
   // on the ground: carried by the turning body, until the engine lifts the ship
-  if (this.ourLanded) {
+  if (this.ourLanded?.deck) {
+    // on a carrier's deck: carried by it — its place, its attitude, its velocity the deck's —, until the engine lifts
+    // the craft or pushes it along
+    const L = this.ourLanded;
+    const Dk = L.deck!;
+    const A0 = bodyAxes(solarBody(L.body)!, t0);
+    const homeDir = (v: Vec3): Vec3 => [0, 1, 2].map((i) => v[0] * A0[0]![i]! + v[1] * A0[1]![i]! + v[2] * A0[2]![i]!) as Vec3;
+    const at = (tq: number) => {
+      const qm = Dk.pl.toFixed(Dk.l, tq);
+      const q: Vec3 = [qm[0] / M_METRES, qm[1] / M_METRES, qm[2] / M_METRES];
+      const Xq = fromBodyFixed(L.body, q, tq);
+      const u = Dk.pl.under(qm, tq);
+      const v = u ? homeDir(u.v) : ([0, 0, 0] as Vec3);
+      return { q, Xq, V: lin(groundVelocity(L.body, Xq, tq), 1, v, 1 / C_MPS) };
+    };
+    const now = at(t0);
+    // (the deck's normal)
+    const upL = homeDir(Dk.pl.dirToFixed([0, 1, 0], t0));
+    const gSurf = OUR_BODIES.find((q) => q.id === L.body)!.mass / Math.hypot(...sub3(now.Xq, ourState(L.body, t0).pos)) ** 2;
+    const along = Math.hypot(...lin(dvT, 1, upL, -dot3(dvT, upL)));
+    const rolls = flown && VESSELS[fleet.active].lands && along > 0.02 * gSurf * simDt;
+    if (dot3(dvT, upL) > gSurf * simDt * 1.001 || rolls) {
+      this.ourLanded = null;
+      this.landed = false;
+      X = now.Xq;
+      V = lin(now.V, 1, dvT, 1);
+      if (!(rolls && dot3(dvT, upL) <= gSurf * simDt * 1.001)) this.onPilotMessage?.(`Lift-off from ${BODY_NAMES[L.body as Body]}`);
+    } else {
+      const t1 = t0 + simDt;
+      const next = at(t1);
+      const A1 = bodyAxes(solarBody(L.body)!, t1);
+      const home1 = (v: Vec3): Vec3 => [0, 1, 2].map((i) => v[0] * A1[0]![i]! + v[1] * A1[1]![i]! + v[2] * A1[2]![i]!) as Vec3;
+      // (the attitude — the camera's, the craft drawn on it — turns with the deck from this frame's to the next:
+      // carried, as the ground's turn carries it, not set — the views' rig moves the camera about the craft)
+      const fixed0 = (d: Vec3): Vec3 => [dot3(d, A0[0] as Vec3), dot3(d, A0[1] as Vec3), dot3(d, A0[2] as Vec3)];
+      const carry = (d: Vec3) => unitV(home1(Dk.pl.dirToFixed(Dk.pl.dirToLocal(fixed0(d), t0), t1)));
+      L.q = next.q;
+      this.properTime += simDt;
+      setHomePose(s, next.Xq, carry(fwd), carry(up), next.V);
+      s.motion = "geodesic";
+      this.landed = true;
+      this.sync();
+      return t1;
+    }
+  } else if (this.ourLanded) {
     const L = this.ourLanded;
     const b = OUR_BODIES.find((q) => q.id === L.body)!;
     // (on the ground as it is known now: a scene placed before the Earth's relief was read back
@@ -469,7 +526,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
       if (sink > 0.5) {
         touched = { speed: sink, vh: Math.hypot(...lin(vr, 1, n, -dot3(vr, n))) * C_MPS, gear: "hull" };
         V = groundVelocity(ground, X, t);
-        this.ourLanded = { body: ground, q: toBodyFixed(ground, X, t) };
+        this.ourLanded = landedAt(ground, X, t);
         break;
       }
       if (dot3(vr, n) < 0) V = lin(V, 1, n, -dot3(vr, n));
@@ -511,7 +568,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
         if (Math.hypot(...vr) * C_MPS < 0.05 && this.pilot.throttle <= 0) {
           this.rolling = null;
           this.rollSite = null;
-          this.ourLanded = { body: ground, q: toBodyFixed(ground, X, t) };
+          this.ourLanded = landedAt(ground, X, t);
           V = gv;
           break;
         }
@@ -545,7 +602,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
       // (resting on the relief, the gear on it)
       X = lin(X, 1, n, -gearHeight(ground, X, t) / M_METRES);
       V = gv;
-      this.ourLanded = { body: ground, q: toBodyFixed(ground, X, t) };
+      this.ourLanded = landedAt(ground, X, t);
       break;
     }
     // (within a solid body's mean figure is no surface: its ground is its relief — a mare, a crater, a
@@ -600,7 +657,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
           if (verdict === "crashed") {
             X = lin(X, 1, n, -gearHeight(ground, X, t) / M_METRES);
             V = gv;
-            this.ourLanded = { body: ground, q: toBodyFixed(ground, X, t) };
+            this.ourLanded = landedAt(ground, X, t);
             break;
           }
           this.rolling = { body: ground };
@@ -611,7 +668,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
           touched = { speed: Math.hypot(...vr) * C_MPS, wheels: true, gear: "tipped" };
           V = gv;
           this.rolling = null;
-          this.ourLanded = { body: ground, q: toBodyFixed(ground, X, t) };
+          this.ourLanded = landedAt(ground, X, t);
           break;
         }
         // (at rest on all its legs, the engine idle, not turning: standing — carried by the ground)
@@ -620,7 +677,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
         if (o.contact >= (belly ? 2 : gdef.legs.length) && still && this.pilot.throttle <= 0) {
           this.rolling = null;
           this.rollSite = null;
-          this.ourLanded = { body: ground, q: toBodyFixed(ground, X, t) };
+          this.ourLanded = landedAt(ground, X, t);
           V = gv;
           gearDw = [0, 0, 0];
           this.pilot.omega = [0, 0, 0];
@@ -779,7 +836,7 @@ function terrainAheadNow(this: CameraController): number {
 }
 
 /** Puts the ship down on a body's ground (a scene's start). */
-function setOurLanded(this: CameraController, l: { body: string; q: Vec3 } | null) {
+function setOurLanded(this: CameraController, l: Landed | null) {
   this.ourLanded = l;
   this.rolling = null;
   this.landed = !!l;

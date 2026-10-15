@@ -3,7 +3,7 @@
 // length and beam (the AIS's, else its kind's), its navigation lights (COLREGs: the masthead lights — two over 50 m
 // —, the sidelights, the stern light), how it rolls and pitches in a sea. Pure.
 
-export type ShipMesh = "cargo" | "tanker" | "ferry" | "trawler" | "sailboat";
+export type ShipMesh = "cargo" | "tanker" | "ferry" | "trawler" | "sailboat" | "frigate";
 
 /** The meshes' own sizes [m] (their length, beam, the height of their masthead over the waterline). */
 export const SHIP_MESH: Record<ShipMesh, { len: number; beam: number; mast: number }> = {
@@ -12,6 +12,7 @@ export const SHIP_MESH: Record<ShipMesh, { len: number; beam: number; mast: numb
   ferry: { len: 150, beam: 26.5, mast: 32 },
   trawler: { len: 28, beam: 8.2, mast: 13 },
   sailboat: { len: 12, beam: 3.9, mast: 17 },
+  frigate: { len: 135, beam: 17, mast: 32 },
 };
 
 /** What a ship's AIS type says it is: its mesh, its typical length and beam [m], a short name for its label. */
@@ -26,7 +27,7 @@ export function shipKindOf(type: number, len = 0): { mesh: ShipMesh; len: number
   if (type === 31 || type === 32 || type === 52) return k("trawler", 30, 10, "tug");
   if (type === 50) return k("trawler", 20, 6, "pilot");
   if (type === 51 || type === 55) return k("trawler", 30, 7, "SAR");
-  if (type === 35) return k("ferry", 120, 16, "military");
+  if (type === 35) return k("frigate", 135, 17, "military");
   if (type >= 40 && type <= 49) return k("ferry", 40, 10, "HSC");
   // (unknown: by its length — a big hull a cargo ship, a small one a workboat)
   if (len > 120) return k("cargo", len, len / 7, "vessel");

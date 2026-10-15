@@ -5681,10 +5681,12 @@ async function main() {
     netVoice.frame();
     // (who speaks: a mark before his name)
     // (the real traffic's labels and lights — controller/traffic.ts)
-    viewOverlay.trafficMarks =
-      settings.traffic && camera.piloting
-        ? [...camera.trafficOverlay(unitsFor(settings).fAlt), ...camera.seaOverlay(unitsFor(settings).fSpd)]
-        : [];
+    viewOverlay.trafficMarks = camera.piloting
+      ? [
+          ...(settings.traffic ? [...camera.trafficOverlay(unitsFor(settings).fAlt), ...camera.seaOverlay(unitsFor(settings).fSpd)] : []),
+          ...camera.carrierOverlay(unitsFor(settings).fSpd),
+        ]
+      : [];
     viewOverlay.netTags = netSession.tags.map((g) => (netVoice.speaking(g.slot) ? { ...g, name: `◉ ${g.name}` } : g));
     if (netSession.ships.length) changed = true;
     if (!renderer.offlineActive && cpuProf.time("free-fall prediction", () => sim.applyRender(info))) changed = true;

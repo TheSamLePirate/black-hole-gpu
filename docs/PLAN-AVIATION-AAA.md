@@ -294,6 +294,8 @@ pertinent.
   - Les feux de pont, les marques d'appontage, son escorte (frégates).
   - Il est placé sur la mer depuis la carte ou la mission ; en réseau, sa route est déterministe sur l'horloge de
     la salle.
+
+  *Fait le 2026-10-15 — [fiche](progress/aviation/M2.md) : le Ford (ton modèle), le Kiev et l'Implacable à l'échelle, leurs ponts au mètre, une route sur l'horloge (partagée en salle), face au vent, tangage et roulis selon la mer, deux frégates d'escorte, radar ami, IFLOLS et feux de nuit ; le pont plate-forme mobile (avion porté sans dérive ni vrille, train sur le pont en marche) ; ombres (seconde carte : l'avion sur le pont, l'îlot, la coque sur la mer) et reflets dans la mer (l'avion aussi, bas au-dessus de l'eau) ; changer l'heure ne déplace plus l'avion ni le porte-avions. Reste : le Charles de Gaulle, brins et catapultes (M3), le placement depuis la carte ou la mission.*
 - **M3. L'appontage.**
   - Le F-35B : approche par l'arrière, décélération jusqu'au **stationnaire à côté du pont**, translation
     au-dessus de la tache, descente verticale.

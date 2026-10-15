@@ -22,8 +22,8 @@ import { setHolePose, setHomePose, setRepPose } from "../camera";
 import { ellOfR, mouth, sphericalFrame } from "../wormhole";
 import { betaToCoord, planetFrame, toGlobal, toLocal, zamoBeta } from "../landing";
 import { BODY_NAMES } from "../targeting";
-import { EPOCH_DATE, M_METRES, M_SECONDS, SOLAR_BODIES, solarBody, solarState, spinVector } from "../system/solar";
-import { bodyFixedOf, fromBodyFixed, GEAR, gearHeight, groundVelocity } from "../system/our-surface";
+import { bodyAxes, EPOCH_DATE, M_METRES, M_SECONDS, SOLAR_BODIES, solarBody, solarState, spinVector, utcOf } from "../system/solar";
+import { bodyFixedOf, fromBodyFixed, GEAR, gearHeight, groundVelocity, solidBody, toBodyFixed } from "../system/our-surface";
 import { EARTH_RUNWAYS, RUNWAY_LENGTH, SITES } from "./sites";
 import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
 import { ourState, soiOf } from "../system/our-side";
@@ -669,8 +669,31 @@ export class GameTools {
       const st = this.status();
       if (st.side === "ours" && st.soi) {
         const p = c.activePoseNow();
-        // (by the mouth — within a few of its gluing radii —: kept against it, the home frame's origin)
-        if (p && Math.hypot(...p.X) > 3 * mouth(s).rGlue) {
+        const camAx = c.camAxesHome();
+        // (near a world's ground — in its air, under 100 km —: kept over the same ground, at the same height, its
+        // attitude and its motion over the turning ground the same — the hour changed, the flight does not: the Earth
+        // turned under a craft carried in space, 50 m over the sea it met the water)
+        if (p && camAx && solidBody(st.soi) && st.altKm < 100) {
+          const ref = st.soi;
+          const A0 = bodyAxes(solarBody(ref)!, t0);
+          const fixed = (v: readonly number[]): V3 =>
+            [0, 1, 2].map((k) => v[0]! * A0[k]![0]! + v[1]! * A0[k]![1]! + v[2]! * A0[k]![2]!) as V3;
+          const q = toBodyFixed(ref, p.X as V3, t0);
+          const gv0 = groundVelocity(ref, p.X as V3, t0);
+          const vRel = fixed([0, 1, 2].map((i) => p.V[i]! - gv0[i]!));
+          const fwd = fixed(camAx[2]),
+            up = fixed(camAx[1]);
+          carry = () => {
+            const A1 = bodyAxes(solarBody(ref)!, t1);
+            const home = (v: V3): V3 => [0, 1, 2].map((i) => v[0] * A1[0]![i]! + v[1] * A1[1]![i]! + v[2] * A1[2]![i]!) as V3;
+            const X = fromBodyFixed(ref, q, t1) as V3;
+            const gv1 = groundVelocity(ref, X, t1);
+            const hv = home(vRel);
+            setHomePose(s, X, home(fwd), home(up), [0, 1, 2].map((i) => gv1[i]! + hv[i]!) as V3);
+            s.anchor = "wormhole";
+          };
+        } else if (p && Math.hypot(...p.X) > 3 * mouth(s).rGlue) {
+          // (by the mouth — within a few of its gluing radii —: kept against it, the home frame's origin)
           const a = ourState(st.soi, t0),
             ref = st.soi;
           carry = () => {
@@ -708,7 +731,13 @@ export class GameTools {
     // (the view on a world's ground — a tripod, a spectator's — carried with it to the new time)
     const view = c.viewController();
     const ground = view !== c || !s.ship ? view.groundHold() : null;
+    // (the carriers at sea where they are: their courses set off as much later — game/carrier.ts)
+    const dSec = (utcOf(t1) - utcOf(t0)) / 1000;
+    for (const sp of c.carriers ?? []) sp.t0 += dSec;
     this.ctx.setTime(t1);
+    // (the controller's clock with it at once — paused, no frame steps it: the craft read at the old hour)
+    c.time = t1;
+    c.shipTime = Number.NaN;
     carry?.();
     c.sync();
     ground?.(t1);

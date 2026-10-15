@@ -175,11 +175,47 @@ export function groundRelief(id: string, q: Vec3): number {
   return f(figureAt(id, q).g);
 }
 
-/** The relief's height [m] under a body-fixed point, and that point's height over the figure [m]. */
-function heightOver(id: string, p: Vec3) {
+/**
+ * A moving platform on a body — a carrier's deck (game/carrier.ts, controller/carriers.ts) —: under a point fixed to
+ * the body [m] at the scene's time t [M], the point's height over it [m], its normal and its velocity over the
+ * body's ground [m/s] (the body's axes); its own frame, a point's and a direction's there and back.
+ */
+export interface Platform {
+  key: string;
+  under(q: Vec3, t: number): { h: number; n: Vec3; v: Vec3 } | null;
+  toLocal(q: Vec3, t: number): Vec3;
+  toFixed(l: Vec3, t: number): Vec3;
+  dirToLocal(d: Vec3, t: number): Vec3;
+  dirToFixed(l: Vec3, t: number): Vec3;
+}
+const platforms = new Map<string, Platform[]>();
+/** The platforms on a body now (the carriers at sea: set each frame). */
+export function setPlatforms(id: string, list: Platform[]) {
+  if (list.length) platforms.set(id, list);
+  else platforms.delete(id);
+}
+/** The platform under a body-fixed point [M units] at t (null: none) — the nearest over the point. */
+export function platformUnder(id: string, p: Vec3, t: number): { pl: Platform; h: number; n: Vec3; v: Vec3 } | null {
+  const list = platforms.get(id);
+  if (!list) return null;
+  const q: Vec3 = [p[0] * M_METRES, p[1] * M_METRES, p[2] * M_METRES];
+  let best: { pl: Platform; h: number; n: Vec3; v: Vec3 } | null = null;
+  for (const pl of list) {
+    const u = pl.under(q, t);
+    if (u && (!best || u.h < best.h)) best = { pl, ...u };
+  }
+  return best;
+}
+
+/** The relief's height [m] under a body-fixed point, and that point's height over the figure [m]; at a time, a
+ *  platform's deck under it too — the nearer of the two under it. */
+function heightOver(id: string, p: Vec3, t?: number) {
   const fa = figureAt(id, p);
   const f = reliefs.get(id);
-  return fa.h - (f ? f(fa.g) : 0);
+  const h = fa.h - (f ? f(fa.g) : 0);
+  if (t === undefined) return h;
+  const u = platformUnder(id, p, t);
+  return u ? Math.min(h, u.h) : h;
 }
 
 /** A body-fixed point's height above the ground [m] (the figure, and the relief when known). */
@@ -219,7 +255,7 @@ export function groundPointOf(id: string, lat: number, lon: number, above = GEAR
 
 /** Height of the ship's gear above the ground [m] (the figure, and the relief when known). */
 export function gearHeight(id: string, X: Vec3, t: number) {
-  return heightOver(id, toBodyFixed(id, X, t)) - GEAR;
+  return heightOver(id, toBodyFixed(id, X, t), t) - GEAR;
 }
 
 /** The figure's normal (the Earth's: geodetic) under a home-frame point, on the home axes. */
@@ -254,9 +290,14 @@ export function groundUnder(id: string, X: Vec3, t: number): Ground {
     return [dot(d, A[0]), dot(d, A[1]), dot(d, A[2])];
   };
   const height = (Xp: Vec3) => heightOver(id, fixed(Xp));
+  // (a body-fixed vector onto the home axes)
+  const home = (v: Vec3): Vec3 => [0, 1, 2].map((i) => v[0] * A[0][i]! + v[1] * A[1][i]! + v[2] * A[2][i]!) as Vec3;
   return {
     at(p: Vec3) {
       const Xp: Vec3 = [X[0] + p[0] / M_METRES, X[1] + p[1] / M_METRES, X[2] + p[2] / M_METRES];
+      // (a carrier's deck under it, nearer than the sea: its height, its normal, its velocity over the ground)
+      const pu = platformUnder(id, fixed(Xp), t);
+      if (pu && pu.h < height(Xp)) return { h: pu.h, n: home(pu.n), v: home(pu.v) };
       const g = figureAt(id, fixed(Xp)).g;
       const up = [0, 1, 2].map((i) => g[0] * A[0][i]! + g[1] * A[1][i]! + g[2] * A[2][i]!) as Vec3;
       const h = height(Xp);

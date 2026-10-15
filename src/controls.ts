@@ -59,7 +59,9 @@ import { installOrders } from "./controller/orders";
 import type { TrafficFeed } from "./traffic/feed";
 import { installWingmen, type RemoteWing, type WingState } from "./controller/wingmen";
 import { installTraffic } from "./controller/traffic";
+import type { Landed } from "./controller/motion";
 import { installSeaTraffic } from "./controller/seatraffic";
+import { installCarriers } from "./controller/carriers";
 import type { Order } from "./game/orders";
 import type { Racetrack } from "./game/racetrack";
 import { installJet } from "./controller/jet";
@@ -862,7 +864,8 @@ export class CameraController {
   teleSaved: { fov: number; lookAt: boolean } | null = null;
 
   /** our universe: resting on a body's ground (its own coordinates) */
-  ourLanded: { body: string; q: Vec3; h?: number } | null = null;
+  /** where the ship rests in our universe — on a carrier's deck, its place on it too (controller/motion.ts) */
+  ourLanded: Landed | null = null;
 
   /** where the ship rests in our universe (a saved game keeps it) */
   get ourLandedOn() {
@@ -1444,6 +1447,7 @@ installOrders(CameraController);
 installWingmen(CameraController);
 installTraffic(CameraController);
 installSeaTraffic(CameraController);
+installCarriers(CameraController);
 installAerobatics(CameraController);
 installRadar(CameraController);
 installFplan(CameraController);

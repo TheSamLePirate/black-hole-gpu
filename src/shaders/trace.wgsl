@@ -142,7 +142,8 @@ struct Params {
   wake: array<vec4f, 17>,
   // the sea's FFT waves (renderer: seaFftParams; sea/fft-gpu.ts; seaWavesFft): [0] on, choppiness, the height's
   // standard deviation [m], unused; [1] the cascades' periods [m], N; [2] the slopes' variance finer than the
-  // cascades (along the wind, across it: Cox–Munk's share the cascades leave), unused ×2; [3] unused
+  // cascades (along the wind, across it: Cox–Munk's share the cascades leave), unused ×2; [3] the nearest
+  // carrier's sphere in the ship's shadow map (shipShadow: its right half), w its radius (0: none)
   seafft: array<vec4f, 4>,
 };
 
@@ -3785,9 +3786,10 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
 // The Ranger's shadow on the ground under it: a point pw from the camera [m, world axes] seen in the
 // ship's own shadow map — the view from its light probe's dominant light (shEnv(9)), across its bounding
 // sphere (ship.wgsl: lightClip) —; lit where nothing of the hull is between it and the light (3 × 3 taps)
+// (the map two side by side — ship.wgsl lightClipB —: the left half about the flown craft, P.shipShadow; the
+// right about the nearest carrier, P.seafft[3] — its hull's shadow on the sea)
 fn shipShadow(pw: vec3f) -> f32 {
-  let R = P.shipShadow.w;
-  if (R <= 0.0) { return 1.0; }
+  if (P.shipShadow.w <= 0.0 && P.seafft[3].w <= 0.0) { return 1.0; }
   let dl = shEnv(9u).xyz;
   if (dot(dl, dl) < 1e-12) { return 1.0; }
   let lw = normalize(dl.x * P.envX.xyz + dl.y * P.envY.xyz + dl.z * P.envZ.xyz);
@@ -3795,19 +3797,30 @@ fn shipShadow(pw: vec3f) -> f32 {
   let p = vec3f(dot(pw, P.camRight.xyz), dot(pw, P.camUp.xyz), dot(pw, P.camFwd.xyz));
   let e1 = normalize(cross(l, select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(l.y) > 0.9)));
   let e2 = cross(l, e1);
-  let q = p - P.shipShadow.xyz;
-  let c = vec3f(dot(q, e1) / R, dot(q, e2) / R, 0.5 - 0.5 * dot(q, l) / R);
-  if (abs(c.x) >= 1.0 || abs(c.y) >= 1.0) { return 1.0; }
   let dims = vec2i(textureDimensions(shipShadowMap));
-  let px = vec2i(vec2f(0.5 + 0.5 * c.x, 0.5 - 0.5 * c.y) * vec2f(dims));
-  var lit = 0.0;
-  for (var j = -1; j <= 1; j++) {
-    for (var i = -1; i <= 1; i++) {
-      let d = textureLoad(shipShadowMap, clamp(px + vec2i(i, j), vec2i(0), dims - 1), 0);
-      lit += select(0.0, 1.0, d >= 0.9999 || c.z <= d + 0.004);
+  let half = vec2i(dims.x / 2, dims.y);
+  var out = 1.0;
+  for (var k = 0; k < 2; k++) {
+    let b = select(P.shipShadow, P.seafft[3], k == 1);
+    let R = b.w;
+    if (R <= 0.0) { continue; }
+    let q = p - b.xyz;
+    let c = vec3f(dot(q, e1) / R, dot(q, e2) / R, 0.5 - 0.5 * dot(q, l) / R);
+    if (abs(c.x) >= 1.0 || abs(c.y) >= 1.0) { continue; }
+    let x0 = select(0, half.x, k == 1);
+    let px = vec2i(vec2f(0.5 + 0.5 * c.x, 0.5 - 0.5 * c.y) * vec2f(half));
+    // (the bias: 0.4 % of the craft's depth, 15 cm of the carrier's)
+    let bias = select(0.004, 0.15 / (2.0 * R), k == 1);
+    var lit = 0.0;
+    for (var j = -1; j <= 1; j++) {
+      for (var i = -1; i <= 1; i++) {
+        let d = textureLoad(shipShadowMap, vec2i(x0, 0) + clamp(px + vec2i(i, j), vec2i(0), half - 1), 0);
+        lit += select(0.0, 1.0, d >= 0.9999 || c.z <= d + bias);
+      }
     }
+    out *= lit / 9.0;
   }
-  return lit / 9.0;
+  return out;
 }
 
 // the disk's turbulence: gradient noise baked into a tiling texture (noise3d.ts: period 32, 4 texels a unit)

@@ -42,7 +42,7 @@ import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
 import shipWGSL from "./shaders/ship.wgsl" with { type: "text" };
 import enduranceWGSL from "./shaders/endurance.wgsl" with { type: "text" };
 import stationWGSL from "./shaders/station.wgsl" with { type: "text" };
-import { ENV_H, ShipRenderer, type Reentry, type ShipInstance, type ShipMeshId, type Thrust } from "./ship";
+import { ENV_H, ShipRenderer, type Reentry, type ShipInstance, type ShipMeshId, type ShipView, type Thrust } from "./ship";
 import type { VesselId } from "./vessels";
 import type { F35Pose } from "./f35/model";
 import { fleet } from "./fleet";
@@ -113,6 +113,7 @@ const SCENERY_EXCLUSIONS: SceneryExclusion[] = [
 import {
   altitudeOver,
   bodyFixedOf,
+  figureUp,
   groundRelief,
   heightOverGround,
   toBodyFixed,
@@ -2685,6 +2686,9 @@ export class Renderer {
     }
     // the sea's FFT waves (Params.seafft): its spectrum renewed when the sea changes, its frame's waves due
     f.set(this.seaFftParams(!o.probe, time, tSec, s), wat + WAKE_VEC4S * 4);
+    // (the nearest carrier's sphere in the ship's shadow map: its shadow on the sea — Params.seafft[3])
+    const sb2 = !o.probe && this.ship.ready && near?.index === earthK ? this.ship.shadowBound2 : null;
+    if (sb2) f.set([sb2.c[0], sb2.c[1], sb2.c[2], sb2.r], wat + WAKE_VEC4S * 4 + 12);
     f[61 * 4 + 1] = sunAng; // (earth4.y)
     f[61 * 4 + 2] = this.marsDust(s, near, bodies, time); // (earth4.z)
     if (!o.probe) this.marsDustNow = f[61 * 4 + 2]!;
@@ -3999,6 +4003,7 @@ export class Renderer {
             vessel: s.ship || this.shipInView ? s.vessel : undefined,
             place: !s.ship && this.shipInView ? this.shipPlace! : undefined,
             others: this.shipOthers(s),
+            sea: this.shipSea(s),
             mPerM: 1476.625 * (s.massSolar || 1),
             forceShadow: !!this.character?.active,
             inside: s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin"),
@@ -4374,7 +4379,16 @@ export class Renderer {
 
   /** a fight's aircraft (controller/combat.ts — sim.ts): each from the flown craft's origin on the camera's axes
    *  [m], its axes on them, its pose */
-  combatOthers: { id: ShipMeshId; rel: Vec3; axes: [Vec3, Vec3, Vec3]; jet?: F35Pose; hidden?: boolean; far?: boolean }[] = [];
+  combatOthers: {
+    id: ShipMeshId;
+    rel: Vec3;
+    axes: [Vec3, Vec3, Vec3];
+    jet?: F35Pose;
+    hidden?: boolean;
+    far?: boolean;
+    big?: boolean;
+    mirror?: boolean;
+  }[] = [];
   /** the ships under way near the camera, for their wakes (controller/seatraffic.ts seaWakes) */
   seaWakes: { p: Vec3; fwd: Vec3; U: number; len: number; beam: number }[] = [];
 
@@ -4455,6 +4469,30 @@ export class Renderer {
       });
   }
 
+  /**
+   * The sea the craft are mirrored in (ship.ts ShipView.sea): within 20 km over the Earth on our side, its plane —
+   * the ellipsoid's h = 0 under the flown craft (WGS84: its height, its normal there) — on the camera's axes from the
+   * eye; whether the flown craft is over it (the relief under it at sea level); its waves' height.
+   */
+  private shipSea(s: Settings): ShipView["sea"] {
+    const cam = this.lastCam;
+    if (!cam || s.system !== "gargantua" || !s.wormhole || cam.region !== "throat" || cam.ell >= 0) return null;
+    const time = this.lastTime;
+    const w = mouth(s).w;
+    const Xc = homeOf(w, cam.ell, cam.n);
+    const h = altitudeOver("earth", Xc, time);
+    if (!(h < 20_000) || !(h > -50)) return null;
+    const upH = figureUp("earth", Xc, time);
+    const r = homeToRep(w, cam.ell, cam.n, upH);
+    const n0: Vec3 = [dot3(r, cam.right), dot3(r, cam.up), dot3(r, cam.fwd)];
+    const l = Math.hypot(...n0) || 1;
+    const n: Vec3 = [n0[0] / l, n0[1] / l, n0[2] / l];
+    const eye = s.ship && this.shipPose ? shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t : ([0, 0, 0] as Vec3);
+    // (the flown craft's image under 500 m — higher, the waves have scattered it)
+    const flown = h < 500 && groundRelief("earth", toBodyFixed("earth", Xc, time)) < 0.5;
+    return { n, d: dot3(n, eye) - h, hs: this.seaHs, t: (performance.now() / 1000) % 3600, flown };
+  }
+
   /** The fight's aircraft as instances: their place from the eye, their axes. */
   private combatShips(s: Settings): ShipInstance[] {
     if (!this.combatOthers.length || !s.ship || !this.shipPose) return [];
@@ -4470,6 +4508,8 @@ export class Renderer {
         // (a fight's aircraft always over the image; the traffic's hidden behind what it holds nearer — a cloud, a
         // mountain)
         far: o.far ?? false,
+        big: o.big,
+        mirror: o.mirror,
       }));
   }
 

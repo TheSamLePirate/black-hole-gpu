@@ -221,7 +221,9 @@ function seaStep(this: CameraController) {
 
 /** The ships for the renderer: the nearest eight within 20 km — their place and axes on the camera's, the axes
  *  scaled to their length and beam; hidden under the sea's surface and behind what the image holds nearer. */
-function seaShips(this: CameraController): { id: ShipTypeId; rel: Vec3; axes: [Vec3, Vec3, Vec3]; hidden: boolean; far: boolean }[] {
+function seaShips(
+  this: CameraController,
+): { id: ShipTypeId; rel: Vec3; axes: [Vec3, Vec3, Vec3]; hidden: boolean; far: boolean; mirror: boolean }[] {
   const list = this.seaNow();
   if (!list.length) return [];
   const E = earthView(this);
@@ -247,6 +249,7 @@ function seaShips(this: CameraController): { id: ShipTypeId; rel: Vec3; axes: [V
         axes: [n(cam(c.right.map((x) => -x)), kx), n(cam(c.up), Math.sqrt(kx * kz)), n(cam(c.fwd), kz)] as [Vec3, Vec3, Vec3],
         hidden: false,
         far: true,
+        mirror: true,
       };
     });
 }
