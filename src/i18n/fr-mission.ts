@@ -20,4 +20,22 @@ export default {
   Briefing: "Briefing",
   "Abandon the mission": "Abandonner la mission",
   "{0}'s mission: {1}": "Mission de {0} : {1}",
+  "Mission map — {0}": "Carte de mission — {0}",
+  "Mission map": "Carte de mission",
+  "No mission flown: the traffic, the carriers and the flight plan.":
+    "Aucune mission en cours : le trafic, les porte-avions et le plan de vol.",
+  Selected: "Sélection",
+  hostile: "hostile",
+  friend: "ami",
+  neutral: "neutre",
+  carrier: "porte-avions",
+  objective: "objectif",
+  "SAM threat": "menace SAM",
+  traffic: "trafic",
+  waypoint: "point de route",
+  place: "lieu",
+  "Fly to": "Voler vers",
+  "flight plan": "plan de vol",
+  "Click a unit, a zone, a point or the ground; drag the plan's points.":
+    "Cliquez une unité, une zone, un point ou le sol ; glissez les points du plan.",
 } satisfies Record<string, string>;

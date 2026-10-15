@@ -12,10 +12,12 @@
 .msn-won { color: #7fe08a; }
 .msn-lost { color: #ff7a6a; }
 .msn-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
-.msn-hud { position: fixed; left: 12px; top: 196px; z-index: 30; max-width: min(340px, calc(100vw - 24px)); padding: 8px 10px; border: 1px solid var(--k-line, rgba(255,255,255,0.15)); border-radius: 8px; background: rgba(8, 12, 16, 0.62); backdrop-filter: blur(4px); pointer-events: none; font: 12.5px/1.4 var(--font, system-ui); color: #e8eef2; }
+.msn-hud { position: fixed; right: 12px; top: 168px; z-index: 30; max-width: min(340px, calc(100vw - 24px)); padding: 8px 10px; border: 1px solid var(--k-line, rgba(255,255,255,0.15)); border-radius: 8px; background: rgba(8, 12, 16, 0.62); backdrop-filter: blur(4px); pointer-events: none; font: 12.5px/1.4 var(--font, system-ui); color: #e8eef2; }
 .msn-hud-t { letter-spacing: 0.06em; text-transform: uppercase; font-size: 11.5px; color: #ffc861; }
 .msn-hud-c { float: right; margin-left: 10px; font-family: var(--mono, monospace); color: #b8c4cc; }
 .msn-hud-o { margin-top: 3px; }
 .msn-hud .msn-done, .msn-objs .msn-done { color: #7fe08a; }
 .msn-hud .msn-failed, .msn-objs .msn-failed { color: #ff7a6a; }
 .msn-hud .msn-opt { opacity: 0.75; }
+.msn-hud-map { pointer-events: auto; float: right; margin: -2px -4px 0 8px; padding: 2px 7px; border: 1px solid rgba(255, 200, 97, 0.5); border-radius: 5px; background: rgba(255, 200, 97, 0.12); font: 600 11px/1.3 var(--font, system-ui); color: #ffc861; cursor: pointer; }
+.msn-hud-map:hover { background: rgba(255, 200, 97, 0.25); }

@@ -1,0 +1,27 @@
+/* The mission map (ui/missionmap.ts): the map beside its objectives, the selection and the legend, the kit's language. */
+.mm-frame { width: min(1240px, calc(100vw - 32px)); padding: 14px 16px 16px; }
+.mm { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); gap: 12px; margin-top: 10px; height: min(680px, calc(100vh - 120px)); }
+.mm-map { position: relative; border: 1px solid var(--k-line); border-radius: var(--k-r); overflow: hidden; background: #050910; min-height: 260px; }
+.mm-map .mv-canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+.mm-side { display: flex; flex-direction: column; gap: 6px; min-height: 0; overflow: auto; }
+.mm-h { margin: 6px 0 0; font: var(--k-font-title); letter-spacing: 0.12em; text-transform: uppercase; color: var(--k-amber); }
+.mm-obj { font: 13px/1.35 var(--font); color: var(--k-text); }
+.mm-obj.mm-done { color: #7fe08a; }
+.mm-obj.mm-failed { color: #ff7a6a; }
+.mm-obj.mm-waiting, .mm-opt { color: var(--k-dim); }
+.mm-note { margin: 0; font: 12.5px/1.35 var(--font); color: var(--k-dim); }
+.mm-sel { font: 600 13px/1.3 var(--font); color: var(--k-text); }
+.mm-coord { font: var(--k-font-value); color: var(--k-dim); }
+.mm-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.mm-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; font: 12px/1.3 var(--font); color: var(--k-dim); }
+.mm-k::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 2px; vertical-align: -1px; background: currentColor; }
+.mm-k-hostile::before { background: #ff4a3a; }
+.mm-k-friend::before { background: #5fc8ff; }
+.mm-k-neutral::before { background: #f2f4f6; }
+.mm-k-threat::before { background: rgba(255, 74, 58, 0.35); border: 1px dashed #ff4a3a; }
+.mm-k-zone::before { background: transparent; border: 2px solid #ffb03a; border-radius: 50%; }
+.mm-k-carrier::before { background: #4f8dff; }
+.mm-k-route::before { background: #ff4fd8; height: 3px; vertical-align: 3px; }
+@media (max-width: 760px) {
+  .mm { grid-template-columns: 1fr; grid-template-rows: minmax(260px, 1fr) auto; height: calc(100vh - 100px); }
+}

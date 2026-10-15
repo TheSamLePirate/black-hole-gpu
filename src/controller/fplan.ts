@@ -25,6 +25,7 @@ declare module "../controls" {
     navStep: typeof navStep;
     routeChanged: typeof routeChanged;
     routeBingo: typeof routeBingo;
+    routeFlyTo: typeof routeFlyTo;
   }
 }
 
@@ -90,6 +91,31 @@ function routeBingo(this: CameraController): number | null {
   const g = this.geoNow();
   if (!R.wps.length || !g || !VESSELS[fleet.active].turbofan) return null;
   return bingo(R, g, cruiseBurn);
+}
+
+/**
+ * "Fly to" a place (the mission map — P2): it put in the plan as the point flown to now — the plan made of here and it
+ * when there is none —, direct to it, NAV engaged. What to say.
+ */
+function routeFlyTo(this: CameraController, name: string, lat: number, lon: number): string {
+  const N = this.nav;
+  const R = N.route;
+  const g = this.geoNow();
+  if (!g) return t("NAV: in the air");
+  const wp = { name: name.slice(0, 12), lat, lon };
+  let at: number;
+  if (!R.wps.length) {
+    R.wps.push({ name: "PPOS", lat: g.lat, lon: g.lon }, wp);
+    at = 1;
+  } else {
+    at = Math.max(1, Math.min(N.on.l ? (N.lnav?.active ?? R.wps.length) : R.wps.length, R.wps.length));
+    R.wps.splice(at, 0, wp);
+  }
+  this.routeChanged();
+  N.lnav?.directTo(at, g);
+  const said = N.on.l ? tf("NAV: LNAV {0} to {1}", N.on.v ? "+ VNAV" : "", wp.name) : this.navToggle("l");
+  N.lnav?.directTo(at, g);
+  return said;
 }
 
 /** NAV engaged or let go (the key, the display's button): LNAV and VNAV, the autopilot and the autothrottle with them. */
@@ -175,5 +201,5 @@ function navStep(this: CameraController, inp: PilotInput, f: { h: number; hdg: n
 }
 
 export function installFplan(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { geoNow, navToggle, navStep, routeChanged, routeBingo });
+  Object.assign(C.prototype, { geoNow, navToggle, navStep, routeChanged, routeBingo, routeFlyTo });
 }

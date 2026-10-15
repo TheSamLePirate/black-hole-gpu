@@ -137,7 +137,10 @@ export class MissionHud {
   private el = h("div", "msn-hud");
   private key = "";
 
-  constructor(private camera: CameraController) {
+  constructor(
+    private camera: CameraController,
+    private onMap?: () => void,
+  ) {
     this.el.dataset.testid = "mission-hud";
     this.el.hidden = true;
     document.body.append(this.el);
@@ -156,7 +159,12 @@ export class MissionHud {
     if (key === this.key) return;
     this.key = key;
     this.el.hidden = false;
+    const map = h("button", "msn-hud-map", t("Map"));
+    map.type = "button";
+    map.dataset.testid = "mission-hud-map";
+    map.onclick = () => this.onMap?.();
     this.el.replaceChildren(
+      ...(this.onMap ? [map] : []),
       h("b", "msn-hud-t", R.spec.title),
       " ",
       h("span", "msn-hud-c", M.deckStart ? t("on deck…") : lim ? `${clock(R.t)} / ${clock(lim)}` : clock(R.t)),

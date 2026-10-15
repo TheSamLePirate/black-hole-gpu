@@ -123,6 +123,20 @@ export function pcdData(
       : null,
     bingo: c.routeBingo(),
     alerts,
+    // (a mission's places — controller/mission.ts —: its zones, the SAMs' reach)
+    marks: c.mission
+      ? c
+          .missionMarks()
+          .filter((m) => m.kind === "zone" || m.kind === "threat")
+          .map((m) => ({
+            kind: m.kind as "zone" | "threat",
+            lat: m.lat,
+            lon: m.lon,
+            r: m.r ?? 0,
+            label: m.label,
+            active: m.state !== "waiting",
+          }))
+      : undefined,
   };
 }
 

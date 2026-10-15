@@ -175,6 +175,8 @@ export interface SymInfo {
   } | null;
   /** a plane's flight plan: the active waypoint (its bearing [° true], its distance [m]) */
   nav?: { name: string; brg: number; dist: number; on: boolean } | null;
+  /** a mission's objective (its bearing [° true], its distance [m], its height over ours [m]) */
+  msn?: { name: string; brg: number; dist: number; dz: number } | null;
   /** the F-35B's STOVL mode (controller/telemetry.ts) */
   stovl?: { on: boolean; conv: number; swivel: number; hover: boolean; vz: number; heavy: boolean } | null;
   /** the docking: the ports' range, closing rate, angle; the guide (camera coordinates) */
@@ -498,6 +500,31 @@ export function drawSymbology(F: SymFrame) {
       caret(bearing(i.dirs.target), COL.target!, true);
       // (the flight plan's active waypoint: magenta, the route's colour)
       caret(i.nav ? i.nav.brg : null, "#ff4fd8", true);
+      // (a mission's objective — P2: amber on the tape, and where it is in the view, ringed, its name and distance)
+      const m = i.msn;
+      caret(m ? m.brg : null, "#ffb03a", true);
+      if (m) {
+        const b = m.brg * D,
+          el = Math.atan2(m.dz, Math.max(m.dist, 1));
+        const p = pr(comb(comb(north, Math.cos(b), east, Math.sin(b)), Math.cos(el), up, Math.sin(el)));
+        if (inside(p, 14 * dpr)) {
+          const R = 11 * dpr;
+          stroke(() => ctx.arc(p![0], p![1], R, 0, 2 * Math.PI), "#ffb03a", 1.6);
+          stroke(
+            () => {
+              ctx.moveTo(p![0], p![1] - 4 * dpr);
+              ctx.lineTo(p![0] + 4 * dpr, p![1]);
+              ctx.lineTo(p![0], p![1] + 4 * dpr);
+              ctx.lineTo(p![0] - 4 * dpr, p![1]);
+              ctx.closePath();
+            },
+            "#ffb03a",
+            1.4,
+          );
+          const U = unitsFor(s);
+          text(`${m.name}  ${U.dist(m.dist).toFixed(1)} ${U.distName}`, p![0] + R + 5 * dpr, p![1], "#ffb03a", 10.5, "left", true);
+        }
+      }
       caret(track, "#78ffaa", true);
       caret(bearing(nose), "#ffc85a", true);
       // the view's heading, boxed

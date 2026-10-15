@@ -1,5 +1,6 @@
 // The CameraController — telemetry: the one view of the flight every display reads (FlightInfo).
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { distM } from "../game/mission";
 import { avionicsData } from "../f35/cockpit";
 import { enuToCam } from "./combat";
 import type { JetModes } from "../game/jet";
@@ -184,6 +185,9 @@ export interface FlightInfo {
   jet: { alt: number; throttle: number; modes: JetModes } | null;
   /** a plane's flight plan (controller/fplan.ts): the active waypoint's name, its bearing [° true], its distance [m], NAV engaged */
   nav: { name: string; brg: number; dist: number; on: boolean } | null;
+  /** a mission's cue (controller/mission.ts missionCue — P2): its objective's name, its bearing [° true], its
+   *  distance [m], its height over ours [m] (the Earth's curve counted) */
+  msn: { name: string; brg: number; dist: number; dz: number } | null;
   /** the F-35's avionics' status (f35/cockpit.ts avionicsData), null: not the F-35 */
   avionics: ReturnType<typeof avionicsData> | null;
   /** a challenge flown: its banner, its next gates (controller/challenge.ts) */
@@ -394,6 +398,16 @@ function flightInfo(this: CameraController): FlightInfo {
         o = N.last.l;
       const w = o ? N.route.wps[o.active] : undefined;
       return w && o ? { name: w.name, brg: (o.brg * 180) / Math.PI, dist: o.dist, on: N.on.l } : null;
+    })(),
+    msn: (() => {
+      const m = this.mission ? this.missionCue() : null;
+      const g = m ? this.geoNow() : null;
+      if (!m || !g) return null;
+      const D = Math.PI / 180;
+      const y = Math.sin((m.lon - g.lon) * D) * Math.cos(m.lat * D);
+      const x = Math.cos(g.lat * D) * Math.sin(m.lat * D) - Math.sin(g.lat * D) * Math.cos(m.lat * D) * Math.cos((m.lon - g.lon) * D);
+      const dist = distM(g, m);
+      return { name: m.name, brg: (Math.atan2(y, x) / D + 360) % 360, dist, dz: m.alt - g.alt - (dist * dist) / (2 * 6_371_008.8) };
     })(),
     entry: this.entryInfo(),
     stovl:

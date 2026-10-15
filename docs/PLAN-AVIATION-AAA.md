@@ -337,6 +337,8 @@ pertinent.
 - **P2. La carte de mission.** Sur la carte (2D et 3D) : la route, les zones des menaces (cercles des SAM), les
   cibles, les amis, le porte-avions, le trafic. On y glisse les points ; on y clique « voler vers ». La même carte
   est sur le TSD du cockpit.
+
+  *P2 fait le 2026-10-15 — [fiche](progress/aviation/P2.md) : la carte de mission (zones des objectifs, portée des SAM, unités en symboles OTAN, porte-avions, trafic réel, plan de vol et avion), « Voler vers » une unité, une zone ou un lieu (dans le plan, en direct, LNAV engagée), les points du plan glissés à la souris ; les zones et menaces sur le TSD ; l'objectif en cours marqué dans la vue 3D par le HUD.*
 - **P3. Créer ses missions.** Un éditeur dans le jeu (poser les objectifs sur la carte, régler les conditions),
   partageable par lien ; et **TARS crée une mission à la voix** (« une escorte de l'A320 AFR123 jusqu'à
   Nice »).

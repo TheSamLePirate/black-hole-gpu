@@ -43,6 +43,10 @@ export class MapView {
   overlay: (ctx: CanvasRenderingContext2D, toScreen: ToScreen, W: number, H: number) => void = () => {};
   /** a click (not a drag): the place under it */
   onPick: (lat: number, lon: number) => void = () => {};
+  /** a press on something its owner moves (a point dragged — the map not panned then): its mover, else null */
+  grab: (px: number, py: number) => ((lat: number, lon: number) => void) | null = () => null;
+  /** a dragged thing let go */
+  onDrop: () => void = () => {};
   /** the view moved (by the hand or a flight) */
   onMove: () => void = () => {};
 
@@ -61,11 +65,16 @@ export class MapView {
     const ptrs = new Map<number, { x: number; y: number }>();
     let moved = 0;
     let pinch = 0;
+    let mover: ((lat: number, lon: number) => void) | null = null;
     this.canvas.addEventListener("pointerdown", (e) => {
       this.canvas.setPointerCapture(e.pointerId);
       ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
       moved = 0;
       this.fly = null;
+      if (ptrs.size === 1) {
+        const r = this.canvas.getBoundingClientRect();
+        mover = this.grab(e.clientX - r.left, e.clientY - r.top);
+      } else mover = null;
       if (ptrs.size === 2) {
         const [a, b] = [...ptrs.values()];
         pinch = Math.hypot(a!.x - b!.x, a!.y - b!.y);
@@ -88,6 +97,14 @@ export class MapView {
         return;
       }
       moved += Math.abs(dx) + Math.abs(dy);
+      if (mover) {
+        if (moved < 5) return;
+        const r = this.canvas.getBoundingClientRect();
+        const [lat, lon] = this.placeAt(e.clientX - r.left, e.clientY - r.top);
+        mover(lat, lon);
+        this.request();
+        return;
+      }
       const s = this.scale();
       this.cx -= dx / s;
       this.cy -= dy / s;
@@ -99,6 +116,12 @@ export class MapView {
       if (!ptrs.has(e.pointerId)) return;
       ptrs.delete(e.pointerId);
       if (ptrs.size < 2) pinch = 0;
+      if (mover && moved >= 5) {
+        mover = null;
+        this.onDrop();
+        return;
+      }
+      mover = null;
       if (moved < 5 && ptrs.size === 0) {
         const r = this.canvas.getBoundingClientRect();
         const [lat, lon] = this.placeAt(e.clientX - r.left, e.clientY - r.top);

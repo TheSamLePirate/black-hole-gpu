@@ -62,6 +62,7 @@ import { SCENARIOS } from "./game/scenarios";
 import { bests as challengeBests } from "./controller/challenge";
 import { type Layer as MusicLayer, LAYERS as MUSIC_LAYERS, THEMES as MUSIC_THEMES } from "./audio/music/themes";
 import { FLIGHT_HOURS, FLIGHT_STARTS, FLIGHT_WEATHER, FlightHub, flightFields, type HubHost, prepareFlight } from "./ui/flighthub";
+import { MissionMap } from "./ui/missionmap";
 import { briefMission, debriefMission, flyMission, MissionHud } from "./ui/airmission";
 import { AIR_MISSIONS } from "./game/airmissions";
 import { checkMission } from "./game/mission";
@@ -3357,6 +3358,7 @@ async function main() {
       // (the flight's leader: its orders — controller/orders.ts)
       { label: { fr: "Patrouille", en: "Flight" }, sub: orderItems() },
       { label: { fr: "Plan de vol", en: "Flight plan" }, key: "⇧O", on: camera.nav.on.l, run: () => routePanel.open() },
+      { label: { fr: "Carte de mission", en: "Mission map" }, on: !!camera.mission, run: () => missionMap.open() },
       {
         label: { fr: "Défis, combats, missions", en: "Challenges, fights, missions" },
         on: !!C || camera.chal?.status === "run" || !!camera.mission,
@@ -3441,6 +3443,7 @@ async function main() {
         ...(VESSELS[fleet.active].flies
           ? [
               { label: { fr: "Plan de vol", en: "Flight plan" }, key: "⇧O", on: camera.nav.on.l, run: () => routePanel.open() },
+              { label: { fr: "Carte de mission", en: "Mission map" }, on: !!camera.mission, run: () => missionMap.open() },
               { label: { fr: "Préparer un vol", en: "Prepare a flight" }, run: () => flightHub.open() },
               { label: { fr: "Défis", en: "Challenges" }, on: camera.chal?.status === "run", run: () => challengePanel.open() },
             ]
@@ -3785,7 +3788,8 @@ async function main() {
   const challengeHost: ChallengeHost = { tools, camera, toast: (s) => panel.toast(s) };
   const challengePanel = new ChallengePanel(challengeHost);
   // a mission (ui/airmission.ts — PLAN-AVIATION-AAA P1): its words said and shown, its objectives on screen, its debrief
-  const missionHud = new MissionHud(camera);
+  const missionMap = new MissionMap({ camera, toast: (s) => panel.toast(s) });
+  const missionHud = new MissionHud(camera, () => missionMap.open());
   camera.onMissionSay = (text) => {
     panel.toast(text);
     voice.say({ text, speaker: "tower", priority: 2 });
@@ -3820,6 +3824,7 @@ async function main() {
         : null;
     },
     last: () => camera.missionLast ?? null,
+    map: missionMap,
   };
   // playing together (ui/netpanel.ts, docs/PLAN-RESEAU.md): the network loaded only when a room is asked for
   // (a room's clock in the scene's seconds — sim.time is in M)

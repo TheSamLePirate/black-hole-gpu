@@ -8,6 +8,7 @@ import { CARRIER, type CarrierId } from "../game/carrier";
 import { R_EARTH } from "../game/challenges";
 import {
   debrief,
+  distM,
   type MissionRun,
   type MissionSpec,
   type MissionUnit,
@@ -17,10 +18,12 @@ import {
   type ObjState,
 } from "../game/mission";
 import type { Scenario } from "../game/scenarios";
+import { MISSILES } from "../game/combat";
 import { t, tf } from "../i18n";
 import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
 import type { CameraController } from "../controls";
 import { enuAt } from "./traffic";
+import { bodyFixedOf, groundRelief } from "../system/our-surface";
 
 const D = Math.PI / 180;
 
@@ -69,6 +72,8 @@ declare module "../controls" {
     missionFrame: typeof missionFrame;
     missionAbort: typeof missionAbort;
     missionApply: typeof missionApply;
+    missionMarks: typeof missionMarks;
+    missionCue: typeof missionCue;
   }
 }
 
@@ -340,6 +345,128 @@ function missionApply(this: CameraController, st: MissionShared) {
   }
 }
 
+/** What a mission shows on a map (the mission map, the TSD — P2): its places, its units, its threats. */
+export interface MissionMark {
+  kind: "zone" | "threat" | "hostile" | "friend" | "neutral" | "carrier" | "dead";
+  lat: number;
+  lon: number;
+  /** a zone's, a threat's radius [m] */
+  r?: number;
+  /** a unit's heading [°] */
+  hdg?: number;
+  label: string;
+  /** a unit's id, the objective a zone is */
+  unit?: string;
+  obj?: string;
+  state?: ObjState;
+  air?: boolean;
+}
+
+/** The marks of the mission flown now (none: none). */
+function missionMarks(this: CameraController): MissionMark[] {
+  const M = this.mission;
+  if (!M) return [];
+  const out: MissionMark[] = [];
+  const R = M.run;
+  const W = worldOf(this, M);
+  const objOf = (unit: string) =>
+    R.spec.objectives.find(
+      (o) =>
+        R.state[o.id] === "active" &&
+        ("unit" in o ? o.unit === unit : o.kind === "destroy" ? o.units.includes(unit) : o.kind === "land" && o.carrier === unit),
+    );
+  // (the places: the zones to reach, the escort's end, a landing's)
+  for (const o of R.spec.objectives) {
+    const z = o.kind === "reach" ? o.at : o.kind === "escort" ? o.until : o.kind === "land" ? o.at : undefined;
+    if (z && R.state[o.id] !== "done")
+      out.push({ kind: "zone", lat: z.lat, lon: z.lon, r: z.radius, label: o.text, obj: o.id, state: R.state[o.id] });
+  }
+  // (the units: where they are now, their side; a SAM's reach)
+  const Wc = this.combat?.world;
+  for (const [id, L] of M.units) {
+    const u = W.unit(id);
+    if (!u) continue;
+    const ob = objOf(id);
+    const q = L.target !== undefined ? Wc?.targets.find((x) => x.id === L.target) : undefined;
+    const label = q?.name ?? L.spec.name ?? id;
+    if (L.carrier) {
+      const k = this.carrierNow().find((x) => x.sp.kind === L.carrier);
+      out.push({
+        kind: "carrier",
+        lat: u.lat,
+        lon: u.lon,
+        hdg: k ? (k.sp.heading * 180) / Math.PI : undefined,
+        label,
+        unit: id,
+        obj: ob?.id,
+      });
+      continue;
+    }
+    if (!u.alive) {
+      out.push({ kind: "dead", lat: u.lat, lon: u.lon, label, unit: id });
+      continue;
+    }
+    const kind = q?.friendly ? "friend" : q?.neutral ? "neutral" : "hostile";
+    const air = !!q?.ai;
+    out.push({
+      kind,
+      lat: u.lat,
+      lon: u.lon,
+      hdg: q ? (Math.atan2(q.v[0], q.v[1]) * 180) / Math.PI : undefined,
+      label,
+      unit: id,
+      obj: ob?.id,
+      air,
+    });
+    if (q?.site && q.site.missiles > 0) out.push({ kind: "threat", lat: u.lat, lon: u.lon, r: MISSILES.sam.rMax, label, unit: id });
+  }
+  return out;
+}
+
+/** Where the mission leads now (the HUD's cue — P2): its first active objective's place or unit — its name, where it
+ *  is, its height over the sea [m]. Null: none. */
+function missionCue(this: CameraController): { name: string; lat: number; lon: number; alt: number } | null {
+  const M = this.mission;
+  if (!M || M.deckStart) return null;
+  const R = M.run;
+  const W = worldOf(this, M);
+  const ground = (lat: number, lon: number) => Math.max(0, groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)));
+  for (const o of R.spec.objectives) {
+    if (R.state[o.id] !== "active") continue;
+    const unit = (id: string) => {
+      const u = W.unit(id);
+      return u?.alive ? { name: o.text, lat: u.lat, lon: u.lon, alt: u.alt } : null;
+    };
+    if (o.kind === "reach") return { name: o.text, lat: o.at.lat, lon: o.at.lon, alt: o.at.alt ?? ground(o.at.lat, o.at.lon) };
+    if (o.kind === "destroy") {
+      for (const id of o.units) {
+        const c = unit(id);
+        if (c) return c;
+      }
+      continue;
+    }
+    if (o.kind === "escort") {
+      const u = unit(o.unit);
+      // (close by it: the escort's end)
+      if (u && distM(W.own, u) > o.within) return u;
+      return { name: o.text, lat: o.until.lat, lon: o.until.lon, alt: o.until.alt ?? ground(o.until.lat, o.until.lon) };
+    }
+    if (o.kind === "identify" || o.kind === "protect") {
+      const c = unit(o.unit);
+      if (c) return c;
+      continue;
+    }
+    if (o.kind === "land") {
+      if (o.carrier) {
+        const c = unit(o.carrier);
+        if (c) return c;
+      }
+      if (o.at) return { name: o.text, lat: o.at.lat, lon: o.at.lon, alt: ground(o.at.lat, o.at.lon) };
+    }
+  }
+  return null;
+}
+
 export function installMission(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { missionStart, missionFrame, missionAbort, missionApply });
+  Object.assign(C.prototype, { missionStart, missionFrame, missionAbort, missionApply, missionMarks, missionCue });
 }

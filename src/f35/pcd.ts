@@ -98,6 +98,8 @@ export interface PcdData {
     name: string;
     colour?: string;
   }[];
+  /** a mission's places (controller/mission.ts missionMarks — P2): its zones to reach (amber), the SAMs' reach (red) */
+  marks?: { kind: "zone" | "threat"; lat: number; lon: number; r: number; label: string; active: boolean }[];
 }
 
 const C = {
@@ -371,6 +373,21 @@ export class Pcd {
       g.arc(x, y, 7, 0, 2 * Math.PI);
       g.stroke();
       this.text(f.icao ?? f.name.slice(0, 6), x + 14, y + 18, C.cyan, 22);
+    }
+    // a mission's places: the zones to reach (amber, the waiting dashed), the SAMs' reach (red, dashed)
+    for (const m of d.marks ?? []) {
+      const [x, y] = where(m.lat, m.lon);
+      const rr = Math.max(m.r * px, 6);
+      if (Math.abs(x - cx) - rr > r.w || Math.abs(y - cy) - rr > r.h * 1.4) continue;
+      const col = m.kind === "threat" ? C.red : C.amber;
+      g.strokeStyle = col;
+      g.lineWidth = 3;
+      g.setLineDash(m.kind === "threat" || !m.active ? [10, 8] : []);
+      g.beginPath();
+      g.arc(x, y, rr, 0, 2 * Math.PI);
+      g.stroke();
+      g.setLineDash([]);
+      if (m.kind === "zone" || rr > 20) this.text(m.label.slice(0, 22), x + rr * 0.72 + 6, y - rr * 0.72, col, 20);
     }
     // the route: its legs (the active magenta), its points (diamonds, their names); the active's bearing,
     // distance and time
