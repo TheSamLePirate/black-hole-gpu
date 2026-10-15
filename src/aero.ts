@@ -316,6 +316,80 @@ export interface VesselAero {
   /** the control surfaces' authority: angular acceleration per kPa of dynamic pressure about the
    *  pitch, yaw and roll axes [rad/s² / kPa] (none: 0) */
   ctrl: V3;
+  /** a fighter's flight at high incidence (docs/PLAN-AVIATION-AAA.md, V2) — none: the wing's own stall alone */
+  highAlpha?: HighAlpha;
+}
+
+/**
+ * A fighter's aerodynamics at high incidence, subsonic (faded out through Mach 0.9–1.3): its whole lift past the
+ * wing's stall (the forebody's chines and the wing's apexes shed vortices that lift on to 35–40°), its pitch break,
+ * its fins blanketed, its forebody's yaw against a sideslip, its sweep's dihedral, its damping and its surfaces'
+ * authority lost — the departures, the spins and the deep stall they make, that its flight control law keeps off.
+ * Angles in degrees.
+ */
+export interface HighAlpha {
+  /** the lift coefficient on the wing's area by incidence [[deg, CL]…] (incompressible: Prandtl–Glauert scales it) */
+  cl: [number, number][];
+  /** the pitching moment added past the stall [[deg, Cm]…] on S·c, nose up > 0 (its break, then the nose-down
+   *  moment of a flat plate that brings it back) */
+  cm: [number, number][];
+  /** the mean chord [m] */
+  chord: number;
+  /** the fins' share of their side force kept by incidence [[deg, k]…] */
+  fin: [number, number][];
+  /** the forebody's yawing moment per radian of sideslip by incidence [[deg, Cn_β]…] on S·b, destabilizing > 0 */
+  cnBeta: [number, number][];
+  /** the swept wing's dihedral at full lift [rad]: a sideslip rolls the craft away from it, more with the lift */
+  sweepDihedral: number;
+  /** the damping kept about x, y, z at 60° (the rotary derivatives' loss) */
+  damp60: V3;
+  /** the surfaces' authority kept about pitch, yaw, roll at 60° (blanketed by the wing and the fuselage) */
+  ctrl60: V3;
+  /** the buffet's onset and full incidence [deg] */
+  buffet: [number, number];
+}
+
+const DEG = Math.PI / 180;
+const peaks = new WeakMap<HighAlpha, number>();
+/** the incidence of its lift's peak [deg] */
+function clPeak(H: HighAlpha): number {
+  let p = peaks.get(H);
+  if (p === undefined) {
+    p = H.cl.reduce((best, r) => (r[1] > best[1] ? r : best), H.cl[0]!)[0];
+    peaks.set(H, p);
+  }
+  return p;
+}
+
+/** A table [[x, y]…] (x rising) read at x, clamped at its ends. */
+export function lerpTable(t: [number, number][], x: number): number {
+  if (x <= t[0]![0]) return t[0]![1];
+  for (let i = 1; i < t.length; i++) {
+    const [x1, y1] = t[i]!;
+    if (x <= x1) {
+      const [x0, y0] = t[i - 1]!;
+      return y0 + ((y1 - y0) * (x - x0)) / (x1 - x0);
+    }
+  }
+  return t[t.length - 1]![1];
+}
+
+/** How much of the high incidence's model holds at Mach M: all subsonic, none past 1.3. */
+export const highAlphaShare = (M: number) => 1 - smooth(0.9, 1.3, M);
+
+/** How far into the high incidence's losses (the damping's, the surfaces') a craft is at incidence α [rad], Mach M: 0
+ *  under 25°, 1 at 60° (subsonic). */
+export const highAlphaLoss = (alpha: number, M: number) => smooth(25, 60, Math.abs(alpha) / DEG) * highAlphaShare(M);
+
+/**
+ * The share of its surfaces' authority a fighter keeps at incidence α [rad], Mach M, about pitch, yaw, roll: its
+ * ctrl60 at 60°, and past 50° the tail itself stalling — 15 % left at 85° (a full aft stick holds a deep stall,
+ * it does not flip the aircraft over).
+ */
+export function highAlphaAuthority(H: HighAlpha, alpha: number, M: number): V3 {
+  const lost = highAlphaLoss(alpha, M);
+  const tail = 1 - 0.85 * smooth(50, 85, Math.abs(alpha) / DEG) * highAlphaShare(M);
+  return [0, 1, 2].map((i) => (1 + (H.ctrl60[i]! - 1) * lost) * tail) as V3;
 }
 
 /** The configuration: flaps (0…1), air brake (0…1), gear down; the wing's height over the ground [m]
@@ -347,9 +421,25 @@ export interface AeroOut {
   heat: number;
   /** the recovery temperature [K] */
   Tr: number;
+  /** the buffet 0…1 (high incidence: the flow breaking off the wing) */
+  buffet: number;
 }
 
-const ZERO: AeroOut = { F: [0, 0, 0], M: [0, 0, 0], q: 0, mach: 0, alpha: 0, beta: 0, L: 0, D: 0, cl: 0, stalled: false, heat: 0, Tr: 0 };
+const ZERO: AeroOut = {
+  F: [0, 0, 0],
+  M: [0, 0, 0],
+  q: 0,
+  mach: 0,
+  alpha: 0,
+  beta: 0,
+  L: 0,
+  D: 0,
+  cl: 0,
+  stalled: false,
+  heat: 0,
+  Tr: 0,
+  buffet: 0,
+};
 
 const smooth = (a: number, b: number, x: number) => {
   const t = Math.min(Math.max((x - a) / (b - a), 0), 1);
@@ -425,7 +515,12 @@ export function aeroForces(A: VesselAero, v: V3, air: Air, w: V3 = [0, 0, 0], cf
   const alpha = Math.atan2(-u[1], u[2]);
   const beta = Math.asin(Math.max(-1, Math.min(1, u[0])));
   let cl = 0,
-    stalled = false;
+    stalled = false,
+    buffet = 0;
+  // (a fighter's high incidence, subsonic: its share of the model, the craft's own incidence in degrees)
+  const HA = A.highAlpha;
+  const haK = HA ? highAlphaShare(M) : 0;
+  const alphaDeg = Math.abs(alpha) / DEG;
   if (A.wing && u[2] > 0.05) {
     const W = A.wing;
     // the lift slope with Mach: Prandtl–Glauert, Ackeret, faded where Newtonian flow takes over
@@ -441,7 +536,8 @@ export function aeroForces(A: VesselAero, v: V3, air: Air, w: V3 = [0, 0, 0], cf
     const ge = Number.isFinite(hb) ? 1 + 0.1 * Math.exp(-4 * hb) : 1;
     // two halves, each at its own angle: the roll's rate raises one and lowers the other (the roll
     // damped by the wing itself), the dihedral turns a sideslip into a roll; a half stalls alone
-    const gam = W.dihedral ?? 0;
+    // (the swept wing's dihedral grows with its lift: a fighter's, at high incidence)
+    const gam = (W.dihedral ?? 0) + (HA ? HA.sweepDihedral * haK * smooth(0, 30, alphaDeg) : 0);
     const y0 = b / 4;
     const up: V3 = [-u[1] * u[0], 1 - u[1] * u[1], -u[1] * u[2]];
     const ul = Math.hypot(...up) || 1;
@@ -458,10 +554,16 @@ export function aeroForces(A: VesselAero, v: V3, air: Air, w: V3 = [0, 0, 0], cf
       const al = Math.atan2(-(uh[1] * Math.cos(gam) - side * uh[0] * Math.sin(gam)), uh[2]);
       const a = Math.abs(al);
       const lin = cla * ge * Math.min(a, s);
-      let c =
-        Math.sign(al) * lin * (1 - 0.4 * smooth(s, s + 0.15, a)) * (1 - smooth(s + 0.3, s + 0.9, a)) +
-        (cfg.flaps ?? 0) * 0.45 * (1 - smooth(3, 6, M));
-      if (a > s) stalled = true;
+      let c0 = Math.sign(al) * lin * (1 - 0.4 * smooth(s, s + 0.15, a)) * (1 - smooth(s + 0.3, s + 0.9, a));
+      if (HA && haK > 0) {
+        // (the whole craft's lift by incidence — its vortices' past the wing's stall —, Prandtl–Glauert's rise kept,
+        // faded into the wing's own model through Mach 1)
+        const ad = Math.min(a / DEG, 90);
+        const tab = Math.sign(al) * lerpTable(HA.cl, ad) * (cla / W.cla) * ge;
+        c0 = c0 + (tab - c0) * haK;
+        if (ad > clPeak(HA)) stalled = true;
+      } else if (a > s) stalled = true;
+      let c = c0 + (cfg.flaps ?? 0) * 0.45 * (1 - smooth(3, 6, M));
       // (the spoilers — the air brake — spoil the lift)
       c *= 1 - 0.65 * (cfg.brake ?? 0);
       clSum += c / 2;
@@ -485,10 +587,22 @@ export function aeroForces(A: VesselAero, v: V3, air: Air, w: V3 = [0, 0, 0], cf
     const Vf = Math.hypot(...vf) || V;
     const bf = Math.atan2(vf[0], vf[2]);
     const a = Math.abs(bf);
-    const cy = -Math.sign(bf) * A.fin.cla * Math.min(a, 0.35) * (1 - 0.5 * smooth(0.35, 0.6, a)) * (1 - smooth(3, 6, M));
+    // (blanketed at high incidence: the wing's and the fuselage's wake over the fins)
+    const blank = HA ? 1 + (lerpTable(HA.fin, alphaDeg) - 1) * haK : 1;
+    const cy = -Math.sign(bf) * A.fin.cla * Math.min(a, 0.35) * (1 - 0.5 * smooth(0.35, 0.6, a)) * (1 - smooth(3, 6, M)) * blank;
     const f: V3 = [0.5 * air.rho * Vf * Vf * A.fin.S * cy, 0, 0];
     const m = cross(r, f);
     for (let i = 0; i < 3; i++) (F[i]! += f[i]!), (Mo[i]! += m[i]!);
+  }
+  if (HA && haK > 0 && A.wing) {
+    // the pitch break past the stall (nose up, then the flat plate's nose down that brings it back); the
+    // forebody's yaw against the sideslip, destabilizing at high incidence (positive about x: the nose down —
+    // aeroForces' moments are right-handed on the ship's axes, x its left)
+    const W = A.wing;
+    const b = Math.sqrt(W.AR * W.S);
+    Mo[0]! -= q * W.S * HA.chord * lerpTable(HA.cm, alphaDeg) * Math.sign(alpha || 1) * haK;
+    Mo[1]! -= q * W.S * b * lerpTable(HA.cnBeta, alphaDeg) * beta * haK;
+    buffet = smooth(HA.buffet[0], HA.buffet[1], alphaDeg) * haK * smooth(20, 60, V);
   }
   // the control surfaces deflected: their drag (a trimmed craft pays some)
   if (cfg.deflect && A.wing) {
@@ -514,13 +628,21 @@ export function aeroForces(A: VesselAero, v: V3, air: Air, w: V3 = [0, 0, 0], cf
   // damping
   const Sref = A.wing?.S ?? A.area[1];
   const kd = (q * Sref * A.len * A.len) / (2 * V);
-  for (let i = 0; i < 3; i++) Mo[i]! -= kd * A.damp[i]! * w[i]!;
+  // (at high incidence the rotary damping falls — a fighter's spin is that: the yaw's turns propelling, up to the
+  // spin's own rate — r b/2V ≈ 0.08 —, past it damping again: the spin settles, it does not run away)
+  const dl = HA ? highAlphaLoss(alpha, M) : 0;
+  const span = A.wing ? Math.sqrt(A.wing.AR * A.wing.S) : A.len;
+  for (let i = 0; i < 3; i++) {
+    let k = HA ? 1 + (HA.damp60[i]! - 1) * dl : 1;
+    if (k < 0) k += (2 - k) * smooth(0.08, 0.16, (Math.abs(w[i]!) * span) / (2 * V));
+    Mo[i]! -= kd * A.damp[i]! * w[i]! * k;
+  }
   const Tr = air.T * (1 + 0.85 * ((g - 1) / 2) * M * M);
   // (the stagnation flux: Sutton–Graves in a continuum, bounded in thin air by what the molecules bring —
   // ½ ρ V³ — towards which it tends in free molecular flow)
   const sg = heatFlux(air, V, A.noseR);
   const heat = (1 - fm) * Math.min(sg, 0.5 * air.rho * V ** 3) + fm * 0.5 * air.rho * V ** 3;
-  return { F, M: Mo, q, mach: M, alpha, beta, L, D, cl, stalled, heat, Tr };
+  return { F, M: Mo, q, mach: M, alpha, beta, L, D, cl, stalled, heat, Tr, buffet };
 }
 
 // ---- the skin's temperatures

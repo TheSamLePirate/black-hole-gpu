@@ -394,6 +394,7 @@ export interface Settings {
   f35GEffects: boolean; // the F-35: the grey-out and the red-out under load
   f35Vapour: boolean; // the F-35: the vapour sheet and threads pulling hard
   f35GLimit: number; // the F-35: its flight control laws' load limit [g]
+  f35Law: "normal" | "direct"; // the F-35: its flight control law — the real one, or the stick on the surfaces (no computer)
   f35InfiniteFuel: boolean; // the F-35: the tanks never empty
   f35InfiniteAmmo: boolean; // the F-35 in a fight: the stores never spent
   f35Invulnerable: boolean; // the F-35 in a fight: no damage taken
@@ -716,6 +717,7 @@ export function defaultSettings(): Settings {
     f35GEffects: true,
     f35Vapour: true,
     f35GLimit: 7,
+    f35Law: "normal",
     f35InfiniteFuel: false,
     f35InfiniteAmmo: false,
     f35Invulnerable: false,
@@ -2018,6 +2020,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   f35GEffects: "pref",
   f35Vapour: "pref",
   f35GLimit: "pref",
+  f35Law: "pref",
   f35InfiniteFuel: "pref",
   f35InfiniteAmmo: "pref",
   f35Invulnerable: "pref",

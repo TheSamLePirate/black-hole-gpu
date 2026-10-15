@@ -1228,7 +1228,8 @@ function airInfo(this: CameraController) {
     glow: L?.air.gas.glow ?? null,
     lift: L?.out.L ?? 0,
     drag: L?.out.D ?? 0,
-    stalled: L?.out.stalled ?? false,
+    // (past the wing's lift peak — but the F-35 on its own law flies there under control, to 50°: no stall to say)
+    stalled: (L?.out.stalled ?? false) && !(fleet.active === "f35" && this.s.f35Law === "normal" && this.flightModeNow() === "plane"),
     h: L?.h ?? NaN,
     speed: L?.speed ?? 0,
     airT: L?.air.T ?? NaN,

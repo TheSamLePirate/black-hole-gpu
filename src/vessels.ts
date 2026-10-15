@@ -383,9 +383,9 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     mass: 14650 + 150 + 6125,
     fuelKg: 6125,
     turbofan: F135,
-    // (the stick's rates: 30°/s in pitch, 10°/s of sideslip's yaw, 190°/s of roll; +7 / −3 g; 27° of
-    // angle of attack — the wing's own limit here, its lift past it falling)
-    fbw: { rates: [0.52, 0.18, 3.3], gMax: 7, gMin: -3, alphaMax: 0.47 },
+    // (the stick's rates: 30°/s in pitch, 10°/s of sideslip's yaw, 190°/s of roll; +7 / −3 g; 50° of angle of
+    // attack — the real aircraft's commanded limit, its chines' vortices lifting past the wing's stall: aero.highAlpha)
+    fbw: { rates: [0.52, 0.18, 3.3], gMax: 7, gMin: -3, alphaMax: 0.87 },
     accel: 1,
     slThrust: 1,
     spool: F135.spool,
@@ -432,6 +432,64 @@ export const VESSELS: Record<VesselId, VesselDef> = {
       // (it breaks past 1.5 × its limit: the flight control system holds it at 7)
       gMax: 10.5,
       ctrl: [0.6, 0.25, 2.2],
+      // its high incidence (docs/PLAN-AVIATION-AAA.md, V2; F/A-18 HARV's and the F-16's published shapes, the
+      // F-35's own figures — 50° commanded, recoverable from every departure flown in its tests):
+      highAlpha: {
+        // (the lift slope 3.8/rad to 20°, its vortices' lift on to a peak of 1.74 at 35°, a flat plate's past 60°)
+        cl: [
+          [0, 0],
+          [10, 0.663],
+          [20, 1.27],
+          [25, 1.5],
+          [30, 1.66],
+          [35, 1.74],
+          [40, 1.7],
+          [45, 1.58],
+          [50, 1.44],
+          [60, 1.15],
+          [70, 0.82],
+          [80, 0.43],
+          [90, 0],
+        ],
+        // (its pitch break from 30°, strongest at 40–48° — the wing's own restoring moment there nearly
+        // cancelled: the deep stall a law keeps off —, a flat plate's nose-down past 60° that brings it back)
+        cm: [
+          [0, 0],
+          [28, 0],
+          [34, 0.07],
+          [40, 0.16],
+          [48, 0.15],
+          [55, 0.04],
+          [62, -0.06],
+          [72, -0.2],
+          [82, -0.34],
+          [90, -0.42],
+        ],
+        chord: 4.0,
+        fin: [
+          [0, 1],
+          [20, 1],
+          [35, 0.5],
+          [50, 0.25],
+          [70, 0.15],
+          [90, 0.1],
+        ],
+        // (its forebody against the sideslip: the fins' 0.2 at low incidence, half that at 35°, outdone past 40°)
+        cnBeta: [
+          [0, 0],
+          [20, 0],
+          [30, 0.06],
+          [40, 0.12],
+          [55, 0.1],
+          [70, 0.04],
+          [90, 0.02],
+        ],
+        sweepDihedral: 0.12,
+        // (past 50° the yaw's damping turns propelling — the spin's own moment —; the roll's nearly gone)
+        damp60: [1.4, -0.6, 0.25],
+        ctrl60: [0.7, 0.35, 0.4],
+        buffet: [18, 32],
+      },
     },
     mounts: {
       // (the pilot's eyes: in the helmet the model sits — scripts/build-f35.py)

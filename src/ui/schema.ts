@@ -4001,6 +4001,22 @@ export const SCHEMA: ControlDef[] = [
     keywords: "g limit load factor fly by wire fcs",
   },
   {
+    key: "f35Law",
+    type: "choice",
+    section: "game",
+    group: "F-35",
+    label: "Control law",
+    style: "segmented",
+    effect: "none",
+    enabled: (s) => s.ship && s.vessel === "f35",
+    help: "The real F-35's flight control law (its limits, its 50° of incidence, departure-proof), or the stick straight on the control surfaces with no computer: stalls, spins and deep stalls possible — not the real aircraft.",
+    keywords: "control law fly by wire fcs direct manual spin stall departure",
+    options: [
+      { value: "normal", label: "Normal", hint: "The real F-35's: carefree, its limits held" },
+      { value: "direct", label: "Direct", hint: "The stick on the surfaces, no computer: spins possible" },
+    ],
+  },
+  {
     key: "f35InfiniteFuel",
     type: "toggle",
     section: "game",

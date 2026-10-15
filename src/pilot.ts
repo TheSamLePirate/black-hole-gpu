@@ -130,6 +130,8 @@ export interface FlightContext {
      *  load factor's and angle of attack's limits) — none: the plane law's defaults */
     speed?: number;
     fbw?: { rates: V3; gMax: number; gMin: number; alphaMax: number };
+    /** the flight control law: the computer's (rates, holds, limits), or "direct" — the stick on the surfaces */
+    law?: "normal" | "direct";
   } | null;
   /** the sci-fi flight computer: the velocity it flies (local 3-velocity), the feed-forward against
    *  gravity and the air (local, proper acceleration), the attitude it holds (local), and the part of
@@ -209,6 +211,11 @@ export interface FlightOutput {
 // (turning rate, angular acceleration, RCS authority: game/tuning.ts, from the settings)
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
+/** Hermite's smooth step from a to b. */
+const smoothstep = (a: number, b: number, x: number) => {
+  const t = clamp((x - a) / (b - a), 0, 1);
+  return t * t * (3 - 2 * t);
+};
 
 /** 4-velocity (spatial part, γβ) ↔ 3-velocity. */
 export const toU = (b: V3): V3 => scale(b, 1 / Math.sqrt(Math.max(1 - dot(b, b), 1e-9)));
@@ -316,6 +323,8 @@ export class FlightComputer {
   alphaHold: number | null = null;
   /** the plane law's held bank [rad] (wings level under 6°), null: to be taken */
   bankHold: number | null = null;
+  /** the direct law's pitch trim [rad/s²]: the elevator's set that holds the pitch with the stick let go */
+  pitchTrim = 0;
   /** what fired last step (the sound follows it): the main engine's throttle as applied, the RCS
    *  (fraction of its authority, the push sideways in the ship's frame: + to its right), the
    *  attitude effort (angular acceleration / the most the wheels give, 0…1) */
@@ -337,6 +346,7 @@ export class FlightComputer {
     this.gammaPrev = null;
     this.alphaHold = null;
     this.bankHold = null;
+    this.pitchTrim = 0;
     this.fired = { throttle: 0, rcs: 0, rcsSide: 0, turn: 0, yaw: 0, at: 0, force: [0, 0, 0], torque: [0, 0, 0] };
   }
 
@@ -528,7 +538,15 @@ export class FlightComputer {
     const planeLaw = !!c.air && c.air.mode === "plane" && c.air.q > 300 && !point && this.hold === "none" && flown;
     if (!planeLaw || inp.pitch !== 0) (this.gammaHold = null), (this.alphaHold = null);
     if (!planeLaw || inp.roll !== 0) this.bankHold = null;
-    if (planeLaw) {
+    const direct = planeLaw && c.air!.law === "direct" && !c.air!.ground;
+    if (direct) {
+      // the direct law (no computer: not the real F-35's): the stick on the control surfaces — an angular
+      // acceleration, its authority's share, nothing held, nothing limited; the aircraft's own stability, damping
+      // and departures; a slow trim takes the pitch the stick leaves (as a pilot's trim switch would)
+      if (manual[0] === 0) this.pitchTrim = clamp(this.pitchTrim - 2.5 * this.omega[0] * dt, -acc3[0], acc3[0]);
+      for (let i = 0; i < 3; i++) want[i] = this.omega[i]! + (manual[i]! * acc3[i]! + (i === 0 ? this.pitchTrim : 0)) * dt;
+      this.gammaHold = this.alphaHold = this.bankHold = null;
+    } else if (planeLaw) {
       // the plane: the stick asks for rates (pitch 20°/s, yaw 8°/s, roll 70°/s); let go, the flight
       // path is held — the climb angle it had (more lift in a bank), no sideslip (the rudder
       // coordinates), the bank kept — the nose turning with the path; the stall kept off
@@ -557,12 +575,35 @@ export class FlightComputer {
         want[0] = clamp(want[0], (P.fbw.gMin - g1) * k, (P.fbw.gMax - g1) * k);
       }
       // (on its own gear the nose wheel steers it: the rudder only as the pedals ask)
-      want[1] = P.ground ? (c.onGear && manual[1] === 0 ? this.omega[1] : manual[1] * 0.3) : P.path[1] - 2 * P.beta + manual[1] * rates[1];
+      // (the sideslip fought harder as the incidence grows — a fighter's departure resistance)
+      const kb = P.fbw ? 2 + 4 * smoothstep(0.35, 0.8, Math.abs(P.alpha)) : 2;
+      // (the pedals at high incidence: no sideslip asked — a roll about the flight path, the "pedal turn" —)
+      const pedalRoll = P.fbw && !P.ground ? smoothstep(0.35, 0.7, Math.abs(P.alpha)) : 0;
+      want[1] = P.ground
+        ? c.onGear && manual[1] === 0
+          ? this.omega[1]
+          : manual[1] * 0.3
+        : P.path[1] - kb * P.beta + manual[1] * rates[1] * (1 - pedalRoll);
       if (this.bankHold === null && inp.roll === 0) this.bankHold = Math.abs(P.bank) < 0.105 ? 0 : P.bank;
       if (P.bankCmd != null && inp.roll === 0) this.bankHold = P.bankCmd;
       // (the bank: right is +; the pilot's roll: left is +)
       // (on the ground the wings held level — the ailerons into a crosswind, as a pilot's)
-      want[2] = manual[2] !== 0 ? manual[2] * rates[2] : P.ground ? 0.4 * P.bank : 1.2 * (P.bank - (this.bankHold ?? P.bank));
+      // (the roll's rate a fighter's law gives falls with the incidence — 190°/s to some 15°/s at 50°: the yaw
+      // that keeps it about the flight path, r = p tan α, within what its rudders give there —, and with a
+      // sideslip building, less still)
+      const ta = Math.tan(clamp(Math.abs(P.alpha), 0, 1.2));
+      const rollMax = P.fbw
+        ? Math.min(rates[2] * (1 - 0.85 * smoothstep(0.26, 0.7, Math.abs(P.alpha))), 0.35 / Math.max(ta, 0.05)) *
+          (1 - 0.8 * smoothstep(0.05, 0.17, Math.abs(P.beta)))
+        : rates[2];
+      want[2] = manual[2] !== 0 ? manual[2] * rollMax : P.ground ? 0.4 * P.bank : 1.2 * (P.bank - (this.bankHold ?? P.bank));
+      if (pedalRoll > 0 && manual[1] !== 0) {
+        want[2] = clamp(want[2] - manual[1] * pedalRoll * rollMax, -rollMax, rollMax);
+        this.bankHold = null;
+      }
+      // (a fighter's law rolls about the flight path, not the nose: at high incidence a roll about the nose turns
+      // the incidence into sideslip — the departure —; the yaw that keeps it, r = p tan α)
+      if (P.fbw && !P.ground) want[1] += -want[2] * Math.tan(clamp(P.alpha, -1.2, 1.2));
     } else if (point && !active) {
       const e = cross(Z, point);
       const s = len(e);

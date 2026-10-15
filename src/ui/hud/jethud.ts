@@ -41,6 +41,8 @@ export interface JetHudInfo {
   bright?: number;
   /** the flight plan's active waypoint: its name, its distance [m], NAV engaged */
   wp?: { name: string; dist: number; on: boolean } | null;
+  /** the flight control law: the direct one said in amber (no computer: no limits) */
+  law?: "normal" | "direct";
 }
 
 export type JetUnits = "aviation" | "metric";
@@ -170,7 +172,7 @@ export function drawJetHud(
     const gk = J.g / 7;
     text(`M ${J.mach.toFixed(2)}`, lx - bw / 2, ly, G(0.95), 14, "left", true);
     text(`G ${J.g.toFixed(1)}`, lx - bw / 2, ly + 20 * dpr, gk > 0.95 ? RED : gk > 0.8 ? AMBER : G(0.95), 14, "left", true);
-    text(`α ${((J.alpha * 180) / Math.PI).toFixed(1)}`, lx - bw / 2, ly + 40 * dpr, J.alpha > 0.42 ? AMBER : G(0.95), 14, "left", true);
+    text(`α ${((J.alpha * 180) / Math.PI).toFixed(1)}`, lx - bw / 2, ly + 40 * dpr, J.alpha > 0.61 ? AMBER : G(0.95), 14, "left", true);
     const vs = U.vs(J.vs);
     text(
       `${vs >= 0 ? "+" : "−"}${aviation ? Math.abs(Math.round(vs / 10) * 10) : Math.abs(vs).toFixed(1)}`,
@@ -264,6 +266,8 @@ export function drawJetHud(
     spd: (v) => `${Math.round(U.spd(v))}`,
   }).filter((a) => a !== "AB");
   if (ann.length) text(ann.join("   "), cx, o.top + (compact ? 30 : 100) * dpr, G(1), 13, "center", true);
+  // (the direct law: the computer off — no limits, no protection —, said always)
+  if (J.law === "direct") text("DIRECT LAW", cx, o.top + (compact ? 66 : 136) * dpr, AMBER, 13, "center", true);
   // (the flight plan's active waypoint, magenta: its name, its distance)
   if (J.wp) {
     const d = aviation ? `${(J.wp.dist / 1852).toFixed(1)} NM` : `${(J.wp.dist / 1000).toFixed(1)} KM`;

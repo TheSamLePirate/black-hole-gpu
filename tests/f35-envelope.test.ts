@@ -154,7 +154,7 @@ describe("the F-35B's flight envelope", () => {
       ref: "~20 (a 7 g corner)",
       src: SRC.none,
       d: 1,
-      gap: best.rate < 18 ? "V2/V3: held to 27° of incidence and a rate law" : undefined,
+      gap: best.rate < 18 ? "V3: the pitch law commands a rate, the load builds slowly" : undefined,
     });
     const slow = E.pull(4000, 140);
     row({
@@ -166,7 +166,7 @@ describe("the F-35B's flight envelope", () => {
       lo: 45,
       hi: 52,
       d: 1,
-      gap: slow.alpha < 45 ? "V2/V3: the law's limit 27°, the wing stalls at 26° with no vortex lift past it" : undefined,
+      gap: slow.alpha < 45 ? "V2: the law's limit, the vortex lift past the wing's stall" : undefined,
     });
   }, 240_000);
 });

@@ -260,7 +260,10 @@ function shakePose(this: CameraController, pose: MountPose, dt: number): MountPo
     {
       dt,
       roll: this.rolling ? (L?.speed ?? 0) : 0,
-      buffet: L && !this.rolling ? clamp((alpha - 0.72 * aMax) / (0.28 * aMax), 0, 1) * clamp(L.out.q / 3000, 0, 1) : 0,
+      // (a fighter's own buffet from its high incidence's model — aero.highAlpha: from 18°, full at 32° —, else near
+      // its angle of attack's limit)
+      buffet:
+        L && !this.rolling ? Math.max(L.out.buffet, clamp((alpha - 0.72 * aMax) / (0.28 * aMax), 0, 1)) * clamp(L.out.q / 3000, 0, 1) : 0,
       transonic: dense * clamp(1 - Math.abs(mach - 1.0) / 0.1, 0, 1),
       ab: this.abLevel,
       engine: this.pilot.engineNow,

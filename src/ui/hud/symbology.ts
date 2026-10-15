@@ -563,6 +563,7 @@ export function drawSymbology(F: SymFrame) {
         throttle: jet.throttle,
         modes: jet.modes,
         wp: i.nav ?? null,
+        law: s.vessel === "f35" ? s.f35Law : "normal",
         rgb: hmdRgb,
         bright: helmet && s.vessel === "f35" ? s.f35HmdBrightness : 1,
         // (the F-35: its helmet's symbology — the values boxed, its fuel, its hover)

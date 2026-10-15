@@ -123,7 +123,7 @@ pertinent.
   instantané, le taux de roulis, la montée, l'accélération de Mach 0,8 à 1,2, le plafond, la vitesse maxi, la
   finesse et l'incidence maxi, comparés aux valeurs publiées du F-35B, avec l'écart de chacune.
   *Fini quand* la table d'écarts est écrite et que chaque valeur est à ±10 % (ou l'écart expliqué).
-- **V2. La haute incidence.** Au modèle géométrique s'ajoutent les effets connus du vol à grande incidence :
+- **V2. La haute incidence.** *Fait le 2026-10-15 — [fiche](progress/aviation/V2.md) : 50° tenus sur la loi, vrille et super-décrochage sans calculateur, sortie en lâchant ; la loi directe et le « pedal turn » faits avec.* Au modèle géométrique s'ajoutent les effets connus du vol à grande incidence :
   - le moment de tangage au-delà du décrochage (cabré, puis piqué) ;
   - la perte de la stabilité de route et le couplage roulis/lacet (le lacet induit par l'aileron) ;
   - l'autorotation quand une aile décroche avant l'autre ;

@@ -126,6 +126,12 @@ export default {
   "The air condensing as the wing pulls hard in moist air: the sheet over the wing, the threads at the wingtips and the apex.":
     "L'air qui se condense quand l'aile tire fort dans l'air humide : la nappe sur l'aile, les fils aux saumons et à l'apex.",
   "G limit": "Limite de facteur de charge",
+  "Control law": "Loi de pilotage",
+  Direct: "Directe",
+  "The real F-35's flight control law (its limits, its 50° of incidence, departure-proof), or the stick straight on the control surfaces with no computer: stalls, spins and deep stalls possible — not the real aircraft.":
+    "La loi de pilotage du vrai F-35 (ses limites, ses 50° d'incidence, à l'abri des départs en vrille), ou le manche directement sur les gouvernes, sans calculateur : décrochages, vrilles et super-décrochages possibles — ce n'est plus le vrai avion.",
+  "The real F-35's: carefree, its limits held": "Celle du vrai F-35 : sans souci, ses limites tenues",
+  "The stick on the surfaces, no computer: spins possible": "Le manche sur les gouvernes, sans calculateur : vrilles possibles",
   "The flight control laws' load limit [g] (the F-35B's: 7). Higher: tighter turns, the grey-out sooner.":
     "La limite de charge des commandes de vol [g] (celle du F-35B : 7). Plus haut : des virages plus serrés, le voile gris plus tôt.",
   "Infinite fuel": "Carburant infini",

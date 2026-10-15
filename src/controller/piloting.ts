@@ -16,7 +16,7 @@ import { attitudeFor, CAPSULE, EntryGuidance, heightOf, type EntryCraft, type En
 import { envOf, type EnvDesc } from "../entry-env";
 import { landingEnd, siteDir, sitesOf, type Site } from "../game/sites";
 import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
-import { aeroForces, airAt, airTop, entryInterface } from "../aero";
+import { aeroForces, airAt, airTop, entryInterface, highAlphaAuthority } from "../aero";
 import { GEAR, groundR, localAccel, localToZamo, planetFrame, toGlobal, toLocal, zamoBeta, zamoToLocal } from "../landing";
 import { circularSpeed, type FlightMode, type PilotInput } from "../pilot";
 import { JET } from "../game/jet";
@@ -993,7 +993,12 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
           beta: LA0.out.beta,
           // (a fighter's surfaces — the F-35's stabilators and flaperons —: authority to roll at 190°/s against
           // its wings' own damping, 14 rad/s² at most; a spacecraft's 4)
-          auth: AV.ctrl.map((k) => Math.min((k * LA0.out.q) / 1000, VESSELS[fleet.active].fbw ? 14 : 4)) as Vec3,
+          // (at high incidence blanketed by the wing and the fuselage: aero.highAlpha's ctrl60 at 60°)
+          auth: AV.ctrl.map((k, i) => {
+            const HA = AV.highAlpha;
+            const kept = HA ? highAlphaAuthority(HA, LA0.out.alpha, LA0.out.mach)[i]! : 1;
+            return Math.min((k * LA0.out.q) / 1000, VESSELS[fleet.active].fbw ? 14 : 4) * kept;
+          }) as Vec3,
           path: this.airFlight.pathRate.map((x) => -x) as Vec3,
           ground: onWheels0,
           stall: AV.wing?.stall ?? 0.35,
@@ -1004,6 +1009,7 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
           speed: LA0.speed,
           // (the F-35: its load limit the setting's)
           fbw: fleet.active === "f35" && VESSELS.f35.fbw ? { ...VESSELS.f35.fbw, gMax: s.f35GLimit } : VESSELS[fleet.active].fbw,
+          law: fleet.active === "f35" ? s.f35Law : "normal",
           gammaCmd: jetCmd.gamma,
           bankCmd: jetCmd.bank,
         }
