@@ -5877,6 +5877,10 @@ async function main() {
             sound.combatCue("explode", { dist: d, size: e.size });
           } else if (e.kind === "hit" && e.on === "player") sound.combatCue("hit");
         }
+        // (TARS as the backseater — I2 —: the missiles at us, the bandits by their BRAA, a hit, a kill called)
+        if (settings.f35ThreatCalls && camera.piloting)
+          for (const c of camera.threatsStep())
+            voice.say({ text: c.text, speaker: "tars", priority: c.priority, ttl: c.priority === 1 ? 6000 : 12_000 });
         CB.events = [];
       } else sound.combatFrame(false, false);
       if (cpuProf.time("flight (camera.update)", () => sim.step(dt))) {

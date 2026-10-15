@@ -58,7 +58,7 @@ export interface Sketch {
   start?: Partial<MissionSpec["start"]> & { place?: string };
   time?: MissionSpec["time"];
   weather?: MissionSpec["weather"];
-  units?: (Partial<MissionUnit> & { kind: MissionUnit["kind"]; at?: Where; route?: Where[] })[];
+  units?: (Omit<Partial<MissionUnit>, "at" | "route"> & { kind: MissionUnit["kind"]; at?: Where; route?: Where[] })[];
   objectives?: SketchObjective[];
   triggers?: Trigger[];
   limit?: number;
@@ -260,6 +260,73 @@ export async function completeMission(
     triggers,
     limit,
   });
+}
+
+/** A change to a mission (TARS's "modify"): its fields replaced; its units, objectives, triggers by their id —
+ *  merged into the one of that id, else added —; `remove`: those ids dropped. */
+export interface MissionPatch extends Omit<Sketch, "id"> {
+  remove?: string[];
+}
+
+/**
+ * A mission changed, as a sketch to complete again (completeMission): a new start's place or point in place of the
+ * old; an objective changed its words made again (unless given); its time allowed made again when its places moved.
+ */
+export function patchMission(spec: MissionSpec, p: MissionPatch, id = spec.id): Sketch {
+  const drop = new Set(p.remove ?? []);
+  const merge = <T extends { id?: string; text?: string }>(base: readonly T[], add: readonly T[] | undefined, words = false): T[] => {
+    const out = base.filter((x) => !x.id || !drop.has(x.id)).map((x) => ({ ...x }));
+    for (const a of add ?? []) {
+      const i = a.id ? out.findIndex((x) => x.id === a.id) : -1;
+      if (i < 0) out.push({ ...a });
+      else {
+        const old = { ...out[i]! };
+        if (words && a.text === undefined) delete old.text;
+        out[i] = { ...old, ...a };
+      }
+    }
+    return out;
+  };
+  const moved = !!(p.start || p.units || p.objectives);
+  let start: Sketch["start"] = spec.start;
+  if (p.start) {
+    const { lat, lon, ...rest } = spec.start;
+    start = p.start.place || typeof p.start.lat === "number" ? { ...rest, ...p.start } : { ...spec.start, ...p.start };
+  }
+  const units = merge(spec.units as NonNullable<Sketch["units"]>, p.units);
+  let objectives = merge(spec.objectives as SketchObjective[], p.objectives, true);
+  // (a unit dropped: dropped from the objectives about it — one left about nothing dropped too —; an objective
+  // dropped: those after it come after the one it came after)
+  const gone = new Set([...drop].filter((x) => spec.units.some((u) => u.id === x) && !units.some((u) => u.id === x)));
+  const after = new Map(spec.objectives.map((o) => [o.id, o.after]));
+  for (;;) {
+    const before = objectives.length;
+    objectives = objectives
+      .map((o) => (o.units ? { ...o, units: o.units.filter((u) => !gone.has(u)) } : o))
+      .filter((o) => {
+        const empty = (o.units && !o.units.length) || (o.unit && gone.has(o.unit)) || (o.carrier && gone.has(o.carrier));
+        if (empty && o.id) drop.add(o.id);
+        return !empty;
+      });
+    if (objectives.length === before) break;
+  }
+  for (const o of objectives) {
+    let a = o.after;
+    while (a && drop.has(a) && !objectives.some((x) => x.id === a)) a = after.get(a);
+    if (a !== o.after) o.after = a;
+  }
+  return {
+    id,
+    title: p.title ?? spec.title,
+    brief: p.brief ?? spec.brief,
+    start,
+    time: p.time ?? spec.time,
+    weather: p.weather ? { ...spec.weather, ...p.weather } : spec.weather,
+    units,
+    objectives,
+    triggers: merge(spec.triggers ?? [], p.triggers),
+    limit: p.limit ?? (moved ? undefined : spec.limit),
+  };
 }
 
 // ------------------------------------------------------------------------------------ the editor's draft

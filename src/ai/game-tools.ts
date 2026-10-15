@@ -14,7 +14,11 @@
 
 import { KNOWLEDGE_PAGES, type KnowledgeLang, type KnowledgePage, readKnowledge, searchKnowledge } from "./knowledge";
 import type { MissionSpec } from "../game/mission";
-import { completeMission, type Resolver, type Sketch } from "../game/missionedit";
+import { completeMission, type MissionPatch, patchMission, type Resolver, type Sketch } from "../game/missionedit";
+import { aspectOf, bearingOf, clockOf } from "../game/threats";
+import { unitsOf } from "../ui/unitsys";
+import type { WeaponSel } from "../controller/combat";
+import type { RadarMode } from "../game/radar";
 import type { RecoveryCase } from "../game/trap";
 import { f35Variant } from "../f35/variant";
 import type { GameMode } from "../game/modes";
@@ -1752,6 +1756,115 @@ export function gameTools(h: GameHost): Tool[] {
       }),
     },
     {
+      name: "traffic",
+      description:
+        "The aircraft about the player (the real traffic heard, the room's pilots, the wingmen, a fight's craft — the radar's picture in the F-35 in the air, else the traffic heard): « quels avions autour ? », « intercepte l'AFR123 ». list: the nearest (maxKm, else 60; n, else 12) — callsign, type, registration, distance, bearing, clock (12 the nose), altitude and its difference, heading, speed, aspect (hot: towards us). info: one by its callsign (name). intercept: the F-35's intercept flown on it (name) — the run, the rejoin, the shadow 300 m behind it on its left; it flies the throttle and the stick itself (touching the controls lets it go: leave them). join: in formation on it (an airliner: at our place in the formation chosen; another: its shadow). stop: the intercept or formation let go (altitude, heading and speed held).",
+      params: {
+        action: { type: "string", enum: ["list", "info", "intercept", "join", "stop"] },
+        name: { type: "string", description: "a callsign, registration or name (AFR123, F-GKXA, Two)" },
+        maxKm: { type: "number" },
+        n: { type: "number" },
+      },
+      required: ["action"],
+      run: act((a) => {
+        const c = h.camera;
+        const u = unitsOf(settings.units);
+        const g = c.geoNow();
+        const hdg = (c.attitudeNow() as { heading?: number }).heading ?? g?.track ?? 0;
+        const row = (x: ReturnType<typeof c.aircraftAround>[number]) => {
+          const d = Math.hypot(x.r[0]!, x.r[1]!, x.r[2]!);
+          return {
+            name: x.name,
+            type: x.type || undefined,
+            reg: x.reg || undefined,
+            source: { trf: "traffic", net: "room", wng: "wingman", rwg: "room's wingman", cmb: "fight" }[x.source] ?? x.source,
+            iff: x.iff,
+            dist: u.fDist(d),
+            bearingDeg: bearingOf(x.r),
+            clock: clockOf(x.r, hdg),
+            alt: g ? u.fAlt(g.alt + x.r[2]!) : undefined,
+            altDiff: u.fAlt(x.r[2]!),
+            headingDeg: Math.hypot(x.v[0]!, x.v[1]!) > 3 ? bearingOf(x.v) : undefined,
+            speed: u.fSpd(Math.hypot(x.v[0]!, x.v[1]!, x.v[2]!)),
+            aspect: aspectOf(x.r, x.v),
+            onGround: x.gnd || undefined,
+          };
+        };
+        switch (a.action) {
+          case "info": {
+            if (!a.name) throw new Error("info needs a name (traffic list)");
+            const x = c.findAircraft(String(a.name));
+            return x ? row(x) : `No aircraft called ${a.name} about us`;
+          }
+          case "intercept":
+            if (!a.name) throw new Error("intercept needs a name (traffic list)");
+            return c.icptOn(String(a.name));
+          case "join":
+            if (!a.name) throw new Error("join needs a name (traffic list)");
+            return c.formOnAircraft(String(a.name));
+          case "stop":
+            if (c.icpt) c.icptOff();
+            if (c.form) c.formOff();
+            return "Intercept and formation off — altitude, heading and speed held";
+          default: {
+            const all = c.aircraftAround(Number(a.maxKm ?? 60) * 1000);
+            const n = Math.min(Math.max(Math.round(Number(a.n ?? 12)), 1), 40);
+            return { count: all.length, nearest: all.slice(0, n).map(row) };
+          }
+        }
+      }),
+    },
+    {
+      name: "weapons",
+      description:
+        "The F-35's weapons and radar, as its backseater (in a fight or a mission: the stores are live then). status: the weapon chosen, the stores left (AIM-120 AMRAAM, AIM-9X, GBU-32 JDAM, the gun's rounds, the flares), their ranges, the damage taken, the targets left, the radar's mode and lock. threats: the tactical picture — the missiles at us (their clock, distance), the hostiles on the radar by BRAA (bearing, distance, altitude, aspect), the last threat calls. select: a weapon (weapon). lock: a radar track by its name (target; none: the next). radar: its mode (RWS: search; TWS: tracks with their velocities; STT: the lock alone, the most precise). fire: the weapon chosen at the lock (FOX 3 the AIM-120 — it needs a lock —, FOX 2 the AIM-9X, a JDAM on the lock or the fall point). gun: a burst (seconds, else 1). countermeasures: flares and chaff out. You call the threats yourself as they come (setting f35ThreatCalls); fire when the pilot orders it.",
+      params: {
+        action: { type: "string", enum: ["status", "threats", "select", "lock", "radar", "fire", "gun", "countermeasures"] },
+        weapon: { type: "string", enum: ["aim120", "aim9x", "jdam"] },
+        target: { type: "string" },
+        mode: { type: "string", enum: ["RWS", "TWS", "STT"] },
+        seconds: { type: "number", minimum: 0.2, maximum: 3 },
+      },
+      required: ["action"],
+      run: act((a) => {
+        const c = h.camera;
+        const live = c.combat?.status === "run";
+        switch (a.action) {
+          case "threats":
+            return c.threatPicture();
+          case "select":
+            if (!a.weapon) throw new Error("select needs a weapon");
+            return c.weaponSelect(a.weapon as WeaponSel);
+          case "lock":
+            return c.lockOnName(a.target ? String(a.target) : undefined);
+          case "radar":
+            if (!a.mode) throw new Error("radar needs a mode");
+            return c.radarModeSet(a.mode as RadarMode);
+          case "fire":
+            if (!live) return "No fight running: the weapons are live in a fight or a mission";
+            {
+              const said = c.combatTrigger("fire") ?? "Fired";
+              const C = c.combat!;
+              return `${said} (${C.world.stores[C.weapon]} ${C.weapon === "jdam" ? "JDAM" : C.weapon.toUpperCase()} left)`;
+            }
+          case "gun": {
+            if (!live) return "No fight running: the weapons are live in a fight or a mission";
+            const sec = Math.min(Math.max(Number(a.seconds ?? 1), 0.2), 3);
+            c.gunTrigger = true;
+            setTimeout(() => {
+              c.gunTrigger = false;
+            }, sec * 1000);
+            return `Guns — ${sec.toFixed(1)} s burst`;
+          }
+          case "countermeasures":
+            if (!live) return "No fight running: the weapons are live in a fight or a mission";
+            return c.combatTrigger("cm") ?? "Flares and chaff out";
+          default:
+            return c.weaponsState();
+        }
+      }),
+    },
+    {
       name: "knowledge",
       description:
         "Your aviation knowledge base (written pages, English and French): the F-35's systems, limits and procedures (f35), basic flying (basics), energy (energy), the dogfight (bfm), formation flying (formation), the carrier (carrier), the ILS (ils), the emergencies (emergencies), the radar (radar), the weapons (weapons), the traffic (traffic). search: the sections that answer a question (query; lang fr or en), their excerpts. read: a page whole or one section (page; section: a word of its title). Answer the pilot from it.",
@@ -1865,17 +1978,28 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "mission",
       description:
-        'Missions: flights with objectives, scored out of 20 at their debrief, flown solo or with the room. list: the game\'s and the pilot\'s own. fly: one by its id, at once (its briefing skipped). create: a new one from the pilot\'s words, as JSON in `mission` — {title?, brief?, units: [{id, kind: sam|truck|bunker|drone|fighter|airliner|traffic|carrier, name?, at: {lat, lon, alt? (m over the sea)} or {place: an airfield\'s ICAO or a town}, hdg?, speed?, side?: hostile|friend|neutral, match?: {callsign} (kind traffic: a real flight taken over — that callsign, else the nearest heard), carrier?: ford|kiev|implacable, later?: true (set by a trigger\'s spawn)}], objectives: [{kind: reach (at {place|lat/lon, radius?}) | destroy (units: [ids]) | escort (unit, until: {place|lat/lon}, within? m) | protect (unit, seconds) | identify (unit, within? m) | land (carrier: unit id, or at), text?, optional?: true (a bonus), after?: another objective\'s id}], triggers?: [{id, when: {time: s} | {done: objective id} | {near: {unit, within}} | {enter: {lat, lon, radius}}, do: [{say: text} | {spawn: unit} | {course: {unit, hdg?, alt?, speed?, to?: {lat, lon, alt?}}} | {side: {unit, side}} | {squawk: {unit, off}} | {win: true} | {fail: why}]}], start?: {place or lat/lon, alt (m over the sea), hdg, speed (m/s), variant: B|C, loadout: aa|ag|gun} (leave it out unless the pilot names where to start: then it is where the craft flies now), time?: {localHour}, weather?: {preset: fair|cloudy|overcast|rain|storm|fog|windy}, limit?: s}. Places by name are found; an airliner or a real flight escorted to a place is sent there; the words left out are made. Kept among the pilot\'s missions, then flown (fly: false — opened in the editor instead). E.g. \'an escort of the A320 AFR123 to Nice\': {"units":[{"id":"a","kind":"traffic","match":{"callsign":"AFR123"}}],"objectives":[{"kind":"escort","unit":"a","until":{"place":"Nice"}}]}. status: the mission flown and its objectives. abort: given up. map: the mission map opened. edit: the editor (on a mission\'s id, else a new one). link: a mission\'s link to share (id).',
+        'Missions: flights with objectives, scored out of 20 at their debrief, flown solo or with the room. list: the game\'s and the pilot\'s own. fly: one by its id, at once (its briefing skipped). create: a new one from the pilot\'s words, as JSON in `mission` — {title?, brief?, units: [{id, kind: sam|truck|bunker|drone|fighter|airliner|traffic|carrier, name?, at: {lat, lon, alt? (m over the sea)} or {place: an airfield\'s ICAO or a town}, hdg?, speed?, side?: hostile|friend|neutral, match?: {callsign} (kind traffic: a real flight taken over — that callsign, else the nearest heard), carrier?: ford|kiev|implacable, later?: true (set by a trigger\'s spawn)}], objectives: [{kind: reach (at {place|lat/lon, radius?}) | destroy (units: [ids]) | escort (unit, until: {place|lat/lon}, within? m) | protect (unit, seconds) | identify (unit, within? m) | land (carrier: unit id, or at), text?, optional?: true (a bonus), after?: another objective\'s id}], triggers?: [{id, when: {time: s} | {done: objective id} | {near: {unit, within}} | {enter: {lat, lon, radius}}, do: [{say: text} | {spawn: unit} | {course: {unit, hdg?, alt?, speed?, to?: {lat, lon, alt?}}} | {side: {unit, side}} | {squawk: {unit, off}} | {win: true} | {fail: why}]}], start?: {place or lat/lon, alt (m over the sea), hdg, speed (m/s), variant: B|C, loadout: aa|ag|gun} (leave it out unless the pilot names where to start: then it is where the craft flies now), time?: {localHour}, weather?: {preset: fair|cloudy|overcast|rain|storm|fog|windy}, limit?: s}. Places by name are found; an airliner or a real flight escorted to a place is sent there; the words left out are made. Kept among the pilot\'s missions, then flown (fly: false — opened in the editor instead). E.g. \'an escort of the A320 AFR123 to Nice\': {"units":[{"id":"a","kind":"traffic","match":{"callsign":"AFR123"}}],"objectives":[{"kind":"escort","unit":"a","until":{"place":"Nice"}}]}. modify: a mission changed (id; the change as JSON in `mission`: any of title, brief, start, time, weather, limit replaced; units, objectives, triggers given with an existing id merged into it, new ids added; remove: [ids] dropped — e.g. {"weather":{"preset":"storm"},"units":[{"id":"sam1","kind":"sam","at":{"place":"Ajaccio"}}],"remove":["t2"]}); the game\'s own kept as a copy among the pilot\'s; kept, flown with fly: true. status: the mission flown and its objectives. abort: given up. map: the mission map opened. edit: the editor (on a mission\'s id, else a new one). link: a mission\'s link to share (id).',
       params: {
-        action: { type: "string", enum: ["list", "fly", "create", "status", "abort", "map", "edit", "link"] },
+        action: { type: "string", enum: ["list", "fly", "create", "modify", "status", "abort", "map", "edit", "link"] },
         id: { type: "string" },
-        mission: { type: "string", description: "create: the mission as JSON" },
-        fly: { type: "boolean", description: "create: fly it at once (default) or open it in the editor" },
+        mission: { type: "string", description: "create: the mission as JSON; modify: the change as JSON" },
+        fly: {
+          type: "boolean",
+          description: "create: fly it at once (default) or open it in the editor; modify: fly it at once (default: kept only)",
+        },
       },
       required: ["action"],
       run: act(async (a) => {
         const M = h.missions;
         if (!M) throw new Error("no missions here");
+        const placeResolver: Resolver = async (name) => {
+          // (an airfield by its exact name or ICAO — "Nice" is not Venice —, else the Atlas's search)
+          const n = fold(name);
+          const site = SITES.find((s) => s.body === "earth" && (fold(s.name) === n || s.icao?.toLowerCase() === n));
+          if (site) return { lat: site.lat, lon: site.lon, name: site.icao ?? site.name };
+          const hit = (await h.atlas?.search(name, "earth"))?.[0];
+          return hit ? { lat: hit.lat, lon: hit.lon, name: hit.name.split(",")[0]! } : null;
+        };
         switch (a.action) {
           case "list":
             return M.list();
@@ -1896,6 +2020,31 @@ export function gameTools(h: GameHost): Tool[] {
           case "link":
             if (!a.id) throw new Error("link needs an id (mission list)");
             return M.link(M.spec(String(a.id)));
+          case "modify": {
+            if (!a.id) throw new Error("modify needs an id (mission list)");
+            const id = String(a.id);
+            const base = M.spec(id);
+            let patch: MissionPatch;
+            try {
+              patch = JSON.parse(String(a.mission ?? "{}"));
+            } catch {
+              throw new Error("modify needs the change as JSON in `mission`");
+            }
+            // (the game's own: changed as a copy of the pilot's)
+            const mine = M.list().some((x) => x.id === id && x.mine);
+            const sketch = patchMission(base, patch, mine ? id : `${id}-${Date.now().toString(36).slice(-4)}`);
+            const { spec, errors } = await completeMission(sketch, { resolve: placeResolver });
+            if (!spec) throw new Error(errors.join("; "));
+            M.keep(spec);
+            const out = {
+              id: spec.id,
+              title: spec.title,
+              units: spec.units.map((u) => `${u.id}: ${u.kind}${u.name ? ` ${u.name}` : ""}`),
+              objectives: spec.objectives.map((o) => o.text),
+              weather: spec.weather?.preset,
+            };
+            return a.fly === true ? { ...out, flown: M.fly(spec) } : out;
+          }
           default: {
             let sketch: Sketch;
             try {
@@ -1905,15 +2054,7 @@ export function gameTools(h: GameHost): Tool[] {
             }
             const g = camera.geoNow();
             const here = g ? { lat: g.lat, lon: g.lon, alt: g.alt, hdg: (g.track * 180) / Math.PI, speed: g.gs } : undefined;
-            const resolve: Resolver = async (name) => {
-              // (an airfield by its exact name or ICAO — "Nice" is not Venice —, else the Atlas's search)
-              const n = fold(name);
-              const site = SITES.find((s) => s.body === "earth" && (fold(s.name) === n || s.icao?.toLowerCase() === n));
-              if (site) return { lat: site.lat, lon: site.lon, name: site.icao ?? site.name };
-              const hit = (await h.atlas?.search(name, "earth"))?.[0];
-              return hit ? { lat: hit.lat, lon: hit.lon, name: hit.name.split(",")[0]! } : null;
-            };
-            const { spec, errors } = await completeMission(sketch, { here, resolve });
+            const { spec, errors } = await completeMission(sketch, { here, resolve: placeResolver });
             if (!spec) throw new Error(errors.join("; "));
             M.keep(spec);
             if (a.fly === false) {

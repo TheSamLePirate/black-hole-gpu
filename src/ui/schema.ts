@@ -4286,6 +4286,17 @@ export const SCHEMA: ControlDef[] = [
     keywords: "radar relief terrain ground map mountains",
   },
   {
+    key: "f35ThreatCalls",
+    type: "toggle",
+    section: "game",
+    group: "F-35",
+    label: "Threat calls",
+    effect: "none",
+    enabled: (s) => s.ship && s.vessel === "f35",
+    help: "In a fight, TARS calls the threats as a backseater: a missile launched at us (where on the clock, how far, break and flares — or the notch and the chaff for a SAM), closing in, defeated; the bandits new on the radar by their bearing, range, altitude and aspect; a hit, a kill.",
+    keywords: "threats missile warning bandit braa calls copilot",
+  },
+  {
     key: "f35RadarRange",
     type: "choice",
     section: "game",

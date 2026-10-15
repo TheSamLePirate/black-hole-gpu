@@ -402,6 +402,7 @@ pertinent.
   - **Missions** : créer, lancer, modifier.
   - **Patrouille** : ordres, formations.
   - **Porte-avions** et **armes** ; les menaces annoncées.
+  *I2 fait le 2026-10-16 — [fiche](progress/aviation/I2.md) : les menaces annoncées par TARS (missiles sur l'horloge avec la parade, bandits en BRAA et en groupe, SAM, coups, victoires ; réglage Annonces des menaces), les outils `traffic` (liste, info, interception et patrouille par indicatif) et `weapons` (état, image tactique, verrou par nom, radar, tir, canon, leurres), `mission modify` — en direct : BRAA, FOX 3 sur ordre, « Départ missile… dégagement à gauche, leurres », le trafic de Paris listé et un 767 intercepté, une mission modifiée par une phrase.*
 - **I3. Le mode instructeur.** Des leçons guidées : premier vol, tour de piste, atterrissage, ILS, figures,
   patrouille, appontage, interception, combat. TARS vole d'abord, puis vous laisse la main et vous corrige,
   télémétrie à l'appui.
