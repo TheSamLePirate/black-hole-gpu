@@ -1,5 +1,6 @@
 // The CameraController — telemetry: the one view of the flight every display reads (FlightInfo).
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { ground } from "./gcas";
 import { distM } from "../game/mission";
 import { avionicsData } from "../f35/cockpit";
 import { enuToCam } from "./combat";
@@ -195,6 +196,9 @@ export interface FlightInfo {
   /** the protections (controller/gcas.ts — A2): the fly-up flying, the ground near (the recovery within twice its
    *  margin), an escape from another aircraft */
   gcas: { flyUp: boolean; near: boolean; escape: string | null } | null;
+  /** the relief about us for the radar's scope (the F-35 over the Earth): where we are, our heading [rad] and height
+   *  [m over the sea], the ground's height at a place [m] (controller/gcas.ts's cache) */
+  relief: { lat: number; lon: number; hdg: number; alt: number; at: (lat: number, lon: number) => number } | null;
   /** the F-35's avionics' status (f35/cockpit.ts avionicsData), null: not the F-35 */
   avionics: ReturnType<typeof avionicsData> | null;
   /** a challenge flown: its banner, its next gates (controller/challenge.ts) */
@@ -418,6 +422,12 @@ function flightInfo(this: CameraController): FlightInfo {
     })(),
     ils: this.ilsRun ? this.ilsInfo() : null,
     aimRing: this.aimRing ? { ...this.aimRing } : null,
+    relief: (() => {
+      if (fleet.active !== "f35" || !this.airFlight.inAir) return null;
+      const g = this.geoNow();
+      const hd = (this.attitudeNow() as { heading?: number }).heading;
+      return g ? { lat: g.lat, lon: g.lon, hdg: hd !== undefined && Number.isFinite(hd) ? hd : g.track, alt: g.alt, at: ground } : null;
+    })(),
     gcas: this.gcas
       ? { flyUp: this.gcas.flyUp, near: this.gcas.clear < 2 * this.gcas.margin, escape: this.gcas.escape?.name ?? null }
       : null,

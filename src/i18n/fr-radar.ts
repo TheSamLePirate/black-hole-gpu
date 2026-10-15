@@ -12,4 +12,7 @@ export default {
   "Intercept off — the autopilot": "Interception coupée — le pilote automatique",
   "Intercept off — on the ground": "Interception coupée — au sol",
   "Shadowing {0} — 300 m behind, on its left": "En patrouille sur {0} — 300 m derrière, à sa gauche",
+  "Relief on the radar": "Relief sur le radar",
+  "The ground under the radar's scope, heading up: above our height red, within 300 m below amber, lower green (brighter higher), the sea dark blue — the ridges ahead seen at a glance. Redrawn twice a second at most.":
+    "Le sol sous l'écran du radar, cap en haut : au-dessus de notre altitude en rouge, à moins de 300 m dessous en orange, plus bas en vert (plus clair plus haut), la mer en bleu nuit — les crêtes devant vues d'un coup d'œil. Redessiné deux fois par seconde au plus.",
 } satisfies Record<string, string>;

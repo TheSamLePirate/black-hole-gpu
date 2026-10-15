@@ -177,6 +177,8 @@ export interface SymInfo {
   nav?: { name: string; brg: number; dist: number; on: boolean } | null;
   /** an ILS approach: the runway, the needles [dots — null: not received], the distance [km], its phase */
   ils?: { id: string; loc: number | null; gs: number | null; dme: number; phase: string; auto: boolean } | null;
+  /** the relief about us for the radar's scope (its place, heading, height; the ground's height at a place) */
+  relief?: { lat: number; lon: number; hdg: number; alt: number; at: (lat: number, lon: number) => number } | null;
   /** the Auto-GCAS's and Auto-ACAS's state: flying up, the ground near, an escape */
   gcas?: { flyUp: boolean; near: boolean; escape: string | null } | null;
   /** the beginner's ring: where the jet is aimed (its heading and flight path [rad]) */
@@ -2488,6 +2490,53 @@ function drawWeapons(
  * the craft, cyan: its own) with their tracks, the lock ringed. Its range the setting's, or the one that holds
  * the lock and the nearest contacts.
  */
+/** The radar scope's relief: a 48² image heading up over ±range [m] about us, the ground's height against ours (above
+ *  red, within 300 m below amber, lower green brighter higher, the sea dark blue); kept and redrawn when we have moved a
+ *  twentieth of the range, turned 3°, the range changed — twice a second at most. */
+const RELIEF_N = 48;
+let reliefImg: { canvas: HTMLCanvasElement; key: string; at: number } | null = null;
+function radarRelief(R: NonNullable<SymInfo["relief"]>, range: number): HTMLCanvasElement {
+  const D0 = Math.PI / 180;
+  const RE = 6_371_008.8;
+  const step = range / 10;
+  const key = `${range}|${Math.round((R.lat * D0 * RE) / step)}|${Math.round((R.lon * D0 * RE * Math.cos(R.lat * D0)) / step)}|${Math.round(R.hdg / (3 * D0))}|${Math.round(R.alt / 100)}`;
+  const now = performance.now();
+  if (reliefImg && (reliefImg.key === key || now - reliefImg.at < 500)) return reliefImg.canvas;
+  const canvas = reliefImg?.canvas ?? document.createElement("canvas");
+  canvas.width = canvas.height = RELIEF_N;
+  const g = canvas.getContext("2d")!;
+  const im = g.createImageData(RELIEF_N, RELIEF_N);
+  const c = Math.cos(R.hdg),
+    sn = Math.sin(R.hdg);
+  for (let j = 0; j < RELIEF_N; j++)
+    for (let i = 0; i < RELIEF_N; i++) {
+      // (the cell's centre: x right, y ahead [m] — turned to east and north by the heading)
+      const x = ((i + 0.5) / RELIEF_N - 0.5) * 2 * range;
+      const y = (0.5 - (j + 0.5) / RELIEF_N) * 2 * range;
+      if (x * x + y * y > range * range * 1.05) continue;
+      const e = x * c + y * sn,
+        n = -x * sn + y * c;
+      const h = R.at(R.lat + n / (D0 * RE), R.lon + e / (D0 * RE * Math.cos(R.lat * D0)));
+      const d = h - R.alt;
+      let r: number, gr: number, b: number;
+      if (h <= 0.5) [r, gr, b] = [8, 26, 64];
+      else if (d > 0) [r, gr, b] = [235, 60, 45];
+      else if (d > -300) [r, gr, b] = [240, 170, 50];
+      else {
+        const k = Math.min(1, h / Math.max(R.alt, 1500));
+        [r, gr, b] = [20 + 40 * k, 70 + 130 * k, 30 + 40 * k];
+      }
+      const o = (j * RELIEF_N + i) * 4;
+      im.data[o] = r;
+      im.data[o + 1] = gr;
+      im.data[o + 2] = b;
+      im.data[o + 3] = 255;
+    }
+  g.putImageData(im, 0, 0);
+  reliefImg = { canvas, key, at: now };
+  return canvas;
+}
+
 function drawRadar(
   F: SymFrame,
   R: RadarData | null,
@@ -2534,6 +2583,19 @@ function drawRadar(
   ctx.beginPath();
   ctx.arc(cx, cy, rad + 6 * dpr, 0, 2 * Math.PI);
   ctx.fill();
+  // (the relief under it, heading up — redrawn twice a second at most: radarRelief)
+  const rel = s.f35RadarRelief !== false ? F.i.relief : null;
+  if (rel) {
+    const img = radarRelief(rel, range);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad, 0, 2 * Math.PI);
+    ctx.clip();
+    ctx.globalAlpha = 0.55;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(img, cx - rad, cy - rad, 2 * rad, 2 * rad);
+    ctx.restore();
+  }
   for (const f of [1 / 3, 2 / 3, 1]) stroke(() => ctx.arc(cx, cy, rad * f, 0, 2 * Math.PI), `${GR}${f === 1 ? 0.6 : 0.3})`, 1);
   const scan = (60 * Math.PI) / 180;
   stroke(

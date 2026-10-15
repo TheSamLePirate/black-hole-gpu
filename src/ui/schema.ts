@@ -4258,6 +4258,17 @@ export const SCHEMA: ControlDef[] = [
     keywords: "radar scope contacts targets missiles",
   },
   {
+    key: "f35RadarRelief",
+    type: "toggle",
+    section: "game",
+    group: "F-35",
+    label: "Relief on the radar",
+    effect: "none",
+    enabled: (s) => s.ship && s.vessel === "f35" && s.f35Radar,
+    help: "The ground under the radar's scope, heading up: above our height red, within 300 m below amber, lower green (brighter higher), the sea dark blue — the ridges ahead seen at a glance. Redrawn twice a second at most.",
+    keywords: "radar relief terrain ground map mountains",
+  },
+  {
     key: "f35RadarRange",
     type: "choice",
     section: "game",

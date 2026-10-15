@@ -414,6 +414,7 @@ export interface Settings {
   f35EnemyMissiles: boolean; // the aggressors' and the SAM's missiles fired
   f35Radar: boolean; // the radar's scope on the helmet in a fight
   f35RadarRange: "auto" | "10" | "20" | "40" | "80" | "160"; // its range [km]
+  f35RadarRelief: boolean; // the relief under the radar's scope: the ground above us red, near amber, below green, the sea
   f35WeaponPanel: boolean; // the weapons' panel in a fight
   f35Avionics: boolean; // the avionics' status block on the helmet
   f35HmdColor: "green" | "amber" | "cyan" | "white"; // the helmet's symbology's colour
@@ -749,6 +750,7 @@ export function defaultSettings(): Settings {
     f35EnemyMissiles: true,
     f35Radar: true,
     f35RadarRange: "auto",
+    f35RadarRelief: true,
     f35WeaponPanel: true,
     f35Avionics: true,
     f35HmdColor: "green",
@@ -2064,6 +2066,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   f35EnemyMissiles: "pref",
   f35Radar: "pref",
   f35RadarRange: "pref",
+  f35RadarRelief: "pref",
   f35WeaponPanel: "pref",
   f35Avionics: "pref",
   f35HmdColor: "pref",
