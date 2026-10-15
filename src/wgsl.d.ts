@@ -22,3 +22,7 @@ declare module "*.ktx2" {
   const url: string;
   export default url;
 }
+declare module "*.md" {
+  const text: string;
+  export default text;
+}

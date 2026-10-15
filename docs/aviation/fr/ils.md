@@ -1,0 +1,20 @@
+# L'approche ILS
+
+## Le système
+Le localizer donne l'axe de la piste (son antenne après le bout de piste ; 2,5° de pleine échelle de chaque côté, un point = 1,25°), le glide la pente de 3° jusqu'à elle (son antenne à 300 m du seuil ; 0,7° de pleine échelle, un point = 0,35°). Les aiguilles : l'axe à gauche ou à droite de nous, le glide au-dessus ou en dessous.
+
+## La procédure dans le jeu
+1. Le point d'approche initiale (IAF) : à 18,5 km dans l'axe, à la hauteur du glide ou au-dessus ; une attente sur l'hippodrome si demandée.
+2. Le localizer intercepté à 30–45°, en anticipant le mouvement de l'aiguille.
+3. Le glide rejoint par-dessous : la descente commence quand le losange se centre — environ 4 m/s à 85 m/s.
+4. Le point d'approche finale (FAF) : 9,3 km — train et volets, à la bonne vitesse, stable.
+5. Les minimums à 60 m : stable (à moins d'un point) — on continue ; sinon l'approche interrompue (montée droit devant, retour à l'IAF).
+6. L'arrondi dès 14 m, gaz réduits, toucher dans la zone de 150 à 900 m, freinage jusqu'à l'arrêt.
+
+## La voler
+- De petites corrections de cap, reprises tôt — ne jamais courir après les aiguilles.
+- Le taux de descente : 5 × la vitesse sol en nœuds, en ft/min (environ 4 à 4,5 m/s à 85 m/s).
+- En finale, la puissance pour la trajectoire, le nez pour la vitesse — les deux ensemble.
+
+## Dans le jeu
+« Approche ILS » dans le menu de vol, l'outil approach de TARS, ou les procédures d'un plan de vol (la navigation passe la main à l'IAF). Le HUD montre les aiguilles ; l'instructeur annonce les écarts et débriefe.

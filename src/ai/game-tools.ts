@@ -12,6 +12,7 @@
 // a load, a deletion, a teleport, the date, a scene — the game is saved as "Before TARS"; undo goes back.
 // Every result is short, and carries what the game said (its toasts) since the call.
 
+import { KNOWLEDGE_PAGES, type KnowledgeLang, type KnowledgePage, readKnowledge, searchKnowledge } from "./knowledge";
 import type { MissionSpec } from "../game/mission";
 import { completeMission, type Resolver, type Sketch } from "../game/missionedit";
 import type { RecoveryCase } from "../game/trap";
@@ -39,7 +40,7 @@ import { MOUNTS, type Mount } from "../mounts";
 import { BODY_NAMES } from "../targeting";
 import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { SOLAR_BODIES, solarBody } from "../system/solar";
-import { FRENCH, tr, type Text } from "../i18n";
+import { FRENCH, lang as uiLang, tr, type Text } from "../i18n";
 import { findSettings, checkSetting } from "./settings-tools";
 import { CONSTELLATIONS, NAMED_STARS } from "../skychart";
 import {
@@ -1748,6 +1749,32 @@ export function gameTools(h: GameHost): Tool[] {
         if (!a.order) throw new Error("order needs an order");
         if (a.order === "shape" && !a.shape) throw new Error("shape needs a shape");
         return c.flightOrder(a.order as OrderId, a.shape as string | undefined);
+      }),
+    },
+    {
+      name: "knowledge",
+      description:
+        "Your aviation knowledge base (written pages, English and French): the F-35's systems, limits and procedures (f35), basic flying (basics), energy (energy), the dogfight (bfm), formation flying (formation), the carrier (carrier), the ILS (ils), the emergencies (emergencies), the radar (radar), the weapons (weapons), the traffic (traffic). search: the sections that answer a question (query; lang fr or en), their excerpts. read: a page whole or one section (page; section: a word of its title). Answer the pilot from it.",
+      params: {
+        action: { type: "string", enum: ["search", "read"] },
+        query: { type: "string" },
+        page: { type: "string", enum: [...KNOWLEDGE_PAGES] },
+        section: { type: "string" },
+        lang: { type: "string", enum: ["fr", "en"] },
+      },
+      required: ["action"],
+      run: act((a) => {
+        const lang = (a.lang === "en" ? "en" : a.lang === "fr" ? "fr" : uiLang === "fr" ? "fr" : "en") as KnowledgeLang;
+        if (a.action === "read") {
+          if (!a.page) throw new Error("read needs a page (search first)");
+          const txt = readKnowledge(a.page as KnowledgePage, lang, a.section ? String(a.section) : undefined);
+          if (!txt) throw new Error(`no page ${a.page}`);
+          return txt.slice(0, 6000);
+        }
+        if (!a.query) throw new Error("search needs a query");
+        const hits = searchKnowledge(String(a.query), lang, 4);
+        if (!hits.length) return "Nothing in the knowledge base on that";
+        return hits.map((h0) => ({ page: h0.page, section: h0.title, excerpt: h0.text.slice(0, 700) }));
       }),
     },
     {

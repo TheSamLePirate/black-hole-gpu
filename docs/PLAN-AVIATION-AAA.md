@@ -395,6 +395,8 @@ pertinent.
   - le trafic.
 
   Son prompt dit enfin qu'il est aussi **copilote de chasse**.
+
+  *I1 fait le 2026-10-16 — [fiche](progress/aviation/I1.md) : onze pages FR + EN (`docs/aviation/`), l'outil `knowledge` (recherche par mots pondérés, accents et terminaisons à part ; lecture d'une page ou d'une section), TARS copilote de chasse — en direct, la vitesse de coin et le cas III répondus depuis sa base.*
 - **I2. Les outils.**
   - **Trafic** : « quels avions autour ? », « intercepte l'AFR123 ».
   - **Missions** : créer, lancer, modifier.
