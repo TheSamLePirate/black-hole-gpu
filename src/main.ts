@@ -65,6 +65,8 @@ import { FLIGHT_HOURS, FLIGHT_STARTS, FLIGHT_WEATHER, FlightHub, flightFields, t
 import { keepMission, MissionEditor, missionLink, myMissions } from "./ui/missioneditor";
 import { missionFromHash } from "./game/missionedit";
 import { MODES as JET_MODES } from "./game/jetmodes";
+import { debriefInstr, flightSchool, type InstructorHost, InstructorPanel } from "./ui/instructor";
+import { type LessonId, LESSONS } from "./game/lessons";
 import { MissionMap } from "./ui/missionmap";
 import { briefMission, debriefMission, flyMission, MissionHud } from "./ui/airmission";
 import { AIR_MISSIONS } from "./game/airmissions";
@@ -3364,6 +3366,7 @@ async function main() {
       { label: { fr: "Patrouille", en: "Flight" }, sub: orderItems() },
       // (the F-35's autopilot modes — A3)
       { label: { fr: "Modes du pilote automatique", en: "Autopilot modes" }, sub: modeItems() },
+      { label: { fr: "École de vol", en: "Flight school" }, run: () => flightSchool(instrHost) },
       { label: { fr: "Plan de vol", en: "Flight plan" }, key: "⇧O", on: camera.nav.on.l, run: () => routePanel.open() },
       { label: { fr: "Carte de mission", en: "Mission map" }, on: !!camera.mission, run: () => missionMap.open() },
       {
@@ -3844,6 +3847,74 @@ async function main() {
   const challengeHost: ChallengeHost = { tools, camera, toast: (s) => panel.toast(s), editMission: (spec) => missionEditor.open(spec) };
   const challengePanel = new ChallengePanel(challengeHost);
   // a mission (ui/airmission.ts — PLAN-AVIATION-AAA P1): its words said and shown, its objectives on screen, its debrief
+  // the instructor (A4 — ui/instructor.ts): its panel, its calls said by TARS, its debrief; the flight school's lessons
+  // flown — demonstrated by the autopilot or tried by hand
+  const lessonPlace = (id: LessonId, demo: boolean): string =>
+    placeShip(() => {
+      if (fleet.active !== "f35") tools.set("vessel", "f35");
+      if (camera.mission) camera.missionAbort();
+      if (camera.combat) camera.combatEnd();
+      camera.ilsOff();
+      if (id === "ils") {
+        // (Edwards's runway 22, 12 km out on its glideslope, the gear down; the ILS flown or only shown)
+        tools.set("f35Variant", "B");
+        const K = SITES.find((x) => x.icao === "KEDW")!;
+        const hd = (K.rwy! * Math.PI) / 180;
+        const back = 12_000;
+        const lat = K.lat - (back * Math.cos(hd)) / 111_195;
+        const lon = K.lon - (back * Math.sin(hd)) / (111_195 * Math.cos((K.lat * Math.PI) / 180));
+        tools.flyAt(lat, lon, Math.round((300 + back) * Math.tan((3 * Math.PI) / 180)), K.rwy!, 95);
+        camera.gearDown = true;
+        fleet.fuel.f35 = 3000;
+        const said = camera.ilsStart("KEDW");
+        if (!demo && camera.ilsRun) camera.ilsRun.manual = true;
+        return demo ? said : t("ILS 22 at Edwards, 12 km out: yours — the needles and the instructor with you");
+      }
+      if (id === "case1") {
+        // (the F-35C off the Ford in the Mediterranean: 7 km astern for Case I, else on its final to fly the ball)
+        tools.set("f35Variant", "C");
+        camera.carrierClear();
+        tools.flyAt(42.75, 6.1, 300, 0, 150);
+        camera.carrierSpawn("ford", { lat: 42.8, lon: 6.1, heading: 0 });
+        fleet.fuel.f35 = 3000;
+        if (demo) {
+          const { P, sp } = camera.carrierNow()[0]!;
+          const D2 = Math.PI / 180;
+          tools.flyAt(
+            P.lat - (7000 * Math.cos(sp.heading)) / 111_195,
+            P.lon - (7000 * Math.sin(sp.heading)) / (111_195 * Math.cos(P.lat * D2)),
+            245,
+            sp.heading / D2,
+            180,
+          );
+          return camera.trapLand("ford", { case: "I" }) ?? "";
+        }
+        camera.carrierFinal("ford", 2500, 75);
+        camera.gearDown = true;
+        return t("The Ford's final, 2.5 km out: yours — the ball, the LSO and the instructor with you");
+      }
+      flyFigure(challengeHost, id, demo ? "demo" : "judge");
+      return demo ? tf("{0}: the demonstration", t(FIGURES[id].name)) : tf("{0}: yours — the instructor watching", t(FIGURES[id].name));
+    });
+  const instrHost: InstructorHost = {
+    camera,
+    toast: (s) => panel.toast(s),
+    hold: (on) => {
+      paused = on;
+      touch();
+    },
+    demo: (id) => lessonPlace(id, true),
+    tryIt: (id) => lessonPlace(id, false),
+  };
+  const instructorPanel = new InstructorPanel(instrHost);
+  camera.onInstrCall = (text, fix) => {
+    voice.say({ text, speaker: "tars", priority: 2 });
+    if ((settings.f35Instructor ?? "full") === "calls") panel.toast(`${text} — ${fix}`);
+  };
+  camera.onInstrDebrief = (last) => {
+    if ((settings.f35Instructor ?? "full") === "full") debriefInstr(instrHost, last);
+    else panel.toast(tf("Instructor: {0}/20", last.debrief.score.toFixed(1)));
+  };
   const missionMap = new MissionMap({ camera, toast: (s) => panel.toast(s) });
   // (made, edited — P3)
   const missionEditor = new MissionEditor({
@@ -5260,6 +5331,18 @@ async function main() {
     },
     utcNow: () => utcOf(sim.time),
     multiExposure: (r) => mxDialog.open({ kind: r.kind, run: r }),
+    lessons: {
+      list: () => LESSONS.map((L) => ({ id: L.id, title: t(L.title) })),
+      demo: (id) => {
+        if (!LESSONS.some((L) => L.id === id)) throw new Error(`no lesson "${id}" — lesson list`);
+        return lessonPlace(id as LessonId, true);
+      },
+      tryIt: (id) => {
+        if (!LESSONS.some((L) => L.id === id)) throw new Error(`no lesson "${id}" — lesson list`);
+        return lessonPlace(id as LessonId, false);
+      },
+      open: () => flightSchool(instrHost),
+    },
     missions: {
       list: () => [
         ...AIR_MISSIONS.map((d) => ({ id: d.id, title: d.make().title, mine: false })),
@@ -5620,7 +5703,17 @@ async function main() {
     bench,
     mission,
     cockpitScreens,
-    flight: { hub: flightHub, route: routePanel, challenges: challengePanel, missions: airMissions },
+    flight: {
+      hub: flightHub,
+      route: routePanel,
+      challenges: challengePanel,
+      missions: airMissions,
+      school: {
+        open: () => flightSchool(instrHost),
+        demo: (id: LessonId) => lessonPlace(id, true),
+        tryIt: (id: LessonId) => lessonPlace(id, false),
+      },
+    },
     net: netPanel,
     audio,
     voice,
@@ -5809,6 +5902,7 @@ async function main() {
     // (flying together: ours sent, the others placed — before the render's figures: their contrails come with ours — ui/netsession.ts)
     netSession.frame(dt);
     missionHud.tick();
+    instructorPanel.tick();
     // (the real traffic about us: asked when due — off by the setting, offline, far from the Earth)
     trafficFeed.tick(now / 1000, settings.traffic && camera.piloting ? camera.geoNow() : null, settings.traffic);
     {

@@ -1,0 +1,73 @@
+/* The instructor (ui/instructor.ts): its live panel, its debrief, the flight school's cards and diagrams. */
+.ins-panel { position: fixed; left: 12px; top: 200px; z-index: 31; width: 340px; max-height: calc(100vh - 470px); overflow: auto; padding: 8px 10px 10px; border: 1px solid rgba(111, 232, 255, 0.35); border-radius: 10px; background: rgba(6, 12, 18, 0.74); backdrop-filter: blur(5px); font: 12.5px/1.35 var(--font, system-ui); color: #e8eef2; display: grid; gap: 6px; }
+.ins-head { display: flex; align-items: center; gap: 8px; }
+.ins-title { flex: 1; font-size: 11.5px; letter-spacing: 0.07em; text-transform: uppercase; color: #6fe8ff; }
+.ins-phase { padding: 1px 7px; border-radius: 9px; background: rgba(111, 232, 255, 0.14); color: #bdf6ff; font-size: 11px; }
+.ins-head .k-btn { padding: 1px 6px; }
+.ins-diagram { display: flex; justify-content: center; background: rgba(0, 0, 0, 0.25); border-radius: 6px; }
+.ins-step { display: grid; gap: 1px; }
+.ins-step b { color: #fff; }
+.ins-step span { color: #b8c4cc; font-size: 12px; }
+.ins-step i { color: #8fa3ad; font-size: 11.5px; }
+.ins-gauge { display: grid; grid-template-columns: 76px 1fr 78px; align-items: center; gap: 6px; }
+.ins-glabel { color: #b8c4cc; font-size: 11.5px; }
+.ins-gbar { position: relative; height: 10px; border-radius: 5px; background: rgba(255, 90, 70, 0.25); overflow: hidden; }
+.ins-gwarn { position: absolute; top: 0; bottom: 0; background: rgba(255, 176, 58, 0.35); }
+.ins-gtol { position: absolute; top: 0; bottom: 0; background: rgba(93, 255, 138, 0.45); }
+.ins-gptr { position: absolute; top: -1px; width: 3px; height: 12px; margin-left: -1.5px; border-radius: 2px; background: #fff; }
+.ins-gval { font: 600 11.5px/1 var(--mono, monospace); text-align: right; }
+.ins-on { color: #5dff8a; } .ins-gptr.ins-on { background: #5dff8a; }
+.ins-near { color: #ffb03a; } .ins-gptr.ins-near { background: #ffb03a; }
+.ins-off { color: #ff6a55; } .ins-gptr.ins-off { background: #ff6a55; }
+.ins-call { display: grid; gap: 2px; padding: 6px 8px; border-left: 3px solid #ffb03a; background: rgba(255, 176, 58, 0.1); border-radius: 4px; }
+.ins-call b { color: #ffc861; font-size: 13.5px; }
+.ins-call span { color: #e0d6c4; font-size: 12px; }
+.ins-row { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+/* the diagram */
+.ld-svg { display: block; max-width: 100%; height: auto; }
+.ld-ground { stroke: rgba(160, 120, 70, 0.7); stroke-width: 1.5; }
+.ld-rwy { fill: #9aa4ad; }
+.ld-ship { fill: #4f8dff; }
+.ld-ideal { fill: none; stroke: rgba(120, 255, 170, 0.9); stroke-width: 2; stroke-dasharray: 6 4; }
+.ld-trace { fill: none; stroke: #fff; stroke-width: 2; }
+.ld-step circle { fill: rgba(6, 12, 18, 0.9); stroke: rgba(111, 232, 255, 0.8); stroke-width: 1.5; }
+.ld-step text { fill: #bdf6ff; font: 600 9.5px/1 var(--mono, monospace); text-anchor: middle; }
+.ld-step { cursor: pointer; }
+.ld-now circle { stroke: #ffc861; fill: rgba(255, 200, 97, 0.25); }
+.ld-sel circle { stroke: #ffc861; stroke-width: 3; fill: rgba(255, 200, 97, 0.45); }
+.ld-dot { fill: #ffb03a; stroke: #000; stroke-width: 1.5; }
+.ld-axis { fill: rgba(190, 215, 240, 0.7); font: 10px/1 var(--font, system-ui); }
+/* the debrief, the cards */
+.ins-frame { width: min(820px, calc(100vw - 32px)); padding: 14px 16px 16px; }
+.ins-wide { width: min(1100px, calc(100vw - 32px)); }
+.ins-debrief, .ins-card { display: grid; gap: 8px; margin-top: 8px; }
+.ins-score { display: flex; align-items: baseline; gap: 12px; font: 600 18px/1 var(--mono, monospace); color: #e8eef2; }
+.ins-letter { font-size: 34px; }
+.ins-lA, .ins-lB { color: #5dff8a; } .ins-lC { color: #ffc861; } .ins-lD, .ins-lF { color: #ff6a55; }
+.ins-charts { display: flex; flex-wrap: wrap; gap: 10px; }
+.ins-chart { border: 1px solid var(--k-line, rgba(255,255,255,0.15)); border-radius: 6px; background: rgba(0, 0, 0, 0.3); max-width: 100%; }
+.ins-table { border-collapse: collapse; font: 12.5px/1.4 var(--font, system-ui); color: var(--k-text, #e8eef2); }
+.ins-table th { text-align: left; font-weight: 600; color: var(--k-dim, #9aa); padding: 2px 10px 2px 0; }
+.ins-table td { padding: 2px 10px 2px 0; }
+.ins-table td:last-child { width: 140px; }
+.ins-mark { display: block; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #ff6a55, #ffb03a 50%, #5dff8a); }
+.ins-phases { display: grid; gap: 3px; }
+.ins-phaserow { display: grid; grid-template-columns: 120px 1fr 50px; align-items: center; gap: 8px; font-size: 12.5px; color: var(--k-text, #e8eef2); }
+.ins-phaserow em { color: var(--k-dim, #9aa); font-style: normal; text-align: right; }
+.ins-h { margin: 6px 0 0; font: var(--k-font-title); letter-spacing: 0.12em; text-transform: uppercase; color: var(--k-amber, #ffb03a); }
+.ins-tips, .ins-errors, .ins-steps { margin: 0; padding-left: 20px; display: grid; gap: 4px; font: 12.5px/1.4 var(--font, system-ui); color: var(--k-text, #e8eef2); }
+.ins-good { margin: 0; color: #5dff8a; }
+.ins-summary { margin: 0; font: 13px/1.45 var(--font, system-ui); color: var(--k-text, #e8eef2); }
+.ins-bigdiagram { display: flex; justify-content: center; padding: 6px; border-radius: 8px; background: rgba(0, 0, 0, 0.35); }
+.ins-stepitem { display: grid; gap: 1px; padding: 2px 4px; border-radius: 4px; cursor: default; }
+.ins-stepitem:hover, .ins-stepitem:focus, .ins-stepitem.ins-lit { background: rgba(255, 200, 97, 0.12); outline: none; }
+.ins-stepitem span { color: var(--k-dim, #9aa); }
+.ins-school { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; margin-top: 10px; max-height: calc(100vh - 160px); overflow: auto; }
+.ins-lesson { all: unset; box-sizing: border-box; display: grid; gap: 5px; padding: 8px 10px; border: 1px solid var(--k-line, rgba(255,255,255,0.15)); border-radius: 8px; background: var(--k-ctl-bg, rgba(255,255,255,0.04)); cursor: pointer; }
+.ins-lesson:hover, .ins-lesson:focus-visible { border-color: rgba(111, 232, 255, 0.6); }
+.ins-lesson b { font: var(--k-font-title); letter-spacing: 0.06em; text-transform: uppercase; color: var(--k-text, #e8eef2); }
+.ins-lesson span { font: 12px/1.35 var(--font, system-ui); color: var(--k-dim, #9aa); }
+.ins-mini { display: flex; justify-content: center; border-radius: 5px; background: rgba(0, 0, 0, 0.3); }
+@media (max-width: 760px) {
+  .ins-panel { width: calc(100vw - 24px); top: auto; bottom: 12px; max-height: 45vh; }
+}

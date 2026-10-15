@@ -112,6 +112,9 @@ export interface TrapRun {
   holdS?: number;
   /** the height held until the glide path is met [m over the sea] (the platform's: Case III, II) */
   platform?: number;
+  /** on the final, now: the glide path's error [°, + high], the line-up [m, + to port], the distance to the hook's
+   *  aim [m] (the instructor's — A4) */
+  now?: { err: number; lineup: number; dist: number };
 }
 
 export type RecoveryCase = "I" | "II" | "III" | "straight";
@@ -302,6 +305,7 @@ export function trapStep(
   const vz = vzRel + dot(vDeck, U);
   const vg = len(sub(own.v, scale(U, dot(own.v, U))));
   const gamma = Math.atan2(vz, Math.max(vg, 1));
+  R.now = { err, lineup, dist };
   // (the last 60 m: the ball no longer read — the hook over the ramp, the deck under it —: nothing judged, nothing
   // called; the glide path flown on)
   if (dist < 60) return { gamma, bank, spd: vApp, full: false };

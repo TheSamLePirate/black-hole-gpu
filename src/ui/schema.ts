@@ -4027,6 +4027,23 @@ export const SCHEMA: ControlDef[] = [
     keywords: "g limit load factor fly by wire fcs",
   },
   {
+    key: "f35Instructor",
+    type: "choice",
+    section: "game",
+    group: "F-35",
+    label: "Instructor",
+    style: "segmented",
+    effect: "none",
+    enabled: (s) => s.ship && s.vessel === "f35",
+    help: "During an ILS approach, a carrier's pass and an aerobatic figure: the deviations called at the right moment with their fix; with its panel, the manoeuvre's diagram and our trace live, its gauges, the step we are at — and its debrief with its charts at the end. The flight school's cards in the flight menu.",
+    keywords: "instructor training lesson school debrief coach calls",
+    options: [
+      { value: "off", label: "Off" },
+      { value: "calls", label: "Calls", hint: "Its calls only" },
+      { value: "full", label: "Full", hint: "Its calls, its live panel, its debrief" },
+    ],
+  },
+  {
     key: "f35AutoProtect",
     type: "toggle",
     section: "game",

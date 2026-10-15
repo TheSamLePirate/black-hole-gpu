@@ -1001,6 +1001,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   this.missionFrame(dtPilot);
   // (an ILS approach: its flare's throttle, its rollout — controller/ils.ts)
   this.ilsFrame();
+  // (the instructor: what is flown watched — controller/instructor.ts)
+  this.instrFrame(dtPilot);
   // (our AI wingmen: flown, in the fight — controller/wingmen.ts)
   this.wingStep?.(dtPilot);
   // (the real traffic: on the radar — controller/traffic.ts)

@@ -64,7 +64,7 @@ export interface BhContext {
   mission: Mission;
   cockpitScreens: CockpitScreens;
   /** a plane's flight: its preparation, its plan (ui/flighthub.ts, ui/routepanel.ts) */
-  flight?: { hub: { open(): void }; route: { open(): void }; challenges: { open(): void }; missions?: unknown };
+  flight?: { hub: { open(): void }; route: { open(): void }; challenges: { open(): void }; missions?: unknown; school?: unknown };
   /** playing together (ui/netpanel.ts): the panel, its client once a room was asked for */
   net?: import("./ui/netpanel").NetPanel;
   audio: SoundDirector;

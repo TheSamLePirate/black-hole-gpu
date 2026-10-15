@@ -178,6 +178,13 @@ export interface GameHost {
     keep(spec: MissionSpec): void;
     link(spec: MissionSpec): string;
   };
+  /** the flight school (A4 — ui/instructor.ts): its lessons, one demonstrated or tried, its page opened */
+  lessons?: {
+    list(): { id: string; title: string }[];
+    demo(id: string): string;
+    tryIt(id: string): string;
+    open(): void;
+  };
   /** the F-35's flights (ui/flighthub.ts, ui/challengepanel.ts): its airfields, a flight set up, the challenges and fights
    *  (their bests), one flown, the one running given up */
   f35?: {
@@ -1741,6 +1748,24 @@ export function gameTools(h: GameHost): Tool[] {
         if (!a.order) throw new Error("order needs an order");
         if (a.order === "shape" && !a.shape) throw new Error("shape needs a shape");
         return c.flightOrder(a.order as OrderId, a.shape as string | undefined);
+      }),
+    },
+    {
+      name: "lesson",
+      description:
+        "The flight school and its instructor: the lessons (the ILS approach, the carrier's Case I and the ball, the aerobatic figures) — each a card with its diagram, its steps, its errors. list: them. demo: one flown by the autopilot (the instructor commenting). try: one set up for the pilot to fly by hand (the ILS 12 km out at Edwards, the Ford's final, a figure's entry), the instructor calling the deviations and debriefing it with its charts. open: the flight school's page.",
+      params: {
+        action: { type: "string", enum: ["list", "demo", "try", "open"] },
+        id: { type: "string" },
+      },
+      required: ["action"],
+      run: act((a) => {
+        const S = h.lessons;
+        if (!S) throw new Error("no flight school here");
+        if (a.action === "list") return S.list();
+        if (a.action === "open") return S.open(), "The flight school is open";
+        if (!a.id) throw new Error("demo/try need a lesson's id (lesson list)");
+        return a.action === "demo" ? S.demo(String(a.id)) : S.tryIt(String(a.id));
       }),
     },
     {

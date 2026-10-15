@@ -376,6 +376,8 @@ pertinent.
 - **A4. L'instructeur.** Pendant chaque approche et chaque figure, les écarts annoncés au bon moment (« trop
   haut », « vitesse », « incidence »), puis un débriefing chiffré.
 
+  *A4 fait le 2026-10-15 — [fiche](progress/aviation/A4.md) : l'instructeur (ILS, appontage, figures : annonces au bon moment avec leur correction, de moins en moins répétées ; débriefing noté sur 20 avec graphiques, phases et points à travailler), son panneau en direct (schéma et trace, étape, jauges, « Explique » en pause), et l'école de vol (12 cartes interactives, démonstration ou essai à la main).*
+
 ### I — TARS aviateur
 
 - **I1. La base de connaissances.** Des pages écrites (FR + EN, `docs/aviation/`) indexées pour TARS, qu'il
