@@ -41,6 +41,8 @@ import { dockedFrame, type VesselId, VESSELS } from "../vessels";
 import type { NetPanel } from "./netpanel";
 import { formationLabel, formSlotFor } from "../controller/formation";
 import { orderOf } from "../game/orders";
+import { checkMission, type MissionSpec } from "../game/mission";
+import type { MissionShared } from "../controller/mission";
 import { type RemoteWing, wingsOut } from "../controller/wingmen";
 
 type Vec3 = [number, number, number];
@@ -105,6 +107,8 @@ export interface NetSessionDeps {
   sceneTime(): number;
   /** a mid-air collision with another's craft (main.ts: destroyed — a match's: shot down by it) */
   onCollide(slot: number, name: string): void;
+  /** another's mission heard (P1): flown with him, on his wing */
+  missionJoin?(spec: MissionSpec, from: number, name: string): void;
 }
 
 const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
@@ -160,6 +164,9 @@ export class NetSession {
   /** when our AI wingmen were last sent [s] */
   private wingSent = 0;
   private cvSent = 0;
+  /** the mission we lead last sent (its id, when), the one we last joined */
+  private msnSent = { id: "", at: 0 };
+  private msnJoined = "";
   private prev: { at: number; st: number; frame: number; v: Vec3; ax: [Vec3, Vec3, Vec3] } | null = null;
   private acc: Vec3 = [0, 0, 0];
   private spin: Vec3 = [0, 0, 0];
@@ -280,6 +287,14 @@ export class NetSession {
       this.cvSent = now;
       net.event({ kind: "cv", list: c.carriers });
     }
+    // (a mission we lead sent to the room — P1: again every 10 s, for those joining later —; what one has done in it
+    // shared as it is done)
+    const M = c.mission;
+    if (M?.lead && !M.ended && !M.pending.length && (M.run.spec.id !== this.msnSent.id || now - this.msnSent.at > 10)) {
+      this.msnSent = { id: M.run.spec.id, at: now };
+      net.event({ kind: "msn", spec: M.run.spec });
+    }
+    c.onMissionState = (st) => this.net?.room && this.net.event({ kind: "mst", st });
     if (!c.radarSources.has("rwg"))
       c.radarSources.set("rwg", (fix) =>
         [...c.remoteWings.entries()].flatMap(([slot, R]) =>
@@ -347,6 +362,18 @@ export class NetSession {
             if (!had || x.t0 < had.t0) mine.set(x.kind, { ...x });
           }
           cam.carriers = [...mine.values()];
+        } else if (e.kind === "msn") {
+          // (another's mission — P1: flown with him once, unless we fly it already)
+          const { spec } = checkMission((ev as unknown as { spec?: unknown }).spec);
+          const cam = this.d.camera;
+          if (!spec || cam.mission?.run.spec.id === spec.id || this.msnJoined === spec.id) return;
+          this.msnJoined = spec.id;
+          this.d.missionJoin?.(spec, from, this.nameOf(from));
+        } else if (e.kind === "mst") {
+          // (what another has done in our shared mission)
+          const st = (ev as unknown as { st?: MissionShared }).st;
+          if (!st || typeof st.id !== "string" || !st.state || typeof st.state !== "object") return;
+          this.d.camera.missionApply(st);
         } else if (e.kind === "order") {
           // (a leader's order — F2: heard, carried out in formation on him; "rejoin" heard out of one: on his wing)
           const o = orderOf((ev as unknown as { o: unknown }).o);

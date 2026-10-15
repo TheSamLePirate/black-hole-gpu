@@ -25,6 +25,8 @@ import type { CameraController } from "../controls";
 
 declare module "../controls" {
   interface CameraController {
+    /** the real flights a mission took over (their ICAO hex): left out of the traffic drawn */
+    trafficTaken?: Set<string>;
     trafficStep: typeof trafficStep;
     trafficNow: typeof trafficNow;
     trafficShips: typeof trafficShips;
@@ -205,6 +207,8 @@ function trafficNow(this: CameraController): TrafficCraft[] {
   const out: TrafficCraft[] = [];
   for (const T of F.planes.values()) {
     const p = T.p;
+    // (taken over by a mission — controller/mission.ts —: flown by the game from there, not by its reports)
+    if (this.trafficTaken?.has(p.id)) continue;
     const af = airframeOf(p.type, p.cat);
     // (on the ground: its wheels on the relief there)
     const wheels = af.mesh ? (MESH[af.mesh].wheels * af.len) / MESH[af.mesh].len : 1.5;

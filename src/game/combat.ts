@@ -165,7 +165,7 @@ export const loadoutMass = (l: Loadout) => l.aim120 * STORE_KG.aim120 + l.aim9x 
 
 // ------------------------------------------------------------------------------------ the world's things
 
-export type TargetKind = "drone" | "fighter" | "sam" | "truck" | "bunker";
+export type TargetKind = "drone" | "fighter" | "sam" | "truck" | "bunker" | "airliner";
 
 export interface Target {
   id: number;
@@ -182,8 +182,24 @@ export interface Target {
   diedAt: number;
   /** its radar cross-section [m²] (the detection's range scales with its fourth root) */
   rcs: number;
-  /** an aircraft's: its AI's state, its orbit's centre, its weapons left, its next shot's time */
-  ai?: { mode: "patrol" | "engage" | "defend" | "extend"; centre: V3; missiles: number; nextShot: number; speed: number; gMax: number };
+  /** an aircraft's: its AI's state, its orbit's centre, its weapons left, its next shot's time; a course flown
+   *  instead (a mission's airliner: its heading [°], height [m, the frame's], speed [m/s]) or a route (its points,
+   *  the next) */
+  ai?: {
+    mode: "patrol" | "engage" | "defend" | "extend" | "course";
+    centre: V3;
+    missiles: number;
+    nextShot: number;
+    speed: number;
+    gMax: number;
+    course?: { hdg: number; alt: number };
+    route?: { pts: V3[]; next: number };
+  };
+  /** the mesh it is drawn with (a mission's airliner: "a320"; else the F-35's) */
+  mesh?: string;
+  /** neither friend nor foe (a mission's airliner, until it turns hostile); its transponder off */
+  neutral?: boolean;
+  squawkOff?: boolean;
   /** a SAM site's: its next shot's time, its missiles left */
   site?: { nextShot: number; missiles: number };
   /** another player (docs/PLAN-RESEAU.md R3): his slot — his craft placed each frame from the network, his damage
@@ -276,6 +292,11 @@ export interface TargetSpec {
   hdg?: number;
   speed?: number;
   name?: string;
+  /** one of ours (not locked, not hurt, never after the player) */
+  friendly?: boolean;
+  /** an airliner's way: its route's points (east, north, height over the ground [m]); else its heading held */
+  route?: [number, number, number][];
+  mesh?: string;
 }
 
 const SPEC: Record<TargetKind, { hp: number; rcs: number; speed: number; gMax: number; missiles: number }> = {
@@ -284,6 +305,7 @@ const SPEC: Record<TargetKind, { hp: number; rcs: number; speed: number; gMax: n
   sam: { hp: 150, rcs: 20, speed: 0, gMax: 0, missiles: 4 },
   truck: { hp: 40, rcs: 10, speed: 0, gMax: 0, missiles: 0 },
   bunker: { hp: 300, rcs: 50, speed: 0, gMax: 0, missiles: 0 },
+  airliner: { hp: 80, rcs: 40, speed: 220, gMax: 1.4, missiles: 0 },
 };
 
 export class CombatWorld {
@@ -321,29 +343,60 @@ export class CombatWorld {
     private rand: () => number = Math.random,
   ) {
     this.stores = { ...loadout };
-    for (const s of specs) {
-      const S = SPEC[s.kind];
-      const air = s.kind === "drone" || s.kind === "fighter";
-      const h = (s.hdg ?? 0) * D;
-      const fwd: V3 = [Math.sin(h), Math.cos(h), 0];
-      const p: V3 = [s.at[0], s.at[1], this.groundZ(s.at[0], s.at[1]) + (air ? s.at[2] : 0)];
-      const speed = air ? (s.speed ?? S.speed) : 0;
-      this.targets.push({
-        id: this.nextId++,
-        kind: s.kind,
-        name: s.name ?? s.kind,
-        p,
-        v: mul(fwd, speed),
-        fwd,
-        up: [0, 0, 1],
-        hp: S.hp,
-        alive: true,
-        diedAt: NaN,
-        rcs: S.rcs,
-        ai: air ? { mode: "patrol", centre: [...p], missiles: S.missiles, nextShot: 20, speed, gMax: S.gMax } : undefined,
-        site: s.kind === "sam" ? { nextShot: 8, missiles: S.missiles } : undefined,
-      });
-    }
+    for (const s of specs) this.addTarget(s);
+  }
+
+  /** A target set in the world (at its start, or later — a mission's): its id. */
+  addTarget(s: TargetSpec): number {
+    const S = SPEC[s.kind];
+    const air = s.kind === "drone" || s.kind === "fighter" || s.kind === "airliner";
+    const h = (s.hdg ?? 0) * D;
+    const fwd: V3 = [Math.sin(h), Math.cos(h), 0];
+    const p: V3 = [s.at[0], s.at[1], this.groundZ(s.at[0], s.at[1]) + (air ? s.at[2] : 0)];
+    const speed = air ? (s.speed ?? S.speed) : 0;
+    const id = this.nextId++;
+    const airliner = s.kind === "airliner";
+    this.targets.push({
+      id,
+      kind: s.kind,
+      name: s.name ?? s.kind,
+      p,
+      v: mul(fwd, speed),
+      fwd,
+      up: [0, 0, 1],
+      hp: S.hp,
+      alive: true,
+      diedAt: NaN,
+      rcs: S.rcs,
+      friendly: s.friendly,
+      mesh: s.mesh ?? (airliner ? "a320" : undefined),
+      ai: air
+        ? {
+            mode: airliner ? "course" : "patrol",
+            centre: [...p],
+            missiles: S.missiles,
+            nextShot: 20,
+            speed,
+            gMax: S.gMax,
+            course: airliner ? { hdg: s.hdg ?? 0, alt: p[2] } : undefined,
+            route: s.route?.length ? { pts: s.route.map(([e, n, a]) => [e, n, this.groundZ(e, n) + a] as V3), next: 0 } : undefined,
+          }
+        : undefined,
+      site: s.kind === "sam" ? { nextShot: 8, missiles: S.missiles } : undefined,
+    });
+    return id;
+  }
+
+  /** An aircraft's course changed (a mission's airliner turned, climbed, sped up — a deviation): its route left. */
+  setCourse(id: number, c: { hdg?: number; alt?: number; speed?: number; to?: V3 }) {
+    const q = this.targets.find((x) => x.id === id);
+    const A = q?.ai;
+    if (!q || !A) return;
+    const hNow = (Math.atan2(q.v[0], q.v[1]) / D + 360) % 360;
+    A.mode = "course";
+    A.route = c.to ? { pts: [c.to], next: 0 } : undefined;
+    A.course = { hdg: c.hdg ?? A.course?.hdg ?? hNow, alt: c.alt ?? A.course?.alt ?? q.p[2] };
+    if (c.speed !== undefined) A.speed = c.speed;
   }
 
   /** The ground's height [m] at east, north (a 250 m grid's, cached). */
@@ -904,9 +957,23 @@ export class CombatWorld {
       const d = len(r);
       // (a missile chasing it: defend — beam it and decoy)
       const threat = this.missiles.find((m) => m.alive && m.owner === "blue" && m.target === q.id && len(sub(m.p, q.p)) < 12_000);
-      if (q.kind === "fighter") A.mode = threat ? "defend" : d < 40_000 ? "engage" : "patrol";
+      if (q.kind === "fighter" && !q.friendly) A.mode = threat ? "defend" : d < 40_000 ? "engage" : "patrol";
       let want: V3;
-      if (A.mode === "defend" && threat) {
+      if (A.mode === "course") {
+        // (a course: its heading and height — or its route's next point, the last held —, no fight)
+        const R = A.route;
+        if (R && R.next < R.pts.length) {
+          const to = sub(R.pts[R.next]!, q.p);
+          if (len([to[0], to[1], 0]) < 1500) R.next++;
+          const tgt = R.pts[Math.min(R.next, R.pts.length - 1)]!;
+          const dd = sub(tgt, q.p);
+          want = unit([dd[0], dd[1], clamp(dd[2] / Math.max(len([dd[0], dd[1], 0]), 3000), -0.12, 0.12)]);
+        } else {
+          const C0 = A.course ?? { hdg: (Math.atan2(q.v[0], q.v[1]) / D + 360) % 360, alt: q.p[2] };
+          const hh = C0.hdg * D;
+          want = unit([Math.sin(hh), Math.cos(hh), clamp((C0.alt - q.p[2]) / 3000, -0.1, 0.1)]);
+        }
+      } else if (A.mode === "defend" && threat) {
         // (perpendicular to the missile's line, level, a decoy each second and a half)
         const los = unit(sub(threat.p, q.p));
         const side = unit(cross(los, [0, 0, 1]));

@@ -1,0 +1,23 @@
+// French for the missions (docs/PLAN-AVIATION-AAA.md, P1–P3: game/mission.ts, ui/airmission.ts) — keyed by the English.
+export default {
+  "Objective done: {0}": "Objectif atteint : {0}",
+  "Objective failed: {0}": "Objectif manqué : {0}",
+  "Mission accomplished: {0}": "Mission accomplie : {0}",
+  "Mission accomplished": "Mission accomplie",
+  "Mission failed: {0}": "Mission échouée : {0}",
+  "Mission abandoned": "Mission abandonnée",
+  "Mission: {0}": "Mission : {0}",
+  "air-to-ground": "air-sol",
+  "gun only": "canon seul",
+  "air-to-air": "air-air",
+  "{0} h local": "{0} h locale",
+  "{0} min at most": "{0} min au plus",
+  Objectives: "Objectifs",
+  "Start the mission": "Lancer la mission",
+  "on deck…": "sur le pont…",
+  Missions: "Missions",
+  "{0} objectives": "{0} objectifs",
+  Briefing: "Briefing",
+  "Abandon the mission": "Abandonner la mission",
+  "{0}'s mission: {1}": "Mission de {0} : {1}",
+} satisfies Record<string, string>;

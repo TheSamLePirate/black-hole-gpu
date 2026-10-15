@@ -62,6 +62,9 @@ import { SCENARIOS } from "./game/scenarios";
 import { bests as challengeBests } from "./controller/challenge";
 import { type Layer as MusicLayer, LAYERS as MUSIC_LAYERS, THEMES as MUSIC_THEMES } from "./audio/music/themes";
 import { FLIGHT_HOURS, FLIGHT_STARTS, FLIGHT_WEATHER, FlightHub, flightFields, type HubHost, prepareFlight } from "./ui/flighthub";
+import { briefMission, debriefMission, flyMission, MissionHud } from "./ui/airmission";
+import { AIR_MISSIONS } from "./game/airmissions";
+import { checkMission } from "./game/mission";
 import { ChallengePanel, type ChallengeHost, flyChallenge, flyFight, flyFigure } from "./ui/challengepanel";
 import { aeroBests } from "./controller/aerobatics";
 import { FIGURE_ORDER, FIGURES, type FigureId } from "./game/aerobatics";
@@ -3355,8 +3358,8 @@ async function main() {
       { label: { fr: "Patrouille", en: "Flight" }, sub: orderItems() },
       { label: { fr: "Plan de vol", en: "Flight plan" }, key: "⇧O", on: camera.nav.on.l, run: () => routePanel.open() },
       {
-        label: { fr: "Défis et combats", en: "Challenges & fights" },
-        on: !!C || camera.chal?.status === "run",
+        label: { fr: "Défis, combats, missions", en: "Challenges, fights, missions" },
+        on: !!C || camera.chal?.status === "run" || !!camera.mission,
         run: () => challengePanel.open(),
       },
       { label: { fr: "Préparer un vol", en: "Prepare a flight" }, run: () => flightHub.open() },
@@ -3781,6 +3784,43 @@ async function main() {
   // the F-35's challenges (ui/challengepanel.ts, PLAN-F35 F9): gate courses, graded landings, aerobatics
   const challengeHost: ChallengeHost = { tools, camera, toast: (s) => panel.toast(s) };
   const challengePanel = new ChallengePanel(challengeHost);
+  // a mission (ui/airmission.ts — PLAN-AVIATION-AAA P1): its words said and shown, its objectives on screen, its debrief
+  const missionHud = new MissionHud(camera);
+  camera.onMissionSay = (text) => {
+    panel.toast(text);
+    voice.say({ text, speaker: "tower", priority: 2 });
+  };
+  camera.onMissionEnd = (last) => {
+    debriefMission(last);
+    tarsEvent({ kind: "report", to: last.brief.letter, detail: `${last.spec.title} — ${last.brief.twenty.toFixed(1)}/20` });
+  };
+  const missionSpec = (x: string | unknown) => {
+    if (typeof x === "string") {
+      const m = AIR_MISSIONS.find((d) => d.id === x);
+      if (!m) throw new Error(`no mission "${x}" — ${AIR_MISSIONS.map((d) => d.id).join(", ")}`);
+      return m.make();
+    }
+    const { spec, errors } = checkMission(x);
+    if (!spec) throw new Error(errors.join("; "));
+    return spec;
+  };
+  const airMissions = {
+    list: () => AIR_MISSIONS.map((d) => ({ id: d.id, title: d.make().title })),
+    spec: (x: string | unknown) => missionSpec(x),
+    fly: (x: string | unknown, o: { lead?: boolean; side?: number } = {}) => placeShip(() => flyMission(challengeHost, missionSpec(x), o)),
+    brief: (x: string | unknown) => {
+      const spec = missionSpec(x);
+      briefMission(spec, () => airMissions.fly(spec));
+    },
+    abort: () => camera.missionAbort(),
+    state: () => {
+      const M = camera.mission;
+      return M
+        ? { id: M.run.spec.id, t: M.run.t, state: { ...M.run.state }, status: M.run.status, deck: M.deckStart, pending: M.pending.length }
+        : null;
+    },
+    last: () => camera.missionLast ?? null,
+  };
   // playing together (ui/netpanel.ts, docs/PLAN-RESEAU.md): the network loaded only when a room is asked for
   // (a room's clock in the scene's seconds — sim.time is in M)
   const netPanel = new NetPanel({ time: () => sim.time * M_SECONDS, build: "", toast: (s) => panel.toast(s) });
@@ -3796,6 +3836,11 @@ async function main() {
     sceneTime: () => sim.time * M_SECONDS,
     // (a mid-air collision: in a match's fight, shot down; else the craft destroyed — the room's way: craftLost)
     onCollide: (slot, name) => collide(slot, name),
+    // (another's mission: flown with him, 80 m off the start, on his right)
+    missionJoin: (spec, _from, name) => {
+      panel.toast(tf("{0}'s mission: {1}", name, spec.title));
+      airMissions.fly(spec, { lead: false, side: 80 });
+    },
   });
   netPanel.session = netSession;
   // a match in the room (ui/netmatch.ts — docs/PLAN-RESEAU.md R3): fights, teams, races, landings together
@@ -5490,7 +5535,7 @@ async function main() {
     bench,
     mission,
     cockpitScreens,
-    flight: { hub: flightHub, route: routePanel, challenges: challengePanel },
+    flight: { hub: flightHub, route: routePanel, challenges: challengePanel, missions: airMissions },
     net: netPanel,
     audio,
     voice,
@@ -5678,6 +5723,7 @@ async function main() {
     const info = pil ? cpuProf.time("flight figures (flightInfo)", () => camera.flightInfo()) : null;
     // (flying together: ours sent, the others placed — before the render's figures: their contrails come with ours — ui/netsession.ts)
     netSession.frame(dt);
+    missionHud.tick();
     // (the real traffic about us: asked when due — off by the setting, offline, far from the Earth)
     trafficFeed.tick(now / 1000, settings.traffic && camera.piloting ? camera.geoNow() : null, settings.traffic);
     {

@@ -332,6 +332,8 @@ pertinent.
   - les conditions de succès et d'échec, le score, et le débriefing (le rapport de vol existe).
 
   Il marche en solo et **en équipes** en réseau.
+
+  *P1 fait le 2026-10-15 — [fiche](progress/aviation/P1.md) : les missions en JSON (briefing, départ, heure, météo, unités, objectifs atteindre/détruire/escorter/protéger/identifier/se poser, déclencheurs, fin, débriefing noté sur 20) ; un vol réel repris au trafic et dévié (transpondeur coupé, nouvelle route, camp changé) ; partagées en salon ; trois missions fournies (Renegade sur les Alpes, Frappe en Corse depuis le Ford, Escorte jusqu'à Ajaccio).*
 - **P2. La carte de mission.** Sur la carte (2D et 3D) : la route, les zones des menaces (cercles des SAM), les
   cibles, les amis, le porte-avions, le trafic. On y glisse les points ; on y clique « voler vers ». La même carte
   est sur le TSD du cockpit.

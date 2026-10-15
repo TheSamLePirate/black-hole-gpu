@@ -996,6 +996,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   this.challengeStep(dtPilot);
   // (a fight: its world stepped with the player — controller/combat.ts)
   this.combatStep(dtPilot);
+  // (a mission: its objectives judged, its triggers' actions done — controller/mission.ts)
+  this.missionFrame(dtPilot);
   // (our AI wingmen: flown, in the fight — controller/wingmen.ts)
   this.wingStep?.(dtPilot);
   // (the real traffic: on the radar — controller/traffic.ts)

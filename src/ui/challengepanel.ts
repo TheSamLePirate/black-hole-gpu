@@ -16,6 +16,9 @@ import type { GameTools } from "../game/tools";
 import { t, tf, tr } from "../i18n";
 import { VESSELS } from "../vessels";
 import { button, el as h, modal } from "./kit";
+import { AIR_MISSIONS } from "../game/airmissions";
+import { briefMission, flyMission } from "./airmission";
+import type { MissionSpec } from "../game/mission";
 
 export interface ChallengeHost {
   tools: GameTools;
@@ -95,6 +98,20 @@ export class ChallengePanel {
       );
       root.append(card);
     }
+    // the missions (PLAN-AVIATION-AAA P1): briefed, then flown
+    root.append(h("h4", "chp-h", t("Missions")));
+    for (const m of AIR_MISSIONS) {
+      const spec = m.make();
+      const card = h("div", "chp-card chp-fight");
+      card.append(
+        h("b", "chp-name", spec.title),
+        h("p", "chp-brief", spec.brief),
+        h("span", "chp-par", tf("{0} objectives", spec.objectives.filter((o) => !o.optional).length)),
+        h("span", "chp-best", spec.limit ? tf("{0} min", Math.round(spec.limit / 60)) : ""),
+        button({ label: t("Briefing"), kind: "primary", testid: `chp-msn-${spec.id}`, onClick: () => this.mission(spec) }),
+      );
+      root.append(card);
+    }
     // the fights
     root.append(h("h4", "chp-h", t("Combat")));
     const CB = combatBests();
@@ -129,6 +146,17 @@ export class ChallengePanel {
           },
         }),
       );
+    if (this.host.camera.mission)
+      root.append(
+        button({
+          label: t("Abandon the mission"),
+          kind: "danger",
+          onClick: () => {
+            this.host.camera.missionAbort();
+            this.close?.();
+          },
+        }),
+      );
     if (this.host.camera.chal?.status === "run")
       root.append(
         button({
@@ -150,6 +178,18 @@ export class ChallengePanel {
     } catch (e) {
       this.host.toast(String((e as Error).message ?? e));
     }
+  }
+
+  /** A mission: its briefing, then flown (the panel closed). */
+  mission(spec: MissionSpec) {
+    this.close?.();
+    briefMission(spec, () => {
+      try {
+        this.host.toast(flyMission(this.host, spec));
+      } catch (e) {
+        this.host.toast(String((e as Error).message ?? e));
+      }
+    });
   }
 
   /** An aerobatic figure — watched or flown —, or the box: the F-35 placed at its entry, the program or the judge on. */

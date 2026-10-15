@@ -17,6 +17,8 @@ export interface Scenario {
   targets: TargetSpec[];
   /** a time limit [s] */
   limit: number;
+  /** a mission's fight (controller/mission.ts): won or lost by its objectives, not by its targets all down */
+  mission?: boolean;
 }
 
 export const SCENARIOS: Scenario[] = [

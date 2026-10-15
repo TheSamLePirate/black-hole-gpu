@@ -9,7 +9,7 @@
 import type { Text } from "../i18n";
 
 const D = Math.PI / 180;
-const R_EARTH = 6_371_008.8;
+export const R_EARTH = 6_371_008.8;
 
 /** A gate: where (latitude, longitude [°]), its centre's height over the ground [m], the heading it is flown
  *  through [° true], its width and height [m]. */

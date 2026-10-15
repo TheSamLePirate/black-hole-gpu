@@ -1,0 +1,21 @@
+/* A mission (ui/airmission.ts): its briefing and debrief in the kit's language, its objectives on screen. */
+.msn-frame { width: min(620px, calc(100vw - 32px)); padding: 16px 18px 18px; }
+.msn-brief { display: grid; gap: 8px; margin-top: 8px; }
+.msn-text { margin: 0; font: 13.5px/1.45 var(--font); color: var(--k-text); }
+.msn-facts, .msn-score { margin: 0; font: var(--k-font-value); color: var(--k-dim); }
+.msn-score { font: 600 15px/1.2 var(--mono); color: var(--k-amber); }
+.msn-h { margin: 6px 0 0; font: var(--k-font-title); letter-spacing: 0.12em; text-transform: uppercase; color: var(--k-amber); }
+.msn-objs { margin: 0; padding-left: 20px; display: grid; gap: 4px; font: 13px/1.35 var(--font); color: var(--k-text); }
+.msn-list { list-style: none; padding-left: 0; }
+.msn-opt { color: var(--k-dim); }
+.msn-result { margin: 0; font: 600 16px/1.3 var(--font); }
+.msn-won { color: #7fe08a; }
+.msn-lost { color: #ff7a6a; }
+.msn-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+.msn-hud { position: fixed; left: 12px; top: 196px; z-index: 30; max-width: min(340px, calc(100vw - 24px)); padding: 8px 10px; border: 1px solid var(--k-line, rgba(255,255,255,0.15)); border-radius: 8px; background: rgba(8, 12, 16, 0.62); backdrop-filter: blur(4px); pointer-events: none; font: 12.5px/1.4 var(--font, system-ui); color: #e8eef2; }
+.msn-hud-t { letter-spacing: 0.06em; text-transform: uppercase; font-size: 11.5px; color: #ffc861; }
+.msn-hud-c { float: right; margin-left: 10px; font-family: var(--mono, monospace); color: #b8c4cc; }
+.msn-hud-o { margin-top: 3px; }
+.msn-hud .msn-done, .msn-objs .msn-done { color: #7fe08a; }
+.msn-hud .msn-failed, .msn-objs .msn-failed { color: #ff7a6a; }
+.msn-hud .msn-opt { opacity: 0.75; }

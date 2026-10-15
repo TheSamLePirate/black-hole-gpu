@@ -30,6 +30,7 @@ import { t, tf, tr } from "../i18n";
 import { bodyFixedOf, groundRelief } from "../system/our-surface";
 import { store } from "../util/storage";
 import type { CameraController } from "../controls";
+import type { ShipMeshId } from "../ship";
 
 type Vec3 = [number, number, number];
 const D = Math.PI / 180;
@@ -153,9 +154,9 @@ function combatStart(this: CameraController, def: Scenario, net: { host: boolean
         v: [...q.v] as V3,
         rcs: q.rcs,
         kind: isGround(q) ? ("ground" as const) : ("air" as const),
-        iff: q.friendly ? ("friend" as const) : ("hostile" as const),
+        iff: q.friendly ? ("friend" as const) : q.neutral ? ("neutral" as const) : ("hostile" as const),
         name: q.name,
-        squawk: !!q.friendly,
+        squawk: (!!q.friendly || q.kind === "airliner") && !q.squawkOff,
         known: true,
         offboard: !!q.friendly,
         colour: q.peer === undefined ? undefined : q.friendly ? "rgba(110, 200, 255, 1)" : "rgba(255, 140, 110, 1)",
@@ -295,7 +296,8 @@ function combatStep(this: CameraController, dt: number) {
     }
     return;
   }
-  const won = W.targets.every((q) => !q.alive);
+  // (a mission's fight: its end the mission's — controller/mission.ts —, shot down still lost)
+  const won = !C.def.mission && W.targets.every((q) => !q.alive);
   if (!W.alive) {
     C.status = "lost";
     C.doneAt = C.t;
@@ -315,7 +317,7 @@ function combatStep(this: CameraController, dt: number) {
       tf("{0} — won in {1}", tr(C.def.title), `${Math.floor(C.t / 60)}:${String(Math.floor(C.t % 60)).padStart(2, "0")}`) +
       (best ? ` · ${t("best")}` : "");
     C.say = C.result;
-  } else if (C.t > C.def.limit) {
+  } else if (!C.def.mission && C.t > C.def.limit) {
     C.status = "lost";
     C.doneAt = C.t;
     C.result = tf("{0} — out of time", tr(C.def.title));
@@ -349,14 +351,14 @@ function camMap(c: CameraController) {
 /** The fight's aircraft for the renderer: each an F-35 (the aggressors', the drones' — the only fighter mesh
  *  there is), its place from the flown craft and its axes on the camera's, gear up, its surfaces at rest;
  *  within 30 km, alive or falling. */
-function combatShips(this: CameraController): { id: "f35"; rel: Vec3; axes: [Vec3, Vec3, Vec3]; jet: F35Pose; hidden: boolean }[] {
+function combatShips(this: CameraController): { id: ShipMeshId; rel: Vec3; axes: [Vec3, Vec3, Vec3]; jet: F35Pose; hidden: boolean }[] {
   const C = this.combat;
   const P = C?.last;
   if (!C || !P) return [];
   const M = enuToCam(this, camMap(this));
   if (!M) return [];
   const pose: F35Pose = { ...restPose(), gear: 0, canopy: 0 };
-  const out: { id: "f35"; rel: Vec3; axes: [Vec3, Vec3, Vec3]; jet: F35Pose; hidden: boolean }[] = [];
+  const out: { id: ShipMeshId; rel: Vec3; axes: [Vec3, Vec3, Vec3]; jet: F35Pose; hidden: boolean }[] = [];
   for (const q of C.world.targets) {
     if (!q.ai) continue;
     if (!q.alive && C.world.t - q.diedAt > 20) continue;
@@ -374,7 +376,7 @@ function combatShips(this: CameraController): { id: "f35"; rel: Vec3; axes: [Vec
         y = P.p[1] + r[1] * s;
       hidden = P.p[2] + r[2] * s < C.world.groundZ(x, y);
     }
-    out.push({ id: "f35", rel: M(r), axes: [M(left), M(u), M(f)], jet: pose, hidden });
+    out.push({ id: (q.mesh ?? "f35") as ShipMeshId, rel: M(r), axes: [M(left), M(u), M(f)], jet: pose, hidden });
   }
   return out.slice(0, 12);
 }
