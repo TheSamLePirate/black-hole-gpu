@@ -172,6 +172,7 @@ pertinent.
   - L'écran radar et le **TSD du PCD** (la situation tactique sur l'écran panoramique).
 
   *Fini quand* un avion de ligne réel apparaît en neutre, disparaît derrière une crête et réapparaît.
+  *Fait le 2026-10-15 — [fiche](progress/aviation/C1.md) : balayage, portée selon la taille, horizon, relief, encoche, RWS/TWS/STT, IFF, liaison ; le combat nourri par le radar ; portée HUD unifiée, boîte de verrouillage, TSD. Le critère « avion de ligne réel » attend la source du trafic (phase T).*
 - **C2. La trajectoire d'interception.**
   - Pour la cible choisie : le **cap de collision** (et le cap pour passer derrière elle à une distance donnée)
     au HUD, la poursuite pure, en avance ou en retard, le temps avant la rencontre, l'angle d'aspect.

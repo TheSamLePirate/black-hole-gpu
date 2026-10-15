@@ -3319,6 +3319,15 @@ async function main() {
             },
           ]
         : []),
+      // (the F-35's radar, always on: its lock, its mode — controller/radar.ts)
+      {
+        label: { fr: "Radar", en: "Radar" },
+        sub: [
+          { label: { fr: "Verrou suivant", en: "Next lock" }, key: "Tab", run: () => say(camera.radarLockNext()) },
+          { label: { fr: `Mode (${camera.radar.mode})`, en: `Mode (${camera.radar.mode})` }, run: () => say(camera.radarMode()) },
+          { label: { fr: "Lâcher le verrou", en: "Drop the lock" }, run: () => (camera.radar.unlock(), say(t("Lock dropped"))) },
+        ],
+      },
       { label: { fr: "Plan de vol", en: "Flight plan" }, key: "⇧O", on: camera.nav.on.l, run: () => routePanel.open() },
       {
         label: { fr: "Défis et combats", en: "Challenges & fights" },
@@ -3440,8 +3449,8 @@ async function main() {
       clearTimeout(tabTimer);
       tabTimer = 0;
       if (camera.combat?.status === "run" && camera.piloting) combatSay(camera.combatTrigger("lock"));
-      // (the F-35 flown: no planets to step through — its Tab the radar's, in a fight)
-      else if (camera.piloting && fleet.active === "f35") panel.toast(t("Tab: the radar's lock in a fight — held: the wheel"));
+      // (the F-35 flown: no planets to step through — its Tab the radar's next lock)
+      else if (camera.piloting && fleet.active === "f35") panel.toast(camera.radarLockNext());
       else nextTarget(tabShift ? -1 : 1);
     } else if (wheel.isOpen) {
       if (wheel.selected >= 0) wheel.activate();

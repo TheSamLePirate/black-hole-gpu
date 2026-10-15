@@ -1,6 +1,7 @@
 // The CameraController — telemetry: the one view of the flight every display reads (FlightInfo).
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import { avionicsData } from "../f35/cockpit";
+import { enuToCam } from "./combat";
 import type { JetModes } from "../game/jet";
 import { blToCartesian, cameraFrame } from "../camera";
 import { horizon, isco, photonOrbits, type Vec3 } from "../physics";
@@ -187,6 +188,8 @@ export interface FlightInfo {
   avionics: ReturnType<typeof avionicsData> | null;
   /** a challenge flown: its banner, its next gates (controller/challenge.ts) */
   chal: ReturnType<CameraController["challengeHud"]>;
+  /** the F-35's radar: its picture and its lock (controller/radar.ts) */
+  radar: (ReturnType<CameraController["radarHud"]> & { lock?: { cam?: Vec3 | null } | null }) | null;
   /** the pilot's eyes and body (game/gstrain.ts) */
   body: { grey: number; black: number; red: number; strain: number; gloc: boolean; felt: number };
   /** an aerobatic figure flown: its banner, its cue, its entry, its guide, its result (controller/aerobatics.ts) */
@@ -367,6 +370,13 @@ function flightInfo(this: CameraController): FlightInfo {
       return f ? { alt: f.h, throttle: this.pilot.engineNow, modes: { ...this.jetModes, lnav: this.nav.on.l, vnav: this.nav.on.v } } : null;
     })(),
     chal: this.challengeHud(C),
+    // (the F-35's radar: its picture, its lock — the lock on the camera's axes for its designation box)
+    radar: (() => {
+      const R = this.radarHud();
+      if (!R?.lock) return R;
+      const M = enuToCam(this, C);
+      return { ...R, lock: { ...R.lock, cam: M ? M(R.lock.r) : null } };
+    })(),
     // (the pilot's eyes and body: the grey-out, the black-out, the red-out, the straining, G-LOC)
     body: (() => {
       const B = this.gStrain;

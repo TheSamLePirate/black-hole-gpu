@@ -252,6 +252,7 @@ export class NetSession {
       if (this.ships.length) this.ships = [];
       if (netFrame.ships.length) netFrame.ships = [];
       if (netRadar.contacts.length) netRadar.contacts = [];
+      this.d.camera.radarSources.delete("net");
       this.prev = null;
       return;
     }
@@ -352,6 +353,34 @@ export class NetSession {
         thrust: s.thrust,
       }));
     const members = new Map(net.room.members.map((m) => [m.slot, m]));
+    // (the F-35's radar — controller/radar.ts —: the room's others over the Earth, friends on its datalink — a
+    // match's are its fight's targets instead)
+    if (!c.radarSources.has("net"))
+      c.radarSources.set("net", (fix) => {
+        if (!this.net?.room || c.combat?.net) return [];
+        const mem = new Map(this.net.room.members.map((m) => [m.slot, m]));
+        return this.ships
+          .filter((s) => !s.ghost && s.state.frame === 0 && s.state.body === 0)
+          .map((s) => {
+            const v = s.state.v as Vec3;
+            return {
+              id: `net:${s.slot}`,
+              r: fix.toLocal(s.state.p as Vec3),
+              v: [
+                v[0] * fix.E[0] + v[1] * fix.E[1] + v[2] * fix.E[2],
+                v[0] * fix.N[0] + v[1] * fix.N[1] + v[2] * fix.N[2],
+                v[0] * fix.U[0] + v[1] * fix.U[1] + v[2] * fix.U[2],
+              ] as Vec3,
+              rcs: s.id === "f35" ? 0.005 : 20,
+              kind: s.state.flags & 1 ? ("ground" as const) : ("air" as const),
+              iff: "friend" as const,
+              name: this.nameOf(s.slot),
+              squawk: true,
+              offboard: true,
+              colour: mem.get(s.slot)?.colour ?? this.awayNames.get(s.slot)?.colour,
+            };
+          });
+      });
     // (on the F-35's radar: each other in his colour, his track, his height against ours)
     netRadar.contacts = this.ships
       .filter((s) => !s.ghost && s.dist < 60_000)

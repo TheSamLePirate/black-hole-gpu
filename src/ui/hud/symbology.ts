@@ -47,8 +47,20 @@ export interface RadarData {
     name: string;
     /** a player's (docs/PLAN-RESEAU.md R1): drawn in his colour, a friend's */
     colour?: string;
+    /** the IFF known (game/radar.ts); a track from the datalink only (drawn hollow) */
+    iff?: string;
+    datalink?: boolean;
   }[];
   missiles: { x: number; y: number; trk: number | null; red: boolean }[];
+}
+
+/** The F-35's radar as the HUD draws it (controller/radar.ts): its mode, its beam off the nose [rad], its picture,
+ *  its lock (on the camera's axes: its designation box; its range [m], closure [m/s], altitude [m]). */
+export interface RadarPicture {
+  mode: string;
+  beam: number;
+  contacts: RadarData["contacts"];
+  lock: { name: string; iff: string; range: number; closure: number; alt: number; cam?: V3 | null } | null;
 }
 
 export interface SymInfo {
@@ -101,6 +113,8 @@ export interface SymInfo {
     result: { score: number; notes: string[] } | null;
     seq: { idx: number; n: number; total: number } | null;
   } | null;
+  /** the F-35's radar (controller/radar.ts) */
+  radar?: RadarPicture | null;
   /** a fight flown (controller/combat.ts): every vector on the camera's axes from the craft [m] */
   combat?: {
     title: string;
@@ -553,7 +567,17 @@ export function drawSymbology(F: SymFrame) {
   if (i.avionics && s.f35Avionics && pilotView) drawAvionics(F, i.avionics, text, hmdRgb);
   if (i.combat) drawCombat(F, pr, stroke, text);
   // (flying together, out of a fight or a course: the others on the scope, each in his colour — ui/netsession.ts)
-  else if (!i.chal && i.avionics && s.f35Radar && netRadar.contacts.length) drawRadar(F, netRadar, null, text, stroke);
+  // (the F-35's radar — always on in the air: its scope, a fight's missiles on it, a course's gates; its lock's box)
+  if (i.avionics && s.f35Radar && i.radar)
+    drawRadar(
+      F,
+      { contacts: i.radar.contacts, missiles: i.combat?.radar.missiles ?? [] },
+      i.chal?.radar?.contacts ?? null,
+      text,
+      stroke,
+      i.radar,
+    );
+  if (i.radar?.lock && !i.combat) drawLockBox(F, pr, stroke, text, i.radar.lock);
   if (i.dock && i.dockGuide && !i.dock.docked && s.hudDock && on(F, "dock") && F.density < 2) drawDock(F, pr, stroke, text, inside);
 
   // ---- in the air: the angle of attack, the energy, the sideslip, the load, the flight director
@@ -1804,7 +1828,8 @@ function drawChallenge(
     }
   }
   // the radar: the course's next gates, the pad
-  if (F.s.f35Radar && C.radar) drawRadar(F, null, C.radar.contacts, text, stroke);
+  // (the radar's scope: drawn with the F-35's radar — the course's gates on it)
+  if (F.s.f35Radar && C.radar && !F.i.radar) drawRadar(F, null, C.radar.contacts, text, stroke);
   // the banner
   const y = F.top + (F.compact ? 64 : 150) * dpr;
   const mm = Math.floor(C.time / 60),
@@ -2138,7 +2163,7 @@ function drawCombat(
       true,
     );
   else drawWeapons(F, text);
-  if (F.s.f35Radar) drawRadar(F, K.radar, null, text, stroke);
+  if (F.s.f35Radar && !i.radar) drawRadar(F, K.radar, null, text, stroke);
   const mm = Math.floor(K.t / 60),
     ss = String(Math.floor(K.t % 60)).padStart(2, "0");
   text(
@@ -2242,6 +2267,7 @@ function drawRadar(
   gates: { x: number; y: number; gate: number; next: boolean; trk: number | null }[] | null,
   text: (t: string, x: number, y: number, col: string, size: number, align?: CanvasTextAlign, mono?: boolean) => void,
   stroke: (draw: () => void, col: string, lw: number, dash?: number[]) => void,
+  P?: RadarPicture,
 ) {
   const { ctx, H, dpr, s } = F;
   const rad = (F.compact ? 86 : 118) * dpr;
@@ -2295,7 +2321,17 @@ function drawRadar(
     [4, 4],
   );
   text(`${Math.round(range / 1000)} KM`, cx + rad, cy + rad + 2 * dpr, `${GR}0.9)`, 10.5, "right", true);
-  text("RDR", cx - rad, cy + rad + 2 * dpr, `${GR}0.9)`, 10.5, "left", true);
+  text(P ? P.mode : "RDR", cx - rad, cy + rad + 2 * dpr, `${GR}0.9)`, 10.5, "left", true);
+  // (the beam: where it sweeps now — on the lock in STT)
+  if (P)
+    stroke(
+      () => {
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + Math.sin(P.beam) * rad, cy - Math.cos(P.beam) * rad);
+      },
+      `${GR}${P.mode === "STT" ? 0.55 : 0.35})`,
+      P.mode === "STT" ? 1.6 : 1,
+    );
   // (clipped to the disc: a contact beyond the range on its rim)
   const at = (x: number, y: number): [number, number, boolean] => {
     const d = Math.hypot(x, y) * k;
@@ -2331,6 +2367,22 @@ function drawRadar(
             ? "rgba(255, 120, 90, 0.95)"
             : "rgba(255, 120, 90, 0.5)";
     ctx.fillStyle = col;
+    // (a track from the datalink alone: drawn hollow — known, not the radar's own)
+    if (c.datalink) {
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1.4 * dpr;
+      ctx.beginPath();
+      ctx.arc(px, py, 5.5 * dpr, 0, 2 * Math.PI);
+      ctx.stroke();
+      if (c.trk !== null) {
+        ctx.beginPath();
+        ctx.moveTo(px + Math.sin(c.trk) * 5.5 * dpr, py - Math.cos(c.trk) * 5.5 * dpr);
+        ctx.lineTo(px + Math.sin(c.trk) * 15 * dpr, py - Math.cos(c.trk) * 15 * dpr);
+        ctx.stroke();
+      }
+      text(c.name, px, py - 13 * dpr, col, 9.5, "center", true);
+      continue;
+    }
     if (c.air) {
       // (a chevron along its track)
       const a = c.trk ?? 0;
@@ -2389,6 +2441,52 @@ function drawRadar(
   ctx.closePath();
   ctx.fill();
   ctx.restore();
+}
+
+/** The radar's lock in the view (its target designation box): a square on it, its name, range, closure and
+ *  altitude; out of the view, an arrow at the edge towards it. */
+function drawLockBox(
+  F: SymFrame,
+  pr: (d: V3 | null | undefined) => [number, number] | null,
+  stroke: (draw: () => void, col: string, lw: number, dash?: number[]) => void,
+  text: (t: string, x: number, y: number, col: string, size: number, align?: CanvasTextAlign, mono?: boolean) => void,
+  L: NonNullable<RadarPicture["lock"]>,
+) {
+  const { ctx, W, H, dpr } = F;
+  const col =
+    L.iff === "hostile"
+      ? "rgba(255, 90, 70, 1)"
+      : L.iff === "friend"
+        ? "rgba(110, 200, 255, 1)"
+        : L.iff === "neutral"
+          ? "rgba(235, 240, 245, 1)"
+          : "rgba(255, 215, 80, 1)";
+  const p = L.cam ? pr(L.cam) : null;
+  const kt = L.closure / 0.514444;
+  const label = `${L.name.toUpperCase()}  ${(L.range / 1852).toFixed(1)} NM  ${kt >= 0 ? "+" : ""}${Math.round(kt)} KT  ${Math.round(L.alt / 0.3048 / 100) * 100} FT`;
+  if (p && p[0] > 0 && p[0] < W && p[1] > 0 && p[1] < H) {
+    const s = 14 * dpr;
+    stroke(() => ctx.rect(p[0] - s, p[1] - s, 2 * s, 2 * s), col, 2);
+    text(label, p[0], p[1] + s + 14 * dpr, col, 11, "center", true);
+  } else if (L.cam) {
+    // (behind or beside: an arrow at the edge, on the way to turn)
+    const a = Math.atan2(-L.cam[1], L.cam[0]);
+    const r = Math.min(W, H) * 0.34;
+    const x = W / 2 + Math.cos(a) * r,
+      y = H / 2 + Math.sin(a) * r;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(a);
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.moveTo(16 * dpr, 0);
+    ctx.lineTo(-7 * dpr, -10 * dpr);
+    ctx.lineTo(-7 * dpr, 10 * dpr);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    text(label, x, y + 20 * dpr, col, 11, "center", true);
+  }
 }
 
 /**

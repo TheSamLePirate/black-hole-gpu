@@ -298,6 +298,8 @@ export class CombatWorld {
   /** the radar: its lock (a target's id) and the targets it sees */
   lock: number | null = null;
   seen: number[] = [];
+  /** the craft's own radar keeps the lock and the seen (controller/radar.ts): this world's scan left aside */
+  radarFed = false;
   /** the player's options (the F-35's settings): stores never spent, no damage taken, the aggressors' skill,
    *  their missiles and the SAM's fired or not */
   opts: CombatOptions = { infinite: false, invulnerable: false, skill: "normal", enemyMissiles: true };
@@ -469,7 +471,7 @@ export class CombatWorld {
     const ev: CombatEvent[] = [];
     if (!(dt > 0)) return ev;
     this.t += dt;
-    this.scan(P);
+    if (!this.radarFed) this.scan(P);
     this.stepGun(dt, P);
     this.stepAi(dt, P, ev);
     this.stepMissiles(dt, P, ev);

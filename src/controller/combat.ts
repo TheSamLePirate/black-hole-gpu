@@ -137,10 +137,35 @@ function combatStart(this: CameraController, def: Scenario, net: { host: boolean
   };
   // (the stores' mass on the jet — fleet.ts: the payload)
   fleet.payload.f35 = loadoutMass(L);
+  // (its targets on the radar — controller/radar.ts —, briefed: hostile from the start, swept at once)
+  this.radarSources.set("cmb", () => {
+    const C = this.combat;
+    const P = C?.last;
+    if (!C || !P) return [];
+    const W = C.world;
+    return W.targets
+      .filter((q) => q.alive)
+      .map((q) => ({
+        id: `cmb:${q.id}`,
+        r: [q.p[0] - P.p[0], q.p[1] - P.p[1], q.p[2] - P.p[2]] as V3,
+        v: [...q.v] as V3,
+        rcs: q.rcs,
+        kind: isGround(q) ? ("ground" as const) : ("air" as const),
+        iff: q.friendly ? ("friend" as const) : ("hostile" as const),
+        name: q.name,
+        squawk: !!q.friendly,
+        known: true,
+        offboard: !!q.friendly,
+        colour: q.peer === undefined ? undefined : q.friendly ? "rgba(110, 200, 255, 1)" : "rgba(255, 140, 110, 1)",
+        agl: q.p[2] - W.groundZ(q.p[0], q.p[1]),
+      }));
+  });
+  this.radarSweep = true;
 }
 
 function combatEnd(this: CameraController) {
   this.combat = null;
+  this.radarSources.delete("cmb");
   fleet.payload.f35 = 0;
 }
 
@@ -173,6 +198,13 @@ function combatTrigger(this: CameraController, what: "fire" | "lock" | "weapon" 
   if (!P) return null;
   const W = C.world;
   if (what === "lock") {
+    // (the F-35's radar — controller/radar.ts —: its next track; the world's lock its own at once)
+    if (this.radarFix()) {
+      const said = this.radarLockNext();
+      const L = this.radar.lock;
+      W.lock = L?.startsWith("cmb:") ? Number(L.slice(4)) : null;
+      return said;
+    }
     const id = W.cycleLock(P);
     const q = W.target(id);
     return q
@@ -283,7 +315,7 @@ function combatStep(this: CameraController, dt: number) {
 }
 
 /** A vector of the fight's frame (east, north, up) on the camera's axes. */
-function enuToCam(c: CameraController, Cm: (v: Vec3 | null) => Vec3 | null): ((v: V3) => Vec3) | null {
+export function enuToCam(c: CameraController, Cm: (v: Vec3 | null) => Vec3 | null): ((v: V3) => Vec3) | null {
   const fr = c.sfFrame(cameraFrame(c.s));
   if (!fr) return null;
   const E = fr.east as Vec3,

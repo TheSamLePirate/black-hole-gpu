@@ -86,5 +86,7 @@ export function touchdown(msgs: string[]) {
 /** The state these flights leave shared: the flown craft, the reliefs a test set (the Moon's craters back). */
 export function resetFlights() {
   fleet.active = "ranger";
+  // (a fight's stores: their mass off the jet)
+  fleet.payload.f35 = 0;
   for (const b of ["moon", "earth", "mars"]) setGroundHeights(b, null);
 }

@@ -82,6 +82,19 @@ export interface PcdData {
   } | null;
   bingo: number | null;
   alerts: { text: string; level: "warning" | "caution" | "advisory" }[];
+  /** the radar's and the datalink's tracks (controller/radar.ts): east, north of the craft [m], their way [rad, from
+   *  north] (null: unknown), their IFF, the lock, the datalink's alone */
+  tracks?: {
+    e: number;
+    n: number;
+    hdg: number | null;
+    iff: string;
+    air: boolean;
+    locked: boolean;
+    datalink: boolean;
+    name: string;
+    colour?: string;
+  }[];
 }
 
 const C = {
@@ -406,6 +419,54 @@ export class Pcd {
         if (rt.l)
           this.text(`XTK ${(Math.abs(rt.xtk) / NM).toFixed(1)}${rt.xtk > 0 ? "R" : "L"}`, r.x + r.w - 16, r.y + 88, C.magenta, 22, "right");
       }
+    }
+    // the tracks (the radar's, the datalink's): the NATO shapes — a friend's half circle (blue), a hostile's
+    // diamond (red), a neutral's square (white), an unknown's quatrefoil (yellow) —, their way a stick, the lock ringed
+    for (const T of d.tracks ?? []) {
+      const c0 = Math.cos(d.heading),
+        s0 = Math.sin(d.heading);
+      const x = cx + (T.e * c0 - T.n * s0) * px,
+        y = cy - (T.e * s0 + T.n * c0) * px;
+      if (Math.abs(x - cx) > r.w / 2 || y < r.y || y > r.y + r.h) continue;
+      const col = T.colour ?? (T.iff === "friend" ? C.cyan : T.iff === "hostile" ? "#ff5a46" : T.iff === "neutral" ? C.white : "#ffd23f");
+      g.strokeStyle = col;
+      g.fillStyle = col;
+      g.lineWidth = 3;
+      g.beginPath();
+      const k = 13;
+      if (T.iff === "friend") g.arc(x, y, k, Math.PI, 2 * Math.PI);
+      else if (T.iff === "hostile") {
+        g.moveTo(x, y - k);
+        g.lineTo(x + k, y);
+        g.lineTo(x, y + k);
+        g.lineTo(x - k, y);
+        g.closePath();
+      } else if (T.iff === "neutral") g.rect(x - k * 0.8, y - k * 0.8, k * 1.6, k * 1.6);
+      else
+        for (const [ox, oy] of [
+          [0, -0.5],
+          [0.5, 0],
+          [0, 0.5],
+          [-0.5, 0],
+        ])
+          g.arc(x + ox! * k, y + oy! * k, k * 0.5, 0, 2 * Math.PI);
+      if (T.datalink) g.setLineDash([5, 4]);
+      g.stroke();
+      g.setLineDash([]);
+      if (T.hdg !== null) {
+        const a = T.hdg - d.heading;
+        g.beginPath();
+        g.moveTo(x, y);
+        g.lineTo(x + Math.sin(a) * 34, y - Math.cos(a) * 34);
+        g.stroke();
+      }
+      if (T.locked) {
+        g.lineWidth = 2;
+        g.beginPath();
+        g.arc(x, y, k + 9, 0, 2 * Math.PI);
+        g.stroke();
+      }
+      this.text(T.name.slice(0, 10), x + 18, y - 14, col, 20);
     }
     // the ground track's line, the ownship
     g.strokeStyle = C.white;

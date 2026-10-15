@@ -94,6 +94,21 @@ export function pcdData(
     liftMax: V.turbofan ? dryThrust(V.turbofan, e.mach, Math.max(e.sigma, 0)) * STOVL.boost : 0,
     ap: { alt: m.alt, hdg: m.hdg, spd: m.spd },
     fields: FIELDS,
+    // (the radar's picture — controller/radar.ts —: its tracks on the TSD's map)
+    tracks: (() => {
+      const RH = c.radarHud();
+      return (RH?.contacts ?? []).map((T) => ({
+        e: T.e,
+        n: T.n,
+        hdg: T.trk === null ? null : T.trk + RH!.heading,
+        iff: T.iff ?? "unknown",
+        air: T.air,
+        locked: T.locked,
+        datalink: !!T.datalink,
+        name: T.name,
+        colour: T.datalink ? T.colour : undefined,
+      }));
+    })(),
     route: c.nav.route.wps.length
       ? {
           wps: c.nav.route.wps,

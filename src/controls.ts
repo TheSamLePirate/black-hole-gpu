@@ -51,6 +51,7 @@ import { installSpectator } from "./controller/spectator";
 import { type AeroRun, installAerobatics } from "./controller/aerobatics";
 import type { FigureId } from "./game/aerobatics";
 import { GStrain } from "./game/gstrain";
+import { installRadar, Radar, type RadarSource } from "./controller/radar";
 import { type FormState, installFormation } from "./controller/formation";
 import { installJet } from "./controller/jet";
 import { installFplan, noNav, type NavState } from "./controller/fplan";
@@ -1029,6 +1030,12 @@ export class CameraController {
   aeroPending: { id: FigureId | "box"; mode: "demo" | "judge" } | null = null;
   /** the load at the pilot's eyes: the grey-out, the black-out, the red-out, G-LOC (game/gstrain.ts) */
   readonly gStrain = new GStrain();
+  /** the F-35's radar (game/radar.ts, controller/radar.ts), its clock [s], its sources by name */
+  readonly radar = new Radar();
+  radarT = 0;
+  /** a whole sweep asked (a fight begun) */
+  radarSweep = false;
+  readonly radarSources = new Map<string, RadarSource>();
   /** a plane's flight plan and its guidance (game/flightplan.ts — controller/fplan.ts) */
   nav: NavState = noNav();
   /** a challenge flown (game/challenges.ts — controller/challenge.ts), null: none */
@@ -1402,6 +1409,7 @@ installSpectator(CameraController);
 installJet(CameraController);
 installFormation(CameraController);
 installAerobatics(CameraController);
+installRadar(CameraController);
 installFplan(CameraController);
 installChallenge(CameraController);
 installCombat(CameraController);
