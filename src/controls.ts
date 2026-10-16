@@ -1,4 +1,5 @@
 import type { MlsReading } from "./game/mls";
+import { JetPad, type JetPadOut } from "./input/jetpad";
 import { Autothrottle, type JetModes, noJetModes } from "./game/jet";
 import { CineBrain } from "./cine/brain";
 import { Follow } from "./cine/follow";
@@ -1089,6 +1090,12 @@ export class CameraController {
   combat: CombatState | null = null;
   /** the gun's trigger held by another hand (a HOTAS's button, a touch) */
   gunTrigger = false;
+  /** the F-35's pad layout (input/jetpad.ts): its state, its frame's output (null: not flown with it), a zoom's
+   *  field to come back to; its actions (the page's) */
+  readonly jetPad = new JetPad();
+  jetPadOut: JetPadOut | null = null;
+  padZoomBase: number | null = null;
+  onJetPadAction?: (action: string, arg?: string) => void;
   /** the last touchdown: its count, its sink and its speed along [m/s], the gear's verdict (controller/motion.ts) */
   lastTouch: { n: number; sink: number; along: number; gear: string } | null = null;
 

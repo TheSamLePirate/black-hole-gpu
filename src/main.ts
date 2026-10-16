@@ -3083,6 +3083,18 @@ async function main() {
   };
   // (a controller's button bound to a keymap action — PLAN-HOTAS: the same as its key)
   camera.onPadKeyAction = (a, arg) => keyActions[a]?.(new KeyboardEvent("keydown"), arg);
+  // the F-35's pad layout (input/jetpad.ts): its keymap actions, and its own — Y's lock (the fight's, else the
+  // radar's next) and its hold the intercept, Menu held the settings
+  camera.onJetPadAction = (a, arg) => {
+    if (renderer.offlineActive) return;
+    if (a === "lock") {
+      if (camera.combat?.status === "run") combatSay(camera.combatTrigger("lock"));
+      else panel.toast(camera.radarLockNext());
+      camera.pad.rumble(0.05, 0.25, 40);
+    } else if (a === "intercept") panel.toast(camera.icptStart());
+    else if (a === "settings") (pauseMenu ??= makePauseMenu()).open();
+    else keyActions[a as KeyAction]?.(new KeyboardEvent("keydown"), arg);
+  };
   // the cockpit's controls under the pointer (PLAN-COCKPIT K2): the same actions as the keys', the lights'
   // settings, the chronometer; a tip beside the pointer
   const cockpitDeps: CockpitDeps = {

@@ -268,7 +268,7 @@ function combatStep(this: CameraController, dt: number) {
     ? optsOf(C.net.rules)
     : { infinite: s.f35InfiniteAmmo, invulnerable: s.f35Invulnerable, skill: s.f35AiSkill, enemyMissiles: s.f35EnemyMissiles };
   // (shot down in a match: no gun until flying again)
-  W.firing = C.downAt === null && (this.codes.has("Space") || this.gunTrigger);
+  W.firing = C.downAt === null && (this.codes.has("Space") || this.gunTrigger || !!this.jetPadOut?.gun);
   const ev = W.step(dt, P);
   // (the gun's sight: the craft's states for the funnel, the lock's turn measured)
   const Gs = (C.gun ??= { hist: [], meas: { id: null, v: null, a: [0, 0, 0], t: 0 } });

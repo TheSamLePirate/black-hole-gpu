@@ -398,6 +398,23 @@ export const KEYMAP: KeySection[] = [
     ],
   },
   {
+    title: "The F-35 on a controller (Xbox 360 · Xbox · PlayStation)",
+    rows: [
+      { keys: "Left stick", text: "Pitch (back: nose up) · roll" },
+      { keys: "Right stick", text: "Turn the head: look where it points — back ahead when let go" },
+      { keys: "R3  (click the right stick)", text: "Zoom the view (held)" },
+      { keys: "RT · LT  (R2 · L2)", text: "Throttle up · down" },
+      { keys: "LB · RB  (L1 · R1)", text: "Rudder left · right" },
+      { keys: "L3  (click the left stick)", text: "Afterburner" },
+      { keys: "A  (✕)", text: "Gun (held)" },
+      { keys: "B  (○)", text: "Fire the weapon chosen (out of a fight: acknowledge)" },
+      { keys: "X  (□)", text: "Next weapon" },
+      { keys: "Y  (△)", text: "Tap: lock the next target · hold: the intercept" },
+      { keys: "D-pad ▲ ▼ ◀ ▶", text: "Gear · flaps · flares and chaff · airbrake" },
+      { keys: "View · Menu", text: "The camera's view · tap: the autopilot's holds — hold: the settings" },
+    ],
+  },
+  {
     title: "Controller (Xbox · PlayStation)",
     rows: [
       { keys: "Left stick", text: "Fly: forward · back · sideways (L3 held: boost)" },

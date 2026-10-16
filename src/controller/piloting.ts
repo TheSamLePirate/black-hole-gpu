@@ -795,7 +795,15 @@ function pilotInput(this: CameraController, pad: ReturnType<GamepadInput["poll"]
   i.pitch = clamp(i.pitch + t.pitch, -1, 1);
   i.yaw = clamp(i.yaw + t.yaw, -1, 1);
   i.roll = clamp(i.roll + t.roll, -1, 1);
-  if (pad && !this.padControls.flightOwned(pad.id)) {
+  const J = this.jetPadOut;
+  if (J) {
+    // the F-35's pad (input/jetpad.ts): the left stick pitch and roll, the bumpers the rudder, the triggers the
+    // throttle
+    i.pitch = clamp(i.pitch + J.pitch, -1, 1);
+    i.roll = clamp(i.roll + J.roll, -1, 1);
+    i.yaw = clamp(i.yaw + J.yaw, -1, 1);
+    i.throttle = clamp(i.throttle + J.throttle, -1, 1);
+  } else if (pad && !this.padControls.flightOwned(pad.id)) {
     // left stick: pitch (pull back = nose up) and yaw; LB/RB: roll; RT/LT: throttle — the built-in mapping (a
     // player's own profile for this pad flies it instead: PLAN-HOTAS)
     i.pitch = clamp(i.pitch - pad.move[0], -1, 1);

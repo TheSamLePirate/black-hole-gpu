@@ -34,6 +34,8 @@ export interface PadState {
   /** Anything moved or pressed this frame. */
   active: boolean;
   id: string;
+  /** every button held now (the standard mapping's order: the F-35's own layout reads them — input/jetpad.ts) */
+  held?: boolean[];
 }
 
 const BUTTONS: Partial<Record<number, PadAction>> = {
@@ -226,7 +228,7 @@ export class GamepadInput {
     const zoom = (b(12) ? 1 : 0) - (b(13) ? 1 : 0);
     const move: PadState["move"] = [ly ? -ly : 0, lx, up, roll]; // (no −0: stick up is forward)
     const active = actions.length > 0 || zoom !== 0 || move.some((x) => x !== 0) || rx !== 0 || ry !== 0;
-    return { move, look: [rx, ry ? -ry : 0], zoom, fast: b(10), actions, active, id: p.id };
+    return { move, look: [rx, ry ? -ry : 0], zoom, fast: b(10), actions, active, id: p.id, held: p.buttons.map((x) => x.pressed) };
   }
 
   /** A short rumble, if the pad can (Chrome, Edge, Safari). */
