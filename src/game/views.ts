@@ -27,6 +27,21 @@ export interface ExceptionalView {
   /** a challenge already given (game/challenges.ts), else a mission made now */
   challengeId?: string;
   make?: (now: number) => MissionSpec;
+  /** its photograph (S3): the photo mode opened in the scene frames it so — the camera about the craft (its outside view
+   *  "around": from behind at yaw 0, above at pitch + [°], its distance [m]), the field [°], the exposure [EV], the bloom, the depth of field —
+   *  and says what */
+  photo: ScenePhoto;
+}
+
+export interface ScenePhoto {
+  yaw: number;
+  pitch: number;
+  dist: number;
+  fov: number;
+  exposure: number;
+  bloom: number;
+  dof?: boolean;
+  note: string;
 }
 
 /** When a body crosses a height [°] at a place (rising or setting), first after `from` within `span` [ms]; null:
@@ -124,6 +139,15 @@ function eclipse2026() {
 export const VIEWS: ExceptionalView[] = [
   {
     id: "view-eclipse",
+    photo: {
+      yaw: 78,
+      pitch: -18,
+      dist: 40,
+      fov: 55,
+      exposure: 0.5,
+      bloom: 0.22,
+      note: L("Sous l'avion, la couronne derrière lui", "Under the jet, the corona behind it"),
+    },
     title: L("Poursuivre l'éclipse du 12 août 2026", "Chasing the eclipse of 12 August 2026"),
     place: L("Islande, au-dessus de l'Atlantique Nord", "Iceland, over the North Atlantic"),
     when: L("12 août 2026, 17 h 45 UTC — sa vraie date", "12 August 2026, 17:45 UTC — its real date"),
@@ -159,6 +183,15 @@ export const VIEWS: ExceptionalView[] = [
   },
   {
     id: "view-moonrise",
+    photo: {
+      yaw: 4,
+      pitch: 3,
+      dist: 70,
+      fov: 22,
+      exposure: 0.3,
+      bloom: 0.15,
+      note: L("Derrière la patrouille, la Lune au téléobjectif", "Behind the formation, the Moon in a long lens"),
+    },
     title: L("Le lever de la pleine Lune en patrouille", "The full Moon rising before a formation"),
     place: L("Le Mont-Saint-Michel", "Mont-Saint-Michel"),
     when: L("La prochaine pleine Lune, à son lever", "The next full Moon, as it rises"),
@@ -199,6 +232,15 @@ export const VIEWS: ExceptionalView[] = [
   },
   {
     id: "view-aurora",
+    photo: {
+      yaw: 25,
+      pitch: -12,
+      dist: 32,
+      fov: 75,
+      exposure: 1.5,
+      bloom: 0.12,
+      note: L("Sous l'avion, les rideaux au-dessus", "Under the jet, the curtains above"),
+    },
     title: L("Les aurores sur les fjords des Lofoten", "The auroras over the Lofoten's fjords"),
     place: L("Trollfjord, Norvège", "Trollfjord, Norway"),
     when: L("Cette nuit, une heure après le crépuscule", "Tonight, an hour after dusk"),
@@ -234,6 +276,15 @@ export const VIEWS: ExceptionalView[] = [
   },
   {
     id: "view-sunset-carrier",
+    photo: {
+      yaw: 8,
+      pitch: 4,
+      dist: 45,
+      fov: 45,
+      exposure: 0,
+      bloom: 0.25,
+      note: L("Dans l'axe du soleil couchant", "Along the setting Sun"),
+    },
     title: L("Le coucher de soleil sur le porte-avions", "Sunset on the carrier"),
     place: L("Le Ford, au large de la Provence", "The Ford, off Provence"),
     when: L("Ce soir, le Soleil à 2° au-dessus de l'horizon", "This evening, the Sun 2° over the horizon"),
@@ -261,6 +312,16 @@ export const VIEWS: ExceptionalView[] = [
   },
   {
     id: "view-grand-canyon",
+    photo: {
+      yaw: 140,
+      pitch: 12,
+      dist: 35,
+      fov: 60,
+      exposure: 0,
+      bloom: 0.12,
+      dof: true,
+      note: L("De trois quarts avant, les parois derrière", "From the front quarter, the walls behind"),
+    },
     title: L("Le Grand Canyon", "The Grand Canyon"),
     place: L("Arizona, le Colorado", "Arizona, the Colorado"),
     when: L("La fin d'après-midi, 18 h", "Late afternoon, 6 pm"),
@@ -296,6 +357,15 @@ export const VIEWS: ExceptionalView[] = [
   },
   {
     id: "view-monument-valley",
+    photo: {
+      yaw: 200,
+      pitch: 6,
+      dist: 40,
+      fov: 55,
+      exposure: 0,
+      bloom: 0.15,
+      note: L("Les buttes dans la lumière rasante", "The buttes in the low light"),
+    },
     title: L("Monument Valley", "Monument Valley"),
     place: L("Utah – Arizona, les Mittens", "Utah – Arizona, the Mittens"),
     when: L("Au coucher du soleil", "At sunset"),
@@ -327,6 +397,15 @@ export const VIEWS: ExceptionalView[] = [
   },
   {
     id: "view-mach-loop",
+    photo: {
+      yaw: 115,
+      pitch: -6,
+      dist: 30,
+      fov: 50,
+      exposure: 0,
+      bloom: 0.1,
+      note: L("D'en bas, comme depuis la crête", "From below, as from the ridge"),
+    },
     title: L("La Mach Loop", "The Mach Loop"),
     place: L("Pays de Galles", "Wales"),
     when: L("Le défi existant", "The challenge as given"),
@@ -336,6 +415,15 @@ export const VIEWS: ExceptionalView[] = [
   },
   {
     id: "view-star-wars-canyon",
+    photo: {
+      yaw: 90,
+      pitch: 22,
+      dist: 30,
+      fov: 60,
+      exposure: 0,
+      bloom: 0.1,
+      note: L("D'en haut, comme les photographes sur le rebord", "From above, as the photographers on the rim"),
+    },
     title: L("Le Star Wars Canyon", "Star Wars Canyon"),
     place: L("Rainbow Canyon, Death Valley", "Rainbow Canyon, Death Valley"),
     when: L("Le défi existant", "The challenge as given"),
@@ -345,6 +433,16 @@ export const VIEWS: ExceptionalView[] = [
   },
   {
     id: "view-fjords",
+    photo: {
+      yaw: 30,
+      pitch: 15,
+      dist: 45,
+      fov: 55,
+      exposure: 0,
+      bloom: 0.1,
+      dof: true,
+      note: L("Au-dessus, le fjord en contrebas", "Above, the fjord below"),
+    },
     title: L("Le Geirangerfjord", "The Geirangerfjord"),
     place: L("Norvège", "Norway"),
     when: L("L'après-midi, 15 h", "Afternoon, 3 pm"),
@@ -376,6 +474,15 @@ export const VIEWS: ExceptionalView[] = [
   },
   {
     id: "view-himalaya",
+    photo: {
+      yaw: 60,
+      pitch: -8,
+      dist: 40,
+      fov: 50,
+      exposure: -0.3,
+      bloom: 0.1,
+      note: L("Les sommets derrière l'avion", "The summits behind the jet"),
+    },
     title: L("L'Himalaya, de l'Ama Dablam à l'Everest", "The Himalaya, from Ama Dablam to Everest"),
     place: L("Khumbu, Népal", "Khumbu, Nepal"),
     when: L("Le matin, 7 h 30", "Morning, 7:30"),
@@ -409,6 +516,15 @@ export const VIEWS: ExceptionalView[] = [
   },
   {
     id: "view-patagonia",
+    photo: {
+      yaw: 150,
+      pitch: 8,
+      dist: 35,
+      fov: 55,
+      exposure: 0,
+      bloom: 0.15,
+      note: L("Les tours de granite en fond", "The granite towers behind"),
+    },
     title: L("Les tours du Paine", "The towers of Paine"),
     place: L("Patagonie chilienne", "Chilean Patagonia"),
     when: L("Le soir, 20 h", "Evening, 8 pm"),
@@ -440,6 +556,15 @@ export const VIEWS: ExceptionalView[] = [
   },
   {
     id: "view-iceland",
+    photo: {
+      yaw: -45,
+      pitch: 18,
+      dist: 45,
+      fov: 55,
+      exposure: 0,
+      bloom: 0.1,
+      note: L("Les glaciers et les cendres sous l'avion", "The ice and ash below the jet"),
+    },
     title: L("Les volcans d'Islande", "Iceland's volcanoes"),
     place: L("L'Eyjafjallajökull, le Katla, l'Hekla", "Eyjafjallajökull, Katla, Hekla"),
     when: L("Le jour, 13 h", "Midday, 1 pm"),
@@ -469,6 +594,15 @@ export const VIEWS: ExceptionalView[] = [
   },
   {
     id: "view-storm-carrier",
+    photo: {
+      yaw: 30,
+      pitch: 6,
+      dist: 50,
+      fov: 55,
+      exposure: -0.2,
+      bloom: 0.1,
+      note: L("Le pont qui tangue derrière l'avion", "The pitching deck behind the jet"),
+    },
     title: L("La tempête et l'appontage", "The storm and the deck"),
     place: L("Le Ford, golfe du Lion", "The Ford, Gulf of Lion"),
     when: L("L'après-midi, 14 h", "Afternoon, 2 pm"),

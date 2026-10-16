@@ -79,6 +79,7 @@ import { installGcas } from "./controller/gcas";
 import { installJetModes } from "./controller/jetmodes";
 import { installCopilot } from "./controller/copilot";
 import { installCourse } from "./controller/course";
+import { installReplay } from "./controller/replay";
 import { installInstructor } from "./controller/instructor";
 import { installNetcraft } from "./controller/netcraft";
 import { installStovl, noStovl, type StovlState } from "./controller/stovl";
@@ -1093,6 +1094,8 @@ export class CameraController {
   /** the F-35's pad layout (input/jetpad.ts): its state, its frame's output (null: not flown with it), a zoom's
    *  field to come back to; its actions (the page's) */
   readonly jetPad = new JetPad();
+  /** when the craft left the ground last (the replay's touchdowns — controller/replay.ts) [ms] */
+  replayAir: number | null = null;
   jetPadOut: JetPadOut | null = null;
   padZoomBase: number | null = null;
   onJetPadAction?: (action: string, arg?: string) => void;
@@ -1481,6 +1484,7 @@ installGcas(CameraController);
 installJetModes(CameraController);
 installCopilot(CameraController);
 installCourse(CameraController);
+installReplay(CameraController);
 installInstructor(CameraController);
 installNetcraft(CameraController);
 installStovl(CameraController);

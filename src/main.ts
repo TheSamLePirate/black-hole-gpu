@@ -122,7 +122,7 @@ import { events } from "./game/events";
 import { phaseOf, phaseText, PhaseWatcher } from "./game/phase";
 import { BODY_NAMES, bodyLook, craftRadius, isCraft, onOurSide, type Body } from "./targeting";
 import { HidPads } from "./gamepad";
-import { MOUNT_KEYS, MOUNTS, setMountVessel, shipToCamera, type Mount } from "./mounts";
+import { MOUNT_KEYS, MOUNTS, mountPose, setMountVessel, shipToCamera, type Mount } from "./mounts";
 import { fleet, fleetSpinStart, fleetStart } from "./fleet";
 import { recorder } from "./game/recorder";
 import { shownSpeed } from "./ui/hud/model";
@@ -214,6 +214,8 @@ import { RUNWAY_DH } from "./game/procedures";
 import { Simulation } from "./sim";
 import { TransportBar } from "./ui/transport";
 import { Take, type TakeState } from "./take";
+import { EV, FlightTape } from "./game/replay";
+import { ReplayPlayer } from "./ui/replay";
 import { BODY_COLOURS, CameraPanel, fmtHeight, VIEW_HELP, VIEW_LABEL, VIEWS, type View } from "./ui/camerapanel";
 import { defaultAltKm, ourMouthPose, ourOrbitPose } from "./game/place";
 import { bodyAxes, EPOCH_DATE, solarBody, solarState, M_METRES, utcOf } from "./system/solar";
@@ -521,6 +523,23 @@ async function main() {
   const sceneryHitboxes = new SceneryHitboxes();
   /** the take recorder (take.ts): the live view recorded, rendered afterwards as a video */
   const take = new Take();
+  /** the replay's tape (game/replay.ts, S3): the last minutes flown, kept each frame — what is drawn again */
+  type ReplayData = {
+    pose: Partial<Settings>;
+    time: number;
+    water: number;
+    exp: number;
+    thrust: Renderer["shipThrust"];
+    plasma: Renderer["shipPlasma"];
+    jet: Renderer["jetPose"];
+    others: Renderer["combatOthers"];
+    wakes: Renderer["seaWakes"];
+  };
+  const tape = new FlightTape<ReplayData>();
+  /** what the tape keeps of the settings: the craft's place, attitude, motion */
+  const REPLAY_KEYS: (keyof Settings)[] = [...POSE_KEYS, "velR", "velT", "velP", "motion", "rotation"];
+  /** the fight's events this frame, for the tape (a launch of ours, an explosion near) */
+  let replayEv = 0;
 
   // -------------------------------------------------------------------- settings panel
   const fileInput = document.createElement("input");
@@ -3152,7 +3171,30 @@ async function main() {
   };
   // photo mode (ui/photo.ts): the view alone, one bar for the picture
   let photoMode: PhotoMode | null = null;
-  const openPhoto = () =>
+  /** the view of exception flown last (S2 — its photograph framed when the photo mode opens in it: S3) */
+  let sceneView: string | null = null;
+  /** The photo mode opened: in a view of exception still flown (its mission or its challenge), framed as the scene
+   *  says once — the camera about the craft, the field, the exposure, the bloom, the depth of field. */
+  const openPhoto = () => {
+    const v = sceneView ? EXCEPTIONAL_VIEWS.find((x) => x.id === sceneView) : undefined;
+    const flown = v && (v.challengeId ? camera.chal?.status === "run" : camera.mission?.run.spec.id === v.id);
+    if (v && flown && !replay.active && camera.piloting) {
+      const P = v.photo;
+      // (the view "around" takes its angle from where the view was on its first step: the scene's set after it)
+      const frame = () => (camera.outside = { ...camera.outside, yaw: P.yaw, pitch: P.pitch, dist: P.dist });
+      if (settings.shipMount !== "around") {
+        setMount("around");
+        setTimeout(frame, 250);
+      } else frame();
+      camera.setFov(P.fov);
+      Object.assign(settings, { exposure: P.exposure, bloom: P.bloom, dof: !!P.dof });
+      onSettingsChange(["exposure", "bloom", "dof"]);
+      panel.toast(tf("Photo of the scene: {0}", P.note));
+      sceneView = null;
+    }
+    openPhotoMode();
+  };
+  const openPhotoMode = () =>
     (photoMode ??= new PhotoMode({
       settings,
       enter: () => {
@@ -3177,6 +3219,124 @@ async function main() {
       },
       toast: (x) => panel.toast(x),
     })).open();
+
+  /** The replay opened (or its trailer): why not said. */
+  const replayOpen = (trailer: boolean) => {
+    const why = replay.open({ trailer });
+    if (why) panel.toast(why);
+    return why;
+  };
+  // ---- the replay and its trailer (ui/replay.ts, S3): the tape drawn again under the replay's cameras, the flight held
+  /** the field when the replay opened (its cameras' when they have none of their own); a photo over it: the photo's */
+  let replayFov = 60,
+    replayPhoto = false;
+  const replay = new ReplayPlayer<ReplayData>({
+    tape,
+    blocked: () =>
+      netPanel.net?.room
+        ? t("In a room the others fly on: no replay")
+        : renderer.offlineActive
+          ? t("A render is running: wait for it")
+          : !camera.piloting
+            ? t("Fly a craft first (F1)")
+            : null,
+    enter: () => {
+      if (camera.spectating) setSpectator(false);
+      photoMode?.close();
+      const was = { settings: { ...settings }, time: sim.time, water: renderer.water.clock };
+      replayFov = settings.fov;
+      return () => {
+        photoMode?.close();
+        Object.assign(settings, was.settings);
+        sim.setTime(was.time);
+        renderer.water.clock = was.water;
+        camera.sync();
+        refreshGui();
+        touch();
+        touchDisplay();
+      };
+    },
+    apply: (f, pose) => {
+      const d = f.data;
+      Object.assign(settings, d.pose);
+      settings.shipMount = pose.up ? "director" : "cockpit";
+      settings.shipLookYaw = 0;
+      settings.shipLookPitch = 0;
+      if (!replayPhoto) settings.fov = pose.fov ?? replayFov;
+      renderer.shipPose = { eye: pose.eye, aim: pose.aim, up: pose.up };
+      renderer.shipPlace = null;
+      renderer.shipThrust = d.thrust;
+      renderer.shipPlasma = d.plasma;
+      renderer.jetPose = d.jet;
+      renderer.combatOthers = d.others;
+      renderer.seaWakes = d.wakes;
+      renderer.shipContrails = null;
+      renderer.shipReentry = null;
+      renderer.shake = [0, 0];
+      renderer.water.clock = d.water;
+      sim.time = d.time;
+      sim.timeDirty = true;
+      setSceneTime(d.time);
+    },
+    cockpit: () => mountPose("cockpit"),
+    photo: (onClose) => {
+      replayPhoto = true;
+      openPhoto();
+      if (photoMode)
+        photoMode.onClosed = () => {
+          replayPhoto = false;
+          onClose();
+        };
+    },
+    video: (frames, fps, draft) => {
+      const out = frames.map((x, i) => ({
+        t: i / fps,
+        settings: {
+          ...x.f.data.pose,
+          shipMount: x.pose.up ? "director" : "cockpit",
+          shipLookYaw: 0,
+          shipLookPitch: 0,
+          fov: x.pose.fov ?? replayFov,
+        } as Partial<Settings>,
+        state: {
+          time: x.f.data.time,
+          water: x.f.data.water,
+          ev: x.f.data.exp,
+          ship: { eye: x.pose.eye, aim: x.pose.aim, up: x.pose.up },
+          thrust: x.f.data.thrust,
+          plasma: x.f.data.plasma,
+          path: null,
+          others: x.f.data.others,
+          jet: x.f.data.jet,
+          wakes: x.f.data.wakes,
+        } as TakeState,
+      }));
+      // (the scene put back first: the video's own snapshot is then the flight's)
+      replay.close();
+      take.load(out, { ...settings });
+      renderDialog.takeChanged();
+      return renderDialog.startVideo({ shot: "take", fps, draft });
+    },
+    title: () => {
+      const g = camera.geoNow();
+      const where =
+        camera.mission?.run.spec.title ??
+        (g ? `${Math.abs(g.lat).toFixed(2)}° ${g.lat >= 0 ? "N" : "S"} · ${Math.abs(g.lon).toFixed(2)}° ${g.lon >= 0 ? "E" : "W"}` : "");
+      return {
+        craft: VESSELS[fleet.active].name,
+        place: where,
+        date: dateOf(sim.time).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" }),
+      };
+    },
+    caption: (m) => {
+      const u = unitsFor(settings);
+      const parts = [u.fSpd(m.speed)];
+      if (m.agl < 1000) parts.push(tf("{0} over the ground", u.fAlt(m.agl)));
+      if (m.nz > 4) parts.push(`${m.nz.toFixed(1)} g`);
+      return parts.join(" · ");
+    },
+    toast: (x) => panel.toast(x),
+  });
 
   // ---- the four modes (game/modes.ts, PLAN-MODES-AAA M1): the ship, on foot, the free camera, photo — read from
   // the state each frame, changed by the top bar's tabs, F1–F4, TARS (set_mode) and __bh.mode
@@ -3421,6 +3581,8 @@ async function main() {
       { label: { fr: "Carte", en: "Map" }, key: "M", on: flightHud.mapView, run: () => flightHud.toggleMapView() },
       { label: { fr: "Vue", en: "View" }, key: "V", run: () => keyActions.mount(new KeyboardEvent("keydown")) },
       { label: { fr: "Photo", en: "Photo" }, run: openPhoto },
+      { label: { fr: "Replay", en: "Replay" }, run: () => replayOpen(false) },
+      { label: { fr: "Bande-annonce", en: "Trailer" }, run: () => replayOpen(true) },
     ];
   };
 
@@ -3547,6 +3709,8 @@ async function main() {
           : []),
         { label: { fr: "Vue", en: "View" }, key: "V", run: () => keyActions.mount(new KeyboardEvent("keydown")) },
         { label: { fr: "Photo", en: "Photo" }, run: openPhoto },
+        { label: { fr: "Replay", en: "Replay" }, run: () => replayOpen(false) },
+        { label: { fr: "Bande-annonce", en: "Trailer" }, run: () => replayOpen(true) },
       ];
     return [
       { label: { fr: "Vue", en: "View" }, key: "V", run: () => nextView(1) },
@@ -3679,6 +3843,9 @@ async function main() {
       renderer.setCameraPath(st.path);
       renderer.autoExposureEV = st.ev;
       sim.time = st.time;
+      if (st.others) renderer.combatOthers = st.others;
+      if (st.jet) renderer.jetPose = st.jet;
+      if (st.wakes) renderer.seaWakes = st.wakes;
       setSceneTime(st.time);
     },
     // (the scene as it was: the flight — a saved game's state —, every setting, the clocks)
@@ -4029,6 +4196,7 @@ async function main() {
     fly: (id) => {
       const v = EXCEPTIONAL_VIEWS.find((x) => x.id === id);
       if (!v) throw new Error(`no view "${id}" — ${EXCEPTIONAL_VIEWS.map((x) => x.id).join(", ")}`);
+      sceneView = id;
       const c = v.challengeId ? CHALLENGES.find((d) => d.id === v.challengeId) : undefined;
       if (c) {
         placeShip(() => (flyChallenge(challengeHost, c), ""));
@@ -5318,6 +5486,14 @@ async function main() {
     telescope: (on) => settings.telescope !== on && toggleTelescope(),
     goTo,
     standOn,
+    replay: (what, shot) => {
+      if (what === "close") return replay.close(), null;
+      if (what === "video")
+        return replay.active || !replayOpen(false) ? replay.video(false) : t("Nothing to replay yet: fly a little first");
+      const why = replay.active && what === "open" ? null : replayOpen(what === "trailer");
+      if (!why && shot) replay.setMode(shot as "auto");
+      return why;
+    },
     skyGoTo: (kind, i) => void skyGoTo(kind, i),
     map: (on, tab) => {
       if (flightHud.mapView !== on) flightHud.toggleMapView();
@@ -5824,6 +6000,24 @@ async function main() {
       challenges: challengePanel,
       missions: airMissions,
       views: { open: () => openViews(viewsHost), fly: (id: string) => viewsHost.fly(id), list: () => EXCEPTIONAL_VIEWS.map((v) => v.id) },
+      /** the replay (S3): opened, its trailer, a camera held ("auto", "chase", "orbit", "flyby", "cockpit"), sought (s from
+       *  the tape's end, ≤ 0), played or paused, its trailer as a video, closed; where it is */
+      replay: {
+        open: () => replayOpen(false),
+        trailer: () => replayOpen(true),
+        shot: (m: "auto" | "chase" | "orbit" | "flyby" | "cockpit") => replay.setMode(m),
+        seek: (s: number) => replay.at(tape.end + s),
+        play: (on: boolean) => {
+          replay.playing = on;
+        },
+        video: (draft = true) => replay.video(draft),
+        close: () => replay.close(),
+        state: () => replay.state(),
+        tape: () => ({ seconds: tape.length, frames: tape.frames.length }),
+        /** the trailer's video: rendering (its frame, of how many), stopped */
+        videoState: () => renderDialog.videoState(),
+        videoStop: () => renderDialog.stopVideo(),
+      },
       school: {
         open: () => flightSchool(instrHost),
         demo: (id: LessonId) => lessonPlace(id, true),
@@ -5935,7 +6129,7 @@ async function main() {
     cpuProf.begin();
     const dt = Math.min(0.1, (now - last) / 1000);
     // (the flight's clock: the frame's time while it runs — frozen, only the steps move it)
-    if (!frozen && !paused) advanceFrameClock(dt * 1000);
+    if (!frozen && !paused && !replay.active) advanceFrameClock(dt * 1000);
     // (the rain's: only while the time runs — paused, the drops stand still)
     if (!frozen && !paused && settings.animate) renderer.rainClock += dt;
     // (the display's refresh: the median of the loop's last intervals — the frame budget is fitted to it)
@@ -5958,7 +6152,7 @@ async function main() {
     // (a menu holding the game — the title, the pause, the missions: the pad moves in it, the flight
     // does not read it meanwhile)
     if (paused) menuPad.tick(camera.pad.poll(), now);
-    if (!frozen && !paused && !renderer.offlineActive) {
+    if (!frozen && !paused && !renderer.offlineActive && !replay.active) {
       // (the flight plan's guidance speaking: a waypoint passed, its end, the bingo)
       if (camera.nav.say) {
         panel.toast(camera.nav.say);
@@ -5988,9 +6182,12 @@ async function main() {
           CB.world.missiles.some((m) => m.alive && m.owner === "red" && m.target === -1),
         );
         for (const e of CB.events) {
-          if (e.kind === "launch") sound.combatCue(e.who === "blue" ? "launch" : "enemyLaunch");
-          else if (e.kind === "explode" && CB.last) {
+          if (e.kind === "launch") {
+            sound.combatCue(e.who === "blue" ? "launch" : "enemyLaunch");
+            if (e.who === "blue") replayEv |= EV.LAUNCH;
+          } else if (e.kind === "explode" && CB.last) {
             const d = Math.hypot(e.p[0] - CB.last.p[0], e.p[1] - CB.last.p[1], e.p[2] - CB.last.p[2]);
+            if (d < 8000) replayEv |= EV.BOOM;
             sound.combatCue("explode", { dist: d, size: e.size });
           } else if (e.kind === "hit" && e.on === "player") sound.combatCue("hit");
         }
@@ -6046,15 +6243,16 @@ async function main() {
     netVoice.frame();
     // (who speaks: a mark before his name)
     // (the real traffic's labels and lights — controller/traffic.ts)
-    viewOverlay.trafficMarks = camera.piloting
-      ? [
-          ...(settings.traffic ? [...camera.trafficOverlay(unitsFor(settings).fAlt), ...camera.seaOverlay(unitsFor(settings).fSpd)] : []),
-          ...camera.carrierOverlay(unitsFor(settings).fSpd),
-        ]
-      : [];
+    viewOverlay.trafficMarks =
+      camera.piloting && !replay.active
+        ? [
+            ...(settings.traffic ? [...camera.trafficOverlay(unitsFor(settings).fAlt), ...camera.seaOverlay(unitsFor(settings).fSpd)] : []),
+            ...camera.carrierOverlay(unitsFor(settings).fSpd),
+          ]
+        : [];
     viewOverlay.netTags = netSession.tags.map((g) => (netVoice.speaking(g.slot) ? { ...g, name: `◉ ${g.name}` } : g));
     if (netSession.ships.length) changed = true;
-    if (!renderer.offlineActive && cpuProf.time("free-fall prediction", () => sim.applyRender(info))) changed = true;
+    if (!renderer.offlineActive && !replay.active && cpuProf.time("free-fall prediction", () => sim.applyRender(info))) changed = true;
     // (another player followed: his flame as the flown craft's — ui/netsession.ts)
     netSession.afterRender();
     // (a take records what the view shows: the settings, the clocks, what the renderer draws of the flight)
@@ -6105,6 +6303,29 @@ async function main() {
     viewer.weatherReal = camera.weatherReal;
     renderer.rain = viewer.rainView();
     renderer.meterSpot = telescopeSpot();
+    // (the replay — S3 —: its frame drawn again under its camera; else the flight kept on the tape, while it runs)
+    if (replay.active && !renderer.offlineActive) {
+      replay.frame(dt);
+      changed = true;
+    } else if (!frozen && !paused && !renderer.offlineActive && settings.animate && camera.piloting && !camera.spectating) {
+      tape.tick(dt);
+      const smp = camera.replaySample();
+      if (smp)
+        tape.push(smp, camera.replayEvents() | replayEv, {
+          pose: Object.fromEntries(REPLAY_KEYS.map((k) => [k, settings[k]])) as Partial<Settings>,
+          time: sim.time,
+          water: renderer.water.clock,
+          exp: renderer.autoExposureEV,
+          thrust: renderer.shipThrust,
+          plasma: renderer.shipPlasma,
+          jet: renderer.jetPose && { ...renderer.jetPose },
+          others: renderer.combatOthers.slice(0, 24),
+          wakes: renderer.seaWakes,
+        });
+      // (a craft set elsewhere — a scene, a jump —: the tape begun afresh)
+      else if (tape.frames.length) tape.clear();
+    }
+    replayEv = 0;
     const st = capped
       ? null
       : cpuProf.time("render (encode, submit)", () =>
@@ -6276,13 +6497,14 @@ async function main() {
     saveTimer += dt;
     // (a setting changed: the player's own kept two seconds on, the game saved with them)
     const soon = saveSoon && saveTimer > 2;
-    if (soon && !benchPage) writePrefs(settings); // (a benchmark's settings are not the player's)
-    if (settings.autosave && firstFrame && !renderer.offlineActive && (saveTimer > settings.autosaveEvery || soon)) {
+    // (a benchmark's settings are not the player's; a replay's poses not the flight's)
+    if (soon && !benchPage && !replay.active) writePrefs(settings);
+    if (settings.autosave && firstFrame && !renderer.offlineActive && !replay.active && (saveTimer > settings.autosaveEvery || soon)) {
       saveTimer = 0;
       cpuProf.time("autosave", () => tools.autosaveNow());
     }
     if (soon) saveSoon = false;
-    const hudVisible = pil || (camera.character.active && flightHud.mapView);
+    const hudVisible = (pil && !replay.active) || (camera.character.active && flightHud.mapView);
     if (flightHud.visible !== hudVisible) flightHud.show(hudVisible);
     syncMode(now);
     topBar.fit();

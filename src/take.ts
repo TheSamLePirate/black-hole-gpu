@@ -24,6 +24,10 @@ export interface TakeState {
   thrust: Thrust | null;
   plasma: [number, number, number, number];
   path: Path;
+  /** a replay's trailer (ui/replay.ts): the others' craft drawn, the F-35's moving parts, the wakes, as they were */
+  others?: import("./renderer").Renderer["combatOthers"];
+  jet?: import("./renderer").Renderer["jetPose"];
+  wakes?: import("./renderer").Renderer["seaWakes"];
 }
 
 interface Frame extends TakeState {
@@ -91,6 +95,16 @@ export class Take {
       path: st.path,
     });
     return true;
+  }
+
+  /**
+   * A take made of frames given (a replay's trailer: ui/replay.ts): each its time [s], its settings (the first frame's
+   * over `base`), its state.
+   */
+  load(frames: { t: number; settings: Partial<Settings>; state: TakeState }[], base: Settings) {
+    this.recording = false;
+    this.last = null;
+    this.frames = frames.map((f, i) => ({ ...f.state, t: f.t, diff: i ? f.settings : { ...base, ...f.settings } }));
   }
 
   /**

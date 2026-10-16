@@ -1,0 +1,32 @@
+/* The flight's replay (S3): its bar at the bottom, the best moments marked on its time line; the trailer's cinema
+   bars, its title and end cards, its captions */
+body.replay :is(.fl-root, .fl-hud, #hud, #panel, #overlay, .kh, #cam-pop, #sky-pop, #sky-card, #hint, .fh, .subtitles, #topbar, .tb-handle) { display: none !important; }
+body.replay-photo .rp-bar, body.replay-photo .rp-letter { display: none !important; }
+.rp-bar { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 60; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; width: min(1180px, calc(100vw - 32px)); box-sizing: border-box; }
+.rp-title { margin-right: 4px; }
+.rp-track { flex: 1 1 260px; min-width: 160px; position: relative; display: flex; align-items: center; }
+.rp-seek { width: 100%; margin: 0; }
+.rp-marks { position: absolute; left: 0; right: 0; top: -3px; height: 4px; pointer-events: none; }
+.rp-clock { font-variant-numeric: tabular-nums; color: #b8c4cc; min-width: 56px; font-size: 12px; }
+.rp-rate { background: rgba(8, 14, 22, 0.9); color: #e8f0fa; border: 1px solid rgba(160, 210, 255, 0.25); border-radius: 4px; padding: 3px 4px; font: inherit; }
+.rp-shots { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.rp-keys { color: #8a96a0; font-size: 11px; }
+.rp-mark { position: absolute; top: 0; height: 4px; background: #ffc861; border-radius: 2px; pointer-events: none; }
+.rp-letter { position: fixed; inset: 0; pointer-events: none; z-index: 55; }
+body.replay-cinema .rp-letter::before, body.replay-cinema .rp-letter::after { content: ""; position: absolute; left: 0; right: 0; height: 11vh; background: #000; }
+body.replay-cinema .rp-letter::before { top: 0; }
+body.replay-cinema .rp-letter::after { bottom: 0; }
+body.replay-cinema .rp-bar { opacity: 0.15; transition: opacity 0.3s; }
+body.replay-cinema .rp-bar:hover { opacity: 1; }
+.rp-cap { position: absolute; left: 0; right: 0; display: grid; justify-items: center; gap: 4px; color: #fff; text-shadow: 0 1px 6px #000; z-index: 1; }
+.rp-cap:empty { display: none; }
+.rp-card { top: 50%; transform: translateY(-50%); animation: rp-fade 2.6s ease-in-out both; }
+.rp-card b { font-size: clamp(28px, 6vw, 64px); letter-spacing: 0.18em; font-weight: 700; }
+.rp-card span { font-size: clamp(14px, 2.4vw, 22px); letter-spacing: 0.08em; }
+.rp-card small { color: #c8d0d8; letter-spacing: 0.2em; text-transform: uppercase; font-size: 12px; }
+.rp-lower { bottom: calc(11vh + 18px); justify-items: start; left: 6vw; right: auto; animation: rp-lower 5s ease-out both; }
+.rp-lower b { font-size: clamp(18px, 2.6vw, 28px); letter-spacing: 0.12em; text-transform: uppercase; color: #ffd98a; }
+.rp-lower span { font-size: 14px; color: #e8f0fa; }
+@keyframes rp-fade { 0% { opacity: 0; } 20% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes rp-lower { 0% { opacity: 0; transform: translateX(-12px); } 12% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; } }
+@media (max-width: 700px) { .rp-keys { display: none; } }

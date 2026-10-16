@@ -79,6 +79,9 @@ export class PhotoMode {
     }
   };
 
+  /** once, after it closed (the replay's photo — ui/replay.ts) */
+  onClosed: (() => void) | null = null;
+
   constructor(private d: PhotoDeps) {}
 
   private hideBar(hidden: boolean) {
@@ -268,5 +271,8 @@ export class PhotoMode {
     document.body.classList.remove("photo");
     this.restore?.();
     this.restore = null;
+    const after = this.onClosed;
+    this.onClosed = null;
+    after?.();
   }
 }

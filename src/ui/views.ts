@@ -26,6 +26,7 @@ export function openViews(host: ViewsHost) {
       h("span", "vw-place", v.place),
       h("span", "vw-facts", `${v.when} · ${v.weather}`),
       h("span", "vw-chal", v.challenge),
+      h("span", "vw-photo", `📷 ${v.photo.note}`),
     );
     c.onclick = () => {
       m.close();

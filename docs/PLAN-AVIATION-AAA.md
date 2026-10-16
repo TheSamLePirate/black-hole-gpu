@@ -444,6 +444,7 @@ Un test e2e à deux pages par étape concernée.
   *S2 fait le 2026-10-16 — [fiche](progress/aviation/S2.md) : treize vues d'exception (l'éclipse du 12 août 2026 poursuivie à sa vraie date, la pleine Lune en patrouille, les aurores des Lofoten, le coucher de soleil sur le Ford, Grand Canyon, Monument Valley, Mach Loop, Star Wars Canyon, Geirangerfjord, Himalaya, Paine, volcans d'Islande, tempête et appontage) et leur page ; les objectifs parcours, éclipse, patrouille tenue ; les aurores dans le tracer (réglage Aurores, Kp) ; corrigés : l'avion éclairé dans l'ombre de l'éclipse, la mer qui suivait l'avion.*
 - **S3. Le spectacle.** Les caméras du replay (passage, tour, poursuite), le mode photo (existant) placé dans
   chaque scène, une bande-annonce automatique de la meilleure séquence.
+  *S3 fait le 2026-10-16 — [fiche](progress/aviation/S3.md) : les 2 min 30 dernières du vol enregistrées en continu et rejouées, le vol gelé puis remis en place (poursuite, tour, passage au téléobjectif, cockpit, réalisateur) ; les meilleurs moments trouvés et enchaînés en bande-annonce (bandes cinéma, titre, légendes), rendue en vidéo ; un cadrage photo pour chacune des treize vues d'exception. En marge : la manette Xbox 360 du F-35 ([fiche](progress/aviation/MANETTE.md)).*
 
 ## Ordre proposé
 1. **V** (le vrai F-35) — tout le reste en dépend.

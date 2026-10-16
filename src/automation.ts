@@ -71,6 +71,7 @@ export interface BhContext {
     missions?: unknown;
     school?: unknown;
     views?: unknown;
+    replay?: unknown;
   };
   /** playing together (ui/netpanel.ts): the panel, its client once a room was asked for */
   net?: import("./ui/netpanel").NetPanel;
