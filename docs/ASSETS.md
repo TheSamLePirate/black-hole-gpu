@@ -50,10 +50,13 @@ refuses another `basisu` version).
   900 MB with the preview, the preview is left out and the site deploys with main alone; main alone
   past 900 MB fails before anything is deployed.
 
-The root's and the preview's builds are not shared on Pages: each app's URLs are relative to its own
-directory — its bundle, workers, Service Worker precache and scope — and Pages serves no links.
-Sharing them would mean rewriting the preview's URLs to `../` for files only identical by chance, so
-the site stays about twice one build.
+Each app's URLs are relative to its own directory — its bundle, workers, Service Worker precache and
+scope — and Pages serves no links, so the root's and the preview's builds were two copies: past 1 GB
+together once main alone came to 500 MB (16 October 2026). The preview's hashed binaries that main has
+byte for byte — named by their content: the textures, meshes, maps, none of them precached — are now
+left to main's copy, the preview's own code (its directory's top level) pointing at them as `../x`; one
+named any other way there, or in a subdirectory (the crew's, the docs' pages), or nowhere, is kept. The
+preview comes to some 100 MB beside main (the run's summary says how many were left).
 
 ## Git LFS
 
