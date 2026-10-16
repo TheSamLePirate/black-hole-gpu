@@ -5,7 +5,7 @@
 // each channel's time within its tolerance, its worst, each phase's mark, a score out of 20 and the tips for what was
 // worst. Pure: the samples in, the calls and the debrief out. Its words English, translated by t() where shown.
 
-export type LessonKind = "ils" | "carrier" | "figure";
+export type LessonKind = "ils" | "carrier" | "figure" | "basic" | "circuit" | "formation" | "intercept" | "guns";
 
 /** A channel watched: its value is the deviation from its target (0: on it), its tolerance and its limit [its unit];
  *  the calls when past it the one way or the other, and their fixes. */
@@ -23,6 +23,12 @@ export interface Channel {
 }
 
 export const CHANNELS: Record<LessonKind, Channel[]> = {
+  // (the guided lessons' set below)
+  basic: [],
+  circuit: [],
+  formation: [],
+  intercept: [],
+  guns: [],
   ils: [
     {
       key: "gs",
@@ -110,6 +116,168 @@ export const CHANNELS: Record<LessonKind, Channel[]> = {
     },
   ],
 };
+
+// (the guided lessons' — I3, game/course.ts —: the targets of the step flown)
+CHANNELS.basic = [
+  {
+    key: "alt",
+    label: "Height",
+    unit: "m",
+    tol: 30,
+    warn: 80,
+    pos: ["High", "The nose a touch down: back to the height, then level again"],
+    neg: ["Low", "A touch of back stick: back to the height, then level again"],
+    weight: 3,
+  },
+  {
+    key: "hdg",
+    label: "Heading",
+    unit: "°",
+    tol: 5,
+    warn: 12,
+    pos: ["Right of the heading", "A little left bank, then wings level on the heading"],
+    neg: ["Left of the heading", "A little right bank, then wings level on the heading"],
+    weight: 2,
+  },
+  {
+    key: "bank",
+    label: "Bank",
+    unit: "°",
+    tol: 6,
+    warn: 14,
+    pos: ["Too much bank to the right", "Ease the bank: 30° is the turn asked"],
+    neg: ["Too much bank to the left", "Ease the bank: 30° is the turn asked"],
+    weight: 1,
+  },
+  {
+    key: "spd",
+    label: "Speed",
+    unit: "m/s",
+    tol: 8,
+    warn: 20,
+    pos: ["Fast", "Power back a little — the speed asked"],
+    neg: ["Slow", "Power up a little — the speed asked"],
+    weight: 2,
+  },
+];
+CHANNELS.circuit = [
+  {
+    key: "alt",
+    label: "Height",
+    unit: "m",
+    tol: 25,
+    warn: 60,
+    pos: ["High", "Less power and the nose down a touch: back to the height or the path"],
+    neg: ["Low — power!", "Power and the nose up a touch: back to the height or the path"],
+    weight: 3,
+  },
+  {
+    key: "off",
+    label: "Off the track",
+    unit: "m",
+    tol: 150,
+    warn: 400,
+    pos: ["Wide", "Turn in a few degrees: the leg's track, or the centreline"],
+    neg: ["Too close in", "Turn out a few degrees: the leg's track, or the centreline"],
+    weight: 2,
+  },
+  {
+    key: "spd",
+    label: "Speed",
+    unit: "m/s",
+    tol: 5,
+    warn: 12,
+    pos: ["Fast", "Power back: the circuit's speed"],
+    neg: ["Slow — power!", "Power: slow and low near the ground is the danger"],
+    weight: 2,
+  },
+];
+CHANNELS.formation = [
+  {
+    key: "fwd",
+    label: "Fore and aft",
+    unit: "m",
+    tol: 6,
+    warn: 20,
+    pos: ["Sliding ahead", "Power back a touch — and back in before it runs on"],
+    neg: ["Falling behind", "A touch of power — and back off it as you close"],
+    weight: 3,
+  },
+  {
+    key: "right",
+    label: "In and out",
+    unit: "m",
+    tol: 6,
+    warn: 18,
+    pos: ["Too far out", "A little bank towards it, then level — the tip on your canopy"],
+    neg: ["Too close in", "A little bank away from it — clearance first"],
+    weight: 3,
+  },
+  {
+    key: "up",
+    label: "Up and down",
+    unit: "m",
+    tol: 4,
+    warn: 12,
+    pos: ["High", "The nose a touch down: level with it"],
+    neg: ["Low", "A touch of back stick: level with it"],
+    weight: 2,
+  },
+];
+CHANNELS.intercept = [
+  {
+    key: "hdg",
+    label: "Heading",
+    unit: "°",
+    tol: 6,
+    warn: 15,
+    pos: ["Right of the intercept course", "Come left: the bearing to it steady"],
+    neg: ["Left of the intercept course", "Come right: the bearing to it steady"],
+    weight: 3,
+  },
+  {
+    key: "alt",
+    label: "Height",
+    unit: "m",
+    tol: 300,
+    warn: 900,
+    pos: ["Above it", "Down towards its height: the radar shows it"],
+    neg: ["Below it", "Climb towards its height: the radar shows it"],
+    weight: 1,
+  },
+];
+CHANNELS.guns = [
+  {
+    key: "az",
+    label: "Aim across",
+    unit: "°",
+    tol: 2,
+    warn: 7,
+    pos: ["It is to your right", "Roll and pull towards it — lead its turn"],
+    neg: ["It is to your left", "Roll and pull towards it — lead its turn"],
+    weight: 3,
+  },
+  {
+    key: "el",
+    label: "Aim up and down",
+    unit: "°",
+    tol: 2,
+    warn: 7,
+    pos: ["It is above the pipper", "Pull: the pipper ahead of it"],
+    neg: ["It is below the pipper", "Ease the pull: the pipper on it"],
+    weight: 3,
+  },
+  {
+    key: "rng",
+    label: "Range",
+    unit: "m",
+    tol: 150,
+    warn: 400,
+    pos: ["Too far for the gun", "Close in: 300 to 600 m"],
+    neg: ["Too close — overshoot!", "Ease off and out of its plane: never in front of it"],
+    weight: 1,
+  },
+];
 
 export interface InstrSample {
   t: number;

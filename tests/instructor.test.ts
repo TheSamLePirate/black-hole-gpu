@@ -59,7 +59,7 @@ test("a deviation called once held past its limit; the worst first; then less an
 });
 
 test("the flight school's lessons: each a path, its steps along it in order, the step found where we are", () => {
-  expect(LESSONS.length).toBe(12);
+  expect(LESSONS.length).toBe(18);
   for (const L of LESSONS) {
     expect(L.path.length).toBeGreaterThan(5);
     expect(L.steps.length).toBeGreaterThan(1);

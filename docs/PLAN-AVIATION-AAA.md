@@ -406,6 +406,7 @@ pertinent.
 - **I3. Le mode instructeur.** Des leçons guidées : premier vol, tour de piste, atterrissage, ILS, figures,
   patrouille, appontage, interception, combat. TARS vole d'abord, puis vous laisse la main et vous corrige,
   télémétrie à l'appui.
+  *I3 fait le 2026-10-16 — [fiche](progress/aviation/I3.md) : les leçons guidées (`game/course.ts`, `controller/course.ts`) — TARS vole la première partie en la commentant, passe la main, l'instructeur corrige et débriefe ; six nouvelles leçons (premier vol, tour de piste, atterrissage, patrouille, interception, canon) et l'ILS, le cas I, les figures guidés ; le bouton Guidé, le panneau « TARS AUX COMMANDES / À VOUS », l'outil lesson guided — premier vol à 18,2/20, patrouille au poste, TARS en direct qui lance l'interception sans s'en mêler.*
 - **I4. Les voix des rôles.** TARS est l'ailier, le contrôleur radar (« Darkstar »), le porte-avions
   (« Mother ») ou l'officier d'appontage : leurs annonces, à la radio de la patrouille.
 

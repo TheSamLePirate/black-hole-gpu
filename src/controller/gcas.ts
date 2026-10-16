@@ -117,7 +117,9 @@ function gcasStep(this: CameraController, dt: number) {
         !o.id.startsWith("wng:") &&
         !o.id.startsWith("rwg:") &&
         // (the aircraft joined on purpose — an intercept's shadow, a tanker's pre-contact —: not a conflict)
-        !(this.icpt && this.icpt.id === o.id && this.icpt.phase !== "run" && this.icpt.phase !== "turn"),
+        !(this.icpt && this.icpt.id === o.id && this.icpt.phase !== "run" && this.icpt.phase !== "turn") &&
+        // (a guided lesson's craft — I3: the leader flown on, the drone shot at —: close on purpose)
+        !(this.course?.target !== undefined && o.id === `cmb:${this.course.target}` && this.course.id !== "intercept"),
     )
     .map((o) => ({ id: o.id, name: o.name, r: o.r, vRel: [o.v[0] - own.v[0], o.v[1] - own.v[1], o.v[2] - own.v[2]] }));
   // (escaping: kept on until the closest approach foreseen is twice the conflict's — not let go at its edge)

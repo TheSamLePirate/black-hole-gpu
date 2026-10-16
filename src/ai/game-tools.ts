@@ -188,6 +188,7 @@ export interface GameHost {
     list(): { id: string; title: string }[];
     demo(id: string): string;
     tryIt(id: string): string;
+    guided(id: string): string;
     open(): void;
   };
   /** the F-35's flights (ui/flighthub.ts, ui/challengepanel.ts): its airfields, a flight set up, the challenges and fights
@@ -1894,9 +1895,9 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "lesson",
       description:
-        "The flight school and its instructor: the lessons (the ILS approach, the carrier's Case I and the ball, the aerobatic figures) — each a card with its diagram, its steps, its errors. list: them. demo: one flown by the autopilot (the instructor commenting). try: one set up for the pilot to fly by hand (the ILS 12 km out at Edwards, the Ford's final, a figure's entry), the instructor calling the deviations and debriefing it with its charts. open: the flight school's page.",
+        "The flight school and its instructor: the lessons (the first flight, the circuit, the landing, the ILS approach, the carrier's Case I and the ball, formation flying, an intercept, guns, the aerobatic figures) — each a card with its diagram, its steps, its errors. list: them. guided: the lesson as a real instructor gives it — you (TARS) fly its first part, saying each step, then hand over (\"your controls\") and the instructor watches the pilot, corrects him with the telemetry and debriefs with its charts (the default for « apprends-moi… », « montre-moi puis laisse-moi faire »). A guided lesson flies itself — its steps are said in your voice, the autopilot and the instructor do the rest, its debrief comes at its end —: after starting it say one short line and touch nothing else in the flight (no other autopilot, formation, wingmen, orders, schedules) until it ends. demo: your part alone, flown by the autopilot. try: set up for the pilot alone (the ILS 12 km out at Edwards, the Ford's final, a figure's entry, the lesson's own start), the instructor watching. open: the flight school's page.",
       params: {
-        action: { type: "string", enum: ["list", "demo", "try", "open"] },
+        action: { type: "string", enum: ["list", "guided", "demo", "try", "open"] },
         id: { type: "string" },
       },
       required: ["action"],
@@ -1905,7 +1906,8 @@ export function gameTools(h: GameHost): Tool[] {
         if (!S) throw new Error("no flight school here");
         if (a.action === "list") return S.list();
         if (a.action === "open") return S.open(), "The flight school is open";
-        if (!a.id) throw new Error("demo/try need a lesson's id (lesson list)");
+        if (!a.id) throw new Error("guided/demo/try need a lesson's id (lesson list)");
+        if (a.action === "guided") return S.guided(String(a.id));
         return a.action === "demo" ? S.demo(String(a.id)) : S.tryIt(String(a.id));
       }),
     },

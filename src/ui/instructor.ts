@@ -23,6 +23,8 @@ export interface InstructorHost {
   /** a lesson's demonstration (the autopilot flies it) or its try (by hand, watched) */
   demo(id: LessonId): string;
   tryIt(id: LessonId): string;
+  /** TARS first, then the pilot (I3) */
+  guided(id: LessonId): string;
 }
 
 const D = Math.PI / 180;
@@ -47,7 +49,8 @@ export function diagramSvg(
   const pad = 14;
   const W = o.w - 2 * pad,
     H = o.h - 2 * pad;
-  if (L.kind !== "ils") {
+  const profile = L.kind === "ils" || L.kind === "basic";
+  if (!profile) {
     // (to scale: the larger span sets it)
     const sx = (x1 - x0) / W,
       sy = (y1 - y0) / H;
@@ -58,7 +61,7 @@ export function diagramSvg(
     x1 = cx + (s * W) / 2;
     y0 = cy - (s * H) / 2;
     y1 = cy + (s * H) / 2;
-  } else y0 = Math.min(y0, 0);
+  } else if (L.kind === "ils") y0 = Math.min(y0, 0);
   const X = (x: number) => pad + ((x - x0) / Math.max(x1 - x0, 1e-6)) * W;
   const Y = (y: number) => pad + H - ((y - y0) / Math.max(y1 - y0, 1e-6)) * H;
   const poly = (P: [number, number][]) => P.map((p) => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(" ");
@@ -71,6 +74,22 @@ export function diagramSvg(
     );
   if (L.kind === "carrier")
     parts.push(`<rect class="ld-ship" x="${X(-330)}" y="${Y(20) - 4}" width="${Math.max(X(0) - X(-330), 6)}" height="8" rx="2"/>`);
+  // (the circuit's runway from above; the leader seen from behind; the target's track; the gunsight's centre)
+  if (L.kind === "circuit")
+    parts.push(`<rect class="ld-rwy" x="${X(0)}" y="${Y(0) - 3}" width="${Math.max(X(2500) - X(0), 4)}" height="6"/>`);
+  if (L.kind === "formation")
+    parts.push(
+      `<path class="ld-ship" d="M${X(-18)},${Y(0)} L${X(18)},${Y(0)} M${X(0)},${Y(0)} L${X(0)},${Y(6)}"/>`,
+      `<rect class="ld-slot" x="${X(34)}" y="${Y(6)}" width="${Math.max(X(46) - X(34), 4)}" height="${Math.max(Y(-6) - Y(6), 4)}"/>`,
+    );
+  if (L.kind === "intercept")
+    parts.push(
+      `<path class="ld-ship" d="M${X(2000)},${Y(0)} L${X(-2500)},${Y(0)}"/><circle class="ld-ship" cx="${X(0)}" cy="${Y(0)}" r="4"/>`,
+    );
+  if (L.kind === "guns")
+    parts.push(
+      `<circle class="ld-ideal" cx="${X(0)}" cy="${Y(0)}" r="${Math.abs(X(7) - X(0))}"/><circle class="ld-ship" cx="${X(0)}" cy="${Y(0)}" r="2"/>`,
+    );
   parts.push(`<polyline class="ld-ideal" points="${poly(L.path)}"/>`);
   if (o.trace?.length) parts.push(`<polyline class="ld-trace" points="${poly(o.trace)}"/>`);
   L.steps.forEach((st, i) => {
@@ -90,6 +109,9 @@ export function diagramSvg(
 
 /** Our trace in the lesson's plane, from the run's samples. */
 function traceOf(R: InstrRun): [number, number][] {
+  // (a guided lesson's own: its point in the lesson's plane — controller/course.ts)
+  if (R.samples.some((s) => s.v.px !== undefined))
+    return R.samples.filter((s) => Number.isFinite(s.v.px)).map((s) => [s.v.px!, s.v.py!] as [number, number]);
   if (R.kind === "ils") return R.samples.filter((s) => Number.isFinite(s.v.h)).map((s) => [s.x, s.v.h!] as [number, number]);
   if (R.kind === "figure") return R.samples.filter((s) => Number.isFinite(s.v.along)).map((s) => [s.v.along!, s.v.up!] as [number, number]);
   // (the carrier's pass from above: along the axis, the line-up)
@@ -114,26 +136,55 @@ export class InstructorPanel {
   tick() {
     const c = this.host.camera;
     const R = c.instr;
+    const C = c.course?.run ? c.course : null;
     const full = (c.s.f35Instructor ?? "full") === "full";
-    if (!R || !full) {
+    if ((!R && !C) || !full) {
       if (!this.el.hidden) this.el.hidden = true;
       this.key = "";
       return;
     }
+    const id = R?.id ?? C!.id;
     const now = performance.now();
-    if (now - this.at < 250 && this.key === R.id) return;
+    if (now - this.at < 250 && this.key === id) return;
     this.at = now;
-    this.key = R.id;
+    this.key = id;
     this.el.hidden = false;
-    const L = lessonOf(R.id);
-    const S = R.samples[R.samples.length - 1];
+    const L = lessonOf(id);
+    const S = R?.samples[R.samples.length - 1];
     const parts: (HTMLElement | string)[] = [];
     const head = h("div", "ins-head");
-    head.append(h("b", "ins-title", `${t("Instructor")} · ${R.title}`), h("span", "ins-phase", S ? t(S.phase) : ""));
+    head.append(
+      h("b", "ins-title", `${t("Instructor")} · ${R?.title ?? (L ? t(L.title) : id)}`),
+      h("span", "ins-phase", S ? t(S.phase) : ""),
+    );
     const fold = button({ label: this.folded ? "▸" : "▾", title: t("Fold"), onClick: () => ((this.folded = !this.folded), (this.at = 0)) });
     head.append(fold);
     parts.push(head);
-    if (!this.folded) {
+    // (a guided lesson: who flies, its steps, TARS's last words)
+    if (C?.run) {
+      const run = C.run;
+      const st = run.steps[run.i];
+      const box = h("div", "ins-course");
+      box.dataset.testid = "course-panel";
+      const who =
+        st?.who === "you" ? h("span", "ins-who ins-who-you", t("YOUR CONTROLS")) : h("span", "ins-who ins-who-tars", t("TARS FLYING"));
+      const top = h("div", "");
+      top.append(who, document.createTextNode(st ? ` ${run.i + 1}/${run.steps.length} · ${t(st.name)}` : ""));
+      const list = h("ol", "ins-csteps");
+      run.steps.forEach((x, k) => {
+        const li = h(
+          "li",
+          `${k < run.i ? "ins-cdone" : k === run.i ? "ins-cnow" : ""}${x.who === "you" ? " ins-cyou" : ""}`,
+          String(k + 1),
+        );
+        li.title = t(x.name);
+        list.append(li);
+      });
+      box.append(top, list);
+      if (C.said) box.append(h("span", "ins-said", C.said));
+      parts.push(box);
+    }
+    if (!this.folded && R) {
       // (the diagram, our trace and our dot over it, the step we are at)
       if (L) {
         const tr = traceOf(R);
@@ -285,6 +336,29 @@ function chartsOf(R: InstrRun): AssistGraph[] {
       ),
     ];
   }
+  if (R.kind !== "figure") {
+    // (a guided lesson's: each of its first two channels against the time, its tolerance about 0)
+    const T = S.map((s) => s.t);
+    const t0 = Math.min(...T),
+      t1 = Math.max(...T);
+    const X = Array.from({ length: 24 }, (_, i) => t0 + ((t1 - t0) * i) / 23);
+    return CHANNELS[R.kind]
+      .map((c) => ({ c, pts: S.filter((s) => Number.isFinite(s.v[c.key])).map((s) => [s.t, s.v[c.key]!] as [number, number]) }))
+      .filter((x) => x.pts.length > 3)
+      .slice(0, 2)
+      .map(({ c, pts }) => {
+        const m = Math.max(c.warn * 1.5, ...pts.map((p) => Math.abs(p[1]))) * 1.15;
+        return mk(
+          t(c.label),
+          { label: t("Time"), unit: "s", min: t0, max: t1 },
+          { label: t("Off"), unit: c.unit as AssistGraph["y"]["unit"], min: -m, max: m },
+          pts,
+          X.map((x) => [x, 0]),
+          X.map((x) => [x, -c.tol]),
+          X.map((x) => [x, c.tol]),
+        );
+      });
+  }
   const X = span(0);
   const gg = S.filter((s) => Number.isFinite(s.v.g)).map((s) => [s.x, s.v.g!] as [number, number]);
   const m = Math.max(2, ...gg.map((p) => Math.abs(p[1]))) * 1.2;
@@ -416,7 +490,13 @@ export function lessonCard(host: InstructorHost, L: Lesson, onClose?: () => void
   const row = h("div", "ins-row");
   row.append(
     button({ label: t("Watch the demonstration"), testid: "lesson-demo", onClick: () => (m.close(), host.toast(host.demo(L.id))) }),
-    button({ label: t("Try it"), kind: "primary", testid: "lesson-try", onClick: () => (m.close(), host.toast(host.tryIt(L.id))) }),
+    button({
+      label: t("Guided: TARS, then you"),
+      kind: "primary",
+      testid: "lesson-guided",
+      onClick: () => (m.close(), host.toast(host.guided(L.id))),
+    }),
+    button({ label: t("Try it"), testid: "lesson-try", onClick: () => (m.close(), host.toast(host.tryIt(L.id))) }),
   );
   body.append(row);
 }

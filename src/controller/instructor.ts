@@ -10,6 +10,7 @@ import { FIGURES, type FigureId } from "../game/aerobatics";
 import { ilsReading } from "../game/ils";
 import { type InstrDebrief, instrDebrief, type InstrRun, instrStep, type LessonKind, newInstr } from "../game/instructor";
 import { fleet } from "../fleet";
+import { LESSONS } from "../game/lessons";
 import { t } from "../i18n";
 import { VESSELS } from "../vessels";
 import type { CameraController } from "../controls";
@@ -32,6 +33,25 @@ const vApp = () => approachSpeed(fleet.massProps().mass, VESSELS.f35.aero!.wing!
 /** What is flown now that the instructor watches: its kind, its lesson's id and title, and its sample (where, the
  *  phase, the channels and the graphs' values). Null: nothing. */
 function watched(
+  c: CameraController,
+): { kind: LessonKind; id: string; title: string; x: number; phase: string; v: Record<string, number> } | null {
+  // (a guided lesson — controller/course.ts —: the pilot's steps alone, as its own lesson; its own kinds sampled there)
+  const C = c.course;
+  if (C) {
+    const s = C.run?.steps[C.run.i];
+    if (!C.run || C.run.done || s?.who !== "you") return null;
+    const L = LESSONS.find((x) => x.id === C.id);
+    const title = L ? t(L.title) : C.id;
+    const own = c.courseSample();
+    if (own) return { ...own, id: C.id, title };
+    const w = watchedOwn(c);
+    return w ? { ...w, id: C.id, title } : null;
+  }
+  return watchedOwn(c);
+}
+
+/** What is flown now outside a guided lesson: an ILS approach, a carrier's pass, a figure. */
+function watchedOwn(
   c: CameraController,
 ): { kind: LessonKind; id: string; title: string; x: number; phase: string; v: Record<string, number> } | null {
   const V = c.airFlight.last?.speed ?? 0;

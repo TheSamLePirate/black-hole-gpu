@@ -42,13 +42,13 @@ const SAY: Record<string, () => string> = {
 };
 
 /** A site's runway as the ILS's (its end landed now: into the wind). */
-function runwayOf(c: CameraController, s: Site): IlsRunway {
+export function runwayOf(c: CameraController, s: Site): IlsRunway {
   const end = landingEnd(s, c.s, daysOf(c.nowTime()), c.weatherReal);
   return { name: end.name, icao: end.icao, lat: end.lat, lon: end.lon, hdg: end.rwy ?? 0, elev: end.elev ?? 0, len: RUNWAY_LENGTH };
 }
 
 /** The runway named (ICAO or name), else the nearest within 150 km. */
-function findRunway(c: CameraController, name?: string): Site | null {
+export function findRunway(c: CameraController, name?: string): Site | null {
   const fields = SITES.filter((x) => x.body === "earth" && x.runway && x.rwy !== undefined);
   if (name) {
     const n = name.trim().toLowerCase();

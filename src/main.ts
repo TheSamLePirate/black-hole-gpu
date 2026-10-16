@@ -67,6 +67,8 @@ import { missionFromHash } from "./game/missionedit";
 import { MODES as JET_MODES } from "./game/jetmodes";
 import { debriefInstr, flightSchool, type InstructorHost, InstructorPanel } from "./ui/instructor";
 import { type LessonId, LESSONS } from "./game/lessons";
+import { fromRunway } from "./game/ils";
+import { findRunway, runwayOf } from "./controller/ils";
 import { MissionMap } from "./ui/missionmap";
 import { briefMission, debriefMission, flyMission, MissionHud } from "./ui/airmission";
 import { AIR_MISSIONS } from "./game/airmissions";
@@ -3849,8 +3851,14 @@ async function main() {
   // a mission (ui/airmission.ts — PLAN-AVIATION-AAA P1): its words said and shown, its objectives on screen, its debrief
   // the instructor (A4 — ui/instructor.ts): its panel, its calls said by TARS, its debrief; the flight school's lessons
   // flown — demonstrated by the autopilot or tried by hand
-  const lessonPlace = (id: LessonId, demo: boolean): string =>
+  const lessonPlace = (id: LessonId, how: boolean | "guided"): string =>
     placeShip(() => {
+      // (guided — I3 —: TARS flies first, then hands over; the new lessons' demonstration his part alone, their try
+      // the pilot's)
+      const guided = how === "guided";
+      const demo = how === true || guided;
+      const mode = guided ? "guided" : how ? "demo" : "try";
+      camera.courseOff();
       if (fleet.active !== "f35") tools.set("vessel", "f35");
       if (camera.mission) camera.missionAbort();
       if (camera.combat) camera.combatEnd();
@@ -3868,6 +3876,7 @@ async function main() {
         fleet.fuel.f35 = 3000;
         const said = camera.ilsStart("KEDW");
         if (!demo && camera.ilsRun) camera.ilsRun.manual = true;
+        if (guided) return camera.courseStart("ils", "guided");
         return demo ? said : t("ILS 22 at Edwards, 12 km out: yours — the needles and the instructor with you");
       }
       if (id === "case1") {
@@ -3887,13 +3896,43 @@ async function main() {
             sp.heading / D2,
             180,
           );
-          return camera.trapLand("ford", { case: "I" }) ?? "";
+          const said = camera.trapLand("ford", { case: "I" }) ?? "";
+          return guided ? camera.courseStart("case1", "guided") : said;
         }
         camera.carrierFinal("ford", 2500, 75);
         camera.gearDown = true;
         return t("The Ford's final, 2.5 km out: yours — the ball, the LSO and the instructor with you");
       }
+      if (id === "first" || id === "formation" || id === "intercept" || id === "guns") {
+        // (over the Mojave: the first flight at 2 500 m, the formation's leader at 5 000 m, the unknown from the
+        // north at 6 000 m, the drone at 4 000 m — the lesson's craft made at its first frame)
+        tools.set("f35Variant", "B");
+        const at = { first: [2500, 90, 200], formation: [5000, 90, 180], intercept: [6000, 0, 250], guns: [4000, 0, 200] }[id];
+        tools.flyAt(id === "intercept" ? 35.2 : 34.9, id === "intercept" ? -117.9 : -117.6, at[0]!, at[1]!, at[2]!);
+        camera.gearDown = false;
+        fleet.fuel.f35 = 5000;
+        return camera.courseStart(id, mode);
+      }
+      if (id === "circuit" || id === "landing") {
+        // (Edwards's runway 22: the downwind abeam, 300 m over the field; or 6 km out on the final)
+        tools.set("f35Variant", "B");
+        const site = findRunway(camera, "KEDW");
+        if (!site) return t("ILS: no runway called KEDW");
+        const W = runwayOf(camera, site);
+        fleet.fuel.f35 = 3000;
+        camera.gearDown = true;
+        if (id === "circuit") {
+          const p = fromRunway(W, 1500, 1800);
+          tools.flyAt(p.lat, p.lon, Math.round(W.elev + 300), (W.hdg + 180) % 360, 100);
+          return camera.courseStart("circuit", mode, { rwy: W });
+        }
+        const p = fromRunway(W, -6000, 0);
+        tools.flyAt(p.lat, p.lon, Math.round(W.elev + 6300 * Math.tan((3 * Math.PI) / 180)), W.hdg, 85);
+        camera.ilsStart("KEDW");
+        return camera.courseStart("landing", mode);
+      }
       flyFigure(challengeHost, id, demo ? "demo" : "judge");
+      if (guided) return camera.courseStart(id, "guided");
       return demo ? tf("{0}: the demonstration", t(FIGURES[id].name)) : tf("{0}: yours — the instructor watching", t(FIGURES[id].name));
     });
   const instrHost: InstructorHost = {
@@ -3905,12 +3944,16 @@ async function main() {
     },
     demo: (id) => lessonPlace(id, true),
     tryIt: (id) => lessonPlace(id, false),
+    guided: (id) => lessonPlace(id, "guided"),
   };
   const instructorPanel = new InstructorPanel(instrHost);
   camera.onInstrCall = (text, fix) => {
     voice.say({ text, speaker: "tars", priority: 2 });
     if ((settings.f35Instructor ?? "full") === "calls") panel.toast(`${text} — ${fix}`);
   };
+  // (a guided lesson — I3 —: TARS's words said; the figure set up again for the pilot)
+  camera.onCourseSay = (text) => voice.say({ text, speaker: "tars", priority: 2, ttl: 20_000 });
+  camera.onCourseFigure = (id) => flyFigure(challengeHost, id as FigureId, "judge");
   camera.onInstrDebrief = (last) => {
     if ((settings.f35Instructor ?? "full") === "full") debriefInstr(instrHost, last);
     else panel.toast(tf("Instructor: {0}/20", last.debrief.score.toFixed(1)));
@@ -5341,6 +5384,10 @@ async function main() {
         if (!LESSONS.some((L) => L.id === id)) throw new Error(`no lesson "${id}" — lesson list`);
         return lessonPlace(id as LessonId, false);
       },
+      guided: (id) => {
+        if (!LESSONS.some((L) => L.id === id)) throw new Error(`no lesson "${id}" — lesson list`);
+        return lessonPlace(id as LessonId, "guided");
+      },
       open: () => flightSchool(instrHost),
     },
     missions: {
@@ -5716,6 +5763,7 @@ async function main() {
         open: () => flightSchool(instrHost),
         demo: (id: LessonId) => lessonPlace(id, true),
         tryIt: (id: LessonId) => lessonPlace(id, false),
+        guided: (id: LessonId) => lessonPlace(id, "guided"),
       },
     },
     net: netPanel,

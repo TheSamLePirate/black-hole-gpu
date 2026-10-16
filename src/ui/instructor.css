@@ -71,3 +71,16 @@
 @media (max-width: 760px) {
   .ins-panel { width: calc(100vw - 24px); top: auto; bottom: 12px; max-height: 45vh; }
 }
+/* the guided lessons (I3): who flies, the step, TARS's words, the steps' list */
+path.ld-ship { fill: none; stroke: #4f8dff; stroke-width: 3; }
+.ld-slot { fill: rgba(120, 255, 170, 0.12); stroke: rgba(120, 255, 170, 0.7); stroke-dasharray: 3 3; }
+.ins-course { display: grid; gap: 4px; padding: 6px 8px; border-left: 3px solid #6fe8ff; background: rgba(111, 232, 255, 0.08); border-radius: 4px; }
+.ins-who { display: inline-block; padding: 1px 6px; border-radius: 3px; font: 700 11px/1.4 var(--mono, monospace); letter-spacing: 0.06em; }
+.ins-who-tars { background: rgba(111, 232, 255, 0.2); color: #9ff0ff; }
+.ins-who-you { background: rgba(255, 200, 97, 0.25); color: #ffd98a; }
+.ins-said { color: #d6e6ee; font-size: 12.5px; }
+.ins-csteps { display: flex; gap: 3px; flex-wrap: wrap; margin: 0; padding: 0; list-style: none; }
+.ins-csteps li { font: 600 10.5px/1.5 var(--mono, monospace); padding: 0 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.06); color: #8fa3ad; }
+.ins-csteps li.ins-cdone { color: #5dff8a; }
+.ins-csteps li.ins-cnow { background: rgba(255, 200, 97, 0.25); color: #ffd98a; }
+.ins-csteps li.ins-cyou { border-bottom: 2px solid rgba(255, 200, 97, 0.6); }
