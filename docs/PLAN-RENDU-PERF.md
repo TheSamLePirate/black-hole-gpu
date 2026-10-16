@@ -70,6 +70,28 @@ rayon et le nombre de rayons qui font la vitesse.
    portées sûres laissent un trou) — Andes −10,5 %, Yosemite −10,5 %, Tarifa −6 %. Images identiques.
    Cumul en cockpit à Tarifa depuis le début : trace 43,9 → 25,7 ms (−41 %), l'image 60 → 41 ms.
 
+5. **Saturne : les pas du trou de ver fusionnés pour `ourSegment`** — près de la bouche (celle de Saturne), chaque rayon
+   est intégré dans sa métrique, et chaque pas de notre côté regardait tous nos corps (leurs anneaux, leur air, la
+   couronne et le disque du Soleil) le long de sa corde : une quarantaine de fois par rayon. Ses cordes sont réunies
+   en morceaux droits tant que le chemin tient droit à un quart de pixel près — un regard par morceau
+   (`TUNE_MERGE`). Trace 126,7 → 54,8 ms (−57 %), l'image 142 → 71 ms, identique (52 dB). Trouvé par élimination
+   (`TUNE_SKIP`) : le ciel −99 %, `ourSegment` −80 %, le fond 0 %.
+
+### Où en est chaque scène (×4, 1600×1000, kerr-mini)
+
+| Scène | trace au départ | trace maintenant |
+|---|---|---|
+| Kerr a=0,94 par la tranche | 12,7 | 12,6 ms |
+| Disque volumétrique + jet | 32,6 | 32,9 ms |
+| Interstellar (le passage du film) | 43,3 | 43,9 ms |
+| Saturne à contre-jour | 137,9 | **54,9 ms** |
+| Miller : Gargantua sur la mer | 122,3 | 124,9 ms |
+| La Lune en plaine | 64,6 | 65,9 ms |
+| Yosemite | 98,9 | **≈ 88–94 ms** |
+| Vol, Alpes, cockpit | 27,2 | **19–23 ms** |
+| Vol, Tarifa, cockpit | 43,9 | **≈ 25,7 ms** |
+| (cabine du Ranger, Interstellar) | 52 | **18 ms** |
+
 ## Essayés, non retenus
 
 - **La tolérance des géodésiques doublée** (`realtimeEps` 0,12 → 0,24) : −32 % sur Kerr par la tranche, mais des taches
@@ -84,6 +106,10 @@ rayon et le nombre de rayons qui font la vitesse.
 - **Les corps de Gargantua écartés par la bande de leur orbite** : rien (ils passent près des rayons).
 - **Alléger la déformation des crêtes** (−18 % à Yosemite) : écarté — la forme des crêtes serait changée (choix du
   16/10 : les garder telles quelles).
+
+- **Miller** : les corps de Gargantua écartés tôt par leur place au début du pas (+3,7 % : les registres) ; par la
+  bande de leur orbite (rien). Ce qui y coûte est du vrai travail : le disque épais — sa brume, sa fumée, sa
+  turbulence que les rayons du ciel traversent — ≈ 18 %, les corps à chaque pas ≈ 17 %, les traversées du plan ≈ 5 %.
 
 ## Ce qui coûte encore, sur Terre
 

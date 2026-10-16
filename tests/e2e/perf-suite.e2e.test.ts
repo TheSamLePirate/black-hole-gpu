@@ -237,6 +237,16 @@ describe.skipIf(!E2E)("the render's costs on held scenes", () => {
         // (the aerial perspective's table's kernel, compiled after the first image: waited for — 3 min at most —
         // near a world with air)
         while (r.aerialTable && !r.aerialPipe && r.lastNear && performance.now() - t0 < 180000) { __bh.touch(); await frame(); }
+        // (a trace pass drawn — not only a kernel said ready: a scene's first could still be compiling)
+        {
+          r.prof.enabled = true; r.prof.every = 1;
+          const t1 = performance.now();
+          while (performance.now() - t1 < 120000) {
+            __bh.touch(); await frame();
+            if ((r.prof.table().find((p) => p.label === "trace")?.last ?? 0) > 0) break;
+          }
+          r.prof.every = 8;
+        }
         let calm = 0;
         while (performance.now() - t0 < 240000) {
           const ready = r.earthTiles.pending === 0 && !r.hdLoading;
