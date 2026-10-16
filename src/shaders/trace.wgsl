@@ -195,6 +195,9 @@ override TUNE_MARCH_K: f32 = 0.5;
 override TUNE_RELAX: f32 = 1.6;
 // (the same within the margin of the ground — the full heights —: 1 none)
 override TUNE_RELAX_BAND: f32 = 1.6;
+// (measures of the ground's detail: 0 its mountains' warp off, 0 all of it off — the image then other)
+override TUNE_WARP: u32 = 1u;
+override TUNE_DETAIL: u32 = 1u;
 // (the ray's work by kind: 0 the ground's march steps (the Earth's, a world's), 1 the ground's heights read (earthH,
 // relief), 2 its shadows' steps, 3 the clouds' steps (the volume's, the weather's), 4 the air's (the auroras'), 5 the
 // water's (the sea's surface search, the mirror's march), 6 the scenery's boxes visited, 7 the geodesic integrator's
@@ -4612,6 +4615,7 @@ fn tfbmFw(p0: vec3f, oct: f32, lam0: f32, res: f32) -> f32 {
   return s / max(n, 1e-6);
 }
 fn earthDetail(q: vec3f, h0: f32, foot: f32, res: f32) -> f32 {
+  if (TUNE_DETAIL == 0u) { return 0.0; }
   let mount = smoothstep(300.0, 2500.0, h0);
   let land = smoothstep(0.0, 40.0, h0);
   var h = 0.0;
@@ -4621,7 +4625,8 @@ fn earthDetail(q: vec3f, h0: f32, foot: f32, res: f32) -> f32 {
   // smooth field (no regular rows of peaks)
   let o1 = layerOctF(1500.0, foot, EARTH_RM, 7.0);
   if (o1 > f32(firstKept(EARTH_RM / 1500.0, res)) && mount > 0.0) {
-    let pw = q * 1500.0 + vec3f(11.0) + 0.7 * vec3f(tfbm(q * 600.0 + vec3f(3.1), 2), tfbm(q * 600.0 + vec3f(7.7), 2), tfbm(q * 600.0 + vec3f(1.3), 2));
+    var pw = q * 1500.0 + vec3f(11.0);
+    if (TUNE_WARP > 0u) { pw += 0.7 * vec3f(tfbm(q * 600.0 + vec3f(3.1), 2), tfbm(q * 600.0 + vec3f(7.7), 2), tfbm(q * 600.0 + vec3f(1.3), 2)); }
     h += ridgedMFw(pw, o1, EARTH_RM / 1500.0, res) * 1500.0 * mount;
   }
   // the plains' hills, the rocks
