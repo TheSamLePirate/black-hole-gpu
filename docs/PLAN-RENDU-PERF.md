@@ -77,13 +77,20 @@ rayon et le nombre de rayons qui font la vitesse.
    (`TUNE_MERGE`). Trace 126,7 → 54,8 ms (−57 %), l'image 142 → 71 ms, identique (52 dB). Trouvé par élimination
    (`TUNE_SKIP`) : le ciel −99 %, `ourSegment` −80 %, le fond 0 %.
 
+6. **Le ciel du trou noir** — la tolérance des géodésiques trois fois plus large loin du trou (`TUNE_EPS_FAR` : × 1
+   jusqu'à 10 M — la sphère de photons, l'anneau, l'ombre exacts —, × 3 au-delà de 20 M) : Kerr par la tranche
+   −21 %, les images au niveau du bruit d'une comparaison (`AB=noop` : deux captures du même, 0,82 d'écart moyen ;
+   × 3 contre × 1 : 0,73, les mêmes cartes de différences). La fumée du disque pas à pas de 0,5 M en temps réel
+   (`TUNE_SMOKE_STEP`, 0,25 avant ; les passes d'affinage gardent 0,1) : Interstellar −22 % ; l'image à l'arrêt
+   la même, en mouvement 29,4 dB contre 29,7 face à l'image convergée (`motion-quality`, choix du 16/10).
+
 ### Où en est chaque scène (×4, 1600×1000, kerr-mini)
 
 | Scène | trace au départ | trace maintenant |
 |---|---|---|
-| Kerr a=0,94 par la tranche | 12,7 | 12,6 ms |
+| Kerr a=0,94 par la tranche | 12,7 | **10,1 ms** |
 | Disque volumétrique + jet | 32,6 | 32,9 ms |
-| Interstellar (le passage du film) | 43,3 | 43,9 ms |
+| Interstellar (le passage du film) | 43,3 | **34,6 ms** |
 | Saturne à contre-jour | 137,9 | **54,9 ms** |
 | Miller : Gargantua sur la mer | 122,3 | 124,9 ms |
 | La Lune en plaine | 64,6 | 65,9 ms |
