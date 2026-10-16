@@ -13,9 +13,10 @@ const smoothstep = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
-/** the most the tracer's detail (trace.wgsl earthDetail) adds over a ground of height h [m] */
+/** the most the tracer's detail (trace.wgsl earthDetail) adds over a ground of height h [m] — its ridges ~1 (a quarter
+ *  more kept), its hills and rocks half again (trace.wgsl detailMargin, the same) */
 export function detailMargin(h: number): number {
-  return 1500 * smoothstep(300, 2500, h) + 50 + 11 + 2;
+  return 1900 * smoothstep(300, 2500, h) + 95;
 }
 
 /** The highest height of the global map in 1° cells (whole metres per texel, W × H equirectangular, half floats). */
