@@ -7,6 +7,9 @@ name: Deploy to GitHub Pages
 #
 # (Until this file is on main, main's own copy of it runs on main's pushes: it deploys main alone, which
 # wipes /test/ until the next preview push, and it is not in this file's concurrency group.)
+#
+# The two revisions are verified side by side, their unit tests' files in parallel (a worker a core); a main
+# revision already verified and built is not verified again (its build kept by its commit).
 
 on:
   push:
@@ -66,7 +69,7 @@ jobs:
       # against its TypeScript twin — both exit 0 without an adapter)
       - run: bun scripts/check-wgsl.ts
       - run: bun scripts/check-forest.ts --rays 2000
-      - run: bun test --reporter=junit --reporter-outfile=junit.xml
+      - run: bun test --parallel --reporter=junit --reporter-outfile=junit.xml
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -76,17 +79,17 @@ jobs:
 
   # a push (or a manual run): the site assembled from both branches' heads, each verified exactly as
   # built — one artifact, one deployment (a Pages deployment replaces the whole site). main gates the
-  # deployment; a failing preview is reported and left out, the site deploying with main alone.
-  site:
+  # deployment; a failing preview is reported and left out, the site deploying with main alone. The two
+  # revisions are verified side by side (main, preview), their builds assembled after (site).
+  snapshot:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
     outputs:
-      preview: ${{ steps.assemble.outputs.preview == 'yes' && env.PREVIEW_PATH || '' }}
       main: ${{ steps.revisions.outputs.main }}
+      test: ${{ steps.revisions.outputs.test }}
     steps:
-      - uses: oven-sh/setup-bun@v2
       - name: Snapshot both branch revisions
         id: revisions
         env:
@@ -120,47 +123,49 @@ jobs:
           test_sha=$(resolve_ref "$PREVIEW_BRANCH")
           echo "main=$main_sha" >> "$GITHUB_OUTPUT"
           echo "test=$test_sha" >> "$GITHUB_OUTPUT"
-      # (each with its parent: the binaries its last commit adds, checked below)
-      - uses: actions/checkout@v4
+
+  # the exact main revision verified and built → the root. A revision verified and built before — a preview
+  # push, main unchanged — is not verified again: its build is kept by its commit (saved only once verified).
+  main:
+    needs: snapshot
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - id: built
+        uses: actions/cache/restore@v4
         with:
-          ref: ${{ steps.revisions.outputs.main }}
-          path: main-src
+          path: site-main.tar
+          key: site-main-${{ needs.snapshot.outputs.main }}
+      # (with its parent: the binaries its last commit adds, checked below)
+      - if: steps.built.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.snapshot.outputs.main }}
           fetch-depth: 2
           persist-credentials: false
-      # (a preview that cannot be checked out fails its verification below: reported, left out)
-      - uses: actions/checkout@v4
-        if: steps.revisions.outputs.test != 'absent'
-        continue-on-error: true
+      # (the Git LFS objects — docs/ASSETS.md —: cached by their ids, fetched only when they change)
+      - if: steps.built.outputs.cache-hit != 'true'
+        run: git lfs ls-files --long | cut -d' ' -f1 | sort > .lfs-ids
+      - if: steps.built.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
         with:
-          ref: ${{ steps.revisions.outputs.test }}
-          path: test-src
-          fetch-depth: 2
-          persist-credentials: false
-      # (the Git LFS objects of both revisions — docs/ASSETS.md —: cached by their ids, fetched only when they change;
-      # a preview without LFS files lists none)
-      - name: The LFS objects' ids
-        run: |
-          for d in main-src test-src; do
-            if [ -d "$d/.git" ]; then (cd "$d" && git lfs ls-files --long | cut -d' ' -f1); fi
-          done | sort -u > .lfs-ids
-      - uses: actions/cache@v4
-        with:
-          path: |
-            main-src/.git/lfs
-            test-src/.git/lfs
-          key: lfs-site-${{ hashFiles('.lfs-ids') }}
-          restore-keys: lfs-site-
-      - name: The LFS objects
-        run: |
-          (cd main-src && git lfs pull)
-          if [ -d test-src/.git ]; then (cd test-src && git lfs pull) || echo "::warning::the preview's LFS objects could not be fetched"; fi
-      - uses: actions/cache@v4
+          path: .git/lfs
+          key: lfs-${{ hashFiles('.lfs-ids') }}
+          restore-keys: lfs-
+      - if: steps.built.outputs.cache-hit != 'true'
+        run: git lfs pull
+      - if: steps.built.outputs.cache-hit != 'true'
+        uses: oven-sh/setup-bun@v2
+      - if: steps.built.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('main-src/bun.lock') }}
-      - name: Verify and build the exact main revision → the root
-        working-directory: main-src
-        # (the size and forest checks where the revision has them: a branch from before them builds without)
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - name: Verify and build the exact main revision
+        if: steps.built.outputs.cache-hit != 'true'
+        # (the size and forest checks where the revision has them: a branch from before them builds without;
+        # the unit tests' files in parallel, a worker a core)
         run: |
           bun install --frozen-lockfile
           bun run typecheck
@@ -168,19 +173,66 @@ jobs:
           if [ -f scripts/check-repo-size.ts ]; then bun scripts/check-repo-size.ts --base HEAD^1; fi
           bun scripts/check-wgsl.ts
           if [ -f scripts/check-forest.ts ]; then bun scripts/check-forest.ts --rays 2000; fi
-          bun test --reporter=junit --reporter-outfile=junit.xml
+          bun test --parallel --reporter=junit --reporter-outfile=junit.xml
           bun run build:pages
-      - if: always()
+          tar -cf site-main.tar -C _site .
+      - if: always() && steps.built.outputs.cache-hit != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: junit
-          path: main-src/junit.xml
-      # (its failure does not stop production: reported below, the preview left out)
-      - name: Verify and build the exact preview revision → /${{ env.PREVIEW_PATH }}/
-        id: preview
-        if: steps.revisions.outputs.test != 'absent'
+          path: junit.xml
+          if-no-files-found: ignore
+      - if: steps.built.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: site-main.tar
+          key: site-main-${{ needs.snapshot.outputs.main }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site-main
+          path: site-main.tar
+          compression-level: 0
+          retention-days: 1
+
+  # the exact preview revision verified and built → /<PREVIEW_PATH>/ (its failure does not stop production:
+  # reported below, the preview left out)
+  preview:
+    needs: snapshot
+    if: needs.snapshot.outputs.test != 'absent'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      ok: ${{ steps.verify.outcome == 'success' && 'yes' || '' }}
+    steps:
+      # (a preview that cannot be checked out fails its verification: reported, left out)
+      - id: checkout
+        uses: actions/checkout@v4
         continue-on-error: true
-        working-directory: test-src
+        with:
+          ref: ${{ needs.snapshot.outputs.test }}
+          fetch-depth: 2
+          persist-credentials: false
+      - if: steps.checkout.outcome == 'success'
+        run: git lfs ls-files --long | cut -d' ' -f1 | sort > .lfs-ids
+      - if: steps.checkout.outcome == 'success'
+        uses: actions/cache@v4
+        with:
+          path: .git/lfs
+          key: lfs-${{ hashFiles('.lfs-ids') }}
+          restore-keys: lfs-
+      - if: steps.checkout.outcome == 'success'
+        run: git lfs pull || echo "::warning::the preview's LFS objects could not be fetched"
+      - uses: oven-sh/setup-bun@v2
+      - if: steps.checkout.outcome == 'success'
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - name: Verify and build the exact preview revision
+        id: verify
+        if: steps.checkout.outcome == 'success'
+        continue-on-error: true
         env:
           KERR_SUBPATH: ${{ env.PREVIEW_PATH }}
         run: |
@@ -190,37 +242,89 @@ jobs:
           if [ -f scripts/check-repo-size.ts ]; then bun scripts/check-repo-size.ts --base HEAD^1; fi
           bun scripts/check-wgsl.ts
           if [ -f scripts/check-forest.ts ]; then bun scripts/check-forest.ts --rays 2000; fi
-          bun test --reporter=junit --reporter-outfile=junit.xml
+          bun test --parallel --reporter=junit --reporter-outfile=junit.xml
           bun run build:pages
-      - if: always() && steps.preview.outcome != 'skipped'
+          tar -cf site-test.tar -C _site .
+      - if: always() && steps.checkout.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: junit-preview
-          path: test-src/junit.xml
+          path: junit.xml
           if-no-files-found: ignore
+      - if: steps.verify.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-test
+          path: site-test.tar
+          compression-level: 0
+          retention-days: 1
       - name: Report a failed preview
-        if: steps.preview.outcome == 'failure'
+        if: steps.verify.outcome != 'success'
         run: |
-          msg="$PREVIEW_BRANCH (${{ steps.revisions.outputs.test }}) failed its verification: the site deploys with main alone, /$PREVIEW_PATH/ removed"
+          msg="$PREVIEW_BRANCH (${{ needs.snapshot.outputs.test }}) failed its verification: the site deploys with main alone, /$PREVIEW_PATH/ removed"
           echo "::warning title=Preview not deployed::$msg"
           echo "> [!WARNING]" >> "$GITHUB_STEP_SUMMARY"
           echo "> $msg" >> "$GITHUB_STEP_SUMMARY"
-      # (the two builds' identical hashed assets are not shared: each app's URLs are relative to its
-      # own directory — its bundle, its workers, its Service Worker's precache and scope —, and Pages
-      # serves no links; sharing would mean rewriting the preview's URLs to ../, for files its own
-      # build may not have. The site is about twice one build, against Pages' 1 GB limit: the guard
-      # below — past 800 MB a warning, past 900 MB the preview left out, and main alone past 900 MB
-      # fails before deploying; docs/ASSETS.md)
+
+  # the two builds assembled: main at the root, the preview beside it
+  site:
+    needs: [snapshot, main, preview]
+    if: always() && needs.main.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      preview: ${{ steps.assemble.outputs.preview == 'yes' && env.PREVIEW_PATH || '' }}
+      main: ${{ needs.snapshot.outputs.main }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: site-main
+      - if: needs.preview.outputs.ok == 'yes'
+        uses: actions/download-artifact@v4
+        with:
+          name: site-test
+      # (each app's URLs are relative to its own directory — its bundle, its workers, its Service Worker's
+      # precache and scope —, and Pages serves no links: the two builds are two copies, against Pages' 1 GB.
+      # So the preview's hashed binaries that main has byte for byte — the textures, the meshes, the maps:
+      # most of a build, none of them precached — are left to main's copy, the preview's code pointing at it
+      # ("./x" → "../x"); one still named any other way is kept. Past 800 MB a warning, past 900 MB the
+      # preview left out, and main alone past 900 MB fails before deploying; docs/ASSETS.md)
       - name: Assemble the site
         id: assemble
         run: |
           set -euo pipefail
           mkdir -p _site
-          cp -a main-src/_site/. _site/
+          tar -xf site-main.tar -C _site
           preview=no
-          if [ "${{ steps.preview.outcome }}" = success ]; then
-            mkdir -p "_site/$PREVIEW_PATH"
-            cp -a test-src/_site/. "_site/$PREVIEW_PATH/"
+          if [ -f site-test.tar ]; then
+            P="_site/$PREVIEW_PATH"
+            mkdir -p "$P"
+            tar -xf site-test.tar -C "$P"
+            # (main's byte-identical copies of the preview's hashed binaries)
+            : > shared.txt
+            for f in "$P"/*; do
+              n=${f##*/}
+              if [ -f "$f" ] && [[ "$n" =~ -[a-z0-9]{8}\.[a-z0-9]+$ ]] && ! [[ "$n" =~ \.(js|css|html|json|wasm|map)$ ]] \
+                && cmp -s "$f" "_site/$n"; then echo "$n" >> shared.txt; fi
+            done
+            # (the preview's code: "./x" → "../x" for those)
+            cat > relink.pl <<'PERL'
+          BEGIN { open my $h, "<", "shared.txt" or die; my @n = map { chomp; quotemeta } <$h>; $re = join "|", @n; }
+          s{(?<=[\x22\x27\x60(=,\s])\./($re)(?=[\x22\x27\x60)\s?#,])}{../$1}g if $re ne "";
+          PERL
+            # (the app's own code, beside them — the crew's and the docs' pages, in their own directories, untouched)
+            find "$P" -maxdepth 1 -type f \( -name '*.js' -o -name '*.css' -o -name '*.html' -o -name '*.json' \) -exec perl -i -p relink.pl {} +
+            # (each left to main's only if every mention of it in the preview is now that code's ../ — one named
+            # otherwise, in a subdirectory, or nowhere, kept)
+            mentions() { (grep -rIhoF -- "$1" "${@:2}" || true) | wc -l; }
+            left=0
+            while read -r n; do
+              all=$(mentions "$n" "$P")
+              up=$(mentions "../$n" "$P"/*.js "$P"/*.css "$P"/*.html "$P"/*.json)
+              if [ "$all" -gt 0 ] && [ "$all" = "$up" ]; then rm -f "$P/$n"; left=$((left + 1)); fi
+            done < shared.txt
+            echo "the preview: $left of its binaries left to main's copy ($(wc -l < shared.txt) identical)" | tee -a "$GITHUB_STEP_SUMMARY"
             preview=yes
           fi
           size_mb() { echo $(( $(du -sb _site | cut -f1) / 1000000 )); }
