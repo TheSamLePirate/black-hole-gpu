@@ -100,6 +100,8 @@ export interface TrapRun {
   down?: number;
   /** intercepting the axis astern (a localizer's way) */
   loc?: boolean;
+  /** an intercept let go short of the final: the next one only homing, closing, with the room to close */
+  missed?: boolean;
   /** why it was waved off (the glide path's error, the line-up, the distance) */
   why?: string;
   /** the recovery's case (P4): I — the overhead break, day and clear —, II — the descent then the break —, III —
@@ -263,9 +265,23 @@ export function trapStep(
     // (the intercept, once begun, kept on to 1.2 km: else, crossing back and forth over 2.5 km, it went round and
     // round between it and the gate)
     // (a pattern's groove — after Case I's 180 — handed over in close: latched from 1 800 m, kept to 400 m)
+    // (one let go short of the final: the next only heading for the ship within 45° of the axis, closing on it, with
+    // the room to close the gap — half what is left before it lets go —: after a bolter in a heavy sea, round again,
+    // it went for the axis while running astern for the gate, turned about across it, crossed it a kilometre or two
+    // over, was still off it at 1.2 km, ran astern for the gate again; homing but 3 km across, or drawing away from
+    // it, never on it in time either)
     const groove = R.leg === "groove" && R.case !== "straight";
-    if (along < (groove ? -900 : -2500) && Math.abs(lineup) < 3000) R.loc = true;
-    if (R.loc && (along > (groove ? -400 : -1200) || Math.abs(lineup) > 4000)) R.loc = false;
+    const homing = dot(vh, axH) > 0.7 * len(vh) && lineup * eRate <= 0;
+    const room = -along - (groove ? 400 : 1200);
+    const retry = homing && Math.abs(lineup) < 0.5 * room;
+    if (along < (groove ? -900 : -2500) && Math.abs(lineup) < 3000 && (!R.missed || retry)) {
+      R.loc = true;
+      R.missed = false;
+    }
+    if (R.loc && (along > (groove ? -400 : -1200) || Math.abs(lineup) > 4000)) {
+      R.loc = false;
+      R.missed = true;
+    }
     if (R.loc) {
       const axisBrg = bearing(axH);
       // (the gap foreseen 8 s on — the turn onto it begun before it, as a pilot leads a localizer's)
