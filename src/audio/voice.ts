@@ -7,8 +7,9 @@
 // as one by what the engine plays around it (the squelch, the Quindar tones, the hiss — engine.ts radio).
 
 /** Who speaks: the landing's callouts (the aircraft's own voice), mission control (by radio), TARS, the
- *  flight computer's messages. */
-export type Speaker = "callout" | "mission" | "tower" | "tars" | "computer";
+ *  flight computer's messages; the flight's radio roles (game/radio.ts, I4): a wingman, the AWACS, the carrier, its
+ *  landing signal officer. */
+export type Speaker = "callout" | "mission" | "tower" | "tars" | "computer" | "wingman" | "awacs" | "mother" | "lso";
 
 /** A line to say. */
 export interface VoiceLine {
@@ -110,6 +111,10 @@ export const SPEAKER_STYLE: Record<Speaker, { rate: number; pitch: number }> = {
   tower: { rate: 1.12, pitch: 1.05 },
   tars: { rate: 1.0, pitch: 0.8 },
   computer: { rate: 1.0, pitch: 1.0 },
+  wingman: { rate: 1.12, pitch: 0.95 },
+  awacs: { rate: 1.06, pitch: 1.1 },
+  mother: { rate: 1.0, pitch: 0.85 },
+  lso: { rate: 1.15, pitch: 1.0 },
 };
 
 export interface SpeechHost {

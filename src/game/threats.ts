@@ -44,6 +44,11 @@ export interface ThreatCall {
   kind: "launch" | "close" | "defeated" | "bandit" | "group" | "sam" | "hit" | "kill";
 }
 
+/** Who calls it on the flight's radio (I4): the backseater the missiles at us and our hits; the AWACS the picture —
+ *  the bandits, the groups, a SAM site — and the kills. */
+export const threatRole = (k: ThreatCall["kind"]): "tars" | "awacs" =>
+  k === "bandit" || k === "group" || k === "sam" || k === "kill" ? "awacs" : "tars";
+
 export const THREAT = {
   /** a missile closing in called again under this [m] */
   close: 3000,

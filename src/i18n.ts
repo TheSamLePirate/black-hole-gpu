@@ -23,6 +23,7 @@ import frProcedures from "./i18n/fr-procedures";
 import frInstructor from "./i18n/fr-instructor";
 import frCopilot from "./i18n/fr-copilot";
 import frCourse from "./i18n/fr-course";
+import frRadio from "./i18n/fr-radio";
 
 export type Lang = "fr" | "en";
 export type Text = Record<Lang, string>;
@@ -85,6 +86,7 @@ addFrench(frProcedures);
 addFrench(frInstructor);
 addFrench(frCopilot);
 addFrench(frCourse);
+addFrench(frRadio);
 addFrench(frMain);
 addFrench(frHud);
 addFrench(frPlace);

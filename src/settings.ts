@@ -417,6 +417,7 @@ export interface Settings {
   f35RadarRange: "auto" | "10" | "20" | "40" | "80" | "160"; // its range [km]
   f35RadarRelief: boolean; // the relief under the radar's scope: the ground above us red, near amber, below green, the sea
   f35ThreatCalls: boolean; // TARS calls the threats in a fight: the missiles at us (break, flares, notch), the bandits by their BRAA, a hit, a kill
+  f35RadioRoles: boolean; // the flight's radio in its roles' voices: the wingmen, the AWACS Darkstar (the picture), the carrier Mother and its LSO Paddles — shared with the room
   f35WeaponPanel: boolean; // the weapons' panel in a fight
   f35Avionics: boolean; // the avionics' status block on the helmet
   f35HmdColor: "green" | "amber" | "cyan" | "white"; // the helmet's symbology's colour
@@ -755,6 +756,7 @@ export function defaultSettings(): Settings {
     f35RadarRange: "auto",
     f35RadarRelief: true,
     f35ThreatCalls: true,
+    f35RadioRoles: true,
     f35WeaponPanel: true,
     f35Avionics: true,
     f35HmdColor: "green",
@@ -2073,6 +2075,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   f35RadarRange: "pref",
   f35RadarRelief: "pref",
   f35ThreatCalls: "pref",
+  f35RadioRoles: "pref",
   f35WeaponPanel: "pref",
   f35Avionics: "pref",
   f35HmdColor: "pref",

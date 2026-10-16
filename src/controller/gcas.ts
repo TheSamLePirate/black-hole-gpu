@@ -116,6 +116,8 @@ function gcasStep(this: CameraController, dt: number) {
         o.kind === "air" &&
         !o.id.startsWith("wng:") &&
         !o.id.startsWith("rwg:") &&
+        // (our AI wingmen in a fight are its world's craft too — cmb:, their peer below 0)
+        !(o.id.startsWith("cmb:") && (this.combat?.world.target(Number(o.id.slice(4)))?.peer ?? 0) < 0) &&
         // (the aircraft joined on purpose — an intercept's shadow, a tanker's pre-contact —: not a conflict)
         !(this.icpt && this.icpt.id === o.id && this.icpt.phase !== "run" && this.icpt.phase !== "turn") &&
         // (a guided lesson's craft — I3: the leader flown on, the drone shot at —: close on purpose)

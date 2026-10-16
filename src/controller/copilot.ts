@@ -4,7 +4,7 @@
 // fired, the decoys —; the threats watched each frame (game/threats.ts: the calls to say), the picture for TARS.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import { MISSILES } from "../game/combat";
-import { newThreatWatch, type ThreatCall, type ThreatWatch, threatStep, aspectOf, bearingOf, clockOf } from "../game/threats";
+import { aspectOf, bearingOf, braa, clockOf, newThreatWatch, type ThreatCall, type ThreatWatch, threatStep } from "../game/threats";
 import type { RadarMode } from "../game/radar";
 import { t, tf } from "../i18n";
 import { unitsOf } from "../ui/unitsys";
@@ -25,6 +25,7 @@ declare module "../controls" {
     radarModeSet: typeof radarModeSet;
     threatsStep: typeof threatsStep;
     threatPicture: typeof threatPicture;
+    bogeyDope: typeof bogeyDope;
   }
 }
 
@@ -289,6 +290,20 @@ function threatPicture(this: CameraController) {
   };
 }
 
+/** The AWACS asked for the nearest bandit (I4 — "bogey dope"): its BRAA, said by Darkstar on the radio. */
+function bogeyDope(this: CameraController): string {
+  const g = this.geoNow();
+  const T = [...this.radar.tracks.values()]
+    .filter((x) => x.iff === "hostile" && x.kind === "air")
+    .sort((a, b) => Math.hypot(...a.r) - Math.hypot(...b.r))[0];
+  const text =
+    T && g
+      ? tf("Darkstar: bogey dope — {0}, hostile, {1}", braa(T.r, T.v, g.alt, unitsOf(this.s.units)), T.name)
+      : t("Darkstar: picture clean");
+  this.onRadio?.(text);
+  return text;
+}
+
 export function installCopilot(C: { prototype: CameraController }) {
   Object.assign(C.prototype, {
     aircraftAround,
@@ -301,5 +316,6 @@ export function installCopilot(C: { prototype: CameraController }) {
     radarModeSet,
     threatsStep,
     threatPicture,
+    bogeyDope,
   });
 }

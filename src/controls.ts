@@ -1066,7 +1066,7 @@ export class CameraController {
   /** the room's others' AI wingmen (their host flies them): by his slot, their states and when heard [s] */
   readonly remoteWings = new Map<number, { at: number; name: string; list: RemoteWing[] }>();
   /** a radio call heard (a leader's order, a wingman's answer): said aloud */
-  onRadio?: (text: string) => void;
+  onRadio?: (text: string, role?: import("./game/radio").RadioRole) => void;
   /** an aerobatic figure flown — the program's demonstration or the player's, judged (controller/aerobatics.ts) —,
    *  and one asked, begun at the next frame in the air (the craft just placed) */
   aero: AeroRun | null = null;

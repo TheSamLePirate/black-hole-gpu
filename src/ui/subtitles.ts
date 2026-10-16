@@ -10,6 +10,10 @@ const NAMES: Record<Speaker, () => string> = {
   tower: () => t("TOWER"),
   tars: () => "TARS",
   computer: () => t("COMPUTER"),
+  wingman: () => t("WINGMAN"),
+  awacs: () => "DARKSTAR",
+  mother: () => "MOTHER",
+  lso: () => "PADDLES",
 };
 
 export class Subtitles {

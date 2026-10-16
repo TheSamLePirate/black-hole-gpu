@@ -1474,6 +1474,11 @@ body.hide-ui .mission-caption { display: none; }
 .subtitles span { font: 500 16px var(--font); letter-spacing: 0.01em; color: #f2f5fa; }
 .subtitles[data-speaker="callout"] small { color: rgba(255, 196, 92, 0.95); }
 .subtitles[data-speaker="tars"] small { color: rgba(140, 255, 190, 0.95); }
+/* the flight's radio roles (I4): a wingman, the AWACS, the carrier, its LSO */
+.subtitles[data-speaker="wingman"] small { color: rgba(120, 200, 255, 0.95); }
+.subtitles[data-speaker="awacs"] small { color: rgba(255, 150, 120, 0.95); }
+.subtitles[data-speaker="mother"] small { color: rgba(200, 180, 255, 0.95); }
+.subtitles[data-speaker="lso"] small { color: rgba(255, 230, 120, 0.95); }
 .subtitles.radio span { font-style: italic; }
 body.hide-ui .subtitles { display: none; }
 

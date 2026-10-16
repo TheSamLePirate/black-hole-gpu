@@ -154,7 +154,7 @@ function wingCount(this: CameraController): number {
 /** A radio call: said aloud and shown. */
 function radio(c: CameraController, text: string) {
   c.onPilotMessage?.(text);
-  c.onRadio?.(text);
+  c.onRadio?.(text, "wingman");
 }
 
 /** The leader (the flown craft) as the formation law reads it, on the ground or flying (his height over it, on a

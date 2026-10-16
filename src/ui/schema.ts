@@ -4297,6 +4297,17 @@ export const SCHEMA: ControlDef[] = [
     keywords: "threats missile warning bandit braa calls copilot",
   },
   {
+    key: "f35RadioRoles",
+    type: "toggle",
+    section: "game",
+    group: "F-35",
+    label: "Radio roles",
+    effect: "none",
+    enabled: (s) => s.ship && s.vessel === "f35",
+    help: "The flight's radio in its roles' own voices: the wingmen, the AWACS Darkstar (the picture, the bandits by their BRAA, a bogey dope), the carrier Mother and its landing signal officer Paddles — each named in the subtitles, heard by the room's pilots too. Off: the tower's one voice, TARS for the picture.",
+    keywords: "radio roles voices awacs darkstar mother paddles lso wingman",
+  },
+  {
     key: "f35RadarRange",
     type: "choice",
     section: "game",

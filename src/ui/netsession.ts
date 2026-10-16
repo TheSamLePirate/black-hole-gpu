@@ -47,6 +47,7 @@ import { orderOf } from "../game/orders";
 import { checkMission, type MissionSpec } from "../game/mission";
 import type { MissionShared } from "../controller/mission";
 import { type RemoteWing, wingsOut } from "../controller/wingmen";
+import { type RadioRole, SHARED_ROLES } from "../game/radio";
 
 type Vec3 = [number, number, number];
 
@@ -112,6 +113,8 @@ export interface NetSessionDeps {
   onCollide(slot: number, name: string): void;
   /** another's mission heard (P1): flown with him, on his wing */
   missionJoin?(spec: MissionSpec, from: number, name: string): void;
+  /** another's radio line (I4: his wingmen, his carrier, his LSO) heard on the flight's radio */
+  radioHeard?(role: RadioRole, text: string, name: string): void;
 }
 
 const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
@@ -388,6 +391,11 @@ export class NetSession {
           const st = (ev as unknown as { st?: MissionShared }).st;
           if (!st || typeof st.id !== "string" || !st.state || typeof st.state !== "object") return;
           this.d.camera.missionApply(st);
+        } else if (e.kind === "radio") {
+          // (another's roles on the flight's radio — I4: his wingmen, his carrier, its LSO)
+          const r = ev as unknown as { role?: unknown; text?: unknown };
+          if (typeof r.text !== "string" || !SHARED_ROLES.includes(r.role as RadioRole)) return;
+          this.d.radioHeard?.(r.role as RadioRole, r.text.slice(0, 240), this.nameOf(from));
         } else if (e.kind === "order") {
           // (a leader's order — F2: heard, carried out in formation on him; "rejoin" heard out of one: on his wing)
           const o = orderOf((ev as unknown as { o: unknown }).o);
@@ -830,6 +838,11 @@ export class NetSession {
   offer: { warp: number; by: string[] } | null = null;
 
   /** Accept the warp offered: ours set to it — the room speeds up once every pilot asks for it. */
+  /** A line of our own roles (I4) on the flight's radio: the room's pilots hear it. */
+  radio(role: RadioRole, text: string) {
+    if (this.net?.room && SHARED_ROLES.includes(role)) this.net.event({ kind: "radio", role, text });
+  }
+
   acceptWarp() {
     if (!this.offer) return false;
     this.d.camera.requestWarp(this.offer.warp * realTimeSpeed(this.d.settings));

@@ -68,6 +68,8 @@ import { MODES as JET_MODES } from "./game/jetmodes";
 import { debriefInstr, flightSchool, type InstructorHost, InstructorPanel } from "./ui/instructor";
 import { type LessonId, LESSONS } from "./game/lessons";
 import { fromRunway } from "./game/ils";
+import { ROLE_VOICE, roleOfLine } from "./game/radio";
+import { threatRole } from "./game/threats";
 import { findRunway, runwayOf } from "./controller/ils";
 import { MissionMap } from "./ui/missionmap";
 import { briefMission, debriefMission, flyMission, MissionHud } from "./ui/airmission";
@@ -1395,8 +1397,15 @@ async function main() {
     systemVoice: (l) =>
       l.speaker === "tars"
         ? { name: settings.tarsSystemVoice || undefined, rate: settings.tarsVoiceRate, pitch: settings.tarsVoicePitch }
-        : null,
+        : roleSystemVoice(l.speaker),
   });
+  /** the radio's roles' system voices (I4): another of the language's voices for each, when there are several */
+  function roleSystemVoice(sp: string): { name?: string } | null {
+    const k = ["wingman", "awacs", "mother", "lso"].indexOf(sp);
+    if (k < 0 || typeof speechSynthesis === "undefined") return null;
+    const vs = speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith(lang));
+    return vs.length > 1 ? { name: vs[(k + 1) % vs.length]!.name } : null;
+  }
   /** what speaks a line, of the game's own (null: the system's): Deepgram when chosen and within reach, the robot (English) */
   function ownVoice(l: import("./audio/voice").VoiceLine): Promise<void> | null {
     if (!settings.voice) return null;
@@ -1416,6 +1425,11 @@ async function main() {
       const e = settings.radioVoiceEngine;
       if (e === "deepgram" || (e === "auto" && reach))
         return deepgramSay(l.text, lang === "fr" ? settings.radioVoiceFr : settings.radioVoiceEn, false, "radio", () => null);
+    }
+    // (the radio's roles — I4 —: a voice of their own each)
+    if (l.speaker === "wingman" || l.speaker === "awacs" || l.speaker === "mother" || l.speaker === "lso") {
+      const e = settings.radioVoiceEngine;
+      if (e === "deepgram" || (e === "auto" && reach)) return deepgramSay(l.text, ROLE_VOICE[l.speaker][lang], false, "radio", () => null);
     }
     return null;
   }
@@ -2634,7 +2648,14 @@ async function main() {
   // (the controller's news, onto the game's bus — game/events.ts — and from it to whoever shows them)
   camera.onPilotMessage = (text) => events.emit("pilotMessage", { text, t: sim.time });
   // (the flight's radio: a leader's orders heard, the wingmen's answers — F2, F3)
-  camera.onRadio = (text) => voice.say({ text, speaker: "tower", priority: 2 });
+  // (its roles — I4 —: each in its voice, named in the subtitles — a wingman, Darkstar, Mother, Paddles —; ours about our
+  // own craft heard by the room's pilots too)
+  camera.onRadio = (text, role) => {
+    if (settings.f35RadioRoles === false) return voice.say({ text, speaker: "tower", priority: 2 });
+    const r = role ? { role, text } : roleOfLine(text);
+    voice.say({ text: r.text, speaker: r.role, priority: r.role === "lso" ? 1 : 2, radio: r.role !== "tower" });
+    netSession.radio(r.role, r.text);
+  };
   camera.onAirEntry = () => events.emit("airEntry", { t: sim.time });
   camera.onCraftLost = (why) => events.emit("craftLost", { why, t: sim.time });
   // (the flight's end graded — game/report.ts —: the HUD's card, a line in the journal)
@@ -4021,6 +4042,10 @@ async function main() {
     sceneTime: () => sim.time * M_SECONDS,
     // (a mid-air collision: in a match's fight, shot down; else the craft destroyed — the room's way: craftLost)
     onCollide: (slot, name) => collide(slot, name),
+    // (another's radio roles — I4 —: heard, his name before)
+    radioHeard: (role, text, name) => {
+      if (settings.f35RadioRoles !== false) voice.say({ text: `${name} — ${text}`, speaker: role, priority: 2, radio: true, ttl: 15_000 });
+    },
     // (another's mission: flown with him, 80 m off the start, on his right)
     missionJoin: (spec, _from, name) => {
       panel.toast(tf("{0}'s mission: {1}", name, spec.title));
@@ -5931,8 +5956,17 @@ async function main() {
         }
         // (TARS as the backseater — I2 —: the missiles at us, the bandits by their BRAA, a hit, a kill called)
         if (settings.f35ThreatCalls && camera.piloting)
-          for (const c of camera.threatsStep())
-            voice.say({ text: c.text, speaker: "tars", priority: c.priority, ttl: c.priority === 1 ? 6000 : 12_000 });
+          for (const c of camera.threatsStep()) {
+            // (the picture Darkstar's — I4 —, the missiles at us TARS's)
+            const awacs = settings.f35RadioRoles !== false && threatRole(c.kind) === "awacs";
+            voice.say({
+              text: c.text,
+              speaker: awacs ? "awacs" : "tars",
+              priority: c.priority,
+              ttl: c.priority === 1 ? 6000 : 12_000,
+              radio: awacs,
+            });
+          }
         CB.events = [];
       } else sound.combatFrame(false, false);
       if (cpuProf.time("flight (camera.update)", () => sim.step(dt))) {

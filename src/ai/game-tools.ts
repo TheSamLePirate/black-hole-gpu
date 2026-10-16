@@ -1819,9 +1819,9 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "weapons",
       description:
-        "The F-35's weapons and radar, as its backseater (in a fight or a mission: the stores are live then). status: the weapon chosen, the stores left (AIM-120 AMRAAM, AIM-9X, GBU-32 JDAM, the gun's rounds, the flares), their ranges, the damage taken, the targets left, the radar's mode and lock. threats: the tactical picture — the missiles at us (their clock, distance), the hostiles on the radar by BRAA (bearing, distance, altitude, aspect), the last threat calls. select: a weapon (weapon). lock: a radar track by its name (target; none: the next). radar: its mode (RWS: search; TWS: tracks with their velocities; STT: the lock alone, the most precise). fire: the weapon chosen at the lock (FOX 3 the AIM-120 — it needs a lock —, FOX 2 the AIM-9X, a JDAM on the lock or the fall point). gun: a burst (seconds, else 1). countermeasures: flares and chaff out. You call the threats yourself as they come (setting f35ThreatCalls); fire when the pilot orders it.",
+        "The F-35's weapons and radar, as its backseater (in a fight or a mission: the stores are live then). status: the weapon chosen, the stores left (AIM-120 AMRAAM, AIM-9X, GBU-32 JDAM, the gun's rounds, the flares), their ranges, the damage taken, the targets left, the radar's mode and lock. threats: the tactical picture — the missiles at us (their clock, distance), the hostiles on the radar by BRAA (bearing, distance, altitude, aspect), the last threat calls. bogey_dope: the AWACS (Darkstar) asked for the nearest bandit — its BRAA said on the radio in its own voice. select: a weapon (weapon). lock: a radar track by its name (target; none: the next). radar: its mode (RWS: search; TWS: tracks with their velocities; STT: the lock alone, the most precise). fire: the weapon chosen at the lock (FOX 3 the AIM-120 — it needs a lock —, FOX 2 the AIM-9X, a JDAM on the lock or the fall point). gun: a burst (seconds, else 1). countermeasures: flares and chaff out. You call the threats yourself as they come (setting f35ThreatCalls); fire when the pilot orders it.",
       params: {
-        action: { type: "string", enum: ["status", "threats", "select", "lock", "radar", "fire", "gun", "countermeasures"] },
+        action: { type: "string", enum: ["status", "threats", "bogey_dope", "select", "lock", "radar", "fire", "gun", "countermeasures"] },
         weapon: { type: "string", enum: ["aim120", "aim9x", "jdam"] },
         target: { type: "string" },
         mode: { type: "string", enum: ["RWS", "TWS", "STT"] },
@@ -1834,6 +1834,8 @@ export function gameTools(h: GameHost): Tool[] {
         switch (a.action) {
           case "threats":
             return c.threatPicture();
+          case "bogey_dope":
+            return c.bogeyDope();
           case "select":
             if (!a.weapon) throw new Error("select needs a weapon");
             return c.weaponSelect(a.weapon as WeaponSel);
