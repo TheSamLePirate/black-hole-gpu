@@ -40,6 +40,7 @@ import { PATH_CHUNK, PATH_MAX, SH_VEC4S, TABLE_LUT, TABLE_PATH, TABLE_WALK, TABL
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
 import maskWGSL from "./shaders/mask.wgsl" with { type: "text" };
 import { AERIAL_TEXTURE_LIMIT, aerialShader } from "./system/aerial";
+import { detailMargin, horizonsReach, MapCells } from "./system/relief-ceiling";
 import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
 import shipWGSL from "./shaders/ship.wgsl" with { type: "text" };
 import enduranceWGSL from "./shaders/endurance.wgsl" with { type: "text" };
@@ -1267,6 +1268,8 @@ export class Renderer {
           );
           // (a tile that will not load — offline, refused: the map's heights there, as the ground had them)
           this.earthTiles.fallback = tileFallbackSampler(map, W, H);
+          // (the relief's ceiling round the camera: the map's highest in 1° cells)
+          this.mapCells = new MapCells(map, W, H);
         }
         if (this.live) this.bindTarget(this.live);
         if (this.offline) {
@@ -2331,6 +2334,15 @@ export class Renderer {
       near.centre = [0, 1, 2].map((i) => near.centre[i]! + (t[0] * cam.right[i]! + t[1] * cam.up[i]! + t[2] * cam.fwd[i]!) * k) as Vec3;
     }
     const earthSurface = near && bodies[near.index]?.id === "earth" ? patchGeodetic(near, WGS84_F) : null;
+    // (the relief's ceiling round the camera — relief-ceiling.ts: the shell the ground's marches work in, radio2.w [m]
+    // over the ellipsoid; 9 600 m at most, as before; 0: that)
+    f[28 * 4 + 3] = 0;
+    if (earthSurface && this.mapCells && this.reliefCeiling) {
+      const alt = earthSurface.h * WGS84_A;
+      let top = Math.max(this.earthTiles.top(), 0);
+      top = Math.max(top, this.mapCells.around(earthSurface.lat, earthSurface.lon, horizonsReach(alt, 9600)));
+      f[28 * 4 + 3] = Math.min(9600, top + detailMargin(top));
+    }
     if (!o.probe) this.lastNear = near;
     set(48, ...(near?.centre ?? [0, 0, 0]), near ? 1 : 0);
     set(49, ...(near?.axes[0] ?? [1, 0, 0]), near?.index ?? 0);
@@ -3768,6 +3780,9 @@ export class Renderer {
   private envRead!: GPUBindGroup;
   /** the air before the near world's ground read from the aerial perspective's table (a switch for comparisons) */
   aerialTable = true;
+  /** the ground's marches in a shell as high as the relief round the camera can be, not 9 600 m (a switch for comparisons) */
+  reliefCeiling = true;
+  private mapCells: MapCells | null = null;
   /** the device binds the table's two textures more (AERIAL_TEXTURE_LIMIT) */
   private get aerialOK() {
     return this.device.limits.maxSampledTexturesPerShaderStage >= AERIAL_TEXTURE_LIMIT;

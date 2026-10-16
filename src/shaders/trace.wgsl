@@ -39,7 +39,7 @@ struct Params {
   pol: vec4f,      // polarization on (0/1), synchrotron fraction, hot-flow field (0 tor, 1 rad, 2 vert, 3 spiral), jet pitch
   ret: vec4f,      // returning radiation on (0/1), disk albedo, max steps of secondary rays, disk haze
   radio: vec4f,    // band (0 visible, 1 230 GHz, 2 86/230/345 GHz), τ₂₃₀, ν_s(4M)/230 GHz, θ_e(4M)
-  radio2: vec4f,   // jet radio brightness, flow H/R, disk smoke, unused
+  radio2: vec4f,   // jet radio brightness, flow H/R, disk smoke; w: the relief's ceiling round the camera [m] (0: 9 600 — earthTop)
   spot: vec4f,     // hot spot on (0/1), orbit radius [M], size σ [M], optical depth through the centre
   spot2: vec4f,    // temperature [K], brightness, initial azimuth [rad], height above the plane [M]
   wh: vec4f,       // wormhole world on (0/1), throat radius ρ, half length a, lensing mass M (Dneg metric)
@@ -188,6 +188,13 @@ override TUNE_SHADOW_K: f32 = 1.18;
 override TUNE_EPS_FAR: f32 = 1.0;
 // (0: the per-step tests of Gargantua's bodies skipped — a measure of what they cost: the bodies then missed)
 override TUNE_STEP_BODIES: u32 = 1u;
+// (the ground's march: a step's share of the clearance — 0.5, safe for slopes to ~60°; more: a measure)
+override TUNE_MARCH_K: f32 = 0.5;
+// (the ground's march over-relaxed — Keinert et al. 2014: a step this many times the safe one tried on the way in,
+// taken back to the safe one when the next point's clearance shows the two safe reaches leave a gap; 1: none)
+override TUNE_RELAX: f32 = 1.6;
+// (the same within the margin of the ground — the full heights —: 1 none)
+override TUNE_RELAX_BAND: f32 = 1.6;
 // (the ray's work by kind: 0 the ground's march steps (the Earth's, a world's), 1 the ground's heights read (earthH,
 // relief), 2 its shadows' steps, 3 the clouds' steps (the volume's, the weather's), 4 the air's (the auroras'), 5 the
 // water's (the sea's surface search, the mirror's march), 6 the scenery's boxes visited, 7 the geodesic integrator's
@@ -5306,7 +5313,7 @@ fn earthTerrainShadow(p: vec3f, Ls: vec3f, foot: f32) -> f32 {
     let x = p0 + Ls * (t / EARTH_RM);
     let r = length(x);
     let hr = (r - 1.0) * EARTH_RM;
-    if (hr > 9600.0) { break; }
+    if (hr > earthTop()) { break; }
     // (+0.5 % of the distance: the march's heights, from coarser levels farther, a few metres off the
     // ground drawn)
     let d = hr - earthHeightStep(x / r, max(0.05 * t, foot)) + bias + 0.005 * t;
@@ -5360,9 +5367,13 @@ fn walkNormal()->vec4f {
  return vec4f(normalize(vec3f(normal.xy,normal.z/EARTH_AB)),WALK_AT.z);
 }
 
+// The highest the ground round the camera can be [m over the ellipsoid] (renderer: relief-ceiling.ts — the map's and
+// the tiles' highest within the horizons' reach and the detail's most over it): the shell the ground's marches work in
+fn earthTop() -> f32 { return select(9600.0, P.radio2.w, P.radio2.w > 0.0); }
+
 fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
   WALK_AT=vec3f(0);
-  let Rs = 1.0 + 9600.0 / EARTH_RM;
+  let Rs = 1.0 + earthTop() / EARTH_RM;
   let b = dot(ro, rd);
   let off = ro - rd * b;
   let d2 = dot(off, off);
@@ -5389,6 +5400,10 @@ fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
   var prevFull = false;
   // (the clearance growing at the last step: the ray leaving the ground)
   var rising = false;
+  // (the over-relaxed steps: the last one was — its safe length then —, and the next not to be, after a step back)
+  var relaxedPrev = false;
+  var safePrev = 0.0;
+  var noRelax = false;
   for (var i = 0u; i < 256u; i++) {
     cost(0u);
     let v = o + rd * t;
@@ -5401,9 +5416,26 @@ fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
     if(walk.y>=.999){f=walk.x;band=true;}
     else if (!band) {
       f = rad - (earthHeightStep(p / r, foot) + 9.0 * foot + 3.0) / EARTH_RM;
+      // (an over-relaxed step whose two ends' safe reaches do not meet — or that went under: a ridge may stand in
+      // the gap; back to the safe step from the last point, not relaxed)
+      if (relaxedPrev && TUNE_MARCH_K * (fPrev + f) < t - tPrev) {
+        t = tPrev + safePrev;
+        relaxedPrev = false;
+        noRelax = true;
+        continue;
+      }
       band = f <= 0.0;
     }
-    if (band && walk.y<.999) { f = mix(rad - earthHeight(p / r, foot) / EARTH_RM,walk.x,walk.y); }
+    if (band && walk.y<.999) {
+      f = mix(rad - earthHeight(p / r, foot) / EARTH_RM,walk.x,walk.y);
+      // (an over-relaxed step's ends whose safe reaches leave a gap — or under the ground: back to the safe step)
+      if (relaxedPrev && TUNE_MARCH_K * (fPrev + f) < t - tPrev) {
+        t = tPrev + safePrev;
+        relaxedPrev = false;
+        noRelax = true;
+        continue;
+      }
+    }
     if (f < 0.0) {
       // (between the last point above — its full height's f, or the margin's, a lower bound — and this one)
       var lo = tPrev;
@@ -5434,11 +5466,20 @@ fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
     // a band of smeared land above the horizon, the runway's mirage in it. Its clearance growing, the
     // relief would have to rise faster than it to meet it: steps of 5 % of the distance (the shell left in
     // ~150 steps); a ridge met is bracketed as any crossing)
-    var step = max(0.5 * f, 0.004 * t + 1e-9);
+    let safe = max(TUNE_MARCH_K * f, 0.004 * t + 1e-9);
+    var step = safe;
+    // (on the way in — the cheap heights —: the step over-relaxed, checked at the next point)
+    let relax = select(TUNE_RELAX, TUNE_RELAX_BAND, band) * TUNE_MARCH_K * f;
+    let tryRelax = !noRelax && walk.y < 0.999 && relax > step;
+    if (tryRelax) { step = relax; }
+    noRelax = false;
     rising = false;
     if (i > 0u && prevFull == band) {
       if (fPrev > f) { step = max(step, min(0.5 * f * (t - tPrev) / (fPrev - f), 0.03 * t)); } else { step = max(step, 0.05 * t); rising = true; }
     }
+    // (relaxed only where the relaxation set the step: the foretold crossings and the rising rays' steps as before)
+    relaxedPrev = tryRelax && step <= relax;
+    safePrev = safe;
     prevFull = band;
     tPrev = t;
     fPrev = f;
@@ -8185,7 +8226,7 @@ fn keyRelief(kn: u32, L: vec3f) -> f32 {
   let surf = u32(bodies[BV * kn + 2u].z);
   if (isEarth(kn) && earthOn()) {
     let alt = (rc - 1.0) * EARTH_RM;
-    if (alt > 9600.0) { return 1.0; }
+    if (alt > earthTop()) { return 1.0; }
     let g = earthHeightStep(c / rc, 2.0) - alt;
     let bias = select(0.0, g, abs(g) < 50.0);
     var t = 20.0;
@@ -8194,7 +8235,7 @@ fn keyRelief(kn: u32, L: vec3f) -> f32 {
       let x = c + L * (t / EARTH_RM);
       let r = length(x);
       let hr = (r - 1.0) * EARTH_RM;
-      if (hr > 9600.0) { break; }
+      if (hr > earthTop()) { break; }
       let d = hr - earthHeightStep(x / r, max(0.05 * t, 2.0)) + bias + 0.005 * t;
       sh = min(sh, clamp(d / (0.04 * t) + 0.5, 0.0, 1.0));
       if (sh <= 0.0) { break; }

@@ -70,6 +70,22 @@ const ABS: Record<string, [string, string, string, string?]> = {
     "__bh.renderer.tune = {}",
     "__bh.renderer.tune = { TUNE_STEP_BODIES: 0 }",
   ],
+  ceiling: [
+    "the ground's marches under the relief's ceiling → under 9 600 m",
+    "__bh.renderer.reliefCeiling = true",
+    "__bh.renderer.reliefCeiling = false",
+  ],
+  march9: [
+    "the ground's march steps 0.5 → 0.9 of the clearance (a measure)",
+    "__bh.renderer.tune = {}",
+    "__bh.renderer.tune = { TUNE_MARCH_K: 0.9 }",
+  ],
+  relax: ["the ground's march over-relaxed ×1.6 → not", "__bh.renderer.tune = {}", "__bh.renderer.tune = { TUNE_RELAX: 1 }"],
+  relaxband: [
+    "the ground's march over-relaxed near the ground too → on the way in only",
+    "__bh.renderer.tune = {}",
+    "__bh.renderer.tune = { TUNE_RELAX_BAND: 1 }",
+  ],
   bodies: ["the bodies listed → all looked at", "__bh.renderer.bodyList = true", "__bh.renderer.bodyList = false"],
   eps2: ["the geodesics' tolerance 0.12 → 0.24", "__bh.settings.realtimeEps = 0.12", "__bh.settings.realtimeEps = 0.24"],
   scenery: ["the scenery balanced → off", `__bh.game.set("earthScenery", "balanced")`, `__bh.game.set("earthScenery", "off")`],
@@ -188,6 +204,9 @@ describe.skipIf(!E2E)("the render's costs on held scenes", () => {
         const r = __bh.renderer, frame = () => new Promise((res) => requestAnimationFrame(() => res(null)));
         const t0 = performance.now();
         while (!r.variantReady && performance.now() - t0 < 180000) { __bh.touch(); await frame(); }
+        // (the aerial perspective's table's kernel, compiled after the first image: waited for — 3 min at most —
+        // near a world with air)
+        while (r.aerialTable && !r.aerialPipe && r.lastNear && performance.now() - t0 < 180000) { __bh.touch(); await frame(); }
         let calm = 0;
         while (performance.now() - t0 < 240000) {
           const ready = r.earthTiles.pending === 0 && !r.hdLoading;

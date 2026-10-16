@@ -351,6 +351,25 @@ export class EarthTiles {
     this.request(cx0(this.priorityLon), this.prioritySinLat);
   }
 
+  /** each tile's highest height (worked out once) */
+  private tops = new WeakMap<Float32Array, number>();
+  /** The highest height of the tiles held, every level's [m] (−∞: none) — the relief's ceiling (relief-ceiling.ts). */
+  top(): number {
+    let m = -Infinity;
+    for (const L of this.levels)
+      for (const d of L.data) {
+        if (!d) continue;
+        let t = this.tops.get(d);
+        if (t === undefined) {
+          t = -Infinity;
+          for (let i = 0; i < d.length; i++) if (d[i]! > t) t = d[i]!;
+          this.tops.set(d, t);
+        }
+        if (t > m) m = t;
+      }
+    return m;
+  }
+
   /** A tile's heights in (z, x — unwrapped as its level's window has it —, y; 256² row by row [m]), with
    *  its imagery (rgba8 packed; none: 0): kept and sent to the GPU while its window wants it. */
   put(z: number, x: number, y: number, h: Float32Array, col: Uint32Array | null = null) {
