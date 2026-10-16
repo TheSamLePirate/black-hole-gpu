@@ -31,7 +31,7 @@ import type { RangerStatus } from "../game/status";
 import { fmtS } from "./gametools";
 import { blinkOn } from "./clock";
 import { cpuProf } from "../perf";
-import { drawSymbology } from "./hud/symbology";
+import { drawSymbology, paintBoom, paintMotor } from "./hud/symbology";
 import { cameraInWorld, SpeedFx, speedFxLevel } from "./speedfx";
 import { Map3D } from "./map3d/map3d";
 import type { WeatherState } from "../weather";
@@ -2445,7 +2445,6 @@ export class FlightHud {
     // (a view the HUD does not show in — the cockpit, the film's —: its warnings and cards only, in the DOM —
     // but the F-35's cockpit: its pilot's helmet shows the symbology there, as the real one does)
     const helmet = this.s.vessel === "f35" && (this.s.shipMount === "cockpit" || this.s.shipMount === "cabin");
-    if (this.view === "bare" && !helmet) return;
     const tanH = Math.tan((this.s.fov * Math.PI) / 360);
     const asp = W / H;
     const proj = (d: V3 | null) => {
@@ -2455,6 +2454,23 @@ export class FlightHud {
       if (Math.abs(x) > 1.05 || Math.abs(y) > 1.05) return null;
       return [((x + 1) / 2) * W, ((1 - y) / 2) * H] as const;
     };
+    if (this.view === "bare" && !helmet) {
+      // (no symbology in this view, but what a fight shows in the world: its explosions — they are not the HUD's)
+      const K = i.combat;
+      if (K) {
+        const fpx = H / (2 * tanH);
+        for (const b of K.booms) {
+          const p = proj(b.d);
+          if (p) paintBoom(ctx, [p[0], p[1]], b.d[2], fpx, b.size, b.age, W, H, dpr);
+        }
+        // (the missiles' motors: their glow, as the HUD's)
+        for (const m of K.missiles) {
+          const p = proj(m.d);
+          if (p && m.motor) paintMotor(ctx, [p[0], p[1]], m.d[2], fpx, dpr);
+        }
+      }
+      return;
+    }
     // the conformal symbology first, under the rest: horizon, pitch ladder, heading, bank, the markers
     // (the future: +10, +30, +60 s and a quarter of the orbit, when there is one)
     const T = i.status?.orbit?.period;
@@ -2476,7 +2492,7 @@ export class FlightHud {
       future: fut,
       quarter,
       runway: this.runway?.() ?? null,
-      outside: ["around", "free", "flyby", "station", "director"].includes(String(i.mount)),
+      outside: ["around", "free", "flyby", "station", "director", "target"].includes(String(i.mount)),
       top: (safeFrame().top - 16) * dpr,
     });
     const r = 11 * dpr;

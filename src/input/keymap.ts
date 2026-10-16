@@ -284,6 +284,11 @@ export const KEYMAP: KeySection[] = [
         bind: [fly("Equal", "combat", { arg: "weapon" }), fly(["Minus", "IntlBackslash"], "combat", { arg: "cm" })],
       },
       {
+        keys: "⇧L",
+        text: "In a fight: the head locked on the target (padlock) — it follows the lock, the missile's target, what was shot down falling, its crash, zoomed on it; again: the head free",
+        bind: [fly("KeyL", "combat", { arg: "padlock", shift: true })],
+      },
+      {
         keys: "Tab held › Flight · F13",
         text: "The flight's leader: the orders' wheel (rejoin, formation, tighten, loosen, attack my target, engage, cover me, hold here, RTB, break) — to the room's wingmen and the AI wingmen; its key (F13) given another in the controls, or a HOTAS button",
         bind: [fly("F13", "orders")],
@@ -291,7 +296,7 @@ export const KEYMAP: KeySection[] = [
       {
         keys: "I K · J L · H N",
         text: "RCS translation: down/up · left/right · forward/back",
-        bind: [fly(["KeyI", "KeyJ", "KeyL", "KeyH", "KeyN"], "held"), fly("KeyK", "held", off)],
+        bind: [fly(["KeyI", "KeyJ", "KeyH", "KeyN"], "held"), fly("KeyL", "held", { shift: false }), fly("KeyK", "held", off)],
       },
       { keys: "Caps Lock", text: "Precision controls (fine rotation, throttle, RCS)", bind: [fly("CapsLock", "precision")] },
       { keys: "T", text: "SAS: stability assist", bind: [fly("KeyT", "sas", { shift: false })] },
@@ -411,7 +416,10 @@ export const KEYMAP: KeySection[] = [
       { keys: "X  (□)", text: "Next weapon" },
       { keys: "Y  (△)", text: "Tap: lock the next target · hold: the intercept" },
       { keys: "D-pad ▲ ▼ ◀ ▶", text: "Gear · flaps · flares and chaff · airbrake" },
-      { keys: "View · Menu", text: "The camera's view · tap: the autopilot's holds — hold: the settings" },
+      {
+        keys: "View · Menu",
+        text: "Tap: the camera's view — hold: the head locked on the target · tap: the autopilot's holds — hold: the settings",
+      },
     ],
   },
   {

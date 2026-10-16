@@ -2070,6 +2070,55 @@ function drawAero(
   } else if (A.status === "done") text(`${A.title.toUpperCase()} — LAPSED`, W / 2, H * 0.32, "#ff6a5a", 22, "center", true);
 }
 
+/** A missile's motor on the screen at `p`, `depth` metres ahead: a glow, white-hot, a little orange, larger near. */
+export function paintMotor(ctx: CanvasRenderingContext2D, p: [number, number], depth: number, fpx: number, dpr: number) {
+  const r = Math.max(Math.min((6 * fpx) / Math.max(depth, 1), 40 * dpr), 2.5 * dpr);
+  const g = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], r);
+  g.addColorStop(0, "rgba(255, 255, 240, 1)");
+  g.addColorStop(0.35, "rgba(255, 190, 90, 0.8)");
+  g.addColorStop(1, "rgba(255, 120, 40, 0)");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(p[0], p[1], r, 0, 2 * Math.PI);
+  ctx.fill();
+}
+
+/**
+ * An explosion on the screen at `p`, `depth` metres ahead (fpx: the pixels per unit of tangent): a flash, a fireball
+ * swelling and cooling to smoke — its real size at its distance (the HUD's, the replay's — ui/replay.ts).
+ */
+export function paintBoom(
+  ctx: CanvasRenderingContext2D,
+  p: [number, number],
+  depth: number,
+  fpx: number,
+  size: number,
+  age: number,
+  W: number,
+  H: number,
+  dpr: number,
+) {
+  const R = size * 14 * (0.5 + 1.6 * Math.min(age / 1.2, 1) + 0.3 * age);
+  const r = Math.max((R * fpx) / depth, 2 * dpr);
+  const heat = Math.max(0, 1 - age / 1.8);
+  const fade = Math.max(0, 1 - age / 8);
+  const g = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], r);
+  g.addColorStop(0, `rgba(255, ${Math.round(200 + 55 * heat)}, ${Math.round(150 * heat)}, ${0.95 * heat + 0.25 * fade})`);
+  g.addColorStop(
+    0.45,
+    `rgba(${Math.round(255 * heat + 70 * (1 - heat))}, ${Math.round(110 * heat + 66 * (1 - heat))}, ${Math.round(30 * heat + 60 * (1 - heat))}, ${0.8 * heat + 0.45 * fade})`,
+  );
+  g.addColorStop(1, "rgba(60, 56, 52, 0)");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(p[0], p[1], r, 0, 2 * Math.PI);
+  ctx.fill();
+  if (age < 0.15) {
+    ctx.fillStyle = `rgba(255, 250, 230, ${0.5 * (1 - age / 0.15)})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
 /** A fight (controller/combat.ts): the explosions, the smoke-less motors' glow, the gun's tracers, the targets
  *  (the radar's in green, the lock a diamond with its range and closure), the gun's pipper on the lead, the
  *  launch zone's scale and its SHOOT cue, the bomb's fall point, the missile warning and its bearings, the
@@ -2091,40 +2140,12 @@ function drawCombat(
   // the explosions: a flash, a fireball swelling and cooling to smoke (their real size at their distance)
   for (const b of K.booms) {
     const p = pr(b.d);
-    if (!p || b.d[2] <= 0) continue;
-    const R = b.size * 14 * (0.5 + 1.6 * Math.min(b.age / 1.2, 1) + 0.3 * b.age);
-    const r = Math.max((R * fpx) / b.d[2], 2 * dpr);
-    const heat = Math.max(0, 1 - b.age / 1.8);
-    const fade = Math.max(0, 1 - b.age / 8);
-    const g = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], r);
-    g.addColorStop(0, `rgba(255, ${Math.round(200 + 55 * heat)}, ${Math.round(150 * heat)}, ${0.95 * heat + 0.25 * fade})`);
-    g.addColorStop(
-      0.45,
-      `rgba(${Math.round(255 * heat + 70 * (1 - heat))}, ${Math.round(110 * heat + 66 * (1 - heat))}, ${Math.round(30 * heat + 60 * (1 - heat))}, ${0.8 * heat + 0.45 * fade})`,
-    );
-    g.addColorStop(1, "rgba(60, 56, 52, 0)");
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(p[0], p[1], r, 0, 2 * Math.PI);
-    ctx.fill();
-    if (b.age < 0.15) {
-      ctx.fillStyle = `rgba(255, 250, 230, ${0.5 * (1 - b.age / 0.15)})`;
-      ctx.fillRect(0, 0, W, H);
-    }
+    if (p && b.d[2] > 0) paintBoom(ctx, p, b.d[2], fpx, b.size, b.age, W, H, dpr);
   }
   // the missiles' motors: a glow (white-hot, a little orange), larger near
   for (const m of K.missiles) {
     const p = pr(m.d);
-    if (!p || !m.motor) continue;
-    const r = Math.max(Math.min((6 * fpx) / Math.max(m.d[2], 1), 40 * dpr), 2.5 * dpr);
-    const g = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], r);
-    g.addColorStop(0, "rgba(255, 255, 240, 1)");
-    g.addColorStop(0.35, "rgba(255, 190, 90, 0.8)");
-    g.addColorStop(1, "rgba(255, 120, 40, 0)");
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(p[0], p[1], r, 0, 2 * Math.PI);
-    ctx.fill();
+    if (p && m.motor) paintMotor(ctx, p, m.d[2], fpx, dpr);
   }
   // the gun's tracers: each fifth round a streak, the others a spark
   ctx.fillStyle = "rgba(255, 220, 120, 0.95)";
@@ -2202,6 +2223,17 @@ function drawCombat(
             ? GRN
             : "rgba(90, 255, 140, 0.45)";
     if (p && p[0] > 0 && p[0] < W && p[1] > 0 && p[1] < H) {
+      // (an aircraft far off: a few pixels of a dark hull against the sky — its spot, as the eye picks one out, a dot
+      // and a half wide, fainter the farther, gone past 20 km)
+      // (only while the hull itself is a few pixels: zoomed in on it, the craft is seen, not a dot over it)
+      const span = q.kind === "drone" ? 3.5 : q.kind === "airliner" ? 34 : 10.7;
+      if (q.alive && !q.ground && q.d && q.d[2] > 0 && q.dist < 20_000 && (0.5 * span * fpx) / q.d[2] < 2.5 * dpr) {
+        const r = 1.6 * dpr;
+        ctx.fillStyle = `rgba(28, 30, 36, ${Math.min(0.9, Math.max(0.3, 1.15 - q.dist / 16_000))})`;
+        ctx.beginPath();
+        ctx.ellipse(p[0], p[1], r, 0.75 * r, 0, 0, 2 * Math.PI);
+        ctx.fill();
+      }
       const s = (q.locked ? 16 : 11) * dpr;
       if (q.ground) {
         stroke(

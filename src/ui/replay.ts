@@ -7,6 +7,7 @@
 import "./replay.css";
 import {
   bestMoments,
+  boomsOnScreen,
   cutLength,
   directorShot,
   type FlightTape,
@@ -18,8 +19,10 @@ import {
   type ShotState,
   shotPose,
   startShot,
+  type TapeBoom,
   type TapeFrame,
 } from "../game/replay";
+import { paintBoom } from "./hud/symbology";
 import { t } from "../i18n";
 import { onEscape } from "./keys";
 import { button, el, h, kbd } from "./kit";
@@ -30,14 +33,17 @@ export interface ReplayHost<R> {
   blocked(): string | null;
   /** the flight held, the scene kept — returns how to put it back */
   enter(): () => void;
-  /** a frame drawn again under a camera's pose */
-  apply(f: TapeFrame<R>, pose: ShotPose): void;
+  /** a frame drawn again under a camera's pose — the craft between it and the next (u: 0 … 1) */
+  apply(f: TapeFrame<R>, pose: ShotPose, next: TapeFrame<R>, u: number): void;
   /** the craft's own seat (the cockpit's pose) */
   cockpit(): ShotPose;
+  /** a frame's explosions (none: none drawn), the view's field now [°] */
+  booms?(f: TapeFrame<R>): TapeBoom[];
+  fov(): number;
   /** the photo mode over the frame held; its close called back */
   photo(onClose: () => void): void;
   /** the trailer rendered as a video: its frames given (each: the frame, the pose, the seconds) — why not, or null */
-  video(frames: { f: TapeFrame<R>; pose: ShotPose }[], fps: number, draft: boolean): string | null;
+  video(frames: { f: TapeFrame<R>; next: TapeFrame<R>; u: number; pose: ShotPose }[], fps: number, draft: boolean): string | null;
   /** the place and the date, for the title card */
   title(): { place: string; date: string; craft: string };
   /** a moment's caption (its figures in the player's units) */
@@ -51,6 +57,7 @@ const SHOT_NAME: Record<ReplayShot | "auto", string> = {
   orbit: t("Orbit around"),
   flyby: t("Fly-by pass"),
   cockpit: t("Cockpit"),
+  target: t("On the target"),
 };
 
 /** The kinds of moment, their name on screen. */
@@ -86,6 +93,10 @@ export class ReplayPlayer<R> {
   private seek: HTMLInputElement | null = null;
   private clock: HTMLElement | null = null;
   private letter: HTMLElement | null = null;
+  /** the explosions drawn over the replay (the HUD's are hidden) */
+  private fx: HTMLCanvasElement | null = null;
+  /** the explosions drawn in the last frame */
+  boomsDrawn = 0;
   private caption: HTMLElement | null = null;
   private unEscape: (() => void) | null = null;
   private photoOpen = false;
@@ -125,6 +136,8 @@ export class ReplayPlayer<R> {
     this.unEscape = null;
     this.bar?.remove();
     this.letter?.remove();
+    this.fx?.remove();
+    this.fx = null;
     this.bar = this.letter = this.caption = this.seek = this.clock = null;
     document.body.classList.remove("replay", "replay-cinema");
     this.trailer = null;
@@ -151,6 +164,8 @@ export class ReplayPlayer<R> {
   at(t: number) {
     const T = this.host.tape;
     this.t = Math.min(Math.max(t, T.start), T.end);
+    // (a cut to elsewhere in time: the director chooses afresh, not after the shot that was)
+    this.shot = null;
     this.newShot();
   }
 
@@ -213,18 +228,22 @@ export class ReplayPlayer<R> {
       const gone = this.shot.shot === "flyby" && pose && pose.eye[2] < -400;
       if (len > cutLength(this.cuts) || len < -0.01 || gone) this.newShot();
     } else if (this.shot?.shot === "flyby" && this.t - this.shot.t0 > 6) this.newShot();
-    const f = T.at(this.t);
-    if (!f || !this.shot) return;
+    const S = T.span(this.t);
+    if (!S || !this.shot) return;
+    const f = S.a;
     const pose = shotPose(T, this.shot, this.t, this.host.cockpit());
-    if (pose) this.host.apply(f, pose);
+    if (pose) {
+      this.host.apply(f, pose, S.b, S.u);
+      this.drawBooms(f, pose);
+    }
     if (this.seek && document.activeElement !== this.seek) this.seek.value = String(this.t - T.start);
     if (this.clock) this.clock.textContent = `${(this.t - T.end).toFixed(1)} s`;
   }
 
   /** The trailer's frames for a video: each frame of its moments under the director's cameras, at `fps`. */
-  trailerFrames(fps = 30): { f: TapeFrame<R>; pose: ShotPose }[] {
+  trailerFrames(fps = 30): { f: TapeFrame<R>; next: TapeFrame<R>; u: number; pose: ShotPose }[] {
     const T = this.host.tape;
-    const out: { f: TapeFrame<R>; pose: ShotPose }[] = [];
+    const out: { f: TapeFrame<R>; next: TapeFrame<R>; u: number; pose: ShotPose }[] = [];
     const moments = bestMoments(T);
     let prev: ReplayShot | null = null;
     let k = 0;
@@ -238,11 +257,27 @@ export class ReplayPlayer<R> {
           prev = want;
         }
         const pose = shotPose(T, st, u, this.host.cockpit());
-        const f = T.at(u);
-        if (pose && f) out.push({ f, pose });
+        const S = T.span(u);
+        if (pose && S) out.push({ f: S.a, next: S.b, u: S.u, pose });
       }
     }
     return out;
+  }
+
+  /** The frame's explosions over the image, as the HUD draws them. */
+  private drawBooms(f: TapeFrame<R>, pose: ShotPose) {
+    const c = this.fx;
+    if (!c) return;
+    const dpr = devicePixelRatio || 1;
+    const W = Math.round(innerWidth * dpr),
+      H = Math.round(innerHeight * dpr);
+    if (c.width !== W || c.height !== H) Object.assign(c, { width: W, height: H });
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, W, H);
+    const B = boomsOnScreen(f.s, pose, this.host.booms?.(f) ?? [], this.host.fov(), W, H);
+    this.boomsDrawn = B.length;
+    for (const b of B) paintBoom(ctx, [b.x, b.y], b.depth, b.fpx, b.size, b.age, W, H, dpr);
   }
 
   // ---------------------------------------------------------------- the interface
@@ -298,12 +333,13 @@ export class ReplayPlayer<R> {
         },
       }),
       button({ label: t("Video…"), testid: "replay-video", onClick: () => this.video(false) }),
-      h("span", { class: "rp-keys" }, kbd(t("Space")), " ", kbd("←→"), " ", kbd("1–5"), " ", kbd(t("Esc"))),
+      h("span", { class: "rp-keys" }, kbd(t("Space")), " ", kbd("←→"), " ", kbd("1–6"), " ", kbd(t("Esc"))),
       button({ label: t("Back to the flight"), icon: "close", testid: "replay-close", onClick: () => this.close() }),
     );
     this.letter = h("div", { class: "rp-letter", "data-testid": "replay-letterbox" }, el("div", "rp-cap"));
     this.caption = this.letter.querySelector(".rp-cap");
-    document.body.append(this.letter, this.bar);
+    this.fx = h("canvas", { class: "rp-fx", "data-testid": "replay-fx" }) as HTMLCanvasElement;
+    document.body.append(this.fx, this.letter, this.bar);
   }
 
   /** The bar's state shown: the play button, the camera held, the time line's length. */
@@ -376,7 +412,7 @@ export class ReplayPlayer<R> {
     if (e.code === "Space") this.toggle();
     else if (e.code === "ArrowLeft") this.at(this.t - 5);
     else if (e.code === "ArrowRight") this.at(this.t + 5);
-    else if (/^Digit[1-5]$/.test(e.code)) this.setMode((["auto", ...REPLAY_SHOTS] as const)[Number(e.code.slice(5)) - 1]!);
+    else if (/^Digit[1-6]$/.test(e.code)) this.setMode((["auto", ...REPLAY_SHOTS] as const)[Number(e.code.slice(5)) - 1]!);
     else if (e.code === "Home") this.at(T.start);
     else used = false;
     if (used) {
@@ -396,6 +432,7 @@ export class ReplayPlayer<R> {
       playing: this.playing,
       mode: this.mode,
       shot: this.shot?.shot ?? null,
+      booms: this.boomsDrawn,
       trailer: this.trailer && { moment: this.trailer.i, of: this.trailer.moments.length, card: this.trailer.card },
       moments: bestMoments(T).map((m) => ({ kind: m.kind, t0: m.t0 - T.end, t1: m.t1 - T.end, score: Math.round(m.score) })),
     };

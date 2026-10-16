@@ -445,6 +445,7 @@ Un test e2e à deux pages par étape concernée.
 - **S3. Le spectacle.** Les caméras du replay (passage, tour, poursuite), le mode photo (existant) placé dans
   chaque scène, une bande-annonce automatique de la meilleure séquence.
   *S3 fait le 2026-10-16 — [fiche](progress/aviation/S3.md) : les 2 min 30 dernières du vol enregistrées en continu et rejouées, le vol gelé puis remis en place (poursuite, tour, passage au téléobjectif, cockpit, réalisateur) ; les meilleurs moments trouvés et enchaînés en bande-annonce (bandes cinéma, titre, légendes), rendue en vidéo ; un cadrage photo pour chacune des treize vues d'exception. En marge : la manette Xbox 360 du F-35 ([fiche](progress/aviation/MANETTE.md)).*
+  *Puis le 2026-10-16 — [fiche](progress/aviation/TIRS.md) : le tir en direct et en replay — l'appareil touché fume, détruit il part en vrille dans sa fumée et explose au crash (drones, chasseurs, avions de ligne ; les navires brûlent et coulent) ; la tête verrouillée sur la cible (⇧L) et la vue « Sur la cible » zoomées ; la cinématique du replay (départ du missile, téléobjectif sur la cible, impact, chute, crash), ses traînées rejouées, sans saccade.*
 
 ## Ordre proposé
 1. **V** (le vrai F-35) — tout le reste en dépend.

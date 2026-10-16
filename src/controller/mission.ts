@@ -335,14 +335,20 @@ function end(c: CameraController, M: MissionState) {
   c.missionLast = { spec: R.spec, status: R.status === "won" ? "won" : "failed", why: R.why, t: R.t, brief };
   c.onMissionSay?.(R.status === "won" ? tf("Mission accomplished: {0}", R.spec.title) : tf("Mission failed: {0}", R.why || R.spec.title));
   c.onMissionEnd?.(c.missionLast);
-  release(c, M);
+  release(c, M, R.status === "won" ? "won" : "lost");
 }
 
-/** Its takeovers given back, its swell, its fight ended. */
-function release(c: CameraController, M: MissionState) {
+/** Its takeovers given back, its swell, its fight ended — over (won, lost): wound down as a fight's end is, the
+ *  wrecks falling to their crash, a ship sinking in its smoke (controller/combat.ts); given up: at once. */
+function release(c: CameraController, M: MissionState, over?: "won" | "lost") {
   for (const L of M.units.values()) if (L.hex) c.trafficTaken?.delete(L.hex);
   if (M.run.spec.weather?.swell) c.seaSwell = null;
-  if (c.combat?.def.mission) c.combatEnd();
+  const C = c.combat;
+  if (C?.def.mission && over && C.status === "run" && C.world.falling(45)) {
+    C.status = over;
+    C.doneAt = C.t;
+    C.result = M.run.spec.title;
+  } else if (C?.def.mission) c.combatEnd();
   c.mission = null;
 }
 

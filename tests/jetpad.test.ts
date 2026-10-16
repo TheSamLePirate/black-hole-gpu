@@ -74,6 +74,7 @@ test("the buttons: their actions on the press; Y tapped the lock, held the inter
   expect(press(14)).toEqual(["combat:cm"]);
   expect(press(15)).toEqual(["airBrake"]);
   expect(press(8)).toEqual(["mount"]);
+  expect(press(8, 0.6)).toEqual(["combat:padlock"]);
   expect(press(10)).toEqual(["jetSystem:ab"]);
   expect(press(3, 0.1)).toEqual(["lock"]);
   expect(press(3, 0.6)).toEqual(["intercept"]);

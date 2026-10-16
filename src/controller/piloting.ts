@@ -577,6 +577,12 @@ function mountTarget(this: CameraController): MountPose {
     return { eye: o.eye, aim: lin(o.eye, 1, f, 10) };
   }
   if (v === "flyby") return { eye: this.flyby.eye, aim: V.centre };
+  if (v === "target") {
+    // (the lens on the fight's focus from behind the craft, the horizon level; nothing to look at: behind the craft)
+    const F = this.focusShip();
+    const eye: Vec3 = [0, 0.15 * V.viewDist + 2, -0.55 * V.viewDist];
+    return F ? { eye, aim: F.q, up: F.up } : { eye, aim: lin(V.centre, 1, [0, 0, 1], 40) };
+  }
   if (v === "director") return this.cineOut ?? { eye: lin(V.centre, 1, [0, 0.25 * V.viewDist, -V.viewDist], 1), aim: V.centre };
   // (about the cabin: where the camera has moved to, looking along the nose — the look turns it)
   if (this.s.shipMount === "cabin") {

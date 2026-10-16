@@ -214,7 +214,8 @@ import { RUNWAY_DH } from "./game/procedures";
 import { Simulation } from "./sim";
 import { TransportBar } from "./ui/transport";
 import { Take, type TakeState } from "./take";
-import { EV, FlightTape } from "./game/replay";
+import { EV, enuToEcef, FlightTape, type TapeBoom, type TapeSample } from "./game/replay";
+import { type ContrailSnap, type ContrailStep, Contrails, MAX_SEGMENTS, SEG_FLOATS } from "./contrails";
 import { ReplayPlayer } from "./ui/replay";
 import { BODY_COLOURS, CameraPanel, fmtHeight, VIEW_HELP, VIEW_LABEL, VIEWS, type View } from "./ui/camerapanel";
 import { defaultAltKm, ourMouthPose, ourOrbitPose } from "./game/place";
@@ -534,10 +535,159 @@ async function main() {
     jet: Renderer["jetPose"];
     others: Renderer["combatOthers"];
     wakes: Renderer["seaWakes"];
+    /** the trails' step this frame (none out of the air), and every 1.5 s their state (the replay plays them from it) */
+    trail: ContrailStep | null;
+    trailSnap?: ContrailSnap;
+    /** a fight's explosions seen then (ECEF), their age */
+    booms: TapeBoom[];
   };
   const tape = new FlightTape<ReplayData>();
+  /** The others' craft from the camera's axes to the craft's own, or from the craft's to a camera's (the replay's) —
+   *  what the tape keeps is the craft's: any camera draws them where they were. (The wakes are the Earth's: as they are.) */
+  type M3r = [Vec3r, Vec3r, Vec3r];
+  type Vec3r = [number, number, number];
+  const mulS = (S: M3r, v: readonly number[]): Vec3r => [
+    S[0][0] * v[0]! + S[0][1] * v[1]! + S[0][2] * v[2]!,
+    S[1][0] * v[0]! + S[1][1] * v[1]! + S[1][2] * v[2]!,
+    S[2][0] * v[0]! + S[2][1] * v[1]! + S[2][2] * v[2]!,
+  ];
+  const mulSt = (S: M3r, v: readonly number[]): Vec3r => [
+    S[0][0] * v[0]! + S[1][0] * v[1]! + S[2][0] * v[2]!,
+    S[0][1] * v[0]! + S[1][1] * v[1]! + S[2][1] * v[2]!,
+    S[0][2] * v[0]! + S[1][2] * v[1]! + S[2][2] * v[2]!,
+  ];
+  /** The others between two frames (u: 0 … 1) — the same craft in the same order: their places and axes
+   *  interpolated; else the first frame's. */
+  function othersBetween(a: Renderer["combatOthers"], b: Renderer["combatOthers"], u: number): Renderer["combatOthers"] {
+    if (u <= 0 || a.length !== b.length || a.some((x, k) => x.id !== b[k]!.id)) return a;
+    return a.map((x, k) => {
+      const y = b[k]!;
+      return {
+        ...x,
+        rel: lerp3(x.rel, y.rel, u),
+        // (their lengths kept: the traffic's axes carry its size)
+        axes: [0, 1, 2].map((k) => {
+          const v = unit3(lerp3(x.axes[k]!, y.axes[k]!, u)),
+            l = Math.hypot(...x.axes[k]!);
+          return [v[0] * l, v[1] * l, v[2] * l];
+        }) as [Vec3r, Vec3r, Vec3r],
+      };
+    });
+  }
+  function othersTo(o: Renderer["combatOthers"], f: (v: readonly number[]) => Vec3r): Renderer["combatOthers"] {
+    return o.map((x) => ({ ...x, rel: f(x.rel), axes: [f(x.axes[0]), f(x.axes[1]), f(x.axes[2])] }));
+  }
+  /** The camera's axes now on the craft's (the live view's mount and look). */
+  const camAxesNow = (): M3r | null =>
+    renderer.shipPose ? (shipToCamera(renderer.shipPose, settings.shipLookYaw, settings.shipLookPitch).S as M3r) : null;
+
+  /** What the replay's lens looks at this frame (game/replay.ts "target"): the fight's focus — our missile's target,
+   *  what was shot down, falling, crashed, a ship sinking (controller/combat.ts combatFocus) — where it is (ECEF). */
+  function replayFocus(smp: TapeSample): [number, number, number] | undefined {
+    const F = camera.combatFocus();
+    const P = camera.combat?.last;
+    // (the lock alone is no event: the lens is for a shot, a fall, a crash, a sinking)
+    return F && P && F.kind !== "lock" ? enuToEcef(smp, [F.p[0] - P.p[0], F.p[1] - P.p[1], F.p[2] - P.p[2]]) : undefined;
+  }
+  /** the trails' state kept every … [s of the tape] (a seek in the replay plays them on from the last: 90 steps at most) */
+  const TRAIL_SNAP_S = 1.5;
+  /** the longest rebuild of the replay's trails since it was last asked (__bh.flight.replay.tape()) [ms] */
+  let replayTrailMs = 0;
+  /** when the trails' state was kept last [the tape's s] */
+  let trailSnapAt = -1e9;
+  /** the replay's trails, played again up to the tape's frame `replayTrailI` */
+  let replayTrails: Contrails | null = null,
+    replayTrailI = -1;
+  const replayTrailBuf = new Float32Array(MAX_SEGMENTS * SEG_FLOATS);
+  /** The trails as they were at the tape's frame i: from the last state kept before it (or the tape's start), played on
+   *  through each frame's step; seen from the craft there. */
+  function trailsAt(i: number, u = 0): { data: Float32Array<ArrayBuffer>; n: number } | null {
+    const t0 = performance.now();
+    try {
+      return trailsAtNow(i, u);
+    } finally {
+      replayTrailMs = Math.max(replayTrailMs, performance.now() - t0);
+    }
+  }
+  /** the replay's trails stepped up to this scene time (a step is never taken back) */
+  let replayTrailNow = Number.NEGATIVE_INFINITY;
+  const lerp3 = (a: readonly number[], b: readonly number[], u: number): [number, number, number] => [
+    a[0]! + (b[0]! - a[0]!) * u,
+    a[1]! + (b[1]! - a[1]!) * u,
+    a[2]! + (b[2]! - a[2]!) * u,
+  ];
+  const unit3 = (v: [number, number, number]): [number, number, number] => {
+    const l = Math.hypot(...v) || 1;
+    return [v[0] / l, v[1] / l, v[2] / l];
+  };
+  function trailsAtNow(i: number, u: number): { data: Float32Array<ArrayBuffer>; n: number } | null {
+    const F = tape.frames;
+    let k = i;
+    while (k >= 0 && k > replayTrailI && !F[k]!.data.trailSnap) k--;
+    // (back in time, or a state kept on the way: begun again from the last state kept)
+    if (!replayTrails || i < replayTrailI || (k > replayTrailI && F[k]?.data.trailSnap)) {
+      if (i < replayTrailI || !replayTrails) {
+        k = i;
+        while (k >= 0 && !F[k]!.data.trailSnap) k--;
+      }
+      replayTrails = new Contrails();
+      const snap = k >= 0 ? F[k]!.data.trailSnap : undefined;
+      if (snap) replayTrails.restore(snap);
+      replayTrailI = snap ? k : -1;
+      replayTrailNow = snap ? snap.tLast : Number.NEGATIVE_INFINITY;
+    }
+    for (let j = replayTrailI + 1; j <= i; j++) {
+      const st = F[j]!.data.trail;
+      if (st && st.now > replayTrailNow) {
+        replayTrails.step(st.now, st.body, st.carry, st.src);
+        replayTrailNow = st.now;
+      }
+    }
+    replayTrailI = i;
+    const a = F[i]?.data.trail;
+    if (!a) return null;
+    // (between this frame and the next: a step of its own at the very time shown — the sources where they were then
+    // —, seen from the craft there: the smoke's head on what makes it, whatever the replay's rate)
+    const b = F[i + 1]?.data.trail;
+    let now = a.now,
+      x = a.x,
+      ax = a.ax;
+    if (b && u > 0 && b.body === a.body) {
+      now = a.now + (b.now - a.now) * u;
+      if (now > replayTrailNow) {
+        const src = a.src.map((q) => {
+          const r = b.src.find((z) => z.key === q.key);
+          return r ? { ...q, p: lerp3(q.p, r.p, u), str: q.str + (r.str - q.str) * u } : q;
+        });
+        replayTrails.step(now, a.body, a.carry, src);
+        replayTrailNow = now;
+      }
+      x = lerp3(a.x, b.x, u);
+      ax = [unit3(lerp3(a.ax[0], b.ax[0], u)), unit3(lerp3(a.ax[1], b.ax[1], u)), unit3(lerp3(a.ax[2], b.ax[2], u))];
+    }
+    const n = replayTrails.view(now, x, ax, replayTrailBuf);
+    return n ? { data: replayTrailBuf, n } : null;
+  }
   /** what the tape keeps of the settings: the craft's place, attitude, motion */
   const REPLAY_KEYS: (keyof Settings)[] = [...POSE_KEYS, "velR", "velT", "velP", "motion", "rotation"];
+  /** The craft's settings between two frames of the tape (u: 0 … 1): its numbers interpolated — its angles the short
+   *  way round —, the same place's (its anchor, its throat's side, its motion) else the first frame's as it was. */
+  const REPLAY_ANGLES = new Set<string>(["yaw", "pitch", "roll", "azimuth", "inclination"]);
+  function poseBetween(a: Partial<Settings>, b: Partial<Settings>, u: number): Partial<Settings> {
+    const A = a as Record<string, unknown>,
+      B = b as Record<string, unknown>;
+    if (u <= 0 || A.anchor !== B.anchor || A.whL !== B.whL || A.motion !== B.motion || A.rotation !== B.rotation) return a;
+    const out: Record<string, unknown> = { ...A };
+    for (const k of REPLAY_KEYS) {
+      const x = A[k],
+        y = B[k];
+      if (typeof x !== "number" || typeof y !== "number" || k === "whL") continue;
+      let d = y - x;
+      if (REPLAY_ANGLES.has(k)) d = ((((d + 180) % 360) + 360) % 360) - 180;
+      out[k] = x + d * u;
+    }
+    return out as Partial<Settings>;
+  }
   /** the fight's events this frame, for the tape (a launch of ours, an explosion near) */
   let replayEv = 0;
 
@@ -3020,7 +3170,16 @@ async function main() {
     missions: () => openMissions(),
     stopFlight: () => releaseControls(),
     ack: () => (camera.combat?.status === "run" ? combatSay(camera.combatTrigger("fire")) : flightHud.acknowledge()),
-    combat: (_, a) => combatSay(camera.combatTrigger(a === "cm" ? "cm" : "weapon")),
+    combat: (_, a) => {
+      if (a === "padlock") {
+        camera.padlock = !camera.padlock;
+        // (let go: the head back ahead — the lens the view's own again)
+        if (!camera.padlock) camera.setLook(0, 0);
+        panel.toast(camera.padlock ? t("Head locked on the target — it follows the shot, the fall, the crash") : t("Head free"));
+        return;
+      }
+      combatSay(camera.combatTrigger(a === "cm" ? "cm" : "weapon"));
+    },
     pause: () => (pauseMenu ??= makePauseMenu()).open(),
     quickSave: () => quickSave(),
     quickLoad: () => quickLoad(),
@@ -3245,6 +3404,8 @@ async function main() {
       photoMode?.close();
       const was = { settings: { ...settings }, time: sim.time, water: renderer.water.clock };
       replayFov = settings.fov;
+      replayTrails = null;
+      replayTrailI = -1;
       return () => {
         photoMode?.close();
         Object.assign(settings, was.settings);
@@ -3256,9 +3417,9 @@ async function main() {
         touchDisplay();
       };
     },
-    apply: (f, pose) => {
+    apply: (f, pose, next, u) => {
       const d = f.data;
-      Object.assign(settings, d.pose);
+      Object.assign(settings, poseBetween(d.pose, next.data.pose, u));
       settings.shipMount = pose.up ? "director" : "cockpit";
       settings.shipLookYaw = 0;
       settings.shipLookPitch = 0;
@@ -3268,17 +3429,21 @@ async function main() {
       renderer.shipThrust = d.thrust;
       renderer.shipPlasma = d.plasma;
       renderer.jetPose = d.jet;
-      renderer.combatOthers = d.others;
+      // (the others where they were, on this camera's axes)
+      const S = shipToCamera({ eye: pose.eye, aim: pose.aim, up: pose.up }, 0, 0).S as M3r;
+      renderer.combatOthers = othersTo(othersBetween(d.others, next.data.others, u), (v) => mulS(S, v));
       renderer.seaWakes = d.wakes;
-      renderer.shipContrails = null;
+      renderer.shipContrails = trailsAt(tape.index(f.t), u);
       renderer.shipReentry = null;
       renderer.shake = [0, 0];
-      renderer.water.clock = d.water;
-      sim.time = d.time;
+      renderer.water.clock = d.water + (next.data.water - d.water) * u;
+      sim.time = d.time + (next.data.time - d.time) * u;
       sim.timeDirty = true;
-      setSceneTime(d.time);
+      setSceneTime(sim.time);
     },
     cockpit: () => mountPose("cockpit"),
+    booms: (f) => f.data.booms,
+    fov: () => settings.fov,
     photo: (onClose) => {
       replayPhoto = true;
       openPhoto();
@@ -3289,26 +3454,32 @@ async function main() {
         };
     },
     video: (frames, fps, draft) => {
+      replayTrails = null;
+      replayTrailI = -1;
       const out = frames.map((x, i) => ({
         t: i / fps,
         settings: {
-          ...x.f.data.pose,
+          ...poseBetween(x.f.data.pose, x.next.data.pose, x.u),
           shipMount: x.pose.up ? "director" : "cockpit",
           shipLookYaw: 0,
           shipLookPitch: 0,
           fov: x.pose.fov ?? replayFov,
         } as Partial<Settings>,
         state: {
-          time: x.f.data.time,
-          water: x.f.data.water,
+          time: x.f.data.time + (x.next.data.time - x.f.data.time) * x.u,
+          water: x.f.data.water + (x.next.data.water - x.f.data.water) * x.u,
           ev: x.f.data.exp,
           ship: { eye: x.pose.eye, aim: x.pose.aim, up: x.pose.up },
           thrust: x.f.data.thrust,
           plasma: x.f.data.plasma,
           path: null,
-          others: x.f.data.others,
+          others: othersTo(othersBetween(x.f.data.others, x.next.data.others, x.u), (v) =>
+            mulS(shipToCamera({ eye: x.pose.eye, aim: x.pose.aim, up: x.pose.up }, 0, 0).S as M3r, v),
+          ),
           jet: x.f.data.jet,
           wakes: x.f.data.wakes,
+          // (the trails as they were: played again up to this frame, copied — the buffer is the replay's)
+          contrails: ((c) => c && { data: c.data.slice(0, c.n * SEG_FLOATS), n: c.n })(trailsAt(tape.index(x.f.t), x.u)),
         } as TakeState,
       }));
       // (the scene put back first: the video's own snapshot is then the flight's)
@@ -3846,6 +4017,7 @@ async function main() {
       if (st.others) renderer.combatOthers = st.others;
       if (st.jet) renderer.jetPose = st.jet;
       if (st.wakes) renderer.seaWakes = st.wakes;
+      if (st.contrails !== undefined) renderer.shipContrails = st.contrails;
       setSceneTime(st.time);
     },
     // (the scene as it was: the flight — a saved game's state —, every setting, the clocks)
@@ -6005,7 +6177,7 @@ async function main() {
       replay: {
         open: () => replayOpen(false),
         trailer: () => replayOpen(true),
-        shot: (m: "auto" | "chase" | "orbit" | "flyby" | "cockpit") => replay.setMode(m),
+        shot: (m: "auto" | "chase" | "orbit" | "flyby" | "cockpit" | "target") => replay.setMode(m),
         seek: (s: number) => replay.at(tape.end + s),
         play: (on: boolean) => {
           replay.playing = on;
@@ -6013,7 +6185,11 @@ async function main() {
         video: (draft = true) => replay.video(draft),
         close: () => replay.close(),
         state: () => replay.state(),
-        tape: () => ({ seconds: tape.length, frames: tape.frames.length }),
+        tape: () => {
+          const trailMs = replayTrailMs;
+          replayTrailMs = 0;
+          return { seconds: tape.length, frames: tape.frames.length, end: tape.end, trailMs };
+        },
         /** the trailer's video: rendering (its frame, of how many), stopped */
         videoState: () => renderDialog.videoState(),
         videoStop: () => renderDialog.stopVideo(),
@@ -6310,18 +6486,42 @@ async function main() {
     } else if (!frozen && !paused && !renderer.offlineActive && settings.animate && camera.piloting && !camera.spectating) {
       tape.tick(dt);
       const smp = camera.replaySample();
-      if (smp)
-        tape.push(smp, camera.replayEvents() | replayEv, {
-          pose: Object.fromEntries(REPLAY_KEYS.map((k) => [k, settings[k]])) as Partial<Settings>,
-          time: sim.time,
-          water: renderer.water.clock,
-          exp: renderer.autoExposureEV,
-          thrust: renderer.shipThrust,
-          plasma: renderer.shipPlasma,
-          jet: renderer.jetPose && { ...renderer.jetPose },
-          others: renderer.combatOthers.slice(0, 24),
-          wakes: renderer.seaWakes,
-        });
+      if (smp) {
+        // (the trails' state kept every 5 s, and at the tape's start)
+        const snap = tape.clock - trailSnapAt >= TRAIL_SNAP_S || !tape.frames.length;
+        const kept = tape.push(
+          smp,
+          camera.replayEvents() | replayEv,
+          {
+            pose: Object.fromEntries(REPLAY_KEYS.map((k) => [k, settings[k]])) as Partial<Settings>,
+            time: sim.time,
+            water: renderer.water.clock,
+            exp: renderer.autoExposureEV,
+            thrust: renderer.shipThrust,
+            plasma: renderer.shipPlasma,
+            jet: renderer.jetPose && { ...renderer.jetPose },
+            ...((S) =>
+              S
+                ? {
+                    others: othersTo(renderer.combatOthers.slice(0, 24), (v) => mulSt(S, v)),
+                  }
+                : { others: [] })(camAxesNow()),
+            wakes: renderer.seaWakes,
+            trail: camera.contrailStep,
+            trailSnap: snap ? camera.contrails.snapshot() : undefined,
+            booms: ((C) =>
+              C?.last && C.booms.length
+                ? C.booms.map((b) => ({
+                    w: enuToEcef(smp, [b.p[0] - C.last!.p[0], b.p[1] - C.last!.p[1], b.p[2] - C.last!.p[2]]),
+                    age: C.t - b.t,
+                    size: b.size,
+                  }))
+                : [])(camera.combat),
+          },
+          replayFocus(smp),
+        );
+        if (kept && snap) trailSnapAt = tape.clock;
+      }
       // (a craft set elsewhere — a scene, a jump —: the tape begun afresh)
       else if (tape.frames.length) tape.clear();
     }

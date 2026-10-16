@@ -50,6 +50,8 @@ export interface TapeFrame<R = unknown> {
   s: TapeSample;
   /** what happened (EV bits) */
   ev: number;
+  /** what to look at, when there is something (an aircraft shot down, falling, its crash): where (ECEF [m]) */
+  focus?: V3;
   /** the app's: the settings to put back, what the renderer drew */
   data: R;
 }
@@ -80,7 +82,7 @@ export class FlightTape<R = unknown> {
   }
 
   /** A frame kept (too soon after the last: skipped — its events carried onto the last). */
-  push(s: TapeSample, ev: number, data: R): boolean {
+  push(s: TapeSample, ev: number, data: R, focus?: V3): boolean {
     let last = this.frames.at(-1);
     // (a jump — a scene set, the craft placed elsewhere —: the tape begun afresh)
     if (last && Math.hypot(...sub(s.p, last.s.p)) > 1500 + 3 * s.speed * (this.clock - last.t)) {
@@ -91,7 +93,7 @@ export class FlightTape<R = unknown> {
       last.ev |= ev;
       return false;
     }
-    this.frames.push({ t: this.clock, s, ev, data });
+    this.frames.push({ t: this.clock, s, ev, data, ...(focus ? { focus } : {}) });
     // (the oldest dropped, a hundred at a time)
     if (this.frames[0]!.t < this.clock - this.seconds - 2) {
       const k = this.frames.findIndex((f) => f.t >= this.clock - this.seconds);
@@ -133,9 +135,45 @@ export class FlightTape<R = unknown> {
     const i = this.index(t);
     return i < 0 ? null : this.frames[i]!;
   }
+
+  /** Where the frames around time t are: the one at or before it, the next, how far between them (0 … 1). */
+  span(t: number): { a: TapeFrame<R>; b: TapeFrame<R>; u: number } | null {
+    const i = this.index(t);
+    if (i < 0) return null;
+    const a = this.frames[i]!,
+      b = this.frames[Math.min(i + 1, this.frames.length - 1)]!;
+    const u = b.t > a.t ? Math.min(Math.max((t - a.t) / (b.t - a.t), 0), 1) : 0;
+    return { a, b, u };
+  }
+
+  /** The craft at time t, between the frames kept (a replay played at its own rate: no frame shown twice, none
+   *  skipped — the image steady). */
+  sampleAt(t: number): TapeSample | null {
+    const S = this.span(t);
+    return S ? lerpSample(S.a.s, S.b.s, S.u) : null;
+  }
 }
 
 // ---------------------------------------------------------------- the world's axes
+
+/** A craft between two of its samples (u: 0 … 1) — its place, its axes (renormalised), its figures. */
+export function lerpSample(a: TapeSample, b: TapeSample, u: number): TapeSample {
+  if (u <= 0) return a;
+  if (u >= 1) return b;
+  const l = (x: number, y: number) => x + (y - x) * u;
+  const v = (x: V3, y: V3): V3 => [l(x[0], y[0]), l(x[1], y[1]), l(x[2], y[2])];
+  return {
+    p: v(a.p, b.p),
+    ax: [norm(v(a.ax[0], b.ax[0])), norm(v(a.ax[1], b.ax[1])), norm(v(a.ax[2], b.ax[2]))],
+    lat: l(a.lat, b.lat),
+    lon: l(a.lon, b.lon),
+    alt: l(a.alt, b.alt),
+    agl: l(a.agl, b.agl),
+    speed: l(a.speed, b.speed),
+    mach: l(a.mach, b.mach),
+    nz: l(a.nz, b.nz),
+  };
+}
 
 const D = Math.PI / 180;
 const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -181,8 +219,8 @@ export function onCraft(s: TapeSample, v: V3, A = axesOf(s)): V3 {
 
 // ---------------------------------------------------------------- the cameras
 
-export type ReplayShot = "chase" | "orbit" | "flyby" | "cockpit";
-export const REPLAY_SHOTS: ReplayShot[] = ["chase", "orbit", "flyby", "cockpit"];
+export type ReplayShot = "chase" | "orbit" | "flyby" | "cockpit" | "target";
+export const REPLAY_SHOTS: ReplayShot[] = ["chase", "orbit", "flyby", "cockpit", "target"];
 
 /** A camera's pose on the craft's axes: the eye, where it looks, its up; its field [°] (none: the view's own). */
 export interface ShotPose {
@@ -234,18 +272,31 @@ export function flybyStand(tape: FlightTape, t: number, seed = 0): V3 {
  * world's) but in the cockpit (the craft's own seat: `cockpit`).
  */
 export function shotPose(tape: FlightTape, st: ShotState, t: number, cockpit?: ShotPose): ShotPose | null {
-  const f = tape.at(t);
-  if (!f) return null;
-  const s = f.s;
+  const s = tape.sampleAt(t);
+  if (!s) return null;
   const A = axesOf(s);
   const [, , U] = enuAt(s.lat, s.lon);
   const up = onCraft(s, U, A);
   const at = (w: V3) => onCraft(s, sub(w, s.p), A);
   if (st.shot === "cockpit") return cockpit ?? { eye: [0, 1.6, 4.7], aim: [0, 1.5, 20] };
-  if (st.shot === "chase") {
+  if (st.shot === "target") {
+    // (from behind and above the craft, the lens on what it shot down — falling, its crash —, its size in the frame
+    // some 60 m whatever its distance; nothing to look at: as the chase)
+    const S = tape.span(t);
+    const fa = S?.a.focus,
+      fb = S?.b.focus ?? fa;
+    if (fa && fb) {
+      const w: V3 = [fa[0] + (fb[0] - fa[0]) * S!.u, fa[1] + (fb[1] - fa[1]) * S!.u, fa[2] + (fb[2] - fa[2]) * S!.u];
+      const eye = at(add(add(s.p, A[2], -20), U, 6));
+      const aim = at(w);
+      const d = Math.hypot(...sub(aim, eye));
+      return { eye, aim, up, fov: Math.min(Math.max((2 * Math.atan(30 / Math.max(d, 1))) / D, 2), 60) };
+    }
+  }
+  if (st.shot === "chase" || st.shot === "target") {
     // (behind the nose as it was a little before — the turns lag —, a little above, looking a little ahead)
     let lag: V3 = [0, 0, 0];
-    for (let k = 0; k <= 6; k++) lag = add(lag, axesOf(tape.at(t - k * 0.07)!.s)[2]);
+    for (let k = 0; k <= 6; k++) lag = add(lag, axesOf(tape.sampleAt(t - k * 0.07)!)[2]);
     const back = norm(lag);
     const eye = at(add(add(s.p, back, -24 - 0.03 * s.speed), U, 5.5));
     return { eye, aim: [0, 1, 6], up };
@@ -382,14 +433,20 @@ export function directorShot(tape: FlightTape, t: number, prev: ReplayShot | nul
   // (what comes in the next 3 s)
   let ev = 0,
     nz = 0;
-  for (let u = t; u < Math.min(t + 3, tape.end); u += 0.1) {
-    const g = tape.at(u)!;
+  // (every frame: an event is one frame's — a launch missed between samples)
+  for (let i = tape.index(t), i1 = tape.index(t + 3); i <= i1; i++) {
+    const g = tape.frames[i]!;
     ev |= g.ev;
     nz = Math.max(nz, Math.abs(g.s.nz));
   }
   const s = f.s;
   let want: ReplayShot;
-  if (ev & (EV.FIRE | EV.LAUNCH | EV.BOOM)) want = prev === "chase" ? "flyby" : "chase";
+  // (a launch coming: the chase — the missile leaving its rail, its smoke —, then the lens on what it flies at; a
+  // shot's target, something shot down — falling, crashing —, a ship sinking: the lens on it, a chase between)
+  const launch = !!(ev & EV.LAUNCH) && !(f.ev & EV.LAUNCH && prev === "chase");
+  if (launch && prev !== "chase") want = "chase";
+  else if (f.focus) want = prev === "target" ? "chase" : "target";
+  else if (ev & (EV.FIRE | EV.LAUNCH | EV.BOOM)) want = prev === "chase" ? "flyby" : "chase";
   else if (ev & EV.TOUCH) want = "flyby";
   else if (s.agl < 300 && s.speed > 100) want = prev === "flyby" ? "chase" : "flyby";
   else if (nz > 4.5 || ev & EV.FORM) want = prev === "orbit" ? "chase" : "orbit";
@@ -401,4 +458,47 @@ export function directorShot(tape: FlightTape, t: number, prev: ReplayShot | nul
 /** A cut's length: a little different each time. */
 export function cutLength(k: number): number {
   return REPLAY.cutMin + ((((Math.sin(k * 12.9898) * 43758.5453) % 1) + 1) % 1) * (REPLAY.cutMax - REPLAY.cutMin);
+}
+
+// ---------------------------------------------------------------- the explosions
+
+/** An explosion as the tape keeps it: where (ECEF [m]), how old [s], how big. */
+export interface TapeBoom {
+  w: V3;
+  age: number;
+  size: number;
+}
+
+/** A point of the local east, north, up about the craft (a fight's — its flat frame, metres from the craft) in ECEF. */
+export function enuToEcef(s: TapeSample, r: V3): V3 {
+  const [E, N, U] = enuAt(s.lat, s.lon);
+  return add(add(add(s.p, E, r[0]), N, r[1]), U, r[2]);
+}
+
+/**
+ * The explosions on the screen under a camera's pose (on the craft's axes) with a field [°, vertical] on W × H pixels:
+ * each where it is, how far ahead [m], the pixels per unit of tangent; those behind the camera left out.
+ */
+export function boomsOnScreen(
+  s: TapeSample,
+  pose: ShotPose,
+  booms: TapeBoom[],
+  fovDeg: number,
+  W: number,
+  H: number,
+): { x: number; y: number; depth: number; fpx: number; size: number; age: number }[] {
+  if (!booms.length) return [];
+  const A = axesOf(s);
+  const fwd = norm(sub(pose.aim, pose.eye));
+  const right = norm(cross(fwd, pose.up ?? [0, 1, 0]));
+  const up = cross(right, fwd);
+  const fpx = H / (2 * Math.tan((fovDeg * D) / 2));
+  const out: { x: number; y: number; depth: number; fpx: number; size: number; age: number }[] = [];
+  for (const b of booms) {
+    const q = sub(onCraft(s, sub(b.w, s.p), A), pose.eye);
+    const z = dot(q, fwd);
+    if (z <= 1) continue;
+    out.push({ x: W / 2 + (dot(q, right) / z) * fpx, y: H / 2 - (dot(q, up) / z) * fpx, depth: z, fpx, size: b.size, age: b.age });
+  }
+  return out;
 }

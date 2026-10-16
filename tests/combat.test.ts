@@ -101,3 +101,64 @@ test("the SAM site fires at a player high over it, not at one under 150 m", () =
   const evHigh = run(high, level([0, 0, 4000]), 20);
   expect(evHigh.some((e) => e.kind === "launch" && e.missile === "sam")).toBe(true);
 });
+
+test("an aircraft shot down: out of control — falling, its nose dropping, rolling —, its explosion where it hits the ground", () => {
+  const W = new CombatWorld([{ kind: "drone", at: [25_000, 3000, 5000], hdg: 0, speed: 120 }], LOADOUTS.aa, flat, seeded());
+  const P = level([0, 0, 5000]);
+  W.scan(P);
+  W.cycleLock(P);
+  W.launch(P, "aim120");
+  const q = W.targets[0]!;
+  // (hit: its damage share; destroyed: the hit's burst — small — and out of control)
+  expect(W.damageOf(q)).toBe(0);
+  let ev: ReturnType<CombatWorld["step"]> = [];
+  for (let t = 0; t < 60 && q.alive; t += 1 / 60) ev.push(...run(W, P, 1 / 60));
+  ev.push(...run(W, P, 0.1));
+  const kill = ev.findIndex((e) => e.kind === "kill");
+  expect(kill).toBeGreaterThanOrEqual(0);
+  expect(ev.find((e, i) => i > kill && e.kind === "explode")).toMatchObject({ size: 0.5 });
+  expect(W.damageOf(q)).toBe(1);
+  expect(q.wreck && Number.isNaN(q.wreck.crashedAt)).toBe(true);
+  // (falling: the nose down to where it goes, its top turning round it, never faster than its drag allows)
+  let nose = 0,
+    vMax = 0,
+    turned = 0;
+  const up0 = [...q.up];
+  ev = run(W, P, 120, () => {
+    nose = Math.min(nose, q.fwd[2]);
+    vMax = Math.max(vMax, Math.hypot(...q.v));
+    turned = Math.max(turned, Math.acos(Math.min(1, up0[0]! * q.up[0] + up0[1]! * q.up[1] + up0[2]! * q.up[2])));
+  });
+  expect(nose).toBeLessThan(-0.8);
+  expect(turned).toBeGreaterThan(1.5);
+  expect(vMax).toBeLessThan(200);
+  const crash = ev.find((e) => e.kind === "crash");
+  expect(crash).toBeDefined();
+  expect(ev.find((e) => e.kind === "explode" && e.size > 2)).toBeDefined();
+  expect(q.p[2]).toBe(0);
+  expect(Number.isNaN(q.wreck!.crashedAt)).toBe(false);
+  // (once: no second explosion)
+  expect(run(W, P, 5).some((e) => e.kind === "explode")).toBe(false);
+});
+
+test("a hit aircraft's damage share: what its hits took of its strength", () => {
+  const W = new CombatWorld([{ kind: "fighter", at: [8000, 2000, 4000], hdg: 270, speed: 260 }], LOADOUTS.aa, flat, seeded(3));
+  const q = W.targets[0]!;
+  q.hp = 40;
+  expect(W.damageOf(q)).toBeCloseTo(0.6);
+});
+
+test("the fight over, the wreck still falls to its crash", () => {
+  const W = new CombatWorld([{ kind: "drone", at: [25_000, 3000, 5000], hdg: 0, speed: 120 }], LOADOUTS.aa, flat, seeded());
+  const P = level([0, 0, 5000]);
+  W.scan(P);
+  W.cycleLock(P);
+  W.launch(P, "aim120");
+  for (let t = 0; t < 60 && W.targets[0]!.alive; t += 1 / 60) run(W, P, 1 / 60);
+  expect(W.falling()).toBe(true);
+  const ev = [];
+  for (let t = 0; t < 120 && W.falling(); t += 1 / 60) ev.push(...W.stepWrecks(1 / 60));
+  expect(W.falling()).toBe(false);
+  expect(W.falling(45)).toBe(true);
+  expect(ev.some((e) => e.kind === "crash")).toBe(true);
+});

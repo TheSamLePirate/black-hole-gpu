@@ -12,6 +12,7 @@ import { TELE_MIN, clamp } from "./util";
 import { freeCameraKeys } from "../input/bindings";
 import { fleet } from "../fleet";
 import { JETPAD } from "../input/jetpad";
+import { shipToCamera } from "../mounts";
 
 declare module "../controls" {
   interface CameraController {
@@ -182,6 +183,16 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   if (s.ship !== this.piloting) this.setPilot(s.ship);
   if (s.shipMount !== this.lastMount) this.lookOff = [0, 0];
   this.aimShipViews(dt);
+  // (the lens on the target — mounts.ts "target" —: its field to frame what it looks at, eased in — given to the lens
+  // below)
+  if (this.piloting && !this.cinematic && this.outsideView() === "target") {
+    const F = this.focusShip();
+    const base = this.targetFov ?? s.fov;
+    const want = F
+      ? Math.min(Math.max((2 * Math.atan(F.size / 2 / Math.max(Math.hypot(...F.q), 1)) * 180) / Math.PI, 1.5), 60)
+      : this.lensBaseNow();
+    this.targetFov = Math.exp(Math.log(base) + (Math.log(want) - Math.log(base)) * (1 - Math.exp(-dt / 0.35)));
+  } else this.targetFov = null;
   if (this.piloting && !this.cinematic && this.outsideView() === "flyby") {
     if (s.shipMount !== this.lastMount) this.flyby.E = null; // (a new fly-by: from where the view is)
     this.flybyStep(dt);
@@ -221,10 +232,32 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   const lk = pc?.commands.axes;
   if (lk && pilotNow && !away && (lk.lookX || lk.lookY))
     this.setLook(s.shipLookYaw + (lk.lookX ?? 0) * 90 * dt, s.shipLookPitch + (lk.lookY ?? 0) * 70 * dt);
-  // (the F-35's pad: the head where the right stick points, back ahead as it is let go; R3 held: the zoom)
+  // (the head locked on the fight's focus — the padlock, ⇧L, the pad's View held —: in the craft's own views it turns
+  // to the lock, our missile's target, what was shot down falling, its crash, the lens zoomed on it; the pad's stick
+  // moved takes the head back while it is)
   const J = this.jetPadOut;
+  this.padlockFov = null;
+  const stickHead = !!J && (Math.abs(J.lookYaw) > 2 || Math.abs(J.lookPitch) > 2);
+  let padlocked = false;
+  if (this.padlock && pilotNow && !away && !this.outsideView() && !stickHead) {
+    const F = this.focusShip();
+    if (F) {
+      padlocked = true;
+      const P = this.mountTarget();
+      const d: [number, number, number] = [F.q[0] - P.eye[0], F.q[1] - P.eye[1], F.q[2] - P.eye[2]];
+      const S = shipToCamera(P, 0, 0).S;
+      const c = S.map((r) => r[0] * d[0] + r[1] * d[1] + r[2] * d[2]);
+      const D = 180 / Math.PI;
+      const yaw = clamp(Math.atan2(c[0]!, c[2]!) * D, -160, 160),
+        pitch = clamp(Math.atan2(c[1]!, Math.hypot(c[0]!, c[2]!)) * D, -50, 85);
+      const k = 1 - Math.exp(-dt / 0.12);
+      this.setLook(s.shipLookYaw + (yaw - s.shipLookYaw) * k, s.shipLookPitch + (pitch - s.shipLookPitch) * k);
+      this.padlockFov = clamp(2 * Math.atan(F.size / 2 / Math.max(Math.hypot(...d), 1)) * D, 6, this.lensBaseNow());
+    }
+  }
+  // (the F-35's pad: the head where the right stick points, back ahead as it is let go; R3 held: the zoom)
   if (J && !away) {
-    if (J.lookYaw !== s.shipLookYaw || J.lookPitch !== s.shipLookPitch) this.setLook(J.lookYaw, J.lookPitch);
+    if (!padlocked && (J.lookYaw !== s.shipLookYaw || J.lookPitch !== s.shipLookPitch)) this.setLook(J.lookYaw, J.lookPitch);
     if (J.zoom > 0) {
       if (this.padZoomBase === null) this.padZoomBase = this.fovTarget ?? s.fov;
       this.fovTarget = null;
@@ -313,9 +346,13 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   this.lensApply(
     directing
       ? this.cineFov
-      : this.piloting && this.softMount() && Math.abs(this.camKick - 1) > 1e-4
-        ? this.lensBaseNow() * this.camKick
-        : null,
+      : this.targetFov !== null
+        ? this.targetFov
+        : this.padlockFov !== null
+          ? this.padlockFov
+          : this.piloting && this.softMount() && Math.abs(this.camKick - 1) > 1e-4
+            ? this.lensBaseNow() * this.camKick
+            : null,
   );
   if (tracked) this.written = [s.yaw, s.pitch, s.roll].join();
   // (the rig idle this frame: it starts afresh from where the camera is when it takes over again)

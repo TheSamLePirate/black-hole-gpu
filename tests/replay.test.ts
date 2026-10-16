@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import {
   axesOf,
   bestMoments,
+  boomsOnScreen,
+  enuToEcef,
   directorShot,
   ecefOf,
   EV,
@@ -95,7 +97,7 @@ test("the fly-by: standing aside the path ahead, the craft passing it — the le
   expect(b.fov!).toBeGreaterThan(20);
   // (the standing place the same in the world)
   const world = (p: { eye: V3 }, t: number) => {
-    const s = T.at(t)!.s;
+    const s = T.sampleAt(t)!;
     const A = axesOf(s);
     return [0, 1, 2].map((k) => s.p[k]! + A[0][k]! * p.eye[0] + A[1][k]! * p.eye[1] + A[2][k]! * p.eye[2]);
   };
@@ -135,4 +137,67 @@ test("the director: the fly-by low and fast, the chase for a burst, never the sa
   const pull = fill(20, (t) => ({ s: north(t, { nz: 7 }) }));
   expect(directorShot(pull, 5, "chase")).toBe("orbit");
   for (const prev of ["chase", "orbit", "flyby"] as const) expect(directorShot(pull, 5, prev)).not.toBe(prev);
+});
+
+test("the explosions on the replay's screen: one ahead of the chase's camera in the middle, one behind it left out", () => {
+  const T = fill(20, (t) => ({ s: north(t) }));
+  const s = T.at(10)!.s;
+  const pose = shotPose(T, startShot(T, "chase", 10), 10)!;
+  // (300 m ahead on the path, at the craft's height; 300 m behind)
+  const ahead = enuToEcef(s, [0, 300, 0]),
+    behind = enuToEcef(s, [0, -300, 0]);
+  const B = boomsOnScreen(
+    s,
+    pose,
+    [ahead, behind].map((w) => ({ w, age: 0.5, size: 2 })),
+    60,
+    1600,
+    900,
+  );
+  expect(B.length).toBe(1);
+  expect(B[0]!.x).toBeCloseTo(800, -1);
+  expect(Math.abs(B[0]!.y - 450)).toBeLessThan(120);
+  expect(B[0]!.depth).toBeGreaterThan(300);
+  // (to the craft's right: on the screen's right)
+  const right = boomsOnScreen(s, pose, [{ w: enuToEcef(s, [100, 300, 0]), age: 0, size: 1 }], 60, 1600, 900);
+  expect(right[0]!.x).toBeGreaterThan(900);
+});
+
+test("the replay between its frames: the craft interpolated — played at any rate, no frame twice, none skipped", () => {
+  const T = fill(10, (t) => ({ s: north(t) }));
+  const a = T.frames[100]!,
+    b = T.frames[101]!;
+  const m = T.sampleAt((a.t + b.t) / 2)!;
+  for (let k = 0; k < 3; k++) expect(m.p[k]).toBeCloseTo((a.s.p[k]! + b.s.p[k]!) / 2, 3);
+  // (the chase's eye at 50 Hz: its motion even — the second difference of its place small)
+  const st = startShot(T, "chase", 2);
+  const eyes: number[] = [];
+  for (let t = 2; t < 4; t += 1 / 50) eyes.push(shotPose(T, st, t)!.eye[2]);
+  for (let i = 2; i < eyes.length; i++) expect(Math.abs(eyes[i]! - 2 * eyes[i - 1]! + eyes[i - 2]!)).toBeLessThan(0.05);
+});
+
+test("the lens on the target: aimed at what was shot down, its field to its distance; the director takes it", () => {
+  const T = new FlightTape();
+  for (let t = 0; t <= 10; t += 1 / 60) {
+    const s = north(t);
+    T.push(s, 0, null, t > 4 ? enuToEcef(s, [300, 2000 - 100 * (t - 4), -200]) : undefined);
+    T.tick(1 / 60);
+  }
+  const st = startShot(T, "target", 6);
+  const p = shotPose(T, st, 6)!;
+  const s = T.sampleAt(6)!;
+  const B = boomsOnScreen(s, p, [{ w: T.at(6)!.focus!, age: 0, size: 1 }], p.fov!, 1600, 900);
+  expect(B[0]!.x).toBeCloseTo(800, 0);
+  expect(B[0]!.y).toBeCloseTo(450, 0);
+  expect(p.fov!).toBeLessThan(5);
+  expect(directorShot(T, 6, "chase")).toBe("target");
+  expect(directorShot(T, 6, "target")).not.toBe("target");
+  expect(directorShot(T, 2, null)).not.toBe("target");
+});
+
+test("the director: a launch a frame long, 2 s ahead — the chase to see the missile leave", () => {
+  const T = fill(20, (t) => ({ s: north(t, { agl: 50, speed: 250 }), ev: Math.abs(t - 7.03) < 0.009 ? EV.LAUNCH : 0 }));
+  expect(T.frames.filter((f) => f.ev & EV.LAUNCH).length).toBe(1);
+  expect(directorShot(T, 5, null)).toBe("chase");
+  expect(directorShot(T, 5, "flyby")).toBe("chase");
 });

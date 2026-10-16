@@ -1392,7 +1392,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "camera",
       description:
-        "The camera (only what is given): shipView: back to the ship's view (from the spectator, a cinematic, the map); mount = a view on the ship (cockpit, cabin, quarter, chase, dorsal, wing, belly, rear, dock, around, free, flyby, station); spectator: a free camera anywhere, the ship flying on; view (without the ship): orbit, follow, free, tripod, fall; lookAt: locked on the target; telescope; spot: the telescope's spot meter (the exposure set by the target's disc alone — a faint object, the wormhole's mouth, drawn bright; on by default); fovDeg; cinematic: orbit/dive/journey/none; goTo: fly the free camera to a body; standOn: a tripod on a body's ground; replay: the last minutes flown played again (open), the trailer of their best moments (trailer), that trailer rendered as a video (video), back to the flight (close) — replayShot the replay's camera (auto: the director's cuts, chase, orbit, flyby, cockpit).",
+        "The camera (only what is given): shipView: back to the ship's view (from the spectator, a cinematic, the map); mount = a view on the ship (cockpit, cabin, quarter, chase, dorsal, wing, belly, rear, dock, around, free, flyby, station); spectator: a free camera anywhere, the ship flying on; view (without the ship): orbit, follow, free, tripod, fall; lookAt: locked on the target; telescope; spot: the telescope's spot meter (the exposure set by the target's disc alone — a faint object, the wormhole's mouth, drawn bright; on by default); fovDeg; cinematic: orbit/dive/journey/none; goTo: fly the free camera to a body; standOn: a tripod on a body's ground; replay: the last minutes flown played again (open), the trailer of their best moments (trailer), that trailer rendered as a video (video), back to the flight (close) — replayShot the replay's camera (auto: the director's cuts, chase, orbit, flyby, cockpit, target: the lens on what was shot down).",
       params: {
         mount: { type: "string", enum: MOUNT_IDS },
         spectator: { type: "boolean" },
@@ -1405,7 +1405,7 @@ export function gameTools(h: GameHost): Tool[] {
         goTo: { type: "string" },
         standOn: { type: "string" },
         replay: { type: "string", enum: ["open", "trailer", "video", "close"] },
-        replayShot: { type: "string", enum: ["auto", "chase", "orbit", "flyby", "cockpit"] },
+        replayShot: { type: "string", enum: ["auto", "chase", "orbit", "flyby", "cockpit", "target"] },
         shipView: {
           type: "boolean",
           description: "back to the ship's view: the ship on, the spectator and cinematics off, the map closed",

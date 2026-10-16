@@ -1283,6 +1283,7 @@ function airInfo(this: CameraController) {
  * carried with the air, aged; handed over in the ship's frame for the renderer. Null: none.
  */
 function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffer>; n: number } | null {
+  this.contrailStep = null;
   const cam = cameraFrame(this.s);
   const fr = this.s.ship ? this.entryFrame(cam) : null;
   if (!fr || !fr.env.atm) {
@@ -1422,15 +1423,41 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
       const q = [0, 1, 2].map((k) => x[k]! + E[k]! * r[0]! + N[k]! * r[1]! + U[k]! * r[2]!) as Vec3;
       src.push({ key: `m${m.id}`, p: q, kind: 4, str: 1 });
     }
-    // (a downed aircraft burning: its smoke as it falls)
-    for (const q of CB.world.targets)
-      if (q.ai && !q.alive && CB.world.t - q.diedAt < 20) {
-        const r = [q.p[0] - P.p[0], q.p[1] - P.p[1], q.p[2] - P.p[2]];
-        const p = [0, 1, 2].map((k) => x[k]! + E[k]! * r[0]! + N[k]! * r[1]! + U[k]! * r[2]!) as Vec3;
-        src.push({ key: `w${q.id}`, p, kind: 4, str: 0.8 });
+    // (an aircraft hit: its smoke, thicker the worse it is; destroyed, burning as it falls; crashed, a column of
+    // smoke rising from where it hit for 45 s)
+    const at = (w: [number, number, number]): Vec3 => {
+      const r = [w[0] - P.p[0], w[1] - P.p[1], w[2] - P.p[2]];
+      return [0, 1, 2].map((k) => x[k]! + E[k]! * r[0]! + N[k]! * r[1]! + U[k]! * r[2]!) as Vec3;
+    };
+    for (const q of CB.world.targets) {
+      // (a ship hit: smoke from its decks; sunk, a column rising a minute from where it settles)
+      if (q.kind === "ship") {
+        const sunk = q.alive ? null : CB.world.t - q.diedAt;
+        const dmg = CB.world.damageOf(q);
+        if (sunk !== null ? sunk < 60 : dmg > 0.1)
+          src.push({
+            key: `s${q.id}`,
+            p: at([q.p[0], q.p[1], q.p[2] + 12 + (sunk !== null ? Math.min(sunk * 6, 300) : 0)]),
+            kind: 4,
+            str: sunk !== null ? 1 : 0.3 + 0.6 * dmg,
+          });
+        continue;
       }
+      if (!q.ai) continue;
+      const crashed = q.wreck && !Number.isNaN(q.wreck.crashedAt) ? CB.world.t - q.wreck.crashedAt : null;
+      if (crashed !== null) {
+        if (crashed < 45) src.push({ key: `c${q.id}`, p: at([q.p[0], q.p[1], q.p[2] + Math.min(crashed * 7, 260)]), kind: 4, str: 1 });
+      } else if (!q.alive) {
+        if (q.wreck || CB.world.t - q.diedAt < 20) src.push({ key: `w${q.id}`, p: at(q.p), kind: 4, str: 1 });
+      } else {
+        const dmg = CB.world.damageOf(q);
+        if (dmg > 0.15) src.push({ key: `w${q.id}`, p: at(q.p), kind: 4, str: 0.25 + 0.5 * dmg });
+      }
+    }
   }
   this.contrails.step(fr.now, fr.body, fr.env.carry, src);
+  // (the step's inputs kept for the replay's tape — it plays the trails again from them)
+  this.contrailStep = { now: fr.now, body: fr.body, carry: fr.env.carry, src, x: [...x] as Vec3, ax };
   const n = this.contrails.view(fr.now, x, ax, this.contrailBuf);
   return n ? { data: this.contrailBuf, n } : null;
 }

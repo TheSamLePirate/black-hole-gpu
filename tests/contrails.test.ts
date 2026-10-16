@@ -75,3 +75,44 @@ test("segments handed over in the ship's frame, at most MAX_SEGMENTS", () => {
   const zs = Array.from({ length: n }, (_, i) => out[i * SEG_FLOATS + 6]!);
   expect(Math.min(...zs)).toBeLessThan(-30000);
 });
+
+test("the replay's trails: played again from a state kept on the way, the same as they were (the state untouched)", () => {
+  const carry = (p: V3, dt: number): V3 => [p[0] + 2 * dt, p[1], p[2]];
+  const srcAt = (t: number) => [
+    { key: "m1", p: [250 * t, 30 * Math.sin(t), 3000] as V3, kind: 4 as const, str: 1 },
+    { key: "e0", p: [250 * t, 0, 3000] as V3, kind: 0 as const, str: t < 6 ? 1 : 0 },
+  ];
+  const live = new Contrails();
+  let snap: ReturnType<Contrails["snapshot"]> | null = null;
+  const steps: number[] = [];
+  for (let k = 0; k <= 600; k++) {
+    const t = k / 60;
+    live.step(t, "earth", carry, srcAt(t));
+    if (k === 240) snap = live.snapshot();
+    if (k > 240) steps.push(t);
+  }
+  const again = new Contrails();
+  again.restore(snap!);
+  for (const t of steps) again.step(t, "earth", carry, srcAt(t));
+  const view = (c: Contrails) => {
+    const out = new Float32Array(MAX_SEGMENTS * SEG_FLOATS);
+    const n = c.view(
+      10,
+      [2500, 0, 3000],
+      [
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1],
+      ],
+      out,
+    );
+    return [...out.slice(0, n * SEG_FLOATS)];
+  };
+  expect(view(again).length).toBeGreaterThan(0);
+  expect(view(again)).toEqual(view(live));
+  // (the state kept untouched by the play: a second play the same)
+  const third = new Contrails();
+  third.restore(snap!);
+  for (const t of steps) third.step(t, "earth", carry, srcAt(t));
+  expect(view(third)).toEqual(view(live));
+});

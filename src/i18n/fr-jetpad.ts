@@ -17,6 +17,6 @@ export default {
   "D-pad ▲ ▼ ◀ ▶": "Croix ▲ ▼ ◀ ▶",
   "Gear · flaps · flares and chaff · airbrake": "Train · volets · leurres et paillettes · aérofrein",
   "View · Menu": "View · Menu",
-  "The camera's view · tap: the autopilot's holds — hold: the settings":
-    "La vue de la caméra · appui : les tenues du pilote automatique — maintenu : les réglages",
+  "Tap: the camera's view — hold: the head locked on the target · tap: the autopilot's holds — hold: the settings":
+    "Appui : la vue de la caméra — maintenu : la tête verrouillée sur la cible · appui : les tenues du pilote automatique — maintenu : les réglages",
 } satisfies Record<string, string>;

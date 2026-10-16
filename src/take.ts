@@ -28,6 +28,7 @@ export interface TakeState {
   others?: import("./renderer").Renderer["combatOthers"];
   jet?: import("./renderer").Renderer["jetPose"];
   wakes?: import("./renderer").Renderer["seaWakes"];
+  contrails?: import("./renderer").Renderer["shipContrails"];
 }
 
 interface Frame extends TakeState {

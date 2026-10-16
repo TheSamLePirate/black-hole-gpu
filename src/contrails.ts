@@ -37,7 +37,7 @@ interface Pt {
   s: number;
 }
 
-interface Trail {
+export interface Trail {
   key: string;
   kind: 0 | 1 | 2 | 3 | 4;
   pts: Pt[];
@@ -53,7 +53,7 @@ const KIND = [
   { life: 0.2, w0: 0.7, spread: 2.2, tau: 0.16, wRef: 1.2, form: 0.02 },
   { life: 2.2, w0: 0.22, spread: 0.35, tau: 0.9, wRef: 0.3, form: 0.03 },
   // (a missile's motor smoke: dense, white, spreading, gone in half a minute)
-  { life: 30, w0: 0.8, spread: 3.2, tau: 2.2, wRef: 1.6, form: 0.04 },
+  { life: 30, w0: 1.4, spread: 3.2, tau: 2.2, wRef: 1.6, form: 0.04 },
 ] as const;
 
 /** The most points a trail keeps, the most segments drawn. */
@@ -109,10 +109,42 @@ export function sheetTrail(cl: number, rho: number, T: number, speed: number): n
   return smooth(0.55, 0.95, cl) * smooth(0.6, 1.0, rho) * smooth(268, 280, T) * smooth(90, 150, speed);
 }
 
+/** The trails as they are at a moment (the replay's — game/replay.ts —: played on from it). */
+export interface ContrailSnap {
+  trails: Trail[];
+  tLast: number;
+  body: string;
+}
+
+/** One step's inputs (the replay plays the trails again from them): the time, the body, the air's carry, the
+ *  sources; the ship's origin and axes in the body frame (for their view). */
+export interface ContrailStep {
+  now: number;
+  body: string;
+  carry: (p: V3, dt: number) => V3;
+  src: ContrailSource[];
+  x: V3;
+  ax: [V3, V3, V3];
+}
+
+const copyTrails = (T: Trail[]): Trail[] => T.map((tr) => ({ ...tr, pts: tr.pts.map((q) => ({ ...q, p: [...q.p] as V3 })) }));
+
 export class Contrails {
   trails: Trail[] = [];
   private tLast = NaN;
   private body = "";
+
+  /** A copy of the trails now. */
+  snapshot(): ContrailSnap {
+    return { trails: copyTrails(this.trails), tLast: this.tLast, body: this.body };
+  }
+
+  /** The trails put back as a snapshot had them (copied: the snapshot stays as it was). */
+  restore(s: ContrailSnap) {
+    this.trails = copyTrails(s.trails);
+    this.tLast = s.tLast;
+    this.body = s.body;
+  }
 
   clear() {
     this.trails = [];

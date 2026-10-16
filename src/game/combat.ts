@@ -203,6 +203,9 @@ export interface Target {
   alive: boolean;
   /** when it was destroyed [s] (its wreck falling, its smoke) */
   diedAt: number;
+  /** an aircraft destroyed: out of control — its spin about its nose [rad/s] —, when it hit the ground [s] (its
+   *  explosion there; NaN: still falling) */
+  wreck?: { spin: number; crashedAt: number };
   /** its radar cross-section [m²] (the detection's range scales with its fourth root) */
   rcs: number;
   /** an aircraft's: its AI's state, its orbit's centre, its weapons left, its next shot's time; a course flown
@@ -303,6 +306,7 @@ export type CombatEvent =
   | { kind: "miss"; missile: number }
   | { kind: "decoyed"; missile: number }
   | { kind: "explode"; p: V3; size: number }
+  | { kind: "crash"; target: number; name: string; p: V3 }
   | { kind: "playerDown" };
 
 // ------------------------------------------------------------------------------------ the world
@@ -552,7 +556,8 @@ export class CombatWorld {
 
   /** A step of the world [s] with the player as it is: what happened. */
   step(dt: number, P: Player): CombatEvent[] {
-    const ev: CombatEvent[] = [];
+    const ev: CombatEvent[] = this.later;
+    this.later = [];
     if (!(dt > 0)) return ev;
     this.t += dt;
     if (!this.radarFed) this.scan(P);
@@ -575,13 +580,65 @@ export class CombatWorld {
     this.decoys = this.decoys.filter((d) => d.t < 5);
     // (a ship lost: settling into the sea)
     for (const q of this.targets) if (!q.alive && q.kind === "ship" && this.t - q.diedAt < 60) q.p[2] -= 0.4 * dt;
-    // (the dead: falling — an aircraft's wreck — and gone after a while)
-    for (const q of this.targets)
-      if (!q.alive && q.ai && q.p[2] > this.groundZ(q.p[0], q.p[1])) {
-        q.v = add(q.v, [0, 0, -G * dt]);
-        q.p = add(q.p, mul(q.v, dt));
-      }
+    // (the dead: an aircraft's wreck out of control to the ground — game/combat.ts wreckStep —, its explosion there)
+    for (const q of this.targets) if (!q.alive && q.ai && q.wreck && Number.isNaN(q.wreck.crashedAt)) this.wreckStep(q, dt, ev);
     return ev;
+  }
+
+  /**
+   * A destroyed aircraft out of control: its wings no longer lifting, it falls — the air's drag to some 170 m/s down —,
+   * its nose dropping to where it goes and rolling round it; on the ground (or the sea) it explodes, once.
+   */
+  /** events seen between steps (a remote wreck's crash), given with the next step's */
+  private later: CombatEvent[] = [];
+
+  private wreckStep(q: Target, dt: number, ev: CombatEvent[]) {
+    const W = q.wreck!;
+    const vt = 170;
+    const sp = Math.hypot(...q.v);
+    q.v = add(q.v, add([0, 0, -G * dt], mul(q.v, (-G * sp * dt) / (vt * vt))));
+    q.p = add(q.p, mul(q.v, dt));
+    // (the nose to the way it goes, a second's lag; the roll about it)
+    const vd = unit(q.v);
+    const k = Math.min(dt / 1.2, 1);
+    const f = unit(add(mul(q.fwd, 1 - k), mul(vd, k)));
+    const right = unit(cross(f, q.up));
+    const up0 = unit(cross(right, f));
+    const a = W.spin * dt;
+    q.fwd = f;
+    q.up = unit(add(mul(up0, Math.cos(a)), mul(right, Math.sin(a))));
+    const gz = this.groundZ(q.p[0], q.p[1]);
+    if (q.p[2] <= gz) {
+      q.p[2] = gz;
+      q.v = [0, 0, 0];
+      W.crashedAt = this.t;
+      ev.push({ kind: "explode", p: [...q.p], size: 2.5 });
+      ev.push({ kind: "crash", target: q.id, name: q.name, p: [...q.p] });
+    }
+  }
+
+  /** The fight over (won, lost): only the wrecks still falling stepped — to their crash. */
+  stepWrecks(dt: number): CombatEvent[] {
+    const ev: CombatEvent[] = this.later;
+    this.later = [];
+    if (!(dt > 0)) return ev;
+    this.t += dt;
+    for (const q of this.targets) if (!q.alive && q.ai && q.wreck && Number.isNaN(q.wreck.crashedAt)) this.wreckStep(q, dt, ev);
+    return ev;
+  }
+
+  /** A wreck still falling, or one crashed — a ship sunk — less than `smoke` seconds ago (its explosion, its smoke). */
+  falling(smoke = 0): boolean {
+    return this.targets.some(
+      (q) =>
+        (q.wreck && (Number.isNaN(q.wreck.crashedAt) || this.t - q.wreck.crashedAt < smoke)) ||
+        (q.kind === "ship" && !q.alive && this.t - q.diedAt < smoke),
+    );
+  }
+
+  /** A target's damage share (0 untouched … 1 destroyed). */
+  damageOf(q: Target): number {
+    return q.alive ? Math.min(Math.max(1 - q.hp / SPEC[q.kind].hp, 0), 1) : 1;
   }
 
   private stepGun(dt: number, P: Player) {
@@ -646,7 +703,9 @@ export class CombatWorld {
       q.alive = false;
       q.diedAt = this.t;
       ev.push({ kind: "kill", target: q.id, name: q.name, by });
-      ev.push({ kind: "explode", p: [...q.p], size: q.ai ? 1 : q.kind === "bunker" || q.kind === "ship" ? 3 : 2 });
+      // (an aircraft: the hit's burst, then out of control to its crash — wreckStep; the ground's at once)
+      ev.push({ kind: "explode", p: [...q.p], size: q.ai ? 0.5 : q.kind === "bunker" || q.kind === "ship" ? 3 : 2 });
+      if (q.ai) q.wreck = { spin: (this.rand() < 0.5 ? -1 : 1) * (1.2 + 2 * this.rand()), crashedAt: Number.NaN };
       if (this.lock === q.id) this.lock = null;
     }
   }
@@ -770,8 +829,16 @@ export class CombatWorld {
       const q = this.target(x.id);
       if (!q) continue;
       q.remote = true;
-      if (q.alive && !x.alive) q.diedAt = this.t;
+      if (q.alive && !x.alive) {
+        q.diedAt = this.t;
+        if (q.ai) q.wreck = { spin: 0, crashedAt: Number.NaN };
+      }
       Object.assign(q, { p: x.p, v: x.v, fwd: x.fwd, up: x.up, alive: x.alive });
+      // (the host's wreck falling here as there: its crash seen — its explosion — as it reaches the ground)
+      if (q.wreck && Number.isNaN(q.wreck.crashedAt) && q.p[2] <= this.groundZ(q.p[0], q.p[1]) + 2) {
+        q.wreck.crashedAt = this.t;
+        this.later.push({ kind: "explode", p: [...q.p], size: 2.5 }, { kind: "crash", target: q.id, name: q.name, p: [...q.p] });
+      }
     }
   }
 

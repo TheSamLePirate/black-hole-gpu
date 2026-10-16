@@ -7,7 +7,7 @@
 //   A  gun (held)   B  fire the weapon (release; else: acknowledge)  X  next weapon
 //   Y  tap: lock the next target · hold: the intercept
 //   D-pad ▲ gear  ▼ flaps  ◀ flares and chaff  ▶ airbrake
-//   View  the camera's view     Menu  tap: the autopilot's holds · hold: the settings
+//   View  tap: the camera's view · hold: the head locked on the target     Menu  tap: the autopilot's holds · hold: the settings
 //
 // Shaped for a fighter: the sticks' fine centre (their curve), the rudder eased in rather than banged, the head's
 // look a spring — where the stick points, back ahead as it is let go —, the zoom eased in and out.
@@ -76,13 +76,13 @@ const ON_PRESS: Partial<Record<number, JetPadAction>> = {
   [DOWN]: { action: "flaps" },
   [LEFT]: { action: "combat", arg: "cm" },
   [RIGHT]: { action: "airBrake" },
-  [VIEW]: { action: "mount" },
   [L3]: { action: "jetSystem", arg: "ab" },
 };
 /** Tap or hold: what each does. */
 const TAP_HOLD: Partial<Record<number, [JetPadAction, JetPadAction]>> = {
   [Y]: [{ action: "lock" }, { action: "intercept" }],
   [MENU]: [{ action: "jetSystem", arg: "ap" }, { action: "settings" }],
+  [VIEW]: [{ action: "mount" }, { action: "combat", arg: "padlock" }],
 };
 
 const ease = (cur: number, target: number, dt: number, tau: number) => cur + (target - cur) * (1 - Math.exp(-dt / tau));

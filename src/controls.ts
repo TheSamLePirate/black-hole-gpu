@@ -1094,6 +1094,11 @@ export class CameraController {
   /** the F-35's pad layout (input/jetpad.ts): its state, its frame's output (null: not flown with it), a zoom's
    *  field to come back to; its actions (the page's) */
   readonly jetPad = new JetPad();
+  /** the lens on the target's field now (the view "On the target" — controller/lens.ts) [°]; null: not in it */
+  targetFov: number | null = null;
+  /** the head locked on the fight's focus (⇧L, the pad's View held — controller/lens.ts), its lens this frame [°] */
+  padlock = false;
+  padlockFov: number | null = null;
   /** when the craft left the ground last (the replay's touchdowns — controller/replay.ts) [ms] */
   replayAir: number | null = null;
   jetPadOut: JetPadOut | null = null;
@@ -1150,6 +1155,8 @@ export class CameraController {
   /** the engines' and the wingtips' condensation trails (contrails.ts), kept in the air */
   readonly contrails = new Contrails();
   contrailBuf = new Float32Array(MAX_SEGMENTS * SEG_FLOATS);
+  /** this frame's trails' step (the replay's tape keeps it — game/replay.ts) */
+  contrailStep: import("./contrails").ContrailStep | null = null;
 
   /** The flown craft's turn as flown — its axes now against last step's: its angular velocity (home)
    *  per M of the scene's time, eased (what it keeps turning at when left to coast). */

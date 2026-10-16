@@ -44,6 +44,8 @@ declare module "../controls" {
     combatEnd: typeof combatEnd;
     combatTrigger: typeof combatTrigger;
     combatPlayer: typeof combatPlayer;
+    combatFocus: typeof combatFocus;
+    focusShip: typeof focusShip;
     combatShips: typeof combatShips;
     combatHud: typeof combatHud;
   }
@@ -255,7 +257,15 @@ function combatStep(this: CameraController, dt: number) {
   if (C.events.length > 200) C.events.splice(0, C.events.length - 200);
   C.t += dt;
   if (C.status !== "run") {
-    if (C.t - C.doneAt > 20) this.combatEnd();
+    // (over: the wrecks still falling to their crash, its explosion; the end when they are down and their smoke has
+    // risen — two minutes and a half at most)
+    const P = this.combatPlayer();
+    if (P) C.last = P;
+    const ev = C.world.stepWrecks(dt);
+    C.events.push(...ev);
+    for (const e of ev) if (e.kind === "explode") C.booms.push({ p: e.p, t: C.t, size: e.size });
+    C.booms = C.booms.filter((b) => C.t - b.t < 8);
+    if (C.t - C.doneAt > 20 && !(C.world.falling(45) && C.t - C.doneAt < 150)) this.combatEnd();
     return;
   }
   const P = this.combatPlayer();
@@ -362,7 +372,8 @@ function combatShips(this: CameraController): { id: ShipMeshId; rel: Vec3; axes:
   const out: { id: ShipMeshId; rel: Vec3; axes: [Vec3, Vec3, Vec3]; jet: F35Pose; hidden: boolean }[] = [];
   for (const q of C.world.targets) {
     if (!q.ai) continue;
-    if (!q.alive && C.world.t - q.diedAt > 20) continue;
+    // (a wreck: drawn as it falls, gone in its explosion as it hits the ground; else 20 s after it died)
+    if (!q.alive && (q.wreck ? q.wreck.crashedAt < C.world.t - 0.4 || C.world.t - q.diedAt > 240 : C.world.t - q.diedAt > 20)) continue;
     const r: V3 = [q.p[0] - P.p[0], q.p[1] - P.p[1], q.p[2] - P.p[2]];
     if (Math.hypot(...r) > 60_000) continue;
     // (the craft's axes: x its left — up × nose —, y its top, z its nose)
@@ -505,6 +516,56 @@ function combatHud(this: CameraController, Cm: (v: Vec3 | null) => Vec3 | null) 
   };
 }
 
+/**
+ * What a fight's eye is on now (the replay's lens, the view "On the target"): the target of our missile in flight (the
+ * last fired), else an aircraft shot down — falling, or crashed less than 8 s ago —, a ship sunk less than 30 s ago,
+ * else the lock. Its place in the fight's frame, what it is.
+ */
+function combatFocus(this: CameraController): { p: V3; kind: "missile" | "wreck" | "ship" | "lock"; id: number } | null {
+  const C = this.combat;
+  if (!C) return null;
+  const W = C.world;
+  const m = W.missiles.filter((x) => x.alive && x.owner === "blue" && (x.target ?? -1) >= 0).sort((a, b) => b.id - a.id)[0];
+  const mt = m && W.target(m.target);
+  if (mt) return { p: [...mt.p] as V3, kind: "missile", id: mt.id };
+  const wreck = W.targets
+    .filter((q) => q.wreck && (Number.isNaN(q.wreck.crashedAt) || W.t - q.wreck.crashedAt < 8))
+    .sort((a, b) => b.diedAt - a.diedAt)[0];
+  if (wreck) return { p: [...wreck.p] as V3, kind: "wreck", id: wreck.id };
+  const ship = W.targets.filter((q) => q.kind === "ship" && !q.alive && W.t - q.diedAt < 30).sort((a, b) => b.diedAt - a.diedAt)[0];
+  if (ship) return { p: [...ship.p] as V3, kind: "ship", id: ship.id };
+  const lk = W.target(W.lock);
+  return lk?.alive ? { p: [...lk.p] as V3, kind: "lock", id: lk.id } : null;
+}
+
+/** The fight's focus on the flown craft's axes (x left, y top, z nose) [m] and the world's up there; null: none. */
+function focusShip(this: CameraController): { q: Vec3; up: Vec3; size: number } | null {
+  const F = this.combatFocus();
+  const P = this.combat?.last;
+  const cam = cameraFrame(this.s);
+  const fr = this.sfFrame(cam);
+  if (!F || !P || !fr) return null;
+  const d = (a: ArrayLike<number>, b: ArrayLike<number>) => a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!;
+  const ax = this.shipAxesLocal(cam)
+    .map((a) => fr.fromLocal(a))
+    .map((a) => [d(a, fr.east), d(a, fr.north), d(a, fr.up)] as Vec3);
+  const r: Vec3 = [F.p[0] - P.p[0], F.p[1] - P.p[1], F.p[2] - P.p[2]];
+  // (how much of the world to frame about it [m]: a ship's length, an aircraft's span — with room)
+  const big = this.combat!.world.target(F.id)?.kind;
+  const size = big === "ship" ? 300 : big === "airliner" ? 140 : 60;
+  return { q: [d(r, ax[0]!), d(r, ax[1]!), d(r, ax[2]!)], up: [ax[0]![2], ax[1]![2], ax[2]![2]], size };
+}
+
 export function installCombat(Ctl: { prototype: CameraController }) {
-  Object.assign(Ctl.prototype, { combatStart, combatStep, combatEnd, combatTrigger, combatPlayer, combatShips, combatHud });
+  Object.assign(Ctl.prototype, {
+    combatStart,
+    combatStep,
+    combatEnd,
+    combatTrigger,
+    combatPlayer,
+    combatShips,
+    combatHud,
+    combatFocus,
+    focusShip,
+  });
 }

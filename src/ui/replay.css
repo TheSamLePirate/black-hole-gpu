@@ -12,6 +12,8 @@ body.replay-photo .rp-bar, body.replay-photo .rp-letter { display: none !importa
 .rp-shots { display: inline-flex; gap: 4px; flex-wrap: wrap; }
 .rp-keys { color: #8a96a0; font-size: 11px; }
 .rp-mark { position: absolute; top: 0; height: 4px; background: #ffc861; border-radius: 2px; pointer-events: none; }
+.rp-fx { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 54; }
+body.replay-photo .rp-fx { display: none; }
 .rp-letter { position: fixed; inset: 0; pointer-events: none; z-index: 55; }
 body.replay-cinema .rp-letter::before, body.replay-cinema .rp-letter::after { content: ""; position: absolute; left: 0; right: 0; height: 11vh; background: #000; }
 body.replay-cinema .rp-letter::before { top: 0; }
