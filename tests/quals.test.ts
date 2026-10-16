@@ -20,6 +20,10 @@ afterEach(() => {
 });
 
 const D = Math.PI / 180;
+/** the sea's motion drawn for the Ford (its seed: a game's carrier draws one at random) — this one once held the
+ *  F-35C in a heavy sea on its wire at full power, sliding across the rolling deck into the sea (stopped judged
+ *  over all its motion, not along the deck) */
+const SEED = 699_699;
 
 test("the grade point average: qualified at 3.0, never with a cut; the hour's UTC for a local hour", () => {
   expect(
@@ -63,6 +67,7 @@ async function qualify(id: QualId, variant: "B" | "C", hs: number) {
     lon: g.lon + (9000 * Math.sin(g.track)) / (111_195 * Math.cos(g.lat * D)),
     heading: g.track / D + 40,
     speed: 14.4,
+    seed: SEED,
   });
   c.carrierStep();
   const radio: string[] = [];

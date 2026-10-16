@@ -93,7 +93,7 @@ const secOf = (t: number) => utcOf(t) / 1000;
 function carrierSpawn(
   this: CameraController,
   kind: CarrierId,
-  o: { lat?: number; lon?: number; heading?: number; speed?: number } = {},
+  o: { lat?: number; lon?: number; heading?: number; speed?: number; seed?: number } = {},
 ): string {
   const g = this.geoNow();
   if (!g && (o.lat === undefined || o.lon === undefined)) return "carrier: over the Earth only";
@@ -113,7 +113,7 @@ function carrierSpawn(
     heading: ((heading % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI),
     speed: o.speed ?? CARRIER[kind].speed,
     t0: secOf(t),
-    seed: Math.floor(Math.random() * 1e6),
+    seed: o.seed ?? Math.floor(Math.random() * 1e6),
   };
   this.carriers = [...(this.carriers ?? []).filter((c) => c.kind !== kind), sp];
   deckOf(kind);

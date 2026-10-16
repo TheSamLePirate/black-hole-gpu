@@ -261,17 +261,23 @@ function trapFrame(this: CameraController, dt: number) {
   this.trapHook = { kind: w.sp.kind, h: hook };
   // on the deck: full power — the wire holds it, or it flies off: a bolter
   if (R && (R.phase === "touch" || R.phase === "bolter")) this.pilot.throttle = 1;
-  // stopped by the wire: the engine to idle, the wire let go, the pass graded
+  // stopped by the wire: the engine to idle, the wire let go, the pass graded — stopped along the deck's axis, the
+  // wire's way (a pitching, rolling deck keeps the craft moving on its springs and across a little: in a heavy sea it
+  // never came under 0.6 m/s all told, held at full power until it slid off the deck); off the deck, the wire gone
   const W = this.trapWire;
   if (W) {
+    const qm = w.o.p as Vec3;
+    const onDeck = !!platformUnder("earth", [qm[0] / M_METRES, qm[1] / M_METRES, qm[2] / M_METRES], this.nowTime());
     const vRel = [0, 1, 2].map((k) => w.o.v[k]! - deckVelocity(w.P, w.o.p)[k]!);
-    if (Math.hypot(...vRel) < 0.6) {
+    const ax = [0, 1, 2].map((k) => w.P.port[k]! * W.axisL[0] + w.P.bow[k]! * W.axisL[2]);
+    const along = vRel[0]! * ax[0]! + vRel[1]! * ax[1]! + vRel[2]! * ax[2]!;
+    if (Math.abs(along) < 0.6 || !onDeck) {
       this.trapWire = null;
       this.pilot.throttle = 0;
       const run = R ?? newTrapRun(w.sp.kind);
       run.wire = W.wire;
       run.phase = "trapped";
-      const g = gradePass(run);
+      const g = onDeck ? gradePass(run) : "Cut";
       run.grade = g;
       this.trapLast = { grade: g, wire: W.wire, points: GRADE_POINTS[g], kind: w.sp.kind, worst: run.worst };
       this.onRadio?.(
