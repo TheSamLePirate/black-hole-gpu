@@ -197,6 +197,13 @@ override TUNE_RELAX: f32 = 1.6;
 override TUNE_RELAX_BAND: f32 = 1.6;
 // (measures of the ground's detail: 0 its mountains' warp off, 0 all of it off — the image then other)
 override TUNE_WARP: u32 = 1u;
+// (measures, the image then other — what a block of a sky ray costs: 1 the background (sky and far points), 2 the far
+// points alone, 4 ourSegment — 32 its bodies met, 64 its rings, 128 its worlds' air, 256 the corona, 512 the stars'
+// discs —, 16 the whole ray past the near world)
+override TUNE_SKIP: u32 = 0u;
+// (1: the wormhole's steps on our side merged into straight pieces for ourSegment while the ray holds straight to a
+// quarter of its pixel; 0: each step's chord on its own, as before)
+override TUNE_MERGE: u32 = 1u;
 override TUNE_DETAIL: u32 = 1u;
 // (the ray's work by kind: 0 the ground's march steps (the Earth's, a world's), 1 the ground's heights read (earthH,
 // relief), 2 its shadows' steps, 3 the clouds' steps (the volume's, the weather's), 4 the air's (the auroras'), 5 the
@@ -1256,13 +1263,15 @@ fn listedBody(i: u32, useList: bool) -> u32 {
 // pixel are left to farPoints. dneg: only those within the Dneg region. gObs: the photon's frequency
 // ratio camera / static observer here.
 fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f32, travel: f32, dneg: bool) -> bool {
+  if ((TUNE_SKIP & 4u) != 0u) { return false; }
   var tBest = tMax;
   var kBest = 0u;
   var hit = false;
   // (from the camera: only the bodies the renderer listed — those such a ray may meet, by the test below —, else all)
   let useList = P.path.w > 0.0 && !dneg && travel == 0.0 && all(o == vec3f(0.0));
   let nB = select(bodyCount() - ourStart(), u32(P.path.w), useList);
-  for (var ki = 0u; ki < nB; ki++) {
+  let nB0 = select(nB, 0u, (TUNE_SKIP & 32u) != 0u);
+  for (var ki = 0u; ki < nB0; ki++) {
     let k = listedBody(ki, useList);
     cost(10u);
     let wk = bodyWhere(k);
@@ -1293,7 +1302,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   }
   let V = -d;
   // rings in front of the nearest body
-  for (var ki = 0u; ki < nB; ki++) {
+  for (var ki = 0u; ki < select(nB, 0u, (TUNE_SKIP & 64u) != 0u); ki++) {
     let k = listedBody(ki, useList);
     cost(10u);
     if (ringOuter(k) <= 0.0 || !isOurs(k) || (dneg && bodyWhere(k) != 4u)) { continue; }
@@ -1318,7 +1327,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   // the Earth (its air in front of what the ray meets — its limb's glow; its ground, clouds and air when
   // it is what the ray meets): one call, the ground or not (every call is a copy the compiler builds)
   {
-    for (var ki = 0u; ki < nB; ki++) {
+    for (var ki = 0u; ki < select(nB, 0u, (TUNE_SKIP & 128u) != 0u); ki++) {
       let k = listedBody(ki, useList);
       cost(10u);
       let wk = bodyWhere(k);
@@ -1347,7 +1356,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   }
   // our Sun's corona, seen where nothing stands before it (the Moon in front: it hides the corona there
   // too) — only an eclipse shows it: a millionth of the Sun's light, drowned in the day's sky otherwise
-  for (var ki = 0u; ki < nB; ki++) {
+  for (var ki = 0u; ki < select(nB, 0u, (TUNE_SKIP & 256u) != 0u); ki++) {
     let k = listedBody(ki, useList);
     cost(10u);
     if (bodyKind(k) != 0u || probeNoStar) { continue; }
@@ -1364,7 +1373,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   // our stars' disks, their edges antialiased: a pixel's share of the disk (not a point: in or out as the
   // samples jitter) — the image's brightest light by far, its bloom over the whole frame steady from frame
   // to frame; a body before it (the Moon's limb on the Sun) taking its own share of the pixel
-  for (var ki = 0u; ki < nB; ki++) {
+  for (var ki = 0u; ki < select(nB, 0u, (TUNE_SKIP & 512u) != 0u); ki++) {
     let k = listedBody(ki, useList);
     cost(10u);
     if (bodyKind(k) != 0u || probeNoStar) { continue; }
@@ -2752,8 +2761,9 @@ fn splatStar(v: vec3f, jx: vec3f, jy: vec3f, F: vec3f) {
 }
 
 fn background(d: vec3f, g: f32, fp: Footprint, sky: f32, org: vec4f) -> vec3f {
+  if ((TUNE_SKIP & 1u) != 0u) { return vec3f(0.0); }
   var pts = vec3f(0.0);
-  if (bodyCount() > 0u && P.bodyCfg2.x > 0.0) {
+  if (bodyCount() > 0u && P.bodyCfg2.x > 0.0 && (TUNE_SKIP & 2u) == 0u) {
     // (native sky: Gargantua's side; home: ours, through the wormhole)
     pts = farPoints(select(1u, 2u, sky > 1.5), d, org, skyFilter(d, fp, P.time.w), g);
   }
@@ -2919,6 +2929,10 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32, gO
   // our universe's planets (Saturn): home coordinates of the ray's points, their distance
   let ours = ourStart() < bodyCount();
   var travel = 0.0;
+  // (the straight piece on our side gathered so far: its start, the travel there; none)
+  var segOn = false;
+  var q0 = vec3f(0.0);
+  var segTravel = 0.0;
   for (var i = 0u; i < 3000u; i++) {
     cost(11u);
     if (st.l >= lPlus && st.pl > 0.0) { out.side = 1.0; break; }
@@ -2964,9 +2978,22 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32, gO
     if (ours && lPrev < -a && st.l < -a && max(lPrev, st.l) > -lMinus) {
       let p0 = homePoint(lPrev, psiPrev, nA, e2);
       let p1 = homePoint(st.l, st.psi, nA, e2);
-      let dp = p1 - p0;
-      let lp = length(dp);
-      if (lp > 0.0 && ourSegment(p0, dp / lp, lp, &out, gObs, travel0 + travel - h, true)) { out.side = -1.0; break; }
+      // (its chords merged while the way holds straight — the last point within a quarter of the pixel's footprint of
+      // the piece's line —: one look at our bodies for the piece, not one a step; flushed as it bends, as the ray
+      // leaves our side's region — out of it, or into the mouth — or as the steps run out)
+      if (!segOn) {
+        segOn = true;
+        q0 = p0;
+        segTravel = travel0 + travel - h;
+      }
+      let L = p1 - q0;
+      let lL = length(L);
+      let dev = select(0.0, length(cross(p0 - q0, L / max(lL, 1e-30))), lL > 0.0);
+      let leaving = st.l <= -lMinus || st.l >= -a || i + 1u >= 3000u;
+      if (TUNE_MERGE == 0u || leaving || dev > 0.25 * beam() * (travel0 + travel)) {
+        segOn = false;
+        if (lL > 0.0 && ourSegment(q0, L / lL, lL, &out, gObs, segTravel, true)) { out.side = -1.0; break; }
+      }
     }
     if (waterOn && (lPrev * st.l < 0.0 || (st.l == 0.0 && lPrev != 0.0))) {
       // through the liquid surface: reflected (probability F, Schlick) or refracted by the ripples
@@ -3265,6 +3292,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
     }
   }
   FOOT = FOOT_FAR;
+  if ((TUNE_SKIP & 16u) != 0u) { return traceOut(pre); }
   var tr = traceLook(lookSky, rnd, tNow);
   tr.col = pre + T * tr.col;
   tr.tint *= T * veil;
