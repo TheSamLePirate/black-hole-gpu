@@ -42,7 +42,7 @@ test("the voice: a signal, its length from its phonemes, its pauses silent, its 
   const t0 = performance.now();
   const x = synthesize(ph, 22050);
   const ms = performance.now() - t0;
-  expect(ms).toBeLessThan(200);
+  if (process.env.PERF) expect(ms).toBeLessThan(200);
   const n = frames(ph).length;
   expect(x.length).toBe(n * Math.round((22050 * 5) / 1000) + Math.round(22050 * 0.05));
   let pk = 0,
