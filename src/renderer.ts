@@ -38,6 +38,7 @@ import { adapterId, guessTier, rememberedLevel, tierAt, type Tier } from "./tier
 import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
 import { PATH_CHUNK, PATH_MAX, SH_VEC4S, TABLE_LUT, TABLE_PATH, TABLE_WALK, TABLE_VEC4S } from "./gpu-tables";
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
+import maskWGSL from "./shaders/mask.wgsl" with { type: "text" };
 import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
 import shipWGSL from "./shaders/ship.wgsl" with { type: "text" };
 import enduranceWGSL from "./shaders/endurance.wgsl" with { type: "text" };
@@ -631,6 +632,10 @@ export class Renderer {
   private hdLoading: MapName | null = null;
   // auto exposure: the light meter (a histogram of the image, read back), its state
   private meterPipeline!: GPUComputePipeline;
+  // the cockpit's mask (mask.wgsl): its pipeline, its parameters, whether the live view's moments hold one
+  private maskPipeline?: GPUComputePipeline;
+  private maskBuf!: GPUBuffer;
+  private maskSet = new WeakMap<object, boolean>();
   private histBuf!: GPUBuffer;
   private histStage!: GPUBuffer;
   private meterPending = false;
@@ -1070,7 +1075,14 @@ export class Renderer {
       mkPost("stars").then((p) => (this.postStars = p)),
       mkPost("beamV").then((p) => (this.postBeamV = p)),
       mkPost("meter").then((p) => (this.meterPipeline = p)),
+      device
+        .createComputePipelineAsync({
+          layout: "auto",
+          compute: { module: device.createShaderModule({ code: maskWGSL, label: "mask" }), entryPoint: "main" },
+        })
+        .then((p) => (this.maskPipeline = p)),
     ]).then(() => {});
+    this.maskBuf = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.histBuf = device.createBuffer({ size: 512, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
     this.histStage = device.createBuffer({ size: 512, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
     this.spotBuf = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
@@ -3486,6 +3498,45 @@ export class Renderer {
   }
 
   /** the trace's passes encoded; false: no kernel for the scene yet (still compiling) — nothing traced */
+  /**
+   * The cockpit's mask (mask.wgsl), before a realtime frame's trace: the tiles the flown craft's own opaque parts
+   * covered last frame — the cabin, the panel, the frame —, a margin round them, marked not to be traced. Only from
+   * the cockpit with the head and the lens as they were then (the cabin holds still on the image: it turns with the
+   * camera); else, once, the marks cleared.
+   */
+  private encodeCockpitMask(enc: GPUCommandEncoder, t: Target, s: Settings, block: number) {
+    if (!this.maskPipeline || t !== this.live) return;
+    const own = this.cockpitMask && s.ship && this.ship.ready ? this.ship.ownMaskOf(t.hdr) : null;
+    const on =
+      !!own &&
+      Math.abs(own.look[0] - s.shipLookYaw) < 1e-3 &&
+      Math.abs(own.look[1] - s.shipLookPitch) < 1e-3 &&
+      Math.abs(own.look[2] - s.fov) < 1e-3;
+    if (!on && !this.maskSet.get(t)) return;
+    this.maskSet.set(t, on);
+    const r = own?.rect ?? [0, 0, 0, 0];
+    const margin = 2 * block + 6;
+    const u = new ArrayBuffer(32);
+    new Uint32Array(u, 0, 4).set([t.width, t.height, on ? 1 : 0, margin]);
+    new Int32Array(u, 16, 4).set(r);
+    this.device.queue.writeBuffer(this.maskBuf, 0, u);
+    const pass = enc.beginComputePass(this.prof.pass("cockpit mask"));
+    pass.setPipeline(this.maskPipeline);
+    pass.setBindGroup(
+      0,
+      this.device.createBindGroup({
+        layout: this.maskPipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: (own?.tex ?? this.ship.ownMaskDummy()).createView() },
+          { binding: 1, resource: { buffer: t.moments } },
+          { binding: 2, resource: { buffer: this.maskBuf } },
+        ],
+      }),
+    );
+    pass.dispatchWorkgroups(Math.ceil(t.width / 16), Math.ceil(t.height / 16));
+    pass.end();
+  }
+
   private dispatchTrace(enc: GPUCommandEncoder, t: Target, x: number, y: number, quality: boolean): boolean {
     this.cameraKey = this.featureKey;
     // (the sea's FFT waves of this frame first: the tracer samples them)
@@ -3648,6 +3699,8 @@ export class Renderer {
   debugSkipShip = false;
   /** the detail (the relief's finest windows, the scenery's box) led where the view looks (a switch for comparisons) */
   gazeStreaming = true;
+  /** the rays the flown craft's own opaque parts hide from the cockpit not traced (mask.wgsl; a switch for comparisons) */
+  cockpitMask = true;
   /** The cost view (a debug view, trace.wgsl COST_VIEW): each ray's work as a heat map in place of the image —
    *  0 off, 1 all of it, 2 … 9 one kind (the ground's march steps, its heights read, its shadows' steps, the
    *  clouds', the air's, the sea's, the scenery's boxes, the main loop's) —, its own kernel variant; the image
@@ -4053,6 +4106,7 @@ export class Renderer {
             mPerM: 1476.625 * (s.massSolar || 1),
             forceShadow: !!this.character?.active,
             inside: s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin"),
+            ownMask: this.cockpitMask && s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin") && t === this.live,
             dash: this.cockpitDash ?? undefined,
             controls: this.cockpitControls ?? undefined,
             gear: this.shipGear ?? undefined,
@@ -4167,6 +4221,7 @@ export class Renderer {
           layout: this.meterPipeline.getBindGroupLayout(0),
           entries: [
             { binding: 0, resource: t.hdr.createView({ baseMipLevel: 0, mipLevelCount: 1 }) },
+            { binding: 11, resource: { buffer: t.moments } },
             { binding: 20, resource: { buffer: this.histBuf } },
             { binding: 22, resource: { buffer: this.spotBuf } },
           ],
@@ -5361,6 +5416,7 @@ export class Renderer {
         offset,
         stars: this.starsSplat ? preExposure(this.ev(s)) * 65536 : 0,
       });
+      this.encodeCockpitMask(enc, t, s, block);
       traced = this.dispatchTrace(enc, t, Math.ceil(t.width / block), Math.ceil(t.height / block), false);
       this.dispatchEnv(enc, t, s);
       this.lastBlock = block;

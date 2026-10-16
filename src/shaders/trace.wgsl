@@ -7871,12 +7871,14 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     inRange = px < W && py < u32(P.region.y) && py < H;
   }
   let idx = py * W + px;
+  // (realtime, the cockpit's mask — mask.wgsl: moments.x < 0 — over this ray: the cabin hides it, not traced)
+  let masked = interleaved && inRange && moments[idx].x < 0.0;
 
   // Adaptive sampling, per 8×8 tile: the tile keeps sampling while any of its pixels has a relative
   // standard error of the mean (luminance) above the threshold (keeps ray differentials available).
   if (li == 0u) { atomicStore(&wgActive, 0u); }
   workgroupBarrier();
-  var need = inRange;
+  var need = inRange && !masked;
   if (inRange && !interleaved && accumulate && (flags & FLAG_ADAPTIVE_SPP) != 0u && si >= f32(P.frame.w)) {
     let acc = accum[idx];
     let n = max(acc.a, 1.0);
@@ -7886,7 +7888,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
   }
   if (need) { atomicAdd(&wgActive, 1u); }
   workgroupBarrier();
-  let sampling = inRange && atomicLoad(&wgActive) > 0u;
+  let sampling = inRange && !masked && atomicLoad(&wgActive) > 0u;
 
   var tr: TraceOut;
   var pos = vec2f(0.0);

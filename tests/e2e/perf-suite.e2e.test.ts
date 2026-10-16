@@ -1,0 +1,194 @@
+import { afterAll, beforeAll, describe, test } from "bun:test";
+import { App, E2E, stopServer } from "./lib/app";
+
+// The render's costs on held scenes (scripts/trace-ab.ts's way, in one build, on kerr-mini): each scene set, its
+// clock held, the view marked changed every frame (__bh.touch: the realtime pass, the same rays each frame); every
+// frame profiled (prof.every = 1) — the trace pass, the probes, the far field's LUT, the reconstruction (resolve,
+// gather, temporal: compute passes, their own times — Apple's render passes' timestamps overlap: the craft's raster
+// is read as the whole frame's interval only, snapped to the 50 Hz screen's 20 ms). The black hole's scenes, the
+// planets' (in the viewer: no craft, no cockpit), the low flight's from the cockpit (the game, after them).
+//   SCENES=a,b (the short names below, or presets), SUB=4 (the realtime subsampling), FRAMES=60,
+//   AB=<name> (ABS below) or "name;js A;js B" — each scene measured A, B, A, B (REPS=2 pairs), the switch put back to A after.
+// E2E_SHOTS=<dir>: each scene's image (and its B's; COST=1 its cost view), perf.json.
+
+const FLIGHT: Record<string, string> = {
+  "flight: Tarifa, cockpit": `__bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set("weather", "cloudy"); __bh.game.set("earthClouds", 0.3);
+    __bh.game.flyAt(36.1, -5.55, 900, 200, 210); __bh.settings.shipMount = "cockpit";`,
+  "flight: the Alps, cockpit": `__bh.game.setDate("2026-07-10T11:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
+    __bh.game.flyAt(45.85, 6.75, 2500, 110, 200); __bh.settings.shipMount = "cockpit";`,
+};
+const DEFAULT = [
+  "Interstellar: along the disk (the film's close pass)",
+  "Kerr a=0.94, near edge-on",
+  "Cinematic: volumetric disk + jet",
+  "Miller: Gargantua over the sea",
+  "Saturn: backlit",
+  "Moon: an afternoon on the plains",
+  "Earth: Yosemite Valley from Tunnel View",
+  "flight: the Alps, cockpit",
+  "flight: Tarifa, cockpit",
+];
+// (short names: the remote runner passes the command through a shell)
+const ALIAS: Record<string, string> = {
+  interstellar: "Interstellar: along the disk (the film's close pass)",
+  kerr: "Kerr a=0.94, near edge-on",
+  cinematic: "Cinematic: volumetric disk + jet",
+  miller: "Miller: Gargantua over the sea",
+  saturn: "Saturn: backlit",
+  moon: "Moon: an afternoon on the plains",
+  yosemite: "Earth: Yosemite Valley from Tunnel View",
+  alps: "flight: the Alps, cockpit",
+  tarifa: "flight: Tarifa, cockpit",
+};
+/** AB=<name>: the switches compared (A, then B) */
+const ABS: Record<string, [string, string, string]> = {
+  mask: ["the cockpit's mask on → off", "__bh.renderer.cockpitMask = true", "__bh.renderer.cockpitMask = false"],
+};
+const SCENES = process.env.SCENES ? process.env.SCENES.split(",").map((x) => ALIAS[x] ?? x) : DEFAULT;
+const SUB = Number(process.env.SUB ?? 4);
+const FRAMES = Number(process.env.FRAMES ?? 60);
+const REPS = Number(process.env.REPS ?? 2);
+const AB = process.env.AB ? (ABS[process.env.AB] ?? process.env.AB.split(";")) : undefined;
+
+type Run = {
+  trace: number;
+  probes: number;
+  lut: number;
+  post: number;
+  compute: number;
+  frame: number;
+  block: number;
+  n: number;
+  /** every pass's median [ms], the largest first */
+  passes?: [string, number][];
+};
+
+describe.skipIf(!E2E)("the render's costs on held scenes", () => {
+  let app: App;
+  const shots = process.env.E2E_SHOTS;
+  const out: Record<string, { a: Run[]; b: Run[] }> = {};
+  const shot = async (name: string) => {
+    if (!shots) return;
+    await Bun.$`mkdir -p ${shots}`;
+    await app.shot(`${shots}/${name.replace(/[^\w]+/g, "-").slice(0, 60)}.png`);
+  };
+  /** FRAMES frames touched, each profiled: the passes' medians, the frames' interval */
+  const measure = () =>
+    app.js<Run>(`(async () => {
+      const r = __bh.renderer, frame = () => new Promise((res) => requestAnimationFrame(() => res(null)));
+      for (let i = 0; i < 20; i++) { __bh.touch(); await frame(); }
+      r.prof.enabled = true; r.prof.every = 1; r.prof.reset();
+      const tr = [], pr = [], lu = [], po = [], co = [], iv = [], all = {};
+      let seen = r.prof.frames, done = r.completedFrames, tl = performance.now();
+      const t0 = performance.now();
+      while (tr.length < ${FRAMES} && performance.now() - t0 < 30000) {
+        __bh.touch();
+        await frame();
+        const now = performance.now();
+        if (r.completedFrames !== done) { iv.push((now - tl) / (r.completedFrames - done)); done = r.completedFrames; tl = now; }
+        if (r.prof.frames === seen) continue;
+        seen = r.prof.frames;
+        const t = r.prof.table();
+        const get = (f) => t.filter(f).reduce((a, p) => a + p.last, 0);
+        tr.push(get((p) => p.label === "trace"));
+        pr.push(get((p) => p.label.includes("probe")));
+        lu.push(get((p) => p.label === "far-field LUT"));
+        po.push(get((p) => p.label === "resolve" || p.label === "gather" || p.label === "temporal"));
+        co.push(get((p) => !p.label.startsWith("ship") && !p.label.startsWith("display") && !p.label.startsWith("canvas")));
+        for (const p of t) (all[p.label] ??= []).push(p.last);
+      }
+      r.prof.every = 8;
+      const med = (a) => { const b = [...a].sort((x, y) => x - y); return b.length ? b[b.length >> 1] : 0; };
+      const passes = Object.entries(all).map(([k, v]) => [k, med(v)]).filter((x) => x[1] >= 0.3).sort((a, b) => b[1] - a[1]).slice(0, 14);
+      return { trace: med(tr), probes: med(pr), lut: med(lu), post: med(po), compute: med(co), frame: med(iv.slice(2)), block: r.realtimeBlockNow, n: tr.length, passes };
+    })()`);
+  const f1 = (x: number) => x.toFixed(1).padStart(6);
+  const row = (r: Run) =>
+    `trace ${f1(r.trace)}  probes ${f1(r.probes)}  LUT ${f1(r.lut)}  post ${f1(r.post)}  compute ${f1(r.compute)}  frame ${f1(r.frame)} ms  (×${r.block}, ${r.n})`;
+
+  beforeAll(async () => {
+    // (the viewer's scenes as they are — no craft, no cockpit —: the flights' after them)
+    app = await App.boot({ width: 1600, height: 1000, lang: "fr", hash: `scene=${encodeURIComponent(DEFAULT[1]!)}`, tiles: true });
+    await app.js(`(() => { Object.assign(__bh.settings, { showFps: true, autosave: false }); return 1; })()`);
+  }, 300_000);
+  afterAll(async () => {
+    const lines = Object.entries(out).map(([sc, v]) => {
+      const m = (rs: Run[], k: Exclude<keyof Run, "passes">) => {
+        const b = rs.map((r) => r[k]).sort((x, y) => x - y);
+        return b[b.length >> 1] ?? 0;
+      };
+      const pick = (rs: Run[]): Run => ({
+        trace: m(rs, "trace"),
+        probes: m(rs, "probes"),
+        lut: m(rs, "lut"),
+        post: m(rs, "post"),
+        compute: m(rs, "compute"),
+        frame: m(rs, "frame"),
+        block: m(rs, "block"),
+        n: m(rs, "n"),
+      });
+      const A = pick(v.a);
+      let s = `${sc.slice(0, 48).padEnd(48)} A ${row(A)}`;
+      if (v.b.length) {
+        const B = pick(v.b);
+        s += `\n${"".padEnd(48)} B ${row(B)}\n${"".padEnd(48)} Δ trace ${f1(B.trace - A.trace)} ms (${(((B.trace - A.trace) / Math.max(A.trace, 1e-6)) * 100).toFixed(1)} %), compute ${f1(B.compute - A.compute)} ms`;
+      }
+      return s;
+    });
+    console.log(`\n${AB ? `A/B: ${AB[0]}\n` : ""}${lines.join("\n")}`);
+    if (shots) await Bun.write(`${shots}/perf.json`, JSON.stringify(out, null, 1));
+    app?.close();
+    stopServer();
+  });
+
+  // (the viewer's scenes first, the flights last: a game's craft and cockpit stay once flown)
+  for (const sc of [...SCENES.filter((x) => !FLIGHT[x]), ...SCENES.filter((x) => FLIGHT[x])])
+    test(`${sc}`, async () => {
+      const set = FLIGHT[sc] ?? `__bh.game.preset(${JSON.stringify(sc)});`;
+      if (FLIGHT[sc]) {
+        // (the F-35 flown first: the preset's fleet would keep the Ranger)
+        await app.js(`(async () => { __bh.game.preset("game:artemis"); __bh.settings.vessel = "f35"; return 1; })()`);
+        await app.waitFor(`__bh.fleet.active === "f35"`, 30_000);
+      }
+      await app.js(`(async () => { ${set}
+        Object.assign(__bh.settings, { realtimeSubsampling: ${SUB}, dynamicResolution: false, fpsCap: 0, animate: false, autosave: false });
+        ${AB ? `${AB[1]};` : ""} return 1; })()`);
+      // (its tracer compiled, its data in — the Earth's tiles —, still for 1.5 s)
+      await app.js(`(async () => {
+        const r = __bh.renderer, frame = () => new Promise((res) => requestAnimationFrame(() => res(null)));
+        const t0 = performance.now();
+        while (!r.variantReady && performance.now() - t0 < 180000) { __bh.touch(); await frame(); }
+        let calm = 0;
+        while (performance.now() - t0 < 240000) {
+          const ready = r.earthTiles.pending === 0 && !r.hdLoading;
+          calm = ready ? calm || performance.now() : 0;
+          if (calm && performance.now() - calm > 1500) break;
+          __bh.touch(); await frame();
+        }
+        return 1; })()`);
+      const v = (out[sc] = { a: [] as Run[], b: [] as Run[] });
+      for (let k = 0; k < (AB ? 2 * REPS : 1); k++) {
+        const side = k % 2 ? "b" : "a";
+        if (AB) {
+          await app.js(`(async () => { ${side === "a" ? AB[1] : AB[2]}; return 1; })()`);
+          await app.js(`(async () => { const r = __bh.renderer, frame = () => new Promise((res) => requestAnimationFrame(() => res(null)));
+            const t0 = performance.now(); while (!r.variantReady && performance.now() - t0 < 180000) { __bh.touch(); await frame(); } return 1; })()`);
+        }
+        const r = await measure();
+        v[side].push(r);
+        console.log(`  ${side.toUpperCase()} ${row(r)}`);
+        if (k < 2) console.log(`      ${(r.passes ?? []).map(([l, ms]) => `${l} ${ms.toFixed(1)}`).join(" · ")}`);
+        if (k < 2) await shot(`${sc}${AB ? `-${side}` : ""}`);
+      }
+      if (AB) await app.js(`(async () => { ${AB[1]}; return 1; })()`);
+      // (COST=1: the cost view's heat map of the scene too — renderer.costView)
+      if (process.env.COST) {
+        await app.js(`(async () => { const r = __bh.renderer, frame = () => new Promise((res) => requestAnimationFrame(() => res(null)));
+          r.costView = 1; const t0 = performance.now();
+          while (!r.variantReady && performance.now() - t0 < 180000) { __bh.touch(); await frame(); }
+          for (let i = 0; i < 40; i++) { __bh.touch(); await frame(); } return 1; })()`);
+        await shot(`${sc}-cost`);
+        await app.js(`(() => { __bh.renderer.costView = 0; return 1; })()`);
+      }
+    }, 600_000);
+});

@@ -1003,6 +1003,12 @@ fn hullDepthFs() -> @location(0) vec4f {
   return vec4f(0.0);
 }
 
+// the flown craft's own opaque parts alone (ship.ts ownMask: the next frame's cockpit mask, mask.wgsl)
+@fragment
+fn ownMaskFs() -> @location(0) vec4f {
+  return vec4f(1.0);
+}
+
 struct POut {
   @builtin(position) clip: vec4f,
   @location(0) q: vec3f, // ship frame

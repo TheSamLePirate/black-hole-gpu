@@ -126,6 +126,8 @@ export interface ShipView {
   mPerM?: number;
   /** the camera in the Ranger's cabin: the cockpit drawn instead of its hull */
   inside?: boolean;
+  /** the flown craft's own opaque parts drawn alone too, for the next frame's cockpit mask (renderer encodeCockpitMask) */
+  ownMask?: boolean;
   /** the cockpit's dashboard: the local up and the motion in the ship's frame, the speed [km/s], the
    *  height [km], the clock [s] */
   dash?: { up: V3; fwd: V3; speed: number; alt: number; time: number };
@@ -278,6 +280,9 @@ interface ShipTargetRes {
   mirrorMoments?: GPUBuffer;
   mirrorHdr?: GPUTexture;
   mirrorOcc?: { tex: GPUTexture; g: GPUBindGroup };
+  /** the flown craft's own opaque parts alone (r8: 1 covered), its box in the image, the head and the lens then;
+   *  valid: drawn the last frame */
+  own?: { tex: GPUTexture; w: number; h: number; rect: [number, number, number, number]; look: [number, number, number]; valid: boolean };
 }
 
 export class ShipRenderer {
@@ -437,6 +442,7 @@ export class ShipRenderer {
     jetGlass: GPURenderPipeline;
     cabin: GPURenderPipeline;
     depthPre: GPURenderPipeline;
+    ownMask: GPURenderPipeline;
     ctl: GPURenderPipeline;
   };
   private envBinds: { copy: GPUBindGroup[]; down: GPUBindGroup[]; ggx: GPUBindGroup[]; sh: GPUBindGroup } | null = null;
@@ -747,6 +753,13 @@ export class ShipRenderer {
         multisample: { count: 4 },
       }),
       jetGlass: glassPipe(0),
+      // the flown craft's own opaque parts alone, covered or not (the next frame's cockpit mask)
+      ownMask: d.createRenderPipeline({
+        layout: "auto",
+        vertex: { ...vertex, entryPoint: "depthVs" },
+        fragment: { module, entryPoint: "ownMaskFs", targets: [{ format: "r8unorm" }] },
+        primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
+      }),
       // the depth alone, first: the shading then runs once a pixel
       depthPre: d.createRenderPipeline({
         layout: "auto",
@@ -2091,6 +2104,49 @@ export class ShipRenderer {
       rp.drawIndexed(ck.mesh.count - ck.solid, 1, ck.solid, 0, 0);
     }
     rp.end();
+    // (the flown craft's own opaque parts alone — from the cockpit: the next frame's rays they hide not traced)
+    if (v.ownMask && this.flown && this.draws.some((dr) => dr.inst === 0)) {
+      if (!res.own || res.own.w !== bw || res.own.h !== bh) {
+        const old = res.own?.tex;
+        if (old) this.device.queue.onSubmittedWorkDone().then(() => old.destroy());
+        res.own = {
+          tex: this.device.createTexture({
+            size: [bw, bh],
+            format: "r8unorm",
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+          }),
+          w: bw,
+          h: bh,
+          rect: [x0, y0, bw, bh],
+          look: [0, 0, 0],
+          valid: false,
+        };
+      }
+      this.ownBind ??= this.device.createBindGroup({
+        layout: this.pipes.ownMask.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: this.uniform } },
+          { binding: 12, resource: { buffer: this.instBuf } },
+        ],
+      });
+      const mp = enc.beginRenderPass(
+        this.pass("ship: own mask", {
+          colorAttachments: [{ view: res.own.tex.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }],
+        }),
+      );
+      mp.setPipeline(this.pipes.ownMask);
+      mp.setBindGroup(0, this.ownBind);
+      for (const dr of this.draws) {
+        if (dr.inst !== 0) continue;
+        mp.setVertexBuffer(0, dr.mesh.vbuf);
+        mp.setIndexBuffer(dr.mesh.ibuf, "uint32");
+        mp.drawIndexed(dr.cabin ? this.cockpit!.solid : (dr.mesh.solid ?? dr.mesh.count), 1, 0, 0, 0);
+      }
+      mp.end();
+      res.own.rect = [x0, y0, bw, bh];
+      res.own.look = [v.look[0], v.look[1], v.fov];
+      res.own.valid = true;
+    } else if (res.own) res.own.valid = false;
     const re = this.reOn;
     const trails = this.trailCount > 0;
     // (from the cabin, its walls hide them: not drawn)
@@ -2203,6 +2259,18 @@ export class ShipRenderer {
     enc.copyTextureToTexture({ texture: b.small }, { texture: res.resolved, origin: [x0, y0] }, [bw, bh]);
   }
 
+  /** The flown craft's own opaque parts as the last frame drew them for this image (encodeShip's ownMask), or null. */
+  ownMaskOf(hdr: GPUTexture) {
+    const o = this.targets.get(hdr)?.own;
+    return o?.valid ? o : null;
+  }
+  private ownDummy?: GPUTexture;
+  /** a 1 × 1 empty mask (bound while none is drawn) */
+  ownMaskDummy() {
+    return (this.ownDummy ??= this.device.createTexture({ size: [1, 1], format: "r8unorm", usage: GPUTextureUsage.TEXTURE_BINDING }));
+  }
+  private ownBind?: GPUBindGroup;
+
   /** Frees the per-target buffers of a destroyed HDR texture. */
   forget(hdr: GPUTexture) {
     const r = this.targets.get(hdr);
@@ -2212,6 +2280,7 @@ export class ShipRenderer {
     r.plumeDepth.destroy();
     r.hullDist.destroy();
     if (r.box) [r.box.color, r.box.depth, r.box.small].forEach((t) => t.destroy());
+    r.own?.tex.destroy();
     this.targets.delete(hdr);
   }
 }
