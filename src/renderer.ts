@@ -2186,7 +2186,7 @@ export class Renderer {
   ) {
     const f = this.paramsF;
     const u = this.paramsU;
-    this.featureKey = this.featuresOf(s) | ((this.costViewMode & 15) << 16);
+    this.featureKey = this.featuresOf(s) | ((this.costViewMode & 15) << 16) | (this.tuneKey << 20);
     const cam = o.probe?.cam ?? cameraFrame(s);
     if (!o.probe) (this.lastCam = cam), (this.lastTime = time);
     // (none flown: a craft of the fleet near the camera brings the craft's pass and its light probe)
@@ -2438,7 +2438,7 @@ export class Renderer {
       const texel = Math.PI / ENV_H;
       const slow = drift < texel / 256;
       this.envStride = this.envReset ? 1 : spread || !slow ? 2 : 4;
-      this.envEvery = this.envReset || spread || !slow ? 1 : 4;
+      this.envEvery = this.envReset || spread ? 1 : !slow ? this.probeEveryMoving : 4;
       const window = Math.round(Math.min(512, Math.max(4, texel / ((slow ? 64 : 4) * drift))));
       set(
         47,
@@ -2794,7 +2794,7 @@ export class Renderer {
       outH,
       2 ** this.ev(s) / preExposure(this.ev(s)) / (s.band === "230GHz" ? s.radioPeak : 1),
       TONEMAPS[s.tonemap],
-      s.renderMode === "physical" ? 0 : 1,
+      s.renderMode === "physical" && !this.costViewMode ? 0 : 1,
       s.bloom,
       target.bloomLevels - 1,
       dither ? 1 : 0,
@@ -2936,6 +2936,7 @@ export class Renderer {
   }
 
   private dofOn(s: Settings, t: Target) {
+    if (this.costViewMode) return false;
     if (!s.dof || s.dofAperture <= 0) return false;
     this.ensureDof(t);
     return true;
@@ -2949,7 +2950,8 @@ export class Renderer {
         ? [this.lastBlock | view | (t.width << 16), ...this.lastOffset, this.validFrom]
         : [1 | view | (t.width << 16), 0, 0, 0];
     this.device.queue.writeBuffer(t.resolveBuf, 0, new Uint32Array(r));
-    this.device.queue.writeBuffer(t.resolveBuf, 16, new Float32Array([preExposure(this.ev(s)), 0, 0, 0]));
+    // (the cost view shown as it is: its heat map neither exposed nor tone-mapped — the display's bypass)
+    this.device.queue.writeBuffer(t.resolveBuf, 16, new Float32Array([this.costViewMode ? 1 : preExposure(this.ev(s)), 0, 0, 0]));
     if (s.polarization) {
       const { cs, gw, gh } = this.polCells(s, t);
       this.device.queue.writeBuffer(t.polGridBuf, 0, new Uint32Array([cs, gw, gh, t.width]));
@@ -3482,6 +3484,7 @@ export class Renderer {
           HAS_SCENERY: has(8192),
           HAS_AURORA: has(16384),
           COST_VIEW: (key >> 16) & 15,
+          ...(this.tunes.get((key >> 20) & 255) ?? {}),
           QUALITY_PIPELINE: quality ? 1 : 0,
         },
       },
@@ -3701,9 +3704,12 @@ export class Renderer {
   gazeStreaming = true;
   /** the rays the flown craft's own opaque parts hide from the cockpit not traced (mask.wgsl; a switch for comparisons) */
   cockpitMask = true;
+  /** the craft's light probe traced every this many frames while what it sees moves (a switch for comparisons) */
+  probeEveryMoving = 1;
   /** The cost view (a debug view, trace.wgsl COST_VIEW): each ray's work as a heat map in place of the image —
-   *  0 off, 1 all of it, 2 … 9 one kind (the ground's march steps, its heights read, its shadows' steps, the
-   *  clouds', the air's, the sea's, the scenery's boxes, the main loop's) —, its own kernel variant; the image
+   *  0 off, 1 all of it, 2 … 13 one kind (docs/BH-API.md: the ground's march, its heights, its shadows, the clouds,
+   *  the air, the water, the scenery, the integrator, the noise, the stars, the bodies, the main loop) —, shown raw
+   *  (no exposure, tone map, depth of field, motion blur), its own kernel variant; the image
    *  traced again (a held one too). */
   get costView() {
     return this.costViewMode;
@@ -3712,8 +3718,33 @@ export class Renderer {
     if (v === this.costViewMode) return;
     this.costViewMode = v;
     this.invalidate();
+    this.resetTemporal();
   }
   private costViewMode = 0;
+  /**
+   * Debug tuning (trace.wgsl TUNE_*: the air's samples, the relief's shadow steps…): its constants, a kernel
+   * variant of their own — what a loop's count costs, A/B in one build. {} the kernel as it is.
+   */
+  get tune(): Record<string, number> {
+    return this.tunes.get(this.tuneKey) ?? {};
+  }
+  set tune(t: Record<string, number>) {
+    const json = JSON.stringify(t ?? {});
+    let k = 0;
+    if (json !== "{}") {
+      for (const [key, v] of this.tunes) if (JSON.stringify(v) === json) k = key;
+      if (!k) {
+        k = (this.tunes.size % 255) + 1;
+        this.tunes.set(k, { ...t });
+      }
+    }
+    if (k === this.tuneKey) return;
+    this.tuneKey = k;
+    this.invalidate();
+    this.resetTemporal();
+  }
+  private tuneKey = 0;
+  private tunes = new Map<number, Record<string, number>>();
   /** the camera's move that breaks the history: the nearest ground's or scenery's shift on the image [px] (a switch for comparisons) */
   taParallaxPx = 0.5;
   /** the history is dropped on the next frame (a new scene, a jump) */
@@ -4088,7 +4119,8 @@ export class Renderer {
       }
       // denoise right after the resolve; beam after the downsampling chain, before the bloom upsampling
       if (s && i === r0 && s.denoise && this.accumulated(t)) this.encodeDenoise(enc, t, s);
-      if (s && i === r0 && t === this.live && this.encodeTemporal(enc, t, s) && s.motionBlur > 0) this.encodeMotionBlur(enc, t);
+      if (s && i === r0 && t === this.live && this.encodeTemporal(enc, t, s) && s.motionBlur > 0 && !this.costViewMode)
+        this.encodeMotionBlur(enc, t);
       // the occlusion depth the raster passes below test against (Z-P1: fresh, not the stale pixels' own)
       if (s && i === r0) this.encodeSceneDepth(enc, t);
       // the space station, where it is on its orbit (before the Ranger: its glass reflects it)

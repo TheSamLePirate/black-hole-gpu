@@ -9,7 +9,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // planets' (in the viewer: no craft, no cockpit), the low flight's from the cockpit (the game, after them).
 //   SCENES=a,b (the short names below, or presets), SUB=4 (the realtime subsampling), FRAMES=60,
 //   AB=<name> (ABS below) or "name;js A;js B" — each scene measured A, B, A, B (REPS=2 pairs), the switch put back to A after.
-// E2E_SHOTS=<dir>: each scene's image (and its B's; COST=1 its cost view), perf.json.
+// E2E_SHOTS=<dir>: each scene's image (and its B's; COST=1,9,… its cost views — renderer.costView), perf.json.
 
 const FLIGHT: Record<string, string> = {
   "flight: Tarifa, cockpit": `__bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set("weather", "cloudy"); __bh.game.set("earthClouds", 0.3);
@@ -43,6 +43,18 @@ const ALIAS: Record<string, string> = {
 /** AB=<name>: the switches compared (A, then B) */
 const ABS: Record<string, [string, string, string]> = {
   mask: ["the cockpit's mask on → off", "__bh.renderer.cockpitMask = true", "__bh.renderer.cockpitMask = false"],
+  // (renderer.tune: trace.wgsl's TUNE_* — what a loop's count costs)
+  air16: ["the air's samples 32 → 16", "__bh.renderer.tune = {}", "__bh.renderer.tune = { TUNE_AIR_N: 16 }"],
+  air8: ["the air's samples 32 → 8", "__bh.renderer.tune = {}", "__bh.renderer.tune = { TUNE_AIR_N: 8 }"],
+  shadow24: [
+    "the relief's shadow steps 48 → 24 (the same reach)",
+    "__bh.renderer.tune = {}",
+    "__bh.renderer.tune = { TUNE_SHADOW_N: 24, TUNE_SHADOW_K: 1.3924 }",
+  ],
+  noshadow: ["the relief's shadows → none", "__bh.renderer.tune = {}", "__bh.renderer.tune = { TUNE_SHADOW_N: 0 }"],
+  probe2: ["the craft's probe every frame → every other", "__bh.renderer.probeEveryMoving = 1", "__bh.renderer.probeEveryMoving = 2"],
+  eps2: ["the geodesics' tolerance 0.12 → 0.24", "__bh.settings.realtimeEps = 0.12", "__bh.settings.realtimeEps = 0.24"],
+  scenery: ["the scenery balanced → off", `__bh.game.set("earthScenery", "balanced")`, `__bh.game.set("earthScenery", "off")`],
 };
 const SCENES = process.env.SCENES ? process.env.SCENES.split(",").map((x) => ALIAS[x] ?? x) : DEFAULT;
 const SUB = Number(process.env.SUB ?? 4);
@@ -181,14 +193,16 @@ describe.skipIf(!E2E)("the render's costs on held scenes", () => {
         if (k < 2) await shot(`${sc}${AB ? `-${side}` : ""}`);
       }
       if (AB) await app.js(`(async () => { ${AB[1]}; return 1; })()`);
-      // (COST=1: the cost view's heat map of the scene too — renderer.costView)
-      if (process.env.COST) {
+      // (COST=1,9,…: the cost view's heat maps of the scene too — renderer.costView, each kind asked)
+      for (const cv of process.env.COST ? process.env.COST.split(",").map(Number) : []) {
         await app.js(`(async () => { const r = __bh.renderer, frame = () => new Promise((res) => requestAnimationFrame(() => res(null)));
-          r.costView = 1; const t0 = performance.now();
+          r.costView = ${cv}; const t0 = performance.now();
+          // (a few frames first: the kernel's key follows the switch at the next frame)
+          for (let i = 0; i < 4; i++) { __bh.touch(); await frame(); }
           while (!r.variantReady && performance.now() - t0 < 180000) { __bh.touch(); await frame(); }
-          for (let i = 0; i < 40; i++) { __bh.touch(); await frame(); } return 1; })()`);
-        await shot(`${sc}-cost`);
-        await app.js(`(() => { __bh.renderer.costView = 0; return 1; })()`);
+          for (let i = 0; i < 24; i++) { __bh.touch(); await frame(); } return 1; })()`);
+        await shot(`${sc}-cost${cv}`);
       }
+      if (process.env.COST) await app.js(`(() => { __bh.renderer.costView = 0; return 1; })()`);
     }, 600_000);
 });

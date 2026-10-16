@@ -175,23 +175,31 @@ override HAS_AURORA: bool = true; // the auroras over the Earth (P.bary.zw, S2: 
 // Dneg integrators out of the kernel (its registers)
 override HAS_KERR: bool = true;
 // The cost view (renderer.costView, a debug view: docs/BH-API.md): 0 off — the counters below out of the kernel —;
-// 1 every ray's work, 2 … 9 one kind of it alone (cost's k + 2), as a heat map — its counts on a log scale,
+// 1 every ray's work, 2 … 13 one kind of it alone (cost's k + 2), as a heat map — its counts on a log scale,
 // blue few … red many — in place of the image.
 override COST_VIEW: u32 = 0u;
-// (the ray's work by kind: 0 the ground's march steps, 1 the ground's heights read (earthH), 2 its shadows' steps,
-// 3 the clouds' steps (the volume's, the weather's), 4 the air's, 5 the sea's surface search, 6 the scenery's boxes
-// visited, 7 the main loop's steps)
-var<private> COST: array<f32, 8>;
+// Debug tuning (renderer.tune, a kernel variant of its own: what a loop's count costs and shows): the air's
+// samples along a ray (earthAir), the relief's shadow steps and their growth (earthTerrainShadow — the same reach:
+// 1.18⁴⁸ ≈ 2 800 × the first step)
+override TUNE_AIR_N: u32 = 32u;
+override TUNE_SHADOW_N: u32 = 48u;
+override TUNE_SHADOW_K: f32 = 1.18;
+// (the ray's work by kind: 0 the ground's march steps (the Earth's, a world's), 1 the ground's heights read (earthH,
+// relief), 2 its shadows' steps, 3 the clouds' steps (the volume's, the weather's), 4 the air's (the auroras'), 5 the
+// water's (the sea's surface search, the mirror's march), 6 the scenery's boxes visited, 7 the geodesic integrator's
+// tries (adaptiveDOPRI), 8 the noise's octaves (the disk's, the clouds', the relief's), 9 the sky's stars looked at, 10
+// the bodies tested along the ray, 11 the main loop's steps (and the wormhole's, the returning light's))
+var<private> COST: array<f32, 12>;
 fn cost(k: u32) { if (COST_VIEW > 0u) { COST[k] += 1.0; } }
 fn costHeat() -> vec3f {
   // (each kind weighed by what a step of it costs, roughly: a height read the unit)
-  let w = array<f32, 8>(0.5, 1.0, 0.5, 3.0, 1.0, 2.0, 0.3, 0.5);
+  let w = array<f32, 12>(0.5, 1.0, 0.5, 3.0, 1.0, 2.0, 0.3, 1.5, 0.3, 0.2, 0.2, 0.5);
   var n = 0.0;
   var top = 2048.0;
   if (COST_VIEW == 1u) {
-    for (var k = 0u; k < 8u; k++) { n += COST[k] * w[k]; }
+    for (var k = 0u; k < 12u; k++) { n += COST[k] * w[k]; }
   } else {
-    n = COST[min(COST_VIEW - 2u, 7u)];
+    n = COST[min(COST_VIEW - 2u, 11u)];
     top = 512.0;
   }
   let x = clamp(log2(1.0 + n) / log2(1.0 + top), 0.0, 1.0);
@@ -336,6 +344,7 @@ fn fbm(p0: vec3f, octaves: i32) -> f32 {
   var s = 0.0;
   var n = 0.0;
   for (var i = 0; i < octaves; i++) {
+    cost(8u);
     s += a * vnoise(p);
     n += a;
     p = p * 2.03 + vec3f(1.7, 9.2, 3.1);
@@ -474,6 +483,7 @@ fn adaptiveDOPRI(s: GState, k1: Deriv, L: f32, a: f32, hTry: f32, hMax: f32, tol
   var out: StepOut;
   out.evals = 0u;
   for (var it = 0; it < 12; it++) {
+    cost(7u);
     let hh = -h; // backwards in affine parameter
     let k2 = geodesicRHS(s.x + hh * (0.2 * k1.dx),
                           s.p + hh * (0.2 * k1.dp), L, a);
@@ -1224,6 +1234,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   var kBest = 0u;
   var hit = false;
   for (var k = ourStart(); k < bodyCount(); k++) {
+    cost(10u);
     let wk = bodyWhere(k);
     if (!(wk == 4u || (wk == 2u && !dneg))) { continue; }
     let c = bodies[BV * k].xyz - o;
@@ -1253,6 +1264,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   let V = -d;
   // rings in front of the nearest body
   for (var k = ourStart(); k < bodyCount(); k++) {
+    cost(10u);
     if (ringOuter(k) <= 0.0 || !isOurs(k) || (dneg && bodyWhere(k) != 4u)) { continue; }
     let c = bodies[BV * k].xyz - o;
     let R = bodyRadius(k);
@@ -1276,6 +1288,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   // it is what the ray meets): one call, the ground or not (every call is a copy the compiler builds)
   {
     for (var k = ourStart(); k < bodyCount(); k++) {
+      cost(10u);
       let wk = bodyWhere(k);
       if (!hasAir(k) || !(wk == 4u || (wk == 2u && !dneg))) { continue; }
       setAir(k);
@@ -1303,6 +1316,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   // our Sun's corona, seen where nothing stands before it (the Moon in front: it hides the corona there
   // too) — only an eclipse shows it: a millionth of the Sun's light, drowned in the day's sky otherwise
   for (var k = ourStart(); k < bodyCount(); k++) {
+    cost(10u);
     if (bodyKind(k) != 0u || probeNoStar) { continue; }
     let wk = bodyWhere(k);
     if (!(wk == 4u || (wk == 2u && !dneg))) { continue; }
@@ -1318,6 +1332,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   // samples jitter) — the image's brightest light by far, its bloom over the whole frame steady from frame
   // to frame; a body before it (the Moon's limb on the Sun) taking its own share of the pixel
   for (var k = ourStart(); k < bodyCount(); k++) {
+    cost(10u);
     if (bodyKind(k) != 0u || probeNoStar) { continue; }
     let wk = bodyWhere(k);
     if (!(wk == 4u || (wk == 2u && !dneg))) { continue; }
@@ -1345,6 +1360,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
     if (cov <= 0.0) { continue; }
     var vis = 1.0;
     for (var j = ourStart(); j < bodyCount(); j++) {
+      cost(10u);
       if (j == k) { continue; }
       let wj = bodyWhere(j);
       if (!(wj == 4u || (wj == 2u && !dneg))) { continue; }
@@ -2051,6 +2067,7 @@ fn returningRadiation(m: GState, side: f32, g1: f32, tNow: f32, u: vec2f) -> vec
   let maxSteps = u32(P.ret.z);
   let eps = P.integ.x * 3.0;
   for (var i = 0u; i < maxSteps; i++) {
+    cost(11u);
     let h = stepSize(s, L, a, eps, rH);
     let n = wrapPole(rk4(s, L, a, -h));
     if (i > 0u && cos(s.x.y) * cos(n.x.y) < 0.0 && n.x.y == n.x.y) {
@@ -2463,6 +2480,7 @@ fn fbmLod(p0: vec3f, octaves: i32, fw: f32) -> f32 {
   var n = 0.0;
   var f = 1.0;
   for (var i = 0; i < octaves; i++) {
+    cost(8u);
     let keep = 1.0 - smoothstep(0.2, 0.5, f * fw);
     if (keep > 0.0) { s += a * mix(0.5, vnoise(p), keep); } else { s += a * 0.5; }
     n += a;
@@ -2489,6 +2507,7 @@ fn starLayer(d: vec3f, cells: f32, layer: u32, g: f32, filt: SkyFilter, density:
     let cell = floor(p);
     for (var j = -1; j <= 1; j++) {
       for (var i = -1; i <= 1; i++) {
+        cost(9u);
         let c = cell + vec2f(f32(i), f32(j));
         if (c.x < 0.0 || c.y < 0.0 || c.x >= cells || c.y >= cells) { continue; }
         let h = hash4(vec3u(u32(c.x), u32(c.y), u32(fuv.x) + layer * 8u));
@@ -2618,6 +2637,7 @@ fn realSky(dB: vec3f, g: f32, fpB: Footprint, home: bool) -> vec3f {
       let s0 = catalogue[4u + cell];
       let s1 = catalogue[5u + cell];
       for (var i = s0; i < s1; i++) {
+        cost(9u);
         let b = starsBase + 4u * i;
         let sd = vec3f(bitcast<f32>(catalogue[b]), bitcast<f32>(catalogue[b + 1u]), bitcast<f32>(catalogue[b + 2u]));
         if (SPLAT) {
@@ -2865,6 +2885,7 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32, gO
   let ours = ourStart() < bodyCount();
   var travel = 0.0;
   for (var i = 0u; i < 3000u; i++) {
+    cost(11u);
     if (st.l >= lPlus && st.pl > 0.0) { out.side = 1.0; break; }
     if (st.l <= -lMinus && st.pl < 0.0) { out.side = -1.0; break; }
     let r = dnegR(st.l).x;
@@ -3281,6 +3302,7 @@ fn tfbm(p0: vec3f, oct: i32) -> f32 {
   var s = 0.0;
   var n = 0.0;
   for (var i = 0; i < oct; i++) {
+    cost(8u);
     s += a * gnoise(p);
     n += a;
     p = p * 2.03 + vec3f(1.7, 9.2, 3.1);
@@ -3390,9 +3412,11 @@ fn ridged(p: vec3f, oct: i32) -> f32 {
 // The ground's height [m] at q: the relief over the measured heights (P.hd2) where there are some; cheap:
 // these filtered by the hardware (the marches' steps)
 fn relief(surf: u32, q: vec3f, foot: f32, mR: f32, tSec: f32) -> f32 {
+  cost(1u);
   return reliefBase(surf, q, foot, mR, tSec) + select(0.0, demH0(q, foot), hasDem(surf));
 }
 fn reliefStep(surf: u32, q: vec3f, foot: f32, mR: f32, tSec: f32) -> f32 {
+  cost(1u);
   return reliefBase(surf, q, foot, mR, tSec) + select(0.0, demStep(q, foot), hasDem(surf));
 }
 // the relief alone (its normal: the measured heights' is the finer map's, hdNormal)
@@ -3502,6 +3526,7 @@ fn nearMarch(look: vec3f) -> NearHit {
   // (the least step, a share of the distance: two of the probe's beams in the light probe — its texels wide)
   let least = max(0.02, 2.0 * probeBeam);
   for (var i = 0u; i < 220u; i++) {
+    cost(0u);
     let v = oc + rd * t;
     let p = A + v;
     let r = length(p);
@@ -3644,6 +3669,7 @@ fn nearShadow(surf: u32, q: vec3f, h: f32, L: vec3f, foot: f32, tSec: f32) -> f3
   var s = 1.0;
   var d = max(0.5, foot) / mR * exp2(0.3 * RND);
   for (var i = 0u; i < 56u; i++) {
+    cost(2u);
     let pp = p0 + L * d;
     let r = length(pp);
     if (r - 1.0 > hmax) { break; }
@@ -4209,6 +4235,7 @@ fn auroraLight(ro: vec3f, rd: vec3f, tEnd: f32, jit: f32) -> vec3f {
   let dt = (tb - ta) / f32(N);
   var L = vec3f(0.0);
   for (var i = 0u; i < N; i++) {
+    cost(4u);
     let t = ta + (f32(i) + jit) * dt;
     let p = ro + rd * t;
     let q = normalize(vec3f(p.x, p.y, p.z * EARTH_AB));
@@ -4264,7 +4291,7 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
   let moonE = 0.3 * EARTH_MOON * pow(max(P.earth3.w, 0.0), 1.5);
   // (from inside the air, samples crowded near the camera: the densest air is there)
   let inside = dot(ro, ro) < airTop() * airTop();
-  let N = 32u;
+  let N = TUNE_AIR_N;
   var tau = vec3f(0.0);
   var tPrev = ta;
   var split = tSplit <= ta;
@@ -4462,6 +4489,7 @@ fn ridgedMF(p0: vec3f, oct: f32) -> f32 {
   var amp = 1.0;
   var norm = 1.0;
   for (var i = 1; f32(i) < oct; i++) {
+    cost(8u);
     p = p * 2.03 + vec3f(1.7, 9.2, 3.1);
     let w = clamp(sig * 1.8, 0.0, 1.0);
     amp *= 0.5;
@@ -4480,6 +4508,7 @@ fn tfbmF(p0: vec3f, oct: f32) -> f32 {
   var s = 0.0;
   var n = 0.0;
   for (var i = 0; f32(i) < oct; i++) {
+    cost(8u);
     let fade = clamp(oct - f32(i), 0.0, 1.0);
     s += a * fade * gnoise(p);
     n += a * fade;
@@ -4507,6 +4536,7 @@ fn ridgedMFw(p0: vec3f, oct: f32, lam0: f32, res: f32) -> f32 {
   // (the octaves the heights hold skipped: their lattice and weights carried, no noise; the first kept
   // one unweighted by those above)
   for (var i = 1; i <= i0; i++) {
+    cost(8u);
     p = p * 2.03 + vec3f(1.7, 9.2, 3.1);
     lam /= 2.03;
     amp *= 0.5;
@@ -4518,6 +4548,7 @@ fn ridgedMFw(p0: vec3f, oct: f32, lam0: f32, res: f32) -> f32 {
   // (the first octave whole, as ridgedMF has it; a later one faded in with the footprint)
   var sum = (sig - 0.3) * amp * select(clamp(oct - f32(i0), 0.0, 1.0), 1.0, i0 == 0) * octaveKept(lam, res);
   for (var i = i0 + 1; f32(i) < oct; i++) {
+    cost(8u);
     p = p * 2.03 + vec3f(1.7, 9.2, 3.1);
     lam /= 2.03;
     let w = clamp(sig * 1.8, 0.0, 1.0);
@@ -4538,6 +4569,7 @@ fn tfbmFw(p0: vec3f, oct: f32, lam0: f32, res: f32) -> f32 {
   var n = 0.0;
   var lam = lam0;
   for (var i = 0; f32(i) < oct; i++) {
+    cost(8u);
     let fade = clamp(oct - f32(i), 0.0, 1.0);
     if (i >= i0) { s += a * fade * gnoise(p) * octaveKept(lam, res); }
     n += a * fade;
@@ -5244,7 +5276,7 @@ fn earthTerrainShadow(p: vec3f, Ls: vec3f, foot: f32) -> f32 {
   let bias = earthHeightStep(p / rp, foot) - (rp - 1.0) * EARTH_RM;
   var t = max(foot, 20.0);
   var sh = 1.0;
-  for (var i = 0; i < 48; i++) {
+  for (var i = 0; i < i32(TUNE_SHADOW_N); i++) {
     cost(2u);
     let x = p0 + Ls * (t / EARTH_RM);
     let r = length(x);
@@ -5255,7 +5287,7 @@ fn earthTerrainShadow(p: vec3f, Ls: vec3f, foot: f32) -> f32 {
     let d = hr - earthHeightStep(x / r, max(0.05 * t, foot)) + bias + 0.005 * t;
     sh = min(sh, clamp(d / (0.04 * t) + 0.5, 0.0, 1.0));
     if (sh <= 0.0) { break; }
-    t *= 1.18;
+    t *= TUNE_SHADOW_K;
   }
   return sh;
 }
@@ -5934,6 +5966,7 @@ fn waterMirror(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, sky: vec3f, footM: f32)
   var fPrev = -1.0;
   var tHit = -1.0;
   for (var i = 0; i < 64; i++) {
+    cost(5u);
     let p = p0 + r * t;
     let rr = length(p);
     let foot = max(footM, t * EARTH_RM * 0.003);
@@ -7228,7 +7261,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
   var mfS = vec3f(0.0);
   if (whOn) { mfS = mouthForce(s.x); }
   for (var i = 0u; i < maxSteps; i++) {
-    cost(7u);
+    cost(11u);
     steps = i;
     var n: GState;
     var h: f32;
