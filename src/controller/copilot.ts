@@ -169,7 +169,14 @@ function weaponsState(this: CameraController) {
   return {
     fight: true,
     weapon: C.weapon,
-    stores: { aim120: W.stores.aim120, aim9x: W.stores.aim9x, jdam: W.stores.jdam, gunRounds: W.stores.gun, flares: W.stores.flares },
+    stores: {
+      aim120: W.stores.aim120,
+      aim9x: W.stores.aim9x,
+      jdam: W.stores.jdam,
+      jsm: W.stores.jsm,
+      gunRounds: W.stores.gun,
+      flares: W.stores.flares,
+    },
     ranges: {
       aim120: { minKm: MISSILES.aim120.rMin / 1000, maxKm: MISSILES.aim120.rMax / 1000 },
       aim9x: { minKm: MISSILES.aim9x.rMin / 1000, maxKm: MISSILES.aim9x.rMax / 1000 },

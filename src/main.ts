@@ -3989,7 +3989,10 @@ async function main() {
   const missionHud = new MissionHud(camera, () => missionMap.open());
   camera.onMissionSay = (text) => {
     panel.toast(text);
-    voice.say({ text, speaker: "tower", priority: 2 });
+    // (a mission's line in a role's words — "Darkstar: …", "Mother: …" — said in that role's voice: I4, S1)
+    const r = settings.f35RadioRoles !== false ? roleOfLine(text) : null;
+    if (r && r.role !== "tower") voice.say({ text: r.text, speaker: r.role, priority: 2, radio: true });
+    else voice.say({ text, speaker: "tower", priority: 2 });
   };
   camera.onMissionEnd = (last) => {
     debriefMission(last);
@@ -4008,7 +4011,8 @@ async function main() {
   const airMissions = {
     list: () => AIR_MISSIONS.map((d) => ({ id: d.id, title: d.make().title })),
     spec: (x: string | unknown) => missionSpec(x),
-    fly: (x: string | unknown, o: { lead?: boolean; side?: number } = {}) => placeShip(() => flyMission(challengeHost, missionSpec(x), o)),
+    fly: (x: string | unknown, o: { lead?: boolean; side?: number; role?: number } = {}) =>
+      placeShip(() => flyMission(challengeHost, missionSpec(x), o)),
     brief: (x: string | unknown) => {
       const spec = missionSpec(x);
       briefMission(spec, () => airMissions.fly(spec));
@@ -4047,9 +4051,13 @@ async function main() {
       if (settings.f35RadioRoles !== false) voice.say({ text: `${name} — ${text}`, speaker: role, priority: 2, radio: true, ttl: 15_000 });
     },
     // (another's mission: flown with him, 80 m off the start, on his right)
-    missionJoin: (spec, _from, name) => {
+    missionJoin: (spec, from, name) => {
       panel.toast(tf("{0}'s mission: {1}", name, spec.title));
-      airMissions.fly(spec, { lead: false, side: 80 });
+      // (a team mission — S1 —: the leader's the first role, ours the next by our place among the room's others)
+      const me = netPanel.net?.room?.slot ?? 0;
+      const slots = [me, ...netSession.others().map((o) => o.slot)].filter((x) => x !== from).sort((a, b) => a - b);
+      const role = spec.roles?.length ? Math.min(1 + slots.indexOf(me), spec.roles.length - 1) : undefined;
+      airMissions.fly(spec, { lead: false, side: role !== undefined && spec.roles?.[role]?.start ? 0 : 80, role });
     },
   });
   netPanel.session = netSession;

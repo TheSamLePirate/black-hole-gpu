@@ -21,3 +21,4 @@
 .msn-hud .msn-opt { opacity: 0.75; }
 .msn-hud-map { pointer-events: auto; float: right; margin: -2px -4px 0 8px; padding: 2px 7px; border: 1px solid rgba(255, 200, 97, 0.5); border-radius: 5px; background: rgba(255, 200, 97, 0.12); font: 600 11px/1.3 var(--font, system-ui); color: #ffc861; cursor: pointer; }
 .msn-hud-map:hover { background: rgba(255, 200, 97, 0.25); }
+.msn-hud-o.msn-other { opacity: 0.55; }

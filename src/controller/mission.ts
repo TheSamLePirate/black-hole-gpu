@@ -48,6 +48,11 @@ export interface MissionState {
   ended: boolean;
   /** shared in a room: we lead it (our objectives the room's), or another does */
   lead: boolean;
+  /** a team mission's role flown (its index — S1) */
+  role: number;
+  /** the carrier qualifications begun by its objectives, the last one ended before it began (S1) */
+  quals: Set<string>;
+  qualSeen: unknown;
 }
 
 /** A mission's states as shared in a room: its objectives', its end. */
@@ -91,16 +96,18 @@ const toLl = (a: { lat: number; lon: number }, e: number, n: number) => ({
  * fight's world made (empty: its units added as they are set), its units set but the later ones. `lead`: false —
  * another's in a room, joined.
  */
-function missionStart(this: CameraController, spec: MissionSpec, o: { lead?: boolean } = {}) {
+function missionStart(this: CameraController, spec: MissionSpec, o: { lead?: boolean; role?: number } = {}) {
   if (this.mission) this.missionAbort();
   const anchor = { lat: spec.start.lat, lon: spec.start.lon };
+  const role = spec.roles?.length ? Math.min(Math.max(o.role ?? 0, 0), spec.roles.length - 1) : 0;
+  const loadout = spec.roles?.[role]?.start?.loadout ?? spec.start.loadout ?? "aa";
   const def: Scenario = {
     id: `mission:${spec.id}`,
     title: { fr: spec.title, en: spec.title },
     brief: { fr: spec.brief, en: spec.brief },
     anchor,
     start: { e: 0, n: 0, agl: spec.start.alt ?? 1500, hdg: spec.start.hdg, speed: spec.start.speed },
-    loadout: spec.start.loadout ?? "aa",
+    loadout,
     targets: [],
     limit: spec.limit ?? 1e9,
     mission: true,
@@ -114,6 +121,9 @@ function missionStart(this: CameraController, spec: MissionSpec, o: { lead?: boo
     pending: [],
     ended: false,
     lead: o.lead ?? true,
+    role,
+    quals: new Set(),
+    qualSeen: this.qualLast ?? null,
   };
   for (const u of spec.units) if (!u.later) spawnUnit(this, u);
 }
@@ -177,6 +187,7 @@ function spawnUnit(c: CameraController, u: MissionUnit, last = false) {
   if (!at) return;
   const [e, n] = toEn(M.anchor, at);
   const kind = u.kind === "traffic" ? "airliner" : u.kind;
+  // (a ship: on the sea, under way — S1)
   const air = kind === "drone" || kind === "fighter" || kind === "airliner";
   live.target = W.addTarget({
     kind,
@@ -213,9 +224,13 @@ function worldOf(c: CameraController, M: MissionState): MissionWorld {
       lat: g?.lat ?? M.anchor.lat,
       lon: g?.lon ?? M.anchor.lon,
       alt: P ? P.p[2] : (g?.alt ?? 0),
+      agl: P && W ? P.p[2] - W.groundZ(P.p[0], P.p[1]) : undefined,
       landed: !!c.ourLanded || (!!c.rolling && air < 15),
       lost: !!c.airFlight.failure || c.combat?.status === "lost",
     },
+    // (S1: the display's formation, the qualification ended since it began)
+    wingmenInPlace: (c.wing?.list ?? []).filter((w) => w.alive && w.dist < 40).length,
+    qual: c.qualLast && c.qualLast !== M.qualSeen ? { qual: c.qualLast.id, qualified: c.qualLast.qualified, gpa: c.qualLast.gpa } : null,
     unit(id) {
       const L = M.units.get(id);
       if (!L) return null;
@@ -251,6 +266,12 @@ function missionFrame(this: CameraController, dt: number) {
     for (const u of P) spawnUnit(this, u, M.wait > TRAFFIC_WAIT);
     if (M.pending.length) return;
   }
+  // (a carrier qualification asked by an active objective: begun once — S1)
+  for (const o of M.run.spec.objectives)
+    if (o.kind === "qual" && M.run.state[o.id] === "active" && !M.quals.has(o.id)) {
+      M.quals.add(o.id);
+      this.qualStart(o.qual, { auto: o.auto ?? false, passes: o.passes });
+    }
   // (in a room each judges it on his own world, what one has done shared to all — missionApply)
   const outs = missionStep(M.run, worldOf(this, M), dt);
   const W = this.combat?.world;
@@ -377,7 +398,7 @@ function missionMarks(this: CameraController): MissionMark[] {
     );
   // (the places: the zones to reach, the escort's end, a landing's)
   for (const o of R.spec.objectives) {
-    const z = o.kind === "reach" ? o.at : o.kind === "escort" ? o.until : o.kind === "land" ? o.at : undefined;
+    const z = o.kind === "reach" || o.kind === "show" ? o.at : o.kind === "escort" ? o.until : o.kind === "land" ? o.at : undefined;
     if (z && R.state[o.id] !== "done")
       out.push({ kind: "zone", lat: z.lat, lon: z.lon, r: z.radius, label: o.text, obj: o.id, state: R.state[o.id] });
   }
@@ -437,7 +458,8 @@ function missionCue(this: CameraController): { name: string; lat: number; lon: n
       const u = W.unit(id);
       return u?.alive ? { name: o.text, lat: u.lat, lon: u.lon, alt: u.alt } : null;
     };
-    if (o.kind === "reach") return { name: o.text, lat: o.at.lat, lon: o.at.lon, alt: o.at.alt ?? ground(o.at.lat, o.at.lon) };
+    if (o.kind === "reach" || o.kind === "show")
+      return { name: o.text, lat: o.at.lat, lon: o.at.lon, alt: o.at.alt ?? ground(o.at.lat, o.at.lon) };
     if (o.kind === "destroy") {
       for (const id of o.units) {
         const c = unit(id);

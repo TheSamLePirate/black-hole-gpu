@@ -431,6 +431,7 @@ Un test e2e à deux pages par étape concernée.
   - **Patrouille acrobatique** : un spectacle en losange devant le public.
   - **Missions conjointes en équipes** en réseau : un avion escorte, l'autre frappe ; 2 contre 2 ; défense du
     porte-avions.
+  *S1 fait le 2026-10-16 — [fiche](progress/aviation/S1.md) : dix missions de plus (escorte du VIP, Red Air, frappe antinavire, qualifications jour/nuit/mer forte, patrouille acrobatique à Salon, en équipe : escorte et frappe, deux contre deux, défense du porte-avions) ; le moteur : navire, objectifs qualification et passages devant le public, « une unité près d'une autre », ailiers au départ, rôles d'équipe en salle ; la frégate hostile et le JSM (C5–C6 en partie) ; le masquage radar corrigé (la courbure comptée à rebours cachait les navires) — en vrai : deux frégates coulées au JSM, le losange devant Salon, Ben rejoint Ana comme ailier.*
 - **S2. Les vues d'exception**, chaque scène avec son heure, sa météo et son défi :
   - **poursuivre une éclipse** à Mach 1,6, comme Concorde en 1973 : l'éclipse totale du 12 août 2026 sur le
     Groenland, l'Islande et l'Espagne, à sa vraie date ;

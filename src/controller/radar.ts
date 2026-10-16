@@ -86,7 +86,7 @@ function groundAt(lat: number, lon: number): number {
 }
 
 /** Whether the ground hides a point r [m, local frame] from the craft at the fix: the line of sight sampled
- *  (the Earth's curve bringing the ground up at its distance — 4/3 of its radius, the air's refraction). */
+ *  against the relief (S1: the Earth's curve was counted twice — a ship at sea level hidden by the sea itself). */
 function maskedBy(fix: RadarFix): (r: V3) => boolean {
   return (r) => {
     const d = Math.hypot(r[0], r[1]);
@@ -98,7 +98,10 @@ function maskedBy(fix: RadarFix): (r: V3) => boolean {
       const lat = fix.lat + nn / (D * R_EARTH);
       const lon = fix.lon + e / (D * R_EARTH * Math.cos(fix.lat * D));
       const dist = d * k;
-      const losAlt = fix.own.alt + r[2] * k - (dist * dist) / (2 * (4 / 3) * R_EARTH);
+      // (the line's height over the curved Earth there: its height in our local frame — r's up, the Earth's true
+      // curve already in it — plus the surface's drop below that frame at its distance; the air's refraction a
+      // little more over a long line, the ray bending with the Earth)
+      const losAlt = fix.own.alt + r[2] * k + (dist * dist) / (2 * R_EARTH) + (dist * (d - dist)) / (2 * 4 * R_EARTH);
       if (losAlt < groundAt(lat, lon)) return true;
     }
     return false;

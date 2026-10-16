@@ -5,7 +5,17 @@
 // checked as any.
 
 import { tf } from "../i18n";
-import { checkMission, distM, type GeoPt, type MissionSpec, type MissionUnit, type Objective, type Trigger } from "./mission";
+import {
+  checkMission,
+  distM,
+  type GeoPt,
+  type MissionRole,
+  type MissionSpec,
+  type MissionStart,
+  type MissionUnit,
+  type Objective,
+  type Trigger,
+} from "./mission";
 
 /** A mission as a link's hash. */
 export function missionToHash(spec: MissionSpec): string {
@@ -230,7 +240,12 @@ export async function completeMission(
   if (start) {
     for (const k2 of ["variant", "loadout", "fuel", "carrier"] as const)
       if (x.start?.[k2] !== undefined) (start as unknown as Record<string, unknown>)[k2] = x.start[k2];
-    if (!start.loadout) start.loadout = units.some((u) => u.kind === "sam" || u.kind === "truck" || u.kind === "bunker") ? "ag" : "aa";
+    if (!start.loadout)
+      start.loadout = units.some((u) => u.kind === "ship")
+        ? "as"
+        : units.some((u) => u.kind === "sam" || u.kind === "truck" || u.kind === "bunker")
+          ? "ag"
+          : "aa";
   }
   // (a real flight not placed: where it is set when none is heard — 25 km ahead of the start, at 10 km)
   if (start) {
@@ -377,7 +392,7 @@ export interface Draft {
   brief: string;
   start: { lat: number; lon: number; alt: number; hdg: number; speed: number };
   variant: "B" | "C";
-  loadout: "aa" | "ag" | "gun";
+  loadout: "aa" | "ag" | "gun" | "as";
   /** the local hour there (none: the scene's) */
   hour?: number;
   weather: string;
@@ -391,6 +406,12 @@ export interface Draft {
   chain: boolean;
   /** the triggers the editor does not show (a mission's own, kept) */
   extra: Trigger[];
+  /** what else a mission given holds and the editor keeps as it is (S1): its qualification's and display's
+   *  objectives, a team mission's roles and its objectives' (by their words), the start's wingmen and formation */
+  keepObjs?: Objective[];
+  roles?: MissionRole[];
+  objRoles?: Record<string, string>;
+  startMore?: Partial<MissionStart>;
 }
 
 /** A new draft about a place (the craft's). */
@@ -502,13 +523,17 @@ export function draftToSpec(d: Draft): { spec: MissionSpec | null; errors: strin
           do: [{ course: { unit: u.id, to: { lat: o.until.lat, lon: o.until.lon, alt: 3000 } } }],
         });
     }
+  // (kept as they were: S1's objectives, the roles, the start's wingmen)
+  objectives.push(...(d.keepObjs ?? []));
+  for (const o of objectives) if (d.objRoles?.[o.text]) o.role = d.objRoles[o.text];
   if (errors.length) return { spec: null, errors };
   return checkMission({
+    roles: d.roles,
     v: 1,
     id: d.id,
     title: d.title.trim() || objectives[0]?.text || "Mission",
     brief: d.brief.trim() || objectives.map((o) => o.text).join(" · "),
-    start: { ...d.start, variant: d.variant, loadout: d.loadout },
+    start: { ...d.start, ...(d.startMore ?? {}), variant: d.variant, loadout: d.loadout },
     time: d.hour !== undefined ? { localHour: d.hour } : undefined,
     weather: { preset: d.weather, wind: 1 },
     units,
@@ -581,5 +606,9 @@ export function specToDraft(s: MissionSpec): Draft {
     msgs,
     chain: s.objectives.some((o) => !!o.after),
     extra: extra.filter((tr) => !tr.id.startsWith("to-")),
+    keepObjs: s.objectives.filter((o) => o.kind === "qual" || o.kind === "show"),
+    roles: s.roles,
+    objRoles: Object.fromEntries(s.objectives.filter((o) => o.role).map((o) => [o.text, o.role!])),
+    startMore: { wingmen: s.start.wingmen, formation: s.start.formation, fuel: s.start.fuel, carrier: s.start.carrier },
   };
 }

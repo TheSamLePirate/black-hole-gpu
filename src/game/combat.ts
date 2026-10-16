@@ -26,7 +26,7 @@ const D = Math.PI / 180;
 
 // ------------------------------------------------------------------------------------ the weapons
 
-export type MissileKind = "aim120" | "aim9x" | "sam" | "r73";
+export type MissileKind = "aim120" | "aim9x" | "sam" | "r73" | "jsm";
 
 /** A missile's figures: its motor's push [m/s²] and burn [s], its drag (deceleration k v² [1/m]), its turn
  *  limit [g], its navigation constant, its seeker's cone [rad], its fuze's radius [m], its flight's limit [s],
@@ -103,6 +103,24 @@ export const MISSILES: Record<MissileKind, MissileDef> = {
     rMax: 32_000,
     rMin: 3000,
   },
+  // (the Joint Strike Missile — S1, PLAN C6 —: an anti-ship missile carried in the F-35's bays, a turbojet's
+  // cruise near 280 m/s for 150 km and more, its imaging seeker on the ship locked, a heavy warhead)
+  jsm: {
+    name: "JSM",
+    accel: 2,
+    burn: 700,
+    drag: 2.4e-5,
+    gMax: 8,
+    nav: 3,
+    fov: 50 * D,
+    fuze: 14,
+    life: 700,
+    seeker: "radar",
+    decoy: 0.05,
+    damage: 460,
+    rMax: 160_000,
+    rMin: 4000,
+  },
   // (the aggressors' infrared missile: an R-73 class's)
   r73: {
     name: "R-73",
@@ -147,25 +165,30 @@ export const SKILL = {
 } as const;
 
 export interface Loadout {
-  id: "aa" | "ag" | "gun";
+  id: "aa" | "ag" | "gun" | "as";
   aim120: number;
   aim9x: number;
   jdam: number;
+  /** anti-ship missiles (S1: the "as" load) */
+  jsm: number;
   gun: number;
   flares: number;
 }
 export const LOADOUTS: Record<Loadout["id"], Loadout> = {
-  aa: { id: "aa", aim120: 4, aim9x: 2, jdam: 0, gun: GUN.rounds, flares: 30 },
-  ag: { id: "ag", aim120: 2, aim9x: 2, jdam: 2, gun: GUN.rounds, flares: 30 },
-  gun: { id: "gun", aim120: 0, aim9x: 0, jdam: 0, gun: GUN.rounds, flares: 30 },
+  aa: { id: "aa", aim120: 4, aim9x: 2, jdam: 0, jsm: 0, gun: GUN.rounds, flares: 30 },
+  ag: { id: "ag", aim120: 2, aim9x: 2, jdam: 2, jsm: 0, gun: GUN.rounds, flares: 30 },
+  gun: { id: "gun", aim120: 0, aim9x: 0, jdam: 0, jsm: 0, gun: GUN.rounds, flares: 30 },
+  // (anti-ship: two JSMs in the bays, two AMRAAMs and two Sidewinders for the way)
+  as: { id: "as", aim120: 2, aim9x: 2, jdam: 0, jsm: 2, gun: GUN.rounds, flares: 30 },
 };
 /** The mass each adds [kg] (the gun pod with its rounds, a missile, a bomb). */
-export const STORE_KG = { aim120: 152, aim9x: 85, jdam: 460, gunPod: 330 };
-export const loadoutMass = (l: Loadout) => l.aim120 * STORE_KG.aim120 + l.aim9x * STORE_KG.aim9x + l.jdam * STORE_KG.jdam + STORE_KG.gunPod;
+export const STORE_KG = { aim120: 152, aim9x: 85, jdam: 460, jsm: 416, gunPod: 330 };
+export const loadoutMass = (l: Loadout) =>
+  l.aim120 * STORE_KG.aim120 + l.aim9x * STORE_KG.aim9x + l.jdam * STORE_KG.jdam + (l.jsm ?? 0) * STORE_KG.jsm + STORE_KG.gunPod;
 
 // ------------------------------------------------------------------------------------ the world's things
 
-export type TargetKind = "drone" | "fighter" | "sam" | "truck" | "bunker" | "airliner";
+export type TargetKind = "drone" | "fighter" | "sam" | "truck" | "bunker" | "airliner" | "ship";
 
 export interface Target {
   id: number;
@@ -308,6 +331,8 @@ const SPEC: Record<TargetKind, { hp: number; rcs: number; speed: number; gMax: n
   truck: { hp: 40, rcs: 10, speed: 0, gMax: 0, missiles: 0 },
   bunker: { hp: 300, rcs: 50, speed: 0, gMax: 0, missiles: 0 },
   airliner: { hp: 80, rcs: 40, speed: 220, gMax: 1.4, missiles: 0 },
+  // (a frigate — S1 —: under way at 9 m/s, its own surface-to-air missiles)
+  ship: { hp: 250, rcs: 5000, speed: 9, gMax: 0, missiles: 6 },
 };
 
 export class CombatWorld {
@@ -355,7 +380,7 @@ export class CombatWorld {
     const h = (s.hdg ?? 0) * D;
     const fwd: V3 = [Math.sin(h), Math.cos(h), 0];
     const p: V3 = [s.at[0], s.at[1], this.groundZ(s.at[0], s.at[1]) + (air ? s.at[2] : 0)];
-    const speed = air ? (s.speed ?? S.speed) : 0;
+    const speed = air || s.kind === "ship" ? (s.speed ?? S.speed) : 0;
     const id = this.nextId++;
     const airliner = s.kind === "airliner";
     this.targets.push({
@@ -386,7 +411,7 @@ export class CombatWorld {
               : undefined,
           }
         : undefined,
-      site: s.kind === "sam" ? { nextShot: 8, missiles: S.missiles } : undefined,
+      site: s.kind === "sam" || s.kind === "ship" ? { nextShot: 8, missiles: S.missiles } : undefined,
     });
     return id;
   }
@@ -466,15 +491,15 @@ export class CombatWorld {
 
   /** A missile launched at the lock (the 9X: the lock, or what its seeker finds before the nose). */
   launch(P: Player, kind: MissileKind): Missile | null {
-    if (kind === "aim120" ? this.stores.aim120 <= 0 : kind === "aim9x" ? this.stores.aim9x <= 0 : true) return null;
+    if (kind !== "aim120" && kind !== "aim9x" && kind !== "jsm") return null;
+    if (this.stores[kind] <= 0) return null;
+    // (the JSM: a ship locked, nothing else)
+    if (kind === "jsm" && this.target(this.lock)?.kind !== "ship") return null;
     let tgt = this.lock;
     if (kind === "aim9x" && tgt === null) tgt = this.boresight(P, MISSILES.aim9x.fov / 2, MISSILES.aim9x.rMax);
     // (nothing for its seeker — none locked, none before the nose within reach —: not fired)
     if (tgt === null) return null;
-    if (!this.opts.infinite) {
-      if (kind === "aim120") this.stores.aim120--;
-      else this.stores.aim9x--;
-    }
+    if (!this.opts.infinite) this.stores[kind]--;
     // (dropped from the bay, or off the rail, at the jet's velocity, a little below)
     const m: Missile = {
       id: this.nextId++,
@@ -533,6 +558,12 @@ export class CombatWorld {
     if (!this.radarFed) this.scan(P);
     this.stepGun(dt, P);
     this.stepAi(dt, P, ev);
+    // (the ships under way on their heading, on the sea)
+    for (const q of this.targets)
+      if (q.kind === "ship" && q.alive) {
+        q.p = add(q.p, mul(q.v, dt));
+        q.p[2] = this.groundZ(q.p[0], q.p[1]);
+      }
     this.stepMissiles(dt, P, ev);
     this.stepBombs(dt, ev);
     this.stepRounds(dt, P, ev);
@@ -542,6 +573,8 @@ export class CombatWorld {
       d.p = add(d.p, mul(d.v, dt));
     }
     this.decoys = this.decoys.filter((d) => d.t < 5);
+    // (a ship lost: settling into the sea)
+    for (const q of this.targets) if (!q.alive && q.kind === "ship" && this.t - q.diedAt < 60) q.p[2] -= 0.4 * dt;
     // (the dead: falling — an aircraft's wreck — and gone after a while)
     for (const q of this.targets)
       if (!q.alive && q.ai && q.p[2] > this.groundZ(q.p[0], q.p[1])) {
@@ -613,7 +646,7 @@ export class CombatWorld {
       q.alive = false;
       q.diedAt = this.t;
       ev.push({ kind: "kill", target: q.id, name: q.name, by });
-      ev.push({ kind: "explode", p: [...q.p], size: q.ai ? 1 : q.kind === "bunker" ? 3 : 2 });
+      ev.push({ kind: "explode", p: [...q.p], size: q.ai ? 1 : q.kind === "bunker" || q.kind === "ship" ? 3 : 2 });
       if (this.lock === q.id) this.lock = null;
     }
   }
@@ -849,6 +882,12 @@ export class CombatWorld {
           }
           continue;
         }
+      }
+      // (the JSM skims the sea: 30 m over it until its last 5 km — its height held, the line of sight's pull upwards
+      // or downwards left out —, then onto the ship)
+      if (m.kind === "jsm" && tg && len(sub(tg.p, m.p)) > 5000) {
+        const zT = this.groundZ(m.p[0], m.p[1]) + 30;
+        a = [a[0], a[1], 1.5 * (zT - m.p[2]) - 2 * m.v[2]];
       }
       // (gravity compensated while guided; the turn limited; the motor, the drag)
       const amax = M.gMax * G;
@@ -1095,7 +1134,8 @@ export function launchZone(
   const range = len(r);
   const closing = -dot(unit(r), sub(q.v, P.v));
   // (a closing target: farther; a fleeing one: much nearer — its reach scaled by the closing speed)
-  const rMax = M.rMax * clamp(0.45 + closing / 700, 0.25, 1.4) * clamp(0.6 + P.p[2] / 20_000, 0.6, 1.3);
+  // (the JSM: a cruise missile's reach — its turbojet's, not the launch's energy)
+  const rMax = kind === "jsm" ? M.rMax : M.rMax * clamp(0.45 + closing / 700, 0.25, 1.4) * clamp(0.6 + P.p[2] / 20_000, 0.6, 1.3);
   return { range, rMax, rMin: M.rMin, inRange: range < rMax && range > M.rMin };
 }
 

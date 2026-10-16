@@ -32,7 +32,21 @@ export interface EditorHost {
 }
 
 type Tool = "start" | "reach" | "land" | "dest" | DraftUnit["kind"];
-const TOOLS: Tool[] = ["start", "reach", "dest", "land", "sam", "truck", "bunker", "drone", "fighter", "airliner", "traffic", "carrier"];
+const TOOLS: Tool[] = [
+  "start",
+  "reach",
+  "dest",
+  "land",
+  "sam",
+  "truck",
+  "bunker",
+  "ship",
+  "drone",
+  "fighter",
+  "airliner",
+  "traffic",
+  "carrier",
+];
 const ROLES: UnitRole[] = ["destroy", "identify", "escort", "protect", "land"];
 
 /** One's own missions, kept in this browser. */
@@ -288,6 +302,7 @@ export class MissionEditor {
       airliner: t("Airliner"),
       traffic: t("Real flight"),
       carrier: t("Carrier"),
+      ship: t("Enemy ship"),
     };
     return n[k];
   }
@@ -420,6 +435,7 @@ export class MissionEditor {
             ["aa", t("air-to-air")],
             ["ag", t("air-to-ground")],
             ["gun", t("gun only")],
+            ["as", t("anti-ship")],
           ],
           (v) => (d.loadout = v),
         ),

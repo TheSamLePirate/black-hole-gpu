@@ -34,6 +34,7 @@ import { windFrom } from "../wind";
 import { earthView } from "./netcraft";
 import type { TrafficMark } from "./traffic";
 import { cross as cross3, type Vec3 } from "../math/vec3";
+import { geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
 import type { CameraController } from "../controls";
 import fordDeckUrl from "../../assets/carriers/ford.deck.bin";
 import kievDeckUrl from "../../assets/carriers/kiev.deck.bin";
@@ -231,6 +232,34 @@ function carrierStep(this: CameraController) {
 }
 const dot3 = (a: readonly number[], b: readonly number[]) => a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!;
 
+/** A fight's ships (S1: a hostile frigate) fixed to the Earth: their place, axes (port, up, bow), velocity; a sunk
+ *  one settling, gone after a minute. */
+function fightShips(c: CameraController): { p: Vec3; port: Vec3; up: Vec3; bow: Vec3; v: Vec3; speed: number }[] {
+  const C = c.combat;
+  if (!C) return [];
+  const A = C.def.anchor;
+  const D = Math.PI / 180;
+  const RE = 6_371_008.8;
+  return C.world.targets
+    .filter((q) => q.kind === "ship" && (q.alive || C.world.t - q.diedAt < 60))
+    .map((q) => {
+      const lat = A.lat + q.p[1] / (D * RE),
+        lon = A.lon + q.p[0] / (D * RE * Math.cos(A.lat * D));
+      const la = lat * D,
+        lo = lon * D;
+      const E = [-Math.sin(lo), Math.cos(lo), 0];
+      const N = [-Math.sin(la) * Math.cos(lo), -Math.sin(la) * Math.sin(lo), Math.cos(la)];
+      const U = [Math.cos(la) * Math.cos(lo), Math.cos(la) * Math.sin(lo), Math.sin(la)] as Vec3;
+      const f = q.fwd;
+      const bow = [0, 1, 2].map((i) => E[i]! * f[0] + N[i]! * f[1]) as Vec3;
+      const stb = [0, 1, 2].map((i) => E[i]! * f[1] - N[i]! * f[0]);
+      const sink = q.alive ? 0 : q.p[2] - C.world.groundZ(q.p[0], q.p[1]);
+      const p = geodeticToCart(WGS84_A, WGS84_F, la, lo, sink) as Vec3;
+      const speed = q.alive ? Math.hypot(q.v[0], q.v[1]) : 0;
+      return { p, port: stb.map((x) => -x) as Vec3, up: U, bow, v: bow.map((x) => x * speed) as Vec3, speed };
+    });
+}
+
 /** The carriers for the renderer: within 40 km, their place and axes on the camera's (their meshes to size). */
 function carrierShips(this: CameraController): {
   id: CarrierId | "frigate";
@@ -242,7 +271,8 @@ function carrierShips(this: CameraController): {
   mirror: boolean;
 }[] {
   const list = this.carrierNow();
-  if (!list.length) return [];
+  const hostile = fightShips(this);
+  if (!list.length && !hostile.length) return [];
   const E = earthView(this);
   if (!E) return [];
   const cam = (b: readonly number[]) => E.toCam(E.toHome(b as Vec3));
@@ -259,6 +289,7 @@ function carrierShips(this: CameraController): {
       },
       ...escortsOf(sp, P, t, this.seaHs ?? 1).map((e) => ({ id: "frigate" as const, P: e })),
     ])
+    .concat(hostile.map((h) => ({ id: "frigate" as const, P: h })))
     .map(({ id, P }) => ({ id, P, rel: cam([0, 1, 2].map((k) => P.p[k]! - E.p0[k]!)) }))
     .filter((x) => Math.hypot(...x.rel) < 40_000)
     .map(({ id, P, rel }) => ({
@@ -276,16 +307,22 @@ function carrierShips(this: CameraController): {
 /** Their wakes (the sea's shader: renderer.seaWakes). */
 function carrierWakes(this: CameraController): { p: Vec3; fwd: Vec3; U: number; len: number; beam: number }[] {
   const t = secOf(this.nowTime());
-  return this.carrierNow().flatMap(({ sp, P }) => {
-    const up = P.p.map((x) => x / Math.hypot(...P.p));
-    const f = P.bow.map((x, i) => x - up[i]! * dot3(P.bow, up));
-    const l = Math.hypot(...f) || 1;
-    const fwd = f.map((x) => x / l) as Vec3;
-    return [
-      { p: P.p as Vec3, fwd, U: sp.speed, len: CARRIER[sp.kind].len, beam: CARRIER[sp.kind].beam },
-      ...escortsOf(sp, P, t, this.seaHs ?? 1).map((e) => ({ p: e.p, fwd, U: sp.speed, len: 135, beam: 17 })),
-    ];
-  });
+  return this.carrierNow()
+    .flatMap(({ sp, P }) => {
+      const up = P.p.map((x) => x / Math.hypot(...P.p));
+      const f = P.bow.map((x, i) => x - up[i]! * dot3(P.bow, up));
+      const l = Math.hypot(...f) || 1;
+      const fwd = f.map((x) => x / l) as Vec3;
+      return [
+        { p: P.p as Vec3, fwd, U: sp.speed, len: CARRIER[sp.kind].len, beam: CARRIER[sp.kind].beam },
+        ...escortsOf(sp, P, t, this.seaHs ?? 1).map((e) => ({ p: e.p, fwd, U: sp.speed, len: 135, beam: 17 })),
+      ];
+    })
+    .concat(
+      fightShips(this)
+        .filter((h) => h.speed > 0)
+        .map((h) => ({ p: h.p, fwd: h.bow, U: h.speed, len: 135, beam: 17 })),
+    );
 }
 
 /**

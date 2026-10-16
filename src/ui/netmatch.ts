@@ -64,6 +64,7 @@ const WEAPON: Record<string, string> = {
   sam: "SAM",
   gun: "GUN",
   jdam: "JDAM",
+  jsm: "JSM",
   collision: "✶",
 };
 

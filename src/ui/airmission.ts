@@ -6,6 +6,7 @@
 import "./airmission.css";
 import type { CameraController } from "../controls";
 import { fleet } from "../fleet";
+import { FORMATION_IDS, type FormationId } from "../game/formations";
 import type { MissionSpec, ObjState } from "../game/mission";
 import { utcHourAt } from "../game/quals";
 import type { GameTools } from "../game/tools";
@@ -29,7 +30,7 @@ const R_EARTH = 6_371_008.8;
  * mission, the craft at its start — `side` [m] to its right: another in a room, on our wing —, the mission run.
  * What to say.
  */
-export function flyMission(host: MissionHost, spec: MissionSpec, o: { lead?: boolean; side?: number } = {}): string {
+export function flyMission(host: MissionHost, spec: MissionSpec, o: { lead?: boolean; side?: number; role?: number } = {}): string {
   const T = host.tools;
   const C = host.camera;
   if (fleet.active !== "f35") T.set("vessel", "f35");
@@ -39,8 +40,13 @@ export function flyMission(host: MissionHost, spec: MissionSpec, o: { lead?: boo
   if (C.combat) C.combatEnd();
   C.aeroStop();
   if (C.qual) C.qualStop();
-  const s = spec.start;
+  // (a team mission's role — S1 —: its own start over the mission's)
+  const role = spec.roles?.length ? Math.min(Math.max(o.role ?? 0, 0), spec.roles.length - 1) : 0;
+  const s = { ...spec.start, ...(spec.roles?.[role]?.start ?? {}) };
   if (s.variant) T.set("f35Variant", s.variant);
+  // (its AI wingmen and their formation — a display's diamond)
+  if (s.wingmen !== undefined) T.set("wingmen", s.wingmen);
+  if (s.formation && FORMATION_IDS.includes(s.formation as FormationId)) T.set("formShape", s.formation as FormationId);
   const w = spec.weather;
   if (w?.preset) T.set("weather", w.preset as WeatherPreset);
   if (w?.wind !== undefined) T.set("wind", w.wind);
@@ -65,8 +71,9 @@ export function flyMission(host: MissionHost, spec: MissionSpec, o: { lead?: boo
   C.pilot.throttle = C.pilot.engineNow = 0.85;
   const full = VESSELS.f35.fuelKg ?? 0;
   fleet.fuel.f35 = s.fuel !== undefined ? Math.min(full, s.fuel <= 1 ? s.fuel * full : s.fuel) : full;
-  C.missionStart(spec, { lead: o.lead ?? true });
-  return tf("Mission: {0}", spec.title);
+  C.missionStart(spec, { lead: o.lead ?? true, role });
+  const R = spec.roles?.[role];
+  return R ? tf("Mission: {0} — your role: {1}", spec.title, R.name) : tf("Mission: {0}", spec.title);
 }
 
 const MARK: Record<ObjState, string> = { waiting: "◦", active: "•", done: "✓", failed: "✗" };
@@ -78,15 +85,32 @@ export function briefMission(spec: MissionSpec, go: () => void) {
   const s = spec.start;
   const facts = [
     `F-35${s.variant ?? ""}`,
-    s.loadout === "ag" ? t("air-to-ground") : s.loadout === "gun" ? t("gun only") : t("air-to-air"),
+    s.loadout === "ag" ? t("air-to-ground") : s.loadout === "gun" ? t("gun only") : s.loadout === "as" ? t("anti-ship") : t("air-to-air"),
+    s.wingmen ? tf("{0} AI wingmen", s.wingmen) : null,
     `${s.lat.toFixed(2)}°, ${s.lon.toFixed(2)}°`,
     spec.time?.localHour !== undefined ? tf("{0} h local", spec.time.localHour) : null,
     spec.limit ? tf("{0} min at most", Math.round(spec.limit / 60)) : null,
   ].filter(Boolean);
   body.append(h("p", "msn-text", spec.brief), h("p", "msn-facts", facts.join(" · ")), h("h4", "msn-h", t("Objectives")));
   const ol = h("ol", "msn-objs");
-  for (const ob of spec.objectives) ol.append(h("li", ob.optional ? "msn-opt" : "", ob.text));
+  const roleName = (id?: string) => spec.roles?.find((r) => r.id === id)?.name;
+  for (const ob of spec.objectives)
+    ol.append(h("li", ob.optional ? "msn-opt" : "", ob.role ? `[${roleName(ob.role)}] ${ob.text}` : ob.text));
   body.append(ol);
+  // (a team mission's roles — S1: in a room the first pilot flies the first, the others the next)
+  if (spec.roles?.length) {
+    body.append(h("h4", "msn-h", t("Roles")));
+    const ul = h("ul", "msn-objs");
+    for (const r of spec.roles) ul.append(h("li", "", r.brief ? `${r.name} — ${r.brief}` : r.name));
+    body.append(
+      ul,
+      h(
+        "p",
+        "msn-facts",
+        t("In a room: the one who starts it flies the first role, the others the next ones. Alone: everything is yours."),
+      ),
+    );
+  }
   const m = modal({ title: spec.title, body: [body], cls: "msn-frame", testid: "mission-brief" });
   const row = h("div", "msn-row");
   body.append(row);
@@ -170,7 +194,16 @@ export class MissionHud {
       h("span", "msn-hud-c", M.deckStart ? t("on deck…") : lim ? `${clock(R.t)} / ${clock(lim)}` : clock(R.t)),
       ...R.spec.objectives
         .filter((o) => R.state[o.id] !== "waiting")
-        .map((o) => h("div", `msn-hud-o msn-${R.state[o.id]}${o.optional ? " msn-opt" : ""}`, `${MARK[R.state[o.id]!]} ${o.text}`)),
+        .map((o) => {
+          // (a team mission: the objectives of our role marked ours, the others' dimmed)
+          const mine = !o.role || o.role === R.spec.roles?.[M.role]?.id;
+          const tag = o.role ? `[${R.spec.roles?.find((r) => r.id === o.role)?.name ?? o.role}] ` : "";
+          return h(
+            "div",
+            `msn-hud-o msn-${R.state[o.id]}${o.optional ? " msn-opt" : ""}${mine ? "" : " msn-other"}`,
+            `${MARK[R.state[o.id]!]} ${tag}${o.text}`,
+          );
+        }),
     );
   }
 }

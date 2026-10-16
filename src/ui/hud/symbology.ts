@@ -135,7 +135,7 @@ export interface SymInfo {
     status: string;
     result: string | null;
     weapon: string;
-    stores: { aim120: number; aim9x: number; jdam: number; gun: number; flares: number };
+    stores: { aim120: number; aim9x: number; jdam: number; jsm?: number; gun: number; flares: number };
     damage: number;
     firing: boolean;
     targets: {
@@ -2383,7 +2383,7 @@ function drawCombat(
   const sel = (w: string, s: string) => (K.weapon === w ? `[${s}]` : s);
   if (!F.s.f35WeaponPanel || F.compact)
     text(
-      `${sel("aim9x", `9X ${S.aim9x}`)}  ${sel("aim120", `120 ${S.aim120}`)}  ${sel("jdam", `JDAM ${S.jdam}`)}  GUN ${S.gun}  CM ${S.flares}`,
+      `${sel("aim9x", `9X ${S.aim9x}`)}  ${sel("aim120", `120 ${S.aim120}`)}  ${sel("jdam", `JDAM ${S.jdam}`)}${S.jsm ? `  ${sel("jsm", `JSM ${S.jsm}`)}` : ""}  GUN ${S.gun}  CM ${S.flares}`,
       xb,
       yb,
       GRN,
@@ -2428,6 +2428,7 @@ function drawWeapons(
     { id: "aim9x", name: "AIM-9X", n: S.aim9x, max: 2 },
     { id: "aim120", name: "AIM-120C", n: S.aim120, max: 4 },
     { id: "jdam", name: "GBU-32", n: S.jdam, max: 2 },
+    ...(S.jsm !== undefined && (S.jsm > 0 || K.weapon === "jsm") ? [{ id: "jsm", name: "JSM", n: S.jsm, max: 2 }] : []),
     { id: "cm", name: "CMDS", n: S.flares, max: 30, bar: true },
   ];
   ctx.fillStyle = "rgba(2, 12, 8, 0.62)";

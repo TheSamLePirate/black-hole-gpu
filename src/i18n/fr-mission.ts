@@ -104,4 +104,14 @@ export default {
   "Edit it": "La modifier",
   Edit: "Modifier",
   "Make a mission": "Créer une mission",
+  // S1: the missions of exception — the anti-ship strike, the roles of a team mission
+  "JSM: lock a ship first (Tab)": "JSM : verrouillez d'abord un navire (Tab)",
+  "JSM away": "JSM parti",
+  "Mission: {0} — your role: {1}": "Mission : {0} — votre rôle : {1}",
+  "Enemy ship": "Navire ennemi",
+  "anti-ship": "antinavire",
+  "{0} AI wingmen": "{0} ailiers IA",
+  Roles: "Rôles",
+  "In a room: the one who starts it flies the first role, the others the next ones. Alone: everything is yours.":
+    "En salle : celui qui la lance prend le premier rôle, les autres les suivants. Seul : tout est à vous.",
 } satisfies Record<string, string>;

@@ -157,7 +157,13 @@ export class ChallengePanel {
       const card = h("div", "chp-card chp-fight");
       const best = CB[d.id];
       const L = LOADOUTS[d.loadout];
-      const load = [L.aim120 && `${L.aim120} AIM-120`, L.aim9x && `${L.aim9x} AIM-9X`, L.jdam && `${L.jdam} GBU-32`, `${L.gun} × 25 mm`]
+      const load = [
+        L.aim120 && `${L.aim120} AIM-120`,
+        L.aim9x && `${L.aim9x} AIM-9X`,
+        L.jdam && `${L.jdam} GBU-32`,
+        L.jsm && `${L.jsm} JSM`,
+        `${L.gun} × 25 mm`,
+      ]
         .filter(Boolean)
         .join(" · ");
       card.append(

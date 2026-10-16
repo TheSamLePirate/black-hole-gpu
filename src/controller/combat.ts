@@ -49,7 +49,7 @@ declare module "../controls" {
   }
 }
 
-export type WeaponSel = "aim9x" | "aim120" | "jdam";
+export type WeaponSel = "aim9x" | "aim120" | "jdam" | "jsm";
 
 export interface CombatState {
   def: Scenario;
@@ -123,7 +123,7 @@ function combatStart(this: CameraController, def: Scenario, net: { host: boolean
   this.combat = {
     def,
     world,
-    weapon: L.aim9x ? "aim9x" : L.aim120 ? "aim120" : "jdam",
+    weapon: L.jsm ? "jsm" : L.aim9x ? "aim9x" : L.aim120 ? "aim120" : "jdam",
     t: 0,
     status: "run",
     doneAt: 0,
@@ -153,7 +153,7 @@ function combatStart(this: CameraController, def: Scenario, net: { host: boolean
         r: [q.p[0] - P.p[0], q.p[1] - P.p[1], q.p[2] - P.p[2]] as V3,
         v: [...q.v] as V3,
         rcs: q.rcs,
-        kind: isGround(q) ? ("ground" as const) : ("air" as const),
+        kind: q.kind === "ship" ? ("sea" as const) : isGround(q) ? ("ground" as const) : ("air" as const),
         iff: q.friendly ? ("friend" as const) : q.neutral ? ("neutral" as const) : ("hostile" as const),
         name: q.name,
         squawk: (!!q.friendly || q.kind === "airliner") && !q.squawkOff,
@@ -215,9 +215,9 @@ function combatTrigger(this: CameraController, what: "fire" | "lock" | "weapon" 
       : t("Lock dropped");
   }
   if (what === "weapon") {
-    const order: WeaponSel[] = ["aim9x", "aim120", "jdam"];
-    for (let k = 1; k <= 3; k++) {
-      const w = order[(order.indexOf(C.weapon) + k) % 3]!;
+    const order: WeaponSel[] = ["aim9x", "aim120", "jdam", "jsm"];
+    for (let k = 1; k <= order.length; k++) {
+      const w = order[(order.indexOf(C.weapon) + k) % order.length]!;
       if (W.stores[w] > 0) {
         C.weapon = w;
         break;
@@ -240,10 +240,11 @@ function combatTrigger(this: CameraController, what: "fire" | "lock" | "weapon" 
   const kind: MissileKind = C.weapon;
   if (W.stores[kind] <= 0) return tf("No {0} left", MISSILES[kind].name);
   if (kind === "aim120" && W.lock === null) return t("AIM-120: lock a target first (Tab)");
+  if (kind === "jsm" && W.target(W.lock)?.kind !== "ship") return t("JSM: lock a ship first (Tab)");
   const m = W.launch(P, kind);
   if (!m) return t("No target for the seeker");
   C.events.push({ kind: "launch", who: "blue", missile: kind, id: m.id });
-  return tf("{0} — {1}", kind === "aim120" ? "FOX 3" : "FOX 2", W.target(m.target)?.name ?? "");
+  return tf("{0} — {1}", kind === "aim120" ? "FOX 3" : kind === "jsm" ? t("JSM away") : "FOX 2", W.target(m.target)?.name ?? "");
 }
 
 /** A frame of the fight: the gun's trigger, the world stepped with the player, its events, its end. */

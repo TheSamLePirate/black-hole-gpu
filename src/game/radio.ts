@@ -18,14 +18,15 @@ export const ROLE_VOICE: Record<Exclude<RadioRole, "tower">, { fr: string; en: s
   lso: { fr: "aura-2-hector-fr", en: "aura-2-mars-en" },
 };
 
-const PREFIX = /^(?:([^,:]{1,24}),\s*(?:ici\s+)?)?(Mother|Paddles|Shooter|Darkstar|Tour|Tower)\s*:\s*/i;
+const PREFIX = /^(?:([^,:]{1,24}),\s*(?:ici\s+)?)?(Mother|Paddles|Shooter|Darkstar|AWACS|Tour|Tower)\s*:\s*/i;
 
 /** A radio line's role by its words, and the line without the role's name (an addressee kept: "F-35C, …"). */
 export function roleOfLine(text: string): { role: RadioRole; text: string } {
   const m = PREFIX.exec(text);
   if (!m) return { role: "tower", text };
   const who = m[2]!.toLowerCase();
-  const role: RadioRole = who === "paddles" ? "lso" : who === "darkstar" ? "awacs" : who === "tour" || who === "tower" ? "tower" : "mother";
+  const role: RadioRole =
+    who === "paddles" ? "lso" : who === "darkstar" || who === "awacs" ? "awacs" : who === "tour" || who === "tower" ? "tower" : "mother";
   const rest = text.slice(m[0].length);
   return { role, text: m[1] ? `${m[1]}, ${rest}` : rest.charAt(0).toUpperCase() + rest.slice(1) };
 }

@@ -19,7 +19,7 @@ export interface Zone extends GeoPt {
   radius: number;
 }
 
-export type UnitKind = "carrier" | "drone" | "fighter" | "sam" | "truck" | "bunker" | "airliner" | "traffic";
+export type UnitKind = "carrier" | "drone" | "fighter" | "sam" | "truck" | "bunker" | "airliner" | "traffic" | "ship";
 
 export interface MissionUnit {
   id: string;
@@ -48,6 +48,8 @@ interface ObjectiveBase {
   points?: number;
   /** active once this other objective is done (else from the start) */
   after?: string;
+  /** a team mission's role it falls to (S1: shown to that pilot as his; done for all by whoever does it) */
+  role?: string;
 }
 export type Objective = ObjectiveBase &
   (
@@ -57,9 +59,19 @@ export type Objective = ObjectiveBase &
     | { kind: "protect"; unit: string; seconds: number }
     | { kind: "identify"; unit: string; within: number }
     | { kind: "land"; carrier?: string; at?: Zone }
+    /** a carrier qualification flown and passed (S1): day, night, a heavy sea; flown by the autopilot when `auto` */
+    | { kind: "qual"; qual: "day" | "night" | "sea"; passes?: number; auto?: boolean }
+    /** a display's passes before the crowd (S1): over the zone below `below` [m over the ground], `wingmen` of them
+     *  in their places (within 40 m) — so many passes */
+    | { kind: "show"; at: Zone; below: number; passes: number; wingmen?: number }
   );
 
-export type Cond = { done: string } | { time: number } | { near: { unit: string; within: number } } | { enter: Zone };
+export type Cond =
+  | { done: string }
+  | { time: number }
+  /** a unit within so far of us — or of another unit (`of`: a raid near the carrier, a bandit near the VIP) */
+  | { near: { unit: string; within: number; of?: string } }
+  | { enter: Zone };
 export type Action =
   | { say: string }
   | { spawn: string }
@@ -75,12 +87,34 @@ export interface Trigger {
   do: Action[];
 }
 
+/** Where and how a mission starts: the place, the heading and speed, the variant, the fuel, the stores, a carrier's
+ *  deck; the AI wingmen flying with the player (S1) and their formation. */
+export type MissionStart = GeoPt & {
+  hdg: number;
+  speed: number;
+  variant?: "B" | "C";
+  fuel?: number;
+  loadout?: "aa" | "ag" | "gun" | "as";
+  carrier?: string;
+  wingmen?: number;
+  formation?: string;
+};
+
+/** A team mission's role (S1): its name, what it is told, where its pilot starts (else the mission's start). In a room
+ *  the first pilot flies the first, the others the next ones; alone, the first — all the objectives his. */
+export interface MissionRole {
+  id: string;
+  name: string;
+  brief?: string;
+  start?: Partial<MissionStart>;
+}
+
 export interface MissionSpec {
   v: 1;
   id: string;
   title: string;
   brief: string;
-  start: GeoPt & { hdg: number; speed: number; variant?: "B" | "C"; fuel?: number; loadout?: "aa" | "ag" | "gun"; carrier?: string };
+  start: MissionStart;
   time?: { localHour?: number; utc?: string };
   weather?: { preset?: string; wind?: 0 | 1 | 2 | 3; clouds?: number; swell?: number };
   units: MissionUnit[];
@@ -88,6 +122,8 @@ export interface MissionSpec {
   triggers?: Trigger[];
   /** the time allowed [s] */
   limit?: number;
+  /** a team mission's roles (S1) */
+  roles?: MissionRole[];
 }
 
 /** A spec checked and its defaults set — what is wrong said (null: none). */
@@ -126,15 +162,20 @@ export function checkMission(x: unknown): { spec: MissionSpec | null; errors: st
           : o.kind === "land" && o.carrier
             ? [o.carrier]
             : [];
+    if (o.role && !(m.roles ?? []).some((r) => r.id === o.role)) errors.push(`objective ${o.id}: no role ${o.role}`);
+    if (o.kind === "show") geo(o.at, `objective ${o.id}`);
     for (const r of refs) if (!ids.has(r)) errors.push(`objective ${o.id}: no unit ${r}`);
     if (o.after && !oids.has(o.after)) errors.push(`objective ${o.id}: no objective ${o.after}`);
     if (o.kind === "reach") geo(o.at, `objective ${o.id}`);
   }
-  for (const tr of m.triggers ?? [])
+  for (const tr of m.triggers ?? []) {
+    const w = tr.when as Cond | undefined;
+    if (w && "near" in w) for (const u of [w.near.unit, w.near.of]) if (u && !ids.has(u)) errors.push(`trigger ${tr.id}: no unit ${u}`);
     for (const a of tr.do ?? []) {
       const u = "spawn" in a ? a.spawn : "course" in a ? a.course.unit : "side" in a ? a.side.unit : "squawk" in a ? a.squawk.unit : null;
       if (u && !ids.has(u)) errors.push(`trigger ${tr.id}: no unit ${u}`);
     }
+  }
   if (errors.length) return { spec: null, errors };
   return {
     spec: {
@@ -186,11 +227,16 @@ export const newRun = (spec: MissionSpec): MissionRun => ({
 
 /** The world as the mission reads it each frame. */
 export interface MissionWorld {
-  own: GeoPt & { alt: number; landed: boolean; lost: boolean };
+  /** ours: also our height over the ground [m] (a display's passes) */
+  own: GeoPt & { alt: number; landed: boolean; lost: boolean; agl?: number };
   /** a unit's state (null: not set, or gone): its place, alive */
   unit(id: string): { lat: number; lon: number; alt: number; alive: boolean } | null;
   /** the carrier (a unit's id) we stand on (null: none) */
   onCarrier: string | null;
+  /** our AI wingmen in their places now (within 40 m) — a display's */
+  wingmenInPlace?: number;
+  /** the last carrier qualification ended since the mission began (null: none yet) */
+  qual?: { qual: string; qualified: boolean; gpa: number } | null;
 }
 
 /** The great-circle distance between two places [m] (and their heights' difference, when both). */
@@ -267,6 +313,34 @@ export function missionStep(R: MissionRun, W: MissionWorld, dt: number): Out[] {
       case "land":
         done = W.own.landed && (o.carrier ? W.onCarrier === o.carrier : o.at ? distM(W.own, o.at) < o.at.radius : true);
         break;
+      case "qual":
+        if (W.qual && W.qual.qual === o.qual) {
+          if (W.qual.qualified) done = true;
+          else failed = `not qualified (${W.qual.gpa.toFixed(2)})`;
+        }
+        break;
+      case "show": {
+        // (a pass: in the zone, low, the formation in its places — counted as it leaves the zone; the formation's
+        // worst moment in it the pass's)
+        const inZone = distM(W.own, o.at) < o.at.radius && (W.own.agl ?? 0) < o.below;
+        const tight = (W.wingmenInPlace ?? 0) >= (o.wingmen ?? 0);
+        const k = `${o.id}:in`;
+        if (inZone) {
+          R.since[k] ??= R.t;
+          if (!tight) R.apart[k] = 1;
+        } else if (R.since[k] !== undefined) {
+          const good = !R.apart[k] && R.t - R.since[k]! > 1;
+          delete R.since[k];
+          delete R.apart[k];
+          if (good) {
+            R.apart[o.id] = (R.apart[o.id] ?? 0) + 1;
+            R.log.push({ t: R.t, text: `${o.text}: ${R.apart[o.id]}/${o.passes}` });
+            out.push({ say: `${o.text}: ${R.apart[o.id]}/${o.passes}` });
+          }
+        }
+        done = (R.apart[o.id] ?? 0) >= o.passes;
+        break;
+      }
     }
     if (failed) {
       R.state[o.id] = "failed";
@@ -291,7 +365,8 @@ export function missionStep(R: MissionRun, W: MissionWorld, dt: number): Out[] {
           : "near" in w
             ? (() => {
                 const u = W.unit(w.near.unit);
-                return !!u && distM(W.own, u, true) < w.near.within;
+                const of = w.near.of ? W.unit(w.near.of) : W.own;
+                return !!u && !!of && u.alive !== false && distM(of, u, true) < w.near.within;
               })()
             : distM(W.own, w.enter) < w.enter.radius;
     if (!go) continue;
