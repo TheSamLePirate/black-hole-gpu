@@ -1,0 +1,9 @@
+/* The views of exception (S2): their cards — the place, the hour, the weather, the challenge */
+.vw-frame { width: min(1100px, calc(100vw - 32px)); padding: 14px 16px 16px; }
+.vw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; margin-top: 8px; max-height: 70vh; overflow: auto; }
+.vw-card { display: grid; gap: 4px; padding: 10px 12px; border-radius: 6px; border: 1px solid rgba(160, 210, 255, 0.18); background: linear-gradient(160deg, rgba(20, 34, 52, 0.85), rgba(8, 14, 22, 0.9)); text-align: left; color: #e8f0fa; cursor: pointer; font: inherit; }
+.vw-card:hover, .vw-card:focus-visible { border-color: rgba(255, 200, 97, 0.7); outline: none; }
+.vw-card b { font-size: 14px; color: #fff; }
+.vw-place { color: #9fd4ff; font-size: 12px; }
+.vw-facts { color: #b8c4cc; font-size: 11.5px; }
+.vw-chal { color: #ffd98a; font-size: 12.5px; }

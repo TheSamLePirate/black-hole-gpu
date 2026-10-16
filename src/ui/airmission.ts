@@ -51,6 +51,8 @@ export function flyMission(host: MissionHost, spec: MissionSpec, o: { lead?: boo
   if (w?.preset) T.set("weather", w.preset as WeatherPreset);
   if (w?.wind !== undefined) T.set("wind", w.wind);
   if (w?.clouds !== undefined) T.set("earthClouds", w.clouds);
+  // (the auroras — S2 —: the mission's, else none)
+  T.set("aurora", w?.aurora ?? 0);
   C.seaSwell = w?.swell ?? null;
   // (its hour: a date, else a local solar hour there on today's date)
   if (spec.time?.utc) T.setDate(spec.time.utc);

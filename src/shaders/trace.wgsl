@@ -52,7 +52,8 @@ struct Params {
   bodyCfg: vec4f,  // number of bodies (spheres: stars, planets), index of the massive star (Gargantua orbits the centre of mass with it; −1), mean radiance of the far throat over the Sun's (our side lit by it), temperature of that Sun [K]
   bodyCfg2: vec4f, // point-source scale: sub-pixel bodies drawn at the catalogue stars' flux scale (its ratio to the physical one); radiance of a magnitude −2 point spread over a pixel's glow, and its flux (highlight compression above them); index of our universe's first body (= count: none)
   path: vec4f,     // camera free-fall path: point count, tube radius per unit ray length, fate (1 horizon, 2 escape), unused
-  bary: vec4f,     // Gargantua orbits the centre of mass: q = m/(M + m) (0: no), relative orbit Ω, unused, unused
+  bary: vec4f,     // Gargantua orbits the centre of mass: q = m/(M + m) (0: no), relative orbit Ω; the auroras (S2:
+                   // over the Earth — another scene's bodies never near it): their Kp (0: none), their clock [s, 0…900)
   water: vec4f,    // cinematic liquid throat: on (0/1), ripple strength, reflectance at normal incidence F0, clock [s]
   water2: vec4f,   // splash where the camera went through: centre (rep unit vector), clock at the crossing
   water3: vec4f,   // glow of the liquid, a pixel's footprint on the throat [rad], unused, unused
@@ -83,7 +84,7 @@ struct Params {
                    // thickness drawn (its scale heights × k)
   earth3: vec4f,   // the Moon: its direction on the Earth's axes; w: the sunlit share of its disk seen
   earth4: vec4f,   // the night sky's light (EARTH_NIGHT) over its value on the ground; y: the Sun's angular radius
-                   // seen from the Earth [rad] (the eclipses), unused
+                   // seen from the Earth [rad] (the eclipses); z: Mars's dust; w: the clouds a volume (the camera low)
   hd: vec4f,       // the finer maps (src/system/hd-maps.ts): the body's map index (−1: none), its brightness
                    // kept (the coarse map's mean over the finer's), its relief's strength (0: none), width
   fine0: vec4f,    // an airless world's ground, finest: an anchor near the camera (whole metres, multiples of
@@ -168,6 +169,7 @@ override HAS_SHADE: bool = true;  // a body's shadow falling on another now (P.s
 override HAS_SCENERY: bool = true;
 override HAS_SURFACE: bool = true;
 override HAS_WX: bool = true;     // the weather near the camera (P.wx: its haze, fog, layers — out of the kernel in fair weather)
+override HAS_AURORA: bool = true; // the auroras over the Earth (P.bary.zw, S2: out of the kernel when none asked)
 // the hole's and the mouth's metrics (O13): off in our universe from afar — the camera beyond the mouth's
 // Dneg region, the region under a pixel —, every ray straight through our bodies to our sky, the Kerr and
 // Dneg integrators out of the kernel (its registers)
@@ -4144,6 +4146,63 @@ fn skySeen(p: vec3f, Ls: vec3f) -> f32 {
   return mix(0.0004, 1.0, avg * avg);
 }
 
+// ---- The auroras (S2): the oval of light round the geomagnetic poles (the dipole's north at 80.8° N, 72.6° W), its
+// arcs at a magnetic latitude ~69° less 1.1° a Kp (64.6° at Kp 4, 59° in a great storm), folded and drifting along the magnetic longitude,
+// their curtains streaked by rays; oxygen's green line at 557.7 nm peaking at 110 km and fading above, its red line
+// at 630 nm from 200 km up (the storms' crowns). Integrated along the ray through their shell (90 – 330 km above
+// the ground): an emission [over the night ground's light, per metre] — no scattering, the air's own transmittance
+// applied by the caller. Its samples jittered (`jit`): the accumulation smooths their thin curtains.
+const AUR_MAG = vec3f(0.04776, -0.15297, 0.98708);
+fn auroraLight(ro: vec3f, rd: vec3f, tEnd: f32, jit: f32) -> vec3f {
+  let kp = P.bary.z;
+  let ts = P.bary.w;
+  let r1 = 1.0 + 90e3 / EARTH_RM;
+  let r2 = 1.0 + 330e3 / EARTH_RM;
+  let b = dot(ro, rd);
+  let c2 = dot(ro, ro);
+  let off2 = c2 - b * b;
+  let h2 = r2 * r2 - off2;
+  if (h2 <= 0.0) { return vec3f(0.0); }
+  let sq = sqrt(h2);
+  var ta = max(-b - sq, 0.0);
+  var tb = min(-b + sq, tEnd);
+  // (inside the inner sphere — from the ground —: the shell begins as the ray leaves it; from above, the shell's
+  // near side only, down to the inner sphere)
+  let hi = r1 * r1 - off2;
+  if (hi > 0.0) {
+    let sqi = sqrt(hi);
+    if (c2 < r1 * r1) { ta = max(ta, -b + sqi); } else if (-b - sqi > ta) { tb = min(tb, -b - sqi); }
+  }
+  if (tb <= ta) { return vec3f(0.0); }
+  let u = normalize(cross(vec3f(0.0, 0.0, 1.0), AUR_MAG));
+  let v = cross(AUR_MAG, u);
+  let centre = 69.0 - 1.1 * kp;
+  let N = 40u;
+  let dt = (tb - ta) / f32(N);
+  var L = vec3f(0.0);
+  for (var i = 0u; i < N; i++) {
+    let t = ta + (f32(i) + jit) * dt;
+    let p = ro + rd * t;
+    let q = normalize(vec3f(p.x, p.y, p.z * EARTH_AB));
+    let hk = airHeight(p) * 1e-3;
+    let m = asin(clamp(dot(q, AUR_MAG), -1.0, 1.0)) * 57.29578;
+    let ml = atan2(dot(q, v), dot(q, u));
+    // (the arcs: folded along the magnetic longitude, drifting — the main one, a fainter one poleward, one
+    // equatorward in a storm)
+    let fold = 1.4 * sin(ml * 6.0 + ts * 0.012) + 0.8 * sin(ml * 15.0 - ts * 0.031) + 0.35 * sin(ml * 37.0 + ts * 0.07);
+    let x = abs(m) - (centre + fold);
+    let arcs = exp(-x * x / 0.08) + 0.55 * exp(-(x - 1.1) * (x - 1.1) / 0.05) + 0.35 * clamp(kp / 6.0, 0.0, 1.0) * exp(-(x + 1.6) * (x + 1.6) / 0.12);
+    // (the rays: vertical streaks along the arc, flickering slowly)
+    let ray = 0.45 + 0.55 * pow(0.5 + 0.5 * sin(ml * 410.0 + 3.0 * sin(ml * 53.0 + ts * 0.05) + ts * 0.4), 3.0);
+    let green = exp(-(hk - 110.0) * (hk - 110.0) / 260.0) + 0.25 * exp(-max(hk - 112.0, 0.0) / 40.0) * step(110.0, hk);
+    // (the red tops: faint in a quiet oval, the storms' crowns)
+    let red = exp(-(hk - 230.0) * (hk - 230.0) / 1500.0) * (0.006 + 0.008 * kp);
+    L += (vec3f(0.11, 1.0, 0.36) * green + vec3f(1.0, 0.1, 0.22) * red) * (arcs * ray);
+  }
+  // (its strength: a quiet oval faint, a storm's bright — over the night ground's light, per metre of ray)
+  return L * dt * EARTH_RM * 8e-6 * (0.25 + 0.3 * kp) * EARTH_NIGHT.g;
+}
+
 // The air along ro + t rd, t in [0, tEnd): what it lets through (T), and the sunlight it scatters
 // towards ro (L; the sun along Ls, its irradiance E); up to tSplit too (Tc, Lc: a cloud there, seen
 // through the air before it only). jit: the samples' offset (0…1).
@@ -6790,6 +6849,11 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
     }
   }
   o.col = (1.0 - alpha) * (air.L + air.T * G) + alpha * (air.Lc + air.Tc * cl);
+  // the auroras (S2): above the air and the clouds — from under them, hidden by a cloud; from above, before it
+  if (HAS_AURORA && earth && P.bary.z > 0.0) {
+    let aur = auroraLight(ro, rd, select(3e38, tHit, tHit > 0.0), jit);
+    o.col += aur * air.T * select(1.0 - alpha, 1.0, airHeight(ro) > 120e3);
+  }
   o.T = select((1.0 - alpha) * air.T, vec3f(0.0), tHit > 0.0);
   return o;
 }
@@ -7954,6 +8018,9 @@ fn keyLight() {
     let g1 = normalize(cross(rd, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(rd.z) > 0.9)));
     let e = earthLook(kn, nearCam(), rd, -1.0, rd, lt.e, g1, cross(rd, g1), 0.0, rs, 0.5, false);
     E *= e.T;
+    // (the Moon's shadow — a solar eclipse —: the Sun's share it leaves where the craft is; in totality none —
+    // the hull lit by the dark sky's light alone)
+    if (isEarth(kn) && P.eclipse.w > 0.0) { E *= sunSeen(nearCam(), rd); }
   }
   if (luminance(E) > 0.0) { E *= keyRelief(kn, normalize(squashed(toBody(L), squashOf(kn)))); }
   // (to the probe's axes: the transpose of envX…Z)

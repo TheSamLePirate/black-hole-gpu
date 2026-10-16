@@ -64,6 +64,12 @@ export type Objective = ObjectiveBase &
     /** a display's passes before the crowd (S1): over the zone below `below` [m over the ground], `wingmen` of them
      *  in their places (within 40 m) — so many passes */
     | { kind: "show"; at: Zone; below: number; passes: number; wingmen?: number }
+    /** S2: a way flown low through its gates in order (each within its radius, under `below` [m over the ground]) */
+    | { kind: "route"; gates: Zone[]; below?: number }
+    /** S2: so many seconds in a solar eclipse's totality (the Sun hidden whole where we fly) */
+    | { kind: "eclipse"; seconds: number }
+    /** S2: the formation held so long, so many AI wingmen in their places all through */
+    | { kind: "formation"; wingmen: number; seconds: number }
   );
 
 export type Cond =
@@ -116,7 +122,7 @@ export interface MissionSpec {
   brief: string;
   start: MissionStart;
   time?: { localHour?: number; utc?: string };
-  weather?: { preset?: string; wind?: 0 | 1 | 2 | 3; clouds?: number; swell?: number };
+  weather?: { preset?: string; wind?: 0 | 1 | 2 | 3; clouds?: number; swell?: number; aurora?: number };
   units: MissionUnit[];
   objectives: Objective[];
   triggers?: Trigger[];
@@ -164,6 +170,10 @@ export function checkMission(x: unknown): { spec: MissionSpec | null; errors: st
             : [];
     if (o.role && !(m.roles ?? []).some((r) => r.id === o.role)) errors.push(`objective ${o.id}: no role ${o.role}`);
     if (o.kind === "show") geo(o.at, `objective ${o.id}`);
+    if (o.kind === "route") {
+      if (!o.gates?.length) errors.push(`objective ${o.id}: its gates`);
+      o.gates?.forEach((g, i) => geo(g, `objective ${o.id} gate ${i + 1}`));
+    }
     for (const r of refs) if (!ids.has(r)) errors.push(`objective ${o.id}: no unit ${r}`);
     if (o.after && !oids.has(o.after)) errors.push(`objective ${o.id}: no objective ${o.after}`);
     if (o.kind === "reach") geo(o.at, `objective ${o.id}`);
@@ -237,6 +247,8 @@ export interface MissionWorld {
   wingmenInPlace?: number;
   /** the last carrier qualification ended since the mission began (null: none yet) */
   qual?: { qual: string; qualified: boolean; gpa: number } | null;
+  /** the share of the Sun the Moon hides where we fly (S2 — read only when an eclipse's objective asks) */
+  sunHidden?: number;
 }
 
 /** The great-circle distance between two places [m] (and their heights' difference, when both). */
@@ -318,6 +330,25 @@ export function missionStep(R: MissionRun, W: MissionWorld, dt: number): Out[] {
           if (W.qual.qualified) done = true;
           else failed = `not qualified (${W.qual.gpa.toFixed(2)})`;
         }
+        break;
+      case "route": {
+        // (the gates in turn: the next within its radius, low enough — its count kept)
+        const k = R.apart[o.id] ?? 0;
+        const g = o.gates[k];
+        if (g && distM(W.own, g) < g.radius && (o.below === undefined || (W.own.agl ?? 0) < o.below)) {
+          R.apart[o.id] = k + 1;
+          if (k + 1 < o.gates.length) out.push({ say: `${o.text}: ${k + 1}/${o.gates.length}` });
+        }
+        done = (R.apart[o.id] ?? 0) >= o.gates.length;
+        break;
+      }
+      case "eclipse":
+        if ((W.sunHidden ?? 0) >= 0.999) R.apart[o.id] = (R.apart[o.id] ?? 0) + dt;
+        done = (R.apart[o.id] ?? 0) >= o.seconds;
+        break;
+      case "formation":
+        R.apart[o.id] = (W.wingmenInPlace ?? 0) >= o.wingmen ? (R.apart[o.id] ?? 0) + dt : 0;
+        done = R.apart[o.id]! >= o.seconds;
         break;
       case "show": {
         // (a pass: in the zone, low, the formation in its places — counted as it leaves the zone; the formation's

@@ -2693,6 +2693,12 @@ export class Renderer {
     if (sb2) f.set([sb2.c[0], sb2.c[1], sb2.c[2], sb2.r], wat + WAKE_VEC4S * 4 + 12);
     f[61 * 4 + 1] = sunAng; // (earth4.y)
     f[61 * 4 + 2] = this.marsDust(s, near, bodies, time); // (earth4.z)
+    // the auroras (S2 — trace.wgsl auroraLight: bary.z, bary.w): their activity (a Kp index) and their curtains'
+    // clock (the scene's seconds, over 900 s); the Earth near only — their code in the kernel then alone
+    const kp = near?.index === earthK ? Math.min(Math.max(Math.round(s.aurora ?? 0), 0), 9) : 0;
+    f[41 * 4 + 2] = kp;
+    f[41 * 4 + 3] = kp > 0 ? ((tSec % 900) + 900) % 900 : 0;
+    if (kp > 0) this.featureKey |= 16384;
     if (!o.probe) this.marsDustNow = f[61 * 4 + 2]!;
     // (the storm's diffuse light in the kernel's weather code: compiled in only then)
     if (f[61 * 4 + 2]! > 0) this.featureKey |= 1024;
@@ -3023,9 +3029,14 @@ export class Renderer {
     const mR = near.radius * 1476.625 * s.massSolar;
     const cb = near.axes.map((a) => -(a[0]! * near.centre[0]! + a[1]! * near.centre[1]! + a[2]! * near.centre[2]!) * mR);
     const surface = patchGeodetic(near, flatteningOf(bodies[near.index]!.id));
-    const up = surface.normal;
     const lat = (surface.lat * 180) / Math.PI,
       lon = (surface.lon * 180) / Math.PI;
+    // (the waves' axes at a fixed anchor, not at the camera: on the camera's own tangent plane its place was always
+    // ~0 on them — the sea carried along under the craft. The anchor kept while within 50 km of it.)
+    const camUp = surface.normal;
+    const A = this.seaAnchor;
+    if (!A || A[0]! * camUp[0]! + A[1]! * camUp[1]! + A[2]! * camUp[2]! < Math.cos(50_000 / 6_371_000)) this.seaAnchor = [...camUp];
+    const up = this.seaAnchor!;
     const eh = Math.hypot(up[0]!, up[1]!) || 1;
     const east = [-up[1]! / eh, up[0]! / eh, 0];
     const north = [up[1]! * east[2]! - up[2]! * east[1]!, up[2]! * east[0]! - up[0]! * east[2]!, up[0]! * east[1]! - up[1]! * east[0]!];
@@ -3059,6 +3070,8 @@ export class Renderer {
     return out;
   }
 
+  /** the sea's waves' anchor: the local vertical their axes are taken at (seaParams) */
+  private seaAnchor: number[] | null = null;
   /** the wind and the place the sea's waves are drawn for this frame (seaParams; null: no sea near) */
   private seaHere: { U: number; to: number; lat: number; lon: number; weight: number } | null = null;
 
@@ -3445,6 +3458,7 @@ export class Renderer {
           HAS_SHADE: has(2048),
           HAS_SURFACE: has(4096),
           HAS_SCENERY: has(8192),
+          HAS_AURORA: has(16384),
           QUALITY_PIPELINE: quality ? 1 : 0,
         },
       },

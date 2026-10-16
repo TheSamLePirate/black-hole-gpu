@@ -68,6 +68,8 @@ import { MODES as JET_MODES } from "./game/jetmodes";
 import { debriefInstr, flightSchool, type InstructorHost, InstructorPanel } from "./ui/instructor";
 import { type LessonId, LESSONS } from "./game/lessons";
 import { fromRunway } from "./game/ils";
+import { VIEWS as EXCEPTIONAL_VIEWS, viewSpec } from "./game/views";
+import { openViews, type ViewsHost } from "./ui/views";
 import { ROLE_VOICE, roleOfLine } from "./game/radio";
 import { threatRole } from "./game/threats";
 import { findRunway, runwayOf } from "./controller/ils";
@@ -3390,6 +3392,7 @@ async function main() {
       // (the F-35's autopilot modes — A3)
       { label: { fr: "Modes du pilote automatique", en: "Autopilot modes" }, sub: modeItems() },
       { label: { fr: "École de vol", en: "Flight school" }, run: () => flightSchool(instrHost) },
+      { label: { fr: "Vues d'exception", en: "Views of exception" }, run: () => openViews(viewsHost) },
       { label: { fr: "Plan de vol", en: "Flight plan" }, key: "⇧O", on: camera.nav.on.l, run: () => routePanel.open() },
       { label: { fr: "Carte de mission", en: "Mission map" }, on: !!camera.mission, run: () => missionMap.open() },
       {
@@ -4000,13 +4003,27 @@ async function main() {
   };
   const missionSpec = (x: string | unknown) => {
     if (typeof x === "string") {
-      const m = AIR_MISSIONS.find((d) => d.id === x)?.make() ?? myMissions().find((d) => d.id === x);
+      const m = AIR_MISSIONS.find((d) => d.id === x)?.make() ?? viewSpec(x, utcOf(sim.time)) ?? myMissions().find((d) => d.id === x);
       if (!m) throw new Error(`no mission "${x}" — ${[...AIR_MISSIONS.map((d) => d.id), ...myMissions().map((d) => d.id)].join(", ")}`);
       return m;
     }
     const { spec, errors } = checkMission(x);
     if (!spec) throw new Error(errors.join("; "));
     return spec;
+  };
+  // the views of exception (S2 — ui/views.ts): a mission made for its hour, or the challenge it is
+  const viewsHost: ViewsHost = {
+    toast: (s) => panel.toast(s),
+    fly: (id) => {
+      const v = EXCEPTIONAL_VIEWS.find((x) => x.id === id);
+      if (!v) throw new Error(`no view "${id}" — ${EXCEPTIONAL_VIEWS.map((x) => x.id).join(", ")}`);
+      const c = v.challengeId ? CHALLENGES.find((d) => d.id === v.challengeId) : undefined;
+      if (c) {
+        placeShip(() => (flyChallenge(challengeHost, c), ""));
+        return tf("{0}: started", tr(c.title));
+      }
+      return airMissions.fly(id);
+    },
   };
   const airMissions = {
     list: () => AIR_MISSIONS.map((d) => ({ id: d.id, title: d.make().title })),
@@ -5427,9 +5444,11 @@ async function main() {
       list: () => [
         ...AIR_MISSIONS.map((d) => ({ id: d.id, title: d.make().title, mine: false })),
         ...myMissions().map((m) => ({ id: m.id, title: m.title, mine: true })),
+        // (the views of exception — S2 —: their challenge in their title)
+        ...EXCEPTIONAL_VIEWS.map((v) => ({ id: v.id, title: `${v.title} — ${v.challenge}`, mine: false })),
       ],
       spec: (id) => missionSpec(id),
-      fly: (x) => airMissions.fly(x),
+      fly: (x) => (typeof x === "string" && EXCEPTIONAL_VIEWS.some((v) => v.id === x) ? viewsHost.fly(x) : airMissions.fly(x)),
       state: () => airMissions.state(),
       abort: () => camera.missionAbort(),
       map: () => missionMap.open(),
@@ -5792,6 +5811,7 @@ async function main() {
       route: routePanel,
       challenges: challengePanel,
       missions: airMissions,
+      views: { open: () => openViews(viewsHost), fly: (id: string) => viewsHost.fly(id), list: () => EXCEPTIONAL_VIEWS.map((v) => v.id) },
       school: {
         open: () => flightSchool(instrHost),
         demo: (id: LessonId) => lessonPlace(id, true),

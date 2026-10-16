@@ -441,6 +441,7 @@ Un test e2e à deux pages par étape concernée.
   - le Grand Canyon, Monument Valley, la Mach Loop et le Star Wars Canyon (le Rainbow existe) ;
   - les fjords, l'Himalaya, la Patagonie, les volcans d'Islande ;
   - la tempête en mer avec appontage.
+  *S2 fait le 2026-10-16 — [fiche](progress/aviation/S2.md) : treize vues d'exception (l'éclipse du 12 août 2026 poursuivie à sa vraie date, la pleine Lune en patrouille, les aurores des Lofoten, le coucher de soleil sur le Ford, Grand Canyon, Monument Valley, Mach Loop, Star Wars Canyon, Geirangerfjord, Himalaya, Paine, volcans d'Islande, tempête et appontage) et leur page ; les objectifs parcours, éclipse, patrouille tenue ; les aurores dans le tracer (réglage Aurores, Kp) ; corrigés : l'avion éclairé dans l'ombre de l'éclipse, la mer qui suivait l'avion.*
 - **S3. Le spectacle.** Les caméras du replay (passage, tour, poursuite), le mode photo (existant) placé dans
   chaque scène, une bande-annonce automatique de la meilleure séquence.
 

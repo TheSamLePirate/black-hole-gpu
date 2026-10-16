@@ -24,6 +24,8 @@ import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "../system/elli
 import type { CameraController } from "../controls";
 import { enuAt } from "./traffic";
 import { bodyFixedOf, groundRelief } from "../system/our-surface";
+import { sunHidden } from "../eclipse/earth-moon";
+import { utcOf } from "../system/solar";
 
 const D = Math.PI / 180;
 
@@ -231,6 +233,11 @@ function worldOf(c: CameraController, M: MissionState): MissionWorld {
     // (S1: the display's formation, the qualification ended since it began)
     wingmenInPlace: (c.wing?.list ?? []).filter((w) => w.alive && w.dist < 40).length,
     qual: c.qualLast && c.qualLast !== M.qualSeen ? { qual: c.qualLast.id, qualified: c.qualLast.qualified, gpa: c.qualLast.gpa } : null,
+    // (S2: the Sun's share hidden where we fly — the ephemeris asked only by an eclipse's objective)
+    sunHidden:
+      g && M.run.spec.objectives.some((o) => o.kind === "eclipse" && M.run.state[o.id] === "active")
+        ? sunHidden(g.lat * D, g.lon * D, g.alt, utcOf(c.nowTime()))
+        : undefined,
     unit(id) {
       const L = M.units.get(id);
       if (!L) return null;
@@ -398,6 +405,19 @@ function missionMarks(this: CameraController): MissionMark[] {
     );
   // (the places: the zones to reach, the escort's end, a landing's)
   for (const o of R.spec.objectives) {
+    // (a route's gates: the next ones)
+    if (o.kind === "route" && R.state[o.id] !== "done")
+      o.gates.slice(R.apart[o.id] ?? 0).forEach((z, i) =>
+        out.push({
+          kind: "zone",
+          lat: z.lat,
+          lon: z.lon,
+          r: z.radius,
+          label: `${o.text} ${(R.apart[o.id] ?? 0) + i + 1}`,
+          obj: o.id,
+          state: R.state[o.id],
+        }),
+      );
     const z = o.kind === "reach" || o.kind === "show" ? o.at : o.kind === "escort" ? o.until : o.kind === "land" ? o.at : undefined;
     if (z && R.state[o.id] !== "done")
       out.push({ kind: "zone", lat: z.lat, lon: z.lon, r: z.radius, label: o.text, obj: o.id, state: R.state[o.id] });
@@ -460,6 +480,16 @@ function missionCue(this: CameraController): { name: string; lat: number; lon: n
     };
     if (o.kind === "reach" || o.kind === "show")
       return { name: o.text, lat: o.at.lat, lon: o.at.lon, alt: o.at.alt ?? ground(o.at.lat, o.at.lon) };
+    if (o.kind === "route") {
+      const g = o.gates[R.apart[o.id] ?? 0];
+      if (g)
+        return {
+          name: `${o.text} ${(R.apart[o.id] ?? 0) + 1}/${o.gates.length}`,
+          lat: g.lat,
+          lon: g.lon,
+          alt: g.alt ?? ground(g.lat, g.lon),
+        };
+    }
     if (o.kind === "destroy") {
       for (const id of o.units) {
         const c = unit(id);

@@ -606,7 +606,7 @@ export function specToDraft(s: MissionSpec): Draft {
     msgs,
     chain: s.objectives.some((o) => !!o.after),
     extra: extra.filter((tr) => !tr.id.startsWith("to-")),
-    keepObjs: s.objectives.filter((o) => o.kind === "qual" || o.kind === "show"),
+    keepObjs: s.objectives.filter((o) => ["qual", "show", "route", "eclipse", "formation"].includes(o.kind)),
     roles: s.roles,
     objRoles: Object.fromEntries(s.objectives.filter((o) => o.role).map((o) => [o.text, o.role!])),
     startMore: { wingmen: s.start.wingmen, formation: s.start.formation, fuel: s.start.fuel, carrier: s.start.carrier },
