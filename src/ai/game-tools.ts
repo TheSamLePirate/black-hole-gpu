@@ -279,6 +279,7 @@ export const SCREENS = [
   "map_globe",
   "map_planisphere",
   "telemetry",
+  "crew_console",
   "character",
   "approach_chart",
   "flight_computer",
@@ -2724,7 +2725,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "show_screen",
       description:
-        "Open a real screen of the game for the pilot: the map (map_3d, map_globe, map_planisphere), the tablet's pages (telemetry: the flight's curves; approach_chart; flight_computer; ship; log), the last flight_report, the hub's live graph (hub_graph: the burn, climb, entry, glide, descent, approach or docking — the optimum, its corridor, what was flown, the craft now) and the entry corridor (entry_corridor), or a page on a cockpit display (cockpit_pfd, cockpit_orbit, cockpit_nav, cockpit_systems, cockpit_docking, cockpit_plan, cockpit_clocks, cockpit_log, cockpit_approach, cockpit_landing; slot 0–7 the display, default 0).",
+        "Open a real screen of the game for the pilot: crew_console (the lightweight crew page's sharing link and QR for phones/tablets, without the simulator); the map (map_3d, map_globe, map_planisphere), the tablet's pages (telemetry: the flight's curves; approach_chart; flight_computer; ship; log), the last flight_report, the hub's live graph (hub_graph: the burn, climb, entry, glide, descent, approach or docking — the optimum, its corridor, what was flown, the craft now) and the entry corridor (entry_corridor), or a page on a cockpit display (cockpit_pfd, cockpit_orbit, cockpit_nav, cockpit_systems, cockpit_docking, cockpit_plan, cockpit_clocks, cockpit_log, cockpit_approach, cockpit_landing; slot 0–7 the display, default 0).",
       params: { screen: { type: "string", enum: SCREENS }, slot: { type: "number", minimum: 0, maximum: 7, integer: true } },
       required: ["screen"],
       run: act((a) => {

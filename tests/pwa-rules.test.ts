@@ -16,6 +16,15 @@ const SITE = `${O}/black-hole-gpu/`;
 const TEST = `${SITE}test/`;
 const DIRS = ["docs", "icons"];
 
+test("crew shell and assets bypass the simulator worker, even when crew is a build directory", () => {
+  for (const scope of [SITE, TEST])
+    for (const page of ["crew", "crew/", "crew/index.html", "crew/index-a1b2c3d4.js"]) {
+      expect(classify(`${scope}${page}`, scope, "GET", ["crew", "docs"])).toBe("pass");
+      expect(classify(`${scope}${page}`, scope)).toBe("pass");
+      expect(isAppPage(`${scope}${page}`, scope)).toBe(false);
+    }
+});
+
 test("a request's kind: hashed assets, the shell, the tiles, the elements, the rest", () => {
   expect(classify(`${SITE}index-a1b2c3d4.js`, SITE)).toBe("immutable");
   expect(classify(`${SITE}earth-3z05cvb5.ktx2`, SITE)).toBe("immutable");

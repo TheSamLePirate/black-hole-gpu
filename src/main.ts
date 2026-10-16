@@ -5495,6 +5495,10 @@ async function main() {
     },
     display: tarsDisplay,
     screen: (name, slot = 0) => {
+      if (name === "crew_console") {
+        if (!settings.netMenu) return t("The network's menu is off (Settings › Network)");
+        return netPanel.showCrew() ?? "Join or create a room to share the crew console.";
+      }
       const map = (tab?: "orbit" | "globe" | "map") => {
         if (!flightHud.mapView) flightHud.toggleMapView();
         if (tab) flightHud.setMapTab(tab);
@@ -6489,6 +6493,7 @@ async function main() {
           fuel: info.engine.fuel ? info.engine.fuel.fraction : null,
         });
       }
+      netSession.instruments(info, status ?? null);
       flightComputer.show(flightHud.mapView);
       tablet.setVisible(flightHud.mapView);
       tablet.tick(now);

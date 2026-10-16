@@ -30,6 +30,8 @@ export function classify(url: string, scope: string, method = "GET", dirs: reado
   if (u.origin === home.origin) {
     if (!u.pathname.startsWith(home.pathname)) return "pass";
     const path = u.pathname.slice(home.pathname.length);
+    // The crew console owns its navigation and assets. Never serve the simulator shell here.
+    if (path === "crew" || path.startsWith("crew/")) return "pass";
     if (path.startsWith("__")) return "pass";
     const dir = path.includes("/") ? path.slice(0, path.indexOf("/")) : null;
     if (dirs && dir !== null && !dirs.includes(dir)) return "pass";

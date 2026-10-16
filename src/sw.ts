@@ -160,7 +160,8 @@ async function networkFirst(request: Request, name: string): Promise<Response> {
     }
     return res;
   } catch (e) {
-    const hit = (await cache.match(request)) ?? (request.mode === "navigate" ? await cache.match(ROOT) : undefined);
+    const hit =
+      (await cache.match(request)) ?? (request.mode === "navigate" && isAppPage(request.url, ROOT) ? await cache.match(ROOT) : undefined);
     if (hit) return hit;
     throw e;
   }

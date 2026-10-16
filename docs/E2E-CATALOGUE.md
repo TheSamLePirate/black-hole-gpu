@@ -14,6 +14,7 @@ Every e2e file (`tests/e2e/*.e2e.test.ts`), by theme: what it proves, the scene 
 
 | file | what it proves | scene(s) booted | ~s on the mini | needs |
 |---|---|---|---|---|
+| crew.e2e.test.ts | Independent crew shell without WebGPU; mobile/tablet/landscape controls; real room and simulator telemetry; bidirectional WebRTC; multi-touch PTT, cancellation and permission races; instruments QR URL. | crew/ then game:artemis | ~95 s locally | fake microphone, same-Chrome second screen; captures remote-results/crew-*.png |
 | harness.e2e.test.ts | A hung page fails at its time limit, a dead Chrome fails every call at once, the Chrome lock is released with it. | none (raw Chrome via `lib/cdp.ts`) | 4 | — |
 | bh-api.e2e.test.ts | Every member of `__bh` and of its namespaces, read live, has its entry in docs/BH-API.md. | game:artemis | 3 | — |
 | gpu-startup.e2e.test.ts | WebGPU startup, quality-LUT and adaptive-kernel fallbacks, device loss at init: diagnostics shown, never an endless splash. | Earth low orbit (Amazon) and other scenes; 320×240 and 640×480; fault `initScript`s | 69 | fault injection in page (no key) |

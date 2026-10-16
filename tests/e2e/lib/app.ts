@@ -105,6 +105,8 @@ export class App {
       args?: string[];
       /** false: this page not recorded (tests/e2e/lib/telemetry.ts — on by default under `bun run e2e`) */
       telemetry?: boolean;
+      /** Independent crew page; no renderer readiness or simulator telemetry. */
+      entry?: "crew";
     } = {},
   ) {
     // (the test file booting it, for its report's folder: E2E_FILE when one file runs, else the caller's frame)
@@ -112,6 +114,7 @@ export class App {
     const s = await serve();
     const cdp = await launch(o);
     const app = new App(cdp, s.url);
+    app.entry = o.entry;
     // (offline from the world: the station's latest elements (CelesTrak) and the relief's tiles (S3)
     // change from day to day — the app falls back on its bundled ones, the same every run)
     await cdp.send("Network.enable");
@@ -126,7 +129,7 @@ export class App {
     if (o.initScript) await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: o.initScript });
     app.sw = !!o.sw;
     app.file = file;
-    app.recorded = o.telemetry !== false;
+    app.recorded = !o.entry && o.telemetry !== false;
     await app.load(o.hash ?? "", !!o.startupFailure);
     return app;
   }
@@ -137,6 +140,7 @@ export class App {
   /** the test file that booted it, and whether its telemetry is recorded */
   file = "";
   recorded = true;
+  entry: "crew" | undefined;
 
   /** the last load's navigation → splash-lifted wall time [ms] */
   lastLoadMs = 0;
@@ -145,7 +149,17 @@ export class App {
     if (server && !server.alive()) throw new Error("e2e: the app's server has died (its error is in the log above) — the page cannot load");
     const t0 = performance.now();
     const previousOrigin = await this.js<number>("performance.timeOrigin");
-    await this.cdp.send("Page.navigate", { url: `${this.url}?e2e=${Math.random()}${this.sw ? "&sw=1" : ""}${hash ? `#${hash}` : ""}` });
+    await this.cdp.send("Page.navigate", {
+      url: `${this.url}${this.entry ? "crew/" : ""}?e2e=${Math.random()}${this.sw ? "&sw=1" : ""}${hash ? `#${hash}` : ""}`,
+    });
+    if (this.entry) {
+      await this.waitFor(
+        `performance.timeOrigin !== ${previousOrigin} && !!window.__crew && document.querySelector("#lobby")?.open`,
+        30_000,
+      );
+      this.lastLoadMs = performance.now() - t0;
+      return;
+    }
     await this.waitFor(
       `performance.timeOrigin !== ${previousOrigin} && ${startupFailure ? 'document.querySelector("#error")?.hidden === false' : 'typeof __bh !== "undefined" && __bh.renderer.firstFrameDoneAt > 0 && !document.querySelector("#loading:not(.done)")'}`,
       180_000,
@@ -338,7 +352,7 @@ export class App {
 
   /** A screenshot — once the scene's ray tracer is compiled (settled): never the stale image the pill covers. */
   async shot(file: string) {
-    await this.settled();
+    if (!this.entry) await this.settled();
     const r = await this.cdp.send<{ data: string }>("Page.captureScreenshot", { format: "png" });
     await Bun.write(file, Buffer.from(r.data, "base64"));
   }

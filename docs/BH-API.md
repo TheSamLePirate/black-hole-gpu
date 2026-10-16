@@ -1,5 +1,8 @@
 # `__bh` — the page's automation handle
 
+The independent `crew/` page exposes `window.__crew` instead of loading the simulator's `__bh`.
+Its API and units are documented in [CREW.md](CREW.md#tars-et-automatisation).
+
 `globalThis.__bh` is how the e2e tests, the scripts, the benches and the devtools drive the game: scenes,
 settings, the simulation frozen and stepped, the ship and its autopilots, the game's tools, offline
 renders, sound, TARS. It is built in `src/automation.ts` (with members from `src/main.ts`'s context and
