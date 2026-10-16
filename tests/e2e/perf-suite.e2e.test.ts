@@ -65,6 +65,11 @@ const ABS: Record<string, [string, string, string, string?]> = {
     // (its pass's kernel compiled after the first image: A waits for it)
     "!!__bh.renderer.aerialPipe",
   ],
+  stepbodies: [
+    "the per-step tests of Gargantua's bodies → skipped (a measure)",
+    "__bh.renderer.tune = {}",
+    "__bh.renderer.tune = { TUNE_STEP_BODIES: 0 }",
+  ],
   bodies: ["the bodies listed → all looked at", "__bh.renderer.bodyList = true", "__bh.renderer.bodyList = false"],
   eps2: ["the geodesics' tolerance 0.12 → 0.24", "__bh.settings.realtimeEps = 0.12", "__bh.settings.realtimeEps = 0.24"],
   scenery: ["the scenery balanced → off", `__bh.game.set("earthScenery", "balanced")`, `__bh.game.set("earthScenery", "off")`],

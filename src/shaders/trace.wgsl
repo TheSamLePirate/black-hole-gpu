@@ -186,6 +186,8 @@ override TUNE_SHADOW_N: u32 = 48u;
 override TUNE_SHADOW_K: f32 = 1.18;
 // (the geodesics' tolerance far from the hole: × this beyond 20 M, × 1 within 10 M — the photon sphere's rays exact)
 override TUNE_EPS_FAR: f32 = 1.0;
+// (0: the per-step tests of Gargantua's bodies skipped — a measure of what they cost: the bodies then missed)
+override TUNE_STEP_BODIES: u32 = 1u;
 // (the ray's work by kind: 0 the ground's march steps (the Earth's, a world's), 1 the ground's heights read (earthH,
 // relief), 2 its shadows' steps, 3 the clouds' steps (the volume's, the weather's), 4 the air's (the auroras'), 5 the
 // water's (the sea's surface search, the mirror's march), 6 the scenery's boxes visited, 7 the geodesic integrator's
@@ -600,7 +602,7 @@ fn stepSizeAt(s: GState, L: f32, a: f32, eps: f32, rH: f32, pc: vec3f) -> f32 {
     }
   }
   let nb = ourStart();
-  if (nb > 0u) {
+  if (nb > 0u && TUNE_STEP_BODIES > 0u) {
     // never step over a body (nor a star's atmosphere, 3 R); sample a star finely near the limb (the
     // traced ones only: those met on the rays' straight way out — K2, Edmunds, 2 000 AU off — do not
     // bound the steps)
@@ -7482,7 +7484,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       // magnification then come from the traced rays themselves)
       var tHit = 2.0;
       var kHit = 0u;
-      for (var k = 0u; k < ourStart(); k++) {
+      for (var k = 0u; k < select(0u, ourStart(), TUNE_STEP_BODIES > 0u); k++) {
         cost(10u);
         if (bodyWhere(k) != 0u) { continue; }
         let c0 = bodyCentre(k, tNow + s.x.w);
