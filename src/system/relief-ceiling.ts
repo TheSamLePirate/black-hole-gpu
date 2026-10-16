@@ -13,8 +13,8 @@ const smoothstep = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
-/** the most the tracer's detail (trace.wgsl earthDetail) adds over a ground of height h [m] — its ridges ~1 (a quarter
- *  more kept), its hills and rocks half again (trace.wgsl detailMargin, the same) */
+/** the most the tracer's detail (trace.wgsl earthDetail: its ridges ≤ 0.7 × 1 500 m over 2 500 m, its hills ±50 m, its
+ *  rocks ±11 m) adds over a ground of height h [m] — the ridges' 1 500 m and a quarter, the hills and rocks half again */
 export function detailMargin(h: number): number {
   return 1900 * smoothstep(300, 2500, h) + 95;
 }

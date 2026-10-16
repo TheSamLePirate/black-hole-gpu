@@ -282,7 +282,21 @@ interface ShipTargetRes {
   mirrorOcc?: { tex: GPUTexture; g: GPUBindGroup };
   /** the flown craft's own opaque parts alone (r8: 1 covered), its box in the image, the head and the lens then;
    *  valid: drawn the last frame */
-  own?: { tex: GPUTexture; w: number; h: number; rect: [number, number, number, number]; look: [number, number, number]; valid: boolean };
+  own?: { tex: GPUTexture; w: number; h: number; rect: [number, number, number, number]; pose: number[]; valid: boolean };
+}
+
+/**
+ * The head's pose an own mask was drawn for (encodeShip's ownMask; renderer encodeCockpitMask compares the next
+ * frame's): the free look's yaw and pitch, the lens, and the mount's eye, line of sight and up on the craft — a
+ * named mount none (zeros): its pose the camera's own then.
+ */
+export function ownPose(look: [number, number], fov: number, mount: Mount | MountPose): number[] {
+  if (typeof mount === "string") return [look[0], look[1], fov, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  const d = [mount.aim[0] - mount.eye[0], mount.aim[1] - mount.eye[1], mount.aim[2] - mount.eye[2]];
+  const dl = Math.hypot(d[0]!, d[1]!, d[2]!) || 1;
+  const u = mount.up ?? [0, 1, 0];
+  const ul = Math.hypot(u[0], u[1], u[2]) || 1;
+  return [look[0], look[1], fov, ...mount.eye, d[0]! / dl, d[1]! / dl, d[2]! / dl, u[0] / ul, u[1] / ul, u[2] / ul];
 }
 
 export class ShipRenderer {
@@ -1873,6 +1887,7 @@ export class ShipRenderer {
     occluder?: { depth: GPUTexture; rect: [number, number, number, number] },
     sceneDepth?: GPUBuffer,
   ) {
+    this.ownDrawn = false;
     if (!this.ready) return;
     // (none flown: only the others — the Ranger's mesh, always there, for the plumes' unused range)
     this.flown = !!v.vessel;
@@ -2118,7 +2133,7 @@ export class ShipRenderer {
           w: bw,
           h: bh,
           rect: [x0, y0, bw, bh],
-          look: [0, 0, 0],
+          pose: [],
           valid: false,
         };
       }
@@ -2144,8 +2159,9 @@ export class ShipRenderer {
       }
       mp.end();
       res.own.rect = [x0, y0, bw, bh];
-      res.own.look = [v.look[0], v.look[1], v.fov];
+      res.own.pose = ownPose(v.look, v.fov, v.mount);
       res.own.valid = true;
+      this.ownDrawn = true;
     } else if (res.own) res.own.valid = false;
     const re = this.reOn;
     const trails = this.trailCount > 0;
@@ -2259,6 +2275,8 @@ export class ShipRenderer {
     enc.copyTextureToTexture({ texture: b.small }, { texture: res.resolved, origin: [x0, y0] }, [bw, bh]);
   }
 
+  /** the flown craft's own opaque parts drawn by the last encodeShip (its early returns: not) */
+  ownDrawn = false;
   /** The flown craft's own opaque parts as the last frame drew them for this image (encodeShip's ownMask), or null. */
   ownMaskOf(hdr: GPUTexture) {
     const o = this.targets.get(hdr)?.own;

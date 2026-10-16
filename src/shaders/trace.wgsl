@@ -184,8 +184,8 @@ override COST_VIEW: u32 = 0u;
 override TUNE_AIR_N: u32 = 32u;
 override TUNE_SHADOW_N: u32 = 48u;
 override TUNE_SHADOW_K: f32 = 1.18;
-// (the geodesics' tolerance far from the hole: × this beyond 20 M, × 1 within 10 M — the photon sphere's rays exact;
-// the far field nearly flat: at 3 the images alike to a comparison's own noise, Kerr edge-on's trace −21 %)
+// (the realtime geodesics' tolerance far from the hole: × this beyond 20 M, × 1 within 10 M — the photon sphere's rays
+// exact; the far field nearly flat: at 3 the images alike to a comparison's own noise, Kerr edge-on's trace −21 %)
 override TUNE_EPS_FAR: f32 = 3.0;
 // (the realtime steps through the disk's smoke [M]: 0.5 — sampled at a random point of each, a different one each frame,
 // the history gathering them: the held image alike to 0.25's, the turning one 29.4 dB against the converged one for
@@ -200,7 +200,7 @@ override TUNE_MARCH_K: f32 = 0.5;
 override TUNE_RELAX: f32 = 1.6;
 // (the same within the margin of the ground — the full heights —: 1 none)
 override TUNE_RELAX_BAND: f32 = 1.6;
-// (measures of the ground's detail: 0 its mountains' warp off, 0 all of it off — the image then other)
+// (measures of the ground's detail, the image then other: 0 its mountains' warp off)
 override TUNE_WARP: u32 = 1u;
 // (measures, the image then other — what a block of a sky ray costs: 1 the background (sky and far points), 2 the far
 // points alone, 4 ourSegment — 32 its bodies met, 64 its rings, 128 its worlds' air, 256 the corona, 512 the stars'
@@ -210,6 +210,7 @@ override TUNE_SKIP: u32 = 0u;
 // (1: the wormhole's steps on our side merged into straight pieces for ourSegment while the ray holds straight to a
 // quarter of its pixel; 0: each step's chord on its own, as before)
 override TUNE_MERGE: u32 = 1u;
+// (0: the ground's detail off altogether — a measure)
 override TUNE_DETAIL: u32 = 1u;
 // (the ray's work by kind: 0 the ground's march steps (the Earth's, a world's), 1 the ground's heights read (earthH,
 // relief), 2 its shadows' steps, 3 the clouds' steps (the volume's, the weather's), 4 the air's (the auroras'), 5 the
@@ -585,7 +586,9 @@ fn stepSizeAt(s: GState, L: f32, a: f32, eps: f32, rH: f32, pc: vec3f) -> f32 {
   let sn = max(sin(s.x.y), 1e-6);
   let c = cos(s.x.y);
   let sig = r * r + a * a * c * c;
-  let ef = eps * (1.0 + (TUNE_EPS_FAR - 1.0) * clamp((r - 10.0) / 10.0, 0.0, 1.0));
+  // (the realtime passes only: the refining and offline ones keep their tolerance all the way)
+  let far = select(1.0, TUNE_EPS_FAR, (P.frame.z & FLAG_INTERLEAVED) != 0u);
+  let ef = eps * (1.0 + (far - 1.0) * clamp((r - 10.0) / 10.0, 0.0, 1.0));
   var h = ef * (r - rH) * (1.0 + 0.01 * r);
   h = min(h, ef * sig * sn * sn / (abs(L) + 1e-3));
   h = min(h, ef * sig * max(sn, 0.02) / (abs(s.p.y) + 1e-3));
@@ -1253,13 +1256,14 @@ fn spunAxes(k: u32) -> mat3x3f {
   return transpose(mat3x3f(ex, ey, a[2]));
 }
 
-// The i-th body ourSegment looks at: the renderer's list (path.w of them, 4 indices a word in water3.zw, water4.w,
-// water5.w — the bodies a ray from the camera may meet: those big enough on the image, the stars), or every one of ours
+// The i-th body ourSegment looks at: the renderer's list (path.w of them; 4 indices of 6 bits a value in water3.zw,
+// water4.w, water5.w — whole numbers under 2²⁴, exact in a float — the bodies a ray from the camera may meet: those
+// big enough on the image, those with rings, the stars), or every one of ours
 fn listedBody(i: u32, useList: bool) -> u32 {
   if (!useList) { return ourStart() + i; }
   let w = i >> 2u;
   let v = select(select(select(P.water5.w, P.water4.w, w == 2u), P.water3.w, w == 1u), P.water3.z, w == 0u);
-  return (bitcast<u32>(v) >> (8u * (i & 3u))) & 255u;
+  return (u32(v) >> (6u * (i & 3u))) & 63u;
 }
 
 // Our universe's bodies on a straight piece of a ray (P.ourCam-relative home coordinates): from o
@@ -1408,8 +1412,10 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
     let cov = max(cov3.x, max(cov3.y, cov3.z));
     if (cov <= 0.0) { continue; }
     var vis = 1.0;
-    for (var ji = 0u; ji < nB; ji++) {
-      let j = listedBody(ji, useList);
+    // (every body before the star, not the listed ones only: a planet under the pixel crossing the Sun's disc —
+    // a transit — takes its share of it)
+    for (var ji = 0u; ji < bodyCount() - ourStart(); ji++) {
+      let j = ourStart() + ji;
       cost(10u);
       if (j == k) { continue; }
       let wj = bodyWhere(j);
@@ -2981,7 +2987,10 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32, gO
     st.psi += h / 6.0 * (k1.psi + 2.0 * k2.psi + 2.0 * k3.psi + k4.psi);
     if (st.l <= a) { out.len += h; }
     travel += h;
-    if (ours && lPrev < -a && st.l < -a && max(lPrev, st.l) > -lMinus) {
+    // (on our side's region — or just out of it with a piece pending: into the mouth, the step landed on ℓ = −a; out at
+    // the far radius —: that last chord ends the piece)
+    let onOurs = lPrev < -a && st.l < -a && max(lPrev, st.l) > -lMinus;
+    if (ours && (onOurs || segOn)) {
       let p0 = homePoint(lPrev, psiPrev, nA, e2);
       let p1 = homePoint(st.l, st.psi, nA, e2);
       // (its chords merged while the way holds straight — the last point within a quarter of the pixel's footprint of
@@ -2995,7 +3004,7 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32, gO
       let L = p1 - q0;
       let lL = length(L);
       let dev = select(0.0, length(cross(p0 - q0, L / max(lL, 1e-30))), lL > 0.0);
-      let leaving = st.l <= -lMinus || st.l >= -a || i + 1u >= 3000u;
+      let leaving = !onOurs || st.l <= -lMinus || st.l >= -a || i + 1u >= 3000u;
       if (TUNE_MERGE == 0u || leaving || dev > 0.25 * beam() * (travel0 + travel)) {
         segOn = false;
         if (lL > 0.0 && ourSegment(q0, L / lL, lL, &out, gObs, segTravel, true)) { out.side = -1.0; break; }
@@ -5509,7 +5518,8 @@ fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
     var step = safe;
     // (on the way in — the cheap heights —: the step over-relaxed, checked at the next point)
     let relax = select(TUNE_RELAX, TUNE_RELAX_BAND, band) * TUNE_MARCH_K * f;
-    let tryRelax = !noRelax && walk.y < 0.999 && relax > step;
+    // (not over the shell's end — a step past it ends the ray, unchecked —, nor on the walking grid)
+    let tryRelax = !noRelax && walk.y < 0.999 && P.walk[0].w < 0.5 && relax > step && t + relax <= t1;
     if (tryRelax) { step = relax; }
     noRelax = false;
     rising = false;
@@ -6963,9 +6973,11 @@ var<private> AP_N: u32 = 0u;
 // (the camera's ray's place on the image [uv] while the table stands for its air; < 0: not)
 var<private> AP_UV: vec2f = vec2f(-1.0);
 // the slices' nearest distance (≈ 3 m of the Earth's radius) and the farthest: past the air's end along any ray
-// from the camera (twice its horizontal reach — a ray grazing the ground's horizon goes on as far again)
+// from the camera that misses the ground — to its horizon, √(r² − 1), then on to the air's top, √(A² − 1) (a tenth more)
 const AP_T0 = 5e-7;
-fn apFar(ro: vec3f) -> f32 { return 2.2 * sqrt(max(airTop() * airTop() - dot(ro, ro), 1e-12)) + 1e-6; }
+fn apFar(ro: vec3f) -> f32 {
+  return 1.1 * (sqrt(max(dot(ro, ro) - 1.0, 0.0)) + sqrt(max(airTop() * airTop() - 1.0, 0.0))) + 1e-6;
+}
 fn apSliceT(z: u32, tFar: f32) -> f32 {
   if (z == 0u) { return 0.0; }
   return AP_T0 * pow(tFar / AP_T0, f32(z - 1u) / f32(AP_Z - 2u));

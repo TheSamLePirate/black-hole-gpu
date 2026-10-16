@@ -23,6 +23,10 @@ const traced = shaders["trace.wgsl + forest.wgsl"]!;
 shaders["trace.wgsl without scenery"] = sceneryShader(surfaceShader(traced, true), false);
 shaders["trace.wgsl without surface textures"] = sceneryShader(surfaceShader(traced, false), true);
 shaders["trace.wgsl without the aerial table"] = aerialShader(traced, false);
+shaders["trace.wgsl without the aerial table, surface textures, scenery"] = aerialShader(
+  sceneryShader(surfaceShader(traced, false), false),
+  false,
+);
 
 try {
   const v = await withGpuPage((evaluate) =>

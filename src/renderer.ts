@@ -45,7 +45,7 @@ import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
 import shipWGSL from "./shaders/ship.wgsl" with { type: "text" };
 import enduranceWGSL from "./shaders/endurance.wgsl" with { type: "text" };
 import stationWGSL from "./shaders/station.wgsl" with { type: "text" };
-import { ENV_H, ShipRenderer, type Reentry, type ShipInstance, type ShipMeshId, type ShipView, type Thrust } from "./ship";
+import { ENV_H, ownPose, ShipRenderer, type Reentry, type ShipInstance, type ShipMeshId, type ShipView, type Thrust } from "./ship";
 import type { VesselId } from "./vessels";
 import type { F35Pose } from "./f35/model";
 import { fleet } from "./fleet";
@@ -217,6 +217,8 @@ const FLAG_AERIAL = 64; // (trace.wgsl FLAG_AERIAL: the aerial perspective's tab
 /** the features under which the far field's LUT is not used: radio, polarization, jet, hot spot, hot flow,
  *  the wormhole, bodies — what a ray between two clean samples could meet unseen */
 const LUT_BLOCKERS = 1 | 2 | 4 | 8 | 16 | 32 | 128;
+/** the flight's shake the cockpit's mask allows for [px]: its line of sight's turn, its up's roll (in its margin) */
+const SHAKE_PX = 10;
 /** the aerial perspective's table: directions across the image, slices along them (trace.wgsl AP_Z) */
 const AERIAL_SIZE: [number, number, number] = [96, 54, 32];
 
@@ -641,6 +643,8 @@ export class Renderer {
   private maskPipeline?: GPUComputePipeline;
   private maskBuf!: GPUBuffer;
   private maskSet = new WeakMap<object, boolean>();
+  /** the realtime frame (frameStamp) the flown craft's own mask was last drawn in; −1: not drawn */
+  private ownMaskStamp = -1;
   private histBuf!: GPUBuffer;
   private histStage!: GPUBuffer;
   private meterPending = false;
@@ -2337,7 +2341,8 @@ export class Renderer {
     // (the relief's ceiling round the camera — relief-ceiling.ts: the shell the ground's marches work in, radio2.w [m]
     // over the ellipsoid; 9 600 m at most, as before; 0: that)
     f[28 * 4 + 3] = 0;
-    if (earthSurface && this.mapCells && this.reliefCeiling) {
+    // (under 300 km: higher, the march hardly runs and the horizons take in half the globe — 9 600 m)
+    if (earthSurface && this.mapCells && this.reliefCeiling && earthSurface.h * WGS84_A < 300_000) {
       const alt = earthSurface.h * WGS84_A;
       let top = Math.max(this.earthTiles.top(), 0);
       top = Math.max(top, this.mapCells.around(earthSurface.lat, earthSurface.lon, horizonsReach(alt, 9600)));
@@ -2463,8 +2468,9 @@ export class Renderer {
     set(45, ...(liquid.map((c) => 0.17 * s.waterDensity * -Math.log(Math.max(c, 0.02))) as [number, number, number]), 0);
     set(46, ...hexToLinear(s.waterGlowColor), 0);
     // (our universe's bodies a ray from the camera may meet — trace.wgsl ourSegment's own test, reach against half
-    // a pixel at its distance: the planets and moons under it skipped there anyway —, and the stars: their
-    // indices, 4 a word, in water3.zw, water4.w, water5.w; their count in path.w — 0: every body)
+    // a pixel at its distance: the planets and moons under it skipped there anyway —, those with rings (their loop
+    // keeps no such test) and the stars: their indices, 6 bits each, 4 a value — whole numbers under 2²⁴, exact in a
+    // float — in water3.zw, water4.w, water5.w; their count in path.w — 0: every body)
     {
       const start = ourStart(bodies);
       const list: number[] = [];
@@ -2475,17 +2481,17 @@ export class Renderer {
         const D = Math.hypot(P[0]!, P[1]!, P[2]!);
         // (the reach: its rings', its air's — at most twice its radius —; a star always: its disc, its corona)
         const reach = b.radius * Math.max(b.rings?.outer ?? 0, b.surface >= 4 ? 2 : 1);
-        if (b.kind === 0 || reach >= 0.45 * pixelAngle * D) {
+        if (b.kind === 0 || (b.rings?.outer ?? 0) > 0 || reach >= 0.45 * pixelAngle * D) {
           if (list.length === 16) all = true;
           else list.push(k);
         }
       }
       const words = [0, 0, 0, 0];
-      if (!all) list.forEach((k, i) => (words[i >> 2]! |= k << (8 * (i & 3))));
-      u[44 * 4 + 2] = words[0]! >>> 0;
-      u[44 * 4 + 3] = words[1]! >>> 0;
-      u[45 * 4 + 3] = words[2]! >>> 0;
-      u[46 * 4 + 3] = words[3]! >>> 0;
+      if (!all) list.forEach((k, i) => (words[i >> 2]! += k * 64 ** (i & 3)));
+      f[44 * 4 + 2] = words[0]!;
+      f[44 * 4 + 3] = words[1]!;
+      f[45 * 4 + 3] = words[2]!;
+      f[46 * 4 + 3] = words[3]!;
       f[40 * 4 + 3] = all ? 0 : list.length + 0.5;
     }
     // light probe for the spaceship: a new frame's weight (1 after a scene reset: no stale light);
@@ -3451,7 +3457,8 @@ export class Renderer {
       this.evictVariants();
     }
     const lutOk = (key & LUT_BLOCKERS) === 0;
-    if (create && !v.busy && !v.failed && (!v.rt || !v.env || (lutOk && !v.lut))) this.realtimeCascade(key, v);
+    const airOk = (key & 128) !== 0 && this.aerialOK;
+    if (create && !v.busy && !v.failed && (!v.rt || !v.env || (lutOk && !v.lut) || (airOk && !v.air))) this.realtimeCascade(key, v);
     if (kind === "q" || kind === "lutq") v.qWanted = true;
     if (create && v.qWanted && !v.qBusy && !v.qFailed && (!v.q || (lutOk && !v.lutq))) this.qualityCascade(key, v);
     return v[kind] ?? general ?? this.coveringVariant(key, kind);
@@ -3534,7 +3541,8 @@ export class Renderer {
   /** An earlier scene's kernel with every feature of this key compiled in (the general one is the widest
    *  of them): it draws this scene as it would — the extra features are switched off by the params. */
   private coveringVariant(key: number, kind: "rt" | "q" | "env" | "lut" | "lutq" | "air"): GPUComputePipeline | null {
-    for (const [k, v] of this.variants) if ((k & key) === key && v[kind]) return v[kind];
+    // (the same debug views and tuning — the bits from 16 on are ids, not features: none other's constants)
+    for (const [k, v] of this.variants) if ((k & key) === key && k >>> 16 === key >>> 16 && v[kind]) return v[kind];
     return null;
   }
 
@@ -3600,25 +3608,35 @@ export class Renderer {
     for (const k of keys.slice(0, Math.max(0, keys.length - 4))) this.variants.delete(k);
   }
 
-  /** the trace's passes encoded; false: no kernel for the scene yet (still compiling) — nothing traced */
   /**
    * The cockpit's mask (mask.wgsl), before a realtime frame's trace: the tiles the flown craft's own opaque parts
    * covered last frame — the cabin, the panel, the frame —, a margin round them, marked not to be traced. Only from
-   * the cockpit with the head and the lens as they were then (the cabin holds still on the image: it turns with the
-   * camera); else, once, the marks cleared.
+   * the cockpit, the own mask drawn the frame before, with the head where it was then (the cabin holds still on the
+   * image: it turns with the camera) — the free look, the lens, the eye on the craft the same; the flight's shake
+   * (its line of sight turned, its up rolled) within SHAKE_PX of it, in the margin —, no depth of field; else, once,
+   * the marks cleared. The margin: the reconstruction's reach (two blocks), 6 px, the shake's, the motion blur's
+   * reach (40 px) when it is on.
    */
   private encodeCockpitMask(enc: GPUCommandEncoder, t: Target, s: Settings, block: number) {
     if (!this.maskPipeline || t !== this.live) return;
-    const own = this.cockpitMask && s.ship && this.ship.ready ? this.ship.ownMaskOf(t.hdr) : null;
-    const on =
-      !!own &&
-      Math.abs(own.look[0] - s.shipLookYaw) < 1e-3 &&
-      Math.abs(own.look[1] - s.shipLookPitch) < 1e-3 &&
-      Math.abs(own.look[2] - s.fov) < 1e-3;
+    const own =
+      this.cockpitMask && s.ship && this.ship.ready && this.ownMaskStamp === this.frameStamp - 1 && !this.dofOn(s, t)
+        ? this.ship.ownMaskOf(t.hdr)
+        : null;
+    let on = false;
+    if (own && own.pose.length === 12) {
+      const now = ownPose([s.shipLookYaw, s.shipLookPitch], s.fov, this.shipPose ?? (s.shipMount as Mount));
+      const p = own.pose;
+      const same = (i: number) => Math.abs(p[i]! - now[i]!) < 1e-3;
+      // (the shake: the line of sight's and the up's turns, against the pixel's angle)
+      const turn = (i: number) => Math.hypot(p[i]! - now[i]!, p[i + 1]! - now[i + 1]!, p[i + 2]! - now[i + 2]!);
+      const pixelAngle = (2 * Math.tan((s.fov * Math.PI) / 360)) / t.height;
+      on = [0, 1, 2, 3, 4, 5].every(same) && turn(6) + turn(9) * 0.5 * Math.hypot(t.width, t.height) * pixelAngle < SHAKE_PX * pixelAngle;
+    }
     if (!on && !this.maskSet.get(t)) return;
     this.maskSet.set(t, on);
     const r = own?.rect ?? [0, 0, 0, 0];
-    const margin = 2 * block + 6;
+    const margin = 2 * block + 6 + SHAKE_PX + (s.motionBlur > 0 ? 40 : 0);
     const u = new ArrayBuffer(32);
     new Uint32Array(u, 0, 4).set([t.width, t.height, on ? 1 : 0, margin]);
     new Int32Array(u, 16, 4).set(r);
@@ -3640,6 +3658,7 @@ export class Renderer {
     pass.end();
   }
 
+  /** the trace's passes encoded; false: no kernel for the scene yet (still compiling) — nothing traced */
   private dispatchTrace(enc: GPUCommandEncoder, t: Target, x: number, y: number, quality: boolean): boolean {
     this.cameraKey = this.featureKey;
     // (the sea's FFT waves of this frame first: the tracer samples them)
@@ -4309,11 +4328,16 @@ export class Renderer {
             (this.station.depthTexture() ? { depth: this.station.depthTexture()!, rect: this.station.rect } : undefined),
           t.sceneDepth,
         );
+        // (the own mask drawn this frame: the next realtime trace's cockpit mask — encodeCockpitMask)
+        if (t === this.live) this.ownMaskStamp = this.ship.ownDrawn ? this.frameStamp : -1;
         // (where it was drawn: the display reads its image there, the bloom too)
         const rect = new Float32Array(this.ship.rectFor(t.hdr));
         this.device.queue.writeBuffer(this.displayBuf, 112, rect);
         this.device.queue.writeBuffer(t.shipRect, 0, rect);
-      } else if (i === r0) this.device.queue.writeBuffer(t.shipRect, 0, new Float32Array(4));
+      } else if (i === r0) {
+        this.device.queue.writeBuffer(t.shipRect, 0, new Float32Array(4));
+        if (t === this.live) this.ownMaskStamp = -1;
+      }
       // the Endurance, over the traced image (before the bloom's levels are made from it)
       if (s && i === r0 && s.endurance && this.lastCam) {
         if (!this.endurance.ready) {
