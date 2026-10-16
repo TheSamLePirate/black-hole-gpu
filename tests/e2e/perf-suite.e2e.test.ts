@@ -105,6 +105,17 @@ const ABS: Record<string, [string, string, string, string?]> = {
     "__bh.renderer.tune = {}",
     "__bh.renderer.tune = { TUNE_MERGE: 0 }",
   ],
+  skipkick: [
+    "the Kerr loop's weak fields' kick → skipped (a measure)",
+    "__bh.renderer.tune = {}",
+    "__bh.renderer.tune = { TUNE_SKIP: 1024 }",
+  ],
+  skipthick: ["the Kerr loop's thick disk → skipped (a measure)", "__bh.renderer.tune = {}", "__bh.renderer.tune = { TUNE_SKIP: 2048 }"],
+  skipcross: [
+    "the Kerr loop's equatorial crossings → skipped (a measure)",
+    "__bh.renderer.tune = {}",
+    "__bh.renderer.tune = { TUNE_SKIP: 4096 }",
+  ],
   bodies: ["the bodies listed → all looked at", "__bh.renderer.bodyList = true", "__bh.renderer.bodyList = false"],
   eps2: ["the geodesics' tolerance 0.12 → 0.24", "__bh.settings.realtimeEps = 0.12", "__bh.settings.realtimeEps = 0.24"],
   scenery: ["the scenery balanced → off", `__bh.game.set("earthScenery", "balanced")`, `__bh.game.set("earthScenery", "off")`],

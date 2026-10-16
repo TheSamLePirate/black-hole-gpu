@@ -199,7 +199,8 @@ override TUNE_RELAX_BAND: f32 = 1.6;
 override TUNE_WARP: u32 = 1u;
 // (measures, the image then other — what a block of a sky ray costs: 1 the background (sky and far points), 2 the far
 // points alone, 4 ourSegment — 32 its bodies met, 64 its rings, 128 its worlds' air, 256 the corona, 512 the stars'
-// discs —, 16 the whole ray past the near world)
+// discs —, 16 the whole ray past the near world; the Kerr loop's 1024 weak fields' kick, 2048 thick disk, 4096 the
+// equatorial crossings)
 override TUNE_SKIP: u32 = 0u;
 // (1: the wormhole's steps on our side merged into straight pieces for ourSegment while the ray holds straight to a
 // quarter of its pixel; 0: each step's chord on its own, as before)
@@ -7494,7 +7495,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
     }
     let pN = blCart(n.x);
     let massive = P.bodyCfg.y >= 0.0;
-    if (massive || whOn) {
+    if ((massive || whOn) && (TUNE_SKIP & 1024u) == 0u) {
       // weak fields added to Kerr — the massive star's, the wormhole's: trapezoidal kick over the
       // step (backwards in λ: Δp = +h ∂δH/∂x)
       var f = vec3f(0.0);
@@ -7685,7 +7686,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
         }
       }
     }
-    if (diskOn && thick) {
+    if (diskOn && thick && (TUNE_SKIP & 2048u) == 0u) {
       // (sampled at a random point of the step — a different one at each step and sample — so that
       // sharp structure along the ray, the smoke's outlines, is not sliced at the steps' spacing)
       var sm = n;
@@ -7728,7 +7729,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
     // Equatorial plane crossing → refine by bisection on cos θ, test the disk annulus.
     let c0 = cos(s.x.y);
     let c1 = cos(n.x.y);
-    if (c0 * c1 < 0.0) {
+    if (c0 * c1 < 0.0 && (TUNE_SKIP & 4096u) == 0u) {
       crossings++;
       let rMin = min(s.x.x, n.x.x);
       CROSSMIN = min(CROSSMIN, rMin);
