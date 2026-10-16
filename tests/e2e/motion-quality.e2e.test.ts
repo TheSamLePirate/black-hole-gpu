@@ -14,11 +14,11 @@ const ALIAS: Record<string, string> = {
 };
 const CONFIGS: Record<string, string> = {
   base: "__bh.renderer.tune = {}",
-  smoke5: "__bh.renderer.tune = { TUNE_SMOKE_STEP: 0.5 }",
+  smoke25: "__bh.renderer.tune = { TUNE_SMOKE_STEP: 0.25 }",
   eps1: "__bh.renderer.tune = { TUNE_EPS_FAR: 1 }",
 };
 const scenes = (process.env.SCENES ?? "interstellar").split(",");
-const confs = process.env.CONF ? process.env.CONF.split(",") : ["base", "smoke5"];
+const confs = process.env.CONF ? process.env.CONF.split(",") : ["base", "smoke25", "base", "smoke25"];
 const FRAMES = Number(process.env.FRAMES ?? 60);
 const STEP = process.env.STEP ?? "__bh.camera.rotateView(0.2, 0.03, 0)";
 

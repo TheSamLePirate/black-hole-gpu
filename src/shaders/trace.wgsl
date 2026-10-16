@@ -187,8 +187,10 @@ override TUNE_SHADOW_K: f32 = 1.18;
 // (the geodesics' tolerance far from the hole: × this beyond 20 M, × 1 within 10 M — the photon sphere's rays exact;
 // the far field nearly flat: at 3 the images alike to a comparison's own noise, Kerr edge-on's trace −21 %)
 override TUNE_EPS_FAR: f32 = 3.0;
-// (the realtime steps through the disk's smoke [M]: 0.25 — a measure)
-override TUNE_SMOKE_STEP: f32 = 0.25;
+// (the realtime steps through the disk's smoke [M]: 0.5 — sampled at a random point of each, a different one each frame,
+// the history gathering them: the held image alike to 0.25's, the turning one 29.4 dB against the converged one for
+// 29.7; Interstellar's trace −22 %. The refining passes keep 0.1)
+override TUNE_SMOKE_STEP: f32 = 0.5;
 // (0: the per-step tests of Gargantua's bodies skipped — a measure of what they cost: the bodies then missed)
 override TUNE_STEP_BODIES: u32 = 1u;
 // (the ground's march: a step's share of the clearance — 0.5, safe for slopes to ~60°; more: a measure)
@@ -592,7 +594,7 @@ fn stepSizeAt(s: GState, L: f32, a: f32, eps: f32, rH: f32, pc: vec3f) -> f32 {
     // volumetric disk: never jump over the layer |z| < 4H (8H with its haze; the smoke's, ~0.5 M above
     // the surface, beyond 8 M), sample it at
     // ≲ 0.4 H across; along it ≲ 0.08 R — ≲ 0.1 M through the smoke (clouds an M across: their
-    // outlines drawn, not averaged away, nor stepped — each step only partly opaque; 0.25 M in the
+    // outlines drawn, not averaged away, nor stepped — each step only partly opaque; 0.5 M (TUNE_SMOKE_STEP) in the
     // realtime passes, a block per ray: the refining passes and offline frames take the fine one)
     let R = r * sn;
     if (R > P.bh.z * 0.8 && R < P.bh.w * DISK_REACH * 1.05) {
