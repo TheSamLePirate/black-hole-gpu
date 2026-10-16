@@ -179,3 +179,25 @@ test("the imagery: every level; EOX's colours brought into the Blue Marble's; fi
     "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2021_3857/default/GoogleMapsCompatible/13/2924/4266.jpg",
   );
 });
+
+test("the windows led where the view looks: ahead by up to 1¼ tile of each level, the camera still inside", () => {
+  const t = new EarthTiles(fakeDevice());
+  const c = camAt(36, -5.4, 400);
+  t.update(c, 0.001);
+  const still = new Map(t.wanted().map(([z, x, y]) => [`${z}/${x}/${y}`, z]));
+  // (looking north, 6 km ahead)
+  const north: Vec3 = [0, 0, 6000 / WGS84_A];
+  const t2 = new EarthTiles(fakeDevice());
+  t2.update(c, 0.001, [0, 0, 0], north);
+  const led = t2.wanted();
+  const finest = Math.max(...led.map(([z]) => z));
+  const ys = (L: [number, number, number][]) => L.filter(([z]) => z === finest).map(([, , y]) => y);
+  // (tiles' y grows southwards: the led window's rows further north)
+  expect(Math.min(...ys(led))).toBeLessThan(
+    Math.min(...ys([...still.keys()].map((k) => k.split("/").map(Number) as [number, number, number]))),
+  );
+  // (the camera's own tile still in the finest window)
+  const n = 2 ** finest;
+  const cy = Math.floor(((1 - Math.log(Math.tan(Math.PI / 4 + (36 * deg) / 2)) / Math.PI) / 2) * n);
+  expect(ys(led)).toContain(cy);
+});

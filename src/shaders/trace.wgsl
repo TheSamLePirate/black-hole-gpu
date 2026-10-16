@@ -174,6 +174,34 @@ override HAS_AURORA: bool = true; // the auroras over the Earth (P.bary.zw, S2: 
 // Dneg region, the region under a pixel —, every ray straight through our bodies to our sky, the Kerr and
 // Dneg integrators out of the kernel (its registers)
 override HAS_KERR: bool = true;
+// The cost view (renderer.costView, a debug view: docs/BH-API.md): 0 off — the counters below out of the kernel —;
+// 1 every ray's work, 2 … 9 one kind of it alone (cost's k + 2), as a heat map — its counts on a log scale,
+// blue few … red many — in place of the image.
+override COST_VIEW: u32 = 0u;
+// (the ray's work by kind: 0 the ground's march steps, 1 the ground's heights read (earthH), 2 its shadows' steps,
+// 3 the clouds' steps (the volume's, the weather's), 4 the air's, 5 the sea's surface search, 6 the scenery's boxes
+// visited, 7 the main loop's steps)
+var<private> COST: array<f32, 8>;
+fn cost(k: u32) { if (COST_VIEW > 0u) { COST[k] += 1.0; } }
+fn costHeat() -> vec3f {
+  // (each kind weighed by what a step of it costs, roughly: a height read the unit)
+  let w = array<f32, 8>(0.5, 1.0, 0.5, 3.0, 1.0, 2.0, 0.3, 0.5);
+  var n = 0.0;
+  var top = 2048.0;
+  if (COST_VIEW == 1u) {
+    for (var k = 0u; k < 8u; k++) { n += COST[k] * w[k]; }
+  } else {
+    n = COST[min(COST_VIEW - 2u, 7u)];
+    top = 512.0;
+  }
+  let x = clamp(log2(1.0 + n) / log2(1.0 + top), 0.0, 1.0);
+  // (black none, blue, cyan, green, yellow, red, white beyond)
+  let c = array<vec3f, 6>(vec3f(0.0, 0.0, 0.25), vec3f(0.0, 0.3, 1.0), vec3f(0.0, 0.9, 0.9), vec3f(0.1, 0.9, 0.1),
+    vec3f(1.0, 0.9, 0.0), vec3f(1.0, 0.1, 0.0));
+  let f = x * 5.0;
+  let i = min(u32(f), 4u);
+  return mix(c[i], c[i + 1u], f - f32(i));
+}
 
 const FLAG_ADAPTIVE_RK = 1u;    // step-doubling error control + Richardson extrapolation
 const FLAG_ADAPTIVE_SPP = 2u;   // skip converged pixels (progressive / offline)
@@ -4246,6 +4274,7 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
   var fog = vec2f(0.0);
   if (HAS_WX) { fog = wxFog(ro, rd); }
   for (var i = 0u; i < N; i++) {
+    cost(4u);
     let u1 = (f32(i) + 1.0) / f32(N);
     let t1 = ta + (tb - ta) * select(u1, u1 * u1, inside);
     // (the fog's share of this step: its stretch under the fog's top)
@@ -5120,6 +5149,7 @@ fn tileSample(l: u32, p: vec2f, mag: f32) -> f32 {
 // edges — over the global map where they leave off; y: the heights' resolution [m] (earthDetail). cheap:
 // bilinear only (the shadows' march)
 fn earthH(q: vec3f, foot: f32, cheap: bool) -> vec2f {
+  cost(1u);
   let texelA = EARTH_RM * TAU / f32(textureDimensions(earthElev).x);
   if (P.tiles.w < 0.5) { return vec2f(earthH0(q, foot), texelA); }
   let cosLat = sqrt(max(1.0 - q.z * q.z, 1e-12));
@@ -5215,6 +5245,7 @@ fn earthTerrainShadow(p: vec3f, Ls: vec3f, foot: f32) -> f32 {
   var t = max(foot, 20.0);
   var sh = 1.0;
   for (var i = 0; i < 48; i++) {
+    cost(2u);
     let x = p0 + Ls * (t / EARTH_RM);
     let r = length(x);
     let hr = (r - 1.0) * EARTH_RM;
@@ -5302,6 +5333,7 @@ fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
   // (the clearance growing at the last step: the ray leaving the ground)
   var rising = false;
   for (var i = 0u; i < 256u; i++) {
+    cost(0u);
     let v = o + rd * t;
     let p = A + v;
     let r = length(p);
@@ -5731,11 +5763,13 @@ fn seaSurfaceHit(look: vec3f, t: f32, m: f32) -> f32 {
   let sb = D * (1.0 + Hm / hc);
   var a = sa;
   for (var i = 1; i <= 24; i++) {
+    cost(5u);
     let b = sa + (sb - sa) * f32(i) / 24.0;
     if (hc - b * sinE - seaHeightAt(lb * b, b) <= 0.0) {
       var lo = a;
       var hi = b;
       for (var j = 0; j < 6; j++) {
+        cost(5u);
         let mid = 0.5 * (lo + hi);
         if (hc - mid * sinE - seaHeightAt(lb * mid, mid) <= 0.0) { hi = mid; } else { lo = mid; }
       }
@@ -6023,6 +6057,7 @@ fn sceneryQuery(o:vec3f,d:vec3f,limit:f32,shadow:bool)->SceneryHit {
   let total=u32(scenery[0].x);var i=0u;
   // Stackless escape indices make the CPU/GPU storage bound independent of density.
   while(i<total){
+    cost(6u);
     let lo=scenery[4u+i*2u];let hi=scenery[5u+i*2u];
     let a=(lo.xyz-o)*inv;let b=(hi.xyz-o)*inv;
     let near=max(max(min(a,b).x,min(a,b).y),min(a,b).z);
@@ -6124,6 +6159,7 @@ fn scenerySurface(foot:f32)->ScenerySurface {
   if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5 || SC_DISTANCE>P.scenery[1].w){return out;}
   let point=SC_POINT.xy;let aa=max(.12,foot*.75);let header=scenery[1];let total=u32(header.y);var i=0u;var priority=0.0;var dryIsland=false;
   while(i<total){
+    cost(6u);
     let lo=scenery[u32(header.x)+i*2u];let hi=scenery[u32(header.x)+i*2u+1u];
     if(any(point<lo.xy-vec2f(aa)) || any(point>hi.xy+vec2f(aa))){i=u32(lo.w);continue;}
     if(hi.w<0.0){i++;continue;}
@@ -6234,9 +6270,14 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   // embankment on the shore, Tanegashima's)
   var lvl = 0.0;
   if (HAS_RWY && RWY_HIT.w > 0.5) { lvl = runwayGrade(gq).y; }
-  let sea0 = smoothstep(0.35, 0.65, rel.b);
+  // (the sea's mask is the global relief map's — a few km a texel —: a ground the fine relief puts over the sea's
+  // level — 0 there, its noise off below 40 m — is land whatever it says, and so is what the scenery draws on land —
+  // the coast's hills and cliffs, a seaside town's low streets were shaded as the sea)
   let osm=scenerySurface(max(length(fx),length(fy))*EARTH_RM);
   let osmWater=select(0.0,osm.cover,osm.kind==3.0 || osm.kind==4.0);
+  let osmLand=select(osm.cover,0.0,osm.kind==3.0 || osm.kind==4.0);
+  let overSea = max(smoothstep(0.5, 2.0, hG), osmLand);
+  let sea0 = smoothstep(0.35, 0.65, rel.b) * (1.0 - overSea);
   let ocean = max(sea0,osmWater) * (1.0 - lvl);
   // (near, the tiles' imagery over the maps: four to eight times finer)
   let img = earthImagery(gq, max(length(fx), length(fy)) * EARTH_RM);
@@ -6610,6 +6651,7 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
   var col = vec3f(0.0);
   var tPrev = t0;
   for (var i = 0u; i < N; i++) {
+    cost(3u);
     // (samples crowding near the camera: the near clouds' shapes resolved, the far ones' mean)
     let u1 = (f32(i) + 1.0) / f32(N);
     let tn = t0 + (t1 - t0) * u1 * u1;
@@ -6713,6 +6755,7 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
   var col = vec3f(0.0);
   var tPrev = t0;
   for (var j = 0u; j < N; j++) {
+    cost(3u);
     let u1 = (f32(j) + 1.0) / f32(N);
     let tn = t0 + (t1 - t0) * u1 * u1;
     let t = mix(tPrev, tn, jit);
@@ -7185,6 +7228,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
   var mfS = vec3f(0.0);
   if (whOn) { mfS = mouthForce(s.x); }
   for (var i = 0u; i < maxSteps; i++) {
+    cost(7u);
     steps = i;
     var n: GState;
     var h: f32;
@@ -7876,6 +7920,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
   if (!sampling) { return; }
 
   var col = tr.col;
+  if (COST_VIEW > 0u) { tr.bgW = 0.0; col = costHeat(); }
   if (tr.bgW > 0.0) {
     // pre-filter width relative to the lensed pixel (the jittered samples already apply σ = 0.42 px);
     // realtime, one ray a block: half the block — the gather's own σ — so a star smaller than the

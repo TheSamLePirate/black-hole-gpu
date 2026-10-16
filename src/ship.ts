@@ -557,6 +557,31 @@ export class ShipRenderer {
         },
       ],
     };
+    // (the F-35's canopy and visor: after the opaque draws, blended (premultiplied), the depth tested not written —
+    // its mode the e2e's A/B: ship.wgsl GLASS_MODE)
+    const glassPipe = (mode: number) =>
+      d.createRenderPipeline({
+        layout: "auto",
+        vertex,
+        fragment: {
+          module,
+          entryPoint: "fsJetGlass",
+          constants: { GLASS_MODE: mode },
+          targets: [
+            {
+              format: "rgba16float",
+              blend: {
+                color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+                alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
+              },
+            },
+          ],
+        },
+        primitive: { topology: "triangle-list", cullMode: "none" },
+        depthStencil: { format: "depth32float", depthWriteEnabled: false, depthCompare: "greater-equal" },
+        multisample: { count: 4 },
+      });
+    this.glassPipe = glassPipe;
     this.pipes = {
       copy: cp("envCopy"),
       down: cp("envDown"),
@@ -721,27 +746,7 @@ export class ShipRenderer {
         depthStencil: { format: "depth32float", depthWriteEnabled: false, depthCompare: "greater-equal" },
         multisample: { count: 4 },
       }),
-      // the F-35's canopy and visor: after the opaque draws, blended (premultiplied), the depth tested not written
-      jetGlass: d.createRenderPipeline({
-        layout: "auto",
-        vertex,
-        fragment: {
-          module,
-          entryPoint: "fsJetGlass",
-          targets: [
-            {
-              format: "rgba16float",
-              blend: {
-                color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
-                alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
-              },
-            },
-          ],
-        },
-        primitive: { topology: "triangle-list", cullMode: "none" },
-        depthStencil: { format: "depth32float", depthWriteEnabled: false, depthCompare: "greater-equal" },
-        multisample: { count: 4 },
-      }),
+      jetGlass: glassPipe(0),
       // the depth alone, first: the shading then runs once a pixel
       depthPre: d.createRenderPipeline({
         layout: "auto",
@@ -1259,6 +1264,13 @@ export class ShipRenderer {
       ],
     });
   }
+
+  /** Parts of the raster left out, to measure what each costs (the e2e's A/B): "shadow", "pre" (the depth
+   *  pre-pass), "hull" (the craft's solid triangles), "glass" (the F-35's canopy and visor; "glass-sr" without the
+   *  traced image's reflection, "glass-flat" a flat tint), "plume" (the flames, trails, lamps). */
+  debugSkip = new Set<string>();
+  private glassPipe?: (mode: number) => GPURenderPipeline;
+  private glassModes: GPURenderPipeline[] = [];
 
   /** Probe → box mips, GGX pre-filtered mips, spherical harmonics (after the tracer's env pass). */
   encodeEnv(enc: GPUCommandEncoder) {
@@ -1907,7 +1919,7 @@ export class ShipRenderer {
     res.rect = [x0, y0, bw, bh];
     // (the self-shadowing, every other frame: the light turns slowly against the ship)
     // (a carrier in the map: each frame — it moves across the view, its shadow with it)
-    if (v.forceShadow || this.bound2 || this.shadowTick++ % 2 === 0) {
+    if (!this.debugSkip.has("shadow") && (v.forceShadow || this.bound2 || this.shadowTick++ % 2 === 0)) {
       const sp = enc.beginRenderPass(
         this.pass("ship: shadow map", {
           colorAttachments: [],
@@ -1950,11 +1962,12 @@ export class ShipRenderer {
     });
     rp.setPipeline(this.pipes.depthPre);
     rp.setBindGroup(0, this.depthBind);
-    this.draws.forEach((dr) => {
-      rp.setVertexBuffer(0, dr.mesh.vbuf);
-      rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
-      rp.drawIndexed(dr.cabin ? this.cockpit!.solid : (dr.mesh.solid ?? dr.mesh.count), 1, 0, 0, dr.inst);
-    });
+    if (!this.debugSkip.has("pre"))
+      this.draws.forEach((dr) => {
+        rp.setVertexBuffer(0, dr.mesh.vbuf);
+        rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
+        rp.drawIndexed(dr.cabin ? this.cockpit!.solid : (dr.mesh.solid ?? dr.mesh.count), 1, 0, 0, dr.inst);
+      });
     rp.setPipeline(this.pipes.ship);
     // (the traced image the craft are drawn over: its sharp reflections — ship.wgsl screenRefl —, its
     // depths: what hides the other craft)
@@ -1970,7 +1983,7 @@ export class ShipRenderer {
     rp.setBindGroup(0, res.bind);
     rp.setBindGroup(1, res.occBind!.g);
     this.draws.forEach((dr) => {
-      if (dr.cabin) return;
+      if (dr.cabin || this.debugSkip.has("hull")) return;
       rp.setVertexBuffer(0, dr.mesh.vbuf);
       rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
       rp.drawIndexed(dr.mesh.solid ?? dr.mesh.count, 1, 0, 0, dr.inst);
@@ -2006,7 +2019,7 @@ export class ShipRenderer {
     }
     // the F-35's glass, over all that (its canopy, the helmet's visor)
     const glassy = this.draws.filter((dr) => !dr.cabin && dr.mesh.solid !== undefined && dr.mesh.solid < dr.mesh.count);
-    if (glassy.length) {
+    if (glassy.length && !this.debugSkip.has("glass")) {
       if (!res.jetGlassBind || res.jetGlassGen !== this.bindGen || res.jetGlassHdr !== hdr) {
         const keep = [0, 1, 2, 3, 12, 16, 22];
         res.jetGlassBind = this.device.createBindGroup({
@@ -2016,8 +2029,22 @@ export class ShipRenderer {
         res.jetGlassGen = this.bindGen;
         res.jetGlassHdr = hdr;
       }
-      rp.setPipeline(this.pipes.jetGlass);
-      rp.setBindGroup(0, res.jetGlassBind);
+      const gm = this.debugSkip.has("glass-flat") ? 2 : this.debugSkip.has("glass-sr") ? 1 : 0;
+      if (gm && !this.glassModes[gm]) this.glassModes[gm] = this.glassPipe!(gm);
+      const gp = gm ? this.glassModes[gm]! : this.pipes.jetGlass;
+      rp.setPipeline(gp);
+      rp.setBindGroup(
+        0,
+        gm
+          ? this.device.createBindGroup({
+              layout: gp.getBindGroupLayout(0),
+              entries: [
+                ...this.shipEntries!.filter((e) => [0, 1, 2, 3, 12, 16, 22].includes(e.binding)),
+                { binding: 10, resource: hdr.createView() },
+              ],
+            })
+          : res.jetGlassBind,
+      );
       for (const dr of glassy) {
         rp.setVertexBuffer(0, dr.mesh.vbuf);
         rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
@@ -2068,7 +2095,7 @@ export class ShipRenderer {
     const trails = this.trailCount > 0;
     // (from the cabin, its walls hide them: not drawn)
     const lamps = this.lampCount > 0 && !this.inCabin;
-    if (jets || re.glow || re.sheath || trails || lamps) {
+    if ((jets || re.glow || re.sheath || trails || lamps) && !this.debugSkip.has("plume")) {
       const B = this.plumeBinds!;
       // (what hides the flames and the plasma: the hull — from inside, the cabin's walls, not its glass)
       const occl =

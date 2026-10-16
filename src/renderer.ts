@@ -1,4 +1,4 @@
-import { streamingLead, aheadFocus } from "./system/streaming-focus";
+import { streamingLead, aheadFocus, gazeLead } from "./system/streaming-focus";
 import type { NetWalkerHome } from "./controller/netcraft";
 import { CharacterRenderer, type GrassView } from "./character-renderer";
 import type { PlanetCharacter } from "./controller/character";
@@ -532,7 +532,7 @@ export class Renderer {
   carrierVelocity: Vec3 | null = null;
   /** the camera's last place on the Earth [its radii] and when [ms]: its velocity measured from frame to frame */
   private eyeTrack: { c: Vec3; at: number } | null = null;
-  streamingState = { leadM: 0, lookAheadSeconds: 6 };
+  streamingState = { leadM: 0, lookAheadSeconds: 6, gazeM: 0 };
   /** the spectator's view holds the flown ship (near enough to draw) */
   private get shipInView() {
     return !!this.shipPlace && this.shipPlace.dist < 2e4;
@@ -2174,7 +2174,7 @@ export class Renderer {
   ) {
     const f = this.paramsF;
     const u = this.paramsU;
-    this.featureKey = this.featuresOf(s);
+    this.featureKey = this.featuresOf(s) | ((this.costViewMode & 15) << 16);
     const cam = o.probe?.cam ?? cameraFrame(s);
     if (!o.probe) (this.lastCam = cam), (this.lastTime = time);
     // (none flown: a craft of the fleet near the camera brings the craft's pass and its light probe)
@@ -2625,7 +2625,17 @@ export class Renderer {
       if (t === this.live) this.streamVelocity = this.cameraGroundVelocity(eye);
       const lead = focus ? streamingLead(focus, this.streamVelocity) : ([0, 0, 0] as Vec3);
       this.streamingState.leadM = Math.hypot(...lead) * 6378137;
-      this.earthTiles.update(focus, pixelAngle, lead);
+      // (where the view looks, on the Earth's axes, and the eye's height: the detail led there — the relief's finest
+      // windows by up to 1¼ tile of each level, the scenery's box by 0.6 of its radius, out to the ground looked at)
+      const gazeDir =
+        eye && near && this.gazeStreaming
+          ? (near.axes.map((a) => a[0]! * cam.fwd[0] + a[1]! * cam.fwd[1] + a[2]! * cam.fwd[2]) as Vec3)
+          : null;
+      const eyeH = eye && near ? Math.max(heightOverGround("earth", eye.map((x) => x * near.radius) as Vec3), 1) : 0;
+      const gazeT = eye && gazeDir ? gazeLead(eye, gazeDir, eyeH, 6000) : ([0, 0, 0] as Vec3);
+      const gazeS = eye && gazeDir ? gazeLead(eye, gazeDir, eyeH, 0.6 * (s.earthScenery === "high" ? 3000 : 2000)) : ([0, 0, 0] as Vec3);
+      this.streamingState.gazeM = Math.hypot(...gazeT) * 6378137;
+      this.earthTiles.update(focus, pixelAngle, lead, onEarth ? gazeT : [0, 0, 0]);
       this.earthSurface.update(eye, s.earthSurface, lead);
       this.earthScenery.update(
         eye,
@@ -2633,7 +2643,7 @@ export class Renderer {
         s.earthSurface !== "off",
         s.earthTerrain,
         SCENERY_EXCLUSIONS,
-        eye ? aheadFocus(eye, lead) : null,
+        eye ? aheadFocus(eye, Math.hypot(...gazeS) > 0 ? gazeS : lead) : null,
       );
       this.earthScenery.shadows = s.earthSceneryShadows;
       this.earthScenery.season(utcOf(time));
@@ -3459,6 +3469,7 @@ export class Renderer {
           HAS_SURFACE: has(4096),
           HAS_SCENERY: has(8192),
           HAS_AURORA: has(16384),
+          COST_VIEW: (key >> 16) & 15,
           QUALITY_PIPELINE: quality ? 1 : 0,
         },
       },
@@ -3633,6 +3644,23 @@ export class Renderer {
   reprojectGround = true;
   /** (the last reprojection: the camera standing still on the near body's ground) */
   taStill: { still: boolean; mMetres: number; turn: number } | null = null;
+  /** the craft's raster passes left out — the flown one, the others — (a switch for measuring their cost) */
+  debugSkipShip = false;
+  /** the detail (the relief's finest windows, the scenery's box) led where the view looks (a switch for comparisons) */
+  gazeStreaming = true;
+  /** The cost view (a debug view, trace.wgsl COST_VIEW): each ray's work as a heat map in place of the image —
+   *  0 off, 1 all of it, 2 … 9 one kind (the ground's march steps, its heights read, its shadows' steps, the
+   *  clouds', the air's, the sea's, the scenery's boxes, the main loop's) —, its own kernel variant; the image
+   *  traced again (a held one too). */
+  get costView() {
+    return this.costViewMode;
+  }
+  set costView(v: number) {
+    if (v === this.costViewMode) return;
+    this.costViewMode = v;
+    this.invalidate();
+  }
+  private costViewMode = 0;
   /** the camera's move that breaks the history: the nearest ground's or scenery's shift on the image [px] (a switch for comparisons) */
   taParallaxPx = 0.5;
   /** the history is dropped on the next frame (a new scene, a jump) */
@@ -4013,7 +4041,7 @@ export class Renderer {
       // the space station, where it is on its orbit (before the Ranger: its glass reflects it)
       if (s && i === r0) this.encodeStation(enc, t, s);
       if (s && i === r0) this.encodeCharacter(enc, t, s);
-      if (s && i === r0 && (s.ship || this.craftsShown) && this.ship.ready) {
+      if (s && i === r0 && (s.ship || this.craftsShown) && this.ship.ready && !this.debugSkipShip) {
         this.ship.encodeShip(
           enc,
           t.hdr,

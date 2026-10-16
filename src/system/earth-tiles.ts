@@ -227,7 +227,7 @@ export class EarthTiles {
    */
   private priorityLon = 0;
   private prioritySinLat = 0;
-  update(c: Vec3 | null, pixAngle: number, lead: Vec3 = [0, 0, 0]) {
+  update(c: Vec3 | null, pixAngle: number, lead: Vec3 = [0, 0, 0], gaze: Vec3 = [0, 0, 0]) {
     if (!c) return this.clear();
     // (the camera's geodetic place: the tracer reads the tiles at the geodetic latitude)
     const g = cartToGeodetic(1, WGS84_F, c);
@@ -238,10 +238,21 @@ export class EarthTiles {
     // (the finest level the nearest ground needs: its texel within the pixel's footprint there)
     const zNeed = Math.min(Math.ceil(Math.log2((TAU * R * cosLat) / (TILE * Math.max(alt * pixAngle, 0.5)))), Z1);
     if (zNeed < Z0) return this.clear();
+    // (each window centred ahead where the view looks — gaze: its offset, Earth-fixed —, by up to a tile and a quarter
+    // of its own level: what is seen ahead gets the finest heights and imagery, the ground behind the view less)
+    const gc = cartToGeodetic(1, WGS84_F, c.map((v, i) => v + gaze[i]!) as Vec3);
+    const gLonT = gc.lon / TAU + 0.5,
+      gSinLat = Math.sin(gc.lat);
     for (const L of this.levels) {
       if (L.z > zNeed) continue;
-      const cx = (this.lon / TAU + 0.5) * L.n;
-      const cy = mercY(this.sinLat, L.n);
+      const cx0 = (this.lon / TAU + 0.5) * L.n,
+        cy0 = mercY(this.sinLat, L.n);
+      const gx = gLonT * L.n - cx0,
+        gy = mercY(gSinLat, L.n) - cy0;
+      const gl = Math.hypot(gx, gy);
+      const k = gl > 1.25 ? 1.25 / gl : 1;
+      const cx = cx0 + gx * k,
+        cy = cy0 + gy * k;
       // (the window recentred once the camera is more than 0.8 of a tile off its middle — or across the
       // date line; at the poles' edges it stays clamped)
       const mid = SPAN / 2;

@@ -26,3 +26,18 @@ test("planetary map scale uses the body's own circumference", () => {
   expect(metresPerMapPixel(0, 0, mars) * 256).toBeCloseTo(2 * Math.PI * mars, 5);
   expect(metresPerMapPixel(90, 21, moon)).toBeGreaterThan(0);
 });
+
+test("the detail led where the view looks: ahead to the ground looked at, at most its reach; none straight down", () => {
+  const { gazeLead } = require("../src/system/streaming-focus") as typeof import("../src/system/streaming-focus");
+  const c: [number, number, number] = [1, 0, 0];
+  // (level, north: the reach)
+  expect(len(gazeLead(c, [0, 0, 1], 300, 6000)) * WGS84_A).toBeCloseTo(6000, 3);
+  // (10° down from 300 m: the ground 1 701 m ahead)
+  const d10: [number, number, number] = [-Math.sin((10 * Math.PI) / 180), 0, Math.cos((10 * Math.PI) / 180)];
+  const g = gazeLead(c, d10, 300, 6000);
+  expect(g[2] * WGS84_A).toBeCloseTo(300 / Math.tan((10 * Math.PI) / 180), 0);
+  expect(Math.abs(dot(c, g))).toBeLessThan(1e-12);
+  // (straight down: none; up: the reach)
+  expect(gazeLead(c, [-1, 0, 0], 300, 6000)).toEqual([0, 0, 0]);
+  expect(len(gazeLead(c, [0.5, 0, Math.sqrt(0.75)], 300, 6000)) * WGS84_A).toBeCloseTo(6000, 3);
+});

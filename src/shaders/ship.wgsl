@@ -1760,17 +1760,21 @@ fn cabinShade(in: VOut, front: bool, glassPass: bool) -> vec4f {
 // faces, their depth not written. The canopy's gold film (its map's colour) tints what is seen through it and
 // covers it by its map's alpha; its faces reflect the sky — the traced image where it holds the direction,
 // the probe elsewhere — by their Fresnel, and the key light's highlight.
+// (GLASS_MODE, the e2e's A/B — ship.ts debugSkip: 1 without the traced image's reflection, 2 a flat tint)
+override GLASS_MODE: u32 = 0u;
 @fragment
 fn fsJetGlass(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let base = textureSample(jetAlbedo, mapSamp, in.uv, 1);
   let part = u32(in.mat + 0.5);
   if (part != 32u && part != 34u) { discard; }
+  if (GLASS_MODE == 2u) { return vec4f(0.002, 0.002, 0.0, 0.1); }
   let gn = normalize(in.n) * select(-1.0, 1.0, front);
   let gv = normalize(-in.p);
   let gnv = clamp(dot(gn, gv), 1e-4, 1.0);
   let F = 0.04 + 0.96 * pow(1.0 - gnv, 5.0);
   let r = reflect(-gv, gn);
-  let sr = screenRefl(r, 0.0004);
+  var sr = vec4f(0.0);
+  if (GLASS_MODE == 0u) { sr = screenRefl(r, 0.0004); }
   var refl = mix(envSpec(r, 0.02), sr.rgb, sr.w);
   if (sh[11].w > 0.5) {
     let l = fromProbe(sh[9].xyz);
