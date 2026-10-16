@@ -39,6 +39,7 @@ import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
 import { PATH_CHUNK, PATH_MAX, SH_VEC4S, TABLE_LUT, TABLE_PATH, TABLE_WALK, TABLE_VEC4S } from "./gpu-tables";
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
 import maskWGSL from "./shaders/mask.wgsl" with { type: "text" };
+import { AERIAL_TEXTURE_LIMIT, aerialShader } from "./system/aerial";
 import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
 import shipWGSL from "./shaders/ship.wgsl" with { type: "text" };
 import enduranceWGSL from "./shaders/endurance.wgsl" with { type: "text" };
@@ -211,9 +212,12 @@ const FLAG_INTERLEAVED = 8;
 const FLAG_REPROJECT = 16;
 /** the far field's LUT is there (trace.wgsl: farLut) */
 const FLAG_LUT = 32;
+const FLAG_AERIAL = 64; // (trace.wgsl FLAG_AERIAL: the aerial perspective's table written this frame)
 /** the features under which the far field's LUT is not used: radio, polarization, jet, hot spot, hot flow,
  *  the wormhole, bodies — what a ray between two clean samples could meet unseen */
 const LUT_BLOCKERS = 1 | 2 | 4 | 8 | 16 | 32 | 128;
+/** the aerial perspective's table: directions across the image, slices along them (trace.wgsl AP_Z) */
+const AERIAL_SIZE: [number, number, number] = [96, 54, 32];
 
 /**
  * Bun's dev server sometimes serves a `type: "text"` import as an asset URL after a hot reload
@@ -888,20 +892,52 @@ export class Renderer {
       addressModeV: "repeat",
       addressModeW: "repeat",
     });
-    const layout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout] });
+    this.aerialTex = [0, 1].map(() =>
+      device.createTexture({
+        size: AERIAL_SIZE,
+        dimension: "3d",
+        format: "rgba16float",
+        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+      }),
+    );
+    this.aerialSampler = device.createSampler({ magFilter: "linear", minFilter: "linear" });
+    // (the light probes' kernels — env — read the aerial perspective's table too: earthLook is theirs as well; never
+    // with its flag on — the table stands for the camera's rays only —, but bound)
+    this.envReadLayout = device.createBindGroupLayout({ entries: this.aerialReadLayout() });
+    this.envRead = device.createBindGroup({ layout: this.envReadLayout, entries: this.aerialRead() });
+    const layout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.envReadLayout] });
     // (the far field's LUT: written by its own pass, read by the main kernel — a second bind group)
     this.lutWriteLayout = device.createBindGroupLayout({
       entries: [
         { binding: 0, visibility: C, storageTexture: { access: "write-only", format: "rgba32float" } },
         { binding: 1, visibility: C, storageTexture: { access: "write-only", format: "r32float" } },
+        ...this.aerialReadLayout(),
       ],
     });
     this.lutReadLayout = device.createBindGroupLayout({
       entries: [
         { binding: 2, visibility: C, texture: { sampleType: "unfilterable-float" } },
         { binding: 3, visibility: C, texture: { sampleType: "unfilterable-float" } },
+        // (the aerial perspective's table: trace.wgsl apInA, apInB, apSamp)
+        ...this.aerialReadLayout(),
       ],
     });
+    // (the aerial perspective's table: written by its own pass — trace.wgsl aerial —, one for the live view)
+    this.aerialWriteLayout = device.createBindGroupLayout({
+      entries: [
+        { binding: 7, visibility: C, storageTexture: { access: "write-only", format: "rgba16float", viewDimension: "3d" } },
+        { binding: 8, visibility: C, storageTexture: { access: "write-only", format: "rgba16float", viewDimension: "3d" } },
+      ],
+    });
+    this.aerialLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.aerialWriteLayout] });
+    this.aerialWrite = device.createBindGroup({
+      layout: this.aerialWriteLayout,
+      entries: [
+        { binding: 7, resource: this.aerialTex[0]!.createView() },
+        { binding: 8, resource: this.aerialTex[1]!.createView() },
+      ],
+    });
+
     this.mainLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.lutReadLayout] });
     this.lutLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.lutWriteLayout] });
     // (compiled asynchronously: the tracer is a huge shader — on Windows (D3D12) one takes a
@@ -923,10 +959,7 @@ export class Renderer {
       ];
       this.lutDummy = device.createBindGroup({
         layout: this.lutReadLayout,
-        entries: [
-          { binding: 2, resource: tx[0]!.createView() },
-          { binding: 3, resource: tx[1]!.createView() },
-        ],
+        entries: [{ binding: 2, resource: tx[0]!.createView() }, { binding: 3, resource: tx[1]!.createView() }, ...this.aerialRead()],
       });
     }
     // (the first image needs only the scene's specialised realtime kernel — compiled at the first frame,
@@ -1448,7 +1481,7 @@ export class Renderer {
         maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
         maxBufferSize: adapter.limits.maxBufferSize,
         maxTextureDimension2D: adapter.limits.maxTextureDimension2D,
-        maxSampledTexturesPerShaderStage: Math.min(SEA_TEXTURE_LIMIT, adapter.limits.maxSampledTexturesPerShaderStage),
+        maxSampledTexturesPerShaderStage: Math.min(AERIAL_TEXTURE_LIMIT, adapter.limits.maxSampledTexturesPerShaderStage),
         maxStorageBuffersPerShaderStage: Math.min(SCENERY_STORAGE_LIMIT, adapter.limits.maxStorageBuffersPerShaderStage),
       },
     });
@@ -1473,15 +1506,18 @@ export class Renderer {
     loading.done("gpu");
     gpuDiagnostics.enter("shader-download");
     const src = {
-      trace: seaShader(
-        sceneryShader(
-          surfaceShader(
-            withForest(await wgsl(traceWGSL), await wgsl(forestSource)),
-            device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT,
+      trace: aerialShader(
+        seaShader(
+          sceneryShader(
+            surfaceShader(
+              withForest(await wgsl(traceWGSL), await wgsl(forestSource)),
+              device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT,
+            ),
+            device.limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT,
           ),
-          device.limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT,
+          device.limits.maxSampledTexturesPerShaderStage >= SEA_TEXTURE_LIMIT,
         ),
-        device.limits.maxSampledTexturesPerShaderStage >= SEA_TEXTURE_LIMIT,
+        device.limits.maxSampledTexturesPerShaderStage >= AERIAL_TEXTURE_LIMIT,
       ),
       seafft: await wgsl(seafftWGSL),
       display: await wgsl(displayWGSL),
@@ -2414,6 +2450,32 @@ export class Renderer {
     const liquid = hexToLinear(s.waterColor);
     set(45, ...(liquid.map((c) => 0.17 * s.waterDensity * -Math.log(Math.max(c, 0.02))) as [number, number, number]), 0);
     set(46, ...hexToLinear(s.waterGlowColor), 0);
+    // (our universe's bodies a ray from the camera may meet — trace.wgsl ourSegment's own test, reach against half
+    // a pixel at its distance: the planets and moons under it skipped there anyway —, and the stars: their
+    // indices, 4 a word, in water3.zw, water4.w, water5.w; their count in path.w — 0: every body)
+    {
+      const start = ourStart(bodies);
+      const list: number[] = [];
+      let all = !this.bodyList;
+      for (let k = start; k < Math.min(bodies.length, MAX_BODIES) && !all; k++) {
+        const b = bodies[k]!;
+        const P = [b.pos[0] - origin[0], b.pos[1] - origin[1], b.pos[2] - origin[2]];
+        const D = Math.hypot(P[0]!, P[1]!, P[2]!);
+        // (the reach: its rings', its air's — at most twice its radius —; a star always: its disc, its corona)
+        const reach = b.radius * Math.max(b.rings?.outer ?? 0, b.surface >= 4 ? 2 : 1);
+        if (b.kind === 0 || reach >= 0.45 * pixelAngle * D) {
+          if (list.length === 16) all = true;
+          else list.push(k);
+        }
+      }
+      const words = [0, 0, 0, 0];
+      if (!all) list.forEach((k, i) => (words[i >> 2]! |= k << (8 * (i & 3))));
+      u[44 * 4 + 2] = words[0]! >>> 0;
+      u[44 * 4 + 3] = words[1]! >>> 0;
+      u[45 * 4 + 3] = words[2]! >>> 0;
+      u[46 * 4 + 3] = words[3]! >>> 0;
+      f[40 * 4 + 3] = all ? 0 : list.length + 0.5;
+    }
     // light probe for the spaceship: a new frame's weight (1 after a scene reset: no stale light);
     // its axes: the planet's probe camera's, else fixed (the ZAMO's, or the throat's), so that it
     // keeps a long running mean while the camera turns — shortened as what it sees moves (a texel
@@ -2746,6 +2808,17 @@ export class Renderer {
       const held = (this.earthSurface.active && !surfaceOn) || (this.earthScenery.active && !sceneryOn);
       if (this.earthHeld && !held && !this.offline) queueMicrotask(() => this.invalidate());
       this.earthHeld = held;
+    }
+    // (the aerial perspective's table: the live view's realtime frames, a world with air near the camera and the camera
+    // within its air — its pass's kernel compiled for this key; else the rays march their own air)
+    this.aerialPipe = null;
+    if (t === this.live && !o.probe && (o.flags & FLAG_INTERLEAVED) !== 0 && this.aerialTable && near && atm) {
+      const inside = Math.hypot(...near.centre) < 1 + (0.9 * 12 * atm.H) / mR;
+      const pipe = this.featureKey !== FEATURES_ALL ? (this.variants.get(this.featureKey)?.air ?? null) : null;
+      if (inside && pipe) {
+        this.aerialPipe = pipe;
+        u[17 * 4 + 2] = (u[17 * 4 + 2] ?? 0) | FLAG_AERIAL;
+      }
     }
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
@@ -3173,6 +3246,7 @@ export class Renderer {
     const pass = enc.beginComputePass(this.prof.pass("ship probe: trace"));
     pass.setPipeline(pipeline);
     pass.setBindGroup(0, t.traceBind);
+    pass.setBindGroup(1, this.envRead);
     pass.dispatchWorkgroups(32 / k, 16 / k);
     pass.end();
     // (its filtering: every other frame when it changes slowly)
@@ -3227,6 +3301,7 @@ export class Renderer {
     const pass = enc.beginComputePass(this.prof.pass("planet probe"));
     pass.setPipeline(pipeline);
     pass.setBindGroup(0, t.probeBind);
+    pass.setBindGroup(1, this.envRead);
     pass.dispatchWorkgroups(PROBE_W / 32, PROBE_H / 32);
     pass.end();
     const last = ++job.slice >= 16;
@@ -3287,6 +3362,8 @@ export class Renderer {
       env: GPUComputePipeline | null;
       lut: GPUComputePipeline | null;
       lutq: GPUComputePipeline | null;
+      /** the aerial perspective's table's pass (trace.wgsl aerial) */
+      air: GPUComputePipeline | null;
       /** a still view asked for the quality cascade (q, lutq) */
       qWanted: boolean;
       /** a cascade under way (realtime: rt, env, lut; quality: q, lutq) — stopped, its queued compiles
@@ -3323,13 +3400,14 @@ export class Renderer {
    * inlined): the general one is compiled after it, and until it lands a scene whose kernel is still
    * compiling is drawn by an earlier scene's covering its features, else not drawn (null).
    */
-  private traceVariant(kind: "rt" | "q" | "env" | "lut" | "lutq", key = this.featureKey, create = true): GPUComputePipeline | null {
+  private traceVariant(kind: "rt" | "q" | "env" | "lut" | "lutq" | "air", key = this.featureKey, create = true): GPUComputePipeline | null {
     const general = {
       rt: this.tracePipeline,
       q: this.qualityPipeline,
       env: this.envPipeline,
       lut: this.lutPipeline,
       lutq: this.lutQPipeline,
+      air: null,
     }[kind];
     if (key === FEATURES_ALL) {
       void this.generalCompile.start();
@@ -3349,6 +3427,7 @@ export class Renderer {
         env: null,
         lut: null,
         lutq: null,
+        air: null,
         qWanted: false,
         busy: false,
         qBusy: false,
@@ -3390,7 +3469,7 @@ export class Renderer {
   private realtimeCascade(key: number, slot: NonNullable<ReturnType<Renderer["variants"]["get"]>>) {
     slot.busy = true;
     const current = this.wanted(key, slot);
-    const compile = (entry: "main" | "env" | "lut", onStall?: () => void) =>
+    const compile = (entry: "main" | "env" | "lut" | "aerial", onStall?: () => void) =>
       this.variantQueue.run(current, () => this.timedVariant(key, entry), onStall);
     const run = async () => {
       if (!slot.rt) {
@@ -3404,6 +3483,8 @@ export class Renderer {
       void this.generalCompile.start();
       await this.firstImage;
       if (!slot.lut && (key & LUT_BLOCKERS) === 0) slot.lut = await compile("lut");
+      // (the aerial perspective's table: a world near the camera — its bodies' bit)
+      if (!slot.air && (key & 128) !== 0 && this.aerialOK) slot.air = await compile("aerial");
     };
     void run().then(
       () => (slot.busy = false),
@@ -3440,14 +3521,14 @@ export class Renderer {
 
   /** An earlier scene's kernel with every feature of this key compiled in (the general one is the widest
    *  of them): it draws this scene as it would — the extra features are switched off by the params. */
-  private coveringVariant(key: number, kind: "rt" | "q" | "env" | "lut" | "lutq"): GPUComputePipeline | null {
+  private coveringVariant(key: number, kind: "rt" | "q" | "env" | "lut" | "lutq" | "air"): GPUComputePipeline | null {
     for (const [k, v] of this.variants) if ((k & key) === key && v[kind]) return v[kind];
     return null;
   }
 
   /** mkVariant, its key and compile time in the diagnostic — every one, not only those the first image
    *  waits for: a scene's feature bit switching on in flight (the scenery's 8192) recompiles for seconds (R-M4) */
-  private async timedVariant(key: number, entry: "main" | "env" | "lut", quality = false) {
+  private async timedVariant(key: number, entry: "main" | "env" | "lut" | "aerial", quality = false) {
     const t0 = performance.now();
     const p = await this.mkVariant(key, entry, quality);
     const s = ((performance.now() - t0) / 1000).toFixed(1);
@@ -3460,10 +3541,17 @@ export class Renderer {
   }
 
   /** A specialised pipeline of the tracer for a features key (the unused ones compiled out). */
-  private mkVariant(key: number, entryPoint: "main" | "env" | "lut", quality: boolean): Promise<GPUComputePipeline> {
+  private mkVariant(key: number, entryPoint: "main" | "env" | "lut" | "aerial", quality: boolean): Promise<GPUComputePipeline> {
     const has = (bit: number) => ((key & bit) !== 0 ? 1 : 0);
     return this.device.createComputePipelineAsync({
-      layout: entryPoint === "main" ? this.mainLayout : entryPoint === "lut" ? this.lutLayout : this.tracePipeLayout,
+      layout:
+        entryPoint === "main"
+          ? this.mainLayout
+          : entryPoint === "lut"
+            ? this.lutLayout
+            : entryPoint === "aerial"
+              ? this.aerialLayout
+              : this.tracePipeLayout,
       compute: {
         module: this.traceModule,
         entryPoint,
@@ -3562,6 +3650,15 @@ export class Renderer {
         lp.end();
       }
     }
+    // (the aerial perspective's table before the rays that read it)
+    if (!quality && this.aerialPipe) {
+      const ap = enc.beginComputePass(this.prof.pass("aerial perspective"));
+      ap.setPipeline(this.aerialPipe);
+      ap.setBindGroup(0, t.traceBind);
+      ap.setBindGroup(1, this.aerialWrite);
+      ap.dispatchWorkgroups(Math.ceil(AERIAL_SIZE[0] / 8), Math.ceil(AERIAL_SIZE[1] / 8));
+      ap.end();
+    }
     const pipeline = this.traceVariant(quality ? "q" : "rt");
     // (the quality kernel still compiling — frame() keeps a still view on the realtime path until then;
     // the scene's realtime kernel still compiling at the start: no image yet)
@@ -3650,22 +3747,50 @@ export class Renderer {
       h,
       write: d.createBindGroup({
         layout: this.lutWriteLayout,
-        entries: [
-          { binding: 0, resource: tex[0]!.createView() },
-          { binding: 1, resource: tex[1]!.createView() },
-        ],
+        entries: [{ binding: 0, resource: tex[0]!.createView() }, { binding: 1, resource: tex[1]!.createView() }, ...this.aerialRead()],
       }),
       read: d.createBindGroup({
         layout: this.lutReadLayout,
-        entries: [
-          { binding: 2, resource: tex[0]!.createView() },
-          { binding: 3, resource: tex[1]!.createView() },
-        ],
+        entries: [{ binding: 2, resource: tex[0]!.createView() }, { binding: 3, resource: tex[1]!.createView() }, ...this.aerialRead()],
       }),
     };
   }
   /** (targets without a LUT: a texel's worth, never read — the flag is off) */
   private lutDummy: GPUBindGroup | null = null;
+  // the aerial perspective's table (trace.wgsl aerial): its textures, layouts, bind group, its pass's pipeline this frame
+  private aerialWriteLayout!: GPUBindGroupLayout;
+  private aerialLayout!: GPUPipelineLayout;
+  private aerialTex: GPUTexture[] = [];
+  private aerialWrite!: GPUBindGroup;
+  private aerialSampler!: GPUSampler;
+  private aerialPipe: GPUComputePipeline | null = null;
+  private envReadLayout!: GPUBindGroupLayout;
+  private envRead!: GPUBindGroup;
+  /** the air before the near world's ground read from the aerial perspective's table (a switch for comparisons) */
+  aerialTable = true;
+  /** the device binds the table's two textures more (AERIAL_TEXTURE_LIMIT) */
+  private get aerialOK() {
+    return this.device.limits.maxSampledTexturesPerShaderStage >= AERIAL_TEXTURE_LIMIT;
+  }
+  /** the table's entries in the kernels' second bind group layouts */
+  private aerialReadLayout(): GPUBindGroupLayoutEntry[] {
+    if (!this.aerialOK) return [];
+    const C = GPUShaderStage.COMPUTE;
+    return [
+      { binding: 4, visibility: C, texture: { sampleType: "float", viewDimension: "3d" } },
+      { binding: 5, visibility: C, texture: { sampleType: "float", viewDimension: "3d" } },
+      { binding: 6, visibility: C, sampler: { type: "filtering" } },
+    ];
+  }
+  /** the table's entries for the main kernel's second bind group */
+  private aerialRead(): GPUBindGroupEntry[] {
+    if (!this.aerialOK) return [];
+    return [
+      { binding: 4, resource: this.aerialTex[0]!.createView() },
+      { binding: 5, resource: this.aerialTex[1]!.createView() },
+      { binding: 6, resource: this.aerialSampler },
+    ];
+  }
 
   /** the live frame's phase, for the post chain (the temporal reprojection runs on realtime frames) */
   private taPhase: FrameStats["phase"] = "realtime";
@@ -3706,6 +3831,8 @@ export class Renderer {
   cockpitMask = true;
   /** the craft's light probe traced every this many frames while what it sees moves (a switch for comparisons) */
   probeEveryMoving = 1;
+  /** the bodies a ray from the camera may meet listed for the kernel (ourSegment), not all looked at (a switch for comparisons) */
+  bodyList = true;
   /** The cost view (a debug view, trace.wgsl COST_VIEW): each ray's work as a heat map in place of the image —
    *  0 off, 1 all of it, 2 … 13 one kind (docs/BH-API.md: the ground's march, its heights, its shadows, the clouds,
    *  the air, the water, the scenery, the integrator, the noise, the stars, the bodies, the main loop) —, shown raw
@@ -3746,7 +3873,7 @@ export class Renderer {
   private tuneKey = 0;
   private tunes = new Map<number, Record<string, number>>();
   /** the camera's move that breaks the history: the nearest ground's or scenery's shift on the image [px] (a switch for comparisons) */
-  taParallaxPx = 0.5;
+  taParallaxPx = 64;
   /** the history is dropped on the next frame (a new scene, a jump) */
   resetTemporal() {
     this.taPrev = null;

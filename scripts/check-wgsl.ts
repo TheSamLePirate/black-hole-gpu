@@ -11,6 +11,7 @@
 import { Glob } from "bun";
 import { withForest } from "../src/forest-shader";
 import { surfaceShader } from "../src/system/earth-surface";
+import { aerialShader } from "../src/system/aerial";
 import { sceneryShader } from "../src/system/scenery";
 import { CHROME, withGpuPage } from "./lib/headless-gpu";
 
@@ -21,6 +22,7 @@ for (const host of ["trace.wgsl", "character.wgsl"]) shaders[`${host} + forest.w
 const traced = shaders["trace.wgsl + forest.wgsl"]!;
 shaders["trace.wgsl without scenery"] = sceneryShader(surfaceShader(traced, true), false);
 shaders["trace.wgsl without surface textures"] = sceneryShader(surfaceShader(traced, false), true);
+shaders["trace.wgsl without the aerial table"] = aerialShader(traced, false);
 
 try {
   const v = await withGpuPage((evaluate) =>

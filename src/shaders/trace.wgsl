@@ -51,14 +51,14 @@ struct Params {
   whZ: vec4f,
   bodyCfg: vec4f,  // number of bodies (spheres: stars, planets), index of the massive star (Gargantua orbits the centre of mass with it; −1), mean radiance of the far throat over the Sun's (our side lit by it), temperature of that Sun [K]
   bodyCfg2: vec4f, // point-source scale: sub-pixel bodies drawn at the catalogue stars' flux scale (its ratio to the physical one); radiance of a magnitude −2 point spread over a pixel's glow, and its flux (highlight compression above them); index of our universe's first body (= count: none)
-  path: vec4f,     // camera free-fall path: point count, tube radius per unit ray length, fate (1 horizon, 2 escape), unused
+  path: vec4f,     // camera free-fall path: point count, tube radius per unit ray length, fate (1 horizon, 2 escape); the bodies listed (+0.5; 0: all — listedBody)
   bary: vec4f,     // Gargantua orbits the centre of mass: q = m/(M + m) (0: no), relative orbit Ω; the auroras (S2:
                    // over the Earth — another scene's bodies never near it): their Kp (0: none), their clock [s, 0…900)
   water: vec4f,    // cinematic liquid throat: on (0/1), ripple strength, reflectance at normal incidence F0, clock [s]
   water2: vec4f,   // splash where the camera went through: centre (rep unit vector), clock at the crossing
-  water3: vec4f,   // glow of the liquid, a pixel's footprint on the throat [rad], unused, unused
-  water4: vec4f,   // absorption of the liquid per unit path (rgb, from its colour and density), unused
-  water5: vec4f,   // colour of the glow (linear rgb), unused
+  water3: vec4f,   // glow of the liquid, a pixel's footprint on the throat [rad]; zw: the listed bodies' indices (listedBody)
+  water4: vec4f,   // absorption of the liquid per unit path (rgb, from its colour and density); w: listed bodies' indices
+  water5: vec4f,   // colour of the glow (linear rgb); w: listed bodies' indices
   envCfg: vec4f,   // light probe: reset (1), 2×2 phase, full refresh (0/1), averaging window [samples]
   // local patch (src/system/local-patch.ts): a body near the camera, along straight rays in the
   // camera's rest frame (components along the ZAMO axes, like the look directions), unit = its radius
@@ -184,6 +184,8 @@ override COST_VIEW: u32 = 0u;
 override TUNE_AIR_N: u32 = 32u;
 override TUNE_SHADOW_N: u32 = 48u;
 override TUNE_SHADOW_K: f32 = 1.18;
+// (the geodesics' tolerance far from the hole: × this beyond 20 M, × 1 within 10 M — the photon sphere's rays exact)
+override TUNE_EPS_FAR: f32 = 1.0;
 // (the ray's work by kind: 0 the ground's march steps (the Earth's, a world's), 1 the ground's heights read (earthH,
 // relief), 2 its shadows' steps, 3 the clouds' steps (the volume's, the weather's), 4 the air's (the auroras'), 5 the
 // water's (the sea's surface search, the mirror's march), 6 the scenery's boxes visited, 7 the geodesic integrator's
@@ -215,6 +217,7 @@ const FLAG_ADAPTIVE_RK = 1u;    // step-doubling error control + Richardson extr
 const FLAG_ADAPTIVE_SPP = 2u;   // skip converged pixels (progressive / offline)
 const FLAG_TEMPORAL = 4u;       // temporal accumulation of realtime samples
 const FLAG_INTERLEAVED = 8u;    // realtime pass: one pixel per block, rotating offset
+const FLAG_AERIAL = 64u;        // the aerial perspective's table is there: the camera's rays near a world with air read it (earthLook)
 const FLAG_LUT = 32u;           // the far field's LUT is there: rays between clean samples read it (main: farLut)
 const FLAG_REPROJECT = 16u;     // realtime under the temporal reprojection: the frames' rays accumulate —
                                 // each prefiltered over its pixel (the history supplies the coverage)
@@ -557,9 +560,10 @@ fn stepSizeAt(s: GState, L: f32, a: f32, eps: f32, rH: f32, pc: vec3f) -> f32 {
   let sn = max(sin(s.x.y), 1e-6);
   let c = cos(s.x.y);
   let sig = r * r + a * a * c * c;
-  var h = eps * (r - rH) * (1.0 + 0.01 * r);
-  h = min(h, eps * sig * sn * sn / (abs(L) + 1e-3));
-  h = min(h, eps * sig * max(sn, 0.02) / (abs(s.p.y) + 1e-3));
+  let ef = eps * (1.0 + (TUNE_EPS_FAR - 1.0) * clamp((r - 10.0) / 10.0, 0.0, 1.0));
+  var h = ef * (r - rH) * (1.0 + 0.01 * r);
+  h = min(h, ef * sig * sn * sn / (abs(L) + 1e-3));
+  h = min(h, ef * sig * max(sn, 0.02) / (abs(s.p.y) + 1e-3));
   let hr = P.ext2.z;
   if (HAS_THICK && hr > 0.0 && P.modes.w == 1u) {
     // volumetric disk: never jump over the layer |z| < 4H (8H with its haze; the smoke's, ~0.5 M above
@@ -601,6 +605,7 @@ fn stepSizeAt(s: GState, L: f32, a: f32, eps: f32, rH: f32, pc: vec3f) -> f32 {
     // traced ones only: those met on the rays' straight way out — K2, Edmunds, 2 000 AU off — do not
     // bound the steps)
     for (var k = 0u; k < nb; k++) {
+      cost(10u);
       if (bodyWhere(k) != 0u) { continue; }
       let R = bodyRadius(k);
       let d = length(pc - bodyCentre(k, P.time.x + s.x.w)) / R;
@@ -1223,6 +1228,15 @@ fn spunAxes(k: u32) -> mat3x3f {
   return transpose(mat3x3f(ex, ey, a[2]));
 }
 
+// The i-th body ourSegment looks at: the renderer's list (path.w of them, 4 indices a word in water3.zw, water4.w,
+// water5.w — the bodies a ray from the camera may meet: those big enough on the image, the stars), or every one of ours
+fn listedBody(i: u32, useList: bool) -> u32 {
+  if (!useList) { return ourStart() + i; }
+  let w = i >> 2u;
+  let v = select(select(select(P.water5.w, P.water4.w, w == 2u), P.water3.w, w == 1u), P.water3.z, w == 0u);
+  return (bitcast<u32>(v) >> (8u * (i & 3u))) & 255u;
+}
+
 // Our universe's bodies on a straight piece of a ray (P.ourCam-relative home coordinates): from o
 // along the unit direction d, over [0, tMax); travel: the ray's length before o (the pixel's
 // footprint). The nearest body stops the ray (a star shines, a planet reflects its star's light);
@@ -1233,7 +1247,11 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   var tBest = tMax;
   var kBest = 0u;
   var hit = false;
-  for (var k = ourStart(); k < bodyCount(); k++) {
+  // (from the camera: only the bodies the renderer listed — those such a ray may meet, by the test below —, else all)
+  let useList = P.path.w > 0.0 && !dneg && travel == 0.0 && all(o == vec3f(0.0));
+  let nB = select(bodyCount() - ourStart(), u32(P.path.w), useList);
+  for (var ki = 0u; ki < nB; ki++) {
+    let k = listedBody(ki, useList);
     cost(10u);
     let wk = bodyWhere(k);
     if (!(wk == 4u || (wk == 2u && !dneg))) { continue; }
@@ -1263,7 +1281,8 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   }
   let V = -d;
   // rings in front of the nearest body
-  for (var k = ourStart(); k < bodyCount(); k++) {
+  for (var ki = 0u; ki < nB; ki++) {
+    let k = listedBody(ki, useList);
     cost(10u);
     if (ringOuter(k) <= 0.0 || !isOurs(k) || (dneg && bodyWhere(k) != 4u)) { continue; }
     let c = bodies[BV * k].xyz - o;
@@ -1287,7 +1306,8 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   // the Earth (its air in front of what the ray meets — its limb's glow; its ground, clouds and air when
   // it is what the ray meets): one call, the ground or not (every call is a copy the compiler builds)
   {
-    for (var k = ourStart(); k < bodyCount(); k++) {
+    for (var ki = 0u; ki < nB; ki++) {
+      let k = listedBody(ki, useList);
       cost(10u);
       let wk = bodyWhere(k);
       if (!hasAir(k) || !(wk == 4u || (wk == 2u && !dneg))) { continue; }
@@ -1315,7 +1335,8 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   }
   // our Sun's corona, seen where nothing stands before it (the Moon in front: it hides the corona there
   // too) — only an eclipse shows it: a millionth of the Sun's light, drowned in the day's sky otherwise
-  for (var k = ourStart(); k < bodyCount(); k++) {
+  for (var ki = 0u; ki < nB; ki++) {
+    let k = listedBody(ki, useList);
     cost(10u);
     if (bodyKind(k) != 0u || probeNoStar) { continue; }
     let wk = bodyWhere(k);
@@ -1331,7 +1352,8 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   // our stars' disks, their edges antialiased: a pixel's share of the disk (not a point: in or out as the
   // samples jitter) — the image's brightest light by far, its bloom over the whole frame steady from frame
   // to frame; a body before it (the Moon's limb on the Sun) taking its own share of the pixel
-  for (var k = ourStart(); k < bodyCount(); k++) {
+  for (var ki = 0u; ki < nB; ki++) {
+    let k = listedBody(ki, useList);
     cost(10u);
     if (bodyKind(k) != 0u || probeNoStar) { continue; }
     let wk = bodyWhere(k);
@@ -1359,7 +1381,8 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
     let cov = max(cov3.x, max(cov3.y, cov3.z));
     if (cov <= 0.0) { continue; }
     var vis = 1.0;
-    for (var j = ourStart(); j < bodyCount(); j++) {
+    for (var ji = 0u; ji < nB; ji++) {
+      let j = listedBody(ji, useList);
       cost(10u);
       if (j == k) { continue; }
       let wj = bodyWhere(j);
@@ -4291,7 +4314,7 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
   let moonE = 0.3 * EARTH_MOON * pow(max(P.earth3.w, 0.0), 1.5);
   // (from inside the air, samples crowded near the camera: the densest air is there)
   let inside = dot(ro, ro) < airTop() * airTop();
-  let N = TUNE_AIR_N;
+  let N = select(TUNE_AIR_N, AP_N, AP_N > 0u);
   var tau = vec3f(0.0);
   var tPrev = ta;
   var split = tSplit <= ta;
@@ -6837,6 +6860,96 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
   return o;
 }
 
+// ---------------------------------------------------------------------------------------------
+// The aerial perspective's table (renderer.ts dispatchTrace; Hillaire 2020's froxels): the air between the camera
+// and each distance along its rays — for AP_X × AP_Y directions over the image, AP_Z slices from the camera out to
+// beyond the air's end (exponentially spaced: metres near, hundreds of kilometres far) —, written before each
+// realtime frame near a world with air, the camera within it: the light the air scatters towards the camera
+// (rgb; a: its moonlit share's luminance) and what it lets through (rgb). Each column marched once, its slices one
+// after the other (earthAir over each, a few samples, from the slice's start: the light of the ones before dimmed by
+// them) — stopped at the world's sphere, no air within the ground. The camera's rays near the world (earthNear →
+// earthLook) read it at the ground's distance, the cloud's, the air's end — in place of their own 32 samples.
+// ---------------------------------------------------------------------------------------------
+@group(1) @binding(4) var apInA: texture_3d<f32>;
+@group(1) @binding(5) var apInB: texture_3d<f32>;
+@group(1) @binding(6) var apSamp: sampler;
+@group(1) @binding(7) var apOutA: texture_storage_3d<rgba16float, write>;
+@group(1) @binding(8) var apOutB: texture_storage_3d<rgba16float, write>;
+const AP_Z = 32u;
+// (earthAir's samples when set: a slice's few; 0 its own)
+var<private> AP_N: u32 = 0u;
+// (the camera's ray's place on the image [uv] while the table stands for its air; < 0: not)
+var<private> AP_UV: vec2f = vec2f(-1.0);
+// the slices' nearest distance (≈ 3 m of the Earth's radius) and the farthest: past the air's end along any ray
+// from the camera (twice its horizontal reach — a ray grazing the ground's horizon goes on as far again)
+const AP_T0 = 5e-7;
+fn apFar(ro: vec3f) -> f32 { return 2.2 * sqrt(max(airTop() * airTop() - dot(ro, ro), 1e-12)) + 1e-6; }
+fn apSliceT(z: u32, tFar: f32) -> f32 {
+  if (z == 0u) { return 0.0; }
+  return AP_T0 * pow(tFar / AP_T0, f32(z - 1u) / f32(AP_Z - 2u));
+}
+// (a distance's place among the slices — fractional; t ≥ tFar: the last)
+fn apSliceZ(t: f32, tFar: f32) -> f32 {
+  if (t <= AP_T0) { return max(t, 0.0) / AP_T0; }
+  return min(1.0 + log(t / AP_T0) / log(tFar / AP_T0) * f32(AP_Z - 2u), f32(AP_Z - 1u));
+}
+// the air between the camera and t along the ray at AP_UV: its light (o.L, its moonlit share o.Lm) and its
+// transmittance (o.T), as earthAir gives them (t = 3e38: the air's end)
+fn apRead(t: f32, tFar: f32) -> EarthAir {
+  let z = apSliceZ(min(t, tFar), tFar);
+  let uvw = vec3f(AP_UV, (z + 0.5) / f32(AP_Z));
+  let a = textureSampleLevel(apInA, apSamp, uvw, 0.0);
+  let b = textureSampleLevel(apInB, apSamp, uvw, 0.0);
+  var o: EarthAir;
+  o.L = max(a.rgb, vec3f(0.0));
+  o.Lm = vec3f(max(a.a, 0.0));
+  o.T = clamp(b.rgb, vec3f(0.0), vec3f(1.0));
+  return o;
+}
+
+@compute @workgroup_size(8, 8)
+fn aerial(@builtin(global_invocation_id) gid: vec3u) {
+  let dims = textureDimensions(apOutA);
+  if (gid.x >= dims.x || gid.y >= dims.y) { return; }
+  // (the column's ray: the image's at its centre, as trace and earthNear set it)
+  let uv = (vec2f(gid.xy) + 0.5) / vec2f(dims.xy);
+  let ndc = vec2f(2.0 * uv.x - 1.0, 1.0 - 2.0 * uv.y);
+  let look = normalize(P.camFwd.xyz + ndc.x * P.cam.w * P.camRight.w * P.camRight.xyz + ndc.y * P.cam.w * P.camUp.xyz);
+  let k = u32(P.near1.w);
+  setAir(k);
+  let ab = squashOf(k);
+  let ro = nearCam();
+  let rd = normalize(squashed(toBody(look), ab));
+  WX_W = select(0.0, P.wx[0].x, HAS_WX && isEarth(k) && earthOn());
+  WX_Q = normalize(ro);
+  let lt = nearLight(k);
+  let Ls = normalize(squashed(toBody(lt.dir), ab));
+  let tFar = apFar(ro);
+  // (no air within the ground: the column ends at the world's sphere)
+  let tg = unitHit(ro, rd);
+  let tEnd = select(tFar, min(tg, tFar), tg > 0.0);
+  var T = vec3f(1.0);
+  var L = vec3f(0.0);
+  var Lm = 0.0;
+  var tPrev = 0.0;
+  textureStore(apOutA, vec3u(gid.xy, 0u), vec4f(0.0));
+  textureStore(apOutB, vec3u(gid.xy, 0u), vec4f(1.0));
+  AP_N = 3u;
+  for (var z = 1u; z < AP_Z; z++) {
+    let t = min(apSliceT(z, tFar), tEnd);
+    if (t > tPrev) {
+      let e = earthAir(ro + rd * tPrev, rd, t - tPrev, Ls, lt.e, 0.5, 3e38);
+      L += T * e.L;
+      Lm += luminance(T * e.Lm);
+      T *= e.T;
+      tPrev = t;
+    }
+    textureStore(apOutA, vec3u(gid.xy, z), vec4f(L, Lm));
+    textureStore(apOutB, vec3u(gid.xy, z), vec4f(T, 0.0));
+  }
+  AP_N = 0u;
+}
+
 fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32, volume: bool) -> EarthLook {
   var o: EarthLook;
   let earth = isEarth(k) && earthOn();
@@ -6907,7 +7020,21 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
     }
   }
   // the air: to the ground (or out), and to the cloud — seen through the air before it only
-  let air = earthAir(ro, rd, select(3e38, tHit, tHit > 0.0), Ls, E, jit, select(3e38, tc, alpha > 0.0));
+  // (the camera's ray, the aerial perspective's table there: read at the ground's distance and the cloud's)
+  var air: EarthAir;
+  if (AP_UV.x >= 0.0 && dot(ro, ro) < airTop() * airTop()) {
+    let tFar = apFar(ro);
+    air = apRead(select(3e38, tHit, tHit > 0.0), tFar);
+    air.Tc = vec3f(1.0);
+    air.Lc = vec3f(0.0);
+    if (alpha > 0.0) {
+      let c = apRead(tc, tFar);
+      air.Tc = c.T;
+      air.Lc = c.L;
+    }
+  } else {
+    air = earthAir(ro, rd, select(3e38, tHit, tHit > 0.0), Ls, E, jit, select(3e38, tc, alpha > 0.0));
+  }
   o.Lm = air.Lm;
   var G = vec3f(0.0);
   if (tHit > 0.0) {
@@ -7009,6 +7136,7 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   let e = earthLook(k, ro, rd, t, normalize(squashed(toBody(lt.dir), ab)), lt.e, squashed(toBody(P.camRight.xyz), ab), squashed(toBody(P.camUp.xyz), ab),
     0.0, pixFoot(), fract(rnd * 7.31 + 0.37), P.earth4.w > 0.5);
   EARTH_SHADOW_ON = false;
+  AP_UV = vec2f(-1.0);
   SEA_ON = false;
   WX_W = 0.0;
   WS = vec4f(0.0);
@@ -7325,6 +7453,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       }
       // bodies are opaque: they hide the tube beyond their surface in this step (then the ray ends)
       for (var k = 0u; k < ourStart(); k++) {
+        cost(10u);
         let ts = sphereHit(q0, q1, bodyCentre(k, tNow + n.x.w), bodyRadius(k));
         if (ts >= 0.0 && pg.w > ts) { behindDisk = true; }
       }
@@ -7354,6 +7483,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       var tHit = 2.0;
       var kHit = 0u;
       for (var k = 0u; k < ourStart(); k++) {
+        cost(10u);
         if (bodyWhere(k) != 0u) { continue; }
         let c0 = bodyCentre(k, tNow + s.x.w);
         let c1 = bodyCentre(k, tEm);
@@ -7947,7 +8077,10 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     }
     pos = vec2f(f32(px) + 0.5, f32(py) + 0.5) + jit;
     let ndc = vec2f(2.0 * pos.x / P.res.x - 1.0, 1.0 - 2.0 * pos.y / P.res.y);
+    // (the aerial perspective's table for the air before the near world's ground — earthNear's)
+    if ((flags & FLAG_AERIAL) != 0u) { AP_UV = pos / P.res.xy; }
     if ((flags & FLAG_LUT) == 0u || !farLut(pos, &tr)) { tr = trace(ndc, rnd, tSample); }
+    AP_UV = vec2f(-1.0);
   }
   wgDir[li] = vec4f(tr.dir, select(0.0, tr.sky, sampling && tr.bgW > 0.0));
   wgPos[li] = pos;

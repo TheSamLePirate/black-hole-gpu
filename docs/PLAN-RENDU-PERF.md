@@ -51,6 +51,29 @@ rayon et le nombre de rayons qui font la vitesse.
    cockpit, la tête et l'objectif immobiles. Trace : Alpes 27,2 → 19,2 ms, Tarifa 43,9 → 32,4 ms ; depuis la cabine du
    Ranger devant Gargantua 52 → 18 ms (Interstellar), 30 → 9 ms (Kerr). Images identiques.
 
+2. **L'historique temporel gardé en vol** (`renderer.taParallaxPx` 0,5 → 64 px) : il était jeté dès que le sol bougeait
+   d'un demi-pixel — en vol bas, à chaque image ; le shader reprojette déjà par la profondeur. PSNR contre l'image
+   convergée (`flight-quality`) : Alpes 31,6 → 33,0 dB, Tarifa 40,3 → 44,4 dB, en virage serré 29,8 → 30,3, en
+   rase-mottes 37,0 → 37,2 — ×4 avec historique vaut ×3 sans ; plus d'escaliers ni de nuages en blocs ; en virage
+   serré, un peu de flou du premier plan au lieu des blocs.
+3. **La table de perspective aérienne** (`trace.wgsl` aerial/apRead, `system/aerial.ts`, `renderer.aerialTable`) : 96 × 54
+   directions × 32 tranches exponentielles jusqu'au-delà de l'air, chaque colonne intégrée une fois (earthAir par
+   tranche, 3 échantillons, composé ; arrêtée au sol) ; les rayons de la caméra près d'un monde avec air la lisent au
+   sol, au nuage, à la fin de l'air au lieu de leurs 32 échantillons. Sa passe < 0,3 ms. Trace : Tarifa −21,5 %
+   (36,2 → 28,4 ms, l'image 59 → 43 ms), Alpes −15 %, Yosemite −6 à −12 %, Andes au couchant −6 %, Bretagne −9 % ;
+   images identiques (43–47 dB entre les deux). Deux textures de plus pour le noyau : demandées si l'appareil les
+   permet (21), sinon le traceur sans la table (`aerialShader`).
+
+## Essayés, non retenus
+
+- **La tolérance des géodésiques doublée** (`realtimeEps` 0,12 → 0,24) : −32 % sur Kerr par la tranche, mais des taches
+  autour de l'anneau de photons et l'ombre déformée — rejeté. Doublée seulement loin du trou (`tune` TUNE_EPS_FAR) :
+  −13 % sur Kerr, rien ailleurs — à revoir à l'œil avant de l'adopter.
+- **La liste compacte des corps** (`renderer.bodyList`) : les 250 tests de corps par rayon de ciel coûtaient peu (−1,6 ms
+  sur Terre, rien sur Saturne) — gardée (images identiques, test exact), sans gain notable.
+- **L'air à 8 échantillons** au lieu de 32 : −4 à −15 % mais l'image change — la table fait mieux sans rien perdre.
+- **La sonde de lumière une image sur deux** : rien de mesurable.
+
 ## Ce que disent les vues coût
 
 - **Le trou noir** : la boucle principale (les pas géodésiques) — ≈ 150 pas par rayon sur le disque, ≈ 500 au bord de
@@ -62,11 +85,9 @@ rayon et le nombre de rayons qui font la vitesse.
 
 ## À mesurer, puis à faire (par gain attendu)
 
-1. **Garder l'historique temporel en vol** — aujourd'hui jeté dès que le sol bouge d'un demi-pixel (`taParallaxPx`) :
-   en vol bas, à chaque image ; l'image n'est que les rayons de l'image courante. Le shader reprojette déjà par la
-   profondeur (le sol rigide, la profondeur la plus proche, l'écrêtage de Salvi). Mesure : `flight-quality`.
-2. **Les pas géodésiques du ciel lointain** — la tolérance, les contraintes de pas hors du disque.
-3. **L'air par une table** (perspective aérienne précalculée) au lieu de 32 pas par pixel — `tune` TUNE_AIR_N d'abord.
-4. **La marche du terrain** : sauter le vide par une pyramide de hauteurs max (comme la Lune, `demTop`), ou un premier
-   passage rasterisé.
-5. **Les planètes lourdes** (Saturne, Miller, Yosemite) : leurs vues coût.
+1. **La marche du terrain** : sauter le vide par une pyramide de hauteurs max (comme la Lune, `demTop`), ou un premier
+   passage rasterisé — ≈ 150 lectures de hauteur par rayon au sol.
+2. **Les pas géodésiques du ciel lointain** — les contraintes de pas hors du disque (la tolérance lointaine).
+3. **Saturne et Miller** : leur ciel coûte sans que les compteurs l'expliquent encore (les boucles par pas sur les corps
+   de Gargantua viennent d'être instrumentées).
+4. **La netteté en mouvement rapide** (l'historique gardé floute un peu le premier plan en virage serré).
