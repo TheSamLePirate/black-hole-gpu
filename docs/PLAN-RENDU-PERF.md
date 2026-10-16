@@ -64,6 +64,12 @@ rayon et le nombre de rayons qui font la vitesse.
    images identiques (43–47 dB entre les deux). Deux textures de plus pour le noyau : demandées si l'appareil les
    permet (21), sinon le traceur sans la table (`aerialShader`).
 
+4. **La marche du terrain** — le plafond du relief (`system/relief-ceiling.ts`, `earthTop`) : la coquille des marches au
+   plus haut que le sol autour de la caméra peut être (la carte et les tuiles, le détail en plus), pas 9 600 m — Alpes
+   −7 %, Tarifa −3 % ; la marche sur-relâchée (Keinert et al. 2014 : un pas 1,6 fois le pas sûr, repris quand les deux
+   portées sûres laissent un trou) — Andes −10,5 %, Yosemite −10,5 %, Tarifa −6 %. Images identiques.
+   Cumul en cockpit à Tarifa depuis le début : trace 43,9 → 25,7 ms (−41 %), l'image 60 → 41 ms.
+
 ## Essayés, non retenus
 
 - **La tolérance des géodésiques doublée** (`realtimeEps` 0,12 → 0,24) : −32 % sur Kerr par la tranche, mais des taches
@@ -73,6 +79,17 @@ rayon et le nombre de rayons qui font la vitesse.
   sur Terre, rien sur Saturne) — gardée (images identiques, test exact), sans gain notable.
 - **L'air à 8 échantillons** au lieu de 32 : −4 à −15 % mais l'image change — la table fait mieux sans rien perdre.
 - **La sonde de lumière une image sur deux** : rien de mesurable.
+- **L'approche du terrain sans bruit** (les hauteurs des tuiles et le plus que le détail peut ajouter) : −1 à −3 % en
+  plaine, +14 % dans les Alpes (la grande marge des montagnes : les hauteurs complètes plus tôt).
+- **Les corps de Gargantua écartés par la bande de leur orbite** : rien (ils passent près des rayons).
+- **Alléger la déformation des crêtes** (−18 % à Yosemite) : écarté — la forme des crêtes serait changée (choix du
+  16/10 : les garder telles quelles).
+
+## Ce qui coûte encore, sur Terre
+
+Le temps se passe près de la surface, plus dans l'approche : le détail procédural à chaque hauteur lue (sans lui
+−15 à −21 %, sa déformation seule −18 % à Yosemite), les normales (trois hauteurs de plus), les ombres douces du relief
+(≈ 14 % dans les Alpes).
 
 ## Ce que disent les vues coût
 
