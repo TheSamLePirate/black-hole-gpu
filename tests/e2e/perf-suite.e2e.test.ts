@@ -56,8 +56,7 @@ const ABS: Record<string, [string, string, string, string?]> = {
   ],
   noshadow: ["the relief's shadows → none", "__bh.renderer.tune = {}", "__bh.renderer.tune = { TUNE_SHADOW_N: 0 }"],
   probe2: ["the craft's probe every frame → every other", "__bh.renderer.probeEveryMoving = 1", "__bh.renderer.probeEveryMoving = 2"],
-  epsfar: ["the geodesics' tolerance far from the hole × 1 → × 2", "__bh.renderer.tune = {}", "__bh.renderer.tune = { TUNE_EPS_FAR: 2 }"],
-  epsfar3: ["the geodesics' tolerance far from the hole × 1 → × 3", "__bh.renderer.tune = {}", "__bh.renderer.tune = { TUNE_EPS_FAR: 3 }"],
+  epsfar: ["the geodesics' tolerance far from the hole × 3 → × 1", "__bh.renderer.tune = {}", "__bh.renderer.tune = { TUNE_EPS_FAR: 1 }"],
   aerial: [
     "the air from the aerial perspective's table → marched by each ray",
     "__bh.renderer.aerialTable = true",
@@ -116,6 +115,7 @@ const ABS: Record<string, [string, string, string, string?]> = {
     "__bh.renderer.tune = {}",
     "__bh.renderer.tune = { TUNE_SKIP: 4096 }",
   ],
+  noop: ["the same → the same (the noise floor of a comparison)", "__bh.renderer.tune = {}", "__bh.renderer.tune = {}"],
   bodies: ["the bodies listed → all looked at", "__bh.renderer.bodyList = true", "__bh.renderer.bodyList = false"],
   eps2: ["the geodesics' tolerance 0.12 → 0.24", "__bh.settings.realtimeEps = 0.12", "__bh.settings.realtimeEps = 0.24"],
   scenery: ["the scenery balanced → off", `__bh.game.set("earthScenery", "balanced")`, `__bh.game.set("earthScenery", "off")`],

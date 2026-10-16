@@ -184,8 +184,9 @@ override COST_VIEW: u32 = 0u;
 override TUNE_AIR_N: u32 = 32u;
 override TUNE_SHADOW_N: u32 = 48u;
 override TUNE_SHADOW_K: f32 = 1.18;
-// (the geodesics' tolerance far from the hole: × this beyond 20 M, × 1 within 10 M — the photon sphere's rays exact)
-override TUNE_EPS_FAR: f32 = 1.0;
+// (the geodesics' tolerance far from the hole: × this beyond 20 M, × 1 within 10 M — the photon sphere's rays exact;
+// the far field nearly flat: at 3 the images alike to a comparison's own noise, Kerr edge-on's trace −21 %)
+override TUNE_EPS_FAR: f32 = 3.0;
 // (0: the per-step tests of Gargantua's bodies skipped — a measure of what they cost: the bodies then missed)
 override TUNE_STEP_BODIES: u32 = 1u;
 // (the ground's march: a step's share of the clearance — 0.5, safe for slopes to ~60°; more: a measure)
