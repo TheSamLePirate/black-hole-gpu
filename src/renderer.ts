@@ -198,7 +198,9 @@ const WAKE_VEC4S = 17;
 const SEAFFT_VEC4S = 4;
 /** the mountains' warp's grids (trace.wgsl: Params.warp; system/warp-grid.ts) */
 const WARP_VEC4S = 4;
-const PARAM_VEC4S = BASE_PARAM_VEC4S + SURFACE_VEC4S + SCENERY_VEC4S + 5 + WAKE_VEC4S + SEAFFT_VEC4S + WARP_VEC4S;
+/** our bodies a ray from the mouth's region may meet (trace.wgsl: Params.mouthList), after the warp's */
+const MOUTH_LIST_AT = (BASE_PARAM_VEC4S + SURFACE_VEC4S + SCENERY_VEC4S + 5 + WAKE_VEC4S + SEAFFT_VEC4S + WARP_VEC4S) * 4;
+const PARAM_VEC4S = BASE_PARAM_VEC4S + SURFACE_VEC4S + SCENERY_VEC4S + 5 + WAKE_VEC4S + SEAFFT_VEC4S + WARP_VEC4S + 2;
 /**
  * The sea's twelve wave trains near the camera (trace.wgsl: seaWaves): wavenumbers in whole units of
  * 2π/1024 m on the wind's axes (along, across) — exact from an anchor of whole kilometres, in float32 —,
@@ -2507,6 +2509,32 @@ export class Renderer {
       f[45 * 4 + 3] = words[2]!;
       f[46 * 4 + 3] = words[3]!;
       f[40 * 4 + 3] = all ? 0 : list.length + 0.5;
+      // (the same for the rays from the mouth's region — its pieces integrated there, the ray out of it (Saturn's sky:
+      // 40 % of its trace was this loop over every body, at each piece) —: the bodies big enough seen from the region's
+      // edge, its radius 100 ρ round the mouth (b.pos: from the mouth), those within it, those with rings, the stars —
+      // a ray from there has travelled at least to the edge: ourSegment's test passes no other)
+      const mouth: number[] = [];
+      let mouthAll = !this.bodyList;
+      for (let k = start; k < Math.min(bodies.length, MAX_BODIES) && !mouthAll; k++) {
+        const b = bodies[k]!;
+        const D = Math.max(Math.hypot(b.pos[0], b.pos[1], b.pos[2]) - 100 * m.w.rho, 0);
+        const reach = b.radius * Math.max(b.rings?.outer ?? 0, b.surface >= 4 ? 2 : 1);
+        if (b.kind === 0 || (b.rings?.outer ?? 0) > 0 || b.where === 4 || reach >= 0.45 * pixelAngle * D) {
+          if (mouth.length === 16) mouthAll = true;
+          else mouth.push(k);
+        }
+      }
+      const mw = [0, 0, 0, 0];
+      if (!mouthAll) mouth.forEach((k, i) => (mw[i >> 2]! += k * 64 ** (i & 3)));
+      f.set(mw, MOUTH_LIST_AT);
+      f.fill(0, MOUTH_LIST_AT + 4, MOUTH_LIST_AT + 8);
+      f[MOUTH_LIST_AT + 4] = mouthAll ? 0 : mouth.length + 0.5;
+      if (!o.probe)
+        this.bodyListSizes = {
+          ours: Math.min(bodies.length, MAX_BODIES) - start,
+          camera: all ? -1 : list.length,
+          mouth: mouthAll ? -1 : mouth.length,
+        };
     }
     // light probe for the spaceship: a new frame's weight (1 after a scene reset: no stale light);
     // its axes: the planet's probe camera's, else fixed (the ZAMO's, or the throat's), so that it
@@ -3888,6 +3916,8 @@ export class Renderer {
   probeEveryMoving = 1;
   /** the bodies a ray from the camera may meet listed for the kernel (ourSegment), not all looked at (a switch for comparisons) */
   bodyList = true;
+  /** the bodies of ours, those the camera's list and the mouth's hold (−1: every body — the list off or too long) */
+  bodyListSizes = { ours: 0, camera: 0, mouth: 0 };
   /** The cost view (a debug view, trace.wgsl COST_VIEW): each ray's work as a heat map in place of the image —
    *  0 off, 1 all of it, 2 … 13 one kind (docs/BH-API.md: the ground's march, its heights, its shadows, the clouds,
    *  the air, the water, the scenery, the integrator, the noise, the stars, the bodies, the main loop) —, shown raw

@@ -407,8 +407,9 @@ The renderer (`src/renderer.ts`). The members the tests read:
 | `cockpitMask` | boolean | the rays the flown craft's own opaque parts hide from the cockpit not traced (shaders/mask.wgsl; default true; a switch for comparisons) |
 | `aerialTable` | boolean | the air before the near world's ground read from the aerial perspective's table (trace.wgsl aerial; default true where the device binds its two textures) |
 | `reliefCeiling` | boolean | the Earth's ground marches under the relief's ceiling round the camera, not 9 600 m (system/relief-ceiling.ts; default true) |
-| `bodyList` | boolean | our universe's bodies a ray from the camera may meet listed for the kernel, not all looked at (default true) |
+| `bodyList` | boolean | our universe's bodies a ray from the camera — and one from the wormhole mouth's region (`bodyListSizes`) — may meet listed for the kernel, not all looked at (default true) |
 | `probeEveryMoving` | number | the craft's light probe traced every this many frames while what it sees moves (default 1) |
+| `bodyListSizes` | object (read-only) | our bodies (`ours`), those the camera's list holds (`camera`) and the mouth's list (`mouth`: the bodies a ray from the mouth's region may meet) — −1: every body (the list off, or over 16) |
 | `kernelsSettled` | boolean (read-only) | the current kernel settled: its own variant compiled with its realtime cascade done (its probe's, its aerial table's pass), the surface and the scenery asked for in its key — a measure is this kernel's (`variantReady` alone let a tuned variant be measured without its aerial table or scenery) |
 | `aerialWanted` | boolean (read-only) | the last live realtime frame would read the aerial table (the camera in a world's air), its pass's kernel compiled or not |
 | `warpGrid` | boolean | the mountains' warp read from its grids round the camera (system/warp-grid.ts, trace.wgsl earthWarp; the crests within 3 cm near, 6 m at 78 km); false: worked out by each ray, as the physics does (a switch for comparisons; default true) |

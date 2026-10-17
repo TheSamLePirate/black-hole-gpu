@@ -96,6 +96,22 @@ rayon et le nombre de rayons qui font la vitesse.
    Tarifa −11 %, Alpes neutre ; images au niveau du bruit d'une comparaison (40–46 dB ; les Alpes 45,2 dB, leur
    plancher `noop` 45,7).
 
+8. **Les corps de Gargantua et les nôtres, moins souvent regardés** (P2, 17/10) — les comptes donnaient Miller ≈ 180
+   corps testés par rayon (p99 1 272), Saturne 270 ; les bornes (le banc corrigé) : à Miller les tests de chaque pas
+   −15 %, à Saturne la boucle des corps rencontrés d'`ourSegment` −39 % — mais cette borne retirait aussi toute
+   rencontre, donc l'ombrage de Saturne elle-même, qui couvre l'image : du vrai travail. Fait, exact (images au
+   niveau du bruit : Saturne 53,6 dB ; Miller 35,5 dB pour un plancher `noop` de 32,7) :
+   - **la liste de la bouche** (`Params.mouthList`) : les rayons de la région de la bouche — ses morceaux intégrés
+     là, le rayon qui en sort — regardaient tous nos corps (27 près de Saturne), à chaque morceau ; ils lisent
+     maintenant ceux assez grands vus du bord de la région (un rayon parti de là a parcouru au moins jusqu'au bord :
+     le test d'`ourSegment` n'en laisse passer aucun autre), ceux de la région, les anneaux, les étoiles (9 près de
+     Saturne). Saturne −5 %.
+   - **le rejet tôt** (`TUNE_BODY_REJECT`) : un corps de Gargantua plus loin du début du pas que le pas, sa portée et
+     ce que son orbite le déplace pendant le pas n'a pas sa place en fin de pas calculée. Miller −2 à −3 %.
+   Comparé révision à révision (avant P1, P1, P2) : Interstellar, Kerr et le disque volumétrique inchangés (33,5,
+   10,2, 32,9 ms) ; Miller 119,3 → 115,9 ms. Le reste de Miller est du vrai travail : le disque épais traversé par
+   les rayons du ciel, les sondes (11 ms), la mer.
+
 **Le banc corrigé** (17/10) : une variante réglée (`tune`) a son propre noyau de table aérienne, et le décor et la
 surface demandent un noyau compilé pour sa clé ; attendre `variantReady` ne garantissait ni l'un ni l'autre — le côté
 B se mesurait souvent sans table aérienne (plus lent) ou sans décor (plus rapide), de 10 à 30 % sur Terre.
@@ -111,8 +127,8 @@ d'un passage à l'autre (20 à 34 ms : le temps réel chargé à l'heure du test
 | Kerr a=0,94 par la tranche | 12,7 | **10,1 ms** |
 | Disque volumétrique + jet | 32,6 | 32,9 ms |
 | Interstellar (le passage du film) | 43,3 | **34,6 ms** |
-| Saturne à contre-jour | 137,9 | **54,9 ms** |
-| Miller : Gargantua sur la mer | 122,3 | 124,9 ms |
+| Saturne à contre-jour | 137,9 | **≈ 51 ms** |
+| Miller : Gargantua sur la mer | 122,3 | **115,9 ms** |
 | La Lune en plaine | 64,6 | 65,9 ms |
 | Yosemite | 98,9 | **73,3 ms** |
 | Les Andes au couchant | — | **65,5 ms** (96,0 sans la grille) |
@@ -170,7 +186,7 @@ Les comptes (`costView` 14, `costStats`) : la marche fait 14 à 30 pas par pixel
 
 1. ~~La marche du terrain par une pyramide de hauteurs max~~ — mesuré : ≤ 10 % à gagner (la marche fait peu de pas) ;
    remplacé par la grille de déformation (fait, 7.).
-2. **Les corps de Gargantua testés à chaque pas** (Miller, Saturne) — P2.
+2. ~~Les corps de Gargantua testés à chaque pas~~ (Miller, Saturne) — fait (8.), ce qu'il y avait d'exact à gagner.
 3. **La netteté en mouvement rapide** (l'historique gardé floute un peu le premier plan en virage serré) — P3.
 4. **L'ombrage du sol** (−20 à −34 % si plat) : ce qui y coûte reste à décomposer (normales, ombres, textures).
 5. Les pas géodésiques du ciel lointain : ≈ 11 par rayon déjà ; la LUT du champ lointain n'aide pas au-delà de blocs

@@ -90,6 +90,12 @@ const ABS: Record<string, [string, string, string, string?]> = {
     "__bh.renderer.tune = {}",
     "__bh.renderer.tune = { TUNE_RELAX_BAND: 1 }",
   ],
+  // (a candidate's switch: trace.wgsl TUNE_BODY_REJECT)
+  bodyreject: [
+    "the bodies far from a step rejected early → not",
+    "__bh.renderer.tune = {}",
+    "__bh.renderer.tune = { TUNE_BODY_REJECT: 0 }",
+  ],
   warpgrid: [
     "the mountains' warp from its grids → worked out by each ray",
     "__bh.renderer.warpGrid = true",
@@ -294,6 +300,7 @@ describe.skipIf(!E2E)("the render's costs on held scenes", () => {
             return 1; })()`);
         }
         const r = await measure();
+        if (k === 0) console.log(`      bodies: ${JSON.stringify(await app.js("__bh.renderer.bodyListSizes"))}`);
         v[side].push(r);
         console.log(`  ${side.toUpperCase()} ${row(r)}`);
         if (k < 2) console.log(`      ${(r.passes ?? []).map(([l, ms]) => `${l} ${ms.toFixed(1)}`).join(" · ")}`);

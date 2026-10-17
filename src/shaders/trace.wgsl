@@ -150,6 +150,9 @@ struct Params {
   // (cos, sin of its longitude, sin, cos of its geodetic latitude); [1…3] each level's window: the reference's place
   // on it in nodes (u east, v north), nodes a radian, on (0/1)
   warp: array<vec4f, 4>,
+  // our universe's bodies a ray leaving the mouth's region may meet (renderer: the mouth's list; ourSegment): [0] their
+  // indices, 6 bits each, 4 a value (as path.w's list); [1].x their count + 0.5 (0: every body)
+  mouthList: array<vec4f, 2>,
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -218,6 +221,8 @@ override TUNE_MERGE: u32 = 1u;
 override TUNE_DETAIL: u32 = 1u;
 // (1: the tiles' heights always bilinear, never their cubic B-spline — a measure)
 override TUNE_CHEAP: u32 = 0u;
+// (1: Gargantua's bodies far from a step rejected before their place at its end — 0: each worked out, a measure)
+override TUNE_BODY_REJECT: u32 = 1u;
 // (the ray's work by kind: 0 the ground's march steps (the Earth's, a world's), 1 the ground's heights read (earthH,
 // relief), 2 its shadows' steps, 3 the clouds' steps (the volume's, the weather's), 4 the air's (the auroras'), 5 the
 // water's (the sea's surface search, the mirror's march), 6 the scenery's boxes visited, 7 the geodesic integrator's
@@ -1270,13 +1275,15 @@ fn spunAxes(k: u32) -> mat3x3f {
   return transpose(mat3x3f(ex, ey, a[2]));
 }
 
-// The i-th body ourSegment looks at: the renderer's list (path.w of them; 4 indices of 6 bits a value in water3.zw,
-// water4.w, water5.w — whole numbers under 2²⁴, exact in a float — the bodies a ray from the camera may meet: those
-// big enough on the image, those with rings, the stars), or every one of ours
-fn listedBody(i: u32, useList: bool) -> u32 {
-  if (!useList) { return ourStart() + i; }
+// The i-th body ourSegment looks at: list 1 the renderer's for the camera's rays (path.w of them; 4 indices of 6 bits a
+// value in water3.zw, water4.w, water5.w — whole numbers under 2²⁴, exact in a float — the bodies a ray from the camera
+// may meet: those big enough on the image, those with rings, the stars), list 2 its own for the rays from the mouth's
+// region (mouthList: the same, seen from the mouth — and those within the region), list 0 every one of ours
+fn listedBody(i: u32, list: u32) -> u32 {
+  if (list == 0u) { return ourStart() + i; }
   let w = i >> 2u;
-  let v = select(select(select(P.water5.w, P.water4.w, w == 2u), P.water3.w, w == 1u), P.water3.z, w == 0u);
+  var v = select(select(select(P.water5.w, P.water4.w, w == 2u), P.water3.w, w == 1u), P.water3.z, w == 0u);
+  if (list == 2u) { v = P.mouthList[0][w]; }
   return (u32(v) >> (6u * (i & 3u))) & 63u;
 }
 
@@ -1291,12 +1298,15 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   var tBest = tMax;
   var kBest = 0u;
   var hit = false;
-  // (from the camera: only the bodies the renderer listed — those such a ray may meet, by the test below —, else all)
-  let useList = P.path.w > 0.0 && !dneg && travel == 0.0 && all(o == vec3f(0.0));
-  let nB = select(bodyCount() - ourStart(), u32(P.path.w), useList);
+  // (only the bodies the renderer listed — those such a ray may meet, by the test below —: from the camera, the camera's
+  // list; from the mouth's region — its pieces there, the ray out of it —, the mouth's: a body passing the test below
+  // is big enough seen from the region's edge, travel + |c| no less than its distance from there; else all)
+  let fromCam = !dneg && travel == 0.0 && all(o == vec3f(0.0));
+  let list = select(select(0u, 2u, P.mouthList[1].x > 0.0), select(0u, 1u, P.path.w > 0.0), fromCam);
+  let nB = select(select(bodyCount() - ourStart(), u32(P.path.w), list == 1u), u32(P.mouthList[1].x), list == 2u);
   let nB0 = select(nB, 0u, (TUNE_SKIP & 32u) != 0u);
   for (var ki = 0u; ki < nB0; ki++) {
-    let k = listedBody(ki, useList);
+    let k = listedBody(ki, list);
     cost(10u);
     let wk = bodyWhere(k);
     if (!(wk == 4u || (wk == 2u && !dneg))) { continue; }
@@ -1327,7 +1337,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   let V = -d;
   // rings in front of the nearest body
   for (var ki = 0u; ki < select(nB, 0u, (TUNE_SKIP & 64u) != 0u); ki++) {
-    let k = listedBody(ki, useList);
+    let k = listedBody(ki, list);
     cost(10u);
     if (ringOuter(k) <= 0.0 || !isOurs(k) || (dneg && bodyWhere(k) != 4u)) { continue; }
     let c = bodies[BV * k].xyz - o;
@@ -1352,7 +1362,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   // it is what the ray meets): one call, the ground or not (every call is a copy the compiler builds)
   {
     for (var ki = 0u; ki < select(nB, 0u, (TUNE_SKIP & 128u) != 0u); ki++) {
-      let k = listedBody(ki, useList);
+      let k = listedBody(ki, list);
       cost(10u);
       let wk = bodyWhere(k);
       if (!hasAir(k) || !(wk == 4u || (wk == 2u && !dneg))) { continue; }
@@ -1381,7 +1391,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   // our Sun's corona, seen where nothing stands before it (the Moon in front: it hides the corona there
   // too) — only an eclipse shows it: a millionth of the Sun's light, drowned in the day's sky otherwise
   for (var ki = 0u; ki < select(nB, 0u, (TUNE_SKIP & 256u) != 0u); ki++) {
-    let k = listedBody(ki, useList);
+    let k = listedBody(ki, list);
     cost(10u);
     if (bodyKind(k) != 0u || probeNoStar) { continue; }
     let wk = bodyWhere(k);
@@ -1398,7 +1408,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   // samples jitter) — the image's brightest light by far, its bloom over the whole frame steady from frame
   // to frame; a body before it (the Moon's limb on the Sun) taking its own share of the pixel
   for (var ki = 0u; ki < select(nB, 0u, (TUNE_SKIP & 512u) != 0u); ki++) {
-    let k = listedBody(ki, useList);
+    let k = listedBody(ki, list);
     cost(10u);
     if (bodyKind(k) != 0u || probeNoStar) { continue; }
     let wk = bodyWhere(k);
@@ -7632,11 +7642,21 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
         cost(10u);
         if (bodyWhere(k) != 0u) { continue; }
         let c0 = bodyCentre(k, tNow + s.x.w);
+        let R = bodyRadius(k);
+        // (nowhere near the step: its centre farther from the step's start than the step, the body's reach — its
+        // star's air 4 R, a point's glow the footprint — and what its orbit moves it over the step (|ω| r, its
+        // parent's too): its end not worked out)
+        {
+          let o0 = bodies[BV * k];
+          let o1 = bodies[BV * k + 1u];
+          var vm = abs(o1.x) * length(o0.xyz);
+          if (o1.y >= 0.0) { vm += abs(bodies[BV * u32(o1.y) + 1u].x) * length(bodies[BV * u32(o1.y)].xyz); }
+          if (TUNE_BODY_REJECT > 0u && length(p0 - c0) > len + max(4.0 * R, footprint(travel + len)) + vm * abs(n.x.w - s.x.w)) { continue; }
+        }
         let c1 = bodyCentre(k, tEm);
         let q0 = p0 - c0;
         let q1 = p1 - c1;
         let dq1 = q1 - q0;
-        let R = bodyRadius(k);
         let u = clamp(-dot(q0, dq1) / max(dot(dq1, dq1), 1e-30), 0.0, 1.0);
         let c = mix(c0, c1, u);
         let rEff = footprint(travel + u * len);
