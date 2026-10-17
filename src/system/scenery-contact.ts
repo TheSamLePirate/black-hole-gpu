@@ -69,10 +69,12 @@ export class SceneryContact {
       b = this.reply.bounds;
     if (!b) return 0;
     const lon = b[0] + wrapLon(geo.lon / D - b[0]);
-    const x = Math.floor(((lon - b[0]) / (b[2] - b[0])) * SCENERY_GRID),
-      y = Math.floor(((b[3] - geo.lat / D) / (b[3] - b[1])) * SCENERY_GRID);
-    if (x < 0 || y < 0 || x >= SCENERY_GRID || y >= SCENERY_GRID) return 0;
-    return this.u[this.f[2]! * 4 + y * SCENERY_GRID + x]!;
+    // (its side the scene's: 512 px, more for a farther reach — packScenery's f[3])
+    const N = this.f[3]! || SCENERY_GRID;
+    const x = Math.floor(((lon - b[0]) / (b[2] - b[0])) * N),
+      y = Math.floor(((b[3] - geo.lat / D) / (b[3] - b[1])) * N);
+    if (x < 0 || y < 0 || x >= N || y >= N) return 0;
+    return this.u[this.f[2]! * 4 + y * N + x]!;
   }
   cover(q: Vec3) {
     return this.pixel(q) >>> 24;

@@ -21,9 +21,16 @@ import type { Vec3 } from "../physics";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "./ellipsoid";
 
 export const TILE = 256;
-/** tiles along a level's window */
+/** tiles along a level's window (the normal detail's reach; a farther one, EarthTiles.setReach: 8) */
 export const SPAN = 4;
 export const CLIP = TILE * SPAN;
+/** By the detail's reach (settings.detailReach): the windows' tiles a side, the tiles kept in memory past them (a
+ *  tile 512 KiB: its heights and its imagery), the finest levels whose next ring round the window is loaded ahead. */
+export const TILE_REACH = {
+  normal: { span: 4, cache: 0, ring: 0 },
+  far: { span: 8, cache: 128, ring: 2 },
+  veryFar: { span: 8, cache: 256, ring: 3 },
+} as const;
 export const Z0 = 6;
 export const Z1 = 13;
 export const LEVELS = Z1 - Z0 + 1;
@@ -101,12 +108,12 @@ interface Level {
   n: number;
   want: Rect | null;
   valid: Rect | null;
-  /** the tile in each slot (x mod 4, y mod 4) and its heights */
+  /** the tile in each slot (x mod span, y mod span) and its heights */
   key: (string | null)[];
   data: (Float32Array | null)[];
+  /** its imagery, held on the finest levels only (the ring's: kept past the window when it leaves it) */
+  col: (Uint32Array | null)[];
 }
-
-const slotOf = (x: number, y: number) => (((y % SPAN) + SPAN) % SPAN) * SPAN + (((x % SPAN) + SPAN) % SPAN);
 
 /** A tile's pixels (rgba, row by row), as they are in its file — or a square of it (x, y, side [px]) enlarged. */
 async function pixels(blob: Blob, crop?: [number, number, number]): Promise<Uint8ClampedArray> {
@@ -144,7 +151,19 @@ export interface TileSample {
 }
 
 export class EarthTiles {
-  readonly texture: GPUTexture;
+  texture: GPUTexture;
+  /** the windows' tiles a side (TILE_REACH: 4, 8), the texture's side in texels its CLIP */
+  private span = SPAN;
+  private get clip() {
+    return TILE * this.span;
+  }
+  /** the tiles kept past the windows — most recently used last — and how many (0: none) */
+  private cache = new Map<string, { h: Float32Array; col: Uint32Array | null }>();
+  private cacheTiles = 0;
+  /** the finest levels whose next ring round the window is loaded ahead into the cache (0: none) */
+  private ring = 0;
+  /** the texture made again for another window (the bind groups holding it rebuilt: the renderer) */
+  onResize: (() => void) | null = null;
   private levels: Level[] = [];
   private inflight = new Map<string, AbortController>();
   private failures = new Map<string, { n: number; at: number }>();
@@ -164,12 +183,7 @@ export class EarthTiles {
   failed = 0;
 
   constructor(private device: GPUDevice) {
-    this.texture = device.createTexture({
-      size: [CLIP, CLIP, LEVELS],
-      format: "rg32uint",
-      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-      label: "earth tiles",
-    });
+    this.texture = this.makeTexture();
     for (let l = 0; l < LEVELS; l++) {
       const z = Z0 + l;
       this.levels.push({
@@ -177,10 +191,72 @@ export class EarthTiles {
         n: 2 ** z,
         want: null,
         valid: null,
-        key: new Array(SPAN * SPAN).fill(null),
-        data: new Array(SPAN * SPAN).fill(null),
+        key: new Array(this.span * this.span).fill(null),
+        data: new Array(this.span * this.span).fill(null),
+        col: new Array(this.span * this.span).fill(null),
       });
     }
+  }
+
+  private makeTexture() {
+    return this.device.createTexture({
+      size: [this.clip, this.clip, LEVELS],
+      format: "rg32uint",
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      label: "earth tiles",
+    });
+  }
+
+  /**
+   * The detail's reach (TILE_REACH): the windows' tiles a side — another one, the texture made again (the old one
+   * destroyed once the work submitted with it is done) and every level drawn anew, its tiles from the cache or loaded
+   * again —, the tiles kept past them, the ring loaded ahead.
+   */
+  setReach(r: { span: number; cache: number; ring: number }) {
+    this.cacheTiles = r.cache;
+    this.ring = r.ring;
+    while (this.cache.size > this.cacheTiles) this.cache.delete(this.cache.keys().next().value!);
+    if (r.span === this.span) return;
+    this.clear();
+    this.span = r.span;
+    const old = this.texture;
+    this.texture = this.makeTexture();
+    void this.device.queue.onSubmittedWorkDone().then(() => old.destroy());
+    for (const L of this.levels) {
+      L.key = new Array(this.span * this.span).fill(null);
+      L.data = new Array(this.span * this.span).fill(null);
+      L.col = new Array(this.span * this.span).fill(null);
+    }
+    this.stamp++;
+    this.onResize?.();
+  }
+
+  /** a tile's slot in its level's window (x mod span, y mod span) */
+  private slotOf(x: number, y: number) {
+    const n = this.span;
+    return (((y % n) + n) % n) * n + (((x % n) + n) % n);
+  }
+
+  /** one of the finest levels wanted, whose ring is loaded ahead and kept */
+  private ringLevel(L: Level) {
+    if (!this.ring || !L.want) return false;
+    let finest = Z0;
+    for (const M of this.levels) if (M.want) finest = M.z;
+    return L.z > finest - this.ring;
+  }
+
+  /** a tile kept past the windows (the least recently used dropped past cacheTiles) */
+  private keep(key: string, h: Float32Array, col: Uint32Array | null) {
+    if (!this.cacheTiles) return;
+    const was = this.cache.get(key);
+    this.cache.delete(key);
+    this.cache.set(key, { h, col: col ?? was?.col ?? null });
+    while (this.cache.size > this.cacheTiles) this.cache.delete(this.cache.keys().next().value!);
+  }
+
+  /** the tiles kept in memory past the windows (the detail's reach: the left ones, the ring loaded ahead) */
+  get kept() {
+    return this.cache.size;
   }
 
   /** the tiles wanted and not yet in */
@@ -189,7 +265,7 @@ export class EarthTiles {
     for (const L of this.levels) {
       if (!L.want) continue;
       for (let y = L.want.y0; y < L.want.y1; y++)
-        for (let x = L.want.x0; x < L.want.x1; x++) if (L.key[slotOf(x, y)] !== this.keyOf(L, x, y)) k++;
+        for (let x = L.want.x0; x < L.want.x1; x++) if (L.key[this.slotOf(x, y)] !== this.keyOf(L, x, y)) k++;
     }
     return k;
   }
@@ -250,17 +326,19 @@ export class EarthTiles {
       const gx = gLonT * L.n - cx0,
         gy = mercY(gSinLat, L.n) - cy0;
       const gl = Math.hypot(gx, gy);
-      const k = gl > 1.25 ? 1.25 / gl : 1;
+      // (by up to a tile and a quarter of a 4-tile window — half the window less three quarters of a tile)
+      const most = this.span / 2 - 0.75;
+      const k = gl > most ? most / gl : 1;
       const cx = cx0 + gx * k,
         cy = cy0 + gy * k;
       // (the window recentred once the camera is more than 0.8 of a tile off its middle — or across the
       // date line; at the poles' edges it stays clamped)
-      const mid = SPAN / 2;
+      const mid = this.span / 2;
       const x0 = Math.round(cx) - mid;
-      const y0 = Math.min(Math.max(Math.round(cy) - mid, 0), L.n - SPAN);
+      const y0 = Math.min(Math.max(Math.round(cy) - mid, 0), L.n - this.span);
       let want = L.want;
       if (!want || Math.abs(cx - (want.x0 + mid)) > 0.8 || (y0 !== want.y0 && Math.abs(cy - (want.y0 + mid)) > 0.8)) {
-        want = { x0, y0, x1: x0 + SPAN, y1: y0 + SPAN };
+        want = { x0, y0, x1: x0 + this.span, y1: y0 + this.span };
       }
       if (!same(want, L.want)) {
         L.want = want;
@@ -277,8 +355,8 @@ export class EarthTiles {
 
   /** Starts the loads: the coarse levels first, each from the camera outwards. */
   private request(lonT: number, sinLat: number) {
-    if (this.inflight.size >= MAX_INFLIGHT) return;
     const now = performance.now();
+    let pending = 0;
     for (const L of this.levels) {
       if (!L.want) continue;
       const cx = lonT * L.n,
@@ -287,21 +365,56 @@ export class EarthTiles {
       for (let y = L.want.y0; y < L.want.y1; y++) {
         for (let x = L.want.x0; x < L.want.x1; x++) {
           const key = this.keyOf(L, x, y);
-          if (L.key[slotOf(x, y)] === key || this.inflight.has(key)) continue;
+          if (L.key[this.slotOf(x, y)] === key || this.inflight.has(key)) continue;
+          // (kept past the window — walked back to, or loaded ahead —: drawn at once)
+          const kept = this.cache.get(key);
+          if (kept) {
+            this.cache.delete(key);
+            this.put(L.z, x, y, kept.h, kept.col);
+            continue;
+          }
           const f = this.failures.get(key);
           if (f && now < f.at) continue;
           todo.push([x, y, (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2]);
         }
       }
+      pending += todo.length;
       todo.sort((a, b) => a[2] - b[2]);
+      // (the loads limited, not what memory holds: every level's kept tiles drawn at once)
       for (const [x, y] of todo) {
-        if (this.inflight.size >= MAX_INFLIGHT) return;
+        if (this.inflight.size >= MAX_INFLIGHT) break;
         void this.load(L, x, y);
       }
     }
+    // (the windows whole: the next ring round the finest levels' loaded ahead into memory — nearest the lead (the
+    // motion's, the gaze's) first, in metres —, half the loads at most: the tiles the windows enter as the craft goes
+    // on, drawn at once)
+    if (pending || !this.ring || this.inflight.size >= MAX_INFLIGHT / 2) return;
+    const ahead: [Level, number, number, number][] = [];
+    for (const L of this.levels) {
+      const w = L.want;
+      if (!w || !this.ringLevel(L)) continue;
+      const cx = lonT * L.n,
+        cy = mercY(sinLat, L.n);
+      for (let y = Math.max(w.y0 - 1, 0); y <= Math.min(w.y1, L.n - 1); y++)
+        for (let x = w.x0 - 1; x <= w.x1; x++) {
+          if (inside(w, x, y)) continue;
+          const key = this.keyOf(L, x, y);
+          if (this.cache.has(key) || this.inflight.has(key)) continue;
+          const f = this.failures.get(key);
+          if (f && now < f.at) continue;
+          ahead.push([L, x, y, Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / L.n]);
+        }
+    }
+    ahead.sort((a, b) => a[3] - b[3]);
+    for (const [L, x, y] of ahead) {
+      if (this.inflight.size >= MAX_INFLIGHT / 2) return;
+      void this.load(L, x, y, true);
+    }
   }
 
-  private async load(L: Level, x: number, y: number) {
+  /** A tile loaded — into its window, or (ahead) into memory past it, drawn if its window has come to it meanwhile. */
+  private async load(L: Level, x: number, y: number, ahead = false) {
     const key = this.keyOf(L, x, y);
     const ctl = new AbortController();
     this.inflight.set(key, ctl);
@@ -326,9 +439,20 @@ export class EarthTiles {
       const heights = await res.blob().then(decode);
       h = heights;
       this.loaded++;
-      void img.then((col) => {
-        if (col && L.key[slotOf(x, y)] === key) this.put(L.z, x, y, heights, col);
-      });
+      if (ahead) {
+        // (into memory at once — its heights: drawn from there if its window comes to it —, its imagery when it comes:
+        // onto the tile if drawn meanwhile)
+        this.keep(key, heights, null);
+        void img.then((col) => {
+          if (!col) return;
+          if (L.key[this.slotOf(x, y)] === key) this.put(L.z, x, y, heights, col);
+          else if (this.cache.has(key)) this.keep(key, heights, col);
+        });
+        h = null;
+      } else
+        void img.then((col) => {
+          if (col && L.key[this.slotOf(x, y)] === key) this.put(L.z, x, y, heights, col);
+        });
     } catch (e) {
       if (!this.inflight.has(key)) return; // (cleared)
       const f = this.failures.get(key) ?? { n: 0, at: 0 };
@@ -375,7 +499,13 @@ export class EarthTiles {
   put(z: number, x: number, y: number, h: Float32Array, col: Uint32Array | null = null) {
     const L = this.levels[z - Z0];
     if (!L || !inside(L.want, x, y)) return;
-    const s = slotOf(x, y);
+    const s = this.slotOf(x, y);
+    // (the ring's levels: the tile the window leaves kept past it — walked back to, drawn from memory —, this one's
+    // imagery held for when it leaves in turn)
+    const ringLevel = this.ringLevel(L);
+    const old = L.key[s];
+    if (ringLevel && old && old !== this.keyOf(L, x, y) && L.data[s]) this.keep(old, L.data[s]!, L.col[s] ?? null);
+    L.col[s] = ringLevel ? (col ?? (old === this.keyOf(L, x, y) ? (L.col[s] ?? null) : null)) : null;
     if (col && inside(L.valid, x, y) && L.key[s] === this.keyOf(L, x, y)) this.imagery++;
     L.key[s] = this.keyOf(L, x, y);
     L.data[s] = h;
@@ -386,7 +516,7 @@ export class EarthTiles {
       texels[2 * i + 1] = col ? col[i]! : 0;
     }
     this.device.queue.writeTexture(
-      { texture: this.texture, origin: [(s % SPAN) * TILE, Math.floor(s / SPAN) * TILE, L.z - Z0] },
+      { texture: this.texture, origin: [(s % this.span) * TILE, Math.floor(s / this.span) * TILE, L.z - Z0] },
       texels,
       { bytesPerRow: TILE * 8 },
       [TILE, TILE, 1],
@@ -408,7 +538,7 @@ export class EarthTiles {
   private complete(L: Level) {
     const w = L.want;
     if (!w) return;
-    for (let y = w.y0; y < w.y1; y++) for (let x = w.x0; x < w.x1; x++) if (L.key[slotOf(x, y)] !== this.keyOf(L, x, y)) return;
+    for (let y = w.y0; y < w.y1; y++) for (let x = w.x0; x < w.x1; x++) if (L.key[this.slotOf(x, y)] !== this.keyOf(L, x, y)) return;
     this.setValid(L, w);
   }
 
@@ -445,7 +575,8 @@ export class EarthTiles {
       else if (ax < -S / 2) ax += S;
       const ay = mercY(this.sinLat, L.n) * TILE - v.y0 * TILE;
       const o = 4 + 8 * l;
-      f.set([ax, ay, (((v.x0 * TILE) % CLIP) + CLIP) % CLIP, (v.y0 * TILE) % CLIP], o);
+      const C = this.clip;
+      f.set([ax, ay, (((v.x0 * TILE) % C) + C) % C, (v.y0 * TILE) % C], o);
       f.set([(v.x1 - v.x0) * TILE, (v.y1 - v.y0) * TILE, S / TAU, 1], o + 4);
     }
     f.set([Math.cos(this.lon), Math.sin(this.lon), this.sinLat, on], 0);
@@ -490,7 +621,7 @@ export class EarthTiles {
           gy = v.y0 * TILE + j;
         const tx = Math.floor(gx / TILE),
           ty = Math.floor(gy / TILE);
-        return L.data[slotOf(tx, ty)]![(gy - ty * TILE) * TILE + (gx - tx * TILE)]!;
+        return L.data[this.slotOf(tx, ty)]![(gy - ty * TILE) * TILE + (gx - tx * TILE)]!;
       };
       const hz = sampleLevel(at, px, py, zf - L.z);
       h += rem * w * hz;

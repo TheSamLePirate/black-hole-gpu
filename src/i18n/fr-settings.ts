@@ -738,6 +738,11 @@ export default {
   "Night vision (Purkinje)": "Vision nocturne (Purkinje)",
   "The eye at night: under a twentieth of white the rods take over, blind to red and keen on blue-green — dark scenes bluer and greyer, a moonlit field as one sees it. 0: none.":
     "L'œil la nuit : sous un vingtième du blanc, les bâtonnets prennent le relais, aveugles au rouge et sensibles au bleu-vert — les scènes sombres plus bleues et plus grises, un champ au clair de lune tel qu'on le voit. 0 : aucun.",
+  "Detail distance": "Distance de détail",
+  Far: "Loin",
+  "Very far": "Très loin",
+  "How far the ground's detail is drawn, and how far ahead where the view looks. The trees, buildings, roads and rivers: their box 1.5 or 2 times wider (balanced 3 or 4 km, high 4.5 or 6 km), their rays as far, their budgets as their area (GPU 36 or 64 MiB, the worker's preparation longer); the relief's tiles over windows twice as wide (GPU 256 MiB rather than 64), led towards the ground looked at up to 12 or 20 km; the tiles round the player kept and the next ones loaded ahead. Sharper far off, more to download, more GPU memory, a slower frame where the scenery fills the view.":
+    "Jusqu'où le détail du sol est dessiné, et jusqu'où devant, là où porte le regard. Les arbres, bâtiments, routes et rivières : leur zone 1,5 ou 2 fois plus large (équilibré 3 ou 4 km, élevé 4,5 ou 6 km), leurs rayons aussi loin, leurs budgets à la mesure de leur surface (GPU 36 ou 64 Mio, la préparation du worker plus longue) ; les tuiles du relief sur des fenêtres deux fois plus larges (GPU 256 Mio au lieu de 64), menées vers le sol regardé jusqu'à 12 ou 20 km ; les tuiles autour du joueur gardées, les suivantes chargées d'avance. Plus net au loin, plus à télécharger, plus de mémoire GPU, une image plus lente là où le décor emplit la vue.",
   "Sharpness in motion": "Netteté en mouvement",
   "In turns": "En virage",
   "Turns and low flight": "En virage et en vol bas",

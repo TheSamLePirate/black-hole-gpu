@@ -89,11 +89,11 @@ import {
   type EarthTier,
 } from "./system/earth-maps";
 import { gpuDiagnostics } from "./gpu-diagnostics";
-import { EarthTiles, TILE_PARAM_VEC4S } from "./system/earth-tiles";
+import { EarthTiles, TILE_PARAM_VEC4S, TILE_REACH } from "./system/earth-tiles";
 import { WarpGrid } from "./system/warp-grid";
 import { EarthSurface, SURFACE_VEC4S, SURFACE_TEXTURE_LIMIT, surfaceShader } from "./system/earth-surface";
 import { EarthScenery, sceneryShader } from "./system/scenery";
-import { SCENERY_VEC4S, SCENERY_STORAGE_LIMIT, type SceneryExclusion } from "./system/scenery-data";
+import { DETAIL_REACH, SCENERY_VEC4S, SCENERY_STORAGE_LIMIT, type SceneryExclusion } from "./system/scenery-data";
 import { LANDSCAPES, LANDSCAPE_CLEARING_M } from "./system/landscapes";
 const SCENERY_EXCLUSIONS: SceneryExclusion[] = [
   ...EARTH_RUNWAYS.map((r) => ({
@@ -175,6 +175,8 @@ const SRGB: GPUTextureFormat = "rgba8unorm-srgb";
 const srgbView = (t: GPUTexture, dimension: GPUTextureViewDimension) =>
   t.createView({ dimension, ...(t.format === "rgba8unorm" ? { format: SRGB } : {}) });
 const BLOCKS = [1, 2, 3, 4, 6, 8];
+/** how far the relief's finest windows are led towards the ground the view looks at [m], by the detail's reach */
+const GAZE_TILES_M: Record<string, number> = { normal: 6000, far: 12000, veryFar: 20000 };
 /** the camera's turn [px a second] past which the realtime rays are one block denser, and under which they go back
  *  (renderer motionBlock) */
 const MOTION_DENSE_IN = 25;
@@ -1071,6 +1073,12 @@ export class Renderer {
     this.endurance.onLoaded = () => this.invalidate();
     this.earthTiles = new EarthTiles(device);
     this.earthTiles.onChange = () => {
+      if (!this.offline) this.invalidate();
+    };
+    // (another window's texture — the detail's reach —: the bind groups holding the old one rebuilt)
+    this.earthTiles.onResize = () => {
+      if (this.live) this.bindTarget(this.live);
+      if (this.offline) this.bindTarget(this.offline.target);
       if (!this.offline) this.invalidate();
     };
     this.earthSurface = new EarthSurface(device, undefined, device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT);
@@ -2774,9 +2782,15 @@ export class Renderer {
           ? (near.axes.map((a) => a[0]! * cam.fwd[0] + a[1]! * cam.fwd[1] + a[2]! * cam.fwd[2]) as Vec3)
           : null;
       const eyeH = eye && near ? Math.max(heightOverGround("earth", eye.map((x) => x * near.radius) as Vec3), 1) : 0;
-      const gazeT = eye && gazeDir ? gazeLead(eye, gazeDir, eyeH, 6000) : ([0, 0, 0] as Vec3);
-      const gazeS = eye && gazeDir ? gazeLead(eye, gazeDir, eyeH, 0.6 * (s.earthScenery === "high" ? 3000 : 2000)) : ([0, 0, 0] as Vec3);
+      // (the detail's reach — settings.detailReach —: the scenery's box this many times wider, the relief's windows led
+      // out to 6, 12 or 20 km)
+      const reach = DETAIL_REACH[s.detailReach] ?? 1;
+      const gazeT = eye && gazeDir ? gazeLead(eye, gazeDir, eyeH, GAZE_TILES_M[s.detailReach] ?? 6000) : ([0, 0, 0] as Vec3);
+      const gazeS =
+        eye && gazeDir ? gazeLead(eye, gazeDir, eyeH, 0.6 * (s.earthScenery === "high" ? 3000 : 2000) * reach) : ([0, 0, 0] as Vec3);
       this.streamingState.gazeM = Math.hypot(...gazeT) * 6378137;
+      // (and its windows 4 or 8 tiles a side, the tiles kept past them and the ring loaded ahead round them)
+      this.earthTiles.setReach(TILE_REACH[s.detailReach] ?? TILE_REACH.normal);
       this.earthTiles.update(focus, pixelAngle, lead, onEarth ? gazeT : [0, 0, 0]);
       this.earthSurface.update(eye, s.earthSurface, lead);
       this.earthScenery.update(
@@ -2786,6 +2800,7 @@ export class Renderer {
         s.earthTerrain,
         SCENERY_EXCLUSIONS,
         eye ? aheadFocus(eye, Math.hypot(...gazeS) > 0 ? gazeS : lead) : null,
+        reach,
       );
       this.earthScenery.shadows = s.earthSceneryShadows;
       this.earthScenery.season(utcOf(time));

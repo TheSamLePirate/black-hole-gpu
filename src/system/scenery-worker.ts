@@ -9,7 +9,7 @@ import {
   localPoint,
   packScenery,
   sceneryFrame,
-  SCENERY_GRID as N,
+  sceneryGrid,
   SCENERY_BYTES,
   wrapLon,
   rasterParts,
@@ -26,7 +26,13 @@ const ty = (lat: number, z = 14) => ((1 - Math.asinh(Math.tan(lat * D)) / Math.P
 async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   const started = performance.now(),
     signal = AbortSignal.timeout(60_000);
-  const radius = q.mode === "high" ? 3000 : 2000,
+  // (the detail's reach: the box, its raster — ~10 m a pixel kept —, its budgets this many times the normal ones)
+  const k = q.reach ?? 1,
+    k2 = k * k,
+    N = sceneryGrid(k),
+    budget = q.budget ?? SCENERY_BYTES,
+    room = budget / SCENERY_BYTES;
+  const radius = (q.mode === "high" ? 3000 : 2000) * k,
     span = (radius + 650) / 111320;
   const lonSpan = span / Math.max(Math.cos(q.lat * D), 0.12);
   const bounds: [number, number, number, number] = [q.lon - lonSpan, q.lat - span, q.lon + lonSpan, q.lat + span];
@@ -286,9 +292,9 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         }
       }
     }
-    if (surfaces.length > 48000) {
+    if (surfaces.length > 48000 * k2) {
       surfaces.sort((a, b) => surfaceDistance(a) - surfaceDistance(b));
-      surfaces.length = 48000;
+      surfaces.length = Math.round(48000 * k2);
       budgetLimited = true;
     }
   };
@@ -306,10 +312,11 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     );
   };
   urls.sort((a, b) => tileDistance(a) - tileDistance(b));
-  if (urls.length > 64) budgetLimited = true;
-  const limit = q.mode === "high" ? 8000 : 5000;
+  const tiles = Math.ceil(64 * k2);
+  if (urls.length > tiles) budgetLimited = true;
+  const limit = Math.round((q.mode === "high" ? 8000 : 5000) * k2);
   const choices: { geo: { lat: number; lon: number }[][]; lat: number; lon: number; h: number; low: number; d: number }[] = [];
-  for (const key of urls.slice(0, 64)) {
+  for (const key of urls.slice(0, tiles)) {
     try {
       const [x, y] = key.split("/").map(Number) as [number, number];
       const raw = await fetchCount(`https://tiles.openfreemap.org/planet/latest/14/${((x % n) + n) % n}/${y}.pbf`);
@@ -356,10 +363,10 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   }
   // Estimated bridge elevation is explicit: tile data provides layer, not surveyed deck/pier geometry.
   bridgeLines.sort((a, b) => a.d - b.d);
-  const bridgeLimit = q.mode === "high" ? 256 : 128;
+  const bridgeLimit = Math.round((q.mode === "high" ? 256 : 128) * k2);
   if (bridgeLines.length + bridgeAreas.length > bridgeLimit) budgetLimited = true;
   const addSolid = (p: Primitive | null) => {
-    if (!p || storedBytes + 64 + p.data.length * 4 > SCENERY_BYTES - 6 * 1024 * 1024) {
+    if (!p || storedBytes + 64 + p.data.length * 4 > budget - 6 * 1024 * 1024 * room) {
       budgetLimited = true;
       return false;
     }
@@ -445,7 +452,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   }
   // Reserve the planar network before vegetation; analytic distance tests keep even narrow paths sharp.
   surfaces.sort((a, b) => surfaceDistance(a) - surfaceDistance(b));
-  const surfaceLimit = q.mode === "high" ? 24000 : 16000;
+  const surfaceLimit = Math.round((q.mode === "high" ? 24000 : 16000) * k2);
   if (surfaces.length > surfaceLimit) {
     surfaces.length = surfaceLimit;
     budgetLimited = true;
@@ -453,7 +460,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   const keptSurfaces: Primitive[] = [];
   for (const v of surfaces) {
     const bytes = 64 + v.data.length * 4;
-    if (storedBytes + bytes > SCENERY_BYTES - 4 * 1024 * 1024) {
+    if (storedBytes + bytes > budget - 4 * 1024 * 1024 * room) {
       budgetLimited = true;
       continue;
     }
@@ -510,7 +517,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         }
       if (!edges.length) continue;
       const bytes = 112 + edges.length * 4;
-      if (storedBytes + bytes > SCENERY_BYTES) {
+      if (storedBytes + bytes > budget) {
         budgetLimited = true;
         continue;
       }
@@ -526,7 +533,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       if (!errors.length) errors.push(String(e).slice(0, 220));
     }
   }
-  const buffer = packScenery(prims, pixels, keptSurfaces, { frame: ff, cells, trees });
+  const buffer = packScenery(prims, pixels, keptSurfaces, { frame: ff, cells, trees }, N, budget);
   return {
     id: q.id,
     lat: q.lat,

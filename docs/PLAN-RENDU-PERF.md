@@ -210,6 +210,48 @@ la marche sur-relâchée tient (la retirer : Andes +13 %, Tarifa +7 %, Alpes neu
 +10 ms sur toute variante réglée (non expliqué) : ses A/B par `tune` ne sont pas fiables. Les Alpes en cockpit varient
 d'un passage à l'autre (20 à 34 ms : le temps réel chargé à l'heure du test).
 
+14. **La distance de détail** (17/10 ; le réglage « Distance de détail », `settings.detailReach` : Normale — par
+   défaut —, Loin, Très loin ; Ciel › La Terre) — fait. Le détail du sol plus loin, et plus loin devant là où porte le
+   regard, préchargé autour du joueur :
+   - **le décor** (arbres, bâtiments, routes, rivières, ponts) : sa zone ×1,5 ou ×2 (équilibré 2 → 3 ou 4 km, élevé
+     3 → 4,5 ou 6 km), la portée de ses rayons autant, ses budgets à la mesure de sa surface — le tampon GPU 16 → 36 ou
+     64 Mio (dans la limite du périphérique), la trame d'occupation du sol 512 → 768 ou 1 024 px (≈ 10 m le pixel
+     gardé), la grille de la forêt, les surfaces, les tuiles OSM, les bâtiments et les ponts ×k² ; le tampon refait à
+     la taille du budget quand la portée change (l'ancien retiré une fois le GPU passé). La collision et la mini-carte
+     lisent le côté de la trame dans la scène (`f[3]`), plus 512 en dur ;
+   - **le relief** (`EarthTiles.setReach`, `TILE_REACH`) : les fenêtres de 4 → 8 tuiles de côté à chaque niveau (la
+     texture 1 024² → 2 048² × 8 niveaux : 64 → 256 Mio ; refaite, l'ancienne détruite après le travail soumis, les
+     groupes de liaison reconstruits — `onResize`) ; le tracé masque l'adresse par la taille de la texture
+     (`textureDimensions`, une puissance de deux), plus `& 1023` ;
+   - **le regard** : les fenêtres du relief menées jusqu'à 6 → 12 ou 20 km vers le sol regardé (`gazeLead` ; décalage
+     au plus d'une demi-fenêtre moins ¾ de tuile), la zone du décor de 0,6 de son rayon ;
+   - **le préchargement** : sur les 2 (Loin) ou 3 (Très loin) niveaux les plus fins, une tuile que la fenêtre quitte
+     est gardée en mémoire avec son imagerie, et, les fenêtres entières, l'anneau suivant autour d'elles est chargé
+     d'avance (le plus proche du point de tête d'abord, la moitié des chargements au plus) ; une tuile gardée revient
+     dans sa fenêtre à l'image même, sans réseau (LRU de 128 ou 256 tuiles, 512 Kio chacune). Les tuiles gardées ne
+     sont plus bloquées par les chargements en vol (ils se limitent eux seuls).
+
+   Mesuré sur kerr-mini (`detail-reach.e2e.test.ts`, cockpit du F-35, alterné Normale/Très loin/Loin ; Tarifa à 600 m
+   et les Alpes à 2 500 m, l'avion tenu le temps du chargement puis 600 ou 1 500 images en vol) :
+
+   | | Normale | Loin | Très loin |
+   |---|---|---|---|
+   | tuiles du relief à l'arrivée | 64–140 | 525–600 | 530–620 |
+   | temps de chargement (relief + décor) | 3–12 s | 6–33 s | 10–28 s |
+   | arbres · bâtiments · routes (Tarifa) | 210 k · 17 · 2 101 | 420 k · 79 · 5 823 | 714 k · 106 · 8 879 |
+   | arbres · bâtiments · routes (Alpes) | 141 k · 1 670 · 5 417 | 245 k · 3 341 · 9 839 | 295 k · 3 372 · 12 608 |
+   | tuiles gardées / chargées pendant 1 500 images à Tarifa | 0 / 18 | — | 147 / 39 |
+   | images avec une fenêtre incomplète (Tarifa, 1 500 images) | 0–3 % | — | 0 % |
+   | le tracé en vol (Tarifa) | 13–18 ms | 15,6 ms | 14–19 ms |
+   | le tracé en vol (Alpes) | 16–23 ms | 23,5 ms | 18–24 ms |
+
+   Le coût du tracé reste dans le bruit d'un passage à l'autre (le temps réel du jour, ±5 ms) : les rayons du décor
+   s'arrêtent à la première boîte, plus loin ne coûte que là où le décor emplit la vue. Le prix est la mémoire
+   (GPU 64 + 16 → 256 + 64 Mio, CPU jusqu'à 128 Mio de tuiles gardées), le réseau (4× de tuiles à l'arrivée) et la
+   préparation du worker (4–9 s au lieu de 2–6). Les images : le relief fin et l'imagerie loin sur les pentes (les
+   Alpes), routes et forêts sur les collines du fond (Tarifa) — `tests/e2e/detail-reach.e2e.test.ts`
+   (`E2E_SHOTS`), `tests/earth-tiles.test.ts` (les fenêtres de 8, la mémoire, l'anneau).
+
 ### Où en est chaque scène (×4, 1600×1000, kerr-mini)
 
 | Scène | trace au départ | trace maintenant |

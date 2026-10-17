@@ -2046,6 +2046,21 @@ export const SCHEMA: ControlDef[] = [
       "forest trees buildings worldwide worldcover openstreetmap osm foret arbres batiments monde scenery roads rivers bridges routes fleuves rivieres ponts rail",
   },
   {
+    key: "detailReach",
+    type: "choice",
+    section: "sky",
+    group: "The Earth",
+    label: "Detail distance",
+    style: "segmented",
+    options: [
+      { value: "normal", label: "Normal" },
+      { value: "far", label: "Far" },
+      { value: "veryFar", label: "Very far" },
+    ],
+    help: "How far the ground's detail is drawn, and how far ahead where the view looks. The trees, buildings, roads and rivers: their box 1.5 or 2 times wider (balanced 3 or 4 km, high 4.5 or 6 km), their rays as far, their budgets as their area (GPU 36 or 64 MiB, the worker's preparation longer); the relief's tiles over windows twice as wide (GPU 256 MiB rather than 64), led towards the ground looked at up to 12 or 20 km; the tiles round the player kept and the next ones loaded ahead. Sharper far off, more to download, more GPU memory, a slower frame where the scenery fills the view.",
+    keywords: "detail distance far draw range lod scenery trees buildings terrain relief tiles preload distance de detail loin",
+  },
+  {
     key: "sceneryHitboxes",
     type: "toggle",
     section: "sky",

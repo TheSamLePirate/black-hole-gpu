@@ -5245,11 +5245,13 @@ const TILE_LEVELS = 8u;
 const TILE_RES_MIN = 25.0;
 // a level's texel at i (from its valid rectangle's corner), in its layer (toroidal: modulo 1024)
 fn tileTexel(l: u32, i: vec2i) -> f32 {
-  let t = (vec2i(P.tileL[2u * l].zw) + i) & vec2i(1023);
+  // (the windows' texture: 4 or 8 tiles a side — EarthTiles.setReach —, a power of two: wrapped by a mask)
+  let t = (vec2i(P.tileL[2u * l].zw) + i) & (vec2i(textureDimensions(earthTiles, 0).xy) - 1);
   return bitcast<f32>(textureLoad(earthTiles, t, l, 0).r);
 }
 fn tileImage(l: u32, i: vec2i) -> u32 {
-  let t = (vec2i(P.tileL[2u * l].zw) + i) & vec2i(1023);
+  // (the windows' texture: 4 or 8 tiles a side — EarthTiles.setReach —, a power of two: wrapped by a mask)
+  let t = (vec2i(P.tileL[2u * l].zw) + i) & (vec2i(textureDimensions(earthTiles, 0).xy) - 1);
   return textureLoad(earthTiles, t, l, 0).g;
 }
 const TILE_IMG_LEVELS = 8u; // (z 6 … 13: src/system/earth-tiles.ts, IMG_Z1)

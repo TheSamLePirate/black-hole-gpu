@@ -15,14 +15,14 @@ export interface LocalPlace {
 export const metresPerMapPixel = (lat: number, zoom: number, radiusM = WGS84_A) =>
   (((2 * Math.PI * radiusM) / 256) * Math.max(0.01, Math.cos(lat * D))) / 2 ** zoom;
 
-/** A contact's 512² ground raster and its box in the contact's local frame: built once, shared by every map that
+/** A contact's ground raster (512² — more for a farther detail's reach: its f[3]) and its box in the contact's local frame: built once, shared by every map that
  *  shows it (the on-foot HUD's minimap and the flight HUD's ground track hold one each), dropped with the contact. */
 const RASTERS = new WeakMap<SceneryContact, { raster: HTMLCanvasElement; box: number[] }>();
 function rasterOf(c: SceneryContact): { raster: HTMLCanvasElement; box: number[] } {
   const had = RASTERS.get(c);
   if (had) return had;
   const { f, u, reply } = c;
-  const N = 512,
+  const N = f[3]! || 512,
     at = f[2]! * 4;
   const image = new ImageData(N, N);
   for (let i = 0; i < N * N; i++) {
