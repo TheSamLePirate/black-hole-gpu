@@ -112,6 +112,20 @@ rayon et le nombre de rayons qui font la vitesse.
    10,2, 32,9 ms) ; Miller 119,3 → 115,9 ms. Le reste de Miller est du vrai travail : le disque épais traversé par
    les rayons du ciel, les sondes (11 ms), la mer.
 
+9. **La netteté en mouvement** (P3, 17/10) — mesurée, rien d'adopté. `flight-quality` (PSNR de l'image temps réel
+   contre la convergée, et la netteté : l'énergie des gradients de l'une sur l'autre) en virage dans les Alpes, en
+   rase-mottes et en croisière à Tarifa, réglages alternés (A, B, A, B) : la largeur du rognage de l'historique
+   (1,5, 2, 3 σ), le poids d'un pixel entre rayons (0,02, 0,05, 0,1), le poids plafond de l'historique (1/16, 1/32),
+   l'affûtage — tous dans l'écart entre deux passages d'un même réglage (±1 dB). Ce qui se voit en virage serré : la
+   crête contre le ciel en escaliers de blocs de 4 px et le sol adouci, quand l'historique cède à la reconstruction
+   d'un rayon pour 16 pixels. Essayé : un pixel entre rayons au bord (ses voisins frais proches et lointains) lisant
+   les deux historiques — celui que trouve la profondeur du plus proche, celui du plus lointain — et gardant le plus
+   proche de l'image : rien, ni sur l'image (±0,1 dB au second passage) ni sur ses seuls contours (le 5 % de plus fort
+   gradient) — retiré. Le défaut est la reconstruction elle-même : plus de rayons en virage (`dynamicResolution`, ou
+   ×3 — « ×4 avec historique vaut ×3 sans »), ou une reconstruction guidée. Le test corrigé : les captures d'un
+   réglage repris numérotées ; le virage demandé depuis la route suivie (le cap demandé s'ajoutait d'un test au
+   suivant : 70° de plus à chaque fois — la meilleure image toujours la première d'un lieu).
+
 **Le banc corrigé** (17/10) : une variante réglée (`tune`) a son propre noyau de table aérienne, et le décor et la
 surface demandent un noyau compilé pour sa clé ; attendre `variantReady` ne garantissait ni l'un ni l'autre — le côté
 B se mesurait souvent sans table aérienne (plus lent) ou sans décor (plus rapide), de 10 à 30 % sur Terre.
@@ -187,7 +201,8 @@ Les comptes (`costView` 14, `costStats`) : la marche fait 14 à 30 pas par pixel
 1. ~~La marche du terrain par une pyramide de hauteurs max~~ — mesuré : ≤ 10 % à gagner (la marche fait peu de pas) ;
    remplacé par la grille de déformation (fait, 7.).
 2. ~~Les corps de Gargantua testés à chaque pas~~ (Miller, Saturne) — fait (8.), ce qu'il y avait d'exact à gagner.
-3. **La netteté en mouvement rapide** (l'historique gardé floute un peu le premier plan en virage serré) — P3.
+3. La netteté en mouvement rapide — mesurée (9.) : rien dans les réglages ni la reprojection ; à faire par plus de
+   rayons en virage ou une reconstruction guidée.
 4. **L'ombrage du sol** (−20 à −34 % si plat) : ce qui y coûte reste à décomposer (normales, ombres, textures).
 5. Les pas géodésiques du ciel lointain : ≈ 11 par rayon déjà ; la LUT du champ lointain n'aide pas au-delà de blocs
    de 2 (audit O1).

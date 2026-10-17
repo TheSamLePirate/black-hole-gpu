@@ -25,6 +25,14 @@ const CONFIGS: Record<string, string> = {
   x4px4: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 4;`,
   x3drop: `__bh.game.set("realtimeSubsampling", 3); __bh.renderer.taParallaxPx = 0.5;`,
   x3keep: `__bh.game.set("realtimeSubsampling", 3); __bh.renderer.taParallaxPx = 64;`,
+  // (the reprojection's weights — renderer.taParams: a fresh pixel's least α, a pixel between rays' weight, the clamp's
+  // width in σ — and the sharpening, in a turn: what keeps the near ground sharp)
+  g3: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.renderer.taParams = [1 / 16, 0.05, 3];`,
+  g15: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.renderer.taParams = [1 / 16, 0.05, 1.5];`,
+  w10: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.renderer.taParams = [1 / 16, 0.1, 2];`,
+  w02: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.renderer.taParams = [1 / 16, 0.02, 2];`,
+  n32: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.renderer.taParams = [1 / 32, 0.05, 2];`,
+  sh6: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.settings.sharpen = 0.6;`,
 };
 const places = (process.env.PLACES ?? "alps,tarifa").split(",");
 const confs = process.env.CONF ? process.env.CONF.split(",") : Object.keys(CONFIGS);
@@ -50,9 +58,14 @@ describe.skipIf(!E2E)("the realtime image's quality in flight, against the conve
     stopServer();
   });
 
+  // (a config asked again — CONF=a,b,a,b, alternated: the flights differ a little each time — its shots numbered)
+  const seen = new Map<string, number>();
   for (const pl of places)
-    for (const cf of confs)
-      test(`${pl}: ${cf}`, async () => {
+    for (const cf of confs) {
+      const n = (seen.get(`${pl}-${cf}`) ?? 0) + 1;
+      seen.set(`${pl}-${cf}`, n);
+      const tag = n > 1 ? `${cf}${n}` : cf;
+      test(`${pl}: ${tag}`, async () => {
         await app.js(`(() => { __bh.game.quality("realtime"); Object.assign(__bh.settings, { dynamicResolution: false, animate: true, targetSpp: 64 });
           ${PLACES[pl]} __bh.settings.shipMount = "cockpit"; ${CONFIGS[cf]}
           const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
@@ -63,18 +76,23 @@ describe.skipIf(!E2E)("the realtime image's quality in flight, against the conve
           const t0 = performance.now(); let calm = 0;
           while (performance.now() - t0 < 60000) { const ok = r.earthTiles.pending === 0; calm = ok ? calm || performance.now() : 0; if (calm && performance.now() - calm > 1500) break; await frame(); }
           // (a turn asked as the frames are flown: the autopilot's heading TURNS[place]° on)
-          ${TURNS[pl] ? `{ const c = __bh.camera; c.jetModes.hdg = (c.jetModes.hdg ?? 0) + ${TURNS[pl]} * Math.PI / 180; }` : ""}
+          // (from the track flown now — the heading asked before added up from one test to the next: each later turn
+          // asked 70° more, a tighter image the first time at each place)
+          ${TURNS[pl] ? `{ const c = __bh.camera; c.jetModes.hdg = (c.geoNow()?.track ?? 0) + ${TURNS[pl]} * Math.PI / 180; }` : ""}
           let done = 0, last = r.lastDoneAt;
           while (done < ${FRAMES}) { await frame(); if (r.lastDoneAt !== last) { last = r.lastDoneAt; done++; } }
           window.__spp = __bh.settings.targetSpp; __bh.settings.targetSpp = 0; __bh.settings.animate = false; return 1; })()`);
         await Bun.sleep(600);
-        await shot(`${pl}-${cf}`);
+        await shot(`${pl}-${tag}`);
         await app.js(`(() => { __bh.settings.targetSpp = 64; __bh.touch(); return 1; })()`);
         for (let i = 0; i < 80; i++) {
           await Bun.sleep(500);
           if (await app.js<boolean>(`__bh.renderer.lastPhase === "converged"`)) break;
         }
-        await shot(`${pl}-${cf}-ref`);
-        await app.js(`(() => { __bh.settings.animate = true; __bh.renderer.taParallaxPx = 0.5; return 1; })()`);
+        await shot(`${pl}-${tag}-ref`);
+        await app.js(
+          `(() => { __bh.settings.animate = true; __bh.renderer.taParallaxPx = 0.5; __bh.renderer.taParams = [1 / 16, 0.05, 2]; __bh.settings.sharpen = 0.3; return 1; })()`,
+        );
       }, 400_000);
+    }
 });
