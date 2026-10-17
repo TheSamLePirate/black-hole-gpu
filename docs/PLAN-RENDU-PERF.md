@@ -126,6 +126,24 @@ rayon et le nombre de rayons qui font la vitesse.
    réglage repris numérotées ; le virage demandé depuis la route suivie (le cap demandé s'ajoutait d'un test au
    suivant : 70° de plus à chaque fois — la meilleure image toujours la première d'un lieu).
 
+10. **L'ombrage du sol décomposé** (17/10 ; `TUNE_GSKIP`, une partie retirée, une mesure) — Alpes et Tarifa en cockpit
+   (les Andes de ce lot mesurées avant que la scène ne soit chargée) :
+
+   | Retiré | Alpes | Tarifa | Andes |
+   |---|---|---|---|
+   | les ombres du relief | −12,5 % | −11,1 % | −10,0 % |
+   | la normale fine du relief (trois hauteurs entières) | −10,1 % | −4,8 % | −2,8 % |
+   | les matériaux proches, le bruit fin, les ombres des nuages, l'imagerie des tuiles, les textures de surface, la mer, les surfaces OSM | ≤ 2–3 % chacun | | |
+
+   Fait : **les ombres du relief pas à pas sur leur hauteur libre** (`TUNE_SHADOW_RELAX` 0,3) — un rayon haut au-dessus
+   du sol (un versant au soleil, un soleil haut) avance d'une part de sa hauteur libre, pas des petits pas de la
+   croissance (de 20 m, ×1,18 : ~35 pas d'un fond de vallée jusqu'au plafond du relief) ; la part de la hauteur libre
+   seule — avec la marge de la distance, des pas passaient sous les crêtes : une rivière au soleil couchant ombrée.
+   Alpes −4 %, Tarifa −3 %, Andes 0 ; images identiques (46–53 dB). Reste : la normale fine — ses trois hauteurs à
+   10 m l'une de l'autre ne partagent pas la déformation (≈ 14 m de décalage), les tuiles n'y pèsent rien (le
+   bilinéaire : 0–3 %) ; c'est le bruit du détail, trois fois : un bruit à dérivées analytiques (la hauteur et sa
+   pente en une évaluation) serait le levier.
+
 **Le banc corrigé** (17/10) : une variante réglée (`tune`) a son propre noyau de table aérienne, et le décor et la
 surface demandent un noyau compilé pour sa clé ; attendre `variantReady` ne garantissait ni l'un ni l'autre — le côté
 B se mesurait souvent sans table aérienne (plus lent) ou sans décor (plus rapide), de 10 à 30 % sur Terre.
@@ -203,6 +221,7 @@ Les comptes (`costView` 14, `costStats`) : la marche fait 14 à 30 pas par pixel
 2. ~~Les corps de Gargantua testés à chaque pas~~ (Miller, Saturne) — fait (8.), ce qu'il y avait d'exact à gagner.
 3. La netteté en mouvement rapide — mesurée (9.) : rien dans les réglages ni la reprojection ; à faire par plus de
    rayons en virage ou une reconstruction guidée.
-4. **L'ombrage du sol** (−20 à −34 % si plat) : ce qui y coûte reste à décomposer (normales, ombres, textures).
+4. L'ombrage du sol — décomposé (10.) ; les ombres allégées ; la normale fine demanderait un bruit à dérivées
+   analytiques.
 5. Les pas géodésiques du ciel lointain : ≈ 11 par rayon déjà ; la LUT du champ lointain n'aide pas au-delà de blocs
    de 2 (audit O1).

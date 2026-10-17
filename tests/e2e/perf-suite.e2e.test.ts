@@ -96,6 +96,30 @@ const ABS: Record<string, [string, string, string, string?]> = {
     "__bh.renderer.tune = {}",
     "__bh.renderer.tune = { TUNE_BODY_REJECT: 0 }",
   ],
+  // (the ground's shading, a part of it left out — trace.wgsl TUNE_GSKIP)
+  ...Object.fromEntries(
+    (
+      [
+        ["gnormal", 1, "the relief's own normal near"],
+        ["gshadow", 2, "the relief's shadows"],
+        ["gcover", 4, "the near materials (snow, rock)"],
+        ["gfine", 8, "the fine noise's colour and light"],
+        ["gclouds", 16, "the clouds' and the weather's shadows"],
+        ["gimagery", 32, "the tiles' imagery"],
+        ["gsurface", 64, "the surface textures"],
+        ["gsea", 128, "the sea's shading"],
+        ["gosm", 256, "the scenery's surfaces"],
+      ] as const
+    ).map(([k, b, what]) => [
+      k,
+      [`${what} → left out (a measure)`, "__bh.renderer.tune = {}", `__bh.renderer.tune = { TUNE_GSKIP: ${b} }`],
+    ]),
+  ),
+  shadowrelax: [
+    "the relief's shadows stepped by their clearance → by their growth alone",
+    "__bh.renderer.tune = {}",
+    "__bh.renderer.tune = { TUNE_SHADOW_RELAX: 0 }",
+  ],
   warpgrid: [
     "the mountains' warp from its grids → worked out by each ray",
     "__bh.renderer.warpGrid = true",

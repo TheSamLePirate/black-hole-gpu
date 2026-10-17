@@ -191,6 +191,8 @@ override COST_VIEW: u32 = 0u;
 override TUNE_AIR_N: u32 = 32u;
 override TUNE_SHADOW_N: u32 = 48u;
 override TUNE_SHADOW_K: f32 = 1.18;
+// (the relief's shadows: a step at least this share of the ray's clearance over the ground — 0: the growth alone)
+override TUNE_SHADOW_RELAX: f32 = 0.3;
 // (the realtime geodesics' tolerance far from the hole: × this beyond 20 M, × 1 within 10 M — the photon sphere's rays
 // exact; the far field nearly flat: at 3 the images alike to a comparison's own noise, Kerr edge-on's trace −21 %)
 override TUNE_EPS_FAR: f32 = 3.0;
@@ -223,6 +225,10 @@ override TUNE_DETAIL: u32 = 1u;
 override TUNE_CHEAP: u32 = 0u;
 // (1: Gargantua's bodies far from a step rejected before their place at its end — 0: each worked out, a measure)
 override TUNE_BODY_REJECT: u32 = 1u;
+// (measures — the Earth's ground shading, a part of it left out: 1 the relief's own normal near, 2 its shadows, 4 the
+// near materials (snow, rock), 8 the fine noise's colour and light, 16 the clouds' and the weather's shadows, 32 the
+// tiles' imagery, 64 the surface textures, 128 the sea's shading, 256 the scenery's surfaces)
+override TUNE_GSKIP: u32 = 0u;
 // (the ray's work by kind: 0 the ground's march steps (the Earth's, a world's), 1 the ground's heights read (earthH,
 // relief), 2 its shadows' steps, 3 the clouds' steps (the volume's, the weather's), 4 the air's (the auroras'), 5 the
 // water's (the sea's surface search, the mirror's march), 6 the scenery's boxes visited, 7 the geodesic integrator's
@@ -5425,10 +5431,14 @@ fn earthTerrainShadow(p: vec3f, Ls: vec3f, foot: f32) -> f32 {
     if (hr > earthTop()) { break; }
     // (+0.5 % of the distance: the march's heights, from coarser levels farther, a few metres off the
     // ground drawn)
-    let d = hr - earthHeightStep(x / r, max(0.05 * t, foot)) + bias + 0.005 * t;
+    let clear = hr - earthHeightStep(x / r, max(0.05 * t, foot)) + bias;
+    let d = clear + 0.005 * t;
     sh = min(sh, clamp(d / (0.04 * t) + 0.5, 0.0, 1.0));
     if (sh <= 0.0) { break; }
-    t *= TUNE_SHADOW_K;
+    // (high over the ground here — a sunlit slope's ray, a high sun's —: on by a share of its clearance (not of the
+    // distance's allowance: steps by it went under the ridges — shadows on a sunlit river at sunset), not by the
+    // growth's small steps over it; the penumbra's least ratio taken where the ground comes near)
+    t = max(t * TUNE_SHADOW_K, t + TUNE_SHADOW_RELAX * clear);
   }
   return sh;
 }
@@ -6483,17 +6493,20 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   // (the sea's mask is the global relief map's — a few km a texel —: a ground the fine relief puts over the sea's
   // level — 0 there, its noise off below 40 m — is land whatever it says, and so is what the scenery draws on land —
   // the coast's hills and cliffs, a seaside town's low streets were shaded as the sea)
-  let osm=scenerySurface(max(length(fx),length(fy))*EARTH_RM);
+  var osm=scenerySurface(max(length(fx),length(fy))*EARTH_RM);
+  if ((TUNE_GSKIP & 256u) != 0u) { osm.cover = 0.0; }
   let osmWater=select(0.0,osm.cover,osm.kind==3.0 || osm.kind==4.0);
   let osmLand=select(osm.cover,0.0,osm.kind==3.0 || osm.kind==4.0);
   let overSea = max(smoothstep(0.5, 2.0, hG), osmLand);
   let sea0 = smoothstep(0.35, 0.65, rel.b) * (1.0 - overSea);
   let ocean = max(sea0,osmWater) * (1.0 - lvl);
   // (near, the tiles' imagery over the maps: four to eight times finer)
-  let img = earthImagery(gq, max(length(fx), length(fy)) * EARTH_RM);
+  var img = earthImagery(gq, max(length(fx), length(fy)) * EARTH_RM);
+  if ((TUNE_GSKIP & 32u) != 0u) { img.w = 0.0; }
   var A = mix(day.rgb, img.c.rgb, img.w) * P.earth2.z;
   A = mix(A, vec3f(0.11, 0.12, 0.065) * P.earth2.z, sea0 * lvl);
-  let surface = surfaceImage(gq, fx, fy);
+  var surface = surfaceImage(gq, fx, fy);
+  if ((TUNE_GSKIP & 64u) != 0u) { surface.w = 0.0; }
   A = mix(A, surface.c * P.earth2.z, surface.w);
   // (the relief: east and north components; the map's is faint — strengthened, P.earth.w)
   var east = vec3f(-q.y, q.x, 0.0);
@@ -6506,13 +6519,13 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   // (near — a pixel under the map's texel — the relief's own normal: its ridges, crests and rocks)
   let footM = max(length(fx), length(fy)) * EARTH_RM;
   let texelM = EARTH_RM * TAU / f32(textureDimensions(earthElev).x);
-  if (footM < texelM && ocean < 1.0) {
+  if (footM < texelM && ocean < 1.0 && (TUNE_GSKIP & 1u) == 0u) {
     n = normalize(mix(n, earthNormalAt(q, footM), smoothstep(texelM, 0.3 * texelM, footM) * (1.0 - ocean)));
   }
   // (near: the ground's own materials from its height and slope — snow above the snow line (lower towards
   // the poles, ragged), bare rock on the steep faces of the mountains; blended in as the map's texel
   // grows under the pixel)
-  if (footM < texelM && ocean < 1.0 && surface.w < 0.999) {
+  if (footM < texelM && ocean < 1.0 && surface.w < 0.999 && (TUNE_GSKIP & 4u) == 0u) {
     let k = smoothstep(texelM, 0.3 * texelM, footM) * (1.0 - ocean) * (1.0 - surface.w);
     let slope = 1.0 - clamp(dot(n, q), 0.0, 1.0);
     let lat = abs(asin(clamp(gq.z, -1.0, 1.0))) * 57.29578;
@@ -6613,12 +6626,13 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   let hc = P.earth2.x;
   let marchMu = dot(q, Ls);
   let qs = normalize(q + (Ls - q * marchMu) * (hc / max(marchMu, 0.06)));
-  var shade = 1.0 - 0.8 * earthCloud(qs, fx * 3.0, fy * 3.0, Ls).x;
+  var shade = 1.0;
+  if ((TUNE_GSKIP & 16u) == 0u) { shade = 1.0 - 0.8 * earthCloud(qs, fx * 3.0, fy * 3.0, Ls).x; }
   // (the weather near the camera: its layers' shadows in place of the map's — each cast from its middle
   // along the sun's slant, through its gaps; the light its decks spread, below with the sky's)
   let wg = wxNear(q);
   var wxVl = vec2f(1.0);
-  if (HAS_WX && wg > 0.0) {
+  if (HAS_WX && wg > 0.0 && (TUNE_GSKIP & 16u) == 0u) {
     shade = mix(shade, 1.0, wg);
     for (var i = 0u; i < 3u; i++) {
       let L = P.wx[1u + i];
@@ -6634,13 +6648,13 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   if (EARTH_SHADOW_ON) { Eg *= shipShadow(EARTH_SHADOW_POINT); }
   // (near, the mountains' shadows: a peak between the sun and the valley)
   let footS = max(length(fx), length(fy)) * EARTH_RM;
-  if (footS < 2.0 * EARTH_RM * TAU / f32(textureDimensions(earthElev).x) && mu0 > -0.05 && ocean < 1.0) {
+  if (footS < 2.0 * EARTH_RM * TAU / f32(textureDimensions(earthElev).x) && mu0 > -0.05 && ocean < 1.0 && (TUNE_GSKIP & 2u) == 0u) {
     Eg *= mix(1.0, earthTerrainShadow(q * (1.0 + hG / EARTH_RM), Ls, footS), 1.0 - ocean);
   }
   // (near: the land's colour and relief finer than the maps — the noise's slopes facing the sun lit)
   var relLit = 1.0;
   let og = earthOct(fx, fy);
-  if (og > 0.0 && ocean < 1.0) {
+  if (og > 0.0 && ocean < 1.0 && (TUNE_GSKIP & 8u) == 0u) {
     let f = 1.0 / earthTexel();
     let oct = max(og, 1.0);
     let k = min(og, 1.0) * (1.0 - ocean);
@@ -6681,7 +6695,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
     col += ripple * 0.35 * sky / PI;
   }
   // the sea (seaShade): the sun's glint off its wind-roughened slopes, the sky mirrored, the whitecaps
-  if (ocean > 0.0) {
+  if (ocean > 0.0 && (TUNE_GSKIP & 128u) == 0u) {
     // (inland water — OSM's lakes and rivers off the sea's map —: calm, a lake more than a river; near, the
     // world mirrored in it)
     // (HAS_SCENERY: without it the calm is 0 only at run time — 0 · x does not fold without fast-math —, and
