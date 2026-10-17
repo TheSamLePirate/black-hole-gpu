@@ -141,8 +141,19 @@ rayon et le nombre de rayons qui font la vitesse.
    seule — avec la marge de la distance, des pas passaient sous les crêtes : une rivière au soleil couchant ombrée.
    Alpes −4 %, Tarifa −3 %, Andes 0 ; images identiques (46–53 dB). Reste : la normale fine — ses trois hauteurs à
    10 m l'une de l'autre ne partagent pas la déformation (≈ 14 m de décalage), les tuiles n'y pèsent rien (le
-   bilinéaire : 0–3 %) ; c'est le bruit du détail, trois fois : un bruit à dérivées analytiques (la hauteur et sa
-   pente en une évaluation) serait le levier.
+   bilinéaire : 0–3 %) ; c'est le bruit du détail, trois fois — un bruit à dérivées analytiques essayé (11.) : rien.
+
+11. **La normale du relief par un bruit à dérivées analytiques** (17/10) — mesurée, retirée. Le bruit et son gradient
+   en une évaluation (gnoiseD : les gradients des coins et la dérivée du fondu quintique), les fBm et le multifractal
+   dérivés, la déformation et sa jacobienne lue dans les grilles ; la normale : la base (tuiles, pistes) aux trois
+   points, le détail une fois au centre, prolongé aux deux autres par son gradient. Vérifié sur le GPU contre les
+   différences de son jumeau CPU en float64 (400 points de montagne : la hauteur exacte, 398 pentes concordantes — les
+   deux autres sur l'arête d'une crête fine, où `1 − |n|` change de signe). Mais rien de gagné : deux paires A/B,
+   Andes 61,0 contre 61,1 ms, Yosemite 69,2 contre 69,3, Alpes 20,3 contre 20,2 (un premier −15 % aux Andes était
+   leur première mesure, prise avant que la scène ne soit chargée : 11,4 ms). Un bruit à dérivées coûte environ deux
+   bruits ; la normale garde ses trois lectures de tuiles : une à deux évaluations du détail épargnées sur trois, 1 à
+   3 % du total, dans le bruit — le noyau, limité par ses registres, n'y gagne pas la place. Retiré (le code est dans
+   l'historique de la session, non commité).
 
 **Le banc corrigé** (17/10) : une variante réglée (`tune`) a son propre noyau de table aérienne, et le décor et la
 surface demandent un noyau compilé pour sa clé ; attendre `variantReady` ne garantissait ni l'un ni l'autre — le côté
@@ -221,7 +232,6 @@ Les comptes (`costView` 14, `costStats`) : la marche fait 14 à 30 pas par pixel
 2. ~~Les corps de Gargantua testés à chaque pas~~ (Miller, Saturne) — fait (8.), ce qu'il y avait d'exact à gagner.
 3. La netteté en mouvement rapide — mesurée (9.) : rien dans les réglages ni la reprojection ; à faire par plus de
    rayons en virage ou une reconstruction guidée.
-4. L'ombrage du sol — décomposé (10.) ; les ombres allégées ; la normale fine demanderait un bruit à dérivées
-   analytiques.
+4. L'ombrage du sol — décomposé (10.) ; les ombres allégées ; la normale par un bruit à dérivées essayée (11.) : rien.
 5. Les pas géodésiques du ciel lointain : ≈ 11 par rayon déjà ; la LUT du champ lointain n'aide pas au-delà de blocs
    de 2 (audit O1).
