@@ -69,7 +69,7 @@ jobs:
       # against its TypeScript twin — both exit 0 without an adapter)
       - run: bun scripts/check-wgsl.ts
       - run: bun scripts/check-forest.ts --rays 2000
-      - run: bun test --parallel --reporter=junit --reporter-outfile=junit.xml
+      - run: bun test --parallel --timeout 30000 --reporter=junit --reporter-outfile=junit.xml
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -165,7 +165,8 @@ jobs:
       - name: Verify and build the exact main revision
         if: steps.built.outputs.cache-hit != 'true'
         # (the size and forest checks where the revision has them: a branch from before them builds without;
-        # the unit tests' files in parallel, a worker a core)
+        # the unit tests' files in parallel, a worker a core — a test's own budget 30 s, not bun's 5: the long
+        # flights' of 4–5 s alone took 6–10 s with the cores shared)
         run: |
           bun install --frozen-lockfile
           bun run typecheck
@@ -173,7 +174,7 @@ jobs:
           if [ -f scripts/check-repo-size.ts ]; then bun scripts/check-repo-size.ts --base HEAD^1; fi
           bun scripts/check-wgsl.ts
           if [ -f scripts/check-forest.ts ]; then bun scripts/check-forest.ts --rays 2000; fi
-          bun test --parallel --reporter=junit --reporter-outfile=junit.xml
+          bun test --parallel --timeout 30000 --reporter=junit --reporter-outfile=junit.xml
           bun run build:pages
           tar -cf site-main.tar -C _site .
       - if: always() && steps.built.outputs.cache-hit != 'true'
@@ -242,7 +243,7 @@ jobs:
           if [ -f scripts/check-repo-size.ts ]; then bun scripts/check-repo-size.ts --base HEAD^1; fi
           bun scripts/check-wgsl.ts
           if [ -f scripts/check-forest.ts ]; then bun scripts/check-forest.ts --rays 2000; fi
-          bun test --parallel --reporter=junit --reporter-outfile=junit.xml
+          bun test --parallel --timeout 30000 --reporter=junit --reporter-outfile=junit.xml
           bun run build:pages
           tar -cf site-test.tar -C _site .
       - if: always() && steps.checkout.outcome == 'success'
