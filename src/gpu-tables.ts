@@ -1,10 +1,11 @@
 // The tracer's read-only tables in one storage buffer (PLAN-MONDE M9): the bodies, the light probe's
-// harmonics, the blackbody's and the synchrotron's colours, the camera's path — at fixed offsets, in vec4s,
-// the same as trace.wgsl's SH_BASE, LUT_OFF and PATH_OFF (tests/gpu-tables.test.ts checks them). One
-// binding instead of three: the trace stage within WebGPU's default 8 storage buffers per stage.
+// harmonics, the blackbody's and the synchrotron's colours, the camera's path, the walking grid, the mountains' warp —
+// at fixed offsets, in vec4s, the same as trace.wgsl's SH_BASE, LUT_OFF, PATH_OFF and WARP_OFF (tests/gpu-tables.test.ts
+// checks them). One binding instead of three: the trace stage within WebGPU's default 8 storage buffers per stage.
 
 import { BB_LUT_SIZE, SYNC_LUT_SIZE } from "./physics";
 import { BODY_VEC4, MAX_BODIES } from "./system/scene-bodies";
+import { WARP_LEVELS, WARP_N } from "./system/warp-grid";
 
 /** the probe's harmonics: 9 × rgb, then the dominant direction */
 export const SH_VEC4S = 10;
@@ -17,4 +18,6 @@ export const TABLE_SH = MAX_BODIES * BODY_VEC4;
 export const TABLE_LUT = TABLE_SH + SH_VEC4S;
 export const TABLE_PATH = TABLE_LUT + BB_LUT_SIZE + SYNC_LUT_SIZE;
 export const TABLE_WALK = TABLE_PATH + PATH_MAX + PATH_MAX / PATH_CHUNK;
-export const TABLE_VEC4S = TABLE_WALK + Math.ceil((65 * 65) / 4);
+/** the mountains' warp's grids (system/warp-grid.ts): their levels' nodes, one vec4 each */
+export const TABLE_WARP = TABLE_WALK + Math.ceil((65 * 65) / 4);
+export const TABLE_VEC4S = TABLE_WARP + WARP_LEVELS * WARP_N * WARP_N;

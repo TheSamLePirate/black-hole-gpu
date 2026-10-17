@@ -9,7 +9,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // planets' (in the viewer: no craft, no cockpit), the low flight's from the cockpit (the game, after them).
 //   SCENES=a,b (the short names below, or presets), SUB=4 (the realtime subsampling), FRAMES=60,
 //   AB=<name> (ABS below) or "name;js A;js B" — each scene measured A, B, A, B (REPS=2 pairs), the switch put back to A after.
-// E2E_SHOTS=<dir>: each scene's image (and its B's; COST=1,9,… its cost views — renderer.costView), perf.json.
+// E2E_SHOTS=<dir>: each scene's image (and its B's; COST=1,9,… its cost views — renderer.costView; 14, 15 their raw
+// counts read back and printed: renderer.costStats), perf.json.
 
 const FLIGHT: Record<string, string> = {
   "flight: Tarifa, cockpit": `__bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set("weather", "cloudy"); __bh.game.set("earthClouds", 0.3);
@@ -80,11 +81,22 @@ const ABS: Record<string, [string, string, string, string?]> = {
     "__bh.renderer.tune = { TUNE_MARCH_K: 0.9 }",
   ],
   relax: ["the ground's march over-relaxed ×1.6 → not", "__bh.renderer.tune = {}", "__bh.renderer.tune = { TUNE_RELAX: 1 }"],
+  // (bounds, not candidates: what fewer of a loop's steps could give — the march's steps twice as long, unsafe; the
+  // relief's shadows on a quarter of their steps)
+  k1: ["the ground's march steps 0.5 → 1 of the clearance (unsafe)", "__bh.renderer.tune = {}", "__bh.renderer.tune = { TUNE_MARCH_K: 1 }"],
+  shadow12: ["the relief's shadows 48 → 12 steps", "__bh.renderer.tune = {}", "__bh.renderer.tune = { TUNE_SHADOW_N: 12 }"],
   relaxband: [
     "the ground's march over-relaxed near the ground too → on the way in only",
     "__bh.renderer.tune = {}",
     "__bh.renderer.tune = { TUNE_RELAX_BAND: 1 }",
   ],
+  warpgrid: [
+    "the mountains' warp from its grids → worked out by each ray",
+    "__bh.renderer.warpGrid = true",
+    "__bh.renderer.warpGrid = false",
+  ],
+  cheap: ["the tiles' heights B-spline → bilinear (a measure)", "__bh.renderer.tune = {}", "__bh.renderer.tune = { TUNE_CHEAP: 1 }"],
+  flatground: ["the Earth's ground shaded → flat (a measure)", "__bh.renderer.tune = {}", "__bh.renderer.tune = { TUNE_SKIP: 8192 }"],
   warp: ["the mountains' warp on → off (a measure)", "__bh.renderer.tune = {}", "__bh.renderer.tune = { TUNE_WARP: 0 }"],
   detail: ["the ground's detail on → off (a measure)", "__bh.renderer.tune = {}", "__bh.renderer.tune = { TUNE_DETAIL: 0 }"],
   skipbg: ["the background → skipped (a measure)", "__bh.renderer.tune = {}", "__bh.renderer.tune = { TUNE_SKIP: 1 }"],
@@ -240,10 +252,11 @@ describe.skipIf(!E2E)("the render's costs on held scenes", () => {
         const t0 = performance.now();
         // (a few frames first: the kernel's key follows the scene at the next frame)
         for (let i = 0; i < 4; i++) { __bh.touch(); await frame(); }
-        while (!r.variantReady && performance.now() - t0 < 180000) { __bh.touch(); await frame(); }
+        // (the kernel settled — renderer.kernelsSettled: its own passes compiled, its surface and scenery in)
+        while (!r.kernelsSettled && performance.now() - t0 < 240000) { __bh.touch(); await frame(); }
         // (the aerial perspective's table's kernel, compiled after the first image: waited for — 3 min at most —
         // near a world with air)
-        while (r.aerialTable && !r.aerialPipe && r.lastNear && performance.now() - t0 < 180000) { __bh.touch(); await frame(); }
+        while (r.aerialWanted && !r.aerialPipe && performance.now() - t0 < 180000) { __bh.touch(); await frame(); }
         // (a trace pass drawn — not only a kernel said ready: a scene's first could still be compiling; the profiler's
         // figures cleared first: they keep the last scene's)
         {
@@ -272,7 +285,10 @@ describe.skipIf(!E2E)("the render's costs on held scenes", () => {
           // general kernel drawing meanwhile, 20–40 % slower — and the tracer settled on it)
           await app.js(`(async () => { const r = __bh.renderer, frame = () => new Promise((res) => requestAnimationFrame(() => res(null)));
             for (let i = 0; i < 4; i++) { __bh.touch(); await frame(); }
-            const t0 = performance.now(); while (!r.variantReady && performance.now() - t0 < 180000) { __bh.touch(); await frame(); }
+            // (settled: a tuned variant's own aerial table's pass, surface and scenery — variantReady alone measured B
+            // without them: 10–30 % on the Earth, either way)
+            const t0 = performance.now(); while (!r.kernelsSettled && performance.now() - t0 < 240000) { __bh.touch(); await frame(); }
+            while (r.aerialWanted && !r.aerialPipe && performance.now() - t0 < 240000) { __bh.touch(); await frame(); }
             for (let i = 0; i < 6; i++) { __bh.touch(); await frame(); }
             ${side === "a" && AB[3] ? `while (!(${AB[3]}) && performance.now() - t0 < 240000) { __bh.touch(); await frame(); }` : ""}
             return 1; })()`);
@@ -291,9 +307,21 @@ describe.skipIf(!E2E)("the render's costs on held scenes", () => {
           r.costView = ${cv}; const t0 = performance.now();
           // (a few frames first: the kernel's key follows the switch at the next frame)
           for (let i = 0; i < 4; i++) { __bh.touch(); await frame(); }
-          while (!r.variantReady && performance.now() - t0 < 180000) { __bh.touch(); await frame(); }
+          while (!r.kernelsSettled && performance.now() - t0 < 240000) { __bh.touch(); await frame(); }
           for (let i = 0; i < 24; i++) { __bh.touch(); await frame(); } return 1; })()`);
         await shot(`${sc}-cost${cv}`);
+        // (14, 15: the raw counts read back — renderer.costStats)
+        if (cv === 14 || cv === 15) {
+          const st = await app.js<{ share: number; mean: number; p50: number; p90: number; p99: number }[] | null>(
+            "__bh.renderer.costStats()",
+          );
+          const names =
+            cv === 14 ? ["march steps", "heights read", "shadow steps"] : ["main-loop steps", "bodies tested", "integrator tries"];
+          for (const [i, x] of (st ?? []).entries())
+            console.log(
+              `  ${sc} ${names[i]}: ${(100 * x.share).toFixed(0)} % of the pixels, there mean ${x.mean.toFixed(1)} · p50 ${x.p50.toFixed(0)} · p90 ${x.p90.toFixed(0)} · p99 ${x.p99.toFixed(0)}`,
+            );
+        }
       }
       if (process.env.COST) await app.js(`(() => { __bh.renderer.costView = 0; return 1; })()`);
     }, 600_000);

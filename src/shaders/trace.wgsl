@@ -146,6 +146,10 @@ struct Params {
   // cascades (along the wind, across it: Cox–Munk's share the cascades leave), unused ×2; [3] the nearest
   // carrier's sphere in the ship's shadow map (shipShadow: its right half), w its radius (0: none)
   seafft: array<vec4f, 4>,
+  // the mountains' warp precomputed (system/warp-grid.ts; earthWarp): [0] the reference — the camera's place —
+  // (cos, sin of its longitude, sin, cos of its geodetic latitude); [1…3] each level's window: the reference's place
+  // on it in nodes (u east, v north), nodes a radian, on (0/1)
+  warp: array<vec4f, 4>,
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -205,13 +209,15 @@ override TUNE_WARP: u32 = 1u;
 // (measures, the image then other — what a block of a sky ray costs: 1 the background (sky and far points), 2 the far
 // points alone, 4 ourSegment — 32 its bodies met, 64 its rings, 128 its worlds' air, 256 the corona, 512 the stars'
 // discs —, 16 the whole ray past the near world; the Kerr loop's 1024 weak fields' kick, 2048 thick disk, 4096 the
-// equatorial crossings)
+// equatorial crossings; 8192 the Earth's ground shaded flat)
 override TUNE_SKIP: u32 = 0u;
 // (1: the wormhole's steps on our side merged into straight pieces for ourSegment while the ray holds straight to a
 // quarter of its pixel; 0: each step's chord on its own, as before)
 override TUNE_MERGE: u32 = 1u;
 // (0: the ground's detail off altogether — a measure)
 override TUNE_DETAIL: u32 = 1u;
+// (1: the tiles' heights always bilinear, never their cubic B-spline — a measure)
+override TUNE_CHEAP: u32 = 0u;
 // (the ray's work by kind: 0 the ground's march steps (the Earth's, a world's), 1 the ground's heights read (earthH,
 // relief), 2 its shadows' steps, 3 the clouds' steps (the volume's, the weather's), 4 the air's (the auroras'), 5 the
 // water's (the sea's surface search, the mirror's march), 6 the scenery's boxes visited, 7 the geodesic integrator's
@@ -220,6 +226,10 @@ override TUNE_DETAIL: u32 = 1u;
 var<private> COST: array<f32, 12>;
 fn cost(k: u32) { if (COST_VIEW > 0u) { COST[k] += 1.0; } }
 fn costHeat() -> vec3f {
+  // (the raw counts, for a readback — renderer.costStats —: 14 the ground's march steps, heights read, shadow steps;
+  // 15 the main loop's steps, the bodies tested, the integrator's tries)
+  if (COST_VIEW == 14u) { return vec3f(COST[0], COST[1], COST[2]); }
+  if (COST_VIEW == 15u) { return vec3f(COST[11], COST[10], COST[7]); }
   // (each kind weighed by what a step of it costs, roughly: a height read the unit)
   let w = array<f32, 12>(0.5, 1.0, 0.5, 3.0, 1.0, 2.0, 0.3, 1.5, 0.3, 0.2, 0.2, 0.5);
   var n = 0.0;
@@ -287,6 +297,10 @@ const FLAG_REPROJECT = 16u;     // realtime under the temporal reprojection: the
 const BV = 6u; // vec4s per body (src/system/scene-bodies.ts: BODY_VEC4)
 const LUT_OFF = 250u; // SH_BASE + 10 harmonics
 const PATH_OFF = 1786u; // LUT_OFF + LUT_N + SYNC_N
+// the mountains' warp's grids (system/warp-grid.ts: TABLE_WARP — after the walking grid), their levels and nodes a side
+const WARP_OFF = 3115u;
+const WARP_LEVELS = 3u;
+const WARP_N = 512u;
 // The solar system's maps (equirectangular, sRGB) and Saturn's rings' radial profile (sRGB + opacity,
 // from the inner to the outer radius), mip-mapped (src/system/planet-maps.ts)
 @group(0) @binding(16) var mapHi: texture_2d_array<f32>; // 2048 × 1024 (solar.ts: MAPS_HI)
@@ -4657,6 +4671,43 @@ fn tfbmFw(p0: vec3f, oct: f32, lam0: f32, res: f32) -> f32 {
   }
   return s / max(n, 1e-6);
 }
+// The mountains' warp at q (a geodetic direction): a smooth field moving the ridged lattice (no regular rows of
+// peaks) — 0.7 × three two-octave gradient noises of q × 600 (~10 and 5 km), six noises at every height read. Round
+// the camera it is read from grids precomputed on nodes fixed on the Earth (system/warp-grid.ts: 19, 76 and 306 m,
+// 512 a side — ±4.9, ±20, ±78 km), bilinear between four of them (the crests moved by 3 cm at most on the finest,
+// 0.4 m on the second, 6 m on the third: tests/warp-grid.test.ts), each blended into the next towards its window's
+// edge; beyond them, and near the poles, worked out
+fn earthWarpExact(q: vec3f) -> vec3f {
+  return 0.7 * vec3f(tfbm(q * 600.0 + vec3f(3.1), 2), tfbm(q * 600.0 + vec3f(7.7), 2), tfbm(q * 600.0 + vec3f(1.3), 2));
+}
+fn warpNode(k: u32, i: vec2i) -> vec3f { return bodies[WARP_OFF + k * WARP_N * WARP_N + u32(i.y) * WARP_N + u32(i.x)].xyz; }
+fn earthWarp(q: vec3f) -> vec3f {
+  if (P.warp[1].w < 0.5) { return earthWarpExact(q); }
+  let r = P.warp[0];
+  // (from the reference: the longitude by a turned atan2, the latitude by sin(φ − φ₀) — no float32 cancellation)
+  let dlon = atan2(-q.x * r.y + q.y * r.x, q.x * r.x + q.y * r.y);
+  let sz = clamp(q.z, -1.0, 1.0);
+  let dlat = asin(clamp(sz * r.w - sqrt(max(1.0 - sz * sz, 0.0)) * r.z, -1.0, 1.0));
+  var w3 = vec3f(0.0);
+  var rem = 1.0;
+  for (var k = 0u; k < WARP_LEVELS; k++) {
+    let L = P.warp[1u + k];
+    if (L.w < 0.5) { continue; }
+    let uv = L.xy + vec2f(dlon, dlat) * L.z;
+    let e = min(min(uv.x, uv.y), min(f32(WARP_N - 1u) - uv.x, f32(WARP_N - 1u) - uv.y));
+    let w = smoothstep(0.0, 48.0, e);
+    if (w <= 0.0) { continue; }
+    let i0 = vec2i(floor(uv));
+    let f = uv - floor(uv);
+    let a = mix(warpNode(k, i0), warpNode(k, i0 + vec2i(1, 0)), f.x);
+    let b = mix(warpNode(k, i0 + vec2i(0, 1)), warpNode(k, i0 + vec2i(1, 1)), f.x);
+    w3 += rem * w * mix(a, b, f.y);
+    rem *= 1.0 - w;
+    if (rem < 1e-4) { break; }
+  }
+  if (rem >= 1e-4) { w3 += rem * earthWarpExact(q); }
+  return w3;
+}
 fn earthDetail(q: vec3f, h0: f32, foot: f32, res: f32) -> f32 {
   if (TUNE_DETAIL == 0u) { return 0.0; }
   let mount = smoothstep(300.0, 2500.0, h0);
@@ -4669,7 +4720,7 @@ fn earthDetail(q: vec3f, h0: f32, foot: f32, res: f32) -> f32 {
   let o1 = layerOctF(1500.0, foot, EARTH_RM, 7.0);
   if (o1 > f32(firstKept(EARTH_RM / 1500.0, res)) && mount > 0.0) {
     var pw = q * 1500.0 + vec3f(11.0);
-    if (TUNE_WARP > 0u) { pw += 0.7 * vec3f(tfbm(q * 600.0 + vec3f(3.1), 2), tfbm(q * 600.0 + vec3f(7.7), 2), tfbm(q * 600.0 + vec3f(1.3), 2)); }
+    if (TUNE_WARP > 0u) { pw += earthWarp(q); }
     h += ridgedMFw(pw, o1, EARTH_RM / 1500.0, res) * 1500.0 * mount;
   }
   // the plains' hills, the rocks
@@ -5286,7 +5337,7 @@ fn earthH(q: vec3f, foot: f32, cheap: bool) -> vec2f {
     let d = min(min(p.x, p.y), min(b.x - p.x, b.y - p.y));
     let w = wz * smoothstep(2.0, 48.0, d);
     if (w <= 0.0) { continue; }
-    h += rem * w * tileSample(l, p, select(zf - z, 0.0, cheap));
+    h += rem * w * tileSample(l, p, select(zf - z, 0.0, cheap || TUNE_CHEAP > 0u));
     res += rem * w * max(EARTH_RM * cosLat / b.z, TILE_RES_MIN);
     rem *= 1.0 - w;
     if (rem < 1e-4) { break; }
@@ -6410,6 +6461,7 @@ fn surfaceMaterial(q: vec3f, cover: u32, footM: f32) -> vec3f {
 var<private> EARTH_SHADOW_POINT:vec3f;
 var<private> EARTH_SHADOW_ON: bool = false;
 fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, hG: f32) -> vec3f {
+  if ((TUNE_SKIP & 8192u) != 0u) { return vec3f(0.05) * max(dot(normalize(q), Ls), 0.0); }
   // (the maps at the geodetic latitude — q the squashed space's —, the geometry at q)
   let gq = geoQ(q);
   let day = textureSampleGrad(earthCube, bgSamp, eCube(gq), eCube(fx), eCube(fy));

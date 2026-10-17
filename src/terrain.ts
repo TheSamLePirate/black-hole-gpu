@@ -269,6 +269,12 @@ function tfbmFw(p0: V3, oct: number, lam0: number, res: number): number {
 const layerOctF = (f: number, foot: number, mR: number, most: number) =>
   Math.min(Math.max(Math.log2(mR / (f * 4 * Math.max(foot, 0.05))), 0), most);
 
+/** The mountains' warp at a geodetic direction q (the tracer's earthWarpExact — on the GPU read from grids round
+ *  the camera, system/warp-grid.ts): the ridged lattice's move, in its units. */
+export function earthWarp(q: V3): V3 {
+  return [0.7 * tfbm(sc(q, 600, 3.1), 2), 0.7 * tfbm(sc(q, 600, 7.7), 2), 0.7 * tfbm(sc(q, 600, 1.3), 2)];
+}
+
 /**
  * The Earth's relief finer than its height map (h0: the map's height there [m]; res: the heights'
  * resolution there [m] — the layers it resolves faded out): on its mountains a ridged multifractal on a
@@ -281,8 +287,8 @@ export function earthDetail(q: V3, h0: number, foot = 0.05, res = EARTH_MAP_RES)
   let h = 0;
   const o1 = layerOctF(1500, foot, EARTH_RM, 7);
   if (o1 > firstKept(EARTH_RM / 1500, res) && mount > 0) {
-    const w: V3 = [tfbm(sc(q, 600, 3.1), 2), tfbm(sc(q, 600, 7.7), 2), tfbm(sc(q, 600, 1.3), 2)];
-    const pw: V3 = [q[0] * 1500 + 11 + 0.7 * w[0], q[1] * 1500 + 11 + 0.7 * w[1], q[2] * 1500 + 11 + 0.7 * w[2]];
+    const w = earthWarp(q);
+    const pw: V3 = [q[0] * 1500 + 11 + w[0], q[1] * 1500 + 11 + w[1], q[2] * 1500 + 11 + w[2]];
     h += ridgedMFw(pw, o1, EARTH_RM / 1500, res) * 1500 * mount;
   }
   const o2 = layerOctF(20000, foot, EARTH_RM, 3);

@@ -84,6 +84,26 @@ rayon et le nombre de rayons qui font la vitesse.
    (`TUNE_SMOKE_STEP`, 0,25 avant ; les passes d'affinage gardent 0,1) : Interstellar −22 % ; l'image à l'arrêt
    la même, en mouvement 29,4 dB contre 29,7 face à l'image convergée (`motion-quality`, choix du 16/10).
 
+7. **La déformation des crêtes lue dans des grilles** (P1, 17/10 ; `system/warp-grid.ts`, `trace.wgsl` earthWarp) — le
+   relief des montagnes est un multifractal sur un réseau déformé par un champ lisse : six bruits de gradient à chaque
+   hauteur lue. Ce champ est calculé sur des nœuds fixes sur la Terre (longitude et latitude en pas entiers : la
+   valeur en un point ne dépend jamais de la place de la grille, rien ne saute quand elle suit la caméra), à trois
+   niveaux autour de la caméra (19, 76, 306 m ; ±4,9, ±20, ±78 km), lu en bilinéaire, chaque niveau fondu dans le
+   suivant vers son bord, calculé au-delà et près des pôles. Les crêtes déplacées de 3 cm au plus près, 0,4 m à 20 km,
+   6 m à 78 km (`tests/warp-grid.test.ts`) ; un niveau recalculé (une passe de calcul) quand la caméra s'est éloignée
+   de 64 nœuds de son centre ; les bruits de la passe sont pris dans le source du traceur, pas recopiés. La physique
+   garde le champ exact (`terrain.ts`). Trace : Andes −32 % (96,0 → 65,5 ms), Yosemite −26 % (98,7 → 73,3 ms),
+   Tarifa −11 %, Alpes neutre ; images au niveau du bruit d'une comparaison (40–46 dB ; les Alpes 45,2 dB, leur
+   plancher `noop` 45,7).
+
+**Le banc corrigé** (17/10) : une variante réglée (`tune`) a son propre noyau de table aérienne, et le décor et la
+surface demandent un noyau compilé pour sa clé ; attendre `variantReady` ne garantissait ni l'un ni l'autre — le côté
+B se mesurait souvent sans table aérienne (plus lent) ou sans décor (plus rapide), de 10 à 30 % sur Terre.
+`renderer.kernelsSettled` (et `aerialWanted`) : la suite de perf attend que le noyau soit réglé. Mesures reprises :
+la marche sur-relâchée tient (la retirer : Andes +13 %, Tarifa +7 %, Alpes neutre). Yosemite garde un biais de
++10 ms sur toute variante réglée (non expliqué) : ses A/B par `tune` ne sont pas fiables. Les Alpes en cockpit varient
+d'un passage à l'autre (20 à 34 ms : le temps réel chargé à l'heure du test).
+
 ### Où en est chaque scène (×4, 1600×1000, kerr-mini)
 
 | Scène | trace au départ | trace maintenant |
@@ -94,7 +114,8 @@ rayon et le nombre de rayons qui font la vitesse.
 | Saturne à contre-jour | 137,9 | **54,9 ms** |
 | Miller : Gargantua sur la mer | 122,3 | 124,9 ms |
 | La Lune en plaine | 64,6 | 65,9 ms |
-| Yosemite | 98,9 | **≈ 88–94 ms** |
+| Yosemite | 98,9 | **73,3 ms** |
+| Les Andes au couchant | — | **65,5 ms** (96,0 sans la grille) |
 | Vol, Alpes, cockpit | 27,2 | **19–23 ms** |
 | Vol, Tarifa, cockpit | 43,9 | **≈ 25,7 ms** |
 | (cabine du Ranger, Interstellar) | 52 | **18 ms** |
@@ -120,9 +141,18 @@ rayon et le nombre de rayons qui font la vitesse.
 
 ## Ce qui coûte encore, sur Terre
 
-Le temps se passe près de la surface, plus dans l'approche : le détail procédural à chaque hauteur lue (sans lui
-−15 à −21 %, sa déformation seule −18 % à Yosemite), les normales (trois hauteurs de plus), les ombres douces du relief
-(≈ 14 % dans les Alpes).
+Mesuré avec le banc corrigé (17/10, avant la grille de déformation), le gain d'une borne (la chose retirée) :
+
+| Retiré | Andes | Alpes | Tarifa |
+|---|---|---|---|
+| le détail procédural | −56 % | −15 % | −22 % |
+| sa déformation des crêtes | −30 % | −2 % | −10 % |
+| l'ombrage du sol (`TUNE_SKIP` 8192 : plat) | −20 % | −34 % | −28 % |
+| la moitié des pas de la marche (`TUNE_MARCH_K` 1) | −14 % | −9 % | −3 % |
+| la B-spline des tuiles (`TUNE_CHEAP`) | 0 % | −3 % | −2 % |
+
+Les comptes (`costView` 14, `costStats`) : la marche fait 14 à 30 pas par pixel (p90 32–81), 24 à 37 hauteurs lues,
+~10 pas d'ombre — pas 150. Le coût est le prix d'une hauteur (le détail) et l'ombrage, pas le nombre de pas.
 
 ## Ce que disent les vues coût
 
@@ -130,14 +160,18 @@ Le temps se passe près de la surface, plus dans l'approche : le détail procéd
   l'ombre ; mais aussi **40 à 150 pas pour les rayons du ciel lointain**, à peine déviés, qui sont la plus grande part
   de l'image ; l'axe de rotation (la singularité des coordonnées) 3 à 5 fois plus. Un pas coûte déjà ≈ 3,6 ns : il faut
   moins de pas, ou moins de rayons.
-- **La Terre en vol bas** : ≈ 150 lectures de hauteur par rayon au sol, 40 pas d'ombre du relief, 32 pas d'air sur
-  chaque pixel.
+- **La Terre en vol bas** : (lu sur les cartes, à corriger par les comptes ci-dessus) ≈ 150 lectures de hauteur par
+  rayon au sol, 40 pas d'ombre du relief, 32 pas d'air sur chaque pixel.
+- **Les comptes du trou noir** (`costView` 15) : ≈ 38 pas géodésiques par rayon (p50 25, p90 ~80) sur Kerr,
+  Interstellar, le disque volumétrique ; le ciel lointain ≈ 11 — les pas chers sont les rayons fortement déviés près
+  du trou. Miller teste ≈ 180 corps par rayon (p99 1 272), Saturne 270.
 
 ## À mesurer, puis à faire (par gain attendu)
 
-1. **La marche du terrain** : sauter le vide par une pyramide de hauteurs max (comme la Lune, `demTop`), ou un premier
-   passage rasterisé — ≈ 150 lectures de hauteur par rayon au sol.
-2. **Les pas géodésiques du ciel lointain** — les contraintes de pas hors du disque (la tolérance lointaine).
-3. **Saturne et Miller** : leur ciel coûte sans que les compteurs l'expliquent encore (les boucles par pas sur les corps
-   de Gargantua viennent d'être instrumentées).
-4. **La netteté en mouvement rapide** (l'historique gardé floute un peu le premier plan en virage serré).
+1. ~~La marche du terrain par une pyramide de hauteurs max~~ — mesuré : ≤ 10 % à gagner (la marche fait peu de pas) ;
+   remplacé par la grille de déformation (fait, 7.).
+2. **Les corps de Gargantua testés à chaque pas** (Miller, Saturne) — P2.
+3. **La netteté en mouvement rapide** (l'historique gardé floute un peu le premier plan en virage serré) — P3.
+4. **L'ombrage du sol** (−20 à −34 % si plat) : ce qui y coûte reste à décomposer (normales, ombres, textures).
+5. Les pas géodésiques du ciel lointain : ≈ 11 par rayon déjà ; la LUT du champ lointain n'aide pas au-delà de blocs
+   de 2 (audit O1).

@@ -13,6 +13,7 @@ import { withForest } from "../src/forest-shader";
 import { surfaceShader } from "../src/system/earth-surface";
 import { aerialShader } from "../src/system/aerial";
 import { sceneryShader } from "../src/system/scenery";
+import { warpShader } from "../src/system/warp-grid";
 import { CHROME, withGpuPage } from "./lib/headless-gpu";
 
 const shaders: Record<string, string> = {};
@@ -27,6 +28,8 @@ shaders["trace.wgsl without the aerial table, surface textures, scenery"] = aeri
   sceneryShader(surfaceShader(traced, false), false),
   false,
 );
+// (the mountains' warp's grid pass: the tracer's noise taken from its source)
+shaders["the warp grid's pass (system/warp-grid.ts)"] = warpShader(shaders["trace.wgsl"]!);
 
 try {
   const v = await withGpuPage((evaluate) =>

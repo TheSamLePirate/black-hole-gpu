@@ -36,7 +36,7 @@ import { visibleTimeout } from "./util/visible-timeout";
 import { automaticQuality, effectiveQuality, earthMapQuality } from "./quality-policy";
 import { adapterId, guessTier, rememberedLevel, tierAt, type Tier } from "./tier";
 import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
-import { PATH_CHUNK, PATH_MAX, SH_VEC4S, TABLE_LUT, TABLE_PATH, TABLE_WALK, TABLE_VEC4S } from "./gpu-tables";
+import { PATH_CHUNK, PATH_MAX, SH_VEC4S, TABLE_LUT, TABLE_PATH, TABLE_VEC4S, TABLE_WALK, TABLE_WARP } from "./gpu-tables";
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
 import maskWGSL from "./shaders/mask.wgsl" with { type: "text" };
 import { AERIAL_TEXTURE_LIMIT, aerialShader } from "./system/aerial";
@@ -90,6 +90,7 @@ import {
 } from "./system/earth-maps";
 import { gpuDiagnostics } from "./gpu-diagnostics";
 import { EarthTiles, TILE_PARAM_VEC4S } from "./system/earth-tiles";
+import { WarpGrid } from "./system/warp-grid";
 import { EarthSurface, SURFACE_VEC4S, SURFACE_TEXTURE_LIMIT, surfaceShader } from "./system/earth-surface";
 import { EarthScenery, sceneryShader } from "./system/scenery";
 import { SCENERY_VEC4S, SCENERY_STORAGE_LIMIT, type SceneryExclusion } from "./system/scenery-data";
@@ -124,7 +125,16 @@ import {
   setGroundRelief,
 } from "./system/our-surface";
 import { EARTH_RM, earthHeightSampler, mapHeightSampler, tileFallbackSampler } from "./terrain";
-import { figureDiskShare, figureSourceElevation, flatteningOf, geodeticNormal, rayFigure, WGS84_A, WGS84_F } from "./system/ellipsoid";
+import {
+  cartToGeodetic,
+  figureDiskShare,
+  figureSourceElevation,
+  flatteningOf,
+  geodeticNormal,
+  rayFigure,
+  WGS84_A,
+  WGS84_F,
+} from "./system/ellipsoid";
 import { AIR_K, sunThroughY } from "./system/earth-air";
 import { homeOf, homeToRep } from "./system/our-side";
 import type { Vec3 } from "./physics";
@@ -186,7 +196,9 @@ const BASE_PARAM_VEC4S = 69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S + SEA_VEC4S + 1 + 
 const WAKE_VEC4S = 17;
 /** the sea's FFT waves (trace.wgsl: Params.seafft) */
 const SEAFFT_VEC4S = 4;
-const PARAM_VEC4S = BASE_PARAM_VEC4S + SURFACE_VEC4S + SCENERY_VEC4S + 5 + WAKE_VEC4S + SEAFFT_VEC4S;
+/** the mountains' warp's grids (trace.wgsl: Params.warp; system/warp-grid.ts) */
+const WARP_VEC4S = 4;
+const PARAM_VEC4S = BASE_PARAM_VEC4S + SURFACE_VEC4S + SCENERY_VEC4S + 5 + WAKE_VEC4S + SEAFFT_VEC4S + WARP_VEC4S;
 /**
  * The sea's twelve wave trains near the camera (trace.wgsl: seaWaves): wavenumbers in whole units of
  * 2π/1024 m on the wind's axes (along, across) — exact from an anchor of whole kilometres, in float32 —,
@@ -1131,6 +1143,8 @@ export class Renderer {
       size: TABLE_VEC4S * 16,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
+    // (the mountains' warp's grids in it, after the walking grid: system/warp-grid.ts)
+    this.warpOut = new WarpGrid(device, this.bodyBuf, TABLE_WARP, traceWGSL);
     this.paramBuf = device.createBuffer({ size: this.params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.probeBuf = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     this.probeStage = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
@@ -1792,7 +1806,7 @@ export class Renderer {
       usage: GPUBufferUsage.STORAGE,
     });
     const polGridBuf = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    const accum = d.createBuffer({ size: px * 16, usage: GPUBufferUsage.STORAGE });
+    const accum = d.createBuffer({ size: px * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     const moments = d.createBuffer({ size: px * 8, usage: GPUBufferUsage.STORAGE }); // Σ l², depth
     const sceneDepth = d.createBuffer({ size: px * 4, usage: GPUBufferUsage.STORAGE }); // the occlusion depth
     const stamps = d.createBuffer({ size: px * 4, usage: GPUBufferUsage.STORAGE });
@@ -2793,6 +2807,8 @@ export class Renderer {
     // (the nearest carrier's sphere in the ship's shadow map: its shadow on the sea — Params.seafft[3])
     const sb2 = !o.probe && this.ship.ready && near?.index === earthK ? this.ship.shadowBound2 : null;
     if (sb2) f.set([sb2.c[0], sb2.c[1], sb2.c[2], sb2.r], wat + WAKE_VEC4S * 4 + 12);
+    // the mountains' warp's grids round the camera (worked out at the frame's start: updateWarp)
+    f.set(this.warpOut.params, wat + (WAKE_VEC4S + SEAFFT_VEC4S) * 4);
     f[61 * 4 + 1] = sunAng; // (earth4.y)
     f[61 * 4 + 2] = this.marsDust(s, near, bodies, time); // (earth4.z)
     // the auroras (S2 — trace.wgsl auroraLight: bary.z, bary.w): their activity (a Kp index) and their curtains'
@@ -2830,9 +2846,11 @@ export class Renderer {
     // (the aerial perspective's table: the live view's realtime frames, a world with air near the camera and the camera
     // within its air — its pass's kernel compiled for this key; else the rays march their own air)
     this.aerialPipe = null;
+    if (t === this.live && !o.probe) this.aerialWanted = false;
     if (t === this.live && !o.probe && (o.flags & FLAG_INTERLEAVED) !== 0 && this.aerialTable && near && atm) {
       const inside = Math.hypot(...near.centre) < 1 + (0.9 * 12 * atm.H) / mR;
       const pipe = this.featureKey !== FEATURES_ALL ? (this.variants.get(this.featureKey)?.air ?? null) : null;
+      this.aerialWanted = inside && this.aerialOK && (this.featureKey & 128) !== 0;
       if (inside && pipe) {
         this.aerialPipe = pipe;
         u[17 * 4 + 2] = (u[17 * 4 + 2] ?? 0) | FLAG_AERIAL;
@@ -3795,6 +3813,9 @@ export class Renderer {
   private aerialWrite!: GPUBindGroup;
   private aerialSampler!: GPUSampler;
   private aerialPipe: GPUComputePipeline | null = null;
+  /** the live view's last realtime frame would read the aerial table (the camera in a world's air), its pass's kernel
+   *  there or not (aerialPipe) */
+  aerialWanted = false;
   private envReadLayout!: GPUBindGroupLayout;
   private envRead!: GPUBindGroup;
   /** the air before the near world's ground read from the aerial perspective's table (a switch for comparisons) */
@@ -3871,7 +3892,7 @@ export class Renderer {
    *  0 off, 1 all of it, 2 … 13 one kind (docs/BH-API.md: the ground's march, its heights, its shadows, the clouds,
    *  the air, the water, the scenery, the integrator, the noise, the stars, the bodies, the main loop) —, shown raw
    *  (no exposure, tone map, depth of field, motion blur), its own kernel variant; the image
-   *  traced again (a held one too). */
+   *  traced again (a held one too). 14 and 15: the raw counts, for costStats. */
   get costView() {
     return this.costViewMode;
   }
@@ -3882,6 +3903,37 @@ export class Renderer {
     this.resetTemporal();
   }
   private costViewMode = 0;
+  /**
+   * The cost view's raw counts read back (costView 14: the ground's march steps, its heights read, its shadows'
+   * steps; 15: the main loop's steps, the bodies tested, the integrator's tries — each pixel's, its samples'
+   * mean): for each, the share of the pixels where it is not nil, and there its mean, median, 90th and 99th
+   * percentiles. Null outside those views.
+   */
+  async costStats(): Promise<{ share: number; mean: number; p50: number; p90: number; p99: number }[] | null> {
+    const t = this.live;
+    if ((this.costViewMode !== 14 && this.costViewMode !== 15) || !t) return null;
+    const size = t.width * t.height * 16;
+    const st = this.device.createBuffer({ size, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const enc = this.device.createCommandEncoder();
+    enc.copyBufferToBuffer(t.accum, 0, st, 0, size);
+    this.device.queue.submit([enc.finish()]);
+    await st.mapAsync(GPUMapMode.READ);
+    const a = new Float32Array(st.getMappedRange().slice(0));
+    st.unmap();
+    st.destroy();
+    const n = t.width * t.height;
+    return [0, 1, 2].map((c) => {
+      const v: number[] = [];
+      for (let i = 0; i < n; i++) {
+        const w = a[4 * i + 3]!;
+        const x = w > 0 ? a[4 * i + c]! / w : 0;
+        if (x > 0) v.push(x);
+      }
+      v.sort((x, y) => x - y);
+      const q = (f: number) => v[Math.min(v.length - 1, Math.floor(f * v.length))] ?? 0;
+      return { share: v.length / n, mean: v.reduce((s, x) => s + x, 0) / Math.max(v.length, 1), p50: q(0.5), p90: q(0.9), p99: q(0.99) };
+    });
+  }
   /**
    * Debug tuning (trace.wgsl TUNE_*: the air's samples, the relief's shadow steps…): its constants, a kernel
    * variant of their own — what a loop's count costs, A/B in one build. {} the kernel as it is.
@@ -5461,8 +5513,42 @@ export class Renderer {
     return this.lastDoneAt;
   }
   /** the scene's specialised tracer compiled (or none needed): the realtime image at full speed */
+  /** the mountains' warp read from its grids round the camera (trace.wgsl earthWarp; false: worked out by each ray —
+   *  a switch for comparisons) */
+  get warpGrid() {
+    return this.warpGridOn;
+  }
+  set warpGrid(v: boolean) {
+    if (v === this.warpGridOn) return;
+    this.warpGridOn = v;
+    this.invalidate();
+  }
+  private warpGridOn = true;
+  private warpOut: WarpGrid;
+  /** The warp's grids kept round the camera near the Earth (its geodetic place), before any pass of the frame. */
+  private updateWarp(s: Settings, time: number) {
+    let at: { lon: number; lat: number } | null = null;
+    const eye = homePosition(s);
+    if (this.warpGrid && eye) {
+      const q = toBodyFixed("earth", eye, time).map((v) => v * M_METRES) as Vec3;
+      const g = cartToGeodetic(WGS84_A, WGS84_F, q);
+      if (g.h < 300_000) at = { lon: g.lon, lat: g.lat };
+    }
+    this.warpOut.update(at);
+  }
   get variantReady() {
     return this.featureKey === FEATURES_ALL || !!this.variants.get(this.featureKey)?.rt;
+  }
+  /** The current kernel settled: its own, its realtime cascade done (its probe's, its aerial table's pass), the
+   *  surface and the scenery asked for in it — a measure taken now is this kernel's (variantReady alone let a
+   *  tuned variant be measured without its aerial table, or its scenery: tests/e2e/perf-suite.e2e.test.ts). */
+  get kernelsSettled() {
+    if (this.featureKey === FEATURES_ALL) return false;
+    const v = this.variants.get(this.featureKey);
+    if (!v?.rt || v.busy) return false;
+    if (this.earthSurface.active && (this.featureKey & 4096) === 0) return false;
+    if (this.earthScenery.active && (this.featureKey & 8192) === 0) return false;
+    return true;
   }
   /** the airfields' real weather when it came in (weather.ts, PLAN-METEO W7), the "real" setting's */
   weatherReal: WeatherState | null = null;
@@ -5549,6 +5635,7 @@ export class Renderer {
     if (sceneChanged) this.invalidate();
     this.configureOutput(s);
     this.prof.begin();
+    this.updateWarp(s, time);
     this.probePlanets(t, s, time);
     const enc = this.device.createCommandEncoder();
     let phase: FrameStats["phase"];
