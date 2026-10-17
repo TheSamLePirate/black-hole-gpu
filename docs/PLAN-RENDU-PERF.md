@@ -178,26 +178,29 @@ rayon et le nombre de rayons qui font la vitesse.
    historique vaut ×3 sans »), `dynamicResolution`. Les réglages-bornes gardés dans les tests : `g100`, `g100n64`,
    `nota` (vol), `g100`, `nota` (rotation pure).
 
-13. **Des rayons plus denses en virage** (17/10, `renderer.motionDense`, motionBlock) — fait. Quand la ligne de visée
-   tourne plus vite que 25 px/s pendant 200 ms (mesuré sur les 8 dernières images : la secousse du vol, un
-   tremblement de moyenne nulle, s'y annule), le bloc des rayons passe à un cran plus fin — ×4 → ×3, ×6 → ×4, ×8 → ×6 —
-   et revient sous 18 px/s après 300 ms ; mesuré en pixels par seconde (en pixels par image, les images ralenties par
-   les rayons plus denses tournaient de plus de pixels chacune : la densité s'entretenait). Pas sur la parallaxe du sol
-   le plus proche : sous l'avion, hors du champ, elle mettait tout vol au-dessus du seuil (une croisière densifiée pour
-   rien, le tracé +70 à +110 %). Le choix automatique du bloc ne compte pas ces images. Mesuré sur kerr-mini
-   (`flight-quality`, alterné ; le tracé pendant le vol, la part d'images plus fines) :
+13. **Des rayons plus denses quand l'image glisse vite** (17/10 ; le réglage « Netteté en mouvement »,
+   `settings.motionDetail` : Non, En virage — par défaut —, En virage et en vol bas ; renderer motionBlock) — fait. Le
+   bloc des rayons passe à un cran plus fin — ×4 → ×3, ×6 → ×4, ×8 → ×6 — quand la ligne de visée tourne plus vite que
+   25 px/s pendant 200 ms (`imageTurnPx` : sur les 8 dernières images, la secousse du vol, un tremblement de moyenne
+   nulle, s'y annule ; en pixels par seconde — en pixels par image, les images ralenties par les rayons plus denses
+   tournaient de plus de pixels chacune : la densité s'entretenait) ; avec le vol bas, aussi quand le sol vu glisse
+   plus vite que 12 px/s (`imageGroundPx` : la moyenne sur quinze directions de la vue — celles sous l'horizon chacune
+   jusqu'au sol, sa hauteur au-dessus de lui, plat, 40 km au plus ; le déplacement de la caméra en travers sur la
+   distance ; le ciel, rien). Retour sous 18 et 9 px/s après 300 ms. Pas sur la parallaxe du sol le plus proche : sous
+   l'avion, hors du champ, elle mettait tout vol au-dessus du seuil (une croisière densifiée pour rien, le tracé +70 à
+   +110 %). Le choix automatique du bloc ne compte pas ces images. Mesuré sur kerr-mini (`flight-quality`, alterné ;
+   le tracé pendant le vol, la part d'images plus fines) :
 
-   | Vol | images plus fines | tracé | PSNR | netteté |
-   |---|---|---|---|---|
-   | virage des Alpes | 100 % | 20,5 → 36 ms (+75 %) | 30,5 → **32,5 dB** | 0,903 → 0,915 |
-   | Tarifa bas, en virage (≈ 22 px/s, au seuil) | 48–87 % | 33 → 42–62 ms | 36,0 → 36,7 dB | 0,85 → 0,87 |
-   | croisière à Tarifa | 0 % | égal | égal | égal |
-   | Alpes en ligne droite | 1 % | égal | égal | égal |
+   | Vol (le sol vu, la rotation) | Non | En virage | En virage et en vol bas |
+   |---|---|---|---|
+   | virage des Alpes (4, 32 px/s) | 30,5 dB · 21 ms | **32,4 dB** · 35 ms (100 %) | 32,6 dB · 36 ms (100 %) |
+   | Tarifa à 700 m, un virage (15–22, 21–24 px/s) | 36,0 dB · 32–40 ms | **38,8 dB** · 41 ms (40 %) | 37–38,4 dB · 46–62 ms (64–100 %) |
+   | croisière à Tarifa (8, 10 px/s) | 38,7 dB · 22 ms | égal (0 %) | égal (0–14 %) |
+   | Alpes en ligne droite (2, 11 px/s) | 33,0 dB · 20 ms | égal (1 %) | — |
 
-   Densifié en tout vol bas (le premier déclencheur, la parallaxe comprise), Tarifa à 700 m gagnait 3 dB (36,1 → 39,0,
-   les contours 30,8 → 33,5) — pour un tracé presque doublé : la parallaxe du sol vu — pas celle du sol sous l'avion —
-   serait le déclencheur du vol bas, à faire. Le coût est celui de la netteté : en virage la cadence baisse (×1,75
-   rayons) ; `motionDense = false` le rend.
+   « En virage » prend l'essentiel ; le vol bas ajoute peu sur ces vols (Tarifa bas y vire déjà) pour un tracé ×1,5 en
+   continu : il vaut pour une ligne droite à basse altitude (densifié tout le vol, Tarifa à 700 m 36,1 → 39,0 dB). Le
+   coût est celui de la netteté : la cadence baisse le temps que cela dure ; « Non » le rend.
 
 **Le banc corrigé** (17/10) : une variante réglée (`tune`) a son propre noyau de table aérienne, et le décor et la
 surface demandent un noyau compilé pour sa clé ; attendre `variantReady` ne garantissait ni l'un ni l'autre — le côté
@@ -274,8 +277,8 @@ Les comptes (`costView` 14, `costStats`) : la marche fait 14 à 30 pas par pixel
 1. ~~La marche du terrain par une pyramide de hauteurs max~~ — mesuré : ≤ 10 % à gagner (la marche fait peu de pas) ;
    remplacé par la grille de déformation (fait, 7.).
 2. ~~Les corps de Gargantua testés à chaque pas~~ (Miller, Saturne) — fait (8.), ce qu'il y avait d'exact à gagner.
-3. La netteté en mouvement rapide — mesurée (9., 12.) ; plus de rayons en virage, fait (13.) ; le vol bas en ligne
-   droite : un déclencheur sur la parallaxe du sol vu, à faire.
+3. La netteté en mouvement rapide — mesurée (9., 12.) ; plus de rayons en virage et en vol bas, le réglage
+   « Netteté en mouvement » (13.).
 4. L'ombrage du sol — décomposé (10.) ; les ombres allégées ; la normale par un bruit à dérivées essayée (11.) : rien.
 5. Les pas géodésiques du ciel lointain : ≈ 11 par rayon déjà ; la LUT du champ lointain n'aide pas au-delà de blocs
    de 2 (audit O1).

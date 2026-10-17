@@ -179,6 +179,10 @@ const BLOCKS = [1, 2, 3, 4, 6, 8];
  *  (renderer motionBlock) */
 const MOTION_DENSE_IN = 25;
 const MOTION_DENSE_OUT = 18;
+/** the seen ground's slide [px a second] past which the rays are denser in low flight (settings.motionDetail "low"),
+ *  and under which they go back */
+const GROUND_DENSE_IN = 12;
+const GROUND_DENSE_OUT = 9;
 /** every feature of the tracer kept (the general pipelines) */
 const FEATURES_ALL = 16383;
 /** how long a block size's measured frame time is remembered [ms] (then tried again) */
@@ -4096,14 +4100,40 @@ export class Renderer {
         past.length > 1
           ? (Math.hypot(cam.fwd[0] - p0.f[0], cam.fwd[1] - p0.f[1], cam.fwd[2] - p0.f[2]) * 1000) / Math.max(now - p0.at, 1)
           : 0;
-      const parallax = shift > 0 && ln ? shift / this.nearestSurfaceM(ln, mPerM) : 0;
       const px = t.height / (2 * tanH);
       this.imageTurnPx = turnRad * px;
-      this.imageParallaxPx = parallax * px;
-      this.imageMotionPx = parallax * px;
+      // (the seen ground's slide [px a second]: fifteen of the view's directions, those below the horizon each to the
+      // ground — its height over it, flat, no farther than 40 km —, the camera's move over the body across each over its
+      // distance; their mean, the sky's nothing — as fast as the ground slides, as much of it as the view shows. Not the
+      // ground under the craft — out of view, a few hundred metres off at any low height: every flight over the line)
+      this.imageGroundPx = 0;
+      const dt = (now - (past[past.length - 2]?.at ?? now)) / 1000;
+      if (ln && at && prev.at && prev.near?.index === ln.index && dt > 0 && dt < 0.5) {
+        const id = this.lastBodies[ln.index]?.id;
+        const h = id && solarBody(id) ? heightOverGround(id, bodyEye(ln).map((x) => x * ln.radius) as Vec3) : 0;
+        const r = Math.hypot(at[0], at[1], at[2]);
+        if (h > 0 && r > 0) {
+          const up = at.map((x) => x / r);
+          const vel = at.map((x, i) => (x - prev.at![i]!) / dt);
+          const body = (v: Vec3) => ln.axes.map((a) => a[0]! * v[0] + a[1]! * v[1] + a[2]! * v[2]);
+          let sum = 0;
+          for (const y of [-0.45, -0.15, 0.15])
+            for (const x of [-0.7, -0.35, 0, 0.35, 0.7]) {
+              const d = [0, 1, 2].map((k) => cam.fwd[k]! + x * tanH * asp * cam.right[k]! + y * tanH * cam.up[k]!) as Vec3;
+              const dl = Math.hypot(d[0], d[1], d[2]);
+              const db = body([d[0] / dl, d[1] / dl, d[2] / dl]);
+              const down = -(db[0]! * up[0]! + db[1]! * up[1]! + db[2]! * up[2]!);
+              if (down < 0.01) continue;
+              const along = vel[0]! * db[0]! + vel[1]! * db[1]! + vel[2]! * db[2]!;
+              const across = Math.hypot(vel[0]! - along * db[0]!, vel[1]! - along * db[1]!, vel[2]! - along * db[2]!);
+              sum += across / Math.min(h / down, 40_000);
+            }
+          this.imageGroundPx = (sum / 15) * px;
+        }
+      }
     } else {
       this.fwdPast.length = 0;
-      this.imageMotionPx = this.imageTurnPx = this.imageParallaxPx = 0;
+      this.imageTurnPx = this.imageGroundPx = 0;
     }
     // (a jump: the other region, or the distance to the hole changed by more than 5 % in a frame, or a translation)
     const jumped = !prev || prev.region !== cam.region || Math.abs(cam.r - prev.r) > 0.05 * Math.max(cam.r, 1e-9) || moved;
@@ -5734,7 +5764,7 @@ export class Renderer {
       this.updateValidFrom(time);
       this.sampleIndex = 0;
       this.bandY = 0;
-      const block = this.motionBlock(s.realtimeSubsampling === "auto" ? this.realtimeBlock : s.realtimeSubsampling);
+      const block = this.motionBlock(s.realtimeSubsampling === "auto" ? this.realtimeBlock : s.realtimeSubsampling, s);
       if (block !== this.lastBlock) this.interleaveIndex = 0;
       let order = this.orders.get(block);
       if (!order) this.orders.set(block, (order = interleaveOrder(block)));
@@ -5918,42 +5948,41 @@ export class Renderer {
   }
 
   /**
-   * The realtime block while the camera turns (renderer.motionDense): one finer — 4 → 3, 6 → 4, 8 → 6 — once its line of
-   * sight turns faster than MOTION_DENSE_IN pixels a second for 200 ms (over 8 frames: the shake's jitter cancels), back
-   * once under MOTION_DENSE_OUT for 300 ms.
-   * In a turn the history gives way and the image is the reconstruction of the frame's rays (docs/PLAN-RENDU-PERF.md
-   * 12.): more of them then, their cost while it lasts. Not on the ground's parallax: the nearest ground (under the
-   * craft, out of view) put every flight over the line — a cruise's straight line denser for nothing. The automatic
-   * choice's timing skips these frames (adaptBlock: another block than its own).
+   * The realtime block while the image slides fast (settings.motionDetail): one finer — 4 → 3, 6 → 4, 8 → 6 — once the
+   * camera's line of sight turns faster than MOTION_DENSE_IN pixels a second for 200 ms (over 8 frames: the shake's
+   * jitter cancels), and with "low" once the seen ground slides faster than GROUND_DENSE_IN (imageGroundPx: low and
+   * fast, straight on); back once both are under their lower lines for 300 ms. The history gives way then and the image
+   * is the reconstruction of the frame's rays (docs/PLAN-RENDU-PERF.md 12., 13.): more of them, their cost while it
+   * lasts. The automatic choice's timing skips these frames (adaptBlock: another block than its own).
    */
-  private motionBlock(block: number): number {
+  private motionBlock(block: number, s: Settings): number {
     const now = performance.now();
-    if (!this.motionDense || block < 3) {
+    if (s.motionDetail === "off" || block < 3) {
       this.motionDenseOn = false;
       return block;
     }
     // (on after 200 ms over the line — a gust's jolt in straight flight is not a turn —, off after 300 ms under the other)
-    if (this.imageTurnPx > MOTION_DENSE_IN) {
+    const low = s.motionDetail === "low";
+    const over = this.imageTurnPx > MOTION_DENSE_IN || (low && this.imageGroundPx > GROUND_DENSE_IN);
+    const under = this.imageTurnPx < MOTION_DENSE_OUT && (!low || this.imageGroundPx < GROUND_DENSE_OUT);
+    if (over) {
       this.motionTurnSince ||= now;
       if (now - this.motionTurnSince > 200) this.motionDenseOn = true;
       this.motionCalmSince = 0;
     } else {
       this.motionTurnSince = 0;
-      if (this.motionDenseOn && this.imageTurnPx < MOTION_DENSE_OUT) {
+      if (this.motionDenseOn && under) {
         this.motionCalmSince ||= now;
         if (now - this.motionCalmSince > 300) this.motionDenseOn = false;
       } else this.motionCalmSince = 0;
     }
     return this.motionDenseOn ? BLOCKS[BLOCKS.indexOf(block) - 1]! : block;
   }
-  /** denser rays while the image moves fast (motionBlock; a switch for comparisons) */
-  motionDense = true;
-  /** the nearest ground's parallax at the last realtime frame [px] */
-  imageMotionPx = 0;
-  /** the camera's turn: its line of sight's over its last 8 frames [px a second] — motionBlock's measure */
+  /** the camera's turn: its line of sight's over its last 8 frames [px a second] — motionBlock's measure in a turn */
   imageTurnPx = 0;
-  /** the nearest ground's parallax at the last frame [px] (under the craft, out of view as often as not: not a measure) */
-  imageParallaxPx = 0;
+  /** the seen ground's slide: its mean over fifteen of the view's directions, the sky's nothing [px a second] —
+   *  motionBlock's measure in low flight */
+  imageGroundPx = 0;
   private fwdPast: { f: Vec3; at: number }[] = [];
   private motionDenseOn = false;
   private motionCalmSince = 0;

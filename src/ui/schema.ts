@@ -1913,6 +1913,21 @@ export const SCHEMA: ControlDef[] = [
     keywords: "taa temporal reprojection history sharp motion upscaling",
   },
   {
+    key: "motionDetail",
+    type: "choice",
+    section: "render",
+    group: "Realtime",
+    label: "Sharpness in motion",
+    style: "segmented",
+    options: [
+      { value: "off", label: "Off" },
+      { value: "turns", label: "In turns" },
+      { value: "low", label: "Turns and low flight" },
+    ],
+    help: "Denser rays while the image slides fast — one block finer, 4× to 3× — where the history from the previous frames cannot keep up: in a turn (its line of sight turning fast), and with low flight also while the ground seen below slides fast. Sharper then (a turn over the Alps 30.5 to 32.5 dB against the still image, low over Tarifa 36 to 39 dB), the frame slower while it lasts: about three quarters more for the rays in a turn, nearly twice in low flight.",
+    keywords: "sharpness motion turn low flight denser rays subsampling blur",
+  },
+  {
     key: "sharpen",
     type: "number",
     section: "render",

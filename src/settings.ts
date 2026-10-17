@@ -297,6 +297,7 @@ export interface Settings {
   glassBlur: boolean; // the interface's panels blur the view behind them (the browser redoes it every frame)
   temporalReprojection: boolean; // realtime: the previous frames' image carried over by the camera's rotation
   sharpen: number; // the image's sharpening after the temporal pass (AMD's RCAS: 0 none … 1 strongest)
+  motionDetail: "off" | "turns" | "low"; // realtime: denser rays while the camera turns fast ("turns"), and while low and fast over the ground ("low")
   purkinje: number; // the night's Purkinje shift (the eye's rods: dark scenes bluer, greyer; 0 none … 1)
   motionBlur: number; // the camera's motion blur in the realtime view: the shutter's share of a frame (0 none … 1)
   farFieldLut: boolean; // rays that stay far from the hole read a traced LUT between clean samples
@@ -642,6 +643,7 @@ export function defaultSettings(): Settings {
     glassBlur: false,
     temporalReprojection: true,
     sharpen: 0.3,
+    motionDetail: "turns",
     purkinje: 0.6,
     motionBlur: 0.5,
     farFieldLut: true,
@@ -1962,6 +1964,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   glassBlur: "pref",
   temporalReprojection: "pref",
   sharpen: "pref",
+  motionDetail: "pref",
   purkinje: "pref",
   motionBlur: "pref",
   farFieldLut: "pref",
