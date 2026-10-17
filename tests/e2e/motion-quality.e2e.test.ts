@@ -16,6 +16,9 @@ const CONFIGS: Record<string, string> = {
   base: "__bh.renderer.tune = {}",
   smoke25: "__bh.renderer.tune = { TUNE_SMOKE_STEP: 0.25 }",
   eps1: "__bh.renderer.tune = { TUNE_EPS_FAR: 1 }",
+  // (the reprojection in a pure turn — exact for the far sky —: the history's clamp almost off; no reprojection)
+  g100: "__bh.renderer.taParams = [1 / 16, 0.05, 100]",
+  nota: "__bh.settings.temporalReprojection = false",
 };
 const scenes = (process.env.SCENES ?? "interstellar").split(",");
 const confs = process.env.CONF ? process.env.CONF.split(",") : ["base", "smoke25", "base", "smoke25"];
@@ -63,6 +66,8 @@ describe.skipIf(!E2E)("the realtime image's quality while the camera turns, agai
           if (await app.js<boolean>(`__bh.renderer.lastPhase === "converged"`)) break;
         }
         await shot(`${sc}-${cf}-ref`);
-        await app.js(`(() => { __bh.renderer.tune = {}; return 1; })()`);
+        await app.js(
+          `(() => { __bh.renderer.tune = {}; __bh.renderer.taParams = [1 / 16, 0.05, 2]; __bh.settings.temporalReprojection = true; return 1; })()`,
+        );
       }, 600_000);
 });

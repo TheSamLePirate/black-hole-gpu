@@ -32,6 +32,11 @@ const CONFIGS: Record<string, string> = {
   w10: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.renderer.taParams = [1 / 16, 0.1, 2];`,
   w02: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.renderer.taParams = [1 / 16, 0.02, 2];`,
   n32: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.renderer.taParams = [1 / 32, 0.05, 2];`,
+  // (bounds: the history's clamp almost off — 100 σ —, and its weight capped at 64 frames rather than 16)
+  g100: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.renderer.taParams = [1 / 16, 0.05, 100];`,
+  g100n64: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.renderer.taParams = [1 / 64, 0.05, 100];`,
+  // (the reconstruction alone: no reprojection — what the history covers)
+  nota: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.settings.temporalReprojection = false;`,
   sh6: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.settings.sharpen = 0.6;`,
 };
 const places = (process.env.PLACES ?? "alps,tarifa").split(",");
@@ -91,7 +96,7 @@ describe.skipIf(!E2E)("the realtime image's quality in flight, against the conve
         }
         await shot(`${pl}-${tag}-ref`);
         await app.js(
-          `(() => { __bh.settings.animate = true; __bh.renderer.taParallaxPx = 0.5; __bh.renderer.taParams = [1 / 16, 0.05, 2]; __bh.settings.sharpen = 0.3; return 1; })()`,
+          `(() => { __bh.settings.animate = true; __bh.renderer.taParallaxPx = 0.5; __bh.renderer.taParams = [1 / 16, 0.05, 2]; __bh.settings.sharpen = 0.3; __bh.settings.temporalReprojection = true; return 1; })()`,
         );
       }, 400_000);
     }

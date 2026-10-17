@@ -155,6 +155,29 @@ rayon et le nombre de rayons qui font la vitesse.
    3 % du total, dans le bruit — le noyau, limité par ses registres, n'y gagne pas la place. Retiré (le code est dans
    l'historique de la session, non commité).
 
+12. **La reconstruction en virage** (17/10) — mesurée, rien d'adopté ; ce qu'on sait maintenant. `flight-quality`
+   (virage des Alpes, rase-mottes et croisière à Tarifa) et `motion-quality` (une rotation pure devant Interstellar et
+   Kerr), réglages alternés :
+   - **sans historique** (`nota`), l'image en virage vaut celle avec (36,4 contre 35,8 dB à Tarifa en rase-mottes) :
+     elle est la reconstruction d'un rayon pour 16 pixels ; en rotation pure au contraire l'historique fait tout
+     (Interstellar 29,0 dB, 18,4 sans).
+   - **la reconstruction** : un Catmull–Rom sur la grille des rayons de l'image (borné au 2 × 2 voisin) au lieu de la
+     gaussienne normalisée — rien (±0,5 dB, avec ou sans historique) : avec un rayon pour 16 pixels l'information
+     manque, la manière d'interpoler ne la rend pas. Retiré.
+   - **le rognage de l'historique presque coupé** (100 σ) : en rotation pure, mieux (Interstellar 30,3 dB et une
+     netteté de 1,07 contre 29,0 et 0,95) — la reprojection y est exacte, le rognage ôte du détail ; en vol droit
+     au-dessus des Alpes, pareil (32,8 contre 32,7) ; en virage, pire (29,5 contre 30,7) ; à Tarifa, bien pire (28,7
+     contre 39,6 : les nuages et la mer bougent — des fantômes).
+   - **la profondeur entre les rayons** bilinéaire sur la grille (au lieu de la plus proche) pour la parallaxe du sol :
+     rien. **Le rognage mesuré sur les rayons** de la grille (3 × 3) au lieu de l'image reconstruite : un peu moins bon
+     (Interstellar 27,2 contre 29,3, le virage des Alpes 30,0 contre 30,6). Retirés.
+   - La secousse du vol (la charge en virage) n'est qu'un décalage de l'affichage : rien pour la reprojection.
+   Bilan : la TAA est à un optimum local ; ce qui reste en virage tient à l'information (un rayon pour 16 pixels) et à
+   un recalage du sol qui se dégrade en virage seulement (cause non trouvée : ni la profondeur, ni la secousse, ni la
+   rotation pure). Les leviers restants coûtent des rayons : un bloc ×3 quand la caméra tourne vite (« ×4 avec
+   historique vaut ×3 sans »), `dynamicResolution`. Les réglages-bornes gardés dans les tests : `g100`, `g100n64`,
+   `nota` (vol), `g100`, `nota` (rotation pure).
+
 **Le banc corrigé** (17/10) : une variante réglée (`tune`) a son propre noyau de table aérienne, et le décor et la
 surface demandent un noyau compilé pour sa clé ; attendre `variantReady` ne garantissait ni l'un ni l'autre — le côté
 B se mesurait souvent sans table aérienne (plus lent) ou sans décor (plus rapide), de 10 à 30 % sur Terre.
@@ -230,8 +253,8 @@ Les comptes (`costView` 14, `costStats`) : la marche fait 14 à 30 pas par pixel
 1. ~~La marche du terrain par une pyramide de hauteurs max~~ — mesuré : ≤ 10 % à gagner (la marche fait peu de pas) ;
    remplacé par la grille de déformation (fait, 7.).
 2. ~~Les corps de Gargantua testés à chaque pas~~ (Miller, Saturne) — fait (8.), ce qu'il y avait d'exact à gagner.
-3. La netteté en mouvement rapide — mesurée (9.) : rien dans les réglages ni la reprojection ; à faire par plus de
-   rayons en virage ou une reconstruction guidée.
+3. La netteté en mouvement rapide — mesurée (9., 12.) : ni les réglages, ni la reconstruction, ni la reprojection ;
+   le levier restant est plus de rayons quand la caméra tourne vite.
 4. L'ombrage du sol — décomposé (10.) ; les ombres allégées ; la normale par un bruit à dérivées essayée (11.) : rien.
 5. Les pas géodésiques du ciel lointain : ≈ 11 par rayon déjà ; la LUT du champ lointain n'aide pas au-delà de blocs
    de 2 (audit O1).
