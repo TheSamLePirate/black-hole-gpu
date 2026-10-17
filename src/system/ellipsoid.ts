@@ -171,3 +171,43 @@ export function withinFigure(r2: number, z: number, a: number, f: number): boole
   const k = 1 / (1 - f);
   return r2 - z * z + z * z * k * k < a * a;
 }
+
+const DEG = Math.PI / 180;
+/**
+ * Between two places on the WGS84 ellipsoid [° geodetic]: the distance along it [m] (Andoyer–Lambert: the sphere's
+ * angle on the reduced latitudes, corrected to first order in the flattening — metres over thousands of km) and the
+ * initial azimuth [rad from true north, eastwards] (the offset's direction in the first place's geodetic east/north).
+ */
+export function wgs84Inverse(lat1: number, lon1: number, lat2: number, lon2: number): { d: number; az: number } {
+  const p1 = lat1 * DEG,
+    p2 = lat2 * DEG,
+    l1 = lon1 * DEG;
+  const A = geodeticToCart(WGS84_A, WGS84_F, p1, l1, 0),
+    B = geodeticToCart(WGS84_A, WGS84_F, p2, lon2 * DEG, 0);
+  const d = sub(B, A);
+  const e = -Math.sin(l1) * d[0] + Math.cos(l1) * d[1];
+  const n = -Math.sin(p1) * Math.cos(l1) * d[0] - Math.sin(p1) * Math.sin(l1) * d[1] + Math.cos(p1) * d[2];
+  const az = Math.atan2(e, n);
+  const b1 = Math.atan((1 - WGS84_F) * Math.tan(p1)),
+    b2 = Math.atan((1 - WGS84_F) * Math.tan(p2));
+  const dl = (lon2 - lon1) * DEG;
+  const h = Math.sin((b2 - b1) / 2) ** 2 + Math.cos(b1) * Math.cos(b2) * Math.sin(dl / 2) ** 2;
+  const s = 2 * Math.asin(Math.min(1, Math.sqrt(h)));
+  if (s < 1e-9) return { d: len(d), az };
+  const P = (b1 + b2) / 2,
+    Q = (b2 - b1) / 2;
+  const X = ((s - Math.sin(s)) * Math.sin(P) ** 2 * Math.cos(Q) ** 2) / Math.cos(s / 2) ** 2;
+  const Y = ((s + Math.sin(s)) * Math.cos(P) ** 2 * Math.sin(Q) ** 2) / Math.sin(s / 2) ** 2;
+  return { d: WGS84_A * (s - (WGS84_F / 2) * (X + Y)), az };
+}
+
+/** A place moved by east and north offsets [m] over the WGS84 ellipsoid (its radii of curvature there: a few tens of km). */
+export function wgs84Offset(lat: number, lon: number, east: number, north: number): { lat: number; lon: number } {
+  const e2 = WGS84_F * (2 - WGS84_F);
+  const s = Math.sin(lat * DEG);
+  const w = Math.sqrt(1 - e2 * s * s);
+  const M = (WGS84_A * (1 - e2)) / (w * w * w),
+    N = WGS84_A / w;
+  const lo = lon + east / (N * Math.max(Math.cos(lat * DEG), 1e-6)) / DEG;
+  return { lat: lat + north / M / DEG, lon: ((((lo + 180) % 360) + 360) % 360) - 180 };
+}

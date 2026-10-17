@@ -3,6 +3,7 @@ import { isCode, normCode } from "../net/proto";
 import { serverUrl } from "../net/load";
 import { store } from "../util/storage";
 import { CrewModel, METRICS, relative, valueText } from "./model";
+import { unitsOf } from "../ui/unitsys";
 import { CrewRadio } from "./radio";
 import { bindTalk } from "./ptt";
 import { CrewViews, VIEW_NAMES, type CrewView } from "./views";
@@ -52,6 +53,7 @@ let rosterKey = "";
 let pilotKey = "";
 let busy = false;
 let painted = "";
+views.units = store.get("kerr.crew.units") === "imperial" ? "imperial" : "metric";
 const initialParams = new URLSearchParams(location.hash.slice(1));
 name.value = net.o.id.name;
 code.value = normCode(initialParams.get("join") ?? "");
@@ -202,17 +204,55 @@ function selectControl<T extends string>(items: [T, string][], current: T, title
   s.addEventListener("change", () => change(s.value as T));
   return s;
 }
+function segmented<T extends string>(items: [T, string][], current: T, title: string, change: (v: T) => void) {
+  const g = el("div", "", "seg");
+  g.setAttribute("role", "group");
+  g.setAttribute("aria-label", title);
+  for (const [value, text] of items) {
+    const b = button(text, () => {
+      for (const o of g.querySelectorAll("button")) o.setAttribute("aria-pressed", String(o === b));
+      change(value);
+    });
+    b.setAttribute("aria-pressed", String(value === current));
+    g.append(b);
+  }
+  return g;
+}
+const NOTES: Record<CrewView, string> = {
+  dash: "Toucher un panneau pour l’ouvrir · pincer pour la portée",
+  pfd: "Horizon, rubans vitesse et altitude, cap, modes du pilote automatique",
+  nd: "Pincer pour la portée · toucher un joueur ou un contact",
+  map: "Glisser pour déplacer · pincer pour zoomer · toucher un joueur",
+  globe: "Glisser pour tourner · pincer pour zoomer",
+  radar: "Pincer pour la portée · toucher un contact",
+  schematic: "Glisser pour faire défiler les systèmes",
+  plan: "Profil vertical et branches · glisser pour faire défiler",
+  telemetry: "Glisser pour lire une mesure · historique reçu sur cet écran",
+};
+function rangeControl() {
+  const range = document.createElement("input");
+  range.type = "number";
+  range.id = "range";
+  range.min = "0.5";
+  range.max = "20000";
+  range.step = "1";
+  range.value = String(Math.round((views.range / 1000) * 10) / 10);
+  range.setAttribute("aria-label", "Portée en kilomètres");
+  range.addEventListener("change", () => {
+    const v = range.valueAsNumber;
+    if (Number.isFinite(v)) views.range = Math.max(500, Math.min(2e7, v * 1000));
+    views.request();
+  });
+  const label = el("label", "km");
+  label.prepend(range);
+  return label;
+}
 function controls() {
   const bar = $("view-controls");
   bar.replaceChildren();
-  bar.append(
-    button("−", () => views.zoomBy(0.75), "zoom-out"),
-    button("+", () => views.zoomBy(1.333), "zoom-in"),
-  );
-  $("zoom-out").setAttribute("aria-label", "Dézoomer");
-  $("zoom-in").setAttribute("aria-label", "Zoomer");
-  if (views.view === "map" || views.view === "globe") {
-    bar.append(button("Centrer / suivre", () => views.reset(), "recenter"));
+  const v = views.view;
+  if (v === "map" || v === "globe") {
+    bar.append(button("Centrer", () => views.reset(), "recenter"));
     const pan = document.createElement("details");
     pan.className = "pan-controls";
     pan.append(el("summary", "Déplacer"));
@@ -226,57 +266,41 @@ function controls() {
       directions.append(button(label, () => views.pan(east, north)));
     pan.append(directions);
     bar.append(pan);
-    $("view-note").textContent = "Glisser pour déplacer · pincer pour zoomer · toucher un joueur";
-  } else if (views.view === "radar" || views.view === "schematic") {
-    const range = document.createElement("input");
-    range.type = "number";
-    range.min = "0.1";
-    range.max = "20000";
-    range.step = "0.1";
-    range.value = String(views.range / 1000);
-    range.style.width = "90px";
-    range.setAttribute("aria-label", "Portée en kilomètres");
-    range.addEventListener("change", () => {
-      const v = range.valueAsNumber;
-      if (Number.isFinite(v)) views.range = Math.max(100, Math.min(2e7, v * 1000));
-      views.request();
-    });
-    const label = el("label", "km");
-    label.prepend(range);
+  } else if (v === "radar" || v === "nd" || v === "dash") {
+    bar.append(rangeControl());
+    if (v !== "dash")
+      bar.append(
+        segmented(
+          [
+            ["heading", "Cap"],
+            ["north", "Nord"],
+          ],
+          views.north ? "north" : "heading",
+          "Orientation",
+          (o) => {
+            views.north = o === "north";
+            views.request();
+          },
+        ),
+      );
     bar.append(
-      label,
-      selectControl(
+      segmented(
         [
-          ["north", "Nord en haut"],
-          ["heading", "Cap en haut"],
+          ["players", "Partagé"],
+          ["sensor", "Capteur"],
         ],
-        views.north ? "north" : "heading",
-        "Orientation",
-        (v) => {
-          views.north = v === "north";
+        views.sensor ? "sensor" : "players",
+        "Source radar",
+        (o) => {
+          views.sensor = o === "sensor";
           views.request();
         },
       ),
       button("Ajuster", () => {
         views.fit();
-        range.value = String(Math.round(views.range / 100) / 10);
+        controls();
       }),
     );
-    if (views.view === "radar")
-      bar.append(
-        selectControl(
-          [
-            ["players", "Positions joueurs"],
-            ["sensor", "Capteur du pilote"],
-          ],
-          views.sensor ? "sensor" : "players",
-          "Source radar",
-          (v) => {
-            views.sensor = v === "sensor";
-            views.request();
-          },
-        ),
-      );
     const contacts = document.createElement("details");
     contacts.className = "pan-controls";
     contacts.append(el("summary", "Contacts"));
@@ -284,30 +308,28 @@ function controls() {
     list.id = "contact-list";
     contacts.append(list);
     bar.append(contacts);
-    $("view-note").textContent = "Pincer pour régler la portée · équipage pour sélectionner un contact";
-  } else {
+  } else if (v === "telemetry") {
     bar.append(
       selectControl(
-        METRICS.map((m) => [m.key, m.name]),
+        [["multi", "Vue d’ensemble"], ...METRICS.map((m) => [m.key, m.name] as [string, string])],
         views.channel,
         "Mesure affichée",
-        (v) => {
-          views.channel = v;
+        (c) => {
+          views.channel = c as typeof views.channel;
           views.request();
         },
       ),
-    );
-    bar.append(
       selectControl(
         [
-          ["60", "1 minute"],
-          ["600", "10 minutes"],
-          ["3600", "1 heure"],
+          ["60", "1 min"],
+          ["300", "5 min"],
+          ["600", "10 min"],
+          ["3600", "1 h"],
         ],
         String(views.window),
         "Fenêtre de temps",
-        (v) => {
-          views.window = Number(v);
+        (w) => {
+          views.window = Number(w);
           views.request();
         },
       ),
@@ -335,8 +357,8 @@ function controls() {
       cursor.value = String(views.inspect * 100);
     };
     bar.append(pause, cursor, button("CSV", download));
-    $("view-note").textContent = "Glisser pour lire une mesure · historique reçu sur cet écran";
   }
+  $("view-note").textContent = NOTES[v];
 }
 function setView(view: CrewView) {
   views.setView(view);
@@ -346,20 +368,143 @@ function setView(view: CrewView) {
     b.classList.toggle("active", b.dataset.view === view);
     b.setAttribute("aria-pressed", String(b.dataset.view === view));
   }
+  document.querySelector<HTMLElement>(".zoom")!.hidden = view === "pfd";
+  $("views").querySelector<HTMLElement>(`[data-view=${view}]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
   controls();
   showCrew(false);
 }
+const ICONS: Record<CrewView, string> = {
+  dash: '<rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/>',
+  pfd: '<circle cx="12" cy="12" r="9"/><path d="M3 13h18M8 12h-3M19 12h-3M10 12l2 2 2-2"/>',
+  nd: '<path d="M4 18a9 9 0 0 1 16 0"/><path d="M12 18l-2.5-6L12 4l2.5 8z"/>',
+  map: '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
+  radar: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="M12 12l6-6"/>',
+  schematic: '<path d="M12 3v18M5 9l7-2 7 2M8 18l4-1 4 1"/><circle cx="12" cy="12" r="1.5"/>',
+  plan: '<path d="M3 18l5-6 4 3 4-7 5 4"/><circle cx="8" cy="12" r="1.5"/><circle cx="16" cy="8" r="1.5"/>',
+  telemetry: '<path d="M3 17l4-5 4 3 4-8 6 6"/><path d="M3 21h18"/>',
+};
 for (const view of Object.keys(VIEW_NAMES) as CrewView[]) {
-  const b = button(VIEW_NAMES[view], () => setView(view));
+  const b = button("", () => setView(view));
+  b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[view]}</svg><span>${VIEW_NAMES[view]}</span>`;
   b.dataset.view = view;
   $("views").append(b);
 }
+views.onOpen = setView;
+$("zoom-in").addEventListener("click", () => views.zoomBy(1.333));
+$("zoom-out").addEventListener("click", () => views.zoomBy(0.75));
+const unitsButton = $("units-button");
+function setUnits(sys: "metric" | "imperial") {
+  views.units = sys;
+  store.set("kerr.crew.units", sys);
+  unitsButton.textContent = sys === "metric" ? "MÉTRIQUE" : "IMPÉRIAL";
+  for (const e of $("metrics").children) (e as HTMLElement).dataset.unit = "";
+  refresh();
+  views.request();
+}
+unitsButton.addEventListener("click", () => setUnits(views.units === "metric" ? "imperial" : "metric"));
 function download() {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([model.csv()], { type: "text/csv" }));
   a.download = `kerr-crew-${model.selected ?? "flight"}.csv`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+/** the strip's tiles: the measures a glance needs, their state (amber, red) and trend */
+const TILES: { key: string; name: string; unit: (u: ReturnType<typeof unitsOf>) => string }[] = [
+  { key: "alt", name: "Altitude", unit: (u) => u.altName.toLowerCase() },
+  { key: "speed", name: "Vitesse", unit: (u) => u.spdName.toLowerCase() },
+  { key: "vz", name: "Vario", unit: (u) => u.vsName.toLowerCase() },
+  { key: "mach", name: "Mach", unit: () => "" },
+  { key: "g", name: "Charge", unit: () => "g" },
+  { key: "hdg", name: "Cap", unit: () => "°" },
+  { key: "fuel", name: "Carburant", unit: () => "%" },
+  { key: "agl", name: "Hauteur sol", unit: (u) => u.altName.toLowerCase() },
+];
+function tiles(own: ReturnType<typeof model.own>) {
+  const box = $("metrics");
+  const u = unitsOf(views.units);
+  if (!box.childElementCount)
+    for (const t of TILES) {
+      const e = el("div", "", "metric");
+      e.dataset.key = t.key;
+      e.append(el("small", t.name), el("strong", "—"), el("em", ""));
+      box.append(e);
+    }
+  const live = !!own && own.age < 3;
+  const m = own?.metrics ?? {},
+    f = own?.snapshot?.flight,
+    sys = own?.snapshot?.sys;
+  const fmt0 = (v: number | undefined, d = 0) =>
+    v === undefined || !Number.isFinite(v) ? "—" : v.toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d });
+  for (const t of TILES) {
+    const e = box.querySelector<HTMLElement>(`[data-key=${t.key}]`)!;
+    let text = "—",
+      state = "",
+      unit = t.unit(u);
+    if (live) {
+      switch (t.key) {
+        case "alt":
+          text =
+            m.alt !== undefined && Math.abs(m.alt) > 99_999
+              ? `${fmt0(m.alt / 1000, 1)}`
+              : fmt0(m.alt !== undefined ? u.alt(m.alt) : undefined);
+          if (m.alt !== undefined && Math.abs(m.alt) > 99_999) unit = "km";
+          break;
+        case "speed": {
+          const v = f?.tas ?? m.speed;
+          text = fmt0(v !== undefined ? u.spd(v) : undefined);
+          break;
+        }
+        case "vz":
+          text = m.vz !== undefined ? `${m.vz > 0.5 ? "▲" : m.vz < -0.5 ? "▼" : ""}${fmt0(Math.abs(u.vs(m.vz)))}` : "—";
+          state = m.vz !== undefined && m.vz < -40 ? "warn" : "";
+          break;
+        case "mach":
+          text = fmt0(m.mach, 2);
+          state = m.mach !== undefined && m.mach > 1 ? "warn" : "";
+          break;
+        case "g":
+          text = fmt0(f?.nz ?? m.g, 1);
+          state = f?.gMax && Math.abs(f.nz ?? m.g ?? 0) > f.gMax * 0.9 ? "alarm" : Math.abs(f?.nz ?? m.g ?? 1) > 5 ? "warn" : "";
+          break;
+        case "hdg": {
+          const h = f?.hdg ?? own?.geo?.heading;
+          text = h === undefined ? "—" : String(Math.round(((((h * 180) / Math.PI) % 360) + 360) % 360) % 360).padStart(3, "0");
+          break;
+        }
+        case "fuel":
+          if (sys?.fuelKg != null && sys.fuelFull) {
+            text = fmt0(sys.fuelKg);
+            unit = "kg";
+          } else text = fmt0(m.fuel !== undefined ? m.fuel * 100 : undefined);
+          {
+            const frac = sys?.fuelKg != null && sys.fuelFull ? sys.fuelKg / sys.fuelFull : m.fuel;
+            state = frac === undefined ? "" : frac < 0.1 ? "alarm" : frac < 0.25 ? "warn" : "ok";
+          }
+          break;
+        case "agl":
+          text = f?.agl !== undefined && f.agl < 30_000 ? fmt0(u.alt(f.agl)) : "—";
+          state = f?.agl !== undefined && f.agl < 150 && (m.vz ?? 0) < -3 ? "warn" : "";
+          break;
+      }
+    }
+    e.querySelector("strong")!.textContent = text;
+    e.querySelector("em")!.textContent = unit;
+    e.dataset.state = state;
+  }
+}
+/** the annunciator: the warnings red and blinking, the cautions amber */
+let alertKey = "";
+function alerts(own: ReturnType<typeof model.own>) {
+  const list = own && own.age < 3 ? (own.snapshot?.warn ?? []) : [];
+  const key = list.join("|");
+  if (key === alertKey) return;
+  alertKey = key;
+  $("alerts").replaceChildren(
+    ...list.map((w) => el("span", w, `alert${/PULL|FLY|STALL|G-LOC|MISSILE|OVER|IMPACT|FAIL/.test(w) ? " warning" : ""}`)),
+  );
 }
 
 function refresh() {
@@ -388,19 +533,10 @@ function refresh() {
       pilot.append(o);
     }
   }
-  const metrics = ["alt", "speed", "mach", "fuel", "g", "tau"];
-  if (!$("metrics").childElementCount)
-    for (const key of metrics) {
-      const m = METRICS.find((m) => m.key === key)!;
-      const e = el("div", "", "metric");
-      e.dataset.key = key;
-      e.append(el("small", m.name), el("strong", "—"), el("em", m.unit));
-      $("metrics").append(e);
-    }
-  for (const m of METRICS) {
-    const e = $("metrics").querySelector(`[data-key=${m.key}] strong`);
-    if (e) e.textContent = own && own.age < 3 ? valueText(own.metrics[m.key], m.k) : "—";
-  }
+  tiles(own);
+  alerts(own);
+  const followed = room?.members.find((m) => m.slot === model.selected);
+  $("pilot-dot").style.background = followed?.colour ?? "#4d606b";
   $("freshness").textContent =
     net.status === "offline"
       ? "Connexion interrompue"
@@ -458,8 +594,27 @@ function refresh() {
     }
     if (!room) members.append(el("p", "Rejoignez une salle pour voir son équipage.", "muted"));
   }
+  const contacts = model.contacts();
+  const count = (k: (c: (typeof contacts)[number]) => boolean) => String(contacts.filter(k).length);
+  const summary: [string, string][] = [
+    ["Joueurs", String(crafts.length)],
+    ["Avions", count((c) => c.kind === "air")],
+    ["Navires", count((c) => c.kind === "sea")],
+  ];
+  const sk = JSON.stringify(summary);
+  if ($("traffic-summary").dataset.key !== sk) {
+    $("traffic-summary").dataset.key = sk;
+    $("traffic-summary").replaceChildren(
+      ...summary.map(([k, v]) => {
+        const d = el("div");
+        d.append(el("strong", v), el("small", k));
+        return d;
+      }),
+    );
+  }
   for (const row of $("members").querySelectorAll<HTMLElement>(".member")) {
     const slot = Number(row.dataset.slot);
+    row.classList.toggle("followed", slot === model.selected);
     row.classList.toggle("speaking", slot === room?.slot ? radio.gate.active : radio.speaking(slot));
     const craft = crafts.find((c) => c.member.slot === slot);
     const r = own && craft ? relative(own, craft) : null;
@@ -471,24 +626,31 @@ function refresh() {
     ? `Aller-retour ${Math.round(net.clock.rtt)} ms · Temps ×${valueText(net.roomWarp())} · ${net.mesh?.peers.size ?? 0} liens WebRTC`
     : "";
   syncRadio();
-  const contacts = $("contact-list");
-  if (contacts) {
-    const sensor = views.sensor && views.view === "radar";
+  const listBox = $("contact-list");
+  if (listBox) {
+    const sensor = views.sensor && views.view !== "dash";
+    const g = own?.geo;
+    const near = g
+      ? [...contacts].sort((x, y) => Math.hypot(x.lat - g.lat, x.lon - g.lon) - Math.hypot(y.lat - g.lat, y.lon - g.lon)).slice(0, 24)
+      : [];
     const items = sensor
-      ? (own?.snapshot?.radar?.contacts ?? []).map((p) => ({ id: p.id, name: p.name }))
-      : crafts.filter((c) => c !== own).map((c) => ({ id: String(c.member.slot), name: c.member.name }));
+      ? (own?.snapshot?.radar?.contacts ?? []).map((p) => ({ id: p.id, name: p.name, slot: -1 }))
+      : [
+          ...crafts.filter((c) => c !== own).map((c) => ({ id: "", name: `✈ ${c.member.name}`, slot: c.member.slot })),
+          ...near.map((c) => ({ id: c.id, name: `${c.kind === "sea" ? "⛴" : c.kind === "ground" ? "◆" : "◇"} ${c.name}`, slot: -1 })),
+        ];
     const signature = JSON.stringify([sensor, items]);
-    if (contacts.dataset.signature !== signature) {
-      contacts.dataset.signature = signature;
-      contacts.replaceChildren();
+    if (listBox.dataset.signature !== signature) {
+      listBox.dataset.signature = signature;
+      listBox.replaceChildren();
       for (const item of items)
-        contacts.append(
+        listBox.append(
           button(item.name, () => {
-            if (sensor) views.onContact(item.id);
-            else select(Number(item.id));
+            if (item.slot >= 0) select(item.slot);
+            else views.onContact(item.id);
           }),
         );
-      if (!items.length) contacts.append(el("p", sensor ? "Aucune piste reçue du pilote." : "Aucun autre pilote connecté.", "muted"));
+      if (!items.length) listBox.append(el("p", sensor ? "Aucune piste reçue du pilote." : "Aucun joueur ni trafic reçu.", "muted"));
     }
   }
   const paint = JSON.stringify(crafts.map((c) => [c.member.slot, c.sample.seq, c.snapshot?.t, Math.floor(c.age)]));
@@ -497,10 +659,27 @@ function refresh() {
     views.request();
   }
 }
+const SIDES: Record<string, string> = {
+  traffic: "trafic réel",
+  hostile: "hostile",
+  friend: "ami",
+  neutral: "neutre",
+  dead: "détruit",
+  carrier: "porte-avions",
+};
 views.onContact = (id) => {
   views.selectedContact = id;
-  const c = model.own()?.snapshot?.radar?.contacts.find((c) => c.id === id);
-  if (c) notice(`${c.name} · ${valueText(Math.hypot(c.e, c.n) / 1000)} km · Δh ${valueText(c.dz)} m · ${c.iff}`);
+  const u = unitsOf(views.units);
+  const own = model.own();
+  const c = own?.snapshot?.radar?.contacts.find((c) => c.id === id);
+  const t = model.contacts().find((t) => t.id === id);
+  if (c) notice(`${c.name} · ${u.fDist(Math.hypot(c.e, c.n))} · Δh ${u.fAlt(c.dz)} · ${c.iff}`);
+  else if (t) {
+    const parts = [t.name, t.type, SIDES[t.side] ?? t.side];
+    if (t.alt !== null) parts.push(u.fAlt(t.alt));
+    if (t.spd !== null) parts.push(u.fSpd(t.spd));
+    notice(parts.filter(Boolean).join(" · "));
+  }
   views.request();
 };
 
@@ -512,17 +691,41 @@ async function askTars(input: string): Promise<string> {
     .toLowerCase()
     .trim();
   const options: [RegExp, CrewView][] = [
+    [/tableau|dashboard|ensemble des instruments/, "dash"],
+    [/plan de vol|\bplan\b|profil|route/, "plan"],
+    [/\bpfd\b|horizon|\bvol\b|attitude/, "pfd"],
+    [/navigation|\bnd\b/, "nd"],
     [/carte|\bmap\b/, "map"],
     [/globe/, "globe"],
     [/radar/, "radar"],
-    [/schema|schematic/, "schematic"],
+    [/schema|schematic|systeme|moteur/, "schematic"],
     [/telemetr|courbe/, "telemetry"],
   ];
   for (const [pattern, view] of options)
     if (pattern.test(q)) {
       setView(view);
+      if (/courbes\b|ensemble/.test(q) && view === "telemetry") {
+        views.channel = "multi";
+        controls();
+        return "Vue d’ensemble des courbes.";
+      }
       if (!q.includes("courbe")) return `Vue ${VIEW_NAMES[view]} affichée.`;
     }
+  if (/imperial|pieds|noeuds/.test(q)) {
+    setUnits("imperial");
+    return "Unités impériales : pieds, nœuds, milles nautiques.";
+  }
+  if (/metrique|metres/.test(q)) {
+    setUnits("metric");
+    return "Unités métriques : mètres, m/s, kilomètres.";
+  }
+  if (/trafic|traffic|avions|bateaux|navires/.test(q)) {
+    const c = model.contacts();
+    const air = c.filter((x) => x.kind === "air").length,
+      sea = c.filter((x) => x.kind === "sea").length,
+      hostile = c.filter((x) => x.side === "hostile").length;
+    return `${model.crafts().length} joueur(s), ${air} avion(s), ${sea} navire(s)${hostile ? `, ${hostile} hostile(s)` : ""}.`;
+  }
   if (/suivre|follow/.test(q)) {
     const m = net.room?.members.find(
       (m) =>
@@ -641,6 +844,7 @@ setInterval(() => {
   if (!document.hidden) refresh();
 }, 250);
 Object.assign(window, { __crew: { net, model, views, radio, join, setView, askTars } });
-setView("map");
+setUnits(views.units);
+setView("dash");
 refresh();
 showLobby();

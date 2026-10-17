@@ -138,6 +138,7 @@ function steady(S: { t: number; p: number[]; v: number[] }[] | undefined) {
 
 export class NetSession {
   private crewSent = -Infinity;
+  private crewAround = -Infinity;
 
   /** At most 4 Hz, only while an instruments screen is present. No simulator on that screen. */
   instruments(info: Info, status: RangerStatus | null) {
@@ -146,7 +147,10 @@ export class NetSession {
     if (!net?.room || net.room.role !== "pilot" || this.follow || !this.d.camera.piloting || now - this.crewSent < 250) return;
     if (!net.room.members.some((m) => m.role === "instruments")) return;
     this.crewSent = now;
-    net.event({ kind: "instruments", data: crewSnapshot(this.d.camera, info, status, this.d.sceneTime()) });
+    // (the surroundings — the traffic, the units, the ships — once a second: the heavier part)
+    const around = now - this.crewAround >= 1000;
+    if (around) this.crewAround = now;
+    net.event({ kind: "instruments", data: crewSnapshot(this.d.camera, info, status, this.d.sceneTime(), around) });
   }
   /** the name tags this frame */
   tags: NetTag[] = [];

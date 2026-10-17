@@ -84,8 +84,10 @@ describe.skipIf(!E2E)("crew console", () => {
     await app.shot("remote-results/crew-mobile-map.png");
   }, 30_000);
 
-  test("all five views and their buttons work on a phone, and TARS reads the received data", async () => {
-    for (const view of ["globe", "radar", "schematic", "telemetry", "map"]) {
+  test("every view and its buttons work on a phone, and TARS reads the received data", async () => {
+    for (const view of ["dash", "nd", "globe", "radar", "schematic", "plan", "telemetry", "map"]) {
+      // (the tabs' bar scrolls on a phone: the tab brought into view as a finger would)
+      await app.js(`(document.querySelector('[data-view=${view}]').scrollIntoView({ inline: 'center', block: 'nearest' }), true)`);
       await app.click(`[data-view=${view}]`);
       expect(await app.js<string>("__crew.views.view")).toBe(view);
       const b = await app.hit("#zoom-in");
@@ -173,6 +175,7 @@ describe.skipIf(!E2E)("crew console", () => {
     for (const [width, height] of [
       [1024, 768],
       [844, 390],
+      [1440, 900],
     ]) {
       await app.cdp.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: true });
       await Bun.sleep(200);
@@ -209,9 +212,20 @@ describe.skipIf(!E2E)("crew console", () => {
       const limit = Date.now() + 15_000;
       while (!data && Date.now() < limit) await Bun.sleep(100);
       expect(data).not.toBeNull();
-      const snapshot = data as { v: number; metrics: { speed: number; fuel?: number }; body: string };
+      const snapshot = data as {
+        v: number;
+        metrics: { speed: number; fuel?: number };
+        body: string;
+        auto?: object;
+        sys?: object;
+        warn?: string[];
+      };
       expect(snapshot.v).toBe(1);
       expect(Number.isFinite(snapshot.metrics.speed)).toBe(true);
+      // (the blocks the console's PFD, systems and annunciator read)
+      expect(snapshot.auto).toBeTruthy();
+      expect(snapshot.sys).toBeTruthy();
+      expect(Array.isArray(snapshot.warn)).toBe(true);
       await app.js("(__bh.net.open(), true)");
       await app.click("[data-testid=net-tab-screens]");
       await app.js(

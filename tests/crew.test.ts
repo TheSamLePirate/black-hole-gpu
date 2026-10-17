@@ -126,3 +126,80 @@ test("crew build stays independent: one small JS, no shaders, workers, images or
   expect(scripts[0]!.size).toBeLessThan(200_000);
   expect(await scripts[0]!.text()).not.toMatch(/createShaderModule|requestAdapter|audio-worklet|basis_transcoder|\.wgsl/);
 });
+
+test("instruments v1 grows by optional blocks: flight, autopilot, plan, systems, alerts, traffic and zones bounded", () => {
+  const data = readInstruments({
+    v: 1,
+    t: 3,
+    body: "earth",
+    metrics: {},
+    flight: { pitch: 0.1, bank: -0.2, hdg: 1, tas: 200, agl: NaN, wind: { spd: 5, from: 4 } },
+    auto: { mode: "plane", assist: "realistic", alt: 9000, hdg: null, spd: "x", lnav: true, vnav: 1, hub: { title: "T", bar: 0.5 } },
+    nav: { active: 400, dist: 1000, brg: 0.5, ete: Infinity },
+    sys: { engine: "F135", fuelKg: 5000, gear: 1, gearDown: true },
+    warn: Array.from({ length: 40 }, () => "STALL"),
+    traffic: Array.from({ length: 300 }, (_, i) => ({
+      id: `t${i}`,
+      name: "AFR1",
+      kind: "boat",
+      side: "traffic",
+      lat: 48,
+      lon: 2,
+      alt: 3000,
+      hdg: 1,
+      spd: 200,
+    })),
+    zones: [
+      { lat: 45, lon: 5, r: 32_000, name: "SA-6", kind: "threat" },
+      { lat: 95, lon: 0, r: 1 },
+    ],
+  })!;
+  expect(data.flight?.tas).toBe(200);
+  expect(data.flight?.agl).toBeUndefined();
+  expect(data.flight?.wind).toEqual({ spd: 5, from: 4 });
+  expect(data.auto?.spd).toBeNull();
+  expect(data.auto?.vnav).toBe(false);
+  expect(data.auto?.hub?.bar).toBe(0.5);
+  expect(data.nav?.active).toBe(63);
+  expect(data.nav?.ete).toBeNull();
+  expect(data.sys?.gearDown).toBe(true);
+  expect(data.warn).toHaveLength(12);
+  expect(data.traffic).toHaveLength(128);
+  expect(data.traffic![0]!.kind).toBe("air");
+  expect(data.zones).toEqual([{ lat: 45, lon: 5, r: 32_000, name: "SA-6", kind: "threat", waiting: false }]);
+  // an older pilot's snapshot: the blocks absent, nothing invented
+  const old = readInstruments({ v: 1, t: 1, metrics: {}, route: [], ahead: [] })!;
+  expect(old.flight).toBeNull();
+  expect(old.traffic).toBeUndefined();
+});
+
+test("WGS84 geodesy for the crew's displays: distances and azimuths on the ellipsoid, offsets by its radii", async () => {
+  const { wgs84Inverse, wgs84Offset } = await import("../src/system/ellipsoid");
+  // Paris–Lyon (the geodesic on WGS84: 391.5 km), a degree of latitude at the equator (110 574 m) and at the pole (111 694 m)
+  const pl = wgs84Inverse(48.8566, 2.3522, 45.764, 4.8357);
+  expect(Math.abs(pl.d - 391_500)).toBeLessThan(600);
+  expect(Math.abs(wgs84Inverse(-0.5, 0, 0.5, 0).d - 110_574)).toBeLessThan(5);
+  expect(Math.abs(wgs84Inverse(88.5, 0, 89.5, 0).d - 111_694)).toBeLessThan(5);
+  expect(Math.abs(wgs84Inverse(48, 2, 48.1, 2).az)).toBeLessThan(1e-9);
+  expect(Math.abs(wgs84Inverse(0, 2, 0, 3).az - Math.PI / 2)).toBeLessThan(1e-9);
+  // 10 km east then measured back
+  const q = wgs84Offset(48.85, 2.35, 10_000, 0);
+  expect(Math.abs(wgs84Inverse(48.85, 2.35, q.lat, q.lon).d - 10_000)).toBeLessThan(2);
+  const n = wgs84Offset(48.85, 2.35, 0, 10_000);
+  expect(Math.abs(wgs84Inverse(48.85, 2.35, n.lat, n.lon).d - 10_000)).toBeLessThan(1);
+});
+
+test("the map: Web Mercator round trips, the land's rings closed and Antarctica through its pole", async () => {
+  const { mercX, mercY, unMercX, unMercY, metresPerPx } = await import("../src/crew/draw/tiles");
+  expect(unMercX(mercX(2.35))).toBeCloseTo(2.35, 9);
+  expect(unMercY(mercY(48.85))).toBeCloseTo(48.85, 9);
+  expect(metresPerPx(0, 0)).toBeCloseTo(156_543.03, 1);
+  const { LAND } = await import("../src/crew/draw/land");
+  expect(LAND.length).toBeGreaterThan(100);
+  const south = LAND.find((r) => r.pts.some((p) => p[1] === -90))!;
+  expect(south.hi - south.lo).toBeGreaterThan(355);
+  // (the longitudes continuous along every ring, but for the closure along the pole itself)
+  for (const r of LAND)
+    for (let k = 1; k < r.pts.length; k++)
+      if (Math.abs(r.pts[k]![1]) !== 90) expect(Math.abs(r.pts[k]![0] - r.pts[k - 1]![0])).toBeLessThanOrEqual(180);
+});

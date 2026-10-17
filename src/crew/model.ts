@@ -1,7 +1,13 @@
 import type { NetClient } from "../net/client";
 import { BODIES, KINDS, type CraftSample, type Member } from "../net/proto";
-import { readInstruments, type InstrumentKey, type InstrumentSnapshot } from "../net/instruments";
-import { cartToGeodetic, WGS84_A, WGS84_F } from "../system/ellipsoid";
+import {
+  readInstruments,
+  type InstrumentKey,
+  type InstrumentSnapshot,
+  type InstrumentTraffic,
+  type InstrumentZone,
+} from "../net/instruments";
+import { cartToGeodetic, WGS84_A, WGS84_F, wgs84Offset } from "../system/ellipsoid";
 
 export const D = Math.PI / 180;
 export const wrap = (a: number) => ((((a + 180) % 360) + 360) % 360) - 180;
@@ -74,9 +80,16 @@ export function relative(own: CrewCraft, other: CrewCraft): { e: number; n: numb
   };
 }
 
+/** a unit about, moved on along its heading since it was heard; `age` [s] */
+export interface Contact extends InstrumentTraffic {
+  age: number;
+}
+
 export class CrewModel {
   selected: number | null = null;
   readonly history = new Map<number, HistoryPoint[]>();
+  /** each pilot's surroundings, as last sent (once a second) */
+  private around = new Map<number, { traffic: InstrumentTraffic[]; zones: InstrumentZone[]; at: number }>();
   private snapshots = new Map<number, { data: InstrumentSnapshot; at: number }>();
   private seen = new Map<number, { sample: CraftSample; at: number }>();
   constructor(readonly net: NetClient) {
@@ -85,6 +98,8 @@ export class CrewModel {
       const data = readInstruments(ev.data);
       if (!data) return;
       this.snapshots.set(from, { data, at: performance.now() });
+      if (data.traffic || data.zones)
+        this.around.set(from, { traffic: data.traffic ?? [], zones: data.zones ?? [], at: performance.now() });
       let h = this.history.get(from) ?? [];
       if (h.length && (data.t < h[h.length - 1]!.t || data.body !== h[h.length - 1]!.body)) h = [];
       if (!h.length || data.t > h[h.length - 1]!.t) h.push({ t: data.t, metrics: data.metrics, geo: data.geo, body: data.body });
@@ -93,6 +108,7 @@ export class CrewModel {
     });
     net.on("room", () => {
       this.snapshots.clear();
+      this.around.clear();
       this.seen.clear();
       this.history.clear();
       this.selected = null;
@@ -102,6 +118,7 @@ export class CrewModel {
       for (const slot of this.snapshots.keys())
         if (!live.has(slot)) {
           this.snapshots.delete(slot);
+          this.around.delete(slot);
           this.history.delete(slot);
           this.seen.delete(slot);
         }
@@ -137,6 +154,39 @@ export class CrewModel {
         },
       ];
     });
+  }
+  /**
+   * Everything the pilots see about, merged (one entry an id: the freshest), moved on along its heading at its speed
+   * since it was sent (flat over a few seconds); dropped after 8 s without news.
+   */
+  contacts(): Contact[] {
+    const now = performance.now();
+    const by = new Map<string, Contact>();
+    for (const [slot, a] of this.around) {
+      const age = (now - a.at) / 1000;
+      if (age > 8) {
+        this.around.delete(slot);
+        continue;
+      }
+      for (const t of a.traffic) {
+        const had = by.get(t.id);
+        if (had && had.age <= age) continue;
+        let { lat, lon } = t;
+        if (t.spd !== null && t.hdg !== null && t.spd > 0.5) {
+          const d = t.spd * Math.min(age, 4);
+          ({ lat, lon } = wgs84Offset(lat, lon, d * Math.sin(t.hdg), d * Math.cos(t.hdg)));
+        }
+        by.set(t.id, { ...t, lat, lon, age });
+      }
+    }
+    return [...by.values()];
+  }
+  /** the mission's zones (the followed pilot's first) */
+  zones(): InstrumentZone[] {
+    const own = this.around.get(this.selected ?? -1);
+    if (own?.zones.length) return own.zones;
+    for (const a of this.around.values()) if (a.zones.length) return a.zones;
+    return [];
   }
   own(crafts = this.crafts()) {
     if (!crafts.some((c) => c.member.slot === this.selected)) this.selected = crafts[0]?.member.slot ?? null;

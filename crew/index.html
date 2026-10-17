@@ -4,50 +4,81 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
-    <meta name="theme-color" content="#0a151c" />
+    <meta name="theme-color" content="#05090e" />
     <title>Kerr — Équipage</title>
     <link rel="stylesheet" href="../src/crew/style.css" />
   </head>
   <body>
     <header class="masthead">
-      <a class="brand" href="../" aria-label="Ouvrir le simulateur Kerr">K<span>ERR</span><small>ÉQUIPAGE</small></a>
-      <div class="connection"><span id="status-dot"></span><span id="connection">Hors connexion</span></div>
-      <button id="room-button" type="button">Rejoindre</button>
+      <a class="brand" href="../" aria-label="Ouvrir le simulateur Kerr"><b>K</b>ERR<small>ÉQUIPAGE</small></a>
+      <label class="pilot-pick"
+        ><span class="sr">Pilote suivi</span><span id="pilot-dot" class="pilot-dot"></span
+        ><select id="pilot" aria-label="Pilote suivi"><option value="">En attente d’un pilote</option></select></label
+      >
+      <div class="connection" title="État de la salle"><span id="status-dot"></span><span id="connection">Hors connexion</span></div>
+      <div class="head-actions">
+        <button id="units-button" class="chip" type="button" aria-label="Unités affichées">MÉTRIQUE</button>
+        <button id="tars-button" class="chip" type="button">TARS</button>
+        <button id="crew-button" class="chip" type="button" aria-expanded="false" aria-controls="crew-panel">Équipage</button>
+        <button id="room-button" class="chip primary-chip" type="button">Rejoindre</button>
+      </div>
     </header>
+    <div id="alerts" class="alerts" role="alert" aria-live="assertive"></div>
     <main>
       <section class="workspace" aria-label="Instruments partagés">
-        <div class="flight-bar">
-          <label>Pilote suivi<select id="pilot" aria-label="Pilote suivi"><option value="">En attente d’un pilote</option></select></label>
-          <button id="crew-button" type="button" aria-expanded="false" aria-controls="crew-panel">Équipage</button>
-          <button id="tars-button" type="button">TARS</button>
-        </div>
         <div id="metrics" class="metrics" aria-label="Mesures du pilote"></div>
-        <div class="view-head"><h1 id="view-title">Carte</h1><span id="freshness">En attente de données</span></div>
-        <div id="view-controls" class="view-controls" aria-label="Contrôles de la vue"></div>
-        <div class="stage"><canvas id="instruments" tabindex="0" role="img" aria-label="Carte des joueurs ; utilisez la liste Pilote suivi pour sélectionner un joueur"></canvas></div>
-        <div class="view-foot"><span id="view-note">Glisser pour déplacer · pincer pour zoomer</span><span>Made with Natural Earth</span></div>
+        <div class="toolbar">
+          <div class="view-id"><h1 id="view-title">Tableau</h1><span id="freshness">En attente de données</span></div>
+          <div id="view-controls" class="view-controls" aria-label="Contrôles de la vue"></div>
+        </div>
+        <div class="stage">
+          <canvas id="instruments" tabindex="0" role="img" aria-label="Instruments du pilote suivi"></canvas>
+          <div class="zoom">
+            <button id="zoom-out" type="button" aria-label="Dézoomer">−</button>
+            <button id="zoom-in" type="button" aria-label="Zoomer">+</button>
+          </div>
+        </div>
+        <div class="view-foot"><span id="view-note">Toucher un panneau pour l’ouvrir</span><span>Made with Natural Earth</span></div>
       </section>
       <aside id="crew-panel" aria-label="Équipage et radio">
         <div class="aside-head"><h2>À bord</h2><button id="close-crew" type="button" aria-label="Fermer l’équipage">Fermer</button></div>
-        <p class="muted">Choisir un pilote pour lire ses instruments. Chaque écran rejoint la salle comme membre d’équipage.</p>
         <div id="members"></div>
-        <p id="network-details" class="muted"></p>
-        <p class="muted">La vue des joueurs indique leurs positions partagées. Le mode capteur affiche uniquement les pistes reçues du radar du pilote.</p>
+        <p id="network-details" class="muted small"></p>
+        <div id="traffic-summary" class="traffic-summary"></div>
+        <p class="muted small">
+          Les positions des joueurs, le trafic réel, les unités de mission et les navires sont partagés par les pilotes. Le mode capteur du radar
+          n’affiche que les pistes reçues du radar du pilote.
+        </p>
       </aside>
     </main>
     <nav id="views" aria-label="Vues de la console"></nav>
     <footer class="radio">
-      <div class="radio-tools"><button id="listen" type="button" aria-pressed="false">Écouter</button><button id="microphone" type="button" aria-pressed="false">Activer le micro</button><label class="talk-mode"><input id="toggle-talk" type="checkbox" /> Toucher pour parler</label></div>
+      <div class="radio-tools">
+        <button id="listen" class="chip" type="button" aria-pressed="false">Écouter</button>
+        <button id="microphone" class="chip" type="button" aria-pressed="false">Activer le micro</button>
+        <label class="talk-mode"><input id="toggle-talk" type="checkbox" /> <span class="long">Toucher pour parler</span><span class="short">Bascule</span></label>
+      </div>
       <button id="talk" class="talk" type="button" aria-pressed="false" disabled><span class="talk-dot"></span><span id="talk-label">Maintenir pour parler</span></button>
       <p id="radio-status" role="status">Écoutez la salle, puis activez votre microphone pour parler.</p>
     </footer>
     <div id="notice" role="status" aria-live="polite"></div>
     <dialog id="lobby">
       <form id="join-form">
-        <p class="eyebrow">KERR / ÉQUIPAGE</p><h2>Rejoindre le vol.</h2>
-        <p class="muted">La radio et les instruments partagés, sur votre ordinateur, téléphone ou tablette.</p>
+        <p class="eyebrow">KERR / ÉQUIPAGE</p>
+        <h2>Rejoindre le vol.</h2>
+        <p class="muted">Tous les instruments du pilote, le trafic, la radio — sur ordinateur, tablette ou téléphone.</p>
         <label>Votre nom<input id="name" name="name" autocomplete="nickname" maxlength="24" required /></label>
-        <label>Code de la salle<input id="code" name="code" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="6" pattern="[A-Za-z2-9]{6}" required /></label>
+        <label
+          >Code de la salle<input
+            id="code"
+            name="code"
+            autocapitalize="characters"
+            autocomplete="off"
+            spellcheck="false"
+            maxlength="6"
+            pattern="[A-Za-z2-9]{6}"
+            required
+        /></label>
         <label>Mot de passe <span class="muted">(si nécessaire)</span><input id="password" name="password" type="password" autocomplete="off" /></label>
         <p id="join-error" class="error" role="alert"></p>
         <button id="join" class="primary" type="submit">Rejoindre l’équipage</button>
@@ -56,10 +87,16 @@
       </form>
     </dialog>
     <dialog id="tars">
-      <form id="tars-form"><p class="eyebrow">TARS / CONSOLE LOCALE</p><h2>À votre écoute.</h2>
-        <p class="muted">Carte, globe, radar, schéma, télémétrie · suivre un pilote · zoom +/− · centrer · ajuster · portée 50 · nord/cap · capteur/joueurs · pause/direct · courbe Mach · écouter · couper micro · état</p>
-        <label>Votre demande<input id="tars-input" autocomplete="off" placeholder="Afficher le globe" /></label>
-        <button type="submit" class="primary">Demander à TARS</button><output id="tars-output" aria-live="polite"></output>
+      <form id="tars-form">
+        <p class="eyebrow">TARS / CONSOLE LOCALE</p>
+        <h2>À votre écoute.</h2>
+        <p class="muted small">
+          tableau, vol, navigation, carte, globe, radar, systèmes, plan, télémétrie · suivre Ana · zoom +/− · centrer · ajuster · portée 50 ·
+          nord/cap · capteur/joueurs · pause/direct · courbe Mach · courbes · trafic · écouter · couper micro · impérial/métrique · état
+        </p>
+        <label>Votre demande<input id="tars-input" autocomplete="off" placeholder="Afficher la navigation" /></label>
+        <button type="submit" class="primary">Demander à TARS</button>
+        <output id="tars-output" aria-live="polite"></output>
         <button id="close-tars" type="button">Fermer</button>
       </form>
     </dialog>
