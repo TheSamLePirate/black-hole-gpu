@@ -32,6 +32,8 @@ const CONFIGS: Record<string, string> = {
   w10: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.renderer.taParams = [1 / 16, 0.1, 2];`,
   w02: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.renderer.taParams = [1 / 16, 0.02, 2];`,
   n32: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.renderer.taParams = [1 / 32, 0.05, 2];`,
+  // (the rays no denser while the image moves fast — renderer.motionDense)
+  nodense: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.renderer.motionDense = false;`,
   // (bounds: the history's clamp almost off — 100 σ —, and its weight capped at 64 frames rather than 16)
   g100: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.renderer.taParams = [1 / 16, 0.05, 100];`,
   g100n64: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.renderer.taParams = [1 / 64, 0.05, 100];`,
@@ -84,9 +86,18 @@ describe.skipIf(!E2E)("the realtime image's quality in flight, against the conve
           // (from the track flown now — the heading asked before added up from one test to the next: each later turn
           // asked 70° more, a tighter image the first time at each place)
           ${TURNS[pl] ? `{ const c = __bh.camera; c.jetModes.hdg = (c.geoNow()?.track ?? 0) + ${TURNS[pl]} * Math.PI / 180; }` : ""}
-          let done = 0, last = r.lastDoneAt;
-          while (done < ${FRAMES}) { await frame(); if (r.lastDoneAt !== last) { last = r.lastDoneAt; done++; } }
+          // (the trace pass's time while flown, and the share of the frames at a finer block — renderer.motionDense)
+          r.prof.enabled = true; r.prof.every = 1; r.prof.reset();
+          let done = 0, last = r.lastDoneAt, traceMs = 0, finer = 0, motion = 0, turn = 0, para = 0;
+          while (done < ${FRAMES}) { await frame(); if (r.lastDoneAt !== last) { last = r.lastDoneAt; done++;
+            traceMs += r.prof.table().find((p) => p.label === "trace")?.last ?? 0;
+            if (r.realtimeBlockNow < __bh.settings.realtimeSubsampling) finer++; motion += r.imageMotionPx; turn += r.imageTurnPx; para += r.imageParallaxPx; } }
+          window.__flown = { trace: traceMs / done, finer: finer / done, motion: motion / done, turn: turn / done, para: para / done };
           window.__spp = __bh.settings.targetSpp; __bh.settings.targetSpp = 0; __bh.settings.animate = false; return 1; })()`);
+        const fl = await app.js<{ trace: number; finer: number; motion: number; turn: number; para: number }>("window.__flown");
+        console.log(
+          `  ${pl} ${tag}: the trace ${fl.trace.toFixed(1)} ms a frame flown, ${(100 * fl.finer).toFixed(0)} % of the frames finer — the turn ${fl.turn.toFixed(0)} px/s, the nearest ground's parallax ${fl.para.toFixed(1)} px`,
+        );
         await Bun.sleep(600);
         await shot(`${pl}-${tag}`);
         await app.js(`(() => { __bh.settings.targetSpp = 64; __bh.touch(); return 1; })()`);
@@ -96,7 +107,7 @@ describe.skipIf(!E2E)("the realtime image's quality in flight, against the conve
         }
         await shot(`${pl}-${tag}-ref`);
         await app.js(
-          `(() => { __bh.settings.animate = true; __bh.renderer.taParallaxPx = 0.5; __bh.renderer.taParams = [1 / 16, 0.05, 2]; __bh.settings.sharpen = 0.3; __bh.settings.temporalReprojection = true; return 1; })()`,
+          `(() => { __bh.settings.animate = true; __bh.renderer.taParallaxPx = 0.5; __bh.renderer.taParams = [1 / 16, 0.05, 2]; __bh.settings.sharpen = 0.3; __bh.settings.temporalReprojection = true; __bh.renderer.motionDense = true; return 1; })()`,
         );
       }, 400_000);
     }
