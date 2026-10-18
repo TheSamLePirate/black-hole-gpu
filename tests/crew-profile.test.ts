@@ -50,3 +50,18 @@ test("the conic: a 420 km ISS orbit (51.6°, its period ~92.7 min); an eccentric
   expect(Math.max(...pts.map(([x, y]) => Math.hypot(x, y)))).toBeLessThanOrEqual(50_000 * 1.0001);
   expect(nuAfter(h, 3600)).toBeGreaterThan(0);
 });
+
+test("the EECOM view's French checklists: the game's own, step for step, as its dictionary has them", async () => {
+  const { CHECKLISTS } = await import("../src/game/systems");
+  const { CHECKLISTS_FR } = await import("../src/crew/checklists");
+  const dicts = await Promise.all(
+    [...new Bun.Glob("src/i18n/fr-*.ts").scanSync(".")].map(async (f) => (await import(`../${f}`)).default as Record<string, string>),
+  );
+  const fr = (s: string) => dicts.find((d) => d[s])?.[s];
+  for (const [k, c] of Object.entries(CHECKLISTS)) {
+    const f = CHECKLISTS_FR[k]!;
+    expect(f.title).toBe(fr(c.title)!);
+    expect(f.steps).toEqual(c.steps.map((s) => fr(s)!));
+    expect(f.action).toBe(fr(c.action)!);
+  }
+});

@@ -17,7 +17,14 @@ export type CrewView =
   | "telemetry"
   | "sdash"
   | "orbit"
-  | "system";
+  | "system"
+  | "navball"
+  | "dock"
+  | "budget"
+  | "eecom"
+  | "timeline"
+  | "rel"
+  | "ground";
 
 /** The craft's profile: its own word (the K1 block), else the families it opens (an older pilot's snapshot). */
 export function profileOf(s: Pick<InstrumentSnapshot, "craft" | "caps" | "sys"> | null | undefined): CrewProfile {
@@ -31,7 +38,7 @@ export function profileOf(s: Pick<InstrumentSnapshot, "craft" | "caps" | "sys"> 
  *  spacecraft's its orbit and its flight computer. */
 export const PROFILE_VIEWS: Record<CrewProfile, CrewView[]> = {
   jet: ["air", "pfd", "nd", "radar", "map", "globe", "dash", "plan", "schematic", "telemetry"],
-  space: ["sdash", "orbit", "system", "pfd", "globe", "telemetry"],
+  space: ["sdash", "orbit", "system", "navball", "dock", "budget", "eecom", "timeline", "rel", "ground", "globe", "telemetry"],
 };
 
 export type TileKey =

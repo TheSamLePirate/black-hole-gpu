@@ -89,7 +89,7 @@ console s'ouvre sur la première vue du profil.
 | profil | badge | vues, dans l'ordre | tuiles |
 |---|---|---|---|
 | F-35 (tactique, vert phosphore) | `F-35 · TACTIQUE` | **Mission aérienne** (radar et carte côte à côte, bandeau objectif · combat · arme · radar · verrou · emports · alertes ; le panneau d'armes dessous), Vol, Navigation, Radar, Carte, Globe, Tableau, Plan de vol, Systèmes, Télémétrie | altitude, vitesse, vario, Mach, charge, cap, carburant, hauteur sol |
-| Vaisseau (contrôle de mission, bleu) | `VAISSEAU · RANGER` | **Tableau** vaisseau (l'orbite en grand, l'attitude, la colonne de l'ordinateur de vol : Δv, ergols, poussées du plan, prochain événement, cible, systèmes, anneau et ports, horloges, liaison), **Orbite**, **Carte système**, Vol, Globe, Télémétrie | Δv restant, ergols, périapside, apoapside, période, prochain événement, charge, dτ/dt, liaison |
+| Vaisseau (contrôle de mission, bleu) | `VAISSEAU · RANGER` | **Tableau** vaisseau (l'orbite en grand, la boule, la colonne de l'ordinateur de vol : Δv, ergols, poussées du plan, prochain événement, cible, systèmes, anneau et ports, horloges, liaison), **Orbite**, **Carte système**, **Boule**, **Amarrage**, **Δv**, **EECOM**, **Chronologie**, **Relativité**, **Sol**, Globe, Télémétrie | Δv restant, ergols, périapside, apoapside, période, prochain événement, charge, dτ/dt, liaison |
 
 **Carte système** (PLAN-VAISSEAUX K3, `src/crew/sys3d/`) : le système solaire ou celui de Gargantua en 3D.
 - **Navigation** : on la fait tourner en glissant et on zoome en pinçant. On la centre sur le corps de la sphère, le
@@ -111,6 +111,21 @@ console s'ouvre sur la première vue du profil.
     elle) ;
   - sinon sur le canvas 2D (disques ombrés, du plus loin au plus proche).
 - Les étiquettes, la légende et la barre d'échelle sont dessinées par-dessus l'un ou l'autre rendu.
+
+**Les vues vaisseau** (PLAN-VAISSEAUX K4, `draw/navball.ts`, `draw/spaceviews.ts`) :
+
+| vue | contenu |
+|---|---|
+| Boule | la boule de navigation : l'attitude contre l'orbite (ciel du côté radial extérieur), marqueurs prograde, rétrograde, normal, anti-normal, radial, nœud de manœuvre ; SAS, maintien, autopilote, assiette, vitesses |
+| Amarrage | le couloir d'approche vu de côté (cône ±0,3 m + 10 % de la distance), le réticule de face (COAS), distance, rapprochement et sa limite, dérive, axes écartés, rotation relative, phase de l'autopilote |
+| Δv | les poussées du plan bout à bout contre le Δv des ergols, la marge, le réservoir, la poussée en cours |
+| EECOM | batterie, oxygène, épurateurs, bilan et autonomie ; chaque panne avec sa checklist (le français du jeu) |
+| Chronologie | le temps de mission (MET) ; les poussées, apsides, changements de sphère, approches minimales des 24 h à venir sur un axe en racine carrée |
+| Relativité | dτ/dt, « une heure à bord = … sur Terre », β, γ, horloge de salle contre temps propre, r · E · L côté Gargantua, liaison |
+| Sol | le corps survolé en projection orthographique autour du vaisseau : grille, terminateur, trace au sol, point d'atterrissage (et sa redésignation au LPD) |
+
+Le Tableau vaisseau montre la boule à la place du PFD. Il faut pour cela les blocs `att` (nez et haut du vaisseau, axes
+de sa pose), `dock`, `land` et `time.met` de l'instantané.
 
 **Orbite** : la conique autour du corps de la sphère, vue de dessus de son plan (périapside en haut), reconstruite à
 partir de l'état reçu (`src/crew/orbitmath.ts`) ; le corps à l'échelle, Pe et Ap avec leurs hauteurs, le vaisseau,

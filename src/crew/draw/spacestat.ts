@@ -14,6 +14,17 @@ const FAILURE_FR: Record<string, string> = {
   scrubber: "ÉPURATEUR EN PANNE",
 };
 export const failureName = (k: string) => FAILURE_FR[k] ?? k.toUpperCase();
+const ROLE_FR: Record<string, string> = {
+  depart: "départ",
+  circ: "circularisation",
+  mcc: "correction",
+  capture: "capture",
+  mccReturn: "correction retour",
+  captureHome: "capture au retour",
+  arrive: "arrivée",
+};
+/** a burn's part in a mission, in French ("nœud" when it has none) */
+export const roleName = (r: string) => (r ? (ROLE_FR[r] ?? r) : "nœud");
 
 /** a bar: its share filled, toned by thresholds */
 function bar(p: Pen, x: number, y: number, w: number, share: number | null, warn = 0.25, alarm = 0.1) {

@@ -21,10 +21,8 @@ const orbitSnap = (t: number) => {
     t,
     body: "earth",
     metrics: { alt: 420_000, speed: 7660, throttle: 0, fuel: 0.62, tau: 1 },
-    geo: { lat: 0, lon: 0, heading: 0 },
     radar: null,
     route: [],
-    ahead: [],
     flight: { pitch: 0.1, bank: 0, hdg: 1.2 },
     caps: { on: true, fam: ["space"] },
     orbit: { pe: 418, ap: 423, inc: 51.6, ecc: 0.0004, period: 5560, tPe: 1200, tAp: 4000, radius: 6378, a: 6791 },
@@ -40,8 +38,31 @@ const orbitSnap = (t: number) => {
     },
     nodes: [{ in: 900 - t, dv: [55, 0, 0], role: "depart" }],
     budget: { dv: 1480, prop: 0.62 },
-    sysx: { battery: 0.94, kwh: 60, balance: 1.4, o2h: 285, scrub: 13.6, crew: 4, failures: [] },
-    time: { warp: 1, room: t, dtau: 1, tau: t },
+    sysx: { battery: 0.94, kwh: 60, balance: -0.6, o2h: 285, scrub: 13.6, crew: 4, failures: [{ kind: "rcsStuck", fixing: false }] },
+    time: { warp: 1, room: 3600 + t, dtau: 0.9999999993, tau: 3600 + t - 0.0000025, met: 2 * 3600 + 754 + t },
+    // (the attitude: the nose a little off prograde, the up radial out)
+    att: {
+      nose: [-Math.sin(a + 0.15), Math.cos(a + 0.15) * Math.cos(i), Math.cos(a + 0.15) * Math.sin(i)],
+      up: [Math.cos(a), Math.sin(a) * Math.cos(i), Math.sin(a) * Math.sin(i)],
+    },
+    dock: {
+      target: "ISS",
+      port: "IDA-2 · Harmony avant",
+      range: 46.2,
+      along: 45.8,
+      latX: 1.2,
+      latY: -0.6,
+      closing: 0.18,
+      latRate: 0.02,
+      angle: 2.4,
+      spin: 0.1,
+      docked: false,
+      phase: "WAYPOINT 2 · APPROCHE",
+    },
+    land: { body: "earth", name: "Cap Canaveral", lat: 28.6, lon: -80.6, moved: false },
+    sun: { lat: -10, lon: 20 },
+    geo: { lat: 30, lon: -60, heading: 0 },
+    ahead: Array.from({ length: 40 }, (_, k) => ({ lat: 30 + 21 * Math.sin(k / 6), lon: -60 + k * 4, t: k * 120 })),
     link: { light: 0.0014, cut: false },
     // (once a second in the game: the bodies and the paths — here every time)
     bodies: BODIES,
@@ -218,8 +239,24 @@ describe.skipIf(!E2E)("the crew console's two profiles (K2)", () => {
     await app.waitFor(`document.getElementById("view-title").textContent === "Orbite"`, 5000);
     await Bun.sleep(600);
     await shot("3-ranger-orbite");
+    // the K4 views, each drawn without an error
+    for (const [view, title] of [
+      ["navball", "Boule"],
+      ["dock", "Amarrage"],
+      ["budget", "Δv"],
+      ["eecom", "EECOM"],
+      ["timeline", "Chronologie"],
+      ["rel", "Relativité"],
+      ["ground", "Sol"],
+    ]) {
+      await app.js(`(document.querySelector('[data-view=${view}]').scrollIntoView({ block: "nearest" }), 1)`);
+      await app.click(`[data-view=${view}]`);
+      await app.waitFor(`document.getElementById("view-title").textContent === ${JSON.stringify(title)}`, 5000);
+      await Bun.sleep(400);
+      await shot(`k4-${view}`);
+    }
     expect(app.cdp.errors).toEqual([]);
-  }, 60_000);
+  }, 90_000);
 
   test("the system map (K3): about the Earth, then the Sun in the log scale, the prediction scrolled; Gargantua's side", async () => {
     await app.click("[data-view=system]");

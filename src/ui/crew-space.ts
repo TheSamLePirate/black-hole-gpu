@@ -11,6 +11,7 @@ import { SPACE_BOUNDS } from "../net/instruments-space";
 import type { OurPath } from "../system/our-predict";
 import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { bodyState } from "../system/ephemeris";
+import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
 import { SOLAR_BODIES, solarBody, solarState } from "../system/solar";
 import { C_MPS, M_METRES, M_SECONDS } from "../units";
 import { VESSELS, type VesselId } from "../vessels";
@@ -143,7 +144,55 @@ export function crewSpace(c: CameraController, i: Info, status: RangerStatus | n
         failures: S.failures.map((f) => ({ kind: f.kind, fixing: f.fixing })),
       }
     : null;
-  out.time = { warp: warpFactor(c.s), room: Math.round(t), dtau: r3(i.dtau), tau: Math.round(c.properTime * M_SECONDS) };
+  if (!Number.isFinite(c.metT0)) c.metT0 = t;
+  out.time = {
+    warp: warpFactor(c.s),
+    room: Math.round(t),
+    dtau: r3(i.dtau),
+    tau: Math.round(c.properTime * M_SECONDS),
+    met: Math.max(0, Math.round(t - c.metT0)),
+  };
+  // the attitude: the flown craft's nose and up (its pose's axes, home frame — the HUD's S is the camera's)
+  const pose = i.region !== "hole" ? c.activePoseNow() : null;
+  out.att = pose
+    ? {
+        nose: [r3(pose.ax[2][0]), r3(pose.ax[2][1]), r3(pose.ax[2][2])],
+        up: [r3(pose.ax[1][0]), r3(pose.ax[1][1]), r3(pose.ax[1][2])],
+      }
+    : null;
+  // the docking's geometry within 5 km of a port (the COAS's axes: across along the craft's right and up)
+  const D = i.region !== "hole" ? c.dockGeometry() : null;
+  if (D && D.range < 5000) {
+    const d = [D.ring[0] - D.c[0], D.ring[1] - D.c[1], D.ring[2] - D.c[2]].map((x) => x * M_METRES) as V3;
+    const al = d[0] * D.a[0] + d[1] * D.a[1] + d[2] * D.a[2];
+    const lat: V3 = [d[0] - al * D.a[0], d[1] - al * D.a[1], d[2] - al * D.a[2]];
+    // (the craft's right: its nose × its up — the navball's)
+    const up = D.sh[1],
+      nz = D.sh[2];
+    const right: V3 = [nz[1] * up[2] - nz[2] * up[1], nz[2] * up[0] - nz[0] * up[2], nz[0] * up[1] - nz[1] * up[0]];
+    out.dock = {
+      target: D.title,
+      port: D.name,
+      range: r1(D.range),
+      along: r1(D.along),
+      latX: r1(lat[0] * right[0] + lat[1] * right[1] + lat[2] * right[2]),
+      latY: r1(lat[0] * up[0] + lat[1] * up[1] + lat[2] * up[2]),
+      closing: r3(D.closing),
+      latRate: r3(D.lateralRate),
+      angle: r1(D.angle),
+      spin: r1(D.spin),
+      docked: D.docked,
+      phase: c.dockAuto?.phase ?? "",
+    };
+  } else out.dock = null;
+  // the landing point: the site flown to, or the point designated (the LPD)
+  const L = c.landRun;
+  const LB = L ? solarBody(L.body) : null;
+  if (L?.site) out.land = { body: L.body, name: L.site.name, lat: L.site.lat, lon: L.site.lon, moved: false };
+  else if (L?.q && LB) {
+    const g = cartToGeodetic(LB.radius, flatteningOf(L.body), L.q);
+    out.land = { body: L.body, name: "", lat: r3((g.lat * 180) / Math.PI), lon: r3((g.lon * 180) / Math.PI), moved: !!i.lpd?.moved };
+  } else out.land = null;
   // (the light's time to the Earth: our side only — behind the wormhole, no live link)
   const earth = bodyAt("earth", tm).pos;
   out.link =

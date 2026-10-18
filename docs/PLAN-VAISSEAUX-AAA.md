@@ -395,7 +395,7 @@ Chaque phase porte sa ligne réseau ; N finit ce qui n'existe qu'à plusieurs.
 | K1 | contrat « espace » des instruments | **fait** 2026-10-18 ([fiche](progress/vaisseaux/K1.md)) |
 | K2 | console par appareil, crew F-35 distinct | **fait** 2026-10-18 ([fiche](progress/vaisseaux/K2.md)) |
 | K3 | carte 3D WebGPU système solaire / Gargantua + repli 2D | **fait** 2026-10-18 ([fiche](progress/vaisseaux/K3.md)) — les autres joueurs sur la carte en N |
-| K4 | vues vaisseau | à faire |
+| K4 | vues vaisseau | **fait** 2026-10-18 ([fiche](progress/vaisseaux/K4.md)) |
 | K5 | postes à bord / au sol, délai lumière réglable | à faire |
 | K6 | actions vaisseau complètes | à faire |
 | K7 | démo vaisseau, e2e, doc crew | à faire |

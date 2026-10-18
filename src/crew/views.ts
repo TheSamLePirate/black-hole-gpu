@@ -17,6 +17,8 @@ import { drawSystems, systemsHeight } from "./draw/systems";
 import { drawPlan, planHeight } from "./draw/plan";
 import { drawChart } from "./draw/chart";
 import { drawOrbit } from "./draw/orbit";
+import { drawNavball } from "./draw/navball";
+import { drawBudget, drawDock, drawEecom, drawGround, drawRelativity, drawTimeline } from "./draw/spaceviews";
 import { defaultMapState, drawSystemMap } from "./draw/system";
 import { SystemRenderer } from "./sys3d/gpu";
 import { drawAirStatus, drawSpaceStatus } from "./draw/spacestat";
@@ -28,6 +30,13 @@ export const VIEW_NAMES: Record<CrewView, string> = {
   sdash: "Tableau",
   orbit: "Orbite",
   system: "Carte système",
+  navball: "Boule",
+  dock: "Amarrage",
+  budget: "Δv",
+  eecom: "EECOM",
+  timeline: "Chronologie",
+  rel: "Relativité",
+  ground: "Sol",
   dash: "Tableau",
   pfd: "Vol",
   nd: "Navigation",
@@ -387,6 +396,28 @@ export class CrewViews {
       case "system":
         this.mapSpan = drawSystemMap(p, r, sc, this.map3d, this.sysRenderer, this.dpr);
         break;
+      case "navball":
+        drawNavball(p, r, sc);
+        break;
+      case "dock":
+        drawDock(p, r, sc);
+        break;
+      case "budget":
+        drawBudget(p, r, sc);
+        break;
+      case "eecom":
+        drawEecom(p, r, sc);
+        animate ||= blink;
+        break;
+      case "timeline":
+        drawTimeline(p, r, sc);
+        break;
+      case "rel":
+        drawRelativity(p, r, sc);
+        break;
+      case "ground":
+        drawGround(p, r, sc);
+        break;
       case "pfd":
         p.panel(r);
         drawPfd(p, r, sc);
@@ -521,10 +552,7 @@ export class CrewViews {
       const h1 = r.h * (r.w > 1100 ? 0.62 : 0.58);
       this.panelOf("orbit", { x: r.x, y: r.y, w: c1, h: h1 }, () => drawOrbit(p, { x: r.x, y: r.y, w: c1, h: h1 }, sc));
       const q = { x: r.x, y: r.y + h1 + g, w: c1, h: r.h - h1 - g };
-      this.panelOf("pfd", q, () => {
-        p.panel(q);
-        drawPfd(p, q, sc);
-      });
+      this.panelOf("navball", q, () => drawNavball(p, q, sc, true));
       const s = { x: r.x + c1 + g, y: r.y, w: c3, h: r.h };
       this.panelOf("sdash", s, () => drawSpaceStatus(p, s, sc));
     } else {

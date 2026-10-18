@@ -324,6 +324,8 @@ export class CameraController {
   } | null = null;
   /** Piloting the Ranger (on whenever the ship is): the flight computer and its last outputs. */
   readonly pilot = new FlightComputer();
+  /** when the flight began [s of the scene] (the crew's mission elapsed time — PLAN-VAISSEAUX K4); NaN: not yet */
+  metT0 = Number.NaN;
   piloting = false;
   /** Near the station (5 km): the nearest port and the ship's docking ring against it — for the HUD. */
   dockInfo: DockInfo | null = null;

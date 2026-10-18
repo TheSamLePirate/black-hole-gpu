@@ -90,14 +90,38 @@ export interface InstrumentTime {
   room: number;
   dtau: number;
   tau: number;
+  /** the mission's elapsed time [s] (since the flight began) */
+  met?: number;
 }
 /** The link to the Earth: the light's time one way [s]; cut (behind the wormhole: no live link). */
 export interface InstrumentLink {
   light: number;
   cut: boolean;
 }
+/** The docking's geometry (K4): the target and its port, the rings' distance, its part along the port's axis and
+ *  across it (the craft's right and up) [m], the closing and drift rates [m/s], the axes apart and the turn against
+ *  the target [°, °/s], docked; the autopilot's phase. */
+export interface InstrumentDock {
+  target: string;
+  port: string;
+  range: number;
+  along: number;
+  latX: number;
+  latY: number;
+  closing: number;
+  latRate: number;
+  angle: number;
+  spin: number;
+  docked: boolean;
+  phase: string;
+}
 export interface InstrumentSpace {
   craft?: InstrumentCraft | null;
+  /** the craft's attitude: its nose and its up on the home frame's axes (the navball's) */
+  att?: { nose: V3; up: V3 } | null;
+  dock?: InstrumentDock | null;
+  /** the landing point: its name, its place [°] on its body, redesignated by the pilot (the LPD) */
+  land?: { body: string; name: string; lat: number; lon: number; moved: boolean } | null;
   state?: InstrumentState | null;
   traj?: InstrumentTraj | null;
   nodes?: InstrumentNode[];
@@ -189,6 +213,27 @@ export function readSpace(x: Record<string, unknown>): InstrumentSpace {
         radius: b.radius as number,
         parent: label(b.parent, 16),
       }));
+  const a = x.att;
+  if (record(a) && v3(a.nose) && v3(a.up)) out.att = { nose: [...a.nose], up: [...a.up] };
+  const d = x.dock;
+  if (record(d) && finite(d.range))
+    out.dock = {
+      target: label(d.target),
+      port: label(d.port),
+      range: d.range,
+      along: num(d.along),
+      latX: num(d.latX),
+      latY: num(d.latY),
+      closing: num(d.closing),
+      latRate: num(d.latRate),
+      angle: num(d.angle),
+      spin: num(d.spin),
+      docked: d.docked === true,
+      phase: label(d.phase),
+    };
+  const ld = x.land;
+  if (record(ld) && finite(ld.lat) && finite(ld.lon) && Math.abs(ld.lat) <= 90)
+    out.land = { body: label(ld.body, 16), name: label(ld.name), lat: ld.lat, lon: ld.lon, moved: ld.moved === true };
   const g = x.target;
   if (record(g) && finite(g.dist))
     out.target = {
@@ -216,7 +261,14 @@ export function readSpace(x: Record<string, unknown>): InstrumentSpace {
         : [],
     };
   const ti = x.time;
-  if (record(ti) && finite(ti.room)) out.time = { warp: num(ti.warp, 1), room: ti.room, dtau: num(ti.dtau, 1), tau: num(ti.tau, ti.room) };
+  if (record(ti) && finite(ti.room))
+    out.time = {
+      warp: num(ti.warp, 1),
+      room: ti.room,
+      dtau: num(ti.dtau, 1),
+      tau: num(ti.tau, ti.room),
+      ...(finite(ti.met) ? { met: Math.max(0, ti.met) } : {}),
+    };
   const l = x.link;
   if (record(l) && finite(l.light)) out.link = { light: Math.max(0, l.light), cut: l.cut === true };
   const r = x.ring;

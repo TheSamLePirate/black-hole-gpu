@@ -158,6 +158,7 @@ function setPilot(this: CameraController, on: boolean) {
  * caches). Before, a second glide began as the first had ended — mid-approach, gear up, braking.
  */
 function newFlight(this: CameraController) {
+  this.metT0 = Number.NaN;
   this.gStrain.reset();
   this.character.stop();
   // (the view the new flight's own: a spectator out — walking or not — let go, its glide with it)

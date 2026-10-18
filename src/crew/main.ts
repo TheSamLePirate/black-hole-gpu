@@ -233,6 +233,13 @@ const NOTES: Record<CrewView, string> = {
   sdash: "L’orbite, l’attitude, l’ordinateur de vol · toucher un panneau pour l’ouvrir",
   orbit: "L’orbite vue de dessus de son plan · périapside en haut · les poussées du plan en magenta",
   system: "Glisser pour tourner · pincer pour zoomer · la prédiction à faire défiler",
+  navball: "L’attitude contre l’orbite · marqueurs prograde, normal, radial, nœud",
+  dock: "Le couloir d’approche de côté, le réticule de face · limites de vitesse et d’alignement",
+  budget: "Le Δv des ergols contre les poussées du plan · la marge",
+  eecom: "Énergie, oxygène, épurateurs · les pannes et leurs checklists",
+  timeline: "Le temps de mission · les événements des heures à venir",
+  rel: "Les deux horloges : dτ/dt, γ, le temps écoulé sur Terre",
+  ground: "Le corps survolé : la trace au sol, le point d’atterrissage, la nuit",
   dash: "Toucher un panneau pour l’ouvrir · pincer pour la portée",
   pfd: "Horizon, rubans vitesse et altitude, cap, modes du pilote automatique",
   nd: "Pincer pour la portée · toucher un joueur ou un contact",
@@ -525,7 +532,18 @@ function setView(view: CrewView) {
     b.classList.toggle("active", b.dataset.view === view);
     b.setAttribute("aria-pressed", String(b.dataset.view === view));
   }
-  document.querySelector<HTMLElement>(".zoom")!.hidden = view === "pfd" || view === "orbit" || view === "sdash";
+  document.querySelector<HTMLElement>(".zoom")!.hidden = [
+    "pfd",
+    "orbit",
+    "sdash",
+    "navball",
+    "dock",
+    "budget",
+    "eecom",
+    "timeline",
+    "rel",
+    "ground",
+  ].includes(view);
   if (view === "system") views.map3d.ahead = 0;
   mcp.hidden = view !== "pfd" && view !== "dash" && view !== "radar" && view !== "air" && view !== "sdash";
   syncMcpKind();
@@ -537,6 +555,13 @@ const ICONS: Record<CrewView, string> = {
   air: '<path d="M12 3l2 7 7 2-7 2-2 7-2-7-7-2 7-2z"/>',
   sdash:
     '<rect x="3" y="3" width="11" height="11" rx="2"/><rect x="16" y="3" width="5" height="18" rx="2"/><rect x="3" y="16" width="11" height="5" rx="2"/>',
+  navball: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><circle cx="12" cy="8" r="1.6"/><path d="M8 12l4 3 4-3"/>',
+  dock: '<rect x="3" y="9" width="7" height="6" rx="1"/><path d="M10 12h4"/><circle cx="18" cy="12" r="3"/>',
+  budget: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  eecom: '<path d="M13 2L5 14h6l-1 8 8-12h-6z"/>',
+  timeline: '<path d="M3 12h18"/><circle cx="7" cy="12" r="2"/><circle cx="14" cy="12" r="2"/><path d="M19 9v6"/>',
+  rel: '<circle cx="8" cy="12" r="5"/><circle cx="17" cy="12" r="4"/><path d="M8 12V9M17 12l2-2"/>',
+  ground: '<circle cx="12" cy="12" r="9"/><path d="M5 15c4-6 10-6 14-3"/><circle cx="16" cy="11" r="1.5"/>',
   system:
     '<circle cx="12" cy="12" r="2.5"/><ellipse cx="12" cy="12" rx="9.5" ry="4"/><ellipse cx="12" cy="12" rx="5.5" ry="2.3"/><circle cx="21" cy="12" r="1.2"/>',
   orbit:

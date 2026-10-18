@@ -68,6 +68,20 @@ test("in flight: the Endurance's space blocks, read back from JSON; the heavy ti
   expect(r.link!.light).toBeLessThan(0.1);
   expect(r.ring).not.toBeNull();
   expect(r.ports!.find((p) => p.docked === "Ranger")).toBeTruthy();
+  // (the attitude on the state's axes: held prograde, the nose along the velocity about the Earth)
+  e.pilot.setHold("prograde");
+  for (let k = 0; k < 30 * 60; k++) {
+    e.flyShip(1 / 30, null as never);
+    setSceneTime(e.time);
+  }
+  const held = readInstruments(
+    JSON.parse(JSON.stringify(crewSnapshot(e, e.flightInfo(), rangerStatus(s, e, e.flightInfo(), e.time), e.time, false))),
+  )!;
+  const vh = held.state!.v.map((x) => x / Math.hypot(...held.state!.v));
+  const along = held.att!.nose[0] * vh[0]! + held.att!.nose[1] * vh[1]! + held.att!.nose[2] * vh[2]!;
+  console.log(`  held prograde: the nose · the velocity = ${along.toFixed(4)}`);
+
+  expect(along).toBeGreaterThan(0.99);
   // (the light tick: no paths, no bodies)
   const light = readInstruments(JSON.parse(JSON.stringify(crewSnapshot(e, info, status, 0, false))))!;
   expect(light.traj).toBeUndefined();
