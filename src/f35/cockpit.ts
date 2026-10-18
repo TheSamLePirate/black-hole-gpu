@@ -17,6 +17,7 @@ import type { F35Pose } from "./model";
 import type { PcdData, PcdField } from "./pcd";
 import { STOVL } from "./stovl";
 import { GUN } from "../game/combat";
+import { ground } from "../controller/gcas";
 
 type V3 = [number, number, number];
 
@@ -158,6 +159,7 @@ export function pcdData(
     bingo: c.routeBingo(),
     alerts,
     damage: (c.combat?.world.damage ?? 0) / 100,
+    ground,
     // (a mission's places — controller/mission.ts —: its zones, the SAMs' reach)
     marks: c.mission
       ? c

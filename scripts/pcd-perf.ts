@@ -1,7 +1,7 @@
 // The F-35's panoramic display's CPU cost in the running app (docs/PLAN-PCD-AAA.md, Q1): a headless Chrome, the F-35
 // lined up at Edwards, the cockpit view; __bh.pcd.stats read over a few seconds (the data, the drawing, the upload).
 //
-//   bun scripts/pcd-perf.ts [seconds] [runs]
+//   bun scripts/pcd-perf.ts [seconds] [runs]          (FLY=lat,lon,agl,hdg,speed: flown there instead — the TSD's relief)
 import { App, stopServer } from "../tests/e2e/lib/app";
 
 const secs = Number(process.argv[2] ?? 8);
@@ -13,7 +13,7 @@ try {
     __bh.freeze(true);
     __bh.settings.vessel = "f35";
     for (let i = 0; i < 5; i++) __bh.step(1 / 30);
-    __bh.game.lineUp("Edwards");
+    ${process.env.FLY ? `__bh.game.flyAt(${process.env.FLY});` : `__bh.game.lineUp("Edwards");`}
     for (let i = 0; i < 5; i++) __bh.step(1 / 30);
     __bh.settings.shipMount = "chase";
     __bh.freeze(false);

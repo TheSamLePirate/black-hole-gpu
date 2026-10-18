@@ -62,7 +62,7 @@ verts, poussée sur `main`.
 - **SMS** : les emports (AIM-120, AIM-9X, GBU-32, JSM), le canon et ses obus, les leurres, l'arme choisie, l'état
   du combat ; les touches au doigt (arme, mode radar, leurres — jamais le tir).
 
-### Q5 — Le TSD enrichi
+### Q5 — Le TSD enrichi — FAIT ([fiche](progress/pcd/Q5.md))
 
 - Côtes et relief simplifiés sous la carte, ailiers et formation, trafic réel, porte-avions, menaces et leurs
   portées, cercle de bingo.

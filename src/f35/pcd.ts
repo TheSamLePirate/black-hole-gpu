@@ -111,6 +111,8 @@ export interface PcdData {
   marks?: { kind: "zone" | "threat"; lat: number; lon: number; r: number; label: string; active: boolean }[];
   /** in a fight, the damage taken (0…1) */
   damage?: number;
+  /** the ground's height at a place [m over the ellipsoid; the sea 0] (the TSD's relief; none: not drawn) */
+  ground?: (lat: number, lon: number) => number;
   /** the radar (controller/radar.ts radarHud): its mode, its beam's azimuth off the nose [rad], its contacts heading
    *  up — x right, y ahead, dz above [m], their way off the nose [rad] (null: not measured) —, the lock's figures
    *  (range [m], closure [m/s], altitude [m], heading [rad], ground speed [m/s]); null: no radar (not flying) */
@@ -220,6 +222,10 @@ const PAGE_PERIOD: Record<PcdPage, number> = {
 };
 const FONT = `"Eurostile", "DIN Alternate", "Arial Narrow", sans-serif`;
 const RANGES = [5, 10, 20, 40, 80, 160];
+/** the TSD's relief: its cells across, the time it may take a frame [ms] (built a few rows at a time) */
+const RELIEF_N = 96;
+const RELIEF_BUDGET = 0.25;
+const EARTH_R = 6.371e6;
 /** the radar's page's ranges [km, or NM] */
 const FCR_RANGES = [10, 20, 40, 80, 160];
 const STORE_NAME = { aim120: "AIM-120", aim9x: "AIM-9X", jdam: "GBU-32", jsm: "JSM" } as const;
@@ -233,6 +239,9 @@ export class Pcd {
   act: ((a: PcdAction) => string | null) | null = null;
   /** the radar page's range [km, or NM] */
   fcrRange = 80;
+  /** the TSD's relief shown (north up, centred at lat, lon, ±half [m]) and the one being built (its rows so far) */
+  private relief: { canvas: OffscreenCanvas; lat: number; lon: number; half: number; key: string } | null = null;
+  private reliefJob: { im: ImageData; row: number; lat: number; lon: number; half: number; alt: number; key: string } | null = null;
   /** each side (left, right) shown as two portals or as one */
   halves: ("split" | "full")[] = ["split", "split"];
   /** the slot whose page menu is open (null: none) */
@@ -436,6 +445,7 @@ export class Pcd {
     }
     const d = this.data;
     this.u = unitsOf(d.units);
+    if (d.ground && this.portals().some((P) => this.pages[P.slot] === "TSD" && this.menu !== P.slot)) this.reliefStep(d, d.ground);
     const regions = this.regions();
     const when = (key: string) => this.drawn.get(key) ?? -Infinity;
     let out = regions.filter((R) => this.forced.has(R.key));
@@ -504,6 +514,63 @@ export class Pcd {
             }
           : null,
     };
+  }
+
+  /**
+   * The TSD's relief (north up, ±2 ranges about where it was asked): the sea dark blue, the land dim by its height —
+   * dark amber within 300 m under us, dark red above us —, dark enough for the symbols over it. Asked again when we
+   * have moved an eighth of its half-width, the range or our altitude changed; built a few rows a frame within
+   * RELIEF_BUDGET, the old one shown meanwhile.
+   */
+  private reliefStep(d: PcdData, ground: (lat: number, lon: number) => number) {
+    const half = 2 * this.range * this.u.distM;
+    const step = half / 8;
+    const kLat = Math.round((d.lat * D * EARTH_R) / step) * step;
+    const kLon = Math.round((d.lon * D * EARTH_R * Math.cos(d.lat * D)) / step) * step;
+    const key = `${half}|${kLat}|${kLon}|${Math.round(d.alt / 150)}`;
+    if (this.relief?.key === key && !this.reliefJob) return;
+    if (this.reliefJob?.key !== key) {
+      const lat = kLat / (D * EARTH_R);
+      this.reliefJob = {
+        im: new ImageData(RELIEF_N, RELIEF_N),
+        row: 0,
+        lat,
+        lon: kLon / (D * EARTH_R * Math.cos(lat * D)),
+        half,
+        alt: d.alt,
+        key,
+      };
+    }
+    const J = this.reliefJob;
+    const t0 = performance.now();
+    const cl = Math.cos(J.lat * D);
+    while (J.row < RELIEF_N && performance.now() - t0 < RELIEF_BUDGET) {
+      const j = J.row++;
+      const n = J.half - ((j + 0.5) / RELIEF_N) * 2 * J.half;
+      for (let i = 0; i < RELIEF_N; i++) {
+        const e = ((i + 0.5) / RELIEF_N) * 2 * J.half - J.half;
+        const h = ground(J.lat + n / (D * EARTH_R), J.lon + e / (D * EARTH_R * cl));
+        const dz = h - J.alt;
+        let c: [number, number, number];
+        if (h <= 0.5) c = [4, 15, 32];
+        else if (dz > 0) c = [56, 15, 12];
+        else if (dz > -300) c = [50, 34, 10];
+        else {
+          const k = Math.min(1, h / 3000);
+          c = [11 + 24 * k, 21 + 12 * k, 15 + 7 * k];
+        }
+        const o = (j * RELIEF_N + i) * 4;
+        J.im.data[o] = c[0];
+        J.im.data[o + 1] = c[1];
+        J.im.data[o + 2] = c[2];
+        J.im.data[o + 3] = 255;
+      }
+    }
+    if (J.row < RELIEF_N) return;
+    const canvas = this.relief?.canvas ?? new OffscreenCanvas(RELIEF_N, RELIEF_N);
+    canvas.getContext("2d")!.putImageData(J.im, 0, 0);
+    this.relief = { canvas, lat: J.lat, lon: J.lon, half: J.half, key: J.key };
+    this.reliefJob = null;
   }
 
   /** A part's pace [ms]: the warnings' strip (its clock in seconds) 250, the flight's state 100, a portal its page's
@@ -723,7 +790,19 @@ export class Pcd {
       cy = r.y + r.h * 0.68;
     const px = (r.h * 0.6) / (this.range * this.u.distM);
     // (a point's place: east and north of the ownship [m] → turned heading up)
-    const R = 6.371e6;
+    const R = EARTH_R;
+    // the relief under it all (north up, turned heading up about the ownship)
+    const RF = this.relief;
+    if (RF && d.ground) {
+      const e0 = (RF.lon - d.lon) * D * R * Math.cos(d.lat * D),
+        n0 = (RF.lat - d.lat) * D * R;
+      g.save();
+      g.translate(cx, cy);
+      g.rotate(-d.heading);
+      g.imageSmoothingEnabled = true;
+      g.drawImage(RF.canvas, (e0 - RF.half) * px, -(n0 + RF.half) * px, 2 * RF.half * px, 2 * RF.half * px);
+      g.restore();
+    }
     const where = (lat: number, lon: number): [number, number] => {
       const e = (lon - d.lon) * D * R * Math.cos(d.lat * D),
         n = (lat - d.lat) * D * R;
@@ -848,36 +927,51 @@ export class Pcd {
           );
       }
     }
-    // the tracks (the radar's, the datalink's): the NATO shapes — a friend's half circle (blue), a hostile's
-    // diamond (red), a neutral's square (white), an unknown's quatrefoil (yellow) —, their way a stick, the lock ringed
+    // the tracks (the radar's, the datalink's): the NATO shapes — an aircraft's open below (a friend's arc, a
+    // hostile's chevron, a neutral's or an unknown's open box), a ship's whole (circle, diamond, square) —, a
+    // friend blue, a hostile red, a neutral white, an unknown yellow; their way a stick, the lock ringed and joined
     for (const T of d.tracks ?? []) {
       const c0 = Math.cos(d.heading),
         s0 = Math.sin(d.heading);
       const x = cx + (T.e * c0 - T.n * s0) * px,
         y = cy - (T.e * s0 + T.n * c0) * px;
-      if (Math.abs(x - cx) > r.w / 2 || y < r.y || y > r.y + r.h) continue;
+      if (x < r.x || x > r.x + r.w || y < r.y || y > r.y + r.h) continue;
       const col = T.colour ?? (T.iff === "friend" ? C.cyan : T.iff === "hostile" ? "#ff5a46" : T.iff === "neutral" ? C.white : "#ffd23f");
       g.strokeStyle = col;
       g.fillStyle = col;
       g.lineWidth = 3;
-      g.beginPath();
       const k = 13;
-      if (T.iff === "friend") g.arc(x, y, k, Math.PI, 2 * Math.PI);
+      if (T.locked) {
+        g.setLineDash([6, 6]);
+        g.lineWidth = 1.5;
+        g.beginPath();
+        g.moveTo(cx, cy);
+        g.lineTo(x, y);
+        g.stroke();
+        g.setLineDash([]);
+        g.lineWidth = 3;
+      }
+      g.beginPath();
+      if (T.air) {
+        if (T.iff === "friend") g.arc(x, y + k * 0.4, k, Math.PI, 2 * Math.PI);
+        else if (T.iff === "hostile") {
+          g.moveTo(x - k, y + k * 0.5);
+          g.lineTo(x, y - k * 0.6);
+          g.lineTo(x + k, y + k * 0.5);
+        } else {
+          g.moveTo(x - k * 0.8, y + k * 0.6);
+          g.lineTo(x - k * 0.8, y - k * 0.6);
+          g.lineTo(x + k * 0.8, y - k * 0.6);
+          g.lineTo(x + k * 0.8, y + k * 0.6);
+        }
+      } else if (T.iff === "friend") g.arc(x, y, k * 0.8, 0, 2 * Math.PI);
       else if (T.iff === "hostile") {
         g.moveTo(x, y - k);
         g.lineTo(x + k, y);
         g.lineTo(x, y + k);
         g.lineTo(x - k, y);
         g.closePath();
-      } else if (T.iff === "neutral") g.rect(x - k * 0.8, y - k * 0.8, k * 1.6, k * 1.6);
-      else
-        for (const [ox, oy] of [
-          [0, -0.5],
-          [0.5, 0],
-          [0, 0.5],
-          [-0.5, 0],
-        ])
-          g.arc(x + ox! * k, y + oy! * k, k * 0.5, 0, 2 * Math.PI);
+      } else g.rect(x - k * 0.75, y - k * 0.75, k * 1.5, k * 1.5);
       if (T.datalink) g.setLineDash([5, 4]);
       g.stroke();
       g.setLineDash([]);
@@ -895,6 +989,21 @@ export class Pcd {
         g.stroke();
       }
       if (!this.declutter || T.locked) this.text(T.name.slice(0, 10), x + 18, y - 14, col, 20);
+    }
+    // the bingo's reach: how far we fly before the fuel left is the bingo (at this flow and ground speed)
+    if (d.flow > 1e-3 && d.gs > 20) {
+      const bingo = d.bingo ?? 0.2 * d.fuelFull;
+      const reach = (Math.max(d.fuel - bingo, 0) / d.flow) * d.gs * px;
+      if (reach > 20 && reach < r.h * 1.4) {
+        g.strokeStyle = C.amber;
+        g.lineWidth = 2;
+        g.setLineDash([3, 9]);
+        g.beginPath();
+        g.arc(cx, cy, reach, 0, 2 * Math.PI);
+        g.stroke();
+        g.setLineDash([]);
+        if (cy - reach > r.y + 70) this.text("BINGO", cx, cy - reach - 12, C.amber, 18, "center", true);
+      }
     }
     // the ground track's line, the ownship
     g.strokeStyle = C.white;
