@@ -3,6 +3,7 @@
 // its surfaces, its STOVL mode, the airfields near it.
 
 import { cameraFrame } from "../camera";
+import { azAltAt } from "../eclipse/earth-moon";
 import type { CameraController } from "../controls";
 import { fleet } from "../fleet";
 import { SITES } from "../game/sites";
@@ -74,6 +75,7 @@ export function pcdData(
     g: c.airFlight.g,
     gPeak: c.airFlight.gPeak,
     alpha: L?.out.alpha ?? 0,
+    sunAlt: azAltAt("sun", geo.lat, geo.lon, 0, date.getTime()).alt,
     wind: c.windNow ?? null,
     throttle: c.pilot.throttle,
     spool: c.pilot.engineNow,

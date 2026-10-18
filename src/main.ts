@@ -7005,6 +7005,7 @@ async function main() {
             }));
             return pcdData(camera, settings, renderer.jetPose, al, dateOf(sim.time));
           });
+          renderer.pcdLook = jetPcd.look(t0, settings.f35PcdBrightness, settings.f35PcdStyle === "cinematic");
           if (parts.length) {
             const t1 = performance.now();
             renderer.ship.updateJetScreen(jetPcd.canvas, parts);

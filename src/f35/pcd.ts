@@ -45,6 +45,8 @@ export interface PcdData {
   g: number;
   gPeak: number;
   alpha: number;
+  /** the Sun's height over the horizon there [°] (the display's automatic brightness) */
+  sunAlt?: number;
   /** the wind: its speed [m/s], where from [°] */
   wind: { speed: number; from: number } | null;
   /** the engine: the throttle and the spool (0…1), the afterburner lit (0…1), its thrust [N], the fuel flow [kg/s] */
@@ -150,6 +152,8 @@ const REGIONS: PcdRect[] = [
 /** the data read every PERIOD [ms]; each part redrawn at its own pace (what moves fast often, the rest less) — in
  *  turn, one a frame: no frame pays for the whole display */
 const PERIOD = 100;
+/** the display's brightness at night (its NIGHT knob, the automatic one in the dark) */
+const PCD_NIGHT = 0.4;
 const PAGE_PERIOD: Record<PcdPage, number> = { TSD: 100, FCS: 100, ENG: 200, FUEL: 500, STOVL: 100, CNI: 250, ADI: 100, CKL: 500 };
 const FONT = `"Eurostile", "DIN Alternate", "Arial Narrow", sans-serif`;
 
@@ -168,12 +172,19 @@ export class Pcd {
   /** when each part was drawn; the parts to draw at once (a touch); the whole display to draw (its first time) */
   private drawn = REGIONS.map(() => -Infinity);
   private forced = new Set<number>();
+  /** the last touch on the display (u, v; when [ms]) and the last page changed (its part [px]; when [ms]) — the
+   *  shader's ring and sweep (ship.wgsl pcdLight) */
+  lastTouch: { u: number; v: number; at: number } | null = null;
+  lastChange: { rect: PcdRect; at: number } | null = null;
+  /** the touch's and the page change's age held [s] (a capture, a test: the ring and the sweep caught mid-way) */
+  ageHeld: number | null = null;
 
   /** A touch at (u, v) on the display (0…1 across, down): a portal's title — its next page —, its arrows,
    *  the TSD's range. What it did (null: nothing). */
   touch(u: number, v: number): string | null {
     const x = u * PCD_W,
       y = v * PCD_H;
+    this.lastTouch = { u, v, at: performance.now() };
     for (let k = 0; k < PORTALS; k++) {
       const x0 = SIDE + GAP + k * (PW + GAP),
         y0 = TOP + GAP;
@@ -184,6 +195,7 @@ export class Pcd {
         const step = x < x0 + 60 ? -1 : 1;
         this.pages[k] = PCD_PAGES[(i + step + PCD_PAGES.length) % PCD_PAGES.length]!;
         this.forced.add(1 + k);
+        this.lastChange = { rect: REGIONS[1 + k]!, at: performance.now() };
         return this.pages[k]!;
       }
       if (this.pages[k] === "TSD" && y > y0 + PH - 70) {
@@ -247,6 +259,34 @@ export class Pcd {
       }
     g.fillStyle = C.bg;
     g.fillRect(0, 0, PCD_W, PCD_H);
+  }
+
+  /** The look the shader needs (ship.wgsl pcdLight): the brightness — its knob's (DAY, NIGHT, NVG) or, automatic,
+   *  the Sun's (dimmed from +5° down to civil twilight's −6°, as a pilot would) —, the style, the touch and the page
+   *  change, their ages [s] (null: none lately), the change's part on the display (u0, v0, u1, v1). */
+  look(now: number, knob: "auto" | "day" | "night" | "nvg", cinematic: boolean) {
+    const T = this.lastTouch,
+      C = this.lastChange;
+    const sun = this.data?.sunAlt ?? 90;
+    const day = Math.min(Math.max((sun + 6) / 11, 0), 1);
+    const level = { day: 1, night: PCD_NIGHT, nvg: 0.2, auto: PCD_NIGHT + (1 - PCD_NIGHT) * day * day * (3 - 2 * day) }[knob];
+    return {
+      level,
+      style: cinematic ? 1 : 0,
+      touch: T && (now - T.at < 1000 || this.ageHeld !== null) ? { u: T.u, v: T.v, age: this.ageHeld ?? (now - T.at) / 1000 } : null,
+      change:
+        C && (now - C.at < 1000 || this.ageHeld !== null)
+          ? {
+              rect: [C.rect.x / PCD_W, C.rect.y / PCD_H, (C.rect.x + C.rect.w) / PCD_W, (C.rect.y + C.rect.h) / PCD_H] as [
+                number,
+                number,
+                number,
+                number,
+              ],
+              age: this.ageHeld ?? (now - C.at) / 1000,
+            }
+          : null,
+    };
   }
 
   /** A part's pace [ms]: the warnings' strip (its clock in seconds) 250, the flight's state 100, a portal its page's. */

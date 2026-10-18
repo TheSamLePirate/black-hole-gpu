@@ -168,6 +168,10 @@ export interface ShipView {
   thrust?: Thrust | null;
   /** the flown F-35's moving parts (src/f35/model.ts) */
   jet?: F35Pose | null;
+  /** the F-35's panoramic display's look (ship.wgsl pcdLight): its brightness (0…1), its style (0 realistic, 1
+   *  cinematic), the last touch (u, v on the display; its age [s]), the last page changed (its part, u0 v0 u1 v1;
+   *  its age [s]) */
+  pcd?: PcdLook | null;
   /** display-referred emission scale: pre-exposure / 2^EV (a flame as bright whatever the exposure) */
   glow?: number;
 }
@@ -203,6 +207,14 @@ export interface Reentry {
   time: number;
 }
 
+/** The F-35's panoramic display's look (ShipView.pcd). */
+export interface PcdLook {
+  level: number;
+  style: number;
+  touch: { u: number; v: number; age: number } | null;
+  change: { rect: [number, number, number, number]; age: number } | null;
+}
+
 const MAX_JETS = 40;
 /** the craft drawn at once, at most */
 const MAX_INST = 24;
@@ -211,7 +223,9 @@ const MAX_INST = 24;
 const LAMPS_AT = 512 + 16 + 8 * 3 * 16;
 /** after them: the carrier's shadow sphere, the sea's plane and state (S.bound2, S.sea, S.seaK) */
 const SEA_AT = LAMPS_AT + 16 + MAX_LAMPS * 3 * 16;
-const SHIP_UNIFORM_BYTES = SEA_AT + 3 * 16;
+/** then the F-35's panoramic display's look (S.pcd0–2) */
+const PCD_AT = SEA_AT + 3 * 16;
+const SHIP_UNIFORM_BYTES = PCD_AT + 3 * 16;
 const INST_FLOATS = 20;
 /** the F-35's parts (src/f35/model.ts) at most, and how many F-35s drawn with their parts posed */
 const MAX_PARTS = 160;
@@ -1650,6 +1664,20 @@ export class ShipRenderer {
         sea?.t ?? 0,
         0,
         0,
+      ]),
+    );
+    const P = v.pcd;
+    this.device.queue.writeBuffer(
+      this.uniform,
+      PCD_AT,
+      new Float32Array([
+        ...(P?.touch ? [P.touch.u, P.touch.v, P.touch.age] : [0, 0, -1]),
+        P?.style ?? 0,
+        P?.level ?? 1,
+        P?.change ? P.change.age : -1,
+        0,
+        0,
+        ...(P?.change ? P.change.rect : [0, 0, 0, 0]),
       ]),
     );
     this.writeReentry(v.reentry, mesh);

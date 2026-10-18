@@ -425,6 +425,8 @@ export interface Settings {
   f35Avionics: boolean; // the avionics' status block on the helmet
   f35HmdColor: "green" | "amber" | "cyan" | "white"; // the helmet's symbology's colour
   f35HmdBrightness: number; // its brightness (0.3 … 1)
+  f35PcdStyle: "realistic" | "cinematic"; // the panoramic display's look: a real PCD's, or with glow, rings and sweeps
+  f35PcdBrightness: "auto" | "day" | "night" | "nvg"; // its brightness: the light's, or its knob's
   netMenu: boolean; // the network's menu and buttons (docs/PLAN-RESEAU.md): off, the game shows no trace of it
   netFreeFight: boolean; // in a room, in the F-35, no match: the free fight — every craft a target, friendly fire on
   netCrewActions: boolean; // the crew screens (crew/) may act aboard — everything but flying (docs/PLAN-CREW-ACTIONS.md); off: the pilot's lock
@@ -769,6 +771,8 @@ export function defaultSettings(): Settings {
     f35Avionics: true,
     f35HmdColor: "green",
     f35HmdBrightness: 1,
+    f35PcdStyle: "realistic",
+    f35PcdBrightness: "auto",
     netMenu: true,
     netFreeFight: true,
     netCrewActions: true,
@@ -2093,6 +2097,8 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   f35Avionics: "pref",
   f35HmdColor: "pref",
   f35HmdBrightness: "pref",
+  f35PcdStyle: "pref",
+  f35PcdBrightness: "pref",
   netMenu: "pref",
   netFreeFight: "pref",
   netCrewActions: "pref",

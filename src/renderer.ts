@@ -4524,6 +4524,7 @@ export class Renderer {
             gear: this.shipGear ?? undefined,
             jet: s.vessel === "f35" && this.jetPose ? { ...this.jetPose, ...this.jetForce } : null,
             cabin: lampsOf(s, this.cockpitGlow),
+            pcd: s.vessel === "f35" ? this.pcdLook : null,
             lamps: { navLights: s.navLights, strobeLights: s.strobeLights, landingLights: s.landingLights, t: performance.now() / 1000 },
             mount: this.shipPose ?? (s.shipMount as Mount),
             look: [s.shipLookYaw, s.shipLookPitch],
@@ -4678,6 +4679,8 @@ export class Renderer {
   jetForce: Partial<import("./f35/model").F35Pose> = {};
   /** the cockpit's displays' mean colours (cockpit/lights.ts displayColours): the screens' light in the cabin */
   cockpitGlow: Float32Array | null = null;
+  /** the F-35's panoramic display's look (set each frame its cockpit is seen — src/f35/pcd.ts look) */
+  pcdLook: import("./ship").PcdLook | null = null;
 
   /** Craft of the fleet in view with none flown (the camera near them): their pass, their light probe. */
   craftsShown = false;

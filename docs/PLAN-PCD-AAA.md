@@ -38,14 +38,15 @@ verts, poussée sur `main`.
 - **Préchauffage** : polices chargées et un dessin hors écran au chargement du F-35 (plus d'à-coup à l'entrée).
 - Mesure : avant / après, CPU (performance.now autour du dessin et de la copie) et GPU (passe du vaisseau).
 
-### Q2 — Le verre et la dalle (lot A)
+### Q2 — Le verre et la dalle (lot A) — FAIT ([fiche](progress/pcd/Q2.md))
 
 - **Verre traité anti-reflet** : F0 ≈ 0,5 %, noirs profonds, reflet du ciel seulement en rasant ; le soleil direct
   délave l'image (physique : sa lumière réfléchie s'ajoute).
 - **Dalle LCD** : sous-pixels RVB visibles seulement de près (fondus selon l'empreinte du pixel), perte de contraste
   hors axe, léger halo des symboles lumineux (lu dans un mip déjà là).
 - **Tactile** : un halo sous le doigt au toucher (uniforme : point et instant du dernier toucher).
-- **Luminosité** : JOUR / NUIT / NVG + le variateur de la cabine ; automatique selon la lumière.
+- **Luminosité** : JOUR / NUIT / JVN ; automatique selon la hauteur du Soleil (l'exposition ne distingue pas assez
+  le jour de la nuit : EV 14,5 de jour, 16,2 de nuit à Edwards).
 - **Style** (réglage `f35PcdStyle` : réaliste, cinématique) : le cinématique ajoute halo plus large, balayage
   au changement de page, rémanence.
 
