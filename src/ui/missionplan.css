@@ -1,0 +1,27 @@
+/* A spacecraft's mission plan (ui/missionplan.ts): its timeline, its Δv against the tanks', the kit's language. */
+.mp-frame { width: min(760px, calc(100vw - 32px)); padding: 14px 16px 16px; }
+.mp { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; max-height: min(640px, calc(100vh - 120px)); }
+.mp-note { font: var(--k-font-value); color: var(--k-dim); }
+.mp-budget { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 12px; }
+.mp-budget > div { display: flex; flex-direction: column; gap: 2px; }
+.mp-budget b { font: var(--k-font-value); color: var(--k-text); }
+.mp-budget b.short { color: #ff6a5a; }
+.mp-bar { position: relative; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.mp-bar > i { position: absolute; inset: 0 auto 0 0; background: #5ad2ff; border-radius: 4px; }
+.mp-bar > i.short { background: #ff6a5a; }
+.mp-list { flex: 1 1 auto; overflow: auto; display: flex; flex-direction: column; gap: 3px; border-top: 1px solid var(--k-line); padding-top: 6px; }
+.mp-row { display: grid; grid-template-columns: 18px minmax(120px, 1fr) 96px 92px 84px; gap: 6px; align-items: center; padding: 3px 4px; border-radius: var(--k-r); font: var(--k-font-value); }
+.mp-row .mp-dot { width: 10px; height: 10px; border-radius: 50%; background: #8aa0b8; justify-self: center; }
+.mp-row.burn .mp-dot { background: #5ad2ff; }
+.mp-row.soi .mp-dot { background: #c38bff; }
+.mp-row.impact .mp-dot { background: #ff6a5a; }
+.mp-row.then .mp-dot { background: #7cf0c0; }
+.mp-row.next { background: rgba(90, 210, 255, 0.09); outline: 1px solid rgba(90, 210, 255, 0.4); }
+.mp-row .mp-dim { color: var(--k-dim); }
+.mp-head { font: var(--k-font-label); letter-spacing: 0.1em; text-transform: uppercase; color: var(--k-dim); }
+.mp-empty { color: var(--k-dim); padding: 10px 4px; }
+.mp-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+@media (max-width: 560px) {
+  .mp-row { grid-template-columns: 14px minmax(90px, 1fr) 76px 70px; }
+  .mp-row > :nth-child(5) { display: none; }
+}

@@ -17,7 +17,7 @@ import type { CameraController, DockTarget } from "../controls";
 
 /** Station keeping's figures: reach [m], the backing off after an undocking [m], the closing speed at most [m/s] and
  *  the braking [m/s²] towards the held point, the warp at most (× real time). */
-export const KEEP = { reach: 5000, away: 30, vmax: 1, brake: 0.02, warp: 10 };
+export const KEEP = { reach: 5000, away: 30, vmax: 1, brake: 0.02, warp: 10, maxRendezvousDv: 10_000 };
 
 declare module "../controls" {
   interface CameraController {
@@ -80,8 +80,15 @@ function rendezvousStart(this: CameraController): string | null {
   if (!nav) return null;
   const said = this.planIss(nav);
   if (!this.plan.nodes.length) return said;
+  // (a plan past any craft's reach — the station's orbit known only near today, its elements propagated decades off:
+  // a nonsense of thousands of km/s — refused, said why)
+  const dv = this.plan.nodes.reduce((a, n) => a + Math.hypot(...n.dv), 0) * C_MPS;
+  if (!(dv < KEEP.maxRendezvousDv)) {
+    this.clearPlan();
+    return tf("Rendezvous: {0} km/s asked — beyond reach (the station's orbit is known near today's date only)", Math.round(dv / 1e3));
+  }
   if (this.pilot.auto !== "node") this.pilot.setAuto("node");
-  return tf("Rendezvous: {0} — flown, then docked", said.replace(/^Plan: /, ""));
+  return tf("Rendezvous: {0} — flown, then docked", said.replace(/^Plan ?: /, ""));
 }
 
 /** The station's approach ellipsoid (4 × 2 × 2 km: 2 km along its track, 1 km up, down and across, about its centre

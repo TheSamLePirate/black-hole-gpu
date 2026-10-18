@@ -56,6 +56,7 @@ import { PadsScreen } from "./ui/pads-screen";
 import { TitleScreen } from "./ui/title";
 import { MissionSelect } from "./ui/missions";
 import { PlacePanel } from "./ui/placepanel";
+import { MissionPlanPanel } from "./ui/missionplan";
 import { RoutePanel } from "./ui/routepanel";
 import { CHALLENGES } from "./game/challenges";
 import { SCENARIOS } from "./game/scenarios";
@@ -3166,7 +3167,7 @@ async function main() {
               : camera.jetToggle(a === "ab" ? "ab" : a === "athr" ? "athr" : "ap"),
       ),
     spaceSystem: (_, a) => panel.toast(a === "rcsMode" ? camera.rcsModeToggle() : camera.keepKey()),
-    route: () => routePanel.open(),
+    route: () => openPlan(),
     airBrake: () => {
       camera.airBrake = camera.airBrake > 0 ? 0 : 1;
       panel.toast(camera.airBrake > 0 ? t("Air brake out") : t("Air brake in"));
@@ -3939,6 +3940,12 @@ async function main() {
           sub: [
             { label: { fr: "Carte", en: "Map" }, key: "M", on: flightHud.mapView, run: () => flightHud.toggleMapView() },
             { label: { fr: "Placer", en: "Place" }, run: () => placePanel.open() },
+            {
+              label: { fr: "Plan de mission", en: "Mission plan" },
+              key: "⇧O",
+              on: camera.plan.nodes.length > 0,
+              run: () => missionPlan.open(),
+            },
             ...(VESSELS[fleet.active].flies
               ? [
                   { label: { fr: "Plan de vol", en: "Flight plan" }, key: "⇧O", on: camera.nav.on.l, run: () => routePanel.open() },
@@ -4296,6 +4303,11 @@ async function main() {
   flightHud.onPlace = () => placePanel.open();
   // a plane's flight plan (ui/routepanel.ts, PLAN-F35 F8): its waypoints on the map, NAV flying it
   const routePanel = new RoutePanel({ camera, toast: (s) => panel.toast(s) });
+  // a spacecraft's mission plan (ui/missionplan.ts, PLAN-VAISSEAUX X1e): its timeline, its Δv, executed from it
+  const missionPlan = new MissionPlanPanel({ camera, toast: (s) => panel.toast(s), planner: () => openMissions() });
+  /** ⇧O: the F-35's — or a craft flown as a plane in the air — flight plan; a spacecraft's mission plan */
+  const openPlan = () =>
+    fleet.active === "f35" || (camera.jetFigures() && camera.airFlight.inAir) ? routePanel.open() : missionPlan.open();
   // a flight prepared (ui/flighthub.ts): the F-35 at an airfield, its hour, its weather, its fuel, its plan
   const hubHost: HubHost = {
     tools,
