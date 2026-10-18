@@ -71,6 +71,13 @@ export interface SpaceFix {
   lon?: number | null;
   altKm?: number | null;
   g?: number;
+  /** the side of the wormhole ("ours", "gargantua", "throat"), the radius from Gargantua [M] (null: ours), the
+   *  Endurance's ring [rpm] (null: none) — the missions' (X11) */
+  side?: string;
+  kerrR?: number | null;
+  ringRpm?: number | null;
+  /** the body of the sphere the craft is in */
+  soi?: string;
 }
 
 export type SpaceDone =
@@ -95,7 +102,14 @@ export type SpaceDone =
   | { nodes: number }
   | { fixed: true }
   | { lpdMoved: true }
-  | { next: string };
+  | { next: string }
+  | { side: string }
+  | { kerrBelow: number }
+  | { kerrAbove: number }
+  | { ringAbove: number }
+  | { altBelow: number }
+  | { altAbove: number }
+  | { soi: string };
 
 export interface SpaceStep {
   who: "tars" | "you";
@@ -121,7 +135,13 @@ export interface SpaceStart {
   hover?: { body: string; lat: number; lon: number; altKm: number };
   /** the ISS this far [m] (its docking scene) */
   iss?: number;
+  /** beside a body at rest (ours or Gargantua's: its height [km], or its radius from the hole [M]); before the
+   *  wormhole's mouth (the missions' — X11) */
+  near?: { body: string; altKm?: number; rM?: number };
+  wormhole?: "ours" | "gargantua";
   target?: string;
+  /** a flight saved (a mission made where one flew — X11's editor): loaded first */
+  save?: import("./save").GameSave;
 }
 
 export interface SpaceLesson {
@@ -658,6 +678,13 @@ export function holds(d: SpaceDone, F: SpaceFix): boolean {
   if ("fixed" in d) return F.failures === 0;
   if ("lpdMoved" in d) return F.lpdMoved;
   if ("next" in d) return F.next === d.next;
+  if ("side" in d) return F.side === d.side;
+  if ("kerrBelow" in d) return F.kerrR != null && F.kerrR < d.kerrBelow;
+  if ("kerrAbove" in d) return F.kerrR != null && F.kerrR > d.kerrAbove;
+  if ("ringAbove" in d) return F.ringRpm != null && F.ringRpm > d.ringAbove;
+  if ("altBelow" in d) return F.altKm != null && F.altKm < d.altBelow;
+  if ("altAbove" in d) return F.altKm != null && F.altKm > d.altAbove;
+  if ("soi" in d) return F.soi === d.soi;
   return false;
 }
 

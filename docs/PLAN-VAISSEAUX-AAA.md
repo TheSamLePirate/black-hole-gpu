@@ -404,7 +404,7 @@ Chaque phase porte sa ligne réseau ; N finit ce qui n'existe qu'à plusieurs.
 | X8 | télémétrie, graphiques, comptes rendus | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X8.md)) — classement en salle (N) |
 | X9 | école de vol spatial (15 leçons) | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X9.md)) — schémas, leçon à deux (N), campagne des démos longues |
 | X10 | défis et qualifications | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X10.md)) — Miller et fronde de Gargantua (X11), défis de salle (N) |
-| X11 | missions, éditeur, campagne Interstellar | à faire |
+| X11 | missions, éditeur, campagne Interstellar | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X11.md)) — missions coopératives à rôles (N) |
 | N | réseau : équipage, baux, flotte, partage, interactions, temps | à faire (une part dans chaque phase) |
 | Z | finition, docs, campagne | à faire |
 

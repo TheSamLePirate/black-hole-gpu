@@ -85,6 +85,7 @@ import { installHoleEndurance } from "./controller/holeendurance";
 import { installCraftPanel } from "./controller/craftpanel";
 import { installPhaseReports } from "./controller/phasereports";
 import { installSpaceChallenge } from "./controller/spacechallenge";
+import { installSpaceMission } from "./controller/spacemission";
 import { installSpaceCourse } from "./controller/spacecourse";
 import { installSystems } from "./controller/systems";
 import { installGcas } from "./controller/gcas";
@@ -1130,6 +1131,8 @@ export class CameraController {
   /** the replay's spacecraft moments (X7): the fleet's links last frame (null: none yet), the engine lit */
   replayLinks: number | null = null;
   replayLit = false;
+  /** the spacecraft's mission under way (PLAN-VAISSEAUX X11 — controller/spacemission.ts) */
+  spaceMission: import("./controller/spacemission").SpaceMissionRun | null = null;
   /** the spacecraft's challenge under way (PLAN-VAISSEAUX X10 — controller/spacechallenge.ts) */
   spaceChal: import("./controller/spacechallenge").SpaceChalRunPublic | null = null;
   /** the space flight school's lesson under way (PLAN-VAISSEAUX X9 — controller/spacecourse.ts) */
@@ -1542,6 +1545,7 @@ installSystems(CameraController);
 installPhaseReports(CameraController);
 installSpaceCourse(CameraController);
 installSpaceChallenge(CameraController);
+installSpaceMission(CameraController);
 installGcas(CameraController);
 installJetModes(CameraController);
 installCopilot(CameraController);

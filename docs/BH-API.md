@@ -1580,6 +1580,18 @@ The spacecraft's challenges (PLAN-VAISSEAUX X10, `game/spacechallenges.ts`, `con
 | `open()` | their panel (`ui/spacechallenges.ts`; each card's button `data-testid="space-chal-<id>"`) |
 | `go(id)` | one set up then begun: `"dock-clock"`, `"lunar-pin"`, `"mars-pin"`, `"hoverslam"`, `"entry-corridor"`, `"rdv-dv"`, `"endurance-spin"`; its run is `__bh.camera.spaceChal` (null once ended, its report then); the bests kept in `localStorage["kerr.space.bests"]` |
 
+### `__bh.flight.spaceMissions` → object
+
+The spacecraft's missions and the Interstellar campaign (PLAN-VAISSEAUX X11, `game/spacemissions.ts`,
+`controller/spacemission.ts`, `ui/spacemissions.ts`).
+
+| member | what |
+|---|---|
+| `open()` | their panel: the campaign's chapters (a chapter locked until the one before is flown whole) and the library; each card's button `data-testid="space-mission-<id>"`; the editor's button `smed-open` |
+| `go(id)` | one set up then begun: `"artemis-2"`, `"iss"`, `"moon-landing"`, `"mars-landing"`, `"rescue"`, `"c1-launch"` … `"c7-edmunds"`; its run is `__bh.camera.spaceMission` (null once ended, its debrief then); the campaign's progress in `localStorage["kerr.space.campaign"]` |
+| `fly(M)` | a mission made (`SpaceMission`: its `start` may be a `save`) set up then begun |
+| `link(M)` | its link (`#smission=…`, the base64url of its JSON): opened, the page flies it |
+
 ### `__bh.net` → NetPanel (src/ui/netpanel.ts)
 
 The room: the Network panel and, once a room was asked for, the network's client and its parts (the network's code is

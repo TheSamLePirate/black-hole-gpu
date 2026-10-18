@@ -73,6 +73,7 @@ export interface BhContext {
     views?: unknown;
     /** the spacecraft's challenges (PLAN-VAISSEAUX X10) */
     spaceChallenges?: unknown;
+    spaceMissions?: unknown;
     replay?: unknown;
   };
   /** playing together (ui/netpanel.ts): the panel, its client once a room was asked for */

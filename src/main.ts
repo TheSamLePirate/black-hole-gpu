@@ -116,7 +116,9 @@ import { MenuPad } from "./ui/padnav";
 import { spaceWheel } from "./ui/spacewheel";
 import { SPACE_LESSONS, type SpaceLessonId, type SpaceStart } from "./game/spacecourse";
 import { SPACE_CHALLENGES, type SpaceChallengeId } from "./game/spacechallenges";
+import { SPACE_MISSIONS, type SpaceMission, type SpaceMissionId, spaceMissionFromHash, spaceMissionToHash } from "./game/spacemissions";
 import { spaceChallengePanel } from "./ui/spacechallenges";
+import { type SpaceMissionHost, spaceMissionPanel } from "./ui/spacemissions";
 import { SIDE_HOLDS } from "./input/spacepad";
 import { RadialWheel, type WheelItem } from "./ui/wheel";
 import { Tablet } from "./ui/tablet";
@@ -4013,7 +4015,7 @@ async function main() {
         failures: camera.systemsInfo()?.failures.length ?? 0,
         course: !!camera.course,
         challenge: camera.chal?.status === "run",
-        mission: !!camera.mission,
+        mission: !!camera.mission || !!camera.spaceMission,
         route: camera.nav.on.l,
         ils: !!camera.ilsRun,
       },
@@ -4064,7 +4066,8 @@ async function main() {
         school: () => flightSchool(instrHost),
         // (a spacecraft's challenges — X10)
         challenges: () => spaceChallengePanel((id) => panel.toast(spaceChallengePlace(id))),
-        missions: () => openMissions(),
+        // (a spacecraft's missions and the Interstellar campaign — X11)
+        missions: () => spaceMissionPanel(spaceMissionHost),
         nextView: () => keyActions.mount(new KeyboardEvent("keydown")),
         photo: openPhoto,
         replay: (trailer) => replayOpen(trailer),
@@ -4573,6 +4576,13 @@ async function main() {
     const wait = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
     camera.spaceCourseOff();
     camera.spaceChal = null;
+    camera.spaceMission = null;
+    // (a flight saved — a mission made where one flew: just that)
+    if (S.save) {
+      tools.load(S.save, { quiet: true });
+      await wait(1200);
+      return;
+    }
     if (S.preset) {
       // (the ISS's distance a scene's own: lent to it for this start)
       const P = presets[S.preset] as (Preset & { issDistance?: number }) | undefined;
@@ -4594,6 +4604,8 @@ async function main() {
     if (S.orbit) tools.orbit(S.orbit.body, { altKm: S.orbit.altKm, inc: S.orbit.inc ?? 0 });
     if (S.land) tools.land(S.land.body, S.land.lat, S.land.lon);
     if (S.hover) tools.hoverOver(S.hover.body, S.hover.lat, S.hover.lon, S.hover.altKm);
+    if (S.near) tools.near(S.near.body, { altKm: S.near.altKm, rM: S.near.rM });
+    if (S.wormhole) tools.wormhole(S.wormhole);
     if (S.target) tools.target(S.target);
     await wait(1200);
   };
@@ -4610,6 +4622,33 @@ async function main() {
     if (!C) return t("No such challenge");
     void placeSpaceStart(C.start).then(() => panel.toast(camera.spaceChallengeBegin(id)));
     return tf("Challenge: {0}", t(C.title));
+  };
+  /** A spacecraft's mission set up (X11) — one of ours by its id, one made —, then its objectives watched. */
+  const spaceMissionPlace = (id: SpaceMissionId | SpaceMission): string => {
+    const M = typeof id === "string" ? SPACE_MISSIONS.find((x) => x.id === id) : id;
+    if (!M) return t("No such mission");
+    void placeSpaceStart(M.start).then(() => panel.toast(camera.spaceMissionBegin(M)));
+    return tf("Mission: {0}", t(M.title));
+  };
+  const spaceMissionLink = (M: SpaceMission) => `${location.origin}${location.pathname}${spaceMissionToHash(M)}`;
+  const spaceMissionHost: SpaceMissionHost = {
+    go: (id) => panel.toast(spaceMissionPlace(id)),
+    fly: (M) => panel.toast(spaceMissionPlace(M)),
+    here: () => {
+      const v = settings.vessel;
+      if (!settings.ship || (v !== "ranger" && v !== "lander" && v !== "endurance")) {
+        panel.toast(t("A mission is made in a spacecraft"));
+        return null;
+      }
+      return { vessel: v, save: tools.snapshot("mission start") };
+    },
+    share: (M) => {
+      const url = spaceMissionLink(M);
+      void navigator.clipboard
+        ?.writeText(url)
+        .then(() => panel.toast(t("The mission's link copied")))
+        .catch(() => panel.toast(url));
+    },
   };
   // (a space lesson's acts that need the game's tools: a manoeuvre planned, a mission, the plan executed, the warp)
   camera.onSpaceCourseAct = (a) => {
@@ -6539,6 +6578,15 @@ async function main() {
         open: () => spaceChallengePanel((id) => panel.toast(spaceChallengePlace(id))),
         go: (id: SpaceChallengeId) => spaceChallengePlace(id),
       },
+      /** the spacecraft's missions and the Interstellar campaign (PLAN-VAISSEAUX X11): their panel, one set up and begun */
+      spaceMissions: {
+        open: () => spaceMissionPanel(spaceMissionHost),
+        go: (id: SpaceMissionId) => spaceMissionPlace(id),
+        /** one made (the editor's, a link's) set up and begun */
+        fly: (M: SpaceMission) => spaceMissionPlace(M),
+        /** a mission's link (#smission=…) */
+        link: (M: SpaceMission) => spaceMissionLink(M),
+      },
     },
     net: netPanel,
     audio,
@@ -7404,6 +7452,7 @@ async function main() {
       // (a space lesson's frame — X9 —, a challenge's — X10)
       camera.spaceCourseFrame(dt, status ?? null);
       camera.spaceChallengeFrame(dt, status ?? null);
+      camera.spaceMissionFrame(dt, status ?? null);
       netSession.instruments(info, status ?? null);
       flightComputer.show(flightHud.mapView);
       tablet.setVisible(flightHud.mapView);
@@ -7497,12 +7546,23 @@ async function main() {
     } catch (e) {
       panel.toast(tf("That link's mission could not be read: {0}", (e as Error).message));
     }
+    // (a shared spacecraft's mission — X11: #smission=…, flown once the title is gone)
+    let spaceLinked: SpaceMission | null = null;
+    try {
+      spaceLinked = spaceMissionFromHash(hash);
+    } catch (e) {
+      panel.toast(tf("That link's mission could not be read: {0}", (e as Error).message));
+    }
     const last = autosave.get();
     // (the flight saved last loaded behind the title screen: Continue only lifts it)
     let resumed: string | null = null;
     try {
       if (shared) panel.toast(tf("Shared flight: {0}", tools.load(shared)));
-      else if (linked) {
+      else if (spaceLinked) {
+        applyPreset(scene && presets[scene] ? scene : "game:artemis");
+        const M = spaceLinked;
+        void splash.gone.then(() => panel.toast(spaceMissionPlace(M)));
+      } else if (linked) {
         applyPreset(scene && presets[scene] ? scene : "game:artemis");
         const spec = linked;
         void splash.gone.then(() => briefMission(spec, () => airMissions.fly(spec)));
@@ -7567,7 +7627,7 @@ async function main() {
       void netPanel
         .join(joinCode, role === "spectator" || role === "instruments" ? role : "pilot")
         .then(() => netPanel.net?.room && netPanel.closePanel());
-    } else if (!shared && !linked && !(scene && presets[scene]) && !benchPage) {
+    } else if (!shared && !linked && !spaceLinked && !(scene && presets[scene]) && !benchPage) {
       titleScreen.open();
       void splash.gone.then(() => titleScreen?.focusFirst());
     } else started = true;
