@@ -347,6 +347,25 @@ __bh.graphicsDiagnostic().events.filter((e) => e.message.includes("after the fir
 ```
 *Used in:* `tests/e2e/gpu-startup.e2e.test.ts` (4 lines use it).
 
+### `__bh.intro()` → object
+
+The intro (`src/intro/intro.ts`, PLAN-TITRE-AAA E1):
+
+- `bg`: what drew its background. The Worker answers `"webgl2"`, `"2d"` or `"none"`; it reads `"page …"` when
+  drawn in the page (no OffscreenCanvas), and `null` while the Worker has not answered yet.
+- `orb`: the loading orb's state (`connecting`, `searching`, `weaving`, `solving`, `composing`, `breathing`; null
+  once gone).
+- `ended`: the sequence played or was passed.
+- `skipped`: it was passed by a key, a click or a touch.
+- `docked`: its name has glided onto the title's logo.
+- `lifted`: it has given way to the live scene.
+- `short`: its short version, the intro already seen.
+
+```js
+__bh.intro().bg === "webgl2" && __bh.intro().lifted
+```
+*Used in:* `tests/e2e/intro.e2e.test.ts`.
+
 ### `__bh.pcd` → object
 
 The F-35's panoramic display (`src/f35/pcd.ts`, PLAN-PCD-AAA).

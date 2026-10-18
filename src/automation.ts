@@ -58,6 +58,8 @@ import type { GameMode, ModeState } from "./game/modes";
 export interface BhContext {
   /** the boot's timeline (boot-timeline.ts): its stages, the main thread's long tasks and frame gaps */
   boot(): BootReport;
+  /** the intro (src/intro/intro.ts): where it stands */
+  intro(): unknown;
   settings: Settings;
   renderer: Renderer;
   camera: CameraController;
@@ -266,6 +268,8 @@ export function installBh(c: BhContext) {
       graphicsDiagnostic: () => gpuDiagnostics.report(),
       /** the boot's timeline: its stages (ms since the navigation), the main thread's long tasks and frame gaps */
       boot: () => c.boot(),
+      /** the intro: what drew its background, the orb's state, its sequence played / passed, docked, lifted */
+      intro: () => c.intro(),
       /** the game's tools: __bh.game.help() */
       game: tools,
       /** the Kerr Bench: __bh.bench.run({ mode: "quick" }) → its report; scene(name) one scene's */

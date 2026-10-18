@@ -26,6 +26,31 @@
         requestAnimationFrame(frame);
       })();
     </script>
+    <script>
+      // (the intro's language and its length, before the first paint: the language kept or the browser's, the
+      // full intro on a first visit — and the first after an update (src/intro/intro.ts clears the mark) —,
+      // a short one after; the keys under this build's prefix too (a preview under test/))
+      (function () {
+        var d = document.documentElement;
+        function get(k) {
+          try {
+            var segs = location.pathname.split("/").filter(Boolean);
+            for (var i = 0; i < segs.length; i++) {
+              var v = localStorage.getItem(segs[i] + "/" + k);
+              if (v !== null) return v;
+            }
+            return localStorage.getItem(k);
+          } catch (e) {
+            return null;
+          }
+        }
+        var l = get("kerr.lang");
+        d.lang = l === "fr" || l === "en" ? l : (navigator.language || "en").toLowerCase().indexOf("fr") === 0 ? "fr" : "en";
+        if (get("kerr.intro.seen")) d.classList.add("intro-short");
+        if (matchMedia("(prefers-reduced-motion: reduce)").matches) d.classList.add("intro-still");
+      })();
+    </script>
+    <link rel="stylesheet" href="./src/intro/intro.css" />
     <link rel="stylesheet" href="./src/fonts.css" />
     <link rel="stylesheet" href="./src/ui/kit/kit.css" />
     <link rel="stylesheet" href="./src/ui/menus.css" />
@@ -37,26 +62,37 @@
     <canvas id="view"></canvas>
     <canvas id="overlay"></canvas>
 
-    <div id="loading" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-      <div class="ld-sky" aria-hidden="true"><i></i><i></i></div>
-      <div class="ld-main">
-        <div class="ld-hole" aria-hidden="true">
-          <div class="ld-glow"></div>
-          <div class="ld-halo"><i></i></div>
-          <div class="ld-disk"><i></i></div>
-          <div class="ld-shadow"></div>
-          <div class="ld-disk front"><i></i></div>
-        </div>
-        <h1 class="ld-title">KERR</h1>
-        <p class="ld-sub">General-relativistic ray tracing · the journey to Gargantua</p>
-        <div class="ld-progress">
-          <div class="ld-bar"><i></i></div>
-          <div class="ld-line"><span class="ld-stage">Starting the ray tracer…</span><span class="ld-pct">0 %</span></div>
-        </div>
-        <ol class="ld-steps"></ol>
-        <button class="ld-skip" hidden>Enter now — the rest keeps loading</button>
+    <!-- the intro (PLAN-TITRE-AAA E1, src/intro/): black, the studio, the name, the logo — CSS only, on the
+         compositor, running before the game's script is even here; the background and the loading orb drawn by
+         a Worker (src/intro/worker.ts); lifted onto the live scene once its first image and its sky are in -->
+    <div id="loading" class="intro" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <canvas class="in-bg" aria-hidden="true"></canvas>
+      <div class="in-studio" aria-hidden="true">
+        <i class="in-bloom"></i>
+        <i class="in-flare"></i>
+        <b class="in-studio-name"><i style="--k:-5">S</i><i style="--k:-4">A</i><i style="--k:-3">M</i><i style="--k:-2">L</i><i style="--k:-1">E</i><i style="--k:0">P</i><i style="--k:1">I</i><i style="--k:2">R</i><i style="--k:3">A</i><i style="--k:4">T</i><i style="--k:5">E</i></b>
+        <span class="in-studio-sub"><span lang="fr">présente</span><span lang="en">presents</span></span>
       </div>
-      <p class="ld-tip"></p>
+      <div class="in-hero">
+        <!-- the mark: the game's own black hole, rendered by its ray tracer (scripts/logo-render.ts, scripts/build-logo.py) -->
+        <div class="in-mark" aria-hidden="true">
+          <img class="in-mark-glow" src="./assets/title/kerr-mark.webp" alt="" />
+          <img class="in-mark-img" src="./assets/title/kerr-mark.webp" alt="" />
+        </div>
+        <h1 class="in-name" aria-label="KERR"><i>K</i><i>E</i><i>R</i><i>R</i></h1>
+        <p class="in-tag"><span lang="fr">Un vol à travers l'espace-temps de Kerr — jusqu'à Gargantua</span><span lang="en">A flight through Kerr spacetime — on to Gargantua</span></p>
+      </div>
+      <div class="in-load">
+        <ol class="in-steps" hidden></ol>
+        <button class="in-orb-btn" type="button" aria-expanded="false" title="">
+          <canvas class="in-orb" aria-hidden="true"></canvas>
+          <span class="in-load-text"><span class="ld-stage"></span><span class="ld-pct">0 %</span></span>
+        </button>
+        <p class="in-note" hidden></p>
+        <button class="in-enter" type="button" hidden></button>
+      </div>
+      <p class="in-skip" aria-hidden="true"><span lang="fr">Une touche pour passer</span><span lang="en">Any key to skip</span></p>
+      <p class="in-credit">© SamLePirate</p>
     </div>
 
     <div id="hud" class="glass">

@@ -33,6 +33,7 @@ import { cockpitHull } from "./system/collide";
 import { afterSkyPrefetch, prefetchSkyAssets, Renderer, type FrameStats, type OfflineStatus } from "./renderer";
 import { swappable } from "./util/swappable";
 import { bootMark, bootReport, bootWatchStop } from "./boot-timeline";
+import { Intro, introBuild } from "./intro/intro";
 import { downloadGpuDiagnostic, globalErrorRouter, gpuDiagnostics } from "./gpu-diagnostics";
 import { horizon, isco } from "./physics";
 import { cameraFrame, repPose, setHolePose, setHomePose, switchAnchor } from "./camera";
@@ -171,7 +172,6 @@ import { CraftLost } from "./ui/craftlost";
 import { applyF35Variant } from "./f35/variant";
 import { FlightComputer } from "./ui/fc/computer";
 import { sitesOf, SITES } from "./game/sites";
-import { Splash } from "./ui/splash";
 import { SceneGallery } from "./ui/scenes";
 import { SoundDirector } from "./audio/director";
 import { haptics } from "./input/haptics";
@@ -334,7 +334,11 @@ async function main() {
   void fetch("version.json")
     .then((r) => (r.ok ? r.json() : null))
     .then((v: { sha?: string } | null) => {
-      if (v?.sha) appVersion = v.sha;
+      if (v?.sha) {
+        appVersion = v.sha;
+        // (a new build: its first start plays the intro whole)
+        introBuild(v.sha);
+      }
       gpuDiagnostics.setContext({ revision: appVersion });
     })
     .catch(() => {});
@@ -384,7 +388,8 @@ async function main() {
   });
   window.addEventListener("error", (event) => globalError("javascript-error", event.error ?? event.message));
   window.addEventListener("unhandledrejection", (event) => globalError("unhandled-rejection", event.reason));
-  const splash = new Splash($("loading") ?? document.createElement("div"));
+  // the intro (src/intro/intro.ts): its sequence already playing in CSS, its Worker started here
+  const splash = new Intro($("loading") ?? document.createElement("div"));
   void splash.gone.then(() => {
     bootMark("splash-lifted");
     setTimeout(bootWatchStop, 2000);
@@ -6380,6 +6385,7 @@ async function main() {
   // the automation handle (devtools, tests, scripts): debug/bh.ts
   installBh({
     boot: () => bootReport(firstFrame ? firstFrameAt : null),
+    intro: () => splash.status(),
     settings,
     renderer,
     camera,
@@ -7468,6 +7474,10 @@ async function main() {
     } else if (!shared && !linked && !(scene && presets[scene]) && !benchPage) {
       titleScreen.open();
       bootMark("title");
+      // (the intro's name glides onto the title's logo when its sequence ends, or now if it has)
+      splash.dockTo = () => (titleScreen?.isOpen ? document.querySelector<HTMLElement>(".ts-logo") : null);
+      splash.dock();
+      void splash.played.then(() => titleScreen?.focusFirst());
       void splash.gone.then(() => titleScreen?.focusFirst());
     } else started = true;
     if (hash.length > 1) history.replaceState(null, "", location.pathname + location.search);

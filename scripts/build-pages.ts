@@ -16,6 +16,8 @@ await $`bun build ./src/system/plan-worker.ts --outfile _site/plan-worker.js --m
 await $`bun build ./src/net/index.ts --outfile _site/net.js --minify --target browser`;
 // (the rocket engine's AudioWorklet — PLAN-AUDIO S2)
 await $`bun build ./src/audio/engine-worklet.ts --outfile _site/audio-worklet.js --minify --target browser`;
+// (the intro's worker: its background and its loading orb — PLAN-TITRE-AAA E1)
+await $`bun build ./src/intro/worker.ts --outfile _site/intro-worker.js --minify --target browser`;
 // (the KTX2 transcoder's worker and its WebAssembly)
 await $`bun build ./src/system/ktx-worker.ts --outfile _site/ktx-worker.js --minify --target browser`;
 await $`bun build ./src/system/earth-surface-worker.ts --outfile _site/earth-surface-worker.js --minify --target browser`;

@@ -481,7 +481,7 @@ Chaque phase : un commit, une planche de captures (`docs/progress/title-aaa/`), 
 - Décider pour thinking-orbs : le paquet (`bun add thinking-orbs`, import de `/engine` seul, React absent du
   bundle vérifié), sinon une copie de l'engine sous `src/vendor/` avec sa licence.
 
-### E1 — L'intro et le chargement (L)
+### E1 — L'intro et le chargement (L) — FAIT ([fiche](progress/title-aaa/E1.md), [planche](progress/title-aaa/E1.jpg) : studio cinématographique, logo rendu par le lancer de rayons du jeu, fond et orbe dans un Worker, aucun coût sur la première image)
 
 - Noir, SAMLEPIRATE présente, KERR, le logo, puis le menu ; passer l'intro ; la version courte ; le mouvement
   réduit.
@@ -583,8 +583,9 @@ Chaque phase : un commit, une planche de captures (`docs/progress/title-aaa/`), 
 
 ## Questions encore ouvertes (à trancher en cours de route)
 
-1. **Le logo** : un mot-symbole KERR seul, ou KERR avec un symbole (l'anneau de photons) ? Une planche de 2 ou 3
-   variantes en E1.
+1. ~~**Le logo**~~ — tranché en E1 : le mot KERR, coupé par le disque, sous un **emblème rendu par le lancer de
+   rayons du jeu** (spin 0,6, 87°, disque fin). Les variantes SVG au trait ont été écartées à la demande de
+   l'utilisateur.
 2. **La carte studio** : « SAMLEPIRATE présente », ou un logo SamLePirate (en existe-t-il un) ?
 3. **L'intro complète** une fois par version (proposé) ou à chaque lancement ?
 4. **La scène vivante derrière le titre** : la partie sauvée (comme aujourd'hui), ou une scène d'accueil fixe
