@@ -2,6 +2,7 @@
 export default {
   "The radar: in the F-35, in the air": "Le radar : en F-35, en vol",
   "Radar: {0}": "Radar : {0}",
+  "Radar: searching — the first contact locked": "Radar : recherche — le premier contact sera verrouillé",
   "Intercept off — altitude, heading and speed held": "Interception coupée — altitude, cap et vitesse tenus",
   "Intercept: no track to intercept — lock one (Tab)": "Interception : aucune piste à intercepter — verrouillez-en une (Tab)",
   "Intercept: {0} · {1} km": "Interception : {0} · {1} km",

@@ -61,6 +61,21 @@ describe("the F-35's radar in a fight", () => {
     expect(W.lock).toBe(Number(c.radar.lock!.slice(4)));
   });
 
+  test("Tab before any contact (the fight's first sweep not yet done): searching — the first contact locked as it comes", () => {
+    const { c, fly } = atStart("drones");
+    // (as at a match's start: its craft placed, nothing swept yet)
+    c.radar.reset();
+    c.radarSweep = false;
+    const said = c.combatTrigger("lock")!;
+    console.log(`  ${said}`);
+    expect(said).toMatch(/searching/);
+    expect(c.radar.lock).toBeNull();
+    fly(0.5);
+    expect(c.radar.lock?.startsWith("cmb:")).toBe(true);
+    expect(c.combat!.world.lock).toBe(Number(c.radar.lock!.slice(4)));
+    expect(c.radarLockWant).toBeUndefined();
+  });
+
   test("its picture: heading up, the lock's range and closure", () => {
     const { c, fly } = atStart("drones");
     fly(0.2);

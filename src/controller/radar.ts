@@ -20,6 +20,8 @@ declare module "../controls" {
     radarHud: typeof radarHud;
     radarLockNext: typeof radarLockNext;
     radarMode: typeof radarMode;
+    /** a lock asked with no contact yet: until when [the radar's s] the first one is locked as it comes */
+    radarLockWant?: number;
   }
 }
 
@@ -129,6 +131,18 @@ function radarStep(this: CameraController, dt: number) {
     this.radarSweep = false;
   }
   this.radar.step(dt, this.radarT, fix.own, objects, masked);
+  // (a lock asked before any contact: the first one now)
+  if (this.radarLockWant !== undefined) {
+    if (this.radarT > this.radarLockWant || this.radar.lock) this.radarLockWant = undefined;
+    else {
+      const id = this.radar.lockNext();
+      const T = id ? this.radar.tracks.get(id) : null;
+      if (T) {
+        this.radarLockWant = undefined;
+        this.onPilotMessage?.(tf("Locked: {0} · {1} km", T.name, (Math.hypot(...T.r) / 1000).toFixed(1)));
+      }
+    }
+  }
   // (a fight: its world's seen and lock the radar's)
   const W = this.combat?.world;
   // (the free fight: weapons free — the datalink's tracks locked too, every craft the world's or taken in)
@@ -148,8 +162,17 @@ function radarStep(this: CameraController, dt: number) {
 /** The radar's next lock (Tab): what to say. */
 function radarLockNext(this: CameraController): string {
   if (!this.radarFix()) return t("The radar: in the F-35, in the air");
+  const had = this.radar.lock;
   const id = this.radar.lockNext();
   const T = id ? this.radar.tracks.get(id) : null;
+  if (!T && !had) {
+    // (no contact yet — a fight just begun, a place just taken: its first sweep not done —: the beam swept at once,
+    // the first contact locked as it comes, within 3 s; a Tab pressed then was lost, "Lock dropped")
+    this.radarLockWant = this.radarT + 3;
+    this.radarSweep = true;
+    return t("Radar: searching — the first contact locked");
+  }
+  this.radarLockWant = undefined;
   if (!T) return t("Lock dropped");
   return tf("Locked: {0} · {1} km", T.name, (Math.hypot(...T.r) / 1000).toFixed(1));
 }

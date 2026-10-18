@@ -3,7 +3,7 @@ import { App, E2E, stopServer } from "./lib/app";
 
 // PLAN-RESEAU R3: a battle between two pages — Ana starts an "everyone for himself" match from the room panel
 // (real clicks); at the countdown's end both F-35s are put on the arena's ring, head-on 16 km apart; Ben locks
-// Ana (Tab), picks the AIM-120 (=) and fires it (Enter): Ana's helmet warns of it, it hits her, she is shot down
+// Ana (Tab), picks the AIM-120 (=) and fires a pair (Enter, Enter): Ana's helmet warns of it, it hits her, she is shot down
 // — said to all, the kill Ben's on both score sheets —, and flies again 5 s later; the host ends the match: the
 // ranking on both screens. (NET_SHOTS=<dir>: both views pictured: the missile flying, the end.)
 
@@ -64,7 +64,7 @@ describe.skipIf(!E2E)("a battle", () => {
     await b.press("Tab");
     await b.waitFor(`__bh.camera.combat.world.lock === ${10_000 + sa}`, 5000).catch(async (e) => {
       console.log(
-        `  Ben: ${await b.js<string>(`JSON.stringify({ lock: __bh.camera.radar.lock, wlock: __bh.camera.combat.world.lock, tracks: [...__bh.camera.radar.tracks.values()].map((T) => T.id + (T.datalink ? "(dl)" : "") + ":" + Math.round(Math.hypot(...T.r))), targets: __bh.camera.combat.world.targets.map((q) => [q.id, q.name, q.peer, q.friendly]) })`)}`,
+        `  Ben: ${await b.js<string>(`JSON.stringify({ lock: __bh.camera.radar.lock, wlock: __bh.camera.combat.world.lock, tracks: [...__bh.camera.radar.tracks.values()].map((T) => T.id + (T.datalink ? "(dl)" : "") + ":" + Math.round(Math.hypot(...T.r))), targets: __bh.camera.combat.world.targets.map((q) => [q.id, q.name, q.peer, q.friendly]), focus: document.hasFocus(), vis: document.visibilityState, body: document.body.className, active: document.activeElement?.tagName + "." + (document.activeElement?.className ?? ""), piloting: __bh.camera.piloting, status: __bh.camera.combat.status, fix: !!__bh.camera.radarFix(), wheel: !!document.querySelector("[data-testid=wheel]"), modal: [...document.querySelectorAll(".k-modal")].map((m) => m.dataset.testid), said: __bh.game.log.events.slice(-5).map((e) => e.text) })`)}`,
       );
       throw e;
     });
@@ -72,6 +72,11 @@ describe.skipIf(!E2E)("a battle", () => {
     expect(await b.js<string>(`__bh.camera.combat.weapon`)).toBe("aim120");
     await b.press("Enter");
     await b.waitFor(`__bh.camera.combat.world.ownMissiles().length === 1`, 5000);
+    // (the second of the pair a second on — shoot-shoot: a proximity burst at the fuze's edge leaves her flying,
+    // 72 % damaged, and after the merge she is behind, out of the radar's cone, no second shot)
+    await Bun.sleep(1000);
+    await b.press("Enter");
+    await b.waitFor(`__bh.camera.combat.world.ownMissiles().length === 2`, 5000);
     await a.waitFor(`__bh.camera.combatHud((v) => v).threats.length > 0`, 10_000);
     const r = await a.js<number>(`__bh.camera.combatHud((v) => v).threats[0].dist`);
     console.log(`  Ana's helmet: missile at ${(r / 1000).toFixed(1)} km`);
@@ -89,7 +94,10 @@ describe.skipIf(!E2E)("a battle", () => {
         .catch(() => false);
       if (down) break;
       console.log(`  shot ${k + 1} missed — again`);
-      await b.press("Tab");
+      // (Tab only if the lock was lost: on the only track, Tab steps past it — "Lock dropped" — and the AIM-120 then
+      // refuses to go without one: the retries never flew)
+      if (!(await b.js<boolean>(`__bh.camera.combat.world.lock === ${10_000 + sa}`))) await b.press("Tab");
+      await b.waitFor(`__bh.camera.combat.world.lock === ${10_000 + sa}`, 5000);
       await b.press("Enter");
     }
     await a.waitFor(`__bh.camera.combat.downAt !== null`, 1000);
