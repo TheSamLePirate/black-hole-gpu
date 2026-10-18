@@ -1408,6 +1408,25 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
       }
     }
   }
+  // (the room's AI wingmen shot down — controller/wingmen.ts, their host's —: burning as their wrecks fall, from their
+  // tails)
+  const RWf = [...this.remoteWings].flatMap(([slot, R]) => R.list.filter((w) => w.x).map((w) => ({ slot, w })));
+  const sfr = RWf.length ? this.sfFrame(cam) : null;
+  const owr = sfr ? this.netOwn() : null;
+  if (sfr && owr && LA && LA.air.rho > 0) {
+    const [E, N, U] = [sfr.east, sfr.north, sfr.up].map((v) => fr.fromLocal(sfr.toLocal(v as Vec3))) as [Vec3, Vec3, Vec3];
+    const Uo = owr.p.map((c) => c / Math.hypot(...owr.p));
+    const Eo = [-Uo[1]!, Uo[0]!, 0].map((c, _, a) => c / (Math.hypot(a[0]!, a[1]!) || 1));
+    const No = [Uo[1]! * Eo[2]! - Uo[2]! * Eo[1]!, Uo[2]! * Eo[0]! - Uo[0]! * Eo[2]!, Uo[0]! * Eo[1]! - Uo[1]! * Eo[0]!];
+    for (const { slot, w } of RWf) {
+      const r = w.p.map((v, k) => v - w.f[k]! * 8 - owr.p[k]!);
+      if (Math.hypot(r[0]!, r[1]!, r[2]!) > 40_000) continue;
+      const re = r[0]! * Eo[0]! + r[1]! * Eo[1]! + r[2]! * Eo[2]!,
+        rn = r[0]! * No[0]! + r[1]! * No[1]! + r[2]! * No[2]!,
+        ru = r[0]! * Uo[0]! + r[1]! * Uo[1]! + r[2]! * Uo[2]!;
+      src.push({ key: `rw${slot}:${w.k}`, p: [0, 1, 2].map((k) => x[k]! + E[k]! * re + N[k]! * rn + U[k]! * ru) as Vec3, kind: 4, str: 1 });
+    }
+  }
   // (a fight's missiles: their motors' smoke — controller/combat.ts —, at their place from the craft in the
   // local east, north, up)
   const CB = this.combat;
@@ -1443,6 +1462,11 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
           });
         continue;
       }
+      // (another player shot down — ui/netmatch.ts —: burning as his craft falls, from its tail)
+      if (q.peer !== undefined && q.falling) {
+        src.push({ key: `f${q.id}`, p: at([q.p[0] - q.fwd[0] * 8, q.p[1] - q.fwd[1] * 8, q.p[2] - q.fwd[2] * 8]), kind: 4, str: 1 });
+        continue;
+      }
       if (!q.ai) continue;
       const crashed = q.wreck && !Number.isNaN(q.wreck.crashedAt) ? CB.world.t - q.wreck.crashedAt : null;
       if (crashed !== null) {
@@ -1453,6 +1477,23 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
         const dmg = CB.world.damageOf(q);
         if (dmg > 0.15) src.push({ key: `w${q.id}`, p: at(q.p), kind: 4, str: 0.25 + 0.5 * dmg });
       }
+    }
+  }
+  // (shot down in a room — ui/netmatch.ts —: our own craft burning as it falls, from its tail; the crashes seen,
+  // ours and the others', a column of smoke rising 45 s)
+  if (CB?.last && sf && LA && LA.air.rho > 0) {
+    const P = CB.last;
+    const [E, N, U] = [sf.east, sf.north, sf.up].map((v) => fr.fromLocal(sf.toLocal(v as Vec3))) as [Vec3, Vec3, Vec3];
+    const at = (w: [number, number, number]): Vec3 => {
+      const r = [w[0] - P.p[0], w[1] - P.p[1], w[2] - P.p[2]];
+      return [0, 1, 2].map((k) => x[k]! + E[k]! * r[0]! + N[k]! * r[1]! + U[k]! * r[2]!) as Vec3;
+    };
+    if (CB.fall && CB.fall.endAt === null)
+      src.push({ key: "own-fall", p: at([P.p[0] - P.fwd[0] * 8, P.p[1] - P.fwd[1] * 8, P.p[2] - P.fwd[2] * 8]), kind: 4, str: 1 });
+    for (const c of CB.crashes ?? []) {
+      const age = CB.t - c.t;
+      if (age >= 0 && age < 45)
+        src.push({ key: `x${c.key}${c.t.toFixed(1)}`, p: at([c.p[0], c.p[1], c.p[2] + Math.min(age * 7, 260)]), kind: 4, str: 1 });
     }
   }
   this.contrails.step(fr.now, fr.body, fr.env.carry, src);

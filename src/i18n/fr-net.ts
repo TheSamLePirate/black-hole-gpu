@@ -97,6 +97,7 @@ export default {
   "Back in the fight": "De retour au combat",
   "{0} of {1} finished": "{0} sur {1} arrivés",
   "Shot down by {0} — back in {1} s": "Abattu par {0} — retour dans {1} s",
+  "Shot down by {0} — out of control": "Abattu par {0} — perte de contrôle",
   Match: "Match",
   "End the match": "Terminer le match",
   "Arena — Rogers Dry Lake": "Arène — lac Rogers",

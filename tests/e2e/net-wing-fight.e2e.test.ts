@@ -175,7 +175,8 @@ describe.skipIf(!E2E)("a room's F-35s: the wingman by the wheel, the free fight"
     for (const p of [a, b]) await p.waitFor(`__bh.net.match.sheet.row(${sa}).kills === 1`, 10_000);
     const feed = await a.js<string>(`[...document.querySelectorAll(".nm-feed-row")].map((e) => e.textContent).join(" | ")`);
     console.log(`  the feed: ${feed}`);
-    await b.waitFor(`__bh.camera.combat?.downAt === null`, 30_000);
+    // (out of control to his crash from some 3 km — game/wreckfall.ts —, then the wait)
+    await b.waitFor(`__bh.camera.combat?.downAt === null`, 90_000);
     console.log(`  Ben flies again`);
     for (const p of [a, b]) expect(p.cdp.errors.filter((e) => !/Failed to load resource|net::ERR/.test(e))).toEqual([]);
   }, 300_000);

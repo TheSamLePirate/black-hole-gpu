@@ -97,8 +97,18 @@ uniform of the flown craft's), the crafts of the players gone kept in the room's
   his); the host's aggressors going after the nearest pilot, run on his world, sent to the others with their
   missiles; **every pilot's missiles sent** — drawn with their smoke, the missile warning when one chases you —;
   your countermeasures drawing the others' missiles too.
-- **Shot down**: said to all (the kill feed: *Ben ✕ Ana · AIM-120*), the kill counted, back in the fight 5 s
-  later on your place of the ring; a **mid-air collision** between two players destroys both (out of a match:
+- **Shot down**: said to all (the kill feed: *Ben ✕ Ana · AIM-120*), the kill counted; **your craft out of
+  control** as the fight's wrecks are (`game/wreckfall.ts`: the controls cut — stick, throttle, autopilot —, its
+  wings no longer lifting, its nose dropping to where it goes and rolling round it, 240 m/s down at most, burning,
+  its smoke trailing; the ground's height over the WGS84 ellipsoid and its relief), **down to its crash** — the
+  explosion, a column of smoke rising 45 s —, the crash then watched from 700 m back and 260 m up (shot down by
+  another: his craft followed 2.5 s on — the kill cam); a fall longer than 45 s breaks up in the air. The others
+  see the same: the craft falling as its samples bring it (not hidden), its smoke, its explosion where its pilot
+  says it ended (the `impact` event, the Earth's coordinates), hidden from there. **The AI wingmen** shot down
+  fall so too (`controller/wingmen.ts`): their wreck flown down by their host, sent to the room marked falling (no
+  longer a radar track), its smoke on every page, its crash's explosion and smoke where the host says it ended (the
+  `wingCrash` event). Back in the fight 5 s after the
+  crash on your place of the ring; a **mid-air collision** between two players destroys both (out of a match:
   no pause, back on the nearest runway 4 s later).
 - **The HUD**: the hit marker (four ticks; a kill: thick and red), the score bar (the mode, the clock, the
   scores or the teams'), the big words (the countdown, *GO*, *shot down by … — back in 4 s*), the end's
@@ -110,10 +120,16 @@ uniform of the flown craft's), the crafts of the players gone kept in the room's
   ours (friendly fire on), the real airliners, ships, carriers and escorts the radar sees — the one locked, and
   any within 6 km (the gun's), taken into the fight as a stand-in placed from the radar's picture each frame
   (`controller/fightproxy.ts`); shot down, the real one is gone on every page of the room (*Ana ✕ AFR123*). The
-  radar weapons free: a friend's datalink track locked too. Shot down: back in the air 6 s later, 15 km south,
-  5 000 m up. No score to reach, no end; the bar says *Free fight* and the kills. A match asked replaces it.
+  radar weapons free: a friend's datalink track locked too. Shot down: out of control to the crash, as in a
+  match (above), then back in the air 6 s after it, 15 km south, 5 000 m up. No score to reach, no end; the bar says *Free fight* and the kills. A match asked replaces it.
 - **Co-op**: the pilots one side (blue, never locked, not hurt unless friendly fire) — they were each other's
   targets before.
+
+Measured on kerr-mini (`tests/e2e/net-shotdown`): Ben shot down 2 300 m up, his craft down in 24 s, rolling
+1.6 rad/s, its nose dropping — on Ana's page 2 284 → 2 175 m when 2 283 → 2 180 m on his —, its crash on her page 11 m
+from his craft's last place there, on the ground; the kill cam on her, Ben again 5 000 m up 6 s after. His
+wingman Two shot down so: 90 m lower 4 s on on both pages, down in 24 s, its crash on Ana's page on the ground.
+(`net-battle`: Ana down in 34 s from the arena's 4 000 m.)
 
 Measured on kerr-mini (`tests/e2e/net-battle`, `net-coop`): the AIM-120 fired at 15 km seen on the target's
 helmet at 15 km, the kill on both score sheets; the host's drones on the guest's world within a metre; the
@@ -143,7 +159,7 @@ voice received by the other at −8 to −12 dBFS, shown speaking, two Quindar t
   its panoramic display, the chase, the fly-by, the free one around him…); your own samples not sent.
 - **A spectator** (the room link with `&role=spectator`, or the panel's role) follows the first pilot at once;
   **an instruments screen** (`&role=instruments`) too, in his cockpit.
-- **The kill cam**: shot down in a match by another, his craft followed until you fly again.
+- **The kill cam**: shot down in a match by another, your crash seen, then his craft followed until you fly again.
 - **Add a screen** (the room panel): the room's link as a **QR code** — a phone's or a tablet's camera opens it
   (over HTTPS: samlepirate.org) — as a spectator, an instruments screen or a pilot; the code is ours
   (`src/net/qr.ts`, byte mode, correction M, versions 1–10, checked module by module against Python's
