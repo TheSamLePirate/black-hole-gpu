@@ -3,6 +3,7 @@
 // simulation frozen and stepped, offline renders and videos posted to the dev server, the bench.
 //   __bh.settings.spin = 0.5; __bh.touch()
 //   __bh.game.help()
+import type { BootReport } from "./boot-timeline";
 import { bodyFixedOf, GEAR, gearHeight, groundRelief, toBodyFixed } from "./system/our-surface";
 import { EARTH_RUNWAYS } from "./game/sites";
 import { GEARS } from "./gear";
@@ -55,6 +56,8 @@ import type { Pwa } from "./pwa";
 import type { GameMode, ModeState } from "./game/modes";
 
 export interface BhContext {
+  /** the boot's timeline (boot-timeline.ts): its stages, the main thread's long tasks and frame gaps */
+  boot(): BootReport;
   settings: Settings;
   renderer: Renderer;
   camera: CameraController;
@@ -261,6 +264,8 @@ export function installBh(c: BhContext) {
   Object.assign(globalThis, {
     __bh: {
       graphicsDiagnostic: () => gpuDiagnostics.report(),
+      /** the boot's timeline: its stages (ms since the navigation), the main thread's long tasks and frame gaps */
+      boot: () => c.boot(),
       /** the game's tools: __bh.game.help() */
       game: tools,
       /** the Kerr Bench: __bh.bench.run({ mode: "quick" }) → its report; scene(name) one scene's */

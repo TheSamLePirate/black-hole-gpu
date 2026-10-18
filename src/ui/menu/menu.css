@@ -1,0 +1,140 @@
+/* The menus' language (PLAN-TITRE-AAA, "the relativistic observatory"): deep black, one warm light — the disk's
+   amber for what is chosen —, warm white titles; one easing, short; the focus a bar, a glow, a step to the right.
+   The screens (title, launch, pause, settings) build on these; ui/menu/router.ts swaps them. */
+
+:root {
+  --m-black: #020409;
+  --m-ink: #f3f7ff;
+  --m-warm: #fff6e8;
+  --m-dim: rgba(214, 224, 238, 0.62);
+  --m-faint: rgba(214, 224, 238, 0.32);
+  --m-line: rgba(214, 224, 238, 0.12);
+  --m-amber: var(--k-amber, #ffb35c);
+  --m-amber-glow: rgba(255, 179, 92, 0.32);
+  --m-surface: rgba(6, 10, 18, 0.72);
+
+  /* type: display, h1, h2, h3, body, caption */
+  --m-t-display: clamp(64px, 9vw, 120px);
+  --m-t-h1: clamp(32px, 3.6vw, 48px);
+  --m-t-h2: 28px;
+  --m-t-h3: 18px;
+  --m-t-body: 15px;
+  --m-t-caption: 12px;
+  --m-f-title: var(--hud-font, Rajdhani, system-ui, sans-serif);
+  --m-f-text: var(--font, Inter, system-ui, sans-serif);
+  --m-f-value: var(--mono, "JetBrains Mono", ui-monospace, monospace);
+
+  /* motion: one curve (an exponential out), nothing bounces */
+  --m-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --m-fast: 180ms;
+  --m-mid: 260ms;
+  --m-slow: 350ms;
+  --m-stagger: 40ms;
+
+  /* the TV-safe margin */
+  --m-safe-x: max(5vw, 16px);
+  --m-safe-y: max(5vh, 16px);
+}
+
+/* an item of a menu: the focus a bar on its left, a glow, a step to the right (never a scale on its text) */
+.m-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 12px 18px 12px 22px;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--m-dim);
+  font: 600 var(--m-t-h3) / 1.1 var(--m-f-title);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--m-fast) var(--m-ease), transform var(--m-mid) var(--m-ease), background var(--m-mid) var(--m-ease);
+}
+.m-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  background: var(--m-amber);
+  box-shadow: 0 0 12px var(--m-amber-glow);
+  transform: scaleY(0);
+  transition: transform var(--m-mid) var(--m-ease);
+}
+.m-item:is(:focus-visible, :focus, :hover):not(:disabled) {
+  outline: none;
+  color: var(--m-warm);
+  transform: translateX(6px);
+  background: linear-gradient(90deg, rgba(255, 179, 92, 0.1), transparent 70%);
+}
+.m-item:is(:focus-visible, :focus, :hover):not(:disabled)::before {
+  transform: scaleY(1);
+}
+.m-item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.m-item small {
+  font: 500 var(--m-t-caption) / 1.35 var(--m-f-text);
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--m-faint);
+}
+.m-item:is(:focus, :hover) small {
+  color: var(--m-dim);
+}
+
+/* a prompt: a key or a button and what it does (ui/menu/glyphs.ts) — none for a touch or a mouse */
+.m-prompts {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font: 500 var(--m-t-caption) var(--m-f-text);
+  color: var(--m-dim);
+}
+.m-prompt {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.m-glyph {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--m-faint);
+  border-radius: 4px;
+  font: 700 11px var(--m-f-value);
+  color: var(--m-ink);
+}
+:root[data-input="pad"] .m-glyph {
+  border-radius: 999px;
+}
+:root:is([data-input="touch"], [data-input="mouse"]) .m-prompts {
+  display: none;
+}
+
+/* the screens' change (a View Transition): a short fade and a slide, forward or back */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--m-mid);
+  animation-timing-function: var(--m-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m-item,
+  .m-item::before {
+    transition: none;
+  }
+  .m-item:is(:focus-visible, :focus, :hover):not(:disabled) {
+    transform: none;
+  }
+}

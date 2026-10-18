@@ -32,6 +32,7 @@ import { CockpitTip } from "./ui/cockpit-tip";
 import { cockpitHull } from "./system/collide";
 import { prefetchSkyAssets, Renderer, type FrameStats, type OfflineStatus } from "./renderer";
 import { swappable } from "./util/swappable";
+import { bootMark, bootReport, bootWatchStop } from "./boot-timeline";
 import { downloadGpuDiagnostic, globalErrorRouter, gpuDiagnostics } from "./gpu-diagnostics";
 import { horizon, isco } from "./physics";
 import { cameraFrame, repPose, setHolePose, setHomePose, switchAnchor } from "./camera";
@@ -298,6 +299,18 @@ let firstFrame = false;
 let firstFrameAt: number | null = null;
 /** the Kerr Bench's page (…/#bench): its GPU memory counted from the first allocation */
 const benchPage = /[#&]bench\b/.test(location.hash);
+// (#slowboot=N — PLAN-TITRE-AAA E0: the graphics' start held N s more, a slow driver's compile played on any
+// machine, to try what is usable while the game starts; taken out of the hash at once, the rest read as before)
+const slowBootS = (() => {
+  const m = /(^#|&)slowboot=(\d+(?:\.\d+)?)/.exec(location.hash);
+  if (!m) return 0;
+  const rest = location.hash
+    .replace(/(^#|&)slowboot=[\d.]+/, "$1")
+    .replace(/^#&/, "#")
+    .replace(/&$/, "");
+  history.replaceState(null, "", location.pathname + location.search + (rest.length > 1 ? rest : ""));
+  return Math.min(Number(m[2]), 600);
+})();
 if (benchPage) installVramHook();
 
 function fail(msg: string) {
@@ -316,6 +329,7 @@ function fail(msg: string) {
 }
 
 async function main() {
+  bootMark("main");
   let appVersion = "dev";
   void fetch("version.json")
     .then((r) => (r.ok ? r.json() : null))
@@ -371,6 +385,10 @@ async function main() {
   window.addEventListener("error", (event) => globalError("javascript-error", event.error ?? event.message));
   window.addEventListener("unhandledrejection", (event) => globalError("unhandled-rejection", event.reason));
   const splash = new Splash($("loading") ?? document.createElement("div"));
+  void splash.gone.then(() => {
+    bootMark("splash-lifted");
+    setTimeout(bootWatchStop, 2000);
+  });
   // (the HUD's and the overlays' fonts — fonts.css — loaded while the GPU starts: a canvas draws in
   // whatever is there at its first frame, and keeps it until redrawn)
   const fonts = Promise.all(
@@ -397,8 +415,10 @@ async function main() {
   let renderer: Renderer;
   let rendererSlot: ReturnType<typeof swappable<Renderer>>;
   try {
-    rendererSlot = swappable(await Renderer.create(canvas));
+    const [created] = await Promise.all([Renderer.create(canvas), new Promise((r) => setTimeout(r, slowBootS * 1000))]);
+    rendererSlot = swappable(created);
     renderer = rendererSlot.proxy;
+    bootMark("renderer");
   } catch (e) {
     startupFailed = true;
     cancelWatchdog();
@@ -6355,6 +6375,7 @@ async function main() {
 
   // the automation handle (devtools, tests, scripts): debug/bh.ts
   installBh({
+    boot: () => bootReport(firstFrame ? firstFrameAt : null),
     settings,
     renderer,
     camera,
@@ -6736,6 +6757,7 @@ async function main() {
       firstFrameAt = renderer.firstFrameDoneAt;
       cancelWatchdog();
       gpuDiagnostics.ready();
+      bootMark("first-image");
       splash.firstImage();
       // (Jupiter's moons' ephemeris, when the start did not wait for it: now, the first image drawn)
       if (!jovianFirst) setTimeout(() => void loadEphemerides(ephemerisUrls(["jup"])), 2000);
@@ -7351,6 +7373,7 @@ async function main() {
   // flight saved last time; then the URL is left clean (settings from an old link were read above) —
   // once the ephemerides are in (a ship placed near a planet before would find it moved under it)
   await ephemerides;
+  bootMark("ephemerides");
   {
     const hash = location.hash;
     const scene = new URLSearchParams(hash.slice(1)).get("scene");
@@ -7439,6 +7462,7 @@ async function main() {
         .then(() => netPanel.net?.room && netPanel.closePanel());
     } else if (!shared && !linked && !(scene && presets[scene]) && !benchPage) {
       titleScreen.open();
+      bootMark("title");
       void splash.gone.then(() => titleScreen?.focusFirst());
     } else started = true;
     if (hash.length > 1) history.replaceState(null, "", location.pathname + location.search);

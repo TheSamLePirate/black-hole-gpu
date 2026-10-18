@@ -347,6 +347,40 @@ __bh.graphicsDiagnostic().events.filter((e) => e.message.includes("after the fir
 ```
 *Used in:* `tests/e2e/gpu-startup.e2e.test.ts` (4 lines use it).
 
+### `__bh.pcd` → object
+
+The F-35's panoramic display (`src/f35/pcd.ts`, PLAN-PCD-AAA).
+
+- `pcd`: the display itself: its pages, `portals()` (each portal's `frame`), and `touch(u, v)`.
+- `stats`: its CPU cost since `reset()`, in ms a frame: `frames`, `draws`, `ms` (the mean), `max` (the worst),
+  `up` (the uploads) and `read` (the data read).
+
+```js
+__bh.pcd.stats.reset(); /* … fly … */ __bh.pcd.stats.ms < 0.7
+```
+*Used in:* `tests/e2e/f35-pcd.e2e.test.ts`.
+
+### `__bh.boot()` → object
+
+The boot's timeline (`src/boot-timeline.ts`, PLAN-TITRE-AAA E0), all in ms since the navigation:
+
+- `marks`: each stage once, in order, as `{ name, t }`. The graphics diagnostic's stages, `<stage> done` for the
+  loading stages, and `main`, `renderer`, `ephemerides`, `title`, `first-image`, `splash-lifted`.
+- `firstImage`: when the first image was drawn.
+- `long`: the main thread's long tasks (over 50 ms), observed from the page's first byte by `index.html`'s inline
+  script, as `{ count, totalMs, maxMs, list: [start, duration][] }`.
+- `gaps`: the gaps of over 50 ms between animation frames until 2 s after the splash lifts, as
+  `{ count, maxMs, list }`.
+- `blockedMs`, `blockedShare`: the time spent in long tasks before the first image, in ms and as a share of the
+  wait.
+
+The `#slowboot=N` address flag holds the graphics' start N seconds longer, to try the menus during a slow start.
+
+```js
+const b = __bh.boot(); b.marks.find((m) => m.name === "renderer").t > 10_000 // after #slowboot=10
+```
+*Used in:* `tests/e2e/boot-time.e2e.test.ts`.
+
 ### `__bh.gpu` → object
 
 The GPU device's handle: `lose()`, `generation()`, `lost()`, `frames()` (below). Use them to test the loss and recovery.

@@ -468,7 +468,7 @@ Chaque phase : un commit, une planche de captures (`docs/progress/title-aaa/`), 
 `bunx biome ci .` verts, poussée sur `main`. Taille : **S** = moins d'une demi-journée, **M** = une journée,
 **L** = deux jours ou plus.
 
-### E0 — Mesures et socle (M)
+### E0 — Mesures et socle (M) — FAIT ([fiche](progress/title-aaa/E0.md) : première image 1,3 s à froid sur Mac ; à 20 Mbit/s le titre attend DE440 jusqu'à 9,7 s ; une tâche de 380 ms après `renderer`)
 
 - **Mesurer le démarrage** avec `performance.mark` à chaque étape : les tâches longues du thread principal
   (`PerformanceObserver` enregistré dans `index.html`), la première image à froid et à chaud.
@@ -496,6 +496,10 @@ Chaque phase : un commit, une planche de captures (`docs/progress/title-aaa/`), 
 - Continuer (et sa vignette), les 4 cartes de mode, Plus…, Réglages, le pied de page.
 - **Construit avant `Renderer.create()`.** Les intentions en file, les préchargements par intention, LANCER
   pendant le chargement.
+- **DE440 demandé en premier**, puis le ciel et les étoiles (E0 : à 20 Mbit/s il arrive dernier, à 9,7 s, et
+  retient le titre et la première image ; viser environ 3,5 s). Mesuré en A/B avec `NET=20`.
+- L'intention appliquée **avant la première image** quand elle est connue à temps (une compilation encore en file
+  est abandonnée, pas une déjà lancée — fiche E0).
 - Corrige les constats 2, 3 et 8.
 
 ### E3 — Les illustrations (M)
