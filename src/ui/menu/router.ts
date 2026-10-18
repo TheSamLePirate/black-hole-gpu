@@ -64,7 +64,9 @@ export class ScreenStack<S extends { id: string }> {
 
 const reducedMotion = () => typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-type ViewTransitionDoc = Document & { startViewTransition?(cb: () => void): { finished: Promise<void> } };
+type ViewTransitionDoc = Document & {
+  startViewTransition?(cb: () => void): { finished: Promise<void>; ready: Promise<void>; updateCallbackDone: Promise<void> };
+};
 
 export class MenuRouter {
   readonly stack = new ScreenStack<MenuScreen>();
@@ -133,8 +135,18 @@ export class MenuRouter {
     const doc = document as ViewTransitionDoc;
     if (!this.page || !doc.startViewTransition || reducedMotion()) return render();
     document.documentElement.dataset.menuDir = dir;
-    const vt = doc.startViewTransition(render);
-    void vt.finished.finally(() => delete document.documentElement.dataset.menuDir);
+    // (a transition can be aborted — its snapshot not taken, another one started, the page hidden —: the change
+    // made once all the same, its promises' rejections caught)
+    let done = false;
+    const once = () => {
+      if (done) return;
+      done = true;
+      render();
+    };
+    const vt = doc.startViewTransition(once);
+    vt.ready.catch(() => {});
+    vt.updateCallbackDone.catch(() => once());
+    vt.finished.catch(() => {}).finally(() => delete document.documentElement.dataset.menuDir);
   }
 
   /** The item focused on the screen shown, remembered under its name (its data-focus-id, or its place). */

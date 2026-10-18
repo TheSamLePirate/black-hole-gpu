@@ -5,7 +5,7 @@
 // sequence ends, and lifts it all onto the live scene once its first image and the assets it needs (its sky) are in
 // — or on "Enter now". Afterwards, assets loaded on demand show in a small pill.
 
-import { t } from "../i18n";
+import { t, tf } from "../i18n";
 import { loading, type Stage } from "../loading";
 import { store } from "../util/storage";
 import { type OrbState, orbStateFor } from "./orb";
@@ -80,8 +80,8 @@ export class Intro {
     };
   }
 
-  /** the element the name glides onto at the sequence's end (the title's logo), or null: none open */
-  dockTo: () => HTMLElement | null = () => null;
+  /** where the name and the emblem glide at the sequence's end (the title's), or null: no title open */
+  dockTo: () => { name: HTMLElement | null; mark: HTMLElement | null } | null = () => null;
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -205,24 +205,34 @@ export class Intro {
   dock() {
     if (!this.ended || this.docked || this.lifted) return;
     const target = this.dockTo();
-    if (!target) return;
+    if (!target?.name) return;
     this.docked = true;
-    const name = this.root.querySelector<HTMLElement>(".in-name")!;
-    const hero = this.root.querySelector<HTMLElement>(".in-hero")!;
-    const a = name.getBoundingClientRect();
-    const b = target.getBoundingClientRect();
-    // (the name's text starts after its padding: half an em)
-    const pad = Number.parseFloat(getComputedStyle(name).paddingLeft) || 0;
-    const dx = b.left - (a.left + pad);
-    const dy = b.top + b.height / 2 - (a.top + a.height / 2);
     document.body.classList.add("intro-docking");
     this.root.classList.add("docking");
-    hero.style.transform = `translate(calc(-50% + ${dx.toFixed(1)}px), calc(-54% + ${dy.toFixed(1)}px))`;
+    // (each glides and scales onto its place: the same type, the same picture — they match there)
+    const glide = (from: HTMLElement | null, to: HTMLElement | null) => {
+      if (!from || !to) return;
+      const a = from.getBoundingClientRect();
+      const b = to.getBoundingClientRect();
+      if (!a.width) return;
+      from.style.transformOrigin = "0 0";
+      from.style.transition = "transform 0.9s cubic-bezier(0.16, 1, 0.3, 1)";
+      from.style.transform = `translate(${(b.left - a.left).toFixed(1)}px, ${(b.top - a.top).toFixed(1)}px) scale(${(b.width / a.width).toFixed(4)})`;
+    };
+    glide(this.root.querySelector<HTMLElement>(".in-name"), target.name);
+    glide(this.root.querySelector<HTMLElement>(".in-mark"), target.mark);
     setTimeout(() => {
       this.root.classList.add("docked");
       this.root.dataset.docked = "1";
       document.body.classList.remove("intro-docking");
     }, 900);
+  }
+
+  /** A launch chosen on the title before the game is there: said under the orb until it runs (null: no more). */
+  launching(label: string | null) {
+    if (this.lifted) return;
+    this.note.textContent = label ? tf("Launching: {0} — as soon as the game is ready", label) : "";
+    this.note.hidden = !label;
   }
 
   /** "Enter now" (or before the first image: as soon as it is there). */

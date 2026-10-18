@@ -491,7 +491,7 @@ Chaque phase : un commit, une planche de captures (`docs/progress/title-aaa/`), 
 - Corrige le constat 1 (deux écrans superposés).
 - Une planche de 2 ou 3 variantes du logo à valider.
 
-### E2 — Le menu titre (L)
+### E2 — Le menu titre (L) — FAIT ([fiche](progress/title-aaa/E2.md), [planche](progress/title-aaa/E2.jpg) : le titre construit à ~50 ms, un lancement choisi pendant le chargement exécuté avant la première image, aucun coût mesuré)
 
 - Continuer (et sa vignette), les 4 cartes de mode, Plus…, Réglages, le pied de page.
 - **Construit avant `Renderer.create()`.** Les intentions en file, les préchargements par intention, LANCER

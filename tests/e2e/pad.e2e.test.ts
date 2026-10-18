@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
 // The game controller in the menus, with a pad of the page's own (navigator.getGamepads replaced: a
-// standard-mapping pad whose buttons the test presses): the D-pad walks the title screen, A chooses,
-// B goes back; in the game, Start opens the pause menu and B resumes.
+// standard-mapping pad whose buttons the test presses): the D-pad walks the title screen's cards, A opens a
+// mode and launches, B goes back; in the game, Start opens the pause menu and B resumes.
 
 const FAKE_PAD = `(() => {
   const buttons = Array.from({ length: 17 }, () => ({ pressed: false, value: 0, touched: false }));
@@ -32,27 +32,34 @@ describe.skipIf(!E2E)("the game controller in the menus", () => {
     stopServer();
   });
 
-  test("the D-pad walks the title screen, A chooses, B goes back", async () => {
-    expect(await focused()).toBe("title-missions");
-    await press(13); // ▼
-    expect(await focused()).toBe("title-explore");
-    await press(12); // ▲
-    expect(await focused()).toBe("title-missions");
+  test("the D-pad walks the title's cards, A opens a mode, B goes back", async () => {
+    await app.waitFor(`document.activeElement?.dataset.testid === "title-mode-foot"`, 10_000);
+    await press(15); // ▶
+    expect(await focused()).toBe("title-mode-plane");
+    await press(14); // ◀
+    expect(await focused()).toBe("title-mode-foot");
     await press(0); // A
-    await app.waitFor(`!!document.querySelector("[data-testid=missions]")`);
+    await app.waitFor(`!!document.querySelector("[data-screen='mode:foot']")`);
     await press(1); // B
-    await app.waitFor(`!!document.querySelector("[data-testid=title]")`);
+    await app.waitFor(`!!document.querySelector("[data-screen='title']")`);
+    await app.waitFor(`document.activeElement?.dataset.testid === "title-mode-foot"`, 3000);
   });
 
-  test("A launches a mission; in it, Start pauses and B resumes", async () => {
-    await press(0); // A: Missions
-    await app.waitFor(`!!document.querySelector("[data-testid=missions]")`);
-    await press(0); // A: the mission focused, launched
+  test("A launches (by ship, low orbit); in it, Start pauses and B resumes", async () => {
+    await press(15); // ▶ by plane
+    await press(15); // ▶ by ship
+    expect(await focused()).toBe("title-mode-ship");
+    await press(0); // A: the mode's screen
+    await app.waitFor(`!!document.querySelector("[data-screen='mode:ship']")`);
+    await Bun.sleep(400);
+    expect(await focused()).toBe("title-act-ship-orbit");
+    await press(0); // A: launched
     await app.waitFor("__bh.camera.piloting", 30_000);
     await press(9); // Start
     await app.waitFor(`!!document.querySelector("[data-testid=pause]")`);
     await press(1); // B
     await app.waitFor(`!document.querySelector("[data-testid=pause]")`);
+    if (app.cdp.errors.length) console.log(app.cdp.errors.join("\n"));
     expect(app.cdp.errors).toEqual([]);
   });
 });

@@ -67,9 +67,10 @@ describe.skipIf(!E2E)("the intro", () => {
     console.log(`  at 7.6 s: ${JSON.stringify(s)}`);
     expect(s.bg).toBe("webgl2");
     expect(["solving", "weaving", "searching", "connecting"]).toContain(s.orb);
-    // (the sequence over; the title not built yet — it waits for the graphics in E1 —: the name stays, centred)
+    // (the sequence over; the title built from the start (E2): the name and the emblem glided onto it, the graphics
+    // still held)
     expect(await app.js<boolean>(`!document.body.classList.contains("intro-play")`)).toBe(true);
-    expect(s.docked === undefined && !s.done).toBe(true);
+    expect(s.docked === "1" && !s.done).toBe(true);
     // (a click on the orb: the loading's detail)
     await app.js(`(document.querySelector(".in-orb-btn").click(), true)`);
     expect(await app.js<boolean>(`!document.querySelector(".in-steps").hidden`)).toBe(true);
@@ -80,7 +81,7 @@ describe.skipIf(!E2E)("the intro", () => {
     await app.waitFor(`document.querySelector("#loading")?.dataset.docked === "1"`, 3000);
     await Bun.sleep(300);
     await shot("E1-6-titre-fond");
-    expect(await opacity(".ts-root")).toBeGreaterThan(0.9);
+    expect(await opacity(".tt-root")).toBeGreaterThan(0.9);
     // (lifted once the first image and the sky are in: not before)
     await app.waitFor(`__bh.intro().lifted && __bh.boot().marks.some((m) => m.name === "splash-lifted")`, 90_000);
     const b = await app.js<{ marks: { name: string; t: number }[]; firstImage: number }>("__bh.boot()");

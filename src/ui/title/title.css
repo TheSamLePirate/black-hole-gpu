@@ -1,0 +1,253 @@
+/* The title screen (PLAN-TITRE-AAA E2, ui/title/title.ts), in the menus' language (ui/menu/menu.css): the emblem
+   and the name top left (the intro's, glided there), Continue, the four ways to play as cards, More… and Settings;
+   a mode's screen: its entries on the left, the one focused shown large on the right. */
+
+.tt-root {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  color: var(--m-ink);
+  /* the scene behind, darkened towards the menu's side and the foot */
+  background:
+    linear-gradient(90deg, rgba(2, 4, 9, 0.88) 0%, rgba(2, 4, 9, 0.6) 38%, rgba(2, 4, 9, 0.12) 72%, transparent 100%),
+    linear-gradient(0deg, rgba(2, 4, 9, 0.7) 0%, transparent 30%);
+  overflow: hidden;
+}
+.tt-page {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  padding: var(--m-safe-y) var(--m-safe-x) calc(var(--m-safe-y) + 34px);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- the brand: the emblem, the name (cut by the disk, lit), the line */
+.tt-brand {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: start;
+  align-items: center;
+  column-gap: clamp(8px, 1.2vw, 18px);
+  justify-self: start;
+}
+.tt-mark {
+  width: clamp(104px, 9.5vw, 150px);
+  height: auto;
+  filter: drop-shadow(0 0 18px rgba(255, 150, 70, 0.35));
+}
+.tt-name {
+  position: relative;
+  justify-self: start;
+  width: max-content;
+  margin: 0 -0.32em 0 -0.5em;
+  padding: 0.25em 0.5em;
+  font: 700 clamp(46px, 6.2vw, 88px) / 0.9 var(--m-f-title);
+  letter-spacing: 0.32em;
+  color: var(--m-ink);
+  white-space: nowrap;
+  -webkit-mask-image: linear-gradient(#000 0 51.5%, transparent 51.5% 54%, #000 54%);
+  mask-image: linear-gradient(#000 0 51.5%, transparent 51.5% 54%, #000 54%);
+}
+.tt-name::before {
+  content: "KERR";
+  position: absolute;
+  inset: 0.25em 0 0.25em 0.5em;
+  color: var(--m-amber);
+  filter: blur(14px);
+  opacity: 0.38;
+}
+.tt-tag {
+  grid-column: 1 / -1;
+  margin: 10px 0 0;
+  font: 600 13px var(--m-f-title);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--m-amber);
+}
+
+/* ---- the menu */
+.tt-menu {
+  margin-top: clamp(18px, 4.5vh, 48px);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(12px, 2.2vh, 22px);
+  min-height: 0;
+}
+
+/* Continue: the game saved last, its picture, its line, when */
+.tt-continue {
+  all: unset;
+  box-sizing: border-box;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: min(620px, 100%);
+  padding: 10px 16px 10px 10px;
+  border: 1px solid var(--m-line);
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(8, 12, 22, 0.82), rgba(8, 12, 22, 0.45));
+  cursor: pointer;
+  transition: border-color var(--m-fast) var(--m-ease), transform var(--m-mid) var(--m-ease), background var(--m-mid) var(--m-ease);
+}
+.tt-cont-art {
+  flex: none;
+  width: 132px;
+  aspect-ratio: 16 / 9;
+  border-radius: 2px;
+  background: #0a0f1a center / cover no-repeat;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.tt-cont-text { display: grid; gap: 3px; min-width: 0; }
+.tt-cont-text b { font: 600 18px var(--m-f-title); letter-spacing: 0.24em; text-transform: uppercase; color: var(--m-warm); }
+.tt-cont-line { font: 500 13px var(--m-f-text); color: var(--m-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt-continue small { font: 500 11px var(--m-f-value); color: var(--m-faint); }
+
+/* the four ways to play */
+.tt-modes {
+  display: flex;
+  gap: clamp(8px, 1vw, 14px);
+  width: min(1120px, 100%);
+}
+.tt-card {
+  all: unset;
+  box-sizing: border-box;
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  height: clamp(190px, 34vh, 330px);
+  border: 1px solid rgba(214, 224, 238, 0.14);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #05080f;
+  cursor: pointer;
+  transition: flex-grow var(--m-slow) var(--m-ease), border-color var(--m-fast) var(--m-ease), box-shadow var(--m-mid) var(--m-ease);
+}
+.tt-card-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.04);
+  transition: transform 6s linear, filter var(--m-mid) var(--m-ease);
+  filter: saturate(0.8) brightness(0.72);
+}
+.tt-card-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(0deg, rgba(2, 4, 9, 0.92) 0%, rgba(2, 4, 9, 0.35) 45%, transparent 70%);
+}
+.tt-card-text {
+  position: absolute;
+  left: 16px;
+  right: 14px;
+  bottom: 16px;
+  display: grid;
+  gap: 6px;
+}
+.tt-card-text b { font: 600 clamp(15px, 1.35vw, 20px) var(--m-f-title); letter-spacing: 0.2em; text-transform: uppercase; color: var(--m-ink); }
+.tt-card-text small { font: 500 12.5px / 1.4 var(--m-f-text); color: var(--m-dim); opacity: 0.7; transition: opacity var(--m-mid) var(--m-ease); }
+.tt-card::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--m-amber);
+  box-shadow: 0 0 14px var(--m-amber-glow);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--m-mid) var(--m-ease);
+}
+.tt-card:is(:focus, :focus-visible, :hover) {
+  flex-grow: 1.4;
+  border-color: rgba(255, 179, 92, 0.55);
+  box-shadow: 0 0 0 1px rgba(255, 179, 92, 0.25), 0 18px 50px rgba(0, 0, 0, 0.5);
+  outline: none;
+}
+.tt-card:is(:focus, :focus-visible, :hover) .tt-card-art { transform: scale(1.12); filter: saturate(1) brightness(0.9); }
+.tt-card:is(:focus, :focus-visible, :hover) .tt-card-text small { opacity: 1; color: var(--m-ink); }
+.tt-card:is(:focus, :focus-visible, :hover)::after { transform: scaleX(1); }
+.tt-continue:is(:focus, :focus-visible, :hover) {
+  border-color: rgba(255, 179, 92, 0.55);
+  background: linear-gradient(90deg, rgba(40, 26, 12, 0.85), rgba(8, 12, 22, 0.5));
+  transform: translateX(6px);
+  outline: none;
+}
+
+.tt-links { display: flex; gap: 6px; }
+.tt-link { font-size: 15px; padding: 9px 16px 9px 18px; }
+
+/* ---- the foot */
+.tt-foot {
+  position: absolute;
+  left: var(--m-safe-x);
+  right: var(--m-safe-x);
+  bottom: max(16px, calc(var(--m-safe-y) * 0.6));
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font: 500 11px var(--m-f-value);
+  color: var(--m-faint);
+}
+.tt-credit { letter-spacing: 0.18em; font-family: var(--m-f-text); }
+.tt-lang { display: flex; gap: 4px; }
+.tt-lang .k-btn { padding: 3px 8px; }
+.tt-foot .m-prompts { margin-left: auto; }
+.tt-version { margin-left: 8px; }
+
+/* ---- a list: a mode's entries, More…, the saved games */
+.tt-list {
+  background: linear-gradient(90deg, rgba(2, 4, 9, 0.94) 0%, rgba(2, 4, 9, 0.84) 50%, rgba(2, 4, 9, 0.72) 100%);
+}
+.tt-crumb { display: flex; align-items: center; gap: 12px; }
+.tt-crumb-mark { width: 54px; height: auto; }
+.tt-crumb-name { font: 700 20px var(--m-f-title); letter-spacing: 0.32em; color: var(--m-ink); }
+.tt-crumb-sep { color: var(--m-faint); font-size: 18px; }
+.tt-crumb-title { margin: 0; font: 600 20px var(--m-f-title); letter-spacing: 0.22em; text-transform: uppercase; color: var(--m-amber); }
+.tt-list-body {
+  margin-top: clamp(18px, 5vh, 56px);
+  display: grid;
+  grid-template-columns: minmax(300px, 460px) minmax(0, 1fr);
+  gap: clamp(20px, 4vw, 64px);
+  align-items: start;
+  min-height: 0;
+}
+.tt-list-side { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.tt-acts { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; max-height: calc(100vh - 260px); padding: 2px 8px 2px 2px; }
+.tt-act { width: 100%; box-sizing: border-box; font-size: 16px; }
+.tt-vessels { display: flex; gap: 6px; }
+.tt-vessel { padding: 7px 14px; letter-spacing: 0.14em; }
+.tt-empty { margin: 8px 0; color: var(--m-dim); font: italic 500 13px var(--m-f-text); }
+.tt-preview { display: flex; flex-direction: column; gap: 12px; max-width: 820px; }
+.tt-preview-frame {
+  aspect-ratio: 16 / 9;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--m-line);
+  background: #05080f;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+}
+.tt-preview-art { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tt-preview-title { margin: 6px 0 0; font: 700 clamp(22px, 2.2vw, 32px) var(--m-f-title); letter-spacing: 0.06em; color: var(--m-ink); }
+.tt-preview-text { margin: 0; max-width: 62ch; font: 400 15px / 1.55 var(--m-f-text); color: var(--m-dim); }
+
+/* ---- narrow screens: the cards two by two, the list over its picture */
+@media (max-width: 760px) {
+  .tt-modes { display: grid; grid-template-columns: 1fr 1fr; }
+  .tt-card { height: clamp(130px, 22vh, 200px); }
+  .tt-list-body { grid-template-columns: 1fr; }
+  .tt-preview { order: -1; }
+  .tt-preview-text { display: none; }
+  .tt-foot .m-prompts, .tt-version { display: none; }
+}
+@media (max-height: 620px) {
+  .tt-tag { display: none; }
+  .tt-card { height: 150px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tt-card, .tt-card-art, .tt-continue { transition: none; }
+}

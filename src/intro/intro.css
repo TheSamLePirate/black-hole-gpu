@@ -325,13 +325,17 @@ html:not([lang="fr"]) #loading [lang="fr"] {
 
 /* ---- handed over to the title: the hero glides to the title's logo (intro.ts), the mark and the line go */
 #loading.docked .in-hero { opacity: 0; transition: opacity 0.3s ease; }
-#loading.docking :is(.in-mark, .in-tag) { opacity: 0; transition: opacity 0.4s ease; }
-#loading.docking :is(.in-skip, .in-credit) { opacity: 0; transition: opacity 0.4s ease; }
+#loading.docking .in-tag { opacity: 0; transition: opacity 0.4s ease; }
+/* (the title has its own credit: the intro's goes — its fade-in animation would hold an opacity, so hidden) */
+#loading.docking :is(.in-skip, .in-credit) { visibility: hidden; }
 
 /* the title over the intro: hidden while the sequence plays, then in (src/intro/intro.ts) */
-body.intro-play .ts-root { opacity: 0; pointer-events: none; }
-.ts-root { transition: opacity 0.6s ease; }
-body.intro-docking .ts-logo { visibility: hidden; }
+body.intro-play .tt-root { opacity: 0; pointer-events: none; }
+.tt-root { transition: opacity 0.6s ease; }
+body.intro-docking .tt-brand :is(.tt-name, .tt-mark) { visibility: hidden; }
+/* (the menu in once the name and the emblem have landed — not under them as they glide) */
+.tt-root .tt-main :is(.tt-tag, .tt-menu, .tt-foot) { transition: opacity 0.55s ease; }
+body.intro-docking .tt-root .tt-main :is(.tt-tag, .tt-menu, .tt-foot) { opacity: 0; transition: none; }
 /* (the intro's background shows through the title's own shade until the live scene is in) */
 body.intro-play #hint, body.intro-play .kh { display: none; }
 

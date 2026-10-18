@@ -55,7 +55,9 @@ import { installPwa } from "./pwa";
 import { PauseMenu } from "./ui/pause";
 import { ControlsScreen } from "./ui/controls-screen";
 import { PadsScreen } from "./ui/pads-screen";
-import { TitleScreen } from "./ui/title";
+import type { SceneGroup } from "./ui/schema";
+import type { TitleGame } from "./ui/title/activities";
+import { TitleScreen } from "./ui/title/title";
 import { MissionSelect } from "./ui/missions";
 import { PlacePanel } from "./ui/placepanel";
 import { RoutePanel } from "./ui/routepanel";
@@ -394,6 +396,34 @@ async function main() {
     bootMark("splash-lifted");
     setTimeout(bootWatchStop, 2000);
   });
+  // the title screen (src/ui/title/title.ts — PLAN-TITRE-AAA E2): built now, before the graphics, usable while
+  // the game loads; a launch chosen meanwhile waits for the game (titleScreen.attach, further down) — unless the
+  // link named a scene, a moment, a mission, the benchmark or a room
+  let titleHold: (on: boolean) => void = () => {};
+  let titleCurrent: () => string | null = () => null;
+  const titleScreen = new TitleScreen({
+    version: () => appVersion,
+    hold: (on) => titleHold(on),
+    waiting: (label) => splash.launching(label),
+    current: () => titleCurrent(),
+  });
+  {
+    const p = new URLSearchParams(location.hash.slice(1));
+    const sc = p.get("scene");
+    const linked = (sc && presets[sc]) || /[#&](save|mission)=/.test(location.hash) || benchPage || (p.get("join") && settings.netMenu);
+    if (!linked) {
+      titleScreen.open();
+      bootMark("title");
+      // (the intro's name and emblem glide onto the title's when its sequence ends)
+      splash.dockTo = () =>
+        titleScreen.isOpen
+          ? { name: document.querySelector<HTMLElement>(".tt-name"), mark: document.querySelector<HTMLElement>(".tt-mark") }
+          : null;
+      splash.dock();
+      void splash.played.then(() => titleScreen.focusFirst());
+      void splash.gone.then(() => titleScreen.focusFirst());
+    }
+  }
   // (the HUD's and the overlays' fonts — fonts.css — loaded while the GPU starts: a canvas draws in
   // whatever is there at its first frame, and keeps it until redrawn)
   const fonts = Promise.all(
@@ -3078,8 +3108,6 @@ async function main() {
       titleScreen: () => titleScreen?.open(),
       toast: (t) => panel.toast(t),
     });
-  /** the title screen, once built (ui/title.ts) */
-  let titleScreen: TitleScreen | null = null;
   const quickSave = () => {
     try {
       panel.toast(tf("Quick save — {0}", tools.save("Quick save")));
@@ -6558,7 +6586,7 @@ async function main() {
     // scene held, or stepped by the video itself)
     // (a menu holding the game — the title, the pause, the missions: the pad moves in it, the flight
     // does not read it meanwhile)
-    if (paused) menuPad.tick(camera.pad.poll(), now);
+    if (paused) menuPad.tick(camera.pad.poll(), now, titleScreen.isOpen);
     if (!frozen && !paused && !renderer.offlineActive && !replay.active) {
       // (the flight plan's guidance speaking: a waypoint passed, its end, the bingo)
       if (camera.nav.say) {
@@ -7402,8 +7430,9 @@ async function main() {
       panel.toast(tf("That link's mission could not be read: {0}", (e as Error).message));
     }
     const last = autosave.get();
-    // (the flight saved last loaded behind the title screen: Continue only lifts it)
-    let resumed: string | null = null;
+    // (the flight saved last loaded behind the title screen: Continue only lifts it — not when a launch was chosen
+    // while the game loaded: its own scene then the only one placed and compiled)
+    const pendingLaunch = titleScreen.pending;
     try {
       if (shared) panel.toast(tf("Shared flight: {0}", tools.load(shared)));
       else if (linked) {
@@ -7411,75 +7440,81 @@ async function main() {
         const spec = linked;
         void splash.gone.then(() => briefMission(spec, () => airMissions.fly(spec)));
       } else if (scene && presets[scene]) applyPreset(scene);
-      else if (hash.length <= 1 && last && settings.autosave) {
-        tools.load(last, { quiet: true });
-        resumed = last.summary;
-      }
+      else if (!pendingLaunch && hash.length <= 1 && last && settings.autosave) tools.load(last, { quiet: true });
     } catch (e) {
       console.warn("Could not restore the saved game:", e);
     }
-    // the title screen (ui/title.ts), unless the link named a scene, a moment or the benchmark
     // the missions (ui/missions.ts): from the title screen; back, the title again
     const missionSelect = new MissionSelect({
       launch: (scene) => {
         paused = false;
-        started = true;
         panel.applyScene(scene);
       },
-      back: () => titleScreen?.open(),
+      back: () => titleScreen.open(),
     });
-    // (Continue: the flight resumed behind the screen at launch; later — the screen opened from the
-    // pause menu — the game left there)
-    let started = false;
-    titleScreen = new TitleScreen({
-      saved: () => (started ? tools.snapshot("now").summary : resumed),
-      continue: () => (started = true),
-      hold: (on) => {
-        paused = on;
-        touch();
-      },
+    titleHold = (on) => {
+      paused = on;
+      touch();
+    };
+    titleCurrent = () => tools.snapshot("now").summary;
+    /** the craft flown changed (as the panel and TARS do: the fleet's switch follows) */
+    const setVessel = (v: Settings["vessel"]) => {
+      if (settings.vessel === v) return;
+      settings.vessel = v;
+      onSettingsChange(["vessel"]);
+    };
+    // the game, as the title screen launches things in it (ui/title/activities.ts)
+    const titleGame: TitleGame = {
+      resume: () => {},
+      walk: (body, lat, lon) => void placeShip(() => tools.walk(body, lat, lon)),
+      jet: () =>
+        void placeShip(() => {
+          setGameMode("ship", true);
+          setVessel("f35");
+          return tools.lineUp();
+        }),
+      flightHub: () => flightHub.open(),
+      challenges: () => challengePanel.open(),
+      school: () => flightSchool(instrHost),
       missions: () => {
         paused = true; // (the scene behind held while one chooses)
         missionSelect.open();
       },
-      explore: () => {
-        started = true;
-        scenes.open();
-      },
-      photo: () => {
-        started = true;
-        setGameMode("photo");
-      },
-      settings: () => {
-        started = true;
-        panel.toggle(true);
-      },
+      scene: (name) => panel.applyScene(name),
+      orbit: (body, altKm) =>
+        void placeShip(() => {
+          setGameMode("ship", true);
+          return tools.orbit(body, { altKm });
+        }),
+      vessel: (v) => setVessel(v),
+      place: () => placePanel.open(),
+      atlas: () => atlas.open(),
+      scenes: (group) => scenes.open("", group as SceneGroup | undefined),
+      photo: () => void setGameMode("photo"),
+      network: () => openNetwork(),
+      networkShown: () => settings.netMenu,
+      editor: () => missionEditor.open(),
+      controls: () => controlsScreen.open(),
+      settings: () => panel.toggle(true),
+      load: (name) => tools.load(name),
       bench: () => {
         location.hash = "bench";
         location.reload();
       },
-      version: () => appVersion,
-    });
-    // (after the title, the game's own state: a flight resumed or not, the same)
+      toast: (text) => panel.toast(text),
+    };
     // (a room's link: straight into the game, the room joined)
     const joinCode = netParams.get("join");
     if (joinCode && settings.netMenu) {
-      started = true;
       // (the panel shown while joining, closed once in: the keys back to the flight)
       netPanel.open();
       const role = netParams.get("role");
       void netPanel
         .join(joinCode, role === "spectator" || role === "instruments" ? role : "pilot")
         .then(() => netPanel.net?.room && netPanel.closePanel());
-    } else if (!shared && !linked && !(scene && presets[scene]) && !benchPage) {
-      titleScreen.open();
-      bootMark("title");
-      // (the intro's name glides onto the title's logo when its sequence ends, or now if it has)
-      splash.dockTo = () => (titleScreen?.isOpen ? document.querySelector<HTMLElement>(".ts-logo") : null);
-      splash.dock();
-      void splash.played.then(() => titleScreen?.focusFirst());
-      void splash.gone.then(() => titleScreen?.focusFirst());
-    } else started = true;
+    }
+    // (the game there: a launch chosen while it loaded runs now — before the first image)
+    titleScreen.attach(titleGame);
     if (hash.length > 1) history.replaceState(null, "", location.pathname + location.search);
   }
   // (the first frame once the fonts are in — at most a second and a half: a slow network draws in the
