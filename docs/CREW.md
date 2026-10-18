@@ -311,7 +311,20 @@ les interruptions et les permissions retardées, puis les mesures émises par le
 
 `bun scripts/crew-demo.ts [ws://localhost:3000/net]` ouvre une salle scriptée sans simulateur : deux pilotes
 de Paris à Lyon (plan, prédiction, pilote automatique, systèmes, alertes), 36 avions de ligne, un porte-avions
-et un ferry, des unités et des zones de mission. Il affiche le lien `/crew/#join=CODE`. Captures : `remote-results/crew-*.png`. Le WebGPU est rendu inaccessible dans la console
+et un ferry, des unités et des zones de mission. Il affiche le lien `/crew/#join=CODE`.
+
+`bun scripts/crew-demo.ts --space` (PLAN-VAISSEAUX K7, `scripts/lib/space-demo.ts`) garde le F-35 de tête et ajoute
+trois vaisseaux scénarisés (une salle accueille quatre pilotes) :
+- **Cooper**, le Ranger en orbite basse, qui s'approche de l'ISS : son orbite, une poussée planifiée, la géométrie
+  d'amarrage, une panne de RCS à 40 s dont l'équipage coche la checklist ;
+- **Brand**, le Lander en descente sur la Lune à Tranquillité (hauteur, trace au sol, point d'atterrissage, 1,28 s de
+  lumière) ;
+- **Romilly**, l'Endurance près de Gargantua (anneau, Ranger au moyeu, mondes du trou noir, liaison coupée pour le
+  sol).
+
+Chacun répond aux ordres de l'équipage. Les e2e vaisseau : `crew-space` (profils, vues, carte 3D), `crew-stations`
+(postes, délai, liaison coupée), `crew-space-actions` (ordres sur le vrai simulateur), `crew-demo-space` (la salle
+de démonstration sans WebGPU : le repli 2D de la carte). Captures : `remote-results/crew-*.png`. Le WebGPU est rendu inaccessible dans la console
 pendant ce test. Safari/iPadOS et les chemins TURN réels demandent une validation sur appareil/réseau réel.
 
 Fond vectoriel : Natural Earth, domaine public, `ne_110m_coastline.geojson`, issu de

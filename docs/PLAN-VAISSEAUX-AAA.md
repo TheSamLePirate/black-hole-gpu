@@ -398,7 +398,7 @@ Chaque phase porte sa ligne réseau ; N finit ce qui n'existe qu'à plusieurs.
 | K4 | vues vaisseau | **fait** 2026-10-18 ([fiche](progress/vaisseaux/K4.md)) |
 | K5 | postes à bord / au sol, délai lumière réglable | **fait** 2026-10-18 ([fiche](progress/vaisseaux/K5.md)) — messages vocaux enregistrés en N |
 | K6 | actions vaisseau complètes | **fait** 2026-10-18 ([fiche](progress/vaisseaux/K6.md)) — ordres de flotte aux autres joueurs en N |
-| K7 | démo vaisseau, e2e, doc crew | à faire |
+| K7 | démo vaisseau, e2e, doc crew | **fait** 2026-10-18 ([fiche](progress/vaisseaux/K7.md)) |
 | X6 | cockpits Ranger (a), Lander (b), Endurance (c) | à faire |
 | X7 | sons, effets, caméras | à faire |
 | X8 | télémétrie, graphiques, comptes rendus | à faire |

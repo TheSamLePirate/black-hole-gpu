@@ -1542,8 +1542,8 @@ function refresh() {
       ? "Connexion interrompue"
       : !own
         ? "En attente de données"
-        : model.selected !== null && model.linkOf(model.selected).cut && own.age > 3
-          ? "Liaison coupée — derrière le trou de ver"
+        : model.selected !== null && model.linkOf(model.selected).cut
+          ? "Liaison coupée — derrière le trou de ver : son dernier mot"
           : own.age > 3
             ? `Position ancienne · ${Math.round(own.age)} s`
             : own.snapshot
