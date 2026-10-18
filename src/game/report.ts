@@ -44,7 +44,7 @@ export interface DockingFigures {
 export type Quality = "good" | "ok" | "bad";
 
 export interface FlightReport {
-  kind: "landing" | "docking" | "ascent" | "insertion" | "rendezvous" | "entry";
+  kind: "landing" | "docking" | "ascent" | "insertion" | "rendezvous" | "entry" | "lesson";
   title: string;
   /** out of 20, and its letter */
   score: number;

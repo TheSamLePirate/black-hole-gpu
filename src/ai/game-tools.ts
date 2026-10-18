@@ -1880,7 +1880,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "knowledge",
       description:
-        "Your aviation knowledge base (written pages, English and French): the F-35's systems, limits and procedures (f35), basic flying (basics), energy (energy), the dogfight (bfm), formation flying (formation), the carrier (carrier), the ILS (ils), the emergencies (emergencies), the radar (radar), the weapons (weapons), the traffic (traffic). search: the sections that answer a question (query; lang fr or en), their excerpts. read: a page whole or one section (page; section: a word of its title). Answer the pilot from it.",
+        "Your aviation and spaceflight knowledge base (written pages, English and French): the F-35's systems, limits and procedures (f35), basic flying (basics), energy (energy), the dogfight (bfm), formation flying (formation), the carrier (carrier), the ILS (ils), the emergencies (emergencies), the radar (radar), the weapons (weapons), the traffic (traffic); the spacecraft's: orbits (orbits), manoeuvres — circularize, Hohmann, plane changes, nodes (maneuvers), rendezvous and docking (docking), entry and landing — deorbit, the corridor, the glide, the Lander's powered descent, take-off (entry), systems and emergencies — the consumables, the failures and their checklists (systems), relativity near Gargantua (relativity). search: the sections that answer a question (query; lang fr or en), their excerpts. read: a page whole or one section (page; section: a word of its title). Answer the pilot from it.",
       params: {
         action: { type: "string", enum: ["search", "read"] },
         query: { type: "string" },

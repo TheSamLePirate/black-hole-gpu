@@ -402,7 +402,7 @@ Chaque phase porte sa ligne réseau ; N finit ce qui n'existe qu'à plusieurs.
 | X6 | cockpits Ranger (a), Lander (b), Endurance (c) | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X6.md)) — tableaux propres au Lander et à l'Endurance (Blender / CC-BY) et second siège en N restent |
 | X7 | sons, effets, caméras | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X7.md)) — vues d'exception spatiales (X9), sons des autres (N) |
 | X8 | télémétrie, graphiques, comptes rendus | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X8.md)) — classement en salle (N) |
-| X9 | école de vol spatial (15 leçons) | à faire |
+| X9 | école de vol spatial (15 leçons) | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X9.md)) — schémas, leçon à deux (N), campagne des démos longues |
 | X10 | défis et qualifications | à faire |
 | X11 | missions, éditeur, campagne Interstellar | à faire |
 | N | réseau : équipage, baux, flotte, partage, interactions, temps | à faire (une part dans chaque phase) |
