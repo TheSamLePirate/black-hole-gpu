@@ -8244,7 +8244,8 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
   }
   let idx = py * W + px;
   // (realtime, the cockpit's mask — mask.wgsl: moments.x < 0 — over this ray: the cabin hides it, not traced)
-  let masked = interleaved && inRange && moments[idx].x < 0.0;
+  // (−1: under the cockpit's mask, not traced; −2: the cabin there but traced — mask.wgsl)
+  let masked = interleaved && inRange && moments[idx].x < -0.5 && moments[idx].x > -1.5;
 
   // Adaptive sampling, per 8×8 tile: the tile keeps sampling while any of its pixels has a relative
   // standard error of the mean (luminance) above the threshold (keeps ray differentials available).

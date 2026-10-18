@@ -670,7 +670,12 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
   if ((zf > 1e-3 && !ground) || carried) {
     var uv = prevUv(d);
     if (carried) { uv = (vec2f(gid.xy) + 0.5) / vec2f(size); }
-    if (all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0))) {
+    // (the history from under the cockpit's mask — mask.wgsl −1: not traced since it came on, the cabin there — is
+    // stale: a fast roll carries the world out from behind the frame onto it; this frame's rays alone there)
+    let up = vec2u(clamp(uv * vec2f(size), vec2f(0.0), vec2f(size) - 1.0));
+    let mx = moments[up.y * W + up.x].x;
+    let underCabin = mx < -0.5 && mx > -1.5;
+    if (all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0)) && !underCabin) {
       hist = historyAt(uv, vec2f(size)) * TA.k.x;
       // the range of the current frame around the pixel, at the block's scale (mean ± g σ, YCoCg of the
       // tone-mapped values; the fresh samples' alone, R2's suggestion, read the stamps nine times more for

@@ -8,8 +8,9 @@
 
 @group(0) @binding(0) var own: texture_2d<f32>;
 @group(0) @binding(1) var<storage, read_write> moments: array<vec2f>;
-// size: the image's width, height, on (0: every tile cleared), the margin [px]; rect: the own mask's box in the
-// image [px] (x, y, w, h)
+// size: the image's width, height, the mode (0: every tile cleared; 1: a covered tile not traced, −1; 2: traced but
+// marked −2 — the cabin still left out of the light meter), the margin [px]; rect: the own mask's box in the image
+// [px] (x, y, w, h)
 struct MaskU { size: vec4u, rect: vec4i };
 @group(0) @binding(2) var<uniform> U: MaskU;
 
@@ -44,5 +45,5 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
   workgroupBarrier();
   let full = atomicLoad(&covered);
   let p = vec2i(gid.xy);
-  if (p.x < W && p.y < H) { moments[u32(p.y * W + p.x)].x = select(0.0, -1.0, full == 1u); }
+  if (p.x < W && p.y < H) { moments[u32(p.y * W + p.x)].x = select(0.0, select(-2.0, -1.0, U.size.z == 1u), full == 1u); }
 }

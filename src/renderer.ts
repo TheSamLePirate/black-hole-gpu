@@ -3691,12 +3691,20 @@ export class Renderer {
    * image: it turns with the camera) — the free look, the lens, the eye on the craft the same; the flight's shake
    * (its line of sight turned, its up rolled) within SHAKE_PX of it, in the margin —, no depth of field; else, once,
    * the marks cleared. The margin: the reconstruction's reach (two blocks), 6 px, the shake's, the motion blur's
-   * reach (40 px) when it is on.
+   * reach (40 px) when it is on. The shake weighed where a turn moves the image most: at its corners (sec² of their
+   * angle off the axis — 1.8× the centre's at 60°). Not traced: −1; the own mask there but the rays traced (the look,
+   * the shake past its margin): −2, the cabin still left out of the light meter — its exposure the same either way.
+   * Off under the cost view (its heat maps and costStats read every pixel).
    */
   private encodeCockpitMask(enc: GPUCommandEncoder, t: Target, s: Settings, block: number) {
     if (!this.maskPipeline || t !== this.live) return;
     const own =
-      this.cockpitMask && s.ship && this.ship.ready && this.ownMaskStamp === this.frameStamp - 1 && !this.dofOn(s, t)
+      this.cockpitMask &&
+      !this.costViewMode &&
+      s.ship &&
+      this.ship.ready &&
+      this.ownMaskStamp === this.frameStamp - 1 &&
+      !this.dofOn(s, t)
         ? this.ship.ownMaskOf(t.hdr)
         : null;
     let on = false;
@@ -3706,15 +3714,23 @@ export class Renderer {
       const same = (i: number) => Math.abs(p[i]! - now[i]!) < 1e-3;
       // (the shake: the line of sight's and the up's turns, against the pixel's angle)
       const turn = (i: number) => Math.hypot(p[i]! - now[i]!, p[i + 1]! - now[i + 1]!, p[i + 2]! - now[i + 2]!);
-      const pixelAngle = (2 * Math.tan((s.fov * Math.PI) / 360)) / t.height;
-      on = [0, 1, 2, 3, 4, 5].every(same) && turn(6) + turn(9) * 0.5 * Math.hypot(t.width, t.height) * pixelAngle < SHAKE_PX * pixelAngle;
+      const tanH = Math.tan((s.fov * Math.PI) / 360);
+      const pixelAngle = (2 * tanH) / t.height;
+      // (a turn δ moves a pixel at an angle θ off the axis by δ sec²θ: the corners')
+      const sec2 = 1 + tanH * tanH * (1 + (t.width / t.height) ** 2);
+      on =
+        [0, 1, 2, 3, 4, 5].every(same) &&
+        turn(6) * sec2 + turn(9) * 0.5 * Math.hypot(t.width, t.height) * pixelAngle < SHAKE_PX * pixelAngle;
     }
-    if (!on && !this.maskSet.get(t)) return;
-    this.maskSet.set(t, on);
+    // (1: not traced; 2: traced, the cabin only left out of the meter; 0: cleared once)
+    const mode = on ? 1 : own && own.pose.length === 12 ? 2 : 0;
+    if (!mode && !this.maskSet.get(t)) return;
+    this.maskSet.set(t, mode !== 0);
     const r = own?.rect ?? [0, 0, 0, 0];
     const margin = 2 * block + 6 + SHAKE_PX + (s.motionBlur > 0 ? 40 : 0);
     const u = new ArrayBuffer(32);
-    new Uint32Array(u, 0, 4).set([t.width, t.height, on ? 1 : 0, margin]);
+    // (the same margin either way: the meter leaves out the same points whether the rays there are traced or not)
+    new Uint32Array(u, 0, 4).set([t.width, t.height, mode, margin]);
     new Int32Array(u, 16, 4).set(r);
     this.device.queue.writeBuffer(this.maskBuf, 0, u);
     const pass = enc.beginComputePass(this.prof.pass("cockpit mask"));
@@ -4467,7 +4483,16 @@ export class Renderer {
             mPerM: 1476.625 * (s.massSolar || 1),
             forceShadow: !!this.character?.active,
             inside: s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin"),
-            ownMask: this.cockpitMask && s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin") && t === this.live,
+            // (the own mask only where the next frame's cockpit mask can use it: a realtime frame, no cost view, no
+            // depth of field)
+            ownMask:
+              this.cockpitMask &&
+              s.ship &&
+              (s.shipMount === "cockpit" || s.shipMount === "cabin") &&
+              t === this.live &&
+              this.taPhase === "realtime" &&
+              !this.costViewMode &&
+              !this.dofOn(s, t),
             dash: this.cockpitDash ?? undefined,
             controls: this.cockpitControls ?? undefined,
             gear: this.shipGear ?? undefined,
