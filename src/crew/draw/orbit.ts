@@ -28,6 +28,11 @@ export const BODY_FR: Record<string, string> = {
   pluto: "Pluton",
   wormhole: "Trou de ver",
   gargantua: "Gargantua",
+  mouth: "Bouche du trou de ver",
+  miller: "Miller",
+  mann: "Mann",
+  edmunds: "Edmunds",
+  k2: "K2 (étoile)",
 };
 export const bodyName = (id: string) => BODY_FR[id] ?? (id ? id[0]!.toUpperCase() + id.slice(1) : "—");
 

@@ -4,7 +4,20 @@ import type { InstrumentSnapshot } from "../net/instruments";
 
 export type CrewProfile = "jet" | "space";
 
-export type CrewView = "air" | "dash" | "pfd" | "nd" | "map" | "globe" | "radar" | "schematic" | "plan" | "telemetry" | "sdash" | "orbit";
+export type CrewView =
+  | "air"
+  | "dash"
+  | "pfd"
+  | "nd"
+  | "map"
+  | "globe"
+  | "radar"
+  | "schematic"
+  | "plan"
+  | "telemetry"
+  | "sdash"
+  | "orbit"
+  | "system";
 
 /** The craft's profile: its own word (the K1 block), else the families it opens (an older pilot's snapshot). */
 export function profileOf(s: Pick<InstrumentSnapshot, "craft" | "caps" | "sys"> | null | undefined): CrewProfile {
@@ -18,7 +31,7 @@ export function profileOf(s: Pick<InstrumentSnapshot, "craft" | "caps" | "sys"> 
  *  spacecraft's its orbit and its flight computer. */
 export const PROFILE_VIEWS: Record<CrewProfile, CrewView[]> = {
   jet: ["air", "pfd", "nd", "radar", "map", "globe", "dash", "plan", "schematic", "telemetry"],
-  space: ["sdash", "orbit", "pfd", "globe", "telemetry"],
+  space: ["sdash", "orbit", "system", "pfd", "globe", "telemetry"],
 };
 
 export type TileKey =

@@ -89,7 +89,28 @@ console s'ouvre sur la première vue du profil.
 | profil | badge | vues, dans l'ordre | tuiles |
 |---|---|---|---|
 | F-35 (tactique, vert phosphore) | `F-35 · TACTIQUE` | **Mission aérienne** (radar et carte côte à côte, bandeau objectif · combat · arme · radar · verrou · emports · alertes ; le panneau d'armes dessous), Vol, Navigation, Radar, Carte, Globe, Tableau, Plan de vol, Systèmes, Télémétrie | altitude, vitesse, vario, Mach, charge, cap, carburant, hauteur sol |
-| Vaisseau (contrôle de mission, bleu) | `VAISSEAU · RANGER` | **Tableau** vaisseau (l'orbite en grand, l'attitude, la colonne de l'ordinateur de vol : Δv, ergols, poussées du plan, prochain événement, cible, systèmes, anneau et ports, horloges, liaison), **Orbite**, Vol, Globe, Télémétrie | Δv restant, ergols, périapside, apoapside, période, prochain événement, charge, dτ/dt, liaison |
+| Vaisseau (contrôle de mission, bleu) | `VAISSEAU · RANGER` | **Tableau** vaisseau (l'orbite en grand, l'attitude, la colonne de l'ordinateur de vol : Δv, ergols, poussées du plan, prochain événement, cible, systèmes, anneau et ports, horloges, liaison), **Orbite**, **Carte système**, Vol, Globe, Télémétrie | Δv restant, ergols, périapside, apoapside, période, prochain événement, charge, dτ/dt, liaison |
+
+**Carte système** (PLAN-VAISSEAUX K3, `src/crew/sys3d/`) : le système solaire ou celui de Gargantua en 3D.
+- **Navigation** : on la fait tourner en glissant et on zoome en pinçant. On la centre sur le corps de la sphère, le
+  vaisseau ou le Soleil. L'échelle est vraie ou logarithmique (les distances au centre compressées : les planètes
+  intérieures et extérieures sur un même écran). Deux vues toutes faites : **Dessus** et **Profil**.
+- **Notre côté** :
+  - le Soleil et les planètes ;
+  - leurs orbites, chacune reconstruite autour de son parent à partir de la position, de la vitesse et du GM reçus ;
+  - les lunes du corps visité, la sphère d'influence, l'orbite du vaisseau ;
+  - la trajectoire libre (cyan) et la trajectoire planifiée (magenta, en tirets), les poussées, la cible.
+- **Le côté Gargantua** : le trou noir avec son horizon (noir sous l'anneau de photons), l'ergosphère, l'orbite des
+  photons et l'ISCO (rayons de Bardeen pour son spin), les mondes sur leurs cercles, la bouche du trou de ver, le
+  vaisseau et sa chute.
+- **Prédiction** : un curseur avance le temps (jusqu'à la trajectoire la plus longue reçue, six heures au moins). Les
+  corps avancent sur leurs orbites (Kepler) et un fantôme du vaisseau suit sa trajectoire.
+- **Rendu** :
+  - en WebGPU, demandé à la première ouverture de la vue comme pour le globe : sphères éclairées par l'étoile (leur
+    nuit sombre, le halo du Soleil), rubans antialiasés, profondeur (une planète cache l'orbite qui passe derrière
+    elle) ;
+  - sinon sur le canvas 2D (disques ombrés, du plus loin au plus proche).
+- Les étiquettes, la légende et la barre d'échelle sont dessinées par-dessus l'un ou l'autre rendu.
 
 **Orbite** : la conique autour du corps de la sphère, vue de dessus de son plan (périapside en haut), reconstruite à
 partir de l'état reçu (`src/crew/orbitmath.ts`) ; le corps à l'échelle, Pe et Ap avec leurs hauteurs, le vaisseau,

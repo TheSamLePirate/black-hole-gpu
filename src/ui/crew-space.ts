@@ -9,6 +9,8 @@ import type { RangerStatus } from "../game/status";
 import type { InstrumentBody, InstrumentSpace, InstrumentTrajSeg, V3 } from "../net/instruments-space";
 import { SPACE_BOUNDS } from "../net/instruments-space";
 import type { OurPath } from "../system/our-predict";
+import { GARGANTUA_SYSTEM } from "../system/bodies";
+import { bodyState } from "../system/ephemeris";
 import { SOLAR_BODIES, solarBody, solarState } from "../system/solar";
 import { C_MPS, M_METRES, M_SECONDS } from "../units";
 import { VESSELS, type VesselId } from "../vessels";
@@ -64,10 +66,12 @@ function bodiesNear(body: string, tm: number): InstrumentBody[] {
   return SOLAR_BODIES.filter((b) => b.parent === null || b.parent === "sun" || b.parent === planet)
     .slice(0, SPACE_BOUNDS.bodies)
     .map((b) => {
-      const p = bodyAt(b.id, tm).pos;
+      const s = bodyAt(b.id, tm);
       return {
         id: b.id,
-        r: [Math.round(p[0] * KM), Math.round(p[1] * KM), Math.round(p[2] * KM)] as V3,
+        r: [Math.round(s.pos[0] * KM), Math.round(s.pos[1] * KM), Math.round(s.pos[2] * KM)] as V3,
+        v: [r3(s.vel[0] * KMS), r3(s.vel[1] * KMS), r3(s.vel[2] * KMS)] as V3,
+        mu: Math.round(b.mass * M_METRES * C_MPS * C_MPS * 1e-9),
         radius: Math.round(b.radius * KM),
         parent: b.parent ?? "",
       };
@@ -158,5 +162,26 @@ export function crewSpace(c: CameraController, i: Info, status: RangerStatus | n
     });
   }
   out.kerr = status?.kerr ? { r: r3(status.kerr.r), E: r3(status.kerr.E), L: r3(status.kerr.L) } : null;
+  // Gargantua's side: the hole, its worlds, the craft and its path on the flat map [M] (the K3 map's)
+  if (heavy && i.region === "hole") {
+    const sys = GARGANTUA_SYSTEM;
+    const q = (v: readonly number[]): V3 => [r3(v[0]!), r3(v[1]!), r3(v[2]!)];
+    const pts = c.path?.pts ?? [];
+    const step = Math.max(1, Math.ceil(pts.length / SPACE_BOUNDS.pts));
+    out.hole = {
+      spin: sys.spin,
+      bodies: sys.bodies
+        .filter((b) => b.universe === "gargantua")
+        .map((b) => ({
+          id: b.id,
+          r: q(bodyState(sys, b.id, tm).pos),
+          radius: b.radius,
+          orbit: b.orbit.type === "kerr" ? b.orbit.r : b.orbit.type === "kepler" ? b.orbit.a : 0,
+        })),
+      craft: i.X ? q(i.X) : null,
+      path: pts.filter((_, k) => k % step === 0).map(q),
+      fate: c.path?.fate ?? "",
+    };
+  }
   return out;
 }

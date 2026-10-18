@@ -17,6 +17,8 @@ import { drawSystems, systemsHeight } from "./draw/systems";
 import { drawPlan, planHeight } from "./draw/plan";
 import { drawChart } from "./draw/chart";
 import { drawOrbit } from "./draw/orbit";
+import { defaultMapState, drawSystemMap } from "./draw/system";
+import { SystemRenderer } from "./sys3d/gpu";
 import { drawAirStatus, drawSpaceStatus } from "./draw/spacestat";
 import type { CrewView } from "./profile";
 
@@ -25,6 +27,7 @@ export const VIEW_NAMES: Record<CrewView, string> = {
   air: "Mission aérienne",
   sdash: "Tableau",
   orbit: "Orbite",
+  system: "Carte système",
   dash: "Tableau",
   pfd: "Vol",
   nd: "Navigation",
@@ -70,6 +73,11 @@ export class CrewViews {
   private tiles = new Tiles();
   /** the globe's photographed Earth: its imagery and its renderer (WebGPU, else the processor), made when first shown */
   readonly earth = new EarthGlobe(() => this.request());
+  /** the system map (PLAN-VAISSEAUX K3): its camera, its focus, its prediction ahead; its renderer (WebGPU asked at its
+   *  first show), the longest prediction it can scroll [s] */
+  readonly map3d = defaultMapState();
+  readonly sysRenderer = new SystemRenderer(() => this.request());
+  mapSpan = 0;
   private dpr = 1;
   private ctx: CanvasRenderingContext2D;
   private pen: Pen;
@@ -151,7 +159,12 @@ export class CrewViews {
       } else if (this.view === "telemetry") this.scrub(e.clientX);
       else if (this.view === "schematic" || this.view === "plan") this.scrollBy(-dy);
       else if (this.view === "map") this.panPx(dx, dy);
-      else if (this.view === "globe") {
+      else if (this.view === "system") {
+        const C3 = this.map3d.cam;
+        C3.yaw -= dx * 0.008;
+        C3.pitch = clamp(C3.pitch + dy * 0.008, -1.55, 1.55);
+        this.request();
+      } else if (this.view === "globe") {
         this.follow = false;
         const k = (Math.min(this.W, this.H) * 0.42 * this.zoom * Math.PI) / 180;
         this.lon = wrap(this.lon - dx / k);
@@ -278,6 +291,7 @@ export class CrewViews {
     else if (this.view === "telemetry") this.window = clamp(this.window / k, 10, 3600);
     else if (this.view === "map") this.zoom = clamp(this.zoom + Math.log2(k), 2, 18);
     else if (this.view === "globe") this.zoom = clamp(this.zoom * k, 0.7, 40);
+    else if (this.view === "system") this.map3d.cam.zoom = clamp(this.map3d.cam.zoom * k, 0.02, 5000);
     else if (this.view === "schematic" || this.view === "plan") this.scrollBy(k > 1 ? -120 : 120);
     this.request();
   }
@@ -369,6 +383,9 @@ export class CrewViews {
         break;
       case "orbit":
         drawOrbit(p, r, sc);
+        break;
+      case "system":
+        this.mapSpan = drawSystemMap(p, r, sc, this.map3d, this.sysRenderer, this.dpr);
         break;
       case "pfd":
         p.panel(r);

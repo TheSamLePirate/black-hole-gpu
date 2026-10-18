@@ -43,8 +43,77 @@ const orbitSnap = (t: number) => {
     sysx: { battery: 0.94, kwh: 60, balance: 1.4, o2h: 285, scrub: 13.6, crew: 4, failures: [] },
     time: { warp: 1, room: t, dtau: 1, tau: t },
     link: { light: 0.0014, cut: false },
+    // (once a second in the game: the bodies and the paths — here every time)
+    bodies: BODIES,
+    traj: {
+      free: [
+        {
+          body: "earth",
+          pts: Array.from({ length: 49 }, (_, k) => ring(k / 48, r, i)),
+          t: Array.from({ length: 49 }, (_, k) => (k / 48) * 5560),
+        },
+      ],
+      plan: [],
+      fate: "continues",
+      hit: "",
+    },
   };
 };
+const AU = 1.495978707e8;
+const MU_SUN = 1.32712440018e11;
+const ring = (u: number, r: number, i: number) => {
+  const a = u * 2 * Math.PI;
+  return [r * Math.cos(a), r * Math.sin(a) * Math.cos(i), r * Math.sin(a) * Math.sin(i)];
+};
+const planet = (id: string, au: number, ang: number, mu: number, radius: number) => {
+  const r = au * AU,
+    v = Math.sqrt(MU_SUN / r);
+  return { id, r: [r * Math.cos(ang), r * Math.sin(ang), 0], v: [-v * Math.sin(ang), v * Math.cos(ang), 0], mu, radius, parent: "sun" };
+};
+const EARTH = planet("earth", 1, 0.3, MU, 6371);
+const BODIES = [
+  { id: "sun", r: [0, 0, 0], v: [0, 0, 0], mu: MU_SUN, radius: 696_000, parent: "" },
+  planet("mercury", 0.387, 2.1, 22032, 2440),
+  planet("venus", 0.723, 4.0, 324859, 6052),
+  EARTH,
+  {
+    id: "moon",
+    r: [EARTH.r[0]! + 384_400, EARTH.r[1]!, 0],
+    v: [EARTH.v[0]!, EARTH.v[1]! + 1.022, 0],
+    mu: 4902.8,
+    radius: 1737,
+    parent: "earth",
+  },
+  planet("mars", 1.524, 1.2, 42828, 3390),
+  planet("jupiter", 5.2, 2.7, 1.26687e8, 69911),
+  planet("saturn", 9.58, 4.6, 3.7931e7, 58232),
+];
+const holeSnap = (t: number) => ({
+  v: 1,
+  t,
+  body: "gargantua",
+  metrics: { speed: 0.3 * 299_792_458, tau: 0.6 },
+  geo: null,
+  radar: null,
+  route: [],
+  ahead: [],
+  caps: { on: true, fam: ["space"] },
+  craft: { id: "endurance", kind: "spacecraft", name: "Endurance", lands: false, ring: true },
+  time: { warp: 1, room: t, dtau: 0.62, tau: t * 0.62 },
+  link: { light: 0, cut: true },
+  hole: {
+    spin: 0.999,
+    bodies: [
+      { id: "gargantua", r: [0, 0, 0], radius: 0, orbit: 0 },
+      { id: "miller", r: [10 * Math.cos(2.55), 10 * Math.sin(2.55), 0], radius: 3e-5, orbit: 10 },
+      { id: "mann", r: [40 * Math.cos(0.72), 40 * Math.sin(0.72), 0], radius: 3e-5, orbit: 40 },
+      { id: "mouth", r: [300 * Math.cos(5.72), 300 * Math.sin(5.72), 0], radius: 0.05, orbit: 300 },
+    ],
+    craft: [10.5 * Math.cos(2.4), 10.5 * Math.sin(2.4), 0.2],
+    path: Array.from({ length: 40 }, (_, k) => [10.5 * Math.cos(2.4 + k * 0.05), 10.5 * Math.sin(2.4 + k * 0.05), 0.2 - k * 0.005]),
+    fate: "continues",
+  },
+});
 const jetSnap = (t: number) => ({
   v: 1,
   t,
@@ -67,6 +136,7 @@ describe.skipIf(!E2E)("the crew console's two profiles (K2)", () => {
   let pilot: NetClient;
   let feed: ReturnType<typeof setInterval>;
   let space = false;
+  let hole = false;
   let t = 0;
   const shots = process.env.E2E_SHOTS;
   const shot = async (name: string) => {
@@ -97,7 +167,7 @@ describe.skipIf(!E2E)("the crew console's two profiles (K2)", () => {
         a: [0, 0, 0],
         vis: emptyVisual(),
       });
-      pilot.event({ kind: "instruments", data: space ? orbitSnap(t) : jetSnap(t) });
+      pilot.event({ kind: "instruments", data: hole ? holeSnap(t) : space ? orbitSnap(t) : jetSnap(t) });
     }, 250);
     await app.click("#name");
     await app.type("Brand");
@@ -148,6 +218,34 @@ describe.skipIf(!E2E)("the crew console's two profiles (K2)", () => {
     await app.waitFor(`document.getElementById("view-title").textContent === "Orbite"`, 5000);
     await Bun.sleep(600);
     await shot("3-ranger-orbite");
+    expect(app.cdp.errors).toEqual([]);
+  }, 60_000);
+
+  test("the system map (K3): about the Earth, then the Sun in the log scale, the prediction scrolled; Gargantua's side", async () => {
+    await app.click("[data-view=system]");
+    await app.waitFor(`document.getElementById("view-title").textContent === "Carte système"`, 5000);
+    // (its renderer asked once shown: WebGPU, else the canvas)
+    await app.waitFor(`!!__crew.views.sysRenderer.kind`, 10_000);
+    const kind = await app.js<string>(`__crew.views.sysRenderer.kind`);
+    console.log(`  the map's renderer: ${kind}`);
+    await Bun.sleep(600);
+    await shot("4-carte-terre");
+    await app.click("[aria-label='Centre de la carte'] button:nth-child(3)");
+    await app.click("[aria-label='Échelle'] button:nth-child(2)");
+    await app.waitFor(`__crew.views.map3d.focus === "sun" && __crew.views.map3d.cam.log`, 3000);
+    await Bun.sleep(600);
+    await shot("5-carte-soleil-log");
+    // the prediction: the slider half way — the Moon and the craft moved on
+    await app.js(
+      `(() => { const s = document.getElementById("map-ahead"); s.value = "500"; s.dispatchEvent(new Event("input")); return 1; })()`,
+    );
+    await app.waitFor(`__crew.views.map3d.ahead > 0`, 3000);
+    hole = true;
+    await app.waitFor(`!!__crew.model.own()?.snapshot?.hole`, 5000);
+    await app.click("[aria-label='Échelle'] button:nth-child(1)");
+    await app.click("[aria-label='Centre de la carte'] button:nth-child(1)");
+    await Bun.sleep(800);
+    await shot("6-carte-gargantua");
     expect(app.cdp.errors).toEqual([]);
   }, 60_000);
 });

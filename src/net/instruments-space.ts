@@ -44,12 +44,24 @@ export interface InstrumentNode {
   dv: V3;
   role: string;
 }
-/** A body of the system: its place [km] from the wormhole's mouth (the home frame's origin), radius [km], parent. */
+/** A body of the system: its place [km] from the wormhole's mouth (the home frame's origin), its velocity [km/s], GM
+ *  [km³/s²], radius [km], parent — its orbit about its parent rebuilt by the console (K3: the map's ellipses). */
 export interface InstrumentBody {
   id: string;
   r: V3;
+  v?: V3;
+  mu?: number;
   radius: number;
   parent: string;
+}
+/** Gargantua's side (K3): the hole's spin; its worlds [M] (their circle's radius about the hole, 0: none); the craft
+ *  and its free-fall path [M] on the flat map of Boyer–Lindquist; the path's fate. */
+export interface InstrumentHole {
+  spin: number;
+  bodies: { id: string; r: V3; radius: number; orbit: number }[];
+  craft: V3 | null;
+  path: V3[];
+  fate: string;
 }
 /** The target: distance [m], closing rate [m/s, + closing], the closest approach [m] and its time [s]. */
 export interface InstrumentTarget {
@@ -102,6 +114,7 @@ export interface InstrumentSpace {
   ports?: { name: string; docked: string }[];
   /** Gargantua's side: radius [M], the energy and angular momentum per mass */
   kerr?: { r: number; E: number; L: number } | null;
+  hole?: InstrumentHole | null;
 }
 
 /** the bounds: segments, points a segment, nodes, bodies, failures, ports */
@@ -168,7 +181,14 @@ export function readSpace(x: Record<string, unknown>): InstrumentSpace {
     out.bodies = x.bodies
       .slice(0, SPACE_BOUNDS.bodies)
       .filter((b): b is Record<string, unknown> => record(b) && v3(b.r) && finite(b.radius))
-      .map((b) => ({ id: label(b.id, 16), r: [...(b.r as V3)], radius: b.radius as number, parent: label(b.parent, 16) }));
+      .map((b) => ({
+        id: label(b.id, 16),
+        r: [...(b.r as V3)],
+        ...(v3(b.v) ? { v: [...b.v] as V3 } : {}),
+        ...(finite(b.mu) && b.mu > 0 ? { mu: b.mu } : {}),
+        radius: b.radius as number,
+        parent: label(b.parent, 16),
+      }));
   const g = x.target;
   if (record(g) && finite(g.dist))
     out.target = {
@@ -208,5 +228,24 @@ export function readSpace(x: Record<string, unknown>): InstrumentSpace {
       .map((p) => ({ name: label(p.name), docked: label(p.docked) }));
   const k = x.kerr;
   if (record(k) && finite(k.r)) out.kerr = { r: k.r, E: num(k.E), L: num(k.L) };
+  const h = x.hole;
+  if (record(h) && finite(h.spin))
+    out.hole = {
+      spin: Math.max(-1, Math.min(1, h.spin)),
+      bodies: Array.isArray(h.bodies)
+        ? h.bodies
+            .slice(0, SPACE_BOUNDS.bodies)
+            .filter((b): b is Record<string, unknown> => record(b) && v3(b.r))
+            .map((b) => ({ id: label(b.id, 16), r: [...(b.r as V3)], radius: num(b.radius), orbit: num(b.orbit) }))
+        : [],
+      craft: v3(h.craft) ? [...h.craft] : null,
+      path: Array.isArray(h.path)
+        ? h.path
+            .slice(0, SPACE_BOUNDS.pts)
+            .filter(v3)
+            .map((q) => [...q] as V3)
+        : [],
+      fate: label(h.fate, 16),
+    };
   return out;
 }

@@ -232,6 +232,7 @@ const NOTES: Record<CrewView, string> = {
   air: "Radar et carte côte à côte · l’objectif, les armes, les alertes · toucher un panneau pour l’ouvrir",
   sdash: "L’orbite, l’attitude, l’ordinateur de vol · toucher un panneau pour l’ouvrir",
   orbit: "L’orbite vue de dessus de son plan · périapside en haut · les poussées du plan en magenta",
+  system: "Glisser pour tourner · pincer pour zoomer · la prédiction à faire défiler",
   dash: "Toucher un panneau pour l’ouvrir · pincer pour la portée",
   pfd: "Horizon, rubans vitesse et altitude, cap, modes du pilote automatique",
   nd: "Pincer pour la portée · toucher un joueur ou un contact",
@@ -264,7 +265,68 @@ function controls() {
   const bar = $("view-controls");
   bar.replaceChildren();
   const v = views.view;
-  if (v === "map" || v === "globe") {
+  if (v === "system") {
+    // the system map (PLAN-VAISSEAUX K3): its centre, its scale, the views from above and edge-on, the prediction
+    const M = views.map3d;
+    bar.append(
+      segmented(
+        [
+          ["body", "Corps"],
+          ["craft", "Vaisseau"],
+          ["sun", "Soleil"],
+        ],
+        M.focus,
+        "Centre de la carte",
+        (o) => {
+          M.focus = o;
+          M.cam.zoom = 1;
+          views.request();
+        },
+      ),
+      segmented(
+        [
+          ["true", "Vraie"],
+          ["log", "Log"],
+        ],
+        M.cam.log ? "log" : "true",
+        "Échelle",
+        (o) => {
+          M.cam.log = o === "log";
+          views.request();
+        },
+      ),
+      button(
+        "Dessus",
+        () => {
+          M.cam.pitch = 1.55;
+          views.request();
+        },
+        "map-top",
+      ),
+      button(
+        "Profil",
+        () => {
+          M.cam.pitch = 0.02;
+          views.request();
+        },
+        "map-edge",
+      ),
+    );
+    const ahead = document.createElement("input");
+    ahead.type = "range";
+    ahead.id = "map-ahead";
+    ahead.min = "0";
+    ahead.max = "1000";
+    ahead.value = "0";
+    ahead.setAttribute("aria-label", "Prédiction : temps à venir");
+    ahead.addEventListener("input", () => {
+      // (the slider's end: the longest path received, six hours at least — squared for a fine start)
+      const span = Math.max(views.mapSpan, 6 * 3600);
+      M.ahead = span * (Number(ahead.value) / 1000) ** 2;
+      views.request();
+    });
+    bar.append(ahead);
+  } else if (v === "map" || v === "globe") {
     bar.append(button("Centrer", () => views.reset(), "recenter"));
     const pan = document.createElement("details");
     pan.className = "pan-controls";
@@ -464,6 +526,7 @@ function setView(view: CrewView) {
     b.setAttribute("aria-pressed", String(b.dataset.view === view));
   }
   document.querySelector<HTMLElement>(".zoom")!.hidden = view === "pfd" || view === "orbit" || view === "sdash";
+  if (view === "system") views.map3d.ahead = 0;
   mcp.hidden = view !== "pfd" && view !== "dash" && view !== "radar" && view !== "air" && view !== "sdash";
   syncMcpKind();
   $("views").querySelector<HTMLElement>(`[data-view=${view}]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -474,6 +537,8 @@ const ICONS: Record<CrewView, string> = {
   air: '<path d="M12 3l2 7 7 2-7 2-2 7-2-7-7-2 7-2z"/>',
   sdash:
     '<rect x="3" y="3" width="11" height="11" rx="2"/><rect x="16" y="3" width="5" height="18" rx="2"/><rect x="3" y="16" width="11" height="5" rx="2"/>',
+  system:
+    '<circle cx="12" cy="12" r="2.5"/><ellipse cx="12" cy="12" rx="9.5" ry="4"/><ellipse cx="12" cy="12" rx="5.5" ry="2.3"/><circle cx="21" cy="12" r="1.2"/>',
   orbit:
     '<ellipse cx="12" cy="12" rx="9" ry="5" transform="rotate(-25 12 12)"/><circle cx="12" cy="12" r="2.5"/><circle cx="19" cy="8" r="1.2"/>',
   dash: '<rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/>',
@@ -651,7 +716,8 @@ function tiles(own: ReturnType<typeof model.own>) {
         case "next":
           // (short: the tile is narrow — 15 min, not 14 min 57)
           text = !snap?.next ? "—" : snap.next.in < 60 || snap.next.in >= 3600 ? dur(snap.next.in) : `${Math.round(snap.next.in / 60)} min`;
-          unit = snap?.next ? snap.next.name || snap.next.kind : "";
+          unit = "";
+          e.title = snap?.next ? `${snap.next.name || snap.next.kind} dans ${dur(snap.next.in)}` : "";
           state = snap?.next?.kind === "impact" ? "alarm" : "";
           break;
         case "dtau":
