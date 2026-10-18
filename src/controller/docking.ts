@@ -465,6 +465,8 @@ function stationContact(this: CameraController, p0: NonNullable<ReturnType<Camer
  * to one rigid assembly, their momenta shared; on a port too fast or off its axis, a bounce.
  */
 function dockCheck(this: CameraController) {
+  // (Gargantua's side: the Endurance there — controller/holeendurance.ts)
+  if (cameraFrame(this.s).region === "hole") return this.holeDockStep();
   const D = this.dockAuto;
   const g = this.dockGeometry(this.pilot.auto === "dock" && D ? { target: D.target, port: D.port } : undefined);
   this.dockInfo = g && g.range < 5000 ? g : null;
@@ -777,6 +779,7 @@ function netUndock(this: CameraController) {
  * from the first port): what is left coasts (or stays on the station), as its own assembly.
  */
 function undock(this: CameraController) {
+  if (this.holeDocked) return this.holeUndock();
   if (this.netDocked) return this.netUndock();
   const me = fleet.active;
   const mine = fleet.links.filter((l) => l.a === me || l.b === me);

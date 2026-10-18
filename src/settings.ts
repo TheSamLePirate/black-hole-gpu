@@ -901,6 +901,7 @@ export type Preset = Partial<Settings> & {
     | "iss"
     | "fleet"
     | "fleetSpin"
+    | "enduranceHole"
     | BodyView /** pose "iss": the ship's distance from the port [m], off its axis [m, station frame] */;
   issDistance?: number;
   issOffset?: [number, number, number];
@@ -1071,6 +1072,21 @@ export const presets: Record<string, Preset> = {
     endurancePhase: 125.82,
     enduranceSize: 2.4,
     enduranceLight: 1.5,
+  },
+  // (PLAN-VAISSEAUX X2c: the Endurance a mothership by Gargantua — the Ranger 150 m off its fore port, at its speed)
+  "Gargantua: the Ranger by the Endurance": {
+    ...GARGANTUA_WORLD,
+    fov: 70,
+    shipMount: "chase",
+    endurance: true,
+    enduranceOrbit: 18,
+    enduranceIncl: 0,
+    enduranceNode: 0,
+    endurancePhase: 125.82,
+    enduranceSize: 2.4,
+    enduranceLight: 1.5,
+    vessel: "ranger",
+    pose: "enduranceHole",
   },
   "Ranger: approaching Gargantua": {
     spin: 0.6,

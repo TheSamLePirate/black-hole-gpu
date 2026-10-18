@@ -1,3 +1,4 @@
+import { holeFleet } from "./holefleet";
 import { streamingLead, aheadFocus, gazeLead } from "./system/streaming-focus";
 import type { NetWalkerHome } from "./controller/netcraft";
 import { CharacterRenderer, type GrassView } from "./character-renderer";
@@ -4558,7 +4559,8 @@ export class Renderer {
         if (t === this.live) this.ownMaskStamp = -1;
       }
       // the Endurance, over the traced image (before the bloom's levels are made from it)
-      if (s && i === r0 && s.endurance && this.lastCam) {
+      // (near it — 60 km —: drawn as a ship at its true size instead, holeShips)
+      if (s && i === r0 && s.endurance && this.lastCam && !holeFleet.source?.()) {
         if (!this.endurance.ready) {
           this.enduranceLoading ??= loading
             .track(
@@ -4927,7 +4929,7 @@ export class Renderer {
   }[] = [];
 
   private shipOthers(s: Settings): ShipInstance[] {
-    const extra = [...this.netShips(s), ...this.combatShips(s)];
+    const extra = [...this.netShips(s), ...this.combatShips(s), ...this.holeShips(s)];
     return extra.length ? [...extra, ...this.fleetOthers(s)] : this.fleetOthers(s);
   }
 
@@ -5029,6 +5031,22 @@ export class Renderer {
         big: o.big,
         mirror: o.mirror,
       }));
+  }
+
+  /** The fleet's Endurance on Gargantua's side, near the camera: at its true size (holefleet.ts). */
+  private holeShips(s: Settings): ShipInstance[] {
+    const h = this.lastCam?.region === "hole" ? holeFleet.source?.() : null;
+    if (!h) return [];
+    const eye = s.ship && this.shipPose ? shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t : ([0, 0, 0] as Vec3);
+    return [
+      {
+        id: "endurance",
+        S: [0, 1, 2].map((k) => [h.axes[0][k]!, h.axes[1][k]!, h.axes[2][k]!]) as [Vec3, Vec3, Vec3],
+        t: [h.rel[0] + eye[0], h.rel[1] + eye[1], h.rel[2] + eye[2]] as Vec3,
+        shadow: Math.hypot(...h.rel) < vesselHulls.endurance.radius + vesselHulls[s.vessel].radius + 60,
+        far: true,
+      },
+    ];
   }
 
   private fleetOthers(s: Settings): ShipInstance[] {

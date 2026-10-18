@@ -916,7 +916,7 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   // docked: carried by the station; a push of the engine or the thrusters undocks
   if (this.docked) {
     if (inp.throttle > 0 || inp.tx !== 0 || inp.ty !== 0 || inp.tz !== 0 || this.pilot.throttle > 0) this.undock();
-    else return this.netDocked ? this.flyNetDocked(dt) : this.flyDocked(dt);
+    else return this.holeDocked ? this.flyHoleDocked(dt) : this.netDocked ? this.flyNetDocked(dt) : this.flyDocked(dt);
   }
   if (Object.values(inp).some((v) => v !== 0)) this.activity = performance.now();
   const dtau = cam.region === "hole" ? cam.zamo.alpha / cam.gamma : 1 / cam.gamma;

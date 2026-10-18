@@ -80,6 +80,7 @@ import { installStationKeep } from "./controller/stationkeep";
 import { installSpaceGuard } from "./controller/spaceguard";
 import { installRing } from "./controller/ring";
 import { installRefuel } from "./controller/refuel";
+import { installHoleEndurance } from "./controller/holeendurance";
 import { installGcas } from "./controller/gcas";
 import { installJetModes } from "./controller/jetmodes";
 import { installCopilot } from "./controller/copilot";
@@ -1179,7 +1180,7 @@ export class CameraController {
   /** Docked to the station (directly, or through craft docked to it): the station carries the flown
    *  craft; a push of the engine or the thrusters undocks. */
   get docked() {
-    return this.s.ship && (fleet.heldByStation() || !!this.netDocked);
+    return this.s.ship && (fleet.heldByStation() || !!this.netDocked || !!this.holeDocked);
   }
   /** held to another player's craft (docs/PLAN-RESEAU.md R7, controller/docking.ts); where it held ours last */
   netDocked: NetDocked | null = null;
@@ -1509,6 +1510,7 @@ installStationKeep(CameraController);
 installSpaceGuard(CameraController);
 installRing(CameraController);
 installRefuel(CameraController);
+installHoleEndurance(CameraController);
 installGcas(CameraController);
 installJetModes(CameraController);
 installCopilot(CameraController);

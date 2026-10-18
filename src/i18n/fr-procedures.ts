@@ -72,6 +72,13 @@ export default {
     "RCS : translation — Z S haut · bas, Q D gauche · droite, ⇧ Alt avant · arrière",
   "RCS: rotation — the attitude keys turn the craft": "RCS : rotation — les touches d'attitude font tourner le vaisseau",
   KEEP: "À POSTE",
+  "By Gargantua, 150 m off the Endurance's fore port: dock to it — its ports on the HUD's docking panel":
+    "Près de Gargantua, à 150 m du port avant de l'Endurance : amarrez-vous — ses ports sur le panneau d'amarrage du HUD",
+  "Docked to the Endurance · {0} · {1} m/s": "Amarré à l'Endurance · {0} · {1} m/s",
+  "Undocked from the Endurance": "Désamarré de l'Endurance",
+  "Docking: within 5 km of the Endurance's ports": "Amarrage : à moins de 5 km des ports de l'Endurance",
+  "The Endurance: not in this scene (by Gargantua)": "L'Endurance : absente de cette scène (près de Gargantua)",
+  "{0} m off the Endurance's fore port": "À {0} m du port avant de l'Endurance",
   propellant: "ergols",
   "REFUEL · {0} %": "FAIRE LE PLEIN · {0} %",
   "Refuel: the propellant is not counted in this scene": "Plein : les ergols ne sont pas comptés dans cette scène",

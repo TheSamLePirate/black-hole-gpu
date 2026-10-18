@@ -1,3 +1,4 @@
+import { holeFleet } from "./holefleet";
 import { SceneryHitboxes } from "./ui/scenery-hitboxes";
 import { planetFrame, toLocal } from "./landing";
 import { cartToGeodetic, flatteningOf, WGS84_A, WGS84_F } from "./system/ellipsoid";
@@ -1783,7 +1784,7 @@ async function main() {
         camera.setRotation("tripod");
       }
       void aimAt(pose.look ?? null, pose.off ?? [0, 0]);
-    } else if (pose) {
+    } else if (pose && pose !== "enduranceHole") {
       // (the station: at the real time now, unless the scene has its own)
       const now = pose === "iss" || pose === "fleet" || pose === "fleetSpin";
       const t = time ?? (now ? gameTimeOf(dateNow()) : sim.time);
@@ -1809,6 +1810,14 @@ async function main() {
     setMountVessel(settings.vessel);
     const starts = pose === "fleetSpin" ? fleetSpinStart(sim.time) : fleetStart(sim.time, settings.vessel);
     if ((pose === "fleet" || pose === "fleetSpin") && settings.ship && settings.vessel !== "f35") camera.flyFrom(starts[settings.vessel]);
+    // (by Gargantua, the Ranger beside the Endurance: 150 m off its fore port — controller/holeendurance.ts)
+    if (pose === "enduranceHole" && settings.ship) {
+      camera.placeByHoleEndurance(150, sim.time);
+      // (again two frames on, on the view's clock: the scene's first frames settle the flight's clock — a few
+      // hundredths of a second off it are thousands of km at a quarter of light's speed)
+      requestAnimationFrame(() => requestAnimationFrame(() => camera.placeByHoleEndurance(150)));
+      panel.toast(t("By Gargantua, 150 m off the Endurance's fore port: dock to it — its ports on the HUD's docking panel"));
+    }
     if (pose === "iss" && settings.ship) {
       // (the station's start gives the ship's own axes — its nose to the port's axis — not the view's:
       // the camera then where its mount is)
@@ -4313,6 +4322,8 @@ async function main() {
   flightHud.onPlace = () => placePanel.open();
   // a plane's flight plan (ui/routepanel.ts, PLAN-F35 F8): its waypoints on the map, NAV flying it
   const routePanel = new RoutePanel({ camera, toast: (s) => panel.toast(s) });
+  // (the fleet's Endurance on Gargantua's side, near: drawn at its true size — controller/holeendurance.ts)
+  holeFleet.source = () => camera.holeCraft();
   // a spacecraft's mission plan (ui/missionplan.ts, PLAN-VAISSEAUX X1e): its timeline, its Δv, executed from it
   const missionPlan = new MissionPlanPanel({ camera, toast: (s) => panel.toast(s), planner: () => openMissions() });
   /** ⇧O: the F-35's — or a craft flown as a plane in the air — flight plan; a spacecraft's mission plan */

@@ -124,6 +124,7 @@ function spaceRecoverStart(this: CameraController): string {
  */
 function spaceAssistStep(this: CameraController, inp: PilotInput, dt: number) {
   this.spaceDrift = false;
+
   // (the ring stopped, or another craft flown: its hold let go — the roll back to the stick's own pace)
   if (this.ringRpm != null && (!VESSELS[fleet.active].ring || (this.ringRpm === 0 && Math.abs(this.pilot.omega[2]) < 1e-3)))
     this.ringRpm = null;

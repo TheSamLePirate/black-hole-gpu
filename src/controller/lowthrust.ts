@@ -2323,7 +2323,8 @@ function autopilotWant(this: CameraController, cam: ReturnType<typeof cameraFram
   const T = Math.max(1.2 * s.timeSpeed * dtau, 1e-3);
   // our universe: Newtonian autopilots in the home frame
   if (this.ourNav(cam)) return this.ourWant(cam, say, T);
-  if (P.auto === "dock") return say(tf("Docking: with the ISS, in our solar system"));
+  // (by Gargantua, the Endurance: its own docking — controller/holeendurance.ts)
+  if (P.auto === "dock") return this.holeDockWant(cam, say) ?? say(tf("Docking: with the ISS, in our solar system"));
   if (P.auto === "keep") return say(t("Station keeping: in our solar system"));
   if (P.auto === "hover") {
     if (cam.region !== "hole") return { beta: [0, 0, 0], ff: [0, 0, 0] };
