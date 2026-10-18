@@ -12,6 +12,10 @@ import type { CameraController } from "../controls";
 import type { MissileKind, V3 } from "../game/combat";
 import { LOADOUTS } from "../game/combat";
 import { proxyGone } from "../controller/fightproxy";
+import { crashView, FALL_CAP, fallStep, startFall } from "../game/wreckfall";
+import { geodeticNormal, WGS84_A, WGS84_F } from "../system/ellipsoid";
+import { heightOverGround } from "../system/our-surface";
+import { M_METRES } from "../units";
 import { fleet } from "../fleet";
 import type { GameTools } from "../game/tools";
 import {
@@ -105,6 +109,11 @@ export class NetMatch {
   private cs = new Map<number, { at: number; s: CombatState }>();
   /** the slots shot down, hidden until they fly again (the room's time) */
   private down = new Map<number, number>();
+  /** the others shot down, their craft falling to its crash: since (the room's time) — seen, not hidden */
+  private falling = new Map<number, number>();
+  /** our own fall's placing of our craft (the puppet's — controller: ours while it is this one) */
+  private fallPuppet: (() => ReturnType<NonNullable<CameraController["puppet"]>>) | null = null;
+  private killcamSet = false;
   private lastHitFrom: number | null = null;
   private lastHitAt = -1;
   private lastHitBy = "";
@@ -222,6 +231,7 @@ export class NetMatch {
 
   private reset() {
     const C = this.d.camera;
+    this.fallStop();
     if (this.d.session.follow?.why === "killcam") this.d.session.setFollow(null);
     if (this.begun && C.combat?.net) C.combatEnd();
     this.match = null;
@@ -230,6 +240,7 @@ export class NetMatch {
     this.begun = false;
     this.cs.clear();
     this.down.clear();
+    this.falling.clear();
     this.d.session.hidden.clear();
     this.root.hidden = true;
   }
@@ -297,6 +308,8 @@ export class NetMatch {
         // (a collision with us in the fight: our side down too)
         if (ev.with === this.me) this.collision(from);
         return this.onDown(Number(ev.slot), ev.by as number | null, String(ev.weapon ?? ""));
+      case "impact":
+        return this.onImpact(from, !!ev.broke, Array.isArray(ev.p) ? (ev.p as [number, number, number]) : null);
       case "cm":
         if (W) W.addDecoys(ev.p as V3, ev.v as V3, ev.up as V3);
         return;
@@ -321,8 +334,19 @@ export class NetMatch {
     this.log.push(`${(this.net?.roomNow() ?? 0).toFixed(1)} down ${slot} by ${by} ${weapon} (${this.phase})`);
     this.sheet?.apply({ kind: "down", slot, by });
     const net = this.net;
-    if (net && this.match) this.down.set(slot, net.roomNow() + this.match.rules.respawn + 1);
-    this.d.session.hidden.set(slot, true);
+    const C0 = this.d.camera.combat;
+    if (net && this.match) {
+      const now = net.roomNow();
+      // (another's craft out of control: seen falling to its crash — hidden there, his impact said —, not at once;
+      // its burst where it was hit)
+      if (slot !== this.me) {
+        this.falling.set(slot, now);
+        this.down.set(slot, now + FALL_CAP + this.match.rules.respawn + 3);
+        const q = C0?.world.target(10_000 + slot);
+        if (C0 && q) C0.booms.push({ p: [...q.p], t: C0.t, size: 1.5 });
+      } else this.down.set(slot, now + this.match.rules.respawn + 1);
+    }
+    if (slot === this.me) this.d.session.hidden.set(slot, true);
     const w = WEAPON[weapon] ?? weapon.toUpperCase();
     this.addFeed(`${this.nameOf(by)} ✕ ${this.nameOf(slot)}${w ? ` · ${w}` : ""}`, this.colourOf(by));
     const C = this.d.camera.combat;
@@ -330,8 +354,43 @@ export class NetMatch {
       C.killAt = C.t;
       C.say = tf("Splash — {0}", this.nameOf(slot));
     }
-    // (shot down by another: the kill cam — his craft followed until we fly again)
-    if (slot === this.me && by !== null && by >= 0 && by !== this.me) this.d.session.setFollow(by, "killcam");
+    // (shot down by another, our craft not falling — not over the Earth —: the kill cam at once, his craft followed
+    // until we fly again; falling: after our crash — fallFrame)
+    if (slot === this.me && by !== null && by >= 0 && by !== this.me && !C0?.fall) this.d.session.setFollow(by, "killcam");
+  }
+
+  /** Another's craft crashed (or broken up in the air): its explosion where it ended (the Earth's coordinates [m], as
+   *  he said it — else where the network last put his craft), its smoke rising there; hidden until he flies again. */
+  private onImpact(slot: number, broke: boolean, at: [number, number, number] | null = null) {
+    const net = this.net;
+    if (!net || !this.match) return;
+    this.log.push(`${net.roomNow().toFixed(1)} impact ${slot}${broke ? " (broke up)" : ""}`);
+    this.falling.delete(slot);
+    this.down.set(slot, net.roomNow() + this.match.rules.respawn + 1);
+    const c = this.d.camera;
+    const C = c.combat;
+    const q = C?.world.target(10_000 + slot);
+    // (his end from our craft — the Earth's coordinates onto the local east, north, up here, as the network's
+    // craft are placed —: his last samples may already be his still eye on it)
+    const own = at && C?.last ? c.netOwn() : null;
+    let w: V3 | null = q ? [...q.p] : null;
+    if (at && own && C?.last) {
+      const U = geodeticNormal(WGS84_A, WGS84_F, own.p);
+      const el = Math.hypot(U[0], U[1]) || 1;
+      const E = [-U[1] / el, U[0] / el, 0];
+      const N = [U[1] * E[2]! - U[2] * E[1]!, U[2] * E[0]! - U[0] * E[2]!, U[0] * E[1]! - U[1] * E[0]!];
+      const d = [at[0] - own.p[0], at[1] - own.p[1], at[2] - own.p[2]];
+      const dt = (a: number[]) => d[0]! * a[0]! + d[1]! * a[1]! + d[2]! * a[2]!;
+      const P = C.last.p;
+      w = [P[0] + dt(E), P[1] + dt(N), P[2] + dt(U)];
+    }
+    if (C && w) {
+      const p: V3 = [w[0], w[1], broke ? w[2] : C.world.groundZ(w[0], w[1])];
+      C.booms.push({ p, t: C.t, size: 2.5 });
+      C.events.push({ kind: "explode", p, size: 2.5 });
+      if (!broke) C.crashes = [...(C.crashes ?? []).filter((x) => C.t - x.t < 60), { key: `s${slot}`, p, t: C.t }];
+    }
+    this.d.session.hidden.set(slot, true);
   }
 
   private addFeed(text: string, colour: string) {
@@ -360,6 +419,7 @@ export class NetMatch {
   /** A match said: its countdown begun (the place taken at its end). */
   begin(m: Match) {
     if (this.match?.id === m.id) return;
+    this.fallStop();
     if (this.begun && this.d.camera.combat?.net) this.d.camera.combatEnd();
     this.match = m;
     this.sheet = new ScoreSheet(m);
@@ -368,6 +428,7 @@ export class NetMatch {
     this.final = null;
     this.cs.clear();
     this.down.clear();
+    this.falling.clear();
     this.d.session.hidden.clear();
     this.respawns = 0;
     this.resultSent = false;
@@ -434,6 +495,7 @@ export class NetMatch {
     this.phase = "over";
     this.final = ranking ?? this.rankingLines();
     const C = this.d.camera;
+    this.fallStop();
     if (C.combat?.net) C.combatEnd();
     this.d.session.hidden.clear();
     this.showEnd();
@@ -563,6 +625,7 @@ export class NetMatch {
       this.final = null;
       this.cs.clear();
       this.down.clear();
+      this.falling.clear();
       this.respawns = 0;
       this.announced.clear();
       this.prevDamage = 0;
@@ -602,6 +665,7 @@ export class NetMatch {
 
   private freeEnd() {
     const c = this.d.camera;
+    this.fallStop();
     if (c.combat?.net) c.combatEnd();
     if (this.d.session.follow?.why === "killcam") this.d.session.setFollow(null);
     this.match = null;
@@ -609,6 +673,7 @@ export class NetMatch {
     this.phase = "idle";
     this.begun = false;
     this.down.clear();
+    this.falling.clear();
     this.d.session.hidden.clear();
     this.root.hidden = true;
   }
@@ -637,6 +702,7 @@ export class NetMatch {
             fwd: s.enu.fwd as V3,
             up: s.enu.up as V3,
             alive: !this.down.has(s.slot),
+            falling: this.falling.has(s.slot),
             friendly: this.sameTeam(me, s.slot),
           })),
       );
@@ -718,14 +784,20 @@ export class NetMatch {
             .map((q) => [q.id, ...q.p.map(r1), ...q.v.map(r1), ...q.fwd.map(r3), ...q.up.map(r3), q.alive ? 1 : 0]);
         net.event({ kind: "cs", s });
       }
-      // shot down: said to all; flown again after the wait
+      // shot down: said to all; out of control to the ground, its explosion (game/wreckfall.ts); flown again after the
+      // wait from the crash (not over the Earth: from the hit)
       if (C.downAt !== null && !this.downSent) {
         this.downSent = true;
         net.event({ kind: "down", slot: me, by: this.lastHitFrom, weapon: this.lastHitBy, with: this.collidedWith ?? undefined });
         this.collidedWith = null;
+        this.fallBegin();
         this.onDown(me, this.lastHitFrom, this.lastHitBy);
       }
-      if (C.downAt !== null && C.t - C.downAt > m.rules.respawn) this.respawn();
+      if (C.downAt !== null) this.fallFrame(net);
+      const waitFrom = C.fall ? C.fall.endAt : C.downAt;
+      if (C.downAt !== null && waitFrom !== null && C.t - waitFrom > m.rules.respawn) this.respawn();
+      // (another's fall whose crash was never said — lost —: ended at the cap)
+      for (const [s, at] of this.falling) if (now - at > FALL_CAP + 3) this.onImpact(s, true);
       // the host's call: the end
       if (m.host === me && this.sheet) {
         const aiLeft = W.targets.filter((q) => q.peer === undefined && q.alive).length;
@@ -745,8 +817,82 @@ export class NetMatch {
     if (!C?.net && m.host === me && this.sheet && challengeOf(m) && this.sheet.over(now)) this.end();
   }
 
+  /** Shot down: our craft out of control — the controls cut (the stick, the throttle, the autopilot: its place is the
+   *  fall's) —, falling as the fight's wrecks do; not over the Earth: none (the wait alone). */
+  private fallBegin() {
+    const c = this.d.camera;
+    const C = c.combat;
+    if (!C) return;
+    const own = c.netOwn();
+    if (!own) {
+      C.fall = null;
+      return;
+    }
+    C.fall = { wreck: startFall(own), last: C.t, endAt: null, at: null, view: null };
+    if (c.pilot.auto !== "none") c.pilot.setAuto(c.pilot.auto);
+    c.pilot.auto = "none";
+    c.pilot.throttle = c.pilot.engineNow = 0;
+    this.killcamSet = false;
+    const put = () => {
+      const F = c.combat?.fall;
+      if (!F) return null;
+      const W = F.wreck;
+      // (crashed: watched from back along its way, above — a still eye)
+      if (F.view) return c.netPlaceEarth(F.view.p, [0, 0, 0], F.view.fwd, F.view.up);
+      return c.netPlaceEarth(W.p, W.v, W.fwd, W.up);
+    };
+    this.fallPuppet = put;
+    c.puppet = put;
+  }
+
+  /** A frame of our fall: stepped on the fight's clock; at its end the explosion (ours, said to the room), its smoke,
+   *  the eye on the crash; shot down by another in a match: his craft followed a while after (the kill cam). */
+  private fallFrame(net: Client) {
+    const c = this.d.camera;
+    const C = c.combat!;
+    const F = C.fall;
+    if (!F) return;
+    const normal = (p: [number, number, number]) => geodeticNormal(WGS84_A, WGS84_F, p);
+    const height = (p: [number, number, number]) =>
+      heightOverGround("earth", [p[0] / M_METRES, p[1] / M_METRES, p[2] / M_METRES] as [number, number, number]);
+    if (F.endAt === null) {
+      // (still the controls' cut: nothing flies it)
+      c.pilot.throttle = c.pilot.engineNow = 0;
+      const dt = C.t - F.last;
+      F.last = C.t;
+      if (!fallStep(F.wreck, dt, normal, height)) return;
+      F.endAt = C.t;
+      F.view = crashView(F.wreck, normal, height);
+      const P = C.last;
+      const broke = F.wreck.broke;
+      const p: V3 = P ? [P.p[0], P.p[1], broke ? P.p[2] : Math.min(P.p[2], C.world.groundZ(P.p[0], P.p[1]))] : [0, 0, 0];
+      F.at = p;
+      C.booms.push({ p, t: C.t, size: 2.5 });
+      C.events.push({ kind: "explode", p, size: 2.5 });
+      if (!broke) C.crashes = [...(C.crashes ?? []).filter((x) => C.t - x.t < 60), { key: "me", p, t: C.t }];
+      net.event({ kind: "impact", p: F.wreck.end?.map(r1), broke: broke || undefined });
+      this.log.push(`${net.roomNow().toFixed(1)} impact ${this.me}${broke ? " (broke up)" : ""} after ${F.wreck.t.toFixed(1)} s`);
+      return;
+    }
+    // (the crash seen a while; then, shot down by another in a match, his craft followed until we fly again)
+    const by = this.lastHitFrom;
+    if (!this.killcamSet && by !== null && by >= 0 && by !== this.me && C.t - F.endAt > 2.5) {
+      this.killcamSet = true;
+      this.d.session.setFollow(by, "killcam");
+    }
+  }
+
+  /** Our fall's placing given up (flown again, the fight left). */
+  private fallStop() {
+    const c = this.d.camera;
+    if (this.fallPuppet && c.puppet === this.fallPuppet) c.puppet = null;
+    this.fallPuppet = null;
+    if (c.combat) c.combat.fall = null;
+  }
+
   private respawn() {
     const m = this.match!;
+    this.fallStop();
     if (this.d.session.follow?.why === "killcam") this.d.session.setFollow(null);
     const C = this.d.camera;
     const CB = C.combat!;
@@ -802,8 +948,12 @@ export class NetMatch {
     // the big words: the countdown, shot down, back
     const C = this.d.camera.combat;
     if (this.phase === "run" && C?.downAt != null) {
-      const left = Math.max(0, m.rules.respawn - (C.t - C.downAt));
-      this.big.textContent = tf("Shot down by {0} — back in {1} s", this.nameOf(this.lastHitFrom), Math.ceil(left));
+      const from = C.fall ? C.fall.endAt : C.downAt;
+      const left = Math.max(0, m.rules.respawn - (C.t - (from ?? C.t)));
+      this.big.textContent =
+        from === null
+          ? tf("Shot down by {0} — out of control", this.nameOf(this.lastHitFrom))
+          : tf("Shot down by {0} — back in {1} s", this.nameOf(this.lastHitFrom), Math.ceil(left));
     } else if (this.phase === "run" && performance.now() > this.bigUntil) this.big.textContent = "";
     // the kill feed: the last five, 8 s each
     const keep = this.feed.filter((f) => performance.now() - f.at < 8000);

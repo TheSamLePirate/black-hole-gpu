@@ -236,6 +236,9 @@ export interface Target {
   /** another player (docs/PLAN-RESEAU.md R3): his slot — his craft placed each frame from the network, his damage
    *  his own (a hit on him sent to him) */
   peer?: number;
+  /** another player shot down, his craft falling out of control to its crash (ui/netmatch.ts — his own fall,
+   *  game/wreckfall.ts, placed here from the network): its smoke */
+  falling?: boolean;
   /** a target another runs (the host's aggressors on a guest's world): placed from the network, not stepped, a
    *  hit on it sent to the host */
   remote?: boolean;
@@ -769,7 +772,7 @@ export class CombatWorld {
    * The other players as targets (docs/PLAN-RESEAU.md R3): each placed where the network says, his team-mates
    * friendly; those gone removed. Their ids: 10 000 + their slot.
    */
-  setPeers(list: { slot: number; name: string; p: V3; v: V3; fwd: V3; up: V3; alive: boolean; friendly: boolean }[]) {
+  setPeers(list: { slot: number; name: string; p: V3; v: V3; fwd: V3; up: V3; alive: boolean; friendly: boolean; falling?: boolean }[]) {
     const ids = new Set(list.map((x) => 10_000 + x.slot));
     this.targets = this.targets.filter((q) => q.peer === undefined || ids.has(q.id));
     for (const x of list) {
@@ -793,7 +796,7 @@ export class CombatWorld {
         this.targets.push(q);
       }
       if (q.alive && !x.alive) q.diedAt = this.t;
-      Object.assign(q, { name: x.name, p: x.p, v: x.v, fwd: x.fwd, up: x.up, alive: x.alive, friendly: x.friendly });
+      Object.assign(q, { name: x.name, p: x.p, v: x.v, fwd: x.fwd, up: x.up, alive: x.alive, friendly: x.friendly, falling: !!x.falling });
       if (!q.alive && this.lock === id) this.lock = null;
     }
   }

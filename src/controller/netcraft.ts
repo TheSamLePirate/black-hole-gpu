@@ -29,10 +29,14 @@ declare module "../controls" {
     netClockRate: typeof netClockRate;
     netShips: typeof netShips;
     netPlaceBeside: typeof netPlaceBeside;
+    netPlaceEarth: typeof netPlaceEarth;
     netWalkerHome: typeof netWalkerHome;
     netOwnWalker: typeof netOwnWalker;
   }
 }
+
+/** what places a sample's craft: its frame, its body, its place, velocity and attitude */
+type CraftPlace = Pick<CraftState, "frame" | "body" | "p" | "v" | "q">;
 
 /** a sample's flag: coasting in space — its orbit carries it (src/net/remote.ts FLAG_COAST, R6) */
 export const NET_COAST = 16;
@@ -297,7 +301,7 @@ function netOwn(this: CameraController): NetOwn | null {
 }
 
 /** A sample's craft in the home frame at scene time t [M]: its place [M] and velocity [c]; null: not on our worlds. */
-export function netStateHome(s: CraftState, t: number): { pos: Vec3; vel: Vec3 } | null {
+export function netStateHome(s: CraftPlace, t: number): { pos: Vec3; vel: Vec3 } | null {
   if (s.frame === NET_FRAME_HOLE) return null;
   const body = NET_BODIES[s.body];
   const b = body ? solarBody(body) : null;
@@ -536,7 +540,7 @@ function netShips(
  */
 function netPlaceBeside(
   this: CameraController,
-  s: CraftState,
+  s: CraftPlace,
   gap: number,
 ): { frame?: "hole"; X: Vec3; vel: Vec3; fwd: Vec3; up: Vec3 } | null {
   // (Gargantua's side — R8 —: on the hole's map, his velocity as the ZAMO's β there)
@@ -573,6 +577,23 @@ function netPlaceBeside(
   };
 }
 
+/** A place on the Earth as the network sends one (its own coordinates [m], the velocity over its ground [m/s], the
+ *  nose and top) for tools.placeAt and the puppet (a wreck's fall — ui/netmatch.ts); null: not on our worlds. */
+function netPlaceEarth(this: CameraController, p: Vec3, v: Vec3, fwd: Vec3, up: Vec3) {
+  const right: Vec3 = [fwd[1] * up[2] - fwd[2] * up[1], fwd[2] * up[0] - fwd[0] * up[2], fwd[0] * up[1] - fwd[1] * up[0]];
+  return this.netPlaceBeside({ frame: 0, body: 0, p, v, q: axesQuat(unit(fwd), unit(up), unit(right)) }, 0);
+}
+
 export function installNetcraft(Ctl: { prototype: CameraController }) {
-  Object.assign(Ctl.prototype, { netOwn, netOwnState, netMouthCam, netClockRate, netShips, netPlaceBeside, netWalkerHome, netOwnWalker });
+  Object.assign(Ctl.prototype, {
+    netOwn,
+    netOwnState,
+    netMouthCam,
+    netClockRate,
+    netShips,
+    netPlaceBeside,
+    netPlaceEarth,
+    netWalkerHome,
+    netOwnWalker,
+  });
 }

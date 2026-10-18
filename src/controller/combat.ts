@@ -32,6 +32,7 @@ import { bodyFixedOf, groundRelief } from "../system/our-surface";
 import { store } from "../util/storage";
 import type { CameraController } from "../controls";
 import type { ShipMeshId } from "../ship";
+import type { WreckFall } from "../game/wreckfall";
 
 type Vec3 = [number, number, number];
 const D = Math.PI / 180;
@@ -74,6 +75,12 @@ export interface CombatState {
   net: { host: boolean; rules: MatchRules } | null;
   /** shot down in a match, waiting to fly again: since [s of the fight] */
   downAt: number | null;
+  /** shot down in a room (ui/netmatch.ts): our craft out of control to its crash — game/wreckfall.ts, the Earth's
+   *  coordinates —, stepped until [s of the fight]; when it ended (crashed, broken up), where in the fight's frame,
+   *  the place watched from then (the Earth's); null: none (not over the Earth — the wait alone) */
+  fall?: { wreck: WreckFall; last: number; endAt: number | null; at: V3 | null; view: { p: Vec3; fwd: Vec3; up: Vec3 } | null } | null;
+  /** the crashes seen — ours, the other players' —: where (the fight's frame), when [s of the fight]: their smoke */
+  crashes?: { key: string; p: V3; t: number }[];
   /** the countermeasures dropped this frame (where, how fast, which way up): sent to the others */
   cmOut: { p: V3; v: V3; up: V3 }[];
   /** the last hit of the player's shots, the last kill [s of the fight] (the HUD's hit marker) */
@@ -550,6 +557,11 @@ function combatFocus(this: CameraController): { p: V3; kind: "missile" | "wreck"
     .filter((q) => q.wreck && (Number.isNaN(q.wreck.crashedAt) || W.t - q.wreck.crashedAt < 8))
     .sort((a, b) => b.diedAt - a.diedAt)[0];
   if (wreck) return { p: [...wreck.p] as V3, kind: "wreck", id: wreck.id };
+  // (another player shot down — ui/netmatch.ts —: his craft falling, his crash less than 8 s ago)
+  const fallen = W.targets.filter((q) => q.peer !== undefined && q.falling).sort((a, b) => b.diedAt - a.diedAt)[0];
+  if (fallen) return { p: [...fallen.p] as V3, kind: "wreck", id: fallen.id };
+  const crash = (C.crashes ?? []).filter((x) => x.key !== "me" && C.t - x.t < 8).sort((a, b) => b.t - a.t)[0];
+  if (crash) return { p: [...crash.p] as V3, kind: "wreck", id: -1 };
   const ship = W.targets.filter((q) => q.kind === "ship" && !q.alive && W.t - q.diedAt < 30).sort((a, b) => b.diedAt - a.diedAt)[0];
   if (ship) return { p: [...ship.p] as V3, kind: "ship", id: ship.id };
   const lk = W.target(W.lock);
