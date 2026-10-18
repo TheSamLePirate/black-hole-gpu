@@ -1377,7 +1377,7 @@ export default {
   "Search the settings": "Rechercher dans les réglages",
   "Flying a spacecraft (K) — KSP's layout": "Piloter un vaisseau (K) — disposition KSP",
   "Station keeping: held where it is against the station or a craft within 5 km, on the thrusters (docked: undock, back off 30 m, then hold) · RCS mode: the attitude keys turn the craft, or translate it (W S up · down, A D left · right, ⇧ Alt forward · back; Q E still roll)":
-    "Maintien de position : tenu où il est par rapport à la station ou à un vaisseau à moins de 5 km, aux propulseurs (amarré : désamarrer, reculer de 30 m, puis tenir) · Mode RCS : les touches d'attitude font tourner le vaisseau, ou le translatent (Z S haut · bas, Q D gauche · droite, ⇧ Alt avant · arrière ; A E roulent toujours)",
+    "Maintien à poste : tenu où il est par rapport à la station ou à un vaisseau à moins de 5 km, aux propulseurs (amarré : désamarrer, reculer de 30 m, puis tenir) · Mode RCS : les touches d'attitude font tourner le vaisseau, ou le translatent (Z S haut · bas, Q D gauche · droite, ⇧ Alt avant · arrière ; A E roulent toujours)",
   "Pitch · yaw · roll (Z S · Q D · A E on AZERTY)": "Tangage · lacet · roulis (Z S · Q D · A E en AZERTY)",
   "⇧ · Alt · ↑ ↓": "⇧ · Alt · ↑ ↓",
   "Throttle up · down (held)": "Gaz plus · moins (maintenu)",

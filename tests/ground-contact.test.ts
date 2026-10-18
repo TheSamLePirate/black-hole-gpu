@@ -29,6 +29,8 @@ test("flown tail first into the ground, off its gear: a crash, not a craft left 
     { ...g, X, fwd: g.up, up: scale(g.fwd, -1), vel: add(groundVelocity("moon", X, 0), scale(g.up, -20 / 299792458)), landed: undefined },
     false,
   );
+  // (the spacecraft's protection off: it would hover — PLAN-VAISSEAUX X1b)
+  c.s.spaceAutoProtect = false;
   fly(30, () => !!c.ourLanded);
   // (a crash: the hull into the ground, or — the gear 1.8 m short, reaching the ground first — the gear
   // collapsing under it; not a craft left standing on its tail)

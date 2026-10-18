@@ -3918,7 +3918,7 @@ async function main() {
               ["takeoff", { fr: "Décoller", en: "Take off" }, "U"],
               ["dock", { fr: "Amarrer", en: "Dock" }, "B"],
               ["entry", { fr: "Rentrée", en: "Entry" }, "⇧G"],
-              ["keep", { fr: "Maintien de position", en: "Station keeping" }, "⇧8"],
+              ["keep", { fr: "Maintien à poste", en: "Station keeping" }, "⇧8"],
             ] as const
           ).map(([a, label, key]) => ({
             label,

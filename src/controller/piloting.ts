@@ -1031,6 +1031,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   this.gcasStep(dtPilot);
   // (a spacecraft's level of assistance: its SAS law, the recovery, the drift held near a craft — controller/spaceassist.ts)
   this.spaceAssistStep(inp, dtPilot);
+  // (its protections: the ground, the keep-out sphere — controller/spaceguard.ts)
+  this.spaceGuardStep();
   // (the F-35B's STOVL mode — controller/stovl.ts —: the thrust's direction, the hover law; its input the stick's
   // left to the pilot — none when the hover law takes it)
   const vt = this.stovlStep(cam, inp, dtPilot);

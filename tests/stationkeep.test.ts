@@ -11,7 +11,12 @@ import { setSceneTime } from "../src/wormhole";
 // PLAN-VAISSEAUX X1a: station keeping — the craft held where it is against a craft near, in the target's orbital frame,
 // on the thrusters; docked, the same key undocks and backs off 30 m, then holds; the RCS translation mode's keys.
 
-afterEach(() => fleetStart(0, "ranger"));
+// (the fleet's flown craft handed to each test's headless controller — given back after)
+const activePose = fleet.activePose;
+afterEach(() => {
+  fleet.activePose = activePose;
+  fleetStart(0, "ranger");
+});
 
 test("the target's orbital frame: unit, orthogonal, right-handed, its turn the orbit's rate", () => {
   const F = lvlhFrame([7000, 0, 0], [0, 7.5, 0.5]);

@@ -78,7 +78,7 @@ export const AUTO_FR: Record<string, string> = {
   dock: "amarrage",
   entry: "rentrée",
   burns: "combustions du plan",
-  keep: "maintien de position",
+  keep: "maintien à poste",
 };
 export const MANEUVER_FR: Record<string, string> = {
   circularize: "circularisation",

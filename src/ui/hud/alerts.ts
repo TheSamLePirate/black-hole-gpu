@@ -106,6 +106,20 @@ function helpOf(id: string): { why: string; todo: string } {
         why: t("Below the innermost stable circular orbit, a circle is unstable: a nudge spirals in."),
         todo: t("Climb above the ISCO before circularizing, or hold with thrust (8: hold position)."),
       };
+    case "guard-ground":
+      return {
+        why: t(
+          "Coming down faster than the engines can still stop the craft above the ground (90 % of the thrust, the time to turn and spool up).",
+        ),
+        todo: t(
+          "Full throttle with the nose up (retrograde), or 8: hold position. Armed, the protection hovers by itself; the stick or ⇧X take it back.",
+        ),
+      };
+    case "guard-kos":
+      return {
+        why: t("Closing on the station or a craft inside its 200 m keep-out sphere faster than its limit: 0.05 m/s + 0.5 % of the range."),
+        todo: t("Brake on the RCS (the translation keys, away from it), or ⇧8: station keeping. Armed, the protection holds by itself."),
+      };
     case "wheels":
       return { why: t("Rolling on the ground."), todo: t("Keep straight; the brakes come once the nose wheel is down.") };
     case "landed":
@@ -121,16 +135,17 @@ function helpOf(id: string): { why: string; todo: string } {
 export type AlertInput = Pick<
   FlightInfo,
   "path" | "landed" | "surface" | "air" | "ergo" | "region" | "r" | "photon" | "isco" | "auto" | "target" | "engine"
-> & {
-  status?: { soi: string; status: string } | null;
-  landedOn?: FlightInfo["landedOn"];
-  /** the time running */
-  animate: boolean;
-  /** the F-35B's STOVL mode (none: not converted) */
-  stovl?: FlightInfo["stovl"];
-  /** a coordinate time [M] in words (the horizon's countdown) */
-  fmtM: (t: number) => string;
-};
+> &
+  Partial<Pick<FlightInfo, "spaceGuard">> & {
+    status?: { soi: string; status: string } | null;
+    landedOn?: FlightInfo["landedOn"];
+    /** the time running */
+    animate: boolean;
+    /** the F-35B's STOVL mode (none: not converted) */
+    stovl?: FlightInfo["stovl"];
+    /** a coordinate time [M] in words (the horizon's countdown) */
+    fmtM: (t: number) => string;
+  };
 
 const RANK: Record<AlertLevel, number> = { warning: 0, caution: 1, advisory: 2 };
 
@@ -169,6 +184,24 @@ export function alertsOf(i: AlertInput): Alert[] {
     if (air.gearWarn) add("gear", "warning", t("GEAR UP · TOO LOW"));
     if (air.heat > 5e4) add("plasma", "advisory", tf("PLASMA · {0} W/cm² · MACH {1}", (air.heat / 1e4).toFixed(0), air.mach.toFixed(1)));
   }
+  // a spacecraft's protections (controller/spaceguard.ts): foreseen, taken over
+  const G = i.spaceGuard;
+  if (G?.kind === "ground")
+    add(
+      "guard-ground",
+      G.level === "act" ? "warning" : "caution",
+      G.level === "act" && G.armed
+        ? tf("AUTO-PROTECTION · GROUND · HOVER · {0} M/S", G.rate.toFixed(0))
+        : tf("SINK RATE · {0} M/S · STOP {1} M", G.rate.toFixed(0), Number.isFinite(G.limit) ? Math.round(G.limit) : "∞"),
+    );
+  else if (G?.kind === "kos")
+    add(
+      "guard-kos",
+      G.level === "act" ? "warning" : "caution",
+      G.level === "act" && G.armed
+        ? tf("AUTO-PROTECTION · KEEP-OUT · HOLDING · {0} M/S", G.rate.toFixed(1))
+        : tf("CLOSING {0} M/S · LIMIT {1} M/S · {2} M", G.rate.toFixed(1), G.limit.toFixed(2), Math.round(G.dist)),
+    );
   // the tank
   const fuel = i.engine.fuel;
   const sv = i.stovl ?? null;

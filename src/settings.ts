@@ -454,7 +454,8 @@ export interface Settings {
   crashSpeed: number; // touching the ground faster than this is a crash [m/s]
   gearForgiving: boolean; // the landing gear's limits three times a real one's (an easier landing)
   spaceAssist: "manual" | "realistic" | "assisted" | "beginner"; // a spacecraft's assistance (PLAN-VAISSEAUX X0): no SAS · the pilot's SAS · SAS always, the drift held near a target · the same, gentle rates
-  spaceInfinitePropellant: boolean; // a spacecraft's tanks never empty (the crew engine's propellant)
+  spaceInfinitePropellant: boolean;
+  spaceAutoProtect: boolean; // a spacecraft's protections act in the realistic level too (the ground: the hover; the keep-out sphere: station keeping) // a spacecraft's tanks never empty (the crew engine's propellant)
   gyroscopes: boolean; // near the hole, the ship's axes carried as gyroscopes (Fermi–Walker: gyro.ts), else fixed on the distant stars
   wind: 0 | 1 | 2 | 3; // the wind and its turbulence: calm, light, moderate, strong (wind.ts) — the fair weather's
   weather: WeatherPreset; // the weather flown through (weather.ts): a preset, a draw, the airfields' real one
@@ -799,6 +800,7 @@ export function defaultSettings(): Settings {
     gearForgiving: false,
     spaceAssist: "realistic",
     spaceInfinitePropellant: false,
+    spaceAutoProtect: true,
     gyroscopes: true,
     wind: 1,
     weather: "fair",
@@ -2124,6 +2126,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   gearForgiving: "pref",
   spaceAssist: "pref",
   spaceInfinitePropellant: "pref",
+  spaceAutoProtect: "pref",
   gyroscopes: "pref",
   wind: "pref",
   weather: "carried",

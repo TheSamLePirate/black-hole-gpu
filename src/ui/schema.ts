@@ -2934,6 +2934,17 @@ export const SCHEMA: ControlDef[] = [
     ],
   },
   {
+    key: "spaceAutoProtect",
+    type: "toggle",
+    section: "game",
+    group: "Spacecraft",
+    label: "Automatic protections",
+    effect: "none",
+    enabled: (s) => s.ship && s.vessel !== "f35",
+    help: "The spacecraft's protections, as the F-35's Auto-GCAS: coming down on the engines faster than they can still stop above the ground, the craft hovers by itself; closing on the station or a craft inside its 200 m keep-out sphere faster than its limit (0.05 m/s + 0.5 % of the range), it holds its place. A caution first, always. Always on in the assisted levels, never in the manual one; not under an autopilot.",
+    keywords: "protection gcas ground collision avoidance hover keep out sphere station docking safety spacecraft",
+  },
+  {
     key: "spaceInfinitePropellant",
     type: "toggle",
     section: "game",

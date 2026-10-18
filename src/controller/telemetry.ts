@@ -90,6 +90,8 @@ export interface FlightInfo {
   spaceAssist?: string;
   spaceDrift?: boolean;
   rcsTranslate?: boolean;
+  /** a spacecraft's protections: what they foresee (controller/spaceguard.ts) */
+  spaceGuard?: import("./spaceguard").SpaceGuard | null;
   /** what holds the rails' warp back ("": nothing) */
   railsNote: string;
   rollAlign: boolean;
@@ -308,6 +310,7 @@ function flightInfo(this: CameraController): FlightInfo {
     spaceAssist: fleet.active === "f35" ? undefined : this.assistLevel(),
     spaceDrift: this.spaceDrift,
     rcsTranslate: this.rcsMode === "translate" && fleet.active !== "f35",
+    spaceGuard: this.spaceGuard ?? null,
     /** what holds the rails' warp back ("" : nothing) */
     railsNote: this.railsNote,
     rollAlign: this.pilot.rollAlign,

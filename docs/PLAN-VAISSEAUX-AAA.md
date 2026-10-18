@@ -142,7 +142,7 @@ missions (X9–X11) → N réseau (chaque phase en porte sa part, N finit les fo
 - **Modes RCS** : *rotation* (actuel), *translation 6 DDL* (amarrage, à la Dragon/Soyuz : manche gauche
   translation, droit rotation), *mixte* ; vitesses d'amarrage réelles (0,03–0,1 m/s au contact).
 - **Nouveaux autopilotes** :
-  - **maintien de position** relative à une cible (station-keeping, R-bar / V-bar) ;
+  - **maintien à poste** relative à une cible (station-keeping, R-bar / V-bar) ;
   - **rendez-vous complet** : phasage → approche lointaine → ellipsoïde d'approche (4 × 2 × 2 km) → sphère
     d'exclusion (200 m) → couloir final, comme l'ISS ;
   - **désamarrage et éloignement** (séparation, sortie du couloir) ;
@@ -217,11 +217,11 @@ missions (X9–X11) → N réseau (chaque phase en porte sa part, N finit les fo
 
 ### X5 — La roue, la manette, le HOTAS
 - **Roue par vaisseau** (déclarée par profil, `ui/wheel.ts` inchangé) :
-  - *Maintiens* ▸ les 9 ; *Autopilotes* ▸ tous (orbite, nœud, transfert, maintien de position, rendez-vous,
+  - *Maintiens* ▸ les 9 ; *Autopilotes* ▸ tous (orbite, nœud, transfert, maintien à poste, rendez-vous,
     désamarrage, descente, fronde) ;
   - *Ordinateur de vol* ▸ ORBITE / CIBLE / ATTERRIR / MISSION, plan de mission (⇧O), exécuter ;
   - *Systèmes* ▸ train, lampes, mode RCS, alimentation, checklists, acquitter, anneau (Endurance) ;
-  - *Amarrage* ▸ amarrer, désamarrer, port, cible, maintien de position ;
+  - *Amarrage* ▸ amarrer, désamarrer, port, cible, maintien à poste ;
   - *Flotte* ▸ bascule de vaisseau, ordres aux vaisseaux de la flotte et de la salle (N) ;
   - *Navigation* ▸ carte, placer, cible ; *École & défis* ▸ ; *Caméra* ▸ ; *Vaisseau* ▸ mode de vol, assistance.
   - Les entrées avion (ILS, défis F-35) quittent la roue du Ranger, sauf en mode avion.
@@ -282,7 +282,7 @@ Blocs optionnels nouveaux de l'instantané v1 (`src/net/instruments.ts`, `ui/cre
 
 ### K6 — Toutes les actions vaisseau
 - `sp.target` enfin dans l'interface, cible depuis la carte 3D ; **nœuds déplaçables** sur la carte (comme les
-  points de route) ; plan de mission édité ; maintien de position, rendez-vous, désamarrage (X1) ; systèmes
+  points de route) ; plan de mission édité ; maintien à poste, rendez-vous, désamarrage (X1) ; systèmes
   (disjoncteurs, secours, isoler un RCS, checklists partagées) ; anneau de l'Endurance ; ordres de flotte.
 - Toujours « tout sauf piloter » (`PLAN-CREW-ACTIONS`) : liste blanche, verrou du pilote, 4 actions/s.
 
@@ -368,7 +368,7 @@ Chaque phase porte sa ligne réseau ; N finit ce qui n'existe qu'à plusieurs.
 - **Partage** : transfert d'ergols, d'électricité, d'O₂ entre vaisseaux amarrés ; partage de cibles, de plans de
   mission, de nœuds ; points d'intérêt et sites marqués pour la salle ; passage de joueurs d'un vaisseau à l'autre
   par le sas (à pied quand c'est posé, amarré en orbite).
-- **Interactions** : amarrage mutuel (existe), maintien de position et rendez-vous sur un joueur (X1),
+- **Interactions** : amarrage mutuel (existe), maintien à poste et rendez-vous sur un joueur (X1),
   remorquage d'un vaisseau en panne, sauvetage, collision et contacts (existent), avertissement de proximité.
 - **Temps** : warp de salle avec poussées longues (un joueur en poussée retient le warp, explication affichée),
   horloge de salle et dilatation (τ par joueur, « temps écoulé sur Terre » de chacun, R8 « pace following the
@@ -387,7 +387,7 @@ Chaque phase porte sa ligne réseau ; N finit ce qui n'existe qu'à plusieurs.
 | Phase | Contenu | État |
 |---|---|---|
 | X0 | niveaux d'assistance, ⇧X, ergols infinis, E1, aide, TARS | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X0.md)) |
-| X1 | modes RCS, nouveaux autopilotes, plan de mission, protections, défauts de la campagne autopilotes | en cours — X1a maintien de position, recul, mode RCS ([fiche](progress/vaisseaux/X1a.md)) |
+| X1 | modes RCS, nouveaux autopilotes, plan de mission, protections, défauts de la campagne autopilotes | en cours — X1a maintien à poste, recul, mode RCS ([fiche](progress/vaisseaux/X1a.md)) · X1b protections ([fiche](progress/vaisseaux/X1b.md)) |
 | X2 | Endurance vaisseau-mère (deux côtés, anneau, flotte, scènes) | à faire |
 | X3 | consommables, pannes, alarmes, checklists | à faire |
 | X4 | HUD Ranger / Lander / Endurance, amarrage, boule | à faire |
