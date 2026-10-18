@@ -10,15 +10,22 @@ import { type Units, type UnitSys, unitsOf } from "../ui/unitsys";
 
 type V3 = [number, number, number];
 
-export type PcdPage = "TSD" | "FCR" | "SMS" | "FCS" | "ENG" | "FUEL" | "STOVL" | "CNI" | "ADI" | "CKL" | "ICAWS";
-export const PCD_PAGES: PcdPage[] = ["TSD", "FCR", "SMS", "FCS", "ENG", "FUEL", "STOVL", "CNI", "ADI", "CKL", "ICAWS"];
+export type PcdPage = "TSD" | "FCR" | "SMS" | "AP" | "MSN" | "FCS" | "ENG" | "FUEL" | "STOVL" | "CNI" | "ADI" | "CKL" | "ICAWS";
+export const PCD_PAGES: PcdPage[] = ["TSD", "FCR", "SMS", "AP", "MSN", "FCS", "ENG", "FUEL", "STOVL", "CNI", "ADI", "CKL", "ICAWS"];
 /** What a touch asks of the craft (main.ts carries it out through the controller): a weapon chosen, the radar's
  *  mode, the radar's next lock, the countermeasures — never a shot. */
 export type PcdAction =
   | { kind: "weapon"; w: "aim120" | "aim9x" | "jdam" | "jsm" }
   | { kind: "radar"; mode: "RWS" | "TWS" | "STT" }
   | { kind: "lock" }
-  | { kind: "cm" };
+  | { kind: "cm" }
+  /** the autopilot: its selectors (SI, radians), AP and A/THR engaged or let go */
+  | { kind: "ap"; set: { alt?: number; hdg?: number; spd?: number; ap?: boolean; athr?: boolean } }
+  /** the flight plan's guidance: LNAV, VNAV */
+  | { kind: "nav"; l?: boolean; v?: boolean }
+  /** a mode: the ILS (to the nearest field) or its cancel, an orbit here, a holding pattern, the terrain following,
+   *  the modes off, the go-around */
+  | { kind: "apMode"; mode: "ils" | "ilsOff" | "orbit" | "hold" | "tf" | "off" | "goAround" };
 
 /** An airfield on the map (lat, lon [°], its runway's heading [°], its name and ICAO code). */
 export interface PcdField {
@@ -111,6 +118,21 @@ export interface PcdData {
   marks?: { kind: "zone" | "threat"; lat: number; lon: number; r: number; label: string; active: boolean }[];
   /** in a fight, the damage taken (0…1) */
   damage?: number;
+  /** the autopilot's mode flown beyond the holds (ORBIT, HOLD, TF, ICPT, FORM…; "" none), the ILS flown */
+  apMode?: { order: string; ils: boolean };
+  /** a mission flown (controller/mission.ts): its title, its clock and limit [s], its state, why it ended, its
+   *  objectives (shown ones: their text, state, optional, ours), its last words */
+  msn?: {
+    title: string;
+    t: number;
+    limit: number | null;
+    status: "flying" | "won" | "failed";
+    why: string;
+    objectives: { text: string; state: "waiting" | "active" | "done" | "failed"; optional: boolean; mine: boolean }[];
+    said: string;
+  } | null;
+  /** a lesson flown (controller/course.ts): its id, how, its steps (whose), the step now, the instructor's last words */
+  lesson?: { id: string; mode: string; steps: { name: string; who: "tars" | "you" }[]; i: number; said: string } | null;
   /** the ground's height at a place [m over the ellipsoid; the sea 0] (the TSD's relief; none: not drawn) */
   ground?: (lat: number, lon: number) => number;
   /** the radar (controller/radar.ts radarHud): its mode, its beam's azimuth off the nose [rad], its contacts heading
@@ -211,6 +233,8 @@ const PAGE_PERIOD: Record<PcdPage, number> = {
   TSD: 100,
   FCR: 100,
   SMS: 250,
+  AP: 200,
+  MSN: 500,
   FCS: 100,
   ENG: 200,
   FUEL: 500,
@@ -239,6 +263,11 @@ export class Pcd {
   act: ((a: PcdAction) => string | null) | null = null;
   /** the radar page's range [km, or NM] */
   fcrRange = 80;
+  /** the autopilot's values just selected and when [ms]: the next − or + steps from them, they are shown, while the
+   *  craft's own catch up (1.5 s — as the crew's MCP) */
+  private sel: { spd?: number; hdg?: number; alt?: number; at: number } = { at: -Infinity };
+  /** each slot's buttons inside its page (the AP's), as last drawn: where, what they do */
+  private hits = new Map<number, { r: PcdRect; act: () => string | null }[]>();
   /** the TSD's relief shown (north up, centred at lat, lon, ±half [m]) and the one being built (its rows so far) */
   private relief: { canvas: OffscreenCanvas; lat: number; lon: number; half: number; key: string } | null = null;
   private reliefJob: { im: ImageData; row: number; lat: number; lon: number; half: number; alt: number; key: string } | null = null;
@@ -347,6 +376,12 @@ export class Pcd {
         if (hit) this.pages[k] = hit.page;
         redraw(!!hit);
         return hit ? hit.page : null;
+      }
+      const hit = this.hits.get(k)?.find((b) => x >= b.r.x && x <= b.r.x + b.r.w && y >= b.r.y && y <= b.r.y + b.r.h);
+      if (hit) {
+        const said = hit.act();
+        redraw(false);
+        return said;
       }
       const keys = this.keys(this.pages[k]!);
       if (keys.length && y > f.y + f.h - FOOT) {
@@ -705,6 +740,7 @@ export class Pcd {
     this.text(menu ? "MENU" : page, f.x + f.w / 2 + 24, my, menu ? C.white : C.cyan, 30, "center", true);
     if (menu) g.fillRect(f.x + f.w / 2 - 40, f.y + HEAD - 4, 128, 3);
     const r = this.content(P);
+    this.hits.set(P.slot, []);
     g.save();
     g.beginPath();
     g.rect(f.x + 2, r.y, f.w - 4, r.h);
@@ -720,6 +756,12 @@ export class Pcd {
           break;
         case "SMS":
           this.sms(r, d);
+          break;
+        case "AP":
+          this.ap(r, d, P.slot);
+          break;
+        case "MSN":
+          this.msn(r, d);
           break;
         case "FCS":
           this.fcs(r, d);
@@ -1238,6 +1280,194 @@ export class Pcd {
     g.fillStyle = C.green;
     g.fillRect(r.x + 132, y0 + 68, (gw - 4) * Math.min(S.gun / Math.max(A.gunFull, 1), 1), 16);
     this.text(`FLARE ${S.flares}`, r.x + r.w - 20, y0 + 76, S.flares > 0 ? C.white : C.yellow, 22, "right", true);
+  }
+
+  /** A button inside a page (lit: its colour; dim: nothing to do now), kept for the touch. */
+  private button(slot: number, r: PcdRect, label: string, lit: string | null, act: (() => string | null) | null, size = 24) {
+    const g = this.g;
+    g.fillStyle = lit ? "#0d2a30" : "#0a1417";
+    g.fillRect(r.x, r.y, r.w, r.h);
+    g.strokeStyle = lit ?? (act ? C.frame : C.dim);
+    g.lineWidth = lit ? 3 : 2;
+    g.strokeRect(r.x, r.y, r.w, r.h);
+    this.text(label, r.x + r.w / 2, r.y + r.h / 2, lit ?? (act ? C.white : C.grey), size, "center", true);
+    if (act) this.hits.get(slot)?.push({ r, act });
+  }
+
+  /** The autopilot (as the crew's MCP): AP and A/THR; the speed, heading and altitude selected (− and +: engaging
+   *  them), held in cyan; LNAV, VNAV (the flight plan's, magenta); the ILS, an orbit, a holding pattern, the terrain
+   *  following, the modes off; the go-around. */
+  private ap(r: PcdRect, d: PcdData, slot: number) {
+    const A = d.ap;
+    const ask = (a: PcdAction) => () => this.act?.(a) ?? null;
+    const apOn = A.alt !== null || A.hdg !== null;
+    const bw = (r.w - 48) / 2;
+    this.button(slot, { x: r.x + 16, y: r.y + 14, w: bw, h: 56 }, "AP", apOn ? C.green : null, ask({ kind: "ap", set: { ap: !apOn } }), 30);
+    this.button(
+      slot,
+      { x: r.x + 32 + bw, y: r.y + 14, w: bw, h: 56 },
+      "A/THR",
+      A.spd !== null ? C.green : null,
+      ask({ kind: "ap", set: { athr: A.spd === null } }),
+      30,
+    );
+    // the selectors: the value held (cyan) or the one it would take (dim), − and +
+    const spdStep = 5 / this.u.spd(1),
+      altStep = (this.u.altName === "FT" ? 500 : 100) / this.u.alt(1),
+      hdgStep = 5 * D;
+    const fresh = performance.now() - this.sel.at < 1500;
+    const pick = (k: "spd" | "hdg" | "alt", held: number | null, now: number) => (fresh ? this.sel[k] : undefined) ?? held ?? now;
+    const spd = pick("spd", A.spd, d.tas),
+      hdg = pick("hdg", A.hdg, d.heading),
+      alt = pick("alt", A.alt, d.alt);
+    // (a selector stepped: from the value just chosen, kept a moment)
+    const choose = (k: "spd" | "hdg" | "alt", v: number): PcdAction => {
+      this.sel = { ...(performance.now() - this.sel.at < 1500 ? this.sel : {}), [k]: v, at: performance.now() };
+      return { kind: "ap", set: { [k]: v } };
+    };
+    const now = (k: "spd" | "hdg" | "alt") =>
+      (performance.now() - this.sel.at < 1500 ? this.sel[k] : undefined) ??
+      (k === "spd" ? (A.spd ?? d.tas) : k === "hdg" ? (A.hdg ?? d.heading) : (A.alt ?? d.alt));
+    const deg = (a: number) => String(Math.round((((a / D) % 360) + 360) % 360) % 360).padStart(3, "0");
+    const rows: [string, string, boolean, (s: number) => PcdAction][] = [
+      ["SPD", `${Math.round(this.u.spd(spd))} ${this.u.spdName}`, A.spd !== null, (k) => choose("spd", now("spd") + k * spdStep)],
+      ["HDG", `${deg(hdg)}°`, A.hdg !== null && !d.route?.l, (k) => choose("hdg", now("hdg") + k * hdgStep)],
+      [
+        "ALT",
+        `${Math.round(this.u.alt(alt)).toLocaleString("en")} ${this.u.altName}`,
+        A.alt !== null && !d.route?.v,
+        (k) => choose("alt", now("alt") + k * altStep),
+      ],
+    ];
+    rows.forEach(([name, value, held, step], i) => {
+      const y = r.y + 92 + i * 70;
+      this.text(name, r.x + 22, y + 28, C.grey, 22, "left", true);
+      this.text(value, r.x + r.w * 0.44, y + 28, held ? C.cyan : C.grey, 32, "center", true);
+      this.button(slot, { x: r.x + r.w - 152, y, w: 64, h: 56 }, "−", null, () => this.act?.(step(-1)) ?? null, 34);
+      this.button(slot, { x: r.x + r.w - 80, y, w: 64, h: 56 }, "+", null, () => this.act?.(step(1)) ?? null, 34);
+    });
+    // the flight plan's guidance
+    const routed = !!d.route?.wps.length;
+    const y1 = r.y + 310;
+    this.button(
+      slot,
+      { x: r.x + 16, y: y1, w: bw, h: 48 },
+      "LNAV",
+      d.route?.l ? C.magenta : null,
+      routed ? ask({ kind: "nav", l: !d.route?.l }) : null,
+    );
+    this.button(
+      slot,
+      { x: r.x + 32 + bw, y: y1, w: bw, h: 48 },
+      "VNAV",
+      d.route?.v ? C.magenta : null,
+      routed ? ask({ kind: "nav", v: !d.route?.v }) : null,
+    );
+    // the modes
+    const M = d.apMode ?? { order: "", ils: false };
+    const modes: [string, boolean, PcdAction][] = [
+      ["ILS", M.ils, { kind: "apMode", mode: M.ils ? "ilsOff" : "ils" }],
+      ["ORBIT", M.order === "ORBIT", { kind: "apMode", mode: M.order === "ORBIT" ? "off" : "orbit" }],
+      ["HOLD", M.order === "HOLD", { kind: "apMode", mode: M.order === "HOLD" ? "off" : "hold" }],
+      ["TF", M.order === "TF", { kind: "apMode", mode: M.order === "TF" ? "off" : "tf" }],
+    ];
+    const mw = (r.w - 32 - 3 * 10) / 4;
+    const y2 = r.y + 372;
+    modes.forEach(([name, on, a], i) =>
+      this.button(slot, { x: r.x + 16 + i * (mw + 10), y: y2, w: mw, h: 48 }, name, on ? C.green : null, ask(a), 22),
+    );
+    if (r.h > 480)
+      this.button(
+        slot,
+        { x: r.x + 16, y: r.y + 432, w: r.w - 32, h: 44 },
+        "GO AROUND",
+        null,
+        d.onGround ? null : ask({ kind: "apMode", mode: "goAround" }),
+        22,
+      );
+    if (M.order && !["ORBIT", "HOLD", "TF"].includes(M.order)) this.text(M.order, r.x + r.w / 2, y2 - 14, C.green, 18, "center", true);
+  }
+
+  /** Text cut into lines no wider than w. */
+  private wrap(t: string, w: number, size: number, bold = false): string[] {
+    const g = this.g;
+    g.font = `${bold ? "700 " : "500 "}${size}px ${FONT}`;
+    const out: string[] = [];
+    let line = "";
+    for (const word of t.split(/\s+/)) {
+      const next = line ? `${line} ${word}` : word;
+      if (g.measureText(next).width > w && line) {
+        out.push(line);
+        line = word;
+      } else line = next;
+    }
+    if (line) out.push(line);
+    return out;
+  }
+
+  /** The mission flown (its title, its clock, its objectives — ◇ to do, ✓ done, ✗ failed —, its last words), else the
+   *  lesson flown (its steps, the one now, the instructor's words). */
+  private msn(r: PcdRect, d: PcdData) {
+    const g = this.g;
+    const clock = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+    const M = d.msn;
+    if (M) {
+      const lines = this.wrap(M.title.toUpperCase(), r.w - 40, 26, true).slice(0, 2);
+      lines.forEach((l, i) => this.text(l, r.x + 20, r.y + 28 + i * 30, C.cyan, 26, "left", true));
+      let y = r.y + 34 + lines.length * 30;
+      const st = M.status === "won" ? ["COMPLETE", C.green] : M.status === "failed" ? ["FAILED", C.red] : ["IN PROGRESS", C.white];
+      this.text(st[0]!, r.x + 20, y, st[1]!, 22, "left", true);
+      this.text(
+        M.limit ? `${clock(M.t)} / ${clock(M.limit)}` : clock(M.t),
+        r.x + r.w - 20,
+        y,
+        M.limit && M.t > 0.85 * M.limit ? C.yellow : C.white,
+        24,
+        "right",
+        true,
+      );
+      y += 40;
+      g.strokeStyle = C.dim;
+      g.lineWidth = 1.5;
+      g.beginPath();
+      g.moveTo(r.x + 16, y - 16);
+      g.lineTo(r.x + r.w - 16, y - 16);
+      g.stroke();
+      for (const o of M.objectives) {
+        if (o.state === "waiting") continue;
+        const [mark, col] = o.state === "done" ? ["✓", C.green] : o.state === "failed" ? ["✗", C.red] : ["◇", o.mine ? C.white : C.grey];
+        const L = this.wrap(o.text, r.w - 80, 22).slice(0, 2);
+        if (y + L.length * 26 > r.y + r.h - 70) break;
+        this.text(mark, r.x + 24, y, col, 24, "left", true);
+        L.forEach((l, i) => this.text(l, r.x + 56, y + i * 26, o.optional || !o.mine ? C.grey : col, 22));
+        y += L.length * 26 + 14;
+      }
+      const why = M.status !== "flying" ? M.why : M.said;
+      this.wrap(why, r.w - 40, 20)
+        .slice(-2)
+        .forEach((l, i, a) => this.text(l, r.x + 20, r.y + r.h - 24 - (a.length - 1 - i) * 24, C.grey, 20));
+      return;
+    }
+    const L = d.lesson;
+    if (L) {
+      this.text(L.id.toUpperCase(), r.x + 20, r.y + 28, C.cyan, 26, "left", true);
+      this.text(L.mode.toUpperCase(), r.x + r.w - 20, r.y + 28, C.white, 22, "right", true);
+      let y = r.y + 72;
+      const from = Math.max(0, Math.min(L.i - 2, L.steps.length - 7));
+      L.steps.slice(from, from + 7).forEach((S, k) => {
+        const i = from + k;
+        const col = i < L.i ? C.green : i === L.i ? C.white : C.grey;
+        this.text(i < L.i ? "✓" : i === L.i ? "▶" : "·", r.x + 24, y, col, 22, "left", true);
+        this.text(`${S.who === "tars" ? "TARS" : "YOU"} · ${S.name}`.slice(0, 34), r.x + 56, y, col, 22, "left", i === L.i);
+        y += 34;
+      });
+      this.wrap(L.said, r.w - 40, 20)
+        .slice(-4)
+        .forEach((l, i, a) => this.text(l, r.x + 20, r.y + r.h - 24 - (a.length - 1 - i) * 24, C.white, 20));
+      return;
+    }
+    this.text("NO MISSION", r.x + r.w / 2, r.y + r.h / 2 - 20, C.grey, 30, "center", true);
+    this.text("MISSIONS AND LESSONS SHOW HERE", r.x + r.w / 2, r.y + r.h / 2 + 18, C.grey, 18, "center");
   }
 
   /** The flight controls: the craft from above (its surfaces' bars coloured by their travel used), their

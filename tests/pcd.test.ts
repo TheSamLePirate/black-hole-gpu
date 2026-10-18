@@ -78,9 +78,9 @@ test("the title's arrows step through the pages; the title opens the menu, a pag
   expect(at(f.x + 28, f.y + 20)).toBe("FCR");
   expect(at(f.x + f.w / 2, f.y + 20)).toBe("MENU");
   expect(p.menu).toBe(1);
-  // (the menu's third row, first button: STOVL)
-  expect(at(f.x + 60, f.y + 46 + 30 + 2 * 82 + 30)).toBe("STOVL");
-  expect(p.pages[1]).toBe("STOVL");
+  // (the menu's third row, first button: ENG)
+  expect(at(f.x + 60, f.y + 46 + 30 + 2 * 82 + 30)).toBe("ENG");
+  expect(p.pages[1]).toBe("ENG");
   expect(p.menu).toBeNull();
 });
 
@@ -144,4 +144,23 @@ test("the radar's and the weapons' keys ask the craft (never a shot)", async () 
   key(sms, 0, 5);
   key(sms, 4, 5);
   expect(asked).toEqual([{ kind: "radar", mode: "TWS" }, { kind: "lock" }, { kind: "weapon", w: "aim120" }, { kind: "cm" }]);
+});
+
+test("the AP page's buttons: engaged, a selector stepped twice from the value just chosen, the ILS asked", async () => {
+  const { p, at } = await pcd();
+  const asked: { kind: string; set?: Record<string, number | boolean>; mode?: string }[] = [];
+  p.act = (a) => (asked.push(a as never), "ok");
+  p.pages[0] = "AP";
+  p.draw(data(), 0);
+  const f = p.portals()[0]!.frame;
+  const r = { x: f.x, y: f.y + 46, w: f.w };
+  at(r.x + 40, r.y + 40);
+  // (the altitude's +, twice: 3 000 → 3 100 → 3 200 m)
+  at(r.x + r.w - 48, r.y + 92 + 140 + 28);
+  at(r.x + r.w - 48, r.y + 92 + 140 + 28);
+  at(r.x + 30, r.y + 372 + 24);
+  expect(asked[0]).toEqual({ kind: "ap", set: { ap: true } });
+  expect(asked[1]!.set!.alt).toBeCloseTo(3100, 6);
+  expect(asked[2]!.set!.alt).toBeCloseTo(3200, 6);
+  expect(asked[3]).toEqual({ kind: "apMode", mode: "ils" });
 });

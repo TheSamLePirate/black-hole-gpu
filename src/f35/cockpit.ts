@@ -160,6 +160,42 @@ export function pcdData(
     alerts,
     damage: (c.combat?.world.damage ?? 0) / 100,
     ground,
+    // (the autopilot's mode beyond its holds — as the crew's instruments read it —, the ILS)
+    apMode: {
+      order: m.order ?? (c.orbitMode ? "ORBIT" : m.icpt ? "ICPT" : m.form ? "FORM" : m.tf !== undefined ? "TF" : ""),
+      ils: !!c.ilsRun,
+    },
+    // (a mission flown: its objectives shown; a lesson: its steps)
+    msn: c.mission
+      ? (() => {
+          const M = c.mission!;
+          const R = M.run;
+          const ours = R.spec.roles?.[M.role]?.id;
+          return {
+            title: R.spec.title,
+            t: R.t,
+            limit: R.spec.limit ?? null,
+            status: R.status,
+            why: R.why,
+            objectives: R.spec.objectives.map((o) => ({
+              text: o.text,
+              state: R.state[o.id] ?? "waiting",
+              optional: !!o.optional,
+              mine: !o.role || o.role === ours,
+            })),
+            said: R.log.at(-1)?.text ?? "",
+          };
+        })()
+      : null,
+    lesson: c.course?.run
+      ? {
+          id: c.course.id,
+          mode: c.course.mode,
+          steps: c.course.run.steps.map((S) => ({ name: S.name, who: S.who })),
+          i: c.course.run.i,
+          said: c.course.said ?? "",
+        }
+      : null,
     // (a mission's places — controller/mission.ts —: its zones, the SAMs' reach)
     marks: c.mission
       ? c

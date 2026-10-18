@@ -67,7 +67,7 @@ verts, poussée sur `main`.
 - Côtes et relief simplifiés sous la carte, ailiers et formation, trafic réel, porte-avions, menaces et leurs
   portées, cercle de bingo.
 
-### Q6 — Pilote automatique et mission
+### Q6 — Pilote automatique et mission — FAIT ([fiche](progress/pcd/Q6.md))
 
 - **AP** tactile comme la console équipage (A3) : AP, A/THR, consignes, LNAV / VNAV, ILS, modes.
 - **MSN** : objectifs, chronos, leçon en cours et ses étapes.

@@ -4270,16 +4270,52 @@ async function main() {
   };
   // (what the panoramic display's keys ask of the craft — never a shot: the weapon, the radar's mode, its lock, the
   // countermeasures — through the controller's own calls, as the crew's backseater's)
-  jetPcd.act = (a) =>
-    a.kind === "weapon"
-      ? camera.weaponSelect(a.w)
-      : a.kind === "radar"
-        ? camera.radarModeSet(a.mode)
-        : a.kind === "lock"
-          ? camera.lockOnName()
-          : camera.combat?.status === "run"
-            ? (camera.combatTrigger("cm") ?? t("Flares and chaff out"))
-            : t("No fight running: the weapons are live in a fight or a mission");
+  // (and the autopilot's: its selectors and LNAV / VNAV by the controller's calls, its modes by the game's tools —
+  // the crew's MCP's —, their answer toasted when it comes)
+  const pcdTool = (name: string, args: Record<string, unknown>) => {
+    void Promise.resolve()
+      .then(() => tarsTools.find((x) => x.name === name)?.run(args as never, new AbortController().signal))
+      .then((r) => {
+        const v = r && typeof r === "object" && "result" in r ? (r as { result: unknown }).result : r;
+        const line =
+          typeof v === "string"
+            ? v
+            : v && typeof v === "object"
+              ? String((v as Record<string, unknown>).note ?? (v as Record<string, unknown>).result ?? "")
+              : "";
+        if (line) panel.toast(`PCD · ${line.slice(0, 120)}`);
+      })
+      .catch((e) => panel.toast(`PCD · ${String((e as Error).message ?? e)}`));
+    return null;
+  };
+  jetPcd.act = (a) => {
+    switch (a.kind) {
+      case "weapon":
+        return camera.weaponSelect(a.w);
+      case "radar":
+        return camera.radarModeSet(a.mode);
+      case "lock":
+        return camera.lockOnName();
+      case "cm":
+        return camera.combat?.status === "run"
+          ? (camera.combatTrigger("cm") ?? t("Flares and chaff out"))
+          : t("No fight running: the weapons are live in a fight or a mission");
+      case "ap":
+        return camera.apSet(a.set);
+      case "nav":
+        return camera.navSet({ ...(a.l !== undefined ? { l: a.l } : {}), ...(a.v !== undefined ? { v: a.v } : {}) });
+      case "apMode":
+        return a.mode === "ils"
+          ? pcdTool("approach", { action: "ils" })
+          : a.mode === "ilsOff"
+            ? pcdTool("approach", { action: "off" })
+            : a.mode === "goAround"
+              ? pcdTool("flight_action", { action: "go_around" })
+              : a.mode === "tf"
+                ? pcdTool("jet_mode", { action: "tf", aglM: 150 })
+                : pcdTool("jet_mode", { action: a.mode });
+    }
+  };
   camera.onJetStart = () => {
     try {
       tools.lineUp();
