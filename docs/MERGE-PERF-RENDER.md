@@ -463,21 +463,33 @@ scènes nouvelles (`tarifa-dusk` : Tarifa au crépuscule vers le couchant, `tari
 | table → marche de chaque rayon, après (`AB=aerial`) | **49,1 dB** (moyennes 9,24 / 9,26) | **46,1 dB** (14,96 / 14,98) |
 | gain de la table sur la trace | −17 % | −21 % |
 
-**Suites, non bloquantes (à faire sur `main`) :**
-- **Netteté en mouvement et résolution dynamique** : `main.ts` (gpuEma, scaleMs) et `adaptBlock` (`blockMs`,
-  `recentMs`) enregistrent les images densifiées : après un virage de plus de 3 s, l'échelle de rendu baisse et ne
-  remonte pas avant 30 s. En « vol bas », `imageGroundPx` borne la distance au sol (40 km) au lieu d'ignorer ce qui est
-  plus loin : densifié en permanence en orbite basse.
-- **Fusion des pas de Saturne** (`trace.wgsl` ourSegment) : l'écart n'est mesuré qu'au dernier point du morceau
-  (l'erreur d'un chemin qui plie régulièrement ≈ n/4 fois le seuil), et le flush garde la corde qui plie. Borner par
-  la direction de la première corde ; vider à `p0`.
-- **`TUNE_EPS_FAR`** ne dépend pas du champ de vision : au télescope, une erreur fixe couvre plus de pixels.
-- **Masque du cockpit** : la tolérance de secousse prise au centre (≈ ×1,8 au bord à 60°) ; le photomètre qui change
-  quand le masque bascule ; les reflets de la verrière (`screenRefl`) et l'historique qui lisent des tuiles figées ;
-  son coût (≈ 2,5 ms mesuré avant l'élargissement de la marge) et son raster payé même quand il ne sert pas.
-- **Distance de détail** : pas de repli si la texture de 256 Mio échoue (iPad) ; niveaux grossiers à 8 tuiles ; la
-  mémoire CPU en Très loin ≈ 300 Mio (avec les couleurs de l'anneau).
-- **Table aérienne à l'horizon** : une colonne de 20 px mélange un rayon arrêté sur la mer et un rayon rasant du ciel
-  (plausible : une bande à l'horizon, le soleil couchant sur la mer trop clair).
+**Les suites, faites après la fusion (18/10, branche `merge-perf-render`)** — mesurées sur kerr-mini (`perf-suite`,
+A/B alternés, ×4 ; les images en PSNR contre le plancher `AB=noop` de la même scène) :
+
+| Suite | Fait | Mesure |
+|---|---|---|
+| Netteté en mouvement et résolution dynamique | les images densifiées (`renderer.lastFrameDense`) hors du temps de la résolution dynamique (`main.ts` gpuEma, scaleMs) et du bloc automatique (`adaptBlock`) ; en « vol bas », le sol à plus de 40 km ignoré (plus densifié en orbite) | non mesuré en vol (le défaut est « Non ») |
+| Masque du cockpit : secousse | la tolérance pesée aux coins de l'image (sec²θ) | — |
+| Masque : photomètre | la cabine toujours hors du photomètre : −2 « couvert mais tracé » quand le masque de l'appareil est là sans le saut | — |
+| Masque : historique | pas d'historique pris sous le masque (−1, figé) | images masque allumé/éteint : Tarifa 46,6 dB, Alpes 47,7 |
+| Masque : coût | deux passes (`mask.wgsl` cell puis main) : un texel lu par pixel, ≤ 18 × 18 cellules par tuile ; éteint sous la vue coût ; son raster seulement en temps réel, sans vue coût ni profondeur de champ | **9,9 → 1,0 ms** ; trace Tarifa 28,9 → 26,1 ms, Alpes 35,2 → 33,0 (avant : l'image 41,8 → 56 ms masque allumé — une perte nette) |
+| Distance de détail | 8 tuiles sur z 11–13 seuls (`FINE_Z`), chaque niveau son côté (`P.tileL[2l+1].w`) ; le 2048² sous une portée d'erreur out-of-memory : refusé, retour à 4 tuiles, plus redemandé ; `request()` saute les fenêtres entières | `detail-reach` (Normale, Très loin) 2 pass ; `tests/earth-tiles` (le repli) |
+| Table aérienne à l'horizon | **confirmé** : au coucher sur la mer, une bande sombre en escalier le long de l'horizon (table/marche 41,2 dB, plancher 50,7). La tranche 0 garde où chaque colonne s'arrête ; un pixel dont une des 4 colonnes s'arrête avant la moitié de sa distance marche son air (`apCovers`) | coucher **47,8 dB** (plancher 50,7) ; crépuscule 48,3, nuit 51,0 ; le gain gardé : coucher −12 %, crépuscule −17 %, nuit −17 %, Tarifa de jour −25 % |
+
+**Écartés, avec la raison :**
+- **La fusion de Saturne bornée sur tout le morceau** (½ |L| sin β) : mesurée 80,1 ms contre 53,7 pour la fusion de la
+  branche, 44,4 dB contre 43,7 face aux pas un par un (plancher 49,3) — +49 % de trace pour 0,7 dB : retirée, la
+  fusion de la branche gardée.
+- **Les reflets de la verrière** (`ship.wgsl screenRefl`) qui lisent l'image sous le tableau de bord : c'était déjà le
+  monde derrière le tableau (faux avant le masque comme après) ; le corriger demande de lier le masque de l'appareil à
+  la passe des appareils.
+
+**Restent ouverts :**
+- **`TUNE_EPS_FAR`** au télescope : le propriétaire le regarde.
+- **La table aérienne sous des nuages lointains** : à Tarifa de jour (nuageux), la table s'écarte de la marche à la base
+  des nuages près de l'horizon (41,4 dB sur la branche avant ces suites, 41,9 après, plancher 48,1) — les nuages lus à
+  leur distance (`Tc`, `Lc`) d'une colonne de 20 px. Pas une régression de ces suites ; à regarder.
 - **`taParallaxPx` 64** : l'historique n'est presque plus jeté ; mesuré en vol seulement, pas au roulage, sur le pont ni
   près des bâtiments.
+- **La netteté en mouvement** en vol avec la résolution dynamique : à mesurer une fois en vol (`flight-quality`,
+  `CONF=turns`).
