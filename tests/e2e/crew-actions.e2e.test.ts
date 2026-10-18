@@ -70,4 +70,41 @@ describe.skipIf(!E2E)("crew actions", () => {
     await app.js("(__bh.settings.netCrewActions = true, true)");
     await app.waitFor(crew("__crew.actions.can('config').ok"), 5000);
   }, 30_000);
+  test("A2 — the flight plan from the crew: a field by its name, a point on the map, its constraint, moved, flown direct", async () => {
+    const route = () =>
+      app.js<{ name: string; lat: number; lon: number; alt?: number }[]>("__bh.camera.nav.route.wps.map(w => ({ ...w }))");
+    await app.js("(() => { const c = __bh.camera; c.nav.route.wps.length = 0; c.routeChanged(); return 1; })()");
+    await app.js(crew("__crew.setView('plan')"));
+    await app.waitFor(`!!document.querySelector('#crew-frame').contentDocument.querySelector('#plan-query')`, 3000);
+    // (Le Bourget by its ICAO, typed and added)
+    await app.js(
+      `(() => { const d = document.querySelector('#crew-frame').contentDocument; const q = d.querySelector('#plan-query'); q.value = 'LFPB'; return true; })()`,
+    );
+    await press("#plan-add");
+    expect((await route()).map((w) => w.name)).toEqual(["LFPB"]);
+    // (a point on the map, from its menu: added at the plan's end)
+    await app.js(crew("__crew.setView('map')"));
+    await app.js(`(${crew("__crew.views.onGround({ lat: 45.5, lon: 6.2 }, 300, 300)")}, true)`);
+    await press("#ctx-append");
+    expect((await route()).length).toBe(2);
+    expect((await route())[1]).toMatchObject({ lat: 45.5, lon: 6.2 });
+    // (its altitude constraint, from the waypoint's menu: 4 000 m)
+    await app.js(`(${crew("__crew.views.onWp(1, 300, 300)")}, true)`);
+    await app.js(
+      `(() => { const d = document.querySelector('#crew-frame').contentDocument; d.querySelector('.ctx-menu .ctx-row input').value = '4000'; return true; })()`,
+    );
+    await press("#ctx-alt-set");
+    expect((await route())[1]!.alt).toBe(4000);
+    // (dragged to a new place: moved, its constraint kept)
+    await app.js(`(${crew("__crew.views.onMoveWp(1, { lat: 45.6, lon: 6.3 })")}, true)`);
+    await app.waitFor(`!${crew("__crew.actions.busy")}`, 5000);
+    expect((await route())[1]).toMatchObject({ lat: 45.6, lon: 6.3, alt: 4000 });
+    // (flown direct to it: the guidance's active point)
+    await app.js(`(${crew("__crew.views.onWp(1, 300, 300)")}, true)`);
+    await press("#ctx-wp-direct");
+    expect(await app.js<number>("__bh.camera.nav.lnav?.active ?? -1")).toBe(1);
+    expect((await lastBoard()).what).toContain("direct");
+    await app.js(crew("__crew.setView('plan')"));
+    await app.shot(`${process.env.E2E_SHOTS ?? "remote-results"}/crew-actions-a2.png`);
+  }, 60_000);
 });

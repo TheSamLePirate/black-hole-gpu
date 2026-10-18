@@ -131,3 +131,28 @@ test("the executor's refusals: another pilot, the pilot's lock, a family closed,
   expect(bad.sent[0]).toMatchObject({ ok: false, id: "z" });
   expect(bad.ran).toHaveLength(0);
 });
+
+test("the ND's touch back to the Earth: WGS84's direct problem, the inverse's own answer within centimetres", async () => {
+  const { wgs84Direct, wgs84Inverse } = await import("../src/system/ellipsoid");
+  for (const [lat, lon, azDeg, d] of [
+    [48.85, 2.35, 135, 50_000],
+    [45.8, 6.75, 10, 300_000],
+    [-33.9, 151.2, 270, 1_200_000],
+    [70, -20, 45, 80_000],
+  ] as const) {
+    const q = wgs84Direct(lat, lon, (azDeg * Math.PI) / 180, d);
+    const back = wgs84Inverse(lat, lon, q.lat, q.lon);
+    expect(Math.abs(back.d - d)).toBeLessThan(0.05);
+    const dAz = back.az - (azDeg * Math.PI) / 180;
+    expect(Math.abs(Math.atan2(Math.sin(dAz), Math.cos(dAz)))).toBeLessThan(1e-7);
+  }
+});
+
+test("the flight plan's acts map to the plan's tool or the controller's point editing, never the autopilot's engage", async () => {
+  const src = await Bun.file("src/ui/crew-exec.ts").text();
+  for (const a of ["nav.add", "nav.remove", "nav.clear", "nav.cruise", "nav.direct"]) expect(src).toContain(`"${a}": `);
+  expect(src).toContain("routeSetPoint");
+  // (LNAV/VNAV engaged belongs to the autopilot's family, not the plan's)
+  const navLines = src.split("\n").filter((l) => l.includes('"nav.'));
+  for (const l of navLines) expect(l).not.toMatch(/lnav|vnav/);
+});

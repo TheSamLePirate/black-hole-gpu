@@ -10,7 +10,7 @@ export interface RadarOpts {
   north: boolean;
   sensor: boolean;
   selected: string | null;
-  pick?: (pt: Point, what: { slot?: number; contact?: string }) => void;
+  pick?: (pt: Point, what: { slot?: number; contact?: string; wp?: number }) => void;
 }
 
 interface Blip {

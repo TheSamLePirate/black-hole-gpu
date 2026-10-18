@@ -211,3 +211,39 @@ export function wgs84Offset(lat: number, lon: number, east: number, north: numbe
   const lo = lon + east / (N * Math.max(Math.cos(lat * DEG), 1e-6)) / DEG;
   return { lat: lat + north / M / DEG, lon: ((((lo + 180) % 360) + 360) % 360) - 180 };
 }
+
+/**
+ * The place a distance [m] away along an initial azimuth [rad] on the WGS84 ellipsoid: the sphere's answer, then
+ * Newton's steps on the inverse (wgs84Inverse) — its north and east components at the start matched — to
+ * millimetres over thousands of km.
+ */
+export function wgs84Direct(lat: number, lon: number, az: number, d: number): { lat: number; lon: number } {
+  const R = 6_371_008.8;
+  const p1 = lat * DEG,
+    s = d / R;
+  const p2 = Math.asin(Math.sin(p1) * Math.cos(s) + Math.cos(p1) * Math.sin(s) * Math.cos(az));
+  const l2 = lon * DEG + Math.atan2(Math.sin(az) * Math.sin(s) * Math.cos(p1), Math.cos(s) - Math.sin(p1) * Math.sin(p2));
+  let q = { lat: p2 / DEG, lon: l2 / DEG };
+  if (d <= 0) return { lat, lon };
+  const goal = [d * Math.cos(az), d * Math.sin(az)];
+  const F = (la: number, lo: number) => {
+    const b = wgs84Inverse(lat, lon, la, lo);
+    return [b.d * Math.cos(b.az), b.d * Math.sin(b.az)];
+  };
+  const h = 1e-6;
+  for (let k = 0; k < 6; k++) {
+    const f = F(q.lat, q.lon);
+    const r = [goal[0]! - f[0]!, goal[1]! - f[1]!];
+    if (Math.hypot(r[0]!, r[1]!) < 1e-4) break;
+    const fa = F(q.lat + h, q.lon),
+      fo = F(q.lat, q.lon + h);
+    const a11 = (fa[0]! - f[0]!) / h,
+      a21 = (fa[1]! - f[1]!) / h,
+      a12 = (fo[0]! - f[0]!) / h,
+      a22 = (fo[1]! - f[1]!) / h;
+    const det = a11 * a22 - a12 * a21;
+    if (!det) break;
+    q = { lat: q.lat + (r[0]! * a22 - a12 * r[1]!) / det, lon: q.lon + (a11 * r[1]! - a21 * r[0]!) / det };
+  }
+  return { lat: q.lat, lon: ((((q.lon + 180) % 360) + 360) % 360) - 180 };
+}

@@ -39,6 +39,33 @@ const RUN: Record<Act, Run> = {
   "cfg.flaps": (a, x) => x.tool("controls", { flaps: a.pos }),
   "cfg.brake": (a, x) => x.tool("controls", { airBrake: a.on }),
   "cfg.sas": (a, x) => x.tool("controls", { sas: a.on }),
+  // (the flight plan: its tool's operations; a point changed in place by the controller's own)
+  "nav.add": (a, x) =>
+    x.tool("flight_plan", {
+      action: "add",
+      ...(a.query !== undefined ? { query: a.query } : { lat: a.lat, lon: a.lon }),
+      ...(a.alt !== undefined ? { altM: a.alt } : {}),
+      ...(a.spd !== undefined ? { spdMs: a.spd } : {}),
+      ...(a.index !== undefined ? { index: a.index } : {}),
+    }),
+  "nav.remove": (a, x) => x.tool("flight_plan", { action: "remove", index: a.index }),
+  "nav.move": (a, x) => x.camera.routeSetPoint(Number(a.index), { lat: Number(a.lat), lon: Number(a.lon) }),
+  "nav.point": (a, x) =>
+    x.camera.routeSetPoint(Number(a.index), {
+      ...(a.clearAlt ? { alt: null } : a.alt !== undefined ? { alt: Number(a.alt) } : {}),
+      ...(a.clearSpd ? { spd: null } : a.spd !== undefined ? { spd: Number(a.spd) } : {}),
+    }),
+  "nav.clear": (_a, x) => x.tool("flight_plan", { action: "clear" }),
+  "nav.cruise": (a, x) =>
+    x.tool("flight_plan", {
+      action: "cruise",
+      ...(a.alt !== undefined ? { altM: a.alt } : {}),
+      ...(a.spd !== undefined ? { spdMs: a.spd } : {}),
+      ...(a.reserve !== undefined ? { reserveKg: a.reserve } : {}),
+    }),
+  "nav.direct": (a, x) => x.tool("flight_plan", { action: "direct", index: a.index }),
+  "nav.procedures": (_a, x) => x.tool("approach", { action: "procedures" }),
+  "nav.target": (a, x) => x.tool("set_target", { name: a.name }),
 };
 
 /** a tool's result as a short line (its own words when it says something) */

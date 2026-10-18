@@ -1,5 +1,7 @@
 // French for a plane's flight plan (PLAN-F35 F8: ui/routepanel.ts, controller/fplan.ts) — keyed by the English.
 export default {
+  "No waypoint {0} — {1} in the plan": "Pas de point {0} — {1} dans le plan",
+  "{0} changed": "{0} modifié",
   "Flight plan": "Plan de vol",
   "Cruise level": "Niveau de croisière",
   "Cruise speed": "Vitesse de croisière",

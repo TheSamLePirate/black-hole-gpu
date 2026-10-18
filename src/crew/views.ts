@@ -9,6 +9,7 @@ import { Smoother, targets, type Scene } from "./draw/scene";
 import { drawPfd } from "./draw/pfd";
 import { drawNd } from "./draw/nd";
 import { drawGeo } from "./draw/geo";
+import { wgs84Direct } from "../system/ellipsoid";
 import { mercX, mercY, Tiles, unMercX, unMercY } from "./draw/tiles";
 import { drawRadar } from "./draw/radar";
 import { drawSystems, systemsHeight } from "./draw/systems";
@@ -28,7 +29,8 @@ export const VIEW_NAMES: Record<CrewView, string> = {
   telemetry: "Télémétrie",
 };
 const wrap = (a: number) => ((((a + 180) % 360) + 360) % 360) - 180;
-type Pick = { point: Point; slot?: number; contact?: string; view?: CrewView; r?: Rect };
+type Pick = { point: Point; slot?: number; contact?: string; wp?: number; view?: CrewView; r?: Rect };
+type Where = { lat: number; lon: number };
 
 export class CrewViews {
   view: CrewView = "dash";
@@ -65,8 +67,19 @@ export class CrewViews {
   private resize: ResizeObserver;
   onSelect: (slot: number) => void = () => {};
   onInspect: () => void = () => {};
-  onContact: (id: string) => void = () => {};
+  onContact: (id: string, x?: number, y?: number) => void = () => {};
   onOpen: (view: CrewView) => void = () => {};
+  /** the flight plan touched (PLAN-CREW-ACTIONS A2): a waypoint (its index, where on the screen), the ground (where
+   *  on the Earth, where on the screen), a waypoint dragged to a new place */
+  onWp: (i: number, x: number, y: number) => void = () => {};
+  onGround: (at: Where, x: number, y: number) => void = () => {};
+  onMoveWp: (i: number, at: Where) => void = () => {};
+  /** the screen's point back to the Earth's (the map's, the ND's this frame); null: none */
+  private unproject: ((x: number, y: number) => Where | null) | null = null;
+  /** where a menu was opened on the map or the ND (its crosshair while it is open) */
+  marker: Point | null = null;
+  /** a waypoint being dragged: its index, the finger's place on the canvas */
+  private drag: { i: number; x: number; y: number; moved: boolean } | null = null;
 
   constructor(
     readonly canvas: HTMLCanvasElement,
@@ -84,6 +97,12 @@ export class CrewViews {
       this.moved = 0;
       this.pinch = this.spread();
       if (this.view === "telemetry") this.scrub(e.clientX);
+      // (a waypoint under the finger on the map or the ND: dragged, not the map)
+      if (this.pointers.size === 1 && (this.view === "map" || this.view === "nd")) {
+        const [x, y] = this.local(e);
+        const wp = this.nearest(x, y, 22, (p) => p.wp !== undefined && !p.r);
+        this.drag = wp ? { i: wp.wp!, x, y, moved: false } : null;
+      } else this.drag = null;
     });
     canvas.addEventListener("pointermove", (e) => {
       const p = this.pointers.get(e.pointerId);
@@ -92,6 +111,13 @@ export class CrewViews {
         dy = e.clientY - p[1];
       this.moved += Math.abs(dx) + Math.abs(dy);
       this.pointers.set(e.pointerId, [e.clientX, e.clientY]);
+      if (this.drag && this.pointers.size === 1) {
+        [this.drag.x, this.drag.y] = this.local(e);
+        this.drag.moved ||= this.moved > 8;
+        this.request();
+        return;
+      }
+      this.drag = null;
       if (this.pointers.size > 1) {
         const d = this.spread();
         if (this.pinch > 0 && d > 0) this.zoomBy(d / this.pinch);
@@ -108,17 +134,30 @@ export class CrewViews {
       }
     });
     canvas.addEventListener("pointerup", (e) => {
-      if (this.pointers.size === 1 && this.moved < 8 && this.view !== "telemetry") {
-        const b = canvas.getBoundingClientRect();
-        const x = e.clientX - b.left,
-          y = e.clientY - b.top;
-        const near = this.picks
-          .filter((p) => !p.view && Math.hypot(p.point[0] - x, p.point[1] - y) < 26)
-          .sort((a, b2) => Math.hypot(a.point[0] - x, a.point[1] - y) - Math.hypot(b2.point[0] - x, b2.point[1] - y))[0];
+      const [x, y] = this.local(e);
+      const drag = this.drag;
+      this.drag = null;
+      if (drag && this.pointers.size === 1) {
+        // (a waypoint dropped somewhere new, or touched where it was)
+        const at = drag.moved ? this.unproject?.(x, y) : null;
+        if (at) this.onMoveWp(drag.i, at);
+        else if (!drag.moved) this.onWp(drag.i, x, y);
+        this.request();
+      } else if (this.pointers.size === 1 && this.moved < 8 && this.view !== "telemetry") {
+        const row = this.picks.find(
+          (p) => p.wp !== undefined && p.r && x >= p.r.x && x <= p.r.x + p.r.w && y >= p.r.y && y <= p.r.y + p.r.h,
+        );
+        const near = this.nearest(x, y, 26, (p) => !p.view && !p.r);
         const panel = this.picks.find((p) => p.view && p.r && x >= p.r.x && x <= p.r.x + p.r.w && y >= p.r.y && y <= p.r.y + p.r.h);
-        if (near?.slot !== undefined) this.onSelect(near.slot);
-        else if (near?.contact) this.onContact(near.contact);
+        if (row) this.onWp(row.wp!, x, y);
+        else if (near?.slot !== undefined) this.onSelect(near.slot);
+        else if (near?.contact) this.onContact(near.contact, x, y);
+        else if (near?.wp !== undefined) this.onWp(near.wp, x, y);
         else if (panel?.view) this.onOpen(panel.view);
+        else if (this.view === "map" || this.view === "nd") {
+          const at = this.unproject?.(x, y);
+          if (at) this.onGround(at, x, y);
+        }
       }
       this.pointers.delete(e.pointerId);
       this.pinch = this.spread();
@@ -145,6 +184,25 @@ export class CrewViews {
     this.lon = wrap(unMercX(mercX(this.lon) - dx / S));
     this.lat = clamp(unMercY(clamp(mercY(this.lat) - dy / S, 0, 1)), -85, 85);
     this.request();
+  }
+  /** a pointer's place on the canvas */
+  private local(e: PointerEvent): Point {
+    const b = this.canvas.getBoundingClientRect();
+    return [e.clientX - b.left, e.clientY - b.top];
+  }
+  /** the pick nearest a point, within a radius, among those a test keeps */
+  private nearest(x: number, y: number, r: number, keep: (p: Pick) => boolean) {
+    let best: Pick | null = null,
+      bd = r;
+    for (const p of this.picks) {
+      if (!keep(p)) continue;
+      const d = Math.hypot(p.point[0] - x, p.point[1] - y);
+      if (d < bd) {
+        bd = d;
+        best = p;
+      }
+    }
+    return best;
   }
   private spread() {
     const ps = [...this.pointers.values()];
@@ -262,7 +320,8 @@ export class CrewViews {
     this.picks = [];
     const sc = this.scene();
     const r: Rect = { x: 8, y: 8, w: this.W - 16, h: this.H - 16 };
-    const pick = (point: Point, what: { slot?: number; contact?: string }) => this.picks.push({ point, ...what });
+    const pick = (point: Point, what: { slot?: number; contact?: string; wp?: number }) => this.picks.push({ point, ...what });
+    this.unproject = null;
     if (this.follow && sc.own?.geo) {
       this.lat = sc.own.geo.lat;
       this.lon = sc.own.geo.lon;
@@ -278,9 +337,18 @@ export class CrewViews {
         p.panel(r);
         drawPfd(p, r, sc);
         break;
-      case "nd":
-        drawNd(p, r, sc, { range: this.range, north: this.north, arc: r.h > 300 && !this.north, sensor: this.sensor, pick });
+      case "nd": {
+        const g = drawNd(p, r, sc, { range: this.range, north: this.north, arc: r.h > 300 && !this.north, sensor: this.sensor, pick });
+        const geo = sc.own?.geo;
+        // (a point of the ND: its bearing and distance from the craft, on the WGS84 ellipsoid)
+        if (geo)
+          this.unproject = (x, y) => {
+            const dx = x - g.cx,
+              dy = y - g.cy;
+            return wgs84Direct(geo.lat, geo.lon, Math.atan2(dx, -dy) + g.up, Math.hypot(dx, dy) / g.k);
+          };
         break;
+      }
       case "map":
       case "globe":
         drawGeo(p, r, sc, {
@@ -292,6 +360,18 @@ export class CrewViews {
           dpr: this.dpr,
           pick,
         });
+        if (this.view === "map") {
+          // (the map's point: Web Mercator undone about its centre)
+          const S = 256 * 2 ** this.zoom,
+            cx = r.x + r.w / 2,
+            cy = r.y + r.h / 2,
+            mx = mercX(this.lon) * S,
+            my = mercY(this.lat) * S;
+          this.unproject = (x, y) => ({
+            lat: unMercY(clamp((my + y - cy) / S, 0, 1)),
+            lon: wrap(unMercX((mx + x - cx) / S)),
+          });
+        }
         break;
       case "radar":
         drawRadar(p, r, sc, { range: this.range, north: this.north, sensor: this.sensor, selected: this.selectedContact, pick });
@@ -310,7 +390,7 @@ export class CrewViews {
         this.scroll = clamp(this.scroll, 0, Math.max(0, this.contentHeight() - this.H));
         c.save();
         p.clip(r);
-        drawPlan(p, r, sc, this.scroll);
+        drawPlan(p, r, sc, this.scroll, (q, i) => this.picks.push({ point: [q.x, q.y], r: q, wp: i }));
         c.restore();
         break;
       case "telemetry": {
@@ -324,6 +404,30 @@ export class CrewViews {
         th = Math.max(30, (this.H * this.H) / ch);
       p.round(this.W - 5, (this.scroll / (ch - this.H)) * (this.H - th), 3, th, 2);
       p.fill("#3fd8ff55");
+    }
+    // the place a menu was opened for
+    if (this.marker && (this.view === "map" || this.view === "nd")) {
+      const [x, y] = this.marker;
+      p.circle(x, y, 11);
+      p.stroke(C.magenta, 2);
+      for (const [dx, dy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ] as const)
+        p.seg(x + dx * 6, y + dy * 6, x + dx * 17, y + dy * 17, C.magenta, 2);
+    }
+    // the waypoint being dragged: its ghost under the finger, the name it carries
+    if (this.drag?.moved) {
+      const d = this.drag;
+      const name = sc.snap?.route[d.i]?.name ?? `point ${d.i + 1}`;
+      p.circle(d.x, d.y, 20);
+      p.fill("#ff5ce122");
+      p.stroke(C.magenta, 1.5, [4, 4]);
+      p.star(d.x, d.y, 9, C.magenta, true);
+      p.text(`${name} → ici`, d.x + 22, d.y - 14, { col: C.white, size: 12, weight: 700, bg: "#050a0ee0" });
+      animate = true;
     }
     if (!sc.own) {
       c.fillStyle = "#05090ecc";

@@ -19,7 +19,7 @@ export interface GeoView {
   zoom: number;
   tiles?: Tiles;
   dpr?: number;
-  pick?: (pt: Point, what: { slot?: number; contact?: string }) => void;
+  pick?: (pt: Point, what: { slot?: number; contact?: string; wp?: number }) => void;
 }
 
 let stars: { w: number; h: number; pts: [number, number, number][] } | null = null;
@@ -240,6 +240,7 @@ export function drawGeo(p: Pen, r: Rect, sc: Scene, v: GeoView) {
       if (!q) return;
       p.star(q[0], q[1], 7, C.magenta, i === act);
       labels.keep(q[0], q[1], 7);
+      v.pick?.(q, { wp: i });
       labels.put(w.name, q[0] + 9, q[1] - 7, { col: i === act ? C.white : C.magenta, size: 11, weight: 700, bg: "#050a0ed0" }, true);
     });
   }

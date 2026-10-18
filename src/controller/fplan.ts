@@ -26,6 +26,7 @@ declare module "../controls" {
     routeChanged: typeof routeChanged;
     routeBingo: typeof routeBingo;
     routeFlyTo: typeof routeFlyTo;
+    routeSetPoint: typeof routeSetPoint;
   }
 }
 
@@ -207,6 +208,37 @@ function navStep(this: CameraController, inp: PilotInput, f: { h: number; hdg: n
   }
 }
 
+/**
+ * A waypoint changed in place (the crew's orders — docs/PLAN-CREW-ACTIONS.md A2): moved (geodetic latitude, longitude
+ * [°]), its altitude [m] or speed [m/s] constraint set, or cleared (null); its name, its airfield kept unless moved
+ * off it. The guidance follows at once, the active point kept. What was done.
+ */
+function routeSetPoint(
+  this: CameraController,
+  index: number,
+  patch: { lat?: number; lon?: number; alt?: number | null; spd?: number | null },
+): string {
+  const R = this.nav.route;
+  const w = R.wps[index];
+  if (!w) throw new Error(tf("No waypoint {0} — {1} in the plan", index, R.wps.length));
+  if (patch.lat !== undefined && patch.lon !== undefined) {
+    w.lat = Math.max(-90, Math.min(90, patch.lat));
+    w.lon = Math.abs(patch.lon) <= 180 ? patch.lon : ((((patch.lon + 180) % 360) + 360) % 360) - 180;
+    // (moved off its airfield: a plain point now)
+    delete w.field;
+  }
+  if (patch.alt === null) delete w.alt;
+  else if (patch.alt !== undefined) w.alt = Math.max(0, Math.min(20_000, patch.alt));
+  if (patch.spd === null) delete w.spd;
+  else if (patch.spd !== undefined) w.spd = Math.max(30, Math.min(700, patch.spd));
+  const active = this.nav.lnav?.active ?? null;
+  this.routeChanged();
+  const g = this.geoNow();
+  // (the point flown to kept: a change ahead of it does not send the guidance back to the start)
+  if (active !== null && g && this.nav.lnav && active < R.wps.length && this.nav.lnav.active !== active) this.nav.lnav.directTo(active, g);
+  return tf("{0} changed", w.name);
+}
+
 export function installFplan(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { geoNow, navToggle, navStep, routeChanged, routeBingo, routeFlyTo });
+  Object.assign(C.prototype, { geoNow, navToggle, navStep, routeChanged, routeBingo, routeFlyTo, routeSetPoint });
 }

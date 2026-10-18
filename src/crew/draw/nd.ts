@@ -12,10 +12,11 @@ export interface NdOpts {
   arc: boolean;
   sensor: boolean;
   /** what can be picked: a player's slot, a contact's id */
-  pick?: (pt: Point, what: { slot?: number; contact?: string }) => void;
+  pick?: (pt: Point, what: { slot?: number; contact?: string; wp?: number }) => void;
 }
 
-export function drawNd(p: Pen, r: Rect, sc: Scene, o: NdOpts) {
+/** the display in r; its geometry back (the craft's place on it, pixels a metre, the bearing up) for the touches */
+export function drawNd(p: Pen, r: Rect, sc: Scene, o: NdOpts): { cx: number; cy: number; k: number; up: number } {
   const c = p.c,
     s = sc.s,
     u = sc.u,
@@ -88,6 +89,7 @@ export function drawNd(p: Pen, r: Rect, sc: Scene, o: NdOpts) {
       if (!q || Math.hypot(q[0] - cx, q[1] - cy) > R * 1.25) return;
       const col = i === act ? C.magenta : i < act ? "#5d6a73" : C.white;
       p.star(q[0], q[1], 7, col, i === act);
+      o.pick?.(q, { wp: i });
       p.text(w.name, q[0] + 10, q[1] - 4, { col, size: 11, weight: 700 });
       if (w.alt !== undefined) p.text(fmt(u.alt(w.alt)), q[0] + 10, q[1] + 9, { col: C.dim, size: 9 });
     });
@@ -321,4 +323,5 @@ export function drawNd(p: Pen, r: Rect, sc: Scene, o: NdOpts) {
   if (n) p.text(`${n} contact${n > 1 ? "s" : ""}`, r.x + 10, r.y + 20 + fs * (w ? 5.2 : 1.5), { col: C.dim, size: fs - 1 });
   if (!geo && own && own.sample.frame === 2)
     p.text("Repère Gargantua · positions locales indisponibles", cx, r.y + r.h - 34, { col: C.amber, size: 11, align: "center" });
+  return { cx, cy, k, up };
 }

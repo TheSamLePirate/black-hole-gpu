@@ -50,6 +50,79 @@ export const ACTS = {
     required: ["on"],
     say: (a) => onOff(a.on, ["aérofrein sorti", "aérofrein rentré"], ["air brake out", "air brake in"]),
   },
+  // the navigation: the flight plan edited, flown direct, the target
+  "nav.add": {
+    fam: "nav",
+    params: {
+      query: { type: "string" },
+      lat: { type: "number", minimum: -90, maximum: 90 },
+      lon: { type: "number", minimum: -180, maximum: 180 },
+      alt: { type: "number", minimum: 0, maximum: 20_000 },
+      spd: { type: "number", minimum: 30, maximum: 700 },
+      index: { type: "number", minimum: 0, maximum: 63, integer: true },
+    },
+    say: (a) => {
+      const what = typeof a.query === "string" ? a.query.toUpperCase().slice(0, 16) : "un point";
+      return {
+        fr: `${what} ajouté au plan`,
+        en: `${typeof a.query === "string" ? a.query.toUpperCase().slice(0, 16) : "a waypoint"} added to the plan`,
+      };
+    },
+  },
+  "nav.remove": {
+    fam: "nav",
+    params: { index: { type: "number", minimum: 0, maximum: 63, integer: true } },
+    required: ["index"],
+    say: (a) => ({ fr: `point ${Number(a.index) + 1} retiré du plan`, en: `waypoint ${Number(a.index) + 1} removed` }),
+  },
+  "nav.move": {
+    fam: "nav",
+    params: {
+      index: { type: "number", minimum: 0, maximum: 63, integer: true },
+      lat: { type: "number", minimum: -90, maximum: 90 },
+      lon: { type: "number", minimum: -180, maximum: 180 },
+    },
+    required: ["index", "lat", "lon"],
+    say: (a) => ({ fr: `point ${Number(a.index) + 1} déplacé`, en: `waypoint ${Number(a.index) + 1} moved` }),
+  },
+  "nav.point": {
+    fam: "nav",
+    params: {
+      index: { type: "number", minimum: 0, maximum: 63, integer: true },
+      alt: { type: "number", minimum: 0, maximum: 20_000 },
+      spd: { type: "number", minimum: 30, maximum: 700 },
+      clearAlt: { type: "boolean" },
+      clearSpd: { type: "boolean" },
+    },
+    required: ["index"],
+    say: (a) => ({ fr: `contraintes du point ${Number(a.index) + 1}`, en: `waypoint ${Number(a.index) + 1}'s constraints` }),
+  },
+  "nav.clear": { fam: "nav", say: () => ({ fr: "plan de vol vidé", en: "flight plan cleared" }) },
+  "nav.cruise": {
+    fam: "nav",
+    params: {
+      alt: { type: "number", minimum: 0, maximum: 20_000 },
+      spd: { type: "number", minimum: 30, maximum: 700 },
+      reserve: { type: "number", minimum: 0, maximum: 8000 },
+    },
+    say: () => ({ fr: "croisière réglée", en: "cruise set" }),
+  },
+  "nav.direct": {
+    fam: "nav",
+    params: { index: { type: "number", minimum: 0, maximum: 63, integer: true } },
+    required: ["index"],
+    say: (a) => ({ fr: `direct vers le point ${Number(a.index) + 1}`, en: `direct to waypoint ${Number(a.index) + 1}` }),
+  },
+  "nav.procedures": {
+    fam: "nav",
+    say: () => ({ fr: "procédures de départ et d'arrivée", en: "departure and arrival procedures" }),
+  },
+  "nav.target": {
+    fam: "nav",
+    params: { name: { type: "string" } },
+    required: ["name"],
+    say: (a) => ({ fr: `cible : ${String(a.name).slice(0, 24)}`, en: `target: ${String(a.name).slice(0, 24)}` }),
+  },
   "cfg.sas": {
     fam: "config",
     params: { on: { type: "boolean" } },

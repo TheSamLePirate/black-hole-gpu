@@ -4,6 +4,7 @@ import { serverUrl } from "../net/load";
 import { store } from "../util/storage";
 import { CrewModel, METRICS, relative, valueText } from "./model";
 import { unitsOf } from "../ui/unitsys";
+import { wgs84Inverse } from "../system/ellipsoid";
 import { CrewRadio } from "./radio";
 import { bindTalk } from "./ptt";
 import { CrewViews, VIEW_NAMES, type CrewView } from "./views";
@@ -315,6 +316,65 @@ function controls() {
     list.id = "contact-list";
     contacts.append(list);
     bar.append(contacts);
+  } else if (v === "plan") {
+    // the flight plan edited (PLAN-CREW-ACTIONS A2): a place added by its name, the cruise, the procedures, cleared
+    const u = unitsOf(views.units);
+    const add = el("form", "", "plan-add");
+    const q = document.createElement("input");
+    q.type = "search";
+    q.id = "plan-query";
+    q.placeholder = "OACI, terrain ou lieu";
+    q.setAttribute("aria-label", "Point à ajouter au plan");
+    q.autocomplete = "off";
+    const go = actButton(
+      "Ajouter",
+      "nav.add",
+      () => ({ query: q.value.trim().slice(0, 40) }),
+      "plan-add",
+      (ok) => {
+        if (ok) q.value = "";
+      },
+    );
+    go.type = "submit";
+    add.append(q, go);
+    add.addEventListener("submit", (e) => e.preventDefault());
+    const cruise = document.createElement("details");
+    cruise.className = "pan-controls";
+    cruise.append(el("summary", "Croisière"));
+    const nav = snapNow()?.nav;
+    const [altBox, altVal] = numberField("Niveau", nav?.cruiseAlt, u.alt, u.altName.toLowerCase());
+    const [spdBox, spdVal] = numberField("Vitesse", nav?.cruiseSpd, u.spd, u.spdName.toLowerCase());
+    const body = el("div", "", "cruise-box");
+    body.append(
+      altBox,
+      spdBox,
+      actButton("Appliquer", "nav.cruise", () => ({
+        ...(Number.isFinite(altVal()) ? { alt: Math.round(altVal()) } : {}),
+        ...(Number.isFinite(spdVal()) ? { spd: Math.round(spdVal()) } : {}),
+      })),
+    );
+    cruise.append(body);
+    // (cleared only on a second press within 3 s)
+    const clear = button(
+      "Vider",
+      () => {
+        if (clear.dataset.armed) {
+          delete clear.dataset.armed;
+          clear.textContent = "Vider";
+          void fire(clear, "nav.clear", {});
+        } else {
+          clear.dataset.armed = "1";
+          clear.textContent = "Confirmer ?";
+          setTimeout(() => {
+            delete clear.dataset.armed;
+            clear.textContent = "Vider";
+          }, 3000);
+        }
+      },
+      "plan-clear",
+    );
+    clear.dataset.act = "nav.clear";
+    bar.append(add, cruise, actButton("Procédures", "nav.procedures", {}, "plan-procedures"), clear);
   } else if (v === "schematic") {
     // the configuration (PLAN-CREW-ACTIONS A1): what a copilot sets — every switch lit as the pilot's craft is
     const sys = () => snapNow()?.sys;
@@ -796,19 +856,178 @@ const SIDES: Record<string, string> = {
   dead: "détruit",
   carrier: "porte-avions",
 };
-views.onContact = (id) => {
+// ---- the context menu (PLAN-CREW-ACTIONS A2): a waypoint, the ground, a contact touched — what can be ordered there
+const stage = document.querySelector<HTMLElement>(".stage")!;
+let menuEl: HTMLElement | null = null;
+function closeMenu() {
+  menuEl?.remove();
+  menuEl = null;
+  if (views.marker) {
+    views.marker = null;
+    views.request();
+  }
+}
+/** a small menu where the finger touched, kept inside the view; the next touch elsewhere closes it */
+function menu(x: number, y: number, title: string, sub: string, items: HTMLElement[]) {
+  // (the crosshair just set for this menu kept: only the menu before goes)
+  const keep = views.marker;
+  closeMenu();
+  views.marker = keep;
+  const m = el("div", "", "ctx-menu");
+  m.setAttribute("role", "menu");
+  m.setAttribute("aria-label", title);
+  const head = el("div", "", "ctx-head");
+  head.append(el("strong", title), ...(sub ? [el("small", sub)] : []));
+  const close = button("✕", closeMenu);
+  close.className = "ctx-close";
+  close.setAttribute("aria-label", "Fermer");
+  head.append(close);
+  m.append(head, ...items);
+  stage.append(m);
+  const w = m.offsetWidth,
+    h = m.offsetHeight;
+  m.style.left = `${Math.max(6, Math.min(stage.clientWidth - w - 6, x + 12))}px`;
+  m.style.top = `${Math.max(6, Math.min(stage.clientHeight - h - 6, y - h / 2))}px`;
+  menuEl = m;
+  syncActs();
+  m.querySelector<HTMLElement>("button:not(.ctx-close)")?.focus({ preventScroll: true });
+}
+$("instruments").addEventListener("pointerdown", closeMenu);
+/** orders sent one after the other, stopped at the first refused — one button (its enabling: the first's family) */
+function chainButton(text: string, steps: () => [Act, Args][], id?: string) {
+  const b = button(
+    text,
+    async () => {
+      const list = steps();
+      b.setAttribute("aria-busy", "true");
+      let r = { ok: true, msg: "" };
+      for (const [act, args] of list) {
+        r = await actions.send(act, args);
+        if (!r.ok) break;
+      }
+      b.removeAttribute("aria-busy");
+      b.classList.remove("ok", "ko");
+      void b.offsetWidth;
+      b.classList.add(r.ok ? "ok" : "ko");
+      notice(r.ok ? `${text} ✓` : `${text} — ${r.msg || "refusé"}`);
+      if (r.ok) closeMenu();
+      refresh();
+    },
+    id,
+  );
+  b.dataset.act = "nav.add";
+  return b;
+}
+/** a number entered in the units shown, sent in SI: [its field, the SI value read back (NaN: none)] */
+function numberField(
+  label: string,
+  valueSI: number | undefined,
+  toShown: (x: number) => number,
+  unit: string,
+): [HTMLElement, () => number] {
+  const box = el("label", "", "ctx-field");
+  const input = document.createElement("input");
+  input.type = "number";
+  input.inputMode = "decimal";
+  input.value = valueSI === undefined ? "" : String(Math.round(toShown(valueSI)));
+  input.setAttribute("aria-label", label);
+  box.append(el("span", label), input, el("em", unit));
+  return [box, () => (input.value.trim() === "" ? Number.NaN : input.valueAsNumber / toShown(1))];
+}
+const where = (at: { lat: number; lon: number }) =>
+  `${Math.abs(at.lat).toFixed(3)}° ${at.lat >= 0 ? "N" : "S"} · ${Math.abs(at.lon).toFixed(3)}° ${at.lon >= 0 ? "E" : "O"}`;
+const fromCraft = (at: { lat: number; lon: number }) => {
+  const g = model.own()?.geo;
+  if (!g) return "";
+  const q = wgs84Inverse(g.lat, g.lon, at.lat, at.lon);
+  const u = unitsOf(views.units);
+  return `à ${u.fDist(q.d)} · relèvement ${String(Math.round(((q.az * 180) / Math.PI + 360) % 360)).padStart(3, "0")}°`;
+};
+
+views.onWp = (i, x, y) => {
+  const snap = snapNow();
+  const wp = snap?.route[i];
+  if (!wp) return;
+  const u = unitsOf(views.units);
+  const [altBox, altVal] = numberField("Altitude", wp.alt, u.alt, u.altName.toLowerCase());
+  const [spdBox, spdVal] = numberField("Vitesse", wp.spd, u.spd, u.spdName.toLowerCase());
+  const row = (box: HTMLElement, set: HTMLElement, clear: HTMLElement) => {
+    const r = el("div", "", "ctx-row");
+    r.append(box, set, clear);
+    return r;
+  };
+  menu(x, y, `${i + 1}. ${wp.name}`, `${where(wp)} · ${fromCraft(wp)}`, [
+    actButton("Direct", "nav.direct", { index: i }, "ctx-wp-direct", (ok) => ok && closeMenu()),
+    row(
+      altBox,
+      actButton(
+        "Fixer",
+        "nav.point",
+        () => (Number.isFinite(altVal()) ? { index: i, alt: Math.round(altVal()) } : { index: i }),
+        "ctx-alt-set",
+      ),
+      actButton("Libre", "nav.point", { index: i, clearAlt: true }),
+    ),
+    row(
+      spdBox,
+      actButton("Fixer", "nav.point", () => (Number.isFinite(spdVal()) ? { index: i, spd: Math.round(spdVal()) } : { index: i })),
+      actButton("Libre", "nav.point", { index: i, clearSpd: true }),
+    ),
+    actButton("Supprimer le point", "nav.remove", { index: i }, "ctx-wp-remove", (ok) => ok && closeMenu()),
+    el(
+      "p",
+      views.view === "plan" ? "Sur la carte ou le ND : glisser un point le déplace." : "Glisser le point pour le déplacer.",
+      "ctx-hint",
+    ),
+  ]);
+};
+views.onMoveWp = (i, at) =>
+  void fire(null, "nav.move", { index: i, lat: Math.round(at.lat * 1e5) / 1e5, lon: Math.round(at.lon * 1e5) / 1e5 });
+views.onGround = (at, x, y) => {
+  const snap = snapNow();
+  const own = model.own();
+  const route = snap?.route ?? [];
+  const active = snap?.nav?.active ?? route.length;
+  const p = { lat: Math.round(at.lat * 1e5) / 1e5, lon: Math.round(at.lon * 1e5) / 1e5 };
+  views.marker = [x, y];
+  views.request();
+  menu(x, y, "Point choisi", `${where(p)} · ${fromCraft(p)}`, [
+    chainButton(
+      "Direct ici",
+      () =>
+        route.length >= 2
+          ? [
+              ["nav.add", { ...p, index: active }],
+              ["nav.direct", { index: active }],
+            ]
+          : [
+              ...(route.length === 0 && own?.geo ? ([["nav.add", { lat: own.geo.lat, lon: own.geo.lon }]] as [Act, Args][]) : []),
+              ["nav.add", p],
+              ["nav.direct", { index: Math.max(1, route.length) }],
+            ],
+      "ctx-direct-here",
+    ),
+    actButton("Ajouter à la fin du plan", "nav.add", p, "ctx-append", (ok) => ok && closeMenu()),
+    ...(route[active]
+      ? [actButton(`Insérer avant ${route[active]!.name}`, "nav.add", { ...p, index: active }, undefined, (ok) => ok && closeMenu())]
+      : []),
+  ]);
+};
+views.onContact = (id, x = stage.clientWidth / 2, y = stage.clientHeight / 2) => {
   views.selectedContact = id;
   const u = unitsOf(views.units);
   const own = model.own();
   const c = own?.snapshot?.radar?.contacts.find((c) => c.id === id);
   const t = model.contacts().find((t) => t.id === id);
-  if (c) notice(`${c.name} · ${u.fDist(Math.hypot(c.e, c.n))} · Δh ${u.fAlt(c.dz)} · ${c.iff}`);
-  else if (t) {
-    const parts = [t.name, t.type, SIDES[t.side] ?? t.side];
-    if (t.alt !== null) parts.push(u.fAlt(t.alt));
-    if (t.spd !== null) parts.push(u.fSpd(t.spd));
-    notice(parts.filter(Boolean).join(" · "));
-  }
+  const name = c?.name ?? t?.name ?? id;
+  const info = c
+    ? `${u.fDist(Math.hypot(c.e, c.n))} · Δh ${u.fAlt(c.dz)} · ${c.iff}`
+    : t
+      ? [t.type, SIDES[t.side] ?? t.side, t.alt !== null ? u.fAlt(t.alt) : "", t.spd !== null ? u.fSpd(t.spd) : "", fromCraft(t)]
+          .filter(Boolean)
+          .join(" · ")
+      : "";
+  menu(x, y, name, info, [actButton("Cibler", "nav.target", { name }, undefined, (ok) => ok && closeMenu())]);
   views.request();
 };
 
@@ -816,6 +1035,7 @@ document.addEventListener("keydown", (e) => {
   if (e.code === "Escape") {
     radio.gate.cancel();
     showCrew(false);
+    closeMenu();
   }
 });
 addEventListener("pagehide", () => {

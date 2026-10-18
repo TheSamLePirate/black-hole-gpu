@@ -10,7 +10,8 @@ import { readCrewCmd, sayOf } from "../src/net/crewcmd";
 
 const url = process.argv[2] ?? "ws://localhost:3000/net";
 const D = Math.PI / 180;
-const ROUTE = [
+type Wp = { name: string; lat: number; lon: number; alt?: number; spd?: number };
+const ROUTE: Wp[] = [
   { name: "LFPG", lat: 49.0097, lon: 2.5479, alt: 119 },
   { name: "MOLBA", lat: 48.55, lon: 2.95, alt: 4000 },
   { name: "AVLON", lat: 47.9, lon: 3.55 },
@@ -18,7 +19,17 @@ const ROUTE = [
   { name: "IAF01", lat: 46.25, lon: 5.05, alt: 2500, spd: 150 },
   { name: "LFLL", lat: 45.7256, lon: 5.0811, alt: 250 },
 ];
-const CRUISE = 9000;
+let CRUISE = 9000;
+let CRUISE_SPD = 235;
+let target = "";
+const PLACES: Record<string, [number, number]> = {
+  LFPO: [48.7233, 2.3794],
+  LFLY: [45.7272, 4.9444],
+  LFMN: [43.6584, 7.2159],
+  LFLS: [45.3629, 5.3294],
+  LFSB: [47.59, 7.5291],
+  DIJON: [47.322, 5.0415],
+};
 
 function pilot(name: string, colour: string) {
   return new NetClient({ url, build: "crew-demo", id: { device: `crew-demo-${name}`, name, colour }, p2p: false });
@@ -114,6 +125,66 @@ const crewDo: Record<string, (a: Record<string, unknown>) => string | null> = {
     board.brake = a.on ? 1 : 0;
     return null;
   },
+  "nav.add": (a) => {
+    let p: Wp;
+    if (typeof a.query === "string") {
+      const k = a.query.toUpperCase();
+      const hit = PLACES[k];
+      if (!hit) return `Rien trouvé pour « ${a.query} »`;
+      p = { name: k, lat: hit[0], lon: hit[1] };
+    } else if (typeof a.lat === "number" && typeof a.lon === "number")
+      p = { name: `WP${String(ROUTE.length + 1).padStart(2, "0")}`, lat: a.lat, lon: a.lon };
+    else return "Un nom ou une position";
+    if (typeof a.alt === "number") p.alt = a.alt;
+    if (typeof a.spd === "number") p.spd = a.spd;
+    const at = typeof a.index === "number" ? Math.min(a.index, ROUTE.length) : ROUTE.length;
+    ROUTE.splice(at, 0, p);
+    if (at <= leg && ROUTE.length > 1) leg++;
+    return null;
+  },
+  "nav.remove": (a) => {
+    const i = Number(a.index);
+    if (!ROUTE[i]) return `Pas de point ${i}`;
+    ROUTE.splice(i, 1);
+    if (i < leg) leg--;
+    leg = Math.max(0, Math.min(leg, ROUTE.length - 1));
+    return null;
+  },
+  "nav.move": (a) => {
+    const w = ROUTE[Number(a.index)];
+    if (!w) return "Pas de tel point";
+    w.lat = Number(a.lat);
+    w.lon = Number(a.lon);
+    return null;
+  },
+  "nav.point": (a) => {
+    const w = ROUTE[Number(a.index)];
+    if (!w) return "Pas de tel point";
+    if (a.clearAlt) delete w.alt;
+    else if (typeof a.alt === "number") w.alt = a.alt;
+    if (a.clearSpd) delete w.spd;
+    else if (typeof a.spd === "number") w.spd = a.spd;
+    return null;
+  },
+  "nav.clear": () => {
+    ROUTE.length = 0;
+    return null;
+  },
+  "nav.cruise": (a) => {
+    if (typeof a.alt === "number") CRUISE = a.alt;
+    if (typeof a.spd === "number") CRUISE_SPD = a.spd;
+    return null;
+  },
+  "nav.direct": (a) => {
+    if (!ROUTE[Number(a.index)]) return "Pas de tel point";
+    leg = Number(a.index);
+    return null;
+  },
+  "nav.procedures": () => "Pas de terrain en bout de plan",
+  "nav.target": (a) => {
+    target = String(a.name);
+    return null;
+  },
   "cfg.sas": (a) => {
     board.sas = !!a.on;
     return null;
@@ -141,7 +212,10 @@ ana.on("event", ({ from, ev }) => {
 setInterval(() => {
   const dt = 0.25;
   t += dt;
-  const wp = ROUTE[leg]!;
+  // (no plan: on along the heading)
+  const ahead1 = (from: { lat: number; lon: number }, h: number): Wp => ({ name: "", ...gcDest(from, h, 50_000) });
+  const wpAt = (i: number, from: { lat: number; lon: number }, h: number): Wp => ROUTE[Math.min(i, ROUTE.length - 1)] ?? ahead1(from, h);
+  const wp = wpAt(leg, { lat, lon }, hdg);
   const brg = gcCourse({ lat, lon }, wp);
   const dist = gcDist({ lat, lon }, wp);
   if (dist < 2500 && leg < ROUTE.length - 1) leg++;
@@ -165,10 +239,11 @@ setInterval(() => {
     h2 = alt,
     l2 = leg;
   for (let k = 1; k <= 30; k++) {
-    const w2 = ROUTE[l2]!;
+    const w2 = wpAt(l2, q, hdg);
     if (gcDist(q, w2) < gs * 10 && l2 < ROUTE.length - 1) l2++;
-    q = gcDest(q, gcCourse(q, ROUTE[l2]!), gs * 10);
-    h2 += Math.max(-25, Math.min(30, ((ROUTE[l2]!.alt ?? CRUISE) - h2) * 0.02)) * 10;
+    const w3 = wpAt(l2, q, hdg);
+    q = gcDest(q, gcCourse(q, w3), gs * 10);
+    h2 += Math.max(-25, Math.min(30, ((w3.alt ?? CRUISE) - h2) * 0.02)) * 10;
     ahead.push({ ...q, t: k * 10, h: h2 });
   }
   const around = Math.round(t * 4) % 4 === 0;
@@ -258,23 +333,25 @@ setInterval(() => {
         order: "",
         hub: null,
       },
-      nav: {
-        active: leg,
-        dist,
-        brg,
-        ete: dist / gs,
-        xtk: 180 * Math.sin(t / 30),
-        dtk: brg,
-        phase: alt < CRUISE - 200 && leg < 3 ? "climb" : leg >= 4 ? "descent" : "cruise",
-        tod: leg <= 3 ? Math.max(0, gcDist({ lat, lon }, ROUTE[3]!) + 20_000) : null,
-        altT: target,
-        spdT: wp.spd ?? 235,
-        cruiseAlt: CRUISE,
-        cruiseSpd: 235,
-        bingo: 2400,
-        fuelToGo: 1500,
-        timeToGo: 1900,
-      },
+      nav: !ROUTE.length
+        ? null
+        : {
+            active: leg,
+            dist,
+            brg,
+            ete: dist / gs,
+            xtk: 180 * Math.sin(t / 30),
+            dtk: brg,
+            phase: alt < CRUISE - 200 && leg < 3 ? "climb" : leg >= 4 ? "descent" : "cruise",
+            tod: leg <= 3 && ROUTE[3] ? Math.max(0, gcDist({ lat, lon }, ROUTE[3]) + 20_000) : null,
+            altT: target,
+            spdT: wp.spd ?? 235,
+            cruiseAlt: CRUISE,
+            cruiseSpd: CRUISE_SPD,
+            bingo: 2400,
+            fuelToGo: 1500,
+            timeToGo: 1900,
+          },
       sys: {
         engine: "F135",
         spool: 0.86,

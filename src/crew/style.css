@@ -830,7 +830,7 @@ dialog input {
   }
   .metrics {
     grid-auto-flow: row;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
   }
 }
 @media (min-width: 1400px) {
@@ -1196,4 +1196,97 @@ dialog input {
   background: linear-gradient(180deg, #1c6b4a, #134a33);
   color: #e3ffef;
   box-shadow: inset 0 0 0 1px #4cf29a80;
+}
+
+/* ---- the context menu and the plan's editing (PLAN-CREW-ACTIONS A2) */
+.ctx-menu {
+  position: absolute;
+  z-index: 6;
+  width: min(300px, calc(100% - 12px));
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid #2c4a5a;
+  background: #0b1720f2;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 18px 44px #000b;
+}
+.ctx-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  margin-bottom: 2px;
+}
+.ctx-head strong {
+  font: 700 14px var(--mono);
+  color: #fff;
+}
+.ctx-head small {
+  grid-column: 1;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.ctx-close {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  min-height: 32px;
+  width: 32px;
+  padding: 0;
+  border-radius: 8px;
+}
+.ctx-menu > button {
+  min-height: 40px;
+  text-align: left;
+}
+.ctx-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 4px;
+  align-items: end;
+}
+.ctx-row button {
+  min-height: 38px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.ctx-field {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+.ctx-field input {
+  min-height: 38px;
+  width: 100%;
+  text-align: right;
+  font-family: var(--mono);
+}
+.ctx-field em {
+  font-style: normal;
+  color: var(--muted);
+}
+.ctx-hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 2px 2px 0;
+}
+.plan-add {
+  display: flex;
+  gap: 4px;
+}
+.plan-add input {
+  min-height: 36px;
+  border-radius: 999px;
+  width: 170px;
+  padding-inline: 12px;
+}
+.cruise-box {
+  grid-template-columns: 1fr !important;
+}
+#plan-clear[data-armed] {
+  border-color: var(--red);
+  color: #ffd2cc;
 }

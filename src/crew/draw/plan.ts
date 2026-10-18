@@ -4,7 +4,8 @@
 import { C, clamp, dur, fmt, type Pen, polar, type Rect } from "./kit";
 import type { Scene } from "./scene";
 
-export function drawPlan(p: Pen, r: Rect, sc: Scene, scroll = 0) {
+/** the plan in r, scrolled; each leg's row given to `pick` (its rectangle, its waypoint's index) */
+export function drawPlan(p: Pen, r: Rect, sc: Scene, scroll = 0, pick?: (q: Rect, wp: number) => void) {
   const snap = sc.snap,
     u = sc.u,
     s = sc.s,
@@ -151,6 +152,7 @@ export function drawPlan(p: Pen, r: Rect, sc: Scene, scroll = 0) {
   legs.forEach((l, j) => {
     const y = hy + 30 + j * rowH;
     const on = l.i === act;
+    pick?.({ x: tbl.x + 6, y: y - 19, w: tbl.w - 12, h: rowH - 4 }, l.i);
     if (on) {
       p.round(tbl.x + 6, y - 19, tbl.w - 12, rowH - 4, 5);
       p.fill("#ff5ce11c");
