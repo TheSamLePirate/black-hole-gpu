@@ -779,7 +779,8 @@ function netUndock(this: CameraController) {
  * from the first port): what is left coasts (or stays on the station), as its own assembly.
  */
 function undock(this: CameraController) {
-  if (this.holeDocked) return this.holeUndock();
+  // (Gargantua's side: the pieces let go on their geodesics — controller/holeendurance.ts)
+  if (cameraFrame(this.s).region === "hole" && this.holeUndockLinks()) return;
   if (this.netDocked) return this.netUndock();
   const me = fleet.active;
   const mine = fleet.links.filter((l) => l.a === me || l.b === me);

@@ -637,9 +637,8 @@ function flightInfo(this: CameraController): FlightInfo {
     info.lpd = { dir: q && ql > 1e-6 ? [q[0] / ql, q[1] / ql, q[2] / ql] : null, dist: Math.hypot(...v), moved: !!this.landRun?.moved };
   } else if (this.pilot.auto !== "land") this.lpdPad = null;
   // (Gargantua's side: the Endurance's docking — controller/holeendurance.ts —, its panel's figures, its port's mark)
-  if (this.holeDocked) info.links.push({ title: "Endurance", port: VESSELS.endurance.ports[this.holeDocked.port]?.name ?? "", fuel: null });
   const hd = cam.region === "hole" ? this.holeDock : null;
-  if (hd && !this.holeDocked) {
+  if (hd) {
     info.dock = { ...hd, docked: false } as unknown as DockInfo;
     const eye = shipToCamera(this.shipPose(), s.shipLookYaw, s.shipLookPitch).t;
     const q: Vec3 = [hd.at[0] + eye[0], hd.at[1] + eye[1], hd.at[2] + eye[2]];

@@ -4560,7 +4560,7 @@ export class Renderer {
       }
       // the Endurance, over the traced image (before the bloom's levels are made from it)
       // (near it — 60 km —: drawn as a ship at its true size instead, holeShips)
-      if (s && i === r0 && s.endurance && this.lastCam && !holeFleet.source?.()) {
+      if (s && i === r0 && s.endurance && this.lastCam && !holeFleet.source?.()?.hideCinematic) {
         if (!this.endurance.ready) {
           this.enduranceLoading ??= loading
             .track(
@@ -5038,15 +5038,13 @@ export class Renderer {
     const h = this.lastCam?.region === "hole" ? holeFleet.source?.() : null;
     if (!h) return [];
     const eye = s.ship && this.shipPose ? shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t : ([0, 0, 0] as Vec3);
-    return [
-      {
-        id: "endurance",
-        S: [0, 1, 2].map((k) => [h.axes[0][k]!, h.axes[1][k]!, h.axes[2][k]!]) as [Vec3, Vec3, Vec3],
-        t: [h.rel[0] + eye[0], h.rel[1] + eye[1], h.rel[2] + eye[2]] as Vec3,
-        shadow: Math.hypot(...h.rel) < vesselHulls.endurance.radius + vesselHulls[s.vessel].radius + 60,
-        far: true,
-      },
-    ];
+    return h.items.map((o) => ({
+      id: o.id,
+      S: [0, 1, 2].map((k) => [o.axes[0][k]!, o.axes[1][k]!, o.axes[2][k]!]) as [Vec3, Vec3, Vec3],
+      t: [o.rel[0] + eye[0], o.rel[1] + eye[1], o.rel[2] + eye[2]] as Vec3,
+      shadow: Math.hypot(...o.rel) < vesselHulls[o.id].radius + vesselHulls[s.vessel].radius + 60,
+      far: true,
+    }));
   }
 
   private fleetOthers(s: Settings): ShipInstance[] {

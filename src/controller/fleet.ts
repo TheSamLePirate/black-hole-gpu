@@ -158,7 +158,8 @@ function switchVessel(this: CameraController, id: VesselId): string | null {
   const cam = cameraFrame(s);
   const nav = this.ourNav(cam);
   // (tf: `t` is the time in these functions)
-  if (!nav) return tf("The other craft are near the Earth — in our solar system");
+  // (Gargantua's side: the craft there — controller/holeendurance.ts)
+  if (!nav) return this.holeSwitch(id);
   const t = nav.t;
   const to = fleet.pose(id, t);
   // (the F-35 is where it is flown: chosen, it is put on a runway — the nearest — by the page's hook)
@@ -263,7 +264,13 @@ function placeNearPort(this: CameraController, target: VesselId, distM: number, 
 function cycleVessel(this: CameraController, dir: 1 | -1) {
   // (another craft flown: the view back with it)
   this.stopSpectator();
-  const ids: VesselId[] = VESSEL_IDS;
+  let ids: VesselId[] = VESSEL_IDS;
+  // (Gargantua's side: the craft there only — docked to the flown one, or left within 10 km)
+  if (cameraFrame(this.s).region === "hole") {
+    const t = this.viewTime();
+    const near = new Set(this.holeCrafts(t).map((q) => q.id));
+    ids = VESSEL_IDS.filter((v) => v === fleet.active || fleet.assembly(fleet.active).includes(v) || near.has(v));
+  }
   const i = ids.indexOf(fleet.active);
   this.s.vessel = ids[(i + dir + ids.length) % ids.length]!;
   return this.s.vessel;

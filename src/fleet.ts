@@ -46,6 +46,15 @@ export interface FreeState extends Pose {
   ground?: { body: string; q: Vec3; ax: [Vec3, Vec3, Vec3] };
 }
 
+/** A craft of the fleet left on Gargantua's side (controller/holeendurance.ts): its geodesic's state (geodesic.ts), its
+ *  axes on the hole's map (left, top, nose), the time its axes were last turned to, its turn [per M of time]. */
+export interface HoleFree {
+  st: import("./geodesic").Massive;
+  ax: [Vec3, Vec3, Vec3];
+  t?: number;
+  w?: Vec3;
+}
+
 /** A step off a grounded craft's place along an axis [M] — its axes kept in the body's frame (some 150 m). */
 const GROUND_EPS = 1e-9;
 
@@ -96,6 +105,8 @@ export class Fleet {
   }
   /** the coasting ones (not flown, not docked to something that carries them) */
   free: Partial<Record<VesselId, FreeState>> = {};
+  /** the craft left on Gargantua's side, coasting on their geodesics (controller/holeendurance.ts) */
+  hole: Partial<Record<VesselId, HoleFree>> = {};
   links: DockLink[] = [];
   /** the flown craft's place now (controls.ts) */
   activePose: (() => (Pose & { t: number }) | null) | null = null;
@@ -492,6 +503,7 @@ setGear(GEARS[fleet.active]!.height);
 export function fleetStart(t: number, active: VesselId): Record<SpacecraftId, Pose> {
   fleet.active = active;
   fleet.free = {};
+  fleet.hole = {};
   fleet.links = [];
   const mu = solarBody("earth")!.mass;
   const E = ourState("earth", t);

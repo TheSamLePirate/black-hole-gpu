@@ -1180,7 +1180,7 @@ export class CameraController {
   /** Docked to the station (directly, or through craft docked to it): the station carries the flown
    *  craft; a push of the engine or the thrusters undocks. */
   get docked() {
-    return this.s.ship && (fleet.heldByStation() || !!this.netDocked || !!this.holeDocked);
+    return this.s.ship && (fleet.heldByStation() || !!this.netDocked);
   }
   /** held to another player's craft (docs/PLAN-RESEAU.md R7, controller/docking.ts); where it held ours last */
   netDocked: NetDocked | null = null;

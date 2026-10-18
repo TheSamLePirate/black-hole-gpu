@@ -4893,6 +4893,20 @@ export const PRESET_INFO: Record<string, { title?: string; description: string; 
     icon: "◍",
     group: "gargantua",
   },
+  "Gargantua: the Ranger by the Endurance": {
+    title: "The Endurance by Gargantua",
+    description:
+      "The mothership on its orbit about the hole, at its true size: the Ranger 150 m off its fore port at a quarter of light's speed — dock (B: auto-dock), fly the Endurance ([ ]), undock and fly the Ranger back.",
+    icon: "◎",
+    group: "gargantua",
+  },
+  "Mann: the tumbling Endurance": {
+    title: "The film's docking at Mann",
+    description:
+      "The Endurance tumbling at 3 rpm on Mann's orbit, the Ranger 150 m off its hub: match its turn about its axis, then dock (B: auto-dock flies its turn ahead).",
+    icon: "↻",
+    group: "gargantua",
+  },
   "Companion star close-up": {
     description: "The orange star: granulation, spots, prominences and corona, Gargantua beyond.",
     icon: "☼",

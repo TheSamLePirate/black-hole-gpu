@@ -880,6 +880,14 @@ export default {
   "Top turning rate of the attitude control (SAS, holds, the autopilots' turns).":
     "Vitesse de rotation maximale du contrôle d'attitude (SAS, maintiens, rotations des pilotes automatiques).",
   "Ranger handling": "Maniabilité du Ranger",
+  "The Endurance by Gargantua": "L'Endurance près de Gargantua",
+  "The mothership on its orbit about the hole, at its true size: the Ranger 150 m off its fore port at a quarter of light's speed — dock (B: auto-dock), fly the Endurance ([ ]), undock and fly the Ranger back.":
+    "Le vaisseau-mère sur son orbite autour du trou, à sa vraie taille : le Ranger à 150 m de son port avant, au quart de la vitesse de la lumière — amarrez-vous (B : amarrage auto), pilotez l'Endurance ([ ]), désamarrez et reprenez le Ranger.",
+  "The film's docking at Mann": "L'amarrage du film, à Mann",
+  "The Endurance tumbling at 3 rpm on Mann's orbit, the Ranger 150 m off its hub: match its turn about its axis, then dock (B: auto-dock flies its turn ahead).":
+    "L'Endurance en vrille à 3 tr/min sur l'orbite de Mann, le Ranger à 150 m de son moyeu : égalez sa rotation autour de son axe, puis amarrez-vous (B : l'amarrage auto vole sa rotation en avance).",
+  "Gargantua: the Ranger by the Endurance": "Gargantua : le Ranger près de l'Endurance",
+  "Mann: the tumbling Endurance": "Mann : l'Endurance en vrille",
   "How much the Ranger, the Lander and the Endurance help. Manual: no SAS — the stick turns the craft faster and faster, a turn kept until stopped by hand. Realistic: the SAS as the pilot sets it (T). Assisted: the SAS always on; within 1 km of a craft or the station, the RCS let go holds the drift against it at nothing. Beginner: the same within 2 km, at half the turning rates. ⇧X: back to a stable craft in any — the turn stopped, over a ground a hover, in orbit prograde held.":
     "Combien le Ranger, le Lander et l'Endurance aident. Manuel : pas de SAS — le manche fait tourner le vaisseau de plus en plus vite, une rotation garde son élan jusqu'à être arrêtée à la main. Réaliste : le SAS comme le pilote le règle (T). Assisté : le SAS toujours actif ; à moins d'1 km d'un vaisseau ou de la station, le RCS relâché annule la dérive par rapport à lui. Débutant : la même chose à moins de 2 km, à la moitié des vitesses de rotation. ⇧X : retour à un vaisseau stable à tout niveau — la rotation arrêtée, au-dessus d'un sol un vol stationnaire, en orbite le prograde maintenu.",
   "No SAS: a turn kept until stopped by hand": "Pas de SAS : une rotation garde son élan jusqu'à l'arrêt manuel",

@@ -72,13 +72,15 @@ export default {
     "RCS : translation — Z S haut · bas, Q D gauche · droite, ⇧ Alt avant · arrière",
   "RCS: rotation — the attitude keys turn the craft": "RCS : rotation — les touches d'attitude font tourner le vaisseau",
   KEEP: "À POSTE",
+  "Docked to the {0} · {1} · {2} m/s": "Amarré à {0} · {1} · {2} m/s",
+  "Undocked from the {0}": "Désamarré de {0}",
+  "Docking: within 5 km of a craft's free port": "Amarrage : à moins de 5 km du port libre d'un vaisseau",
+  "{0}: not on this side of the wormhole": "{0} : pas de ce côté du trou de ver",
+  "The {0} is {1} km away — within 10 km to fly it": "{0} est à {1} km — à moins de 10 km pour le piloter",
   "By Gargantua, 150 m off the Endurance's fore port: dock to it — its ports on the HUD's docking panel":
     "Près de Gargantua, à 150 m du port avant de l'Endurance : amarrez-vous — ses ports sur le panneau d'amarrage du HUD",
-  "Docked to the Endurance · {0} · {1} m/s": "Amarré à l'Endurance · {0} · {1} m/s",
   "The Endurance tumbles at {0} rpm: match its turn about its hub's axis, then dock (B: auto-dock)":
     "L'Endurance tourne sur elle-même à {0} tr/min : égalez sa rotation autour de l'axe de son moyeu, puis amarrez-vous (B : amarrage auto)",
-  "Undocked from the Endurance": "Désamarré de l'Endurance",
-  "Docking: within 5 km of the Endurance's ports": "Amarrage : à moins de 5 km des ports de l'Endurance",
   "The Endurance: not in this scene (by Gargantua)": "L'Endurance : absente de cette scène (près de Gargantua)",
   "{0} m off the Endurance's fore port": "À {0} m du port avant de l'Endurance",
   propellant: "ergols",
