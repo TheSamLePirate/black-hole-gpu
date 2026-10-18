@@ -179,7 +179,7 @@ rayon et le nombre de rayons qui font la vitesse.
    `nota` (vol), `g100`, `nota` (rotation pure).
 
 13. **Des rayons plus denses quand l'image glisse vite** (17/10 ; le réglage « Netteté en mouvement »,
-   `settings.motionDetail` : Non, En virage — par défaut —, En virage et en vol bas ; renderer motionBlock) — fait. Le
+   `settings.motionDetail` : Non — par défaut depuis l'audit du 18/10 —, En virage, En virage et en vol bas ; renderer motionBlock) — fait. Le
    bloc des rayons passe à un cran plus fin — ×4 → ×3, ×6 → ×4, ×8 → ×6 — quand la ligne de visée tourne plus vite que
    25 px/s pendant 200 ms (`imageTurnPx` : sur les 8 dernières images, la secousse du vol, un tremblement de moyenne
    nulle, s'y annule ; en pixels par seconde — en pixels par image, les images ralenties par les rayons plus denses
@@ -272,7 +272,8 @@ d'un passage à l'autre (20 à 34 ms : le temps réel chargé à l'heure du test
 
 - **La tolérance des géodésiques doublée** (`realtimeEps` 0,12 → 0,24) : −32 % sur Kerr par la tranche, mais des taches
   autour de l'anneau de photons et l'ombre déformée — rejeté. Doublée seulement loin du trou (`tune` TUNE_EPS_FAR) :
-  −13 % sur Kerr, rien ailleurs — à revoir à l'œil avant de l'adopter.
+  −13 % sur Kerr, rien ailleurs — essai du 16/10 ; repris et **adopté** à 3 (Fait, 6.), contrôlé par `AB=noop`
+  seulement : le propriétaire le regarde à l'œil, au télescope surtout (la tolérance ne dépend pas du champ).
 - **La liste compacte des corps** (`renderer.bodyList`) : les 250 tests de corps par rayon de ciel coûtaient peu (−1,6 ms
   sur Terre, rien sur Saturne) — gardée (images identiques, test exact), sans gain notable.
 - **L'air à 8 échantillons** au lieu de 32 : −4 à −15 % mais l'image change — la table fait mieux sans rien perdre.
@@ -283,8 +284,9 @@ d'un passage à l'autre (20 à 34 ms : le temps réel chargé à l'heure du test
 - **Alléger la déformation des crêtes** (−18 % à Yosemite) : écarté — la forme des crêtes serait changée (choix du
   16/10 : les garder telles quelles).
 
-- **Miller** : les corps de Gargantua écartés tôt par leur place au début du pas (+3,7 % : les registres) ; par la
-  bande de leur orbite (rien). Ce qui y coûte est du vrai travail : le disque épais — sa brume, sa fumée, sa
+- **Miller** : les corps de Gargantua écartés tôt par leur place au début du pas (premier essai, 16/10, avant le banc
+  corrigé : +3,7 %, les registres ; repris le 17/10 avec la borne du mouvement orbital, `TUNE_BODY_REJECT` — Fait, 8. :
+  −2 à −3 %, adopté) ; par la bande de leur orbite (rien). Ce qui y coûte est du vrai travail : le disque épais — sa brume, sa fumée, sa
   turbulence que les rayons du ciel traversent — ≈ 18 %, les corps à chaque pas ≈ 17 %, les traversées du plan ≈ 5 %.
 
 ## Ce qui coûte encore, sur Terre

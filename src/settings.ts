@@ -644,7 +644,7 @@ export function defaultSettings(): Settings {
     glassBlur: false,
     temporalReprojection: true,
     sharpen: 0.3,
-    motionDetail: "turns",
+    motionDetail: "off",
     purkinje: 0.6,
     motionBlur: 0.5,
     farFieldLut: true,

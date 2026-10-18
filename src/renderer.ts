@@ -1143,13 +1143,16 @@ export class Renderer {
       mkPost("stars").then((p) => (this.postStars = p)),
       mkPost("beamV").then((p) => (this.postBeamV = p)),
       mkPost("meter").then((p) => (this.meterPipeline = p)),
-      device
-        .createComputePipelineAsync({
-          layout: "auto",
-          compute: { module: device.createShaderModule({ code: maskWGSL, label: "mask" }), entryPoint: "main" },
-        })
-        .then((p) => (this.maskPipeline = p)),
     ]).then(() => {});
+    // (the cockpit's mask: an optimisation, not waited for — a browser that refuses its shader keeps it off, the
+    // renderer starting all the same)
+    device
+      .createComputePipelineAsync({
+        layout: "auto",
+        compute: { module: device.createShaderModule({ code: maskWGSL, label: "mask" }), entryPoint: "main" },
+      })
+      .then((p) => (this.maskPipeline = p))
+      .catch((e) => console.warn("cockpit mask unavailable:", e));
     this.maskBuf = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.histBuf = device.createBuffer({ size: 512, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
     this.histStage = device.createBuffer({ size: 512, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
@@ -2278,7 +2281,8 @@ export class Renderer {
     set(3, ...cam.up, pixelAngle);
     set(4, ...cam.fwd, o.stars ?? 0);
     set(5, cam.zamo.alpha, cam.zamo.omega, cam.zamo.varpi, cam.zamo.sqrtSig);
-    set(6, cam.zamo.sqrtSigOverDel, 0, 0, 0);
+    // (y: the aerial table's scale — trace.wgsl apScale)
+    set(6, cam.zamo.sqrtSigOverDel, preExposure(this.ev(s)), 0, 0);
     set(7, ...cam.beta, cam.gamma);
     set(8, a, horizon(a), dc.rIn, Math.max(s.diskOuter, dc.rIn + 0.5));
     set(9, s.diskTemp, dc.fmax, s.turbulence, dc.logY);

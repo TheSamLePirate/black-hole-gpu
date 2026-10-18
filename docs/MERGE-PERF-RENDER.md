@@ -12,9 +12,9 @@ Le journal détaillé, mesure par mesure, est [`PLAN-RENDU-PERF.md`](PLAN-RENDU-
 | Branche | `perf-render` — tête `2377f8c0` + ce rapport ; `test-kimi` = `2377f8c0`, déployée sur GitHub Pages `/test/` |
 | Base commune avec `main` | `a7da8d28` (16/10, « What costs in the low flight's render… ») |
 | Commits propres à la branche | 29 (dont 4 déjà sur `main` sous un autre hash, à contenu identique — §5) |
-| `main` en avance | 5 commits : les 4 copies ci-dessus + `1ce1f2a7` (la console d'équipage, autre session) |
+| `main` en avance | 7 commits (18/10) : les 4 copies ci-dessus + `1ce1f2a7` (la console d'équipage), `ff7ec030` (l'école de vol), `dfa72d36` (le radar) |
 | Fichiers touchés | 45 fichiers, +3 216 / −272 lignes |
-| Fusion à blanc | `git merge-tree --write-tree origin/main perf-render` : **aucun conflit** (17/10, 21 h) |
+| Fusion à blanc | `git merge-tree --write-tree origin/main perf-render` : **aucun conflit** (17/10, 21 h ; refaite le 18/10 sur `dfa72d36` : aucun) |
 | Vérifié sur la branche | `bunx biome ci .` OK, `bunx tsc --noEmit -p .` OK, `check-repo-size` 0 binaire nouveau, `check-wgsl` 20/20 shaders (Apple), tests unitaires **1 307 pass / 0 fail** (kerr-mini, `--parallel=4`), CI Pages de `test-kimi` verte (snapshot, main, preview, site, deploy) |
 
 La demande d'origine (16/10) : « Ne pas tracer sous le cockpit. Mode diagnostic de performances… Le rendu, c'est le
@@ -173,7 +173,7 @@ coûtent du temps.
 
 ### 2.10 Plus de rayons quand l'image glisse vite — `3e947c2b`, puis réglage `20814e4c`
 - **Réglage** : Rendu › Temps réel › « Netteté en mouvement » (`settings.motionDetail`, persistance `pref`). Valeurs
-  `off`, `turns` (**défaut**), `low`.
+  `off` (**défaut** depuis l'audit du 18/10, §7), `turns`, `low`.
 - **Effet** : le bloc des rayons passe un cran plus fin (×4 → ×3, ×6 → ×4, ×8 → ×6 ; `renderer.motionBlock`).
 - **Déclencheurs** (mesurés en px/s, pas en px par image : sinon la densité s'entretenait d'elle-même) :
   - En virage : `imageTurnPx` > 25 px/s pendant 200 ms, retour sous 18 px/s après 300 ms.
@@ -309,7 +309,7 @@ coûtent du temps.
   - `costView` : 14 et 15, affichage brut ;
   - `streamingState.gazeM` : jusqu'à 12 et 20 km selon la portée ;
   - `earthScenery.stats().reach`.
-- **Réglages nouveaux** (les deux en persistance `pref`) : `motionDetail` (défaut `turns`), `detailReach` (défaut
+- **Réglages nouveaux** (les deux en persistance `pref`) : `motionDetail` (défaut `off`), `detailReach` (défaut
   `normal`).
 
 ## 4. Ce qui ne fonctionne pas, reste douteux ou n'a pas été vérifié
@@ -354,7 +354,8 @@ coûtent du temps.
     d'orbite n'ont rien donné.
 11. **Contradiction dans `PLAN-RENDU-PERF.md`.** La section « Essayés, non retenus » dit encore de revoir à l'œil
     `TUNE_EPS_FAR` avant de l'adopter. Il **a** été adopté à 3 (§2.6, `8d446de9`), contrôlé par `AB=noop` seulement,
-    sans revue à l'œil par le propriétaire. À corriger dans la doc, ou à faire valider.
+    sans revue à l'œil par le propriétaire. La doc est corrigée (18/10) ; le propriétaire le regarde lui-même, au
+    télescope surtout.
 12. **Le masque du cockpit** n'agit qu'en cockpit, tête immobile à 10 px près, sans profondeur de champ. Hors de ces
     conditions, aucun gain (c'est voulu). Si un nouvel appareil a des parties opaques mal classées (verrière marquée
     opaque), des rayons visibles ne seraient pas tracés : à vérifier à l'ajout de tout nouveau cockpit.
@@ -409,6 +410,8 @@ coûtent du temps.
 
 ## 6. Pistes ouvertes (non faites)
 
+(Voir aussi §7 : les suites de l'audit du 18/10.)
+
 - **Distance de détail.**
   - Fenêtres de 8 seulement sur les niveaux fins (diviser la mémoire par 2 à 4).
   - Un A/B `perf-suite` sur vue figée (`AB=reach`).
@@ -420,3 +423,44 @@ coûtent du temps.
   de blocs de 2 (audit O1).
 - **Sol.** La normale fine du relief (5–10 %) et les ombres du relief (≈ 11 %) restent les plus gros postes de
   l'ombrage. La marche elle-même ne fait que 14–30 pas par pixel.
+
+## 7. L'audit avant la fusion (18/10/2026)
+
+Une relecture du code (le masque, la Terre, le trou noir, les réglages et les tuiles), sans e2e, puis des correctifs
+sur la branche. Décisions du propriétaire : corriger sur `perf-render` puis fusionner ; « Netteté en mouvement » à
+**Non** par défaut ; `TUNE_EPS_FAR` 3 regardé par lui au télescope ; une vérification ciblée sur kerr-mini.
+
+**Corrigé sur la branche :**
+- **Le masque ne peut plus empêcher le démarrage.** `mask.wgsl` lisait `covered` par `workgroupUniformLoad` sur un
+  atomique (une surcharge récente, la première du projet) et son pipeline était dans le `Promise.all` attendu à la
+  création du moteur : un navigateur qui refuse le shader (Safari, iPad ?) bloquait tout. Maintenant une barrière et
+  `atomicLoad`, le pipeline à part, son échec laissant le masque éteint.
+- **Le décor ne disparaît plus en changeant la distance de détail.** `scenery.ts` réallouait le tampon (vide) avant le
+  test « une source manque, garder la scène dessinée » : une tuile OSM en échec laissait des arbres et des bâtiments
+  invisibles mais solides (collisions). Le test passe avant la réallocation.
+- **La table aérienne pré-exposée.** Ses `rgba16float` gardaient la lumière brute ; le reste du pipeline la multiplie
+  par `preExposure` (jusqu'à 2⁴⁰) avant tout stockage 16 bits. De nuit l'air de la table pouvait s'arrondir à zéro.
+  Écrite × `preExposure`, lue ÷ (`Params.zamo2.y`, `trace.wgsl apScale`).
+- **« Netteté en mouvement » : Non par défaut.** « En virage » coûte 21 → 35 ms par virage et la résolution dynamique
+  compte ces images (voir plus bas) ; le joueur la choisit.
+- **La doc** : `TUNE_EPS_FAR` adopté (plus « à revoir ») ; le rejet tôt des corps du 16/10 (+3,7 %) distingué de celui
+  adopté le 17/10 ; les commentaires « 1024² » du noyau.
+
+**Suites, non bloquantes (à faire sur `main`) :**
+- **Netteté en mouvement et résolution dynamique** : `main.ts` (gpuEma, scaleMs) et `adaptBlock` (`blockMs`,
+  `recentMs`) enregistrent les images densifiées : après un virage de plus de 3 s, l'échelle de rendu baisse et ne
+  remonte pas avant 30 s. En « vol bas », `imageGroundPx` borne la distance au sol (40 km) au lieu d'ignorer ce qui est
+  plus loin : densifié en permanence en orbite basse.
+- **Fusion des pas de Saturne** (`trace.wgsl` ourSegment) : l'écart n'est mesuré qu'au dernier point du morceau
+  (l'erreur d'un chemin qui plie régulièrement ≈ n/4 fois le seuil), et le flush garde la corde qui plie. Borner par
+  la direction de la première corde ; vider à `p0`.
+- **`TUNE_EPS_FAR`** ne dépend pas du champ de vision : au télescope, une erreur fixe couvre plus de pixels.
+- **Masque du cockpit** : la tolérance de secousse prise au centre (≈ ×1,8 au bord à 60°) ; le photomètre qui change
+  quand le masque bascule ; les reflets de la verrière (`screenRefl`) et l'historique qui lisent des tuiles figées ;
+  son coût (≈ 2,5 ms mesuré avant l'élargissement de la marge) et son raster payé même quand il ne sert pas.
+- **Distance de détail** : pas de repli si la texture de 256 Mio échoue (iPad) ; niveaux grossiers à 8 tuiles ; la
+  mémoire CPU en Très loin ≈ 300 Mio (avec les couleurs de l'anneau).
+- **Table aérienne à l'horizon** : une colonne de 20 px mélange un rayon arrêté sur la mer et un rayon rasant du ciel
+  (plausible : une bande à l'horizon, le soleil couchant sur la mer trop clair).
+- **`taParallaxPx` 64** : l'historique n'est presque plus jeté ; mesuré en vol seulement, pas au roulage, sur le pont ni
+  près des bâtiments.

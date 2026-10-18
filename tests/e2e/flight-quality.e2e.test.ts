@@ -21,7 +21,7 @@ PLACES["tarifa-low"] = `__bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set
 const CONFIGS: Record<string, string> = {
   // (the history dropped once the ground's parallax passes half a pixel: in low flight, every frame — today's)
   x4drop: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 0.5;`,
-  x4keep: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64;`,
+  x4keep: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.settings.motionDetail = "off";`,
   x4px4: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 4;`,
   x3drop: `__bh.game.set("realtimeSubsampling", 3); __bh.renderer.taParallaxPx = 0.5;`,
   x3keep: `__bh.game.set("realtimeSubsampling", 3); __bh.renderer.taParallaxPx = 64;`,
@@ -32,8 +32,9 @@ const CONFIGS: Record<string, string> = {
   w10: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.renderer.taParams = [1 / 16, 0.1, 2];`,
   w02: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.renderer.taParams = [1 / 16, 0.02, 2];`,
   n32: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.renderer.taParams = [1 / 32, 0.05, 2];`,
-  // (the rays no denser while the image moves fast — settings.motionDetail "off"; x4keep: "turns", the default)
+  // (the rays no denser while the image moves fast — settings.motionDetail "off", the default; denser in turns: "turns")
   nodense: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.settings.motionDetail = "off";`,
+  turns: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.settings.motionDetail = "turns";`,
   // (… and denser in low flight too, the seen ground sliding fast — settings.motionDetail "low")
   low: `__bh.game.set("realtimeSubsampling", 4); __bh.renderer.taParallaxPx = 64; __bh.settings.motionDetail = "low";`,
   // (bounds: the history's clamp almost off — 100 σ —, and its weight capped at 64 frames rather than 16)

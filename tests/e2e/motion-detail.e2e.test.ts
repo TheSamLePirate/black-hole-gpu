@@ -16,7 +16,7 @@ describe.skipIf(!E2E)("the sharpness in motion's setting", () => {
   });
 
   test("searched in French, its choices named, « En virage et en vol bas » clicked and taken", async () => {
-    expect(await app.js<string>("__bh.settings.motionDetail")).toBe("turns");
+    expect(await app.js<string>("__bh.settings.motionDetail")).toBe("off");
     await app.click("[data-testid=topbar-settings]");
     await app.waitFor(`!document.getElementById("panel").classList.contains("collapsed")`);
     await app.click(".sp-search input");
@@ -39,6 +39,6 @@ describe.skipIf(!E2E)("the sharpness in motion's setting", () => {
       await Bun.$`mkdir -p ${process.env.E2E_SHOTS}`;
       await app.shot(`${process.env.E2E_SHOTS}/motion-detail.png`);
     }
-    await app.js(`(() => { __bh.settings.motionDetail = "turns"; return 1; })()`);
+    await app.js(`(() => { __bh.settings.motionDetail = "off"; return 1; })()`);
   }, 120_000);
 });

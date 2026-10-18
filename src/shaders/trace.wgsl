@@ -17,7 +17,8 @@ struct Params {
   camUp: vec4f,    // w = pixel angular size
   camFwd: vec4f,   // w: the catalogue stars splatted (R8): radiance → fixed point (the pre-exposure × 2¹⁶); 0: not
   zamo: vec4f,     // α, ω, ϖ, √Σ at the camera
-  zamo2: vec4f,    // √(Σ/Δ), unused...
+  zamo2: vec4f,    // √(Σ/Δ), the aerial table's scale (the frame's pre-exposure: its half floats hold the image's
+                   // range, not the raw radiance's — a night's air 2⁻⁴⁰ of a day's; 0: 1), unused ×2
   boost: vec4f,    // observer velocity β in the ZAMO frame (r̂, θ̂, φ̂), w = γ
   bh: vec4f,       // a, r+, r_isco, r_out
   disk: vec4f,     // T_max [K], F_max, turbulence, log10 Y(T_max)
@@ -3932,7 +3933,7 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
 // in the fixed map's units, read instead of the day cube's alpha when P.earth.x is 2; held still: no drift)
 @group(0) @binding(20) var earthNight: texture_cube<f32>;
 @group(0) @binding(21) var earthElev: texture_2d<f32>;    // the height above the sea [m] (ETOPO 2022), the oceans
-// the terrain tiles' levels (rg32uint, 1024²): their heights' float bits [m]; up to z 8 their imagery
+// the terrain tiles' levels (rg32uint, 1024² or 2048² — EarthTiles.setReach): their heights' float bits [m]; up to z 8 their imagery
 // (rgba8: the day's sRGB, the night's lights; 0: none)
 @group(0) @binding(28) var earthTiles: texture_2d_array<u32>;
 @group(0) @binding(29) var surfaceColour: texture_2d_array<f32>;
@@ -5243,7 +5244,7 @@ fn earthH0(q: vec3f, foot: f32) -> f32 {
 const TILE_Z0 = 6u;
 const TILE_LEVELS = 8u;
 const TILE_RES_MIN = 25.0;
-// a level's texel at i (from its valid rectangle's corner), in its layer (toroidal: modulo 1024)
+// a level's texel at i (from its valid rectangle's corner), in its layer (toroidal: modulo the texture's side)
 fn tileTexel(l: u32, i: vec2i) -> f32 {
   // (the windows' texture: 4 or 8 tiles a side — EarthTiles.setReach —, a power of two: wrapped by a mask)
   let t = (vec2i(P.tileL[2u * l].zw) + i) & (vec2i(textureDimensions(earthTiles, 0).xy) - 1);
@@ -7065,6 +7066,8 @@ fn apSliceZ(t: f32, tFar: f32) -> f32 {
   if (t <= AP_T0) { return max(t, 0.0) / AP_T0; }
   return min(1.0 + log(t / AP_T0) / log(tFar / AP_T0) * f32(AP_Z - 2u), f32(AP_Z - 1u));
 }
+// the aerial table's light stored × the frame's pre-exposure (P.zamo2.y): within a half float's range at any EV
+fn apScale() -> f32 { return select(1.0, P.zamo2.y, P.zamo2.y > 0.0); }
 // the air between the camera and t along the ray at AP_UV: its light (o.L, its moonlit share o.Lm) and its
 // transmittance (o.T), as earthAir gives them (t = 3e38: the air's end)
 fn apRead(t: f32, tFar: f32) -> EarthAir {
@@ -7073,8 +7076,9 @@ fn apRead(t: f32, tFar: f32) -> EarthAir {
   let a = textureSampleLevel(apInA, apSamp, uvw, 0.0);
   let b = textureSampleLevel(apInB, apSamp, uvw, 0.0);
   var o: EarthAir;
-  o.L = max(a.rgb, vec3f(0.0));
-  o.Lm = vec3f(max(a.a, 0.0));
+  let k = 1.0 / apScale();
+  o.L = max(a.rgb, vec3f(0.0)) * k;
+  o.Lm = vec3f(max(a.a, 0.0) * k);
   o.T = clamp(b.rgb, vec3f(0.0), vec3f(1.0));
   return o;
 }
@@ -7116,7 +7120,7 @@ fn aerial(@builtin(global_invocation_id) gid: vec3u) {
       T *= e.T;
       tPrev = t;
     }
-    textureStore(apOutA, vec3u(gid.xy, z), vec4f(L, Lm));
+    textureStore(apOutA, vec3u(gid.xy, z), vec4f(L, Lm) * apScale());
     textureStore(apOutB, vec3u(gid.xy, z), vec4f(T, 0.0));
   }
   AP_N = 0u;

@@ -206,6 +206,16 @@ export class EarthScenery {
           this.onContent?.();
           return;
         }
+        // (a scene rebuilt with a source missing — the land cover's raster, a tile — while one is drawn here: the
+        // drawn one kept, its trees and its contacts, the rebuild tried again later — before the buffer is made again
+        // for a new reach: the drawn scene stays in the buffer the shader reads)
+        if (r.errors?.length && this.data) {
+          this.lastError = r.errors[0]!;
+          this.failures++;
+          this.retryAt = performance.now() + this.backoff();
+          this.onContent?.();
+          return;
+        }
         // (the buffer the scene's budget, made again when a farther reach's scene needs more — or comes back to less)
         const size = this.budget();
         if (!this.allocated || this.bufferBytes !== size) {
@@ -220,15 +230,6 @@ export class EarthScenery {
           });
           this.retire(old, oldBytes); // (the placeholder: not counted — the next scene is not held back for it)
           this.onChange?.();
-        }
-        // (a scene rebuilt with a source missing — the land cover's raster, a tile — while one is drawn here: the
-        // drawn one kept, its trees and its contacts, the rebuild tried again later)
-        if (r.errors?.length && this.data) {
-          this.lastError = r.errors[0]!;
-          this.failures++;
-          this.retryAt = performance.now() + this.backoff();
-          this.onContent?.();
-          return;
         }
         const t = performance.now();
         this.device.queue.writeBuffer(this.buffer, 0, r.buffer);

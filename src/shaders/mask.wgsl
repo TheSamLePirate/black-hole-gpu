@@ -39,7 +39,10 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
       }
     }
   }
-  let full = workgroupUniformLoad(&covered);
+  // (a barrier and a plain load, not workgroupUniformLoad on an atomic — a newer overload some browsers lack; nothing
+  // after it waits on the others)
+  workgroupBarrier();
+  let full = atomicLoad(&covered);
   let p = vec2i(gid.xy);
   if (p.x < W && p.y < H) { moments[u32(p.y * W + p.x)].x = select(0.0, -1.0, full == 1u); }
 }
