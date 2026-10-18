@@ -2621,6 +2621,7 @@ async function main() {
       refreshGui();
     },
     undock: () => camera.undock(),
+    refuel: () => panel.toast(camera.refuelFromDocked()),
     throttle: (t) => {
       if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto); // taking the throttle ends the autopilot
       camera.pilot.throttle = t;

@@ -248,7 +248,9 @@ export interface FlightInfo {
   /** the docking autopilot's phase ("": off) */
   dockPhase: string;
   /** what the flown craft is docked to (its own links) */
-  links: { title: string; port: string }[];
+  links: { title: string; port: string; fuel?: number | null }[];
+  /** the flown craft's propellant, its tank's share (null: not counted) */
+  ownFuel?: number | null;
   /** the craft flown, and those docked to it; the assembly's mass [kg] */
   vessel: VesselId;
   assembly: VesselId[];
@@ -613,12 +615,14 @@ function flightInfo(this: CameraController): FlightInfo {
   // the station near: its port where it is seen from the eye, the velocity relative to it (the
   // docking's prograde and retrograde)
   // (the flown craft's dockings: to what, by which port — the docking panel's UNDOCK)
+  info.ownFuel = this.propellantOf(fleet.active)?.share ?? null;
   info.links = fleet.links
     .filter((l) => l.a === fleet.active || l.b === fleet.active)
     .map((l) => {
       const other = l.a === fleet.active ? l.b : l.a;
       const k = l.a === fleet.active ? l.pb : l.pa;
       return {
+        fuel: other === "iss" ? null : (this.propellantOf(other)?.share ?? null),
         title: other === "iss" ? "ISS" : VESSELS[other].name,
         port: other === "iss" ? (station.ports[k]?.name ?? "") : (VESSELS[other].ports[k]?.name ?? ""),
       };

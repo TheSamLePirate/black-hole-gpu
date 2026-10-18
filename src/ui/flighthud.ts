@@ -203,6 +203,8 @@ const GLYPH: Record<string, string> = {
 export interface FlightHudActions {
   /** the game tools' window */
   tools(): void;
+  /** the flown craft's tank filled from a docked craft (controller/refuel.ts) */
+  refuel?(): void;
   /** the HUD's kind: the next of automatic, atmosphere, space, approach (⇧²) */
   hudKind?(): void;
   /** the future path in the view, on / off */
@@ -2682,6 +2684,7 @@ export class FlightHud {
     const f = (v: number, n = 1) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(2)} km` : `${v.toFixed(n)} m`);
     const ok = (b: boolean) => (b ? "ok" : "");
     const key = [
+      `${i.ownFuel ?? ""}:${links.map((l) => l.fuel ?? "").join(",")}`,
       links.map((l) => l.title + l.port).join(),
       d
         ? [
@@ -2707,7 +2710,17 @@ export class FlightHud {
     // docked: to what, by which port; UNDOCK lets the flown craft go
     if (links.length) {
       this.dock.append(h("div", "fl-title", tf("Docked · {0}", links.map((l) => l.title).join(" · "))));
-      for (const l of links) this.dock.append(h("div", "fl-dock-port", `${l.title} · ${l.port}`));
+      for (const l of links)
+        this.dock.append(
+          h("div", "fl-dock-port", `${l.title} · ${l.port}${l.fuel != null ? ` · ${t("propellant")} ${Math.round(l.fuel * 100)} %` : ""}`),
+        );
+      // (a craft of the fleet with propellant to give, the flown craft's tank not full: REFUEL)
+      if (i.ownFuel != null && i.ownFuel < 0.995 && links.some((l) => (l.fuel ?? 0) > 0.001)) {
+        const r = h("button", "fl-go", tf("REFUEL · {0} %", Math.round(i.ownFuel * 100))) as HTMLButtonElement;
+        r.dataset.testid = "dock-refuel";
+        r.onclick = () => this.act.refuel?.();
+        this.dock.append(r);
+      }
       const b = h("button", "fl-go", t("UNDOCK")) as HTMLButtonElement;
       b.onclick = () => this.act.undock();
       this.dock.append(b);

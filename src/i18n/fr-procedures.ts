@@ -72,6 +72,15 @@ export default {
     "RCS : translation — Z S haut · bas, Q D gauche · droite, ⇧ Alt avant · arrière",
   "RCS: rotation — the attitude keys turn the craft": "RCS : rotation — les touches d'attitude font tourner le vaisseau",
   KEEP: "À POSTE",
+  propellant: "ergols",
+  "REFUEL · {0} %": "FAIRE LE PLEIN · {0} %",
+  "Refuel: the propellant is not counted in this scene": "Plein : les ergols ne sont pas comptés dans cette scène",
+  "Refuel: a rocket's tank": "Plein : le réservoir d'une fusée",
+  "Refuel: docked to a craft of the fleet first (the Endurance holds the most)":
+    "Plein : s'amarrer d'abord à un vaisseau de la flotte (l'Endurance en a le plus)",
+  "Refuel: the tank is full": "Plein : le réservoir est plein",
+  "Refuel: the {0} has nothing left to give": "Plein : {0} n'a plus rien à donner",
+  "Refuelled from the {0}: {1} t — the {0} at {2} %": "Plein fait depuis {0} : {1} t — {0} à {2} %",
   "The Endurance's ring: its turn a revolution a minute lower · higher — the whole craft turns about its axis, its thrusters hold it; the weight in its modules on the HUD (5 rpm: 0.84 g)":
     "L'anneau de l'Endurance : sa rotation d'un tour par minute de moins · de plus — tout le vaisseau tourne autour de son axe, ses propulseurs la tiennent ; la pesanteur dans ses modules au HUD (5 tr/min : 0,84 g)",
   "The ring: the Endurance's": "L'anneau : celui de l'Endurance",
