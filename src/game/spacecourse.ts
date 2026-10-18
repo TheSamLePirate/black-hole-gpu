@@ -66,6 +66,11 @@ export interface SpaceFix {
   lpdMoved: boolean;
   /** the next event of the free path ("enter", "exit", "impact"…; "" none) */
   next: string;
+  /** where over its body [°] and how high [km] (null: none — the hole's side), the load felt [g] (the challenges') */
+  lat?: number | null;
+  lon?: number | null;
+  altKm?: number | null;
+  g?: number;
 }
 
 export type SpaceDone =

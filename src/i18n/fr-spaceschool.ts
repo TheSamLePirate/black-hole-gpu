@@ -211,4 +211,37 @@ export default {
   You: "Vous",
   "Try it alone": "Essayer seul",
   "I fly it: {0}": "Je le fais : {0}",
+  "No such challenge": "Pas de défi de ce nom",
+  "Challenge: {0}": "Défi : {0}",
+  "Challenge · {0}": "Défi · {0}",
+  Result: "Résultat",
+  Medal: "Médaille",
+  Gold: "Or",
+  Silver: "Argent",
+  Bronze: "Bronze",
+  "Gold under": "L'or sous",
+  "new record": "nouveau record",
+  "Spacecraft challenges": "Défis des vaisseaux",
+  "gold under {0}": "l'or sous {0}",
+  "Docking against the clock": "L'amarrage contre la montre",
+  "The ISS 60 m off: docked as fast as you can — under the capture's limits.":
+    "L'ISS à 60 m : amarré le plus vite possible — dans les limites de la capture.",
+  "Pinpoint landing on the Moon": "Le poser de précision sur la Lune",
+  "3 km over Tranquility: land as near the pad as you can.": "3 km au-dessus de Tranquillité : posez-vous au plus près de l'aire.",
+  "Pinpoint landing on Mars": "Le poser de précision sur Mars",
+  "3 km over Jezero crater: down on the site, the thin air and its winds.":
+    "3 km au-dessus du cratère Jezero : sur le site, avec l'air ténu et ses vents.",
+  "The hoverslam": "Le hoverslam",
+  "2 km over the Moon, the engine off, falling: light it at the last moment — the least Δv to a safe touchdown.":
+    "2 km au-dessus de la Lune, moteur coupé, en chute : allumez au dernier moment — le moins de Δv pour un poser sûr.",
+  "The entry corridor": "Le couloir de rentrée",
+  "From a 400 km orbit, down through the air: the gentlest entry — the least load at its peak.":
+    "D'une orbite de 400 km jusqu'au sol à travers l'air : la rentrée la plus douce — la plus petite charge au pic.",
+  "The rendezvous on the least Δv": "Le rendez-vous au Δv minimal",
+  "The ISS 20 km ahead: within a kilometre of it on as little Δv as you can.":
+    "L'ISS 20 km devant : à moins d'un kilomètre d'elle avec le moins de Δv possible.",
+  "The tumbling Endurance": "L'Endurance en vrille",
+  "The film's scene: dock to the spinning Endurance before it is lost — the faster the better.":
+    "La scène du film : amarrez-vous à l'Endurance qui tourne avant de la perdre — le plus vite possible.",
+  Best: "Meilleur",
 } satisfies Record<string, string>;

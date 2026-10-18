@@ -1566,6 +1566,20 @@ const s = __bh.flight.school.state(); [s.step, s.steps, s.name, s.left, s.stalle
 *Used in:* `school-demos.e2e.test.ts` (real clicks to start, `state()` as its watchdog), `course.e2e.test.ts`,
 `instructor.e2e.test.ts`.
 
+- `space(id, mode)` — a space school's lesson (PLAN-VAISSEAUX X9, `game/spacecourse.ts`: `"attitude"`, `"holds"`,
+  `"orbit-basics"`, `"hohmann"`, `"plane"`, `"rendezvous"`, `"docking"`, `"entry"`, `"glide"`, `"lunar-descent"`,
+  `"ascent"`, `"endurance-dock"`, `"slingshot"`, `"relativity"`, `"emergencies"`) set up then begun, `mode`
+  `"guided"` · `"demo"` · `"try"`; its run is `__bh.camera.spaceCourse` (null once ended, its report then).
+
+### `__bh.flight.spaceChallenges` → object
+
+The spacecraft's challenges (PLAN-VAISSEAUX X10, `game/spacechallenges.ts`, `controller/spacechallenge.ts`).
+
+| member | what |
+|---|---|
+| `open()` | their panel (`ui/spacechallenges.ts`; each card's button `data-testid="space-chal-<id>"`) |
+| `go(id)` | one set up then begun: `"dock-clock"`, `"lunar-pin"`, `"mars-pin"`, `"hoverslam"`, `"entry-corridor"`, `"rdv-dv"`, `"endurance-spin"`; its run is `__bh.camera.spaceChal` (null once ended, its report then); the bests kept in `localStorage["kerr.space.bests"]` |
+
 ### `__bh.net` → NetPanel (src/ui/netpanel.ts)
 
 The room: the Network panel and, once a room was asked for, the network's client and its parts (the network's code is

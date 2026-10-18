@@ -21,6 +21,8 @@ import {
 import type { RangerStatus } from "../game/status";
 import { t, tf } from "../i18n";
 import type { Hold } from "../pilot";
+import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
+import { toBodyFixed } from "../system/our-surface";
 import { solarBody, solarState } from "../system/solar";
 import { C_MPS } from "../units";
 
@@ -83,8 +85,8 @@ function act(c: CameraController, a: SpaceAct) {
   else c.onSpaceCourseAct?.(a);
 }
 
-/** The lesson's figures now (a spacecraft on our side; the hole's: the clocks only). */
-function fixOf(c: CameraController, st: RangerStatus | null): Omit<SpaceFix, "stepT"> {
+/** The lesson's figures now (a spacecraft on our side; the hole's: the clocks only) — the challenges' too. */
+export function fixOf(c: CameraController, st: RangerStatus | null): Omit<SpaceFix, "stepT"> {
   const P = c.pilot;
   const pose = c.activePoseNow();
   const nose = pose ? (pose.ax[2] as V3) : null;
@@ -111,7 +113,20 @@ function fixOf(c: CameraController, st: RangerStatus | null): Omit<SpaceFix, "st
   const S0 = (c.spaceStep0 ??= { nose: nose ? [...nose] : null, spent: c.spent });
   const turn = nose && S0.nose ? Math.acos(Math.max(-1, Math.min(1, dot(unit(nose), unit(S0.nose))))) * D : 0;
   const o = st?.orbit;
+  // (where over the body: its fixed axes, its figure — the challenges' landing points)
+  let lat: number | null = null,
+    lon: number | null = null;
+  const B = body ? solarBody(body) : null;
+  if (nav && B && body) {
+    const g = cartToGeodetic(B.radius, flatteningOf(body), toBodyFixed(body, nav.X, nav.t));
+    lat = g.lat * D;
+    lon = g.lon * D;
+  }
   return {
+    lat,
+    lon,
+    altKm: st ? st.altKm : null,
+    g: Math.abs(c.airInfo().g || 0),
     pe: o ? o.peKm : null,
     ap: o && o.ecc < 1 ? o.apKm : null,
     ecc: o ? o.ecc : null,

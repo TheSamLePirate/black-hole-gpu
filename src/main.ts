@@ -114,7 +114,9 @@ import { MISSIONS } from "./game/missions";
 import { KeyHints } from "./ui/keyhints";
 import { MenuPad } from "./ui/padnav";
 import { spaceWheel } from "./ui/spacewheel";
-import { SPACE_LESSONS, type SpaceLessonId } from "./game/spacecourse";
+import { SPACE_LESSONS, type SpaceLessonId, type SpaceStart } from "./game/spacecourse";
+import { SPACE_CHALLENGES, type SpaceChallengeId } from "./game/spacechallenges";
+import { spaceChallengePanel } from "./ui/spacechallenges";
 import { SIDE_HOLDS } from "./input/spacepad";
 import { RadialWheel, type WheelItem } from "./ui/wheel";
 import { Tablet } from "./ui/tablet";
@@ -4060,7 +4062,8 @@ async function main() {
         hudKind: () => keyActions.hudKind(new KeyboardEvent("keydown")),
         precision: () => keyActions.precision(new KeyboardEvent("keydown")),
         school: () => flightSchool(instrHost),
-        challenges: () => challengePanel.open(),
+        // (a spacecraft's challenges — X10)
+        challenges: () => spaceChallengePanel((id) => panel.toast(spaceChallengePlace(id))),
         missions: () => openMissions(),
         nextView: () => keyActions.mount(new KeyboardEvent("keydown")),
         photo: openPhoto,
@@ -4564,40 +4567,49 @@ async function main() {
     guided: (id) => lessonPlace(id, "guided"),
     spaceLesson: (id, mode) => spaceLessonPlace(id, mode),
   };
+  /** A spacecraft's start set up (PLAN-VAISSEAUX X9–X10: a lesson's, a challenge's): its scene, its craft, its orbit,
+   *  ground or hover, its target. */
+  const placeSpaceStart = async (S: SpaceStart) => {
+    const wait = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
+    camera.spaceCourseOff();
+    camera.spaceChal = null;
+    if (S.preset) {
+      // (the ISS's distance a scene's own: lent to it for this start)
+      const P = presets[S.preset] as (Preset & { issDistance?: number }) | undefined;
+      const was = P?.issDistance;
+      if (P && S.iss !== undefined) P.issDistance = S.iss;
+      try {
+        tools.preset(S.preset);
+      } finally {
+        if (P && S.iss !== undefined) P.issDistance = was;
+      }
+      await wait(1500);
+    }
+    if (settings.vessel !== S.vessel) {
+      settings.vessel = S.vessel;
+      refreshGui();
+      await wait(900);
+    }
+    if (!settings.ship) actions["btn-ship"]?.();
+    if (S.orbit) tools.orbit(S.orbit.body, { altKm: S.orbit.altKm, inc: S.orbit.inc ?? 0 });
+    if (S.land) tools.land(S.land.body, S.land.lat, S.land.lon);
+    if (S.hover) tools.hoverOver(S.hover.body, S.hover.lat, S.hover.lon, S.hover.altKm);
+    if (S.target) tools.target(S.target);
+    await wait(1200);
+  };
   /** A space lesson's scene set up (PLAN-VAISSEAUX X9 — game/spacecourse.ts), then its run begun on the controller. */
   const spaceLessonPlace = (id: SpaceLessonId, mode: "guided" | "demo" | "try"): string => {
     const L = SPACE_LESSONS.find((x) => x.id === id);
     if (!L) return t("No such lesson");
-    camera.spaceCourseOff();
-    const S = L.start;
-    void (async () => {
-      const wait = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
-      if (S.preset) {
-        // (the ISS's distance a scene's own: lent to it for this lesson)
-        const P = presets[S.preset] as (Preset & { issDistance?: number }) | undefined;
-        const was = P?.issDistance;
-        if (P && S.iss !== undefined) P.issDistance = S.iss;
-        try {
-          tools.preset(S.preset);
-        } finally {
-          if (P && S.iss !== undefined) P.issDistance = was;
-        }
-        await wait(1500);
-      }
-      if (settings.vessel !== S.vessel) {
-        settings.vessel = S.vessel;
-        refreshGui();
-        await wait(900);
-      }
-      if (!settings.ship) actions["btn-ship"]?.();
-      if (S.orbit) tools.orbit(S.orbit.body, { altKm: S.orbit.altKm, inc: S.orbit.inc ?? 0 });
-      if (S.land) tools.land(S.land.body, S.land.lat, S.land.lon);
-      if (S.hover) tools.hoverOver(S.hover.body, S.hover.lat, S.hover.lon, S.hover.altKm);
-      if (S.target) tools.target(S.target);
-      await wait(1200);
-      panel.toast(camera.spaceCourseBegin(id, mode));
-    })();
+    void placeSpaceStart(L.start).then(() => panel.toast(camera.spaceCourseBegin(id, mode)));
     return tf("Lesson: {0}", t(L.title));
+  };
+  /** A spacecraft's challenge set up (X10), then measured. */
+  const spaceChallengePlace = (id: SpaceChallengeId): string => {
+    const C = SPACE_CHALLENGES.find((x) => x.id === id);
+    if (!C) return t("No such challenge");
+    void placeSpaceStart(C.start).then(() => panel.toast(camera.spaceChallengeBegin(id)));
+    return tf("Challenge: {0}", t(C.title));
   };
   // (a space lesson's acts that need the game's tools: a manoeuvre planned, a mission, the plan executed, the warp)
   camera.onSpaceCourseAct = (a) => {
@@ -6519,6 +6531,13 @@ async function main() {
         guided: (id: LessonId) => lessonPlace(id, "guided"),
         /** the lesson flown now: its step, its time, what is left of it, how long stalled; the last one's end */
         state: () => camera.courseState(),
+        /** the space school's lesson set up and begun (PLAN-VAISSEAUX X9) */
+        space: (id: SpaceLessonId, mode: "guided" | "demo" | "try") => spaceLessonPlace(id, mode),
+      },
+      /** the spacecraft's challenges (PLAN-VAISSEAUX X10): their panel, one set up and begun */
+      spaceChallenges: {
+        open: () => spaceChallengePanel((id) => panel.toast(spaceChallengePlace(id))),
+        go: (id: SpaceChallengeId) => spaceChallengePlace(id),
       },
     },
     net: netPanel,
@@ -7382,8 +7401,9 @@ async function main() {
       }
       // (a spacecraft's phases reported as they end — PLAN-VAISSEAUX X8: ascent, insertion, rendezvous, entry)
       camera.phaseReportStep(status ?? null);
-      // (a space lesson's frame — X9)
+      // (a space lesson's frame — X9 —, a challenge's — X10)
       camera.spaceCourseFrame(dt, status ?? null);
+      camera.spaceChallengeFrame(dt, status ?? null);
       netSession.instruments(info, status ?? null);
       flightComputer.show(flightHud.mapView);
       tablet.setVisible(flightHud.mapView);
