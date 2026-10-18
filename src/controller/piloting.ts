@@ -1029,6 +1029,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   this.radarStep(dtPilot);
   // (the Auto-GCAS and the Auto-ACAS: the ground and the others foreseen — controller/gcas.ts)
   this.gcasStep(dtPilot);
+  // (a spacecraft's level of assistance: its SAS law, the recovery, the drift held near a craft — controller/spaceassist.ts)
+  this.spaceAssistStep(inp, dtPilot);
   // (the F-35B's STOVL mode — controller/stovl.ts —: the thrust's direction, the hover law; its input the stick's
   // left to the pilot — none when the hover law takes it)
   const vt = this.stovlStep(cam, inp, dtPilot);
@@ -1097,6 +1099,7 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   }
   const out = this.pilot.step(
     {
+      rate: this.spaceRate,
       air: airCtx,
       sf: sfCtx,
       thrustDir: vt.thrustDir,
@@ -1276,7 +1279,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
     // (the F-35's tanks never empty, the setting on)
     if (e.sigma > 0 && !(fleet.active === "f35" && s.f35InfiniteFuel))
       fleet.fuel[fleet.active] = Math.max(0, left - fuelFlow(TF, thrust, dry, e.sigma, e.mach) * dTau * Msec);
-  } else if (fuelOn(s)) this.spent += (w / Math.max(this.pressureThrust(), 0.05)) * (this.jetModes.ab ? JET.abFlow / JET.abThrust : 1);
+  } else if (fuelOn(s) && !(fleet.active !== "f35" && s.spaceInfinitePropellant))
+    this.spent += (w / Math.max(this.pressureThrust(), 0.05)) * (this.jetModes.ab ? JET.abFlow / JET.abThrust : 1);
   if (burn && this.nodeBurning) this.nodeDone = Math.max(this.nodeDone + along(burn.dir), 0);
   this.dockCheck();
   this.measureSpin();

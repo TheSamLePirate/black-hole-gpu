@@ -453,6 +453,8 @@ export interface Settings {
   rcsFraction: number; // RCS translation, as a fraction of the main engine's thrust
   crashSpeed: number; // touching the ground faster than this is a crash [m/s]
   gearForgiving: boolean; // the landing gear's limits three times a real one's (an easier landing)
+  spaceAssist: "manual" | "realistic" | "assisted" | "beginner"; // a spacecraft's assistance (PLAN-VAISSEAUX X0): no SAS · the pilot's SAS · SAS always, the drift held near a target · the same, gentle rates
+  spaceInfinitePropellant: boolean; // a spacecraft's tanks never empty (the crew engine's propellant)
   gyroscopes: boolean; // near the hole, the ship's axes carried as gyroscopes (Fermi–Walker: gyro.ts), else fixed on the distant stars
   wind: 0 | 1 | 2 | 3; // the wind and its turbulence: calm, light, moderate, strong (wind.ts) — the fair weather's
   weather: WeatherPreset; // the weather flown through (weather.ts): a preset, a draw, the airfields' real one
@@ -795,6 +797,8 @@ export function defaultSettings(): Settings {
     // (a real gear: 3 m/s a landing, 4.5 a collapse — the certification's 10 ft/s and a margin)
     crashSpeed: 4.5,
     gearForgiving: false,
+    spaceAssist: "realistic",
+    spaceInfinitePropellant: false,
     gyroscopes: true,
     wind: 1,
     weather: "fair",
@@ -2118,6 +2122,8 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   rcsFraction: "carried",
   crashSpeed: "carried",
   gearForgiving: "pref",
+  spaceAssist: "pref",
+  spaceInfinitePropellant: "pref",
   gyroscopes: "pref",
   wind: "pref",
   weather: "carried",

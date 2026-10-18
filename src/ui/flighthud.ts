@@ -1910,7 +1910,20 @@ export class FlightHud {
       M[k]!.classList.toggle("on", on);
       (M[k]!.lastChild as HTMLElement).textContent = text;
     };
-    setChip("sas", i.sas, "SAS");
+    // (a spacecraft's level of assistance named on it: manual — no SAS —, assisted, beginner; the drift held near a craft)
+    setChip(
+      "sas",
+      i.sas,
+      i.spaceAssist === "manual"
+        ? t("MANUAL")
+        : i.spaceDrift
+          ? t("SAS · DRIFT HELD")
+          : i.spaceAssist === "assisted"
+            ? t("SAS · ASSISTED")
+            : i.spaceAssist === "beginner"
+              ? t("SAS · BEGINNER")
+              : "SAS",
+    );
     // (the HUD's kind: lit when forced, its name; automatic: dim, the phase's)
     setChip("hudk", s.hudKind !== "auto", `HUD ${hudKindName(this.kind).toUpperCase()}`);
     M.pathBtn!.classList.toggle("off", !s.pathInView);

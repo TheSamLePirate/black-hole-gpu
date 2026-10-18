@@ -242,7 +242,7 @@ export const KEYMAP: KeySection[] = [
     ],
   },
   {
-    title: "Flying the Ranger (K) — KSP's layout",
+    title: "Flying a spacecraft (K) — KSP's layout",
     rows: [
       { keys: "W S · A D · Q E", text: "Pitch · yaw · roll (Z S · Q D · A E on AZERTY)" },
       {
@@ -252,7 +252,7 @@ export const KEYMAP: KeySection[] = [
       },
       {
         keys: "Z · X · ⇧X",
-        text: "Full throttle · cut (W · X on AZERTY) — on the entry autopilot's approach, full throttle goes around · the F-35: back to stable flight (wings level, a gentle climb, a safe speed; then the holds)",
+        text: "Full throttle · cut (W · X on AZERTY) — on the entry autopilot's approach, full throttle goes around · back to a stable craft: the F-35 wings level, a gentle climb, a safe speed, then the holds; a spacecraft its turn stopped, over a ground a hover, in orbit prograde held",
         bind: [
           fly("KeyZ", "throttleFull", off),
           fly("KeyX", "throttleCut", off),

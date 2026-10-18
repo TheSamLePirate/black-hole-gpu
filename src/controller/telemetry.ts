@@ -86,6 +86,9 @@ export interface FlightInfo {
   /** Throttle lever, independent of engine spool-down and RCS acceleration. */
   throttleLever?: number;
   sas: boolean;
+  /** a spacecraft's level of assistance (controller/spaceassist.ts), the RCS holding the drift near a craft */
+  spaceAssist?: string;
+  spaceDrift?: boolean;
   /** what holds the rails' warp back ("": nothing) */
   railsNote: string;
   rollAlign: boolean;
@@ -299,7 +302,10 @@ function flightInfo(this: CameraController): FlightInfo {
         : this.pilot.auto === "entry"
           ? this.pilot.fired.throttle
           : this.pilot.throttle,
-    sas: this.pilot.sas,
+    // (the SAS flown: the level's when it imposes one)
+    sas: this.spaceRate ? this.spaceRate.law === "damped" : this.pilot.sas,
+    spaceAssist: fleet.active === "f35" ? undefined : this.assistLevel(),
+    spaceDrift: this.spaceDrift,
     /** what holds the rails' warp back ("" : nothing) */
     railsNote: this.railsNote,
     rollAlign: this.pilot.rollAlign,

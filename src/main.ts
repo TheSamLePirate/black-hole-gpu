@@ -2524,6 +2524,10 @@ async function main() {
   }
   function pilotSas() {
     camera.pilot.sas = !camera.pilot.sas;
+    // (a spacecraft's level that imposes it: said so — Settings › Spacecraft)
+    const lv = fleet.active === "f35" ? "realistic" : settings.spaceAssist;
+    if (lv === "manual") return panel.toast(t("Manual assistance: no SAS — the turn kept until stopped by hand (Settings › Spacecraft)"));
+    if (lv === "assisted" || lv === "beginner") return panel.toast(t("SAS always on at this assistance (Settings › Spacecraft)"));
     panel.toast(camera.pilot.sas ? t("SAS on") : t("SAS off"));
   }
   function pilotRoll() {

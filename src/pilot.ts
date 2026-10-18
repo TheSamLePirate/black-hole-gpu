@@ -86,6 +86,9 @@ export interface PilotInput {
 
 export interface FlightContext {
   dt: number; // wall-clock seconds
+  /** a spacecraft's level of assistance over the SAS (controller/spaceassist.ts): direct — the stick an angular
+   *  acceleration, nothing damps —, damped — the SAS always on —, its rates scaled; absent: the pilot's SAS */
+  rate?: { law: "direct" | "damped"; scale: number } | null;
   /** the camera's axes and velocity (local components); velocity = 3-velocity β */
   right: V3;
   up: V3;
@@ -535,7 +538,9 @@ export class FlightComputer {
     // ---- attitude: rate command (fly-by-wire), holds point the nose, SAS damps
     // (the camera frame is left-handed relative to the ship's: a positive rotation about its x axis
     // lifts the nose, about y turns it right, about z rolls left)
-    const fine = this.precision ? 0.25 : 1;
+    const fine = (this.precision ? 0.25 : 1) * (c.rate?.scale ?? 1);
+    // (the level of assistance's SAS: forced off — manual —, forced on — assisted, beginner —, else the pilot's)
+    const sas = c.rate ? c.rate.law === "damped" : this.sas;
     // (the sci-fi computer reads the stick as its commands: the attitude is its own)
     const flown = this.auto === "none" || assisted;
     const manual: V3 = c.sf && flown ? [0, 0, 0] : [inp.pitch * fine, inp.yaw * fine, -inp.roll * fine];
@@ -689,9 +694,9 @@ export class FlightComputer {
       if (ffr) for (let i = 0; i < 3; i++) want[i] = want[i]! + ffr[i]!;
     } else {
       for (let i = 0; i < 3; i++) {
-        if (manual[i] !== 0) want[i] = this.sas ? manual[i]! * TUNING.turnRate : this.omega[i]! + manual[i]! * TUNING.turnAccel * dt;
+        if (manual[i] !== 0) want[i] = sas ? manual[i]! * TUNING.turnRate : this.omega[i]! + manual[i]! * TUNING.turnAccel * dt;
         // (on the gear: the roll still held, the pitch and the yaw left to the springs and the nose wheel)
-        else if (this.sas && !(c.onGear && i !== 2)) want[i] = 0;
+        else if (sas && !(c.onGear && i !== 2)) want[i] = 0;
         // (on the gear, the nose lowered no faster than 3°/s: a pilot's back pressure)
         if (c.onGear && i === 0 && manual[0] === 0) want[0] = Math.max(this.omega[0], -0.05);
       }

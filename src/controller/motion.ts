@@ -44,6 +44,16 @@ import { add as axpy, cross, dot as dot3, lin, sub as sub3 } from "../math/vec3"
 import type { CameraController } from "../controls";
 import { MAX_RANGE, add3, homeOfPose, normalize, rotateAbout, spinAxis, spinRate, unitV } from "./util";
 
+/** A vector's direction, scaled by its largest component before its length is taken (no overflow for a denormal
+ *  one); null for nothing or a non-finite one. */
+export function unitOf(v: Vec3): Vec3 | null {
+  const m = Math.max(Math.abs(v[0]), Math.abs(v[1]), Math.abs(v[2]));
+  if (!(m > 0) || !Number.isFinite(m)) return null;
+  const w: Vec3 = [v[0] / m, v[1] / m, v[2] / m];
+  const l = Math.hypot(...w);
+  return [w[0] / l, w[1] / l, w[2] / l];
+}
+
 declare module "../controls" {
   interface CameraController {
     fly: typeof fly;
@@ -148,9 +158,7 @@ function fallStep(this: CameraController, simDt: number, keys: Vec3, fast: boole
     const f0 = sphericalFrame(X0);
     const w0 = (v: Vec3) => add3(f0.er, f0.et, f0.ep, v);
     const dirZ: Vec3 = acc
-      ? accel > 0
-        ? lin(acc, 1 / accel, acc, 0)
-        : [0, 0, 0]
+      ? (unitOf(acc) ?? [0, 0, 0])
       : kn > 0
         ? normalize(lin(lin(cam.fwd, keys[0], cam.right, keys[1]), 1, cam.up, keys[2]))
         : [0, 0, 0];
@@ -234,7 +242,10 @@ function fallStep(this: CameraController, simDt: number, keys: Vec3, fast: boole
   const thrust = (dt: number) => {
     const v = p.vel;
     if (!(accel > 0)) return v;
-    const d = acc ? lin(acc, 1 / accel, acc, 0) : normalize(lin(lin(p.fwd, keys[0], right, keys[1]), 1, p.up, keys[2]));
+    // (a thrust's direction scaled before its length is taken: 1/|acc| of a denormal thrust overflowed to
+    // Infinity and NaN'd the step — docs/ERRORS-TO-FIX.md E1)
+    const d = acc ? unitOf(acc) : normalize(lin(lin(p.fwd, keys[0], right, keys[1]), 1, p.up, keys[2]));
+    if (!d) return v;
     const g = 1 / Math.sqrt(Math.max(1 - (v[0] ** 2 + v[1] ** 2 + v[2] ** 2), 1e-9));
     const U = lin(v, g, d, accel * dt);
     return lin(U, 1 / Math.sqrt(1 + U[0] ** 2 + U[1] ** 2 + U[2] ** 2), U, 0);

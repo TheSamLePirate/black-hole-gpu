@@ -306,7 +306,7 @@ export class Tars {
     switch (s.stage) {
       case "orbit":
         return s.target
-          ? tf("In orbit. For {0}: open the planner (0) and plan the transfer.", s.target.name)
+          ? tf("In orbit. For {0}: open the planner (O) and plan the transfer.", s.target.name)
           : t("In orbit. Pick a target on the map (M), then plan the transfer.");
       case "entry":
         return t("We're in the entry. Hold the attitude; the entry autopilot (Shift G) can fly it.");
@@ -319,7 +319,7 @@ export class Tars {
       case "escape":
         return t("We're leaving this world for good. Check the trajectory on the map.");
       default:
-        return t("Plan the next step on the map (M) or with the planner (0). I'll be here.");
+        return t("Plan the next step on the map (M) or with the planner (O). I'll be here.");
     }
   }
 

@@ -35,9 +35,9 @@ test("the questions, English and French: where, fuel, speed, target, next, what 
   expect(t.answer("What's our speed", S, plain).text).toBe("7,668 metres per second relative to Earth.");
   expect(t.answer("distance to the target", S, plain).text).toBe("Moon is 384,123 kilometres away.");
   expect(t.answer("when is the next event?", S, plain).text).toBe("In 3 days, we enter the sphere of influence of Moon.");
-  expect(t.answer("what should I do?", S, plain).text).toContain("open the planner (0)");
-  expect(t.answer("Qu'est-ce que je dois faire ?", S, plain).text).toContain("open the planner (0)");
-  expect(t.answer("on fait quoi maintenant", S, plain).text).toContain("open the planner (0)");
+  expect(t.answer("what should I do?", S, plain).text).toContain("open the planner (O)");
+  expect(t.answer("Qu'est-ce que je dois faire ?", S, plain).text).toContain("open the planner (O)");
+  expect(t.answer("on fait quoi maintenant", S, plain).text).toContain("open the planner (O)");
   expect(t.answer("qui es-tu ?", S, plain).text).toContain("TARS.");
   expect(t.answer("blorp", S, plain).text).toContain("I don't understand");
 });

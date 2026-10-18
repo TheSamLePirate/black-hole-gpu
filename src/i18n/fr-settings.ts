@@ -880,6 +880,15 @@ export default {
   "Top turning rate of the attitude control (SAS, holds, the autopilots' turns).":
     "Vitesse de rotation maximale du contrôle d'attitude (SAS, maintiens, rotations des pilotes automatiques).",
   "Ranger handling": "Maniabilité du Ranger",
+  "How much the Ranger, the Lander and the Endurance help. Manual: no SAS — the stick turns the craft faster and faster, a turn kept until stopped by hand. Realistic: the SAS as the pilot sets it (T). Assisted: the SAS always on; within 1 km of a craft or the station, the RCS let go holds the drift against it at nothing. Beginner: the same within 2 km, at half the turning rates. ⇧X: back to a stable craft in any — the turn stopped, over a ground a hover, in orbit prograde held.":
+    "Combien le Ranger, le Lander et l'Endurance aident. Manuel : pas de SAS — le manche fait tourner le vaisseau de plus en plus vite, une rotation garde son élan jusqu'à être arrêtée à la main. Réaliste : le SAS comme le pilote le règle (T). Assisté : le SAS toujours actif ; à moins d'1 km d'un vaisseau ou de la station, le RCS relâché annule la dérive par rapport à lui. Débutant : la même chose à moins de 2 km, à la moitié des vitesses de rotation. ⇧X : retour à un vaisseau stable à tout niveau — la rotation arrêtée, au-dessus d'un sol un vol stationnaire, en orbite le prograde maintenu.",
+  "No SAS: a turn kept until stopped by hand": "Pas de SAS : une rotation garde son élan jusqu'à l'arrêt manuel",
+  "The SAS as the pilot sets it": "Le SAS comme le pilote le règle",
+  "SAS always; the drift held near a craft": "SAS toujours ; la dérive annulée près d'un vaisseau",
+  "The same, gentle rates": "La même chose, rotations douces",
+  "Infinite propellant": "Ergols infinis",
+  "The spacecraft's tanks never empty (with the crew engine's propellant on): every burn free, the mass kept full.":
+    "Les réservoirs des vaisseaux ne se vident jamais (avec les ergols du moteur réaliste actifs) : chaque poussée est gratuite, la masse reste pleine.",
   "Turn acceleration": "Accélération en rotation",
   "Angular acceleration of the reaction wheels and the RCS: how fast a turn starts and stops.":
     "Accélération angulaire des roues de réaction et des RCS : la rapidité avec laquelle une rotation démarre et s'arrête.",
@@ -1366,7 +1375,7 @@ export default {
   "Quality (5: realtime max, 6: game)": "Qualité (5 : temps réel max, 6 : jeu)",
   "⌘K / Ctrl+K": "⌘K / Ctrl+K",
   "Search the settings": "Rechercher dans les réglages",
-  "Flying the Ranger (K) — KSP's layout": "Piloter le Ranger (K) — disposition KSP",
+  "Flying a spacecraft (K) — KSP's layout": "Piloter un vaisseau (K) — disposition KSP",
   "Pitch · yaw · roll (Z S · Q D · A E on AZERTY)": "Tangage · lacet · roulis (Z S · Q D · A E en AZERTY)",
   "⇧ · Alt · ↑ ↓": "⇧ · Alt · ↑ ↓",
   "Throttle up · down (held)": "Gaz plus · moins (maintenu)",

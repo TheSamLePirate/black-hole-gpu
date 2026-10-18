@@ -131,8 +131,9 @@ missions (X9–X11) → N réseau (chaque phase en porte sa part, N finit les fo
   - *débutant* : protections qui agissent, couloirs larges, rotation tuée au lâcher, gâchette « suivre le directeur ».
 - **⇧X « Récupérer »** pour les vaisseaux (même action `jetSystem recover`) : tuer la rotation, puis selon la phase —
   rétrograde horizon et vol stationnaire près du sol, prograde en orbite, attitude de rentrée dans l'air.
-- **Purge des défauts** listés plus haut (E1, touche TARS, pôle de la date, Δv d'ascension, mission Jupiter) ;
-  textes d'aide et `keymap` par vaisseau.
+- **Purge des défauts** : E1, touche TARS, textes d'aide et `keymap`. *(Fait : la mission Jupiter, le Δv d'ascension
+  et le pôle de la date sont des défauts d'autopilotes — passés en X1. Les profils par vaisseau naissent avec leur
+  premier usage, X4/X5. L'affichage des « triches » aux autres va en N.)*
 - **Réseau** : les réglages « pref » restent locaux ; les triches (infini, invulnérable) affichées dans le tag
   des autres et refusées en match classé.
 - **Mesure** : tests unitaires des niveaux ; l'ascension ≤ 10 % du Δv optimal ; campagne autopilotes re-jouée.
@@ -158,6 +159,8 @@ missions (X9–X11) → N réseau (chaque phase en porte sa part, N finit les fo
   stationnaire), zone d'exclusion d'une station ou d'un joueur (vitesse de rapprochement trop forte → freinage),
   couloir de rentrée (rebond ou surchauffe prédits), limite de g et de chauffe structurale ; réglage
   avertir / agir / off.
+- **Défauts de la campagne autopilotes** (venus de X0) : mission Jupiter (le planificateur se croit sur sa visée),
+  ascension à +27–30 % du Δv optimal, inclinaison au pôle J2000 contre sites au pôle de la date.
 - **Réseau** : rendez-vous et amarrage automatiques sur un joueur (existe pour DOCK, étendu au maintien de
   position et au rendez-vous complet) ; les protections tiennent compte des vaisseaux des autres.
 - **Mesure** : e2e par autopilote (ISS rendez-vous de bout en bout, descente Lander sur la Lune à < 50 m du
@@ -383,8 +386,8 @@ Chaque phase porte sa ligne réseau ; N finit ce qui n'existe qu'à plusieurs.
 
 | Phase | Contenu | État |
 |---|---|---|
-| X0 | profils, réglages, niveaux d'assistance, ⇧X, défauts | à faire |
-| X1 | modes RCS, nouveaux autopilotes, plan de mission, protections | à faire |
+| X0 | niveaux d'assistance, ⇧X, ergols infinis, E1, aide, TARS | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X0.md)) |
+| X1 | modes RCS, nouveaux autopilotes, plan de mission, protections, défauts de la campagne autopilotes | à faire |
 | X2 | Endurance vaisseau-mère (deux côtés, anneau, flotte, scènes) | à faire |
 | X3 | consommables, pannes, alarmes, checklists | à faire |
 | X4 | HUD Ranger / Lander / Endurance, amarrage, boule | à faire |

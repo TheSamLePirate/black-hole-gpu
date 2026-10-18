@@ -146,8 +146,8 @@ export default {
     "On est posés. Décollez avec U, ou l'autopilote de décollage dans le hub.",
   "Docked. Undock when you're ready, or plan the next leg with the planner.":
     "Amarrés. Désamarrez quand vous voulez, ou préparez l'étape suivante avec le planificateur.",
-  "In orbit. For {0}: open the planner (0) and plan the transfer.":
-    "En orbite. Pour {0} : ouvrez le planificateur (0) et préparez le transfert.",
+  "In orbit. For {0}: open the planner (O) and plan the transfer.":
+    "En orbite. Pour {0} : ouvrez le planificateur (O) et préparez le transfert.",
   "In orbit. Pick a target on the map (M), then plan the transfer.":
     "En orbite. Choisissez une cible sur la carte (M), puis préparez le transfert.",
   "We're in the entry. Hold the attitude; the entry autopilot (Shift G) can fly it.":
@@ -160,8 +160,8 @@ export default {
     "Suborbital : on redescend. Remontez le périastre, ou préparez l'atterrissage.",
   "We're leaving this world for good. Check the trajectory on the map.":
     "On quitte ce monde pour de bon. Vérifiez la trajectoire sur la carte.",
-  "Plan the next step on the map (M) or with the planner (0). I'll be here.":
-    "Préparez l'étape suivante sur la carte (M) ou avec le planificateur (0). Je serai là.",
+  "Plan the next step on the map (M) or with the planner (O). I'll be here.":
+    "Préparez l'étape suivante sur la carte (M) ou avec le planificateur (O). Je serai là.",
   "Nice landing. I'd give it a ten, if I had a scale.": "Bel atterrissage. Je mettrais dix, si j'avais un barème.",
   "Smooth. I didn't even need to brace.": "En douceur. Je n'ai même pas eu à me cramponner.",
   "We're down. All of us. That counts for something.": "On est posés. Tous. Ça compte.",
