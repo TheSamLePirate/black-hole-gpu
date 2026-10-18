@@ -85,17 +85,49 @@ const RUN: Record<Act, Run> = {
   },
   "ap.traffic": (a, x) => x.tool("traffic", { action: a.action, ...(a.name ? { name: a.name } : {}) }),
   "ap.goAround": (_a, x) => x.tool("flight_action", { action: "go_around" }),
+  // (the spacecraft's flight computer: its tools, a manoeuvre or a mission previewed (execute: false) or flown)
+  "sp.hold": (a, x) => x.tool("hold", { direction: a.direction }),
+  "sp.auto": (a, x) => x.tool("autopilot", a),
+  "sp.maneuver": (a, x) => x.tool("plan_maneuver", a),
+  "sp.mission": (a, x) => x.tool("plan_mission", a),
+  "sp.plan": (a, x) => x.tool("manage_plan", { action: a.action }),
+  "sp.target": (a, x) => x.tool("set_target", { name: a.name }),
+  "sp.release": (_a, x) => x.tool("flight_action", { action: "release" }),
 };
 
-/** a tool's result as a short line (its own words when it says something) */
-function short(r: unknown): string {
-  if (r === undefined || r === null) return "";
-  if (typeof r === "string") return r.slice(0, 160);
-  if (typeof r === "object") {
-    const o = r as Record<string, unknown>;
-    for (const k of ["said", "result", "message", "msg", "status"]) if (typeof o[k] === "string") return (o[k] as string).slice(0, 160);
+/** a tool's result, unwrapped from what the game said meanwhile: its value, the game's lines */
+function unwrap(r: unknown): { v: unknown; said: string[] } {
+  if (r && typeof r === "object" && "result" in r && "game" in r) {
+    const o = r as { result: unknown; game: unknown };
+    return { v: o.result, said: Array.isArray(o.game) ? o.game.filter((x): x is string => typeof x === "string") : [] };
   }
-  return "";
+  return { v: r, said: [] };
+}
+/** a result as a short line (its own words when it says something), whether it says no (ok: false), its figures */
+function readResult(r: unknown): { line: string; refused: boolean; data: Record<string, string | number | boolean> } {
+  const { v, said } = unwrap(r);
+  const data: Record<string, string | number | boolean> = {};
+  let line = "",
+    refused = false;
+  if (typeof v === "string") line = v;
+  else if (v && typeof v === "object" && !Array.isArray(v)) {
+    const o = v as Record<string, unknown>;
+    if (o.ok === false) refused = true;
+    for (const k of ["note", "said", "result", "message", "msg", "status"]) if (!line && typeof o[k] === "string") line = o[k] as string;
+    for (const [k, x] of Object.entries(o)) {
+      if (Object.keys(data).length >= 10) break;
+      if (typeof x === "number" || typeof x === "boolean" || (typeof x === "string" && x.length <= 120)) data[k] = x;
+      else if (Array.isArray(x)) {
+        data[`${k}N`] = x.length;
+        // (a manoeuvre's first burn: when and how much)
+        const f = x[0] as Record<string, unknown> | undefined;
+        if (f && typeof f.dvMs === "number")
+          data[`${k}1`] = `${Math.round(f.dvMs)} m/s${typeof f.inS === "number" ? ` dans ${Math.round(f.inS)} s` : ""}`;
+      }
+    }
+  }
+  if (!line && said.length) line = said.at(-1)!;
+  return { line: line.slice(0, 160), refused, data };
 }
 /** the tools' refusals come back as words, not throws: the usual ones read as a refusal */
 const REFUSED =
@@ -115,9 +147,12 @@ export class CrewExec {
     if (to !== room.slot) return;
     const id = p.ok ? p.cmd.id : (p.id ?? "");
     const act = p.ok ? p.cmd.act : String((raw as { act?: unknown })?.act ?? "").slice(0, 32);
-    const answer = (ok: boolean, msg: string) => {
+    const answer = (ok: boolean, msg: string, data?: CrewAck["data"]) => {
       const what = p.ok ? sayOf(p.cmd.act, p.cmd.args).fr : act;
-      if (id) net.event({ kind: "crew-ack", v: 1, id, to: from, act, ok, msg, what } satisfies CrewAck & { kind: string });
+      if (id)
+        net.event({ kind: "crew-ack", v: 1, id, to: from, act, ok, msg, what, ...(data ? { data } : {}) } satisfies CrewAck & {
+          kind: string;
+        });
     };
     // (the console's own words for the gates' refusals: it speaks French)
     const sender = room.members.find((m) => m.slot === from);
@@ -140,10 +175,13 @@ export class CrewExec {
       },
     };
     let ok = true,
-      msg = "";
+      msg = "",
+      data: CrewAck["data"];
     try {
-      msg = short(await RUN[p.cmd.act](p.cmd.args, ctx));
-      if (REFUSED.test(msg)) ok = false;
+      const r = readResult(await RUN[p.cmd.act](p.cmd.args, ctx));
+      msg = r.line;
+      data = r.data;
+      if (r.refused || REFUSED.test(msg)) ok = false;
     } catch (e) {
       ok = false;
       msg = (e instanceof Error ? e.message : String(e)).slice(0, 160);
@@ -151,6 +189,6 @@ export class CrewExec {
     const who = this.d.nameOf(from);
     const what = tr(sayOf(p.cmd.act, p.cmd.args));
     this.d.toast(ok ? tf("{0} (crew): {1}", who, what) : tf("{0} (crew): {1} — refused: {2}", who, what, msg));
-    answer(ok, msg);
+    answer(ok, msg, data);
   }
 }

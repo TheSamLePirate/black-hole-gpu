@@ -10,6 +10,8 @@ import type { CrewModel } from "./model";
 export interface Done {
   ok: boolean;
   msg: string;
+  /** the figures the pilot's game sent back (a manoeuvre previewed: its Δv, its burns) */
+  data?: Record<string, string | number | boolean>;
 }
 export interface BoardLine {
   at: number;
@@ -41,7 +43,7 @@ export class CrewActions {
       if (mine) {
         clearTimeout(mine.timer);
         this.pending.delete(a.id);
-        mine.resolve({ ok: a.ok, msg: a.msg });
+        mine.resolve({ ok: a.ok, msg: a.msg, data: a.data });
       }
       // (any answer of the pilot followed: the board's journal)
       if (from === this.model.selected && Object.hasOwn(ACTS, a.act)) {

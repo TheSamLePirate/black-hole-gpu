@@ -1496,3 +1496,47 @@ dialog input {
     min-height: 30px;
   }
 }
+
+/* ---- the flight computer (PLAN-CREW-ACTIONS A4) */
+.fc-pop > div {
+  grid-template-columns: 1fr 1fr !important;
+}
+.fc-pop > div select,
+.fc-pop > div input {
+  min-height: 40px;
+  min-width: 0;
+}
+.fc-card {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #060b10;
+  border: 1px solid #1d3442;
+  font-size: 12px;
+}
+.fc-card:empty {
+  display: none;
+}
+.fc-card strong {
+  font: 700 11px var(--mono);
+  letter-spacing: 1px;
+  color: var(--accent);
+}
+.fc-card[data-state="ko"] strong {
+  color: var(--red);
+}
+.fc-card p {
+  color: var(--muted);
+  line-height: 1.4;
+}
+.fc-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: var(--mono);
+}
+.fc-row b {
+  color: #fff;
+}

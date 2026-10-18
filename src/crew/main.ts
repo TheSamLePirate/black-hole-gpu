@@ -8,8 +8,8 @@ import { wgs84Inverse } from "../system/ellipsoid";
 import { CrewRadio } from "./radio";
 import { bindTalk } from "./ptt";
 import { CrewViews, VIEW_NAMES, type CrewView } from "./views";
-import { CrewActions } from "./actions";
-import { ACTS, type Act } from "../net/crewcmd";
+import { CrewActions, type Done } from "./actions";
+import { ACTS, type Act, AUTO_FR, AUTOS, HOLD_FR, HOLDS, MANEUVER_FR, MANEUVERS } from "../net/crewcmd";
 import type { Args } from "../ai/tool-schema";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -460,7 +460,7 @@ function setView(view: CrewView) {
   }
   document.querySelector<HTMLElement>(".zoom")!.hidden = view === "pfd";
   mcp.hidden = view !== "pfd" && view !== "dash";
-  if (!mcp.hidden && !mcp.childElementCount) buildMcp();
+  syncMcpKind();
   $("views").querySelector<HTMLElement>(`[data-view=${view}]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
   controls();
   showCrew(false);
@@ -605,12 +605,12 @@ function alerts(own: ReturnType<typeof model.own>) {
  * A control that gives an order: busy until the pilot answers, its result said (a refusal also by a short
  * vibration on a phone), unusable while its family is closed (the lock, the craft, the mode) — the reason its title.
  */
-function actButton(text: string, act: Act, args: Args | (() => Args) = {}, id?: string, done?: (ok: boolean) => void) {
+function actButton(text: string, act: Act, args: Args | (() => Args) = {}, id?: string, done?: (ok: boolean, r: Done) => void) {
   const b = button(text, () => void fire(b, act, typeof args === "function" ? args() : args, done), id);
   b.dataset.act = act;
   return b;
 }
-async function fire(b: HTMLElement | null, act: Act, args: Args, done?: (ok: boolean) => void) {
+async function fire(b: HTMLElement | null, act: Act, args: Args, done?: (ok: boolean, r: Done) => void) {
   b?.setAttribute("aria-busy", "true");
   const r = await actions.send(act, args);
   b?.removeAttribute("aria-busy");
@@ -621,7 +621,7 @@ async function fire(b: HTMLElement | null, act: Act, args: Args, done?: (ok: boo
   const What = what.charAt(0).toUpperCase() + what.slice(1);
   notice(r.ok ? `${What} ✓` : `${What} — ${r.msg || "refusé"}`);
   if (!r.ok) navigator.vibrate?.(60);
-  done?.(r.ok);
+  done?.(r.ok, r);
   refresh();
   return r;
 }
@@ -736,8 +736,18 @@ function selector(key: "alt" | "hdg" | "spd", title: string) {
   box.append(el("span", title, "knob-title"), hold(-1, "−", `${title} moins`), value, hold(1, "+", `${title} plus`));
   return box;
 }
+/** the MCP's kind follows the pilot's craft: an aircraft's autopilot, or a spacecraft's flight computer */
+function syncMcpKind() {
+  if (mcp.hidden) return;
+  const fam = snapNow()?.caps?.fam ?? [];
+  const kind = fam.includes("space") && !fam.includes("jet") ? "space" : "jet";
+  if (mcp.dataset.kind === kind && mcp.childElementCount) return;
+  if (kind === "space") buildFc();
+  else buildMcp();
+}
 function buildMcp() {
   mcp.replaceChildren();
+  mcp.dataset.kind = "jet";
   /** a switch: its state the pilot's (4 Hz), but what it was just set to while his instruments catch up (1.5 s) */
   const toggle = (text: string, act: Act, args: (want: boolean) => Args, on: () => boolean, id: string) => {
     let local: { v: boolean; at: number } | null = null;
@@ -835,6 +845,156 @@ function buildMcp() {
   mcp.append(sw, kn);
   syncMcp();
 }
+// ---- the flight computer (PLAN-CREW-ACTIONS A4): a spacecraft's holds, autopilots, manoeuvres and missions
+/** a select of choices (their value, their words) */
+function choices(items: readonly string[], words: Record<string, string>, label: string, value?: string) {
+  const s = document.createElement("select");
+  s.setAttribute("aria-label", label);
+  for (const v of items) {
+    const o = document.createElement("option");
+    o.value = v;
+    o.textContent = words[v] ?? v;
+    s.append(o);
+  }
+  if (value) s.value = value;
+  return s;
+}
+/** a popover of the flight computer's: its summary, its body */
+function fcPop(title: string, body: HTMLElement[]) {
+  const d = document.createElement("details");
+  d.className = "pan-controls mcp-pop fc-pop";
+  d.append(el("summary", title));
+  const box = el("div");
+  box.append(...body);
+  d.append(box);
+  return d;
+}
+/** a manoeuvre's or a mission's figures back from the pilot's game, in a small card */
+function fcCard(card: HTMLElement, r: { ok: boolean; msg: string; data?: Record<string, string | number | boolean> }) {
+  const d = r.data ?? {};
+  const rows: [string, string][] = [];
+  if (typeof d.dvTotalMs === "number") rows.push(["Δv total", `${Math.round(d.dvTotalMs)} m/s`]);
+  if (typeof d.burnsN === "number") rows.push(["Combustions", String(d.burnsN)]);
+  if (typeof d.burns1 === "string") rows.push(["Première", d.burns1]);
+  if (typeof d.executing === "boolean") rows.push(["Exécution", d.executing ? "en cours" : "non"]);
+  card.replaceChildren(
+    el("strong", r.ok ? "Aperçu" : "Refusé"),
+    ...(r.msg ? [el("p", r.msg)] : []),
+    ...rows.map(([k, v]) => {
+      const row = el("div", "", "fc-row");
+      row.append(el("span", k), el("b", v));
+      return row;
+    }),
+  );
+  card.dataset.state = r.ok ? "ok" : "ko";
+}
+function buildFc() {
+  mcp.replaceChildren();
+  mcp.dataset.kind = "space";
+  const field = (label: string, ph = "", type = "text") => {
+    const i = document.createElement("input");
+    i.type = type;
+    i.placeholder = ph;
+    i.setAttribute("aria-label", label);
+    return i;
+  };
+  const num = (i: HTMLInputElement) => (i.value.trim() === "" ? undefined : Number(i.value));
+  // the hold
+  const hold = choices(HOLDS, { none: "Aucune", ...HOLD_FR }, "Tenue d'attitude", "prograde");
+  // the autopilot (a site to land on or enter for, an orbit to take off to)
+  const auto = choices(AUTOS, { none: "Aucun", ...AUTO_FR }, "Autopilote", "circularize");
+  const site = field("Site d'atterrissage ou de rentrée", "site (atterrir, rentrée)");
+  const upAlt = field("Altitude d'orbite au décollage (km)", "orbite km", "number");
+  // the manoeuvre and its card
+  const op = choices(MANEUVERS, MANEUVER_FR, "Manœuvre", "circularize");
+  const where = choices(["now", "pe", "ap"], { now: "maintenant", pe: "au périgée", ap: "à l'apogée" }, "Quand");
+  const mAlt = field("Altitude visée (km)", "altitude km", "number");
+  const mInc = field("Inclinaison visée (°)", "inclinaison °", "number");
+  const mCard = el("div", "", "fc-card");
+  const maneuver = (execute: boolean): Args => ({
+    op: op.value,
+    where: where.value,
+    ...(num(mAlt) !== undefined ? { altKm: num(mAlt) } : {}),
+    ...(num(mInc) !== undefined ? { incDeg: num(mInc) } : {}),
+    execute,
+  });
+  // the mission and its card
+  const target = field("Destination de la mission", "Lune, Mars, ISS…");
+  const arrival = choices(
+    ["orbit", "flyby", "freeReturn"],
+    { orbit: "mise en orbite", flyby: "survol", freeReturn: "retour libre" },
+    "Arrivée",
+  );
+  const sCard = el("div", "", "fc-card");
+  const mission = (execute: boolean): Args => ({ target: target.value.trim().slice(0, 32), arrival: arrival.value, execute });
+  const sw = el("div", "", "mcp-sw");
+  sw.append(
+    fcPop("Tenue", [hold, actButton("Tenir", "sp.hold", () => ({ direction: hold.value }), "fc-hold")]),
+    fcPop("Autopilote", [
+      auto,
+      site,
+      upAlt,
+      actButton(
+        "Engager",
+        "sp.auto",
+        () => ({
+          mode: auto.value,
+          ...(site.value.trim() ? { site: site.value.trim().slice(0, 40) } : {}),
+          ...(num(upAlt) !== undefined ? { altKm: num(upAlt) } : {}),
+        }),
+        "fc-auto",
+      ),
+    ]),
+    fcPop("Manœuvre", [
+      op,
+      where,
+      mAlt,
+      mInc,
+      actButton(
+        "Aperçu",
+        "sp.maneuver",
+        () => maneuver(false),
+        "fc-preview",
+        (_ok, r) => fcCard(mCard, r),
+      ),
+      actButton(
+        "Exécuter",
+        "sp.maneuver",
+        () => maneuver(true),
+        "fc-execute",
+        (_ok, r) => fcCard(mCard, r),
+      ),
+      mCard,
+    ]),
+    fcPop("Mission", [
+      target,
+      arrival,
+      actButton(
+        "Aperçu",
+        "sp.mission",
+        () => mission(false),
+        "fc-mission-preview",
+        (_ok, r) => fcCard(sCard, r),
+      ),
+      actButton(
+        "Lancer",
+        "sp.mission",
+        () => mission(true),
+        "fc-mission",
+        (_ok, r) => fcCard(sCard, r),
+      ),
+      sCard,
+    ]),
+    fcPop("Plan", [
+      actButton("Exécuter le plan", "sp.plan", { action: "execute" }, "fc-plan-run"),
+      actButton("Effacer le plan", "sp.plan", { action: "clear" }, "fc-plan-clear"),
+    ]),
+    actButton("Relâcher", "sp.release", {}, "fc-release"),
+  );
+  mcp.append(sw);
+  syncActs();
+}
+
 /** the selectors' windows: the pending turn in white, the pilot's selected in cyan, none in grey */
 function syncMcp() {
   if (mcp.hidden) return;
@@ -918,6 +1078,7 @@ function refresh() {
   tiles(own);
   alerts(own);
   board();
+  syncMcpKind();
   syncMcp();
   const followed = room?.members.find((m) => m.slot === model.selected);
   $("pilot-dot").style.background = followed?.colour ?? "#4d606b";

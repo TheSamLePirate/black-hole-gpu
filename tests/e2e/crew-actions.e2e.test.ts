@@ -147,4 +147,30 @@ describe.skipIf(!E2E)("crew actions", () => {
     await app.waitFor(`!__bh.camera.orbitMode`, 3000);
     await app.shot(`${process.env.E2E_SHOTS ?? "remote-results"}/crew-actions-a3.png`);
   }, 60_000);
+  test("A4 — the spacecraft's flight computer from the crew: a hold, a manoeuvre previewed with its figures, released", async () => {
+    await app.js(`(() => { __bh.game.preset("Earth: docking to the ISS"); return 1; })()`);
+    await app.waitFor("__bh.camera.piloting", 60_000);
+    await app.waitFor(`${crew("__crew.model.own()?.snapshot?.caps?.fam.includes('space')")}`, 20_000);
+    await app.js(crew("__crew.setView('pfd')"));
+    await app.waitFor(`document.querySelector('#crew-frame').contentDocument.querySelector('#mcp').dataset.kind === 'space'`, 5000);
+    // (the hold: prograde)
+    await app.js(
+      `(() => { const s = document.querySelector('#crew-frame').contentDocument.querySelector('select[aria-label="Tenue d\\'attitude"]'); s.value = 'prograde'; return true; })()`,
+    );
+    await press("#fc-hold");
+    expect(await app.js<string>("__bh.camera.pilot.hold")).toBe("prograde");
+    // (a circularization previewed: its Δv in the card, nothing flown)
+    await press("#fc-preview");
+    const card = await app.js<string>(`document.querySelector('#crew-frame').contentDocument.querySelector('.fc-card').textContent`);
+    console.log(`  preview: ${card.replace(/\n/g, " · ")}`);
+    expect(card).toMatch(/Δv total|Refusé/);
+    expect(await app.js<string>("__bh.camera.pilot.auto")).not.toBe("node");
+    await app.js(
+      `(() => { const d = document.querySelector('#crew-frame').contentDocument; d.querySelector('.fc-pop:nth-of-type(3)').open = true; return true; })()`,
+    );
+    await app.shot(`${process.env.E2E_SHOTS ?? "remote-results"}/crew-actions-a4.png`);
+    // (everything released)
+    await press("#fc-release");
+    expect(await app.js<string>("__bh.camera.pilot.hold")).toBe("none");
+  }, 120_000);
 });

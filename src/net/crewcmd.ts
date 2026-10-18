@@ -11,6 +11,86 @@ export const FAMILIES = ["nav", "config", "jet", "space", "weapons"] as const;
 export type Family = (typeof FAMILIES)[number];
 
 type Say = (a: Args) => { fr: string; en: string };
+
+/** the spacecraft's holds, autopilots and manoeuvres (the game's own lists — src/ai/game-tools.ts) */
+export const HOLDS = [
+  "none",
+  "prograde",
+  "retrograde",
+  "radialOut",
+  "radialIn",
+  "normal",
+  "antinormal",
+  "target",
+  "antiTarget",
+  "maneuver",
+] as const;
+export const AUTOS = [
+  "none",
+  "hover",
+  "circularize",
+  "approach",
+  "orbit",
+  "node",
+  "transfer",
+  "land",
+  "takeoff",
+  "dock",
+  "entry",
+  "burns",
+] as const;
+export const MANEUVERS = [
+  "circularize",
+  "apoapsis",
+  "periapsis",
+  "hohmann",
+  "inclination",
+  "match_planes",
+  "resonant",
+  "rendezvous",
+  "intercept",
+  "match_velocities",
+  "fine_tune",
+  "align_over_site",
+] as const;
+export const HOLD_FR: Record<string, string> = {
+  prograde: "prograde",
+  retrograde: "rétrograde",
+  radialOut: "radiale extérieure",
+  radialIn: "radiale intérieure",
+  normal: "normale",
+  antinormal: "anti-normale",
+  target: "vers la cible",
+  antiTarget: "opposée à la cible",
+  maneuver: "sur le nœud",
+};
+export const AUTO_FR: Record<string, string> = {
+  hover: "stationnaire",
+  circularize: "circulariser",
+  approach: "approche de la cible",
+  orbit: "orbiter la cible",
+  node: "exécuter le nœud",
+  transfer: "transfert",
+  land: "atterrissage",
+  takeoff: "décollage vers l'orbite",
+  dock: "amarrage",
+  entry: "rentrée",
+  burns: "combustions du plan",
+};
+export const MANEUVER_FR: Record<string, string> = {
+  circularize: "circularisation",
+  apoapsis: "apoapside",
+  periapsis: "périapside",
+  hohmann: "Hohmann",
+  inclination: "inclinaison",
+  match_planes: "plans alignés",
+  resonant: "orbite résonante",
+  rendezvous: "rendez-vous",
+  intercept: "interception",
+  match_velocities: "vitesses égalisées",
+  fine_tune: "ajustement fin",
+  align_over_site: "passage au-dessus d'un site",
+};
 export interface ActSpec {
   fam: Family;
   params?: Record<string, Param>;
@@ -205,6 +285,77 @@ export const ACTS = {
     },
   },
   "ap.goAround": { fam: "jet", say: () => ({ fr: "remise de gaz", en: "go-around" }) },
+  // the spacecraft's flight computer: its holds, its autopilots, the manoeuvres previewed then flown, a mission
+  "sp.hold": {
+    fam: "space",
+    params: { direction: { type: "string", enum: HOLDS } },
+    required: ["direction"],
+    say: (a) => ({
+      fr: a.direction === "none" ? "tenue d'attitude coupée" : `tenue ${HOLD_FR[String(a.direction)] ?? a.direction}`,
+      en: `hold ${a.direction}`,
+    }),
+  },
+  "sp.auto": {
+    fam: "space",
+    params: {
+      mode: { type: "string", enum: AUTOS },
+      site: { type: "string" },
+      altKm: { type: "number", minimum: 50, maximum: 100_000 },
+      incDeg: { type: "number", minimum: -180, maximum: 180 },
+    },
+    required: ["mode"],
+    say: (a) => ({
+      fr: a.mode === "none" ? "autopilote coupé" : `autopilote ${AUTO_FR[String(a.mode)] ?? a.mode}`,
+      en: `autopilot ${a.mode}`,
+    }),
+  },
+  "sp.maneuver": {
+    fam: "space",
+    params: {
+      op: { type: "string", enum: MANEUVERS },
+      where: { type: "string", enum: ["now", "pe", "ap"] },
+      altKm: { type: "number", minimum: 1, maximum: 1e7 },
+      incDeg: { type: "number", minimum: 0, maximum: 180 },
+      ratio: { type: "number", minimum: 0.2, maximum: 20 },
+      site: { type: "string" },
+      execute: { type: "boolean" },
+    },
+    required: ["op", "execute"],
+    say: (a) => {
+      const op = MANEUVER_FR[String(a.op)] ?? String(a.op);
+      return {
+        fr: a.execute ? `manœuvre ${op} exécutée` : `manœuvre ${op} — aperçu`,
+        en: `${a.op} ${a.execute ? "executed" : "previewed"}`,
+      };
+    },
+  },
+  "sp.mission": {
+    fam: "space",
+    params: {
+      target: { type: "string" },
+      arrival: { type: "string", enum: ["orbit", "flyby", "freeReturn"] },
+      altKm: { type: "number", minimum: 1, maximum: 1e7 },
+      execute: { type: "boolean" },
+    },
+    required: ["target", "execute"],
+    say: (a) => ({
+      fr: `mission vers ${String(a.target).slice(0, 20)}${a.execute ? " — lancée" : " — aperçu"}`,
+      en: `mission to ${String(a.target).slice(0, 20)}${a.execute ? "" : " previewed"}`,
+    }),
+  },
+  "sp.plan": {
+    fam: "space",
+    params: { action: { type: "string", enum: ["execute", "clear"] } },
+    required: ["action"],
+    say: (a) => onOff(a.action === "execute", ["plan exécuté", "plan effacé"], ["plan executed", "plan cleared"]),
+  },
+  "sp.target": {
+    fam: "space",
+    params: { name: { type: "string" } },
+    required: ["name"],
+    say: (a) => ({ fr: `cible : ${String(a.name).slice(0, 24)}`, en: `target: ${String(a.name).slice(0, 24)}` }),
+  },
+  "sp.release": { fam: "space", say: () => ({ fr: "autopilote et tenue relâchés", en: "autopilot and hold released" }) },
   "cfg.sas": {
     fam: "config",
     params: { on: { type: "boolean" } },
@@ -250,6 +401,8 @@ export interface CrewAck {
   msg: string;
   /** what was asked, in the crew console's words (French: its language) */
   what: string;
+  /** a few figures back (a manoeuvre previewed: its Δv, its burns…), primitives only */
+  data?: Record<string, string | number | boolean>;
 }
 
 const record = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object" && !Array.isArray(x);
@@ -271,7 +424,13 @@ export function readCrewCmd(x: unknown): { ok: true; cmd: CrewCmd } | { ok: fals
 export function readCrewAck(x: unknown): CrewAck | null {
   if (!record(x) || x.v !== 1 || typeof x.id !== "string" || typeof x.to !== "number" || typeof x.ok !== "boolean") return null;
   const s = (v: unknown, n: number) => (typeof v === "string" ? v.slice(0, n) : "");
-  return { v: 1, id: x.id.slice(0, 40), to: x.to, act: s(x.act, 32), ok: x.ok, msg: s(x.msg, 200), what: s(x.what, 80) };
+  const data: Record<string, string | number | boolean> = {};
+  if (record(x.data))
+    for (const [k, v] of Object.entries(x.data).slice(0, 12)) {
+      if (typeof v === "string") data[k.slice(0, 24)] = v.slice(0, 120);
+      else if ((typeof v === "number" && Number.isFinite(v)) || typeof v === "boolean") data[k.slice(0, 24)] = v;
+    }
+  return { v: 1, id: x.id.slice(0, 40), to: x.to, act: s(x.act, 32), ok: x.ok, msg: s(x.msg, 200), what: s(x.what, 80), data };
 }
 
 export const familyOf = (act: string): Family | null => SPECS[act]?.fam ?? null;
