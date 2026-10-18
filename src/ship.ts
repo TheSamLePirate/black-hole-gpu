@@ -21,6 +21,8 @@ import f35Mr0 from "../assets/f35/f35-mr-0.ktx2";
 import f35Mr1 from "../assets/f35/f35-mr-1.ktx2";
 import { nozzleExit, parseF35, partMatrices, restPose, type F35Mesh, type F35Pose } from "./f35/model";
 import { PCD_H, PCD_W } from "./f35/pcd-size";
+import type { PcdRect } from "./f35/pcd";
+import { MipGen } from "./mipgen";
 import { ktxLevels, ktxTarget, writeLevels } from "./system/ktx2";
 
 import { shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
@@ -1793,45 +1795,37 @@ export class ShipRenderer {
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
     }));
   }
-  private jetMipCanvases: OffscreenCanvas[] = [];
-  /** The panoramic display's new picture: its canvas, then its mips (halved on canvases). */
-  updateJetScreen(src: OffscreenCanvas | HTMLCanvasElement) {
+  /** the canvases' mips, made on the GPU */
+  private mipGen: MipGen | null = null;
+  private mips() {
+    return (this.mipGen ??= new MipGen(this.device));
+  }
+  /** The panoramic display's new picture: the parts of its canvas drawn (all of it: null) copied, then its mips. */
+  updateJetScreen(src: OffscreenCanvas | HTMLCanvasElement, parts: PcdRect[] | null = null) {
     const tex = this.jetScreenTexture();
-    let level: HTMLCanvasElement | OffscreenCanvas = src;
-    for (let l = 0; l < tex.mipLevelCount; l++) {
-      const w = Math.max(1, PCD_W >> l),
-        h = Math.max(1, PCD_H >> l);
-      if (l > 0) {
-        const c = (this.jetMipCanvases[l] ??= new OffscreenCanvas(w, h));
-        const g = c.getContext("2d")!;
-        g.imageSmoothingQuality = "high";
-        g.clearRect(0, 0, w, h);
-        g.drawImage(level, 0, 0, w, h);
-        level = c;
-      }
-      this.device.queue.copyExternalImageToTexture({ source: level }, { texture: tex, mipLevel: l }, [w, h]);
-    }
+    for (const r of parts ?? [{ x: 0, y: 0, w: PCD_W, h: PCD_H }])
+      this.device.queue.copyExternalImageToTexture(
+        { source: src, origin: { x: r.x, y: r.y } },
+        { texture: tex, mipLevel: 0, origin: { x: r.x, y: r.y } },
+        [r.w, r.h],
+      );
+    this.mips().run(tex);
+  }
+  /** Readies the panoramic display's texture, the canvas's copy and its mips' pipeline (the F-35 chosen: no stall at
+   *  the first look) — its (black) canvas uploaded once the pipeline is compiled. */
+  warmJetScreen(src: OffscreenCanvas | HTMLCanvasElement) {
+    const tex = this.jetScreenTexture();
+    void this.mips()
+      .warm(tex.format)
+      .then(() => this.updateJetScreen(src));
   }
 
-  /** The screens' new picture: a 2048 × 1024 canvas, then its mips (halved on canvases). */
+  /** The screens' new picture: a 2048 × 1024 canvas, then its mips. */
   updateScreens(src: HTMLCanvasElement | OffscreenCanvas) {
     const tex = this.screenTexture();
-    let level: HTMLCanvasElement | OffscreenCanvas = src;
-    for (let l = 0; l < tex.mipLevelCount; l++) {
-      const w = Math.max(1, 2048 >> l),
-        h = Math.max(1, 1024 >> l);
-      if (l > 0) {
-        const c = (this.mipCanvases[l] ??= new OffscreenCanvas(w, h));
-        const g = c.getContext("2d")!;
-        g.imageSmoothingQuality = "high";
-        g.clearRect(0, 0, w, h);
-        g.drawImage(level, 0, 0, w, h);
-        level = c;
-      }
-      this.device.queue.copyExternalImageToTexture({ source: level }, { texture: tex, mipLevel: l }, [w, h]);
-    }
+    this.device.queue.copyExternalImageToTexture({ source: src }, { texture: tex, mipLevel: 0 }, [2048, 1024]);
+    this.mips().run(tex);
   }
-  private mipCanvases: OffscreenCanvas[] = [];
   /** Whether the cabin is drawn (its screens are worth drawing). */
   get cabinShown() {
     return this.inCabin;

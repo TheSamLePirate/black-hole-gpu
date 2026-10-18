@@ -63,6 +63,9 @@ export interface BhContext {
   bench: KerrBench;
   mission: Mission;
   cockpitScreens: CockpitScreens;
+  /** the F-35's panoramic display (src/f35/pcd.ts): the display, its cost (CPU ms a frame: the data, the drawing,
+   *  the upload — mean and worst since reset) */
+  pcd?: { pcd: unknown; stats: { frames: number; draws: number; ms: number; max: number; up: number; reset(): void } };
   /** a plane's flight: its preparation, its plan (ui/flighthub.ts, ui/routepanel.ts) */
   flight?: {
     hub: { open(): void };
@@ -337,6 +340,8 @@ export function installBh(c: BhContext) {
       tarsVoice: { phonemes, synthesize, robotVoice },
       /** the cabin's screens: their picture (canvas: 4 × 2 slots of 512 px, the PFD first) */
       cockpitScreens,
+      /** the F-35's panoramic display: __bh.pcd.pcd (its pages, touch(u, v)), __bh.pcd.stats (its CPU cost) */
+      pcd: c.pcd,
       flight: c.flight,
       /** playing together (ui/netpanel.ts): loaded, its client (net), open(), create(), join(), leave() */
       net: c.net,

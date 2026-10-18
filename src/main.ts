@@ -2562,6 +2562,19 @@ async function main() {
   let jetIn: JetInputs | null = null;
   /** the F-35's panoramic cockpit display (src/f35/pcd.ts) */
   const jetPcd = new Pcd();
+  let pcdWarm = false;
+  /** its CPU cost each frame it is shown (__bh.pcd.stats): the data, the drawing, the upload */
+  const pcdStats = {
+    frames: 0,
+    draws: 0,
+    ms: 0,
+    max: 0,
+    /** of which the upload (the copy, the mips) */
+    up: 0,
+    reset() {
+      this.frames = this.draws = this.ms = this.max = this.up = 0;
+    },
+  };
   const flightHud = new FlightHud(settings, {
     hold: pilotHold,
     auto: pilotAuto,
@@ -6298,6 +6311,7 @@ async function main() {
     bench,
     mission,
     cockpitScreens,
+    pcd: { pcd: jetPcd, stats: pcdStats },
     flight: {
       hub: flightHub,
       route: routePanel,
@@ -6971,14 +6985,36 @@ async function main() {
           // (another player followed: his surfaces, his gear, his nozzle — ui/netsession.ts)
           if (netSession.followJet) renderer.jetPose = netSession.followJet;
         } else jetIn = null;
+        // (the F-35 chosen: its display's fonts, canvas and mips readied while the browser idles — no stall at the
+        // cockpit's first look)
+        if (settings.vessel === "f35" && !pcdWarm) {
+          pcdWarm = true;
+          (window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 200)))(() => {
+            jetPcd.warm();
+            renderer.ship.warmJetScreen(jetPcd.canvas);
+          });
+        }
         // (the F-35's panoramic display, seen from its seat: drawn at 10 Hz, onto the dashboard)
         if (settings.vessel === "f35" && (settings.shipMount === "cockpit" || settings.shipMount === "cabin")) {
-          const al = alertsOf({ ...info, status, animate: settings.animate, fmtM: () => "" }).map((a) => ({
-            text: a.text,
-            level: a.level,
-          }));
-          const d = pcdData(camera, settings, renderer.jetPose, al, dateOf(sim.time));
-          if (d && jetPcd.draw(d, performance.now())) renderer.ship.updateJetScreen(jetPcd.canvas);
+          const t0 = performance.now();
+          // (its data read every 100 ms, its parts drawn in turn — one a frame —, only those uploaded)
+          const parts = jetPcd.frame(t0, () => {
+            const al = alertsOf({ ...info, status, animate: settings.animate, fmtM: () => "" }).map((a) => ({
+              text: a.text,
+              level: a.level,
+            }));
+            return pcdData(camera, settings, renderer.jetPose, al, dateOf(sim.time));
+          });
+          if (parts.length) {
+            const t1 = performance.now();
+            renderer.ship.updateJetScreen(jetPcd.canvas, parts);
+            pcdStats.draws++;
+            pcdStats.up += performance.now() - t1;
+          }
+          const dt = performance.now() - t0;
+          pcdStats.frames++;
+          pcdStats.ms += dt;
+          pcdStats.max = Math.max(pcdStats.max, dt);
         }
         // (the cockpit's controls: each where the flight has it, lit by its mode — PLAN-COCKPIT)
         // (each moving part travelling there: a lever moved by a key or an autopilot seen going — K5)

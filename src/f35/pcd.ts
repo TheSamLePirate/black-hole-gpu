@@ -133,6 +133,26 @@ const PH = PORTAL_END - TOP - GAP * 2;
 const HEAD = 46;
 const D = Math.PI / 180;
 
+/** A part of the display [px]. */
+export interface PcdRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+/** The display's parts, each redrawn on its own: the warnings' strip, each portal (its gaps with it), the flight's
+ *  state in the notch. */
+const REGIONS: PcdRect[] = [
+  { x: 0, y: 0, w: PCD_W, h: TOP },
+  ...Array.from({ length: PORTALS }, (_, k) => ({ x: SIDE + GAP / 2 + k * (PW + GAP), y: TOP, w: PW + GAP, h: PORTAL_END - TOP })),
+  { x: NOTCH[0], y: PORTAL_END, w: NOTCH[1] - NOTCH[0], h: PCD_H - PORTAL_END },
+];
+/** the data read every PERIOD [ms]; each part redrawn at its own pace (what moves fast often, the rest less) — in
+ *  turn, one a frame: no frame pays for the whole display */
+const PERIOD = 100;
+const PAGE_PERIOD: Record<PcdPage, number> = { TSD: 100, FCS: 100, ENG: 200, FUEL: 500, STOVL: 100, CNI: 250, ADI: 100, CKL: 500 };
+const FONT = `"Eurostile", "DIN Alternate", "Arial Narrow", sans-serif`;
+
 export class Pcd {
   readonly canvas = new OffscreenCanvas(PCD_W, PCD_H);
   private g = this.canvas.getContext("2d")!;
@@ -142,8 +162,12 @@ export class Pcd {
   range = 20;
   /** the units shown (each draw's) */
   private u: Units = unitsOf("metric");
-  private last = -Infinity;
-  private dirty = true;
+  /** the data drawn (read again every PERIOD, or at once after a touch), when */
+  private data: PcdData | null = null;
+  private dataAt = -Infinity;
+  /** when each part was drawn; the parts to draw at once (a touch); the whole display to draw (its first time) */
+  private drawn = REGIONS.map(() => -Infinity);
+  private forced = new Set<number>();
 
   /** A touch at (u, v) on the display (0…1 across, down): a portal's title — its next page —, its arrows,
    *  the TSD's range. What it did (null: nothing). */
@@ -159,7 +183,7 @@ export class Pcd {
         // (the arrows at the title's ends: back, forth; the title itself: forth)
         const step = x < x0 + 60 ? -1 : 1;
         this.pages[k] = PCD_PAGES[(i + step + PCD_PAGES.length) % PCD_PAGES.length]!;
-        this.dirty = true;
+        this.forced.add(1 + k);
         return this.pages[k]!;
       }
       if (this.pages[k] === "TSD" && y > y0 + PH - 70) {
@@ -167,35 +191,90 @@ export class Pcd {
         const r = [5, 10, 20, 40, 80, 160];
         const j = Math.max(0, r.indexOf(this.range));
         this.range = r[Math.min(Math.max(j + (x < x0 + PW / 2 ? -1 : 1), 0), r.length - 1)]!;
-        this.dirty = true;
+        this.forced.add(1 + k);
         return `RNG ${this.range}`;
       }
     }
     return null;
   }
 
-  /** Draws when due (10 Hz, or at once after a touch). Whether it drew. */
-  draw(d: PcdData, now: number): boolean {
-    if (!this.dirty && now - this.last < 100) return false;
-    this.last = now;
+  /** A frame: the data read when due (every PERIOD, or at once after a touch), the part waiting longest drawn when
+   *  due (two when the frames are slow; at its first look the display fills in six frames), a touched portal at once.
+   *  The parts drawn (to upload). */
+  frame(now: number, read: () => PcdData | null): PcdRect[] {
+    if (!this.data || this.forced.size || now - this.dataAt >= PERIOD) {
+      const d = read();
+      if (!d) return [];
+      this.data = d;
+      this.dataAt = now;
+    }
+    const d = this.data;
     this.u = unitsOf(d.units);
-    this.dirty = false;
+    const out = [...this.forced];
+    this.forced.clear();
+    if (!out.length) {
+      // (how late each part is, against its pace: the latest first)
+      const late = (i: number) => (now - this.drawn[i]!) / this.period(i);
+      const order = REGIONS.map((_, i) => i).sort((a, b) => late(b) - late(a));
+      for (const i of order.slice(0, 2))
+        if (late(i) >= 1 && !(out.length && (!Number.isFinite(this.drawn[i]!) || late(i) < 2))) out.push(i);
+    }
+    for (const i of out) {
+      this.region(i, d);
+      this.drawn[i] = now;
+    }
+    return out.map((i) => REGIONS[i]!);
+  }
+
+  /** Draws the whole display at once (the tests, a capture). */
+  draw(d: PcdData, now: number) {
+    this.u = unitsOf(d.units);
+    REGIONS.forEach((_, i) => {
+      this.region(i, d);
+      this.drawn[i] = now;
+    });
+  }
+
+  /** Readies the fonts and the canvas (the F-35 chosen, before its cockpit is seen: no stall at the first drawing):
+   *  the glyphs at every size and weight, the black under the parts. */
+  warm() {
     const g = this.g;
-    g.save();
+    for (const w of ["500", "700"])
+      for (const size of [16, 18, 20, 22, 24, 26, 28, 30, 34, 40, 48, 56]) {
+        g.font = `${w} ${size}px ${FONT}`;
+        g.fillStyle = C.white;
+        g.fillText("0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ ◀▶°·%:/+−.,", 0, 40);
+      }
     g.fillStyle = C.bg;
     g.fillRect(0, 0, PCD_W, PCD_H);
-    this.topStrip(d);
-    for (let k = 0; k < PORTALS; k++) this.portal(k, d);
-    this.bottomStrip(d);
+  }
+
+  /** A part's pace [ms]: the warnings' strip (its clock in seconds) 250, the flight's state 100, a portal its page's. */
+  private period(i: number) {
+    return i === 0 ? 250 : i <= PORTALS ? PAGE_PERIOD[this.pages[i - 1]!] : PERIOD;
+  }
+
+  /** A part drawn over its own black. */
+  private region(i: number, d: PcdData) {
+    const g = this.g;
+    const r = REGIONS[i]!;
+    g.save();
+    g.beginPath();
+    g.rect(r.x, r.y, r.w, r.h);
+    g.clip();
+    g.fillStyle = C.bg;
+    g.fillRect(r.x, r.y, r.w, r.h);
+    if (i === 0) this.topStrip(d);
+    else if (i <= PORTALS) this.portal(i - 1, d);
+    else this.bottomStrip(d);
     g.restore();
-    return true;
   }
 
   // ---- the frame
 
   private text(s: string, x: number, y: number, colour = C.white, size = 26, align: CanvasTextAlign = "left", bold = false) {
     const g = this.g;
-    g.font = `${bold ? "700 " : "500 "}${size}px "Eurostile", "DIN Alternate", "Arial Narrow", sans-serif`;
+    g.font = `${bold ? "700 " : "500 "}${size}px ${FONT}`;
     g.fillStyle = colour;
     g.textAlign = align;
     g.textBaseline = "middle";
