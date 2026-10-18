@@ -7,7 +7,22 @@ import { App, E2E, stopServer } from "./lib/app";
 // march, 3 its heights read, 4 its shadows, 5 the clouds, 6 the air, 7 the sea, 8 the scenery, 9 the main loop).
 // E2E_SHOTS=<dir>: the views.
 
-const KINDS = ["image", "all", "ground-march", "heights", "ground-shadows", "clouds", "air", "sea", "scenery", "main-loop"];
+const KINDS = [
+  "image",
+  "all",
+  "ground-march",
+  "heights",
+  "ground-shadows",
+  "clouds",
+  "air",
+  "water",
+  "scenery",
+  "integrator",
+  "noise",
+  "stars",
+  "bodies",
+  "main-loop",
+];
 
 describe.skipIf(!E2E)("the cost view: each ray's work as a heat map", () => {
   let app: App;

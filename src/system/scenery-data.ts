@@ -4,6 +4,13 @@ import { type ForestFrame, forestVec4s, writeForest } from "./forest";
 import type { Vec3 } from "../physics";
 
 export const SCENERY_BYTES = 16 * 1024 * 1024;
+/** The detail's reach (settings.detailReach): the scenery's box, its land cover's raster and its rays this many times the
+ *  normal ones, its budgets as its area — its buffer 16, 36 or 64 MiB, its raster 512, 768 or 1024 px (~10 m a pixel
+ *  kept). */
+export const DETAIL_REACH = { normal: 1, far: 1.5, veryFar: 2 } as const;
+export type DetailReach = keyof typeof DETAIL_REACH;
+export const sceneryBudget = (reach: number) => Math.ceil((SCENERY_BYTES * reach * reach) / (1024 * 1024)) * 1024 * 1024;
+export const sceneryGrid = (reach: number) => Math.round((SCENERY_GRID * reach) / 64) * 64;
 export const SCENERY_VEC4S = 6;
 export const SCENERY_STORAGE_LIMIT = 9;
 export const SCENERY_GRID = 512;
@@ -116,7 +123,14 @@ function sceneryBVH(prims: Primitive[]) {
 // their own (forest.ts), after the raster.
 //   vec4 0 (nodes, geometries at, raster at, raster side)  1 (surfaces' nodes at, count, geometries at, surfaces)
 //   2 (forest at: 0 none, —, —, —)  3 (—)  then the nodes, geometries, surfaces, raster, forest
-export function packScenery(prims: Primitive[], pixels: Uint32Array, surfaces: Primitive[] = [], forest?: ForestSection) {
+export function packScenery(
+  prims: Primitive[],
+  pixels: Uint32Array,
+  surfaces: Primitive[] = [],
+  forest?: ForestSection,
+  grid = SCENERY_GRID,
+  budget = SCENERY_BYTES,
+) {
   const { nodes, geometries } = sceneryBVH(prims);
   const surface = sceneryBVH(surfaces);
   const nodeCount = nodes.length / 8,
@@ -126,11 +140,11 @@ export function packScenery(prims: Primitive[], pixels: Uint32Array, surfaces: P
     pixelOffset = surfaceGeom + surface.geometries.length / 4,
     forestOffset = pixelOffset + Math.ceil(pixels.length / 4);
   const bytes = (forestOffset + (forest ? forestVec4s(forest.frame) : 0)) * 16;
-  if (bytes > SCENERY_BYTES) throw new Error("scenery budget exceeded");
+  if (bytes > budget) throw new Error("scenery budget exceeded");
   const buffer = new ArrayBuffer(bytes),
     f = new Float32Array(buffer),
     u = new Uint32Array(buffer);
-  f.set([nodeCount, geomOffset, pixelOffset, SCENERY_GRID], 0);
+  f.set([nodeCount, geomOffset, pixelOffset, grid], 0);
   f.set([surfaceOffset, surface.nodes.length / 8, surfaceGeom, surfaces.length], 4);
   if (forest) {
     f[8] = forestOffset;
@@ -150,6 +164,9 @@ export interface SceneryRequest {
   mode: SceneryMode;
   satellite: boolean;
   exclusions: SceneryExclusion[];
+  /** the detail's reach (DETAIL_REACH: 1, 1.5, 2) and the bytes the GPU takes for it */
+  reach: number;
+  budget: number;
 }
 export interface SceneryReply {
   id: number;

@@ -36,13 +36,16 @@ import { visibleTimeout } from "./util/visible-timeout";
 import { automaticQuality, effectiveQuality, earthMapQuality } from "./quality-policy";
 import { adapterId, guessTier, rememberedLevel, tierAt, type Tier } from "./tier";
 import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
-import { PATH_CHUNK, PATH_MAX, SH_VEC4S, TABLE_LUT, TABLE_PATH, TABLE_WALK, TABLE_VEC4S } from "./gpu-tables";
+import { PATH_CHUNK, PATH_MAX, SH_VEC4S, TABLE_LUT, TABLE_PATH, TABLE_VEC4S, TABLE_WALK, TABLE_WARP } from "./gpu-tables";
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
+import maskWGSL from "./shaders/mask.wgsl" with { type: "text" };
+import { AERIAL_TEXTURE_LIMIT, aerialShader } from "./system/aerial";
+import { detailMargin, horizonsReach, MapCells } from "./system/relief-ceiling";
 import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
 import shipWGSL from "./shaders/ship.wgsl" with { type: "text" };
 import enduranceWGSL from "./shaders/endurance.wgsl" with { type: "text" };
 import stationWGSL from "./shaders/station.wgsl" with { type: "text" };
-import { ENV_H, ShipRenderer, type Reentry, type ShipInstance, type ShipMeshId, type ShipView, type Thrust } from "./ship";
+import { ENV_H, ownPose, ShipRenderer, type Reentry, type ShipInstance, type ShipMeshId, type ShipView, type Thrust } from "./ship";
 import type { VesselId } from "./vessels";
 import type { F35Pose } from "./f35/model";
 import { fleet } from "./fleet";
@@ -86,10 +89,11 @@ import {
   type EarthTier,
 } from "./system/earth-maps";
 import { gpuDiagnostics } from "./gpu-diagnostics";
-import { EarthTiles, TILE_PARAM_VEC4S } from "./system/earth-tiles";
+import { EarthTiles, TILE_PARAM_VEC4S, TILE_REACH } from "./system/earth-tiles";
+import { WarpGrid } from "./system/warp-grid";
 import { EarthSurface, SURFACE_VEC4S, SURFACE_TEXTURE_LIMIT, surfaceShader } from "./system/earth-surface";
 import { EarthScenery, sceneryShader } from "./system/scenery";
-import { SCENERY_VEC4S, SCENERY_STORAGE_LIMIT, type SceneryExclusion } from "./system/scenery-data";
+import { DETAIL_REACH, SCENERY_VEC4S, SCENERY_STORAGE_LIMIT, type SceneryExclusion } from "./system/scenery-data";
 import { LANDSCAPES, LANDSCAPE_CLEARING_M } from "./system/landscapes";
 const SCENERY_EXCLUSIONS: SceneryExclusion[] = [
   ...EARTH_RUNWAYS.map((r) => ({
@@ -121,7 +125,16 @@ import {
   setGroundRelief,
 } from "./system/our-surface";
 import { EARTH_RM, earthHeightSampler, mapHeightSampler, tileFallbackSampler } from "./terrain";
-import { figureDiskShare, figureSourceElevation, flatteningOf, geodeticNormal, rayFigure, WGS84_A, WGS84_F } from "./system/ellipsoid";
+import {
+  cartToGeodetic,
+  figureDiskShare,
+  figureSourceElevation,
+  flatteningOf,
+  geodeticNormal,
+  rayFigure,
+  WGS84_A,
+  WGS84_F,
+} from "./system/ellipsoid";
 import { AIR_K, sunThroughY } from "./system/earth-air";
 import { homeOf, homeToRep } from "./system/our-side";
 import type { Vec3 } from "./physics";
@@ -162,6 +175,16 @@ const SRGB: GPUTextureFormat = "rgba8unorm-srgb";
 const srgbView = (t: GPUTexture, dimension: GPUTextureViewDimension) =>
   t.createView({ dimension, ...(t.format === "rgba8unorm" ? { format: SRGB } : {}) });
 const BLOCKS = [1, 2, 3, 4, 6, 8];
+/** how far the relief's finest windows are led towards the ground the view looks at [m], by the detail's reach */
+const GAZE_TILES_M: Record<string, number> = { normal: 6000, far: 12000, veryFar: 20000 };
+/** the camera's turn [px a second] past which the realtime rays are one block denser, and under which they go back
+ *  (renderer motionBlock) */
+const MOTION_DENSE_IN = 25;
+const MOTION_DENSE_OUT = 18;
+/** the seen ground's slide [px a second] past which the rays are denser in low flight (settings.motionDetail "low"),
+ *  and under which they go back */
+const GROUND_DENSE_IN = 12;
+const GROUND_DENSE_OUT = 9;
 /** every feature of the tracer kept (the general pipelines) */
 const FEATURES_ALL = 16383;
 /** how long a block size's measured frame time is remembered [ms] (then tried again) */
@@ -183,7 +206,11 @@ const BASE_PARAM_VEC4S = 69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S + SEA_VEC4S + 1 + 
 const WAKE_VEC4S = 17;
 /** the sea's FFT waves (trace.wgsl: Params.seafft) */
 const SEAFFT_VEC4S = 4;
-const PARAM_VEC4S = BASE_PARAM_VEC4S + SURFACE_VEC4S + SCENERY_VEC4S + 5 + WAKE_VEC4S + SEAFFT_VEC4S;
+/** the mountains' warp's grids (trace.wgsl: Params.warp; system/warp-grid.ts) */
+const WARP_VEC4S = 4;
+/** our bodies a ray from the mouth's region may meet (trace.wgsl: Params.mouthList), after the warp's */
+const MOUTH_LIST_AT = (BASE_PARAM_VEC4S + SURFACE_VEC4S + SCENERY_VEC4S + 5 + WAKE_VEC4S + SEAFFT_VEC4S + WARP_VEC4S) * 4;
+const PARAM_VEC4S = BASE_PARAM_VEC4S + SURFACE_VEC4S + SCENERY_VEC4S + 5 + WAKE_VEC4S + SEAFFT_VEC4S + WARP_VEC4S + 2;
 /**
  * The sea's twelve wave trains near the camera (trace.wgsl: seaWaves): wavenumbers in whole units of
  * 2π/1024 m on the wind's axes (along, across) — exact from an anchor of whole kilometres, in float32 —,
@@ -210,9 +237,14 @@ const FLAG_INTERLEAVED = 8;
 const FLAG_REPROJECT = 16;
 /** the far field's LUT is there (trace.wgsl: farLut) */
 const FLAG_LUT = 32;
+const FLAG_AERIAL = 64; // (trace.wgsl FLAG_AERIAL: the aerial perspective's table written this frame)
 /** the features under which the far field's LUT is not used: radio, polarization, jet, hot spot, hot flow,
  *  the wormhole, bodies — what a ray between two clean samples could meet unseen */
 const LUT_BLOCKERS = 1 | 2 | 4 | 8 | 16 | 32 | 128;
+/** the flight's shake the cockpit's mask allows for [px]: its line of sight's turn, its up's roll (in its margin) */
+const SHAKE_PX = 10;
+/** the aerial perspective's table: directions across the image, slices along them (trace.wgsl AP_Z) */
+const AERIAL_SIZE: [number, number, number] = [96, 54, 32];
 
 /**
  * Bun's dev server sometimes serves a `type: "text"` import as an asset URL after a hot reload
@@ -631,6 +663,12 @@ export class Renderer {
   private hdLoading: MapName | null = null;
   // auto exposure: the light meter (a histogram of the image, read back), its state
   private meterPipeline!: GPUComputePipeline;
+  // the cockpit's mask (mask.wgsl): its pipeline, its parameters, whether the live view's moments hold one
+  private maskPipeline?: GPUComputePipeline;
+  private maskBuf!: GPUBuffer;
+  private maskSet = new WeakMap<object, boolean>();
+  /** the realtime frame (frameStamp) the flown craft's own mask was last drawn in; −1: not drawn */
+  private ownMaskStamp = -1;
   private histBuf!: GPUBuffer;
   private histStage!: GPUBuffer;
   private meterPending = false;
@@ -883,20 +921,52 @@ export class Renderer {
       addressModeV: "repeat",
       addressModeW: "repeat",
     });
-    const layout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout] });
+    this.aerialTex = [0, 1].map(() =>
+      device.createTexture({
+        size: AERIAL_SIZE,
+        dimension: "3d",
+        format: "rgba16float",
+        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+      }),
+    );
+    this.aerialSampler = device.createSampler({ magFilter: "linear", minFilter: "linear" });
+    // (the light probes' kernels — env — read the aerial perspective's table too: earthLook is theirs as well; never
+    // with its flag on — the table stands for the camera's rays only —, but bound)
+    this.envReadLayout = device.createBindGroupLayout({ entries: this.aerialReadLayout() });
+    this.envRead = device.createBindGroup({ layout: this.envReadLayout, entries: this.aerialRead() });
+    const layout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.envReadLayout] });
     // (the far field's LUT: written by its own pass, read by the main kernel — a second bind group)
     this.lutWriteLayout = device.createBindGroupLayout({
       entries: [
         { binding: 0, visibility: C, storageTexture: { access: "write-only", format: "rgba32float" } },
         { binding: 1, visibility: C, storageTexture: { access: "write-only", format: "r32float" } },
+        ...this.aerialReadLayout(),
       ],
     });
     this.lutReadLayout = device.createBindGroupLayout({
       entries: [
         { binding: 2, visibility: C, texture: { sampleType: "unfilterable-float" } },
         { binding: 3, visibility: C, texture: { sampleType: "unfilterable-float" } },
+        // (the aerial perspective's table: trace.wgsl apInA, apInB, apSamp)
+        ...this.aerialReadLayout(),
       ],
     });
+    // (the aerial perspective's table: written by its own pass — trace.wgsl aerial —, one for the live view)
+    this.aerialWriteLayout = device.createBindGroupLayout({
+      entries: [
+        { binding: 7, visibility: C, storageTexture: { access: "write-only", format: "rgba16float", viewDimension: "3d" } },
+        { binding: 8, visibility: C, storageTexture: { access: "write-only", format: "rgba16float", viewDimension: "3d" } },
+      ],
+    });
+    this.aerialLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.aerialWriteLayout] });
+    this.aerialWrite = device.createBindGroup({
+      layout: this.aerialWriteLayout,
+      entries: [
+        { binding: 7, resource: this.aerialTex[0]!.createView() },
+        { binding: 8, resource: this.aerialTex[1]!.createView() },
+      ],
+    });
+
     this.mainLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.lutReadLayout] });
     this.lutLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.lutWriteLayout] });
     // (compiled asynchronously: the tracer is a huge shader — on Windows (D3D12) one takes a
@@ -918,10 +988,7 @@ export class Renderer {
       ];
       this.lutDummy = device.createBindGroup({
         layout: this.lutReadLayout,
-        entries: [
-          { binding: 2, resource: tx[0]!.createView() },
-          { binding: 3, resource: tx[1]!.createView() },
-        ],
+        entries: [{ binding: 2, resource: tx[0]!.createView() }, { binding: 3, resource: tx[1]!.createView() }, ...this.aerialRead()],
       });
     }
     // (the first image needs only the scene's specialised realtime kernel — compiled at the first frame,
@@ -1008,6 +1075,12 @@ export class Renderer {
     this.earthTiles.onChange = () => {
       if (!this.offline) this.invalidate();
     };
+    // (another window's texture — the detail's reach —: the bind groups holding the old one rebuilt)
+    this.earthTiles.onResize = () => {
+      if (this.live) this.bindTarget(this.live);
+      if (this.offline) this.bindTarget(this.offline.target);
+      if (!this.offline) this.invalidate();
+    };
     this.earthSurface = new EarthSurface(device, undefined, device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT);
     this.surfaceSampler = device.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", maxAnisotropy: 4 });
     this.earthSurface.onChange = () => {
@@ -1071,6 +1144,16 @@ export class Renderer {
       mkPost("beamV").then((p) => (this.postBeamV = p)),
       mkPost("meter").then((p) => (this.meterPipeline = p)),
     ]).then(() => {});
+    // (the cockpit's mask: an optimisation, not waited for — a browser that refuses its shader keeps it off, the
+    // renderer starting all the same)
+    device
+      .createComputePipelineAsync({
+        layout: "auto",
+        compute: { module: device.createShaderModule({ code: maskWGSL, label: "mask" }), entryPoint: "main" },
+      })
+      .then((p) => (this.maskPipeline = p))
+      .catch((e) => console.warn("cockpit mask unavailable:", e));
+    this.maskBuf = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.histBuf = device.createBuffer({ size: 512, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
     this.histStage = device.createBuffer({ size: 512, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
     this.spotBuf = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
@@ -1081,6 +1164,8 @@ export class Renderer {
       size: TABLE_VEC4S * 16,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
+    // (the mountains' warp's grids in it, after the walking grid: system/warp-grid.ts)
+    this.warpOut = new WarpGrid(device, this.bodyBuf, TABLE_WARP, traceWGSL);
     this.paramBuf = device.createBuffer({ size: this.params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.probeBuf = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     this.probeStage = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
@@ -1222,6 +1307,8 @@ export class Renderer {
           );
           // (a tile that will not load — offline, refused: the map's heights there, as the ground had them)
           this.earthTiles.fallback = tileFallbackSampler(map, W, H);
+          // (the relief's ceiling round the camera: the map's highest in 1° cells)
+          this.mapCells = new MapCells(map, W, H);
         }
         if (this.live) this.bindTarget(this.live);
         if (this.offline) {
@@ -1436,7 +1523,7 @@ export class Renderer {
         maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
         maxBufferSize: adapter.limits.maxBufferSize,
         maxTextureDimension2D: adapter.limits.maxTextureDimension2D,
-        maxSampledTexturesPerShaderStage: Math.min(SEA_TEXTURE_LIMIT, adapter.limits.maxSampledTexturesPerShaderStage),
+        maxSampledTexturesPerShaderStage: Math.min(AERIAL_TEXTURE_LIMIT, adapter.limits.maxSampledTexturesPerShaderStage),
         maxStorageBuffersPerShaderStage: Math.min(SCENERY_STORAGE_LIMIT, adapter.limits.maxStorageBuffersPerShaderStage),
       },
     });
@@ -1461,15 +1548,18 @@ export class Renderer {
     loading.done("gpu");
     gpuDiagnostics.enter("shader-download");
     const src = {
-      trace: seaShader(
-        sceneryShader(
-          surfaceShader(
-            withForest(await wgsl(traceWGSL), await wgsl(forestSource)),
-            device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT,
+      trace: aerialShader(
+        seaShader(
+          sceneryShader(
+            surfaceShader(
+              withForest(await wgsl(traceWGSL), await wgsl(forestSource)),
+              device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT,
+            ),
+            device.limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT,
           ),
-          device.limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT,
+          device.limits.maxSampledTexturesPerShaderStage >= SEA_TEXTURE_LIMIT,
         ),
-        device.limits.maxSampledTexturesPerShaderStage >= SEA_TEXTURE_LIMIT,
+        device.limits.maxSampledTexturesPerShaderStage >= AERIAL_TEXTURE_LIMIT,
       ),
       seafft: await wgsl(seafftWGSL),
       display: await wgsl(displayWGSL),
@@ -1737,7 +1827,7 @@ export class Renderer {
       usage: GPUBufferUsage.STORAGE,
     });
     const polGridBuf = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    const accum = d.createBuffer({ size: px * 16, usage: GPUBufferUsage.STORAGE });
+    const accum = d.createBuffer({ size: px * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     const moments = d.createBuffer({ size: px * 8, usage: GPUBufferUsage.STORAGE }); // Σ l², depth
     const sceneDepth = d.createBuffer({ size: px * 4, usage: GPUBufferUsage.STORAGE }); // the occlusion depth
     const stamps = d.createBuffer({ size: px * 4, usage: GPUBufferUsage.STORAGE });
@@ -2174,7 +2264,7 @@ export class Renderer {
   ) {
     const f = this.paramsF;
     const u = this.paramsU;
-    this.featureKey = this.featuresOf(s) | ((this.costViewMode & 15) << 16);
+    this.featureKey = this.featuresOf(s) | ((this.costViewMode & 15) << 16) | (this.tuneKey << 20);
     const cam = o.probe?.cam ?? cameraFrame(s);
     if (!o.probe) (this.lastCam = cam), (this.lastTime = time);
     // (none flown: a craft of the fleet near the camera brings the craft's pass and its light probe)
@@ -2191,7 +2281,8 @@ export class Renderer {
     set(3, ...cam.up, pixelAngle);
     set(4, ...cam.fwd, o.stars ?? 0);
     set(5, cam.zamo.alpha, cam.zamo.omega, cam.zamo.varpi, cam.zamo.sqrtSig);
-    set(6, cam.zamo.sqrtSigOverDel, 0, 0, 0);
+    // (y: the aerial table's scale — trace.wgsl apScale)
+    set(6, cam.zamo.sqrtSigOverDel, this.aerialPreExposed ? preExposure(this.ev(s)) : 0, 0, 0);
     set(7, ...cam.beta, cam.gamma);
     set(8, a, horizon(a), dc.rIn, Math.max(s.diskOuter, dc.rIn + 0.5));
     set(9, s.diskTemp, dc.fmax, s.turbulence, dc.logY);
@@ -2283,6 +2374,16 @@ export class Renderer {
       near.centre = [0, 1, 2].map((i) => near.centre[i]! + (t[0] * cam.right[i]! + t[1] * cam.up[i]! + t[2] * cam.fwd[i]!) * k) as Vec3;
     }
     const earthSurface = near && bodies[near.index]?.id === "earth" ? patchGeodetic(near, WGS84_F) : null;
+    // (the relief's ceiling round the camera — relief-ceiling.ts: the shell the ground's marches work in, radio2.w [m]
+    // over the ellipsoid; 9 600 m at most, as before; 0: that)
+    f[28 * 4 + 3] = 0;
+    // (under 300 km: higher, the march hardly runs and the horizons take in half the globe — 9 600 m)
+    if (earthSurface && this.mapCells && this.reliefCeiling && earthSurface.h * WGS84_A < 300_000) {
+      const alt = earthSurface.h * WGS84_A;
+      let top = Math.max(this.earthTiles.top(), 0);
+      top = Math.max(top, this.mapCells.around(earthSurface.lat, earthSurface.lon, horizonsReach(alt, 9600)));
+      f[28 * 4 + 3] = Math.min(9600, top + detailMargin(top));
+    }
     if (!o.probe) this.lastNear = near;
     set(48, ...(near?.centre ?? [0, 0, 0]), near ? 1 : 0);
     set(49, ...(near?.axes[0] ?? [1, 0, 0]), near?.index ?? 0);
@@ -2402,6 +2503,59 @@ export class Renderer {
     const liquid = hexToLinear(s.waterColor);
     set(45, ...(liquid.map((c) => 0.17 * s.waterDensity * -Math.log(Math.max(c, 0.02))) as [number, number, number]), 0);
     set(46, ...hexToLinear(s.waterGlowColor), 0);
+    // (our universe's bodies a ray from the camera may meet — trace.wgsl ourSegment's own test, reach against half
+    // a pixel at its distance: the planets and moons under it skipped there anyway —, those with rings (their loop
+    // keeps no such test) and the stars: their indices, 6 bits each, 4 a value — whole numbers under 2²⁴, exact in a
+    // float — in water3.zw, water4.w, water5.w; their count in path.w — 0: every body)
+    {
+      const start = ourStart(bodies);
+      const list: number[] = [];
+      let all = !this.bodyList;
+      for (let k = start; k < Math.min(bodies.length, MAX_BODIES) && !all; k++) {
+        const b = bodies[k]!;
+        const P = [b.pos[0] - origin[0], b.pos[1] - origin[1], b.pos[2] - origin[2]];
+        const D = Math.hypot(P[0]!, P[1]!, P[2]!);
+        // (the reach: its rings', its air's — at most twice its radius —; a star always: its disc, its corona)
+        const reach = b.radius * Math.max(b.rings?.outer ?? 0, b.surface >= 4 ? 2 : 1);
+        if (b.kind === 0 || (b.rings?.outer ?? 0) > 0 || reach >= 0.45 * pixelAngle * D) {
+          if (list.length === 16) all = true;
+          else list.push(k);
+        }
+      }
+      const words = [0, 0, 0, 0];
+      if (!all) list.forEach((k, i) => (words[i >> 2]! += k * 64 ** (i & 3)));
+      f[44 * 4 + 2] = words[0]!;
+      f[44 * 4 + 3] = words[1]!;
+      f[45 * 4 + 3] = words[2]!;
+      f[46 * 4 + 3] = words[3]!;
+      f[40 * 4 + 3] = all ? 0 : list.length + 0.5;
+      // (the same for the rays from the mouth's region — its pieces integrated there, the ray out of it (Saturn's sky:
+      // 40 % of its trace was this loop over every body, at each piece) —: the bodies big enough seen from the region's
+      // edge, its radius 100 ρ round the mouth (b.pos: from the mouth), those within it, those with rings, the stars —
+      // a ray from there has travelled at least to the edge: ourSegment's test passes no other)
+      const mouth: number[] = [];
+      let mouthAll = !this.bodyList;
+      for (let k = start; k < Math.min(bodies.length, MAX_BODIES) && !mouthAll; k++) {
+        const b = bodies[k]!;
+        const D = Math.max(Math.hypot(b.pos[0], b.pos[1], b.pos[2]) - 100 * m.w.rho, 0);
+        const reach = b.radius * Math.max(b.rings?.outer ?? 0, b.surface >= 4 ? 2 : 1);
+        if (b.kind === 0 || (b.rings?.outer ?? 0) > 0 || b.where === 4 || reach >= 0.45 * pixelAngle * D) {
+          if (mouth.length === 16) mouthAll = true;
+          else mouth.push(k);
+        }
+      }
+      const mw = [0, 0, 0, 0];
+      if (!mouthAll) mouth.forEach((k, i) => (mw[i >> 2]! += k * 64 ** (i & 3)));
+      f.set(mw, MOUTH_LIST_AT);
+      f.fill(0, MOUTH_LIST_AT + 4, MOUTH_LIST_AT + 8);
+      f[MOUTH_LIST_AT + 4] = mouthAll ? 0 : mouth.length + 0.5;
+      if (!o.probe)
+        this.bodyListSizes = {
+          ours: Math.min(bodies.length, MAX_BODIES) - start,
+          camera: all ? -1 : list.length,
+          mouth: mouthAll ? -1 : mouth.length,
+        };
+    }
     // light probe for the spaceship: a new frame's weight (1 after a scene reset: no stale light);
     // its axes: the planet's probe camera's, else fixed (the ZAMO's, or the throat's), so that it
     // keeps a long running mean while the camera turns — shortened as what it sees moves (a texel
@@ -2426,7 +2580,7 @@ export class Renderer {
       const texel = Math.PI / ENV_H;
       const slow = drift < texel / 256;
       this.envStride = this.envReset ? 1 : spread || !slow ? 2 : 4;
-      this.envEvery = this.envReset || spread || !slow ? 1 : 4;
+      this.envEvery = this.envReset || spread ? 1 : !slow ? this.probeEveryMoving : 4;
       const window = Math.round(Math.min(512, Math.max(4, texel / ((slow ? 64 : 4) * drift))));
       set(
         47,
@@ -2632,9 +2786,15 @@ export class Renderer {
           ? (near.axes.map((a) => a[0]! * cam.fwd[0] + a[1]! * cam.fwd[1] + a[2]! * cam.fwd[2]) as Vec3)
           : null;
       const eyeH = eye && near ? Math.max(heightOverGround("earth", eye.map((x) => x * near.radius) as Vec3), 1) : 0;
-      const gazeT = eye && gazeDir ? gazeLead(eye, gazeDir, eyeH, 6000) : ([0, 0, 0] as Vec3);
-      const gazeS = eye && gazeDir ? gazeLead(eye, gazeDir, eyeH, 0.6 * (s.earthScenery === "high" ? 3000 : 2000)) : ([0, 0, 0] as Vec3);
+      // (the detail's reach — settings.detailReach —: the scenery's box this many times wider, the relief's windows led
+      // out to 6, 12 or 20 km)
+      const reach = DETAIL_REACH[s.detailReach] ?? 1;
+      const gazeT = eye && gazeDir ? gazeLead(eye, gazeDir, eyeH, GAZE_TILES_M[s.detailReach] ?? 6000) : ([0, 0, 0] as Vec3);
+      const gazeS =
+        eye && gazeDir ? gazeLead(eye, gazeDir, eyeH, 0.6 * (s.earthScenery === "high" ? 3000 : 2000) * reach) : ([0, 0, 0] as Vec3);
       this.streamingState.gazeM = Math.hypot(...gazeT) * 6378137;
+      // (and its windows 4 or 8 tiles a side, the tiles kept past them and the ring loaded ahead round them)
+      this.earthTiles.setReach(TILE_REACH[s.detailReach] ?? TILE_REACH.normal);
       this.earthTiles.update(focus, pixelAngle, lead, onEarth ? gazeT : [0, 0, 0]);
       this.earthSurface.update(eye, s.earthSurface, lead);
       this.earthScenery.update(
@@ -2644,6 +2804,7 @@ export class Renderer {
         s.earthTerrain,
         SCENERY_EXCLUSIONS,
         eye ? aheadFocus(eye, Math.hypot(...gazeS) > 0 ? gazeS : lead) : null,
+        reach,
       );
       this.earthScenery.shadows = s.earthSceneryShadows;
       this.earthScenery.season(utcOf(time));
@@ -2701,6 +2862,8 @@ export class Renderer {
     // (the nearest carrier's sphere in the ship's shadow map: its shadow on the sea — Params.seafft[3])
     const sb2 = !o.probe && this.ship.ready && near?.index === earthK ? this.ship.shadowBound2 : null;
     if (sb2) f.set([sb2.c[0], sb2.c[1], sb2.c[2], sb2.r], wat + WAKE_VEC4S * 4 + 12);
+    // the mountains' warp's grids round the camera (worked out at the frame's start: updateWarp)
+    f.set(this.warpOut.params, wat + (WAKE_VEC4S + SEAFFT_VEC4S) * 4);
     f[61 * 4 + 1] = sunAng; // (earth4.y)
     f[61 * 4 + 2] = this.marsDust(s, near, bodies, time); // (earth4.z)
     // the auroras (S2 — trace.wgsl auroraLight: bary.z, bary.w): their activity (a Kp index) and their curtains'
@@ -2734,6 +2897,19 @@ export class Renderer {
       const held = (this.earthSurface.active && !surfaceOn) || (this.earthScenery.active && !sceneryOn);
       if (this.earthHeld && !held && !this.offline) queueMicrotask(() => this.invalidate());
       this.earthHeld = held;
+    }
+    // (the aerial perspective's table: the live view's realtime frames, a world with air near the camera and the camera
+    // within its air — its pass's kernel compiled for this key; else the rays march their own air)
+    this.aerialPipe = null;
+    if (t === this.live && !o.probe) this.aerialWanted = false;
+    if (t === this.live && !o.probe && (o.flags & FLAG_INTERLEAVED) !== 0 && this.aerialTable && near && atm) {
+      const inside = Math.hypot(...near.centre) < 1 + (0.9 * 12 * atm.H) / mR;
+      const pipe = this.featureKey !== FEATURES_ALL ? (this.variants.get(this.featureKey)?.air ?? null) : null;
+      this.aerialWanted = inside && this.aerialOK && (this.featureKey & 128) !== 0;
+      if (inside && pipe) {
+        this.aerialPipe = pipe;
+        u[17 * 4 + 2] = (u[17 * 4 + 2] ?? 0) | FLAG_AERIAL;
+      }
     }
     this.device.queue.writeBuffer(this.paramBuf, 0, this.params);
   }
@@ -2782,7 +2958,7 @@ export class Renderer {
       outH,
       2 ** this.ev(s) / preExposure(this.ev(s)) / (s.band === "230GHz" ? s.radioPeak : 1),
       TONEMAPS[s.tonemap],
-      s.renderMode === "physical" ? 0 : 1,
+      s.renderMode === "physical" && !this.costViewMode ? 0 : 1,
       s.bloom,
       target.bloomLevels - 1,
       dither ? 1 : 0,
@@ -2924,6 +3100,7 @@ export class Renderer {
   }
 
   private dofOn(s: Settings, t: Target) {
+    if (this.costViewMode) return false;
     if (!s.dof || s.dofAperture <= 0) return false;
     this.ensureDof(t);
     return true;
@@ -2937,7 +3114,8 @@ export class Renderer {
         ? [this.lastBlock | view | (t.width << 16), ...this.lastOffset, this.validFrom]
         : [1 | view | (t.width << 16), 0, 0, 0];
     this.device.queue.writeBuffer(t.resolveBuf, 0, new Uint32Array(r));
-    this.device.queue.writeBuffer(t.resolveBuf, 16, new Float32Array([preExposure(this.ev(s)), 0, 0, 0]));
+    // (the cost view shown as it is: its heat map neither exposed nor tone-mapped — the display's bypass)
+    this.device.queue.writeBuffer(t.resolveBuf, 16, new Float32Array([this.costViewMode ? 1 : preExposure(this.ev(s)), 0, 0, 0]));
     if (s.polarization) {
       const { cs, gw, gh } = this.polCells(s, t);
       this.device.queue.writeBuffer(t.polGridBuf, 0, new Uint32Array([cs, gw, gh, t.width]));
@@ -3159,6 +3337,7 @@ export class Renderer {
     const pass = enc.beginComputePass(this.prof.pass("ship probe: trace"));
     pass.setPipeline(pipeline);
     pass.setBindGroup(0, t.traceBind);
+    pass.setBindGroup(1, this.envRead);
     pass.dispatchWorkgroups(32 / k, 16 / k);
     pass.end();
     // (its filtering: every other frame when it changes slowly)
@@ -3213,6 +3392,7 @@ export class Renderer {
     const pass = enc.beginComputePass(this.prof.pass("planet probe"));
     pass.setPipeline(pipeline);
     pass.setBindGroup(0, t.probeBind);
+    pass.setBindGroup(1, this.envRead);
     pass.dispatchWorkgroups(PROBE_W / 32, PROBE_H / 32);
     pass.end();
     const last = ++job.slice >= 16;
@@ -3273,6 +3453,8 @@ export class Renderer {
       env: GPUComputePipeline | null;
       lut: GPUComputePipeline | null;
       lutq: GPUComputePipeline | null;
+      /** the aerial perspective's table's pass (trace.wgsl aerial) */
+      air: GPUComputePipeline | null;
       /** a still view asked for the quality cascade (q, lutq) */
       qWanted: boolean;
       /** a cascade under way (realtime: rt, env, lut; quality: q, lutq) — stopped, its queued compiles
@@ -3309,13 +3491,14 @@ export class Renderer {
    * inlined): the general one is compiled after it, and until it lands a scene whose kernel is still
    * compiling is drawn by an earlier scene's covering its features, else not drawn (null).
    */
-  private traceVariant(kind: "rt" | "q" | "env" | "lut" | "lutq", key = this.featureKey, create = true): GPUComputePipeline | null {
+  private traceVariant(kind: "rt" | "q" | "env" | "lut" | "lutq" | "air", key = this.featureKey, create = true): GPUComputePipeline | null {
     const general = {
       rt: this.tracePipeline,
       q: this.qualityPipeline,
       env: this.envPipeline,
       lut: this.lutPipeline,
       lutq: this.lutQPipeline,
+      air: null,
     }[kind];
     if (key === FEATURES_ALL) {
       void this.generalCompile.start();
@@ -3335,6 +3518,7 @@ export class Renderer {
         env: null,
         lut: null,
         lutq: null,
+        air: null,
         qWanted: false,
         busy: false,
         qBusy: false,
@@ -3346,7 +3530,8 @@ export class Renderer {
       this.evictVariants();
     }
     const lutOk = (key & LUT_BLOCKERS) === 0;
-    if (create && !v.busy && !v.failed && (!v.rt || !v.env || (lutOk && !v.lut))) this.realtimeCascade(key, v);
+    const airOk = (key & 128) !== 0 && this.aerialOK;
+    if (create && !v.busy && !v.failed && (!v.rt || !v.env || (lutOk && !v.lut) || (airOk && !v.air))) this.realtimeCascade(key, v);
     if (kind === "q" || kind === "lutq") v.qWanted = true;
     if (create && v.qWanted && !v.qBusy && !v.qFailed && (!v.q || (lutOk && !v.lutq))) this.qualityCascade(key, v);
     return v[kind] ?? general ?? this.coveringVariant(key, kind);
@@ -3376,7 +3561,7 @@ export class Renderer {
   private realtimeCascade(key: number, slot: NonNullable<ReturnType<Renderer["variants"]["get"]>>) {
     slot.busy = true;
     const current = this.wanted(key, slot);
-    const compile = (entry: "main" | "env" | "lut", onStall?: () => void) =>
+    const compile = (entry: "main" | "env" | "lut" | "aerial", onStall?: () => void) =>
       this.variantQueue.run(current, () => this.timedVariant(key, entry), onStall);
     const run = async () => {
       if (!slot.rt) {
@@ -3390,6 +3575,8 @@ export class Renderer {
       void this.generalCompile.start();
       await this.firstImage;
       if (!slot.lut && (key & LUT_BLOCKERS) === 0) slot.lut = await compile("lut");
+      // (the aerial perspective's table: a world near the camera — its bodies' bit)
+      if (!slot.air && (key & 128) !== 0 && this.aerialOK) slot.air = await compile("aerial");
     };
     void run().then(
       () => (slot.busy = false),
@@ -3426,14 +3613,15 @@ export class Renderer {
 
   /** An earlier scene's kernel with every feature of this key compiled in (the general one is the widest
    *  of them): it draws this scene as it would — the extra features are switched off by the params. */
-  private coveringVariant(key: number, kind: "rt" | "q" | "env" | "lut" | "lutq"): GPUComputePipeline | null {
-    for (const [k, v] of this.variants) if ((k & key) === key && v[kind]) return v[kind];
+  private coveringVariant(key: number, kind: "rt" | "q" | "env" | "lut" | "lutq" | "air"): GPUComputePipeline | null {
+    // (the same debug views and tuning — the bits from 16 on are ids, not features: none other's constants)
+    for (const [k, v] of this.variants) if ((k & key) === key && k >>> 16 === key >>> 16 && v[kind]) return v[kind];
     return null;
   }
 
   /** mkVariant, its key and compile time in the diagnostic — every one, not only those the first image
    *  waits for: a scene's feature bit switching on in flight (the scenery's 8192) recompiles for seconds (R-M4) */
-  private async timedVariant(key: number, entry: "main" | "env" | "lut", quality = false) {
+  private async timedVariant(key: number, entry: "main" | "env" | "lut" | "aerial", quality = false) {
     const t0 = performance.now();
     const p = await this.mkVariant(key, entry, quality);
     const s = ((performance.now() - t0) / 1000).toFixed(1);
@@ -3446,10 +3634,17 @@ export class Renderer {
   }
 
   /** A specialised pipeline of the tracer for a features key (the unused ones compiled out). */
-  private mkVariant(key: number, entryPoint: "main" | "env" | "lut", quality: boolean): Promise<GPUComputePipeline> {
+  private mkVariant(key: number, entryPoint: "main" | "env" | "lut" | "aerial", quality: boolean): Promise<GPUComputePipeline> {
     const has = (bit: number) => ((key & bit) !== 0 ? 1 : 0);
     return this.device.createComputePipelineAsync({
-      layout: entryPoint === "main" ? this.mainLayout : entryPoint === "lut" ? this.lutLayout : this.tracePipeLayout,
+      layout:
+        entryPoint === "main"
+          ? this.mainLayout
+          : entryPoint === "lut"
+            ? this.lutLayout
+            : entryPoint === "aerial"
+              ? this.aerialLayout
+              : this.tracePipeLayout,
       compute: {
         module: this.traceModule,
         entryPoint,
@@ -3470,6 +3665,7 @@ export class Renderer {
           HAS_SCENERY: has(8192),
           HAS_AURORA: has(16384),
           COST_VIEW: (key >> 16) & 15,
+          ...(this.tunes.get((key >> 20) & 255) ?? {}),
           QUALITY_PIPELINE: quality ? 1 : 0,
         },
       },
@@ -3483,6 +3679,56 @@ export class Renderer {
   private evictVariants() {
     const keys = [...this.variants.keys()];
     for (const k of keys.slice(0, Math.max(0, keys.length - 4))) this.variants.delete(k);
+  }
+
+  /**
+   * The cockpit's mask (mask.wgsl), before a realtime frame's trace: the tiles the flown craft's own opaque parts
+   * covered last frame — the cabin, the panel, the frame —, a margin round them, marked not to be traced. Only from
+   * the cockpit, the own mask drawn the frame before, with the head where it was then (the cabin holds still on the
+   * image: it turns with the camera) — the free look, the lens, the eye on the craft the same; the flight's shake
+   * (its line of sight turned, its up rolled) within SHAKE_PX of it, in the margin —, no depth of field; else, once,
+   * the marks cleared. The margin: the reconstruction's reach (two blocks), 6 px, the shake's, the motion blur's
+   * reach (40 px) when it is on.
+   */
+  private encodeCockpitMask(enc: GPUCommandEncoder, t: Target, s: Settings, block: number) {
+    if (!this.maskPipeline || t !== this.live) return;
+    const own =
+      this.cockpitMask && s.ship && this.ship.ready && this.ownMaskStamp === this.frameStamp - 1 && !this.dofOn(s, t)
+        ? this.ship.ownMaskOf(t.hdr)
+        : null;
+    let on = false;
+    if (own && own.pose.length === 12) {
+      const now = ownPose([s.shipLookYaw, s.shipLookPitch], s.fov, this.shipPose ?? (s.shipMount as Mount));
+      const p = own.pose;
+      const same = (i: number) => Math.abs(p[i]! - now[i]!) < 1e-3;
+      // (the shake: the line of sight's and the up's turns, against the pixel's angle)
+      const turn = (i: number) => Math.hypot(p[i]! - now[i]!, p[i + 1]! - now[i + 1]!, p[i + 2]! - now[i + 2]!);
+      const pixelAngle = (2 * Math.tan((s.fov * Math.PI) / 360)) / t.height;
+      on = [0, 1, 2, 3, 4, 5].every(same) && turn(6) + turn(9) * 0.5 * Math.hypot(t.width, t.height) * pixelAngle < SHAKE_PX * pixelAngle;
+    }
+    if (!on && !this.maskSet.get(t)) return;
+    this.maskSet.set(t, on);
+    const r = own?.rect ?? [0, 0, 0, 0];
+    const margin = 2 * block + 6 + SHAKE_PX + (s.motionBlur > 0 ? 40 : 0);
+    const u = new ArrayBuffer(32);
+    new Uint32Array(u, 0, 4).set([t.width, t.height, on ? 1 : 0, margin]);
+    new Int32Array(u, 16, 4).set(r);
+    this.device.queue.writeBuffer(this.maskBuf, 0, u);
+    const pass = enc.beginComputePass(this.prof.pass("cockpit mask"));
+    pass.setPipeline(this.maskPipeline);
+    pass.setBindGroup(
+      0,
+      this.device.createBindGroup({
+        layout: this.maskPipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: (own?.tex ?? this.ship.ownMaskDummy()).createView() },
+          { binding: 1, resource: { buffer: t.moments } },
+          { binding: 2, resource: { buffer: this.maskBuf } },
+        ],
+      }),
+    );
+    pass.dispatchWorkgroups(Math.ceil(t.width / 16), Math.ceil(t.height / 16));
+    pass.end();
   }
 
   /** the trace's passes encoded; false: no kernel for the scene yet (still compiling) — nothing traced */
@@ -3507,6 +3753,15 @@ export class Renderer {
         lp.dispatchWorkgroups(Math.ceil(t.lut.w / 8), Math.ceil(t.lut.h / 8));
         lp.end();
       }
+    }
+    // (the aerial perspective's table before the rays that read it)
+    if (!quality && this.aerialPipe) {
+      const ap = enc.beginComputePass(this.prof.pass("aerial perspective"));
+      ap.setPipeline(this.aerialPipe);
+      ap.setBindGroup(0, t.traceBind);
+      ap.setBindGroup(1, this.aerialWrite);
+      ap.dispatchWorkgroups(Math.ceil(AERIAL_SIZE[0] / 8), Math.ceil(AERIAL_SIZE[1] / 8));
+      ap.end();
     }
     const pipeline = this.traceVariant(quality ? "q" : "rt");
     // (the quality kernel still compiling — frame() keeps a still view on the realtime path until then;
@@ -3596,22 +3851,59 @@ export class Renderer {
       h,
       write: d.createBindGroup({
         layout: this.lutWriteLayout,
-        entries: [
-          { binding: 0, resource: tex[0]!.createView() },
-          { binding: 1, resource: tex[1]!.createView() },
-        ],
+        entries: [{ binding: 0, resource: tex[0]!.createView() }, { binding: 1, resource: tex[1]!.createView() }, ...this.aerialRead()],
       }),
       read: d.createBindGroup({
         layout: this.lutReadLayout,
-        entries: [
-          { binding: 2, resource: tex[0]!.createView() },
-          { binding: 3, resource: tex[1]!.createView() },
-        ],
+        entries: [{ binding: 2, resource: tex[0]!.createView() }, { binding: 3, resource: tex[1]!.createView() }, ...this.aerialRead()],
       }),
     };
   }
   /** (targets without a LUT: a texel's worth, never read — the flag is off) */
   private lutDummy: GPUBindGroup | null = null;
+  // the aerial perspective's table (trace.wgsl aerial): its textures, layouts, bind group, its pass's pipeline this frame
+  private aerialWriteLayout!: GPUBindGroupLayout;
+  private aerialLayout!: GPUPipelineLayout;
+  private aerialTex: GPUTexture[] = [];
+  private aerialWrite!: GPUBindGroup;
+  private aerialSampler!: GPUSampler;
+  private aerialPipe: GPUComputePipeline | null = null;
+  /** the live view's last realtime frame would read the aerial table (the camera in a world's air), its pass's kernel
+   *  there or not (aerialPipe) */
+  aerialWanted = false;
+  private envReadLayout!: GPUBindGroupLayout;
+  private envRead!: GPUBindGroup;
+  /** the air before the near world's ground read from the aerial perspective's table (a switch for comparisons) */
+  aerialTable = true;
+  /** the aerial table's light stored × the frame's pre-exposure (trace.wgsl apScale; false: raw, as before the 18/10
+   *  audit — a switch for comparisons) */
+  aerialPreExposed = true;
+  /** the ground's marches in a shell as high as the relief round the camera can be, not 9 600 m (a switch for comparisons) */
+  reliefCeiling = true;
+  private mapCells: MapCells | null = null;
+  /** the device binds the table's two textures more (AERIAL_TEXTURE_LIMIT) */
+  private get aerialOK() {
+    return this.device.limits.maxSampledTexturesPerShaderStage >= AERIAL_TEXTURE_LIMIT;
+  }
+  /** the table's entries in the kernels' second bind group layouts */
+  private aerialReadLayout(): GPUBindGroupLayoutEntry[] {
+    if (!this.aerialOK) return [];
+    const C = GPUShaderStage.COMPUTE;
+    return [
+      { binding: 4, visibility: C, texture: { sampleType: "float", viewDimension: "3d" } },
+      { binding: 5, visibility: C, texture: { sampleType: "float", viewDimension: "3d" } },
+      { binding: 6, visibility: C, sampler: { type: "filtering" } },
+    ];
+  }
+  /** the table's entries for the main kernel's second bind group */
+  private aerialRead(): GPUBindGroupEntry[] {
+    if (!this.aerialOK) return [];
+    return [
+      { binding: 4, resource: this.aerialTex[0]!.createView() },
+      { binding: 5, resource: this.aerialTex[1]!.createView() },
+      { binding: 6, resource: this.aerialSampler },
+    ];
+  }
 
   /** the live frame's phase, for the post chain (the temporal reprojection runs on realtime frames) */
   private taPhase: FrameStats["phase"] = "realtime";
@@ -3648,10 +3940,19 @@ export class Renderer {
   debugSkipShip = false;
   /** the detail (the relief's finest windows, the scenery's box) led where the view looks (a switch for comparisons) */
   gazeStreaming = true;
+  /** the rays the flown craft's own opaque parts hide from the cockpit not traced (mask.wgsl; a switch for comparisons) */
+  cockpitMask = true;
+  /** the craft's light probe traced every this many frames while what it sees moves (a switch for comparisons) */
+  probeEveryMoving = 1;
+  /** the bodies a ray from the camera may meet listed for the kernel (ourSegment), not all looked at (a switch for comparisons) */
+  bodyList = true;
+  /** the bodies of ours, those the camera's list and the mouth's hold (−1: every body — the list off or too long) */
+  bodyListSizes = { ours: 0, camera: 0, mouth: 0 };
   /** The cost view (a debug view, trace.wgsl COST_VIEW): each ray's work as a heat map in place of the image —
-   *  0 off, 1 all of it, 2 … 9 one kind (the ground's march steps, its heights read, its shadows' steps, the
-   *  clouds', the air's, the sea's, the scenery's boxes, the main loop's) —, its own kernel variant; the image
-   *  traced again (a held one too). */
+   *  0 off, 1 all of it, 2 … 13 one kind (docs/BH-API.md: the ground's march, its heights, its shadows, the clouds,
+   *  the air, the water, the scenery, the integrator, the noise, the stars, the bodies, the main loop) —, shown raw
+   *  (no exposure, tone map, depth of field, motion blur), its own kernel variant; the image
+   *  traced again (a held one too). 14 and 15: the raw counts, for costStats. */
   get costView() {
     return this.costViewMode;
   }
@@ -3659,10 +3960,66 @@ export class Renderer {
     if (v === this.costViewMode) return;
     this.costViewMode = v;
     this.invalidate();
+    this.resetTemporal();
   }
   private costViewMode = 0;
+  /**
+   * The cost view's raw counts read back (costView 14: the ground's march steps, its heights read, its shadows'
+   * steps; 15: the main loop's steps, the bodies tested, the integrator's tries — each pixel's, its samples'
+   * mean): for each, the share of the pixels where it is not nil, and there its mean, median, 90th and 99th
+   * percentiles. Null outside those views.
+   */
+  async costStats(): Promise<{ share: number; mean: number; p50: number; p90: number; p99: number }[] | null> {
+    const t = this.live;
+    if ((this.costViewMode !== 14 && this.costViewMode !== 15) || !t) return null;
+    const size = t.width * t.height * 16;
+    const st = this.device.createBuffer({ size, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const enc = this.device.createCommandEncoder();
+    enc.copyBufferToBuffer(t.accum, 0, st, 0, size);
+    this.device.queue.submit([enc.finish()]);
+    await st.mapAsync(GPUMapMode.READ);
+    const a = new Float32Array(st.getMappedRange().slice(0));
+    st.unmap();
+    st.destroy();
+    const n = t.width * t.height;
+    return [0, 1, 2].map((c) => {
+      const v: number[] = [];
+      for (let i = 0; i < n; i++) {
+        const w = a[4 * i + 3]!;
+        const x = w > 0 ? a[4 * i + c]! / w : 0;
+        if (x > 0) v.push(x);
+      }
+      v.sort((x, y) => x - y);
+      const q = (f: number) => v[Math.min(v.length - 1, Math.floor(f * v.length))] ?? 0;
+      return { share: v.length / n, mean: v.reduce((s, x) => s + x, 0) / Math.max(v.length, 1), p50: q(0.5), p90: q(0.9), p99: q(0.99) };
+    });
+  }
+  /**
+   * Debug tuning (trace.wgsl TUNE_*: the air's samples, the relief's shadow steps…): its constants, a kernel
+   * variant of their own — what a loop's count costs, A/B in one build. {} the kernel as it is.
+   */
+  get tune(): Record<string, number> {
+    return this.tunes.get(this.tuneKey) ?? {};
+  }
+  set tune(t: Record<string, number>) {
+    const json = JSON.stringify(t ?? {});
+    let k = 0;
+    if (json !== "{}") {
+      for (const [key, v] of this.tunes) if (JSON.stringify(v) === json) k = key;
+      if (!k) {
+        k = (this.tunes.size % 255) + 1;
+        this.tunes.set(k, { ...t });
+      }
+    }
+    if (k === this.tuneKey) return;
+    this.tuneKey = k;
+    this.invalidate();
+    this.resetTemporal();
+  }
+  private tuneKey = 0;
+  private tunes = new Map<number, Record<string, number>>();
   /** the camera's move that breaks the history: the nearest ground's or scenery's shift on the image [px] (a switch for comparisons) */
-  taParallaxPx = 0.5;
+  taParallaxPx = 64;
   /** the history is dropped on the next frame (a new scene, a jump) */
   resetTemporal() {
     this.taPrev = null;
@@ -3750,6 +4107,56 @@ export class Renderer {
       (prev.at === null ||
         at === null ||
         (shift > 0 && shift / this.nearestSurfaceM(ln!, mPerM) > (this.taParallaxPx * 2 * tanH) / t.height));
+    // (the image's motion this frame [px]: the camera's turn — its line of sight's and its up's — and the nearest ground's
+    // parallax; what the motion's denser rays answer, next frame — motionBlock)
+    if (prev && prev.region === cam.region) {
+      // (the turn: the line of sight against its own 8 frames ago, over the time between — the flight's shake, a jitter
+      // about the mean, cancels there; a frame's own difference took it for a turn, a few pixels in straight flight —
+      // — in pixels a second: a frame's own pixels grow as the frames slow, the denser rays' then kept them denser)
+      const past = this.fwdPast;
+      const now = performance.now();
+      past.push({ f: [...cam.fwd] as Vec3, at: now });
+      if (past.length > 9) past.shift();
+      const p0 = past[0]!;
+      const turnRad =
+        past.length > 1
+          ? (Math.hypot(cam.fwd[0] - p0.f[0], cam.fwd[1] - p0.f[1], cam.fwd[2] - p0.f[2]) * 1000) / Math.max(now - p0.at, 1)
+          : 0;
+      const px = t.height / (2 * tanH);
+      this.imageTurnPx = turnRad * px;
+      // (the seen ground's slide [px a second]: fifteen of the view's directions, those below the horizon each to the
+      // ground — its height over it, flat, no farther than 40 km —, the camera's move over the body across each over its
+      // distance; their mean, the sky's nothing — as fast as the ground slides, as much of it as the view shows. Not the
+      // ground under the craft — out of view, a few hundred metres off at any low height: every flight over the line)
+      this.imageGroundPx = 0;
+      const dt = (now - (past[past.length - 2]?.at ?? now)) / 1000;
+      if (ln && at && prev.at && prev.near?.index === ln.index && dt > 0 && dt < 0.5) {
+        const id = this.lastBodies[ln.index]?.id;
+        const h = id && solarBody(id) ? heightOverGround(id, bodyEye(ln).map((x) => x * ln.radius) as Vec3) : 0;
+        const r = Math.hypot(at[0], at[1], at[2]);
+        if (h > 0 && r > 0) {
+          const up = at.map((x) => x / r);
+          const vel = at.map((x, i) => (x - prev.at![i]!) / dt);
+          const body = (v: Vec3) => ln.axes.map((a) => a[0]! * v[0] + a[1]! * v[1] + a[2]! * v[2]);
+          let sum = 0;
+          for (const y of [-0.45, -0.15, 0.15])
+            for (const x of [-0.7, -0.35, 0, 0.35, 0.7]) {
+              const d = [0, 1, 2].map((k) => cam.fwd[k]! + x * tanH * asp * cam.right[k]! + y * tanH * cam.up[k]!) as Vec3;
+              const dl = Math.hypot(d[0], d[1], d[2]);
+              const db = body([d[0] / dl, d[1] / dl, d[2] / dl]);
+              const down = -(db[0]! * up[0]! + db[1]! * up[1]! + db[2]! * up[2]!);
+              if (down < 0.01) continue;
+              const along = vel[0]! * db[0]! + vel[1]! * db[1]! + vel[2]! * db[2]!;
+              const across = Math.hypot(vel[0]! - along * db[0]!, vel[1]! - along * db[1]!, vel[2]! - along * db[2]!);
+              sum += across / Math.min(h / down, 40_000);
+            }
+          this.imageGroundPx = (sum / 15) * px;
+        }
+      }
+    } else {
+      this.fwdPast.length = 0;
+      this.imageTurnPx = this.imageGroundPx = 0;
+    }
     // (a jump: the other region, or the distance to the hole changed by more than 5 % in a frame, or a translation)
     const jumped = !prev || prev.region !== cam.region || Math.abs(cam.r - prev.r) > 0.05 * Math.max(cam.r, 1e-9) || moved;
     const on = s.temporalReprojection && this.taPhase === "realtime" && ta.valid && !jumped;
@@ -4035,7 +4442,8 @@ export class Renderer {
       }
       // denoise right after the resolve; beam after the downsampling chain, before the bloom upsampling
       if (s && i === r0 && s.denoise && this.accumulated(t)) this.encodeDenoise(enc, t, s);
-      if (s && i === r0 && t === this.live && this.encodeTemporal(enc, t, s) && s.motionBlur > 0) this.encodeMotionBlur(enc, t);
+      if (s && i === r0 && t === this.live && this.encodeTemporal(enc, t, s) && s.motionBlur > 0 && !this.costViewMode)
+        this.encodeMotionBlur(enc, t);
       // the occlusion depth the raster passes below test against (Z-P1: fresh, not the stale pixels' own)
       if (s && i === r0) this.encodeSceneDepth(enc, t);
       // the space station, where it is on its orbit (before the Ranger: its glass reflects it)
@@ -4053,6 +4461,7 @@ export class Renderer {
             mPerM: 1476.625 * (s.massSolar || 1),
             forceShadow: !!this.character?.active,
             inside: s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin"),
+            ownMask: this.cockpitMask && s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin") && t === this.live,
             dash: this.cockpitDash ?? undefined,
             controls: this.cockpitControls ?? undefined,
             gear: this.shipGear ?? undefined,
@@ -4081,11 +4490,16 @@ export class Renderer {
             (this.station.depthTexture() ? { depth: this.station.depthTexture()!, rect: this.station.rect } : undefined),
           t.sceneDepth,
         );
+        // (the own mask drawn this frame: the next realtime trace's cockpit mask — encodeCockpitMask)
+        if (t === this.live) this.ownMaskStamp = this.ship.ownDrawn ? this.frameStamp : -1;
         // (where it was drawn: the display reads its image there, the bloom too)
         const rect = new Float32Array(this.ship.rectFor(t.hdr));
         this.device.queue.writeBuffer(this.displayBuf, 112, rect);
         this.device.queue.writeBuffer(t.shipRect, 0, rect);
-      } else if (i === r0) this.device.queue.writeBuffer(t.shipRect, 0, new Float32Array(4));
+      } else if (i === r0) {
+        this.device.queue.writeBuffer(t.shipRect, 0, new Float32Array(4));
+        if (t === this.live) this.ownMaskStamp = -1;
+      }
       // the Endurance, over the traced image (before the bloom's levels are made from it)
       if (s && i === r0 && s.endurance && this.lastCam) {
         if (!this.endurance.ready) {
@@ -4167,6 +4581,7 @@ export class Renderer {
           layout: this.meterPipeline.getBindGroupLayout(0),
           entries: [
             { binding: 0, resource: t.hdr.createView({ baseMipLevel: 0, mipLevelCount: 1 }) },
+            { binding: 11, resource: { buffer: t.moments } },
             { binding: 20, resource: { buffer: this.histBuf } },
             { binding: 22, resource: { buffer: this.spotBuf } },
           ],
@@ -5208,8 +5623,42 @@ export class Renderer {
     return this.lastDoneAt;
   }
   /** the scene's specialised tracer compiled (or none needed): the realtime image at full speed */
+  /** the mountains' warp read from its grids round the camera (trace.wgsl earthWarp; false: worked out by each ray —
+   *  a switch for comparisons) */
+  get warpGrid() {
+    return this.warpGridOn;
+  }
+  set warpGrid(v: boolean) {
+    if (v === this.warpGridOn) return;
+    this.warpGridOn = v;
+    this.invalidate();
+  }
+  private warpGridOn = true;
+  private warpOut: WarpGrid;
+  /** The warp's grids kept round the camera near the Earth (its geodetic place), before any pass of the frame. */
+  private updateWarp(s: Settings, time: number) {
+    let at: { lon: number; lat: number } | null = null;
+    const eye = homePosition(s);
+    if (this.warpGrid && eye) {
+      const q = toBodyFixed("earth", eye, time).map((v) => v * M_METRES) as Vec3;
+      const g = cartToGeodetic(WGS84_A, WGS84_F, q);
+      if (g.h < 300_000) at = { lon: g.lon, lat: g.lat };
+    }
+    this.warpOut.update(at);
+  }
   get variantReady() {
     return this.featureKey === FEATURES_ALL || !!this.variants.get(this.featureKey)?.rt;
+  }
+  /** The current kernel settled: its own, its realtime cascade done (its probe's, its aerial table's pass), the
+   *  surface and the scenery asked for in it — a measure taken now is this kernel's (variantReady alone let a
+   *  tuned variant be measured without its aerial table, or its scenery: tests/e2e/perf-suite.e2e.test.ts). */
+  get kernelsSettled() {
+    if (this.featureKey === FEATURES_ALL) return false;
+    const v = this.variants.get(this.featureKey);
+    if (!v?.rt || v.busy) return false;
+    if (this.earthSurface.active && (this.featureKey & 4096) === 0) return false;
+    if (this.earthScenery.active && (this.featureKey & 8192) === 0) return false;
+    return true;
   }
   /** the airfields' real weather when it came in (weather.ts, PLAN-METEO W7), the "real" setting's */
   weatherReal: WeatherState | null = null;
@@ -5296,6 +5745,7 @@ export class Renderer {
     if (sceneChanged) this.invalidate();
     this.configureOutput(s);
     this.prof.begin();
+    this.updateWarp(s, time);
     this.probePlanets(t, s, time);
     const enc = this.device.createCommandEncoder();
     let phase: FrameStats["phase"];
@@ -5336,7 +5786,7 @@ export class Renderer {
       this.updateValidFrom(time);
       this.sampleIndex = 0;
       this.bandY = 0;
-      const block = s.realtimeSubsampling === "auto" ? this.realtimeBlock : s.realtimeSubsampling;
+      const block = this.motionBlock(s.realtimeSubsampling === "auto" ? this.realtimeBlock : s.realtimeSubsampling, s);
       if (block !== this.lastBlock) this.interleaveIndex = 0;
       let order = this.orders.get(block);
       if (!order) this.orders.set(block, (order = interleaveOrder(block)));
@@ -5361,6 +5811,7 @@ export class Renderer {
         offset,
         stars: this.starsSplat ? preExposure(this.ev(s)) * 65536 : 0,
       });
+      this.encodeCockpitMask(enc, t, s, block);
       traced = this.dispatchTrace(enc, t, Math.ceil(t.width / block), Math.ceil(t.height / block), false);
       this.dispatchEnv(enc, t, s);
       this.lastBlock = block;
@@ -5517,6 +5968,47 @@ export class Renderer {
       this.fastMs = 0;
     }
   }
+
+  /**
+   * The realtime block while the image slides fast (settings.motionDetail): one finer — 4 → 3, 6 → 4, 8 → 6 — once the
+   * camera's line of sight turns faster than MOTION_DENSE_IN pixels a second for 200 ms (over 8 frames: the shake's
+   * jitter cancels), and with "low" once the seen ground slides faster than GROUND_DENSE_IN (imageGroundPx: low and
+   * fast, straight on); back once both are under their lower lines for 300 ms. The history gives way then and the image
+   * is the reconstruction of the frame's rays (docs/PLAN-RENDU-PERF.md 12., 13.): more of them, their cost while it
+   * lasts. The automatic choice's timing skips these frames (adaptBlock: another block than its own).
+   */
+  private motionBlock(block: number, s: Settings): number {
+    const now = performance.now();
+    if (s.motionDetail === "off" || block < 3) {
+      this.motionDenseOn = false;
+      return block;
+    }
+    // (on after 200 ms over the line — a gust's jolt in straight flight is not a turn —, off after 300 ms under the other)
+    const low = s.motionDetail === "low";
+    const over = this.imageTurnPx > MOTION_DENSE_IN || (low && this.imageGroundPx > GROUND_DENSE_IN);
+    const under = this.imageTurnPx < MOTION_DENSE_OUT && (!low || this.imageGroundPx < GROUND_DENSE_OUT);
+    if (over) {
+      this.motionTurnSince ||= now;
+      if (now - this.motionTurnSince > 200) this.motionDenseOn = true;
+      this.motionCalmSince = 0;
+    } else {
+      this.motionTurnSince = 0;
+      if (this.motionDenseOn && under) {
+        this.motionCalmSince ||= now;
+        if (now - this.motionCalmSince > 300) this.motionDenseOn = false;
+      } else this.motionCalmSince = 0;
+    }
+    return this.motionDenseOn ? BLOCKS[BLOCKS.indexOf(block) - 1]! : block;
+  }
+  /** the camera's turn: its line of sight's over its last 8 frames [px a second] — motionBlock's measure in a turn */
+  imageTurnPx = 0;
+  /** the seen ground's slide: its mean over fifteen of the view's directions, the sky's nothing [px a second] —
+   *  motionBlock's measure in low flight */
+  imageGroundPx = 0;
+  private fwdPast: { f: Vec3; at: number }[] = [];
+  private motionDenseOn = false;
+  private motionCalmSince = 0;
+  private motionTurnSince = 0;
 
   private liveTargetSpp = 0;
   private liveQualityError: string | undefined;

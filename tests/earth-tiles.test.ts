@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { Vec3 } from "../src/physics";
-import { EarthTiles, edge, sampleLevel, TILE, TILE_PARAM_VEC4S, Z0, Z1 } from "../src/system/earth-tiles";
+import { EarthTiles, edge, sampleLevel, TILE, TILE_PARAM_VEC4S, TILE_REACH, Z0, Z1 } from "../src/system/earth-tiles";
 import { EARTH_RUNWAYS, runwayGrade, runwayWeight } from "../src/game/sites";
 import { earthHeightSampler, tileFallbackSampler } from "../src/terrain";
 import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
@@ -12,7 +12,11 @@ import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "../src/system/
 // (no GPU, no network: the textures a stub, the loads never answering — the tiles put in by hand)
 (globalThis as { GPUTextureUsage?: unknown }).GPUTextureUsage ??= { TEXTURE_BINDING: 4, COPY_DST: 2 };
 globalThis.fetch = (() => new Promise(() => {})) as unknown as typeof fetch;
-const fakeDevice = () => ({ createTexture: () => ({}), queue: { writeTexture() {} } }) as unknown as GPUDevice;
+const fakeDevice = () =>
+  ({
+    createTexture: (d: { size: number[] }) => ({ size: d.size, destroy() {} }),
+    queue: { writeTexture() {}, onSubmittedWorkDone: () => Promise.resolve() },
+  }) as unknown as GPUDevice;
 const deg = Math.PI / 180;
 const dir = (lat: number, lon: number): Vec3 => [
   Math.cos(lat * deg) * Math.cos(lon * deg),
@@ -200,4 +204,58 @@ test("the windows led where the view looks: ahead by up to 1¼ tile of each leve
   const n = 2 ** finest;
   const cy = Math.floor(((1 - Math.log(Math.tan(Math.PI / 4 + (36 * deg) / 2)) / Math.PI) / 2) * n);
   expect(ys(led)).toContain(cy);
+});
+
+test("the detail's reach: windows of 8 tiles, the tiles left kept and drawn again from memory, the ring loaded ahead", () => {
+  const t = new EarthTiles(fakeDevice());
+  let resized = 0;
+  t.onResize = () => resized++;
+  const cam = camAt(45.9, 6.87, 2);
+  t.update(cam, 1e-3);
+  fill(t);
+  // (Far: the texture made again, 2048 texels a side, every level drawn anew — 8 × 8 tiles each)
+  t.setReach(TILE_REACH.far);
+  expect(resized).toBe(1);
+  expect((t.texture as unknown as { size: number[] }).size).toEqual([2048, 2048, Z1 - Z0 + 1]);
+  t.update(cam, 1e-3);
+  expect(t.wanted().length).toBe(64 * (Z1 - Z0 + 1));
+  expect(t.heightAt(dir(45.9, 6.87), 1).rem).toBe(1);
+  fill(t);
+  expect(t.pending).toBe(0);
+  // (the heights the same as through 4 tiles, out farther: 8 km off on the finest level — a 4-tile window's 2.5 km)
+  for (const [lat, lon] of [
+    [45.9, 6.87],
+    [45.92, 6.95],
+    [45.85, 6.8],
+  ] as const) {
+    const s = t.heightAt(dir(lat, lon), 1);
+    expect(s.rem).toBe(0);
+    expect(Math.abs(s.h - field(lat, lon))).toBeLessThan(2);
+    expect(s.res).toBeLessThan(30);
+  }
+  // (the windows whole: the next ring round the finest levels asked for ahead — the loads never answer here)
+  const inner = t as unknown as {
+    inflight: Map<string, unknown>;
+    cache: Map<string, unknown>;
+    levels: { z: number; want: unknown; valid: unknown }[];
+  };
+  // (the loads answered: the windows' — put in by hand here — gone from the ones in flight)
+  inner.inflight.clear();
+  t.update(cam, 1e-3);
+  expect([...inner.inflight.keys()].some((k) => k.startsWith(`${Z1}/`) || k.startsWith(`${Z1 - 1}/`))).toBe(true);
+  // (12 km east and back: the finest windows' columns left kept, drawn again from memory — none to load)
+  t.update(camAt(45.9, 7.025, 2), 1e-3);
+  expect(t.pending).toBeGreaterThan(0);
+  fill(t);
+  expect(inner.cache.size).toBeGreaterThan(0);
+  t.update(cam, 1e-3);
+  // (the finest two levels — the ring's — whole again at once: their windows drawn entire)
+  for (const L of inner.levels.filter((L) => L.z >= Z1 - 1)) expect(L.valid).toEqual(L.want);
+  const s = t.heightAt(dir(45.9, 6.87), 1);
+  expect(Math.abs(s.h - field(45.9, 6.87))).toBeLessThan(2);
+  expect(s.res).toBeLessThan(30);
+  // (back to Normal: 4 tiles, the memory let go)
+  t.setReach(TILE_REACH.normal);
+  expect(resized).toBe(2);
+  expect(inner.cache.size).toBe(0);
 });

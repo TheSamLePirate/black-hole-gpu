@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { PATH_CHUNK, PATH_MAX, TABLE_LUT, TABLE_PATH, TABLE_SH, TABLE_WALK, TABLE_VEC4S } from "../src/gpu-tables";
+import { PATH_CHUNK, PATH_MAX, TABLE_LUT, TABLE_PATH, TABLE_SH, TABLE_VEC4S, TABLE_WALK, TABLE_WARP } from "../src/gpu-tables";
+import { WARP_LEVELS, WARP_N } from "../src/system/warp-grid";
 import { sceneryShader } from "../src/system/scenery";
 import { SCENERY_STORAGE_LIMIT } from "../src/system/scenery-data";
 
@@ -16,7 +17,11 @@ test("the tables' offsets: the renderer's and the shader's the same", () => {
   expect(constU("PATH_MAX")).toBe(PATH_MAX);
   expect(constU("PATH_CHUNK")).toBe(PATH_CHUNK);
   expect(TABLE_WALK).toBe(TABLE_PATH + PATH_MAX + PATH_MAX / PATH_CHUNK);
-  expect(TABLE_VEC4S).toBe(TABLE_WALK + Math.ceil((65 * 65) / 4));
+  expect(TABLE_WARP).toBe(TABLE_WALK + Math.ceil((65 * 65) / 4));
+  expect(constU("WARP_OFF")).toBe(TABLE_WARP);
+  expect(constU("WARP_LEVELS")).toBe(WARP_LEVELS);
+  expect(constU("WARP_N")).toBe(WARP_N);
+  expect(TABLE_VEC4S).toBe(TABLE_WARP + WARP_LEVELS * WARP_N * WARP_N);
 });
 
 test("the trace stage retains eight-buffer compatibility and requires only one optional scenery buffer", () => {

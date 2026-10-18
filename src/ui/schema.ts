@@ -1913,6 +1913,21 @@ export const SCHEMA: ControlDef[] = [
     keywords: "taa temporal reprojection history sharp motion upscaling",
   },
   {
+    key: "motionDetail",
+    type: "choice",
+    section: "render",
+    group: "Realtime",
+    label: "Sharpness in motion",
+    style: "segmented",
+    options: [
+      { value: "off", label: "Off" },
+      { value: "turns", label: "In turns" },
+      { value: "low", label: "Turns and low flight" },
+    ],
+    help: "Denser rays while the image slides fast — one block finer, 4× to 3× — where the history from the previous frames cannot keep up: in a turn (its line of sight turning fast), and with low flight also while the ground seen below slides fast. Sharper then (a turn over the Alps 30.5 to 32.5 dB against the still image, low over Tarifa 36 to 39 dB), the frame slower while it lasts: about three quarters more for the rays in a turn, nearly twice in low flight.",
+    keywords: "sharpness motion turn low flight denser rays subsampling blur",
+  },
+  {
     key: "sharpen",
     type: "number",
     section: "render",
@@ -2029,6 +2044,21 @@ export const SCHEMA: ControlDef[] = [
     help: "Real forests and OSM buildings, roads, railways, rivers, lakes, paved airfields and 3D bridges through OpenFreeMap. Every tree of a world-fixed 7 m grid where WorldCover says trees grow — its kind from the climate (broadleaf, spruce, pine, palm, poplar, shrubs), its crown carved into leaf clumps near, with dappled shade — no limit on their number. Balanced: 2 km, 5,000 buildings, 16,000 surface features and 128 bridges; high: 3 km, 8,000 buildings, 24,000 surface features and 256 bridges. Shared 16 MiB GPU budget; worker preparation. Streamed below 12 km, between 84° S and 84° N. Enable terrain for volumes and networks. Building heights, road widths and bridge elevation/supports can be estimated. Source tiles simplify OSM and do not expose every tag. © ESA WorldCover / modified Copernicus Sentinel data (2021), CC BY 4.0. © OpenMapTiles, OpenStreetMap (ODbL), OpenFreeMap.",
     keywords:
       "forest trees buildings worldwide worldcover openstreetmap osm foret arbres batiments monde scenery roads rivers bridges routes fleuves rivieres ponts rail",
+  },
+  {
+    key: "detailReach",
+    type: "choice",
+    section: "sky",
+    group: "The Earth",
+    label: "Detail distance",
+    style: "segmented",
+    options: [
+      { value: "normal", label: "Normal" },
+      { value: "far", label: "Far" },
+      { value: "veryFar", label: "Very far" },
+    ],
+    help: "How far the ground's detail is drawn, and how far ahead where the view looks. The trees, buildings, roads and rivers: their box 1.5 or 2 times wider (balanced 3 or 4 km, high 4.5 or 6 km), their rays as far, their budgets as their area (GPU 36 or 64 MiB, the worker's preparation longer); the relief's tiles over windows twice as wide (GPU 256 MiB rather than 64), led towards the ground looked at up to 12 or 20 km; the tiles round the player kept and the next ones loaded ahead. Sharper far off, more to download, more GPU memory, a slower frame where the scenery fills the view.",
+    keywords: "detail distance far draw range lod scenery trees buildings terrain relief tiles preload distance de detail loin",
   },
   {
     key: "sceneryHitboxes",

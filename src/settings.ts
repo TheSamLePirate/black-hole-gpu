@@ -297,6 +297,7 @@ export interface Settings {
   glassBlur: boolean; // the interface's panels blur the view behind them (the browser redoes it every frame)
   temporalReprojection: boolean; // realtime: the previous frames' image carried over by the camera's rotation
   sharpen: number; // the image's sharpening after the temporal pass (AMD's RCAS: 0 none … 1 strongest)
+  motionDetail: "off" | "turns" | "low"; // realtime: denser rays while the camera turns fast ("turns"), and while low and fast over the ground ("low")
   purkinje: number; // the night's Purkinje shift (the eye's rods: dark scenes bluer, greyer; 0 none … 1)
   motionBlur: number; // the camera's motion blur in the realtime view: the shutter's share of a frame (0 none … 1)
   farFieldLut: boolean; // rays that stay far from the hole read a traced LUT between clean samples
@@ -309,6 +310,7 @@ export interface Settings {
   earthSurface: "off" | "satellite" | "materials"; // regional Sentinel-2 / WorldCover pilot; independent of physical relief
   earthScenery: "off" | "balanced" | "high";
   earthSceneryShadows: boolean;
+  detailReach: "normal" | "far" | "veryFar"; // the ground's detail drawn farther — the scenery's box, the relief's windows — and led farther where the view looks
   sceneryHitboxes: boolean; // CPU collision wireframes, on foot only (diagnostic)
   earthGrass: "off" | "balanced";
   earthGrassDensity: number; // the share of the grass blades drawn (0.25 … 1; 1 the authored density)
@@ -643,6 +645,7 @@ export function defaultSettings(): Settings {
     glassBlur: false,
     temporalReprojection: true,
     sharpen: 0.3,
+    motionDetail: "off",
     purkinje: 0.6,
     motionBlur: 0.5,
     farFieldLut: true,
@@ -655,6 +658,7 @@ export function defaultSettings(): Settings {
     earthSurface: "satellite",
     earthScenery: "balanced",
     earthSceneryShadows: true,
+    detailReach: "normal",
     sceneryHitboxes: false,
     earthGrass: "balanced",
     earthGrassDensity: 1,
@@ -1964,6 +1968,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   glassBlur: "pref",
   temporalReprojection: "pref",
   sharpen: "pref",
+  motionDetail: "pref",
   purkinje: "pref",
   motionBlur: "pref",
   farFieldLut: "pref",
@@ -1975,6 +1980,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   earthTerrain: "scene",
   earthSurface: "scene",
   earthScenery: "scene",
+  detailReach: "pref",
   earthSceneryShadows: "scene",
   sceneryHitboxes: "pref",
   earthGrass: "pref",

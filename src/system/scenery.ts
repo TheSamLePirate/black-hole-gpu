@@ -4,7 +4,7 @@ import { SceneryContact } from "./scenery-contact";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "./ellipsoid";
 import {
   D,
-  SCENERY_BYTES,
+  sceneryBudget,
   SCENERY_STORAGE_LIMIT,
   SCENERY_VEC4S,
   sceneryCentre,
@@ -35,6 +35,10 @@ export class EarthScenery {
   private data: SceneryReply | null = null;
   private camera: Vec3 | null = null;
   private allocated = false;
+  /** the drawn buffer's size (the placeholder's 64 bytes, else a scene's budget) */
+  private bufferBytes = 64;
+  /** the detail's reach (DETAIL_REACH: 1, 1.5, 2): the box, its raster, its rays this many times the normal ones */
+  private reach = 1;
   private requested = "";
   private id = 0;
   private mode: SceneryMode = "off";
@@ -70,6 +74,10 @@ export class EarthScenery {
       label: "world scenery placeholder",
     });
   }
+  /** the bytes a scene of this reach may take: its budget, within the device's largest storage binding */
+  private budget() {
+    return Math.min(sceneryBudget(this.reach), this.device.limits.maxStorageBufferBindingSize ?? Number.POSITIVE_INFINITY);
+  }
   private clear() {
     this.worker?.terminate();
     this.worker = null;
@@ -88,7 +96,8 @@ export class EarthScenery {
       const old = this.buffer;
       this.allocated = false;
       this.buffer = this.device.createBuffer({ size: 64, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
-      this.retire(old, SCENERY_BYTES);
+      this.retire(old, this.bufferBytes);
+      this.bufferBytes = 64;
       this.onChange?.();
     }
     this.stamp++;
@@ -118,9 +127,11 @@ export class EarthScenery {
     terrain: boolean,
     exclusions: SceneryRequest["exclusions"] = [],
     priority: Vec3 | null = null,
+    reach = 1,
   ) {
     if (this.disposed) return;
-    const changed = this.mode !== mode || this.satellite !== satellite;
+    const changed = this.mode !== mode || this.satellite !== satellite || this.reach !== reach;
+    this.reach = reach;
     this.mode = mode;
     this.satellite = satellite;
     this.terrain = terrain;
@@ -148,11 +159,11 @@ export class EarthScenery {
     const distance = (v: { lat: number; lon: number }) =>
       Math.hypot((c.lat - v.lat) * 111320, wrapLon(c.lon - v.lon) * 111320 * Math.cos(c.lat * D));
     const dist = this.data ? distance(this.data) : Infinity;
-    if (dist > 8000 && this.data) {
+    if (dist > 8000 * reach && this.data) {
       this.clear();
       this.onContent?.();
     }
-    if ((changed || (this.requestedCentre && distance(this.requestedCentre) > 8000)) && this.busy) {
+    if ((changed || (this.requestedCentre && distance(this.requestedCentre) > 8000 * reach)) && this.busy) {
       this.worker?.terminate();
       this.worker = null;
       this.busy = false;
@@ -161,7 +172,7 @@ export class EarthScenery {
       // (the camera moved on: its new scene asked at once, not after the throttle)
       this.attempted = -Infinity;
     }
-    const key = `${c.key}:${mode}:${satellite}`;
+    const key = `${c.key}:${mode}:${satellite}:${reach}`;
     // (waited for — the settled frame, an offline render — until drawn, or failed and waiting to be tried again)
     this.wanted = key !== this.applied && !(key === this.requested && this.lastError);
     if (
@@ -187,7 +198,7 @@ export class EarthScenery {
         this.worker?.terminate();
         this.worker = null;
         const r = e.data;
-        if (r.error || !r.buffer || r.buffer.byteLength > SCENERY_BYTES) {
+        if (r.error || !r.buffer || r.buffer.byteLength > this.budget()) {
           this.lastError = r.error ?? "invalid scene size";
           this.failures++;
           this.retryAt = performance.now() + this.backoff();
@@ -195,25 +206,30 @@ export class EarthScenery {
           this.onContent?.();
           return;
         }
-        if (!this.allocated) {
-          const old = this.buffer;
-          this.allocated = true;
-          this.buffer = this.device.createBuffer({
-            size: SCENERY_BYTES,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-            label: "world forests and OSM scenery",
-          });
-          this.retire(old, 0); // (the placeholder: not counted — the next scene is not held back for it)
-          this.onChange?.();
-        }
         // (a scene rebuilt with a source missing — the land cover's raster, a tile — while one is drawn here: the
-        // drawn one kept, its trees and its contacts, the rebuild tried again later)
+        // drawn one kept, its trees and its contacts, the rebuild tried again later — before the buffer is made again
+        // for a new reach: the drawn scene stays in the buffer the shader reads)
         if (r.errors?.length && this.data) {
           this.lastError = r.errors[0]!;
           this.failures++;
           this.retryAt = performance.now() + this.backoff();
           this.onContent?.();
           return;
+        }
+        // (the buffer the scene's budget, made again when a farther reach's scene needs more — or comes back to less)
+        const size = this.budget();
+        if (!this.allocated || this.bufferBytes !== size) {
+          const old = this.buffer;
+          const oldBytes = this.allocated ? this.bufferBytes : 0;
+          this.allocated = true;
+          this.bufferBytes = size;
+          this.buffer = this.device.createBuffer({
+            size,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+            label: "world forests and OSM scenery",
+          });
+          this.retire(old, oldBytes); // (the placeholder: not counted — the next scene is not held back for it)
+          this.onChange?.();
         }
         const t = performance.now();
         this.device.queue.writeBuffer(this.buffer, 0, r.buffer);
@@ -243,7 +259,16 @@ export class EarthScenery {
         this.worker = null;
         this.onContent?.();
       };
-      this.worker.postMessage({ id, lat: c.lat, lon: c.lon, mode, satellite, exclusions } satisfies SceneryRequest);
+      this.worker.postMessage({
+        id,
+        lat: c.lat,
+        lon: c.lon,
+        mode,
+        satellite,
+        exclusions,
+        reach,
+        budget: this.budget(),
+      } satisfies SceneryRequest);
     } catch (e) {
       this.lastError = String(e);
       this.failures++;
@@ -285,7 +310,7 @@ export class EarthScenery {
       o[12 + i] = v[0] * dx + v[1] * dy + v[2] * dz;
     }
     o[3] = this.terrain ? 1 : 0;
-    o[7] = this.mode === "high" ? 3500 : 2500;
+    o[7] = (this.mode === "high" ? 3500 : 2500) * this.reach;
     o[11] = 1;
     o[15] = Math.min(1, (performance.now() - this.started) / 600);
     o[16] = b[0] * D;
@@ -342,7 +367,8 @@ export class EarthScenery {
       shadows: this.shadows,
       shadowReceiverRangeM: this.mode === "high" ? 2000 : 1200,
       shadowRayRangeM: this.mode === "high" ? 900 : 500,
-      gpuBytes: this.allocated ? SCENERY_BYTES : 64,
+      gpuBytes: this.bufferBytes,
+      reach: this.reach,
       retiringGpuBytes: this.retiredBytes,
       coverPixels: d?.coverPixels ?? 0,
       rgbPixels: d?.rgbPixels ?? 0,
