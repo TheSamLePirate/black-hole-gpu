@@ -22,6 +22,8 @@ export class CrewRadio {
   private muted = new Set<number>();
   private devices = new Map<number, string>();
   private buf = new Float32Array(256);
+  /** the transmission begun or ended (the CAPCOM's Quindar tones — PLAN-VAISSEAUX K5) */
+  onTalk?: (active: boolean) => void;
 
   constructor(
     readonly net: NetClient,
@@ -30,6 +32,7 @@ export class CrewRadio {
     this.gate = new TalkGate((active) => {
       for (const track of this.mic?.getAudioTracks() ?? []) track.enabled = active;
       if (active) navigator.vibrate?.(12);
+      this.onTalk?.(active);
       changed();
     });
     net.on("voice", ({ slot, stream }) => {

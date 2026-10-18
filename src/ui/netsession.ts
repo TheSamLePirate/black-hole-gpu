@@ -140,6 +140,13 @@ function steady(S: { t: number; p: number[]; v: number[] }[] | undefined) {
   return true;
 }
 
+/** an age said short: 4 min, 2 h 10, 3 d */
+function formatAge(s: number): string {
+  if (s < 3600) return tf("{0} min", Math.max(1, Math.round(s / 60)));
+  if (s < 86400 * 2) return tf("{0} h {1}", Math.floor(s / 3600), String(Math.floor((s % 3600) / 60)).padStart(2, "0"));
+  return tf("{0} d", Math.round(s / 86400));
+}
+
 export class NetSession {
   private crewSent = -Infinity;
   /** the crew's orders carried out (docs/PLAN-CREW-ACTIONS.md), made at the first one heard */
@@ -401,7 +408,18 @@ export class NetSession {
       net.on("event", ({ from, ev }) => {
         const e = ev as { kind?: string; to?: number };
         if (e.kind === "crew-cmd") void this.crewExec.handle(net, from, ev);
-        else if (e.kind === "tel") this.tel.set(from, (ev as unknown as { v: Record<string, number> }).v);
+        else if (e.kind === "crew-msg") {
+          // (a crew member's message — PLAN-VAISSEAUX K5: the ground's arrive late; behind the wormhole, recorded and
+          // delivered when the link came back, its age said)
+          const m = ev as unknown as { text?: unknown; rec?: unknown; to?: unknown };
+          // (to the pilot it was meant for)
+          if (typeof m.to === "number" && m.to !== net.room?.slot) return;
+          const text = typeof m.text === "string" ? m.text.slice(0, 280) : "";
+          if (!text) return;
+          const rec = typeof m.rec === "number" && Number.isFinite(m.rec) && m.rec > 60 ? m.rec : 0;
+          const who = this.nameOf(from);
+          this.d.toast(rec ? tf("Recorded message from {0} ({1} ago): {2}", who, formatAge(rec), text) : tf("{0}: {1}", who, text));
+        } else if (e.kind === "tel") this.tel.set(from, (ev as unknown as { v: Record<string, number> }).v);
         else if (e.kind === "wng") {
           // (another's AI wingmen — F3: his host's flying, drawn and on our radar here)
           const list = (ev as unknown as { w?: unknown }).w;

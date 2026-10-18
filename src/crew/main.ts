@@ -9,6 +9,7 @@ import { CrewRadio } from "./radio";
 import { bindTalk } from "./ptt";
 import { CrewViews, VIEW_NAMES, type CrewView } from "./views";
 import { dur } from "./draw/kit";
+import { linkFor, Outbox, type Station, STATIONS, stationOf } from "./station";
 import { type CrewProfile, PROFILE_TILES, PROFILE_VIEWS, profileOf, type TileKey, viewIn } from "./profile";
 import { CrewActions, type Done } from "./actions";
 import { ACTS, type Act, AUTO_FR, AUTOS, HOLD_FR, HOLDS, MANEUVER_FR, MANEUVERS } from "../net/crewcmd";
@@ -44,8 +45,30 @@ const net = new NetClient({
   id: { device: `crew:${device}`, name: store.get("kerr.crew.name") || "Équipage", colour: "#89dce5" },
 });
 const model = new CrewModel(net);
+/** the station chosen at the lobby (PLAN-VAISSEAUX K5): aboard, live; on the ground, the light's time late */
+let station: Station = stationOf(store.get("kerr.crew.station"));
+model.linkFor = (link) => linkFor(station, link);
+const outbox = new Outbox();
 const views = new CrewViews($<HTMLCanvasElement>("instruments"), model);
 const radio = new CrewRadio(net, () => syncRadio());
+// (the CAPCOM's Quindar tones: 2 525 Hz as the voice opens, 2 475 Hz as it closes — 250 ms, the Apollo loops')
+let quindarCtx: AudioContext | null = null;
+radio.onTalk = (active) => {
+  if (station.id !== "capcom") return;
+  try {
+    quindarCtx ??= new AudioContext();
+    const c = quindarCtx;
+    const o = c.createOscillator(),
+      g = c.createGain();
+    o.frequency.value = active ? 2525 : 2475;
+    g.gain.value = 0.12;
+    o.connect(g).connect(c.destination);
+    o.start();
+    o.stop(c.currentTime + 0.25);
+  } catch {
+    // (no audio: no tone)
+  }
+};
 const actions = new CrewActions(net, model);
 actions.onChange(() => {
   board();
@@ -65,7 +88,29 @@ let busy = false;
 let painted = "";
 views.units = store.get("kerr.crew.units") === "imperial" ? "imperial" : "metric";
 const initialParams = new URLSearchParams(location.hash.slice(1));
-name.value = net.o.id.name;
+name.value = store.get("kerr.crew.name") || net.o.id.name;
+// the lobby's stations: aboard, on the ground
+{
+  const sel = $<HTMLSelectElement>("station");
+  for (const [place, title] of [
+    ["aboard", "À bord"],
+    ["ground", "Au sol — contrôle de mission"],
+  ] as const) {
+    const g = document.createElement("optgroup");
+    g.label = title;
+    for (const st of STATIONS.filter((x) => x.place === place)) {
+      const o = document.createElement("option");
+      o.value = st.id;
+      o.textContent = st.place === "ground" ? `${st.call} — ${st.title}` : st.title;
+      o.selected = st.id === station.id;
+      g.append(o);
+    }
+    sel.append(g);
+  }
+  const role = () => ($("station-role").textContent = stationOf(sel.value).role);
+  sel.addEventListener("change", role);
+  role();
+}
 code.value = normCode(initialParams.get("join") ?? "");
 code.addEventListener("input", () => {
   code.value = normCode(code.value).slice(0, 6);
@@ -125,9 +170,13 @@ async function join(roomCode: string, displayName: string, pass = "") {
       radio.stop();
       net.leave();
     }
-    net.profile(displayName.trim().slice(0, 24) || "Équipage", "#89dce5");
+    // (the station: its call after the name, in the room — FIDO, CAPCOM…)
+    station = stationOf($<HTMLSelectElement>("station").value);
+    store.set("kerr.crew.station", station.id);
+    const bare = displayName.trim().slice(0, 16) || "Équipage";
+    net.profile(`${bare} · ${station.call}`, "#89dce5");
     await net.join(normal, "instruments", pass || undefined);
-    store.set("kerr.crew.name", net.o.id.name);
+    store.set("kerr.crew.name", bare);
     const params = new URLSearchParams({ join: normal });
     if (initialParams.has("server")) params.set("server", initialParams.get("server")!);
     history.replaceState(null, "", `#${params}`);
@@ -135,6 +184,8 @@ async function join(roomCode: string, displayName: string, pass = "") {
     rosterKey = "";
     pilotKey = "";
     refresh();
+    // (a spacecraft followed: the station's own view)
+    if (profile === "space") setView(station.view);
   } catch (error) {
     const errors: Record<string, string> = {
       password: "Mot de passe incorrect.",
@@ -579,12 +630,16 @@ const ICONS: Record<CrewView, string> = {
 /** the header's badge: the profile and the craft followed (F-35 · TACTIQUE, VAISSEAU · ENDURANCE) */
 function syncBadge() {
   const c = snapNow()?.craft;
+  // (a spacecraft's console: the station, aboard or on the ground — and the light's time from there)
+  const L = model.selected !== null ? model.linkOf(model.selected) : { delay: 0, cut: false };
+  const where = station.place === "aboard" ? "à bord" : L.cut ? "sol · liaison coupée" : L.delay > 0 ? `sol +${dur(L.delay)}` : "sol";
   $("profile-badge").textContent =
     profile === "jet"
       ? `${c?.name ?? "F-35"} · TACTIQUE`.toUpperCase()
       : profile === "space"
-        ? `VAISSEAU · ${c?.name ?? ""}`.toUpperCase()
+        ? `VAISSEAU · ${c?.name ?? ""} — ${station.call} · ${where}`.toUpperCase()
         : "";
+  $("profile-badge").classList.toggle("cut", station.place === "ground" && L.cut);
 }
 /** the console's profile now (PLAN-VAISSEAUX K2 — profile.ts): the craft followed's — its views, its tiles, its theme */
 let profile: CrewProfile | null = null;
@@ -601,8 +656,8 @@ function setProfile(p: CrewProfile) {
     $("views").append(b);
   }
   $("metrics").replaceChildren();
-  // (the view kept when the other profile has it — the PFD, the globe, the telemetry —, else the profile's first)
-  setView(viewIn(p, views.view));
+  // (the view kept when the other profile has it — the globe, the telemetry —, else the station's, the profile's first)
+  setView(PROFILE_VIEWS[p].includes(views.view) ? views.view : p === "space" ? station.view : viewIn(p, views.view));
 }
 views.onOpen = setView;
 $("zoom-in").addEventListener("click", () => views.zoomBy(1.333));
@@ -1311,6 +1366,46 @@ function board() {
   syncActs();
 }
 
+/** the message to the pilot (K5): live aboard; the light's time late from the ground; behind the wormhole recorded,
+ *  delivered (its age with it) when the link comes back */
+function sendMessage(text: string) {
+  const to = model.selected;
+  if (!net.room || to === null) return notice("Aucun pilote suivi.");
+  const L = model.linkOf(to);
+  if (L.cut) {
+    outbox.record(text, Date.now());
+    notice("Message enregistré : il partira au retour de la liaison.");
+  } else {
+    const go = () => net.event({ kind: "crew-msg", v: 1, to, text, rec: 0 });
+    if (L.delay > 0) setTimeout(go, L.delay * 1000);
+    else go();
+    notice(L.delay > 0 ? `Message envoyé : il arrive dans ${dur(L.delay)}.` : "Message envoyé.");
+  }
+  syncMessages();
+}
+function syncMessages() {
+  const to = model.selected;
+  const L = to !== null ? model.linkOf(to) : { delay: 0, cut: false };
+  // (the link back: the recorded ones sent, each its age)
+  if (!L.cut && outbox.waiting.length && net.room && to !== null)
+    for (const m of outbox.flush()) net.event({ kind: "crew-msg", v: 1, to, text: m.text, rec: Math.round((Date.now() - m.at) / 1000) });
+  $("msg-state").textContent = L.cut
+    ? `Liaison coupée (trou de ver) · ${outbox.waiting.length} message(s) enregistré(s)`
+    : station.place === "ground" && L.delay > 0
+      ? `Délai lumière ${dur(L.delay)} aller · ${dur(2 * L.delay)} aller-retour`
+      : station.place === "ground"
+        ? "Liaison directe"
+        : "À bord : en direct";
+}
+$("msg-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const i = $<HTMLInputElement>("msg-text");
+  const text = i.value.trim();
+  if (!text) return;
+  sendMessage(text);
+  i.value = "";
+});
+
 function refresh() {
   const room = net.room,
     crafts = model.crafts(),
@@ -1339,6 +1434,7 @@ function refresh() {
   }
   setProfile(profileOf(own?.snapshot));
   syncBadge();
+  syncMessages();
   tiles(own);
   alerts(own);
   board();
@@ -1351,11 +1447,15 @@ function refresh() {
       ? "Connexion interrompue"
       : !own
         ? "En attente de données"
-        : own.age > 3
-          ? `Position ancienne · ${Math.round(own.age)} s`
-          : own.snapshot
-            ? "Mesures du pilote · direct"
-            : "Position reçue · mesures détaillées indisponibles";
+        : model.selected !== null && model.linkOf(model.selected).cut && own.age > 3
+          ? "Liaison coupée — derrière le trou de ver"
+          : own.age > 3
+            ? `Position ancienne · ${Math.round(own.age)} s`
+            : own.snapshot
+              ? model.selected !== null && model.linkOf(model.selected).delay > 0
+                ? `Mesures du pilote · différées de ${dur(model.linkOf(model.selected).delay)} (lumière)`
+                : "Mesures du pilote · direct"
+              : "Position reçue · mesures détaillées indisponibles";
   $("freshness").classList.toggle("stale", net.status === "offline" || (!!own && own.age > 3));
   const rk = JSON.stringify(room?.members);
   if (rk !== rosterKey) {

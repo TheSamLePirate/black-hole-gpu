@@ -172,6 +172,38 @@ teinte bleue, assombrissement). Crédit « © OpenStreetMap contributors » touj
 tuiles échouent, la carte garde le fond vectoriel Natural Earth (continents remplis). Les tuiles CARTO
 « Dark Matter » exigent désormais une clé d'API et ne sont donc pas utilisées.
 
+## Les postes : à bord ou au sol (vaisseaux)
+
+Au lobby, l'équipier choisit son poste (PLAN-VAISSEAUX K5, `src/crew/station.ts`). Son indicatif suit son nom dans la
+salle (« Brand · FIDO ») et la console vaisseau s'ouvre sur la vue de son poste.
+
+| poste | lieu | s'ouvre sur |
+|---|---|---|
+| Copilote (CDR-2) | à bord | Tableau |
+| Navigateur (NAV) | à bord | Carte système |
+| Ingénieur de bord (ING) | à bord | EECOM |
+| FLIGHT — directeur de vol | sol | Tableau |
+| FIDO — dynamique de vol | sol | Orbite |
+| GUIDO — guidage | sol | Boule |
+| EECOM — systèmes | sol | EECOM |
+| CAPCOM — communications | sol | Chronologie (et les tonalités Quindar à chaque prise de parole : 2 525 Hz à l'ouverture, 2 475 Hz à la fermeture) |
+
+- **À bord**, tout est en direct.
+- **Au sol**, la console reçoit les instantanés en retard du délai de la lumière ; ses ordres et leurs réponses
+  partent en retard de la même façon.
+  - Le délai se règle dans la salle : c'est un réglage du pilote, *Réseau → Délai lumière vers le sol* (réel, un
+    dixième, aucun). L'instantané en porte la valeur (`link.delay`).
+  - Exemples : la Lune 1,3 s, Mars plusieurs minutes. Pour les longs délais, la file ne garde qu'un instantané par
+    seconde.
+- **Derrière le trou de ver**, la liaison est coupée pour le sol.
+  - Plus rien de neuf n'arrive et les ordres sont refusés.
+  - Les messages sont enregistrés ; ils partent au retour de la liaison, avec leur âge (« Message enregistré de Brand ·
+    CAPCOM (il y a 2 h 10) : … »).
+- **Message à l'équipage** (panneau Équipage) : un texte de 280 caractères au plus pour le pilote suivi. En direct à
+  bord, en différé depuis le sol. Le pilote le reçoit en toast (`crew-msg`).
+- Le badge indique le poste et la liaison (« VAISSEAU · RANGER — FIDO · SOL +2 S », en rouge quand la liaison est
+  coupée). La ligne d'état indique les mesures différées.
+
 ## Commandes tactiles et radio
 
 Toutes les commandes sont accessibles sans clavier ni survol, en portrait et en paysage. Glisser déplace la

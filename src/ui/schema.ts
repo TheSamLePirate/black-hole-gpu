@@ -4516,6 +4516,22 @@ export const SCHEMA: ControlDef[] = [
     keywords: "network crew copilot navigator instruments console actions lock",
   },
   {
+    key: "netLightDelay",
+    type: "choice",
+    section: "game",
+    group: "Network",
+    label: "Light delay to the ground",
+    style: "segmented",
+    effect: "none",
+    help: "The crew's ground stations (mission control) see the craft late and their orders arrive late by the light's time from the Earth — the Moon 1.3 s, Mars minutes; behind the wormhole, no live link: only recorded messages, delivered when it comes back. The stations aboard are always live.",
+    keywords: "network crew ground mission control light delay capcom latency mars moon wormhole",
+    options: [
+      { value: "real", label: "Real", hint: "The light's own time" },
+      { value: "tenth", label: "A tenth", hint: "Ten times shorter: Mars in two minutes" },
+      { value: "off", label: "None", hint: "The ground live as aboard (the wormhole still cuts it)" },
+    ],
+  },
+  {
     key: "netFreeFight",
     type: "toggle",
     section: "game",

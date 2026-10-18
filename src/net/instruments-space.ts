@@ -93,9 +93,11 @@ export interface InstrumentTime {
   /** the mission's elapsed time [s] (since the flight began) */
   met?: number;
 }
-/** The link to the Earth: the light's time one way [s]; cut (behind the wormhole: no live link). */
+/** The link to the Earth: the light's time one way [s]; the delay the room plays for its ground stations [s] (the
+ *  pilot's setting: real, a tenth, none — K5); cut (behind the wormhole: no live link). */
 export interface InstrumentLink {
   light: number;
+  delay?: number;
   cut: boolean;
 }
 /** The docking's geometry (K4): the target and its port, the rings' distance, its part along the port's axis and
@@ -270,7 +272,12 @@ export function readSpace(x: Record<string, unknown>): InstrumentSpace {
       ...(finite(ti.met) ? { met: Math.max(0, ti.met) } : {}),
     };
   const l = x.link;
-  if (record(l) && finite(l.light)) out.link = { light: Math.max(0, l.light), cut: l.cut === true };
+  if (record(l) && finite(l.light))
+    out.link = {
+      light: Math.max(0, l.light),
+      ...(finite(l.delay) ? { delay: Math.max(0, Math.min(l.delay, 7200)) } : {}),
+      cut: l.cut === true,
+    };
   const r = x.ring;
   if (record(r) && finite(r.rpm)) out.ring = { rpm: r.rpm, g: num(r.g) };
   if (Array.isArray(x.ports))

@@ -8,6 +8,7 @@ import {
   type InstrumentZone,
 } from "../net/instruments";
 import { cartToGeodetic, WGS84_A, WGS84_F, wgs84Offset } from "../system/ellipsoid";
+import { DelayLine } from "./station";
 
 export const D = Math.PI / 180;
 export const wrap = (a: number) => ((((a + 180) % 360) + 360) % 360) - 180;
@@ -97,20 +98,26 @@ export class CrewModel {
       if (ev.kind !== "instruments" || !net.room?.members.some((m) => m.slot === from && m.role === "pilot")) return;
       const data = readInstruments(ev.data);
       if (!data) return;
-      this.snapshots.set(from, { data, at: performance.now() });
-      if (data.traffic || data.zones)
-        this.around.set(from, { traffic: data.traffic ?? [], zones: data.zones ?? [], at: performance.now() });
-      let h = this.history.get(from) ?? [];
-      if (h.length && (data.t < h[h.length - 1]!.t || data.body !== h[h.length - 1]!.body)) h = [];
-      if (!h.length || data.t > h[h.length - 1]!.t) h.push({ t: data.t, metrics: data.metrics, geo: data.geo, body: data.body });
-      if (h.length > 2400) h.splice(0, h.length - 2400);
-      this.history.set(from, h);
+      // (a ground station — PLAN-VAISSEAUX K5: the light's time late; behind the wormhole, nothing new at all)
+      this.rawLink.set(from, data.link ?? null);
+      const L = this.linkOf(from);
+      if (L.cut) return;
+      const line = this.lines.get(from);
+      if (L.delay > 0 || (line && line.size)) {
+        const q = line ?? new DelayLine<InstrumentSnapshot>();
+        this.lines.set(from, q);
+        q.push(data, performance.now() / 1000, L.delay);
+        return;
+      }
+      this.apply(from, data);
     });
     net.on("room", () => {
       this.snapshots.clear();
       this.around.clear();
       this.seen.clear();
       this.history.clear();
+      this.lines.clear();
+      this.rawLink.clear();
       this.selected = null;
     });
     net.on("roster", (members) => {
@@ -121,10 +128,42 @@ export class CrewModel {
           this.around.delete(slot);
           this.history.delete(slot);
           this.seen.delete(slot);
+          this.lines.delete(slot);
         }
     });
   }
+  /** the station's link to a pilot (K5): its delay [s] and whether it is cut — set by the console (0 aboard) */
+  linkFor: (link: InstrumentSnapshot["link"] | null | undefined) => { delay: number; cut: boolean } = () => ({ delay: 0, cut: false });
+  private lines = new Map<number, DelayLine<InstrumentSnapshot>>();
+  private rawLink = new Map<number, InstrumentSnapshot["link"] | null>();
+  /** a pilot's link as the station has it now (from his newest snapshot, not the delayed one) */
+  linkOf(slot: number) {
+    return this.linkFor(this.rawLink.get(slot));
+  }
+  /** the delayed snapshots now due, shown */
+  private pump() {
+    const now = performance.now() / 1000;
+    for (const [slot, q] of this.lines) {
+      const L = this.linkOf(slot);
+      const v = q.take(now, L.delay);
+      if (v && this.snapshots.get(slot)?.data !== v) this.apply(slot, v);
+    }
+  }
+  /** a snapshot shown: the pilot's figures, his surroundings, his history */
+  private apply(from: number, data: InstrumentSnapshot) {
+    {
+      this.snapshots.set(from, { data, at: performance.now() });
+      if (data.traffic || data.zones)
+        this.around.set(from, { traffic: data.traffic ?? [], zones: data.zones ?? [], at: performance.now() });
+      let h = this.history.get(from) ?? [];
+      if (h.length && (data.t < h[h.length - 1]!.t || data.body !== h[h.length - 1]!.body)) h = [];
+      if (!h.length || data.t > h[h.length - 1]!.t) h.push({ t: data.t, metrics: data.metrics, geo: data.geo, body: data.body });
+      if (h.length > 2400) h.splice(0, h.length - 2400);
+      this.history.set(from, h);
+    }
+  }
   crafts(): CrewCraft[] {
+    this.pump();
     const now = performance.now();
     return (this.net.room?.members ?? []).flatMap((member) => {
       if (member.role !== "pilot") return [];

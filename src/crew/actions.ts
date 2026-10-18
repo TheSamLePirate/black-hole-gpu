@@ -38,6 +38,20 @@ export class CrewActions {
       const a = readCrewAck(ev);
       const room = net.room;
       if (!a || !room) return;
+      // (a ground station: the answer the light's time late too — K5)
+      const late = this.model.selected !== null ? this.model.linkOf(this.model.selected).delay : 0;
+      if (late > 0) setTimeout(() => this.ack(from, a), late * 1000);
+      else this.ack(from, a);
+    });
+    net.on("room", () => {
+      this.board.length = 0;
+      this.changed();
+    });
+  }
+  private ack(from: number, a: NonNullable<ReturnType<typeof readCrewAck>>) {
+    const room = this.net.room;
+    if (!room) return;
+    {
       // (an answer to ours: its promise settled)
       const mine = a.to === room.slot ? this.pending.get(a.id) : undefined;
       if (mine) {
@@ -52,11 +66,7 @@ export class CrewActions {
         if (this.board.length > 40) this.board.pop();
       }
       this.changed();
-    });
-    net.on("room", () => {
-      this.board.length = 0;
-      this.changed();
-    });
+    }
   }
   onChange(f: () => void) {
     this.listeners.add(f);
@@ -86,15 +96,23 @@ export class CrewActions {
     const can = this.can(fam);
     const to = this.model.selected;
     if (!can.ok || to === null) return Promise.resolve({ ok: false, msg: can.why || "Aucun pilote suivi" });
+    // (a ground station — K5: behind the wormhole no order goes; else it goes the light's time late, its answer too)
+    const L = this.model.linkOf(to);
+    if (L.cut) return Promise.resolve({ ok: false, msg: "Liaison coupée (trou de ver) : enregistrez un message" });
     const id = newId();
     return new Promise<Done>((resolve) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id);
-        resolve({ ok: false, msg: "Pas de réponse du pilote" });
-        this.changed();
-      }, 3000);
+      const timer = setTimeout(
+        () => {
+          this.pending.delete(id);
+          resolve({ ok: false, msg: "Pas de réponse du pilote" });
+          this.changed();
+        },
+        3000 + 2000 * L.delay,
+      );
       this.pending.set(id, { act, resolve, timer });
-      this.net.event({ kind: "crew-cmd", v: 1, id, to, act, args });
+      const go = () => this.net.event({ kind: "crew-cmd", v: 1, id, to, act, args });
+      if (L.delay > 0) setTimeout(go, L.delay * 1000);
+      else go();
       this.changed();
     });
   }

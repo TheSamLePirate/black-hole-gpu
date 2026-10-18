@@ -48,6 +48,14 @@
           <p id="crew-lock" class="lock-state"></p>
           <ol id="board"></ol>
         </section>
+        <form id="msg-form" class="msg-form" aria-label="Message à l’équipage">
+          <h3>Message à l’équipage</h3>
+          <div class="msg-row">
+            <input id="msg-text" maxlength="280" autocomplete="off" placeholder="Votre message au pilote" aria-label="Message au pilote" />
+            <button id="msg-send" type="submit">Envoyer</button>
+          </div>
+          <p id="msg-state" class="muted small"></p>
+        </form>
         <div id="members"></div>
         <p id="network-details" class="muted small"></p>
         <div id="traffic-summary" class="traffic-summary"></div>
@@ -85,6 +93,8 @@
             pattern="[A-Za-z2-9]{6}"
             required
         /></label>
+        <label>Poste<select id="station" name="station" aria-describedby="station-role"></select></label>
+        <p id="station-role" class="muted small"></p>
         <label>Mot de passe <span class="muted">(si nécessaire)</span><input id="password" name="password" type="password" autocomplete="off" /></label>
         <p id="join-error" class="error" role="alert"></p>
         <button id="join" class="primary" type="submit">Rejoindre l’équipage</button>

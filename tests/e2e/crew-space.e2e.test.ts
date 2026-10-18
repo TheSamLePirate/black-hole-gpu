@@ -190,6 +190,7 @@ describe.skipIf(!E2E)("the crew console's two profiles (K2)", () => {
       });
       pilot.event({ kind: "instruments", data: hole ? holeSnap(t) : space ? orbitSnap(t) : jetSnap(t) });
     }, 250);
+    await app.js(`(document.getElementById("name").value = "", 1)`);
     await app.click("#name");
     await app.type("Brand");
     await app.click("#code");
@@ -226,7 +227,8 @@ describe.skipIf(!E2E)("the crew console's two profiles (K2)", () => {
     expect(views[0]).toBe("sdash");
     expect(views).toContain("orbit");
     expect(views).not.toContain("radar");
-    expect(await app.js<string>(`document.getElementById("profile-badge").textContent`)).toBe("VAISSEAU · RANGER");
+    // (the station after the craft: the copilot's, aboard — K5)
+    expect(await app.js<string>(`document.getElementById("profile-badge").textContent`)).toBe("VAISSEAU · RANGER — CDR-2 · À BORD");
     // (the view the F-35's console showed is not the spacecraft's: its first)
     expect(await app.js<string>(`document.getElementById("view-title").textContent`)).toBe("Tableau");
     // (French grouping: a narrow no-break space)

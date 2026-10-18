@@ -428,6 +428,7 @@ export interface Settings {
   netMenu: boolean; // the network's menu and buttons (docs/PLAN-RESEAU.md): off, the game shows no trace of it
   netFreeFight: boolean; // in a room, in the F-35, no match: the free fight — every craft a target, friendly fire on
   netCrewActions: boolean; // the crew screens (crew/) may act aboard — everything but flying (docs/PLAN-CREW-ACTIONS.md); off: the pilot's lock
+  netLightDelay: "real" | "tenth" | "off"; // the light's time to the crew's ground stations (PLAN-VAISSEAUX K5): real · a tenth · none
   cineDynamicFov: boolean; // its lens widened with the speed and the afterburner, the long lens on the still cameras
   characterShoulder: number; // on foot: the camera over the right shoulder [m] (0: behind the head)
   shipAlbedo: number; // hull albedo (light grey paint in the film)
@@ -777,6 +778,7 @@ export function defaultSettings(): Settings {
     netMenu: true,
     netFreeFight: true,
     netCrewActions: true,
+    netLightDelay: "real",
     cineDynamicFov: true,
     characterShoulder: 0.45,
     shipAlbedo: 0.6,
@@ -2140,6 +2142,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   netMenu: "pref",
   netFreeFight: "pref",
   netCrewActions: "pref",
+  netLightDelay: "pref",
   cineDynamicFov: "pref",
   characterShoulder: "pref",
   shipAlbedo: "carried",

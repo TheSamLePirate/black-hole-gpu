@@ -1637,3 +1637,24 @@ body[data-profile="space"] {
 body[data-profile="jet"] .profile-badge {
   border-radius: 1px;
 }
+
+/* the crew's message to the pilot (PLAN-VAISSEAUX K5): sent the light's time late from the ground, recorded behind the
+   wormhole */
+.msg-form {
+  margin: 10px 0 12px;
+}
+.msg-form h3 {
+  margin: 0 0 6px;
+}
+.msg-row {
+  display: flex;
+  gap: 6px;
+}
+.msg-row input {
+  flex: 1;
+  min-width: 0;
+}
+.profile-badge.cut {
+  color: var(--red);
+  border-color: var(--red);
+}

@@ -199,7 +199,11 @@ export function crewSpace(c: CameraController, i: Info, status: RangerStatus | n
     i.region === "hole"
       ? { light: 0, cut: true }
       : i.X
-        ? { light: r1((Math.hypot(i.X[0] - earth[0], i.X[1] - earth[1], i.X[2] - earth[2]) * M_METRES) / C_MPS), cut: false }
+        ? (() => {
+            const light = (Math.hypot(i.X[0] - earth[0], i.X[1] - earth[1], i.X[2] - earth[2]) * M_METRES) / C_MPS;
+            const k = c.s.netLightDelay === "off" ? 0 : c.s.netLightDelay === "tenth" ? 0.1 : 1;
+            return { light: r1(light), delay: Math.round(light * k * 100) / 100, cut: false };
+          })()
         : null;
   if (V.ring) {
     const R = c.ringInfo();
