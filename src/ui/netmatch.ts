@@ -149,6 +149,10 @@ export class NetMatch {
     this.root.append(this.bar, this.big, this.feedEl, this.endEl);
     this.root.hidden = true;
     document.body.append(this.root);
+    // (one of our AI wingmen's wreck crashed — controller/wingmen.ts —: the room told, its explosion seen there)
+    d.camera.onWingCrash = (k, p, broke) => {
+      if (this.net?.room) this.net.event({ kind: "wingCrash", k, p: p.map(r1), broke: broke || undefined });
+    };
   }
 
   private get net() {
@@ -263,6 +267,12 @@ export class NetMatch {
       this.addFeed(`${this.nameOf(from)} ✕ ${String(ev.name ?? ev.key)}`, this.colourOf(from));
       return;
     }
+    // (another's AI wingman crashed — its wreck's end —: its explosion, its smoke)
+    if (kind === "wingCrash") {
+      this.log.push(`${(this.net?.roomNow() ?? 0).toFixed(1)} wing crash ${from}:${String(ev.k)}`);
+      const at = Array.isArray(ev.p) && ev.p.length === 3 ? (ev.p as [number, number, number]) : null;
+      return this.crashSeen(`w${from}:${String(ev.k)}`, !!ev.broke, at, null);
+    }
     if (kind === "hitWing" && ev.to === this.me) {
       this.d.camera.wingHurt(Number(ev.k), Number(ev.dmg) || 0, this.nameOf(from));
       this.addFeed(`${this.nameOf(from)} → ${String(ev.k)}`, this.colourOf(from));
@@ -367,13 +377,20 @@ export class NetMatch {
     this.log.push(`${net.roomNow().toFixed(1)} impact ${slot}${broke ? " (broke up)" : ""}`);
     this.falling.delete(slot);
     this.down.set(slot, net.roomNow() + this.match.rules.respawn + 1);
+    const q = this.d.camera.combat?.world.target(10_000 + slot);
+    // (his end as he said it: his last samples may already be his still eye on it)
+    this.crashSeen(`s${slot}`, broke, at, q ? [...q.p] : null);
+    this.d.session.hidden.set(slot, true);
+  }
+
+  /** A crash said by another (his craft's, one of his AI wingmen's): its explosion where it ended — the Earth's
+   *  coordinates [m] from our craft onto the local east, north, up here, as the network's craft are placed; else
+   *  `near` (the fight's frame) —, its smoke rising there. */
+  private crashSeen(key: string, broke: boolean, at: [number, number, number] | null, near: V3 | null) {
     const c = this.d.camera;
     const C = c.combat;
-    const q = C?.world.target(10_000 + slot);
-    // (his end from our craft — the Earth's coordinates onto the local east, north, up here, as the network's
-    // craft are placed —: his last samples may already be his still eye on it)
     const own = at && C?.last ? c.netOwn() : null;
-    let w: V3 | null = q ? [...q.p] : null;
+    let w: V3 | null = near;
     if (at && own && C?.last) {
       const U = geodeticNormal(WGS84_A, WGS84_F, own.p);
       const el = Math.hypot(U[0], U[1]) || 1;
@@ -388,9 +405,8 @@ export class NetMatch {
       const p: V3 = [w[0], w[1], broke ? w[2] : C.world.groundZ(w[0], w[1])];
       C.booms.push({ p, t: C.t, size: 2.5 });
       C.events.push({ kind: "explode", p, size: 2.5 });
-      if (!broke) C.crashes = [...(C.crashes ?? []).filter((x) => C.t - x.t < 60), { key: `s${slot}`, p, t: C.t }];
+      if (!broke) C.crashes = [...(C.crashes ?? []).filter((x) => C.t - x.t < 60), { key, p, t: C.t }];
     }
-    this.d.session.hidden.set(slot, true);
   }
 
   private addFeed(text: string, colour: string) {

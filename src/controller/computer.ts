@@ -1408,6 +1408,25 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
       }
     }
   }
+  // (the room's AI wingmen shot down — controller/wingmen.ts, their host's —: burning as their wrecks fall, from their
+  // tails)
+  const RWf = [...this.remoteWings].flatMap(([slot, R]) => R.list.filter((w) => w.x).map((w) => ({ slot, w })));
+  const sfr = RWf.length ? this.sfFrame(cam) : null;
+  const owr = sfr ? this.netOwn() : null;
+  if (sfr && owr && LA && LA.air.rho > 0) {
+    const [E, N, U] = [sfr.east, sfr.north, sfr.up].map((v) => fr.fromLocal(sfr.toLocal(v as Vec3))) as [Vec3, Vec3, Vec3];
+    const Uo = owr.p.map((c) => c / Math.hypot(...owr.p));
+    const Eo = [-Uo[1]!, Uo[0]!, 0].map((c, _, a) => c / (Math.hypot(a[0]!, a[1]!) || 1));
+    const No = [Uo[1]! * Eo[2]! - Uo[2]! * Eo[1]!, Uo[2]! * Eo[0]! - Uo[0]! * Eo[2]!, Uo[0]! * Eo[1]! - Uo[1]! * Eo[0]!];
+    for (const { slot, w } of RWf) {
+      const r = w.p.map((v, k) => v - w.f[k]! * 8 - owr.p[k]!);
+      if (Math.hypot(r[0]!, r[1]!, r[2]!) > 40_000) continue;
+      const re = r[0]! * Eo[0]! + r[1]! * Eo[1]! + r[2]! * Eo[2]!,
+        rn = r[0]! * No[0]! + r[1]! * No[1]! + r[2]! * No[2]!,
+        ru = r[0]! * Uo[0]! + r[1]! * Uo[1]! + r[2]! * Uo[2]!;
+      src.push({ key: `rw${slot}:${w.k}`, p: [0, 1, 2].map((k) => x[k]! + E[k]! * re + N[k]! * rn + U[k]! * ru) as Vec3, kind: 4, str: 1 });
+    }
+  }
   // (a fight's missiles: their motors' smoke — controller/combat.ts —, at their place from the craft in the
   // local east, north, up)
   const CB = this.combat;

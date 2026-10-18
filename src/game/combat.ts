@@ -237,7 +237,8 @@ export interface Target {
    *  his own (a hit on him sent to him) */
   peer?: number;
   /** another player shot down, his craft falling out of control to its crash (ui/netmatch.ts — his own fall,
-   *  game/wreckfall.ts, placed here from the network): its smoke */
+   *  game/wreckfall.ts, placed here from the network), or one of our AI wingmen's wreck (controller/wingmen.ts): its
+   *  smoke */
   falling?: boolean;
   /** a target another runs (the host's aggressors on a guest's world): placed from the network, not stepped, a
    *  hit on it sent to the host */
@@ -774,7 +775,8 @@ export class CombatWorld {
    */
   setPeers(list: { slot: number; name: string; p: V3; v: V3; fwd: V3; up: V3; alive: boolean; friendly: boolean; falling?: boolean }[]) {
     const ids = new Set(list.map((x) => 10_000 + x.slot));
-    this.targets = this.targets.filter((q) => q.peer === undefined || ids.has(q.id));
+    // (the players gone dropped — our AI wingmen, peers of a negative slot, are setWingmen's)
+    this.targets = this.targets.filter((q) => q.peer === undefined || q.peer < 0 || ids.has(q.id));
     for (const x of list) {
       const id = 10_000 + x.slot;
       let q = this.target(id);
@@ -806,7 +808,7 @@ export class CombatWorld {
    * a negative slot: −2 for Two…), placed each frame, a hit on it kept in netHits for its own damage. Their ids:
    * 20 000 + their place.
    */
-  setWingmen(list: { k: number; name: string; p: V3; v: V3; fwd: V3; up: V3; alive: boolean }[]) {
+  setWingmen(list: { k: number; name: string; p: V3; v: V3; fwd: V3; up: V3; alive: boolean; falling?: boolean }[]) {
     const ids = new Set(list.map((x) => 20_000 + x.k));
     this.targets = this.targets.filter((q) => !(q.peer !== undefined && q.peer < 0) || ids.has(q.id));
     for (const x of list) {
@@ -830,7 +832,7 @@ export class CombatWorld {
         this.targets.push(q);
       }
       if (q.alive && !x.alive) q.diedAt = this.t;
-      Object.assign(q, { p: x.p, v: x.v, fwd: x.fwd, up: x.up, alive: x.alive, friendly: true });
+      Object.assign(q, { p: x.p, v: x.v, fwd: x.fwd, up: x.up, alive: x.alive, friendly: true, falling: !!x.falling });
     }
   }
 

@@ -340,21 +340,24 @@ export class NetSession {
     if (!c.radarSources.has("rwg"))
       c.radarSources.set("rwg", (fix) =>
         [...c.remoteWings.entries()].flatMap(([slot, R]) =>
-          R.list.map((w) => ({
-            id: `rwg:${slot}:${w.k}`,
-            r: fix.toLocal(w.p as [number, number, number]),
-            v: [0, 1, 2].map((i) => (i === 0 ? fix.E : i === 1 ? fix.N : fix.U).reduce((s, x, k) => s + x * w.v[k]!, 0)) as [
-              number,
-              number,
-              number,
-            ],
-            rcs: 4,
-            kind: "air" as const,
-            iff: "friend" as const,
-            name: `${R.name} ${w.k}`,
-            squawk: true,
-            offboard: true,
-          })),
+          // (one shot down, falling to its crash: no longer a track)
+          R.list
+            .filter((w) => !w.x)
+            .map((w) => ({
+              id: `rwg:${slot}:${w.k}`,
+              r: fix.toLocal(w.p as [number, number, number]),
+              v: [0, 1, 2].map((i) => (i === 0 ? fix.E : i === 1 ? fix.N : fix.U).reduce((s, x, k) => s + x * w.v[k]!, 0)) as [
+                number,
+                number,
+                number,
+              ],
+              rcs: 4,
+              kind: "air" as const,
+              iff: "friend" as const,
+              name: `${R.name} ${w.k}`,
+              squawk: true,
+              offboard: true,
+            })),
         ),
       );
     this.alightStep(now);

@@ -7,7 +7,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // 150 % sent over the network as her shot's is (the missiles themselves: net-battle, net-wing-fight) — downs him: his
 // controls cut, his craft falls out of control (it rolls, its nose drops) to the ground — seen so on both pages, its
 // smoke trailing —, explodes there on both (where he says it ended), his smoke rising; hidden then on Ana's, the
-// kill cam on Ana after; Ben in the air again 6 s after the crash, 5 000 m up. (NET_SHOTS=<dir>: both views.)
+// kill cam on Ana after; Ben in the air again 6 s after the crash, 5 000 m up. Then his AI wingman, shot down so:
+// out of control to its crash too, seen from both. (NET_SHOTS=<dir>: both views.)
 
 describe.skipIf(!E2E)("a player shot down: out of control to the crash, seen from both", () => {
   let a: App;
@@ -179,6 +180,54 @@ describe.skipIf(!E2E)("a player shot down: out of control to the crash, seen fro
     expect(h).toBeGreaterThan(4000);
     await a.waitFor(`!__bh.net.session.hidden.has(${sb}) && (${PEER(sb)})?.alive === true`, 15_000);
     await shot(b, "b-again");
-    for (const p of [a, b]) expect(p.cdp.errors.filter((e) => !/Failed to load resource|net::ERR/.test(e))).toEqual([]);
   }, 60_000);
+
+  test("Ben's AI wingman shot down by Ana: out of control to its crash too — falling, its smoke, its explosion on both pages", async () => {
+    // (Ben where he started, his wingman Two on his wing; Ana 12 km east of him, low, coming west)
+    await b.js(
+      `(() => { __bh.settings.wingmen = 1; __bh.game.flyAt(34.95, ${-117.8 + 1500 / (111_195 * Math.cos((34.95 * Math.PI) / 180))}, 2300, 90, 220); return 1; })()`,
+    );
+    await a.js(
+      `(() => { __bh.game.flyAt(34.95, ${-117.8 + 13_500 / (111_195 * Math.cos((34.95 * Math.PI) / 180))}, 500, 270, 150); return 1; })()`,
+    );
+    await b.waitFor(`__bh.camera.wing?.list.some((w) => w.k === 2 && w.alive)`, 20_000);
+    await a.waitFor(`__bh.camera.remoteWings.get(${sb})?.list.some((w) => w.k === 2 && !w.x)`, 20_000);
+    await Bun.sleep(3000);
+    /** Two's height over the ground on Ben's page [m] (its wreck's when falling), on Ana's (the room's sample) */
+    const TWO = `(() => { const w = __bh.camera.wing.list.find((x) => x.k === 2); const p = w.wreck && !w.alive ? w.wreck.p : w.jet.p; const R = Math.hypot(...p); return { alive: w.alive, falling: !!w.wreck && !w.wreck.end, ended: !!w.wreck?.end, broke: !!w.wreck?.broke, t: w.wreck?.t ?? 0, p }; })()`;
+    const h0 = await b.js<number>(`__bh.camera.wingShips().length`);
+    expect(h0).toBeGreaterThan(0);
+    await a.js(`(() => { __bh.net.net.event({ kind: "hitWing", to: ${sb}, k: 2, dmg: 150, by: "aim120" }); return 1; })()`);
+    await b.waitFor(`(${TWO}).falling`, 10_000);
+    // (falling on both: drawn still, on Ana's its samples marked so, not a radar track there any more — its smoke)
+    await a.waitFor(`__bh.camera.remoteWings.get(${sb})?.list.some((w) => w.k === 2 && w.x === 1)`, 5000);
+    const p0 = await b.js<number[]>(`(${TWO}).p`);
+    const q0 = await a.js<number[]>(`__bh.camera.remoteWings.get(${sb}).list.find((w) => w.k === 2).p`);
+    await Bun.sleep(4000);
+    const p1 = await b.js<number[]>(`(${TWO}).p`);
+    const q1 = await a.js<number[]>(`__bh.camera.remoteWings.get(${sb}).list.find((w) => w.k === 2).p`);
+    const down = (u: number[], v: number[]) => Math.hypot(...u) - Math.hypot(...v);
+    console.log(`  Two 4 s on: ${Math.round(down(p0, p1))} m lower on Ben's page, ${Math.round(down(q0, q1))} m on Ana's`);
+    expect(down(p0, p1)).toBeGreaterThan(50);
+    expect(down(q0, q1)).toBeGreaterThan(50);
+    expect(await b.js<number>(`__bh.camera.wingShips().length`)).toBeGreaterThan(0);
+    expect(await a.js<boolean>(`__bh.camera.radarObjects.some((o) => o.id === "rwg:${sb}:2")`)).toBe(false);
+    expect(await b.js<boolean>(`__bh.camera.combat.world.targets.some((q) => q.id === 20_002 && q.falling)`)).toBe(true);
+    await shot(a, "a-wing-falling");
+    // (its crash: on the ground, the explosion and the smoke on both pages)
+    await b.waitFor(`(${TWO}).ended`, 60_000);
+    const T = await b.js<{ t: number; broke: boolean }>(TWO);
+    console.log(`  Two down in ${T.t.toFixed(1)} s — Ana's log: ${await a.js<string>(`__bh.net.match.log.slice(-1).join("")`)}`);
+    expect(T.broke).toBe(false);
+    expect(await b.js<boolean>(`__bh.camera.combat.crashes.some((x) => x.key === "w2")`)).toBe(true);
+    await a.waitFor(`__bh.camera.combat.crashes?.some((x) => x.key === "w${sb}:2")`, 10_000);
+    const crash = await a.js<number>(
+      `(() => { const C = __bh.camera.combat; const x = C.crashes.find((y) => y.key === "w${sb}:2"); return x.p[2] - C.world.groundZ(x.p[0], x.p[1]); })()`,
+    );
+    expect(Math.abs(crash)).toBeLessThan(5);
+    await a.waitFor(`!__bh.camera.remoteWings.get(${sb})?.list.some((w) => w.k === 2)`, 5000);
+    await Bun.sleep(600);
+    await shot(a, "a-wing-crash");
+    for (const p of [a, b]) expect(p.cdp.errors.filter((e) => !/Failed to load resource|net::ERR/.test(e))).toEqual([]);
+  }, 120_000);
 });

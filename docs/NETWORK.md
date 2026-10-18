@@ -104,7 +104,10 @@ uniform of the flown craft's), the crafts of the players gone kept in the room's
   explosion, a column of smoke rising 45 s —, the crash then watched from 700 m back and 260 m up (shot down by
   another: his craft followed 2.5 s on — the kill cam); a fall longer than 45 s breaks up in the air. The others
   see the same: the craft falling as its samples bring it (not hidden), its smoke, its explosion where its pilot
-  says it ended (the `impact` event, the Earth's coordinates), hidden from there. Back in the fight 5 s after the
+  says it ended (the `impact` event, the Earth's coordinates), hidden from there. **The AI wingmen** shot down
+  fall so too (`controller/wingmen.ts`): their wreck flown down by their host, sent to the room marked falling (no
+  longer a radar track), its smoke on every page, its crash's explosion and smoke where the host says it ended (the
+  `wingCrash` event). Back in the fight 5 s after the
   crash on your place of the ring; a **mid-air collision** between two players destroys both (out of a match:
   no pause, back on the nearest runway 4 s later).
 - **The HUD**: the hit marker (four ticks; a kill: thick and red), the score bar (the mode, the clock, the
@@ -124,7 +127,8 @@ uniform of the flown craft's), the crafts of the players gone kept in the room's
 
 Measured on kerr-mini (`tests/e2e/net-shotdown`): Ben shot down 2 300 m up, his craft down in 24 s, rolling
 1.6 rad/s, its nose dropping — on Ana's page 2 284 → 2 175 m when 2 283 → 2 180 m on his —, its crash on her page 11 m
-from his craft's last place there, on the ground; the kill cam on her, Ben again 5 000 m up 6 s after.
+from his craft's last place there, on the ground; the kill cam on her, Ben again 5 000 m up 6 s after. His
+wingman Two shot down so: 90 m lower 4 s on on both pages, down in 24 s, its crash on Ana's page on the ground.
 (`net-battle`: Ana down in 34 s from the arena's 4 000 m.)
 
 Measured on kerr-mini (`tests/e2e/net-battle`, `net-coop`): the AIM-120 fired at 15 km seen on the target's

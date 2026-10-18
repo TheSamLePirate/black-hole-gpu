@@ -20,7 +20,8 @@ import { SITES } from "../game/sites";
 import type { RadarObject } from "../game/radar";
 import { restPose, type F35Pose } from "../f35/model";
 import { tr } from "../i18n";
-import { cartToGeodetic, WGS84_A, WGS84_F } from "../system/ellipsoid";
+import { cartToGeodetic, geodeticNormal, WGS84_A, WGS84_F } from "../system/ellipsoid";
+import { fallStep, startFall, type WreckFall } from "../game/wreckfall";
 import { bodyFixedOf, groundRelief } from "../system/our-surface";
 import { solarBody } from "../system/solar";
 import { earthView } from "./netcraft";
@@ -36,6 +37,9 @@ declare module "../controls" {
     wingOrder: typeof wingOrder;
     wingCount: typeof wingCount;
     wingHurt: typeof wingHurt;
+    /** one of our wingmen's wreck crashed (where: the Earth's coordinates [m]; broken up in the air): the room told
+     *  (ui/netmatch.ts) */
+    onWingCrash?: (k: number, p: number[], broke: boolean) => void;
   }
 }
 
@@ -71,6 +75,8 @@ export interface Wingman {
   fired: { id: number; target: number; at: number }[];
   hp: number;
   alive: boolean;
+  /** shot down: its wreck out of control to the ground (game/wreckfall.ts — a player's craft's fall), until it ends */
+  wreck?: WreckFall | null;
   /** its slot's distance [m] (in formation, in cover), its last commands */
   dist: number;
   cmd: AiCmd | null;
@@ -86,21 +92,33 @@ export interface RemoteWing {
   v: number[];
   f: number[];
   u: number[];
+  /** shot down, falling to its crash */
+  x?: 1;
+}
+
+/** A wingman's wreck still falling (shot down, not yet crashed). */
+const fallingW = (w: Wingman) => !w.alive && !!w.wreck && !w.wreck.end;
+/** A wingman as drawn and sent: its place, velocity, nose and top — alive, its craft's; falling, its wreck's. */
+function poseOf(w: Wingman): { p: number[]; v: number[]; fwd: number[]; up: number[] } {
+  if (w.wreck && !w.alive) return { p: w.wreck.p, v: w.wreck.v, fwd: w.wreck.fwd, up: w.wreck.up };
+  const A = w.jet.axes();
+  return { p: w.jet.p, v: w.jet.v, fwd: A.fwd, up: A.up };
 }
 
 /** Our wingmen as sent to the room. */
 export function wingsOut(c: CameraController): RemoteWing[] {
   const r = (x: number, k = 10) => Math.round(x * k) / k;
   return (c.wing?.list ?? [])
-    .filter((w) => w.alive)
+    .filter((w) => w.alive || fallingW(w))
     .map((w) => {
-      const A = w.jet.axes();
+      const P = poseOf(w);
       return {
         k: w.k,
-        p: w.jet.p.map((x) => r(x)),
-        v: w.jet.v.map((x) => r(x)),
-        f: A.fwd.map((x) => r(x, 1000)),
-        u: A.up.map((x) => r(x, 1000)),
+        p: P.p.map((x) => r(x)),
+        v: P.v.map((x) => r(x)),
+        f: P.fwd.map((x) => r(x, 1000)),
+        u: P.up.map((x) => r(x, 1000)),
+        ...(w.alive ? {} : { x: 1 as const }),
       };
     });
 }
@@ -158,10 +176,43 @@ function wingHurt(this: CameraController, k: number, damage: number, by: string)
   if (!w) return;
   w.hp -= damage;
   if (w.hp > 0) return radio(this, tr({ fr: `${nameOf(w.k)}, touché par ${by} !`, en: `${nameOf(w.k)}, hit by ${by}!` }));
-  w.alive = false;
   radio(this, tr({ fr: `${nameOf(w.k)} abattu par ${by} !`, en: `${nameOf(w.k)} shot down by ${by}!` }));
-  const C = this.combat;
-  if (C) C.booms.push({ p: fightP(this, w.jet.p) ?? [0, 0, 0], t: C.t, size: 1.5 });
+  wingDown(this, w);
+}
+
+/** One of our wingmen shot down: out of control to the ground as a player's craft is (game/wreckfall.ts), its burst
+ *  where it was hit. */
+function wingDown(c: CameraController, w: Wingman) {
+  w.alive = false;
+  const A = w.jet.axes();
+  w.wreck = startFall({ p: [...w.jet.p] as V3, v: [...w.jet.v] as V3, fwd: [...A.fwd] as V3, up: [...A.up] as V3 });
+  const C = c.combat;
+  if (C) C.booms.push({ p: fightP(c, w.jet.p) ?? [0, 0, 0], t: C.t, size: 1.5 });
+}
+
+const normalE = (p: V3) => geodeticNormal(WGS84_A, WGS84_F, p);
+const aglE = (p: V3) => geoOf(p).agl;
+
+/** A frame of a wingman's wreck [s]: down along the WGS84 normal to the ground (the relief over the ellipsoid); its
+ *  crash there. */
+function wingFall(c: CameraController, w: Wingman, dt: number) {
+  const F = w.wreck;
+  if (!F || F.end || !fallStep(F, dt, normalE, aglE)) return;
+  wingCrash(c, w, F.end!, F.broke);
+}
+
+/** A wingman's crash (its wreck's end, or flown into the ground): the explosion, its smoke rising (a fight's), the
+ *  room told. */
+function wingCrash(c: CameraController, w: Wingman, at: readonly number[], broke = false) {
+  const C = c.combat;
+  const fp = fightP(c, at);
+  if (C && fp) {
+    const p: V3 = [fp[0], fp[1], broke ? fp[2] : C.world.groundZ(fp[0], fp[1])];
+    C.booms.push({ p, t: C.t, size: 2.5 });
+    C.events.push({ kind: "explode", p, size: 2.5 });
+    if (!broke) C.crashes = [...(C.crashes ?? []).filter((x) => C.t - x.t < 60), { key: `w${w.k}`, p, t: C.t }];
+  }
+  c.onWingCrash?.(w.k, [...at], broke);
 }
 
 /** A radio call: said aloud and shown. */
@@ -313,9 +364,8 @@ function wingStep(this: CameraController, dt: number) {
         if (w) {
           w.hp -= h.damage;
           if (w.hp <= 0) {
-            w.alive = false;
             radio(this, tr({ fr: `${nameOf(w.k)} est abattu !`, en: `${nameOf(w.k)} is down!` }));
-            C!.booms.push({ p: fightP(this, w.jet.p) ?? [0, 0, 0], t: C!.t, size: 1.5 });
+            wingDown(this, w);
           } else radio(this, tr({ fr: `${nameOf(w.k)}, touché !`, en: `${nameOf(w.k)}, I'm hit!` }));
         }
       } else keep.push(h);
@@ -323,7 +373,10 @@ function wingStep(this: CameraController, dt: number) {
     CW.netHits = keep;
   }
   for (const w of Wg.list) {
-    if (!w.alive) continue;
+    if (!w.alive) {
+      wingFall(this, w, dt);
+      continue;
+    }
     const J = w.jet;
     const g = geoOf(J.p);
     let cmd: AiCmd;
@@ -481,17 +534,27 @@ function wingStep(this: CameraController, dt: number) {
     if (J.crashed) {
       w.alive = false;
       radio(this, tr({ fr: `${nameOf(w.k)} s'est écrasé`, en: `${nameOf(w.k)} crashed` }));
+      wingCrash(this, w, J.p);
     }
   }
   // (the fight: our wingmen in it — the aggressors go after them —, our kills said)
   if (CW) {
     CW.setWingmen(
       Wg.list.map((w) => {
-        const A = w.jet.axes();
-        const P = fightP(this, w.jet.p) ?? [0, 0, -1e6];
-        const R = enuAxes(w.jet.p);
+        const A = poseOf(w);
+        const P = fightP(this, A.p) ?? [0, 0, -1e6];
+        const R = enuAxes(A.p);
         const loc = (x: readonly number[]): V3 => [dot(x, R.E), dot(x, R.N), dot(x, R.U)];
-        return { k: w.k, name: nameOf(w.k), p: P, v: loc(w.jet.v), fwd: loc(A.fwd), up: loc(A.up), alive: w.alive };
+        return {
+          k: w.k,
+          name: nameOf(w.k),
+          p: P,
+          v: loc(A.v),
+          fwd: loc(A.fwd),
+          up: loc(A.up),
+          alive: w.alive,
+          falling: fallingW(w),
+        };
       }),
     );
     for (const w of Wg.list)
@@ -705,11 +768,12 @@ function wingShips(this: CameraController): { id: "f35"; rel: Vec3; axes: [Vec3,
       hidden: false,
     };
   };
+  // (ours flying, and those shot down falling to their crash)
   const out = (Wg?.list ?? [])
-    .filter((w) => w.alive)
+    .filter((w) => w.alive || fallingW(w))
     .map((w) => {
-      const A = w.jet.axes();
-      return ship(w.jet.p, A.fwd, A.up);
+      const A = poseOf(w);
+      return ship(A.p, A.fwd, A.up);
     });
   // (the room's others': carried on from their last sample — a second at most —, drawn smoothed: the place carried
   // on by its velocity frame to frame and eased onto each new sample's over a quarter second, the attitude eased so;
