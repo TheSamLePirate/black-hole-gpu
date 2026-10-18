@@ -459,6 +459,8 @@ function setView(view: CrewView) {
     b.setAttribute("aria-pressed", String(b.dataset.view === view));
   }
   document.querySelector<HTMLElement>(".zoom")!.hidden = view === "pfd";
+  mcp.hidden = view !== "pfd" && view !== "dash";
+  if (!mcp.hidden && !mcp.childElementCount) buildMcp();
   $("views").querySelector<HTMLElement>(`[data-view=${view}]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
   controls();
   showCrew(false);
@@ -663,6 +665,198 @@ function syncActs() {
     b.title = can.ok ? "" : can.why;
   }
 }
+// ---- the MCP (PLAN-CREW-ACTIONS A3): the aircraft's autopilot set as a copilot sets it — under the PFD and the dashboard
+const mcp = $("mcp");
+/** a selector's value turned but not yet sent (sent once the finger rests 400 ms), its time */
+const pend: { alt?: number; hdg?: number; spd?: number; at: number } = { at: 0 };
+let pendTimer: ReturnType<typeof setTimeout> | undefined;
+/** the selectors' targets now: the pending turn, else the pilot's selected, else the flight's own figure */
+function mcpNow() {
+  const s = snapNow();
+  const a = s?.auto,
+    f = s?.flight;
+  const recent = performance.now() - pend.at < 2500;
+  return {
+    alt: (recent ? pend.alt : undefined) ?? a?.alt ?? s?.metrics.alt ?? 0,
+    hdg: (recent ? pend.hdg : undefined) ?? (a?.hdg != null ? (a.hdg * 180) / Math.PI : f ? (f.hdg * 180) / Math.PI : 0),
+    spd: (recent ? pend.spd : undefined) ?? a?.spd ?? f?.tas ?? s?.metrics.speed ?? 0,
+  };
+}
+function sendPend() {
+  const args: Args = {};
+  if (pend.alt !== undefined) args.alt = Math.round(Math.max(0, Math.min(20_000, pend.alt)));
+  if (pend.hdg !== undefined) args.hdgDeg = ((Math.round(pend.hdg) % 360) + 360) % 360;
+  if (pend.spd !== undefined) args.spd = Math.round(Math.max(30, Math.min(700, pend.spd)));
+  pend.alt = pend.hdg = pend.spd = undefined;
+  if (Object.keys(args).length) void fire(mcp.querySelector("[data-act='ap.set']"), "ap.set", args);
+}
+/** a selector: − and + (held: repeating, faster), its value; turned values sent together once the finger rests */
+function selector(key: "alt" | "hdg" | "spd", title: string) {
+  const box = el("div", "", "knob");
+  box.dataset.key = key;
+  const u = () => unitsOf(views.units);
+  const step = () => (key === "hdg" ? 1 : key === "alt" ? 100 / u().alt(1) : 5 / u().spd(1));
+  const value = el("output", "—", "knob-value");
+  const turn = (dir: number, fast: boolean) => {
+    const now = mcpNow();
+    let v = (pend[key] ?? now[key]) + dir * step() * (fast ? 10 : 1);
+    if (key === "hdg") v = ((v % 360) + 360) % 360;
+    pend[key] = v;
+    pend.at = performance.now();
+    clearTimeout(pendTimer);
+    pendTimer = setTimeout(sendPend, 400);
+    syncMcp();
+  };
+  const hold = (dir: number, text: string, label: string) => {
+    const b = el("button", text, "knob-step") as HTMLButtonElement;
+    b.type = "button";
+    b.dataset.act = "ap.set";
+    b.setAttribute("aria-label", label);
+    let timer: ReturnType<typeof setInterval> | undefined;
+    let n = 0;
+    const stop = () => {
+      clearInterval(timer);
+      timer = undefined;
+    };
+    b.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      n = 0;
+      turn(dir, false);
+      timer = setInterval(() => turn(dir, ++n > 8), 140);
+    });
+    for (const ev of ["pointerup", "pointercancel", "pointerleave", "blur"]) b.addEventListener(ev, stop);
+    b.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        turn(dir, e.shiftKey);
+      }
+    });
+    return b;
+  };
+  box.append(el("span", title, "knob-title"), hold(-1, "−", `${title} moins`), value, hold(1, "+", `${title} plus`));
+  return box;
+}
+function buildMcp() {
+  mcp.replaceChildren();
+  /** a switch: its state the pilot's (4 Hz), but what it was just set to while his instruments catch up (1.5 s) */
+  const toggle = (text: string, act: Act, args: (want: boolean) => Args, on: () => boolean, id: string) => {
+    let local: { v: boolean; at: number } | null = null;
+    let want = false;
+    const state = () => (local && performance.now() - local.at < 1500 ? local.v : on());
+    const b = actButton(
+      text,
+      act,
+      () => {
+        want = !state();
+        return args(want);
+      },
+      id,
+      (ok) => {
+        if (ok) local = { v: want, at: performance.now() };
+      },
+    );
+    pressedOf.set(b, state);
+    return b;
+  };
+  const a = () => snapNow()?.auto;
+  const app = document.createElement("details");
+  app.className = "pan-controls mcp-pop";
+  app.append(el("summary", "APP"));
+  const appBox = el("div");
+  const field = document.createElement("input");
+  field.placeholder = "OACI (vide : le plus proche)";
+  field.setAttribute("aria-label", "Terrain de l'approche ILS");
+  appBox.append(
+    field,
+    actButton("ILS", "ap.ils", () => (field.value.trim() ? { field: field.value.trim().slice(0, 12) } : {}), "mcp-ils"),
+    actButton("Annuler l'ILS", "ap.ilsOff", {}, "mcp-ils-off"),
+  );
+  app.append(appBox);
+  const modes = document.createElement("details");
+  modes.className = "pan-controls mcp-pop";
+  modes.append(el("summary", "Modes"));
+  const modeBox = el("div");
+  const agl = document.createElement("input");
+  agl.type = "number";
+  agl.value = "150";
+  agl.setAttribute("aria-label", "Hauteur du suivi de terrain en mètres");
+  const here = () => {
+    const g = model.own()?.geo;
+    return g ? { lat: Math.round(g.lat * 1e5) / 1e5, lon: Math.round(g.lon * 1e5) / 1e5 } : {};
+  };
+  modeBox.append(
+    actButton("Orbite ici", "ap.mode", () => ({ mode: "orbit", ...here() }), "mcp-orbit"),
+    actButton("Circuit d'attente", "ap.mode", () => ({ mode: "hold", inboundDeg: Math.round(mcpNow().hdg) % 360 }), "mcp-hold"),
+    agl,
+    actButton("Suivi de terrain", "ap.mode", () => ({ mode: "tf", aglM: Math.max(0, Math.min(1000, Number(agl.value) || 150)) }), "mcp-tf"),
+    actButton("Arrêter l'interception", "ap.traffic", { action: "stop" }, "mcp-stop"),
+    actButton("Couper le mode", "ap.mode", { mode: "off" }, "mcp-mode-off"),
+  );
+  modes.append(modeBox);
+  const go = actButton("Remise de gaz", "ap.goAround", {}, "mcp-ga");
+  go.classList.add("mcp-ga");
+  // the switches on one row (a phone scrolls it), the three selectors on the other
+  const sw = el("div", "", "mcp-sw");
+  sw.append(
+    toggle(
+      "AP",
+      "ap.engage",
+      (w) => ({ ap: w }),
+      () => a()?.alt != null || a()?.hdg != null,
+      "mcp-ap",
+    ),
+    toggle(
+      "A/THR",
+      "ap.engage",
+      (w) => ({ athr: w }),
+      () => a()?.spd != null,
+      "mcp-athr",
+    ),
+    toggle(
+      "LNAV",
+      "ap.nav",
+      (w) => ({ lnav: w }),
+      () => !!a()?.lnav,
+      "mcp-lnav",
+    ),
+    toggle(
+      "VNAV",
+      "ap.nav",
+      (w) => ({ vnav: w }),
+      () => !!a()?.vnav,
+      "mcp-vnav",
+    ),
+    app,
+    modes,
+    go,
+  );
+  const kn = el("div", "", "mcp-knobs");
+  kn.append(selector("spd", "VIT"), selector("hdg", "CAP"), selector("alt", "ALT"));
+  mcp.append(sw, kn);
+  syncMcp();
+}
+/** the selectors' windows: the pending turn in white, the pilot's selected in cyan, none in grey */
+function syncMcp() {
+  if (mcp.hidden) return;
+  const u = unitsOf(views.units);
+  const now = mcpNow();
+  const a = snapNow()?.auto;
+  const recent = performance.now() - pend.at < 2500;
+  for (const box of mcp.querySelectorAll<HTMLElement>(".knob")) {
+    const key = box.dataset.key as "alt" | "hdg" | "spd";
+    const out = box.querySelector("output")!;
+    const v = now[key];
+    out.textContent =
+      key === "hdg"
+        ? String(Math.round(v) % 360).padStart(3, "0")
+        : key === "alt"
+          ? Math.round(u.alt(v)).toLocaleString("fr-FR")
+          : String(Math.round(u.spd(v)));
+    const selected = key === "alt" ? a?.alt != null : key === "hdg" ? a?.hdg != null : a?.spd != null;
+    out.dataset.state = recent && pend[key] !== undefined ? "turning" : selected ? "selected" : "off";
+  }
+}
+
 /** the board: the lock's state and the journal of the orders the pilot followed answered */
 function board() {
   const own = model.own();
@@ -724,6 +918,7 @@ function refresh() {
   tiles(own);
   alerts(own);
   board();
+  syncMcp();
   const followed = room?.members.find((m) => m.slot === model.selected);
   $("pilot-dot").style.background = followed?.colour ?? "#4d606b";
   $("freshness").textContent =
@@ -1027,7 +1222,16 @@ views.onContact = (id, x = stage.clientWidth / 2, y = stage.clientHeight / 2) =>
           .filter(Boolean)
           .join(" · ")
       : "";
-  menu(x, y, name, info, [actButton("Cibler", "nav.target", { name }, undefined, (ok) => ok && closeMenu())]);
+  const air = !!c || t?.kind === "air";
+  menu(x, y, name, info, [
+    actButton("Cibler", "nav.target", { name }, "ctx-target", (ok) => ok && closeMenu()),
+    ...(air
+      ? [
+          actButton("Intercepter", "ap.traffic", { action: "intercept", name }, "ctx-intercept", (ok) => ok && closeMenu()),
+          actButton("Rejoindre en formation", "ap.traffic", { action: "join", name }, "ctx-join", (ok) => ok && closeMenu()),
+        ]
+      : []),
+  ]);
   views.request();
 };
 

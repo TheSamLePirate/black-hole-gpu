@@ -1290,3 +1290,209 @@ dialog input {
   border-color: var(--red);
   color: #ffd2cc;
 }
+
+/* ---- the MCP (PLAN-CREW-ACTIONS A3): the glareshield's selectors under the PFD */
+.mcp {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 4px 0;
+  padding: 8px;
+  border: 1px solid #22404f;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #111d26, #0a131a);
+  box-shadow: inset 0 1px 0 #ffffff0d;
+}
+.mcp[hidden] {
+  display: none;
+}
+.mcp-sw {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.mcp-sw::-webkit-scrollbar {
+  display: none;
+}
+.mcp-sw > * {
+  flex-shrink: 0;
+}
+.mcp-sw button,
+.mcp-sw summary {
+  min-height: 44px;
+  min-width: 56px;
+  border-radius: 8px;
+  font: 700 12px var(--mono);
+  letter-spacing: 0.8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+}
+.mcp-sw button[aria-pressed="true"] {
+  background: linear-gradient(180deg, #1c6b4a, #134a33);
+  border-color: var(--green);
+  color: #e3ffef;
+  box-shadow: 0 0 12px #4cf29a33;
+}
+.mcp-knobs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  flex: 1 1 480px;
+}
+.knob {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 38px;
+  grid-template-rows: auto 1fr;
+  align-items: center;
+  column-gap: 3px;
+  padding: 2px 4px 4px;
+  border-radius: 8px;
+  background: #060b10;
+  border: 1px solid #1d3442;
+}
+.knob-title {
+  grid-column: 1 / -1;
+  text-align: center;
+  font: 700 9px var(--mono);
+  letter-spacing: 1.5px;
+  color: var(--muted);
+}
+.knob-step {
+  min-height: 36px;
+  padding: 0;
+  border-radius: 7px;
+  font-size: 18px;
+  font-weight: 700;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.knob-value {
+  text-align: center;
+  font: 700 18px var(--mono);
+  color: #4d606b;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.knob-value[data-state="selected"] {
+  color: var(--accent);
+  text-shadow: 0 0 8px #3fd8ff66;
+}
+.knob-value[data-state="turning"] {
+  color: #fff;
+}
+.mcp-pop > div {
+  grid-template-columns: 1fr !important;
+}
+.mcp-pop input {
+  min-height: 40px;
+}
+.mcp-ga {
+  border-color: #5a4422 !important;
+  color: var(--amber);
+}
+@media (max-width: 700px) {
+  .mcp {
+    display: grid;
+    gap: 5px;
+    padding: 5px;
+    margin-inline: 0;
+  }
+  .mcp-knobs {
+    gap: 4px;
+  }
+  .knob {
+    grid-template-columns: 30px minmax(0, 1fr) 30px;
+    padding: 1px 2px 3px;
+  }
+  .knob-step {
+    min-height: 34px;
+    font-size: 16px;
+  }
+  .knob-value {
+    font-size: 14px;
+  }
+  .mcp-sw button,
+  .mcp-sw summary {
+    min-width: 48px;
+    min-height: 38px;
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  .mcp {
+    padding: 4px;
+    gap: 4px;
+  }
+  .knob-step {
+    min-height: 30px;
+  }
+}
+/* (a phone in landscape: the MCP a column beside the PFD — the height is what it lacks) */
+@media (max-height: 520px) and (orientation: landscape) {
+  .workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .workspace > .toolbar {
+    grid-column: 1 / -1;
+  }
+  .workspace > .stage {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .mcp {
+    grid-column: 2;
+    grid-row: 2;
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    width: 214px;
+    margin: 0 4px 4px 0;
+    overflow-y: auto;
+  }
+  .mcp-sw {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+  .mcp-sw > button,
+  .mcp-sw > details {
+    flex: 1 0 30%;
+  }
+  .mcp-sw summary {
+    min-width: 0;
+  }
+  .mcp-knobs {
+    grid-template-columns: 1fr;
+    flex: 0 0 auto;
+    gap: 3px;
+  }
+  .mcp-sw button,
+  .mcp-sw summary {
+    min-height: 32px;
+    font-size: 10px;
+    padding: 2px 4px;
+  }
+  .knob {
+    grid-template-rows: auto;
+    grid-template-columns: 26px 28px minmax(0, 1fr) 28px;
+    padding: 2px;
+  }
+  .knob-title {
+    grid-column: 1;
+    font-size: 8px;
+    letter-spacing: 0.5px;
+  }
+  .knob-step {
+    min-height: 30px;
+  }
+}

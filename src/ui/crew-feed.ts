@@ -265,7 +265,7 @@ export function crewSnapshot(c: CameraController, i: Info, status: RangerStatus 
       auto: i.auto,
       hold: i.hold,
       sas: i.sas,
-      order: m?.order ?? (m?.icpt ? "ICPT" : m?.form ? "FORM" : m?.tf !== undefined ? "TF" : ""),
+      order: m?.order ?? (c.orbitMode ? "ORBIT" : m?.icpt ? "ICPT" : m?.form ? "FORM" : m?.tf !== undefined ? "TF" : ""),
       hub: i.hub ? { title: i.hub.title, phase: i.hub.phase, next: i.hub.next ?? "", bar: i.hub.bar } : null,
     },
     nav:

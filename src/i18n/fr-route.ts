@@ -1,5 +1,10 @@
 // French for a plane's flight plan (PLAN-F35 F8: ui/routepanel.ts, controller/fplan.ts) — keyed by the English.
 export default {
+  "Altitude {0} m selected": "Altitude {0} m sélectionnée",
+  "Heading {0}° selected": "Cap {0}° sélectionné",
+  "Speed {0} m/s selected": "Vitesse {0} m/s sélectionnée",
+  "The autopilot as it was": "Pilote automatique inchangé",
+  "NAV as it was": "NAV inchangée",
   "No waypoint {0} — {1} in the plan": "Pas de point {0} — {1} dans le plan",
   "{0} changed": "{0} modifié",
   "Flight plan": "Plan de vol",

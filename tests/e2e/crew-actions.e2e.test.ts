@@ -88,7 +88,8 @@ describe.skipIf(!E2E)("crew actions", () => {
     await press("#ctx-append");
     expect((await route()).length).toBe(2);
     expect((await route())[1]).toMatchObject({ lat: 45.5, lon: 6.2 });
-    // (its altitude constraint, from the waypoint's menu: 4 000 m)
+    // (its altitude constraint, from the waypoint's menu once the console has the point: 4 000 m)
+    await app.waitFor(`${crew("__crew.model.own()?.snapshot?.route.length")} >= 2`, 5000);
     await app.js(`(${crew("__crew.views.onWp(1, 300, 300)")}, true)`);
     await app.js(
       `(() => { const d = document.querySelector('#crew-frame').contentDocument; d.querySelector('.ctx-menu .ctx-row input').value = '4000'; return true; })()`,
@@ -106,5 +107,44 @@ describe.skipIf(!E2E)("crew actions", () => {
     expect((await lastBoard()).what).toContain("direct");
     await app.js(crew("__crew.setView('plan')"));
     await app.shot(`${process.env.E2E_SHOTS ?? "remote-results"}/crew-actions-a2.png`);
+  }, 60_000);
+  test("A3 — the autopilot from the crew's MCP: AP, A/THR, the altitude and heading selected, LNAV, an orbit and off", async () => {
+    const modes = () =>
+      app.js<{ alt: number | null; hdg: number | null; spd: number | null; order?: string }>("({ ...__bh.camera.jetModes })");
+    /** a selector turned by its button, held for n steps (the console's own pointer events) */
+    const turn = (key: string, plus: boolean, n: number) =>
+      app.js(`(() => { const d = document.querySelector('#crew-frame').contentDocument;
+        const b = d.querySelector('.knob[data-key=${key}] .knob-step:${plus ? "last" : "first"}-of-type');
+        for (let i = 0; i < ${n}; i++) { b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })); }
+        return true; })()`);
+    await app.js(crew("__crew.setView('pfd')"));
+    await app.waitFor(`!!document.querySelector('#crew-frame').contentDocument.querySelector('#mcp-ap')`, 3000);
+    // (the holds engaged from the MCP: the altitude and heading now)
+    if ((await modes()).alt === null) await press("#mcp-ap");
+    expect((await modes()).alt).not.toBeNull();
+    const alt0 = (await modes()).alt!;
+    await turn("alt", true, 5);
+    // (sent once the finger rests: the selected altitude 500 m higher)
+    await app.waitFor(`Math.abs(__bh.camera.jetModes.alt - ${alt0 + 500}) < 11`, 5000);
+    const hdg0 = ((await modes()).hdg! * 180) / Math.PI;
+    await turn("hdg", false, 20);
+    await app.waitFor(
+      `Math.abs(((__bh.camera.jetModes.hdg * 180 / Math.PI) - ${(((hdg0 - 20) % 360) + 360) % 360} + 540) % 360 - 180) < 1.5`,
+      5000,
+    );
+    // (the autothrottle engaged, its speed held)
+    if ((await modes()).spd === null) await press("#mcp-athr");
+    expect((await modes()).spd).not.toBeNull();
+    // (LNAV on the plan made in A2, then off)
+    await press("#mcp-lnav");
+    expect(await app.js<boolean>("__bh.camera.nav.on.l")).toBe(true);
+    await press("#mcp-lnav");
+    expect(await app.js<boolean>("__bh.camera.nav.on.l")).toBe(false);
+    // (an orbit here, then the mode off)
+    await press("#mcp-orbit");
+    await app.waitFor(`!!__bh.camera.orbitMode`, 3000);
+    await press("#mcp-mode-off");
+    await app.waitFor(`!__bh.camera.orbitMode`, 3000);
+    await app.shot(`${process.env.E2E_SHOTS ?? "remote-results"}/crew-actions-a3.png`);
   }, 60_000);
 });

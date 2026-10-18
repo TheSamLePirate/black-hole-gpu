@@ -123,6 +123,88 @@ export const ACTS = {
     required: ["name"],
     say: (a) => ({ fr: `cible : ${String(a.name).slice(0, 24)}`, en: `target: ${String(a.name).slice(0, 24)}` }),
   },
+  // the autopilot (an aircraft): it flies, the crew sets it as on an MCP
+  "ap.set": {
+    fam: "jet",
+    params: {
+      alt: { type: "number", minimum: 0, maximum: 20_000 },
+      hdgDeg: { type: "number", minimum: 0, maximum: 360 },
+      spd: { type: "number", minimum: 30, maximum: 700 },
+    },
+    say: (a) => {
+      const parts: string[] = [];
+      if (a.alt !== undefined) parts.push(`ALT ${Math.round(Number(a.alt))} m`);
+      if (a.hdgDeg !== undefined) parts.push(`CAP ${String(Math.round(Number(a.hdgDeg)) % 360).padStart(3, "0")}°`);
+      if (a.spd !== undefined) parts.push(`VIT ${Math.round(Number(a.spd))} m/s`);
+      const s = parts.join(" · ") || "—";
+      return { fr: `consigne ${s}`, en: `selected ${s.replace("CAP", "HDG").replace("VIT", "SPD")}` };
+    },
+  },
+  "ap.engage": {
+    fam: "jet",
+    params: { ap: { type: "boolean" }, athr: { type: "boolean" } },
+    say: (a) => {
+      const fr = [
+        a.ap === undefined ? "" : a.ap ? "AP engagé" : "AP coupé",
+        a.athr === undefined ? "" : a.athr ? "A/THR engagée" : "A/THR coupée",
+      ];
+      const en = [a.ap === undefined ? "" : a.ap ? "AP on" : "AP off", a.athr === undefined ? "" : a.athr ? "A/THR on" : "A/THR off"];
+      return { fr: fr.filter(Boolean).join(", ") || "pilote automatique", en: en.filter(Boolean).join(", ") || "autopilot" };
+    },
+  },
+  "ap.nav": {
+    fam: "jet",
+    params: { lnav: { type: "boolean" }, vnav: { type: "boolean" } },
+    say: (a) => {
+      const p = (k: string, v: unknown) => (v === undefined ? "" : `${k} ${v ? "on" : "off"}`);
+      const s = [p("LNAV", a.lnav), p("VNAV", a.vnav)].filter(Boolean).join(", ") || "NAV";
+      return { fr: s, en: s };
+    },
+  },
+  "ap.ils": {
+    fam: "jet",
+    params: { field: { type: "string" } },
+    say: (a) => ({
+      fr: `approche ILS${a.field ? ` ${String(a.field).toUpperCase().slice(0, 12)}` : ""}`,
+      en: `ILS approach${a.field ? ` ${String(a.field).toUpperCase().slice(0, 12)}` : ""}`,
+    }),
+  },
+  "ap.ilsOff": { fam: "jet", say: () => ({ fr: "approche ILS annulée", en: "ILS approach off" }) },
+  "ap.mode": {
+    fam: "jet",
+    params: {
+      mode: { type: "string", enum: ["orbit", "hold", "tf", "off"] },
+      lat: { type: "number", minimum: -90, maximum: 90 },
+      lon: { type: "number", minimum: -180, maximum: 180 },
+      radiusKm: { type: "number", minimum: 1, maximum: 50 },
+      dir: { type: "string", enum: ["right", "left"] },
+      inboundDeg: { type: "number", minimum: 0, maximum: 360 },
+      aglM: { type: "number", minimum: 0, maximum: 1000 },
+    },
+    required: ["mode"],
+    say: (a) => {
+      const fr: Record<string, string> = {
+        orbit: "orbite",
+        hold: "circuit d'attente",
+        tf: "suivi de terrain",
+        off: "mode du pilote automatique coupé",
+      };
+      const en: Record<string, string> = { orbit: "orbit", hold: "holding pattern", tf: "terrain following", off: "autopilot mode off" };
+      return { fr: fr[String(a.mode)] ?? "mode", en: en[String(a.mode)] ?? "mode" };
+    },
+  },
+  "ap.traffic": {
+    fam: "jet",
+    params: { action: { type: "string", enum: ["intercept", "join", "stop"] }, name: { type: "string" } },
+    required: ["action"],
+    say: (a) => {
+      const n = typeof a.name === "string" ? ` ${a.name.slice(0, 16)}` : "";
+      const fr: Record<string, string> = { intercept: `interception${n}`, join: `formation sur${n}`, stop: "interception arrêtée" };
+      const en: Record<string, string> = { intercept: `intercept${n}`, join: `join${n}`, stop: "intercept stopped" };
+      return { fr: fr[String(a.action)]!, en: en[String(a.action)]! };
+    },
+  },
+  "ap.goAround": { fam: "jet", say: () => ({ fr: "remise de gaz", en: "go-around" }) },
   "cfg.sas": {
     fam: "config",
     params: { on: { type: "boolean" } },

@@ -20,6 +20,7 @@ import type { CameraController } from "../controls";
 declare module "../controls" {
   interface CameraController {
     jetToggle: typeof jetToggle;
+    apSet: typeof apSet;
     jetStep: typeof jetStep;
     jetFigures: typeof jetFigures;
     jetThrust: typeof jetThrust;
@@ -56,6 +57,40 @@ function jetThrust(this: CameraController): number {
 /** Whether the jet's systems can be flown: a craft built for the air, flown as a plane. */
 function jetReady(c: CameraController) {
   return VESSELS[fleet.active].flies && c.flightModeNow() === "plane";
+}
+
+/**
+ * The autopilot's selectors set as on an MCP (the crew's orders — docs/PLAN-CREW-ACTIONS.md A3): the altitude [m],
+ * the heading [rad], the speed [m/s], the holds (ap) and the autothrottle (athr) engaged or let go — a target given
+ * engages its system. A selected altitude or speed takes VNAV off (it would move them back), a selected heading
+ * LNAV, as the stick does. Never the throttle, never the afterburner. What was done.
+ */
+function apSet(this: CameraController, want: { alt?: number; hdg?: number; spd?: number; ap?: boolean; athr?: boolean }): string {
+  if (!jetReady(this)) return t("The jet's systems: in plane mode (F)");
+  const m = this.jetModes;
+  const N = this.nav;
+  const said: string[] = [];
+  const apOn = () => m.alt !== null || m.hdg !== null;
+  if (want.ap === false && apOn()) said.push(this.jetToggle("ap"));
+  if (want.athr === false && m.spd !== null) said.push(this.jetToggle("athr"));
+  if ((want.ap || want.alt !== undefined || want.hdg !== undefined) && !apOn()) said.push(this.jetToggle("ap"));
+  if ((want.athr || want.spd !== undefined) && m.spd === null) said.push(this.jetToggle("athr"));
+  if (want.alt !== undefined && apOn()) {
+    m.alt = Math.round(Math.max(0, Math.min(20_000, want.alt)) / 10) * 10;
+    if (N.on.v) N.on.v = false;
+    said.push(tf("Altitude {0} m selected", m.alt));
+  }
+  if (want.hdg !== undefined && apOn()) {
+    m.hdg = ((want.hdg % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) || 0;
+    if (N.on.l) N.on.l = false;
+    said.push(tf("Heading {0}° selected", String(Math.round(m.hdg / D) % 360).padStart(3, "0")));
+  }
+  if (want.spd !== undefined && m.spd !== null) {
+    m.spd = Math.round(Math.max(30, Math.min(700, want.spd)));
+    if (N.on.v) N.on.v = false;
+    said.push(tf("Speed {0} m/s selected", m.spd));
+  }
+  return said.join(" — ") || t("The autopilot as it was");
 }
 
 /**
@@ -208,5 +243,5 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
 }
 
 export function installJet(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { jetToggle, jetStep, jetFigures, jetThrust });
+  Object.assign(C.prototype, { jetToggle, apSet, jetStep, jetFigures, jetThrust });
 }

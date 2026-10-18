@@ -66,6 +66,25 @@ const RUN: Record<Act, Run> = {
   "nav.direct": (a, x) => x.tool("flight_plan", { action: "direct", index: a.index }),
   "nav.procedures": (_a, x) => x.tool("approach", { action: "procedures" }),
   "nav.target": (a, x) => x.tool("set_target", { name: a.name }),
+  // (the aircraft's autopilot: its selectors, its modes, its approaches — never the afterburner or the throttle)
+  "ap.set": (a, x) =>
+    x.camera.apSet({
+      ...(a.alt !== undefined ? { alt: Number(a.alt) } : {}),
+      ...(a.hdgDeg !== undefined ? { hdg: (Number(a.hdgDeg) * Math.PI) / 180 } : {}),
+      ...(a.spd !== undefined ? { spd: Number(a.spd) } : {}),
+    }),
+  "ap.engage": (a, x) =>
+    x.camera.apSet({ ...(a.ap !== undefined ? { ap: !!a.ap } : {}), ...(a.athr !== undefined ? { athr: !!a.athr } : {}) }),
+  "ap.nav": (a, x) =>
+    x.camera.navSet({ ...(a.lnav !== undefined ? { l: !!a.lnav } : {}), ...(a.vnav !== undefined ? { v: !!a.vnav } : {}) }),
+  "ap.ils": (a, x) => x.tool("approach", { action: "ils", ...(a.field ? { field: a.field } : {}) }),
+  "ap.ilsOff": (_a, x) => x.tool("approach", { action: "off" }),
+  "ap.mode": (a, x) => {
+    const { mode, ...rest } = a;
+    return x.tool("jet_mode", { action: mode, ...rest });
+  },
+  "ap.traffic": (a, x) => x.tool("traffic", { action: a.action, ...(a.name ? { name: a.name } : {}) }),
+  "ap.goAround": (_a, x) => x.tool("flight_action", { action: "go_around" }),
 };
 
 /** a tool's result as a short line (its own words when it says something) */
@@ -79,7 +98,8 @@ function short(r: unknown): string {
   return "";
 }
 /** the tools' refusals come back as words, not throws: the usual ones read as a refusal */
-const REFUSED = /^(no |not |cannot|can't|unknown|only |the jet's systems: in|in the air|nav: no|out of)/i;
+const REFUSED =
+  /^(no |not |cannot|can't|unknown|only |the jet's systems: in|the autopilot's holds: in|in the air|nav: (no|in the air)|out of|nothing )/i;
 
 export class CrewExec {
   private gate = new CrewGate(4);

@@ -106,6 +106,8 @@ function sample(lat0: number, lon0: number, h: number, heading: number, v: numbe
 
 // the crew's orders (docs/PLAN-CREW-ACTIONS.md): Ana's board answers them as the simulator would
 const board = { ackUntil: 0, gearDown: false, flaps: 0, brake: 0, sas: true };
+// the autopilot as an MCP: its selected targets (null: managed by the plan), its modes
+const ap = { on: true, athr: true, lnav: true, vnav: true, alt: 4000, hdg: null as number | null, spd: 235, order: "", ils: "" };
 const crewDo: Record<string, (a: Record<string, unknown>) => string | null> = {
   "cfg.ack": () => {
     board.ackUntil = t + 20;
@@ -185,6 +187,50 @@ const crewDo: Record<string, (a: Record<string, unknown>) => string | null> = {
     target = String(a.name);
     return null;
   },
+  "ap.set": (a) => {
+    if (typeof a.alt === "number") {
+      ap.alt = a.alt;
+      ap.vnav = false;
+    }
+    if (typeof a.hdgDeg === "number") {
+      ap.hdg = (a.hdgDeg * Math.PI) / 180;
+      ap.lnav = false;
+    }
+    if (typeof a.spd === "number") {
+      ap.spd = a.spd;
+      ap.vnav = false;
+    }
+    ap.on = true;
+    return null;
+  },
+  "ap.engage": (a) => {
+    if (typeof a.ap === "boolean") ap.on = a.ap;
+    if (typeof a.athr === "boolean") ap.athr = a.athr;
+    return null;
+  },
+  "ap.nav": (a) => {
+    if (!ROUTE.length) return "NAV: no flight plan";
+    if (typeof a.lnav === "boolean") ap.lnav = a.lnav;
+    if (typeof a.vnav === "boolean") ap.vnav = a.vnav;
+    return null;
+  },
+  "ap.ils": (a) => {
+    ap.ils = typeof a.field === "string" ? a.field.toUpperCase() : "LFLL";
+    return null;
+  },
+  "ap.ilsOff": () => {
+    ap.ils = "";
+    return null;
+  },
+  "ap.mode": (a) => {
+    ap.order = a.mode === "off" ? "" : (({ orbit: "ORBIT", hold: "HOLD", tf: "TF" } as Record<string, string>)[String(a.mode)] ?? "");
+    return null;
+  },
+  "ap.traffic": (a) => {
+    ap.order = a.action === "stop" ? "" : a.action === "join" ? "FORM" : "ICPT";
+    return null;
+  },
+  "ap.goAround": () => "Pas en approche",
   "cfg.sas": (a) => {
     board.sas = !!a.on;
     return null;
@@ -219,14 +265,16 @@ setInterval(() => {
   const brg = gcCourse({ lat, lon }, wp);
   const dist = gcDist({ lat, lon }, wp);
   if (dist < 2500 && leg < ROUTE.length - 1) leg++;
-  const dh = Math.atan2(Math.sin(brg - hdg), Math.cos(brg - hdg));
+  // (the heading flown: the plan's under LNAV, the selected one else; an orbit's turn)
+  const want = ap.order === "ORBIT" ? hdg + 0.4 : ap.lnav || ap.hdg === null ? brg : ap.hdg;
+  const dh = Math.atan2(Math.sin(want - hdg), Math.cos(want - hdg));
   const turn = Math.max(-3 * D, Math.min(3 * D, dh)) * dt * 2;
   hdg = (hdg + turn + 2 * Math.PI) % (2 * Math.PI);
   const bank = Math.max(-35 * D, Math.min(35 * D, dh * 2)) + Math.sin(t * 0.7) * 2 * D;
-  const target = wp.alt ?? CRUISE;
+  const target = ap.vnav ? (wp.alt ?? CRUISE) : ap.alt;
   const vs = Math.max(-25, Math.min(30, (Math.min(target, CRUISE) - alt) * 0.02));
   alt += vs * dt;
-  spd += ((wp.spd ?? 235) - spd) * 0.02;
+  spd += ((ap.vnav ? (wp.spd ?? CRUISE_SPD) : ap.spd) - spd) * 0.02;
   const gs = spd + 12;
   const p = gcDest({ lat, lon }, hdg, gs * dt);
   lat = p.lat;
@@ -321,16 +369,16 @@ setInterval(() => {
       auto: {
         mode: "plane",
         assist: "realistic",
-        alt: target,
-        hdg: brg,
-        spd: 235,
+        alt: ap.on ? target : null,
+        hdg: ap.on ? (ap.lnav ? brg : ap.hdg) : null,
+        spd: ap.athr ? (ap.vnav ? (wp.spd ?? CRUISE_SPD) : ap.spd) : null,
         ab: false,
-        lnav: true,
-        vnav: true,
+        lnav: ap.lnav,
+        vnav: ap.vnav,
         auto: "none",
         hold: "none",
         sas: board.sas,
-        order: "",
+        order: ap.order,
         hub: null,
       },
       nav: !ROUTE.length
@@ -370,7 +418,10 @@ setInterval(() => {
         damage: 0,
         mass: 22_500,
       },
-      ils: leg >= 5 ? { id: "ILS 36R LFLL", loc: Math.sin(t / 5) * 0.6, gs: Math.cos(t / 7) * 0.5, dme: dist, phase: "final" } : null,
+      ils:
+        ap.ils || leg >= 5
+          ? { id: `ILS ${ap.ils || "LFLL"}`, loc: Math.sin(t / 5) * 0.6, gs: Math.cos(t / 7) * 0.5, dme: dist, phase: "final" }
+          : null,
       orbit: null,
       next: null,
       msn: { name: "SA-6", brg: gcCourse({ lat, lon }, units[0]!), dist: gcDist({ lat, lon }, units[0]!), dz: -alt },

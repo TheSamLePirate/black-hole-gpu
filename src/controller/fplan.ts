@@ -27,6 +27,7 @@ declare module "../controls" {
     routeBingo: typeof routeBingo;
     routeFlyTo: typeof routeFlyTo;
     routeSetPoint: typeof routeSetPoint;
+    navSet: typeof navSet;
   }
 }
 
@@ -239,6 +240,15 @@ function routeSetPoint(
   return tf("{0} changed", w.name);
 }
 
+/** LNAV and VNAV set on or off (not toggled: the crew's orders — A3), each through navToggle. What was said. */
+function navSet(this: CameraController, want: { l?: boolean; v?: boolean }): string {
+  const N = this.nav;
+  const said: string[] = [];
+  if (want.l !== undefined && want.l !== N.on.l) said.push(this.navToggle("l"));
+  if (want.v !== undefined && want.v !== N.on.v) said.push(this.navToggle("v"));
+  return said.join(" — ") || t("NAV as it was");
+}
+
 export function installFplan(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { geoNow, navToggle, navStep, routeChanged, routeBingo, routeFlyTo, routeSetPoint });
+  Object.assign(C.prototype, { geoNow, navToggle, navStep, routeChanged, routeBingo, routeFlyTo, routeSetPoint, navSet });
 }
