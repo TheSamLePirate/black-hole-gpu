@@ -76,6 +76,10 @@ export interface RadarPicture {
 }
 
 export interface SymInfo {
+  /** the flown craft's docking port's axis (camera coordinates): the COAS's boresight */
+  dockBore?: number[] | null;
+  /** a spacecraft's own panel (game/craftpanel.ts) */
+  craftPanel?: import("../../game/craftpanel").CraftPanel | null;
   /** the powered landing's point (the LPD, controller/telemetry.ts) */
   lpd?: { dir: number[] | null; dist: number; moved: boolean } | null;
   /** the F-35's avionics (f35/cockpit.ts): its status block on the helmet */
@@ -645,6 +649,8 @@ export function drawSymbology(F: SymFrame) {
   if (i.chal) drawChallenge(F, pr, stroke, text);
   if (i.aero) drawAero(F, text);
   if (i.avionics && s.f35Avionics && pilotView) drawAvionics(F, i.avionics, text, hmdRgb);
+  // (a spacecraft's own panel — the Lander's descent, the Endurance's mothership's: game/craftpanel.ts)
+  else if (i.craftPanel && F.density < 2) drawCraftPanel(F, i.craftPanel, text);
   if (i.combat) drawCombat(F, pr, stroke, text);
   // (flying together, out of a fight or a course: the others on the scope, each in his colour — ui/netsession.ts)
   // (the F-35's radar — always on in the air: its scope, a fight's missiles on it, a course's gates; its lock's box)
@@ -660,6 +666,8 @@ export function drawSymbology(F: SymFrame) {
   if (i.radar?.lock && !i.combat) drawLockBox(F, pr, stroke, text, i.radar.lock);
   if (i.radar?.lock?.icpt) drawIntercept(F, pr, stroke, text, i.radar.lock, i.radar.lock.icpt);
   if (i.dock && i.dockGuide && !i.dock.docked && s.hudDock && on(F, "dock") && F.density < 2) drawDock(F, pr, stroke, text, inside);
+  // (the docking's last 60 m: the COAS — the own port's boresight, a crosshair the target port's mark is flown into)
+  if (i.dockBore && i.dirs.dock && s.hudDock && F.density < 2) drawCoas(F, i.dockBore as V3, i.dirs.dock as V3, pr, stroke, text, inside);
 
   // ---- in the air: the angle of attack, the energy, the sideslip, the load, the flight director
   const A = i.air;
@@ -2894,6 +2902,83 @@ function drawIntercept(
  * the afterburner —, the fuel — its gauge, the flow, the time left, the bingo (red past it) —, the configuration,
  * the autopilot's modes lit, the load against its limit, the STOVL, the damage in a fight, the cautions.
  */
+/** The COAS (a crewed craft's alignment sight): a crosshair on the flown craft's port's boresight, the target port's
+ *  mark a ring; aligned, the ring sits on the cross — green within 1°, amber within 5°. */
+function drawCoas(
+  F: SymFrame,
+  bore: V3,
+  port: V3,
+  pr: Proj,
+  stroke: Stroke,
+  text: Text,
+  inside: (p: [number, number] | null, m?: number) => boolean,
+) {
+  const { ctx, dpr } = F;
+  const b = bore[2] > 0.05 ? pr(bore) : null;
+  const p = port[2] > 0.05 ? pr(port) : null;
+  const off =
+    (Math.acos(
+      Math.max(
+        -1,
+        Math.min(1, (bore[0] * port[0] + bore[1] * port[1] + bore[2] * port[2]) / (Math.hypot(...bore) * Math.hypot(...port) || 1)),
+      ),
+    ) *
+      180) /
+    Math.PI;
+  const col = off < 1 ? "rgba(110, 255, 200, 0.95)" : off < 5 ? "rgba(255, 196, 92, 0.95)" : "rgba(255, 110, 90, 0.9)";
+  if (b && inside(b, 20 * dpr)) {
+    const r = 18 * dpr;
+    stroke(
+      () => {
+        ctx.moveTo(b[0] - 2.2 * r, b[1]);
+        ctx.lineTo(b[0] - 0.4 * r, b[1]);
+        ctx.moveTo(b[0] + 0.4 * r, b[1]);
+        ctx.lineTo(b[0] + 2.2 * r, b[1]);
+        ctx.moveTo(b[0], b[1] - 2.2 * r);
+        ctx.lineTo(b[0], b[1] - 0.4 * r);
+        ctx.moveTo(b[0], b[1] + 0.4 * r);
+        ctx.lineTo(b[0], b[1] + 2.2 * r);
+      },
+      col,
+      1.4,
+    );
+    text(`COAS ${off.toFixed(1)}°`, b[0] + 2.4 * 18 * dpr, b[1] - 8 * dpr, col, 10.5, "left", true);
+  }
+  if (p && inside(p, 20 * dpr)) stroke(() => ctx.arc(p[0], p[1], 9 * dpr, 0, 2 * Math.PI), col, 1.6);
+}
+
+/** A spacecraft's own panel (game/craftpanel.ts): its title, its rows — a label, a value toned — in a box at the left. */
+function drawCraftPanel(F: SymFrame, P: NonNullable<SymInfo["craftPanel"]>, text: Text) {
+  const { ctx, dpr } = F;
+  const TONE: Record<string, string> = {
+    norm: "rgba(228, 240, 255, 0.95)",
+    dim: "rgba(170, 190, 215, 0.6)",
+    warn: "rgba(255, 196, 92, 1)",
+    bad: "rgba(255, 90, 70, 1)",
+    good: "rgba(110, 255, 200, 0.95)",
+  };
+  const lh = 17 * dpr;
+  // (its place: left of the view's centre below the top's panels, clear of the HUD's own — hud/layout.ts —: moved
+  // down, else right; at the top-left it sat under the target's card)
+  const wantBox: Box = { x: 120, y: F.top / dpr + 150, w: 252, h: 17 * (P.rows.length + 1) + 12, id: "craftpanel" };
+  const at = fit(wantBox, "down", { reach: 400 }) ?? fit(wantBox, "right", { reach: 300 }) ?? wantBox;
+  drawn.push(at);
+  const x = (at.x + 8) * dpr,
+    w = 236 * dpr;
+  const y0 = (at.y + 14) * dpr;
+  const h = lh * (P.rows.length + 1) + 12 * dpr;
+  ctx.fillStyle = "rgba(4, 10, 18, 0.55)";
+  ctx.fillRect(x - 8 * dpr, y0 - 14 * dpr, w + 16 * dpr, h);
+  ctx.fillStyle = "rgba(95, 255, 208, 0.9)";
+  ctx.fillRect(x - 8 * dpr, y0 - 14 * dpr, 2 * dpr, h);
+  text(P.title, x, y0, "rgba(95, 255, 208, 0.95)", 11, "left", true);
+  P.rows.forEach((r, k) => {
+    const y = y0 + lh * (k + 1);
+    text(r.label, x, y, "rgba(170, 190, 215, 0.75)", 11, "left", true);
+    text(r.value, x + w, y, TONE[r.tone ?? "norm"]!, 12, "right", true);
+  });
+}
+
 function drawAvionics(
   F: SymFrame,
   A: NonNullable<SymInfo["avionics"]>,

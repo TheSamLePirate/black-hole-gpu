@@ -1750,8 +1750,17 @@ export class FlightHud {
     const sf = info.surface;
     const low =
       !!sf && !sf.landed && sf.alt < 300 && sf.vHor < 25 && !(info.air?.inAir && info.air.mode === "plane" && (info.air.speed ?? 0) > 60);
+    // (an airless world: its powered descent below 5 km the approach's HUD — the Lander's scope, its descent panel)
+    const airless = !info.air?.inAir && !!sf && !sf.landed;
+    const lowAirless = airless && sf!.alt < 5000;
     this.kind = this.kinds.step(
-      { stage: this.phase?.stage ?? null, mode: this.phase?.mode ?? null, final: !!this.runway?.()?.final, low },
+      {
+        stage: this.phase?.stage ?? null,
+        mode: this.phase?.mode ?? null,
+        final: !!this.runway?.()?.final,
+        low: low || lowAirless,
+        airless,
+      },
       performance.now() / 1000,
       this.s.hudKind,
     );
@@ -2712,7 +2721,11 @@ export class FlightHud {
       this.dock.append(h("div", "fl-title", tf("Docked · {0}", links.map((l) => l.title).join(" · "))));
       for (const l of links)
         this.dock.append(
-          h("div", "fl-dock-port", `${l.title} · ${l.port}${l.fuel != null ? ` · ${t("propellant")} ${Math.round(l.fuel * 100)} %` : ""}`),
+          h(
+            "div",
+            "fl-dock-port",
+            `${l.title} · ${t(l.port)}${l.fuel != null ? ` · ${t("propellant")} ${Math.round(l.fuel * 100)} %` : ""}`,
+          ),
         );
       // (a craft of the fleet with propellant to give, the flown craft's tank not full: REFUEL)
       if (i.ownFuel != null && i.ownFuel < 0.995 && links.some((l) => (l.fuel ?? 0) > 0.001)) {
@@ -2726,7 +2739,7 @@ export class FlightHud {
       this.dock.append(b);
     }
     if (!d) return;
-    this.dock.append(h("div", "fl-title", tf("Docking · {0}", d.title)), h("div", "fl-dock-port", d.name));
+    this.dock.append(h("div", "fl-title", tf("Docking · {0}", d.title)), h("div", "fl-dock-port", t(d.name)));
     row(t("Range"), f(d.range, d.range < 100 ? 2 : 1));
     row(t("Closing"), `${d.closing.toFixed(2)} m/s`, ok(d.closing > 0 && d.closing < 0.5));
     row(t("Offset"), `${f(d.lateral, 2)} · ${d.lateralRate.toFixed(2)} m/s`, ok(d.lateral < 0.3));

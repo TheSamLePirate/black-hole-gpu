@@ -65,6 +65,9 @@ export interface VesselDef {
   /** a craft turned about its long axis for its crew's weight (the Endurance — the whole of it turns, as in the film):
    *  its ring's radius [m] (PLAN-VAISSEAUX X2a) */
   ring?: { radius: number };
+  /** a spacecraft's own HUD (docs/PLAN-VAISSEAUX-AAA.md, X4; game/craftpanel.ts): its panel — the Lander's descent, the
+   *  Endurance's mothership's */
+  space?: { panel?: "descent" | "mothership" };
   /** a ground under it: its gear (the Endurance has none — it never lands) */
   lands: boolean;
   jets: JetDef[];
@@ -283,6 +286,7 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     viewDist: 62,
     // the round hatch on its back, amidships (scripts/build-lander.ts)
     ports: [{ name: "dorsal hatch", centre: [0, 5.55, 0.58], axis: [0, 1, 0] }],
+    space: { panel: "descent" },
     lands: true,
     jets: LANDER_JETS,
     flame: 1.6,
@@ -343,6 +347,7 @@ export const VESSELS: Record<VesselId, VesselDef> = {
       { name: "hub, aft", centre: [0, 0, -10.7], axis: [0, 0, -1] },
     ],
     // (its modules' ring about the hub: the radius of gyration about the axis)
+    space: { panel: "mothership" },
     ring: { radius: 30 },
     lands: false,
     jets: ENDURANCE_JETS,

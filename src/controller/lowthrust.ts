@@ -2147,6 +2147,16 @@ function hubCompute(this: CameraController): HubInfo | null {
       [t("Drift"), ms(N.drift ?? 0)],
       [t("Reference frame"), this.keepRun?.frame === "lvlh" ? t("orbital (LVLH)") : t("its own")],
     ]);
+  // (by Gargantua — controller/holeendurance.ts —: the same figures, from its own docking's)
+  const hd = a === "dock" && !this.dockInfo ? this.holeDock : null;
+  if (hd)
+    return base("DOCK", this.dockAuto?.phase ?? t("docking"), [
+      [t("Range"), hd.range < 100 ? `${hd.range.toFixed(2)} m` : km(hd.range)],
+      [t("Along · across"), `${hd.along.toFixed(1)} m · ${hd.lateral.toFixed(2)} m`],
+      [t("Closing"), `${hd.closing.toFixed(2)} m/s`],
+      [t("Ports' axes"), `${hd.angle.toFixed(1)}°`],
+      ...(hd.spin >= 0.5 ? ([[t("Turn against it"), `${hd.spin.toFixed(1)}°/s`]] as [string, string][]) : []),
+    ]);
   if (a === "dock") return this.dockCard() ?? base("DOCK", this.dockAuto?.phase ?? t("docking"));
   return base(AUTO_NAMES[a].toUpperCase(), t("flying"));
 }
