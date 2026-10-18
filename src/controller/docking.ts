@@ -863,7 +863,8 @@ function dockWant(
       blocked: false,
       checked: -1e9,
       // (the waypoints beyond where it starts: held on the way in)
-      wp: { left: DOCK_WAYPOINTS.map((_, i) => i).filter((i) => g0.along > DOCK_WAYPOINTS[i]!.along + 15), held: null, since: 0 },
+      // (beyond it by range: joined on the axis there if it comes from aside — see the axis point below)
+      wp: { left: DOCK_WAYPOINTS.map((_, i) => i).filter((i) => g0.range > DOCK_WAYPOINTS[i]!.along + 15), held: null, since: 0 },
     };
     this.onPilotMessage?.(
       `Docking autopilot · ${theTitle(g0)}'s ${g0.name} · ${g0.range < 1000 ? `${g0.range.toFixed(0)} m` : `${(g0.range / 1000).toFixed(2)} km`}`,
@@ -995,7 +996,8 @@ function dockWant(
   } else {
     D.final = false;
     // to the axis: a point on it, round the target if it stands in the way
-    const S = Math.min(Math.max(along, 30), 200);
+    // (Waypoint 1 still to hold: the axis joined just beyond it — at 200 m it was never met, coming from aside)
+    const S = Math.min(Math.max(along, 30), D.wp?.left[0] === 0 ? DOCK_WAYPOINTS[0]!.along + 5 : 200);
     const G = lin(g.c, 1, a, S / M_METRES);
     const now = frameNow();
     if (now - D.checked > 250) {
