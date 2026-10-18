@@ -11,7 +11,7 @@ export function aerialShader(code: string, supported: boolean): string {
     .replace(/^@group\(1\) @binding\((4|5|6|7|8)\).*\n/gm, "")
     .replace(
       /fn apRead\([\s\S]*?(?=@compute @workgroup_size\(8, 8\)\nfn aerial\()/,
-      "fn apRead(t: f32, tFar: f32) -> EarthAir { var o: EarthAir; o.T = vec3f(1.0); return o; }\n\n",
+      "fn apRead(t: f32, tFar: f32) -> EarthAir { var o: EarthAir; o.T = vec3f(1.0); return o; }\nfn apCovers(t: f32, tFar: f32) -> bool { return false; }\n\n",
     )
     .replace(/@compute @workgroup_size\(8, 8\)\nfn aerial\([\s\S]*?(?=fn earthLook\()/, "");
 }

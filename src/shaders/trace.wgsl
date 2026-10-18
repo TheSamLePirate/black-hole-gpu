@@ -7084,6 +7084,22 @@ fn apRead(t: f32, tFar: f32) -> EarthAir {
   return o;
 }
 
+// the table holds the air to t at AP_UV: none of the four columns read there ends before half of t (its ray met the
+// ground nearer — a hill before the far sea, the sea under a sky pixel at the horizon: their light and transmittance
+// stop there, the band at a sunset's horizon too dark); a column ending a little nearer — the next one down a slope —
+// kept, as the table's filtering is (t = 3e38: the air's end)
+fn apCovers(t: f32, tFar: f32) -> bool {
+  let dims = vec2i(textureDimensions(apInB).xy);
+  let i0 = vec2i(floor(AP_UV * vec2f(dims) - 0.5));
+  var e = 1.0;
+  for (var j = 0; j < 2; j++) {
+    for (var i = 0; i < 2; i++) {
+      e = min(e, textureLoad(apInB, vec3i(clamp(i0 + vec2i(i, j), vec2i(0), dims - 1), 0), 0).a);
+    }
+  }
+  return e * tFar >= 0.5 * min(t, tFar);
+}
+
 @compute @workgroup_size(8, 8)
 fn aerial(@builtin(global_invocation_id) gid: vec3u) {
   let dims = textureDimensions(apOutA);
@@ -7110,7 +7126,9 @@ fn aerial(@builtin(global_invocation_id) gid: vec3u) {
   var Lm = 0.0;
   var tPrev = 0.0;
   textureStore(apOutA, vec3u(gid.xy, 0u), vec4f(0.0));
-  textureStore(apOutB, vec3u(gid.xy, 0u), vec4f(1.0));
+  // (slice 0's alpha: where the column ends, over the table's reach — 1 the air's end; less, its ray met the ground:
+  // apCovers)
+  textureStore(apOutB, vec3u(gid.xy, 0u), vec4f(1.0, 1.0, 1.0, tEnd / tFar));
   AP_N = 3u;
   for (var z = 1u; z < AP_Z; z++) {
     let t = min(apSliceT(z, tFar), tEnd);
@@ -7199,8 +7217,13 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
   // the air: to the ground (or out), and to the cloud — seen through the air before it only
   // (the camera's ray, the aerial perspective's table there: read at the ground's distance and the cloud's)
   var air: EarthAir;
-  if (AP_UV.x >= 0.0 && dot(ro, ro) < airTop() * airTop()) {
-    let tFar = apFar(ro);
+  var useAp = AP_UV.x >= 0.0 && dot(ro, ro) < airTop() * airTop();
+  var tFar = 0.0;
+  if (useAp) {
+    tFar = apFar(ro);
+    useAp = apCovers(select(3e38, tHit, tHit > 0.0), tFar) && (alpha <= 0.0 || apCovers(tc, tFar));
+  }
+  if (useAp) {
     air = apRead(select(3e38, tHit, tHit > 0.0), tFar);
     air.Tc = vec3f(1.0);
     air.Lc = vec3f(0.0);
