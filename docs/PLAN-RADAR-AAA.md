@@ -2,10 +2,13 @@
 
 Sur `main`. Objectif : **un radar parfait**, pour le pilote comme pour la console crew. Tous les écrans doivent
 montrer la même chose, au même endroit, au même instant, avec les mêmes symboles. Ce qui se dit sur un écran est
-vrai sur les autres. Deux ajouts :
+vrai sur les autres. Les ajouts :
 
 - **toutes les pistes d'atterrissage du monde** sur tous les radars et toutes les cartes ;
-- **l'historique de chaque piste radar** (sa traînée), activable ou non.
+- **l'historique de chaque piste radar** (sa traînée), activable ou non ;
+- **les missiles et les leurres** (fusées IR, paillettes) sur tous les radars et toutes les cartes ;
+- **cliquer sur un radar pour sélectionner une cible**, sur tous les radars ;
+- **zoomer un radar à la molette**, sur tous les radars.
 
 **Contrainte** : coût nul mesurable sur l'image du pilote (A/B à ±1 %, comme pour le PCD) et ≤ 16 Ko par
 événement réseau (la limite du serveur, `server/rooms.ts:391`).
@@ -17,10 +20,13 @@ vrai sur les autres. Deux ajouts :
 | « les pistes » | **les deux** : toutes les pistes d'atterrissage (aéroports du monde entier + ponts des porte-avions), et l'historique de chaque piste radar (traînée, **option à bascule**) |
 | la vue « Partagé » du crew | **toujours la vérité** du jeu, y compris en match ; la vue « Capteur » montre ce que savent les capteurs du pilote |
 | les vaisseaux sans radar (Ranger, Lander, Endurance) | **un radar par vaisseau**, chacun avec son capteur (portée, champ, modes), sur le même moteur de pistes |
+| missiles et leurres | **sur tous les radars et toutes les cartes**, pilote et crew (demandé le 2026-10-18, second tour) |
+| sélection | **un clic sur un radar sélectionne la cible**, sur tous les radars (HUD, TSD, FCR, DAS, EOTS, carte de mission, crew) |
+| zoom | **la molette zoome le radar** sous le pointeur, sur tous les radars |
 
 ## Définition de « parfait » (les critères d'acceptation)
 
-Chaque critère est mesuré par un test (phase RD12) :
+Chaque critère est mesuré par un test (phase RD14) :
 
 | # | critère | mesure |
 |---|---|---|
@@ -32,6 +38,9 @@ Chaque critère est mesuré par un test (phase RD12) :
 | P6 | **Toutes les pistes** ouvertes de la base (OurAirports) avec coordonnées dessinées, à leur vraie place (±30 m sur les tuiles OSM), avec leur cap et leur longueur | test unitaire sur LFPG, KJFK, EGLL, un terrain en herbe, un hydro ; capture e2e |
 | P7 | **Coût** : image du pilote inchangée (A/B ±1 % contre le commit de départ, Mojave et Alpes) ; crew à 60 i/s sur téléphone avec 200 pistes, traînées et pistes d'aéroport | trace-ab, profilage crew |
 | P8 | **Débit** : ≤ 16 Ko par événement, ≤ 48 Ko/s par pilote | compteur dans `netsession` |
+| P9 | **Missiles et leurres** : chaque missile en vol et chaque leurre vivant est une piste, sur tous les écrans qui doivent le montrer (vérité au crew Partagé, ce que voient DAS / radar / EOTS ailleurs), avec sa cible et son temps restant | e2e : un AIM-120 tiré sur un drone, un SAM tiré sur nous, des leurres largués — comptés sur chaque écran, pilote et crew |
+| P10 | **Sélection** : un clic à moins de 12 px d'un symbole le sélectionne, sur chaque radar ; la même piste est alors sélectionnée sur **tous** les écrans du pilote (et le lock suit en < 1 image) ; un clic dans le vide ne fait rien d'autre que désélectionner | e2e en vrais événements CDP (`e2e-real-input`), un par écran |
+| P11 | **Zoom** : un cran de molette = un pas de portée, sur chaque radar ; au-dessus d'un radar, la molette ne touche **jamais** le champ de la caméra | e2e en vrais événements CDP, un par écran |
 
 ## État de départ (analysé le 2026-10-18)
 
@@ -65,6 +74,29 @@ Chaque critère est mesuré par un test (phase RD12) :
   base mondiale, pas d'index spatial.
 - **Les traînées** : aucune, nulle part. La seule trace est celle du pilote suivi dans la carte du crew
   (`crew/draw/geo.ts:222`).
+- **Les missiles** (`game/combat.ts:29`, `:256`) : AIM-120, AIM-9X, JSM, SAM, R-73, avec leur tireur (`owner`
+  blue/red, `from`), leur cible (une cible, nous `-1`, un leurre `-2 − i`, rien), leur guidage (IR ou radar).
+  - Dessinés en points : le scope du HUD (`i.combat.radar.missiles`), le TSD et la bande DAS
+    (`f35/cockpit.ts:174`, `pcd.ts:1537`).
+  - **Toujours la vérité** : sans cible dessinée, sans temps restant.
+  - En match, les missiles de chaque pilote sont envoyés aux autres 10 fois par seconde (`ui/netmatch.ts:784`).
+- **Les leurres** (`game/combat.ts:289`) : une fusée IR et une gerbe de paillettes à chaque largage
+  (`combat.ts:576`), 5 s de vie, qui détournent les missiles (IR et radar). En match, les nôtres sont envoyés
+  aux autres (`netmatch.ts:778`, événement `cm`). **Aucun écran ne les montre**, ni chez le pilote ni chez le
+  crew.
+- **Le clic sur un radar**
+  - Scope du HUD : **aucun** (dessin seulement).
+  - PCD : un toucher dans le cockpit (`camera.onJetTouch` → `jetPick` → `jetPcd.touch`, `main.ts:4291`) n'agit
+    que sur les touches. La touche LOCK passe à **la piste suivante** (`lockOnName()` sans nom). Toucher une
+    piste du TSD ou du FCR ne fait rien.
+  - Crew : un toucher sur un contact ouvre un menu (`views.onContact`, `crew/main.ts:1460`).
+- **La molette**
+  - Dans le jeu, elle zoome **le champ de la caméra** (`controls.ts:841 onWheel` → `zoomStep`), sauf au-dessus
+    d'une commande du cockpit (le bouton tourne).
+  - La portée du scope du HUD est un réglage (`f35RadarRange`). Celles du TSD et du FCR passent par les touches
+    du PCD (`pcd.ts:438`).
+  - Crew : portée continue de 500 m à 20 000 km à la molette et au pincement (radar, ND, dash : `views.ts:270`),
+    qui ne tombe pas sur les pas du jeu.
 - **Le réseau** : événements JSON par le WebSocket (fiables, ordonnés, ≤ 16 384 caractères), échantillons
   binaires de 104 octets (WebRTC sans retransmission + serveur). Horloge de salle : `net.roomNow()`,
   `net.roomWarp()` (pause = warp 0). Prédiction des autres : `remote.ts at(t)` (Hermite, correction lissée).
@@ -95,6 +127,13 @@ Chaque critère est mesuré par un test (phase RD12) :
 | 20 | Les actions crew visent un contact **par son nom** (`wp.lock {target: name}`, `ap.traffic {name}`) : deux appareils de même nom, une piste renommée, et c'est le mauvais | `crew/main.ts:1460-1485` |
 | 21 | Les options du crew (portée, nord, source) **ne sont pas sauvegardées** | `crew/main.ts:258` |
 | 22 | **Aucun radar hors du F-35** : Ranger, Lander, Endurance n'ont ni scope, ni ACAS, ni radar de rendez-vous | `radarFix` |
+| 23 | **Les leurres n'apparaissent nulle part** : ni sur le FCR (les paillettes sont un écho radar), ni sur le DAS ou l'EOTS (les fusées sont des points chauds), ni au crew | `combat.ts:289` |
+| 24 | **Les missiles ne sont que des points** : pas de cible ni de ligne vers elle, pas de temps avant impact (le nôtre : « pitbull », A-pole, F-pole), pas de distinction de type ou de guidage ; un missile détourné vers un leurre ne se voit pas | `symbology.ts`, `pcd.ts:1537` |
+| 25 | **Le crew ne voit aucun missile** (ni les nôtres, ni ceux des SAM, ni ceux des autres joueurs en match) | `surroundings()` |
+| 26 | **On ne peut pas désigner une piste précise** dans le jeu : la touche LOCK et Tab passent à la suivante (de la plus proche à la plus lointaine) ; viser *ce* bandit-là demande plusieurs appuis | `game/radar.ts lockNext`, `pcd.ts:448` |
+| 27 | **Au-dessus d'un radar, la molette zoome la caméra** : on change le champ de vue en voulant changer la portée | `controls.ts:841` |
+| 28 | **Portées sans pas commun** : HUD 10–160 km (réglage), TSD 5–160 (touches), FCR 10–160 (touches), crew continu 500 m–20 000 km | `symbology.ts:2600`, `pcd.ts:252`, `:275`, `crew/views.ts:270` |
+| 29 | **Pas de curseur de désignation** (TDC) à la manette ou au HOTAS : sans souris, rien n'est sélectionnable | `input/jetpad.ts`, `input/bindings.ts` |
 
 ## La proposition
 
@@ -105,10 +144,14 @@ que lisent les écrans, les outils et le réseau.
 
 ```ts
 interface PicTrack {
-  id: string;            // stable, préfixé par la source : trf:, ais:, cv:, cmb:, wng:, rwg:, net:, msl:, iss:, flt:
+  id: string;            // stable, préfixé par la source : trf:, ais:, cv:, cmb:, wng:, rwg:, net:, msl:, cm:, iss:, flt:
   name: string;          // indicatif ou nom
-  type: string;          // A320, F-35, frégate…
-  kind: "air" | "sea" | "ground" | "space" | "missile";
+  type: string;          // A320, F-35, frégate, AIM-120, fusée…
+  kind: "air" | "sea" | "ground" | "space" | "missile" | "flare" | "chaff";
+  // un missile : son guidage, sa cible (l'id d'une piste, ou celui d'un leurre), son temps avant impact [s]
+  msl?: { seeker: "ir" | "radar"; target: string | null; tti: number | null; pitbull: boolean; ours: boolean };
+  // un leurre : qui l'a largué, sa vie restante [s]
+  cm?: { by: string; life: number };
   // la vérité (ce qu'est l'objet)
   side: "friend" | "hostile" | "neutral" | "traffic" | "carrier" | "player" | "dead";
   // ce qu'en savent nos capteurs
@@ -129,8 +172,9 @@ interface PicTrack {
   `cmb` y passe aussi (constat 11).
 - **La vérité et le capteur sont deux champs de la même piste**, jamais deux listes. Une piste peut être
   `truth` (connue du jeu, pas des capteurs) : la vue Partagé la montre, les écrans du pilote non.
-- **Les missiles deviennent des pistes** (`msl:`), vus par le DAS (alerte missile à 360°, ~10 km pour un départ
-  de missile) ou par le radar, sinon `truth` seulement (constat 16).
+- **Les missiles et les leurres deviennent des pistes** (`msl:`, `cm:`), vus par les capteurs qui le peuvent,
+  sinon `truth` seulement (constats 16, 23 à 25 ; détail au §7).
+- **La sélection est dans l'image** (`picture.selected`, une seule pour tous les écrans du pilote ; détail au §8).
 - **L'EOTS et le DAS sont des capteurs** (bits `EOTS`, `DAS`), pas une copie des pistes radar (constat 17).
 - **`radarHud`, `pcdData`, la télémétrie, les outils lisent l'image**, une fois par image (constats 18, 19 : on
   supprime `netRadar`).
@@ -157,7 +201,7 @@ V-bar, H-bar).
   vaisseau-mère, côté Gargantua comme côté Terre.
 - **Les écrans** : le scope générique du HUD (§4) existe pour tous ; les HUD, cockpits et vues crew propres aux
   vaisseaux sont ceux de **PLAN-VAISSEAUX-AAA** (X4, X6, K4). Ce plan leur fournit l'image et le scope ; il ne
-  refait pas leurs écrans. **À coordonner** avec la branche `vaisseaux-aaa` (§9).
+  refait pas leurs écrans. **À coordonner** avec la branche `vaisseaux-aaa` (§11).
 
 ### 3. Le flux crew (`net/picture.ts`)
 
@@ -170,10 +214,12 @@ envoyés, dérivés de l'image, jusqu'à la clôture, pour un ancien crew ouvert
   piste, soit **≈ 300 pistes sous 16 Ko**.
 - **Daté en heure de salle** : `t0` du bloc, et l'âge de chaque mesure.
 - **Par priorité**, toutes les 250 ms :
-  1. tout de suite : le lock, les hostiles, les missiles, le datalink, ce qui est à moins de 40 km ;
+  1. tout de suite : le lock, la sélection, les hostiles, **les missiles et les leurres** (dans chaque bloc,
+     tant qu'ils vivent), le datalink, ce qui est à moins de 40 km ;
   2. le reste à tour de rôle, chaque piste au moins **une fois par seconde** ;
   3. les disparitions (ids perdus) dans le même bloc.
 - **Le faisceau** : mode, azimut, sens, limites du balayage, la portée de l'écran du pilote.
+- **La sélection du pilote** (son id) et sa portée par écran, pour que le crew les montre.
 - **L'historique de rattrapage** : à l'arrivée d'un crew (ou sur sa demande), un bloc `hist` étalé sur quelques
   envois, les 2 dernières minutes de chaque piste à 1 point par 2 s, quantifiées en écarts.
 - **Plusieurs pilotes** : le crew fusionne les images de tous les pilotes de la salle par id, la mesure la plus
@@ -195,7 +241,15 @@ l'importe aussi).
   | inconnu | demi-carré | carré |
   | neutre | demi-carré blanc | carré blanc |
 
-  Le trafic civil est un losange TCAS ouvert. Un missile est un trait avec sa pointe.
+  Le trafic civil est un losange TCAS ouvert. Les armes et les leurres :
+
+  | objet | symbole |
+  |---|---|
+  | missile | un trait avec sa pointe, dans l'axe de sa route ; le nôtre cyan, celui d'un équipier à sa couleur, l'ennemi rouge et clignotant s'il nous vise ; le type en petit (120, 9X, SAM, R73, JSM) |
+  | sa cible | un trait pointillé du missile à sa cible ; le temps avant impact au bout (`12 s`), « PITBULL » quand le nôtre guide seul |
+  | fusée IR | une étoile orange qui pâlit en 5 s |
+  | paillettes | un petit nuage de points gris qui s'étale et ralentit |
+  | missile détourné | son trait de cible passe sur le leurre, marqué « LEURRÉ » ; à l'impact « SPLASH », sinon « RATÉ » (3 s) |
 - **Les états** :
   - ferme : plein ;
   - prolongé : creux ;
@@ -212,18 +266,22 @@ Ce que ça change à chaque écran :
 - **Scope du HUD** : formes et états ci-dessus ; on enlève le code mort (constat 15) ; une étiquette seulement
   pour le lock, les hostiles et le plus proche (le reste sans texte, pour désencombrer) ; le secteur réel ±60° et
   le faisceau ; un **mode « espace »** (LVLH, distance et vitesse de rapprochement) pour les vaisseaux.
-- **TSD** : même symbologie ; hauteurs relatives ajoutées ; traînées (§6) ; pistes (§5).
+- **TSD** : même symbologie ; hauteurs relatives ajoutées ; missiles et leurres (§7) ; traînées (§6) ; pistes
+  (§5).
 - **FCR** : le hostile aérien en chevron (plus de losange) ; distinction air/surface ; l'historique « B-scope »
-  (les échos précédents en points qui s'estompent) ; en carte sol (SAR stylisé), les pistes d'aéroport.
-- **DAS** : neutre ≠ inconnu ; ses propres pistes IR à 360°, plus seulement le radar.
+  (les échos précédents en points qui s'estompent) ; nos missiles en vol vers le lock (temps avant impact, A-pole
+  et F-pole dans le bloc du lock), les échos de paillettes ; en carte sol (SAR stylisé), les pistes d'aéroport.
+- **DAS** : neutre ≠ inconnu ; ses propres pistes IR à 360°, plus seulement le radar ; les départs de missile
+  et les fusées.
+- **EOTS** : les fusées en points chauds qui éblouissent l'image un instant ; le missile suivi.
 - **Carte de mission** : lit l'image (vérité filtrée comme le pilote la voit, ou tout, selon l'assistance — voir
-  les questions ouvertes) ; ajoute AIS, ailiers, joueurs, missiles.
+  les questions ouvertes) ; ajoute AIS, ailiers, joueurs, missiles, leurres.
 - **Étiquettes 3D** : mêmes couleurs que les écrans.
 
 ### 5. Toutes les pistes d'atterrissage (`src/world/runways.ts`, `assets/runways/`)
 
 - **La base** : OurAirports (domaine public), `airports.csv` (≈ 12 Mo, ≈ 80 000 lieux) et `runways.csv`
-  (≈ 4 Mo, ≈ 47 000 pistes). **Téléchargement soumis à ton accord** (nom, source, taille) au début de RD8.
+  (≈ 4 Mo, ≈ 47 000 pistes). **Téléchargement soumis à ton accord** (nom, source, taille) au début de RD10.
 - **La construction** (`scripts/build-runways.ts`, comme `build-ephemeris.ts`) :
   - Garder les lieux ouverts : grands, moyens et petits aéroports, hydrobases, héliports. Écarter les fermés.
   - Pour chaque piste : les deux seuils (lat/lon, élévation, seuil décalé), cap vrai, longueur, largeur,
@@ -280,7 +338,92 @@ Ce que ça change à chaque écran :
 - **Partout** : scope du HUD (court, quelques points), TSD, FCR (échos), carte de mission ; crew : radar, ND,
   carte, globe.
 
-### 7. La console crew
+### 7. Les missiles et les leurres
+
+**Deux nouvelles sources** de l'image : `msl` (les missiles de `combat.world.missiles`, plus ceux des autres
+joueurs en match, reçus par `netmatch`) et `cm` (les leurres de `combat.world.decoys`, plus ceux reçus par
+l'événement `cm`). Ils deviennent des pistes comme les autres : même id d'un écran à l'autre, même place, même
+heure de salle.
+
+**Qui voit quoi** (pour le pilote ; le crew Partagé voit tout, toujours) :
+
+| objet | radar (APG-81) | DAS (IR, 360°) | EOTS | datalink |
+|---|---|---|---|---|
+| **notre missile** | dans le faisceau (σ ≈ 0,05 m² : ≈ 47 km) | moteur allumé | dans son champ | **toujours** (la liaison de guidage) : place, cible, temps avant impact |
+| **missile d'un équipier ou d'un ailier** | idem | idem | idem | toujours (Link 16) |
+| **missile ennemi** | dans le faisceau | **le départ** (la flamme, ≤ 20 km) et le vol moteur allumé ; moteur éteint, seulement à moins de 3 km | dans son champ | non |
+| **fusée IR** | non | oui (≤ 10 km), 5 s | oui (un point chaud qui éblouit) | non |
+| **paillettes** | **oui** : un écho fort (σ ≈ 50 m²) qui ralentit à la vitesse du vent en 1–2 s, tombe dans le notch Doppler et se perd ; en RWS il peut faire une **fausse piste** | non | non | non |
+
+- **Notre missile** : son trait de cible, son temps avant impact, « PITBULL » dans les 15 derniers km de
+  l'AIM-120 ; sur le FCR, A-pole et F-pole dans le bloc du lock. À la fin, « SPLASH » ou « RATÉ » 3 s sur la
+  piste.
+- **Le missile ennemi** : rouge, clignotant s'il nous vise. Son relèvement est marqué sur le cercle du scope du
+  HUD et sur la bande DAS (l'horloge de l'alerte, « MISSILE 4 H », déjà annoncée par la voix). Son temps avant
+  impact est estimé depuis sa vitesse de rapprochement. Le site SAM qui tire est marqué au départ.
+- **Le leurre qui détourne** : le trait de cible du missile passe sur lui, marqué « LEURRÉ » (on le voit pour nos
+  missiles comme pour ceux qu'on esquive).
+- **La traînée d'un missile** (sa fumée) : toujours courte (5 s), même avec les traînées éteintes (réglage
+  `radarTrailMissiles`, défaut on).
+- **Partout** : scope du HUD, TSD, FCR, DAS, EOTS, carte de mission ; crew : radar, ND, carte, globe.
+- **Au crew** : dans chaque bloc (priorité 1) ; les missiles portent `target` (un id de piste) et `tti` ; les
+  leurres leur vie restante. Une salve de leurres (≈ 2 objets par largage, 5 s de vie) tient dans le budget.
+- **Le réseau** : un missile d'un autre joueur garde l'id de son tireur (`msl:<slot>:<id>`), le même sur tous
+  les écrans de la salle.
+
+### 8. Sélectionner et zoomer, sur tous les radars
+
+**Une seule sélection** pour tous les écrans du pilote (`picture.selected`), surlignée partout (un anneau ambre
+tireté, comme le crew aujourd'hui), plus le lock qui garde son anneau à lui.
+
+**Le clic**
+
+- **Un clic à moins de 12 px d'un symbole le sélectionne.** Plusieurs symboles sous le pointeur : le plus
+  menaçant d'abord ; un nouveau clic au même endroit passe au suivant.
+- **Ce que la sélection fait** dépend de la piste :
+
+  | piste | un clic | un second clic sur la même | appui long ou clic droit |
+  |---|---|---|---|
+  | une piste **radar** | **désignée et verrouillée** (le lock en TWS, le radar continue de balayer) | **STT** | menu : intercepter, rejoindre en formation, BRAA à la radio, déverrouiller, infos |
+  | une piste hors radar (datalink, TCAS, AIS, porte-avions) | **la cible** : intercepter ou rejoindre la visent, le bloc de la cible donne relèvement, distance, hauteur | le radar est pointé sur elle (un balayage resserré autour) | même menu, plus « direct » |
+  | **un missile** | sélectionné : type, tireur, cible, temps avant impact | — | « suivre à l'EOTS » |
+  | **un leurre** | infos seulement | — | — |
+  | **une piste d'aéroport** | le terrain sélectionné (sa fiche, §5) | « direct » | ajouter au plan, approche, infos METAR |
+  | le vide | désélectionne (le lock reste ; il se lâche par le menu ou la touche) | — | — |
+
+- **Où** :
+  - **Scope du HUD** : chaque dessin enregistre ses cibles de clic (comme les `hits` du PCD). Un clic sans
+    glisser (< 4 px, sinon c'est le regard qui tourne) dans le disque du scope est pris **avant** le regard et
+    `onJetTouch` (`controls.ts:723`).
+  - **PCD** (TSD, FCR, DAS, EOTS) : `jetPick` → (u, v) → `pcd.pick(u, v)` sur la page touchée, les touches de
+    page gardant leur rôle.
+  - **Carte de mission** : la même règle sur son canvas.
+  - **Crew** : radar, ND, carte, globe (§9).
+- **À la manette, au HOTAS, au clavier** (constat 29) : un **curseur de désignation** (TDC). On maintient une
+  touche (liaison à choisir dans `input/bindings.ts` sans conflit avec ZQSD, AE, WX en AZERTY), le manche droit
+  le déplace sur l'écran actif (le scope du HUD, ou la page du PCD regardée dans le cockpit) ; A ou la détente
+  désigne. Tab garde « la suivante », ⇧Tab « la précédente ».
+- **TARS et les outils** désignent par id (`lockOn(id)`), le nom restant en repli (« verrouille le bandit au
+  nord »).
+
+**La molette**
+
+- **Une seule échelle de pas** pour tous les radars :
+  - air : 2, 5, 10, 20, 40, 80, 160, 320 km (en NM : 1, 2,5, 5, 10, 20, 40, 80, 160, selon `unitsFor()`) ;
+  - espace : 1, 10, 100, 1 000, 10 000 km.
+- **Au-dessus d'un radar, un cran de molette = un pas**, accumulé comme le bouton du cockpit (50 px par cran,
+  pour les pavés tactiles). L'événement est consommé : **le champ de la caméra ne bouge pas** (constat 27).
+  - **Scope du HUD** : le pointeur dans son disque → `f35RadarRange` (AUTO bascule en manuel au pas courant ; un
+    clic sur l'étiquette de portée revient à AUTO).
+  - **PCD** : `jetPick` au moment de la molette (seulement si le pointeur est sur l'écran, matériau 36) → la
+    page sous le pointeur (portée du TSD ou du FCR, champ large ou étroit de l'EOTS).
+  - **Carte de mission** : zoom continu centré sous le pointeur (c'est une carte).
+  - **Crew** : radar, ND, dash par pas (le pincement glisse puis se cale sur le pas le plus proche) ; carte et
+    globe en continu, centrés sous le pointeur.
+- **Clavier, manette, HOTAS** : portée + et − en liaisons (à choisir sans conflit), sur l'écran actif.
+- **Mémorisé** : la portée de chaque écran (préférences pour le jeu, `localStorage` pour le crew).
+
+### 9. La console crew
 
 - **Un `TrackStore`** (`crew/tracks.ts`) :
   - Il reçoit les blocs `pic` de tous les pilotes et fusionne par id.
@@ -298,13 +441,26 @@ Ce que ça change à chaque écran :
     datalink et le TCAS à 360° (constat 10).
   - **Partagé** : **toute la vérité** (décision), colorée par le **camp réel**. Ce que les capteurs du pilote
     voient aussi est plein, le reste creux, le lock entouré. Pas de faux balayage : c'est un écran tactique.
+- **Missiles et leurres** dans toutes les vues (§7) : Partagé les montre tous, Capteur ceux que voient les
+  capteurs du pilote, avec les mêmes traits de cible, temps avant impact, « LEURRÉ ».
+- **Le clic** (§8) :
+  - Un clic sélectionne la piste chez le crew (anneau ambre, fiche). Plusieurs sous le doigt : la plus menaçante,
+    puis la suivante au clic suivant.
+  - **« Le clic désigne au pilote »** (bascule du crew, **activée par défaut** quand le pilote ouvre ses actions,
+    `netCrewActions`) : la sélection du crew devient celle du pilote, avec les mêmes effets que son propre clic
+    (une piste radar est verrouillée, une autre devient la cible), par l'acte `wp.lock {id}` ou `nav.target {id}`.
+    Le pilote voit « CREW ▸ nom » et le marqueur de désignation du crew.
+  - Appui long ou clic droit : le menu actuel (cibler, intercepter, rejoindre, verrouiller), par id.
+  - La sélection du pilote est montrée au crew (anneau ambre plein) ; celle du crew au pilote (anneau tireté).
+- **La molette et le pincement** (§8) : radar, ND et dash par pas communs avec le jeu ; carte et globe en continu
+  sous le pointeur.
 - **Les actions visent un id** (`wp.lock {id}`, `ap.traffic {id}`, `nav.target {id}`), le nom restant en repli
   (constat 20).
 - **Les options sauvegardées** (constat 21) : portée, nord ou cap, source, traînées, pistes.
 - **Les listes** : contacts triés par menace puis distance (le lock d'abord), filtre par camp et nature,
   recherche par nom.
 
-### 8. Le réseau partout
+### 10. Le réseau partout
 
 - **Link 16 entre joueurs** : chaque F-35 partage ses pistes radar avec ses équipiers (même équipe, ou toute la
   salle hors match). Elles arrivent dans leur image avec le bit `DATALINK` et l'id d'origine : une piste vue par
@@ -313,8 +469,11 @@ Ce que ça change à chaque écran :
   vérité** (décision : assumée, à dire dans l'écran de salle « le crew voit tout »).
 - **Les vaisseaux** : le radar de rendez-vous voit les joueurs (transpondeur) ; leurs traînées viennent de
   leurs échantillons.
+- **Missiles et leurres en match** : ceux de chaque joueur (déjà envoyés 10 fois par seconde par `netmatch`)
+  entrent dans l'image de tous avec le même id ; un missile qui vise un joueur est rouge chez lui, à la couleur de
+  son équipe chez les autres.
 
-### 9. Coordination avec les autres plans
+### 11. Coordination avec les autres plans
 
 - **PLAN-VAISSEAUX-AAA** (branche `vaisseaux-aaa`, worktree `../bhg-vaisseaux`) :
   - X4 (HUD spécialisés), X6 (cockpits), K1 à K4 (crew vaisseau) consomment l'image et les capteurs de RD4.
@@ -325,7 +484,7 @@ Ce que ça change à chaque écran :
 - **PLAN-AEROPORTS** : les `SITES` restent la référence 3D ; la base mondiale est une couche de cartes.
 - **PLAN-CREW-ACTIONS** : les actes `wp.lock`, `ap.traffic`, `nav.target` gagnent `id`.
 
-### 10. Les budgets
+### 12. Les budgets
 
 | quoi | budget |
 |---|---|
@@ -337,6 +496,8 @@ Ce que ça change à chaque écran :
 | flux crew | ≤ 16 Ko par bloc, ≤ 48 Ko/s |
 | pistes du monde | ≤ 1,5 Mo gzip au total, une tuile ≤ 120 Ko |
 | crew | 60 i/s sur iPhone récent avec 200 pistes + traînées + aéroports |
+| missiles et leurres | ≤ 0,03 ms/image pour 40 objets (pas de masque du relief pour le DAS) |
+| clic et molette | test des cibles ≤ 0,05 ms par événement ; `jetPick` seulement sur un clic ou un cran, jamais au survol |
 
 ## Phases
 
@@ -352,8 +513,8 @@ Chaque phase : un commit, une fiche et une planche de captures (`docs/progress/r
     géo).
 - **Le coût de départ** : `radarStep`, `radarHud` ×2, PCD, scope du HUD, en vol sur le Mojave et les Alpes
   (trace-ab sur vues figées).
-- **La salle de démo enrichie** (`scripts/crew-demo.ts`) : un combat (amis IA, neutres, hostiles, missiles), du
-  trafic, des navires AIS, un porte-avions, deux joueurs.
+- **La salle de démo enrichie** (`scripts/crew-demo.ts`) : un combat (amis IA, neutres, hostiles, missiles et
+  leurres), du trafic, des navires AIS, un porte-avions, deux joueurs.
 - **Les captures « avant »** de chaque écran radar et carte : `docs/progress/radar/before/`.
 
 ### RD1 — Les correctifs immédiats (S)
@@ -410,7 +571,29 @@ Chaque phase : un commit, une fiche et une planche de captures (`docs/progress/r
 - Le dessin sur tous les radars et toutes les cartes ; les réglages `radarTrails` et `radarTrailLock` (FR + EN).
 - e2e : bascule, longueur, rattrapage à l'arrivée d'un crew.
 
-### RD8 — La base mondiale des pistes (M)
+### RD8 — Les missiles et les leurres (M)
+
+- Les sources `msl` et `cm` (les nôtres, ceux des ennemis, ceux des autres joueurs en match) ; qui voit quoi
+  (radar, DAS, EOTS, datalink) ; les paillettes en écho radar, la fausse piste en RWS.
+- Les symboles, les traits de cible, le temps avant impact, PITBULL, A-pole et F-pole, LEURRÉ, SPLASH ou RATÉ ;
+  le relèvement de l'alerte sur le scope et le DAS.
+- Sur tous les écrans du pilote et du crew ; la traînée courte des missiles (`radarTrailMissiles`).
+- La salle de démo avec des tirs et des largages.
+- Tests : qui voit quoi (unitaire) ; e2e P9 (un AIM-120 sur un drone, un SAM sur nous, des leurres, en solo et
+  en match à deux).
+
+### RD9 — Sélectionner et zoomer (M)
+
+- `picture.selected` ; les cibles de clic de chaque écran (scope du HUD, PCD : TSD, FCR, DAS, EOTS ; carte de
+  mission) ; le clic avant le regard ; le second clic, l'appui long et le menu.
+- La molette sur chaque radar, l'échelle de pas commune, le champ de la caméra protégé (27, 28) ; AUTO.
+- Le curseur de désignation à la manette et au HOTAS, les liaisons portée + et − (29) ; ⇧Tab.
+- Le crew : sélection, « le clic désigne au pilote », menu par id, pas communs ; les deux sélections montrées de
+  part et d'autre.
+- e2e P10 et P11 en vrais événements CDP, un par écran (le point du PCD trouvé par `jetPick`, comme
+  `f35-pcd.e2e`), et une fausse manette pour le curseur.
+
+### RD10 — La base mondiale des pistes (M)
 
 - **Demande d'accord pour le téléchargement** (OurAirports, noms, tailles).
 - `scripts/build-runways.ts`, les tuiles, l'index, les seuils reconstruits ; `src/world/runways.ts` (pur) ; le
@@ -419,7 +602,7 @@ Chaque phase : un commit, une fiche et une planche de captures (`docs/progress/r
 - Tests : LFPG (4 pistes), KJFK, EGLL, un terrain en herbe, une hydrobase, un héliport ; taille des tuiles ;
   requête près de l'antiméridien et des pôles.
 
-### RD9 — Les pistes sur tous les radars et toutes les cartes (L)
+### RD11 — Les pistes sur tous les radars et toutes les cartes (L)
 
 - Scope du HUD, TSD, FCR carte sol, carte de mission, trace au sol, carte de route, carte 3D ; crew : radar,
   ND, carte, globe, plan.
@@ -428,21 +611,21 @@ Chaque phase : un commit, une fiche et une planche de captures (`docs/progress/r
 - La fiche d'un aéroport au toucher et ses actions. Les bascules.
 - Captures : Paris (LFPG, LFPO, LFPB), Mojave, le Ford en mer, sur le TSD, le HUD et toutes les cartes du crew.
 
-### RD10 — Le réseau partout (M)
+### RD12 — Le réseau partout (M)
 
 - Le Link 16 entre joueurs (une piste vue par deux joueurs n'est qu'une).
 - Les règles du match (pilote : ses capteurs et son équipe ; crew Partagé : vérité, annoncée dans la salle).
 - Rendez-vous entre joueurs au radar.
 - e2e deux navigateurs sur kerr-mini : `net-wing-fight`, `net-battle` et un vol en patrouille avec deux crews.
 
-### RD11 — Les pistes utilisables (M, si validé — voir les questions ouvertes)
+### RD13 — Les pistes utilisables (M, si validé — voir les questions ouvertes)
 
 - `findRunway` et l'ILS sur la base mondiale : un ILS synthétique pour chaque piste revêtue ≥ 1 800 m.
 - `nav.add` et le crew qui trouvent n'importe quel ICAO ; METAR de la station la plus proche.
 
-### RD12 — Clôture (M)
+### RD14 — Clôture (M)
 
-- **La campagne e2e** : P1 à P8 sur ce Mac (headless) et kerr-mini (plein écran) ; captures en vol réel (Alpes,
+- **La campagne e2e** : P1 à P11 sur ce Mac (headless) et kerr-mini (plein écran) ; captures en vol réel (Alpes,
   Mojave, Paris, combat BVR, Ranger vers l'ISS).
 - **Les mesures** : A/B contre le commit de départ (Mojave, Alpes), crew sur téléphone.
 - **Les docs** : `docs/RADAR.md` et `RADAR.fr.md` ; `F35.md`, `CREW.md`, `BH-API.md` (`__bh.radar`),
@@ -462,7 +645,12 @@ Chaque phase : un commit, une fiche et une planche de captures (`docs/progress/r
 - **L'indépendance du bundle crew** (`tests/crew.test.ts:115`) : `radar/symbols.ts`, `world/runways.ts`,
   `net/picture.ts` doivent rester purs (aucun import du simulateur).
 - **La branche vaisseaux** en parallèle : `src/radar/*` est neuf, les écrans vaisseaux restent à elle ; ordre
-  de fusion au §9.
+  de fusion au §11.
+- **Le clic contre le regard** : dans le cockpit, la souris tourne la tête. Parade : un clic est un appui sans
+  glisser (< 4 px), et seul un clic sur un symbole (ou dans le disque du scope, ou sur l'écran du PCD) est pris par
+  le radar ; partout ailleurs, rien ne change.
+- **La molette et le cockpit** : le bouton du cockpit sous le pointeur garde la priorité, puis le radar, puis le
+  champ de la caméra.
 - **Le réalisme contre la lisibilité** : un radar vrai perd des contacts (notch, relief). Les états (prolongé,
   mémoire) et les traînées aident à suivre ; l'assistance (questions ouvertes) peut tout montrer.
 
@@ -470,10 +658,16 @@ Chaque phase : un commit, une fiche et une planche de captures (`docs/progress/r
 
 1. **Les écrans du pilote en assistance** : seulement ses capteurs (réaliste, proposé par défaut), ou une option
    « image complète » (tout, comme le crew Partagé) pour les niveaux d'assistance élevés ?
-2. **Les pistes utilisables (RD11)** : un ILS synthétique et l'autopilote d'approche sur toutes les pistes
+2. **Les pistes utilisables (RD13)** : un ILS synthétique et l'autopilote d'approche sur toutes les pistes
    revêtues ≥ 1 800 m, ou seulement les cartes ?
 3. **Les pistes en 3D dans le monde** : aujourd'hui seules les 8 `SITES` existent dans le rendu. Les autres
    restent sur les cartes (proposé), le rendu 3D des pistes du monde étant un autre plan ?
 4. **Un AWACS** (E-7 fictif) qui partagerait son image par datalink dans certaines missions ?
 5. **Les traînées par défaut** : `off` (proposé) ou `short` ?
 6. **Les héliports et hydrobases** : affichés sous 20 km (proposé) ou jamais par défaut ?
+7. **Le clic sur une piste radar** : il verrouille tout de suite (proposé : c'est « sélectionner la cible »), ou il
+   sélectionne seulement, le lock demandant un second clic ?
+8. **« Le clic du crew désigne au pilote »** activé par défaut quand le pilote ouvre ses actions (proposé), ou
+   désactivé par défaut ?
+9. **Les paillettes en fausse piste** (RWS) : réaliste (proposé), ou trop déroutant hors du niveau d'assistance
+   « réaliste » ?
