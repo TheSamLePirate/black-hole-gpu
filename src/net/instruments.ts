@@ -35,7 +35,7 @@ export interface InstrumentFlight {
   /** the straight path's seconds to the ground (the GPWS's) */
   terrain?: number;
 }
-/** The autopilot, its targets (null: not held) and the assistance flown. */
+/** The autopilot, its targets (null: not held: the altitude [m], the heading [rad], the speed [m/s]) and the assistance flown. */
 export interface InstrumentAuto {
   mode: string;
   assist: string;

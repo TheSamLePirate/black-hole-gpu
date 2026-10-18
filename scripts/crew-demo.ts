@@ -198,7 +198,7 @@ setInterval(() => {
         mode: "plane",
         assist: "realistic",
         alt: target,
-        hdg: (brg / D + 360) % 360,
+        hdg: brg,
         spd: 235,
         ab: false,
         lnav: true,

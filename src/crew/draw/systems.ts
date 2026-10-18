@@ -1,7 +1,7 @@
 // The systems' synoptic: the engine, the fuel (its bingo, endurance and range, what the plan leaves), the
 // configuration (the gear's lights, the flaps, the air brake, STOVL), the load and the incidence, the structure's
 // heat, the orbit drawn, the autopilot's and the assistance's modes, the alerts — cards laid out to the width.
-import { C, clamp, D, dur, fmt, type Pen, TAU, type Rect } from "./kit";
+import { C, clamp, D, deg360, dur, fmt, type Pen, TAU, type Rect } from "./kit";
 import type { Scene } from "./scene";
 
 const ok = (x: number | null | undefined): x is number => typeof x === "number" && Number.isFinite(x);
@@ -267,7 +267,7 @@ export function drawSystems(p: Pen, r: Rect, sc: Scene) {
         gw = (q.w - 28 - (cols - 1) * 6) / cols;
       const lamps: [string, boolean, string][] = [
         [a?.alt != null ? `ALT ${fmt(u.alt(a.alt))}` : "ALT", a?.alt != null, C.green],
-        [a?.hdg != null ? `CAP ${String(Math.round(a.hdg)).padStart(3, "0")}` : "CAP", a?.hdg != null, C.green],
+        [a?.hdg != null ? `CAP ${String(Math.round(deg360(a.hdg)) % 360).padStart(3, "0")}` : "CAP", a?.hdg != null, C.green],
         [a?.spd != null ? `VIT ${fmt(u.spd(a.spd))}` : "A/THR", a?.spd != null, C.green],
         ["LNAV", !!a?.lnav, C.magenta],
         ["VNAV", !!a?.vnav, C.magenta],

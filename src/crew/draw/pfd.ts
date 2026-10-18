@@ -14,7 +14,7 @@ function fma(p: Pen, r: Rect, sc: Scene) {
     : a?.order
       ? [a.order, C.green]
       : a?.hdg != null
-        ? [`HDG ${String(Math.round(deg360(a.hdg * D) / 1)).padStart(3, "0")}`, C.green]
+        ? [`HDG ${String(Math.round(deg360(a.hdg))).padStart(3, "0")}`, C.green]
         : a?.hold && a.hold !== "none"
           ? [a.hold.toUpperCase(), C.green]
           : ["—", C.dim];

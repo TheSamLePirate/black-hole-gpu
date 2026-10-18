@@ -264,7 +264,7 @@ export function drawNd(p: Pen, r: Rect, sc: Scene, o: NdOpts) {
     c.restore();
   };
   const a = snap?.auto;
-  if (a?.hdg != null) ring(a.hdg * D, C.cyan, "bug");
+  if (a?.hdg != null) ring(a.hdg, C.cyan, "bug");
   if (nav) ring(nav.brg, C.magenta, "tri");
   if (Number.isFinite(s.track)) ring(s.track, C.green, "diamond");
   // the craft
