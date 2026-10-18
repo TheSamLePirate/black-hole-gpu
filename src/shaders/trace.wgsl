@@ -5265,15 +5265,16 @@ fn earthH0(q: vec3f, foot: f32) -> f32 {
 const TILE_Z0 = 6u;
 const TILE_LEVELS = 8u;
 const TILE_RES_MIN = 25.0;
-// a level's texel at i (from its valid rectangle's corner), in its layer (toroidal: modulo the texture's side)
+// a level's texel at i (from its valid rectangle's corner), in its layer (toroidal: modulo its window's side)
 fn tileTexel(l: u32, i: vec2i) -> f32 {
-  // (the windows' texture: 4 or 8 tiles a side — EarthTiles.setReach —, a power of two: wrapped by a mask)
-  let t = (vec2i(P.tileL[2u * l].zw) + i) & (vec2i(textureDimensions(earthTiles, 0).xy) - 1);
+  // (a level's window: 4 or 8 tiles a side — EarthTiles.setReach, its fine levels —, its side a power of two in
+  // P.tileL[2l + 1].w: wrapped by a mask)
+  let t = (vec2i(P.tileL[2u * l].zw) + i) & vec2i(i32(P.tileL[2u * l + 1u].w) - 1);
   return bitcast<f32>(textureLoad(earthTiles, t, l, 0).r);
 }
 fn tileImage(l: u32, i: vec2i) -> u32 {
-  // (the windows' texture: 4 or 8 tiles a side — EarthTiles.setReach —, a power of two: wrapped by a mask)
-  let t = (vec2i(P.tileL[2u * l].zw) + i) & (vec2i(textureDimensions(earthTiles, 0).xy) - 1);
+  // (its level's window's side: P.tileL[2l + 1].w — tileTexel)
+  let t = (vec2i(P.tileL[2u * l].zw) + i) & vec2i(i32(P.tileL[2u * l + 1u].w) - 1);
   return textureLoad(earthTiles, t, l, 0).g;
 }
 const TILE_IMG_LEVELS = 8u; // (z 6 … 13: src/system/earth-tiles.ts, IMG_Z1)

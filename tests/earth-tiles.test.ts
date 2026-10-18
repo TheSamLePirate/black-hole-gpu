@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { Vec3 } from "../src/physics";
-import { EarthTiles, edge, sampleLevel, TILE, TILE_PARAM_VEC4S, TILE_REACH, Z0, Z1 } from "../src/system/earth-tiles";
+import { EarthTiles, edge, FINE_Z, sampleLevel, TILE, TILE_PARAM_VEC4S, TILE_REACH, Z0, Z1 } from "../src/system/earth-tiles";
 import { EARTH_RUNWAYS, runwayGrade, runwayWeight } from "../src/game/sites";
 import { earthHeightSampler, tileFallbackSampler } from "../src/terrain";
 import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
@@ -213,12 +213,12 @@ test("the detail's reach: windows of 8 tiles, the tiles left kept and drawn agai
   const cam = camAt(45.9, 6.87, 2);
   t.update(cam, 1e-3);
   fill(t);
-  // (Far: the texture made again, 2048 texels a side, every level drawn anew — 8 × 8 tiles each)
+  // (Far: the texture made again, 2048 texels a side, every level drawn anew — the fine ones 8 × 8 tiles, the coarser 4 × 4)
   t.setReach(TILE_REACH.far);
   expect(resized).toBe(1);
   expect((t.texture as unknown as { size: number[] }).size).toEqual([2048, 2048, Z1 - Z0 + 1]);
   t.update(cam, 1e-3);
-  expect(t.wanted().length).toBe(64 * (Z1 - Z0 + 1));
+  expect(t.wanted().length).toBe(64 * (Z1 - FINE_Z + 1) + 16 * (FINE_Z - Z0));
   expect(t.heightAt(dir(45.9, 6.87), 1).rem).toBe(1);
   fill(t);
   expect(t.pending).toBe(0);
@@ -258,4 +258,29 @@ test("the detail's reach: windows of 8 tiles, the tiles left kept and drawn agai
   t.setReach(TILE_REACH.normal);
   expect(resized).toBe(2);
   expect(inner.cache.size).toBe(0);
+});
+
+test("the detail's reach on a device that cannot hold its texture: back to 4 tiles, not asked again", async () => {
+  // (the 2048² texture's 256 MiB refused — out of memory, an iPad's —: the reach kept at 4 tiles, the next frames'
+  // setReach(far) not trying it again)
+  let made = 0;
+  const dev = {
+    createTexture: (d: { size: number[] }) => (made++, { size: d.size, destroy() {} }),
+    pushErrorScope() {},
+    popErrorScope: () => Promise.resolve(made > 1 && made % 2 === 0 ? { message: "out of memory" } : null),
+    queue: { writeTexture() {}, onSubmittedWorkDone: () => Promise.resolve() },
+  } as unknown as GPUDevice;
+  const t = new EarthTiles(dev);
+  let resized = 0;
+  t.onResize = () => resized++;
+  t.setReach(TILE_REACH.far);
+  expect((t.texture as unknown as { size: number[] }).size[0]).toBe(2048);
+  await Promise.resolve();
+  await Promise.resolve();
+  expect((t.texture as unknown as { size: number[] }).size[0]).toBe(1024);
+  expect(resized).toBe(2);
+  t.setReach(TILE_REACH.far);
+  t.setReach(TILE_REACH.veryFar);
+  expect(resized).toBe(2);
+  expect((t.texture as unknown as { size: number[] }).size[0]).toBe(1024);
 });

@@ -21,8 +21,11 @@ import type { Vec3 } from "../physics";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "./ellipsoid";
 
 export const TILE = 256;
-/** tiles along a level's window (the normal detail's reach; a farther one, EarthTiles.setReach: 8) */
+/** tiles along a level's window (the normal detail's reach; a farther one, EarthTiles.setReach: 8 on the fine levels) */
 export const SPAN = 4;
+/** the finest levels a farther reach widens (z 11–13: 8 tiles of z 11 span what 4 of z 10 do — the coarser levels' 4
+ *  tiles already reach past them; 8 there was four times the tiles loaded for nothing) */
+export const FINE_Z = 11;
 export const CLIP = TILE * SPAN;
 /** By the detail's reach (settings.detailReach): the windows' tiles a side, the tiles kept in memory past them (a
  *  tile 512 KiB: its heights and its imagery), the finest levels whose next ring round the window is loaded ahead. */
@@ -106,6 +109,8 @@ function intersect(a: Rect | null, b: Rect | null): Rect | null {
 interface Level {
   z: number;
   n: number;
+  /** its window's tiles a side (SPAN, or the reach's on the fine levels) */
+  span: number;
   want: Rect | null;
   valid: Rect | null;
   /** the tile in each slot (x mod span, y mod span) and its heights */
@@ -152,10 +157,15 @@ export interface TileSample {
 
 export class EarthTiles {
   texture: GPUTexture;
-  /** the windows' tiles a side (TILE_REACH: 4, 8), the texture's side in texels its CLIP */
+  /** the fine levels' windows' tiles a side (TILE_REACH: 4, 8 — FINE_Z), the texture's side in texels its CLIP */
   private span = SPAN;
+  /** the most the device holds (a farther reach's 256 MiB texture refused: back to SPAN, not asked again) */
+  private spanMax = 8;
   private get clip() {
     return TILE * this.span;
+  }
+  private levelSpan(z: number) {
+    return z >= FINE_Z ? this.span : SPAN;
   }
   /** the tiles kept past the windows — most recently used last — and how many (0: none) */
   private cache = new Map<string, { h: Float32Array; col: Uint32Array | null }>();
@@ -186,14 +196,16 @@ export class EarthTiles {
     this.texture = this.makeTexture();
     for (let l = 0; l < LEVELS; l++) {
       const z = Z0 + l;
+      const n = this.levelSpan(z);
       this.levels.push({
         z,
         n: 2 ** z,
+        span: n,
         want: null,
         valid: null,
-        key: new Array(this.span * this.span).fill(null),
-        data: new Array(this.span * this.span).fill(null),
-        col: new Array(this.span * this.span).fill(null),
+        key: new Array(n * n).fill(null),
+        data: new Array(n * n).fill(null),
+        col: new Array(n * n).fill(null),
       });
     }
   }
@@ -208,32 +220,42 @@ export class EarthTiles {
   }
 
   /**
-   * The detail's reach (TILE_REACH): the windows' tiles a side — another one, the texture made again (the old one
-   * destroyed once the work submitted with it is done) and every level drawn anew, its tiles from the cache or loaded
-   * again —, the tiles kept past them, the ring loaded ahead.
+   * The detail's reach (TILE_REACH): the fine levels' windows' tiles a side — another one, the texture made again (the
+   * old one destroyed once the work submitted with it is done) and every level drawn anew, its tiles from the cache or
+   * loaded again —, the tiles kept past them, the ring loaded ahead. A texture the device cannot hold (out of memory:
+   * an iPad's 256 MiB) falls back to 4 tiles, and stays there.
    */
   setReach(r: { span: number; cache: number; ring: number }) {
     this.cacheTiles = r.cache;
     this.ring = r.ring;
     while (this.cache.size > this.cacheTiles) this.cache.delete(this.cache.keys().next().value!);
-    if (r.span === this.span) return;
+    const span = Math.min(r.span, this.spanMax);
+    if (span === this.span) return;
     this.clear();
-    this.span = r.span;
+    this.span = span;
     const old = this.texture;
+    this.device.pushErrorScope?.("out-of-memory");
     this.texture = this.makeTexture();
+    void this.device.popErrorScope?.().then((e) => {
+      if (!e || this.span === SPAN) return;
+      console.warn(`Terrain tiles: the ${this.clip}² texture refused (${e.message}) — the detail's reach kept at ${SPAN} tiles`);
+      this.spanMax = SPAN;
+      this.setReach({ span: SPAN, cache: this.cacheTiles, ring: this.ring });
+    });
     void this.device.queue.onSubmittedWorkDone().then(() => old.destroy());
     for (const L of this.levels) {
-      L.key = new Array(this.span * this.span).fill(null);
-      L.data = new Array(this.span * this.span).fill(null);
-      L.col = new Array(this.span * this.span).fill(null);
+      L.span = this.levelSpan(L.z);
+      L.key = new Array(L.span * L.span).fill(null);
+      L.data = new Array(L.span * L.span).fill(null);
+      L.col = new Array(L.span * L.span).fill(null);
     }
     this.stamp++;
     this.onResize?.();
   }
 
   /** a tile's slot in its level's window (x mod span, y mod span) */
-  private slotOf(x: number, y: number) {
-    const n = this.span;
+  private slotOf(L: Level, x: number, y: number) {
+    const n = L.span;
     return (((y % n) + n) % n) * n + (((x % n) + n) % n);
   }
 
@@ -265,7 +287,7 @@ export class EarthTiles {
     for (const L of this.levels) {
       if (!L.want) continue;
       for (let y = L.want.y0; y < L.want.y1; y++)
-        for (let x = L.want.x0; x < L.want.x1; x++) if (L.key[this.slotOf(x, y)] !== this.keyOf(L, x, y)) k++;
+        for (let x = L.want.x0; x < L.want.x1; x++) if (L.key[this.slotOf(L, x, y)] !== this.keyOf(L, x, y)) k++;
     }
     return k;
   }
@@ -327,18 +349,18 @@ export class EarthTiles {
         gy = mercY(gSinLat, L.n) - cy0;
       const gl = Math.hypot(gx, gy);
       // (by up to a tile and a quarter of a 4-tile window — half the window less three quarters of a tile)
-      const most = this.span / 2 - 0.75;
+      const most = L.span / 2 - 0.75;
       const k = gl > most ? most / gl : 1;
       const cx = cx0 + gx * k,
         cy = cy0 + gy * k;
       // (the window recentred once the camera is more than 0.8 of a tile off its middle — or across the
       // date line; at the poles' edges it stays clamped)
-      const mid = this.span / 2;
+      const mid = L.span / 2;
       const x0 = Math.round(cx) - mid;
-      const y0 = Math.min(Math.max(Math.round(cy) - mid, 0), L.n - this.span);
+      const y0 = Math.min(Math.max(Math.round(cy) - mid, 0), L.n - L.span);
       let want = L.want;
       if (!want || Math.abs(cx - (want.x0 + mid)) > 0.8 || (y0 !== want.y0 && Math.abs(cy - (want.y0 + mid)) > 0.8)) {
-        want = { x0, y0, x1: x0 + this.span, y1: y0 + this.span };
+        want = { x0, y0, x1: x0 + L.span, y1: y0 + L.span };
       }
       if (!same(want, L.want)) {
         L.want = want;
@@ -358,14 +380,15 @@ export class EarthTiles {
     const now = performance.now();
     let pending = 0;
     for (const L of this.levels) {
-      if (!L.want) continue;
+      // (a window drawn whole: nothing to look for — not its tiles' keys made again each frame)
+      if (!L.want || same(L.valid, L.want)) continue;
       const cx = lonT * L.n,
         cy = mercY(sinLat, L.n);
       const todo: [number, number, number][] = [];
       for (let y = L.want.y0; y < L.want.y1; y++) {
         for (let x = L.want.x0; x < L.want.x1; x++) {
           const key = this.keyOf(L, x, y);
-          if (L.key[this.slotOf(x, y)] === key || this.inflight.has(key)) continue;
+          if (L.key[this.slotOf(L, x, y)] === key || this.inflight.has(key)) continue;
           // (kept past the window — walked back to, or loaded ahead —: drawn at once)
           const kept = this.cache.get(key);
           if (kept) {
@@ -445,13 +468,13 @@ export class EarthTiles {
         this.keep(key, heights, null);
         void img.then((col) => {
           if (!col) return;
-          if (L.key[this.slotOf(x, y)] === key) this.put(L.z, x, y, heights, col);
+          if (L.key[this.slotOf(L, x, y)] === key) this.put(L.z, x, y, heights, col);
           else if (this.cache.has(key)) this.keep(key, heights, col);
         });
         h = null;
       } else
         void img.then((col) => {
-          if (col && L.key[this.slotOf(x, y)] === key) this.put(L.z, x, y, heights, col);
+          if (col && L.key[this.slotOf(L, x, y)] === key) this.put(L.z, x, y, heights, col);
         });
     } catch (e) {
       if (!this.inflight.has(key)) return; // (cleared)
@@ -499,7 +522,7 @@ export class EarthTiles {
   put(z: number, x: number, y: number, h: Float32Array, col: Uint32Array | null = null) {
     const L = this.levels[z - Z0];
     if (!L || !inside(L.want, x, y)) return;
-    const s = this.slotOf(x, y);
+    const s = this.slotOf(L, x, y);
     // (the ring's levels: the tile the window leaves kept past it — walked back to, drawn from memory —, this one's
     // imagery held for when it leaves in turn)
     const ringLevel = this.ringLevel(L);
@@ -516,7 +539,7 @@ export class EarthTiles {
       texels[2 * i + 1] = col ? col[i]! : 0;
     }
     this.device.queue.writeTexture(
-      { texture: this.texture, origin: [(s % this.span) * TILE, Math.floor(s / this.span) * TILE, L.z - Z0] },
+      { texture: this.texture, origin: [(s % L.span) * TILE, Math.floor(s / L.span) * TILE, L.z - Z0] },
       texels,
       { bytesPerRow: TILE * 8 },
       [TILE, TILE, 1],
@@ -538,7 +561,7 @@ export class EarthTiles {
   private complete(L: Level) {
     const w = L.want;
     if (!w) return;
-    for (let y = w.y0; y < w.y1; y++) for (let x = w.x0; x < w.x1; x++) if (L.key[this.slotOf(x, y)] !== this.keyOf(L, x, y)) return;
+    for (let y = w.y0; y < w.y1; y++) for (let x = w.x0; x < w.x1; x++) if (L.key[this.slotOf(L, x, y)] !== this.keyOf(L, x, y)) return;
     this.setValid(L, w);
   }
 
@@ -559,7 +582,8 @@ export class EarthTiles {
   /**
    * The tracer's params (trace.wgsl: P.tiles, P.tileL): the reference (cos, sin of its longitude, the sine
    * of its latitude, on), then per level the reference's place in its valid rectangle [px], the
-   * rectangle's corner in its layer [px], its size [px], its pixels per radian, on.
+   * rectangle's corner in its layer [px], its size [px], its pixels per radian, its window's side in its layer [px]
+   * (a power of two, the tracer's wrap: 0 off).
    */
   params(): Float32Array {
     const f = new Float32Array(TILE_PARAM_VEC4S * 4);
@@ -575,9 +599,9 @@ export class EarthTiles {
       else if (ax < -S / 2) ax += S;
       const ay = mercY(this.sinLat, L.n) * TILE - v.y0 * TILE;
       const o = 4 + 8 * l;
-      const C = this.clip;
+      const C = TILE * L.span;
       f.set([ax, ay, (((v.x0 * TILE) % C) + C) % C, (v.y0 * TILE) % C], o);
-      f.set([(v.x1 - v.x0) * TILE, (v.y1 - v.y0) * TILE, S / TAU, 1], o + 4);
+      f.set([(v.x1 - v.x0) * TILE, (v.y1 - v.y0) * TILE, S / TAU, C], o + 4);
     }
     f.set([Math.cos(this.lon), Math.sin(this.lon), this.sinLat, on], 0);
     return f;
@@ -621,7 +645,7 @@ export class EarthTiles {
           gy = v.y0 * TILE + j;
         const tx = Math.floor(gx / TILE),
           ty = Math.floor(gy / TILE);
-        return L.data[this.slotOf(tx, ty)]![(gy - ty * TILE) * TILE + (gx - tx * TILE)]!;
+        return L.data[this.slotOf(L, tx, ty)]![(gy - ty * TILE) * TILE + (gx - tx * TILE)]!;
       };
       const hz = sampleLevel(at, px, py, zf - L.z);
       h += rem * w * hz;
