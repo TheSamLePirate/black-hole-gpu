@@ -99,3 +99,50 @@ test("docked: ⇧8 undocks, backs off 30 m, then holds", () => {
   expect(g.range).toBeLessThan(40);
   expect(Math.hypot(...g.vrel)).toBeLessThan(0.03);
 }, 240_000);
+
+test("docking from 300 m: held at Waypoint 1 (220 m) then Waypoint 2 (20 m), each its go, then docked", () => {
+  const { c, fly, msgs, s } = nearEndurance(300, 0);
+  s.target = "endurance";
+  c.pilot.setAuto("dock");
+  const phases = new Set<string>();
+  const t = fly(900, () => {
+    if (c.dockAuto?.phase) phases.add(c.dockAuto.phase);
+    return msgs.some((m) => /^Docked to /.test(m));
+  });
+  console.log(
+    `  ${[...phases].join(" → ")} · docked in ${t.toFixed(0)} s of the wall's time · ${msgs.filter((m) => /Waypoint/.test(m)).join(" · ")}`,
+  );
+  expect(phases.has("WAYPOINT 1 · HOLD")).toBe(true);
+  expect(phases.has("WAYPOINT 2 · HOLD")).toBe(true);
+  expect(msgs.some((m) => /Waypoint 1: go/.test(m))).toBe(true);
+  expect(msgs.some((m) => /Waypoint 2: go/.test(m))).toBe(true);
+  expect(msgs.some((m) => /^Docked to /.test(m))).toBe(true);
+}, 300_000);
+
+test("B with a craft targeted far off: the whole rendezvous planned and flown, then the docking", () => {
+  setSceneTime(0);
+  fleetStart(0, "lander");
+  const s = {
+    ...defaultSettings(),
+    ...presets["Earth: the Endurance tumbling, 300 km up"]!,
+    vessel: "lander" as const,
+    timeSpeed: 1 / M_SECONDS,
+    animate: true,
+  };
+  const c = new CameraController({} as HTMLCanvasElement, s, () => {}, true);
+  fleet.activePose = () => c.activePoseNow();
+  const starts = fleetStart(0, "lander");
+  c.time = 0;
+  c.setPilot(true);
+  c.newFlight();
+  c.flyFrom(starts.lander);
+  c.settleMount();
+  c.sync();
+  s.target = "endurance";
+  const said = c.rendezvousStart();
+  console.log(`  ${said} · ${c.plan.nodes.length} nodes`);
+  expect(said).toMatch(/Rendezvous/);
+  expect(c.pilot.auto).toBe("node");
+  expect(c.plan.nodes.length).toBeGreaterThanOrEqual(3);
+  expect(c.plan.nodes.at(-1)!.then).toBe("dock");
+}, 120_000);

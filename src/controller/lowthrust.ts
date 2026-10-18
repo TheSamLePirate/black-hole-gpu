@@ -59,7 +59,7 @@ import { C_MPS, DAY_S, G0, M_METRES, M_SECONDS } from "../units";
 import { add as axpy, cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 import { caught } from "../debug";
 import { frameNow } from "../frameclock";
-import { dockClosingMark, nominalDockClosing } from "../docking-guidance";
+import { DOCK_WAYPOINTS, dockClosingMark, nominalDockClosing } from "../docking-guidance";
 import { t, tf } from "../i18n";
 
 import type { CameraController, FutureView, HubInfo, HubRow, LowThrust, RunwayView } from "../controls";
@@ -1432,6 +1432,8 @@ function dockCard(this: CameraController): HubInfo | null {
     FINAL: t("the last metres: on the axis, the ports facing — to the capture"),
     "HOLD 10 m": t("held 10 m out until on the axis, the ports facing and the drift still"),
     "TO THE AXIS": t("to a point on the port's axis, off the target"),
+    "WAYPOINT 1 · HOLD": t("held at Waypoint 1, 220 m out: the go for the approach"),
+    "WAYPOINT 2 · HOLD": t("held at Waypoint 2, 20 m out: the go for the capture"),
   };
   const phase = why[D.phase] ?? (D.blocked ? t("round the target, clear of its hull, to the axis") : t("docking"));
   const along = g.along,
@@ -1466,7 +1468,7 @@ function dockCard(this: CameraController): HubInfo | null {
     flown: this.glideTrace.pts,
     now: [along, closing],
     levels: hasAsked ? [{ y: asked, label: t("ASKED") }] : [],
-    marks: [{ x: 10, label: t("HOLD") }],
+    marks: [{ x: 10, label: t("HOLD") }, ...(D.wp?.left ?? []).map((k) => ({ x: DOCK_WAYPOINTS[k]!.along, label: `WP${k + 1}` }))],
     state:
       !D.corridor || !hasAsked
         ? "wait"
@@ -1495,6 +1497,8 @@ function dockCard(this: CameraController): HubInfo | null {
     phase,
     rows: [
       [t("Range"), m(g.range)],
+      // (where it is about the station's zones: its approach ellipsoid — 4 × 2 × 2 km —, its keep-out sphere — 200 m)
+      [t("Zone"), g.range < 200 ? t("keep-out sphere") : this.inApproachEllipsoid(g) ? t("approach ellipsoid") : t("outside")],
       [t("Along · across"), `${m(along)} · ${m(g.lateral)}`],
       // (past their marks: too fast for the distance — the graph's own "off" —, the ports' axes and the
       // turns apart near the contact, by the flight report's marks)

@@ -4,6 +4,7 @@
 // orbital frame, LVLH); the attitude its own (the SAS). Docked, the same key undocks and backs off 30 m along the line from the target's
 // centre, then holds there.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { cameraFrame } from "../camera";
 import { t, tf } from "../i18n";
 import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 import type { Vec3 } from "../physics";
@@ -26,6 +27,8 @@ declare module "../controls" {
     keepAway?: number;
     keepWant: typeof keepWant;
     keepKey: typeof keepKey;
+    rendezvousStart: typeof rendezvousStart;
+    inApproachEllipsoid: typeof inApproachEllipsoid;
   }
 }
 
@@ -60,6 +63,36 @@ function keepFrame(
 /** The speed towards the held point [m/s]: KEEP.vmax at most, braked at KEEP.brake, a tenth of the gap a second near. */
 export function keepSpeed(gap: number): number {
   return Math.min(KEEP.vmax, Math.sqrt(2 * KEEP.brake * gap), 0.1 * gap);
+}
+
+/**
+ * B (the docking autopilot) with the station or a craft targeted beyond the docking's 3 km: the whole rendezvous —
+ * planned (iss-plan.ts: the departure, two corrections, the arrival 200 m off its free port) and flown (the plan's
+ * nodes executed), the docking autopilot then taking it to the capture (its waypoints held). What to say; null within
+ * 3 km (the docking autopilot itself), or nothing to plan for (it says why).
+ */
+function rendezvousStart(this: CameraController): string | null {
+  const s = this.s;
+  const near = this.dockGeometry();
+  if (near && near.range <= 3000) return null;
+  if (!(s.target === "iss" || isCraft(s.target))) return null;
+  const nav = this.ourNav(cameraFrame(s));
+  if (!nav) return null;
+  const said = this.planIss(nav);
+  if (!this.plan.nodes.length) return said;
+  if (this.pilot.auto !== "node") this.pilot.setAuto("node");
+  return tf("Rendezvous: {0} — flown, then docked", said.replace(/^Plan: /, ""));
+}
+
+/** The station's approach ellipsoid (4 × 2 × 2 km: 2 km along its track, 1 km up, down and across, about its centre
+ *  — its LVLH): whether the craft is in it. */
+function inApproachEllipsoid(this: CameraController, g: { X: Vec3; tgt: { X: Vec3; V: Vec3 } }): boolean {
+  const nav = this.ourNav(cameraFrame(this.s));
+  if (!nav) return false;
+  const B = ourState(nav.ref, nav.t);
+  const F = lvlhFrame(sub3(g.tgt.X, B.pos), sub3(g.tgt.V, B.vel));
+  const r = lin(sub3(g.X, g.tgt.X), M_METRES, g.X, 0);
+  return (dot3(r, F.T) / 2000) ** 2 + (dot3(r, F.R) / 1000) ** 2 + (dot3(r, F.N) / 1000) ** 2 < 1;
 }
 
 /** ⇧8: docked, undock and back off (then hold); else station keeping on or off. What to say. */
@@ -130,5 +163,5 @@ function keepWant(
 }
 
 export function installStationKeep(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { keepWant, keepKey });
+  Object.assign(C.prototype, { keepWant, keepKey, rendezvousStart, inApproachEllipsoid });
 }

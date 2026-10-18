@@ -1206,6 +1206,9 @@ export class CameraController {
     warpStep?: number;
     warpNow?: number;
     warpT?: number;
+    /** the station's waypoints on the approach (docking-guidance.ts DOCK_WAYPOINTS): which are still to hold, the one
+     *  held and since when (the scene's time [M]) */
+    wp?: { left: number[]; held: number | null; since: number };
   } | null = null;
 
   /** Warp the pilot asked for, while the rails (or a glide) hold it lower (null: none held back). */

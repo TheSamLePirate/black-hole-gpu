@@ -10,7 +10,7 @@ import { BODY_NAMES, type Body, isCraft, isNetTarget } from "../targeting";
 import type { MountPose } from "../mounts";
 import { fleet, type Pose } from "../fleet";
 import { dockedFrame, VESSEL_IDS, VESSELS, type VesselId } from "../vessels";
-import { nominalDockClosing } from "../docking-guidance";
+import { DOCK_WAYPOINTS, nominalDockClosing } from "../docking-guidance";
 import { mouth } from "../wormhole";
 import { gravityHome, homeOf, ourState, repToHomeVec } from "../system/our-side";
 import { issAxes, issTrack, m34apply, m34unapply, partTransforms, station, stationAngles, type M34 } from "../system/iss";
@@ -18,6 +18,7 @@ import { stationHulls, vesselHulls, type TriBVH } from "../system/collide";
 import { C_MPS, M_METRES, M_SECONDS } from "../units";
 import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 import { frameNow } from "../frameclock";
+import { t } from "../i18n";
 
 import type { CameraController, DockInfo, DockTarget } from "../controls";
 import { onAxesV, unitV } from "./util";
@@ -861,6 +862,8 @@ function dockWant(
       final: false,
       blocked: false,
       checked: -1e9,
+      // (the waypoints beyond where it starts: held on the way in)
+      wp: { left: DOCK_WAYPOINTS.map((_, i) => i).filter((i) => g0.along > DOCK_WAYPOINTS[i]!.along + 15), held: null, since: 0 },
     };
     this.onPilotMessage?.(
       `Docking autopilot · ${theTitle(g0)}'s ${g0.name} · ${g0.range < 1000 ? `${g0.range.toFixed(0)} m` : `${(g0.range / 1000).toFixed(2)} km`}`,
@@ -964,6 +967,27 @@ function dockWant(
     // before the contact, not met at the capture's edge)
     if (D.final && along < 3) vc *= Math.min(Math.max((0.1 - lat) / 0.06, 0.25), 1);
     D.phase = along >= 12 ? "APPROACH" : D.final ? "FINAL" : "HOLD 10 m";
+    // the station's waypoints: stopped on each (its hold), then on — the crew's go
+    const W = D.wp;
+    const k = W?.left[0];
+    if (W && k !== undefined) {
+      const P = DOCK_WAYPOINTS[k]!;
+      // (slowing to stop there: a tenth of the gap a second at most; backing to it if past)
+      vc = Math.min(vc, Math.max(0.05 * (along - P.along), -0.1));
+      const there = Math.abs(along - P.along) < 2 && Math.abs(g.closing) < 0.03;
+      if (there && W.held !== k) {
+        W.held = k;
+        W.since = nav.t;
+      }
+      if (W.held === k) {
+        D.phase = `${P.name} · HOLD`;
+        if ((nav.t - W.since) * M_SECONDS >= P.hold) {
+          W.left.shift();
+          W.held = null;
+          this.onPilotMessage?.(k === 0 ? t("Waypoint 1: go for the approach") : t("Waypoint 2: go for the capture"));
+        }
+      }
+    }
     let vl = lin(latv, -kLat, latv, 0);
     const vll = Math.hypot(...vl);
     if (vll > 0.4) vl = lin(vl, 0.4 / vll, vl, 0);

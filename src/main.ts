@@ -2507,6 +2507,11 @@ async function main() {
     }
     if (a === "dock" && camera.docked)
       return panel.toast(camera.netDocked ? t("Docked to another's craft — UNDOCK first") : t("Docked to the ISS — UNDOCK first"));
+    // (the station or a craft targeted beyond 3 km: the whole rendezvous, planned and flown, then docked)
+    if (a === "dock" && camera.pilot.auto !== "dock") {
+      const said = camera.rendezvousStart();
+      if (said) return panel.toast(said);
+    }
     camera.pilot.setAuto(a);
     panel.toast(camera.pilot.auto === "none" ? t("Autopilot off") : tf("Autopilot: {0}", AUTO_NAMES[a]));
   }
