@@ -47,7 +47,8 @@ export function endurancePose(s: Settings, t: number) {
   const z = unit(V);
   const x0 = unit(cross(cross(z, C), z));
   const y0 = cross(z, x0);
-  const psi = (2 * Math.PI * t) / Math.max(s.enduranceSpin, 1);
+  // (its turn's period [M]: a tenth of a second of the scene at least — the film's tumble at Mann among them)
+  const psi = (2 * Math.PI * t) / Math.max(s.enduranceSpin, 2e-4);
   const x: Vec3 = [0, 1, 2].map((k) => Math.cos(psi) * x0[k]! + Math.sin(psi) * y0[k]!) as Vec3;
   const y = cross(z, x);
   return { C, V, x, y, z };

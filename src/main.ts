@@ -1816,7 +1816,12 @@ async function main() {
       // (again two frames on, on the view's clock: the scene's first frames settle the flight's clock — a few
       // hundredths of a second off it are thousands of km at a quarter of light's speed)
       requestAnimationFrame(() => requestAnimationFrame(() => camera.placeByHoleEndurance(150)));
-      panel.toast(t("By Gargantua, 150 m off the Endurance's fore port: dock to it — its ports on the HUD's docking panel"));
+      const rpm = 60 / (settings.enduranceSpin * M_SECONDS);
+      panel.toast(
+        rpm > 0.5
+          ? tf("The Endurance tumbles at {0} rpm: match its turn about its hub's axis, then dock (B: auto-dock)", rpm.toFixed(0))
+          : t("By Gargantua, 150 m off the Endurance's fore port: dock to it — its ports on the HUD's docking panel"),
+      );
     }
     if (pose === "iss" && settings.ship) {
       // (the station's start gives the ship's own axes — its nose to the port's axis — not the view's:

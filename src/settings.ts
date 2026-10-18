@@ -1088,6 +1088,24 @@ export const presets: Record<string, Preset> = {
     vessel: "ranger",
     pose: "enduranceHole",
   },
+  // (the film's docking: the Endurance tumbling by Mann's world — 3 rpm, the Ranger 150 m off its hub: match its turn)
+  "Mann: the tumbling Endurance": {
+    ...GARGANTUA_WORLD,
+    fov: 70,
+    shipMount: "chase",
+    endurance: true,
+    enduranceOrbit: 40,
+    enduranceIncl: 0,
+    enduranceNode: 0,
+    // (half a degree behind Mann on its orbit: clear of its world's pull, its world in sight)
+    endurancePhase: (0.72 * 180) / Math.PI - 0.5,
+    // (3 rpm: a turn in 20 s of the scene)
+    enduranceSpin: 20 / M_SECONDS,
+    enduranceSize: 2.4,
+    enduranceLight: 1.5,
+    vessel: "ranger",
+    pose: "enduranceHole",
+  },
   "Ranger: approaching Gargantua": {
     spin: 0.6,
     distance: 34,

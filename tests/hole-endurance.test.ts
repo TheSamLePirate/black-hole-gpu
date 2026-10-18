@@ -100,3 +100,50 @@ test("B by Gargantua: the docking autopilot takes the Ranger from 150 m to the E
   expect(c.holeDocked).toBeTruthy();
   expect(c.pilot.auto).toBe("none");
 }, 300_000);
+
+test("Mann, the film's docking: the Endurance tumbling at 3 rpm — B matches its turn and docks", () => {
+  const P = presets["Mann: the tumbling Endurance"]!;
+  setSceneTime(P.time ?? 0);
+  fleet.active = "ranger";
+  const s = { ...defaultSettings(), ...P, timeSpeed: 1 / M_SECONDS, animate: true };
+  const c = new CameraController({} as HTMLCanvasElement, s, () => {}, true);
+  const msgs: string[] = [];
+  c.onPilotMessage = (m) => msgs.push(m);
+  c.time = P.time ?? 0;
+  c.setPilot(true);
+  c.newFlight();
+  c.sync();
+  c.placeByHoleEndurance(150);
+  const fly = (sec: number, until?: () => boolean) => {
+    for (let i = 0; i < sec * 30; i++) {
+      c.flyShip(1 / 30, null as never);
+      if (Number.isFinite(c.shipTime)) c.time = c.shipTime;
+      if (until?.()) return i / 30;
+    }
+    return sec;
+  };
+  fly(0.2);
+  const spin0 = c.holeDock!.spin;
+  c.pilot.setAuto("dock");
+  let worstSpin = 0;
+  const trace: string[] = [];
+  let k = 0;
+  const t = fly(900, () => {
+    if ((c.holeDock?.along ?? 99) < 12) worstSpin = Math.max(worstSpin, c.holeDock?.spin ?? 0);
+    if (k++ % 900 === 0) {
+      const g = c.holeDock;
+      trace.push(
+        `${Math.round(k / 30)}s ${c.dockAuto?.phase ?? "-"} ${g ? `${g.range.toFixed(1)}m a${g.along.toFixed(1)} l${g.lateral.toFixed(2)} ${g.angle.toFixed(1)}° spin${g.spin.toFixed(1)} cl${g.closing.toFixed(2)}` : "—"} local:${!!c.local}`,
+      );
+    }
+    return !!c.holeDocked;
+  });
+  if (!c.holeDocked) console.log(trace.join("\n"));
+  void k;
+  console.log(
+    `  turns apart at the start ${spin0.toFixed(1)}°/s · ${msgs.filter((m) => /Docked/.test(m)).join("")} after ${t.toFixed(0)} s · the last 12 m at most ${worstSpin.toFixed(2)}°/s apart`,
+  );
+  expect(spin0).toBeGreaterThan(15);
+  expect(c.holeDocked).toBeTruthy();
+  expect(worstSpin).toBeLessThan(3);
+}, 300_000);

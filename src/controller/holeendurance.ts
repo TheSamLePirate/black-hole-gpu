@@ -14,10 +14,10 @@ import { gradeDocking } from "../game/report";
 import { recorder } from "../game/recorder";
 import { t, tf } from "../i18n";
 import { zamoBeta } from "../landing";
-import { add, dot, lin, sub } from "../math/vec3";
+import { add, cross, dot, lin, sub } from "../math/vec3";
 import type { Vec3 } from "../physics";
 import { mapToRest } from "../system/local-patch";
-import { C_MPS } from "../units";
+import { C_MPS, M_SECONDS } from "../units";
 import { dockedFrame, VESSELS } from "../vessels";
 import { nominalDockClosing } from "../docking-guidance";
 import type { Want } from "../pilot";
@@ -26,7 +26,7 @@ import { timeRate } from "../clock";
 import type { CameraController } from "../controls";
 
 /** Near enough to be drawn at its true size and docked to [m]; the capture's limits (as the station's). */
-export const HOLE_DOCK = { near: 60e3, reach: 5000, along: 0.3, lateral: 0.3, angle: 10, speed: 0.5 };
+export const HOLE_DOCK = { near: 60e3, reach: 5000, along: 0.3, lateral: 0.3, angle: 10, speed: 0.5, spin: 3 };
 
 const unit = (a: Vec3): Vec3 => {
   const l = Math.hypot(...a) || 1;
@@ -74,7 +74,9 @@ function holeEndurance(this: CameraController, t: number) {
   // the scene's circle is not one — 27 m/s apart in the first fifth of a second —, the Endurance only drawn)
   if (!s.endurance || fleet.active === "endurance" || Math.abs(s.enduranceIncl) > 1e-6) return null;
   const P = endurancePose(s, t);
-  return { C: P.C as Vec3, V: P.V as Vec3, ax: [P.x, P.y, P.z] as [Vec3, Vec3, Vec3], mR: 1476.625 * (s.massSolar || 1) };
+  // (its turn about its hub's axis — its ports on it: their centres do not circle, the turn is matched to align them)
+  const w = lin(P.z as Vec3, (2 * Math.PI) / Math.max(s.enduranceSpin, 2e-4), P.z as Vec3, 0);
+  return { C: P.C as Vec3, V: P.V as Vec3, ax: [P.x, P.y, P.z] as [Vec3, Vec3, Vec3], w, mR: 1476.625 * (s.massSolar || 1) };
 }
 
 /** The camera on Gargantua's side: its place on the map [M], its rest frame's mapping, its ZAMO velocity. */
@@ -104,12 +106,15 @@ function holeDockStep(this: CameraController) {
   // the pair of free ports nearest each other (rest metres)
   let best: HoleDock | null = null;
   const bE = zamoBeta(E.C, E.V, this.s.spin);
-  const vRel: Vec3 = lin(sub(H.cam.beta as Vec3, bE), C_MPS, bE, 0);
+  const wMe = this.ownTurn(S);
   VESSELS.endurance.ports.forEach((tp, k) => {
     const cT = add(E.C, lin(onE(tp.centre as Vec3), 1 / E.mR, E.C, 0));
     const aT = unit(H.rest(onE(tp.axis as Vec3)));
     VESSELS[me].ports.forEach((op, j) => {
       const cO = add(H.X, lin(onMe(op.centre as Vec3), 1 / E.mR, H.X, 0));
+      // (the ring's velocity: the ship's and its own turn's — turning with a tumbling Endurance, its ring circles)
+      const vRing = add(H.cam.beta as Vec3, H.toLocal(cross(wMe, sub(cO, H.X))));
+      const vRel: Vec3 = lin(sub(vRing, bE), C_MPS, bE, 0);
       const d = lin(H.rest(sub(cO, cT)), E.mR, cO, 0);
       const range = Math.hypot(...d);
       if (best && range >= best.range) return;
@@ -129,7 +134,8 @@ function holeDockStep(this: CameraController) {
         lateralRate: Math.hypot(...sub(vRel, lin(aT, -closing, aT, 0))),
         // (on the map — both axes there exactly: the rest frame's mapping, at a fifth of light's speed, bends angles)
         angle: (Math.acos(Math.max(-1, Math.min(1, -dot(unit(onMe(op.axis as Vec3)), unit(onE(tp.axis as Vec3)))))) * 180) / Math.PI,
-        spin: (Math.hypot(...this.pilot.omega) * 180) / Math.PI,
+        // (the turns apart: the flown craft's against the Endurance's [deg/s])
+        spin: (Math.hypot(...sub(wMe, E.w)) / M_SECONDS) * (180 / Math.PI),
         at: [dot(atC, H.cam.right as Vec3) * E.mR, dot(atC, H.cam.up as Vec3) * E.mR, dot(atC, H.cam.fwd as Vec3) * E.mR],
       };
     });
@@ -144,6 +150,7 @@ function holeDockStep(this: CameraController) {
     g.along > -0.6 &&
     g.lateral < HOLE_DOCK.lateral &&
     g.angle < HOLE_DOCK.angle &&
+    g.spin < HOLE_DOCK.spin &&
     speed < HOLE_DOCK.speed &&
     g.closing > -0.02
   ) {
@@ -229,8 +236,11 @@ function holeDockWant(this: CameraController, cam: ReturnType<typeof cameraFrame
   const F = dockedFrame(VESSELS[me].ports[g.ownPort]!, VESSELS.endurance.ports[g.port]!, [0, 1, 0]);
   const onE = (v: Vec3): Vec3 => lin(lin(E.ax[0], v[0], E.ax[1], v[1]), 1, E.ax[2], v[2]);
   const shipAx = F.ax.map((v) => unit(onE(v as Vec3))) as [Vec3, Vec3, Vec3];
-  // (the attitude: the ship's nose and top as docked, on the local axes)
-  const att = { nose: unit(H.toLocal(shipAx[2])), up: unit(H.toLocal(shipAx[1])) };
+  // (the attitude: the ship's nose and top as docked, on the local axes; the Endurance's turn flown ahead — its tumble
+  // chased on the error alone is never caught — as the pilot's rates on the ship's axes, per second of its clock)
+  const Sm = this.shipAxesLocal(H.cam).map((a) => H.toMap(a as Vec3)) as [Vec3, Vec3, Vec3];
+  const rate = Sm.map((x) => -dot(E.w, x) * timeRate(this.s)) as Vec3;
+  const att = { nose: unit(H.toLocal(shipAx[2])), up: unit(H.toLocal(shipAx[1])), rate };
   this.dockAuto ??= {
     target: "endurance",
     port: g.port,
@@ -281,7 +291,14 @@ function holeDockWant(this: CameraController, cam: ReturnType<typeof cameraFrame
   }
   const bE = zamoBeta(E.C, E.V, this.s.spin);
   void cam;
-  return { beta: lin(bE, 1, want, 1 / C_MPS), ff: [0, 0, 0] };
+  // (the ring's motion is the ship's and its own turn's: turning with the tumbling Endurance, the ring — a metre off
+  // the ship's roll axis — circles; the ship's velocity is the ring's wanted less ω × r, its push less the circle's
+  // pull — without, the ring stayed 1.2 m off the axis, held 10 m out for ever)
+  const wOwn = this.ownTurn(Sm);
+  const rr = sub(ring(), H.X);
+  const circ = H.toLocal(cross(wOwn, rr));
+  const pull = H.toLocal(cross(wOwn, cross(wOwn, rr)));
+  return { beta: lin(lin(bE, 1, want, 1 / C_MPS), 1, circ, -1), ff: lin(pull, -1, pull, 0) };
 }
 
 /** The fleet's craft to draw on Gargantua's side near the camera: the Endurance at its true size within 60 km — its
