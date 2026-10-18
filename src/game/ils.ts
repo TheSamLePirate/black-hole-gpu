@@ -88,7 +88,7 @@ export function ilsReading(R: IlsRunway, p: { lat: number; lon: number; alt: num
   };
 }
 
-export type IlsPhase = "toIaf" | "hold" | "intercept" | "final" | "flare" | "rollout" | "missed" | "done";
+export type IlsPhase = "base" | "toIaf" | "hold" | "intercept" | "final" | "flare" | "rollout" | "missed" | "done";
 
 export interface IlsRun {
   rwy: IlsRunway;
@@ -105,6 +105,8 @@ export interface IlsRun {
   /** the worst deviations on the final, below the final fix [dots] */
   worst: { loc: number; gs: number };
   missed: number;
+  /** a circuit's base: the turn onto the final begun */
+  baseIn?: boolean;
   /** the gap across's integral on the final [m s] */
   xInt?: number;
   /** the last vertical speed in the air [m/s] */
@@ -113,9 +115,9 @@ export interface IlsRun {
   touch?: { along: number; across: number; vs: number };
 }
 
-export const newIlsRun = (rwy: IlsRunway, hold = 0): IlsRun => ({
+export const newIlsRun = (rwy: IlsRunway, hold = 0, base = false): IlsRun => ({
   rwy,
-  phase: "toIaf",
+  phase: base ? "base" : "toIaf",
   t: 0,
   hold,
   loc: false,
@@ -186,6 +188,32 @@ export function ilsStep(
     }
     return { gamma: 10 * D, bank: steer(crs), spd: vApp + 40, gear: false, flaps: 0.5 };
   }
+  // a visual circuit's base (`base`, from the downwind abeam the field): the base leg square to the runway, towards its
+  // axis (45° of bank, a fighter's circuit); the turn onto the final begun where its radius (40° at our speed) rolls it out on the centreline —
+  // the gap left as wide as that turn's own (R (1 − cos Δψ)) —, then the intercept's law, latched; down to the path
+  // (300 m over the field at most), the gear and half flaps out, the final's speed and a little; lined up: the
+  // final; over the threshold still not: round again
+  if (R.phase === "base") {
+    const side = Math.sign(r.across) || 1;
+    const dpsi = wrap(own.trk - crs);
+    const rad = (own.gs * own.gs) / (9.80665 * Math.tan(40 * D));
+    if (!R.baseIn && Math.abs(dpsi) < 110 * D && Math.abs(r.across) <= rad * (1 - Math.cos(dpsi)) + 40 && side * xRate < 0) R.baseIn = true;
+    const want = R.baseIn ? crs + clamp(-0.006 * (r.across + 10 * xRate), -40 * D, 40 * D) : crs - (side * Math.PI) / 2;
+    if (Math.abs(r.across) < 100 && Math.abs(xRate) < 6 && Math.cos(dpsi) > 0.97 && r.along < -800) {
+      R.loc = R.gs = true;
+      R.phase = "final";
+    } else if (r.along > -500 && Math.cos(dpsi) > 0) {
+      R.phase = "missed";
+      R.missed++;
+      return { gamma: 10 * D, bank: 0, spd: vApp + 40, gear: false, flaps: 0.5, call: "Go around" };
+    } else {
+      // (the path's own descent as we close the field, and the gap closed in some 5 s)
+      const hT = clamp(gsHeight(r.along), 60, 300);
+      const vz = -Math.max(own.gs * Math.cos(dpsi), 0) * Math.tan(ILS.glide * D) - 0.2 * (r.h - hT);
+      const gamma = clamp(Math.atan2(vz, Math.max(own.gs, 1)), -8 * D, 3 * D);
+      return { gamma, bank: steer(want, 45 * D), spd: vApp + 8, gear: true, flaps: 0.5 };
+    }
+  }
   // the initial fix, its hold
   const iafH = Math.max(gsHeight(-ILS.iaf), 600);
   if (R.phase === "toIaf" || R.phase === "hold") {
@@ -241,7 +269,9 @@ export function ilsStep(
     if (!R.loc && r.locIn && Math.abs(r.across) < 150 && Math.abs(xRate) < 8) R.loc = true;
     const call = R.loc ? say("Localizer captured") : undefined;
     const hHold = Math.max(iafH, Math.min(own.alt - W.elev, iafH + 300));
-    if (R.loc && r.gsIn && r.gs <= 0.05) {
+    // (the glideslope captured from below — or, established inside the final fix already, within a dot of it either
+    // way: placed on a short final a little low, it went round at once)
+    if (R.loc && r.gsIn && (r.gs <= 0.05 || (r.along > -ILS.faf - 2000 && Math.abs(r.gs) < 1.2))) {
       R.gs = true;
       R.phase = "final";
     }
@@ -256,7 +286,8 @@ export function ilsStep(
   }
   // the final: two loops across (the speed across asked by the gap, the bank closing it), down the glideslope
   // (and the gap's integral, a crosswind's drift taken out)
-  if (R.phase === "final" || R.phase === "flare") R.xInt = clamp((R.xInt ?? 0) + r.across * dt, -400, 400);
+  // (the integral only once near the axis: the capture's transient not wound into it — a drift pushed past it)
+  if ((R.phase === "final" || R.phase === "flare") && Math.abs(r.across) < 20) R.xInt = clamp((R.xInt ?? 0) + r.across * dt, -400, 400);
   const xWant = clamp(-0.12 * r.across - 0.01 * (R.xInt ?? 0), -12, 12);
   const aLat = 0.4 * (xWant - xRate);
   const bank = clamp(Math.atan2(aLat, 9.80665), -20 * D, 20 * D);

@@ -28,6 +28,9 @@ export const ACAS = {
   /** the closest approach that is a conflict [m], the time ahead looked at [s], the escape's flight path [rad] */
   miss: 150,
   ahead: 8,
+  /** closer than this [m]: a conflict whatever the motion; a closing speed under this [m/s]: none */
+  close: 25,
+  closing: 2,
   escape: 15 * D,
 };
 
@@ -89,13 +92,18 @@ export function acasConflict(
   let best: { id: string; name: string; t: number; miss: number; above: number } | null = null;
   for (const o of others) {
     const v2 = o.vRel[0]! ** 2 + o.vRel[1]! ** 2 + o.vRel[2]! ** 2;
-    if (v2 < 1) continue;
-    const t = -(o.r[0]! * o.vRel[0]! + o.r[1]! * o.vRel[1]! + o.r[2]! * o.vRel[2]!) / v2;
     const now = Math.hypot(o.r[0]!, o.r[1]!, o.r[2]!);
-    if (t < 0 || t > ACAS.ahead) {
-      if (now < missMax && (!best || now < best.miss)) best = { id: o.id, name: o.name, t: 0, miss: now, above: o.r[2]! };
+    // (closer than a wingspan's few: a conflict whatever the motion)
+    if (now < ACAS.close) {
+      if (!best || now < best.miss) best = { id: o.id, name: o.name, t: 0, miss: now, above: o.r[2]! };
       continue;
     }
+    // (else only closing on us: two craft side by side at the same speed — a wingman left beside his leader — are no
+    // conflict; they had both climbing away for ever)
+    const closing = -(o.r[0]! * o.vRel[0]! + o.r[1]! * o.vRel[1]! + o.r[2]! * o.vRel[2]!) / Math.max(now, 1);
+    if (v2 < 1 || closing < ACAS.closing) continue;
+    const t = -(o.r[0]! * o.vRel[0]! + o.r[1]! * o.vRel[1]! + o.r[2]! * o.vRel[2]!) / v2;
+    if (t < 0 || t > ACAS.ahead) continue;
     const c = [o.r[0]! + o.vRel[0]! * t, o.r[1]! + o.vRel[1]! * t, o.r[2]! + o.vRel[2]! * t];
     const miss = Math.hypot(c[0]!, c[1]!, c[2]!);
     if (miss < missMax && (!best || miss < best.miss)) best = { id: o.id, name: o.name, t, miss, above: c[2]! };

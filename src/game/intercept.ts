@@ -188,7 +188,11 @@ export function interceptStep(
   let ph = phase;
   const turning = Math.abs(dot(T.a ?? [0, 0, 0], rightT)) > ICPT.manoeuvre;
   if ((ph === "run" || ph === "turn") && dist < ICPT.joinDist && (hca < ICPT.joinHca || turning)) ph = "join";
-  else if ((ph === "join" || ph === "shadow") && (dist > ICPT.runDist || (hca > ICPT.runHca && !turning))) ph = "run";
+  // (a turning target joined whatever the angle: back to the run — its speed by the distance — once 1.5 times the
+  // join's distance off: the formation law, made for the slot's last few hundred metres, had fallen 5 km behind a
+  // drone on its racetrack, closing at 9 m/s)
+  else if ((ph === "join" || ph === "shadow") && (dist > (turning ? 1.5 * ICPT.joinDist : ICPT.runDist) || (hca > ICPT.runHca && !turning)))
+    ph = "run";
   if (ph === "join" || ph === "shadow") {
     const F = formationStep(o, V, T, slot, mem, dt);
     if (F.dist < ICPT.shadowDist) ph = "shadow";

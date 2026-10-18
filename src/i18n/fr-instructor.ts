@@ -124,6 +124,7 @@ export default {
   "To work on": "À travailler",
   "Clean: every channel within its tolerance.": "Propre : chaque paramètre dans sa tolérance.",
   "Debrief — {0}": "Débriefing — {0}",
+  "Demonstration: {0}/20": "Démonstration : {0}/20",
   Again: "Réessayer",
   "The lesson's card": "La carte de la leçon",
   "Its steps": "Ses étapes",

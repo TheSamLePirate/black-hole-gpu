@@ -424,6 +424,7 @@ export interface Settings {
   f35HmdColor: "green" | "amber" | "cyan" | "white"; // the helmet's symbology's colour
   f35HmdBrightness: number; // its brightness (0.3 … 1)
   netMenu: boolean; // the network's menu and buttons (docs/PLAN-RESEAU.md): off, the game shows no trace of it
+  netFreeFight: boolean; // in a room, in the F-35, no match: the free fight — every craft a target, friendly fire on
   cineDynamicFov: boolean; // its lens widened with the speed and the afterburner, the long lens on the still cameras
   characterShoulder: number; // on foot: the camera over the right shoulder [m] (0: behind the head)
   shipAlbedo: number; // hull albedo (light grey paint in the film)
@@ -764,6 +765,7 @@ export function defaultSettings(): Settings {
     f35HmdColor: "green",
     f35HmdBrightness: 1,
     netMenu: true,
+    netFreeFight: true,
     cineDynamicFov: true,
     characterShoulder: 0.45,
     shipAlbedo: 0.6,
@@ -2084,6 +2086,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   f35HmdColor: "pref",
   f35HmdBrightness: "pref",
   netMenu: "pref",
+  netFreeFight: "pref",
   cineDynamicFov: "pref",
   characterShoulder: "pref",
   shipAlbedo: "carried",

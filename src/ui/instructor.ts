@@ -379,7 +379,17 @@ function chartsOf(R: InstrRun): AssistGraph[] {
 const letterOf = (s: number) => (s >= 17 ? "A" : s >= 14 ? "B" : s >= 11 ? "C" : s >= 8 ? "D" : "F");
 
 /** The debrief: the score, the charts, each channel's and each phase's marks, what to work on; again, its card. */
+/** The debrief shown (one at a time). */
+let debriefOpen: { root: HTMLElement; close: () => void } | null = null;
+
+/** The debrief shown closed (a new lesson, the craft placed elsewhere). */
+export function closeDebrief() {
+  if (debriefOpen?.root.isConnected) debriefOpen.close();
+  debriefOpen = null;
+}
+
 export function debriefInstr(host: InstructorHost, last: { run: InstrRun; debrief: InstrDebrief }) {
+  closeDebrief();
   const { run: R, debrief: B } = last;
   const body = h("div", "ins-debrief");
   const top = h("div", "ins-score");
@@ -432,6 +442,7 @@ export function debriefInstr(host: InstructorHost, last: { run: InstrRun; debrie
     body.append(ul);
   } else body.append(h("p", "ins-good", t("Clean: every channel within its tolerance.")));
   const m = modal({ title: tf("Debrief — {0}", R.title), body: [body], cls: "ins-frame", testid: "instructor-debrief" });
+  debriefOpen = m;
   const row = h("div", "ins-row");
   const L = lessonOf(R.id);
   row.append(

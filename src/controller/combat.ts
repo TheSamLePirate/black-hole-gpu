@@ -23,6 +23,7 @@ import {
   type V3,
 } from "../game/combat";
 import { enu } from "../game/challenges";
+import { proxyGone, proxyStep, worldIdOf } from "./fightproxy";
 import { type GunState, gunFunnel, gunSolution, SIGHT, trackAccel } from "../game/gunsight";
 import type { MatchRules } from "../game/match";
 import type { Scenario } from "../game/scenarios";
@@ -78,6 +79,10 @@ export interface CombatState {
   /** the last hit of the player's shots, the last kill [s of the fight] (the HUD's hit marker) */
   hitAt: number;
   killAt: number;
+  /** the free fight's (ui/netmatch.ts): every craft a target — the outside ones taken in as proxies
+   *  (controller/fightproxy.ts: their radar id → the world's id) */
+  free?: boolean;
+  proxies?: Map<string, number>;
   /** the gun's sight (game/gunsight.ts): the craft's last states (the funnel's), the lock's acceleration measured */
   gun?: { hist: GunState[]; meas: { id: number | null; v: V3 | null; a: V3; t: number } };
 }
@@ -149,7 +154,7 @@ function combatStart(this: CameraController, def: Scenario, net: { host: boolean
     if (!C || !P) return [];
     const W = C.world;
     return W.targets
-      .filter((q) => q.alive)
+      .filter((q) => q.alive && !q.proxy)
       .map((q) => ({
         id: `cmb:${q.id}`,
         r: [q.p[0] - P.p[0], q.p[1] - P.p[1], q.p[2] - P.p[2]] as V3,
@@ -207,7 +212,7 @@ function combatTrigger(this: CameraController, what: "fire" | "lock" | "weapon" 
     if (this.radarFix()) {
       const said = this.radarLockNext();
       const L = this.radar.lock;
-      W.lock = L?.startsWith("cmb:") ? Number(L.slice(4)) : null;
+      W.lock = C.free ? worldIdOf(this, L) : L?.startsWith("cmb:") ? Number(L.slice(4)) : null;
       return said;
     }
     const id = W.cycleLock(P);
@@ -279,7 +284,19 @@ function combatStep(this: CameraController, dt: number) {
     : { infinite: s.f35InfiniteAmmo, invulnerable: s.f35Invulnerable, skill: s.f35AiSkill, enemyMissiles: s.f35EnemyMissiles };
   // (shot down in a match: no gun until flying again)
   W.firing = C.downAt === null && (this.codes.has("Space") || this.gunTrigger || !!this.jetPadOut?.gun);
+  // (the free fight: the outside craft near, and the one locked, in the world as targets)
+  proxyStep(this);
   const ev = W.step(dt, P);
+  // (an outside craft hit, destroyed: another's wingman's hit his; the real one gone, the room told)
+  for (const e of ev) {
+    const q = e.kind === "kill" || e.kind === "hit" ? W.target(e.kind === "kill" ? e.target : (e.on as number)) : undefined;
+    if (!q?.proxy) continue;
+    if (e.kind === "hit") this.onProxyHit?.(q.proxy, e.damage, e.by);
+    else {
+      proxyGone(this, q.proxy);
+      this.onProxyDown?.(q.proxy, q.name);
+    }
+  }
   // (the gun's sight: the craft's states for the funnel, the lock's turn measured)
   const Gs = (C.gun ??= { hist: [], meas: { id: null, v: null, a: [0, 0, 0], t: 0 } });
   Gs.hist.push({ t: C.t, p: [...P.p], v: [...P.v], fwd: [...P.fwd] });
@@ -371,7 +388,8 @@ function combatShips(this: CameraController): { id: ShipMeshId; rel: Vec3; axes:
   const pose: F35Pose = { ...restPose(), gear: 0, canopy: 0 };
   const out: { id: ShipMeshId; rel: Vec3; axes: [Vec3, Vec3, Vec3]; jet: F35Pose; hidden: boolean }[] = [];
   for (const q of C.world.targets) {
-    if (!q.ai) continue;
+    // (an outside craft taken in: its own drawing while alive — its wreck the fight's)
+    if (!q.ai || (q.proxy && q.alive)) continue;
     // (a wreck: drawn as it falls, gone in its explosion as it hits the ground; else 20 s after it died)
     if (!q.alive && (q.wreck ? q.wreck.crashedAt < C.world.t - 0.4 || C.world.t - q.diedAt > 240 : C.world.t - q.diedAt > 20)) continue;
     const r: V3 = [q.p[0] - P.p[0], q.p[1] - P.p[1], q.p[2] - P.p[2]];

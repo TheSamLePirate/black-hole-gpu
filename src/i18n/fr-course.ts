@@ -13,6 +13,36 @@ export default {
   "Guided: TARS, then you": "Guidé : TARS, puis vous",
   "The collision course": "La route de collision",
   "The conversion": "La conversion",
+  // the demonstrations: TARS flying the pilot's part too
+  "The demonstration stopped: {0} went nowhere for {1} s": "Démonstration interrompue : « {0} » n'avance plus depuis {1} s",
+  "Holding level": "Tenir le palier",
+  "Level at {alt}, heading {hdg}, {spd}: the attitude set, the trim taking the pressure off — hands light.":
+    "En palier à {alt}, cap {hdg}, {spd} : l'assiette posée, le trim soulage l'effort — les mains légères.",
+  "A level turn to the left, back to heading {hdg}: 30° of bank, the nose on the horizon.":
+    "Un virage en palier à gauche, retour au cap {hdg} : 30° d'inclinaison, le nez sur l'horizon.",
+  "A descent of 500 m, back to {alt}: the power back, the nose a little down — the level-off begun early.":
+    "Une descente de 500 m, retour à {alt} : la puissance réduite, le nez un peu bas — la mise en palier anticipée.",
+  "Slowing to {spd}: the power back, the nose raised as the speed falls, the height held.":
+    "Décélération à {spd} : la puissance réduite, le nez relevé à mesure que la vitesse baisse, l'altitude tenue.",
+  "The base turn: 90° towards the runway, the power back, down to 200 m — then onto the centreline.":
+    "Le virage de base : 90° vers la piste, la puissance réduite, descente vers 200 m — puis sur l'axe.",
+  "Final and landing": "Finale et atterrissage",
+  "Final: the centreline, the 3° path to the numbers, on speed. The flare from 14 m, the throttle idle — down, the brakes.":
+    "Finale : l'axe, le plan à 3° vers les numéros, à la vitesse. L'arrondi dès 14 m, la manette au ralenti — posé, les freins.",
+  "The aim point still in the windscreen, on speed. From 14 m the flare: the throttle idle, the descent eased — touchdown, the brakes.":
+    "Le point d'aboutissement fixe dans le pare-brise, à la vitesse. Dès 14 m l'arrondi : la manette au ralenti, la descente adoucie — le toucher, les freins.",
+  "The final and the landing": "La finale et l'atterrissage",
+  "The needles centred, small corrections; the gear down, on speed — minimums, the flare at 14 m, touchdown.":
+    "Les aiguilles centrées, de petites corrections ; le train sorti, à la vitesse — les minimums, l'arrondi à 14 m, le toucher.",
+  "The groove: the meatball on the datum lights, lined up, on speed — full power at the touchdown, to the wire.":
+    "La finale : le meatball sur la barre de référence, aligné, à la vitesse — plein gaz au toucher, jusqu'au brin.",
+  "Holding the slot": "Tenir la place",
+  "In the slot: its wingtip on the canopy, small corrections — the power for the distance. A minute like this.":
+    "En place : son saumon d'aile sur la verrière, de petites corrections — la puissance pour la distance. Une minute ainsi.",
+  "The collision course held, then the turn behind it — lag — to roll out on its tail, at its height.":
+    "La route de collision tenue, puis le virage derrière lui — en retard — pour sortir dans sa queue, à son altitude.",
+  "The pipper on it, its turn led — short bursts between 300 and 600 m.":
+    "Le réticule sur lui, son virage anticipé — de courtes rafales entre 300 et 600 m.",
   // the first flight
   "First flight": "Premier vol",
   "Level flight, a level turn, a climb — TARS flies them, then you: level, the turn back, the descent, the slowing.":

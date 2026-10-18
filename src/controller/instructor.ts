@@ -18,7 +18,9 @@ import type { CameraController } from "../controls";
 declare module "../controls" {
   interface CameraController {
     instr?: InstrRun | null;
-    instrLast?: { run: InstrRun; debrief: InstrDebrief } | null;
+    instrLast?: { run: InstrRun; debrief: InstrDebrief; auto?: boolean } | null;
+    /** the manoeuvre watched flown by an autopilot all along (a demonstration: its mark, no debrief to read) */
+    instrAuto?: boolean;
     /** a call (its words, its fix) — the page says and shows it */
     onInstrCall?: (text: string, fix: string) => void;
     /** a manoeuvre ended: its debrief — the page shows it */
@@ -32,16 +34,30 @@ const vApp = () => approachSpeed(fleet.massProps().mass, VESSELS.f35.aero!.wing!
 
 /** What is flown now that the instructor watches: its kind, its lesson's id and title, and its sample (where, the
  *  phase, the channels and the graphs' values). Null: nothing. */
-function watched(
-  c: CameraController,
-): { kind: LessonKind; id: string; title: string; x: number; phase: string; v: Record<string, number> } | null {
+function watched(c: CameraController): {
+  kind: LessonKind;
+  id: string;
+  title: string;
+  x: number;
+  phase: string;
+  v: Record<string, number>;
+  auto?: boolean;
+  demo?: boolean;
+} | null {
   // (a guided lesson — controller/course.ts —: the pilot's steps alone, as its own lesson; its own kinds sampled there)
   const C = c.course;
   if (C) {
     const s = C.run?.steps[C.run.i];
-    if (!C.run || C.run.done || s?.who !== "you") return null;
+    if (!C.run || C.run.done) return null;
     const L = LESSONS.find((x) => x.id === C.id);
     const title = L ? t(L.title) : C.id;
+    // (a demonstration: what TARS flies watched as ever — an approach, a pass, a figure: its trace on the panel's
+    // diagram, his mark said, no debrief to read)
+    if (C.mode === "demo") {
+      const w = watchedOwn(c);
+      return w ? { ...w, id: C.id, title, auto: true, demo: true } : null;
+    }
+    if (s?.who !== "you") return null;
     const own = c.courseSample();
     if (own) return { ...own, id: C.id, title };
     const w = watchedOwn(c);
@@ -53,7 +69,7 @@ function watched(
 /** What is flown now outside a guided lesson: an ILS approach, a carrier's pass, a figure. */
 function watchedOwn(
   c: CameraController,
-): { kind: LessonKind; id: string; title: string; x: number; phase: string; v: Record<string, number> } | null {
+): { kind: LessonKind; id: string; title: string; x: number; phase: string; v: Record<string, number>; auto?: boolean } | null {
   const V = c.airFlight.last?.speed ?? 0;
   const I = c.ilsRun;
   if (I && (I.phase === "intercept" || I.phase === "final" || I.phase === "flare")) {
@@ -61,6 +77,7 @@ function watchedOwn(
     if (!g) return null;
     const r = ilsReading(I.rwy, g);
     return {
+      auto: !I.manual,
       kind: "ils",
       id: "ils",
       title: t("ILS approach"),
@@ -78,6 +95,7 @@ function watchedOwn(
   const T = c.trapRun;
   if (T?.phase === "final" && T.now) {
     return {
+      auto: !T.manual,
       kind: "carrier",
       id: "case1",
       title: t("Carrier: Case I and the ball"),
@@ -95,6 +113,7 @@ function watchedOwn(
     const H = c.aeroHud();
     const load = H?.guide?.load;
     return {
+      auto: A.mode === "demo",
       kind: "figure",
       id: A.id,
       title: t(FIGURES[A.id as FigureId].name),
@@ -114,15 +133,18 @@ function instrFrame(this: CameraController, dt: number) {
   if (R && (!w || w.id !== R.id)) {
     // (ended: its debrief, when it was flown long enough to judge)
     if (R.samples.length > 15) {
-      this.instrLast = { run: R, debrief: instrDebrief(R) };
+      this.instrLast = { run: R, debrief: instrDebrief(R), auto: this.instrAuto };
       this.onInstrDebrief?.(this.instrLast);
     }
     this.instr = null;
   }
   if (!w) return;
+  if (!this.instr) this.instrAuto = true;
+  if (!w.auto) this.instrAuto = false;
   const run = (this.instr ??= newInstr(w.kind, w.id, w.title));
   const call = instrStep(run, w.x, w.phase, w.v, dt);
-  if (call) this.onInstrCall?.(t(call.text), t(call.fix));
+  // (no calls on TARS's own demonstration: he does not correct himself)
+  if (call && !w.demo) this.onInstrCall?.(t(call.text), t(call.fix));
 }
 
 export function installInstructor(C: { prototype: CameraController }) {

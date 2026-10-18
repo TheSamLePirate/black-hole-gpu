@@ -4,6 +4,7 @@
 // between sampled along the line of sight (the Earth's curve in); a fight's lock and seen kept by it; what the HUD
 // and the PCD draw.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { worldIdOf } from "./fightproxy";
 import { cameraFrame } from "../camera";
 import { fleet } from "../fleet";
 import { interceptCues } from "../game/intercept";
@@ -130,11 +131,17 @@ function radarStep(this: CameraController, dt: number) {
   this.radar.step(dt, this.radarT, fix.own, objects, masked);
   // (a fight: its world's seen and lock the radar's)
   const W = this.combat?.world;
+  // (the free fight: weapons free — the datalink's tracks locked too, every craft the world's or taken in)
+  const free = !!this.combat?.free;
+  this.radar.weaponsFree = free;
   if (W) {
     W.radarFed = true;
-    W.seen = [...this.radar.tracks.values()].filter((T) => !T.datalink && T.id.startsWith("cmb:")).map((T) => Number(T.id.slice(4)));
+    W.seen = [...this.radar.tracks.values()]
+      .filter((T) => !T.datalink || free)
+      .map((T) => (free ? worldIdOf(this, T.id) : T.id.startsWith("cmb:") ? Number(T.id.slice(4)) : null))
+      .filter((x): x is number => x !== null);
     const L = this.radar.lock;
-    W.lock = L?.startsWith("cmb:") ? Number(L.slice(4)) : null;
+    W.lock = free ? worldIdOf(this, L) : L?.startsWith("cmb:") ? Number(L.slice(4)) : null;
   }
 }
 

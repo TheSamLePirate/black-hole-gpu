@@ -1230,6 +1230,13 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   this.airFlight.cfg.deflect = airCtx ? this.pilot.fired.torque : undefined;
   this.airFlight.vacuum();
   if (simDt > 0) this.fall(simDt, [0, 0, 0], false, out.acc);
+  // (the fight's picture of us after our own step: its craft — the aggressors, a lesson's leader, the others — drawn
+  // and placed about where we are now, not where we were a frame ago: alongside, a leader shuffled fore and aft by
+  // our own way over the frame, 4 m at 250 m/s, 8 m on a slow frame)
+  if (this.combat?.last && simDt > 0) {
+    const P = this.combatPlayer();
+    if (P) this.combat.last = P;
+  }
   // (the gear's torque over the frame turns the craft: its pitch settling on the nose wheel, a bounce)
   if (this.gearDw) {
     for (let i = 0; i < 3; i++) this.pilot.omega[i] = this.pilot.omega[i]! + this.gearDw[i]!;

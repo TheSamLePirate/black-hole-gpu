@@ -35,6 +35,7 @@ declare module "../controls" {
     wingShips: typeof wingShips;
     wingOrder: typeof wingOrder;
     wingCount: typeof wingCount;
+    wingHurt: typeof wingHurt;
   }
 }
 
@@ -149,6 +150,18 @@ const dot = (a: readonly number[], b: readonly number[]) => a[0]! * b[0]! + a[1]
 /** How many wingmen fly (the setting's, alive). */
 function wingCount(this: CameraController): number {
   return this.wing?.list.filter((w) => w.alive).length ?? 0;
+}
+
+/** One of our wingmen hit by another player's shot (the free fight: ui/netmatch.ts) — `damage` off its 100. */
+function wingHurt(this: CameraController, k: number, damage: number, by: string) {
+  const w = this.wing?.list.find((x) => x.k === k && x.alive);
+  if (!w) return;
+  w.hp -= damage;
+  if (w.hp > 0) return radio(this, tr({ fr: `${nameOf(w.k)}, touché par ${by} !`, en: `${nameOf(w.k)}, hit by ${by}!` }));
+  w.alive = false;
+  radio(this, tr({ fr: `${nameOf(w.k)} abattu par ${by} !`, en: `${nameOf(w.k)} shot down by ${by}!` }));
+  const C = this.combat;
+  if (C) C.booms.push({ p: fightP(this, w.jet.p) ?? [0, 0, 0], t: C.t, size: 1.5 });
 }
 
 /** A radio call: said aloud and shown. */
@@ -698,22 +711,41 @@ function wingShips(this: CameraController): { id: "f35"; rel: Vec3; axes: [Vec3,
       const A = w.jet.axes();
       return ship(w.jet.p, A.fwd, A.up);
     });
-  // (the room's others': carried on from their last sample, a second at most)
+  // (the room's others': carried on from their last sample — a second at most —, drawn smoothed: the place carried
+  // on by its velocity frame to frame and eased onto each new sample's over a quarter second, the attitude eased so;
+  // a sample's step — 20 a second, the network's jitter — no longer a jump)
   const now = performance.now() / 1000;
-  for (const R of this.remoteWings.values()) {
+  const live = new Set<string>();
+  for (const [slot, R] of this.remoteWings) {
     const age = Math.min(now - R.at, 1);
-    for (const w of R.list)
-      out.push(
-        ship(
-          w.p.map((x, k) => x + w.v[k]! * age),
-          w.f,
-          w.u,
-        ),
-      );
+    for (const w of R.list) {
+      const key = `${slot}:${w.k}`;
+      live.add(key);
+      const want = w.p.map((x, k) => x + w.v[k]! * age);
+      let S = drawn.get(key);
+      if (!S || now - S.t > 1 || Math.hypot(...want.map((x, k) => x - S!.p[k]!)) > 200) {
+        S = { p: [...want], f: [...w.f], u: [...w.u], t: now };
+        drawn.set(key, S);
+      } else {
+        const dt = Math.min(now - S.t, 0.1);
+        const a = 1 - Math.exp(-dt / 0.25);
+        const b = 1 - Math.exp(-dt / 0.15);
+        S.p = S.p.map((x, k) => x + w.v[k]! * dt);
+        S.p = S.p.map((x, k) => x + (want[k]! - x) * a);
+        S.f = n(S.f.map((x, k) => x + (w.f[k]! - x) * b) as Vec3);
+        S.u = n(S.u.map((x, k) => x + (w.u[k]! - x) * b) as Vec3);
+        S.t = now;
+      }
+      out.push(ship(S.p, S.f, S.u));
+    }
   }
+  for (const k of drawn.keys()) if (!live.has(k)) drawn.delete(k);
   return out;
 }
 
+/** The others' AI wingmen as drawn (their smoothed place and attitude, when) — by their player's slot and number. */
+const drawn = new Map<string, { p: number[]; f: number[]; u: number[]; t: number }>();
+
 export function installWingmen(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { wingStep, wingShips, wingOrder, wingCount });
+  Object.assign(C.prototype, { wingStep, wingShips, wingOrder, wingCount, wingHurt });
 }

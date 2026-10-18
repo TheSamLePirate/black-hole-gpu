@@ -153,6 +153,8 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
   const fm =
     this.gcasJet(inp) ??
     this.assistJet(inp, f, dt, "recover") ??
+    // (a demonstration's guns: TARS's aim — controller/course.ts)
+    this.courseJet(f) ??
     this.icptStep(inp, f) ??
     this.trapJet(inp) ??
     this.ilsJet(inp) ??

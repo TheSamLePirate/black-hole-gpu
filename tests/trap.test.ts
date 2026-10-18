@@ -197,6 +197,26 @@ describe("the recovery on the wires", () => {
     expect(r.radio.join(" ")).toMatch(/Initial.*break.*Abeam.*180.*roger ball/is);
   }, 240_000);
 
+  test("Case I demonstrated as the flight school's lesson: the pattern, the groove, the wire — none of its steps late", async () => {
+    const s = await setUp(1, 3000, 7000, 0);
+    s.c.trapLand("ford", { case: "I" });
+    s.c.courseStart("case1", "demo");
+    const said: string[] = [];
+    s.c.onCourseSay = (x) => said.push(x);
+    const steps: string[] = [];
+    let t = 0;
+    let at = "";
+    while (t < 600 && (s.c.course || t < 1)) {
+      s.fly(0.25);
+      t += 0.25;
+      const st = `${s.c.course?.run?.steps[s.c.course.run.i]?.name} ${s.c.trapRun?.phase}/${s.c.trapRun?.leg}`;
+      if (st !== at) steps.push(`${(at = st)} @${t}s`);
+    }
+    console.log(`  ${steps.join(" → ")}; ${said.at(-1)}; ${JSON.stringify(s.c.courseLast)} — ${s.c.trapLast?.wire}-wire`);
+    expect(s.c.trapLast?.wire).toBeGreaterThan(0);
+    expect(s.c.courseLast?.late).toEqual([]);
+  }, 300_000);
+
   test("Case III: out of the marshal, down the final bearing to the platform, dirty at ten miles, the glide path — trapped", async () => {
     const r = await byCase("III", 30_000, 900);
     expect(r.legs).toEqual(["marshal", "penetration", "groove"]);

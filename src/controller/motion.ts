@@ -897,6 +897,18 @@ function reportLandingDue(this: CameraController) {
   this.reportDue = null;
   if (!due) return;
   const { body, verdict, sink, along } = due;
+  // (on a carrier's deck: the LSO grades it — the wire, the ball —, not a runway's report: a trap's 4 m/s and 2.3 g
+  // read as a hard landing, a D over the deck)
+  const g = this.geoNow();
+  if (
+    this.trapRun ||
+    this.deckRun ||
+    (g &&
+      this.carrierNow().some(
+        ({ P }) => Math.hypot((P.lat - g.lat) * 111_195, (P.lon - g.lon) * 111_195 * Math.cos((g.lat * Math.PI) / 180)) < 500,
+      ))
+  )
+    return;
   const cam = cameraFrame(this.s);
   const rw = this.runwayCompute();
   // (a runway's landing rolls on: a craft put down on its engines beside one — the Lander at Kennedy, 0 m/s

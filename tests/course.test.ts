@@ -57,15 +57,15 @@ test("a course's steps: TARS's then the pilot's, held, timed, by event, at most;
   expect(R.steps[R.i]!.name).toBe("Turn back left");
   expect(deviations(R, fix({ alt: 3020, hdg: 140, bank: -40 }))).toEqual({ alt: 20, hdg: Number.NaN, spd: 0, bank: -10 });
   expect(deviations(R, fix({ alt: 3000, hdg: 95, bank: -10 })).hdg).toBe(5);
-  // (not done: at most 60 s, then on)
-  run(61, fix({ alt: 3400, hdg: 140 }));
+  // (not done: at most 90 s, then on)
+  run(91, fix({ alt: 3400, hdg: 140 }));
   expect(R.steps[R.i]!.name).toBe("Descend");
   run(6, fix({ alt: 2500, hdg: 90 }));
   run(6, fix({ alt: 2500, hdg: 90, spd: 160 }));
   expect(said[said.length - 1]).toBe("end");
   expect(R.done).toBe(true);
   // (a demonstration: TARS's three; a try: the pilot's four, the first letting the holds go)
-  expect(newCourse("first", "demo", 0, 0).steps.map((s) => s.who)).toEqual(["tars", "tars", "tars"]);
+  expect(newCourse("first", "demo", 0, 0).steps.map((s) => s.who)).toEqual(["tars", "tars", "tars", "tars", "tars", "tars", "tars"]);
   const T = newCourse("guns", "try", 0, 0);
   expect(T.steps.map((s) => s.who)).toEqual(["you"]);
   expect(T.steps[0]!.act).toEqual(["free"]);
@@ -265,3 +265,200 @@ test("the instructor's guided channels call their deviations", () => {
   for (let i = 0; i < 60 && !call; i++) call = instrStep(R, i, "x", { fwd: -25, right: 0, up: 0 }, 0.1);
   expect(call!.text).toBe("Falling behind");
 });
+
+// The demonstrations whole: TARS flies the pilot's part too (the user's report — "the landing never lands"); each step
+// ended by its own condition, not its time at most (courseLast.late empty), never stalled.
+
+/** The F-35B over Edwards (a flat plain at the runway's level): `along`, `across` its runway's frame, `h` over it, `hdg`, `v`. */
+function overEdwards(along: number, across: number, h: number, hdg: number, v: number) {
+  const K = SITES.find((x) => x.icao === "KEDW")!;
+  const W = { name: K.name, icao: "KEDW", lat: K.lat, lon: K.lon, hdg: K.rwy!, elev: K.elev!, len: RUNWAY_LENGTH };
+  setGroundHeights("earth", () => W.elev);
+  gcasForget();
+  const D = Math.PI / 180;
+  const p = fromRunway(W, along, across);
+  const g = ourGroundPose("earth", p.lat, p.lon, 0);
+  const north = cross(g.up, g.fwd);
+  const fwd = add(scale(north, Math.cos(hdg * D)), scale(g.fwd, Math.sin(hdg * D)));
+  const X = add(g.X, scale(g.up, h / M_METRES));
+  const a = flight({ ...g, X, fwd, vel: add(g.vel, scale(fwd, v / C_MPS)), landed: undefined }, false, "f35");
+  a.c.s.flightMode = "plane";
+  a.c.pilot.throttle = a.c.pilot.engineNow = 0.5;
+  fleet.fuel.f35 = 3000;
+  a.fly(0.5);
+  return { a, c: a.c, W };
+}
+
+test("demonstrations: TARS flies every step — the pilot's too, but a figure's second time", () => {
+  const D = newCourse("first", "demo", 0, 0);
+  expect(D.steps.length).toBe(7);
+  expect(D.steps.every((s) => s.who === "tars")).toBe(true);
+  expect(D.steps[3]!.act).toEqual(["holds"]);
+  expect(newCourse("landing", "demo", 0, 0).steps.map((s) => s.act)).toEqual([["ils-auto"], ["ils-auto"]]);
+  expect(newCourse("guns", "demo", 0, 0).steps[1]!.act).toEqual(["icpt", "guns-auto"]);
+  expect(newCourse("loop", "demo", 0, 0).steps.length).toBe(1);
+  // (every lesson's pilot step but a figure's has TARS's way to fly it)
+  for (const L of LESSONS) {
+    const C = courseOf(L.id);
+    if (C.kind === "figure") continue;
+    expect(newCourse(L.id, "demo", 0, 0).steps.length).toBe(C.steps.length);
+  }
+});
+
+test("the first flight demonstrated whole: TARS's seven steps, back to the start's height and heading, slowed", () => {
+  const a = cruise(2500, 200, 0.7);
+  const c = a.c;
+  fleet.fuel.f35 = 5000;
+  const said: string[] = [];
+  c.onCourseSay = (s) => said.push(s);
+  c.courseStart("first", "demo");
+  a.fly(1);
+  const R = c.course!.run!;
+  const h0 = R.alt0;
+  const t = a.fly(500, () => !c.course);
+  const f = c.jetFigures()!;
+  console.log(`  demonstrated in ${t.toFixed(0)} s: ${Math.round(f.h - h0)} m from the start's height, ${Math.round(f.V)} m/s`);
+  expect(c.course).toBe(null);
+  expect(said.length).toBe(8);
+  expect(said[said.length - 1]).toMatch(/demonstration/);
+  expect(Math.abs(f.h - h0)).toBeLessThan(60);
+  expect(Math.abs(f.V - 160)).toBeLessThan(10);
+}, 300_000);
+
+test("the landing demonstrated whole: TARS flies the final, the flare, down and stopped on the runway", () => {
+  const { a, c, W } = overEdwards(-6000, 0, 6300 * Math.tan((3 * Math.PI) / 180), SITES.find((x) => x.icao === "KEDW")!.rwy!, 85);
+  c.gearDown = true;
+  c.ilsStart("KEDW");
+  c.courseStart("landing", "demo");
+  const t = a.fly(300, () => !!c.ilsLast && !c.ilsRun);
+  const L = c.ilsLast;
+  console.log(
+    `  down and stopped in ${t.toFixed(0)} s: ${L?.score}/20, ${Math.round(L?.touch?.along ?? 0)} m in, ${L?.touch?.across.toFixed(1)} m off`,
+  );
+  expect(L).toBeTruthy();
+  expect(L!.touch!.along).toBeGreaterThan(100);
+  expect(L!.touch!.along).toBeLessThan(W.len / 2);
+  expect(c.course).toBe(null);
+}, 300_000);
+
+test("the circuit demonstrated whole: the downwind, the base round onto the centreline, the final, down and stopped", () => {
+  const K = SITES.find((x) => x.icao === "KEDW")!;
+  const { a, c, W } = overEdwards(1500, 1800, 300, (K.rwy! + 180) % 360, 100);
+  c.gearDown = true;
+  const said: string[] = [];
+  c.onCourseSay = (s) => said.push(s);
+  c.courseStart("circuit", "demo", { rwy: W });
+  let worst = 0;
+  let axisAt = 0;
+  const t = a.fly(500, () => {
+    const G = c.geoNow();
+    const st = c.course?.run?.steps[c.course.run.i];
+    if (process.env.TRACE && G && Math.round((c.course?.run?.t ?? 0) * 30) % 150 === 0) {
+      const r = onRunway(W, G);
+      console.log(
+        st?.name,
+        c.ilsRun?.phase,
+        Math.round(r.along),
+        Math.round(r.across),
+        Math.round(r.h),
+        Math.round(c.jetFigures()?.V ?? 0),
+        Math.round(((c.jetFigures()?.hdg ?? 0) * 180) / Math.PI),
+      );
+    }
+    if (G && st?.name === "Final and landing") {
+      if (!axisAt) axisAt = onRunway(W, G).along;
+      const r = onRunway(W, G);
+      if (r.along < -300) worst = Math.max(worst, Math.abs(r.across));
+    }
+    return !!c.ilsLast && !c.ilsRun;
+  });
+  const L = c.ilsLast;
+  console.log(
+    `  down and stopped in ${t.toFixed(0)} s: lined up ${Math.round(-axisAt)} m out, worst ${Math.round(worst)} m off on the final; ${L?.score}/20, ${Math.round(L?.touch?.along ?? 0)} m in, ${L?.touch?.across.toFixed(1)} m off`,
+  );
+  expect(L).toBeTruthy();
+  expect(-axisAt).toBeGreaterThan(1500);
+  expect(-axisAt).toBeLessThan(7000);
+  expect(Math.abs(L!.touch!.across)).toBeLessThan(8);
+  expect(L!.touch!.along).toBeGreaterThan(50);
+  expect(said.length).toBe(4);
+}, 300_000);
+
+test("guns demonstrated whole: TARS into the drone's six, his own bursts, the kill", () => {
+  const a = cruise(4000, 200, 0.7);
+  const c = a.c;
+  fleet.fuel.f35 = 5000;
+  const said: string[] = [];
+  c.onCourseSay = (x) => said.push(x);
+  c.courseStart("guns", "demo");
+  a.fly(2);
+  const t = a.fly(400, () => !c.course);
+  console.log(`  ${said.join(" · ")} — ${t.toFixed(0)} s`);
+  expect(c.course).toBe(null);
+  expect(said.length).toBe(3);
+  expect(c.combat!.world.targets.some((x) => x.name === "BQM-7" && !x.alive)).toBe(true);
+  expect(c.gunTrigger).toBe(false);
+}, 300_000);
+
+test("formation demonstrated whole: the rejoin, a minute in the slot — none of its steps late", () => {
+  const a = cruise(5000, 180, 0.7);
+  const c = a.c;
+  fleet.fuel.f35 = 5000;
+  c.courseStart("formation", "demo");
+  a.fly(2);
+  let worst = 0;
+  const t = a.fly(400, () => {
+    const s = c.course?.run?.steps[c.course.run.i];
+    if (s?.name === "Holding the slot") worst = Math.max(worst, c.icpt?.last?.dist ?? 0);
+    return !c.course;
+  });
+  console.log(`  ${t.toFixed(0)} s, the slot held within ${worst.toFixed(1)} m; ${JSON.stringify(c.courseLast)}`);
+  expect(c.courseLast?.late).toEqual([]);
+  expect(c.courseLast?.failed).toBeUndefined();
+  expect(worst).toBeLessThan(15);
+}, 300_000);
+
+test("the intercept demonstrated whole: the collision course, the conversion to its tail — none of its steps late", () => {
+  const a = cruise(6000, 250, 0.75);
+  const c = a.c;
+  fleet.fuel.f35 = 5000;
+  c.courseStart("intercept", "demo");
+  a.fly(2);
+  const t = a.fly(700, () => !c.course);
+  console.log(`  ${t.toFixed(0)} s; ${JSON.stringify(c.courseLast)}`);
+  expect(c.course).toBe(null);
+  expect(c.courseLast?.late).toEqual([]);
+  expect(c.courseLast?.failed).toBeUndefined();
+}, 300_000);
+
+test("the ILS demonstrated whole from 12 km: down and stopped — none of its steps late", () => {
+  const { a, c, W } = overEdwards(-12_000, 0, 12_300 * Math.tan((3 * Math.PI) / 180), SITES.find((x) => x.icao === "KEDW")!.rwy!, 95);
+  c.gearDown = true;
+  c.ilsStart("KEDW");
+  c.courseStart("ils", "demo");
+  const t = a.fly(400, () => !!c.ilsLast && !c.ilsRun && !c.course);
+  console.log(
+    `  ${t.toFixed(0)} s: ${c.ilsLast?.score}/20, ${Math.round(c.ilsLast?.touch?.along ?? 0)} m in; ${JSON.stringify(c.courseLast)}`,
+  );
+  expect(c.ilsLast?.touch?.along).toBeLessThan(W.len / 2);
+  expect(c.courseLast?.late).toEqual([]);
+}, 300_000);
+
+test("a demonstration that goes nowhere is given up, said — the stall watch", () => {
+  const a = cruise(5000, 180, 0.7);
+  const c = a.c;
+  fleet.fuel.f35 = 5000;
+  const said: string[] = [];
+  c.onCourseSay = (x) => said.push(x);
+  c.courseStart("formation", "demo");
+  a.fly(2);
+  // (the leader made unreachable: carried 40 m further north every frame)
+  const q = c.combat!.world.target(c.course!.target!)!;
+  a.fly(200, () => {
+    q.p[1] += 40;
+    return !c.course;
+  });
+  console.log(`  ${said[said.length - 1]} — ${JSON.stringify(c.courseLast)}`);
+  expect(c.courseLast?.failed).toBe("The rejoin");
+  expect(said[said.length - 1]).toMatch(/stopped/);
+}, 300_000);

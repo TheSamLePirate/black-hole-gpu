@@ -125,6 +125,8 @@ function seaNow(this: CameraController): SeaCraft[] {
   for (const T of F.ships.values()) {
     const s = T.s;
     if (!Number.isFinite(s.lat) || !T.hist.length) continue;
+    // (sunk in a fight — controller/fightproxy.ts)
+    if (this.seaTaken?.has(String(s.mmsi))) continue;
     const Z = shipSize(s.type, s.len, s.beam);
     const recent = T.hist.slice(-4);
     const still = recent.every((q) => q.sog < STILL);

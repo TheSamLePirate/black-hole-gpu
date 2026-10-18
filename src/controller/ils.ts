@@ -73,12 +73,12 @@ export function findRunway(c: CameraController, name?: string): Site | null {
  * The ILS approach engaged: on the runway named (ICAO or name — else the nearest within 150 km), its end into the
  * wind; `hold`: laps in the hold at the initial fix first (Infinity: until cleared). What to say.
  */
-function ilsStart(this: CameraController, name?: string, o: { hold?: number } = {}): string {
+function ilsStart(this: CameraController, name?: string, o: { hold?: number; rwy?: IlsRunway; base?: boolean } = {}): string {
   if (fleet.active !== "f35") return t("ILS: the F-35");
   const g = this.geoNow();
   if (!g || this.rolling || this.ourLanded) return t("ILS: in the air");
-  const site = findRunway(this, name);
-  if (!site) return name ? tf("ILS: no runway called {0}", name) : t("ILS: no runway within 150 km");
+  const site = o.rwy ? null : findRunway(this, name);
+  if (!site && !o.rwy) return name ? tf("ILS: no runway called {0}", name) : t("ILS: no runway within 150 km");
   if (this.form) this.formOff();
   if (this.icpt) this.icptOff();
   this.trapRun = null;
@@ -89,13 +89,16 @@ function ilsStart(this: CameraController, name?: string, o: { hold?: number } = 
   if (this.pilot.auto !== "none") this.pilot.setAuto(this.pilot.auto);
   this.pilot.auto = "none";
   this.nav.on = { l: false, v: false };
-  const W = runwayOf(this, site);
-  this.ilsRun = newIlsRun(W, o.hold ?? 0);
+  // (a visual circuit's base and final — `base`: from the downwind, round onto the centreline)
+  const W = o.rwy ?? runwayOf(this, site!);
+  this.ilsRun = newIlsRun(W, o.hold ?? 0, o.base);
   const id = `${W.icao ?? W.name} ${runwayId(W.hdg)}`;
   this.onRadio?.(
-    o.hold
-      ? tf("{0} approach: hold at the initial fix, expect the ILS {1}", W.icao ?? W.name, runwayId(W.hdg))
-      : tf("{0} approach: cleared ILS {1}", W.icao ?? W.name, runwayId(W.hdg)),
+    o.base
+      ? tf("{0} tower: cleared to land, runway {1}", W.icao ?? W.name, runwayId(W.hdg))
+      : o.hold
+        ? tf("{0} approach: hold at the initial fix, expect the ILS {1}", W.icao ?? W.name, runwayId(W.hdg))
+        : tf("{0} approach: cleared ILS {1}", W.icao ?? W.name, runwayId(W.hdg)),
   );
   return tf("ILS approach: {0}, {1} km", id, Math.round(gcDist(g, W) / 1000));
 }

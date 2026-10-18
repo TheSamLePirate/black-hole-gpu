@@ -18,6 +18,8 @@ const R_EARTH = 6_371_008.8;
 
 declare module "../controls" {
   interface CameraController {
+    /** the room's players flying on our wing now (their slots — ui/netsession.ts) */
+    formWithMe?: Set<number>;
     /** the protections' state: the recovery's clearance foreseen [m] and its margin, the fly-up or the escape flying */
     gcas?: {
       at: number;
@@ -60,6 +62,13 @@ function gcasArmed(this: CameraController): boolean {
   if (!(this.s.f35AutoProtect ?? true) && level !== "assisted" && level !== "beginner") return false;
   if (this.gearDown || this.form || this.ilsRun || this.trapRun || this.deckRun || this.stovl.on) return false;
   return this.flightModeNow() === "plane" && this.pilot.auto === "none";
+}
+
+/** The room's slot a radar track stands for (its craft, or its stand-in in a fight's world), else −1. */
+function slotOfTrack(c: CameraController, id: string): number {
+  if (id.startsWith("net:")) return Number(id.slice(4));
+  if (id.startsWith("cmb:")) return c.combat?.world.target(Number(id.slice(4)))?.peer ?? -1;
+  return -1;
 }
 
 /** A frame of the protections (ten times a second): the recovery foreseen, the fly-up taken or given back; the
@@ -120,6 +129,9 @@ function gcasStep(this: CameraController, dt: number) {
         !(o.id.startsWith("cmb:") && (this.combat?.world.target(Number(o.id.slice(4)))?.peer ?? 0) < 0) &&
         // (the aircraft joined on purpose — an intercept's shadow, a tanker's pre-contact —: not a conflict)
         !(this.icpt && this.icpt.id === o.id && this.icpt.phase !== "run" && this.icpt.phase !== "turn") &&
+        // (a room's player flying on our wing — he said so: his place in our formation —, his craft or its stand-in in
+        // a fight: close on purpose, never a conflict to climb away from — the free fight's frame gave him a few m/s)
+        !this.formWithMe?.has(slotOfTrack(this, o.id)) &&
         // (a guided lesson's craft — I3: the leader flown on, the drone shot at —: close on purpose)
         !(this.course?.target !== undefined && o.id === `cmb:${this.course.target}` && this.course.id !== "intercept"),
     )

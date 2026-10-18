@@ -65,7 +65,7 @@ import { FLIGHT_HOURS, FLIGHT_STARTS, FLIGHT_WEATHER, FlightHub, flightFields, t
 import { keepMission, MissionEditor, missionLink, myMissions } from "./ui/missioneditor";
 import { missionFromHash } from "./game/missionedit";
 import { MODES as JET_MODES } from "./game/jetmodes";
-import { debriefInstr, flightSchool, type InstructorHost, InstructorPanel } from "./ui/instructor";
+import { closeDebrief, debriefInstr, flightSchool, type InstructorHost, InstructorPanel } from "./ui/instructor";
 import { type LessonId, LESSONS } from "./game/lessons";
 import { fromRunway } from "./game/ils";
 import { VIEWS as EXCEPTIONAL_VIEWS, viewSpec } from "./game/views";
@@ -167,6 +167,7 @@ import { visibleTimeout } from "./util/visible-timeout";
 import { gameLog } from "./game/log";
 import { autosave, saveFromHash, type GameSave } from "./game/save";
 import { CraftLost } from "./ui/craftlost";
+import { applyF35Variant } from "./f35/variant";
 import { FlightComputer } from "./ui/fc/computer";
 import { sitesOf, SITES } from "./game/sites";
 import { Splash } from "./ui/splash";
@@ -246,6 +247,9 @@ import { ORDERS, type OrderId } from "./game/orders";
 import { FORMATION_IDS, FORMATIONS } from "./game/formations";
 import { TrafficFeed } from "./traffic/feed";
 import { unitsFor } from "./ui/unitsys";
+
+/** The craft lost to the air's screen (ui/craftlost.ts) — made at once: a placing hides it. */
+const craftLost = new CraftLost();
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>("view");
@@ -3730,30 +3734,55 @@ async function main() {
           { label: { fr: "Formation sur la cible", en: "Formation on the lock" }, run: () => say(camera.trafficForm()) },
         ],
       },
-      // (the flight's leader: its orders — controller/orders.ts)
-      { label: { fr: "Patrouille", en: "Flight" }, sub: orderItems() },
-      // (the F-35's autopilot modes — A3)
-      { label: { fr: "Modes du pilote automatique", en: "Autopilot modes" }, sub: modeItems() },
-      { label: { fr: "École de vol", en: "Flight school" }, run: () => flightSchool(instrHost) },
-      { label: { fr: "Vues d'exception", en: "Views of exception" }, run: () => openViews(viewsHost) },
-      { label: { fr: "Plan de vol", en: "Flight plan" }, key: "⇧O", on: camera.nav.on.l, run: () => routePanel.open() },
-      { label: { fr: "Carte de mission", en: "Mission map" }, on: !!camera.mission, run: () => missionMap.open() },
+      // (the flight: the leader's orders, the AI wingmen, a room player's wing — controller/orders.ts, ui/netsession.ts)
+      { label: { fr: "Patrouille", en: "Flight" }, on: !!camera.form, sub: orderItems() },
+      // (the ways flown: the plan, the approach, the autopilot's modes — A3)
       {
-        label: { fr: "Approche ILS", en: "ILS approach" },
-        on: !!camera.ilsRun,
-        run: () => panel.toast(camera.ilsRun ? (camera.ilsOff(), t("ILS approach off")) : camera.ilsStart()),
+        label: { fr: "Navigation", en: "Navigation" },
+        on: camera.nav.on.l || !!camera.ilsRun,
+        sub: [
+          { label: { fr: "Plan de vol", en: "Flight plan" }, key: "⇧O", on: camera.nav.on.l, run: () => routePanel.open() },
+          {
+            label: { fr: "Approche ILS", en: "ILS approach" },
+            hint: { fr: "La piste la plus proche, face au vent", en: "The nearest runway, into the wind" },
+            on: !!camera.ilsRun,
+            run: () => panel.toast(camera.ilsRun ? (camera.ilsOff(), t("ILS approach off")) : camera.ilsStart()),
+          },
+          { label: { fr: "Modes du pilote automatique", en: "Autopilot modes" }, sub: modeItems() },
+          { label: { fr: "Carte", en: "Map" }, key: "M", on: flightHud.mapView, run: () => flightHud.toggleMapView() },
+          { label: { fr: "Carte de mission", en: "Mission map" }, on: !!camera.mission, run: () => missionMap.open() },
+          { label: { fr: "Préparer un vol", en: "Prepare a flight" }, run: () => flightHub.open() },
+        ],
       },
+      // (what to fly: the school, the challenges and fights, the views of exception)
       {
-        label: { fr: "Défis, combats, missions", en: "Challenges, fights, missions" },
-        on: !!C || camera.chal?.status === "run" || !!camera.mission,
-        run: () => challengePanel.open(),
+        label: { fr: "Leçons et défis", en: "Lessons & challenges" },
+        on: !!C || camera.chal?.status === "run" || !!camera.mission || !!camera.course,
+        sub: [
+          {
+            label: { fr: "École de vol", en: "Flight school" },
+            hint: { fr: "Démonstrations, leçons guidées, essais notés", en: "Demonstrations, guided lessons, graded tries" },
+            on: !!camera.course,
+            run: () => flightSchool(instrHost),
+          },
+          {
+            label: { fr: "Défis, combats, missions", en: "Challenges, fights, missions" },
+            on: !!C || camera.chal?.status === "run" || !!camera.mission,
+            run: () => challengePanel.open(),
+          },
+          { label: { fr: "Vues d'exception", en: "Views of exception" }, run: () => openViews(viewsHost) },
+        ],
       },
-      { label: { fr: "Préparer un vol", en: "Prepare a flight" }, run: () => flightHub.open() },
-      { label: { fr: "Carte", en: "Map" }, key: "M", on: flightHud.mapView, run: () => flightHud.toggleMapView() },
-      { label: { fr: "Vue", en: "View" }, key: "V", run: () => keyActions.mount(new KeyboardEvent("keydown")) },
-      { label: { fr: "Photo", en: "Photo" }, run: openPhoto },
-      { label: { fr: "Replay", en: "Replay" }, run: () => replayOpen(false) },
-      { label: { fr: "Bande-annonce", en: "Trailer" }, run: () => replayOpen(true) },
+      // (the camera: the view, a photo, the replay and its trailer)
+      {
+        label: { fr: "Caméra", en: "Camera" },
+        sub: [
+          { label: { fr: "Vue suivante", en: "Next view" }, key: "V", run: () => keyActions.mount(new KeyboardEvent("keydown")) },
+          { label: { fr: "Photo", en: "Photo" }, run: openPhoto },
+          { label: { fr: "Replay", en: "Replay" }, run: () => replayOpen(false) },
+          { label: { fr: "Bande-annonce", en: "Trailer" }, run: () => replayOpen(true) },
+        ],
+      },
     ];
   };
 
@@ -3801,7 +3830,24 @@ async function main() {
     const say = (s: string | null) => s && panel.toast(s);
     const order = (id: OrderId, arg?: string) => say(camera.flightOrder(id, arg));
     const item = (id: OrderId): WheelItem => ({ label: { fr: ORDERS[id].fr, en: ORDERS[id].en }, run: () => order(id) });
+    // (in a room: a wingman's place on each player flying — the formation flown for us, the first place free on
+    // his wing —; again on him, or Leave: off)
+    const wings: WheelItem[] = netSession.leaders().map((p) => ({
+      label: { fr: `Ailier de ${p.name}`, en: `${p.name}'s wingman` },
+      hint: { fr: "Formation automatique sur son aile", en: "The formation flown on his wing for you" },
+      on: camera.form?.slot === p.slot,
+      run: () => say(netSession.formation(p.slot)),
+    }));
+    if (camera.form)
+      wings.push({
+        label: { fr: "Quitter la formation", en: "Leave the formation" },
+        run: () => {
+          camera.formOff();
+          say(t("Formation off — altitude, heading and speed held"));
+        },
+      });
     return [
+      ...wings,
       // (the AI wingmen: none to three, in turn — controller/wingmen.ts)
       {
         label: { fr: `Ailiers IA (${settings.wingmen})`, en: `AI wingmen (${settings.wingmen})` },
@@ -3820,22 +3866,29 @@ async function main() {
           run: () => order("shape", id),
         })),
       },
-      item("tighten"),
-      item("loosen"),
-      item("attack"),
-      item("engage"),
-      item("cover"),
-      item("hold"),
-      item("rtb"),
       item("breakL"),
       item("breakR"),
-      // (the pass for the spectators: the tight diamond, the camera standing ahead on the way — the fly-by's)
+      // (the fight's orders, the flight's others: wheels of their own — the main one kept to a glance)
       {
-        label: { fr: ORDERS.show.fr, en: ORDERS.show.en },
-        run: () => {
-          order("show");
-          setTimeout(() => (settings.shipMount = "flyby"), 4000);
-        },
+        label: { fr: "Ordres de combat", en: "Combat orders" },
+        sub: [item("attack"), item("engage"), item("cover")],
+      },
+      {
+        label: { fr: "Autres ordres", en: "More orders" },
+        sub: [
+          item("tighten"),
+          item("loosen"),
+          item("hold"),
+          item("rtb"),
+          // (the pass for the spectators: the tight diamond, the camera standing ahead on the way — the fly-by's)
+          {
+            label: { fr: ORDERS.show.fr, en: ORDERS.show.en },
+            run: () => {
+              order("show");
+              setTimeout(() => (settings.shipMount = "flyby"), 4000);
+            },
+          },
+        ],
       },
     ];
   };
@@ -3863,25 +3916,37 @@ async function main() {
             ] as const
           ).map(([a, label, key]) => ({ label, key, on: P.auto === a, run: () => pilotAuto(a) })),
         },
-        { label: { fr: "Carte", en: "Map" }, key: "M", on: flightHud.mapView, run: () => flightHud.toggleMapView() },
-        { label: { fr: "Placer", en: "Place" }, run: () => placePanel.open() },
-        ...(VESSELS[fleet.active].flies
-          ? [
-              { label: { fr: "Plan de vol", en: "Flight plan" }, key: "⇧O", on: camera.nav.on.l, run: () => routePanel.open() },
-              { label: { fr: "Carte de mission", en: "Mission map" }, on: !!camera.mission, run: () => missionMap.open() },
-              {
-                label: { fr: "Approche ILS", en: "ILS approach" },
-                on: !!camera.ilsRun,
-                run: () => panel.toast(camera.ilsRun ? (camera.ilsOff(), t("ILS approach off")) : camera.ilsStart()),
-              },
-              { label: { fr: "Préparer un vol", en: "Prepare a flight" }, run: () => flightHub.open() },
-              { label: { fr: "Défis", en: "Challenges" }, on: camera.chal?.status === "run", run: () => challengePanel.open() },
-            ]
-          : []),
-        { label: { fr: "Vue", en: "View" }, key: "V", run: () => keyActions.mount(new KeyboardEvent("keydown")) },
-        { label: { fr: "Photo", en: "Photo" }, run: openPhoto },
-        { label: { fr: "Replay", en: "Replay" }, run: () => replayOpen(false) },
-        { label: { fr: "Bande-annonce", en: "Trailer" }, run: () => replayOpen(true) },
+        // (the ways flown and the places, then the camera: wheels of their own — the main one kept to a glance)
+        {
+          label: { fr: "Navigation", en: "Navigation" },
+          on: flightHud.mapView || camera.nav.on.l || !!camera.ilsRun,
+          sub: [
+            { label: { fr: "Carte", en: "Map" }, key: "M", on: flightHud.mapView, run: () => flightHud.toggleMapView() },
+            { label: { fr: "Placer", en: "Place" }, run: () => placePanel.open() },
+            ...(VESSELS[fleet.active].flies
+              ? [
+                  { label: { fr: "Plan de vol", en: "Flight plan" }, key: "⇧O", on: camera.nav.on.l, run: () => routePanel.open() },
+                  { label: { fr: "Carte de mission", en: "Mission map" }, on: !!camera.mission, run: () => missionMap.open() },
+                  {
+                    label: { fr: "Approche ILS", en: "ILS approach" },
+                    on: !!camera.ilsRun,
+                    run: () => panel.toast(camera.ilsRun ? (camera.ilsOff(), t("ILS approach off")) : camera.ilsStart()),
+                  },
+                  { label: { fr: "Préparer un vol", en: "Prepare a flight" }, run: () => flightHub.open() },
+                  { label: { fr: "Défis", en: "Challenges" }, on: camera.chal?.status === "run", run: () => challengePanel.open() },
+                ]
+              : []),
+          ],
+        },
+        {
+          label: { fr: "Caméra", en: "Camera" },
+          sub: [
+            { label: { fr: "Vue suivante", en: "Next view" }, key: "V", run: () => keyActions.mount(new KeyboardEvent("keydown")) },
+            { label: { fr: "Photo", en: "Photo" }, run: openPhoto },
+            { label: { fr: "Replay", en: "Replay" }, run: () => replayOpen(false) },
+            { label: { fr: "Bande-annonce", en: "Trailer" }, run: () => replayOpen(true) },
+          ],
+        },
       ];
     return [
       { label: { fr: "Vue", en: "View" }, key: "V", run: () => nextView(1) },
@@ -3930,6 +3995,9 @@ async function main() {
   };
   let tabTimer = 0;
   let tabShift = false;
+  /** when Tab went down (its event's time): a release within the hold's 220 ms is a tap, even if a slow frame let
+   *  the wheel's timer fire first */
+  let tabDownTs = 0;
   addEventListener("keydown", (e: KeyboardEvent) => {
     // (held: the key's repeats swallowed — they went on to the bindings and stepped through the targets while
     // the wheel opened)
@@ -3942,6 +4010,7 @@ async function main() {
     e.preventDefault();
     e.stopImmediatePropagation();
     tabShift = e.shiftKey;
+    tabDownTs = e.timeStamp;
     clearTimeout(tabTimer);
     tabTimer = window.setTimeout(() => {
       tabTimer = 0;
@@ -3950,6 +4019,11 @@ async function main() {
   });
   addEventListener("keyup", (e: KeyboardEvent) => {
     if (e.key !== "Tab") return;
+    // (released within the hold's time — the wheel opened only because a long frame held the page —: a tap)
+    if (!tabTimer && wheel.isOpen && wheel.selected < 0 && e.timeStamp - tabDownTs < 220) {
+      wheel.close();
+      tabTimer = -1;
+    }
     if (tabTimer) {
       // (a tap: the next target — in a fight, the radar's next lock)
       clearTimeout(tabTimer);
@@ -4226,6 +4300,12 @@ async function main() {
   // a mission (ui/airmission.ts — PLAN-AVIATION-AAA P1): its words said and shown, its objectives on screen, its debrief
   // the instructor (A4 — ui/instructor.ts): its panel, its calls said by TARS, its debrief; the flight school's lessons
   // flown — demonstrated by the autopilot or tried by hand
+  /** The F-35's variant set now — its figures, its tanks — not at the next frame's render (sim.ts): the carrier's
+   *  autopilot, begun at once, was dropped by its first step as the B's (no hook) */
+  const setVariant = (v: "B" | "C") => {
+    tools.set("f35Variant", v);
+    if (applyF35Variant(v)) fleet.fuel.f35 = VESSELS.f35.fuelKg ?? 0;
+  };
   const lessonPlace = (id: LessonId, how: boolean | "guided"): string =>
     placeShip(() => {
       // (guided — I3 —: TARS flies first, then hands over; the new lessons' demonstration his part alone, their try
@@ -4233,32 +4313,52 @@ async function main() {
       const guided = how === "guided";
       const demo = how === true || guided;
       const mode = guided ? "guided" : how ? "demo" : "try";
+      // (a lesson begun from a paused game — the pause menu's, the instructor's Explain —: flown at once)
+      if (pauseMenu?.isOpen) pauseMenu.close();
+      paused = false;
       camera.courseOff();
+      // (the last lesson's autopilots let go: its carrier pass, its deck recovery, its figure, its intercept, its
+      // formation, its holds — a new lesson begins clean)
+      camera.trapRun = null;
+      camera.deckRun = null;
+      camera.aeroStop();
+      if (camera.icpt) camera.icptOff();
+      if (camera.form) camera.formOff();
+      Object.assign(camera.jetModes, { alt: null, hdg: null, spd: null, bankMax: undefined });
+      camera.gunTrigger = false;
+      // (each placing below in flight with its engine running — flyAt leaves the throttle where it was: at idle after
+      // the last lesson's landing, the jet slowing from the start)
       if (fleet.active !== "f35") tools.set("vessel", "f35");
       if (camera.mission) camera.missionAbort();
       if (camera.combat) camera.combatEnd();
       camera.ilsOff();
       if (id === "ils") {
         // (Edwards's runway 22, 12 km out on its glideslope, the gear down; the ILS flown or only shown)
-        tools.set("f35Variant", "B");
+        setVariant("B");
         const K = SITES.find((x) => x.icao === "KEDW")!;
         const hd = (K.rwy! * Math.PI) / 180;
         const back = 12_000;
         const lat = K.lat - (back * Math.cos(hd)) / 111_195;
         const lon = K.lon - (back * Math.sin(hd)) / (111_195 * Math.cos((K.lat * Math.PI) / 180));
         tools.flyAt(lat, lon, Math.round((300 + back) * Math.tan((3 * Math.PI) / 180)), K.rwy!, 95);
+        camera.pilot.throttle = camera.pilot.engineNow = 0.65;
         camera.gearDown = true;
         fleet.fuel.f35 = 3000;
         const said = camera.ilsStart("KEDW");
         if (!demo && camera.ilsRun) camera.ilsRun.manual = true;
-        if (guided) return camera.courseStart("ils", "guided");
-        return demo ? said : t("ILS 22 at Edwards, 12 km out: yours — the needles and the instructor with you");
+        // (every demonstration a course of TARS's: its steps followed, its progress watched)
+        if (demo) {
+          camera.courseStart("ils", mode);
+          return said;
+        }
+        return t("ILS 22 at Edwards, 12 km out: yours — the needles and the instructor with you");
       }
       if (id === "case1") {
         // (the F-35C off the Ford in the Mediterranean: 7 km astern for Case I, else on its final to fly the ball)
-        tools.set("f35Variant", "C");
+        setVariant("C");
         camera.carrierClear();
         tools.flyAt(42.75, 6.1, 300, 0, 150);
+        camera.pilot.throttle = camera.pilot.engineNow = 0.65;
         camera.carrierSpawn("ford", { lat: 42.8, lon: 6.1, heading: 0 });
         fleet.fuel.f35 = 3000;
         if (demo) {
@@ -4271,8 +4371,10 @@ async function main() {
             sp.heading / D2,
             180,
           );
+          camera.pilot.throttle = camera.pilot.engineNow = 0.65;
           const said = camera.trapLand("ford", { case: "I" }) ?? "";
-          return guided ? camera.courseStart("case1", "guided") : said;
+          camera.courseStart("case1", mode);
+          return said;
         }
         camera.carrierFinal("ford", 2500, 75);
         camera.gearDown = true;
@@ -4281,16 +4383,17 @@ async function main() {
       if (id === "first" || id === "formation" || id === "intercept" || id === "guns") {
         // (over the Mojave: the first flight at 2 500 m, the formation's leader at 5 000 m, the unknown from the
         // north at 6 000 m, the drone at 4 000 m — the lesson's craft made at its first frame)
-        tools.set("f35Variant", "B");
+        setVariant("B");
         const at = { first: [2500, 90, 200], formation: [5000, 90, 180], intercept: [6000, 0, 250], guns: [4000, 0, 200] }[id];
         tools.flyAt(id === "intercept" ? 35.2 : 34.9, id === "intercept" ? -117.9 : -117.6, at[0]!, at[1]!, at[2]!);
+        camera.pilot.throttle = camera.pilot.engineNow = 0.65;
         camera.gearDown = false;
         fleet.fuel.f35 = 5000;
         return camera.courseStart(id, mode);
       }
       if (id === "circuit" || id === "landing") {
         // (Edwards's runway 22: the downwind abeam, 300 m over the field; or 6 km out on the final)
-        tools.set("f35Variant", "B");
+        setVariant("B");
         const site = findRunway(camera, "KEDW");
         if (!site) return t("ILS: no runway called KEDW");
         const W = runwayOf(camera, site);
@@ -4298,16 +4401,21 @@ async function main() {
         camera.gearDown = true;
         if (id === "circuit") {
           const p = fromRunway(W, 1500, 1800);
-          tools.flyAt(p.lat, p.lon, Math.round(W.elev + 300), (W.hdg + 180) % 360, 100);
+          // (flyAt's height is over the ground: 300 m over the field — not its elevation added: 700 m too high, the
+          // approach's autopilot never established)
+          tools.flyAt(p.lat, p.lon, 300, (W.hdg + 180) % 360, 100);
+          camera.pilot.throttle = camera.pilot.engineNow = 0.65;
           return camera.courseStart("circuit", mode, { rwy: W });
         }
         const p = fromRunway(W, -6000, 0);
-        tools.flyAt(p.lat, p.lon, Math.round(W.elev + 6300 * Math.tan((3 * Math.PI) / 180)), W.hdg, 85);
+        tools.flyAt(p.lat, p.lon, Math.round(6300 * Math.tan((3 * Math.PI) / 180)), W.hdg, 85);
+        camera.pilot.throttle = camera.pilot.engineNow = 0.65;
         camera.ilsStart("KEDW");
         return camera.courseStart("landing", mode);
       }
       flyFigure(challengeHost, id, demo ? "demo" : "judge");
-      if (guided) return camera.courseStart(id, "guided");
+      if (demo) camera.courseStart(id, mode);
+      if (guided) return t("TARS flies first, then hands over to you");
       return demo ? tf("{0}: the demonstration", t(FIGURES[id].name)) : tf("{0}: yours — the instructor watching", t(FIGURES[id].name));
     });
   const instrHost: InstructorHost = {
@@ -4330,7 +4438,9 @@ async function main() {
   camera.onCourseSay = (text) => voice.say({ text, speaker: "tars", priority: 2, ttl: 20_000 });
   camera.onCourseFigure = (id) => flyFigure(challengeHost, id as FigureId, "judge");
   camera.onInstrDebrief = (last) => {
-    if ((settings.f35Instructor ?? "full") === "full") debriefInstr(instrHost, last);
+    // (a demonstration — the autopilot all along —: its mark said, no debrief to read)
+    if (last.auto) panel.toast(tf("Demonstration: {0}/20", last.debrief.score.toFixed(1)));
+    else if ((settings.f35Instructor ?? "full") === "full") debriefInstr(instrHost, last);
     else panel.toast(tf("Instructor: {0}/20", last.debrief.score.toFixed(1)));
   };
   const missionMap = new MissionMap({ camera, toast: (s) => panel.toast(s) });
@@ -4474,6 +4584,16 @@ async function main() {
   function placeShip(f: () => string): string {
     atlasReady();
     if (camera.character.active) camera.character.stop();
+    // (the manoeuvre the instructor watched left behind: not judged — its debrief, if shown, closed)
+    camera.instr = null;
+    closeDebrief();
+    // (the craft lost — its screen up, the time stopped —: a new place is a new flight)
+    if (craftLost.shown) {
+      craftLost.hide();
+      camera.airFlight.failure = null;
+      settings.animate = true;
+      onSettingsChange(["animate"]);
+    }
     const note = f();
     refreshGui();
     touch();
@@ -6099,7 +6219,6 @@ async function main() {
   }
   // the air's limits (flightair.ts): a point kept as the craft enters the air, the craft lost past them
   let entryPoint: GameSave | null = null;
-  const craftLost = new CraftLost();
   events.on("airEntry", () => {
     entryPoint = tools.snapshot("before the entry");
   });
@@ -6199,6 +6318,8 @@ async function main() {
         demo: (id: LessonId) => lessonPlace(id, true),
         tryIt: (id: LessonId) => lessonPlace(id, false),
         guided: (id: LessonId) => lessonPlace(id, "guided"),
+        /** the lesson flown now: its step, its time, what is left of it, how long stalled; the last one's end */
+        state: () => camera.courseState(),
       },
     },
     net: netPanel,

@@ -241,7 +241,7 @@ function fightShips(c: CameraController): { p: Vec3; port: Vec3; up: Vec3; bow: 
   const D = Math.PI / 180;
   const RE = 6_371_008.8;
   return C.world.targets
-    .filter((q) => q.kind === "ship" && (q.alive || C.world.t - q.diedAt < 60))
+    .filter((q) => q.kind === "ship" && !q.proxy && (q.alive || C.world.t - q.diedAt < 60))
     .map((q) => {
       const lat = A.lat + q.p[1] / (D * RE),
         lon = A.lon + q.p[0] / (D * RE * Math.cos(A.lat * D));

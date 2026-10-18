@@ -1,5 +1,7 @@
 /* The instructor (ui/instructor.ts): its live panel, its debrief, the flight school's cards and diagrams. */
 .ins-panel { position: fixed; left: 12px; top: 200px; z-index: 31; width: 340px; max-height: calc(100vh - 470px); overflow: auto; padding: 8px 10px 10px; border: 1px solid rgba(111, 232, 255, 0.35); border-radius: 10px; background: rgba(6, 12, 18, 0.74); backdrop-filter: blur(5px); font: 12.5px/1.35 var(--font, system-ui); color: #e8eef2; display: grid; gap: 6px; }
+/* (its display set above: the hidden attribute alone no longer hid it — a lesson's panel left on screen after it) */
+.ins-panel[hidden] { display: none; }
 .ins-head { display: flex; align-items: center; gap: 8px; }
 .ins-title { flex: 1; font-size: 11.5px; letter-spacing: 0.07em; text-transform: uppercase; color: #6fe8ff; }
 .ins-phase { padding: 1px 7px; border-radius: 9px; background: rgba(111, 232, 255, 0.14); color: #bdf6ff; font-size: 11px; }

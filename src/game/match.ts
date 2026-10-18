@@ -7,7 +7,7 @@
 import { CHALLENGES, type ChallengeDef } from "./challenges";
 import { SCENARIOS, type Scenario } from "./scenarios";
 
-export type MatchMode = "coop" | "ffa" | "teams" | "race" | "landing";
+export type MatchMode = "coop" | "ffa" | "teams" | "race" | "landing" | "free";
 
 export interface MatchRules {
   /** stores never spent */
@@ -63,8 +63,29 @@ export const ARENA: Scenario = {
   limit: 3600,
 };
 
+/** The free fight (a room's F-35s, no match asked): wherever they fly — its frame anchored where it begins —,
+ *  everyone a target, a team-mate's fire too; the air-to-air stores. */
+export const FREE_FIGHT: Scenario = {
+  ...ARENA,
+  id: "free",
+  title: { fr: "Combat libre", en: "Free fight" },
+  brief: { fr: "En réseau, en F-35 : tout le monde est une cible", en: "In a room, in the F-35: everyone is a target" },
+  loadout: "aa",
+  limit: 1e9,
+  mission: true,
+};
+
+/** The free fight's rules: no time, no score to reach, every hit counts — a team-mate's, one's own wingman's. */
+export const FREE_RULES: MatchRules = { ...DEFAULT_RULES, friendlyFire: true, limit: 1e9, scoreLimit: 0, respawn: 6 };
+
 export const scenarioOf = (m: Pick<Match, "mode" | "def">): Scenario | null =>
-  m.mode === "ffa" || m.mode === "teams" ? ARENA : m.mode === "coop" ? (SCENARIOS.find((s) => s.id === m.def) ?? null) : null;
+  m.mode === "free"
+    ? FREE_FIGHT
+    : m.mode === "ffa" || m.mode === "teams"
+      ? ARENA
+      : m.mode === "coop"
+        ? (SCENARIOS.find((s) => s.id === m.def) ?? null)
+        : null;
 
 export const challengeOf = (m: Pick<Match, "mode" | "def">): ChallengeDef | null =>
   m.mode === "race" || m.mode === "landing" ? (CHALLENGES.find((c) => c.id === m.def) ?? null) : null;
@@ -188,7 +209,9 @@ export class ScoreSheet {
     }
   }
 
+  /** On the same side: a team match's team-mates; every pilot of a co-op match (together against the aggressors). */
   sameTeam(a: number, b: number) {
+    if (this.match.mode === "coop") return a >= 0 && b >= 0;
     return this.match.mode === "teams" && (this.match.teams[a] ?? -1) === (this.match.teams[b] ?? -2);
   }
 
@@ -216,7 +239,7 @@ export class ScoreSheet {
   over(t: number, aiLeft = 1): { why: "time" | "score" | "done" | "cleared" } | null {
     const m = this.match;
     const T = t - m.start;
-    if (T < 0) return null;
+    if (T < 0 || m.mode === "free") return null;
     if (m.mode === "coop") {
       if (aiLeft === 0) return { why: "cleared" };
       return T > (scenarioOf(m)?.limit ?? 600) ? { why: "time" } : null;

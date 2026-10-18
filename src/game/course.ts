@@ -25,7 +25,11 @@ export type CourseAct =
   | "icpt"
   | "icpt-slot"
   /** the figure set up again for the pilot, judged */
-  | "figure-judge";
+  | "figure-judge"
+  /** (a demonstration's — TARS flying the pilot's part too:) the circuit's base and final by the approach's autopilot */
+  | "circuit-auto"
+  /** the gun fired by TARS when its pipper is on the lesson's target */
+  | "guns-auto";
 
 /** Its targets, relative to the lesson's start: the height's change [m], the heading's [°], the speed [m/s], the
  *  bank while turning [°, + right]. */
@@ -48,6 +52,11 @@ export interface CourseStep {
   done: CourseDone;
   /** at most [s]: then on to the next anyway */
   max?: number;
+  /** a pilot's step in a demonstration: what TARS does to fly it himself (none: left out of the demonstration —
+   *  a figure's second time), his words then, its name */
+  auto?: CourseAct[];
+  demoSay?: string;
+  demoName?: string;
 }
 
 export interface Course {
@@ -81,7 +90,8 @@ const FIRST: Course = {
       act: ["holds"],
       target: { dAlt: 0, dHdg: 90, spd: 200, bank: 30 },
       done: { held: 2 },
-      max: 45,
+      // (90° at 30° of bank and 200 m/s: 1.6° a second — some 60 s with the roll in and out)
+      max: 90,
     },
     {
       who: "tars",
@@ -97,6 +107,9 @@ const FIRST: Course = {
       name: "Your controls: level",
       say: "Your controls. Hold this: level at {alt}, heading {hdg}, {spd}.",
       act: ["free"],
+      auto: ["holds"],
+      demoName: "Holding level",
+      demoSay: "Level at {alt}, heading {hdg}, {spd}: the attitude set, the trim taking the pressure off — hands light.",
       target: { dAlt: 500, dHdg: 90, spd: 200 },
       done: { held: 10 },
       max: 60,
@@ -105,14 +118,20 @@ const FIRST: Course = {
       who: "you",
       name: "Turn back left",
       say: "Now a level turn to the left, back to heading {hdg}: 30° of bank, the height held.",
+      auto: ["holds"],
+      demoName: "Turn back left",
+      demoSay: "A level turn to the left, back to heading {hdg}: 30° of bank, the nose on the horizon.",
       target: { dAlt: 500, dHdg: 0, spd: 200, bank: -30 },
       done: { held: 3 },
-      max: 60,
+      max: 90,
     },
     {
       who: "you",
       name: "Descend",
       say: "Descend 500 m, back to {alt}: the nose a little down, the power back — and level off smoothly.",
+      auto: ["holds"],
+      demoName: "Descend",
+      demoSay: "A descent of 500 m, back to {alt}: the power back, the nose a little down — the level-off begun early.",
       target: { dAlt: 0, dHdg: 0, spd: 200 },
       done: { held: 5 },
       max: 90,
@@ -121,6 +140,9 @@ const FIRST: Course = {
       who: "you",
       name: "Slow down",
       say: "Slow to {spd}: the power back, the nose up as it slows, the height held.",
+      auto: ["holds"],
+      demoName: "Slow down",
+      demoSay: "Slowing to {spd}: the power back, the nose raised as the speed falls, the height held.",
       target: { dAlt: 0, dHdg: 0, spd: 160 },
       done: { held: 5 },
       max: 60,
@@ -146,6 +168,9 @@ const CIRCUIT: Course = {
       name: "Base turn",
       say: "Your controls. The base turn now: 90° towards the runway, down to 200 m, 90 m/s.",
       act: ["free"],
+      auto: ["circuit-auto"],
+      demoName: "Base turn",
+      demoSay: "The base turn: 90° towards the runway, the power back, down to 200 m — then onto the centreline.",
       done: { event: "axis" },
       max: 120,
     },
@@ -153,6 +178,9 @@ const CIRCUIT: Course = {
       who: "you",
       name: "Final",
       say: "Final: lined up on the centreline, the 3° path to the numbers, on speed — the flare from 14 m.",
+      auto: [],
+      demoName: "Final and landing",
+      demoSay: "Final: the centreline, the 3° path to the numbers, on speed. The flare from 14 m, the throttle idle — down, the brakes.",
       done: { event: "landed" },
       max: 150,
     },
@@ -177,6 +205,10 @@ const LANDING: Course = {
       name: "Your controls: the landing",
       say: "Your controls. Hold the aim point and the speed; from 14 m the flare — the throttle idle, the descent eased.",
       act: ["ils-manual"],
+      auto: ["ils-auto"],
+      demoName: "The landing",
+      demoSay:
+        "The aim point still in the windscreen, on speed. From 14 m the flare: the throttle idle, the descent eased — touchdown, the brakes.",
       done: { event: "landed" },
       max: 120,
     },
@@ -201,6 +233,9 @@ const ILS_GUIDED: Course = {
       name: "Your controls: the final",
       say: "Your controls. Keep the needles centred — small corrections, taken out early — and the speed; the flare at 14 m.",
       act: ["ils-manual"],
+      auto: ["ils-auto"],
+      demoName: "The final and the landing",
+      demoSay: "The needles centred, small corrections; the gear down, on speed — minimums, the flare at 14 m, touchdown.",
       done: { event: "landed" },
       max: 180,
     },
@@ -224,6 +259,9 @@ const CASE1: Course = {
       name: "Your controls: the groove",
       say: "Your controls. Call the ball: the meatball on the datum lights, the line-up, on speed — to the wire.",
       act: ["trap-manual"],
+      auto: [],
+      demoName: "The groove",
+      demoSay: "The groove: the meatball on the datum lights, lined up, on speed — full power at the touchdown, to the wire.",
       done: { event: "trap-end" },
       max: 120,
     },
@@ -248,6 +286,9 @@ const FORMATION: Course = {
       name: "Your controls: hold the slot",
       say: "Your controls. Hold the slot: its wingtip on your canopy, small corrections — the power for the distance.",
       act: ["free"],
+      auto: [],
+      demoName: "Holding the slot",
+      demoSay: "In the slot: its wingtip on the canopy, small corrections — the power for the distance. A minute like this.",
       done: { time: 60 },
     },
   ],
@@ -271,6 +312,9 @@ const INTERCEPT: Course = {
       name: "Your controls: the intercept",
       say: "Your controls. Keep the collision course, then lag behind it and roll out 1.5 km on its tail, at its height.",
       act: ["free"],
+      auto: ["icpt"],
+      demoName: "The conversion",
+      demoSay: "The collision course held, then the turn behind it — lag — to roll out on its tail, at its height.",
       done: { event: "behind", hold: 3 },
       max: 300,
     },
@@ -295,6 +339,9 @@ const GUNS: Course = {
       name: "Your controls: guns",
       say: "Your controls. The pipper on it — lead its turn, short bursts (Space) between 300 and 600 m.",
       act: ["free"],
+      auto: ["icpt", "guns-auto"],
+      demoName: "Guns",
+      demoSay: "The pipper on it, its turn led — short bursts between 300 and 600 m.",
       done: { event: "kill" },
       max: 90,
     },
@@ -311,7 +358,8 @@ const figureCourse = (id: FigureId): Course => ({
       name: "The demonstration",
       say: "I have control: the figure flown once — watch the load and the cues.",
       done: { event: "figure-done" },
-      max: 120,
+      // (the Cuban eight's two loops at 3.5 g from 240 m/s: some 130 s)
+      max: 200,
     },
     {
       who: "you",
@@ -361,15 +409,22 @@ export interface CourseRun {
   alt0: number;
   hdg0: number;
   done: boolean;
+  /** the steps left at their time at most, their condition never met (their names) */
+  late: string[];
 }
 
 export function newCourse(id: CourseId, mode: "guided" | "demo" | "try", alt0: number, hdg0: number): CourseRun {
   const C = courseOf(id);
   const first = C.steps.findIndex((s) => s.who === "you");
-  const steps = mode === "demo" ? C.steps.slice(0, first) : mode === "try" ? C.steps.slice(first) : C.steps;
+  // (a demonstration: TARS flies the whole lesson — the pilot's steps too, as he would fly them —, those he cannot
+  // left out)
+  const demo = C.steps
+    .filter((s) => s.who === "tars" || s.auto)
+    .map((s) => (s.who === "tars" ? s : { ...s, who: "tars" as const, act: s.auto, say: s.demoSay ?? s.say, name: s.demoName ?? s.name }));
+  const steps = mode === "demo" ? demo : mode === "try" ? C.steps.slice(first) : C.steps;
   // (a try: the pilot's first step does what TARS's handover would)
   if (mode === "try" && steps[0] && !steps[0].act) steps[0] = { ...steps[0], act: ["free"] };
-  return { course: C, steps, i: 0, t: 0, st: 0, held: 0, alt0, hdg0, done: steps.length === 0 };
+  return { course: C, steps, i: 0, t: 0, st: 0, held: 0, alt0, hdg0, done: steps.length === 0, late: [] };
 }
 
 const wrap180 = (a: number) => ((((a + 180) % 360) + 360) % 360) - 180;
@@ -432,7 +487,10 @@ export function courseStep(R: CourseRun, f: CourseFix, dt: number): { begin?: Co
     R.held = f.events.has(d.event) ? R.held + dt : 0;
     ok = R.held >= (d.hold ?? 0) && f.events.has(d.event);
   }
-  if (!ok && s.max !== undefined && R.st >= s.max) ok = true;
+  if (!ok && s.max !== undefined && R.st >= s.max) {
+    ok = true;
+    R.late.push(s.name);
+  }
   if (!ok) return {};
   R.i++;
   R.st = 0;

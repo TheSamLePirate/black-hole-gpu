@@ -1,6 +1,14 @@
 // French for playing together (docs/PLAN-RESEAU.md: ui/netpanel.ts) — keyed by the English.
 export default {
   "Network menu": "Menu Réseau",
+  "Free fight in a room": "Combat libre en salle",
+  "In a room, in the F-35, outside a match: weapons live, every craft a target — the other players, their wingmen and yours, airliners, ships, carriers —, friendly fire on, everything on the radar.":
+    "En salle, en F-35, hors d'un match : armes actives, tout appareil est une cible — les autres joueurs, leurs ailiers et les vôtres, les avions de ligne, les navires, les porte-avions —, tir ami autorisé, tout sur le radar.",
+  "Free fight: in a room, in the F-35 — every craft a target": "Combat libre : en salle, en F-35 — tout appareil est une cible",
+  "Free fight": "Combat libre",
+  "In trail behind {0} — {1} m": "En file derrière {0} — {1} m",
+  "In a room, in F-35s, no match: every craft a target, friendly fire on":
+    "En salle, en F-35, hors match : tout appareil est une cible, tir ami autorisé",
   "Playing together (the pause menu, the wheel, a room's badge). Off: no trace of the network — the game never connects unless asked.":
     "Jouer ensemble (le menu pause, la roue, le badge d'une salle). Désactivé : aucune trace du réseau — le jeu ne se connecte jamais sans qu'on le demande.",
   Network: "Réseau",

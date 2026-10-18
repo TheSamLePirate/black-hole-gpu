@@ -14,6 +14,7 @@ export default {
   "ILS: no runway within 150 km": "ILS : aucune piste à moins de 150 km",
   "{0} approach: hold at the initial fix, expect the ILS {1}": "{0} approche : attendez au point initial, prévoyez l'ILS {1}",
   "{0} approach: cleared ILS {1}": "{0} approche : autorisé ILS {1}",
+  "{0} tower: cleared to land, runway {1}": "{0} tour : autorisé atterrissage, piste {1}",
   "ILS approach: {0}, {1} km": "Approche ILS : {0}, {1} km",
   "ILS: no approach flown": "ILS : aucune approche en cours",
   "Cleared ILS {0}": "Autorisé ILS {0}",

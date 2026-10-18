@@ -45,6 +45,10 @@ loaded only then.
   him 50 m behind at 250 m/s).
 - **Beside** (the room panel, each other pilot): your craft put off his right wing at his speed, his heading
   and his height — in formation; on the ground, parked beside him. `__bh.net.teleport(slot, gap?)`.
+- **A wingman by the wheel**: Tab held › *Flight* › *Ana's wingman* (each pilot of the room flying in the Earth's
+  air; *Leave the formation* when in one), TARS's "join Ana" too: the formation below, in **the first free
+  place** of the shape chosen — his AI wingmen's and the other players' on his wing (each page tells the room
+  whose wing it flies, every 2 s) taken; all three taken, in trail behind him, 80 m and more.
 - **Formation** (the room panel, each other pilot flying in the Earth's air; again: off): your autopilot flies
   an echelon off his right wing — clear of both wingspans by 15 m (26 m between two F-35s), 15 m back — and
   holds it, his turns and his speed's changes followed; the HUD says `FORM ANA 4 M` (his name, the slot's
@@ -99,6 +103,17 @@ uniform of the flown craft's), the crafts of the players gone kept in the room's
 - **The HUD**: the hit marker (four ticks; a kill: thick and red), the score bar (the mode, the clock, the
   scores or the teams'), the big words (the countdown, *GO*, *shot down by … — back in 4 s*), the end's
   ranking; a newcomer told of the match running.
+
+- **The free fight** (in a room, in the F-35, no match running, nor a mission, a lesson or a challenge of one's
+  own; the setting *Free fight in a room*, on by default): weapons live — the air-to-air stores, the gun —,
+  **every craft a target**: the other players (orange, locked by Tab like any track), their AI wingmen and
+  ours (friendly fire on), the real airliners, ships, carriers and escorts the radar sees — the one locked, and
+  any within 6 km (the gun's), taken into the fight as a stand-in placed from the radar's picture each frame
+  (`controller/fightproxy.ts`); shot down, the real one is gone on every page of the room (*Ana ✕ AFR123*). The
+  radar weapons free: a friend's datalink track locked too. Shot down: back in the air 6 s later, 15 km south,
+  5 000 m up. No score to reach, no end; the bar says *Free fight* and the kills. A match asked replaces it.
+- **Co-op**: the pilots one side (blue, never locked, not hurt unless friendly fire) — they were each other's
+  targets before.
 
 Measured on kerr-mini (`tests/e2e/net-battle`, `net-coop`): the AIM-120 fired at 15 km seen on the target's
 helmet at 15 km, the kill on both score sheets; the host's drones on the guest's world within a metre; the

@@ -14,6 +14,8 @@ import type { CameraController } from "../controls";
 
 declare module "../controls" {
   interface CameraController {
+    /** on a room player's wing by his name (ui/netsession.ts) — what to say; null: no such player */
+    netFormation?: (name: string) => string | null;
     threatWatch?: { W: ThreatWatch; of: unknown } | null;
     aircraftAround: typeof aircraftAround;
     findAircraft: typeof findAircraft;
@@ -124,10 +126,13 @@ function icptOn(this: CameraController, name: string): string {
   return tf("Intercept: {0} · {1} km", a.name, (Math.hypot(...a.r) / 1000).toFixed(1));
 }
 
-/** In formation on an aircraft by its name: a real flight's (controller/traffic.ts), else intercepted to its
- *  shadow. What to say. */
+/** In formation on an aircraft by its name: a room player's wing, a real flight's (controller/traffic.ts), else
+ *  intercepted to its shadow. What to say. */
 function formOnAircraft(this: CameraController, name: string): string {
   if (!this.radarFix()) return t("The radar: in the F-35, in the air");
+  // (a player of the room: on his wing — the formation flown for us, the first place free — ui/netsession.ts)
+  const net = this.netFormation?.(name);
+  if (net) return net;
   const a = this.findAircraft(name);
   if (!a) return tf("No aircraft called {0} about us", name);
   if (a.source === "trf") {

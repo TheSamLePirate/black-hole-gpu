@@ -4,7 +4,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // The instructor and the flight school (docs/PLAN-AVIATION-AAA.md, A4): first the Alps as ever; then the flight
 // school's cards — the ILS's opened by a real click, a step picked on its diagram —; tried by hand: the jet left to
 // drift off the localizer, the instructor's panel live (the diagram and our trace, the gauges, the call and its fix),
-// let go — its debrief with its charts —; then the loop demonstrated, its trace drawn over the figure, debriefed.
+// let go — its debrief with its charts —; then the loop demonstrated, its trace drawn over the figure, its mark said
+// (a demonstration: no debrief screen to read).
 // (Measured headless: tests/instructor.test.ts.) (E2E_SHOTS=<dir>: the views.)
 
 describe.skipIf(!E2E)("the instructor and the flight school", () => {
@@ -74,16 +75,21 @@ describe.skipIf(!E2E)("the instructor and the flight school", () => {
     await app.press("Escape");
   }, 120_000);
 
-  test("the loop demonstrated: its trace over the figure, debriefed", async () => {
-    await app.js(`(() => { __bh.flight.school.demo("loop"); return 1; })()`);
+  test("the loop demonstrated: its trace over the figure, its mark said — no debrief screen over a demonstration", async () => {
+    await app.js(`(() => { __bh.camera.instrLast = null; __bh.flight.school.demo("loop"); return 1; })()`);
     await app.waitFor(`__bh.camera.aero?.status === "fly"`, 30_000);
     await Bun.sleep(14_000);
     await shot("loop-panel");
-    await app.waitFor(`!!document.querySelector('[data-testid="instructor-debrief"]')`, 60_000);
+    expect(await app.js<boolean>(`!!document.querySelector('[data-testid="instructor-panel"]:not([hidden]) .ins-diagram')`)).toBe(true);
+    await app.waitFor(`!!__bh.camera.instrLast`, 60_000);
     await Bun.sleep(600);
-    await shot("loop-debrief");
-    const s = await app.js<number>(`__bh.camera.instrLast.debrief.score`);
-    console.log(`  the loop's debrief: ${s}/20`);
-    expect(s).toBeGreaterThan(10);
+    await shot("loop-mark");
+    const s = await app.js<{ score: number; auto: boolean }>(
+      `({ score: __bh.camera.instrLast.debrief.score, auto: !!__bh.camera.instrLast.auto })`,
+    );
+    console.log(`  the loop demonstrated: ${s.score}/20`);
+    expect(s.auto).toBe(true);
+    expect(s.score).toBeGreaterThan(10);
+    expect(await app.js<boolean>(`!!document.querySelector('[data-testid="instructor-debrief"]')`)).toBe(false);
   }, 120_000);
 });

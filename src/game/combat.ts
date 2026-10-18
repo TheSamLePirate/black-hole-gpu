@@ -220,6 +220,11 @@ export interface Target {
     gMax: number;
     course?: { hdg: number; alt: number };
     route?: { pts: V3[]; next: number; loop?: boolean };
+    /** the lift's part across the path flown now [m/s²]; its bank [rad, + right], its vertical pull [m/s²] (eased
+     *  towards the turn asked at its roll and pull rates) */
+    lat?: V3;
+    phi?: number;
+    av?: number;
   };
   /** the mesh it is drawn with (a mission's airliner: "a320"; else the F-35's) */
   mesh?: string;
@@ -236,6 +241,12 @@ export interface Target {
   remote?: boolean;
   /** one of ours (a team-mate): not locked, not hurt unless friendly fire */
   friendly?: boolean;
+  /** a craft of the world outside the fight taken in as a target (the free fight's: a real airliner, a ship, a
+   *  carrier, another's wingman — its radar id): placed from it each frame, not stepped, not drawn while alive (its
+   *  own drawing is), its wreck the fight's */
+  proxy?: string;
+  /** a remote target's last placing [s of the world] (its smoothing) */
+  syncAt?: number;
 }
 
 export interface Missile {
@@ -432,12 +443,27 @@ export class CombatWorld {
     if (c.speed !== undefined) A.speed = c.speed;
   }
 
-  /** The ground's height [m] at east, north (a 250 m grid's, cached). */
+  /** The ground's height [m] at east, north: a 250 m grid's, cached, read between its four nodes (bilinear — the
+   *  nearest node's stepped: the floor's pull-ups and a ridge's hiding jumped at each cell's edge). */
   groundZ(e: number, n: number): number {
-    const k = `${Math.round(e / 250)},${Math.round(n / 250)}`;
+    const x = e / 250,
+      y = n / 250;
+    const i = Math.floor(x),
+      j = Math.floor(y);
+    const fx = x - i,
+      fy = y - j;
+    const z00 = this.groundNode(i, j),
+      z10 = this.groundNode(i + 1, j),
+      z01 = this.groundNode(i, j + 1),
+      z11 = this.groundNode(i + 1, j + 1);
+    return (z00 * (1 - fx) + z10 * fx) * (1 - fy) + (z01 * (1 - fx) + z11 * fx) * fy;
+  }
+
+  private groundNode(i: number, j: number): number {
+    const k = `${i},${j}`;
     let z = this.ground.get(k);
     if (z === undefined) {
-      z = this.groundAt(Math.round(e / 250) * 250, Math.round(n / 250) * 250);
+      z = this.groundAt(i * 250, j * 250);
       this.ground.set(k, z);
     }
     return z;
@@ -565,7 +591,7 @@ export class CombatWorld {
     this.stepAi(dt, P, ev);
     // (the ships under way on their heading, on the sea)
     for (const q of this.targets)
-      if (q.kind === "ship" && q.alive) {
+      if (q.kind === "ship" && q.alive && !q.proxy) {
         q.p = add(q.p, mul(q.v, dt));
         q.p[2] = this.groundZ(q.p[0], q.p[1]);
       }
@@ -833,7 +859,20 @@ export class CombatWorld {
         q.diedAt = this.t;
         if (q.ai) q.wreck = { spin: 0, crashedAt: Number.NaN };
       }
-      Object.assign(q, { p: x.p, v: x.v, fwd: x.fwd, up: x.up, alive: x.alive });
+      // (smoothed: carried on by its velocity since the last frame, eased onto the host's sample over a quarter second
+      // — its attitude too —: ten samples a second and the network's jitter no longer jumps; a big gap taken at once)
+      const dt = this.t - (q.syncAt ?? -1e9);
+      if (q.alive && x.alive && dt > 0 && dt < 1 && len(sub(x.p, q.p)) < 300) {
+        const a = 1 - Math.exp(-dt / 0.25);
+        const b = 1 - Math.exp(-dt / 0.15);
+        const p = add(q.p, mul(x.v, dt));
+        q.p = add(p, mul(sub(x.p, p), a));
+        q.v = x.v;
+        q.fwd = unit(add(q.fwd, mul(sub(x.fwd, q.fwd), b)));
+        q.up = unit(add(q.up, mul(sub(x.up, q.up), b)));
+        q.alive = x.alive;
+      } else Object.assign(q, { p: x.p, v: x.v, fwd: x.fwd, up: x.up, alive: x.alive });
+      q.syncAt = this.t;
       // (the host's wreck falling here as there: its crash seen — its explosion — as it reaches the ground)
       if (q.wreck && Number.isNaN(q.wreck.crashedAt) && q.p[2] <= this.groundZ(q.p[0], q.p[1]) + 2) {
         q.wreck.crashedAt = this.t;
@@ -1026,7 +1065,7 @@ export class CombatWorld {
       return best;
     };
     for (const q of this.targets) {
-      if (!q.alive || q.remote || q.peer !== undefined) continue;
+      if (!q.alive || q.remote || q.peer !== undefined || q.proxy) continue;
       const T = nearest(q.p);
       if (!T) continue;
       const P = T;
@@ -1067,7 +1106,9 @@ export class CombatWorld {
       const d = len(r);
       // (a missile chasing it: defend — beam it and decoy)
       const threat = this.missiles.find((m) => m.alive && m.owner === "blue" && m.target === q.id && len(sub(m.p, q.p)) < 12_000);
-      if (q.kind === "fighter" && !q.friendly) A.mode = threat ? "defend" : d < 40_000 ? "engage" : "patrol";
+      // (engaged within 40 km, left beyond 45: no flicker between the two at the edge)
+      if (q.kind === "fighter" && !q.friendly)
+        A.mode = threat ? "defend" : d < (A.mode === "engage" ? 45_000 : 40_000) ? "engage" : "patrol";
       let want: V3;
       if (A.mode === "course") {
         // (a course: its heading and height — or its route's next point, the last held —, no fight)
@@ -1144,20 +1185,43 @@ export class CombatWorld {
       // (never into the ground: 300 m over it held)
       const floor = this.groundZ(q.p[0], q.p[1]) + 300;
       if (q.p[2] < floor) want = unit([want[0], want[1], Math.max(want[2], 0.5)]);
-      // (turned towards it at its g at most, its speed held)
+      // (turned towards it as a pilot flies: the angle to it closed over a second or three — not this frame's angle
+      // over this frame's time, which shook with the frame rate —, at its g at most; its lift — the weight's part
+      // across its path and the turn's pull — rolled towards the one asked at its roll rate and pulled at its pull
+      // rate: the bank eased in and out, never snapped at a route's corner or a change of mind; the path following
+      // the bank; its speed held)
       const sp = Math.max(len(q.v), 60);
       const u = unit(q.v);
       const turn = sub(want, mul(u, dot(want, u)));
       const tl = len(turn);
-      const rate = Math.min((A.gMax * SKILL[this.opts.skill].g * G) / sp, tl > 1e-6 ? Math.acos(clamp(dot(want, u), -1, 1)) / dt : 0);
-      const nu = tl > 1e-6 ? unit(add(u, mul(unit(turn), rate * dt))) : u;
+      const gm = A.gMax * SKILL[this.opts.skill].g * G;
+      const agile = A.gMax >= 7 ? 1 : A.gMax >= 3 ? 0.55 : 0.3;
+      const roll = (agile >= 1 ? 180 : agile > 0.5 ? 90 : 15) * D;
+      const ang = Math.acos(clamp(dot(want, u), -1, 1));
+      const aWant: V3 = tl > 1e-6 ? mul(unit(turn), Math.min(gm, (sp * ang) / (1.2 / agile))) : [0, 0, 0];
+      // (the bank asked — the horizontal pull over the weight and the vertical pull —, rolled to at its roll rate;
+      // the vertical pull eased at its pull rate; the horizontal one the bank's: g tan φ)
+      const hz = Math.hypot(u[0], u[1]);
+      const right: V3 = hz > 1e-6 ? [u[1] / hz, -u[0] / hz, 0] : [1, 0, 0];
+      const upP = unit(cross(right, u));
+      const aH = dot(aWant, right),
+        aV = dot(aWant, upP);
+      const wt = G * Math.max(upP[2], 0.2);
+      const phiWant = clamp(Math.atan2(aH, Math.max(wt + aV, 0.3 * G)), -80 * D, 80 * D);
+      const phi = (A.phi ?? 0) + clamp(phiWant - (A.phi ?? 0), -roll * dt, roll * dt);
+      const pull = (gm / 0.6) * agile * dt;
+      const av = (A.av ?? 0) + clamp(aV - (A.av ?? 0), -pull, pull);
+      A.phi = phi;
+      A.av = av;
+      const lat = add(mul(right, (wt + av) * Math.tan(phi)), mul(upP, av));
+      A.lat = lat;
       const speed = sp + clamp(A.speed - sp, -10 * dt, 10 * dt);
+      const nu = unit(add(u, mul(lat, dt / sp)));
       q.v = mul(nu, speed);
       q.p = add(q.p, mul(q.v, dt));
       // (its attitude: the nose along its path, banked into the turn — the lift's tilt)
-      const lat = tl > 1e-6 ? mul(unit(turn), rate * speed) : [0, 0, 0];
       q.fwd = nu;
-      q.up = unit(add(add([0, 0, G], lat as V3), mul(nu, -dot(add([0, 0, G], lat as V3), nu))));
+      q.up = unit(add(add([0, 0, G], lat), mul(nu, -dot(add([0, 0, G], lat), nu))));
     }
   }
 }

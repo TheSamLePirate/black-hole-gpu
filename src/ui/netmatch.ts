@@ -11,12 +11,15 @@ import "./netmatch.css";
 import type { CameraController } from "../controls";
 import type { MissileKind, V3 } from "../game/combat";
 import { LOADOUTS } from "../game/combat";
+import { proxyGone } from "../controller/fightproxy";
 import { fleet } from "../fleet";
 import type { GameTools } from "../game/tools";
 import {
   challengeOf,
   DEFAULT_RULES,
   dealTeams,
+  FREE_FIGHT,
+  FREE_RULES,
   LANDINGS,
   type Match,
   type MatchMode,
@@ -75,6 +78,7 @@ const MODE_ABOUT: Record<MatchMode, () => string> = {
   teams: () => t("Two teams of two, in F-35s: the team with the most kills"),
   race: () => t("Through the gates, each in his craft: the best time wins"),
   landing: () => t("Each lands on the runway: the best graded landing wins"),
+  free: () => t("In a room, in F-35s, no match: every craft a target, friendly fire on"),
 };
 
 const MODE_NAMES: Record<MatchMode, () => string> = {
@@ -83,6 +87,7 @@ const MODE_NAMES: Record<MatchMode, () => string> = {
   teams: () => t("Two teams"),
   race: () => t("Gate race"),
   landing: () => t("Landing contest"),
+  free: () => t("Free fight"),
 };
 
 export class NetMatch {
@@ -239,6 +244,17 @@ export class NetMatch {
       this.d.toast(tf("{0}: {1}", this.nameOf(from), String(ev.why ?? t("destroyed"))));
       this.d.session.hidden.set(from, true);
       setTimeout(() => this.d.session.hidden.delete(from), 5000);
+      return;
+    }
+    // (the free fight's outside craft: one destroyed by another — gone here too —; one of our wingmen hit by him)
+    if (kind === "tgtDown" && typeof ev.key === "string") {
+      proxyGone(this.d.camera, ev.key);
+      this.addFeed(`${this.nameOf(from)} ✕ ${String(ev.name ?? ev.key)}`, this.colourOf(from));
+      return;
+    }
+    if (kind === "hitWing" && ev.to === this.me) {
+      this.d.camera.wingHurt(Number(ev.k), Number(ev.dmg) || 0, this.nameOf(from));
+      this.addFeed(`${this.nameOf(from)} → ${String(ev.k)}`, this.colourOf(from));
       return;
     }
     if (!this.match) return;
@@ -489,6 +505,7 @@ export class NetMatch {
   frame() {
     const net = this.net;
     if (net !== this.bound) this.bind(net);
+    this.freeStep(net);
     const m = this.match;
     if (!net?.room || !m) {
       if (!this.root.hidden && this.phase !== "over") this.root.hidden = true;
@@ -506,6 +523,99 @@ export class NetMatch {
     // (the slots shot down fly again: shown again)
     for (const [s, until] of this.down) if (now > until) this.down.delete(s), this.d.session.hidden.delete(s);
     this.drawUi(now);
+  }
+
+  // ---------------------------------------------------------------------------------- the free fight
+
+  /**
+   * The free fight: in a room, in the F-35, no match nor mission, lesson or challenge of one's own — every craft a
+   * target (the room's others, their wingmen and ours, the airliners, ships and carriers the radar locks), friendly
+   * fire on, no score to reach, no end. A match of its own on this page alone (each pilot's), run as the others are
+   * (the peers placed from the network, the hits sent, the shot down flying again); its frame anchored where it
+   * began, again 150 km on. A match asked replaces it; it ends when its conditions do.
+   */
+  private freeStep(net: Client | null) {
+    const c = this.d.camera;
+    const free = this.match?.mode === "free";
+    if (this.match && !free) return;
+    const want =
+      !!net?.room &&
+      net.room.role === "pilot" &&
+      fleet.active === "f35" &&
+      c.s.netFreeFight !== false &&
+      !c.mission &&
+      !c.course &&
+      c.chal?.status !== "run" &&
+      !(c.combat && !c.combat.net) &&
+      !!c.geoNow();
+    if (!want) {
+      if (free) this.freeEnd();
+      return;
+    }
+    const now = net!.roomNow();
+    const pilots = net!.room!.members.filter((x) => x.role === "pilot").map((x) => x.slot);
+    if (!free) {
+      const m: Match = { id: "free", mode: "free", def: "free", host: -1, start: now, rules: FREE_RULES, pilots, teams: {} };
+      this.match = m;
+      this.sheet = new ScoreSheet(m);
+      this.phase = "run";
+      this.begun = true;
+      this.final = null;
+      this.cs.clear();
+      this.down.clear();
+      this.respawns = 0;
+      this.announced.clear();
+      this.prevDamage = 0;
+      this.feed = [];
+      this.endEl.hidden = true;
+      this.freeCombat();
+      this.d.toast(t("Free fight: in a room, in the F-35 — every craft a target"));
+      return;
+    }
+    this.match!.pilots = pilots;
+    for (const s of pilots) this.sheet?.row(s);
+    // (its fight gone — ended by another's —: again; far from its anchor, nothing of ours in flight: anchored here)
+    const C = c.combat;
+    const g = c.geoNow()!;
+    const a = C?.def.anchor;
+    const far = a ? Math.hypot((g.lat - a.lat) * 111_195, (g.lon - a.lon) * 111_195 * Math.cos(a.lat * (Math.PI / 180))) > 150_000 : true;
+    if (!C || (far && C.downAt === null && !C.world.ownMissiles().length)) this.freeCombat();
+  }
+
+  /** The free fight's world, anchored where we are. */
+  private freeCombat() {
+    const c = this.d.camera;
+    const g = c.geoNow()!;
+    if (c.combat) c.combatEnd();
+    c.combatStart({ ...FREE_FIGHT, anchor: { lat: g.lat, lon: g.lon } }, { host: true, rules: FREE_RULES });
+    c.combat!.free = true;
+    // (an outside craft destroyed by us: the room told — each page hides it —; another's wingman hit: the hit his)
+    c.onProxyDown = (key, name) => {
+      this.net?.event({ kind: "tgtDown", key, name });
+      this.addFeed(`${this.nameOf(this.me)} ✕ ${name}`, this.colourOf(this.me));
+    };
+    c.onProxyHit = (key, damage, by) => {
+      const m = /^rwg:(\d+):(\d+)$/.exec(key);
+      if (m) this.net?.event({ kind: "hitWing", to: Number(m[1]), k: Number(m[2]), dmg: r1(damage), by });
+    };
+  }
+
+  private freeEnd() {
+    const c = this.d.camera;
+    if (c.combat?.net) c.combatEnd();
+    if (this.d.session.follow?.why === "killcam") this.d.session.setFollow(null);
+    this.match = null;
+    this.sheet = null;
+    this.phase = "idle";
+    this.begun = false;
+    this.down.clear();
+    this.d.session.hidden.clear();
+    this.root.hidden = true;
+  }
+
+  /** In the free fight now. */
+  get freeFight() {
+    return this.match?.mode === "free";
   }
 
   private run(net: Client, now: number) {
@@ -642,7 +752,16 @@ export class NetMatch {
     const CB = C.combat!;
     const sc = scenarioOf(m)!;
     const i = Math.max(0, m.pilots.indexOf(this.me));
-    const sp = m.mode === "coop" ? spawnOf(m, i) : respawnOf(m, this.me, ++this.respawns);
+    // (the free fight: in the air again 15 km south of where we fell, 5 000 m over the ground, heading north)
+    const g = C.geoNow();
+    const sp =
+      m.mode === "free"
+        ? g
+          ? { lat: g.lat - 0.135, lon: g.lon, agl: 5000, hdg: 0, speed: 250 }
+          : null
+        : m.mode === "coop"
+          ? spawnOf(m, i)
+          : respawnOf(m, this.me, ++this.respawns);
     if (sp) {
       this.d.tools.flyAt(sp.lat, sp.lon, sp.agl, sp.hdg, sp.speed);
       C.airFlight.cfg.flaps = 0;
@@ -670,8 +789,15 @@ export class NetMatch {
       score = R.map((r) => `${this.nameOf(r.slot)} ${m.mode === "coop" ? r.ai : r.kills}`).join(" · ");
     } else if (S && m.mode === "teams") score = tf("Blue {0} — {1} Red", S.teamScore(0), S.teamScore(1));
     else if (S) score = tf("{0} of {1} finished", [...S.rows.values()].filter((r) => r.result !== null).length, S.rows.size);
-    const clock = this.phase === "run" ? fmtClock(limit - T) : this.phase === "countdown" ? fmtClock(m.start - now) : "";
-    const txt = `${MODE_NAMES[m.mode]()} · ${clock}${score ? `  |  ${score}` : ""}`;
+    if (S && m.mode === "free") {
+      const R = S.ranking().filter((r) => r.kills || r.deaths);
+      score = R.slice(0, 4)
+        .map((r) => `${this.nameOf(r.slot)} ${r.kills}`)
+        .join(" · ");
+    }
+    const clock =
+      m.mode === "free" ? "" : this.phase === "run" ? fmtClock(limit - T) : this.phase === "countdown" ? fmtClock(m.start - now) : "";
+    const txt = `${MODE_NAMES[m.mode]()}${clock ? ` · ${clock}` : ""}${score ? `  |  ${score}` : ""}`;
     if (this.bar.textContent !== txt) this.bar.textContent = txt;
     // the big words: the countdown, shot down, back
     const C = this.d.camera.combat;
@@ -700,7 +826,7 @@ export class NetMatch {
   section(): HTMLElement {
     const box = h("div", "nm-panel");
     const m = this.match;
-    if (m && this.phase !== "over") {
+    if (m && m.mode !== "free" && this.phase !== "over") {
       const run = h("div", "nm-running");
       run.append(h("span", "nm-live", t("Under way")), h("b", "", MODE_NAMES[m.mode]()), h("span", "", this.titleOf(m)));
       box.append(run);

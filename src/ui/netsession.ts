@@ -184,6 +184,10 @@ export class NetSession {
   private lastSend = -1;
   /** when our AI wingmen were last sent [s] */
   private wingSent = 0;
+  /** whose wing each player flies in formation (heard every 2 s: his leader's slot, his place in it) — the places
+   *  taken when we join the same leader */
+  readonly formOf = new Map<number, { lead: number; pos: number; at: number }>();
+  private formSent = { lead: -1, pos: 0, at: 0 };
   private cvSent = 0;
   /** the mission we lead last sent (its id, when), the one we last joined */
   private msnSent = { id: "", at: 0 };
@@ -294,14 +298,31 @@ export class NetSession {
     }
     const c = this.d.camera;
     const now = performance.now() / 1000;
+    // (TARS's "join <name>" on a room player: his wing — controller/copilot.ts)
+    c.netFormation ??= (name) => {
+      const n = name.trim().toLowerCase();
+      const p = this.others().find((x) => x.name.trim().toLowerCase() === n);
+      return p ? this.formation(p.slot) : null;
+    };
     // (our orders as the flight's leader: sent to the room)
     if (!c.orderSinks.has("net")) c.orderSinks.set("net", (o) => this.net?.room && this.net.event({ kind: "order", o }));
-    // (our AI wingmen sent to the room, 10 times a second — we fly them; the others' heard, a stale host's dropped)
-    if (c.wing?.list.length && now - this.wingSent > 0.1) {
+    // (our AI wingmen sent to the room, 20 times a second — we fly them; the others' heard, a stale host's dropped)
+    if (c.wing?.list.length && now - this.wingSent > 0.05) {
       this.wingSent = now;
       net.event({ kind: "wng", w: wingsOut(c) });
     }
     for (const [slot, R] of c.remoteWings) if (now - R.at > 3) c.remoteWings.delete(slot);
+    // (our place in a formation on a room player told — at once when it changes, else every 2 s; the others' kept 6 s)
+    const fl = c.form?.slot ?? -1;
+    const fp = c.form?.pos ?? 0;
+    if (fl !== this.formSent.lead || fp !== this.formSent.pos || (fl >= 0 && now - this.formSent.at > 2)) {
+      this.formSent = { lead: fl, pos: fp, at: now };
+      net.event({ kind: "fml", lead: fl, pos: fp });
+    }
+    for (const [slot, F] of this.formOf) if (now - F.at > 6) this.formOf.delete(slot);
+    // (those on our wing: the protections' leave them be — controller/gcas.ts)
+    const me = net.room?.slot;
+    c.formWithMe = new Set([...this.formOf].filter(([, F]) => F.lead === me).map(([slot]) => slot));
     // (the carriers at sea sent to the room every 5 s — their course a function of the room's clock: the same
     // carrier on every page, one joining later told too)
     if (c.carriers?.length && now - this.cvSent > 5) {
@@ -400,6 +421,11 @@ export class NetSession {
           const r = ev as unknown as { role?: unknown; text?: unknown };
           if (typeof r.text !== "string" || !SHARED_ROLES.includes(r.role as RadioRole)) return;
           this.d.radioHeard?.(r.role as RadioRole, r.text.slice(0, 240), this.nameOf(from));
+        } else if (e.kind === "fml") {
+          const f = ev as unknown as { lead?: unknown; pos?: unknown };
+          if (typeof f.lead === "number" && f.lead >= 0 && typeof f.pos === "number")
+            this.formOf.set(from, { lead: f.lead, pos: f.pos, at: performance.now() / 1000 });
+          else this.formOf.delete(from);
         } else if (e.kind === "order") {
           // (a leader's order — F2: heard, carried out in formation on him; "rejoin" heard out of one: on his wing)
           const o = orderOf((ev as unknown as { o: unknown }).o);
@@ -1156,6 +1182,25 @@ export class NetSession {
     return this.d.camera.form?.slot ?? null;
   }
 
+  /** The first place free in a formation on `lead` (2–4): not his AI wingmen's, not another player's on his wing
+   *  (heard); none free: 0. */
+  freePlace(lead: number): number {
+    const c = this.d.camera;
+    const taken = new Set<number>();
+    for (const w of c.remoteWings.get(lead)?.list ?? []) taken.add(w.k);
+    const me = this.net?.room?.slot;
+    for (const [slot, F] of this.formOf) if (slot !== me && F.lead === lead) taken.add(F.pos);
+    for (const p of [2, 3, 4]) if (!taken.has(p)) return p;
+    return 0;
+  }
+
+  /** The room's pilots flying in the Earth's air now — whose wing we may join (the wheel's Flight). */
+  leaders(): { slot: number; name: string }[] {
+    return this.others()
+      .filter((x) => x.state && x.state.frame === 0 && x.state.body === 0 && (x.state.flags & 1) === 0)
+      .map((x) => ({ slot: x.slot, name: x.name }));
+  }
+
   formation(slot: number, o: { side?: "right" | "left"; gap?: number; back?: number; up?: number } = {}): string {
     const c = this.d.camera;
     if (c.form?.slot === slot) {
@@ -1194,16 +1239,23 @@ export class NetSession {
     // (the place: as asked — a side, a gap —, else ours in the formation chosen, its close slots widened to the
     // two craft's spans)
     const S = this.d.settings;
-    const legacy = o.side !== undefined || o.gap !== undefined || o.back !== undefined || o.up !== undefined;
-    const place = legacy
-      ? { right: o.side === "left" ? -gap : gap, back: o.back ?? 15, up: o.up ?? 0 }
-      : formSlotFor(S.formShape, S.formPos, S.formSpacing, gap / 26);
+    // (our place: the first free on his wing — his AI wingmen's and the others' heard taken —; all taken: trailing
+    // him, a place further back for each of us)
+    const free = this.freePlace(slot);
+    const trail = free === 0 ? 1 + [...this.formOf.values()].filter((F) => F.lead === slot && F.pos === 0).length : 0;
+    const legacy = o.side !== undefined || o.gap !== undefined || o.back !== undefined || o.up !== undefined || trail > 0;
+    const pos = free || S.formPos;
+    const place = trail
+      ? { right: 0, back: 60 * trail + 20, up: -10 * trail }
+      : legacy
+        ? { right: o.side === "left" ? -gap : gap, back: o.back ?? 15, up: o.up ?? 0 }
+        : formSlotFor(S.formShape, pos, S.formSpacing, gap / 26);
     c.form = {
       slot,
       name: p.name,
       at: place,
       shape: legacy ? undefined : S.formShape,
-      pos: S.formPos,
+      pos: legacy ? 0 : pos,
       spacing: S.formSpacing,
       kspan: gap / 26,
       since: performance.now() / 1000,
@@ -1229,7 +1281,8 @@ export class NetSession {
         return { p: W.p, v: W.v, a, fwd: ax.fwd, aLat: bankAccel(phi + roll * 0.8) };
       },
     };
-    if (!legacy) return tf("Formation {0} on {1} — #{2}", formationLabel(S.formShape), p.name, S.formPos);
+    if (trail) return tf("In trail behind {0} — {1} m", p.name, place.back);
+    if (!legacy) return tf("Formation {0} on {1} — #{2}", formationLabel(S.formShape), p.name, pos);
     const where = o.side === "left" ? tf("off {0}'s left wing", p.name) : tf("off {0}'s right wing", p.name);
     return tf("Formation {0} — {1} m", where, Math.round(gap));
   }

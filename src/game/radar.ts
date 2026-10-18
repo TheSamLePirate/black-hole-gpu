@@ -107,6 +107,8 @@ export class Radar {
   private dir = 1;
   tracks = new Map<string, Track>();
   lock: string | null = null;
+  /** weapons free (the free fight in a room): the datalink's tracks locked too — a friend's craft, one's own wingman */
+  weaponsFree = false;
   /** identified already (the IFF answered, or seen): the truth known, by id */
   private known = new Map<string, Iff>();
   /** the lock's last measure [s] (lost a second after) */
@@ -240,7 +242,7 @@ export class Radar {
   /** The lock moved to the next radar track (nearest first, the datalink's left out), or dropped at the end. */
   lockNext(): string | null {
     const order = [...this.tracks.values()]
-      .filter((T) => !T.datalink)
+      .filter((T) => !T.datalink || this.weaponsFree)
       .sort((a, b) => len(a.r) - len(b.r))
       .map((T) => T.id);
     if (!order.length) return this.unlock();
@@ -254,7 +256,7 @@ export class Radar {
   /** A track locked by its id (the radar's own track); false if none. */
   lockOn(id: string): boolean {
     const T = this.tracks.get(id);
-    if (!T || T.datalink) return false;
+    if (!T || (T.datalink && !this.weaponsFree)) return false;
     this.lock = id;
     this.lockAt = 0;
     return true;

@@ -62,7 +62,12 @@ describe.skipIf(!E2E)("a battle", () => {
   test("Ben: Tab locks Ana, = the AIM-120, Enter fires it — Ana's helmet warns of it", async () => {
     await b.waitFor(`__bh.camera.combat.world.targets.some((q) => q.peer === ${sa} && q.alive)`, 30_000);
     await b.press("Tab");
-    await b.waitFor(`__bh.camera.combat.world.lock === ${10_000 + sa}`, 5000);
+    await b.waitFor(`__bh.camera.combat.world.lock === ${10_000 + sa}`, 5000).catch(async (e) => {
+      console.log(
+        `  Ben: ${await b.js<string>(`JSON.stringify({ lock: __bh.camera.radar.lock, wlock: __bh.camera.combat.world.lock, tracks: [...__bh.camera.radar.tracks.values()].map((T) => T.id + (T.datalink ? "(dl)" : "") + ":" + Math.round(Math.hypot(...T.r))), targets: __bh.camera.combat.world.targets.map((q) => [q.id, q.name, q.peer, q.friendly]) })`)}`,
+      );
+      throw e;
+    });
     await b.press("Equal", "=");
     expect(await b.js<string>(`__bh.camera.combat.weapon`)).toBe("aim120");
     await b.press("Enter");

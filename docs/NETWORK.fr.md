@@ -117,6 +117,25 @@ cible à 15 km, la victoire sur les deux feuilles ; les drones de l'hôte dans l
 près ; l'AIM-9X de l'invité en abat un, la victoire est la sienne des deux côtés ; les coureurs à 72 m au
 départ.
 
+### Le combat libre, l'ailier par la roue
+
+- **Ailier par la roue** : Tab maintenu › *Patrouille* › *Ailier de Ana* (chaque pilote de la salle en vol dans
+  l'air de la Terre ; *Quitter la formation* quand on y est), ou TARS « rejoins Ana » : la formation automatique,
+  à **la première place libre** de la forme choisie — celles de ses ailiers IA et des autres joueurs sur son aile
+  (chaque page dit à la salle sur l'aile de qui elle vole, toutes les 2 s) prises ; les trois prises, en file
+  derrière lui, à 80 m et plus.
+- **Le combat libre** (en salle, en F-35, sans match en cours, ni mission, leçon ou défi à soi ; le réglage
+  *Combat libre en salle*, actif par défaut) : armes actives — missiles air-air, canon —, **tout appareil est une
+  cible** : les autres joueurs (orange, verrouillés par Tab comme toute piste), leurs ailiers IA et les nôtres
+  (tir ami autorisé), les avions de ligne, navires, porte-avions et escortes réels que le radar voit — celui
+  verrouillé, et tout ce qui est à moins de 6 km (le canon), pris dans le combat par une doublure placée chaque
+  image d'après l'image radar (`controller/fightproxy.ts`) ; abattu, le vrai disparaît sur toutes les pages de la
+  salle (*Ana ✕ AFR123*). Le radar en armes libres : la piste liaison de données d'un ami se verrouille aussi.
+  Abattu : de retour en l'air 6 s plus tard, 15 km au sud, à 5 000 m. Pas de score à atteindre, pas de fin ; la
+  barre dit *Combat libre* et les victoires. Un match demandé le remplace.
+- **Coop** : les pilotes d'un même camp (bleus, jamais verrouillés, pas touchés sans tir ami) — ils étaient
+  jusqu'ici les cibles les uns des autres.
+
 ## Les voix (R2)
 
 - **Activer le micro** (le panneau de la salle) : le navigateur demande une fois ; notre voix part sur chaque

@@ -44,6 +44,18 @@ function slerp(a: Q, b: Q, u: number): Q {
   return a.map((x, k) => sa * x + sb * b[k]!) as Q;
 }
 
+/** a ⊗ b */
+function qmul(a: Q, b: Q): Q {
+  return [
+    a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+    a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+    a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+    a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
+  ];
+}
+const conj = (q: Q): Q => [-q[0], -q[1], -q[2], q[3]];
+const ID: Q = [0, 0, 0, 1];
+
 /** q turned by the world-frame spin w over dt */
 function spin(q: Q, w: V3, dt: number): Q {
   const ang = Math.hypot(...w) * dt;
@@ -92,8 +104,10 @@ export class RemoteTrack {
   persist = false;
   /** the error being taken in (shown − true), and the time it was measured */
   private corr: V3 = [0, 0, 0];
+  /** the attitude's disagreement at the new sample (world frame), taken in as the place's */
+  private qCorr: Q = ID;
   private corrAt = 0;
-  private last: { t: number; p: V3 } | null = null;
+  private last: { t: number; p: V3; q: Q } | null = null;
   private maxAhead: number;
   private smooth: number;
 
@@ -119,8 +133,10 @@ export class RemoteTrack {
     // the shown position measured against the new truth: the gap taken in smoothly from here (not across a change
     // of frame: a craft gone out of the air, into another's sphere)
     const prev = S.length > 1 ? S[S.length - 2]! : null;
-    if (prev && (prev.frame !== s.frame || prev.body !== s.body)) this.corr = [0, 0, 0];
-    else if (this.last) {
+    if (prev && (prev.frame !== s.frame || prev.body !== s.body)) {
+      this.corr = [0, 0, 0];
+      this.qCorr = ID;
+    } else if (this.last) {
       const raw = this.raw(this.last.t);
       if (raw) {
         const e: V3 = [this.last.p[0] - raw.p[0], this.last.p[1] - raw.p[1], this.last.p[2] - raw.p[2]];
@@ -128,7 +144,13 @@ export class RemoteTrack {
         if (Math.hypot(...e) < 1000) {
           this.corr = e;
           this.corrAt = this.last.t;
-        } else this.corr = [0, 0, 0];
+          // (the attitude's too: a roll begun or stopped between two samples no longer a step — 60° and more: at once)
+          const d = qmul(this.last.q, conj(raw.q));
+          this.qCorr = Math.abs(d[3]) > Math.cos((60 * Math.PI) / 360) ? d : ID;
+        } else {
+          this.corr = [0, 0, 0];
+          this.qCorr = ID;
+        }
       }
     }
   }
@@ -240,8 +262,9 @@ export class RemoteTrack {
     }
     const k = Math.exp(-Math.max(0, t - this.corrAt) / (this.smooth * Math.max(1, this.env.pace)));
     const p: V3 = [r.p[0] + this.corr[0] * k, r.p[1] + this.corr[1] * k, r.p[2] + this.corr[2] * k];
-    this.last = { t, p };
-    return { ...r, p };
+    const q = this.qCorr === ID ? r.q : qmul(slerp(ID, this.qCorr, k), r.q);
+    this.last = { t, p, q };
+    return { ...r, p, q };
   }
 }
 

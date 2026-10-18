@@ -4405,6 +4405,16 @@ export const SCHEMA: ControlDef[] = [
     help: "Playing together (the pause menu, the wheel, a room's badge). Off: no trace of the network — the game never connects unless asked.",
     keywords: "network multiplayer online room friends together",
   },
+  {
+    key: "netFreeFight",
+    type: "toggle",
+    section: "game",
+    group: "Network",
+    label: "Free fight in a room",
+    effect: "none",
+    help: "In a room, in the F-35, outside a match: weapons live, every craft a target — the other players, their wingmen and yours, airliners, ships, carriers —, friendly fire on, everything on the radar.",
+    keywords: "network combat fight weapons friendly fire pvp dogfight",
+  },
 ];
 
 export const SCHEMA_BY_KEY = new Map(SCHEMA.map((d) => [d.key, d]));
