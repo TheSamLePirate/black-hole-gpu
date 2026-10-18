@@ -1220,6 +1220,16 @@ body.piloting #hint { display: none; }
 .fl-report .q-good { color: #b9ffd2; }
 .fl-report .q-ok { color: var(--hud-amber); }
 .fl-report .q-bad { color: #ff8f80; }
+/* the report's curve (PLAN-VAISSEAUX X8): the phase's altitude, load or Δv */
+.fl-rp-curve {
+  margin: 6px 0 2px;
+  color: #62e6ff;
+}
+.fl-rp-ctitle {
+  font: 600 10px/1.2 var(--mono, ui-monospace, monospace);
+  opacity: 0.75;
+  margin-bottom: 2px;
+}
 .fl-rp-foot { margin-top: 8px; font: 500 11px var(--hud-font); color: var(--hud-dim); }
 .fl-hub-gfix { margin-top: 4px; font: 600 11px/1.3 var(--hud-font); color: var(--hud-amber); }
 .fl-hub-gfix[hidden] { display: none; }

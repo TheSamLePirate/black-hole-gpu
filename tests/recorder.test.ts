@@ -34,7 +34,10 @@ test("the CSV: its header, a row a sample, a null as an empty cell", () => {
   R.push(at(0, 400e3));
   R.push({ ...at(1, 399.5e3), fuel: 0.75 });
   const lines = R.csv().trim().split("\n");
-  expect(lines[0]).toBe("t_s,alt_m,speed_mps,vz_mps,load_g,q_pa,mach,heat_wpm2,throttle,dv_mps,fuel");
+  // (the spacecraft's channels after — PLAN-VAISSEAUX X8 —, empty for a sample without them)
+  expect(lines[0]).toBe(
+    "t_s,alt_m,speed_mps,vz_mps,load_g,q_pa,mach,heat_wpm2,throttle,dv_mps,fuel,dv_left_mps,dv_plan_mps,battery,o2_h,dock_range_m,dock_closing_mps,earth_gap_s",
+  );
   expect(lines.length).toBe(3);
   expect(lines[1]!.endsWith(",")).toBe(true);
   expect(lines[2]!.split(",")[1]).toBe("399500");

@@ -578,4 +578,13 @@ export default {
   "Come closer to the vessel's hatch (3 m).": "Approchez-vous de l’accès du vaisseau (3 m).",
   "The vessel is moving too fast.": "Le vaisseau se déplace trop vite.",
   "The astronaut is not on foot.": "Le personnage n’est pas à pied.",
+  "Ascent to orbit · {0}": "Ascension vers l'orbite · {0}",
+  Efficiency: "Rendement",
+  "Least possible": "Minimum possible",
+  "Orbit insertion · {0}": "Mise en orbite · {0}",
+  "Aimed at": "Visée",
+  "Rendezvous · {0}": "Rendez-vous · {0}",
+  "Entry · {0}": "Rentrée · {0}",
+  "Greatest heat flux": "Flux thermique maximal",
+  "Off the site": "Écart au site",
 } satisfies Record<string, string>;

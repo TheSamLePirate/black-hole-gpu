@@ -99,6 +99,8 @@ export interface ScreenData {
   systems?: import("../controller/systems").SystemsInfo | null;
   ticks?: Map<string, Set<number>>;
   rcs?: "rotate" | "translate";
+  /** the mission's elapsed time [s] (PLAN-VAISSEAUX X8 — a spacecraft's; none: an aircraft's) */
+  met?: number | null;
 }
 
 const fmtKm = (km: number) =>
@@ -1505,6 +1507,15 @@ export class CockpitScreens {
     g.fillText(date.toISOString().slice(0, 10), 22, 226);
     g.fillText("SHIP τ", 22, 299);
     big(fmtDur(d.info.properTime * M_SECONDS), 356, "#fff4dc");
+    // (the Earth's clock ahead of the ship's — Gargantua's hours: the years gone by there — X8)
+    const gap = d.time * M_SECONDS - d.info.properTime * M_SECONDS;
+    if (gap > 60) {
+      g.font = `700 20px ${FONT}`;
+      g.fillStyle = gap > 86400 ? "#ff7a5c" : AMBER;
+      g.textAlign = "right";
+      g.fillText(`EARTH +${fmtDur(gap)}`, SLOT - 22, 299);
+      g.textAlign = "left";
+    }
     g.fillStyle = "rgba(255, 220, 160, 0.6)";
     g.font = `600 20px ${FONT}`;
     g.fillText("WARP", 22, 423);
@@ -1526,6 +1537,16 @@ export class CockpitScreens {
     ) {
       g.fillText("dτ/dt · THE SHIP'S CLOCK RATE", 22, 547);
       big(dt!.toFixed(4), 604, dt! < 0.5 ? "#ff7a5c" : dt! < 0.9 ? AMBER : "#fff4dc");
+    } else if (d.met != null) {
+      // (a spacecraft's mission elapsed time — X8)
+      g.fillText("MET", 22, 547);
+      const m = d.met;
+      const days = Math.floor(m / 86400);
+      big(
+        `${days ? `${days}d ` : ""}${String(Math.floor((m % 86400) / 3600)).padStart(2, "0")}:${String(Math.floor((m % 3600) / 60)).padStart(2, "0")}:${String(Math.floor(m % 60)).padStart(2, "0")}`,
+        604,
+        "#fff4dc",
+      );
     } else {
       g.fillText("LOCAL", 22, 547);
       const loc = new Date();

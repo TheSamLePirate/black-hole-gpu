@@ -265,6 +265,25 @@ interface Sample {
   si: boolean;
 }
 
+/** a report's curve as a small inline SVG (its title, its axis's ends) */
+function reportCurve(c: FlightReport["curve"] | null, esc: (s: string) => string): string {
+  if (!c || c.pts.length < 3) return "";
+  const xs = c.pts.map((p) => p[0]),
+    ys = c.pts.map((p) => p[1]);
+  const x0 = Math.min(...xs),
+    x1 = Math.max(...xs, x0 + 1),
+    y0 = Math.min(0, ...ys),
+    y1 = Math.max(...ys, y0 + 1e-6);
+  const W = 260,
+    H = 70;
+  const pts = c.pts.map(([x, y]) => `${(((x - x0) / (x1 - x0)) * W).toFixed(1)},${(H - ((y - y0) / (y1 - y0)) * H).toFixed(1)}`).join(" ");
+  const fmt = (v: number) => (Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1));
+  return (
+    `<div class="fl-rp-curve" data-testid="report-curve"><div class="fl-rp-ctitle">${esc(c.title)} · ${esc(c.unit)} · ${fmt(y1)} max</div>` +
+    `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg></div>`
+  );
+}
+
 export class FlightHud {
   private root = h("div", "fl-root");
   private hud: HTMLCanvasElement;
@@ -512,6 +531,8 @@ export class FlightHud {
       `<div class="fl-rp-what">${esc(r.title)}</div>` +
       `<div class="fl-rp-grade g-${r.letter}"><b>${r.letter}</b><span>${r.score.toFixed(1)} / 20</span></div>` +
       `<div class="fl-stgrid">${r.lines.map((l) => `<span>${esc(l.label)}</span><b class="q-${l.q}">${esc(l.value)}</b>`).join("")}</div>` +
+      // (the phase's curve — PLAN-VAISSEAUX X8: the ascent's altitude, the entry's load, the rendezvous's Δv)
+      reportCurve(r.curve ?? null, esc) +
       `<div class="fl-rp-foot">${esc(t("M › Telemetry: the flight's curves"))}</div>`;
     R.dataset.testid = "flight-report";
     R.setAttribute("role", "dialog");

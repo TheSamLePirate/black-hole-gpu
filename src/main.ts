@@ -7043,6 +7043,7 @@ async function main() {
           systems: camera.systemsInfo(),
           ticks: camera.sysTicks,
           rcs: camera.rcsMode ?? "rotate",
+          met: fleet.active !== "f35" && Number.isFinite(camera.metT0) ? sim.time * M_SECONDS - camera.metT0 : null,
         })
       ) {
         renderer.ship.updateScreens(cockpitScreens.canvas);
@@ -7307,8 +7308,27 @@ async function main() {
           throttle: info.throttle,
           dv: camera.spent * C_MPS,
           fuel: info.engine.fuel ? info.engine.fuel.fraction : null,
+          // (a spacecraft's channels — PLAN-VAISSEAUX X8)
+          ...(fleet.active === "f35"
+            ? {}
+            : (() => {
+                const Y = info.systems;
+                const dk = info.dock;
+                const b = camera.fcBudget().dv;
+                return {
+                  dvLeft: Number.isFinite(b) ? b : null,
+                  dvPlan: (info.plan?.nodes ?? []).reduce((a, n) => a + Math.hypot(...n.dv), 0) * C_MPS,
+                  battery: Y ? Y.battery / Math.max(Y.batteryKWh, 1e-9) : null,
+                  o2: Y && Number.isFinite(Y.o2Hours) ? Y.o2Hours : null,
+                  dockRange: dk ? dk.range : null,
+                  dockClosing: dk ? dk.closing : null,
+                  earthGap: Math.max(0, sim.time * M_SECONDS - camera.properTime * M_SECONDS),
+                };
+              })()),
         });
       }
+      // (a spacecraft's phases reported as they end — PLAN-VAISSEAUX X8: ascent, insertion, rendezvous, entry)
+      camera.phaseReportStep(status ?? null);
       netSession.instruments(info, status ?? null);
       flightComputer.show(flightHud.mapView);
       tablet.setVisible(flightHud.mapView);
