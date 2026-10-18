@@ -187,6 +187,10 @@ export default {
   White: "Blanc",
   "Helmet brightness": "Luminosité du casque",
   "The helmet's symbology: how bright.": "La symbologie du casque : son intensité.",
+  "Helmet look": "Aspect du casque",
+  "The helmet's symbology: outlined dark (the most readable on a bright sky), the light on a visor (its glow, a faint shade), or cinematic (a wider glow).":
+    "La symbologie du casque : cernée de sombre (la plus lisible sur un ciel clair), la lumière sur une visière (son halo, une ombre légère), ou cinématique (un halo plus large).",
+  Readable: "Lisible",
   "Cockpit display": "Écran du cockpit",
   "The panoramic display's look: a real F-35's, sober — or cinematic: a wider glow, a ring under the finger, a new page swept in.":
     "L'aspect de l'écran panoramique : celui d'un vrai F-35, sobre — ou cinématique : un halo plus large, un anneau sous le doigt, une nouvelle page balayée.",

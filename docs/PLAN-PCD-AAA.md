@@ -77,7 +77,7 @@ verts, poussée sur `main`.
 - Une « caméra » infrarouge dessinée à partir des pistes et du relief connu : silhouettes chaudes, horizon,
   réticule, zoom — **sans second rendu GPU**.
 
-### Q8 — Le casque (lot D)
+### Q8 — Le casque (lot D) — FAIT ([fiche](progress/pcd/Q8.md))
 
 - Le même traitement sur la symbologie du casque : phosphore vert réaliste (ou cinématique), halo, lisibilité
   sur ciel clair, sans coût GPU mesurable.

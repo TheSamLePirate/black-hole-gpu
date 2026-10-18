@@ -4426,6 +4426,23 @@ export const SCHEMA: ControlDef[] = [
     keywords: "hmd helmet brightness",
   },
   {
+    key: "f35HmdLook",
+    type: "choice",
+    section: "game",
+    group: "F-35",
+    label: "Helmet look",
+    style: "segmented",
+    effect: "none",
+    enabled: (s) => s.ship && s.vessel === "f35",
+    help: "The helmet's symbology: outlined dark (the most readable on a bright sky), the light on a visor (its glow, a faint shade), or cinematic (a wider glow).",
+    keywords: "hmd helmet symbology look glow visor readable cinematic realistic",
+    options: [
+      { value: "readable", label: "Readable" },
+      { value: "realistic", label: "Realistic" },
+      { value: "cinematic", label: "Cinematic" },
+    ],
+  },
+  {
     key: "f35PcdStyle",
     type: "choice",
     section: "game",

@@ -39,6 +39,9 @@ export interface JetHudInfo {
   /** the symbology's colour ("r, g, b") and brightness (the F-35's settings) */
   rgb?: string;
   bright?: number;
+  /** the helmet's look (the F-35's setting): its boxes dark (readable), faintly shaded (realistic: the light on a
+   *  visor cannot draw a black), or open (cinematic) */
+  look?: "readable" | "realistic" | "cinematic";
   /** the flight plan's active waypoint: its name, its distance [m], NAV engaged */
   wp?: { name: string; dist: number; on: boolean } | null;
   /** the flight control law: the direct one said in amber (no computer: no limits) */
@@ -91,11 +94,11 @@ export function drawJetHud(
   const off = Math.min(W * 0.3, Math.max(190 * dpr, Math.min(W, H) * 0.36));
   const half = Math.min(H * 0.22, 150 * dpr);
   const box = (x: number, y: number, w: number, h: number, s: string, align: "left" | "right", col = "#ffffff") => {
-    ctx.fillStyle = "rgba(2, 14, 6, 0.72)";
+    ctx.fillStyle = J.look === "realistic" ? "rgba(0, 28, 12, 0.24)" : "rgba(2, 14, 6, 0.72)";
     ctx.strokeStyle = G(0.95);
     ctx.lineWidth = 1.4 * dpr;
     const x0 = align === "left" ? x : x - w;
-    ctx.fillRect(x0, y - h / 2, w, h);
+    if (J.look !== "cinematic") ctx.fillRect(x0, y - h / 2, w, h);
     ctx.strokeRect(x0, y - h / 2, w, h);
     text(s, x0 + w - 6 * dpr, y, col, 15, "right", true);
   };

@@ -425,6 +425,7 @@ export interface Settings {
   f35Avionics: boolean; // the avionics' status block on the helmet
   f35HmdColor: "green" | "amber" | "cyan" | "white"; // the helmet's symbology's colour
   f35HmdBrightness: number; // its brightness (0.3 … 1)
+  f35HmdLook: "readable" | "realistic" | "cinematic"; // the helmet's symbology: outlined dark (the most readable), the light on a visor (a glow, a faint shade), or a wider glow
   f35PcdStyle: "realistic" | "cinematic"; // the panoramic display's look: a real PCD's, or with glow, rings and sweeps
   f35PcdBrightness: "auto" | "day" | "night" | "nvg"; // its brightness: the light's, or its knob's
   netMenu: boolean; // the network's menu and buttons (docs/PLAN-RESEAU.md): off, the game shows no trace of it
@@ -771,6 +772,7 @@ export function defaultSettings(): Settings {
     f35Avionics: true,
     f35HmdColor: "green",
     f35HmdBrightness: 1,
+    f35HmdLook: "realistic",
     f35PcdStyle: "realistic",
     f35PcdBrightness: "auto",
     netMenu: true,
@@ -2097,6 +2099,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   f35Avionics: "pref",
   f35HmdColor: "pref",
   f35HmdBrightness: "pref",
+  f35HmdLook: "pref",
   f35PcdStyle: "pref",
   f35PcdBrightness: "pref",
   netMenu: "pref",

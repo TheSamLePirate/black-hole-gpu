@@ -277,6 +277,8 @@ export interface SymFrame {
 }
 
 const UNDER = "rgba(0, 0, 0, 0.42)";
+/** the helmet's realistic look: a faint shade under its light (a dark green, as the visor's tint) */
+const VISOR_SHADE = "rgba(0, 28, 12, 0.24)";
 /** the ladder's, the heading's, the bank's colour (r, g, b): the HUD's cyan, the jet's green in its style */
 const CYAN = "124, 214, 255";
 let LADDER = CYAN;
@@ -304,17 +306,22 @@ export function drawSymbology(F: SymFrame) {
     return [W / 2 + (d[0] / d[2]) * fpx, H / 2 - (d[1] / d[2]) * fpx];
   };
   const inside = (p: [number, number] | null, m = 0) => !!p && p[0] >= m && p[0] <= W - m && p[1] >= m && p[1] <= H - m;
+  // (each mark twice — no more strokes in any look —: under it a dark outline for the bright sky (the readable look),
+  // or, on the F-35's helmet, the light its visor shows: the mark's own glow about it, a faint shade under it to keep
+  // it on a white cloud (realistic), a wider glow alone (cinematic) — docs/PLAN-PCD-AAA.md, Q8)
+  let look: Settings["f35HmdLook"] = "readable";
+  const glowOf = () => (look === "cinematic" ? { w: 6, a: 0.3 } : { w: 3.2, a: 0.22 });
   const stroke = (draw: () => void, col: string, lw: number, dash?: number[]) => {
     ctx.setLineDash(dash ? dash.map((x) => x * dpr) : []);
-    for (const [w, c] of [
-      [lw + 2.4, UNDER],
-      [lw, col],
-    ] as const) {
+    const G = look === "readable" ? null : glowOf();
+    for (const [w, c, a] of [G ? ([lw + G.w, col, G.a] as const) : ([lw + 2.4, UNDER, 1] as const), [lw, col, 1] as const]) {
       ctx.lineWidth = w * dpr;
-      ctx.strokeStyle = c;
+      ctx.strokeStyle = look === "realistic" && a < 1 ? VISOR_SHADE : c;
+      ctx.globalAlpha = look === "realistic" && a < 1 ? 1 : a;
       ctx.beginPath();
       draw();
       ctx.stroke();
+      ctx.globalAlpha = 1;
     }
     ctx.setLineDash([]);
   };
@@ -322,9 +329,11 @@ export function drawSymbology(F: SymFrame) {
     ctx.font = `${mono ? 600 : 700} ${size * dpr}px ${mono ? MONO : FONT}`;
     ctx.textAlign = align;
     ctx.textBaseline = "middle";
-    ctx.lineWidth = 3 * dpr;
-    ctx.strokeStyle = UNDER;
+    ctx.lineWidth = (look === "cinematic" ? 4 : 3) * dpr;
+    ctx.strokeStyle = look === "readable" ? UNDER : look === "realistic" ? VISOR_SHADE : col;
+    ctx.globalAlpha = look === "cinematic" ? 0.28 : 1;
     ctx.strokeText(t, x, y);
+    ctx.globalAlpha = 1;
     ctx.fillStyle = col;
     ctx.fillText(t, x, y);
   };
@@ -342,7 +351,8 @@ export function drawSymbology(F: SymFrame) {
   const atmo = F.kind ? F.kind === "atmo" || (helmet && F.kind === "approach") : A0?.mode === "plane";
   // (the F-35B in its STOVL mode keeps it to a hover: its helmet's symbology down to no speed at all)
   const jet = s.hudJet !== "off" && pilotView && atmo && i.jet && A0?.inAir && (A0.q > 20 || !!i.stovl?.on) ? i.jet : null;
-  // (the F-35's helmet: its colour the setting's)
+  // (the F-35's helmet: its look, its colour the settings')
+  if (helmet && s.vessel === "f35" && (s.shipMount === "cockpit" || s.shipMount === "cabin")) look = s.f35HmdLook ?? "realistic";
   const hmdRgb = helmet && s.vessel === "f35" ? (HMD_RGB[s.f35HmdColor] ?? JET_GREEN) : JET_GREEN;
   LADDER = jet ? hmdRgb : CYAN;
   const S = i.S;
@@ -680,6 +690,7 @@ export function drawSymbology(F: SymFrame) {
         law: s.vessel === "f35" ? s.f35Law : "normal",
         rgb: hmdRgb,
         bright: helmet && s.vessel === "f35" ? s.f35HmdBrightness : 1,
+        look,
         // (the F-35: its helmet's symbology — the values boxed, its fuel, its hover)
         hmd: i.engine?.jet
           ? {
