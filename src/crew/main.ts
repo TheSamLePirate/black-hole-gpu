@@ -8,6 +8,8 @@ import { wgs84Inverse } from "../system/ellipsoid";
 import { CrewRadio } from "./radio";
 import { bindTalk } from "./ptt";
 import { CrewViews, VIEW_NAMES, type CrewView } from "./views";
+import { dur } from "./draw/kit";
+import { type CrewProfile, PROFILE_TILES, PROFILE_VIEWS, profileOf, type TileKey, viewIn } from "./profile";
 import { CrewActions, type Done } from "./actions";
 import { ACTS, type Act, AUTO_FR, AUTOS, HOLD_FR, HOLDS, MANEUVER_FR, MANEUVERS } from "../net/crewcmd";
 import type { Args } from "../ai/tool-schema";
@@ -227,6 +229,9 @@ function segmented<T extends string>(items: [T, string][], current: T, title: st
   return g;
 }
 const NOTES: Record<CrewView, string> = {
+  air: "Radar et carte côte à côte · l’objectif, les armes, les alertes · toucher un panneau pour l’ouvrir",
+  sdash: "L’orbite, l’attitude, l’ordinateur de vol · toucher un panneau pour l’ouvrir",
+  orbit: "L’orbite vue de dessus de son plan · périapside en haut · les poussées du plan en magenta",
   dash: "Toucher un panneau pour l’ouvrir · pincer pour la portée",
   pfd: "Horizon, rubans vitesse et altitude, cap, modes du pilote automatique",
   nd: "Pincer pour la portée · toucher un joueur ou un contact",
@@ -458,14 +463,19 @@ function setView(view: CrewView) {
     b.classList.toggle("active", b.dataset.view === view);
     b.setAttribute("aria-pressed", String(b.dataset.view === view));
   }
-  document.querySelector<HTMLElement>(".zoom")!.hidden = view === "pfd";
-  mcp.hidden = view !== "pfd" && view !== "dash" && view !== "radar";
+  document.querySelector<HTMLElement>(".zoom")!.hidden = view === "pfd" || view === "orbit" || view === "sdash";
+  mcp.hidden = view !== "pfd" && view !== "dash" && view !== "radar" && view !== "air" && view !== "sdash";
   syncMcpKind();
   $("views").querySelector<HTMLElement>(`[data-view=${view}]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
   controls();
   showCrew(false);
 }
 const ICONS: Record<CrewView, string> = {
+  air: '<path d="M12 3l2 7 7 2-7 2-2 7-2-7-7-2 7-2z"/>',
+  sdash:
+    '<rect x="3" y="3" width="11" height="11" rx="2"/><rect x="16" y="3" width="5" height="18" rx="2"/><rect x="3" y="16" width="11" height="5" rx="2"/>',
+  orbit:
+    '<ellipse cx="12" cy="12" rx="9" ry="5" transform="rotate(-25 12 12)"/><circle cx="12" cy="12" r="2.5"/><circle cx="19" cy="8" r="1.2"/>',
   dash: '<rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/>',
   pfd: '<circle cx="12" cy="12" r="9"/><path d="M3 13h18M8 12h-3M19 12h-3M10 12l2 2 2-2"/>',
   nd: '<path d="M4 18a9 9 0 0 1 16 0"/><path d="M12 18l-2.5-6L12 4l2.5 8z"/>',
@@ -476,11 +486,33 @@ const ICONS: Record<CrewView, string> = {
   plan: '<path d="M3 18l5-6 4 3 4-7 5 4"/><circle cx="8" cy="12" r="1.5"/><circle cx="16" cy="8" r="1.5"/>',
   telemetry: '<path d="M3 17l4-5 4 3 4-8 6 6"/><path d="M3 21h18"/>',
 };
-for (const view of Object.keys(VIEW_NAMES) as CrewView[]) {
-  const b = button("", () => setView(view));
-  b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[view]}</svg><span>${VIEW_NAMES[view]}</span>`;
-  b.dataset.view = view;
-  $("views").append(b);
+/** the header's badge: the profile and the craft followed (F-35 · TACTIQUE, VAISSEAU · ENDURANCE) */
+function syncBadge() {
+  const c = snapNow()?.craft;
+  $("profile-badge").textContent =
+    profile === "jet"
+      ? `${c?.name ?? "F-35"} · TACTIQUE`.toUpperCase()
+      : profile === "space"
+        ? `VAISSEAU · ${c?.name ?? ""}`.toUpperCase()
+        : "";
+}
+/** the console's profile now (PLAN-VAISSEAUX K2 — profile.ts): the craft followed's — its views, its tiles, its theme */
+let profile: CrewProfile | null = null;
+function setProfile(p: CrewProfile) {
+  if (p === profile) return;
+  profile = p;
+  document.body.dataset.profile = p;
+  syncBadge();
+  $("views").replaceChildren();
+  for (const view of PROFILE_VIEWS[p]) {
+    const b = button("", () => setView(view));
+    b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[view]}</svg><span>${VIEW_NAMES[view]}</span>`;
+    b.dataset.view = view;
+    $("views").append(b);
+  }
+  $("metrics").replaceChildren();
+  // (the view kept when the other profile has it — the PFD, the globe, the telemetry —, else the profile's first)
+  setView(viewIn(p, views.view));
 }
 views.onOpen = setView;
 $("zoom-in").addEventListener("click", () => views.zoomBy(1.333));
@@ -503,40 +535,53 @@ function download() {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-/** the strip's tiles: the measures a glance needs, their state (amber, red) and trend */
-const TILES: { key: string; name: string; unit: (u: ReturnType<typeof unitsOf>) => string }[] = [
-  { key: "alt", name: "Altitude", unit: (u) => u.altName.toLowerCase() },
-  { key: "speed", name: "Vitesse", unit: (u) => u.spdName.toLowerCase() },
-  { key: "vz", name: "Vario", unit: (u) => u.vsName.toLowerCase() },
-  { key: "mach", name: "Mach", unit: () => "" },
-  { key: "g", name: "Charge", unit: () => "g" },
-  { key: "hdg", name: "Cap", unit: () => "°" },
-  { key: "fuel", name: "Carburant", unit: () => "%" },
-  { key: "agl", name: "Hauteur sol", unit: (u) => u.altName.toLowerCase() },
-];
+/** the strip's tiles: the measures a glance needs, their state (amber, red) and trend — each profile its own
+ *  (PLAN-VAISSEAUX K2: the spacecraft's Δv, propellant, apsides, period, next event, g, dτ/dt, the link) */
+const TILES: Record<TileKey, { name: string; unit: (u: ReturnType<typeof unitsOf>) => string }> = {
+  alt: { name: "Altitude", unit: (u) => u.altName.toLowerCase() },
+  speed: { name: "Vitesse", unit: (u) => u.spdName.toLowerCase() },
+  vz: { name: "Vario", unit: (u) => u.vsName.toLowerCase() },
+  mach: { name: "Mach", unit: () => "" },
+  g: { name: "Charge", unit: () => "g" },
+  hdg: { name: "Cap", unit: () => "°" },
+  fuel: { name: "Carburant", unit: () => "%" },
+  agl: { name: "Hauteur sol", unit: (u) => u.altName.toLowerCase() },
+  dv: { name: "Δv restant", unit: () => "m/s" },
+  prop: { name: "Ergols", unit: () => "%" },
+  pe: { name: "Périapside", unit: () => "km" },
+  ap: { name: "Apoapside", unit: () => "km" },
+  period: { name: "Période", unit: () => "" },
+  next: { name: "Prochain", unit: () => "" },
+  dtau: { name: "dτ/dt", unit: () => "" },
+  link: { name: "Liaison", unit: () => "" },
+};
 function tiles(own: ReturnType<typeof model.own>) {
   const box = $("metrics");
   const u = unitsOf(views.units);
+  const keys = PROFILE_TILES[profile ?? "jet"];
   if (!box.childElementCount)
-    for (const t of TILES) {
+    for (const k of keys) {
       const e = el("div", "", "metric");
-      e.dataset.key = t.key;
-      e.append(el("small", t.name), el("strong", "—"), el("em", ""));
+      e.dataset.key = k;
+      e.append(el("small", TILES[k].name), el("strong", "—"), el("em", ""));
       box.append(e);
     }
   const live = !!own && own.age < 3;
   const m = own?.metrics ?? {},
-    f = own?.snapshot?.flight,
-    sys = own?.snapshot?.sys;
-  const fmt0 = (v: number | undefined, d = 0) =>
-    v === undefined || !Number.isFinite(v) ? "—" : v.toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d });
-  for (const t of TILES) {
-    const e = box.querySelector<HTMLElement>(`[data-key=${t.key}]`)!;
+    snap = own?.snapshot,
+    f = snap?.flight,
+    sys = snap?.sys;
+  const fmt0 = (v: number | undefined | null, d = 0) =>
+    v === undefined || v === null || !Number.isFinite(v)
+      ? "—"
+      : v.toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d });
+  for (const k of keys) {
+    const e = box.querySelector<HTMLElement>(`[data-key=${k}]`)!;
     let text = "—",
       state = "",
-      unit = t.unit(u);
+      unit = TILES[k].unit(u);
     if (live) {
-      switch (t.key) {
+      switch (k) {
         case "alt":
           text =
             m.alt !== undefined && Math.abs(m.alt) > 99_999
@@ -579,6 +624,44 @@ function tiles(own: ReturnType<typeof model.own>) {
         case "agl":
           text = f?.agl !== undefined && f.agl < 30_000 ? fmt0(u.alt(f.agl)) : "—";
           state = f?.agl !== undefined && f.agl < 150 && (m.vz ?? 0) < -3 ? "warn" : "";
+          break;
+        case "dv": {
+          const dv = snap?.budget?.dv;
+          text = dv === null ? "∞" : fmt0(dv);
+          state = dv != null && dv < 200 ? "warn" : "";
+          break;
+        }
+        case "prop": {
+          const pr = snap?.budget?.prop ?? (m.fuel !== undefined ? m.fuel : null);
+          text = fmt0(pr !== null ? pr * 100 : null);
+          state = pr === null ? "" : pr < 0.1 ? "alarm" : pr < 0.25 ? "warn" : "ok";
+          break;
+        }
+        case "pe":
+          text = fmt0(snap?.orbit?.pe, Math.abs(snap?.orbit?.pe ?? 0) < 100 ? 1 : 0);
+          state = snap?.orbit && snap.orbit.pe < 0 ? "alarm" : "";
+          break;
+        case "ap":
+          text = snap?.orbit ? (snap.orbit.ecc >= 1 ? "libre" : fmt0(snap.orbit.ap, Math.abs(snap.orbit.ap) < 100 ? 1 : 0)) : "—";
+          if (snap?.orbit && snap.orbit.ecc >= 1) unit = "";
+          break;
+        case "period":
+          text = dur(snap?.orbit?.period ?? null);
+          break;
+        case "next":
+          // (short: the tile is narrow — 15 min, not 14 min 57)
+          text = !snap?.next ? "—" : snap.next.in < 60 || snap.next.in >= 3600 ? dur(snap.next.in) : `${Math.round(snap.next.in / 60)} min`;
+          unit = snap?.next ? snap.next.name || snap.next.kind : "";
+          state = snap?.next?.kind === "impact" ? "alarm" : "";
+          break;
+        case "dtau":
+          text = fmt0(snap?.time?.dtau, 4);
+          state = snap?.time && snap.time.dtau < 0.99 ? "warn" : "";
+          break;
+        case "link":
+          text = snap?.link ? (snap.link.cut ? "coupée" : dur(snap.link.light)) : "—";
+          unit = snap?.link && !snap.link.cut ? "lumière" : "";
+          state = snap?.link?.cut ? "alarm" : "";
           break;
       }
     }
@@ -795,9 +878,9 @@ function selector(key: "alt" | "hdg" | "spd", title: string) {
 function syncMcpKind() {
   const fam = snapNow()?.caps?.fam ?? [];
   // (the radar's: the weapons' panel, in the F-35 only)
-  if (views.view === "radar") mcp.hidden = !fam.includes("weapons");
+  if (views.view === "radar" || views.view === "air") mcp.hidden = !fam.includes("weapons");
   if (mcp.hidden) return;
-  const kind = views.view === "radar" ? "arms" : fam.includes("space") && !fam.includes("jet") ? "space" : "jet";
+  const kind = views.view === "radar" || views.view === "air" ? "arms" : fam.includes("space") && !fam.includes("jet") ? "space" : "jet";
   if (mcp.dataset.kind === kind && mcp.childElementCount) return;
   if (kind === "arms") buildArms();
   else if (kind === "space") buildFc();
@@ -1163,6 +1246,8 @@ function refresh() {
       pilot.append(o);
     }
   }
+  setProfile(profileOf(own?.snapshot));
+  syncBadge();
   tiles(own);
   alerts(own);
   board();
@@ -1501,6 +1586,7 @@ setInterval(() => {
 }, 250);
 Object.assign(window, { __crew: { net, model, views, radio, actions, join, setView } });
 setUnits(views.units);
-setView("dash");
+setProfile("jet");
+setView("air");
 refresh();
 showLobby();

@@ -393,7 +393,7 @@ Chaque phase porte sa ligne réseau ; N finit ce qui n'existe qu'à plusieurs.
 | X4 | HUD Ranger / Lander / Endurance, amarrage, boule | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X4.md)) — reste la couleur du HUD et la boule « AAA » |
 | X5 | roue par vaisseau, manette, HOTAS | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X5.md)) — ordres de flotte en réseau en N |
 | K1 | contrat « espace » des instruments | **fait** 2026-10-18 ([fiche](progress/vaisseaux/K1.md)) |
-| K2 | console par appareil, crew F-35 distinct | à faire |
+| K2 | console par appareil, crew F-35 distinct | **fait** 2026-10-18 ([fiche](progress/vaisseaux/K2.md)) |
 | K3 | carte 3D WebGPU système solaire / Gargantua + repli 2D | à faire |
 | K4 | vues vaisseau | à faire |
 | K5 | postes à bord / au sol, délai lumière réglable | à faire |

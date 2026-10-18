@@ -91,6 +91,8 @@ export interface InstrumentSpace {
   nodes?: InstrumentNode[];
   /** the burn flown now: its Δv left [m/s] */
   burn?: { left: number } | null;
+  /** the propellant: the Δv it still holds [m/s] (null: not counted), the tank's share */
+  budget?: { dv: number | null; prop: number | null } | null;
   bodies?: InstrumentBody[];
   target?: InstrumentTarget | null;
   sysx?: InstrumentSysx | null;
@@ -157,6 +159,11 @@ export function readSpace(x: Record<string, unknown>): InstrumentSpace {
       .filter((n): n is Record<string, unknown> => record(n) && finite(n.in) && v3(n.dv))
       .map((n) => ({ in: n.in as number, dv: [...(n.dv as V3)], role: label(n.role, 16) }));
   if (record(x.burn) && finite(x.burn.left)) out.burn = { left: x.burn.left };
+  if (record(x.budget))
+    out.budget = {
+      dv: finite(x.budget.dv) ? Math.max(0, x.budget.dv) : null,
+      prop: finite(x.budget.prop) ? Math.min(Math.max(x.budget.prop, 0), 1) : null,
+    };
   if (Array.isArray(x.bodies))
     out.bodies = x.bodies
       .slice(0, SPACE_BOUNDS.bodies)

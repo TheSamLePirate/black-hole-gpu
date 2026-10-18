@@ -111,6 +111,11 @@ export function crewSpace(c: CameraController, i: Info, status: RangerStatus | n
     role: n.role ?? "",
   }));
   out.burn = i.plan?.burning && nodes[0] ? { left: r1(Math.hypot(...nodes[0].dv) * C_MPS) } : null;
+  {
+    const dv = id === "f35" ? Number.NaN : c.fcBudget().dv;
+    const prop = id === "f35" ? null : (c.propellantOf(id)?.share ?? null);
+    out.budget = { dv: Number.isFinite(dv) ? Math.round(dv) : null, prop: prop === null ? null : r3(prop) };
+  }
   const tg = status?.target;
   out.target = tg
     ? {

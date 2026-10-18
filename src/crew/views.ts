@@ -16,9 +16,15 @@ import { drawRadar } from "./draw/radar";
 import { drawSystems, systemsHeight } from "./draw/systems";
 import { drawPlan, planHeight } from "./draw/plan";
 import { drawChart } from "./draw/chart";
+import { drawOrbit } from "./draw/orbit";
+import { drawAirStatus, drawSpaceStatus } from "./draw/spacestat";
+import type { CrewView } from "./profile";
 
-export type CrewView = "dash" | "pfd" | "nd" | "map" | "globe" | "radar" | "schematic" | "plan" | "telemetry";
+export type { CrewView } from "./profile";
 export const VIEW_NAMES: Record<CrewView, string> = {
+  air: "Mission aérienne",
+  sdash: "Tableau",
+  orbit: "Orbite",
   dash: "Tableau",
   pfd: "Vol",
   nd: "Navigation",
@@ -267,7 +273,8 @@ export class CrewViews {
     this.request();
   }
   zoomBy(k: number) {
-    if (this.view === "radar" || this.view === "nd" || this.view === "dash") this.range = clamp(this.range / k, 500, 2e7);
+    if (this.view === "radar" || this.view === "nd" || this.view === "dash" || this.view === "air")
+      this.range = clamp(this.range / k, 500, 2e7);
     else if (this.view === "telemetry") this.window = clamp(this.window / k, 10, 3600);
     else if (this.view === "map") this.zoom = clamp(this.zoom + Math.log2(k), 2, 18);
     else if (this.view === "globe") this.zoom = clamp(this.zoom * k, 0.7, 40);
@@ -352,6 +359,16 @@ export class CrewViews {
     switch (this.view) {
       case "dash":
         this.dash(r, sc);
+        break;
+      case "sdash":
+        this.sdash(r, sc);
+        break;
+      case "air":
+        this.air(r, sc);
+        animate = true;
+        break;
+      case "orbit":
+        drawOrbit(p, r, sc);
         break;
       case "pfd":
         p.panel(r);
@@ -461,7 +478,64 @@ export class CrewViews {
         align: "center",
       });
     }
-    return animate || (this.view === "dash" && blink);
+    return animate || ((this.view === "dash" || this.view === "sdash") && blink);
+  }
+  /** a dashboard's panel: drawn clipped, framed, touched to open its view */
+  private panelOf(view: CrewView, q: Rect, draw: () => void) {
+    const p = this.pen;
+    // (too small to draw: a phone's landscape strip)
+    if (q.w < 90 || q.h < 60) return;
+    this.ctx.save();
+    p.clip(q);
+    draw();
+    this.ctx.restore();
+    p.round(q.x + 0.5, q.y + 0.5, q.w - 1, q.h - 1, 10);
+    p.stroke("#1f3c4b", 1);
+    this.picks.push({ point: [q.x, q.y], view, r: q });
+  }
+  /** the spacecraft's dashboard (PLAN-VAISSEAUX K2): the orbit large, the attitude, the flight computer's column */
+  private sdash(r: Rect, sc: Scene) {
+    const p = this.pen,
+      g = 8;
+    const wide = r.w > r.h * 1.1;
+    if (wide) {
+      const c3 = Math.min(360, r.w * 0.3),
+        c1 = r.w - c3 - g;
+      const h1 = r.h * (r.w > 1100 ? 0.62 : 0.58);
+      this.panelOf("orbit", { x: r.x, y: r.y, w: c1, h: h1 }, () => drawOrbit(p, { x: r.x, y: r.y, w: c1, h: h1 }, sc));
+      const q = { x: r.x, y: r.y + h1 + g, w: c1, h: r.h - h1 - g };
+      this.panelOf("pfd", q, () => {
+        p.panel(q);
+        drawPfd(p, q, sc);
+      });
+      const s = { x: r.x + c1 + g, y: r.y, w: c3, h: r.h };
+      this.panelOf("sdash", s, () => drawSpaceStatus(p, s, sc));
+    } else {
+      const h1 = (r.h - g) * 0.45;
+      const o = { x: r.x, y: r.y, w: r.w, h: h1 };
+      this.panelOf("orbit", o, () => drawOrbit(p, o, sc, true));
+      const s = { x: r.x, y: r.y + h1 + g, w: r.w, h: r.h - h1 - g };
+      this.panelOf("sdash", s, () => drawSpaceStatus(p, s, sc));
+    }
+  }
+  /** the F-35's tactical console (PLAN-VAISSEAUX K2): the radar and the map side by side, the mission's strip */
+  private air(r: Rect, sc: Scene) {
+    const p = this.pen,
+      g = 8;
+    const sh = r.h < 360 ? 0 : Math.min(84, r.h * 0.2);
+    const top = { x: r.x, y: r.y, w: r.w, h: r.h - (sh ? sh + g : 0) };
+    const wide = top.w >= top.h;
+    const a = wide ? { ...top, w: (top.w - g) / 2 } : { ...top, h: (top.h - g) / 2 };
+    const b = wide ? { ...top, x: top.x + a.w + g, w: top.w - a.w - g } : { ...top, y: top.y + a.h + g, h: top.h - a.h - g };
+    this.panelOf("radar", a, () =>
+      drawRadar(p, a, sc, { range: this.range, north: this.north, sensor: this.sensor, selected: this.selectedContact }),
+    );
+    this.panelOf("map", b, () =>
+      drawGeo(p, b, sc, { globe: false, lat: this.lat, lon: this.lon, zoom: 8, tiles: this.tiles, dpr: this.dpr }),
+    );
+    if (!sh) return;
+    const m = { x: r.x, y: r.y + r.h - sh, w: r.w, h: sh };
+    this.panelOf("air", m, () => drawAirStatus(p, m, sc));
   }
   /** the dashboard: the PFD and the ND always, the systems, the plan, the map as the room allows */
   private dash(r: Rect, sc: Scene) {

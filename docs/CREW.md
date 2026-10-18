@@ -78,6 +78,24 @@ Toutes dessinées en canvas 2D, à la demande (nouvelles données, geste, lissag
 seuls le balayage du radar et une alerte clignotante entretiennent l'animation, à 30 images/s au plus. Le
 tampon suit la densité de l'écran, borné à ~4 Mpx.
 
+### Deux consoles : le F-35 ou le vaisseau
+
+La console prend le profil de l'appareil que pilote le joueur suivi (PLAN-VAISSEAUX K2, `src/crew/profile.ts`). Elle
+le lit dans le bloc `craft` de l'instantané ; pour un pilote plus ancien, dans les familles d'ordres (`weapons`
+signifie le F-35). Elle change d'elle-même quand le pilote change d'appareil : ses vues, leur ordre, ses tuiles, son
+thème et son badge. Une vue que l'autre profil possède aussi (le PFD, le globe, la télémétrie) est gardée ; sinon la
+console s'ouvre sur la première vue du profil.
+
+| profil | badge | vues, dans l'ordre | tuiles |
+|---|---|---|---|
+| F-35 (tactique, vert phosphore) | `F-35 · TACTIQUE` | **Mission aérienne** (radar et carte côte à côte, bandeau objectif · combat · arme · radar · verrou · emports · alertes ; le panneau d'armes dessous), Vol, Navigation, Radar, Carte, Globe, Tableau, Plan de vol, Systèmes, Télémétrie | altitude, vitesse, vario, Mach, charge, cap, carburant, hauteur sol |
+| Vaisseau (contrôle de mission, bleu) | `VAISSEAU · RANGER` | **Tableau** vaisseau (l'orbite en grand, l'attitude, la colonne de l'ordinateur de vol : Δv, ergols, poussées du plan, prochain événement, cible, systèmes, anneau et ports, horloges, liaison), **Orbite**, Vol, Globe, Télémétrie | Δv restant, ergols, périapside, apoapside, période, prochain événement, charge, dτ/dt, liaison |
+
+**Orbite** : la conique autour du corps de la sphère, vue de dessus de son plan (périapside en haut), reconstruite à
+partir de l'état reçu (`src/crew/orbitmath.ts`) ; le corps à l'échelle, Pe et Ap avec leurs hauteurs, le vaisseau,
+les poussées du plan là où elles tombent (Kepler), la branche d'une hyperbole et la trajectoire libre dans la
+sphère ; les éléments à côté.
+
 | vue | contenu |
 |---|---|
 | Tableau | PFD + ND ; sur grand écran aussi la carte et le plan de vol. Toucher un panneau l'ouvre |
