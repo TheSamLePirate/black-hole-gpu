@@ -13,6 +13,8 @@ export interface SystemsDeps {
   info(): SystemsInfo | null;
   fix(kind: FailureKind): string;
   toast(s: string): void;
+  /** the steps ticked, shared with the crew's consoles (the controller's — PLAN-VAISSEAUX K6) */
+  ticks?: Map<string, Set<number>>;
 }
 
 const fmtH = (hrs: number) =>
@@ -21,11 +23,13 @@ const fmtH = (hrs: number) =>
 export class SystemsPage {
   el = h("div", { class: "sy", "data-testid": "systems-page" });
   /** the steps ticked (kind or normal list → their indices) */
-  private ticked = new Map<string, Set<number>>();
+  private ticked: Map<string, Set<number>>;
   private normal = NORMAL_CHECKLISTS[0]!.id;
   private sig = "";
 
-  constructor(private d: SystemsDeps) {}
+  constructor(private d: SystemsDeps) {
+    this.ticked = d.ticks ?? new Map();
+  }
 
   live() {
     const I = this.d.info();
@@ -114,6 +118,7 @@ export class SystemsPage {
         testid: `systems-fix-${f.kind}`,
         onClick: () => {
           if (!all) return this.d.toast(t("The checklist first: every step ticked"));
+          this.ticked.delete(key);
           this.d.toast(this.d.fix(f.kind));
           this.sig = "";
         },

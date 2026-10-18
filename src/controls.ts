@@ -324,6 +324,9 @@ export class CameraController {
   } | null = null;
   /** Piloting the Ranger (on whenever the ship is): the flight computer and its last outputs. */
   readonly pilot = new FlightComputer();
+  /** the checklists' steps ticked (a failure's kind "f:<kind>" or a normal list "n:<id>" → their indices): shared by
+   *  the tablet's Systems page and the crew's consoles (PLAN-VAISSEAUX K6) */
+  readonly sysTicks = new Map<string, Set<number>>();
   /** when the flight began [s of the scene] (the crew's mission elapsed time — PLAN-VAISSEAUX K4); NaN: not yet */
   metT0 = Number.NaN;
   piloting = false;

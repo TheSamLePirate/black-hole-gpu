@@ -204,6 +204,26 @@ salle (« Brand · FIDO ») et la console vaisseau s'ouvre sur la vue de son pos
 - Le badge indique le poste et la liaison (« VAISSEAU · RANGER — FIDO · SOL +2 S », en rouge quand la liaison est
   coupée). La ligne d'état indique les mesures différées.
 
+## Les actions vaisseau (K6)
+
+Sous chaque vue de la console vaisseau, l'ordinateur de vol propose ses panneaux. Le premier est celui du poste, mis en
+avant : Systèmes pour EECOM et l'ingénieur, Manœuvre pour FIDO et le navigateur, Tenue pour GUIDO, Autopilote pour
+FLIGHT.
+
+| panneau | ordres |
+|---|---|
+| Tenue · Autopilote · Manœuvre · Mission · Plan | comme avant (PLAN-CREW-ACTIONS) |
+| **Cible** | `sp.target` : un corps, la station, un vaisseau par son nom |
+| **Amarrage** | `sp.dock` : maintien à poste, désamarrer, faire le plein, mode RCS |
+| **Systèmes** | chaque panne en cours avec sa checklist. Les cases sont **partagées** avec la tablette du pilote (`sys.step`) ; l'action (isoler le bloc, rallumer, passer sur la centrale de secours…) n'est permise qu'une fois toutes les étapes cochées (`sys.fix`) |
+| **Anneau** | `sp.ring` : l'anneau de l'Endurance plus ou moins vite |
+
+- **Carte système** : toucher un corps ouvre un menu : « Prendre pour cible », « Mission vers … — aperçu ».
+- **Orbite** : on fait glisser une poussée du plan le long de l'orbite. Son nouveau temps s'affiche pendant le geste
+  (Kepler) et la poussée est déplacée d'autant (`sp.node`).
+- Comme toujours, « tout sauf piloter » : liste blanche, verrou du pilote, 4 ordres par seconde. Un ordre refusé l'est
+  avec sa raison, dans la langue de la console.
+
 ## Commandes tactiles et radio
 
 Toutes les commandes sont accessibles sans clavier ni survol, en portrait et en paysage. Glisser déplace la

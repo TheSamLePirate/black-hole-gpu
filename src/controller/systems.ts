@@ -46,6 +46,8 @@ declare module "../controls" {
     systemsFix: typeof systemsFix;
     systemsFail: typeof systemsFail;
     systemsInfo: typeof systemsInfo;
+    systemsTick: typeof systemsTick;
+    systemsFixChecked: typeof systemsFixChecked;
     systemsOf: typeof systemsOf;
   }
 }
@@ -101,6 +103,29 @@ function systemsFix(this: CameraController, kind: FailureKind): string {
   return tf("{0}: under way", t(CHECKLISTS[kind].action));
 }
 
+/** A failure's checklist step ticked or not (the crew's console, the tablet — one list for both). What to say. */
+function systemsTick(this: CameraController, kind: FailureKind, step: number, on: boolean): string {
+  const L = CHECKLISTS[kind];
+  if (!L || !Number.isInteger(step) || step < 0 || step >= L.steps.length) return t("No such step");
+  const S = this.systemsOf(fleet.active);
+  if (!S?.failures.some((f) => f.kind === kind && !f.fixed)) return t("Nothing to fix");
+  const key = `f:${kind}`;
+  const done = this.sysTicks.get(key) ?? new Set<number>();
+  this.sysTicks.set(key, done);
+  if (on) done.add(step);
+  else done.delete(step);
+  return tf("{0}: {1}/{2}", t(L.title), done.size, L.steps.length);
+}
+
+/** A failure's action given, once its checklist is all ticked (the crew's discipline — its order refused before). */
+function systemsFixChecked(this: CameraController, kind: FailureKind): string {
+  const L = CHECKLISTS[kind];
+  const done = this.sysTicks.get(`f:${kind}`);
+  if (!L || !done || done.size < L.steps.length) return t("The checklist first: every step ticked");
+  this.sysTicks.delete(`f:${kind}`);
+  return this.systemsFix(kind);
+}
+
 /** A failure now (a scenario's, a test's, the crew's drill). */
 function systemsFail(this: CameraController, kind: FailureKind): string {
   const S = this.systemsOf(fleet.active);
@@ -136,5 +161,14 @@ function systemsInfo(this: CameraController): SystemsInfo | null {
 }
 
 export function installSystems(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { systemsStep, systemsEffects, systemsFix, systemsFail, systemsInfo, systemsOf });
+  Object.assign(C.prototype, {
+    systemsStep,
+    systemsEffects,
+    systemsFix,
+    systemsFail,
+    systemsInfo,
+    systemsOf,
+    systemsTick,
+    systemsFixChecked,
+  });
 }

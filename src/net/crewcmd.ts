@@ -55,6 +55,15 @@ export const MANEUVERS = [
   "align_over_site",
 ] as const;
 export const WEAPON_NAMES: Record<string, string> = { aim120: "AIM-120 AMRAAM", aim9x: "AIM-9X", jdam: "GBU-32 JDAM", jsm: "JSM" };
+/** the spacecraft's failures (game/systems.ts) by a short name */
+export const SYS_NAMES: Record<string, { fr: string; en: string }> = {
+  engine: { fr: "moteur éteint", en: "engine out" },
+  rcsStuck: { fr: "RCS bloqué", en: "RCS stuck" },
+  gyro: { fr: "centrale inertielle", en: "IMU drift" },
+  bus: { fr: "court-circuit du bus", en: "bus short" },
+  o2Leak: { fr: "fuite d'oxygène", en: "oxygen leak" },
+  scrubber: { fr: "épurateur", en: "scrubber" },
+};
 export const HOLD_FR: Record<string, string> = {
   prograde: "prograde",
   retrograde: "rétrograde",
@@ -359,6 +368,65 @@ export const ACTS = {
     say: (a) => ({ fr: `cible : ${String(a.name).slice(0, 24)}`, en: `target: ${String(a.name).slice(0, 24)}` }),
   },
   "sp.release": { fam: "space", say: () => ({ fr: "autopilote et tenue relâchés", en: "autopilot and hold released" }) },
+  // (PLAN-VAISSEAUX K6: the docking's — undock, refuel, keep station, the RCS's mode —, the Endurance's ring, the plan's
+  // burns moved in time or removed, the systems' checklists ticked and their actions given)
+  "sp.dock": {
+    fam: "space",
+    params: { action: { type: "string", enum: ["undock", "refuel", "keep", "rcs"] } },
+    required: ["action"],
+    say: (a) =>
+      ({
+        undock: { fr: "désamarrage", en: "undock" },
+        refuel: { fr: "plein depuis le vaisseau amarré", en: "refuel from the docked craft" },
+        keep: { fr: "maintien à poste", en: "station keeping" },
+        rcs: { fr: "mode RCS basculé", en: "RCS mode switched" },
+      })[String(a.action)] ?? { fr: "amarrage", en: "docking" },
+  },
+  "sp.ring": {
+    fam: "space",
+    params: { dir: { type: "number", minimum: -1, maximum: 1, integer: true } },
+    required: ["dir"],
+    say: (a) => (a.dir === 1 ? { fr: "anneau plus vite", en: "ring faster" } : { fr: "anneau moins vite", en: "ring slower" }),
+  },
+  "sp.node": {
+    fam: "space",
+    params: {
+      action: { type: "string", enum: ["shift", "delete"] },
+      index: { type: "number", minimum: 0, maximum: 15, integer: true },
+      dtS: { type: "number", minimum: -1e7, maximum: 1e7 },
+    },
+    required: ["action", "index"],
+    say: (a) =>
+      a.action === "delete"
+        ? { fr: `poussée ${Number(a.index) + 1} supprimée`, en: `burn ${Number(a.index) + 1} removed` }
+        : {
+            fr: `poussée ${Number(a.index) + 1} déplacée de ${Math.round(Number(a.dtS ?? 0))} s`,
+            en: `burn ${Number(a.index) + 1} moved ${Math.round(Number(a.dtS ?? 0))} s`,
+          },
+  },
+  // (the failures' short names, the console's French and the pilot's English)
+  "sys.step": {
+    fam: "space",
+    params: {
+      kind: { type: "string", enum: ["engine", "rcsStuck", "gyro", "bus", "o2Leak", "scrubber"] },
+      step: { type: "number", minimum: 0, maximum: 11, integer: true },
+      on: { type: "boolean" },
+    },
+    required: ["kind", "step", "on"],
+    say: (a) => ({
+      fr: `checklist ${SYS_NAMES[String(a.kind)]?.fr ?? a.kind} : étape ${Number(a.step) + 1} ${a.on ? "faite" : "décochée"}`,
+      en: `checklist ${SYS_NAMES[String(a.kind)]?.en ?? a.kind}: step ${Number(a.step) + 1} ${a.on ? "done" : "unticked"}`,
+    }),
+  },
+  "sys.fix": {
+    fam: "space",
+    params: { kind: { type: "string", enum: ["engine", "rcsStuck", "gyro", "bus", "o2Leak", "scrubber"] } },
+    required: ["kind"],
+    say: (a) => ({
+      fr: `action de panne : ${SYS_NAMES[String(a.kind)]?.fr ?? a.kind}`,
+      en: `failure action: ${SYS_NAMES[String(a.kind)]?.en ?? a.kind}`,
+    }),
+  },
   // the F-35's weapons (the backseater's): the radar, the weapon, the lock, the shots, the decoys
   "wp.radar": {
     fam: "weapons",

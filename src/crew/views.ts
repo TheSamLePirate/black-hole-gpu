@@ -16,7 +16,8 @@ import { drawRadar } from "./draw/radar";
 import { drawSystems, systemsHeight } from "./draw/systems";
 import { drawPlan, planHeight } from "./draw/plan";
 import { drawChart } from "./draw/chart";
-import { drawOrbit } from "./draw/orbit";
+import { drawOrbit, type OrbitPicks } from "./draw/orbit";
+import { timeBetween } from "./orbitmath";
 import { drawNavball } from "./draw/navball";
 import { drawBudget, drawDock, drawEecom, drawGround, drawRelativity, drawTimeline } from "./draw/spaceviews";
 import { defaultMapState, drawSystemMap } from "./draw/system";
@@ -87,6 +88,13 @@ export class CrewViews {
   readonly map3d = defaultMapState();
   readonly sysRenderer = new SystemRenderer(() => this.request());
   mapSpan = 0;
+  /** what a finger can take: the map's bodies, the orbit's burns (and the one dragged) */
+  private mapBodies: { id: string; x: number; y: number; r: number }[] = [];
+  private orbitPicks: OrbitPicks | null = null;
+  private nodeDrag: { i: number; x: number; y: number; nu: number } | null = null;
+  /** a body touched on the map; a burn moved along the orbit [s] */
+  onBody: (id: string, x: number, y: number) => void = () => {};
+  onNodeMove: (i: number, dtS: number) => void = () => {};
   private dpr = 1;
   private ctx: CanvasRenderingContext2D;
   private pen: Pen;
@@ -123,6 +131,12 @@ export class CrewViews {
       this.moved = 0;
       this.pinch = this.spread();
       if (this.view === "telemetry") this.scrub(e.clientX);
+      // (a burn under the finger on the orbit: dragged along it)
+      if (this.view === "orbit" && this.pointers.size === 1 && this.orbitPicks) {
+        const [x, y] = this.local(e);
+        const n = this.orbitPicks.nodes.find((q) => Math.hypot(q.x - x, q.y - y) < 18);
+        this.nodeDrag = n ? { i: n.i, x, y, nu: n.nu } : null;
+      }
       // (a waypoint under the finger on the map or the ND: dragged, not the map)
       if (this.pointers.size === 1 && (this.view === "map" || this.view === "nd")) {
         const [x, y] = this.local(e);
@@ -161,6 +175,11 @@ export class CrewViews {
       // (moved before it was held: the map, not the waypoint)
       if (this.drag && !this.drag.armed && this.moved >= 8) this.drag = null;
       if (this.drag) return;
+      if (this.nodeDrag && this.pointers.size === 1) {
+        [this.nodeDrag.x, this.nodeDrag.y] = this.local(e);
+        this.request();
+        return;
+      }
       if (this.pointers.size > 1) {
         const d = this.spread();
         if (this.pinch > 0 && d > 0) this.zoomBy(d / this.pinch);
@@ -185,6 +204,28 @@ export class CrewViews {
       const [x, y] = this.local(e);
       const drag = this.drag;
       this.drag = null;
+      // (a burn dropped somewhere along the orbit: its new time)
+      const nd = this.nodeDrag;
+      this.nodeDrag = null;
+      if (nd && this.orbitPicks && this.moved >= 8) {
+        const dt = timeBetween(this.orbitPicks.o, nd.nu, this.orbitPicks.toNu(x, y));
+        if (Number.isFinite(dt) && Math.abs(dt) >= 1) this.onNodeMove(nd.i, Math.round(dt));
+        this.pointers.delete(e.pointerId);
+        this.request();
+        return;
+      }
+      // (a body touched on the map)
+      if (this.view === "system" && this.moved < 8) {
+        const b = this.mapBodies
+          .map((q) => ({ q, d: Math.hypot(q.x - x, q.y - y) }))
+          .filter((o) => o.d < Math.max(o.q.r, 14))
+          .sort((a, b2) => a.d - b2.d)[0];
+        if (b) {
+          this.onBody(b.q.id, x, y);
+          this.pointers.delete(e.pointerId);
+          return;
+        }
+      }
       if (drag && this.pointers.size === 1) {
         // (a waypoint dropped somewhere new, or touched where it was)
         const at = drag.moved ? this.unproject?.(x, y) : null;
@@ -391,11 +432,14 @@ export class CrewViews {
         animate = true;
         break;
       case "orbit":
-        drawOrbit(p, r, sc);
+        this.orbitPicks = drawOrbit(p, r, sc, false, this.nodeDrag);
         break;
-      case "system":
-        this.mapSpan = drawSystemMap(p, r, sc, this.map3d, this.sysRenderer, this.dpr);
+      case "system": {
+        const m = drawSystemMap(p, r, sc, this.map3d, this.sysRenderer, this.dpr);
+        this.mapSpan = m.span;
+        this.mapBodies = m.bodies;
         break;
+      }
       case "navball":
         drawNavball(p, r, sc);
         break;

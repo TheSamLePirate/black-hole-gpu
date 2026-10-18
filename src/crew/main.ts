@@ -9,7 +9,9 @@ import { CrewRadio } from "./radio";
 import { bindTalk } from "./ptt";
 import { CrewViews, VIEW_NAMES, type CrewView } from "./views";
 import { dur } from "./draw/kit";
-import { linkFor, Outbox, type Station, STATIONS, stationOf } from "./station";
+import { bodyName } from "./draw/orbit";
+import { linkFor, Outbox, type Station, type StationId, STATIONS, stationOf } from "./station";
+import { CHECKLISTS_FR } from "./checklists";
 import { type CrewProfile, PROFILE_TILES, PROFILE_VIEWS, profileOf, type TileKey, viewIn } from "./profile";
 import { CrewActions, type Done } from "./actions";
 import { ACTS, type Act, AUTO_FR, AUTOS, HOLD_FR, HOLDS, MANEUVER_FR, MANEUVERS } from "../net/crewcmd";
@@ -596,7 +598,8 @@ function setView(view: CrewView) {
     "ground",
   ].includes(view);
   if (view === "system") views.map3d.ahead = 0;
-  mcp.hidden = view !== "pfd" && view !== "dash" && view !== "radar" && view !== "air" && view !== "sdash";
+  // (the spacecraft's flight computer under every view of its console — K6: each station acts from its own)
+  mcp.hidden = profile !== "space" && view !== "pfd" && view !== "dash" && view !== "radar" && view !== "air";
   syncMcpKind();
   $("views").querySelector<HTMLElement>(`[data-view=${view}]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
   controls();
@@ -632,7 +635,7 @@ function syncBadge() {
   const c = snapNow()?.craft;
   // (a spacecraft's console: the station, aboard or on the ground — and the light's time from there)
   const L = model.selected !== null ? model.linkOf(model.selected) : { delay: 0, cut: false };
-  const where = station.place === "aboard" ? "à bord" : L.cut ? "sol · liaison coupée" : L.delay > 0 ? `sol +${dur(L.delay)}` : "sol";
+  const where = station.place === "aboard" ? "à bord" : L.cut ? "sol · liaison coupée" : L.delay >= 0.5 ? `sol +${dur(L.delay)}` : "sol";
   $("profile-badge").textContent =
     profile === "jet"
       ? `${c?.name ?? "F-35"} · TACTIQUE`.toUpperCase()
@@ -772,7 +775,9 @@ function tiles(own: ReturnType<typeof model.own>) {
           break;
         case "dv": {
           const dv = snap?.budget?.dv;
-          text = dv === null ? "∞" : fmt0(dv);
+          // (a big one in km/s: the tile is narrow)
+          text = dv === null ? "∞" : dv !== undefined && dv >= 100_000 ? fmt0(dv / 1000, 1) : fmt0(dv);
+          if (dv != null && dv >= 100_000) unit = "km/s";
           state = dv != null && dv < 200 ? "warn" : "";
           break;
         }
@@ -945,8 +950,10 @@ function syncActs() {
   for (const b of document.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLSelectElement>("[data-act]")) {
     const fam = ACTS[b.dataset.act as Act]?.fam;
     const can = fam ? actions.can(fam) : { ok: false, why: "" };
-    b.disabled = !can.ok;
-    b.title = can.ok ? "" : can.why;
+    // (a control held back for its own reason — a failure's action before its checklist is ticked: K6)
+    const held = b.dataset.held ?? "";
+    b.disabled = !can.ok || !!held;
+    b.title = !can.ok ? can.why : held;
   }
 }
 // ---- the MCP (PLAN-CREW-ACTIONS A3): the aircraft's autopilot set as a copilot sets it — under the PFD and the dashboard
@@ -1027,10 +1034,14 @@ function syncMcpKind() {
   if (views.view === "radar" || views.view === "air") mcp.hidden = !fam.includes("weapons");
   if (mcp.hidden) return;
   const kind = views.view === "radar" || views.view === "air" ? "arms" : fam.includes("space") && !fam.includes("jet") ? "space" : "jet";
-  if (mcp.dataset.kind === kind && mcp.childElementCount) return;
+  // (the spacecraft's panel rebuilt for another station or craft — its pops' order, the Endurance's ring)
+  const sig = kind === "space" ? `space:${station.id}:${!!snapNow()?.craft?.ring}` : kind;
+  if (mcp.dataset.kind === sig && mcp.childElementCount) return;
   if (kind === "arms") buildArms();
-  else if (kind === "space") buildFc();
-  else buildMcp();
+  else if (kind === "space") {
+    buildFc();
+    mcp.dataset.kind = sig;
+  } else buildMcp();
 }
 /** the F-35's weapons (PLAN-CREW-ACTIONS A5), the backseater's: the radar, the weapon, the lock, the shots, the decoys */
 function buildArms() {
@@ -1244,10 +1255,15 @@ function buildFc() {
   );
   const sCard = el("div", "", "fc-card");
   const mission = (execute: boolean): Args => ({ target: target.value.trim().slice(0, 32), arrival: arrival.value, execute });
-  const sw = el("div", "", "mcp-sw");
-  sw.append(
-    fcPop("Tenue", [hold, actButton("Tenir", "sp.hold", () => ({ direction: hold.value }), "fc-hold")]),
-    fcPop("Autopilote", [
+  // the target (sp.target: a body, the station, a craft of the room by its name)
+  const tgt = field("Cible", "Lune, Mars, ISS, Endurance…");
+  // the systems (X3 · K6): each failure's checklist, its steps ticked here as on the pilot's tablet, its action once
+  // all are — rebuilt as the pilot's figures change (syncSys)
+  const sys = el("div", "", "fc-sys");
+  sys.id = "fc-sys";
+  const pops: Record<string, HTMLElement> = {
+    hold: fcPop("Tenue", [hold, actButton("Tenir", "sp.hold", () => ({ direction: hold.value }), "fc-hold")]),
+    auto: fcPop("Autopilote", [
       auto,
       site,
       upAlt,
@@ -1262,7 +1278,7 @@ function buildFc() {
         "fc-auto",
       ),
     ]),
-    fcPop("Manœuvre", [
+    maneuver: fcPop("Manœuvre", [
       op,
       where,
       mAlt,
@@ -1283,7 +1299,7 @@ function buildFc() {
       ),
       mCard,
     ]),
-    fcPop("Mission", [
+    mission: fcPop("Mission", [
       target,
       arrival,
       actButton(
@@ -1302,13 +1318,91 @@ function buildFc() {
       ),
       sCard,
     ]),
-    fcPop("Plan", [
+    plan: fcPop("Plan", [
       actButton("Exécuter le plan", "sp.plan", { action: "execute" }, "fc-plan-run"),
       actButton("Effacer le plan", "sp.plan", { action: "clear" }, "fc-plan-clear"),
     ]),
-    actButton("Relâcher", "sp.release", {}, "fc-release"),
-  );
+    target: fcPop("Cible", [
+      tgt,
+      actButton("Prendre pour cible", "sp.target", () => ({ name: tgt.value.trim().slice(0, 32) }), "fc-target"),
+    ]),
+    dock: fcPop("Amarrage", [
+      actButton("Maintien à poste", "sp.dock", { action: "keep" }, "fc-keep"),
+      actButton("Désamarrer", "sp.dock", { action: "undock" }, "fc-undock"),
+      actButton("Faire le plein", "sp.dock", { action: "refuel" }, "fc-refuel"),
+      actButton("Mode RCS", "sp.dock", { action: "rcs" }, "fc-rcs"),
+    ]),
+    systems: fcPop("Systèmes", [sys]),
+    ...(snapNow()?.craft?.ring
+      ? {
+          ring: fcPop("Anneau", [
+            actButton("Anneau −", "sp.ring", { dir: -1 }, "fc-ring-down"),
+            actButton("Anneau +", "sp.ring", { dir: 1 }, "fc-ring-up"),
+          ]),
+        }
+      : {}),
+  };
+  // (the station's own first — PLAN-VAISSEAUX K6: FIDO the trajectory's, GUIDO the attitude's, EECOM the systems')
+  const order: Record<StationId, string[]> = {
+    copilot: ["hold", "auto", "maneuver", "plan", "dock", "target", "mission", "systems", "ring"],
+    nav: ["maneuver", "mission", "plan", "target", "hold", "auto", "dock", "systems", "ring"],
+    engineer: ["systems", "ring", "dock", "hold", "auto", "maneuver", "plan", "target", "mission"],
+    flight: ["auto", "hold", "maneuver", "mission", "plan", "dock", "systems", "target", "ring"],
+    fido: ["maneuver", "mission", "plan", "target", "auto", "hold", "dock", "systems", "ring"],
+    guido: ["hold", "auto", "dock", "target", "maneuver", "plan", "mission", "systems", "ring"],
+    eecom: ["systems", "ring", "dock", "hold", "auto", "maneuver", "plan", "mission", "target"],
+    capcom: ["hold", "auto", "plan", "dock", "systems", "maneuver", "mission", "target", "ring"],
+  };
+  const sw = el("div", "", "mcp-sw");
+  const keys = order[station.id].filter((k) => pops[k]);
+  keys.forEach((k, i) => {
+    if (i === 0) pops[k]!.classList.add("featured");
+    sw.append(pops[k]!);
+  });
+  sw.append(actButton("Relâcher", "sp.release", {}, "fc-release"));
   mcp.append(sw);
+  sysKey = "";
+  syncSys();
+  syncActs();
+}
+
+/** the Systems pop's failures and their checklists from the pilot's figures (K6), rebuilt when they change */
+let sysKey = "";
+function syncSys() {
+  const box = document.getElementById("fc-sys");
+  if (!box) return;
+  const F = snapNow()?.sysx?.failures ?? [];
+  const key = JSON.stringify(F);
+  if (key === sysKey) return;
+  sysKey = key;
+  if (!F.length) {
+    box.replaceChildren(el("p", "Aucune panne — systèmes nominaux.", "muted small"));
+    return;
+  }
+  box.replaceChildren(
+    ...F.map((f) => {
+      const L = CHECKLISTS_FR[f.kind];
+      const card = el("div", "", "fc-card");
+      card.append(el("strong", L?.title ?? f.kind));
+      const ticks = new Set(f.ticks ?? []);
+      (L?.steps ?? []).forEach((st, i) => {
+        const lab = document.createElement("label");
+        lab.className = "fc-step";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = ticks.has(i);
+        cb.dataset.testid = `sys-step-${f.kind}-${i}`;
+        cb.addEventListener("change", () => void fire(null, "sys.step", { kind: f.kind, step: i, on: cb.checked }));
+        lab.append(cb, document.createTextNode(` ${st}`));
+        card.append(lab);
+      });
+      const all = (L?.steps ?? []).every((_, i) => ticks.has(i));
+      const b = actButton(f.fixing ? "En cours…" : (L?.action ?? "Action"), "sys.fix", { kind: f.kind }, `sys-fix-${f.kind}`);
+      if (!all || f.fixing) b.dataset.held = f.fixing ? "Réparation en cours" : "La checklist d'abord : toutes les étapes cochées";
+      card.append(b);
+      return card;
+    }),
+  );
   syncActs();
 }
 
@@ -1440,6 +1534,7 @@ function refresh() {
   board();
   syncMcpKind();
   syncMcp();
+  syncSys();
   const followed = room?.members.find((m) => m.slot === model.selected);
   $("pilot-dot").style.background = followed?.colour ?? "#4d606b";
   $("freshness").textContent =
@@ -1703,6 +1798,16 @@ views.onWp = (i, x, y) => {
 };
 views.onMoveWp = (i, at) =>
   void fire(null, "nav.move", { index: i, lat: Math.round(at.lat * 1e5) / 1e5, lon: Math.round(at.lon * 1e5) / 1e5 });
+// a body touched on the system map (K6): taken for the target, a mission previewed to it
+views.onBody = (id, x, y) => {
+  const name = bodyName(id);
+  menu(x, y, name, "Carte système", [
+    actButton("Prendre pour cible", "sp.target", { name: id }, "ctx-body-target", (ok) => ok && closeMenu()),
+    actButton(`Mission vers ${name} — aperçu`, "sp.mission", { target: id, arrival: "orbit", execute: false }, "ctx-body-mission"),
+  ]);
+};
+// a burn dragged along the orbit (K6): its new time
+views.onNodeMove = (i, dtS) => void fire(null, "sp.node", { action: "shift", index: i, dtS });
 views.onGround = (at, x, y) => {
   const snap = snapNow();
   const own = model.own();

@@ -138,3 +138,12 @@ test("the projection: the focus at the view's centre; the log scale brings the f
   // (log: the Earth's distance grows against Mars's — the inner system opened up)
   expect(near(L) / far(L)).toBeGreaterThan(near(P) / far(P));
 });
+
+test("the time between two true anomalies: a quarter of a circular orbit a quarter of its period, either way", async () => {
+  const { conicOf, timeBetween } = await import("../src/crew/orbitmath");
+  const mu = 398600.4418,
+    r = 6771;
+  const o = conicOf([r, 0, 0], [0, Math.sqrt(mu / r), 0], mu)!;
+  expect(timeBetween(o, 0, Math.PI / 2) / o.period).toBeCloseTo(0.25, 6);
+  expect(timeBetween(o, Math.PI / 2, 0) / o.period).toBeCloseTo(-0.25, 6);
+});

@@ -26,8 +26,16 @@ const lengthLabel = (x: number, unit: "km" | "M") =>
         ? `${fmt(x / 1e6, 1)} Mkm`
         : `${fmt(x)} km`;
 
-/** The view; returns the longest prediction it can scroll [s] (the slider's end). */
-export function drawSystemMap(p: Pen, r: Rect, sc: Scene, st: SystemMapState, R: SystemRenderer, dpr: number): number {
+/** The view; returns the longest prediction it can scroll [s] (the slider's end) and the bodies on the screen (a finger
+ *  takes one for the target — K6). */
+export function drawSystemMap(
+  p: Pen,
+  r: Rect,
+  sc: Scene,
+  st: SystemMapState,
+  R: SystemRenderer,
+  dpr: number,
+): { span: number; bodies: { id: string; x: number; y: number; r: number }[] } {
   p.panel(r);
   const scene = systemScene(sc.snap, st.focus, st.ahead);
   if (!scene) {
@@ -42,7 +50,7 @@ export function drawSystemMap(p: Pen, r: Rect, sc: Scene, st: SystemMapState, R:
         align: "center",
       },
     );
-    return 0;
+    return { span: 0, bodies: [] };
   }
   R.start();
   const P = project(scene, st.cam, r.w, r.h);
@@ -138,5 +146,5 @@ export function drawSystemMap(p: Pen, r: Rect, sc: Scene, st: SystemMapState, R:
     ly += 15;
   }
   c.restore();
-  return scene.span;
+  return { span: scene.span, bodies: P.discs.map((d) => ({ id: d.id, x: r.x + d.x, y: r.y + d.y, r: d.r })) };
 }

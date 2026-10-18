@@ -141,7 +141,7 @@ export function crewSpace(c: CameraController, i: Info, status: RangerStatus | n
         o2h: r1(S.o2Hours),
         scrub: r1(S.scrubDays),
         crew: S.crew,
-        failures: S.failures.map((f) => ({ kind: f.kind, fixing: f.fixing })),
+        failures: S.failures.map((f) => ({ kind: f.kind, fixing: f.fixing, ticks: [...(c.sysTicks.get(`f:${f.kind}`) ?? [])].sort() })),
       }
     : null;
   if (!Number.isFinite(c.metT0)) c.metT0 = t;

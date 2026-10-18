@@ -81,7 +81,8 @@ export interface InstrumentSysx {
   o2h: number;
   scrub: number;
   crew: number;
-  failures: { kind: string; fixing: boolean }[];
+  /** each failure under way, its checklist's steps ticked (shared by the tablet and the consoles — K6) */
+  failures: { kind: string; fixing: boolean; ticks?: number[] }[];
 }
 /** The clocks: the warp, the room's time [s] (the scene's — the far-away clock, the Earth's), the craft's dτ/dt and
  *  its own clock's time [s] (the gap between the two: the time gone by on the Earth for the crew's hour). */
@@ -259,7 +260,13 @@ export function readSpace(x: Record<string, unknown>): InstrumentSpace {
         ? y.failures
             .slice(0, SPACE_BOUNDS.failures)
             .filter(record)
-            .map((f) => ({ kind: label(f.kind, 16), fixing: f.fixing === true }))
+            .map((f) => ({
+              kind: label(f.kind, 16),
+              fixing: f.fixing === true,
+              ...(Array.isArray(f.ticks)
+                ? { ticks: f.ticks.slice(0, 12).filter((k): k is number => Number.isInteger(k) && k >= 0 && k < 12) }
+                : {}),
+            }))
         : [],
     };
   const ti = x.time;

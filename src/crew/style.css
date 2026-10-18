@@ -1658,3 +1658,16 @@ body[data-profile="jet"] .profile-badge {
   color: var(--red);
   border-color: var(--red);
 }
+
+/* the spacecraft's flight computer's pops (PLAN-VAISSEAUX K6): the station's own first, the systems' checklists */
+.fc-pop.featured > summary {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.fc-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  margin: 4px 0;
+}

@@ -102,3 +102,26 @@ export function conicPoints(o: Conic, rMax: number, n = 180): [number, number][]
 
 /** A point of the frame [km] in the conic's plane (x toward the periapsis, y 90° on). */
 export const inPlane = (o: Conic, q: V3): [number, number] => [dot(q, o.P), dot(q, o.Q)];
+
+/** The time from one true anomaly to another along the conic [s]: the shortest way about an ellipse (within half a
+ *  period, either side), along a hyperbola's arm as it is flown. */
+export function timeBetween(o: Conic, nu1: number, nu2: number): number {
+  const { e, mu } = o;
+  if (e < 1) {
+    const n = Math.sqrt(mu / (o.a * o.a * o.a));
+    const M = (nu: number) => {
+      const E = 2 * Math.atan2(Math.sqrt(1 - e) * Math.sin(nu / 2), Math.sqrt(1 + e) * Math.cos(nu / 2));
+      return E - e * Math.sin(E);
+    };
+    let dM = M(nu2) - M(nu1);
+    dM = Math.atan2(Math.sin(dM), Math.cos(dM));
+    return dM / n;
+  }
+  const A = -o.a;
+  const n = Math.sqrt(mu / (A * A * A));
+  const M = (nu: number) => {
+    const H = 2 * Math.atanh(Math.sqrt((e - 1) / (e + 1)) * Math.tan(nu / 2));
+    return e * Math.sinh(H) - H;
+  };
+  return (M(nu2) - M(nu1)) / n;
+}

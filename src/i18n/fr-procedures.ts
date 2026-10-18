@@ -328,4 +328,5 @@ export default {
   "Rendezvous: {0} · {1} km": "Rendez-vous : {0} · {1} km",
   "Orbit off — the stick": "Orbite coupée — le manche",
   "Assistance: {0}": "Assistance : {0}",
+  "No such step": "Pas d'étape de ce numéro",
 } satisfies Record<string, string>;
