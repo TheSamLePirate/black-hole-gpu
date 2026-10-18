@@ -16,6 +16,7 @@ import { dryThrust, fuelFlow } from "./engine";
 import type { F35Pose } from "./model";
 import type { PcdData, PcdField } from "./pcd";
 import { STOVL } from "./stovl";
+import { GUN } from "../game/combat";
 
 type V3 = [number, number, number];
 
@@ -57,6 +58,7 @@ export function pcdData(
   const fuel = fleet.fuel.f35 ?? V.fuelKg ?? 0;
   const st = c.stovl;
   const m = c.jetModes;
+  const RH = c.radarHud();
   return {
     units: s.units,
     time: date,
@@ -98,20 +100,50 @@ export function pcdData(
     ap: { alt: m.alt, hdg: m.hdg, spd: m.spd },
     fields: FIELDS,
     // (the radar's picture — controller/radar.ts —: its tracks on the TSD's map)
-    tracks: (() => {
-      const RH = c.radarHud();
-      return (RH?.contacts ?? []).map((T) => ({
-        e: T.e,
-        n: T.n,
-        hdg: T.trk === null ? null : T.trk + RH!.heading,
-        iff: T.iff ?? "unknown",
-        air: T.air,
-        locked: T.locked,
-        datalink: !!T.datalink,
-        name: T.name,
-        colour: T.datalink ? T.colour : undefined,
-      }));
-    })(),
+    tracks: (RH?.contacts ?? []).map((T) => ({
+      e: T.e,
+      n: T.n,
+      hdg: T.trk === null ? null : T.trk + RH!.heading,
+      iff: T.iff ?? "unknown",
+      air: T.air,
+      locked: T.locked,
+      datalink: !!T.datalink,
+      name: T.name,
+      colour: T.datalink ? T.colour : undefined,
+    })),
+    // (the radar's own page, FCR: its mode, its beam, its contacts heading up, the lock's figures)
+    fcr: RH
+      ? {
+          mode: RH.mode,
+          beam: RH.beam,
+          contacts: RH.contacts.map((T) => ({
+            x: T.x,
+            y: T.y,
+            dz: T.dz,
+            trk: T.trk,
+            iff: T.iff ?? "unknown",
+            air: T.air,
+            locked: T.locked,
+            datalink: !!T.datalink,
+            name: T.name,
+          })),
+          lock: RH.lock
+            ? {
+                name: RH.lock.name,
+                iff: RH.lock.iff ?? "unknown",
+                range: RH.lock.range,
+                closure: RH.lock.closure,
+                alt: RH.lock.alt,
+                hdg: RH.lock.hdg,
+                gs: RH.lock.gs,
+              }
+            : null,
+        }
+      : null,
+    // (the weapons, SMS: a fight running, the weapon chosen, the stores left)
+    arms: c.combat
+      ? { live: c.combat.status === "run", sel: c.combat.weapon, stores: { ...c.combat.world.stores }, gunFull: GUN.rounds }
+      : null,
     route: c.nav.route.wps.length
       ? {
           wps: c.nav.route.wps,
@@ -125,7 +157,7 @@ export function pcdData(
       : null,
     bingo: c.routeBingo(),
     alerts,
-    damage: c.combat?.world.damage ?? 0,
+    damage: (c.combat?.world.damage ?? 0) / 100,
     // (a mission's places — controller/mission.ts —: its zones, the SAMs' reach)
     marks: c.mission
       ? c

@@ -10,8 +10,15 @@ import { type Units, type UnitSys, unitsOf } from "../ui/unitsys";
 
 type V3 = [number, number, number];
 
-export type PcdPage = "TSD" | "FCS" | "ENG" | "FUEL" | "STOVL" | "CNI" | "ADI" | "CKL" | "ICAWS";
-export const PCD_PAGES: PcdPage[] = ["TSD", "FCS", "ENG", "FUEL", "STOVL", "CNI", "ADI", "CKL", "ICAWS"];
+export type PcdPage = "TSD" | "FCR" | "SMS" | "FCS" | "ENG" | "FUEL" | "STOVL" | "CNI" | "ADI" | "CKL" | "ICAWS";
+export const PCD_PAGES: PcdPage[] = ["TSD", "FCR", "SMS", "FCS", "ENG", "FUEL", "STOVL", "CNI", "ADI", "CKL", "ICAWS"];
+/** What a touch asks of the craft (main.ts carries it out through the controller): a weapon chosen, the radar's
+ *  mode, the radar's next lock, the countermeasures — never a shot. */
+export type PcdAction =
+  | { kind: "weapon"; w: "aim120" | "aim9x" | "jdam" | "jsm" }
+  | { kind: "radar"; mode: "RWS" | "TWS" | "STT" }
+  | { kind: "lock" }
+  | { kind: "cm" };
 
 /** An airfield on the map (lat, lon [°], its runway's heading [°], its name and ICAO code). */
 export interface PcdField {
@@ -104,6 +111,33 @@ export interface PcdData {
   marks?: { kind: "zone" | "threat"; lat: number; lon: number; r: number; label: string; active: boolean }[];
   /** in a fight, the damage taken (0…1) */
   damage?: number;
+  /** the radar (controller/radar.ts radarHud): its mode, its beam's azimuth off the nose [rad], its contacts heading
+   *  up — x right, y ahead, dz above [m], their way off the nose [rad] (null: not measured) —, the lock's figures
+   *  (range [m], closure [m/s], altitude [m], heading [rad], ground speed [m/s]); null: no radar (not flying) */
+  fcr?: {
+    mode: "RWS" | "TWS" | "STT";
+    beam: number;
+    contacts: {
+      x: number;
+      y: number;
+      dz: number;
+      trk: number | null;
+      iff: string;
+      air: boolean;
+      locked: boolean;
+      datalink: boolean;
+      name: string;
+    }[];
+    lock: { name: string; iff: string; range: number; closure: number; alt: number; hdg: number; gs: number } | null;
+  } | null;
+  /** the weapons (controller/combat.ts): a fight running, the weapon chosen, the stores left (null: no fight yet) */
+  arms?: {
+    live: boolean;
+    sel: string;
+    stores: { aim120: number; aim9x: number; jdam: number; jsm: number; gun: number; flares: number };
+    /** the gun's rounds when full */
+    gunFull: number;
+  } | null;
 }
 
 const C = {
@@ -163,7 +197,7 @@ interface PcdKey {
   act?: () => string | null;
 }
 /** the pages drawn over a whole wide portal (maps); the others keep a portal's width, centred */
-const WIDE: ReadonlySet<PcdPage> = new Set(["TSD"]);
+const WIDE: ReadonlySet<PcdPage> = new Set(["TSD", "FCR"]);
 const TOP_STRIP: PcdRect = { x: 0, y: 0, w: PCD_W, h: TOP };
 const BOTTOM_STRIP: PcdRect = { x: NOTCH[0], y: PORTAL_END, w: NOTCH[1] - NOTCH[0], h: PCD_H - PORTAL_END };
 /** the data read every PERIOD [ms]; each part redrawn at its own pace (what moves fast often, the rest less) — in
@@ -173,6 +207,8 @@ const PERIOD = 100;
 const PCD_NIGHT = 0.4;
 const PAGE_PERIOD: Record<PcdPage, number> = {
   TSD: 100,
+  FCR: 100,
+  SMS: 250,
   FCS: 100,
   ENG: 200,
   FUEL: 500,
@@ -184,12 +220,19 @@ const PAGE_PERIOD: Record<PcdPage, number> = {
 };
 const FONT = `"Eurostile", "DIN Alternate", "Arial Narrow", sans-serif`;
 const RANGES = [5, 10, 20, 40, 80, 160];
+/** the radar's page's ranges [km, or NM] */
+const FCR_RANGES = [10, 20, 40, 80, 160];
+const STORE_NAME = { aim120: "AIM-120", aim9x: "AIM-9X", jdam: "GBU-32", jsm: "JSM" } as const;
 
 export class Pcd {
   readonly canvas = new OffscreenCanvas(PCD_W, PCD_H);
   private g = this.canvas.getContext("2d")!;
   /** each slot's page */
-  pages: PcdPage[] = ["TSD", "FCS", "ENG", "FUEL"];
+  pages: PcdPage[] = ["TSD", "FCR", "SMS", "FUEL"];
+  /** what a touch asks of the craft (main.ts: the controller's weapons and radar): what to say */
+  act: ((a: PcdAction) => string | null) | null = null;
+  /** the radar page's range [km, or NM] */
+  fcrRange = 80;
   /** each side (left, right) shown as two portals or as one */
   halves: ("split" | "full")[] = ["split", "split"];
   /** the slot whose page menu is open (null: none) */
@@ -327,6 +370,35 @@ export class Pcd {
             act: () => ((this.declutter = !this.declutter), this.declutter ? "DCLT ON" : "DCLT OFF"),
           },
         ];
+      case "FCR": {
+        const mode = this.data?.fcr?.mode;
+        const fstep = (s: number) => () => {
+          const j = Math.max(0, FCR_RANGES.indexOf(this.fcrRange));
+          this.fcrRange = FCR_RANGES[Math.min(Math.max(j + s, 0), FCR_RANGES.length - 1)]!;
+          return `FCR ${this.fcrRange}`;
+        };
+        return [
+          ...(["RWS", "TWS", "STT"] as const).map((m) => ({
+            label: m,
+            on: mode === m,
+            act: () => this.act?.({ kind: "radar", mode: m }) ?? null,
+          })),
+          { label: "LOCK", act: () => this.act?.({ kind: "lock" }) ?? null },
+          { label: "RNG −", act: fstep(-1) },
+          { label: "RNG +", act: fstep(1) },
+        ];
+      }
+      case "SMS": {
+        const A = this.data?.arms;
+        return [
+          ...(["aim120", "aim9x", "jdam", "jsm"] as const).map((w) => ({
+            label: STORE_NAME[w],
+            on: A?.sel === w,
+            act: () => this.act?.({ kind: "weapon", w }) ?? null,
+          })),
+          { label: "CM", act: () => this.act?.({ kind: "cm" }) ?? null },
+        ];
+      }
       default:
         return [];
     }
@@ -575,6 +647,12 @@ export class Pcd {
       switch (page) {
         case "TSD":
           this.tsd(r, d);
+          break;
+        case "FCR":
+          this.fcr(r, d);
+          break;
+        case "SMS":
+          this.sms(r, d);
           break;
         case "FCS":
           this.fcs(r, d);
@@ -855,6 +933,202 @@ export class Pcd {
       24,
       "right",
     );
+  }
+
+  /** The radar (FCR): a B-scope — the azimuth across (±60°), the range up —, its beam sweeping, its contacts: hits
+   *  in RWS (no way known), tracks in TWS (their IFF's shape, their way a stick, their altitude), the lock alone bright
+   *  in STT; the lock's figures. */
+  private fcr(r: PcdRect, d: PcdData) {
+    const g = this.g;
+    const F = d.fcr;
+    const L = r.x + 56,
+      R = r.x + r.w - 24,
+      T = r.y + 58,
+      B = r.y + r.h - 34;
+    const cx = (L + R) / 2;
+    const AZ = 60 * D;
+    const range = this.fcrRange * this.u.distM;
+    const X = (az: number) => cx + (az / AZ) * ((R - L) / 2);
+    const Y = (rg: number) => B - (rg / range) * (B - T);
+    // the grid: the azimuths (±30°, the nose), the ranges' quarters
+    g.strokeStyle = C.dim;
+    g.lineWidth = 1.5;
+    g.strokeRect(L, T, R - L, B - T);
+    g.beginPath();
+    for (const a of [-30, 0, 30]) {
+      g.moveTo(X(a * D), T);
+      g.lineTo(X(a * D), B);
+    }
+    for (const f of [0.25, 0.5, 0.75]) {
+      g.moveTo(L, Y(f * range));
+      g.lineTo(R, Y(f * range));
+    }
+    g.stroke();
+    for (const f of [0.25, 0.5, 0.75, 1]) this.text(String(Math.round(f * this.fcrRange)), L - 8, Y(f * range), C.grey, 20, "right");
+    for (const a of [-60, -30, 0, 30, 60]) this.text(String(Math.abs(a)), X(a * D), B + 18, C.grey, 18, "center");
+    if (!F) {
+      this.text("RADAR STBY", cx, (T + B) / 2, C.grey, 30, "center", true);
+      return;
+    }
+    // the mode, the range; the beam
+    this.text(F.mode, r.x + 20, r.y + 24, C.cyan, 28, "left", true);
+    this.text(`${this.fcrRange} ${this.u.distName}`, r.x + 110, r.y + 24, C.white, 24);
+    g.strokeStyle = "rgba(95, 231, 255, 0.45)";
+    g.lineWidth = 2;
+    const bx = X(Math.max(-AZ, Math.min(AZ, F.beam)));
+    g.beginPath();
+    g.moveTo(bx, T);
+    g.lineTo(bx, B);
+    g.stroke();
+    // the contacts
+    for (const K of F.contacts) {
+      const rg = Math.hypot(K.x, K.y);
+      const az = Math.atan2(K.x, K.y);
+      if (Math.abs(az) > AZ || rg > range || K.y < 0) continue;
+      const x = X(az),
+        y = Y(rg);
+      const col = K.iff === "friend" ? C.cyan : K.iff === "hostile" ? "#ff5a46" : K.iff === "neutral" ? C.white : C.yellow;
+      const dim = F.mode === "STT" && !K.locked;
+      g.globalAlpha = dim ? 0.35 : 1;
+      g.strokeStyle = col;
+      g.fillStyle = col;
+      g.lineWidth = 3;
+      if (F.mode === "RWS" && !K.locked && !K.datalink) g.fillRect(x - 9, y - 5, 18, 10);
+      else {
+        const k = 12;
+        g.beginPath();
+        if (K.iff === "friend") g.arc(x, y, k, Math.PI, 2 * Math.PI);
+        else if (K.iff === "hostile") {
+          g.moveTo(x, y - k);
+          g.lineTo(x + k, y);
+          g.lineTo(x, y + k);
+          g.lineTo(x - k, y);
+          g.closePath();
+        } else g.rect(x - k * 0.8, y - k * 0.8, k * 1.6, k * 1.6);
+        if (K.datalink) g.setLineDash([5, 4]);
+        g.stroke();
+        g.setLineDash([]);
+        if (K.trk !== null) {
+          g.beginPath();
+          g.moveTo(x, y);
+          g.lineTo(x + Math.sin(K.trk) * 30, y - Math.cos(K.trk) * 30);
+          g.stroke();
+        }
+        // (its altitude, in thousands of the altitude's unit — as a real scope)
+        this.text(`${(this.u.alt(d.alt + K.dz) / 1000).toFixed(0)}`, x, y + 24, col, 18, "center");
+      }
+      if (K.locked) {
+        g.lineWidth = 2;
+        g.beginPath();
+        g.arc(x, y, 22, 0, 2 * Math.PI);
+        g.stroke();
+      }
+      if (!this.declutter && (K.locked || F.mode !== "RWS")) this.text(K.name.slice(0, 10), x + 18, y - 16, col, 18);
+      g.globalAlpha = 1;
+    }
+    // the lock's figures
+    const lk = F.lock;
+    if (lk) {
+      const vc = this.u.spd(lk.closure);
+      const rows = [
+        lk.name.slice(0, 14),
+        `${this.u.dist(lk.range).toFixed(1)} ${this.u.distName}  VC ${Math.round(vc)}`,
+        `${Math.round(this.u.alt(lk.alt)).toLocaleString("en")} ${this.u.altName}  ${String(Math.round(lk.hdg / D)).padStart(3, "0")}°  ${Math.round(this.u.spd(lk.gs))}`,
+      ];
+      this.text(rows[0]!, r.x + r.w - 20, r.y + 20, lk.iff === "hostile" ? "#ff5a46" : C.yellow, 24, "right", true);
+      this.text(`${rows[1]}  ·  ${rows[2]}`, r.x + r.w - 20, r.y + 44, C.white, 18, "right");
+    }
+  }
+
+  /** The weapons (SMS): the craft from below and its stations — the AIM-9Xs at the wingtips, the AIM-120s and the
+   *  GBU-32s (or the JSMs) in the bays —, each lit when loaded, the chosen one ringed; the master arm, the
+   *  gun's rounds, the flares. */
+  private sms(r: PcdRect, d: PcdData) {
+    const g = this.g;
+    const A = d.arms;
+    const live = !!A?.live;
+    this.text(live ? "ARM" : "SAFE", r.x + 20, r.y + 24, live ? C.green : C.grey, 28, "left", true);
+    this.text("MASTER", r.x + 90, r.y + 24, C.grey, 20);
+    if (!A) {
+      this.text("NO STORES DATA", r.x + r.w / 2, r.y + r.h / 2, C.grey, 26, "center", true);
+      this.text("A FIGHT OR A MISSION ARMS THEM", r.x + r.w / 2, r.y + r.h / 2 + 36, C.grey, 18, "center");
+      return;
+    }
+    const S = A.stores;
+    // the craft from below (the planform), its stations
+    const k = Math.min(r.w / 11.5, (r.h - 170) / 14.6);
+    const cx = r.x + r.w / 2,
+      cy = r.y + 50 + 7.8 * k;
+    const P: [number, number][] = [
+      [0, 7.7],
+      [0.75, 4],
+      [1.6, 0.4],
+      [5.35, -2.2],
+      [5.35, -3.2],
+      [2.3, -3.3],
+      [2.6, -5.2],
+      [3.4, -6.3],
+      [3.4, -7.2],
+      [1.0, -6.5],
+      [0, -6.6],
+    ];
+    g.strokeStyle = C.frame;
+    g.lineWidth = 2.5;
+    g.beginPath();
+    P.forEach(([x, y], i) => (i ? g.lineTo(cx + x * k, cy - y * k) : g.moveTo(cx + x * k, cy - y * k)));
+    for (let i = P.length - 1; i >= 0; i--) g.lineTo(cx - P[i]![0] * k, cy - P[i]![1] * k);
+    g.closePath();
+    g.stroke();
+    // (a station: its store's short name, lit when loaded, ringed when chosen)
+    const station = (x: number, y: number, kind: keyof typeof STORE_NAME, loaded: boolean) => {
+      const w = 1.8 * k,
+        h = 1.05 * k;
+      const chosen = A.sel === kind;
+      g.fillStyle = loaded ? (chosen ? "#0f4a2a" : "#0d2a1c") : "#0a0f12";
+      g.fillRect(cx + x * k - w / 2, cy - y * k - h / 2, w, h);
+      g.strokeStyle = chosen ? C.cyan : loaded ? C.green : C.dim;
+      g.lineWidth = chosen ? 3 : 2;
+      g.strokeRect(cx + x * k - w / 2, cy - y * k - h / 2, w, h);
+      this.text(
+        kind === "jdam" ? "32" : kind === "aim9x" ? "9X" : kind === "aim120" ? "120" : "JSM",
+        cx + x * k,
+        cy - y * k,
+        loaded ? C.white : C.grey,
+        Math.max(16, k * 0.6),
+        "center",
+        true,
+      );
+    };
+    // (each kind's stores, the left station first: a count shared left and right)
+    const lr = (n: number) => [Math.ceil(n / 2), Math.floor(n / 2)] as const;
+    const [l9, r9] = lr(S.aim9x),
+      [lj, rj] = lr(S.jsm),
+      [l32, r32] = lr(S.jdam);
+    station(-5.0, -2.7, "aim9x", l9 > 0);
+    station(5.0, -2.7, "aim9x", r9 > 0);
+    // (the bays' outer stations: the GBU-32s, or the JSMs of the anti-ship load)
+    const bay = S.jsm > 0 ? "jsm" : "jdam";
+    station(-1.0, 1.2, bay, (bay === "jsm" ? lj : l32) > 0);
+    station(1.0, 1.2, bay, (bay === "jsm" ? rj : r32) > 0);
+    for (let i = 0; i < 4; i++) station(i < 2 ? -1.0 : 1.0, -0.6 - (i % 2) * 1.2, "aim120", S.aim120 > i);
+    // the stores left: the chosen one, then each kind; the gun, the flares
+    const y0 = r.y + r.h - 118;
+    const sel = A.sel as keyof typeof STORE_NAME;
+    const left = S[sel] ?? 0;
+    this.text(`${STORE_NAME[sel] ?? sel.toUpperCase()} · ${left}`, r.x + 20, y0, left > 0 ? C.cyan : C.yellow, 30, "left", true);
+    if (sel === "aim120" && !d.fcr?.lock) this.text("LOCK REQUIRED", r.x + r.w - 20, y0, C.yellow, 20, "right", true);
+    const kinds = ["aim120", "aim9x", "jdam", "jsm"] as const;
+    kinds.forEach((w, i) =>
+      this.text(`${STORE_NAME[w]} ${S[w]}`, r.x + 20 + i * ((r.w - 40) / 4), y0 + 40, S[w] > 0 ? C.white : C.grey, 18),
+    );
+    this.text(`GUN ${S.gun}`, r.x + 20, y0 + 76, S.gun > 0 ? C.white : C.yellow, 22, "left", true);
+    const gw = r.w * 0.36;
+    g.strokeStyle = C.frame;
+    g.lineWidth = 2;
+    g.strokeRect(r.x + 130, y0 + 66, gw, 20);
+    g.fillStyle = C.green;
+    g.fillRect(r.x + 132, y0 + 68, (gw - 4) * Math.min(S.gun / Math.max(A.gunFull, 1), 1), 16);
+    this.text(`FLARE ${S.flares}`, r.x + r.w - 20, y0 + 76, S.flares > 0 ? C.white : C.yellow, 22, "right", true);
   }
 
   /** The flight controls: the craft from above (its surfaces' bars coloured by their travel used), their

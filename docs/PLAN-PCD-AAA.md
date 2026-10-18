@@ -56,7 +56,7 @@ verts, poussée sur `main`.
 - Les chevauchements corrigés (FCS), une grille typographique commune.
 - **ICAWS** : la vraie liste des alertes (avertissement, précaution, avis) et les dégâts en combat.
 
-### Q4 — Radar FCR et armes SMS
+### Q4 — Radar FCR et armes SMS — FAIT ([fiche](progress/pcd/Q4.md))
 
 - **FCR** : B-scope (distance / gisement), modes RWS / TWS / STT, verrou, IFF, portée réglable au toucher.
 - **SMS** : les emports (AIM-120, AIM-9X, GBU-32, JSM), le canon et ses obus, les leurres, l'arme choisie, l'état

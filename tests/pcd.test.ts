@@ -73,14 +73,14 @@ async function pcd() {
 test("the title's arrows step through the pages; the title opens the menu, a page chosen in it", async () => {
   const { p, at } = await pcd();
   const f = p.portals()[1]!.frame;
-  expect(p.pages[1]).toBe("FCS");
-  expect(at(f.x + 84, f.y + 20)).toBe("ENG");
-  expect(at(f.x + 28, f.y + 20)).toBe("FCS");
+  expect(p.pages[1]).toBe("FCR");
+  expect(at(f.x + 84, f.y + 20)).toBe("SMS");
+  expect(at(f.x + 28, f.y + 20)).toBe("FCR");
   expect(at(f.x + f.w / 2, f.y + 20)).toBe("MENU");
   expect(p.menu).toBe(1);
-  // (the menu's third row, first button: ADI)
-  expect(at(f.x + 60, f.y + 46 + 30 + 2 * 82 + 30)).toBe("ADI");
-  expect(p.pages[1]).toBe("ADI");
+  // (the menu's third row, first button: STOVL)
+  expect(at(f.x + 60, f.y + 46 + 30 + 2 * 82 + 30)).toBe("STOVL");
+  expect(p.pages[1]).toBe("STOVL");
   expect(p.menu).toBeNull();
 });
 
@@ -129,4 +129,19 @@ test("drawn in turn: one part a frame, each at its page's pace; a touched portal
   expect(parts.length).toBe(1);
   expect(parts[0]!.x).toBeLessThanOrEqual(f.x);
   expect(parts[0]!.x + parts[0]!.w).toBeGreaterThanOrEqual(f.x + f.w);
+});
+
+test("the radar's and the weapons' keys ask the craft (never a shot)", async () => {
+  const { p, at } = await pcd();
+  const asked: unknown[] = [];
+  p.act = (a) => (asked.push(a), "ok");
+  const fcr = p.portals()[1]!.frame,
+    sms = p.portals()[2]!.frame;
+  const key = (f: { x: number; y: number; w: number; h: number }, i: number, n: number) => at(f.x + ((i + 0.5) / n) * f.w, f.y + f.h - 20);
+  key(fcr, 1, 6);
+  key(fcr, 3, 6);
+  expect(key(fcr, 5, 6)).toBe("FCR 160");
+  key(sms, 0, 5);
+  key(sms, 4, 5);
+  expect(asked).toEqual([{ kind: "radar", mode: "TWS" }, { kind: "lock" }, { kind: "weapon", w: "aim120" }, { kind: "cm" }]);
 });

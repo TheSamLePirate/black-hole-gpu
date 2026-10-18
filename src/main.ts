@@ -4268,6 +4268,18 @@ async function main() {
     if (what) panel.toast(`PCD · ${what}`);
     return true;
   };
+  // (what the panoramic display's keys ask of the craft — never a shot: the weapon, the radar's mode, its lock, the
+  // countermeasures — through the controller's own calls, as the crew's backseater's)
+  jetPcd.act = (a) =>
+    a.kind === "weapon"
+      ? camera.weaponSelect(a.w)
+      : a.kind === "radar"
+        ? camera.radarModeSet(a.mode)
+        : a.kind === "lock"
+          ? camera.lockOnName()
+          : camera.combat?.status === "run"
+            ? (camera.combatTrigger("cm") ?? t("Flares and chaff out"))
+            : t("No fight running: the weapons are live in a fight or a mission");
   camera.onJetStart = () => {
     try {
       tools.lineUp();
