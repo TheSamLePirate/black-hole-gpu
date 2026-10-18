@@ -6671,7 +6671,9 @@ async function main() {
       if (st.offline) renderDialog.update((lastOffline = st.offline));
       if (renderer.completedFrames !== measuredFrames) {
         measuredFrames = renderer.completedFrames;
-        gpuEma = gpuEma ? 0.9 * gpuEma + 0.1 * renderer.lastGpuMs : renderer.lastGpuMs;
+        // (a frame of the motion's denser rays — Sharpness in motion, a turn —: not this scale's time; counted, a long
+        // turn lowered the scale, and its 30 s memory then held it down after the turn)
+        if (!renderer.lastFrameDense) gpuEma = gpuEma ? 0.9 * gpuEma + 0.1 * renderer.lastGpuMs : renderer.lastGpuMs;
       }
     }
     // (a compile or a stream begun or ended: the timings measured afresh — the image untouched)

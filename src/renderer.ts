@@ -819,6 +819,9 @@ export class Renderer {
   }
   /** the last frame's GPU time [ms] */
   lastGpuMs = 0;
+  /** the last completed frame drawn with the motion's denser rays (motionBlock): its time not the block's nor the
+   *  scale's — the dynamic resolution (main.ts) and the automatic block (adaptBlock) leave it out */
+  lastFrameDense = false;
   private lastPhase: FrameStats["phase"] = "realtime";
   /** time spent over the budget, under it with room for a finer block [ms of frames] */
   private slowMs = 0;
@@ -4148,7 +4151,10 @@ export class Renderer {
               if (down < 0.01) continue;
               const along = vel[0]! * db[0]! + vel[1]! * db[1]! + vel[2]! * db[2]!;
               const across = Math.hypot(vel[0]! - along * db[0]!, vel[1]! - along * db[1]!, vel[2]! - along * db[2]!);
-              sum += across / Math.min(h / down, 40_000);
+              // (ground farther than 40 km — an orbit's, a high cruise's — left out, not counted as at 40 km: low
+              // flight only)
+              if (h / down > 40_000) continue;
+              sum += across / (h / down);
             }
           this.imageGroundPx = (sum / 15) * px;
         }
@@ -5488,6 +5494,7 @@ export class Renderer {
   /** `traced`: the frame traced the scene (the first image: the first such frame completed) */
   private submit(enc: GPUCommandEncoder, done: (ms: number) => void, traced = true) {
     const t0 = performance.now();
+    const dense = this.motionDenseOn;
     this.prof.end(enc);
     this.device.queue.submit([enc.finish()]);
     this.inFlight++;
@@ -5498,6 +5505,7 @@ export class Renderer {
         const ms = now - Math.max(t0, this.lastDoneAt);
         this.lastDoneAt = now;
         this.lastGpuMs = ms;
+        this.lastFrameDense = dense;
         this.completedFrames++;
         if (traced && !this.firstFrameDoneAt) {
           this.firstFrameDoneAt = now;
@@ -5925,6 +5933,9 @@ export class Renderer {
       this.eventFrames--;
       return;
     }
+    // (a frame of the motion's denser rays: neither the block's time nor the recent median's — its block one finer
+    // while the turn lasts, its cost not what the automatic choice weighs)
+    if (this.lastFrameDense) return;
     const rec = this.recentMs;
     rec.push(ms);
     if (rec.length > 15) rec.shift();
@@ -5975,7 +5986,7 @@ export class Renderer {
    * jitter cancels), and with "low" once the seen ground slides faster than GROUND_DENSE_IN (imageGroundPx: low and
    * fast, straight on); back once both are under their lower lines for 300 ms. The history gives way then and the image
    * is the reconstruction of the frame's rays (docs/PLAN-RENDU-PERF.md 12., 13.): more of them, their cost while it
-   * lasts. The automatic choice's timing skips these frames (adaptBlock: another block than its own).
+   * lasts. The automatic block and the dynamic resolution leave these frames out (lastFrameDense).
    */
   private motionBlock(block: number, s: Settings): number {
     const now = performance.now();
