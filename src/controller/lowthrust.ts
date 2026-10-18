@@ -678,7 +678,7 @@ function ourSurfaceWant(
   // take-off
   const LG = this.launchGoal;
   const d0 = climbTop(id, LG.altKm);
-  const east = launchEast(id, sub3(nav.X, Pb), LG.incDeg);
+  const east = launchEast(id, sub3(nav.X, Pb), LG.incDeg, nav.t);
   const vc = Math.sqrt(sb.mass / r);
   const vi = sub3(nav.V, nav.refVel);
   // (done: steered, at the top, the speed across the vertical the circular one's to 0.5 % — its east part only,
@@ -885,9 +885,9 @@ function levelHeading(this: CameraController, up: Vec3): Vec3 {
  * site's latitude is above it. The latitude is the geocentric one — the orbit's plane passes through
  * the centre —, not the figure's geodetic up (0.19° apart at Kennedy on the Earth's ellipsoid).
  */
-export function launchEast(id: string, rel: Vec3, incDeg: number | null): Vec3 {
+export function launchEast(id: string, rel: Vec3, incDeg: number | null, t?: number): Vec3 {
   const up = unitV(rel);
-  const pole = unitV(spinAxis(id));
+  const pole = unitV(spinAxis(id, t));
   let east = cross(pole, up);
   if (Math.hypot(...east) < 1e-12) east = cross([0, 0, 1], up);
   east = unitV(east);
@@ -1081,12 +1081,12 @@ function climbAssist(
   const q = toBodyFixed(id, nav.X, nav.t);
   const ql = Math.hypot(...q);
   const gv = groundVelocity(id, nav.X, nav.t);
-  const pole = unitV(spinAxis(id));
+  const pole = unitV(spinAxis(id, nav.t));
   let eastG = cross(pole, up);
   if (Math.hypot(...eastG) < 1e-12) eastG = cross([0, 0, 1], up);
   eastG = unitV(eastG);
   const north = cross(up, eastG);
-  const east = launchEast(id, rel, this.launchGoal.incDeg);
+  const east = launchEast(id, rel, this.launchGoal.incDeg, nav.t);
   if (!this.climbRec || this.climbRec.id !== id) {
     const vGroundE = dot3(sub3(gv, nav.refVel), east);
     this.climbRec = { id, pad: lin(q, 1 / ql, q, 0) as Vec3, trace: [], qMax: 0, profile: climbProfile(id, thr, dragK, d0, vGroundE) };
@@ -2682,7 +2682,7 @@ function runwayCompute(this: CameraController): RunwayView | null {
   const T = fr.place(site);
   const tu = unitV(T);
   const nav = this.ourNav(cam);
-  const pole: Vec3 = nav ? unitV(spinAxis(fr.body)) : [0, 0, 1];
+  const pole: Vec3 = nav ? unitV(spinAxis(fr.body, nav.t)) : [0, 0, 1];
   const north = unitV(lin(pole, 1, tu, -dot3(pole, tu)));
   const east = cross(north, tu);
   const hd = (site.rwy ?? 0) * D;

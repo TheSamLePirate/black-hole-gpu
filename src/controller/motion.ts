@@ -404,7 +404,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
       const X1 = fromBodyFixed(L.body, L.q, t1);
       // (the attitude turns with the ground)
       const ang = spinRate(L.body) * simDt;
-      const ax = unitV(spinAxis(L.body));
+      const ax = unitV(spinAxis(L.body, t0));
       this.properTime += simDt;
       setHomePose(s, X1, unitV(rotateAbout(fwd, ax, ang)), unitV(rotateAbout(up, ax, ang)), groundVelocity(L.body, X1, t1));
       s.motion = "geodesic";

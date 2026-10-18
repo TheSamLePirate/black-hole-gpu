@@ -1354,7 +1354,7 @@ function horizonAxes(this: CameraController, cam: ReturnType<typeof cameraFrame>
     const id = nav.ref;
     if (id === "sun" || !solarBody(id)) return null;
     const up = figureUp(id, nav.X, nav.t);
-    const ax = spinAxis(id);
+    const ax = spinAxis(id, nav.t);
     let north = lin(ax, 1, up, -dot3(ax, up));
     if (Math.hypot(...north) < 1e-9) north = lin([0, 0, 1], 1, up, -up[2]);
     return { up: unitV(nav.toRep(up)), north: unitV(nav.toRep(unitV(north))) };
@@ -1379,7 +1379,7 @@ function sfFrame(this: CameraController, cam: ReturnType<typeof cameraFrame>) {
     if (id === "sun" || !b) return null;
     const P = nav.refPos;
     const up = figureUp(id, nav.X, nav.t);
-    const ax = spinAxis(id);
+    const ax = spinAxis(id, nav.t);
     let north = lin(ax, 1, up, -dot3(ax, up));
     if (Math.hypot(...north) < 1e-9) north = lin([0, 0, 1], 1, up, -up[2]);
     north = unitV(north);

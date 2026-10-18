@@ -56,7 +56,7 @@ test("placing the Ranger: an orbit around Mars, in its sphere of influence, rela
   const B = solarState("mars", t);
   const r = [0, 1, 2].map((i) => p.X[i]! - B.pos[i]!) as [number, number, number];
   const v = [0, 1, 2].map((i) => p.vel[i]! - B.vel[i]!) as [number, number, number];
-  const el = elements(b.mass, r, v, equatorAxes("mars"));
+  const el = elements(b.mass, r, v, equatorAxes("mars", t));
   const km = M_METRES / 1e3;
   expect((el.rp - b.radius) * km).toBeCloseTo(300, 3);
   expect((el.ra - b.radius) * km).toBeCloseTo(1200, 3);

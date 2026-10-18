@@ -1,6 +1,6 @@
 import type { Vec3 } from "../physics";
 import { radius, type Dneg } from "../wormhole";
-import { solarBody, spinVector } from "../system/solar";
+import { solarBody, spinVector, poleOfDate } from "../system/solar";
 
 import type { PoseKeys } from "../controls";
 
@@ -206,7 +206,16 @@ export function rotateAbout(v: Vec3, k: Vec3, ang: number): Vec3 {
   const x: Vec3 = [k[1] * v[2] - k[2] * v[1], k[2] * v[0] - k[0] * v[2], k[0] * v[1] - k[1] * v[0]];
   return [v[0] * c + x[0] * s + k[0] * kv * (1 - c), v[1] * c + x[1] * s + k[1] * kv * (1 - c), v[2] * c + x[2] * s + k[2] * kv * (1 - c)];
 }
-export const spinAxis = (id: string) => spinVector(solarBody(id)!);
+/** A body's spin vector — at a date `t` [M] along its pole of the date (the frame the sites and the ground turn in:
+ *  PLAN-VAISSEAUX X1f), without one the J2000 pole's. */
+export const spinAxis = (id: string, t?: number): Vec3 => {
+  const b = solarBody(id)!;
+  const w = spinVector(b);
+  if (t === undefined) return w;
+  const N = poleOfDate(b, t);
+  const k = Math.hypot(...w);
+  return [N[0] * k, N[1] * k, N[2] * k];
+};
 export const spinRate = (id: string) => Math.hypot(...spinVector(solarBody(id)!));
 
 /** A look's yaw kept in (−180°, 180°]: turning past behind goes on round, no stop. */
