@@ -137,6 +137,8 @@ export interface InstrumentSnapshot {
   /** the F-35's weapons (the crew's backseater — PLAN-CREW-ACTIONS A5): a fight running, the weapon chosen, the stores
    *  left, the radar's mode, its lock's name */
   arms?: { live: boolean; sel: string; stores: Record<string, number>; mode: string; lock: string } | null;
+  /** the Sun seen from the body flown about: the point under it [°] on the body's own axes (the globe's day and night) */
+  sun?: { lat: number; lon: number } | null;
   /** the crew's orders (net/crewcmd.ts): the pilot's lock open, the families that can be done now */
   caps?: { on: boolean; fam: string[] } | null;
   /** sent once a second at most: absent, the last list stands */
@@ -342,6 +344,7 @@ export function readInstruments(x: unknown): InstrumentSnapshot | null {
           lock: label(x.arms.lock, 32),
         }
       : null,
+    sun: place(x.sun) ? { lat: (x.sun as { lat: number }).lat, lon: (x.sun as { lon: number }).lon } : null,
     caps:
       record(x.caps) && Array.isArray(x.caps.fam)
         ? {

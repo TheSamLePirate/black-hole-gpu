@@ -14,6 +14,7 @@ Every e2e file (`tests/e2e/*.e2e.test.ts`), by theme: what it proves, the scene 
 
 | file | what it proves | scene(s) booted | ~s on the mini | needs |
 |---|---|---|---|---|
+| crew-actions.e2e.test.ts | The crew's orders on the real simulator (docs/PLAN-CREW-ACTIONS.md): the crew console in a frame joined as instruments, its own buttons — configuration, the pilot's lock, the flight plan (menus, constraint, drag, direct), the MCP (AP, A/THR, selectors, LNAV, orbit), the flight computer beside the ISS (hold, a manoeuvre previewed), the F-35's weapons in a room's free fight (radar, weapon, decoys, a held shot). | game:artemis, Earth: docking to the ISS | ~20 s on kerr-mini (+ boot) | run on the mini when this Mac is loaded; captures remote-results/crew-actions-a*.png |
 | crew.e2e.test.ts | Independent crew shell without WebGPU; mobile/tablet/landscape controls; real room and simulator telemetry; bidirectional WebRTC; multi-touch PTT, cancellation and permission races; instruments QR URL. | crew/ then game:artemis | ~95 s locally | fake microphone, same-Chrome second screen; captures remote-results/crew-*.png |
 | harness.e2e.test.ts | A hung page fails at its time limit, a dead Chrome fails every call at once, the Chrome lock is released with it. | none (raw Chrome via `lib/cdp.ts`) | 4 | — |
 | bh-api.e2e.test.ts | Every member of `__bh` and of its namespaces, read live, has its entry in docs/BH-API.md. | game:artemis | 3 | — |

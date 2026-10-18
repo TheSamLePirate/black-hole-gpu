@@ -73,6 +73,17 @@ const units = [
   { id: "m:escort", name: "VIP", lat: 47.95, lon: 3.6, side: "friend", kind: "air" as const, hdg: 140 * D, spd: 220, alt: 8500 },
 ];
 
+/** the point under the Sun at a date (the declination and the equation of time to a fraction of a degree) */
+function subSolar(d: Date) {
+  const day = (d.getTime() - Date.UTC(d.getUTCFullYear(), 0, 0)) / 86_400_000;
+  const g = (2 * Math.PI * (day - 1)) / 365;
+  const decl = 0.006918 - 0.399912 * Math.cos(g) + 0.070257 * Math.sin(g) - 0.006758 * Math.cos(2 * g) + 0.000907 * Math.sin(2 * g);
+  const eot =
+    229.18 * (0.000075 + 0.001868 * Math.cos(g) - 0.032077 * Math.sin(g) - 0.014615 * Math.cos(2 * g) - 0.040849 * Math.sin(2 * g));
+  const minutes = d.getUTCHours() * 60 + d.getUTCMinutes() + d.getUTCSeconds() / 60;
+  return { lat: decl / D, lon: -((minutes + eot) / 4 - 180) };
+}
+
 function sample(lat0: number, lon0: number, h: number, heading: number, v: number) {
   const p = geodeticToCart(WGS84_A, WGS84_F, lat0 * D, lon0 * D, h);
   const E = [-Math.sin(lon0 * D), Math.cos(lon0 * D), 0];
@@ -449,6 +460,7 @@ setInterval(() => {
       msn: { name: "SA-6", brg: gcCourse({ lat, lon }, units[0]!), dist: gcDist({ lat, lon }, units[0]!), dz: -alt },
       warn,
       caps: { on: true, fam: ["nav", "config", "jet", "weapons"] },
+      sun: subSolar(new Date()),
       arms: { live: true, sel: arms.sel, stores: arms.stores, mode: arms.mode, lock: arms.lock },
       ...(around
         ? {

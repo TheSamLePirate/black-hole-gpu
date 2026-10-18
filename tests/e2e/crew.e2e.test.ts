@@ -18,7 +18,8 @@ describe.skipIf(!E2E)("crew console", () => {
       width: 390,
       height: 844,
       args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"],
-      initScript: `if (location.pathname.includes('/crew/')) Object.defineProperty(navigator, "gpu", {get() { throw new Error("Crew accessed WebGPU"); }});`,
+      // (WebGPU counted, and absent: the globe's photographed Earth asks for it alone — never at the start)
+      initScript: `if (location.pathname.includes('/crew/')) { window.__gpuAsked = 0; Object.defineProperty(navigator, "gpu", { get() { window.__gpuAsked++; return undefined; } }); }`,
     });
     pilot = new NetClient({
       url: new URL("net", app.url).href.replace("http", "ws"),
@@ -74,6 +75,7 @@ describe.skipIf(!E2E)("crew console", () => {
     await app.click("#join");
     await app.waitFor("__crew.net.room?.role === 'instruments' && !!__crew.model.own()?.snapshot", 15_000);
     expect(await app.js<string>("typeof window.__bh")).toBe("undefined");
+    expect(await app.js<number>("window.__gpuAsked")).toBe(0);
     expect(await app.js<number>("__crew.model.own().metrics.fuel")).toBe(0.75);
     expect(
       await app.js<string[]>(

@@ -11,6 +11,7 @@ import { drawNd } from "./draw/nd";
 import { drawGeo } from "./draw/geo";
 import { wgs84Direct } from "../system/ellipsoid";
 import { mercX, mercY, Tiles, unMercX, unMercY } from "./draw/tiles";
+import { EarthGlobe } from "./draw/earth";
 import { drawRadar } from "./draw/radar";
 import { drawSystems, systemsHeight } from "./draw/systems";
 import { drawPlan, planHeight } from "./draw/plan";
@@ -61,6 +62,8 @@ export class CrewViews {
   private smooth = new Smoother();
   /** the map's tiles (OpenStreetMap, CARTO's night style): fetched only while a map is drawn */
   private tiles = new Tiles();
+  /** the globe's photographed Earth: its imagery and its renderer (WebGPU, else the processor), made when first shown */
+  readonly earth = new EarthGlobe(() => this.request());
   private dpr = 1;
   private ctx: CanvasRenderingContext2D;
   private pen: Pen;
@@ -78,8 +81,8 @@ export class CrewViews {
   private unproject: ((x: number, y: number) => Where | null) | null = null;
   /** where a menu was opened on the map or the ND (its crosshair while it is open) */
   marker: Point | null = null;
-  /** a waypoint being dragged: its index, the finger's place on the canvas */
-  private drag: { i: number; x: number; y: number; moved: boolean } | null = null;
+  /** a waypoint touched: its index, the finger's place, when; dragged once held 250 ms still (armed), else the map */
+  private drag: { i: number; x: number; y: number; moved: boolean; at: number; armed: boolean } | null = null;
 
   constructor(
     readonly canvas: HTMLCanvasElement,
@@ -101,7 +104,18 @@ export class CrewViews {
       if (this.pointers.size === 1 && (this.view === "map" || this.view === "nd")) {
         const [x, y] = this.local(e);
         const wp = this.nearest(x, y, 22, (p) => p.wp !== undefined && !p.r);
-        this.drag = wp ? { i: wp.wp!, x, y, moved: false } : null;
+        this.drag = wp ? { i: wp.wp!, x, y, moved: false, at: performance.now(), armed: false } : null;
+        // (held still: the waypoint taken — its ghost shows it)
+        if (this.drag) {
+          const d = this.drag;
+          setTimeout(() => {
+            if (this.drag === d && this.moved < 8) {
+              d.armed = true;
+              navigator.vibrate?.(15);
+              this.request();
+            }
+          }, 250);
+        }
       } else this.drag = null;
     });
     canvas.addEventListener("pointermove", (e) => {
@@ -111,13 +125,19 @@ export class CrewViews {
         dy = e.clientY - p[1];
       this.moved += Math.abs(dx) + Math.abs(dy);
       this.pointers.set(e.pointerId, [e.clientX, e.clientY]);
-      if (this.drag && this.pointers.size === 1) {
+      // (a second finger: a pinch, never a waypoint's drag)
+      if (this.pointers.size > 1) this.drag = null;
+      if (this.drag && this.pointers.size === 1 && (this.drag.armed || this.moved < 8)) {
         [this.drag.x, this.drag.y] = this.local(e);
         this.drag.moved ||= this.moved > 8;
-        this.request();
-        return;
+        if (this.drag.armed) {
+          this.request();
+          return;
+        }
       }
-      this.drag = null;
+      // (moved before it was held: the map, not the waypoint)
+      if (this.drag && !this.drag.armed && this.moved >= 8) this.drag = null;
+      if (this.drag) return;
       if (this.pointers.size > 1) {
         const d = this.spread();
         if (this.pinch > 0 && d > 0) this.zoomBy(d / this.pinch);
@@ -359,7 +379,9 @@ export class CrewViews {
           tiles: this.tiles,
           dpr: this.dpr,
           pick,
+          ...(this.view === "globe" ? { earth: this.earth, sun: sc.snap?.sun ?? null } : {}),
         });
+        if (this.view === "globe") this.earth.start();
         if (this.view === "map") {
           // (the map's point: Web Mercator undone about its centre)
           const S = 256 * 2 ** this.zoom,
@@ -419,7 +441,7 @@ export class CrewViews {
         p.seg(x + dx * 6, y + dy * 6, x + dx * 17, y + dy * 17, C.magenta, 2);
     }
     // the waypoint being dragged: its ghost under the finger, the name it carries
-    if (this.drag?.moved) {
+    if (this.drag?.armed) {
       const d = this.drag;
       const name = sc.snap?.route[d.i]?.name ?? `point ${d.i + 1}`;
       p.circle(d.x, d.y, 20);

@@ -7,7 +7,7 @@ import { shownSpeed } from "./hud/model";
 import { C_MPS, M_METRES, M_SECONDS } from "../units";
 import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
 import { toBodyFixed } from "../system/our-surface";
-import { solarBody } from "../system/solar";
+import { solarBody, solarState } from "../system/solar";
 import { fuelPlan } from "../game/flightplan";
 import type { Family } from "../net/crewcmd";
 import { fleet } from "../fleet";
@@ -23,6 +23,16 @@ const D = Math.PI / 180;
  * The crew's families open now (net/crewcmd.ts): the flight plan over the Earth; the configuration on a craft that
  * flies; the jet's autopilot in plane mode in the air, the spacecraft's out of it; the weapons in the F-35.
  */
+/** the point under the Sun on the body's own axes [°] (a direction: the globe's light, not a place on its figure) */
+function sunOver(body: string, t: number): InstrumentSnapshot["sun"] {
+  if (!solarBody(body) || body === "sun") return null;
+  const tm = t / M_SECONDS;
+  const q = toBodyFixed(body, solarState("sun", tm).pos, tm);
+  const r = Math.hypot(q[0], q[1], q[2]);
+  if (!(r > 0)) return null;
+  return { lat: Math.asin(q[2] / r) / D, lon: Math.atan2(q[1], q[0]) / D };
+}
+
 /** the F-35's weapons for the crew's backseater: a fight running, the weapon chosen, the stores, the radar */
 function armsOf(c: CameraController): NonNullable<InstrumentSnapshot["arms"]> {
   const C = c.combat;
@@ -336,6 +346,7 @@ export function crewSnapshot(c: CameraController, i: Info, status: RangerStatus 
     msn: i.msn ? { name: i.msn.name, brg: i.msn.brg * D, dist: i.msn.dist, dz: i.msn.dz } : null,
     warn: warnings(i, status, fuelKg, bingo),
     caps: { on: c.s.netCrewActions !== false, fam: crewFamilies(c) },
+    sun: sunOver(body, t),
     arms: fleet.active === "f35" ? armsOf(c) : null,
     ...(around && body === "earth" ? surroundings(c, i, g ? { lat: g.lat, lon: g.lon, alt: g.alt } : null) : {}),
     radar: i.radar

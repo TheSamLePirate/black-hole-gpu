@@ -7,6 +7,7 @@ import coastlines from "../coastlines.json";
 import { C, D, fmt, Labels, type Pen, ramp, SIDE, unitSymbol, type Point, type Rect } from "./kit";
 import { LAND } from "./land";
 import { mercX, mercY, metresPerPx, night, TILE_CREDIT, type Tiles } from "./tiles";
+import { EARTH_CREDIT, type EarthGlobe } from "./earth";
 import type { Scene } from "./scene";
 
 const COAST = coastlines as number[][][];
@@ -18,6 +19,9 @@ export interface GeoView {
   /** the globe: its scale (1: the disc in the view); the map: the Web Mercator zoom level */
   zoom: number;
   tiles?: Tiles;
+  /** the globe's photographed Earth (draw/earth.ts) and the Sun's point lighting it */
+  earth?: EarthGlobe;
+  sun?: { lat: number; lon: number } | null;
   dpr?: number;
   pick?: (pt: Point, what: { slot?: number; contact?: string; wp?: number }) => void;
 }
@@ -73,6 +77,7 @@ export function drawGeo(p: Pen, r: Rect, sc: Scene, v: GeoView) {
   const jump = v.globe ? Infinity : Math.min(W * 0.6, S / 2);
   const mpp = v.globe ? 6.371e6 / R : metresPerPx(v.lat, v.zoom);
   const labels = new Labels(p);
+  let photo = false;
   c.save();
   p.round(r.x, r.y, W, H, 10);
   c.clip();
@@ -85,6 +90,10 @@ export function drawGeo(p: Pen, r: Rect, sc: Scene, v: GeoView) {
       c.fillRect(r.x + x, r.y + y, b > 0.8 ? 2 : 1, b > 0.8 ? 2 : 1);
     }
     c.globalAlpha = 1;
+    // (the Earth photographed, lit, when its imagery has come — else the shaded vector globe)
+    photo = earth && !!v.earth?.draw(c, r, { lat: v.lat, lon: v.lon, R, cx, cy, sun: v.sun ?? null }, v.dpr ?? 1);
+  }
+  if (v.globe && !photo) {
     const halo = c.createRadialGradient(cx, cy, R * 0.96, cx, cy, R * 1.12);
     halo.addColorStop(0, "#3fb6ff66");
     halo.addColorStop(0.4, "#1a6fd022");
@@ -97,9 +106,12 @@ export function drawGeo(p: Pen, r: Rect, sc: Scene, v: GeoView) {
     sea.addColorStop(1, "#06121d");
     p.circle(cx, cy, R);
     p.fill(sea);
+  }
+  if (v.globe) {
     c.save();
     p.circle(cx, cy, R);
     c.clip();
+    if (photo) c.globalAlpha = 0.3;
     for (let la = -75; la < 90; la += 15) {
       p.path(Array.from({ length: 121 }, (_, i) => at(la, i * 3 - 180)));
       p.stroke(la === 0 ? C.grid2 : C.grid, 1);
@@ -108,13 +120,14 @@ export function drawGeo(p: Pen, r: Rect, sc: Scene, v: GeoView) {
       p.path(Array.from({ length: 61 }, (_, i) => at(i * 3 - 90, lo)));
       p.stroke(lo === 0 ? C.grid2 : C.grid, 1);
     }
+    c.globalAlpha = 1;
   } else {
     c.fillStyle = "#0a1620";
     c.fillRect(r.x, r.y, W, H);
   }
   // the land: vector (the globe's, the map's while its tiles come or offline), then the map's tiles over it
   const tiled = earth && !v.globe && !!v.tiles?.online;
-  if (earth) {
+  if (earth && !photo) {
     // (under the tiles the day's colours: inverted with them, the night's sea and land where none has come yet)
     if (tiled) {
       c.fillStyle = "#aad3df";
@@ -178,7 +191,8 @@ export function drawGeo(p: Pen, r: Rect, sc: Scene, v: GeoView) {
       c.globalAlpha = 1;
       p.stroke("#5fc3da", 1.1);
     }
-  } else if (own) p.text(own.body.toUpperCase(), cx, cy, { col: "#ffffff10", size: Math.min(W, H) * 0.12, align: "center", weight: 800 });
+  } else if (!earth && own)
+    p.text(own.body.toUpperCase(), cx, cy, { col: "#ffffff10", size: Math.min(W, H) * 0.12, align: "center", weight: 800 });
   if (!v.globe) {
     const vg = c.createRadialGradient(cx, cy, Math.min(W, H) * 0.35, cx, cy, Math.hypot(W, H) * 0.6);
     vg.addColorStop(0, "#00000000");
@@ -338,6 +352,14 @@ export function drawGeo(p: Pen, r: Rect, sc: Scene, v: GeoView) {
   for (const f of later) f();
   if (v.globe) c.restore();
   c.restore();
+  if (photo)
+    p.text(EARTH_CREDIT, r.x + W - 8, r.y + H - 6, {
+      col: "#9fb3bdcc",
+      size: 9,
+      align: "right",
+      font: "system-ui, sans-serif",
+      bg: "#050a0e99",
+    });
   // the scale and the credits (the map)
   if (!v.globe) {
     const want = mpp * W * 0.18;

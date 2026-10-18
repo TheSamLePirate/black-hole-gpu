@@ -12,8 +12,9 @@ distincte, conservée pendant ses reconnexions, afin de ne pas remplacer le pilo
 ## Chargement et données
 
 `crew/index.html` ne charge que `src/crew/main.ts` et sa feuille de style. Il importe le client réseau pur,
-le protocole, les mathématiques WGS84 et un fond vectoriel. Aucun accès à WebGPU/WebGL, shader, texture,
-modèle, moteur de simulation ou moteur audio du jeu. Le build place tous ses fichiers sous `crew/`, en dehors
+le protocole, les mathématiques WGS84 et un fond vectoriel. Aucun moteur de simulation, modèle ou moteur audio du
+jeu ; WebGPU n'est demandé qu'à l'ouverture de la vue Globe (l'e2e compte les accès à `navigator.gpu` : aucun au
+démarrage). Le build place tous ses fichiers sous `crew/`, en dehors
 du précache du simulateur. Le service worker du simulateur laisse passer ces URL et ne les remplace jamais
 par sa page principale hors ligne. La console n'installe pas de service worker ; une première ouverture
 nécessite donc une connexion.
@@ -62,7 +63,7 @@ tampon suit la densité de l'écran, borné à ~4 Mpx.
 | Vol (PFD) | horizon, échelle de tangage, inclinaison et dérapage, vecteur vitesse, rubans vitesse (consigne, tendance) et altitude (consigne, sol), vario, cap (consigne, route, point actif, objectif), FMA, ILS, hauteur radio, G, α |
 | Navigation (ND) | arc cap en haut ou rose nord en haut, route (branche active magenta), T/D, prédiction, vent, trafic façon TCAS (hauteur relative), navires, unités, zones, joueurs, pistes radar |
 | Carte | OpenStreetMap de nuit, Web Mercator, zoom continu ; traînée colorée par l'altitude, prédiction minutée, plan, zones, tous les contacts, joueurs ; étiquettes sans chevauchement |
-| Globe | orthographique ombré, atmosphère, étoiles, continents remplis |
+| Globe | la Terre photographiée : NASA Blue Marble (relief ombré et bathymétrie) le jour, Black Marble (lumières des villes) la nuit, terminateur à l'heure du simulateur du pilote (`sun` dans l'instantané), limbe assombri, halo de l'atmosphère, étoiles — en WebGPU (textures 4 096 px avec leurs mipmaps), sinon sur le processeur (2 048 px, une image par changement de vue), sinon (hors ligne) le globe vectoriel |
 | Radar | balayage et rémanence ; positions partagées (joueurs + trafic + unités) ou capteur du pilote ; liste triée par distance |
 | Systèmes | moteur, carburant (bingo, autonomie, rayon, à l'arrivée), configuration, charge/incidence, structure, pilote automatique et assistance, orbite, alertes |
 | Plan de vol | profil vertical (niveaux, contraintes, T/D, hauteurs prévues) et branches (distance, ETE, ETA, altitude, vitesse), carburant à l'arrivée |
@@ -79,6 +80,14 @@ projection des tuiles OSM, définie sur les coordonnées WGS84). Les autres corp
 situe la trace. Les positions inertielles ne sont jamais interprétées comme terrestres ; sans position
 géographique fournie par le pilote, la vue l'indique, et les distances locales de Gargantua sont indisponibles.
 Les vues relatives ne comparent que des poses dans le même corps et le même repère.
+
+### Le globe
+
+`src/crew/draw/earth.ts`. Les deux images équirectangulaires viennent de GIBS (NASA, WMS EPSG:4326, CORS) à la
+première ouverture du Globe : 2 048 px d'abord (le serveur les dessine à la demande : ~1 s), puis 4 096 px pour
+WebGPU en arrière-plan. Chaque pixel du disque est ramené à sa latitude et sa longitude (l'orthographique inverse),
+le niveau de mip choisi d'après l'empreinte du pixel (pas de couture à l'antiméridien). Le crédit « Imagerie NASA
+Blue Marble · Black Marble (GIBS) » s'affiche avec l'image.
 
 ### Fond de carte
 
@@ -115,15 +124,39 @@ en arrière-plan n'est promise.
 Dans le simulateur classique, le réglage radio existant qui coupe les appareils du même réseau s'applique
 aussi à la voix d'une console sur ce réseau. Le désactiver côté pilote si cet appareil doit être entendu.
 
-## TARS et automatisation
+## Agir à bord : tout sauf piloter
 
-TARS dispose ici d'une console locale, sans modèle en ligne ni chargement de l'application classique. Il
-lit seulement les mesures reçues et exécute les mêmes actions que les contrôles : `carte`, `globe`, `radar`,
-`tableau`, `vol`, `navigation`, `systèmes`, `plan`, `télémétrie`, `courbes`, `trafic`, `impérial`/`métrique`, `suivre Ana`, `zoom +`, `centrer`, `ajuster`, `portée 50`, `nord`, `cap`, `capteur`,
-`joueurs`, `pause`, `direct`, `courbe Mach`, `écouter`, `couper micro`, `export CSV` ou une mesure comme
-`carburant`. Il ne peut ni piloter ni modifier le vol distant.
+Depuis la console, un équipier commande à bord du pilote qu'il suit ce que ferait un copilote, un navigateur
+ou un officier systèmes d'armes — jamais le manche, la manette des gaz, le mode de vol ni une touche libre
+(plan et audit : `docs/PLAN-CREW-ACTIONS.md`). Tout membre entré comme **Équipage** peut agir, sans validation
+du pilote ; le pilote voit un toast « Ben (équipage) : train sorti » et garde un **verrou général** : Réseau ›
+Écrans › « L'équipage peut agir à bord », ou Réglages › Réseau › Actions de l'équipage. Verrouillé, les
+équipiers ne font que regarder (pastille VERROUILLÉ, contrôles grisés avec leur raison).
 
-Dans l'application classique, TARS peut ouvrir le partage et son QR via `show_screen(crew_console)`.
+| famille | où dans la console | ce qui est commandé |
+|---|---|---|
+| navigation (sur Terre) | Plan de vol (barre), Carte et ND (toucher, glisser un point), menu d'un contact | ajouter un terrain ou un lieu, un point touché (à la fin, avant le point actif, « Direct ici »), contraintes d'altitude et de vitesse, déplacer, supprimer, direct, croisière, procédures, vider (second appui), cibler |
+| configuration (appareil qui vole) | Systèmes (barre), bandeau des alertes | train, volets 0/½/plein, aérofrein, SAS, acquitter l'alarme |
+| pilote automatique avion | MCP sous le PFD et le Tableau | AP, A/THR, sélecteurs VIT/CAP/ALT (maintenir : plus vite), LNAV, VNAV, approche ILS, orbite ici, attente, suivi de terrain, interception et formation (menu d'un contact), remise de gaz |
+| ordinateur de vol (vaisseau) | le même bandeau, hors de l'air | tenue d'attitude, autopilotes (atterrir, décoller vers une orbite…), manœuvres et missions en **aperçu** chiffré puis exécutées, plan, relâcher |
+| armement (F-35) | bandeau sous le Radar, menu d'un contact | mode radar, arme, verrouillage, **TIR** et canon à maintenir 0,6 s (au clavier : deux appuis), leurres |
+
+Chaque contrôle montre l'état réel lu dans les instruments du pilote (jamais supposé), tourne pendant
+l'attente de la réponse (3 s au plus), puis clignote vert ou rouge avec la raison d'un refus ; le **journal de
+bord** (panneau Équipage) liste qui a demandé quoi, sur tous les écrans.
+
+Le contrat est `src/net/crewcmd.ts` : `crew-cmd { v: 1, id, to, act, args }` vers le pilote suivi,
+`crew-ack { v: 1, id, to, act, ok, msg, what, data? }` entendu par tous. Chaque acte du catalogue a sa famille et
+le schéma de ses arguments (le vérificateur des outils du jeu). À bord (`src/ui/crew-exec.ts`), l'ordre n'est
+exécuté que s'il vient d'un membre `instruments` (rôle de la liste, numéro estampillé par le serveur), qu'il
+vise ce pilote, que le verrou est ouvert, que sa famille est ouverte sur cet appareil et dans ce mode
+(instantané : `caps`), au plus quatre par seconde et une fois chacun ; il passe par les fonctions des outils du
+jeu, appelées directement — aucun agent, aucun modèle — et par trois appels ajoutés au contrôleur : `apSet`
+(sélecteurs du pilote automatique), `navSet` (LNAV/VNAV), `routeSetPoint` (un point du plan modifié). Un toucher
+sur le ND redevient un lieu par le problème direct de WGS84 (`wgs84Direct`).
+
+La console n'a plus de TARS : elle agit par ses propres contrôles. Dans l'application classique, TARS peut
+toujours ouvrir le partage et son QR via `show_screen(crew_console)`.
 
 L'interface d'automatisation est `window.__crew`, indépendante de `__bh` :
 
@@ -131,16 +164,20 @@ L'interface d'automatisation est `window.__crew`, indépendante de `__bh` :
 |---|---|
 | `net` | `NetClient` : salle, membres, état, horloge, mesh, microphone |
 | `model` | `crafts()`, `own()`, `selected`, `history`, `csv()` |
-| `views` | vue, zoom, portée en mètres, orientation, suivi, canal, fenêtre en secondes, inspection |
+| `views` | vue, zoom, portée en mètres, orientation, suivi, canal, fenêtre en secondes, inspection ; `onGround`, `onWp`, `onMoveWp` (les touchers de la carte, du ND et du plan) |
+| `actions` | `send(act, args)` (Promise : `ok`, `msg`, `data`), `can(famille)`, `board` (journal), `busy` |
 | `radio` | `listen()`, `enableMic()`, `disableMic()`, `gate`, `speaking(slot)`, `volume(slot, value?)`, `mute(slot)` |
 | `join(code, name, password?)` | rejoindre comme instruments (Promise) |
 | `setView(view)` | `dash`, `pfd`, `nd`, `map`, `globe`, `radar`, `schematic` (systèmes), `plan`, `telemetry` |
-| `askTars(text)` | commande locale, réponse texte (Promise) |
 
 ## Vérification
 
 `bun test tests/crew.test.ts tests/pwa-rules.test.ts` vérifie le garde de transmission, le contrat, WGS84 et
-les frontières du build et du cache. `bun run e2e crew` exerce une salle réelle, les cinq vues à 390×844,
+les frontières du build et du cache. `bun test tests/crew-actions.test.ts` vérifie le contrat des ordres, la cadence, qu'aucun acte ne pilote, les
+refus de l'exécuteur et le problème direct de WGS84. `bun run e2e crew-actions` (ou sur le mini :
+`bun scripts/remote.ts run -- E2E=1 bun test tests/e2e/crew-actions.e2e.test.ts --timeout 600000`) pilote le vrai
+simulateur depuis la console dans un cadre de la même page : configuration, verrou, plan de vol, MCP, ordinateur
+de vol près de l'ISS, armement en combat libre. `bun run e2e crew` exerce une salle réelle, toutes les vues à 390×844,
 1024×768 et 844×390, une conversation WebRTC entre deux pages du même Chrome, le PTT à plusieurs doigts,
 les interruptions et les permissions retardées, puis les mesures émises par le vrai simulateur (avec ses blocs
 `auto`, `sys`, `warn`) et le lien de ses Écrans.

@@ -123,7 +123,7 @@ porte-avions, missions, leçons, réglages graphiques/son, caméra/HUD/panneaux 
   téléphone sur un refus.
 - **« Pas de TARS »** : le bouton et la boîte TARS de la console sont retirés (à confirmer, voir plus bas).
 
-## Phases (une phase = un commit + des captures)
+## Phases (une phase = un commit + des captures) — toutes faites le 2026-10-18
 
 | phase | contenu | vérification |
 |---|---|---|
@@ -137,11 +137,20 @@ porte-avions, missions, leçons, réglages graphiques/son, caméra/HUD/panneaux 
 
 Estimation : A0 ½ journée, A1 ½, A2 1, A3 1, A4 ½, A5 1, A6 ½.
 
-## Points ouverts
+## Points tranchés (2026-10-18)
 
-1. « Pas de TARS » : retirer aussi le TARS **local** de la console (la boîte de commandes par mots-clés
-   d'aujourd'hui), ou seulement ne pas l'utiliser pour agir ?
-2. Garder chez le pilote un **interrupteur général** « Actions de l'équipage » (activé par défaut) pour couper
-   tout d'un geste — malgré « tout autorisé » ?
-3. Le pilote est informé par un toast ; faut-il aussi une **annonce vocale** (la voix de bord dit
-   « Train sorti — Ben ») ?
+1. Pas de TARS du tout dans la console : le TARS local (commandes par mots-clés) est retiré.
+2. Un verrou général chez le pilote (`settings.netCrewActions`, Réseau › Écrans), ouvert par défaut.
+3. Le toast suffit (pas d'annonce vocale).
+
+## Fait
+
+| phase | commit | mesure |
+|---|---|---|
+| A0 | contrat, exécuteur, verrou, retrait de TARS, journal de bord | e2e crew 7/7 : ordre exécuté puis refusé verrou fermé |
+| A1 | configuration | vrai F-35 : train, volets, aérofrein ; toasts au pilote |
+| A2 | plan de vol | Le Bourget ajouté, point de carte, 4 000 m, déplacé, direct (LNAV point 2) |
+| A3 | MCP | +500 m, −20°, A/THR, LNAV on/off, orbite puis coupée ; HUD ALT HDG A/T |
+| A4 | ordinateur de vol | Ranger près de l'ISS : tenue prograde, circularisation en aperçu (Δv 2 m/s) |
+| A5 | armement | AIM-9X, TWS, leurres, tir maintenu (« no target for the seeker ») |
+| A6 | doc, campagne | voir le dernier commit |

@@ -112,7 +112,7 @@ test("geographic fallback respects WGS84 at Paris and the poles and rejects iner
   expect(relative(a, craft({ ...b.sample, body: 1 }))).toBeNull();
 });
 
-test("crew build stays independent: one small JS, no shaders, workers, images or simulator engine", async () => {
+test("crew build stays independent: one small JS, no shader files, workers, images or simulator engine (the globe's WebGPU inline)", async () => {
   const build = await Bun.build({
     entrypoints: ["./crew/index.html"],
     outdir: "/tmp/kerr-crew-build-test",
@@ -123,8 +123,10 @@ test("crew build stays independent: one small JS, no shaders, workers, images or
   expect(build.outputs.every((o) => /\.(html|js|css)$/.test(o.path))).toBe(true);
   const scripts = build.outputs.filter((o) => o.path.endsWith(".js"));
   expect(scripts).toHaveLength(1);
-  expect(scripts[0]!.size).toBeLessThan(200_000);
-  expect(await scripts[0]!.text()).not.toMatch(/createShaderModule|requestAdapter|audio-worklet|basis_transcoder|\.wgsl/);
+  // (its budget: the instruments, the actions, the globe's renderer and the coasts — 197 KB minified on 2026-10-18)
+  expect(scripts[0]!.size).toBeLessThan(256_000);
+  // (WebGPU only for the globe's photographed Earth, its shader inline — asked once the globe is shown: the e2e counts it)
+  expect(await scripts[0]!.text()).not.toMatch(/audio-worklet|basis_transcoder|\.wgsl|ktx2|scenery-worker|plan-worker/);
 });
 
 test("instruments v1 grows by optional blocks: flight, autopilot, plan, systems, alerts, traffic and zones bounded", () => {
