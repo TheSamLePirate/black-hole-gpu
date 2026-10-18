@@ -122,6 +122,11 @@ uniform of the flown craft's), the crafts of the players gone kept in the room's
 - **Co-op**: the pilots one side (blue, never locked, not hurt unless friendly fire) — they were each other's
   targets before.
 
+Measured on kerr-mini (`tests/e2e/net-shotdown`): Ben shot down 2 300 m up, his craft down in 24 s, rolling
+1.6 rad/s, its nose dropping — on Ana's page 2 284 → 2 175 m when 2 283 → 2 180 m on his —, its crash on her page 11 m
+from his craft's last place there, on the ground; the kill cam on her, Ben again 5 000 m up 6 s after.
+(`net-battle`: Ana down in 34 s from the arena's 4 000 m.)
+
 Measured on kerr-mini (`tests/e2e/net-battle`, `net-coop`): the AIM-120 fired at 15 km seen on the target's
 helmet at 15 km, the kill on both score sheets; the host's drones on the guest's world within a metre; the
 guest's AIM-9X downing one, the kill his on both; the racers 72 m apart at the start.

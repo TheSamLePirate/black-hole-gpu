@@ -4,7 +4,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // PLAN-RESEAU R3: a battle between two pages — Ana starts an "everyone for himself" match from the room panel
 // (real clicks); at the countdown's end both F-35s are put on the arena's ring, head-on 16 km apart; Ben locks
 // Ana (Tab), picks the AIM-120 (=) and fires a pair (Enter, Enter): Ana's helmet warns of it, it hits her, she is shot down
-// — said to all, the kill Ben's on both score sheets —, and flies again 5 s later; the host ends the match: the
+// — said to all, the kill Ben's on both score sheets —, falls out of control to her crash, and flies again 5 s after it; the host ends the match: the
 // ranking on both screens. (NET_SHOTS=<dir>: both views pictured: the missile flying, the end.)
 
 describe.skipIf(!E2E)("a battle", () => {
@@ -85,7 +85,7 @@ describe.skipIf(!E2E)("a battle", () => {
     await shot(a, "battle-a-warning");
   }, 60_000);
 
-  test("the AIM-120 hits Ana: shot down, the kill Ben's on both sheets; she flies again", async () => {
+  test("the AIM-120 hits Ana: shot down, the kill Ben's on both sheets; she falls to her crash, flies again", async () => {
     // (a miss happens — two pages on one GPU, their samples in fits —: another shot, three at most)
     for (let k = 0; k < 3; k++) {
       const down = await a
@@ -112,12 +112,15 @@ describe.skipIf(!E2E)("a battle", () => {
     for (const p of [a, b])
       await p.waitFor(`__bh.net.match.sheet.row(${sb}).kills === 1 && __bh.net.match.sheet.row(${sa}).deaths === 1`, 10_000);
     console.log(`  ${await b.js<string>(`[...document.querySelectorAll(".nm-feed-row")].map((e) => e.textContent).join(" | ")`)}`);
-    // (the kill cam: Ana's view on Ben's craft while she waits)
-    expect(await a.js<number | null>(`__bh.net.session.follow?.slot ?? null`)).toBe(sb);
+    // (out of control to her crash — game/wreckfall.ts —, from some 4 km: well under a minute; then the kill cam,
+    // her view on Ben's craft while she waits)
+    await a.waitFor(`__bh.camera.combat.fall?.endAt != null`, 60_000);
+    console.log(`  Ana's crash: ${await a.js<string>(`__bh.net.match.log.filter((l) => l.includes("impact")).join(" / ")`)}`);
+    await a.waitFor(`__bh.net.session.follow?.slot === ${sb}`, 6000);
     await a.waitFor(`__bh.camera.combat.downAt === null`, 15_000);
     expect(await a.js<boolean>(`__bh.net.session.follow === null && __bh.camera.puppet === null`)).toBe(true);
     expect(await a.js<number>(`__bh.camera.combat.world.damage`)).toBe(0);
-  }, 90_000);
+  }, 240_000);
 
   test("the host ends the match: the ranking on both screens, Ben first", async () => {
     await a.js(`(() => { __bh.net.match.stop(); return 1; })()`);
