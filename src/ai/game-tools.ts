@@ -353,6 +353,7 @@ const AUTOS: Auto[] = [
   "dock",
   "entry",
   "burns",
+  "keep",
 ];
 const HOLDS: Hold[] = [
   "none",
@@ -1047,7 +1048,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "autopilot",
       description:
-        "Engage an autopilot (none switches it off). hover: hold position; circularize; approach: close on the target only (it does not dock); orbit: orbit the target; node: execute the planned manoeuvre; transfer; land: powered landing below; takeoff: to orbit (altKm, incDeg); dock: TO DOCK — target the station or craft first; within 3 km it closes in, aligns and docks by itself (farther: plan_mission to it first, which ends 200 m from the port); entry: from orbit, deorbit burn + entry + glide + runway landing at `site`; burns: fly the flight computer's burns.",
+        "Engage an autopilot (none switches it off). hover: hold position; circularize; approach: close on the target only (it does not dock); orbit: orbit the target; node: execute the planned manoeuvre; transfer; land: powered landing below; takeoff: to orbit (altKm, incDeg); dock: TO DOCK — target the station or craft first; within 3 km it closes in, aligns and docks by itself (farther: plan_mission to it first, which ends 200 m from the port); entry: from orbit, deorbit burn + entry + glide + runway landing at `site`; burns: fly the flight computer's burns; keep: station keeping — hold the craft where it is against the station or a craft within 5 km (the target's orbital frame), on the thrusters.",
       params: {
         mode: { type: "string", enum: AUTOS },
         site: { type: "string", description: "entry/land: a landing site or runway name (list_places)" },

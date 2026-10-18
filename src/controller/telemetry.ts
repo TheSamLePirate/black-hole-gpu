@@ -89,6 +89,7 @@ export interface FlightInfo {
   /** a spacecraft's level of assistance (controller/spaceassist.ts), the RCS holding the drift near a craft */
   spaceAssist?: string;
   spaceDrift?: boolean;
+  rcsTranslate?: boolean;
   /** what holds the rails' warp back ("": nothing) */
   railsNote: string;
   rollAlign: boolean;
@@ -306,6 +307,7 @@ function flightInfo(this: CameraController): FlightInfo {
     sas: this.spaceRate ? this.spaceRate.law === "damped" : this.pilot.sas,
     spaceAssist: fleet.active === "f35" ? undefined : this.assistLevel(),
     spaceDrift: this.spaceDrift,
+    rcsTranslate: this.rcsMode === "translate" && fleet.active !== "f35",
     /** what holds the rails' warp back ("" : nothing) */
     railsNote: this.railsNote,
     rollAlign: this.pilot.rollAlign,

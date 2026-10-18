@@ -40,7 +40,10 @@ declare module "../controls" {
     /** the level's SAS law this frame (the flight computer's FlightContext.rate), the RCS holding the drift */
     spaceRate?: FlightContext["rate"];
     spaceDrift?: boolean;
+    /** the RCS mode (⇧9): the attitude keys turn the craft, or translate it (docking) */
+    rcsMode?: "rotate" | "translate";
     spaceAssistStep: typeof spaceAssistStep;
+    rcsModeToggle: typeof rcsModeToggle;
     spaceRecoverStart: typeof spaceRecoverStart;
   }
 }
@@ -69,6 +72,22 @@ export function driftHold(vrel: [number, number, number], ax: [number, number, n
     ty: clamp(-dot3(vrel, Y) * k, -1, 1),
     tz: clamp(-dot3(vrel, Z) * k, -1, 1),
   };
+}
+
+/** The translation mode's keys (pure): W S (the pitch) up · down, A D (the yaw) left · right, the throttle keys forward
+ *  · back — added to the translation keys; the roll kept; the pitch, the yaw and the throttle taken. */
+export function translateKeys(inp: PilotInput): PilotInput {
+  const c = (x: number) => Math.min(Math.max(x, -1), 1);
+  return { ...inp, tx: c(inp.tx + inp.yaw), ty: c(inp.ty - inp.pitch), tz: c(inp.tz + inp.throttle), pitch: 0, yaw: 0, throttle: 0 };
+}
+
+/** ⇧9: the RCS mode switched — the attitude keys turning the craft, or translating it. What to say. */
+function rcsModeToggle(this: CameraController): string {
+  if (fleet.active === "f35") return t("RCS mode: the spacecraft's");
+  this.rcsMode = this.rcsMode === "translate" ? "rotate" : "translate";
+  return this.rcsMode === "translate"
+    ? t("RCS: translation — W S up · down, A D left · right, ⇧ Alt forward · back")
+    : t("RCS: rotation — the attitude keys turn the craft");
 }
 
 /** Over a solid ground, how high the craft's gear is [m] (Infinity off one, or near none). */
@@ -105,11 +124,15 @@ function spaceRecoverStart(this: CameraController): string {
  */
 function spaceAssistStep(this: CameraController, inp: PilotInput, dt: number) {
   this.spaceDrift = false;
+  // (station keeping let go: its held point forgotten — controller/stationkeep.ts)
+  if (this.pilot.auto !== "keep") this.keepRun = null;
   if (fleet.active === "f35") {
     this.spaceRate = null;
     this.spaceRecover = null;
     return;
   }
+  // (the translation mode: the attitude keys and the throttle's translate the craft)
+  if (this.rcsMode === "translate") Object.assign(inp, translateKeys(inp));
   const level = this.assistLevel() as SpaceAssistLevel;
   let rate = spaceRateLaw(level);
   const P = this.pilot;
@@ -155,5 +178,5 @@ function spaceAssistStep(this: CameraController, inp: PilotInput, dt: number) {
 }
 
 export function installSpaceAssist(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { spaceAssistStep, spaceRecoverStart });
+  Object.assign(C.prototype, { spaceAssistStep, spaceRecoverStart, rcsModeToggle });
 }

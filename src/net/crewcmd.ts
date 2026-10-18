@@ -38,6 +38,7 @@ export const AUTOS = [
   "dock",
   "entry",
   "burns",
+  "keep",
 ] as const;
 export const MANEUVERS = [
   "circularize",
@@ -77,6 +78,7 @@ export const AUTO_FR: Record<string, string> = {
   dock: "amarrage",
   entry: "rentrée",
   burns: "combustions du plan",
+  keep: "maintien de position",
 };
 export const MANEUVER_FR: Record<string, string> = {
   circularize: "circularisation",

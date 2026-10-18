@@ -38,7 +38,8 @@ export type Auto =
   | "takeoff"
   | "dock"
   | "entry"
-  | "burns";
+  | "burns"
+  | "keep";
 /** How the craft is flown in the air: as a rocket (rates, as in space), as a plane (the control
  *  surfaces, the flight path held), as a sci-fi craft (the flight computer flies a commanded velocity). */
 export type FlightMode = "rocket" | "plane" | "sf";
@@ -69,6 +70,7 @@ export const AUTO_NAMES: Record<Auto, string> = {
   dock: t("Docking"),
   entry: t("Entry & landing"),
   burns: t("Flight computer burns"),
+  keep: t("Station keeping"),
 };
 
 /** Pilot's commands, −1 … 1 (rotation: positive = nose up, nose right, roll right). */
@@ -433,8 +435,9 @@ export class FlightComputer {
         const align = c.snap ? 1 : dot(Z, point);
         throttle = c.burn.throttle * clamp((align - 0.9945) / (0.9994 - 0.9945), 0, 1);
       }
-    } else if (this.auto === "dock" && c.want) {
-      // docking: the thrusters only, within their authority; the attitude held on the port's axis
+    } else if ((this.auto === "dock" || this.auto === "keep") && c.want) {
+      // docking, station keeping: the thrusters only, within their authority; the attitude held on the port's axis
+      // (station keeping: the pilot's — the SAS)
       const T = Math.max(1.2 * c.tauRate, 1e-3);
       const A = add(scale(add(toU(c.want.beta), scale(toU(c.beta), -1)), 1 / T), c.want.ff);
       const a = len(A);

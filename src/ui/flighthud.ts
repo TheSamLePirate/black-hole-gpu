@@ -181,6 +181,7 @@ const AUTO_KEYS: [Auto, string, string][] = [
   ["takeoff", t("TAKE OFF"), "U"],
   ["entry", t("ENTRY"), "⇧G"],
   ["dock", t("DOCK"), "B"],
+  ["keep", t("KEEP"), "⇧8"],
 ];
 
 const GLYPH: Record<string, string> = {
@@ -1914,15 +1915,16 @@ export class FlightHud {
     setChip(
       "sas",
       i.sas,
-      i.spaceAssist === "manual"
-        ? t("MANUAL")
-        : i.spaceDrift
-          ? t("SAS · DRIFT HELD")
-          : i.spaceAssist === "assisted"
-            ? t("SAS · ASSISTED")
-            : i.spaceAssist === "beginner"
-              ? t("SAS · BEGINNER")
-              : "SAS",
+      (i.rcsTranslate ? `${t("RCS TRANSL.")} · ` : "") +
+        (i.spaceAssist === "manual"
+          ? t("MANUAL")
+          : i.spaceDrift
+            ? t("SAS · DRIFT HELD")
+            : i.spaceAssist === "assisted"
+              ? t("SAS · ASSISTED")
+              : i.spaceAssist === "beginner"
+                ? t("SAS · BEGINNER")
+                : "SAS"),
     );
     // (the HUD's kind: lit when forced, its name; automatic: dim, the phase's)
     setChip("hudk", s.hudKind !== "auto", `HUD ${hudKindName(this.kind).toUpperCase()}`);
@@ -2134,6 +2136,8 @@ export class FlightHud {
         for (const k of ["prograde", "retrograde", "radialOut", "radialIn", "normal", "antinormal"])
           why[k] = i.landed ? t("On the ground") : t("No orbit here");
       if (i.landed) why.hover = why.circularize = why.land = t("On the ground");
+      // (station keeping: a craft or the station within 5 km — docked, its key backs off first)
+      if (!i.links.length && (!i.dock || i.dock.range > 5000)) why.keep = t("No craft within 5 km");
       else {
         why.takeoff = t("Not on the ground");
         if (!nearGround) why.land = t("No ground near");

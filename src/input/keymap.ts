@@ -42,6 +42,7 @@ export type KeyAction =
   | "flaps"
   | "airBrake"
   | "jetSystem"
+  | "spaceSystem"
   | "route"
   | "combat"
   | "cineShot"
@@ -310,14 +311,19 @@ export const KEYMAP: KeySection[] = [
         keys: "8 · 9 · 0 · ⇧0 · F7 · U · B",
         text: "Autopilot: hold position · circularize · approach · orbit the target · land · take off · dock (the ISS within 3 km)",
         bind: [
-          fly("Digit8", "auto", { arg: "hover" }),
-          fly("Digit9", "auto", { arg: "circularize" }),
+          fly("Digit8", "auto", { arg: "hover", shift: false }),
+          fly("Digit9", "auto", { arg: "circularize", shift: false }),
           fly("Digit0", "auto", { arg: "approach", shift: false }),
           fly("Digit0", "auto", { arg: "orbit", shift: true }),
           fly("F7", "auto", { arg: "land" }),
           fly("KeyU", "auto", { arg: "takeoff" }),
           fly("KeyB", "auto", { arg: "dock", shift: false }),
         ],
+      },
+      {
+        keys: "⇧8 · ⇧9",
+        text: "Station keeping: held where it is against the station or a craft within 5 km, on the thrusters (docked: undock, back off 30 m, then hold) · RCS mode: the attitude keys turn the craft, or translate it (W S up · down, A D left · right, ⇧ Alt forward · back; Q E still roll)",
+        bind: [fly("Digit8", "spaceSystem", { arg: "keep", shift: true }), fly("Digit9", "spaceSystem", { arg: "rcsMode", shift: true })],
       },
       {
         keys: "M · ⇧M",

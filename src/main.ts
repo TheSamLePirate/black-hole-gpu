@@ -3160,6 +3160,7 @@ async function main() {
               ? camera.navToggle()
               : camera.jetToggle(a === "ab" ? "ab" : a === "athr" ? "athr" : "ap"),
       ),
+    spaceSystem: (_, a) => panel.toast(a === "rcsMode" ? camera.rcsModeToggle() : camera.keepKey()),
     route: () => routePanel.open(),
     airBrake: () => {
       camera.airBrake = camera.airBrake > 0 ? 0 : 1;
@@ -3917,8 +3918,14 @@ async function main() {
               ["takeoff", { fr: "Décoller", en: "Take off" }, "U"],
               ["dock", { fr: "Amarrer", en: "Dock" }, "B"],
               ["entry", { fr: "Rentrée", en: "Entry" }, "⇧G"],
+              ["keep", { fr: "Maintien de position", en: "Station keeping" }, "⇧8"],
             ] as const
-          ).map(([a, label, key]) => ({ label, key, on: P.auto === a, run: () => pilotAuto(a) })),
+          ).map(([a, label, key]) => ({
+            label,
+            key,
+            on: P.auto === a,
+            run: () => (a === "keep" ? panel.toast(camera.keepKey()) : pilotAuto(a)),
+          })),
         },
         // (the ways flown and the places, then the camera: wheels of their own — the main one kept to a glance)
         {

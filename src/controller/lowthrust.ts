@@ -537,6 +537,7 @@ function ourWant(this: CameraController, cam: ReturnType<typeof cameraFrame>, sa
   }
   this.ourAnchor = null;
   if (P.auto === "land" || P.auto === "takeoff") return this.ourSurfaceWant(nav, g, say, out, T);
+  if (P.auto === "keep") return this.keepWant(nav, say, out);
   if (P.auto === "dock") return this.dockWant(nav, say, out);
   if (P.auto !== "approach" && P.auto !== "orbit" && P.auto !== "circularize")
     return say(tf("{0}: not in our universe (yet)", AUTO_NAMES[P.auto]));
@@ -2109,6 +2110,12 @@ function hubCompute(this: CameraController): HubInfo | null {
     // (low over a ground: the descent's graph too — the hold a hover)
     return sf && !sf.landed && sf.alt !== undefined && sf.alt < 5000 ? { ...H, ...this.descentAssist(sf, true) } : H;
   }
+  if (a === "keep" && N.off !== undefined)
+    return base(t("KEEP"), tf("held against the {0}", N.name ?? ""), [
+      [t("Off the held point"), N.off < 10 ? `${N.off.toFixed(2)} m` : km(N.off)],
+      [t("Drift"), ms(N.drift ?? 0)],
+      [t("Reference frame"), this.keepRun?.frame === "lvlh" ? t("orbital (LVLH)") : t("its own")],
+    ]);
   if (a === "dock") return this.dockCard() ?? base("DOCK", this.dockAuto?.phase ?? t("docking"));
   return base(AUTO_NAMES[a].toUpperCase(), t("flying"));
 }
@@ -2286,6 +2293,7 @@ function autopilotWant(this: CameraController, cam: ReturnType<typeof cameraFram
   // our universe: Newtonian autopilots in the home frame
   if (this.ourNav(cam)) return this.ourWant(cam, say, T);
   if (P.auto === "dock") return say(tf("Docking: with the ISS, in our solar system"));
+  if (P.auto === "keep") return say(t("Station keeping: in our solar system"));
   if (P.auto === "hover") {
     if (cam.region !== "hole") return { beta: [0, 0, 0], ff: [0, 0, 0] };
     const z = cam.zamo;
