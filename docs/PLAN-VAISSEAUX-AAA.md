@@ -399,8 +399,8 @@ Chaque phase porte sa ligne réseau ; N finit ce qui n'existe qu'à plusieurs.
 | K5 | postes à bord / au sol, délai lumière réglable | **fait** 2026-10-18 ([fiche](progress/vaisseaux/K5.md)) — messages vocaux enregistrés en N |
 | K6 | actions vaisseau complètes | **fait** 2026-10-18 ([fiche](progress/vaisseaux/K6.md)) — ordres de flotte aux autres joueurs en N |
 | K7 | démo vaisseau, e2e, doc crew | **fait** 2026-10-18 ([fiche](progress/vaisseaux/K7.md)) |
-| X6 | cockpits Ranger (a), Lander (b), Endurance (c) | à faire |
-| X7 | sons, effets, caméras | à faire |
+| X6 | cockpits Ranger (a), Lander (b), Endurance (c) | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X6.md)) — tableaux propres au Lander et à l'Endurance (Blender / CC-BY) et second siège en N restent |
+| X7 | sons, effets, caméras | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X7.md)) — vues d'exception spatiales (X9), sons des autres (N) |
 | X8 | télémétrie, graphiques, comptes rendus | à faire |
 | X9 | école de vol spatial (15 leçons) | à faire |
 | X10 | défis et qualifications | à faire |

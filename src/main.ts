@@ -1,4 +1,5 @@
 import { SystemsPage } from "./ui/systemspage";
+import type { FailureKind } from "./game/systems";
 import { holeFleet } from "./holefleet";
 import { SceneryHitboxes } from "./ui/scenery-hitboxes";
 import { planetFrame, toLocal } from "./landing";
@@ -3380,8 +3381,24 @@ async function main() {
     act: (id, v) => cockpitAct(cockpitDeps, id, v),
     // (the screens' pages: their tabs over the screen under the pointer — PLAN-COCKPIT K3)
     screenHover: (slot, u, v) => cockpitScreens.hoverScreen(slot, u, v),
-    screenTab: (_, u, v) => tabAt(u, v) !== null,
+    // (a tab, or a page's touch button — PLAN-VAISSEAUX X6a)
+    screenTab: (slot, u, v) => tabAt(u, v) !== null || cockpitScreens.actAt(slot, u, v) !== null,
     screenClick: (slot, u, v) => {
+      // (a page's touch button: its act — the checklists ticked as the tablet's, the SAS, the RCS, a hold)
+      const a = cockpitScreens.actAt(slot, u, v);
+      if (a) {
+        if (a.kind === "tick") {
+          const done = camera.sysTicks.get(a.key) ?? new Set<number>();
+          camera.sysTicks.set(a.key, done);
+          if (done.has(a.step)) done.delete(a.step);
+          else done.add(a.step);
+        } else if (a.kind === "fix") panel.toast(camera.systemsFixChecked(a.fail as FailureKind));
+        else if (a.kind === "nextList") cockpitScreens.normal++;
+        else if (a.kind === "sas") pilotSas();
+        else if (a.kind === "rcs") panel.toast(camera.rcsModeToggle());
+        else if (a.kind === "hold") pilotHold(camera.pilot.hold === a.dir ? "none" : a.dir);
+        return;
+      }
       const p = cockpitScreens.clickScreen(slot, u, v);
       if (p === undefined) return;
       settings.cockpitPages = cockpitScreens.pagesSetting();
@@ -7023,6 +7040,9 @@ async function main() {
           runway: camera.runwayView(),
           chrono:
             cockpitChrono.running || cockpitChrono.seconds() > 0 ? { s: cockpitChrono.seconds(), running: cockpitChrono.running } : null,
+          systems: camera.systemsInfo(),
+          ticks: camera.sysTicks,
+          rcs: camera.rcsMode ?? "rotate",
         })
       ) {
         renderer.ship.updateScreens(cockpitScreens.canvas);

@@ -329,4 +329,6 @@ export default {
   "Orbit off — the stick": "Orbite coupée — le manche",
   "Assistance: {0}": "Assistance : {0}",
   "No such step": "Pas d'étape de ce numéro",
+  "more failure(s)": "autre(s) panne(s)",
+  "NEXT CHECKLIST ▸": "CHECKLIST SUIVANTE ▸",
 } satisfies Record<string, string>;

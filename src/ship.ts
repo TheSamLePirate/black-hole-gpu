@@ -386,7 +386,8 @@ export class ShipRenderer {
     if (!H || !C || H.k <= 0.01) return null;
     const len = 18;
     const view = (p: V3) => {
-      const q: V3 = [p[0] - this.camShip[0], p[1] - this.camShip[1], p[2] - this.camShip[2]];
+      const k = this.cabinOffset;
+      const q: V3 = [p[0] + k[0] - this.camShip[0], p[1] + k[1] - this.camShip[1], p[2] + k[2] - this.camShip[2]];
       return C.R.map((r) => r[0]! * q[0] + r[1]! * q[1] + r[2]! * q[2]) as V3;
     };
     let a = view(H.p),
@@ -1066,8 +1067,12 @@ export class ShipRenderer {
     const c: V3 = [ndcX * C.tanX, ndcY * C.tanY, 1];
     const d: V3 = [0, 1, 2].map((k) => c[0] * C.R[0]![k]! + c[1] * C.R[1]![k]! + c[2] * C.R[2]![k]!) as V3;
     const l = Math.hypot(...d);
-    return { o: [...this.camShip] as V3, d: [d[0] / l, d[1] / l, d[2] / l] };
+    // (in the cabin's own frame: another craft's cabin is offset — X6b–c)
+    const k = this.cabinOffset;
+    return { o: [this.camShip[0] - k[0], this.camShip[1] - k[1], this.camShip[2] - k[2]], d: [d[0] / l, d[1] / l, d[2] / l] };
   }
+  /** the cabin's place in the flown craft's frame (another craft's than the Ranger's: its offset) [m] */
+  private cabinOffset: V3 = [0, 0, 0];
 
   /** A point of the ship's frame in the last frame's view: its ndc (y up), or null behind the eye. */
   cabinProject(p: V3): [number, number] | null {
@@ -1511,10 +1516,13 @@ export class ShipRenderer {
       frigate: 14,
     } as const;
     let jetSlot = 0;
-    // (inside the Ranger: its cabin instead of its hull)
-    if (v.inside && this.flown && this.vessel === "ranger") this.loadCockpit();
-    const inCabin = !!(v.inside && this.flown && this.vessel === "ranger" && this.cockpit);
+    // (inside the Ranger: its cabin instead of its hull — the Lander's and the Endurance's the same cabin placed at their
+    // cockpit's: PLAN-VAISSEAUX X6b–c)
+    const hasCabin = this.vessel === "ranger" || !!VESSELS[this.vessel as VesselId]?.cabin;
+    if (v.inside && this.flown && hasCabin) this.loadCockpit();
+    const inCabin = !!(v.inside && this.flown && hasCabin && this.cockpit);
     this.inCabin = inCabin;
+    this.cabinOffset = inCabin ? (VESSELS[this.vessel as VesselId]?.cabin?.offset ?? [0, 0, 0]) : [0, 0, 0];
     const sea = v.sea ?? null;
     const list: {
       id: ShipMeshId;
@@ -1555,7 +1563,10 @@ export class ShipRenderer {
       sr = 0;
     list.forEach((it, i) => {
       const me = i === 0 && inCabin ? this.cockpit!.mesh : this.meshes[it.id]!;
-      model(it.R, it.t, this.instData, i * INST_FLOATS);
+      // (the cabin in another craft: moved by its offset on the craft's axes)
+      const o = i === 0 && inCabin ? this.cabinOffset : null;
+      const tt: V3 = o ? ([0, 1, 2].map((r) => it.t[r]! + it.R[r]![0]! * o[0] + it.R[r]![1]! * o[1] + it.R[r]![2]! * o[2]) as V3) : it.t;
+      model(it.R, tt, this.instData, i * INST_FLOATS);
       // (an F-35: its parts' maps after the instances — the flown one's pose, the others' at rest)
       let parts = 0;
       if (it.id === "f35" && this.jetMesh && jetSlot < JET_SLOTS) {

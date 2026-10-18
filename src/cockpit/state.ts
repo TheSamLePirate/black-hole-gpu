@@ -49,6 +49,9 @@ export function controlStates(
     sas: { pos: 0, lit: on(P.sas) },
     chrono: { pos: 0, lit: on(!!chrono?.running) },
     apOff: { pos: 0, lit: on(P.auto !== "none" || P.hold !== "none") * 0.25 },
+    rcsMode: { pos: 0, lit: on(c.rcsMode === "translate") },
+    // (a failure under way: the master caution flashing — X3)
+    masterCaution: { pos: 0, lit: (c.systemsInfo()?.failures.length ?? 0) > 0 ? on(Math.floor(performance.now() / 400) % 2 === 0) : 0 },
   };
   if (ptr.hover && st[ptr.hover]) st[ptr.hover]!.hover = true;
   if (ptr.pressed && st[ptr.pressed]) st[ptr.pressed]!.pressed = true;
