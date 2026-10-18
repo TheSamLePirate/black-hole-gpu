@@ -72,7 +72,7 @@ verts, poussée sur `main`.
 - **AP** tactile comme la console équipage (A3) : AP, A/THR, consignes, LNAV / VNAV, ILS, modes.
 - **MSN** : objectifs, chronos, leçon en cours et ses étapes.
 
-### Q7 — DAS / EOTS synthétique
+### Q7 — DAS / EOTS synthétique — FAIT ([fiche](progress/pcd/Q7.md))
 
 - Une « caméra » infrarouge dessinée à partir des pistes et du relief connu : silhouettes chaudes, horizon,
   réticule, zoom — **sans second rendu GPU**.

@@ -4,8 +4,13 @@
 import { beforeAll, expect, test } from "bun:test";
 
 beforeAll(() => {
+  // (anything asked of it answers: a call returns it again — a gradient, a pattern, a text's measure 10 wide)
+  const any: unknown = new Proxy(() => {}, {
+    get: (_t, k) => (k === "width" ? 10 : k === "data" ? new Uint8ClampedArray(64 * 64 * 4) : k === Symbol.toPrimitive ? undefined : any),
+    apply: () => any,
+  });
   const ctx = new Proxy({} as Record<string, unknown>, {
-    get: (t, k) => (k in t ? t[k as string] : () => ({ width: 10 })),
+    get: (t, k) => (k in t ? t[k as string] : any),
     set: (t, k, v) => ((t[k as string] = v), true),
   });
   (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas ??= class {
@@ -78,9 +83,10 @@ test("the title's arrows step through the pages; the title opens the menu, a pag
   expect(at(f.x + 28, f.y + 20)).toBe("FCR");
   expect(at(f.x + f.w / 2, f.y + 20)).toBe("MENU");
   expect(p.menu).toBe(1);
-  // (the menu's third row, first button: ENG)
-  expect(at(f.x + 60, f.y + 46 + 30 + 2 * 82 + 30)).toBe("ENG");
-  expect(p.pages[1]).toBe("ENG");
+  // (the menu's third row, first button: the seventh page)
+  const { PCD_PAGES } = await import("../src/f35/pcd");
+  expect(at(f.x + 60, f.y + 46 + 30 + 2 * 82 + 30)).toBe(PCD_PAGES[6]!);
+  expect(p.pages[1]).toBe(PCD_PAGES[6]!);
   expect(p.menu).toBeNull();
 });
 

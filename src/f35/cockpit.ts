@@ -160,6 +160,22 @@ export function pcdData(
     alerts,
     damage: (c.combat?.world.damage ?? 0) / 100,
     ground,
+    // (the missiles in flight — the DAS sees their motors —: heading up as the radar's contacts)
+    missiles: (() => {
+      const C = c.combat;
+      const P = C?.last;
+      if (!C || !P) return [];
+      const psi = Math.atan2(P.fwd[0], P.fwd[1]);
+      const cs = Math.cos(psi),
+        sn = Math.sin(psi);
+      return C.world.missiles
+        .filter((M) => M.alive)
+        .map((M) => {
+          const e = M.p[0] - P.p[0],
+            n = M.p[1] - P.p[1];
+          return { x: e * cs - n * sn, y: e * sn + n * cs, dz: M.p[2] - P.p[2], atUs: M.owner === "red" && M.target === -1 };
+        });
+    })(),
     // (the autopilot's mode beyond its holds — as the crew's instruments read it —, the ILS)
     apMode: {
       order: m.order ?? (c.orbitMode ? "ORBIT" : m.icpt ? "ICPT" : m.form ? "FORM" : m.tf !== undefined ? "TF" : ""),

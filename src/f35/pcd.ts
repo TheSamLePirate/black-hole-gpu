@@ -10,8 +10,8 @@ import { type Units, type UnitSys, unitsOf } from "../ui/unitsys";
 
 type V3 = [number, number, number];
 
-export type PcdPage = "TSD" | "FCR" | "SMS" | "AP" | "MSN" | "FCS" | "ENG" | "FUEL" | "STOVL" | "CNI" | "ADI" | "CKL" | "ICAWS";
-export const PCD_PAGES: PcdPage[] = ["TSD", "FCR", "SMS", "AP", "MSN", "FCS", "ENG", "FUEL", "STOVL", "CNI", "ADI", "CKL", "ICAWS"];
+export type PcdPage = "TSD" | "FCR" | "SMS" | "EOTS" | "AP" | "MSN" | "FCS" | "ENG" | "FUEL" | "STOVL" | "CNI" | "ADI" | "CKL" | "ICAWS";
+export const PCD_PAGES: PcdPage[] = ["TSD", "FCR", "SMS", "EOTS", "AP", "MSN", "FCS", "ENG", "FUEL", "STOVL", "CNI", "ADI", "CKL", "ICAWS"];
 /** What a touch asks of the craft (main.ts carries it out through the controller): a weapon chosen, the radar's
  *  mode, the radar's next lock, the countermeasures — never a shot. */
 export type PcdAction =
@@ -133,6 +133,9 @@ export interface PcdData {
   } | null;
   /** a lesson flown (controller/course.ts): its id, how, its steps (whose), the step now, the instructor's last words */
   lesson?: { id: string; mode: string; steps: { name: string; who: "tars" | "you" }[]; i: number; said: string } | null;
+  /** the missiles in flight (a fight's — the DAS sees their motors): heading up as the radar's contacts (x right, y
+   *  ahead, dz above [m]), the ones at us */
+  missiles?: { x: number; y: number; dz: number; atUs: boolean }[];
   /** the ground's height at a place [m over the ellipsoid; the sea 0] (the TSD's relief; none: not drawn) */
   ground?: (lat: number, lon: number) => number;
   /** the radar (controller/radar.ts radarHud): its mode, its beam's azimuth off the nose [rad], its contacts heading
@@ -221,7 +224,7 @@ interface PcdKey {
   act?: () => string | null;
 }
 /** the pages drawn over a whole wide portal (maps); the others keep a portal's width, centred */
-const WIDE: ReadonlySet<PcdPage> = new Set(["TSD", "FCR"]);
+const WIDE: ReadonlySet<PcdPage> = new Set(["TSD", "FCR", "EOTS"]);
 const TOP_STRIP: PcdRect = { x: 0, y: 0, w: PCD_W, h: TOP };
 const BOTTOM_STRIP: PcdRect = { x: NOTCH[0], y: PORTAL_END, w: NOTCH[1] - NOTCH[0], h: PCD_H - PORTAL_END };
 /** the data read every PERIOD [ms]; each part redrawn at its own pace (what moves fast often, the rest less) — in
@@ -233,6 +236,7 @@ const PAGE_PERIOD: Record<PcdPage, number> = {
   TSD: 100,
   FCR: 100,
   SMS: 250,
+  EOTS: 100,
   AP: 200,
   MSN: 500,
   FCS: 100,
@@ -250,6 +254,12 @@ const RANGES = [5, 10, 20, 40, 80, 160];
 const RELIEF_N = 96;
 const RELIEF_BUDGET = 0.25;
 const EARTH_R = 6.371e6;
+/** the EOTS's horizon: the terrain's highest elevation seen along each bearing (a bin a half degree, all round),
+ *  sampled at these distances [m] (the Earth's curve in) */
+const RIDGE_BINS = 720;
+const RIDGE_D = Array.from({ length: 22 }, (_, i) => 200 * 1.3 ** i);
+/** its fields of view [°]: wide, narrow */
+const EOTS_FOV = { W: 30, N: 6 } as const;
 /** the radar's page's ranges [km, or NM] */
 const FCR_RANGES = [10, 20, 40, 80, 160];
 const STORE_NAME = { aim120: "AIM-120", aim9x: "AIM-9X", jdam: "GBU-32", jsm: "JSM" } as const;
@@ -266,6 +276,14 @@ export class Pcd {
   /** the autopilot's values just selected and when [ms]: the next − or + steps from them, they are shown, while the
    *  craft's own catch up (1.5 s — as the crew's MCP) */
   private sel: { spd?: number; hdg?: number; alt?: number; at: number } = { at: -Infinity };
+  /** the EOTS: its field of view, white or black hot, slaved to the lock or looking along the nose */
+  eots = { fov: "W" as "W" | "N", whot: true, slave: true };
+  /** the horizon's terrain all round [rad above the level] (NaN: not sampled yet), the bins' cursor, where it was
+   *  sampled from (moved 500 m or 100 m up: sampled again) */
+  private ridge = new Float32Array(RIDGE_BINS).fill(Number.NaN);
+  private ridgeAt = { i: 0, lat: Number.NaN, lon: 0, alt: 0 };
+  /** the IR picture's grain (made once) */
+  private grain: OffscreenCanvas | null = null;
   /** each slot's buttons inside its page (the AP's), as last drawn: where, what they do */
   private hits = new Map<number, { r: PcdRect; act: () => string | null }[]>();
   /** the TSD's relief shown (north up, centred at lat, lon, ±half [m]) and the one being built (its rows so far) */
@@ -432,6 +450,18 @@ export class Pcd {
           { label: "RNG +", act: fstep(1) },
         ];
       }
+      case "EOTS": {
+        const E = this.eots;
+        return [
+          {
+            label: E.fov === "W" ? "WFOV" : "NFOV",
+            on: E.fov === "N",
+            act: () => ((E.fov = E.fov === "W" ? "N" : "W"), E.fov === "W" ? "WFOV" : "NFOV"),
+          },
+          { label: E.whot ? "WHOT" : "BHOT", act: () => ((E.whot = !E.whot), E.whot ? "WHOT" : "BHOT") },
+          { label: E.slave ? "SLAVE" : "BORE", on: E.slave, act: () => ((E.slave = !E.slave), E.slave ? "SLAVE" : "BORE") },
+        ];
+      }
       case "SMS": {
         const A = this.data?.arms;
         return [
@@ -480,7 +510,9 @@ export class Pcd {
     }
     const d = this.data;
     this.u = unitsOf(d.units);
-    if (d.ground && this.portals().some((P) => this.pages[P.slot] === "TSD" && this.menu !== P.slot)) this.reliefStep(d, d.ground);
+    const shown = (pg: PcdPage) => this.portals().some((P) => this.pages[P.slot] === pg && this.menu !== P.slot);
+    if (d.ground && shown("TSD")) this.reliefStep(d, d.ground);
+    if (d.ground && shown("EOTS")) this.ridgeStep(d, d.ground);
     const regions = this.regions();
     const when = (key: string) => this.drawn.get(key) ?? -Infinity;
     let out = regions.filter((R) => this.forced.has(R.key));
@@ -606,6 +638,41 @@ export class Pcd {
     canvas.getContext("2d")!.putImageData(J.im, 0, 0);
     this.relief = { canvas, lat: J.lat, lon: J.lon, half: J.half, key: J.key };
     this.reliefJob = null;
+  }
+
+  /** The horizon's terrain, a few bearings a frame within RELIEF_BUDGET — in turn one of the EOTS's view, one of the
+   *  whole round —, from where we were last moved 500 m or 100 m up (the old horizon kept meanwhile: it moves little). */
+  private ridgeStep(d: PcdData, ground: (lat: number, lon: number) => number) {
+    const A = this.ridgeAt;
+    const cl = Math.cos(d.lat * D);
+    const moved = Math.hypot((d.lat - A.lat) * D * EARTH_R, (d.lon - A.lon) * D * EARTH_R * cl);
+    if (!(moved < 500) || Math.abs(d.alt - A.alt) > 100) Object.assign(A, { lat: d.lat, lon: d.lon, alt: d.alt });
+    const bin = (2 * Math.PI) / RIDGE_BINS;
+    const half = (EOTS_FOV[this.eots.fov] / 2 + 2) * D;
+    const v0 = Math.round((d.heading + this.eotsLos(d).az - half) / bin),
+      vn = Math.max(1, Math.round((2 * half) / bin));
+    const t0 = performance.now();
+    for (let k = 0; performance.now() - t0 < RELIEF_BUDGET; k++) {
+      const i = (((k % 2 === 0 ? v0 + (A.i % vn) : A.i * 7) % RIDGE_BINS) + RIDGE_BINS) % RIDGE_BINS;
+      if (k % 2) A.i++;
+      const se = Math.sin(i * bin),
+        cn = Math.cos(i * bin);
+      // (beyond the samples the ground goes on to the horizon: the sea's, at its dip, at least)
+      let best = -Math.acos(EARTH_R / (EARTH_R + Math.max(A.alt, 1)));
+      for (const r of RIDGE_D) {
+        const h = ground(A.lat + (r * cn) / (D * EARTH_R), A.lon + (r * se) / (D * EARTH_R * cl));
+        best = Math.max(best, Math.atan2(h - A.alt - (r * r) / (2 * EARTH_R), r));
+      }
+      this.ridge[i] = best;
+    }
+  }
+
+  /** The EOTS's line of sight off the nose's heading [rad] (az right, el up): the lock's when slaved, else the nose's. */
+  private eotsLos(d: PcdData) {
+    const lk = this.eots.slave ? d.fcr?.contacts.find((K) => K.locked) : undefined;
+    return lk
+      ? { az: Math.atan2(lk.x, lk.y), el: Math.atan2(lk.dz, Math.hypot(lk.x, lk.y)), lock: true }
+      : { az: 0, el: d.pitch, lock: false };
   }
 
   /** A part's pace [ms]: the warnings' strip (its clock in seconds) 250, the flight's state 100, a portal its page's
@@ -756,6 +823,9 @@ export class Pcd {
           break;
         case "SMS":
           this.sms(r, d);
+          break;
+        case "EOTS":
+          this.eotsPage(r, d);
           break;
         case "AP":
           this.ap(r, d, P.slot);
@@ -1280,6 +1350,198 @@ export class Pcd {
     g.fillStyle = C.green;
     g.fillRect(r.x + 132, y0 + 68, (gw - 4) * Math.min(S.gun / Math.max(A.gunFull, 1), 1), 16);
     this.text(`FLARE ${S.flares}`, r.x + r.w - 20, y0 + 76, S.flares > 0 ? C.white : C.yellow, 22, "right", true);
+  }
+
+  /**
+   * The EOTS (the targeting camera, infrared): its picture made here, not rendered — the sky cold, the ground warm
+   * under the horizon's terrain (its ridge sampled all round), the tracks as hot spots (an aircraft small and bright, a
+   * ship long), the lock in its tracking gates; white or black hot, wide or narrow; slaved to the lock or along the
+   * nose. Under it the DAS's band, all round: the horizon, the tracks, the missiles in flight (red: at us).
+   */
+  private eotsPage(r: PcdRect, d: PcdData) {
+    const g = this.g;
+    const E = this.eots;
+    const band = 78;
+    const v = { x: r.x + 10, y: r.y + 10, w: r.w - 20, h: r.h - band - 26 };
+    const los = this.eotsLos(d);
+    const fov = EOTS_FOV[E.fov] * D;
+    const k = v.w / fov;
+    const cx = v.x + v.w / 2,
+      cy = v.y + v.h / 2;
+    const hot = (t: number) => {
+      const c = Math.round(255 * (E.whot ? t : 1 - t));
+      return `rgb(${c}, ${c}, ${c})`;
+    };
+    g.save();
+    g.beginPath();
+    g.rect(v.x, v.y, v.w, v.h);
+    g.clip();
+    // the sky, cold (a little warmer down to the horizon)
+    const sky = g.createLinearGradient(0, v.y, 0, v.y + v.h);
+    sky.addColorStop(0, hot(0.03));
+    sky.addColorStop(1, hot(0.14));
+    g.fillStyle = sky;
+    g.fillRect(v.x, v.y, v.w, v.h);
+    // the ground under the terrain's ridge (or the level horizon where not sampled yet), warmer nearer
+    const cols = 96;
+    g.beginPath();
+    g.moveTo(v.x, v.y + v.h);
+    for (let i = 0; i <= cols; i++) {
+      const az = los.az + (i / cols - 0.5) * (v.w / k);
+      const b = (((((d.heading + az) / (2 * Math.PI)) * RIDGE_BINS) % RIDGE_BINS) + RIDGE_BINS) % RIDGE_BINS;
+      const el = this.ridge[Math.floor(b)]!;
+      const e = Number.isFinite(el) ? el : -Math.acos(EARTH_R / (EARTH_R + Math.max(d.alt, 1)));
+      g.lineTo(v.x + (i / cols) * v.w, cy - (e - los.el) * k);
+    }
+    g.lineTo(v.x + v.w, v.y + v.h);
+    g.closePath();
+    const gr = g.createLinearGradient(0, cy - 0.05 * k, 0, v.y + v.h);
+    gr.addColorStop(0, hot(0.36));
+    gr.addColorStop(1, hot(0.56));
+    g.fillStyle = gr;
+    g.fill();
+    // the tracks: hot spots
+    for (const K of d.fcr?.contacts ?? []) {
+      const rg = Math.hypot(K.x, K.y, K.dz);
+      const az = Math.atan2(K.x, K.y) - los.az,
+        el = Math.atan2(K.dz, Math.hypot(K.x, K.y)) - los.el;
+      const x = cx + az * k,
+        y = cy - el * k;
+      if (x < v.x - 40 || x > v.x + v.w + 40 || y < v.y - 40 || y > v.y + v.h + 40 || rg < 1) continue;
+      const size = Math.max((K.air ? 14 : 120) / rg, 0.0006) * k;
+      g.fillStyle = hot(0.97);
+      if (K.air) {
+        g.beginPath();
+        g.ellipse(x, y, Math.max(size, 2.5), Math.max(size * 0.4, 1.5), 0, 0, 2 * Math.PI);
+        g.fill();
+        // (its exhaust's glow)
+        g.globalAlpha = 0.35;
+        g.beginPath();
+        g.arc(x, y, Math.max(size, 2.5) * 2.4, 0, 2 * Math.PI);
+        g.fill();
+        g.globalAlpha = 1;
+      } else g.fillRect(x - Math.max(size, 4), y - Math.max(size * 0.18, 1.5), 2 * Math.max(size, 4), Math.max(size * 0.36, 3));
+      if (K.locked) {
+        // (the tracking gates: four corners)
+        const q = Math.max(size * 2.6, 16),
+          L = q * 0.45;
+        g.strokeStyle = C.white;
+        g.lineWidth = 2.5;
+        g.beginPath();
+        for (const [sx, sy] of [
+          [-1, -1],
+          [1, -1],
+          [1, 1],
+          [-1, 1],
+        ] as const) {
+          g.moveTo(x + sx * q, y + sy * (q - L));
+          g.lineTo(x + sx * q, y + sy * q);
+          g.lineTo(x + sx * (q - L), y + sy * q);
+        }
+        g.stroke();
+      }
+    }
+    // the grain of a real sensor (a pattern made once)
+    if (!this.grain) {
+      this.grain = new OffscreenCanvas(64, 64);
+      const q = this.grain.getContext("2d")!;
+      const im = q.createImageData(64, 64);
+      for (let i = 0; i < im.data.length; i += 4) {
+        const c = Math.floor(Math.random() * 255);
+        im.data[i] = im.data[i + 1] = im.data[i + 2] = c;
+        im.data[i + 3] = 22;
+      }
+      q.putImageData(im, 0, 0);
+    }
+    const pat = g.createPattern(this.grain, "repeat");
+    if (pat) {
+      g.fillStyle = pat;
+      g.fillRect(v.x, v.y, v.w, v.h);
+    }
+    g.restore();
+    // the frame, the reticle (open in its centre), the figures
+    g.strokeStyle = C.frame;
+    g.lineWidth = 2;
+    g.strokeRect(v.x, v.y, v.w, v.h);
+    g.strokeStyle = C.green;
+    g.lineWidth = 2;
+    g.beginPath();
+    for (const [a, b] of [
+      [-1, 0],
+      [1, 0],
+      [0, -1],
+      [0, 1],
+    ] as const) {
+      g.moveTo(cx + a * 14, cy + b * 14);
+      g.lineTo(cx + a * 46, cy + b * 46);
+    }
+    g.stroke();
+    const sgn = (a: number, p: string, n: string) => `${String(Math.round(Math.abs(a / D))).padStart(3, "0")}${a >= 0 ? p : n}`;
+    this.text(`EOTS  ${E.fov === "W" ? "WFOV" : "NFOV"}  ${E.whot ? "WHOT" : "BHOT"}`, v.x + 12, v.y + 20, C.green, 20, "left", true);
+    this.text(`AZ ${sgn(los.az, "R", "L")}  EL ${sgn(los.el, "U", "D")}`, v.x + v.w - 12, v.y + 20, C.green, 20, "right", true);
+    const lk = d.fcr?.lock;
+    this.text(
+      los.lock && lk
+        ? `PT TRK ${lk.name.slice(0, 12)}  R ${this.u.dist(lk.range).toFixed(1)} ${this.u.distName}`
+        : los.lock
+          ? "PT TRK"
+          : "BORESIGHT",
+      v.x + 12,
+      v.y + v.h - 18,
+      C.green,
+      20,
+      "left",
+      true,
+    );
+    // the DAS's band: all round, the nose in its middle
+    const b = { x: r.x + 10, y: r.y + r.h - band - 8, w: r.w - 20, h: band };
+    g.fillStyle = "#04080a";
+    g.fillRect(b.x, b.y, b.w, b.h);
+    g.strokeStyle = C.frame;
+    g.strokeRect(b.x, b.y, b.w, b.h);
+    const bk = b.w / (2 * Math.PI);
+    const by = b.y + b.h * 0.58;
+    const elK = b.h / (50 * D);
+    g.strokeStyle = "#3a4a40";
+    g.lineWidth = 1.5;
+    g.beginPath();
+    for (let i = 0; i <= 180; i++) {
+      const az = (i / 180 - 0.5) * 2 * Math.PI;
+      const bin = (((((d.heading + az) / (2 * Math.PI)) * RIDGE_BINS) % RIDGE_BINS) + RIDGE_BINS) % RIDGE_BINS;
+      const el = this.ridge[Math.floor(bin)]!;
+      const y = by - (Number.isFinite(el) ? el : 0) * elK;
+      if (i) g.lineTo(b.x + az * bk + b.w / 2, y);
+      else g.moveTo(b.x, y);
+    }
+    g.stroke();
+    for (let a = -180; a <= 180; a += 30) {
+      const x = b.x + b.w / 2 + a * D * bk;
+      g.strokeStyle = a === 0 ? C.green : C.dim;
+      g.beginPath();
+      g.moveTo(x, b.y + b.h - 10);
+      g.lineTo(x, b.y + b.h);
+      g.stroke();
+    }
+    // (the EOTS's field in the band)
+    g.strokeStyle = C.green;
+    g.strokeRect(b.x + b.w / 2 + (los.az - fov / 2) * bk, b.y + 4, Math.max(fov * bk, 3), b.h - 8);
+    const dot = (x: number, y: number, dz: number, col: string, size: number) => {
+      const az = Math.atan2(x, y),
+        el = Math.atan2(dz, Math.hypot(x, y));
+      g.fillStyle = col;
+      g.beginPath();
+      g.arc(b.x + b.w / 2 + az * bk, Math.max(b.y + 6, Math.min(b.y + b.h - 6, by - el * elK)), size, 0, 2 * Math.PI);
+      g.fill();
+    };
+    for (const K of d.fcr?.contacts ?? []) dot(K.x, K.y, K.dz, K.iff === "hostile" ? "#ff5a46" : K.iff === "friend" ? C.cyan : C.white, 3);
+    for (const M of d.missiles ?? []) {
+      dot(M.x, M.y, M.dz, M.atUs ? C.red : C.amber, M.atUs ? 6 : 4);
+      if (M.atUs) {
+        const az = Math.atan2(M.x, M.y);
+        this.text("MSL", b.x + b.w / 2 + az * bk, b.y + 12, C.red, 16, "center", true);
+      }
+    }
+    this.text("DAS", b.x + 8, b.y + 14, C.grey, 16, "left", true);
   }
 
   /** A button inside a page (lit: its colour; dim: nothing to do now), kept for the touch. */
