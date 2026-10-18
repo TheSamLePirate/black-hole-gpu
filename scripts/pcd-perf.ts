@@ -6,7 +6,7 @@ import { App, stopServer } from "../tests/e2e/lib/app";
 
 const secs = Number(process.argv[2] ?? 8);
 const runs = Number(process.argv[3] ?? 3);
-const app = await App.boot({ width: 1600, height: 1000, hash: "scene=game:artemis", tiles: true, telemetry: false });
+const app = await App.boot({ width: 1600, height: 1000, hash: "scene=game:artemis", tiles: process.env.TILES !== "0", telemetry: false });
 try {
   await app.waitFor("__bh.camera.piloting", 120_000);
   await app.js(`(() => {
@@ -31,10 +31,10 @@ try {
       const f = (t) => { window.__ft.push(t - last); last = t; if (window.__ft.length < 2000) requestAnimationFrame(f); }; requestAnimationFrame(f); return true; })()`);
     await Bun.sleep(secs * 1000);
     const s = await app.js(`(() => { const s = __bh.pcd.stats; const ft = window.__ft.slice().sort((a, b) => a - b);
-      return { frames: s.frames, draws: s.draws, mean: s.ms / Math.max(s.frames, 1), up: s.up / Math.max(s.frames, 1), max: s.max,
+      return { frames: s.frames, draws: s.draws, mean: s.ms / Math.max(s.frames, 1), up: s.up / Math.max(s.frames, 1), read: s.read / Math.max(s.frames, 1), max: s.max,
         frameMed: ft[ft.length >> 1], frameP99: ft[Math.floor(ft.length * 0.99)] }; })()`);
     console.log(
-      `run ${r + 1}: mean ${s.mean.toFixed(3)} ms/frame (upload ${s.up.toFixed(3)}) · max ${s.max.toFixed(2)} ms · ${s.draws} draws / ${s.frames} frames · frame median ${s.frameMed.toFixed(1)} ms, p99 ${s.frameP99.toFixed(1)} ms`,
+      `run ${r + 1}: mean ${s.mean.toFixed(3)} ms/frame (upload ${s.up.toFixed(3)}, data ${s.read.toFixed(3)}) · max ${s.max.toFixed(2)} ms · ${s.draws} draws / ${s.frames} frames · frame median ${s.frameMed.toFixed(1)} ms, p99 ${s.frameP99.toFixed(1)} ms`,
     );
   }
 } finally {

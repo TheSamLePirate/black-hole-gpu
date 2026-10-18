@@ -2563,16 +2563,20 @@ async function main() {
   /** the F-35's panoramic cockpit display (src/f35/pcd.ts) */
   const jetPcd = new Pcd();
   let pcdWarm = false;
+  /** the display's parts drawn, not yet sent to its texture; when it was last sent [ms] */
+  const pcdPending: import("./f35/pcd").PcdRect[] = [];
+  let pcdSentAt = -Infinity;
   /** its CPU cost each frame it is shown (__bh.pcd.stats): the data, the drawing, the upload */
   const pcdStats = {
     frames: 0,
     draws: 0,
     ms: 0,
     max: 0,
-    /** of which the upload (the copy, the mips) */
+    /** of which the upload (the copy, the mips), the data read (the alerts, pcdData) */
     up: 0,
+    read: 0,
     reset() {
-      this.frames = this.draws = this.ms = this.max = this.up = 0;
+      this.frames = this.draws = this.ms = this.max = this.up = this.read = 0;
     },
   };
   const flightHud = new FlightHud(settings, {
@@ -7051,12 +7055,24 @@ async function main() {
               text: a.text,
               level: a.level,
             }));
-            return pcdData(camera, settings, renderer.jetPose, al, dateOf(sim.time));
+            const d = pcdData(camera, settings, renderer.jetPose, al, dateOf(sim.time));
+            pcdStats.read += performance.now() - t0;
+            return d;
           });
           renderer.pcdLook = jetPcd.look(t0, settings.f35PcdBrightness, settings.f35PcdStyle === "cinematic");
-          if (parts.length) {
+          // (the parts drawn gathered and sent together — one copy of their union, one pass of mips — every 66 ms at
+          // most, at once after a touch: a third of the uploads, a delay no eye sees)
+          pcdPending.push(...parts);
+          const touched = (jetPcd.lastTouch?.at ?? -Infinity) > pcdSentAt;
+          if (pcdPending.length && (touched || t0 - pcdSentAt >= 66)) {
             const t1 = performance.now();
-            renderer.ship.updateJetScreen(jetPcd.canvas, parts);
+            const x0 = Math.min(...pcdPending.map((r) => r.x)),
+              y0 = Math.min(...pcdPending.map((r) => r.y));
+            const x1 = Math.max(...pcdPending.map((r) => r.x + r.w)),
+              y1 = Math.max(...pcdPending.map((r) => r.y + r.h));
+            renderer.ship.updateJetScreen(jetPcd.canvas, [{ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }]);
+            pcdPending.length = 0;
+            pcdSentAt = t0;
             pcdStats.draws++;
             pcdStats.up += performance.now() - t1;
           }

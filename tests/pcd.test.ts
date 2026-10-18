@@ -1,8 +1,13 @@
 // The F-35's panoramic display (src/f35/pcd.ts, docs/PLAN-PCD-AAA.md): its touches — the pages' arrows, the menu, a
 // side shown as one portal, the keys — and its drawing in turn (one part a frame, each at its page's pace). The canvas
 // is a stand-in (no OffscreenCanvas here): every drawing call accepted, nothing drawn.
-import { beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 
+// (another file's stand-in may be there already: ours set for these tests, theirs given back after)
+const before = (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas;
+afterAll(() => {
+  (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = before;
+});
 beforeAll(() => {
   // (anything asked of it answers: a call returns it again — a gradient, a pattern, a text's measure 10 wide)
   const any: unknown = new Proxy(() => {}, {
@@ -13,7 +18,7 @@ beforeAll(() => {
     get: (t, k) => (k in t ? t[k as string] : any),
     set: (t, k, v) => ((t[k as string] = v), true),
   });
-  (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas ??= class {
+  (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = class {
     constructor(
       public width: number,
       public height: number,

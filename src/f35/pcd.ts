@@ -251,8 +251,8 @@ const PAGE_PERIOD: Record<PcdPage, number> = {
 const FONT = `"Eurostile", "DIN Alternate", "Arial Narrow", sans-serif`;
 const RANGES = [5, 10, 20, 40, 80, 160];
 /** the TSD's relief: its cells across, the time it may take a frame [ms] (built a few rows at a time) */
-const RELIEF_N = 96;
-const RELIEF_BUDGET = 0.25;
+const RELIEF_N = 64;
+const RELIEF_BUDGET = 0.15;
 const EARTH_R = 6.371e6;
 /** the EOTS's horizon: the terrain's highest elevation seen along each bearing (a bin a half degree, all round),
  *  sampled at these distances [m] (the Earth's curve in) */

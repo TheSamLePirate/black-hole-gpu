@@ -65,7 +65,7 @@ export interface BhContext {
   cockpitScreens: CockpitScreens;
   /** the F-35's panoramic display (src/f35/pcd.ts): the display, its cost (CPU ms a frame: the data, the drawing,
    *  the upload — mean and worst since reset) */
-  pcd?: { pcd: unknown; stats: { frames: number; draws: number; ms: number; max: number; up: number; reset(): void } };
+  pcd?: { pcd: unknown; stats: { frames: number; draws: number; ms: number; max: number; up: number; read: number; reset(): void } };
   /** a plane's flight: its preparation, its plan (ui/flighthub.ts, ui/routepanel.ts) */
   flight?: {
     hub: { open(): void };

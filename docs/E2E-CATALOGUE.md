@@ -62,6 +62,7 @@ Every e2e file (`tests/e2e/*.e2e.test.ts`), by theme: what it proves, the scene 
 | file | what it proves | scene(s) booted | ~s on the mini | needs |
 |---|---|---|---|---|
 | cockpit.e2e.test.ts | Cabin controls worked by real pointer events: hover lights and tips, SAS, flaps, air brake, cabin knob, switches, screen tabs, GEAR, NIGHT. | game:artemis, 1440×900 | 16 | CDP mouse events |
+| f35-pcd.e2e.test.ts | The F-35's panoramic display by real pointer events in its cockpit, flying (docs/PLAN-PCD-AAA.md): a title opens the pages' menu and SMS is chosen in it; the corner shows a side as one portal, then two; the AP page's button engages the autopilot, the altitude's + selects 100 m more; the display's CPU cost under 0.70 ms a frame (the one before Q1), no frame over 8 ms. | game:artemis, 1440×900, no tiles | 3 | CDP mouse events; the click's place found by the cockpit's own pick (renderer.ship.jetPick) |
 | cockpit-flight.e2e.test.ts | A glide to Edwards flown only by panel clicks (ENTRY, AP OFF, GEAR, FLAPS, ENTRY): landed on its wheels. | game:artemis, 1440×900 | 14 | fixed steps between clicks |
 | hotas.e2e.test.ts | Three simulated Thrustmaster devices: stick roll, throttle lever pick-up, buttons, toe brakes, known profiles, controllers screen, vibrations. | game:artemis, 1280×800 | 9 | simulated gamepads in page (no real device) |
 | hotas-flight.e2e.test.ts | Flight from 25 km out at 180 m/s with stick, lever and director, a climb, a banked turn, down to the runway. | game:artemis, 1280×800 | 8 | simulated gamepads; whole flight stepped |

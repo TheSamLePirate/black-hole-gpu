@@ -29,6 +29,17 @@ const FIELDS: PcdField[] = SITES.filter((s) => s.body === "earth" && s.runway).m
   rwy: s.rwy,
 }));
 
+/** The Sun's height there [°] (the display's automatic brightness): the ephemeris asked again every 5 s of the clock
+ *  or 20 km away — it moves slowly. */
+let sunKept: { lat: number; lon: number; t: number; alt: number } | null = null;
+function sunAltAt(lat: number, lon: number, date: Date) {
+  const t = date.getTime();
+  const K = sunKept;
+  if (K && Math.abs(t - K.t) < 5000 && Math.abs(lat - K.lat) < 0.2 && Math.abs(lon - K.lon) < 0.2) return K.alt;
+  sunKept = { lat, lon, t, alt: azAltAt("sun", lat, lon, 0, t).alt };
+  return sunKept.alt;
+}
+
 /** The display's data now (null: not over the Earth). */
 export function pcdData(
   c: CameraController,
@@ -78,7 +89,7 @@ export function pcdData(
     g: c.airFlight.g,
     gPeak: c.airFlight.gPeak,
     alpha: L?.out.alpha ?? 0,
-    sunAlt: azAltAt("sun", geo.lat, geo.lon, 0, date.getTime()).alt,
+    sunAlt: sunAltAt(geo.lat, geo.lon, date),
     wind: c.windNow ?? null,
     throttle: c.pilot.throttle,
     spool: c.pilot.engineNow,

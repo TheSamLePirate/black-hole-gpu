@@ -1,4 +1,4 @@
-# Plan — l'écran panoramique du F-35 et le casque, AAA (PCD + HMD)
+# Plan — l'écran panoramique du F-35 et le casque, AAA (PCD + HMD) — TERMINÉ (2026-10-18)
 
 Sur `main`. Objectif : l'écran panoramique du F-35 (`src/f35/pcd.ts`, dessiné sur un canvas, posé sur la planche
 par `ship.wgsl`, matériau 36) et la symbologie du casque (`ui/hud/symbology.ts`) au niveau AAA. L'écran rattrape
@@ -82,6 +82,6 @@ verts, poussée sur `main`.
 - Le même traitement sur la symbologie du casque : phosphore vert réaliste (ou cinématique), halo, lisibilité
   sur ciel clair, sans coût GPU mesurable.
 
-### Q9 — Clôture
+### Q9 — Clôture — FAIT ([fiche](progress/pcd/Q9.md), [planche finale](progress/pcd/FINAL.jpg))
 
 - `docs/F35.md` / `F35.fr.md`, e2e (pages au toucher, perf), planche finale.
