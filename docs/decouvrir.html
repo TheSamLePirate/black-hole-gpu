@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gargantua — le trou noir d'Interstellar, calculé en temps réel</title>
-<meta name="description" content="Un simulateur de vol spatial dans le navigateur : pilotez le Ranger de la Terre jusqu'à Gargantua avec TARS, votre copilote IA. Un trou noir de Kerr tracé rayon par rayon, le Système solaire à l'échelle, rentrées et atterrissages réels, météo, aéroports, cockpit interactif.">
+<meta name="description" content="Un simulateur de vol dans le navigateur : pilotez le Ranger de la Terre jusqu'à Gargantua, ou un F-35 au-dessus de la vraie Terre, avec TARS, votre copilote IA. Un trou noir de Kerr tracé rayon par rayon, le Système solaire à l'échelle, le trafic aérien et maritime réel, des porte-avions, des missions, une école de vol, et jusqu'à quatre pilotes ensemble.">
 <meta property="og:title" content="Gargantua — le trou noir d'Interstellar, calculé en temps réel">
-<meta property="og:description" content="Un simulateur de vol relativiste dans le navigateur, avec un copilote IA : de Kennedy à Saturne, puis à travers le trou de ver.">
+<meta property="og:description" content="Un simulateur de vol dans le navigateur, avec un copilote IA : de Kennedy à Saturne puis à travers le trou de ver — ou en F-35 parmi les vrais avions de ligne, à plusieurs.">
 <meta property="og:image" content="img/marketing/endurance-og.jpg">
 <meta name="theme-color" content="#050507">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -45,7 +45,7 @@
   .nav.solid { background: rgba(5,5,7,.78); backdrop-filter: blur(12px); padding: 12px 28px; border-bottom: 1px solid var(--line); }
   .brand { font: 700 1rem/1 var(--mono); letter-spacing: .3em; text-decoration: none; }
   .brand span { color: var(--gold); }
-  .nav ul { display: flex; gap: 26px; list-style: none; margin: 0; padding: 0; font-size: .92rem; color: var(--muted); }
+  .nav ul { display: flex; gap: 20px; list-style: none; margin: 0; padding: 0; font-size: .88rem; color: var(--muted); white-space: nowrap; }
   .nav ul a { text-decoration: none; }
   .nav ul a:hover { color: var(--text); }
   .btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 26px; border-radius: 999px; font: 600 .98rem/1 var(--sans); text-decoration: none; border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.06); backdrop-filter: blur(6px); transition: transform .2s, background .2s, box-shadow .2s; }
@@ -166,6 +166,7 @@
     html { scroll-behavior: auto; }
   }
 
+  @media (max-width: 1180px) { .nav ul { display: none; } }
   @media (max-width: 960px) {
     .split { grid-template-columns: 1fr; gap: 40px; }
     .features { grid-template-columns: 1fr 1fr; }
@@ -199,9 +200,12 @@
     <li><a href="#physique">La physique</a></li>
     <li><a href="#voyage">Le voyage</a></li>
     <li><a href="#simulateur">Le simulateur</a></li>
+    <li><a href="#f35">Le F‑35</a></li>
+    <li><a href="#monde">Le monde</a></li>
+    <li><a href="#missions">Missions</a></li>
     <li><a href="#tars">TARS</a></li>
+    <li><a href="#ensemble">Ensemble</a></li>
     <li><a href="#jeu">Le jeu</a></li>
-    <li><a href="#film">Le film</a></li>
     <li><a href="#galerie">Galerie</a></li>
   </ul>
   <a class="btn small primary" href="../">Jouer</a>
@@ -210,14 +214,14 @@
 <header class="hero" id="top">
   <div class="hero-bg" role="img" aria-label="L'Endurance devant Gargantua, son disque d'accrétion courbé par la gravité"></div>
   <div class="hero-content wrap">
-    <div class="eyebrow rv">Simulateur de vol spatial · relativité générale · copilote IA</div>
+    <div class="eyebrow rv">Vol spatial · chasseur F‑35 · relativité générale · copilote IA</div>
     <h1 class="rv d1"><span class="glow">Gargantua</span><span class="thin">Le trou noir d'<em>Interstellar</em>, calculé rayon par rayon. Et vous êtes aux commandes.</span></h1>
     <div class="ctas rv d2">
       <a class="btn primary" href="../#scene=game:interstellar">▶&nbsp; Décoller de Kennedy</a>
       <a class="btn" href="#film">Voir le film</a>
       <a class="btn" href="comment-jouer.html">Comment jouer</a>
     </div>
-    <div class="meta rv d3">WebGPU · sans installation · hors ligne · clavier, manette, HOTAS ou écran tactile</div>
+    <div class="meta rv d3">WebGPU · sans installation · hors ligne · jusqu'à 4 pilotes ensemble · clavier, manette, HOTAS ou écran tactile</div>
   </div>
   <div class="scroll-cue" aria-hidden="true"></div>
 </header>
@@ -227,7 +231,7 @@
     <div class="stat rv"><b>10<sup>8</sup> M☉</b><span>la masse de Gargantua</span></div>
     <div class="stat rv d1"><b>a* = 0,998</b><span>un trou noir de Kerr presque extrême</span></div>
     <div class="stat rv d2"><b>DE440</b><span>les éphémérides de la NASA pour le Système solaire</span></div>
-    <div class="stat rv d3"><b>49 outils</b><span>pour TARS, le copilote IA qui pilote avec vous</span></div>
+    <div class="stat rv d3"><b>67 outils</b><span>pour TARS, le copilote IA qui pilote avec vous</span></div>
   </div>
 </section>
 
@@ -301,6 +305,136 @@
   </div>
 </section>
 
+<section id="f35">
+  <div class="wrap">
+    <div class="split">
+      <div>
+        <div class="eyebrow rv">Le chasseur</div>
+        <h2 class="rv d1">Un F‑35, <em>comme le vrai.</em></h2>
+        <p class="lead rv d2">Le F‑35B — et le F‑35C des porte‑avions — au‑dessus de la vraie Terre. Son domaine de vol est mesuré contre les chiffres publiés : vitesse maximale, plafond, virage soutenu, rayon d'action, 7 g, 50° d'incidence. Tous dans leur fourchette.</p>
+        <ul class="points">
+          <li class="rv d1"><span class="ic">α</span><div><strong>La loi de commande du vrai</strong><p>Le manche demande un facteur de charge, établi en une demi‑seconde ; l'avion tient 50° d'incidence sans jamais partir en vrille. En loi directe, sans calculateur : super‑décrochage et vrille, dont on sort en lâchant tout.</p></div></li>
+          <li class="rv d2"><span class="ic">↧</span><div><strong>STOVL</strong><p>Soufflante, trappes et tuyère orientable : le stationnaire, l'appontage vertical, le décollage court depuis un pont.</p></div></li>
+          <li class="rv d3"><span class="ic">▣</span><div><strong>Cockpit et casque</strong><p>L'écran panoramique tactile dessiné en direct — carte tactique, moteur, carburant, STOVL, check‑lists — et la symbologie du casque à la place d'un HUD.</p></div></li>
+          <li class="rv d1"><span class="ic">g</span><div><strong>Sentir l'avion</strong><p>Voile gris, voile noir, perte de connaissance à 9 g tenus, voile rouge sous −1,5 g ; la vapeur arrachée à l'aile, la respiration au masque, le grondement du réacteur et le crépitement de la postcombustion.</p></div></li>
+          <li class="rv d2"><span class="ic">⊕</span><div><strong>Quatre niveaux d'aide</strong><p>De la loi directe au mode débutant — on vise, l'avion y va. L'Auto‑GCAS et l'Auto‑ACAS du vrai F‑35 reprennent la main avant le sol ou la collision.</p></div></li>
+        </ul>
+      </div>
+      <figure class="frame rv d2" style="aspect-ratio: 16/9; margin: 0;">
+        <img src="progress/aviation/v2-f35-spin.jpg" alt="Le F‑35 en vrille, en loi directe, l'horizon doré du soleil couchant derrière lui" loading="lazy">
+        <figcaption>LOI DIRECTE · EN VRILLE</figcaption>
+      </figure>
+    </div>
+    <div class="duo">
+      <figure class="frame rv" style="margin:0"><img src="progress/aviation/v5-body-grey.jpg" alt="Le cockpit du F‑35 à 9 g : le champ de vision qui grisaille sur les bords" loading="lazy"><figcaption>9 G DEPUIS LE COCKPIT · LE VOILE GRIS</figcaption></figure>
+      <figure class="frame rv d1" style="margin:0"><img src="progress/aviation/m1-sea-backlit.jpg" alt="Le F‑35 vu de derrière, face au soleil bas au‑dessus de la mer" loading="lazy"><figcaption>CONTRE‑JOUR SUR LA MER</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section id="combat">
+  <div class="wrap">
+    <div class="eyebrow rv">Le combat</div>
+    <h2 class="rv d1">Voir, rejoindre, <em>tirer.</em></h2>
+    <p class="lead rv d2">Le radar AN/APG‑81 s'allume dès que le F‑35 quitte le sol, en combat ou non. Ce qu'il voit, le HUD le nomme ; ce qu'il verrouille, l'avion sait le rejoindre — et l'abattre.</p>
+    <div class="features">
+      <article class="feat wide rv"><div class="shot"><img src="progress/aviation/c1-radar-hud.jpg" alt="Le HUD du F‑35 au couchant : la portée radar en TWS, un drone verrouillé et sa boîte" loading="lazy"></div><div class="body"><span class="tag">Radar</span><h3>Un vrai capteur</h3><p>Le faisceau balaie ±60° en 2 s ; la portée dépend de la taille de la cible ; l'horizon, le relief réel et l'encoche Doppler la cachent. RWS, TWS, STT, l'IFF et la liaison de données.</p></div></article>
+      <article class="feat wide rv d1"><div class="shot"><img src="progress/aviation/tir-drone-3-falling.jpg" alt="Le drone abattu part en vrille dans sa fumée, la traînée du missile derrière lui" loading="lazy"></div><div class="body"><span class="tag">Missiles</span><h3>Abattu, il tombe</h3><p>AIM‑120, AIM‑9X, bombes guidées, JSM antinavire, leurres et paillettes. Touché, l'appareil fume ; détruit, il part en vrille dans sa fumée jusqu'au crash — et la tête du pilote peut le suivre.</p></div></article>
+      <article class="feat rv"><div class="shot"><img src="progress/aviation/c2-icpt-shadow.jpg" alt="Le F‑35 en patrouille derrière sa cible après l'interception, au couchant" loading="lazy"></div><div class="body"><span class="tag">Interception</span><h3>La route de collision</h3><p>Cap de collision, temps avant la rencontre, aspect. ⇧Tab vole la conversion par l'arrière jusqu'à 300 m derrière la cible — même un vrai avion de ligne.</p></div></article>
+      <article class="feat rv d1"><div class="shot"><img src="progress/aviation/c3-gun-firing.jpg" alt="Au canon depuis le cockpit : l'entonnoir sur l'axe, le réticule sur la cible" loading="lazy"></div><div class="body"><span class="tag">Canon</span><h3>Où tirer</h3><p>Le collimateur anticipe le virage de la cible : sur un chasseur à 5 g, 86 % des obus au but à 1 000 m. L'entonnoir et les traçantes, comme sur le vrai.</p></div></article>
+      <article class="feat rv d2"><div class="shot"><img src="progress/aviation/s3-replay-flyby.jpg" alt="Le replay, caméra de passage : le F‑35 vu d'en dessous au téléobjectif" loading="lazy"></div><div class="body"><span class="tag">Replay</span><h3>Le réalisateur</h3><p>Les deux dernières minutes et demie gardées : poursuite, tour, passage, cockpit, sur la cible — il coupe tout seul. La bande‑annonce trouve les meilleurs moments et se rend en vidéo.</p></div></article>
+    </div>
+  </div>
+</section>
+
+<section class="journey" id="monde">
+  <div class="wrap">
+    <div class="split">
+      <div>
+        <div class="eyebrow rv">Le monde vivant</div>
+        <h2 class="rv d1">Le vrai trafic, <em>sur une vraie mer.</em></h2>
+        <p class="lead rv d2">Les avions de ligne qui volent en ce moment au‑dessus de vous, les navires qui croisent au large — et trois porte‑avions qui font route face au vent.</p>
+        <ul class="points">
+          <li class="rv d1"><span class="ic">✈</span><div><strong>Le trafic aérien en direct</strong><p>Par l'ADS‑B (adsb.lol, OpenSky) : chaque avion à son modèle et sa taille, son indicatif, son immatriculation, ses feux, sa traînée ; son vol reconstruit sans saut, une minute en différé. On peut voler à son aile.</p></div></li>
+          <li class="rv d2"><span class="ic">≈</span><div><strong>Les navires de l'AIS</strong><p>Cargos, pétroliers, ferries, chalutiers, voiliers à leur taille ; leurs feux de route la nuit, leur sillage de Kelvin tracé dans la mer.</p></div></li>
+          <li class="rv d3"><span class="ic">∿</span><div><strong>Une mer calculée vague par vague</strong><p>Trois cascades de FFT, de la houle de 300 m aux vaguelettes de 12 cm, les moutons, le ciel reflété — et l'état de la mer du jour, lu chez Open‑Meteo.</p></div></li>
+          <li class="rv d1"><span class="ic">⚓</span><div><strong>Le Ford, le Kiev, l'Implacable</strong><p>À l'échelle, escortés de deux frégates, ils tanguent avec la houle ; leur ombre sur le pont, leur reflet sur l'eau. Le F‑35B s'y pose à la verticale et en redécolle court.</p></div></li>
+          <li class="rv d2"><span class="ic">↯</span><div><strong>Catapulte, brins, Paddles</strong><p>Le F‑35C catapulté du Ford, arrêté par l'un de ses trois brins ; l'officier d'appontage annonce « roger ball » et note chaque passage. Cas I, II ou III selon l'heure et le temps ; qualifications de jour, de nuit et par mer forte.</p></div></li>
+        </ul>
+      </div>
+      <figure class="frame rv d2" style="aspect-ratio: 16/9; margin: 0;">
+        <img src="progress/aviation/t3-ships-close.jpg" alt="Un porte‑conteneurs croisé à basse altitude : sa vague d'étrave et son sillage sur la mer" loading="lazy">
+        <figcaption>UN PORTE‑CONTENEURS CROISÉ À 120 M · SON SILLAGE</figcaption>
+      </figure>
+    </div>
+    <div class="duo">
+      <figure class="frame rv" style="margin:0"><img src="progress/aviation/m3c-cat-off.jpg" alt="Le F‑35C sorti de la catapulte du Ford, postcombustion allumée, au‑dessus de la mer" loading="lazy"><figcaption>CATAPULTÉ DU FORD · F‑35C, POSTCOMBUSTION</figcaption></figure>
+      <figure class="frame rv d1" style="margin:0"><img src="progress/aviation/t2-airliner-around.jpg" alt="Le F‑35 en patrouille avec un A321neo réel au‑dessus de Paris, ses feux de position allumés" loading="lazy"><figcaption>EN PATROUILLE AVEC UN A321NEO RÉEL · PARIS</figcaption></figure>
+    </div>
+    <div class="duo" style="margin-top:18px">
+      <figure class="frame rv" style="margin:0"><img src="progress/aviation/m2-ford-deck.jpg" alt="Le F‑35B posé sur le pont du Gerald R. Ford, l'ombre de l'îlot sur le pont" loading="lazy"><figcaption>POSÉ SUR LE FORD · L'OMBRE DE L'ÎLOT</figcaption></figure>
+      <figure class="frame rv d1" style="margin:0"><img src="progress/aviation/m1-sea-force5-low.jpg" alt="Le F‑35 à 60 m au‑dessus d'une mer de force 5, sous les nuages" loading="lazy"><figcaption>FORCE 5 · VUE DE 60 M</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section id="missions">
+  <div class="wrap">
+    <div class="split">
+      <figure class="frame rv" style="aspect-ratio: 16/9; margin: 0;">
+        <img src="progress/aviation/p1-ident.jpg" alt="Renegade sur les Alpes : le vol réel repris, rejoint et identifié de près au‑dessus des nuages" loading="lazy">
+        <figcaption>RENEGADE SUR LES ALPES · LE VOL RÉEL EZY35PH IDENTIFIÉ À 250 M</figcaption>
+      </figure>
+      <div>
+        <div class="eyebrow rv">Les missions</div>
+        <h2 class="rv d1">Des missions. <em>Des vues d'exception.</em></h2>
+        <p class="lead rv d2">Treize missions, de la police du ciel à la défense du porte‑avions, et un éditeur pour écrire les vôtres — ou les dicter à TARS.</p>
+        <ul class="points">
+          <li class="rv d1"><span class="ic">⌖</span><div><strong>Un vrai vol détourné</strong><p>Renegade sur les Alpes reprend un vol de ligne réel : il coupe son transpondeur et vire au sud. L'intercepter, l'identifier, l'escorter jusqu'à Lyon.</p></div></li>
+          <li class="rv d2"><span class="ic">✦</span><div><strong>Frapper, escorter, défendre</strong><p>Frappe en Corse depuis le Ford, frégates coulées au JSM à l'ouest de la Sardaigne, Red Air au large d'Hyères, patrouille acrobatique à Salon, qualifications d'appontage — seul ou en équipe, chacun son rôle.</p></div></li>
+          <li class="rv d3"><span class="ic">▦</span><div><strong>La carte et l'éditeur</strong><p>Zones, portée des SAM, symboles OTAN, « Voler vers ». Placez SAM, drones, chasseurs, vols réels et porte‑avions d'un clic ; la mission se partage par un lien.</p></div></li>
+          <li class="rv d1"><span class="ic">“</span><div><strong>Ou dictée à TARS</strong><p>« Escorte l'A320 AFR123 jusqu'à Nice » : il écrit la mission, trouve Nice, reprend le vrai vol et la lance.</p></div></li>
+        </ul>
+      </div>
+    </div>
+    <p class="lead rv" style="margin-top:72px">Treize vues d'exception, chacune à son heure, sa météo et son défi — et aussi la Mach Loop, l'Himalaya, Monument Valley, le Geirangerfjord, le lever de la pleine Lune en patrouille…</p>
+    <div class="track" tabindex="0" aria-label="Les vues d'exception, défilement horizontal">
+      <article class="stop rv"><div class="ph"><img src="progress/aviation/s2-corona.jpg" alt="La couronne du Soleil éclipsé au‑dessus de l'horizon, vue en vol" loading="lazy"></div><div class="txt"><div class="n">01 · ÉCLIPSE</div><h3>Le 12 août 2026</h3><p>Poursuivie au‑dessus de l'Islande, à sa vraie date. Le défi : trois minutes dans la totalité à Mach 1,6, comme le Concorde en 1973.</p></div></article>
+      <article class="stop rv d1"><div class="ph"><img src="progress/aviation/s2-aurora.jpg" alt="Les aurores vertes au‑dessus des Lofoten, vues du cockpit" loading="lazy"></div><div class="txt"><div class="n">02 · AURORES</div><h3>Les Lofoten</h3><p>Le vert de l'oxygène, ses sommets rouges ; remonter les fjords jusqu'au Trollfjord sous 400 m.</p></div></article>
+      <article class="stop rv d2"><div class="ph"><img src="progress/aviation/s2-grand-canyon.jpg" alt="Le F‑35 au‑dessus du Grand Canyon au soleil du soir" loading="lazy"></div><div class="txt"><div class="n">03 · GRAND CANYON</div><h3>Sous le rebord</h3><p>Suivre le Colorado au soleil du soir, porte après porte.</p></div></article>
+      <article class="stop rv d3"><div class="ph"><img src="progress/aviation/m3d-sea-deck.jpg" alt="Le F‑35 en finale au‑dessus d'une mer blanche d'écume" loading="lazy"></div><div class="txt"><div class="n">04 · TEMPÊTE</div><h3>L'appontage</h3><p>Une houle de 4,4 m, un pont qui tangue, et Paddles qui note.</p></div></article>
+      <article class="stop rv"><div class="ph"><img src="progress/aviation/s3-scene-photo.jpg" alt="Le mode photo dans le Grand Canyon : le F‑35 de trois quarts avant" loading="lazy"></div><div class="txt"><div class="n">05 · PHOTO</div><h3>Chaque scène son cadrage</h3><p>Le mode photo s'ouvre sur l'angle, le champ, l'exposition et la profondeur de champ de la scène.</p></div></article>
+    </div>
+    <div class="track-hint">← faites défiler →</div>
+  </div>
+</section>
+
+<section class="journey" id="patrouille">
+  <div class="wrap">
+    <div class="split">
+      <div>
+        <div class="eyebrow rv">La patrouille</div>
+        <h2 class="rv d1">Jamais seul <em>en l'air.</em></h2>
+        <p class="lead rv d2">Deux à quatre avions, huit formations, trois écartements — avec des ailiers IA ou avec vos amis.</p>
+        <ul class="points">
+          <li class="rv d1"><span class="ic">◇</span><div><strong>Des ailiers qui volent pour de vrai</strong><p>Un à trois F‑35 IA, pilotés avec les forces du vrai avion : tenus à 1,3 m en losange, ils annoncent leurs contacts, tirent « Fox trois » et peuvent être abattus.</p></div></li>
+          <li class="rv d2"><span class="ic">◎</span><div><strong>Les ordres du leader</strong><p>Par la roue ou à la voix : en losange, serrez, dégagement à droite, attente étagée, retour base, attaquez ma cible, engagez.</p></div></li>
+          <li class="rv d3"><span class="ic">⤳</span><div><strong>Changer de poste sans à‑coup</strong><p>Pour passer de l'autre côté, l'ailier passe dessous et derrière le leader ; dans un virage tactique, les ailiers se croisent.</p></div></li>
+          <li class="rv d1"><span class="ic">⇈</span><div><strong>Décoller et se poser ensemble</strong><p>L'élément part 8 s après le leader ; à l'atterrissage, chacun vole sa propre approche vers son point de toucher. Et le passage en losange, devant la caméra.</p></div></li>
+        </ul>
+      </div>
+      <figure class="frame rv d2" style="aspect-ratio: 16/9; margin: 0;">
+        <img src="progress/aviation/f3-wingmen-diamond.jpg" alt="Quatre F‑35 en losange au coucher du soleil" loading="lazy">
+        <figcaption>UN LEADER ET SES TROIS AILIERS IA, EN LOSANGE</figcaption>
+      </figure>
+    </div>
+    <div class="duo">
+      <figure class="frame rv" style="margin:0"><img src="progress/aviation/f4-ops-pass.jpg" alt="Le passage en losange vu de la caméra de passage, au‑dessus du désert" loading="lazy"><figcaption>LE PASSAGE EN LOSANGE</figcaption></figure>
+      <figure class="frame rv d1" style="margin:0"><img src="progress/aviation/s1-diamond.jpg" alt="Le losange de quatre F‑35 en route vers Salon‑de‑Provence" loading="lazy"><figcaption>PATROUILLE ACROBATIQUE · VERS SALON‑DE‑PROVENCE</figcaption></figure>
+    </div>
+  </div>
+</section>
+
 <section class="tars" id="tars">
   <div class="wrap">
     <div class="split">
@@ -325,7 +459,75 @@
       <figure class="frame rv" style="margin:0"><img src="img/marketing/tars_agents.webp" alt="Deux sous-agents de TARS analysent en parallèle le vent à Edwards et la marge d'énergie" loading="lazy"><figcaption>DEUX SOUS‑AGENTS · LE VENT ET L'ÉNERGIE</figcaption></figure>
       <figure class="frame rv d1" style="margin:0"><img src="img/marketing/tars_commands.webp" alt="Les commandes « / » de TARS complétées en tapant : /teleport orbit Ma" loading="lazy"><figcaption>« /TELEPORT ORBIT MA… » · COMPLÉTÉ EN TAPANT</figcaption></figure>
     </div>
+    <div class="split" style="margin-top:96px">
+      <figure class="frame rv" style="aspect-ratio: 16/9; margin: 0;">
+        <img src="progress/aviation/i2-intercept.jpg" alt="L'interception d'un vrai 767 de FedEx au‑dessus de Paris, demandée à TARS, ICPT au HUD" loading="lazy">
+        <figcaption>« INTERCEPTE LE FDX6321 » · UN VRAI 767 DE FEDEX</figcaption>
+      </figure>
+      <div>
+        <div class="eyebrow rv">TARS · l'aviateur</div>
+        <h2 class="rv d1">En l'air, <em>un équipier.</em></h2>
+        <ul class="points">
+          <li class="rv d1"><span class="ic">✎</span><div><strong>Il sait l'aviation</strong><p>Onze pages écrites pour lui, en français et en anglais : le F‑35, l'énergie, le combat tournoyant, la patrouille, le porte‑avions, l'ILS, les urgences, le radar, les armes, le trafic. Il y cherche, répond dans vos unités, sans inventer de chiffre.</p></div></li>
+          <li class="rv d2"><span class="ic">!</span><div><strong>Il annonce les menaces</strong><p>« Départ missile, 11 heures, 8 km — dégagement à gauche, leurres. » Sur ordre, il verrouille, tire, largue les leurres, intercepte le vrai trafic.</p></div></li>
+          <li class="rv d3"><span class="ic">◖</span><div><strong>Chaque rôle sa voix</strong><p>L'ailier, Darkstar l'AWACS, Mother le porte‑avions, Paddles l'officier d'appontage : chacun sa voix, son nom en sous‑titre, le grésillement de la radio. En salle, la radio de votre patrouille s'entend chez les autres pilotes.</p></div></li>
+        </ul>
+      </div>
+    </div>
     <p class="req rv">Avec votre propre clé OpenRouter (connexion en un clic, gardée dans votre navigateur). Sans clé, TARS répond et obéit aux ordres courants hors ligne.</p>
+  </div>
+</section>
+
+<section class="tars" id="ecole">
+  <div class="wrap">
+    <div class="split">
+      <div>
+        <div class="eyebrow rv">L'école de vol</div>
+        <h2 class="rv d1">TARS vole d'abord. <em>Puis vous.</em></h2>
+        <p class="lead rv d2">Dix‑huit leçons — premier vol, tour de piste, atterrissage, ILS, cas I sur le Ford, patrouille, interception, canon et dix figures de voltige — chacune avec sa carte, son schéma et ses chiffres.</p>
+        <ul class="points">
+          <li class="rv d1"><span class="ic">▶</span><div><strong>Il montre</strong><p>« Voir la démonstration » : TARS vole toute la leçon et dit chaque étape au moment où il la commence.</p></div></li>
+          <li class="rv d2"><span class="ic">⇄</span><div><strong>Puis il passe la main</strong><p>En mode guidé, il vole la première partie, puis « À vous les commandes ». Près d'un autre avion, le vôtre reste trimé jusqu'à ce que vous repreniez le manche.</p></div></li>
+          <li class="rv d3"><span class="ic">∿</span><div><strong>Un instructeur qui regarde</strong><p>Vos écarts mesurés, le pire annoncé d'abord avec sa correction — « Bas — sous le glide… » —, votre trace dessinée en direct sur le schéma de la manœuvre.</p></div></li>
+          <li class="rv d1"><span class="ic">☰</span><div><strong>Le débriefing</strong><p>Une note sur 20 et une lettre, les courbes face à l'idéal, la note de chaque phase et les deux points à travailler. Puis : réessayer.</p></div></li>
+        </ul>
+      </div>
+      <figure class="frame rv d2" style="aspect-ratio: 16/9; margin: 0;">
+        <img src="progress/aviation/a4-panel.jpg" alt="En approche ILS à la main : le panneau de l'instructeur en direct, le schéma et la trace, les jauges, l'annonce « Vite » et sa correction" loading="lazy">
+        <figcaption>ILS À LA MAIN · LE PANNEAU DE L'INSTRUCTEUR</figcaption>
+      </figure>
+    </div>
+    <div class="duo">
+      <figure class="frame rv" style="margin:0"><img src="progress/aviation/i3-tars-turn.jpg" alt="Le premier vol guidé : TARS aux commandes, un virage en palier à droite" loading="lazy"><figcaption>PREMIER VOL · TARS AUX COMMANDES, ÉTAPE 2/7</figcaption></figure>
+      <figure class="frame rv d1" style="margin:0"><img src="progress/aviation/i3-debrief.jpg" alt="Le débriefing du premier vol : A, 18,2/20, la hauteur et le cap face au temps" loading="lazy"><figcaption>LE DÉBRIEFING · A, 18,2/20</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section class="journey" id="ensemble">
+  <div class="wrap">
+    <div class="split">
+      <figure class="frame rv" style="aspect-ratio: 16/9; margin: 0;">
+        <img src="progress/net/form-b.jpg" alt="Deux F‑35 de deux joueurs en formation au coucher du soleil" loading="lazy">
+        <figcaption>DEUX JOUEURS · BEN EN FORMATION À DROITE D'ANA</figcaption>
+      </figure>
+      <div>
+        <div class="eyebrow rv">Jouer ensemble</div>
+        <h2 class="rv d1">À plusieurs, <em>dans le même ciel.</em></h2>
+        <p class="lead rv d2">Deux à quatre pilotes dans un même monde, avec des spectateurs et des écrans à côté. Un code de six lettres ou un lien suffit ; tant qu'on ne demande pas de salle, rien ne se connecte.</p>
+        <ul class="points">
+          <li class="rv d1"><span class="ic">⇉</span><div><strong>Voler ensemble</strong><p>Chacun son engin, les autres dessinés au présent, gouvernes et postcombustion comprises. « Ailier de… » dans la roue : le pilote automatique vous met à sa première place libre.</p></div></li>
+          <li class="rv d2"><span class="ic">♪</span><div><strong>La radio</strong><p>Votre voix en direct, passée par une radio de casque avec les bips Quindar d'Apollo ; à la voix, en tenant une touche ou toujours.</p></div></li>
+          <li class="rv d3"><span class="ic">⚑</span><div><strong>Les matchs et le combat libre</strong><p>Chacun pour soi, deux équipes, ensemble contre les agresseurs, course de portes, concours d'atterrissage. Hors match, en F‑35, tout est une cible — les autres joueurs, les ailiers IA, les avions de ligne et navires réels que voit le radar — et l'on revole 6 s après.</p></div></li>
+          <li class="rv d1"><span class="ic">◌</span><div><strong>Jusqu'à Gargantua</strong><p>À pied sur la Terre, la Lune ou Mars, en orbite avec un warp voté par tous, amarrés l'un à l'autre — et autour de Miller, où votre horloge ralentit sous les yeux des autres.</p></div></li>
+          <li class="rv d2"><span class="ic">▤</span><div><strong>La console Équipage</strong><p>Un téléphone ou une tablette scanne le QR code : PFD, navigation, carte OpenStreetMap de nuit, radar, systèmes, plan de vol, télémétrie — sans WebGPU.</p></div></li>
+        </ul>
+      </div>
+    </div>
+    <div class="duo">
+      <figure class="frame rv" style="margin:0;aspect-ratio:16/10"><img src="progress/80_crew_console_desktop.jpg" alt="La console Équipage sur un ordinateur : neuf écrans — tableau, vol, navigation, carte, globe, radar, systèmes, plan, télémétrie" loading="lazy"><figcaption>LA CONSOLE ÉQUIPAGE · NEUF ÉCRANS</figcaption></figure>
+      <figure class="frame rv d1" style="margin:0;aspect-ratio:16/10"><img src="progress/81_crew_console_phone.jpg" alt="La console Équipage sur un téléphone : le tableau, le PFD, la navigation et la carte" loading="lazy"><figcaption>LA MÊME, SUR UN TÉLÉPHONE</figcaption></figure>
+    </div>
   </div>
 </section>
 
@@ -372,6 +574,11 @@
       <a class="big rv d1" href="img/marketing/ranger.webp"><img src="img/marketing/ranger.webp" alt="Le Ranger et Gargantua" loading="lazy"><span>LE RANGER EN ORBITE DE KERR</span></a>
       <a class="rv d2" href="img/marketing/saturn.webp"><img src="img/marketing/saturn.webp" alt="Saturne" loading="lazy"><span>SATURNE</span></a>
       <a class="rv d3" href="img/marketing/earthrise.webp"><img src="img/marketing/earthrise.webp" alt="Lever de Terre" loading="lazy"><span>LEVER DE TERRE</span></a>
+      <a class="rv" href="progress/aviation/m3c-cat-off.jpg"><img src="progress/aviation/m3c-cat-off.jpg" alt="Le F‑35C sorti de la catapulte du Ford" loading="lazy"><span>CATAPULTÉ DU FORD</span></a>
+      <a class="rv d1" href="progress/aviation/t3-ships-close.jpg"><img src="progress/aviation/t3-ships-close.jpg" alt="Un porte‑conteneurs et son sillage, croisé à basse altitude" loading="lazy"><span>LE SILLAGE DE KELVIN</span></a>
+      <a class="rv d2" href="progress/aviation/s2-aurora.jpg"><img src="progress/aviation/s2-aurora.jpg" alt="Les aurores au‑dessus des Lofoten, vues du cockpit" loading="lazy"><span>AURORES SUR LES LOFOTEN</span></a>
+      <a class="rv d3" href="progress/aviation/tir-drone-4-crash.jpg"><img src="progress/aviation/tir-drone-4-crash.jpg" alt="L'explosion d'un drone abattu, au bout de sa traînée" loading="lazy"><span>SPLASH</span></a>
+      <a class="rv" href="progress/aviation/s2-totality.jpg"><img src="progress/aviation/s2-totality.jpg" alt="Le F‑35 en silhouette dans la totalité de l'éclipse" loading="lazy"><span>DANS LA TOTALITÉ</span></a>
     </div>
   </div>
 </section>
@@ -380,7 +587,7 @@
   <div class="wrap">
     <div class="eyebrow rv">Prêt au décollage</div>
     <h2 class="rv d1">L'horizon vous <em>attend.</em></h2>
-    <p class="lead rv d2">Ouvrez la page, appuyez sur <b>U</b> : le Ranger quitte le pas de tir. Le reste du chemin jusqu'à Gargantua, c'est vous qui le tracez — ou appuyez sur <b>F6</b> et demandez‑le à TARS.</p>
+    <p class="lead rv d2">Ouvrez la page, appuyez sur <b>U</b> : le Ranger quitte le pas de tir. Le reste du chemin jusqu'à Gargantua, c'est vous qui le tracez — ou appuyez sur <b>F6</b> et demandez‑le à TARS. Envie de chasse ? La roue (<b>Tab</b> maintenu) vous met aux commandes d'un F‑35. À plusieurs ? <b>Échap</b> › <em>Réseau — jouer ensemble</em>.</p>
     <div class="ctas rv d3">
       <a class="btn primary" href="../#scene=game:interstellar">▶&nbsp; Lancer la partie</a>
       <a class="btn" href="../#scene=game:artemis">S'entraîner avec Artemis II</a>
@@ -395,7 +602,8 @@
     <div>Gargantua — simulateur de trou noir de Kerr en WebGPU.<br>
       <a href="./">Atlas de Kerr</a> · <a href="comment-jouer.html">Comment jouer</a> · <a href="https://github.com/TheSamLePirate/black-hole-gpu">Code source</a></div>
     <div>Éphémérides : NASA JPL DE440. Ranger : « Interstellar Ranger One » par Max Vizell,
-      <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.<br>Œuvre de fan, sans lien avec les ayants droit du film.</div>
+      <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. F‑35 : « F‑35A Lightning II » par shangus930,
+      <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.<br>Trafic réel : adsb.lol (ODbL), OpenSky Network, aisstream.io. Cartes : © OpenStreetMap contributors.<br>Œuvre de fan, sans lien avec les ayants droit du film.</div>
   </div>
 </footer>
 

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Comment jouer — Gargantua</title>
-<meta name="description" content="Comment jouer : du pas de tir de Kennedy à Saturne, au trou de ver et à Gargantua — commandes, pilotage du Ranger, carte, planificateur et outils.">
+<meta name="description" content="Comment jouer : du pas de tir de Kennedy à Saturne, au trou de ver et à Gargantua ; le F-35 au-dessus de la vraie Terre, ses combats, ses porte-avions et son école de vol ; jouer à plusieurs — commandes, modes, carte, planificateur et sauvegardes.">
 <style>
   :root {
     --bg: #07080c;
@@ -150,10 +150,11 @@
 
 <header class="hero">
   <h1>Comment jouer</h1>
-  <p>Partez du pas de tir du Kennedy Space Center en 2067, mettez le Ranger en orbite, traversez le système solaire jusqu'à Saturne, plongez dans le trou de ver… et rejoignez Gargantua, ses mondes et son disque.</p>
+  <p>Partez du pas de tir du Kennedy Space Center en 2067, mettez le Ranger en orbite, traversez le système solaire jusqu'à Saturne, plongez dans le trou de ver… et rejoignez Gargantua, ses mondes et son disque. Ou prenez un F-35 au-dessus de la vraie Terre : son école de vol, ses combats, ses porte-avions — seul ou à plusieurs.</p>
   <div class="cta">
     <a class="btn primary" href="../#scene=game:interstellar">▶ Lancer la partie</a>
     <a class="btn" href="../#scene=game:artemis">Entraînement : Artemis II</a>
+    <a class="btn" href="#f35">Piloter le F-35</a>
     <a class="btn" href="#touches">Toutes les touches</a>
   </div>
 </header>
@@ -162,6 +163,7 @@
   <ul>
     <li><a href="#avant">Avant de commencer</a></li>
     <li><a href="#interface">L'interface</a></li>
+    <li><a href="#modes">Les quatre modes</a></li>
     <li><a href="#parcours">Le parcours</a></li>
     <li><a href="#pilotage">Piloter le Ranger</a></li>
     <li><a href="#autopilotes">Autopilotes</a></li>
@@ -170,11 +172,20 @@
     <li><a href="#camera">Caméra &amp; temps</a></li>
     <li><a href="#touches">Toutes les touches</a></li>
     <li><a href="#cockpit">Le cockpit</a></li>
+    <li><a href="#f35">Piloter le F-35</a></li>
+    <li><a href="#combat">Radar &amp; combat</a></li>
+    <li><a href="#patrouille">Patrouille</a></li>
+    <li><a href="#porte-avions">Porte-avions</a></li>
+    <li><a href="#missions">Défis &amp; missions</a></li>
+    <li><a href="#ecole">L'école de vol</a></li>
+    <li><a href="#trafic">Trafic réel &amp; mer</a></li>
+    <li><a href="#spectacle">Replay &amp; vues d'exception</a></li>
     <li><a href="#meteo">Météo &amp; aéroports</a></li>
     <li><a href="#son">Son, musique &amp; voix</a></li>
     <li><a href="#tars">TARS, l'IA de bord</a></li>
+    <li><a href="#ensemble">Jouer ensemble</a></li>
     <li><a href="#manette">Manettes, HOTAS &amp; tactile</a></li>
-    <li><a href="#outils">Outils &amp; sauvegardes</a></li>
+    <li><a href="#outils">Sauvegardes &amp; outils</a></li>
   </ul>
 </nav>
 
@@ -184,49 +195,88 @@
   <h2>Avant de commencer<small>Ce qu'il faut pour jouer</small></h2>
   <div class="grid">
     <div class="card"><h4>Un navigateur WebGPU</h4><p>Chrome, Edge ou Arc récents (ou Safari avec WebGPU activé). Tout le rendu — le trou noir, la lentille gravitationnelle, les planètes — est calculé sur la carte graphique.</p></div>
-    <div class="card"><h4>Un clavier, une manette ou un écran tactile</h4><p>Le clavier donne accès à tout. Une manette Xbox / PlayStation est reconnue ; sur téléphone et tablette, un manche et une manette des gaz apparaissent à l'écran.</p></div>
+    <div class="card"><h4>Un clavier, une manette, un HOTAS ou un écran tactile</h4><p>Le clavier donne accès à tout. Une manette Xbox / PlayStation est reconnue (avec une disposition de chasseur pour le F-35), comme les manches, manettes des gaz et palonniers ; sur téléphone et tablette, un manche et une manette des gaz apparaissent à l'écran.</p></div>
     <div class="card"><h4>La qualité « jeu »</h4><p>Les scènes de jeu démarrent en qualité <kbd>6</kbd> (game). Si l'image saccade, essayez <kbd>5</kbd> ; pour une image fixe très fine, <kbd>3</kbd> ou <kbd>4</kbd>.</p></div>
-    <div class="card"><h4>Les textes du jeu sont en anglais</h4><p>Les boutons et messages à l'écran sont en anglais : cette page les cite tels quels (<em>PLAN</em>, <em>EXECUTE</em>, <em>Free return</em>…).</p></div>
+    <div class="card"><h4>En français ou en anglais</h4><p>Le jeu parle la langue du navigateur (le français s'il est réglé en français, l'anglais sinon) ; l'écran titre permet d'en changer, et le choix est gardé. Quelques termes restent en anglais, comme dans un vrai cockpit (<em>PLAN</em>, <em>EXECUTE</em>, <em>SHOOT</em>, <em>IN RANGE</em>…).</p></div>
+    <div class="card"><h4>Métrique par défaut</h4><p>Altitudes en mètres, vitesses en m/s, distances en km — partout : HUD, cartes, TARS, la console d'équipage. Les unités impériales (pieds, nœuds, milles) sont une option des réglages.</p></div>
   </div>
-  <div class="note">Appuyez sur <kbd>?</kbd> à tout moment pour afficher l'aide‑mémoire des touches dans le jeu. <kbd>M</kbd> ouvre les réglages hors vol (<kbd>⇧M</kbd> en vol) et <kbd>⌘K</kbd> / <kbd>Ctrl+K</kbd> y cherche un réglage par son nom.</div>
+  <div class="note">Appuyez sur <kbd>?</kbd> à tout moment pour afficher l'aide‑mémoire des touches dans le jeu. <kbd>M</kbd> ouvre les réglages hors vol (<kbd>⇧M</kbd> en vol) et <kbd>⌘K</kbd> / <kbd>Ctrl+K</kbd> y cherche un réglage par son nom. <kbd>Échap</kbd>, quand rien n'est ouvert, met le jeu en pause et ouvre son menu.</div>
 </section>
 
 
 <section id="interface">
-  <h2>L'interface<small>Ce que vous voyez à l'ouverture, hors vol</small></h2>
-  <figure class="shot"><a href="img/comment-jouer/01_accueil.webp"><img src="img/comment-jouer/01_accueil.webp" alt="L’écran d’accueil : Gargantua en direct. En haut à gauche, la fréquence d’image et la vue ; en haut à droite, les réglages ; en bas, la barre du temps et la barre d’outils." loading="lazy"></a><figcaption>L’écran d’accueil : Gargantua en direct. En haut à gauche, la fréquence d’image et la vue ; en haut à droite, les réglages ; en bas, la barre du temps et la barre d’outils.</figcaption></figure>
-  <h3>La barre d'outils</h3>
-  <figure class="shot narrow"><a href="img/comment-jouer/c_toolbar.webp"><img src="img/comment-jouer/c_toolbar.webp" alt="La barre du temps (pause, plus lent / plus rapide, temps réel, REC) au‑dessus de la barre d’outils." loading="lazy"></a><figcaption>La barre du temps (pause, plus lent / plus rapide, temps réel, REC) au‑dessus de la barre d’outils.</figcaption></figure>
+  <h2>L'interface<small>L'écran titre, la barre du haut, la roue et le menu pause</small></h2>
+  <h3>L'écran titre</h3>
+  <p>À l'ouverture : <strong>Continuer</strong> (la partie là où vous l'avez laissée), <strong>Missions</strong> (le voyage, Artemis, le trou de ver, Gargantua), <strong>Explorer</strong> (la galerie des scènes : la Terre, le système solaire, les trous noirs), <strong>Mode photo</strong>, <strong>Réglages</strong> et le <strong>Kerr Bench</strong> (mesurer sa machine) — et le choix de la langue. Le menu pause le rouvre (<em>Écran titre</em>).</p>
+
+  <h3>La barre du haut</h3>
+  <p>Une seule barre, en haut, dans tous les modes (l'ancienne barre d'outils du bas n'existe plus). De gauche à droite :</p>
   <ul class="icons">
-    <li><b>⊞ Scènes</b> — la galerie de toutes les scènes</li>
-    <li><b>📷 Caméra</b> — placement, cible, objectif, télescope (la vue et la cible sont écrites à côté)</li>
-    <li><b>⇕ Jet</b> — le jet relativiste</li>
-    <li><b>✦ Ranger</b> — activer / désactiver le vaisseau (<kbd>K</kbd>)</li>
-    <li><b>⊜ Cinéma</b> — surface liquide du trou de ver</li>
-    <li><b>◌ Guide</b> — guide analytique de l'ombre</li>
-    <li><b>⟋ Ciel</b> — la carte du ciel</li>
-    <li><b>🔧 Outils</b> — les outils de jeu (<kbd>F2</kbd>)</li>
-    <li><b>🔊 Son</b> — son activé / coupé</li>
-    <li><b>🖥 Rendu</b> — rendu hors ligne &amp; vidéo</li>
-    <li><b>📷 PNG</b> — capture d'écran (<kbd>P</kbd>)</li>
-    <li><b>⛶ · 👁 · ?</b> — plein écran · masquer l'interface · aide</li>
+    <li><b>L'emblème de TARS</b> — il respire au repos et montre ce qu'il fait ; un clic lui parle (<kbd>F6</kbd>)</li>
+    <li><b>Les quatre onglets</b> — Vaisseau · À pied · Caméra libre · Photo (<kbd>F1</kbd>–<kbd>F4</kbd>) ; un onglet impossible à cet instant est grisé, sa raison dans sa bulle</li>
+    <li><b>Le groupe du mode</b> — en vol : les voyants, les horloges, l'engin piloté, sa vue ; à pied : le monde et le lieu</li>
+    <li><b>Le temps</b> — pause, plus lent / plus rapide, temps réel, enregistrement d'une prise</li>
+    <li><b>Les actions</b> — Atlas, trépied, le ciel d'ici, observatoire, surimpression, placer, scènes, météo, éclipses, carte du ciel, musique, son, capture, rendu, détails, aide, réglages ; ce qui ne tient pas passe sous <b>⋯</b></li>
+    <li><b>Masquer</b> — la barre se cache ; la poignée en haut la ramène</li>
   </ul>
+
+  <h3>La roue — <kbd>Tab</kbd> maintenu</h3>
+  <p>Maintenez <kbd>Tab</kbd> : une roue s'ouvre (jusqu'à 800 px de diamètre) ; pointez un secteur à la souris et relâchez pour l'exécuter, un secteur marqué ▸ ouvre sa propre roue. Le centre dit l'élément pointé, sa touche et s'il est engagé. Un <strong>appui bref</strong> sur <kbd>Tab</kbd> reste « la cible suivante » (en F-35 : le verrou radar suivant). La roue dépend de ce que vous faites :</p>
+  <ul>
+    <li><strong>Hors vol</strong> — la vue, regarder la cible, le télescope, le ciel d'ici, l'observatoire, la surimpression, la scène (jet, surface liquide, guide d'ombre, son, plein écran), piloter, placer le vaisseau, <strong>Voler en F-35</strong>, <strong>Défis F-35</strong>, <strong>Réseau</strong>, les cinématiques, le ciel, la photo.</li>
+    <li><strong>Aux commandes d'un vaisseau spatial</strong> — SAS, prograde, rétrograde, vers la cible, les autopilotes ▸, la navigation ▸ (carte, placer, plan de vol, approche ILS…), la caméra ▸ (vue, photo, replay, bande‑annonce).</li>
+    <li><strong>En F-35</strong> — dix secteurs : voir <a href="#roue-f35">la roue du F-35</a>.</li>
+  </ul>
+
+  <h3>Le menu pause — <kbd>Échap</kbd></h3>
+  <p>Le temps s'arrête ; le menu propose : reprendre, <strong>Capture</strong> (la vue de l'instant rendue sans bruit, enregistrée en PNG une fois convergée), <strong>Rendu…</strong> (une image ou une vidéo), sauvegarder, charger, l'<strong>Atlas</strong>, <strong>Le ciel d'ici</strong>, la <strong>surimpression</strong>, l'<strong>observatoire</strong>, <strong>Réseau — jouer ensemble</strong>, placer le vaisseau, la date et l'heure, la météo, les éclipses, rendre les commandes (si un autopilote ou une mission tourne), les réglages, les <strong>commandes</strong> (clavier, manettes et HOTAS), le mode photo et l'écran titre. Les flèches <kbd>↑</kbd> <kbd>↓</kbd> s'y déplacent, comme à la manette.</p>
 
   <h3>Les scènes</h3>
   <figure class="shot"><a href="img/comment-jouer/02_scenes.webp"><img src="img/comment-jouer/02_scenes.webp" alt="La galerie des scènes : Jeu, Terre, Système solaire, Gargantua, Trou de ver, Trous noirs — avec une recherche. Les deux premières cartes lancent le jeu et l’entraînement Artemis II." loading="lazy"></a><figcaption>La galerie des scènes : Jeu, Terre, Système solaire, Gargantua, Trou de ver, Trous noirs — avec une recherche. Les deux premières cartes lancent le jeu et l’entraînement Artemis II.</figcaption></figure>
 
   <h3>Les réglages</h3>
-  <p>Le bouton <em>Settings</em> (ou <kbd>M</kbd> hors vol, <kbd>⇧M</kbd> en vol) ouvre le panneau : la scène, vos préréglages, la qualité, puis des onglets <em>Camera · Scene · Matter · Sky · Physics · Render · Game</em>. Chaque réglage modifié se remet par défaut d'un clic sur son point ; <kbd>⌘Z</kbd> annule.</p>
+  <p>Le bouton <em>Réglages</em> de la barre du haut (ou <kbd>M</kbd> hors vol, <kbd>⇧M</kbd> en vol, ou le menu pause) ouvre le panneau : la scène, vos préréglages, la qualité, puis des onglets <em>Caméra · Scène · Matière · Ciel · Physique · Rendu · Jeu</em> (le groupe <em>F-35</em>, la formation, le trafic, le réseau sont sous <em>Jeu</em>). Chaque réglage modifié se remet par défaut d'un clic sur son point ; <kbd>⌘Z</kbd> annule.</p>
   <div class="shots"><figure class="shot"><a href="img/comment-jouer/47_reglages_game.webp"><img src="img/comment-jouer/47_reglages_game.webp" alt="L’onglet Game : le Ranger (activé, vaisseau piloté, vue, moteur), l’auto‑warp pendant les manœuvres, l’apparence du vaisseau…" loading="lazy"></a><figcaption>L’onglet Game : le Ranger (activé, vaisseau piloté, vue, moteur), l’auto‑warp pendant les manœuvres, l’apparence du vaisseau…</figcaption></figure><figure class="shot"><a href="img/comment-jouer/04_settings_search.webp"><img src="img/comment-jouer/04_settings_search.webp" alt="La recherche (⌘K / Ctrl+K) : « ship » trouve les scènes et tous les réglages qui en parlent." loading="lazy"></a><figcaption>La recherche (⌘K / Ctrl+K) : « ship » trouve les scènes et tous les réglages qui en parlent.</figcaption></figure></div>
 
   <h3>Activer ou désactiver le vaisseau</h3>
-  <p>Le bouton <strong>✦ Ranger</strong> de la barre d'outils (ou <kbd>K</kbd>) fait apparaître le vaisseau dans n'importe quelle scène et vous met aux commandes : la barre d'outils laisse place au HUD de vol. <kbd>⇧K</kbd> en vol vous fait quitter le vaisseau ; la caméra redevient libre et la barre d'outils revient.</p>
+  <p><kbd>K</kbd> (ou l'onglet <strong>Vaisseau</strong>, <kbd>F1</kbd>) fait apparaître le vaisseau dans n'importe quelle scène et vous met aux commandes : le HUD de vol s'affiche sous la barre du haut. L'onglet <strong>Caméra libre</strong> (<kbd>F3</kbd>) vous en détache — le vaisseau continue son vol — et <kbd>F1</kbd> vous y ramène. Posé, <kbd>⇧K</kbd> vous fait descendre à pied (voir <a href="#modes">les quatre modes</a>).</p>
   <div class="shots"><figure class="shot"><a href="img/comment-jouer/40_ranger_gargantua.webp"><img src="img/comment-jouer/40_ranger_gargantua.webp" alt="Vaisseau activé : le Ranger en orbite de Kerr autour de Gargantua, avec son HUD de vol." loading="lazy"></a><figcaption>Vaisseau activé : le Ranger en orbite de Kerr autour de Gargantua, avec son HUD de vol.</figcaption></figure><figure class="shot"><a href="img/comment-jouer/41_sans_vaisseau.webp"><img src="img/comment-jouer/41_sans_vaisseau.webp" alt="Vaisseau désactivé : même scène, caméra libre, barre d’outils de retour." loading="lazy"></a><figcaption>Vaisseau désactivé : même scène, caméra libre, barre d’outils de retour.</figcaption></figure></div>
 
   <h3>Les autres panneaux</h3>
   <div class="shots"><figure class="shot"><a href="img/comment-jouer/05_camera.webp"><img src="img/comment-jouer/05_camera.webp" alt="Le panneau Caméra : autour, suivi, libre, trépied, chute libre ; regard sur la cible, télescope, objectif, vitesse, cinématiques." loading="lazy"></a><figcaption>Le panneau Caméra : autour, suivi, libre, trépied, chute libre ; regard sur la cible, télescope, objectif, vitesse, cinématiques.</figcaption></figure><figure class="shot"><a href="img/comment-jouer/06_details.webp"><img src="img/comment-jouer/06_details.webp" alt="Les détails (I) : toutes les grandeurs physiques du trou noir et de l’observateur." loading="lazy"></a><figcaption>Les détails (I) : toutes les grandeurs physiques du trou noir et de l’observateur.</figcaption></figure></div>
   <div class="shots"><figure class="shot"><a href="img/comment-jouer/08_render.webp"><img src="img/comment-jouer/08_render.webp" alt="Le rendu hors ligne : n’importe quelle résolution, des centaines d’échantillons par pixel, export PNG / EXR, et la vidéo." loading="lazy"></a><figcaption>Le rendu hors ligne : n’importe quelle résolution, des centaines d’échantillons par pixel, export PNG / EXR, et la vidéo.</figcaption></figure><figure class="shot"><a href="img/comment-jouer/07_help.webp"><img src="img/comment-jouer/07_help.webp" alt="L’aide‑mémoire (?) : toutes les touches, toujours à jour." loading="lazy"></a><figcaption>L’aide‑mémoire (?) : toutes les touches, toujours à jour.</figcaption></figure></div>
 </section>
+<section id="modes">
+  <h2>Les quatre modes<small><kbd>F1</kbd> Vaisseau · <kbd>F2</kbd> À pied · <kbd>F3</kbd> Caméra libre · <kbd>F4</kbd> Photo — les onglets de la barre du haut</small></h2>
+  <div class="grid">
+    <div class="card"><h4>Vaisseau — F1</h4><p>Aux commandes : le Ranger, le Lander, l'Endurance ou le F-35, avec leur HUD, leurs autopilotes, la carte et le planificateur.</p></div>
+    <div class="card"><h4>À pied — F2</h4><p>Un astronaute sur la Terre, la Lune, Mars ou un monde de Gargantua : on marche, on court, on saute dans la gravité locale. <kbd>⇧K</kbd> près d'un engin posé y remonte.</p></div>
+    <div class="card"><h4>Caméra libre — F3</h4><p>N'importe où dans le système, sans vaisseau ; un vaisseau piloté continue son vol, ses autopilotes et son plan.</p></div>
+    <div class="card"><h4>Photo — F4</h4><p>La vue seule : exposition, focale, profondeur de champ ; le rendu hors ligne d'une image ou d'une vidéo. <kbd>Échap</kbd> revient au mode d'avant.</p></div>
+  </div>
+  <h3>À pied</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Touche</th><th>Effet</th></tr></thead>
+    <tbody>
+      <tr><td><kbd class="f">Z</kbd> <kbd class="f">Q</kbd> <kbd class="f">S</kbd> <kbd class="f">D</kbd> · <kbd>⇧</kbd></td><td>Marcher par rapport à la caméra (WASD en QWERTY) · courir</td></tr>
+      <tr><td><kbd>Espace</kbd></td><td>Sauter, avec la gravité du lieu</td></tr>
+      <tr><td>Glisser · molette</td><td>Tourner autour du personnage · distance de la caméra</td></tr>
+      <tr><td><kbd>M</kbd></td><td>La carte du lieu</td></tr>
+      <tr><td><kbd>Y</kbd> · <kbd>⇧T</kbd></td><td>Le trépied posé là où l'on se tient, puis le télescope · le trépied seul, tourné comme vous</td></tr>
+      <tr><td><kbd>⇧K</kbd></td><td>Remonter dans un engin posé (s'approcher de son accès)</td></tr>
+    </tbody>
+  </table></div>
+  <p>Le HUD à pied donne la latitude et la longitude, l'altitude, une boussole, une carte orientée et la direction de votre engin.</p>
+  <h3>Aller partout</h3>
+  <ul>
+    <li><strong>L'Atlas</strong> (<kbd>F8</kbd>, la barre du haut, le menu pause) — la Terre, la Lune et Mars en cartes : une centaine de destinations, des coordonnées, et sur la Terre toute adresse (recherche Photon / OpenStreetMap). La fiche d'un lieu dit son altitude, sa distance, s'il y fait jour ; et vous y met : en orbite au‑dessus, l'engin posé, à pied, la caméra libre au‑dessus, un trépied.</li>
+    <li><strong>Placer</strong> (la barre du haut, le menu pause) — le vaisseau en orbite, au sol, à pied ou à côté d'un astre, cherché par son nom : une destination, une piste, des coordonnées ou une adresse.</li>
+    <li><strong>Le ciel d'ici</strong> (<kbd>⇧F8</kbd>) — depuis la Terre : filés d'étoiles, analemme, la Lune, l'ISS et ses transits, les éclipses, le sélénélion ; y aller, le vivre, le rendre.</li>
+    <li><strong>L'observatoire</strong> (<kbd>⇧Y</kbd>) — ce qu'il y a à voir depuis le sol de la Terre (le Soleil, la Lune, les planètes et leurs lunes, l'ISS, les étoiles brillantes, le trou de ver), quand il sera visible et à son meilleur ; le télescope y est porté, tout de suite ou au bon moment.</li>
+    <li><strong>La capture</strong> (la barre du haut, le menu pause) — dans tous les modes, la vue de l'instant rendue hors ligne et enregistrée en PNG une fois convergée.</li>
+  </ul>
+</section>
+
 <section id="parcours">
   <h2>Le parcours<small>Le voyage du film, de la Terre à Gargantua</small></h2>
   <p>La scène <strong>game:interstellar</strong> commence le 1<sup>er</sup> janvier 2067 à 10 h, le Ranger posé sur le pas de tir de Kennedy, en temps réel. Le système solaire est à l'échelle, les planètes à leur vraie place (éphémérides de la NASA).</p>
@@ -236,7 +286,7 @@
     <li><strong>Planifier le transfert</strong>Appuyez sur <kbd>O</kbd> pour l'onglet MISSION de l'ordinateur de bord : choisissez la destination et l'arrivée (<em>Orbit</em>, <em>Flyby</em>, rendez‑vous, passage du trou de ver…), cliquez <em>PLAN</em> — le trajet s'affiche sur la carte —, puis <em>EXECUTE</em>. Les allumages se font tout seuls ; accélérez le temps avec <kbd>.</kbd> entre deux.</li>
     <li><strong>Trouver le trou de ver</strong>Il attend à 0,7 UA derrière Saturne. Ciblez‑le sur la carte puis <kbd>0</kbd> : l'autopilote d'approche vous y conduit.</li>
     <li><strong>Traverser</strong>De l'autre côté : Gargantua (10⁸ masses solaires, spin 0,998), son disque, et les mondes de Miller, Mann et Edmunds. Mêmes outils : carte, planificateur, autopilotes.<figure class="shot"><a href="img/comment-jouer/49_miller.webp"><img src="img/comment-jouer/49_miller.webp" alt="Posé sur Miller, Gargantua au‑dessus de l’océan." loading="lazy"></a><figcaption>Posé sur Miller, Gargantua au‑dessus de l’océan.</figcaption></figure></li>
-    <li><strong>Se poser</strong><kbd>G</kbd> pose le vaisseau sur le monde visé. Depuis le sol, <kbd>U</kbd> redécolle.</li>
+    <li><strong>Se poser</strong><kbd>F7</kbd> pose le vaisseau sur le monde visé (atterrissage propulsé) ; depuis l'orbite de la Terre, <kbd>⇧G</kbd> fait la rentrée et l'atterrissage sur une piste. Depuis le sol, <kbd>U</kbd> redécolle ; <kbd>⇧K</kbd> vous fait descendre à pied.</li>
   </ol>
   <div class="note"><strong>Pour apprendre :</strong> la scène <a href="../#scene=game:artemis">game:artemis</a> vous place à 400 km au‑dessus de la Terre, la Lune visée. <kbd>O</kbd> → la Lune → <em>Free return</em> → <em>PLAN</em> → <em>EXECUTE</em>, et regardez Artemis II se dérouler sur la carte (<kbd>M</kbd>). C'est le meilleur moyen de comprendre les missions.</div><div class="shots"><figure class="shot"><a href="img/comment-jouer/32_planif_free_return.webp"><img src="img/comment-jouer/32_planif_free_return.webp" alt="Le planificateur après PLAN : 4 nœuds — départ (3,10 km/s), deux corrections visées en vol, capture au retour." loading="lazy"></a><figcaption>Le planificateur après PLAN : 4 nœuds — départ (3,10 km/s), deux corrections visées en vol, capture au retour.</figcaption></figure><figure class="shot"><a href="img/comment-jouer/33_carte_artemis.webp"><img src="img/comment-jouer/33_carte_artemis.webp" alt="La carte (M) : l’orbite de retour libre autour de la Lune, les nœuds, et la frise temporelle en haut." loading="lazy"></a><figcaption>La carte (M) : l’orbite de retour libre autour de la Lune, les nœuds, et la frise temporelle en haut.</figcaption></figure></div>
   <p class="muted">Le jeu se sauvegarde tout seul dans le navigateur et reprend là où vous l'avez laissé à la visite suivante. Les autres scènes (galerie <em>Scenes</em> dans la barre d'outils) sont des points de vue libres : le trou noir, l'ISS, la flotte, les mondes de Gargantua…</p>
@@ -265,7 +315,7 @@
   <div class="legend"><span class="lf">Rotation &amp; gaz</span><span class="lr">Translation RCS</span><span class="lt">Gaz &amp; précision</span></div>
 
   <h3>Le HUD de vol</h3>
-  <figure class="shot"><a href="img/comment-jouer/c_flightbar.webp"><img src="img/comment-jouer/c_flightbar.webp" alt="La barre de vol : SAS · HOLD · AUTO, le temps, REC, les horloges (temps du vaisseau, temps lointain, leur rapport, date terrestre), puis le vaisseau piloté, PLAN, la vue, le tube de trajectoire, le son, les outils, la barre d’outils et la densité du HUD." loading="lazy"></a><figcaption>La barre de vol : SAS · HOLD · AUTO, le temps, REC, les horloges (temps du vaisseau, temps lointain, leur rapport, date terrestre), puis le vaisseau piloté, PLAN, la vue, le tube de trajectoire, le son, les outils, la barre d’outils et la densité du HUD.</figcaption></figure>
+  <p>En vol, le groupe du mode dans la barre du haut porte les voyants (SAS · HOLD · AUTO), les horloges (temps du vaisseau, temps lointain, leur rapport, date terrestre), l'engin piloté et sa vue. Le HUD s'affiche dans les vues extérieures (dorsale, poursuite) ; dans le cockpit, ce sont les écrans de bord qui parlent. Il y en a trois, choisis par la phase du vol — <strong>Atmosphère</strong>, <strong>Espace</strong>, <strong>Approche</strong> — ou imposés avec <kbd>⇧²</kbd>.</p>
   <ul class="icons">
     <li><b>En haut à gauche</b> — la cible : distance, vitesse d'approche, plus courte distance</li>
     <li><b>En haut à droite</b> — le Ranger : statut (posé, en vol, en orbite…), altitude, vitesse, Pe · Ap</li>
@@ -292,19 +342,22 @@
       <tr><td><kbd>F</kbd> · <kbd>⇧F</kbd></td><td><kbd>F</kbd> · <kbd>⇧F</kbd></td><td>Dans l'air : voler en fusée · en avion · avec l'ordinateur de vol — l'antigravité</td></tr>
       <tr><td><kbd>P</kbd> · <kbd>⇧P</kbd></td><td><kbd>P</kbd> · <kbd>⇧P</kbd></td><td>Volets (rentrés · mi · pleins) · aérofrein</td></tr>
       <tr><td><kbd>G</kbd></td><td><kbd>G</kbd></td><td>Train d'atterrissage : sorti · rentré (8 s ; verrouillé au sol ; une alarme s'il est rentré bas et lent)</td></tr>
-      <tr><td><kbd>F4</kbd></td><td><kbd>F4</kbd></td><td>Assisté : vous pilotez, le directeur de l'autopilote montre où pointer et combien de gaz</td></tr>
-      <tr><td><kbd>F3</kbd></td><td><kbd>F3</kbd></td><td>Spectateur : une caméra libre, le vaisseau continue (<kbd>F3</kbd> ou <kbd>V</kbd> pour revenir)</td></tr>
+      <tr><td><kbd>⇧F4</kbd></td><td><kbd>⇧F4</kbd></td><td>Assisté : vous pilotez, le directeur de l'autopilote montre où pointer et combien de gaz</td></tr>
+      <tr><td><kbd>F3</kbd></td><td><kbd>F3</kbd></td><td>Spectateur (la caméra libre) : le vaisseau continue, ses autopilotes et son plan (<kbd>F1</kbd> ou <kbd>V</kbd> pour revenir)</td></tr>
       <tr><td><kbd>F6</kbd></td><td><kbd>F6</kbd></td><td>TARS : tapé, sa console ; tenu, lui parler (voir <a href="#tars">TARS</a>)</td></tr>
+      <tr><td><kbd>Tab</kbd> maintenu</td><td>idem</td><td>La roue : maintiens, autopilotes, navigation, caméra (voir <a href="#interface">l'interface</a>)</td></tr>
+      <tr><td><kbd>*</kbd> (PC) · <kbd>`</kbd> (Mac)</td><td><kbd>\</kbd></td><td>La vue Réalisateur, puis son plan suivant : au choix du réalisateur, poursuite, orbite lente, passage, suivi au sol, le limbe de la planète, la destination</td></tr>
       <tr><td><kbd>Entrée</kbd></td><td><kbd>Enter</kbd></td><td>Acquitter l'alarme principale : le voyant éteint, l'alarme muette</td></tr>
       <tr><td><kbd>⌫</kbd></td><td><kbd>Backspace</kbd></td><td>Reprendre la main : arrête la mission automatique, le maintien et l'autopilote en cours</td></tr>
       <tr><td><kbd>Échap</kbd></td><td><kbd>Esc</kbd></td><td>Ferme le panneau du dessus ; sinon le menu pause (le temps s'arrête) : reprendre, sauvegarder, charger, réglages</td></tr>
-      <tr><td><kbd>⇧K</kbd></td><td><kbd>⇧K</kbd></td><td>Quitter le Ranger (caméra libre) — <kbd>K</kbd> pour y revenir</td></tr>
+      <tr><td><kbd>⇧K</kbd></td><td><kbd>⇧K</kbd></td><td>Posé : descendre à pied — à pied, remonter à bord d'un engin posé</td></tr>
+      <tr><td><kbd>F5</kbd> · <kbd>F9</kbd></td><td><kbd>F5</kbd> · <kbd>F9</kbd></td><td>Sauvegarde rapide · chargement rapide</td></tr>
     </tbody>
   </table></div>
   <div class="note warn">Les gaz se règlent avec <kbd>⇧</kbd> et <kbd>Alt</kbd>, jamais avec <kbd>Ctrl</kbd> : <kbd>Ctrl+W</kbd> fermerait l'onglet.</div>
 
-  <h3>Les trois vaisseaux</h3>
-  <p><kbd>[</kbd> et <kbd>]</kbd> passent d'un vaisseau à l'autre : le <strong>Ranger</strong>, le <strong>Lander</strong> et l'<strong>Endurance</strong>. Ceux qu'on ne pilote pas continuent leur trajectoire — et leur rotation — comme on les a laissés.</p><figure class="shot narrow"><a href="img/comment-jouer/13_menu_vaisseau.webp"><img src="img/comment-jouer/13_menu_vaisseau.webp" alt="Le menu des vaisseaux (bouton RANGER de la barre de vol) : masse, état, distance de chacun." loading="lazy"></a><figcaption>Le menu des vaisseaux (bouton RANGER de la barre de vol) : masse, état, distance de chacun.</figcaption></figure>
+  <h3>Les engins</h3>
+  <p><kbd>[</kbd> et <kbd>]</kbd> passent d'un engin à l'autre : le <strong>Ranger</strong>, le <strong>Lander</strong>, l'<strong>Endurance</strong> et le <strong>F-35</strong> (voir <a href="#f35">Piloter le F-35</a>). Ceux qu'on ne pilote pas continuent leur trajectoire — et leur rotation — comme on les a laissés ; un engin laissé sur une piste y reste.</p><figure class="shot narrow"><a href="img/comment-jouer/13_menu_vaisseau.webp"><img src="img/comment-jouer/13_menu_vaisseau.webp" alt="Le menu des vaisseaux (bouton RANGER de la barre de vol) : masse, état, distance de chacun." loading="lazy"></a><figcaption>Le menu des vaisseaux (bouton RANGER de la barre de vol) : masse, état, distance de chacun.</figcaption></figure>
 
   <h3>Les vues de bord</h3>
   <p><kbd>V</kbd> / <kbd>⇧V</kbd> font défiler les caméras du vaisseau : le <strong>cockpit</strong> (le siège du pilote, avec ses écrans), la coque, autour du vaisseau, libre, survol… <kbd>⇧R</kbd> ramène la caméra à sa place d'origine. Glisser à la souris regarde autour ; un double‑clic regarde droit devant. <kbd>²</kbd> règle la densité du HUD : complet · minimal · vue nette.</p>
@@ -330,7 +383,7 @@
       <tr><td><kbd>⇧G</kbd></td><td>Rentrée &amp; atterrissage : depuis l'orbite, la poussée de désorbitation pour un site (l'onglet LAND de l'ordinateur le choisit), la rentrée guidée, le plané, la piste</td></tr>
       <tr><td><kbd>U</kbd></td><td>Autopilote : décoller (virage gravitationnel jusqu'en orbite)</td></tr>
       <tr><td><kbd>B</kbd></td><td>Autopilote : amarrage (l'ISS à moins de 3 km, ou un autre vaisseau de la flotte)</td></tr>
-      <tr><td><kbd>F4</kbd></td><td>Assisté : l'autopilote vous guide au lieu de piloter</td></tr>
+      <tr><td><kbd>⇧F4</kbd></td><td>Assisté : l'autopilote vous guide au lieu de piloter</td></tr>
     </tbody>
   </table></div>
   <p class="muted">Les autopilotes rendent la main à votre accélération du temps quand ils ont fini. Pendant la croisière, le SAS affiche PRO.</p><figure class="shot"><a href="img/comment-jouer/50_iss.webp"><img src="img/comment-jouer/50_iss.webp" alt="Amarrage à l’ISS (scène « Earth: docking to the ISS ») : la fenêtre DOCKING donne distance, vitesse de rapprochement, décalage — B lance AUTO‑DOCK." loading="lazy"></a><figcaption>Amarrage à l’ISS (scène « Earth: docking to the ISS ») : la fenêtre DOCKING donne distance, vitesse de rapprochement, décalage — B lance AUTO‑DOCK.</figcaption></figure>
@@ -394,8 +447,9 @@
     <tbody>
       <tr><td><kbd>V</kbd> · <kbd>⇧V</kbd></td><td>Vue suivante · précédente (sans vaisseau : autour · suivi · libre · trépied · chute libre)</td></tr>
       <tr><td><kbd>C</kbd></td><td>Regard verrouillé sur la cible, où que soit la caméra</td></tr>
-      <tr><td><kbd>Y</kbd></td><td>Télescope : champ jusqu'à 0,02°, tenu sur la cible (la molette zoome)</td></tr>
-      <tr><td><kbd>Tab</kbd> · <kbd>⇧Tab</kbd></td><td>Cible suivante · précédente (ou un clic dessus dans la vue)</td></tr>
+      <tr><td><kbd>Y</kbd></td><td>Télescope : champ jusqu'à 0,02°, tenu sur la cible (la molette zoome) — à pied, le trépied posé d'abord là où l'on se tient</td></tr>
+      <tr><td><kbd>⇧Y</kbd></td><td>Hors vol : l'observatoire (ce qu'il y a à voir depuis la Terre, et quand) — en vol : la trajectoire future dans la vue</td></tr>
+      <tr><td><kbd>Tab</kbd> · <kbd>⇧Tab</kbd></td><td>Cible suivante · précédente (ou un clic dessus dans la vue) — <kbd>Tab</kbd> maintenu : la roue</td></tr>
       <tr><td>Glisser</td><td>Tourner autour de la cible · sinon regarder autour</td></tr>
       <tr><td>Clic droit · <kbd>⇧</kbd> glissé</td><td>Autour : décaler la vue · libre : roulis</td></tr>
       <tr><td>Molette · pincer</td><td>Distance · avancer / reculer · zoom du télescope</td></tr>
@@ -428,7 +482,7 @@
       <tbody>
         <tr><td><kbd>N</kbd> · <kbd>⇧N</kbd></td><td>Constellations · noms des étoiles brillantes</td></tr>
         <tr><td><kbd>U</kbd></td><td>Grilles : équatoriale · horizontale · les deux · aucune</td></tr>
-        <tr><td>Bouton <em>Sky</em></td><td>La carte du ciel complète</td></tr>
+        <tr><td><em>Carte du ciel</em> (barre du haut)</td><td>La carte du ciel complète</td></tr>
         <tr><td>Réglage <em>Réfraction atmosphérique</em></td><td>L'air de la Terre relève les astres d'un demi-degré à l'horizon : le Soleil couchant aplati, encore vu quand il est déjà dessous ; au téléobjectif, son bord haut vert et, à la dernière seconde, le rayon vert (allumée par défaut)</td></tr>
       </tbody>
     </table></div>
@@ -444,21 +498,26 @@
     <div class="tbl"><table>
       <thead><tr><th colspan="2">L'interface</th></tr></thead>
       <tbody>
-        <tr><td><kbd>M</kbd> · <kbd>⌘K</kbd></td><td>Réglages · les chercher</td></tr>
+        <tr><td><kbd>M</kbd> · <kbd>⌘K</kbd></td><td>Réglages · les chercher (en vol : <kbd>⇧M</kbd>)</td></tr>
+        <tr><td><kbd>F1</kbd>–<kbd>F4</kbd></td><td>Les modes : Vaisseau · À pied · Caméra libre · Photo</td></tr>
+        <tr><td><kbd>F6</kbd></td><td>TARS, dans tous les modes : tapé, lui écrire · tenu, lui parler</td></tr>
+        <tr><td><kbd>F8</kbd> · <kbd>⇧F8</kbd></td><td>L'Atlas · le ciel d'ici (filés, analemme, ISS, éclipses)</td></tr>
+        <tr><td><kbd>F5</kbd> · <kbd>F9</kbd></td><td>Sauvegarde rapide · chargement rapide</td></tr>
         <tr><td><kbd>I</kbd></td><td>Détails &amp; mesures physiques</td></tr>
-        <tr><td><kbd>H</kbd> · <kbd>F</kbd> · <kbd>P</kbd></td><td>Masquer l'interface · plein écran · capture PNG</td></tr>
+        <tr><td><kbd>H</kbd> · <kbd>F</kbd> · <kbd>P</kbd></td><td>Masquer l'interface · plein écran · capture PNG (en vol, ces lettres pilotent : les boutons de la barre)</td></tr>
+        <tr><td><kbd>Échap</kbd></td><td>Ferme le panneau du dessus ; sinon le menu pause</td></tr>
         <tr><td><kbd>⌘Z</kbd> · <kbd>⇧⌘Z</kbd></td><td>Annuler · rétablir</td></tr>
-        <tr><td><kbd>F2</kbd></td><td>Outils de jeu</td></tr>
-        <tr><td><kbd>?</kbd></td><td>Aide‑mémoire des touches</td></tr>
+        <tr><td><kbd>F10</kbd></td><td>Outils de jeu (pour les développeurs : une version locale ou <code>?dev</code>)</td></tr>
+        <tr><td><kbd>?</kbd></td><td>Aide‑mémoire des touches (clavier, manettes)</td></tr>
       </tbody>
     </table></div>
   </div>
   <div class="shots"><figure class="shot"><a href="img/comment-jouer/43_constellations.webp"><img src="img/comment-jouer/43_constellations.webp" alt="N et U : les figures et noms des constellations, la grille équatoriale." loading="lazy"></a><figcaption>N et U : les figures et noms des constellations, la grille équatoriale.</figcaption></figure><figure class="shot"><a href="img/comment-jouer/44_carte_du_ciel.webp"><img src="img/comment-jouer/44_carte_du_ciel.webp" alt="Le bouton Ciel : figures, noms, étoiles, grilles, écliptique, opacité, et « aller à » une constellation ou une étoile." loading="lazy"></a><figcaption>Le bouton Ciel : figures, noms, étoiles, grilles, écliptique, opacité, et « aller à » une constellation ou une étoile.</figcaption></figure></div>
-  <p class="muted">En vol, certaines lettres changent de sens (<kbd>M</kbd> carte, <kbd>O</kbd> planificateur, <kbd>U</kbd> décollage, <kbd>G</kbd> atterrissage, <kbd>B</kbd> amarrage…) : ce sont celles des sections précédentes qui s'appliquent.</p>
+  <p class="muted">En vol, certaines lettres changent de sens (<kbd>M</kbd> carte, <kbd>O</kbd> planificateur, <kbd>U</kbd> décollage, <kbd>G</kbd> train, <kbd>B</kbd> amarrage…) : ce sont celles des sections précédentes qui s'appliquent.</p>
 </section>
 
 <section id="cockpit">
-  <h2>Le cockpit<small>Vue <em>Cockpit</em> : tout se commande au pointeur</small></h2>
+  <h2>Le cockpit du Ranger<small>Vue <em>Cockpit</em> : tout se commande au pointeur (celui du F-35 : <a href="#f35">plus bas</a>)</small></h2>
   <p>Dans la vue cockpit, une vingtaine de commandes répondent au pointeur, comme les touches : le levier du train (qui voyage jusqu'à sa position), les volets, l'aérofrein, les gaz, le SAS, les maintiens, les autopilotes, les feux, l'éclairage de la cabine, le chronomètre. Survolées, elles disent ce qu'elles font.</p>
   <ul>
     <li><strong>Huit écrans à pages</strong> — PFD (assiette, vitesse, altitude ; dans l'air l'incidence, l'énergie, le directeur), ORBIT, NAV, SYSTEMS, DOCKING, PLAN (les nœuds ou le graphe de l'assistance), CLOCKS, LOG, et en approche APPROACH et LANDING. Les onglets en haut de chaque écran changent sa page ; un second clic le rend à sa page automatique.</li>
@@ -466,6 +525,185 @@
     <li><strong>Le rapport de vol</strong> — après un posé ou un amarrage, une note sur 20 et sa lettre : vitesse, axe, taux de chute, précision.</li>
   </ul>
   <figure class="shot"><a href="img/marketing/sim_entry_cockpit.webp"><img src="img/marketing/sim_entry_cockpit.webp" alt="Le cockpit en pleine rentrée : le plasma à la fenêtre, Mach 21,8 à 66 km, le PFD et la page NAV (rentrée vers Edwards, inclinaison commandée, écart)." loading="lazy"></a><figcaption>Le cockpit en pleine rentrée : le plasma à la fenêtre, Mach 21,8 à 66 km ; le PFD et la page NAV (rentrée vers Edwards, inclinaison commandée, écart).</figcaption></figure>
+</section>
+
+<section id="f35">
+  <h2>Piloter le F-35<small>Un chasseur au-dessus de la vraie Terre : le F-35B (STOVL) ou le F-35C (porte-avions)</small></h2>
+  <p>Le F-35 vole avec les forces du vrai avion : son réacteur F135 (120 kN à sec, 176 kN avec la postcombustion, qui baissent avec l'altitude et le Mach), son carburant, ses commandes de vol électriques. Mesuré dans le jeu : Mach 1,6 à 11 km avec postcombustion, 7 g (réglable de 5 à 9), 50° d'incidence tenus sans jamais partir en vrille, un décollage en une dizaine de secondes.</p>
+  <h3>Monter à bord</h3>
+  <ul>
+    <li><strong>Voler en F-35</strong> (la roue hors vol) ou <strong>Préparer un vol</strong> (en vol : <kbd>Tab</kbd> maintenu › <em>Navigation</em>) — un aérodrome ; un départ (aligné sur la piste en service, en finale à 15 km et 900 m, ou en croisière à 40 km, 6 000 m et 230 m/s) ; l'heure de l'aérodrome (comme elle est, aube, matin, midi, crépuscule, nuit) ; la météo ; le carburant ; un plan de vol vers un autre aérodrome — puis <strong>Voler</strong>.</li>
+    <li><strong>Défis F-35</strong> (la roue hors vol) ou une <a href="#missions">mission</a>, une <a href="#ecole">leçon</a>, une <a href="#spectacle">vue d'exception</a> : l'avion est placé tout seul.</li>
+    <li><kbd>[</kbd> <kbd>]</kbd> : le F-35 est l'un des engins de la flotte ; choisi ainsi, il est posé sur la piste la plus proche.</li>
+  </ul>
+
+  <h3>Les commandes du F-35</h3>
+  <p>Les touches de vol sont celles du Ranger (<kbd class="f">Z</kbd> <kbd class="f">S</kbd> tangage, <kbd class="f">Q</kbd> <kbd class="f">D</kbd> lacet, <kbd class="f">A</kbd> <kbd class="f">E</kbd> roulis, <kbd>⇧</kbd> / <kbd>Alt</kbd> les gaz, <kbd class="f">W</kbd> / <kbd class="f">X</kbd> plein gaz / coupé), lues par leur position physique. S'y ajoutent :</p>
+  <div class="tbl"><table>
+    <thead><tr><th>AZERTY</th><th>QWERTY</th><th>Action</th></tr></thead>
+    <tbody>
+      <tr><td><kbd>⇧W</kbd></td><td><kbd>⇧Z</kbd></td><td>Postcombustion (la manette au cran, poussée ×1,5)</td></tr>
+      <tr><td><kbd>ù</kbd> · <kbd>⇧ù</kbd></td><td><kbd>'</kbd> · <kbd>⇧'</kbd></td><td>Pilote automatique : altitude et cap tenus (le manche passe outre ; lâché, les nouveaux sont tenus) · auto‑manette : la vitesse tenue (<kbd>⇧</kbd> / <kbd>Alt</kbd> la règlent)</td></tr>
+      <tr><td><kbd>⇧,</kbd></td><td><kbd>⇧M</kbd></td><td>NAV : le pilote automatique suit le plan de vol (LNAV la route, VNAV ses altitudes et vitesses) ; le manche le coupe</td></tr>
+      <tr><td><kbd>⇧O</kbd></td><td><kbd>⇧O</kbd></td><td>Le panneau du plan de vol : les points posés sur la carte, leurs contraintes, le carburant, le bingo, <em>Procédures</em> (départ et arrivée)</td></tr>
+      <tr><td><kbd>⇧B</kbd></td><td><kbd>⇧B</kbd></td><td>F-35B : mode STOVL — la soufflante, la tuyère pivotée ; sous 65 m/s la loi de stationnaire (le manche une vitesse sol, <kbd>⇧</kbd> / <kbd>Alt</kbd> une vitesse verticale, lâché : tenu sur place)</td></tr>
+      <tr><td><kbd>G</kbd> · <kbd>P</kbd> · <kbd>⇧P</kbd></td><td>idem</td><td>Train · volets · aérofreins</td></tr>
+      <tr><td><kbd>U</kbd> · <kbd>F7</kbd></td><td>idem</td><td>Décollage automatique · atterrissage automatique (près d'un porte-avions : l'appontage)</td></tr>
+      <tr><td><kbd>⇧X</kbd></td><td><kbd>⇧X</kbd></td><td>Retour au vol stable : les ailes à plat d'abord, puis une légère montée à une vitesse sûre, puis les tenues — à tous les niveaux d'assistance</td></tr>
+      <tr><td><kbd>Tab</kbd> · <kbd>⇧Tab</kbd></td><td>idem</td><td>Le verrou radar sur la piste suivante · l'interception de la cible verrouillée — <kbd>Tab</kbd> maintenu : la roue du F-35</td></tr>
+      <tr><td><kbd>Espace</kbd> (maintenu) · <kbd>Entrée</kbd></td><td>idem</td><td>En combat : le canon · l'arme choisie (la pause passe alors sur <kbd>Échap</kbd>)</td></tr>
+      <tr><td><kbd>=</kbd> · <kbd>)</kbd> ou <kbd>&lt;</kbd></td><td><kbd>=</kbd> · <kbd>−</kbd></td><td>En combat : l'arme suivante · leurres IR et paillettes (les deux touches à droite du <kbd>0</kbd> ; sur un Mac français, l'arme suivante est sur <kbd>-</kbd>)</td></tr>
+      <tr><td><kbd>⇧L</kbd></td><td><kbd>⇧L</kbd></td><td>En combat : la tête verrouillée sur la cible — elle suit le verrou, puis la cible du missile, l'épave qui tombe, son crash ; encore : la tête libre</td></tr>
+      <tr><td><kbd>F13</kbd></td><td><kbd>F13</kbd></td><td>La roue des ordres de patrouille directement (réassignable, ou sur un bouton du HOTAS)</td></tr>
+      <tr><td><kbd>V</kbd> · <kbd>⇧T</kbd></td><td>idem</td><td>Vue suivante · trépied au sol</td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted">Piloté, le F-35 laisse de côté ce qui est propre aux vaisseaux spatiaux : pas de tenue prograde, pas d'alignement du roulis, pas d'autopilote orbital, pas de cible parmi les planètes — ces touches le disent au lieu d'agir.</p>
+
+  <h3 id="roue-f35">La roue du F-35 — <kbd>Tab</kbd> maintenu</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Secteur</th><th>Ce qu'il contient</th></tr></thead>
+    <tbody>
+      <tr><td>Pilote auto ▸</td><td>Altitude et cap (<kbd>ù</kbd>), auto‑manette (<kbd>⇧ù</kbd>), NAV (plan de vol), décollage auto (<kbd>U</kbd>)</td></tr>
+      <tr><td>Postcombustion</td><td>Allumée · éteinte (<kbd>⇧W</kbd>)</td></tr>
+      <tr><td>STOVL</td><td>Le mode STOVL du F-35B (<kbd>⇧B</kbd>)</td></tr>
+      <tr><td>Train, volets ▸</td><td>Train (<kbd>G</kbd>), volets (<kbd>P</kbd>), aérofreins (<kbd>⇧P</kbd>)</td></tr>
+      <tr><td>Armes ▸</td><td>En combat seulement : arme suivante, verrouiller, leurres, fin du combat</td></tr>
+      <tr><td>Radar ▸</td><td>Verrou suivant, mode (RWS · TWS · STT), lâcher le verrou, intercepter (<kbd>⇧Tab</kbd>), formation sur la cible</td></tr>
+      <tr><td>Patrouille ▸</td><td>Ailier de … (un joueur de la salle), ailiers IA, rejoindre, formation ▸, dégagements, ordres de combat ▸, autres ordres ▸ — voir <a href="#patrouille">la patrouille</a></td></tr>
+      <tr><td>Navigation ▸</td><td>Plan de vol (<kbd>⇧O</kbd>), approche ILS (la piste la plus proche, face au vent), modes du pilote automatique ▸, carte (<kbd>M</kbd>), carte de mission, préparer un vol</td></tr>
+      <tr><td>Leçons et défis ▸</td><td>École de vol · défis, combats, missions · vues d'exception</td></tr>
+      <tr><td>Caméra ▸</td><td>Vue suivante, photo, replay, bande‑annonce</td></tr>
+    </tbody>
+  </table></div>
+  <figure class="shot"><a href="progress/aviation/reseau-roue.jpg"><img src="progress/aviation/reseau-roue.jpg" alt="La roue du F-35, Tab maintenu : dix secteurs ; Patrouille › Ailier de Ana ; Ben sur l'aile d'Ana ; en combat libre, Ana verrouille Ben." loading="lazy"></a><figcaption>La roue (Tab maintenu) : dix secteurs ; <em>Patrouille › Ailier de Ana</em> ; Ben tenu sur l'aile d'Ana ; en combat libre, Ana le verrouille.</figcaption></figure>
+
+  <h3>Le cockpit et le casque</h3>
+  <p>La vue cockpit est la vue principale du F-35. Pas de HUD sur la verrière : la <strong>symbologie du casque</strong> (sa couleur — vert, ambre, cyan, blanc — et sa luminosité se règlent), avec ses annonces NAV et le point actif. Devant le pilote, l'<strong>écran panoramique tactile</strong>, dessiné en direct et touché à la souris : TSD (la carte mobile, la route, les pistes radar, les zones d'une mission), FCS, ENG, FUEL (le bingo), STOVL, CNI, ADI, check‑lists. En haut à gauche, l'avionique : régime, poussée, carburant et son bingo, train, volets, modes du pilote automatique (ALT HDG A/T LNAV VNAV), facteur de charge et sa limite, alarmes.</p>
+  <figure class="shot"><a href="progress/f35/f5-cockpit.jpg"><img src="progress/f35/f5-cockpit.jpg" alt="Le cockpit du F-35B : au point fixe à Edwards ; l'écran panoramique TSD, FCS, ENG, FUEL ; la symbologie du casque en approche ; en stationnaire, HOVER et BINGO." loading="lazy"></a><figcaption>Le cockpit : au point fixe ; l'écran panoramique (TSD, FCS, ENG, FUEL) ; le casque en approche ; en stationnaire.</figcaption></figure>
+
+  <h3>Les niveaux d'assistance</h3>
+  <p>Réglages › <em>F-35 › Assistance</em> :</p>
+  <div class="grid">
+    <div class="card"><h4>Manuel</h4><p>La loi directe : le manche sur les gouvernes, sans calculateur. Décrochages et vrilles possibles ; on en sort en lâchant tout.</p></div>
+    <div class="card"><h4>Réaliste (par défaut)</h4><p>Le vrai F-35 : le manche commande un facteur de charge (1 g au neutre, 7 g plein arrière), 50° d'incidence au plus, le roulis autour du vecteur vitesse.</p></div>
+    <div class="card"><h4>Assisté</h4><p>Les gaz deviennent une vitesse tenue, l'incidence est limitée à 20°, la protection du sol est toujours active.</p></div>
+    <div class="card"><h4>Débutant</h4><p>On vise, l'avion y va : le manche déplace un anneau cyan dans la vue, l'avion incline et tire pour le rejoindre.</p></div>
+  </div>
+  <ul>
+    <li><strong>Auto‑GCAS</strong> — dix fois par seconde, l'avion prévoit la ressource qu'il ferait ; si le relief devient trop proche, il prend la main au dernier moment (ailes à plat, puis montée), « AUTO GCAS — FLY UP » au HUD, et la rend une fois dégagé.</li>
+    <li><strong>Auto‑ACAS</strong> — un autre avion (combat, trafic réel, joueurs, ailiers) prévu à moins de 150 m dans les 8 s : un évitement vertical.</li>
+    <li>Les deux sont actifs par défaut (réglage <em>Auto‑GCAS · Auto‑ACAS</em>), toujours aux niveaux Assisté et Débutant ; ils se taisent en loi directe, train sorti, en formation, en approche ILS ou d'appontage, en STOVL.</li>
+    <li><strong>Le corps du pilote</strong> (réglage <em>Effets de g</em>) — le voile gris, puis noir sous forte charge tenue, la perte de connaissance à 9 g (la loi de l'avion continue de voler), le voile rouge sous −1,5 g ; la respiration au masque en vue cockpit.</li>
+  </ul>
+  <div class="shots"><figure class="shot"><a href="progress/aviation/a1-ring.jpg"><img src="progress/aviation/a1-ring.jpg" alt="Le niveau Débutant : l'anneau cyan que le manche déplace, l'avion qui le rejoint." loading="lazy"></a><figcaption>Débutant : l'anneau que le manche déplace, l'avion qui le rejoint.</figcaption></figure><figure class="shot"><a href="progress/aviation/a2-flyup.jpg"><img src="progress/aviation/a2-flyup.jpg" alt="L'Auto-GCAS : AUTO GCAS — FLY UP, la ressource automatique devant le relief." loading="lazy"></a><figcaption>L'Auto‑GCAS : la ressource automatique devant le relief.</figcaption></figure></div>
+
+  <h3>Les modes du pilote automatique</h3>
+  <p><kbd>Tab</kbd> maintenu › <em>Navigation › Modes du pilote automatique</em> :</p>
+  <ul>
+    <li><strong>Orbite ici</strong> (à droite ou à gauche) — un cercle autour d'un point, à 40° d'inclinaison (4 km au moins), altitude et vitesse tenues (« ORBIT »).</li>
+    <li><strong>Hippodrome ici</strong> — l'attente sur l'endroit où l'on est.</li>
+    <li><strong>Suivi de terrain</strong> — à 100, 150 ou 300 m du sol (« TF 150 ») : l'avion monte devant le relief et redescend dans les vallées ; le cap reste celui du pilote automatique ou de la navigation.</li>
+    <li><strong>Ravitailleur</strong> — un ravitailleur ami, TEXACO 11, placé 25 km devant à 7 000 m : rejoint jusqu'à sa position pré‑contact (« PRE‑CONTACT TEXACO 11 »).</li>
+    <li><strong>Approche ILS</strong> — la piste la plus proche (à moins de 150 km), face au vent : le point d'approche initiale à 18,5 km, le localizer, le glide à 3° capté par en dessous, train et volets au point d'approche finale (9,3 km), les minimums à 60 m (instable : remise des gaz), l'arrondi, le roulage freiné et la note sur 20. Les aiguilles de l'ILS s'affichent autour du centre du casque.</li>
+    <li><strong>Voler vers… (la carte)</strong>, <strong>Voltige</strong> (les démonstrations), <strong>Modes coupés</strong>.</li>
+  </ul>
+</section>
+
+<section id="combat">
+  <h2>Radar &amp; combat<small>Le radar toujours allumé, l'interception, le canon et les missiles</small></h2>
+  <h3>Le radar</h3>
+  <p>L'AN/APG‑81 est allumé dès que le F-35 est en l'air. Son faisceau balaie ±60° devant le nez en 2 s ; sa portée dépend de la taille de la cible (environ 150 km pour un chasseur) ; il ne voit rien derrière l'horizon ni derrière le relief, et perd dans le fouillis du sol un avion qui croise en travers. Son écran, dans le casque en bas à gauche, montre le relief, les pistes avec leur route et leur hauteur par rapport à vous, les missiles en vol, le verrou cerclé.</p>
+  <ul>
+    <li><strong>Les modes</strong> — RWS (les contacts), TWS (les pistes, leurs vitesses et leurs routes), STT (le verrou seul) : <em>Radar › Mode</em> dans la roue.</li>
+    <li><strong>Les couleurs</strong> — ami bleu, neutre blanc (un avion de ligne qui répond au transpondeur), inconnu jaune (identifié de près), hostile rouge ; les amis de la liaison de données en cercles creux.</li>
+    <li><strong>Le verrou</strong> — un appui bref sur <kbd>Tab</kbd> verrouille la piste la plus proche, puis la suivante ; avant le premier contact, le radar cherche et verrouille le premier qui vient. Hors combat, une boîte sur la cible donne son nom, sa distance, sa vitesse et son altitude.</li>
+  </ul>
+  <h3>L'interception</h3>
+  <p>Sur une piste verrouillée, le casque donne le cap de collision (« INTC 070 ») et son repère, le temps avant la rencontre (TTI), l'angle d'aspect (« AA 35R »), la poursuite volée (LEAD, PURE, LAG). <kbd>⇧Tab</kbd> (ou <em>Radar › Intercepter</em>) la fait voler au pilote automatique : la course par l'arrière, la jonction, puis la patrouille à 300 m derrière et 60 m sur sa gauche (« ICPT », « JOIN », « SHDW »). Le manche ou les gaz la coupent.</p>
+  <h3>Les armes</h3>
+  <div class="grid">
+    <div class="card"><h4>Le canon de 25 mm</h4><p>220 coups. Le réticule se place là où tirer — il anticipe le virage de la cible —, « IN RANGE » entre 150 m et 1,2 km ; l'entonnoir montre la gerbe ; un obus sur cinq est traçant.</p></div>
+    <div class="card"><h4>AIM‑120 et AIM‑9X</h4><p>Le missile radar pour la distance, l'infrarouge de près et hors de l'axe ; tous deux guidés par navigation proportionnelle. « SHOOT » en rouge quand le tir est bon.</p></div>
+    <div class="card"><h4>GBU‑32 JDAM et JSM</h4><p>La bombe guidée planée jusqu'à son point, son point de chute au HUD ; le missile antinavire (configuration antinavire) : il croise au ras de l'eau et coule une frégate.</p></div>
+    <div class="card"><h4>Leurres et paillettes</h4><p>Contre les missiles qui vous poursuivent : l'alerte missile et ses directions au HUD, et TARS qui dit quoi faire.</p></div>
+  </div>
+  <p>Les menaces : des chasseurs agresseurs (réglage <em>Agresseurs</em> : facile, normal, as), des sites SAM qui tirent sur ce qui vole au‑dessus de 150 m, des frégates. Un appareil touché fume ; détruit, il part en vrille, brûle et s'écrase. En combat, TARS annonce les missiles tirés sur vous (« Départ missile, 11 heures, 8 km — dégagement à gauche, leurres ») et les coups reçus ; l'AWACS <strong>Darkstar</strong> annonce les bandits au radar. Réglages <em>F-35</em> : munitions et carburant infinis, invulnérable, missiles ennemis, annonces des menaces.</p>
+  <div class="shots"><figure class="shot"><a href="progress/aviation/c2-icpt-cues.jpg"><img src="progress/aviation/c2-icpt-cues.jpg" alt="Les repères d'interception sur un drone verrouillé : INTC, TTI, AA, LAG." loading="lazy"></a><figcaption>Les repères d'interception sur un drone verrouillé.</figcaption></figure><figure class="shot"><a href="progress/aviation/c3-gun-sight.jpg"><img src="progress/aviation/c3-gun-sight.jpg" alt="Le réticule du canon, sa distance, IN RANGE : le drone dans son cercle." loading="lazy"></a><figcaption>Le réticule du canon : sa distance, « IN RANGE ».</figcaption></figure></div>
+</section>
+
+<section id="patrouille">
+  <h2>La patrouille<small>Formations, ailiers IA et ordres du leader — <kbd>Tab</kbd> maintenu › Patrouille</small></h2>
+  <ul>
+    <li><strong>Les ailiers IA</strong> — <em>Ailiers IA</em> dans la roue (ou Réglages › <em>Formation</em>, ou TARS) : de zéro à trois F-35, Deux, Trois et Quatre, qui volent avec les forces du vrai avion. Ils se mettent à leur poste, décollent et atterrissent en patrouille avec vous, annoncent leurs contacts (« Deux, contact, bandit… »), combattent et peuvent être abattus.</li>
+    <li><strong>Les formations</strong> — <em>Formation ▸</em> : échelon droite ou gauche, fingertip, triangle, losange, ligne de front, colonne, patrouille étalée ; l'écartement (serré, normal, large) et votre poste quand vous volez sur l'aile d'un autre sont dans Réglages › <em>Formation</em>. Les postes changent sans à‑coup, en passant sous le leader.</li>
+    <li><strong>Les ordres</strong> — rejoindre, dégagement à gauche ou à droite, <em>Ordres de combat ▸</em> (attaquer ma cible, engager les hostiles, me couvrir), <em>Autres ordres ▸</em> (serrer, s'écarter, tenir ici, rentrer à la base, passage en losange). Chacun est dit à la radio ; il s'adresse aux ailiers IA et aux joueurs de la salle en formation sur vous. TARS les comprend aussi à la voix : « Patrouille, en losange », « Dégagez à gauche ! ».</li>
+    <li><strong>Sur l'aile d'un autre</strong> — <em>Ailier de …</em> pour un joueur de la salle (le pilote automatique vole la formation, à la première place libre), <em>Formation sur la cible</em> (roue Radar) pour un avion de ligne réel verrouillé ; <em>Quitter la formation</em> rend la main, l'altitude, le cap et la vitesse tenus.</li>
+  </ul>
+  <figure class="shot"><a href="progress/aviation/f3-wingmen-diamond.jpg"><img src="progress/aviation/f3-wingmen-diamond.jpg" alt="Trois ailiers IA en losange autour du leader au-dessus d'Edwards." loading="lazy"></a><figcaption>Trois ailiers IA en losange au‑dessus d'Edwards.</figcaption></figure>
+</section>
+
+<section id="porte-avions">
+  <h2>Porte-avions<small>Le Gerald R. Ford, le Kiev, le HMS Implacable</small></h2>
+  <p>Les porte‑avions font route face au vent, escortés de deux frégates ; ils tanguent et roulent avec la mer, et l'avion posé sur le pont est porté par lui. On les trouve dans les missions, les leçons et les vues d'exception, ou en demandant à TARS (« fais apparaître un porte‑avions »). La variante se choisit dans Réglages › <em>F-35 › Variante</em> : <strong>F-35B</strong> (décollage court, atterrissage vertical) ou <strong>F-35C</strong> (catapulte et brins, une aile plus grande, une crosse).</p>
+  <div class="grid">
+    <div class="card"><h4>F-35B : l'appontage vertical</h4><p><kbd>F7</kbd> à moins de 30 km d'un porte‑avions : le pilote automatique remonte le long de bâbord, passe en STOVL, se met en stationnaire à côté du pont, traverse au‑dessus de la tache et descend. Trop lourd, il dit combien de carburant brûler. L'officier d'appontage note : OK, Passable, Non noté.</p></div>
+    <div class="card"><h4>F-35B : le décollage court</h4><p><kbd>U</kbd> sur le pont : la course tuyère vers l'arrière, la rotation, la soufflante qui porte ; si le pont dégagé est trop court pour la masse, un décollage vertical — ou un refus qui dit pourquoi.</p></div>
+    <div class="card"><h4>F-35C : catapulte et brins</h4><p><kbd>U</kbd> sur le Ford : la navette, la mise en tension, le lancement à 72 m/s. <kbd>F7</kbd> : l'approche au « meatball » sur le plan de 3,5°, la crosse qui prend l'un des trois brins (le bon : le deuxième) — ou le bolter, et un nouveau tour.</p></div>
+    <div class="card"><h4>Cas I, II et III</h4><p>Choisis par l'heure et le temps. Cas I : l'initiale, le break, la vent arrière, le 180. Cas III (la nuit, plafond bas) : le marshal à 21 nautiques et la descente dans l'axe. Cas II : un mélange des deux.</p></div>
+  </div>
+  <p><strong>Paddles</strong>, l'officier d'appontage, parle pendant la finale (« Roger ball », « De la puissance ! », l'alignement, la remise de gaz) et note chaque passage : OK souligné, OK, Passable, bolter, Non noté, remise de gaz, Coupé. <strong>Mother</strong>, le porte‑avions, annonce le cas, les autorisations et les lancements. Les <strong>qualifications d'appontage</strong> — jour, nuit, mer forte (houle de 4,4 m) — enchaînent quatre passages notés : qualifié à partir d'une moyenne de 3,0 sans aucun passage coupé.</p>
+  <figure class="shot narrow"><a href="progress/aviation/m3c-trap-wire.jpg"><img src="progress/aviation/m3c-trap-wire.jpg" alt="Le F-35C arrêté par un brin sur le pont du Ford." loading="lazy"></a><figcaption>Le F-35C arrêté par un brin sur le pont du Ford.</figcaption></figure>
+</section>
+
+<section id="missions">
+  <h2>Défis, combats &amp; missions<small><kbd>Tab</kbd> maintenu › Leçons et défis › Défis, combats, missions</small></h2>
+  <div class="grid">
+    <div class="card"><h4>Les défis</h4><p>Des parcours de portes en basse altitude — la Mach Loop galloise, Rainbow Canyon, le slalom de Rogers —, l'atterrissage noté, l'atterrissage vertical. Médailles et records gardés.</p></div>
+    <div class="card"><h4>La voltige</h4><p>Dix figures (looping, Immelmann, split‑S, tonneaux, huit cubain, vol dos, passage à grande incidence, renversement à 7 g, vrille et sortie) : <em>Regarder</em> le pilote automatique les voler, ou <em>Voler</em> et être noté sur 20. La boîte de voltige : cinq figures enchaînées, sur 100.</p></div>
+    <div class="card"><h4>Les combats</h4><p>Chasse aux drones, duel au canon, interception à deux contre un, frappe au sol — sur les champs de tir du Mojave.</p></div>
+    <div class="card"><h4>Les missions</h4><p>Treize missions avec briefing, objectifs et débriefing noté : le Renegade sur les Alpes, une frappe en Corse depuis le Ford, des escortes (Ajaccio, le VIP jusqu'à Nice), Red Air au large d'Hyères, une frappe antinavire, les qualifications d'appontage, la patrouille acrobatique à Salon, et trois missions en équipe.</p></div>
+  </div>
+  <ul>
+    <li><strong>Le briefing</strong>, puis <em>Lancer la mission</em> : l'avion, sa variante et son emport, la météo et l'heure sont réglés. Les objectifs en cours s'affichent en haut à gauche (•, ✓, ✗) avec le chronomètre ; l'objectif en cours est marqué dans la vue (un cercle et un losange orange, son nom, sa distance) et sur la bande de cap.</li>
+    <li><strong>Un vol réel</strong> peut être repris par une mission : l'avion de ligne entendu le plus proche quitte le trafic et devient l'appareil à intercepter ou à escorter.</li>
+    <li><strong>La carte de mission</strong> (bouton <em>Carte</em> du bloc des objectifs, ou <em>Navigation › Carte de mission</em>) : les zones des objectifs, la portée des SAM, les unités et leurs symboles, les porte‑avions, le trafic réel, le plan de vol ; un clic puis <em>Voler vers</em> met le lieu dans le plan et engage la navigation ; les points du plan se glissent à la souris.</li>
+    <li><strong>Créer ses missions</strong> — <em>Créer une mission</em> (ou <em>Modifier</em> une mission du jeu) : l'éditeur sur la carte, un outil puis un clic pour placer le départ, les lieux, les unités (SAM, camion, bunker, drone, chasseur, avion de ligne, vol réel, porte‑avions, navire) ; leurs objectifs, leur heure d'apparition, les messages. La garder parmi « mes missions », copier son lien (<code>#mission=…</code> : l'ouvrir lance le jeu sur son briefing), l'exporter en JSON. TARS sait aussi en écrire une à la voix : « une escorte de l'A320 AFR123 jusqu'à Nice ».</li>
+  </ul>
+  <div class="shots"><figure class="shot"><a href="progress/aviation/p2-map.jpg"><img src="progress/aviation/p2-map.jpg" alt="La carte de mission de la frappe en Corse : la portée du SA-6, les objectifs, le plan de vol, Fly to." loading="lazy"></a><figcaption>La carte de mission : la portée du SAM, les objectifs, le plan de vol.</figcaption></figure><figure class="shot"><a href="progress/aviation/p3-editor.jpg"><img src="progress/aviation/p3-editor.jpg" alt="L'éditeur de missions sur la carte." loading="lazy"></a><figcaption>L'éditeur de missions.</figcaption></figure></div>
+</section>
+
+<section id="ecole">
+  <h2>L'école de vol<small><kbd>Tab</kbd> maintenu › Leçons et défis › École de vol</small></h2>
+  <p>Dix‑huit leçons : le premier vol, le tour de piste, l'atterrissage, l'approche ILS, le cas I et le ball, le vol en patrouille, l'interception, le canon, et les dix figures de voltige. Chaque fiche a son résumé, son schéma interactif, ses étapes chiffrées et les erreurs courantes, et trois boutons :</p>
+  <div class="grid">
+    <div class="card"><h4>Voir la démonstration</h4><p>TARS vole toute la leçon, jusqu'au bout — la part du pilote comprise —, en disant chaque étape. Elle est notée d'un mot, sans écran de débriefing.</p></div>
+    <div class="card"><h4>Guidé : TARS, puis vous</h4><p>TARS vole la première partie et la commente, puis « À vous les commandes » : vous volez la suite, l'instructeur regarde.</p></div>
+    <div class="card"><h4>Essayer</h4><p>L'avion est placé ; c'est à vous de voler toute la leçon, l'instructeur regarde.</p></div>
+  </div>
+  <p><strong>L'instructeur</strong> (réglage <em>Instructeur</em> : coupé, annonces seules, complet) annonce chaque écart tenu au‑delà de sa limite avec sa correction (« Bas — sous le glide : remonte un peu le nez et ajoute un peu de gaz »), le pire d'abord, sans se répéter en boucle. Son panneau, à gauche, montre le schéma de la manœuvre avec votre trace en direct, qui vole (<em>TARS AUX COMMANDES</em> ou <em>À VOUS</em>), l'étape en cours, une jauge par paramètre ; <em>Explique</em> met en pause et ouvre la fiche. À la fin, le <strong>débriefing</strong> : une note sur 20 et une lettre, les graphiques de ce qui a été volé face à l'idéal, les deux points à travailler, <em>Réessayer</em>.</p>
+  <div class="shots"><figure class="shot"><a href="progress/aviation/demos-ecole.jpg"><img src="progress/aviation/demos-ecole.jpg" alt="Les démonstrations de l'école de vol volées jusqu'au bout : atterrissage 20/20, tour de piste, cas I et son brin, canon, formation, huit cubain." loading="lazy"></a><figcaption>Les démonstrations jusqu'au bout : atterrissage, tour de piste, cas I, canon, formation, huit cubain.</figcaption></figure><figure class="shot"><a href="progress/aviation/a4-panel.jpg"><img src="progress/aviation/a4-panel.jpg" alt="Le panneau de l'instructeur pendant une approche ILS : le schéma et la trace, les jauges, l'annonce et sa correction." loading="lazy"></a><figcaption>Le panneau de l'instructeur : le schéma et la trace, les jauges, l'annonce.</figcaption></figure></div>
+</section>
+
+<section id="trafic">
+  <h2>Trafic réel &amp; mer<small>Les vrais avions et navires autour de vous</small></h2>
+  <ul>
+    <li><strong>Les avions de ligne réels</strong> (ADS‑B, par adsb.lol ou OpenSky) dans 120 km autour de l'appareil piloté : les douze plus proches dans 25 km avec leur modèle (A320 ou CRJ‑900, à la taille de leur type), leurs feux et leurs traînées de condensation, les autres en points lumineux ; leurs étiquettes (indicatif · immatriculation · type · altitude) dans 40 km. Ils sont montrés une minute en différé, leur vol reconstruit sans saut (réglage <em>Avions en différé</em> : direct, 30 s, 1 min, 2 min). Au radar : neutres.</li>
+    <li><strong>Les navires réels</strong> (AIS) dans 60 km quand le serveur en reçoit : porte‑conteneurs, pétroliers, ferries, chalutiers, voiliers, leur sillage dans la mer, leurs feux la nuit.</li>
+    <li>Désactivable (Réglages › <em>Trafic › Trafic réel</em>) ; absent hors ligne. Les sources sont créditées à l'écran.</li>
+    <li><strong>La mer</strong> — des vagues calculées sur la carte graphique, la houle et la mer du vent, les moutons, les reflets des navires et de l'avion ; l'état de la mer réel du jour (Open‑Meteo), ou celui que lève le vent.</li>
+  </ul>
+  <figure class="shot"><a href="progress/aviation/t2-airliner-chase.jpg"><img src="progress/aviation/t2-airliner-chase.jpg" alt="Un avion de ligne réel au-dessus de Paris, suivi en patrouille." loading="lazy"></a><figcaption>Un avion de ligne réel, rejoint en patrouille.</figcaption></figure>
+</section>
+
+<section id="spectacle">
+  <h2>Replay, bande-annonce &amp; vues d'exception<small><kbd>Tab</kbd> maintenu › Caméra · Leçons et défis › Vues d'exception</small></h2>
+  <ul>
+    <li><strong>Le replay</strong> — les deux dernières minutes et demie de vol, gardées en continu. Le vol est gelé pendant le replay et reprend exactement où il était. Ses caméras : poursuite, tour, passage, cockpit, réalisateur. Ses touches : <kbd>Espace</kbd> lecture / pause, <kbd>←</kbd> <kbd>→</kbd> 5 s, <kbd>1</kbd>–<kbd>5</kbd> les caméras, <kbd>Échap</kbd> retour au vol ; ralenti ½× et ¼× ; les meilleurs moments marqués en ambre. Pas de replay dans une salle de jeu à plusieurs.</li>
+    <li><strong>La bande‑annonce</strong> — jusqu'à trois moments de 8 s choisis par le jeu (rase‑mottes, virage serré, passage du mur du son, tirs, toucher des roues, patrouille), en bandes cinéma avec carton‑titre et légendes ; <em>Vidéo…</em> la rend en film à pleine qualité.</li>
+    <li><strong>Les vues d'exception</strong> — treize scènes, chacune avec son heure, sa météo, son défi et son cadrage photo : l'éclipse totale du 12 août 2026 poursuivie à Mach 1,6, le lever de la pleine Lune en patrouille sur le Mont‑Saint‑Michel, les aurores des Lofoten, le coucher de soleil sur le porte‑avions, le Grand Canyon, Monument Valley, la Mach Loop, le Star Wars Canyon, le Geirangerfjord, l'Himalaya, les tours du Paine, les volcans d'Islande, la tempête et l'appontage.</li>
+  </ul>
+  <figure class="shot"><a href="progress/aviation/s2-views.jpg"><img src="progress/aviation/s2-views.jpg" alt="La page des vues d'exception : treize scènes, leur lieu, leur heure, leur défi." loading="lazy"></a><figcaption>Les vues d'exception : treize scènes, leur lieu, leur heure, leur défi.</figcaption></figure>
 </section>
 
 <section id="meteo">
@@ -490,9 +728,10 @@
 <section id="son">
   <h2>Son, musique &amp; voix<small>Réglages › Jeu › Son</small></h2>
   <ul>
-    <li><strong>L'audio spatial</strong> — tout est synthétisé en direct : le moteur granulaire, le RCS, le vent, la cabine (étouffée, en vue cockpit), le roulement sur la piste, la station ; au casque, le son est placé en 3D (HRTF), avec l'effet Doppler et le bang supersonique.</li>
+    <li><strong>L'audio spatial</strong> — tout est synthétisé en direct : le moteur granulaire, le RCS, le vent, la cabine (étouffée, en vue cockpit), le roulement sur la piste, la station ; le réacteur du F-35 (son sifflement, son grondement, le crépitement de la postcombustion, la soufflante) ; au casque, le son est placé en 3D (HRTF), avec l'effet Doppler et le bang supersonique.</li>
     <li><strong>Les annonces</strong> — en finale les hauteurs radio (300 … 10 m), « Minimums », « Taux de chute », « Terrain ! Remontez ! », et les alarmes graves du HUD dites à voix haute.</li>
     <li><strong>Le contrôle de mission et la tour</strong> — Houston avec le délai de la lumière (rien de l'autre côté du trou de ver), la coupure radio dans le plasma de la rentrée, la tour qui autorise l'atterrissage.</li>
+    <li><strong>La radio de la patrouille</strong> — chaque rôle a sa voix et son nom dans les sous‑titres : l'<strong>ailier</strong> (ses contacts, ses tirs), l'AWACS <strong>Darkstar</strong> (les bandits au radar, les sites SAM, les victoires), le porte‑avions <strong>Mother</strong> et l'officier d'appontage <strong>Paddles</strong> ; dans une salle, ceux qui concernent votre avion sont entendus des autres joueurs (réglage <em>Rôles radio</em>).</li>
     <li><strong>La musique</strong> — le silence, sauf aux grands moments : le décollage, la rentrée, la finale, le trou de ver, Gargantua ; et sur Miller, le tic‑tac.</li>
     <li><strong>Les sous‑titres</strong> — chaque voix nommée, au‑dessus du tiers bas de l'écran.</li>
   </ul>
@@ -500,7 +739,7 @@
 
 <section id="tars">
   <h2>TARS, l'IA de bord<small><kbd>F6</kbd> — tapé : sa console · tenu : lui parler</small></h2>
-  <p>TARS est le copilote du Ranger. Hors ligne, il répond avec ses phrases écrites et comprend les ordres courants. Avec <strong>votre clé OpenRouter</strong> (dans sa console : « Se connecter avec OpenRouter », ou coller une clé — gardée dans ce navigateur seulement), il devient un <strong>agent</strong> : il pilote, navigue, règle, montre, et se souvient de vous.</p>
+  <p>TARS est le copilote du Ranger et du F-35, présent dans les quatre modes (son emblème en haut à gauche de la barre). Hors ligne, il répond avec ses phrases écrites et comprend les ordres courants. Avec <strong>votre clé OpenRouter</strong> (dans sa console : « Se connecter avec OpenRouter », ou coller une clé — gardée dans ce navigateur seulement), il devient un <strong>agent</strong> : il pilote, navigue, règle, montre, et se souvient de vous.</p>
   <p><strong>Lui parler</strong> : maintenez <kbd>F6</kbd> (ou cliquez son micro) et parlez, vos mots s'affichent à mesure ; relâchez, il répond. Chrome et Safari savent reconnaître la parole ; dans Arc, Brave, Opera ou Firefox, collez une clé <strong>Deepgram</strong> sous Réglages › Jeu › TARS › « L'oreille de TARS », ou sur la ligne « Oreille » de sa console (ou <code>/deepgram</code>) : elle est vérifiée auprès de Deepgram puis gardée dans ce navigateur seulement, et elle entend de même partout.</p>
   <p><strong>Ses réglages</strong> : l'onglet <em>Réglages</em> de sa console réunit tout — son esprit (son modèle, ses réflexes, son humour…), <strong>sa voix</strong> (une voix naturelle Deepgram — Hector ou Agathe en français, une quarantaine en anglais — avec son grain de robot, propre ou en radio ; le robot du film en anglais ; ou une voix de votre système, son débit et sa hauteur), celles de Houston et de la tour, et <strong>son oreille</strong> (le modèle, la langue, le micro, « Tester l'oreille » qui affiche ce qu'il entend). « Essayer sa voix » le fait parler aussitôt.</p>
   <div class="grid">
@@ -509,6 +748,7 @@
     <div class="card"><h4>Il montre</h4><p>La télémétrie en direct (altitude, vitesse, charge, inclinaison, incidence…), le couloir de rentrée, le graphe du hub, des fiches de chiffres, et les vrais écrans du jeu (carte, tablette, écrans du cockpit, rapport).</p></div>
     <div class="card"><h4>Il veille</h4><p>Ses réflexes le réveillent aux moments clés — la fin d'un autopilote, les phases de la rentrée, une alerte, un écart, un rapport — et vous pouvez lui en donner : « toutes les 10 minutes, vérifie le carburant ». Un budget par heure les borne.</p></div>
     <div class="card"><h4>Il délègue</h4><p>Pour une analyse en plusieurs regards, il lance des <strong>sous‑agents</strong> en parallèle (en lecture seule) et décide ensuite.</p></div>
+    <div class="card"><h4>Il est copilote de chasse</h4><p>En F-35, il connaît l'aviation (onze pages écrites pour lui : l'avion, l'énergie, le combat, la patrouille, le porte‑avions, l'ILS, le radar, les armes…), annonce les menaces, verrouille et tire quand vous l'ordonnez, intercepte un avion par son indicatif, donne les ordres de patrouille, lance une approche, un appontage, une leçon, une mission — et en écrit une.</p></div>
     <div class="card"><h4>Il se souvient</h4><p>Votre nom, vos préférences, vos échanges, d'une visite à l'autre — onglet Mémoire de sa console, « oublie tout » pour effacer.</p></div>
   </div>
   <h3>Sa console</h3>
@@ -533,6 +773,31 @@
   <p class="muted">Réglages › Jeu › TARS : ses remarques, son honnêteté et son humour (« honesty 70 »), le modèle (GLM‑5.3 Flash par défaut, Claude Haiku 5.5…), ses réveils et leur budget par heure. Un vol vers la Lune mené par TARS coûte environ un millième de dollar.</p>
 </section>
 
+<section id="ensemble">
+  <h2>Jouer ensemble<small>Deux à quatre pilotes, des spectateurs et des écrans — <kbd>Échap</kbd> › Réseau — jouer ensemble</small></h2>
+  <p>Le solo reste entier : rien ne se connecte tant que vous ne demandez pas une salle.</p>
+  <ol class="steps">
+    <li><strong>Ouvrir le panneau Réseau</strong>Le menu pause › <em>Réseau — jouer ensemble</em>, ou la roue hors vol › <em>Réseau</em>. Choisissez votre nom et votre couleur.</li>
+    <li><strong>Créer une salle</strong>Un nom et un mot de passe, facultatifs : son code de six lettres s'affiche, avec <em>Copier le lien</em>. Envoyez le code ou le lien aux autres.</li>
+    <li><strong>Rejoindre</strong>Le même panneau › <em>Rejoindre une salle</em> : le code, le mot de passe s'il y en a un, et le rôle — <strong>Pilote</strong>, <strong>Spectateur</strong> ou <strong>Instruments</strong> ; ou simplement le lien. Un téléphone ou une tablette scanne le QR code de l'onglet <em>Écrans</em>.</li>
+    <li><strong>En salle</strong>Le badge en haut à gauche (code · joueurs · latence) rouvre le panneau : onglets <em>Équipage</em> (Suivre, À côté, Formation, volumes), <em>Match</em>, <em>Voix</em>, <em>Écrans</em>. <em>Quitter la salle</em> en bas ; <em>Reprendre mon engin</em> au retour.</li>
+  </ol>
+  <p class="muted">Une salle accueille huit appareils, dont quatre pilotes ; elle garde son horloge et les engins laissés par chacun (« Ana (absent) »). En salle, le temps est celui de tous : une accélération demandée attend que chaque pilote l'accepte.</p>
+  <div class="grid">
+    <div class="card"><h4>Voler ensemble</h4><p>Chacun pilote son engin ; ceux des autres sont dessinés là où ils sont, gouvernes, train et postcombustion compris, avec leur nom et leur distance, et sur le radar du F-35. <em>À côté</em> vous place à droite d'un autre ; <em>Formation</em> fait voler votre pilote automatique en échelon sur son aile.</p></div>
+    <div class="card"><h4>Ailier par la roue</h4><p><kbd>Tab</kbd> maintenu › <em>Patrouille › Ailier de Ana</em> (ou TARS « rejoins Ana ») : la formation automatique à la première place libre de son aile ; les ordres du leader vous parviennent et sont exécutés.</p></div>
+    <div class="card"><h4>Les matchs</h4><p>Onglet <em>Match</em> : chacun pour soi, deux équipes, ensemble contre les agresseurs, course de portes, concours d'atterrissage — munitions infinies, invulnérable, tir ami, missiles ennemis, durée, score. Abattu, on revient au combat quelques secondes plus tard.</p></div>
+    <div class="card"><h4>Le combat libre</h4><p>En salle, en F-35, sans match, mission, leçon ni défi en cours : armes actives, <strong>tout appareil est une cible</strong> — les autres joueurs, les ailiers IA (les leurs et les vôtres : tir ami autorisé), les avions de ligne et navires réels que le radar voit. Abattu : de retour en l'air 6 s plus tard. Réglage <em>Combat libre en salle</em>.</p></div>
+    <div class="card"><h4>Les voix</h4><p>Onglet <em>Voix</em> › activer le micro : à la voix, en tenant une touche, ou toujours. Chacun entendu comme à la radio, avec les bips Quindar d'Apollo.</p></div>
+    <div class="card"><h4>Suivre, regarder</h4><p><em>Suivre</em> un pilote : toutes les vues sur son engin, son cockpit, ses instruments. Un spectateur suit le premier pilote ; abattu en match, on suit son vainqueur jusqu'à revoler.</p></div>
+    <div class="card"><h4>À pied, dans l'espace</h4><p>Marcher ensemble sur la Terre, la Lune ou Mars, monter à bord de l'engin d'un ami (<kbd>⇧K</kbd>) ; en orbite ensemble, s'amarrer à l'engin d'un autre (<kbd>B</kbd>), et jusqu'à Gargantua, chacun avec son temps propre.</p></div>
+    <div class="card"><h4>Les missions en équipe</h4><p>Celui qui lance une mission l'envoie à la salle : chacun prend un rôle (frappeur, escorte, ailier…), et un objectif atteint par l'un l'est pour tous.</p></div>
+  </div>
+  <h3>La console d'équipage</h3>
+  <p>Un téléphone, une tablette ou un petit ordinateur peut rejoindre la salle comme écran d'instruments, sans faire tourner le jeu : la page <a href="../crew/">crew/</a> (son lien et son QR code dans <em>Réseau › Écrans › Instruments</em>). Neuf vues en cockpit de verre : le tableau, le PFD, la navigation (ND, trafic façon TCAS), la carte (OpenStreetMap de nuit), le globe, le radar, les systèmes (moteur, carburant et bingo, configuration, pilote automatique), le plan de vol (profil vertical et branches) et la télémétrie ; métrique ou impérial.</p>
+  <div class="shots"><figure class="shot"><a href="progress/reseau/r9-interface.jpg"><img src="progress/reseau/r9-interface.jpg" alt="Le panneau Réseau : créer ou rejoindre une salle, l'équipage, le match, une accélération proposée." loading="lazy"></a><figcaption>Le panneau Réseau : la salle, l'équipage, le match, une accélération proposée.</figcaption></figure><figure class="shot"><a href="progress/80_crew_console_desktop.jpg"><img src="progress/80_crew_console_desktop.jpg" alt="La console d'équipage : neuf vues — tableau, PFD, navigation, carte, globe, radar, systèmes, plan de vol, télémétrie." loading="lazy"></a><figcaption>La console d'équipage : ses neuf vues.</figcaption></figure></div>
+</section>
+
 <section id="manette">
   <h2>Manettes, HOTAS &amp; écran tactile</h2>
   <p><strong>Tout périphérique de jeu</strong> est reconnu — manette, manche, manette des gaz, palonnier : des profils connus (Thrustmaster T.16000M, TWCS, Warthog, T.Flight ; Saitek/Logitech X52, X56, Extreme 3D Pro ; VKB Gladiator ; les palonniers) ou le vôtre, réglé dans le menu pause › <em>Commandes</em> › <em>Manettes et HOTAS</em> (chaque axe, sa courbe, sa zone morte, la calibration ; chaque bouton lié à n'importe quelle action du clavier). La manette des gaz absolue garde sa position ; les vibrations suivent le moteur, le toucher, les alarmes.</p>
@@ -548,11 +813,12 @@
         <tr><td>A (✕)</td><td>Voler jusqu'à la cible</td></tr>
         <tr><td>B · X · Y (○ □ △)</td><td>Chute libre · orbite auto · vue suivante</td></tr>
         <tr><td>Croix ◀ ▶ · ▲ ▼</td><td>Cible précédente / suivante · plus près / plus loin</td></tr>
-        <tr><td>R3 · View · Menu</td><td>Recentrer · lancer / pause · réglages</td></tr>
+        <tr><td>R3 · View · Menu</td><td>Recentrer · lancer / pause · le menu pause</td></tr>
+        <tr><td>Dans les menus</td><td>Croix ou stick gauche ▲ ▼ · A choisir · B retour</td></tr>
       </tbody>
     </table></div>
     <div class="tbl"><table>
-      <thead><tr><th colspan="2">En vol</th></tr></thead>
+      <thead><tr><th colspan="2">En vol (vaisseaux spatiaux)</th></tr></thead>
       <tbody>
         <tr><td>Stick gauche</td><td>Tangage · lacet</td></tr>
         <tr><td>LB · RB</td><td>Roulis</td></tr>
@@ -565,13 +831,36 @@
       </tbody>
     </table></div>
   </div>
+  <h3>Le F-35 à la manette</h3>
+  <p>Dès qu'on pilote le F-35 avec une manette (Xbox 360, Xbox, PlayStation), elle prend la disposition d'un chasseur (un profil personnel garde la priorité) :</p>
+  <div class="tbl"><table>
+    <tbody>
+      <tr><td>Stick gauche</td><td>Tangage (tiré : cabrer) · roulis</td></tr>
+      <tr><td>Stick droit</td><td>La tête : regarder où il pointe ; lâché, elle revient droit devant</td></tr>
+      <tr><td>R3 maintenu</td><td>Le zoom ; relâché, la vue revient</td></tr>
+      <tr><td>RT · LT</td><td>Gaz + · −</td></tr>
+      <tr><td>LB · RB</td><td>Palonnier gauche · droite</td></tr>
+      <tr><td>L3</td><td>Postcombustion</td></tr>
+      <tr><td>A (✕) maintenu</td><td>Le canon</td></tr>
+      <tr><td>B (○)</td><td>Tirer l'arme choisie (hors combat : acquitter une alarme)</td></tr>
+      <tr><td>X (□)</td><td>Arme suivante</td></tr>
+      <tr><td>Y (△)</td><td>Appui bref : verrouiller la cible suivante · maintenu : l'interception</td></tr>
+      <tr><td>Croix ▲ ▼ ◀ ▶</td><td>Train · volets · leurres · aérofrein</td></tr>
+      <tr><td>View</td><td>Appui bref : la vue suivante · maintenu : la tête verrouillée sur la cible</td></tr>
+      <tr><td>Menu</td><td>Appui bref : les tenues du pilote automatique · maintenu : les réglages</td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted">Au HOTAS, la manette des gaz garde son cran de postcombustion ; la roue des ordres de patrouille (<kbd>F13</kbd>) se pose sur un bouton. Au clavier, la patrouille et le canon restent difficiles : une manette ou un HOTAS aide beaucoup.</p>
   <p class="muted">Manette non détectée ? Appuyez sur un bouton avec la page au premier plan. Une manette Xbox 360 filaire dans Chrome, Edge ou Arc se connecte en USB depuis l'aide‑mémoire (<kbd>?</kbd>).</p>
   <h3>Écran tactile</h3>
   <p>Sur téléphone ou tablette, en vol : un <strong>manche</strong> en bas à gauche (tirer vers soi : cabrer ; gauche / droite : lacet), une <strong>manette des gaz</strong> en bas à droite qui reste où on la laisse, et deux boutons de roulis à maintenir. SAS, maintiens, autopilotes et planificateur sont des boutons du HUD.</p><figure class="shot"><a href="img/comment-jouer/60_mobile.webp"><img src="img/comment-jouer/60_mobile.webp" alt="Sur téléphone, à l’horizontale : le manche à gauche, les boutons de roulis et la manette des gaz à droite." loading="lazy"></a><figcaption>Sur téléphone, à l’horizontale : le manche à gauche, les boutons de roulis et la manette des gaz à droite.</figcaption></figure>
 </section>
 
 <section id="outils">
-  <h2>Outils &amp; sauvegardes<small><kbd>F2</kbd>, ou 🛠 dans la barre de mission</small></h2>
+  <h2>Sauvegardes &amp; outils<small>Le menu pause, <kbd>F5</kbd> · <kbd>F9</kbd> — et <kbd>F10</kbd> pour les développeurs</small></h2>
+  <p><strong>Sauvegarder</strong> et <strong>Charger</strong> sont dans le menu pause (<kbd>Échap</kbd>) : des sauvegardes nommées, la sauvegarde automatique (le jeu reprend là où vous l'avez laissé à la visite suivante), et <kbd>F5</kbd> / <kbd>F9</kbd> pour la sauvegarde et le chargement rapides. Une mission se partage par son lien (<code>#mission=…</code>), une salle par le sien (<code>#join=CODE</code>).</p>
+  <h3>Les outils de jeu — <kbd>F10</kbd></h3>
+  <p>Réservés aux développeurs : ils n'apparaissent que dans une version locale ou avec <code>?dev</code> dans l'adresse.</p>
   <div class="grid">
     <div class="card"><h4>Ranger</h4><p>L'état en direct : sphère d'influence, statut (posé, en vol, suborbital, en orbite…), altitude, vitesses, périapside, apoapside, inclinaison, période, prochain événement.</p></div>
     <div class="card"><h4>Place</h4><p>Mettre le Ranger en orbite autour de n'importe quel astre, ou le poser au sol en cliquant sur un globe ou un planisphère. Raccourcis : orbite basse, pas de tir KSC, orbite lunaire basse.</p></div>
@@ -587,11 +876,12 @@
 <section>
   <h2>Astuces</h2>
   <div class="grid">
-    <div class="card"><h4>Rien ne bouge ?</h4><p>Le temps est peut‑être en pause : <kbd>Espace</kbd>. Ou revenez au temps réel avec <kbd>!</kbd>.</p></div>
+    <div class="card"><h4>Rien ne bouge ?</h4><p>Le temps est peut‑être en pause : <kbd>Espace</kbd>. Ou revenez au temps réel avec <kbd>!</kbd>. Dans une salle, le temps est celui de tous.</p></div>
+    <div class="card"><h4>Le F-35 part n'importe où ?</h4><p><kbd>⇧X</kbd> : ailes à plat, légère montée, vitesse sûre, puis les tenues. Pour débuter, Réglages › <em>F-35 › Assistance</em> : <em>Débutant</em> ou <em>Assisté</em> — et l'<a href="#ecole">école de vol</a>.</p></div>
     <div class="card"><h4>Le voyage est long</h4><p>Une fois le plan lancé (<em>EXECUTE</em>), le temps s’accélère tout seul entre les allumages (auto‑warp). Vous pouvez choisir le vôtre avec <kbd>;</kbd> <kbd>:</kbd> — il reste plafonné pour ne pas rater un allumage.</p></div>
     <div class="card"><h4>Perdu dans l'espace ?</h4><p><kbd>M</kbd> en vol, puis <em>Fit</em> pour recadrer la carte ; <kbd>⇧R</kbd> remet la caméra à sa place.</p></div>
     <div class="card"><h4>Demandez à TARS</h4><p><kbd>F6</kbd> puis « que dois‑je faire ? », ou <kbd>/help</kbd> pour toutes les commandes.</p></div>
-    <div class="card"><h4>Une belle image</h4><p>Pause (<kbd>Espace</kbd>) pour que l'image s'affine, <kbd>H</kbd> pour cacher l'interface, <kbd>P</kbd> pour l'enregistrer — ou le <strong>mode photo</strong> (bouton Photo) : exposition, focale, profondeur de champ, rendu ; « Retour au jeu » pour en sortir. Réglages › Rendu : <em>Afficher les FPS</em>.</p></div>
+    <div class="card"><h4>Une belle image</h4><p>Pause (<kbd>Espace</kbd>) pour que l'image s'affine, <kbd>H</kbd> pour cacher l'interface, <kbd>P</kbd> pour l'enregistrer — ou le <strong>mode photo</strong> (<kbd>F4</kbd>) : exposition, focale, profondeur de champ, rendu ; <kbd>Échap</kbd> pour en sortir. La <strong>capture</strong> de la barre du haut rend la vue sans bruit et l'enregistre toute seule. Réglages › Rendu : <em>Afficher les FPS</em>.</p></div>
   </div>
 </section>
 
@@ -599,7 +889,8 @@
 
 <footer>
   Gargantua — simulateur de trou noir de Kerr en WebGPU. <a href="../">Lancer le jeu</a> · <a href="./">Atlas de Kerr (rendus &amp; vidéos)</a>.<br>
-  Ranger : « Interstellar Ranger One » par Max Vizell, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.
+  Ranger : « Interstellar Ranger One » par Max Vizell, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> · F-35 : « F-35A Lightning II » par shangus930, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.<br>
+  Pour aller plus loin : <a href="https://github.com/TheSamLePirate/black-hole-gpu/blob/main/docs/F35.fr.md">le F-35</a> · <a href="https://github.com/TheSamLePirate/black-hole-gpu/blob/main/docs/NETWORK.fr.md">jouer ensemble</a> · <a href="https://github.com/TheSamLePirate/black-hole-gpu/blob/main/docs/CREW.md">la console d'équipage</a> · <a href="https://github.com/TheSamLePirate/black-hole-gpu/blob/main/docs/HUD.md">le HUD</a>.
 </footer>
 
 <dialog class="lb" id="lb"><img alt=""></dialog>

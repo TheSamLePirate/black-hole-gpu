@@ -27,6 +27,16 @@ await $`cp -R gallery/. _site/docs/`;
 await $`cp docs/video/*.mp4 _site/docs/video/`;
 // (the French pages: how to play, the presentation; their images)
 await $`mkdir -p _site/docs/img && cp docs/comment-jouer.html docs/decouvrir.html _site/docs/ && cp -R docs/img/comment-jouer docs/img/marketing _site/docs/img/`;
+// (and the progress sheets' captures they show — docs/progress/…, named by their path relative to docs/: each one
+// they point at copied there, not the whole folder's 500 images)
+{
+  const pages = await Promise.all(["docs/comment-jouer.html", "docs/decouvrir.html"].map((f) => Bun.file(f).text()));
+  const used = new Set(pages.flatMap((h) => [...h.matchAll(/(?:src|href|poster)="(progress\/[^"#?]+)"/g)].map((m) => m[1]!)));
+  for (const rel of used) {
+    if (!(await Bun.file(`docs/${rel}`).exists())) throw new Error(`build-pages: docs/${rel} (shown by the French pages) is missing`);
+    await $`mkdir -p ${`_site/docs/${rel.slice(0, rel.lastIndexOf("/"))}`} && cp ${`docs/${rel}`} ${`_site/docs/${rel}`}`;
+  }
+}
 // (the build's version: the benchmark's report names it)
 await Bun.write(
   "_site/version.json",

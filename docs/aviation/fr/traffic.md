@@ -15,4 +15,4 @@ L'interception (le verrouillage radar, ou TARS : « intercepte l'AFR123 ») : l'
 Une mission peut reprendre un vrai vol (celui demandé, sinon le plus proche entendu) : il quitte le trafic dessiné et vole comme la mission le dit — une déviation, son transpondeur coupé, une escorte.
 
 ## Règles
-Rester à l'écart des avions de ligne : l'Auto-ACAS évite une route de collision ; dans les missions du jeu, un avion de ligne est neutre — jamais une cible.
+Rester à l'écart des avions de ligne : l'Auto-ACAS évite un appareil qui se rapproche en route de collision (ou à moins de 25 m) ; dans les missions du jeu, un avion de ligne est neutre — jamais une cible. Seul le combat libre d'une salle prend pour cibles les vrais avions de ligne et navires que voit le radar (la page des armes).

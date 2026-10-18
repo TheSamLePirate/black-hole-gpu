@@ -10,7 +10,8 @@ spheres of influence — `paint.ts`, drawn there or on the canvas alike); a Canv
 warp included) and handed over in pixels with their view depth. Without WebGPU, or if its pipelines are
 refused, the canvas draws everything itself (`src/ui/map3d/`: `camera.ts` the eased orbit camera, `scene.ts` what each universe holds,
 `map3d.ts` the drawing, gestures and bar). The flight HUD's map panel (`src/ui/flighthud.ts`) puts
-it under three tabs — **3D**, **Globe**, **Planisphere** (see *The ground track* below).
+it under three tabs — **3D**, **Globe**, **Planisphere** (see *The ground track* below). The Earth's flat maps — the
+flight plan, the mission map and the mission editor — are at the end (*The Earth's flat maps*).
 
 ## Wormhole crossings
 
@@ -186,7 +187,57 @@ elsewhere the tabs are dimmed and the 3D map shows, the tab chosen kept (remembe
 On the GPU the tracks over the globe and the planisphere are GPU lines too (anti-aliased, faded along,
 broken across the planisphere's edge), drawn at 15 Hz (every frame while dragged).
 
+**The weather layer** (PLAN-METEO W2b — `src/ui/weather-map.ts`): a **Weather** button beside the three tabs
+(remembered, `kerr.map-weather`; turned on, it shows the planisphere) lays the weather over the Earth as a
+weather service draws it — the rain as a radar shows it (teal to green, yellow, orange, red, a storm's core
+magenta; the fog a pale veil), computed once a day into a small image; the wind as a few hundred drifting
+particles coloured by its force; each landing site a station marker (its flight category's dot, its name,
+the category and the visibility; hovered, its whole report: wind, gusts, visibility, ceiling, precipitation);
+a legend. With the real weather, the satellites' mosaic of the day lies under it and each station shows its
+own real weather.
+
 Cost: ~1 ms a frame on the main thread (the orbits cached and re-sampled a few a frame as time goes by);
 on the GPU, four draw calls (the stars, the bodies' depth, the bodies, the lines — a few thousand
 segments) and a fifth for the marks. Full screen at 1600×900 holds 60 frames a second (16.7 ms median and
 95th percentile, Earth or the whole system in view).
+
+## The Earth's flat maps
+
+The Atlas's map (`src/ui/mapview.ts`) — the Earth on Web Mercator from its imagery's tiles (NASA GIBS's Blue
+Marble to level 8, EOX's Sentinel-2 cloudless beyond, to 13; the parent tile shown while one comes), the Moon
+and Mars on the plate carrée — dragged, zoomed about the pointer by the wheel or a pinch, a double click
+closer, a click picking a place, an object dragged by its owner; drawn on demand. Three flight tools are built
+on it:
+
+- **The flight plan** (⇧O, `src/ui/routepanel.ts` — see [F35.md](F35.md), *Flight plans*): the route's
+  legs along their great circles, its numbered waypoints (the active one magenta), the airfields, the craft
+  and its track; a click adds a waypoint (on an airfield, that airfield).
+- **The mission map** (`src/ui/missionmap.ts` — the wheel's *Navigation › Mission map*, the objectives'
+  **Map** button): the tactical picture, refreshed every 0.7 s —
+  - the objectives' zones (amber; the one under way solid, the waiting ones dashed), the SAMs' reach (red,
+    dashed, labelled with its radius, while they have missiles);
+  - the mission's units where they are now in NATO shapes — hostile a red diamond, friend a blue half
+    circle, neutral a white square, destroyed a grey cross —, an aircraft with a stick along its way;
+  - the carriers at sea (blue, along their heading), the real traffic (up to 600 small arrows, their
+    callsigns from zoom 8; with the setting *Real traffic*), the flight plan (its active leg magenta), the
+    craft (a green arrow along its track).
+  A click picks the nearest thing within 16 px (else the place, its coordinates): **Fly to** puts it in the
+  plan as the next point (an empty plan: present position → it), direct, NAV engaged with the autopilot and
+  the autothrottle; a waypoint can be removed, or **dragged** (the map holds still meanwhile, the guidance
+  recomputed when let go). Beside: the objectives and their state, the selection and its actions, the
+  legend. Without a mission: the traffic, the carriers and the plan. The same picture on the F-35's TSD
+  ([COCKPIT.md](COCKPIT.md)), the objective under way on the HUD ([HUD.md](HUD.md)).
+- **The mission editor** (`src/ui/missioneditor.ts`, `game/missionedit.ts` — *Create a mission* in
+  *Challenges, fights, missions*, or *Edit* on a mission, a copy): a tool, a click places it — the start, a
+  place to reach, an escort's destination, an airfield to land at, a SAM, a truck, a bunker, a ship, a
+  drone, a fighter, an airliner, a real flight (by its callsign), a carrier —; what is placed is dragged,
+  a click selects it. Beside: the title and the briefing, the start's altitude, heading and speed, the
+  F-35's variant and stores, the local hour and the weather, the time allowed, the objectives one after the
+  other or all together; each unit's name, side, altitude and heading, its objectives (destroy, identify,
+  escort, protect, land aboard), when it appears, a bonus; each place's name and radius; the messages on the
+  way. **Fly it**, **Copy the link** (`#mission=…`, the whole mission in base64url: opened, the game goes
+  straight to its briefing), **Keep** (my missions, 50 at most, in this browser), **Export JSON**, **Paste
+  JSON**.
+
+Elsewhere: on foot, a heading-up minimap of the local ground (`src/ui/foothud.ts`, `src/ui/local-ground-map.ts`);
+the crew console's OpenStreetMap at night ([CREW.md](CREW.md)).

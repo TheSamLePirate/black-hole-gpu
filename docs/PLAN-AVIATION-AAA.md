@@ -2,6 +2,10 @@
 
 *Écrit le 2026-10-15, après la formation en réseau (`492c3b8`). Branche de travail : `reseau` (== `main`).*
 
+*État au 2026-10-18 (`dfa72d3`) : V, C1–C3, F, T1–T3, M, P, A, I et S faits (du 2026-10-15 au 2026-10-16), suivis de
+reprises jusqu'au 2026-10-18 (notées sous chaque phase). Restent C4 (l'IA au vrai modèle de vol), C5 et C6 (faits en
+partie avec S1 : la frégate et le JSM), T4 (trafic simulé, rejeux) et T5 (vivre avec le trafic).*
+
 Demande (2026-10-15), « gros plan AAA » :
 - le F-35 **réagit comme le vrai** et fait les mêmes manœuvres (looping, vrilles…) ;
 - **changer de formation, donner des ordres**, créer des **plans de vol**, des **missions**, une **carte de mission**
@@ -173,6 +177,8 @@ pertinent.
 
   *Fini quand* un avion de ligne réel apparaît en neutre, disparaît derrière une crête et réapparaît.
   *Fait le 2026-10-15 — [fiche](progress/aviation/C1.md) : balayage, portée selon la taille, horizon, relief, encoche, RWS/TWS/STT, IFF, liaison ; le combat nourri par le radar ; portée HUD unifiée, boîte de verrouillage, TSD. Le critère « avion de ligne réel » attend la source du trafic (phase T).*
+  *Puis le 2026-10-15 — [fiche](progress/aviation/radar-relief.md) : le relief sous l'écran radar du HUD, cap en haut, à sa portée.*
+  *Puis le 2026-10-18 (`dfa72d3`) : le verrou demandé avant le premier contact (Tab juste après le départ d'un match, le premier balayage pas fini) n'est plus perdu (« Verrou perdu ») — « Radar : recherche — le premier contact verrouillé », le faisceau balayé aussitôt et la première piste verrouillée dans les 3 s (`controller/radar.ts` `radarLockWant`) ; net-battle 4/4 deux fois de suite sur kerr-mini.*
 - **C2. La trajectoire d'interception.**
   - Pour la cible choisie : le **cap de collision** (et le cap pour passer derrière elle à une distance donnée)
     au HUD, la poursuite pure, en avance ou en retard, le temps avant la rencontre, l'angle d'aspect.
@@ -215,11 +221,13 @@ pertinent.
   En réseau, l'ordre s'affiche chez le joueur humain (et s'exécute s'il est en formation).
 
   *Fait le 2026-10-15 — [fiche](progress/aviation/F2.md) : 11 ordres et leurs appels radio ; roue (Tab › Patrouille, action F13 réassignable/HOTAS), TARS (outil et hors ligne) ; reçus en réseau, exécutés en formation (forme, écartement, dégagement, attente étagée, retour base, rejoindre) ; ralliement lointain par la course de C2.*
+  *Puis le 2026-10-18 (`ff7ec03`) — [fiche](progress/aviation/ECOLE-RESEAU.md) : la roue (Tab maintenu) lisible — jusqu'à 800 px (44 % du petit côté de la vue), textes de 13 à 20 px ajustés à chaque secteur, le centre qui dit l'élément pointé, sa touche, s'il est engagé ; 10 secteurs au lieu de 21 (Navigation, Leçons et défis, Caméra, ordres regroupés) ; un appui bref reste « verrou suivant ».*
 - **F3. Les ailiers IA**, en solo comme en réseau (l'hôte les fait voler).
   - Un à trois F-35 qui volent avec le vrai modèle, tiennent leur poste et obéissent aux ordres.
   - Ils annoncent leurs contacts, se battent (C4) et peuvent être perdus.
 
   *Fait le 2026-10-15 — [fiche](progress/aviation/F3.md) : avion IA aux forces du vrai F-35 (aero.ts, F135) volé à la manière de la loi ; 1–3 ailiers en formation, tous les ordres, combat (AIM-120/9X, abattus possibles), radio, liaison, réseau (l'hôte les fait voler) ; losange tenu à 1,3 m, 2 drones abattus.*
+  *Puis le 2026-10-18 (`ff7ec03`) — [fiche](progress/aviation/ECOLE-RESEAU.md) : les avions IA lissés — inclinaison à leur vitesse de roulis (180°/s chasseurs, 90°/s drones, 15°/s avions de ligne) et facteur de charge à vitesse limitée, la trajectoire indépendante de la cadence d'images ; dessinés depuis notre position de l'image en cours (plus de 4–8 m de va-et-vient) ; le sol sous le combat interpolé ; les ailiers IA des autres joueurs (20 Hz) et les agresseurs de l'hôte lissés.*
 - **F4. Les manœuvres de patrouille.** Décollage et atterrissage en patrouille, virages en formation (« cross-under »),
   changements de formation fluides, un passage en losange pour les spectateurs.
   *Fait le 2026-10-15 — [fiche](progress/aviation/F4.md) : transitions fluides (dessous et derrière), virages croisés des formations tactiques, décollage et atterrissage en patrouille (avion IA au sol), passage en losange avec la caméra de passage.*
@@ -319,6 +327,8 @@ pertinent.
 
   *M3d fait le 2026-10-15 — **M3 fini** — [fiche](progress/aviation/M3d.md) : les qualifications de jour, de nuit et par mer forte (houle de 4,4 m imposée), quatre passages notés chacune, enchaînés par le pilote automatique (catapulte ou décollage court, tour, approche, ravitaillement moteur tournant) ou volés par le pilote ; qualifiés : F-35C 3,50 / 3,50 / 3,75, F-35B 4,00.*
 
+  *Puis le 2026-10-17 (`ed5c437`) : l'appontage par mer forte jamais bloqué — l'arrêt au brin jugé sur la vitesse le long de l'axe du pont (par 4,5 m de mer, l'avion ne descendait jamais sous 0,6 m/s, restait plein gaz au brin, glissait hors du pont), le brin lâché et le passage coupé si l'avion quitte le pont ; une interception de l'axe abandonnée avant la finale (après un bolter, il tournait sans fin) ; la graine du mouvement de la mer une option de `carrierSpawn`, fixée dans `tests/quals.test.ts`. Sur kerr-mini, 40 graines : la qualification par mer forte toujours finie (avant : 2 bloquées, 2 coupées).*
+
 ### P — Plans de vol, missions, carte
 
 - **P1. Le moteur de missions.** Une mission est **une donnée** (JSON). Elle peut prendre **un vol ou un navire
@@ -377,6 +387,7 @@ pertinent.
   haut », « vitesse », « incidence »), puis un débriefing chiffré.
 
   *A4 fait le 2026-10-15 — [fiche](progress/aviation/A4.md) : l'instructeur (ILS, appontage, figures : annonces au bon moment avec leur correction, de moins en moins répétées ; débriefing noté sur 20 avec graphiques, phases et points à travailler), son panneau en direct (schéma et trace, étape, jauges, « Explique » en pause), et l'école de vol (12 cartes interactives, démonstration ou essai à la main).*
+  *Puis le 2026-10-18 (`ff7ec03`) — [fiche](progress/aviation/ECOLE-RESEAU.md) : chaque « Voir la démonstration » vole toute la leçon, la part du pilote comprise (TARS avec ses propres mots, `game/course.ts` `auto`/`demoSay`/`demoName`), l'ILS, le cas I et les figures par le même déroulé ; corrigés en chemin : l'atterrissage et le tour de piste placés 700 m trop haut (la hauteur de `flyAt` est une hauteur sol), la glide capturée par le dessus, le posé jamais vu, le F-35C appliqué une image trop tard, le canon de TARS (poursuite avec anticipation : abattu en 35 s), la base du tour de piste (ILS phase `base`) ; plus de débriefing sur une démonstration, le panneau instructeur enfin caché, une leçon toujours démarrée (pause et « appareil perdu » levés, moteur en marche). La surveillance : une démonstration qui stagne 90 s est abandonnée et le dit, `__bh.flight.school.state()`, `tests/e2e/school-demos.e2e.test.ts` (un chien de garde toutes les 2 s) — les 18 démonstrations jusqu'au bout sur kerr-mini (atterrissage 20/20, cas I au brin 1).*
 
 ### I — TARS aviateur
 
@@ -420,6 +431,14 @@ Le réseau n'est pas une phase à part : **chaque étape est livrée en solo et 
 
 Un test e2e à deux pages par étape concernée.
 
+*Le 2026-10-16 (`b8def89`) puis le 2026-10-17 (`1ce1f2a`) — [CREW.md](CREW.md) : la console d'équipage (`crew/`), une page légère pour un téléphone, une tablette ou un petit ordinateur qui rejoint la salle ; refaite le 17 en cockpit de verre — neuf vues dessinées sur un seul canvas (`src/crew/draw/` : tableau de bord, PFD, ND, carte OpenStreetMap passée en nuit, globe, radar, systèmes, plan de vol et son profil vertical, télémétrie), WGS84 partout, `scripts/crew-demo.ts` (une salle simulée sans le simulateur) ; `bun run e2e crew` 7/7.*
+
+*Le 2026-10-18 (`ff7ec03`) — [fiche](progress/aviation/ECOLE-RESEAU.md) :*
+- *l'ailier d'un joueur par la roue (Tab maintenu › Patrouille › « Ailier de Ana », ou TARS « rejoins Ana ») : « À côté » s'il est loin, puis la formation à la première place libre (ses ailiers IA et les autres joueurs sur son aile comptés : chaque page dit à la salle sur l'aile de qui elle vole) ; l'Auto-ACAS ne fuit plus son propre ailier (seul compte un appareil qui se rapproche, ou à moins de 25 m) ;*
+- *le combat libre en salle, en F-35, hors match, mission, leçon ou défi (réglage « Combat libre en salle ») : tout appareil est une cible — les autres joueurs, leurs ailiers IA et les nôtres, les avions de ligne, navires et porte-avions réels que voit le radar (des doublures placées d'après l'image radar, `controller/fightproxy.ts`) —, tir ami autorisé, le radar en armes libres, de retour en l'air 6 s après avoir été abattu ;*
+- *en coopération, les pilotes enfin dans le même camp ;*
+- *`tests/e2e/net-wing-fight` : Ben rejoint l'aile d'Ana par la roue, tenu à 3,6 m sur 20 s, Ana l'abat à l'AIM-120, il revole.*
+
 ### S — Scènes, missions et défis d'exception (pour finir)
 - **S1. Les missions.**
   - **Escorte** d'un avion de ligne réel ou d'un VIP simulé.
@@ -444,8 +463,9 @@ Un test e2e à deux pages par étape concernée.
   *S2 fait le 2026-10-16 — [fiche](progress/aviation/S2.md) : treize vues d'exception (l'éclipse du 12 août 2026 poursuivie à sa vraie date, la pleine Lune en patrouille, les aurores des Lofoten, le coucher de soleil sur le Ford, Grand Canyon, Monument Valley, Mach Loop, Star Wars Canyon, Geirangerfjord, Himalaya, Paine, volcans d'Islande, tempête et appontage) et leur page ; les objectifs parcours, éclipse, patrouille tenue ; les aurores dans le tracer (réglage Aurores, Kp) ; corrigés : l'avion éclairé dans l'ombre de l'éclipse, la mer qui suivait l'avion.*
 - **S3. Le spectacle.** Les caméras du replay (passage, tour, poursuite), le mode photo (existant) placé dans
   chaque scène, une bande-annonce automatique de la meilleure séquence.
-  *S3 fait le 2026-10-16 — [fiche](progress/aviation/S3.md) : les 2 min 30 dernières du vol enregistrées en continu et rejouées, le vol gelé puis remis en place (poursuite, tour, passage au téléobjectif, cockpit, réalisateur) ; les meilleurs moments trouvés et enchaînés en bande-annonce (bandes cinéma, titre, légendes), rendue en vidéo ; un cadrage photo pour chacune des treize vues d'exception. En marge : la manette Xbox 360 du F-35 ([fiche](progress/aviation/MANETTE.md)).*
-  *Puis le 2026-10-16 — [fiche](progress/aviation/TIRS.md) : le tir en direct et en replay — l'appareil touché fume, détruit il part en vrille dans sa fumée et explose au crash (drones, chasseurs, avions de ligne ; les navires brûlent et coulent) ; la tête verrouillée sur la cible (⇧L) et la vue « Sur la cible » zoomées ; la cinématique du replay (départ du missile, téléobjectif sur la cible, impact, chute, crash), ses traînées rejouées, sans saccade.*
+  *S3 fait le 2026-10-16 (`2c1cfe1`) — **S fini** — [fiche](progress/aviation/S3.md) : les 2 min 30 dernières du vol enregistrées en continu et rejouées, le vol gelé puis remis en place (poursuite, tour, passage au téléobjectif, cockpit, réalisateur) ; les meilleurs moments trouvés et enchaînés en bande-annonce (bandes cinéma, titre, légendes), rendue en vidéo ; un cadrage photo pour chacune des treize vues d'exception. En marge : la manette Xbox 360 du F-35 (`10fe535`, [fiche](progress/aviation/MANETTE.md)).*
+  *Puis le 2026-10-16 (`1081444`) — [fiche](progress/aviation/TIRS.md) : le tir en direct et en replay — l'appareil touché fume, détruit il part en vrille dans sa fumée et explose au crash (drones, chasseurs, avions de ligne ; les navires brûlent et coulent) ; la tête verrouillée sur la cible (⇧L) et la vue « Sur la cible » zoomées ; la cinématique du replay (départ du missile, téléobjectif sur la cible, impact, chute, crash), ses traînées rejouées, sans saccade.*
+  *Puis le 2026-10-16 (`a7da8d2`) — [fiche](progress/aviation/RENDU-GPU.md) : ce qui coûte dans le rendu en vol bas, mesuré sur kerr-mini — le détail du relief et du décor mené là où regarde la vue (`system/streaming-focus.ts` `gazeLead`), les collines et les rues du bord de mer plus peintes en mer, une vue du coût par rayon (`renderer.costView`), le tracé ≈ 150 ms à ×2 en 1600×1000 au-dessus de Tarifa ; `tests/e2e/gibraltar-shots` (les trois tirs vus du cockpit), `perf-ab`, `shootdown-gpu`, `cost-view`.*
 
 ## Ordre proposé
 1. **V** (le vrai F-35) — tout le reste en dépend.

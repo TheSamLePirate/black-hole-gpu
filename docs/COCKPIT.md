@@ -1,6 +1,6 @@
 # Le cockpit interactif
 
-Dans le cockpit du Ranger (vue « Cockpit »), le pilote travaille au tableau avec la souris : il survole une commande, la clique, la glisse, la tourne à la molette. Chaque commande fait la même chose que sa touche. Elle suit l'état du vol, même quand une touche, une manette ou l'autopilote l'a changé. Les écrans changent de page sous le pointeur. Le train se commande au levier ; la cabine et la coque ont leurs lumières. Plan : [`PLAN-COCKPIT.md`](PLAN-COCKPIT.md) (M8, K1–K7).
+Dans le cockpit du Ranger (vue « Cockpit »), le pilote travaille au tableau avec la souris : il survole une commande, la clique, la glisse, la tourne à la molette. Chaque commande fait la même chose que sa touche. Elle suit l'état du vol, même quand une touche, une manette ou l'autopilote l'a changé. Les écrans changent de page sous le pointeur. Le train se commande au levier ; la cabine et la coque ont leurs lumières. Plan : [`PLAN-COCKPIT.md`](PLAN-COCKPIT.md) (M8, K1–K7). Le F-35 a son propre cockpit, un écran tactile panoramique et le casque : voir [plus bas](#le-cockpit-du-f-35).
 
 ## Les fichiers
 
@@ -90,6 +90,51 @@ Dix pages pour chacun des huit affichages : PFD, ORB, NAV, SYS, DCK, PLN, CLK, L
   - Verres : ≤ 0,1 ms.
   - Halos : dans le bruit.
   - Deux pièges mesurés : redessiner la profondeur de la coque pour cacher les feux coûtait 1,3 ms ; lire la profondeur tracée dans chaque fragment de halo coûtait 5 ms.
+
+## Le cockpit du F-35
+
+Dans la vue « Cockpit » (ou « Cabine ») du F-35, il n'y a pas de HUD sur une vitre : comme sur le vrai avion,
+la symbologie est celle du casque, affichée par-dessus la vue (voir [`HUD.md`](HUD.md), *Flown as a plane*). Le
+tableau de bord, c'est un seul écran tactile panoramique. Plan : [`PLAN-F35.md`](PLAN-F35.md) (F5) ; l'avion :
+[`F35.md`](F35.md).
+
+| Fichier | Rôle |
+|---|---|
+| `src/f35/pcd.ts` | pur : l'écran panoramique (PCD), dessiné sur un canvas de 2048 × 768 px, et ce que fait un toucher |
+| `src/f35/cockpit.ts` | `pcdData` : ce que l'écran affiche, lu sur le vol à chaque dessin ; `avionicsData` : le bloc « avionique » du casque |
+| `src/f35/pose.ts`, `src/f35/model.ts` | les pièces mobiles, dont le manche latéral et la manette des gaz |
+
+### L'écran panoramique (PCD)
+
+- **Il est dessiné dix fois par seconde**, et tout de suite après un toucher. Il se pose sur l'écran du tableau
+  de bord (matière 36).
+- **Un clic sur l'écran le touche** (`jetPick`, puis `Pcd.touch`) : un toast dit ce qui a changé (« PCD · FUEL »).
+  - Le titre d'un portail passe à la page suivante ; les flèches ◀ ▶ à ses deux bouts reculent ou avancent.
+  - Sur le TSD, − et + en bas changent la portée : 5, 10, 20, 40, 80 ou 160 (km, ou NM en unités impériales).
+- **La bande du haut** : F-35B, l'heure UTC (« Z »), « ICAWS · NO FAULTS » ou les trois alertes les plus graves
+  (rouge, jaune), le carburant en kg (jaune sous 20 %).
+- **Quatre portails**, chacun une page parmi huit (TSD, FCS, ENG, FUEL au départ) :
+
+| Page | Ce qu'elle montre |
+|---|---|
+| TSD | la carte tactique, cap en haut : cercles de distance et boussole ; les terrains, leur piste (4,5 km) et leur code OACI ; les zones d'une mission (ambre) et la portée des SAM (rouge) ; la route (la branche active en magenta, « LNAV/VNAV ▸ point », son relèvement, sa distance, son temps, l'écart latéral XTK) ; les pistes du radar et de la liaison en symboles OTAN (ami demi-cercle bleu, hostile losange rouge, neutre carré blanc, inconnu quadrilobe jaune ; la liaison en pointillé, le verrouillage cerclé) ; la trace au sol, le terrain le plus proche, le cap |
+| FCS | l'avion vu de dessus, chaque gouverne (stabilisateurs, flaperons, becs, dérives) et son braquage ; G et son pic, l'incidence, Mach |
+| ENG | le régime (N2) et la température des gaz en cadrans ; la poussée en kN, le débit en kg/h, la manette ; la soufflante en STOVL |
+| FUEL | le total, sa jauge et ses repères JOKER et BINGO (celui du plan de vol, le joker 1 500 kg au-dessus), le débit, l'endurance, le rayon d'action, la masse |
+| STOVL | l'avion de profil, la porte de la soufflante, l'angle de la tuyère ; NOZZLE, DOORS (OPEN, TRANSIT, CLOSED), la marge en stationnaire, HOVER · VZ |
+| CNI | la navigation : position, altitude, hauteur radar, vitesses (sol, vraie, Mach), vitesse verticale, route, vent ; le terrain le plus proche |
+| ADI | l'horizon de secours, la vitesse et l'altitude |
+| CKL | la liste du moment (au sol BEFORE TAKEOFF ; en STOVL VERTICAL LANDING ; en vol APPROACH), chaque ligne cochée d'après l'état du vol |
+
+- **La bande du bas**, dans l'encoche de la console centrale : ALT (ou VNAV, magenta), HDG (ou LNAV), A/T,
+  CTOL/STOVL/HOVER ; puis THR % (et AB), le train, les volets, l'aérofrein.
+
+### Le manche et la manette
+
+- **Le manche latéral** s'incline sous la main du pilote, quelle que soit la source (clavier, manette, HOTAS) :
+  12° vers l'avant ou l'arrière, 10° de côté.
+- **La manette des gaz** glisse le long de son rail, de 0 à 100 %.
+- La verrière se lève à l'arrêt (au sol, moteur au ralenti).
 
 ## Les outils de test (`__bh`)
 

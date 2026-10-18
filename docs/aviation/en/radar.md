@@ -4,7 +4,7 @@
 - RWS (range while search): the beam sweeps ±60°, the contacts found.
 - TWS (track while scan): the contacts tracked as it sweeps — their way and speed known.
 - STT (single target track): the beam on one target, for a missile's guidance.
-Tab locks the next target; the radar's mode key cycles RWS → TWS → STT.
+Tab locks the next target, nearest first (past the last: "Lock dropped"); the radar's mode key cycles RWS → TWS → STT. A Tab before any contact — a fight just begun, a place just taken, the beam's first sweep not done — is not lost: "Radar: searching — the first contact locked", the beam swept at once and the first contact locked as it comes, within 3 s.
 
 ## The picture
 - The scope (bottom left of the HUD): heading up, the range rings, the contacts with their way; the relief under it (above our height red, within 300 m below amber, lower green, the sea blue).
@@ -19,3 +19,4 @@ Tab locks the next target; the radar's mode key cycles RWS → TWS → STT.
 ## In the game
 - The real traffic (ADS-B) appears with its callsign and transponder; the mission's units, the room's players, our wingmen.
 - The intercept: a locked track flown to (run, turn, join), then shadowed 300 m behind on its left.
+- The friends seen by the datalink only are not locked — except in a room's free fight, where the radar is weapons free: every track locks, a friend's too.

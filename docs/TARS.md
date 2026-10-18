@@ -35,15 +35,19 @@ peut avoir échoué. [Détails, budgets et limites](THIRD-PERSON-IMPLEMENTATION.
 | `src/ai/openrouter.ts`, `src/ai/tars-online.ts` | TARS par OpenRouter : la clé, la connexion OAuth (PKCE), les appels GLM et Jev, leur coût ; son caractère pour le modèle, ses remarques décidées par Jev |
 | `src/ui/tars-panel.ts`, `pwa/openrouter.html` | sa console F6 (emblème, onglets Échange · Agents · Réveils · Mémoire, actions en direct, suivi du hub, proposition, tâches, autocomplétion, modes, poignée) et le lien à OpenRouter ; la page de rappel de la connexion |
 | `src/ai/agent.ts`, `src/ai/tool-schema.ts` | TARS agent : la boucle d'un tour (appels, résultats, bornes, arrêt) ; le schéma des outils et la vérification des arguments |
-| `src/ai/game-tools.ts`, `src/ai/settings-tools.ts` | ses 49 outils : tout le jeu, montrer, proposer, attendre, réveils, sous-agents, tâches, savoir-faire ; les réglages trouvés par les mots et vérifiés au schéma |
+| `src/ai/game-tools.ts`, `src/ai/settings-tools.ts` | ses 68 outils : tout le jeu (dont le F-35 : ses vols, l'école de vol, les missions, le trafic, la patrouille, les armes, le porte-avions, l'approche, le plan de vol), montrer, proposer, attendre, réveils, sous-agents, tâches, savoir-faire ; les réglages trouvés par les mots et vérifiés au schéma |
+| `src/ai/knowledge.ts`, `docs/aviation/{fr,en}/*.md` | sa base de connaissances aéronautique : onze pages par langue, coupées en sections, cherchées par leurs mots (outil `knowledge`), livrées avec le jeu |
+| `src/game/threats.ts`, `src/controller/copilot.ts` | le navigateur en place arrière : les menaces annoncées en combat (missiles, BRAA, SAM, coups, victoires) ; le trafic autour, l'interception et la patrouille sur un avion nommé |
+| `src/game/radio.ts` | les rôles de la radio de la patrouille (ailier, AWACS Darkstar, Mother, Paddles) : leur voix, leur nom en sous-titre, partagés avec la salle |
+| `src/game/course.ts`, `src/controller/course.ts` | les leçons de l'école de vol : guidée (TARS puis vous), démonstration (TARS vole tout), essai (vous seul) ; chaque étape dite de sa voix |
 | `src/ai/telemetry.ts` | `get_telemetry` par groupes (attitude, air, commandes, autopilote, hub, rentrée, approche, descente, poussée, amarrage) ; ses canaux échantillonnés pour ses graphes |
 | `src/ai/triggers.ts`, `src/ai/budget.ts` | ses réveils : réflexes et règles (événements, toutes les N min, à une heure du jeu) ; le plafond par heure et l'intervalle |
 | `src/ai/subagents.ts` | ses sous-agents : jusqu'à 4 copies en parallèle, lecture et calcul seulement |
-| `src/ai/commands.ts`, `src/ai/tars-commands.ts` | les 26 commandes « / » de l'agent, les mentions @, les modes, les savoir-faire ; leurs complétions (pur) et leur exécution |
-| `src/ai/game-commands.ts` | les 76 commandes de jeu (« /target », « /cockpit », « /teleport »…) exécutées par ses outils sans le modèle ; leurs arguments complétés |
+| `src/ai/commands.ts`, `src/ai/tars-commands.ts` | les 27 commandes « / » de l'agent, les mentions @, les modes, les savoir-faire ; leurs complétions (pur) et leur exécution |
+| `src/ai/game-commands.ts` | les 93 commandes de jeu (« /target », « /cockpit », « /teleport »…) exécutées par ses outils sans le modèle ; leurs arguments complétés |
 | `src/ui/tars/emblem.ts`, `src/ui/tars/display.ts`, `src/ui/tars/chart.ts` | son emblème animé ; ses cartes sur la vue (graphes en direct, couloir et graphe du hub superposés, fiches) et leur tracé |
 | `src/ai/tars-agent.ts`, `src/ai/memory.ts` | sa consigne d'agent, un tour à la fois ; sa mémoire gardée entre les visites |
-| `src/ai/offline-orders.ts`, `src/ai/listen.ts` | les ordres compris hors ligne ; le push-to-talk |
+| `src/ai/offline-orders.ts`, `src/ai/listen.ts` | les ordres compris hors ligne (dont ceux du leader à sa patrouille) ; le push-to-talk |
 | `src/audio/engine.ts` | les bus « voix » et « musique », la radio autour des voix (Quindar, squelch, souffle), le souffle du blackout, la chaîne de la voix de TARS |
 
 ## Les voix
@@ -148,12 +152,15 @@ Ce qui encadre ces répliques :
 Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A9, B1–B7, C1–C6). Le code, système par système : [`systemes/10-tars-agent.md`](systemes/10-tars-agent.md). Par OpenRouter, TARS **agit** sur tout le jeu, sans jamais demander (décision du propriétaire).
 
 - **Lui parler** : F6 tapé, le champ ; F6 **tenu**, il écoute (le champ en rouge, les mots en direct) et la question part au relâché ; le bouton 🎙 au clic. La reconnaissance est celle du navigateur : Chrome l'envoie aux serveurs de Google, Safari la garde sur l'appareil.
-- **Ce qu'il fait** : ses 49 outils couvrent tout le jeu.
+- **Ce qu'il fait** : ses 68 outils couvrent tout le jeu (ceux du F-35 : [phase 4](#phase-4--le-copilote-de-chasse)).
   - Lire : l'état entier, les sites et pistes, les corps, la météo (et la météo réelle de n'importe quel lieu à n'importe quelle date depuis 1940 : `weather_at`, `/weatherat`), le ciel (télémétrie « sky » : hauteurs vraies et réfractées du Soleil et de la Lune, l'éclipse en cours là où est la caméra — sa phase, la part du Soleil cachée, celle de la Lune dans l'ombre ; il est réveillé à chaque phase : réflexe « éclipse »), les éclipses passées et à venir partout dans le système solaire (`find_eclipses`, `eclipse_local`, `/eclipses`, `/eclipse` ; il y emmène : `go_see_eclipse` ; il en montre la page : écran `eclipses`), les photographies en surimpression (`multiple_exposure`, `/analemma` : l'analemme d'un lieu, ses dates et positions écrites à côté de chaque Soleil ; `/eclipsephoto` : les phases d'une éclipse de Soleil ou de Lune vue d'un lieu, la totalité au milieu, l'heure et la part cachée de chaque disque — dans le ciel du trépied, en bande ou dans l'ombre de la Terre —, ou le transit de Mercure ou de Vénus ; `/startrails` : un filé d'étoiles ; `/moonpath` : le trajet de la Lune sur une nuit, à la même heure chaque jour ou chaque jour lunaire ; `/issphoto` : la traînée de l'ISS), les passages visibles de l'ISS (`iss_passes`, `/isspasses`), les réglages, sauvegardes et scènes, le journal, le dernier rapport, les touches.
   - Piloter : les autopilotes (posé sur un site, décollage vers une orbite, amarrage…), les maintiens, les commandes, la remise de gaz.
   - Naviguer : la cible, le calculateur de vol (planifié puis exécuté), une mission vers un corps ou la station.
   - Le temps et la date, les vues, le ciel, les panneaux et la carte.
-  - Téléporter, sauvegarder et charger, lancer une scène.
+  - **L'observatoire** (`observe`) : depuis le sol de la Terre, quand voir une planète, une lune, le Soleil, la Lune, l'ISS, une étoile brillante ou le trou de ver (`when` : ses fenêtres sur `days` jours, son meilleur moment, le ciel), le télescope pointé dessus (`look` : maintenant, à son meilleur moment ou à une date), la page ouverte (`open`).
+  - **Le replay** (`camera`, `replay`) : les dernières minutes volées rejouées (`open`), la bande-annonce de leurs meilleurs moments (`trailer`), rendue en vidéo (`video`), le retour au vol (`close`) ; sa caméra `replayShot` : `auto` (les plans du réalisateur), `chase`, `orbit`, `flyby`, `cockpit`, `target` (l'objectif sur ce qui a été abattu).
+  - **Les vues d'exception** : dans l'outil `mission` (`list`, puis `fly` sur un id `view-…`) — l'éclipse du 12 août 2026 poursuivie, la pleine Lune qui se lève, les aurores des Lofoten, un coucher de soleil sur le porte-avions, les canyons, les fjords, l'Himalaya, la Patagonie, l'Islande, une tempête en mer.
+  - Téléporter (`place_ship` : **un lieu par son nom** — `query` : une piste, un site, une destination de l'Atlas, toute adresse ou nom de lieu sur la Terre (OpenStreetMap, WGS84), des coordonnées tapées —, ou `site`, ou corps + lat/lon ; modes `orbit`, `orbit_over`, `ground`, `walk`, `lineup`, `fly` — en vol au-dessus du lieu, `aglM` au-dessus du sol —, `near`, `wormhole`, `glide`, `hover`), sauvegarder et charger, lancer une scène.
   - **Tout réglage**, vérifié au schéma ; **toute touche**.
   - **Attendre** l'issue (la fin d'un autopilote, un posé, une orbite autour d'un corps) pendant que le jeu tourne.
 - **Sa console** (F6) : son emblème — quatre monolithes animés selon son état (prêt, à l'écoute, réfléchit, agit, parle) —, l'échange, ses actions en direct (◌ en cours, ✓ fait, ✗ refusé ; la ligne entière en info-bulle), la ligne vivante d'une attente, « TARS travaille… (Échap : arrêter) ». Fermée, **sa présence** reste en haut de l'écran tant qu'il agit ou parle. Ce qu'il a lancé (un autopilote, un plan) est **suivi jusqu'au bout**, puis l'issue dite.
@@ -163,7 +170,7 @@ Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A9, B1–B7, C1–C6). L
 - **Le filet** : avant ce qui ne se défait pas (charger, déplacer — `place_ship`, `atlas go`, `sky_events take` go/live, `character start`, `set_mode foot` —, changer la date, une scène), la partie est sauvegardée sous « Before TARS » ; « annule » y revient.
 - **Sa mémoire** : la conversation gardée d'une visite à l'autre, dans ce navigateur seulement (jamais dans une sauvegarde, les réglages, un export). 24 échanges mot pour mot, les plus vieux résumés par le modèle ; ses notes (votre nom, vos préférences). Dans le champ F6 : leur nombre et « effacer » ; ou « oublie tout ».
 - **Le modèle** : réglage « Modèle de TARS » — GLM-5.3 Flash par défaut (le moins cher), Claude Haiku 5.5, GPT-6 Luna, DeepSeek V4.1 Flash, Gemini 3.8 Flash, Claude Sonnet 5.5. Un vol vers la Lune mené par TARS a coûté 0,0012 $ avec GLM.
-- **Hors ligne** (sans clé, sans réseau, ou le réglage coupé) : les ordres courants compris en français et en anglais — poser, décoller, circulariser, amarrer, la cible, le train, le temps, les vues, la carte, sauvegarder, annuler, téléporter en orbite, oublier — exécutés par les mêmes outils ; une question garde ses phrases écrites.
+- **Hors ligne** (sans clé, sans réseau, ou le réglage coupé) : les ordres courants compris en français et en anglais — poser, décoller, circulariser, amarrer, la cible, le train, le temps, les vues, la carte, sauvegarder, annuler, téléporter en orbite, oublier, et les ordres du leader à sa patrouille (rejoignez, une formation — losange, échelon droite ou gauche, finger four, triangle, ligne de front, colonne, patrouille étalée —, le passage en losange, serrez, écartez, attaquez ma cible, engagez, couvrez-moi, attente ici, retour base, dégagez à gauche ou à droite) — exécutés par les mêmes outils ; une question garde ses phrases écrites.
 
 ### Phase 2 : le super-agent
 
@@ -176,12 +183,34 @@ Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A9, B1–B7, C1–C6). L
 
 ### Phase 3 : ce qu'ont les grands agents
 
-- **Les commandes « / »**, complétées en tapant (↑ ↓, Tab, Entrée) : /help, /clear, /compact, /model, /mode, /plan, /cost, /budget, /status, /telemetry, /show, /stop, /undo, /retry, /export, /memory, /forget, /agents, /wakes, /reflexes, /voice, /skill, /dock, /login, /key, /logout.
+- **Les commandes « / »**, complétées en tapant (↑ ↓, Tab, Entrée) : /help, /clear, /compact, /model, /mode, /plan, /cost, /budget, /status, /telemetry, /show, /stop, /undo, /retry, /export, /memory, /forget, /agents, /wakes, /reflexes, /voice, /skill, /dock, /login, /key, /logout, /deepgram.
 - **Tout le jeu en commandes**, exécutées sans le modèle (sans coût), leurs arguments complétés : /target, /view (et /cockpit, /chase, /shipview…), /autopilot, /land, /entry, /takeoff, /dock, /hold, /throttle, /gear, /flaps, /brake, /sas, /mission, /maneuver, /teleport, /warp, /pause, /date, /map, /panel, /sky, /save, /load, /scene, /set, /quality, /press, /places, /weather… et /tool pour n'importe lequel de ses outils (« /tool place_ship mode=orbit body=mars altKm=300 »).
 - **@** complète un corps, un site, un écran, un réglage ; **↑ ↓** rappellent les questions passées.
 - **Ses modes** (Maj+Tab, /mode) : Agir (sans confirmation), Proposer (il propose chaque plan avant d'agir), Observer (il lit et montre, n'agit pas).
 - **Sa liste de tâches** pour une tâche en plusieurs étapes, cochée en direct.
 - **Les savoir-faire** : « /skill save nom » garde la dernière demande ; « /nom » la rejoue ; il peut en créer lui-même.
+
+### Phase 4 : le copilote de chasse
+
+Plan : [`PLAN-AVIATION-AAA.md`](PLAN-AVIATION-AAA.md) (I1–I4, S1–S3) ; les fiches : [`progress/aviation/`](progress/aviation/) (I1 à I4, S1 à S3, [ECOLE-RESEAU](progress/aviation/ECOLE-RESEAU.md)). En F-35, TARS est le navigateur en place arrière, l'instructeur et l'ailier. Ses outils :
+
+| Outil | Actions | Ce qu'il fait |
+|---|---|---|
+| `f35` | `fields`, `prepare`, `challenges`, `fly`, `abort`, `figures`, `figure` | les vols du F-35 : les terrains de départ ; un vol préparé et lancé (`field` : OACI ou nom ; `start` : `runway` aligné, `final` à 15 km, `cruise` à 40 km ; `hour` : celle du terrain ; `weather` ; `fuel` 0,05–1 ; `dest` : un plan de vol vers un terrain d'arrivée) ; les défis (Mach Loop, Rainbow Canyon, le slalom, les atterrissages, la voltige) et les combats avec leurs records et médailles, l'un lancé, abandonné ; les dix figures de voltige, une figure (ou `box` : cinq d'affilée, sur 100) en `watch` (l'autopilote la vole) ou `fly` (le pilote, noté sur 20) |
+| `lesson` | `list`, `guided`, `demo`, `try`, `open` | l'école de vol (18 leçons : premier vol, tour de piste, atterrissage, ILS, Case I, patrouille, interception, canon, les dix figures). **`guided`** (par défaut pour « apprends-moi… ») : TARS vole la première partie en disant chaque étape, puis « à vous les commandes », l'instructeur regarde, corrige et débriefe. **`demo`** : TARS vole **toute** la leçon, la part du pilote comprise, avec ses propres mots ; notée d'un toast, sans fenêtre de débriefing ; une démo qui n'avance plus depuis 90 s est abandonnée et le dit. **`try`** : le pilote seul, l'instructeur regardant. Une leçon lancée, TARS dit une phrase et ne touche plus au vol |
+| `mission` | `list`, `fly`, `create`, `modify`, `status`, `abort`, `map`, `edit`, `link` | les missions notées sur 20 (celles du jeu, du pilote, les vues d'exception `view-…`) ; une mission composée d'après les mots du pilote (JSON : unités, objectifs `reach`/`destroy`/`escort`/`protect`/`identify`/`land`/`qual`/`show`, déclencheurs, départ, rôles d'équipe, heure, météo), ou modifiée (champs remplacés, unités/objectifs/déclencheurs fusionnés par id, `remove` ; une mission du jeu modifiée devient une copie du pilote) ; la carte de mission, l'éditeur, le lien à partager |
+| `traffic` | `list`, `info`, `intercept`, `join`, `stop` | les avions autour (l'image radar du F-35 en vol, sinon le trafic entendu : vrai trafic, joueurs de la salle, ailiers, combat) avec indicatif, type, distance, relèvement, horloge, altitude, aspect ; l'interception volée (la course, la rejointe, l'ombre 300 m derrière à gauche — ne pas toucher aux commandes ensuite) ; **`join`** : sur un joueur de la salle, **son aile**, la formation volée pour nous à la première place libre (ses ailiers IA et les autres joueurs sur son aile comptés ; loin de plus de 20 km, d'abord placé à côté de lui) ; sur un avion de ligne, notre place dans la formation choisie ; sinon son ombre |
+| `flight_lead` | `wingmen`, `order`, `status` | la patrouille qu'il mène : 0 à 3 ailiers IA (Deux, Trois, Quatre) ; un ordre dit à la radio — `rejoin`, `shape` (`echelonR`, `echelonL`, `fingertip`, `vic`, `diamond`, `line`, `trail`, `spread`), `tighten`, `loosen`, `attack` (son verrou), `engage`, `cover`, `hold`, `rtb`, `breakL`, `breakR`, `show` (le losange serré d'un passage, la caméra fly-by) ; l'état de la formation |
+| `weapons` | `status`, `threats`, `bogey_dope`, `select`, `lock`, `radar`, `fire`, `gun`, `countermeasures` | les armes et le radar : les emports (AIM-120, AIM-9X, GBU-32, JSM, obus, leurres), les dégâts, le mode et le verrou ; l'image tactique (missiles sur nous, hostiles en BRAA, dernières annonces) ; la *bogey dope* demandée à Darkstar ; une arme, un verrou par nom, RWS/TWS/STT ; le tir (il renvoie ce qui reste), une rafale de 0,2 à 3 s, leurres et paillettes — armes actives en combat ou en mission seulement ; il tire quand le pilote l'ordonne |
+| `knowledge` | `search`, `read` | sa base aéronautique (`f35`, `basics`, `energy`, `bfm`, `formation`, `carrier`, `ils`, `emergencies`, `radar`, `weapons`, `traffic`) : les sections qui répondent à une question, ou une page entière / une section par un mot de son titre ; en français ou en anglais |
+| `jet_mode` | `orbit`, `hold`, `tf`, `tanker`, `off` | les modes de l'autopilote : orbite sur un point, hippodrome d'attente, suivi de terrain (100, 150, 300 m sol), le ravitailleur TEXACO 11 rejoint au pré-contact |
+| `approach` | `ils`, `clear`, `off`, `status`, `procedures` | l'ILS volé par l'autopilote jusqu'à l'arrêt, noté sur 20 (attente au point initial possible) ; les procédures de départ et d'arrivée du plan de vol |
+| `carrier` | `spawn`, `qual`, `land`, `recover`, `takeoff`, `status`, `clear` | les porte-avions (Ford, Kiev, Implacable) et leurs frégates ; une qualification (jour, nuit, mer forte) ; posé sur le pont ; la récupération (le F-35B à la verticale, le F-35C sur les brins par son cas I, II, III ou en ligne droite) ; le décollage du F-35B |
+| `flight_plan` | `show`, `add`, `remove`, `clear`, `cruise`, `direct`, `nav` | le plan de vol (points par code OACI, nom, adresse ou coordonnées, contraintes d'altitude et de vitesse, croisière, réserve), LNAV/VNAV |
+
+- **Les menaces annoncées** (`game/threats.ts`, réglage *Annonces des menaces*, activé par défaut) : en combat il annonce lui-même un missile tiré sur nous (horloge, distance, quoi faire — dégagement, leurres ; un SAM : au travers, paillettes), le même à moins de 3 km, sa fin (leurré, évité), un coup reçu. Les missiles et les coups coupent ce qui se dit ; le reste attend 3 s. Les amis et les neutres ne sont jamais annoncés.
+- **Les rôles de la radio** (`game/radio.ts`, réglage *Rôles radio*, activé par défaut) : l'ailier (AILIER), l'AWACS **Darkstar** (les bandits nouveaux par leur BRAA, les groupes, les sites SAM, les victoires, la *bogey dope*), le porte-avions **Mother** et son officier d'appontage **Paddles** parlent chacun de sa voix (Deepgram, ou une autre voix du système), leur nom en sous-titre. TARS ne garde que ce qui est à lui (les missiles sur nous, les coups) ; Paddles coupe les autres. Les annonces qui concernent notre avion partent à la salle (« Ana — Roger ball. ») ; Darkstar n'est pas partagé. Coupé : tout repasse par la voix de la tour et TARS reprend la situation.
+- **Sa base de connaissances** (`ai/knowledge.ts`, I1) : pour toute question d'aviation (un chiffre, une procédure, une tactique), il la cherche avant de répondre. Les pages : [`aviation/fr`](aviation/fr/), [`aviation/en`](aviation/en/).
 
 ## Les outils de test (`__bh`)
 
@@ -192,6 +221,7 @@ Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A9, B1–B7, C1–C6). L
 | `__bh.music` | `moment`, `notes`, `ticks` |
 | `__bh.tarsVoice` | `phonemes`, `synthesize`, `robotVoice` : la voix de TARS rendue hors ligne (sa mesure) |
 | `__bh.tars` | `agent.ask(question)`, `agent.last` (ses actions), `agent.lastText`, `memory`, `tools()` |
+| `__bh.flight.school.state()` | la leçon en cours : l'étape, son temps, ce qu'il en reste, depuis quand elle stagne |
 | `__sound.busLevels()`, `__sound.busSpectrum(bus)` | les niveaux et les spectres des bus (voix, musique…) |
 
 ## Les tests
@@ -201,7 +231,8 @@ Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A9, B1–B7, C1–C6). L
   - `callouts`, `capcom`, `score` ;
   - `tars-voice` (phonèmes, synthèse), `tars` ;
   - `openrouter` (clé, PKCE, échange, appels, coût, alias, rationnement) ;
-  - `tars-agent` (arguments, un tour, ses bornes, la mémoire, les réveils, le budget, les sous-agents, les commandes et leurs complétions), `tars-tools` (noms, sites, touches, réglages, ordres hors ligne, télémétrie).
+  - `tars-agent` (arguments, un tour, ses bornes, la mémoire, les réveils, le budget, les sous-agents, les commandes et leurs complétions), `tars-tools` (noms, sites, touches, réglages, ordres hors ligne, télémétrie) ;
+  - `knowledge` (onze pages par langue, leurs sections parallèles, une question trouvant sa section), `threats` (horloge, BRAA, la veille d'un combat), `radio` (les rôles reconnus, leurs voix, le partage), `course` et `instructor` (les leçons, leurs étapes, la démonstration entière).
 - **e2e** :
   - `voice` (les sous-titres, l'ordre) ;
   - `callouts` (le posé d'Edwards : les hauteurs dans l'ordre, minimums, la tour, l'arrêt des roues) ;
@@ -210,7 +241,10 @@ Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A9, B1–B7, C1–C6). L
   - `tars` (F6, vraie saisie) ;
   - `tars-online` (réseau simulé dans la page) ;
   - `tars-agent` (modèle simulé, 11 cas : un ordre, une erreur corrigée, l'arrêt, la mémoire, la présence, la proposition, les réveils, la console, les commandes « / » et les commandes de jeu sans appel au modèle) ;
-  - `tars-agent-live` et `tars-eval` (le vrai OpenRouter, `TARS_LIVE=1` : le banc court ; `TARS_LONG=1` : les longs vols).
+  - `tars-agent-live` et `tars-eval` (le vrai OpenRouter, `TARS_LIVE=1` : le banc court ; `TARS_LONG=1` : les longs vols) ;
+  - `tars-reach` (les vols du F-35, le plan de vol, la musique, les sauvegardes, les pages) ;
+  - `copilot` (TARS en direct en combat : le verrou, le tir, les menaces ; le vrai trafic au-dessus de Paris, une interception ; une mission modifiée) et `radio` (deux pages d'une salle : Darkstar, l'ailier, Mother, Paddles, entendus par l'autre) ;
+  - `school-demos` (chaque démonstration de l'école lancée par de vrais clics, surveillée toutes les 2 s : échec si elle stagne 45 s, si une étape finit par son temps maximal, si un débriefing, la pause ou « appareil perdu » apparaît ; `DEMOS=landing,circuit` pour un sous-ensemble).
 - **Mesurer une voix**
   - Whisper (`faster-whisper`, modèle « small ») ;
   - 0,4 s de silence autour de chaque phrase ;

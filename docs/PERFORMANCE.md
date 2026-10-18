@@ -7,7 +7,8 @@ profiler (`src/perf.ts`), both in **F2 › Perf** and `__bh.game.perf()`.
 
 The sections *Before* → *After* are that analysis. What followed — the audit plan (waves A–C, every
 step measured with `scripts/bench.ts`) and the changes since — is summed up under **Since then**
-(updated 2026-10-02); the plan's own log, step by step with its measures, is `docs/perf/audit-plan.md`.
+(2026-10-02, then 2026-10-16); the plan's own log, step by step with its measures, is `docs/perf/audit-plan.md`.
+The F-35's low flight over the Earth, measured on kerr-mini, is **The low flight** (2026-10-16).
 
 ## Before
 
@@ -127,6 +128,68 @@ fall back a tier (high → med → the solar system's map).
 the Ranger's cockpit with a depth pre-pass and its own lean shader (`fsCabin`, `089c112`): ~19 → 35–45
 renders/s in headless Chrome at 1600 × 900 (50 outside).
 
+## Since then (2026-10-09 → 10-16)
+
+- **The bodies' shadows out of the kernel when none is seen** (`e0aa277`): a variant bit `HAS_SHADE`, on only
+  while a shadow pair is active and its receiver is over two pixels across. Measured with `trace-ab` against the
+  tracer before PLAN-CIEL: the eclipses' shadows had cost +6 % at Burgos and +12 % over the Andes' sunset with
+  no shadow in sight (the kernel is register-bound); now +0.2 %, +0.1 %, Jupiter +0.4 %. The refraction and the
+  green flash cost nothing measurable.
+- **The surface's and the scenery's kernels compiled ahead** (`b230bd1`): their bits (4096, 8192) came on in
+  the frame their data arrived, starting the compiles of a ~7 000-line kernel then — about 4 s without a GPU
+  frame when the scenery turned ready. The kernel with those bits is now compiled from the moment their data is
+  asked for, the bits switched on once it is there; four variant keys kept (two before: the bits coming and
+  going in play — the scenery cleared every 8 km, surface pages, weather, runways — compiled the same kernels
+  again and again).
+- **A 2-second dip in flight** (`4373ee5`, V5) measured: neither the cockpit nor a kernel's compile (every
+  variant ready) — the Earth's scenery loading at a teleport's first arrival somewhere.
+
+## The low flight (2026-10-16)
+
+Measured on kerr-mini (Mac mini M1, its screen 1920 × 1080 at 50 Hz), image 1600 × 1000, the F-35 from its
+cockpit 300 m over the strait of Gibraltar (`a7da8d2`; the full sheet, in French, with its heat maps:
+[`progress/aviation/RENDU-GPU.md`](progress/aviation/RENDU-GPU.md)).
+
+**It is the ray.** The whole landscape (terrain, sea, clouds, air, scenery) is one compute pass, one ray per
+b × b block; the rest (the craft's raster, reconstruction, temporal, display) is at full resolution. At ×2
+(400 000 rays) over the hills of Tarifa the trace pass takes ≈ 150 ms of a ≈ 168 ms image, linear in the rays
+(a render scale of 0.5, a quarter of them: 163 → 43 ms) — ≈ 0.37 µs a ray on the M1; ×1 (1.6 M rays) would be
+≈ 600 ms. In "RT max" (automatic blocks, 6 or 4): 40–45 ms a frame, 21–22 fps cruising, firing and falling,
+28 fps at the crash; the three shots at ×8, ×6, ×4, ×3, ×2: ≈ 26, 28, 44, 65, 121 ms cruising.
+
+| Change (trace pass at ×2) | ms | |
+|---|---|---|
+| the head up at the sky (+35°) | 150 → 93 | −38 % |
+| the head down at the ground (−30°) | 150 → 225 | +49 % |
+| the scenery (trees, buildings, roads) off | 148 → 128 | −14 % |
+| the real relief's tiles → the global map | 151 → 179 | +18 % (its procedural relief) |
+| volumetric clouds → flat | | −3 % |
+| cloud cover 0.3 → 0 | | −1 % |
+| the FFT sea → wave trains | | −2 % |
+| cloudy weather → fair; the Sentinel surface; the scenery's shadows | | ≈ 0 |
+
+A ray that meets the ground costs two to three times one of sky. The **cost view** (`renderer.costView`, a
+kernel variant of its own — off, its counters out of the kernel: the trace pass unchanged at 148 ms) shows why:
+≈ 150 heights read by a ray on the ground (each through the tiles' levels and the procedural detail; 10–40 by
+one in the sky), ≈ 40 relief-shadow steps on the near ground, ≈ 40 air steps on every pixel, clouds up to ≈ 40
+in the sky; and the pixels under the opaque cockpit traced too.
+
+Elsewhere: the CPU ≈ 4 ms a loop; the 50 Hz screen makes frames take 20 ms steps (a 21 ms frame takes 40 —
+whole-image A/Bs only say 20 or 40 ms there: the trace pass is timed apart); the F-35's canopy, a full-screen
+blended MSAA ×4 layer, 2–4 ms (up to 16 where the frame grazes 20 ms; its shader's reflection nothing); the real
+traffic, the motion blur and the gaze-led streaming nothing measurable.
+
+**The detail led by the gaze** (`system/streaming-focus.ts gazeLead`): the relief's finest windows (`EarthTiles`)
+and the scenery's box are led towards where the view meets the ground, up to 6 km and 1.25 tiles at most a
+level, not only round the craft — a target zoomed on 5–10 km off has fine ground behind it.
+`renderer.gazeStreaming` (on by default) switches it for comparisons; `streamingState.gazeM` says by how far.
+
+The levers measured, in their expected order (not on main): rays under the opaque cockpit not traced (15–25 %
+of them from the cockpit); the air from a precomputed table instead of ≈ 40 steps a pixel; the terrain's march
+skipping empty space (a max-height pyramid) or the tiles' terrain rasterised first; the relief's shadows in a map
+per tile; the temporal reprojection kept in low flight (its history is dropped as soon as the near ground moves
+0.5 px, `taParallaxPx` — always, flying low).
+
 ## Left as they are (measured, for later)
 
 - **display (4–10 ms)**: a trivial shader; its time is mostly the wait for the canvas' drawable and
@@ -192,6 +255,12 @@ renders/s in headless Chrome at 1600 × 900 (50 outside).
   *Dynamic resolution*, *Frame budget*, *Frame rate cap*, *Temporal reprojection*, *Far-field LUT*,
   *Frosted panels*; Render › Image: *Pixel ratio*.
 - F2 › **Perf**: the same, live; F2 › Audit: the frame rate check.
+- The low flight's (`docs/BH-API.md`): `renderer.costView` (0 off, 1 all the work weighed, 2 … 9 one kind
+  alone), `renderer.gazeStreaming`, `renderer.debugSkipShip` and `ship.debugSkip` (`"shadow"`, `"pre"`,
+  `"hull"`, `"glass"`, `"glass-sr"`, `"glass-flat"`, `"plume"`: the craft's raster in parts), `taParallaxPx`;
+  `tests/e2e/perf-ab.e2e.test.ts` (alternated A/B, medians, CPU and trace pass: `SET=trace` the ray at ×2,
+  `SET=ship` the raster; `SUBS`, `ONLY`, `NOVSYNC`), `shootdown-gpu` (the three shots at ×8 … ×2),
+  `cost-view` (the cost views, frozen, at the Alps then Tarifa), `gibraltar-shots` (≈ 4 min, the frames by phase).
 - `bun scripts/trace-ab.ts --ref http://localhost:3012/ [--new http://localhost:3000/] [--scenes "a|b"] [--reps 2] [--frames 150]`
   — the tracer's GPU time, A/B, on frozen views: two builds (a frozen copy of HEAD served on another
   port, and the working tree) alternated, each scene at subsampling 4 and ~1.44 Mpx with its clock held,

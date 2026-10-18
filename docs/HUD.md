@@ -12,6 +12,29 @@ right from any mount); points (the future path, the runway, the docking gates) w
 - **Colours**: the game's palette — cyan the instruments and the predictions, amber the craft and the
   cautions, green what is right (on speed, on the axis, aimed), red the limits; each stroke over a dark
   outline, read on a bright sky.
+- **Units** (**Settings › Game › HUD aids › Units**, `ui/unitsys.ts`): metric by default (m, m/s, km),
+  imperial as the option (ft, kt, NM, ft/min) — the same for the tapes, the radar, the lock, the gun's range,
+  the ILS's distance, the cockpit's displays.
+
+## The three HUDs, and what each phase shows
+
+`game/hudkind.ts`, `ui/hud/kindhud.ts`, `ui/hud/declutter.ts`.
+
+- **Three kinds** (setting **The ship's HUD**: automatic, or forced; ⇧² cycles them): **Atmosphere** — the
+  fighter's (below); **Space** — in cyan right of the centre, the orbit about the body of the sphere of
+  influence (apsides with their heights and times, inclination, eccentricity, period), the next event on the
+  path (an impact in red), the target's range and closing rate; **Approach** — in white, the radar altitude
+  and the vertical speed large on the right, the runway guidance's deviations, the gear, flaps and air brake
+  under the centre (the gear up low in red). Automatic: landed, on the ground, on a final or low and slow →
+  Approach; in the air or entering it → Atmosphere; else Space — a change held a moment before it shows.
+- **Each phase leaves out what has nothing to say** (one matrix, phase × element): in orbit the bank scale,
+  the air data and the runway; on the final the orbital markers, the future and the burn; landed the
+  future and the markers; docking the horizon, the heading and the bank; about the hole the horizon, the
+  heading and the bank. The switches and the density key (²) apply on top.
+- **Where the whole HUD shows** (setting **HUD in the views**): by default the chase and dorsal views; in
+  the cockpit the cabin's screens are the instruments and the other views keep only the warnings, the
+  autopilot's card and the docking aid (a fight's explosions and missile glows are still drawn). The F-35's
+  cockpit is the exception: its pilot's helmet shows the symbology there, as the real one does.
 
 ## Everywhere near a world
 
@@ -212,6 +235,90 @@ is seen; the switch **Aids on the cockpit's screens**, each aid also by its own 
 | PLAN | The next burn, large: its countdown, Δv, length at full thrust, the aim; the assistant's graph under it (or alone) — the burn's, the ascent's, the entry corridor, the final, the descent, the approach, the docking. |
 | ORBIT | About Gargantua: the relativity box — dτ/dt, speed and γ, the sky ahead's Doppler, the energy, r against the ISCO, the photon orbit and the horizon, the tide. |
 | CLOCKS | About Gargantua: dτ/dt in place of the local time. |
+
+## Flown as a plane: the fighter's HUD and the F-35's helmet
+
+In the air flown as a plane, from the pilot's seat (setting **Jet HUD**, `ui/hud/jethud.ts`), the ladder,
+the heading tape and the bank scale take the jet's green; the F-35's helmet (HMD — it has no head-up glass)
+takes the colour and brightness set in **Settings › Game › F-35** (green, amber, cyan, white). The F-35
+leaves out a spacecraft's markers (radial, normal, the edge arrows).
+
+| Aid | What |
+|---|---|
+| Tapes (a jet) | The airspeed left (10 kt ticks, 50 labelled; metric 5 / 25 m/s) and the altitude right (100 ft ticks, 500 labelled; metric 20 / 100 m), each value boxed; the autothrottle's speed and the altitude hold's target as magenta chevrons (at the tape's end when off it). Under the speed: Mach, G and its peak (amber at 70 % of the limit, red at 90 %), α (amber at 85 % of the stall, red past it); under the altitude: the vertical speed, the radar altitude boxed below 1 500 m (amber under 60 m). |
+| The helmet (F-35) | No tapes: the airspeed (KCAS or m/s) and the altitude boxed, closer in; under them Mach, G (amber past 5.6, red past 6.65), α (amber past 35°), **DIRECT LAW** in amber when the flight computer is off; the vertical speed and the radar altitude; the fuel in kg bottom right (amber under 20 %); the STOVL state (CONVERT %, STOVL n°, HOVER) and in a hover GS and VZ. |
+| Annunciators | Under the heading tape, the modes engaged: `ALT …` or `VNAV …` or `TF 150`, `HDG 070` or `LNAV`, `A/T …`, an order flown (`BRK`, `HOLD`, `ORBIT`); a formation `FORM <LEADER>` with the slot's distance; an intercept `ICPT`, `JOIN`, `SHDW`, `PRE-CONTACT` and the target's name. Under them the flight plan's active waypoint `▸ NAME 12.4 KM` (magenta when NAV flies it). |
+| Throttle | Bottom left: `THR %` and its bar, amber with the afterburner, `AB` blinking. |
+| Heading tape carets | Besides the nose (amber), the track (green) and the target: the flight plan's waypoint (magenta), a mission's objective (amber — and in the view a ring and a diamond on it, its name and distance, the Earth's curve counted), the beginner's aim ring (cyan, four ticks: the jet flies to it — assistance *Beginner*). |
+| Avionics (F-35) | Top left (setting **Avionics status**), "F-35B · AVIONICS": the engine's spool, the throttle and the thrust in kN, AFTERBURNER %; the fuel with its gauge and the bingo's magenta mark (red past it), the flow, the time left, BINGO; GEAR, FLAPS, SPDBRK; the autopilot's ALT HDG A/T LNAV VNAV lit when engaged; G against its limit; STOVL; DAMAGE; the three gravest cautions. |
+| Auto-GCAS · Auto-ACAS | Two chevrons closing on the centre as the ground nears (amber), met in red with **AUTO GCAS — FLY UP** when it takes the stick; **AUTO ACAS — <callsign>** for an escape from another aircraft. |
+| ILS (3°) | About the view's centre, in green: the glideslope's dots on the right, the localizer's below, magenta diamonds (hollow while not received); the runway, the distance, `AP` under the autopilot and its phase (IAF, HOLD, LOC, LOC GS, FLARE, ROLL, GA). |
+| Challenges · aerobatics | A gold banner: the title, the clock, the gates passed, the penalties, each figure's mark; the gates drawn in the world (the next gold, its number and distance; an arrow at the edge when out of view) and on the radar scope; an aerobatic figure's entry window, its cue and its guide (`PULL 4.0 G`, `ROLL ▶`), its score out of 20. |
+
+![The radar's scope, TWS, a drone locked](progress/aviation/c1-radar-hud.jpg)
+
+## The radar and the fight (F-35)
+
+**The radar's scope** (bottom left, setting **Radar scope**, its range set or automatic — **Radar range**):
+heading up, the craft white at its centre; rings at a third, two thirds and the range; the scan's ±60° dashed;
+the mode bottom left (RWS, TWS, STT), the range bottom right, the beam's line (on the lock in STT); the
+relief under it (setting **Relief on the radar**: above our height red, within 300 m below amber, lower
+green, the sea dark blue — redrawn twice a second at most). Each track in its IFF's colour (friend blue,
+neutral white, unknown yellow, hostile red; a room's player in his own): an aircraft a chevron along its track
+with its speed's tick and its height against ours in hundreds of metres, a ground or sea contact a square, a
+datalink track a hollow circle, the lock ringed and named; the missiles in flight (theirs red, ours cyan) with
+their tracks; a challenge's gates. Automatic range: the smallest of 10, 20, 40, 80, 160 km holding the lock,
+else the three nearest. Tab locks the next track — with none yet, "searching", the first one locked as it comes
+(within 3 s).
+
+| Aid | What |
+|---|---|
+| Lock box (out of a fight) | A square on the target in its IFF's colour, `NAME 37.1 KM +240 M/S 4700 M`; out of the view an arrow at the edge. |
+| Intercept cues | On a lock: the collision course's steering cue (a circle and its stem, where to fly to meet it) and a line low in the view — `INTC 070  TTI 4:42  AA 35R  LAG 4°  HCA 120`: the heading to fly, the time to the merge, the aspect angle and its side, the pursuit (LEAD, PURE within 3°, LAG), the crossing angle. |
+| Targets (a fight) | Aircraft in squares, ground targets in diamonds: green seen, faint unseen, amber locked (red when a shot is good, its ring and `NAME km ±closure`), blue a team-mate, grey `SPLASH` destroyed; far off, a dark dot where the hull is only a few pixels (gone past 20 km or once it is seen large). Locked out of the view: an amber arrow at the edge. |
+| Gun | The pipper on the lead (velocity **and** turn over the rounds' flight, `game/gunsight.ts`): green, amber firing, red with a second ring and **GUNS** blinking when on the target in reach; its range arc (a whole turn 2 km, a tick at 1.2 km), the range and `IN RANGE` (150 m – 1.2 km). The funnel (trigger held or the target within 1.5 km): the stream's two edges a wingspan apart, 150 m to 1.6 km — the target filling it is at its range. Tracers: one round in five a streak. |
+| Missiles | The allowable steering error's circle about the nose (amber dashed, red solid when the shot is good) and the target's dot in it (60° off the nose at its rim). The launch zone's scale on the right — its least range and its reach, the range now —, **SHOOT** blinking red in range, a store left and the target within 60° of the nose, `IN RANGE · TURN` in amber off the nose. |
+| Bomb | **CCIP**: a cross where the bomb would fall. |
+| Missile warning | A red ring bottom right, a dot at each missile's bearing (nearer the centre the nearer it is), the nearest's distance; **MISSILE** blinking. |
+| Hit marker | Four white ticks about the centre — a hit of ours; thick, larger and red — a kill. |
+| The fight's line | Under the annunciators: the fight's name, its clock, the targets left; `DAMAGE %` (red past 60); its result. |
+| Weapons panel | On the right (setting **Weapons panel**; a line of counts on a phone): GUN 25MM (a bar of 220), AIM-9X (2), AIM-120C (4), GBU-32 (2), JSM when carried, CMDS (a bar of 30) — the chosen one boxed and arrowed, empty ones red, `ARM · FIRING`, ∞ with infinite ammunition. |
+| In the world | The explosions (a flash, a fireball cooling to smoke at its real size), the missiles' motors' glow — in every view, the outside ones too. |
+
+![The intercept's cues on a drone](progress/aviation/c2-icpt-cues.jpg)
+![The gun's sight in range](progress/aviation/c3-gun-sight.jpg)
+
+**A match, and the free fight** (`ui/netmatch.ts`): a bar at the top centre — the mode, the time left, the
+scores (`Everyone for himself · 3:12 | Ana 2 · Ben 1`, two teams' `Blue 2 — 1 Red`, a race's or a landing
+contest's finishers); in a room in the F-35, outside a match, the **free fight** (setting **Free fight in a
+room**) shows `Free fight | Ana 2 · Ben 1` with no clock — every craft a target, friendly fire on, shot down
+flown again 6 s later. On the right the kill feed (`Ana ✕ Ben · AIM-120`, the last five, 8 s each, in the
+shooter's colour); in the middle the big words (`Shot down by Ana — back in 4 s`, the countdown).
+
+**The traffic in the view** (`ui/overlay.ts`): the real airliners' lights at their place and size, a label
+within 40 km (callsign · registration · type · altitude); the ships' (name · kind · speed) within 30 km; the
+room's players a caret and their name in their colour.
+
+## The radial wheel
+
+**Tab held** 220 ms (a tap stays "next target" — the F-35's radar's next lock, ⇧Tab its intercept —, even if a
+slow frame let the wheel open) opens it at the centre (`ui/wheel.ts`): the pointer's direction picks a sector (a
+small dead zone in the hub), releasing Tab or a click does it (released on the hub: nothing); a sector marked ▸ opens its own wheel in place (the hub goes back), Esc
+closes.
+
+- **Its size**: its ring 44 % of the view's smaller side (a radius of 150 to 400 px: up to 800 px across), its
+  hub 36 % of that; its labels 13–20 px, each as wide as its sector (a long word set smaller, 11 px at least).
+- **The hub** reads the item pointed at — its name, its key, *engaged*, a line on what it does — or, with
+  none, the wheel's title and the path of sub-wheels taken (◂ to go back).
+- **The F-35's wheel** (nine sectors, ten in a fight): Autopilot ▸ (altitude & heading, autothrottle, NAV,
+  auto take-off) · Afterburner · STOVL · Gear, flaps ▸ · Weapons ▸ (in a fight: next weapon, lock, decoys,
+  end the fight) · Radar ▸ (next lock, mode, drop the lock, intercept, formation on the lock) · Flight ▸ (a
+  room player's wingman, AI wingmen, rejoin, formation ▸, breaks, combat orders ▸, more orders ▸) ·
+  Navigation ▸ (flight plan, ILS approach, autopilot modes ▸ — orbit, hold, terrain following, tanker, fly
+  to…, aerobatics —, map, mission map, prepare a flight) · Lessons & challenges ▸ · Camera ▸. The spacecraft's
+  wheel is grouped the same way; on foot or out of a craft, the camera's.
+
+![The wheel, 800 px across](progress/aviation/reseau-roue.jpg)
 
 Cost: the symbology is a few hundred canvas strokes a frame; the future path and the runway are
 recomputed ten times a second at most (`futureView`, `runwayView`). Full screen at 1280 × 720 and on a

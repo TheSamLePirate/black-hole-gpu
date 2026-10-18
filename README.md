@@ -7,7 +7,11 @@ and the lensed sky, written in TypeScript + WGSL, served with Bun — and, aroun
 Interstellar's Ranger (and the Lander, the Endurance) from the pad at the Kennedy Space Center through the
 solar system to scale, to the wormhole near Saturn and Gargantua's side (Miller, Mann, Edmunds) — with a
 working cockpit, real weather and airports, spatial sound, HOTAS support, and TARS, an AI copilot that can
-fly, navigate and set anything in the game.
+fly, navigate and set anything in the game. Over the photorealistic Earth one also walks, and flies the
+**F-35B and F-35C** as the real fighter (its control law and protections, an always-on radar, missiles and the
+gun, AI wingmen and orders, carriers at sea, ILS and Case I/II/III approaches, a flight school, missions) among
+the real airliners and ships of the moment — alone or with two to four players in a room, a phone or a tablet
+joining as the crew's glass cockpit.
 
 ```bash
 git lfs install && git lfs pull   # the surface packs, the astronaut, the docs' media are in Git LFS (docs/ASSETS.md)
@@ -45,20 +49,48 @@ How the code works:
   added since the first reading** (11).
 
 Guides per feature:
+- [`docs/F35.md`](docs/F35.md) ([français](docs/F35.fr.md)) — **the F-35B and F-35C**: keys, the Tab wheel, the
+  pad, the control law and the assistance, Auto-GCAS/ACAS, the autopilot's modes and the ILS, the radar, the
+  intercept and the gun sight, weapons and fights, formations and wingmen, the carriers, missions, the flight school.
+- [`docs/aviation/en/`](docs/aviation/en/f35.md) ([français](docs/aviation/fr/f35.md)) — TARS's aviation knowledge
+  base, eleven pages: [the F-35](docs/aviation/en/f35.md), [basics](docs/aviation/en/basics.md),
+  [energy](docs/aviation/en/energy.md), [BFM](docs/aviation/en/bfm.md), [formation](docs/aviation/en/formation.md),
+  [carrier](docs/aviation/en/carrier.md), [ILS](docs/aviation/en/ils.md),
+  [emergencies](docs/aviation/en/emergencies.md), [radar](docs/aviation/en/radar.md),
+  [weapons](docs/aviation/en/weapons.md), [traffic](docs/aviation/en/traffic.md).
+- [`docs/NETWORK.md`](docs/NETWORK.md) ([français](docs/NETWORK.fr.md)) — **playing together**: rooms, flying
+  together, matches, voices, following and spectating, on foot, in space, docking, by Gargantua.
+  [`docs/CREW.md`](docs/CREW.md) — the crew console (`crew/`), a phone's or a tablet's glass cockpit in a room.
 - [`docs/TARS.md`](docs/TARS.md) — the voices, the music, mission control and TARS (offline, OpenRouter, the agent).
 - [`docs/COCKPIT.md`](docs/COCKPIT.md) — the interactive cockpit. [`docs/HUD.md`](docs/HUD.md) — the HUD's piloting aids.
 - [`docs/HOTAS.md`](docs/HOTAS.md) — gamepads, sticks, throttles and pedals. [`docs/AUDIO.md`](docs/AUDIO.md),
   [`docs/SOUND.md`](docs/SOUND.md) — the spatial sound and its synthesis.
-- [`docs/MAP.md`](docs/MAP.md) — the 3D map. [`docs/GAME-TOOLS.md`](docs/GAME-TOOLS.md) — the game tools window (F2), saves, `__bh.game`.
+- [`docs/MAP.md`](docs/MAP.md) — the 3D map. [`docs/GAME-TOOLS.md`](docs/GAME-TOOLS.md) — the game tools window, saves, `__bh.game`.
 - [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) — the performance analysis, the profilers, the Game quality, the Kerr Bench.
 - [`docs/FLIGHTLAB.md`](docs/FLIGHTLAB.md) — the autopilots' flight lab.
+- [`docs/ASSETS.md`](docs/ASSETS.md) — the assets, Git LFS and the repository's and the site's size.
+
+Testing and automating it:
+- [`docs/BH-API.md`](docs/BH-API.md) — `__bh`, the page's automation handle (and `__crew`'s).
+- [`docs/E2E.md`](docs/E2E.md) — the end-to-end tests and campaigns, the guide;
+  [`docs/E2E-CATALOGUE.md`](docs/E2E-CATALOGUE.md) — every e2e file, what it proves and its time.
+- [`docs/REMOTE-TESTS.md`](docs/REMOTE-TESTS.md), [`docs/IPAD-TESTS.md`](docs/IPAD-TESTS.md) — the tests run on
+  the Mac mini and on a real iPad.
 
 Working on it:
-- [`docs/AAA-PROGRESS.md`](docs/AAA-PROGRESS.md) — where the AAA work stands; the plans `docs/PLAN-*.md`
-  (HUD, hub, assistant, map, weather, airports, audio, HOTAS, cockpit, world, TARS, TARS agent…) and the audits.
-- [`docs/DEPLOY.md`](docs/DEPLOY.md) — GitHub Pages and the server. [`docs/REMOTE-TESTS.md`](docs/REMOTE-TESTS.md),
-  [`docs/IPAD-TESTS.md`](docs/IPAD-TESTS.md) — the tests run on the Mac mini and on a real iPad.
-- `docs/progress/` — a screenshot sheet per step; `docs/video/` — the videos of the gallery.
+- [`docs/AAA-PROGRESS.md`](docs/AAA-PROGRESS.md) — where the AAA work stands; the plans `docs/PLAN-*.md` —
+  among the latest [PLAN-AVIATION-AAA](docs/PLAN-AVIATION-AAA.md) (the real F-35, combat, the flight, traffic, the
+  sea and carriers, missions, assistance, TARS the aviator, the views), [PLAN-F35](docs/PLAN-F35.md),
+  [PLAN-RESEAU](docs/PLAN-RESEAU.md) (the network), [PLAN-MODES-AAA](docs/PLAN-MODES-AAA.md) (the four modes),
+  [PLAN-TERRE-PHOTOREALISTE](docs/PLAN-TERRE-PHOTOREALISTE.md), [PLAN-OBSERVATOIRE](docs/PLAN-OBSERVATOIRE.md),
+  [PLAN-TARS-AGENT](docs/PLAN-TARS-AGENT.md) — and the audits and reviews (`docs/AUDIT-*.md`, `docs/REVIEW-*.md`);
+  [`docs/ERRORS-TO-FIX.md`](docs/ERRORS-TO-FIX.md) — the errors found and not yet fixed.
+- [`docs/DEPLOY.md`](docs/DEPLOY.md) — GitHub Pages and the server (the room server, the traffic relay's keys).
+- `docs/progress/` — a screenshot sheet per step: [`aviation/`](docs/progress/aviation/) (the aviation phases V1–S3
+  and the 2026-10-18 round: [ECOLE-RESEAU](docs/progress/aviation/ECOLE-RESEAU.md)), `f35/`, `reseau/`, the AAA
+  lots ([modes](docs/progress/modes-aaa.md), [on foot](docs/progress/on-foot-aaa.md),
+  [music](docs/progress/music-aaa.md), [landscapes](docs/progress/landscapes.md)…); `docs/video/` — the videos of
+  the gallery.
 
 ## The game
 
@@ -138,7 +170,7 @@ Working on it:
   camera sees them (its aberration included), over the image where the sky shows; hover a star for its card.
 - **Sound** (Settings › Game › Sound, the toolbar's Sound button): synthesized live with Web Audio, no
   sample — engine, RCS, wheels, cabin, the flight computer's calls ([docs/SOUND.md](docs/SOUND.md)).
-- **Game tools** (F2, the toolbar's Tools button): the Ranger's state, place it in orbit or on a ground
+- **Game tools** (F10, the top bar's Tools button; developers: a local build or `?dev`): the Ranger's state, place it in orbit or on a ground
   anywhere, targets and spheres of influence, time and date, saves, a self-audit, the performance meters
   ([docs/GAME-TOOLS.md](docs/GAME-TOOLS.md)).
 - **Touch screens**: the page never zooms; on a phone the HUD is laid out for it, and flying uses a stick, a
@@ -150,7 +182,7 @@ Working on it:
 - **The title screen, the pause menu, the missions** (`src/ui/title.ts`, `pause.ts`, `missions.ts`): the
   last flight already loaded behind the title (Continue), Escape for the pause (resume, save, load, hand the
   controls back, settings, controls), a mission selector with its briefings.
-- **The hub and the assistants** (F4; `src/ui/hud/`): every autopilot's card — its step, its figures and
+- **The hub and the assistants** (`src/ui/hud/`; ⇧F4 switches every autopilot to assisted): every autopilot's card — its step, its figures and
   their trends, the next step, the cue — and its graph (Δv against time, height against distance: the
   optimum, the corridor, what was flown); the HUD's conformal symbology and its aids, each with its switch
   ([docs/HUD.md](docs/HUD.md)); the alerts ranked WARNING / CAUTION / ADVISORY; the flight's recorder and,
@@ -176,22 +208,60 @@ Working on it:
   the great moments; subtitles ([docs/TARS.md](docs/TARS.md)).
 - **TARS, the AI copilot** (F6; `src/ai/`, [docs/TARS.md](docs/TARS.md),
   [docs/systemes/10-tars-agent.md](docs/systemes/10-tars-agent.md)): offline he answers with his written
-  lines and understands the common orders; with the player's own OpenRouter key he is **an agent** with 43
+  lines and understands the common orders; with the player's own OpenRouter key he is **an agent** with 68
   tools over the whole game — he flies the autopilots, plans and flies missions, teleports, sets any setting,
-  presses any key, waits for the outcome. Orders run without confirmation; "propose me a plan for…" gives a
+  presses any key, waits for the outcome; in the F-35 he is the backseater and the instructor — he answers from
+  his aviation knowledge base, calls the threats, locks and fires on order, intercepts a real flight by its
+  callsign, flies the flight school's demonstrations, writes a mission from a sentence. Orders run without confirmation; "propose me a plan for…" gives a
   costed plan to accept or refuse; three modes (Act, Propose, Observe). He shows live charts, the entry
   corridor, the hub's graph, telemetry cards and the game's own screens; wakes himself at the key moments
   (reflexes, rules he schedules, an hourly budget); runs read-only sub-agents in parallel; keeps a clearable
-  memory. His console has **"/" commands** with completion — 26 for the agent (/help, /clear, /model, /mode,
-  /plan, /cost, /undo, /export, /skill…) and 67 for the game, run without the model (/target, /cockpit,
+  memory. His console has **"/" commands** with completion — 27 for the agent (/help, /clear, /model, /mode,
+  /plan, /cost, /undo, /export, /skill…) and 93 for the game, run without the model (/target, /cockpit,
   /autopilot entry Edwards, /teleport orbit Moon 100, /warp, /set…) —, @ mentions, the questions' history,
   push-to-talk (F6 held).
-- **Photo mode** (the toolbar, the pause menu): the view alone, the time held, the lens, depth of field, exposure, a PNG or
+- **Photo mode** (F4, the top bar, the pause menu): the view alone, the time held, the lens, depth of field, exposure, a PNG or
   an offline render; its Back to the game button. **Settings › Render › Show the frame rate** puts the FPS
   in a corner.
 - **A PWA** (`src/sw.ts`, `src/pwa.ts`): installable, served from its cache, the last scene playable
   offline, the Earth's tiles kept under a budget; a lost GPU device rebuilt without reloading the page
   (`src/util/swappable.ts`).
+- **Four modes** (F1–F4, the top bar's tabs; [PLAN-MODES-AAA](docs/PLAN-MODES-AAA.md)): **Ship**, **On foot**
+  (the astronaut walking the Earth, the Moon and Mars — ⇧K leaves or boards a landed craft),
+  the **Free camera** (anywhere; a ship flies on) and **Photo** (renders, videos). The Earth photorealistic near
+  the ground: Sentinel-2 imagery over pilot regions, OpenStreetMap's buildings and ways, procedural forests, grass
+  ([PLAN-TERRE-PHOTOREALISTE](docs/PLAN-TERRE-PHOTOREALISTE.md)); the **Atlas** (F8: the Earth, the Moon and Mars as
+  maps — a destination, an address, coordinates — to be put in orbit, landed, on foot or on a tripod), **the sky's
+  events** (⇧F8: star trails, the analemma, the ISS's transits, eclipses), **the observatory** (⇧Y: what to see
+  from here and when, the telescope taken to it), the **multiple exposure**, the music system.
+- **The F-35B and F-35C** ([docs/F35.md](docs/F35.md); `src/f35/`, `src/game/`, `src/controller/`): the real
+  fighter's figures (Mach 1.6, 7 g, 50° of incidence, measured against the published envelope), its control law
+  and a direct one (spins), four assistance levels, Auto-GCAS and Auto-ACAS, the pilot's body (grey-out, G-LOC);
+  the autopilot's holds, NAV on a flight plan, orbit, racetrack, terrain following, a tanker's pre-contact, the ILS
+  at 3° with its go-around; the AN/APG-81 radar always on (RWS/TWS/STT, IFF, datalink, the relief under its
+  scope), the intercept, a gun sight that leads the target's turn, AIM-120, AIM-9X, JDAM and JSM; formations, one
+  to three AI wingmen and the leader's orders; aerobatic figures judged out of 20; a cockpit with its panoramic
+  display and helmet; a fighter's layout on an Xbox pad; the flight's replay and its trailer.
+- **The living sky and sea** ([PLAN-AVIATION-AAA](docs/PLAN-AVIATION-AAA.md)): the **real traffic** — the
+  airliners of the moment (adsb.lol, OpenSky) drawn with their models, lights and contrails a minute late on
+  their reconstructed flight, the ships (aisstream) with their Kelvin wakes — through a relay that keeps the keys
+  on the server (`server/traffic.ts`); **the sea** by FFT (a JONSWAP wind sea and swell, the real sea state from
+  Open-Meteo Marine, whitecaps, the sky reflected); **three carriers** at sea — the Gerald R. Ford, the Kiev, the
+  HMS Implacable — pitching with it: the F-35B's vertical recovery and short take-off, the F-35C's catapult,
+  wires and LSO grades, Case I, II and III, the day, night and heavy-sea qualifications.
+- **Missions, challenges, the flight school**: gate courses, graded landings, the aerobatic box; thirteen
+  missions (a real flight hijacked and escorted, strikes, an anti-ship strike, escorts, Red Air, team missions
+  for a room) with their mission map, an editor and `#mission=` links; thirteen **views of exception** (the
+  12 August 2026 eclipse chased at Mach 1.6, the auroras over the Lofoten, sunset on the carrier, the Himalaya…);
+  a **flight school** of eighteen lessons — TARS flies the demonstration whole, guides you, then hands over, an
+  instructor calling the deviations and grading the debrief.
+- **Playing together** ([docs/NETWORK.md](docs/NETWORK.md); `server/`, `src/net/`): rooms of two to four
+  pilots, spectators and instrument screens (a room server at `stream.samlepirate.org`, direct WebRTC links) —
+  flying together over the Earth, on a player's wing by the wheel, matches (everyone for himself, teams, co-op,
+  races, landing contests) and the F-35's free fight, the voices, following another, on foot, in space and
+  docking together, by Gargantua, the room's clock shared. **The crew console** ([docs/CREW.md](docs/CREW.md),
+  `crew/`): a light page for a phone, a tablet or a small computer joining a room as instruments — nine displays
+  (PFD, ND, map with OpenStreetMap at night, globe, radar, systems, flight plan, telemetry), no WebGPU.
 
 ## Physics
 
@@ -567,9 +637,9 @@ adds periapsis and apoapsis with the time to reach them and the closest approach
 the target where it is seen: light delay and aberration included.
 Keys (KSP's layout, by physical position — Z S · Q D · A E on AZERTY): W S / A D / Q E pitch, yaw, roll;
 I K · J L · H N RCS translation; ⇧ / Alt (or ↑ ↓) throttle up / down, Z full, X cut; Caps Lock precision
-controls; T SAS; R roll alignment; 1–7 holds; autopilots 8 hold position · 9 circularize · 0 approach · G land ·
-U take off · B dock; O missions (the flight computer's MISSION tab); M the 3D map, ⇧M the settings; V · ⇧V camera; ⇧R camera reset; ⇧Y the
-future path in the view; [ ] the craft flown; ⇧K leave the ship; , . time warp; drag looks around from the
+controls; T SAS; R roll alignment; 1–7 holds; autopilots 8 hold position · 9 circularize · 0 approach · ⇧0 orbit the target · F7 land ·
+U take off · B dock; G gear; O missions (the flight computer's MISSION tab); M the 3D map, ⇧M the settings; V · ⇧V camera; ⇧R camera reset; ⇧Y the
+future path in the view; [ ] the craft flown; ⇧K leave or board a landed craft; , . time warp; drag looks around from the
 attach point. The pad: left stick, bumpers and triggers fly; A SAS, B cut, X/Y prograde/retrograde, D-pad ▲▼
 camera. Touch: a stick, a throttle lever, roll buttons. Default lighting of the hull: 1 (physical: strong
 contrasts).
@@ -688,15 +758,16 @@ matches the cycloid solution. **T** runs the
 journey: line up with the mouth, cross the throat, emerge facing the black hole and settle into orbit (from
 the black hole's universe: the way back home).
 
-Keys: space time · , . / warp and real time · V view · C look at the target · Y telescope · Tab target ·
+Keys: space time · , . / warp and real time · V view · C look at the target · Y telescope · ⇧Y observatory · Tab target (held: the radial wheel) ·
 R · ⇧R next view · recentre · O cinematic orbit · ⇧C free-fall dive (exact E=1, L=Q=0 geodesic in proper time,
 seen from the rain frame) · T wormhole journey · ⇧T tripod on the ground · B free fall · middle click mouse look ·
 N · ⇧N constellations · star names · U sky grids · J jet · G shadow guide · L liquid wormhole ·
 K fly the Ranger (flight keys in the help sheet) · I readouts · M settings · ⌘K search · ⌘Z undo ·
-1–6 quality (5 RT max, 6 Game) · P PNG · F fullscreen · H hide UI · F2 game tools · ? the shortcut sheet.
-In flight: F flight mode (⇧F antigravity) · P · ⇧P flaps · air brake · G gear · F4 the hub · F3 spectator ·
+1–6 quality (5 RT max, 6 Game) · P PNG · F fullscreen · H hide UI · F1–F4 the modes (ship, on foot, free camera,
+photo) · F8 the Atlas · ⇧F8 the sky's events · F5 · F9 quick save · load · F10 game tools · ? the shortcut sheet.
+In flight: F flight mode (⇧F antigravity) · P · ⇧P flaps · air brake · G gear · ⇧F4 assisted · F3 the free camera (the ship flies on) ·
 F6 TARS (held: speak) · F7 land · ⇧G entry · Enter acknowledge the master warning · ⌫ hand the controls back ·
-Escape pause. Every key can be rebound (pause › Controls); comment-jouer.html lists them all, AZERTY and QWERTY.
+Escape pause. The F-35's own keys: [docs/F35.md](docs/F35.md). Every key can be rebound (pause › Controls); comment-jouer.html lists them all, AZERTY and QWERTY.
 
 The URL is not kept in sync with the settings any more: a link (`#save=…`, Copy a link in the game tools;
 or the panel's share link) restores a moment, `#scene=…` starts a scene, and old setting links are read once.

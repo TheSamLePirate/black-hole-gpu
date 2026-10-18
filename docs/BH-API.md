@@ -21,7 +21,7 @@ a function is synchronous.
 **The live list.** `bun scripts/bh-api.ts` prints every member as the running page has it (path, kind,
 arity). `bun scripts/bh-api.ts --check` lists the members this page is missing. `tests/e2e/bh-api.e2e.test.ts`
 fails when one is missing: every member of `__bh`, and of its namespaces (`game`, `bench`, `iss`, `sky`,
-`gpu`, `hud`, `sys`, `pwa`, `tarsVoice`, `tars`), has its own heading or table row here, under its full path.
+`gpu`, `hud`, `sys`, `pwa`, `tarsVoice`, `tars`, `mode`), has its own heading or table row here, under its full path.
 The big live objects (`settings`, `camera`, `renderer`, `sim`, `fleet`, `mission`, …) are documented by the
 members tests use; their source is their full reference.
 
@@ -32,7 +32,9 @@ members tests use; their source is their full reference.
 2. [The game's tools — `__bh.game`](#the-games-tools--__bhgame) — status, orbit, land, glide, saves, warp, targets
 3. [The ship, its flight, the world](#the-ship-its-flight-the-world) — `camera` (the pilot, autopilots,
    holds), `fleet`, `mission`, `sys`, `iss`, `sky`, the cockpit
-4. [Sound, voices, TARS, the bench](#sound-voices-tars-the-bench)
+4. [The aircraft's game and the network — `__bh.flight`, `__bh.net`](#the-aircrafts-game-and-the-network--__bhflight-__bhnet)
+   — the F-35's pages (hub, route, challenges, missions, views, replay, flight school), the room
+5. [Sound, voices, TARS, the bench](#sound-voices-tars-the-bench)
 
 ---
 
@@ -644,6 +646,18 @@ __bh.game.exportSave("before TMI");
 ```
 *Used in:* none.
 
+### `__bh.game.flyAt(lat, lon, aglM, headingDeg, speed, body = "earth")` → string
+
+The flown craft in the air over a place of one of our worlds (geodetic latitude, east longitude [°]), `aglM` metres
+**above its ground** (the relief there measured and the height set right — not above the sea), flying `headingDeg`
+[° true] at `speed` m/s through the air, level, by hand (the autopilot off), gear up. A challenge's or a lesson's start
+(the F-35's: docs/PLAN-F35.md F9). Returns `placeAt`'s note. Our worlds only (throws `flyAt: our worlds`).
+
+```js
+__bh.game.flyAt(45.85, 6.75, 2500, 110, 150);   // over the Alps, 2 500 m above the ground (school-demos.e2e.test.ts)
+```
+*Used in:* about 46 files — `instructor.e2e.test.ts`, `school-demos.e2e.test.ts`, `gibraltar-shots.e2e.test.ts`, `carriers.e2e.test.ts`, `net-flight.e2e.test.ts`, `knowledge.e2e.test.ts`, …
+
 ### `__bh.game.get(key)` → the setting's value
 
 Reads one setting by its key (the keys of the settings schema: `src/settings.ts`).
@@ -717,6 +731,18 @@ __bh.game.land("moon", 0.674, 23.473);               // Tranquility Base
 __bh.game.land("mars", 18.44, -102.55);
 ```
 *Used in:* `tests/e2e/weather-panel.e2e.test.ts`, `eclipses.e2e.test.ts`, `multiexposure.e2e.test.ts`, `pwa.e2e.test.ts`, `spectator.e2e.test.ts`, `assist-climb.e2e.test.ts`, `metar.e2e.test.ts`, `tars-eval.e2e.test.ts`, `assist-handover.e2e.test.ts`, `tests/flight/scenarios/gargantua.ts`, `vertical.ts`.
+
+### `__bh.game.lineUp(name?, alongM = 60)` → string
+
+Lined up on a runway of the Earth, `alongM` metres past the threshold of the end in use (into the wind), its nose
+down the runway's axis as drawn (`sites.ts` `EARTH_RUNWAYS`, WGS84), at rest on its gear — a take-off's start. `name`
+is matched as `glideTo`'s (case-insensitive substring of a site's name; none matching throws with the list); omitted:
+the runway nearest the flown craft (Edwards when it is not near the Earth).
+
+```js
+__bh.game.lineUp("Edwards");
+```
+*Used in:* `f35-challenges.e2e.test.ts`, `f35-combat.e2e.test.ts`, `f35-flight-ops.e2e.test.ts`, `f35-hud.e2e.test.ts`, `ground-placement.e2e.test.ts`, `runway-placement.e2e.test.ts`.
 
 ### `__bh.game.lastAudit` → AuditReport | null
 
@@ -831,6 +857,14 @@ __bh.game.target("moon"); __bh.game.orbitTarget();
 ```
 *Used in:* none.
 
+### `__bh.game.parkAt(body, lat, lon, heading, note?)` → string
+
+Parked on its gear at a geodetic latitude, east longitude [°] and heading [°] — exactly there: no runway's lining up,
+no moving aside from another craft (as `land` and `hoverOver` do). Used by the network to put our craft back where it
+was left after riding in another's (docs/PLAN-RESEAU.md R5). `note` replaces the journal's line.
+
+*Used in:* none under tests (`ui/netsession.ts`).
+
 ### `__bh.game.pause(on = true)` → "Paused" | "Running"
 
 Stops or resumes the scene's clock (sets `settings.animate`).
@@ -883,6 +917,14 @@ Puts the Ranger at a state, the restart of its flight there. `pose`: `{ frame, X
 Throws when the scene is not loaded: `"ours"` and `"mouth"` need the wormhole scene (`settings.wormhole`).
 
 *Used in:* `tests/flight/scenarios/dock.ts`, `missions.ts`.
+
+### `__bh.game.placings` → number
+
+How many times the craft was placed (`placeAt` counts every placing: `flyAt`, `lineUp`, `land`, `parkAt`, a lesson's,
+a mission's…). A placing awaited — the room's runway after a loss, Beside before a formation — compares it before and
+after to see whether a later one took its place.
+
+*Used in:* none under tests (`ui/netsession.ts`).
 
 ### `__bh.game.preset(name)` → void
 
@@ -1151,6 +1193,9 @@ use are tabled below; the rest are internal. Most functions are synchronous and 
 | `setWarpAuthority(auto)` | → void | sets `settings.autoWarp`. `true`: the hub (or the manoeuvre) sets the warp while an autopilot flies; `false`: the pilot sets it, below the autopilot's ceiling. Clears the hub's and the node's pending warp wishes. |
 | `setLook(yaw, pitch)` | → void | turns the camera on its mount, degrees (yaw wraps, pitch clamped to ±85); the ship stays put. Used in cockpit tests to aim at a control. |
 | `planTransfer(goal, r2?, o?)` | → string | plans a transfer to `"orbit" \| "star" \| "wormhole"`. `r2` (default 30) is the orbit's radius in M, floored at max(1.02 × ISCO, horizon + 2 M); with the Crew engine it is a low-thrust plan (`o.orbitStar` for the star). Returns a message string. |
+| `courseState()` | → object | the flight school's lesson flown now (src/controller/course.ts) — what `__bh.flight.school.state()` returns; see there. |
+| `courseLast` | `{ id, mode, t, late, failed? }` \| null | the last lesson flown to its end or given up: its id, mode (`"demo"` \| `"try"` \| `"guided"`), its time [s], the steps ended by their time at most (`late`), and `failed` (the step's name) when a demonstration stalled 90 s and was given up. Cleared when a lesson begins. Read by `school-demos.e2e.test.ts`. |
+| `radarLockWant` | number \| undefined | a lock asked (Tab) before the radar had any contact: until when [the radar's s] the first contact is locked as it comes (3 s after the Tab; the beam swept at once). Undefined once locked, or past. `tests/radar-flight.test.ts`. |
 
 Flight computer: `__bh.camera.pilot` (src/pilot.ts, class FlightComputer). Members of the object, as tests use them:
 
@@ -1254,6 +1299,39 @@ An object of helpers for the frames and the navigation. Each member is listed be
 ### `__bh.sys.bodyState(id, t)` → `{pos, vel, dtau}`
 
 The same as `__bh.ourState`: a body of Gargantua's system at coordinate time `t` [M]; `pos` [M], `vel` [c]. Synchronous.
+
+### `__bh.sys.bodyFixed(id, X, t)` → `[x, y, z]`
+
+A point of the home frame `X` [M] at time `t` [M] on body `id`'s own turning axes [M] (`toBodyFixed`): to set a craft
+against a runway or a place on the ground. Synchronous.
+
+*Used in:* `ground-placement.e2e.test.ts`, `runway-placement.e2e.test.ts`.
+
+### `__bh.sys.gears()` → `Record<string, GearDef>`
+
+The craft's gears (`src/gear.ts` `GEARS`, keyed by vessel): `height` [m], `legs` (each `at` on the craft's axes — x
+left, y up, z nose — [m], `stroke`, `share`, `wheel`, `brakes`, `steers`, `mu`), `sag`, `zeta`, `mu`, `muBrake`, `roll`.
+
+*Used in:* `ground-placement.e2e.test.ts` (each leg's height over the ground).
+
+### `__bh.sys.heightOverGround(id, X, t)` → number
+
+A home-frame point's height over body `id`'s ground as drawn and flown [m] — the gear's own measure (the relief, the
+runways levelled, over the WGS84 ellipsoid on the Earth). Synchronous.
+
+```js
+// a leg's height: the craft's place plus the leg's offset on its axes (ground-placement.e2e.test.ts)
+__bh.sys.heightOverGround("earth", legX, __bh.time())
+```
+*Used in:* `ground-placement.e2e.test.ts`.
+
+### `__bh.sys.runways()` → `RunwayFrame[]`
+
+The Earth's runways as drawn (`sites.ts` `EARTH_RUNWAYS`): each its `site`, its threshold's `origin` on the WGS84
+surface (body-fixed metres), the unit `p` (the threshold's geodetic up), `along` (the landing direction) and `across`
+(its right), its `elev` [m]. The paved strip is `RUNWAY_LENGTH` = 4 500 m from the threshold.
+
+*Used in:* `ground-placement.e2e.test.ts`, `runway-placement.e2e.test.ts`.
 
 ### `__bh.sys.geodetic()` → `{body, lat, lon, altM, radiusM} | null`
 
@@ -1413,6 +1491,97 @@ is its automatic page, `SLOT_PAGE`: pfd, orbit, nav, systems, docking, plan, clo
 ```js
 __bh.cockpitScreens.pages[0]   // "orbit" after the test sets it (tests/e2e/cockpit.e2e.test.ts:131)
 ```
+
+---
+
+## The aircraft's game and the network — `__bh.flight`, `__bh.net`
+
+The F-35's pages and lessons (docs/PLAN-F35.md, docs/PLAN-AVIATION-AAA.md), built in `src/main.ts`, and the room
+(docs/PLAN-RESEAU.md, docs/NETWORK.md). Neither is in the walker's namespaces (`tests/e2e/lib/bh-api.ts` `NAMESPACES`):
+their members are documented here as tests use them; the classes behind them are their full reference. Placing calls
+(`missions.fly`, `views.fly`, `school.demo` / `tryIt` / `guided`) place the craft and return what the game says.
+
+### `__bh.flight` → object
+
+| member | what it is |
+|---|---|
+| `hub` | the flight prepared (`ui/flighthub.ts` `FlightHub`): `open()` shows its card (airfield, start, hour, weather, fuel, a plan), `go()` flies it, `isOpen` |
+| `route` | the flight plan's editor on the map (`ui/routepanel.ts` `RoutePanel`): `open()`, `isOpen` |
+| `challenges` | Challenges (`ui/challengepanel.ts` `ChallengePanel`): `open()`, `isOpen`, `go(def)` a challenge, `fight(scenario)`, `mission(spec)`, `figure(id \| "box", "demo" \| "judge")` |
+| `missions` | the air missions (P1–P3): `list()` → `{ id, title }[]`; `spec(x)` (an id, or a spec); `fly(x, { lead?, side?, role? })` flies one (an id such as `"antiship"`, `"corsica-strike"`, `"team-2v2"`, or a spec object); `brief(x)` its briefing screen; `abort()`; `state()` → `{ id, t, state, status, deck, pending }` \| null; `last()` the last one ended (its debrief) \| null; `map` (`MissionMap`), `editor` (`MissionEditor`); `link(x)` its `#mission=` address; `mine()` the player's own |
+| `views` | the views of exception (S2): `open()` their page, `fly(id)` one placed and flown, `list()` their ids |
+| `replay` | the replay (S3): `open()`, `trailer()`, `shot(m)` a camera held (`"auto"`, `"chase"`, `"orbit"`, `"flyby"`, `"cockpit"`, `"target"`), `seek(s)` (seconds from the tape's end, ≤ 0), `play(on)`, `video(draft = true)` the trailer rendered as a video, `close()`, `state()` → `{ active, t, length, playing, mode, shot, booms, trailer, moments }`, `tape()` → `{ seconds, frames, end, trailMs }` (`trailMs`: the longest rebuild of the trails since last asked), `videoState()`, `videoStop()` |
+| `school` | the flight school (A4, I3); see below |
+
+*Used in:* about 23 e2e files — `f35-*.e2e.test.ts`, `mission*.e2e.test.ts`, `s1-missions`, `s2-views`, `s3-replay`,
+`wreck-replay`, `shootdown*`, `gibraltar-shots`, `course`, `instructor`, `radio`, `school-demos`.
+
+### `__bh.flight.school` → object
+
+| member | what it does |
+|---|---|
+| `open()` | the flight school's page (`ui/instructor.ts` `flightSchool`: the lessons' cards; each card's *Watch the demonstration* is `data-testid="lesson-demo"`) |
+| `demo(id)` | the lesson `id` placed and flown by TARS whole, the pilot's part too (`LessonId`, `src/game/lessons.ts`: `"first"`, `"circuit"`, `"landing"`, `"ils"`, `"case1"`, `"formation"`, `"intercept"`, `"guns"`, or a figure's id — `"loop"`, `"immelmann"`, `"splitS"`, `"aileronRoll"`, `"barrelRoll"`, `"cuban8"`, `"inverted"`, `"highAlpha"`, `"reversal"`, `"spin"`) |
+| `tryIt(id)` | the same lesson flown by the pilot, the instructor watching |
+| `guided(id)` | TARS flies the first part, then hands over (I3) |
+| `state()` | the lesson flown now, for the page and the tests (`camera.courseState()`) |
+
+Each placing begins clean: the pause and the craft-lost screen lifted, the last lesson's autopilots (its carrier pass,
+deck recovery, figure, intercept, formation, holds) let go, the engine running.
+
+`state()` returns:
+
+| field | meaning |
+|---|---|
+| `id`, `mode` | the lesson flown (null: none) and how (`"demo"`, `"try"`, `"guided"`) |
+| `step`, `steps` | its step now (1-based; 0: none) of how many |
+| `who`, `name` | who flies the step (TARS or the pilot) and its name |
+| `stepT`, `stepMax` | the step's time [s] and its most (null: none) — a step ended by its most is listed in `late` |
+| `t` | the lesson's time [s] |
+| `left` | what is left of the step, in its own measure (a distance to the threshold, to the axis, to the carrier, the target's range, the deviations…), null when it has none |
+| `stalled` | how long [s] the step has not come nearer its end (`left` not down by 1 %); a demonstration stalled 90 s is given up and says so |
+| `late` | the steps ended by their time at most |
+| `last` | the last lesson's end (`camera.courseLast`: `{ id, mode, t, late, failed? }`) or null |
+
+```js
+__bh.flight.school.demo("landing");
+// …then every 2 s, as the watchdog of school-demos.e2e.test.ts:
+const s = __bh.flight.school.state(); [s.step, s.steps, s.name, s.left, s.stalled]
+```
+*Used in:* `school-demos.e2e.test.ts` (real clicks to start, `state()` as its watchdog), `course.e2e.test.ts`,
+`instructor.e2e.test.ts`.
+
+### `__bh.net` → NetPanel (src/ui/netpanel.ts)
+
+The room: the Network panel and, once a room was asked for, the network's client and its parts (the network's code is
+loaded on demand; in the solo game `net`, `session`, `match` and `voice` stay null and `loaded` false).
+
+| member | what it is |
+|---|---|
+| `open()`, `closePanel()`, `isOpen` | the Network panel |
+| `loaded` | whether the network's code was loaded at all |
+| `setName(name, colour?)` | the player's name (24 characters at most) and colour, kept and sent to the room |
+| `create(name?, password?)` | creates a room and joins it as its pilot (Promise) |
+| `join(code, role = "pilot", password?)` | joins a room (`"pilot"`, `"spectator"`, `"instruments"`) (Promise) |
+| `leave()` | out of the room: back to the solo game |
+| `teleport(slot, gap?)` | Beside: our craft put beside another's (on foot, beside him on foot); what is said |
+| `formation(slot, { side?, gap?, back?, up? }?)` | formation flight on another's craft (again on the same slot: off). Far (> 20 km) or not flying: Beside first. With no option, our place is the first free on his wing (`session.freePlace`); all taken, trailing him. What is said |
+| `radar()` | the others on the F-35's radar this frame |
+| `crewLink(code?)`, `showCrew()`, `link(code)` | the crew console's link (`crew/#join=`), its panel, the game's `#join=` link |
+| `net` | the client (`src/net/client.ts`): `room` (`code`, `slot`, `name`, `role`, `members`, `clock.warp`, `wants`), `clock.synced`, `roomNow()` (the room's clock [s]), `roomWarp`, `remotes.track(slot)` (another's interpolated craft), `mesh` (the direct links), `mine`, `iceServers`, `event(e)` |
+| `session` | flying together (`ui/netsession.ts` `NetSession`): `others()`, `tags`, `follow` (a player followed), `teleport`, `formation`, `formSlot()` (whose wing we fly), **`freePlace(lead)`** (the first free place 2–4 on `lead`'s wing — his AI wingmen's and the others' heard taken; 0: none), **`leaders()`** (the room's pilots flying in the Earth's air: whose wing the wheel offers), **`formOf`** (whose wing each player flies, heard by the `fml` event every 2 s: `{ lead, pos, at }`), `placeAtPort`, `aboard`, `links`, `lag`, `bumped`, `offer` / `acceptWarp()` (a speed-up asked), `resume()` |
+| `match` | the room's match (`ui/netmatch.ts` `NetMatch`): `start(mode, def, rules?)` (`"coop"`, `"ffa"`, `"teams"`, `"race"`, `"landing"`), `stop()`, `phase` (`"idle"`, `"countdown"`, `"run"`, `"over"`), `match` (its mode, rules, teams), `sheet` (`ScoreSheet`: `row(slot)`, `sameTeam(a, b)` — every pilot of a co-op match on one side), `log`, **`freeFight`** (true while the free fight runs: match mode `"free"`, in a room, in the F-35, no match, mission, lesson or challenge of one's own; setting `netFreeFight`) |
+| `voice` | the voices (`ui/netvoice.ts` `NetVoice`): `on`, `talking`, `speaking(slot)`, `levels`, `heard`, `quindars`, `prefs` |
+
+```js
+await __bh.net.create("Wing");               // net-wing-fight.e2e.test.ts
+__bh.net.net.room.code;
+__bh.net.formation(__bh.net.session.leaders()[0].slot);
+__bh.net.match.freeFight;
+```
+*Used in:* every `net-*.e2e.test.ts` (`net-wing-fight`, `net-formation-ap`, `net-battle`, `net-coop`, `net-orders`,
+`net-flight`, `net-moon`, …): two or more `App`s in one room of the test server's own rooms (`server.ts`'s `/net`,
+in memory). Also [NETWORK.md](NETWORK.md).
 
 ---
 

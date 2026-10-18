@@ -106,6 +106,29 @@ job's exit code. `--cpu` runs a job without a browser (`bun test`, `bun run chec
 Job control: `status`, `logs <id> [-f]`, `fetch <id>`, `cancel <id>`, `clean --keep 10`. Full reference
 in [REMOTE-TESTS.md](REMOTE-TESTS.md) (French).
 
+**A test's own variables go inline.** `bun run e2e --remote` sends only `E2E=1` with the command: a variable set
+here (`DEMOS=landing bun run e2e --remote school-demos`) does not reach the mini. `remote.ts run` runs its command by
+zsh in the copy, as typed, so put them in it:
+
+```bash
+bun scripts/remote.ts run -- E2E=1 DEMOS=landing,circuit bun test tests/e2e/school-demos.e2e.test.ts --timeout 600000
+```
+
+**Seeing the mini's screen mid-run.** `ssh kerr-mini screencapture …` cannot reach the display (the ssh session is
+not the logged-in user's graphical one). Grab the test Chrome's own page instead, over its DevTools port (each test
+Chrome listens on `--remote-debugging-port=<9600–9899>`, tests/e2e/lib/cdp.ts):
+
+```bash
+ssh kerr-mini 'pgrep -fl remote-debugging-port'               # the test Chrome and its port
+ssh -fN -L <port>:127.0.0.1:<port> kerr-mini                  # that port tunnelled here (the same number)
+bun -e 'const p = (await (await fetch("http://127.0.0.1:<port>/json")).json()).find((x) => x.type === "page");
+  const ws = new WebSocket(p.webSocketDebuggerUrl);
+  ws.onopen = () => ws.send(JSON.stringify({ id: 1, method: "Page.captureScreenshot", params: { format: "jpeg", quality: 80 } }));
+  ws.onmessage = async (e) => { const m = JSON.parse(e.data); if (m.id === 1) { await Bun.write("remote-results/mini-now.jpg", Buffer.from(m.result.data, "base64")); process.exit(0); } };'
+```
+
+It is a second DevTools client beside the test's: it reads the page, it does not disturb it.
+
 ### Which Mac
 
 - A single quick file (< 1 min), or a test being written or debugged: **here**.
@@ -191,6 +214,10 @@ page** — a unit test, faster, for autopilot logic.
 | `SHOT=<file>`, `HUD_BOXES=1` | some tests' screenshots / HUD box dump |
 | `TARS_LIVE=1` (+ `OPENROUTER_API_KEY` in `.env`), `TARS_MODEL`, `TARS_LONG=1` | the live-model TARS tests (paid: only when asked) |
 | `DEEPGRAM_API_KEY` in `.env` | `tars-ear.e2e.test.ts` (the microphone through Deepgram) runs |
+| `DEMOS=landing,circuit` | `school-demos.e2e.test.ts` runs only those demonstrations (default: all 18) |
+| `E2E_SHOTS=<dir>`, `NET_SHOTS=<dir>` | where `school-demos` (its views, `summary.json`, a stall's `<id>-STALL.json`) and `net-wing-fight` write their pictures (default under `remote-results/`) |
+
+On the mini these go inline in the command (§3, *A test's own variables go inline*).
 
 ### Every test is recorded
 
@@ -250,6 +277,35 @@ Plain `E2E=1 bun test …` (no preload) records nothing.
 8. **Write artifacts under `remote-results/`** (git-ignored, brought back from the mini).
 9. **A feature reachable by TARS** (see CLAUDE.md) gets its tool tested in `tests/tars-tools.test.ts` and,
    end to end, in `tars-agent.e2e.test.ts` with the mock model.
+10. **Close a screen by its own button, never by Escape.** Escape opens the pause menu when nothing else is open
+    (a debrief already gone, a modal closing on its own): the game is then paused under the test. And removing
+    `.k-modal` nodes from the page is no close either: the screen's `onClose` never runs, so a pause it held
+    stays — the game sits paused with nothing on screen. Click its close button
+    (`app.click('[data-testid="instructor-debrief"] .k-modal-head button')`), and check
+    `document.body.classList.contains("paused")` when in doubt.
+11. **Two pages on one GPU: let both tracers compile before measuring.** A two-page test (the `net-*` files) at
+    kiosk size runs two renderers on one GPU; while one page compiles its tracer, both drop to 7–10 fps and a
+    formation, a lock or a hit measured then is the stall's. Wait `__bh.renderer.tracerSettled` on **both**
+    pages (`for (const p of [a, b]) await p.waitFor("__bh.renderer.tracerSettled", 120_000)`) before holding a
+    place or timing anything.
+
+### A watchdog for long real-time flights
+
+A flight flown at real time by the game's own autopilots (a lesson, a mission) cannot be stepped in one call.
+Poll it instead and fail fast on the first sign it is stuck — `tests/e2e/school-demos.e2e.test.ts` is the model:
+
+- **Start it by real clicks** (the school › the lesson's card › *Watch the demonstration*), then wait for the game
+  to say it began (`__bh.flight.school.state().id === "landing"`).
+- **Every 2 s read one state** (`__bh.flight.school.state()`: the step of how many, its name, its time and its
+  most, `left` — what is left of it in its own measure —, `stalled` — how long `left` has not come down) plus the
+  screens (`[data-testid="instructor-debrief"]`, `body.paused`, `.craft-lost`); print a line only when it changes.
+- **Fail on a cause, not a timeout**: stalled 45 s (the game itself gives up at 90 s), a debrief, the pause or a
+  craft lost during a demonstration, still flying after its budget; at the end, `last.failed` (given up) or
+  `last.late` (a step ended by its time at most) also fail.
+- **On a failure, dump the state** (the lesson's, the ILS's, the carrier pass's, the intercept's, the figure's, the
+  jet's figures and modes) to `<dir>/<id>-STALL.json` and take a view (`<id>-STALL.png`): the next run starts
+  from the cause.
+- A summary of every case (`summary.json`) is written in `afterAll`, whatever failed.
 
 ---
 
@@ -337,6 +393,10 @@ Flight-lab campaigns follow the same pattern: `bun scripts/flightlab.ts run --sh
 | `rsync failed` / ssh errors | the mini is asleep or off the network: `ssh kerr-mini true`, `remote.ts doctor`. Never bypass a host-key warning |
 | `no graphical session` on the mini | nobody is logged in at its screen. Ask the user (or `--headless` if they agree) |
 | a WebGPU device lost mid-test | `__bh.gpu.generation()` grew. See `gpu-recovery.e2e.test.ts`. On the mini, report it with the log |
+| the game stands still, nothing on screen, `body.paused` | a screen was "closed" by Escape (it opened the pause) or by removing its `.k-modal` node (its close never ran). Close screens by their button (§4, rule 10) |
+| a two-page test at 7–10 fps, a formation or lock lost early | one page was compiling its tracer: both share the GPU. Wait `renderer.tracerSettled` on both (§4, rule 11) |
+| `ssh kerr-mini screencapture` gives nothing | ssh is not the graphical session: grab the test Chrome's page over its DevTools port (§3, *Seeing the mini's screen*) |
+| a variable set here has no effect on a `--remote` run | only `E2E=1` is sent: put it inline in `remote.ts run -- VAR=… bun test …` (§3) |
 | two Chromes on one Mac in `lab-monitor` (⚠) | something launched Chrome without the lock (a new script: use `launch()` from tests/e2e/lib/cdp.ts or `chromeLock()`), or an orphan: `lab-monitor --sweep` |
 
 ---

@@ -19,6 +19,8 @@ Ce fichier suit l'exécution du plan de l'audit [`AUDIT-AAA-2026-10-03.md`](AUDI
 | Produit / gameplay | 50 | 72 | 80 |
 | **Global** | **≈ 54** | **≈ 77,5** | **≈ 78–80** |
 
+*Du 11 au 18/10/2026, non réestimé :* la Terre photoréaliste et l'exploration à pied (fusion du 13/10), le F-35 (PLAN-F35, 13–14/10), le jeu à plusieurs (PLAN-RESEAU R0–R8, 14/10), l'aviation AAA (PLAN-AVIATION-AAA, 15–18/10) et la console d'équipage (16–17/10) relèvent surtout le **Produit** : des missions, des défis, des qualifications et une école de vol **notés sur 20**, avec leurs records, sont la première vraie matière d'une progression — la progression elle-même (carrière, objectifs suivis d'une session à l'autre) manque toujours. **Code + tests** : 1 321 tests unitaires (18/10), 95 fichiers e2e de plus (158 en tout), dont seize à plusieurs pages (`net-*`), la CI en parallèle (17/10). Les notes restent celles du plan HUB.
+
 *TARS agent (10/10/2026), non réestimé :* il relève le **Produit** (un copilote qui pilote, explique, propose, surveille et répond aux commandes « / ») et l'**UI** (sa console d'agent), mais la progression et les objectifs suivis manquent toujours ; les notes restent celles du plan HUB.
 
 *Réestimé après le plan HUB (08/10/2026).* **UI** (77 → 79) : la carte du hub, la télémétrie, les graphiques et le rapport de vol (section [Plan HUB](#plan-hub--hub-télémétrie-graphiques-rapport-terminé-08102026)) — plus aucun chevauchement dans les 10 états de référence, la carte homogène pour tous les autopilotes (tendances ▲▼, seuils en couleur), le graphe ouvert en grand, une page TÉLÉMÉTRIE avec export CSV. **Produit** (71 → 72) : un vol noté sur 20 à l'atterrissage et à l'amarrage, première brique d'une progression ; la progression elle-même manque toujours. **Code + tests** (76) : 6 e2e de plus (`hud-layout`, `hub-graph`, `hub-card`, `telemetry`, `report`, `saves`) et une galerie d'états fixes (`scripts/hud-gallery.ts`) ; les sauvegardes rechargent exactement le vol (flotte, site, désorbitation attendue, attitude).
@@ -499,6 +501,67 @@ Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md), étapes A1–A9, B1–B7, C1�
 - **En chemin** : le mode photo a son bouton « Retour au jeu » ; le compteur d'images revient en réglage (Réglages › Rendu › Afficher la fréquence d'images).
 - **A9, B7 : la doc** — `TARS.md`, une fiche système pour TARS (`systemes/10-tars-agent.md`) et une pour tout ce qui s'est ajouté depuis le 2 octobre (`systemes/11-ajouts-depuis-octobre.md`), le README, et les deux pages HTML refaites pour le simulateur et TARS (`decouvrir.html` : les sections « Le simulateur » et « TARS » ; `comment-jouer.html` : le cockpit, la météo et les aéroports, le son, TARS et ses commandes, les touches corrigées). Restent les longs vols du banc réel (`TARS_LONG=1`).
 
+## La Terre photoréaliste, à pied, la caméra (fusionnée le 13/10/2026)
+
+Branche `codex/earth-photorealistic` (11–13/10), revue et corrigée avant sa fusion (`c18e982`) : revue
+[`REVIEW-BRANCH-2026-10-13.md`](REVIEW-BRANCH-2026-10-13.md), campagne [`E2E-CAMPAIGN-2026-10-13.md`](E2E-CAMPAIGN-2026-10-13.md).
+
+- **La Terre** : les surfaces Sentinel-2 et WorldCover régionales, l'imagerie Sentinel-2 sans nuages à 10 m (EOX), le décor OpenStreetMap mondial et ses ombres, les forêts procédurales selon le climat et les saisons, les eaux calmes qui reflètent, quatorze paysages refaits d'après de vraies photographies.
+- **À pied** : l'astronaute (personnage de 70 os, IK des pieds), l'herbe vivante faite sur le GPU, les pierres, son HUD et sa mini-carte.
+- **La caméra et les modes** : le réalisateur à caméras virtuelles, quatre modes de jeu et une barre du haut, l'Atlas (la Terre, la Lune et Mars en cartes), les événements du ciel au trépied, le mode photo (rendus et films), un système de musique orchestrale.
+- **La revue** : la profondeur d'occultation des passes rastérisées, tout ancré sur la caméra, la taille du dépôt et du site gardée en CI.
+
+## PLAN-F35 : le F-35B sur Terre (terminé, 14/10/2026)
+
+Plan : [`PLAN-F35.md`](PLAN-F35.md), étapes F1 à F11 ; référence [`F35.md`](F35.md).
+
+- **F1–F2** : le modèle fourni converti (91 000 triangles, 119 pièces mobiles découpées à leurs charnières, 27 Mo de KTX2), rendu en PBR texturé, gouvernes, verrière, panache et feux.
+- **F3–F4** : le vol — le F135, le carburant réel, les commandes de vol électriques (+7/−3 g) ; le STOVL (soufflante, tuyère 3BSM à 95°, loi de stationnaire), posé verticalement à 1,2 m/s.
+- **F5–F7** : le cockpit (l'écran panoramique tactile dessiné en direct, la symbologie du casque), le son du turbofan, les effets de vol (vapeur, vortex, chaleur, voiles).
+- **F8–F10** : les plans de vol (LNAV/VNAV, bingo) et la préparation d'un vol, les défis notés (Mach Loop, Rainbow Canyon, Rogers), l'armement et le combat (radar, AIM-120, AIM-9X, canon, JDAM, leurres, IA d'agresseur).
+- **F11** : e2e par vraies touches, coût GPU mesuré (le F-35 ≈ le Ranger), `F35.md` FR + EN.
+
+## PLAN-RESEAU : jouer à plusieurs (terminé, 14/10/2026)
+
+Plan : [`PLAN-RESEAU.md`](PLAN-RESEAU.md), phases R0 à R8 ; référence [`NETWORK.md`](NETWORK.md).
+
+- **R0** : le serveur de salles (Bun, SQLite) à `stream.samlepirate.org`, le protocole binaire, l'horloge de la salle, le code réseau chargé à la demande (le solo inchangé).
+- **R1–R2** : voler ensemble sur Terre (WebRTC direct, les autres affichés au présent), les voix (radio, Quindar), le relais TURN (coturn).
+- **R3** : combats, courses et atterrissages en salle, le tireur favorisé, les scores.
+- **R4–R5** : spectateur et écran instruments (QR code), à pied ensemble, passager dans l'engin d'un ami.
+- **R6–R8** : le système solaire ensemble (le pas de la salle, Kepler chez les autres), l'amarrage entre joueurs et le monde persistant, Gargantua (une horloge commune : décision du propriétaire).
+- **Puis** (14–15/10) : marcher ensemble sur la Lune et Mars, le pilote automatique de formation sur un autre joueur.
+
+## PLAN-AVIATION-AAA : le vrai F-35, le combat, la patrouille, la mer (15–18/10/2026)
+
+Plan : [`PLAN-AVIATION-AAA.md`](PLAN-AVIATION-AAA.md) ; une fiche par étape dans `docs/progress/aviation/`.
+
+- **V1–V5** (15/10) : le domaine de vol mesuré contre l'avion publié, 50° d'incidence, vrille et loi directe, les lois de pilotage du vrai F-35, dix figures de voltige jugées (démonstrations notées 18,7 à 20/20), le corps du pilote.
+- **C1–C3** (15/10) : le radar APG-81 toujours actif (RWS/TWS/STT, IFF, liaison, relief), l'interception automatique jusqu'à la patrouille à 300 m, le collimateur qui prédit la cible (86 % au but à 1 000 m sur une cible à 5 g).
+- **F1–F4** (15/10) : les formations, les ordres du leader (roue, TARS, HOTAS, réseau), un à trois ailiers IA, les manœuvres de patrouille.
+- **T1–T3** (15/10) : le trafic réel (adsb.lol, OpenSky, aisstream par un relais), les avions de ligne (A320, CRJ-900) et les navires sur la mer, leurs sillages.
+- **M1–M3** (15/10) : la mer par FFT (JONSWAP, Open-Meteo marine), le Ford, le Kiev et l'Implacable sur la mer, l'appontage vertical du F-35B, le F-35C à la catapulte et aux brins, les qualifications de jour, de nuit et par mer forte.
+- **P1–P4** (15/10) : le moteur de missions (un vol réel détourné), la carte de mission, l'éditeur et TARS qui crée une mission à la voix, l'ILS à 3° et les cas I, II et III du porte-avions.
+- **A1–A4** (15/10) : les niveaux d'assistance, l'Auto-GCAS et l'Auto-ACAS, les nouveaux modes (orbite, suivi de terrain, ravitailleur), l'instructeur et l'école de vol.
+- **I1–I4** (16/10) : la base de connaissances de TARS (onze pages FR + EN), ses outils de trafic et d'armes, les leçons guidées, les rôles radio (Darkstar, Mother, Paddles).
+- **S1–S3** (16/10) : treize missions d'exception, treize vues d'exception (l'éclipse du 12 août 2026 poursuivie, les aurores…), le replay, ses caméras et la bande-annonce ; puis le tir en direct et rejoué, la manette Xbox 360, ce qui coûte en GPU en vol bas.
+- **Reprises** : l'appontage par mer forte jamais bloqué (17/10), le tour du 18/10 (ci-dessous).
+- Restent C4 (l'IA au vrai modèle de vol), C5–C6 en partie, T4–T5.
+
+## La console d'équipage (16–17/10/2026)
+
+Référence : [`CREW.md`](CREW.md). Une page légère à part (`crew/`) qui rejoint une salle depuis un téléphone, une tablette ou un petit ordinateur (16/10, `b8def89`), refaite le 17/10 (`1ce1f2a`) en cockpit de verre : neuf vues sur un seul canvas (tableau de bord, PFD, ND, carte OpenStreetMap passée en nuit, globe, radar, systèmes, plan de vol avec son profil vertical, télémétrie), WGS84 partout, dessinées à la demande (30 i/s au plus) ; `scripts/crew-demo.ts` une salle simulée sans le simulateur ; e2e `crew` 7/7 (téléphone, tablette, paysage, 1440×900). Planches `docs/progress/80–81`.
+
+## L'école de vol jusqu'au bout, l'ailier en réseau, le combat libre (18/10/2026)
+
+Fiche : [`progress/aviation/ECOLE-RESEAU.md`](progress/aviation/ECOLE-RESEAU.md) ; commits `ff7ec03`, `dfa72d3`.
+
+- **Les démonstrations** volées en entier (les 18, sur kerr-mini en temps réel : atterrissage 20/20, cas I au brin 1, canon en 35 s), les causes de leurs arrêts corrigées (une hauteur sol prise pour une altitude : 700 m trop haut), plus de débriefing sur une démo, une leçon toujours démarrée ; la surveillance (`__bh.flight.school.state()`, abandon après 90 s sans progrès, `tests/e2e/school-demos`).
+- **La roue** lisible (jusqu'à 800 px, 10 secteurs au lieu de 21).
+- **Les avions IA lissés** (vitesse de roulis, facteur de charge limité, dessinés depuis notre position de l'image en cours).
+- **En salle** : l'ailier d'un joueur par la roue, à la première place libre (l'événement `fml`) ; l'Auto-ACAS qui ne fuit plus son ailier ; le combat libre en F-35 (tout appareil est une cible, tir ami) ; la coopération dans un seul camp ; le verrou radar demandé avant le premier contact.
+- Mesuré : 1 321 tests unitaires ; `net-wing-fight`, `net-formation-ap` 4/4, `net-orders`, `net-coop`, `net-battle` 4/4 deux fois sur kerr-mini.
+
 ## Ce qui reste pour l'AAA (au 10/10/2026)
 
 Par ordre de gain :
@@ -523,7 +586,32 @@ Par ordre de gain :
 5. **UI, 79 → 80** : la migration complète de la symbologie vers le modèle du HUD (U4.9), et la carte 3D en ellipsoïde. Le hub, la télémétrie et les graphiques sont faits (plan HUB).
 6. **TARS** : les longs vols de son banc réel (`TARS_LONG=1` : un décollage vers 300 km, une rentrée et un posé à Edwards), puis GLM comparé à Claude Haiku 5.5 sur le même banc.
 
+*Point au 18/10/2026* (la liste ci-dessus gardée telle quelle) : pour le **Produit**, les missions, défis, qualifications et leçons notés sur 20 avec leurs records (PLAN-F35 F9, PLAN-AVIATION-AAA P1, M3d, A4, S1) et le jeu à plusieurs (PLAN-RESEAU) sont faits ; restent la progression d'une session à l'autre (carrière, objectifs suivis) et, côté aviation, C4 (l'IA au vrai modèle de vol), C5–C6 en partie, T4–T5 ([`PLAN-AVIATION-AAA.md`](PLAN-AVIATION-AAA.md)). Les autres points n'ont pas bougé.
+
 ## Journal
+
+- **18/10/2026 — L'école de vol jusqu'au bout, l'ailier en réseau, le combat libre** (`ff7ec03`, `dfa72d3`). Détails dans la [section du 18/10](#lécole-de-vol-jusquau-bout-lailier-en-réseau-le-combat-libre-18102026).
+
+  Leçons :
+  - **une démonstration doit aller jusqu'au bout de ce qu'elle annonce** : TARS ne volait que sa part ; un chien de garde qui juge « l'étape s'approche-t-elle de sa fin ? » toutes les 2 s a trouvé chaque arrêt, avec sa cause ;
+  - **une hauteur sol n'est pas une altitude** : passer l'altitude de la piste à `flyAt` (hauteur au-dessus du sol) plaçait l'atterrissage 700 m trop haut — l'ILS ne s'établissait jamais ;
+  - **ne jamais fermer un écran par Échap ni en retirant son nœud** dans un e2e : Échap ouvre la pause, un nœud retiré laisse le jeu en pause sans rien à l'écran ;
+  - **deux pages sur un GPU** tombent à 7–10 i/s pendant que l'une compile son traceur : attendre `renderer.tracerSettled` sur les deux avant de mesurer ;
+  - **un Tab avant le premier contact** était perdu : un ordre qui arrive trop tôt doit être gardé, pas refusé.
+
+- **17/10/2026 — La console d'équipage en cockpit de verre** (`1ce1f2a`), **l'appontage par mer forte jamais bloqué** (`ed5c437` : sur 40 graines de mer, toutes les qualifications finies ; avant, 2 bloquées et 2 coupées), **la CI en parallèle** (`da71a74`, `3031e27` : les deux révisions vérifiées côte à côte, la prévisualisation de nouveau sous le 1 Go de Pages) et les budgets de temps des tests unitaires sous `PERF=1` seulement (`43acf69`).
+
+  Leçon : **une graine aléatoire dans un test de vol** cache un échec sur vingt — la fixer dans le test, et balayer les graines à part.
+
+- **16/10/2026 — PLAN-AVIATION-AAA I1–I4 et S1–S3** : TARS aviateur (connaissances, outils, leçons guidées, rôles radio), les missions et vues d'exception, le replay et sa bande-annonce ; le tir en direct et rejoué (`1081444`), la manette Xbox 360 (`10fe535`), ce qui coûte en GPU en vol bas (`a7da8d2`) ; la première console d'équipage (`b8def89`).
+
+- **15/10/2026 — PLAN-AVIATION-AAA V, C1–C3, F, T1–T3, M, P, A** en un jour, une fiche et un commit par étape (`docs/progress/aviation/`) ; les unités métriques par défaut partout (`693b783`).
+
+- **14/10/2026 — PLAN-F35 terminé (F8–F11) et PLAN-RESEAU terminé (R0–R8)** ; l'observatoire depuis le sol de la Terre, placer l'engin par un nom de lieu, le relais TURN en service.
+
+- **13/10/2026 — Fusion de `codex/earth-photorealistic`** (`c18e982`) après sa revue et une campagne e2e complète ; Git LFS pour les binaires ; PLAN-F35 commencé (F1–F7).
+
+- **11–12/10/2026** (branche `codex/earth-photorealistic`) : les surfaces Sentinel-2, le décor OSM mondial, les forêts, l'herbe vivante, l'astronaute, le réalisateur de caméras, les quatre modes, l'Atlas, le mode photo, la musique orchestrale ; le harnais e2e enregistre chaque test et son tableau de bord (10–11/10).
 
 - **10/10/2026 — PLAN-CIEL terminé (C1–C11) : le ciel réel et ses photographies.** La vraie météo partout et à la date du jeu (Open-Meteo, les archives depuis 1940 ; les nuages du jour vus de l'espace), la réfraction de l'air (le Soleil couchant aplati, le sélénélion), le rayon vert, les ombres des corps les uns sur les autres (la Lune rouge des éclipses, les ombres des lunes de Jupiter), un calculateur d'éclipses pour tout le système solaire (fidèle à la NASA : gamma à 1e-4, les heures à la seconde) avec sa page, ses cartes et « Aller voir ». Et les surimpressions : l'analemme, la séquence d'éclipse (au-dessus du paysage, en bande, dans l'ombre de la Terre), les transits de Mercure et de Vénus, le filé d'étoiles, le trajet de la Lune (et l'analemme lunaire), le passage de l'ISS. TARS sait tout faire et est réveillé par les éclipses. 49 outils, 76 commandes de jeu.
 

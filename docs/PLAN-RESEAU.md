@@ -436,6 +436,50 @@ Ranger distant.
   de la salle et la rejoint quand les autres l'ont rattrapé. À rediscuter avant la phase.
 - Finitions de l'interface, réglages réseau, aide en anglais et en français.
 
+### Après le plan (2026-10-14 → 2026-10-18)
+
+Le plan R0–R8 fini, le réseau a continué dans chaque nouvelle étape (le principe « solo et réseau » de
+[PLAN-AVIATION-AAA.md](PLAN-AVIATION-AAA.md), section R).
+
+- **2026-10-14** (`e8a0d3a`) : le relais TURN en service — coturn dans la pile (réseau de l'hôte, 3478 et
+  49160–49200, le secret `TURN_SECRET` de la pile), les identifiants donnés à chaque page par le serveur de salles.
+- **2026-10-14** (`06f47ca`) : marcher ensemble sur la Lune et sur Mars (un engin posé sur un autre corps envoyé fixe
+  à son sol), « À côté » d'un joueur à pied ; deux Macs en patrouille par le serveur de production (40,0–40,1 m
+  tenus 3 min en air calme).
+- **2026-10-15** (`492c3b8`) : le pilote automatique de formation — « Formation » dans le panneau de la salle,
+  l'échelon tenu sur l'aile d'un autre (`game/formation.ts`), « À côté » d'abord au-delà de 20 km ; puis, avec
+  PLAN-AVIATION-AAA : les formations et leurs places (F1), les ordres du leader reçus en salle (F2), les ailiers IA
+  volés par l'hôte et envoyés à 20 Hz (F3), les missions partagées et en équipes (P1, S1), les rôles radio entendus
+  par la salle (I4), les porte-avions sur l'horloge de la salle (M2).
+- **2026-10-16 / 2026-10-17** (`b8def89`, `1ce1f2a`) : la console d'équipage `crew/` — l'écran instruments de R4
+  devenu une page à part, un cockpit de verre pour téléphone, tablette ou ordinateur ([CREW.md](CREW.md)).
+- **2026-10-18** (`ff7ec03`, [fiche](progress/aviation/ECOLE-RESEAU.md)) :
+  - **l'ailier par la roue** : Tab maintenu › Patrouille › « Ailier de Ana » (`NetSession.leaders()` : les pilotes de
+    la salle en vol dans l'air terrestre), ou TARS « rejoins Ana » (`camera.netFormation`) ; « À côté » s'il est loin,
+    puis la formation **à la première place libre** (`NetSession.freePlace` : ses ailiers IA et les autres joueurs
+    sur son aile comptés ; toutes prises, en colonne derrière lui) ;
+  - **l'événement `fml`** : chaque page dit à la salle sur l'aile de qui elle vole et à quelle place (aussitôt quand
+    cela change, sinon toutes les 2 s ; gardé 6 s chez les autres — `NetSession.formOf`) ;
+  - **`formWithMe`** : les joueurs sur notre aile, que l'Auto-ACAS laisse en paix (`controller/gcas.ts`) — le
+    leader grimpait pour fuir son propre ailier ; et deux avions côte à côte à la même vitesse ne grimpent plus
+    ensemble sans fin (seul compte un appareil qui se rapproche, ou à moins de 25 m) ;
+  - **le combat libre** : le mode de match `"free"` (`ui/netmatch.ts` `freeStep`, `NetMatch.freeFight`) — en salle,
+    en F-35, sans match, mission, leçon ni défi à soi (réglage `netFreeFight`, activé par défaut) : un match propre à
+    chaque page, sans score à atteindre ni fin ; tout appareil est une cible (les autres joueurs, leurs ailiers IA
+    et les nôtres, le trafic réel et les navires que voit le radar, par des doublures — `controller/fightproxy.ts` —
+    retirées sur toutes les pages quand elles sont abattues), tir ami autorisé, radar en armes libres, de retour en
+    l'air 6 s après ; un match demandé le remplace ;
+  - **la coopération** : `ScoreSheet.sameTeam` (`game/match.ts`) met enfin tous les pilotes d'un match `coop` dans
+    le même camp (ils étaient les cibles les uns des autres) ;
+  - **les autres lissés** : leurs ailiers IA (20 Hz) et les agresseurs de l'hôte interpolés, l'attitude d'un engin
+    distant corrigée en douceur à chaque échantillon (`net/remote.ts`).
+  - Mesuré sur kerr-mini : `net-wing-fight` (Ben sur l'aile d'Ana par la roue, tenu à 3,6 m sur 20 s ; Ana l'abat à
+    l'AIM-120, il revole), `net-formation-ap` 4/4, `net-orders`, `net-coop` (les deux premiers échouaient sur `main`
+    avant).
+- **2026-10-18** (`dfa72d3`) : le verrou radar demandé avant le premier contact (Tab juste au départ d'un match)
+  verrouille le premier contact dans les 3 s au lieu de « Verrou perdu » ; `net-battle` 4/4 deux fois de suite sur
+  kerr-mini (Ben ne verrouillait jamais Ana).
+
 ## Accroches dans le code existant
 
 Le réseau lit ce que la physique expose et ne la réimplémente jamais. Les accroches sont minces et
@@ -474,4 +518,5 @@ regroupées :
 ## À faire par l'utilisateur
 - R0 : l'hôte `stream.samlepirate.org` dans nginx-proxy-manager vers `host:3001`, *Websockets Support* coché.
 - R2 : ouvrir 3478/udp, 3478/tcp et 49160–49200/udp (et dans le Network Firewall OVH s'il est actif) ; le
-  secret de coturn dans les variables de la stack Portainer.
+  secret de coturn dans les variables de la stack Portainer. *coturn est dans la pile depuis le 2026-10-14
+  (`e8a0d3a`, voir « Après le plan »).*

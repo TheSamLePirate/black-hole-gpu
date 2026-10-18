@@ -9,8 +9,11 @@ The HUD's **Place** button (also the radial wheel and the pause menu) opens `src
 orbit (periapsis, apoapsis, inclination, retrograde; a click on the globe: the orbit passes over the
 place now), on the ground (globe, the landing sites, latitude and longitude), beside a body at rest
 (the hover autopilot holds it, the body targeted), before the wormhole on our side or on Gargantua's,
-and quick ones. During a mission it asks first and ends the mission; from a scene without the game's
-world (a bare Kerr view) it loads it first.
+and quick ones. **By name**: its search field finds a destination (the Atlas's), a runway, coordinates
+typed or, on the Earth, any address (Photon as one types, Nominatim on Enter) — in orbit, on the ground or
+on foot, WGS84 exact: set down within centimetres of the address, the orbit over it aimed along its geodetic
+normal. During a mission it asks first and ends the mission; from a scene without the game's world (a bare
+Kerr view) it loads it first. TARS places by name too (`place_ship` with `query`).
 
 ## The date and time (for every player)
 
@@ -31,9 +34,9 @@ frame; landed, where it stands), a plan made on the old clock dropped.
 | **Saves** | Named saves (every setting exact, the date, the pilot, the flight plan), the autosave, load / export (⤓) / delete (✕), *Import a file…*, *Export now*, *Copy a link* (this moment, without the plan). |
 | **Perf** | Where the frame's time goes: frames rendered and loop rate, GPU time per frame and of its passes, the image size (pixel ratio × render scale), quality · frame budget · realtime block, the worst loop; tables of the GPU passes (ms, last) and of the main thread's sections (ms, worst over 3 s). Buttons: quality *Game* (≈ 60 fps), *RT max* (≈ 30), *High*; dynamic resolution on / off. |
 | **Audit** | Self-checks (*Run the audit*): settings finite, ephemeris velocities vs positions, ship state, SOI agreement, free-fall predictor vs Kepler, save round trip, frame rate, steadiness of the ship's light and of the auto exposure, errors, and (optional) the planner on the target. Report downloadable. |
+| **Journal** | What happened: pilot messages, SOI and status changes, placements, saves, audits, errors — filter, copy, download. |
 
 The window remembers its last tab.
-| **Journal** | What happened: pilot messages, SOI and status changes, placements, saves, audits, errors — filter, copy, download. |
 
 ## The HUD
 
@@ -76,6 +79,12 @@ __bh.game.orbit("gargantua", { rM: 12 })            // Kerr circular orbit, radi
 __bh.game.orbit("miller", { altKm: 300 })           // in Miller's frame (Gargantua's tides: ±70 km)
 __bh.game.land("moon", 0.674, 23.473)               // Tranquility Base
 __bh.game.land("mann", 10, -30)                     // Gargantua's worlds: lat / lon on their frame (x away from Gargantua)
+// (on the Earth a point on a runway's strip is lined up on it, its nose down the end in use; another craft parked within 50 m: set 70 m aside)
+__bh.game.walk("moon", 0.674, 23.473)               // landed there, the astronaut out beside it on foot (a spot refused: the ship stays landed, the error says why)
+__bh.game.parkAt("earth", 34.905, -117.884, 220)     // parked on its gear there, nose on that heading — no lining up, no moving aside
+__bh.game.lineUp("Edwards", 60)                     // on a runway's threshold, 60 m in, nose down the end in use (into the wind), at rest — a take-off's start (no name: the runway nearest)
+__bh.game.flyAt(34.905, -117.884, 1500, 220, 180)    // in the air: lat, lon, 1 500 m over the GROUND there (the relief measured), heading 220°, 180 m/s, level, by hand, clean
+// (flyAt's height is above the ground, not the sea: a runway's elevation + 330 m passed to it puts the jet 330 m too high over a high field)
 __bh.game.near("jupiter")                           // beside it at rest, two radii up: targeted, the hover autopilot on
 __bh.game.near("gargantua", { rM: 12 })             // a static observer 12 M from Gargantua
 __bh.game.wormhole("gargantua")                     // before the far mouth (or "ours": beyond Saturn), at rest
@@ -88,6 +97,8 @@ __bh.game.orbitTarget()                             // around the current target
 __bh.game.placeAt({ frame, X, vel, fwd, up })        // at a state (home frame / the hole's map)
 __bh.game.target("saturn"); __bh.game.targets(); __bh.game.soi(); __bh.game.bodies("gargantua")
 __bh.game.warp(1000); __bh.game.realTime(); __bh.game.pause(false); __bh.game.setDate("2067-06-01T12:00"); __bh.game.date()
+__bh.game.jumpTo(t); __bh.game.now()                // the clock set to a scene time [M] (the ship carried; returns {date, planDropped}); the scene's time now [M]
+__bh.game.placings                                  // how many times the craft was placed (a placing awaited — the room's runway after a loss — let go by a later one)
 __bh.game.set("crashSpeed", 20); __bh.game.get("turnRate"); __bh.game.settings()
 __bh.game.quality("game")                           // low · medium · high · ultra · realtime · game
 __bh.game.perf()                                    // what the Perf tab shows (GPU timestamps: on from the start when the GPU has them)
@@ -99,4 +110,8 @@ await __bh.game.audit({ planner: true })
 __bh.game.log.events; __bh.game.log.text()
 ```
 
-Sources: `src/game/` (orbit, kepler, place, status, save, log, audit, tuning, tools), `src/ui/gametools.ts`, `src/ui/targethud.ts`.
+`__bh.game.help()` prints the short list; the methods above are all of `GameTools` (`src/game/tools.ts`). The
+F-35's own handles (its flights, the flight school — `__bh.flight.school.state()` —, the views, the replay) are
+under `__bh.flight`: [`BH-API.md`](BH-API.md).
+
+Sources: `src/game/` (orbit, kepler, place, status, save, log, audit, tuning, tools), `src/ui/gametools.ts`, `src/ui/placepanel.ts`, `src/ui/timepanel.ts`, `src/ui/targethud.ts`.

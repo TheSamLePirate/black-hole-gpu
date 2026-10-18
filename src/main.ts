@@ -3909,7 +3909,7 @@ async function main() {
               ["hover", { fr: "Stationnaire", en: "Hover" }, "8"],
               ["circularize", { fr: "Circulariser", en: "Circularize" }, "9"],
               ["approach", { fr: "Approche", en: "Approach" }, "0"],
-              ["land", { fr: "Atterrir", en: "Land" }, "G"],
+              ["land", { fr: "Atterrir", en: "Land" }, "F7"],
               ["takeoff", { fr: "Décoller", en: "Take off" }, "U"],
               ["dock", { fr: "Amarrer", en: "Dock" }, "B"],
               ["entry", { fr: "Rentrée", en: "Entry" }, "⇧G"],
@@ -4308,8 +4308,8 @@ async function main() {
   };
   const lessonPlace = (id: LessonId, how: boolean | "guided"): string =>
     placeShip(() => {
-      // (guided — I3 —: TARS flies first, then hands over; the new lessons' demonstration his part alone, their try
-      // the pilot's)
+      // (guided — I3 —: TARS flies first, then hands over; a demonstration TARS's whole lesson — the pilot's part
+      // too —; a try the pilot's part alone)
       const guided = how === "guided";
       const demo = how === true || guided;
       const mode = guided ? "guided" : how ? "demo" : "try";
