@@ -120,6 +120,13 @@ function helpOf(id: string): { why: string; todo: string } {
         why: t("Closing on the station or a craft inside its 200 m keep-out sphere faster than its limit: 0.05 m/s + 0.5 % of the range."),
         todo: t("Brake on the RCS (the translation keys, away from it), or ⇧8: station keeping. Armed, the protection holds by itself."),
       };
+    case "ring":
+      return {
+        why: t("The Endurance turns about its axis: in its ring's modules the turn's pull is the crew's weight (ω² r, 30 m out)."),
+        todo: t(
+          "⇧[ ⇧]: its turn a revolution a minute lower or higher — 5 rpm gives 0.84 g; past 7 rpm its structure is strained. To dock at its hub, match its turn.",
+        ),
+      };
     case "wheels":
       return { why: t("Rolling on the ground."), todo: t("Keep straight; the brakes come once the nose wheel is down.") };
     case "landed":
@@ -136,7 +143,7 @@ export type AlertInput = Pick<
   FlightInfo,
   "path" | "landed" | "surface" | "air" | "ergo" | "region" | "r" | "photon" | "isco" | "auto" | "target" | "engine"
 > &
-  Partial<Pick<FlightInfo, "spaceGuard">> & {
+  Partial<Pick<FlightInfo, "spaceGuard" | "ring">> & {
     status?: { soi: string; status: string } | null;
     landedOn?: FlightInfo["landedOn"];
     /** the time running */
@@ -201,6 +208,16 @@ export function alertsOf(i: AlertInput): Alert[] {
       G.level === "act" && G.armed
         ? tf("AUTO-PROTECTION · KEEP-OUT · HOLDING · {0} M/S", G.rate.toFixed(1))
         : tf("CLOSING {0} M/S · LIMIT {1} M/S · {2} M", G.rate.toFixed(1), G.limit.toFixed(2), Math.round(G.dist)),
+    );
+  // the Endurance's ring: its turn, the weight in its modules (a caution past its structure's comfort)
+  const Rg = i.ring;
+  if (Rg && (Rg.rpm > 0.05 || (Rg.asked ?? 0) > 0))
+    add(
+      "ring",
+      Rg.rpm > 7.05 ? "caution" : "advisory",
+      Rg.asked !== null && Math.abs(Rg.rpm - Rg.asked) > 0.05
+        ? tf("RING {0} RPM → {1} · {2} G", Rg.rpm.toFixed(1), Rg.asked, Rg.g.toFixed(2))
+        : tf("RING {0} RPM · {1} G", Rg.rpm.toFixed(1), Rg.g.toFixed(2)),
     );
   // the tank
   const fuel = i.engine.fuel;

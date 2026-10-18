@@ -91,6 +91,11 @@ export interface FlightContext {
   /** a spacecraft's level of assistance over the SAS (controller/spaceassist.ts): direct — the stick an angular
    *  acceleration, nothing damps —, damped — the SAS always on —, its rates scaled; absent: the pilot's SAS */
   rate?: { law: "direct" | "damped"; scale: number } | null;
+  /** a turn held about the ship's long axis (the Endurance's ring, controller/ring.ts) [rad/s, + rolling left], the
+   *  SAS's zero in its place for the roll */
+  spinHold?: number | null;
+  /** and how fast its thrusters change that turn [rad/s²] */
+  spinAcc?: number;
   /** the camera's axes and velocity (local components); velocity = 3-velocity β */
   right: V3;
   up: V3;
@@ -699,6 +704,7 @@ export class FlightComputer {
       for (let i = 0; i < 3; i++) {
         if (manual[i] !== 0) want[i] = sas ? manual[i]! * TUNING.turnRate : this.omega[i]! + manual[i]! * TUNING.turnAccel * dt;
         // (on the gear: the roll still held, the pitch and the yaw left to the springs and the nose wheel)
+        else if (i === 2 && c.spinHold) want[i] = c.spinHold;
         else if (sas && !(c.onGear && i !== 2)) want[i] = 0;
         // (on the gear, the nose lowered no faster than 3°/s: a pilot's back pressure)
         if (c.onGear && i === 0 && manual[0] === 0) want[0] = Math.max(this.omega[0], -0.05);
@@ -707,14 +713,22 @@ export class FlightComputer {
     let effort = 0;
     const torque: V3 = [0, 0, 0];
     for (let i = 0; i < 3; i++) {
-      const d = clamp(want[i]! - this.omega[i]!, -acc3[i]! * dt, acc3[i]! * dt);
+      // (the ring's turn changed by its thrusters about the long axis, slowly: a 900 t ring)
+      const ai = i === 2 && c.spinHold != null && c.spinAcc ? Math.min(acc3[i]!, c.spinAcc) : acc3[i]!;
+      const d = clamp(want[i]! - this.omega[i]!, -ai * dt, ai * dt);
       if (dt > 0) {
         torque[i] = d / (acc3[i]! * dt);
         effort = Math.max(effort, Math.abs(torque[i]!));
       }
       // (no faster than 1.5 × the commanded rate — but a turn the craft has past it kept, only slowed: docked
       // to the tumbling Endurance, the assembly's 18°/s were cut to its 1.5 × 0.9°/s at once)
-      const lim = Math.max(1.5 * TUNING.turnRate, Math.abs(this.omega[i]!), planeLaw && c.air!.fbw ? 1.3 * c.air!.fbw.rates[i]! : 0);
+      // (the Endurance's ring: its turn held past the turning rate — its thrusters bring it there, slowly)
+      const lim = Math.max(
+        1.5 * TUNING.turnRate,
+        Math.abs(this.omega[i]!),
+        planeLaw && c.air!.fbw ? 1.3 * c.air!.fbw.rates[i]! : 0,
+        i === 2 && c.spinHold ? 1.02 * Math.abs(c.spinHold) : 0,
+      );
       this.omega[i] = clamp(this.omega[i]! + d, -lim, lim);
       if (Math.abs(this.omega[i]!) < 1e-5 && want[i] === 0) this.omega[i] = 0;
     }

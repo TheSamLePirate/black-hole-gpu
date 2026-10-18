@@ -1,3 +1,4 @@
+import { RING } from "./ring";
 import { tunnelEntrySide } from "../system/wormhole-map";
 import { ASSIST } from "./assistlevel";
 import { timeRate } from "../clock";
@@ -1102,6 +1103,9 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   const out = this.pilot.step(
     {
       rate: this.spaceRate,
+      // (the Endurance's ring: its turn held about its axis — controller/ring.ts)
+      spinHold: VESSELS[fleet.active].ring && this.ringRpm != null ? (this.ringRpm * 2 * Math.PI) / 60 : null,
+      spinAcc: RING.accel,
       air: airCtx,
       sf: sfCtx,
       thrustDir: vt.thrustDir,

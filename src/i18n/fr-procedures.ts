@@ -72,6 +72,18 @@ export default {
     "RCS : translation — Z S haut · bas, Q D gauche · droite, ⇧ Alt avant · arrière",
   "RCS: rotation — the attitude keys turn the craft": "RCS : rotation — les touches d'attitude font tourner le vaisseau",
   KEEP: "À POSTE",
+  "The Endurance's ring: its turn a revolution a minute lower · higher — the whole craft turns about its axis, its thrusters hold it; the weight in its modules on the HUD (5 rpm: 0.84 g)":
+    "L'anneau de l'Endurance : sa rotation d'un tour par minute de moins · de plus — tout le vaisseau tourne autour de son axe, ses propulseurs la tiennent ; la pesanteur dans ses modules au HUD (5 tr/min : 0,84 g)",
+  "The ring: the Endurance's": "L'anneau : celui de l'Endurance",
+  "Ring: stopping its turn": "Anneau : arrêt de sa rotation",
+  "Ring: {0} rpm asked — {1} g in its modules{2}": "Anneau : {0} tr/min demandés — {1} g dans ses modules{2}",
+  " · past its structure's comfort": " · au-delà du confort de sa structure",
+  "The Endurance turns about its axis: in its ring's modules the turn's pull is the crew's weight (ω² r, 30 m out).":
+    "L'Endurance tourne autour de son axe : dans les modules de son anneau, la traction de la rotation fait le poids de l'équipage (ω² r, à 30 m).",
+  "⇧[ ⇧]: its turn a revolution a minute lower or higher — 5 rpm gives 0.84 g; past 7 rpm its structure is strained. To dock at its hub, match its turn.":
+    "⇧[ ⇧] : sa rotation d'un tour par minute de moins ou de plus — 5 tr/min donnent 0,84 g ; au-delà de 7 tr/min sa structure souffre. Pour s'amarrer à son moyeu, égaler sa rotation.",
+  "RING {0} RPM → {1} · {2} G": "ANNEAU {0} TR/MIN → {1} · {2} G",
+  "RING {0} RPM · {1} G": "ANNEAU {0} TR/MIN · {1} G",
   "Rendezvous: {0} km/s asked — beyond reach (the station's orbit is known near today's date only)":
     "Rendez-vous : {0} km/s demandés — hors de portée (l'orbite de la station n'est connue que près de la date d'aujourd'hui)",
   Departure: "Départ",

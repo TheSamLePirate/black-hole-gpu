@@ -2675,6 +2675,9 @@ export class FlightHud {
     const d = i.dock;
     const links = i.links ?? [];
     this.dock.hidden = !d && !links.length;
+    // (the alerts' lines moved below the docking panel while it shows — both sat at the top's centre: the panel hid them)
+    const below = this.dock.hidden ? "" : `${Math.round(this.dock.offsetTop + this.dock.offsetHeight + 8)}px`;
+    if (this.warn.style.top !== below) this.warn.style.top = below;
     if (!d && !links.length) return;
     const f = (v: number, n = 1) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(2)} km` : `${v.toFixed(n)} m`);
     const ok = (b: boolean) => (b ? "ok" : "");

@@ -62,6 +62,9 @@ export interface VesselDef {
   centre: V3;
   viewDist: number;
   ports: Port[];
+  /** a craft turned about its long axis for its crew's weight (the Endurance — the whole of it turns, as in the film):
+   *  its ring's radius [m] (PLAN-VAISSEAUX X2a) */
+  ring?: { radius: number };
   /** a ground under it: its gear (the Endurance has none — it never lands) */
   lands: boolean;
   jets: JetDef[];
@@ -339,6 +342,8 @@ export const VESSELS: Record<VesselId, VesselDef> = {
       { name: "hub, fore", centre: [0, 0, 9.3], axis: [0, 0, 1] },
       { name: "hub, aft", centre: [0, 0, -10.7], axis: [0, 0, -1] },
     ],
+    // (its modules' ring about the hub: the radius of gyration about the axis)
+    ring: { radius: 30 },
     lands: false,
     jets: ENDURANCE_JETS,
     flame: 2.2,

@@ -90,6 +90,8 @@ export interface FlightInfo {
   spaceAssist?: string;
   spaceDrift?: boolean;
   rcsTranslate?: boolean;
+  /** the Endurance's ring: its turn [rpm], the weight in its modules [g], the turn asked (controller/ring.ts) */
+  ring?: { rpm: number; g: number; asked: number | null } | null;
   /** the powered landing's point (the LPD): seen from the eye (camera coordinates), its distance [m], redesignated */
   lpd?: { dir: Vec3 | null; dist: number; moved: boolean } | null;
   /** a spacecraft's protections: what they foresee (controller/spaceguard.ts) */
@@ -313,6 +315,7 @@ function flightInfo(this: CameraController): FlightInfo {
     spaceDrift: this.spaceDrift,
     rcsTranslate: this.rcsMode === "translate" && fleet.active !== "f35",
     spaceGuard: this.spaceGuard ?? null,
+    ring: this.ringInfo(),
     /** what holds the rails' warp back ("" : nothing) */
     railsNote: this.railsNote,
     rollAlign: this.pilot.rollAlign,

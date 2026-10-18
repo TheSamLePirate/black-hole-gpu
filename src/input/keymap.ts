@@ -326,6 +326,14 @@ export const KEYMAP: KeySection[] = [
         bind: [fly("Digit8", "spaceSystem", { arg: "keep", shift: true }), fly("Digit9", "spaceSystem", { arg: "rcsMode", shift: true })],
       },
       {
+        keys: "⇧[ · ⇧]",
+        text: "The Endurance's ring: its turn a revolution a minute lower · higher — the whole craft turns about its axis, its thrusters hold it; the weight in its modules on the HUD (5 rpm: 0.84 g)",
+        bind: [
+          fly("BracketLeft", "spaceSystem", { arg: "ringDown", shift: true }),
+          fly("BracketRight", "spaceSystem", { arg: "ringUp", shift: true }),
+        ],
+      },
+      {
         keys: "M · ⇧M",
         text: "3D map (drag: turn · right-drag: pan · wheel: zoom · click: target · double-click: centre) · settings panel",
         bind: [{ layer: "flight", key: ["m"], shift: false, do: "map" }],
@@ -356,7 +364,7 @@ export const KEYMAP: KeySection[] = [
       {
         keys: "[ · ]",
         text: "The craft flown: the Ranger, the Lander, the Endurance (the others coast, turning as they were)",
-        bind: [fly("BracketLeft", "vessel", { arg: "-1" }), fly("BracketRight", "vessel", { arg: "1" })],
+        bind: [fly("BracketLeft", "vessel", { arg: "-1", shift: false }), fly("BracketRight", "vessel", { arg: "1", shift: false })],
       },
       {
         keys: "F · ⇧F",

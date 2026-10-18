@@ -3166,7 +3166,16 @@ async function main() {
               ? camera.navToggle()
               : camera.jetToggle(a === "ab" ? "ab" : a === "athr" ? "athr" : "ap"),
       ),
-    spaceSystem: (_, a) => panel.toast(a === "rcsMode" ? camera.rcsModeToggle() : camera.keepKey()),
+    spaceSystem: (_, a) =>
+      panel.toast(
+        a === "rcsMode"
+          ? camera.rcsModeToggle()
+          : a === "ringUp"
+            ? camera.ringSet(1)
+            : a === "ringDown"
+              ? camera.ringSet(-1)
+              : camera.keepKey(),
+      ),
     route: () => openPlan(),
     airBrake: () => {
       camera.airBrake = camera.airBrake > 0 ? 0 : 1;
