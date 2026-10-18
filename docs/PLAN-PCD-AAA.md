@@ -50,9 +50,9 @@ verts, poussée sur `main`.
 - **Style** (réglage `f35PcdStyle` : réaliste, cinématique) : le cinématique ajoute halo plus large, balayage
   au changement de page, rémanence.
 
-### Q3 — La mise en page d'un vrai F-35 + ICAWS
+### Q3 — La mise en page d'un vrai F-35 + ICAWS — FAIT ([fiche](progress/pcd/Q3.md))
 
-- Portails en 1 / 2 / 4 fenêtres (appui long : agrandir), menus en bas de portail, palette fidèle.
+- Chaque côté en 1 ou 2 portails (le coin du titre), le menu des pages au titre, les touches au pied du portail.
 - Les chevauchements corrigés (FCS), une grille typographique commune.
 - **ICAWS** : la vraie liste des alertes (avertissement, précaution, avis) et les dégâts en combat.
 

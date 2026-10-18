@@ -125,6 +125,7 @@ export function pcdData(
       : null,
     bingo: c.routeBingo(),
     alerts,
+    damage: c.combat?.world.damage ?? 0,
     // (a mission's places — controller/mission.ts —: its zones, the SAMs' reach)
     marks: c.mission
       ? c
