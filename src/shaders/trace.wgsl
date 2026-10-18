@@ -2976,7 +2976,6 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32, gO
   var segOn = false;
   var q0 = vec3f(0.0);
   var segTravel = 0.0;
-  var segD = vec3f(0.0);
   for (var i = 0u; i < 3000u; i++) {
     cost(11u);
     if (st.l >= lPlus && st.pl > 0.0) { out.side = 1.0; break; }
@@ -3025,41 +3024,21 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32, gO
     if (ours && (onOurs || segOn)) {
       let p0 = homePoint(lPrev, psiPrev, nA, e2);
       let p1 = homePoint(st.l, st.psi, nA, e2);
-      // (its chords merged while the way holds straight — within half the pixel's footprint of the piece's line —: one
-      // look at our bodies for the piece, not one a step; flushed as the ray leaves our side's region — out of it, or
-      // into the mouth — or as the steps run out; as it bends, the piece up to p0 flushed and a new one begun there)
+      // (its chords merged while the way holds straight — the last point within a quarter of the pixel's footprint of
+      // the piece's line —: one look at our bodies for the piece, not one a step; flushed as it bends, as the ray
+      // leaves our side's region — out of it, or into the mouth — or as the steps run out)
       if (!segOn) {
         segOn = true;
         q0 = p0;
         segTravel = travel0 + travel - h;
-        segD = vec3f(0.0);
       }
       let L = p1 - q0;
       let lL = length(L);
-      let c = p1 - p0;
-      let lc = length(c);
-      // (the way's bend: a path turning one way, its direction within an angle β of the piece's line, keeps within
-      // ½ |L| sin β of it — β the larger of its first chord's and its last's; not its last point's distance alone,
-      // which a steady bend's middle exceeds n/4 times over n steps)
-      var bend = 0.0;
-      if (lL > 0.0 && any(segD != vec3f(0.0))) {
-        let u = L / lL;
-        bend = 0.5 * lL * max(length(cross(segD, u)), select(0.0, length(cross(c / lc, u)), lc > 0.0));
-      }
+      let dev = select(0.0, length(cross(p0 - q0, L / max(lL, 1e-30))), lL > 0.0);
       let leaving = !onOurs || st.l <= -lMinus || st.l >= -a || i + 1u >= 3000u;
-      if (TUNE_MERGE == 0u || leaving) {
+      if (TUNE_MERGE == 0u || leaving || dev > 0.25 * beam() * (travel0 + travel)) {
         segOn = false;
         if (lL > 0.0 && ourSegment(q0, L / lL, lL, &out, gObs, segTravel, true)) { out.side = -1.0; break; }
-      } else if (bend > 0.5 * beam() * (travel0 + travel)) {
-        // (the piece without the chord that bends it, then a new one from p0 with that chord)
-        let Lp = p0 - q0;
-        let lp = length(Lp);
-        if (lp > 0.0 && ourSegment(q0, Lp / lp, lp, &out, gObs, segTravel, true)) { out.side = -1.0; break; }
-        q0 = p0;
-        segTravel = travel0 + travel - h;
-        segD = select(vec3f(0.0), c / max(lc, 1e-30), lc > 0.0);
-      } else if (all(segD == vec3f(0.0)) && lc > 0.0) {
-        segD = c / lc;
       }
     }
     if (waterOn && (lPrev * st.l < 0.0 || (st.l == 0.0 && lPrev != 0.0))) {
