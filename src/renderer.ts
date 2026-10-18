@@ -2282,7 +2282,7 @@ export class Renderer {
     set(4, ...cam.fwd, o.stars ?? 0);
     set(5, cam.zamo.alpha, cam.zamo.omega, cam.zamo.varpi, cam.zamo.sqrtSig);
     // (y: the aerial table's scale — trace.wgsl apScale)
-    set(6, cam.zamo.sqrtSigOverDel, preExposure(this.ev(s)), 0, 0);
+    set(6, cam.zamo.sqrtSigOverDel, this.aerialPreExposed ? preExposure(this.ev(s)) : 0, 0, 0);
     set(7, ...cam.beta, cam.gamma);
     set(8, a, horizon(a), dc.rIn, Math.max(s.diskOuter, dc.rIn + 0.5));
     set(9, s.diskTemp, dc.fmax, s.turbulence, dc.logY);
@@ -3875,6 +3875,9 @@ export class Renderer {
   private envRead!: GPUBindGroup;
   /** the air before the near world's ground read from the aerial perspective's table (a switch for comparisons) */
   aerialTable = true;
+  /** the aerial table's light stored × the frame's pre-exposure (trace.wgsl apScale; false: raw, as before the 18/10
+   *  audit — a switch for comparisons) */
+  aerialPreExposed = true;
   /** the ground's marches in a shell as high as the relief round the camera can be, not 9 600 m (a switch for comparisons) */
   reliefCeiling = true;
   private mapCells: MapCells | null = null;

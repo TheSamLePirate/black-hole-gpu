@@ -7319,7 +7319,9 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   // the stars behind the sunlit sky: drawn far brighter than they are (the sky's scenes need them), they
   // would shine through a blue sky — faded as the sky's glow here outshines them: gone while it is a
   // hundredth of a white ground in the sun or more (day, sunset), all out below a ten-thousandth (night)
-  let s = luminance(max(e.col - e.Lm, vec3f(0.0))) / max(luminance(lt.e) / PI, 1e-30);
+  // (the moonlit share's luminance taken off, not its colour: the aerial table keeps it as a grey luminance — a grey
+  // off a blue sky left its blue, and veiled a moonlit night's stars; the same for a ray's own air, linear)
+  let s = max(luminance(e.col) - luminance(e.Lm), 0.0) / max(luminance(lt.e) / PI, 1e-30);
   let veil = clamp(log(1e-2 / max(s, 1e-12)) / log(100.0), 0.0, 1.0);
   // (the airport's rotating beacon — A3 —: faint by day, a sweeping flash by night)
   var col = e.col;

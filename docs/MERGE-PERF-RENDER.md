@@ -441,10 +441,27 @@ sur la branche. Décisions du propriétaire : corriger sur `perf-render` puis fu
 - **La table aérienne pré-exposée.** Ses `rgba16float` gardaient la lumière brute ; le reste du pipeline la multiplie
   par `preExposure` (jusqu'à 2⁴⁰) avant tout stockage 16 bits. De nuit l'air de la table pouvait s'arrondir à zéro.
   Écrite × `preExposure`, lue ÷ (`Params.zamo2.y`, `trace.wgsl apScale`).
+- **Les étoiles d'une nuit de lune voilées par la table** (trouvé par la vérification ci-dessous). La table garde la part
+  de la lune (`Lm`) en luminance grise ; le voile des étoiles (`earthNear`) l'ôtait canal par canal d'un ciel bleu,
+  borné à 0 : le bleu restait, et voilait la plupart des étoiles faibles sous la lune (le ciel de la vue 14 % plus
+  sombre qu'avec la marche de chaque rayon). Le voile ôte maintenant la luminance : identique pour la marche d'un rayon
+  (linéaire), juste pour la table.
 - **« Netteté en mouvement » : Non par défaut.** « En virage » coûte 21 → 35 ms par virage et la résolution dynamique
   compte ces images (voir plus bas) ; le joueur la choisit.
 - **La doc** : `TUNE_EPS_FAR` adopté (plus « à revoir ») ; le rejet tôt des corps du 16/10 (+3,7 %) distingué de celui
   adopté le 17/10 ; les commentaires « 1024² » du noyau.
+
+**Vérifié sur kerr-mini (18/10)** : `check-wgsl` 20/20 ; tests unitaires 1 307 pass / 0 fail ; `perf-suite` sur deux
+scènes nouvelles (`tarifa-dusk` : Tarifa au crépuscule vers le couchant, `tarifa-night` : sous la pleine lune du
+29/07/2026), A/B alternés, images comparées en PSNR (le bruit d'une comparaison, `AB=noop` : 50,0 dB au crépuscule,
+44,2 dB la nuit) :
+
+| | crépuscule | nuit |
+|---|---|---|
+| table pré-exposée → lumière brute (`AB=aerialraw`, l'ancienne table) | 46,0 dB — des bandes dans le ciel | 43,3 dB |
+| table → marche de chaque rayon, avant le correctif du voile | 51,1 dB | 41,5 dB — les étoiles voilées |
+| table → marche de chaque rayon, après (`AB=aerial`) | **49,1 dB** (moyennes 9,24 / 9,26) | **46,1 dB** (14,96 / 14,98) |
+| gain de la table sur la trace | −17 % | −21 % |
 
 **Suites, non bloquantes (à faire sur `main`) :**
 - **Netteté en mouvement et résolution dynamique** : `main.ts` (gpuEma, scaleMs) et `adaptBlock` (`blockMs`,

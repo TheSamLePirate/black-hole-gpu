@@ -407,6 +407,7 @@ The renderer (`src/renderer.ts`). The members the tests read:
 | `taParallaxPx` | number | the camera's move that breaks the temporal history: the nearest ground's or scenery's shift on the image [px] (default 64 — the history kept in flight, reprojected by depth; 0.5 dropped it every frame of a low flight) |
 | `cockpitMask` | boolean | the rays the flown craft's own opaque parts hide from the cockpit not traced (shaders/mask.wgsl; default true; a switch for comparisons) |
 | `aerialTable` | boolean | the air before the near world's ground read from the aerial perspective's table (trace.wgsl aerial; default true where the device binds its two textures) |
+| `aerialPreExposed` | boolean | the aerial table's light stored × the frame's pre-exposure (trace.wgsl apScale; default true; false: raw, as before the 18/10 audit — `perf-suite` AB=aerialraw) |
 | `reliefCeiling` | boolean | the Earth's ground marches under the relief's ceiling round the camera, not 9 600 m (system/relief-ceiling.ts; default true) |
 | `bodyList` | boolean | our universe's bodies a ray from the camera — and one from the wormhole mouth's region (`bodyListSizes`) — may meet listed for the kernel, not all looked at (default true) |
 | `probeEveryMoving` | number | the craft's light probe traced every this many frames while what it sees moves (default 1) |

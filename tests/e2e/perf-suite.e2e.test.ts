@@ -17,6 +17,12 @@ const FLIGHT: Record<string, string> = {
     __bh.game.flyAt(36.1, -5.55, 900, 200, 210); __bh.settings.shipMount = "cockpit";`,
   "flight: the Alps, cockpit": `__bh.game.setDate("2026-07-10T11:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
     __bh.game.flyAt(45.85, 6.75, 2500, 110, 200); __bh.settings.shipMount = "cockpit";`,
+  // (the air at dusk and by moonlight — the aerial table's half floats at a high exposure: AB=aerial; the dusk's view
+  // towards the sun's glow over the sea, the night's under the full moon)
+  "flight: Tarifa at dusk, cockpit": `__bh.game.setDate("2026-07-29T20:15:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
+    __bh.game.flyAt(36.1, -5.55, 900, 290, 210); __bh.settings.shipMount = "cockpit";`,
+  "flight: Tarifa by moonlight, cockpit": `__bh.game.setDate("2026-07-29T23:30:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
+    __bh.game.flyAt(36.1, -5.55, 900, 200, 210); __bh.settings.shipMount = "cockpit";`,
 };
 const DEFAULT = [
   "Interstellar: along the disk (the film's close pass)",
@@ -43,6 +49,8 @@ const ALIAS: Record<string, string> = {
   himalaya: "Earth: the Himalaya from orbit",
   alps: "flight: the Alps, cockpit",
   tarifa: "flight: Tarifa, cockpit",
+  "tarifa-dusk": "flight: Tarifa at dusk, cockpit",
+  "tarifa-night": "flight: Tarifa by moonlight, cockpit",
 };
 /** AB=<name>: the switches compared (A, then B) */
 const ABS: Record<string, [string, string, string, string?]> = {
@@ -63,6 +71,13 @@ const ABS: Record<string, [string, string, string, string?]> = {
     "__bh.renderer.aerialTable = true",
     "__bh.renderer.aerialTable = false",
     // (its pass's kernel compiled after the first image: A waits for it)
+    "!!__bh.renderer.aerialPipe",
+  ],
+  // (the aerial table's half floats: its light × the pre-exposure → raw, as before the 18/10 audit — at dusk, at night)
+  aerialraw: [
+    "the aerial table's light pre-exposed → raw",
+    "__bh.renderer.aerialPreExposed = true",
+    "__bh.renderer.aerialPreExposed = false",
     "!!__bh.renderer.aerialPipe",
   ],
   stepbodies: [
