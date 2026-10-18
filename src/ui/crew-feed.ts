@@ -289,7 +289,7 @@ export function crewSnapshot(c: CameraController, i: Info, status: RangerStatus 
           }
         : null,
     sys: {
-      engine: i.engine.kind,
+      engine: av ? "F135" : i.engine.kind,
       spool: av ? av.spool : null,
       thrust: av ? av.thrustKn : null,
       ab: av ? av.ab : null,

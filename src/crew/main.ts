@@ -44,7 +44,10 @@ const model = new CrewModel(net);
 const views = new CrewViews($<HTMLCanvasElement>("instruments"), model);
 const radio = new CrewRadio(net, () => syncRadio());
 const actions = new CrewActions(net, model);
-actions.onChange(() => board());
+actions.onChange(() => {
+  board();
+  views.request();
+});
 let noticeTimer: ReturnType<typeof setTimeout>;
 const notice = (s: string) => {
   $("notice").textContent = s;
@@ -312,6 +315,29 @@ function controls() {
     list.id = "contact-list";
     contacts.append(list);
     bar.append(contacts);
+  } else if (v === "schematic") {
+    // the configuration (PLAN-CREW-ACTIONS A1): what a copilot sets — every switch lit as the pilot's craft is
+    const sys = () => snapNow()?.sys;
+    bar.append(
+      actGroup("Train", [
+        ["Rentré", "cfg.gear", { down: false }, () => sys()?.gearDown === false],
+        ["Sorti", "cfg.gear", { down: true }, () => !!sys()?.gearDown],
+      ]),
+      actGroup("Volets", [
+        ["0", "cfg.flaps", { pos: 0 }, () => (sys()?.flaps ?? -1) === 0],
+        ["½", "cfg.flaps", { pos: 0.5 }, () => sys()?.flaps === 0.5],
+        ["Pleins", "cfg.flaps", { pos: 1 }, () => sys()?.flaps === 1],
+      ]),
+      actGroup("Aérofrein", [
+        ["Rentré", "cfg.brake", { on: false }, () => (sys()?.brake ?? 1) === 0],
+        ["Sorti", "cfg.brake", { on: true }, () => (sys()?.brake ?? 0) > 0],
+      ]),
+      actGroup("SAS", [
+        ["Off", "cfg.sas", { on: false }, () => snapNow()?.auto?.sas === false],
+        ["On", "cfg.sas", { on: true }, () => !!snapNow()?.auto?.sas],
+      ]),
+      actButton("Acquitter l’alarme", "cfg.ack", {}, "ack-systems"),
+    );
   } else if (v === "telemetry") {
     bar.append(
       selectControl(
@@ -537,8 +563,39 @@ async function fire(b: HTMLElement | null, act: Act, args: Args, done?: (ok: boo
   refresh();
   return r;
 }
+/** the controls that show a state of the pilot's (the gear down, the SAS…): their pressed look from his instruments */
+const pressedOf = new Map<HTMLElement, () => boolean>();
+/**
+ * A group of ordering buttons, one of them lit as the pilot's state says (read at 4 Hz, not assumed): a title, and
+ * each choice's words, act, arguments and whether it is the state now.
+ */
+function actGroup(title: string, items: [string, Act, Args, () => boolean][]) {
+  const g = el("div", "", "seg act-seg");
+  g.setAttribute("role", "group");
+  g.setAttribute("aria-label", title);
+  g.append(el("span", title, "seg-title"));
+  for (const [text, act, args, on] of items) {
+    const b = actButton(text, act, args);
+    pressedOf.set(b, on);
+    g.append(b);
+  }
+  return g;
+}
+/** the pilot followed's snapshot now (fresh), for the controls' states */
+const snapNow = () => {
+  const own = model.own();
+  return own && own.age < 3 ? own.snapshot : null;
+};
+
 /** every control that gives an order: on or off as its family is open */
 function syncActs() {
+  for (const [b, on] of pressedOf) {
+    if (!b.isConnected) {
+      pressedOf.delete(b);
+      continue;
+    }
+    b.setAttribute("aria-pressed", String(on()));
+  }
   for (const b of document.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLSelectElement>("[data-act]")) {
     const fam = ACTS[b.dataset.act as Act]?.fam;
     const can = fam ? actions.can(fam) : { ok: false, why: "" };

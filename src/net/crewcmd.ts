@@ -24,6 +24,38 @@ const onOff = (on: unknown, fr: [string, string], en: [string, string]) => ({ fr
 /** The catalogue: every act a crew may ask. Nothing here flies the craft by hand. */
 export const ACTS = {
   "cfg.ack": { fam: "config", say: () => ({ fr: "alarme acquittée", en: "master caution silenced" }) },
+  // the configuration: what a copilot sets on the pilot's call
+  "cfg.gear": {
+    fam: "config",
+    params: { down: { type: "boolean" } },
+    required: ["down"],
+    say: (a) => onOff(a.down, ["train sorti", "train rentré"], ["gear down", "gear up"]),
+  },
+  "cfg.flaps": {
+    fam: "config",
+    params: { pos: { type: "number", minimum: 0, maximum: 1 } },
+    required: ["pos"],
+    say: (a) => {
+      const p = Number(a.pos);
+      return p < 0.25
+        ? { fr: "volets rentrés", en: "flaps up" }
+        : p < 0.75
+          ? { fr: "volets à moitié", en: "flaps half" }
+          : { fr: "volets pleins", en: "flaps full" };
+    },
+  },
+  "cfg.brake": {
+    fam: "config",
+    params: { on: { type: "boolean" } },
+    required: ["on"],
+    say: (a) => onOff(a.on, ["aérofrein sorti", "aérofrein rentré"], ["air brake out", "air brake in"]),
+  },
+  "cfg.sas": {
+    fam: "config",
+    params: { on: { type: "boolean" } },
+    required: ["on"],
+    say: (a) => onOff(a.on, ["SAS engagé", "SAS coupé"], ["SAS on", "SAS off"]),
+  },
 } satisfies Record<string, ActSpec>;
 export type Act = keyof typeof ACTS;
 const SPECS: Record<string, ActSpec> = ACTS;

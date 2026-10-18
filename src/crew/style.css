@@ -1181,3 +1181,19 @@ dialog input {
     animation: none;
   }
 }
+.act-seg {
+  align-items: center;
+  gap: 2px;
+}
+.act-seg .seg-title {
+  font: 700 10px var(--mono);
+  letter-spacing: 0.8px;
+  color: var(--muted);
+  text-transform: uppercase;
+  padding: 0 8px 0 10px;
+}
+.act-seg button[aria-pressed="true"] {
+  background: linear-gradient(180deg, #1c6b4a, #134a33);
+  color: #e3ffef;
+  box-shadow: inset 0 0 0 1px #4cf29a80;
+}

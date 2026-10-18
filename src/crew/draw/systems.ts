@@ -152,7 +152,7 @@ export function drawSystems(p: Pen, r: Rect, sc: Scene) {
       p.c.restore();
       const gear = sys?.gear ?? 0,
         down = !!sys?.gearDown;
-      const col = gear >= 0.99 ? C.green : gear > 0.01 || down ? C.amber : "#33444e";
+      const col = down && gear >= 0.99 ? C.green : gear > 0.01 || down ? C.amber : "#33444e";
       for (const [gx, gy] of [
         [0, -5.5],
         [-2.6, 2.8],
@@ -162,12 +162,8 @@ export function drawSystems(p: Pen, r: Rect, sc: Scene) {
         p.fill(col === "#33444e" ? "#0b141a" : `${col}44`);
         p.stroke(col, 1.6);
       }
-      p.text(gear >= 0.99 ? "TRAIN SORTI" : gear > 0.01 ? "TRAIN EN TRANSIT" : "TRAIN RENTRÉ", cx, cy + size * 1.25 + 8, {
-        col: gear > 0.01 ? col : C.dim,
-        size: 10,
-        align: "center",
-        weight: 700,
-      });
+      const label = down ? (gear >= 0.99 ? "TRAIN SORTI" : "TRAIN EN SORTIE") : gear > 0.01 ? "TRAIN EN RENTRÉE" : "TRAIN RENTRÉ";
+      p.text(label, cx, cy + size * 1.25 + 8, { col: gear > 0.01 || down ? col : C.dim, size: 10, align: "center", weight: 700 });
       const x = q.x + q.w * 0.56,
         w = q.w * 0.4;
       bar(p, x, q.y + 46, w, 8, sys?.flaps ?? null, C.cyan, "VOLETS", ok(sys?.flaps) ? `${fmt(sys!.flaps * 100)} %` : "—");

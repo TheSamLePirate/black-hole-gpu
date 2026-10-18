@@ -34,6 +34,11 @@ type Run = (a: Args, x: ExecCtx) => unknown | Promise<unknown>;
 
 const RUN: Record<Act, Run> = {
   "cfg.ack": (_a, x) => x.tool("flight_action", { action: "acknowledge" }),
+  // (the controls tool for its switches alone)
+  "cfg.gear": (a, x) => x.tool("controls", { gear: a.down }),
+  "cfg.flaps": (a, x) => x.tool("controls", { flaps: a.pos }),
+  "cfg.brake": (a, x) => x.tool("controls", { airBrake: a.on }),
+  "cfg.sas": (a, x) => x.tool("controls", { sas: a.on }),
 };
 
 /** a tool's result as a short line (its own words when it says something) */

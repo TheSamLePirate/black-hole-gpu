@@ -94,10 +94,28 @@ function sample(lat0: number, lon0: number, h: number, heading: number, v: numbe
 }
 
 // the crew's orders (docs/PLAN-CREW-ACTIONS.md): Ana's board answers them as the simulator would
-const board = { ackUntil: 0 };
+const board = { ackUntil: 0, gearDown: false, flaps: 0, brake: 0, sas: true };
 const crewDo: Record<string, (a: Record<string, unknown>) => string | null> = {
   "cfg.ack": () => {
     board.ackUntil = t + 20;
+    return null;
+  },
+  "cfg.gear": (a) => {
+    if (!a.down && alt < 30) return "Au sol : le train reste sorti";
+    board.gearDown = !!a.down;
+    return null;
+  },
+  "cfg.flaps": (a) => {
+    const p = Number(a.pos);
+    board.flaps = p < 0.25 ? 0 : p < 0.75 ? 0.5 : 1;
+    return null;
+  },
+  "cfg.brake": (a) => {
+    board.brake = a.on ? 1 : 0;
+    return null;
+  },
+  "cfg.sas": (a) => {
+    board.sas = !!a.on;
     return null;
   },
 };
@@ -236,7 +254,7 @@ setInterval(() => {
         vnav: true,
         auto: "none",
         hold: "none",
-        sas: true,
+        sas: board.sas,
         order: "",
         hub: null,
       },
@@ -265,10 +283,10 @@ setInterval(() => {
         flow: 0.95,
         fuelKg: fuel,
         fuelFull: 8300,
-        gear: 0,
-        gearDown: false,
-        flaps: 0,
-        brake: 0,
+        gear: board.gearDown ? 1 : 0,
+        gearDown: board.gearDown,
+        flaps: board.flaps,
+        brake: board.brake,
         stovl: "",
         hull: 0.12,
         shield: null,
