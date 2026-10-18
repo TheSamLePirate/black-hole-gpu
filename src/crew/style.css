@@ -1540,3 +1540,58 @@ dialog input {
 .fc-row b {
   color: #fff;
 }
+
+/* ---- the weapons (PLAN-CREW-ACTIONS A5) */
+.hold-btn {
+  position: relative;
+  overflow: hidden;
+  min-height: 36px;
+  border-radius: 999px;
+  font: 800 12px var(--mono);
+  letter-spacing: 1px;
+  border-color: #6b2a2a;
+  color: #ffb5a7;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.hold-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #ff4d4d55;
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.hold-btn.holding::before {
+  animation: hold-fill var(--hold, 600ms) linear forwards;
+}
+.hold-btn.armed {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px #ff4d4d44;
+}
+@keyframes hold-fill {
+  to {
+    transform: scaleX(1);
+  }
+}
+.arms-state {
+  font: 700 10px var(--mono);
+  letter-spacing: 0.6px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.arms-state[data-live="true"] {
+  color: var(--amber);
+}
+.arms-shots .hold-btn,
+.arms-shots button {
+  min-height: 44px;
+  border-radius: 10px;
+}
+.arms-shots .hold-btn {
+  min-width: 84px;
+}
+.arms-sw .act-seg button {
+  min-height: 40px;
+}

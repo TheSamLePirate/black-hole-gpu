@@ -459,7 +459,7 @@ function setView(view: CrewView) {
     b.setAttribute("aria-pressed", String(b.dataset.view === view));
   }
   document.querySelector<HTMLElement>(".zoom")!.hidden = view === "pfd";
-  mcp.hidden = view !== "pfd" && view !== "dash";
+  mcp.hidden = view !== "pfd" && view !== "dash" && view !== "radar";
   syncMcpKind();
   $("views").querySelector<HTMLElement>(`[data-view=${view}]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
   controls();
@@ -643,6 +643,52 @@ function actGroup(title: string, items: [string, Act, Args, () => boolean][]) {
   }
   return g;
 }
+/**
+ * An order given only by holding (a shot): the finger kept down `ms` — a ring fills — or, from a keyboard, a second
+ * press within 1.5 s. Let go early: nothing sent. Never a pilot's validation (all is allowed): a gesture against slips.
+ */
+function holdButton(text: string, act: Act, args: () => Args, id: string, ms = 600) {
+  const b = el("button", text, "hold-btn") as HTMLButtonElement;
+  b.type = "button";
+  b.id = id;
+  b.dataset.act = act;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let armed = 0;
+  const go = () => void fire(b, act, args());
+  const stop = () => {
+    clearTimeout(timer);
+    timer = undefined;
+    b.classList.remove("holding");
+  };
+  b.addEventListener("pointerdown", (e) => {
+    if (b.disabled) return;
+    e.preventDefault();
+    b.style.setProperty("--hold", `${ms}ms`);
+    b.classList.add("holding");
+    timer = setTimeout(() => {
+      stop();
+      go();
+    }, ms);
+  });
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) b.addEventListener(ev, stop);
+  b.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    if (performance.now() - armed < 1500) {
+      armed = 0;
+      b.classList.remove("armed");
+      go();
+    } else {
+      armed = performance.now();
+      b.classList.add("armed");
+      notice(`${text} : appuyer encore pour confirmer`);
+      setTimeout(() => b.classList.remove("armed"), 1500);
+    }
+  });
+  b.title = "Maintenir pour tirer";
+  return b;
+}
+
 /** the pilot followed's snapshot now (fresh), for the controls' states */
 const snapNow = () => {
   const own = model.own();
@@ -651,6 +697,15 @@ const snapNow = () => {
 
 /** every control that gives an order: on or off as its family is open */
 function syncActs() {
+  const armsBox = document.querySelector<HTMLElement>(".arms-state");
+  if (armsBox) {
+    const a = snapNow()?.arms;
+    const s = a?.stores ?? {};
+    armsBox.textContent = !a
+      ? ""
+      : `${a.live ? "ARMES ACTIVES" : "HORS COMBAT"} · 120×${s.aim120 ?? 0} 9X×${s.aim9x ?? 0} JDAM×${s.jdam ?? 0} JSM×${s.jsm ?? 0}${a.lock ? ` · VERROU ${a.lock}` : ""}`;
+    armsBox.dataset.live = String(!!a?.live);
+  }
   for (const [b, on] of pressedOf) {
     if (!b.isConnected) {
       pressedOf.delete(b);
@@ -738,12 +793,45 @@ function selector(key: "alt" | "hdg" | "spd", title: string) {
 }
 /** the MCP's kind follows the pilot's craft: an aircraft's autopilot, or a spacecraft's flight computer */
 function syncMcpKind() {
-  if (mcp.hidden) return;
   const fam = snapNow()?.caps?.fam ?? [];
-  const kind = fam.includes("space") && !fam.includes("jet") ? "space" : "jet";
+  // (the radar's: the weapons' panel, in the F-35 only)
+  if (views.view === "radar") mcp.hidden = !fam.includes("weapons");
+  if (mcp.hidden) return;
+  const kind = views.view === "radar" ? "arms" : fam.includes("space") && !fam.includes("jet") ? "space" : "jet";
   if (mcp.dataset.kind === kind && mcp.childElementCount) return;
-  if (kind === "space") buildFc();
+  if (kind === "arms") buildArms();
+  else if (kind === "space") buildFc();
   else buildMcp();
+}
+/** the F-35's weapons (PLAN-CREW-ACTIONS A5), the backseater's: the radar, the weapon, the lock, the shots, the decoys */
+function buildArms() {
+  mcp.replaceChildren();
+  mcp.dataset.kind = "arms";
+  const arms = () => snapNow()?.arms;
+  const sw = el("div", "", "mcp-sw arms-sw");
+  sw.append(
+    actGroup("Radar", [
+      ["RWS", "wp.radar", { mode: "RWS" }, () => arms()?.mode === "RWS"],
+      ["TWS", "wp.radar", { mode: "TWS" }, () => arms()?.mode === "TWS"],
+      ["STT", "wp.radar", { mode: "STT" }, () => arms()?.mode === "STT"],
+    ]),
+    actGroup("Arme", [
+      ["AIM-120", "wp.select", { weapon: "aim120" }, () => arms()?.sel === "aim120"],
+      ["AIM-9X", "wp.select", { weapon: "aim9x" }, () => arms()?.sel === "aim9x"],
+      ["GBU-32", "wp.select", { weapon: "jdam" }, () => arms()?.sel === "jdam"],
+      ["JSM", "wp.select", { weapon: "jsm" }, () => arms()?.sel === "jsm"],
+    ]),
+  );
+  const shots = el("div", "", "mcp-sw arms-shots");
+  shots.append(
+    actButton("Verrouiller", "wp.lock", {}, "wp-lock"),
+    holdButton("TIR", "wp.fire", () => ({}), "wp-fire"),
+    holdButton("Canon", "wp.gun", () => ({ seconds: 1 }), "wp-gun"),
+    actButton("Leurres", "wp.cm", {}, "wp-cm"),
+    el("span", "", "arms-state"),
+  );
+  mcp.append(sw, shots);
+  syncActs();
 }
 function buildMcp() {
   mcp.replaceChildren();
@@ -1390,6 +1478,7 @@ views.onContact = (id, x = stage.clientWidth / 2, y = stage.clientHeight / 2) =>
       ? [
           actButton("Intercepter", "ap.traffic", { action: "intercept", name }, "ctx-intercept", (ok) => ok && closeMenu()),
           actButton("Rejoindre en formation", "ap.traffic", { action: "join", name }, "ctx-join", (ok) => ok && closeMenu()),
+          actButton("Verrouiller", "wp.lock", { target: name }, "ctx-lock", (ok) => ok && closeMenu()),
         ]
       : []),
   ]);

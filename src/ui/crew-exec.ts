@@ -93,6 +93,13 @@ const RUN: Record<Act, Run> = {
   "sp.plan": (a, x) => x.tool("manage_plan", { action: a.action }),
   "sp.target": (a, x) => x.tool("set_target", { name: a.name }),
   "sp.release": (_a, x) => x.tool("flight_action", { action: "release" }),
+  // (the F-35's weapons: the backseater's — the weapons tool's actions)
+  "wp.radar": (a, x) => x.tool("weapons", { action: "radar", mode: a.mode }),
+  "wp.select": (a, x) => x.tool("weapons", { action: "select", weapon: a.weapon }),
+  "wp.lock": (a, x) => x.tool("weapons", { action: "lock", ...(a.target ? { target: a.target } : {}) }),
+  "wp.fire": (_a, x) => x.tool("weapons", { action: "fire" }),
+  "wp.gun": (a, x) => x.tool("weapons", { action: "gun", seconds: a.seconds ?? 1 }),
+  "wp.cm": (_a, x) => x.tool("weapons", { action: "countermeasures" }),
 };
 
 /** a tool's result, unwrapped from what the game said meanwhile: its value, the game's lines */
@@ -131,7 +138,7 @@ function readResult(r: unknown): { line: string; refused: boolean; data: Record<
 }
 /** the tools' refusals come back as words, not throws: the usual ones read as a refusal */
 const REFUSED =
-  /^(no |not |cannot|can't|unknown|only |the jet's systems: in|the autopilot's holds: in|in the air|nav: (no|in the air)|out of|nothing )/i;
+  /^(no |not |cannot|can't|unknown|only |the jet's systems: in|the autopilot's holds: in|in the air|nav: (no|in the air)|out of|nothing |the radar: in|stt: no)/i;
 
 export class CrewExec {
   private gate = new CrewGate(4);

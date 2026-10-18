@@ -107,6 +107,7 @@ function sample(lat0: number, lon0: number, h: number, heading: number, v: numbe
 // the crew's orders (docs/PLAN-CREW-ACTIONS.md): Ana's board answers them as the simulator would
 const board = { ackUntil: 0, gearDown: false, flaps: 0, brake: 0, sas: true };
 // the autopilot as an MCP: its selected targets (null: managed by the plan), its modes
+const arms = { sel: "aim120", mode: "TWS", lock: "", stores: { aim120: 4, aim9x: 2, jdam: 2, jsm: 0 } as Record<string, number> };
 const ap = { on: true, athr: true, lnav: true, vnav: true, alt: 4000, hdg: null as number | null, spd: 235, order: "", ils: "" };
 const crewDo: Record<string, (a: Record<string, unknown>) => string | null> = {
   "cfg.ack": () => {
@@ -231,6 +232,27 @@ const crewDo: Record<string, (a: Record<string, unknown>) => string | null> = {
     return null;
   },
   "ap.goAround": () => "Pas en approche",
+  "wp.radar": (a) => {
+    arms.mode = String(a.mode);
+    return null;
+  },
+  "wp.select": (a) => {
+    if (!arms.stores[String(a.weapon)]) return "No JSM left";
+    arms.sel = String(a.weapon);
+    return null;
+  },
+  "wp.lock": (a) => {
+    arms.lock = typeof a.target === "string" ? a.target : "BANDIT 1";
+    return null;
+  },
+  "wp.fire": () => {
+    if (!arms.lock) return "No target for the seeker";
+    if (!arms.stores[arms.sel]) return "No weapon left";
+    arms.stores[arms.sel]!--;
+    return null;
+  },
+  "wp.gun": () => null,
+  "wp.cm": () => null,
   "cfg.sas": (a) => {
     board.sas = !!a.on;
     return null;
@@ -427,6 +449,7 @@ setInterval(() => {
       msn: { name: "SA-6", brg: gcCourse({ lat, lon }, units[0]!), dist: gcDist({ lat, lon }, units[0]!), dz: -alt },
       warn,
       caps: { on: true, fam: ["nav", "config", "jet", "weapons"] },
+      arms: { live: true, sel: arms.sel, stores: arms.stores, mode: arms.mode, lock: arms.lock },
       ...(around
         ? {
             traffic: [

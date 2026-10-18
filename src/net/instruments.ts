@@ -134,6 +134,9 @@ export interface InstrumentSnapshot {
   msn?: { name: string; brg: number; dist: number; dz: number } | null;
   /** the alerts lit (STALL, GEAR, PULL UP, BINGO…) */
   warn?: string[];
+  /** the F-35's weapons (the crew's backseater — PLAN-CREW-ACTIONS A5): a fight running, the weapon chosen, the stores
+   *  left, the radar's mode, its lock's name */
+  arms?: { live: boolean; sel: string; stores: Record<string, number>; mode: string; lock: string } | null;
   /** the crew's orders (net/crewcmd.ts): the pilot's lock open, the families that can be done now */
   caps?: { on: boolean; fam: string[] } | null;
   /** sent once a second at most: absent, the last list stands */
@@ -323,6 +326,22 @@ export function readInstruments(x: unknown): InstrumentSnapshot | null {
       : null,
     next: next ? { kind: label(next.kind, 16), name: label(next.name), in: next.in as number } : null,
     msn: msn ? { name: label(msn.name), brg: msn.brg as number, dist: msn.dist as number, dz: num(msn.dz) ?? 0 } : null,
+    arms: record(x.arms)
+      ? {
+          live: x.arms.live === true,
+          sel: label(x.arms.sel, 12),
+          stores: record(x.arms.stores)
+            ? Object.fromEntries(
+                Object.entries(x.arms.stores)
+                  .slice(0, 8)
+                  .filter((e): e is [string, number] => finite(e[1]))
+                  .map(([k, v]) => [k.slice(0, 12), v]),
+              )
+            : {},
+          mode: label(x.arms.mode, 8),
+          lock: label(x.arms.lock, 32),
+        }
+      : null,
     caps:
       record(x.caps) && Array.isArray(x.caps.fam)
         ? {

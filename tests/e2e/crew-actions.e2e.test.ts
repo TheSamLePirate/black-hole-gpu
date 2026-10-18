@@ -173,4 +173,34 @@ describe.skipIf(!E2E)("crew actions", () => {
     await press("#fc-release");
     expect(await app.js<string>("__bh.camera.pilot.hold")).toBe("none");
   }, 120_000);
+  test("A5 — the F-35's weapons from the crew's radar: the weapon, the radar's mode, the decoys, a shot held", async () => {
+    await app.js(`(() => { __bh.settings.vessel = "f35"; return 1; })()`);
+    await app.waitFor(`__bh.fleet.active === "f35"`, 30_000);
+    await app.js(`(() => { __bh.game.flyAt(45.85, 6.75, 3000, 110, 200); return 1; })()`);
+    await app.waitFor(`${crew("__crew.model.own()?.snapshot?.caps?.fam.includes('weapons')")}`, 20_000);
+    // (the free fight of a room: the weapons live)
+    await app.waitFor(`__bh.camera.combat?.status === "run"`, 20_000);
+    await app.js(crew("__crew.setView('radar')"));
+    await app.waitFor(`!!document.querySelector('#crew-frame').contentDocument.querySelector('#wp-fire')`, 3000);
+    await press(`.act-seg[aria-label="Arme"] button:nth-of-type(2)`);
+    expect(await app.js<string>("__bh.camera.combat.weapon")).toBe("aim9x");
+    await press(`.act-seg[aria-label="Radar"] button:nth-of-type(2)`);
+    expect(await app.js<string>("__bh.camera.radar.mode")).toBe("TWS");
+    await press("#wp-cm");
+    expect((await lastBoard()).ok).toBe(true);
+    // (the shot: the button held 0.7 s — let go early, nothing)
+    const fireBtn = "document.querySelector('#crew-frame').contentDocument.querySelector('#wp-fire')";
+    await app.js(`(${fireBtn}.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })), true)`);
+    await Bun.sleep(200);
+    await app.js(`(${fireBtn}.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })), true)`);
+    await Bun.sleep(500);
+    expect((await lastBoard()).what).not.toBe("tir");
+    await app.js(`(${fireBtn}.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })), true)`);
+    await Bun.sleep(800);
+    await app.waitFor(`!${crew("__crew.actions.busy")}`, 5000);
+    const shot = await lastBoard();
+    console.log(`  fire: ${JSON.stringify(shot)}`);
+    expect(shot.what).toBe("tir");
+    await app.shot(`${process.env.E2E_SHOTS ?? "remote-results"}/crew-actions-a5.png`);
+  }, 120_000);
 });

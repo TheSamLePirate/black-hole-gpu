@@ -53,6 +53,7 @@ export const MANEUVERS = [
   "fine_tune",
   "align_over_site",
 ] as const;
+export const WEAPON_NAMES: Record<string, string> = { aim120: "AIM-120 AMRAAM", aim9x: "AIM-9X", jdam: "GBU-32 JDAM", jsm: "JSM" };
 export const HOLD_FR: Record<string, string> = {
   prograde: "prograde",
   retrograde: "rétrograde",
@@ -356,6 +357,37 @@ export const ACTS = {
     say: (a) => ({ fr: `cible : ${String(a.name).slice(0, 24)}`, en: `target: ${String(a.name).slice(0, 24)}` }),
   },
   "sp.release": { fam: "space", say: () => ({ fr: "autopilote et tenue relâchés", en: "autopilot and hold released" }) },
+  // the F-35's weapons (the backseater's): the radar, the weapon, the lock, the shots, the decoys
+  "wp.radar": {
+    fam: "weapons",
+    params: { mode: { type: "string", enum: ["RWS", "TWS", "STT"] } },
+    required: ["mode"],
+    say: (a) => ({ fr: `radar ${a.mode}`, en: `radar ${a.mode}` }),
+  },
+  "wp.select": {
+    fam: "weapons",
+    params: { weapon: { type: "string", enum: ["aim120", "aim9x", "jdam", "jsm"] } },
+    required: ["weapon"],
+    say: (a) => ({
+      fr: `arme : ${WEAPON_NAMES[String(a.weapon)] ?? a.weapon}`,
+      en: `weapon: ${WEAPON_NAMES[String(a.weapon)] ?? a.weapon}`,
+    }),
+  },
+  "wp.lock": {
+    fam: "weapons",
+    params: { target: { type: "string" } },
+    say: (a) => ({
+      fr: a.target ? `verrouillage ${String(a.target).slice(0, 20)}` : "verrouillage de la piste suivante",
+      en: a.target ? `lock ${String(a.target).slice(0, 20)}` : "lock the next track",
+    }),
+  },
+  "wp.fire": { fam: "weapons", say: () => ({ fr: "tir", en: "fire" }) },
+  "wp.gun": {
+    fam: "weapons",
+    params: { seconds: { type: "number", minimum: 0.2, maximum: 3 } },
+    say: (a) => ({ fr: `rafale canon ${Number(a.seconds ?? 1).toFixed(1)} s`, en: `gun burst ${Number(a.seconds ?? 1).toFixed(1)} s` }),
+  },
+  "wp.cm": { fam: "weapons", say: () => ({ fr: "leurres", en: "countermeasures" }) },
   "cfg.sas": {
     fam: "config",
     params: { on: { type: "boolean" } },

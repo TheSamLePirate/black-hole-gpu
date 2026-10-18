@@ -23,6 +23,20 @@ const D = Math.PI / 180;
  * The crew's families open now (net/crewcmd.ts): the flight plan over the Earth; the configuration on a craft that
  * flies; the jet's autopilot in plane mode in the air, the spacecraft's out of it; the weapons in the F-35.
  */
+/** the F-35's weapons for the crew's backseater: a fight running, the weapon chosen, the stores, the radar */
+function armsOf(c: CameraController): NonNullable<InstrumentSnapshot["arms"]> {
+  const C = c.combat;
+  const R = c.radar;
+  const lk = R.lock ? R.tracks.get(R.lock) : null;
+  return {
+    live: C?.status === "run",
+    sel: C?.weapon ?? "",
+    stores: C ? { ...(C.world.stores as unknown as Record<string, number>) } : {},
+    mode: R.mode,
+    lock: lk?.name ?? "",
+  };
+}
+
 export function crewFamilies(c: CameraController): Family[] {
   const A = c.airInfo();
   const out: Family[] = [];
@@ -322,6 +336,7 @@ export function crewSnapshot(c: CameraController, i: Info, status: RangerStatus 
     msn: i.msn ? { name: i.msn.name, brg: i.msn.brg * D, dist: i.msn.dist, dz: i.msn.dz } : null,
     warn: warnings(i, status, fuelKg, bingo),
     caps: { on: c.s.netCrewActions !== false, fam: crewFamilies(c) },
+    arms: fleet.active === "f35" ? armsOf(c) : null,
     ...(around && body === "earth" ? surroundings(c, i, g ? { lat: g.lat, lon: g.lon, alt: g.alt } : null) : {}),
     radar: i.radar
       ? {
