@@ -2976,7 +2976,7 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32, gO
   var segOn = false;
   var q0 = vec3f(0.0);
   var segTravel = 0.0;
-  var d0 = vec3f(0.0);
+  var segD = vec3f(0.0);
   for (var i = 0u; i < 3000u; i++) {
     cost(11u);
     if (st.l >= lPlus && st.pl > 0.0) { out.side = 1.0; break; }
@@ -3032,7 +3032,7 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32, gO
         segOn = true;
         q0 = p0;
         segTravel = travel0 + travel - h;
-        d0 = vec3f(0.0);
+        segD = vec3f(0.0);
       }
       let L = p1 - q0;
       let lL = length(L);
@@ -3042,9 +3042,9 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32, gO
       // ½ |L| sin β of it — β the larger of its first chord's and its last's; not its last point's distance alone,
       // which a steady bend's middle exceeds n/4 times over n steps)
       var bend = 0.0;
-      if (lL > 0.0 && any(d0 != vec3f(0.0))) {
+      if (lL > 0.0 && any(segD != vec3f(0.0))) {
         let u = L / lL;
-        bend = 0.5 * lL * max(length(cross(d0, u)), select(0.0, length(cross(c / lc, u)), lc > 0.0));
+        bend = 0.5 * lL * max(length(cross(segD, u)), select(0.0, length(cross(c / lc, u)), lc > 0.0));
       }
       let leaving = !onOurs || st.l <= -lMinus || st.l >= -a || i + 1u >= 3000u;
       if (TUNE_MERGE == 0u || leaving) {
@@ -3057,9 +3057,9 @@ fn dnegTrace(l0: f32, n0: vec3f, d0: vec3f, lPlus: f32, lMinus: f32, u0: f32, gO
         if (lp > 0.0 && ourSegment(q0, Lp / lp, lp, &out, gObs, segTravel, true)) { out.side = -1.0; break; }
         q0 = p0;
         segTravel = travel0 + travel - h;
-        d0 = select(vec3f(0.0), c / max(lc, 1e-30), lc > 0.0);
-      } else if (all(d0 == vec3f(0.0)) && lc > 0.0) {
-        d0 = c / lc;
+        segD = select(vec3f(0.0), c / max(lc, 1e-30), lc > 0.0);
+      } else if (all(segD == vec3f(0.0)) && lc > 0.0) {
+        segD = c / lc;
       }
     }
     if (waterOn && (lPrev * st.l < 0.0 || (st.l == 0.0 && lPrev != 0.0))) {

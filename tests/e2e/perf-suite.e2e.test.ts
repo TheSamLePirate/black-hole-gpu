@@ -21,6 +21,9 @@ const FLIGHT: Record<string, string> = {
   // towards the sun's glow over the sea, the night's under the full moon)
   "flight: Tarifa at dusk, cockpit": `__bh.game.setDate("2026-07-29T20:15:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
     __bh.game.flyAt(36.1, -5.55, 900, 290, 210); __bh.settings.shipMount = "cockpit";`,
+  // (the sun's disc setting over the sea: a sky column by a sea column of the aerial table — AB=aerial)
+  "flight: Tarifa at sunset, cockpit": `__bh.game.setDate("2026-07-29T19:28:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
+    __bh.game.flyAt(36.1, -5.55, 900, 292, 210); __bh.settings.shipMount = "cockpit";`,
   "flight: Tarifa by moonlight, cockpit": `__bh.game.setDate("2026-07-29T23:30:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
     __bh.game.flyAt(36.1, -5.55, 900, 200, 210); __bh.settings.shipMount = "cockpit";`,
 };
@@ -51,6 +54,7 @@ const ALIAS: Record<string, string> = {
   tarifa: "flight: Tarifa, cockpit",
   "tarifa-dusk": "flight: Tarifa at dusk, cockpit",
   "tarifa-night": "flight: Tarifa by moonlight, cockpit",
+  "tarifa-sunset": "flight: Tarifa at sunset, cockpit",
 };
 /** AB=<name>: the switches compared (A, then B) */
 const ABS: Record<string, [string, string, string, string?]> = {
