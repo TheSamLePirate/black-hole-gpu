@@ -1,3 +1,4 @@
+import { SystemsPage } from "./ui/systemspage";
 import { holeFleet } from "./holefleet";
 import { SceneryHitboxes } from "./ui/scenery-hitboxes";
 import { planetFrame, toLocal } from "./landing";
@@ -2797,6 +2798,8 @@ async function main() {
   // sky's and the log's pages
   const tablet = new Tablet(flightComputer.panel, {
     ship: () => rangerView(tools),
+    // (a spacecraft's systems — ui/systemspage.ts, controller/systems.ts)
+    systems: () => new SystemsPage({ info: () => camera.systemsInfo(), fix: (k) => camera.systemsFix(k), toast: (s) => panel.toast(s) }),
     camera: camPanel!,
     sky: skyPanel,
     log: gameLog,

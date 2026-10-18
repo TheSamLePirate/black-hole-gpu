@@ -389,7 +389,7 @@ Chaque phase porte sa ligne réseau ; N finit ce qui n'existe qu'à plusieurs.
 | X0 | niveaux d'assistance, ⇧X, ergols infinis, E1, aide, TARS | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X0.md)) |
 | X1 | modes RCS, nouveaux autopilotes, plan de mission, protections, défauts de la campagne autopilotes | en cours — X1a maintien à poste, recul, mode RCS ([fiche](progress/vaisseaux/X1a.md)) · X1b protections ([fiche](progress/vaisseaux/X1b.md)) · X1c rendez-vous ([fiche](progress/vaisseaux/X1c.md)) · X1d LPD ([fiche](progress/vaisseaux/X1d.md)) · X1e plan de mission ([fiche](progress/vaisseaux/X1e.md)) · X1f pôle de la date ([fiche](progress/vaisseaux/X1f.md)) ; restent l'ascension en deux temps et Jupiter (sessions à part) |
 | X2 | Endurance vaisseau-mère (deux côtés, anneau, flotte, scènes) | en cours — X2a l'anneau ([fiche](progress/vaisseaux/X2a.md)) · X2b ergols et plein ([fiche](progress/vaisseaux/X2b.md)) · X2c près de Gargantua ([fiche](progress/vaisseaux/X2c.md)) · X2d Mann en vrille ([fiche](progress/vaisseaux/X2d.md)) · X2e piloter près de Gargantua, traversée amarrée ([fiche](progress/vaisseaux/X2e.md)) — **fait** (la fronde : X11) |
-| X3 | consommables, pannes, alarmes, checklists | à faire |
+| X3 | consommables, pannes, alarmes, checklists | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X3.md)) — pannes en réseau en N |
 | X4 | HUD Ranger / Lander / Endurance, amarrage, boule | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X4.md)) — reste la couleur du HUD et la boule « AAA » |
 | X5 | roue par vaisseau, manette, HOTAS | à faire |
 | K1 | contrat « espace » des instruments | à faire |

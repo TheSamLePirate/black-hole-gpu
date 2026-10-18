@@ -91,6 +91,8 @@ export interface FlightInfo {
   spaceAssist?: string;
   spaceDrift?: boolean;
   rcsTranslate?: boolean;
+  /** the spacecraft's systems: consumables, failures (controller/systems.ts) */
+  systems?: import("./systems").SystemsInfo | null;
   /** the flown craft's docking port's axis, seen from the eye (camera coordinates): the COAS's boresight */
   dockBore?: Vec3 | null;
   /** the spacecraft's own panel (game/craftpanel.ts): the Lander's descent, the Endurance's mothership's */
@@ -324,6 +326,7 @@ function flightInfo(this: CameraController): FlightInfo {
     spaceGuard: this.spaceGuard ?? null,
     ring: this.ringInfo(),
     craftPanel: null,
+    systems: this.systemsInfo(),
     /** what holds the rails' warp back ("" : nothing) */
     railsNote: this.railsNote,
     rollAlign: this.pilot.rollAlign,

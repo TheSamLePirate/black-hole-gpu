@@ -1,0 +1,19 @@
+/* A spacecraft's systems on the tablet (ui/systemspage.ts): gauges, failures and their checklists, the normal ones. */
+.sy { display: flex; flex-direction: column; gap: 10px; padding: 6px 2px; }
+.sy-gauges { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.sy-g { display: flex; flex-direction: column; gap: 3px; }
+.sy-g b { font: var(--k-font-value); color: var(--k-text); }
+.sy-g small { color: var(--k-dim); font: var(--k-font-label); letter-spacing: 0.06em; }
+.sy-bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.sy-bar > i { display: block; height: 100%; background: #5ad2ff; }
+.sy-bar > i.warn { background: #ffc45c; }
+.sy-bar > i.bad { background: #ff6a5a; }
+.sy-h { font: var(--k-font-label); letter-spacing: 0.12em; text-transform: uppercase; color: var(--k-dim); margin-top: 4px; }
+.sy-fail { border: 1px solid rgba(255, 106, 90, 0.5); border-radius: var(--k-r); padding: 8px; display: flex; flex-direction: column; gap: 5px; background: rgba(60, 10, 6, 0.35); }
+.sy-fail.fixing { border-color: rgba(255, 196, 92, 0.5); background: rgba(50, 32, 6, 0.3); }
+.sy-fail h4 { margin: 0; font: var(--k-font-label); letter-spacing: 0.1em; color: #ffb4a8; }
+.sy-step { display: flex; gap: 8px; align-items: center; font: var(--k-font-value); color: var(--k-text); cursor: pointer; }
+.sy-step input { accent-color: #5fffd0; }
+.sy-step.done span { color: var(--k-dim); text-decoration: line-through; }
+.sy-none { color: var(--k-dim); font: var(--k-font-value); }
+.sy-sel { color-scheme: dark; }

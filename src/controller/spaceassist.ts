@@ -130,6 +130,8 @@ function spaceAssistStep(this: CameraController, inp: PilotInput, dt: number) {
     this.ringRpm = null;
   // (the Lander's hover calls — controller/craftpanel.ts)
   this.hoverCallStep();
+  // (its systems: consumables, failures, a stuck thruster's push — controller/systems.ts)
+  this.systemsStep(inp, dt);
   // (station keeping let go: its held point forgotten — controller/stationkeep.ts)
   if (this.pilot.auto !== "keep") this.keepRun = null;
   if (fleet.active === "f35") {

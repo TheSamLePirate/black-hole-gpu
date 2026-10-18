@@ -6,6 +6,17 @@
 import type { FlightInfo } from "../../controller/telemetry";
 import { BODY_NAMES } from "../../targeting";
 import { t, tf } from "../../i18n";
+import { CHECKLISTS, type FailureKind } from "../../game/systems";
+
+/** Why each failure shows (its symptoms). */
+const SYS_WHY: Record<FailureKind, string> = {
+  engine: "The main engine flamed out: no thrust until it is relit.",
+  rcsStuck: "A thruster is stuck open: the craft drifts sideways on its own, the thrusters fighting it.",
+  gyro: "The inertial platform drifts: what the computer holds slowly turns away.",
+  bus: "A short on the main bus: the systems draw three times their power, the battery runs down.",
+  o2Leak: "The cabin loses oxygen: the stock empties in hours.",
+  scrubber: "The CO₂ scrubbers stopped: the crew's air fouls.",
+};
 
 export type AlertLevel = "warning" | "caution" | "advisory";
 
@@ -21,6 +32,15 @@ export interface Alert {
 
 /** Each alert's explanation: why it comes on, what to do (in words for the pilot). */
 function helpOf(id: string): { why: string; todo: string } {
+  // (a spacecraft's failure — game/systems.ts —: its checklist the « what to do », its last step the action)
+  if (id.startsWith("sys-")) {
+    const C = CHECKLISTS[id.slice(4) as FailureKind];
+    if (C)
+      return {
+        why: t(SYS_WHY[id.slice(4) as FailureKind]),
+        todo: [...C.steps.map((x) => t(x)), `→ ${t(C.action)} (${t("the tablet's Systems page")})`].join(" · "),
+      };
+  }
   switch (id) {
     case "horizon":
       return {
@@ -120,6 +140,18 @@ function helpOf(id: string): { why: string; todo: string } {
         why: t("Closing on the station or a craft inside its 200 m keep-out sphere faster than its limit: 0.05 m/s + 0.5 % of the range."),
         todo: t("Brake on the RCS (the translation keys, away from it), or ⇧8: station keeping. Armed, the protection holds by itself."),
       };
+    case "sys-power":
+      return {
+        why: t("The battery runs down: the generators give less than the systems, the thrusters and the wheels draw."),
+        todo: t("Ease off the thrusters, shed loads; flat, only the main engine answers — the systems recharge it slowly."),
+      };
+    case "sys-o2":
+      return {
+        why: t("The cabin's oxygen runs low for its crew (0.84 kg a person a day)."),
+        todo: t("Dock to the Endurance, land, or close a leak — the tablet's Systems page."),
+      };
+    case "sys-scrub":
+      return { why: t("The CO₂ scrubbers near the end of their life."), todo: t("Fit the spare cartridge, or reach the Endurance.") };
     case "ring":
       return {
         why: t("The Endurance turns about its axis: in its ring's modules the turn's pull is the crew's weight (ω² r, 30 m out)."),
@@ -143,7 +175,7 @@ export type AlertInput = Pick<
   FlightInfo,
   "path" | "landed" | "surface" | "air" | "ergo" | "region" | "r" | "photon" | "isco" | "auto" | "target" | "engine"
 > &
-  Partial<Pick<FlightInfo, "spaceGuard" | "ring">> & {
+  Partial<Pick<FlightInfo, "spaceGuard" | "ring" | "systems">> & {
     status?: { soi: string; status: string } | null;
     landedOn?: FlightInfo["landedOn"];
     /** the time running */
@@ -209,6 +241,24 @@ export function alertsOf(i: AlertInput): Alert[] {
         ? tf("AUTO-PROTECTION · KEEP-OUT · HOLDING · {0} M/S", G.rate.toFixed(1))
         : tf("CLOSING {0} M/S · LIMIT {1} M/S · {2} M", G.rate.toFixed(1), G.limit.toFixed(2), Math.round(G.dist)),
     );
+  // a spacecraft's systems (controller/systems.ts): its failures — each its checklist —, its battery, its air
+  const Y = i.systems;
+  if (Y) {
+    for (const f of Y.failures)
+      add(
+        `sys-${f.kind}`,
+        f.fixing ? "caution" : "warning",
+        f.fixing ? tf("{0} · FIXING", t(CHECKLISTS[f.kind].title)) : t(CHECKLISTS[f.kind].title),
+      );
+    const bat = Y.batteryKWh > 0 ? Y.battery / Y.batteryKWh : 1;
+    if (Y.battery <= 0) add("sys-power", "warning", t("BATTERY FLAT · NO THRUSTERS, NO WHEELS"));
+    else if (bat < 0.15) add("sys-power", "caution", tf("BATTERY {0} %", Math.round(bat * 100)));
+    if (Y.o2Kg <= 0) add("sys-o2", "warning", t("NO OXYGEN LEFT"));
+    else if (Y.o2Hours < 2) add("sys-o2", "warning", tf("O₂ {0} MIN LEFT", Math.round(Y.o2Hours * 60)));
+    else if (Y.o2Hours < 24) add("sys-o2", "caution", tf("O₂ {0} H LEFT", Math.round(Y.o2Hours)));
+    if (Y.scrubDays < 1)
+      add("sys-scrub", Y.scrubDays <= 0 ? "warning" : "caution", tf("CO₂ SCRUBBERS {0} H", Math.round(Y.scrubDays * 24)));
+  }
   // the Endurance's ring: its turn, the weight in its modules (a caution past its structure's comfort)
   const Rg = i.ring;
   if (Rg && (Rg.rpm > 0.05 || (Rg.asked ?? 0) > 0))

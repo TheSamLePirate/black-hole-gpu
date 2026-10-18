@@ -1158,7 +1158,15 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
         return unitV(nv.toRep(figureUp(nv.ref, nv.X, nv.t))) as [number, number, number];
       })(),
       // (a turbofan's spool always: its own lag, whatever the scene's engine)
-      rcs: VESSELS[fleet.active].turbofan ? 0 : 1,
+      // (its thrusters: none on an aircraft; a quad isolated, a flat battery — controller/systems.ts)
+      ...(() => {
+        const e = this.systemsEffects();
+        return {
+          rcs: VESSELS[fleet.active].turbofan ? 0 : e.powerOut ? 0 : e.rcs,
+          wheelsOff: e.powerOut,
+          drift: e.drift.some((x) => x !== 0) ? e.drift : null,
+        };
+      })(),
       spoolK:
         s.engine === "crew" || VESSELS[fleet.active].turbofan
           ? 1 - Math.exp(-((s.animate ? timeRate(s) * dt : 0) * Msec) / VESSELS[fleet.active].spool)

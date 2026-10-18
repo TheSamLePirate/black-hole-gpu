@@ -175,6 +175,10 @@ export interface FlightContext {
   vtol?: { nose: V3; up: V3; throttle: number };
   /** the RCS translation's share (0: none — an aircraft's turbofan has no thrusters to slide it) */
   rcs?: number;
+  /** the battery flat (game/systems.ts): the reaction wheels and the thrusters dead */
+  wheelsOff?: boolean;
+  /** an attitude reference drifting (an IMU failing): the rates the holds and the SAS fly without knowing [rad/s] */
+  drift?: V3 | null;
   /**
    * the rigid body (phase 2): its inertia tensor on the ship's axes [kg m²] and the most torque its
    * wheels and thrusters give about each [kg m² rad/s²] — the angular accelerations τ/I, and Euler's
@@ -483,7 +487,7 @@ export class FlightComputer {
         }
       }
       const a = len(A);
-      const rcsMax = TUNING.rcs * c.thrust;
+      const rcsMax = TUNING.rcs * c.thrust * (c.rcs ?? 1);
       // (nothing to push — or nothing to push with: no burn, never a direction of a zero vector)
       if (a < 0.8 * rcsMax || a === 0) {
         rcsC = toC(A); // fine corrections: RCS only, no need to turn (an attitude hold may point the nose)
@@ -558,7 +562,8 @@ export class FlightComputer {
     const A3 = c.air && (c.air.mode !== "rocket" || this.auto === "entry") ? c.air.auth : [0, 0, 0];
     const I = c.inertia,
       tq = c.torque;
-    const axisAcc = (i: number) => (I && tq ? tq[i]! / I[i]![i]! : TUNING.turnAccel);
+    // (the battery flat — game/systems.ts —: no wheels, no thrusters; only the air's surfaces turn it)
+    const axisAcc = (i: number) => (c.wheelsOff ? 0 : I && tq ? tq[i]! / I[i]![i]! : TUNING.turnAccel);
     // (on its own gear, the surfaces' authority no more than the wheels' and thrusters' own: a stiff
     // control against stiff springs would fight them frame by frame)
     // (a craft without wheels or thrusters to speak of — a fighter —: its surfaces up to 1.6 rad/s² on the
@@ -710,6 +715,8 @@ export class FlightComputer {
         if (c.onGear && i === 0 && manual[0] === 0) want[0] = Math.max(this.omega[0], -0.05);
       }
     }
+    // (an IMU drifting: what the computer holds still turns, unseen by it)
+    if (c.drift && !c.snap) for (let i = 0; i < 3; i++) want[i] = want[i]! + c.drift[i]!;
     let effort = 0;
     const torque: V3 = [0, 0, 0];
     for (let i = 0; i < 3; i++) {
@@ -751,7 +758,7 @@ export class FlightComputer {
         ? clamp(c.vtol.throttle, 0, 1)
         : clamp(this.throttle + inp.throttle * (this.precision ? 0.15 : 0.6) * dt, 0, 1);
       throttle = this.throttle;
-      const rcsMax = TUNING.rcs * c.thrust;
+      const rcsMax = TUNING.rcs * c.thrust * (c.rcs ?? 1);
       // (the ship's right is −x)
       const k = rcsMax * (this.precision ? 0.25 : 1);
       rcsC = add(add(scale(X, -inp.tx * k), scale(Y, inp.ty * k)), scale(Z, inp.tz * k));

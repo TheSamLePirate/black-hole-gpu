@@ -105,6 +105,8 @@ export class Fleet {
   }
   /** the coasting ones (not flown, not docked to something that carries them) */
   free: Partial<Record<VesselId, FreeState>> = {};
+  /** each spacecraft's systems — its consumables, its failures (game/systems.ts, controller/systems.ts) */
+  systems: Partial<Record<VesselId, import("./game/systems").SystemsState>> = {};
   /** the craft left on Gargantua's side, coasting on their geodesics (controller/holeendurance.ts) */
   hole: Partial<Record<VesselId, HoleFree>> = {};
   links: DockLink[] = [];
@@ -504,6 +506,7 @@ export function fleetStart(t: number, active: VesselId): Record<SpacecraftId, Po
   fleet.active = active;
   fleet.free = {};
   fleet.hole = {};
+  fleet.systems = {};
   fleet.links = [];
   const mu = solarBody("earth")!.mass;
   const E = ourState("earth", t);
