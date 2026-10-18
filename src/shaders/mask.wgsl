@@ -5,6 +5,9 @@
 // leaves it 0), the trace kernel's thread there does not trace (trace.wgsl main), the light meter skips it
 // (post.wgsl meter). The margin: the reconstruction's reach (two blocks) and the camera's buffeting — a pixel
 // the mask let through, near its edge, is traced and its neighbours with it.
+// Two passes: cell — each 8 × 8 cell of the image covered whole or not (a texel read a pixel) —, then main — a tile
+// covered when every cell within its margin is (the margin rounded out to whole cells: ≤ 18 × 18 cells a tile, not
+// (16 + 2m)² texels — with the motion blur's 40 px, 81 texels a pixel, 10 ms on an M1).
 
 @group(0) @binding(0) var own: texture_2d<f32>;
 @group(0) @binding(1) var<storage, read_write> moments: array<vec2f>;
@@ -13,8 +16,30 @@
 // [px] (x, y, w, h)
 struct MaskU { size: vec4u, rect: vec4i };
 @group(0) @binding(2) var<uniform> U: MaskU;
+// each 8 × 8 cell: 1 covered whole (off the image: covered), 0 not
+@group(0) @binding(3) var<storage, read_write> cells: array<u32>;
 
 var<workgroup> covered: atomic<u32>;
+
+@compute @workgroup_size(8, 8)
+fn cell(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id) lid: vec3u,
+        @builtin(workgroup_id) wid: vec3u) {
+  if (lid.x == 0u && lid.y == 0u) { atomicStore(&covered, 1u); }
+  workgroupBarrier();
+  let W = i32(U.size.x);
+  let H = i32(U.size.y);
+  let p = vec2i(gid.xy);
+  // (off the image: nothing seen there — as if covered)
+  if (p.x < W && p.y < H) {
+    let q = p - U.rect.xy;
+    var a = 0.0;
+    if (all(q >= vec2i(0)) && all(q < U.rect.zw)) { a = textureLoad(own, q, 0).r; }
+    if (a < 0.5) { atomicStore(&covered, 0u); }
+  }
+  workgroupBarrier();
+  let CW = (U.size.x + 7u) / 8u;
+  if (lid.x == 0u && lid.y == 0u) { cells[wid.y * CW + wid.x] = atomicLoad(&covered); }
+}
 
 @compute @workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id) lid: vec3u,
@@ -23,21 +48,19 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
   workgroupBarrier();
   let W = i32(U.size.x);
   let H = i32(U.size.y);
-  let m = i32(U.size.w);
   if (U.size.z != 0u) {
-    // (the tile and its margin, each thread a stride of it)
-    let o = vec2i(wid.xy) * 16 - vec2i(m);
-    let span = 16 + 2 * m;
-    for (var y = i32(lid.y); y < span; y += 16) {
-      for (var x = i32(lid.x); x < span; x += 16) {
-        let p = o + vec2i(x, y);
-        // (off the image: nothing seen there — as if covered)
-        if (any(p < vec2i(0)) || p.x >= W || p.y >= H) { continue; }
-        let q = p - U.rect.xy;
-        var a = 0.0;
-        if (all(q >= vec2i(0)) && all(q < U.rect.zw)) { a = textureLoad(own, q, 0).r; }
-        if (a < 0.5) { atomicStore(&covered, 0u); }
-      }
+    // (the tile and its margin, in whole cells — floor by an arithmetic shift, below 0 too —, each thread a stride)
+    let m = i32(U.size.w);
+    let CW = (W + 7) / 8;
+    let CH = (H + 7) / 8;
+    let c0 = (vec2i(wid.xy) * 16 - vec2i(m)) >> vec2u(3u);
+    let c1 = (vec2i(wid.xy) * 16 + vec2i(15 + m)) >> vec2u(3u);
+    let n = c1 - c0 + vec2i(1);
+    for (var k = i32(lid.y * 16u + lid.x); k < n.x * n.y; k += 256) {
+      let c = c0 + vec2i(k % n.x, k / n.x);
+      // (off the image: covered)
+      if (any(c < vec2i(0)) || c.x >= CW || c.y >= CH) { continue; }
+      if (cells[u32(c.y * CW + c.x)] == 0u) { atomicStore(&covered, 0u); }
     }
   }
   // (a barrier and a plain load, not workgroupUniformLoad on an atomic — a newer overload some browsers lack; nothing

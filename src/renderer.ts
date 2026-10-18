@@ -665,6 +665,9 @@ export class Renderer {
   private meterPipeline!: GPUComputePipeline;
   // the cockpit's mask (mask.wgsl): its pipeline, its parameters, whether the live view's moments hold one
   private maskPipeline?: GPUComputePipeline;
+  /** the mask's first pass (mask.wgsl cell): each 8 × 8 cell covered whole or not, into the target's maskCells */
+  private maskCellPipeline?: GPUComputePipeline;
+  private maskCells = new WeakMap<object, GPUBuffer>();
   private maskBuf!: GPUBuffer;
   private maskSet = new WeakMap<object, boolean>();
   /** the realtime frame (frameStamp) the flown craft's own mask was last drawn in; −1: not drawn */
@@ -1149,12 +1152,16 @@ export class Renderer {
     ]).then(() => {});
     // (the cockpit's mask: an optimisation, not waited for — a browser that refuses its shader keeps it off, the
     // renderer starting all the same)
-    device
-      .createComputePipelineAsync({
-        layout: "auto",
-        compute: { module: device.createShaderModule({ code: maskWGSL, label: "mask" }), entryPoint: "main" },
+    const maskModule = device.createShaderModule({ code: maskWGSL, label: "mask" });
+    Promise.all(
+      (["cell", "main"] as const).map((entryPoint) =>
+        device.createComputePipelineAsync({ layout: "auto", compute: { module: maskModule, entryPoint } }),
+      ),
+    )
+      .then(([cell, main]) => {
+        this.maskCellPipeline = cell;
+        this.maskPipeline = main;
       })
-      .then((p) => (this.maskPipeline = p))
       .catch((e) => console.warn("cockpit mask unavailable:", e));
     this.maskBuf = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.histBuf = device.createBuffer({ size: 512, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
@@ -3697,14 +3704,9 @@ export class Renderer {
    * Off under the cost view (its heat maps and costStats read every pixel).
    */
   private encodeCockpitMask(enc: GPUCommandEncoder, t: Target, s: Settings, block: number) {
-    if (!this.maskPipeline || t !== this.live) return;
+    if (!this.maskPipeline || !this.maskCellPipeline || t !== this.live) return;
     const own =
-      this.cockpitMask &&
-      !this.costViewMode &&
-      s.ship &&
-      this.ship.ready &&
-      this.ownMaskStamp === this.frameStamp - 1 &&
-      !this.dofOn(s, t)
+      this.cockpitMask && !this.costViewMode && s.ship && this.ship.ready && this.ownMaskStamp === this.frameStamp - 1 && !this.dofOn(s, t)
         ? this.ship.ownMaskOf(t.hdr)
         : null;
     let on = false;
@@ -3733,16 +3735,40 @@ export class Renderer {
     new Uint32Array(u, 0, 4).set([t.width, t.height, mode, margin]);
     new Int32Array(u, 16, 4).set(r);
     this.device.queue.writeBuffer(this.maskBuf, 0, u);
+    // (the cells, 8 × 8 px each: the target's own buffer)
+    const cw = Math.ceil(t.width / 8),
+      ch = Math.ceil(t.height / 8);
+    let cells = this.maskCells.get(t);
+    if (!cells || cells.size < cw * ch * 4) {
+      cells?.destroy();
+      cells = this.device.createBuffer({ size: Math.max(cw * ch * 4, 16), usage: GPUBufferUsage.STORAGE, label: "cockpit mask cells" });
+      this.maskCells.set(t, cells);
+    }
     const pass = enc.beginComputePass(this.prof.pass("cockpit mask"));
+    if (mode) {
+      pass.setPipeline(this.maskCellPipeline);
+      pass.setBindGroup(
+        0,
+        this.device.createBindGroup({
+          layout: this.maskCellPipeline.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: (own?.tex ?? this.ship.ownMaskDummy()).createView() },
+            { binding: 2, resource: { buffer: this.maskBuf } },
+            { binding: 3, resource: { buffer: cells } },
+          ],
+        }),
+      );
+      pass.dispatchWorkgroups(cw, ch);
+    }
     pass.setPipeline(this.maskPipeline);
     pass.setBindGroup(
       0,
       this.device.createBindGroup({
         layout: this.maskPipeline.getBindGroupLayout(0),
         entries: [
-          { binding: 0, resource: (own?.tex ?? this.ship.ownMaskDummy()).createView() },
           { binding: 1, resource: { buffer: t.moments } },
           { binding: 2, resource: { buffer: this.maskBuf } },
+          { binding: 3, resource: { buffer: cells } },
         ],
       }),
     );
