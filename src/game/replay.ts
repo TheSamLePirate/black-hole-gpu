@@ -42,6 +42,10 @@ export const EV = {
   FORM: 16,
   /** the afterburner lit */
   AB: 32,
+  /** a docking's capture (PLAN-VAISSEAUX X7: the spacecraft's moments) */
+  DOCK: 64,
+  /** a rocket's burn begun */
+  BURN: 128,
 } as const;
 
 export interface TapeFrame<R = unknown> {
@@ -334,10 +338,12 @@ export function interest(f: TapeFrame): number {
   if (f.ev & EV.TOUCH) x += 12;
   if (f.ev & EV.FORM) x += 1;
   if (f.ev & EV.AB) x += 0.3;
+  if (f.ev & EV.DOCK) x += 14;
+  if (f.ev & EV.BURN) x += 4;
   return x;
 }
 
-export type MomentKind = "low" | "pull" | "sonic" | "gun" | "missile" | "kill" | "touch" | "form" | "flight";
+export type MomentKind = "low" | "pull" | "sonic" | "gun" | "missile" | "kill" | "touch" | "form" | "flight" | "dock" | "burn";
 
 /** A moment for the trailer: its span on the tape, its worth, what it is, its figures. */
 export interface Moment {
@@ -367,7 +373,9 @@ function kindOf(fr: TapeFrame[]): MomentKind {
   }
   if (ev & EV.BOOM) return "kill";
   if (ev & EV.LAUNCH) return "missile";
+  if (ev & EV.DOCK) return "dock";
   if (ev & EV.TOUCH) return "touch";
+  if (ev & EV.BURN) return "burn";
   if (ev & EV.FIRE) return "gun";
   if (sonic) return "sonic";
   if (lowFast > fr.length / 4) return "low";
@@ -398,7 +406,7 @@ export function bestMoments(tape: FlightTape, n = REPLAY.moments, len = REPLAY.m
     let score = cum[i1]! - cum[i0]!;
     // (the events: their bonus, the span centred on them better)
     for (let i = i0; i <= i1; i++)
-      if (F[i]!.ev & (EV.LAUNCH | EV.BOOM | EV.TOUCH)) {
+      if (F[i]!.ev & (EV.LAUNCH | EV.BOOM | EV.TOUCH | EV.DOCK)) {
         const c = Math.abs(F[i]!.t - (t0 + len * 0.45)) / len;
         score += (F[i]!.ev & EV.BOOM ? 30 : 20) * (1 - c);
       }

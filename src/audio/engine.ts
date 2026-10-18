@@ -108,6 +108,9 @@ export interface EngineState {
   out?: boolean;
   /** the buffet of a wing at high incidence, 0…1 (its rumble through the airframe) */
   buffet?: number;
+  /** the craft's voice (PLAN-VAISSEAUX X7 — vessels.ts sound): the main engine's pitch, the thrusters' tone, the
+   *  structure's rumble, × the Ranger's */
+  voice?: { pitch: number; rcs: number; sub: number } | null;
 }
 
 /** Where the main engine is from the ear (audio/space.ts): its place in the listener's frame [m], its
@@ -1112,16 +1115,17 @@ export class SoundEngine {
       const P = g.node.parameters;
       set(P.get("throttle")!, th, 0.05);
       set(P.get("air")!, clamp(s.air, 0, 2), 0.2);
-      set(P.get("pitch")!, s.space?.dop ?? 1, 0.1);
+      set(P.get("pitch")!, Math.max(0.25, (s.space?.dop ?? 1) * (s.voice?.pitch ?? 1)), 0.1);
     }
     const old = g ? 0 : 1;
     set(e.rumble.gain, old * 0.9 * Math.sqrt(th), 0.08);
-    set(e.rumbleLP.frequency, 90 + 260 * th, 0.1);
+    const vs = s.voice?.sub ?? 1;
+    set(e.rumbleLP.frequency, (90 + 260 * th) * vs, 0.1);
     set(e.roar.gain, old * (0.32 * th + 0.25 * th * air), 0.08);
     set(e.roarBP.frequency, 380 + 1200 * th + 1500 * air * th, 0.15);
     set(e.crackle.gain, 0.6 * th, 0.1);
     set(e.sub.gain, 0.25 * Math.sqrt(th), 0.08);
-    set(e.subOsc.frequency, 36 + 14 * th, 0.2);
+    set(e.subOsc.frequency, (36 + 14 * th) * vs, 0.2);
     // ignition and shutdown: a thump / a sigh
     const was = prev ? clamp(prev.throttle) * (prev.live ? 1 : 0) : 0;
     if (was < 0.02 && th >= 0.02) this.ignition(th);
@@ -1145,7 +1149,7 @@ export class SoundEngine {
     const r = cl ? 0 : clamp(s.rcs) * live;
     set(this.rcsV.gain.gain, 0.9 * r, 0.02);
     set(this.rcsV.pan.pan, clamp(s.rcsPan, -1, 1) * 0.7, 0.05);
-    set(this.rcsV.bp.frequency, 1500 + 900 * r, 0.05);
+    set(this.rcsV.bp.frequency, (1500 + 900 * r) * (s.voice?.rcs ?? 1), 0.05);
     const rWas = prev ? clamp(prev.rcs) * (prev.live ? 1 : 0) : 0;
     if (!cl && rWas < 0.05 && r >= 0.05) this.valve(s.rcsPan, true);
     else if (!cl && rWas >= 0.05 && r < 0.05) this.valve(s.rcsPan, false);

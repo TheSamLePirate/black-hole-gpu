@@ -359,6 +359,8 @@ export class SoundDirector {
       // cockpit was heard as an outside view)
       inside: hearing(s.shipMount, !!o.spectator) !== "outside",
       rcsClusters: fresh && o.pose && o.thrust ? this.clusterSound(o.pose, o.thrust) : null,
+      // (each craft its voice — X7)
+      voice: VESSELS[fleet.active].sound ?? null,
       // (the cabin — S4: how the view hears the ship, the load the crew feels, the hull heating, the panel)
       hearing: hearing(s.shipMount, !!o.spectator),
       g: this.felt(info),

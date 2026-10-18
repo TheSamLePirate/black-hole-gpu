@@ -1124,6 +1124,11 @@ export class CameraController {
   spacePadOut: SpacePadOut | null = null;
   onSpacePadAction?: (action: string, arg?: string) => void;
   padWheel?: { isOpen(): boolean; aim(v: [number, number] | null): void };
+  /** the replay's spacecraft moments (X7): the fleet's links last frame (null: none yet), the engine lit */
+  replayLinks: number | null = null;
+  replayLit = false;
+  /** the touchdowns' count the camera's shake has felt (null: none yet — X7) */
+  shakeTouchN: number | null = null;
   /** the last touchdown: its count, its sink and its speed along [m/s], the gear's verdict (controller/motion.ts) */
   lastTouch: { n: number; sink: number; along: number; gear: string } | null = null;
 
