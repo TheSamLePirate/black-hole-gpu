@@ -35,7 +35,8 @@ pour ce qu'un ancien pilote n'envoie pas.
   carburant et temps restants du plan ;
 - `sys` : moteur (régime, poussée, PC, débit), carburant (kg, plein), train, volets, aérofrein, STOVL,
   température de coque, bouclier, dommages, masse ;
-- `ils`, `orbit` (apogée, périgée, inclinaison, période, temps aux apsides), `next` (prochain événement),
+- `ils`, `orbit` (apogée, périgée, inclinaison, période, temps aux apsides, rayon du corps, demi-grand axe),
+  `next` (prochain événement),
   `msn` (objectif de mission), `warn` (alertes : FLY UP, PULL UP, STALL, GEAR, BINGO, MISSILE…) ;
 - les pistes du radar du pilote, leur identification et le verrouillage ;
 - la route (32 points, avec contraintes d'altitude et de vitesse) et la trajectoire prévue (48 points, avec
@@ -45,6 +46,26 @@ pour ce qu'un ancien pilote n'envoie pas.
   unités d'une mission (hostiles, amies, neutres, détruites), les porte-avions, les cibles d'un combat, les
   zones d'objectif et la portée des SAM. La console fusionne les listes de tous les pilotes (sans doublon) et
   les extrapole entre deux envois le long de leur cap (rayons de courbure WGS84).
+
+Les blocs « espace » (PLAN-VAISSEAUX K1, `src/net/instruments-space.ts`), en km et km/s autour de chaque corps, sur
+les axes du repère du jeu :
+- à chaque envoi :
+  - `craft` : l'appareil suivi (avion ou vaisseau, s'il se pose, s'il a un anneau) ; la console choisit son profil
+    d'après lui ;
+  - `state` : position et vitesse autour du corps de la sphère d'influence, son GM, son rayon, sa sphère ;
+  - `nodes` : les poussées du plan (dans combien de secondes, Δv prograde · normal · radial en m/s, rôle) ; `burn`
+    (Δv restant de la poussée en cours) ;
+  - `target` : distance, rapprochement, approche minimale et sa date ;
+  - `sysx` : batterie, bilan, oxygène, épurateurs, équipage, pannes (X3) ;
+  - `time` : facteur de temps, horloge de salle, dτ/dt et temps propre ;
+  - `link` : temps de la lumière vers la Terre, coupé derrière le trou de ver ;
+  - `ring`, `ports` : l'anneau et les ports de l'Endurance ;
+  - `kerr` : du côté de Gargantua, r, E et L.
+- une fois par seconde :
+  - `traj` : la trajectoire libre (96 points) et la trajectoire planifiée (72 points), découpées par sphère
+    d'influence (6 morceaux au plus), avec leur sort (continue, impact, trou de ver) ;
+  - `bodies` : le Soleil, les planètes et les lunes du corps visité, depuis la bouche du trou de ver.
+- Un instantané lourd tient sous 16 Ko (Endurance en orbite : 8,8 Ko).
 
 Le contrat est `src/net/instruments.ts`. Les tableaux et les textes reçus sont bornés, les valeurs non finies
 écartées. Après trois secondes sans pose, les mesures actuelles sont remplacées par des tirets et le signal

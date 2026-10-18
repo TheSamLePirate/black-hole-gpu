@@ -1,6 +1,7 @@
 // A display-only snapshot for the independent crew page. SI, degrees for geographic coordinates,
 // radians for angles (heading, attitude, track); radar offsets east/north/up in metres. No dependency on the simulator.
 // Version 1 grows only by optional blocks: an older console ignores them, a newer one shows what an older pilot sends.
+import { type InstrumentSpace, readSpace } from "./instruments-space";
 export const INSTRUMENT_KEYS = ["alt", "speed", "vz", "g", "q", "mach", "heat", "throttle", "fuel", "tau"] as const;
 export type InstrumentKey = (typeof INSTRUMENT_KEYS)[number];
 export interface InstrumentContact {
@@ -112,7 +113,7 @@ export interface InstrumentZone {
   kind: "zone" | "threat";
   waiting: boolean;
 }
-export interface InstrumentSnapshot {
+export interface InstrumentSnapshot extends InstrumentSpace {
   v: 1;
   t: number;
   body: string;
@@ -127,8 +128,20 @@ export interface InstrumentSnapshot {
   nav?: InstrumentNav | null;
   sys?: InstrumentSystems | null;
   ils?: { id: string; loc: number | null; gs: number | null; dme: number; phase: string } | null;
-  /** the orbit: apsides' heights [km], inclination [°], eccentricity, period and times to the apsides [s] */
-  orbit?: { pe: number; ap: number; inc: number; ecc: number; period: number | null; tPe: number | null; tAp: number | null } | null;
+  /** the orbit: apsides' heights [km], inclination [°], eccentricity, period and times to the apsides [s]; the body's
+   *  radius and the semi-major axis [km], the apsides' true anomalies [rad] (PLAN-VAISSEAUX K1: the ORBIT card's
+   *  figure was the Earth's) */
+  orbit?: {
+    pe: number;
+    ap: number;
+    inc: number;
+    ecc: number;
+    period: number | null;
+    tPe: number | null;
+    tAp: number | null;
+    radius?: number;
+    a?: number;
+  } | null;
   /** the next event on the free-fall path, and the mission's objective */
   next?: { kind: string; name: string; in: number } | null;
   msn?: { name: string; brg: number; dist: number; dz: number } | null;
@@ -289,6 +302,7 @@ export function readInstruments(x: unknown): InstrumentSnapshot | null {
   const next = record(x.next) && finite(x.next.in) ? x.next : null;
   const msn = record(x.msn) && finite(x.msn.brg) && finite(x.msn.dist) ? x.msn : null;
   return {
+    ...readSpace(x),
     v: 1,
     t: x.t,
     body: label(x.body),
@@ -324,6 +338,7 @@ export function readInstruments(x: unknown): InstrumentSnapshot | null {
           period: opt(orbit.period),
           tPe: opt(orbit.tPe),
           tAp: opt(orbit.tAp),
+          ...numbers<{ radius: number; a: number }>(orbit, ["radius", "a"]),
         }
       : null,
     next: next ? { kind: label(next.kind, 16), name: label(next.name), in: next.in as number } : null,
