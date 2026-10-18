@@ -76,6 +76,8 @@ export interface RadarPicture {
 }
 
 export interface SymInfo {
+  /** the powered landing's point (the LPD, controller/telemetry.ts) */
+  lpd?: { dir: number[] | null; dist: number; moved: boolean } | null;
   /** the F-35's avionics (f35/cockpit.ts): its status block on the helmet */
   avionics?: ReturnType<typeof avionicsData> | null;
   S: number[][];
@@ -630,6 +632,8 @@ export function drawSymbology(F: SymFrame) {
   if (F.runway && s.hudRunway && on(F, "runway") && !F.outside && F.density < 2) drawRunway(F, F.runway, pr, stroke, text, inside);
   if (i.surface && !i.surface.landed && s.hudHover && on(F, "hover") && !F.outside && F.density < 2 && !F.compact)
     drawHover(F, i.surface, up, pr, stroke, text, inside);
+  // ---- the powered landing's point: where the autopilot lands, the stick moving it (the LPD)
+  if (i.lpd?.dir && !F.outside && F.density < 2) drawLpd(F, i.lpd, pr, stroke, text, inside);
 
   // ---- near Gargantua: the relativity box; the way to the hole named
   if (i.region === "hole" && s.hudRelativity && on(F, "relativity") && !F.outside && F.density < 2 && !F.compact && Number.isFinite(i.r))
@@ -1527,6 +1531,41 @@ function drawRunway(
  *   NOW), from the descent rate, the thrust over weight and the local gravity;
  * - the touchdown spot in the view: where the craft comes down at this drift and descent rate.
  */
+/** The landing point designator's mark: a cross in a circle on the ground where the powered landing goes, its distance,
+ *  « LPD » — amber once the pilot moved it. */
+function drawLpd(
+  F: SymFrame,
+  L: NonNullable<SymInfo["lpd"]>,
+  pr: Proj,
+  stroke: Stroke,
+  text: Text,
+  inside: (p: [number, number] | null, m?: number) => boolean,
+) {
+  const { ctx, dpr } = F;
+  const p = pr(L.dir as V3);
+  if (!p || !inside(p, 30 * dpr)) return;
+  const col = L.moved ? "#ffc85a" : "#7cf0c0";
+  const r = 13 * dpr;
+  stroke(
+    () => {
+      ctx.beginPath();
+      ctx.arc(p[0], p[1], r, 0, 2 * Math.PI);
+      ctx.moveTo(p[0] - r * 1.6, p[1]);
+      ctx.lineTo(p[0] - r * 0.5, p[1]);
+      ctx.moveTo(p[0] + r * 0.5, p[1]);
+      ctx.lineTo(p[0] + r * 1.6, p[1]);
+      ctx.moveTo(p[0], p[1] - r * 1.6);
+      ctx.lineTo(p[0], p[1] - r * 0.5);
+      ctx.moveTo(p[0], p[1] + r * 0.5);
+      ctx.lineTo(p[0], p[1] + r * 1.6);
+    },
+    col,
+    1.6,
+  );
+  const d = L.dist >= 1000 ? `${(L.dist / 1000).toFixed(1)} km` : `${Math.round(L.dist)} m`;
+  text(`LPD ${d}`, p[0] + r * 1.9, p[1] - r * 0.4, col, 11, "left", true);
+}
+
 function drawHover(
   F: SymFrame,
   sf: NonNullable<SymInfo["surface"]>,

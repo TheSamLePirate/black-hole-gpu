@@ -133,6 +133,16 @@ function spaceAssistStep(this: CameraController, inp: PilotInput, dt: number) {
   }
   // (the translation mode: the attitude keys and the throttle's translate the craft)
   if (this.rcsMode === "translate") Object.assign(inp, translateKeys(inp));
+  // (the powered landing flying to a point: the stick redesignates it — W S forward · back, A D or the translation
+  // keys left · right —, Apollo's landing point designator; the craft's attitude the autopilot's)
+  this.lpdIn = null;
+  const L = this.landRun;
+  if (this.pilot.auto === "land" && L && (L.q || L.site)) {
+    const fwd = Math.max(-1, Math.min(1, -inp.pitch + inp.tz));
+    const right = Math.max(-1, Math.min(1, inp.yaw + inp.tx));
+    if (fwd !== 0 || right !== 0) this.lpdIn = { fwd, right };
+    inp.pitch = inp.yaw = inp.tx = inp.tz = 0;
+  }
   const level = this.assistLevel() as SpaceAssistLevel;
   let rate = spaceRateLaw(level);
   const P = this.pilot;

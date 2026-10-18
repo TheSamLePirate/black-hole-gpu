@@ -1363,7 +1363,16 @@ export class CameraController {
     cmd: DescentCmd | null;
     /** the braking begun low (descent.ts: no coasting again) */
     braking?: boolean;
+    /** the landing point redesignated by the pilot (controller/spaceassist.ts, the LPD): where it was first, the
+     *  scene's time of the last move [M], moved at all */
+    q0?: Vec3 | null;
+    lpdT?: number;
+    moved?: boolean;
   } | null = null;
+  /** the stick's redesignation of the landing point this frame (the LPD): forward, right (−1 … 1) */
+  lpdIn: { fwd: number; right: number } | null = null;
+  /** the powered landing's point this frame (home frame [M]), for the HUD's LPD marker */
+  lpdPad: Vec3 | null = null;
 
   /**
    * Our universe's landing and take-off (the body of the sphere of influence, if it has a ground):

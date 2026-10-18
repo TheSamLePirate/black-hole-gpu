@@ -796,7 +796,30 @@ function landWant(
   }
   // (here: the place under the craft held once it is slow)
   if (!L.site && !L.q && vhSI < 3) L.q = toBodyFixed(id, lin(nav.X, 1, up, -h / M_METRES), t0);
-  const padX = L.site ? sitePlace(L.site) : L.q ? fromBodyFixed(id, L.q, t0) : null;
+  let padX = L.site ? sitePlace(L.site) : L.q ? fromBodyFixed(id, L.q, t0) : null;
+  // the landing point redesignated (the LPD: the stick, controller/spaceassist.ts) — moved over the ground at 5 % of
+  // the height a second (5 m/s at least), no farther than the height (250 m at least) from where it first was
+  const dtL = L.lpdT !== undefined ? Math.max(0, (t0 - L.lpdT) * M_SECONDS) : 0;
+  L.lpdT = t0;
+  if (padX && this.lpdIn && h < LPD.below && dtL > 0) {
+    const hz = (v: Vec3) => unitV(lin(v, 1, up, -dot3(v, up)));
+    const vh = lin(va, 1, up, -dot3(va, up));
+    const fwd = Math.hypot(...vh) * C > 2 ? hz(vh) : hz(L.heading ?? this.levelHeading(up));
+    const right = cross(fwd, up);
+    const step = Math.max(LPD.minRate, LPD.rate * h) * dtL;
+    L.q0 ??= toBodyFixed(id, padX, t0);
+    let to = lin(padX, 1, lin(fwd, this.lpdIn.fwd, right, this.lpdIn.right), step / M_METRES);
+    const o = fromBodyFixed(id, L.q0, t0);
+    const off = lin(sub3(to, o), M_METRES, to, 0);
+    const lim = Math.max(LPD.minReach, h);
+    const ol = Math.hypot(...off);
+    if (ol > lim) to = lin(o, 1, off, lim / ol / M_METRES);
+    L.q = toBodyFixed(id, to, t0);
+    if (L.site) L.site = null;
+    L.moved = true;
+    padX = to;
+  }
+  this.lpdPad = padX;
   // the weight the engine holds: gravity less the centrifugal of the motion over the body (an orbit's
   // speed holds itself up)
   const vih = lin(vi, 1, up, -dot3(vi, up));
@@ -835,6 +858,10 @@ function landWant(
   const nose = unitV(lin(L.heading, 1, up, -dot3(L.heading, up)));
   return { ...out(want, ff), att: { nose: unitV(nav.toRep(nose)), up: unitV(nav.toRep(up)), vectored: true } };
 }
+
+/** The landing point designator: below this height [m]; its moving rate (a share of the height a second), the least
+ *  rate [m/s], the least reach [m]. */
+export const LPD = { below: 5000, rate: 0.05, minRate: 5, minReach: 250 };
 
 /** Below this over a ground [m], the hover holds a place on it (carried by its turning), level. */
 const HOVER_LOW = 20e3;

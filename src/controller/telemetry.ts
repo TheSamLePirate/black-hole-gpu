@@ -90,6 +90,8 @@ export interface FlightInfo {
   spaceAssist?: string;
   spaceDrift?: boolean;
   rcsTranslate?: boolean;
+  /** the powered landing's point (the LPD): seen from the eye (camera coordinates), its distance [m], redesignated */
+  lpd?: { dir: Vec3 | null; dist: number; moved: boolean } | null;
   /** a spacecraft's protections: what they foresee (controller/spaceguard.ts) */
   spaceGuard?: import("./spaceguard").SpaceGuard | null;
   /** what holds the rails' warp back ("": nothing) */
@@ -618,6 +620,15 @@ function flightInfo(this: CameraController): FlightInfo {
         port: other === "iss" ? (station.ports[k]?.name ?? "") : (VESSELS[other].ports[k]?.name ?? ""),
       };
     });
+  // the powered landing's point, as the eye sees it (the HUD's LPD)
+  if (nav && this.pilot.auto === "land" && this.lpdPad) {
+    const eye = shipToCamera(this.shipPose(), s.shipLookYaw, s.shipLookPitch).t;
+    const v = lin(sub3(this.lpdPad, nav.X), M_METRES, this.lpdPad, 0);
+    const pc = C(nav.toRep(v));
+    const q: Vec3 | null = pc ? [pc[0] + eye[0], pc[1] + eye[1], pc[2] + eye[2]] : null;
+    const ql = q ? Math.hypot(...q) : 0;
+    info.lpd = { dir: q && ql > 1e-6 ? [q[0] / ql, q[1] / ql, q[2] / ql] : null, dist: Math.hypot(...v), moved: !!this.landRun?.moved };
+  } else if (this.pilot.auto !== "land") this.lpdPad = null;
   const di = this.dockInfo;
   if (di && nav) {
     info.dock = di;

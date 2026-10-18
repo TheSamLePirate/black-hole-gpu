@@ -387,7 +387,7 @@ Chaque phase porte sa ligne réseau ; N finit ce qui n'existe qu'à plusieurs.
 | Phase | Contenu | État |
 |---|---|---|
 | X0 | niveaux d'assistance, ⇧X, ergols infinis, E1, aide, TARS | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X0.md)) |
-| X1 | modes RCS, nouveaux autopilotes, plan de mission, protections, défauts de la campagne autopilotes | en cours — X1a maintien à poste, recul, mode RCS ([fiche](progress/vaisseaux/X1a.md)) · X1b protections ([fiche](progress/vaisseaux/X1b.md)) · X1c rendez-vous ([fiche](progress/vaisseaux/X1c.md)) |
+| X1 | modes RCS, nouveaux autopilotes, plan de mission, protections, défauts de la campagne autopilotes | en cours — X1a maintien à poste, recul, mode RCS ([fiche](progress/vaisseaux/X1a.md)) · X1b protections ([fiche](progress/vaisseaux/X1b.md)) · X1c rendez-vous ([fiche](progress/vaisseaux/X1c.md)) · X1d LPD ([fiche](progress/vaisseaux/X1d.md)) |
 | X2 | Endurance vaisseau-mère (deux côtés, anneau, flotte, scènes) | à faire |
 | X3 | consommables, pannes, alarmes, checklists | à faire |
 | X4 | HUD Ranger / Lander / Endurance, amarrage, boule | à faire |
