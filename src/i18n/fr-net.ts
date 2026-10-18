@@ -2,6 +2,13 @@
 export default {
   "Network menu": "Menu Réseau",
   "Free fight in a room": "Combat libre en salle",
+  "Crew actions": "Actions de l'équipage",
+  "The crew screens (phones, tablets joined as instruments) may act aboard — the flight plan, the configuration, the autopilot, the weapons — but never fly. Off: the pilot's lock, they only watch.":
+    "Les écrans d'équipage (téléphones, tablettes entrés comme instruments) peuvent agir à bord — plan de vol, configuration, pilote automatique, armement — sans jamais piloter. Désactivé : le verrou du pilote, ils ne font que regarder.",
+  "{0} (crew): {1}": "{0} (équipage) : {1}",
+  "{0} (crew): {1} — refused: {2}": "{0} (équipage) : {1} — refusé : {2}",
+  "The crew may act aboard (everything but flying)": "L'équipage peut agir à bord (tout sauf piloter)",
+  "Crew's actions locked: they only watch": "Actions de l'équipage verrouillées : il ne fait que regarder",
   "In a room, in the F-35, outside a match: weapons live, every craft a target — the other players, their wingmen and yours, airliners, ships, carriers —, friendly fire on, everything on the radar.":
     "En salle, en F-35, hors d'un match : armes actives, tout appareil est une cible — les autres joueurs, leurs ailiers et les vôtres, les avions de ligne, les navires, les porte-avions —, tir ami autorisé, tout sur le radar.",
   "Free fight: in a room, in the F-35 — every craft a target": "Combat libre : en salle, en F-35 — tout appareil est une cible",

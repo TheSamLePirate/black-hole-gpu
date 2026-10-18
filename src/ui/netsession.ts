@@ -5,7 +5,9 @@
 // (src/net/) is the network module's, loaded when a room was asked for.
 
 import { fmtFactor, realTimeSpeed, roomPace } from "../clock";
-import { crewSnapshot } from "./crew-feed";
+import { crewFamilies, crewSnapshot } from "./crew-feed";
+import { CrewExec } from "./crew-exec";
+import type { Tool } from "../ai/agent";
 import type { Info } from "./flighthud";
 import type { RangerStatus } from "../game/status";
 import type { CameraController } from "../controls";
@@ -113,6 +115,8 @@ export interface NetSessionDeps {
   onCollide(slot: number, name: string): void;
   /** another's mission heard (P1): flown with him, on his wing */
   missionJoin?(spec: MissionSpec, from: number, name: string): void;
+  /** the game's tools, which the crew's orders run through (main.ts: TARS's — called directly) */
+  crewTools?(): Tool[];
   /** another's radio line (I4: his wingmen, his carrier, his LSO) heard on the flight's radio */
   radioHeard?(role: RadioRole, text: string, name: string): void;
 }
@@ -138,6 +142,20 @@ function steady(S: { t: number; p: number[]; v: number[] }[] | undefined) {
 
 export class NetSession {
   private crewSent = -Infinity;
+  /** the crew's orders carried out (docs/PLAN-CREW-ACTIONS.md), made at the first one heard */
+  private crewExecOf: CrewExec | null = null;
+  private get crewExec() {
+    const d = this.d;
+    this.crewExecOf ??= new CrewExec({
+      camera: d.camera,
+      settings: d.settings,
+      tools: () => d.crewTools?.() ?? [],
+      toast: (s) => d.toast(s),
+      nameOf: (slot) => this.nameOf(slot),
+      families: () => crewFamilies(d.camera),
+    });
+    return this.crewExecOf;
+  }
   private crewAround = -Infinity;
 
   /** At most 4 Hz, only while an instruments screen is present. No simulator on that screen. */
@@ -379,7 +397,8 @@ export class NetSession {
       net.on("world", placeAway);
       net.on("event", ({ from, ev }) => {
         const e = ev as { kind?: string; to?: number };
-        if (e.kind === "tel") this.tel.set(from, (ev as unknown as { v: Record<string, number> }).v);
+        if (e.kind === "crew-cmd") void this.crewExec.handle(net, from, ev);
+        else if (e.kind === "tel") this.tel.set(from, (ev as unknown as { v: Record<string, number> }).v);
         else if (e.kind === "wng") {
           // (another's AI wingmen — F3: his host's flying, drawn and on our radar here)
           const list = (ev as unknown as { w?: unknown }).w;

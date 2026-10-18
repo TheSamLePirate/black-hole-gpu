@@ -22,6 +22,8 @@ export interface NetHost {
   /** the build's id */
   build: string;
   toast(s: string): void;
+  /** the pilot's lock on the crew's actions (settings.netCrewActions — docs/PLAN-CREW-ACTIONS.md) */
+  crewActions?: { get(): boolean; set(on: boolean): void };
 }
 
 interface Known {
@@ -312,6 +314,17 @@ export class NetPanel {
     );
     const row = h("div", "netp-row netp-qrrow");
     row.append(img, col);
+    // the pilot's lock: the crew screens act aboard (everything but flying), or only watch
+    const lock = h("label", "netp-check");
+    const box2 = h("input") as HTMLInputElement;
+    box2.type = "checkbox";
+    box2.checked = this.host.crewActions?.get() ?? true;
+    box2.dataset.testid = "net-crew-actions";
+    box2.addEventListener("change", () => {
+      this.host.crewActions?.set(box2.checked);
+      this.host.toast(box2.checked ? t("The crew may act aboard (everything but flying)") : t("Crew's actions locked: they only watch"));
+    });
+    lock.append(box2, h("span", "", t("The crew may act aboard (everything but flying)")));
     box.append(
       h(
         "p",
@@ -321,6 +334,7 @@ export class NetPanel {
         ),
       ),
       row,
+      lock,
     );
     return box;
   }

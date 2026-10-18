@@ -16,9 +16,9 @@
         ><select id="pilot" aria-label="Pilote suivi"><option value="">En attente d’un pilote</option></select></label
       >
       <div class="connection" title="État de la salle"><span id="status-dot"></span><span id="connection">Hors connexion</span></div>
+      <span id="act-state" class="act-state" title="Actions de l'équipage à bord du pilote suivi"></span>
       <div class="head-actions">
         <button id="units-button" class="chip" type="button" aria-label="Unités affichées">MÉTRIQUE</button>
-        <button id="tars-button" class="chip" type="button">TARS</button>
         <button id="crew-button" class="chip" type="button" aria-expanded="false" aria-controls="crew-panel">Équipage</button>
         <button id="room-button" class="chip primary-chip" type="button">Rejoindre</button>
       </div>
@@ -41,7 +41,12 @@
         <div class="view-foot"><span id="view-note">Toucher un panneau pour l’ouvrir</span><span>Made with Natural Earth</span></div>
       </section>
       <aside id="crew-panel" aria-label="Équipage et radio">
-        <div class="aside-head"><h2>À bord</h2><button id="close-crew" type="button" aria-label="Fermer l’équipage">Fermer</button></div>
+        <div class="aside-head"><h2>Équipage</h2><button id="close-crew" type="button" aria-label="Fermer l’équipage">Fermer</button></div>
+        <section class="board" aria-label="Journal de bord">
+          <h3>Journal de bord</h3>
+          <p id="crew-lock" class="lock-state"></p>
+          <ol id="board"></ol>
+        </section>
         <div id="members"></div>
         <p id="network-details" class="muted small"></p>
         <div id="traffic-summary" class="traffic-summary"></div>
@@ -84,20 +89,6 @@
         <button id="join" class="primary" type="submit">Rejoindre l’équipage</button>
         <button id="leave" type="button" hidden>Quitter la salle</button>
         <button id="close-lobby" type="button" hidden>Retour aux instruments</button>
-      </form>
-    </dialog>
-    <dialog id="tars">
-      <form id="tars-form">
-        <p class="eyebrow">TARS / CONSOLE LOCALE</p>
-        <h2>À votre écoute.</h2>
-        <p class="muted small">
-          tableau, vol, navigation, carte, globe, radar, systèmes, plan, télémétrie · suivre Ana · zoom +/− · centrer · ajuster · portée 50 ·
-          nord/cap · capteur/joueurs · pause/direct · courbe Mach · courbes · trafic · écouter · couper micro · impérial/métrique · état
-        </p>
-        <label>Votre demande<input id="tars-input" autocomplete="off" placeholder="Afficher la navigation" /></label>
-        <button type="submit" class="primary">Demander à TARS</button>
-        <output id="tars-output" aria-live="polite"></output>
-        <button id="close-tars" type="button">Fermer</button>
       </form>
     </dialog>
     <noscript>JavaScript est nécessaire pour rejoindre une salle et afficher ses instruments.</noscript>

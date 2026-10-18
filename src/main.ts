@@ -4512,7 +4512,18 @@ async function main() {
   };
   // playing together (ui/netpanel.ts, docs/PLAN-RESEAU.md): the network loaded only when a room is asked for
   // (a room's clock in the scene's seconds — sim.time is in M)
-  const netPanel = new NetPanel({ time: () => sim.time * M_SECONDS, build: "", toast: (s) => panel.toast(s) });
+  const netPanel = new NetPanel({
+    time: () => sim.time * M_SECONDS,
+    build: "",
+    toast: (s) => panel.toast(s),
+    crewActions: {
+      get: () => settings.netCrewActions !== false,
+      set: (on) => {
+        settings.netCrewActions = on;
+        onSettingsChange(["netCrewActions"]);
+      },
+    },
+  });
   const openNetwork = () => (settings.netMenu ? netPanel.open() : panel.toast(t("The network's menu is off (Settings › Network)")));
   const netSession = new NetSession({
     camera,
@@ -4523,6 +4534,8 @@ async function main() {
     toast: (s) => panel.toast(s),
     jetIn: () => jetIn,
     sceneTime: () => sim.time * M_SECONDS,
+    // (the crew's orders: through the game's tools, called directly — docs/PLAN-CREW-ACTIONS.md)
+    crewTools: () => tarsTools,
     // (a mid-air collision: in a match's fight, shot down; else the craft destroyed — the room's way: craftLost)
     onCollide: (slot, name) => collide(slot, name),
     // (another's radio roles — I4 —: heard, his name before)

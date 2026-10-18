@@ -9,12 +9,30 @@ import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
 import { toBodyFixed } from "../system/our-surface";
 import { solarBody } from "../system/solar";
 import { fuelPlan } from "../game/flightplan";
+import type { Family } from "../net/crewcmd";
+import { fleet } from "../fleet";
+import { VESSELS } from "../vessels";
 import { cruiseBurn } from "../f35/cruise";
 import { CARRIER } from "../game/carrier";
 import { enuAt } from "../controller/traffic";
 import { WGS84_A, WGS84_F, wgs84Inverse, wgs84Offset } from "../system/ellipsoid";
 
 const D = Math.PI / 180;
+
+/**
+ * The crew's families open now (net/crewcmd.ts): the flight plan over the Earth; the configuration on a craft that
+ * flies; the jet's autopilot in plane mode in the air, the spacecraft's out of it; the weapons in the F-35.
+ */
+export function crewFamilies(c: CameraController): Family[] {
+  const A = c.airInfo();
+  const out: Family[] = [];
+  if (c.geoNow()) out.push("nav");
+  if (VESSELS[fleet.active].flies) out.push("config");
+  if (A.inAir && A.mode === "plane") out.push("jet");
+  else if (!A.inAir || A.mode === "rocket") out.push("space");
+  if (fleet.active === "f35") out.push("weapons");
+  return out;
+}
 const fin = (x: number | null | undefined) => (typeof x === "number" && Number.isFinite(x) ? x : null);
 
 /** The alerts lit for the crew's annunciator, in their order of urgency. */
@@ -303,6 +321,7 @@ export function crewSnapshot(c: CameraController, i: Info, status: RangerStatus 
     next: status?.next ? { kind: status.next.kind, name: status.next.name, in: status.next.inS } : null,
     msn: i.msn ? { name: i.msn.name, brg: i.msn.brg * D, dist: i.msn.dist, dz: i.msn.dz } : null,
     warn: warnings(i, status, fuelKg, bingo),
+    caps: { on: c.s.netCrewActions !== false, fam: crewFamilies(c) },
     ...(around && body === "earth" ? surroundings(c, i, g ? { lat: g.lat, lon: g.lon, alt: g.alt } : null) : {}),
     radar: i.radar
       ? {

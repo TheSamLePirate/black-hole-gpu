@@ -6,6 +6,7 @@ import { NetClient } from "../src/net/client";
 import { emptyVisual } from "../src/net/proto";
 import { geodeticToCart, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
 import { gcCourse, gcDest, gcDist } from "../src/game/flightplan";
+import { readCrewCmd, sayOf } from "../src/net/crewcmd";
 
 const url = process.argv[2] ?? "ws://localhost:3000/net";
 const D = Math.PI / 180;
@@ -92,6 +93,33 @@ function sample(lat0: number, lon0: number, h: number, heading: number, v: numbe
   };
 }
 
+// the crew's orders (docs/PLAN-CREW-ACTIONS.md): Ana's board answers them as the simulator would
+const board = { ackUntil: 0 };
+const crewDo: Record<string, (a: Record<string, unknown>) => string | null> = {
+  "cfg.ack": () => {
+    board.ackUntil = t + 20;
+    return null;
+  },
+};
+ana.on("event", ({ from, ev }) => {
+  if (ev.kind !== "crew-cmd") return;
+  const cmd = readCrewCmd(ev);
+  if (!cmd.ok)
+    return ana.event({ kind: "crew-ack", v: 1, id: cmd.id ?? "", to: from, act: String(ev.act), ok: false, msg: cmd.error, what: "" });
+  if (cmd.cmd.to !== ana.room?.slot) return;
+  const why = crewDo[cmd.cmd.act]?.(cmd.cmd.args) ?? null;
+  ana.event({
+    kind: "crew-ack",
+    v: 1,
+    id: cmd.cmd.id,
+    to: from,
+    act: cmd.cmd.act,
+    ok: !why,
+    msg: why ?? "",
+    what: sayOf(cmd.cmd.act, cmd.cmd.args).fr,
+  });
+});
+
 setInterval(() => {
   const dt = 0.25;
   t += dt;
@@ -136,7 +164,10 @@ setInterval(() => {
     s.lat = n.lat;
     s.lon = n.lon;
   }
-  const warn = [...(fuel < 7000 ? ["BINGO"] : []), ...(Math.floor(t / 20) % 6 === 5 ? ["MISSILE"] : [])];
+  const warn =
+    t < board.ackUntil
+      ? []
+      : [...(fuel < 7000 ? ["BINGO"] : []), ...(Math.floor(t / 20) % 6 === 5 ? ["MISSILE"] : []), ...(t > 2 && t < 40 ? ["GEAR"] : [])];
   ana.sendCraft(sample(lat, lon, alt, hdg, spd));
   ana.event({
     kind: "instruments",
@@ -249,6 +280,7 @@ setInterval(() => {
       next: null,
       msn: { name: "SA-6", brg: gcCourse({ lat, lon }, units[0]!), dist: gcDist({ lat, lon }, units[0]!), dz: -alt },
       warn,
+      caps: { on: true, fam: ["nav", "config", "jet", "weapons"] },
       ...(around
         ? {
             traffic: [

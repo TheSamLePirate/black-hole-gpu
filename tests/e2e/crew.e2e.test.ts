@@ -84,7 +84,7 @@ describe.skipIf(!E2E)("crew console", () => {
     await app.shot("remote-results/crew-mobile-map.png");
   }, 30_000);
 
-  test("every view and its buttons work on a phone, and TARS reads the received data", async () => {
+  test("every view and its buttons work on a phone, the received data on its tiles; no TARS on the console", async () => {
     for (const view of ["dash", "nd", "globe", "radar", "schematic", "plan", "telemetry", "map"]) {
       // (the tabs' bar scrolls on a phone: the tab brought into view as a finger would)
       await app.js(`(document.querySelector('[data-view=${view}]').scrollIntoView({ inline: 'center', block: 'nearest' }), true)`);
@@ -95,8 +95,9 @@ describe.skipIf(!E2E)("crew console", () => {
       await app.click("#zoom-in");
       expect(await app.js<boolean>("document.documentElement.scrollWidth <= innerWidth")).toBe(true);
     }
-    expect(await app.js<string>("__crew.askTars('carburant')")).toContain("75");
-    await app.js("__crew.askTars('globe')");
+    expect(await app.js<string>("document.querySelector('[data-key=fuel] strong').textContent")).toContain("75");
+    expect(await app.js<boolean>("!document.querySelector('#tars, #tars-button') && !('askTars' in __crew)")).toBe(true);
+    await app.js("(__crew.setView('globe'), true)");
     expect(await app.js<string>("__crew.views.view")).toBe("globe");
     await app.shot("remote-results/crew-mobile-globe.png");
   });
@@ -186,7 +187,6 @@ describe.skipIf(!E2E)("crew console", () => {
     }
     clearInterval(feed);
     await app.waitFor("document.querySelector('#freshness').textContent.includes('ancienne')", 6000);
-    expect(await app.js<string>("__crew.askTars('état')")).toContain("ancien");
     expect(app.cdp.errors).toEqual([]);
   }, 15_000);
 
@@ -204,8 +204,10 @@ describe.skipIf(!E2E)("crew console", () => {
       p2p: false,
     });
     let data: unknown = null;
+    const acks: Record<string, unknown>[] = [];
     observer.on("event", ({ ev }) => {
       if (ev.kind === "instruments") data = ev.data;
+      if (ev.kind === "crew-ack") acks.push(ev as Record<string, unknown>);
     });
     try {
       await observer.join(code, "instruments");
@@ -226,8 +228,29 @@ describe.skipIf(!E2E)("crew console", () => {
       expect(snapshot.auto).toBeTruthy();
       expect(snapshot.sys).toBeTruthy();
       expect(Array.isArray(snapshot.warn)).toBe(true);
+      // the crew's orders (PLAN-CREW-ACTIONS A0): the families announced, an order carried out and answered, then
+      // refused once the pilot locks them
+      const caps = (data as { caps?: { on: boolean; fam: string[] } }).caps;
+      expect(caps?.on).toBe(true);
+      expect(caps?.fam).toContain("config");
+      const pilotSlot = await app.js<number>("__bh.net.net.room.slot");
+      const ask = async (id: string) => {
+        observer.event({ kind: "crew-cmd", v: 1, id, to: pilotSlot, act: "cfg.ack", args: {} });
+        const until = Date.now() + 5000;
+        while (!acks.some((a) => a.id === id) && Date.now() < until) await Bun.sleep(50);
+        return acks.find((a) => a.id === id);
+      };
+      expect(await ask("e2e-ack-1")).toMatchObject({ ok: true, act: "cfg.ack" });
+      await app.js("(__bh.settings.netCrewActions = false, true)");
+      const refused = await ask("e2e-ack-2");
+      expect(refused).toMatchObject({ ok: false });
+      expect(String(refused?.msg)).toMatch(/verrouill|lock/i);
+      await app.js("(__bh.settings.netCrewActions = true, true)");
       await app.js("(__bh.net.open(), true)");
       await app.click("[data-testid=net-tab-screens]");
+      await app.waitFor("!!document.querySelector('[data-testid=net-screen-role]')", 10_000);
+      // (the pilot's lock on the crew's actions, beside the link)
+      expect(await app.js<boolean>("document.querySelector('[data-testid=net-crew-actions]').checked")).toBe(true);
       await app.js(
         "(() => { const s=document.querySelector('[data-testid=net-screen-role]'); s.value='instruments'; s.dispatchEvent(new Event('change')); return true; })()",
       );

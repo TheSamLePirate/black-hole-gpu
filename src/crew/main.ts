@@ -7,6 +7,9 @@ import { unitsOf } from "../ui/unitsys";
 import { CrewRadio } from "./radio";
 import { bindTalk } from "./ptt";
 import { CrewViews, VIEW_NAMES, type CrewView } from "./views";
+import { CrewActions } from "./actions";
+import { ACTS, type Act } from "../net/crewcmd";
+import type { Args } from "../ai/tool-schema";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const button = (text: string, action: () => void, id?: string) => {
@@ -23,8 +26,7 @@ const el = (tag: string, text = "", cls = "") => {
   e.className = cls;
   return e;
 };
-const lobby = $<HTMLDialogElement>("lobby"),
-  tars = $<HTMLDialogElement>("tars");
+const lobby = $<HTMLDialogElement>("lobby");
 const pilot = $<HTMLSelectElement>("pilot"),
   talk = $<HTMLButtonElement>("talk"),
   toggle = $<HTMLInputElement>("toggle-talk");
@@ -41,6 +43,8 @@ const net = new NetClient({
 const model = new CrewModel(net);
 const views = new CrewViews($<HTMLCanvasElement>("instruments"), model);
 const radio = new CrewRadio(net, () => syncRadio());
+const actions = new CrewActions(net, model);
+actions.onChange(() => board());
 let noticeTimer: ReturnType<typeof setTimeout>;
 const notice = (s: string) => {
   $("notice").textContent = s;
@@ -504,7 +508,74 @@ function alerts(own: ReturnType<typeof model.own>) {
   alertKey = key;
   $("alerts").replaceChildren(
     ...list.map((w) => el("span", w, `alert${/PULL|FLY|STALL|G-LOC|MISSILE|OVER|IMPACT|FAIL/.test(w) ? " warning" : ""}`)),
+    ...(list.length ? [actButton("Acquitter", "cfg.ack", {}, "ack-alarm")] : []),
   );
+  syncActs();
+}
+
+/**
+ * A control that gives an order: busy until the pilot answers, its result said (a refusal also by a short
+ * vibration on a phone), unusable while its family is closed (the lock, the craft, the mode) — the reason its title.
+ */
+function actButton(text: string, act: Act, args: Args | (() => Args) = {}, id?: string, done?: (ok: boolean) => void) {
+  const b = button(text, () => void fire(b, act, typeof args === "function" ? args() : args, done), id);
+  b.dataset.act = act;
+  return b;
+}
+async function fire(b: HTMLElement | null, act: Act, args: Args, done?: (ok: boolean) => void) {
+  b?.setAttribute("aria-busy", "true");
+  const r = await actions.send(act, args);
+  b?.removeAttribute("aria-busy");
+  b?.classList.remove("ok", "ko");
+  void b?.offsetWidth;
+  b?.classList.add(r.ok ? "ok" : "ko");
+  const what = actions.label(act, args);
+  const What = what.charAt(0).toUpperCase() + what.slice(1);
+  notice(r.ok ? `${What} ✓` : `${What} — ${r.msg || "refusé"}`);
+  if (!r.ok) navigator.vibrate?.(60);
+  done?.(r.ok);
+  refresh();
+  return r;
+}
+/** every control that gives an order: on or off as its family is open */
+function syncActs() {
+  for (const b of document.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLSelectElement>("[data-act]")) {
+    const fam = ACTS[b.dataset.act as Act]?.fam;
+    const can = fam ? actions.can(fam) : { ok: false, why: "" };
+    b.disabled = !can.ok;
+    b.title = can.ok ? "" : can.why;
+  }
+}
+/** the board: the lock's state and the journal of the orders the pilot followed answered */
+function board() {
+  const own = model.own();
+  const caps = own?.snapshot?.caps;
+  const state = !net.room || !own ? "" : !caps ? "lecture seule" : caps.on ? "actions" : "verrouillé";
+  const s = $("act-state");
+  s.textContent = state === "actions" ? "ACTIONS ✓" : state === "verrouillé" ? "VERROUILLÉ" : state ? "LECTURE" : "";
+  s.dataset.state = state;
+  $("crew-lock").textContent = !own
+    ? "Aucun pilote suivi."
+    : !caps
+      ? "Ce simulateur ne reçoit pas d'ordres : instruments en lecture seule."
+      : caps.on
+        ? `Vous pouvez agir à bord de ${own.member.name} — tout sauf piloter.`
+        : `${own.member.name} a verrouillé les actions de l'équipage.`;
+  const list = $("board");
+  const key = JSON.stringify(actions.board.slice(0, 12).map((l) => [l.at, l.ok]));
+  if (list.dataset.key !== key) {
+    list.dataset.key = key;
+    list.replaceChildren(
+      ...actions.board.slice(0, 12).map((l) => {
+        const li = el("li", "", l.ok ? "ok" : "ko");
+        const time = new Date(l.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        li.append(el("time", time), el("strong", l.who), el("span", l.what), ...(l.ok ? [] : [el("em", l.msg || "refusé")]));
+        return li;
+      }),
+    );
+    if (!actions.board.length) list.append(el("li", "Aucun ordre pour l'instant.", "empty"));
+  }
+  syncActs();
 }
 
 function refresh() {
@@ -535,6 +606,7 @@ function refresh() {
   }
   tiles(own);
   alerts(own);
+  board();
   const followed = room?.members.find((m) => m.slot === model.selected);
   $("pilot-dot").style.background = followed?.colour ?? "#4d606b";
   $("freshness").textContent =
@@ -683,153 +755,6 @@ views.onContact = (id) => {
   views.request();
 };
 
-/** TARS uses the same local actions as touch controls and only the received measurements. */
-async function askTars(input: string): Promise<string> {
-  const q = input
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-  const options: [RegExp, CrewView][] = [
-    [/tableau|dashboard|ensemble des instruments/, "dash"],
-    [/plan de vol|\bplan\b|profil|route/, "plan"],
-    [/\bpfd\b|horizon|\bvol\b|attitude/, "pfd"],
-    [/navigation|\bnd\b/, "nd"],
-    [/carte|\bmap\b/, "map"],
-    [/globe/, "globe"],
-    [/radar/, "radar"],
-    [/schema|schematic|systeme|moteur/, "schematic"],
-    [/telemetr|courbe/, "telemetry"],
-  ];
-  for (const [pattern, view] of options)
-    if (pattern.test(q)) {
-      setView(view);
-      if (/courbes\b|ensemble/.test(q) && view === "telemetry") {
-        views.channel = "multi";
-        controls();
-        return "Vue d’ensemble des courbes.";
-      }
-      if (!q.includes("courbe")) return `Vue ${VIEW_NAMES[view]} affichée.`;
-    }
-  if (/imperial|pieds|noeuds/.test(q)) {
-    setUnits("imperial");
-    return "Unités impériales : pieds, nœuds, milles nautiques.";
-  }
-  if (/metrique|metres/.test(q)) {
-    setUnits("metric");
-    return "Unités métriques : mètres, m/s, kilomètres.";
-  }
-  if (/trafic|traffic|avions|bateaux|navires/.test(q)) {
-    const c = model.contacts();
-    const air = c.filter((x) => x.kind === "air").length,
-      sea = c.filter((x) => x.kind === "sea").length,
-      hostile = c.filter((x) => x.side === "hostile").length;
-    return `${model.crafts().length} joueur(s), ${air} avion(s), ${sea} navire(s)${hostile ? `, ${hostile} hostile(s)` : ""}.`;
-  }
-  if (/suivre|follow/.test(q)) {
-    const m = net.room?.members.find(
-      (m) =>
-        m.role === "pilot" &&
-        q.includes(
-          m.name
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .toLowerCase(),
-        ),
-    );
-    if (m) {
-      select(m.slot);
-      return `Je suis ${m.name}.`;
-    }
-    return "Indiquez le nom d’un pilote connecté.";
-  }
-  if (/zoom/.test(q)) {
-    views.zoomBy(/moins|out|−|-/.test(q) ? 0.75 : 1.333);
-    return "Zoom ajusté.";
-  }
-  if (/centr|recentr/.test(q)) {
-    views.reset();
-    return "Vue centrée sur le pilote.";
-  }
-  if (/ajust|fit/.test(q)) {
-    views.fit();
-    return "Portée ajustée aux joueurs.";
-  }
-  if (/portee|range/.test(q)) {
-    const n = Number(q.match(/[\d.]+/)?.[0]);
-    if (n >= 0.1 && n <= 20000) {
-      views.range = n * 1000;
-      controls();
-      views.request();
-      return `Portée ${n} km.`;
-    }
-    return "Indiquez une portée entre 0,1 et 20 000 km.";
-  }
-  if (/nord|\bcap\b/.test(q)) {
-    views.north = q.includes("nord");
-    views.request();
-    return views.north ? "Nord en haut." : "Cap en haut.";
-  }
-  if (/capteur|joueurs/.test(q)) {
-    views.sensor = q.includes("capteur");
-    setView("radar");
-    return views.sensor ? "Radar reçu du pilote." : "Positions partagées des joueurs.";
-  }
-  if (/pause|figer|direct|reprendre/.test(q)) {
-    const pause = /pause|figer/.test(q);
-    if (pause !== views.paused) views.togglePause();
-    controls();
-    return pause ? "Consultation figée. La radio reste active." : "Mesures en direct.";
-  }
-  if (/ecouter|listen/.test(q)) {
-    await radio.listen();
-    return radio.error || "Écoute activée.";
-  }
-  if (/couper.*micro/.test(q)) {
-    radio.disableMic();
-    return "Microphone coupé.";
-  }
-  if (/activer.*micro/.test(q)) {
-    await radio.enableMic();
-    return radio.error || "Microphone prêt. Maintenez le bouton radio pour parler.";
-  }
-  if (/csv|export/.test(q)) {
-    download();
-    return "Historique exporté.";
-  }
-  const metric =
-    [...METRICS]
-      .sort((a, b) => b.name.length - a.name.length)
-      .find((m) =>
-        q.includes(
-          m.name
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .toLowerCase(),
-        ),
-      ) ?? METRICS.find((m) => q.split(/\W+/).includes(m.key));
-  if (metric && /courbe/.test(q)) {
-    views.channel = metric.key;
-    controls();
-    views.request();
-    return `Courbe ${metric.name}.`;
-  }
-  const own = model.own();
-  if (!own) return "Je ne reçois pas encore de pilote. Rejoignez une salle et choisissez un pilote.";
-  if (own.age > 3) return "Le signal est ancien. Je ne peux pas confirmer les valeurs actuelles.";
-  return `${own.member.name} · ${own.kind.toUpperCase()} · ${own.body}\n${(metric ? [metric] : METRICS.slice(0, 7)).map((m) => `${m.name} : ${valueText(own.metrics[m.key], m.k)} ${m.unit}`).join("\n")}`;
-}
-$("tars-button").addEventListener("click", () => {
-  radio.gate.cancel();
-  tars.showModal();
-});
-$("close-tars").addEventListener("click", () => tars.close());
-$("tars-form").addEventListener("submit", (e) => {
-  e.preventDefault();
-  void askTars($<HTMLInputElement>("tars-input").value).then((text) => {
-    $("tars-output").textContent = text;
-  });
-});
 document.addEventListener("keydown", (e) => {
   if (e.code === "Escape") {
     radio.gate.cancel();
@@ -843,7 +768,7 @@ addEventListener("pagehide", () => {
 setInterval(() => {
   if (!document.hidden) refresh();
 }, 250);
-Object.assign(window, { __crew: { net, model, views, radio, join, setView, askTars } });
+Object.assign(window, { __crew: { net, model, views, radio, actions, join, setView } });
 setUnits(views.units);
 setView("dash");
 refresh();

@@ -4436,6 +4436,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "network multiplayer online room friends together",
   },
   {
+    key: "netCrewActions",
+    type: "toggle",
+    section: "game",
+    group: "Network",
+    label: "Crew actions",
+    effect: "none",
+    help: "The crew screens (phones, tablets joined as instruments) may act aboard — the flight plan, the configuration, the autopilot, the weapons — but never fly. Off: the pilot's lock, they only watch.",
+    keywords: "network crew copilot navigator instruments console actions lock",
+  },
+  {
     key: "netFreeFight",
     type: "toggle",
     section: "game",

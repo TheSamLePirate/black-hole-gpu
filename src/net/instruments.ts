@@ -134,6 +134,8 @@ export interface InstrumentSnapshot {
   msn?: { name: string; brg: number; dist: number; dz: number } | null;
   /** the alerts lit (STALL, GEAR, PULL UP, BINGO…) */
   warn?: string[];
+  /** the crew's orders (net/crewcmd.ts): the pilot's lock open, the families that can be done now */
+  caps?: { on: boolean; fam: string[] } | null;
   /** sent once a second at most: absent, the last list stands */
   traffic?: InstrumentTraffic[];
   zones?: InstrumentZone[];
@@ -321,6 +323,16 @@ export function readInstruments(x: unknown): InstrumentSnapshot | null {
       : null,
     next: next ? { kind: label(next.kind, 16), name: label(next.name), in: next.in as number } : null,
     msn: msn ? { name: label(msn.name), brg: msn.brg as number, dist: msn.dist as number, dz: num(msn.dz) ?? 0 } : null,
+    caps:
+      record(x.caps) && Array.isArray(x.caps.fam)
+        ? {
+            on: x.caps.on === true,
+            fam: x.caps.fam
+              .slice(0, 8)
+              .filter((f): f is string => typeof f === "string")
+              .map((f) => f.slice(0, 12)),
+          }
+        : null,
     ...(Array.isArray(x.traffic) ? { traffic: readTraffic(x.traffic) } : {}),
     ...(Array.isArray(x.zones)
       ? {
