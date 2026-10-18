@@ -8,6 +8,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // Then #slowboot=10: the graphics held 10 s more, the title still there.
 
 const RUNS = Number(process.env.RUNS ?? 3);
+const FIRST = process.env.FIRST === "1";
+const CLEAR_SAVE = `try { for (const k of Object.keys(localStorage)) if (k.includes("kerr.autosave")) localStorage.removeItem(k); } catch {}`;
 
 interface Report {
   marks: { name: string; t: number }[];
@@ -62,31 +64,49 @@ describe.skipIf(!E2E)("the boot's timeline", () => {
     expect(out.every((o) => o.cold.firstImage && o.warm.firstImage)).toBe(true);
   }, 1_200_000);
 
-  // (NET=<Mbit/s>: the page loaded again with the browser's cache off and the network throttled — the
-  // downloads (the bundle, DE440, the sky, the stars) as a player's first visit over that link)
+  // (NET=<Mbit/s>: a first visit over that link — each run its own Chrome (nothing left in flight by the run before
+  // on the throttled link), the page booted once then loaded again with the cache off and the link throttled. The
+  // downloads that began before the splash lifted, by size: who shares the link with what the scene needs first)
   test.skipIf(!process.env.NET)(
     "a first visit over a slow link",
     async () => {
       const mbit = Number(process.env.NET);
-      app = await App.boot({ telemetry: false });
-      await app.cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
-      await app.cdp.send("Network.emulateNetworkConditions", {
-        offline: false,
-        latency: 40,
-        downloadThroughput: (mbit * 1e6) / 8,
-        uploadThroughput: (mbit * 1e6) / 8 / 4,
-      });
-      await app.js(
-        "(Object.keys(localStorage).filter((k) => k.includes('kerr.autosave')).forEach((k) => localStorage.removeItem(k)), true)",
+      const runs: Report[] = [];
+      for (let i = 0; i < RUNS; i++) {
+        // (FIRST=1: a first visitor — no flight saved, cleared before the page's scripts at each load; else a
+        // returning player's, the boot's own autosave behind the title)
+        app = await App.boot({ telemetry: false, initScript: FIRST ? CLEAR_SAVE : undefined });
+        await app.cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
+        await app.cdp.send("Network.emulateNetworkConditions", {
+          offline: false,
+          latency: 40,
+          downloadThroughput: (mbit * 1e6) / 8,
+          uploadThroughput: (mbit * 1e6) / 8 / 4,
+        });
+        await app.load("");
+        const r = await app.js<Report>("__bh.boot()");
+        runs.push(r);
+        console.log(line(`${mbit} Mbit/s`, r));
+        console.log(`  stages: ${r.marks.map((m) => `${m.name} ${m.t}`).join(" · ")}`);
+        if (i === 0) {
+          const big = await app.js<[string, number, number, number][]>(`performance.getEntriesByType("resource")
+            .filter((e) => e.startTime < (__bh.boot().marks.find((m) => m.name === "splash-lifted")?.t ?? 1e9) && e.encodedBodySize > 100000)
+            .sort((a, b) => b.encodedBodySize - a.encodedBodySize)
+            .map((e) => [e.name.replace(location.origin, "").split("?")[0], Math.round(e.encodedBodySize / 1024), Math.round(e.startTime), Math.round(e.responseEnd)])`);
+          console.log(
+            `  before the splash lifted (KB, start → end ms):\n${big.map(([n, kb, s, e]) => `    ${n} ${kb} KB ${s} → ${e}`).join("\n")}`,
+          );
+        }
+        app.close();
+        app = undefined;
+      }
+      const med = (f: (r: Report) => number | null) => runs.map((r) => f(r) ?? 0).sort((a, b) => a - b)[Math.floor(runs.length / 2)];
+      console.log(
+        `  median at ${mbit} Mbit/s, ${FIRST ? "first visit" : "a flight saved"}: main ${med((r) => at(r, "main"))} · ephemerides ${med((r) => at(r, "ephemerides"))} · title ${med((r) => at(r, "title"))} · first image ${med((r) => r.firstImage)} · sky done ${med((r) => at(r, "sky done"))} · stars done ${med((r) => at(r, "stars done"))} · lifted ${med((r) => at(r, "splash-lifted"))} ms`,
       );
-      await app.load("");
-      const r = await app.js<Report>("__bh.boot()");
-      console.log(line(`${mbit} Mbit/s`, r));
-      console.log(`  stages: ${r.marks.map((m) => `${m.name} ${m.t}`).join(" · ")}`);
-      app.close();
-      app = undefined;
+      if (process.env.OUT) await Bun.write(process.env.OUT, JSON.stringify(runs, null, 1));
     },
-    600_000,
+    900_000,
   );
 
   test("#slowboot=10: the graphics held 10 s, the game still starts", async () => {

@@ -496,8 +496,10 @@ Chaque phase : un commit, une planche de captures (`docs/progress/title-aaa/`), 
 - Continuer (et sa vignette), les 4 cartes de mode, Plus…, Réglages, le pied de page.
 - **Construit avant `Renderer.create()`.** Les intentions en file, les préchargements par intention, LANCER
   pendant le chargement.
-- **DE440 demandé en premier**, puis le ciel et les étoiles (E0 : à 20 Mbit/s il arrive dernier, à 9,7 s, et
-  retient le titre et la première image ; viser environ 3,5 s). Mesuré en A/B avec `NET=20`.
+- ~~DE440 demandé en premier~~ — FAIT en E0b ([fiche](progress/title-aaa/E0b.md)) : à 20 Mbit/s, la première
+  image arrive 6,0 s plus tôt pour un joueur qui revient et 2,8 s plus tôt pour un premier visiteur. En
+  contrepartie, ce premier visiteur reçoit le vrai ciel 2,1 s plus tard. **Le fondu vers la scène vivante
+  attend donc le vrai ciel.**
 - L'intention appliquée **avant la première image** quand elle est connue à temps (une compilation encore en file
   est abandonnée, pas une déjà lancée — fiche E0).
 - Corrige les constats 2, 3 et 8.

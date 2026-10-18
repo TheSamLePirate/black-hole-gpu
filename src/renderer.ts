@@ -258,21 +258,35 @@ async function wgsl(src: string): Promise<string> {
 // (the sky's assets fetched before Renderer.create() even returns: their megabytes download while
 // the shaders compile; loadSky consumes the buffers, wrapped back as Responses for its loaders)
 const skyPrefetch = new Map<string, Promise<ArrayBuffer>>();
+/** the sky's prefetch settled (its downloads in or failed): what the downloads ahead of need wait for — they
+ *  would otherwise share the link with it and hold the real sky back (PLAN-TITRE-AAA E0) */
+let skyPrefetched: Promise<unknown> = Promise.resolve();
+/** Resolves once the sky's prefetch has settled, and at least `ms` from now. */
+export const afterSkyPrefetch = (ms: number) => Promise.all([skyPrefetched, new Promise((r) => setTimeout(r, ms))]).then(() => {});
 
-/** Starts the sky's downloads (the Gaia map, the star catalogues) ahead of loadSky — idempotent. */
-export function prefetchSkyAssets(get: (url: string, id: string) => Promise<Response>): void {
+/**
+ * Starts the sky's downloads (the Gaia map, the star catalogues) ahead of loadSky — idempotent. `after`: they
+ * begin once it settles (the ephemerides: needed first, not to share the link with these 7 MB), loadSky waiting
+ * on them meanwhile rather than fetching them again.
+ */
+export function prefetchSkyAssets(get: (url: string, id: string) => Promise<Response>, after: Promise<unknown> = Promise.resolve()): void {
+  const gate = after.then(
+    () => {},
+    () => {},
+  );
   for (const [url, id] of [
     [milkyWayUrl, "sky"],
     [starLodUrl, "stars"],
     [starCatalogueUrl, "stars"],
   ] as const) {
     if (skyPrefetch.has(url)) continue;
-    const p = get(url, id).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${url}: ${r.status}`))));
+    const p = gate.then(() => get(url, id)).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${url}: ${r.status}`))));
     void p.catch(() => {
       if (skyPrefetch.get(url) === p) skyPrefetch.delete(url);
     });
     skyPrefetch.set(url, p);
   }
+  skyPrefetched = Promise.allSettled(skyPrefetch.values());
 }
 
 /**
@@ -5733,21 +5747,22 @@ export class Renderer {
   private simulatedLoss = false;
 
   /**
-   * The Earth's medium maps (22.7 MB) downloaded ahead of need — 3 s after the first image, not while the
-   * shaders compile (PLAN-MONDE M3): at 20 Mbit/s they put a scene without the Earth's first image back
-   * from 7.2 to 11.1 s. Not on a connection the user asked to spare (Save-Data: they come when a view
-   * needs them); no texture made — the scene's loader keeps the GPU's residency.
+   * The Earth's medium maps (22.7 MB) downloaded ahead of need — 3 s after the first image and once the sky is
+   * in, not while the shaders compile (PLAN-MONDE M3): at 20 Mbit/s they put a scene without the Earth's first
+   * image back from 7.2 to 11.1 s, and beside the sky they held it back 4 s more (PLAN-TITRE-AAA E0). Not on a
+   * connection the user asked to spare (Save-Data: they come when a view needs them); no texture made — the
+   * scene's loader keeps the GPU's residency.
    */
   private prefetchEarthSoon() {
     if (!earthPrefetchWanted()) return;
     const device = this.device;
-    setTimeout(() => {
+    void afterSkyPrefetch(3000).then(() => {
       if (this.lost) return;
       void prefetchEarthMaps(device).catch((error) => {
         gpuDiagnostics.record("earth-prefetch", error);
         console.warn("Earth prefetch unavailable:", error);
       });
-    }, 3000);
+    });
   }
 
   /** The device lost on purpose — its recovery tested (PLAN-MONDE M2): destroyed, told as a reset. */

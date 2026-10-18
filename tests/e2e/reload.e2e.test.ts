@@ -23,5 +23,6 @@ describe.skipIf(!E2E)("reload: completed GPU image and startup timings", () => {
     expect(await app.js<number>("__bh.renderer.gpuErrors")).toBe(0);
     expect(await app.js<string | null>("__bh.renderer.lost")).toBeNull();
     expect(app.cdp.errors).toEqual([]);
-  });
+    // (a load waits for the splash, the scene's compiles and a beat: never within bun's default 5 s)
+  }, 300_000);
 });

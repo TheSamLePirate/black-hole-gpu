@@ -30,7 +30,7 @@ import { CockpitInput } from "./cockpit/input";
 import { cockpitTarget } from "./cockpit/pointer";
 import { CockpitTip } from "./ui/cockpit-tip";
 import { cockpitHull } from "./system/collide";
-import { prefetchSkyAssets, Renderer, type FrameStats, type OfflineStatus } from "./renderer";
+import { afterSkyPrefetch, prefetchSkyAssets, Renderer, type FrameStats, type OfflineStatus } from "./renderer";
 import { swappable } from "./util/swappable";
 import { bootMark, bootReport, bootWatchStop } from "./boot-timeline";
 import { downloadGpuDiagnostic, globalErrorRouter, gpuDiagnostics } from "./gpu-diagnostics";
@@ -396,20 +396,24 @@ async function main() {
   ).catch(() => {});
   // the solar system's ephemerides and the sky's assets: downloading while the shaders compile, not
   // after them (plan §2.1-C). DE440 (3.3 MB) always, before the scene is placed; JUP365 (Jupiter's centre
-  // and moons, 2040–2100: 4.1 MB) only where it may matter — a scene about Jupiter, a save (its place not
-  // known here) —, else after the first image: at 20 Mbit/s it held every scene's first image back
-  // (PLAN-MONDE M3)
+  // and moons, 2040–2100: 7.5 MB) only where it may matter — a scene about Jupiter, a save naming Jupiter or its
+  // moons (its target, its reference body, its ground), a shared moment (not read yet) —, else after the first
+  // image: at 20 Mbit/s it held every scene's first image back (PLAN-MONDE M3), and every returning player's —
+  // the autosave, wherever it was, took 7.5 MB before DE440's 3.3 (PLAN-TITRE-AAA E0)
   const ephemerisFetch = (u: string) =>
     loading.fetch(u, "ephemeris").then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${u}: ${r.status}`))));
   const startScene = new URLSearchParams(location.hash.slice(1)).get("scene");
   const jovianFirst =
     /[#&]save=/.test(location.hash) ||
-    (startScene ? !presets[startScene] || JOVIAN.test(JSON.stringify(presets[startScene])) : !!autosave.get());
+    (startScene ? !presets[startScene] || JOVIAN.test(JSON.stringify(presets[startScene])) : JOVIAN.test(JSON.stringify(autosave.get())));
   loading.stage("ephemeris", t("The solar system — NASA/JPL ephemerides (DE440)"), { weight: 2 });
   const ephemerides = loading.track("ephemeris", "", loadEphemerides(ephemerisUrls(jovianFirst ? ["de", "jup"] : ["de"]), ephemerisFetch));
   loading.stage("sky", t("Milky Way — the Gaia DR2 map"), { weight: 2 });
   loading.stage("stars", t("Stars — the Hipparcos & HYG catalogue"), { weight: 2 });
-  prefetchSkyAssets((u, id) => loading.fetch(u, id));
+  // (the sky after the ephemerides, not beside them: DE440 is what the scene needs first — sharing the link it
+  // came last, at 9.8 s at 20 Mbit/s, holding the title and the first image; the sky is not needed for that
+  // image — PLAN-TITRE-AAA E0)
+  prefetchSkyAssets((u, id) => loading.fetch(u, id), ephemerides);
   // (the renderer behind a handle: rebuilt on a new device after a loss, the page, the simulation and the
   // overlays keeping the handle they were given — PLAN-MONDE M2)
   let renderer: Renderer;
@@ -6759,8 +6763,9 @@ async function main() {
       gpuDiagnostics.ready();
       bootMark("first-image");
       splash.firstImage();
-      // (Jupiter's moons' ephemeris, when the start did not wait for it: now, the first image drawn)
-      if (!jovianFirst) setTimeout(() => void loadEphemerides(ephemerisUrls(["jup"])), 2000);
+      // (Jupiter's moons' ephemeris, when the start did not wait for it: now, the first image drawn and the sky
+      // in — not sharing the link with it)
+      if (!jovianFirst) void afterSkyPrefetch(2000).then(() => loadEphemerides(ephemerisUrls(["jup"])));
     }
     if (st) {
       renderedAt = now;
