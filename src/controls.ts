@@ -1,5 +1,6 @@
 import type { MlsReading } from "./game/mls";
 import { JetPad, type JetPadOut } from "./input/jetpad";
+import { SpacePad, type SpacePadOut } from "./input/spacepad";
 import { Autothrottle, type JetModes, noJetModes } from "./game/jet";
 import { CineBrain } from "./cine/brain";
 import { Follow } from "./cine/follow";
@@ -1112,6 +1113,12 @@ export class CameraController {
   jetPadOut: JetPadOut | null = null;
   padZoomBase: number | null = null;
   onJetPadAction?: (action: string, arg?: string) => void;
+  /** a spacecraft's pad layout (input/spacepad.ts — PLAN-VAISSEAUX X5): its state, its frame's output (null: not
+   *  flown with it), its actions and the wheel it drives (the page's) */
+  readonly spacePad = new SpacePad();
+  spacePadOut: SpacePadOut | null = null;
+  onSpacePadAction?: (action: string, arg?: string) => void;
+  padWheel?: { isOpen(): boolean; aim(v: [number, number] | null): void };
   /** the last touchdown: its count, its sink and its speed along [m/s], the gear's verdict (controller/motion.ts) */
   lastTouch: { n: number; sink: number; along: number; gear: string } | null = null;
 

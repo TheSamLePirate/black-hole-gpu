@@ -22,7 +22,7 @@ import {
 import { remappables } from "../input/bindings";
 import { forgetProfile, type PadControls, saveProfile, snapshotDevices, storedProfiles } from "../input/devices";
 import type { KeyAction } from "../input/keymap";
-import { standardTemplate } from "../input/profiles";
+import { spaceTemplate, standardTemplate } from "../input/profiles";
 import { sharedPad } from "../gamepad";
 import { onEscape } from "./keys";
 import { button, el, h } from "./kit";
@@ -39,6 +39,7 @@ const T = {
   noProfile: { fr: "aucun profil", en: "no profile" },
   customise: { fr: "Personnaliser", en: "Customise" },
   reset: { fr: "Profil d'origine", en: "Original profile" },
+  space: { fr: "Profil vaisseau 6 DDL", en: "Spacecraft 6-DOF profile" },
   calibrate: { fr: "Calibrer", en: "Calibrate" },
   calibrating: { fr: "Bougez chaque axe jusqu'à ses butées… (cliquez pour finir)", en: "Move every axis to its stops… (click to finish)" },
   add: { fr: "Ajouter une commande…", en: "Add a command…" },
@@ -278,11 +279,18 @@ export class PadsScreen {
     if (!dev) return this.editor.replaceChildren();
     const { p, own } = this.profile(dev);
     const head = h("div", { class: "ps-head" }, el("b", "", p?.name ?? dev.name));
+    // (the spacecraft's six degrees of freedom: the docking's layout as the player's profile — PLAN-VAISSEAUX X5)
+    const space = button({
+      label: tr(T.space),
+      testid: "pads-space",
+      onClick: () => this.edit(dev, (q) => (q.bindings = spaceTemplate(dev).bindings)),
+    });
     if (!p && dev.standard) {
-      head.append(button({ label: tr(T.customise), testid: "pads-customise", onClick: () => this.edit(dev, () => {}) }));
+      head.append(button({ label: tr(T.customise), testid: "pads-customise", onClick: () => this.edit(dev, () => {}) }), space);
       this.editor.replaceChildren(head, el("p", "ps-none", tr(T.builtinHelp)));
       return;
     }
+    head.append(space);
     if (own) {
       head.append(
         button({

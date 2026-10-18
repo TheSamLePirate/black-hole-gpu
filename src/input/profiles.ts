@@ -115,3 +115,34 @@ export function standardTemplate(d: DeviceSnapshot): Profile {
     ],
   };
 }
+
+/** A spacecraft's six degrees of freedom (PLAN-VAISSEAUX X5): the docking's layout. A standard pad: the right stick
+ *  the attitude (pitch, yaw), the bumpers the roll, the left stick the RCS's translations (left–right, down–up), the
+ *  triggers forward · back, A SAS. A flight device: its known (or generic) profile with the translations on it — a
+ *  throttle's rocker the RCS's forward–back rather than the rudder (its mini-stick's left–right, down–up kept). */
+export function spaceTemplate(d: DeviceSnapshot): Profile {
+  if (d.standard)
+    return {
+      model: d.model,
+      name: `${d.name} (6 DDL · 6-DOF)`,
+      bindings: [
+        { target: "pitch", source: ax(3) },
+        { target: "yaw", source: ax(2) },
+        { held: "rollLeft", source: btn(4) },
+        { held: "rollRight", source: btn(5) },
+        { target: "rcsX", source: ax(0) },
+        { target: "rcsY", source: ax(1), shape: inv },
+        { held: "rcsForward", source: btn(7) },
+        { held: "rcsBack", source: btn(6) },
+        { action: "sas", source: btn(0) },
+      ],
+    };
+  const base = presetFor(d) ?? { model: d.model, name: d.name, bindings: stick(null, null) };
+  const throttleDevice =
+    base.bindings.some((b) => "target" in b && b.target === "throttle") &&
+    !base.bindings.some((b) => "target" in b && b.target === "pitch");
+  const bindings = base.bindings.map((b) =>
+    throttleDevice && "target" in b && b.target === "yaw" ? { ...b, target: "rcsZ" as const } : b,
+  );
+  return { model: d.model, name: `${base.name} (6 DDL · 6-DOF)`, bindings };
+}

@@ -112,6 +112,8 @@ import { skyNow } from "./system/sky-now";
 import { MISSIONS } from "./game/missions";
 import { KeyHints } from "./ui/keyhints";
 import { MenuPad } from "./ui/padnav";
+import { spaceWheel } from "./ui/spacewheel";
+import { SIDE_HOLDS } from "./input/spacepad";
 import { RadialWheel, type WheelItem } from "./ui/wheel";
 import { Tablet } from "./ui/tablet";
 import { PhotoMode } from "./ui/photo";
@@ -130,7 +132,7 @@ import { fleet, fleetSpinStart, fleetStart } from "./fleet";
 import { recorder } from "./game/recorder";
 import { shownSpeed } from "./ui/hud/model";
 import { CockpitScreens, tabAt } from "./ui/cockpitscreens";
-import { VESSELS } from "./vessels";
+import { VESSEL_IDS, VESSELS, type VesselId } from "./vessels";
 import { FlightHud } from "./ui/flighthud";
 import { AUTO_NAMES, HOLD_NAMES, type Auto, type Hold } from "./pilot";
 import { Mission } from "./mission";
@@ -3315,6 +3317,23 @@ async function main() {
     else if (a === "settings") (pauseMenu ??= makePauseMenu()).open();
     else keyActions[a as KeyAction]?.(new KeyboardEvent("keydown"), arg);
   };
+  // a spacecraft's pad layout (input/spacepad.ts — PLAN-VAISSEAUX X5): its keymap actions, and its own — the D-pad ▶'s
+  // holds in turn, Y held the wheel (the stick aims it, A does it, B goes back), Menu tapped the pause menu
+  camera.onSpacePadAction = (a, arg) => {
+    if (renderer.offlineActive) return;
+    if (a === "wheelOpen") {
+      wheel.open(wheelItems(), { fr: "Pilotage", en: "Flight" });
+      camera.pad.rumble(0.05, 0.2, 30);
+    } else if (a === "wheelDo") wheel.activate();
+    else if (a === "wheelBack") wheel.back();
+    else if (a === "nextTarget") nextTarget(1);
+    else if (a === "settings") (pauseMenu ??= makePauseMenu()).open();
+    else if (a === "sideHold") {
+      const i = SIDE_HOLDS.indexOf(camera.pilot.hold as (typeof SIDE_HOLDS)[number]);
+      pilotHold(SIDE_HOLDS[(i + 1) % SIDE_HOLDS.length]!);
+    } else keyActions[a as KeyAction]?.(new KeyboardEvent("keydown"), arg);
+  };
+  camera.padWheel = { isOpen: () => wheel.isOpen, aim: (v) => wheel.aim(v) };
   // the cockpit's controls under the pointer (PLAN-COCKPIT K2): the same actions as the keys', the lights'
   // settings, the chronometer; a tip beside the pointer
   const cockpitDeps: CockpitDeps = {
@@ -3930,74 +3949,108 @@ async function main() {
       },
     ];
   };
-  const wheelItems = (): WheelItem[] => {
+  /** The spacecraft's wheel (PLAN-VAISSEAUX X5 — ui/spacewheel.ts): the craft's holds, autopilots, systems, docking,
+   *  fleet; the Ranger's aircraft entries only while it flies as a plane. */
+  const spaceWheelNow = (): WheelItem[] => {
     const P = camera.pilot;
+    const V = VESSELS[fleet.active];
+    const say = (m: string | null | undefined) => m && panel.toast(m);
+    const ring = fleet.active === "endurance" ? camera.ringInfo() : null;
+    const hole = cameraFrame(settings).region === "hole";
+    const near = hole ? new Set(camera.holeCrafts(camera.viewTime()).map((q) => q.id)) : null;
+    const vessels = VESSEL_IDS.filter(
+      (v) => v !== "f35" && (!near || v === fleet.active || fleet.assembly(fleet.active).includes(v) || near.has(v)),
+    ).map((id) => ({ id, name: VESSELS[id].name }));
+    const flipSetting = (k: "navLights" | "landingLights") => {
+      settings[k] = !settings[k];
+      onSettingsChange([k]);
+      refreshGui();
+    };
+    return spaceWheel(
+      {
+        vessel: fleet.active as Exclude<VesselId, "f35">,
+        planeMode: !!V.flies && settings.flightMode === "plane",
+        lands: V.lands,
+        sas: P.sas,
+        hold: P.hold,
+        auto: P.auto,
+        docked: camera.docked,
+        rcsTranslate: camera.rcsMode === "translate",
+        gearDown: camera.gearDown,
+        navLights: settings.navLights,
+        landingLights: settings.landingLights,
+        nodes: camera.plan.nodes.length,
+        mapOpen: flightHud.mapView,
+        ringRpm: ring ? ring.rpm : null,
+        vessels,
+        assist: settings.spaceAssist,
+        failures: camera.systemsInfo()?.failures.length ?? 0,
+        course: !!camera.course,
+        challenge: camera.chal?.status === "run",
+        mission: !!camera.mission,
+        route: camera.nav.on.l,
+        ils: !!camera.ilsRun,
+      },
+      {
+        sas: pilotSas,
+        hold: pilotHold,
+        auto: pilotAuto,
+        keep: () => say(camera.keepKey()),
+        undock: () => camera.undock(),
+        refuel: () => say(camera.refuelFromDocked()),
+        recover: () => say(camera.recoverStart()),
+        computer: (tab) => {
+          if (!flightHud.mapView) flightHud.toggleMapView();
+          flightComputer.show(true);
+          tablet.setPage("computer");
+          flightComputer.openTab(tab);
+        },
+        missionPlan: () => missionPlan.open(),
+        execute: () => pilotAuto(camera.transfer || camera.pilot.auto === "transfer" ? "transfer" : "node"),
+        gear: () => setGear(!camera.gearDown),
+        lights: (w) => flipSetting(w === "nav" ? "navLights" : "landingLights"),
+        rcsMode: () => say(camera.rcsModeToggle()),
+        systems: () => {
+          if (!flightHud.mapView) flightHud.toggleMapView();
+          tablet.setPage("systems");
+        },
+        ack: () => flightHud.acknowledge(),
+        ring: (d) => say(camera.ringSet(d)),
+        nextTarget: () => nextTarget(1),
+        vessel: (id) => {
+          settings.vessel = id;
+          refreshGui();
+          scheduleUrlSave();
+        },
+        map: () => flightHud.toggleMapView(),
+        place: () => placePanel.open(),
+        assist: (lv) => {
+          settings.spaceAssist = lv;
+          onSettingsChange(["spaceAssist"]);
+          refreshGui();
+          panel.toast(
+            tf("Assistance: {0}", { manual: t("Manual"), realistic: t("Realistic"), assisted: t("Assisted"), beginner: t("Beginner") }[lv]),
+          );
+        },
+        flightMode: () => keyActions.flightMode(new KeyboardEvent("keydown")),
+        hudKind: () => keyActions.hudKind(new KeyboardEvent("keydown")),
+        precision: () => keyActions.precision(new KeyboardEvent("keydown")),
+        school: () => flightSchool(instrHost),
+        challenges: () => challengePanel.open(),
+        missions: () => openMissions(),
+        nextView: () => keyActions.mount(new KeyboardEvent("keydown")),
+        photo: openPhoto,
+        replay: (trailer) => replayOpen(trailer),
+        route: () => routePanel.open(),
+        missionMap: () => missionMap.open(),
+        ilsToggle: () => panel.toast(camera.ilsRun ? (camera.ilsOff(), t("ILS approach off")) : camera.ilsStart()),
+        hub: () => flightHub.open(),
+      },
+    );
+  };
+  const wheelItems = (): WheelItem[] => {
     if (flying() && fleet.active === "f35") return jetWheel();
-    if (flying())
-      return [
-        { label: { fr: "SAS", en: "SAS" }, key: "T", on: P.sas, run: pilotSas },
-        { label: { fr: "Prograde", en: "Prograde" }, key: "1", on: P.hold === "prograde", run: () => pilotHold("prograde") },
-        { label: { fr: "Rétrograde", en: "Retrograde" }, key: "2", on: P.hold === "retrograde", run: () => pilotHold("retrograde") },
-        { label: { fr: "Vers la cible", en: "To the target" }, key: "7", on: P.hold === "target", run: () => pilotHold("target") },
-        {
-          label: { fr: "Autopilote", en: "Autopilot" },
-          on: P.auto !== "none",
-          sub: (
-            [
-              ["hover", { fr: "Stationnaire", en: "Hover" }, "8"],
-              ["circularize", { fr: "Circulariser", en: "Circularize" }, "9"],
-              ["approach", { fr: "Approche", en: "Approach" }, "0"],
-              ["land", { fr: "Atterrir", en: "Land" }, "F7"],
-              ["takeoff", { fr: "Décoller", en: "Take off" }, "U"],
-              ["dock", { fr: "Amarrer", en: "Dock" }, "B"],
-              ["entry", { fr: "Rentrée", en: "Entry" }, "⇧G"],
-              ["keep", { fr: "Maintien à poste", en: "Station keeping" }, "⇧8"],
-            ] as const
-          ).map(([a, label, key]) => ({
-            label,
-            key,
-            on: P.auto === a,
-            run: () => (a === "keep" ? panel.toast(camera.keepKey()) : pilotAuto(a)),
-          })),
-        },
-        // (the ways flown and the places, then the camera: wheels of their own — the main one kept to a glance)
-        {
-          label: { fr: "Navigation", en: "Navigation" },
-          on: flightHud.mapView || camera.nav.on.l || !!camera.ilsRun,
-          sub: [
-            { label: { fr: "Carte", en: "Map" }, key: "M", on: flightHud.mapView, run: () => flightHud.toggleMapView() },
-            { label: { fr: "Placer", en: "Place" }, run: () => placePanel.open() },
-            {
-              label: { fr: "Plan de mission", en: "Mission plan" },
-              key: "⇧O",
-              on: camera.plan.nodes.length > 0,
-              run: () => missionPlan.open(),
-            },
-            ...(VESSELS[fleet.active].flies
-              ? [
-                  { label: { fr: "Plan de vol", en: "Flight plan" }, key: "⇧O", on: camera.nav.on.l, run: () => routePanel.open() },
-                  { label: { fr: "Carte de mission", en: "Mission map" }, on: !!camera.mission, run: () => missionMap.open() },
-                  {
-                    label: { fr: "Approche ILS", en: "ILS approach" },
-                    on: !!camera.ilsRun,
-                    run: () => panel.toast(camera.ilsRun ? (camera.ilsOff(), t("ILS approach off")) : camera.ilsStart()),
-                  },
-                  { label: { fr: "Préparer un vol", en: "Prepare a flight" }, run: () => flightHub.open() },
-                  { label: { fr: "Défis", en: "Challenges" }, on: camera.chal?.status === "run", run: () => challengePanel.open() },
-                ]
-              : []),
-          ],
-        },
-        {
-          label: { fr: "Caméra", en: "Camera" },
-          sub: [
-            { label: { fr: "Vue suivante", en: "Next view" }, key: "V", run: () => keyActions.mount(new KeyboardEvent("keydown")) },
-            { label: { fr: "Photo", en: "Photo" }, run: openPhoto },
-            { label: { fr: "Replay", en: "Replay" }, run: () => replayOpen(false) },
-            { label: { fr: "Bande-annonce", en: "Trailer" }, run: () => replayOpen(true) },
-          ],
-        },
-      ];
+    if (flying()) return spaceWheelNow();
     return [
       { label: { fr: "Vue", en: "View" }, key: "V", run: () => nextView(1) },
       { label: { fr: "Regarder la cible", en: "Look at target" }, key: "C", on: settings.lookAt, run: toggleLookAt },

@@ -810,6 +810,14 @@ function pilotInput(this: CameraController, pad: ReturnType<GamepadInput["poll"]
     i.roll = clamp(i.roll + J.roll, -1, 1);
     i.yaw = clamp(i.yaw + J.yaw, -1, 1);
     i.throttle = clamp(i.throttle + J.throttle, -1, 1);
+  } else if (this.spacePadOut) {
+    // a spacecraft's pad (input/spacepad.ts): the left stick pitch and yaw, the bumpers the roll, the triggers the
+    // throttle — in the RCS's translation mode, they translate as the keys do (spaceassist.ts translateKeys)
+    const SP = this.spacePadOut;
+    i.pitch = clamp(i.pitch + SP.pitch, -1, 1);
+    i.yaw = clamp(i.yaw + SP.yaw, -1, 1);
+    i.roll = clamp(i.roll + SP.roll, -1, 1);
+    i.throttle = clamp(i.throttle + SP.throttle, -1, 1);
   } else if (pad && !this.padControls.flightOwned(pad.id)) {
     // left stick: pitch (pull back = nose up) and yaw; LB/RB: roll; RT/LT: throttle — the built-in mapping (a
     // player's own profile for this pad flies it instead: PLAN-HOTAS)

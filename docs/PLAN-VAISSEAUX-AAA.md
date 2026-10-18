@@ -391,7 +391,7 @@ Chaque phase porte sa ligne réseau ; N finit ce qui n'existe qu'à plusieurs.
 | X2 | Endurance vaisseau-mère (deux côtés, anneau, flotte, scènes) | en cours — X2a l'anneau ([fiche](progress/vaisseaux/X2a.md)) · X2b ergols et plein ([fiche](progress/vaisseaux/X2b.md)) · X2c près de Gargantua ([fiche](progress/vaisseaux/X2c.md)) · X2d Mann en vrille ([fiche](progress/vaisseaux/X2d.md)) · X2e piloter près de Gargantua, traversée amarrée ([fiche](progress/vaisseaux/X2e.md)) — **fait** (la fronde : X11) |
 | X3 | consommables, pannes, alarmes, checklists | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X3.md)) — pannes en réseau en N |
 | X4 | HUD Ranger / Lander / Endurance, amarrage, boule | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X4.md)) — reste la couleur du HUD et la boule « AAA » |
-| X5 | roue par vaisseau, manette, HOTAS | à faire |
+| X5 | roue par vaisseau, manette, HOTAS | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X5.md)) — ordres de flotte en réseau en N |
 | K1 | contrat « espace » des instruments | à faire |
 | K2 | console par appareil, crew F-35 distinct | à faire |
 | K3 | carte 3D WebGPU système solaire / Gargantua + repli 2D | à faire |

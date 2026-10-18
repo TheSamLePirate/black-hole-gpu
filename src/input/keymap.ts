@@ -437,6 +437,22 @@ export const KEYMAP: KeySection[] = [
     ],
   },
   {
+    title: "A spacecraft on a controller (Ranger · Lander · Endurance)",
+    rows: [
+      { keys: "Left stick", text: "Pitch (back: nose up) · yaw — in RCS translation: up · down · left · right" },
+      { keys: "Right stick", text: "Look about — the wheel open: aims its sectors" },
+      { keys: "RT · LT  (R2 · L2)", text: "Throttle up · down — in RCS translation: forward · back" },
+      { keys: "LB · RB  (L1 · R1)", text: "Roll left · right" },
+      { keys: "L3 · R3", text: "RCS mode: rotation ⟷ translation · look ahead" },
+      { keys: "A  (✕)", text: "SAS — the wheel open: do the sector" },
+      { keys: "B  (○)", text: "Tap: acknowledge · hold: stop the tumble — the wheel open: back" },
+      { keys: "X  (□)", text: "Tap: dock (the rendezvous beyond 3 km) · hold: station keeping" },
+      { keys: "Y  (△)", text: "Tap: next target · hold: the wheel (let go: does the sector)" },
+      { keys: "D-pad ▲ ▼ ◀ ▶", text: "Hold prograde · retrograde · to the target · radial and normal in turn" },
+      { keys: "View · Menu", text: "Tap: the camera's view — hold: the map · tap: the pause menu — hold: the mission plan" },
+    ],
+  },
+  {
     title: "Controller (Xbox · PlayStation)",
     rows: [
       { keys: "Left stick", text: "Fly: forward · back · sideways (L3 held: boost)" },

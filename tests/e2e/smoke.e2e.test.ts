@@ -40,10 +40,20 @@ describe.skipIf(!E2E)("smoke: in flight (Artemis, low Earth orbit)", () => {
     const tab = { code: "Tab", key: "Tab", windowsVirtualKeyCode: 9 };
     await app.cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", ...tab });
     await app.waitFor(`!!document.querySelector("[data-testid=wheel]")`, 3000);
-    // (the third of eight sectors, to the right of the centre: retrograde)
+    // (the spacecraft's wheel — ui/spacewheel.ts —: its second of eleven sectors, Holds ▸, released opens its wheel;
+    // there the second of ten, retrograde, clicked)
     const [w, h] = await app.js<[number, number]>("[innerWidth, innerHeight]");
-    await app.cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: w / 2 + 120, y: h / 2 });
+    const at = (i: number, n: number) => {
+      const a = (i / n) * 2 * Math.PI;
+      return { x: w / 2 + 150 * Math.sin(a), y: h / 2 - 150 * Math.cos(a) };
+    };
+    await app.cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...at(1, 11) });
     await app.cdp.send("Input.dispatchKeyEvent", { type: "keyUp", ...tab });
+    await app.waitFor(`document.querySelectorAll("[data-testid=wheel] .rw-sector").length === 10`, 3000);
+    const r = at(1, 10);
+    await app.cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...r });
+    await app.cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", ...r, button: "left", clickCount: 1 });
+    await app.cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", ...r, button: "left", clickCount: 1 });
     await app.waitFor(`!document.querySelector("[data-testid=wheel]")`, 3000);
     expect(await app.js<string>("__bh.camera.pilot.hold")).toBe("retrograde");
     await app.press("Backspace");

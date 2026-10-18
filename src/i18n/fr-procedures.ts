@@ -327,4 +327,5 @@ export default {
   "Pre-contact on {0} — 50 m behind, 10 m below": "Pré-contact sur {0} — 50 m derrière, 10 m dessous",
   "Rendezvous: {0} · {1} km": "Rendez-vous : {0} · {1} km",
   "Orbit off — the stick": "Orbite coupée — le manche",
+  "Assistance: {0}": "Assistance : {0}",
 } satisfies Record<string, string>;
