@@ -448,7 +448,8 @@ async function main() {
   // promoting it back by measure)
   if (gate.safe && renderer.tier.level > 1) renderer.tier = tierAt(1, `${renderer.tier.label} · safe start`);
   // (console: `await compileBench()` on the title screen — what each kernel costs to compile on this machine)
-  (window as unknown as { compileBench: unknown }).compileBench = (...a: Parameters<Renderer["compileBench"]>) => renderer.compileBench(...a);
+  (window as unknown as { compileBench: unknown }).compileBench = (...a: Parameters<Renderer["compileBench"]>) =>
+    renderer.compileBench(...a);
   gpuDiagnostics.setRuntime(() => ({
     adapter: renderer.adapter,
     tier: renderer.tier,
@@ -6760,7 +6761,14 @@ async function main() {
     const soon = saveSoon && saveTimer > 2;
     // (a benchmark's settings are not the player's; a replay's poses not the flight's)
     if (soon && !benchPage && !replay.active) writePrefs(settings);
-    if (settings.autosave && firstFrame && !flightPending && !renderer.offlineActive && !replay.active && (saveTimer > settings.autosaveEvery || soon)) {
+    if (
+      settings.autosave &&
+      firstFrame &&
+      !flightPending &&
+      !renderer.offlineActive &&
+      !replay.active &&
+      (saveTimer > settings.autosaveEvery || soon)
+    ) {
       saveTimer = 0;
       cpuProf.time("autosave", () => tools.autosaveNow());
     }

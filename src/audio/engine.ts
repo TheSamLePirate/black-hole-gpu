@@ -370,7 +370,8 @@ export class SoundEngine {
   private start() {
     if (this.started) {
       // (not before a gesture: the browser refuses it and logs a warning at every call)
-      if (this.ctx?.state === "suspended" && this.enabled && !document.hidden && navigator.userActivation?.hasBeenActive) void this.ctx.resume();
+      if (this.ctx?.state === "suspended" && this.enabled && !document.hidden && navigator.userActivation?.hasBeenActive)
+        void this.ctx.resume();
       return;
     }
     this.started = true;

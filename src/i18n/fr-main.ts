@@ -477,6 +477,8 @@ export default {
   "the GPU was reset": "le GPU a été réinitialisé",
   "Compiling the ray tracer — first image": "Compilation du lancer de rayons — première image",
   "{0}.wgsl failed to compile:": "La compilation de {0}.wgsl a échoué :",
+  "This graphics card is too slow for the ray tracer: {0} ms per image even at the lowest settings (under 10 images a second). The game is not playable here.":
+    "Cette carte graphique est trop lente pour le lancer de rayons : {0} ms par image même avec les réglages minimaux (moins de 10 images par seconde). Le jeu n’est pas jouable ici.",
   "The ray tracer's pipelines failed to compile: {0}": "La compilation des pipelines du lancer de rayons a échoué : {0}",
   "WebGPU pipeline creation failed: {0}": "La création du pipeline WebGPU a échoué : {0}",
   // (the landing gear: controller/motion.ts)

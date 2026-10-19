@@ -170,7 +170,15 @@ const QUALITY_AFTER_MS = 20000;
 /** the launch kernel's probe starts this long after its main entry, in parallel with it (cold: the main takes ~85 s) */
 const LAUNCH_PROBE_AFTER_MS = 45_000;
 /** compileBench("bits"): what a few bits cost on their own */
-const BITS_BENCH: { key: number; entry?: "main" | "env" | "lut"; quality?: boolean }[] = [{ key: 32 }, { key: 64 }, { key: 128 }, { key: 256 }, { key: 640 }, { key: 4096 }, { key: 8192 }];
+const BITS_BENCH: { key: number; entry?: "main" | "env" | "lut"; quality?: boolean }[] = [
+  { key: 32 },
+  { key: 64 },
+  { key: 128 },
+  { key: 256 },
+  { key: 640 },
+  { key: 4096 },
+  { key: 8192 },
+];
 /** compileBench("tiers"): the two kernels that would cover the scenes (with the cheap bits all in, bodies or not),
  *  then the bits not measured yet */
 const TIERS_BENCH: typeof BITS_BENCH = [15328, 15200, 1, 2, 4, 8, 16, 1024, 16384].map((key) => ({ key }));
@@ -3600,7 +3608,7 @@ export class Renderer {
     } finally {
       if (bg) loading.done(bg);
     }
-    const s =((performance.now() - t0) / 1000).toFixed(1);
+    const s = ((performance.now() - t0) / 1000).toFixed(1);
     trail(`done ${what} (${s} s)`);
     gpuDiagnostics.record(
       "pipeline-compiled",
@@ -5664,7 +5672,8 @@ export class Renderer {
       traced,
     );
     // (a scene whose kernel still compiles, the general one not in yet: the last image stays — said)
-    if ((this.firstFrameDoneAt || this.launchHeld) && phase !== "converged") this.noteSceneTracer(!traced || performance.now() < this.sceneMinUntil);
+    if ((this.firstFrameDoneAt || this.launchHeld) && phase !== "converged")
+      this.noteSceneTracer(!traced || performance.now() < this.sceneMinUntil);
     this.lastPhase = phase;
     return this.stats(phase, t);
   }

@@ -239,7 +239,13 @@ class SceneVeil {
       if (inner) d.append(el("i", ""));
       return d;
     };
-    hole.append(part("ld-glow", false), part("ld-halo", true), part("ld-disk", true), part("ld-shadow", false), part("ld-disk front", true));
+    hole.append(
+      part("ld-glow", false),
+      part("ld-halo", true),
+      part("ld-disk", true),
+      part("ld-shadow", false),
+      part("ld-disk front", true),
+    );
     this.root.append(sky, this.warp, hole, this.label, track, this.note);
     document.body.append(this.root);
     loading.on(() => this.update());

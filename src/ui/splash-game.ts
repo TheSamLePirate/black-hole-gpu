@@ -5,7 +5,7 @@
 type Rock = { x: number; y: number; vx: number; vy: number; r: number; a: number; va: number; hp: number; shape: number[] };
 type Shot = { x: number; y: number; vx: number; vy: number };
 type Dust = { r: number; a: number; s: number; o: number };
-type Spark ={ x: number; y: number; vx: number; vy: number; life: number };
+type Spark = { x: number; y: number; vx: number; vy: number; life: number };
 
 const MAX_ROCKS = 14;
 const FIRE_EVERY = 0.16; // [s]
@@ -119,7 +119,7 @@ export class SplashGame {
       // (the far half is lensed over the top of the hole)
       const y = cy + s * p.r * R * tilt - (back ? (R * 1.15 * -s) / Math.sqrt(p.r) : 0);
       const doppler = 0.55 + 0.45 * Math.cos(a - 0.6);
-      g.fillStyle = `rgba(255,${150 + 90 * doppler | 0},${80 + 120 * doppler | 0},${(0.25 + 0.6 * doppler) * p.o})`;
+      g.fillStyle = `rgba(255,${(150 + 90 * doppler) | 0},${(80 + 120 * doppler) | 0},${(0.25 + 0.6 * doppler) * p.o})`;
       g.fillRect(x - p.s / 2, y - p.s / 2, p.s, p.s);
     };
     for (const p of this.dust) dot(p, true);
@@ -167,7 +167,7 @@ export class SplashGame {
     const cv = this.cv;
     const w = cv.clientWidth;
     const h = cv.clientHeight;
-    if (cv.width !== w || cv.height !== h) ((cv.width = w), (cv.height = h));
+    if (cv.width !== w || cv.height !== h) (cv.width = w), (cv.height = h);
     const g = this.g!;
     g.clearRect(0, 0, w, h);
     this.t += dt;
@@ -197,10 +197,7 @@ export class SplashGame {
     this.fireIn -= dt;
     if (this.firing && this.fireIn <= 0 && this.shots.length < 40) {
       this.fireIn = FIRE_EVERY;
-      this.shots.push(
-        { x: this.sx - 9, y: this.sy - 14, vx: 0, vy: -620 },
-        { x: this.sx + 9, y: this.sy - 14, vx: 0, vy: -620 },
-      );
+      this.shots.push({ x: this.sx - 9, y: this.sy - 14, vx: 0, vy: -620 }, { x: this.sx + 9, y: this.sy - 14, vx: 0, vy: -620 });
     }
     for (const s of this.shots) {
       pull(s, 2.5, dt);

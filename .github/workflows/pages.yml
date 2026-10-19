@@ -1,21 +1,20 @@
 name: Deploy to GitHub Pages
 
-# The site: main at the root and, beside it, a preview branch under /<PREVIEW_PATH>/ (an A/B of the
+# The site: main at the root, test-kimi under /test/, and Ineptie-Version under /ineptie/ (an A/B of each
 # branch against production on the same origin). The app is base-path-agnostic; each build's Service
 # Worker keeps to its own scope's caches and pages, and the preview's storage keys carry its path
 # (scripts/build-pages.ts: KERR_SUBPATH) — the two never touch each other's offline shell or saves.
 #
-# (Until this file is on main, main's own copy of it runs on main's pushes: it deploys main alone, which
-# wipes /test/ until the next preview push, and it is not in this file's concurrency group.)
+# Every publishing branch carries this workflow so each deployment preserves all previews.
 #
-# The two revisions are verified side by side, their unit tests' files in parallel (a worker a core); a main
+# The three revisions are verified side by side, their unit tests' files in parallel (a worker a core); a main
 # revision already verified and built is not verified again (its build kept by its commit).
 
 on:
   push:
     # (GitHub reads these before any env: the preview branch is named here too — keep it equal to
     # env.PREVIEW_BRANCH; to retire the preview, remove it here and empty PREVIEW_BRANCH)
-    branches: [main, test-kimi]
+    branches: [main, test-kimi, Ineptie-Version]
   pull_request:
   workflow_dispatch:
 
@@ -24,12 +23,14 @@ env:
   # and the site's directory it is served from
   PREVIEW_BRANCH: test-kimi
   PREVIEW_PATH: test
+  INEPTIE_BRANCH: Ineptie-Version
+  INEPTIE_PATH: ineptie
 
 # (each job asks for what it needs: no write token where branch code runs)
 permissions: {}
 
 concurrency:
-  # Serialize the entire snapshot → verification → deployment, across both publishing branches.
+  # Serialize the entire snapshot → verification → deployment, across all publishing branches.
   # PR checks retain their own cancellable group. An artifact cannot wait behind a newer deployment.
   group: pages-${{ github.event_name == 'pull_request' && github.ref || 'production' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -89,8 +90,9 @@ jobs:
     outputs:
       main: ${{ steps.revisions.outputs.main }}
       test: ${{ steps.revisions.outputs.test }}
+      ineptie: ${{ steps.revisions.outputs.ineptie }}
     steps:
-      - name: Snapshot both branch revisions
+      - name: Snapshot all branch revisions
         id: revisions
         env:
           GH_TOKEN: ${{ github.token }}
@@ -110,7 +112,7 @@ jobs:
             if [ "$status" = 200 ]; then
               sha=$(jq -er '.object.sha | select(test("^[0-9a-f]{40}$"))' "$response") || { rm -f "$response"; return 1; }
               echo "$sha"
-            elif [ "$status" = 404 ] && [ "$branch" = "$PREVIEW_BRANCH" ]; then
+            elif [ "$status" = 404 ] && { [ "$branch" = "$PREVIEW_BRANCH" ] || [ "$branch" = "$INEPTIE_BRANCH" ]; }; then
               echo absent
             else
               echo "Cannot resolve $branch: HTTP $status" >&2
@@ -121,8 +123,10 @@ jobs:
           }
           main_sha=$(resolve_ref main)
           test_sha=$(resolve_ref "$PREVIEW_BRANCH")
+          ineptie_sha=$(resolve_ref "$INEPTIE_BRANCH")
           echo "main=$main_sha" >> "$GITHUB_OUTPUT"
           echo "test=$test_sha" >> "$GITHUB_OUTPUT"
+          echo "ineptie=$ineptie_sha" >> "$GITHUB_OUTPUT"
 
   # the exact main revision verified and built → the root. A revision verified and built before — a preview
   # push, main unchanged — is not verified again: its build is kept by its commit (saved only once verified).
@@ -267,15 +271,87 @@ jobs:
           echo "> [!WARNING]" >> "$GITHUB_STEP_SUMMARY"
           echo "> $msg" >> "$GITHUB_STEP_SUMMARY"
 
-  # the two builds assembled: main at the root, the preview beside it
+  # The additional preview, isolated under /ineptie/.
+  ineptie:
+    needs: snapshot
+    if: needs.snapshot.outputs.ineptie != 'absent'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      ok: ${{ steps.verify.outcome == 'success' && 'yes' || '' }}
+    steps:
+      # (a preview that cannot be checked out fails its verification: reported, left out)
+      - id: checkout
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          ref: ${{ needs.snapshot.outputs.ineptie }}
+          fetch-depth: 2
+          persist-credentials: false
+      - if: steps.checkout.outcome == 'success'
+        run: git lfs ls-files --long | cut -d' ' -f1 | sort > .lfs-ids
+      - if: steps.checkout.outcome == 'success'
+        uses: actions/cache@v4
+        with:
+          path: .git/lfs
+          key: lfs-${{ hashFiles('.lfs-ids') }}
+          restore-keys: lfs-
+      - if: steps.checkout.outcome == 'success'
+        run: git lfs pull || echo "::warning::the preview's LFS objects could not be fetched"
+      - uses: oven-sh/setup-bun@v2
+      - if: steps.checkout.outcome == 'success'
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - name: Verify and build the exact Ineptie-Version revision
+        id: verify
+        if: steps.checkout.outcome == 'success'
+        continue-on-error: true
+        env:
+          KERR_SUBPATH: ${{ env.INEPTIE_PATH }}
+        run: |
+          bun install --frozen-lockfile
+          bun run typecheck
+          bunx biome ci .
+          if [ -f scripts/check-repo-size.ts ]; then bun scripts/check-repo-size.ts --base HEAD^1; fi
+          bun scripts/check-wgsl.ts
+          if [ -f scripts/check-forest.ts ]; then bun scripts/check-forest.ts --rays 2000; fi
+          bun test --parallel --timeout 30000 --reporter=junit --reporter-outfile=junit.xml
+          bun run build:pages
+          tar -cf site-ineptie.tar -C _site .
+      - if: always() && steps.checkout.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-ineptie
+          path: junit.xml
+          if-no-files-found: ignore
+      - if: steps.verify.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-ineptie
+          path: site-ineptie.tar
+          compression-level: 0
+          retention-days: 1
+      - name: Report a failed preview
+        if: steps.verify.outcome != 'success'
+        run: |
+          msg="$INEPTIE_BRANCH (${{ needs.snapshot.outputs.ineptie }}) failed its verification: deployment is stopped to preserve the published site"
+          echo "::warning title=Preview not deployed::$msg"
+          echo "> [!WARNING]" >> "$GITHUB_STEP_SUMMARY"
+          echo "> $msg" >> "$GITHUB_STEP_SUMMARY"
+
+  # The builds assembled: main at the root, both previews beside it.
   site:
-    needs: [snapshot, main, preview]
-    if: always() && needs.main.result == 'success'
+    needs: [snapshot, main, preview, ineptie]
+    if: always() && needs.main.result == 'success' && (needs.snapshot.outputs.ineptie == 'absent' || needs.ineptie.outputs.ok == 'yes')
     runs-on: ubuntu-latest
     permissions:
       contents: read
     outputs:
       preview: ${{ steps.assemble.outputs.preview == 'yes' && env.PREVIEW_PATH || '' }}
+      ineptie: ${{ steps.assemble.outputs.ineptie == 'yes' && env.INEPTIE_PATH || '' }}
       main: ${{ needs.snapshot.outputs.main }}
     steps:
       - uses: actions/download-artifact@v4
@@ -285,6 +361,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: site-test
+      - if: needs.ineptie.outputs.ok == 'yes'
+        uses: actions/download-artifact@v4
+        with:
+          name: site-ineptie
       # (each app's URLs are relative to its own directory — its bundle, its workers, its Service Worker's
       # precache and scope —, and Pages serves no links: the two builds are two copies, against Pages' 1 GB.
       # So the preview's hashed binaries that main has byte for byte — the textures, the meshes, the maps:
@@ -298,10 +378,13 @@ jobs:
           mkdir -p _site
           tar -xf site-main.tar -C _site
           preview=no
-          if [ -f site-test.tar ]; then
-            P="_site/$PREVIEW_PATH"
+          ineptie=no
+          for kind in test ineptie; do
+            if [ "$kind" = test ]; then preview_path="$PREVIEW_PATH"; else preview_path="$INEPTIE_PATH"; fi
+            if [ ! -f "site-$kind.tar" ]; then continue; fi
+            P="_site/$preview_path"
             mkdir -p "$P"
-            tar -xf site-test.tar -C "$P"
+            tar -xf "site-$kind.tar" -C "$P"
             # (main's byte-identical copies of the preview's hashed binaries)
             : > shared.txt
             for f in "$P"/*; do
@@ -325,11 +408,15 @@ jobs:
               up=$(mentions "../$n" "$P"/*.js "$P"/*.css "$P"/*.html "$P"/*.json)
               if [ "$all" -gt 0 ] && [ "$all" = "$up" ]; then rm -f "$P/$n"; left=$((left + 1)); fi
             done < shared.txt
-            echo "the preview: $left of its binaries left to main's copy ($(wc -l < shared.txt) identical)" | tee -a "$GITHUB_STEP_SUMMARY"
-            preview=yes
-          fi
+            echo "preview /$preview_path/: $left of its binaries left to main's copy ($(wc -l < shared.txt) identical)" | tee -a "$GITHUB_STEP_SUMMARY"
+            if [ "$kind" = test ]; then preview=yes; else ineptie=yes; fi
+          done
           size_mb() { echo $(( $(du -sb _site | cut -f1) / 1000000 )); }
           size=$(size_mb)
+          if [ "$size" -gt 900 ] && [ "$ineptie" = yes ]; then
+            echo "::error title=Ineptie not deployed::the site with /$INEPTIE_PATH/ comes to $size MB (over the 900 MB budget)"
+            exit 1
+          fi
           if [ "$size" -gt 900 ] && [ "$preview" = yes ]; then
             msg="the site with /$PREVIEW_PATH/ comes to $size MB (over 900 MB of Pages' 1 GB): deployed with main alone"
             echo "::warning title=Preview not deployed::$msg"
@@ -339,7 +426,7 @@ jobs:
             preview=no
             size=$(size_mb)
           fi
-          echo "site: $size MB (preview: $preview)" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "site: $size MB (test: $preview, ineptie: $ineptie)" | tee -a "$GITHUB_STEP_SUMMARY"
           if [ "$size" -gt 900 ]; then
             echo "::error title=Site size::the site comes to $size MB, over 900 MB of Pages' 1 GB limit (docs/ASSETS.md)"
             exit 1
@@ -347,6 +434,7 @@ jobs:
             echo "::warning title=Site size::the site comes to $size MB, past 800 MB of Pages' 1 GB limit (docs/ASSETS.md)"
           fi
           echo "preview=$preview" >> "$GITHUB_OUTPUT"
+          echo "ineptie=$ineptie" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
@@ -371,9 +459,11 @@ jobs:
         env:
           URL: ${{ steps.deployment.outputs.page_url }}
           PREVIEW: ${{ needs.site.outputs.preview }}
+          INEPTIE: ${{ needs.site.outputs.ineptie }}
         run: |
           echo "main:    $URL"
           if [ -n "$PREVIEW" ]; then echo "preview: $URL$PREVIEW/"; fi
+          if [ -n "$INEPTIE" ]; then echo "ineptie: $URL$INEPTIE/"; fi
 
   # the dedicated server (docs/DEPLOY.md): the same site artifact in an nginx image on GHCR, then the
   # `deploy` branch names that image — the server's Portainer polls the branch and pulls it; nothing
@@ -382,7 +472,7 @@ jobs:
   # push — main unchanged — redeploys nothing (the branch named here as in `on.push`: env is not read in
   # a job's `if`)
   server:
-    if: github.event_name != 'pull_request' && github.ref != 'refs/heads/test-kimi'
+    if: github.event_name != 'pull_request' && github.ref != 'refs/heads/test-kimi' && github.ref != 'refs/heads/Ineptie-Version'
     needs: site
     runs-on: ubuntu-latest
     # (the deploy branch is also written by rooms.yml: one writer at a time)
@@ -412,6 +502,7 @@ jobs:
           tar -xf pages-artifact/artifact.tar -C _site
           rm -rf pages-artifact
           if [ -n "$PREVIEW_PATH" ]; then rm -rf "_site/$PREVIEW_PATH"; fi
+          if [ -n "$INEPTIE_PATH" ]; then rm -rf "_site/$INEPTIE_PATH"; fi
           image="ghcr.io/${GITHUB_REPOSITORY,,}"
           tag="${MAIN:0:7}-${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
           echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
