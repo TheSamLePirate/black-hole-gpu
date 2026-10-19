@@ -16,6 +16,13 @@ Portainer (stack "kerr", from the `deploy` branch, polling) ─► new commit �
 
 ## The Pages site (`.github/workflows/pages.yml`)
 
+- **`Ineptie-Version` at `/ineptie/`**: published beside main and `/test/`, with
+  `KERR_SUBPATH=ineptie` to isolate its storage. All three publishing branches carry the same Pages
+  workflow and share its deployment concurrency group. The `ineptie` job verifies and builds the exact
+  snapshotted revision; a failure stops deployment, preserving the published site. Shared hashed binaries
+  use main's copy as for `/test/`; the complete site must stay within the 900 MB budget. Both previews
+  are omitted from the dedicated server image. The `github-pages` environment permits all three branches.
+
 - **Both revisions side by side**: a `snapshot` job reads the heads of main and of the preview branch, then the
   jobs `main` and `preview` verify and build each exact revision in parallel — types, `bunx biome ci .`,
   `scripts/check-repo-size.ts --base HEAD^1`, the shaders (`check-wgsl.ts`), the forests' tracer
