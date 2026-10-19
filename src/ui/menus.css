@@ -91,6 +91,19 @@ body.paused .fl-root, body.paused #topbar { filter: saturate(0.6) brightness(0.8
 }
 @keyframes ts-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .ts-root { animation: none; } }
+/* the tracer not compiled yet (launch): a drifting starfield in its place — CSS only, no GPU */
+body.tracer-held .ts-root {
+  background:
+    radial-gradient(1.2px 1.2px at 12% 22%, #fff, transparent), radial-gradient(1px 1px at 31% 68%, #cfe0ff, transparent),
+    radial-gradient(1.5px 1.5px at 47% 15%, #fff, transparent), radial-gradient(1px 1px at 63% 82%, #fff, transparent),
+    radial-gradient(1.2px 1.2px at 78% 36%, #ffe9c8, transparent), radial-gradient(1px 1px at 90% 70%, #fff, transparent),
+    radial-gradient(1px 1px at 22% 90%, #fff, transparent), radial-gradient(1.4px 1.4px at 56% 48%, #cfe0ff, transparent),
+    radial-gradient(ellipse at 72% 52%, rgba(255, 179, 92, 0.16), transparent 42%), #02040a;
+  background-size: 420px 420px, 420px 420px, 420px 420px, 420px 420px, 420px 420px, 420px 420px, 420px 420px, 420px 420px, 100% 100%, 100% 100%;
+  animation: ts-in 0.6s ease-out both, ts-drift 90s linear infinite;
+}
+@keyframes ts-drift { to { background-position: 420px 210px, 420px 210px, 420px 210px, 420px 210px, 420px 210px, 420px 210px, 420px 210px, 420px 210px, 0 0, 0 0; } }
+@media (prefers-reduced-motion: reduce) { body.tracer-held .ts-root { animation: none; } }
 .ts-panel { width: min(420px, 100%); display: flex; flex-direction: column; gap: 14px; }
 .ts-logo {
   margin: 0;

@@ -91,6 +91,60 @@ export const GROUP_SWITCH: Record<string, keyof Settings> = {
   "Companion star": "sun",
 };
 
+const BH_SCENES: SceneGroup[] = ["hole", "gargantua", "wormhole"];
+const FLIGHT_SCENES: SceneGroup[] = ["game", "earth", "landscapes"];
+const EARTH_SCENES: SceneGroup[] = ["game", "earth", "landscapes", "solar"];
+
+/**
+ * Where a group of settings belongs — `section/group` → the kinds of scene it applies to. A group absent here is
+ * general (every scene: the render, the sound, TARS, the HUD, the lens, time…). The panel shows only the general
+ * groups and those of the scene being played (search still finds everything).
+ */
+const GROUP_SCOPE: Record<string, SceneGroup[]> = {
+  "camera/Observer motion": BH_SCENES,
+  "camera/Cinematics": BH_SCENES,
+  "camera/Free fall": BH_SCENES,
+  "camera/Position": BH_SCENES,
+  "scene/Black hole": BH_SCENES,
+  "scene/Interstellar wormhole": ["wormhole", "gargantua"],
+  "scene/Liquid wormhole (artistic)": ["wormhole"],
+  "matter/Accretion disk": BH_SCENES,
+  "matter/Relativistic jet": BH_SCENES,
+  "matter/Hot accretion flow": BH_SCENES,
+  "matter/Hot spot": BH_SCENES,
+  "matter/Planetary system": ["gargantua"],
+  "matter/Endurance": ["gargantua"],
+  "matter/Companion star": ["hole", "gargantua"],
+  "sky/Celestial sphere": BH_SCENES,
+  "sky/Orientation": BH_SCENES,
+  "sky/The Earth": EARTH_SCENES,
+  "render/Converged image": BH_SCENES,
+  "physics/Frequency shifts": BH_SCENES,
+  "physics/Observation": BH_SCENES,
+  "physics/Polarization": BH_SCENES,
+  "game/Ranger": ["game", "earth", "gargantua", "wormhole"],
+  "game/Ranger: appearance": ["game", "earth", "gargantua", "wormhole"],
+  "game/Ranger handling": ["game", "earth", "gargantua", "wormhole"],
+  "game/Ground & air": FLIGHT_SCENES,
+  "game/Cockpit": FLIGHT_SCENES,
+  "game/F-35": FLIGHT_SCENES,
+  "game/Formation": FLIGHT_SCENES,
+  "game/Traffic": FLIGHT_SCENES,
+  "game/On foot": EARTH_SCENES,
+  "game/Camera rig": EARTH_SCENES,
+};
+
+/** A group is shown in any scene while its own switch is on (a star, the Endurance, a wormhole the scene turned on). */
+const GROUP_ACTIVE: Record<string, keyof Settings> = { ...GROUP_SWITCH, Endurance: "endurance" };
+
+/** Does this setting belong to the scene being played (`null`: no scene, a view of one's own — everything)? */
+export function appliesTo(d: ControlDef, scene: SceneGroup | null, s: Settings): boolean {
+  const scope = GROUP_SCOPE[`${d.section}/${d.group}`];
+  if (!scope || !scene || scope.includes(scene)) return true;
+  const on = GROUP_ACTIVE[d.group];
+  return !!on && !!s[on];
+}
+
 const diskOn = (s: Settings) => s.disk;
 const jetOn = (s: Settings) => s.jet;
 const flowOn = (s: Settings) => s.hotFlow;
@@ -1820,7 +1874,7 @@ export const SCHEMA: ControlDef[] = [
     key: "hdrPeak",
     type: "number",
     section: "render",
-    group: "Image",
+    group: "Advanced",
     label: "HDR peak",
     min: 1,
     max: 16,
@@ -1886,7 +1940,7 @@ export const SCHEMA: ControlDef[] = [
     key: "realtimeSubsampling",
     type: "choice",
     section: "render",
-    group: "Realtime",
+    group: "Advanced",
     label: "Subsampling",
     style: "segmented",
     options: ["auto", 1, 2, 3, 4, 6, 8].map((v) => ({ value: v, label: v === "auto" ? "Auto" : `${v}×` })),
@@ -2211,7 +2265,7 @@ export const SCHEMA: ControlDef[] = [
     key: "farFieldLut",
     type: "toggle",
     section: "render",
-    group: "Realtime",
+    group: "Advanced",
     label: "Far-field LUT",
     effect: "none",
     help: "In scenes with only the hole and its disk, a ray every 8 pixels is traced first; between four that escaped untouched, far beyond the disk, where the lensed sky is smooth, the rays are not traced — their sky is interpolated (under a tenth of a pixel of error). The disk, its images and the photon ring are always traced.",
@@ -2253,7 +2307,7 @@ export const SCHEMA: ControlDef[] = [
     key: "realtimeBudget",
     type: "number",
     section: "render",
-    group: "Realtime",
+    group: "Advanced",
     label: "Frame budget",
     min: 8,
     max: 120,
@@ -2281,7 +2335,7 @@ export const SCHEMA: ControlDef[] = [
     type: "number",
     section: "render",
     group: "Realtime",
-    label: "RK4 step ε",
+    label: "RK4 step ε (realtime)",
     min: 0.01,
     max: 0.3,
     scale: "log",
@@ -2294,7 +2348,7 @@ export const SCHEMA: ControlDef[] = [
     type: "number",
     section: "render",
     group: "Realtime",
-    label: "Max steps",
+    label: "Max steps (realtime)",
     min: 50,
     max: 5000,
     scale: "log",
@@ -2354,7 +2408,7 @@ export const SCHEMA: ControlDef[] = [
     type: "number",
     section: "render",
     group: "Converged image",
-    label: "RK4 step ε",
+    label: "RK4 step ε (still image)",
     min: 0.002,
     max: 0.1,
     scale: "log",
@@ -2367,7 +2421,7 @@ export const SCHEMA: ControlDef[] = [
     type: "number",
     section: "render",
     group: "Converged image",
-    label: "Max steps",
+    label: "Max steps (still image)",
     min: 200,
     max: 50000,
     scale: "log",

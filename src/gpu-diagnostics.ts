@@ -94,6 +94,11 @@ export class GpuDiagnostics {
       runtime,
     };
   }
+  /** How the previous session ended, when it did not reach its first image (null: it did, or there is none). */
+  previousSession(): { status?: string; stage?: string } | null {
+    const p = this.previous as { status?: string; stage?: string } | null;
+    return p ? { status: p.status, stage: p.stage } : null;
+  }
   report() {
     return { ...this.snapshot(), previousIncompleteSession: this.previous };
   }

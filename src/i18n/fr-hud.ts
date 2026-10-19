@@ -539,7 +539,21 @@ export default {
   "Still compiling the ray tracer for this graphics card. The first time can take several minutes (Windows especially); the next starts reuse the browser's cache.":
     "Compilation du traceur de rayons pour cette carte graphique toujours en cours. La première fois peut prendre plusieurs minutes (sous Windows surtout) ; les démarrages suivants réutilisent le cache du navigateur.",
   "Enter when the first image is ready": "Entrer dès que la première image est prête",
+  "Loading the scene…": "Chargement de la scène…",
+  "Tracing the light's paths…": "Tracé des trajets de la lumière…",
+  "Bending space around the hole…": "Courbure de l'espace autour du trou…",
+  "Compiling the ray tracer for your graphics card…": "Compilation du lancer de rayons pour votre carte graphique…",
   "Compiling the ray tracer for this scene": "Compilation du lancer de rayons pour cette scène",
+  "Compiling the still-view quality kernel in the background": "Compilation de fond (qualité vue fixe) — évite F5",
+  "Compiling the ray tracer for your graphics card": "Compilation du traceur de rayons pour ta carte graphique",
+  "Compiling the ray tracer (1/2)": "Traceur de rayons — noyau principal (1/2)",
+  "Compiling the ray tracer (2/2)": "Traceur de rayons — sonde de lumière (2/2)",
+  "Preparing the Earth scenes": "Préparation des scènes terrestres",
+  "Compiling the ray tracer's probe in the background": "Compilation de fond (sonde) — évite F5",
+  "Compiling the ray tracer's light table in the background": "Compilation de fond (table de lumière) — évite F5",
+  "Loading the scene — compiling the ray tracer…": "Chargement de la scène — compilation du lancer de rayons…",
+  "The first time takes a while (up to a few minutes); the next ones reuse the browser's cache.":
+    "La première fois est longue (jusqu'à quelques minutes) ; les suivantes réutilisent le cache du navigateur.",
   "Enter now": "Entrer maintenant",
   "Download graphics diagnostic": "Télécharger le diagnostic graphique",
   "The graphics device was reset ({0}). Reload the page to go on.":

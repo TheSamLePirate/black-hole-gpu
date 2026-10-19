@@ -634,6 +634,23 @@ kbd {
   .ld-steps, .ld-sub { display: none; }
 }
 
+/* the arcade (splash-game.ts): the screen is the game's; only the bar and its percentage stay, at the bottom */
+#loading.arcade .ld-hole,
+#loading.arcade .ld-title,
+#loading.arcade .ld-sub,
+#loading.arcade .ld-steps,
+#loading.arcade .ld-stage,
+#loading.arcade .ld-tip { display: none; }
+#loading.arcade .ld-main {
+  position: absolute;
+  left: 50%;
+  bottom: max(26px, 4vh);
+  translate: -50% 0;
+  width: min(560px, calc(100vw - 32px));
+  z-index: 6;
+}
+#loading.arcade .ld-line { justify-content: center; margin-top: 6px; font-size: 13px; }
+
 @media (prefers-reduced-motion: reduce) {
   .ld-halo i, .ld-disk i { animation-duration: 30s; }
   .ld-sky i, .ld-glow { animation: none; }
@@ -677,6 +694,49 @@ body.map-open .asset-pill { top: auto; bottom: 138px; left: calc(50% + (var(--fc
 }
 .ap-bar { flex: none; width: 60px; height: 2px; border-radius: 2px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
 .ap-bar i { display: block; height: 100%; background: var(--accent); transform-origin: left; transform: scaleX(0); transition: transform 0.3s; }
+
+/* a scene's tracer compiling, the last image frozen behind: a veil that says so (over the image, under the panels) */
+.scene-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 24;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  --hole: min(190px, 46vw, 26vh);
+  overflow: hidden;
+  background: radial-gradient(ellipse 80% 60% at 50% 40%, #0e0d16 0%, #050509 55%, #000 100%);
+  color: var(--text);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  /* (leaving: the hole swells while the veil fades — the new scene shows through) */
+  transition: opacity 0.9s ease 0.1s;
+  pointer-events: none;
+}
+.scene-veil.show { opacity: 1; transition: opacity 0.6s ease; }
+.scene-veil > :not(.ld-sky):not(.sv-warp):not(.sv-bar):not(.sv-note) { position: relative; }
+/* the flight: the stars streaming past, the hole nearer as the scene gets ready (--sv-k), swelling as the veil leaves */
+.sv-warp { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.scene-veil .ld-hole { margin-top: -12vh; transform: scale(2.6); transition: transform 1.1s cubic-bezier(0.6, 0, 0.3, 1); }
+.scene-veil.show .ld-hole { transform: scale(var(--sv-k, 0.7)); transition: transform 0.6s linear; }
+.sv-label { font-size: 13px; color: var(--dim); }
+.sv-label.in { animation: ld-in 0.5s ease; }
+body.benching .scene-veil { display: none; }
+/* (the progress is a thin line at the foot of the screen, not the centre of it) */
+.sv-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.sv-bar i { display: block; height: 100%; background: var(--accent); transform-origin: left; transform: scaleX(0); }
+.sv-note { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); width: min(520px, 86vw); text-align: center; opacity: 0.45; font-size: 11.5px; }
+.sv-spin {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 179, 92, 0.25);
+  border-top-color: var(--accent);
+  animation: ld-rot 0.9s linear infinite;
+}
 
 /* ---------------------------------------------------------------- offline render dialog */
 #render {

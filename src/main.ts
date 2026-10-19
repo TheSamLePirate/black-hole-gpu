@@ -161,7 +161,8 @@ import { rangerStatus, type RangerStatus } from "./game/status";
 import { GameToolsWindow, rangerView } from "./ui/gametools";
 import { applyTuning } from "./game/tuning";
 import { demotionEligible, dynamicResolutionOn, promotionEligible } from "./quality-policy";
-import { adapterId, cappedRatio, demoted, promoted, rememberLevel } from "./tier";
+import { preflight, tooSlow } from "./preflight";
+import { adapterId, cappedRatio, demoted, promoted, rememberLevel, tierAt } from "./tier";
 import { cpuProf } from "./perf";
 import { visibleTimeout } from "./util/visible-timeout";
 import { gameLog } from "./game/log";
@@ -292,9 +293,14 @@ let transport: TransportBar | null = null;
 let firstFrame = false;
 /** when the first image was on screen [performance.now() ms] */
 let firstFrameAt: number | null = null;
-/** the Kerr Bench's page (…/#bench): its GPU memory counted from the first allocation */
-const benchPage = /[#&]bench\b/.test(location.hash);
-if (benchPage) installVramHook();
+/** the Kerr Bench's screen is up (…/#bench from a link, or opened from the title: no reload, the compiled kernels kept) */
+let benchPage = /[#&]bench\b/.test(location.hash);
+/** the saved flight not yet loaded (the title screen's Continue loads it): nothing is autosaved over it meanwhile */
+let flightPending: (() => void) | null = null;
+/** the tracer not compiled while the title screen is up at launch (a starfield behind it): the scene chosen, it starts */
+let releaseTrace = () => {};
+// (the GPU memory counted from the first allocation, whichever way the bench is reached)
+installVramHook();
 
 function fail(msg: string) {
   document.getElementById("loading")?.remove();
@@ -309,6 +315,18 @@ function fail(msg: string) {
   reload.className = "error-reload";
   reload.onclick = () => location.reload();
   errorEl.append(document.createElement("br"), diagnostic, reload);
+}
+
+/** Once per page: the machine is too slow even at the floor (preflight.ts tooSlow) — the way in closed, nothing more can be done. */
+let tooSlowShown = false;
+function tooSlowNotice(ms: number) {
+  tooSlowShown = true;
+  const message = tf(
+    "This graphics card is too slow for the ray tracer: {0} ms per image even at the lowest settings (under 10 images a second). The game is not playable here.",
+    ms.toFixed(0),
+  );
+  gpuDiagnostics.record("too-slow", message, true);
+  fail(message);
 }
 
 async function main() {
@@ -367,6 +385,29 @@ async function main() {
   window.addEventListener("error", (event) => globalError("javascript-error", event.error ?? event.message));
   window.addEventListener("unhandledrejection", (event) => globalError("unhandled-rejection", event.reason));
   const splash = new Splash($("loading") ?? document.createElement("div"));
+  // (the gate: the adapter read against the minimum before anything heavy is downloaded or compiled —
+  // a machine that cannot run the tracer is told why, and one whose last start died compiling starts light)
+  const adapter = navigator.gpu ? await navigator.gpu.requestAdapter({ powerPreference: "high-performance" }).catch(() => null) : null;
+  const gate = preflight({
+    webgpu: !!navigator.gpu,
+    secureContext: window.isSecureContext,
+    adapter: adapter
+      ? {
+          fallback: !!(adapter.info as (GPUAdapterInfo & { isFallbackAdapter?: boolean }) | undefined)?.isFallbackAdapter,
+          limits: adapter.limits as unknown as Record<string, number>,
+        }
+      : null,
+    previous: gpuDiagnostics.previousSession(),
+    allowSoftware: benchPage || navigator.webdriver || /[#&]software\b/.test(location.hash),
+  });
+  gpuDiagnostics.setContext({ preflight: gate });
+  if (gate.kind === "refuse") {
+    startupFailed = true;
+    cancelWatchdog();
+    gpuDiagnostics.record("preflight-refused", gate.reasons.join(" "), true);
+    fail(gate.reasons.map((r) => t(r)).join("\n"));
+    return;
+  }
   // (the HUD's and the overlays' fonts — fonts.css — loaded while the GPU starts: a canvas draws in
   // whatever is there at its first frame, and keeps it until redrawn)
   const fonts = Promise.all(
@@ -403,6 +444,11 @@ async function main() {
     return;
   }
   if (startupFailed) return;
+  // (the last start died compiling: the pixel budget at the lowest two tiers for this one, the governor
+  // promoting it back by measure)
+  if (gate.safe && renderer.tier.level > 1) renderer.tier = tierAt(1, `${renderer.tier.label} · safe start`);
+  // (console: `await compileBench()` on the title screen — what each kernel costs to compile on this machine)
+  (window as unknown as { compileBench: unknown }).compileBench = (...a: Parameters<Renderer["compileBench"]>) => renderer.compileBench(...a);
   gpuDiagnostics.setRuntime(() => ({
     adapter: renderer.adapter,
     tier: renderer.tier,
@@ -425,7 +471,7 @@ async function main() {
     recovering = true;
     let saved = false;
     try {
-      if (settings.autosave) saved = tools.autosaveNow();
+      if (settings.autosave && !flightPending) saved = tools.autosaveNow();
     } catch (error) {
       gpuDiagnostics.record("autosave-after-device-loss", error);
     }
@@ -1705,6 +1751,9 @@ async function main() {
   // (a preset exposed for our side — sunlit Saturn, ~21 EV above the disk — does not pass its exposure on)
   let exposedForOurSide = false;
   function applyPreset(name: string) {
+    releaseTrace();
+    // (every scene enters through the veil for 15 s at least: its remaining compiles go on behind it)
+    renderer.holdSceneVeil(15_000);
     currentScene = presets[name] ? name : null;
     if (camera.spectating) setSpectator(false);
     renderer.resetTemporal(); // (another scene: no history carried into it)
@@ -6083,20 +6132,24 @@ async function main() {
     game: tools,
     autopilot: () => camera.pilot.auto,
   });
-  if (benchPage) {
-    // (a benchmark's scenes are not the player's flight: nothing autosaved on this page)
+  // (opened in the page, closed back to the title: the device and its compiled kernels stay — a reload
+  // destroyed the device, froze the page for seconds and compiled everything again, each way)
+  const openBench = () => {
+    benchPage = true;
+    // (a benchmark's scenes are not the player's flight: nothing autosaved meanwhile)
+    const autosaving = settings.autosave;
     settings.autosave = false;
-    void splash.gone.then(
-      () =>
-        new BenchScreen(bench, {
-          onStart: () => renderer.prof.reset(),
-          onClose: () => {
-            history.replaceState(null, "", location.pathname);
-            location.reload();
-          },
-        }),
-    );
-  }
+    new BenchScreen(bench, {
+      onStart: () => renderer.prof.reset(),
+      onClose: () => {
+        benchPage = false;
+        settings.autosave = autosaving;
+        history.replaceState(null, "", location.pathname + location.search);
+        titleScreen?.open();
+      },
+    });
+  };
+  if (benchPage) void splash.gone.then(openBench);
   // the air's limits (flightair.ts): a point kept as the craft enters the air, the craft lost past them
   let entryPoint: GameSave | null = null;
   const craftLost = new CraftLost();
@@ -6149,7 +6202,7 @@ async function main() {
   });
   addEventListener("pagehide", (e) => {
     if (!benchPage) writePrefs(settings);
-    if (settings.autosave && firstFrame) tools.autosaveNow();
+    if (settings.autosave && firstFrame && !flightPending) tools.autosaveNow();
     gpuDiagnostics.flush();
     // (the GPU's memory — the Earth's maps are hundreds of MB — freed now, not when the old page is
     // collected: reloads in a row would stack them)
@@ -6304,10 +6357,13 @@ async function main() {
     requestAnimationFrame(loop);
     cpuProf.begin();
     const dt = Math.min(0.1, (now - last) / 1000);
+    // (a menu holding the game, or the scene's tracer still compiling: the time stands still — it runs
+    // once the scene is drawn, not behind a veil)
+    const holding = paused || loading.isActive("scene-tracer");
     // (the flight's clock: the frame's time while it runs — frozen, only the steps move it)
-    if (!frozen && !paused && !replay.active) advanceFrameClock(dt * 1000);
+    if (!frozen && !holding && !replay.active) advanceFrameClock(dt * 1000);
     // (the rain's: only while the time runs — paused, the drops stand still)
-    if (!frozen && !paused && settings.animate) renderer.rainClock += dt;
+    if (!frozen && !holding && settings.animate) renderer.rainClock += dt;
     // (the display's refresh: the median of the loop's last intervals — the frame budget is fitted to it)
     loopIv.push(now - last);
     if (loopIv.length > 31) loopIv.shift();
@@ -6328,7 +6384,7 @@ async function main() {
     // (a menu holding the game — the title, the pause, the missions: the pad moves in it, the flight
     // does not read it meanwhile)
     if (paused) menuPad.tick(camera.pad.poll(), now);
-    if (!frozen && !paused && !renderer.offlineActive && !replay.active) {
+    if (!frozen && !holding && !renderer.offlineActive && !replay.active) {
       // (the flight plan's guidance speaking: a waypoint passed, its end, the bingo)
       if (camera.nav.say) {
         panel.toast(camera.nav.say);
@@ -6483,7 +6539,7 @@ async function main() {
     if (replay.active && !renderer.offlineActive) {
       replay.frame(dt);
       changed = true;
-    } else if (!frozen && !paused && !renderer.offlineActive && settings.animate && camera.piloting && !camera.spectating) {
+    } else if (!frozen && !holding && !renderer.offlineActive && settings.animate && camera.piloting && !camera.spectating) {
       tape.tick(dt);
       const smp = camera.replaySample();
       if (smp) {
@@ -6531,6 +6587,11 @@ async function main() {
       : cpuProf.time("render (encode, submit)", () =>
           renderer.frame(camera.viewSettings(), sim.time, changed, sim.timeDirty, displayChanged),
         );
+    // (the tracer held behind the title: the start is over — the loading screen lifts, the watchdog stands down)
+    if (!firstFrame && renderer.holdTrace) {
+      cancelWatchdog();
+      splash.firstImage();
+    }
     if (!firstFrame && renderer.firstFrameDoneAt > 0) {
       firstFrame = true;
       firstFrameAt = renderer.firstFrameDoneAt;
@@ -6686,7 +6747,7 @@ async function main() {
           demotedAt = now;
           resize();
           if (renderer.adapter) rememberLevel(adapterId(renderer.adapter), down);
-        }
+        } else if (!tooSlowShown && !benchPage && tooSlow(gpuEma)) tooSlowNotice(gpuEma);
       }
     }
     cpuProf.time("overlay (guide, marker)", () => viewOverlay.draw(chart && !renderer.offlineActive ? chart : null, chartKey));
@@ -6699,7 +6760,7 @@ async function main() {
     const soon = saveSoon && saveTimer > 2;
     // (a benchmark's settings are not the player's; a replay's poses not the flight's)
     if (soon && !benchPage && !replay.active) writePrefs(settings);
-    if (settings.autosave && firstFrame && !renderer.offlineActive && !replay.active && (saveTimer > settings.autosaveEvery || soon)) {
+    if (settings.autosave && firstFrame && !flightPending && !renderer.offlineActive && !replay.active && (saveTimer > settings.autosaveEvery || soon)) {
       saveTimer = 0;
       cpuProf.time("autosave", () => tools.autosaveNow());
     }
@@ -7072,7 +7133,7 @@ async function main() {
                 }
               : null,
           // (the rain heard where it falls — none held with the time)
-          rain: renderer.rain && !renderer.rain.dust && settings.animate && !frozen && !paused ? renderer.rain.rain : 0,
+          rain: renderer.rain && !renderer.rain.dust && settings.animate && !frozen && !holding ? renderer.rain.rain : 0,
         }),
       );
     } else {
@@ -7084,7 +7145,7 @@ async function main() {
         info: null,
         status: null,
         fired: camera.pilot.fired,
-        rain: renderer.rain && !renderer.rain.dust && settings.animate && !frozen && !paused ? renderer.rain.rain : 0,
+        rain: renderer.rain && !renderer.rain.dust && settings.animate && !frozen && !holding ? renderer.rain.rain : 0,
       });
     }
     // (the music — audio/music.ts —: every frame, whatever is flown or not: the flight's cue when it is known,
@@ -7131,7 +7192,8 @@ async function main() {
       panel.toast(tf("That link's mission could not be read: {0}", (e as Error).message));
     }
     const last = autosave.get();
-    // (the flight saved last loaded behind the title screen: Continue only lifts it)
+    // (the flight saved last: its summary shown on the title screen, the flight itself loaded by Continue — its
+    // kernels compile then, not behind the title, and a reload meanwhile has less to tear down)
     let resumed: string | null = null;
     try {
       if (shared) panel.toast(tf("Shared flight: {0}", tools.load(shared)));
@@ -7141,8 +7203,15 @@ async function main() {
         void splash.gone.then(() => briefMission(spec, () => airMissions.fly(spec)));
       } else if (scene && presets[scene]) applyPreset(scene);
       else if (hash.length <= 1 && last && settings.autosave) {
-        tools.load(last, { quiet: true });
         resumed = last.summary;
+        flightPending = () => {
+          flightPending = null;
+          try {
+            tools.load(last, { quiet: true });
+          } catch (e) {
+            console.warn("Could not restore the saved game:", e);
+          }
+        };
       }
     } catch (e) {
       console.warn("Could not restore the saved game:", e);
@@ -7153,6 +7222,8 @@ async function main() {
       launch: (scene) => {
         paused = false;
         started = true;
+        flightPending = null;
+        releaseTrace();
         panel.applyScene(scene);
       },
       back: () => titleScreen?.open(),
@@ -7162,10 +7233,16 @@ async function main() {
     let started = false;
     titleScreen = new TitleScreen({
       saved: () => (started ? tools.snapshot("now").summary : resumed),
-      continue: () => (started = true),
+      continue: () => {
+        started = true;
+        flightPending?.();
+        releaseTrace();
+      },
       hold: (on) => {
         paused = on;
         touch();
+        // (a menu left without a scene chosen: the tracer starts all the same, for the view behind)
+        if (!on) setTimeout(() => !titleScreen?.isOpen && releaseTrace(), 90_000);
       },
       missions: () => {
         paused = true; // (the scene behind held while one chooses)
@@ -7173,19 +7250,25 @@ async function main() {
       },
       explore: () => {
         started = true;
+        flightPending = null;
         scenes.open();
       },
       photo: () => {
         started = true;
+        flightPending?.();
+        releaseTrace();
         setGameMode("photo");
       },
       settings: () => {
         started = true;
+        flightPending?.();
+        releaseTrace();
         panel.toggle(true);
       },
       bench: () => {
-        location.hash = "bench";
-        location.reload();
+        started = true;
+        releaseTrace();
+        openBench();
       },
       version: () => appVersion,
     });
@@ -7201,8 +7284,23 @@ async function main() {
         .join(joinCode, role === "spectator" || role === "instruments" ? role : "pilot")
         .then(() => netPanel.net?.room && netPanel.closePanel());
     } else if (!shared && !linked && !(scene && presets[scene]) && !benchPage) {
-      titleScreen.open();
-      void splash.gone.then(() => titleScreen?.focusFirst());
+      // (nothing traced behind the title: the tracer compiles — minutes, cold — when a scene is chosen, not
+      // before; the loading screen lifts at once, a starfield in CSS behind the menu)
+      renderer.holdTrace = true;
+      document.body.classList.add("tracer-held");
+      releaseTrace = () => {
+        releaseTrace = () => {};
+        document.body.classList.remove("tracer-held");
+        renderer.holdTrace = false;
+        changed = true;
+      };
+      // (the launch kernel compiles under the loading screen, its animation: the title and the menu open
+      // only once it is there and the screen has lifted)
+      renderer.prewarm();
+      void splash.gone.then(() => {
+        titleScreen?.open();
+        titleScreen?.focusFirst();
+      });
     } else started = true;
     if (hash.length > 1) history.replaceState(null, "", location.pathname + location.search);
   }

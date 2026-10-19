@@ -32,6 +32,7 @@ import { lookOf } from "./skychart";
 import { HD_SETS, hdColorFormat, loadHdMap, placeholderHd, type HdMap } from "./system/hd-maps";
 import { bakeNoise3d } from "./noise3d";
 import { AsyncResource, CompileQueue } from "./util/async-resource";
+import { trail } from "./util/compile-trail";
 import { visibleTimeout } from "./util/visible-timeout";
 import { automaticQuality, effectiveQuality, earthMapQuality } from "./quality-policy";
 import { adapterId, guessTier, rememberedLevel, tierAt, type Tier } from "./tier";
@@ -164,6 +165,26 @@ const srgbView = (t: GPUTexture, dimension: GPUTextureViewDimension) =>
 const BLOCKS = [1, 2, 3, 4, 6, 8];
 /** every feature of the tracer kept (the general pipelines) */
 const FEATURES_ALL = 16383;
+/** how long the view stays still before its quality kernel is compiled [ms] */
+const QUALITY_AFTER_MS = 20000;
+/** the launch kernel's probe starts this long after its main entry, in parallel with it (cold: the main takes ~85 s) */
+const LAUNCH_PROBE_AFTER_MS = 45_000;
+/** compileBench("bits"): what a few bits cost on their own */
+const BITS_BENCH: { key: number; entry?: "main" | "env" | "lut"; quality?: boolean }[] = [{ key: 32 }, { key: 64 }, { key: 128 }, { key: 256 }, { key: 640 }, { key: 4096 }, { key: 8192 }];
+/** compileBench("tiers"): the two kernels that would cover the scenes (with the cheap bits all in, bodies or not),
+ *  then the bits not measured yet */
+const TIERS_BENCH: typeof BITS_BENCH = [15328, 15200, 1, 2, 4, 8, 16, 1024, 16384].map((key) => ({ key }));
+/** compileBench("tiers2"): every bit but the bodies', then the bodies' kernel with the surface, the scenery */
+const TIERS2_BENCH: typeof BITS_BENCH = [16255, 2784 | 4096, 2784 | 8192, 2784 | 256].map((key) => ({ key }));
+/** compileBench's kernels: the lightest, the Kerr hole, the launch's, the launch's with shadows, the quality one, the general one */
+const DEFAULT_BENCH: typeof BITS_BENCH = [
+  { key: 0 },
+  { key: 512 },
+  { key: 736 },
+  { key: 2784 },
+  { key: 736, quality: true },
+  { key: FEATURES_ALL },
+];
 /** how long a block size's measured frame time is remembered [ms] (then tried again) */
 const BLOCK_MEMORY = 20000;
 /** the camera held after moving: the refinement's full passes over which the history hands over to it (at most its samples) */
@@ -213,6 +234,11 @@ const FLAG_LUT = 32;
 /** the features under which the far field's LUT is not used: radio, polarization, jet, hot spot, hot flow,
  *  the wormhole, bodies — what a ray between two clean samples could meet unseen */
 const LUT_BLOCKERS = 1 | 2 | 4 | 8 | 16 | 32 | 128;
+/** the kernels compiled at the start, one per family of scenes (a scene is drawn by the one holding its features) */
+const FAMILY_HOLE = 767; // Kerr metrics, bodies, thick disk, wormhole, the disk's options
+const FAMILY_EARTH = 128 | 256 | 512 | 1024 | 2048 | 4096 | 8192 | 16384; // bodies, runways, weather, shadow, surface, scenery, aurora
+const FAMILIES = [FAMILY_HOLE, FAMILY_EARTH];
+const EARTH_BITS = 256 | 1024 | 2048 | 4096 | 8192 | 16384;
 
 /**
  * Bun's dev server sometimes serves a `type: "text"` import as an asset URL after a hot reload
@@ -424,6 +450,16 @@ const SCENERY_TOP_M = 60;
 function bodyEye(near: { centre: Vec3; axes: Vec3[] }): Vec3 {
   return near.axes.map((a) => -(a[0]! * near.centre[0] + a[1]! * near.centre[1] + a[2]! * near.centre[2])) as Vec3;
 }
+
+// Scratch arrays for the per-frame uniform writes (writeBuffer copies at call time: one reused array per shape,
+// no allocation in the hot path).
+const scratchU4 = new Uint32Array(4);
+const scratchF4 = new Float32Array(4);
+const scratchHist = new Uint32Array(128);
+const scratchDisplay = new Float32Array(32);
+const scratchRain = new Float32Array(12);
+const scratchHaze = new Float32Array(8);
+const meterBinds = new WeakMap<GPUTexture, { pipe: GPUComputePipeline; hist: GPUBuffer; spot: GPUBuffer; bind: GPUBindGroup }>();
 
 /** The camera's place on its near body, in metres along the body's own axes (mPerM: metres per M): a rotation of the view leaves it unchanged. */
 function placeOnBody(near: { centre: Vec3; radius: number; axes: Vec3[] }, mPerM: number): Vec3 {
@@ -929,6 +965,14 @@ export class Renderer {
     // LUT and the quality kernel compile in the background; until they land a still view stays on the
     // realtime path and the LUT pass is skipped — see frame() and dispatchTrace)
     this.firstImage = new Promise<void>((resolve) => (this.resolveFirstImage = resolve));
+    // (a trace of the background compiles, to find what still runs when the page is refreshed)
+    let lastStatus = "";
+    setInterval(() => {
+      try {
+        const s = `${JSON.stringify(this.pipelineStatus)} queue ${this.variantQueue.pending}`;
+        if (s !== lastStatus) trail((lastStatus = s));
+      } catch {}
+    }, 1000);
     this.generalCompile = new AsyncResource(
       async () => {
         const t0 = performance.now();
@@ -1402,7 +1446,9 @@ export class Renderer {
     loading.stage("gpu", t("WebGPU — the graphics device"), { weight: 0.5, indeterminate: true, eta: 0.5 });
     loading.stage("shaders", t("Shaders — geodesics, disk, sky, Ranger"), { weight: 1 });
     gpuDiagnostics.enter("adapter-request");
+    trail("requesting the adapter");
     const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
+    trail("adapter received");
     if (!adapter) throw new Error(t("No WebGPU adapter found."));
     gpuDiagnostics.setContext({
       adapter: {
@@ -1440,6 +1486,7 @@ export class Renderer {
         maxStorageBuffersPerShaderStage: Math.min(SCENERY_STORAGE_LIMIT, adapter.limits.maxStorageBuffersPerShaderStage),
       },
     });
+    trail("device received");
     onDevice(device);
     // (the device lost — a driver reset, the GPU's memory exhausted —: said to the page, which saves the
     // flight and offers a reload; nothing more is sent to it)
@@ -2417,7 +2464,6 @@ export class Renderer {
     } else {
       const drift = this.probeDrift(s, cam, bodies, origin, m, time, bg);
       if (!(drift < 0.1)) this.envReset = true;
-      if (this.envReset) this.eventFrames = Math.max(this.eventFrames, 2);
       // (the sky's brightness changed a lot — the auto exposure —: every texel written over, a quarter a
       // frame, the old light kept meanwhile — not all 32 768 long rays in one frame)
       const spread = !this.envReset && this.envSpread > 0;
@@ -2603,7 +2649,10 @@ export class Renderer {
     f.set(shade, (BASE_PARAM_VEC4S - WX_VEC4S - SHADE_VEC4S) * 4);
     // (a shadow falling: 2048 — none, its code out of the kernel: the kernel is register-bound, a pair's loop
     // cost 6–12 % over the Earth where no shadow ever fell)
-    if (shade[8]! > 0) this.featureKey |= 2048;
+    // (its kernel compiled ahead like the surface's, and the bit switched on once it is there: a shadow falling on
+    // the way — 177 s for a cold kernel — no longer holds the image back, the kernel without it draws on)
+    const shadeFalls = shade[8]! > 0;
+    if (shadeFalls && this.kernelReady(this.featureKey | 2048)) this.featureKey |= 2048;
     // the sky through the Earth's air (PLAN-CIEL C3): its refractivity at sea level, from the real weather's
     // air when it is in (cold air bends more), else the standard atmosphere's
     f.set(
@@ -2718,7 +2767,7 @@ export class Renderer {
     // switched on only once it is there: until then their params stay zero, the kernel without them draws on
     const surfaceAsked = this.earthSurface.active || this.earthSurface.pending;
     const sceneryAsked = this.earthScenery.active || this.earthScenery.pending;
-    const ahead = this.featureKey | (surfaceAsked ? 4096 : 0) | (sceneryAsked ? 8192 : 0);
+    const ahead = this.featureKey | (shadeFalls ? 2048 : 0) | (surfaceAsked ? 4096 : 0) | (sceneryAsked ? 8192 : 0);
     if (!o.probe) {
       this.aheadKey = this.firstFrameDoneAt && ahead !== this.featureKey ? ahead : -1;
       if (this.aheadKey >= 0) this.traceVariant("rt", this.aheadKey);
@@ -2777,41 +2826,40 @@ export class Renderer {
       sx *= z;
       sy *= z;
     }
-    const d = new Float32Array([
-      outW,
-      outH,
-      2 ** this.ev(s) / preExposure(this.ev(s)) / (s.band === "230GHz" ? s.radioPeak : 1),
-      TONEMAPS[s.tonemap],
-      s.renderMode === "physical" ? 0 : 1,
-      s.bloom,
-      target.bloomLevels - 1,
-      dither ? 1 : 0,
-      sx,
-      sy,
-      ox,
-      oy,
-      hdr ? 1 : 0,
-      Math.max(1, s.hdrPeak),
-      0,
-      0,
-      ...(() => {
-        const { cs, gw, gh } = this.polCells(s, target);
-        return [s.polarization ? 1 : 0, cs, gw, gh];
-      })(),
-      // fraction drawn at full length: synchrotron scenes vs the thermal disk's ≤ 11.7 %
-      target.width,
-      target.height,
-      s.hotFlow || s.jet ? Math.max(0.05, s.polFraction) : 0.117,
-      s.band === "230GHz" ? 1 : 0,
-      this.beamSetup(s, target)?.level ?? 0,
-      (s.ship || this.craftsShown) && this.ship.ready ? 1 : 0,
-      this.dofOn(s, target) ? 1 : 0,
-      // (the sharpening, RCAS — the live view and its refining; the instrument's beam left soft)
-      s.sharpen,
-    ]);
+    const d = scratchDisplay;
+    d[0] = outW;
+    d[1] = outH;
+    d[2] = 2 ** this.ev(s) / preExposure(this.ev(s)) / (s.band === "230GHz" ? s.radioPeak : 1);
+    d[3] = TONEMAPS[s.tonemap];
+    d[4] = s.renderMode === "physical" ? 0 : 1;
+    d[5] = s.bloom;
+    d[6] = target.bloomLevels - 1;
+    d[7] = dither ? 1 : 0;
+    d[8] = sx;
+    d[9] = sy;
+    d[10] = ox;
+    d[11] = oy;
+    d[12] = hdr ? 1 : 0;
+    d[13] = Math.max(1, s.hdrPeak);
     // (the lens flare's strength: after the HDR peak)
     d[14] = s.lensFlare;
     d[15] = this.shadowKeep;
+    const pc = this.polCells(s, target);
+    d[16] = s.polarization ? 1 : 0;
+    d[17] = pc.cs;
+    d[18] = pc.gw;
+    d[19] = pc.gh;
+    // fraction drawn at full length: synchrotron scenes vs the thermal disk's ≤ 11.7 %
+    d[20] = target.width;
+    d[21] = target.height;
+    d[22] = s.hotFlow || s.jet ? Math.max(0.05, s.polFraction) : 0.117;
+    d[23] = s.band === "230GHz" ? 1 : 0;
+    d[24] = this.beamSetup(s, target)?.level ?? 0;
+    d[25] = (s.ship || this.craftsShown) && this.ship.ready ? 1 : 0;
+    d[26] = this.dofOn(s, target) ? 1 : 0;
+    // (the sharpening, RCAS — the live view and its refining; the instrument's beam left soft)
+    d[27] = s.sharpen;
+    d.fill(0, 28);
     this.device.queue.writeBuffer(this.displayBuf, 0, d);
     // (the eye: the night's Purkinje shift — display.wgsl eye.x —, by how dark the scene the exposure
     // adapts to is: daylight EV ~14.4, night ~16.3 — the shadows of a sunlit day stay in colour)
@@ -2819,44 +2867,44 @@ export class Renderer {
     // (the telescope's spot — a sensor's frame, not the eye's —: no Purkinje shift; its black point, the sky behind
     // the target as the frame exposes it, a little under it)
     const spot = target === this.live && this.meterSpot && this.spotSky > 0;
-    this.device.queue.writeBuffer(
-      this.displayBuf,
-      128,
-      new Float32Array([spot ? 0 : s.purkinje * scotopic, spot ? 0.92 * this.spotSky * 2 ** this.ev(s) : 0, 0, 0]),
-    );
+    const eye = scratchF4;
+    eye[0] = spot ? 0 : s.purkinje * scotopic;
+    eye[1] = spot ? 0.92 * this.spotSky * 2 ** this.ev(s) : 0;
+    eye[2] = eye[3] = 0;
+    this.device.queue.writeBuffer(this.displayBuf, 128, eye);
     // (the rain — W5, display.wgsl rainLook —: its strength, a clock [s], in the cabin (its canopy's drops),
     // the vertical field's half tangent; the drops' velocity on the camera's axes [m/s], their speed)
     const r = target === this.live ? this.rain : null;
     const inside = !!r && !r.dust && s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin");
     const v = r?.v ?? [0, 0, 0];
-    this.device.queue.writeBuffer(
-      this.displayBuf,
-      144,
-      new Float32Array([
-        r ? Math.min(r.rain, 1.3) : 0,
-        this.rainClock % 3600,
-        // (z: in the cabin 1; Mars's dust, not rain, 2)
-        (inside ? 1 : 0) + (r?.dust ? 2 : 0),
-        Math.tan((s.fov * Math.PI) / 360),
-        ...v,
-        Math.hypot(...v),
-        // (rainX: the flown craft's distance from the camera [m] — outside it, the drops beyond it hidden —,
-        // the gusts, the lens wet)
-        r && !inside && s.ship && this.shipPose ? Math.hypot(...shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t) : 0,
-        r?.gust ?? 0,
-        // (outside, the camera's lens wet: a few soft drops — PLAN-PLUIE, the owner's choice)
-        r && !r.dust && !inside ? 1 : 0,
-        0,
-      ]),
-    );
+    const rn = scratchRain;
+    rn[0] = r ? Math.min(r.rain, 1.3) : 0;
+    rn[1] = this.rainClock % 3600;
+    // (z: in the cabin 1; Mars's dust, not rain, 2)
+    rn[2] = (inside ? 1 : 0) + (r?.dust ? 2 : 0);
+    rn[3] = Math.tan((s.fov * Math.PI) / 360);
+    rn[4] = v[0]!;
+    rn[5] = v[1]!;
+    rn[6] = v[2]!;
+    rn[7] = Math.hypot(v[0]!, v[1]!, v[2]!);
+    // (rainX: the flown craft's distance from the camera [m] — outside it, the drops beyond it hidden —,
+    // the gusts, the lens wet)
+    rn[8] = r && !inside && s.ship && this.shipPose ? Math.hypot(...shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t) : 0;
+    rn[9] = r?.gust ?? 0;
+    // (outside, the camera's lens wet: a few soft drops — PLAN-PLUIE, the owner's choice)
+    rn[10] = r && !r.dust && !inside ? 1 : 0;
+    rn[11] = 0;
+    this.device.queue.writeBuffer(this.displayBuf, 144, rn);
     // (the F-35's heat haze — display.wgsl haze —: its exhaust's column in the image, its radii, its strength,
     // a clock)
     const hz = target === this.live && s.ship && s.heatHaze ? this.ship.hazeView() : null;
-    this.device.queue.writeBuffer(
-      this.displayBuf,
-      192,
-      new Float32Array(hz ? [...hz, (performance.now() / 1000) % 3600] : [0, 0, 0, 0, 0, 0, 0, 0]),
-    );
+    const hv = scratchHaze;
+    hv.fill(0);
+    if (hz) {
+      for (let i = 0; i < hz.length && i < 7; i++) hv[i] = hz[i]!;
+      hv[hz.length] = (performance.now() / 1000) % 3600;
+    }
+    this.device.queue.writeBuffer(this.displayBuf, 192, hv);
   }
 
   /** the rain round the camera (main.ts, from the controller's rainView): its strength and the drops'
@@ -2932,15 +2980,28 @@ export class Renderer {
   private writeResolve(t: Target, s: Settings) {
     const view = s.polarization && s.polView === "intensity" ? 1 << 8 : 0;
     // x: block | view << 8 | image width << 16
-    const r =
-      t === this.live
-        ? [this.lastBlock | view | (t.width << 16), ...this.lastOffset, this.validFrom]
-        : [1 | view | (t.width << 16), 0, 0, 0];
-    this.device.queue.writeBuffer(t.resolveBuf, 0, new Uint32Array(r));
-    this.device.queue.writeBuffer(t.resolveBuf, 16, new Float32Array([preExposure(this.ev(s)), 0, 0, 0]));
+    const r = scratchU4;
+    if (t === this.live) {
+      r[0] = this.lastBlock | view | (t.width << 16);
+      r[1] = this.lastOffset[0]!;
+      r[2] = this.lastOffset[1]!;
+      r[3] = this.validFrom;
+    } else {
+      r[0] = 1 | view | (t.width << 16);
+      r[1] = r[2] = r[3] = 0;
+    }
+    this.device.queue.writeBuffer(t.resolveBuf, 0, r);
+    const f = scratchF4;
+    f[0] = preExposure(this.ev(s));
+    f[1] = f[2] = f[3] = 0;
+    this.device.queue.writeBuffer(t.resolveBuf, 16, f);
     if (s.polarization) {
       const { cs, gw, gh } = this.polCells(s, t);
-      this.device.queue.writeBuffer(t.polGridBuf, 0, new Uint32Array([cs, gw, gh, t.width]));
+      r[0] = cs;
+      r[1] = gw;
+      r[2] = gh;
+      r[3] = t.width;
+      this.device.queue.writeBuffer(t.polGridBuf, 0, r);
     }
   }
 
@@ -3156,6 +3217,12 @@ export class Renderer {
     const k = this.envStride;
     const pipeline = this.traceVariant("env");
     if (!pipeline) return; // (its epoch unmarked: the next frame tries again)
+    // (a full reset of the probe costs this frame and the next: their times are not the scene's, and are left
+    // out of the block regulator's measure. Here, where the pass is really encoded — not where the reset is
+    // only asked for: a scene without a ship, a Ranger still loading or a probe kernel still compiling never
+    // clears the flag, so every frame was left out and the regulator, seeing none, held the block the last
+    // scene had left it — 1 at 90 ms a frame on Saturn after a heavy scene)
+    if (this.envReset) this.eventFrames = Math.max(this.eventFrames, 2);
     const pass = enc.beginComputePass(this.prof.pass("ship probe: trace"));
     pass.setPipeline(pipeline);
     pass.setBindGroup(0, t.traceBind);
@@ -3317,6 +3384,7 @@ export class Renderer {
       lut: this.lutPipeline,
       lutq: this.lutQPipeline,
     }[kind];
+    key = this.familyOf(key);
     if (key === FEATURES_ALL) {
       void this.generalCompile.start();
       return general;
@@ -3352,11 +3420,82 @@ export class Renderer {
     return v[kind] ?? general ?? this.coveringVariant(key, kind);
   }
 
+  /**
+   * A still view's quality kernel — compiled (84 s on a quiet GPU, twice that while the scene is drawn) only once the
+   * view has stayed still for a while: stopping a moment is not asking for the converged image, and a compile
+   * started then holds the GPU process, and a page refresh, for minutes. Until then, only what is already there.
+   */
+  private qualityKernel(key: number, start: boolean): GPUComputePipeline | null {
+    if (start) return this.traceVariant("q", key);
+    key = this.familyOf(key);
+    return this.variants.get(key)?.q ?? this.qualityPipeline ?? this.coveringVariant(key, "q");
+  }
+
   /** whether a key's queued compile is still wanted: its slot kept, the device there, the camera on it —
    *  a scene left, its remaining compiles (minutes each on a slow D3D12 driver) no longer hold the new
    *  scene's back */
   private wanted(key: number, slot: unknown) {
-    return () => this.variants.get(key) === slot && !this.lost && (key === this.cameraKey || key === this.aheadKey);
+    return () =>
+      this.variants.get(key) === slot &&
+      !this.lost &&
+      (key === this.familyOf(this.cameraKey) || key === this.familyOf(this.aheadKey) || (this.holdTrace && FAMILIES.includes(key)));
+  }
+
+  private prewarmKey = -1;
+
+  /**
+   * The kernel a features key is drawn by: one of the two families compiled at the start (black hole, Earth) when it
+   * holds every bit of the key — the extra features off by the params, as with any covering kernel —, else the key's own.
+   * Every scene then finishes only its quality entry, whatever its features: the same compile for all, none of its own
+   * main/probe (a scene's own kernel was 40–90 s more, twice that under a drawing scene).
+   */
+  private familyOf(key: number) {
+    // (a key with no LUT blocker keeps its own kernel: it draws with the far-field LUT, which a family's has not)
+    if (key < 0 || key >= 1 << 16 || key === FEATURES_ALL || (key & LUT_BLOCKERS) === 0) return key;
+    const earth = (key & EARTH_BITS) !== 0;
+    for (const f of earth ? [FAMILY_EARTH, FAMILY_HOLE] : [FAMILY_HOLE, FAMILY_EARTH]) if ((f & key) === key) return f;
+    return key;
+  }
+
+  /**
+   * The black-hole family's kernel compiles under the loading screen, before the menu opens, while nothing else is
+   * drawn — twice as fast as under a scene — so that choosing a scene finds it ready; the Earth family's follows
+   * behind the menu. A stage of the loading screen (its animation).
+   */
+  async prewarm(key = FAMILY_HOLE) {
+    if (this.lost || this.variants.has(key) || this.prewarmKey >= 0) return;
+    this.prewarmKey = key;
+    const id = "bg-prewarm";
+    // (cold: ~1 min 25 on a quiet GPU — the main entry; instant from the browser's shader cache. Its probe, started
+    // in parallel after 45 s, and the Earth family's kernel follow behind the menu, in the background)
+    loading.stage(id, t("Compiling the ray tracer for your graphics card"), { weight: 6, indeterminate: true, eta: 90 });
+    let v: ReturnType<Renderer["variants"]["get"]>;
+    try {
+      loading.set(id, 0);
+      this.traceVariant("rt", key); // (main, then the probe: the realtime cascade)
+      v = this.variants.get(key)!;
+      while (!v.rt && !v.failed && !v.rtGivenUp && !this.lost) await new Promise((r) => setTimeout(r, 500));
+    } catch (e) {
+      console.warn("Launch kernel not prepared:", e);
+    } finally {
+      loading.done(id);
+    }
+    if (!v?.rt) return;
+    // (behind the menu: the probe, started in parallel with the main entry, ends; then the Earth family's main and probe,
+    // dropped as soon as a scene outside it is chosen)
+    if (this.variants.has(FAMILY_EARTH)) return;
+    const bg = "bg-prewarm-earth";
+    loading.stage(bg, t("Preparing the Earth scenes"), { weight: 1, indeterminate: true, eta: 200, background: true });
+    try {
+      while (!v.env && !v.failed && !v.rtGivenUp && !this.lost && this.holdTrace) await new Promise((r) => setTimeout(r, 500));
+      this.traceVariant("rt", FAMILY_EARTH);
+      const e = this.variants.get(FAMILY_EARTH)!;
+      while (!(e.rt && e.env) && !e.failed && !e.rtGivenUp && !this.lost && this.holdTrace) await new Promise((r) => setTimeout(r, 500));
+    } catch (e) {
+      console.warn("Earth kernel not prepared:", e);
+    } finally {
+      loading.done(bg);
+    }
   }
 
   /** a key's realtime kernel is there — its own, an earlier scene's covering it, or the general one (every
@@ -3364,6 +3503,7 @@ export class Renderer {
    *  be (its compile failed or hung). Waiting for the specialised kernel itself held the scenery back for minutes
    *  on a cold shader cache (32 s for its main entry, 23 s for its probe, queued behind others) */
   private kernelReady(key: number) {
+    key = this.familyOf(key);
     if (key === FEATURES_ALL || this.tracePipeline) return true;
     const v = this.variants.get(key);
     return !!v?.rt || !!v?.failed || !!v?.rtGivenUp || !!this.coveringVariant(key, "rt");
@@ -3378,16 +3518,22 @@ export class Renderer {
     const current = this.wanted(key, slot);
     const compile = (entry: "main" | "env" | "lut", onStall?: () => void) =>
       this.variantQueue.run(current, () => this.timedVariant(key, entry), onStall);
+    // (the launch kernel's probe starts in parallel once its main entry has run for LAUNCH_PROBE_AFTER_MS: the loading
+    // screen ends with the main entry, the probe — already under way — ends behind it, instead of after it)
+    let early: ReturnType<Renderer["timedVariant"]> | null = null;
+    if (key === FAMILY_HOLE && !slot.rt && !slot.env)
+      setTimeout(() => {
+        if (!slot.rt && !slot.env && current()) early = this.timedVariant(key, "env");
+      }, LAUNCH_PROBE_AFTER_MS);
     const run = async () => {
       if (!slot.rt) {
         slot.rt = await compile("main", () => (slot.rtGivenUp = true));
         if (!slot.rt) return;
       }
       if (!slot.env) {
-        slot.env = await compile("env");
+        slot.env = await (early ?? compile("env"));
         if (!slot.env) return;
       }
-      void this.generalCompile.start();
       await this.firstImage;
       if (!slot.lut && (key & LUT_BLOCKERS) === 0) slot.lut = await compile("lut");
     };
@@ -3435,14 +3581,56 @@ export class Renderer {
    *  waits for: a scene's feature bit switching on in flight (the scenery's 8192) recompiles for seconds (R-M4) */
   private async timedVariant(key: number, entry: "main" | "env" | "lut", quality = false) {
     const t0 = performance.now();
-    const p = await this.mkVariant(key, entry, quality);
-    const s = ((performance.now() - t0) / 1000).toFixed(1);
+    const what = `${entry}${quality ? " (quality)" : ""} features ${key}`;
+    trail(`start ${what}`);
+    // (the optional compiles after the image — the probe, the light table, the still view's — are told in the pill:
+    // a refresh meanwhile waits for them to end)
+    const bg = entry !== "main" || quality ? `bg-${what}` : "";
+    if (bg) {
+      const label = quality
+        ? t("Compiling the still-view quality kernel in the background")
+        : entry === "env"
+          ? t("Compiling the ray tracer's probe in the background")
+          : t("Compiling the ray tracer's light table in the background");
+      loading.stage(bg, label, { indeterminate: true, eta: 30, background: true });
+    }
+    let p: GPUComputePipeline;
+    try {
+      p = await this.mkVariant(key, entry, quality);
+    } finally {
+      if (bg) loading.done(bg);
+    }
+    const s =((performance.now() - t0) / 1000).toFixed(1);
+    trail(`done ${what} (${s} s)`);
     gpuDiagnostics.record(
       "pipeline-compiled",
       `tracer ${entry}${quality ? " (quality)" : ""}, features ${key}: ${s} s${this.firstFrameDoneAt ? "" : ", before the first image"}`,
     );
     if (!this.firstFrameDoneAt && entry === "main" && !quality) gpuDiagnostics.enter("first-frame");
     return p;
+  }
+
+  /**
+   * What each kernel costs to compile on this machine, measured one at a time on a quiet GPU process (console:
+   * `await compileBench()` on the title screen, nothing else running). Run twice, the second time shows what the
+   * browser's shader cache gives back. Returns a table as text.
+   */
+  async compileBench(
+    which: "bits" | "tiers" | "tiers2" | { key: number; entry?: "main" | "env" | "lut"; quality?: boolean }[] = DEFAULT_BENCH,
+  ) {
+    const specs = which === "bits" ? BITS_BENCH : which === "tiers" ? TIERS_BENCH : which === "tiers2" ? TIERS2_BENCH : which;
+    while (this.variantQueue.pending > 0 || this.generalCompile.state === "pending") await new Promise((r) => setTimeout(r, 1000));
+    const rows: string[] = [];
+    for (const { key, entry = "main", quality = false } of specs) {
+      const what = `${entry}${quality ? " (quality)" : ""} features ${key}`;
+      trail(`bench start ${what}`);
+      const t0 = performance.now();
+      await this.mkVariant(key, entry, quality);
+      const s = ((performance.now() - t0) / 1000).toFixed(1);
+      trail(`bench done ${what} (${s} s)`);
+      rows.push(`${what}: ${s} s`);
+    }
+    return rows.join("\n");
   }
 
   /** A specialised pipeline of the tracer for a features key (the unused ones compiled out). */
@@ -3999,7 +4187,14 @@ export class Renderer {
       );
       t.denoise = { tex, bufs, binds };
     }
-    t.denoise.bufs.forEach((b, i) => d.queue.writeBuffer(b, 0, new Float32Array([2 ** i, 1.5 * s.denoiseStrength, i, 0])));
+    const dn = scratchF4;
+    t.denoise.bufs.forEach((b, i) => {
+      dn[0] = 2 ** i;
+      dn[1] = 1.5 * s.denoiseStrength;
+      dn[2] = i;
+      dn[3] = 0;
+      d.queue.writeBuffer(b, 0, dn);
+    });
     for (const g of t.denoise.binds) {
       const pass = enc.beginComputePass(this.prof.pass("denoise"));
       pass.setPipeline(this.postAtrous);
@@ -4082,10 +4277,11 @@ export class Renderer {
           t.sceneDepth,
         );
         // (where it was drawn: the display reads its image there, the bloom too)
-        const rect = new Float32Array(this.ship.rectFor(t.hdr));
+        const rect = scratchF4;
+        rect.set(this.ship.rectFor(t.hdr));
         this.device.queue.writeBuffer(this.displayBuf, 112, rect);
         this.device.queue.writeBuffer(t.shipRect, 0, rect);
-      } else if (i === r0) this.device.queue.writeBuffer(t.shipRect, 0, new Float32Array(4));
+      } else if (i === r0) this.device.queue.writeBuffer(t.shipRect, 0, scratchF4.fill(0));
       // the Endurance, over the traced image (before the bloom's levels are made from it)
       if (s && i === r0 && s.endurance && this.lastCam) {
         if (!this.endurance.ready) {
@@ -4110,11 +4306,21 @@ export class Renderer {
     if (s && this.dofOn(s, t)) {
       const dof = t.dof!;
       // (the largest circle: the aperture × 3 % of the image's height)
-      this.device.queue.writeBuffer(dof.buf, 0, new Float32Array([s.dofFocus, s.dofAperture * 0.03 * t.height, 32, 0]));
-      this.device.queue.writeBuffer(dof.buf, 16, new Uint32Array([t.width, t.height, 0, 0]));
+      const df = scratchF4;
+      df[0] = s.dofFocus;
+      df[1] = s.dofAperture * 0.03 * t.height;
+      df[2] = 32;
+      df[3] = 0;
+      this.device.queue.writeBuffer(dof.buf, 0, df);
+      const du = scratchU4;
+      du[0] = t.width;
+      du[1] = t.height;
+      du[2] = du[3] = 0;
+      this.device.queue.writeBuffer(dof.buf, 16, du);
       // (the Endurance's box and depth: nearer than the traced scene where it covers it)
-      const er = s.endurance ? this.endurance.rect : [0, 0, 0, 0];
-      this.device.queue.writeBuffer(dof.buf, 32, new Float32Array(er));
+      const er = s.endurance ? this.endurance.rect : null;
+      for (let i = 0; i < 4; i++) df[i] = er ? er[i]! : 0;
+      this.device.queue.writeBuffer(dof.buf, 32, df);
       const et = this.endurance.depthTexture();
       if (dof.endTex !== et) {
         dof.endTex = et;
@@ -4139,7 +4345,11 @@ export class Renderer {
     // the lens flare's meter: where the light that burns out is (a level ≤ 128 px wide)
     if (s && s.lensFlare > 0 && t.flare.bind) {
       const level = Math.min(t.bloomLevels - 1, Math.max(1, Math.ceil(Math.log2(t.width / 128))));
-      this.device.queue.writeBuffer(t.flare.u, 0, new Float32Array([2 ** this.ev(s) / preExposure(this.ev(s)), level, 0, 0]));
+      const f = scratchF4;
+      f[0] = 2 ** this.ev(s) / preExposure(this.ev(s));
+      f[1] = level;
+      f[2] = f[3] = 0;
+      this.device.queue.writeBuffer(t.flare.u, 0, f);
       const pass = enc.beginComputePass(this.prof.pass("lens flare meter"));
       pass.setPipeline(this.postFlare);
       pass.setBindGroup(0, t.flare.bind);
@@ -4148,7 +4358,7 @@ export class Renderer {
     }
     // the light meter, on the live view (the scene: the Ranger is composited at display)
     if (s?.autoExposure && t === this.live && !this.meterPending) {
-      this.device.queue.writeBuffer(this.histBuf, 0, new Uint32Array(128));
+      this.device.queue.writeBuffer(this.histBuf, 0, scratchHist);
       const sp = this.meterSpot;
       // (another target, the spot taken or let go: its exposure found at once — not eased from the last one's,
       // seconds of a burnt or a black frame)
@@ -4158,20 +4368,33 @@ export class Renderer {
         this.autoEVSet = false;
       }
       this.meterSpotUsed = !!sp;
-      this.device.queue.writeBuffer(this.spotBuf, 0, new Float32Array(sp ? [sp.x, sp.y, sp.r, 1] : [0, 0, 0, 0]));
+      const spot = scratchF4;
+      spot[0] = sp ? sp.x : 0;
+      spot[1] = sp ? sp.y : 0;
+      spot[2] = sp ? sp.r : 0;
+      spot[3] = sp ? 1 : 0;
+      this.device.queue.writeBuffer(this.spotBuf, 0, spot);
       const pass = enc.beginComputePass(this.prof.pass("light meter"));
       pass.setPipeline(this.meterPipeline);
-      pass.setBindGroup(
-        0,
-        this.device.createBindGroup({
-          layout: this.meterPipeline.getBindGroupLayout(0),
-          entries: [
-            { binding: 0, resource: t.hdr.createView({ baseMipLevel: 0, mipLevelCount: 1 }) },
-            { binding: 20, resource: { buffer: this.histBuf } },
-            { binding: 22, resource: { buffer: this.spotBuf } },
-          ],
-        }),
-      );
+      // (one bind group per HDR texture and pipeline: not rebuilt each frame)
+      let mb = meterBinds.get(t.hdr);
+      if (!mb || mb.pipe !== this.meterPipeline || mb.hist !== this.histBuf || mb.spot !== this.spotBuf) {
+        mb = {
+          pipe: this.meterPipeline,
+          hist: this.histBuf,
+          spot: this.spotBuf,
+          bind: this.device.createBindGroup({
+            layout: this.meterPipeline.getBindGroupLayout(0),
+            entries: [
+              { binding: 0, resource: t.hdr.createView({ baseMipLevel: 0, mipLevelCount: 1 }) },
+              { binding: 20, resource: { buffer: this.histBuf } },
+              { binding: 22, resource: { buffer: this.spotBuf } },
+            ],
+          }),
+        };
+        meterBinds.set(t.hdr, mb);
+      }
+      pass.setBindGroup(0, mb.bind);
       pass.dispatchWorkgroups(8, 8);
       pass.end();
       enc.copyBufferToBuffer(this.histBuf, 0, this.histStage, 0, 512);
@@ -5157,7 +5380,7 @@ export class Renderer {
     // (the pills the player sees: "Compiling the ray tracer…" — the first image's, the scene's)
     if (loading.isActive("pipelines") || loading.isActive("scene-tracer")) return false;
     if (this.featureKey === FEATURES_ALL) return !!this.tracePipeline;
-    const v = this.variants.get(this.featureKey);
+    const v = this.variants.get(this.familyOf(this.featureKey));
     return !!v?.rt || !!v?.failed || !!v?.rtGivenUp;
   }
 
@@ -5175,7 +5398,7 @@ export class Renderer {
    * the queue's stall limit, or failed, no longer counts: the kernel drawing is then for good). */
   get calibrationReady() {
     return (
-      (this.variantReady || !!this.variants.get(this.featureKey)?.rtGivenUp) &&
+      (this.variantReady || !!this.variants.get(this.familyOf(this.featureKey))?.rtGivenUp) &&
       this.earthSettled &&
       this.variantQueue.pending === 0 &&
       ![this.generalCompile, this.qualityCompile, this.lutCompile, this.lutQCompile].some((r) => r.state === "pending")
@@ -5209,7 +5432,7 @@ export class Renderer {
   }
   /** the scene's specialised tracer compiled (or none needed): the realtime image at full speed */
   get variantReady() {
-    return this.featureKey === FEATURES_ALL || !!this.variants.get(this.featureKey)?.rt;
+    return this.featureKey === FEATURES_ALL || !!this.variants.get(this.familyOf(this.featureKey))?.rt;
   }
   /** the airfields' real weather when it came in (weather.ts, PLAN-METEO W7), the "real" setting's */
   weatherReal: WeatherState | null = null;
@@ -5279,8 +5502,14 @@ export class Renderer {
   gpuErrors = 0;
   onGpuError?: (message: string) => void;
 
+  /** nothing traced, so no tracer compiled, until the scene is chosen (the title screen at launch: its own backdrop) */
+  holdTrace = false;
+  /** it was held: the loading screen lifted without a first image, so the scene's own wait is the one said */
+  private launchHeld = false;
+
   frame(s: Settings, time: number, sceneChanged: boolean, timeChanged: boolean, displayChanged: boolean): FrameStats | null {
-    if (this.lost) return null;
+    if (this.holdTrace) this.launchHeld = true;
+    if (this.lost || this.holdTrace) return null;
     if (this.busy) return null;
     // (polarization turned on or off: the live target remade with or without its buffer)
     this.wantPol = !!s.polarization;
@@ -5329,7 +5558,9 @@ export class Renderer {
     if (
       sceneChanged ||
       timeChanged ||
-      (adaptive && this.sampleIndex < targetSpp && !(this.firstFrameDoneAt && this.traceVariant("q", this.cameraKey)))
+      (adaptive &&
+        this.sampleIndex < targetSpp &&
+        !(this.firstFrameDoneAt && this.qualityKernel(this.cameraKey, performance.now() - this.sceneAt > QUALITY_AFTER_MS)))
     ) {
       phase = "realtime";
       this.frameStamp++;
@@ -5433,9 +5664,21 @@ export class Renderer {
       traced,
     );
     // (a scene whose kernel still compiles, the general one not in yet: the last image stays — said)
-    if (this.firstFrameDoneAt && phase !== "converged") this.noteSceneTracer(!traced);
+    if ((this.firstFrameDoneAt || this.launchHeld) && phase !== "converged") this.noteSceneTracer(!traced || performance.now() < this.sceneMinUntil);
     this.lastPhase = phase;
     return this.stats(phase, t);
+  }
+
+  private sceneMinUntil = 0;
+  /**
+   * A scene's loading veil stays up at least this long, its kernel ready or not: the scene's remaining compiles (probe,
+   * quality) go on behind it, and every scene takes a similar time to enter.
+   */
+  holdSceneVeil(ms: number) {
+    if (this.offline) return;
+    this.sceneMinUntil = performance.now() + ms;
+    // (a frame at the end, to lift the veil — a settled image draws none)
+    setTimeout(() => this.invalidate(), ms + 50);
   }
 
   private sceneTracerShown = false;
@@ -5443,7 +5686,7 @@ export class Renderer {
   private noteSceneTracer(waiting: boolean) {
     if (waiting === this.sceneTracerShown) return;
     this.sceneTracerShown = waiting;
-    if (waiting) loading.stage("scene-tracer", t("Compiling the ray tracer for this scene"), { indeterminate: true, eta: 30 });
+    if (waiting) loading.stage("scene-tracer", t("Compiling the ray tracer for this scene"), { indeterminate: true, eta: 20 });
     else loading.done("scene-tracer");
   }
 

@@ -71,8 +71,20 @@ const chrome = Bun.spawn(
 );
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const kill = () => {
+  // (Windows: no pkill, and the pid Bun.spawn gives is not the browser's — its tree is found by its port and
+  // ended whole, the parent still alive: once it is gone taskkill /T no longer finds the children)
+  if (process.platform === "win32")
+    Bun.spawnSync(
+      [
+        "powershell",
+        "-NoProfile",
+        "-Command",
+        `Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" | Where-Object { $_.CommandLine -match 'remote-debugging-port=${port} ' } | ForEach-Object { taskkill /F /T /PID $_.ProcessId }`,
+      ],
+      { stdout: "ignore", stderr: "ignore" },
+    );
+  else Bun.spawnSync(["pkill", "-f", `remote-debugging-port=${port}`]);
   chrome.kill();
-  Bun.spawnSync(["pkill", "-f", `remote-debugging-port=${port}`]);
 };
 process.on("SIGINT", () => (kill(), process.exit(1)));
 

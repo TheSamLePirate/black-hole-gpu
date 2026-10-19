@@ -11,6 +11,8 @@ export interface Stage {
   label: string;
   /** share of the whole start */
   weight: number;
+  /** optional work after the start: shown in the pill, not counted in the start's progress nor waited for */
+  background?: boolean;
   state: StageState;
   /** fraction done (downloads: bytes; otherwise set by the code, or eased while indeterminate) */
   frac: number;
@@ -37,10 +39,11 @@ class LoadTracker {
     return this.stages.get(id)?.state === "active";
   }
 
-  stage(id: string, label: string, o: { weight?: number; indeterminate?: boolean; eta?: number } = {}) {
+  stage(id: string, label: string, o: { weight?: number; indeterminate?: boolean; eta?: number; background?: boolean } = {}) {
     const s: Stage = {
       id,
       label,
+      background: o.background,
       weight: o.weight ?? 1,
       state: "active",
       frac: 0,
@@ -136,15 +139,21 @@ class LoadTracker {
     let w = 0,
       f = 0;
     for (const s of this.stages.values()) {
+      if (s.background) continue;
       w += s.weight;
       f += s.weight * this.fracOf(s, now);
     }
     return w ? f / w : 0;
   }
 
-  /** Stages still running. */
+  /** Stages still running (the background ones apart: nothing waits for them). */
   get pending() {
-    return this.list().filter((s) => s.state === "active");
+    return this.list().filter((s) => s.state === "active" && !s.background);
+  }
+
+  /** Background stages still running (the optional compiles after the scene shows): told to the player, never waited for. */
+  get background() {
+    return this.list().filter((s) => s.state === "active" && s.background);
   }
 
   on(f: () => void) {

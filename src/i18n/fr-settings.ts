@@ -781,6 +781,10 @@ export default {
   "Weight of each new realtime sample (1 = no temporal accumulation). Lower = smoother, more ghosting while animating.":
     "Poids de chaque nouvel échantillon temps réel (1 = pas d'accumulation temporelle). Plus bas = plus lisse, plus d'images fantômes pendant l'animation.",
   "RK4 step ε": "Pas RK4 ε",
+  "RK4 step ε (realtime)": "Pas RK4 ε (temps réel)",
+  "RK4 step ε (still image)": "Pas RK4 ε (image fixe)",
+  "Max steps (realtime)": "Pas max (temps réel)",
+  "Max steps (still image)": "Pas max (image fixe)",
   "Relative step size of the realtime integrator (step ≈ ε·(r − r₊)).":
     "Taille de pas relative de l'intégrateur temps réel (pas ≈ ε·(r − r₊)).",
   "Max steps": "Pas max",

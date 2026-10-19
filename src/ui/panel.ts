@@ -14,6 +14,7 @@ import {
   SCHEMA,
   SCHEMA_BY_KEY,
   SECTIONS,
+  appliesTo,
   type ChoiceDef,
   type ControlDef,
   type NumberDef,
@@ -328,6 +329,7 @@ export class SettingsPanel {
         onchange: (e: Event) => {
           this.advanced = (e.target as HTMLInputElement).checked;
           this.saveUiState();
+          this.renderTabs();
           this.renderBody();
         },
       }),
@@ -495,8 +497,14 @@ export class SettingsPanel {
     const info = name ? PRESET_INFO[name] : undefined;
     const key = name ?? "";
     if (card.dataset.scene === key) return;
+    const firstDraw = card.dataset.scene === undefined;
     card.dataset.scene = key;
     card.dataset.group = name ? sceneGroup(name) : "";
+    // (another scene: its own settings, the tabs and the body drawn again)
+    if (!firstDraw) {
+      this.renderTabs();
+      this.renderBody();
+    }
     card.replaceChildren(
       h("span", { class: "sp-scene-ico", "aria-hidden": "true" }, info?.icon ?? "✦"),
       h(
@@ -595,9 +603,18 @@ export class SettingsPanel {
   }
 
   // ---------------------------------------------------------------------------------- tabs & body
+  /** Shown without a search: not advanced (unless asked), and belonging to the scene being played or to every scene. */
+  private shown(d: ControlDef) {
+    const name = this.o.currentScene();
+    return (this.advanced || !d.advanced) && appliesTo(d, name ? sceneGroup(name) : null, this.s);
+  }
+
   private renderTabs() {
     this.tabsEl.replaceChildren();
-    for (const sec of SECTIONS) {
+    // (only the tabs that hold something for this scene)
+    const sections = SECTIONS.filter((sec) => SCHEMA.some((d) => d.section === sec.id && this.shown(d)));
+    if (sections.length && !sections.some((sec) => sec.id === this.tab)) this.tab = sections[0]!.id;
+    for (const sec of sections) {
       this.tabsEl.append(
         h(
           "button",
@@ -631,7 +648,7 @@ export class SettingsPanel {
     this.body.replaceChildren();
     const searching = this.query.length > 0;
     this.tabsEl.classList.toggle("dim", searching);
-    const defs = SCHEMA.filter((d) => (searching ? this.matches(d, this.query) : d.section === this.tab && (this.advanced || !d.advanced)));
+    const defs = SCHEMA.filter((d) => (searching ? this.matches(d, this.query) : d.section === this.tab && this.shown(d)));
     // (the scenes match a search too)
     const scenes = searching
       ? this.o.presetNames.filter((n) => {
@@ -684,7 +701,9 @@ export class SettingsPanel {
       if (!groups.has(gk)) groups.set(gk, []);
       groups.get(gk)!.push(d);
     }
-    for (const [title, list] of groups) this.body.append(this.renderGroup(title, list, searching));
+    // (the "Advanced" group always comes last)
+    const ordered = [...groups].sort(([a], [b]) => Number(a === "Advanced") - Number(b === "Advanced"));
+    for (const [title, list] of ordered) this.body.append(this.renderGroup(title, list, searching));
     if (!searching && this.tab === "sky") {
       this.body.append(
         h(

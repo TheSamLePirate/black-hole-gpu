@@ -1,6 +1,6 @@
 // The GPU memory the page allocates, summed from its createTexture / createBuffer calls (less the
-// destroyed): WebGPU tells no VRAM figure. Installed before the renderer exists — on the benchmark's
-// page only (#bench), as it wraps every allocation. Same estimate as scripts/bench.ts.
+// destroyed): WebGPU tells no VRAM figure. Installed before the renderer exists, so the bench opened
+// from the title (no reload) counts from the first allocation. Same estimate as scripts/bench.ts.
 
 const BYTES: Record<string, number> = {
   rgba8unorm: 4,

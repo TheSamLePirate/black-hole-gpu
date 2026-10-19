@@ -5,6 +5,7 @@
 
 import { loading, type Stage } from "../loading";
 import { t } from "../i18n";
+import { SplashGame } from "./splash-game";
 
 const TIPS = [
   t("Drag to orbit, wheel to zoom — click a body to target it, double-click to fly to it."),
@@ -42,11 +43,13 @@ export class Splash {
   private tip = 0;
   private tipTimer = 0;
   private pill = new AssetPill();
+  private game: SplashGame;
   private resolveLifted!: () => void;
   /** resolved when the loading screen has gone (messages wait for it) */
   readonly gone = new Promise<void>((r) => (this.resolveLifted = r));
 
   constructor(private root: HTMLElement) {
+    this.game = new SplashGame(root);
     if (!root.querySelector(".ld-bar")) {
       // (no loading screen — a hot reload after it was lifted: nothing to show)
       this.bar = this.stageEl = this.pctEl = this.steps = this.tipEl = document.createElement("div");
@@ -66,6 +69,7 @@ export class Splash {
     this.tip = Math.floor(Math.random() * TIPS.length);
     this.showTip();
     this.tipTimer = window.setInterval(() => this.showTip(), 5200);
+    this.game.start();
     // (during a slow compile the user can queue entry: without an image yet the click is
     // remembered and acted on at the first image — never a black page over an unwired HUD (plan §2.1-D))
     setTimeout(() => {
@@ -124,7 +128,9 @@ export class Splash {
     if (this.imageAt) {
       const waiting = loading.pending.length > 0;
       this.skip.hidden = !waiting;
-      if (!waiting || now - this.imageAt > MAX_WAIT) {
+      // (the launch kernel's compile — minutes, cold — is waited for: the menu opens on a scene that starts at once)
+      const limit = loading.isActive("bg-prewarm") ? 600_000 : MAX_WAIT;
+      if (!waiting || now - this.imageAt > limit) {
         // (a beat on the full bar, then in)
         this.bar.style.transform = "scaleX(1)";
         this.pctEl.textContent = "100 %";
@@ -139,8 +145,10 @@ export class Splash {
   private lift() {
     this.lifted = true;
     clearInterval(this.tipTimer);
+    this.game.stop();
     this.root.classList.add("done");
     this.pill.start();
+    new SceneVeil().start();
     setTimeout(() => this.resolveLifted(), 700);
     setTimeout(() => this.root.remove(), 1100);
   }
@@ -156,6 +164,7 @@ export class Splash {
   private renderSteps() {
     if (this.lifted) return;
     for (const s of loading.list()) {
+      if (s.background) continue;
       let row = this.rows.get(s.id);
       if (!row) {
         const li = el("li", "ld-step");
@@ -169,7 +178,7 @@ export class Splash {
       row.li.dataset.state = s.state;
       if (s.state === "failed") row.li.title = s.error ?? "";
     }
-    const active = loading.list().filter((s) => s.state === "active");
+    const active = loading.pending;
     // (the heaviest stage still running names the wait)
     const lead = active.sort((a, b) => b.weight - a.weight)[0];
     this.stageEl.textContent = lead ? `${lead.label}…` : this.imageAt ? t("Ready") : t("Almost there…");
@@ -189,6 +198,162 @@ function info(s: Stage, now: number) {
   if (s.total) return `${fmtMB(s.loaded)} / ${fmtMB(s.total)} MB`;
   if (s.loaded) return `${fmtMB(s.loaded)} MB`;
   return `${Math.floor(100 * loading.fracOf(s, now))} %`;
+}
+
+/**
+ * A scene whose tracer still compiles and nothing else can draw it: the last image stays on the screen, which looks
+ * like a hang. A veil over it says so — only when the wait is not a blink (the stage up for a third of a second).
+ */
+class SceneVeil {
+  private root = el("div", "scene-veil");
+  private label = el("span", "sv-label");
+  private note = el("small", "sv-note");
+  private bar = el("i", "");
+  private timer = 0;
+  private raf = 0;
+  private step = -1;
+
+  /** what the wait says as it goes (by the fraction the bar shows): the screen is never the same for long */
+  private static readonly STEPS: [number, string][] = [
+    [0, t("Loading the scene…")],
+    [0.2, t("Tracing the light's paths…")],
+    [0.45, t("Bending space around the hole…")],
+    [0.7, t("Compiling the ray tracer for your graphics card…")],
+    [0.88, t("Almost there…")],
+  ];
+
+  start() {
+    this.root.setAttribute("role", "status");
+    this.root.setAttribute("aria-live", "polite");
+    this.note.textContent = t("The first time takes a while (up to a few minutes); the next ones reuse the browser's cache.");
+    const track = el("span", "sv-bar");
+    track.append(this.bar);
+    // (the loading screen's own sky and black hole, CSS only: they keep turning while the scene compiles)
+    const sky = el("div", "ld-sky");
+    sky.setAttribute("aria-hidden", "true");
+    sky.append(el("i", ""), el("i", ""));
+    const hole = el("div", "ld-hole");
+    hole.setAttribute("aria-hidden", "true");
+    const part = (cls: string, inner: boolean) => {
+      const d = el("div", cls);
+      if (inner) d.append(el("i", ""));
+      return d;
+    };
+    hole.append(part("ld-glow", false), part("ld-halo", true), part("ld-disk", true), part("ld-shadow", false), part("ld-disk front", true));
+    this.root.append(sky, this.warp, hole, this.label, track, this.note);
+    document.body.append(this.root);
+    loading.on(() => this.update());
+  }
+
+  // ---- the flight: stars streaming past towards the camera (a canvas, drawn while the veil is up and while it leaves)
+  private warp = el("canvas", "sv-warp");
+  private stars = Array.from({ length: 240 }, () => ({ x: Math.random() * 2 - 1, y: Math.random() * 2 - 1, z: Math.random() }));
+  private speed = 0.25;
+  private flyRaf = 0;
+  private flyAt = 0;
+  /** the leave's jump: the stars rush past while the veil fades */
+  private jump = false;
+
+  private fly = (now: number) => {
+    this.flyRaf = 0;
+    const dt = Math.min((now - (this.flyAt || now)) / 1000, 0.05);
+    this.flyAt = now;
+    const cv = this.warp;
+    const w = (cv.width = cv.clientWidth);
+    const h = (cv.height = cv.clientHeight);
+    const g = cv.getContext("2d");
+    if (!g || !w || !h) return;
+    const s = loading.list().find((x) => x.id === "scene-tracer");
+    const f = s && s.state === "active" ? loading.fracOf(s) : 1;
+    // (the cruise quickens with the progress; the jump at the end quickens it much more)
+    const target = this.jump ? 2.6 : 0.22 + 0.4 * f;
+    this.speed += (target - this.speed) * Math.min(dt * 2.5, 1);
+    const cx = w / 2;
+    const cy = h * 0.4;
+    const k = Math.max(w, h) * 0.55;
+    g.lineCap = "round";
+    for (const st of this.stars) {
+      const before = st.z + this.speed * dt * 2.2;
+      st.z -= this.speed * dt;
+      if (st.z <= 0.03) {
+        st.x = Math.random() * 2 - 1;
+        st.y = Math.random() * 2 - 1;
+        st.z = 1;
+        continue;
+      }
+      const x1 = cx + (st.x / st.z) * k * 0.3;
+      const y1 = cy + (st.y / st.z) * k * 0.3;
+      const x0 = cx + (st.x / before) * k * 0.3;
+      const y0 = cy + (st.y / before) * k * 0.3;
+      if (x1 < -50 || x1 > w + 50 || y1 < -50 || y1 > h + 50) {
+        st.z = 1;
+        continue;
+      }
+      const near = 1 - st.z;
+      g.strokeStyle = `rgba(${st.x > 0 ? "255,236,210" : "205,224,255"},${(0.15 + 0.85 * near).toFixed(2)})`;
+      g.lineWidth = 0.6 + 2 * near;
+      g.beginPath();
+      g.moveTo(x0, y0);
+      g.lineTo(x1, y1);
+      g.stroke();
+    }
+    // (the hole grows as the scene gets ready: the flight brings it nearer)
+    this.root.style.setProperty("--sv-k", (0.62 + 0.45 * f).toFixed(3));
+    if (this.root.classList.contains("show") || this.jump) this.flyRaf = requestAnimationFrame(this.fly);
+  };
+
+  private startFlight() {
+    this.jump = false;
+    this.speed = 0.22;
+    this.flyAt = 0;
+    if (!this.flyRaf) this.flyRaf = requestAnimationFrame(this.fly);
+  }
+
+  /** the scene is ready: the rush, while the veil fades; then still */
+  private endFlight() {
+    this.jump = true;
+    if (!this.flyRaf) this.flyRaf = requestAnimationFrame(this.fly);
+    setTimeout(() => (this.jump = false), 1200);
+  }
+
+  private frame = () => {
+    this.raf = 0;
+    const s = loading.list().find((x) => x.id === "scene-tracer");
+    if (!s || s.state !== "active" || !this.root.classList.contains("show")) return;
+    const f = loading.fracOf(s);
+    this.bar.style.transform = `scaleX(${f.toFixed(3)})`;
+    let step = 0;
+    SceneVeil.STEPS.forEach(([at], i) => f >= at && (step = i));
+    if (step !== this.step) {
+      this.step = step;
+      this.label.textContent = SceneVeil.STEPS[step]![1];
+      // (restart the fade-in)
+      this.label.classList.remove("in");
+      void this.label.offsetWidth;
+      this.label.classList.add("in");
+    }
+    this.raf = requestAnimationFrame(this.frame);
+  };
+
+  private update() {
+    const waiting = loading.isActive("scene-tracer");
+    if (waiting && !this.timer && !this.root.classList.contains("show")) this.timer = window.setTimeout(() => this.show(), 350);
+    if (!waiting) {
+      clearTimeout(this.timer);
+      this.timer = 0;
+      if (this.root.classList.contains("show")) this.endFlight();
+      this.root.classList.remove("show");
+    }
+  }
+
+  private show() {
+    this.timer = 0;
+    if (!loading.isActive("scene-tracer")) return;
+    this.step = -1;
+    this.root.classList.add("show");
+    this.startFlight();
+    if (!this.raf) this.raf = requestAnimationFrame(this.frame);
+  }
 }
 
 /** Assets loaded on demand, after the start: a small pill with their progress. */
@@ -214,8 +379,7 @@ class AssetPill {
   }
 
   private update() {
-    const pending = loading.pending;
-    const show = pending.length > 0;
+    const show = loading.pending.length + loading.background.length > 0;
     if (show === this.on && !show) return;
     this.on = show;
     this.root.classList.toggle("show", show);
@@ -224,7 +388,7 @@ class AssetPill {
 
   private frame = () => {
     this.raf = 0;
-    const pending = loading.pending;
+    const pending = [...loading.pending, ...loading.background];
     if (!pending.length) {
       this.root.classList.remove("show");
       this.on = false;
