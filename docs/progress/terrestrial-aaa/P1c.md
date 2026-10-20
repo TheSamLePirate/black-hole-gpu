@@ -30,9 +30,9 @@ temps réel, décor, jitter), voir P1b.
 | Vue | Niveau | p50 | p90 | p99 | max |
 |---|---|---|---|---|---|
 | Nadir 900 m | 1 et 2 | 0,21 m | 0,59 m | 1,03 m | 2,2 m |
-| Oblique 900 m | 1 / 2 | 0,44 m | 1,55 m | 3,1 / 3,05 m | 8,2 m |
-| Oblique 3 km | 2 (cellule 153 m) | 3,1 m | 14,3 m | 36,7 m | 100 m (saturé) |
-| Oblique 3 km | 1 (cellule 38 m) | 1,0 m | 2,7 m | 4,0 m | 11 m |
+| Oblique 900 m | 1 et 2 | 0,44 m | 1,55 m | 3,1 m | 6,9 / 7,3 m |
+| Oblique 3 km | 2 (cellule 153 m) | 3,1 m | 14,3 m | 37 m | 100 m (saturé) |
+| Oblique 3 km | 1 (cellule 38 m) | 1,0 m | 2,7 m | 4,05 m | 11 m |
 
 La grille de niveau 1 reste à moins de 4 m (p99) à 3 km : l'erreur suit la taille de cellule, comme attendu d'un
 cache bilinéaire. Un seul niveau étant dessiné, la sélection par erreur projetée reste à faire. Au proche, à
