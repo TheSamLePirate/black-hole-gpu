@@ -1,0 +1,402 @@
+[
+ {
+  "marks": [
+   {
+    "name": "main",
+    "t": 8411
+   },
+   {
+    "name": "webgpu-availability",
+    "t": 8413
+   },
+   {
+    "name": "adapter-request",
+    "t": 8413
+   },
+   {
+    "name": "device-request",
+    "t": 8419
+   },
+   {
+    "name": "canvas-configuration",
+    "t": 8423
+   },
+   {
+    "name": "gpu done",
+    "t": 8423
+   },
+   {
+    "name": "shader-download",
+    "t": 8423
+   },
+   {
+    "name": "pipeline-creation",
+    "t": 8424
+   },
+   {
+    "name": "shader-validation",
+    "t": 8503
+   },
+   {
+    "name": "core-pipeline-compilation",
+    "t": 8520
+   },
+   {
+    "name": "shaders done",
+    "t": 8527
+   },
+   {
+    "name": "tracer-compilation",
+    "t": 8527
+   },
+   {
+    "name": "renderer",
+    "t": 8527
+   },
+   {
+    "name": "ephemeris done",
+    "t": 10057
+   },
+   {
+    "name": "ephemerides",
+    "t": 10057
+   },
+   {
+    "name": "title",
+    "t": 10059
+   },
+   {
+    "name": "first-frame",
+    "t": 10173
+   },
+   {
+    "name": "running",
+    "t": 10237
+   },
+   {
+    "name": "first-image",
+    "t": 10237
+   },
+   {
+    "name": "pipelines done",
+    "t": 10237
+   },
+   {
+    "name": "stars done",
+    "t": 13117
+   },
+   {
+    "name": "sky done",
+    "t": 15343
+   },
+   {
+    "name": "splash-lifted",
+    "t": 16332
+   }
+  ],
+  "firstImage": 10225,
+  "long": {
+   "count": 3,
+   "totalMs": 235,
+   "maxMs": 97,
+   "list": [
+    [
+     8423,
+     80
+    ],
+    [
+     10071,
+     97
+    ],
+    [
+     12339,
+     58
+    ]
+   ]
+  },
+  "gaps": {
+   "count": 4,
+   "maxMs": 100,
+   "list": [
+    [
+     8419,
+     83
+    ],
+    [
+     10069,
+     83
+    ],
+    [
+     12336,
+     83
+    ],
+    [
+     12453,
+     100
+    ]
+   ]
+  },
+  "blockedMs": 177,
+  "blockedShare": 0.017
+ },
+ {
+  "marks": [
+   {
+    "name": "main",
+    "t": 2368
+   },
+   {
+    "name": "webgpu-availability",
+    "t": 2370
+   },
+   {
+    "name": "adapter-request",
+    "t": 2370
+   },
+   {
+    "name": "device-request",
+    "t": 2379
+   },
+   {
+    "name": "canvas-configuration",
+    "t": 2383
+   },
+   {
+    "name": "gpu done",
+    "t": 2383
+   },
+   {
+    "name": "shader-download",
+    "t": 2383
+   },
+   {
+    "name": "pipeline-creation",
+    "t": 2384
+   },
+   {
+    "name": "shader-validation",
+    "t": 2481
+   },
+   {
+    "name": "core-pipeline-compilation",
+    "t": 2502
+   },
+   {
+    "name": "shaders done",
+    "t": 2511
+   },
+   {
+    "name": "tracer-compilation",
+    "t": 2511
+   },
+   {
+    "name": "renderer",
+    "t": 2511
+   },
+   {
+    "name": "ephemeris done",
+    "t": 4022
+   },
+   {
+    "name": "ephemerides",
+    "t": 4022
+   },
+   {
+    "name": "title",
+    "t": 4025
+   },
+   {
+    "name": "first-frame",
+    "t": 4143
+   },
+   {
+    "name": "running",
+    "t": 4200
+   },
+   {
+    "name": "first-image",
+    "t": 4200
+   },
+   {
+    "name": "pipelines done",
+    "t": 4200
+   },
+   {
+    "name": "stars done",
+    "t": 7147
+   },
+   {
+    "name": "sky done",
+    "t": 9115
+   },
+   {
+    "name": "splash-lifted",
+    "t": 10105
+   }
+  ],
+  "firstImage": 4189,
+  "long": {
+   "count": 3,
+   "totalMs": 255,
+   "maxMs": 105,
+   "list": [
+    [
+     2383,
+     98
+    ],
+    [
+     4032,
+     105
+    ],
+    [
+     6773,
+     52
+    ]
+   ]
+  },
+  "gaps": {
+   "count": 2,
+   "maxMs": 100,
+   "list": [
+    [
+     2382,
+     100
+    ],
+    [
+     4031,
+     100
+    ]
+   ]
+  },
+  "blockedMs": 203,
+  "blockedShare": 0.048
+ },
+ {
+  "marks": [
+   {
+    "name": "main",
+    "t": 2422
+   },
+   {
+    "name": "webgpu-availability",
+    "t": 2424
+   },
+   {
+    "name": "adapter-request",
+    "t": 2424
+   },
+   {
+    "name": "device-request",
+    "t": 2430
+   },
+   {
+    "name": "canvas-configuration",
+    "t": 2432
+   },
+   {
+    "name": "gpu done",
+    "t": 2432
+   },
+   {
+    "name": "shader-download",
+    "t": 2432
+   },
+   {
+    "name": "pipeline-creation",
+    "t": 2432
+   },
+   {
+    "name": "shader-validation",
+    "t": 2520
+   },
+   {
+    "name": "core-pipeline-compilation",
+    "t": 2540
+   },
+   {
+    "name": "shaders done",
+    "t": 2547
+   },
+   {
+    "name": "tracer-compilation",
+    "t": 2547
+   },
+   {
+    "name": "renderer",
+    "t": 2548
+   },
+   {
+    "name": "ephemeris done",
+    "t": 4098
+   },
+   {
+    "name": "ephemerides",
+    "t": 4098
+   },
+   {
+    "name": "title",
+    "t": 4101
+   },
+   {
+    "name": "first-frame",
+    "t": 4225
+   },
+   {
+    "name": "running",
+    "t": 4282
+   },
+   {
+    "name": "first-image",
+    "t": 4282
+   },
+   {
+    "name": "pipelines done",
+    "t": 4282
+   },
+   {
+    "name": "stars done",
+    "t": 7827
+   },
+   {
+    "name": "sky done",
+    "t": 9311
+   },
+   {
+    "name": "splash-lifted",
+    "t": 10299
+   }
+  ],
+  "firstImage": 4274,
+  "long": {
+   "count": 2,
+   "totalMs": 206,
+   "maxMs": 118,
+   "list": [
+    [
+     2431,
+     88
+    ],
+    [
+     4101,
+     118
+    ]
+   ]
+  },
+  "gaps": {
+   "count": 2,
+   "maxMs": 117,
+   "list": [
+    [
+     2430,
+     83
+    ],
+    [
+     4096,
+     117
+    ]
+   ]
+  },
+  "blockedMs": 206,
+  "blockedShare": 0.048
+ }
+]

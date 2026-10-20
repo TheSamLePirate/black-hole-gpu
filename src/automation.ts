@@ -3,6 +3,7 @@
 // simulation frozen and stepped, offline renders and videos posted to the dev server, the bench.
 //   __bh.settings.spin = 0.5; __bh.touch()
 //   __bh.game.help()
+import type { BootReport } from "./boot-timeline";
 import { bodyFixedOf, GEAR, gearHeight, groundRelief, toBodyFixed } from "./system/our-surface";
 import { EARTH_RUNWAYS } from "./game/sites";
 import { GEARS } from "./gear";
@@ -55,6 +56,19 @@ import type { Pwa } from "./pwa";
 import type { GameMode, ModeState } from "./game/modes";
 
 export interface BhContext {
+  /** the boot's timeline (boot-timeline.ts): its stages, the main thread's long tasks and frame gaps */
+  boot(): BootReport;
+  /** the intro (src/intro/intro.ts): where it stands */
+  intro(): unknown;
+  /** the way into the game (ui/entry.ts, PLAN-TITRE-AAA E10): its veil up; a scene tracer's compile held `ms` */
+  entry: { readonly busy: boolean; compile(ms: number): boolean };
+  /** the menus (PLAN-TITRE-AAA): which is up, on which screen — and opened by the tests */
+  menu: {
+    state(): { title: string | null; pause: string | null; settings: string | null; entry: boolean };
+    title(mode?: "foot" | "plane" | "ship" | "free"): void;
+    pause(): void;
+    settings(tab?: string): void;
+  };
   settings: Settings;
   renderer: Renderer;
   camera: CameraController;
@@ -63,6 +77,9 @@ export interface BhContext {
   bench: KerrBench;
   mission: Mission;
   cockpitScreens: CockpitScreens;
+  /** the F-35's panoramic display (src/f35/pcd.ts): the display, its cost (CPU ms a frame: the data, the drawing,
+   *  the upload — mean and worst since reset) */
+  pcd?: { pcd: unknown; stats: { frames: number; draws: number; ms: number; max: number; up: number; read: number; reset(): void } };
   /** a plane's flight: its preparation, its plan (ui/flighthub.ts, ui/routepanel.ts) */
   flight?: {
     hub: { open(): void };
@@ -261,6 +278,12 @@ export function installBh(c: BhContext) {
   Object.assign(globalThis, {
     __bh: {
       graphicsDiagnostic: () => gpuDiagnostics.report(),
+      /** the boot's timeline: its stages (ms since the navigation), the main thread's long tasks and frame gaps */
+      boot: () => c.boot(),
+      /** the intro: what drew its background, the orb's state, its sequence played / passed, docked, lifted */
+      intro: () => c.intro(),
+      entry: c.entry,
+      menu: c.menu,
       /** the game's tools: __bh.game.help() */
       game: tools,
       /** the Kerr Bench: __bh.bench.run({ mode: "quick" }) → its report; scene(name) one scene's */
@@ -340,6 +363,8 @@ export function installBh(c: BhContext) {
       tarsVoice: { phonemes, synthesize, robotVoice },
       /** the cabin's screens: their picture (canvas: 4 × 2 slots of 512 px, the PFD first) */
       cockpitScreens,
+      /** the F-35's panoramic display: __bh.pcd.pcd (its pages, touch(u, v)), __bh.pcd.stats (its CPU cost) */
+      pcd: c.pcd,
       flight: c.flight,
       /** playing together (ui/netpanel.ts): loaded, its client (net), open(), create(), join(), leave() */
       net: c.net,

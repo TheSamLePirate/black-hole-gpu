@@ -4,6 +4,8 @@
 // loaded on demand: the planets' maps when a scene needs them, the Ranger when it is flown).
 // No DOM here: the views subscribe.
 
+import { bootMark } from "./boot-timeline";
+
 export type StageState = "pending" | "active" | "done" | "failed";
 
 export interface Stage {
@@ -68,6 +70,7 @@ class LoadTracker {
     s.state = "done";
     s.frac = 1;
     s.doneAt = performance.now();
+    bootMark(`${id} done`);
     this.emit();
   }
 

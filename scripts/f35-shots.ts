@@ -23,6 +23,8 @@ interface View {
   js?: string;
   /** frames stepped before the capture (default 90) */
   frames?: number;
+  /** an expression printed with the capture (the exposure, a setting…) */
+  log?: string;
 }
 
 const out = process.argv[2] ?? "f35-shots";
@@ -87,7 +89,7 @@ try {
     })()`);
     await Bun.sleep(1500);
     await app.shot(`${out}/${v.name}.png`);
-    console.log(`${out}/${v.name}.png`);
+    console.log(`${out}/${v.name}.png${v.log ? ` — ${v.log}: ${JSON.stringify(await app.js(v.log))}` : ""}`);
   }
 } finally {
   app.close();

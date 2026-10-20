@@ -10,8 +10,22 @@ import { type Units, type UnitSys, unitsOf } from "../ui/unitsys";
 
 type V3 = [number, number, number];
 
-export type PcdPage = "TSD" | "FCS" | "ENG" | "FUEL" | "STOVL" | "CNI" | "ADI" | "CKL";
-export const PCD_PAGES: PcdPage[] = ["TSD", "FCS", "ENG", "FUEL", "STOVL", "CNI", "ADI", "CKL"];
+export type PcdPage = "TSD" | "FCR" | "SMS" | "EOTS" | "AP" | "MSN" | "FCS" | "ENG" | "FUEL" | "STOVL" | "CNI" | "ADI" | "CKL" | "ICAWS";
+export const PCD_PAGES: PcdPage[] = ["TSD", "FCR", "SMS", "EOTS", "AP", "MSN", "FCS", "ENG", "FUEL", "STOVL", "CNI", "ADI", "CKL", "ICAWS"];
+/** What a touch asks of the craft (main.ts carries it out through the controller): a weapon chosen, the radar's
+ *  mode, the radar's next lock, the countermeasures — never a shot. */
+export type PcdAction =
+  | { kind: "weapon"; w: "aim120" | "aim9x" | "jdam" | "jsm" }
+  | { kind: "radar"; mode: "RWS" | "TWS" | "STT" }
+  | { kind: "lock" }
+  | { kind: "cm" }
+  /** the autopilot: its selectors (SI, radians), AP and A/THR engaged or let go */
+  | { kind: "ap"; set: { alt?: number; hdg?: number; spd?: number; ap?: boolean; athr?: boolean } }
+  /** the flight plan's guidance: LNAV, VNAV */
+  | { kind: "nav"; l?: boolean; v?: boolean }
+  /** a mode: the ILS (to the nearest field) or its cancel, an orbit here, a holding pattern, the terrain following,
+   *  the modes off, the go-around */
+  | { kind: "apMode"; mode: "ils" | "ilsOff" | "orbit" | "hold" | "tf" | "off" | "goAround" };
 
 /** An airfield on the map (lat, lon [°], its runway's heading [°], its name and ICAO code). */
 export interface PcdField {
@@ -45,6 +59,8 @@ export interface PcdData {
   g: number;
   gPeak: number;
   alpha: number;
+  /** the Sun's height over the horizon there [°] (the display's automatic brightness) */
+  sunAlt?: number;
   /** the wind: its speed [m/s], where from [°] */
   wind: { speed: number; from: number } | null;
   /** the engine: the throttle and the spool (0…1), the afterburner lit (0…1), its thrust [N], the fuel flow [kg/s] */
@@ -100,6 +116,55 @@ export interface PcdData {
   }[];
   /** a mission's places (controller/mission.ts missionMarks — P2): its zones to reach (amber), the SAMs' reach (red) */
   marks?: { kind: "zone" | "threat"; lat: number; lon: number; r: number; label: string; active: boolean }[];
+  /** in a fight, the damage taken (0…1) */
+  damage?: number;
+  /** the autopilot's mode flown beyond the holds (ORBIT, HOLD, TF, ICPT, FORM…; "" none), the ILS flown */
+  apMode?: { order: string; ils: boolean };
+  /** a mission flown (controller/mission.ts): its title, its clock and limit [s], its state, why it ended, its
+   *  objectives (shown ones: their text, state, optional, ours), its last words */
+  msn?: {
+    title: string;
+    t: number;
+    limit: number | null;
+    status: "flying" | "won" | "failed";
+    why: string;
+    objectives: { text: string; state: "waiting" | "active" | "done" | "failed"; optional: boolean; mine: boolean }[];
+    said: string;
+  } | null;
+  /** a lesson flown (controller/course.ts): its id, how, its steps (whose), the step now, the instructor's last words */
+  lesson?: { id: string; mode: string; steps: { name: string; who: "tars" | "you" }[]; i: number; said: string } | null;
+  /** the missiles in flight (a fight's — the DAS sees their motors): heading up as the radar's contacts (x right, y
+   *  ahead, dz above [m]), the ones at us */
+  missiles?: { x: number; y: number; dz: number; atUs: boolean }[];
+  /** the ground's height at a place [m over the ellipsoid; the sea 0] (the TSD's relief; none: not drawn) */
+  ground?: (lat: number, lon: number) => number;
+  /** the radar (controller/radar.ts radarHud): its mode, its beam's azimuth off the nose [rad], its contacts heading
+   *  up — x right, y ahead, dz above [m], their way off the nose [rad] (null: not measured) —, the lock's figures
+   *  (range [m], closure [m/s], altitude [m], heading [rad], ground speed [m/s]); null: no radar (not flying) */
+  fcr?: {
+    mode: "RWS" | "TWS" | "STT";
+    beam: number;
+    contacts: {
+      x: number;
+      y: number;
+      dz: number;
+      trk: number | null;
+      iff: string;
+      air: boolean;
+      locked: boolean;
+      datalink: boolean;
+      name: string;
+    }[];
+    lock: { name: string; iff: string; range: number; closure: number; alt: number; hdg: number; gs: number } | null;
+  } | null;
+  /** the weapons (controller/combat.ts): a fight running, the weapon chosen, the stores left (null: no fight yet) */
+  arms?: {
+    live: boolean;
+    sel: string;
+    stores: { aim120: number; aim9x: number; jdam: number; jsm: number; gun: number; flares: number };
+    /** the gun's rounds when full */
+    gunFull: number;
+  } | null;
 }
 
 const C = {
@@ -127,75 +192,516 @@ const NOTCH = [Math.round(PCD_W * 0.295), Math.round(PCD_W * 0.615)] as const;
 const GAP = 8;
 /** (the portals kept off the display's outer edge: its bezel's lip hides it) */
 const SIDE = 28;
-const PORTALS = 4;
-const PW = (PCD_W - 2 * SIDE - GAP * (PORTALS + 1)) / PORTALS;
+/** the portals' slots: four across, two each side of the centre — a side shown as its two portals or as one twice as
+ *  wide (its first slot's page), as a real PCD's halves */
+const SLOTS = 4;
+const PW = (PCD_W - 2 * SIDE - GAP * (SLOTS + 1)) / SLOTS;
 const PH = PORTAL_END - TOP - GAP * 2;
+/** a portal's title bar, its keys' bar at its foot (its page's keys) */
 const HEAD = 46;
+const FOOT = 50;
 const D = Math.PI / 180;
+
+/** A part of the display [px]. */
+export interface PcdRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+/** A portal shown: its slot, its frame, its part of the display (its gaps with it: what is redrawn), its key. */
+interface Portal {
+  slot: number;
+  full: boolean;
+  frame: PcdRect;
+  region: PcdRect;
+  key: string;
+}
+/** A page's key at its portal's foot: its label, lit, what it does (what to say; null: nothing). */
+interface PcdKey {
+  label: string;
+  on?: boolean;
+  act?: () => string | null;
+}
+/** the pages drawn over a whole wide portal (maps); the others keep a portal's width, centred */
+const WIDE: ReadonlySet<PcdPage> = new Set(["TSD", "FCR", "EOTS"]);
+const TOP_STRIP: PcdRect = { x: 0, y: 0, w: PCD_W, h: TOP };
+const BOTTOM_STRIP: PcdRect = { x: NOTCH[0], y: PORTAL_END, w: NOTCH[1] - NOTCH[0], h: PCD_H - PORTAL_END };
+/** the data read every PERIOD [ms]; each part redrawn at its own pace (what moves fast often, the rest less) — in
+ *  turn, one a frame: no frame pays for the whole display */
+const PERIOD = 100;
+/** the display's brightness at night (its NIGHT knob, the automatic one in the dark) */
+const PCD_NIGHT = 0.4;
+const PAGE_PERIOD: Record<PcdPage, number> = {
+  TSD: 100,
+  FCR: 100,
+  SMS: 250,
+  EOTS: 100,
+  AP: 200,
+  MSN: 500,
+  FCS: 100,
+  ENG: 200,
+  FUEL: 500,
+  STOVL: 100,
+  CNI: 250,
+  ADI: 100,
+  CKL: 500,
+  ICAWS: 250,
+};
+const FONT = `"Eurostile", "DIN Alternate", "Arial Narrow", sans-serif`;
+const RANGES = [5, 10, 20, 40, 80, 160];
+/** the TSD's relief: its cells across, the time it may take a frame [ms] (built a few rows at a time) */
+const RELIEF_N = 64;
+const RELIEF_BUDGET = 0.15;
+const EARTH_R = 6.371e6;
+/** the EOTS's horizon: the terrain's highest elevation seen along each bearing (a bin a half degree, all round),
+ *  sampled at these distances [m] (the Earth's curve in) */
+const RIDGE_BINS = 720;
+const RIDGE_D = Array.from({ length: 22 }, (_, i) => 200 * 1.3 ** i);
+/** its fields of view [°]: wide, narrow */
+const EOTS_FOV = { W: 30, N: 6 } as const;
+/** the radar's page's ranges [km, or NM] */
+const FCR_RANGES = [10, 20, 40, 80, 160];
+const STORE_NAME = { aim120: "AIM-120", aim9x: "AIM-9X", jdam: "GBU-32", jsm: "JSM" } as const;
 
 export class Pcd {
   readonly canvas = new OffscreenCanvas(PCD_W, PCD_H);
   private g = this.canvas.getContext("2d")!;
-  /** each portal's page */
-  pages: PcdPage[] = ["TSD", "FCS", "ENG", "FUEL"];
-  /** the TSD's range [the distance's unit: km, or NM] */
+  /** each slot's page */
+  pages: PcdPage[] = ["TSD", "FCR", "SMS", "FUEL"];
+  /** what a touch asks of the craft (main.ts: the controller's weapons and radar): what to say */
+  act: ((a: PcdAction) => string | null) | null = null;
+  /** the radar page's range [km, or NM] */
+  fcrRange = 80;
+  /** the autopilot's values just selected and when [ms]: the next − or + steps from them, they are shown, while the
+   *  craft's own catch up (1.5 s — as the crew's MCP) */
+  private sel: { spd?: number; hdg?: number; alt?: number; at: number } = { at: -Infinity };
+  /** the EOTS: its field of view, white or black hot, slaved to the lock or looking along the nose */
+  eots = { fov: "W" as "W" | "N", whot: true, slave: true };
+  /** the horizon's terrain all round [rad above the level] (NaN: not sampled yet), the bins' cursor, where it was
+   *  sampled from (moved 500 m or 100 m up: sampled again) */
+  private ridge = new Float32Array(RIDGE_BINS).fill(Number.NaN);
+  private ridgeAt = { i: 0, lat: Number.NaN, lon: 0, alt: 0 };
+  /** the IR picture's grain (made once) */
+  private grain: OffscreenCanvas | null = null;
+  /** each slot's buttons inside its page (the AP's), as last drawn: where, what they do */
+  private hits = new Map<number, { r: PcdRect; act: () => string | null }[]>();
+  /** the TSD's relief shown (north up, centred at lat, lon, ±half [m]) and the one being built (its rows so far) */
+  private relief: { canvas: OffscreenCanvas; lat: number; lon: number; half: number; key: string } | null = null;
+  private reliefJob: { im: ImageData; row: number; lat: number; lon: number; half: number; alt: number; key: string } | null = null;
+  /** each side (left, right) shown as two portals or as one */
+  halves: ("split" | "full")[] = ["split", "split"];
+  /** the slot whose page menu is open (null: none) */
+  menu: number | null = null;
+  /** the TSD's range [the distance's unit: km, or NM]; its names and labels hidden */
   range = 20;
+  declutter = false;
   /** the units shown (each draw's) */
   private u: Units = unitsOf("metric");
-  private last = -Infinity;
-  private dirty = true;
+  /** the data drawn (read again every PERIOD, or at once after a touch), when */
+  private data: PcdData | null = null;
+  private dataAt = -Infinity;
+  /** when each part was drawn (by its key); the parts to draw at once (a touch) */
+  private drawn = new Map<string, number>();
+  private forced = new Set<string>();
+  /** the last touch on the display (u, v; when [ms]) and the last page changed (its part [px]; when [ms]) — the
+   *  shader's ring and sweep (ship.wgsl pcdLight) */
+  lastTouch: { u: number; v: number; at: number } | null = null;
+  lastChange: { rect: PcdRect; at: number } | null = null;
+  /** the touch's and the page change's age held [s] (a capture, a test: the ring and the sweep caught mid-way) */
+  ageHeld: number | null = null;
 
-  /** A touch at (u, v) on the display (0…1 across, down): a portal's title — its next page —, its arrows,
-   *  the TSD's range. What it did (null: nothing). */
+  /** The portals shown: each side's two, or its one twice as wide. */
+  portals(): Portal[] {
+    const out: Portal[] = [];
+    const y = TOP + GAP;
+    for (let h = 0; h < 2; h++) {
+      const k0 = 2 * h;
+      if (this.halves[h] === "full")
+        out.push({
+          slot: k0,
+          full: true,
+          frame: { x: SIDE + GAP + k0 * (PW + GAP), y, w: 2 * PW + GAP, h: PH },
+          region: { x: SIDE + GAP / 2 + k0 * (PW + GAP), y: TOP, w: 2 * (PW + GAP), h: PORTAL_END - TOP },
+          key: `p${k0}F`,
+        });
+      else
+        for (const k of [k0, k0 + 1])
+          out.push({
+            slot: k,
+            full: false,
+            frame: { x: SIDE + GAP + k * (PW + GAP), y, w: PW, h: PH },
+            region: { x: SIDE + GAP / 2 + k * (PW + GAP), y: TOP, w: PW + GAP, h: PORTAL_END - TOP },
+            key: `p${k}`,
+          });
+    }
+    return out;
+  }
+
+  /** The display's parts, each redrawn on its own: the warnings' strip, the portals, the flight's state. */
+  private regions(): { key: string; rect: PcdRect; portal?: Portal }[] {
+    return [
+      { key: "top", rect: TOP_STRIP },
+      ...this.portals().map((P) => ({ key: P.key, rect: P.region, portal: P })),
+      { key: "bottom", rect: BOTTOM_STRIP },
+    ];
+  }
+
+  /** A touch at (u, v) on the display (0…1 across, down) — in a portal: its title's arrows (the page before, the
+   *  next), its title (the pages' menu, then a page chosen in it), its corner (the side shown as one portal, or two),
+   *  its page's keys at its foot. What it did (null: nothing). */
   touch(u: number, v: number): string | null {
     const x = u * PCD_W,
       y = v * PCD_H;
-    for (let k = 0; k < PORTALS; k++) {
-      const x0 = SIDE + GAP + k * (PW + GAP),
-        y0 = TOP + GAP;
-      if (x < x0 || x > x0 + PW || y < y0 || y > y0 + PH) continue;
-      const i = PCD_PAGES.indexOf(this.pages[k]!);
-      if (y < y0 + HEAD) {
-        // (the arrows at the title's ends: back, forth; the title itself: forth)
-        const step = x < x0 + 60 ? -1 : 1;
-        this.pages[k] = PCD_PAGES[(i + step + PCD_PAGES.length) % PCD_PAGES.length]!;
-        this.dirty = true;
-        return this.pages[k]!;
+    const now = performance.now();
+    this.lastTouch = { u, v, at: now };
+    for (const P of this.portals()) {
+      const f = P.frame;
+      if (x < f.x || x > f.x + f.w || y < f.y || y > f.y + f.h) continue;
+      const k = P.slot;
+      const redraw = (changed: boolean) => {
+        this.forced.add(P.key);
+        if (changed) this.lastChange = { rect: P.region, at: now };
+      };
+      if (y < f.y + HEAD) {
+        if (x < f.x + 112) {
+          // (the arrows: the page before, the next)
+          const i = PCD_PAGES.indexOf(this.pages[k]!);
+          this.pages[k] = PCD_PAGES[(i + (x < f.x + 56 ? -1 : 1) + PCD_PAGES.length) % PCD_PAGES.length]!;
+          this.menu = null;
+          redraw(true);
+          return this.pages[k]!;
+        }
+        if (x > f.x + f.w - 64) {
+          // (the corner: this side as one portal, or two — the parts it covers drawn at once)
+          const h = k >> 1;
+          this.halves[h] = this.halves[h] === "full" ? "split" : "full";
+          this.menu = null;
+          for (const Q of this.portals())
+            if (Q.slot >> 1 === h) {
+              this.forced.add(Q.key);
+              this.lastChange = { rect: Q.region, at: now };
+            }
+          return this.halves[h] === "full" ? `${this.pages[2 * h]} FULL` : "SPLIT";
+        }
+        this.menu = this.menu === k ? null : k;
+        redraw(false);
+        return this.menu === k ? "MENU" : null;
       }
-      if (this.pages[k] === "TSD" && y > y0 + PH - 70) {
-        // (the range: − on the left, + on the right)
-        const r = [5, 10, 20, 40, 80, 160];
-        const j = Math.max(0, r.indexOf(this.range));
-        this.range = r[Math.min(Math.max(j + (x < x0 + PW / 2 ? -1 : 1), 0), r.length - 1)]!;
-        this.dirty = true;
-        return `RNG ${this.range}`;
+      if (this.menu === k) {
+        const hit = this.menuItems(this.content(P)).find((m) => x >= m.r.x && x <= m.r.x + m.r.w && y >= m.r.y && y <= m.r.y + m.r.h);
+        this.menu = null;
+        if (hit) this.pages[k] = hit.page;
+        redraw(!!hit);
+        return hit ? hit.page : null;
       }
+      const hit = this.hits.get(k)?.find((b) => x >= b.r.x && x <= b.r.x + b.r.w && y >= b.r.y && y <= b.r.y + b.r.h);
+      if (hit) {
+        const said = hit.act();
+        redraw(false);
+        return said;
+      }
+      const keys = this.keys(this.pages[k]!);
+      if (keys.length && y > f.y + f.h - FOOT) {
+        const key = keys[Math.min(Math.floor(((x - f.x) / f.w) * keys.length), keys.length - 1)]!;
+        const said = key.act?.() ?? null;
+        if (said !== null) redraw(false);
+        return said;
+      }
+      return null;
     }
     return null;
   }
 
-  /** Draws when due (10 Hz, or at once after a touch). Whether it drew. */
-  draw(d: PcdData, now: number): boolean {
-    if (!this.dirty && now - this.last < 100) return false;
-    this.last = now;
+  /** A page's keys at its portal's foot. */
+  private keys(page: PcdPage): PcdKey[] {
+    const step = (s: number) => () => {
+      const j = Math.max(0, RANGES.indexOf(this.range));
+      this.range = RANGES[Math.min(Math.max(j + s, 0), RANGES.length - 1)]!;
+      return `RNG ${this.range}`;
+    };
+    switch (page) {
+      case "TSD":
+        return [
+          { label: "RNG −", act: step(-1) },
+          { label: `${this.range} ${this.u.distName}` },
+          { label: "RNG +", act: step(1) },
+          {
+            label: "DCLT",
+            on: this.declutter,
+            act: () => ((this.declutter = !this.declutter), this.declutter ? "DCLT ON" : "DCLT OFF"),
+          },
+        ];
+      case "FCR": {
+        const mode = this.data?.fcr?.mode;
+        const fstep = (s: number) => () => {
+          const j = Math.max(0, FCR_RANGES.indexOf(this.fcrRange));
+          this.fcrRange = FCR_RANGES[Math.min(Math.max(j + s, 0), FCR_RANGES.length - 1)]!;
+          return `FCR ${this.fcrRange}`;
+        };
+        return [
+          ...(["RWS", "TWS", "STT"] as const).map((m) => ({
+            label: m,
+            on: mode === m,
+            act: () => this.act?.({ kind: "radar", mode: m }) ?? null,
+          })),
+          { label: "LOCK", act: () => this.act?.({ kind: "lock" }) ?? null },
+          { label: "RNG −", act: fstep(-1) },
+          { label: "RNG +", act: fstep(1) },
+        ];
+      }
+      case "EOTS": {
+        const E = this.eots;
+        return [
+          {
+            label: E.fov === "W" ? "WFOV" : "NFOV",
+            on: E.fov === "N",
+            act: () => ((E.fov = E.fov === "W" ? "N" : "W"), E.fov === "W" ? "WFOV" : "NFOV"),
+          },
+          { label: E.whot ? "WHOT" : "BHOT", act: () => ((E.whot = !E.whot), E.whot ? "WHOT" : "BHOT") },
+          { label: E.slave ? "SLAVE" : "BORE", on: E.slave, act: () => ((E.slave = !E.slave), E.slave ? "SLAVE" : "BORE") },
+        ];
+      }
+      case "SMS": {
+        const A = this.data?.arms;
+        return [
+          ...(["aim120", "aim9x", "jdam", "jsm"] as const).map((w) => ({
+            label: STORE_NAME[w],
+            on: A?.sel === w,
+            act: () => this.act?.({ kind: "weapon", w }) ?? null,
+          })),
+          { label: "CM", act: () => this.act?.({ kind: "cm" }) ?? null },
+        ];
+      }
+      default:
+        return [];
+    }
+  }
+
+  /** A portal's page area: under its title, over its keys; a narrow page centred in a wide portal. */
+  private content(P: Portal): PcdRect {
+    const f = P.frame;
+    const page = this.pages[P.slot]!;
+    const foot = this.keys(page).length && this.menu !== P.slot ? FOOT : 0;
+    const w = P.full && !WIDE.has(page) && this.menu !== P.slot ? PW : f.w;
+    return { x: f.x + (f.w - w) / 2, y: f.y + HEAD, w, h: f.h - HEAD - foot };
+  }
+
+  /** The pages' menu: a button a page, three across. */
+  private menuItems(r: PcdRect) {
+    const cols = 3,
+      bw = (r.w - 40) / cols,
+      bh = 64;
+    return PCD_PAGES.map((page, i) => ({
+      page,
+      r: { x: r.x + 20 + (i % cols) * bw + 6, y: r.y + 30 + Math.floor(i / cols) * (bh + 18), w: bw - 12, h: bh },
+    }));
+  }
+
+  /** A frame: the data read when due (every PERIOD, or at once after a touch), the part waiting longest drawn when
+   *  due (two when the frames are slow; at its first look the display fills in six frames), a touched portal at once.
+   *  The parts drawn (to upload). */
+  frame(now: number, read: () => PcdData | null): PcdRect[] {
+    if (!this.data || this.forced.size || now - this.dataAt >= PERIOD) {
+      const d = read();
+      if (!d) return [];
+      this.data = d;
+      this.dataAt = now;
+    }
+    const d = this.data;
     this.u = unitsOf(d.units);
-    this.dirty = false;
+    const shown = (pg: PcdPage) => this.portals().some((P) => this.pages[P.slot] === pg && this.menu !== P.slot);
+    if (d.ground && shown("TSD")) this.reliefStep(d, d.ground);
+    if (d.ground && shown("EOTS")) this.ridgeStep(d, d.ground);
+    const regions = this.regions();
+    const when = (key: string) => this.drawn.get(key) ?? -Infinity;
+    let out = regions.filter((R) => this.forced.has(R.key));
+    this.forced.clear();
+    if (!out.length) {
+      // (how late each part is, against its pace: the latest first)
+      const late = (R: (typeof regions)[number]) => (now - when(R.key)) / this.period(R.key, R.portal);
+      const order = [...regions].sort((a, b) => late(b) - late(a));
+      out = [];
+      for (const R of order.slice(0, 2)) if (late(R) >= 1 && !(out.length && (!Number.isFinite(when(R.key)) || late(R) < 2))) out.push(R);
+    }
+    for (const R of out) {
+      this.region(R.rect, d, R.key, R.portal);
+      this.drawn.set(R.key, now);
+    }
+    return out.map((R) => R.rect);
+  }
+
+  /** Draws the whole display at once (the tests, a capture). */
+  draw(d: PcdData, now: number) {
+    this.u = unitsOf(d.units);
+    this.data = d;
+    for (const R of this.regions()) {
+      this.region(R.rect, d, R.key, R.portal);
+      this.drawn.set(R.key, now);
+    }
+  }
+
+  /** Readies the fonts and the canvas (the F-35 chosen, before its cockpit is seen: no stall at the first drawing):
+   *  the glyphs at every size and weight, the black under the parts. */
+  warm() {
     const g = this.g;
-    g.save();
+    for (const w of ["500", "700"])
+      for (const size of [16, 18, 20, 22, 24, 26, 28, 30, 34, 40, 48, 56]) {
+        g.font = `${w} ${size}px ${FONT}`;
+        g.fillStyle = C.white;
+        g.fillText("0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ ◀▶°·%:/+−.,", 0, 40);
+      }
     g.fillStyle = C.bg;
     g.fillRect(0, 0, PCD_W, PCD_H);
-    this.topStrip(d);
-    for (let k = 0; k < PORTALS; k++) this.portal(k, d);
-    this.bottomStrip(d);
+  }
+
+  /** The look the shader needs (ship.wgsl pcdLight): the brightness — its knob's (DAY, NIGHT, NVG) or, automatic,
+   *  the Sun's (dimmed from +5° down to civil twilight's −6°, as a pilot would) —, the style, the touch and the page
+   *  change, their ages [s] (null: none lately), the change's part on the display (u0, v0, u1, v1). */
+  look(now: number, knob: "auto" | "day" | "night" | "nvg", cinematic: boolean) {
+    const T = this.lastTouch,
+      C = this.lastChange;
+    const sun = this.data?.sunAlt ?? 90;
+    const day = Math.min(Math.max((sun + 6) / 11, 0), 1);
+    const level = { day: 1, night: PCD_NIGHT, nvg: 0.2, auto: PCD_NIGHT + (1 - PCD_NIGHT) * day * day * (3 - 2 * day) }[knob];
+    return {
+      level,
+      style: cinematic ? 1 : 0,
+      touch: T && (now - T.at < 1000 || this.ageHeld !== null) ? { u: T.u, v: T.v, age: this.ageHeld ?? (now - T.at) / 1000 } : null,
+      change:
+        C && (now - C.at < 1000 || this.ageHeld !== null)
+          ? {
+              rect: [C.rect.x / PCD_W, C.rect.y / PCD_H, (C.rect.x + C.rect.w) / PCD_W, (C.rect.y + C.rect.h) / PCD_H] as [
+                number,
+                number,
+                number,
+                number,
+              ],
+              age: this.ageHeld ?? (now - C.at) / 1000,
+            }
+          : null,
+    };
+  }
+
+  /**
+   * The TSD's relief (north up, ±2 ranges about where it was asked): the sea dark blue, the land dim by its height —
+   * dark amber within 300 m under us, dark red above us —, dark enough for the symbols over it. Asked again when we
+   * have moved an eighth of its half-width, the range or our altitude changed; built a few rows a frame within
+   * RELIEF_BUDGET, the old one shown meanwhile.
+   */
+  private reliefStep(d: PcdData, ground: (lat: number, lon: number) => number) {
+    const half = 2 * this.range * this.u.distM;
+    const step = half / 8;
+    const kLat = Math.round((d.lat * D * EARTH_R) / step) * step;
+    const kLon = Math.round((d.lon * D * EARTH_R * Math.cos(d.lat * D)) / step) * step;
+    const key = `${half}|${kLat}|${kLon}|${Math.round(d.alt / 150)}`;
+    if (this.relief?.key === key && !this.reliefJob) return;
+    if (this.reliefJob?.key !== key) {
+      const lat = kLat / (D * EARTH_R);
+      this.reliefJob = {
+        im: new ImageData(RELIEF_N, RELIEF_N),
+        row: 0,
+        lat,
+        lon: kLon / (D * EARTH_R * Math.cos(lat * D)),
+        half,
+        alt: d.alt,
+        key,
+      };
+    }
+    const J = this.reliefJob;
+    const t0 = performance.now();
+    const cl = Math.cos(J.lat * D);
+    while (J.row < RELIEF_N && performance.now() - t0 < RELIEF_BUDGET) {
+      const j = J.row++;
+      const n = J.half - ((j + 0.5) / RELIEF_N) * 2 * J.half;
+      for (let i = 0; i < RELIEF_N; i++) {
+        const e = ((i + 0.5) / RELIEF_N) * 2 * J.half - J.half;
+        const h = ground(J.lat + n / (D * EARTH_R), J.lon + e / (D * EARTH_R * cl));
+        const dz = h - J.alt;
+        let c: [number, number, number];
+        if (h <= 0.5) c = [4, 15, 32];
+        else if (dz > 0) c = [56, 15, 12];
+        else if (dz > -300) c = [50, 34, 10];
+        else {
+          const k = Math.min(1, h / 3000);
+          c = [11 + 24 * k, 21 + 12 * k, 15 + 7 * k];
+        }
+        const o = (j * RELIEF_N + i) * 4;
+        J.im.data[o] = c[0];
+        J.im.data[o + 1] = c[1];
+        J.im.data[o + 2] = c[2];
+        J.im.data[o + 3] = 255;
+      }
+    }
+    if (J.row < RELIEF_N) return;
+    const canvas = this.relief?.canvas ?? new OffscreenCanvas(RELIEF_N, RELIEF_N);
+    canvas.getContext("2d")!.putImageData(J.im, 0, 0);
+    this.relief = { canvas, lat: J.lat, lon: J.lon, half: J.half, key: J.key };
+    this.reliefJob = null;
+  }
+
+  /** The horizon's terrain, a few bearings a frame within RELIEF_BUDGET — in turn one of the EOTS's view, one of the
+   *  whole round —, from where we were last moved 500 m or 100 m up (the old horizon kept meanwhile: it moves little). */
+  private ridgeStep(d: PcdData, ground: (lat: number, lon: number) => number) {
+    const A = this.ridgeAt;
+    const cl = Math.cos(d.lat * D);
+    const moved = Math.hypot((d.lat - A.lat) * D * EARTH_R, (d.lon - A.lon) * D * EARTH_R * cl);
+    if (!(moved < 500) || Math.abs(d.alt - A.alt) > 100) Object.assign(A, { lat: d.lat, lon: d.lon, alt: d.alt });
+    const bin = (2 * Math.PI) / RIDGE_BINS;
+    const half = (EOTS_FOV[this.eots.fov] / 2 + 2) * D;
+    const v0 = Math.round((d.heading + this.eotsLos(d).az - half) / bin),
+      vn = Math.max(1, Math.round((2 * half) / bin));
+    const t0 = performance.now();
+    for (let k = 0; performance.now() - t0 < RELIEF_BUDGET; k++) {
+      const i = (((k % 2 === 0 ? v0 + (A.i % vn) : A.i * 7) % RIDGE_BINS) + RIDGE_BINS) % RIDGE_BINS;
+      if (k % 2) A.i++;
+      const se = Math.sin(i * bin),
+        cn = Math.cos(i * bin);
+      // (beyond the samples the ground goes on to the horizon: the sea's, at its dip, at least)
+      let best = -Math.acos(EARTH_R / (EARTH_R + Math.max(A.alt, 1)));
+      for (const r of RIDGE_D) {
+        const h = ground(A.lat + (r * cn) / (D * EARTH_R), A.lon + (r * se) / (D * EARTH_R * cl));
+        best = Math.max(best, Math.atan2(h - A.alt - (r * r) / (2 * EARTH_R), r));
+      }
+      this.ridge[i] = best;
+    }
+  }
+
+  /** The EOTS's line of sight off the nose's heading [rad] (az right, el up): the lock's when slaved, else the nose's. */
+  private eotsLos(d: PcdData) {
+    const lk = this.eots.slave ? d.fcr?.contacts.find((K) => K.locked) : undefined;
+    return lk
+      ? { az: Math.atan2(lk.x, lk.y), el: Math.atan2(lk.dz, Math.hypot(lk.x, lk.y)), lock: true }
+      : { az: 0, el: d.pitch, lock: false };
+  }
+
+  /** A part's pace [ms]: the warnings' strip (its clock in seconds) 250, the flight's state 100, a portal its page's
+   *  (its menu open: 1 s). */
+  private period(key: string, P?: Portal) {
+    if (!P) return key === "top" ? 250 : PERIOD;
+    return this.menu === P.slot ? 1000 : PAGE_PERIOD[this.pages[P.slot]!];
+  }
+
+  /** A part drawn over its own black. */
+  private region(r: PcdRect, d: PcdData, key: string, P?: Portal) {
+    const g = this.g;
+    g.save();
+    g.beginPath();
+    g.rect(r.x, r.y, r.w, r.h);
+    g.clip();
+    g.fillStyle = C.bg;
+    g.fillRect(r.x, r.y, r.w, r.h);
+    if (P) this.portal(P, d);
+    else if (key === "top") this.topStrip(d);
+    else this.bottomStrip(d);
     g.restore();
-    return true;
   }
 
   // ---- the frame
 
   private text(s: string, x: number, y: number, colour = C.white, size = 26, align: CanvasTextAlign = "left", bold = false) {
     const g = this.g;
-    g.font = `${bold ? "700 " : "500 "}${size}px "Eurostile", "DIN Alternate", "Arial Narrow", sans-serif`;
+    g.font = `${bold ? "700 " : "500 "}${size}px ${FONT}`;
     g.fillStyle = colour;
     g.textAlign = align;
     g.textBaseline = "middle";
@@ -265,64 +771,150 @@ export class Pcd {
     row2.forEach(([s, c], i) => this.text(s, x0 + w * (i + 0.5), y0 + h * 1.45, c, 24, "center", true));
   }
 
-  private portal(k: number, d: PcdData) {
+  /** A portal: its frame, its title bar (the arrows, the page's name, the corner's one-or-two), its page — or the
+   *  pages' menu —, its keys. */
+  private portal(P: Portal, d: PcdData) {
     const g = this.g;
-    const x0 = SIDE + GAP + k * (PW + GAP),
-      y0 = TOP + GAP;
+    const f = P.frame;
+    const page = this.pages[P.slot]!;
+    const menu = this.menu === P.slot;
     g.strokeStyle = C.frame;
     g.lineWidth = 3;
-    g.strokeRect(x0, y0, PW, PH);
+    g.strokeRect(f.x, f.y, f.w, f.h);
     g.fillStyle = C.title;
-    g.fillRect(x0, y0, PW, HEAD);
-    const page = this.pages[k]!;
-    this.text("◀", x0 + 24, y0 + HEAD / 2, C.grey, 24, "center");
-    this.text("▶", x0 + PW - 24, y0 + HEAD / 2, C.grey, 24, "center");
-    this.text(page, x0 + PW / 2, y0 + HEAD / 2, C.cyan, 30, "center", true);
+    g.fillRect(f.x, f.y, f.w, HEAD);
+    const my = f.y + HEAD / 2;
+    this.text("◀", f.x + 28, my, C.grey, 24, "center");
+    this.text("▶", f.x + 84, my, C.grey, 24, "center");
+    g.strokeStyle = C.grey;
+    g.lineWidth = 1.5;
+    g.beginPath();
+    g.moveTo(f.x + 56, f.y + 8);
+    g.lineTo(f.x + 56, f.y + HEAD - 8);
+    g.moveTo(f.x + 112, f.y + 8);
+    g.lineTo(f.x + 112, f.y + HEAD - 8);
+    g.moveTo(f.x + f.w - 64, f.y + 8);
+    g.lineTo(f.x + f.w - 64, f.y + HEAD - 8);
+    g.stroke();
+    // (the corner: one portal drawn as two, or two as one)
+    const cx = f.x + f.w - 32;
+    g.strokeStyle = C.grey;
+    g.lineWidth = 2;
+    if (P.full) {
+      g.strokeRect(cx - 14, my - 9, 12, 18);
+      g.strokeRect(cx + 2, my - 9, 12, 18);
+    } else g.strokeRect(cx - 14, my - 9, 28, 18);
+    this.text(menu ? "MENU" : page, f.x + f.w / 2 + 24, my, menu ? C.white : C.cyan, 30, "center", true);
+    if (menu) g.fillRect(f.x + f.w / 2 - 40, f.y + HEAD - 4, 128, 3);
+    const r = this.content(P);
+    this.hits.set(P.slot, []);
     g.save();
     g.beginPath();
-    g.rect(x0 + 2, y0 + HEAD, PW - 4, PH - HEAD - 2);
+    g.rect(f.x + 2, r.y, f.w - 4, r.h);
     g.clip();
-    const r = { x: x0, y: y0 + HEAD, w: PW, h: PH - HEAD };
-    switch (page) {
-      case "TSD":
-        this.tsd(r, d);
-        break;
-      case "FCS":
-        this.fcs(r, d);
-        break;
-      case "ENG":
-        this.eng(r, d);
-        break;
-      case "FUEL":
-        this.fuel(r, d);
-        break;
-      case "STOVL":
-        this.stovlPage(r, d);
-        break;
-      case "CNI":
-        this.cni(r, d);
-        break;
-      case "ADI":
-        this.adi(r, d);
-        break;
-      case "CKL":
-        this.ckl(r, d);
-        break;
-    }
+    if (menu) this.pageMenu(r, page);
+    else
+      switch (page) {
+        case "TSD":
+          this.tsd(r, d);
+          break;
+        case "FCR":
+          this.fcr(r, d);
+          break;
+        case "SMS":
+          this.sms(r, d);
+          break;
+        case "EOTS":
+          this.eotsPage(r, d);
+          break;
+        case "AP":
+          this.ap(r, d, P.slot);
+          break;
+        case "MSN":
+          this.msn(r, d);
+          break;
+        case "FCS":
+          this.fcs(r, d);
+          break;
+        case "ENG":
+          this.eng(r, d);
+          break;
+        case "FUEL":
+          this.fuel(r, d);
+          break;
+        case "STOVL":
+          this.stovlPage(r, d);
+          break;
+        case "CNI":
+          this.cni(r, d);
+          break;
+        case "ADI":
+          this.adi(r, d);
+          break;
+        case "CKL":
+          this.ckl(r, d);
+          break;
+        case "ICAWS":
+          this.icaws(r, d);
+          break;
+      }
     g.restore();
+    // its page's keys: lit when on
+    const keys = menu ? [] : this.keys(page);
+    if (keys.length) {
+      const y0 = f.y + f.h - FOOT;
+      g.fillStyle = C.title;
+      g.fillRect(f.x + 2, y0, f.w - 4, FOOT - 2);
+      const kw = f.w / keys.length;
+      keys.forEach((K, i) => {
+        const x = f.x + i * kw;
+        if (K.act) {
+          g.strokeStyle = K.on ? C.cyan : C.frame;
+          g.lineWidth = 2;
+          g.strokeRect(x + 6, y0 + 6, kw - 12, FOOT - 14);
+        }
+        this.text(K.label, x + kw / 2, y0 + FOOT / 2 - 1, K.on ? C.cyan : K.act ? C.white : C.grey, 22, "center", true);
+      });
+    }
+  }
+
+  /** The pages' menu: the page shown lit. */
+  private pageMenu(r: PcdRect, page: PcdPage) {
+    const g = this.g;
+    for (const m of this.menuItems(r)) {
+      const on = m.page === page;
+      g.fillStyle = on ? "#103a44" : "#0a171b";
+      g.fillRect(m.r.x, m.r.y, m.r.w, m.r.h);
+      g.strokeStyle = on ? C.cyan : C.frame;
+      g.lineWidth = 2;
+      g.strokeRect(m.r.x, m.r.y, m.r.w, m.r.h);
+      this.text(m.page, m.r.x + m.r.w / 2, m.r.y + m.r.h / 2, on ? C.cyan : C.white, 26, "center", true);
+    }
   }
 
   // ---- the pages
 
   /** The tactical situation: heading up, the ownship low in the portal, the airfields and their runways, the
    *  range rings, the track. */
-  private tsd(r: Rect, d: PcdData) {
+  private tsd(r: PcdRect, d: PcdData) {
     const g = this.g;
     const cx = r.x + r.w / 2,
       cy = r.y + r.h * 0.68;
     const px = (r.h * 0.6) / (this.range * this.u.distM);
     // (a point's place: east and north of the ownship [m] → turned heading up)
-    const R = 6.371e6;
+    const R = EARTH_R;
+    // the relief under it all (north up, turned heading up about the ownship)
+    const RF = this.relief;
+    if (RF && d.ground) {
+      const e0 = (RF.lon - d.lon) * D * R * Math.cos(d.lat * D),
+        n0 = (RF.lat - d.lat) * D * R;
+      g.save();
+      g.translate(cx, cy);
+      g.rotate(-d.heading);
+      g.imageSmoothingEnabled = true;
+      g.drawImage(RF.canvas, (e0 - RF.half) * px, -(n0 + RF.half) * px, 2 * RF.half * px, 2 * RF.half * px);
+      g.restore();
+    }
     const where = (lat: number, lon: number): [number, number] => {
       const e = (lon - d.lon) * D * R * Math.cos(d.lat * D),
         n = (lat - d.lat) * D * R;
@@ -372,7 +964,7 @@ export class Pcd {
       g.beginPath();
       g.arc(x, y, 7, 0, 2 * Math.PI);
       g.stroke();
-      this.text(f.icao ?? f.name.slice(0, 6), x + 14, y + 18, C.cyan, 22);
+      if (!this.declutter) this.text(f.icao ?? f.name.slice(0, 6), x + 14, y + 18, C.cyan, 22);
     }
     // a mission's places: the zones to reach (amber, the waiting dashed), the SAMs' reach (red, dashed)
     for (const m of d.marks ?? []) {
@@ -416,7 +1008,7 @@ export class Pcd {
         g.lineTo(x - 11, y);
         g.closePath();
         g.stroke();
-        this.text(rt.wps[i]!.name, x + 16, y - 14, col, 22);
+        if (!this.declutter || i === rt.active) this.text(rt.wps[i]!.name, x + 16, y - 14, col, 22);
       });
       const w = rt.wps[rt.active];
       if (w) {
@@ -447,36 +1039,51 @@ export class Pcd {
           );
       }
     }
-    // the tracks (the radar's, the datalink's): the NATO shapes — a friend's half circle (blue), a hostile's
-    // diamond (red), a neutral's square (white), an unknown's quatrefoil (yellow) —, their way a stick, the lock ringed
+    // the tracks (the radar's, the datalink's): the NATO shapes — an aircraft's open below (a friend's arc, a
+    // hostile's chevron, a neutral's or an unknown's open box), a ship's whole (circle, diamond, square) —, a
+    // friend blue, a hostile red, a neutral white, an unknown yellow; their way a stick, the lock ringed and joined
     for (const T of d.tracks ?? []) {
       const c0 = Math.cos(d.heading),
         s0 = Math.sin(d.heading);
       const x = cx + (T.e * c0 - T.n * s0) * px,
         y = cy - (T.e * s0 + T.n * c0) * px;
-      if (Math.abs(x - cx) > r.w / 2 || y < r.y || y > r.y + r.h) continue;
+      if (x < r.x || x > r.x + r.w || y < r.y || y > r.y + r.h) continue;
       const col = T.colour ?? (T.iff === "friend" ? C.cyan : T.iff === "hostile" ? "#ff5a46" : T.iff === "neutral" ? C.white : "#ffd23f");
       g.strokeStyle = col;
       g.fillStyle = col;
       g.lineWidth = 3;
-      g.beginPath();
       const k = 13;
-      if (T.iff === "friend") g.arc(x, y, k, Math.PI, 2 * Math.PI);
+      if (T.locked) {
+        g.setLineDash([6, 6]);
+        g.lineWidth = 1.5;
+        g.beginPath();
+        g.moveTo(cx, cy);
+        g.lineTo(x, y);
+        g.stroke();
+        g.setLineDash([]);
+        g.lineWidth = 3;
+      }
+      g.beginPath();
+      if (T.air) {
+        if (T.iff === "friend") g.arc(x, y + k * 0.4, k, Math.PI, 2 * Math.PI);
+        else if (T.iff === "hostile") {
+          g.moveTo(x - k, y + k * 0.5);
+          g.lineTo(x, y - k * 0.6);
+          g.lineTo(x + k, y + k * 0.5);
+        } else {
+          g.moveTo(x - k * 0.8, y + k * 0.6);
+          g.lineTo(x - k * 0.8, y - k * 0.6);
+          g.lineTo(x + k * 0.8, y - k * 0.6);
+          g.lineTo(x + k * 0.8, y + k * 0.6);
+        }
+      } else if (T.iff === "friend") g.arc(x, y, k * 0.8, 0, 2 * Math.PI);
       else if (T.iff === "hostile") {
         g.moveTo(x, y - k);
         g.lineTo(x + k, y);
         g.lineTo(x, y + k);
         g.lineTo(x - k, y);
         g.closePath();
-      } else if (T.iff === "neutral") g.rect(x - k * 0.8, y - k * 0.8, k * 1.6, k * 1.6);
-      else
-        for (const [ox, oy] of [
-          [0, -0.5],
-          [0.5, 0],
-          [0, 0.5],
-          [-0.5, 0],
-        ])
-          g.arc(x + ox! * k, y + oy! * k, k * 0.5, 0, 2 * Math.PI);
+      } else g.rect(x - k * 0.75, y - k * 0.75, k * 1.5, k * 1.5);
       if (T.datalink) g.setLineDash([5, 4]);
       g.stroke();
       g.setLineDash([]);
@@ -493,7 +1100,22 @@ export class Pcd {
         g.arc(x, y, k + 9, 0, 2 * Math.PI);
         g.stroke();
       }
-      this.text(T.name.slice(0, 10), x + 18, y - 14, col, 20);
+      if (!this.declutter || T.locked) this.text(T.name.slice(0, 10), x + 18, y - 14, col, 20);
+    }
+    // the bingo's reach: how far we fly before the fuel left is the bingo (at this flow and ground speed)
+    if (d.flow > 1e-3 && d.gs > 20) {
+      const bingo = d.bingo ?? 0.2 * d.fuelFull;
+      const reach = (Math.max(d.fuel - bingo, 0) / d.flow) * d.gs * px;
+      if (reach > 20 && reach < r.h * 1.4) {
+        g.strokeStyle = C.amber;
+        g.lineWidth = 2;
+        g.setLineDash([3, 9]);
+        g.beginPath();
+        g.arc(cx, cy, reach, 0, 2 * Math.PI);
+        g.stroke();
+        g.setLineDash([]);
+        if (cy - reach > r.y + 70) this.text("BINGO", cx, cy - reach - 12, C.amber, 18, "center", true);
+      }
     }
     // the ground track's line, the ownship
     g.strokeStyle = C.white;
@@ -532,23 +1154,591 @@ export class Pcd {
       24,
       "right",
     );
-    // the range's buttons
-    const yb = r.y + r.h - 34;
-    g.strokeStyle = C.frame;
-    g.strokeRect(r.x + 16, yb - 22, 80, 44);
-    g.strokeRect(r.x + r.w - 96, yb - 22, 80, 44);
-    this.text("−", r.x + 56, yb, C.white, 32, "center", true);
-    this.text("+", r.x + r.w - 56, yb, C.white, 32, "center", true);
-    this.text(`${this.range} ${this.u.distName}`, cx, yb, C.white, 26, "center", true);
   }
 
-  /** The flight controls: the craft from above, each surface's deflection drawn and written; the load, the
-   *  incidence, the law. */
-  private fcs(r: Rect, d: PcdData) {
+  /** The radar (FCR): a B-scope — the azimuth across (±60°), the range up —, its beam sweeping, its contacts: hits
+   *  in RWS (no way known), tracks in TWS (their IFF's shape, their way a stick, their altitude), the lock alone bright
+   *  in STT; the lock's figures. */
+  private fcr(r: PcdRect, d: PcdData) {
     const g = this.g;
+    const F = d.fcr;
+    const L = r.x + 56,
+      R = r.x + r.w - 24,
+      T = r.y + 58,
+      B = r.y + r.h - 34;
+    const cx = (L + R) / 2;
+    const AZ = 60 * D;
+    const range = this.fcrRange * this.u.distM;
+    const X = (az: number) => cx + (az / AZ) * ((R - L) / 2);
+    const Y = (rg: number) => B - (rg / range) * (B - T);
+    // the grid: the azimuths (±30°, the nose), the ranges' quarters
+    g.strokeStyle = C.dim;
+    g.lineWidth = 1.5;
+    g.strokeRect(L, T, R - L, B - T);
+    g.beginPath();
+    for (const a of [-30, 0, 30]) {
+      g.moveTo(X(a * D), T);
+      g.lineTo(X(a * D), B);
+    }
+    for (const f of [0.25, 0.5, 0.75]) {
+      g.moveTo(L, Y(f * range));
+      g.lineTo(R, Y(f * range));
+    }
+    g.stroke();
+    for (const f of [0.25, 0.5, 0.75, 1]) this.text(String(Math.round(f * this.fcrRange)), L - 8, Y(f * range), C.grey, 20, "right");
+    for (const a of [-60, -30, 0, 30, 60]) this.text(String(Math.abs(a)), X(a * D), B + 18, C.grey, 18, "center");
+    if (!F) {
+      this.text("RADAR STBY", cx, (T + B) / 2, C.grey, 30, "center", true);
+      return;
+    }
+    // the mode, the range; the beam
+    this.text(F.mode, r.x + 20, r.y + 24, C.cyan, 28, "left", true);
+    this.text(`${this.fcrRange} ${this.u.distName}`, r.x + 110, r.y + 24, C.white, 24);
+    g.strokeStyle = "rgba(95, 231, 255, 0.45)";
+    g.lineWidth = 2;
+    const bx = X(Math.max(-AZ, Math.min(AZ, F.beam)));
+    g.beginPath();
+    g.moveTo(bx, T);
+    g.lineTo(bx, B);
+    g.stroke();
+    // the contacts
+    for (const K of F.contacts) {
+      const rg = Math.hypot(K.x, K.y);
+      const az = Math.atan2(K.x, K.y);
+      if (Math.abs(az) > AZ || rg > range || K.y < 0) continue;
+      const x = X(az),
+        y = Y(rg);
+      const col = K.iff === "friend" ? C.cyan : K.iff === "hostile" ? "#ff5a46" : K.iff === "neutral" ? C.white : C.yellow;
+      const dim = F.mode === "STT" && !K.locked;
+      g.globalAlpha = dim ? 0.35 : 1;
+      g.strokeStyle = col;
+      g.fillStyle = col;
+      g.lineWidth = 3;
+      if (F.mode === "RWS" && !K.locked && !K.datalink) g.fillRect(x - 9, y - 5, 18, 10);
+      else {
+        const k = 12;
+        g.beginPath();
+        if (K.iff === "friend") g.arc(x, y, k, Math.PI, 2 * Math.PI);
+        else if (K.iff === "hostile") {
+          g.moveTo(x, y - k);
+          g.lineTo(x + k, y);
+          g.lineTo(x, y + k);
+          g.lineTo(x - k, y);
+          g.closePath();
+        } else g.rect(x - k * 0.8, y - k * 0.8, k * 1.6, k * 1.6);
+        if (K.datalink) g.setLineDash([5, 4]);
+        g.stroke();
+        g.setLineDash([]);
+        if (K.trk !== null) {
+          g.beginPath();
+          g.moveTo(x, y);
+          g.lineTo(x + Math.sin(K.trk) * 30, y - Math.cos(K.trk) * 30);
+          g.stroke();
+        }
+        // (its altitude, in thousands of the altitude's unit — as a real scope)
+        this.text(`${(this.u.alt(d.alt + K.dz) / 1000).toFixed(0)}`, x, y + 24, col, 18, "center");
+      }
+      if (K.locked) {
+        g.lineWidth = 2;
+        g.beginPath();
+        g.arc(x, y, 22, 0, 2 * Math.PI);
+        g.stroke();
+      }
+      if (!this.declutter && (K.locked || F.mode !== "RWS")) this.text(K.name.slice(0, 10), x + 18, y - 16, col, 18);
+      g.globalAlpha = 1;
+    }
+    // the lock's figures
+    const lk = F.lock;
+    if (lk) {
+      const vc = this.u.spd(lk.closure);
+      const rows = [
+        lk.name.slice(0, 14),
+        `${this.u.dist(lk.range).toFixed(1)} ${this.u.distName}  VC ${Math.round(vc)}`,
+        `${Math.round(this.u.alt(lk.alt)).toLocaleString("en")} ${this.u.altName}  ${String(Math.round(lk.hdg / D)).padStart(3, "0")}°  ${Math.round(this.u.spd(lk.gs))}`,
+      ];
+      this.text(rows[0]!, r.x + r.w - 20, r.y + 20, lk.iff === "hostile" ? "#ff5a46" : C.yellow, 24, "right", true);
+      this.text(`${rows[1]}  ·  ${rows[2]}`, r.x + r.w - 20, r.y + 44, C.white, 18, "right");
+    }
+  }
+
+  /** The weapons (SMS): the craft from below and its stations — the AIM-9Xs at the wingtips, the AIM-120s and the
+   *  GBU-32s (or the JSMs) in the bays —, each lit when loaded, the chosen one ringed; the master arm, the
+   *  gun's rounds, the flares. */
+  private sms(r: PcdRect, d: PcdData) {
+    const g = this.g;
+    const A = d.arms;
+    const live = !!A?.live;
+    this.text(live ? "ARM" : "SAFE", r.x + 20, r.y + 24, live ? C.green : C.grey, 28, "left", true);
+    this.text("MASTER", r.x + 90, r.y + 24, C.grey, 20);
+    if (!A) {
+      this.text("NO STORES DATA", r.x + r.w / 2, r.y + r.h / 2, C.grey, 26, "center", true);
+      this.text("A FIGHT OR A MISSION ARMS THEM", r.x + r.w / 2, r.y + r.h / 2 + 36, C.grey, 18, "center");
+      return;
+    }
+    const S = A.stores;
+    // the craft from below (the planform), its stations
+    const k = Math.min(r.w / 11.5, (r.h - 170) / 14.6);
     const cx = r.x + r.w / 2,
-      cy = r.y + r.h * 0.45;
-    const k = r.w / 14;
+      cy = r.y + 50 + 7.8 * k;
+    const P: [number, number][] = [
+      [0, 7.7],
+      [0.75, 4],
+      [1.6, 0.4],
+      [5.35, -2.2],
+      [5.35, -3.2],
+      [2.3, -3.3],
+      [2.6, -5.2],
+      [3.4, -6.3],
+      [3.4, -7.2],
+      [1.0, -6.5],
+      [0, -6.6],
+    ];
+    g.strokeStyle = C.frame;
+    g.lineWidth = 2.5;
+    g.beginPath();
+    P.forEach(([x, y], i) => (i ? g.lineTo(cx + x * k, cy - y * k) : g.moveTo(cx + x * k, cy - y * k)));
+    for (let i = P.length - 1; i >= 0; i--) g.lineTo(cx - P[i]![0] * k, cy - P[i]![1] * k);
+    g.closePath();
+    g.stroke();
+    // (a station: its store's short name, lit when loaded, ringed when chosen)
+    const station = (x: number, y: number, kind: keyof typeof STORE_NAME, loaded: boolean) => {
+      const w = 1.8 * k,
+        h = 1.05 * k;
+      const chosen = A.sel === kind;
+      g.fillStyle = loaded ? (chosen ? "#0f4a2a" : "#0d2a1c") : "#0a0f12";
+      g.fillRect(cx + x * k - w / 2, cy - y * k - h / 2, w, h);
+      g.strokeStyle = chosen ? C.cyan : loaded ? C.green : C.dim;
+      g.lineWidth = chosen ? 3 : 2;
+      g.strokeRect(cx + x * k - w / 2, cy - y * k - h / 2, w, h);
+      this.text(
+        kind === "jdam" ? "32" : kind === "aim9x" ? "9X" : kind === "aim120" ? "120" : "JSM",
+        cx + x * k,
+        cy - y * k,
+        loaded ? C.white : C.grey,
+        Math.max(16, k * 0.6),
+        "center",
+        true,
+      );
+    };
+    // (each kind's stores, the left station first: a count shared left and right)
+    const lr = (n: number) => [Math.ceil(n / 2), Math.floor(n / 2)] as const;
+    const [l9, r9] = lr(S.aim9x),
+      [lj, rj] = lr(S.jsm),
+      [l32, r32] = lr(S.jdam);
+    station(-5.0, -2.7, "aim9x", l9 > 0);
+    station(5.0, -2.7, "aim9x", r9 > 0);
+    // (the bays' outer stations: the GBU-32s, or the JSMs of the anti-ship load)
+    const bay = S.jsm > 0 ? "jsm" : "jdam";
+    station(-1.0, 1.2, bay, (bay === "jsm" ? lj : l32) > 0);
+    station(1.0, 1.2, bay, (bay === "jsm" ? rj : r32) > 0);
+    for (let i = 0; i < 4; i++) station(i < 2 ? -1.0 : 1.0, -0.6 - (i % 2) * 1.2, "aim120", S.aim120 > i);
+    // the stores left: the chosen one, then each kind; the gun, the flares
+    const y0 = r.y + r.h - 118;
+    const sel = A.sel as keyof typeof STORE_NAME;
+    const left = S[sel] ?? 0;
+    this.text(`${STORE_NAME[sel] ?? sel.toUpperCase()} · ${left}`, r.x + 20, y0, left > 0 ? C.cyan : C.yellow, 30, "left", true);
+    if (sel === "aim120" && !d.fcr?.lock) this.text("LOCK REQUIRED", r.x + r.w - 20, y0, C.yellow, 20, "right", true);
+    const kinds = ["aim120", "aim9x", "jdam", "jsm"] as const;
+    kinds.forEach((w, i) =>
+      this.text(`${STORE_NAME[w]} ${S[w]}`, r.x + 20 + i * ((r.w - 40) / 4), y0 + 40, S[w] > 0 ? C.white : C.grey, 18),
+    );
+    this.text(`GUN ${S.gun}`, r.x + 20, y0 + 76, S.gun > 0 ? C.white : C.yellow, 22, "left", true);
+    const gw = r.w * 0.36;
+    g.strokeStyle = C.frame;
+    g.lineWidth = 2;
+    g.strokeRect(r.x + 130, y0 + 66, gw, 20);
+    g.fillStyle = C.green;
+    g.fillRect(r.x + 132, y0 + 68, (gw - 4) * Math.min(S.gun / Math.max(A.gunFull, 1), 1), 16);
+    this.text(`FLARE ${S.flares}`, r.x + r.w - 20, y0 + 76, S.flares > 0 ? C.white : C.yellow, 22, "right", true);
+  }
+
+  /**
+   * The EOTS (the targeting camera, infrared): its picture made here, not rendered — the sky cold, the ground warm
+   * under the horizon's terrain (its ridge sampled all round), the tracks as hot spots (an aircraft small and bright, a
+   * ship long), the lock in its tracking gates; white or black hot, wide or narrow; slaved to the lock or along the
+   * nose. Under it the DAS's band, all round: the horizon, the tracks, the missiles in flight (red: at us).
+   */
+  private eotsPage(r: PcdRect, d: PcdData) {
+    const g = this.g;
+    const E = this.eots;
+    const band = 78;
+    const v = { x: r.x + 10, y: r.y + 10, w: r.w - 20, h: r.h - band - 26 };
+    const los = this.eotsLos(d);
+    const fov = EOTS_FOV[E.fov] * D;
+    const k = v.w / fov;
+    const cx = v.x + v.w / 2,
+      cy = v.y + v.h / 2;
+    const hot = (t: number) => {
+      const c = Math.round(255 * (E.whot ? t : 1 - t));
+      return `rgb(${c}, ${c}, ${c})`;
+    };
+    g.save();
+    g.beginPath();
+    g.rect(v.x, v.y, v.w, v.h);
+    g.clip();
+    // the sky, cold (a little warmer down to the horizon)
+    const sky = g.createLinearGradient(0, v.y, 0, v.y + v.h);
+    sky.addColorStop(0, hot(0.03));
+    sky.addColorStop(1, hot(0.14));
+    g.fillStyle = sky;
+    g.fillRect(v.x, v.y, v.w, v.h);
+    // the ground under the terrain's ridge (or the level horizon where not sampled yet), warmer nearer
+    const cols = 96;
+    g.beginPath();
+    g.moveTo(v.x, v.y + v.h);
+    for (let i = 0; i <= cols; i++) {
+      const az = los.az + (i / cols - 0.5) * (v.w / k);
+      const b = (((((d.heading + az) / (2 * Math.PI)) * RIDGE_BINS) % RIDGE_BINS) + RIDGE_BINS) % RIDGE_BINS;
+      const el = this.ridge[Math.floor(b)]!;
+      const e = Number.isFinite(el) ? el : -Math.acos(EARTH_R / (EARTH_R + Math.max(d.alt, 1)));
+      g.lineTo(v.x + (i / cols) * v.w, cy - (e - los.el) * k);
+    }
+    g.lineTo(v.x + v.w, v.y + v.h);
+    g.closePath();
+    const gr = g.createLinearGradient(0, cy - 0.05 * k, 0, v.y + v.h);
+    gr.addColorStop(0, hot(0.36));
+    gr.addColorStop(1, hot(0.56));
+    g.fillStyle = gr;
+    g.fill();
+    // the tracks: hot spots
+    for (const K of d.fcr?.contacts ?? []) {
+      const rg = Math.hypot(K.x, K.y, K.dz);
+      const az = Math.atan2(K.x, K.y) - los.az,
+        el = Math.atan2(K.dz, Math.hypot(K.x, K.y)) - los.el;
+      const x = cx + az * k,
+        y = cy - el * k;
+      if (x < v.x - 40 || x > v.x + v.w + 40 || y < v.y - 40 || y > v.y + v.h + 40 || rg < 1) continue;
+      const size = Math.max((K.air ? 14 : 120) / rg, 0.0006) * k;
+      g.fillStyle = hot(0.97);
+      if (K.air) {
+        g.beginPath();
+        g.ellipse(x, y, Math.max(size, 2.5), Math.max(size * 0.4, 1.5), 0, 0, 2 * Math.PI);
+        g.fill();
+        // (its exhaust's glow)
+        g.globalAlpha = 0.35;
+        g.beginPath();
+        g.arc(x, y, Math.max(size, 2.5) * 2.4, 0, 2 * Math.PI);
+        g.fill();
+        g.globalAlpha = 1;
+      } else g.fillRect(x - Math.max(size, 4), y - Math.max(size * 0.18, 1.5), 2 * Math.max(size, 4), Math.max(size * 0.36, 3));
+      if (K.locked) {
+        // (the tracking gates: four corners)
+        const q = Math.max(size * 2.6, 16),
+          L = q * 0.45;
+        g.strokeStyle = C.white;
+        g.lineWidth = 2.5;
+        g.beginPath();
+        for (const [sx, sy] of [
+          [-1, -1],
+          [1, -1],
+          [1, 1],
+          [-1, 1],
+        ] as const) {
+          g.moveTo(x + sx * q, y + sy * (q - L));
+          g.lineTo(x + sx * q, y + sy * q);
+          g.lineTo(x + sx * (q - L), y + sy * q);
+        }
+        g.stroke();
+      }
+    }
+    // the grain of a real sensor (a pattern made once)
+    if (!this.grain) {
+      this.grain = new OffscreenCanvas(64, 64);
+      const q = this.grain.getContext("2d")!;
+      const im = q.createImageData(64, 64);
+      for (let i = 0; i < im.data.length; i += 4) {
+        const c = Math.floor(Math.random() * 255);
+        im.data[i] = im.data[i + 1] = im.data[i + 2] = c;
+        im.data[i + 3] = 22;
+      }
+      q.putImageData(im, 0, 0);
+    }
+    const pat = g.createPattern(this.grain, "repeat");
+    if (pat) {
+      g.fillStyle = pat;
+      g.fillRect(v.x, v.y, v.w, v.h);
+    }
+    g.restore();
+    // the frame, the reticle (open in its centre), the figures
+    g.strokeStyle = C.frame;
+    g.lineWidth = 2;
+    g.strokeRect(v.x, v.y, v.w, v.h);
+    g.strokeStyle = C.green;
+    g.lineWidth = 2;
+    g.beginPath();
+    for (const [a, b] of [
+      [-1, 0],
+      [1, 0],
+      [0, -1],
+      [0, 1],
+    ] as const) {
+      g.moveTo(cx + a * 14, cy + b * 14);
+      g.lineTo(cx + a * 46, cy + b * 46);
+    }
+    g.stroke();
+    const sgn = (a: number, p: string, n: string) => `${String(Math.round(Math.abs(a / D))).padStart(3, "0")}${a >= 0 ? p : n}`;
+    this.text(`EOTS  ${E.fov === "W" ? "WFOV" : "NFOV"}  ${E.whot ? "WHOT" : "BHOT"}`, v.x + 12, v.y + 20, C.green, 20, "left", true);
+    this.text(`AZ ${sgn(los.az, "R", "L")}  EL ${sgn(los.el, "U", "D")}`, v.x + v.w - 12, v.y + 20, C.green, 20, "right", true);
+    const lk = d.fcr?.lock;
+    this.text(
+      los.lock && lk
+        ? `PT TRK ${lk.name.slice(0, 12)}  R ${this.u.dist(lk.range).toFixed(1)} ${this.u.distName}`
+        : los.lock
+          ? "PT TRK"
+          : "BORESIGHT",
+      v.x + 12,
+      v.y + v.h - 18,
+      C.green,
+      20,
+      "left",
+      true,
+    );
+    // the DAS's band: all round, the nose in its middle
+    const b = { x: r.x + 10, y: r.y + r.h - band - 8, w: r.w - 20, h: band };
+    g.fillStyle = "#04080a";
+    g.fillRect(b.x, b.y, b.w, b.h);
+    g.strokeStyle = C.frame;
+    g.strokeRect(b.x, b.y, b.w, b.h);
+    const bk = b.w / (2 * Math.PI);
+    const by = b.y + b.h * 0.58;
+    const elK = b.h / (50 * D);
+    g.strokeStyle = "#3a4a40";
+    g.lineWidth = 1.5;
+    g.beginPath();
+    for (let i = 0; i <= 180; i++) {
+      const az = (i / 180 - 0.5) * 2 * Math.PI;
+      const bin = (((((d.heading + az) / (2 * Math.PI)) * RIDGE_BINS) % RIDGE_BINS) + RIDGE_BINS) % RIDGE_BINS;
+      const el = this.ridge[Math.floor(bin)]!;
+      const y = by - (Number.isFinite(el) ? el : 0) * elK;
+      if (i) g.lineTo(b.x + az * bk + b.w / 2, y);
+      else g.moveTo(b.x, y);
+    }
+    g.stroke();
+    for (let a = -180; a <= 180; a += 30) {
+      const x = b.x + b.w / 2 + a * D * bk;
+      g.strokeStyle = a === 0 ? C.green : C.dim;
+      g.beginPath();
+      g.moveTo(x, b.y + b.h - 10);
+      g.lineTo(x, b.y + b.h);
+      g.stroke();
+    }
+    // (the EOTS's field in the band)
+    g.strokeStyle = C.green;
+    g.strokeRect(b.x + b.w / 2 + (los.az - fov / 2) * bk, b.y + 4, Math.max(fov * bk, 3), b.h - 8);
+    const dot = (x: number, y: number, dz: number, col: string, size: number) => {
+      const az = Math.atan2(x, y),
+        el = Math.atan2(dz, Math.hypot(x, y));
+      g.fillStyle = col;
+      g.beginPath();
+      g.arc(b.x + b.w / 2 + az * bk, Math.max(b.y + 6, Math.min(b.y + b.h - 6, by - el * elK)), size, 0, 2 * Math.PI);
+      g.fill();
+    };
+    for (const K of d.fcr?.contacts ?? []) dot(K.x, K.y, K.dz, K.iff === "hostile" ? "#ff5a46" : K.iff === "friend" ? C.cyan : C.white, 3);
+    for (const M of d.missiles ?? []) {
+      dot(M.x, M.y, M.dz, M.atUs ? C.red : C.amber, M.atUs ? 6 : 4);
+      if (M.atUs) {
+        const az = Math.atan2(M.x, M.y);
+        this.text("MSL", b.x + b.w / 2 + az * bk, b.y + 12, C.red, 16, "center", true);
+      }
+    }
+    this.text("DAS", b.x + 8, b.y + 14, C.grey, 16, "left", true);
+  }
+
+  /** A button inside a page (lit: its colour; dim: nothing to do now), kept for the touch. */
+  private button(slot: number, r: PcdRect, label: string, lit: string | null, act: (() => string | null) | null, size = 24) {
+    const g = this.g;
+    g.fillStyle = lit ? "#0d2a30" : "#0a1417";
+    g.fillRect(r.x, r.y, r.w, r.h);
+    g.strokeStyle = lit ?? (act ? C.frame : C.dim);
+    g.lineWidth = lit ? 3 : 2;
+    g.strokeRect(r.x, r.y, r.w, r.h);
+    this.text(label, r.x + r.w / 2, r.y + r.h / 2, lit ?? (act ? C.white : C.grey), size, "center", true);
+    if (act) this.hits.get(slot)?.push({ r, act });
+  }
+
+  /** The autopilot (as the crew's MCP): AP and A/THR; the speed, heading and altitude selected (− and +: engaging
+   *  them), held in cyan; LNAV, VNAV (the flight plan's, magenta); the ILS, an orbit, a holding pattern, the terrain
+   *  following, the modes off; the go-around. */
+  private ap(r: PcdRect, d: PcdData, slot: number) {
+    const A = d.ap;
+    const ask = (a: PcdAction) => () => this.act?.(a) ?? null;
+    const apOn = A.alt !== null || A.hdg !== null;
+    const bw = (r.w - 48) / 2;
+    this.button(slot, { x: r.x + 16, y: r.y + 14, w: bw, h: 56 }, "AP", apOn ? C.green : null, ask({ kind: "ap", set: { ap: !apOn } }), 30);
+    this.button(
+      slot,
+      { x: r.x + 32 + bw, y: r.y + 14, w: bw, h: 56 },
+      "A/THR",
+      A.spd !== null ? C.green : null,
+      ask({ kind: "ap", set: { athr: A.spd === null } }),
+      30,
+    );
+    // the selectors: the value held (cyan) or the one it would take (dim), − and +
+    const spdStep = 5 / this.u.spd(1),
+      altStep = (this.u.altName === "FT" ? 500 : 100) / this.u.alt(1),
+      hdgStep = 5 * D;
+    const fresh = performance.now() - this.sel.at < 1500;
+    const pick = (k: "spd" | "hdg" | "alt", held: number | null, now: number) => (fresh ? this.sel[k] : undefined) ?? held ?? now;
+    const spd = pick("spd", A.spd, d.tas),
+      hdg = pick("hdg", A.hdg, d.heading),
+      alt = pick("alt", A.alt, d.alt);
+    // (a selector stepped: from the value just chosen, kept a moment)
+    const choose = (k: "spd" | "hdg" | "alt", v: number): PcdAction => {
+      this.sel = { ...(performance.now() - this.sel.at < 1500 ? this.sel : {}), [k]: v, at: performance.now() };
+      return { kind: "ap", set: { [k]: v } };
+    };
+    const now = (k: "spd" | "hdg" | "alt") =>
+      (performance.now() - this.sel.at < 1500 ? this.sel[k] : undefined) ??
+      (k === "spd" ? (A.spd ?? d.tas) : k === "hdg" ? (A.hdg ?? d.heading) : (A.alt ?? d.alt));
+    const deg = (a: number) => String(Math.round((((a / D) % 360) + 360) % 360) % 360).padStart(3, "0");
+    const rows: [string, string, boolean, (s: number) => PcdAction][] = [
+      ["SPD", `${Math.round(this.u.spd(spd))} ${this.u.spdName}`, A.spd !== null, (k) => choose("spd", now("spd") + k * spdStep)],
+      ["HDG", `${deg(hdg)}°`, A.hdg !== null && !d.route?.l, (k) => choose("hdg", now("hdg") + k * hdgStep)],
+      [
+        "ALT",
+        `${Math.round(this.u.alt(alt)).toLocaleString("en")} ${this.u.altName}`,
+        A.alt !== null && !d.route?.v,
+        (k) => choose("alt", now("alt") + k * altStep),
+      ],
+    ];
+    rows.forEach(([name, value, held, step], i) => {
+      const y = r.y + 92 + i * 70;
+      this.text(name, r.x + 22, y + 28, C.grey, 22, "left", true);
+      this.text(value, r.x + r.w * 0.44, y + 28, held ? C.cyan : C.grey, 32, "center", true);
+      this.button(slot, { x: r.x + r.w - 152, y, w: 64, h: 56 }, "−", null, () => this.act?.(step(-1)) ?? null, 34);
+      this.button(slot, { x: r.x + r.w - 80, y, w: 64, h: 56 }, "+", null, () => this.act?.(step(1)) ?? null, 34);
+    });
+    // the flight plan's guidance
+    const routed = !!d.route?.wps.length;
+    const y1 = r.y + 310;
+    this.button(
+      slot,
+      { x: r.x + 16, y: y1, w: bw, h: 48 },
+      "LNAV",
+      d.route?.l ? C.magenta : null,
+      routed ? ask({ kind: "nav", l: !d.route?.l }) : null,
+    );
+    this.button(
+      slot,
+      { x: r.x + 32 + bw, y: y1, w: bw, h: 48 },
+      "VNAV",
+      d.route?.v ? C.magenta : null,
+      routed ? ask({ kind: "nav", v: !d.route?.v }) : null,
+    );
+    // the modes
+    const M = d.apMode ?? { order: "", ils: false };
+    const modes: [string, boolean, PcdAction][] = [
+      ["ILS", M.ils, { kind: "apMode", mode: M.ils ? "ilsOff" : "ils" }],
+      ["ORBIT", M.order === "ORBIT", { kind: "apMode", mode: M.order === "ORBIT" ? "off" : "orbit" }],
+      ["HOLD", M.order === "HOLD", { kind: "apMode", mode: M.order === "HOLD" ? "off" : "hold" }],
+      ["TF", M.order === "TF", { kind: "apMode", mode: M.order === "TF" ? "off" : "tf" }],
+    ];
+    const mw = (r.w - 32 - 3 * 10) / 4;
+    const y2 = r.y + 372;
+    modes.forEach(([name, on, a], i) =>
+      this.button(slot, { x: r.x + 16 + i * (mw + 10), y: y2, w: mw, h: 48 }, name, on ? C.green : null, ask(a), 22),
+    );
+    if (r.h > 480)
+      this.button(
+        slot,
+        { x: r.x + 16, y: r.y + 432, w: r.w - 32, h: 44 },
+        "GO AROUND",
+        null,
+        d.onGround ? null : ask({ kind: "apMode", mode: "goAround" }),
+        22,
+      );
+    if (M.order && !["ORBIT", "HOLD", "TF"].includes(M.order)) this.text(M.order, r.x + r.w / 2, y2 - 14, C.green, 18, "center", true);
+  }
+
+  /** Text cut into lines no wider than w. */
+  private wrap(t: string, w: number, size: number, bold = false): string[] {
+    const g = this.g;
+    g.font = `${bold ? "700 " : "500 "}${size}px ${FONT}`;
+    const out: string[] = [];
+    let line = "";
+    for (const word of t.split(/\s+/)) {
+      const next = line ? `${line} ${word}` : word;
+      if (g.measureText(next).width > w && line) {
+        out.push(line);
+        line = word;
+      } else line = next;
+    }
+    if (line) out.push(line);
+    return out;
+  }
+
+  /** The mission flown (its title, its clock, its objectives — ◇ to do, ✓ done, ✗ failed —, its last words), else the
+   *  lesson flown (its steps, the one now, the instructor's words). */
+  private msn(r: PcdRect, d: PcdData) {
+    const g = this.g;
+    const clock = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+    const M = d.msn;
+    if (M) {
+      const lines = this.wrap(M.title.toUpperCase(), r.w - 40, 26, true).slice(0, 2);
+      lines.forEach((l, i) => this.text(l, r.x + 20, r.y + 28 + i * 30, C.cyan, 26, "left", true));
+      let y = r.y + 34 + lines.length * 30;
+      const st = M.status === "won" ? ["COMPLETE", C.green] : M.status === "failed" ? ["FAILED", C.red] : ["IN PROGRESS", C.white];
+      this.text(st[0]!, r.x + 20, y, st[1]!, 22, "left", true);
+      this.text(
+        M.limit ? `${clock(M.t)} / ${clock(M.limit)}` : clock(M.t),
+        r.x + r.w - 20,
+        y,
+        M.limit && M.t > 0.85 * M.limit ? C.yellow : C.white,
+        24,
+        "right",
+        true,
+      );
+      y += 40;
+      g.strokeStyle = C.dim;
+      g.lineWidth = 1.5;
+      g.beginPath();
+      g.moveTo(r.x + 16, y - 16);
+      g.lineTo(r.x + r.w - 16, y - 16);
+      g.stroke();
+      for (const o of M.objectives) {
+        if (o.state === "waiting") continue;
+        const [mark, col] = o.state === "done" ? ["✓", C.green] : o.state === "failed" ? ["✗", C.red] : ["◇", o.mine ? C.white : C.grey];
+        const L = this.wrap(o.text, r.w - 80, 22).slice(0, 2);
+        if (y + L.length * 26 > r.y + r.h - 70) break;
+        this.text(mark, r.x + 24, y, col, 24, "left", true);
+        L.forEach((l, i) => this.text(l, r.x + 56, y + i * 26, o.optional || !o.mine ? C.grey : col, 22));
+        y += L.length * 26 + 14;
+      }
+      const why = M.status !== "flying" ? M.why : M.said;
+      this.wrap(why, r.w - 40, 20)
+        .slice(-2)
+        .forEach((l, i, a) => this.text(l, r.x + 20, r.y + r.h - 24 - (a.length - 1 - i) * 24, C.grey, 20));
+      return;
+    }
+    const L = d.lesson;
+    if (L) {
+      this.text(L.id.toUpperCase(), r.x + 20, r.y + 28, C.cyan, 26, "left", true);
+      this.text(L.mode.toUpperCase(), r.x + r.w - 20, r.y + 28, C.white, 22, "right", true);
+      let y = r.y + 72;
+      const from = Math.max(0, Math.min(L.i - 2, L.steps.length - 7));
+      L.steps.slice(from, from + 7).forEach((S, k) => {
+        const i = from + k;
+        const col = i < L.i ? C.green : i === L.i ? C.white : C.grey;
+        this.text(i < L.i ? "✓" : i === L.i ? "▶" : "·", r.x + 24, y, col, 22, "left", true);
+        this.text(`${S.who === "tars" ? "TARS" : "YOU"} · ${S.name}`.slice(0, 34), r.x + 56, y, col, 22, "left", i === L.i);
+        y += 34;
+      });
+      this.wrap(L.said, r.w - 40, 20)
+        .slice(-4)
+        .forEach((l, i, a) => this.text(l, r.x + 20, r.y + r.h - 24 - (a.length - 1 - i) * 24, C.white, 20));
+      return;
+    }
+    this.text("NO MISSION", r.x + r.w / 2, r.y + r.h / 2 - 20, C.grey, 30, "center", true);
+    this.text("MISSIONS AND LESSONS SHOW HERE", r.x + r.w / 2, r.y + r.h / 2 + 18, C.grey, 18, "center");
+  }
+
+  /** The flight controls: the craft from above (its surfaces' bars coloured by their travel used), their
+   *  deflections in a table beside it (left, right), the load, the incidence, the Mach, the law below. */
+  private fcs(r: PcdRect, d: PcdData) {
+    const g = this.g;
+    const k = Math.min((r.w * 0.56) / 11.4, (r.h - 140) / 16.2);
+    const cx = r.x + r.w * 0.3,
+      cy = r.y + 14 + 8 * k;
     // (the planform, nose up: metres from the centre)
     const P: [number, number][] = [
       [0, 7.7],
@@ -564,45 +1754,70 @@ export class Pcd {
       [0, -6.6],
     ];
     g.strokeStyle = C.grey;
-    g.lineWidth = 3;
+    g.lineWidth = 2.5;
     g.beginPath();
     P.forEach(([x, y], i) => (i ? g.lineTo(cx + x * k, cy - y * k) : g.moveTo(cx + x * k, cy - y * k)));
     for (let i = P.length - 1; i >= 0; i--) g.lineTo(cx - P[i]![0] * k, cy - P[i]![1] * k);
     g.closePath();
     g.stroke();
     const s = d.surfaces;
+    const col = (a: number, max: number) => (Math.abs(a) / max > 0.85 ? C.yellow : C.green);
     if (s) {
-      // (a surface: its span's line, coloured by its travel used; its value in degrees)
-      const bar = (x0: number, y0: number, x1: number, y1: number, a: number, max: number, label: string, lx: number, ly: number) => {
-        const f = Math.min(Math.abs(a) / max, 1);
-        g.strokeStyle = f > 0.85 ? C.yellow : C.green;
-        g.lineWidth = 10;
+      const bar = (x0: number, y0: number, x1: number, y1: number, a: number, max: number) => {
+        g.strokeStyle = col(a, max);
+        g.lineWidth = Math.max(4, k * 0.38);
         g.beginPath();
         g.moveTo(cx + x0 * k, cy - y0 * k);
         g.lineTo(cx + x1 * k, cy - y1 * k);
         g.stroke();
-        this.text(`${label}${a >= 0 ? "+" : ""}${(a / D).toFixed(0)}`, cx + lx * k, cy - ly * k, C.white, 21, "center");
       };
       // (the pilot's left: the screen's left — the craft seen from above, its nose up)
-      bar(-1.0, -4.0, -4.9, -3.0, s.flaperon[0], 25 * D, "FLP ", -3.4, -4.5);
-      bar(1.0, -4.0, 4.9, -3.0, s.flaperon[1], 25 * D, "FLP ", 3.4, -4.5);
-      bar(-1.7, 0.5, -5.0, -1.9, s.lef[0], 30 * D, "LEF ", -4.6, 0.4);
-      bar(1.7, 0.5, 5.0, -1.9, s.lef[1], 30 * D, "LEF ", 4.6, 0.4);
-      bar(-1.1, -6.6, -3.3, -6.9, s.stab[0], 20 * D, "STAB ", -2.6, -7.8);
-      bar(1.1, -6.6, 3.3, -6.9, s.stab[1], 20 * D, "STAB ", 2.6, -7.8);
-      bar(-1.5, -5.6, -1.9, -6.2, s.rudder[0], 25 * D, "RUD ", -1.6, -5.0);
-      bar(1.5, -5.6, 1.9, -6.2, s.rudder[1], 25 * D, "RUD ", 1.6, -5.0);
+      bar(-1.0, -4.0, -4.9, -3.0, s.flaperon[0], 25 * D);
+      bar(1.0, -4.0, 4.9, -3.0, s.flaperon[1], 25 * D);
+      bar(-1.7, 0.5, -5.0, -1.9, s.lef[0], 30 * D);
+      bar(1.7, 0.5, 5.0, -1.9, s.lef[1], 30 * D);
+      bar(-1.1, -6.6, -3.3, -6.9, s.stab[0], 20 * D);
+      bar(1.1, -6.6, 3.3, -6.9, s.stab[1], 20 * D);
+      bar(-1.5, -5.6, -1.9, -6.2, s.rudder[0], 25 * D);
+      bar(1.5, -5.6, 1.9, -6.2, s.rudder[1], 25 * D);
+      // (the table: each surface's left and right, in degrees)
+      const tx = r.x + r.w * 0.6,
+        cl = r.x + r.w * 0.79,
+        cr = r.x + r.w * 0.95;
+      const deg = (a: number) => `${a >= 0 ? "+" : "−"}${Math.abs(a / D).toFixed(0)}`;
+      this.text("L", cl, r.y + 30, C.grey, 20, "right");
+      this.text("R", cr, r.y + 30, C.grey, 20, "right");
+      (
+        [
+          ["LEF", s.lef, 30],
+          ["FLPRN", s.flaperon, 25],
+          ["STAB", s.stab, 20],
+          ["RUD", s.rudder, 25],
+        ] as const
+      ).forEach(([name, lr, max], i) => {
+        const y = r.y + 72 + i * 46;
+        this.text(name, tx, y, C.grey, 22);
+        this.text(deg(lr[0]), cl, y, col(lr[0], max * D), 26, "right", true);
+        this.text(deg(lr[1]), cr, y, col(lr[1], max * D), 26, "right", true);
+      });
     }
-    const y = r.y + r.h - 120;
-    this.text(`G ${d.g.toFixed(1)}`, r.x + 30, y, d.g > 6.5 ? C.yellow : C.white, 30, "left", true);
-    this.text(`PEAK ${d.gPeak.toFixed(1)}`, r.x + 30, y + 44, C.grey, 24);
-    this.text(`AOA ${(d.alpha / D).toFixed(1)}°`, r.x + r.w / 2, y, d.alpha > 24 * D ? C.yellow : C.white, 30, "center", true);
-    this.text(d.stovl?.on ? "LAW STOVL" : "LAW CTOL · 7G", r.x + r.w - 30, y, C.cyan, 26, "right", true);
-    this.text(`MACH ${d.mach.toFixed(2)}`, r.x + r.w / 2, y + 44, C.grey, 24, "center");
+    // the load, the incidence, the Mach; the peak and the law
+    const y = r.y + r.h - 82;
+    g.strokeStyle = C.dim;
+    g.lineWidth = 1.5;
+    g.beginPath();
+    g.moveTo(r.x + 16, y - 32);
+    g.lineTo(r.x + r.w - 16, y - 32);
+    g.stroke();
+    this.text(`G ${d.g.toFixed(1)}`, r.x + 24, y, d.g > 6.5 ? C.yellow : C.white, 30, "left", true);
+    this.text(`AOA ${(d.alpha / D).toFixed(1)}°`, r.x + r.w * 0.36, y, d.alpha > 24 * D ? C.yellow : C.white, 30, "left", true);
+    this.text(`M ${d.mach.toFixed(2)}`, r.x + r.w - 24, y, C.white, 30, "right", true);
+    this.text(`PEAK ${d.gPeak.toFixed(1)} G`, r.x + 24, y + 44, C.grey, 22);
+    this.text(d.stovl?.on ? "LAW STOVL" : "LAW CTOL · 7G", r.x + r.w - 24, y + 44, C.cyan, 22, "right", true);
   }
 
   /** The engine: the core's speed (N2) and the exhaust's temperature as dials, the thrust, the flow. */
-  private eng(r: Rect, d: PcdData) {
+  private eng(r: PcdRect, d: PcdData) {
     const n2 = d.thrust > 0 || d.spool > 0 ? 63 + 37 * d.spool + 2 * d.ab : 0;
     const egt = 420 + 430 * d.spool + 180 * d.ab;
     this.dial(r.x + r.w * 0.28, r.y + 150, 105, n2 / 110, `${n2.toFixed(0)}`, "N2 %", n2 > 103 ? C.yellow : C.green);
@@ -642,7 +1857,7 @@ export class Pcd {
   }
 
   /** The fuel: the total, its gauge and its marks (joker, bingo), the flow, the endurance at it. */
-  private fuel(r: Rect, d: PcdData) {
+  private fuel(r: PcdRect, d: PcdData) {
     const g = this.g;
     const f = d.fuelFull > 0 ? d.fuel / d.fuelFull : 0;
     const x = r.x + 40,
@@ -686,7 +1901,7 @@ export class Pcd {
   }
 
   /** The STOVL: the craft from the side, its lift fan's door, its nozzle's angle; the hover's margin. */
-  private stovlPage(r: Rect, d: PcdData) {
+  private stovlPage(r: PcdRect, d: PcdData) {
     const g = this.g;
     const S = d.stovl;
     const cx = r.x + r.w / 2,
@@ -762,7 +1977,7 @@ export class Pcd {
   }
 
   /** The navigation: where, how fast, the wind, the nearest field. */
-  private cni(r: Rect, d: PcdData) {
+  private cni(r: PcdRect, d: PcdData) {
     const lat = `${d.lat >= 0 ? "N" : "S"} ${Math.abs(d.lat).toFixed(4)}°`,
       lon = `${d.lon >= 0 ? "E" : "W"} ${Math.abs(d.lon).toFixed(4)}°`;
     const rows: [string, string][] = [
@@ -797,7 +2012,7 @@ export class Pcd {
   }
 
   /** The standby attitude: the horizon, the pitch's lines, the bank. */
-  private adi(r: Rect, d: PcdData) {
+  private adi(r: PcdRect, d: PcdData) {
     const g = this.g;
     const cx = r.x + r.w / 2,
       cy = r.y + r.h / 2 - 20;
@@ -840,8 +2055,47 @@ export class Pcd {
     this.text(`${Math.round(this.u.alt(d.alt))} ${this.u.altName}`, r.x + r.w - 30, r.y + r.h - 40, C.white, 28, "right", true);
   }
 
+  /** The integrated cautions and warnings: each alert in its colour, the gravest first (warnings red, cautions
+   *  amber, advisories white); in a fight, the damage. */
+  private icaws(r: PcdRect, d: PcdData) {
+    const g = this.g;
+    const rank = { warning: 0, caution: 1, advisory: 2 } as const;
+    const list = [...d.alerts].sort((a, b) => rank[a.level] - rank[b.level]);
+    const n = (l: keyof typeof rank) => list.filter((a) => a.level === l).length;
+    this.text(`WARN ${n("warning")}`, r.x + 24, r.y + 30, n("warning") ? C.red : C.grey, 24, "left", true);
+    this.text(`CAUT ${n("caution")}`, r.x + r.w / 2, r.y + 30, n("caution") ? C.amber : C.grey, 24, "center", true);
+    this.text(`ADV ${n("advisory")}`, r.x + r.w - 24, r.y + 30, n("advisory") ? C.white : C.grey, 24, "right", true);
+    let y = r.y + 70;
+    if (!list.length) this.text("NO FAULTS", r.x + r.w / 2, r.y + r.h / 2 - 20, C.green, 34, "center", true);
+    for (const a of list.slice(0, Math.floor((r.h - 150) / 48))) {
+      const c = a.level === "warning" ? C.red : a.level === "caution" ? C.amber : C.white;
+      if (a.level === "warning") {
+        g.fillStyle = c;
+        g.fillRect(r.x + 16, y - 20, r.w - 32, 40);
+      } else {
+        g.strokeStyle = c;
+        g.lineWidth = 2;
+        g.strokeRect(r.x + 16, y - 20, r.w - 32, 40);
+      }
+      this.text(a.text.toUpperCase().slice(0, 34), r.x + 30, y, a.level === "warning" ? "#000" : c, 22, "left", true);
+      y += 48;
+    }
+    // (in a fight: the damage taken)
+    if (d.damage !== undefined && d.damage > 0) {
+      const yb = r.y + r.h - 50,
+        w = r.w - 200;
+      this.text("DAMAGE", r.x + 24, yb, C.grey, 22);
+      g.strokeStyle = C.frame;
+      g.lineWidth = 2;
+      g.strokeRect(r.x + 130, yb - 14, w, 28);
+      g.fillStyle = d.damage > 0.6 ? C.red : d.damage > 0.3 ? C.amber : C.yellow;
+      g.fillRect(r.x + 133, yb - 11, (w - 6) * Math.min(d.damage, 1), 22);
+      this.text(`${Math.round(d.damage * 100)}%`, r.x + r.w - 24, yb, C.white, 24, "right", true);
+    }
+  }
+
   /** The checklists: each item checked from the flight's state. */
-  private ckl(r: Rect, d: PcdData) {
+  private ckl(r: PcdRect, d: PcdData) {
     const lists: { title: string; items: [string, boolean][] }[] = d.onGround
       ? [
           {
@@ -891,13 +2145,6 @@ export class Pcd {
       }
     }
   }
-}
-
-interface Rect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
 }
 
 /** The nearest airfield: its distance [m] and bearing [°]. */

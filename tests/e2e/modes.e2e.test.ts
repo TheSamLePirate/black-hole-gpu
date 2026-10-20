@@ -124,6 +124,9 @@ describe.skipIf(!E2E)("the four modes and the top bar", () => {
 
   test("the pause menu offers the capture", async () => {
     await app.press("Escape", "Escape");
+    // (since PLAN-TITRE-AAA E8 the entry is in its group's drawer)
+    await app.waitFor(`!!document.querySelector("[data-testid=pause-group-capture]")`, 5000);
+    await app.click("[data-testid=pause-group-capture]");
     await app.waitFor(`!!document.querySelector("[data-testid=pause-capture]")`, 3_000);
     await app.press("Escape", "Escape");
   }, 30_000);

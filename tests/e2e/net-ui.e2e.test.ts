@@ -94,6 +94,11 @@ describe.skipIf(!E2E)("the network's interface", () => {
     const hint = await a.js<string>(`document.querySelector("[data-testid=pause-network]").textContent`);
     console.log(`  pause item: ${hint}`);
     expect(hint).toContain(await a.js<string>(`__bh.net.net.room.code`));
+    // (in a room the common clock does not stop: the pause says so and holds nothing — PLAN-TITRE-AAA E8)
+    expect(await a.js<boolean>(`!!document.querySelector(".pz-root.live [data-testid=pause-live]")`)).toBe(true);
+    const t0 = await a.js<number>("__bh.sim.time");
+    await Bun.sleep(1500);
+    expect(await a.js<number>("__bh.sim.time")).toBeGreaterThan(t0);
     await shot(a, "pause");
     await a.press("Escape");
   }, 30_000);

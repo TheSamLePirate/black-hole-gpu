@@ -347,6 +347,80 @@ __bh.graphicsDiagnostic().events.filter((e) => e.message.includes("after the fir
 ```
 *Used in:* `tests/e2e/gpu-startup.e2e.test.ts` (4 lines use it).
 
+### `__bh.menu` → object
+
+The menus (PLAN-TITRE-AAA; [MENUS.md](MENUS.md)): which is up, on which screen — and opened by the tests.
+
+| member | what it is |
+|---|---|
+| `state()` | `{ title, pause, settings, entry }`: the title's screen (`"title"`, `"mode:ship"`, `"plane:field"`, `"credits"`…), the pause's (`"pause"`, `"pause:save"`, `"pause:load"`, `"pause:leave"`), the player's settings' tab (`"game"`, `"graphics"`…), the entry's veil up (boolean) — each null when closed |
+| `title(mode?)` | the title opened; with a mode (`"foot"`, `"plane"`, `"ship"`, `"free"`), that mode's launch screen alone — its back the pause |
+| `pause()` | the pause opened |
+| `settings(tab?)` | the player's settings opened, on a tab |
+
+### `__bh.entry` → object
+
+The way into the game from the menus (`src/ui/entry.ts`, PLAN-TITRE-AAA E10): a fade to black, the launch under it,
+a scene loading screen while the scene's tracer compiles, the black lifted and the HUD's start.
+
+| member | what it is |
+|---|---|
+| `busy` | the veil up (`[data-testid=entry]`, its `data-phase`: `in`, `loading`, `out`) |
+| `compile(ms)` | holds the scene tracer's loading stage `ms` long — the renderer raises it only when nothing else can draw (its general tracer draws meanwhile), so a fast machine never shows the loading screen: the tests' way to see it |
+
+### `__bh.intro()` → object
+
+The intro (`src/intro/intro.ts`, PLAN-TITRE-AAA E1):
+
+- `bg`: what drew its background. The Worker answers `"webgl2"`, `"2d"` or `"none"`; it reads `"page …"` when
+  drawn in the page (no OffscreenCanvas), and `null` while the Worker has not answered yet.
+- `orb`: the loading orb's state (`connecting`, `searching`, `weaving`, `solving`, `composing`, `breathing`; null
+  once gone).
+- `ended`: the sequence played or was passed.
+- `skipped`: it was passed by a key, a click or a touch.
+- `docked`: its name has glided onto the title's logo.
+- `lifted`: it has given way to the live scene.
+- `short`: its short version, the intro already seen.
+
+```js
+__bh.intro().bg === "webgl2" && __bh.intro().lifted
+```
+*Used in:* `tests/e2e/intro.e2e.test.ts`.
+
+### `__bh.pcd` → object
+
+The F-35's panoramic display (`src/f35/pcd.ts`, PLAN-PCD-AAA).
+
+- `pcd`: the display itself: its pages, `portals()` (each portal's `frame`), and `touch(u, v)`.
+- `stats`: its CPU cost since `reset()`, in ms a frame: `frames`, `draws`, `ms` (the mean), `max` (the worst),
+  `up` (the uploads) and `read` (the data read).
+
+```js
+__bh.pcd.stats.reset(); /* … fly … */ __bh.pcd.stats.ms < 0.7
+```
+*Used in:* `tests/e2e/f35-pcd.e2e.test.ts`.
+
+### `__bh.boot()` → object
+
+The boot's timeline (`src/boot-timeline.ts`, PLAN-TITRE-AAA E0), all in ms since the navigation:
+
+- `marks`: each stage once, in order, as `{ name, t }`. The graphics diagnostic's stages, `<stage> done` for the
+  loading stages, and `main`, `renderer`, `ephemerides`, `title`, `first-image`, `splash-lifted`.
+- `firstImage`: when the first image was drawn.
+- `long`: the main thread's long tasks (over 50 ms), observed from the page's first byte by `index.html`'s inline
+  script, as `{ count, totalMs, maxMs, list: [start, duration][] }`.
+- `gaps`: the gaps of over 50 ms between animation frames until 2 s after the splash lifts, as
+  `{ count, maxMs, list }`.
+- `blockedMs`, `blockedShare`: the time spent in long tasks before the first image, in ms and as a share of the
+  wait.
+
+The `#slowboot=N` address flag holds the graphics' start N seconds longer, to try the menus during a slow start.
+
+```js
+const b = __bh.boot(); b.marks.find((m) => m.name === "renderer").t > 10_000 // after #slowboot=10
+```
+*Used in:* `tests/e2e/boot-time.e2e.test.ts`.
+
 ### `__bh.gpu` → object
 
 The GPU device's handle: `lose()`, `generation()`, `lost()`, `frames()` (below). Use them to test the loss and recovery.

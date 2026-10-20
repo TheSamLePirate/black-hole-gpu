@@ -105,6 +105,8 @@ export class App {
       args?: string[];
       /** false: this page not recorded (tests/e2e/lib/telemetry.ts — on by default under `bun run e2e`) */
       telemetry?: boolean;
+      /** the intro played whole, as on a first visit (otherwise its short version: it was seen) */
+      fullIntro?: boolean;
       /** Independent crew page; no renderer readiness or simulator telemetry. */
       entry?: "crew";
     } = {},
@@ -124,7 +126,8 @@ export class App {
     });
     // (the first-visit hint already seen: it would sit over what the tests look at)
     await cdp.send("Page.addScriptToEvaluateOnNewDocument", {
-      source: `try { localStorage.setItem("kerr.hint-seen", "1"); localStorage.setItem("kerr.lang", "${o.lang ?? "en"}"); } catch {}`,
+      // (the intro seen: its short version, 1.5 s — tests/e2e/intro.e2e.test.ts plays it whole)
+      source: `try { localStorage.setItem("kerr.hint-seen", "1"); localStorage.setItem("kerr.lang", "${o.lang ?? "en"}"); if (!${!!o.fullIntro}) localStorage.setItem("kerr.intro.seen", "1"); } catch {}`,
     });
     if (o.initScript) await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: o.initScript });
     app.sw = !!o.sw;

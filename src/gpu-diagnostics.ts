@@ -1,3 +1,4 @@
+import { bootMark } from "./boot-timeline";
 import { storageKey } from "./util/storage";
 
 /** Local, bounded graphics diagnostics. No network telemetry and no scene/save data. */
@@ -57,6 +58,7 @@ export class GpuDiagnostics {
   enter(stage: string) {
     if (this.status === "failed") return;
     this.stage = stage;
+    bootMark(stage);
     this.add("stage", stage);
     this.persist();
   }

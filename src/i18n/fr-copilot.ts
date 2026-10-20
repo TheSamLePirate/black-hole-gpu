@@ -20,6 +20,7 @@ export default {
   "{0} bandits, nearest {1}": "{0} bandits, le plus proche {1}",
   // the traffic, the weapons (controller/copilot.ts)
   "No aircraft called {0} about us": "Aucun avion nommé {0} autour de nous",
+  "Flares and chaff out": "Leurres et paillettes largués",
   "No fight running: the weapons are live in a fight or a mission":
     "Aucun combat en cours : les armes ne sont actives qu'en combat ou en mission",
   "{0}: not on the radar — not seen yet, or a friend's on the datalink":

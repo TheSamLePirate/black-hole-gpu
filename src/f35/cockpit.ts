@@ -3,6 +3,7 @@
 // its surfaces, its STOVL mode, the airfields near it.
 
 import { cameraFrame } from "../camera";
+import { azAltAt } from "../eclipse/earth-moon";
 import type { CameraController } from "../controls";
 import { fleet } from "../fleet";
 import { SITES } from "../game/sites";
@@ -15,6 +16,8 @@ import { dryThrust, fuelFlow } from "./engine";
 import type { F35Pose } from "./model";
 import type { PcdData, PcdField } from "./pcd";
 import { STOVL } from "./stovl";
+import { GUN } from "../game/combat";
+import { ground } from "../controller/gcas";
 
 type V3 = [number, number, number];
 
@@ -25,6 +28,17 @@ const FIELDS: PcdField[] = SITES.filter((s) => s.body === "earth" && s.runway).m
   lon: s.lon,
   rwy: s.rwy,
 }));
+
+/** The Sun's height there [°] (the display's automatic brightness): the ephemeris asked again every 5 s of the clock
+ *  or 20 km away — it moves slowly. */
+let sunKept: { lat: number; lon: number; t: number; alt: number } | null = null;
+function sunAltAt(lat: number, lon: number, date: Date) {
+  const t = date.getTime();
+  const K = sunKept;
+  if (K && Math.abs(t - K.t) < 5000 && Math.abs(lat - K.lat) < 0.2 && Math.abs(lon - K.lon) < 0.2) return K.alt;
+  sunKept = { lat, lon, t, alt: azAltAt("sun", lat, lon, 0, t).alt };
+  return sunKept.alt;
+}
 
 /** The display's data now (null: not over the Earth). */
 export function pcdData(
@@ -56,6 +70,7 @@ export function pcdData(
   const fuel = fleet.fuel.f35 ?? V.fuelKg ?? 0;
   const st = c.stovl;
   const m = c.jetModes;
+  const RH = c.radarHud();
   return {
     units: s.units,
     time: date,
@@ -74,6 +89,7 @@ export function pcdData(
     g: c.airFlight.g,
     gPeak: c.airFlight.gPeak,
     alpha: L?.out.alpha ?? 0,
+    sunAlt: sunAltAt(geo.lat, geo.lon, date),
     wind: c.windNow ?? null,
     throttle: c.pilot.throttle,
     spool: c.pilot.engineNow,
@@ -96,20 +112,50 @@ export function pcdData(
     ap: { alt: m.alt, hdg: m.hdg, spd: m.spd },
     fields: FIELDS,
     // (the radar's picture — controller/radar.ts —: its tracks on the TSD's map)
-    tracks: (() => {
-      const RH = c.radarHud();
-      return (RH?.contacts ?? []).map((T) => ({
-        e: T.e,
-        n: T.n,
-        hdg: T.trk === null ? null : T.trk + RH!.heading,
-        iff: T.iff ?? "unknown",
-        air: T.air,
-        locked: T.locked,
-        datalink: !!T.datalink,
-        name: T.name,
-        colour: T.datalink ? T.colour : undefined,
-      }));
-    })(),
+    tracks: (RH?.contacts ?? []).map((T) => ({
+      e: T.e,
+      n: T.n,
+      hdg: T.trk === null ? null : T.trk + RH!.heading,
+      iff: T.iff ?? "unknown",
+      air: T.air,
+      locked: T.locked,
+      datalink: !!T.datalink,
+      name: T.name,
+      colour: T.datalink ? T.colour : undefined,
+    })),
+    // (the radar's own page, FCR: its mode, its beam, its contacts heading up, the lock's figures)
+    fcr: RH
+      ? {
+          mode: RH.mode,
+          beam: RH.beam,
+          contacts: RH.contacts.map((T) => ({
+            x: T.x,
+            y: T.y,
+            dz: T.dz,
+            trk: T.trk,
+            iff: T.iff ?? "unknown",
+            air: T.air,
+            locked: T.locked,
+            datalink: !!T.datalink,
+            name: T.name,
+          })),
+          lock: RH.lock
+            ? {
+                name: RH.lock.name,
+                iff: RH.lock.iff ?? "unknown",
+                range: RH.lock.range,
+                closure: RH.lock.closure,
+                alt: RH.lock.alt,
+                hdg: RH.lock.hdg,
+                gs: RH.lock.gs,
+              }
+            : null,
+        }
+      : null,
+    // (the weapons, SMS: a fight running, the weapon chosen, the stores left)
+    arms: c.combat
+      ? { live: c.combat.status === "run", sel: c.combat.weapon, stores: { ...c.combat.world.stores }, gunFull: GUN.rounds }
+      : null,
     route: c.nav.route.wps.length
       ? {
           wps: c.nav.route.wps,
@@ -123,6 +169,60 @@ export function pcdData(
       : null,
     bingo: c.routeBingo(),
     alerts,
+    damage: (c.combat?.world.damage ?? 0) / 100,
+    ground,
+    // (the missiles in flight — the DAS sees their motors —: heading up as the radar's contacts)
+    missiles: (() => {
+      const C = c.combat;
+      const P = C?.last;
+      if (!C || !P) return [];
+      const psi = Math.atan2(P.fwd[0], P.fwd[1]);
+      const cs = Math.cos(psi),
+        sn = Math.sin(psi);
+      return C.world.missiles
+        .filter((M) => M.alive)
+        .map((M) => {
+          const e = M.p[0] - P.p[0],
+            n = M.p[1] - P.p[1];
+          return { x: e * cs - n * sn, y: e * sn + n * cs, dz: M.p[2] - P.p[2], atUs: M.owner === "red" && M.target === -1 };
+        });
+    })(),
+    // (the autopilot's mode beyond its holds — as the crew's instruments read it —, the ILS)
+    apMode: {
+      order: m.order ?? (c.orbitMode ? "ORBIT" : m.icpt ? "ICPT" : m.form ? "FORM" : m.tf !== undefined ? "TF" : ""),
+      ils: !!c.ilsRun,
+    },
+    // (a mission flown: its objectives shown; a lesson: its steps)
+    msn: c.mission
+      ? (() => {
+          const M = c.mission!;
+          const R = M.run;
+          const ours = R.spec.roles?.[M.role]?.id;
+          return {
+            title: R.spec.title,
+            t: R.t,
+            limit: R.spec.limit ?? null,
+            status: R.status,
+            why: R.why,
+            objectives: R.spec.objectives.map((o) => ({
+              text: o.text,
+              state: R.state[o.id] ?? "waiting",
+              optional: !!o.optional,
+              mine: !o.role || o.role === ours,
+            })),
+            said: R.log.at(-1)?.text ?? "",
+          };
+        })()
+      : null,
+    lesson: c.course?.run
+      ? {
+          id: c.course.id,
+          mode: c.course.mode,
+          steps: c.course.run.steps.map((S) => ({ name: S.name, who: S.who })),
+          i: c.course.run.i,
+          said: c.course.said ?? "",
+        }
+      : null,
     // (a mission's places — controller/mission.ts —: its zones, the SAMs' reach)
     marks: c.mission
       ? c

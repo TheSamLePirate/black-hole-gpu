@@ -42,6 +42,9 @@ describe.skipIf(!E2E)("s5: the interface for every eye, size and session", () =>
     await app.press("Escape");
     await Bun.sleep(600);
     await look("pause");
+    // (since PLAN-TITRE-AAA E8 the entry is in its group's drawer)
+    await app.waitFor(`!!document.querySelector("[data-testid=pause-group-settings]")`, 5000);
+    await app.click("[data-testid=pause-group-settings]");
     await app.click("[data-testid=pause-controls]");
     await Bun.sleep(500);
     await look("controls");

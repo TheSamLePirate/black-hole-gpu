@@ -1,50 +1,41 @@
-// The pause menu: Escape when nothing is open stops the time and offers the game's own — resume, save,
-// load, hand the controls back (the autopilot, the hold, the mission: ⌫ does it without the menu), the
-// settings, the controls, the title screen. Its sub-pages (save, load) go back with Escape.
+// The pause menu (PLAN-TITRE-AAA E8): Escape when nothing is open. A full-height column on the left over the scene
+// held still — not a box in the middle —, its first level short (resume, save, load, release the controls when
+// something is engaged, capture ›, world ›, sky ›, play together, change mode ›, settings ›, the title), the
+// rest in drawers: a second column beside, opened by Enter, → or a click, closed by ←, Escape or B. On the right,
+// the context: where one is, the mission and its objectives (or the flight's figures), the time played, the last
+// save, a tip of the mode. In a network room the common clock does not stop: the game goes on behind the menu,
+// and it says so. Going back to the title asks first when more than five minutes went unsaved. Screens by
+// ui/menu/router.ts (the focus in two dimensions, the controller's every button), as the title's.
 
-import { t, tr, type Text } from "../i18n";
 import { downloadGpuDiagnostic } from "../gpu-diagnostics";
 import { autosave, slots } from "../game/save";
 import type { GameTools } from "../game/tools";
-import { onEscape } from "./keys";
-import { button, el, h, kbd } from "./kit";
+import { tr, type Text } from "../i18n";
+import { button, el, h } from "./kit";
+import type { MenuAction } from "./menu/actions";
+import { glyph, onInputChange, watchInput } from "./menu/glyphs";
+import { type MenuScreen, MenuRouter } from "./menu/router";
+import { agoWords, DRAWERS, type DrawerId, OBJ_MARK, type PauseContext, playedText, tipOf, titleNeedsConfirm } from "./pausemenu";
+import type { ModeId } from "./title/activities";
 
 const T = {
   title: { fr: "Pause", en: "Paused" },
+  goesOn: { fr: "Le jeu continue", en: "The game goes on" },
+  goesOnText: {
+    fr: "En salle {0}, l'horloge commune ne s'arrête pas.",
+    en: "In room {0}, the common clock does not stop.",
+  },
   resume: { fr: "Reprendre", en: "Resume" },
   save: { fr: "Sauvegarder", en: "Save game" },
   load: { fr: "Charger", en: "Load game" },
-  place: { fr: "Placer le vaisseau", en: "Place the ship" },
-  time: { fr: "Date et heure", en: "Date and time" },
-  weather: { fr: "Météo", en: "Weather" },
-  eclipses: { fr: "Éclipses", en: "Eclipses" },
   release: { fr: "Rendre les commandes", en: "Release the controls" },
-  releaseHint: { fr: "coupe l'autopilote, le maintien, la mission", en: "stops the autopilot, the hold, the mission" },
-  settings: { fr: "Réglages", en: "Settings" },
-  controls: { fr: "Commandes", en: "Controls" },
-  photo: { fr: "Mode photo", en: "Photo mode" },
-  capture: { fr: "Capture (rendu hors ligne)", en: "Capture (offline render)" },
-  captureHint: {
-    fr: "la vue de cet instant, rendue sans bruit, enregistrée en PNG",
-    en: "this instant's view, rendered noise-free, saved as a PNG",
-  },
-  render: { fr: "Rendu…", en: "Render…" },
-  atlas: { fr: "Atlas", en: "Atlas" },
-  atlasHint: { fr: "la Terre, la Lune, Mars : y aller", en: "the Earth, the Moon, Mars: go there" },
-  sky: { fr: "Le ciel d'ici", en: "The sky from here" },
-  skyHint: { fr: "filés, analemme, ISS, éclipses : les vivre", en: "trails, analemma, ISS, eclipses: live them" },
-  multi: { fr: "Surimpression", en: "Multiple exposure" },
-  observe: { fr: "Observatoire", en: "Observatory" },
-  network: { fr: "Réseau — jouer ensemble", en: "Network — play together" },
+  releaseHint: { fr: "Coupe l'autopilote, le maintien, la mission (⌫)", en: "Stops the autopilot, the hold, the mission (⌫)" },
+  network: { fr: "Jouer ensemble", en: "Play together" },
   networkHint: { fr: "2 à 4 joueurs, un spectateur", en: "2 to 4 players, a spectator" },
-  observeHint: { fr: "ce qu'il y a à voir d'ici, et quand — le télescope", en: "what to see from here, and when — the telescope" },
-  multiHint: {
-    fr: "depuis la vue cadrée : analemme, filé d'étoiles, Lune, éclipse",
-    en: "from the view framed: analemma, trails, Moon, eclipse",
-  },
-  renderHint: { fr: "une image ou une vidéo : taille, échantillons, plan", en: "a picture or a video: size, samples, shot" },
-  title2: { fr: "Écran titre", en: "Title screen" },
+  title2: { fr: "Retour au titre", en: "Back to the title" },
   back: { fr: "Retour", en: "Back" },
+  choose: { fr: "Choisir", en: "Choose" },
+  open: { fr: "Ouvrir", en: "Open" },
   name: { fr: "Nom de la sauvegarde", en: "Save name" },
   saveNew: { fr: "Sauvegarder", en: "Save" },
   overwrite: { fr: "Écraser", en: "Overwrite" },
@@ -54,7 +45,20 @@ const T = {
   auto: { fr: "Sauvegarde automatique", en: "Autosave" },
   none: { fr: "Aucune sauvegarde pour l'instant.", en: "No saved game yet." },
   saved: { fr: "Sauvegardé", en: "Saved" },
-  quick: { fr: "F5 sauvegarde rapide · F9 chargement rapide", en: "F5 quick save · F9 quick load" },
+  mission: { fr: "Mission", en: "Mission" },
+  played: { fr: "Temps de jeu", en: "Played" },
+  savedAgo: { fr: "sauvé {0}", en: "saved {0}" },
+  notSaved: { fr: "pas encore sauvé", en: "not saved yet" },
+  tip: { fr: "Astuce", en: "Tip" },
+  leaveTitle: { fr: "Retour au titre ?", en: "Back to the title?" },
+  leaveText: {
+    fr: "La dernière sauvegarde date {0} : ce qui a été joué depuis serait perdu.",
+    en: "The last save was {0}: what was played since would be lost.",
+  },
+  leaveNone: { fr: "Rien n'a encore été sauvegardé de cette partie.", en: "Nothing of this game has been saved yet." },
+  saveLeave: { fr: "Sauvegarder, puis le titre", en: "Save, then the title" },
+  leave: { fr: "Le titre sans sauvegarder", en: "The title without saving" },
+  stay: { fr: "Rester", en: "Stay" },
 } satisfies Record<string, Text>;
 
 export interface PauseDeps {
@@ -64,7 +68,11 @@ export interface PauseDeps {
   /** an autopilot, a hold or a mission engaged — and their release */
   engaged(): boolean;
   release(): void;
+  /** where one is, the mission, the time played, the last save, the room (ui/pausemenu.ts) */
+  context(): PauseContext;
   settings(): void;
+  /** the Lab: every control (ui/panel.ts) */
+  lab(): void;
   help(): void;
   /** the controls screen (its back: this menu again) */
   controls(): void;
@@ -93,44 +101,80 @@ export interface PauseDeps {
   weather(): void;
   /** the eclipse calculator (ui/eclipses.ts) */
   eclipses?(): void;
+  /** a way to play's launch screen (the title's), over the game — its back: this menu again */
+  modes(id: ModeId): void;
   titleScreen(): void;
   toast(text: string): void;
 }
 
+const fill = (s: string, ...a: string[]) => a.reduce((x, v, i) => x.replace(`{${i}}`, v), s);
+
 export class PauseMenu {
   private root: HTMLElement | null = null;
-  private frame: HTMLElement | null = null;
-  private unEscape: (() => void) | null = null;
-  private unSub: (() => void) | null = null;
+  private router: MenuRouter | null = null;
+  private ctxEl: HTMLElement | null = null;
+  private unInput: (() => void) | null = null;
+  /** in a room: the simulation not held */
+  private live = false;
+  private tipN = Math.floor(Math.random() * 100);
+  private ctx: PauseContext | null = null;
 
   constructor(private d: PauseDeps) {}
 
   get isOpen() {
     return !!this.root;
   }
+  /** the screen shown ("pause", "pause:save", "pause:load", "pause:leave"), null when closed */
+  get screen(): string | null {
+    return this.router?.current ?? null;
+  }
 
   open() {
     if (this.root) return;
-    this.d.hold(true);
-    this.frame = h("div", { class: "k-frame pm", role: "dialog", "aria-modal": "true", "aria-label": tr(T.title), "data-testid": "pause" });
-    this.root = h("div", { class: "k-modal pm-scrim" }, this.frame);
-    this.root.addEventListener("click", (e) => e.target === this.root && this.close());
+    watchInput();
+    this.ctx = this.d.context();
+    this.live = !!this.ctx.room;
+    if (!this.live) this.d.hold(true);
+    this.tipN++;
+    const host = h("div", { class: "pz-host" });
+    this.ctxEl = h("aside", { class: "pz-context", "aria-live": "polite", "data-testid": "pause-context" });
+    this.root = h(
+      "div",
+      {
+        class: `pz-root${this.live ? " live" : ""}`,
+        role: "dialog",
+        "aria-modal": "true",
+        "aria-label": tr(T.title),
+        "data-testid": "pause",
+      },
+      host,
+      this.ctxEl,
+    );
     document.body.append(this.root);
     document.body.classList.add("paused");
-    this.unEscape = onEscape(() => this.close());
-    this.main();
+    // (its screens change at once: a tool's menu, its keys pressed in a row)
+    this.router = new MenuRouter(host, { onEmpty: () => this.close(), cut: true });
+    this.router.push(this.mainScreen());
+    this.fillContext();
+    // (the prompts follow the device: redrawn in place)
+    this.unInput = onInputChange(() => {
+      for (const e of this.root?.querySelectorAll<HTMLElement & { refill?: () => void }>(".m-prompts") ?? []) e.refill?.();
+    });
   }
 
   close() {
     if (!this.root) return;
-    this.unSub?.();
-    this.unSub = null;
-    this.unEscape?.();
-    this.unEscape = null;
-    this.root.remove();
-    this.root = this.frame = null;
+    // (its router emptied calls this again: the menu already gone by then)
+    const root = this.root;
+    this.root = this.ctxEl = null;
+    this.unInput?.();
+    this.unInput = null;
+    const r = this.router;
+    this.router = null;
+    r?.close(true);
+    root.remove();
     document.body.classList.remove("paused");
-    this.d.hold(false);
+    if (!this.live) this.d.hold(false);
   }
 
   /** Leaves the menu for one of the game's surfaces (it opens over the paused scene). */
@@ -139,163 +183,363 @@ export class PauseMenu {
     fn();
   }
 
-  private page(title: string, ...kids: (Node | null)[]) {
-    this.frame!.replaceChildren(h("h2", { class: "k-title pm-title" }, title), ...kids.filter((k): k is Node => !!k));
-    this.frame!.querySelector<HTMLElement>("button, input")?.focus();
+  // ------------------------------------------------------------------ the context column
+
+  private fillContext() {
+    const c = this.ctx!;
+    const kids: (Node | null)[] = [];
+    if (c.room)
+      kids.push(
+        h(
+          "div",
+          { class: "pz-live", "data-testid": "pause-live" },
+          el("b", "", tr(T.goesOn)),
+          el("span", "", fill(tr(T.goesOnText), c.room)),
+        ),
+      );
+    kids.push(el("p", "pz-where", c.line));
+    if (c.mission)
+      kids.push(
+        h(
+          "section",
+          { class: "pz-mission", "data-testid": "pause-mission" },
+          h("p", { class: "pz-mission-head" }, el("span", "pz-k", tr(T.mission)), el("b", "", c.mission.title)),
+          h(
+            "ul",
+            { class: "pz-objs" },
+            ...c.mission.objectives.map((o) =>
+              h("li", { class: `pz-obj ${o.state}` }, el("i", "", OBJ_MARK[o.state]), el("span", "", o.text)),
+            ),
+          ),
+        ),
+      );
+    else if (c.figures.length)
+      kids.push(h("dl", { class: "pz-figs" }, ...c.figures.map(([k, v]) => h("div", {}, el("dt", "", k), el("dd", "", v)))));
+    kids.push(
+      el(
+        "p",
+        "pz-meta",
+        `${tr(T.played)} ${playedText(c.played)} · ${c.savedAt !== null ? fill(tr(T.savedAgo), agoWords(Date.now() - c.savedAt)) : tr(T.notSaved)}`,
+      ),
+      h("p", { class: "pz-tip" }, el("span", "pz-k", tr(T.tip)), tr(tipOf(c.tips, this.tipN))),
+    );
+    this.ctxEl!.replaceChildren(...kids.filter((k): k is Node => !!k));
   }
 
-  private item(label: string, onClick: () => void, o: { hint?: string; testid?: string; kind?: "primary" | "danger" } = {}) {
-    const b = button({ label, kind: o.kind, testid: o.testid, onClick });
-    b.classList.add("pm-item");
-    if (o.hint) b.append(el("small", "pm-hint", o.hint));
+  // ------------------------------------------------------------------ screens
+
+  private prompts(list: [MenuAction, Text][]) {
+    const ps = h("div", { class: "m-prompts" }) as HTMLElement & { refill?: () => void };
+    ps.refill = () =>
+      ps.replaceChildren(
+        ...list.flatMap(([a, label]) => {
+          const g = glyph(a);
+          return g ? [h("span", { class: "m-prompt" }, el("span", "m-glyph", g), tr(label))] : [];
+        }),
+      );
+    ps.refill();
+    return h("footer", { class: "pz-foot" }, ps);
+  }
+
+  private head(title: string, line?: string) {
+    return h(
+      "header",
+      { class: "pz-head" },
+      h("h2", { class: "pz-title" }, title, this.live ? el("span", "pz-badge", tr(T.goesOn)) : null),
+      line ? el("p", "pz-line", line) : null,
+    );
+  }
+
+  /** An item of a list: its title, its line, a key on its right; a drawer's: › */
+  private item(testid: string, title: string, o: { hint?: string; key?: string; drawer?: boolean; first?: boolean } = {}) {
+    const b = h(
+      "button",
+      {
+        class: `m-item tt-act pz-item${o.drawer ? " pz-has-drawer" : ""}`,
+        type: "button",
+        "data-testid": testid,
+        "data-focus-id": testid,
+        ...(o.first ? { "data-autofocus": "" } : {}),
+      },
+      h(
+        "span",
+        { class: "tt-act-row" },
+        el("span", "", title),
+        o.key ? el("em", "tt-act-mark", o.key) : o.drawer ? el("em", "pz-chev", "›") : null,
+      ),
+      o.hint ? el("small", "", o.hint) : null,
+    );
     return b;
   }
 
-  private main() {
-    this.unSub?.();
-    this.unSub = null;
-    const list = h(
-      "nav",
-      { class: "pm-list", "aria-label": tr(T.title) },
-      this.item(tr(T.resume), () => this.close(), { testid: "pause-resume" }),
-      this.item(tr(T.capture), () => this.leaveFor(this.d.capture), { hint: tr(T.captureHint), testid: "pause-capture", kind: "primary" }),
-      this.item(tr(T.render), () => this.leaveFor(this.d.render), { hint: tr(T.renderHint), testid: "pause-render" }),
-      this.item(tr(T.save), () => this.savePage(), { testid: "pause-save" }),
-      this.item(tr(T.load), () => this.loadPage(), { testid: "pause-load" }),
-      this.item(t("Download graphics diagnostic"), downloadGpuDiagnostic, { testid: "pause-graphics-diagnostic" }),
-      this.item(tr(T.atlas), () => this.leaveFor(this.d.atlas), { hint: tr(T.atlasHint), testid: "pause-atlas" }),
-      this.item(tr(T.sky), () => this.leaveFor(this.d.skyEvents), { hint: tr(T.skyHint), testid: "pause-sky" }),
-      this.d.multiExposure
-        ? this.item(tr(T.multi), () => this.leaveFor(() => this.d.multiExposure?.()), { hint: tr(T.multiHint), testid: "pause-multi" })
-        : null,
-      this.d.observe
-        ? this.item(tr(T.observe), () => this.leaveFor(() => this.d.observe?.()), { hint: tr(T.observeHint), testid: "pause-observe" })
-        : null,
-      this.d.network && (this.d.networkShown?.() ?? true)
-        ? this.item(tr(T.network), () => this.leaveFor(() => this.d.network?.()), {
-            hint: this.d.networkState?.() ?? tr(T.networkHint),
-            testid: "pause-network",
-          })
-        : null,
-      this.item(tr(T.place), () => this.leaveFor(this.d.place), { testid: "pause-place" }),
-      this.item(tr(T.time), () => this.leaveFor(this.d.time), { testid: "pause-time" }),
-      this.item(tr(T.weather), () => this.leaveFor(this.d.weather), { testid: "pause-weather" }),
-      this.item(tr(T.eclipses), () => this.leaveFor(() => this.d.eclipses?.()), { testid: "pause-eclipses" }),
-      this.d.engaged()
-        ? this.item(
-            tr(T.release),
-            () => {
-              this.d.release();
-              this.close();
-            },
-            { hint: `⌫ — ${tr(T.releaseHint)}`, testid: "pause-release" },
-          )
-        : null,
-      this.item(tr(T.settings), () => this.leaveFor(this.d.settings), { testid: "pause-settings" }),
-      this.item(tr(T.controls), () => this.leaveFor(this.d.controls), { testid: "pause-controls" }),
-      this.item(tr(T.photo), () => this.leaveFor(this.d.photo), { testid: "pause-photo" }),
-      this.item(tr(T.title2), () => this.leaveFor(this.d.titleScreen), { testid: "pause-title" }),
-    );
-    // (↑ ↓ move between the items, as on a console)
-    list.addEventListener("keydown", (e) => {
-      // (Enter: the item focused, here — not left to the browser's activation of a focused button)
-      if (e.key === "Enter" && (e.target as HTMLElement).tagName === "BUTTON") {
-        e.preventDefault();
-        e.stopPropagation();
-        (e.target as HTMLButtonElement).click();
-        return;
+  private mainScreen(): MenuScreen {
+    let drawer: DrawerId | null = null;
+    let drawerEl: HTMLElement | null = null;
+    let groupBtn: (id: DrawerId) => HTMLElement | null = () => null;
+    const hide = () => {
+      drawer = null;
+      if (drawerEl) {
+        drawerEl.hidden = true;
+        drawerEl.replaceChildren();
       }
-      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-      e.preventDefault();
-      e.stopPropagation();
-      const items = [...list.querySelectorAll<HTMLButtonElement>("button")];
-      const i = items.indexOf(document.activeElement as HTMLButtonElement);
-      items[(i + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
-    });
-    this.page(tr(T.title), list, h("p", { class: "pm-foot" }, kbd("Esc"), ` ${tr(T.resume)} · `, tr(T.quick)));
-  }
-
-  /** A sub-page: Escape goes back to the main page (not out of the menu). */
-  private sub() {
-    this.unSub?.();
-    this.unSub = onEscape(() => this.main());
-  }
-
-  private savePage() {
-    this.sub();
-    const name = h("input", { class: "pm-input", type: "text", "aria-label": tr(T.name), placeholder: tr(T.name), maxlength: "60" });
-    const doSave = (nm: string) => {
-      try {
-        const saved = this.d.tools.save(nm);
-        this.d.toast(`${tr(T.saved)} — ${saved}`);
-        this.main();
-      } catch (e) {
-        this.d.toast((e as Error).message);
-      }
+      for (const b of this.root?.querySelectorAll(".pz-has-drawer.open") ?? []) b.classList.remove("open");
     };
-    name.addEventListener("keydown", (e) => e.key === "Enter" && doSave(name.value));
-    const list = h("div", { class: "pm-saves" });
-    for (const g of slots.list())
-      list.append(
-        this.saveRow(g.name, g.summary, g.savedAt, [
-          button({ label: tr(T.overwrite), testid: "pause-overwrite", onClick: () => doSave(g.name) }),
-        ]),
-      );
-    this.page(
-      tr(T.save),
-      h(
-        "div",
-        { class: "pm-row" },
-        name,
-        button({ label: tr(T.saveNew), kind: "primary", testid: "pause-save-new", onClick: () => doSave(name.value) }),
-      ),
-      list,
-      button({ label: tr(T.back), onClick: () => this.main() }),
-    );
-  }
-
-  private loadPage() {
-    this.sub();
-    const list = h("div", { class: "pm-saves" });
-    const load = (nm: string) => {
-      try {
-        this.d.toast(this.d.tools.load(nm));
-        this.close();
-      } catch (e) {
-        this.d.toast((e as Error).message);
-      }
-    };
-    const auto = autosave.get();
-    if (auto)
-      list.append(
-        this.saveRow(tr(T.auto), auto.summary, auto.savedAt, [
-          button({ label: tr(T.loadIt), kind: "primary", testid: "pause-load-auto", onClick: () => load("autosave") }),
-        ]),
-      );
-    for (const g of slots.list()) {
-      const del = button({ label: tr(T.delete), kind: "danger" });
-      // (a destructive action: confirmed by a second press)
-      del.addEventListener("click", () => {
-        if (del.dataset.armed) {
-          this.d.tools.deleteSave(g.name);
-          this.loadPage();
-        } else {
-          del.dataset.armed = "1";
-          del.querySelector("span")!.textContent = tr(T.confirmDelete);
+    return {
+      id: "pause",
+      build: () => {
+        drawer = null;
+        const d = this.d;
+        const page = h("div", { class: "tt-page pz-page" });
+        const list = h("nav", { class: "pz-list", "aria-label": tr(T.title) });
+        drawerEl = h("nav", { class: "pz-drawer", hidden: "" });
+        const actions: Record<string, (() => void) | undefined> = {
+          capture: () => this.leaveFor(d.capture),
+          render: () => this.leaveFor(d.render),
+          photo: () => this.leaveFor(d.photo),
+          multi: d.multiExposure ? () => this.leaveFor(() => d.multiExposure?.()) : undefined,
+          atlas: () => this.leaveFor(d.atlas),
+          place: () => this.leaveFor(d.place),
+          time: () => this.leaveFor(d.time),
+          weather: () => this.leaveFor(d.weather),
+          sky: () => this.leaveFor(d.skyEvents),
+          observe: d.observe ? () => this.leaveFor(() => d.observe?.()) : undefined,
+          eclipses: d.eclipses ? () => this.leaveFor(() => d.eclipses?.()) : undefined,
+          "mode-foot": () => this.leaveFor(() => d.modes("foot")),
+          "mode-plane": () => this.leaveFor(() => d.modes("plane")),
+          "mode-ship": () => this.leaveFor(() => d.modes("ship")),
+          "mode-free": () => this.leaveFor(() => d.modes("free")),
+          settings: () => this.leaveFor(d.settings),
+          lab: () => this.leaveFor(d.lab),
+          controls: () => this.leaveFor(d.controls),
+          "graphics-diagnostic": () => void downloadGpuDiagnostic(),
+        };
+        /** a drawer shown beside (into: the focus on its first entry) */
+        const show = (id: DrawerId, into: boolean) => {
+          if (drawer !== id) {
+            drawer = id;
+            const D = DRAWERS[id];
+            drawerEl!.replaceChildren(
+              h("p", { class: "pz-crumb" }, el("span", "", tr(T.title)), el("i", "", "›"), el("b", "", tr(D.title))),
+              ...D.items
+                .filter((x) => actions[x.id])
+                .map((x) => {
+                  const b = this.item(`pause-${x.id}`, tr(x.title), { hint: x.hint ? tr(x.hint) : undefined });
+                  b.addEventListener("click", () => actions[x.id]!());
+                  // (← back to the group)
+                  b.addEventListener("keydown", (e) => {
+                    if (e.key !== "ArrowLeft") return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    groupBtn(id)?.focus();
+                  });
+                  return b;
+                }),
+            );
+            drawerEl!.hidden = false;
+            drawerEl!.dataset.drawer = id;
+            for (const b of list.querySelectorAll(".pz-has-drawer")) b.classList.toggle("open", (b as HTMLElement).dataset.drawer === id);
+          }
+          if (into) drawerEl!.querySelector<HTMLElement>("button")?.focus();
+        };
+        const add = (b: HTMLElement, go: () => void, id?: DrawerId) => {
+          if (id) {
+            b.dataset.drawer = id;
+            b.addEventListener("click", () => show(id, true));
+            b.addEventListener("keydown", (e) => {
+              if (e.key !== "ArrowRight") return;
+              e.preventDefault();
+              e.stopPropagation();
+              show(id, true);
+            });
+            b.addEventListener("focus", () => show(id, false));
+            b.addEventListener("pointerenter", () => show(id, false));
+          } else {
+            b.addEventListener("click", go);
+            b.addEventListener("focus", hide);
+          }
+          list.append(b);
+        };
+        const group = (id: DrawerId) =>
+          add(this.item(`pause-group-${id}`, tr(DRAWERS[id].title), { hint: tr(DRAWERS[id].hint), drawer: true }), () => {}, id);
+        groupBtn = (id) => list.querySelector<HTMLElement>(`[data-drawer="${id}"]`);
+        add(this.item("pause-resume", tr(T.resume), { first: true }), () => this.close());
+        add(this.item("pause-save", tr(T.save), { key: "F5" }), () => this.router?.push(this.saveScreen()));
+        add(this.item("pause-load", tr(T.load), { key: "F9" }), () => this.router?.push(this.loadScreen()));
+        if (d.engaged())
+          add(this.item("pause-release", tr(T.release), { hint: tr(T.releaseHint) }), () => {
+            d.release();
+            this.close();
+          });
+        list.append(el("hr", "pz-sep", ""));
+        group("capture");
+        group("world");
+        group("sky");
+        if (d.network && (d.networkShown?.() ?? true))
+          add(this.item("pause-network", tr(T.network), { hint: d.networkState?.() ?? tr(T.networkHint) }), () =>
+            this.leaveFor(() => d.network?.()),
+          );
+        group("modes");
+        list.append(el("hr", "pz-sep", ""));
+        group("settings");
+        add(this.item("pause-title", tr(T.title2)), () => {
+          const c = this.d.context();
+          if (titleNeedsConfirm(c, Date.now())) this.router?.push(this.leaveScreen(c.savedAt));
+          else this.leaveFor(d.titleScreen);
+        });
+        page.append(
+          this.head(tr(T.title), this.ctx?.line),
+          h("div", { class: "pz-cols" }, list, drawerEl),
+          this.prompts([
+            ["confirm", T.choose],
+            ["back", T.resume],
+          ]),
+        );
+        return page;
+      },
+      // (Escape in a drawer: back to its group — out of the menu only from the first column)
+      back: () => {
+        if (drawer && drawerEl?.contains(document.activeElement)) {
+          const id = drawer;
+          groupBtn(id)?.focus();
+          return false;
         }
-      });
-      list.append(this.saveRow(g.name, g.summary, g.savedAt, [button({ label: tr(T.loadIt), onClick: () => load(g.name) }), del]));
-    }
-    if (!list.children.length) list.append(el("p", "pm-empty", tr(T.none)));
-    this.page(tr(T.load), list, button({ label: tr(T.back), onClick: () => this.main() }));
+        return true;
+      },
+    };
+  }
+
+  private saveScreen(): MenuScreen {
+    return {
+      id: "pause:save",
+      build: () => {
+        const name = h("input", {
+          class: "tt-search pz-input",
+          type: "text",
+          "aria-label": tr(T.name),
+          placeholder: tr(T.name),
+          maxlength: "60",
+          "data-autofocus": "",
+        }) as HTMLInputElement;
+        const doSave = (nm: string) => {
+          try {
+            const saved = this.d.tools.save(nm);
+            this.d.toast(`${tr(T.saved)} — ${saved}`);
+            this.ctx = this.d.context();
+            this.fillContext();
+            this.router?.back();
+          } catch (e) {
+            this.d.toast((e as Error).message);
+          }
+        };
+        name.addEventListener("keydown", (e) => e.key === "Enter" && doSave(name.value));
+        const go = button({ label: tr(T.saveNew), kind: "primary", testid: "pause-save-new", onClick: () => doSave(name.value) });
+        go.classList.add("m-item", "tt-launch", "pz-go");
+        const list = h("div", { class: "pz-saves" });
+        for (const g of slots.list()) {
+          const b = button({ label: tr(T.overwrite), testid: "pause-overwrite", onClick: () => doSave(g.name) });
+          b.classList.add("pz-mini");
+          list.append(this.saveRow(g.name, g.summary, g.savedAt, [b]));
+        }
+        return h(
+          "div",
+          { class: "tt-page pz-page" },
+          this.head(tr(T.save)),
+          h("div", { class: "pz-sub" }, h("div", { class: "pz-row" }, name, go), list),
+          this.prompts([["back", T.back]]),
+        );
+      },
+    };
+  }
+
+  private loadScreen(): MenuScreen {
+    return {
+      id: "pause:load",
+      build: () => {
+        const list = h("div", { class: "pz-saves" });
+        const load = (nm: string) => {
+          try {
+            this.d.toast(this.d.tools.load(nm));
+            this.close();
+          } catch (e) {
+            this.d.toast((e as Error).message);
+          }
+        };
+        const auto = autosave.get();
+        if (auto) {
+          const b = button({ label: tr(T.loadIt), kind: "primary", testid: "pause-load-auto", onClick: () => load("autosave") });
+          b.classList.add("pz-mini");
+          b.dataset.autofocus = "";
+          list.append(this.saveRow(tr(T.auto), auto.summary, auto.savedAt, [b]));
+        }
+        for (const g of slots.list()) {
+          const del = button({ label: tr(T.delete), kind: "danger" });
+          del.classList.add("pz-mini");
+          // (a destructive action: confirmed by a second press)
+          del.addEventListener("click", () => {
+            if (del.dataset.armed) {
+              this.d.tools.deleteSave(g.name);
+              this.router?.refresh();
+            } else {
+              del.dataset.armed = "1";
+              del.querySelector("span")!.textContent = tr(T.confirmDelete);
+            }
+          });
+          const l = button({ label: tr(T.loadIt), onClick: () => load(g.name) });
+          l.classList.add("pz-mini");
+          list.append(this.saveRow(g.name, g.summary, g.savedAt, [l, del]));
+        }
+        if (!list.children.length) list.append(el("p", "tt-empty", tr(T.none)));
+        return h(
+          "div",
+          { class: "tt-page pz-page" },
+          this.head(tr(T.load)),
+          h("div", { class: "pz-sub" }, list),
+          this.prompts([["back", T.back]]),
+        );
+      },
+    };
+  }
+
+  /** Back to the title, more than five minutes unsaved: save first, leave anyway, or stay. */
+  private leaveScreen(savedAt: number | null): MenuScreen {
+    return {
+      id: "pause:leave",
+      build: () => {
+        const text = savedAt !== null ? fill(tr(T.leaveText), agoWords(Date.now() - savedAt)) : tr(T.leaveNone);
+        const save = this.item("pause-leave-save", tr(T.saveLeave), { first: true });
+        save.classList.add("tt-launch");
+        save.addEventListener("click", () => {
+          try {
+            this.d.toast(`${tr(T.saved)} — ${this.d.tools.save("")}`);
+          } catch (e) {
+            this.d.toast((e as Error).message);
+          }
+          this.leaveFor(this.d.titleScreen);
+        });
+        const go = this.item("pause-leave-go", tr(T.leave));
+        go.addEventListener("click", () => this.leaveFor(this.d.titleScreen));
+        const stay = this.item("pause-leave-stay", tr(T.stay));
+        stay.addEventListener("click", () => this.router?.back());
+        return h(
+          "div",
+          { class: "tt-page pz-page" },
+          this.head(tr(T.leaveTitle)),
+          h("div", { class: "pz-sub" }, el("p", "pz-text", text), h("nav", { class: "pz-list" }, save, go, stay)),
+          this.prompts([
+            ["confirm", T.choose],
+            ["back", T.back],
+          ]),
+        );
+      },
+    };
   }
 
   private saveRow(name: string, summary: string, savedAt: number, actions: HTMLElement[]) {
     return h(
       "div",
-      { class: "pm-save" },
-      h("div", { class: "pm-save-text" }, el("b", "", name), el("span", "", summary), el("small", "", new Date(savedAt).toLocaleString())),
-      h("div", { class: "pm-save-acts" }, ...actions),
+      { class: "pz-save" },
+      h("div", { class: "pz-save-text" }, el("b", "", name), el("span", "", summary), el("small", "", new Date(savedAt).toLocaleString())),
+      h("div", { class: "pz-save-acts" }, ...actions),
     );
   }
 }

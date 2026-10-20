@@ -135,10 +135,19 @@ async function measure(t: Target, n: number) {
     console.log(`  cold: first GPU frame ${cold.firstFrameMs} ms, splash lifted ${cold.splashLiftedMs} ms`);
     await snap(cdp, "2-title");
 
-    // ---- the first mission launched from the title screen (the focus lands on the first entry
-    // once the splash has gone — wait for it, not for a fixed delay)
-    await until(cdp, `document.activeElement?.dataset.testid === "title-missions"`, 20_000);
-    await press(cdp, "Enter", 13);
+    // ---- the first mission launched from the title screen: by ship › every mission (PLAN-TITRE-AAA E2) — or, on a
+    // build before it, its Missions entry (the focus on the first entry once the splash has gone)
+    await until(
+      cdp,
+      `document.activeElement?.dataset.testid === "title-missions" || (!!document.querySelector("[data-testid=title-mode-ship]") && !document.body.classList.contains("intro-play"))`,
+      20_000,
+    );
+    if (await js<boolean>(cdp, `!!document.querySelector("[data-testid=title-mode-ship]")`)) {
+      await js(cdp, `document.querySelector("[data-testid=title-mode-ship]").click(), true`);
+      await until(cdp, `!!document.querySelector("[data-testid=title-act-ship-missions]")`, 5_000);
+      await Bun.sleep(500);
+      await js(cdp, `document.querySelector("[data-testid=title-act-ship-missions]").click(), true`);
+    } else await press(cdp, "Enter", 13);
     await until(cdp, `!!document.querySelector("[data-testid=missions]")`, 10_000);
     const mission = await js<string>(cdp, `document.querySelector(".ms-name")?.textContent ?? "?"`);
     await snap(cdp, "3-missions");

@@ -1,0 +1,73 @@
+// The loading orb (PLAN-TITRE-AAA): thinking-orbs' engine (MIT, © Jakub Antalik — pure geometry, no DOM, no
+// React) drawn by us, in the game's colours: the near dots warm white, the far ones the disk's amber. Its
+// state follows the boot's stages (loading.ts). No DOM here either: it draws into any 2D context — the intro's
+// Worker's OffscreenCanvas, a canvas in the page.
+
+import { MODE_FRAMES, type OrbState, resolvePreset } from "thinking-orbs/engine";
+
+export type { OrbState };
+
+/** the tuned preset drawn (64 CSS px), scaled to the size asked */
+const BASE = 64;
+/** the far dots' colour (the disk's amber) and the near ones' (a warm white) */
+const FAR = [255, 179, 92] as const;
+const NEAR = [255, 246, 232] as const;
+
+/**
+ * One frame of the orb in the `size`-pixel square whose top-left corner is (x, y) of `ctx`, `t` seconds into its animation.
+ * `fade` (0…1) dims it whole (its entry and exit).
+ */
+export function drawOrb(
+  ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D,
+  state: OrbState,
+  x: number,
+  y: number,
+  size: number,
+  t: number,
+  fade = 1,
+) {
+  const { mode, speed, opts } = resolvePreset(state, BASE);
+  const { dots, lines } = MODE_FRAMES[mode](BASE, t * speed, opts);
+  const k = size / BASE;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(k, k);
+  for (const l of lines) {
+    const [r, g, b, a] = ink(l.white, (l.a ?? 1) * fade);
+    ctx.strokeStyle = `rgba(${r},${g},${b},${a})`;
+    ctx.lineWidth = l.w;
+    ctx.beginPath();
+    ctx.moveTo(l.x1, l.y1);
+    ctx.lineTo(l.x2, l.y2);
+    ctx.stroke();
+  }
+  for (const d of dots) {
+    const [r, g, b, a] = ink(d.white, (d.a ?? 1) * fade);
+    ctx.fillStyle = `rgba(${r},${g},${b},${a})`;
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** An ink value (the engine's paper convention: 0 the darkest) as our colour on the dark: near bright and warm white,
+ *  far dim and amber. */
+export function ink(white: number, alpha: number): [number, number, number, number] {
+  const n = 1 - Math.min(1, Math.max(0, white));
+  const lum = 0.3 + 0.7 * n;
+  const c = (i: 0 | 1 | 2) => Math.round((FAR[i] + (NEAR[i] - FAR[i]) * n) * lum);
+  return [c(0), c(1), c(2), Math.round(alpha * 1000) / 1000];
+}
+
+/** The stages of the boot (loading.ts ids) still running, the first image drawn or not: the orb's state. */
+export function orbStateFor(active: readonly string[], firstImage: boolean): OrbState {
+  if (firstImage) return active.length ? "composing" : "breathing";
+  if (active.includes("pipelines") || active.includes("scene-tracer")) return "solving";
+  if (active.includes("shaders")) return "weaving";
+  if (active.includes("gpu")) return "connecting";
+  if (active.some((id) => DOWNLOADS.has(id))) return "searching";
+  return "working";
+}
+
+const DOWNLOADS = new Set(["ephemeris", "sky", "stars", "maps", "earth", "ranger", "endurance", "iss"]);

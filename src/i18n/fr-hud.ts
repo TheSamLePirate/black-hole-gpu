@@ -541,6 +541,8 @@ export default {
   "Enter when the first image is ready": "Entrer dès que la première image est prête",
   "Compiling the ray tracer for this scene": "Compilation du lancer de rayons pour cette scène",
   "Enter now": "Entrer maintenant",
+  "The loading's detail": "Le détail du chargement",
+  "Launching: {0} — as soon as the game is ready": "Lancement : {0} — dès que le jeu est prêt",
   "Download graphics diagnostic": "Télécharger le diagnostic graphique",
   "The graphics device was reset ({0}). Reload the page to go on.":
     "Le périphérique graphique a été réinitialisé ({0}). Rechargez la page pour continuer.",

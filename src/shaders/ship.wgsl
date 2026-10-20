@@ -86,6 +86,12 @@ struct Ship {
   // 0: none): its normal, d; its significant height [m], a clock [s], unused × 2
   sea: vec4f,
   seaK: vec4f,
+  // the F-35's panoramic display (docs/PLAN-PCD-AAA.md, Q2): the last touch — u, v on the display, its age [s]
+  // (−1: none) —, the style (0 realistic, 1 cinematic); its brightness (0…1), the last page change's age [s] (−1:
+  // none), unused × 2; the part changed (u0, v0, u1, v1)
+  pcd0: vec4f,
+  pcd1: vec4f,
+  pcd2: vec4f,
 };
 
 // A craft drawn: craft → camera frame, then its kind (0 Ranger, 1 Lander, 2 Endurance, 3 F-35), in the shadow
@@ -654,6 +660,58 @@ fn cabinHeight(kind: u32, c: vec2f, fw: f32) -> f32 {
   }
 }
 
+/**
+ * The F-35's panoramic display's light (docs/PLAN-PCD-AAA.md, Q2): its picture (the canvas, sRGB: linear here) as an
+ * LCD panel gives it — up close each pixel three stripes, red, green, blue, in a black matrix (faded out as they
+ * shrink under ~3 screen pixels: no moiré); off its axis less contrast and the blacks' faint bluish glow (IPS); a glow
+ * about the bright symbols (the picture 8–16× coarser: the light scattered in the glass); the touch under the finger;
+ * the brightness (the DAY / NIGHT / NVG knob, or the light's). The cinematic style: a wider glow, a ring at the touch,
+ * a new page swept in from its top.
+ */
+fn pcdLight(uv: vec2f, dx: vec2f, dy: vec2f, cosV: f32) -> vec3f {
+  let dims = vec2f(textureDimensions(jetScreen));
+  let cine = S.pcd0.w;
+  // (the canvas's pixels one screen pixel spans)
+  let fp = max(max(length(dx * dims), length(dy * dims)), 1e-4);
+  var c = textureSampleGrad(jetScreen, mapSamp, uv, dx, dy).rgb;
+  let see = 1.0 - smoothstep(0.1, 0.35, fp);
+  if (see > 0.0) {
+    let px = uv * dims;
+    let texel = textureLoad(jetScreen, vec2i(clamp(px, vec2f(0.0), dims - 1.0)), 0).rgb;
+    let f = fract(px);
+    let s3 = f.x * 3.0;
+    let k = floor(s3);
+    let fs = fract(s3);
+    let ex = max(0.1, fp * 3.0);
+    let ey = max(0.06, fp);
+    let ax = smoothstep(0.0, ex, fs) * smoothstep(1.0, 1.0 - ex, fs);
+    let ay = smoothstep(0.0, ey, f.y) * smoothstep(1.0, 1.0 - ey, f.y);
+    let sel = vec3f(select(0.0, 1.0, k < 0.5), select(0.0, 1.0, k > 0.5 && k < 1.5), select(0.0, 1.0, k > 1.5));
+    c = mix(c, texel * sel * (3.0 * ax * ay / ((1.0 - ex) * (1.0 - ey))), see);
+  }
+  let halo = textureSampleLevel(jetScreen, mapSamp, uv, max(log2(fp), 0.0) + mix(3.0, 4.0, cine)).rgb;
+  c += halo * mix(0.06, 0.2, cine);
+  // (the panel seen askew: dimmer, its blacks glowing)
+  c = c * mix(0.7, 1.0, smoothstep(0.15, 0.85, cosV)) + vec3f(0.35, 0.45, 0.8) * (0.012 * (1.0 - cosV) * (1.0 - cosV));
+  // the touch: a soft light under the finger (a ring spreading, cinematic)
+  let T = S.pcd0;
+  if (T.z >= 0.0 && T.z < 0.6) {
+    let d = length((uv - T.xy) * dims) / dims.y;
+    let soft = exp(-d * d / 0.0012) * clamp(1.0 - T.z / 0.3, 0.0, 1.0);
+    let r = 0.015 + T.z * 0.3;
+    let ring = exp(-((d - r) / 0.006) * ((d - r) / 0.006)) * clamp(1.0 - T.z / 0.6, 0.0, 1.0);
+    c += vec3f(0.35, 0.75, 0.9) * mix(0.25 * soft, 0.6 * ring + 0.2 * soft, cine);
+  }
+  // a new page swept in from its top (cinematic): below the sweep the old black, the sweep's line bright
+  let P = S.pcd2;
+  if (cine > 0.5 && S.pcd1.y >= 0.0 && S.pcd1.y < 0.3 && all(uv >= P.xy) && all(uv <= P.zw)) {
+    let y = (uv.y - P.y) / max(P.w - P.y, 1e-4);
+    let at = S.pcd1.y / 0.3;
+    c = c * select(1.0, 0.08, y > at) + vec3f(0.35, 0.85, 1.0) * (0.9 * exp(-((y - at) / 0.012) * ((y - at) / 0.012)));
+  }
+  return c * S.pcd1.x;
+}
+
 @fragment
 fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   // (the space station before it: hidden there — the station is composited first, into the traced image)
@@ -836,13 +894,15 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
       coat = 0.0;
     }
     case 42u: { albedo = vec3f(0.03); metal = 0.0; rough = 0.08; coat = 0.0; }
-    // the F-35's panoramic display: its picture's light under a glass (dark, smooth: the cockpit reflected)
+    // the F-35's panoramic display: its picture's light through an LCD panel under an anti-reflective glass (an
+    // avionics display's: F0 0.6 %, 0.4 % diffuse — the cockpit's black kept, the sky seen in it only grazing; the sun
+    // on it still washes it out)
     case 36u: {
-      albedo = vec3f(0.01);
+      albedo = vec3f(0.004);
       metal = 0.0;
-      rough = 0.08;
+      rough = 0.06;
       coat = 0.0;
-      emit = textureSampleGrad(jetScreen, mapSamp, in.uv, duvx, duvy).rgb * 1.3;
+      emit = pcdLight(in.uv, duvx, duvy, abs(dot(ng, normalize(-pS)))) * 1.3;
     }
     // its cockpit's dark hardware (the stick, the throttle: generated)
     case 37u: { albedo = vec3f(0.035, 0.036, 0.04); metal = 0.1; rough = 0.55; coat = 0.0; }
@@ -887,7 +947,7 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let E = irradiance(n);
 
   // base layer: metal/paint, with multiple-scattering energy compensation (Fdez-Agüera 2019)
-  let f0 = mix(vec3f(0.04), albedo, metal);
+  let f0 = mix(vec3f(select(0.04, 0.006, part == 36u)), albedo, metal);
   let ab = envAB(rough, nv);
   let fss = f0 * ab.x + ab.y;
   let ess = ab.x + ab.y;

@@ -541,6 +541,8 @@ export class CameraController {
     addEventListener("keydown", (e: KeyboardEvent) => {
       if (isTyping(e)) return;
       if (e.metaKey || e.ctrlKey) return;
+      // (a key in a menu — the pause, the title —: the menu's, not the flight's, even with the game going on)
+      if ((e.target as HTMLElement | null)?.closest?.("[aria-modal=true]")) return;
       this.keys.add(e.key);
       this.codes.add(e.code);
     });

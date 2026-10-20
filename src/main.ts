@@ -33,8 +33,10 @@ import { CockpitInput } from "./cockpit/input";
 import { cockpitTarget } from "./cockpit/pointer";
 import { CockpitTip } from "./ui/cockpit-tip";
 import { cockpitHull } from "./system/collide";
-import { prefetchSkyAssets, Renderer, type FrameStats, type OfflineStatus } from "./renderer";
+import { afterSkyPrefetch, prefetchSkyAssets, Renderer, type FrameStats, type OfflineStatus } from "./renderer";
 import { swappable } from "./util/swappable";
+import { bootMark, bootReport, bootWatchStop } from "./boot-timeline";
+import { Intro, introBuild } from "./intro/intro";
 import { downloadGpuDiagnostic, globalErrorRouter, gpuDiagnostics } from "./gpu-diagnostics";
 import { horizon, isco } from "./physics";
 import { cameraFrame, repPose, setHolePose, setHomePose, switchAnchor } from "./camera";
@@ -54,9 +56,15 @@ import { NetVoice } from "./ui/netvoice";
 import type { JetInputs } from "./f35/pose";
 import { installPwa } from "./pwa";
 import { PauseMenu } from "./ui/pause";
+import type { PauseContext } from "./ui/pausemenu";
+import { PlayerSettings } from "./ui/settings/player";
+import type { PlayerTab } from "./ui/settings/menu";
+import { GameEntry } from "./ui/entry";
 import { ControlsScreen } from "./ui/controls-screen";
 import { PadsScreen } from "./ui/pads-screen";
-import { TitleScreen } from "./ui/title";
+import type { SceneGroup } from "./ui/schema";
+import type { TitleGame } from "./ui/title/activities";
+import { TitleScreen } from "./ui/title/title";
 import { MissionSelect } from "./ui/missions";
 import { PlacePanel } from "./ui/placepanel";
 import { MissionPlanPanel } from "./ui/missionplan";
@@ -183,7 +191,6 @@ import { CraftLost } from "./ui/craftlost";
 import { applyF35Variant } from "./f35/variant";
 import { FlightComputer } from "./ui/fc/computer";
 import { sitesOf, SITES } from "./game/sites";
-import { Splash } from "./ui/splash";
 import { SceneGallery } from "./ui/scenes";
 import { SoundDirector } from "./audio/director";
 import { haptics } from "./input/haptics";
@@ -311,6 +318,18 @@ let firstFrame = false;
 let firstFrameAt: number | null = null;
 /** the Kerr Bench's page (…/#bench): its GPU memory counted from the first allocation */
 const benchPage = /[#&]bench\b/.test(location.hash);
+// (#slowboot=N — PLAN-TITRE-AAA E0: the graphics' start held N s more, a slow driver's compile played on any
+// machine, to try what is usable while the game starts; taken out of the hash at once, the rest read as before)
+const slowBootS = (() => {
+  const m = /(^#|&)slowboot=(\d+(?:\.\d+)?)/.exec(location.hash);
+  if (!m) return 0;
+  const rest = location.hash
+    .replace(/(^#|&)slowboot=[\d.]+/, "$1")
+    .replace(/^#&/, "#")
+    .replace(/&$/, "");
+  history.replaceState(null, "", location.pathname + location.search + (rest.length > 1 ? rest : ""));
+  return Math.min(Number(m[2]), 600);
+})();
 if (benchPage) installVramHook();
 
 function fail(msg: string) {
@@ -329,11 +348,16 @@ function fail(msg: string) {
 }
 
 async function main() {
+  bootMark("main");
   let appVersion = "dev";
   void fetch("version.json")
     .then((r) => (r.ok ? r.json() : null))
     .then((v: { sha?: string } | null) => {
-      if (v?.sha) appVersion = v.sha;
+      if (v?.sha) {
+        appVersion = v.sha;
+        // (a new build: its first start plays the intro whole)
+        introBuild(v.sha);
+      }
       gpuDiagnostics.setContext({ revision: appVersion });
     })
     .catch(() => {});
@@ -383,7 +407,44 @@ async function main() {
   });
   window.addEventListener("error", (event) => globalError("javascript-error", event.error ?? event.message));
   window.addEventListener("unhandledrejection", (event) => globalError("unhandled-rejection", event.reason));
-  const splash = new Splash($("loading") ?? document.createElement("div"));
+  // the intro (src/intro/intro.ts): its sequence already playing in CSS, its Worker started here
+  const splash = new Intro($("loading") ?? document.createElement("div"));
+  void splash.gone.then(() => {
+    bootMark("splash-lifted");
+    setTimeout(bootWatchStop, 2000);
+  });
+  // the title screen (src/ui/title/title.ts — PLAN-TITRE-AAA E2): built now, before the graphics, usable while
+  // the game loads; a launch chosen meanwhile waits for the game (titleScreen.attach, further down) — unless the
+  // link named a scene, a moment, a mission, the benchmark or a room
+  let titleHold: (on: boolean) => void = () => {};
+  let titleCurrent: () => string | null = () => null;
+  // the way into the game from the menus (ui/entry.ts, PLAN-TITRE-AAA E10): a fade to black, a scene loading
+  // screen while its tracer compiles, the HUD's start
+  const gameEntry = new GameEntry();
+  const titleScreen = new TitleScreen({
+    version: () => appVersion,
+    hold: (on) => titleHold(on),
+    waiting: (label) => splash.launching(label),
+    current: () => titleCurrent(),
+    entry: (show, launch) => gameEntry.play(show, launch),
+  });
+  {
+    const p = new URLSearchParams(location.hash.slice(1));
+    const sc = p.get("scene");
+    const linked = (sc && presets[sc]) || /[#&](save|s?mission)=/.test(location.hash) || benchPage || (p.get("join") && settings.netMenu);
+    if (!linked) {
+      titleScreen.open();
+      bootMark("title");
+      // (the intro's name and emblem glide onto the title's when its sequence ends)
+      splash.dockTo = () =>
+        titleScreen.isOpen
+          ? { name: document.querySelector<HTMLElement>(".tt-name"), mark: document.querySelector<HTMLElement>(".tt-mark") }
+          : null;
+      splash.dock();
+      void splash.played.then(() => titleScreen.focusFirst());
+      void splash.gone.then(() => titleScreen.focusFirst());
+    }
+  }
   // (the HUD's and the overlays' fonts — fonts.css — loaded while the GPU starts: a canvas draws in
   // whatever is there at its first frame, and keeps it until redrawn)
   const fonts = Promise.all(
@@ -391,27 +452,33 @@ async function main() {
   ).catch(() => {});
   // the solar system's ephemerides and the sky's assets: downloading while the shaders compile, not
   // after them (plan §2.1-C). DE440 (3.3 MB) always, before the scene is placed; JUP365 (Jupiter's centre
-  // and moons, 2040–2100: 4.1 MB) only where it may matter — a scene about Jupiter, a save (its place not
-  // known here) —, else after the first image: at 20 Mbit/s it held every scene's first image back
-  // (PLAN-MONDE M3)
+  // and moons, 2040–2100: 7.5 MB) only where it may matter — a scene about Jupiter, a save naming Jupiter or its
+  // moons (its target, its reference body, its ground), a shared moment (not read yet) —, else after the first
+  // image: at 20 Mbit/s it held every scene's first image back (PLAN-MONDE M3), and every returning player's —
+  // the autosave, wherever it was, took 7.5 MB before DE440's 3.3 (PLAN-TITRE-AAA E0)
   const ephemerisFetch = (u: string) =>
     loading.fetch(u, "ephemeris").then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${u}: ${r.status}`))));
   const startScene = new URLSearchParams(location.hash.slice(1)).get("scene");
   const jovianFirst =
     /[#&]save=/.test(location.hash) ||
-    (startScene ? !presets[startScene] || JOVIAN.test(JSON.stringify(presets[startScene])) : !!autosave.get());
+    (startScene ? !presets[startScene] || JOVIAN.test(JSON.stringify(presets[startScene])) : JOVIAN.test(JSON.stringify(autosave.get())));
   loading.stage("ephemeris", t("The solar system — NASA/JPL ephemerides (DE440)"), { weight: 2 });
   const ephemerides = loading.track("ephemeris", "", loadEphemerides(ephemerisUrls(jovianFirst ? ["de", "jup"] : ["de"]), ephemerisFetch));
   loading.stage("sky", t("Milky Way — the Gaia DR2 map"), { weight: 2 });
   loading.stage("stars", t("Stars — the Hipparcos & HYG catalogue"), { weight: 2 });
-  prefetchSkyAssets((u, id) => loading.fetch(u, id));
+  // (the sky after the ephemerides, not beside them: DE440 is what the scene needs first — sharing the link it
+  // came last, at 9.8 s at 20 Mbit/s, holding the title and the first image; the sky is not needed for that
+  // image — PLAN-TITRE-AAA E0)
+  prefetchSkyAssets((u, id) => loading.fetch(u, id), ephemerides);
   // (the renderer behind a handle: rebuilt on a new device after a loss, the page, the simulation and the
   // overlays keeping the handle they were given — PLAN-MONDE M2)
   let renderer: Renderer;
   let rendererSlot: ReturnType<typeof swappable<Renderer>>;
   try {
-    rendererSlot = swappable(await Renderer.create(canvas));
+    const [created] = await Promise.all([Renderer.create(canvas), new Promise((r) => setTimeout(r, slowBootS * 1000))]);
+    rendererSlot = swappable(created);
     renderer = rendererSlot.proxy;
+    bootMark("renderer");
   } catch (e) {
     startupFailed = true;
     cancelWatchdog();
@@ -2597,6 +2664,23 @@ async function main() {
   let jetIn: JetInputs | null = null;
   /** the F-35's panoramic cockpit display (src/f35/pcd.ts) */
   const jetPcd = new Pcd();
+  let pcdWarm = false;
+  /** the display's parts drawn, not yet sent to its texture; when it was last sent [ms] */
+  const pcdPending: import("./f35/pcd").PcdRect[] = [];
+  let pcdSentAt = -Infinity;
+  /** its CPU cost each frame it is shown (__bh.pcd.stats): the data, the drawing, the upload */
+  const pcdStats = {
+    frames: 0,
+    draws: 0,
+    ms: 0,
+    max: 0,
+    /** of which the upload (the copy, the mips), the data read (the alerts, pcdData) */
+    up: 0,
+    read: 0,
+    reset() {
+      this.frames = this.draws = this.ms = this.max = this.up = this.read = 0;
+    },
+  };
   const flightHud = new FlightHud(settings, {
     hold: pilotHold,
     auto: pilotAuto,
@@ -3033,12 +3117,44 @@ async function main() {
     if (camera.cinematic) camera.setCinematic(null);
   };
   // the controls screen (ui/controls-screen.ts): from the pause menu, back to it
+  /** where the keys' screen goes back to: the pause, or the player's settings when opened from them */
+  let controlsBack = () => (pauseMenu ??= makePauseMenu()).open();
   const controlsScreen: ControlsScreen = new ControlsScreen({
     help: () => actions["btn-help"]!(),
     pads: () => padsScreen.open(),
-    back: () => (pauseMenu ??= makePauseMenu()).open(),
+    back: () => controlsBack(),
     toast: (t) => panel.toast(t),
   });
+  // the player's settings (ui/settings/player.ts, PLAN-TITRE-AAA E9): the screen of the settings a player changes —
+  // the panel's drawer, every control, is the Lab now (⇧M, its LAB ›, the search)
+  const playerSettings: PlayerSettings = new PlayerSettings({
+    settings,
+    defaults: defaultSettings,
+    set: (key, value) => panel.setValue(key, value),
+    setQuality: (q) => panel.setQuality(q),
+    quality: () => panel.qualityNow(),
+    lab: (query) => panel.openLab(query),
+    controls: () => {
+      controlsBack = () => {
+        controlsBack = () => (pauseMenu ??= makePauseMenu()).open();
+        playerSettings.reopen("controls");
+      };
+      controlsScreen.open();
+    },
+    pads: () => padsScreen.open(),
+    connectController: HidPads.supported ? () => connectController() : undefined,
+    // (in a room the common clock does not stop: nothing held)
+    hold: (on) => {
+      if (netPanel.net?.room) return;
+      paused = on;
+      touch();
+    },
+    toast: (s) => panel.toast(s),
+  });
+  panel.searchKey = () => {
+    playerSettings.openSearch();
+    return true;
+  };
   // the controllers screen (ui/pads-screen.ts — PLAN-HOTAS H4): from the controls screen, back to it
   const padsScreen = new PadsScreen({ pads: camera.padControls, back: () => controlsScreen.open(), toast: (t) => panel.toast(t) });
   // (made at its first opening: the game's tools are built further down)
@@ -3052,9 +3168,13 @@ async function main() {
       },
       engaged: () => mission.active || camera.pilot.hold !== "none" || camera.pilot.auto !== "none" || !!camera.cinematic,
       release: releaseControls,
-      settings: () => panel.toggle(true),
+      settings: () => playerSettings.open(() => pauseMenu?.open()),
+      lab: () => panel.openLab(),
       help: () => actions["btn-help"]!(),
-      controls: () => controlsScreen.open(),
+      controls: () => {
+        controlsBack = () => (pauseMenu ??= makePauseMenu()).open();
+        controlsScreen.open();
+      },
       photo: () => void setGameMode("photo"),
       capture: () => {
         const why = renderDialog.capture();
@@ -3076,10 +3196,61 @@ async function main() {
       weather: () => weatherPanel.open(),
       eclipses: () => eclipses.open(),
       titleScreen: () => titleScreen?.open(),
+      modes: (id) => titleScreen.openMode(id, () => pauseMenu?.open()),
+      context: (): PauseContext => {
+        const mode = gameMode();
+        const u = unitsFor(settings);
+        // the mission: an air mission flown (its objectives' states), or a space mission's scene (its list)
+        const M = camera.mission;
+        const space = MISSIONS.find((q) => q.scene === currentScene);
+        const mission = M
+          ? {
+              title: M.run.spec.title,
+              objectives: M.run.spec.objectives.map((o) => ({ text: o.text, state: M.run.state[o.id] ?? ("waiting" as const) })),
+            }
+          : space
+            ? { title: tr(space.title), objectives: space.objectives.map((o) => ({ text: tr(o), state: "todo" as const })) }
+            : null;
+        const figures: [string, string][] = [];
+        const walker = camera.character.place();
+        if (mode === "foot" && walker)
+          figures.push([
+            tr({ fr: "Lieu", en: "Place" }),
+            `${BODY_NAMES[walker.body as Target] ?? walker.body} · ${fmtLatLon(walker.lat, walker.lon, 3)}`,
+          ]);
+        else if (camera.piloting)
+          try {
+            const st = tools.status();
+            // (a distance in the units shown, its thousands grouped: "400 km", "147 094 163 km")
+            const far = (m: number) => `${Math.round(u.dist(m)).toLocaleString(lang)} ${u.distName.toLowerCase()}`;
+            figures.push(
+              [tr({ fr: "État", en: "Status" }), st.label],
+              [tr({ fr: "Altitude", en: "Altitude" }), st.altKm > 20 ? far(st.altKm * 1000) : u.fAlt(st.altKm * 1000)],
+              [tr({ fr: "Vitesse", en: "Speed" }), u.fSpd(st.speed)],
+            );
+            if (st.target) figures.push([tr({ fr: "Cible", en: "Target" }), `${st.target.name} · ${far(st.target.distKm * 1000)}`]);
+          } catch {
+            // (no flight figures here: the line says where)
+          }
+        let line = "";
+        try {
+          line = tools.snapshot("now").summary;
+        } catch {
+          line = tools.date();
+        }
+        return {
+          line,
+          mode,
+          mission,
+          figures,
+          played: playedMs,
+          savedAt: tools.savedAt,
+          room: netPanel.net?.room?.code ?? null,
+          tips: mode === "ship" && settings.vessel === "f35" ? "jet" : mode,
+        };
+      },
       toast: (t) => panel.toast(t),
     });
-  /** the title screen, once built (ui/title.ts) */
-  let titleScreen: TitleScreen | null = null;
   const quickSave = () => {
     try {
       panel.toast(tf("Quick save — {0}", tools.save("Quick save")));
@@ -4404,6 +4575,54 @@ async function main() {
     if (what) panel.toast(`PCD · ${what}`);
     return true;
   };
+  // (what the panoramic display's keys ask of the craft — never a shot: the weapon, the radar's mode, its lock, the
+  // countermeasures — through the controller's own calls, as the crew's backseater's)
+  // (and the autopilot's: its selectors and LNAV / VNAV by the controller's calls, its modes by the game's tools —
+  // the crew's MCP's —, their answer toasted when it comes)
+  const pcdTool = (name: string, args: Record<string, unknown>) => {
+    void Promise.resolve()
+      .then(() => tarsTools.find((x) => x.name === name)?.run(args as never, new AbortController().signal))
+      .then((r) => {
+        const v = r && typeof r === "object" && "result" in r ? (r as { result: unknown }).result : r;
+        const line =
+          typeof v === "string"
+            ? v
+            : v && typeof v === "object"
+              ? String((v as Record<string, unknown>).note ?? (v as Record<string, unknown>).result ?? "")
+              : "";
+        if (line) panel.toast(`PCD · ${line.slice(0, 120)}`);
+      })
+      .catch((e) => panel.toast(`PCD · ${String((e as Error).message ?? e)}`));
+    return null;
+  };
+  jetPcd.act = (a) => {
+    switch (a.kind) {
+      case "weapon":
+        return camera.weaponSelect(a.w);
+      case "radar":
+        return camera.radarModeSet(a.mode);
+      case "lock":
+        return camera.lockOnName();
+      case "cm":
+        return camera.combat?.status === "run"
+          ? (camera.combatTrigger("cm") ?? t("Flares and chaff out"))
+          : t("No fight running: the weapons are live in a fight or a mission");
+      case "ap":
+        return camera.apSet(a.set);
+      case "nav":
+        return camera.navSet({ ...(a.l !== undefined ? { l: a.l } : {}), ...(a.v !== undefined ? { v: a.v } : {}) });
+      case "apMode":
+        return a.mode === "ils"
+          ? pcdTool("approach", { action: "ils" })
+          : a.mode === "ilsOff"
+            ? pcdTool("approach", { action: "off" })
+            : a.mode === "goAround"
+              ? pcdTool("flight_action", { action: "go_around" })
+              : a.mode === "tf"
+                ? pcdTool("jet_mode", { action: "tf", aglM: 150 })
+                : pcdTool("jet_mode", { action: a.mode });
+    }
+  };
   camera.onJetStart = () => {
     try {
       tools.lineUp();
@@ -5395,8 +5614,7 @@ async function main() {
       id: "btn-settings",
       label: t("Settings"),
       icon: TB_ICONS.settings,
-      key: "M",
-      run: () => panel.toggle(),
+      run: () => (playerSettings.isOpen ? playerSettings.close() : playerSettings.open()),
       prio: 1,
       testid: "topbar-settings",
     });
@@ -6556,6 +6774,31 @@ async function main() {
 
   // the automation handle (devtools, tests, scripts): debug/bh.ts
   installBh({
+    boot: () => bootReport(firstFrame ? firstFrameAt : null),
+    intro: () => splash.status(),
+    // the way into the game (ui/entry.ts, E10): its veil up or not; `compile(ms)` holds the scene tracer's stage that
+    // long — the scene loading screen seen on a machine that compiles too fast to show it
+    entry: {
+      get busy() {
+        return gameEntry.busy;
+      },
+      compile: (ms: number) => {
+        loading.stage("scene-tracer", t("Compiling the ray tracer for this scene"), { indeterminate: true, eta: ms / 1000 });
+        setTimeout(() => loading.done("scene-tracer"), ms);
+        return true;
+      },
+    },
+    menu: {
+      state: () => ({
+        title: titleScreen.screen,
+        pause: pauseMenu?.screen ?? null,
+        settings: playerSettings.tabNow,
+        entry: gameEntry.busy,
+      }),
+      title: (mode) => (mode ? titleScreen.openMode(mode, () => (pauseMenu ??= makePauseMenu()).open()) : titleScreen.open()),
+      pause: () => (pauseMenu ??= makePauseMenu()).open(),
+      settings: (tab) => playerSettings.open(undefined, { tab: tab as PlayerTab | undefined }),
+    },
     settings,
     renderer,
     camera,
@@ -6564,6 +6807,7 @@ async function main() {
     bench,
     mission,
     cockpitScreens,
+    pcd: { pcd: jetPcd, stats: pcdStats },
     flight: {
       hub: flightHub,
       route: routePanel,
@@ -6715,6 +6959,8 @@ async function main() {
   let groundSeen = "";
   /** the pause menu (or the title screen) open: the simulation holds, the image refines */
   let paused = false;
+  /** the time played this visit — the game running, no menu over it [ms] (the pause's context) */
+  let playedMs = 0;
   const menuPad = new MenuPad();
   let lastStats: FrameStats | null = null;
   let saveTimer = 0;
@@ -6726,6 +6972,7 @@ async function main() {
     const dt = Math.min(0.1, (now - last) / 1000);
     // (the flight's clock: the frame's time while it runs — frozen, only the steps move it)
     if (!frozen && !paused && !replay.active) advanceFrameClock(dt * 1000);
+    if (!paused && firstFrame) playedMs += dt * 1000;
     // (the rain's: only while the time runs — paused, the drops stand still)
     if (!frozen && !paused && settings.animate) renderer.rainClock += dt;
     // (the display's refresh: the median of the loop's last intervals — the frame budget is fitted to it)
@@ -6747,7 +6994,11 @@ async function main() {
     // scene held, or stepped by the video itself)
     // (a menu holding the game — the title, the pause, the missions: the pad moves in it, the flight
     // does not read it meanwhile)
-    if (paused) menuPad.tick(camera.pad.poll(), now);
+    // (in a room the pause does not hold the game — its clock is the room's —: the pad moves in the menu all the
+    // same, and the craft reads none of it meanwhile)
+    const pauseUp = !!pauseMenu?.isOpen || playerSettings.isOpen;
+    if (paused || pauseUp) menuPad.tick(camera.pad.poll(), now, titleScreen.isOpen || pauseUp);
+    camera.padFrame = !paused && pauseUp ? null : undefined;
     if (!frozen && !paused && !renderer.offlineActive && !replay.active) {
       // (the flight plan's guidance speaking: a waypoint passed, its end, the bingo)
       if (camera.nav.say) {
@@ -6956,9 +7207,11 @@ async function main() {
       firstFrameAt = renderer.firstFrameDoneAt;
       cancelWatchdog();
       gpuDiagnostics.ready();
+      bootMark("first-image");
       splash.firstImage();
-      // (Jupiter's moons' ephemeris, when the start did not wait for it: now, the first image drawn)
-      if (!jovianFirst) setTimeout(() => void loadEphemerides(ephemerisUrls(["jup"])), 2000);
+      // (Jupiter's moons' ephemeris, when the start did not wait for it: now, the first image drawn and the sky
+      // in — not sharing the link with it)
+      if (!jovianFirst) void afterSkyPrefetch(2000).then(() => loadEphemerides(ephemerisUrls(["jup"])));
     }
     if (st) {
       renderedAt = now;
@@ -7261,14 +7514,49 @@ async function main() {
           // (another player followed: his surfaces, his gear, his nozzle — ui/netsession.ts)
           if (netSession.followJet) renderer.jetPose = netSession.followJet;
         } else jetIn = null;
+        // (the F-35 chosen: its display's fonts, canvas and mips readied while the browser idles — no stall at the
+        // cockpit's first look)
+        if (settings.vessel === "f35" && !pcdWarm) {
+          pcdWarm = true;
+          (window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 200)))(() => {
+            jetPcd.warm();
+            renderer.ship.warmJetScreen(jetPcd.canvas);
+          });
+        }
         // (the F-35's panoramic display, seen from its seat: drawn at 10 Hz, onto the dashboard)
         if (settings.vessel === "f35" && (settings.shipMount === "cockpit" || settings.shipMount === "cabin")) {
-          const al = alertsOf({ ...info, status, animate: settings.animate, fmtM: () => "" }).map((a) => ({
-            text: a.text,
-            level: a.level,
-          }));
-          const d = pcdData(camera, settings, renderer.jetPose, al, dateOf(sim.time));
-          if (d && jetPcd.draw(d, performance.now())) renderer.ship.updateJetScreen(jetPcd.canvas);
+          const t0 = performance.now();
+          // (its data read every 100 ms, its parts drawn in turn — one a frame —, only those uploaded)
+          const parts = jetPcd.frame(t0, () => {
+            const al = alertsOf({ ...info, status, animate: settings.animate, fmtM: () => "" }).map((a) => ({
+              text: a.text,
+              level: a.level,
+            }));
+            const d = pcdData(camera, settings, renderer.jetPose, al, dateOf(sim.time));
+            pcdStats.read += performance.now() - t0;
+            return d;
+          });
+          renderer.pcdLook = jetPcd.look(t0, settings.f35PcdBrightness, settings.f35PcdStyle === "cinematic");
+          // (the parts drawn gathered and sent together — one copy of their union, one pass of mips — every 66 ms at
+          // most, at once after a touch: a third of the uploads, a delay no eye sees)
+          pcdPending.push(...parts);
+          const touched = (jetPcd.lastTouch?.at ?? -Infinity) > pcdSentAt;
+          if (pcdPending.length && (touched || t0 - pcdSentAt >= 66)) {
+            const t1 = performance.now();
+            const x0 = Math.min(...pcdPending.map((r) => r.x)),
+              y0 = Math.min(...pcdPending.map((r) => r.y));
+            const x1 = Math.max(...pcdPending.map((r) => r.x + r.w)),
+              y1 = Math.max(...pcdPending.map((r) => r.y + r.h));
+            renderer.ship.updateJetScreen(jetPcd.canvas, [{ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }]);
+            pcdPending.length = 0;
+            pcdSentAt = t0;
+            pcdStats.draws++;
+            pcdStats.up += performance.now() - t1;
+          }
+          const dt = performance.now() - t0;
+          pcdStats.frames++;
+          pcdStats.ms += dt;
+          pcdStats.max = Math.max(pcdStats.max, dt);
         }
         // (the cockpit's controls: each where the flight has it, lit by its mode — PLAN-COCKPIT)
         // (each moving part travelling there: a lever moved by a key or an autopilot seen going — K5)
@@ -7563,6 +7851,7 @@ async function main() {
   // flight saved last time; then the URL is left clean (settings from an old link were read above) —
   // once the ephemerides are in (a ship placed near a planet before would find it moved under it)
   await ephemerides;
+  bootMark("ephemerides");
   {
     const hash = location.hash;
     const scene = new URLSearchParams(hash.slice(1)).get("scene");
@@ -7587,8 +7876,9 @@ async function main() {
       panel.toast(tf("That link's mission could not be read: {0}", (e as Error).message));
     }
     const last = autosave.get();
-    // (the flight saved last loaded behind the title screen: Continue only lifts it)
-    let resumed: string | null = null;
+    // (the flight saved last loaded behind the title screen: Continue only lifts it — not when a launch was chosen
+    // while the game loaded: its own scene then the only one placed and compiled)
+    const pendingLaunch = titleScreen.pending;
     try {
       if (shared) panel.toast(tf("Shared flight: {0}", tools.load(shared)));
       else if (spaceLinked) {
@@ -7600,70 +7890,165 @@ async function main() {
         const spec = linked;
         void splash.gone.then(() => briefMission(spec, () => airMissions.fly(spec)));
       } else if (scene && presets[scene]) applyPreset(scene);
-      else if (hash.length <= 1 && last && settings.autosave) {
-        tools.load(last, { quiet: true });
-        resumed = last.summary;
-      }
+      else if (!pendingLaunch && hash.length <= 1 && last && settings.autosave) tools.load(last, { quiet: true });
     } catch (e) {
       console.warn("Could not restore the saved game:", e);
     }
-    // the title screen (ui/title.ts), unless the link named a scene, a moment or the benchmark
     // the missions (ui/missions.ts): from the title screen; back, the title again
     const missionSelect = new MissionSelect({
       launch: (scene) => {
         paused = false;
-        started = true;
         panel.applyScene(scene);
       },
-      back: () => titleScreen?.open(),
+      back: () => titleScreen.open(),
     });
-    // (Continue: the flight resumed behind the screen at launch; later — the screen opened from the
-    // pause menu — the game left there)
-    let started = false;
-    titleScreen = new TitleScreen({
-      saved: () => (started ? tools.snapshot("now").summary : resumed),
-      continue: () => (started = true),
-      hold: (on) => {
-        paused = on;
-        touch();
+    titleHold = (on) => {
+      paused = on;
+      touch();
+    };
+    titleCurrent = () => tools.snapshot("now").summary;
+    /** the craft flown changed (as the panel and TARS do: the fleet's switch follows) */
+    const setVessel = (v: Settings["vessel"]) => {
+      if (settings.vessel === v) return;
+      settings.vessel = v;
+      onSettingsChange(["vessel"]);
+    };
+    /**
+     * The clock set to that hour of a place's own (mean solar) day [h], the Sun's hour angle there found from the
+     * subsolar point — forward, within one of its days (a month on the Moon, a sol on Mars), then refined.
+     */
+    const setLocalHour = (world: string, lon: number, hour: number) => {
+      const DAY_S: Record<string, number> = { earth: 86400, moon: 29.530589 * 86400, mars: 88775.244 };
+      const day = DAY_S[world];
+      if (!day) return;
+      let t = camera.nowTime();
+      for (let k = 0; k < 4; k++) {
+        const q = toBodyFixed(world, ourState("sun", t).pos, t);
+        const sub = (Math.atan2(q[1], q[0]) * 180) / Math.PI;
+        // (the local hour: noon where the Sun is overhead, an hour for each 15° east of it)
+        const now = ((((lon - sub + 180) % 360) + 360) % 360) / 15;
+        let d = (((hour - now) % 24) + 24) % 24;
+        if (k > 0 && d > 12) d -= 24;
+        t += ((d / 24) * day) / M_SECONDS;
+      }
+      tools.setDate(t);
+    };
+    /** the craft chosen on the title (by ship): set again once the game's world is loaded — a scene sets its own */
+    let shipChoice: Settings["vessel"] | null = null;
+    /** a placement in the craft chosen, in ship mode */
+    const inShip = (f: () => string) =>
+      void placeShip(() => {
+        setGameMode("ship", true);
+        if (shipChoice) {
+          setVessel(shipChoice);
+          // (the switch now — the flight's step would make it next frame, after the placement: the craft left
+          // would be the one placed)
+          const why = camera.switchVessel(shipChoice);
+          if (why) panel.toast(why);
+        }
+        shipChoice = null;
+        return f();
+      });
+    // the game, as the title screen launches things in it (ui/title/activities.ts)
+    const titleGame: TitleGame = {
+      resume: () => {},
+      walk: (body, lat, lon) => void placeShip(() => tools.walk(body, lat, lon)),
+      stroll: (c) =>
+        void placeShip(() => {
+          if (c.hour !== null) setLocalHour(c.world, c.lon, c.hour);
+          if (c.world === "earth" && c.weather && c.weather !== settings.weather) {
+            settings.weather = c.weather;
+            hubHost.weatherChanged();
+          }
+          return tools.walk(c.world, c.lat, c.lon);
+        }),
+      // (a flight from the title starts in the pilot's seat — PLAN-TITRE-AAA E11)
+      jet: () => {
+        placeShip(() => {
+          setGameMode("ship", true);
+          setVessel("f35");
+          return tools.lineUp();
+        });
+        setMount("cockpit");
       },
+      flightHub: () => flightHub.open(),
+      // (By plane — E4: the same paths as the Flight hub's card and TARS's tools)
+      flight: (c) => {
+        placeShip(() => prepareFlight(hubHost, { field: c.field, start: c.start, hour: c.hour, weather: c.weather, fuel: c.fuel }));
+        setMount("cockpit");
+      },
+      mission: (id) => airMissions.brief(id),
+      fight: (id) => {
+        const f = SCENARIOS.find((d) => d.id === id);
+        if (!f) throw new Error(`no fight "${id}"`);
+        placeShip(() => (flyFight(challengeHost, f), ""));
+      },
+      lesson: (id, how) => {
+        if (!LESSONS.some((L) => L.id === id)) throw new Error(`no lesson "${id}"`);
+        lessonPlace(id as LessonId, how === "demo" ? true : how === "try" ? false : "guided");
+      },
+      challenge: (id) => {
+        const c = CHALLENGES.find((d) => d.id === id);
+        if (!c) throw new Error(`no challenge "${id}"`);
+        placeShip(() => (flyChallenge(challengeHost, c), ""));
+      },
+      figure: (id, how) => {
+        if (id !== "box" && !FIGURE_ORDER.includes(id as FigureId)) throw new Error(`no figure "${id}"`);
+        placeShip(() => (flyFigure(challengeHost, id as FigureId | "box", how === "watch" ? "demo" : "judge"), ""));
+      },
+      challenges: () => challengePanel.open(),
+      school: () => flightSchool(instrHost),
       missions: () => {
         paused = true; // (the scene behind held while one chooses)
         missionSelect.open();
       },
-      explore: () => {
-        started = true;
-        scenes.open();
+      scene: (name) => panel.applyScene(name),
+      freeScene: (name) => {
+        panel.applyScene(name);
+        setGameMode("free", true);
       },
-      photo: () => {
-        started = true;
-        setGameMode("photo");
+      orbit: (body, altKm) => inShip(() => tools.orbit(body, { altKm })),
+      land: (body, lat, lon) => inShip(() => tools.land(body, lat, lon)),
+      near: (body, altKm) => inShip(() => tools.near(body, { altKm })),
+      wormhole: (side) => inShip(() => tools.wormhole(side)),
+      vessel: (v) => {
+        shipChoice = v;
+        setVessel(v);
       },
-      settings: () => {
-        started = true;
-        panel.toggle(true);
+      place: () => {
+        // (the game's world loaded first — its scene sets its own craft —, then the one chosen)
+        atlasReady();
+        if (shipChoice) setVessel(shipChoice);
+        shipChoice = null;
+        placePanel.open();
       },
+      atlas: () => atlas.open(),
+      scenes: (group) => scenes.open("", group as SceneGroup | undefined),
+      photo: () => void setGameMode("photo"),
+      network: () => openNetwork(),
+      networkShown: () => settings.netMenu,
+      editor: () => missionEditor.open(),
+      controls: () => controlsScreen.open(),
+      settings: () => playerSettings.open(() => titleScreen.open()),
+      load: (name) => tools.load(name),
       bench: () => {
         location.hash = "bench";
         location.reload();
       },
-      version: () => appVersion,
-    });
-    // (after the title, the game's own state: a flight resumed or not, the same)
+      toast: (text) => panel.toast(text),
+    };
     // (a room's link: straight into the game, the room joined)
     const joinCode = netParams.get("join");
     if (joinCode && settings.netMenu) {
-      started = true;
       // (the panel shown while joining, closed once in: the keys back to the flight)
       netPanel.open();
       const role = netParams.get("role");
       void netPanel
         .join(joinCode, role === "spectator" || role === "instruments" ? role : "pilot")
         .then(() => netPanel.net?.room && netPanel.closePanel());
-    } else if (!shared && !linked && !spaceLinked && !(scene && presets[scene]) && !benchPage) {
-      titleScreen.open();
-      void splash.gone.then(() => titleScreen?.focusFirst());
-    } else started = true;
+    }
+    // (the game there: a launch chosen while it loaded runs now — before the first image)
+    titleScreen.attach(titleGame);
     if (hash.length > 1) history.replaceState(null, "", location.pathname + location.search);
   }
   // (the first frame once the fonts are in — at most a second and a half: a slow network draws in the
