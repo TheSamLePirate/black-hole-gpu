@@ -1,6 +1,8 @@
 import { TERRAIN_CACHE_N } from "./terrain-cache-layout";
 import { terrainHeightLibrary, type TerrainCacheSources } from "./terrain-cache";
 import { TERRAIN_RASTER_MAX_PIXELS, TERRAIN_RASTER_UNIFORM_BYTES } from "./terrain-raster-frame";
+import { RASTER_MESH_INDEX_BYTES, RASTER_MESH_VERTEX_BYTES, runwayMeshKey, terrainRasterMesh } from "./terrain-raster-mesh";
+import type { TerrainWindow } from "./terrain-cache-layout";
 
 /** The pilot's geometry and inspector, deliberately separate from radiance and the reference tracer. */
 export function terrainRasterShader(trace: string): string {
@@ -18,8 +20,8 @@ struct U {
 @group(0) @binding(3) var<storage, read> referenceDepth: array<f32>;
 struct Vertex { @builtin(position) clip: vec4f, @location(0) p: vec3f };
 
-@vertex fn terrainVs(@builtin(vertex_index) node: u32) -> Vertex {
-  let ij = vec2f(f32(node % GRID_N), f32(node / GRID_N));
+@vertex fn terrainVs(@location(0) vertex: vec3f) -> Vertex {
+  let ij = vertex.xy;
   let d = (ij - vec2f(f32(GRID_N - 1u) * 0.5)) / u.figure.w;
   // Exact trigonometric sums, with cos(d)-1 evaluated without cancellation.
   let halfSin = sin(d * 0.5);
@@ -36,11 +38,18 @@ struct Vertex { @builtin(position) clip: vec4f, @location(0) p: vec3f };
   let z = (1.0 - u.figure.y) * (dn * sa + u.figure.x * ds);
   let cl = u.reference.x * cos(d.x) - u.reference.y * sin(d.x);
   let sl = u.reference.y * cos(d.x) + u.reference.x * sin(d.x);
-  var h = table[u32(u.origin.w) + node / 4u][node % 4u];
+  let cell = min(vec2u(floor(ij)), vec2u(GRID_N - 2u));
+  let blend = ij - vec2f(cell);
+  var heights: array<f32,4>;
+  for (var j=0u; j<4u; j++) {
+    let node = (cell.y + j / 2u) * GRID_N + cell.x + j % 2u;
+    heights[j] = table[u32(u.origin.w) + node / 4u][node % 4u];
+  }
+  var h = mix(mix(heights[0], heights[1], blend.x), mix(heights[2], heights[3], blend.x), blend.y);
   let normal = vec3f(ca * cl, ca * sl, sa);
   // The exact grading and detail suppression, not a second approximation of runway flattening.
   if (runwayGrade(normal).x > 0.0) {
-    h = earthHeightExactG(normal, EARTH_RM / (2.0 * u.figure.w));
+    h = earthHeightExactG(normal, vertex.z);
   }
   let delta = vec3f(x * u.reference.x - y * u.reference.y, x * u.reference.y + y * u.reference.x, z);
   let p = u.origin.xyz + delta + vec3f(ca * cl, ca * sl, sa) * h;
@@ -106,6 +115,12 @@ export class TerrainRaster {
   private inspectLayout: GPUBindGroupLayout;
   private uniform: GPUBuffer | null = null;
   private index: GPUBuffer | null = null;
+  private vertex: GPUBuffer | null = null;
+  private meshKey = "";
+  private indexCount = 0;
+  private columns = 0;
+  private rows = 0;
+  private meshBuilds = 0;
   private meshBind: GPUBindGroup | null = null;
   private table: GPUBuffer | null = null;
   private heightSources: TerrainCacheSources | null = null;
@@ -134,7 +149,11 @@ export class TerrainRaster {
     void device
       .createRenderPipelineAsync({
         layout: "auto",
-        vertex: { module: this.module, entryPoint: "terrainVs" },
+        vertex: {
+          module: this.module,
+          entryPoint: "terrainVs",
+          buffers: [{ arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] }],
+        },
         fragment: { module: this.module, entryPoint: "terrainFs", targets: [{ format: "r32float" }] },
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
@@ -235,6 +254,8 @@ export class TerrainRaster {
     sources: TerrainCacheSources,
     frame: Float32Array<ArrayBuffer>,
     level: number,
+    window: TerrainWindow,
+    runways: Float32Array,
     profile: (label: string, descriptor: GPURenderPassDescriptor) => GPURenderPassDescriptor,
   ): boolean {
     this.idle("compiling");
@@ -247,17 +268,19 @@ export class TerrainRaster {
         size: TERRAIN_RASTER_UNIFORM_BYTES,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       });
-      const n = TERRAIN_CACHE_N;
-      const indices = new Uint32Array((n - 1) ** 2 * 6);
-      let k = 0;
-      for (let y = 0; y < n - 1; y++)
-        for (let x = 0; x < n - 1; x++) {
-          const a = y * n + x;
-          indices.set([a, a + 1, a + n, a + 1, a + n + 1, a + n], k);
-          k += 6;
-        }
-      this.index = this.device.createBuffer({ size: indices.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
-      this.device.queue.writeBuffer(this.index, 0, indices);
+      this.index = this.device.createBuffer({ size: RASTER_MESH_INDEX_BYTES, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
+      this.vertex = this.device.createBuffer({ size: RASTER_MESH_VERTEX_BYTES, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+    }
+    const key = `${level}:${window.i}:${window.j}:${runwayMeshKey(runways)}`;
+    if (key !== this.meshKey) {
+      const mesh = terrainRasterMesh(window, level, runways);
+      this.device.queue.writeBuffer(this.vertex!, 0, mesh.vertices);
+      this.device.queue.writeBuffer(this.index!, 0, mesh.indices);
+      this.indexCount = mesh.indices.length;
+      this.columns = mesh.columns;
+      this.rows = mesh.rows;
+      this.meshKey = key;
+      this.meshBuilds++;
     }
     const table = sources.table;
     const old = this.heightSources;
@@ -295,7 +318,8 @@ export class TerrainRaster {
     pass.setBindGroup(0, this.meshBind!);
     pass.setBindGroup(1, this.heightBind!);
     pass.setIndexBuffer(this.index!, "uint32");
-    pass.drawIndexed((TERRAIN_CACHE_N - 1) ** 2 * 6);
+    pass.setVertexBuffer(0, this.vertex!);
+    pass.drawIndexed(this.indexCount);
     pass.end();
     const bind = this.device.createBindGroup({
       layout: overlay.getBindGroupLayout(0),
@@ -330,12 +354,16 @@ export class TerrainRaster {
       reason: this.reason,
       encodedFrames: this.encodedFrames,
       level: this.level,
-      triangles: (TERRAIN_CACHE_N - 1) ** 2 * 2,
+      triangles: this.indexCount / 3,
+      columns: this.columns,
+      rows: this.rows,
+      meshBuilds: this.meshBuilds,
       width: a?.width ?? 0,
       height: a?.height ?? 0,
       targetBytes: a ? a.width * a.height * 8 : 0,
       retiredBytes: [...this.retired].reduce((s, p) => s + p.width * p.height * 8, 0),
       indexBytes: this.index?.size ?? 0,
+      vertexBytes: this.vertex?.size ?? 0,
       uniformBytes: this.uniform?.size ?? 0,
     };
   }
@@ -345,6 +373,7 @@ export class TerrainRaster {
     this.idle("disposed");
     this.uniform?.destroy();
     this.index?.destroy();
+    this.vertex?.destroy();
     for (const a of [...this.retired, ...(this.attachments ? [this.attachments] : [])]) {
       a.distance.destroy();
       a.depth.destroy();

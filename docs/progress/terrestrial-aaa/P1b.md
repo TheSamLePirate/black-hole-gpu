@@ -9,7 +9,13 @@ de gain sur le M1 Max. Aucun test, vol ou benchmark de jeu n'a été lancé.
 
 ## Géométrie et données réutilisées
 
-- Une grille indexée de 129 × 129 sommets, 32 768 triangles, lit directement les hauteurs float32 du cache P1a.
+- Une grille indexée part de 129 × 129 sommets, 32 768 triangles, et lit les hauteurs float32 du cache P1a.
+  Des lignes supplémentaires sont insérées près des seuils, des bords du ruban et de la zone nivelée des
+  quatre pistes au maximum. Le plafond est 193 × 193 sommets, 73 728 triangles. Les lignes traversent la
+  portion : aucune jonction en T, mais pas encore un maillage explicitement aligné sur une piste oblique.
+  Les sommets ajoutés lisent le cache bilinéairement hors nivellement ; dans sa zone, ils utilisent la
+  fonction de référence avec une empreinte adaptée à leurs intervalles. Chaque sommet est partagé.
+  La topologie ne change qu'avec la fenêtre, le niveau ou la géométrie des pistes, pas avec caméra/vent/horloge.
   Un seul niveau est dessiné à la fois, choisi explicitement entre 0 et 5 ; le niveau demandé est préparé
   en priorité. Il n'y a pas de nouvelle copie des hauteurs vers le CPU, ni de tableau de sommets par image.
 - Le niveau 2 par défaut couvre environ 19,6 km nord-sud, avec des cellules de 153 m. Les autres niveaux
@@ -81,7 +87,8 @@ Au-delà, le pilote rapporte `pixel-budget` et conserve la vue actuelle. Pas de 
 
 Un redimensionnement garde au plus deux paires de textures, actuelle et retirée. La paire retirée attend
 la fin des soumissions qui l'utilisent ; une nouvelle allocation de taille différente attend sa libération.
-La désactivation retire aussi les textures. L'index de **393 216 octets**, l'uniforme de **128 octets** et les
+La désactivation retire aussi les textures. Les buffers de sommets/index sont plafonnés à **1 331 724 octets**
+(446 988 + 884 736), plus l'uniforme de **128 octets**. Ces buffers et les
 pipelines restent réutilisables après première activation. La perte ou libération du device libère le tout.
 Les compteurs distinguent les textures actuelles et retirées, sans prétendre mesurer les allocations internes du driver.
 

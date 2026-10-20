@@ -5833,6 +5833,8 @@ export class Renderer {
       },
       frame,
       level,
+      window,
+      this.paramsF.subarray((69 + TILE_PARAM_VEC4S) * 4, (69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S) * 4),
       (label, descriptor) => this.prof.pass(label, descriptor),
     );
   }
