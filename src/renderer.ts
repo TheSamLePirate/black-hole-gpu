@@ -4,7 +4,7 @@ import { TerrainCache, withTerrainCache } from "./system/terrain-cache";
 import { RASTER_HINT_BINDING, RASTER_HINT_TEXTURE_LIMIT, withTerrainRaster } from "./system/terrain-raster-hint";
 import { TERRAIN_CACHE_MAX_LAT, TERRAIN_CACHE_VEC4S } from "./system/terrain-cache-layout";
 import { TerrainRaster } from "./system/terrain-raster";
-import { SceneryRaster } from "./system/scenery-raster";
+import { SCENERY_RASTER_LOD, SceneryRaster, type SceneryRasterLod } from "./system/scenery-raster";
 import { TERRAIN_RASTER_MAX_PIXELS, terrainRasterFrame } from "./system/terrain-raster-frame";
 import type { NetWalkerHome } from "./controller/netcraft";
 import { CharacterRenderer, type GrassView } from "./character-renderer";
@@ -5876,6 +5876,15 @@ export class Renderer {
   private sceneryRaster: SceneryRaster | null = null;
   /** the trees drawn as raster instances under earthPipeline "raster" (a switch for comparisons: off, the grid walked) */
   sceneryRasterOn = true;
+  /** the trees' proxies' detail (system/scenery-raster.ts SceneryRasterLod; a switch for comparisons) */
+  get sceneryRasterLod(): SceneryRasterLod {
+    return this.sceneryRaster?.getLod() ?? { ...SCENERY_RASTER_LOD };
+  }
+  set sceneryRasterLod(lod: SceneryRasterLod) {
+    this.pendingSceneryLod = { ...this.sceneryRasterLod, ...lod };
+    this.sceneryRaster?.setLod(this.pendingSceneryLod);
+  }
+  private pendingSceneryLod: SceneryRasterLod | null = null;
   /** Freeze automatic quality policy while a diagnostic adds its own GPU work. */
   get terrainRasterInspecting() {
     return this.terrainRasterRequested;
@@ -5938,7 +5947,10 @@ export class Renderer {
     const sc = this.earthScenery;
     let trees = false;
     if (this.sceneryRasterOn && this.rasterPrimaryOn && s.earthScenery !== "off" && sc.supported && sc.forestCells > 0) {
-      this.sceneryRaster ??= new SceneryRaster(this.device, this.traceSource);
+      if (!this.sceneryRaster) {
+        this.sceneryRaster = new SceneryRaster(this.device, this.traceSource);
+        if (this.pendingSceneryLod) this.sceneryRaster.setLod(this.pendingSceneryLod);
+      }
       trees = this.sceneryRaster.encodeCull(enc, this.prof.pass("scenery raster cull"), frame, sc.params(), sc.buffer, sc.forestCells);
     }
     const drawn = this.terrainRaster.encodeVisibility(

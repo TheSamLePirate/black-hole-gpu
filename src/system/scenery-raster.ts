@@ -12,8 +12,16 @@
 import { TERRAIN_RASTER_FORMAT } from "./terrain-raster";
 import { TERRAIN_RASTER_UNIFORM_BYTES } from "./terrain-raster-frame";
 
-/** Trees nearer than this [m] get the fine proxies (the round crown's 80 faces, the trunk); farther, 20 faces, no trunk. */
-export const SCENERY_RASTER_NEAR_M = 300;
+/** The proxies' detail: trees nearer than `nearM` [m] get the near ones (with their trunk), the rest the far ones — a
+ *  round crown's icosahedron of 80 or 20 faces, or an octahedron of 8. Measured (Tarifa, the scenery high and very far,
+ *  docs/progress/raster-aaa/ETAPE-1.md): the far octahedra halve the visibility pass (8.4 → 4.6 ms) for 1.2 ms more
+ *  of exact tests missed in shade, the image alike; a quad turned to the camera was worse on both counts. */
+export interface SceneryRasterLod {
+  nearM: number;
+  near: "ico80" | "ico20";
+  far: "ico20" | "octa";
+}
+export const SCENERY_RASTER_LOD: SceneryRasterLod = { nearM: 300, near: "ico80", far: "octa" };
 /** Instances a list holds at most (four lists, 4 bytes each: 16 MiB). */
 export const SCENERY_RASTER_CAP = 1 << 20;
 const LISTS = 4;
@@ -102,6 +110,29 @@ function icosphere(levels: number): Tri {
   const k = 1.02 / inr;
   return f.flatMap((tri) => tri.map((i) => [v[i]![0] * k, v[i]![1] * k, v[i]![2] * k] as [number, number, number]));
 }
+/** an octahedron circumscribed about the unit sphere (its faces √3 × nearer than its corners) */
+function octahedron(): Tri {
+  const a = Math.sqrt(3) * 1.02;
+  const P: [number, number, number][] = [
+    [a, 0, 0],
+    [-a, 0, 0],
+    [0, a, 0],
+    [0, -a, 0],
+    [0, 0, a],
+    [0, 0, -a],
+  ];
+  const f = [
+    [0, 2, 4],
+    [2, 1, 4],
+    [1, 3, 4],
+    [3, 0, 4],
+    [2, 0, 5],
+    [1, 2, 5],
+    [3, 1, 5],
+    [0, 3, 5],
+  ];
+  return f.flatMap((t) => t.map((i) => P[i]!));
+}
 /** an n-sided pyramid circumscribed about the unit cone (apex at 0, base disc of radius 1 at z = −1), with its base */
 function pyramid(n: number): Tri {
   const k = 1.02 / Math.cos(Math.PI / n);
@@ -136,19 +167,21 @@ function pack(parts: [Tri, number][]): Float32Array<ArrayBuffer> {
     }
   return a;
 }
-/** the four lists' proxies: near round (80 faces + trunk), near cone (12-sided + trunk), far round (20), far cone (6) */
-export function sceneryRasterMeshes(): Float32Array<ArrayBuffer>[] {
+/** the four lists' proxies: near round (+ trunk), near cone (+ trunk), far round, far cone — at the detail asked */
+export function sceneryRasterMeshes(lod: SceneryRasterLod = SCENERY_RASTER_LOD): Float32Array<ArrayBuffer>[] {
+  const nearRound = lod.near === "ico80" ? icosphere(1) : icosphere(0);
+  const farRound = lod.far === "ico20" ? icosphere(0) : octahedron();
   return [
     pack([
-      [icosphere(1), 0],
+      [nearRound, 0],
       [prism(6), 2],
     ]),
     pack([
-      [pyramid(12), 1],
+      [pyramid(lod.near === "ico80" ? 12 : 6), 1],
       [prism(6), 2],
     ]),
-    pack([[icosphere(0), 0]]),
-    pack([[pyramid(6), 1]]),
+    pack([[farRound, 0]]),
+    pack([[pyramid(lod.far === "ico20" ? 6 : 4), 1]]),
   ];
 }
 
@@ -160,14 +193,13 @@ struct U {
   image: vec4f, output: vec4f,
 };
 @group(0) @binding(0) var<uniform> u: U;
-// the scenery's frame (P.scenery): its east, north, up axes on the Earth's, the camera in it [m]
+// the scenery's frame (P.scenery): its east, north, up axes on the Earth's, the camera in it [m] (w: the near proxies' reach [m])
 struct S { east: vec4f, north: vec4f, up: vec4f, cam: vec4f };
 @group(0) @binding(1) var<uniform> sc: S;
 @group(0) @binding(2) var<storage, read> scenery: array<vec4f>;
 fn forestData(i: u32) -> vec4f { return scenery[i]; }
 ${forest}
 const CAP = ${SCENERY_RASTER_CAP}u;
-const NEAR_M = ${SCENERY_RASTER_NEAR_M}.0;
 struct Draw { vertices: u32, instances: atomic<u32>, first: u32, base: u32 };
 @group(0) @binding(3) var<storage, read_write> draws: array<Draw, ${LISTS}>;
 @group(0) @binding(4) var<storage, read_write> listsOut: array<u32>;
@@ -234,7 +266,7 @@ fn cull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: vec
   if (v.z < -R) { return; }
   if (abs(v.x) - tx * v.z > R * sqrt(1.0 + tx * tx)) { return; }
   if (abs(v.y) - ty * v.z > R * sqrt(1.0 + ty * ty)) { return; }
-  let list = select(0u, 1u, t.cone) + select(2u, 0u, length(v) < NEAR_M);
+  let list = select(0u, 1u, t.cone) + select(2u, 0u, length(v) < sc.cam.w);
   let at = atomicAdd(&draws[list].instances, 1u);
   if (at < CAP) { listsOut[list * CAP + at] = k; }
 }
@@ -322,13 +354,7 @@ export class SceneryRaster {
       label: "scenery raster draws",
     });
     this.lists = device.createBuffer({ size: LISTS * SCENERY_RASTER_CAP * 4, usage: S, label: "scenery raster instances" });
-    for (const m of sceneryRasterMeshes()) {
-      const b = device.createBuffer({ size: m.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
-      device.queue.writeBuffer(b, 0, m);
-      this.meshes.push(b);
-      this.meshCounts.push(m.length / 4);
-    }
-    for (let l = 0; l < LISTS; l++) this.reset[l * 4] = this.meshCounts[l]!;
+    this.setLod(SCENERY_RASTER_LOD);
     const fail = (e: unknown) => (this.error ??= String(e));
     // (one layout for the two compute entries, one for the four draws: a bind group made on a pipeline's "auto" layout is
     // that pipeline's alone — the others' submissions failed whole, the frame black)
@@ -383,6 +409,26 @@ export class SceneryRaster {
         .then((p) => (this.drawPipes[l] = p), fail);
   }
 
+  private lod: SceneryRasterLod = SCENERY_RASTER_LOD;
+  private sceneryOut = new Float32Array(16);
+  /** the proxies' detail (a switch for comparisons — renderer.sceneryRasterLod) */
+  setLod(lod: SceneryRasterLod) {
+    for (const b of this.meshes) b.destroy();
+    this.meshes = [];
+    this.meshCounts = [];
+    for (const m of sceneryRasterMeshes(lod)) {
+      const b = this.device.createBuffer({ size: m.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+      this.device.queue.writeBuffer(b, 0, m);
+      this.meshes.push(b);
+      this.meshCounts.push(m.length / 4);
+    }
+    for (let l = 0; l < LISTS; l++) this.reset[l * 4] = this.meshCounts[l]!;
+    this.lod = { ...lod };
+  }
+  getLod(): SceneryRasterLod {
+    return { ...this.lod };
+  }
+
   get ready() {
     return !this.error && !!this.cullPipe && !!this.clampPipe && this.drawPipes.every((p) => !!p);
   }
@@ -426,7 +472,9 @@ export class SceneryRaster {
     }
     const q = this.device.queue;
     q.writeBuffer(this.frameU, 0, frame as Float32Array<ArrayBuffer>);
-    q.writeBuffer(this.sceneryU, 0, scenery as Float32Array<ArrayBuffer>, 0, 16);
+    this.sceneryOut.set(scenery.subarray(0, 16));
+    this.sceneryOut[15] = this.lod.nearM;
+    q.writeBuffer(this.sceneryU, 0, this.sceneryOut);
     q.writeBuffer(this.draws, 0, this.reset);
     const groups = Math.ceil(forestCells / 64);
     const gx = Math.min(groups, 65535);

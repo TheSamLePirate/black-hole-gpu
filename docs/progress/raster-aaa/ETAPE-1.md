@@ -169,3 +169,22 @@ Tarifa, chronométrage peu fiable des passes raster sur Apple), le ciel tracé (
 La sculpture des couronnes ne vaut presque rien à ce stade : la remplacer par de la géométrie (l'étape prévue en 2) ne
 gagnerait pas sa peine. Les ombres du décor valent ≈ 2 ms. Le reste de `shade` (≈ 11 ms sans décor) est l'ombrage du sol ;
 hors `shade`, la passe de visibilité raster (≈ 8 ms, chronométrage peu fiable sur Apple) et le ciel tracé (≈ 4,5 ms).
+
+## 1d — des proxys d'arbres plus légers au loin — fait
+
+`renderer.sceneryRasterLod` (`SceneryRasterLod` : portée des proxys proches, faces de la couronne ronde proche, forme
+des lointains) pour comparer dans un même passage. Tarifa bas, raster ¼, détail high/veryFar :
+
+| Proxys lointains | image GPU | visibilité | `shade` | image |
+|---|---|---|---|---|
+| icosaèdres (20 faces) | 36,4 ms | 8,4 ms | 16,4 ms | 41,4 dB |
+| **octaèdres (8 faces)** — défaut | **33,3 ms** | **4,6 ms** | 17,7 ms | 41,7 dB |
+| quads tournés vers la caméra | 33,9 ms | 6,6 ms | 16,8 ms | 40,7 dB |
+
+Les octaèdres divisent la passe de visibilité par deux pour 1,2 ms de tests manqués en plus : −3 ms net, image égale.
+Les quads, essayés puis retirés, se recouvrent davantage et leur profondeur avancée gêne la reconstruction. La portée
+des proxys proches (150 ou 300 m) ne change presque rien. Aucun effet dans les Alpes (pas de forêt).
+
+Configuration par défaut vérifiée : Tarifa 33,4 ms · 42,0 dB (tracé ×4 : 15,0 ms · 34,8 dB), Alpes 16,6 ms · 32,0 dB
+(tracé ×4 : 11,5 ms · 30,2 dB). Le test de vol attend désormais le noyau `shade` pour tout mode raster (les premières
+lignes invalides venaient de là) et garde un mode répété comme une mesure à part.

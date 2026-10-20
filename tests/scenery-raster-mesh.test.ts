@@ -65,3 +65,10 @@ test("the trunks' proxies hold the unit cylinder", () => {
   expect(holds(nearRound!, 2, cylinder)).toBeGreaterThanOrEqual(0);
   expect(holds(nearCone!, 2, cylinder)).toBeGreaterThanOrEqual(0);
 });
+test("the lighter proxies (20 faces near, octahedra and 4-sided pyramids far) hold their shapes too", () => {
+  const [nearRound, nearCone, farRound, farCone] = sceneryRasterMeshes({ nearM: 150, near: "ico20", far: "octa" });
+  expect(holds(nearRound!, 0, sphere)).toBeGreaterThanOrEqual(0);
+  expect(holds(nearCone!, 1, cone)).toBeGreaterThanOrEqual(0);
+  expect(holds(farRound!, 0, sphere)).toBeGreaterThanOrEqual(0);
+  expect(holds(farCone!, 1, cone)).toBeGreaterThanOrEqual(0);
+});

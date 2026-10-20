@@ -25,6 +25,11 @@ const MODE_SET: Record<string, string> = {
   // (the raster's shading rate: one pixel in two, one in 2 × 2 a frame — the rest rebuilt, then the history)
   rasterhalf: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "half"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4);`,
   rasterquarter: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4);`,
+  // (the trees' proxies' detail at the ¼ rate — renderer.sceneryRasterLod: the near ones' reach, their round crown's faces, the far ones')
+  lod300: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sceneryRasterLod = { nearM: 300, near: "ico80", far: "ico20" };`,
+  lod150: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sceneryRasterLod = { nearM: 150, near: "ico80", far: "ico20" };`,
+  lod150light: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sceneryRasterLod = { nearM: 150, near: "ico20", far: "octa" };`,
+  lod300octa: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sceneryRasterLod = { nearM: 300, near: "ico80", far: "octa" };`,
   // (the raster without the trees' instances: the grid walked from every pixel, as étape 1a had it)
   rasterwalk: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "every"; __bh.renderer.sceneryRasterOn = false; __bh.game.set("realtimeSubsampling", 4);`,
 };
@@ -93,13 +98,17 @@ describe.skipIf(!E2E)("the raster's primary visibility in flight: frame rate and
         return 1; })()`);
       const shots: Record<string, string> = {};
       const measured: Record<string, { gpuMs: number; passes: Record<string, number>; raster: Record<string, unknown> }> = {};
-      for (const md of modes) {
+      // (a mode asked twice — MODES=a,b,a,b, alternated — measured each time: its rows numbered)
+      const runs = modes.map((md, i) => (modes.indexOf(md) === i ? md : `${md}#${modes.slice(0, i + 1).filter((x) => x === md).length}`));
+      for (const [i, md] of modes.entries()) {
+        const run = runs[i]!;
         await app.js(`(() => { ${MODE_SET[md]} __bh.touch(); return 1; })()`);
         await app.waitFor(`!!__bh.renderer.variantReady`, 300_000).catch(() => {});
         await app.js(`(() => { const r = __bh.renderer; r.prof.enabled = true; r.prof.every = 1; r.prof.reset(); return 1; })()`);
-        if (md === "raster")
+        if (MODE_SET[md]!.includes(`earthPipeline = "raster"`))
           await app.waitFor(
-            `__bh.renderer.terrainRasterStats.primary && __bh.renderer.prof.table().some((p) => p.label === "earth shade (raster)")`,
+            `__bh.renderer.terrainRasterStats.primary && __bh.renderer.prof.table().some((p) => p.label === "earth shade (raster)") &&
+              (!__bh.renderer.sceneryRasterOn || __bh.settings.earthScenery === "off" || !!__bh.renderer.terrainRasterStats.scenery?.active)`,
             300_000,
           );
         await app.js(`(async () => { const r = __bh.renderer, frame = () => new Promise((q) => requestAnimationFrame(q));
@@ -111,9 +120,9 @@ describe.skipIf(!E2E)("the raster's primary visibility in flight: frame rate and
           window.__m = { gpuMs: +(gpu / done).toFixed(1), raster: { ...r.terrainRasterStats },
             passes: Object.fromEntries(Object.entries(sum).map(([k, v]) => [k, +(v / done).toFixed(2)])) };
           return 1; })()`);
-        measured[md] = await app.js("window.__m");
-        shots[md] = `remote-results/rf-${pl}-${md}.png`;
-        await app.shot(shots[md]!);
+        measured[run] = await app.js("window.__m");
+        shots[run] = `remote-results/rf-${pl}-${run.replace("#", "-")}.png`;
+        await app.shot(shots[run]!);
       }
       // (the reference: the same view, the touching stopped, converged)
       await app.js(
@@ -126,22 +135,23 @@ describe.skipIf(!E2E)("the raster's primary visibility in flight: frame rate and
       const fr = `remote-results/rf-${pl}-ref.png`;
       await app.shot(fr);
       const ref = png(fr);
-      for (const md of modes) {
-        const m = measured[md]!;
+      for (const [i, md] of modes.entries()) {
+        const run = runs[i]!;
+        const m = measured[run]!;
         const rays = ["trace", "earth shade (raster)", "terrain raster visibility"].reduce((a, k) => a + (m.passes[k] ?? 0), 0);
         const row = {
           place: pl,
-          mode: md,
+          mode: run,
           gpuMs: m.gpuMs,
           raysMs: +rays.toFixed(1),
-          psnrVsConverged: psnr(png(shots[md]!), ref),
+          psnrVsConverged: psnr(png(shots[run]!), ref),
           primary: m.raster.primary,
           trees: (m.raster.scenery as { active?: boolean } | null)?.active ?? false,
           passes: m.passes,
         };
         rows.push(row);
         console.log(JSON.stringify({ ...row, passes: undefined }));
-        if (md === "raster") expect(m.raster.error).toBeFalsy();
+        if (MODE_SET[md]!.includes(`earthPipeline = "raster"`)) expect(m.raster.error).toBeFalsy();
       }
       await app.js(`(() => { __bh.settings.animate = true; __bh.settings.targetSpp = 0; return 1; })()`);
     }, 1_200_000);
