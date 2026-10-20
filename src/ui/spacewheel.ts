@@ -40,6 +40,9 @@ export interface SpaceWheelState {
   mission: boolean;
   route: boolean;
   ils: boolean;
+  /** in a room (N1: its fleet); another pilot's craft targeted: his name (its orders) */
+  room?: boolean;
+  netTarget?: string | null;
 }
 
 /** What its items do (main.ts's). */
@@ -62,6 +65,9 @@ export interface SpaceWheelActions {
   ring(dir: 1 | -1): void;
   nextTarget(): void;
   vessel(id: VesselId): void;
+  /** the room's fleet (N1): its panel; an order to the pilot targeted */
+  roomFleet?(): void;
+  fleetOrder?(o: "come" | "hold" | "dock"): void;
   map(): void;
   place(): void;
   assist(level: SpaceAssistLevel): void;
@@ -230,10 +236,20 @@ export function spaceWheel(S: SpaceWheelState, A: SpaceWheelActions): WheelItem[
         { label: { fr: "Cible suivante", en: "Next target" }, key: "Tab", run: A.nextTarget },
       ],
     },
-    // (the fleet: the craft one can fly instead — the room's orders come with the network's phase)
+    // (the fleet: the craft one can fly instead; in a room, its fleet — N1 — and orders to the pilot targeted)
     {
       label: { fr: "Flotte", en: "Fleet" },
-      sub: S.vessels.map((v) => ({ label: { fr: v.name, en: v.name }, on: v.id === S.vessel, run: () => A.vessel(v.id) })),
+      sub: [
+        ...S.vessels.map((v) => ({ label: { fr: v.name, en: v.name }, on: v.id === S.vessel, run: () => A.vessel(v.id) })),
+        ...(S.room && A.roomFleet ? [{ label: { fr: "Flotte de la salle", en: "Room fleet" }, run: A.roomFleet }] : []),
+        ...(S.netTarget && A.fleetOrder
+          ? [
+              { label: { fr: `${S.netTarget} : viens`, en: `${S.netTarget}: come to me` }, run: () => A.fleetOrder!("come") },
+              { label: { fr: `${S.netTarget} : maintiens`, en: `${S.netTarget}: hold on me` }, run: () => A.fleetOrder!("hold") },
+              { label: { fr: `${S.netTarget} : amarre-toi`, en: `${S.netTarget}: dock to me` }, run: () => A.fleetOrder!("dock") },
+            ]
+          : []),
+      ],
     },
     {
       label: { fr: "Navigation", en: "Navigation" },

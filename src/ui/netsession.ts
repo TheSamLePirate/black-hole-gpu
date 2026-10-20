@@ -50,6 +50,17 @@ import { checkMission, type MissionSpec } from "../game/mission";
 import type { MissionShared } from "../controller/mission";
 import { type RemoteWing, wingsOut } from "../controller/wingmen";
 import { type RadioRole, SHARED_ROLES } from "../game/radio";
+import {
+  isSpaceOrder,
+  orderAsk,
+  orderPlan,
+  proximity,
+  rangeText,
+  SPACE_VESSELS,
+  type SpaceOrder,
+  type SpaceTel,
+  spaceTelOf,
+} from "../net/spacefleet";
 
 type Vec3 = [number, number, number];
 
@@ -119,6 +130,8 @@ export interface NetSessionDeps {
   crewTools?(): Tool[];
   /** another's radio line (I4: his wingmen, his carrier, his LSO) heard on the flight's radio */
   radioHeard?(role: RadioRole, text: string, name: string): void;
+  /** a question to the pilot (PLAN-VAISSEAUX N: another's order, his request): accepted or refused, or let lapse */
+  ask?(text: string, answer: (yes: boolean) => void, testid?: string): void;
 }
 
 const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
@@ -167,6 +180,7 @@ export class NetSession {
 
   /** At most 4 Hz, only while an instruments screen is present. No simulator on that screen. */
   instruments(info: Info, status: RangerStatus | null) {
+    this.lastStatus = status;
     const net = this.net;
     const now = performance.now();
     if (!net?.room || net.room.role !== "pilot" || this.follow || !this.d.camera.piloting || now - this.crewSent < 250) return;
@@ -177,6 +191,17 @@ export class NetSession {
     if (around) this.crewAround = now;
     net.event({ kind: "instruments", data: crewSnapshot(this.d.camera, info, status, this.d.sceneTime(), around) });
   }
+  /** the flight's status last told (main.ts, each frame: instruments) */
+  private lastStatus: RangerStatus | null = null;
+  /** the room's spacecraft as their pilots tell them (PLAN-VAISSEAUX N1 — net/spacefleet.ts), ours among them */
+  spaceTel = new Map<number, SpaceTel>();
+  private stelAt = -Infinity;
+  /** the others' craft from ours: how far [m], how fast closing [m/s] — this frame's, seen in our universe */
+  near = new Map<number, { range: number; closing: number }>();
+  private nearPrev = new Map<number, { d: number; at: number }>();
+  private proxAt = new Map<number, number>();
+  /** the orders we gave, their answers (slot → what was said back) */
+  orderAnswers = new Map<number, { o: SpaceOrder; yes: boolean }>();
   /** the name tags this frame */
   tags: NetTag[] = [];
   /** the others' craft this frame */
@@ -491,6 +516,27 @@ export class NetSession {
             this.d.camera.netBumped(dv);
             this.bumped++;
           }
+        } else if (e.kind === "stel") {
+          // (another's spacecraft — N1: the fleet's row)
+          const T = spaceTelOf((ev as unknown as { v?: unknown }).v);
+          if (T) this.spaceTel.set(from, T);
+          else this.spaceTel.delete(from);
+        } else if (e.kind === "sorder" && e.to === net.room?.slot) {
+          // (another pilot's order to our spacecraft — N1: proposed, ours to accept)
+          const o = (ev as unknown as { o?: unknown }).o;
+          if (!isSpaceOrder(o)) return;
+          const who = this.nameOf(from);
+          const answer = (yes: boolean) => {
+            if (yes) this.d.toast(this.carryOrder(from, o));
+            this.net?.event({ kind: "sorder-ack", to: from, o, yes });
+          };
+          if (this.d.ask) this.d.ask(orderAsk(o, who), answer, "net-order");
+          else this.d.toast(orderAsk(o, who));
+        } else if (e.kind === "sorder-ack" && e.to === net.room?.slot) {
+          const a = ev as unknown as { o?: unknown; yes?: unknown };
+          if (!isSpaceOrder(a.o)) return;
+          this.orderAnswers.set(from, { o: a.o, yes: !!a.yes });
+          this.d.toast(a.yes ? tf("{0} accepts: on the way", this.nameOf(from)) : tf("{0} refuses", this.nameOf(from)));
         } else if (e.kind === "alight") {
           if (this.aboard.get(from) === net.room?.slot) this.d.toast(tf("{0} got off", this.nameOf(from)));
           this.aboard.delete(from);
@@ -530,6 +576,7 @@ export class NetSession {
     if (!R.netWalkers.length) R.netWalkersCam = [];
     const followed = this.follow ? (all.find((s) => s.slot === this.follow!.slot) ?? null) : null;
     this.ships = all.filter((s) => s.slot !== this.follow?.slot);
+    this.nearStep(all, net.room.slot);
     // (his state read straight — the craft placed even when ours is far from the Earth: a spectator in orbit)
     const fstate = this.follow ? (states.find((s) => s.slot === this.follow!.slot) ?? null) : null;
     this.puppetFrame(followed, fstate);
@@ -828,6 +875,102 @@ export class NetSession {
         },
       });
     }
+    // (our spacecraft for the room's fleet — N1: once a second)
+    if (now - this.stelAt > 1) {
+      this.stelAt = now;
+      const v = this.ourSpaceTel();
+      if (v) {
+        net.event({ kind: "stel", v });
+        this.spaceTel.set(net.room!.slot, v);
+      } else if (this.spaceTel.delete(net.room!.slot)) net.event({ kind: "stel", v: null });
+    }
+  }
+
+  /** Our spacecraft as the room's fleet shows it (null: not flying one). */
+  private ourSpaceTel(): SpaceTel | null {
+    const c = this.d.camera;
+    const v = fleet.active;
+    if (!this.d.settings.ship || !SPACE_VESSELS.includes(v as never)) return null;
+    const st = this.lastStatus;
+    const sys = c.systemsInfo();
+    const dv = c.fcBudget?.().dv;
+    return {
+      vsl: v as SpaceTel["vsl"],
+      body: st ? (st.side === "gargantua" && !st.soi ? "hole" : st.soi || "sun") : "sun",
+      alt: st && Number.isFinite(st.altKm) ? Math.round(st.altKm * 10) / 10 : 0,
+      st: st ? st.status : "flight",
+      dv: Number.isFinite(dv) ? Math.round(dv!) : null,
+      fails: sys ? sys.failures.filter((f) => !f.fixing).length : 0,
+      docked: !!(c.docked || c.netDocked),
+      o2h: sys && Number.isFinite(sys.o2Hours) ? Math.round(Math.min(sys.o2Hours, 1e6) * 10) / 10 : null,
+      bat: sys && Number.isFinite(sys.battery) ? Math.round(clamp(sys.battery, 0, 1) * 100) / 100 : null,
+      side: st?.side ?? "ours",
+    };
+  }
+
+  /** The others' range and closing from ours this frame; a craft closing in near, not docked: the proximity warning. */
+  private nearStep(all: NetShip[], me: number) {
+    const now = performance.now() / 1000;
+    const seen = new Set<number>();
+    for (const s of all) {
+      if (s.ghost || s.slot >= 200 || !Number.isFinite(s.dist)) continue;
+      seen.add(s.slot);
+      const P = this.nearPrev.get(s.slot);
+      const dt = P ? now - P.at : 0;
+      const was = this.near.get(s.slot);
+      // (closing smoothed over half a second: the samples' steps)
+      let raw = P && dt > 0.05 ? (P.d - s.dist) / dt : (was?.closing ?? 0);
+      // (a jump — a placing, a craft put elsewhere —: not a speed; the closing starts again from it)
+      const jump = Math.abs(raw) > 3000;
+      if (jump) raw = 0;
+      const closing = was && !jump ? was.closing + (raw - was.closing) * Math.min(1, dt / 0.5) : raw;
+      if (!P || dt > 0.05) this.nearPrev.set(s.slot, { d: s.dist, at: now });
+      this.near.set(s.slot, { range: s.dist, closing });
+      // (docked together, aboard: no warning)
+      const linked = this.links.get(s.slot)?.host === me || this.links.get(me)?.host === s.slot || this.aboard.get(me) === s.slot;
+      const W = !linked && SPACE_VESSELS.includes(fleet.active as never) ? proximity(s.dist, closing) : "none";
+      if (W !== "none" && now - (this.proxAt.get(s.slot) ?? -Infinity) > 15) {
+        this.proxAt.set(s.slot, now);
+        const said = tf(
+          W === "warning" ? "PROXIMITY — {0}: {1}, closing {2} m/s" : "Traffic — {0}: {1}, closing {2} m/s",
+          this.nameOf(s.slot),
+          rangeText(s.dist),
+          closing.toFixed(1),
+        );
+        this.d.toast(said);
+        this.d.camera.onPilotMessage?.(said);
+        this.proximityAlerts++;
+      }
+    }
+    for (const k of [...this.near.keys()]) if (!seen.has(k)) this.near.delete(k), this.nearPrev.delete(k);
+  }
+  /** the proximity warnings given (the e2e's count) */
+  proximityAlerts = 0;
+
+  /** Another's craft our target (the fleet's Target). What to say. */
+  target(slot: number): string {
+    this.d.camera.selectTarget(netTargetId(slot) as never);
+    return tf("Target: {0}", this.nameOf(slot));
+  }
+
+  /** An order to another pilot's spacecraft (N1): sent, his answer heard later. What to say. */
+  spaceOrder(slot: number, o: SpaceOrder): string {
+    const net = this.net;
+    if (!net?.room) return t("Not in a room");
+    if (!SPACE_VESSELS.includes(fleet.active as never)) return t("Orders to the fleet: from a spacecraft");
+    if (!this.spaceTel.has(slot)) return t("Not a spacecraft of the room");
+    this.orderAnswers.delete(slot);
+    net.event({ kind: "sorder", to: slot, o });
+    return tf("Order sent to {0}", this.nameOf(slot));
+  }
+
+  /** An order accepted: his craft our target, the autopilot on it as far as it reaches. What to say. */
+  private carryOrder(from: number, o: SpaceOrder): string {
+    const c = this.d.camera;
+    c.selectTarget(netTargetId(from) as never);
+    const P = orderPlan(o, this.near.get(from)?.range ?? null);
+    if (P.auto) c.pilot.setAuto(P.auto);
+    return P.say;
   }
 
   /**

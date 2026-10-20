@@ -119,6 +119,7 @@ import { SPACE_CHALLENGES, type SpaceChallengeId } from "./game/spacechallenges"
 import { SPACE_MISSIONS, type SpaceMission, type SpaceMissionId, spaceMissionFromHash, spaceMissionToHash } from "./game/spacemissions";
 import { spaceChallengePanel } from "./ui/spacechallenges";
 import { type SpaceMissionHost, spaceMissionPanel } from "./ui/spacemissions";
+import { netAsk } from "./ui/netask";
 import { SIDE_HOLDS } from "./input/spacepad";
 import { RadialWheel, type WheelItem } from "./ui/wheel";
 import { Tablet } from "./ui/tablet";
@@ -131,7 +132,7 @@ import { POSE_KEYS } from "./controller/util";
 import { readPrefs, writePrefs } from "./game/prefs";
 import { events } from "./game/events";
 import { phaseOf, phaseText, PhaseWatcher } from "./game/phase";
-import { BODY_NAMES, bodyLook, craftRadius, isCraft, onOurSide, type Body } from "./targeting";
+import { BODY_NAMES, bodyLook, craftRadius, isCraft, isNetTarget, netTargets, onOurSide, type Body } from "./targeting";
 import { HidPads } from "./gamepad";
 import { MOUNT_KEYS, MOUNTS, mountPose, setMountVessel, shipToCamera, type Mount } from "./mounts";
 import { fleet, fleetSpinStart, fleetStart } from "./fleet";
@@ -4018,6 +4019,8 @@ async function main() {
         mission: !!camera.mission || !!camera.spaceMission,
         route: camera.nav.on.l,
         ils: !!camera.ilsRun,
+        room: !!netPanel.net?.room,
+        netTarget: isNetTarget(settings.target) ? netTargets.name(settings.target as never) : null,
       },
       {
         sas: pilotSas,
@@ -4068,6 +4071,12 @@ async function main() {
         challenges: () => spaceChallengePanel((id) => panel.toast(spaceChallengePlace(id))),
         // (a spacecraft's missions and the Interstellar campaign — X11)
         missions: () => spaceMissionPanel(spaceMissionHost),
+        // (the room's fleet — N1: its panel, an order to the pilot targeted)
+        roomFleet: () => netPanel.openTab("fleet"),
+        fleetOrder: (o) => {
+          const slot = isNetTarget(settings.target) ? Number(String(settings.target).slice(4)) : -1;
+          panel.toast(slot >= 0 ? netSession.spaceOrder(slot, o) : t("Target another pilot's craft first"));
+        },
         nextView: () => keyActions.mount(new KeyboardEvent("keydown")),
         photo: openPhoto,
         replay: (trailer) => replayOpen(trailer),
@@ -4771,6 +4780,8 @@ async function main() {
     toast: (s) => panel.toast(s),
     jetIn: () => jetIn,
     sceneTime: () => sim.time * M_SECONDS,
+    // (another's order, his request — PLAN-VAISSEAUX N: a card to accept or refuse)
+    ask: (text, answer, testid) => netAsk(text, answer, testid),
     // (the crew's orders: through the game's tools, called directly — docs/PLAN-CREW-ACTIONS.md)
     crewTools: () => tarsTools,
     // (a mid-air collision: in a match's fight, shot down; else the craft destroyed — the room's way: craftLost)
