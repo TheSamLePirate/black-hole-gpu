@@ -83,3 +83,24 @@ test("sharing (N2): the giver keeps his reserve, gives no more than asked; amoun
   expect(amountOf("12")).toBeNull();
   expect(amountOf(Number.POSITIVE_INFINITY)).toBeNull();
 });
+
+test("the room's board (N4): results checked; each pilot's best per thing flown; a challenge ranked by its result", async () => {
+  const { board, refTitle, resultOf, resultText } = await import("../src/net/roomboard");
+  const R = (slot: number, name: string, x: Record<string, unknown>, at: number) =>
+    resultOf({ kind: "challenge", title: "Défi · X", letter: "A", ...x }, slot, name, at)!;
+  expect(resultOf({ kind: "challenge", title: "x", score: 25, letter: "A" }, 0, "A", 0)).toBeNull();
+  expect(resultOf({ kind: "hack", title: "x", score: 10, letter: "A" }, 0, "A", 0)).toBeNull();
+  expect(resultOf({ kind: "lesson", title: "x", score: 10, letter: "B", ref: "lesson:<b>" }, 0, "A", 0)?.ref).toBeNull();
+  const res = [
+    R(0, "Ana", { ref: "challenge:dock-clock", score: 15, medal: "silver", metric: { value: 150, text: "2 min 30" } }, 1),
+    R(1, "Ben", { ref: "challenge:dock-clock", score: 20, medal: "gold", metric: { value: 95, text: "1 min 35" } }, 2),
+    R(0, "Ana", { ref: "challenge:dock-clock", score: 20, medal: "gold", metric: { value: 90, text: "1 min 30" } }, 3),
+    R(1, "Ben", { kind: "landing", title: "Landing · Moon", score: 17, letter: "A" }, 4),
+  ];
+  const B = board(res);
+  expect(B.map((s) => s.key)).toEqual(["title:Landing · Moon", "challenge:dock-clock"]);
+  expect(B[1]!.title).toBe("Challenge · Docking against the clock");
+  expect(B[1]!.rows.map((r) => `${r.rank} ${r.name} ${r.metric?.text}`)).toEqual(["1 Ana 1 min 30", "2 Ben 1 min 35"]);
+  expect(resultText(B[1]!.rows[0]!)).toBe("20.0/20 · 🥇 1 min 30");
+  expect(refTitle({ ref: "mission:iss", title: "x" })).toBe("Mission · To the ISS");
+});

@@ -50,6 +50,8 @@ import { checkMission, type MissionSpec } from "../game/mission";
 import type { MissionShared } from "../controller/mission";
 import { type RemoteWing, wingsOut } from "../controller/wingmen";
 import { type RadioRole, SHARED_ROLES } from "../game/radio";
+import { type RoomResult, refTitle, resultOf, resultText } from "../net/roomboard";
+import type { FlightReport } from "../game/report";
 import { amountOf, amountText, giveAmount, isShareWhat, roomFor, type ShareWhat } from "../net/spaceshare";
 import { SYSTEMS } from "../game/systems";
 import { propellantKg, spentFor } from "../game/propellant";
@@ -137,6 +139,8 @@ export interface NetSessionDeps {
   crewTools?(): Tool[];
   /** another's radio line (I4: his wingmen, his carrier, his LSO) heard on the flight's radio */
   radioHeard?(role: RadioRole, text: string, name: string): void;
+  /** a spacecraft's challenge set up and begun (PLAN-VAISSEAUX N4: a room challenge accepted); what to say */
+  spaceChallenge?(id: string): string;
   /** a question to the pilot (PLAN-VAISSEAUX N: another's order, his request): accepted or refused, or let lapse */
   ask?(text: string, answer: (yes: boolean) => void, testid?: string): void;
 }
@@ -629,6 +633,28 @@ export class NetSession {
           this.d.toast(tf("{0} keeps the controls", this.nameOf(from)));
         } else if (e.kind === "helm" && e.to === net.room?.slot && this.follow?.why === "passenger" && this.follow.slot === from) {
           this.d.toast(this.takeHelm(from, (ev as unknown as { st?: unknown }).st));
+        } else if (e.kind === "rpt") {
+          // (another's result — N4: the room's board)
+          const R = resultOf((ev as unknown as { r?: unknown }).r, from, this.nameOf(from), Date.now());
+          if (!R) return;
+          this.addResult(R);
+          this.d.toast(tf("{0} — {1}: {2}", R.name, refTitle(R), resultText(R)));
+        } else if (e.kind === "rchal") {
+          // (a room challenge proposed — N4: the same start for all who take it, the others ghosts)
+          const id = (ev as unknown as { id?: unknown }).id;
+          if (typeof id !== "string" || !/^[\w-]{1,40}$/.test(id) || !this.d.spaceChallenge) return;
+          this.roomChal = { id, by: from, slots: new Set([from]), at: Date.now() };
+          const title = refTitle({ ref: `challenge:${id}`, title: id });
+          const answer = (yes: boolean) => {
+            if (!yes || !this.net?.room) return;
+            this.roomChal?.slots.add(this.net.room.slot);
+            this.net.event({ kind: "rchal-in", id });
+            this.d.toast(this.d.spaceChallenge!(id));
+          };
+          if (this.d.ask) this.d.ask(tf("{0} proposes a room challenge: {1}", this.nameOf(from), title), answer, "net-rchal");
+        } else if (e.kind === "rchal-in") {
+          const id = (ev as unknown as { id?: unknown }).id;
+          if (this.roomChal && this.roomChal.id === id) this.roomChal.slots.add(from);
         } else if (e.kind === "alight") {
           if (this.aboard.get(from) === net.room?.slot) this.d.toast(tf("{0} got off", this.nameOf(from)));
           this.aboard.delete(from);
@@ -654,7 +680,9 @@ export class NetSession {
     // (those docked to our craft: held on it)
     const attached = new Map([...this.links].filter(([, l]) => l.host === net.room!.slot).map(([g, l]) => [g, { c: l.c, ax: l.ax }]));
     const all = c.netShips(
-      states.filter((s) => (!this.hidden.has(s.slot) && !this.handed.has(s.slot)) || s.slot === this.follow?.slot),
+      states
+        .filter((s) => (!this.hidden.has(s.slot) && !this.handed.has(s.slot)) || s.slot === this.follow?.slot)
+        .map((s) => (this.ghostOf(s.slot) ? { ...s, ghost: true } : s)),
       dt,
       Infinity,
       attached,
@@ -1049,6 +1077,55 @@ export class NetSession {
   target(slot: number): string {
     this.d.camera.selectTarget(netTargetId(slot) as never);
     return tf("Target: {0}", this.nameOf(slot));
+  }
+
+  /** the room's results heard and ours (N4: its board), the latest 120 */
+  results: RoomResult[] = [];
+  /** the room challenge under way (N4): which, who proposed it, who took it */
+  roomChal: { id: string; by: number; slots: Set<number>; at: number } | null = null;
+
+  private addResult(R: RoomResult) {
+    this.results.push(R);
+    if (this.results.length > 120) this.results.shift();
+    // (a room challenge's pilot done: no more a ghost to the others)
+    if (this.roomChal && R.ref === `challenge:${this.roomChal.id}`) this.roomChal.slots.delete(R.slot);
+  }
+
+  /** Another's craft a ghost to ours (N4): both flying the same room challenge — drawn as a tag, never struck. */
+  private ghostOf(slot: number): boolean {
+    const RC = this.roomChal;
+    const me = this.net?.room?.slot;
+    return !!RC && me !== undefined && RC.slots.has(me) && RC.slots.has(slot) && Date.now() - RC.at < 30 * 60_000;
+  }
+
+  /** Our result told to the room (N4: its board) — every report of the flight's, in a room. */
+  shareReport(r: FlightReport | null) {
+    const net = this.net;
+    if (!r || !net?.room) return;
+    const v = {
+      kind: r.kind,
+      title: r.title,
+      score: Math.round(r.score * 10) / 10,
+      letter: r.letter,
+      ref: r.ref ?? null,
+      medal: r.medal ?? null,
+      metric: r.metric ?? null,
+    };
+    const R = resultOf(v, net.room.slot, this.nameOf(net.room.slot), Date.now());
+    if (!R) return;
+    this.addResult(R);
+    net.event({ kind: "rpt", r: v });
+  }
+
+  /** A challenge proposed to the room (N4): begun here, offered to each pilot. What to say. */
+  proposeChallenge(id: string): string {
+    const net = this.net;
+    if (!net?.room) return t("Not in a room");
+    if (!this.d.spaceChallenge) return t("Not here");
+    this.roomChal = { id, by: net.room.slot, slots: new Set([net.room.slot]), at: Date.now() };
+    net.event({ kind: "rchal", id });
+    this.d.toast(this.d.spaceChallenge(id));
+    return tf("Room challenge proposed: {0}", refTitle({ ref: `challenge:${id}`, title: id }));
   }
 
   /** what was given and received this session (N2: the e2e's counts, in the unit of each) */

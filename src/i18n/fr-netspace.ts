@@ -102,4 +102,14 @@ export default {
   "Ring −": "Anneau −",
   "Execute the plan": "Exécuter le plan",
   "Take the controls": "Prendre les commandes",
+  // the room's board and challenges (N4)
+  "Propose to the room": "Proposer à la salle",
+  "{0} proposes a room challenge: {1}": "{0} propose un défi de salle : {1}",
+  "Not here": "Pas ici",
+  "Room challenge proposed: {0}": "Défi de salle proposé : {0}",
+  Results: "Résultats",
+  "Room challenge: {0} — flying: {1}": "Défi de salle : {0} — en vol : {1}",
+  "No results yet — each lesson, challenge, mission and report flown in the room comes here":
+    "Aucun résultat pour l'instant — chaque leçon, défi, mission et compte rendu volé dans la salle arrive ici",
+  "{0} — {1}: {2}": "{0} — {1} : {2}",
 } satisfies Record<string, string>;

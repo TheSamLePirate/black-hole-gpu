@@ -53,6 +53,12 @@ export interface FlightReport {
   /** the phase's curve for the debrief (PLAN-VAISSEAUX X8): its name, its unit, its points (x: seconds from the
    *  phase's start) */
   curve?: { title: string; unit: string; pts: [number, number][] } | null;
+  /** what was flown, said the same in every language (PLAN-VAISSEAUX N4: the room's board) — "challenge:dock-clock",
+   *  "mission:iss", "lesson:holds" */
+  ref?: string;
+  /** a challenge's medal, its result in its unit (lower is better) */
+  medal?: "gold" | "silver" | "bronze" | null;
+  metric?: { value: number; text: string };
 }
 
 const letterOf = (s: number): FlightReport["letter"] => (s >= 17 ? "A" : s >= 14 ? "B" : s >= 10 ? "C" : s >= 6 ? "D" : "F");

@@ -175,6 +175,7 @@ function spaceCourseFrame(this: CameraController, dt: number, st: RangerStatus |
       const score = lessonScore(R);
       this.onFlightReport?.({
         kind: "lesson",
+        ref: `lesson:${L.id}`,
         title: tf("Lesson · {0}", t(L.title)),
         score,
         letter: score >= 17 ? "A" : score >= 14 ? "B" : score >= 10 ? "C" : score >= 6 ? "D" : "F",

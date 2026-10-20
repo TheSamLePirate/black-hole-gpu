@@ -81,6 +81,7 @@ function spaceChallengeFrame(this: CameraController, dt: number, st: RangerStatu
     if (score === null) {
       this.onFlightReport?.({
         kind: "challenge",
+        ref: `challenge:${C.id}`,
         title: tf("Challenge · {0}", t(C.title)),
         score: 0,
         letter: "F",
@@ -113,6 +114,9 @@ function spaceChallengeFrame(this: CameraController, dt: number, st: RangerStatu
             : Math.max(0, 10 * (1 - (score - C.medals[2]) / C.medals[2]));
     this.onFlightReport?.({
       kind: "challenge",
+      ref: `challenge:${C.id}`,
+      medal,
+      metric: { value: score, text: scoreText(C, score) },
       title: tf("Challenge · {0}", t(C.title)),
       score: twenty,
       letter: twenty >= 17 ? "A" : twenty >= 14 ? "B" : twenty >= 10 ? "C" : twenty >= 6 ? "D" : "F",

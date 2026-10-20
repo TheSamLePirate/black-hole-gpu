@@ -13,6 +13,7 @@ import type { NetMatch } from "./netmatch";
 import type { NetSession } from "./netsession";
 import { fleetRows, orderName, rangeText, SPACE_ORDERS } from "../net/spacefleet";
 import { SHARE_WHATS, shareName } from "../net/spaceshare";
+import { board, refTitle, resultText } from "../net/roomboard";
 import type { NetVoice } from "./netvoice";
 
 type Client = InstanceType<NetModule["NetClient"]>;
@@ -456,10 +457,10 @@ export class NetPanel {
   }
 
   /** the panel's tab in a room (R8: the crew, the match, the voices, the screens) */
-  private tab: "crew" | "fleet" | "match" | "voice" | "screens" = "crew";
+  private tab: "crew" | "fleet" | "results" | "match" | "voice" | "screens" = "crew";
 
   /** The panel opened on one of its tabs (the wheel's "Room fleet"). */
-  openTab(tab: "crew" | "fleet" | "match" | "voice" | "screens") {
+  openTab(tab: "crew" | "fleet" | "results" | "match" | "voice" | "screens") {
     this.tab = tab;
     if (this.close) this.render();
     else this.open();
@@ -480,6 +481,7 @@ export class NetPanel {
       pane.dataset.testid = `net-pane-${this.tab}`;
       if (this.tab === "crew") pane.append(this.crew(net));
       else if (this.tab === "fleet") pane.append(this.fleet(net));
+      else if (this.tab === "results") pane.append(this.resultsBoard(net));
       else if (this.tab === "match") pane.append(this.match?.section() ?? h("p", "netp-stat", t("No match here")));
       else if (this.tab === "voice") pane.append(this.voice ? this.voiceSection(this.voice) : h("p", "netp-stat", "—"));
       else pane.append(this.screenSection(room.code));
@@ -601,6 +603,11 @@ export class NetPanel {
     const tabs: [typeof this.tab, string, string][] = [
       ["crew", t("Crew"), String(room.members.length)],
       ["fleet", t("Fleet"), this.session?.spaceTel.size ? String(this.session.spaceTel.size) : ""],
+      [
+        "results",
+        t("Results"),
+        this.session?.roomChal?.slots.size ? "●" : this.session?.results.length ? String(this.session.results.length) : "",
+      ],
       ["match", t("Match"), this.match?.match && this.match.phase !== "over" ? "●" : ""],
       ["voice", t("Voice"), this.voice?.on ? "◉" : ""],
       ["screens", t("Screens"), ""],
@@ -779,6 +786,45 @@ export class NetPanel {
     );
     card.append(row, own);
     return card;
+  }
+
+  /** the room's board (PLAN-VAISSEAUX N4): the room challenge under way, then for each thing flown each pilot's best,
+   *  ranked */
+  private resultsBoard(net: Client) {
+    const S = this.session;
+    const wrap = h("div", "netp-board");
+    wrap.dataset.testid = "net-board";
+    if (!S) return wrap;
+    const RC = S.roomChal;
+    if (RC && RC.slots.size) {
+      const names = [...RC.slots].map((s) => net.room!.members.find((m) => m.slot === s)?.name ?? `#${s}`);
+      const b = h(
+        "p",
+        "netp-roomchal",
+        tf("Room challenge: {0} — flying: {1}", refTitle({ ref: `challenge:${RC.id}`, title: RC.id }), names.join(", ")),
+      );
+      b.dataset.testid = "net-roomchal";
+      wrap.append(b);
+    }
+    const B = board(S.results);
+    if (!B.length) {
+      wrap.append(h("p", "netp-stat", t("No results yet — each lesson, challenge, mission and report flown in the room comes here")));
+      return wrap;
+    }
+    for (const sec of B) {
+      const box = h("div", "netp-boardsec");
+      box.dataset.testid = `net-board-${sec.key.replace(/[^\w-]/g, "_")}`;
+      box.append(h("b", "netp-lab", sec.title));
+      const ol = h("ol", "netp-boardlist");
+      for (const r of sec.rows) {
+        const li = h("li", r.slot === net.room!.slot ? "netp-mine" : "");
+        li.append(h("span", "netp-rank", `${r.rank}.`), h("span", "", r.name), h("span", "netp-grow"), h("b", "", resultText(r)));
+        ol.append(li);
+      }
+      box.append(ol);
+      wrap.append(box);
+    }
+    return wrap;
   }
 
   /** the crew: each member — his colour, his voice, his name, his role, how his samples come; his volume, and

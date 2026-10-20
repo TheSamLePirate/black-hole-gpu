@@ -81,6 +81,7 @@ function spaceMissionFrame(this: CameraController, dt: number, st: RangerStatus 
       lines.push({ label: t("Next chapter"), value: t(CAMPAIGN[M.chapter]!.title), q: "good" });
     this.onFlightReport?.({
       kind: "mission",
+      ref: `mission:${M.id}`,
       title: tf("Mission · {0}", t(M.title)),
       score,
       letter: score >= 17 ? "A" : score >= 14 ? "B" : score >= 10 ? "C" : score >= 6 ? "D" : "F",

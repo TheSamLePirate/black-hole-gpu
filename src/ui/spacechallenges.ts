@@ -8,7 +8,8 @@ import { button, el as h, modal } from "./kit";
 
 const MEDAL: Record<string, string> = { gold: "🥇", silver: "🥈", bronze: "🥉" };
 
-export function spaceChallengePanel(go: (id: SpaceChallengeId) => void) {
+/** `propose`: in a room, each challenge offered to its pilots too (PLAN-VAISSEAUX N4). */
+export function spaceChallengePanel(go: (id: SpaceChallengeId) => void, propose?: (id: SpaceChallengeId) => void) {
   const root = h("div", "chp");
   const m = modal({ title: t("Spacecraft challenges"), body: [root], cls: "chp-frame", testid: "space-challenges" });
   const B = spaceBests();
@@ -30,6 +31,17 @@ export function spaceChallengePanel(go: (id: SpaceChallengeId) => void) {
         },
       }),
     );
+    if (propose)
+      card.append(
+        button({
+          label: t("Propose to the room"),
+          testid: `space-chal-room-${C.id}`,
+          onClick: () => {
+            m.close();
+            propose(C.id);
+          },
+        }),
+      );
     root.append(card);
   }
 }

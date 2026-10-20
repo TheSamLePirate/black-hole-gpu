@@ -2891,6 +2891,8 @@ async function main() {
     }
     if (!r) return;
     gameLog.add("info", `${r.title} — ${r.letter} (${r.score.toFixed(1)} / 20)`, sim.time);
+    // (told to the room — PLAN-VAISSEAUX N4: its board)
+    netSession.shareReport(r);
   };
   events.on("pilotMessage", ({ text, t }) => {
     panel.toast(text);
@@ -4068,7 +4070,11 @@ async function main() {
         precision: () => keyActions.precision(new KeyboardEvent("keydown")),
         school: () => flightSchool(instrHost),
         // (a spacecraft's challenges — X10)
-        challenges: () => spaceChallengePanel((id) => panel.toast(spaceChallengePlace(id))),
+        challenges: () =>
+          spaceChallengePanel(
+            (id) => panel.toast(spaceChallengePlace(id)),
+            netPanel.net?.room ? (id) => panel.toast(netSession.proposeChallenge(id)) : undefined,
+          ),
         // (a spacecraft's missions and the Interstellar campaign — X11)
         missions: () => spaceMissionPanel(spaceMissionHost),
         // (the room's fleet — N1: its panel, an order to the pilot targeted)
@@ -4780,6 +4786,8 @@ async function main() {
     toast: (s) => panel.toast(s),
     jetIn: () => jetIn,
     sceneTime: () => sim.time * M_SECONDS,
+    // (a room challenge accepted — PLAN-VAISSEAUX N4: its start set up here)
+    spaceChallenge: (id) => spaceChallengePlace(id as SpaceChallengeId),
     // (another's order, his request — PLAN-VAISSEAUX N: a card to accept or refuse)
     ask: (text, answer, testid) => netAsk(text, answer, testid),
     // (the crew's orders: through the game's tools, called directly — docs/PLAN-CREW-ACTIONS.md)
@@ -6586,7 +6594,11 @@ async function main() {
       },
       /** the spacecraft's challenges (PLAN-VAISSEAUX X10): their panel, one set up and begun */
       spaceChallenges: {
-        open: () => spaceChallengePanel((id) => panel.toast(spaceChallengePlace(id))),
+        open: () =>
+          spaceChallengePanel(
+            (id) => panel.toast(spaceChallengePlace(id)),
+            netPanel.net?.room ? (id) => panel.toast(netSession.proposeChallenge(id)) : undefined,
+          ),
         go: (id: SpaceChallengeId) => spaceChallengePlace(id),
       },
       /** the spacecraft's missions and the Interstellar campaign (PLAN-VAISSEAUX X11): their panel, one set up and begun */
