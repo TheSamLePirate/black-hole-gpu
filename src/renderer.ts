@@ -3606,12 +3606,7 @@ export class Renderer {
     const lutOk = (key & LUT_BLOCKERS) === 0;
     const airOk = (key & 128) !== 0 && this.aerialOK;
     const shadeOk = (key & FEATURE_TERRAIN_RASTER) !== 0;
-    if (
-      create &&
-      !v.busy &&
-      !v.failed &&
-      (!v.rt || !v.env || (lutOk && !v.lut) || (airOk && !v.air) || (shadeOk && !v.shade))
-    )
+    if (create && !v.busy && !v.failed && (!v.rt || !v.env || (lutOk && !v.lut) || (airOk && !v.air) || (shadeOk && !v.shade)))
       this.realtimeCascade(key, v);
     if (kind === "q" || kind === "lutq") v.qWanted = true;
     if (create && v.qWanted && !v.qBusy && !v.qFailed && (!v.q || (lutOk && !v.lutq))) this.qualityCascade(key, v);
@@ -3748,7 +3743,8 @@ export class Renderer {
           HAS_SCENERY: has(8192),
           HAS_AURORA: has(16384),
           HAS_TERRAIN_CACHE: (entryPoint === "main" || entryPoint === "shade") && !quality ? has(FEATURE_TERRAIN_CACHE) : 0,
-          HAS_TERRAIN_RASTER: (entryPoint === "main" || entryPoint === "shade") && !quality && this.rasterHint ? has(FEATURE_TERRAIN_RASTER) : 0,
+          HAS_TERRAIN_RASTER:
+            (entryPoint === "main" || entryPoint === "shade") && !quality && this.rasterHint ? has(FEATURE_TERRAIN_RASTER) : 0,
           COST_VIEW: (key >> 16) & 15,
           ...(this.tunes.get((key >> 20) & 255) ?? {}),
           QUALITY_PIPELINE: quality ? 1 : 0,

@@ -64,6 +64,12 @@ test.skipIf(!E2E)(
           `__bh.renderer.terrainRasterStats.primary && __bh.renderer.terrainRasterStats.reason === "pilot" && __bh.renderer.terrainRasterStats.encodedFrames > 5`,
           180_000,
         );
+        // (a tuning is a kernel variant of its own: its shade compiles after its main — measured once it draws)
+        await app.js("(() => { __bh.game.perf(); __bh.renderer.prof.every = 1; __bh.renderer.prof.reset(); return true; })()");
+        await app.waitFor(
+          `__bh.renderer.prof.frames >= 2 && __bh.renderer.prof.table().some((p) => p.label === "earth shade (raster)")`,
+          300_000,
+        );
         const w = await app.js<number>("__bh.renderer.completedFrames");
         await app.waitFor(`__bh.renderer.completedFrames >= ${w + 30}`, 120_000);
         await app.js("(() => { __bh.game.perf(); __bh.renderer.prof.every = 1; __bh.renderer.prof.reset(); return true; })()");
