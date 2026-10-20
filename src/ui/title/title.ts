@@ -15,6 +15,52 @@ import { type MenuScreen, MenuRouter } from "../menu/router";
 import { SCENE_THUMBS } from "../scene-thumbs";
 import { type Activity, MODES, MORE, type Mode, type TitleGame, VESSELS, type VesselChoice } from "./activities";
 import { MODE_ART, TURNTABLES, turntable } from "./art";
+import {
+  challengeItems,
+  combatItems,
+  cycle,
+  FIELDS,
+  FIGURE_HOWS,
+  type FigureHow,
+  type FlightChoice,
+  FUELS,
+  flightLine,
+  HOURS,
+  keepFlight,
+  LESSON_HOWS,
+  type LessonHow,
+  lastFlight,
+  lessonItems,
+  type PlaneItem,
+  STARTS,
+  WEATHERS,
+} from "./plane";
+
+/** By plane's tabs (E4) */
+type PlaneTab = "free" | "combat" | "school" | "challenges";
+const PLANE_TABS: { id: PlaneTab; label: Text }[] = [
+  { id: "free", label: { fr: "Vol libre", en: "Free flight" } },
+  { id: "combat", label: { fr: "Combat", en: "Combat" } },
+  { id: "school", label: { fr: "École de vol", en: "Flight school" } },
+  { id: "challenges", label: { fr: "Défis", en: "Challenges" } },
+];
+const P = {
+  field: { fr: "Aérodrome", en: "Airfield" },
+  start: { fr: "Départ", en: "Start" },
+  hour: { fr: "Heure", en: "Hour" },
+  weather: { fr: "Météo", en: "Weather" },
+  fuel: { fr: "Carburant", en: "Fuel" },
+  fly: { fr: "Lancer le vol", en: "Fly" },
+  flyHint: { fr: "Le F-35B, là et comme réglé", en: "The F-35B, there and as set" },
+  how: { fr: "Comment", en: "How" },
+  tab: { fr: "Onglet", en: "Tab" },
+  search: { fr: "Chercher un aérodrome (OACI, nom)", en: "Find an airfield (ICAO, name)" },
+  fieldTitle: { fr: "L'aérodrome", en: "The airfield" },
+  freeText: {
+    fr: "Le F-35B à l'aérodrome choisi, aligné sur sa piste en service, en finale ou en croisière, à l'heure de son propre jour, sous la météo choisie.",
+    en: "The F-35B at the airfield chosen, lined up on its runway in use, on final or cruising, at the hour of its own day, under the weather chosen.",
+  },
+} satisfies Record<string, Text>;
 
 const T = {
   tagline: { fr: "Un vol à travers l'espace-temps de Kerr — jusqu'à Gargantua", en: "A flight through Kerr spacetime — on to Gargantua" },
@@ -95,7 +141,11 @@ export class TitleScreen {
     this.router = new MenuRouter(this.root);
     this.router.push(this.mainScreen());
     // (the prompts follow the device: a screen redrawn when it changes)
-    this.unInput = onInputChange(() => this.router?.refresh());
+    // (the prompts follow the device: redrawn in place — never the whole page: a page rebuilt between a press and its
+    // release, the first click after a key, swallowed the click)
+    this.unInput = onInputChange(() => {
+      for (const e of this.root?.querySelectorAll<HTMLElement & { refill?: () => void }>(".m-prompts") ?? []) e.refill?.();
+    });
   }
 
   close() {
@@ -224,7 +274,7 @@ export class TitleScreen {
         b.addEventListener("click", () => {
           this.lastMode = m;
           img.style.viewTransitionName = "tt-art";
-          this.router?.push(this.modeScreen(m));
+          this.router?.push(m.id === "plane" ? this.planeScreen() : this.modeScreen(m));
         });
         return b;
       }),
@@ -266,11 +316,15 @@ export class TitleScreen {
         return b;
       }),
     );
-    const ps = h("div", { class: "m-prompts" });
-    for (const [a, label] of [...prompts, ...(back ? ([["back", T.back]] as [MenuAction, Text][]) : [])]) {
-      const g = glyph(a);
-      if (g) ps.append(h("span", { class: "m-prompt" }, el("span", "m-glyph", g), tr(label)));
-    }
+    const ps = h("div", { class: "m-prompts" }) as HTMLElement & { refill?: () => void };
+    ps.refill = () =>
+      ps.replaceChildren(
+        ...[...prompts, ...(back ? ([["back", T.back]] as [MenuAction, Text][]) : [])].flatMap(([a, label]) => {
+          const g = glyph(a);
+          return g ? [h("span", { class: "m-prompt" }, el("span", "m-glyph", g), tr(label))] : [];
+        }),
+      );
+    ps.refill();
     return h("footer", { class: "tt-foot" }, el("span", "tt-credit", "© SamLePirate"), lp, ps, el("span", "tt-version", this.d.version()));
   }
 
@@ -377,6 +431,291 @@ export class TitleScreen {
         this.vessel = VESSELS[(i + (a === "tabNext" ? 1 : VESSELS.length - 1)) % VESSELS.length]!.id;
         this.router?.refresh();
         return true;
+      },
+    };
+  }
+
+  // ------------------------------------------------------------------ by plane (E4)
+
+  private planeTab: PlaneTab = "free";
+  private flightChoice: FlightChoice = lastFlight();
+  private lessonHow: LessonHow = "guided";
+  private figureHow: FigureHow = "fly";
+
+  /** By plane: four tabs (LB / RB, Q / E) — a free flight set up, the combat, the school, the challenges. */
+  private planeScreen(): MenuScreen {
+    return {
+      id: "mode:plane",
+      build: () => this.buildPlane(),
+      action: (a) => {
+        if (a !== "tabPrev" && a !== "tabNext") return false;
+        const i = PLANE_TABS.findIndex((x) => x.id === this.planeTab);
+        this.planeTab = PLANE_TABS[(i + (a === "tabNext" ? 1 : PLANE_TABS.length - 1)) % PLANE_TABS.length]!.id;
+        this.router?.refresh();
+        return true;
+      },
+    };
+  }
+
+  private buildPlane(): HTMLElement {
+    const page = h("div", { class: "tt-page tt-list tt-plane", "data-mode": "plane", "data-tab": this.planeTab });
+    const tabs = h(
+      "div",
+      { class: "tt-tabs", role: "tablist", "data-nav-skip": "" },
+      ...PLANE_TABS.map((x) => {
+        const b = button({ label: tr(x.label), on: this.planeTab === x.id, testid: `title-tab-${x.id}` });
+        b.classList.add("tt-tab");
+        b.setAttribute("role", "tab");
+        b.setAttribute("aria-selected", String(this.planeTab === x.id));
+        b.addEventListener("click", () => {
+          this.planeTab = x.id;
+          this.router?.refresh();
+        });
+        return b;
+      }),
+    );
+    // the preview: the picture, the title, the text, a mark
+    const pImg = h("img", { class: "tt-preview-art", src: MODE_ART.plane.wide, alt: "" }) as HTMLImageElement;
+    pImg.style.viewTransitionName = "tt-art";
+    const pTitle = el("h3", "tt-preview-title", "");
+    const pText = el("p", "tt-preview-text", "");
+    const pMark = el("p", "tt-preview-mark", "");
+    const preview = h("aside", { class: "tt-preview" }, h("div", { class: "tt-preview-frame" }, pImg), pTitle, pText, pMark);
+    const show = (title: string, text: string, mark = "") => {
+      pTitle.textContent = title;
+      pText.textContent = text;
+      pMark.textContent = mark;
+    };
+    const side = h("div", { class: "tt-list-side" });
+    if (this.planeTab === "free") this.planeFree(side, show);
+    else this.planeList(side, show);
+    page.append(
+      this.crumb(tr(MODES.find((x) => x.id === "plane")!.title)),
+      tabs,
+      h("div", { class: "tt-list-body" }, side, preview),
+      this.foot([
+        ["confirm", { fr: "Lancer", en: "Launch" }],
+        ["tabNext", P.tab],
+      ]),
+    );
+    return page;
+  }
+
+  /** A setting's row: its name, its value between ◂ ▸ — ← → (the D-pad) change it, a click the next, Enter its own
+   *  (the airfield: its list). */
+  private selector(label: string, testid: string, value: () => string, step: (d: number) => void, changed: () => void, enter?: () => void) {
+    const val = el("b", "", "");
+    const b = h(
+      "button",
+      { class: "m-item tt-sel", type: "button", role: "slider", "aria-label": label, "data-testid": testid, "data-focus-id": testid },
+      el("span", "tt-sel-label", label),
+      h("span", { class: "tt-sel-val" }, el("i", "", "◂"), val, el("i", "", "▸")),
+    );
+    const render = () => {
+      val.textContent = value();
+      b.setAttribute("aria-valuetext", value());
+    };
+    const go = (d: number) => {
+      step(d);
+      render();
+      changed();
+    };
+    b.addEventListener("keydown", (e) => {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      e.preventDefault();
+      e.stopPropagation();
+      go(e.key === "ArrowRight" ? 1 : -1);
+    });
+    b.addEventListener("click", (e) => {
+      if (enter) return enter();
+      // (a click on the value's left part: back)
+      const r = b.getBoundingClientRect();
+      go(e.clientX > 0 && e.clientX < r.left + r.width * 0.55 ? -1 : 1);
+    });
+    render();
+    return b;
+  }
+
+  private planeFree(side: HTMLElement, show: (title: string, text: string, mark?: string) => void) {
+    const c = this.flightChoice;
+    const pick = <T>(xs: { id: T; label: Text }[], id: T) => tr(xs.find((x) => x.id === id)?.label ?? xs[0]!.label);
+    const changed = () => {
+      keepFlight(c);
+      show(tr(PLANE_TABS[0]!.label), tr(P.freeText), flightLine(c));
+    };
+    const field = () => FIELDS.find((f) => f.id === c.field);
+    side.append(
+      this.selector(
+        tr(P.field),
+        "title-flight-field",
+        () => (field() ? `${field()!.icao ? `${field()!.icao} · ` : ""}${field()!.name}` : c.field),
+        (d) => (c.field = cycle(FIELDS, field() ?? FIELDS[0]!, d).id),
+        changed,
+        () => this.router?.push(this.fieldPicker()),
+      ),
+      this.selector(
+        tr(P.start),
+        "title-flight-start",
+        () => pick(STARTS, c.start),
+        (d) => (c.start = cycle(STARTS, STARTS.find((x) => x.id === c.start)!, d).id),
+        changed,
+      ),
+      this.selector(
+        tr(P.hour),
+        "title-flight-hour",
+        () => pick(HOURS, c.hour),
+        (d) => (c.hour = cycle(HOURS, HOURS.find((x) => x.id === c.hour)!, d).id),
+        changed,
+      ),
+      this.selector(
+        tr(P.weather),
+        "title-flight-weather",
+        () => pick(WEATHERS, c.weather),
+        (d) => (c.weather = cycle(WEATHERS, WEATHERS.find((x) => x.id === c.weather)!, d).id),
+        changed,
+      ),
+      this.selector(
+        tr(P.fuel),
+        "title-flight-fuel",
+        () => `${Math.round(c.fuel * 100)} %`,
+        (d) => (c.fuel = cycle(FUELS, c.fuel, d)),
+        changed,
+      ),
+    );
+    const fly = h(
+      "button",
+      { class: "m-item tt-launch", type: "button", "data-testid": "title-flight-fly", "data-focus-id": "fly", "data-autofocus": "" },
+      el("span", "", tr(P.fly)),
+      el("small", "", tr(P.flyHint)),
+    );
+    fly.addEventListener("click", () => this.choose({ id: "plane-flight", title: P.fly, hint: P.flyHint, run: (g) => g.flight({ ...c }) }));
+    side.append(fly);
+    changed();
+  }
+
+  /** Combat, the school, the challenges: a list (in groups), each entry launched as it says. */
+  private planeList(side: HTMLElement, show: (title: string, text: string, mark?: string) => void) {
+    const tab = this.planeTab;
+    const items: PlaneItem[] = tab === "combat" ? combatItems() : tab === "school" ? lessonItems() : challengeItems();
+    if (tab === "school")
+      side.append(
+        this.selector(
+          tr(P.how),
+          "title-lesson-how",
+          () => tr(LESSON_HOWS.find((x) => x.id === this.lessonHow)!.label),
+          (d) => (this.lessonHow = cycle(LESSON_HOWS, LESSON_HOWS.find((x) => x.id === this.lessonHow)!, d).id),
+          () => {},
+        ),
+      );
+    if (tab === "challenges")
+      side.append(
+        this.selector(
+          tr(P.how),
+          "title-figure-how",
+          () => tr(FIGURE_HOWS.find((x) => x.id === this.figureHow)!.label),
+          (d) => (this.figureHow = cycle(FIGURE_HOWS, FIGURE_HOWS.find((x) => x.id === this.figureHow)!, d).id),
+          () => {},
+        ),
+      );
+    const list = h("nav", { class: "tt-acts", "aria-label": tr(PLANE_TABS.find((x) => x.id === tab)!.label) });
+    items.forEach((it, i) => {
+      if (it.group) list.append(el("h4", "tt-group", it.group));
+      const b = h(
+        "button",
+        {
+          class: "m-item tt-act",
+          type: "button",
+          "data-testid": `title-plane-${it.id.replace(":", "-")}`,
+          "data-focus-id": it.id,
+          ...(i === 0 ? { "data-autofocus": "" } : {}),
+        },
+        h("span", { class: "tt-act-row" }, el("span", "", it.title), it.mark ? el("em", "tt-act-mark", it.mark) : null),
+        el("small", "", it.text),
+      );
+      const focus = () => show(it.title, it.text, it.mark ?? "");
+      b.addEventListener("focus", focus);
+      b.addEventListener("pointerenter", focus);
+      b.addEventListener("click", () => {
+        const [kind, id] = it.id.split(":") as [string, string];
+        const title = { fr: it.title, en: it.title };
+        this.choose({
+          id: it.id,
+          title,
+          hint: { fr: it.text, en: it.text },
+          opens: kind === "mission",
+          run: (g) =>
+            kind === "mission"
+              ? g.mission(id)
+              : kind === "fight"
+                ? g.fight(id)
+                : kind === "lesson"
+                  ? g.lesson(id, this.lessonHow)
+                  : kind === "challenge"
+                    ? g.challenge(id)
+                    : g.figure(id, this.figureHow),
+        });
+      });
+      list.append(b);
+    });
+    side.append(list);
+    if (items[0]) show(items[0].title, items[0].text, items[0].mark ?? "");
+  }
+
+  /** The airfields, found by a few letters (ICAO or name), chosen by Enter or a click. */
+  private fieldPicker(): MenuScreen {
+    return {
+      id: "plane:field",
+      build: () => {
+        const page = h("div", { class: "tt-page tt-list tt-picker" });
+        const input = h("input", {
+          class: "tt-search",
+          type: "search",
+          placeholder: tr(P.search),
+          "aria-label": tr(P.search),
+          "data-testid": "title-field-search",
+          "data-autofocus": "",
+        }) as HTMLInputElement;
+        const list = h("nav", { class: "tt-acts tt-fields", "aria-label": tr(P.fieldTitle) });
+        const fill = () => {
+          const q = input.value.trim().toLowerCase();
+          list.replaceChildren(
+            ...FIELDS.filter((f) => !q || f.name.toLowerCase().includes(q) || (f.icao ?? "").toLowerCase().startsWith(q))
+              .slice(0, 60)
+              .map((f) => {
+                const b = h(
+                  "button",
+                  { class: "m-item tt-act", type: "button", "data-testid": `title-field-${f.id}`, "data-focus-id": `field-${f.id}` },
+                  el("span", "", f.name),
+                  el("small", "", f.icao ?? ""),
+                );
+                if (f.id === this.flightChoice.field) b.classList.add("on");
+                b.addEventListener("click", () => {
+                  this.flightChoice.field = f.id;
+                  keepFlight(this.flightChoice);
+                  this.router?.back();
+                });
+                return b;
+              }),
+          );
+        };
+        input.addEventListener("input", fill);
+        // (↓ from the search: into the list; Enter: the first found)
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            list.querySelector<HTMLElement>("button")?.focus();
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            list.querySelector<HTMLElement>("button")?.click();
+          }
+        });
+        fill();
+        page.append(
+          this.crumb(tr(P.fieldTitle)),
+          h("div", { class: "tt-list-side tt-picker-body" }, input, list),
+          this.foot([["confirm", { fr: "Choisir", en: "Choose" }]]),
+        );
+        return page;
       },
     };
   }

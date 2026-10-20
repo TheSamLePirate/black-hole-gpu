@@ -16,8 +16,9 @@ describe.skipIf(!E2E)("the game controller in the menus", () => {
   let app: App;
   /** a button pressed for a few frames, then released */
   const press = async (n: number) => {
+    // (held 250 ms: the pad is read once a frame — a slower machine's stalled frame missed a 120 ms press)
     await app.js(`(window.__pad.buttons[${n}].pressed = true, 1)`);
-    await Bun.sleep(120);
+    await Bun.sleep(250);
     await app.js(`(window.__pad.buttons[${n}].pressed = false, 1)`);
     await Bun.sleep(120);
   };
@@ -40,6 +41,9 @@ describe.skipIf(!E2E)("the game controller in the menus", () => {
     expect(await focused()).toBe("title-mode-foot");
     await press(0); // A
     await app.waitFor(`!!document.querySelector("[data-screen='mode:foot']")`);
+    // (the screens' change — a View Transition, the screen's pictures loading — over: a button held 120 ms in a
+    // stalled frame is not seen by the pad's poll)
+    await Bun.sleep(600);
     await press(1); // B
     await app.waitFor(`!!document.querySelector("[data-screen='title']")`);
     await app.waitFor(`document.activeElement?.dataset.testid === "title-mode-foot"`, 3000);
@@ -51,7 +55,7 @@ describe.skipIf(!E2E)("the game controller in the menus", () => {
     expect(await focused()).toBe("title-mode-ship");
     await press(0); // A: the mode's screen
     await app.waitFor(`!!document.querySelector("[data-screen='mode:ship']")`);
-    await Bun.sleep(400);
+    await Bun.sleep(600);
     expect(await focused()).toBe("title-act-ship-orbit");
     await press(0); // A: launched
     await app.waitFor("__bh.camera.piloting", 30_000);

@@ -4,6 +4,7 @@
 // E4–E6 will give each mode its launch screen; these are its first, direct entries.
 
 import type { Text } from "../../i18n";
+import type { FigureHow, FlightChoice, LessonHow } from "./plane";
 
 /** The game, as the title screen launches things in it (main.ts implements it once the game is built). */
 export interface TitleGame {
@@ -13,6 +14,18 @@ export interface TitleGame {
   walk(body: string, lat: number, lon: number): void;
   /** the F-35B lined up on a runway */
   jet(): void;
+  /** a free flight set up (the Flight hub's prepareFlight): the field, the start, the hour, the weather, the fuel */
+  flight(c: FlightChoice): void;
+  /** an air mission: its briefing, then flown */
+  mission(id: string): void;
+  /** a free fight */
+  fight(id: string): void;
+  /** a flight-school lesson: watched (the autopilot), tried (graded) or guided */
+  lesson(id: string, how: LessonHow): void;
+  /** a challenge (a course, a landing) */
+  challenge(id: string): void;
+  /** an aerobatic figure (or "box": the five) flown and judged, or watched */
+  figure(id: string, how: FigureHow): void;
   /** the flight's preparation (field, start, hour, weather) */
   flightHub(): void;
   /** the F-35's challenges, fights and missions */

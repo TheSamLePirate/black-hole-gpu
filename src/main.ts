@@ -7474,6 +7474,28 @@ async function main() {
           return tools.lineUp();
         }),
       flightHub: () => flightHub.open(),
+      // (By plane — E4: the same paths as the Flight hub's card and TARS's tools)
+      flight: (c) =>
+        void placeShip(() => prepareFlight(hubHost, { field: c.field, start: c.start, hour: c.hour, weather: c.weather, fuel: c.fuel })),
+      mission: (id) => airMissions.brief(id),
+      fight: (id) => {
+        const f = SCENARIOS.find((d) => d.id === id);
+        if (!f) throw new Error(`no fight "${id}"`);
+        placeShip(() => (flyFight(challengeHost, f), ""));
+      },
+      lesson: (id, how) => {
+        if (!LESSONS.some((L) => L.id === id)) throw new Error(`no lesson "${id}"`);
+        lessonPlace(id as LessonId, how === "demo" ? true : how === "try" ? false : "guided");
+      },
+      challenge: (id) => {
+        const c = CHALLENGES.find((d) => d.id === id);
+        if (!c) throw new Error(`no challenge "${id}"`);
+        placeShip(() => (flyChallenge(challengeHost, c), ""));
+      },
+      figure: (id, how) => {
+        if (id !== "box" && !FIGURE_ORDER.includes(id as FigureId)) throw new Error(`no figure "${id}"`);
+        placeShip(() => (flyFigure(challengeHost, id as FigureId | "box", how === "watch" ? "demo" : "judge"), ""));
+      },
       challenges: () => challengePanel.open(),
       school: () => flightSchool(instrHost),
       missions: () => {

@@ -511,7 +511,7 @@ Chaque phase : un commit, une planche de captures (`docs/progress/title-aaa/`), 
 - Les scènes proposées : l'astronaute sur la Lune avec la Terre basse, le F-35 au-dessus des Alpes au couchant,
   le Ranger devant Saturne, Gargantua.
 
-### E4 — En avion (M)
+### E4 — En avion (M) — FAIT ([fiche](progress/title-aaa/E4.md), [planche](progress/title-aaa/E4.jpg) : 4 onglets, le vol libre réglé et gardé, les missions, l'école, les défis ; un clic perdu après une touche corrigé)
 
 - Vol libre (départ, aérodrome, heure, météo), Combat, École de vol, Défis.
 - Les modales actuelles deviennent des pages du routeur.
