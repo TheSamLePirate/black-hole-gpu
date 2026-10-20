@@ -5,7 +5,6 @@ import { RASTER_HINT_BINDING, RASTER_HINT_TEXTURE_LIMIT, withTerrainRaster } fro
 import { TERRAIN_CACHE_MAX_LAT, TERRAIN_CACHE_VEC4S } from "./system/terrain-cache-layout";
 import { TerrainRaster } from "./system/terrain-raster";
 import { SCENERY_RASTER_LOD, SceneryRaster, type SceneryRasterLod } from "./system/scenery-raster";
-import { DETAIL_CACHE_BINDING, DETAIL_CACHE_TEXTURE_LIMIT, DetailCache, withDetailCache } from "./system/detail-cache";
 import { TERRAIN_RASTER_MAX_PIXELS, terrainRasterFrame } from "./system/terrain-raster-frame";
 import type { NetWalkerHome } from "./controller/netcraft";
 import { CharacterRenderer, type GrassView } from "./character-renderer";
@@ -44,7 +43,7 @@ import { visibleTimeout } from "./util/visible-timeout";
 import { automaticQuality, effectiveQuality, earthMapQuality } from "./quality-policy";
 import { adapterId, guessTier, rememberedLevel, tierAt, type Tier } from "./tier";
 import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
-import { PATH_CHUNK, PATH_MAX, SH_VEC4S, TABLE_DETAIL, TABLE_LUT, TABLE_PATH, TABLE_VEC4S, TABLE_WALK, TABLE_WARP } from "./gpu-tables";
+import { PATH_CHUNK, PATH_MAX, SH_VEC4S, TABLE_LUT, TABLE_PATH, TABLE_VEC4S, TABLE_WALK, TABLE_WARP } from "./gpu-tables";
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
 import maskWGSL from "./shaders/mask.wgsl" with { type: "text" };
 import { AERIAL_TEXTURE_LIMIT, aerialShader } from "./system/aerial";
@@ -403,8 +402,6 @@ interface Target {
   sceneDepthBind: GPUBindGroup | null;
   /** the main trace pass's bind group holding the raster patch's distance texture of this frame (made when it changes) */
   hintBind?: { tex: GPUTexture; bind: GPUBindGroup };
-  /** the tracer's bind group for the relief detail cache's own writing (its texture's stand-in bound — system/detail-cache.ts) */
-  detailBuildBind?: GPUBindGroup;
   stamps: GPUBuffer;
   gather: GPUBuffer;
   hdr: GPUTexture;
@@ -905,8 +902,6 @@ export class Renderer {
     // (the raster patch's distances for the ground march: where the device takes the one more texture; an empty one — no
     // hint, 0 — bound otherwise)
     this.rasterHint = device.limits.maxSampledTexturesPerShaderStage >= RASTER_HINT_TEXTURE_LIMIT;
-    // (the relief's detail cache round the camera — system/detail-cache.ts: 16 MiB, where the device binds its texture)
-    if (device.limits.maxSampledTexturesPerShaderStage >= DETAIL_CACHE_TEXTURE_LIMIT) this.detailCache = new DetailCache(device);
     if (this.rasterHint)
       this.rasterDummy = device.createTexture({
         label: "raster hint: none",
@@ -945,9 +940,6 @@ export class Renderer {
         { binding: 28, visibility: C, texture: { sampleType: "uint", viewDimension: "2d-array" } },
         ...(device.limits.maxSampledTexturesPerShaderStage >= RASTER_HINT_TEXTURE_LIMIT
           ? [{ binding: RASTER_HINT_BINDING, visibility: C, texture: { sampleType: "unfilterable-float" } as GPUTextureBindingLayout }]
-          : []),
-        ...(device.limits.maxSampledTexturesPerShaderStage >= DETAIL_CACHE_TEXTURE_LIMIT
-          ? [{ binding: DETAIL_CACHE_BINDING, visibility: C, texture: { sampleType: "unfilterable-float" } as GPUTextureBindingLayout }]
           : []),
         ...(device.limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT
           ? [{ binding: 32, visibility: C, buffer: { type: "read-only-storage" } as GPUBufferBindingLayout }]
@@ -1458,7 +1450,6 @@ export class Renderer {
     this.terrainSurfaceCache?.dispose();
     this.terrainRaster?.dispose();
     this.sceneryRaster?.dispose();
-    this.detailCache?.dispose();
     this.device.destroy();
   }
 
@@ -1587,7 +1578,7 @@ export class Renderer {
         maxBufferSize: adapter.limits.maxBufferSize,
         maxTextureDimension2D: adapter.limits.maxTextureDimension2D,
         maxSampledTexturesPerShaderStage: Math.min(
-          Math.max(AERIAL_TEXTURE_LIMIT, RASTER_HINT_TEXTURE_LIMIT, DETAIL_CACHE_TEXTURE_LIMIT),
+          Math.max(AERIAL_TEXTURE_LIMIT, RASTER_HINT_TEXTURE_LIMIT),
           adapter.limits.maxSampledTexturesPerShaderStage,
         ),
         maxStorageBuffersPerShaderStage: Math.min(SCENERY_STORAGE_LIMIT, adapter.limits.maxStorageBuffersPerShaderStage),
@@ -1618,12 +1609,9 @@ export class Renderer {
         seaShader(
           sceneryShader(
             surfaceShader(
-              withDetailCache(
-                withTerrainRaster(
-                  withTerrainCache(withForest(await wgsl(traceWGSL), await wgsl(forestSource))),
-                  device.limits.maxSampledTexturesPerShaderStage >= RASTER_HINT_TEXTURE_LIMIT,
-                ),
-                device.limits.maxSampledTexturesPerShaderStage >= DETAIL_CACHE_TEXTURE_LIMIT,
+              withTerrainRaster(
+                withTerrainCache(withForest(await wgsl(traceWGSL), await wgsl(forestSource))),
+                device.limits.maxSampledTexturesPerShaderStage >= RASTER_HINT_TEXTURE_LIMIT,
               ),
               device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT,
             ),
@@ -1680,7 +1668,6 @@ export class Renderer {
       r.terrainSurfaceCache?.dispose();
       r.terrainRaster?.dispose();
       r.sceneryRaster?.dispose();
-      r.detailCache?.dispose();
       // (a loss simulated — the e2e's, __bh.gpu.lose(): the device destroyed — told as a real one)
       r.lost = r.simulatedLoss ? "simulated" : info.reason === "destroyed" ? "released" : info.message || t("the GPU was reset");
       if (r.offline) r.offline.error = r.lost;
@@ -2003,7 +1990,7 @@ export class Renderer {
   }
 
   /** The trace kernels' bind group entries for a target; `binding14` is the buffer of the probe or of the light probe. */
-  private traceEntries(t: Target, binding14: GPUBuffer, raster?: GPUTexture, detail?: GPUTexture): GPUBindGroupEntry[] {
+  private traceEntries(t: Target, binding14: GPUBuffer, raster?: GPUTexture): GPUBindGroupEntry[] {
     return [
       { binding: 0, resource: { buffer: this.paramBuf } },
       { binding: 1, resource: { buffer: t.accum } },
@@ -2045,7 +2032,6 @@ export class Renderer {
           ]
         : []),
       ...(this.rasterHint ? [{ binding: RASTER_HINT_BINDING, resource: (raster ?? this.rasterDummy!).createView() }] : []),
-      ...(this.detailCache ? [{ binding: DETAIL_CACHE_BINDING, resource: (detail ?? this.detailCache.texture).createView() }] : []),
     ];
   }
 
@@ -2054,10 +2040,6 @@ export class Renderer {
     const d = this.device;
     t.hintBind = undefined;
     t.traceBind = d.createBindGroup({ layout: this.traceLayout, entries: this.traceEntries(t, this.ship.envBuf) });
-    // (the cache's own writing: its texture not read in the same dispatch — the stand-in at its binding)
-    t.detailBuildBind = this.detailCache
-      ? d.createBindGroup({ layout: this.traceLayout, entries: this.traceEntries(t, this.ship.envBuf, undefined, this.detailCache.dummy) })
-      : undefined;
     t.probeBind = d.createBindGroup({ layout: this.traceLayout, entries: this.traceEntries(t, this.probeBuf) });
     t.polGridPass = d.createBindGroup({
       layout: this.postPolGrid.getBindGroupLayout(0),
@@ -3790,10 +3772,6 @@ export class Renderer {
             (entryPoint === "main" || entryPoint === "shade" || entryPoint === "shadeMark") && !quality && this.rasterHint
               ? has(FEATURE_TERRAIN_RASTER)
               : 0,
-          HAS_DETAIL_CACHE:
-            (entryPoint === "main" || entryPoint === "shade" || entryPoint === "shadeMark") && !quality && this.detailCache
-              ? has(FEATURE_TERRAIN_RASTER)
-              : 0,
           COST_VIEW: (key >> 16) & 15,
           ...(this.tunes.get((key >> 20) & 255) ?? {}),
           QUALITY_PIPELINE: quality ? 1 : 0,
@@ -3952,8 +3930,6 @@ export class Renderer {
     }
     // The raster patch's visibility, after the cache it reads and before the rays that start from it.
     if (!quality && s) this.encodeTerrainRasterVisibility(enc, t, s);
-    // (the relief's detail cache round the camera, its strips of this frame written before the rays that read it)
-    if (!quality) this.encodeDetailCache(enc, t);
     const hint = !quality && this.rasterHint ? (this.terrainRaster?.distanceTexture() ?? null) : null;
     // (the aerial perspective's table before the rays that read it)
     if (!quality && this.aerialPipe) {
@@ -5937,50 +5913,6 @@ export class Renderer {
     return t.hintBind.bind;
   }
 
-  /** the relief's detail read from its cache round the camera (system/detail-cache.ts; a switch for comparisons) */
-  detailCacheOn = true;
-  private detailCache: DetailCache | null = null;
-  private detailBuildPipe: GPUComputePipeline | null = null;
-  private detailBuildWanted = false;
-  private detailTableOn = false;
-  get detailCacheStats() {
-    return { on: this.detailTableOn, ...(this.detailCache?.stats() ?? {}) };
-  }
-  /** The cache's strips for this frame (the raster pipeline only: its kernels read it), and its window in the table. */
-  private encodeDetailCache(enc: GPUCommandEncoder, t: Target) {
-    const c = this.detailCache;
-    const near = this.lastNear;
-    const on = !!c && this.detailCacheOn && this.rasterPrimaryOn && !!near && !!t.detailBuildBind;
-    if (!on || !c || !near) {
-      if (this.detailTableOn && c) {
-        const off = new Float32Array(4);
-        this.device.queue.writeBuffer(this.bodyBuf, TABLE_DETAIL * 16, off);
-        this.detailTableOn = false;
-      }
-      return;
-    }
-    if (!this.detailBuildPipe) {
-      if (!this.detailBuildWanted) {
-        this.detailBuildWanted = true;
-        void this.device
-          .createComputePipelineAsync({
-            layout: this.device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, c.writeLayout] }),
-            compute: { module: this.traceModule, entryPoint: "detailBuild", constants: { QUALITY_PIPELINE: 0 } },
-          })
-          .then(
-            (p) => (this.detailBuildPipe = p),
-            (e) => console.warn("Relief detail cache unavailable:", e),
-          );
-      }
-      return;
-    }
-    const geo = patchGeodetic(near, WGS84_F);
-    const rects = c.plan(geo.lat, geo.lon, `${this.earthTiles.stamp}:${this.earthMaps.tier}`);
-    c.encode(enc, this.detailBuildPipe, t.detailBuildBind!, rects, this.prof.pass("relief detail cache"));
-    this.device.queue.writeBuffer(this.bodyBuf, TABLE_DETAIL * 16, c.tableEntries());
-    this.detailTableOn = true;
-  }
-
   private encodeTerrainRasterVisibility(enc: GPUCommandEncoder, target: Target, s: Settings) {
     if (!this.terrainRasterRequested || !this.lastNear || !this.lastCam) {
       this.terrainRaster?.suspend();
@@ -6123,7 +6055,6 @@ export class Renderer {
     this.terrainSurfaceCache?.dispose();
     this.terrainRaster?.dispose();
     this.sceneryRaster?.dispose();
-    this.detailCache?.dispose();
     this.device.destroy();
   }
 

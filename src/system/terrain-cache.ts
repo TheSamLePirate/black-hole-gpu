@@ -70,8 +70,6 @@ export function terrainHeightLibrary(trace: string, runways = false, group = 0):
   const functions = new Map<string, string>();
   for (const [, name] of trace.matchAll(/^fn (\w+)\(/gm)) functions.set(name!, wgslFunction(trace, name!));
   functions.set("earthWarp", "fn earthWarp(q: vec3f) -> vec3f { return earthWarpExact(q); }");
-  // (the relief's detail cache — system/detail-cache.ts — is the camera's: a baked height reads the detail itself)
-  functions.set("detailCacheRead", "fn detailCacheRead(q: vec3f) -> vec2f { return vec2f(0.0); }");
   const selected = new Map<string, string>();
   const add = (name: string) => {
     if (name === "cost" || selected.has(name)) return;
