@@ -91,9 +91,13 @@ describe.skipIf(!E2E)("the autopilot's new modes", () => {
     await app.js(`(() => { const C = __bh.camera.combat, A = C.def.anchor, q = C.world.targets[0], D = Math.PI / 180, R = 6371008.8;
       const h = Math.atan2(q.v[0], q.v[1]), e = q.p[0] - Math.sin(h) * 3000, n = q.p[1] - Math.cos(h) * 3000;
       __bh.game.flyAt(A.lat + n / (D * R), A.lon + e / (D * R * Math.cos(A.lat * D)), q.p[2] - C.world.groundZ(e, n), h / D, 230);
-      // (the placing let the intercept go: the rendezvous engaged again)
-      __bh.camera.jetModes.alt = Math.round(__bh.camera.geoNow().alt); __bh.camera.jetToggle("athr"); __bh.camera.tankerPending = q.id; return 1; })()`);
-    await app.waitFor(`__bh.camera.aar?.stage === "hose"`, 120_000);
+      // (the placing let the intercept go)
+      __bh.camera.jetModes.alt = Math.round(__bh.camera.geoNow().alt); __bh.camera.jetToggle("athr"); return 1; })()`);
+    // (a moment for the placing to settle, then the refuelling engaged again on the same tanker — a side given, so
+    // not taken as "off")
+    await Bun.sleep(600);
+    await app.js(`__bh.camera.tankerStart({ side: "right" })`);
+    await app.waitFor(`__bh.camera.aar?.stage === "hose"`, 150_000);
     await Bun.sleep(4000);
     await around(200, 8, 45);
     await shot("tanker");

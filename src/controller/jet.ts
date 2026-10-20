@@ -162,7 +162,8 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
   if (!jetReady(this)) {
     if (this.form && !formGrace(this.form)) this.formOff(t("Formation off — not flown as a plane"));
     if (this.icpt) this.icptOff(t("Intercept off — not flown as a plane"));
-    if (this.aar) this.aarOff(t("Refuelling off — not flown as a plane"));
+    // (the refuelling kept: a moment out of the plane's law — a placing, the flight mode switched — and it takes up
+    // again where it was, its rendezvous too; the ground or another autopilot let it go below)
     if (!this.form && (m.alt !== null || m.hdg !== null || m.spd !== null || m.ab)) this.jetModes = noJetModes();
     return none;
   }
@@ -175,7 +176,10 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
     if (this.form && (this.pilot.auto !== "none" || !formGrace(this.form)))
       this.formOff(this.pilot.auto !== "none" ? t("Formation off — the autopilot") : t("Formation off — on the ground"));
     if (this.icpt) this.icptOff(this.pilot.auto !== "none" ? t("Intercept off — the autopilot") : t("Intercept off — on the ground"));
-    if (this.aar) this.aarOff(this.pilot.auto !== "none" ? t("Refuelling off — the autopilot") : t("Refuelling off — on the ground"));
+    // (the refuelling let go by another autopilot or a real roll on the ground — not by a frame without the plane's
+    // figures, as just after a placing: taken up again)
+    if (this.aar && this.pilot.auto !== "none") this.aarOff(t("Refuelling off — the autopilot"));
+    else if (this.aar && this.rolling && f) this.aarOff(t("Refuelling off — on the ground"));
     m.alt = m.hdg = m.spd = null;
     this.jetCws.thr = Number.NaN;
     return none;
