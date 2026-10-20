@@ -347,6 +347,16 @@ __bh.graphicsDiagnostic().events.filter((e) => e.message.includes("after the fir
 ```
 *Used in:* `tests/e2e/gpu-startup.e2e.test.ts` (4 lines use it).
 
+### `__bh.entry` → object
+
+The way into the game from the menus (`src/ui/entry.ts`, PLAN-TITRE-AAA E10): a fade to black, the launch under it,
+a scene loading screen while the scene's tracer compiles, the black lifted and the HUD's start.
+
+| member | what it is |
+|---|---|
+| `busy` | the veil up (`[data-testid=entry]`, its `data-phase`: `in`, `loading`, `out`) |
+| `compile(ms)` | holds the scene tracer's loading stage `ms` long — the renderer raises it only when nothing else can draw (its general tracer draws meanwhile), so a fast machine never shows the loading screen: the tests' way to see it |
+
 ### `__bh.intro()` → object
 
 The intro (`src/intro/intro.ts`, PLAN-TITRE-AAA E1):

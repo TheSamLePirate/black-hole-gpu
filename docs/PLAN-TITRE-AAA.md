@@ -546,7 +546,7 @@ Chaque phase : un commit, une planche de captures (`docs/progress/title-aaa/`), 
 - Le Labo nettoyé ; la recherche commune.
 - Corrige le constat 6.
 
-### E10 — L'entrée en jeu (M)
+### E10 — L'entrée en jeu (M) — FAIT ([fiche](progress/title-aaa/E10.md), [planche](progress/title-aaa/E10.jpg) : le menu qui glisse, le fondu au noir, l'écran de chargement de scène, le démarrage du HUD, l'orbe dans la pastille)
 
 - La sortie du menu et le fondu au noir ; l'écran de chargement de scène (illustration, orbe, astuce du mode).
 - Le démarrage du HUD.

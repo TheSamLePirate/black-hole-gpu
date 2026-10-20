@@ -373,16 +373,8 @@ kbd {
 /* (the map open: in its free middle, above the timeline — not over the map's bar) */
 body.map-open .asset-pill { top: auto; bottom: 138px; left: calc(50% + (var(--fc-l, 0px) - var(--fc-r, 0px)) / 2); }
 .ap-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ap-spin {
-  flex: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(255, 179, 92, 0.25);
-  border-top-color: var(--accent);
-  animation: ld-rot 0.8s linear infinite;
-}
-@keyframes ld-rot { to { transform: rotate(360deg); } }
+/* (the loading orb at its head — PLAN-TITRE-AAA E10 —, in place of the spinner) */
+.ap-orb { flex: none; width: 20px; height: 20px; margin: -3px 0 -3px -2px; }
 .ap-bar { flex: none; width: 60px; height: 2px; border-radius: 2px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
 .ap-bar i { display: block; height: 100%; background: var(--accent); transform-origin: left; transform: scaleX(0); transition: transform 0.3s; }
 

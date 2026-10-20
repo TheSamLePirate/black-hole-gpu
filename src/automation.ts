@@ -60,6 +60,8 @@ export interface BhContext {
   boot(): BootReport;
   /** the intro (src/intro/intro.ts): where it stands */
   intro(): unknown;
+  /** the way into the game (ui/entry.ts, PLAN-TITRE-AAA E10): its veil up; a scene tracer's compile held `ms` */
+  entry: { readonly busy: boolean; compile(ms: number): boolean };
   settings: Settings;
   renderer: Renderer;
   camera: CameraController;
@@ -270,6 +272,7 @@ export function installBh(c: BhContext) {
       boot: () => c.boot(),
       /** the intro: what drew its background, the orb's state, its sequence played / passed, docked, lifted */
       intro: () => c.intro(),
+      entry: c.entry,
       /** the game's tools: __bh.game.help() */
       game: tools,
       /** the Kerr Bench: __bh.bench.run({ mode: "quick" }) → its report; scene(name) one scene's */

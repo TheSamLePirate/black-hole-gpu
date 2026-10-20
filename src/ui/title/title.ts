@@ -51,6 +51,8 @@ import {
   STARTS,
   WEATHERS,
 } from "./plane";
+import type { EntryShow } from "../entry";
+import type { TipSet } from "../pausemenu";
 import { CREDITS, whoOf } from "./credits";
 import { CRAFT, launchShip, type ShipItem, sheetLines, shipItems } from "./ship";
 
@@ -79,6 +81,9 @@ const P = {
     en: "The F-35B at the airfield chosen, lined up on its runway in use, on final or cruising, at the hour of its own day, under the weather chosen.",
   },
 } satisfies Record<string, Text>;
+
+/** a way to play's tips on the way in (E10): By plane's the F-35's */
+const TIPS_OF: Record<ModeId, TipSet> = { foot: "foot", plane: "jet", ship: "ship", free: "free" };
 
 /** On foot's and the free camera's words (E6) */
 const F = {
@@ -184,6 +189,9 @@ export interface TitleDeps {
   waiting(label: string | null): void;
   /** the game in progress, in a line (null: none started yet) */
   current(): string | null;
+  /** the way into the game (ui/entry.ts, E10): the launch under a fade to black, a scene loading screen, the HUD's
+   *  start — none: at once */
+  entry?(show: EntryShow, launch: () => void): Promise<void>;
 }
 
 export class TitleScreen {
@@ -277,7 +285,8 @@ export class TitleScreen {
     this.queued = null;
     if (q) {
       this.d.waiting(null);
-      this.run(q.a, q.vessel);
+      // (before the first image: the intro is the curtain — no entry of its own)
+      this.run(q.a, q.vessel, true);
     }
   }
 
@@ -292,15 +301,24 @@ export class TitleScreen {
     this.run(a, this.vessel);
   }
 
-  private run(a: Activity, vessel: VesselChoice) {
+  private run(a: Activity, vessel: VesselChoice, atOnce = false) {
     const g = this.game!;
     this.started = true;
-    this.close();
-    try {
-      a.run(g, { vessel });
-    } catch (e) {
-      g.toast((e as Error).message);
-    }
+    const go = () => {
+      this.close();
+      try {
+        a.run(g, { vessel });
+      } catch (e) {
+        g.toast((e as Error).message);
+      }
+    };
+    // (a panel opened, not a place reached — or the game behind the screen, Continue —: no curtain)
+    if (atOnce || a.opens || a === CONTINUE || !this.d.entry) return go();
+    // (the menu slides out while the black comes in: E10)
+    this.root?.classList.add("leaving");
+    const mode = this.lastMode?.id ?? "ship";
+    const art = (a.art && SCENE_THUMBS[a.art]) || MODE_ART[mode].wide;
+    void this.d.entry({ title: tr(a.title), art, tips: TIPS_OF[mode] }, go).catch((e) => g.toast((e as Error).message));
   }
 
   // ------------------------------------------------------------------ screens

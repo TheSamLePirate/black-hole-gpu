@@ -199,6 +199,53 @@
   .pls-explain { display: none; }
 }
 
+/* ---------------------------------------------------------------- the way into the game (PLAN-TITRE-AAA E10)
+   The menu slides out, the black comes in (400 ms); a scene loading screen while its tracer compiles; the black
+   lifts and the HUD lights up, element by element (600 ms). */
+.tt-root.leaving .tt-page { transform: translateX(-56px); opacity: 0; transition: transform 300ms var(--m-ease), opacity 260ms ease-in; }
+.en-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: #000;
+  opacity: 0;
+  transition: opacity 400ms ease-in;
+  pointer-events: auto;
+  display: grid;
+  place-items: center;
+}
+.en-veil.on { opacity: 1; }
+.en-veil.out { opacity: 0; transition: opacity 500ms ease-out; pointer-events: none; }
+.en-card { position: absolute; inset: 0; display: grid; place-items: center; animation: ts-in 400ms var(--m-ease) both; }
+.en-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.32; filter: blur(2px) saturate(0.9); }
+.en-card::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 55%, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.85) 70%); }
+.en-front { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 0 24px; text-align: center; max-width: 720px; }
+.en-title { margin: 0; font: 700 clamp(22px, 2.6vw, 34px) var(--m-f-title); letter-spacing: 0.24em; text-transform: uppercase; color: var(--m-warm); }
+.en-orb { width: 96px; height: 96px; }
+.en-stage { margin: 0; font: 500 13px var(--m-f-value); color: var(--m-dim); }
+.en-tip { margin: 22px 0 0; font: 400 15px / 1.5 var(--m-f-text); color: var(--m-ink); opacity: 0.85; }
+/* the HUD's start: each element lit in turn, with a flicker */
+body.hud-boot .fl-root > *, body.hud-boot canvas.fl-hud, body.hud-boot #topbar { animation: hud-on 520ms linear both; }
+body.hud-boot .fl-root > :nth-child(2) { animation-delay: 50ms; }
+body.hud-boot .fl-root > :nth-child(3) { animation-delay: 100ms; }
+body.hud-boot .fl-root > :nth-child(4) { animation-delay: 150ms; }
+body.hud-boot .fl-root > :nth-child(5) { animation-delay: 200ms; }
+body.hud-boot .fl-root > :nth-child(n + 6) { animation-delay: 250ms; }
+body.hud-boot canvas.fl-hud { animation-delay: 80ms; }
+body.hud-boot #topbar { animation-delay: 30ms; }
+@keyframes hud-on {
+  0% { opacity: 0; }
+  30% { opacity: 0.85; }
+  40% { opacity: 0.25; }
+  58% { opacity: 1; filter: brightness(1.6); }
+  100% { opacity: 1; filter: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tt-root.leaving .tt-page { transform: none; transition: none; }
+  body.hud-boot .fl-root > *, body.hud-boot canvas.fl-hud, body.hud-boot #topbar { animation: none; }
+  .en-veil, .en-veil.out { transition-duration: 80ms; }
+}
+
 /* paused: the HUD's clocks and the toolbar dim under the menu */
 body.paused .fl-root, body.paused #topbar { filter: saturate(0.6) brightness(0.8); }
 /* (the pause: the HUD put away under its column and its context — the scene, not the instruments, behind) */

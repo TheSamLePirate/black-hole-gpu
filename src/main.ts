@@ -55,6 +55,7 @@ import { installPwa } from "./pwa";
 import { PauseMenu } from "./ui/pause";
 import type { PauseContext } from "./ui/pausemenu";
 import { PlayerSettings } from "./ui/settings/player";
+import { GameEntry } from "./ui/entry";
 import { ControlsScreen } from "./ui/controls-screen";
 import { PadsScreen } from "./ui/pads-screen";
 import type { SceneGroup } from "./ui/schema";
@@ -403,11 +404,15 @@ async function main() {
   // link named a scene, a moment, a mission, the benchmark or a room
   let titleHold: (on: boolean) => void = () => {};
   let titleCurrent: () => string | null = () => null;
+  // the way into the game from the menus (ui/entry.ts, PLAN-TITRE-AAA E10): a fade to black, a scene loading
+  // screen while its tracer compiles, the HUD's start
+  const gameEntry = new GameEntry();
   const titleScreen = new TitleScreen({
     version: () => appVersion,
     hold: (on) => titleHold(on),
     waiting: (label) => splash.launching(label),
     current: () => titleCurrent(),
+    entry: (show, launch) => gameEntry.play(show, launch),
   });
   {
     const p = new URLSearchParams(location.hash.slice(1));
@@ -6504,6 +6509,18 @@ async function main() {
   installBh({
     boot: () => bootReport(firstFrame ? firstFrameAt : null),
     intro: () => splash.status(),
+    // the way into the game (ui/entry.ts, E10): its veil up or not; `compile(ms)` holds the scene tracer's stage that
+    // long — the scene loading screen seen on a machine that compiles too fast to show it
+    entry: {
+      get busy() {
+        return gameEntry.busy;
+      },
+      compile: (ms: number) => {
+        loading.stage("scene-tracer", t("Compiling the ray tracer for this scene"), { indeterminate: true, eta: ms / 1000 });
+        setTimeout(() => loading.done("scene-tracer"), ms);
+        return true;
+      },
+    },
     settings,
     renderer,
     camera,

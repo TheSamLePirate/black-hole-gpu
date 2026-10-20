@@ -8,7 +8,7 @@
 import { t, tf } from "../i18n";
 import { loading, type Stage } from "../loading";
 import { store } from "../util/storage";
-import { type OrbState, orbStateFor } from "./orb";
+import { drawOrb, type OrbState, orbStateFor } from "./orb";
 import { IntroPainter } from "./painter";
 import type { IntroMessage } from "./worker";
 
@@ -352,20 +352,27 @@ function info(s: Stage, now: number) {
   return `${Math.floor(100 * loading.fracOf(s, now))} %`;
 }
 
-/** Assets loaded on demand, after the start: a small pill with their progress. */
+/** Assets loaded on demand, after the start: a small pill with their progress — the loading orb at its head
+ *  (PLAN-TITRE-AAA E10: the intro's orb, its state from the stages: a compile solving, a download searching). */
 class AssetPill {
   private root = el("div", "asset-pill");
   private label = el("span", "ap-label");
   private bar = el("i", "");
+  private orb = document.createElement("canvas");
+  private orbCtx: CanvasRenderingContext2D | null = null;
   private on = false;
   private raf = 0;
+  private t0 = performance.now();
 
   constructor() {
     this.root.setAttribute("role", "status");
     this.root.setAttribute("aria-live", "polite");
     const track = el("span", "ap-bar");
     track.append(this.bar);
-    this.root.append(el("b", "ap-spin"), this.label, track);
+    this.orb.className = "ap-orb";
+    this.orb.width = this.orb.height = 40;
+    this.orbCtx = this.orb.getContext("2d");
+    this.root.append(this.orb, this.label, track);
   }
 
   start() {
@@ -393,6 +400,20 @@ class AssetPill {
     }
     const s = pending[0]!;
     const now = performance.now();
+    if (this.orbCtx) {
+      this.orbCtx.clearRect(0, 0, 40, 40);
+      drawOrb(
+        this.orbCtx,
+        orbStateFor(
+          pending.map((x) => x.id),
+          false,
+        ),
+        0,
+        0,
+        40,
+        (now - this.t0) / 1000,
+      );
+    }
     this.label.textContent = `${s.label} · ${info(s, now)}`;
     this.bar.style.transform = `scaleX(${loading.fracOf(s, now).toFixed(3)})`;
     this.raf = requestAnimationFrame(this.frame);
