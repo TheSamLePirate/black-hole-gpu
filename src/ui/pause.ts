@@ -10,7 +10,7 @@
 import { downloadGpuDiagnostic } from "../gpu-diagnostics";
 import { autosave, slots } from "../game/save";
 import type { GameTools } from "../game/tools";
-import { tr, type Text } from "../i18n";
+import { onLangChange, tr, type Text } from "../i18n";
 import { button, el, h } from "./kit";
 import type { MenuAction } from "./menu/actions";
 import { glyph, onInputChange, watchInput } from "./menu/glyphs";
@@ -114,6 +114,7 @@ export class PauseMenu {
   private router: MenuRouter | null = null;
   private ctxEl: HTMLElement | null = null;
   private unInput: (() => void) | null = null;
+  private unLang: (() => void) | null = null;
   /** in a room: the simulation not held */
   private live = false;
   private tipN = Math.floor(Math.random() * 100);
@@ -160,6 +161,10 @@ export class PauseMenu {
     this.unInput = onInputChange(() => {
       for (const e of this.root?.querySelectorAll<HTMLElement & { refill?: () => void }>(".m-prompts") ?? []) e.refill?.();
     });
+    this.unLang = onLangChange(() => {
+      this.router?.refresh();
+      this.fillContext();
+    });
   }
 
   close() {
@@ -169,6 +174,8 @@ export class PauseMenu {
     this.root = this.ctxEl = null;
     this.unInput?.();
     this.unInput = null;
+    this.unLang?.();
+    this.unLang = null;
     const r = this.router;
     this.router = null;
     r?.close(true);

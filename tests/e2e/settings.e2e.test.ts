@@ -1,11 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { SETTING_COSTS } from "../../src/ui/settings/costs";
 import { App, E2E, stopServer } from "./lib/app";
 
 // The player's settings (PLAN-TITRE-AAA E9), by real events: opened from the title — a row per setting, the one
 // focused explained, → changing it at once, R resetting the tab —; the tabs by Q / E (the quality's preset by →);
 // a risky setting (the render scale) back by itself after 15 s, kept when kept; the common search (a setting here,
 // the hole's spin in the Lab, opened on it); from the pause, the Controls tab's keys screen — its back these
-// settings, theirs the pause. SHOTS=1: its screens captured in docs/progress/title-aaa.
+// settings, theirs the pause; a graphics setting's GPU cost; the language changed in place, without a reload.
+// SHOTS=1: its screens captured in docs/progress/title-aaa.
 
 const SHOTS = process.env.SHOTS === "1" ? "docs/progress/title-aaa" : process.env.SHOTS;
 
@@ -134,6 +136,56 @@ describe.skipIf(!E2E)("the player's settings", () => {
     await app.waitFor(`!document.querySelector("[data-testid=settings]") && !!document.querySelector("[data-testid=pause-resume]")`, 5000);
     await app.press("Escape");
     await app.waitFor(`!document.querySelector("[data-testid=pause]")`, 5000);
+    expect(app.cdp.errors).toEqual([]);
+  });
+
+  test("a graphics setting's GPU cost, explained (E9b)", async () => {
+    const keys = Object.keys(SETTING_COSTS);
+    expect(keys.length).toBeGreaterThan(0);
+    await app.js(`(__bh.menu.settings("graphics"), true)`);
+    await app.waitFor(`__bh.menu.state().settings === "graphics"`, 5000);
+    await settle();
+    // (the costliest measured first — the render scale —; the pointer out of the rows: the explanation the focus's)
+    const order = keys.sort((a, b) => {
+      const ca = SETTING_COSTS[a as keyof typeof SETTING_COSTS]!,
+        cb = SETTING_COSTS[b as keyof typeof SETTING_COSTS]!;
+      return cb.heavyMs / cb.lightMs - ca.heavyMs / ca.lightMs;
+    });
+    const k = await app.js<string>(
+      `${JSON.stringify(order)}.find((k) => !!document.querySelector("[data-testid=setting-" + k + "]")) ?? ""`,
+    );
+    expect(k).not.toBe("");
+    await app.cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 1400, y: 880 });
+    await app.js(`(document.querySelector("[data-testid=setting-${k}]").focus(), true)`);
+    await settle();
+    const cost = await app.js<{ dots: string; text: string; title: string }>(
+      `(() => { const c = document.querySelector("[data-testid=settings-cost]"); return { dots: c.dataset.dots, text: c.textContent, title: document.querySelector("[data-testid=settings-explain] h3").textContent }; })()`,
+    );
+    console.log(`  ${k} (${cost.title}): ${cost.text}`);
+    expect(Number(cost.dots)).toBeGreaterThanOrEqual(1);
+    expect(cost.text).toMatch(/GPU/);
+    await shot("E9b-1-cout");
+  });
+
+  test("the language changed in place: no reload, the settings and the Lab drawn again in it (E9b)", async () => {
+    await app.click("[data-testid=settings-tab-interface]");
+    await settle();
+    const origin = await app.js<number>("performance.timeOrigin");
+    await app.js(`(document.querySelector("[data-testid=setting-language]").focus(), true)`);
+    await app.press("ArrowRight");
+    await app.waitFor(`document.documentElement.lang === "fr"`, 5000);
+    await settle();
+    expect(await app.js<number>("performance.timeOrigin")).toBe(origin);
+    expect(await app.js<string>(`document.querySelector("[data-testid=settings] .pz-title").textContent`)).toBe("Réglages");
+    expect(await app.js<string>(`document.querySelector("#panel h2").textContent`)).toBe("Labo");
+    await shot("E9b-2-langue");
+    // (back to English, still the same page)
+    await app.js(`(document.querySelector("[data-testid=setting-language]").focus(), true)`);
+    await app.press("ArrowLeft");
+    await app.waitFor(`document.documentElement.lang === "en"`, 5000);
+    expect(await app.js<number>("performance.timeOrigin")).toBe(origin);
+    expect(await app.js<string>(`document.querySelector("[data-testid=settings] .pz-title").textContent`)).toBe("Settings");
+    await app.press("Escape");
     expect(app.cdp.errors).toEqual([]);
   });
 });

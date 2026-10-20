@@ -6,7 +6,7 @@
 // button), prompts by the device used last.
 
 import markUrl from "../../../assets/title/kerr-mark.webp";
-import { lang, setLang, tr, type Text } from "../../i18n";
+import { lang, onLangChange, setLang, tr, type Text } from "../../i18n";
 import { autosave, type GameSave, slots } from "../../game/save";
 import { button, el, h } from "../kit";
 import type { MenuAction } from "../menu/actions";
@@ -124,7 +124,10 @@ const M = {
   credits: { fr: "Crédits", en: "Credits" },
   creditsHint: { fr: "Qui a fait le jeu, et tout ce sur quoi il repose", en: "Who made the game, and everything it is built on" },
   language: { fr: "Langue", en: "Language" },
-  languageHint: { fr: "La page se recharge dans l'autre langue", en: "The page reloads in the other language" },
+  languageHint: {
+    fr: "Les menus changent tout de suite ; le HUD et les panneaux du jeu déjà ouverts, au prochain chargement",
+    en: "The menus change at once; the game's HUD and panels already built, at the next load",
+  },
   benchTitle: { fr: "Kerr Bench", en: "Kerr Bench" },
   benchText: {
     fr: "La page va se recharger pour mesurer cette machine : le tracé de rayons à chaque profondeur, puis les mondes, les vaisseaux, la météo et les vols. La partie en cours est sauvegardée.",
@@ -206,6 +209,7 @@ export class TitleScreen {
   /** the mode chosen last (its card's picture grows into its screen) */
   private lastMode: Mode | null = null;
   private unInput: (() => void) | null = null;
+  private unLang: (() => void) | null = null;
 
   constructor(private d: TitleDeps) {}
 
@@ -240,11 +244,15 @@ export class TitleScreen {
     this.unInput = onInputChange(() => {
       for (const e of this.root?.querySelectorAll<HTMLElement & { refill?: () => void }>(".m-prompts") ?? []) e.refill?.();
     });
+    // (the language changed: the screen shown drawn again in it)
+    this.unLang = onLangChange(() => this.router?.refresh());
   }
 
   close() {
     if (!this.root) return;
     this.onBack = null;
+    this.unLang?.();
+    this.unLang = null;
     this.unInput?.();
     this.unInput = null;
     const r = this.router;
@@ -443,11 +451,8 @@ export class TitleScreen {
           label: l.toUpperCase(),
           on: lang === l,
           title: l === "fr" ? "Français" : "English",
-          onClick: () => {
-            if (lang === l) return;
-            setLang(l);
-            location.reload();
-          },
+          // (the language changed in place: the screens listening redraw themselves — E9b)
+          onClick: () => setLang(l),
         });
         b.dataset.navSkip = "";
         return b;
@@ -1399,7 +1404,7 @@ export class TitleScreen {
         list.append(b);
       }
     }
-    // (the language: a row of its own — the page reloads in the other one)
+    // (the language: a row of its own — the menus redrawn in the other one, no reload: E9b)
     const langs = [
       { id: "fr" as const, label: { fr: "Français", en: "Français" } },
       { id: "en" as const, label: { fr: "English", en: "English" } },
@@ -1408,10 +1413,7 @@ export class TitleScreen {
       tr(M.language),
       "title-more-language",
       () => tr(langs.find((x) => x.id === lang)!.label),
-      () => {
-        setLang(lang === "fr" ? "en" : "fr");
-        location.reload();
-      },
+      () => setLang(lang === "fr" ? "en" : "fr"),
       () => {},
     );
     const showLang = () => show({ title: M.language, hint: M.languageHint, art: markUrl });

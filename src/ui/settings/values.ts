@@ -67,3 +67,13 @@ export function numberAt(d: NumberDef, share: number): number {
   if (d.scale === "log") return fromSlider(d, f * 1000);
   return fromSlider(d, d.min + f * (d.max - d.min));
 }
+
+/** A setting's GPU cost (ui/settings/costs.ts) as a share of its view's frame: what its heavy value adds. */
+export function costShare(c: { lightMs: number; heavyMs: number }): number {
+  return c.lightMs > 0 ? (c.heavyMs - c.lightMs) / c.lightMs : 0;
+}
+
+/** The cost's dots (0…5): under 3 % none (within the measure's noise), then 10, 25, 50, 100 % of the frame. */
+export function costDots(share: number): number {
+  return share < 0.03 ? 0 : share < 0.1 ? 1 : share < 0.25 ? 2 : share < 0.5 ? 3 : share < 1 ? 4 : 5;
+}

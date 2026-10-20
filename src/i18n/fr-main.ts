@@ -1,5 +1,7 @@
 // French for the app's messages, the map and the dialogs (keyed by the English: see src/i18n.ts).
 export default {
+  "The menus are in this language now; the HUD and the panels already built follow at the next load":
+    "Les menus sont maintenant dans cette langue ; le HUD et les panneaux déjà construits suivront au prochain chargement",
   "a rocket — the stick turns it, the throttle pushes along the nose":
     "une fusée — le manche la fait pivoter, les gaz poussent dans l'axe du nez",
   "a plane — the control surfaces; let go, the flight path is held (F: next)":

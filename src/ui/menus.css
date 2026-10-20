@@ -175,6 +175,8 @@
 .pls-default { margin: 0; font: 600 14px var(--m-f-value); color: var(--m-ink); }
 .pls-note { margin: 0; font: 400 13px / 1.5 var(--m-f-text); color: var(--m-dim); }
 .pls-risky { color: var(--m-amber); }
+.pls-cost { margin: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; font: 500 13.5px var(--m-f-text); color: var(--m-ink); }
+.pls-dots { font: 600 14px var(--m-f-value); letter-spacing: 0.18em; color: var(--m-amber); }
 .m-item.pls-lab { margin-top: 6px; border-top: 1px solid var(--m-line); padding-top: 14px; }
 .pls-keep {
   position: absolute;

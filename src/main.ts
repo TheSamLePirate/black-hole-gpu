@@ -249,7 +249,7 @@ import { installVramHook } from "./bench/vram";
 import { BenchScreen } from "./ui/bench";
 import { setSteady } from "./ui/clock";
 import { applyPalette } from "./ui/hudkit";
-import { lang, t, tf, tr } from "./i18n";
+import { lang, onLangChange, t, tf, tr } from "./i18n";
 import { ORDERS, type OrderId } from "./game/orders";
 import { FORMATION_IDS, FORMATIONS } from "./game/formations";
 import { TrafficFeed } from "./traffic/feed";
@@ -3109,6 +3109,12 @@ async function main() {
     playerSettings.openSearch();
     return true;
   };
+  // the language changed in place (PLAN-TITRE-AAA E9b): the menus redraw themselves, the Lab is built again; the HUD
+  // and the panels built before keep the other one until the page's next load — said once the game is there
+  onLangChange(() => {
+    panel.relabel();
+    if (firstFrame) panel.toast(t("The menus are in this language now; the HUD and the panels already built follow at the next load"));
+  });
   // the controllers screen (ui/pads-screen.ts — PLAN-HOTAS H4): from the controls screen, back to it
   const padsScreen = new PadsScreen({ pads: camera.padControls, back: () => controlsScreen.open(), toast: (t) => panel.toast(t) });
   // (made at its first opening: the game's tools are built further down)

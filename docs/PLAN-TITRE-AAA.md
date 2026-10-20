@@ -540,6 +540,8 @@ Chaque phase : un commit, une planche de captures (`docs/progress/title-aaa/`), 
 
 ### E9 — Les réglages : l'écran joueur et le Labo (L) — FAIT ([fiche](progress/title-aaa/E9.md), [planche](progress/title-aaa/E9.jpg) : 8 onglets et 157 réglages rangés depuis le schéma, l'explication, le retour des réglages risqués, la recherche commune, le Labo ; constat 6 corrigé)
 
+- **E9b** — FAIT ([fiche](progress/title-aaa/E9b.md), [planche](progress/title-aaa/E9b.jpg)) : le coût GPU de chaque réglage graphique, mesuré sur kerr-mini (`scripts/settings-cost.ts` → `src/ui/settings/costs.ts`), affiché dans l'explication ; la langue changée sans recharger la page (les menus et le Labo redessinés, le HUD au prochain chargement).
+
 - L'étiquetage `menu` dans `schema.ts`, avec un test qui vérifie que chaque contrôle est rangé.
 - L'écran plein écran, le panneau d'explication, le retour automatique des réglages risqués.
 - Commandes et manettes réunis.

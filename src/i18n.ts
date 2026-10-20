@@ -42,10 +42,22 @@ export let lang: Lang = initial();
 // (the page says its language: screen readers, hyphenation, the browser's translation offer)
 if (typeof document !== "undefined") document.documentElement.lang = lang;
 
-/** Chooses the language (kept for the next visits). */
+const langListeners = new Set<(l: Lang) => void>();
+
+/** Chooses the language (kept for the next visits): the page says it, the menus listening redraw themselves
+ *  (PLAN-TITRE-AAA E9b — what was built before in the other language follows at the next load). */
 export function setLang(l: Lang) {
+  if (l === lang) return;
   lang = l;
   store.set("kerr.lang", l);
+  if (typeof document !== "undefined") document.documentElement.lang = l;
+  for (const f of [...langListeners]) f(l);
+}
+
+/** Told when the language changes (a menu redrawing itself); the unsubscription returned. */
+export function onLangChange(f: (l: Lang) => void): () => void {
+  langListeners.add(f);
+  return () => langListeners.delete(f);
 }
 
 /** A text in the interface's language. */

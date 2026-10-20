@@ -6,7 +6,7 @@
 // tab; ⌘K (or /) searches both screens; LAB › opens the drawer of every control. The controls' own screens (the
 // keys, the pads) from its Controls tab. Which settings it shows: ui/settings/menu.ts — the schema the one source.
 
-import { lang, setLang, t, type Text, tr } from "../../i18n";
+import { lang, onLangChange, setLang, t, type Text, tr } from "../../i18n";
 import { QUALITY, type Quality, type Settings } from "../../settings";
 import { button, el, h } from "../kit";
 import type { MenuAction } from "../menu/actions";
@@ -26,7 +26,8 @@ import {
   rowsOf,
   searchSettings,
 } from "./menu";
-import { formatValue, numberAt, sameValue, sliderPercent, stepNumber } from "./values";
+import { COSTS_MEASURED, SETTING_COSTS } from "./costs";
+import { costDots, costShare, formatValue, numberAt, sameValue, sliderPercent, stepNumber } from "./values";
 
 const T = {
   title: { fr: "Réglages", en: "Settings" },
@@ -46,8 +47,8 @@ const T = {
   retrace: { fr: "S'applique tout de suite : l'image se recalcule.", en: "Applies at once: the picture is traced again." },
   risky: { fr: "Revient de lui-même après {0} s si vous ne le gardez pas.", en: "Comes back by itself after {0} s unless you keep it." },
   reload: {
-    fr: "La page se recharge dans l'autre langue (la partie est sauvegardée).",
-    en: "The page reloads in the other language (the game is saved).",
+    fr: "Les menus changent tout de suite, sans recharger la page. Le HUD et les panneaux du jeu déjà construits suivront au prochain chargement.",
+    en: "The menus change at once, without reloading the page. The game's HUD and panels already built follow at the next load.",
   },
   keep: { fr: "Garder ce réglage ?", en: "Keep this setting?" },
   keepIn: { fr: "retour dans {0} s", en: "back in {0} s" },
@@ -66,6 +67,20 @@ const T = {
   usbHint: {
     fr: "Une manette que le navigateur ne voit pas (Xbox 360 filaire)",
     en: "A controller the browser does not see (wired Xbox 360)",
+  },
+  cost: { fr: "Coût GPU", en: "GPU cost" },
+  costLine: {
+    fr: "{0} → {1} : +{2} ms par image (± {5}), +{3} %, vue « {4} »",
+    en: "{0} → {1}: +{2} ms a frame (± {5}), +{3} %, view “{4}”",
+  },
+  costNone: { fr: "négligeable (moins de 3 % de l'image, vue « {0} »)", en: "negligible (under 3 % of the frame, view “{0}”)" },
+  costLess: {
+    fr: "{0} → {1} : plus léger, −{2} ms par image (−{3} %), vue « {4} »",
+    en: "{0} → {1}: lighter, −{2} ms a frame (−{3} %), view “{4}”",
+  },
+  costWhere: {
+    fr: "Mesuré sur {0}, le {1}, à l'image de référence du Kerr Bench (~1,44 Mpx, l'horloge tenue).",
+    en: "Measured on {0}, {1}, at the Kerr Bench's reference frame (~1.44 Mpx, the clock held).",
   },
   quality: {
     fr: "Le préréglage d'ensemble : les rayons par image, les échantillons de l'image convergée, l'échelle de rendu. JEU vise la fluidité (≈ 60 i/s), ULTRA la précision.",
@@ -107,6 +122,7 @@ export class PlayerSettings {
   private root: HTMLElement | null = null;
   private router: MenuRouter | null = null;
   private unInput: (() => void) | null = null;
+  private unLang: (() => void) | null = null;
   private tab: PlayerTab = "game";
   private query = "";
   private onBack: (() => void) | null = null;
@@ -139,6 +155,8 @@ export class PlayerSettings {
     this.unInput = onInputChange(() => {
       for (const e of this.root?.querySelectorAll<HTMLElement & { refill?: () => void }>(".m-prompts") ?? []) e.refill?.();
     });
+    // (the language changed — here, by its row —: these settings drawn again in it)
+    this.unLang = onLangChange(() => this.router?.refresh());
   }
 
   /** The search, from ⌘K: the screen opened on it. */
@@ -154,6 +172,8 @@ export class PlayerSettings {
     this.root = null;
     this.unInput?.();
     this.unInput = null;
+    this.unLang?.();
+    this.unLang = null;
     const r = this.router;
     this.router = null;
     r?.close(true);
@@ -441,7 +461,6 @@ export class PlayerSettings {
     if (k === "@language") {
       const i = LANGUAGES.findIndex((x) => x.id === lang);
       setLang(LANGUAGES[(i + dir + LANGUAGES.length) % LANGUAGES.length]!.id);
-      location.reload();
       return;
     }
     const d = defOf(k)!;
@@ -523,6 +542,43 @@ export class PlayerSettings {
     extra.push(h("p", { class: "pls-default" }, el("span", "pz-k", tr(T.byDefault)), this.plain(d, def)));
     extra.push(el("p", "pls-note", tr(d.effect === "none" || d.effect === "display" ? T.now : T.retrace)));
     if (RISKY.includes(k)) extra.push(el("p", "pls-note pls-risky", fill(tr(T.risky), String(REVERT_S))));
+    // (its GPU cost, where it was measured: ui/settings/costs.ts, written by scripts/settings-cost.ts)
+    const c = SETTING_COSTS[d.key];
+    if (c) {
+      const share = costShare(c);
+      const n = costDots(share);
+      // (a heavy value that costs less — the relief: the rays stop on the ground sooner —: said so)
+      const line = n
+        ? fill(
+            tr(T.costLine),
+            this.plain(d, c.light),
+            this.plain(d, c.heavy),
+            (c.heavyMs - c.lightMs).toFixed(1),
+            String(Math.round(100 * share)),
+            c.view,
+            c.noise.toFixed(1),
+          )
+        : share <= -0.03
+          ? fill(
+              tr(T.costLess),
+              this.plain(d, c.light),
+              this.plain(d, c.heavy),
+              (c.lightMs - c.heavyMs).toFixed(1),
+              String(Math.round(-100 * share)),
+              c.view,
+            )
+          : fill(tr(T.costNone), c.view);
+      extra.push(
+        h(
+          "p",
+          { class: "pls-cost", "data-testid": "settings-cost", "data-dots": String(n) },
+          el("span", "pz-k", tr(T.cost)),
+          el("b", "pls-dots", "●".repeat(n) + "○".repeat(5 - n)),
+          el("span", "", line),
+        ),
+        el("p", "pls-note", fill(tr(T.costWhere), COSTS_MEASURED.machine, COSTS_MEASURED.date)),
+      );
+    }
     const opt = d.type === "choice" ? (d as ChoiceDef).options.find((o) => sameValue(o.value, this.d.settings[d.key])) : null;
     const text = [d.help ? t(d.help) : "", opt?.hint ? `${t(opt.label)} : ${t(opt.hint)}` : ""].filter(Boolean).join("\n\n");
     this.explainText(explain, t(d.label), text, extra);

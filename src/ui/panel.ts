@@ -90,6 +90,15 @@ export class SettingsPanel {
     this.toastEl = h("div", { class: "sp-toasts", "aria-live": "polite" });
     document.body.append(this.tooltip, this.toastEl);
     this.build();
+    // tooltips (delegated: once, the panel rebuilt in place keeps them)
+    this.root.addEventListener("pointerover", (e) => {
+      const t = (e.target as HTMLElement).closest<HTMLElement>("[data-help]");
+      if (t) this.showTooltip(t);
+    });
+    this.root.addEventListener("pointerout", (e) => {
+      const t = (e.target as HTMLElement).closest<HTMLElement>("[data-help]");
+      if (t && !t.contains(e.relatedTarget as Node)) this.tooltip.classList.remove("show");
+    });
     if (this.isOpen) this.unEscape = onEscape(() => this.toggle(false));
     addEventListener("keydown", this.onKey);
     addEventListener("pointerup", () => this.commit());
@@ -112,6 +121,14 @@ export class SettingsPanel {
   /** the quality preset the settings match now (null: edited by hand) */
   qualityNow(): Quality | null {
     return this.matchingQuality();
+  }
+
+  /** Built again in place, in the language chosen now (PLAN-TITRE-AAA E9b: the language without a reload) — its
+   *  search, its tab and its open state kept. */
+  relabel() {
+    const q = this.searchInput?.value ?? "";
+    this.build();
+    this.searchInput.value = q;
   }
 
   /** The Lab opened (PLAN-TITRE-AAA E9: from the player's screen, its search), on a search when one is given. */
@@ -362,16 +379,6 @@ export class SettingsPanel {
     this.renderTabs();
     this.renderBody();
     this.updateHistoryButtons();
-
-    // tooltips (delegated)
-    this.root.addEventListener("pointerover", (e) => {
-      const t = (e.target as HTMLElement).closest<HTMLElement>("[data-help]");
-      if (t) this.showTooltip(t);
-    });
-    this.root.addEventListener("pointerout", (e) => {
-      const t = (e.target as HTMLElement).closest<HTMLElement>("[data-help]");
-      if (t && !t.contains(e.relatedTarget as Node)) this.tooltip.classList.remove("show");
-    });
   }
 
   private showTooltip(t: HTMLElement) {
