@@ -7463,6 +7463,22 @@ async function main() {
       settings.vessel = v;
       onSettingsChange(["vessel"]);
     };
+    /** the craft chosen on the title (by ship): set again once the game's world is loaded — a scene sets its own */
+    let shipChoice: Settings["vessel"] | null = null;
+    /** a placement in the craft chosen, in ship mode */
+    const inShip = (f: () => string) =>
+      void placeShip(() => {
+        setGameMode("ship", true);
+        if (shipChoice) {
+          setVessel(shipChoice);
+          // (the switch now — the flight's step would make it next frame, after the placement: the craft left
+          // would be the one placed)
+          const why = camera.switchVessel(shipChoice);
+          if (why) panel.toast(why);
+        }
+        shipChoice = null;
+        return f();
+      });
     // the game, as the title screen launches things in it (ui/title/activities.ts)
     const titleGame: TitleGame = {
       resume: () => {},
@@ -7503,13 +7519,21 @@ async function main() {
         missionSelect.open();
       },
       scene: (name) => panel.applyScene(name),
-      orbit: (body, altKm) =>
-        void placeShip(() => {
-          setGameMode("ship", true);
-          return tools.orbit(body, { altKm });
-        }),
-      vessel: (v) => setVessel(v),
-      place: () => placePanel.open(),
+      orbit: (body, altKm) => inShip(() => tools.orbit(body, { altKm })),
+      land: (body, lat, lon) => inShip(() => tools.land(body, lat, lon)),
+      near: (body, altKm) => inShip(() => tools.near(body, { altKm })),
+      wormhole: (side) => inShip(() => tools.wormhole(side)),
+      vessel: (v) => {
+        shipChoice = v;
+        setVessel(v);
+      },
+      place: () => {
+        // (the game's world loaded first — its scene sets its own craft —, then the one chosen)
+        atlasReady();
+        if (shipChoice) setVessel(shipChoice);
+        shipChoice = null;
+        placePanel.open();
+      },
       atlas: () => atlas.open(),
       scenes: (group) => scenes.open("", group as SceneGroup | undefined),
       photo: () => void setGameMode("photo"),

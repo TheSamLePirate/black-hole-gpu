@@ -56,7 +56,7 @@ describe.skipIf(!E2E)("the title screen", () => {
     await app.press("Enter");
     await app.waitFor(`document.querySelector("[data-screen='mode:ship']")`, 3000);
     await Bun.sleep(400);
-    expect(await focused()).toBe("title-act-ship-orbit");
+    expect(await focused()).toBe("title-ship-dest-earth-orbit");
     // (the craft by the shoulder buttons' keys: Q/E — A/E on AZERTY)
     // (a launch in the craft chosen: its turntable shown — E3 —, turning)
     expect(await app.js<boolean>(`document.querySelector(".tt-preview-frame").classList.contains("turning")`)).toBe(true);
@@ -86,7 +86,7 @@ describe.skipIf(!E2E)("the title screen", () => {
     await app.waitFor(`document.querySelector("[data-screen='mode:ship']")`, 3000);
     // (the screens' change — a View Transition — over before the next click)
     await Bun.sleep(500);
-    await app.click("[data-testid=title-act-ship-orbit]");
+    await app.click("[data-testid=title-ship-dest-earth-orbit]");
     expect(await app.js<boolean>(shown)).toBe(false);
     await app.waitFor(`!document.querySelector(".in-note")?.hidden`, 2000);
     await shot("E2-5-lancement-attendu");

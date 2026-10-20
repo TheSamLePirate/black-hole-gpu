@@ -56,7 +56,7 @@ describe.skipIf(!E2E)("the game controller in the menus", () => {
     await press(0); // A: the mode's screen
     await app.waitFor(`!!document.querySelector("[data-screen='mode:ship']")`);
     await Bun.sleep(600);
-    expect(await focused()).toBe("title-act-ship-orbit");
+    expect(await focused()).toBe("title-ship-dest-earth-orbit");
     await press(0); // A: launched
     await app.waitFor("__bh.camera.piloting", 30_000);
     await press(9); // Start

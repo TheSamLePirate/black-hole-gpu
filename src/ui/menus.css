@@ -99,17 +99,20 @@ body.title-open #overlay, body.title-open .sp-toasts, body.title-open #hint, bod
 .ms-side { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 .ms-title { font-size: 16px; letter-spacing: 0.32em; margin-bottom: 6px; }
 .ms-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
-.ms-item {
+/* (.k-btn.ms-item: over the kit's button whatever the bundle's order — the labels left, whole, the tagline under;
+   PLAN-TITRE-AAA finding 7) */
+.k-btn.ms-item {
   position: relative;
   justify-content: flex-start;
   flex-direction: column;
   align-items: flex-start;
   gap: 3px;
-  padding: 10px 14px 10px 20px;
+  padding: 10px 52px 10px 20px;
   font-size: 13.5px;
   letter-spacing: 0.14em;
   white-space: normal;
   text-align: left;
+  width: 100%;
 }
 .ms-item.on, .ms-item:focus, .ms-item:hover:not(:disabled) { color: #fff; border-color: var(--k-on-edge); background: var(--k-on-bg); box-shadow: 0 0 14px rgba(111, 210, 255, 0.2) inset; outline: none; }
 .ms-item.on::before { content: "▸"; position: absolute; left: 6px; top: 10px; color: var(--k-on); }

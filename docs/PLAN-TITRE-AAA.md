@@ -516,7 +516,7 @@ Chaque phase : un commit, une planche de captures (`docs/progress/title-aaa/`), 
 - Vol libre (départ, aérodrome, heure, météo), Combat, École de vol, Défis.
 - Les modales actuelles deviennent des pages du routeur.
 
-### E5 — En vaisseau (M)
+### E5 — En vaisseau (M) — FAIT ([fiche](progress/title-aaa/E5.md), [planche](progress/title-aaa/E5.jpg) : le hangar, les fiches, les missions par vaisseau, les sols fermés à l'Endurance ; le vaisseau choisi enfin celui qu'on place ; constat 7 corrigé)
 
 - Le hangar (les rotations), les fiches, les missions par vaisseau, les destinations libres compatibles.
 - Corrige le constat 7 (les libellés des missions).

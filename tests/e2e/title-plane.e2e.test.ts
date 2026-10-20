@@ -19,7 +19,7 @@ describe.skipIf(!E2E)("by plane, on the title", () => {
   });
 
   const focused = () => app.js<string>("document.activeElement?.dataset.testid ?? ''");
-  const tab = () => app.js<string>(`document.querySelector("[data-mode=plane]")?.dataset.tab ?? ""`);
+  const tab = () => app.js<string>(`document.querySelector(".tt-root [data-mode=plane]")?.dataset.tab ?? ""`);
   const settle = () => Bun.sleep(500);
   const shot = async (name: string) => {
     if (!SHOTS) return;
@@ -32,7 +32,7 @@ describe.skipIf(!E2E)("by plane, on the title", () => {
     await app.waitFor(`!!document.querySelector("[data-testid=title-mode-plane]")`, 10_000);
     await settle();
     await app.click("[data-testid=title-mode-plane]");
-    await app.waitFor(`!!document.querySelector("[data-mode=plane]")`, 5000);
+    await app.waitFor(`!!document.querySelector(".tt-root [data-mode=plane]")`, 5000);
     await settle();
   };
 
@@ -60,7 +60,7 @@ describe.skipIf(!E2E)("by plane, on the title", () => {
     const found = await app.js<string>(`document.querySelector(".tt-fields button")?.dataset.testid ?? ""`);
     expect(found).toMatch(/^title-field-/);
     await app.click(`[data-testid=${found}]`);
-    await app.waitFor(`!!document.querySelector("[data-mode=plane]")`, 5000);
+    await app.waitFor(`!!document.querySelector(".tt-root [data-mode=plane]")`, 5000);
     await settle();
     expect(await app.js<string>(`document.querySelector("[data-testid=title-flight-field] b").textContent`)).toMatch(/Bourget/);
     await shot("E4-1-vol-libre");
@@ -103,7 +103,7 @@ describe.skipIf(!E2E)("by plane, on the title", () => {
     await toPlane();
     // (By plane opens on the tab used last — Combat here: Free flight again)
     await app.click("[data-testid=title-tab-free]");
-    await app.waitFor(`document.querySelector("[data-mode=plane]")?.dataset.tab === "free"`, 3000);
+    await app.waitFor(`document.querySelector(".tt-root [data-mode=plane]")?.dataset.tab === "free"`, 3000);
     expect(await app.js<string>(`document.querySelector("[data-testid=title-flight-field] b").textContent`)).toMatch(/Bourget/);
     await app.click("[data-testid=title-flight-fly]");
     await app.waitFor(`__bh.settings.vessel === "f35" && __bh.camera.piloting`, 60_000);

@@ -293,7 +293,7 @@
 .tt-group { margin: 14px 0 4px 22px; font: 600 11px var(--m-f-title); letter-spacing: 0.26em; text-transform: uppercase; color: var(--m-amber); }
 .tt-group:first-child { margin-top: 2px; }
 .tt-act-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; width: 100%; }
-.tt-act-mark { font: 600 11px var(--m-f-value); font-style: normal; letter-spacing: 0.04em; text-transform: none; color: var(--m-amber); }
+.tt-act-mark { flex: none; white-space: nowrap; font: 600 11px var(--m-f-value); font-style: normal; letter-spacing: 0.04em; text-transform: none; color: var(--m-amber); }
 .tt-act small { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .tt-preview-mark { margin: 0; font: 500 13px var(--m-f-value); color: var(--m-amber); }
 .tt-act.on { color: var(--m-warm); }
@@ -311,6 +311,35 @@
 }
 .tt-search:focus { border-color: rgba(255, 179, 92, 0.55); }
 .tt-fields { max-height: calc(100vh - 300px); }
+
+/* ---- By ship (E5): the craft's sheet, its name over the turntable, a destination closed to it */
+.tt-sheet {
+  padding: 12px 14px 12px 16px;
+  border-left: 2px solid var(--m-amber);
+  background: linear-gradient(90deg, rgba(255, 179, 92, 0.08), rgba(255, 179, 92, 0));
+}
+.tt-sheet-role { margin: 0 0 10px; font: 400 14px / 1.5 var(--m-f-text); color: var(--m-dim); }
+.tt-sheet-figs { display: grid; grid-template-columns: repeat(4, auto); gap: 4px 18px; margin: 0; justify-content: start; }
+.tt-sheet-fig dt { font: 600 10px var(--m-f-title); letter-spacing: 0.2em; text-transform: uppercase; color: var(--m-faint); }
+.tt-sheet-fig dd { margin: 2px 0 0; font: 600 15px var(--m-f-value); color: var(--m-ink); }
+.tt-ship .tt-acts { max-height: calc(100vh - var(--m-safe-y) * 2 - 300px); min-height: 180px; }
+.tt-craft-name {
+  position: absolute;
+  left: 22px;
+  bottom: 16px;
+  font: 700 clamp(22px, 2.6vw, 38px) var(--m-f-title);
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--m-ink);
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.8);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--m-mid) var(--m-ease);
+}
+.tt-preview-frame.turning .tt-craft-name { opacity: 0.92; }
+.tt-act.locked { opacity: 0.45; }
+.tt-act.locked .tt-act-mark { color: var(--m-faint); }
+.tt-preview-mark.locked { color: #ff8a7a; }
 
 /* ---- narrow screens: the cards two by two, the list over its picture */
 @media (max-width: 760px) {

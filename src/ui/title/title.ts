@@ -35,6 +35,7 @@ import {
   STARTS,
   WEATHERS,
 } from "./plane";
+import { CRAFT, launchShip, type ShipItem, sheetLines, shipItems } from "./ship";
 
 /** By plane's tabs (E4) */
 type PlaneTab = "free" | "combat" | "school" | "challenges";
@@ -60,6 +61,15 @@ const P = {
     fr: "Le F-35B à l'aérodrome choisi, aligné sur sa piste en service, en finale ou en croisière, à l'heure de son propre jour, sous la météo choisie.",
     en: "The F-35B at the airfield chosen, lined up on its runway in use, on final or cruising, at the hour of its own day, under the weather chosen.",
   },
+} satisfies Record<string, Text>;
+
+/** By ship's words (E5) */
+const S = {
+  where: { fr: "Destinations", en: "Destinations" },
+  missions: { fr: "Missions", en: "Missions" },
+  scenes: { fr: "Scènes", en: "Scenes" },
+  more: { fr: "Ailleurs", en: "Elsewhere" },
+  craft: { fr: "Vaisseau", en: "Craft" },
 } satisfies Record<string, Text>;
 
 const T = {
@@ -274,7 +284,7 @@ export class TitleScreen {
         b.addEventListener("click", () => {
           this.lastMode = m;
           img.style.viewTransitionName = "tt-art";
-          this.router?.push(m.id === "plane" ? this.planeScreen() : this.modeScreen(m));
+          this.router?.push(m.id === "plane" ? this.planeScreen() : m.id === "ship" ? this.shipScreen() : this.modeScreen(m));
         });
         return b;
       }),
@@ -433,6 +443,159 @@ export class TitleScreen {
         return true;
       },
     };
+  }
+
+  // ------------------------------------------------------------------ by ship (E5)
+
+  /** By ship: the hangar — a tab per craft (LB / RB, Q / E), its sheet, its turntable —, the destinations it can
+   *  reach (a ground closed to one that never lands: shown, with why), its missions and scenes, the rest. */
+  private shipScreen(): MenuScreen {
+    return {
+      id: "mode:ship",
+      build: () => this.buildShip(),
+      action: (a) => {
+        if (a !== "tabPrev" && a !== "tabNext") return false;
+        const i = CRAFT.findIndex((c) => c.id === this.vessel);
+        this.vessel = CRAFT[(i + (a === "tabNext" ? 1 : CRAFT.length - 1)) % CRAFT.length]!.id;
+        this.router?.refresh();
+        return true;
+      },
+    };
+  }
+
+  private buildShip(): HTMLElement {
+    const mode = MODES.find((x) => x.id === "ship")!;
+    const craft = CRAFT.find((c) => c.id === this.vessel)!;
+    const page = h("div", { class: "tt-page tt-list tt-plane tt-ship", "data-mode": "ship", "data-vessel": craft.id });
+    const tabs = h(
+      "div",
+      { class: "tt-tabs", role: "tablist", "aria-label": tr(S.craft), "data-nav-skip": "" },
+      ...CRAFT.map((c) => {
+        const b = button({ label: c.name, on: this.vessel === c.id, testid: `title-vessel-${c.id}` });
+        b.classList.add("tt-tab");
+        b.setAttribute("role", "tab");
+        b.setAttribute("aria-selected", String(this.vessel === c.id));
+        b.addEventListener("click", () => {
+          this.vessel = c.id;
+          this.router?.refresh();
+        });
+        return b;
+      }),
+    );
+    // the craft's sheet: what it is for, its figures
+    const sheet = h(
+      "section",
+      { class: "tt-sheet", "data-testid": "title-ship-sheet", "aria-label": craft.name },
+      el("p", "tt-sheet-role", tr(craft.role)),
+      h(
+        "dl",
+        { class: "tt-sheet-figs" },
+        ...sheetLines(craft).map(([k, v]) => h("div", { class: "tt-sheet-fig" }, el("dt", "", k), el("dd", "", v))),
+      ),
+    );
+    // the preview: the turntable (a destination: flown in this craft) or the scene's picture (a mission)
+    const wide = MODE_ART.ship.wide;
+    const pImg = h("img", { class: "tt-preview-art", src: wide, alt: "" }) as HTMLImageElement;
+    pImg.style.viewTransitionName = "tt-art";
+    this.turn = turntable(TURNTABLES[this.vessel]);
+    const frame = h("div", { class: "tt-preview-frame" }, pImg, this.turn, el("span", "tt-craft-name", craft.name));
+    const pTitle = el("h3", "tt-preview-title", "");
+    const pText = el("p", "tt-preview-text", "");
+    const pMark = el("p", "tt-preview-mark", "");
+    const preview = h("aside", { class: "tt-preview" }, frame, pTitle, pText, pMark);
+    const show = (title: string, text: string, o: { art?: string; turning: boolean; mark?: string; locked?: boolean }) => {
+      const src = (o.art && SCENE_THUMBS[o.art]) || wide;
+      if (pImg.getAttribute("src") !== src) pImg.src = src;
+      frame.classList.toggle("turning", o.turning);
+      pTitle.textContent = title;
+      pText.textContent = text;
+      pMark.textContent = o.mark ?? "";
+      pMark.classList.toggle("locked", !!o.locked);
+    };
+    const list = h("nav", { class: "tt-acts", "aria-label": tr(mode.title) });
+    const entry = (
+      testid: string,
+      focusId: string,
+      title: string,
+      text: string,
+      mark: string | null,
+      focus: () => void,
+      go: () => void,
+      first = false,
+    ) => {
+      const b = h(
+        "button",
+        {
+          class: "m-item tt-act",
+          type: "button",
+          "data-testid": testid,
+          "data-focus-id": focusId,
+          ...(first ? { "data-autofocus": "" } : {}),
+        },
+        h("span", { class: "tt-act-row" }, el("span", "", title), mark ? el("em", "tt-act-mark", mark) : null),
+        el("small", "", text),
+      );
+      b.addEventListener("focus", focus);
+      b.addEventListener("pointerenter", focus);
+      b.addEventListener("click", go);
+      list.append(b);
+      return b;
+    };
+    const slug = (id: string) =>
+      id
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/-$/, "");
+    const item = (x: ShipItem, first: boolean) => {
+      const focus = () =>
+        show(tr(x.title), tr(x.brief ?? x.text), {
+          art: x.art,
+          turning: !!x.go,
+          mark: x.locked ? tr(x.locked) : x.mark ? tr(x.mark) : "",
+          locked: !!x.locked,
+        });
+      const b = entry(
+        `title-ship-${slug(x.id)}`,
+        x.id,
+        tr(x.title),
+        tr(x.text),
+        x.locked ? "✕" : x.mark ? tr(x.mark) : null,
+        focus,
+        () => {
+          if (x.locked) return focus();
+          this.choose({ id: x.id, title: x.title, hint: x.text, art: x.art, craft: !!x.go, run: (g, o) => launchShip(g, x, o.vessel) });
+        },
+        first,
+      );
+      if (x.locked) {
+        b.classList.add("locked");
+        b.setAttribute("aria-disabled", "true");
+      }
+    };
+    const { destinations, missions } = shipItems(this.vessel);
+    list.append(el("h4", "tt-group", tr(S.where)));
+    destinations.forEach((x, i) => item(x, i === 0));
+    list.append(el("h4", "tt-group", tr(this.vessel === "ranger" ? S.missions : S.scenes)));
+    for (const x of missions) item(x, false);
+    // (the rest: the craft placed anywhere; every mission's briefing)
+    list.append(el("h4", "tt-group", tr(S.more)));
+    for (const a of mode.activities.filter((x) => x.opens)) {
+      const focus = () => show(tr(a.title), tr(a.hint), { turning: !!a.craft });
+      entry(`title-act-${a.id}`, a.id, tr(a.title), tr(a.hint), null, focus, () => this.choose(a));
+    }
+    const side = h("div", { class: "tt-list-side" }, sheet, list);
+    page.append(
+      this.crumb(tr(mode.title)),
+      tabs,
+      h("div", { class: "tt-list-body" }, side, preview),
+      this.foot([
+        ["confirm", T.launch],
+        ["tabNext", S.craft],
+      ]),
+    );
+    const d0 = destinations[0]!;
+    show(tr(d0.title), tr(d0.text), { art: d0.art, turning: true });
+    return page;
   }
 
   // ------------------------------------------------------------------ by plane (E4)

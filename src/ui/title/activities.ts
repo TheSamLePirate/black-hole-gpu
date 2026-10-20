@@ -38,6 +38,12 @@ export interface TitleGame {
   scene(name: string): void;
   /** the craft chosen, in a circular orbit about a body */
   orbit(body: string, altKm: number): void;
+  /** the craft chosen, landed there (latitude, east longitude [°]) */
+  land(body: string, lat: number, lon: number): void;
+  /** the craft chosen, at rest beside a body, that high above it */
+  near(body: string, altKm: number): void;
+  /** the craft chosen, before the wormhole: on our side, or on Gargantua's */
+  wormhole(side: "ours" | "gargantua"): void;
   /** the craft flown */
   vessel(id: VesselChoice): void;
   /** where to place the ship */
