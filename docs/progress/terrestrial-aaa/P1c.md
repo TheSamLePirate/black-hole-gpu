@@ -71,3 +71,41 @@ Conséquences : P2–P6 (profondeur partagée, éclairage commun, forêts, nuage
 supposent un monde raster qui n'existe pas encore. Le prochain jalon mesurable est un **tracé qui consomme la
 distance raster** sur un petit domaine sûr (relief naturel, hors piste, hors mer, hors nuages), avec mesure du temps
 de `trace` avant/après à image comparable. En attendant, tout reste désactivé par défaut.
+
+## 6. Addendum — où va le travail du tracé (mesures d'orientation, même jour)
+
+Trois essais faits après la décision du §5, pour savoir si une voie raster-visibilité a un plafond de gain.
+
+**a) Le noyau sans la métrique du trou de ver n'est pas plus rapide.** Idée : le noyau Terre seule (`HAS_KERR` retiré)
+pourrait être choisi quand la bouche est hors du champ (cône des rayons intégrés `B = max(4ρ, √(0,26 M/pixel))` vu de la
+caméra, soit ~3° ici). Implémenté et vérifié (il se déclenchait aux vues obliques, nadir exclu car la bouche y est dans le
+champ). Résultat : `trace` 46–47 ms contre 47–48 (oblique 3 km), 32–34 contre 34–35 (10 km), sans gain à 900 m
+(67–77 ms, bruit de compilation). **Abandonné et retiré du code.**
+
+**b) Rétractation : « terrain coupé » et « trou de ver coupé » n'étaient pas des ablations valides.** `earthTerrain=false`
+garde la marche avec la carte globale ; `wormhole=false` change de scène (le ciel de Gargantua remplace la Terre : 18 ms
+mesurés sur une image noire d'étoiles). Les 18–20 ms de cet essai ne disent rien du coût de la Terre. Ils ne sont dans
+aucun chiffre de ce rapport.
+
+**c) Répartition du travail par rayon (vue de coût du jeu, `renderer.costView`).** Pour Kennedy, 960 × 540, nuages 0,3, moyenne
+par pixel de chaque compteur (palette de la vue inversée sur une capture sur 1 pixel sur 4 : ±10 %), × poids relatifs du code
+(`costHeat`) :
+
+| Vue | Marche du sol | Hauteurs lues | Ombres du relief | Air | Octaves de bruit | Total pondéré (vue « tout ») |
+|---|---|---|---|---|---|---|
+| Oblique 900 m | 16,5 pas | 77 | 15,7 | 21,7 | 138 | 231 |
+| Oblique 3 km | 16,2 | 71 | 14,5 | – | 106 | 222 |
+| Oblique 10 km | 15,6 | 33 | 6,1 | – | 37 | 136 |
+
+(Compteur direct, vue 14, mêmes scènes sans nuages : 22 à 24 pas de marche, 49 à 52 lectures de hauteur, 22 pas d'ombre
+par pixel à 900 m–3 km.) En pondéré, **les hauteurs lues et les octaves de bruit du relief représentent de l'ordre du tiers
+au moitié du travail d'un rayon** (≈ 50 % à 900 m, ≈ 46 % à 3 km, ≈ 32 % à 10 km), la marche et les ombres du sol 7 % chacune
+environ. Les poids sont ceux, approximatifs, du code ; ce n'est pas un temps GPU.
+
+**Conséquence pour la décision.** Le plafond d'une visibilité raster qui supprimerait la marche primaire de relief (marche +
+hauteurs + octaves) est donc de l'ordre de **30 à 50 % du travail de rayon** sur le terrain, pas davantage : les ombres du relief,
+l'air, les nuages, la mer et le décor restent. Ce plafond n'est atteint que si la hauteur raster est assez précise : l'écart du
+§3 (14 m au p90 à 3 km avec la cellule de 153 m) impose des niveaux plus fins près de la caméra, donc une fusion multi-niveaux, et
+le détail procédural sous la maille du cache (octaves de bruit) doit être rendu par un autre moyen (matériau/normale) — ce
+qui est justement le chantier P3. La poursuite reste donc **conditionnelle** ; un essai honnête est un tracé qui prend la
+distance raster pour les rayons du sol d'un petit domaine, avec mesure avant/après.
