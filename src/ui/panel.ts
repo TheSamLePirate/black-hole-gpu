@@ -1,7 +1,7 @@
 import { isTyping } from "../controls";
 import { freeCameraKeys } from "../input/bindings";
 import { KEYMAP } from "../input/keymap";
-import { t, tf } from "../i18n";
+import { t, tf, tr } from "../i18n";
 import { h, icon, modal } from "./kit";
 import { onEscape } from "./keys";
 import { QUALITY, type Quality, type Settings } from "../settings";
@@ -21,6 +21,7 @@ import {
 } from "./schema";
 import { store } from "../util/storage";
 import { gameLog } from "../game/log";
+import { decimalsFor, formatValue, fromSlider, sameValue, sliderPercent, toSlider } from "./settings/values";
 
 type Key = keyof Settings;
 type Diff = { key: Key; before: unknown; after: unknown }[];
@@ -50,52 +51,6 @@ const STORE_PRESETS = "kerr.userPresets.v1";
 const STORE_UI = "kerr.panel.v1";
 
 // ------------------------------------------------------------------------------------ helpers
-function decimalsFor(step: number) {
-  return Math.max(0, Math.min(6, -Math.floor(Math.log10(step) + 1e-9)));
-}
-
-function formatValue(d: NumberDef, v: number): string {
-  if (d.offAtZero && v === 0) return "off";
-  if (d.scale === "log") {
-    const a = Math.abs(v);
-    if (a !== 0 && (a >= 1e5 || a < 1e-3))
-      return v
-        .toExponential(Math.max(0, (d.precision ?? 3) - 1))
-        .replace(/\.?0+e/, "e")
-        .replace("e+", "e");
-    return String(Number(v.toPrecision(d.precision ?? 3)));
-  }
-  return v.toFixed(decimalsFor(d.step ?? 0.01));
-}
-
-function toSlider(d: NumberDef, v: number): number {
-  if (d.scale === "log") {
-    if (d.offAtZero && v <= 0) return 0;
-    return (Math.log(Math.max(v, d.min) / d.min) / Math.log(d.max / d.min)) * 1000;
-  }
-  return v;
-}
-
-function fromSlider(d: NumberDef, x: number): number {
-  if (d.scale === "log") {
-    if (d.offAtZero && x <= 0) return 0;
-    const v = d.min * (d.max / d.min) ** (x / 1000);
-    return Number(v.toPrecision(d.precision ?? 3));
-  }
-  const step = d.step ?? 0.01;
-  return Number((Math.round(x / step) * step).toFixed(decimalsFor(step)));
-}
-
-function sliderPercent(d: NumberDef, v: number) {
-  const x = toSlider(d, v);
-  return d.scale === "log" ? x / 10 : ((x - d.min) / (d.max - d.min)) * 100;
-}
-
-function sameValue(a: unknown, b: unknown) {
-  if (typeof a === "number" && typeof b === "number") return Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
-  return a === b;
-}
-
 // ------------------------------------------------------------------------------------ panel
 export class SettingsPanel {
   private s: Settings;
@@ -146,6 +101,29 @@ export class SettingsPanel {
     this.set(key, value);
   }
 
+  /** A quality preset applied (its rays, its samples, its render scale) — the player's screen's too. */
+  setQuality(q: Quality) {
+    this.begin();
+    Object.assign(this.s, QUALITY[q], { quality: q });
+    this.o.onChange([...new Set([...QUALITY_KEYS, ...(Object.keys(QUALITY[q]) as (keyof Settings)[]), "quality" as const])]);
+    this.commit();
+    this.refresh();
+  }
+  /** the quality preset the settings match now (null: edited by hand) */
+  qualityNow(): Quality | null {
+    return this.matchingQuality();
+  }
+
+  /** The Lab opened (PLAN-TITRE-AAA E9: from the player's screen, its search), on a search when one is given. */
+  openLab(query?: string) {
+    this.toggle(true);
+    if (query === undefined) return;
+    this.searchInput.value = query;
+    this.query = query.trim().toLowerCase();
+    this.renderBody();
+    this.searchInput.focus();
+  }
+
   /** The controls drawn again (a choice's options changed: the system's voices, listed late). */
   redraw() {
     this.renderBody();
@@ -171,6 +149,9 @@ export class SettingsPanel {
   get isOpen() {
     return !this.root.classList.contains("collapsed");
   }
+
+  /** ⌘K with the Lab closed: the common search (the player's screen), when it takes it */
+  searchKey?: () => boolean;
 
   /** while set, messages wait for it (the loading screen) */
   holdToasts: Promise<void> | null = null;
@@ -287,19 +268,31 @@ export class SettingsPanel {
     this.root.replaceChildren();
     this.root.classList.add("sp");
 
-    this.undoBtn = h("button", { class: "sp-icon", title: "Undo (⌘Z / Ctrl+Z)", onclick: () => this.undo() }, icon("undo"));
-    this.redoBtn = h("button", { class: "sp-icon", title: "Redo (⇧⌘Z / Ctrl+Y)", onclick: () => this.redo() }, icon("redo"));
+    this.undoBtn = h(
+      "button",
+      { class: "sp-icon", title: tr({ fr: "Annuler (⌘Z / Ctrl+Z)", en: "Undo (⌘Z / Ctrl+Z)" }), onclick: () => this.undo() },
+      icon("undo"),
+    );
+    this.redoBtn = h(
+      "button",
+      { class: "sp-icon", title: tr({ fr: "Rétablir (⇧⌘Z / Ctrl+Y)", en: "Redo (⇧⌘Z / Ctrl+Y)" }), onclick: () => this.redo() },
+      icon("redo"),
+    );
     const menuBtn = h(
       "button",
-      { class: "sp-icon", title: "More", onclick: (e: Event) => this.openMenu(e.currentTarget as HTMLElement) },
+      { class: "sp-icon", title: tr({ fr: "Plus", en: "More" }), onclick: (e: Event) => this.openMenu(e.currentTarget as HTMLElement) },
       icon("menu"),
     );
-    const closeBtn = h("button", { class: "sp-icon", title: "Hide settings (M)", onclick: () => this.toggle(false) }, icon("close"));
+    const closeBtn = h(
+      "button",
+      { class: "sp-icon", title: tr({ fr: "Fermer le Labo (⇧M)", en: "Close the Lab (⇧M)" }), onclick: () => this.toggle(false) },
+      icon("close"),
+    );
     const opener = h(
       "button",
-      { class: "sp-opener", title: "Settings (M)", onclick: () => this.toggle(true) },
+      { class: "sp-opener", title: tr({ fr: "Labo (⇧M)", en: "Lab (⇧M)" }), onclick: () => this.toggle(true) },
       icon("gear"),
-      h("span", {}, t("Settings")),
+      h("span", {}, tr({ fr: "Labo", en: "Lab" })),
     );
 
     this.searchInput = h("input", {
@@ -321,7 +314,13 @@ export class SettingsPanel {
     });
     const advToggle = h(
       "label",
-      { class: "sp-adv", title: "Show expert integration and sampling parameters" },
+      {
+        class: "sp-adv",
+        title: tr({
+          fr: "Montrer les paramètres experts d'intégration et d'échantillonnage",
+          en: "Show expert integration and sampling parameters",
+        }),
+      },
       h("input", {
         type: "checkbox",
         ...(this.advanced ? { checked: true } : {}),
@@ -347,7 +346,7 @@ export class SettingsPanel {
         "header",
         { class: "sp-head" },
         icon("gear", "ico sp-logo"),
-        h("h2", {}, t("Settings")),
+        h("h2", {}, tr({ fr: "Labo", en: "Lab" })),
         h("div", { class: "sp-head-actions" }, this.undoBtn, this.redoBtn, menuBtn, closeBtn),
       ),
       h("div", { class: "sp-search" }, icon("search"), this.searchInput, advToggle),
@@ -415,7 +414,7 @@ export class SettingsPanel {
     const user = this.userPresets();
     const userChips = h("div", { class: "sp-chips" });
     for (const name of Object.keys(user)) {
-      const del = h("span", { class: "sp-chip-del", title: "Delete preset" }, "×");
+      const del = h("span", { class: "sp-chip-del", title: tr({ fr: "Supprimer ce préréglage", en: "Delete preset" }) }, "×");
       const chip = h(
         "button",
         {
@@ -449,13 +448,13 @@ export class SettingsPanel {
       );
       userChips.append(chip);
     }
-    const nameIn = h("input", { class: "sp-save-name", placeholder: "Preset name", maxlength: "40" });
+    const nameIn = h("input", { class: "sp-save-name", placeholder: tr({ fr: "Nom du préréglage", en: "Preset name" }), maxlength: "40" });
     const saveRow = h(
       "div",
       { class: "sp-save", hidden: true },
       nameIn,
-      h("button", { class: "sp-btn primary", onclick: () => save() }, "Save"),
-      h("button", { class: "sp-btn", onclick: () => (saveRow.hidden = true) }, "Cancel"),
+      h("button", { class: "sp-btn primary", onclick: () => save() }, tr({ fr: "Enregistrer", en: "Save" })),
+      h("button", { class: "sp-btn", onclick: () => (saveRow.hidden = true) }, tr({ fr: "Annuler", en: "Cancel" })),
     );
     const save = () => {
       const name = nameIn.value.trim();
@@ -485,7 +484,13 @@ export class SettingsPanel {
         t("Save current"),
       ),
     );
-    el.append(h("div", { class: "sp-label" }, "Scene"), this.sceneCard, h("div", { class: "sp-label" }, "My presets"), userChips, saveRow);
+    el.append(
+      h("div", { class: "sp-label" }, tr({ fr: "Scène", en: "Scene" })),
+      this.sceneCard,
+      h("div", { class: "sp-label" }, tr({ fr: "Mes préréglages", en: "My presets" })),
+      userChips,
+      saveRow,
+    );
   }
 
   private updateSceneCard() {
@@ -505,7 +510,7 @@ export class SettingsPanel {
         h("b", {}, name ? sceneTitle(name) : t("Your own view")),
         h("small", {}, name ? t(SCENE_GROUPS.find((g) => g.id === sceneGroup(name))!.label) : t("Settings edited, or a saved flight")),
       ),
-      h("span", { class: "sp-scene-go" }, "Browse", icon("chevron", "ico")),
+      h("span", { class: "sp-scene-go" }, tr({ fr: "Parcourir", en: "Browse" }), icon("chevron", "ico")),
     );
   }
 
@@ -571,19 +576,27 @@ export class SettingsPanel {
           "button",
           {
             dataset: { value: q, help, helpTitle: tf("{0} quality", label) },
-            onclick: () => {
-              this.begin();
-              Object.assign(this.s, QUALITY[q], { quality: q });
-              this.o.onChange([...new Set([...QUALITY_KEYS, ...(Object.keys(QUALITY[q]) as (keyof Settings)[]), "quality" as const])]);
-              this.commit();
-              this.refresh();
-            },
+            onclick: () => this.setQuality(q),
           },
           label,
         ),
       );
     }
-    seg.append(h("span", { class: "sp-custom", dataset: { help: "Integration or sampling parameters were edited by hand." } }, "Custom"));
+    seg.append(
+      h(
+        "span",
+        {
+          class: "sp-custom",
+          dataset: {
+            help: tr({
+              fr: "Des paramètres d'intégration ou d'échantillonnage ont été modifiés à la main.",
+              en: "Integration or sampling parameters were edited by hand.",
+            }),
+          },
+        },
+        tr({ fr: "Personnalisé", en: "Custom" }),
+      ),
+    );
     el.append(seg);
     this.updateQuality();
   }
@@ -1127,8 +1140,10 @@ export class SettingsPanel {
       e.preventDefault();
       this.redo();
     } else if (mod && e.key.toLowerCase() === "k") {
-      // (the settings' search: ⌘K / Ctrl+K — the / key is real time, in every mode)
+      // (the settings' search: ⌘K / Ctrl+K — the / key is real time, in every mode): the common one, over the
+      // player's screen and the Lab (PLAN-TITRE-AAA E9) — the Lab's own while it is open
       e.preventDefault();
+      if (!this.isOpen && this.searchKey?.()) return;
       this.toggle(true);
       this.searchInput.focus();
     } else if (!mod && !typing && this.flightKeys?.(e)) {

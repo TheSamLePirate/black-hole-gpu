@@ -124,6 +124,81 @@
 @media (prefers-reduced-motion: reduce) {
   .pz-root, .pz-drawer, .pz-badge { animation: none; }
 }
+/* ---------------------------------------------------------------- the player's settings (PLAN-TITRE-AAA E9)
+   A full screen: the tabs, the rows (a bar, ◂ value ▸, a dot), the one focused explained beside them. */
+.pls-root {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  background: linear-gradient(90deg, rgba(2, 4, 9, 0.98), rgba(2, 4, 9, 0.94) 60%, rgba(2, 4, 9, 0.9));
+  color: var(--m-ink);
+  animation: ts-in 0.2s var(--m-ease) both;
+}
+.pls-head { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
+.pls-head .pz-title { font-size: clamp(26px, 3vw, 40px); }
+.pls-search { max-width: 420px; flex: 1 1 260px; }
+.pls-body {
+  margin-top: clamp(12px, 2.5vh, 26px);
+  display: grid;
+  grid-template-columns: minmax(320px, 620px) minmax(0, 1fr);
+  gap: clamp(20px, 3vw, 56px);
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.pls-side { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.pls-list { display: flex; flex-direction: column; gap: 1px; overflow-y: auto; min-height: 0; flex: 1 1 auto; padding: 2px 8px 2px 2px; max-height: calc(100vh - var(--m-safe-y) * 2 - 240px); }
+.m-item.pls-row {
+  width: 100%;
+  box-sizing: border-box;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding-top: 9px;
+  padding-bottom: 9px;
+  font-size: 14px;
+  letter-spacing: 0.14em;
+}
+.m-item.pls-row.off { opacity: 0.45; cursor: default; }
+.pls-label { display: flex; align-items: baseline; gap: 10px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pls-chip { font: 600 9.5px var(--m-f-title); font-style: normal; letter-spacing: 0.2em; color: var(--m-amber); }
+.pls-val { display: flex; align-items: center; gap: 10px; flex: none; text-transform: none; letter-spacing: 0.02em; max-width: 55%; }
+.pls-val b { font: 600 13.5px var(--m-f-text); color: var(--m-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pls-val i { font-style: normal; color: var(--m-hint); }
+.m-item.pls-row:is(:focus, :hover) .pls-val i { color: var(--m-amber); }
+.pls-bar { position: relative; width: clamp(90px, 10vw, 150px); height: 6px; border-radius: 3px; background: rgba(214, 224, 238, 0.14); overflow: hidden; }
+.pls-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, rgba(255, 179, 92, 0.55), var(--m-amber)); border-radius: 3px; }
+.pls-dot { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--m-hint); box-sizing: border-box; }
+.pls-dot.on { background: var(--m-amber); border-color: var(--m-amber); box-shadow: 0 0 10px var(--m-amber-glow); }
+.pls-explain { display: flex; flex-direction: column; gap: 12px; max-width: 560px; padding-top: 6px; }
+.pls-help { margin: 0; white-space: pre-line; font: 400 15px / 1.6 var(--m-f-text); color: var(--m-ink); opacity: 0.85; }
+.pls-default { margin: 0; font: 600 14px var(--m-f-value); color: var(--m-ink); }
+.pls-note { margin: 0; font: 400 13px / 1.5 var(--m-f-text); color: var(--m-dim); }
+.pls-risky { color: var(--m-amber); }
+.m-item.pls-lab { margin-top: 6px; border-top: 1px solid var(--m-line); padding-top: 14px; }
+.pls-keep {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--m-safe-y) + 48px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 18px;
+  border: 1px solid rgba(255, 179, 92, 0.6);
+  border-radius: 4px;
+  background: rgba(10, 12, 20, 0.96);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
+}
+.pls-keep[hidden] { display: none; }
+.pls-keep b { font: 700 14px var(--m-f-title); letter-spacing: 0.16em; text-transform: uppercase; color: var(--m-amber); }
+.pls-keep span { font: 500 13px var(--m-f-text); color: var(--m-ink); }
+.pls-keep-acts { display: flex; gap: 8px; }
+@media (max-width: 760px) {
+  .pls-body { grid-template-columns: 1fr; }
+  .pls-explain { display: none; }
+}
+
 /* paused: the HUD's clocks and the toolbar dim under the menu */
 body.paused .fl-root, body.paused #topbar { filter: saturate(0.6) brightness(0.8); }
 /* (the pause: the HUD put away under its column and its context — the scene, not the instruments, behind) */

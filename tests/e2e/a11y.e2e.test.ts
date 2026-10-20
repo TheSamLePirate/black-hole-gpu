@@ -44,8 +44,11 @@ describe.skipIf(!E2E)("accessibility and pointer", () => {
     expect(await app.js<string[]>(INVISIBLE)).toEqual([]);
   });
 
-  test("the settings open: every control named", async () => {
+  test("the settings open: every control named — the player's, then the Lab's", async () => {
     await app.click("[data-testid=topbar-settings]");
+    await app.waitFor(`!!document.querySelector("[data-testid=settings]")`);
+    expect(await app.js<string[]>(UNNAMED)).toEqual([]);
+    await app.click("[data-testid=settings-lab]");
     await app.waitFor(`!document.getElementById("panel").classList.contains("collapsed")`);
     expect(await app.js<string[]>(UNNAMED)).toEqual([]);
     await app.press("Escape");

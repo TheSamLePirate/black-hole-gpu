@@ -71,6 +71,8 @@ export interface PauseDeps {
   /** where one is, the mission, the time played, the last save, the room (ui/pausemenu.ts) */
   context(): PauseContext;
   settings(): void;
+  /** the Lab: every control (ui/panel.ts) */
+  lab(): void;
   help(): void;
   /** the controls screen (its back: this menu again) */
   controls(): void;
@@ -303,6 +305,7 @@ export class PauseMenu {
           "mode-ship": () => this.leaveFor(() => d.modes("ship")),
           "mode-free": () => this.leaveFor(() => d.modes("free")),
           settings: () => this.leaveFor(d.settings),
+          lab: () => this.leaveFor(d.lab),
           controls: () => this.leaveFor(d.controls),
           "graphics-diagnostic": () => void downloadGpuDiagnostic(),
         };

@@ -538,7 +538,7 @@ Chaque phase : un commit, une planche de captures (`docs/progress/title-aaa/`), 
 - Le cas réseau ; le diagnostic déplacé.
 - Corrige les constats 4 et 5.
 
-### E9 — Les réglages : l'écran joueur et le Labo (L)
+### E9 — Les réglages : l'écran joueur et le Labo (L) — FAIT ([fiche](progress/title-aaa/E9.md), [planche](progress/title-aaa/E9.jpg) : 8 onglets et 157 réglages rangés depuis le schéma, l'explication, le retour des réglages risqués, la recherche commune, le Labo ; constat 6 corrigé)
 
 - L'étiquetage `menu` dans `schema.ts`, avec un test qui vérifie que chaque contrôle est rangé.
 - L'écran plein écran, le panneau d'explication, le retour automatique des réglages risqués.

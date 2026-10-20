@@ -17,7 +17,10 @@ describe.skipIf(!E2E)("the sharpness in motion's setting", () => {
 
   test("searched in French, its choices named, « En virage et en vol bas » clicked and taken", async () => {
     expect(await app.js<string>("__bh.settings.motionDetail")).toBe("off");
+    // (the Lab — the drawer of every control —, from the player's settings: PLAN-TITRE-AAA E9)
     await app.click("[data-testid=topbar-settings]");
+    await app.waitFor(`!!document.querySelector("[data-testid=settings-lab]")`);
+    await app.click("[data-testid=settings-lab]");
     await app.waitFor(`!document.getElementById("panel").classList.contains("collapsed")`);
     await app.click(".sp-search input");
     await app.type("netteté en mouvement");

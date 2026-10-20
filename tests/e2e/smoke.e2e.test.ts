@@ -229,10 +229,11 @@ describe.skipIf(!E2E)("smoke: in flight (Artemis, low Earth orbit)", () => {
   });
 
   test("the settings: a real click on the opener opens them, Escape closes them", async () => {
+    // (the player's settings — PLAN-TITRE-AAA E9 —; the drawer of every control is the Lab, from them)
     await app.click("[data-testid=topbar-settings]");
-    await app.waitFor(`!document.getElementById("panel").classList.contains("collapsed")`);
+    await app.waitFor(`!!document.querySelector("[data-testid=settings]")`);
     await app.press("Escape");
-    expect(await app.js<boolean>(`document.getElementById("panel").classList.contains("collapsed")`)).toBe(true);
+    expect(await app.js<boolean>(`!!document.querySelector("[data-testid=settings]")`)).toBe(false);
   });
 
   test("the Kerr Bench measures a scene", async () => {

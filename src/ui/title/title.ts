@@ -393,9 +393,13 @@ export class TitleScreen {
       "div",
       { class: "tt-links" },
       this.link(tr(T.more), "title-more", () => this.router?.push(this.moreScreen())),
-      this.link(tr(T.settings), "title-settings", () =>
-        this.choose({ id: "settings", title: T.settings, hint: T.settings, opens: true, run: (g) => g.settings() }),
-      ),
+      this.link(tr(T.settings), "title-settings", () => {
+        // (the game there: its settings over the title, their back the title — no game started by it)
+        const g = this.game;
+        if (!g) return this.choose({ id: "settings", title: T.settings, hint: T.settings, opens: true, run: (x) => x.settings() });
+        this.close();
+        g.settings();
+      }),
     );
     page.append(brand, h("div", { class: "tt-menu" }, contBtn, cards, links), this.foot([["confirm", T.choose]], false));
     return page;

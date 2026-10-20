@@ -54,6 +54,7 @@ import type { JetInputs } from "./f35/pose";
 import { installPwa } from "./pwa";
 import { PauseMenu } from "./ui/pause";
 import type { PauseContext } from "./ui/pausemenu";
+import { PlayerSettings } from "./ui/settings/player";
 import { ControlsScreen } from "./ui/controls-screen";
 import { PadsScreen } from "./ui/pads-screen";
 import type { SceneGroup } from "./ui/schema";
@@ -3064,12 +3065,44 @@ async function main() {
     if (camera.cinematic) camera.setCinematic(null);
   };
   // the controls screen (ui/controls-screen.ts): from the pause menu, back to it
+  /** where the keys' screen goes back to: the pause, or the player's settings when opened from them */
+  let controlsBack = () => (pauseMenu ??= makePauseMenu()).open();
   const controlsScreen: ControlsScreen = new ControlsScreen({
     help: () => actions["btn-help"]!(),
     pads: () => padsScreen.open(),
-    back: () => (pauseMenu ??= makePauseMenu()).open(),
+    back: () => controlsBack(),
     toast: (t) => panel.toast(t),
   });
+  // the player's settings (ui/settings/player.ts, PLAN-TITRE-AAA E9): the screen of the settings a player changes —
+  // the panel's drawer, every control, is the Lab now (⇧M, its LAB ›, the search)
+  const playerSettings: PlayerSettings = new PlayerSettings({
+    settings,
+    defaults: defaultSettings,
+    set: (key, value) => panel.setValue(key, value),
+    setQuality: (q) => panel.setQuality(q),
+    quality: () => panel.qualityNow(),
+    lab: (query) => panel.openLab(query),
+    controls: () => {
+      controlsBack = () => {
+        controlsBack = () => (pauseMenu ??= makePauseMenu()).open();
+        playerSettings.reopen("controls");
+      };
+      controlsScreen.open();
+    },
+    pads: () => padsScreen.open(),
+    connectController: HidPads.supported ? () => connectController() : undefined,
+    // (in a room the common clock does not stop: nothing held)
+    hold: (on) => {
+      if (netPanel.net?.room) return;
+      paused = on;
+      touch();
+    },
+    toast: (s) => panel.toast(s),
+  });
+  panel.searchKey = () => {
+    playerSettings.openSearch();
+    return true;
+  };
   // the controllers screen (ui/pads-screen.ts — PLAN-HOTAS H4): from the controls screen, back to it
   const padsScreen = new PadsScreen({ pads: camera.padControls, back: () => controlsScreen.open(), toast: (t) => panel.toast(t) });
   // (made at its first opening: the game's tools are built further down)
@@ -3083,9 +3116,13 @@ async function main() {
       },
       engaged: () => mission.active || camera.pilot.hold !== "none" || camera.pilot.auto !== "none" || !!camera.cinematic,
       release: releaseControls,
-      settings: () => panel.toggle(true),
+      settings: () => playerSettings.open(() => pauseMenu?.open()),
+      lab: () => panel.openLab(),
       help: () => actions["btn-help"]!(),
-      controls: () => controlsScreen.open(),
+      controls: () => {
+        controlsBack = () => (pauseMenu ??= makePauseMenu()).open();
+        controlsScreen.open();
+      },
       photo: () => void setGameMode("photo"),
       capture: () => {
         const why = renderDialog.capture();
@@ -5305,8 +5342,7 @@ async function main() {
       id: "btn-settings",
       label: t("Settings"),
       icon: TB_ICONS.settings,
-      key: "M",
-      run: () => panel.toggle(),
+      run: () => (playerSettings.isOpen ? playerSettings.close() : playerSettings.open()),
       prio: 1,
       testid: "topbar-settings",
     });
@@ -6645,7 +6681,7 @@ async function main() {
     // does not read it meanwhile)
     // (in a room the pause does not hold the game — its clock is the room's —: the pad moves in the menu all the
     // same, and the craft reads none of it meanwhile)
-    const pauseUp = !!pauseMenu?.isOpen;
+    const pauseUp = !!pauseMenu?.isOpen || playerSettings.isOpen;
     if (paused || pauseUp) menuPad.tick(camera.pad.poll(), now, titleScreen.isOpen || pauseUp);
     camera.padFrame = !paused && pauseUp ? null : undefined;
     if (!frozen && !paused && !renderer.offlineActive && !replay.active) {
@@ -7635,7 +7671,7 @@ async function main() {
       networkShown: () => settings.netMenu,
       editor: () => missionEditor.open(),
       controls: () => controlsScreen.open(),
-      settings: () => panel.toggle(true),
+      settings: () => playerSettings.open(() => titleScreen.open()),
       load: (name) => tools.load(name),
       bench: () => {
         location.hash = "bench";

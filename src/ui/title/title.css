@@ -271,7 +271,7 @@
   cursor: pointer;
   position: relative;
 }
-.k-btn.tt-tab.on { color: var(--m-warm); }
+.k-btn.tt-tab.on { color: var(--m-warm); background: transparent; border-color: transparent; box-shadow: none; }
 .k-btn.tt-tab.on::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: 0; height: 2px; background: var(--m-amber); box-shadow: 0 0 10px var(--m-amber-glow); }
 .k-btn.tt-tab:hover { color: var(--m-ink); }
 .tt-plane .tt-list-body { margin-top: clamp(14px, 3vh, 30px); }
