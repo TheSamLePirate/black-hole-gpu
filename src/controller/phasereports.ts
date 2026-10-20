@@ -33,6 +33,8 @@ interface PhaseRep {
   circ: { aimKm: number; aimInc: number | null; body: string; from: string } | null;
   landed: boolean;
   auto: string;
+  /** the height last frame [km]: a jump — a save loaded, a placing — is no phase's end */
+  altKm?: number;
 }
 
 /** the heights an orbit must clear to be one: above the air (the Earth's 100 km), else 5 km over the ground */
@@ -71,8 +73,15 @@ function phaseReportStep(this: CameraController, st: RangerStatus | null) {
   const landed = !!(this.ourLanded || this.rolling);
   const g = this.geoNow();
   const body = st?.soi ?? "";
-  // the ascent: off the ground, until an orbit clear of the air
-  if (P.landed && !landed && body) P.ascent = { t0: t, spent0: spent, body, gMax: 0, lat: g?.lat ?? 0 };
+  // (a jump of height between two frames — a save loaded, the craft placed elsewhere —: the phases under way dropped)
+  const alt = st?.altKm;
+  if (alt !== undefined && P.altKm !== undefined && Math.abs(alt - P.altKm) > 50) {
+    P.ascent = P.rdv = P.entry = P.circ = null;
+    P.landed = landed;
+  }
+  P.altKm = alt;
+  // the ascent: off the ground — lifting off near it —, until an orbit clear of the air
+  if (P.landed && !landed && body && (alt ?? 0) < 2) P.ascent = { t0: t, spent0: spent, body, gMax: 0, lat: g?.lat ?? 0 };
   if (P.ascent) {
     P.ascent.gMax = Math.max(P.ascent.gMax, Math.abs(air.g || 0));
     const o = st?.orbit;

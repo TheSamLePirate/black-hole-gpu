@@ -1036,12 +1036,12 @@ function syncMcpKind() {
   const kind = views.view === "radar" || views.view === "air" ? "arms" : fam.includes("space") && !fam.includes("jet") ? "space" : "jet";
   // (the spacecraft's panel rebuilt for another station or craft — its pops' order, the Endurance's ring)
   const sig = kind === "space" ? `space:${station.id}:${!!snapNow()?.craft?.ring}` : kind;
-  if (mcp.dataset.kind === sig && mcp.childElementCount) return;
+  if ((mcp.dataset.sig ?? mcp.dataset.kind) === sig && mcp.childElementCount) return;
+  // (its kind said plainly — "arms", "space", "jet" —, its signature beside it)
   if (kind === "arms") buildArms();
-  else if (kind === "space") {
-    buildFc();
-    mcp.dataset.kind = sig;
-  } else buildMcp();
+  else if (kind === "space") buildFc();
+  else buildMcp();
+  mcp.dataset.sig = sig;
 }
 /** the F-35's weapons (PLAN-CREW-ACTIONS A5), the backseater's: the radar, the weapon, the lock, the shots, the decoys */
 function buildArms() {
