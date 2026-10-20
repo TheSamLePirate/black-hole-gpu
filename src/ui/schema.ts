@@ -2054,7 +2054,7 @@ export const SCHEMA: ControlDef[] = [
     advanced: true,
     effect: "scene",
     visible: (s) => s.earthTerrainRasterView !== "off",
-    help: "Choose the pilot patch: levels 0 to 5 have north-south vertex spacing of about 10 m, 38 m, 153 m, 612 m, 2.45 km and 9.78 km. Each patch spans 128 cells. This is a geometry diagnostic, with no automatic level transitions or runway grading yet.",
+    help: "Choose the pilot patch: levels 0 to 5 have north-south vertex spacing of about 10 m, 38 m, 153 m, 612 m, 2.45 km and 9.78 km. Each patch spans 128 cells. This is a geometry diagnostic, without automatic level transitions. Coarse levels may not resolve runway edges.",
     keywords: "terrain raster pilot level spacing patch diagnostics",
   },
   {

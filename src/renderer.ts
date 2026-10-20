@@ -5798,7 +5798,7 @@ export class Renderer {
       this.terrainRaster?.suspend();
       return;
     }
-    this.terrainRaster ??= new TerrainRaster(this.device);
+    this.terrainRaster ??= new TerrainRaster(this.device, this.traceSource);
     if (target.width * target.height > TERRAIN_RASTER_MAX_PIXELS) {
       this.terrainRaster.idle("pixel-budget");
       return;
@@ -5820,8 +5820,20 @@ export class Renderer {
       s.fov,
       1476.625 * s.massSolar,
     );
-    this.terrainRaster.encode(enc, output, target.sceneDepth, this.bodyBuf, frame, level, (label, descriptor) =>
-      this.prof.pass(label, descriptor),
+    this.terrainRaster.encode(
+      enc,
+      output,
+      target.sceneDepth,
+      {
+        params: this.paramBuf,
+        table: this.bodyBuf,
+        elevation: this.earthMaps.elev,
+        tiles: this.earthTiles.texture,
+        sampler: this.sampler,
+      },
+      frame,
+      level,
+      (label, descriptor) => this.prof.pass(label, descriptor),
     );
   }
   /** Experimental height-cache diagnostics, accessible through __bh.renderer. */

@@ -25,7 +25,7 @@ for (const host of ["trace.wgsl", "character.wgsl"]) shaders[`${host} + forest.w
 const traced = withTerrainCache(shaders["trace.wgsl + forest.wgsl"]!);
 shaders["trace.wgsl + forest + terrain cache"] = traced;
 shaders["terrain height cache bake (system/terrain-cache.ts)"] = terrainCacheShader(traced);
-shaders["terrain raster pilot (system/terrain-raster.ts)"] = terrainRasterShader();
+shaders["terrain raster pilot (system/terrain-raster.ts)"] = terrainRasterShader(traced);
 shaders["trace.wgsl without scenery"] = sceneryShader(surfaceShader(traced, true), false);
 shaders["trace.wgsl without surface textures"] = sceneryShader(surfaceShader(traced, false), true);
 shaders["trace.wgsl without the aerial table"] = aerialShader(traced, false);

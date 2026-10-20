@@ -21,8 +21,15 @@ de gain sur le M1 Max. Aucun test, vol ou benchmark de jeu n'a été lancé.
 - Le dessin lit une fenêtre seulement quand sa préparation et sa copie précèdent la passe raster dans la
   soumission actuelle. Une fenêtre non prête laisse la vue actuelle visible.
 
-Les hauteurs de P1a sont le **relief naturel filtré**. Le pilote n'applique pas le nivellement des pistes,
-ne dessine ni végétation, ni bâtiments, ni vagues et ne raccorde pas plusieurs fenêtres. Il utilise des
+Les hauteurs de P1a sont le **relief naturel filtré**. Le pilote recalcule désormais les sommets dans la zone
+de nivellement des pistes avec `earthHeightExactG`, extraite de la même source WGSL : altitude, transition
+et suppression du détail procédural suivent le modèle existant, à l'empreinte du niveau choisi. Aucun
+tampon de hauteurs supplémentaire n'est ajouté. Les paramètres et textures sont partagés ; les valeurs
+de piste sont relues à chaque dessin, sans dépendre d'une invalidation du cache naturel.
+
+Cela ne garantit pas une piste plane entre les sommets : une grille grossière peut manquer ses bords ou
+interpoler au travers. Un maillage conforme aux pistes reste nécessaire avant la bascule du rendu final.
+Le pilote ne dessine ni végétation, ni bâtiments, ni vagues et ne raccorde pas plusieurs fenêtres. Il utilise des
 triangles à deux faces pour l'inspection. Aucun de ces choix n'est validé pour la visibilité finale.
 
 ## Contrat de profondeur de cette passe
@@ -59,7 +66,7 @@ la vue actuelle visible. Les couleurs sont des indications diagnostiques, sans i
 tracée/résolue, y compris son décor et ses effets ; entre les rayons temps réel, elle peut conserver une valeur
 antérieure ou utiliser le minimum des quatre échantillons frais voisins. Le raster échantillonne les centres
 des pixels, sans le jitter individuel des rayons. À cela s'ajoutent empreintes filtrées différentes, triangles
-au lieu d'interpolation bilinéaire, et pistes/mer/décor absents du pilote. Une couleur signale donc un écart
+au lieu d'interpolation bilinéaire, sous-échantillonnage des pistes, mer/décor absents du pilote. Une couleur signale donc un écart
 à investiguer, pas une faute géométrique attribuable automatiquement au cache.
 
 Le chemin physique conserve les calculs d'éclipse, réfraction, diffusion, absorption et transport relativiste.
@@ -113,7 +120,7 @@ Vérifications effectuées, sans exécuter de passe de jeu :
 
 Ces vérifications ne valident pas les bind groups, les dessins, la précision numérique ou le rendu en mouvement.
 
-Suite nécessaire : références P0, accord numérique WGS84 des sommets et de la profondeur, nivellement des pistes,
+Suite nécessaire : références P0, accord numérique WGS84 des sommets et de la profondeur, maillage conforme aux pistes,
 bords/raccords et bornes d'erreur, sélection multi-patches par erreur projetée, mouvement, puis consommation
 de la visibilité raster par le rendu final en conservant éclairage et optique. Les forêts et nuages restent
 des lots distincts ; aucun gain de FPS ou de qualité AAA n'est déclaré acquis ici.

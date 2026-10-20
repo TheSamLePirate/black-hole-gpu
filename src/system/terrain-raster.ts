@@ -1,9 +1,11 @@
 import { TERRAIN_CACHE_N } from "./terrain-cache-layout";
+import { terrainHeightLibrary, type TerrainCacheSources } from "./terrain-cache";
 import { TERRAIN_RASTER_MAX_PIXELS, TERRAIN_RASTER_UNIFORM_BYTES } from "./terrain-raster-frame";
 
 /** The pilot's geometry and inspector, deliberately separate from radiance and the reference tracer. */
-export function terrainRasterShader(): string {
+export function terrainRasterShader(trace: string): string {
   return `
+${terrainHeightLibrary(trace, true, 1)}
 const GRID_N = ${TERRAIN_CACHE_N}u;
 struct U {
   origin: vec4f, reference: vec4f, figure: vec4f,
@@ -34,7 +36,12 @@ struct Vertex { @builtin(position) clip: vec4f, @location(0) p: vec3f };
   let z = (1.0 - u.figure.y) * (dn * sa + u.figure.x * ds);
   let cl = u.reference.x * cos(d.x) - u.reference.y * sin(d.x);
   let sl = u.reference.y * cos(d.x) + u.reference.x * sin(d.x);
-  let h = table[u32(u.origin.w) + node / 4u][node % 4u];
+  var h = table[u32(u.origin.w) + node / 4u][node % 4u];
+  let normal = vec3f(ca * cl, ca * sl, sa);
+  // The exact grading and detail suppression, not a second approximation of runway flattening.
+  if (runwayGrade(normal).x > 0.0) {
+    h = earthHeightExactG(normal, EARTH_RM / (2.0 * u.figure.w));
+  }
   let delta = vec3f(x * u.reference.x - y * u.reference.y, x * u.reference.y + y * u.reference.x, z);
   let p = u.origin.xyz + delta + vec3f(ca * cl, ca * sl, sa) * h;
   var v: Vertex;
@@ -101,6 +108,8 @@ export class TerrainRaster {
   private index: GPUBuffer | null = null;
   private meshBind: GPUBindGroup | null = null;
   private table: GPUBuffer | null = null;
+  private heightSources: TerrainCacheSources | null = null;
+  private heightBind: GPUBindGroup | null = null;
   private attachments: Attachments | null = null;
   private retired = new Set<Attachments>();
   private disposed = false;
@@ -110,8 +119,11 @@ export class TerrainRaster {
   private reason = "compiling";
   private level = -1;
 
-  constructor(private device: GPUDevice) {
-    this.module = device.createShaderModule({ code: terrainRasterShader(), label: "terrain raster pilot" });
+  constructor(
+    private device: GPUDevice,
+    trace: string,
+  ) {
+    this.module = device.createShaderModule({ code: terrainRasterShader(trace), label: "terrain raster pilot" });
     this.inspectLayout = device.createBindGroupLayout({
       entries: [
         { binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
@@ -220,7 +232,7 @@ export class TerrainRaster {
     enc: GPUCommandEncoder,
     output: GPUTexture,
     sceneDepth: GPUBuffer,
-    table: GPUBuffer,
+    sources: TerrainCacheSources,
     frame: Float32Array<ArrayBuffer>,
     level: number,
     profile: (label: string, descriptor: GPURenderPassDescriptor) => GPURenderPassDescriptor,
@@ -247,6 +259,20 @@ export class TerrainRaster {
       this.index = this.device.createBuffer({ size: indices.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
       this.device.queue.writeBuffer(this.index, 0, indices);
     }
+    const table = sources.table;
+    const old = this.heightSources;
+    if (!old || !(Object.keys(sources) as (keyof TerrainCacheSources)[]).every((k) => old[k] === sources[k])) {
+      this.heightBind = this.device.createBindGroup({
+        layout: this.mesh.getBindGroupLayout(1),
+        entries: [
+          { binding: 0, resource: { buffer: sources.params } },
+          { binding: 4, resource: sources.sampler },
+          { binding: 21, resource: sources.elevation.createView() },
+          { binding: 28, resource: sources.tiles.createView({ dimension: "2d-array" }) },
+        ],
+      });
+      this.heightSources = sources;
+    }
     if (this.table !== table) {
       this.table = table;
       this.meshBind = this.device.createBindGroup({
@@ -267,6 +293,7 @@ export class TerrainRaster {
     );
     pass.setPipeline(this.mesh);
     pass.setBindGroup(0, this.meshBind!);
+    pass.setBindGroup(1, this.heightBind!);
     pass.setIndexBuffer(this.index!, "uint32");
     pass.drawIndexed((TERRAIN_CACHE_N - 1) ** 2 * 6);
     pass.end();
@@ -326,5 +353,7 @@ export class TerrainRaster {
     this.attachments = null;
     this.meshBind = null;
     this.table = null;
+    this.heightBind = null;
+    this.heightSources = null;
   }
 }

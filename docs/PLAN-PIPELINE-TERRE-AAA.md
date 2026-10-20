@@ -137,7 +137,7 @@ Toutes les cases d'implémentation sont volontairement non cochées.
 
 **En cours :** [P1a — cache GPU de hauteurs expérimental](progress/terrestrial-aaa/P1a.md). Ce sous-lot prépare une source réutilisable et son chemin de comparaison dans le traceur. Il ne valide ni l'erreur géométrique, ni le gain total, ni le jalon raster ; les cases restent ouvertes jusqu'à leurs preuves.
 
-[P1b — première passe de terrain raster et inspecteur](progress/terrestrial-aaa/P1b.md) ajoute une portion courbe WGS84 et les vues de profondeur/normales/écart. Elle ne remplace pas encore les intersections primaires ; la sélection multi-patches, les raccords LOD et le nivellement restent à implémenter avant cette bascule.
+[P1b — première passe de terrain raster et inspecteur](progress/terrestrial-aaa/P1b.md) ajoute une portion courbe WGS84 et les vues de profondeur/normales/écart. Le nivellement est désormais évalué aux sommets des pistes par la fonction existante. Elle ne remplace pas encore les intersections primaires ; sélection multi-patches, raccords LOD et maillage conforme aux pistes restent nécessaires avant cette bascule.
 
 - [ ] Construire une surface source stable et ses versions filtrées à partir du relief réel, du détail procédural et du nivellement des pistes.
 - [ ] Produire incrémentalement hauteurs, normales macro et bornes par tuile ; gérer bordures, versions et invalidation.

@@ -64,9 +64,9 @@ fn terrainCachedHeight(q: vec3f, foot: f32) -> f32 {
  * Bake natural terrain from the tracer's own height function and DEM filtering. Select its
  * transitive function/constant dependencies, not a hand-maintained second terrain implementation.
  * Evaluate the warp field directly so nodes do not depend on the camera's moving warp windows.
- * Runway grading is excluded here: every graded query stays on the reference function in the tracer.
+ * Default: natural terrain for caching. The raster variant enables the original runway grading.
  */
-export function terrainCacheShader(trace: string): string {
+export function terrainHeightLibrary(trace: string, runways = false, group = 0): string {
   const functions = new Map<string, string>();
   for (const [, name] of trace.matchAll(/^fn (\w+)\(/gm)) functions.set(name!, wgslFunction(trace, name!));
   functions.set("earthWarp", "fn earthWarp(q: vec3f) -> vec3f { return earthWarpExact(q); }");
@@ -96,18 +96,22 @@ export function terrainCacheShader(trace: string): string {
   }
   const params = /struct Params\s*\{[\s\S]*?\};/.exec(trace)?.[0];
   if (!params) throw new Error("terrain-cache: missing Params");
-  constants.set("HAS_RWY", "override HAS_RWY: bool = false;");
+  constants.set("HAS_RWY", `override HAS_RWY: bool = ${runways};`);
   return `${params}
 ${[...constants.values()].join("\n")}
-@group(0) @binding(0) var<uniform> P: Params;
-@group(0) @binding(4) var bgSamp: sampler;
-@group(0) @binding(21) var earthElev: texture_2d<f32>;
-@group(0) @binding(28) var earthTiles: texture_2d_array<u32>;
+@group(${group}) @binding(0) var<uniform> P: Params;
+@group(${group}) @binding(4) var bgSamp: sampler;
+@group(${group}) @binding(21) var earthElev: texture_2d<f32>;
+@group(${group}) @binding(28) var earthTiles: texture_2d_array<u32>;
+fn cost(k: u32) {}
+${[...selected.values()].join("\n")}`;
+}
+
+export function terrainCacheShader(trace: string): string {
+  return `${terrainHeightLibrary(trace)}
 struct CacheU { reference: vec4f, scale: vec4f };
 @group(1) @binding(0) var<uniform> U: CacheU;
 @group(1) @binding(1) var<storage, read_write> outHeights: array<f32>;
-fn cost(k: u32) {}
-${[...selected.values()].join("\n")}
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) gid: vec3u) {
   if (any(gid.xy >= vec2u(${TERRAIN_CACHE_N}u))) { return; }
