@@ -3,7 +3,7 @@
 // the craft is flown until the ground is in, then the clock is stopped and the same view drawn with the near Earth traced
 // at ×6, at ×4, then shaded by the raster (`earthPipeline: "raster"`, the sky at ×4), the view touched every frame (fresh
 // rays, no history: a fast turn's worst); each mode's GPU passes and image, against the same view converged.
-// PLACES=tarifa-low,tarifa,alps (default all); FRAMES: frames flown a mode (90); MODES=trace6,trace4,raster; RF_DETAIL (below).
+// PLACES=tarifa-low,tarifa,alps (default all); FRAMES: frames flown a mode (90); MODES=trace6,trace4,rasterwalk,raster (rasterwalk: the raster without the trees' instances); RF_DETAIL (below).
 // Captures remote-results/rf-<place>-<mode>[-ref].png; measures remote-results/raster-flight.json.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
@@ -20,10 +20,12 @@ const PLACES: Record<string, string> = {
 const MODE_SET: Record<string, string> = {
   trace6: `__bh.settings.earthPipeline = "trace"; __bh.game.set("realtimeSubsampling", 6);`,
   trace4: `__bh.settings.earthPipeline = "trace"; __bh.game.set("realtimeSubsampling", 4);`,
-  raster: `__bh.settings.earthPipeline = "raster"; __bh.game.set("realtimeSubsampling", 4);`,
+  raster: `__bh.settings.earthPipeline = "raster"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4);`,
+  // (the raster without the trees' instances: the grid walked from every pixel, as étape 1a had it)
+  rasterwalk: `__bh.settings.earthPipeline = "raster"; __bh.renderer.sceneryRasterOn = false; __bh.game.set("realtimeSubsampling", 4);`,
 };
 const places = (process.env.PLACES ?? "tarifa-low,tarifa,alps").split(",");
-const modes = (process.env.MODES ?? "trace6,trace4,raster").split(",");
+const modes = (process.env.MODES ?? "trace6,trace4,rasterwalk,raster").split(",");
 const FRAMES = Number(process.env.FRAMES ?? 90);
 // (RF_DETAIL=max, the default: the scenery's trees and buildings at their most, drawn farthest, with their shadows and the
 // satellite surface — the image aimed at; RF_DETAIL=game: the game's own settings)
@@ -72,6 +74,11 @@ describe.skipIf(!E2E)("the raster's primary visibility in flight: frame rate and
         ${PLACES[pl]} __bh.settings.shipMount = "cockpit"; ${DETAIL} __bh.settings.earthPipeline = "trace";
         const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
         c.jetModes.alt = c.last?.alt ?? c.jetModes.alt; return 1; })()`);
+      // (the clock stopped a few frames after the craft is put there: every run sees the same view, however long the
+      // ground's tiles and the kernels take)
+      await app.js(
+        `(async () => { for (let i = 0; i < 10; i++) await new Promise((q) => requestAnimationFrame(q)); __bh.settings.animate = false; return 1; })()`,
+      );
       await app.waitFor(`!!__bh.renderer.variantReady`, 300_000).catch(() => {});
       await app.js(`(async () => { const r = __bh.renderer, frame = () => new Promise((q) => requestAnimationFrame(q));
         const t0 = performance.now(); let calm = 0;
@@ -125,6 +132,7 @@ describe.skipIf(!E2E)("the raster's primary visibility in flight: frame rate and
           raysMs: +rays.toFixed(1),
           psnrVsConverged: psnr(png(shots[md]!), ref),
           primary: m.raster.primary,
+          trees: (m.raster.scenery as { active?: boolean } | null)?.active ?? false,
           passes: m.passes,
         };
         rows.push(row);

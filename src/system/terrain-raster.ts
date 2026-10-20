@@ -1,4 +1,7 @@
 import { TERRAIN_CACHE_N } from "./terrain-cache-layout";
+
+/** The visibility target: r the ground's distance [m], g the scenery's instance drawn nearest (system/scenery-raster.ts). */
+export const TERRAIN_RASTER_FORMAT: GPUTextureFormat = "rg32float";
 import { terrainHeightLibrary, type TerrainCacheSources } from "./terrain-cache";
 import { TERRAIN_RASTER_MAX_PIXELS, TERRAIN_RASTER_UNIFORM_BYTES } from "./terrain-raster-frame";
 import { RASTER_MESH_INDEX_BYTES, RASTER_MESH_VERTEX_BYTES, runwayMeshKey, terrainRasterMesh } from "./terrain-raster-mesh";
@@ -59,7 +62,8 @@ struct Vertex { @builtin(position) clip: vec4f, @location(0) p: vec3f };
   v.clip = vec4f(v.p.x / u.right.w, v.p.y / u.up.w, u.forward.w, v.p.z);
   return v;
 }
-@fragment fn terrainFs(v: Vertex) -> @location(0) f32 { return length(v.p); }
+// (r: the ground's distance [m]; g: the scenery's instance drawn there — none here, the scenery's draw writes it alone)
+@fragment fn terrainFs(v: Vertex) -> @location(0) vec4f { return vec4f(length(v.p), 0.0, 0.0, 1.0); }
 
 @vertex fn screenVs(@builtin(vertex_index) k: u32) -> @builtin(position) vec4f {
   let p = array<vec2f, 3>(vec2f(-1,-1), vec2f(3,-1), vec2f(-1,3));
@@ -157,7 +161,7 @@ export class TerrainRaster {
           entryPoint: "terrainVs",
           buffers: [{ arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] }],
         },
-        fragment: { module: this.module, entryPoint: "terrainFs", targets: [{ format: "r32float" }] },
+        fragment: { module: this.module, entryPoint: "terrainFs", targets: [{ format: TERRAIN_RASTER_FORMAT }] },
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
       })
@@ -236,7 +240,7 @@ export class TerrainRaster {
     const distance = this.device.createTexture({
       label: "terrain raster metric distance",
       size: [width, height],
-      format: "r32float",
+      format: TERRAIN_RASTER_FORMAT,
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
     const depth = this.device.createTexture({
@@ -262,6 +266,7 @@ export class TerrainRaster {
     window: TerrainWindow,
     runways: Float32Array,
     profile: (label: string, descriptor: GPURenderPassDescriptor) => GPURenderPassDescriptor,
+    scenery?: (pass: GPURenderPassEncoder) => void,
   ): boolean {
     this.idle("compiling");
     if (this.disposed || this.error) return false;
@@ -327,6 +332,8 @@ export class TerrainRaster {
     pass.setIndexBuffer(this.index!, "uint32");
     pass.setVertexBuffer(0, this.vertex!);
     pass.drawIndexed(this.indexCount);
+    // (the scenery's instances after the ground, against its depth, their ids in g alone — system/scenery-raster.ts)
+    scenery?.(pass);
     pass.end();
     this.active = true;
     this.reason = "pilot";
@@ -335,7 +342,8 @@ export class TerrainRaster {
     return true;
   }
 
-  /** The distances drawn this frame (r32float, metres from the camera, 0 where no triangle covers a pixel), else null. */
+  /** The distances drawn this frame (rg32float: r metres from the camera, 0 where no triangle covers a pixel; g the scenery's
+   *  instance), else null. */
   distanceTexture(): GPUTexture | null {
     return this.active && !this.error ? (this.attachments?.distance ?? null) : null;
   }
@@ -388,8 +396,8 @@ export class TerrainRaster {
       cutTriangles: this.cutTriangles,
       width: a?.width ?? 0,
       height: a?.height ?? 0,
-      targetBytes: a ? a.width * a.height * 8 : 0,
-      retiredBytes: [...this.retired].reduce((s, p) => s + p.width * p.height * 8, 0),
+      targetBytes: a ? a.width * a.height * 12 : 0,
+      retiredBytes: [...this.retired].reduce((s, p) => s + p.width * p.height * 12, 0),
       indexBytes: this.index?.size ?? 0,
       vertexBytes: this.vertex?.size ?? 0,
       uniformBytes: this.uniform?.size ?? 0,

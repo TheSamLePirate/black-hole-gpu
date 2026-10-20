@@ -191,18 +191,115 @@ fn forestLook(h: ForestHit, n: vec3f, p: vec3f, sat: vec4f) -> ForestLook {
   return ForestLook(alb, through);
 }
 
+// The section's header, read once a query: its offset, the cells' grid (w × h, the words' place), a cell's size, the
+// world's columns, the grid's first global cell, and the cells → frame metres maps
+struct ForestHead { F: u32, w: i32, h: i32, cellsAt: u32, cell: f32, columns: i32, i0: i32, j0: i32, C: vec3f, Dm: vec3f };
+fn forestHead(F: u32) -> ForestHead {
+  let h0 = forestData(F); let h1 = forestData(F + 1u); let h6 = forestData(F + 6u);
+  return ForestHead(F, i32(h0.x), i32(h0.y), u32(h1.x), h1.z, i32(h1.w), bitcast<i32>(h6.x), bitcast<i32>(h6.y),
+    forestData(F + 4u).xyz, forestData(F + 5u).xyz);
+}
+// Where a ray comes within reach of cell (i, j)'s tree [m along it]: its trunk's foot, less its crown's width and its height
+// (forestCandidate's own t0) — the walk past a tree the raster named and the ray missed starts there
+fn forestCandidateStart(o: vec3f, d: vec3f, i: i32, j: i32, hd: ForestHead) -> f32 {
+  if (i < 0 || j < 0 || i >= hd.w || j >= hd.h) { return 0.0; }
+  let k = u32(j * hd.w + i);
+  let word = bitcast<u32>(forestData(hd.cellsAt + k / 4u)[k % 4u]);
+  let z = f32(word & 0x3fffffu) / 100.0 - 20000.0;
+  let height = 2.0 + f32(word >> 26u) * 0.5;
+  let gi = u32(((hd.i0 + i) % hd.columns + hd.columns) % hd.columns); let gj = bitcast<u32>(hd.j0 + j);
+  let u = f32(i) + 0.12 + 0.76 * forestUnit(forestHash(gi, gj, 1u));
+  let v = f32(j) + 0.12 + 0.76 * forestUnit(forestHash(gi, gj, 2u));
+  let r = hd.cell * (0.3 + 0.17 * forestUnit(forestHash(gi, gj, 3u)));
+  let foot = vec3f(hd.C.x + hd.C.y * u + hd.C.z * v, hd.Dm.x + hd.Dm.y * u + hd.Dm.z * v, z);
+  return max(0.0, dot(foot - o, d) - r - height);
+}
+// A ray's crossing with the one tree of cell (i, j), or none (t −1): forestQuery's own test of a candidate, and the raster's
+// (the tree its instance drew at a pixel: docs/PLAN-RENDU-RASTER-AAA.md étape 1b)
+fn forestCandidate(o: vec3f, d: vec3f, i: i32, j: i32, detail: f32, hd: ForestHead) -> ForestHit {
+  let none = ForestHit(-1.0, vec3f(0.0), 0u, 0u, vec3f(0.0), 0.0, 0.0, 1.0);
+  let F = hd.F; let w = hd.w; let hh = hd.h; let cellsAt = hd.cellsAt; let cell = hd.cell; let columns = hd.columns;
+  let i0 = hd.i0; let j0 = hd.j0; let C = hd.C; let Dm = hd.Dm;
+  if (i < 0 || j < 0 || i >= w || j >= hh) { return none; }
+  let k = u32(j * w + i);
+  let word = bitcast<u32>(forestData(cellsAt + k / 4u)[k % 4u]);
+  let kind = (word >> 22u) & 15u;
+  if (kind == 0u) { return none; }
+  let z = f32(word & 0x3fffffu) / 100.0 - 20000.0;
+  let height = 2.0 + f32(word >> 26u) * 0.5;
+  let gi = u32(((i0 + i) % columns + columns) % columns); let gj = bitcast<u32>(j0 + j);
+  let u = f32(i) + 0.12 + 0.76 * forestUnit(forestHash(gi, gj, 1u));
+  let v = f32(j) + 0.12 + 0.76 * forestUnit(forestHash(gi, gj, 2u));
+  let r = cell * (0.3 + 0.17 * forestUnit(forestHash(gi, gj, 3u)));
+  let foot = vec3f(C.x + C.y * u + C.z * v, Dm.x + Dm.y * u + Dm.z * v, z);
+  // (the ray's nearest pass to the trunk's axis: farther than the crown, nothing)
+  let rel = foot.xy - o.xy; let dd = dot(d.xy, d.xy);
+  let off = select(length(rel - d.xy * (dot(rel, d.xy) / dd)), length(rel), dd < 1e-10);
+  if (off > r + 0.5) { return none; }
+  let kA = forestData(F + 7u + 4u * kind); let kB = forestData(F + 8u + 4u * kind); let kD = forestData(F + 10u + 4u * kind);
+  // (the ray started near the tree: the shapes' sums stay small however far the camera)
+  let t0 = max(0.0, dot(foot - o, d) - r - height);
+  let oo = o + d * t0;
+  // (a deciduous crown in winter: its twigs carved through, the sky behind them)
+  let amp = (kD.x + 0.55 * kD.w * forestData(F + 7u).z) * r;
+  let near = t0 + r + height < detail * (0.85 + 0.3 * forestUnit(forestHash(gi, gj, 8u)));
+  // the plain crown (far: shrunk by half the carving, its mean)
+  var crown = ForestCrown(kA.x > 0.5, vec3f(0.0), vec3f(0.0), amp, kD.y, kD.z);
+  let shrink = select(0.5 * amp, 0.0, near);
+  if (crown.cone) {
+    crown.c = foot + vec3f(0.0, 0.0, height);
+    crown.r = vec3f(kA.z * r - shrink, height * (1.0 - kA.y), 0.0);
+  } else {
+    crown.c = foot + vec3f(0.0, 0.0, kA.y * height);
+    crown.r = vec3f(kA.z * r - shrink, kA.z * r - shrink, kA.w * height - shrink);
+  }
+  var h = select(forestEllipsoid(oo, d, crown.c, crown.r), forestCone(oo, d, crown.c, crown.r.x, crown.r.y), crown.cone);
+  var part = 0u; var ao = 1.0;
+  // (bare: a deciduous tree's winter, 0 … 1)
+  let bare = kD.w * forestData(F + 7u).z;
+  let seed = forestUnit(forestHash(gi, gj, 4u));
+  if (h.x > 0.0 && near && bare > 0.5) {
+    let c = forestTwigs(oo, d, crown, h.x, seed);
+    if (c.x > 0.0) {
+      h = vec4f(c.x, forestTwigNormal(oo + d * c.x - crown.c, seed));
+      ao = clamp(1.0 + c.y / (crown.r.x + 1e-3), 0.45, 1.0);
+    } else { h = vec4f(-1.0); }
+  } else if (h.x > 0.0 && near) {
+    let c = forestCarved(oo, d, crown, h.x);
+    if (c.x > 0.0) {
+      h = vec4f(c.x, forestCrownNormal(crown, oo + d * c.x));
+      ao = clamp(1.0 + c.y / (crown.amp * 1.6 + 1e-3), 0.3, 1.0);
+    } else { h = vec4f(-1.0); }
+  } else if (h.x > 0.0 && bare > 0.5) {
+    // (far: the twigs' cover, a fine fixed pattern the camera's jitter averages)
+    let k = bitcast<vec3u>(vec3i(floor((oo + d * h.x) * 2.5)));
+    if (forestUnit(forestPcg((k.x * 73856093u) ^ (k.y * 19349663u) ^ (k.z * 83492791u))) > 0.45) { h = vec4f(-1.0); }
+  }
+  if (h.x > 0.0) { h.x += t0; }
+  if (kB.x > 0.0) {
+    // (a bare crown shows its trunk running up into it)
+    let tr = forestTrunk(oo, d, foot - vec3f(0.0, 0.0, 1.0), kB.y + kB.z * height, z + mix(kB.x, 0.8, bare) * height);
+    if (tr.x > 0.0 && (h.x < 0.0 || tr.x + t0 < h.x)) { h = vec4f(tr.x + t0, tr.yzw); part = 1u; ao = 1.0; }
+  }
+  if (h.x <= 0.0) { return none; }
+  return ForestHit(h.x, h.yzw, kind, part, foot, height, seed, ao);
+}
+
 // The first tree a ray from o along d (unit, frame metres) meets before tMax; anyHit: the first found.
 // Crowns within `detail` metres along the ray are carved by their leaves (0: the plain shapes everywhere).
 fn forestQuery(o: vec3f, d: vec3f, tMax: f32, anyHit: bool, detail: f32) -> ForestHit {
+  return forestQueryFrom(o, d, 0.0, tMax, anyHit, detail);
+}
+// The same, the cells walked from tStart along the ray (the raster's: no tree before it — its instance there the nearest)
+fn forestQueryFrom(o: vec3f, d: vec3f, tStart: f32, tMax: f32, anyHit: bool, detail: f32) -> ForestHit {
   var best = ForestHit(tMax, vec3f(0.0), 0u, 0u, vec3f(0.0), 0.0, 0.0, 1.0);
   let F = u32(forestData(2u).x);
   if (F == 0u) { return best; }
-  let h0 = forestData(F); let h1 = forestData(F + 1u);
-  let A = forestData(F + 2u).xyz; let B = forestData(F + 3u).xyz; let C = forestData(F + 4u).xyz; let Dm = forestData(F + 5u).xyz;
-  let h6 = forestData(F + 6u);
-  let i0 = bitcast<i32>(h6.x); let j0 = bitcast<i32>(h6.y); let columns = i32(h1.w);
-  let w = i32(h0.x); let hh = i32(h0.y); let bw = u32(h0.z); let bh = i32(h0.w);
-  let cellsAt = u32(h1.x); let blocksAt = u32(h1.y); let cell = h1.z;
+  let hd = forestHead(F);
+  let A = forestData(F + 2u).xyz; let B = forestData(F + 3u).xyz;
+  let h0 = forestData(F);
+  let w = hd.w; let hh = hd.h; let bw = u32(h0.z); let bh = i32(h0.w);
+  let blocksAt = u32(forestData(F + 1u).y);
   // the ray in dual cells' coordinates (the cells' coordinates + ½)
   let s0 = vec2f(A.x + A.y * o.x + A.z * o.y, B.x + B.y * o.x + B.z * o.y) + 0.5;
   let sr = vec2f(A.y * d.x + A.z * d.y, B.y * d.x + B.z * d.y);
@@ -211,7 +308,7 @@ fn forestQuery(o: vec3f, d: vec3f, tMax: f32, anyHit: bool, detail: f32) -> Fore
   let inv = select(1.0 / sd, vec2f(1e30), sd == vec2f(0.0));
   let ta = (vec2f(0.0) - s0) * inv; let tb = (vec2f(f32(w + 1), f32(hh + 1)) - s0) * inv;
   let t1 = min(min(max(ta, tb).x, max(ta, tb).y), tMax);
-  var t = max(max(min(ta, tb).x, min(ta, tb).y), 0.0);
+  var t = max(max(min(ta, tb).x, min(ta, tb).y), max(tStart, 0.0));
   let stp = vec2i(select(vec2i(-1), vec2i(1), sd >= vec2f(0.0)));
   let delta = abs(inv);
   var steps = 0u;
@@ -236,70 +333,9 @@ fn forestQuery(o: vec3f, d: vec3f, tMax: f32, anyHit: bool, detail: f32) -> Fore
     var next = (vec2f(p) + select(vec2f(0.0), vec2f(1.0), sd >= vec2f(0.0)) - s0) * inv;
     loop {
       for (var q = 0; q < 4; q++) {
-        let i = p.x - 1 + (q & 1); let j = p.y - 1 + (q >> 1);
-        if (i < 0 || j < 0 || i >= w || j >= hh) { continue; }
-        let k = u32(j * w + i);
-        let word = bitcast<u32>(forestData(cellsAt + k / 4u)[k % 4u]);
-        let kind = (word >> 22u) & 15u;
-        if (kind == 0u) { continue; }
-        let z = f32(word & 0x3fffffu) / 100.0 - 20000.0;
-        let height = 2.0 + f32(word >> 26u) * 0.5;
-        let gi = u32(((i0 + i) % columns + columns) % columns); let gj = bitcast<u32>(j0 + j);
-        let u = f32(i) + 0.12 + 0.76 * forestUnit(forestHash(gi, gj, 1u));
-        let v = f32(j) + 0.12 + 0.76 * forestUnit(forestHash(gi, gj, 2u));
-        let r = cell * (0.3 + 0.17 * forestUnit(forestHash(gi, gj, 3u)));
-        let foot = vec3f(C.x + C.y * u + C.z * v, Dm.x + Dm.y * u + Dm.z * v, z);
-        // (the ray's nearest pass to the trunk's axis: farther than the crown, nothing)
-        let rel = foot.xy - o.xy; let dd = dot(d.xy, d.xy);
-        let off = select(length(rel - d.xy * (dot(rel, d.xy) / dd)), length(rel), dd < 1e-10);
-        if (off > r + 0.5) { continue; }
-        let kA = forestData(F + 7u + 4u * kind); let kB = forestData(F + 8u + 4u * kind); let kD = forestData(F + 10u + 4u * kind);
-        // (the ray started near the tree: the shapes' sums stay small however far the camera)
-        let t0 = max(0.0, dot(foot - o, d) - r - height);
-        let oo = o + d * t0;
-        // (a deciduous crown in winter: its twigs carved through, the sky behind them)
-        let amp = (kD.x + 0.55 * kD.w * forestData(F + 7u).z) * r;
-        let near = t0 + r + height < detail * (0.85 + 0.3 * forestUnit(forestHash(gi, gj, 8u)));
-        // the plain crown (far: shrunk by half the carving, its mean)
-        var crown = ForestCrown(kA.x > 0.5, vec3f(0.0), vec3f(0.0), amp, kD.y, kD.z);
-        let shrink = select(0.5 * amp, 0.0, near);
-        if (crown.cone) {
-          crown.c = foot + vec3f(0.0, 0.0, height);
-          crown.r = vec3f(kA.z * r - shrink, height * (1.0 - kA.y), 0.0);
-        } else {
-          crown.c = foot + vec3f(0.0, 0.0, kA.y * height);
-          crown.r = vec3f(kA.z * r - shrink, kA.z * r - shrink, kA.w * height - shrink);
-        }
-        var h = select(forestEllipsoid(oo, d, crown.c, crown.r), forestCone(oo, d, crown.c, crown.r.x, crown.r.y), crown.cone);
-        var part = 0u; var ao = 1.0;
-        // (bare: a deciduous tree's winter, 0 … 1)
-        let bare = kD.w * forestData(F + 7u).z;
-        let seed = forestUnit(forestHash(gi, gj, 4u));
-        if (h.x > 0.0 && near && bare > 0.5) {
-          let c = forestTwigs(oo, d, crown, h.x, seed);
-          if (c.x > 0.0) {
-            h = vec4f(c.x, forestTwigNormal(oo + d * c.x - crown.c, seed));
-            ao = clamp(1.0 + c.y / (crown.r.x + 1e-3), 0.45, 1.0);
-          } else { h = vec4f(-1.0); }
-        } else if (h.x > 0.0 && near) {
-          let c = forestCarved(oo, d, crown, h.x);
-          if (c.x > 0.0) {
-            h = vec4f(c.x, forestCrownNormal(crown, oo + d * c.x));
-            ao = clamp(1.0 + c.y / (crown.amp * 1.6 + 1e-3), 0.3, 1.0);
-          } else { h = vec4f(-1.0); }
-        } else if (h.x > 0.0 && bare > 0.5) {
-          // (far: the twigs' cover, a fine fixed pattern the camera's jitter averages)
-          let k = bitcast<vec3u>(vec3i(floor((oo + d * h.x) * 2.5)));
-          if (forestUnit(forestPcg((k.x * 73856093u) ^ (k.y * 19349663u) ^ (k.z * 83492791u))) > 0.45) { h = vec4f(-1.0); }
-        }
-        if (h.x > 0.0) { h.x += t0; }
-        if (kB.x > 0.0) {
-          // (a bare crown shows its trunk running up into it)
-          let tr = forestTrunk(oo, d, foot - vec3f(0.0, 0.0, 1.0), kB.y + kB.z * height, z + mix(kB.x, 0.8, bare) * height);
-          if (tr.x > 0.0 && (h.x < 0.0 || tr.x + t0 < h.x)) { h = vec4f(tr.x + t0, tr.yzw); part = 1u; ao = 1.0; }
-        }
-        if (h.x > 0.0 && h.x < best.t) {
-          best = ForestHit(h.x, h.yzw, kind, part, foot, height, seed, ao);
+        let c = forestCandidate(o, d, p.x - 1 + (q & 1), p.y - 1 + (q >> 1), detail, hd);
+        if (c.t > 0.0 && c.t < best.t) {
+          best = c;
           if (anyHit) { return best; }
         }
       }

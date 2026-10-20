@@ -4,6 +4,7 @@ import { TerrainCache, withTerrainCache } from "./system/terrain-cache";
 import { RASTER_HINT_BINDING, RASTER_HINT_TEXTURE_LIMIT, withTerrainRaster } from "./system/terrain-raster-hint";
 import { TERRAIN_CACHE_MAX_LAT, TERRAIN_CACHE_VEC4S } from "./system/terrain-cache-layout";
 import { TerrainRaster } from "./system/terrain-raster";
+import { SceneryRaster } from "./system/scenery-raster";
 import { TERRAIN_RASTER_MAX_PIXELS, terrainRasterFrame } from "./system/terrain-raster-frame";
 import type { NetWalkerHome } from "./controller/netcraft";
 import { CharacterRenderer, type GrassView } from "./character-renderer";
@@ -1448,6 +1449,7 @@ export class Renderer {
     this.earthSurface.dispose();
     this.terrainSurfaceCache?.dispose();
     this.terrainRaster?.dispose();
+    this.sceneryRaster?.dispose();
     this.device.destroy();
   }
 
@@ -1665,6 +1667,7 @@ export class Renderer {
       r.earthSurface.dispose();
       r.terrainSurfaceCache?.dispose();
       r.terrainRaster?.dispose();
+      r.sceneryRaster?.dispose();
       // (a loss simulated — the e2e's, __bh.gpu.lose(): the device destroyed — told as a real one)
       r.lost = r.simulatedLoss ? "simulated" : info.reason === "destroyed" ? "released" : info.message || t("the GPU was reset");
       if (r.offline) r.offline.error = r.lost;
@@ -2927,6 +2930,8 @@ export class Renderer {
     const rasterPrimary = hinting && s.earthPipeline === "raster";
     if (!o.probe) this.rasterPrimaryOn = rasterPrimary;
     f[MOUTH_LIST_AT + 5] = rasterPrimary ? 1 : 0;
+    // (the trees drawn as raster instances this frame: set once they are — encodeTerrainRasterVisibility)
+    f[MOUTH_LIST_AT + 6] = 0;
     // Keep a stable key when a still frame starts refining; its quality kernel compiles the cache out.
     if (terrainCacheEligible) this.featureKey |= FEATURE_TERRAIN_CACHE;
     if (hinting) this.featureKey |= FEATURE_TERRAIN_RASTER;
@@ -5835,13 +5840,22 @@ export class Renderer {
   private terrainRasterLevel = 2;
   /** the last camera frame shades the raster patch's pixels one a pixel (earthPipeline "raster", trace.wgsl shade) */
   private rasterPrimaryOn = false;
+  /** the world's trees as raster instances (system/scenery-raster.ts), made the first time the raster pipeline has them */
+  private sceneryRaster: SceneryRaster | null = null;
+  /** the trees drawn as raster instances under earthPipeline "raster" (a switch for comparisons: off, the grid walked) */
+  sceneryRasterOn = true;
   /** Freeze automatic quality policy while a diagnostic adds its own GPU work. */
   get terrainRasterInspecting() {
     return this.terrainRasterRequested;
   }
   /** Geometry inspector only; its metric depth does not yet replace the scene's occlusion depth. */
   get terrainRasterStats() {
-    return { requested: this.terrainRasterRequested, primary: this.rasterPrimaryOn, ...this.terrainRaster?.stats() };
+    return {
+      requested: this.terrainRasterRequested,
+      primary: this.rasterPrimaryOn,
+      scenery: this.sceneryRaster?.stats() ?? null,
+      ...this.terrainRaster?.stats(),
+    };
   }
 
   /**
@@ -5885,7 +5899,16 @@ export class Renderer {
       s.fov,
       1476.625 * s.massSolar,
     );
-    this.terrainRaster.encodeVisibility(
+    // The world's trees as raster instances (docs/PLAN-RENDU-RASTER-AAA.md étape 1b): culled before the pass, drawn in it
+    // after the ground; the tracer told whether they were (mouthList[1].z — trace.wgsl RASTER_SCENERY), else it walks the
+    // forest's grid as before.
+    const sc = this.earthScenery;
+    let trees = false;
+    if (this.sceneryRasterOn && this.rasterPrimaryOn && s.earthScenery !== "off" && sc.supported && sc.forestCells > 0) {
+      this.sceneryRaster ??= new SceneryRaster(this.device, this.traceSource);
+      trees = this.sceneryRaster.encodeCull(enc, this.prof.pass("scenery raster cull"), frame, sc.params(), sc.buffer, sc.forestCells);
+    }
+    const drawn = this.terrainRaster.encodeVisibility(
       enc,
       {
         params: this.paramBuf,
@@ -5899,7 +5922,12 @@ export class Renderer {
       window,
       this.paramsF.subarray((69 + TILE_PARAM_VEC4S) * 4, (69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S) * 4),
       (label, descriptor) => this.prof.pass(label, descriptor),
+      trees ? (pass) => this.sceneryRaster!.draw(pass) : undefined,
     );
+    if (drawn && trees) {
+      this.paramsF[MOUTH_LIST_AT + 6] = 1;
+      this.device.queue.writeBuffer(this.paramBuf, (MOUTH_LIST_AT + 4) * 4, this.paramsF.subarray(MOUTH_LIST_AT + 4, MOUTH_LIST_AT + 8));
+    }
   }
 
   /** The inspector's overlay on the final image, after the patch's visibility of this frame. */
@@ -5981,6 +6009,7 @@ export class Renderer {
     this.earthSurface.dispose();
     this.terrainSurfaceCache?.dispose();
     this.terrainRaster?.dispose();
+    this.sceneryRaster?.dispose();
     this.device.destroy();
   }
 

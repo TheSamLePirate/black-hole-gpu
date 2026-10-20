@@ -228,6 +228,13 @@ override TUNE_MERGE: u32 = 1u;
 override TUNE_DETAIL: u32 = 1u;
 // (1: the tiles' heights always bilinear, never their cubic B-spline — a measure)
 override TUNE_CHEAP: u32 = 0u;
+// (1: the raster's pixels shade drew coloured by the way their scenery was found — red the tree the instance named, hit;
+// blue that tree missed, the grid walked; green no instance, no walk; white the walk as before (no raster scenery) — a measure)
+override TUNE_RASTER_PATHS: u32 = 0u;
+var<private> RASTER_PATH: u32 = 0u;
+// (the raster hint's grazing limit: a ray lower than this sine over the ground below the hint is marched as before — 0: never,
+// a measure of what the grazing rays' marches cost, the thin ridges then missed)
+override TUNE_HINT_GRAZE: f32 = 0.15;
 // (1: Gargantua's bodies far from a step rejected before their place at its end — 0: each worked out, a measure)
 override TUNE_BODY_REJECT: u32 = 1u;
 // (measures — the Earth's ground shading, a part of it left out: 1 the relief's own normal near, 2 its shadows, 4 the
@@ -5512,6 +5519,7 @@ fn earthTop() -> f32 { return select(9600.0, P.radio2.w, P.radio2.w > 0.0); }
 
 // BEGIN_TERRAIN_RASTER (system/terrain-raster-hint.ts supplies the lookup where the device takes its texture)
 fn terrainRasterHint(px: vec2f) -> f32 { return 0.0; }
+fn terrainRasterId(px: vec2f) -> u32 { return 0u; }
 // END_TERRAIN_RASTER
 // the raster patch's distance [m] along this sample's ray, 0 where it does not cover it (main sets it)
 var<private> RHINT: f32 = 0.0;
@@ -5521,6 +5529,10 @@ fn rasterPrimary() -> bool { return HAS_TERRAIN_RASTER && P.mouthList[1].y > 0.5
 // moments.x of a pixel shade wrote (post.wgsl gatherH leaves it out of the stale pixels' reconstruction: the ground's
 // dense samples bled into the sky's sparse ones at the horizon); above any Σ luminance² a realtime frame writes there
 const RASTER_MARK = 1e30;
+// The scenery's instance the raster drew at the pixel shade works on (terrainRasterId: a tree, its cell + 1; 0 none) and
+// whether the raster drew the scenery at all this frame (then a pixel with none has no tree before its ground — étape 1b)
+var<private> RASTER_ID: u32 = 0u;
+var<private> RASTER_SCENERY: bool = false;
 
 // The ground's clearance (as the march's f) at t along the ray from ro: the full relief, as the crossing's refinement reads it.
 fn marchClear(A: vec3f, o: vec3f, e: f32, rd: vec3f, t: f32, fpK: f32) -> f32 {
@@ -5544,7 +5556,7 @@ fn earthMarchHinted(ro: vec3f, rd: vec3f, fpK: f32, tM: f32, kM: f32) -> f32 {
   let sinG = abs(dot(rd, normalize(pH)));
   // (a grazing ray crosses the ground over a long stretch, and the patch's cells — a hundred metres and more — miss the ridges
   // it could pass between: the march keeps those)
-  if (sinG < 0.15) { return -3.0; }
+  if (sinG < TUNE_HINT_GRAZE) { return -3.0; }
   // (a pixel's footprint there, the patch's own few metres: the vertical band the hint is trusted within)
   let eps = 5.0 + 2.0 * tM * fpK;
   let dm = clamp(eps / sinG, 3.0, 0.02 * tM + 3.0);
@@ -6310,6 +6322,11 @@ fn forestData(i:u32)->vec4f { return scenery[i]; }
 // BEGIN_FOREST_MODULE (shaders/forest.wgsl set in at load, src/forest-shader.ts: this stub draws no tree)
 struct ForestHit { t: f32, n: vec3f, kind: u32, part: u32, base: vec3f, height: f32, seed: f32, ao: f32 };
 fn forestQuery(o: vec3f, d: vec3f, tMax: f32, anyHit: bool, detail: f32) -> ForestHit { return ForestHit(tMax, vec3f(0.0), 0u, 0u, vec3f(0.0), 0.0, 0.0, 1.0); }
+struct ForestHead { F: u32, w: i32, h: i32, cellsAt: u32, cell: f32, columns: i32, i0: i32, j0: i32, C: vec3f, Dm: vec3f };
+fn forestHead(F: u32) -> ForestHead { return ForestHead(F, 0, 0, 0u, 0.0, 1, 0, 0, vec3f(0.0), vec3f(0.0)); }
+fn forestCandidate(o: vec3f, d: vec3f, i: i32, j: i32, detail: f32, hd: ForestHead) -> ForestHit { return ForestHit(-1.0, vec3f(0.0), 0u, 0u, vec3f(0.0), 0.0, 0.0, 1.0); }
+fn forestCandidateStart(o: vec3f, d: vec3f, i: i32, j: i32, hd: ForestHead) -> f32 { return 0.0; }
+fn forestQueryFrom(o: vec3f, d: vec3f, tStart: f32, tMax: f32, anyHit: bool, detail: f32) -> ForestHit { return ForestHit(tMax, vec3f(0.0), 0u, 0u, vec3f(0.0), 0.0, 0.0, 1.0); }
 struct ForestLook { albedo: vec3f, through: vec3f };
 fn forestLook(h: ForestHit, n: vec3f, p: vec3f, sat: vec4f) -> ForestLook { return ForestLook(vec3f(0.0), vec3f(0.0)); }
 // END_FOREST_MODULE
@@ -6413,7 +6430,22 @@ fn worldScenery(dW:vec3f,tMax:f32,rnd:f32)->f32 {
   let d=sceneryLocal(dW);let o=P.scenery[3].xyz;
   SC_SAMPLE=rnd;SC_POINT=o+d*tMax;SC_DISTANCE=tMax;
   let hit=sceneryQuery(o,d,min(tMax,P.scenery[1].w),false);
-  let tree=forestQuery(o,d,hit.t,false,220.0);
+  // (the raster's scenery — étape 1b —: the tree its instance drew at this pixel tested alone; a pixel it drew none at has
+  // no tree before its ground; the instance's proxy wider than its tree there — a carved crown's gap —: the grid walked)
+  var tree=ForestHit(hit.t,vec3f(0.0),0u,0u,vec3f(0.0),0.0,0.0,1.0);
+  RASTER_PATH=3u;
+  if(RASTER_SCENERY){
+    RASTER_PATH=2u;
+    if(RASTER_ID>0u){
+      let F=u32(forestData(2u).x);
+      if(F>0u){
+        let hd=forestHead(F);let k=i32(RASTER_ID-1u);
+        let c=forestCandidate(o,d,k%max(hd.w,1),k/max(hd.w,1),220.0,hd);
+        if(c.t>0.0 && c.t<hit.t){tree=c;RASTER_PATH=0u;}
+        else{tree=forestQueryFrom(o,d,forestCandidateStart(o,d,k%max(hd.w,1),k/max(hd.w,1),hd),hit.t,false,220.0);RASTER_PATH=1u;}
+      }
+    }
+  }else{tree=forestQuery(o,d,hit.t,false,220.0);}
   if(tree.kind>0u){
     let p=o+d*tree.t;
     SC_POINT=p;SC_DISTANCE=tree.t;
@@ -8350,7 +8382,8 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
   // (−1: under the cockpit's mask, not traced; −2: the cabin there but traced — mask.wgsl)
   let masked = interleaved && inRange && moments[idx].x < -0.5 && moments[idx].x > -1.5;
   // (the raster's primary visibility: a ray whose pixel the patch covers is shade's, not traced here)
-  let rasterSkip = interleaved && inRange && rasterPrimary() && terrainRasterHint(vec2f(f32(px), f32(py)) + 0.5) > 0.0;
+  let rasterAt = vec2f(f32(px), f32(py)) + 0.5;
+  let rasterSkip = interleaved && inRange && rasterPrimary() && (terrainRasterHint(rasterAt) > 0.0 || terrainRasterId(rasterAt) > 0u);
 
   // Adaptive sampling, per 8×8 tile: the tile keeps sampling while any of its pixels has a relative
   // standard error of the mean (luminance) above the threshold (keeps ray differentials available).
@@ -8479,7 +8512,11 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   let k = u32(P.near1.w);
   if (!isEarth(k) || !hasAir(k) || !earthOn()) { return; }
   let idx = gid.y * W + gid.x;
-  if (terrainRasterHint(vec2f(gid.xy) + 0.5) <= 0.0) { return; }
+  // (the terrain's pixels and the scenery's — a tree against the sky too)
+  let centre = vec2f(gid.xy) + 0.5;
+  RASTER_ID = terrainRasterId(centre);
+  if (terrainRasterHint(centre) <= 0.0 && RASTER_ID == 0u) { return; }
+  RASTER_SCENERY = P.mouthList[1].z > 0.5;
   // (under the cockpit's mask: the cabin there)
   if (moments[idx].x < -0.5 && moments[idx].x > -1.5) { return; }
   let flags = P.frame.z;
@@ -8501,10 +8538,15 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   REFR_DELTA = 0.0;
   let e = earthNear(look, rnd, k);
   RHINT = 0.0;
+  RASTER_ID = 0u;
+  RASTER_SCENERY = false;
   AP_UV = vec2f(-1.0);
   if (e.t <= 0.0) { return; }
   var col = e.col;
   if (COST_VIEW > 0u) { col = costHeat(); }
+  if (TUNE_RASTER_PATHS > 0u) {
+    col = array<vec3f, 4>(vec3f(1.0, 0.0, 0.0), vec3f(0.0, 0.0, 1.0), vec3f(0.0, 1.0, 0.0), vec3f(1.0))[min(RASTER_PATH, 3u)];
+  }
   if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
   let old = accum[idx];
   if (temporal && stamps[idx] >= P.frame.y && old.a > 0.0) { col = mix(old.rgb / old.a, col, P.ext.w); }

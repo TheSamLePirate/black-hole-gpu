@@ -289,6 +289,10 @@ export class EarthScenery {
   private backoff() {
     return Math.min(300000, 30000 * 2 ** Math.max(0, this.failures - 1));
   }
+  /** the drawn scene's forest grid: its cells (w × h, one tree at most each; 0: none) — the raster's cull walks them */
+  get forestCells() {
+    return this.data?.forestCells ?? 0;
+  }
   /** the tracer's params (P.scenery), one array written again each frame (none allocated per frame) */
   private paramsOut = new Float32Array(SCENERY_VEC4S * 4);
   params() {
