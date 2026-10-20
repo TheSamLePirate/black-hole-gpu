@@ -220,6 +220,10 @@ export interface Target {
     gMax: number;
     course?: { hdg: number; alt: number };
     route?: { pts: V3[]; next: number; loop?: boolean };
+    /** its bank at most [rad] (a tanker's 25° — its receivers on its hoses follow it —; else its g's); its roll rate
+     *  at most [rad/s] (a tanker's gentle 3°/s: its pods 11 m out rise and fall with its bank) */
+    bankMax?: number;
+    rollMax?: number;
     /** the lift's part across the path flown now [m/s²]; its bank [rad, + right], its vertical pull [m/s²] (eased
      *  towards the turn asked at its roll and pull rates) */
     lat?: V3;
@@ -341,6 +345,9 @@ export interface TargetSpec {
   /** its route flown round and round (a tanker's racetrack) */
   routeLoop?: boolean;
   mesh?: string;
+  /** its bank at most [°] (a tanker's: 25), its roll rate at most [°/s] (a tanker's: 3) */
+  bankMax?: number;
+  rollMax?: number;
 }
 
 const SPEC: Record<TargetKind, { hp: number; rcs: number; speed: number; gMax: number; missiles: number }> = {
@@ -428,6 +435,8 @@ export class CombatWorld {
             route: s.route?.length
               ? { pts: s.route.map(([e, n, a]) => [e, n, this.groundZ(e, n) + a] as V3), next: 0, loop: s.routeLoop }
               : undefined,
+            bankMax: s.bankMax !== undefined ? s.bankMax * D : undefined,
+            rollMax: s.rollMax !== undefined ? s.rollMax * D : undefined,
           }
         : undefined,
       site: s.kind === "sam" || s.kind === "ship" ? { nextShot: 8, missiles: S.missiles } : undefined,
@@ -1201,7 +1210,7 @@ export class CombatWorld {
       const tl = len(turn);
       const gm = A.gMax * SKILL[this.opts.skill].g * G;
       const agile = A.gMax >= 7 ? 1 : A.gMax >= 3 ? 0.55 : 0.3;
-      const roll = (agile >= 1 ? 180 : agile > 0.5 ? 90 : 15) * D;
+      const roll = Math.min((agile >= 1 ? 180 : agile > 0.5 ? 90 : 15) * D, A.rollMax ?? Infinity);
       const ang = Math.acos(clamp(dot(want, u), -1, 1));
       const aWant: V3 = tl > 1e-6 ? mul(unit(turn), Math.min(gm, (sp * ang) / (1.2 / agile))) : [0, 0, 0];
       // (the bank asked — the horizontal pull over the weight and the vertical pull —, rolled to at its roll rate;
@@ -1212,7 +1221,8 @@ export class CombatWorld {
       const aH = dot(aWant, right),
         aV = dot(aWant, upP);
       const wt = G * Math.max(upP[2], 0.2);
-      const phiWant = clamp(Math.atan2(aH, Math.max(wt + aV, 0.3 * G)), -80 * D, 80 * D);
+      const bMax = A.bankMax ?? 80 * D;
+      const phiWant = clamp(Math.atan2(aH, Math.max(wt + aV, 0.3 * G)), -bMax, bMax);
       const phi = (A.phi ?? 0) + clamp(phiWant - (A.phi ?? 0), -roll * dt, roll * dt);
       const pull = (gm / 0.6) * agile * dt;
       const av = (A.av ?? 0) + clamp(aV - (A.av ?? 0), -pull, pull);

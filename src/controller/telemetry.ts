@@ -228,6 +228,8 @@ export interface FlightInfo {
   aero: ReturnType<CameraController["aeroHud"]>;
   /** a fight flown: its targets, missiles, lead, zone, warnings (controller/combat.ts) */
   combat: ReturnType<CameraController["combatHud"]>;
+  /** the air refuelling's cues (controller/aar.ts) */
+  aar: ReturnType<CameraController["aarHud"]>;
   /** the F-35B's STOVL mode (controller/stovl.ts): on, converted 0…1, the nozzle's swivel 0…1, the hover law
    *  flying, the vertical speed it holds [m/s], too heavy to hover */
   stovl: { on: boolean; conv: number; swivel: number; hover: boolean; vz: number; heavy: boolean } | null;
@@ -431,6 +433,7 @@ function flightInfo(this: CameraController): FlightInfo {
     aero: this.aeroHud(),
     avionics: fleet.active === "f35" ? avionicsData(this, s) : null,
     combat: this.combatHud(C),
+    aar: this.aarHud(C),
     nav: (() => {
       const N = this.nav,
         o = N.last.l;

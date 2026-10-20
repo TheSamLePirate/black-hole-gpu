@@ -19,6 +19,8 @@ test("a radio line's role by its words; the role's name left out, an addressee k
   expect(roleOfLine("F-35B, ici Mother : autorisé au décollage vertical. Conversion.").role).toBe("mother");
   expect(roleOfLine("Shooter: launch!")).toEqual({ role: "mother", text: "Launch!" });
   expect(roleOfLine("Darkstar : situation claire")).toEqual({ role: "awacs", text: "Situation claire" });
+  // (the tanker — the refuelling: controller/aar.ts —, by its callsign)
+  expect(roleOfLine("TEXACO 11: cleared contact, right hose")).toEqual({ role: "tanker", text: "Cleared contact, right hose" });
   expect(roleOfLine("Edwards approach: cleared ILS 22")).toEqual({ role: "tower", text: "Edwards approach: cleared ILS 22" });
   expect(roleOfLine("Two, in position")).toEqual({ role: "tower", text: "Two, in position" });
 });
@@ -29,7 +31,7 @@ test("the picture Darkstar's, the missiles at us TARS's; each role its voice and
   const ids = new Set(AURA_VOICES.map((v) => v.id));
   for (const v of Object.values(ROLE_VOICE)) expect(ids.has(v.fr) && ids.has(v.en)).toBe(true);
   // (the English voices all different)
-  expect(new Set(Object.values(ROLE_VOICE).map((v) => v.en)).size).toBe(4);
+  expect(new Set(Object.values(ROLE_VOICE).map((v) => v.en)).size).toBe(Object.keys(ROLE_VOICE).length);
   for (const r of ["wingman", "awacs", "mother", "lso"] as const) expect(SPEAKER_STYLE[r].rate).toBeGreaterThan(0.9);
-  expect([...SHARED_ROLES]).toEqual(["wingman", "mother", "lso"]);
+  expect([...SHARED_ROLES]).toEqual(["wingman", "mother", "lso", "tanker"]);
 });

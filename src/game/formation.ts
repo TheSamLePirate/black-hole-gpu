@@ -104,10 +104,28 @@ export interface FormOut {
   closing: number;
 }
 
+/** A formation law's own gains in place of FORM's (the refuelling's contact — game/aar.ts —: tighter, slower). */
+export interface FormGains {
+  wC?: number;
+  wA?: number;
+  wU?: number;
+  vA?: number;
+  vC?: number;
+  vU?: number;
+}
+
 /**
  * A frame of the formation: our craft `o` (its speed through the air V [m/s]), the leader `L`, the slot.
  */
-export function formationStep(o: FormCraft, V: number, L: FormCraft, slot: FormSlot, mem?: { iA: number; iU: number }, dt = 0): FormOut {
+export function formationStep(
+  o: FormCraft,
+  V: number,
+  L: FormCraft,
+  slot: FormSlot,
+  mem?: { iA: number; iU: number },
+  dt = 0,
+  k: FormGains = {},
+): FormOut {
   // (the leader's frame: the up at his place, his track flat — his nose when slow —, his right)
   const up = unit(L.p);
   const along = (w: V3) => sub(w, scale(up, dot(w, up)));
@@ -152,8 +170,8 @@ export function formationStep(o: FormCraft, V: number, L: FormCraft, slot: FormS
     mem.iA = near ? clamp(mem.iA + eA * dt, -FORM.iMax, FORM.iMax) : mem.iA * 0.98;
     mem.iU = near ? clamp(mem.iU + eU * dt, -FORM.iMax, FORM.iMax) : mem.iU * 0.98;
   }
-  const aA = loop(eA, dot(vr, fwd), FORM.wA, FORM.vA, FORM.stopA, dot(aL, fwd)) + (mem ? FORM.kiA * mem.iA : 0);
-  let aC = loop(eC, dot(vr, right), FORM.wC, FORM.vC, FORM.stopC, aLat);
+  const aA = loop(eA, dot(vr, fwd), k.wA ?? FORM.wA, k.vA ?? FORM.vA, FORM.stopA, dot(aL, fwd)) + (mem ? FORM.kiA * mem.iA : 0);
+  let aC = loop(eC, dot(vr, right), k.wC ?? FORM.wC, k.vC ?? FORM.vC, FORM.stopC, aLat);
   // (the keep-out: abreast of him within reach of his wings — pushed out on the side we are, whatever the slot
   // asks: his turn's roll-in, a gust, a rejoin cutting in)
   const sep = here * lat;
@@ -171,7 +189,7 @@ export function formationStep(o: FormCraft, V: number, L: FormCraft, slot: FormS
   // (the climb: the leader's own vertical speed and the slot's height closed at wU — the plane law holds a
   // flight path, a vertical speed: one order less)
   const Vs = Math.max(V, 30);
-  const vs = dot(L.v, up) + clamp(FORM.wU * eU + (mem ? FORM.kiU * mem.iU : 0), -FORM.vU, FORM.vU);
+  const vs = dot(L.v, up) + clamp((k.wU ?? FORM.wU) * eU + (mem ? FORM.kiU * mem.iU : 0), -(k.vU ?? FORM.vU), k.vU ?? FORM.vU);
   const gamma = clamp(Math.asin(clamp(vs / Vs, -1, 1)), -JET.gammaMax, JET.gammaMax);
   const dist = Math.hypot(eA, eC, eU);
   return {

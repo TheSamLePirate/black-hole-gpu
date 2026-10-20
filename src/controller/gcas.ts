@@ -129,6 +129,8 @@ function gcasStep(this: CameraController, dt: number) {
         !(o.id.startsWith("cmb:") && (this.combat?.world.target(Number(o.id.slice(4)))?.peer ?? 0) < 0) &&
         // (the aircraft joined on purpose — an intercept's shadow, a tanker's pre-contact —: not a conflict)
         !(this.icpt && this.icpt.id === o.id && this.icpt.phase !== "run" && this.icpt.phase !== "turn") &&
+        // (the tanker refuelling us behind its hose — controller/aar.ts —: close on purpose)
+        !(this.aar?.stage === "hose" && o.id === `cmb:${this.aar.tanker}`) &&
         // (a room's player flying on our wing — he said so: his place in our formation —, his craft or its stand-in in
         // a fight: close on purpose, never a conflict to climb away from — the free fight's frame gave him a few m/s)
         !this.formWithMe?.has(slotOfTrack(this, o.id)) &&

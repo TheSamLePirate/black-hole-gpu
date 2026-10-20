@@ -179,6 +179,25 @@ export interface SymInfo {
     /** shot down in a match, waiting to fly again */
     down?: boolean;
   } | null;
+  /** the air refuelling (controller/aar.ts): the basket and the probe's tip (the camera's axes, from the eye [m]), the
+   *  gap (the basket to the right, above, ahead of the tip [m]), the closing speed, the hose pushed in, the lights, the
+   *  fuel given */
+  aar?: {
+    phase: string;
+    mode: "auto" | "assisted" | "manual";
+    lights: "off" | "amber" | "green" | "red";
+    basket: V3 | null;
+    tip: V3 | null;
+    rim: number;
+    gap: V3;
+    closure: number;
+    takeup: number | null;
+    flow: readonly [number, number];
+    whip: number;
+    given: number;
+    want: number;
+    practice: boolean;
+  } | null;
   /** a plane's flight plan: the active waypoint (its bearing [° true], its distance [m]) */
   nav?: { name: string; brg: number; dist: number; on: boolean } | null;
   /** an ILS approach: the runway, the needles [dots — null: not received], the distance [km], its phase */
@@ -674,7 +693,9 @@ export function drawSymbology(F: SymFrame) {
       i.radar,
     );
   if (i.radar?.lock && !i.combat) drawLockBox(F, pr, stroke, text, i.radar.lock);
-  if (i.radar?.lock?.icpt) drawIntercept(F, pr, stroke, text, i.radar.lock, i.radar.lock.icpt);
+  if (i.radar?.lock?.icpt && !i.aar) drawIntercept(F, pr, stroke, text, i.radar.lock, i.radar.lock.icpt);
+  // (the air refuelling: the basket, the probe, the gap, the hose's range, the pod's lights)
+  if (i.aar && pilotView) drawAar(F, i.aar, pr, stroke, text, fpx, hmdRgb);
   if (i.dock && i.dockGuide && !i.dock.docked && s.hudDock && on(F, "dock") && F.density < 2) drawDock(F, pr, stroke, text, inside);
   // (the docking's last 60 m: the COAS — the own port's boresight, a crosshair the target port's mark is flown into)
   if (i.dockBore && i.dirs.dock && s.hudDock && F.density < 2) drawCoas(F, i.dockBore as V3, i.dirs.dock as V3, pr, stroke, text, inside);
@@ -2906,6 +2927,128 @@ function drawIntercept(
   const pur = I.pursuit === "PURE" ? "PURE" : `${I.pursuit} ${Math.round(I.pursuitDeg)}°`;
   const line = `INTC ${hdg(I.collHdg)}  TTI ${tti}  AA ${Math.round(I.aspect)}${I.side}  ${pur}  HCA ${Math.round(I.hca)}`;
   text(line, W / 2, H * 0.78, col, 11, "center", true);
+}
+
+/**
+ * The air refuelling's cues (controller/aar.ts): the basket's ring where it is (its size its own, its colour the pod's
+ * light), the probe's tip a diamond, the line between them and the way to steer (the basket to the right, above);
+ * under them the phase and the way it is flown, the gap and the closing speed (red past the basket's bounce), the
+ * hose's range locked (its fuel's band, its whip), the pod's three lights, the fuel given.
+ */
+function drawAar(
+  F: SymFrame,
+  A: NonNullable<SymInfo["aar"]>,
+  pr: (d: V3 | null | undefined) => [number, number] | null,
+  stroke: (draw: () => void, col: string, lw: number, dash?: number[]) => void,
+  text: (t: string, x: number, y: number, col: string, size: number, align?: CanvasTextAlign, mono?: boolean) => void,
+  fpx: number,
+  rgb: string,
+) {
+  const { ctx, W, H, dpr } = F;
+  const U = unitsFor(F.s);
+  const col = `rgba(${rgb}, 1)`;
+  const LIGHT = { off: "rgba(140, 140, 140, 0.6)", amber: "#ffc85a", green: "#5cff8a", red: "#ff5a46" } as const;
+  const lit = LIGHT[A.lights];
+  const m = (x: number, d = 1) => `${U.alt(x).toFixed(d)} ${U.altName.toLowerCase()}`;
+  const pb = A.basket ? pr(A.basket) : null;
+  const pt = A.tip ? pr(A.tip) : null;
+  const on = (p: [number, number] | null): p is [number, number] => !!p && p[0] > -W && p[0] < 2 * W && p[1] > -H && p[1] < 2 * H;
+  if (on(pb) && A.basket) {
+    const r = Math.max(6 * dpr, (A.rim / Math.max(A.basket[2], 0.5)) * fpx);
+    stroke(() => ctx.arc(pb[0], pb[1], r, 0, 2 * Math.PI), lit, 2);
+    stroke(() => ctx.arc(pb[0], pb[1], Math.max(2 * dpr, r * 0.3), 0, 2 * Math.PI), lit, 1.4);
+  }
+  if (on(pt)) {
+    const s = 6 * dpr;
+    stroke(
+      () => {
+        ctx.moveTo(pt[0], pt[1] - s);
+        ctx.lineTo(pt[0] + s, pt[1]);
+        ctx.lineTo(pt[0], pt[1] + s);
+        ctx.lineTo(pt[0] - s, pt[1]);
+        ctx.closePath();
+      },
+      col,
+      1.6,
+    );
+    if (on(pb) && A.takeup === null)
+      stroke(
+        () => {
+          ctx.moveTo(pt[0], pt[1]);
+          ctx.lineTo(pb[0], pb[1]);
+        },
+        col,
+        1,
+        [4, 4],
+      );
+  }
+  // the panel: above the centre, under the heading's annunciators (clear of the subtitles in the lower third)
+  const x = W / 2,
+    y0 = H * 0.3;
+  text(
+    `AAR · ${A.phase} · ${A.mode === "auto" ? "AUTO" : A.mode === "assisted" ? "ASSIST" : "MAN"}`,
+    x,
+    y0,
+    lit === LIGHT.off ? col : lit,
+    13,
+    "center",
+    true,
+  );
+  const [gr, gu, ga] = A.gap;
+  const steer = `${gu >= 0 ? "▲" : "▼"}${m(Math.abs(gu))}  ${gr >= 0 ? "▶" : "◀"}${m(Math.abs(gr))}`;
+  const fast = A.closure > 2.6;
+  const close = `${U.spd(A.closure).toFixed(1)} ${U.spdName}`;
+  text(
+    A.takeup === null ? `GAP ${m(Math.max(ga, 0))}   ${steer}   CLOSE ${close}` : `HOSE ${m(A.takeup)}   ${steer}`,
+    x,
+    y0 + 18 * dpr,
+    fast ? "#ff5a46" : col,
+    12,
+    "center",
+    true,
+  );
+  // (the hose's range, locked: its fuel's band green, its whip red, where it is)
+  if (A.takeup !== null) {
+    const w = 180 * dpr,
+      h = 7 * dpr,
+      bx = x - w / 2,
+      by = y0 + 30 * dpr;
+    const X = (v: number) => bx + (Math.min(Math.max(v, 0), A.whip) / A.whip) * w;
+    ctx.fillStyle = "rgba(92, 255, 138, 0.35)";
+    ctx.fillRect(X(A.flow[0]), by, X(A.flow[1]) - X(A.flow[0]), h);
+    ctx.fillStyle = "rgba(255, 90, 70, 0.35)";
+    ctx.fillRect(X(A.whip * 0.92), by, X(A.whip) - X(A.whip * 0.92), h);
+    stroke(() => ctx.rect(bx, by, w, h), col, 1);
+    const k = X(A.takeup);
+    stroke(
+      () => {
+        ctx.moveTo(k, by - 4 * dpr);
+        ctx.lineTo(k, by + h + 4 * dpr);
+      },
+      col,
+      2,
+    );
+  }
+  // (the pod's lights: red, amber, green — the one lit bright)
+  const lx = x + 120 * dpr,
+    ly = y0;
+  for (const [i, k] of (["red", "amber", "green"] as const).entries()) {
+    ctx.beginPath();
+    ctx.arc(lx, ly + i * 10 * dpr, 3.5 * dpr, 0, 2 * Math.PI);
+    ctx.fillStyle = A.lights === k ? LIGHT[k] : "rgba(60, 60, 60, 0.7)";
+    ctx.fill();
+  }
+  // (the fuel given)
+  const kg = (v: number) => Math.round(v).toLocaleString("en").replace(/,/g, " ");
+  text(
+    `FUEL ${kg(A.given)} / ${kg(A.want)} kg${A.practice ? " · PRACTICE" : ""}`,
+    x,
+    y0 + (A.takeup === null ? 34 : 50) * dpr,
+    col,
+    11,
+    "center",
+    true,
+  );
 }
 
 /**

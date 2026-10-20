@@ -162,6 +162,7 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
   if (!jetReady(this)) {
     if (this.form && !formGrace(this.form)) this.formOff(t("Formation off — not flown as a plane"));
     if (this.icpt) this.icptOff(t("Intercept off — not flown as a plane"));
+    if (this.aar) this.aarOff(t("Refuelling off — not flown as a plane"));
     if (!this.form && (m.alt !== null || m.hdg !== null || m.spd !== null || m.ab)) this.jetModes = noJetModes();
     return none;
   }
@@ -174,6 +175,7 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
     if (this.form && (this.pilot.auto !== "none" || !formGrace(this.form)))
       this.formOff(this.pilot.auto !== "none" ? t("Formation off — the autopilot") : t("Formation off — on the ground"));
     if (this.icpt) this.icptOff(this.pilot.auto !== "none" ? t("Intercept off — the autopilot") : t("Intercept off — on the ground"));
+    if (this.aar) this.aarOff(this.pilot.auto !== "none" ? t("Refuelling off — the autopilot") : t("Refuelling off — on the ground"));
     m.alt = m.hdg = m.spd = null;
     this.jetCws.thr = Number.NaN;
     return none;
@@ -185,11 +187,13 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
   // (the levels of assistance — controller/assistlevel.ts —: back to stable flight, the beginner's ring; the assisted
   // level's auto-throttle)
   this.assistThrottle(f);
-  const fm =
+  const fm: { gamma: number; bank: number; spd: number; acc: number; thr?: number } | null =
     this.gcasJet(inp) ??
     this.assistJet(inp, f, dt, "recover") ??
     // (a demonstration's guns: TARS's aim — controller/course.ts)
     this.courseJet(f) ??
+    // (the air refuelling — controller/aar.ts —: the probe flown into the basket; its rendezvous the intercept's)
+    this.aarJet(inp, f, dt) ??
     this.icptStep(inp, f) ??
     this.trapJet(inp) ??
     this.ilsJet(inp) ??
@@ -199,6 +203,15 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
   if (fm) {
     cws.pitch = cws.roll = false;
     // (the afterburner when the dry engine at full cannot keep up — he speeds up, we are behind —, out once eased)
+    // (a throttle set by the mode itself — the refuelling's last metres, flown on the speed over the ground: the
+    // autothrottle's on the air's would chase every gust)
+    if (fm.thr !== undefined) {
+      m.ab = false;
+      this.pilot.throttle = fm.thr;
+      this.jetAthr.reset();
+      cws.thr = this.pilot.throttle;
+      return { gamma: fm.gamma, bank: fm.bank };
+    }
     if (!m.ab && this.pilot.throttle >= 0.98 && fm.acc > 1.2) {
       m.ab = true;
       this.pilot.throttle = 1;

@@ -14,6 +14,7 @@ const NAMES: Record<Speaker, () => string> = {
   awacs: () => "DARKSTAR",
   mother: () => "MOTHER",
   lso: () => "PADDLES",
+  tanker: () => "TEXACO",
 };
 
 export class Subtitles {

@@ -321,10 +321,7 @@ export default {
   "Terrain following: in the air": "Suivi de terrain : en vol",
   "Terrain following: {0} m over the ground": "Suivi de terrain : {0} m au-dessus du sol",
   "Tanker: in the air": "Ravitailleur : en vol",
-  "Tanker: TEXACO 11, 25 km ahead at 7 000 m — the rendezvous to pre-contact":
-    "Ravitailleur : TEXACO 11, 25 km devant à 7 000 m — rendez-vous en pré-contact",
   "Orbit and terrain following off": "Orbite et suivi de terrain coupés",
-  "Pre-contact on {0} — 50 m behind, 10 m below": "Pré-contact sur {0} — 50 m derrière, 10 m dessous",
   "Rendezvous: {0} · {1} km": "Rendez-vous : {0} · {1} km",
   "Orbit off — the stick": "Orbite coupée — le manche",
   "Assistance: {0}": "Assistance : {0}",

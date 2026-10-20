@@ -1664,7 +1664,7 @@ async function main() {
   });
   /** the radio's roles' system voices (I4): another of the language's voices for each, when there are several */
   function roleSystemVoice(sp: string): { name?: string } | null {
-    const k = ["wingman", "awacs", "mother", "lso"].indexOf(sp);
+    const k = ["wingman", "awacs", "mother", "lso", "tanker"].indexOf(sp);
     if (k < 0 || typeof speechSynthesis === "undefined") return null;
     const vs = speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith(lang));
     return vs.length > 1 ? { name: vs[(k + 1) % vs.length]!.name } : null;
@@ -1690,7 +1690,7 @@ async function main() {
         return deepgramSay(l.text, lang === "fr" ? settings.radioVoiceFr : settings.radioVoiceEn, false, "radio", () => null);
     }
     // (the radio's roles — I4 —: a voice of their own each)
-    if (l.speaker === "wingman" || l.speaker === "awacs" || l.speaker === "mother" || l.speaker === "lso") {
+    if (l.speaker === "wingman" || l.speaker === "awacs" || l.speaker === "mother" || l.speaker === "lso" || l.speaker === "tanker") {
       const e = settings.radioVoiceEngine;
       if (e === "deepgram" || (e === "auto" && reach)) return deepgramSay(l.text, ROLE_VOICE[l.speaker][lang], false, "radio", () => null);
     }
@@ -4093,7 +4093,25 @@ async function main() {
           { label: { fr: "Coupé", en: "Off" }, run: () => say(camera.tfStart(null)) },
         ],
       },
-      { label: { fr: "Ravitailleur", en: "Tanker" }, on: !!camera.icpt?.slot, run: () => say(camera.tankerStart()) },
+      {
+        label: { fr: "Ravitaillement en vol", en: "Air refuelling" },
+        on: !!camera.aar,
+        sub: [
+          { label: { fr: "Ravitailleur à 25 km", en: "Tanker 25 km ahead" }, run: () => say(camera.tankerStart({ near: false })) },
+          { label: { fr: "Ravitailleur tout près", en: "Tanker close by" }, run: () => say(camera.tankerStart({ near: true })) },
+          ...(["auto", "assisted", "manual"] as const).map((m) => ({
+            label:
+              m === "auto"
+                ? { fr: "Automatique", en: "Automatic" }
+                : m === "assisted"
+                  ? { fr: "Assisté", en: "Assisted" }
+                  : { fr: "Manuel", en: "Manual" },
+            on: (camera.aar?.mode ?? settings.f35AarMode) === m,
+            run: () => say(camera.aarModeSet(m)),
+          })),
+          { label: { fr: "Coupé", en: "Off" }, run: () => say(camera.modesOff()) },
+        ],
+      },
       { label: { fr: "Approche ILS", en: "ILS approach" }, on: !!camera.ilsRun, run: () => say(camera.ilsStart()) },
       { label: { fr: "Voler vers… (carte)", en: "Fly to… (map)" }, run: () => missionMap.open() },
       { label: { fr: "Voltige (démonstration)", en: "Aerobatics (demonstration)" }, run: () => challengePanel.open() },

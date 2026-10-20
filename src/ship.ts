@@ -46,6 +46,12 @@ import ferryUrl from "../assets/traffic/ferry.bin";
 import trawlerUrl from "../assets/traffic/trawler.bin";
 import sailboatUrl from "../assets/traffic/sailboat.bin";
 import frigateUrl from "../assets/traffic/frigate.bin";
+import mrttUrl from "../assets/traffic/mrtt.bin";
+import drogueUrl from "../assets/traffic/drogue.bin";
+import probeUrl from "../assets/traffic/probe.bin";
+import lampRedUrl from "../assets/traffic/lamp-red.bin";
+import lampAmberUrl from "../assets/traffic/lamp-amber.bin";
+import lampGreenUrl from "../assets/traffic/lamp-green.bin";
 import cargoHullUrl from "../assets/traffic/cargo-hull.jpg";
 import cargoBridgeUrl from "../assets/traffic/cargo-bridge.jpg";
 import cargoBoxesUrl from "../assets/traffic/cargo-boxes.jpg";
@@ -66,7 +72,10 @@ export type AirlinerId = "a320" | "crj900";
 export type ShipTypeId = "cargo" | "tanker" | "ferry" | "trawler" | "sailboat" | "frigate";
 /** The carriers (scripts/build-carriers.ts, docs/PLAN-AVIATION-AAA.md M2). */
 export type CarrierId = "ford" | "kiev" | "implacable";
-export type TrafficMeshId = AirlinerId | ShipTypeId | CarrierId;
+/** The air refuelling's (scripts/build-tanker.ts, game/aar.ts): the tanker, its hose and drogue, the F-35's probe, the
+ *  pods' lights. */
+export type AarMeshId = "mrtt" | "drogue" | "probe" | "lamp-red" | "lamp-amber" | "lamp-green";
+export type TrafficMeshId = AirlinerId | ShipTypeId | CarrierId | AarMeshId;
 /** A mesh the craft's pass draws: a craft's, an airliner's, a ship's. */
 export type ShipMeshId = VesselId | TrafficMeshId;
 const TRAFFIC_MESHES: Record<TrafficMeshId, string> = {
@@ -81,6 +90,12 @@ const TRAFFIC_MESHES: Record<TrafficMeshId, string> = {
   ford: fordUrl,
   kiev: kievUrl,
   implacable: implacableUrl,
+  mrtt: mrttUrl,
+  drogue: drogueUrl,
+  probe: probeUrl,
+  "lamp-red": lampRedUrl,
+  "lamp-amber": lampAmberUrl,
+  "lamp-green": lampGreenUrl,
 };
 /** The traffic's colour maps, a layer each (ship.wgsl: the materials 40, 41, 44–46); the carriers' after them
  *  (80–86), added with the first carrier drawn. */
@@ -1530,6 +1545,12 @@ export class ShipRenderer {
       kiev: 12,
       implacable: 13,
       frigate: 14,
+      mrtt: 15,
+      drogue: 16,
+      probe: 17,
+      "lamp-red": 18,
+      "lamp-amber": 19,
+      "lamp-green": 20,
     } as const;
     let jetSlot = 0;
     // (inside the Ranger: its cabin instead of its hull — the Lander's and the Endurance's the same cabin placed at their

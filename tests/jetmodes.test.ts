@@ -7,7 +7,7 @@ import { resetFlights } from "./helpers/flight";
 
 // PLAN-AVIATION-AAA A3: the F-35's new autopilot modes — an orbit over a point held at its radius, round and round;
 // the terrain following over hills 150 m over them, the Auto-GCAS never needed; the rendezvous with a tanker on its
-// racetrack, to the pre-contact slot 50 m behind and 10 m below.
+// racetrack, to the observation slot behind its hose — the refuelling then (tests/aar.test.ts).
 
 afterEach(() => {
   resetFlights();
@@ -92,22 +92,30 @@ test("the terrain following at 150 m over hills: their tops cleared, the valleys
   expect(flyUps).toBe(0);
 }, 120_000);
 
-test("a tanker: set 25 km ahead on its racetrack, the rendezvous to its pre-contact slot", () => {
+test("a tanker: set 25 km ahead on its racetrack, the rendezvous behind its hose, the refuelling's stage then", () => {
   const { c, fly } = cruise(6000, 240, 0.7);
   c.jetToggle("ap");
   c.jetToggle("athr");
   const msgs: string[] = [];
   c.onPilotMessage = (s) => msgs.push(s);
   expect(c.tankerStart()).toMatch(/TEXACO 11/);
-  const t = fly(600, () => c.icpt?.phase === "shadow" && (c.icpt.last?.dist ?? 99) < 15);
+  const t = fly(600, () => c.aar?.stage === "hose");
   const q = c.combat!.world.targets[0]!;
   const P = c.combat!.last!;
   const d = [q.p[0] - P.p[0], q.p[1] - P.p[1], q.p[2] - P.p[2]];
   console.log(
-    `  pre-contact after ${t.toFixed(0)} s: ${Math.hypot(...d).toFixed(0)} m from it, ${(P.p[2] - q.p[2]).toFixed(1)} m above — ${msgs.filter((m) => /Pre-contact|Intercept/.test(m)).join(" · ")}`,
+    `  behind its hose after ${t.toFixed(0)} s: ${Math.hypot(...d).toFixed(0)} m from it, ${(P.p[2] - q.p[2]).toFixed(1)} m above — ${msgs.filter((m) => /Behind|Refuelling|Intercept/.test(m)).join(" · ")}`,
   );
-  expect(c.icpt?.phase).toBe("shadow");
-  expect(Math.hypot(...d)).toBeLessThan(80);
+  expect(c.aar?.stage).toBe("hose");
+  expect(c.icpt ?? null).toBeNull();
+  expect(Math.hypot(...d)).toBeLessThan(100);
   expect(P.p[2] - q.p[2]).toBeLessThan(0);
   expect(c.gcas?.escape ?? null).toBeNull();
+  // (again: the refuelling off; once more — the same tanker joined again, not a second one)
+  expect(c.tankerStart()).toMatch(/off/);
+  expect(c.aar ?? null).toBeNull();
+  expect(c.tankerStart({ side: "left" })).toMatch(/left hose/);
+  expect(c.combat!.world.targets.filter((x) => x.name === "TEXACO 11").length).toBe(1);
+  expect(c.modesOff()).toMatch(/refuelling off/);
+  expect(c.aar ?? null).toBeNull();
 }, 200_000);

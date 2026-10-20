@@ -402,6 +402,7 @@ export interface Settings {
   f35Law: "normal" | "direct"; // the F-35: its flight control law — the real one, or the stick on the surfaces (no computer)
   f35AutoProtect: boolean;
   f35Instructor: "off" | "calls" | "full"; // the instructor (A4): off, the calls only, the calls and its live panel // the F-35's Auto-GCAS and Auto-ACAS (A2): the ground's and the others' collisions avoided by the jet itself (always in the assisted levels)
+  f35AarMode: "level" | "auto" | "assisted" | "manual"; // the air refuelling (controller/aar.ts): as the assistance asks (the beginner's auto, else assisted) · the systems fly it all · they hold the probe on the basket's line, the throttle closes · the pilot flies it
   f35Assist: "manual" | "realistic" | "assisted" | "beginner"; // the F-35's assistance (A1): the direct law · the real one · auto-throttle, 20° of incidence, the ground's protection · aimed: the stick moves where it goes
   f35InfiniteFuel: boolean; // the F-35: the tanks never empty
   f35Variant: "B" | "C"; // the F-35: the B (short take-off, vertical landing) or the C (the carrier's: catapult, wires)
@@ -754,6 +755,7 @@ export function defaultSettings(): Settings {
     f35GLimit: 7,
     f35Law: "normal",
     f35Assist: "realistic",
+    f35AarMode: "level",
     f35AutoProtect: true,
     f35Instructor: "full",
     f35InfiniteFuel: false,
@@ -2121,6 +2123,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   f35GLimit: "pref",
   f35Law: "pref",
   f35Assist: "pref",
+  f35AarMode: "pref",
   f35AutoProtect: "pref",
   f35Instructor: "pref",
   f35InfiniteFuel: "pref",

@@ -414,6 +414,8 @@ function combatShips(this: CameraController): { id: ShipMeshId; rel: Vec3; axes:
       hidden = P.p[2] + r[2] * s < C.world.groundZ(x, y);
     }
     out.push({ id: (q.mesh ?? "f35") as ShipMeshId, rel: M(r), axes: [M(left), M(u), M(f)], jet: pose, hidden });
+    // (a tanker refuelling us: its hoses, its pods' lights, our probe — controller/aar.ts)
+    if (this.aar?.tanker === q.id && q.alive && !hidden) out.unshift(...this.aarShips(P, M));
   }
   return out.slice(0, 12);
 }

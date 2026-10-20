@@ -64,6 +64,7 @@ export const PLAYER_MENU: PlayerGroup[] = [
     title: { fr: "F-35", en: "F-35" },
     keys: [
       "f35Assist",
+      "f35AarMode",
       "f35Law",
       "f35Variant",
       "f35Instructor",

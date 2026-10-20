@@ -3,7 +3,7 @@ import { App, E2E, stopServer } from "./lib/app";
 
 // The F-35's new autopilot modes (docs/PLAN-AVIATION-AAA.md, A3): first the Alps as ever; then the terrain following
 // at 150 m down the Arve's valley toward Chamonix — the real relief —; an orbit over the Mont Blanc; the tanker set,
-// joined to its pre-contact slot. (Measured headless: tests/jetmodes.test.ts.) (E2E_SHOTS=<dir>: the views.)
+// joined behind its hose (the refuelling itself: tests/e2e/aar.e2e.test.ts). (Measured headless: tests/jetmodes.test.ts.) (E2E_SHOTS=<dir>: the views.)
 
 describe.skipIf(!E2E)("the autopilot's new modes", () => {
   let app: App;
@@ -80,7 +80,7 @@ describe.skipIf(!E2E)("the autopilot's new modes", () => {
     await app.js(`(() => { __bh.camera.modesOff(); return 1; })()`);
   }, 120_000);
 
-  test("the tanker: set, joined to its pre-contact slot", async () => {
+  test("the tanker: set, joined behind its hose", async () => {
     await app.js(
       `(() => { __bh.game.flyAt(43.3, 6.0, 6500, 90, 230); const c = __bh.camera; c.jetModes.alt = Math.round(c.geoNow().alt); c.jetModes.hdg = c.attitudeNow().heading; c.jetToggle("athr"); return 1; })()`,
     );
@@ -93,14 +93,15 @@ describe.skipIf(!E2E)("the autopilot's new modes", () => {
       __bh.game.flyAt(A.lat + n / (D * R), A.lon + e / (D * R * Math.cos(A.lat * D)), q.p[2] - C.world.groundZ(e, n), h / D, 230);
       // (the placing let the intercept go: the rendezvous engaged again)
       __bh.camera.jetModes.alt = Math.round(__bh.camera.geoNow().alt); __bh.camera.jetToggle("athr"); __bh.camera.tankerPending = q.id; return 1; })()`);
-    await app.waitFor(`__bh.camera.icpt?.phase === "shadow"`, 120_000);
+    await app.waitFor(`__bh.camera.aar?.stage === "hose"`, 120_000);
     await Bun.sleep(4000);
     await around(200, 8, 45);
     await shot("tanker");
     const d = await app.js<number>(
       `(() => { const C = __bh.camera.combat, q = C.world.targets[0], P = C.last; return Math.hypot(q.p[0] - P.p[0], q.p[1] - P.p[1], q.p[2] - P.p[2]); })()`,
     );
-    console.log(`  pre-contact: ${d.toFixed(0)} m from the tanker`);
-    expect(d).toBeLessThan(90);
+    console.log(`  behind its hose: ${d.toFixed(0)} m from the tanker`);
+    expect(d).toBeLessThan(110);
+    await app.js(`(() => { __bh.camera.modesOff(); return 1; })()`);
   }, 200_000);
 });

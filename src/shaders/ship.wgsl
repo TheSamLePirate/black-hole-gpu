@@ -860,6 +860,16 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
       rough = 0.32 + 0.1 * grime;
       coat = 0.45 * coat;
     }
+    // the tanker (scripts/build-tanker.ts): the A320's map painted over a military grey — its livery's colours and
+    // whites the paint, its windows, wheels and dark trims kept dark —, a satin finish
+    case 43u: {
+      let c = textureSampleGrad(trafficAlbedo, mapSamp, in.uv, 0, duvx, duvy).rgb;
+      let hi = max(c.r, max(c.g, c.b));
+      albedo = mix(c * 0.6, vec3f(0.165, 0.175, 0.185), smoothstep(0.12, 0.3, hi));
+      metal = 0.1;
+      rough = 0.45 + 0.12 * grime;
+      coat = 0.2 * coat;
+    }
     // the ships (scripts/build-ships.ts): the container ship's hull, bridge, containers on their maps (layers 2–4) —
     // painted steel, weathered —; the drawn ships' paints: antifouling, white, navy, deck, sailcloth, steel, orange
     case 44u, 45u, 46u: {
@@ -892,6 +902,17 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
       metal = 0.2;
       rough = 0.55;
       coat = 0.0;
+    }
+    // (a lamp — the refuelling pod's lights —: its flat colour glowing — display-referred, as the F-35's own lights)
+    case 91u: {
+      let rg = in.uv.x;
+      let g = floor(rg / 256.0 + 1e-3);
+      let c = pow(clamp(vec3f((rg - 256.0 * g) / 255.0, g / 255.0, in.uv.y), vec3f(0.0), vec3f(1.0)), vec3f(2.2));
+      albedo = c * 0.2;
+      metal = 0.0;
+      rough = 0.2;
+      coat = 0.0;
+      emit = c * 3.0;
     }
     case 42u: { albedo = vec3f(0.03); metal = 0.0; rough = 0.08; coat = 0.0; }
     // the F-35's panoramic display: its picture's light through an LCD panel under an anti-reflective glass (an

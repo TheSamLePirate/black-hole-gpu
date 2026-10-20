@@ -1925,9 +1925,12 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "jet_mode",
       description:
-        "The F-35's autopilot modes. orbit: circles over a point (lat/lon, else one radius to the side so it is on it at once; radiusKm — by default the 40° bank's at its speed, 4 km at least; dir right or left), its altitude and speed held. hold: the racetrack over a point (lat/lon, else here) inbound on a course (inboundDeg, else the track). tf: terrain following aglM over the ground (100, 150, 300 — 0 off): the ground ahead cleared, the valleys followed, the heading still the autopilot's or NAV's. tanker: a tanker (TEXACO 11) set 25 km ahead at 7 000 m on its racetrack and joined to its pre-contact slot, 50 m behind and 10 m below. off: the orbit and the terrain following let go. Also: approach (the ILS), mission map (fly to a point), the challenges' aerobatic demonstrations.",
+        "The F-35's autopilot modes. orbit: circles over a point (lat/lon, else one radius to the side so it is on it at once; radiusKm — by default the 40° bank's at its speed, 4 km at least; dir right or left), its altitude and speed held. hold: the racetrack over a point (lat/lon, else here) inbound on a course (inboundDeg, else the track). tf: terrain following aglM over the ground (100, 150, 300 — 0 off): the ground ahead cleared, the valleys followed, the heading still the autopilot's or NAV's. tanker: the air refuelling — a tanker (TEXACO 11, an A330 MRTT's hose-and-drogue pods) set 25 km ahead at 7 000 m on its racetrack (near: 1.5 km ahead at our height), joined behind its hose (side: right by default, or left), then the probe out and flown into the basket the way refuelMode says (auto: the systems fly it all; assisted: held on the basket's line, the pilot's throttle closes; manual: the pilot flies, the HUD's cues help — none: the setting's) until the tanks are full; again while refuelling: off. refuelMode alone (no tanker): the way changed now. off: the orbit, the terrain following and the refuelling let go. Also: approach (the ILS), mission map (fly to a point), the challenges' aerobatic demonstrations.",
       params: {
-        action: { type: "string", enum: ["orbit", "hold", "tf", "tanker", "off"] },
+        action: { type: "string", enum: ["orbit", "hold", "tf", "tanker", "refuelMode", "off"] },
+        near: { type: "boolean" },
+        side: { type: "string", enum: ["right", "left"] },
+        refuelMode: { type: "string", enum: ["auto", "assisted", "manual"] },
         lat: { type: "number" },
         lon: { type: "number" },
         radiusKm: { type: "number", minimum: 1, maximum: 50 },
@@ -1955,8 +1958,13 @@ export function gameTools(h: GameHost): Tool[] {
           }
           case "tf":
             return c.tfStart(a.aglM ? Number(a.aglM) : null);
-          case "tanker":
-            return c.tankerStart();
+          case "tanker": {
+            if (a.refuelMode) c.aarModeSet(a.refuelMode as "auto" | "assisted" | "manual");
+            const o = { near: a.near === true ? true : undefined, side: a.side as "right" | "left" | undefined };
+            return c.tankerStart(o.near || o.side ? o : {});
+          }
+          case "refuelMode":
+            return c.aarModeSet(a.refuelMode as "auto" | "assisted" | "manual" | undefined);
           default:
             return c.modesOff();
         }
