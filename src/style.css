@@ -1193,7 +1193,7 @@ body.hide-ui .mission-caption { display: none; }
 body.hide-ui .subtitles { display: none; }
 
 /* the field to speak to TARS (PLAN-TARS T5b): F6, under the subtitles */
-/* TARS (PLAN-TARS-AGENT A7–A8): his console — not a chat box: his emblem and what he does, the exchange, a
+/* TARS (PLAN-TARS-AGENT A7–A8): his console — not a chat box: his orb and what he does, the exchange, a
    plan he proposes, his actions as he does them, the wait's live line, the field; his presence while closed;
    his cards over the view. Its accent follows his state. */
 .tars-panel, .tars-presence { --tc: 140, 255, 190; }
@@ -1221,10 +1221,9 @@ body.hide-ui .subtitles { display: none; }
 .tp-who { display: flex; flex-direction: column; line-height: 1.1; }
 .tp-who small { font: 700 12px var(--hud-font); letter-spacing: 0.34em; color: rgba(var(--tc), 0.98); }
 .tp-state { font: 600 10.5px var(--hud-font); letter-spacing: 0.18em; text-transform: uppercase; color: rgba(var(--tc), 0.7); margin-top: 3px; }
-.tars-emblem { flex: none; overflow: visible; }
-.te-slab { fill: rgba(var(--tc), 0.07); stroke: rgba(var(--tc), 0.55); stroke-width: 0.8; }
-.te-strip { fill: rgba(var(--tc), 0.9); filter: drop-shadow(0 0 2px rgba(var(--tc), 0.8)); }
-.tars-emblem[data-state="idle"] .te-strip { fill: rgba(var(--tc), 0.45); filter: none; }
+/* his orbs (ui/tars/orb.ts): thinking orbs, drawn on canvases in his state's colour */
+.tars-orb { display: inline-block; flex: none; vertical-align: middle; }
+.tars-orb[hidden] { display: none; }
 .tp-thread { display: flex; flex-direction: column; gap: 3px; }
 .tp-thread p { margin: 0; }
 .tp-thread p:empty { display: none; }
@@ -1238,22 +1237,23 @@ body.hide-ui .subtitles { display: none; }
 @keyframes tars-step { from { opacity: 0; transform: translateX(-4px); } to { opacity: 1; transform: none; } }
 .tars-actions li.no { color: rgba(255, 176, 150, 0.95); }
 .tars-actions li.run { color: rgba(255, 214, 130, 0.95); }
-.tp-mark { width: 12px; flex: none; text-align: center; }
-.tars-actions li.run .tp-mark { animation: tars-spin 1s linear infinite; display: inline-block; }
-@keyframes tars-spin { to { transform: rotate(360deg); } }
+.tp-mark { width: 16px; flex: none; text-align: center; }
+.tp-mark .tars-orb, .tp-sub-mark .tars-orb, .tp-todo-mark .tars-orb { vertical-align: -2px; }
 .tp-icon { width: 14px; flex: none; text-align: center; opacity: 0.85; }
 .tp-what { flex: none; max-width: 60%; overflow: hidden; text-overflow: ellipsis; }
 .tp-res { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: rgba(200, 212, 230, 0.55); font-weight: 400; }
 .tp-res::before { content: "→ "; }
-.tp-wait { position: relative; font: 500 11.5px var(--hud-font); color: rgba(255, 214, 130, 0.95); padding: 4px 8px 6px; border-radius: 5px; background: rgba(255, 200, 90, 0.06); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.tp-wait::after { content: ""; position: absolute; left: 0; bottom: 0; height: 2px; width: 30%; background: linear-gradient(90deg, transparent, rgba(255, 200, 90, 0.9), transparent); animation: tars-scan 1.6s ease-in-out infinite; }
-@keyframes tars-scan { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+.tp-wait { display: flex; align-items: center; gap: 7px; font: 500 11.5px var(--hud-font); color: rgba(255, 214, 130, 0.95); padding: 4px 8px; border-radius: 5px; background: rgba(255, 200, 90, 0.06); }
+.tp-wait[hidden] { display: none; }
+.tp-wait-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .tars-row { display: flex; align-items: center; gap: 8px; border-top: 1px solid rgba(var(--tc), 0.14); padding-top: 7px; }
 .tars-panel input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; font: 500 15px var(--font); color: #f2f5fa; }
 .tars-panel input::placeholder { color: rgba(200, 210, 225, 0.45); }
-.tars-mic { background: transparent; border: 1px solid rgba(var(--tc), 0.4); border-radius: 50%; width: 30px; height: 30px; font-size: 14px; line-height: 1; cursor: pointer; color: inherit; flex: none; }
-.tars-panel.listening .tars-mic { background: rgba(255, 128, 112, 0.9); border-color: transparent; box-shadow: 0 0 0 6px rgba(255, 128, 112, 0.15); animation: tars-rec 1.2s ease-in-out infinite; }
-@keyframes tars-rec { 50% { box-shadow: 0 0 0 10px rgba(255, 128, 112, 0.05); } }
+.tars-mic { display: grid; place-items: center; padding: 0; background: transparent; border: 1px solid rgba(var(--tc), 0.4); border-radius: 50%; width: 30px; height: 30px; font-size: 14px; line-height: 1; cursor: pointer; color: inherit; flex: none; }
+/* (listening: his orb listening in the button's place) */
+.tars-mic .tars-orb, .tars-panel.listening .tars-mic-glyph { display: none; }
+.tars-panel.listening .tars-mic .tars-orb { display: block; }
+.tars-panel.listening .tars-mic { background: rgba(255, 128, 112, 0.14); border-color: rgba(255, 128, 112, 0.75); }
 .tars-link { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 10px; font: 400 11.5px var(--font); color: rgba(200, 210, 225, 0.6); }
 .tars-link .sp-link { font-size: 11.5px; }
 .tars-link em { color: rgba(255, 210, 120, 0.9); font-style: normal; }
@@ -1288,11 +1288,11 @@ body.hide-ui .subtitles { display: none; }
 .tp-h-you::before { content: "› "; color: rgba(var(--tc), 0.6); }
 .tp-h-tars { font: 400 12px/1.35 var(--font); color: rgba(235, 242, 250, 0.85); padding-left: 10px; border-left: 2px solid rgba(var(--tc), 0.35); }
 .tp-agents { display: flex; flex-direction: column; gap: 6px; }
-.tp-sub { display: grid; grid-template-columns: 14px auto 1fr; gap: 2px 8px; align-items: baseline; padding: 7px 9px; border-radius: 7px; border: 1px solid rgba(124, 214, 255, 0.25); background: rgba(124, 214, 255, 0.05); animation: tars-step 0.2s ease-out; }
+.tp-sub { display: grid; grid-template-columns: 16px auto 1fr; gap: 2px 8px; align-items: baseline; padding: 7px 9px; border-radius: 7px; border: 1px solid rgba(124, 214, 255, 0.25); background: rgba(124, 214, 255, 0.05); animation: tars-step 0.2s ease-out; }
 .tp-sub b { font: 700 11px var(--hud-font); letter-spacing: 0.08em; color: #cfeeff; text-transform: uppercase; }
 .tp-sub p { grid-column: 2 / 4; margin: 0; font: 400 12px/1.4 var(--font); color: rgba(225, 235, 248, 0.88); }
 .tp-sub.running { border-color: rgba(255, 200, 90, 0.35); background: rgba(255, 200, 90, 0.05); }
-.tp-sub.running .tp-sub-mark { display: inline-block; animation: tars-spin 1s linear infinite; color: #ffd27a; }
+.tp-sub.running .tp-sub-mark { color: #7cd6ff; }
 .tp-sub.done .tp-sub-mark { color: #7dffae; }
 .tp-sub.failed { border-color: rgba(255, 140, 120, 0.4); }
 .tp-sub.failed .tp-sub-mark { color: #ff8d7f; }
@@ -1392,8 +1392,8 @@ body.hide-ui .subtitles { display: none; }
 .tp-todos li { display: flex; gap: 8px; font: 500 12px var(--font); color: rgba(220, 230, 245, 0.85); }
 .tp-todos li.done { color: rgba(200, 212, 230, 0.5); text-decoration: line-through; text-decoration-color: rgba(120, 255, 170, 0.5); }
 .tp-todos li.active { color: #ffe2a0; }
-.tp-todo-mark { width: 12px; flex: none; text-align: center; color: rgba(var(--tc), 0.8); }
-.tp-todos li.active .tp-todo-mark { display: inline-block; animation: tars-spin 1.2s linear infinite; color: #ffd27a; }
+.tp-todo-mark { width: 16px; flex: none; text-align: center; color: rgba(var(--tc), 0.8); }
+.tp-todos li.active .tp-todo-mark { color: #ffd27a; }
 /* a plan he proposes: its steps, its figures, accept or refuse */
 .tp-proposal { border: 1px solid rgba(124, 214, 255, 0.4); border-radius: 8px; padding: 9px 11px; background: rgba(124, 214, 255, 0.06); animation: tars-step 0.25s ease-out; }
 .tp-proposal header { display: flex; align-items: baseline; gap: 8px; }
@@ -1410,7 +1410,7 @@ body.hide-ui .subtitles { display: none; }
 .tp-yes { background: rgba(120, 255, 170, 0.9); color: #04140b; border: none; }
 .tp-no { background: transparent; color: rgba(255, 190, 170, 0.95); border: 1px solid rgba(255, 150, 130, 0.5); }
 .tp-hint { font: 400 11px var(--font); color: rgba(200, 210, 225, 0.5); }
-/* his presence while the console is closed: the emblem and what he is doing */
+/* his presence while the console is closed: his orb and what he is doing */
 .tars-presence {
   position: fixed; left: 50%; top: calc(var(--tb-bottom, 52px) + 88px); transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 8px;
   padding: 5px 12px 5px 8px; border-radius: 18px; cursor: pointer; max-width: min(520px, 90vw);
@@ -1436,10 +1436,8 @@ body.hide-ui .subtitles { display: none; }
 .tc-x { background: none; border: none; color: rgba(200, 212, 230, 0.6); font-size: 17px; line-height: 1; cursor: pointer; padding: 0 2px; }
 .tc-x:hover { color: #fff; }
 .tc-cv { display: block; width: 100%; }
-.tars-card footer { margin-top: 4px; font: 500 10px var(--hud-font); letter-spacing: 0.1em; text-transform: uppercase; color: rgba(140, 255, 190, 0.55); }
-.tars-card footer.tc-at::before { content: none; }
+.tars-card footer { display: flex; align-items: center; gap: 5px; margin-top: 4px; font: 500 10px var(--hud-font); letter-spacing: 0.1em; text-transform: uppercase; color: rgba(140, 255, 190, 0.55); }
 .tars-card footer.tc-at { color: rgba(190, 205, 225, 0.45); }
-.tars-card footer::before { content: "● "; color: rgba(255, 110, 100, 0.9); animation: tars-blink 1.4s steps(2) infinite; }
 @keyframes tars-blink { 50% { opacity: 0.2; } }
 .tars-card dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; margin: 0; font: 500 12px var(--hud-font); }
 .tars-card dt { color: rgba(190, 205, 225, 0.62); }
@@ -1451,7 +1449,7 @@ body.hide-ui .subtitles { display: none; }
 /* the map open: its tablet on the left — the cards beside it */
 body.map-open .tars-display { left: 392px; }
 @media (max-width: 900px) { .tars-display { left: 12px; right: 12px; width: auto; top: calc(var(--tb-bottom, 52px) + 12px); } }
-@media (prefers-reduced-motion: reduce) { .tars-panel, .tars-presence, .tars-actions li, .tp-proposal { animation: none; } .tp-wait::after, .tars-actions li.run .tp-mark, .tars-card footer::before { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .tars-panel, .tars-presence, .tars-actions li, .tp-proposal, .tp-verdict.off { animation: none; } }
 body.reduce-motion .tars-panel, body.reduce-motion .tars-presence { animation: none; }
 
 /* density: 1 minimal (tapes, cockpit, mission bar) · 2 clean (markers and warnings) */
@@ -1934,18 +1932,17 @@ body .sp-tooltip, #tip {
 .tb-ic svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .tb-ic svg .f { fill: currentColor; stroke: none; }
 
-/* TARS: his emblem, always there (breathing at rest), his name */
+/* TARS: his orb, always there (breathing at rest), his name */
 .tb-tars {
   all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 9px 0 6px;
   border-radius: 3px; color: rgb(var(--tc)); --tc: 140, 255, 190; transition: background 0.15s;
 }
 .tb-tars:hover { background: rgba(var(--tc), 0.1); }
-.tb-tars .tars-emblem { filter: drop-shadow(0 0 4px rgba(var(--tc), 0.45)); }
 .tb-tars-name { font: 700 11.5px var(--hud-font); letter-spacing: 0.24em; }
-#topbar:has(.tars-emblem[data-state="listening"]) .tb-tars, .tb-handle:has(.tars-emblem[data-state="listening"]) { --tc: 255, 128, 112; }
-#topbar:has(.tars-emblem[data-state="thinking"]) .tb-tars, .tb-handle:has(.tars-emblem[data-state="thinking"]) { --tc: 124, 214, 255; }
-#topbar:has(.tars-emblem[data-state="acting"]) .tb-tars, .tb-handle:has(.tars-emblem[data-state="acting"]) { --tc: 255, 200, 90; }
-#topbar:has(.tars-emblem[data-state="error"]) .tb-tars, .tb-handle:has(.tars-emblem[data-state="error"]) { --tc: 255, 120, 110; }
+#topbar:has(.tars-orb[data-state="listening"]) .tb-tars, .tb-handle:has(.tars-orb[data-state="listening"]) { --tc: 255, 128, 112; }
+#topbar:has(.tars-orb[data-state="thinking"]) .tb-tars, .tb-handle:has(.tars-orb[data-state="thinking"]) { --tc: 124, 214, 255; }
+#topbar:has(.tars-orb[data-state="acting"]) .tb-tars, .tb-handle:has(.tars-orb[data-state="acting"]) { --tc: 255, 200, 90; }
+#topbar:has(.tars-orb[data-state="error"]) .tb-tars, .tb-handle:has(.tars-orb[data-state="error"]) { --tc: 255, 120, 110; }
 
 /* the four modes: the one on lit in amber, its name shown; the others their icon (a mode refused now: dimmed) */
 .tb-modes { gap: 1px; padding: 0 6px; }

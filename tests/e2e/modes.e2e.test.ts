@@ -24,7 +24,7 @@ describe.skipIf(!E2E)("the four modes and the top bar", () => {
     await app.waitFor(`document.querySelector("#topbar .tb-tab.on")?.dataset.mode === "free"`, 3_000);
     const r = await app.js<{ shown: boolean; tars: boolean; time: boolean; camera: boolean; inside: boolean }>(`(() => {
       const b = document.getElementById("topbar"), r = b.getBoundingClientRect();
-      return { shown: !b.hidden && r.height > 30, tars: !!b.querySelector(".tb-tars .tars-emblem"), time: !!b.querySelector(".tb-time .tp"),
+      return { shown: !b.hidden && r.height > 30, tars: !!b.querySelector(".tb-tars .tars-orb"), time: !!b.querySelector(".tb-time .tp"),
         camera: !!b.querySelector(".tb-free #btn-camera"), inside: r.left >= 0 && r.right <= innerWidth };
     })()`);
     expect(r).toEqual({ shown: true, tars: true, time: true, camera: true, inside: true });
@@ -95,7 +95,7 @@ describe.skipIf(!E2E)("the four modes and the top bar", () => {
     expect(
       await app.js<boolean>(`document.getElementById("topbar").hidden && !document.querySelector("[data-testid=topbar-handle]").hidden`),
     ).toBe(true);
-    expect(await app.js<boolean>(`!!document.querySelector("[data-testid=topbar-handle] .tars-emblem")`)).toBe(true);
+    expect(await app.js<boolean>(`!!document.querySelector("[data-testid=topbar-handle] .tars-orb")`)).toBe(true);
     await app.click("[data-testid=topbar-handle]");
     expect(await app.js<boolean>(`!document.getElementById("topbar").hidden`)).toBe(true);
     expect(await app.js<{ hidden: boolean }>("__bh.mode.bar()")).toMatchObject({ hidden: false });

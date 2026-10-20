@@ -10,6 +10,7 @@ import { t, tf, tr, type Text } from "../../i18n";
 import type { Settings } from "../../settings";
 import { type ChoiceDef, type ControlDef, type NumberDef, SCHEMA_BY_KEY } from "../schema";
 import { earKeyLine } from "../ear-key";
+import { TarsOrb, TINT } from "./orb";
 
 type Key = keyof Settings;
 
@@ -199,13 +200,18 @@ export class TarsSettingsTab {
     b.type = "button";
     b.dataset.testid = `ts-try-${who}`;
     const now = el("span", "ts-now");
+    // (while the line is said, an orb composing beside it)
+    const orb = TarsOrb.mark("composing", who === "tars" ? TINT.green : TINT.amber, 18);
+    orb.hidden = true;
     b.addEventListener("click", async () => {
       b.disabled = true;
+      orb.hidden = false;
       now.textContent = t("speaking…");
       now.textContent = await this.host.tryVoice(who).catch((e) => String(e));
+      orb.hidden = true;
       b.disabled = false;
     });
-    row.append(b, now);
+    row.append(b, orb, now);
     this.updaters.push(() => {
       if (!b.disabled) now.textContent = this.host.voiceNow(who);
     });
@@ -242,6 +248,12 @@ export class TarsSettingsTab {
     b.type = "button";
     b.dataset.testid = "ts-test-ear";
     const meter = el("span", "ts-level");
+    // (while the ear is tried, his orb listening — its pace and size the level heard; the meter measures it)
+    let lv = 0;
+    const orb = new TarsOrb(20);
+    orb.set("listening");
+    orb.level = () => lv;
+    orb.el.hidden = true;
     const heard = el("span", "ts-heard");
     heard.dataset.testid = "ts-heard";
     b.addEventListener("click", () => {
@@ -250,10 +262,14 @@ export class TarsSettingsTab {
         return;
       }
       b.textContent = t("Stop");
+      orb.el.hidden = false;
       heard.textContent = t("Speak…");
       heard.classList.remove("note");
       this.stopTest = this.host.testEar({
-        level: (v) => meter.style.setProperty("--f", String(Math.min(1, v))),
+        level: (v) => {
+          lv = Math.min(1, v * 2.2);
+          meter.style.setProperty("--f", String(Math.min(1, v)));
+        },
         words: (text) => {
           heard.textContent = text || t("Speak…");
         },
@@ -261,6 +277,8 @@ export class TarsSettingsTab {
           this.stopTest = null;
           b.textContent = t("Test the ear");
           meter.style.setProperty("--f", "0");
+          orb.el.hidden = true;
+          lv = 0;
           if (note) {
             heard.textContent = note;
             heard.classList.add("note");
@@ -269,7 +287,7 @@ export class TarsSettingsTab {
         },
       });
     });
-    test.append(b, meter, heard);
+    test.append(b, orb.el, meter, heard);
     box.append(row, test);
     return box;
   }

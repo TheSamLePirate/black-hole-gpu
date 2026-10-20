@@ -1551,9 +1551,13 @@ async function main() {
       typed,
     ).catch((e) => tarsPanel.answer(e instanceof Error ? e.message : String(e)));
   };
-  // (his emblem moves with his voice: the robot's own measured on the voice bus; a system voice's guessed)
+  // (his orb moves with the voices: listening, the microphone's level (Deepgram's ear; the browser's own gives
+  // none); speaking, the robot's own measured on the voice bus; a system voice's unknown)
+  let micLevel = 0;
+  let micAt = -1e9;
   tarsPanel.levels(
     () => {
+      if (tarsPanel.currentState === "listening") return performance.now() - micAt < 400 ? Math.min(1, micLevel * 2.2) : null;
       if (tarsPanel.currentState !== "speaking" || lang !== "en" || !settings.voice) return null;
       const db = sound.busLevels().voice ?? -Infinity;
       return Number.isFinite(db) ? Math.min(1, Math.max(0, (db + 52) / 36)) : 0;
@@ -1568,6 +1572,10 @@ async function main() {
     {
       lang: () => lang,
       hearing: (text) => tarsPanel.hearing(text),
+      level: (v) => {
+        micLevel = v;
+        micAt = performance.now();
+      },
       heard: (text) => {
         if (!text) return tarsPanel.refresh(t("Nothing heard."));
         tarsPanel.hearing("");
@@ -2915,7 +2923,7 @@ async function main() {
   // the top bar (ui/topbar.ts, PLAN-MODES-AAA M1): the app's one bar in every mode — the modes, the mode's
   // group (the ship's: the flight HUD's chips, clocks, craft and views), the time, the actions, TARS
   const topBar = new TopBar({ setMode: (m) => void setGameMode(m), tars: () => tarsPanel.toggle() });
-  for (const e of topBar.emblems) tarsPanel.mirror(e);
+  for (const e of topBar.orbs) tarsPanel.mirror(e);
   topBar.shipModes.append(flightHud.bar.modes);
   topBar.shipClocks.append(flightHud.bar.clocks);
   topBar.shipActs.append(flightHud.bar.acts);
@@ -6884,6 +6892,7 @@ async function main() {
       earTrail: () => tarsTalk.trail,
       // (a line's Deepgram sound asked: its length in samples — the tests)
       voiceSynth: async (text: string, model: string) => (await deepgramVoice.synth(text, model))?.length ?? 0,
+      panel: tarsPanel,
     },
     skyLoading,
     mx: {

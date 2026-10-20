@@ -8,6 +8,7 @@
 import { CHANNELS, type RecKey, recorder } from "../../game/recorder";
 import { tr } from "../../i18n";
 import { drawChart, type Series } from "./chart";
+import { TarsOrb, TINT } from "./orb";
 
 export interface DataRow {
   label: string;
@@ -136,7 +137,11 @@ export class TarsDisplay {
       el.append(cv);
       if (spec.live || spec.source) {
         const foot = document.createElement("footer");
-        foot.textContent = tr({ fr: "en direct · l'enregistreur du vol", en: "live · the flight recorder" });
+        // (live: a small orb searching before it)
+        foot.append(
+          TarsOrb.mark("searching", TINT.green, 11),
+          tr({ fr: "en direct · l'enregistreur du vol", en: "live · the flight recorder" }),
+        );
         el.append(foot);
       }
       card.cv = cv;

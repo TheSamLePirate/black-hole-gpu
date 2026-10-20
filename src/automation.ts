@@ -33,6 +33,7 @@ import type { Speech } from "./audio/voice";
 import type { Capcom } from "./game/capcom";
 import type { Music } from "./audio/music";
 import type { TarsAgent } from "./ai/tars-agent";
+import type { TarsPanel } from "./ui/tars-panel";
 import type { TarsMemory } from "./ai/memory";
 import type { Tool } from "./ai/agent";
 import { VideoWriter } from "./video";
@@ -110,6 +111,8 @@ export interface BhContext {
     spent: () => number;
     earTrail?: () => string[];
     voiceSynth?: (text: string, model: string) => Promise<number>;
+    /** his console (ui/tars-panel.ts): shown, his state (its orbs) set — the screenshots of his orbs */
+    panel?: TarsPanel;
   };
   skyLoading: Promise<unknown>;
   /** multiple exposures (PLAN-CIEL C8): the analemma's runner */

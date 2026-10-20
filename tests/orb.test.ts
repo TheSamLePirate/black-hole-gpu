@@ -48,3 +48,21 @@ test("the state follows the boot's stages", () => {
   expect(orbStateFor([], true)).toBe("breathing");
   expect(orbStateFor([], false)).toBe("working");
 });
+
+test("TARS's look: the 20 px design has fewer dots, and his tint replaces the amber", () => {
+  const big = counter();
+  drawOrb(big.ctx, "solving", 0, 0, 30, 1.7);
+  const small = counter();
+  drawOrb(small.ctx, "solving", 0, 0, 30, 1.7, 1, { design: 20 });
+  expect(small.n.arcs).toBeGreaterThan(10);
+  expect(small.n.arcs).toBeLessThan(big.n.arcs);
+  const blue = [124, 214, 255] as const;
+  const far = ink(1, 1, blue, [240, 250, 255]);
+  expect(far[2]).toBeGreaterThan(far[0]);
+  const tinted = counter();
+  drawOrb(tinted.ctx, "breathing", 0, 0, 20, 0.6, 1, { design: 20, far: blue, near: [240, 250, 255] });
+  for (const s of tinted.n.styles) {
+    const [r, , b] = s.match(/\d+/g)!.map(Number);
+    expect(b!).toBeGreaterThanOrEqual(r!);
+  }
+});

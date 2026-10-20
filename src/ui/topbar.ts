@@ -1,6 +1,6 @@
 // The top bar (PLAN-MODES-AAA M1): the app's one bar, on screen in every mode — the four modes (F1 ship, F2 on
 // foot, F3 the free camera, F4 photo), the mode's own group (the ship's chips, clocks, craft and view; the
-// walker's place; the free camera's view), the time (the transport bar), the actions, TARS's emblem (always
+// walker's place; the free camera's view), the time (the transport bar), the actions, TARS's orb (always
 // there, breathing at rest, moving with what he does) and a button to hide it — a slim handle, TARS in it,
 // brings it back. The actions that do not fit the window's width go, the least used first, into a ⋯ menu.
 
@@ -9,7 +9,7 @@ import { GAME_MODES } from "../game/modes";
 import { t } from "../i18n";
 import { store } from "../util/storage";
 import { el as h } from "./kit";
-import { TarsEmblem } from "./tars/emblem";
+import { TarsOrb } from "./tars/orb";
 
 /** The four modes' line icons (24 × 24). */
 const MODE_ICONS: Record<GameMode, string> = {
@@ -151,8 +151,8 @@ export class TopBar {
   readonly freeSlot = h("div", "tb-group tb-free");
   /** the time: the transport bar */
   readonly time = h("div", "tb-group tb-time");
-  readonly emblem = new TarsEmblem(22, { ambient: true });
-  private handleEmblem = new TarsEmblem(14, { ambient: true });
+  readonly orb = new TarsOrb(24);
+  private handleOrb = new TarsOrb(16);
   private tabs = new Map<GameMode, HTMLButtonElement>();
   private context = h("div", "tb-group tb-context");
   private ctxTitle = h("b");
@@ -185,9 +185,9 @@ export class TopBar {
     this.el.setAttribute("role", "toolbar");
     this.el.setAttribute("aria-label", t("The game's bar"));
     this.el.dataset.testid = "topbar";
-    // TARS: his emblem, always there
+    // TARS: his orb, always there (breathing at rest)
     this.tarsBtn.type = "button";
-    this.tarsBtn.append(this.emblem.el, h("span", "tb-tars-name", "TARS"));
+    this.tarsBtn.append(this.orb.el, h("span", "tb-tars-name", "TARS"));
     this.tarsBtn.dataset.tip = t("TARS: ask him anything, or ask him to do it (F6: tap to write, hold to speak)");
     this.tarsBtn.dataset.testid = "topbar-tars";
     this.tarsBtn.onclick = () => d.tars();
@@ -233,7 +233,7 @@ export class TopBar {
     this.hideBtn.dataset.testid = "topbar-hide";
     this.hideBtn.onclick = () => this.hide(true);
     this.handle.type = "button";
-    this.handle.append(this.handleEmblem.el, svg('<path d="M7 10l5 5 5-5"/>'));
+    this.handle.append(this.handleOrb.el, svg('<path d="M7 10l5 5 5-5"/>'));
     this.handle.dataset.tip = t("Show the bar");
     this.handle.dataset.testid = "topbar-handle";
     this.handle.onclick = () => this.hide(false);
@@ -270,9 +270,9 @@ export class TopBar {
     }
   }
 
-  /** The emblems in TARS's state (his console mirrors his to them). */
-  get emblems() {
-    return [this.emblem, this.handleEmblem];
+  /** The orbs in TARS's state (his console mirrors his to them). */
+  get orbs() {
+    return [this.orb, this.handleOrb];
   }
 
   /** An action on the bar; a button of the page is moved in with its id and listeners. */

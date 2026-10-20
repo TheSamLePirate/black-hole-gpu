@@ -1,14 +1,15 @@
 // TARS's console (PLAN-TARS T5b, PLAN-TARS-AGENT A3–A8): not a chat box — his presence on the HUD.
-//   - his emblem (ui/tars/emblem.ts), its slabs moving with what he does, and the word for it (ready,
-//     listening, thinking, acting, speaking);
+//   - his orb (ui/tars/orb.ts: a thinking orb, its animation and colour what he does), and the word for it
+//     (ready, listening, thinking, acting, speaking);
 //   - the exchange: the pilot's words, his answer;
 //   - the task: each action as he does it — its icon, what it did, running then done (✓) or refused (✗),
-//     the full line in its tooltip —, and while he waits on the game, the wait's live line;
+//     the full line in its tooltip; a small orb marking the one running —, and while he waits on the game, the
+//     wait's live line (its orb searching);
 //   - the field (F6 tapped; F6 held: he listens, the words shown as they come; the 🎙 button), Escape
 //     stopping a turn that runs, then closing;
 //   - his link: offline or OpenRouter (the key's end, the model, what the session has cost), sign in, paste a
 //     key, disconnect; his memory (exchanges, notes) and its eraser.
-// Closed while he acts or speaks, a small presence stays: the emblem and what he is doing.
+// Closed while he acts or speaks, a small presence stays: his orb and what he is doing.
 // The agent's console (PLAN-TARS-AGENT B6): moved by its grip (top right; its place kept, a double click
 // docks it back), larger or smaller, folded to its head; its tabs — the exchange (and the past ones), his
 // sub-agents at work, his wakings (reflexes and rules, each switched on or off, the hour's budget), his
@@ -16,7 +17,7 @@
 
 import { t, tf, tr, type Text } from "../i18n";
 import { store } from "../util/storage";
-import { TarsEmblem, type EmblemState } from "./tars/emblem";
+import { TarsOrb, TINT, type TarsState } from "./tars/orb";
 import type { Proposal } from "../ai/game-tools";
 import { MODE_WORDS, type Mode, type Suggestion } from "../ai/commands";
 import { checkDeepgramKey, deepgramKey } from "../ai/deepgram";
@@ -129,7 +130,7 @@ const QUIET = new Set([
 /** the steps shown at most */
 const STEPS = 7;
 
-const STATE_WORD: Record<EmblemState, Text> = {
+const STATE_WORD: Record<TarsState, Text> = {
   idle: { fr: "Prêt", en: "Ready" },
   listening: { fr: "À l'écoute", en: "Listening" },
   thinking: { fr: "Réfléchit", en: "Thinking" },
@@ -203,10 +204,12 @@ export class TarsPanel {
   readonly el = el("div", "tars-panel");
   /** the small presence while the console is closed */
   readonly presence = el("button", "tars-presence");
-  readonly emblem = new TarsEmblem(30);
-  private miniEmblem = new TarsEmblem(20);
-  /** the emblems shown elsewhere (the top bar's), kept in his state */
-  private mirrors: TarsEmblem[] = [];
+  readonly orb = new TarsOrb(40);
+  private miniOrb = new TarsOrb(20);
+  /** the orbs shown elsewhere (the top bar's), kept in his state */
+  private mirrors: TarsOrb[] = [];
+  /** the mic button's orb, listening */
+  private micOrb = new TarsOrb(22);
   private input = el("input");
   private status = el("div", "tars-link");
   private stateWord = el("span", "tp-state");
@@ -214,6 +217,7 @@ export class TarsPanel {
   private tarsLine = el("p", "tp-tars");
   private actions = el("ol", "tars-actions");
   private waitLine = el("div", "tp-wait");
+  private waitText = el("span", "tp-wait-text");
   private presenceText = el("span", "tp-presence-text");
   private proposalEl = el("section", "tp-proposal");
   /** the field taking a key, hidden (OpenRouter's, Deepgram's) — none: a question */
@@ -222,7 +226,7 @@ export class TarsPanel {
   private settingsTab: TarsSettingsTab | null = null;
   /** his ear's key line (ui/ear-key.ts) */
   private ear: (HTMLElement & { update(): void }) | null = null;
-  private state: EmblemState = "idle";
+  private state: TarsState = "idle";
   private running: HTMLLIElement | null = null;
   private tab: Tab = "talk";
   private panes = new Map<Tab, HTMLElement>();
@@ -250,12 +254,12 @@ export class TarsPanel {
     this.el.dataset.testid = "tars-panel";
     this.el.hidden = true;
     if (host.settingsTab) this.settingsTab = new TarsSettingsTab(host.settingsTab);
-    // (the head: his emblem, his name, what he is doing)
+    // (the head: his orb, his name, what he is doing)
     const head = el("div", "tp-head");
     const who = el("div", "tp-who");
     who.append(el("small", "", "TARS"), this.stateWord);
     this.stateWord.dataset.testid = "tars-state";
-    head.append(this.emblem.el, who, this.budgetEl);
+    head.append(this.orb.el, who, this.budgetEl);
     this.budgetEl.dataset.testid = "tars-budget";
     // (its controls, top right: larger, folded, closed — and the grip that moves it)
     const ctl = el("div", "tp-ctl");
@@ -294,6 +298,7 @@ export class TarsPanel {
     this.actions.setAttribute("aria-live", "polite");
     this.waitLine.dataset.testid = "tars-wait";
     this.waitLine.hidden = true;
+    this.waitLine.append(TarsOrb.mark("searching", TINT.amber, 16), this.waitText);
     task.append(this.actions, this.waitLine);
     // (the field)
     const row = el("div", "tars-row");
@@ -319,7 +324,10 @@ export class TarsPanel {
     this.input.addEventListener("input", () => this.suggest());
     // (the microphone: a click listens, another sends — the key held does the same)
     if (host.talk) {
-      const mic = el("button", "tars-mic", "🎙");
+      const mic = el("button", "tars-mic");
+      // (the microphone, and while he listens his orb in its place)
+      mic.append(el("span", "tars-mic-glyph", "🎙"), this.micOrb.el);
+      this.micOrb.set("listening");
       mic.type = "button";
       mic.dataset.testid = "tars-mic";
       mic.title = t("Speak to TARS (or hold F6)");
@@ -374,11 +382,11 @@ export class TarsPanel {
     // (as left last time: its place, its size, folded or not)
     const kept = store.getJSON<{ x?: number; y?: number; large?: boolean; folded?: boolean } | null>(POS_KEY, null);
     if (kept) this.setLook(kept, false);
-    // (the presence: his emblem and his current doing, while the console is closed — a click opens it)
+    // (the presence: his orb and his current doing, while the console is closed — a click opens it)
     this.presence.type = "button";
     this.presence.dataset.testid = "tars-presence";
     this.presence.hidden = true;
-    this.presence.append(this.miniEmblem.el, this.presenceText);
+    this.presence.append(this.miniOrb.el, this.presenceText);
     this.presence.addEventListener("click", (e) => {
       e.stopPropagation();
       this.show();
@@ -535,7 +543,9 @@ export class TarsPanel {
     this.todosEl.replaceChildren(
       ...(items ?? []).map((t) => {
         const li = el("li", t.status);
-        li.append(el("span", "tp-todo-mark", t.status === "done" ? "✓" : t.status === "active" ? "◌" : "○"), el("span", "", t.text));
+        const mark = el("span", "tp-todo-mark", t.status === "done" ? "✓" : t.status === "active" ? "" : "○");
+        if (t.status === "active") mark.append(TarsOrb.mark("solving", TINT.amber));
+        li.append(mark, el("span", "", t.text));
         return li;
       }),
     );
@@ -655,8 +665,10 @@ export class TarsPanel {
     s.state = u.state;
     s.line = u.line;
     s.el.className = `tp-sub ${u.state}`;
+    const mark = el("span", "tp-sub-mark", u.state === "running" ? "" : u.state === "done" ? "✓" : "✗");
+    if (u.state === "running") mark.append(TarsOrb.mark("weaving", TINT.blue));
     s.el.replaceChildren(
-      el("span", "tp-sub-mark", u.state === "running" ? "◌" : u.state === "done" ? "✓" : "✗"),
+      mark,
       el("b", "", u.name),
       // (its conclusion as text: a model's markdown marks dropped)
       el("p", "", u.line.replace(/\*\*|__|`/g, "").replace(/^\s*[-*]\s+/gm, "• ")),
@@ -876,12 +888,12 @@ export class TarsPanel {
     this.budgetEl.classList.toggle("warn", warn);
   }
 
-  /** What he is doing: the emblem, the word, the presence. */
-  setState(s: EmblemState) {
+  /** What he is doing: his orbs, the word, the presence. */
+  setState(s: TarsState) {
     this.state = s;
     this.el.dataset.state = s;
     this.presence.dataset.state = s;
-    for (const e of [this.emblem, this.miniEmblem, ...this.mirrors]) e.set(s);
+    for (const e of [this.orb, this.miniOrb, ...this.mirrors]) e.set(s);
     this.stateWord.textContent = tr(STATE_WORD[s]);
     this.syncPresence();
   }
@@ -890,11 +902,11 @@ export class TarsPanel {
     return this.state;
   }
 
-  /** the emblems' voice level (0…1, null: unknown) and whether motion is reduced */
+  /** the orbs' voice level (0…1, null: unknown) and whether motion is reduced */
   levels(level: () => number | null, still: () => boolean) {
     this.levelFn = level;
     this.stillFn = still;
-    for (const e of [this.emblem, this.miniEmblem, ...this.mirrors]) {
+    for (const e of [this.orb, this.miniOrb, this.micOrb, ...this.mirrors]) {
       e.level = level;
       e.still = still;
     }
@@ -902,8 +914,8 @@ export class TarsPanel {
   private levelFn: () => number | null = () => null;
   private stillFn: () => boolean = () => false;
 
-  /** An emblem shown elsewhere (the top bar's), in his state from now on. */
-  mirror(e: TarsEmblem) {
+  /** An orb shown elsewhere (the top bar's), in his state from now on. */
+  mirror(e: TarsOrb) {
     this.mirrors.push(e);
     e.level = this.levelFn;
     e.still = this.stillFn;
@@ -914,7 +926,7 @@ export class TarsPanel {
     this.presence.hidden = this.open || this.state === "idle";
     if (this.presence.hidden) return;
     const step = this.running?.querySelector(".tp-what")?.textContent;
-    const wait = this.waitLine.hidden ? "" : this.waitLine.textContent;
+    const wait = this.waitLine.hidden ? "" : this.waitText.textContent;
     this.presenceText.textContent = [tr(STATE_WORD[this.state]), wait || step].filter(Boolean).join(" · ");
   }
 
@@ -942,8 +954,7 @@ export class TarsPanel {
   /** An action begun: its step, running. */
   begin(tool: string, args: Record<string, unknown>) {
     this.running = this.step(tool, args);
-    this.emblem.flash();
-    this.miniEmblem.flash();
+    for (const e of [this.orb, this.miniOrb, ...this.mirrors]) e.flash();
     this.syncPresence();
   }
 
@@ -971,11 +982,9 @@ export class TarsPanel {
       .filter(([k, v]) => v !== null && v !== false && typeof v !== "object" && k !== "execute" && k !== "maxSeconds")
       .map(([k, v]) => (v === true ? k : String(v)))
       .join(" · ");
-    li.append(
-      el("span", "tp-mark", "◌"),
-      el("span", "tp-icon", w?.i ?? "•"),
-      el("span", "tp-what", w ? `${tr(w.w)}${arg ? ` · ${arg}` : ""}` : tool),
-    );
+    const mark = el("span", "tp-mark");
+    mark.append(TarsOrb.mark("working", TINT.amber));
+    li.append(mark, el("span", "tp-icon", w?.i ?? "•"), el("span", "tp-what", w ? `${tr(w.w)}${arg ? ` · ${arg}` : ""}` : tool));
     this.actions.append(li);
     while (this.actions.children.length > STEPS) this.actions.firstElementChild!.remove();
     return li;
@@ -1023,7 +1032,7 @@ export class TarsPanel {
 
   /** The wait's live line (null: none). */
   progress(text: string | null) {
-    this.waitLine.textContent = text ?? "";
+    this.waitText.textContent = text ?? "";
     this.waitLine.hidden = !text;
     this.syncPresence();
   }

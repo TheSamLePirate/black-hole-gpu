@@ -1908,9 +1908,10 @@ the handle). It groups the agent, his memory, his tools and the cost, and the vo
 | `spent()` | `() => number` | the OpenRouter spend so far [USD] |
 | `earTrail()` | `() => string[]` | the ear's log (push-to-talk): what the microphone did, step by step |
 | `voiceSynth(text, model)` | `(text: string, model: string) => Promise<number>` | a line rendered by Deepgram's speech (for example `"aura-2-hector-fr"`): its length in samples, 0 when Deepgram gives nothing (`src/audio/deepgram-voice.ts`; it needs a Deepgram key, pasted in TARS's console, or the dev server's relay) |
+| `panel` | `TarsPanel` | his console (`src/ui/tars-panel.ts`): `show()`, `close()`, `setState("idle" \| "listening" \| "thinking" \| "acting" \| "speaking" \| "error")` (his orbs follow it), `levels(level, still)`, `begin`/`action`/`progress`/`todos`/`subagent` (the marks of what runs) |
 
 *Used in:* `tests/e2e/tars-eval.e2e.test.ts` (`__bh.tars.spent()` before and after a turn: the cost in USD),
-`tests/e2e/tars-ear.e2e.test.ts` (`__bh.tars.earTrail?.()`, `__bh.tars.voiceSynth("Orbite stable, Cooper.", "aura-2-hector-fr")`)
+`tests/e2e/tars-ear.e2e.test.ts` (`__bh.tars.earTrail?.()`, `__bh.tars.voiceSynth("Orbite stable, Cooper.", "aura-2-hector-fr")`), `tests/e2e/tars-orbs.e2e.test.ts` (`__bh.tars.panel`: his state set, his orbs shot)
 
 ### `__bh.tars.agent` → TarsAgent
 
@@ -2034,6 +2035,20 @@ Deepgram key (pasted in TARS's console) or the dev server's relay (`src/audio/de
 await app.js(`__bh.tars.voiceSynth("Orbite stable, Cooper.", "aura-2-hector-fr")`); // > 0
 ```
 *Used in:* `tests/e2e/tars-ear.e2e.test.ts`
+
+### `__bh.tars.panel` → TarsPanel
+
+His console (`src/ui/tars-panel.ts`). `show()` / `close()` open and close it; `setState(s)` sets what he is doing
+(`"idle"`, `"listening"`, `"thinking"`, `"acting"`, `"speaking"`, `"error"`) — the word, and every one of his orbs
+(`src/ui/tars/orb.ts`: the console's head, the presence while closed, the top bar and its handle); `levels(level,
+still)` replaces the voice's level (0…1, null: unknown) and the reduced-motion test the orbs read; `begin(tool, args)`,
+`action(result, ok, full, tool)`, `progress(text)`, `todos(items)`, `subagent(u)`, `listening(on)` show the marks of
+what runs (each a small orb). The game drives it itself; a test sets it to look at his orbs.
+
+```js
+await app.js(`(__bh.tars.panel.show(), __bh.tars.panel.setState("thinking"), true)`);
+```
+*Used in:* `tests/e2e/tars-orbs.e2e.test.ts`
 
 ### `__bh.tarsVoice` → object
 

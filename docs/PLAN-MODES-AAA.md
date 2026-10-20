@@ -47,7 +47,7 @@ The user's choices:
 - **TARS:**
   - F6 works in the flight layer only;
   - its state `tarsView` is filled only while flying, and its 1 Hz loop returns when not piloting;
-  - its console is `TarsPanel`, its emblem an animated SVG;
+  - its console is `TarsPanel`, its emblem an animated SVG (since 2026-10-20 a thinking orb: ui/tars/orb.ts);
   - it has about 40 tools, but none for renders or video.
 - **Pause:** the pause menu has no capture. The offline render dialog (`renderdialog.ts`) is reachable only from
   photo mode. Video renders exist (live, take, orbit, journey, dive; H.264 MP4).

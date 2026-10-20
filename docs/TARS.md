@@ -33,7 +33,7 @@ peut avoir échoué. [Détails, budgets et limites](THIRD-PERSON-IMPLEMENTATION.
 | `src/audio/g2p.ts`, `src/audio/formant.ts` | la voix robot de TARS en anglais : le texte en phonèmes, la synthèse par formants |
 | `src/game/tars.ts` | pur : TARS hors ligne — ses réponses, son honnêteté et son humour, ses remarques |
 | `src/ai/openrouter.ts`, `src/ai/tars-online.ts` | TARS par OpenRouter : la clé, la connexion OAuth (PKCE), les appels GLM et Jev, leur coût ; son caractère pour le modèle, ses remarques décidées par Jev |
-| `src/ui/tars-panel.ts`, `pwa/openrouter.html` | sa console F6 (emblème, onglets Échange · Agents · Réveils · Mémoire, actions en direct, suivi du hub, proposition, tâches, autocomplétion, modes, poignée) et le lien à OpenRouter ; la page de rappel de la connexion |
+| `src/ui/tars-panel.ts`, `pwa/openrouter.html` | sa console F6 (son orbe, onglets Échange · Agents · Réveils · Mémoire, actions en direct, suivi du hub, proposition, tâches, autocomplétion, modes, poignée) et le lien à OpenRouter ; la page de rappel de la connexion |
 | `src/ai/agent.ts`, `src/ai/tool-schema.ts` | TARS agent : la boucle d'un tour (appels, résultats, bornes, arrêt) ; le schéma des outils et la vérification des arguments |
 | `src/ai/game-tools.ts`, `src/ai/settings-tools.ts` | ses 68 outils : tout le jeu (dont le F-35 : ses vols, l'école de vol, les missions, le trafic, la patrouille, les armes, le porte-avions, l'approche, le plan de vol), montrer, proposer, attendre, réveils, sous-agents, tâches, savoir-faire ; les réglages trouvés par les mots et vérifiés au schéma |
 | `src/ai/knowledge.ts`, `docs/aviation/{fr,en}/*.md` | sa base de connaissances aéronautique : onze pages par langue, coupées en sections, cherchées par leurs mots (outil `knowledge`), livrées avec le jeu |
@@ -45,7 +45,7 @@ peut avoir échoué. [Détails, budgets et limites](THIRD-PERSON-IMPLEMENTATION.
 | `src/ai/subagents.ts` | ses sous-agents : jusqu'à 4 copies en parallèle, lecture et calcul seulement |
 | `src/ai/commands.ts`, `src/ai/tars-commands.ts` | les 27 commandes « / » de l'agent, les mentions @, les modes, les savoir-faire ; leurs complétions (pur) et leur exécution |
 | `src/ai/game-commands.ts` | les 93 commandes de jeu (« /target », « /cockpit », « /teleport »…) exécutées par ses outils sans le modèle ; leurs arguments complétés |
-| `src/ui/tars/emblem.ts`, `src/ui/tars/display.ts`, `src/ui/tars/chart.ts` | son emblème animé ; ses cartes sur la vue (graphes en direct, couloir et graphe du hub superposés, fiches) et leur tracé |
+| `src/ui/tars/orb.ts`, `src/ui/tars/display.ts`, `src/ui/tars/chart.ts` | ses orbes (thinking orbs) ; ses cartes sur la vue (graphes en direct, couloir et graphe du hub superposés, fiches) et leur tracé |
 | `src/ai/tars-agent.ts`, `src/ai/memory.ts` | sa consigne d'agent, un tour à la fois ; sa mémoire gardée entre les visites |
 | `src/ai/offline-orders.ts`, `src/ai/listen.ts` | les ordres compris hors ligne (dont ceux du leader à sa patrouille) ; le push-to-talk |
 | `src/audio/engine.ts` | les bus « voix » et « musique », la radio autour des voix (Quindar, squelch, souffle), le souffle du blackout, la chaîne de la voix de TARS |
@@ -163,7 +163,23 @@ Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A9, B1–B7, C1–C6). L
   - Téléporter (`place_ship` : **un lieu par son nom** — `query` : une piste, un site, une destination de l'Atlas, toute adresse ou nom de lieu sur la Terre (OpenStreetMap, WGS84), des coordonnées tapées —, ou `site`, ou corps + lat/lon ; modes `orbit`, `orbit_over`, `ground`, `walk`, `lineup`, `fly` — en vol au-dessus du lieu, `aglM` au-dessus du sol —, `near`, `wormhole`, `glide`, `hover`), sauvegarder et charger, lancer une scène.
   - **Tout réglage**, vérifié au schéma ; **toute touche**.
   - **Attendre** l'issue (la fin d'un autopilote, un posé, une orbite autour d'un corps) pendant que le jeu tourne.
-- **Sa console** (F6) : son emblème — quatre monolithes animés selon son état (prêt, à l'écoute, réfléchit, agit, parle) —, l'échange, ses actions en direct (◌ en cours, ✓ fait, ✗ refusé ; la ligne entière en info-bulle), la ligne vivante d'une attente, « TARS travaille… (Échap : arrêter) ». Fermée, **sa présence** reste en haut de l'écran tant qu'il agit ou parle. Ce qu'il a lancé (un autopilote, un plan) est **suivi jusqu'au bout**, puis l'issue dite.
+- **Sa console** (F6) : son orbe — un *thinking orb* animé et teinté selon son état (voir « Ses orbes » ci-dessous) —, l'échange, ses actions en direct (un petit orbe en cours, ✓ fait, ✗ refusé ; la ligne entière en info-bulle), la ligne vivante d'une attente (son orbe qui cherche), « TARS travaille… (Échap : arrêter) ». Fermée, **sa présence** reste en haut de l'écran tant qu'il agit ou parle. Ce qu'il a lancé (un autopilote, un plan) est **suivi jusqu'au bout**, puis l'issue dite.
+- **Ses orbes** (`src/ui/tars/orb.ts`, 20/10/2026) : toutes ses animations sont des *thinking orbs*
+  ([thinking-orbs](https://github.com/Jakubantalik/thinking-orbs), son moteur sans React, dessiné par
+  `src/intro/orb.ts` comme l'orbe du chargement), teintés de la couleur de son état. Les siens — la tête de la
+  console (40 px), sa présence (20 px), la barre du haut (24 px) et sa poignée (16 px) — suivent ce qu'il fait :
+  prêt → *breathing* (un anneau qui respire, lent et pâle, vert) · à l'écoute → *listening* (une onde dans les
+  anneaux, rouge ; son allure et sa taille au niveau du micro quand l'oreille est Deepgram) · réfléchit → *solving*
+  (cyan) · agit → *connecting* (ambre ; chaque action un sursaut) · parle → *composing* (vert ; au niveau de sa voix
+  robot) · problème → un anneau immobile, rouge. Les petits marquent ce qui tourne : l'étape en cours (*working*),
+  l'attente (*searching*), un sous-agent (*weaving*), la tâche en cours (*solving*), le bouton micro pendant
+  l'écoute (son orbe à l'écoute à la place de 🎙), le « en direct » d'un graphe (*searching*), l'essai de sa voix
+  (*composing*) et le test de l'oreille (*listening*, au niveau entendu ; la jauge reste, c'est une mesure). Sous
+  40 px, le dessin 20 px du moteur (moins de points, plus gros). Une seule boucle `requestAnimationFrame` pour tous,
+  qui ne tourne que si l'un bouge à l'écran (caché, hors écran, onglet caché : rien n'est dessiné) ; au repos
+  ~15 images/s ; mouvement réduit : une image fixe (l'état dit par la forme et la couleur). Gardés : les entrées de
+  la console et des étapes (`tars-in`, `tars-step` — de la mise en page, pas une activité) et le clignotement du
+  verdict du hub (une alarme). e2e `tests/e2e/tars-orbs.e2e.test.ts`, captures `docs/progress/tars-orbs/`.
 - **Il montre** : des graphes (les canaux de l'enregistreur en direct, ou ses propres séries), des fiches de chiffres, et les vrais écrans du jeu (la carte, la tablette, un écran du cockpit, le rapport de vol) ; trois cartes au plus sur la vue, fermées par leur ×.
 - **Ordres et propositions** : un ordre (« pose-nous », « vise Mars ») s'exécute sans confirmation ; « propose-moi un plan pour… » donne un plan chiffré, sans rien exécuter, avec ACCEPTER / REFUSER (ou « oui » / « non ») — accepté, il l'exécute.
 - **L'arrêter** : Échap, « stop », ou une nouvelle question.

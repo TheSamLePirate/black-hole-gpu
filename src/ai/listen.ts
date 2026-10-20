@@ -23,7 +23,14 @@ const Ctor = (): (new () => Recognition) | null => {
 
 /** An ear of our own (Deepgram's): the words as they come, until end() — its last ones before it resolves. */
 export interface Ear {
-  start(h: { interim(text: string): void; final(text: string): void; error(code: string): void; note?(what: string): void }): Promise<void>;
+  start(h: {
+    interim(text: string): void;
+    final(text: string): void;
+    error(code: string): void;
+    note?(what: string): void;
+    /** the microphone's level now (0…1) */
+    level?(v: number): void;
+  }): Promise<void>;
   end(): Promise<void>;
 }
 
@@ -37,6 +44,8 @@ export interface ListenHost {
   failed(why: "denied" | "network" | "none" | "other", code?: string): void;
   /** listening on / off */
   state(on: boolean): void;
+  /** the microphone's level now (0…1: its loudest sample) — an ear of our own's only (TARS's orb listening) */
+  level?(v: number): void;
 }
 
 /** a hold shorter than this is a tap [ms] */
@@ -148,6 +157,7 @@ export class PushToTalk {
         this.interim = "";
         this.host.hearing(this.text());
       },
+      level: (v) => this.host.level?.(v),
       note: (what) => {
         this.trail.push(`ear ${what}`);
         if (this.trail.length > 60) this.trail.splice(0, this.trail.length - 60);
