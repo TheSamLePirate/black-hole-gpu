@@ -40,6 +40,8 @@ function deepgramRelay(path: "listen" | "speak", names: string[]) {
 
 // the network's rooms (docs/PLAN-RESEAU.md) on this server's /net: dev and the tests fly against them here;
 // kept in a file in dev, in memory otherwise (production's rooms live at stream.samlepirate.org)
+// (ignored by Git: absent in a fresh clone/worktree; SQLite creates the file, not its parent directory)
+if (dev) await Bun.$`mkdir -p snapshots`.quiet();
 const rooms = createRooms({ db: dev ? "snapshots/rooms-dev.sqlite" : ":memory:", build: "local" });
 
 const traffic = createTraffic({

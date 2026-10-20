@@ -307,6 +307,10 @@ export interface Settings {
   refraction: boolean; // the Earth's air bends the light from beyond it (PLAN-CIEL C3): the Sun, the Moon, the stars raised at the horizon
   autoWarp: boolean; // hub/manoeuvre sets warp; off: user's choice below its ceiling
   earthTerrain: boolean; // the Earth's real ground near the camera: elevation tiles streamed in (else the global map)
+  earthTerrainCache: boolean; // experimental filtered surface cache, realtime Earth only; exact fallback otherwise
+  earthTerrainRasterView: "off" | "depth" | "normals" | "difference"; // diagnostic raster patch; no replacement of physical rendering
+  earthTerrainRasterLevel: number; // diagnostic cache level 0…5; single patch, no automatic LOD yet
+  earthTerrainRasterUse: boolean; // experimental: the tracer's ground rays start from the raster patch's distance (verified, else marched as before)
   earthSurface: "off" | "satellite" | "materials"; // regional Sentinel-2 / WorldCover pilot; independent of physical relief
   earthScenery: "off" | "balanced" | "high";
   earthSceneryShadows: boolean;
@@ -665,6 +669,10 @@ export function defaultSettings(): Settings {
     refraction: true,
     autoWarp: true,
     earthTerrain: true,
+    earthTerrainCache: false,
+    earthTerrainRasterView: "off",
+    earthTerrainRasterLevel: 2,
+    earthTerrainRasterUse: false,
     earthSurface: "satellite",
     earthScenery: "balanced",
     earthSceneryShadows: true,
@@ -2032,6 +2040,10 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   refraction: "pref",
   autoWarp: "scene",
   earthTerrain: "scene",
+  earthTerrainCache: "pref",
+  earthTerrainRasterView: "pref",
+  earthTerrainRasterLevel: "pref",
+  earthTerrainRasterUse: "pref",
   earthSurface: "scene",
   earthScenery: "scene",
   detailReach: "pref",

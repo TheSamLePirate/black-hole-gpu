@@ -1,0 +1,176 @@
+[
+  {
+    "pose": "rim-2km",
+    "level": 2,
+    "traceOff": [
+      69.1671807706376,
+      63.66394782900171
+    ],
+    "traceOn": [
+      52.93318226119066,
+      50.45161040227343
+    ],
+    "medianOff": 69.1671807706376,
+    "medianOn": 52.93318226119066,
+    "meanAbsDiff": 1.919035011574074,
+    "maxDiff": 107,
+    "share24": 0.001945167824074074,
+    "noise": {
+      "mean": 1.9184519675925926,
+      "max": 109,
+      "share24": 0.0019089988425925926
+    },
+    "work": {
+      "off": [
+        0,
+        0,
+        0
+      ],
+      "on": [
+        17.6,
+        42.5,
+        29.4
+      ]
+    },
+    "stats": {
+      "requested": true,
+      "compiled": true,
+      "error": null,
+      "active": true,
+      "reason": "pilot",
+      "encodedFrames": 585,
+      "level": 2,
+      "triangles": 32768,
+      "columns": 129,
+      "rows": 129,
+      "meshBuilds": 1,
+      "conforming": false,
+      "cutVertices": 0,
+      "cutTriangles": 0,
+      "width": 960,
+      "height": 540,
+      "targetBytes": 4147200,
+      "retiredBytes": 0,
+      "indexBytes": 1179648,
+      "vertexBytes": 594444,
+      "uniformBytes": 128,
+      "key": 1073742560
+    }
+  },
+  {
+    "pose": "rim-4km",
+    "level": 2,
+    "traceOff": [
+      58.54849547646306,
+      60.35076545868138
+    ],
+    "traceOn": [
+      41.68976795339807,
+      41.73660741544214
+    ],
+    "medianOff": 60.35076545868138,
+    "medianOn": 41.73660741544214,
+    "meanAbsDiff": 2.6344068287037037,
+    "maxDiff": 120,
+    "share24": 0.009508101851851853,
+    "noise": {
+      "mean": 2.5484425636574075,
+      "max": 119,
+      "share24": 0.008088831018518518
+    },
+    "work": {
+      "off": [
+        19.9,
+        55.4,
+        28.3
+      ],
+      "on": [
+        18,
+        38.6,
+        28.4
+      ]
+    },
+    "stats": {
+      "requested": true,
+      "compiled": true,
+      "error": null,
+      "active": true,
+      "reason": "pilot",
+      "encodedFrames": 1698,
+      "level": 2,
+      "triangles": 32768,
+      "columns": 129,
+      "rows": 129,
+      "meshBuilds": 1,
+      "conforming": false,
+      "cutVertices": 0,
+      "cutTriangles": 0,
+      "width": 960,
+      "height": 540,
+      "targetBytes": 4147200,
+      "retiredBytes": 0,
+      "indexBytes": 1179648,
+      "vertexBytes": 594444,
+      "uniformBytes": 128,
+      "key": 1073742560
+    }
+  },
+  {
+    "pose": "rim-horizon",
+    "level": 2,
+    "traceOff": [
+      60.400108629988566,
+      65.344592556881
+    ],
+    "traceOn": [
+      47.07497206060607,
+      50.17789211303808
+    ],
+    "medianOff": 65.344592556881,
+    "medianOn": 50.17789211303808,
+    "meanAbsDiff": 1.8781546585648148,
+    "maxDiff": 124,
+    "share24": 0.011299913194444445,
+    "noise": {
+      "mean": 1.532923900462963,
+      "max": 124,
+      "share24": 0.006036603009259259
+    },
+    "work": {
+      "off": [
+        24.5,
+        46.1,
+        24.3
+      ],
+      "on": [
+        26.7,
+        37.3,
+        24.2
+      ]
+    },
+    "stats": {
+      "requested": true,
+      "compiled": true,
+      "error": null,
+      "active": true,
+      "reason": "pilot",
+      "encodedFrames": 2310,
+      "level": 2,
+      "triangles": 32768,
+      "columns": 129,
+      "rows": 129,
+      "meshBuilds": 1,
+      "conforming": false,
+      "cutVertices": 0,
+      "cutTriangles": 0,
+      "width": 960,
+      "height": 540,
+      "targetBytes": 4147200,
+      "retiredBytes": 0,
+      "indexBytes": 1179648,
+      "vertexBytes": 594444,
+      "uniformBytes": 128,
+      "key": 1073742560
+    }
+  }
+]

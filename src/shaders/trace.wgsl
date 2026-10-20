@@ -152,13 +152,17 @@ struct Params {
   // on it in nodes (u east, v north), nodes a radian, on (0/1)
   warp: array<vec4f, 4>,
   // our universe's bodies a ray leaving the mouth's region may meet (renderer: the mouth's list; ourSegment): [0] their
-  // indices, 6 bits each, 4 a value (as path.w's list); [1].x their count + 0.5 (0: every body)
+  // indices, 6 bits each, 4 a value (as path.w's list); [1].x their count + 0.5 (0: every body),
+  // [1].w: experimental terrestrial height-cache lookup allowed in this realtime frame (0 otherwise)
   mouthList: array<vec4f, 2>,
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
 // pipeline, keeping the realtime kernel small (register pressure / occupancy).
 override QUALITY_PIPELINE: bool = false;
+// Experimental surface cache, compiled out of default and scientific/reference kernels.
+override HAS_TERRAIN_CACHE: bool = false;
+override HAS_TERRAIN_RASTER: bool = false; // the raster patch's distances (system/terrain-raster-hint.ts): the ground march starts from them
 
 // Kernel specialisation (renderer.ts: traceVariant): a feature the scene does not use compiled out —
 // the uber-kernel's branches and their registers, on the scenes that have none of them (the Gargantua
@@ -5368,7 +5372,7 @@ fn earthH(q: vec3f, foot: f32, cheap: bool) -> vec2f {
   }
   return vec2f(h, res);
 }
-fn earthHeightG(q: vec3f, foot: f32) -> f32 {
+fn earthHeightExactG(q: vec3f, foot: f32) -> f32 {
   let hr = earthH(q, foot, false);
   // (a runway's airfield graded: at its level, its detail off — the gear's ground the same)
   var g = vec3f(0.0);
@@ -5376,6 +5380,18 @@ fn earthHeightG(q: vec3f, foot: f32) -> f32 {
   let h0 = mix(hr.x, g.z, g.y);
   if (g.x >= 1.0) { return max(h0, 0.0); }
   return max(h0 + (1.0 - g.x) * earthDetail(q, h0, foot, hr.y), 0.0);
+}
+// BEGIN_TERRAIN_CACHE (system/terrain-cache.ts supplies the existing table lookup)
+fn terrainCachedHeight(q: vec3f, foot: f32) -> f32 { return -1.0; }
+// END_TERRAIN_CACHE
+fn earthHeightG(q: vec3f, foot: f32) -> f32 {
+  if (HAS_TERRAIN_CACHE) {
+    if (!HAS_RWY || runwayGrade(q).x <= 0.0) {
+      let h = terrainCachedHeight(q, foot);
+      if (h >= 0.0) { return h; }
+    }
+  }
+  return earthHeightExactG(q, foot);
 }
 // The ground's height at a unit direction q of the squashed space, as a radial height there [m of a]: the
 // relief read at its geodetic direction (src/terrain.ts: earthHeightSampler, the same), over the scale
@@ -5493,6 +5509,77 @@ fn walkNormal()->vec4f {
 // The highest the ground round the camera can be [m over the ellipsoid] (renderer: relief-ceiling.ts — the map's and
 // the tiles' highest within the horizons' reach and the detail's most over it): the shell the ground's marches work in
 fn earthTop() -> f32 { return select(9600.0, P.radio2.w, P.radio2.w > 0.0); }
+
+// BEGIN_TERRAIN_RASTER (system/terrain-raster-hint.ts supplies the lookup where the device takes its texture)
+fn terrainRasterHint(px: vec2f) -> f32 { return 0.0; }
+// END_TERRAIN_RASTER
+// the raster patch's distance [m] along this sample's ray, 0 where it does not cover it (main sets it)
+var<private> RHINT: f32 = 0.0;
+
+// The ground's clearance (as the march's f) at t along the ray from ro: the full relief, as the crossing's refinement reads it.
+fn marchClear(A: vec3f, o: vec3f, e: f32, rd: vec3f, t: f32, fpK: f32) -> f32 {
+  let v = o + rd * t;
+  let p = A + v;
+  let r = length(p);
+  return (e + 2.0 * dot(A, v) + dot(v, v)) / (r + 1.0) - earthHeight(p / r, max(t * fpK * EARTH_RM, 0.05)) / EARTH_RM;
+}
+// The ground's crossing from the raster patch's distance tM [m] (kM: metres per unit of t): the full relief is read at
+// two points either side of it, a few metres apart (a vertical tolerance over the ray's grazing — wider at a low angle),
+// and the crossing refined as the march's own. -3: the hint did not bracket the ground (the relief there above the
+// patch's, or nothing near): the march is then done as before. What the patch misses between the camera and the hint,
+// a thin ridge above its filtered surface, shows as the ground already over the ray at the near end: the same fallback.
+fn earthMarchHinted(ro: vec3f, rd: vec3f, fpK: f32, tM: f32, kM: f32) -> f32 {
+  let fine = P.nearCam1.w > 0.5;
+  let A = select(ro, P.nearCam0.xyz, fine);
+  let e = select(dot(ro, ro) - 1.0, P.nearCam0.w, fine);
+  let o = select(vec3f(0.0), P.nearCam1.xyz, fine);
+  let tH = tM / kM;
+  let pH = A + o + rd * tH;
+  let sinG = abs(dot(rd, normalize(pH)));
+  // (a grazing ray crosses the ground over a long stretch, and the patch's cells — a hundred metres and more — miss the ridges
+  // it could pass between: the march keeps those)
+  if (sinG < 0.15) { return -3.0; }
+  // (a pixel's footprint there, the patch's own few metres: the vertical band the hint is trusted within)
+  let eps = 5.0 + 2.0 * tM * fpK;
+  let dm = clamp(eps / sinG, 3.0, 0.02 * tM + 3.0);
+  let dt = dm / kM;
+  var lo = tH - dt;
+  if (lo <= 0.0) { return -3.0; }
+  var hi = tH + dt;
+  var flo = marchClear(A, o, e, rd, lo, fpK);
+  if (flo <= 0.0) { return -3.0; }
+  var fhi = marchClear(A, o, e, rd, hi, fpK);
+  if (fhi >= 0.0) {
+    // (the patch below the relief: once more, farther)
+    lo = hi;
+    flo = fhi;
+    hi = tH + 4.0 * dt;
+    fhi = marchClear(A, o, e, rd, hi, fpK);
+    if (fhi >= 0.0) { return -3.0; }
+  }
+  // (Illinois' regula falsi: the retained end's f halved when it stays twice, so a curved ground does not leave one end behind;
+  // until the bracket is a tenth of the ray's footprint there — the march's own crossing is bracketed by a step of 0.4 % of
+  // the distance and refined three times)
+  let tol = max(0.05, 0.1 * tM * fpK) / kM;
+  var side = 0;
+  for (var j = 0u; j < 10u; j++) {
+    if (hi - lo < tol) { break; }
+    let m = clamp(lo + (hi - lo) * flo / (flo - fhi), lo + 0.02 * (hi - lo), hi - 0.02 * (hi - lo));
+    let fm = marchClear(A, o, e, rd, m, fpK);
+    if (fm < 0.0) {
+      hi = m;
+      fhi = fm;
+      if (side == -1) { flo *= 0.5; }
+      side = -1;
+    } else {
+      lo = m;
+      flo = fm;
+      if (side == 1) { fhi *= 0.5; }
+      side = 1;
+    }
+  }
+  return clamp(lo + (hi - lo) * flo / (flo - fhi), lo, hi);
+}
 
 fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
   WALK_AT=vec3f(0);
@@ -7306,7 +7393,14 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   let m = length(rs);
   let rd = rs / m;
   var t = unitHit(ro, rd);
-  if (isEarth(k) && earthOn() && length(ro) < 1.5) { t = earthMarch(ro, rd, pixFoot()); }
+  if (isEarth(k) && earthOn() && length(ro) < 1.5) {
+    t = -3.0;
+    // (the raster patch's distance, the ground there found by two reads and a refinement instead of a march)
+    if (HAS_TERRAIN_RASTER && RHINT > 0.0 && P.walk[0].w < 0.5) {
+      t = earthMarchHinted(ro, rd, pixFoot(), RHINT, length(vec3f(rd.xy, rd.z / ab)) * EARTH_RM);
+    }
+    if (t < -2.5) { t = earthMarch(ro, rd, pixFoot()); }
+  }
   // (the windsocks beside the runways near: before the ground, they are what the ray meets)
   WS = vec4f(0.0);
   if (HAS_RWY && isEarth(k) && rwyCount() > 0u) {
@@ -8292,7 +8386,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     let ndc = vec2f(2.0 * pos.x / P.res.x - 1.0, 1.0 - 2.0 * pos.y / P.res.y);
     // (the aerial perspective's table for the air before the near world's ground — earthNear's)
     if ((flags & FLAG_AERIAL) != 0u) { AP_UV = pos / P.res.xy; }
+    if (HAS_TERRAIN_RASTER) { RHINT = terrainRasterHint(pos); }
     if ((flags & FLAG_LUT) == 0u || !farLut(pos, &tr)) { tr = trace(ndc, rnd, tSample); }
+    RHINT = 0.0;
     AP_UV = vec2f(-1.0);
   }
   wgDir[li] = vec4f(tr.dir, select(0.0, tr.sky, sampling && tr.bgW > 0.0));

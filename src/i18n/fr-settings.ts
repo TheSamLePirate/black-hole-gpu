@@ -1,5 +1,20 @@
 // French for the settings, the scenes and the keyboard sheet (keyed by the English: see src/i18n.ts).
 export default {
+  "Terrain raster pilot": "Terrain par triangles (pilote)",
+  "Raster depth": "Profondeur du terrain pilote",
+  "Raster normals": "Normales du terrain pilote",
+  "Raster / scene depth": "Écart de profondeur avec la scène",
+  "Raster pilot level": "Niveau du terrain pilote",
+  "Inspect one experimental terrain patch made of triangles. Depth, normals or differences from the current scene are overlaid after rendering; physics and optical calculations keep their current path. Requires real terrain near Earth. Disable the terrain cache lookup for a reference comparison. This diagnostic adds work and keeps rendering while enabled.":
+    "Inspecte une portion de terrain expérimentale dessinée par triangles. La profondeur, les normales ou les écarts avec la scène actuelle sont affichés après le rendu ; la physique et les calculs optiques conservent leur chemin actuel. Nécessite le relief réel près de la Terre. Désactivez le cache du relief pour comparer avec la référence. Ce diagnostic ajoute du travail et maintient le rendu actif.",
+  "Choose the pilot patch: levels 0 to 5 have north-south vertex spacing of about 10 m, 38 m, 153 m, 612 m, 2.45 km and 9.78 km. Each patch spans 128 cells. This is a geometry diagnostic, without automatic level transitions. Coarse levels may not resolve runway edges.":
+    "Choisissez la portion pilote : les niveaux 0 à 5 espacent les sommets nord-sud d’environ 10 m, 38 m, 153 m, 612 m, 2,45 km et 9,78 km. Chaque portion couvre 128 cellules. C’est un diagnostic de géométrie, sans transition automatique entre niveaux. Les niveaux grossiers peuvent mal représenter les bords des pistes.",
+  "Terrain raster hints (experimental)": "Indices raster du relief (expérimental)",
+  "Draw the terrain patch as triangles first, and start each camera ray's ground search where the patch says it lands: the exact relief is evaluated there and the search is kept as it was wherever the hint does not bracket the ground. Realtime views only; runways, walking, offline images, probes and relativistic views keep the reference march. The patch is one level (see the pilot level) and covers about 20 km at level 2. Needs real terrain and a GPU with 22 sampled textures per stage; compare image and frame time before keeping it.":
+    "Dessine d’abord la portion de terrain par triangles et commence la recherche du sol de chaque rayon de caméra là où la portion dit qu’il tombe : le relief exact y est évalué, et la recherche reste ce qu’elle était partout où l’indice n’encadre pas le sol. Vues en temps réel seulement ; pistes, marche, images hors ligne, sondes et vues relativistes gardent la marche de référence. La portion est d’un seul niveau (voir le niveau pilote) et couvre environ 20 km au niveau 2. Nécessite le relief réel et un GPU à 22 textures échantillonnées par étage ; comparez l’image et le temps de rendu avant de la garder.",
+  "Terrain cache (experimental)": "Cache du relief (expérimental)",
+  "Prepare filtered terrain heights on the GPU and reuse them while flying. Experimental: compare image quality and frame time before enabling permanently. Runways, walking, offline images and relativistic views keep the reference terrain. Requires real terrain.":
+    "Prépare les hauteurs filtrées du relief sur le GPU et les réutilise en vol. Expérimental : comparez l’image et le temps de rendu avant une activation permanente. Les pistes, la marche, les images hors ligne et les vues relativistes conservent le relief de référence. Nécessite le relief réel.",
   "Local source unavailable": "Source locale indisponible",
   Centre: "Centrer",
   "Walking speed": "Vitesse de marche",

@@ -14,13 +14,21 @@ import { surfaceShader } from "../src/system/earth-surface";
 import { aerialShader } from "../src/system/aerial";
 import { sceneryShader } from "../src/system/scenery";
 import { warpShader } from "../src/system/warp-grid";
+import { terrainCacheShader, withTerrainCache } from "../src/system/terrain-cache";
+import { terrainRasterShader } from "../src/system/terrain-raster";
+import { withTerrainRaster } from "../src/system/terrain-raster-hint";
 import { CHROME, withGpuPage } from "./lib/headless-gpu";
 
 const shaders: Record<string, string> = {};
 for await (const f of new Glob("src/shaders/*.wgsl").scan(".")) shaders[f.split("/").pop()!] = await Bun.file(f).text();
 for (const host of ["trace.wgsl", "character.wgsl"]) shaders[`${host} + forest.wgsl`] = withForest(shaders[host]!, shaders["forest.wgsl"]!);
 // (the tracer as smaller devices build it: no world scenery — 8 storage buffers —, no surface textures)
-const traced = shaders["trace.wgsl + forest.wgsl"]!;
+const traced = withTerrainCache(shaders["trace.wgsl + forest.wgsl"]!);
+shaders["trace.wgsl + forest + terrain cache"] = traced;
+shaders["terrain height cache bake (system/terrain-cache.ts)"] = terrainCacheShader(traced);
+shaders["terrain raster pilot (system/terrain-raster.ts)"] = terrainRasterShader(traced);
+// (the tracer as the full device builds it: the raster patch's distances read by the ground march)
+shaders["trace.wgsl with the raster hint"] = withTerrainRaster(traced, true);
 shaders["trace.wgsl without scenery"] = sceneryShader(surfaceShader(traced, true), false);
 shaders["trace.wgsl without surface textures"] = sceneryShader(surfaceShader(traced, false), true);
 shaders["trace.wgsl without the aerial table"] = aerialShader(traced, false);
