@@ -405,7 +405,7 @@ Chaque phase porte sa ligne réseau ; N finit ce qui n'existe qu'à plusieurs.
 | X9 | école de vol spatial (15 leçons) | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X9.md)) — schémas, leçon à deux (N), campagne des démos longues |
 | X10 | défis et qualifications | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X10.md)) — Miller et fronde de Gargantua (X11), défis de salle (N) |
 | X11 | missions, éditeur, campagne Interstellar | **fait** 2026-10-18 ([fiche](progress/vaisseaux/X11.md)) — missions coopératives à rôles (N) |
-| N | réseau : équipage, baux, flotte, partage, interactions, temps | à faire (une part dans chaque phase) |
+| N | réseau : équipage, baux, flotte, partage, interactions, temps | **fait** 2026-10-20 — N1 flotte ([fiche](progress/vaisseaux/N1.md)) · N2 partage ([fiche](progress/vaisseaux/N2.md)) · N3 à bord, copilote, passation ([fiche](progress/vaisseaux/N3.md)) · N4 défis de salle, classement ([fiche](progress/vaisseaux/N4.md)) · N5 missions coopératives ([fiche](progress/vaisseaux/N5.md)) · N6 temps, sons, carte crew ([fiche](progress/vaisseaux/N6.md)) — restent l'Endurance de salle avec bail, les feux distants, les messages vocaux |
 | Z | finition, docs, campagne | à faire |
 
 ## Risques

@@ -60,6 +60,8 @@ import { fuelOn } from "../engine";
 import type { ManeuverNode } from "../maneuver";
 import { type Act, readCrewAck, sayOf } from "../net/crewcmd";
 import { lang } from "../i18n";
+import { sound } from "../audio/engine";
+import { roomCraft } from "../net/spacefleet";
 import {
   isSpaceOrder,
   orderAsk,
@@ -355,6 +357,8 @@ export class NetSession {
       if (R.netShipsCam.length) R.netShipsCam = [];
       if (this.tags.length) this.tags = [];
       if (this.ships.length) this.ships = [];
+      sound.othersFrame(null);
+      roomCraft.list = () => [];
       if (netFrame.ships.length) netFrame.ships = [];
       if (netRadar.contacts.length) netRadar.contacts = [];
       this.d.camera.radarSources.delete("net");
@@ -744,6 +748,19 @@ export class NetSession {
     const followed = this.follow ? (all.find((s) => s.slot === this.follow!.slot) ?? null) : null;
     this.ships = all.filter((s) => s.slot !== this.follow?.slot);
     this.nearStep(all, net.room.slot);
+    // (the room's other spacecraft for the crew's map — N6)
+    roomCraft.list = () =>
+      this.ships
+        .filter((s) => !s.ghost && !s.side && SPACE_VESSELS.includes(s.id as never))
+        .map((s) => ({
+          name: this.nameOf(s.slot),
+          colour: members.get(s.slot)?.colour ?? "#cccccc",
+          vessel: VESSELS[s.id].name,
+          X: [...s.X] as [number, number, number],
+        }));
+    // (another's engine heard — N6: the nearest firing within 3 km, at its place)
+    const loud = this.ships.filter((s) => !s.ghost && s.dist < 3000 && s.thrust.throttle > 0.05).sort((p, q) => p.dist - q.dist)[0];
+    sound.othersFrame(loud ? { at: loud.rel as [number, number, number], throttle: loud.thrust.throttle, air: loud.thrust.air } : null);
     // (his state read straight — the craft placed even when ours is far from the Earth: a spectator in orbit)
     const fstate = this.follow ? (states.find((s) => s.slot === this.follow!.slot) ?? null) : null;
     this.puppetFrame(followed, fstate);
@@ -1400,7 +1417,7 @@ export class NetSession {
       W === 0
         ? tf("paused by {0}", names((w) => w === 0).join(", ") || t("the room"))
         : mine > W * 1.001
-          ? tf("{0} asked — waiting for {1}", fmtFactor(mine), names((w) => w < mine * 0.999).join(", "))
+          ? tf("{0} asked — waiting for {1}", fmtFactor(mine), this.holders(room, (w) => w < mine * 0.999, W).join(", "))
           : "";
     // (a speed-up asked by another: offered to us)
     const ask = Math.max(0, ...room.members.filter((m) => m.role === "pilot" && m.slot !== room.slot).map((m) => room.wants[m.slot] ?? 0));
@@ -1409,6 +1426,28 @@ export class NetSession {
       this.d.toast(tf("{0} asks for {1} — warp up to accept", offer.by.join(", "), fmtFactor(offer.warp)));
     this.offer = offer;
     if (offer && !roomPace.note) roomPace.note = tf("{0} asks for {1}", offer.by.join(", "), fmtFactor(offer.warp));
+  }
+
+  /** The pilots holding the room's warp back, each with why (N6: a burn under way holds it — said so). */
+  private holders(
+    room: { members: { slot: number; name: string; role: string }[]; wants: Record<number, number>; slot: number },
+    f: (w: number) => boolean,
+    W: number,
+  ): string[] {
+    return room.members
+      .filter((m) => m.role === "pilot" && m.slot !== room.slot && f(room.wants[m.slot] ?? W))
+      .map((m) => {
+        const T = this.tel.get(m.slot);
+        return T && ((T.eng ?? 0) > 0.02 || (T.thr ?? 0) > 0.02) ? tf("{0} (burning)", m.name) : m.name;
+      });
+  }
+  /** the pilots holding the room's warp now (the panel's, the tests') */
+  get warpHolders(): string[] {
+    const room = this.net?.room;
+    if (!room) return [];
+    const W = this.net!.roomWarp();
+    const mine = room.wants[room.slot] ?? W;
+    return mine > W * 1.001 ? this.holders(room, (w) => w < mine * 0.999, W) : [];
   }
 
   /** our scene's time less the room's, at the end of the frame's step [s] (R6) */

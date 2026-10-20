@@ -1001,6 +1001,48 @@ export class SoundEngine {
   /** A sonic boom heard where the Mach cone sweeps the listener (S7): its N-wave — the bow's shock (the
    *  pressure's leap up), the fall, the tail's shock (its leap back): the "double bang", `gap` [s] apart (0.06
    *  s at least) —, `level` 0…1 (the distance's). */
+  /** another pilot's engine (PLAN-VAISSEAUX N6): one voice, a rumble at the nearest craft firing near ours */
+  private other: { src: AudioBufferSourceNode; lp: BiquadFilterNode; g: GainNode; p: PannerNode } | null = null;
+  /** how loud another's engine is heard now (0…1 — the e2e's, the tests') */
+  otherLevel = 0;
+  /**
+   * Another's engine heard this frame (null: none firing near): its place in the camera's frame [m: x right, y up,
+   * z into the view], its throttle, the air about it (none: vacuum — a game's licence, dulled and low).
+   */
+  othersFrame(o: { at: [number, number, number]; throttle: number; air: number } | null) {
+    if (!this.running || !this.enabled || !this.ctx) return;
+    const ctx = this.ctx;
+    if (!this.other && !o) return;
+    if (!this.other) {
+      const src = ctx.createBufferSource();
+      src.buffer = this.noise(ctx, 4, "brown");
+      src.loop = true;
+      const lp = new BiquadFilterNode(ctx, { type: "lowpass", frequency: 400, Q: 0.7 });
+      const g = new GainNode(ctx, { gain: 0 });
+      const p = new PannerNode(ctx, {
+        panningModel: this.hrtf ? "HRTF" : "equalpower",
+        distanceModel: "inverse",
+        refDistance: 40,
+        rolloffFactor: 1,
+      });
+      src.connect(lp).connect(g).connect(p).connect(this.busses.listener);
+      src.start();
+      this.other = { src, lp, g, p };
+    }
+    const V = this.other;
+    const t = ctx.currentTime;
+    const k = o ? clamp(o.throttle) : 0;
+    const air = o ? clamp(o.air) : 0;
+    this.otherLevel = k * (0.25 + 0.55 * air);
+    V.g.gain.setTargetAtTime(this.otherLevel, t, 0.15);
+    if (o) {
+      V.p.positionX.setTargetAtTime(o.at[0], t, 0.05);
+      V.p.positionY.setTargetAtTime(o.at[1], t, 0.05);
+      V.p.positionZ.setTargetAtTime(-o.at[2], t, 0.05);
+      V.lp.frequency.setTargetAtTime(250 + 900 * air + 200 * k, t, 0.2);
+    }
+  }
+
   boomAt(level: number, gap: number) {
     if (!this.running || !this.enabled) return;
     this.nwave(this.busses.master, 0.95 * clamp(level), 0, Math.max(gap, 0.06));

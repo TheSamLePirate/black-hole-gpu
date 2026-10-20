@@ -7,6 +7,12 @@
 import { t, tf } from "../i18n";
 
 export const SPACE_VESSELS = ["ranger", "lander", "endurance"] as const;
+
+/** The room's other spacecraft where they are now (N6: the crew's map), filled by the room's session: each one's name,
+ *  colour, kind and place [M, the home frame]. */
+export const roomCraft: { list: () => { name: string; colour: string; vessel: string; X: [number, number, number] }[] } = {
+  list: () => [],
+};
 export type SpaceVesselId = (typeof SPACE_VESSELS)[number];
 
 /** A pilot's spacecraft as the room hears it (the "stel" event). */

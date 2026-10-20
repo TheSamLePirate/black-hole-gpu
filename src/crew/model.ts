@@ -159,12 +159,13 @@ export class CrewModel {
   }
   /** each pilot's once-a-second blocks (PLAN-VAISSEAUX K1: the bodies, the paths, Gargantua's side), the last ones —
    *  carried into the snapshots between them, as the surroundings are */
-  private heavy = new Map<number, Pick<InstrumentSnapshot, "bodies" | "traj" | "hole">>();
+  private heavy = new Map<number, Pick<InstrumentSnapshot, "bodies" | "traj" | "hole" | "others">>();
   /** a snapshot shown: the pilot's figures, his surroundings, his history */
   private apply(from: number, data: InstrumentSnapshot) {
     {
       const hv = this.heavy.get(from) ?? {};
-      if (data.bodies || data.traj || data.hole) {
+      if (data.bodies || data.traj || data.hole || data.others) {
+        if (data.others) hv.others = data.others;
         if (data.bodies) hv.bodies = data.bodies;
         if (data.traj) hv.traj = data.traj;
         if (data.hole) hv.hole = data.hole;
@@ -174,12 +175,14 @@ export class CrewModel {
       if (data.hole && hv.bodies) {
         delete hv.bodies;
         delete hv.traj;
+        delete hv.others;
       }
       if (data.state && hv.hole) delete hv.hole;
       data = {
         ...data,
         ...(data.bodies ? {} : hv.bodies ? { bodies: hv.bodies } : {}),
         ...(data.traj ? {} : hv.traj ? { traj: hv.traj } : {}),
+        ...(data.others ? {} : hv.others ? { others: hv.others } : {}),
         ...(data.hole ? {} : hv.hole ? { hole: hv.hole } : {}),
       };
       this.snapshots.set(from, { data, at: performance.now() });

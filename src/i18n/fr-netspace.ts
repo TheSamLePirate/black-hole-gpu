@@ -147,4 +147,7 @@ export default {
   "Ranger — the docking": "Ranger — l'amarrage",
   "Close in on the Endurance and dock once it is steady.": "S'approcher de l'Endurance et s'y amarrer une fois stable.",
   "Within a kilometre of the Endurance": "À moins d'un kilomètre de l'Endurance",
+  // time (N6)
+  "{0} (burning)": "{0} (en poussée)",
+  "held by {0}": "retenu par {0}",
 } satisfies Record<string, string>;

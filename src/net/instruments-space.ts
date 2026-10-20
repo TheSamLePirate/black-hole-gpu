@@ -118,6 +118,14 @@ export interface InstrumentDock {
   docked: boolean;
   phase: string;
 }
+/** another pilot's spacecraft in the room (PLAN-VAISSEAUX N6): about the same body as ours [km, its frame] */
+export interface InstrumentOther {
+  name: string;
+  colour: string;
+  vessel: string;
+  r: V3;
+}
+
 export interface InstrumentSpace {
   craft?: InstrumentCraft | null;
   /** the craft's attitude: its nose and its up on the home frame's axes (the navball's) */
@@ -133,6 +141,8 @@ export interface InstrumentSpace {
   /** the propellant: the Δv it still holds [m/s] (null: not counted), the tank's share */
   budget?: { dv: number | null; prop: number | null } | null;
   bodies?: InstrumentBody[];
+  /** the room's other spacecraft about the same body (N6) */
+  others?: InstrumentOther[] | null;
   target?: InstrumentTarget | null;
   sysx?: InstrumentSysx | null;
   time?: InstrumentTime | null;
@@ -145,7 +155,7 @@ export interface InstrumentSpace {
 }
 
 /** the bounds: segments, points a segment, nodes, bodies, failures, ports */
-export const SPACE_BOUNDS = { segs: 6, pts: 96, nodes: 16, bodies: 32, failures: 8, ports: 6 };
+export const SPACE_BOUNDS = { segs: 6, pts: 96, nodes: 16, bodies: 32, failures: 8, ports: 6, others: 8 };
 
 const record = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object" && !Array.isArray(x);
 const finite = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
@@ -204,6 +214,16 @@ export function readSpace(x: Record<string, unknown>): InstrumentSpace {
       dv: finite(x.budget.dv) ? Math.max(0, x.budget.dv) : null,
       prop: finite(x.budget.prop) ? Math.min(Math.max(x.budget.prop, 0), 1) : null,
     };
+  if (Array.isArray(x.others))
+    out.others = x.others
+      .slice(0, SPACE_BOUNDS.others)
+      .filter((o): o is Record<string, unknown> => record(o) && v3(o.r))
+      .map((o) => ({
+        name: label(o.name, 24),
+        colour: typeof o.colour === "string" && /^#[0-9a-f]{3,8}$/i.test(o.colour) ? o.colour : "#cccccc",
+        vessel: label(o.vessel, 16),
+        r: [...(o.r as V3)],
+      }));
   if (Array.isArray(x.bodies))
     out.bodies = x.bodies
       .slice(0, SPACE_BOUNDS.bodies)

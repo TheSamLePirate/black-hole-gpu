@@ -136,6 +136,15 @@ export function drawOrbit(
       p.text(`${dt >= 0 ? "+" : "−"}${dur(Math.abs(dt))}`, gx + 12, gy + 4, { col: C.white, size: 11, weight: 700, bg: "#050a0ee0" });
     }
   }
+  // the room's other spacecraft (N6), seen in our orbit's plane
+  for (const q of sc.snap?.others ?? []) {
+    if (Math.hypot(...q.r) > rMax * 1.6) continue;
+    const [qx, qy] = S(inPlane(o, q.r));
+    p.circle(qx, qy, 4.5);
+    p.fill(q.colour);
+    p.stroke("#03070a", 1.5);
+    p.text(`${q.name} · ${q.vessel}`, qx + 8, qy - 6, { col: q.colour, size: 10, weight: 700, bg: "#050a0ec0" });
+  }
   // the craft
   const [sx, sy] = S(inPlane(o, st.r));
   p.circle(sx, sy, 6);

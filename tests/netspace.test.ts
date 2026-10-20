@@ -149,3 +149,17 @@ test("co-op missions (N5): each role a mission of its own; won when every role i
     ),
   ).toEqual(["a"]);
 });
+
+test("the crew's map (N6): the room's other craft read bounded, their colour checked", async () => {
+  const { readSpace, SPACE_BOUNDS } = await import("../src/net/instruments-space");
+  const others = Array.from({ length: 12 }, (_, i) => ({
+    name: `P${i}`,
+    colour: i === 1 ? "red;x" : "#7fd4ff",
+    vessel: "Ranger",
+    r: [6771, i, 0],
+  }));
+  const S = readSpace({ others: [...others, { name: "bad", r: [1, 2] }] });
+  expect(S.others!.length).toBe(SPACE_BOUNDS.others);
+  expect(S.others![0]).toEqual({ name: "P0", colour: "#7fd4ff", vessel: "Ranger", r: [6771, 0, 0] });
+  expect(S.others![1]!.colour).toBe("#cccccc");
+});

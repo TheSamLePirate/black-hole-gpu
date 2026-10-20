@@ -8,6 +8,7 @@ import { fleet } from "../fleet";
 import type { RangerStatus } from "../game/status";
 import type { InstrumentBody, InstrumentSpace, InstrumentTrajSeg, V3 } from "../net/instruments-space";
 import { SPACE_BOUNDS } from "../net/instruments-space";
+import { roomCraft } from "../net/spacefleet";
 import type { OurPath } from "../system/our-predict";
 import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { bodyState } from "../system/ephemeris";
@@ -108,6 +109,21 @@ export function crewSpace(c: CameraController, i: Info, status: RangerStatus | n
       hit: i.ourFree?.hit ?? "",
     };
     if (body) out.bodies = bodiesNear(body, tm);
+    // (the room's other spacecraft about the same body, within its sphere — N6)
+    if (out.state) {
+      const b = bodyAt(body, tm);
+      const lim = Number.isFinite(out.state.soi) ? out.state.soi : 2e6;
+      out.others = roomCraft
+        .list()
+        .map((o) => ({
+          name: o.name,
+          colour: o.colour,
+          vessel: o.vessel,
+          r: [r1((o.X[0] - b.pos[0]) * KM), r1((o.X[1] - b.pos[1]) * KM), r1((o.X[2] - b.pos[2]) * KM)] as V3,
+        }))
+        .filter((o) => Math.hypot(...o.r) < lim)
+        .slice(0, SPACE_BOUNDS.others);
+    }
   }
   const nodes = i.plan?.nodes ?? [];
   out.nodes = nodes.slice(0, SPACE_BOUNDS.nodes).map((n) => ({

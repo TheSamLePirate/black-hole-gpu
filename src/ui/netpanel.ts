@@ -577,6 +577,13 @@ export class NetPanel {
     const W = net.roomWarp();
     const pace = h("div", "netp-pace");
     pace.append(h("span", "netp-lab", t("Time")), h("b", "", W === 0 ? t("paused") : W === 1 ? t("×1 real time") : `×${W}`));
+    // (what holds it back — N6: a pilot slower, one burning)
+    const held = this.session?.warpHolders ?? [];
+    if (held.length) {
+      const e = h("span", "netp-offer", tf("held by {0}", held.join(", ")));
+      e.dataset.testid = "net-warp-held";
+      pace.append(e);
+    }
     const offer = this.session?.offer;
     if (offer) {
       pace.append(
