@@ -5,6 +5,8 @@ Date : **20 octobre 2026**. Branche : `codex/aaa-terrestrial-renderer`, issue de
 Statut : **prototype implémenté, désactivé par défaut ; aucune validation en vol ou de performance**.
 Ce lot commence la partie caches de [P1](../../PLAN-PIPELINE-TERRE-AAA.md#p1--terrain-pilote--caches-et-raster).
 Il ne remplace pas encore la visibilité par des triangles et ne constitue pas le premier livrable complet de P1.
+La suite est décrite dans [P1b — terrain raster diagnostique](P1b.md) : elle réutilise ces hauteurs, peut
+prioriser le niveau demandé et distingue préparation du cache et lecture par le traceur.
 
 ## Ce que fait ce lot
 

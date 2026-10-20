@@ -6830,17 +6830,18 @@ async function main() {
     heldFor = held ? heldFor + dt : 0;
     movingFor = held ? 0 : movingFor + dt;
     const dynOn = dynamicResolutionOn(settings) && !renderer.offlineActive && forcedScale === null;
+    const terrainInspecting = renderer.terrainRasterInspecting;
     if (forcedScale !== null && renderScale !== forcedScale) {
       renderScale = forcedScale;
       resize();
     }
-    if (dynOn && heldFor > 0.4 && renderScale < 1) {
+    if (!terrainInspecting && dynOn && heldFor > 0.4 && renderScale < 1) {
       movingScale = renderScale;
       renderScale = 1;
       gpuEma = 0;
       scaleHeld = 0;
       resize();
-    } else if (movingFor > 0.15 && movingScale > 0) {
+    } else if (!terrainInspecting && movingFor > 0.15 && movingScale > 0) {
       if (dynOn && renderScale !== movingScale) {
         renderScale = movingScale;
         gpuEma = 0;
@@ -6858,7 +6859,7 @@ async function main() {
       const now = performance.now();
       scaleHeld += 1.5;
       const settled = scaleHeld >= 3;
-      if (on && settled && gpuEma > 0) scaleMs.set(renderScale, { ms: gpuEma, at: now });
+      if (!terrainInspecting && on && settled && gpuEma > 0) scaleMs.set(renderScale, { ms: gpuEma, at: now });
       const known = (x: number) => {
         const m = scaleMs.get(x);
         return m && now - m.at < 30000 ? m.ms : undefined;
@@ -6870,6 +6871,7 @@ async function main() {
       const budget = renderer.frameBudget(settings);
       let want = renderScale;
       if (forcedScale !== null) want = forcedScale;
+      else if (terrainInspecting) want = renderScale;
       else if (!dynOn) want = 1;
       else if (held) want = renderScale;
       else if (!settled) want = renderScale;

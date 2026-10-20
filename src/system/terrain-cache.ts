@@ -177,6 +177,7 @@ export class TerrainCache {
     at: { lon: number; lat: number } | null,
     revision: string,
     timestamp?: () => GPUComputePassDescriptor,
+    preferredLevel = -1,
   ): boolean {
     const { pipeline, sources } = this;
     if (this.disposed || !pipeline || !sources) return false;
@@ -193,7 +194,10 @@ export class TerrainCache {
       this.windows[k] = w;
       if (w) metadata.set(terrainWindowParams(w, TERRAIN_CACHE_ROUNDS[k]!, this.ready[k]!), 8 * k);
     }
-    const k = this.windows.findIndex((w, i) => w !== null && !this.ready[i]);
+    const k =
+      this.windows[preferredLevel] && !this.ready[preferredLevel]
+        ? preferredLevel
+        : this.windows.findIndex((w, i) => w !== null && !this.ready[i]);
     if (k >= 0) {
       if (!this.staging) {
         this.staging = this.device.createBuffer({
@@ -239,6 +243,12 @@ export class TerrainCache {
     }
     this.device.queue.writeBuffer(sources.table, TABLE_TERRAIN * 16, metadata);
     return k >= 0;
+  }
+
+  /** Ready in the current submission, including any bake/copy encoded before the pilot's draw. */
+  levelWindow(level: number): TerrainWindow | null {
+    const window = this.windows[level];
+    return this.ready[level] && window ? { ...window } : null;
   }
 
   stats() {

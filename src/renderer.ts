@@ -1,6 +1,8 @@
 import { streamingLead, aheadFocus, gazeLead } from "./system/streaming-focus";
 import { TerrainCache, withTerrainCache } from "./system/terrain-cache";
 import { TERRAIN_CACHE_MAX_LAT, TERRAIN_CACHE_VEC4S } from "./system/terrain-cache-layout";
+import { TerrainRaster } from "./system/terrain-raster";
+import { TERRAIN_RASTER_MAX_PIXELS, terrainRasterFrame } from "./system/terrain-raster-frame";
 import type { NetWalkerHome } from "./controller/netcraft";
 import { CharacterRenderer, type GrassView } from "./character-renderer";
 import type { PlanetCharacter } from "./controller/character";
@@ -1424,6 +1426,7 @@ export class Renderer {
     this.earthScenery.dispose();
     this.earthSurface.dispose();
     this.terrainSurfaceCache?.dispose();
+    this.terrainRaster?.dispose();
     this.device.destroy();
   }
 
@@ -1634,6 +1637,7 @@ export class Renderer {
       r.earthScenery.dispose();
       r.earthSurface.dispose();
       r.terrainSurfaceCache?.dispose();
+      r.terrainRaster?.dispose();
       // (a loss simulated — the e2e's, __bh.gpu.lose(): the device destroyed — told as a real one)
       r.lost = r.simulatedLoss ? "simulated" : info.reason === "destroyed" ? "released" : info.message || t("the GPU was reset");
       if (r.offline) r.offline.error = r.lost;
@@ -2903,7 +2907,7 @@ export class Renderer {
     if (kp > 0) this.featureKey |= 16384;
     // Keep reference rendering for optical/scientific kernels and contact with the walking patch.
     const terrainCacheEligible = !!(
-      s.earthTerrainCache &&
+      (s.earthTerrainCache || s.earthTerrainRasterView !== "off") &&
       s.earthTerrain &&
       this.earthMaps.tier &&
       t === this.live &&
@@ -2921,7 +2925,13 @@ export class Renderer {
     // Keep a stable key when a still frame starts refining; its quality kernel compiles the cache out.
     if (terrainCacheEligible) this.featureKey |= FEATURE_TERRAIN_CACHE;
     this.terrainCacheWanted = terrainCacheEligible && (o.flags & FLAG_INTERLEAVED) !== 0;
-    f[MOUTH_LIST_AT + 7] = this.terrainCacheWanted ? 1 : 0;
+    if (!o.probe) {
+      this.terrainRasterRequested = terrainCacheEligible && s.earthTerrainRasterView !== "off";
+      this.terrainRasterLevel = Number.isFinite(s.earthTerrainRasterLevel)
+        ? Math.max(0, Math.min(5, Math.round(s.earthTerrainRasterLevel)))
+        : 2;
+    }
+    f[MOUTH_LIST_AT + 7] = this.terrainCacheWanted && s.earthTerrainCache ? 1 : 0;
     if (!o.probe) this.marsDustNow = f[61 * 4 + 2]!;
     // (the storm's diffuse light in the kernel's weather code: compiled in only then)
     if (f[61 * 4 + 2]! > 0) this.featureKey |= 1024;
@@ -3855,10 +3865,14 @@ export class Renderer {
       const near = this.lastNear;
       const geo = near ? patchGeodetic(near, WGS84_F) : null;
       const at = geo && geo.h * WGS84_A < 100_000 ? geo : null;
-      const changed = this.terrainSurfaceCache.encode(enc, at, `${this.earthTiles.stamp}:${this.earthMaps.tier}`, () =>
-        this.prof.pass("terrain surface cache"),
+      const changed = this.terrainSurfaceCache.encode(
+        enc,
+        at,
+        `${this.earthTiles.stamp}:${this.earthMaps.tier}`,
+        () => this.prof.pass("terrain surface cache"),
+        this.terrainRasterRequested ? this.terrainRasterLevel : -1,
       );
-      if (changed) {
+      if (changed && this.paramsF[MOUTH_LIST_AT + 7]! > 0.5) {
         // The level affects this submission: reject older samples/history in this very frame.
         this.frameTimes.length = 0;
         this.epoch = this.validFrom = this.frameStamp;
@@ -5719,6 +5733,7 @@ export class Renderer {
    * the queue's stall limit, or failed, no longer counts: the kernel drawing is then for good). */
   get calibrationReady() {
     return (
+      !this.terrainRasterRequested &&
       (this.variantReady || !!this.variants.get(this.featureKey)?.rtGivenUp) &&
       this.earthSettled &&
       this.variantQueue.pending === 0 &&
@@ -5766,6 +5781,49 @@ export class Renderer {
   private warpOut: WarpGrid;
   private terrainSurfaceCache: TerrainCache | null = null;
   private terrainCacheWanted = false;
+  private terrainRaster: TerrainRaster | null = null;
+  private terrainRasterRequested = false;
+  private terrainRasterLevel = 2;
+  /** Freeze automatic quality policy while a diagnostic adds its own GPU work. */
+  get terrainRasterInspecting() {
+    return this.terrainRasterRequested;
+  }
+  /** Geometry inspector only; its metric depth does not yet replace the scene's occlusion depth. */
+  get terrainRasterStats() {
+    return { requested: this.terrainRasterRequested, ...this.terrainRaster?.stats() };
+  }
+
+  private encodeTerrainRaster(enc: GPUCommandEncoder, target: Target, output: GPUTexture, s: Settings) {
+    if (!this.terrainRasterRequested || s.earthTerrainRasterView === "off" || !this.lastNear || !this.lastCam) {
+      this.terrainRaster?.suspend();
+      return;
+    }
+    this.terrainRaster ??= new TerrainRaster(this.device);
+    if (target.width * target.height > TERRAIN_RASTER_MAX_PIXELS) {
+      this.terrainRaster.idle("pixel-budget");
+      return;
+    }
+    const level = this.terrainRasterLevel;
+    const window = this.terrainSurfaceCache?.levelWindow(level);
+    if (!window) {
+      this.terrainRaster.idle("cache-not-ready");
+      return;
+    }
+    const frame = terrainRasterFrame(
+      this.lastNear,
+      this.lastCam,
+      window,
+      level,
+      target,
+      output,
+      s.earthTerrainRasterView,
+      s.fov,
+      1476.625 * s.massSolar,
+    );
+    this.terrainRaster.encode(enc, output, target.sceneDepth, this.bodyBuf, frame, level, (label, descriptor) =>
+      this.prof.pass(label, descriptor),
+    );
+  }
   /** Experimental height-cache diagnostics, accessible through __bh.renderer. */
   get terrainCacheStats() {
     const stats = this.terrainSurfaceCache?.stats() ?? {
@@ -5839,6 +5897,7 @@ export class Renderer {
     this.simulatedLoss = true;
     this.earthSurface.dispose();
     this.terrainSurfaceCache?.dispose();
+    this.terrainRaster?.dispose();
     this.device.destroy();
   }
 
@@ -5877,6 +5936,8 @@ export class Renderer {
   frame(s: Settings, time: number, sceneChanged: boolean, timeChanged: boolean, displayChanged: boolean): FrameStats | null {
     if (this.lost) return null;
     if (this.busy) return null;
+    if (s.earthTerrainRasterView === "off") this.terrainRaster?.suspend();
+    else this.terrainRaster?.idle("waiting");
     // (polarization turned on or off: the live target remade with or without its buffer)
     this.wantPol = !!s.polarization;
     if (this.live && this.livePol !== this.wantPol) this.resize(this.live.width, this.live.height);
@@ -5907,6 +5968,11 @@ export class Renderer {
     // (the quality kernel failed: a still view converges on the fixed-step kernel — the path taken
     // with the error control off — rather than drawing realtime frames for ever)
     const adaptive = s.adaptiveIntegrator && this.qualityCompile.state !== "failed";
+    const rasterInspecting =
+      this.terrainRasterRequested &&
+      s.earthTerrainRasterView !== "off" &&
+      t.width * t.height <= TERRAIN_RASTER_MAX_PIXELS &&
+      !this.terrainRaster?.unavailable;
     // (the general quality kernel — every feature, the later scenes' fallback — only once the general
     // realtime one is in: two kernels this size compiling side by side are minutes on a slow D3D12 driver,
     // 5 min each on an RX 5700 XT; the still view does not wait for it, below)
@@ -5915,6 +5981,7 @@ export class Renderer {
       this.generalCompile.state === "ready" &&
       !sceneChanged &&
       !timeChanged &&
+      !this.terrainRasterRequested &&
       adaptive &&
       this.sampleIndex < targetSpp
     )
@@ -5925,6 +5992,7 @@ export class Renderer {
     if (
       sceneChanged ||
       timeChanged ||
+      rasterInspecting ||
       (adaptive && this.sampleIndex < targetSpp && !(this.firstFrameDoneAt && this.traceVariant("q", this.cameraKey)))
     ) {
       phase = "realtime";
@@ -6010,6 +6078,7 @@ export class Renderer {
     this.encodePost(enc, t, s);
     const outTex = this.context.getCurrentTexture();
     this.encodeDisplay(enc, t, this.canvasPipeline, outTex.createView());
+    this.encodeTerrainRaster(enc, t, outTex, s);
     this.encodeChart(enc, s, t, outTex.createView(), outTex.format, outTex.width, outTex.height, false);
     this.chartDirty = false;
     const auto = s.realtimeSubsampling === "auto";
@@ -6018,7 +6087,8 @@ export class Renderer {
     this.submit(
       enc,
       (ms) => {
-        if (phase === "realtime" && auto && generation === this.timingGeneration) this.adaptBlock(ms, this.frameBudget(s), used);
+        if (phase === "realtime" && auto && !this.terrainRasterRequested && generation === this.timingGeneration)
+          this.adaptBlock(ms, this.frameBudget(s), used);
         if (phase === "converging" && rows > 0) {
           const perRow = ms / rows;
           // (the bands sized to the quality's frame budget — the Game's 16 ms keeps 60 fps while the image

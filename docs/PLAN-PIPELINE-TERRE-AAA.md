@@ -2,7 +2,7 @@
 
 Date : **20 octobre 2026**. Branche de conception : **`codex/aaa-terrestrial-renderer`**, créée depuis **`a9380bfe69d8b40a26bc4ed158934338624646c1`**, dernier `origin/main` récupéré à sa création.
 
-Statut : **implémentation commencée — prototype de cache de hauteurs P1a, désactivé par défaut**. Le [suivi P1a](progress/terrestrial-aaa/P1a.md) décrit le code, les vérifications et ses limites. Aucun jalon de qualité/performance n'est validé : les mesures P0, le terrain raster et la comparaison en mouvement restent à faire. Aucun test ou benchmark de jeu n'a été lancé ; les vérifications TypeScript et de compilation WGSL sont distinguées des validations futures ci-dessous.
+Statut : **implémentation commencée — cache de hauteurs P1a et terrain raster diagnostique P1b, désactivés par défaut**. Les suivis [P1a](progress/terrestrial-aaa/P1a.md) et [P1b](progress/terrestrial-aaa/P1b.md) décrivent le code, les vérifications et leurs limites. Aucun jalon de qualité/performance n'est validé : les mesures P0, le raster dans le rendu final et la comparaison en mouvement restent à faire. Aucun test ou benchmark de jeu n'a été lancé ; les vérifications TypeScript et de compilation WGSL sont distinguées des validations futures ci-dessous.
 
 Lire d'abord [l'analyse technique](ANALYSE-PIPELINE-TERRE-AAA.md). Les règles de référence restent [CLAUDE.md](../CLAUDE.md), [E2E.md](E2E.md), [BH-API.md](BH-API.md) et [E2E-CATALOGUE.md](E2E-CATALOGUE.md).
 
@@ -136,6 +136,8 @@ Toutes les cases d'implémentation sont volontairement non cochées.
 **But :** démontrer le bénéfice structurel avant la généralisation.
 
 **En cours :** [P1a — cache GPU de hauteurs expérimental](progress/terrestrial-aaa/P1a.md). Ce sous-lot prépare une source réutilisable et son chemin de comparaison dans le traceur. Il ne valide ni l'erreur géométrique, ni le gain total, ni le jalon raster ; les cases restent ouvertes jusqu'à leurs preuves.
+
+[P1b — première passe de terrain raster et inspecteur](progress/terrestrial-aaa/P1b.md) ajoute une portion courbe WGS84 et les vues de profondeur/normales/écart. Elle ne remplace pas encore les intersections primaires ; la sélection multi-patches, les raccords LOD et le nivellement restent à implémenter avant cette bascule.
 
 - [ ] Construire une surface source stable et ses versions filtrées à partir du relief réel, du détail procédural et du nivellement des pistes.
 - [ ] Produire incrémentalement hauteurs, normales macro et bornes par tuile ; gérer bordures, versions et invalidation.
