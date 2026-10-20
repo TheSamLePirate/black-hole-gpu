@@ -431,6 +431,7 @@ export interface Settings {
   netMenu: boolean; // the network's menu and buttons (docs/PLAN-RESEAU.md): off, the game shows no trace of it
   netFreeFight: boolean; // in a room, in the F-35, no match: the free fight — every craft a target, friendly fire on
   netCrewActions: boolean; // the crew screens (crew/) may act aboard — everything but flying (docs/PLAN-CREW-ACTIONS.md); off: the pilot's lock
+  netLightDelay: "real" | "tenth" | "off"; // the light's time to the crew's ground stations (PLAN-VAISSEAUX K5): real · a tenth · none
   cineDynamicFov: boolean; // its lens widened with the speed and the afterburner, the long lens on the still cameras
   characterShoulder: number; // on foot: the camera over the right shoulder [m] (0: behind the head)
   shipAlbedo: number; // hull albedo (light grey paint in the film)
@@ -456,6 +457,11 @@ export interface Settings {
   rcsFraction: number; // RCS translation, as a fraction of the main engine's thrust
   crashSpeed: number; // touching the ground faster than this is a crash [m/s]
   gearForgiving: boolean; // the landing gear's limits three times a real one's (an easier landing)
+  spaceAssist: "manual" | "realistic" | "assisted" | "beginner"; // a spacecraft's assistance (PLAN-VAISSEAUX X0): no SAS · the pilot's SAS · SAS always, the drift held near a target · the same, gentle rates
+  spaceInfinitePropellant: boolean;
+  spaceAutoProtect: boolean;
+  spaceFailures: "off" | "rare" | "realistic" | "hard"; // a spacecraft's failures drawn: none · rare · realistic · hard (off for a beginner)
+  spaceConsumables: boolean; // a spacecraft's electricity, oxygen and scrubbers counted // a spacecraft's protections act in the realistic level too (the ground: the hover; the keep-out sphere: station keeping) // a spacecraft's tanks never empty (the crew engine's propellant)
   gyroscopes: boolean; // near the hole, the ship's axes carried as gyroscopes (Fermi–Walker: gyro.ts), else fixed on the distant stars
   wind: 0 | 1 | 2 | 3; // the wind and its turbulence: calm, light, moderate, strong (wind.ts) — the fair weather's
   weather: WeatherPreset; // the weather flown through (weather.ts): a preset, a draw, the airfields' real one
@@ -778,6 +784,7 @@ export function defaultSettings(): Settings {
     netMenu: true,
     netFreeFight: true,
     netCrewActions: true,
+    netLightDelay: "real",
     cineDynamicFov: true,
     characterShoulder: 0.45,
     shipAlbedo: 0.6,
@@ -801,6 +808,11 @@ export function defaultSettings(): Settings {
     // (a real gear: 3 m/s a landing, 4.5 a collapse — the certification's 10 ft/s and a margin)
     crashSpeed: 4.5,
     gearForgiving: false,
+    spaceAssist: "realistic",
+    spaceInfinitePropellant: false,
+    spaceAutoProtect: true,
+    spaceFailures: "off",
+    spaceConsumables: true,
     gyroscopes: true,
     wind: 1,
     weather: "fair",
@@ -901,6 +913,7 @@ export type Preset = Partial<Settings> & {
     | "iss"
     | "fleet"
     | "fleetSpin"
+    | "enduranceHole"
     | BodyView /** pose "iss": the ship's distance from the port [m], off its axis [m, station frame] */;
   issDistance?: number;
   issOffset?: [number, number, number];
@@ -1071,6 +1084,39 @@ export const presets: Record<string, Preset> = {
     endurancePhase: 125.82,
     enduranceSize: 2.4,
     enduranceLight: 1.5,
+  },
+  // (PLAN-VAISSEAUX X2c: the Endurance a mothership by Gargantua — the Ranger 150 m off its fore port, at its speed)
+  "Gargantua: the Ranger by the Endurance": {
+    ...GARGANTUA_WORLD,
+    fov: 70,
+    shipMount: "chase",
+    endurance: true,
+    enduranceOrbit: 18,
+    enduranceIncl: 0,
+    enduranceNode: 0,
+    endurancePhase: 125.82,
+    enduranceSize: 2.4,
+    enduranceLight: 1.5,
+    vessel: "ranger",
+    pose: "enduranceHole",
+  },
+  // (the film's docking: the Endurance tumbling by Mann's world — 3 rpm, the Ranger 150 m off its hub: match its turn)
+  "Mann: the tumbling Endurance": {
+    ...GARGANTUA_WORLD,
+    fov: 70,
+    shipMount: "chase",
+    endurance: true,
+    enduranceOrbit: 40,
+    enduranceIncl: 0,
+    enduranceNode: 0,
+    // (half a degree behind Mann on its orbit: clear of its world's pull, its world in sight)
+    endurancePhase: (0.72 * 180) / Math.PI - 0.5,
+    // (3 rpm: a turn in 20 s of the scene)
+    enduranceSpin: 20 / M_SECONDS,
+    enduranceSize: 2.4,
+    enduranceLight: 1.5,
+    vessel: "ranger",
+    pose: "enduranceHole",
   },
   "Ranger: approaching Gargantua": {
     spin: 0.6,
@@ -2105,6 +2151,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   netMenu: "pref",
   netFreeFight: "pref",
   netCrewActions: "pref",
+  netLightDelay: "pref",
   cineDynamicFov: "pref",
   characterShoulder: "pref",
   shipAlbedo: "carried",
@@ -2127,6 +2174,11 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   rcsFraction: "carried",
   crashSpeed: "carried",
   gearForgiving: "pref",
+  spaceAssist: "pref",
+  spaceInfinitePropellant: "pref",
+  spaceAutoProtect: "pref",
+  spaceFailures: "pref",
+  spaceConsumables: "pref",
   gyroscopes: "pref",
   wind: "pref",
   weather: "carried",

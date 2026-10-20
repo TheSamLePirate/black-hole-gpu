@@ -53,7 +53,7 @@ select.netp-in { flex: 0 0 auto; cursor: pointer; }
 /* the crew */
 .netp-members, .netp-known { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
 .netp-members li { display: grid; grid-template-columns: auto auto 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--k-line); border-radius: var(--k-r); background: var(--k-ctl-bg); }
-.netp-members li.me { border-color: rgba(111, 210, 255, 0.45); background: rgba(111, 210, 255, 0.06); }
+.netp-members li.netp-mine { border-color: rgba(111, 210, 255, 0.45); background: rgba(111, 210, 255, 0.06); }
 .netp-who { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .netp-whoname { display: flex; align-items: center; gap: 8px; font: 600 13.5px/1.2 var(--font); color: var(--k-text); }
 .netp-whoname > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -111,3 +111,21 @@ body.hide-ui .net-badge, body.title-open .net-badge { display: none; }
 /* the pilot's lock on the crew's actions (docs/PLAN-CREW-ACTIONS.md) */
 .netp-check { display: flex; gap: 8px; align-items: center; margin-top: 10px; cursor: pointer; font-size: 12px; }
 .netp-check input { width: 18px; height: 18px; accent-color: #7fd4ff; }
+/* the room's fleet of spacecraft (PLAN-VAISSEAUX N1) */
+.netp-fleetlist li { grid-template-columns: auto auto 1fr; }
+.netp-fleetlist .netp-acts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.netp-fleetlist .netp-whosub { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.netp-fail { color: var(--k-red, #ff6b5b); border-color: currentColor; }
+.netp-near { color: var(--k-amber, #ffb84d); }
+.netp-no { color: var(--k-red, #ff6b5b); }
+/* the copilot aboard another's craft (PLAN-VAISSEAUX N3) */
+.netp-copilot { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid rgba(111, 210, 255, 0.45); border-radius: var(--k-r); background: rgba(111, 210, 255, 0.06); }
+.netp-copilot .netp-acts { flex-wrap: wrap; }
+/* the room's board (PLAN-VAISSEAUX N4) */
+.netp-board { display: grid; gap: 10px; }
+.netp-roomchal { margin: 0; padding: 8px 10px; border: 1px solid var(--k-amber, #ffb84d); border-radius: var(--k-r); color: var(--k-amber, #ffb84d); font: 12.5px/1.35 var(--font); }
+.netp-boardsec { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid var(--k-line); border-radius: var(--k-r); background: var(--k-ctl-bg); }
+.netp-boardlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.netp-boardlist li { display: flex; gap: 8px; align-items: baseline; font: 13px/1.3 var(--font); }
+.netp-boardlist li.netp-mine { color: #7fd4ff; }
+.netp-rank { width: 22px; color: var(--k-dim); font: var(--k-font-value); }

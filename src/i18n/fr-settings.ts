@@ -880,6 +880,23 @@ export default {
   "Top turning rate of the attitude control (SAS, holds, the autopilots' turns).":
     "Vitesse de rotation maximale du contrôle d'attitude (SAS, maintiens, rotations des pilotes automatiques).",
   "Ranger handling": "Maniabilité du Ranger",
+  "The Endurance by Gargantua": "L'Endurance près de Gargantua",
+  "The mothership on its orbit about the hole, at its true size: the Ranger 150 m off its fore port at a quarter of light's speed — dock (B: auto-dock), fly the Endurance ([ ]), undock and fly the Ranger back.":
+    "Le vaisseau-mère sur son orbite autour du trou, à sa vraie taille : le Ranger à 150 m de son port avant, au quart de la vitesse de la lumière — amarrez-vous (B : amarrage auto), pilotez l'Endurance ([ ]), désamarrez et reprenez le Ranger.",
+  "The film's docking at Mann": "L'amarrage du film, à Mann",
+  "The Endurance tumbling at 3 rpm on Mann's orbit, the Ranger 150 m off its hub: match its turn about its axis, then dock (B: auto-dock flies its turn ahead).":
+    "L'Endurance en vrille à 3 tr/min sur l'orbite de Mann, le Ranger à 150 m de son moyeu : égalez sa rotation autour de son axe, puis amarrez-vous (B : l'amarrage auto vole sa rotation en avance).",
+  "Gargantua: the Ranger by the Endurance": "Gargantua : le Ranger près de l'Endurance",
+  "Mann: the tumbling Endurance": "Mann : l'Endurance en vrille",
+  "How much the Ranger, the Lander and the Endurance help. Manual: no SAS — the stick turns the craft faster and faster, a turn kept until stopped by hand. Realistic: the SAS as the pilot sets it (T). Assisted: the SAS always on; within 1 km of a craft or the station, the RCS let go holds the drift against it at nothing. Beginner: the same within 2 km, at half the turning rates. ⇧X: back to a stable craft in any — the turn stopped, over a ground a hover, in orbit prograde held.":
+    "Combien le Ranger, le Lander et l'Endurance aident. Manuel : pas de SAS — le manche fait tourner le vaisseau de plus en plus vite, une rotation garde son élan jusqu'à être arrêtée à la main. Réaliste : le SAS comme le pilote le règle (T). Assisté : le SAS toujours actif ; à moins d'1 km d'un vaisseau ou de la station, le RCS relâché annule la dérive par rapport à lui. Débutant : la même chose à moins de 2 km, à la moitié des vitesses de rotation. ⇧X : retour à un vaisseau stable à tout niveau — la rotation arrêtée, au-dessus d'un sol un vol stationnaire, en orbite le prograde maintenu.",
+  "No SAS: a turn kept until stopped by hand": "Pas de SAS : une rotation garde son élan jusqu'à l'arrêt manuel",
+  "The SAS as the pilot sets it": "Le SAS comme le pilote le règle",
+  "SAS always; the drift held near a craft": "SAS toujours ; la dérive annulée près d'un vaisseau",
+  "The same, gentle rates": "La même chose, rotations douces",
+  "Infinite propellant": "Ergols infinis",
+  "The spacecraft's tanks never empty (with the crew engine's propellant on): every burn free, the mass kept full.":
+    "Les réservoirs des vaisseaux ne se vident jamais (avec les ergols du moteur réaliste actifs) : chaque poussée est gratuite, la masse reste pleine.",
   "Turn acceleration": "Accélération en rotation",
   "Angular acceleration of the reaction wheels and the RCS: how fast a turn starts and stops.":
     "Accélération angulaire des roues de réaction et des RCS : la rapidité avec laquelle une rotation démarre et s'arrête.",
@@ -1366,7 +1383,9 @@ export default {
   "Quality (5: realtime max, 6: game)": "Qualité (5 : temps réel max, 6 : jeu)",
   "⌘K / Ctrl+K": "⌘K / Ctrl+K",
   "Search the settings": "Rechercher dans les réglages",
-  "Flying the Ranger (K) — KSP's layout": "Piloter le Ranger (K) — disposition KSP",
+  "Flying a spacecraft (K) — KSP's layout": "Piloter un vaisseau (K) — disposition KSP",
+  "Station keeping: held where it is against the station or a craft within 5 km, on the thrusters (docked: undock, back off 30 m, then hold) · RCS mode: the attitude keys turn the craft, or translate it (W S up · down, A D left · right, ⇧ Alt forward · back; Q E still roll)":
+    "Maintien à poste : tenu où il est par rapport à la station ou à un vaisseau à moins de 5 km, aux propulseurs (amarré : désamarrer, reculer de 30 m, puis tenir) · Mode RCS : les touches d'attitude font tourner le vaisseau, ou le translatent (Z S haut · bas, Q D gauche · droite, ⇧ Alt avant · arrière ; A E roulent toujours)",
   "Pitch · yaw · roll (Z S · Q D · A E on AZERTY)": "Tangage · lacet · roulis (Z S · Q D · A E en AZERTY)",
   "⇧ · Alt · ↑ ↓": "⇧ · Alt · ↑ ↓",
   "Throttle up · down (held)": "Gaz plus · moins (maintenu)",
@@ -1379,8 +1398,8 @@ export default {
   "Roll alignment: wings in the orbital plane while the nose is held": "Alignement en roulis : ailes dans le plan orbital, le nez maintenu",
   "Hold prograde · retrograde · radial ± · normal ± · target (ANTI, NODE on the panel)":
     "Maintien prograde · rétrograde · radial ± · normal ± · cible (ANTI, NODE sur le panneau)",
-  "Autopilot: hold position · circularize · approach · orbit the target · land · take off · dock (the ISS within 3 km)":
-    "Pilote auto : maintien de position · circulariser · approche · orbite de la cible · atterrir · décoller · amarrage (l'ISS à moins de 3 km)",
+  "Autopilot: hold position · circularize · approach · orbit the target · land · take off · dock (within 3 km; farther, the whole rendezvous)":
+    "Pilote auto : maintien de position · circulariser · approche · orbite de la cible · atterrir · décoller · amarrage (à moins de 3 km ; au-delà, tout le rendez-vous)",
   "3D map (drag: turn · right-drag: pan · wheel: zoom · click: target · double-click: centre) · settings panel":
     "Carte 3D (glisser : tourner · glisser-droit : déplacer · molette : zoom · clic : cible · double-clic : centrer) · panneau de réglages",
   "Camera: next · previous view — on the hull, around the ship, free, fly-by":

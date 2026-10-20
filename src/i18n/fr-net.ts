@@ -229,4 +229,15 @@ export default {
   "off {0}'s right wing": "à droite de {0}",
   "off {0}'s left wing": "à gauche de {0}",
   "Formation {0} — {1} m": "Formation {0} — {1} m",
+  "Recorded message from {0} ({1} ago): {2}": "Message enregistré de {0} (il y a {1}) : {2}",
+  "{0} h {1}": "{0} h {1}",
+  "{0} d": "{0} j",
+  "Light delay to the ground": "Délai lumière vers le sol",
+  "The crew's ground stations (mission control) see the craft late and their orders arrive late by the light's time from the Earth — the Moon 1.3 s, Mars minutes; behind the wormhole, no live link: only recorded messages, delivered when it comes back. The stations aboard are always live.":
+    "Les postes au sol de l'équipage (le contrôle de mission) voient le vaisseau en retard, et leurs ordres arrivent en retard, du temps que met la lumière depuis la Terre — la Lune 1,3 s, Mars des minutes ; derrière le trou de ver, plus de liaison directe : seulement des messages enregistrés, délivrés à son retour. Les postes à bord sont toujours en direct.",
+  Real: "Réel",
+  "A tenth": "Un dixième",
+  "The light's own time": "Le temps de la lumière",
+  "Ten times shorter: Mars in two minutes": "Dix fois plus court : Mars en deux minutes",
+  "The ground live as aboard (the wormhole still cuts it)": "Le sol en direct comme à bord (le trou de ver coupe toujours)",
 } satisfies Record<string, string>;

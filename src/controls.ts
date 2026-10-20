@@ -1,5 +1,6 @@
 import type { MlsReading } from "./game/mls";
 import { JetPad, type JetPadOut } from "./input/jetpad";
+import { SpacePad, type SpacePadOut } from "./input/spacepad";
 import { Autothrottle, type JetModes, noJetModes } from "./game/jet";
 import { CineBrain } from "./cine/brain";
 import { Follow } from "./cine/follow";
@@ -75,6 +76,18 @@ import { installCombat, type CombatState } from "./controller/combat";
 import { installMission } from "./controller/mission";
 import { installIls } from "./controller/ils";
 import { installAssistLevel } from "./controller/assistlevel";
+import { installSpaceAssist } from "./controller/spaceassist";
+import { installStationKeep } from "./controller/stationkeep";
+import { installSpaceGuard } from "./controller/spaceguard";
+import { installRing } from "./controller/ring";
+import { installRefuel } from "./controller/refuel";
+import { installHoleEndurance } from "./controller/holeendurance";
+import { installCraftPanel } from "./controller/craftpanel";
+import { installPhaseReports } from "./controller/phasereports";
+import { installSpaceChallenge } from "./controller/spacechallenge";
+import { installSpaceMission } from "./controller/spacemission";
+import { installSpaceCourse } from "./controller/spacecourse";
+import { installSystems } from "./controller/systems";
 import { installGcas } from "./controller/gcas";
 import { installJetModes } from "./controller/jetmodes";
 import { installCopilot } from "./controller/copilot";
@@ -315,6 +328,11 @@ export class CameraController {
   } | null = null;
   /** Piloting the Ranger (on whenever the ship is): the flight computer and its last outputs. */
   readonly pilot = new FlightComputer();
+  /** the checklists' steps ticked (a failure's kind "f:<kind>" or a normal list "n:<id>" → their indices): shared by
+   *  the tablet's Systems page and the crew's consoles (PLAN-VAISSEAUX K6) */
+  readonly sysTicks = new Map<string, Set<number>>();
+  /** when the flight began [s of the scene] (the crew's mission elapsed time — PLAN-VAISSEAUX K4); NaN: not yet */
+  metT0 = Number.NaN;
   piloting = false;
   /** Near the station (5 km): the nearest port and the ship's docking ring against it — for the HUD. */
   dockInfo: DockInfo | null = null;
@@ -1106,6 +1124,23 @@ export class CameraController {
   jetPadOut: JetPadOut | null = null;
   padZoomBase: number | null = null;
   onJetPadAction?: (action: string, arg?: string) => void;
+  /** a spacecraft's pad layout (input/spacepad.ts — PLAN-VAISSEAUX X5): its state, its frame's output (null: not
+   *  flown with it), its actions and the wheel it drives (the page's) */
+  readonly spacePad = new SpacePad();
+  spacePadOut: SpacePadOut | null = null;
+  onSpacePadAction?: (action: string, arg?: string) => void;
+  padWheel?: { isOpen(): boolean; aim(v: [number, number] | null): void };
+  /** the replay's spacecraft moments (X7): the fleet's links last frame (null: none yet), the engine lit */
+  replayLinks: number | null = null;
+  replayLit = false;
+  /** the spacecraft's mission under way (PLAN-VAISSEAUX X11 — controller/spacemission.ts) */
+  spaceMission: import("./controller/spacemission").SpaceMissionRun | null = null;
+  /** the spacecraft's challenge under way (PLAN-VAISSEAUX X10 — controller/spacechallenge.ts) */
+  spaceChal: import("./controller/spacechallenge").SpaceChalRunPublic | null = null;
+  /** the space flight school's lesson under way (PLAN-VAISSEAUX X9 — controller/spacecourse.ts) */
+  spaceCourse: import("./game/spacecourse").SpaceRun | null = null;
+  /** the touchdowns' count the camera's shake has felt (null: none yet — X7) */
+  shakeTouchN: number | null = null;
   /** the last touchdown: its count, its sink and its speed along [m/s], the gear's verdict (controller/motion.ts) */
   lastTouch: { n: number; sink: number; along: number; gear: string } | null = null;
 
@@ -1205,6 +1240,9 @@ export class CameraController {
     warpStep?: number;
     warpNow?: number;
     warpT?: number;
+    /** the station's waypoints on the approach (docking-guidance.ts DOCK_WAYPOINTS): which are still to hold, the one
+     *  held and since when (the scene's time [M]) */
+    wp?: { left: number[]; held: number | null; since: number };
   } | null = null;
 
   /** Warp the pilot asked for, while the rails (or a glide) hold it lower (null: none held back). */
@@ -1359,7 +1397,16 @@ export class CameraController {
     cmd: DescentCmd | null;
     /** the braking begun low (descent.ts: no coasting again) */
     braking?: boolean;
+    /** the landing point redesignated by the pilot (controller/spaceassist.ts, the LPD): where it was first, the
+     *  scene's time of the last move [M], moved at all */
+    q0?: Vec3 | null;
+    lpdT?: number;
+    moved?: boolean;
   } | null = null;
+  /** the stick's redesignation of the landing point this frame (the LPD): forward, right (−1 … 1) */
+  lpdIn: { fwd: number; right: number } | null = null;
+  /** the powered landing's point this frame (home frame [M]), for the HUD's LPD marker */
+  lpdPad: Vec3 | null = null;
 
   /**
    * Our universe's landing and take-off (the body of the sphere of influence, if it has a ground):
@@ -1489,6 +1536,18 @@ installCombat(CameraController);
 installMission(CameraController);
 installIls(CameraController);
 installAssistLevel(CameraController);
+installSpaceAssist(CameraController);
+installStationKeep(CameraController);
+installSpaceGuard(CameraController);
+installRing(CameraController);
+installRefuel(CameraController);
+installHoleEndurance(CameraController);
+installCraftPanel(CameraController);
+installSystems(CameraController);
+installPhaseReports(CameraController);
+installSpaceCourse(CameraController);
+installSpaceChallenge(CameraController);
+installSpaceMission(CameraController);
 installGcas(CameraController);
 installJetModes(CameraController);
 installCopilot(CameraController);

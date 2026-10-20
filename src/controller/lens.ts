@@ -174,8 +174,26 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
     !this.padControls.flightOwned(pad.id);
   this.jetPadOut = jetPadOn ? this.jetPad.step(pad!, dt) : null;
   if (!jetPadOn) this.jetPad.reset();
+  // (a spacecraft flown with a pad — its own layout, input/spacepad.ts —: its sticks, its RCS's translation, its holds,
+  // the wheel it opens and aims)
+  const spacePadOn =
+    !!pad &&
+    !!pad.held &&
+    fleet.active !== "f35" &&
+    this.piloting &&
+    !this.spectator &&
+    !this.character.active &&
+    !this.cinematic &&
+    this.outsideView() !== "free" &&
+    !this.padControls.flightOwned(pad.id);
+  if (spacePadOn && this.spacePad.wheel && !this.padWheel?.isOpen()) this.spacePad.wheelClosed();
+  this.spacePadOut = spacePadOn ? this.spacePad.step(pad!, dt) : null;
+  if (!spacePadOn) this.spacePad.reset();
   if (this.jetPadOut) for (const a of this.jetPadOut.actions) this.onJetPadAction?.(a.action, a.arg);
-  else if (pad) for (const a of pad.actions) this.onPadAction?.(a);
+  else if (this.spacePadOut) {
+    for (const a of this.spacePadOut.actions) this.onSpacePadAction?.(a.action, a.arg);
+    if (this.spacePad.wheel) this.padWheel?.aim(this.spacePadOut.wheelAim);
+  } else if (pad) for (const a of pad.actions) this.onPadAction?.(a);
   // (the controllers through their profiles — a HOTAS, a pad the player set: their buttons' keymap actions)
   const pc = this.scripted ? null : this.padControls.read();
   if (pc) for (const p of pc.pressed) this.onPadKeyAction?.(p.action, p.arg);
@@ -270,9 +288,11 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
     s.fov = this.padZoomBase;
     this.padZoomBase = null;
   }
-  if (pad && !J && !away && (pad.look[0] || pad.look[1])) {
+  // (a spacecraft's pad: its right stick the look unless it aims the wheel)
+  const look = this.spacePadOut ? this.spacePadOut.look : pad?.look;
+  if (pad && look && !J && !away && (look[0] || look[1])) {
     // right stick: orbit the target, or turn the camera (free rotation, flight); piloting: look
-    if (pilotNow) this.setLook(s.shipLookYaw + pad.look[0] * 90 * dt, s.shipLookPitch + pad.look[1] * 70 * dt);
+    if (pilotNow) this.setLook(s.shipLookYaw + look[0] * 90 * dt, s.shipLookPitch + look[1] * 70 * dt);
     else if (this.orbiting) this.orbitBy(-pad.look[0] * 75 * dt, -pad.look[1] * 75 * dt);
     else {
       const k = 110 * dt * Math.min(1, this.s.fov / 60);
@@ -282,7 +302,7 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   // (+ − and the pad's zoom: the distance — the lens with the telescope)
   const zoom = (f: number) => (s.telescope ? this.zoomLens(f) : this.zoomBy(f));
   if (!away) {
-    if (pad?.zoom && !J) zoom(Math.exp(-1.4 * pad.zoom * dt));
+    if (pad?.zoom && !J && !this.spacePadOut) zoom(Math.exp(-1.4 * pad.zoom * dt));
     if (this.keys.has("+") || this.keys.has("=")) zoom(Math.exp(-1.2 * dt));
     if (this.keys.has("-") || this.keys.has("_")) zoom(Math.exp(1.2 * dt));
   }

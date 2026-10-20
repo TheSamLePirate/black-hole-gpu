@@ -11,11 +11,12 @@ import { button, el, h } from "./kit";
 import { ChartsPage, type ChartsDeps } from "./charts-page";
 import { TelemetryPage } from "./telemetry-page";
 
-export type TabletPage = "computer" | "ship" | "telemetry" | "charts" | "camera" | "sky" | "log";
+export type TabletPage = "computer" | "ship" | "systems" | "telemetry" | "charts" | "camera" | "sky" | "log";
 
 const PAGES: [TabletPage, Text][] = [
   ["computer", { fr: "Ordinateur", en: "Computer" }],
   ["ship", { fr: "Vaisseau", en: "Ship" }],
+  ["systems", { fr: "Systèmes", en: "Systems" }],
   ["telemetry", { fr: "Télémétrie", en: "Telemetry" }],
   ["charts", { fr: "Cartes", en: "Charts" }],
   ["camera", { fr: "Caméra", en: "Camera" }],
@@ -30,6 +31,8 @@ interface Embeddable {
 export interface TabletDeps {
   /** the ship's state in rows (ui/gametools.ts rangerView) */
   ship(): { el: HTMLElement; live(): void };
+  /** a spacecraft's systems (ui/systemspage.ts) */
+  systems?(): { el: HTMLElement; live(): void };
   camera: Embeddable;
   sky: Embeddable;
   log: GameLog;
@@ -46,6 +49,7 @@ export class Tablet {
   private page: TabletPage = "computer";
   private visible = false;
   private shipView: { el: HTMLElement; live(): void } | null = null;
+  private systemsView: { el: HTMLElement; live(): void } | null = null;
   private unLog: (() => void) | null = null;
   private liveAt = 0;
   private telemetry: TelemetryPage | null = null;
@@ -101,6 +105,10 @@ export class Tablet {
       this.chartsAt = now;
       this.charts?.draw();
     }
+    if (this.visible && this.page === "systems" && this.systemsView && now - this.liveAt >= 250) {
+      this.liveAt = now;
+      this.systemsView.live();
+    }
     if (!this.visible || this.page !== "ship" || !this.shipView || now - this.liveAt < 250) return;
     this.liveAt = now;
     this.shipView.live();
@@ -112,6 +120,12 @@ export class Tablet {
       this.shipView ??= this.d.ship();
       this.pageEl.append(this.shipView.el);
       this.shipView.live();
+    } else if (this.page === "systems") {
+      this.systemsView ??= this.d.systems?.() ?? null;
+      if (this.systemsView) {
+        this.pageEl.append(this.systemsView.el);
+        this.systemsView.live();
+      }
     } else if (this.page === "telemetry") {
       this.telemetry ??= new TelemetryPage();
       this.pageEl.append(this.telemetry.el);

@@ -1595,3 +1595,79 @@ dialog input {
 .arms-sw .act-seg button {
   min-height: 40px;
 }
+
+/* the console's profile (PLAN-VAISSEAUX K2): the F-35's tactical — phosphor green and amber, darker, squarer —, the
+   spacecraft's — a mission control's blue and white */
+body[data-profile="jet"] {
+  --accent: #8dff6a;
+  --line: #1f3a27;
+  --line2: #2c5236;
+  --glass: #08120bdd;
+  --glass2: #0b1a10;
+  background:
+    radial-gradient(1200px 600px at 20% -10%, #0f2614 0%, transparent 60%),
+    radial-gradient(900px 500px at 110% 110%, #13200f 0%, transparent 55%),
+    #040805;
+}
+body[data-profile="space"] {
+  --accent: #6fd3ff;
+  --line: #1d3350;
+  --line2: #2a4a72;
+  --glass: #0a1322dd;
+  --glass2: #0d1a2e;
+  background:
+    radial-gradient(1200px 600px at 20% -10%, #0e2140 0%, transparent 60%),
+    radial-gradient(900px 500px at 110% 110%, #121c36 0%, transparent 55%),
+    #04070f;
+}
+.profile-badge {
+  font: 700 10px/1 var(--mono);
+  letter-spacing: 0.12em;
+  padding: 4px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  justify-self: start;
+  margin-bottom: 3px;
+  white-space: nowrap;
+}
+.profile-badge:empty {
+  display: none;
+}
+body[data-profile="jet"] .profile-badge {
+  border-radius: 1px;
+}
+
+/* the crew's message to the pilot (PLAN-VAISSEAUX K5): sent the light's time late from the ground, recorded behind the
+   wormhole */
+.msg-form {
+  margin: 10px 0 12px;
+}
+.msg-form h3 {
+  margin: 0 0 6px;
+}
+.msg-row {
+  display: flex;
+  gap: 6px;
+}
+.msg-row input {
+  flex: 1;
+  min-width: 0;
+}
+.profile-badge.cut {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+/* the spacecraft's flight computer's pops (PLAN-VAISSEAUX K6): the station's own first, the systems' checklists */
+.fc-pop.featured > summary {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.fc-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  margin: 4px 0;
+}

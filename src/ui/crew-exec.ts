@@ -12,6 +12,8 @@ import type { Tool } from "../ai/agent";
 import type { CameraController } from "../controls";
 import type { Settings } from "../settings";
 import { tf, tr } from "../i18n";
+import { CHECKLISTS, type FailureKind } from "../game/systems";
+import { M_SECONDS } from "../units";
 
 export interface CrewExecDeps {
   camera: CameraController;
@@ -22,6 +24,8 @@ export interface CrewExecDeps {
   nameOf(slot: number): string;
   /** the families open now (ui/crew-feed.ts crewFamilies) */
   families(): Family[];
+  /** whether a player rides aboard our craft (PLAN-VAISSEAUX N3: our copilot — his orders as a crew screen's) */
+  aboard?(slot: number): boolean;
 }
 
 /** what an act does aboard: the game tool and its arguments, or the controller's own call; its words back */
@@ -93,6 +97,39 @@ const RUN: Record<Act, Run> = {
   "sp.plan": (a, x) => x.tool("manage_plan", { action: a.action }),
   "sp.target": (a, x) => x.tool("set_target", { name: a.name }),
   "sp.release": (_a, x) => x.tool("flight_action", { action: "release" }),
+  // (PLAN-VAISSEAUX K6: the controller's own calls — the docking's, the ring's, the plan's burns, the systems')
+  "sp.dock": (a, x) => {
+    const C = x.camera;
+    if (a.action === "undock") return C.docked ? (C.undock(), "Désamarré") : "Not docked";
+    if (a.action === "refuel") return C.refuelFromDocked();
+    if (a.action === "rcs") return C.rcsModeToggle();
+    return C.keepKey();
+  },
+  "sp.ring": (a, x) => (a.dir === 0 ? "No such direction" : x.camera.ringSet(Number(a.dir) > 0 ? 1 : -1)),
+  "sp.node": (a, x) => {
+    const C = x.camera;
+    const i = Number(a.index);
+    if (!C.plan.nodes[i]) return "No such burn";
+    if (a.action === "delete") {
+      C.deleteNode(i);
+      return "Poussée supprimée";
+    }
+    C.nudgeNode(i, [0, 0, 0], Number(a.dtS ?? 0) / M_SECONDS);
+    return "Poussée déplacée";
+  },
+  // (the refusals said as such, whatever the pilot's language: the console's French)
+  "sys.step": (a, x) => {
+    const k = a.kind as FailureKind;
+    if (!x.camera.systemsInfo()?.failures.some((f) => f.kind === k)) return { ok: false, note: "Cette panne n'est pas en cours" };
+    return x.camera.systemsTick(k, Number(a.step), !!a.on);
+  },
+  "sys.fix": (a, x) => {
+    const k = a.kind as FailureKind;
+    if (!x.camera.systemsInfo()?.failures.some((f) => f.kind === k)) return { ok: false, note: "Cette panne n'est pas en cours" };
+    if ((x.camera.sysTicks.get(`f:${k}`)?.size ?? 0) < CHECKLISTS[k].steps.length)
+      return { ok: false, note: "La checklist d'abord : toutes les étapes cochées" };
+    return x.camera.systemsFixChecked(k);
+  },
   // (the F-35's weapons: the backseater's — the weapons tool's actions)
   "wp.radar": (a, x) => x.tool("weapons", { action: "radar", mode: a.mode }),
   "wp.select": (a, x) => x.tool("weapons", { action: "select", weapon: a.weapon }),
@@ -138,7 +175,7 @@ function readResult(r: unknown): { line: string; refused: boolean; data: Record<
 }
 /** the tools' refusals come back as words, not throws: the usual ones read as a refusal */
 const REFUSED =
-  /^(no |not |cannot|can't|unknown|only |the jet's systems: in|the autopilot's holds: in|in the air|nav: (no|in the air)|out of|nothing |the radar: in|stt: no)/i;
+  /^(no |not |nothing to fix|the checklist first|cannot|can't|unknown|only |the jet's systems: in|the autopilot's holds: in|in the air|nav: (no|in the air)|out of|nothing |the radar: in|stt: no)/i;
 
 export class CrewExec {
   private gate = new CrewGate(4);
@@ -163,7 +200,7 @@ export class CrewExec {
     };
     // (the console's own words for the gates' refusals: it speaks French)
     const sender = room.members.find((m) => m.slot === from);
-    if (sender?.role !== "instruments") return answer(false, "Seul un écran d'équipage donne des ordres");
+    if (sender?.role !== "instruments" && !this.d.aboard?.(from)) return answer(false, "Seul un écran d'équipage donne des ordres");
     if (this.d.settings.netCrewActions === false) return answer(false, "Le pilote a verrouillé les actions de l'équipage");
     if (!p.ok) return answer(false, p.error);
     const pace = this.gate.pass(from, p.cmd.id, performance.now());

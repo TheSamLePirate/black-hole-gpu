@@ -28,11 +28,16 @@ export interface HudKindInput {
   final: boolean;
   /** near the ground, low and slow, not landed: a hover, a vertical landing */
   low: boolean;
+  /** out of any air (an airless world's: the Moon's) — its "flight" phase is a space flight, not an aircraft's */
+  airless?: boolean;
 }
 
 /** The HUD the flight calls for now. */
 export function hudKindOf(i: HudKindInput): HudKind {
   if (i.mode === "landed" || i.stage === "ground" || i.stage === "approach" || i.final || i.low) return "approach";
+  // (over an airless world the phase says "flight" low over it: no air to fly — the space HUD; near the ground the
+  // approach's, above. PLAN-VAISSEAUX X4: the Moon's descents showed the aircraft's HUD)
+  if (i.stage === "air" && i.airless) return "space";
   if (i.stage === "air" || i.stage === "entry") return "atmo";
   return "space";
 }

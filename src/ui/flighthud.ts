@@ -181,6 +181,7 @@ const AUTO_KEYS: [Auto, string, string][] = [
   ["takeoff", t("TAKE OFF"), "U"],
   ["entry", t("ENTRY"), "⇧G"],
   ["dock", t("DOCK"), "B"],
+  ["keep", t("KEEP"), "⇧8"],
 ];
 
 const GLYPH: Record<string, string> = {
@@ -202,6 +203,8 @@ const GLYPH: Record<string, string> = {
 export interface FlightHudActions {
   /** the game tools' window */
   tools(): void;
+  /** the flown craft's tank filled from a docked craft (controller/refuel.ts) */
+  refuel?(): void;
   /** the HUD's kind: the next of automatic, atmosphere, space, approach (⇧²) */
   hudKind?(): void;
   /** the future path in the view, on / off */
@@ -260,6 +263,25 @@ interface Sample {
   dtau: number;
   g: number;
   si: boolean;
+}
+
+/** a report's curve as a small inline SVG (its title, its axis's ends) */
+function reportCurve(c: FlightReport["curve"] | null, esc: (s: string) => string): string {
+  if (!c || c.pts.length < 3) return "";
+  const xs = c.pts.map((p) => p[0]),
+    ys = c.pts.map((p) => p[1]);
+  const x0 = Math.min(...xs),
+    x1 = Math.max(...xs, x0 + 1),
+    y0 = Math.min(0, ...ys),
+    y1 = Math.max(...ys, y0 + 1e-6);
+  const W = 260,
+    H = 70;
+  const pts = c.pts.map(([x, y]) => `${(((x - x0) / (x1 - x0)) * W).toFixed(1)},${(H - ((y - y0) / (y1 - y0)) * H).toFixed(1)}`).join(" ");
+  const fmt = (v: number) => (Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1));
+  return (
+    `<div class="fl-rp-curve" data-testid="report-curve"><div class="fl-rp-ctitle">${esc(c.title)} · ${esc(c.unit)} · ${fmt(y1)} max</div>` +
+    `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg></div>`
+  );
 }
 
 export class FlightHud {
@@ -509,6 +531,8 @@ export class FlightHud {
       `<div class="fl-rp-what">${esc(r.title)}</div>` +
       `<div class="fl-rp-grade g-${r.letter}"><b>${r.letter}</b><span>${r.score.toFixed(1)} / 20</span></div>` +
       `<div class="fl-stgrid">${r.lines.map((l) => `<span>${esc(l.label)}</span><b class="q-${l.q}">${esc(l.value)}</b>`).join("")}</div>` +
+      // (the phase's curve — PLAN-VAISSEAUX X8: the ascent's altitude, the entry's load, the rendezvous's Δv)
+      reportCurve(r.curve ?? null, esc) +
       `<div class="fl-rp-foot">${esc(t("M › Telemetry: the flight's curves"))}</div>`;
     R.dataset.testid = "flight-report";
     R.setAttribute("role", "dialog");
@@ -1747,8 +1771,17 @@ export class FlightHud {
     const sf = info.surface;
     const low =
       !!sf && !sf.landed && sf.alt < 300 && sf.vHor < 25 && !(info.air?.inAir && info.air.mode === "plane" && (info.air.speed ?? 0) > 60);
+    // (an airless world: its powered descent below 5 km the approach's HUD — the Lander's scope, its descent panel)
+    const airless = !info.air?.inAir && !!sf && !sf.landed;
+    const lowAirless = airless && sf!.alt < 5000;
     this.kind = this.kinds.step(
-      { stage: this.phase?.stage ?? null, mode: this.phase?.mode ?? null, final: !!this.runway?.()?.final, low },
+      {
+        stage: this.phase?.stage ?? null,
+        mode: this.phase?.mode ?? null,
+        final: !!this.runway?.()?.final,
+        low: low || lowAirless,
+        airless,
+      },
       performance.now() / 1000,
       this.s.hudKind,
     );
@@ -1910,7 +1943,21 @@ export class FlightHud {
       M[k]!.classList.toggle("on", on);
       (M[k]!.lastChild as HTMLElement).textContent = text;
     };
-    setChip("sas", i.sas, "SAS");
+    // (a spacecraft's level of assistance named on it: manual — no SAS —, assisted, beginner; the drift held near a craft)
+    setChip(
+      "sas",
+      i.sas,
+      (i.rcsTranslate ? `${t("RCS TRANSL.")} · ` : "") +
+        (i.spaceAssist === "manual"
+          ? t("MANUAL")
+          : i.spaceDrift
+            ? t("SAS · DRIFT HELD")
+            : i.spaceAssist === "assisted"
+              ? t("SAS · ASSISTED")
+              : i.spaceAssist === "beginner"
+                ? t("SAS · BEGINNER")
+                : "SAS"),
+    );
     // (the HUD's kind: lit when forced, its name; automatic: dim, the phase's)
     setChip("hudk", s.hudKind !== "auto", `HUD ${hudKindName(this.kind).toUpperCase()}`);
     M.pathBtn!.classList.toggle("off", !s.pathInView);
@@ -2121,6 +2168,8 @@ export class FlightHud {
         for (const k of ["prograde", "retrograde", "radialOut", "radialIn", "normal", "antinormal"])
           why[k] = i.landed ? t("On the ground") : t("No orbit here");
       if (i.landed) why.hover = why.circularize = why.land = t("On the ground");
+      // (station keeping: a craft or the station within 5 km — docked, its key backs off first)
+      if (!i.links.length && (!i.dock || i.dock.range > 5000)) why.keep = t("No craft within 5 km");
       else {
         why.takeoff = t("Not on the ground");
         if (!nearGround) why.land = t("No ground near");
@@ -2658,10 +2707,14 @@ export class FlightHud {
     const d = i.dock;
     const links = i.links ?? [];
     this.dock.hidden = !d && !links.length;
+    // (the alerts' lines moved below the docking panel while it shows — both sat at the top's centre: the panel hid them)
+    const below = this.dock.hidden ? "" : `${Math.round(this.dock.offsetTop + this.dock.offsetHeight + 8)}px`;
+    if (this.warn.style.top !== below) this.warn.style.top = below;
     if (!d && !links.length) return;
     const f = (v: number, n = 1) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(2)} km` : `${v.toFixed(n)} m`);
     const ok = (b: boolean) => (b ? "ok" : "");
     const key = [
+      `${i.ownFuel ?? ""}:${links.map((l) => l.fuel ?? "").join(",")}`,
       links.map((l) => l.title + l.port).join(),
       d
         ? [
@@ -2687,13 +2740,27 @@ export class FlightHud {
     // docked: to what, by which port; UNDOCK lets the flown craft go
     if (links.length) {
       this.dock.append(h("div", "fl-title", tf("Docked · {0}", links.map((l) => l.title).join(" · "))));
-      for (const l of links) this.dock.append(h("div", "fl-dock-port", `${l.title} · ${l.port}`));
+      for (const l of links)
+        this.dock.append(
+          h(
+            "div",
+            "fl-dock-port",
+            `${l.title} · ${t(l.port)}${l.fuel != null ? ` · ${t("propellant")} ${Math.round(l.fuel * 100)} %` : ""}`,
+          ),
+        );
+      // (a craft of the fleet with propellant to give, the flown craft's tank not full: REFUEL)
+      if (i.ownFuel != null && i.ownFuel < 0.995 && links.some((l) => (l.fuel ?? 0) > 0.001)) {
+        const r = h("button", "fl-go", tf("REFUEL · {0} %", Math.round(i.ownFuel * 100))) as HTMLButtonElement;
+        r.dataset.testid = "dock-refuel";
+        r.onclick = () => this.act.refuel?.();
+        this.dock.append(r);
+      }
       const b = h("button", "fl-go", t("UNDOCK")) as HTMLButtonElement;
       b.onclick = () => this.act.undock();
       this.dock.append(b);
     }
     if (!d) return;
-    this.dock.append(h("div", "fl-title", tf("Docking · {0}", d.title)), h("div", "fl-dock-port", d.name));
+    this.dock.append(h("div", "fl-title", tf("Docking · {0}", d.title)), h("div", "fl-dock-port", t(d.name)));
     row(t("Range"), f(d.range, d.range < 100 ? 2 : 1));
     row(t("Closing"), `${d.closing.toFixed(2)} m/s`, ok(d.closing > 0 && d.closing < 0.5));
     row(t("Offset"), `${f(d.lateral, 2)} · ${d.lateralRate.toFixed(2)} m/s`, ok(d.lateral < 0.3));

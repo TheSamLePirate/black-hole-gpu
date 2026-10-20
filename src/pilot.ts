@@ -38,7 +38,8 @@ export type Auto =
   | "takeoff"
   | "dock"
   | "entry"
-  | "burns";
+  | "burns"
+  | "keep";
 /** How the craft is flown in the air: as a rocket (rates, as in space), as a plane (the control
  *  surfaces, the flight path held), as a sci-fi craft (the flight computer flies a commanded velocity). */
 export type FlightMode = "rocket" | "plane" | "sf";
@@ -69,6 +70,7 @@ export const AUTO_NAMES: Record<Auto, string> = {
   dock: t("Docking"),
   entry: t("Entry & landing"),
   burns: t("Flight computer burns"),
+  keep: t("Station keeping"),
 };
 
 /** Pilot's commands, −1 … 1 (rotation: positive = nose up, nose right, roll right). */
@@ -86,6 +88,14 @@ export interface PilotInput {
 
 export interface FlightContext {
   dt: number; // wall-clock seconds
+  /** a spacecraft's level of assistance over the SAS (controller/spaceassist.ts): direct — the stick an angular
+   *  acceleration, nothing damps —, damped — the SAS always on —, its rates scaled; absent: the pilot's SAS */
+  rate?: { law: "direct" | "damped"; scale: number } | null;
+  /** a turn held about the ship's long axis (the Endurance's ring, controller/ring.ts) [rad/s, + rolling left], the
+   *  SAS's zero in its place for the roll */
+  spinHold?: number | null;
+  /** and how fast its thrusters change that turn [rad/s²] */
+  spinAcc?: number;
   /** the camera's axes and velocity (local components); velocity = 3-velocity β */
   right: V3;
   up: V3;
@@ -165,6 +175,10 @@ export interface FlightContext {
   vtol?: { nose: V3; up: V3; throttle: number };
   /** the RCS translation's share (0: none — an aircraft's turbofan has no thrusters to slide it) */
   rcs?: number;
+  /** the battery flat (game/systems.ts): the reaction wheels and the thrusters dead */
+  wheelsOff?: boolean;
+  /** an attitude reference drifting (an IMU failing): the rates the holds and the SAS fly without knowing [rad/s] */
+  drift?: V3 | null;
   /**
    * the rigid body (phase 2): its inertia tensor on the ship's axes [kg m²] and the most torque its
    * wheels and thrusters give about each [kg m² rad/s²] — the angular accelerations τ/I, and Euler's
@@ -430,8 +444,9 @@ export class FlightComputer {
         const align = c.snap ? 1 : dot(Z, point);
         throttle = c.burn.throttle * clamp((align - 0.9945) / (0.9994 - 0.9945), 0, 1);
       }
-    } else if (this.auto === "dock" && c.want) {
-      // docking: the thrusters only, within their authority; the attitude held on the port's axis
+    } else if ((this.auto === "dock" || this.auto === "keep") && c.want) {
+      // docking, station keeping: the thrusters only, within their authority; the attitude held on the port's axis
+      // (station keeping: the pilot's — the SAS)
       const T = Math.max(1.2 * c.tauRate, 1e-3);
       const A = add(scale(add(toU(c.want.beta), scale(toU(c.beta), -1)), 1 / T), c.want.ff);
       const a = len(A);
@@ -472,7 +487,7 @@ export class FlightComputer {
         }
       }
       const a = len(A);
-      const rcsMax = TUNING.rcs * c.thrust;
+      const rcsMax = TUNING.rcs * c.thrust * (c.rcs ?? 1);
       // (nothing to push — or nothing to push with: no burn, never a direction of a zero vector)
       if (a < 0.8 * rcsMax || a === 0) {
         rcsC = toC(A); // fine corrections: RCS only, no need to turn (an attitude hold may point the nose)
@@ -535,7 +550,9 @@ export class FlightComputer {
     // ---- attitude: rate command (fly-by-wire), holds point the nose, SAS damps
     // (the camera frame is left-handed relative to the ship's: a positive rotation about its x axis
     // lifts the nose, about y turns it right, about z rolls left)
-    const fine = this.precision ? 0.25 : 1;
+    const fine = (this.precision ? 0.25 : 1) * (c.rate?.scale ?? 1);
+    // (the level of assistance's SAS: forced off — manual —, forced on — assisted, beginner —, else the pilot's)
+    const sas = c.rate ? c.rate.law === "damped" : this.sas;
     // (the sci-fi computer reads the stick as its commands: the attitude is its own)
     const flown = this.auto === "none" || assisted;
     const manual: V3 = c.sf && flown ? [0, 0, 0] : [inp.pitch * fine, inp.yaw * fine, -inp.roll * fine];
@@ -545,7 +562,8 @@ export class FlightComputer {
     const A3 = c.air && (c.air.mode !== "rocket" || this.auto === "entry") ? c.air.auth : [0, 0, 0];
     const I = c.inertia,
       tq = c.torque;
-    const axisAcc = (i: number) => (I && tq ? tq[i]! / I[i]![i]! : TUNING.turnAccel);
+    // (the battery flat — game/systems.ts —: no wheels, no thrusters; only the air's surfaces turn it)
+    const axisAcc = (i: number) => (c.wheelsOff ? 0 : I && tq ? tq[i]! / I[i]![i]! : TUNING.turnAccel);
     // (on its own gear, the surfaces' authority no more than the wheels' and thrusters' own: a stiff
     // control against stiff springs would fight them frame by frame)
     // (a craft without wheels or thrusters to speak of — a fighter —: its surfaces up to 1.6 rad/s² on the
@@ -689,24 +707,35 @@ export class FlightComputer {
       if (ffr) for (let i = 0; i < 3; i++) want[i] = want[i]! + ffr[i]!;
     } else {
       for (let i = 0; i < 3; i++) {
-        if (manual[i] !== 0) want[i] = this.sas ? manual[i]! * TUNING.turnRate : this.omega[i]! + manual[i]! * TUNING.turnAccel * dt;
+        if (manual[i] !== 0) want[i] = sas ? manual[i]! * TUNING.turnRate : this.omega[i]! + manual[i]! * TUNING.turnAccel * dt;
         // (on the gear: the roll still held, the pitch and the yaw left to the springs and the nose wheel)
-        else if (this.sas && !(c.onGear && i !== 2)) want[i] = 0;
+        else if (i === 2 && c.spinHold) want[i] = c.spinHold;
+        else if (sas && !(c.onGear && i !== 2)) want[i] = 0;
         // (on the gear, the nose lowered no faster than 3°/s: a pilot's back pressure)
         if (c.onGear && i === 0 && manual[0] === 0) want[0] = Math.max(this.omega[0], -0.05);
       }
     }
+    // (an IMU drifting: what the computer holds still turns, unseen by it)
+    if (c.drift && !c.snap) for (let i = 0; i < 3; i++) want[i] = want[i]! + c.drift[i]!;
     let effort = 0;
     const torque: V3 = [0, 0, 0];
     for (let i = 0; i < 3; i++) {
-      const d = clamp(want[i]! - this.omega[i]!, -acc3[i]! * dt, acc3[i]! * dt);
+      // (the ring's turn changed by its thrusters about the long axis, slowly: a 900 t ring)
+      const ai = i === 2 && c.spinHold != null && c.spinAcc ? Math.min(acc3[i]!, c.spinAcc) : acc3[i]!;
+      const d = clamp(want[i]! - this.omega[i]!, -ai * dt, ai * dt);
       if (dt > 0) {
         torque[i] = d / (acc3[i]! * dt);
         effort = Math.max(effort, Math.abs(torque[i]!));
       }
       // (no faster than 1.5 × the commanded rate — but a turn the craft has past it kept, only slowed: docked
       // to the tumbling Endurance, the assembly's 18°/s were cut to its 1.5 × 0.9°/s at once)
-      const lim = Math.max(1.5 * TUNING.turnRate, Math.abs(this.omega[i]!), planeLaw && c.air!.fbw ? 1.3 * c.air!.fbw.rates[i]! : 0);
+      // (the Endurance's ring: its turn held past the turning rate — its thrusters bring it there, slowly)
+      const lim = Math.max(
+        1.5 * TUNING.turnRate,
+        Math.abs(this.omega[i]!),
+        planeLaw && c.air!.fbw ? 1.3 * c.air!.fbw.rates[i]! : 0,
+        i === 2 && c.spinHold ? 1.02 * Math.abs(c.spinHold) : 0,
+      );
       this.omega[i] = clamp(this.omega[i]! + d, -lim, lim);
       if (Math.abs(this.omega[i]!) < 1e-5 && want[i] === 0) this.omega[i] = 0;
     }
@@ -729,7 +758,7 @@ export class FlightComputer {
         ? clamp(c.vtol.throttle, 0, 1)
         : clamp(this.throttle + inp.throttle * (this.precision ? 0.15 : 0.6) * dt, 0, 1);
       throttle = this.throttle;
-      const rcsMax = TUNING.rcs * c.thrust;
+      const rcsMax = TUNING.rcs * c.thrust * (c.rcs ?? 1);
       // (the ship's right is −x)
       const k = rcsMax * (this.precision ? 0.25 : 1);
       rcsC = add(add(scale(X, -inp.tx * k), scale(Y, inp.ty * k)), scale(Z, inp.tz * k));

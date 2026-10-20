@@ -1,5 +1,6 @@
 // The CameraController — telemetry: the one view of the flight every display reads (FlightInfo).
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import type { CraftPanel } from "../game/craftpanel";
 import { ground } from "./gcas";
 import { distM } from "../game/mission";
 import { avionicsData } from "../f35/cockpit";
@@ -86,6 +87,22 @@ export interface FlightInfo {
   /** Throttle lever, independent of engine spool-down and RCS acceleration. */
   throttleLever?: number;
   sas: boolean;
+  /** a spacecraft's level of assistance (controller/spaceassist.ts), the RCS holding the drift near a craft */
+  spaceAssist?: string;
+  spaceDrift?: boolean;
+  rcsTranslate?: boolean;
+  /** the spacecraft's systems: consumables, failures (controller/systems.ts) */
+  systems?: import("./systems").SystemsInfo | null;
+  /** the flown craft's docking port's axis, seen from the eye (camera coordinates): the COAS's boresight */
+  dockBore?: Vec3 | null;
+  /** the spacecraft's own panel (game/craftpanel.ts): the Lander's descent, the Endurance's mothership's */
+  craftPanel?: CraftPanel | null;
+  /** the Endurance's ring: its turn [rpm], the weight in its modules [g], the turn asked (controller/ring.ts) */
+  ring?: { rpm: number; g: number; asked: number | null } | null;
+  /** the powered landing's point (the LPD): seen from the eye (camera coordinates), its distance [m], redesignated */
+  lpd?: { dir: Vec3 | null; dist: number; moved: boolean } | null;
+  /** a spacecraft's protections: what they foresee (controller/spaceguard.ts) */
+  spaceGuard?: import("./spaceguard").SpaceGuard | null;
   /** what holds the rails' warp back ("": nothing) */
   railsNote: string;
   rollAlign: boolean;
@@ -238,7 +255,9 @@ export interface FlightInfo {
   /** the docking autopilot's phase ("": off) */
   dockPhase: string;
   /** what the flown craft is docked to (its own links) */
-  links: { title: string; port: string }[];
+  links: { title: string; port: string; fuel?: number | null }[];
+  /** the flown craft's propellant, its tank's share (null: not counted) */
+  ownFuel?: number | null;
   /** the craft flown, and those docked to it; the assembly's mass [kg] */
   vessel: VesselId;
   assembly: VesselId[];
@@ -299,7 +318,15 @@ function flightInfo(this: CameraController): FlightInfo {
         : this.pilot.auto === "entry"
           ? this.pilot.fired.throttle
           : this.pilot.throttle,
-    sas: this.pilot.sas,
+    // (the SAS flown: the level's when it imposes one)
+    sas: this.spaceRate ? this.spaceRate.law === "damped" : this.pilot.sas,
+    spaceAssist: fleet.active === "f35" ? undefined : this.assistLevel(),
+    spaceDrift: this.spaceDrift,
+    rcsTranslate: this.rcsMode === "translate" && fleet.active !== "f35",
+    spaceGuard: this.spaceGuard ?? null,
+    ring: this.ringInfo(),
+    craftPanel: null,
+    systems: this.systemsInfo(),
     /** what holds the rails' warp back ("" : nothing) */
     railsNote: this.railsNote,
     rollAlign: this.pilot.rollAlign,
@@ -597,16 +624,50 @@ function flightInfo(this: CameraController): FlightInfo {
   // the station near: its port where it is seen from the eye, the velocity relative to it (the
   // docking's prograde and retrograde)
   // (the flown craft's dockings: to what, by which port — the docking panel's UNDOCK)
+  info.ownFuel = this.propellantOf(fleet.active)?.share ?? null;
   info.links = fleet.links
     .filter((l) => l.a === fleet.active || l.b === fleet.active)
     .map((l) => {
       const other = l.a === fleet.active ? l.b : l.a;
       const k = l.a === fleet.active ? l.pb : l.pa;
       return {
+        fuel: other === "iss" ? null : (this.propellantOf(other)?.share ?? null),
         title: other === "iss" ? "ISS" : VESSELS[other].name,
         port: other === "iss" ? (station.ports[k]?.name ?? "") : (VESSELS[other].ports[k]?.name ?? ""),
       };
     });
+  // the spacecraft's own panel (X4): the Lander's descent over an airless world (or low), the Endurance's mothership's
+  info.craftPanel = this.craftPanelNow(info);
+  // the powered landing's point, as the eye sees it (the HUD's LPD)
+  if (nav && this.pilot.auto === "land" && this.lpdPad) {
+    const eye = shipToCamera(this.shipPose(), s.shipLookYaw, s.shipLookPitch).t;
+    const v = lin(sub3(this.lpdPad, nav.X), M_METRES, this.lpdPad, 0);
+    const pc = C(nav.toRep(v));
+    const q: Vec3 | null = pc ? [pc[0] + eye[0], pc[1] + eye[1], pc[2] + eye[2]] : null;
+    const ql = q ? Math.hypot(...q) : 0;
+    info.lpd = { dir: q && ql > 1e-6 ? [q[0] / ql, q[1] / ql, q[2] / ql] : null, dist: Math.hypot(...v), moved: !!this.landRun?.moved };
+  } else if (this.pilot.auto !== "land") this.lpdPad = null;
+  // the COAS's boresight: the flown craft's own docking port's axis on the camera's axes (the docking's within 60 m)
+  {
+    const own =
+      this.holeDock && cam.region === "hole"
+        ? { v: fleet.active, k: this.holeDock.ownPort, r: this.holeDock.range }
+        : this.dockInfo && this.dockInfo.own === fleet.active
+          ? { v: fleet.active, k: this.dockInfo.ownPort, r: this.dockInfo.range }
+          : null;
+    const S = info.S as unknown as number[][];
+    const a = own && own.r < 60 ? VESSELS[own.v].ports[own.k]?.axis : null;
+    info.dockBore = a ? ([0, 1, 2].map((r) => S[r]![0]! * a[0] + S[r]![1]! * a[1] + S[r]![2]! * a[2]) as Vec3) : null;
+  }
+  // (Gargantua's side: the Endurance's docking — controller/holeendurance.ts —, its panel's figures, its port's mark)
+  const hd = cam.region === "hole" ? this.holeDock : null;
+  if (hd) {
+    info.dock = { ...hd, docked: false } as unknown as DockInfo;
+    const eye = shipToCamera(this.shipPose(), s.shipLookYaw, s.shipLookPitch).t;
+    const q: Vec3 = [hd.at[0] + eye[0], hd.at[1] + eye[1], hd.at[2] + eye[2]];
+    const ql = Math.hypot(...q);
+    if (ql > 1e-6) info.dirs.dock = [q[0] / ql, q[1] / ql, q[2] / ql];
+  }
   const di = this.dockInfo;
   if (di && nav) {
     info.dock = di;

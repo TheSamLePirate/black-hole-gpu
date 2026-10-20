@@ -8,6 +8,11 @@ import { wgs84Inverse } from "../system/ellipsoid";
 import { CrewRadio } from "./radio";
 import { bindTalk } from "./ptt";
 import { CrewViews, VIEW_NAMES, type CrewView } from "./views";
+import { dur } from "./draw/kit";
+import { bodyName } from "./draw/orbit";
+import { linkFor, Outbox, type Station, type StationId, STATIONS, stationOf } from "./station";
+import { CHECKLISTS_FR } from "./checklists";
+import { type CrewProfile, PROFILE_TILES, PROFILE_VIEWS, profileOf, type TileKey, viewIn } from "./profile";
 import { CrewActions, type Done } from "./actions";
 import { ACTS, type Act, AUTO_FR, AUTOS, HOLD_FR, HOLDS, MANEUVER_FR, MANEUVERS } from "../net/crewcmd";
 import type { Args } from "../ai/tool-schema";
@@ -42,8 +47,30 @@ const net = new NetClient({
   id: { device: `crew:${device}`, name: store.get("kerr.crew.name") || "Équipage", colour: "#89dce5" },
 });
 const model = new CrewModel(net);
+/** the station chosen at the lobby (PLAN-VAISSEAUX K5): aboard, live; on the ground, the light's time late */
+let station: Station = stationOf(store.get("kerr.crew.station"));
+model.linkFor = (link) => linkFor(station, link);
+const outbox = new Outbox();
 const views = new CrewViews($<HTMLCanvasElement>("instruments"), model);
 const radio = new CrewRadio(net, () => syncRadio());
+// (the CAPCOM's Quindar tones: 2 525 Hz as the voice opens, 2 475 Hz as it closes — 250 ms, the Apollo loops')
+let quindarCtx: AudioContext | null = null;
+radio.onTalk = (active) => {
+  if (station.id !== "capcom") return;
+  try {
+    quindarCtx ??= new AudioContext();
+    const c = quindarCtx;
+    const o = c.createOscillator(),
+      g = c.createGain();
+    o.frequency.value = active ? 2525 : 2475;
+    g.gain.value = 0.12;
+    o.connect(g).connect(c.destination);
+    o.start();
+    o.stop(c.currentTime + 0.25);
+  } catch {
+    // (no audio: no tone)
+  }
+};
 const actions = new CrewActions(net, model);
 actions.onChange(() => {
   board();
@@ -63,7 +90,29 @@ let busy = false;
 let painted = "";
 views.units = store.get("kerr.crew.units") === "imperial" ? "imperial" : "metric";
 const initialParams = new URLSearchParams(location.hash.slice(1));
-name.value = net.o.id.name;
+name.value = store.get("kerr.crew.name") || net.o.id.name;
+// the lobby's stations: aboard, on the ground
+{
+  const sel = $<HTMLSelectElement>("station");
+  for (const [place, title] of [
+    ["aboard", "À bord"],
+    ["ground", "Au sol — contrôle de mission"],
+  ] as const) {
+    const g = document.createElement("optgroup");
+    g.label = title;
+    for (const st of STATIONS.filter((x) => x.place === place)) {
+      const o = document.createElement("option");
+      o.value = st.id;
+      o.textContent = st.place === "ground" ? `${st.call} — ${st.title}` : st.title;
+      o.selected = st.id === station.id;
+      g.append(o);
+    }
+    sel.append(g);
+  }
+  const role = () => ($("station-role").textContent = stationOf(sel.value).role);
+  sel.addEventListener("change", role);
+  role();
+}
 code.value = normCode(initialParams.get("join") ?? "");
 code.addEventListener("input", () => {
   code.value = normCode(code.value).slice(0, 6);
@@ -123,9 +172,13 @@ async function join(roomCode: string, displayName: string, pass = "") {
       radio.stop();
       net.leave();
     }
-    net.profile(displayName.trim().slice(0, 24) || "Équipage", "#89dce5");
+    // (the station: its call after the name, in the room — FIDO, CAPCOM…)
+    station = stationOf($<HTMLSelectElement>("station").value);
+    store.set("kerr.crew.station", station.id);
+    const bare = displayName.trim().slice(0, 16) || "Équipage";
+    net.profile(`${bare} · ${station.call}`, "#89dce5");
     await net.join(normal, "instruments", pass || undefined);
-    store.set("kerr.crew.name", net.o.id.name);
+    store.set("kerr.crew.name", bare);
     const params = new URLSearchParams({ join: normal });
     if (initialParams.has("server")) params.set("server", initialParams.get("server")!);
     history.replaceState(null, "", `#${params}`);
@@ -133,6 +186,8 @@ async function join(roomCode: string, displayName: string, pass = "") {
     rosterKey = "";
     pilotKey = "";
     refresh();
+    // (a spacecraft followed: the station's own view)
+    if (profile === "space") setView(station.view);
   } catch (error) {
     const errors: Record<string, string> = {
       password: "Mot de passe incorrect.",
@@ -227,6 +282,17 @@ function segmented<T extends string>(items: [T, string][], current: T, title: st
   return g;
 }
 const NOTES: Record<CrewView, string> = {
+  air: "Radar et carte côte à côte · l’objectif, les armes, les alertes · toucher un panneau pour l’ouvrir",
+  sdash: "L’orbite, l’attitude, l’ordinateur de vol · toucher un panneau pour l’ouvrir",
+  orbit: "L’orbite vue de dessus de son plan · périapside en haut · les poussées du plan en magenta",
+  system: "Glisser pour tourner · pincer pour zoomer · la prédiction à faire défiler",
+  navball: "L’attitude contre l’orbite · marqueurs prograde, normal, radial, nœud",
+  dock: "Le couloir d’approche de côté, le réticule de face · limites de vitesse et d’alignement",
+  budget: "Le Δv des ergols contre les poussées du plan · la marge",
+  eecom: "Énergie, oxygène, épurateurs · les pannes et leurs checklists",
+  timeline: "Le temps de mission · les événements des heures à venir",
+  rel: "Les deux horloges : dτ/dt, γ, le temps écoulé sur Terre",
+  ground: "Le corps survolé : la trace au sol, le point d’atterrissage, la nuit",
   dash: "Toucher un panneau pour l’ouvrir · pincer pour la portée",
   pfd: "Horizon, rubans vitesse et altitude, cap, modes du pilote automatique",
   nd: "Pincer pour la portée · toucher un joueur ou un contact",
@@ -259,7 +325,68 @@ function controls() {
   const bar = $("view-controls");
   bar.replaceChildren();
   const v = views.view;
-  if (v === "map" || v === "globe") {
+  if (v === "system") {
+    // the system map (PLAN-VAISSEAUX K3): its centre, its scale, the views from above and edge-on, the prediction
+    const M = views.map3d;
+    bar.append(
+      segmented(
+        [
+          ["body", "Corps"],
+          ["craft", "Vaisseau"],
+          ["sun", "Soleil"],
+        ],
+        M.focus,
+        "Centre de la carte",
+        (o) => {
+          M.focus = o;
+          M.cam.zoom = 1;
+          views.request();
+        },
+      ),
+      segmented(
+        [
+          ["true", "Vraie"],
+          ["log", "Log"],
+        ],
+        M.cam.log ? "log" : "true",
+        "Échelle",
+        (o) => {
+          M.cam.log = o === "log";
+          views.request();
+        },
+      ),
+      button(
+        "Dessus",
+        () => {
+          M.cam.pitch = 1.55;
+          views.request();
+        },
+        "map-top",
+      ),
+      button(
+        "Profil",
+        () => {
+          M.cam.pitch = 0.02;
+          views.request();
+        },
+        "map-edge",
+      ),
+    );
+    const ahead = document.createElement("input");
+    ahead.type = "range";
+    ahead.id = "map-ahead";
+    ahead.min = "0";
+    ahead.max = "1000";
+    ahead.value = "0";
+    ahead.setAttribute("aria-label", "Prédiction : temps à venir");
+    ahead.addEventListener("input", () => {
+      // (the slider's end: the longest path received, six hours at least — squared for a fine start)
+      const span = Math.max(views.mapSpan, 6 * 3600);
+      M.ahead = span * (Number(ahead.value) / 1000) ** 2;
+      views.request();
+    });
+    bar.append(ahead);
+  } else if (v === "map" || v === "globe") {
     bar.append(button("Centrer", () => views.reset(), "recenter"));
     const pan = document.createElement("details");
     pan.className = "pan-controls";
@@ -458,14 +585,41 @@ function setView(view: CrewView) {
     b.classList.toggle("active", b.dataset.view === view);
     b.setAttribute("aria-pressed", String(b.dataset.view === view));
   }
-  document.querySelector<HTMLElement>(".zoom")!.hidden = view === "pfd";
-  mcp.hidden = view !== "pfd" && view !== "dash" && view !== "radar";
+  document.querySelector<HTMLElement>(".zoom")!.hidden = [
+    "pfd",
+    "orbit",
+    "sdash",
+    "navball",
+    "dock",
+    "budget",
+    "eecom",
+    "timeline",
+    "rel",
+    "ground",
+  ].includes(view);
+  if (view === "system") views.map3d.ahead = 0;
+  // (the spacecraft's flight computer under every view of its console — K6: each station acts from its own)
+  mcp.hidden = profile !== "space" && view !== "pfd" && view !== "dash" && view !== "radar" && view !== "air";
   syncMcpKind();
   $("views").querySelector<HTMLElement>(`[data-view=${view}]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
   controls();
   showCrew(false);
 }
 const ICONS: Record<CrewView, string> = {
+  air: '<path d="M12 3l2 7 7 2-7 2-2 7-2-7-7-2 7-2z"/>',
+  sdash:
+    '<rect x="3" y="3" width="11" height="11" rx="2"/><rect x="16" y="3" width="5" height="18" rx="2"/><rect x="3" y="16" width="11" height="5" rx="2"/>',
+  navball: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><circle cx="12" cy="8" r="1.6"/><path d="M8 12l4 3 4-3"/>',
+  dock: '<rect x="3" y="9" width="7" height="6" rx="1"/><path d="M10 12h4"/><circle cx="18" cy="12" r="3"/>',
+  budget: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  eecom: '<path d="M13 2L5 14h6l-1 8 8-12h-6z"/>',
+  timeline: '<path d="M3 12h18"/><circle cx="7" cy="12" r="2"/><circle cx="14" cy="12" r="2"/><path d="M19 9v6"/>',
+  rel: '<circle cx="8" cy="12" r="5"/><circle cx="17" cy="12" r="4"/><path d="M8 12V9M17 12l2-2"/>',
+  ground: '<circle cx="12" cy="12" r="9"/><path d="M5 15c4-6 10-6 14-3"/><circle cx="16" cy="11" r="1.5"/>',
+  system:
+    '<circle cx="12" cy="12" r="2.5"/><ellipse cx="12" cy="12" rx="9.5" ry="4"/><ellipse cx="12" cy="12" rx="5.5" ry="2.3"/><circle cx="21" cy="12" r="1.2"/>',
+  orbit:
+    '<ellipse cx="12" cy="12" rx="9" ry="5" transform="rotate(-25 12 12)"/><circle cx="12" cy="12" r="2.5"/><circle cx="19" cy="8" r="1.2"/>',
   dash: '<rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/>',
   pfd: '<circle cx="12" cy="12" r="9"/><path d="M3 13h18M8 12h-3M19 12h-3M10 12l2 2 2-2"/>',
   nd: '<path d="M4 18a9 9 0 0 1 16 0"/><path d="M12 18l-2.5-6L12 4l2.5 8z"/>',
@@ -476,11 +630,37 @@ const ICONS: Record<CrewView, string> = {
   plan: '<path d="M3 18l5-6 4 3 4-7 5 4"/><circle cx="8" cy="12" r="1.5"/><circle cx="16" cy="8" r="1.5"/>',
   telemetry: '<path d="M3 17l4-5 4 3 4-8 6 6"/><path d="M3 21h18"/>',
 };
-for (const view of Object.keys(VIEW_NAMES) as CrewView[]) {
-  const b = button("", () => setView(view));
-  b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[view]}</svg><span>${VIEW_NAMES[view]}</span>`;
-  b.dataset.view = view;
-  $("views").append(b);
+/** the header's badge: the profile and the craft followed (F-35 · TACTIQUE, VAISSEAU · ENDURANCE) */
+function syncBadge() {
+  const c = snapNow()?.craft;
+  // (a spacecraft's console: the station, aboard or on the ground — and the light's time from there)
+  const L = model.selected !== null ? model.linkOf(model.selected) : { delay: 0, cut: false };
+  const where = station.place === "aboard" ? "à bord" : L.cut ? "sol · liaison coupée" : L.delay >= 0.5 ? `sol +${dur(L.delay)}` : "sol";
+  $("profile-badge").textContent =
+    profile === "jet"
+      ? `${c?.name ?? "F-35"} · TACTIQUE`.toUpperCase()
+      : profile === "space"
+        ? `VAISSEAU · ${c?.name ?? ""} — ${station.call} · ${where}`.toUpperCase()
+        : "";
+  $("profile-badge").classList.toggle("cut", station.place === "ground" && L.cut);
+}
+/** the console's profile now (PLAN-VAISSEAUX K2 — profile.ts): the craft followed's — its views, its tiles, its theme */
+let profile: CrewProfile | null = null;
+function setProfile(p: CrewProfile) {
+  if (p === profile) return;
+  profile = p;
+  document.body.dataset.profile = p;
+  syncBadge();
+  $("views").replaceChildren();
+  for (const view of PROFILE_VIEWS[p]) {
+    const b = button("", () => setView(view));
+    b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[view]}</svg><span>${VIEW_NAMES[view]}</span>`;
+    b.dataset.view = view;
+    $("views").append(b);
+  }
+  $("metrics").replaceChildren();
+  // (the view kept when the other profile has it — the globe, the telemetry —, else the station's, the profile's first)
+  setView(PROFILE_VIEWS[p].includes(views.view) ? views.view : p === "space" ? station.view : viewIn(p, views.view));
 }
 views.onOpen = setView;
 $("zoom-in").addEventListener("click", () => views.zoomBy(1.333));
@@ -503,40 +683,53 @@ function download() {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-/** the strip's tiles: the measures a glance needs, their state (amber, red) and trend */
-const TILES: { key: string; name: string; unit: (u: ReturnType<typeof unitsOf>) => string }[] = [
-  { key: "alt", name: "Altitude", unit: (u) => u.altName.toLowerCase() },
-  { key: "speed", name: "Vitesse", unit: (u) => u.spdName.toLowerCase() },
-  { key: "vz", name: "Vario", unit: (u) => u.vsName.toLowerCase() },
-  { key: "mach", name: "Mach", unit: () => "" },
-  { key: "g", name: "Charge", unit: () => "g" },
-  { key: "hdg", name: "Cap", unit: () => "°" },
-  { key: "fuel", name: "Carburant", unit: () => "%" },
-  { key: "agl", name: "Hauteur sol", unit: (u) => u.altName.toLowerCase() },
-];
+/** the strip's tiles: the measures a glance needs, their state (amber, red) and trend — each profile its own
+ *  (PLAN-VAISSEAUX K2: the spacecraft's Δv, propellant, apsides, period, next event, g, dτ/dt, the link) */
+const TILES: Record<TileKey, { name: string; unit: (u: ReturnType<typeof unitsOf>) => string }> = {
+  alt: { name: "Altitude", unit: (u) => u.altName.toLowerCase() },
+  speed: { name: "Vitesse", unit: (u) => u.spdName.toLowerCase() },
+  vz: { name: "Vario", unit: (u) => u.vsName.toLowerCase() },
+  mach: { name: "Mach", unit: () => "" },
+  g: { name: "Charge", unit: () => "g" },
+  hdg: { name: "Cap", unit: () => "°" },
+  fuel: { name: "Carburant", unit: () => "%" },
+  agl: { name: "Hauteur sol", unit: (u) => u.altName.toLowerCase() },
+  dv: { name: "Δv restant", unit: () => "m/s" },
+  prop: { name: "Ergols", unit: () => "%" },
+  pe: { name: "Périapside", unit: () => "km" },
+  ap: { name: "Apoapside", unit: () => "km" },
+  period: { name: "Période", unit: () => "" },
+  next: { name: "Prochain", unit: () => "" },
+  dtau: { name: "dτ/dt", unit: () => "" },
+  link: { name: "Liaison", unit: () => "" },
+};
 function tiles(own: ReturnType<typeof model.own>) {
   const box = $("metrics");
   const u = unitsOf(views.units);
+  const keys = PROFILE_TILES[profile ?? "jet"];
   if (!box.childElementCount)
-    for (const t of TILES) {
+    for (const k of keys) {
       const e = el("div", "", "metric");
-      e.dataset.key = t.key;
-      e.append(el("small", t.name), el("strong", "—"), el("em", ""));
+      e.dataset.key = k;
+      e.append(el("small", TILES[k].name), el("strong", "—"), el("em", ""));
       box.append(e);
     }
   const live = !!own && own.age < 3;
   const m = own?.metrics ?? {},
-    f = own?.snapshot?.flight,
-    sys = own?.snapshot?.sys;
-  const fmt0 = (v: number | undefined, d = 0) =>
-    v === undefined || !Number.isFinite(v) ? "—" : v.toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d });
-  for (const t of TILES) {
-    const e = box.querySelector<HTMLElement>(`[data-key=${t.key}]`)!;
+    snap = own?.snapshot,
+    f = snap?.flight,
+    sys = snap?.sys;
+  const fmt0 = (v: number | undefined | null, d = 0) =>
+    v === undefined || v === null || !Number.isFinite(v)
+      ? "—"
+      : v.toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d });
+  for (const k of keys) {
+    const e = box.querySelector<HTMLElement>(`[data-key=${k}]`)!;
     let text = "—",
       state = "",
-      unit = t.unit(u);
+      unit = TILES[k].unit(u);
     if (live) {
-      switch (t.key) {
+      switch (k) {
         case "alt":
           text =
             m.alt !== undefined && Math.abs(m.alt) > 99_999
@@ -579,6 +772,47 @@ function tiles(own: ReturnType<typeof model.own>) {
         case "agl":
           text = f?.agl !== undefined && f.agl < 30_000 ? fmt0(u.alt(f.agl)) : "—";
           state = f?.agl !== undefined && f.agl < 150 && (m.vz ?? 0) < -3 ? "warn" : "";
+          break;
+        case "dv": {
+          const dv = snap?.budget?.dv;
+          // (a big one in km/s: the tile is narrow)
+          text = dv === null ? "∞" : dv !== undefined && dv >= 100_000 ? fmt0(dv / 1000, 1) : fmt0(dv);
+          if (dv != null && dv >= 100_000) unit = "km/s";
+          state = dv != null && dv < 200 ? "warn" : "";
+          break;
+        }
+        case "prop": {
+          const pr = snap?.budget?.prop ?? (m.fuel !== undefined ? m.fuel : null);
+          text = fmt0(pr !== null ? pr * 100 : null);
+          state = pr === null ? "" : pr < 0.1 ? "alarm" : pr < 0.25 ? "warn" : "ok";
+          break;
+        }
+        case "pe":
+          text = fmt0(snap?.orbit?.pe, Math.abs(snap?.orbit?.pe ?? 0) < 100 ? 1 : 0);
+          state = snap?.orbit && snap.orbit.pe < 0 ? "alarm" : "";
+          break;
+        case "ap":
+          text = snap?.orbit ? (snap.orbit.ecc >= 1 ? "libre" : fmt0(snap.orbit.ap, Math.abs(snap.orbit.ap) < 100 ? 1 : 0)) : "—";
+          if (snap?.orbit && snap.orbit.ecc >= 1) unit = "";
+          break;
+        case "period":
+          text = dur(snap?.orbit?.period ?? null);
+          break;
+        case "next":
+          // (short: the tile is narrow — 15 min, not 14 min 57)
+          text = !snap?.next ? "—" : snap.next.in < 60 || snap.next.in >= 3600 ? dur(snap.next.in) : `${Math.round(snap.next.in / 60)} min`;
+          unit = "";
+          e.title = snap?.next ? `${snap.next.name || snap.next.kind} dans ${dur(snap.next.in)}` : "";
+          state = snap?.next?.kind === "impact" ? "alarm" : "";
+          break;
+        case "dtau":
+          text = fmt0(snap?.time?.dtau, 4);
+          state = snap?.time && snap.time.dtau < 0.99 ? "warn" : "";
+          break;
+        case "link":
+          text = snap?.link ? (snap.link.cut ? "coupée" : dur(snap.link.light)) : "—";
+          unit = snap?.link && !snap.link.cut ? "lumière" : "";
+          state = snap?.link?.cut ? "alarm" : "";
           break;
       }
     }
@@ -716,8 +950,10 @@ function syncActs() {
   for (const b of document.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLSelectElement>("[data-act]")) {
     const fam = ACTS[b.dataset.act as Act]?.fam;
     const can = fam ? actions.can(fam) : { ok: false, why: "" };
-    b.disabled = !can.ok;
-    b.title = can.ok ? "" : can.why;
+    // (a control held back for its own reason — a failure's action before its checklist is ticked: K6)
+    const held = b.dataset.held ?? "";
+    b.disabled = !can.ok || !!held;
+    b.title = !can.ok ? can.why : held;
   }
 }
 // ---- the MCP (PLAN-CREW-ACTIONS A3): the aircraft's autopilot set as a copilot sets it — under the PFD and the dashboard
@@ -795,13 +1031,17 @@ function selector(key: "alt" | "hdg" | "spd", title: string) {
 function syncMcpKind() {
   const fam = snapNow()?.caps?.fam ?? [];
   // (the radar's: the weapons' panel, in the F-35 only)
-  if (views.view === "radar") mcp.hidden = !fam.includes("weapons");
+  if (views.view === "radar" || views.view === "air") mcp.hidden = !fam.includes("weapons");
   if (mcp.hidden) return;
-  const kind = views.view === "radar" ? "arms" : fam.includes("space") && !fam.includes("jet") ? "space" : "jet";
-  if (mcp.dataset.kind === kind && mcp.childElementCount) return;
+  const kind = views.view === "radar" || views.view === "air" ? "arms" : fam.includes("space") && !fam.includes("jet") ? "space" : "jet";
+  // (the spacecraft's panel rebuilt for another station or craft — its pops' order, the Endurance's ring)
+  const sig = kind === "space" ? `space:${station.id}:${!!snapNow()?.craft?.ring}` : kind;
+  if ((mcp.dataset.sig ?? mcp.dataset.kind) === sig && mcp.childElementCount) return;
+  // (its kind said plainly — "arms", "space", "jet" —, its signature beside it)
   if (kind === "arms") buildArms();
   else if (kind === "space") buildFc();
   else buildMcp();
+  mcp.dataset.sig = sig;
 }
 /** the F-35's weapons (PLAN-CREW-ACTIONS A5), the backseater's: the radar, the weapon, the lock, the shots, the decoys */
 function buildArms() {
@@ -1015,10 +1255,15 @@ function buildFc() {
   );
   const sCard = el("div", "", "fc-card");
   const mission = (execute: boolean): Args => ({ target: target.value.trim().slice(0, 32), arrival: arrival.value, execute });
-  const sw = el("div", "", "mcp-sw");
-  sw.append(
-    fcPop("Tenue", [hold, actButton("Tenir", "sp.hold", () => ({ direction: hold.value }), "fc-hold")]),
-    fcPop("Autopilote", [
+  // the target (sp.target: a body, the station, a craft of the room by its name)
+  const tgt = field("Cible", "Lune, Mars, ISS, Endurance…");
+  // the systems (X3 · K6): each failure's checklist, its steps ticked here as on the pilot's tablet, its action once
+  // all are — rebuilt as the pilot's figures change (syncSys)
+  const sys = el("div", "", "fc-sys");
+  sys.id = "fc-sys";
+  const pops: Record<string, HTMLElement> = {
+    hold: fcPop("Tenue", [hold, actButton("Tenir", "sp.hold", () => ({ direction: hold.value }), "fc-hold")]),
+    auto: fcPop("Autopilote", [
       auto,
       site,
       upAlt,
@@ -1033,7 +1278,7 @@ function buildFc() {
         "fc-auto",
       ),
     ]),
-    fcPop("Manœuvre", [
+    maneuver: fcPop("Manœuvre", [
       op,
       where,
       mAlt,
@@ -1054,7 +1299,7 @@ function buildFc() {
       ),
       mCard,
     ]),
-    fcPop("Mission", [
+    mission: fcPop("Mission", [
       target,
       arrival,
       actButton(
@@ -1073,13 +1318,91 @@ function buildFc() {
       ),
       sCard,
     ]),
-    fcPop("Plan", [
+    plan: fcPop("Plan", [
       actButton("Exécuter le plan", "sp.plan", { action: "execute" }, "fc-plan-run"),
       actButton("Effacer le plan", "sp.plan", { action: "clear" }, "fc-plan-clear"),
     ]),
-    actButton("Relâcher", "sp.release", {}, "fc-release"),
-  );
+    target: fcPop("Cible", [
+      tgt,
+      actButton("Prendre pour cible", "sp.target", () => ({ name: tgt.value.trim().slice(0, 32) }), "fc-target"),
+    ]),
+    dock: fcPop("Amarrage", [
+      actButton("Maintien à poste", "sp.dock", { action: "keep" }, "fc-keep"),
+      actButton("Désamarrer", "sp.dock", { action: "undock" }, "fc-undock"),
+      actButton("Faire le plein", "sp.dock", { action: "refuel" }, "fc-refuel"),
+      actButton("Mode RCS", "sp.dock", { action: "rcs" }, "fc-rcs"),
+    ]),
+    systems: fcPop("Systèmes", [sys]),
+    ...(snapNow()?.craft?.ring
+      ? {
+          ring: fcPop("Anneau", [
+            actButton("Anneau −", "sp.ring", { dir: -1 }, "fc-ring-down"),
+            actButton("Anneau +", "sp.ring", { dir: 1 }, "fc-ring-up"),
+          ]),
+        }
+      : {}),
+  };
+  // (the station's own first — PLAN-VAISSEAUX K6: FIDO the trajectory's, GUIDO the attitude's, EECOM the systems')
+  const order: Record<StationId, string[]> = {
+    copilot: ["hold", "auto", "maneuver", "plan", "dock", "target", "mission", "systems", "ring"],
+    nav: ["maneuver", "mission", "plan", "target", "hold", "auto", "dock", "systems", "ring"],
+    engineer: ["systems", "ring", "dock", "hold", "auto", "maneuver", "plan", "target", "mission"],
+    flight: ["auto", "hold", "maneuver", "mission", "plan", "dock", "systems", "target", "ring"],
+    fido: ["maneuver", "mission", "plan", "target", "auto", "hold", "dock", "systems", "ring"],
+    guido: ["hold", "auto", "dock", "target", "maneuver", "plan", "mission", "systems", "ring"],
+    eecom: ["systems", "ring", "dock", "hold", "auto", "maneuver", "plan", "mission", "target"],
+    capcom: ["hold", "auto", "plan", "dock", "systems", "maneuver", "mission", "target", "ring"],
+  };
+  const sw = el("div", "", "mcp-sw");
+  const keys = order[station.id].filter((k) => pops[k]);
+  keys.forEach((k, i) => {
+    if (i === 0) pops[k]!.classList.add("featured");
+    sw.append(pops[k]!);
+  });
+  sw.append(actButton("Relâcher", "sp.release", {}, "fc-release"));
   mcp.append(sw);
+  sysKey = "";
+  syncSys();
+  syncActs();
+}
+
+/** the Systems pop's failures and their checklists from the pilot's figures (K6), rebuilt when they change */
+let sysKey = "";
+function syncSys() {
+  const box = document.getElementById("fc-sys");
+  if (!box) return;
+  const F = snapNow()?.sysx?.failures ?? [];
+  const key = JSON.stringify(F);
+  if (key === sysKey) return;
+  sysKey = key;
+  if (!F.length) {
+    box.replaceChildren(el("p", "Aucune panne — systèmes nominaux.", "muted small"));
+    return;
+  }
+  box.replaceChildren(
+    ...F.map((f) => {
+      const L = CHECKLISTS_FR[f.kind];
+      const card = el("div", "", "fc-card");
+      card.append(el("strong", L?.title ?? f.kind));
+      const ticks = new Set(f.ticks ?? []);
+      (L?.steps ?? []).forEach((st, i) => {
+        const lab = document.createElement("label");
+        lab.className = "fc-step";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = ticks.has(i);
+        cb.dataset.testid = `sys-step-${f.kind}-${i}`;
+        cb.addEventListener("change", () => void fire(null, "sys.step", { kind: f.kind, step: i, on: cb.checked }));
+        lab.append(cb, document.createTextNode(` ${st}`));
+        card.append(lab);
+      });
+      const all = (L?.steps ?? []).every((_, i) => ticks.has(i));
+      const b = actButton(f.fixing ? "En cours…" : (L?.action ?? "Action"), "sys.fix", { kind: f.kind }, `sys-fix-${f.kind}`);
+      if (!all || f.fixing) b.dataset.held = f.fixing ? "Réparation en cours" : "La checklist d'abord : toutes les étapes cochées";
+      card.append(b);
+      return card;
+    }),
+  );
   syncActs();
 }
 
@@ -1137,6 +1460,46 @@ function board() {
   syncActs();
 }
 
+/** the message to the pilot (K5): live aboard; the light's time late from the ground; behind the wormhole recorded,
+ *  delivered (its age with it) when the link comes back */
+function sendMessage(text: string) {
+  const to = model.selected;
+  if (!net.room || to === null) return notice("Aucun pilote suivi.");
+  const L = model.linkOf(to);
+  if (L.cut) {
+    outbox.record(text, Date.now());
+    notice("Message enregistré : il partira au retour de la liaison.");
+  } else {
+    const go = () => net.event({ kind: "crew-msg", v: 1, to, text, rec: 0 });
+    if (L.delay > 0) setTimeout(go, L.delay * 1000);
+    else go();
+    notice(L.delay > 0 ? `Message envoyé : il arrive dans ${dur(L.delay)}.` : "Message envoyé.");
+  }
+  syncMessages();
+}
+function syncMessages() {
+  const to = model.selected;
+  const L = to !== null ? model.linkOf(to) : { delay: 0, cut: false };
+  // (the link back: the recorded ones sent, each its age)
+  if (!L.cut && outbox.waiting.length && net.room && to !== null)
+    for (const m of outbox.flush()) net.event({ kind: "crew-msg", v: 1, to, text: m.text, rec: Math.round((Date.now() - m.at) / 1000) });
+  $("msg-state").textContent = L.cut
+    ? `Liaison coupée (trou de ver) · ${outbox.waiting.length} message(s) enregistré(s)`
+    : station.place === "ground" && L.delay > 0
+      ? `Délai lumière ${dur(L.delay)} aller · ${dur(2 * L.delay)} aller-retour`
+      : station.place === "ground"
+        ? "Liaison directe"
+        : "À bord : en direct";
+}
+$("msg-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const i = $<HTMLInputElement>("msg-text");
+  const text = i.value.trim();
+  if (!text) return;
+  sendMessage(text);
+  i.value = "";
+});
+
 function refresh() {
   const room = net.room,
     crafts = model.crafts(),
@@ -1163,11 +1526,15 @@ function refresh() {
       pilot.append(o);
     }
   }
+  setProfile(profileOf(own?.snapshot));
+  syncBadge();
+  syncMessages();
   tiles(own);
   alerts(own);
   board();
   syncMcpKind();
   syncMcp();
+  syncSys();
   const followed = room?.members.find((m) => m.slot === model.selected);
   $("pilot-dot").style.background = followed?.colour ?? "#4d606b";
   $("freshness").textContent =
@@ -1175,11 +1542,15 @@ function refresh() {
       ? "Connexion interrompue"
       : !own
         ? "En attente de données"
-        : own.age > 3
-          ? `Position ancienne · ${Math.round(own.age)} s`
-          : own.snapshot
-            ? "Mesures du pilote · direct"
-            : "Position reçue · mesures détaillées indisponibles";
+        : model.selected !== null && model.linkOf(model.selected).cut
+          ? "Liaison coupée — derrière le trou de ver : son dernier mot"
+          : own.age > 3
+            ? `Position ancienne · ${Math.round(own.age)} s`
+            : own.snapshot
+              ? model.selected !== null && model.linkOf(model.selected).delay > 0
+                ? `Mesures du pilote · différées de ${dur(model.linkOf(model.selected).delay)} (lumière)`
+                : "Mesures du pilote · direct"
+              : "Position reçue · mesures détaillées indisponibles";
   $("freshness").classList.toggle("stale", net.status === "offline" || (!!own && own.age > 3));
   const rk = JSON.stringify(room?.members);
   if (rk !== rosterKey) {
@@ -1427,6 +1798,16 @@ views.onWp = (i, x, y) => {
 };
 views.onMoveWp = (i, at) =>
   void fire(null, "nav.move", { index: i, lat: Math.round(at.lat * 1e5) / 1e5, lon: Math.round(at.lon * 1e5) / 1e5 });
+// a body touched on the system map (K6): taken for the target, a mission previewed to it
+views.onBody = (id, x, y) => {
+  const name = bodyName(id);
+  menu(x, y, name, "Carte système", [
+    actButton("Prendre pour cible", "sp.target", { name: id }, "ctx-body-target", (ok) => ok && closeMenu()),
+    actButton(`Mission vers ${name} — aperçu`, "sp.mission", { target: id, arrival: "orbit", execute: false }, "ctx-body-mission"),
+  ]);
+};
+// a burn dragged along the orbit (K6): its new time
+views.onNodeMove = (i, dtS) => void fire(null, "sp.node", { action: "shift", index: i, dtS });
 views.onGround = (at, x, y) => {
   const snap = snapNow();
   const own = model.own();
@@ -1501,6 +1882,7 @@ setInterval(() => {
 }, 250);
 Object.assign(window, { __crew: { net, model, views, radio, actions, join, setView } });
 setUnits(views.units);
-setView("dash");
+setProfile("jet");
+setView("air");
 refresh();
 showLobby();

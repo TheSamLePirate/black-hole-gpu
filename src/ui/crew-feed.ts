@@ -3,6 +3,7 @@ import type { CameraController } from "../controls";
 import type { InstrumentSnapshot } from "../net/instruments";
 import type { RangerStatus } from "../game/status";
 import type { Info } from "./flighthud";
+import { crewSpace } from "./crew-space";
 import { shownSpeed } from "./hud/model";
 import { C_MPS, M_METRES, M_SECONDS } from "../units";
 import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
@@ -240,6 +241,8 @@ export function crewSnapshot(c: CameraController, i: Info, status: RangerStatus 
     fuelToGo = av.flow * ete + rest.fuel;
   }
   return {
+    // (the spacecraft's blocks — PLAN-VAISSEAUX K1: the craft, its state, paths, burns, bodies, target, systems, clocks)
+    ...crewSpace(c, i, status, t, around),
     v: 1,
     t,
     body,
@@ -340,6 +343,8 @@ export function crewSnapshot(c: CameraController, i: Info, status: RangerStatus 
           period: fin(status.orbit.period),
           tPe: fin(status.orbit.tPe),
           tAp: fin(status.orbit.tAp),
+          radius: status.orbit.radiusKm,
+          ...(Number.isFinite(status.orbit.aKm) ? { a: status.orbit.aKm } : {}),
         }
       : null,
     next: status?.next ? { kind: status.next.kind, name: status.next.name, in: status.next.inS } : null,

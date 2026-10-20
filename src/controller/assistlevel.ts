@@ -32,9 +32,9 @@ declare module "../controls" {
   }
 }
 
-/** The level flown now (the F-35's; any other craft: realistic — its own law). */
+/** The level flown now: the F-35's, any other craft's the spacecraft's (controller/spaceassist.ts). */
 function assistLevel(this: CameraController): AssistLevel {
-  return fleet.active === "f35" ? (this.s.f35Assist ?? "realistic") : "realistic";
+  return fleet.active === "f35" ? (this.s.f35Assist ?? "realistic") : (this.s.spaceAssist ?? "realistic");
 }
 
 /** The jet's flight path now [rad] (over the ground's — the air's is near it). */
@@ -46,7 +46,8 @@ function gammaNow(c: CameraController): number {
 /** Back to stable flight (the key, TARS): the wings rolled level, the nose to a gentle climb, a safe speed; then the
  *  altitude, the heading and the speed held. What to say. */
 function recoverStart(this: CameraController): string {
-  if (!this.jetFigures()) return t("Recovery: in the air, flown as a plane");
+  // (a spacecraft out of a plane's flight: its own — the turn stopped, a hover, prograde: controller/spaceassist.ts)
+  if (!this.jetFigures()) return fleet.active === "f35" ? t("Recovery: in the air, flown as a plane") : this.spaceRecoverStart();
   this.recovering = { t: 0, level: 0 };
   this.aimRing = null;
   return t("Recovery: wings level, climbing");

@@ -11,6 +11,10 @@ import { button, el as h, modal } from "./kit";
 import { netRadar } from "./hud/symbology";
 import type { NetMatch } from "./netmatch";
 import type { NetSession } from "./netsession";
+import { fleetRows, orderName, rangeText, SPACE_ORDERS } from "../net/spacefleet";
+import { SHARE_WHATS, shareName } from "../net/spaceshare";
+import { board, refTitle, resultText } from "../net/roomboard";
+import { COOP_MISSIONS, coopVerdict } from "../game/coopmissions";
 import type { NetVoice } from "./netvoice";
 
 type Client = InstanceType<NetModule["NetClient"]>;
@@ -137,8 +141,13 @@ export class NetPanel {
     this.render();
     // (the link's figures kept fresh while the panel is open)
     // (not while one types: the field would be made again under the caret)
+    // (nor while a button is held: made again between its press and its release, the click was lost)
+    let pressing = false;
+    this.body.addEventListener("pointerdown", () => (pressing = true));
+    window.addEventListener("pointerup", () => setTimeout(() => (pressing = false), 0));
     this.pulse = setInterval(() => {
       const f = document.activeElement;
+      if (pressing) return;
       if (this.net?.room && !((f instanceof HTMLInputElement || f instanceof HTMLSelectElement) && this.body?.contains(f))) this.render();
     }, 1000);
   }
@@ -449,7 +458,14 @@ export class NetPanel {
   }
 
   /** the panel's tab in a room (R8: the crew, the match, the voices, the screens) */
-  private tab: "crew" | "match" | "voice" | "screens" = "crew";
+  private tab: "crew" | "fleet" | "results" | "match" | "voice" | "screens" = "crew";
+
+  /** The panel opened on one of its tabs (the wheel's "Room fleet"). */
+  openTab(tab: "crew" | "fleet" | "results" | "match" | "voice" | "screens") {
+    this.tab = tab;
+    if (this.close) this.render();
+    else this.open();
+  }
 
   private render() {
     const B = this.body;
@@ -465,6 +481,8 @@ export class NetPanel {
       const pane = h("div", "netp-pane");
       pane.dataset.testid = `net-pane-${this.tab}`;
       if (this.tab === "crew") pane.append(this.crew(net));
+      else if (this.tab === "fleet") pane.append(this.fleet(net));
+      else if (this.tab === "results") pane.append(this.resultsBoard(net));
       else if (this.tab === "match") pane.append(this.match?.section() ?? h("p", "netp-stat", t("No match here")));
       else if (this.tab === "voice") pane.append(this.voice ? this.voiceSection(this.voice) : h("p", "netp-stat", "—"));
       else pane.append(this.screenSection(room.code));
@@ -559,6 +577,13 @@ export class NetPanel {
     const W = net.roomWarp();
     const pace = h("div", "netp-pace");
     pace.append(h("span", "netp-lab", t("Time")), h("b", "", W === 0 ? t("paused") : W === 1 ? t("×1 real time") : `×${W}`));
+    // (what holds it back — N6: a pilot slower, one burning)
+    const held = this.session?.warpHolders ?? [];
+    if (held.length) {
+      const e = h("span", "netp-offer", tf("held by {0}", held.join(", ")));
+      e.dataset.testid = "net-warp-held";
+      pace.append(e);
+    }
     const offer = this.session?.offer;
     if (offer) {
       pace.append(
@@ -585,6 +610,12 @@ export class NetPanel {
     strip.setAttribute("role", "tablist");
     const tabs: [typeof this.tab, string, string][] = [
       ["crew", t("Crew"), String(room.members.length)],
+      ["fleet", t("Fleet"), this.session?.spaceTel.size ? String(this.session.spaceTel.size) : ""],
+      [
+        "results",
+        t("Results"),
+        this.session?.roomChal?.slots.size ? "●" : this.session?.results.length ? String(this.session.results.length) : "",
+      ],
       ["match", t("Match"), this.match?.match && this.match.phase !== "over" ? "●" : ""],
       ["voice", t("Voice"), this.voice?.on ? "◉" : ""],
       ["screens", t("Screens"), ""],
@@ -606,6 +637,240 @@ export class NetPanel {
     return strip;
   }
 
+  /** the room's spacecraft (PLAN-VAISSEAUX N1): each pilot's — his craft, where, its Δv, its consumables, its
+   *  failures, how far and how fast closing —; targeted, given an order (come, hold, dock), his answer */
+  private fleet(net: Client) {
+    const room = net.room!;
+    const S = this.session;
+    const wrap = h("div", "netp-fleet");
+    wrap.dataset.testid = "net-fleet";
+    if (!S) return wrap;
+    // (riding in another's craft — N3: his copilot's controls)
+    if (S.follow?.why === "passenger") wrap.append(this.copilotCard(S, room.members.find((m) => m.slot === S.follow!.slot)?.name ?? "—"));
+    const rows = fleetRows(room.members, S.spaceTel, room.slot, S.near).filter((r) => !S.aboard.has(r.slot) && !(r.me && S.follow));
+    if (!rows.length) {
+      wrap.append(
+        h("p", "netp-stat", t("No spacecraft in the room — the fleet lists the pilots flying a Ranger, a Lander or the Endurance")),
+      );
+      return wrap;
+    }
+    const mine = rows.some((r) => r.me);
+    const list = h("ul", "netp-members netp-fleetlist");
+    for (const r of rows) {
+      const li = h("li", r.me ? "netp-mine" : "");
+      li.dataset.testid = `net-fleet-${r.slot}`;
+      const dot = h("i", "netp-dot");
+      dot.style.background = r.colour;
+      const who = h("div", "netp-who");
+      const line = h("div", "netp-whoname");
+      line.append(h("span", "", r.name), h("em", "netp-chip", r.craft));
+      if (r.fails) line.append(h("em", "netp-chip netp-fail", r.fails === 1 ? t("1 failure") : tf("{0} failures", r.fails)));
+      const sub = h("div", "netp-whosub");
+      const where = h("small", "netp-route", r.where);
+      where.dataset.testid = `net-fleet-where-${r.slot}`;
+      sub.append(where, h("small", "netp-route", `Δv ${r.dv}${r.life ? ` · ${r.life}` : ""}`));
+      if (r.range !== null) {
+        const near = h(
+          "small",
+          "netp-route netp-near",
+          `${rangeText(r.range)}${Math.abs(r.closing ?? 0) >= 0.05 ? ` · ${(r.closing ?? 0) > 0 ? "▼" : "▲"} ${Math.abs(r.closing ?? 0).toFixed(1)} m/s` : ""}`,
+        );
+        near.dataset.testid = `net-fleet-range-${r.slot}`;
+        sub.append(near);
+      }
+      const ans = S.orderAnswers.get(r.slot);
+      if (ans)
+        sub.append(h("em", `netp-aboard${ans.yes ? "" : " netp-no"}`, `${orderName(ans.o)} · ${ans.yes ? t("accepted") : t("refused")}`));
+      who.append(line, sub);
+      li.append(dot, h("i", ""), who);
+      const acts = h("div", "netp-acts");
+      const riders = [...S.aboard]
+        .filter(([, host]) => host === r.slot)
+        .map(([p]) => room.members.find((m) => m.slot === p)?.name ?? `#${p}`);
+      if (riders.length) sub.append(h("em", "netp-aboard", tf("aboard: {0}", riders.join(", "))));
+      if (!r.me && mine) {
+        // (our craft docked to his — N3: through the hatch)
+        if (S.dockedWith(r.slot))
+          acts.append(
+            button({
+              label: t("Go aboard"),
+              kind: "primary",
+              testid: `net-board-${r.slot}`,
+              onClick: () => {
+                this.host.toast(S.boardSpace(r.slot));
+                this.render();
+              },
+            }),
+          );
+        acts.append(
+          button({
+            label: t("Target"),
+            testid: `net-fleet-target-${r.slot}`,
+            onClick: () => {
+              this.host.toast(S.target(r.slot));
+              this.render();
+            },
+          }),
+        );
+        // (docked together — N2: what one asks of the other)
+        if (S.dockedWith(r.slot))
+          for (const w of SHARE_WHATS)
+            acts.append(
+              button({
+                label: shareName(w),
+                testid: `net-share-${w}-${r.slot}`,
+                onClick: () => {
+                  this.host.toast(S.shareAsk(r.slot, w));
+                  this.render();
+                },
+              }),
+            );
+        acts.append(
+          button({
+            label: t("Send my target"),
+            testid: `net-send-target-${r.slot}`,
+            onClick: () => this.host.toast(S.shareTarget(r.slot)),
+          }),
+          button({ label: t("Send my plan"), testid: `net-send-plan-${r.slot}`, onClick: () => this.host.toast(S.sharePlan(r.slot)) }),
+        );
+        for (const o of SPACE_ORDERS)
+          acts.append(
+            button({
+              label: orderName(o),
+              testid: `net-fleet-${o}-${r.slot}`,
+              onClick: () => {
+                this.host.toast(S.spaceOrder(r.slot, o));
+                this.render();
+              },
+            }),
+          );
+      }
+      li.append(acts);
+      list.append(li);
+    }
+    wrap.append(list);
+    return wrap;
+  }
+
+  /** aboard another's craft (N3): his copilot's controls — SAS, holds, station keeping, the ring, the plan —, the
+   *  controls asked, back to one's own craft */
+  private copilotCard(S: NetSession, pilot: string) {
+    const card = h("div", "netp-copilot");
+    card.dataset.testid = "net-copilot";
+    card.append(h("b", "netp-lab", tf("Copilot aboard {0}'s craft", pilot)));
+    const row = h("div", "netp-acts");
+    const go = (label: string, testid: string, f: () => string) =>
+      button({
+        label,
+        testid,
+        onClick: () => {
+          this.host.toast(f());
+          this.render();
+        },
+      });
+    row.append(
+      go(t("SAS on"), "net-cp-sas", () => S.copilot("cfg.sas", { on: true })),
+      go(t("Prograde"), "net-cp-pro", () => S.copilot("sp.hold", { direction: "prograde" })),
+      go(t("Retrograde"), "net-cp-retro", () => S.copilot("sp.hold", { direction: "retrograde" })),
+      go(t("Hold off"), "net-cp-hold-off", () => S.copilot("sp.hold", { direction: "none" })),
+      go(t("Station keeping"), "net-cp-keep", () => S.copilot("sp.auto", { mode: "keep" })),
+      go(t("Autopilot off"), "net-cp-auto-off", () => S.copilot("sp.auto", { mode: "none" })),
+      go(t("Ring +"), "net-cp-ring-up", () => S.copilot("sp.ring", { dir: 1 })),
+      go(t("Ring −"), "net-cp-ring-down", () => S.copilot("sp.ring", { dir: -1 })),
+      go(t("Execute the plan"), "net-cp-exec", () => S.copilot("sp.plan", { action: "execute" })),
+    );
+    const own = h("div", "netp-acts");
+    own.append(
+      button({
+        label: t("Take the controls"),
+        kind: "primary",
+        testid: "net-helm-ask",
+        onClick: () => {
+          this.host.toast(S.helmAsk());
+          this.render();
+        },
+      }),
+      go(t("Back to my craft"), "net-alight", () => S.boardToggle() ?? ""),
+    );
+    card.append(row, own);
+    return card;
+  }
+
+  /** the room's board (PLAN-VAISSEAUX N4): the room challenge under way, then for each thing flown each pilot's best,
+   *  ranked */
+  private resultsBoard(net: Client) {
+    const S = this.session;
+    const wrap = h("div", "netp-board");
+    wrap.dataset.testid = "net-board";
+    if (!S) return wrap;
+    const RC = S.roomChal;
+    if (RC && RC.slots.size) {
+      const names = [...RC.slots].map((s) => net.room!.members.find((m) => m.slot === s)?.name ?? `#${s}`);
+      const b = h(
+        "p",
+        "netp-roomchal",
+        tf("Room challenge: {0} — flying: {1}", refTitle({ ref: `challenge:${RC.id}`, title: RC.id }), names.join(", ")),
+      );
+      b.dataset.testid = "net-roomchal";
+      wrap.append(b);
+    }
+    // (the co-op mission under way — N5: each role, its pilot, how far; a free role to take)
+    const C = S.coop;
+    const CM = C ? COOP_MISSIONS.find((m) => m.id === C.id) : null;
+    if (C && CM) {
+      const box = h("div", "netp-boardsec netp-coop");
+      box.dataset.testid = "net-coop";
+      const v = coopVerdict(C.roles);
+      box.append(h("b", "netp-lab", `${tf("Co-op · {0}", t(CM.title))}${v === "won" ? " — ✓" : v === "lost" ? " — ✗" : ""}`));
+      const ol = h("ol", "netp-boardlist");
+      for (const R of CM.roles) {
+        const st = C.roles.get(R.id)!;
+        const li = h("li", st.slot === net.room!.slot ? "netp-mine" : "");
+        li.dataset.testid = `net-coop-${R.id}`;
+        const who = st.slot === null ? t("free") : (net.room!.members.find((m) => m.slot === st.slot)?.name ?? `#${st.slot}`);
+        li.append(
+          h("span", "", t(R.title)),
+          h("span", "netp-grow"),
+          h("span", "", who),
+          h("b", "", `${st.i}/${st.n}${st.ended ? (st.ok ? " ✓" : " ✗") : ""}`),
+        );
+        if (st.slot === null && !st.ended && !C.mine)
+          li.append(
+            button({
+              label: t("Take the role"),
+              testid: `net-coop-take-${R.id}`,
+              onClick: () => {
+                this.host.toast(S.takeRole(R.id));
+                this.render();
+              },
+            }),
+          );
+        ol.append(li);
+      }
+      box.append(ol);
+      wrap.append(box);
+    }
+    const B = board(S.results);
+    if (!B.length) {
+      wrap.append(h("p", "netp-stat", t("No results yet — each lesson, challenge, mission and report flown in the room comes here")));
+      return wrap;
+    }
+    for (const sec of B) {
+      const box = h("div", "netp-boardsec");
+      box.dataset.testid = `net-board-${sec.key.replace(/[^\w-]/g, "_")}`;
+      box.append(h("b", "netp-lab", sec.title));
+      const ol = h("ol", "netp-boardlist");
+      for (const r of sec.rows) {
+        const li = h("li", r.slot === net.room!.slot ? "netp-mine" : "");
+        li.append(h("span", "netp-rank", `${r.rank}.`), h("span", "", r.name), h("span", "netp-grow"), h("b", "", resultText(r)));
+        ol.append(li);
+      }
+      box.append(ol);
+      wrap.append(box);
+    }
+    return wrap;
+  }
+
   /** the crew: each member — his colour, his voice, his name, his role, how his samples come; his volume, and
    *  following him, going beside him */
   private crew(net: Client) {
@@ -614,7 +879,7 @@ export class NetPanel {
     list.dataset.testid = "net-members";
     for (const m of [...room.members].sort((a, b) => a.slot - b.slot)) {
       const mine = m.slot === room.slot;
-      const li = h("li", mine ? "me" : "");
+      const li = h("li", mine ? "netp-mine" : "");
       const dot = h("i", "netp-dot");
       dot.style.background = m.colour;
       const L = net.mesh?.peers.get(m.slot);

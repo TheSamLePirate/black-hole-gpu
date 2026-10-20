@@ -17,6 +17,11 @@ export interface ShakeInput {
   engine: number;
   /** a touchdown this frame: its sink [m/s] (0: none) */
   jolt: number;
+  /** a spacecraft's (PLAN-VAISSEAUX X7): its rocket's thrust felt through the frame (0 … 1, heavier for a
+   *  heavier craft), the re-entry's plasma (0 … 1), the Endurance's ring turning up or down (0 … 1) */
+  rocket?: number;
+  plasma?: number;
+  ring?: number;
 }
 
 /** The view's turn this frame [rad]: about its up (yaw), its right (pitch), its axis (roll). */
@@ -68,6 +73,12 @@ export class CamShake {
     roll += 0.006 * this.j * band(t, 6, 3.1);
     // (the engine's own hum through the seat, always a little)
     pitch += 0.00015 * i.engine * band(t, 31, 9.2);
+    // (a rocket's roar through the frame, the re-entry's buffeting, the ring's slow groan — X7)
+    const rk = i.rocket ?? 0,
+      pl = i.plasma ?? 0,
+      rg = i.ring ?? 0;
+    pitch += 0.0016 * rk * band(t, 17, 6.6) + 0.005 * pl * band(t, 5.7, 1.1);
+    roll += 0.0012 * rk * band(t, 13, 4.4) + 0.0035 * pl * band(t, 3.9, 2.6) + 0.004 * rg * band(t, 0.7, 5.2);
     const k = Math.max(gain, 0);
     return { yaw: yaw * k, pitch: pitch * k, roll: roll * k };
   }

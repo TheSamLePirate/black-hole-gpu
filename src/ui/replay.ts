@@ -71,6 +71,8 @@ export const MOMENT_NAME: Record<MomentKind, string> = {
   touch: t("Wheels down"),
   form: t("In formation"),
   flight: t("In flight"),
+  dock: t("Hard dock"),
+  burn: t("Engine burn"),
 };
 
 /** The trailer's cards: the title's and the end's [s]. */

@@ -261,6 +261,25 @@ export const CONTROLS: ControlDef[] = [
     at: [0.06, -0.065],
     lamp: AMBER,
   },
+  // (PLAN-VAISSEAUX X6a: the RCS's translation mode, the master caution — a failure's alarm acknowledged)
+  {
+    id: "rcsMode",
+    name: { fr: "RCS : translation · rotation", en: "RCS: translation · rotation" },
+    placard: "RCS TRANS",
+    kind: "button",
+    panel: "C",
+    at: [-0.03, -0.13],
+    lamp: AMBER,
+  },
+  {
+    id: "masterCaution",
+    name: { fr: "Alarme principale (acquitter)", en: "Master caution (acknowledge)" },
+    placard: "MASTER",
+    kind: "button",
+    panel: "C",
+    at: [0.03, -0.13],
+    lamp: [1, 0.25, 0.15],
+  },
 ];
 
 export const MAX_CONTROLS = 32;

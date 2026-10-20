@@ -10,7 +10,7 @@ import { BODY_NAMES, type Body, isCraft, isNetTarget } from "../targeting";
 import type { MountPose } from "../mounts";
 import { fleet, type Pose } from "../fleet";
 import { dockedFrame, VESSEL_IDS, VESSELS, type VesselId } from "../vessels";
-import { nominalDockClosing } from "../docking-guidance";
+import { DOCK_WAYPOINTS, nominalDockClosing } from "../docking-guidance";
 import { mouth } from "../wormhole";
 import { gravityHome, homeOf, ourState, repToHomeVec } from "../system/our-side";
 import { issAxes, issTrack, m34apply, m34unapply, partTransforms, station, stationAngles, type M34 } from "../system/iss";
@@ -18,6 +18,7 @@ import { stationHulls, vesselHulls, type TriBVH } from "../system/collide";
 import { C_MPS, M_METRES, M_SECONDS } from "../units";
 import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 import { frameNow } from "../frameclock";
+import { t } from "../i18n";
 
 import type { CameraController, DockInfo, DockTarget } from "../controls";
 import { onAxesV, unitV } from "./util";
@@ -464,6 +465,8 @@ function stationContact(this: CameraController, p0: NonNullable<ReturnType<Camer
  * to one rigid assembly, their momenta shared; on a port too fast or off its axis, a bounce.
  */
 function dockCheck(this: CameraController) {
+  // (Gargantua's side: the Endurance there — controller/holeendurance.ts)
+  if (cameraFrame(this.s).region === "hole") return this.holeDockStep();
   const D = this.dockAuto;
   const g = this.dockGeometry(this.pilot.auto === "dock" && D ? { target: D.target, port: D.port } : undefined);
   this.dockInfo = g && g.range < 5000 ? g : null;
@@ -776,6 +779,8 @@ function netUndock(this: CameraController) {
  * from the first port): what is left coasts (or stays on the station), as its own assembly.
  */
 function undock(this: CameraController) {
+  // (Gargantua's side: the pieces let go on their geodesics — controller/holeendurance.ts)
+  if (cameraFrame(this.s).region === "hole" && this.holeUndockLinks()) return;
   if (this.netDocked) return this.netUndock();
   const me = fleet.active;
   const mine = fleet.links.filter((l) => l.a === me || l.b === me);
@@ -861,6 +866,9 @@ function dockWant(
       final: false,
       blocked: false,
       checked: -1e9,
+      // (the waypoints beyond where it starts: held on the way in)
+      // (beyond it by range: joined on the axis there if it comes from aside — see the axis point below)
+      wp: { left: DOCK_WAYPOINTS.map((_, i) => i).filter((i) => g0.range > DOCK_WAYPOINTS[i]!.along + 15), held: null, since: 0 },
     };
     this.onPilotMessage?.(
       `Docking autopilot · ${theTitle(g0)}'s ${g0.name} · ${g0.range < 1000 ? `${g0.range.toFixed(0)} m` : `${(g0.range / 1000).toFixed(2)} km`}`,
@@ -964,6 +972,27 @@ function dockWant(
     // before the contact, not met at the capture's edge)
     if (D.final && along < 3) vc *= Math.min(Math.max((0.1 - lat) / 0.06, 0.25), 1);
     D.phase = along >= 12 ? "APPROACH" : D.final ? "FINAL" : "HOLD 10 m";
+    // the station's waypoints: stopped on each (its hold), then on — the crew's go
+    const W = D.wp;
+    const k = W?.left[0];
+    if (W && k !== undefined) {
+      const P = DOCK_WAYPOINTS[k]!;
+      // (slowing to stop there: a tenth of the gap a second at most; backing to it if past)
+      vc = Math.min(vc, Math.max(0.05 * (along - P.along), -0.1));
+      const there = Math.abs(along - P.along) < 2 && Math.abs(g.closing) < 0.03;
+      if (there && W.held !== k) {
+        W.held = k;
+        W.since = nav.t;
+      }
+      if (W.held === k) {
+        D.phase = `${P.name} · HOLD`;
+        if ((nav.t - W.since) * M_SECONDS >= P.hold) {
+          W.left.shift();
+          W.held = null;
+          this.onPilotMessage?.(k === 0 ? t("Waypoint 1: go for the approach") : t("Waypoint 2: go for the capture"));
+        }
+      }
+    }
     let vl = lin(latv, -kLat, latv, 0);
     const vll = Math.hypot(...vl);
     if (vll > 0.4) vl = lin(vl, 0.4 / vll, vl, 0);
@@ -971,7 +1000,8 @@ function dockWant(
   } else {
     D.final = false;
     // to the axis: a point on it, round the target if it stands in the way
-    const S = Math.min(Math.max(along, 30), 200);
+    // (Waypoint 1 still to hold: the axis joined just beyond it — at 200 m it was never met, coming from aside)
+    const S = Math.min(Math.max(along, 30), D.wp?.left[0] === 0 ? DOCK_WAYPOINTS[0]!.along + 5 : 200);
     const G = lin(g.c, 1, a, S / M_METRES);
     const now = frameNow();
     if (now - D.checked > 250) {

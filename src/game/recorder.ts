@@ -25,6 +25,16 @@ export interface RecSample {
   dv: number;
   /** the propellant left (0…1), or null (none counted) */
   fuel: number | null;
+  /** a spacecraft's (PLAN-VAISSEAUX X8): the Δv the propellant still holds and the plan's [m/s], the battery's share
+   *  and the oxygen's hours, the docking's range [m] and closing rate [m/s], the hours gone by on the Earth beyond
+   *  the craft's own [s] — null where they mean nothing */
+  dvLeft?: number | null;
+  dvPlan?: number | null;
+  battery?: number | null;
+  o2?: number | null;
+  dockRange?: number | null;
+  dockClosing?: number | null;
+  earthGap?: number | null;
 }
 
 export type RecKey = Exclude<keyof RecSample, "t">;
@@ -41,6 +51,13 @@ export const CHANNELS: { key: RecKey; label: string; unit: string; k: number }[]
   { key: "throttle", label: "Throttle", unit: "%", k: 100 },
   { key: "dv", label: "Δv spent", unit: "m/s", k: 1 },
   { key: "fuel", label: "Propellant", unit: "%", k: 100 },
+  { key: "dvLeft", label: "Δv left", unit: "m/s", k: 1 },
+  { key: "dvPlan", label: "Δv of the plan", unit: "m/s", k: 1 },
+  { key: "battery", label: "Battery", unit: "%", k: 100 },
+  { key: "o2", label: "Oxygen", unit: "h", k: 1 },
+  { key: "dockRange", label: "Docking range", unit: "m", k: 1 },
+  { key: "dockClosing", label: "Closing rate", unit: "m/s", k: 1 },
+  { key: "earthGap", label: "Time gone by on Earth", unit: "h", k: 1 / 3600 },
 ];
 
 export class FlightRecorder {
@@ -86,9 +103,30 @@ export class FlightRecorder {
 
   /** The record as CSV: a header, then a row a sample (SI units, as recorded). */
   csv(): string {
-    const keys: (keyof RecSample)[] = ["t", "alt", "speed", "vz", "g", "q", "mach", "heat", "throttle", "dv", "fuel"];
-    const head = "t_s,alt_m,speed_mps,vz_mps,load_g,q_pa,mach,heat_wpm2,throttle,dv_mps,fuel";
-    const cell = (v: number | null) => (v === null || !Number.isFinite(v) ? "" : String(Math.round(v * 1e4) / 1e4));
+    const keys: (keyof RecSample)[] = [
+      "t",
+      "alt",
+      "speed",
+      "vz",
+      "g",
+      "q",
+      "mach",
+      "heat",
+      "throttle",
+      "dv",
+      "fuel",
+      "dvLeft",
+      "dvPlan",
+      "battery",
+      "o2",
+      "dockRange",
+      "dockClosing",
+      "earthGap",
+    ];
+    const head =
+      "t_s,alt_m,speed_mps,vz_mps,load_g,q_pa,mach,heat_wpm2,throttle,dv_mps,fuel,dv_left_mps,dv_plan_mps,battery,o2_h,dock_range_m,dock_closing_mps,earth_gap_s";
+    const cell = (v: number | null | undefined) =>
+      v === null || v === undefined || !Number.isFinite(v) ? "" : String(Math.round(v * 1e4) / 1e4);
     return `${head}\n${this.samples.map((s) => keys.map((k) => cell(s[k] as number | null)).join(",")).join("\n")}\n`;
   }
 }

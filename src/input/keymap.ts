@@ -42,6 +42,7 @@ export type KeyAction =
   | "flaps"
   | "airBrake"
   | "jetSystem"
+  | "spaceSystem"
   | "route"
   | "combat"
   | "cineShot"
@@ -242,7 +243,7 @@ export const KEYMAP: KeySection[] = [
     ],
   },
   {
-    title: "Flying the Ranger (K) — KSP's layout",
+    title: "Flying a spacecraft (K) — KSP's layout",
     rows: [
       { keys: "W S · A D · Q E", text: "Pitch · yaw · roll (Z S · Q D · A E on AZERTY)" },
       {
@@ -252,7 +253,7 @@ export const KEYMAP: KeySection[] = [
       },
       {
         keys: "Z · X · ⇧X",
-        text: "Full throttle · cut (W · X on AZERTY) — on the entry autopilot's approach, full throttle goes around · the F-35: back to stable flight (wings level, a gentle climb, a safe speed; then the holds)",
+        text: "Full throttle · cut (W · X on AZERTY) — on the entry autopilot's approach, full throttle goes around · back to a stable craft: the F-35 wings level, a gentle climb, a safe speed, then the holds; a spacecraft its turn stopped, over a ground a hover, in orbit prograde held",
         bind: [
           fly("KeyZ", "throttleFull", off),
           fly("KeyX", "throttleCut", off),
@@ -275,7 +276,7 @@ export const KEYMAP: KeySection[] = [
       },
       {
         keys: "⇧M · ⇧O",
-        text: "A plane's flight plan: NAV — the autopilot flying it (LNAV the route, VNAV its altitudes and speeds; the stick takes them off) · the flight plan's panel: its waypoints edited on the map, its fuel, the bingo",
+        text: "A plane's flight plan: NAV — the autopilot flying it (LNAV the route, VNAV its altitudes and speeds; the stick takes them off) · the flight plan's panel: its waypoints edited on the map, its fuel, the bingo; a spacecraft: its mission plan — the burns, the spheres crossed, the Δv against the tanks', executed from it",
         bind: [fly("KeyM", "jetSystem", { arg: "nav", shift: true }), fly("KeyO", "route", { shift: true })],
       },
       {
@@ -308,15 +309,28 @@ export const KEYMAP: KeySection[] = [
       },
       {
         keys: "8 · 9 · 0 · ⇧0 · F7 · U · B",
-        text: "Autopilot: hold position · circularize · approach · orbit the target · land · take off · dock (the ISS within 3 km)",
+        text: "Autopilot: hold position · circularize · approach · orbit the target · land · take off · dock (within 3 km; farther, the whole rendezvous)",
         bind: [
-          fly("Digit8", "auto", { arg: "hover" }),
-          fly("Digit9", "auto", { arg: "circularize" }),
+          fly("Digit8", "auto", { arg: "hover", shift: false }),
+          fly("Digit9", "auto", { arg: "circularize", shift: false }),
           fly("Digit0", "auto", { arg: "approach", shift: false }),
           fly("Digit0", "auto", { arg: "orbit", shift: true }),
           fly("F7", "auto", { arg: "land" }),
           fly("KeyU", "auto", { arg: "takeoff" }),
           fly("KeyB", "auto", { arg: "dock", shift: false }),
+        ],
+      },
+      {
+        keys: "⇧8 · ⇧9",
+        text: "Station keeping: held where it is against the station or a craft within 5 km, on the thrusters (docked: undock, back off 30 m, then hold) · RCS mode: the attitude keys turn the craft, or translate it (W S up · down, A D left · right, ⇧ Alt forward · back; Q E still roll)",
+        bind: [fly("Digit8", "spaceSystem", { arg: "keep", shift: true }), fly("Digit9", "spaceSystem", { arg: "rcsMode", shift: true })],
+      },
+      {
+        keys: "⇧[ · ⇧]",
+        text: "The Endurance's ring: its turn a revolution a minute lower · higher — the whole craft turns about its axis, its thrusters hold it; the weight in its modules on the HUD (5 rpm: 0.84 g)",
+        bind: [
+          fly("BracketLeft", "spaceSystem", { arg: "ringDown", shift: true }),
+          fly("BracketRight", "spaceSystem", { arg: "ringUp", shift: true }),
         ],
       },
       {
@@ -350,7 +364,7 @@ export const KEYMAP: KeySection[] = [
       {
         keys: "[ · ]",
         text: "The craft flown: the Ranger, the Lander, the Endurance (the others coast, turning as they were)",
-        bind: [fly("BracketLeft", "vessel", { arg: "-1" }), fly("BracketRight", "vessel", { arg: "1" })],
+        bind: [fly("BracketLeft", "vessel", { arg: "-1", shift: false }), fly("BracketRight", "vessel", { arg: "1", shift: false })],
       },
       {
         keys: "F · ⇧F",
@@ -420,6 +434,22 @@ export const KEYMAP: KeySection[] = [
         keys: "View · Menu",
         text: "Tap: the camera's view — hold: the head locked on the target · tap: the autopilot's holds — hold: the settings",
       },
+    ],
+  },
+  {
+    title: "A spacecraft on a controller (Ranger · Lander · Endurance)",
+    rows: [
+      { keys: "Left stick", text: "Pitch (back: nose up) · yaw — in RCS translation: up · down · left · right" },
+      { keys: "Right stick", text: "Look about — the wheel open: aims its sectors" },
+      { keys: "RT · LT  (R2 · L2)", text: "Throttle up · down — in RCS translation: forward · back" },
+      { keys: "LB · RB  (L1 · R1)", text: "Roll left · right" },
+      { keys: "L3 · R3", text: "RCS mode: rotation ⟷ translation · look ahead" },
+      { keys: "A  (✕)", text: "SAS — the wheel open: do the sector" },
+      { keys: "B  (○)", text: "Tap: acknowledge · hold: stop the tumble — the wheel open: back" },
+      { keys: "X  (□)", text: "Tap: dock (the rendezvous beyond 3 km) · hold: station keeping" },
+      { keys: "Y  (△)", text: "Tap: next target · hold: the wheel (let go: does the sector)" },
+      { keys: "D-pad ▲ ▼ ◀ ▶", text: "Hold prograde · retrograde · to the target · radial and normal in turn" },
+      { keys: "View · Menu", text: "Tap: the camera's view — hold: the map · tap: the pause menu — hold: the mission plan" },
     ],
   },
   {

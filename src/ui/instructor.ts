@@ -8,6 +8,7 @@
 
 import "./instructor.css";
 import type { CameraController } from "../controls";
+import { type SpaceLesson, SPACE_LESSONS, type SpaceLessonId } from "../game/spacecourse";
 import { CHANNELS, type InstrDebrief, type InstrRun } from "../game/instructor";
 import { ILS } from "../game/ils";
 import { type Lesson, type LessonId, LESSONS, stepAt } from "../game/lessons";
@@ -25,6 +26,8 @@ export interface InstructorHost {
   tryIt(id: LessonId): string;
   /** TARS first, then the pilot (I3) */
   guided(id: LessonId): string;
+  /** a space lesson (PLAN-VAISSEAUX X9): its scene set up, then guided, demonstrated or tried */
+  spaceLesson?(id: SpaceLessonId, mode: "guided" | "demo" | "try"): string;
 }
 
 const D = Math.PI / 180;
@@ -515,7 +518,21 @@ export function lessonCard(host: InstructorHost, L: Lesson, onClose?: () => void
 /** The flight school: the lessons' cards, each its diagram in small. */
 export function flightSchool(host: InstructorHost) {
   const grid = h("div", "ins-school");
-  const m = modal({ title: t("Flight school"), body: [grid], cls: "ins-frame ins-wide", testid: "flight-school" });
+  // (the spacecraft's school beside the aeroplane's — PLAN-VAISSEAUX X9: its lessons first in a spacecraft)
+  const space = h("div", "ins-school");
+  for (const L of SPACE_LESSONS) {
+    const c = h("button", "ins-lesson ins-space");
+    c.type = "button";
+    c.dataset.testid = `space-lesson-${L.id}`;
+    c.append(h("b", "", t(L.title)), h("span", "", t(L.summary)));
+    c.onclick = () => (m.close(), spaceLessonCard(host, L));
+    space.append(c);
+  }
+  const inSpace = host.camera.piloting && host.camera.s.vessel !== "f35";
+  const body = inSpace
+    ? [h("h4", "ins-h", t("The space school")), space, h("h4", "ins-h", t("The aeroplane school")), grid]
+    : [grid, h("h4", "ins-h", t("The space school")), space];
+  const m = modal({ title: t("Flight school"), body, cls: "ins-frame ins-wide", testid: "flight-school" });
   for (const L of LESSONS) {
     const c = h("button", "ins-lesson");
     c.type = "button";
@@ -526,4 +543,28 @@ export function flightSchool(host: InstructorHost) {
     c.onclick = () => (m.close(), lessonCard(host, L));
     grid.append(c);
   }
+}
+
+/** A space lesson's card (PLAN-VAISSEAUX X9): its summary, its steps (TARS's and the pilot's), the three ways to take it. */
+export function spaceLessonCard(host: InstructorHost, L: SpaceLesson) {
+  const body = h("div", "ins-card");
+  const steps = h("ol", "ins-steps");
+  for (const st of L.steps) {
+    const li = h("li", "ins-stepitem");
+    li.append(h("b", "", `${st.who === "tars" ? "TARS" : t("You")} · ${t(st.name)}`), h("span", "", t(st.say)));
+    steps.append(li);
+  }
+  body.append(h("p", "ins-summary", t(L.summary)), h("h4", "ins-h", t("Its steps")), steps);
+  const m = modal({ title: t(L.title), body: [body], cls: "ins-frame", testid: "space-lesson-card" });
+  const go = (mode: "guided" | "demo" | "try") => () => {
+    m.close();
+    host.toast(host.spaceLesson?.(L.id, mode) ?? t("No such lesson"));
+  };
+  const row = h("div", "ins-row");
+  row.append(
+    button({ label: t("Watch the demonstration"), testid: "space-lesson-demo", onClick: go("demo") }),
+    button({ label: t("Guided: TARS, then you"), kind: "primary", testid: "space-lesson-guided", onClick: go("guided") }),
+    button({ label: t("Try it alone"), testid: "space-lesson-try", onClick: go("try") }),
+  );
+  body.append(row);
 }

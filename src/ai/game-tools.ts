@@ -353,6 +353,7 @@ const AUTOS: Auto[] = [
   "dock",
   "entry",
   "burns",
+  "keep",
 ];
 const HOLDS: Hold[] = [
   "none",
@@ -1047,7 +1048,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "autopilot",
       description:
-        "Engage an autopilot (none switches it off). hover: hold position; circularize; approach: close on the target only (it does not dock); orbit: orbit the target; node: execute the planned manoeuvre; transfer; land: powered landing below; takeoff: to orbit (altKm, incDeg); dock: TO DOCK — target the station or craft first; within 3 km it closes in, aligns and docks by itself (farther: plan_mission to it first, which ends 200 m from the port); entry: from orbit, deorbit burn + entry + glide + runway landing at `site`; burns: fly the flight computer's burns.",
+        "Engage an autopilot (none switches it off). hover: hold position; circularize; approach: close on the target only (it does not dock); orbit: orbit the target; node: execute the planned manoeuvre; transfer; land: powered landing below; takeoff: to orbit (altKm, incDeg); dock: TO DOCK — target the station or craft first; within 3 km it closes in, aligns and docks by itself (farther: plan_mission to it first, which ends 200 m from the port); entry: from orbit, deorbit burn + entry + glide + runway landing at `site`; burns: fly the flight computer's burns; keep: station keeping — hold the craft where it is against the station or a craft within 5 km (the target's orbital frame), on the thrusters.",
       params: {
         mode: { type: "string", enum: AUTOS },
         site: { type: "string", description: "entry/land: a landing site or runway name (list_places)" },
@@ -1879,7 +1880,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "knowledge",
       description:
-        "Your aviation knowledge base (written pages, English and French): the F-35's systems, limits and procedures (f35), basic flying (basics), energy (energy), the dogfight (bfm), formation flying (formation), the carrier (carrier), the ILS (ils), the emergencies (emergencies), the radar (radar), the weapons (weapons), the traffic (traffic). search: the sections that answer a question (query; lang fr or en), their excerpts. read: a page whole or one section (page; section: a word of its title). Answer the pilot from it.",
+        "Your aviation and spaceflight knowledge base (written pages, English and French): the F-35's systems, limits and procedures (f35), basic flying (basics), energy (energy), the dogfight (bfm), formation flying (formation), the carrier (carrier), the ILS (ils), the emergencies (emergencies), the radar (radar), the weapons (weapons), the traffic (traffic); the spacecraft's: orbits (orbits), manoeuvres — circularize, Hohmann, plane changes, nodes (maneuvers), rendezvous and docking (docking), entry and landing — deorbit, the corridor, the glide, the Lander's powered descent, take-off (entry), systems and emergencies — the consumables, the failures and their checklists (systems), relativity near Gargantua (relativity). search: the sections that answer a question (query; lang fr or en), their excerpts. read: a page whole or one section (page; section: a word of its title). Answer the pilot from it.",
       params: {
         action: { type: "string", enum: ["search", "read"] },
         query: { type: "string" },

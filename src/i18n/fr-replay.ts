@@ -38,4 +38,6 @@ export default {
   "Fly a craft first (F1)": "Pilotez d'abord un appareil (F1)",
   "{0} over the ground": "{0} sol",
   "Photo of the scene: {0}": "Photo de la scène : {0}",
+  "Hard dock": "Amarrage",
+  "Engine burn": "Poussée moteur",
 };

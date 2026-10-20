@@ -59,7 +59,7 @@ import { C_MPS, DAY_S, G0, M_METRES, M_SECONDS } from "../units";
 import { add as axpy, cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 import { caught } from "../debug";
 import { frameNow } from "../frameclock";
-import { dockClosingMark, nominalDockClosing } from "../docking-guidance";
+import { DOCK_WAYPOINTS, dockClosingMark, nominalDockClosing } from "../docking-guidance";
 import { t, tf } from "../i18n";
 
 import type { CameraController, FutureView, HubInfo, HubRow, LowThrust, RunwayView } from "../controls";
@@ -537,6 +537,7 @@ function ourWant(this: CameraController, cam: ReturnType<typeof cameraFrame>, sa
   }
   this.ourAnchor = null;
   if (P.auto === "land" || P.auto === "takeoff") return this.ourSurfaceWant(nav, g, say, out, T);
+  if (P.auto === "keep") return this.keepWant(nav, say, out);
   if (P.auto === "dock") return this.dockWant(nav, say, out);
   if (P.auto !== "approach" && P.auto !== "orbit" && P.auto !== "circularize")
     return say(tf("{0}: not in our universe (yet)", AUTO_NAMES[P.auto]));
@@ -677,7 +678,7 @@ function ourSurfaceWant(
   // take-off
   const LG = this.launchGoal;
   const d0 = climbTop(id, LG.altKm);
-  const east = launchEast(id, sub3(nav.X, Pb), LG.incDeg);
+  const east = launchEast(id, sub3(nav.X, Pb), LG.incDeg, nav.t);
   const vc = Math.sqrt(sb.mass / r);
   const vi = sub3(nav.V, nav.refVel);
   // (done: steered, at the top, the speed across the vertical the circular one's to 0.5 % — its east part only,
@@ -795,7 +796,30 @@ function landWant(
   }
   // (here: the place under the craft held once it is slow)
   if (!L.site && !L.q && vhSI < 3) L.q = toBodyFixed(id, lin(nav.X, 1, up, -h / M_METRES), t0);
-  const padX = L.site ? sitePlace(L.site) : L.q ? fromBodyFixed(id, L.q, t0) : null;
+  let padX = L.site ? sitePlace(L.site) : L.q ? fromBodyFixed(id, L.q, t0) : null;
+  // the landing point redesignated (the LPD: the stick, controller/spaceassist.ts) — moved over the ground at 5 % of
+  // the height a second (5 m/s at least), no farther than the height (250 m at least) from where it first was
+  const dtL = L.lpdT !== undefined ? Math.max(0, (t0 - L.lpdT) * M_SECONDS) : 0;
+  L.lpdT = t0;
+  if (padX && this.lpdIn && h < LPD.below && dtL > 0) {
+    const hz = (v: Vec3) => unitV(lin(v, 1, up, -dot3(v, up)));
+    const vh = lin(va, 1, up, -dot3(va, up));
+    const fwd = Math.hypot(...vh) * C > 2 ? hz(vh) : hz(L.heading ?? this.levelHeading(up));
+    const right = cross(fwd, up);
+    const step = Math.max(LPD.minRate, LPD.rate * h) * dtL;
+    L.q0 ??= toBodyFixed(id, padX, t0);
+    let to = lin(padX, 1, lin(fwd, this.lpdIn.fwd, right, this.lpdIn.right), step / M_METRES);
+    const o = fromBodyFixed(id, L.q0, t0);
+    const off = lin(sub3(to, o), M_METRES, to, 0);
+    const lim = Math.max(LPD.minReach, h);
+    const ol = Math.hypot(...off);
+    if (ol > lim) to = lin(o, 1, off, lim / ol / M_METRES);
+    L.q = toBodyFixed(id, to, t0);
+    if (L.site) L.site = null;
+    L.moved = true;
+    padX = to;
+  }
+  this.lpdPad = padX;
   // the weight the engine holds: gravity less the centrifugal of the motion over the body (an orbit's
   // speed holds itself up)
   const vih = lin(vi, 1, up, -dot3(vi, up));
@@ -835,6 +859,10 @@ function landWant(
   return { ...out(want, ff), att: { nose: unitV(nav.toRep(nose)), up: unitV(nav.toRep(up)), vectored: true } };
 }
 
+/** The landing point designator: below this height [m]; its moving rate (a share of the height a second), the least
+ *  rate [m/s], the least reach [m]. */
+export const LPD = { below: 5000, rate: 0.05, minRate: 5, minReach: 250 };
+
 /** Below this over a ground [m], the hover holds a place on it (carried by its turning), level. */
 const HOVER_LOW = 20e3;
 
@@ -857,9 +885,9 @@ function levelHeading(this: CameraController, up: Vec3): Vec3 {
  * site's latitude is above it. The latitude is the geocentric one — the orbit's plane passes through
  * the centre —, not the figure's geodetic up (0.19° apart at Kennedy on the Earth's ellipsoid).
  */
-export function launchEast(id: string, rel: Vec3, incDeg: number | null): Vec3 {
+export function launchEast(id: string, rel: Vec3, incDeg: number | null, t?: number): Vec3 {
   const up = unitV(rel);
-  const pole = unitV(spinAxis(id));
+  const pole = unitV(spinAxis(id, t));
   let east = cross(pole, up);
   if (Math.hypot(...east) < 1e-12) east = cross([0, 0, 1], up);
   east = unitV(east);
@@ -1053,12 +1081,12 @@ function climbAssist(
   const q = toBodyFixed(id, nav.X, nav.t);
   const ql = Math.hypot(...q);
   const gv = groundVelocity(id, nav.X, nav.t);
-  const pole = unitV(spinAxis(id));
+  const pole = unitV(spinAxis(id, nav.t));
   let eastG = cross(pole, up);
   if (Math.hypot(...eastG) < 1e-12) eastG = cross([0, 0, 1], up);
   eastG = unitV(eastG);
   const north = cross(up, eastG);
-  const east = launchEast(id, rel, this.launchGoal.incDeg);
+  const east = launchEast(id, rel, this.launchGoal.incDeg, nav.t);
   if (!this.climbRec || this.climbRec.id !== id) {
     const vGroundE = dot3(sub3(gv, nav.refVel), east);
     this.climbRec = { id, pad: lin(q, 1 / ql, q, 0) as Vec3, trace: [], qMax: 0, profile: climbProfile(id, thr, dragK, d0, vGroundE) };
@@ -1431,6 +1459,8 @@ function dockCard(this: CameraController): HubInfo | null {
     FINAL: t("the last metres: on the axis, the ports facing — to the capture"),
     "HOLD 10 m": t("held 10 m out until on the axis, the ports facing and the drift still"),
     "TO THE AXIS": t("to a point on the port's axis, off the target"),
+    "WAYPOINT 1 · HOLD": t("held at Waypoint 1, 220 m out: the go for the approach"),
+    "WAYPOINT 2 · HOLD": t("held at Waypoint 2, 20 m out: the go for the capture"),
   };
   const phase = why[D.phase] ?? (D.blocked ? t("round the target, clear of its hull, to the axis") : t("docking"));
   const along = g.along,
@@ -1465,7 +1495,7 @@ function dockCard(this: CameraController): HubInfo | null {
     flown: this.glideTrace.pts,
     now: [along, closing],
     levels: hasAsked ? [{ y: asked, label: t("ASKED") }] : [],
-    marks: [{ x: 10, label: t("HOLD") }],
+    marks: [{ x: 10, label: t("HOLD") }, ...(D.wp?.left ?? []).map((k) => ({ x: DOCK_WAYPOINTS[k]!.along, label: `WP${k + 1}` }))],
     state:
       !D.corridor || !hasAsked
         ? "wait"
@@ -1494,6 +1524,8 @@ function dockCard(this: CameraController): HubInfo | null {
     phase,
     rows: [
       [t("Range"), m(g.range)],
+      // (where it is about the station's zones: its approach ellipsoid — 4 × 2 × 2 km —, its keep-out sphere — 200 m)
+      [t("Zone"), g.range < 200 ? t("keep-out sphere") : this.inApproachEllipsoid(g) ? t("approach ellipsoid") : t("outside")],
       [t("Along · across"), `${m(along)} · ${m(g.lateral)}`],
       // (past their marks: too fast for the distance — the graph's own "off" —, the ports' axes and the
       // turns apart near the contact, by the flight report's marks)
@@ -2109,6 +2141,22 @@ function hubCompute(this: CameraController): HubInfo | null {
     // (low over a ground: the descent's graph too — the hold a hover)
     return sf && !sf.landed && sf.alt !== undefined && sf.alt < 5000 ? { ...H, ...this.descentAssist(sf, true) } : H;
   }
+  if (a === "keep" && N.off !== undefined)
+    return base(t("KEEP"), tf("held against the {0}", N.name ?? ""), [
+      [t("Off the held point"), N.off < 10 ? `${N.off.toFixed(2)} m` : km(N.off)],
+      [t("Drift"), ms(N.drift ?? 0)],
+      [t("Reference frame"), this.keepRun?.frame === "lvlh" ? t("orbital (LVLH)") : t("its own")],
+    ]);
+  // (by Gargantua — controller/holeendurance.ts —: the same figures, from its own docking's)
+  const hd = a === "dock" && !this.dockInfo ? this.holeDock : null;
+  if (hd)
+    return base("DOCK", this.dockAuto?.phase ?? t("docking"), [
+      [t("Range"), hd.range < 100 ? `${hd.range.toFixed(2)} m` : km(hd.range)],
+      [t("Along · across"), `${hd.along.toFixed(1)} m · ${hd.lateral.toFixed(2)} m`],
+      [t("Closing"), `${hd.closing.toFixed(2)} m/s`],
+      [t("Ports' axes"), `${hd.angle.toFixed(1)}°`],
+      ...(hd.spin >= 0.5 ? ([[t("Turn against it"), `${hd.spin.toFixed(1)}°/s`]] as [string, string][]) : []),
+    ]);
   if (a === "dock") return this.dockCard() ?? base("DOCK", this.dockAuto?.phase ?? t("docking"));
   return base(AUTO_NAMES[a].toUpperCase(), t("flying"));
 }
@@ -2285,7 +2333,9 @@ function autopilotWant(this: CameraController, cam: ReturnType<typeof cameraFram
   const T = Math.max(1.2 * s.timeSpeed * dtau, 1e-3);
   // our universe: Newtonian autopilots in the home frame
   if (this.ourNav(cam)) return this.ourWant(cam, say, T);
-  if (P.auto === "dock") return say(tf("Docking: with the ISS, in our solar system"));
+  // (by Gargantua, the Endurance: its own docking — controller/holeendurance.ts)
+  if (P.auto === "dock") return this.holeDockWant(cam, say) ?? say(tf("Docking: with the ISS, in our solar system"));
+  if (P.auto === "keep") return say(t("Station keeping: in our solar system"));
   if (P.auto === "hover") {
     if (cam.region !== "hole") return { beta: [0, 0, 0], ff: [0, 0, 0] };
     const z = cam.zamo;
@@ -2643,7 +2693,7 @@ function runwayCompute(this: CameraController): RunwayView | null {
   const T = fr.place(site);
   const tu = unitV(T);
   const nav = this.ourNav(cam);
-  const pole: Vec3 = nav ? unitV(spinAxis(fr.body)) : [0, 0, 1];
+  const pole: Vec3 = nav ? unitV(spinAxis(fr.body, nav.t)) : [0, 0, 1];
   const north = unitV(lin(pole, 1, tu, -dot3(pole, tu)));
   const east = cross(north, tu);
   const hd = (site.rwy ?? 0) * D;

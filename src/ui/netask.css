@@ -1,0 +1,5 @@
+/* a question from the room (ui/netask.ts) */
+.netask { position: fixed; top: 132px; left: 50%; transform: translateX(-50%); z-index: 60; width: min(440px, calc(100vw - 32px)); padding: 12px 14px; border: 1px solid var(--k-amber, #ffb84d); border-radius: var(--k-r, 4px); background: rgba(10, 16, 24, 0.92); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45); color: var(--k-text, #e8eef4); font: 13px/1.4 var(--font, sans-serif); pointer-events: auto; }
+.netask p { margin: 0 0 10px; }
+.netask-row { display: flex; gap: 8px; align-items: center; justify-content: flex-end; }
+.netask-left { margin-right: auto; font: 600 12px/1 var(--mono, monospace); color: var(--k-dim, #8aa); font-style: normal; }

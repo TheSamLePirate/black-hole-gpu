@@ -7,7 +7,7 @@ import { properBodyAxes } from "../system/local-patch";
 // camera settings take (home frame on our side, the hole's map on Gargantua's side).
 
 import type { Vec3 } from "../physics";
-import { eclipticOf, poleAxes, solarBody, solarState, spinVector, M_METRES, SOLAR_BODIES } from "../system/solar";
+import { eclipticOf, poleAxes, poleOfDate, solarBody, solarState, spinVector, M_METRES, SOLAR_BODIES } from "../system/solar";
 import { soiOf } from "../system/our-side";
 import { bodyFixedOf, figureUp, fromBodyFixed, groundPointOf, groundVelocity, heightOverGround, solidBody } from "../system/our-surface";
 import { body as sysBody, GARGANTUA_SYSTEM } from "../system/bodies";
@@ -67,10 +67,12 @@ export const universeOf = (id: string): "ours" | "gargantua" | null =>
   OUR_IDS.includes(id) ? "ours" : THEIR_IDS.includes(id) ? "gargantua" : null;
 
 /** A body's equatorial axes (not turning with it): x on the ecliptic, z along its pole. */
-export function equatorAxes(id: string): Axes {
+/** A body's equator's axes — at a date `t` [M] its pole of the date's (the sites', the take-off's: PLAN-VAISSEAUX
+ *  X1f), without one its catalogue pole's. */
+export function equatorAxes(id: string, t?: number): Axes {
   const b = solarBody(id);
   if (!b || b.kind === "star") return ECLIPTIC;
-  return poleAxes(eclipticOf(b.pole[0], b.pole[1])) as Axes;
+  return poleAxes(t === undefined ? eclipticOf(b.pole[0], b.pole[1]) : poleOfDate(b, t)) as Axes;
 }
 
 /** The air's top above a body (where the tracer's air ends: 12 scale heights) [km], 0 without. */
@@ -98,7 +100,7 @@ export function ourOrbitPose(p: OrbitPlacement, t: number): Pose {
   const ra = R + (p.apKm ?? p.peKm ?? alt) * KM;
   const inc = p.retrograde ? 180 - (p.inc ?? 0) : (p.inc ?? 0);
   const spec: OrbitSpec = { rp, ra, i: inc, raan: p.raan ?? 0, argPe: p.argPe ?? 0, nu: p.nu ?? 0 };
-  const { r, v } = stateFrom(b.mass, spec, equatorAxes(p.body));
+  const { r, v } = stateFrom(b.mass, spec, equatorAxes(p.body, t));
   const soi = soiOf(p.body, t);
   if (Math.max(rp, ra) > soi)
     throw new Error(
@@ -106,7 +108,7 @@ export function ourOrbitPose(p: OrbitPlacement, t: number): Pose {
     );
   const B = solarState(p.body, t);
   const X = add(B.pos, r);
-  const el = elements(b.mass, r, v, equatorAxes(p.body));
+  const el = elements(b.mass, r, v, equatorAxes(p.body, t));
   const note = `${b.name}: orbit ${Math.round((el.rp - R) / KM)} × ${Math.round((el.ra - R) / KM)} km, i ${((el.i * 180) / Math.PI).toFixed(1)}°`;
   return { frame: "ours", X, vel: add(B.vel, v), fwd: unit(v), up: unit(r), note };
 }
@@ -260,7 +262,7 @@ export function orbitOver(id: string, q: Vec3, t: number, o: { inc: number; argP
   let e = unit(q);
   if (universeOf(id) === "ours") {
     const d = unit(sub(fromBodyFixed(id, q, t), solarState(id, t).pos));
-    const A = equatorAxes(id);
+    const A = equatorAxes(id, t);
     e = [dot(d, A[0]), dot(d, A[1]), dot(d, A[2])];
   }
   const lat = Math.asin(Math.min(Math.max(e[2], -1), 1)),

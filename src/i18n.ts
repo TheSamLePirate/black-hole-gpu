@@ -27,6 +27,9 @@ import frRadio from "./i18n/fr-radio";
 import frViews from "./i18n/fr-views";
 import frJetpad from "./i18n/fr-jetpad";
 import frReplay from "./i18n/fr-replay";
+import frNetSpace from "./i18n/fr-netspace";
+import frSpaceMissions from "./i18n/fr-spacemissions";
+import frSpaceSchool from "./i18n/fr-spaceschool";
 
 export type Lang = "fr" | "en";
 export type Text = Record<Lang, string>;
@@ -87,6 +90,9 @@ export const tf = (en: string, ...v: (string | number)[]) => t(en).replace(/\{(\
 export const hasFrench = (en: string) => FR.has(en);
 
 addFrench(frSettings);
+addFrench(frSpaceSchool);
+addFrench(frSpaceMissions);
+addFrench(frNetSpace);
 addFrench(frCockpit);
 addFrench(frTars);
 addFrench(frVoices);

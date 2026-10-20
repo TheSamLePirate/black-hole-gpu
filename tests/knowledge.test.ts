@@ -5,8 +5,8 @@ import { KNOWLEDGE_PAGES, readKnowledge, searchKnowledge } from "../src/ai/knowl
 // a question finds the section that answers it, in its language (the accents, the case, a word's ending aside); a
 // page read whole or by one section.
 
-test("eleven pages in each language, their sections the same", () => {
-  expect(KNOWLEDGE_PAGES.length).toBe(11);
+test("seventeen pages in each language (the six spacecraft's — PLAN-VAISSEAUX X9), their sections the same", () => {
+  expect(KNOWLEDGE_PAGES.length).toBe(17);
   for (const p of KNOWLEDGE_PAGES) {
     const en = readKnowledge(p, "en")!;
     const fr = readKnowledge(p, "fr")!;
@@ -31,4 +31,13 @@ test("a question finds the section that answers it, in its language", () => {
   expect(searchKnowledge("zzzz", "en")).toEqual([]);
   // (one section read by a word of its title)
   expect(readKnowledge("ils", "fr", "procédure")).toMatch(/^## L'approche ILS — La procédure dans le jeu\n1\. Le point/);
+});
+
+test("the spacecraft's pages answer in their language (PLAN-VAISSEAUX X9)", () => {
+  const top = (q: string, l: "en" | "fr") => searchKnowledge(q, l, 1)[0]?.title ?? "";
+  expect(top("Hohmann transfer second burn", "en")).toMatch(/Hohmann/);
+  expect(top("capture docking reticle COAS", "en")).toMatch(/Docking by hand/i);
+  expect(top("fuite d'oxygène cabine", "fr")).toMatch(/pannes/i);
+  expect(top("dτ/dt horloge Miller", "fr")).toMatch(/horloges/i);
+  expect(top("corridor heat flux entry", "en")).toMatch(/corridor/i);
 });

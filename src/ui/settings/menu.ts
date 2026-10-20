@@ -36,7 +36,24 @@ export interface PlayerGroup {
 export const PLAYER_MENU: PlayerGroup[] = [
   // ---- game
   { tab: "game", title: { fr: "À pied", en: "On foot" }, keys: ["walkSpeed", "runSpeed", "jumpSpeed", "characterDistance"] },
-  { tab: "game", title: { fr: "Vaisseaux", en: "Spacecraft" }, keys: ["vessel", "shipMount", "engine", "fuel", "autoWarp", "crewG"] },
+  {
+    tab: "game",
+    title: { fr: "Vaisseaux", en: "Spacecraft" },
+    keys: [
+      "vessel",
+      "shipMount",
+      // (PLAN-VAISSEAUX X0–X3: the assistance, the protections, the systems' realism, the propellant)
+      "spaceAssist",
+      "spaceAutoProtect",
+      "spaceConsumables",
+      "spaceFailures",
+      "spaceInfinitePropellant",
+      "engine",
+      "fuel",
+      "autoWarp",
+      "crewG",
+    ],
+  },
   {
     tab: "game",
     title: { fr: "Pilotage", en: "Flying" },
@@ -205,7 +222,11 @@ export const PLAYER_MENU: PlayerGroup[] = [
   // ---- interface
   { tab: "interface", title: { fr: "Langue et unités", en: "Language and units" }, keys: ["@language", "units"] },
   // ---- network
-  { tab: "network", title: { fr: "Jouer ensemble", en: "Playing together" }, keys: ["netMenu", "netCrewActions", "netFreeFight"] },
+  {
+    tab: "network",
+    title: { fr: "Jouer ensemble", en: "Playing together" },
+    keys: ["netMenu", "netCrewActions", "netLightDelay", "netFreeFight"],
+  },
 ];
 
 /** The settings that can leave the screen unreadable: back by themselves after REVERT_S unless kept. */

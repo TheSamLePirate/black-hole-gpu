@@ -55,6 +55,11 @@ Guides per feature:
 - [`docs/F35.md`](docs/F35.md) ([français](docs/F35.fr.md)) — **the F-35B and F-35C**: keys, the Tab wheel, the
   pad, the control law and the assistance, Auto-GCAS/ACAS, the autopilot's modes and the ILS, the radar, the
   intercept and the gun sight, weapons and fights, formations and wingmen, the carriers, missions, the flight school.
+- [`docs/VAISSEAUX.md`](docs/VAISSEAUX.md) ([français](docs/VAISSEAUX.fr.md)) — **the spacecraft: Ranger, Lander,
+  Endurance**: keys, the Tab wheel, the pad, the assistance levels and ⇧X, station keeping, the rendezvous, the LPD,
+  the mission plan, the protections, the mothership's ring, systems and failures, the HUDs and cockpits, the space
+  school, challenges, missions and the Interstellar campaign, playing together; TARS's space knowledge base
+  [`docs/spatial/en/`](docs/spatial/en/orbits.md) ([français](docs/spatial/fr/orbits.md)).
 - [`docs/aviation/en/`](docs/aviation/en/f35.md) ([français](docs/aviation/fr/f35.md)) — TARS's aviation knowledge
   base, eleven pages: [the F-35](docs/aviation/en/f35.md), [basics](docs/aviation/en/basics.md),
   [energy](docs/aviation/en/energy.md), [BFM](docs/aviation/en/bfm.md), [formation](docs/aviation/en/formation.md),
@@ -84,6 +89,7 @@ Working on it:
 - [`docs/AAA-PROGRESS.md`](docs/AAA-PROGRESS.md) — where the AAA work stands; the plans `docs/PLAN-*.md` —
   among the latest [PLAN-AVIATION-AAA](docs/PLAN-AVIATION-AAA.md) (the real F-35, combat, the flight, traffic, the
   sea and carriers, missions, assistance, TARS the aviator, the views), [PLAN-F35](docs/PLAN-F35.md),
+  [PLAN-VAISSEAUX-AAA](docs/PLAN-VAISSEAUX-AAA.md) (the Ranger, the Lander and the Endurance at the F-35's level),
   [PLAN-RESEAU](docs/PLAN-RESEAU.md) (the network), [PLAN-MODES-AAA](docs/PLAN-MODES-AAA.md) (the four modes),
   [PLAN-TERRE-PHOTOREALISTE](docs/PLAN-TERRE-PHOTOREALISTE.md), [PLAN-OBSERVATOIRE](docs/PLAN-OBSERVATOIRE.md),
   [PLAN-TARS-AGENT](docs/PLAN-TARS-AGENT.md) — and the audits and reviews (`docs/AUDIT-*.md`, `docs/REVIEW-*.md`);
@@ -245,6 +251,15 @@ Working on it:
   scope), the intercept, a gun sight that leads the target's turn, AIM-120, AIM-9X, JDAM and JSM; formations, one
   to three AI wingmen and the leader's orders; aerobatic figures judged out of 20; a cockpit with its panoramic
   display and helmet; a fighter's layout on an Xbox pad; the flight's replay and its trailer.
+- **The spacecraft: Ranger, Lander, Endurance** ([docs/VAISSEAUX.md](docs/VAISSEAUX.md),
+  [PLAN-VAISSEAUX-AAA](docs/PLAN-VAISSEAUX-AAA.md)): four assistance levels and ⇧X recovery, ground and keep-out
+  protections, station keeping, a full rendezvous with Dragon's waypoints, the Lander's landing point designator,
+  an editable mission plan; the Endurance a mothership on both sides of the wormhole (its ring, refuelling, the
+  tumbling docking at Mann); consumables, failures and checklists; a HUD and a cockpit per craft, an eleven-sector
+  wheel, a pad and 6-DOF HOTAS layout; phase reports out of 20, a space school of fifteen lessons, seven challenges,
+  missions, the seven-chapter Interstellar campaign and an editor (`#smission=` links); in a room the fleet and its
+  orders, sharing between docked craft, a copilot aboard and the controls handed over, room challenges and co-op
+  missions with roles.
 - **The living sky and sea** ([PLAN-AVIATION-AAA](docs/PLAN-AVIATION-AAA.md)): the **real traffic** — the
   airliners of the moment (adsb.lol, OpenSky) drawn with their models, lights and contrails a minute late on
   their reconstructed flight, the ships (aisstream) with their Kelvin wakes — through a relay that keeps the keys
@@ -770,7 +785,7 @@ K fly the Ranger (flight keys in the help sheet) · I readouts · M settings · 
 photo) · F8 the Atlas · ⇧F8 the sky's events · F5 · F9 quick save · load · F10 game tools · ? the shortcut sheet.
 In flight: F flight mode (⇧F antigravity) · P · ⇧P flaps · air brake · G gear · ⇧F4 assisted · F3 the free camera (the ship flies on) ·
 F6 TARS (held: speak) · F7 land · ⇧G entry · Enter acknowledge the master warning · ⌫ hand the controls back ·
-Escape pause. The F-35's own keys: [docs/F35.md](docs/F35.md). Every key can be rebound (pause › Controls); comment-jouer.html lists them all, AZERTY and QWERTY.
+Escape pause. The F-35's own keys: [docs/F35.md](docs/F35.md); the spacecraft's: [docs/VAISSEAUX.md](docs/VAISSEAUX.md). Every key can be rebound (pause › Controls); comment-jouer.html lists them all, AZERTY and QWERTY.
 
 The URL is not kept in sync with the settings any more: a link (`#save=…`, Copy a link in the game tools;
 or the panel's share link) restores a moment, `#scene=…` starts a scene, and old setting links are read once.

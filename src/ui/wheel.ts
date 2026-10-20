@@ -135,15 +135,28 @@ export class RadialWheel {
     if (!this.root) return;
     const dx = e.clientX - innerWidth / 2,
       dy = e.clientY - innerHeight / 2;
-    const n = this.items.length;
-    let sel = -1;
     // (a small dead zone at the centre: the direction picks, not the distance)
-    if (Math.hypot(dx, dy) > Math.min(this.rIn * 0.5, 48)) {
-      const a = (Math.atan2(dy, dx) + Math.PI / 2 + 2 * Math.PI) % (2 * Math.PI);
-      sel = Math.round((a / (2 * Math.PI)) * n) % n;
-    }
-    this.select(sel);
+    this.select(Math.hypot(dx, dy) > Math.min(this.rIn * 0.5, 48) ? this.sectorAt(dx, dy) : -1);
   };
+
+  /** The sector in a direction from the centre (screen axes: right +, down +). */
+  private sectorAt(dx: number, dy: number) {
+    const n = this.items.length;
+    const a = (Math.atan2(dy, dx) + Math.PI / 2 + 2 * Math.PI) % (2 * Math.PI);
+    return Math.round((a / (2 * Math.PI)) * n) % n;
+  }
+
+  /** A pad's stick aims (right +, up +); let go (null), the sector stays picked — A does it, B goes back. */
+  aim(v: [number, number] | null) {
+    if (this.root && v) this.select(this.sectorAt(v[0], -v[1]));
+  }
+
+  /** Back a wheel (the pad's B): the parent's, or closed. */
+  back() {
+    const prev = this.stack.pop();
+    if (prev) this.show(prev.items, prev.title);
+    else this.close();
+  }
 
   /** Selects a sector (−1: none) — the keyboard's and the pad's way too. */
   select(i: number) {

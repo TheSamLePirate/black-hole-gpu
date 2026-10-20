@@ -1,14 +1,19 @@
 // A scripted room for the crew console (crew/): two pilots flying Paris → Lyon in formation, sending what the
 // simulator sends — the poses, the instruments with their plan, prediction, autopilot, systems, alerts — and the
-// surroundings (airliners, a carrier and a ship, a mission's units and zones). No simulator, no GPU.
-//   bun scripts/crew-demo.ts [ws://localhost:3000/net]  → prints the room's code; open /crew/#join=CODE
+// surroundings (airliners, a carrier and a ship, a mission's units and zones); and three spacecraft (PLAN-VAISSEAUX
+// K7 — scripts/lib/space-demo.ts): the Ranger closing on the ISS, the Lander descending on the Moon, the Endurance by
+// Gargantua. No simulator, no GPU.
+//   bun scripts/crew-demo.ts [ws://localhost:3000/net] [--space]  → prints the room's code; open /crew/#join=CODE
+//   (--space: the leader's F-35 and the three spacecraft — a room holds four pilots —; else the two F-35s)
 import { NetClient } from "../src/net/client";
 import { emptyVisual } from "../src/net/proto";
 import { geodeticToCart, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
 import { gcCourse, gcDest, gcDist } from "../src/game/flightplan";
 import { readCrewCmd, sayOf } from "../src/net/crewcmd";
+import { spacePilots } from "./lib/space-demo";
 
-const url = process.argv[2] ?? "ws://localhost:3000/net";
+const SPACE = process.argv.includes("--space");
+const url = process.argv.slice(2).find((a) => !a.startsWith("--")) ?? "ws://localhost:3000/net";
 const D = Math.PI / 180;
 type Wp = { name: string; lat: number; lon: number; alt?: number; spd?: number };
 const ROUTE: Wp[] = [
@@ -35,10 +40,12 @@ function pilot(name: string, colour: string) {
   return new NetClient({ url, build: "crew-demo", id: { device: `crew-demo-${name}`, name, colour }, p2p: false });
 }
 const ana = pilot("Ana", "#ffb43c");
-const ben = pilot("Ben", "#4cf29a");
+const ben = SPACE ? null : pilot("Ben", "#4cf29a");
 const room = await ana.create("Démo équipage", 0);
-await ben.join(room.code, "pilot");
+await ben?.join(room.code, "pilot");
 console.log(`Salle ${room.code} · http://localhost:3000/crew/#join=${room.code}`);
+// (the spacecraft beside the leader: Cooper, Brand, Romilly)
+if (SPACE) await spacePilots(url, room.code);
 
 // the leader's state
 let lat = 48.95,
@@ -490,5 +497,5 @@ setInterval(() => {
   });
   // the wingman, 1.5 km right and behind
   const w = gcDest(gcDest({ lat, lon }, hdg + Math.PI / 2, 1500), hdg + Math.PI, 900);
-  ben.sendCraft(sample(w.lat, w.lon, alt + 60, hdg, spd));
+  ben?.sendCraft(sample(w.lat, w.lon, alt + 60, hdg, spd));
 }, 250);

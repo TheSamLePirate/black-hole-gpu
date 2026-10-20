@@ -49,8 +49,8 @@ export default {
   "VNAV off — the stick: altitude held": "VNAV coupé — le manche : altitude maintenue",
   "{0} passed — {1} next": "{0} passé — ensuite {1}",
   "{0}: the flight plan's end — heading and altitude held": "{0} : fin du plan de vol — cap et altitude maintenus",
-  "A plane's flight plan: NAV — the autopilot flying it (LNAV the route, VNAV its altitudes and speeds; the stick takes them off) · the flight plan's panel: its waypoints edited on the map, its fuel, the bingo":
-    "Plan de vol d'un avion : NAV — l'autopilote le suit (LNAV la route, VNAV ses altitudes et vitesses ; le manche les coupe) · le panneau du plan : ses points édités sur la carte, son carburant, le bingo",
+  "A plane's flight plan: NAV — the autopilot flying it (LNAV the route, VNAV its altitudes and speeds; the stick takes them off) · the flight plan's panel: its waypoints edited on the map, its fuel, the bingo; a spacecraft: its mission plan — the burns, the spheres crossed, the Δv against the tanks', executed from it":
+    "Plan de vol d'un avion : NAV — l'autopilote le suit (LNAV la route, VNAV ses altitudes et vitesses ; le manche les coupe) · le panneau du plan : ses points édités sur la carte, son carburant, le bingo ; un vaisseau : son plan de mission — les poussées, les sphères traversées, le Δv face aux réservoirs, exécuté depuis lui",
   "Prepare a flight — F-35B": "Préparer un vol — F-35B",
   Airfield: "Aérodrome",
   Start: "Départ",

@@ -30,6 +30,8 @@ import { caught } from "../debug";
 import { displayColours } from "../cockpit/lights";
 import { shownSpeed } from "./hud/model";
 import { drawGraph, type AssistGraph, type GraphPalette } from "./hud/graph";
+import { CHECKLISTS, NORMAL_CHECKLISTS } from "../game/systems";
+import { t as tx } from "../i18n";
 
 const W = 2048,
   H = 1024,
@@ -92,6 +94,13 @@ export interface ScreenData {
   runway?: RunwayView | null;
   /** the cockpit's chronometer, when it has a time (its CHRONO button — PLAN-COCKPIT K5) */
   chrono?: { s: number; running: boolean } | null;
+  /** the spacecraft's systems (X3), the checklists' steps ticked (shared with the tablet and the crew — K6), the
+   *  RCS's mode — the CKL and ECS pages' (X6a) */
+  systems?: import("../controller/systems").SystemsInfo | null;
+  ticks?: Map<string, Set<number>>;
+  rcs?: "rotate" | "translate";
+  /** the mission's elapsed time [s] (PLAN-VAISSEAUX X8 — a spacecraft's; none: an aircraft's) */
+  met?: number | null;
 }
 
 const fmtKm = (km: number) =>
@@ -128,7 +137,7 @@ export function pfdAttitude(up: readonly number[] | null): { roll: number; pitch
 }
 
 /** The pages a display can show. */
-export const PAGES = ["pfd", "orbit", "nav", "systems", "docking", "plan", "clocks", "log", "approach", "landing"] as const;
+export const PAGES = ["pfd", "orbit", "nav", "systems", "docking", "plan", "clocks", "log", "approach", "landing", "ckl", "eecom"] as const;
 export type PageId = (typeof PAGES)[number];
 /** each display's own page (its automatic one) */
 export const SLOT_PAGE: PageId[] = ["pfd", "orbit", "nav", "systems", "docking", "plan", "clocks", "log"];
@@ -143,9 +152,22 @@ const TAB_LABEL: Record<PageId, string> = {
   log: "LOG",
   approach: "APP",
   landing: "LDG",
+  ckl: "CKL",
+  eecom: "ECS",
 };
-/** the tabs' strip: two rows of five at the screen's foot (drawing units: 512 × 683 a display) */
-const TABS = { cols: 5, rows: 2, x0: 12, y0: SH - 118, w: (SLOT - 24) / 5, h: 50 } as const;
+/** the tabs' strip: two rows of six at the screen's foot (drawing units: 512 × 683 a display) */
+const TABS = { cols: 6, rows: 2, x0: 12, y0: SH - 118, w: (SLOT - 24) / 6, h: 50 } as const;
+
+/** What a touch on a page does (PLAN-VAISSEAUX X6a — the screens touched as the F-35's PCD is): a failure's
+ *  checklist step ticked, its action given, a normal checklist's step or the next list, the SAS, the RCS's mode,
+ *  a hold. */
+export type ScreenAct =
+  | { kind: "tick"; key: string; step: number }
+  | { kind: "fix"; fail: string }
+  | { kind: "nextList" }
+  | { kind: "sas" }
+  | { kind: "rcs" }
+  | { kind: "hold"; dir: "prograde" | "retrograde" };
 
 /** The tab under a point of a display (u, v: 0…1 across and down the screen, as the cabin's pick gives
  *  them), or null. */
@@ -198,6 +220,45 @@ export class CockpitScreens {
     this.lastDraw = -Infinity;
   }
 
+  /** the touch zones drawn this frame (each its display, its box in drawing units, what it does) */
+  private zones: { slot: number; x: number; y: number; w: number; h: number; act: ScreenAct }[] = [];
+  private slot = 0;
+  /** the normal checklist the CKL page shows (its index in the game's) */
+  normal = 0;
+
+  /** What a touch at (u, v) of a display does (null: nothing there — or its tabs over it). */
+  actAt(slot: number, u: number, v: number): ScreenAct | null {
+    if (this.tabs?.slot === slot && tabAt(u, v)) return null;
+    const x = (0.02 + 0.96 * u) * SLOT,
+      y = (0.02 + 0.96 * v) * SH;
+    return this.zones.find((z) => z.slot === slot && x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h)?.act ?? null;
+  }
+  /** a touch button drawn and its zone kept (none when it cannot be pressed) */
+  private button(
+    g: OffscreenCanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    label: string,
+    act: ScreenAct | null,
+    on = false,
+  ) {
+    g.fillStyle = on ? LINE : act ? PANEL : "rgba(8, 57, 74, 0.45)";
+    g.fillRect(x, y, w, h);
+    g.strokeStyle = act ? LINE : DIM;
+    g.lineWidth = 2;
+    g.strokeRect(x, y, w, h);
+    g.fillStyle = on ? BG : act ? TEXT : DIM;
+    g.font = `700 ${h > 44 ? 22 : 18}px ${FONT}`;
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.fillText(label, x + w / 2, y + h / 2 + 1, w - 10);
+    g.textAlign = "left";
+    g.textBaseline = "alphabetic";
+    if (act) this.zones.push({ slot: this.slot, x, y, w, h, act });
+  }
+
   /** The pages chosen, as the setting keeps them. */
   pagesSetting(): string {
     return this.pages.some((p) => p) ? this.pages.map((p) => p ?? "").join(",") : "";
@@ -221,6 +282,7 @@ export class CockpitScreens {
     this.lastDraw = now;
     const g = this.g;
     g.clearRect(0, 0, W, H);
+    this.zones = [];
     // (the pages as kept: a saved setting, another tab's change)
     if (d.settings.cockpitPages !== this.pagesKey) {
       this.pages = parsePages(d.settings.cockpitPages);
@@ -236,6 +298,8 @@ export class CockpitScreens {
       clocks: (g, d) => this.clocks(g, d),
       log: (g, d) => this.logScreen(g, d),
       approach: (g, d) => (d.runway ? this.approachScreen(g, d.runway) : this.none(g, "APPROACH", "— no runway in reach —")),
+      ckl: (g, d) => this.checklists(g, d),
+      eecom: (g, d) => this.eecom(g, d),
       landing: (g, d) => {
         const sf = d.info.surface as SurfaceLike | null | undefined;
         return sf ? this.landingScreen(g, d, sf) : this.none(g, "LANDING", "— no ground near —");
@@ -247,6 +311,7 @@ export class CockpitScreens {
         page[chosen ?? own](g, d, chosen === null);
         if (this.tabs?.slot === i) this.tabStrip(g, chosen, this.tabs.over);
       };
+      this.slot = i;
       g.save();
       g.translate((i % 4) * SLOT, Math.floor(i / 4) * SLOT);
       g.beginPath();
@@ -1034,6 +1099,110 @@ export class CockpitScreens {
     g.font = `600 18px ${FONT}`;
     g.fillStyle = DIM;
     g.fillText(others.length ? `+ ${others.map((q) => VESSELS[q].name).join(" + ")}` : "", 300, 90);
+    // the touch buttons (X6a): the SAS, the RCS's mode, the holds
+    const bw = (SLOT - 48) / 4;
+    this.button(g, 12, 560, bw, 46, "SAS", { kind: "sas" }, i.sas);
+    this.button(g, 20 + bw, 560, bw, 46, "RCS TR", { kind: "rcs" }, d.rcs === "translate");
+    this.button(g, 28 + 2 * bw, 560, bw, 46, "PRO", { kind: "hold", dir: "prograde" }, i.hold === "prograde");
+    this.button(g, 36 + 3 * bw, 560, bw, 46, "RETRO", { kind: "hold", dir: "retrograde" }, i.hold === "retrograde");
+  }
+
+  // ---------------------------------------------------------------------------------- CKL, ECS (X6a)
+  /** CKL: each failure's checklist, its steps touched one by one, its action once they all are; else the
+   *  normal checklists of the flight's phases, one after the other. */
+  private checklists(g: OffscreenCanvasRenderingContext2D, d: ScreenData) {
+    const S = d.systems;
+    const fail = S?.failures[0];
+    const T = d.ticks;
+    if (fail) {
+      const L = CHECKLISTS[fail.kind];
+      this.frame(g, `CKL · ${tx(L.title)}`);
+      const done = T?.get(`f:${fail.kind}`) ?? new Set<number>();
+      L.steps.forEach((st, k) => {
+        const y = 92 + k * 74;
+        const on = done.has(k);
+        this.button(g, 14, y, 52, 52, on ? "✓" : String(k + 1), fail.fixing ? null : { kind: "tick", key: `f:${fail.kind}`, step: k }, on);
+        this.wrap(g, tx(st), 78, y + 22, SLOT - 92, on ? DIM : TEXT);
+      });
+      const all = L.steps.every((_, k) => done.has(k));
+      this.button(
+        g,
+        14,
+        92 + L.steps.length * 74 + 8,
+        SLOT - 28,
+        56,
+        fail.fixing ? tx("Under way…") : tx(L.action),
+        all && !fail.fixing ? { kind: "fix", fail: fail.kind } : null,
+        false,
+      );
+      if (S && S.failures.length > 1) {
+        g.font = `600 18px ${FONT}`;
+        g.fillStyle = AMBER;
+        g.fillText(`+ ${S.failures.length - 1} ${tx("more failure(s)")}`, 18, SH - 130);
+      }
+      return;
+    }
+    const N = NORMAL_CHECKLISTS[this.normal % NORMAL_CHECKLISTS.length]!;
+    this.frame(g, `CKL · ${tx(N.title)}`);
+    const key = `n:${N.id}`;
+    const done = T?.get(key) ?? new Set<number>();
+    N.steps.slice(0, 6).forEach((st, k) => {
+      const y = 92 + k * 66;
+      const on = done.has(k);
+      this.button(g, 14, y, 48, 48, on ? "✓" : String(k + 1), { kind: "tick", key, step: k }, on);
+      this.wrap(g, tx(st), 74, y + 20, SLOT - 88, on ? DIM : TEXT);
+    });
+    this.button(g, 14, SH - 186, SLOT - 28, 50, tx("NEXT CHECKLIST ▸"), { kind: "nextList" });
+  }
+  /** a text on two lines at most within a width */
+  private wrap(g: OffscreenCanvasRenderingContext2D, text: string, x: number, y: number, w: number, colour: string) {
+    g.font = `600 19px ${FONT}`;
+    g.fillStyle = colour;
+    const words = text.split(" ");
+    let line = "",
+      n = 0;
+    for (const wd of words) {
+      const next = line ? `${line} ${wd}` : wd;
+      if (g.measureText(next).width > w && line) {
+        g.fillText(line, x, y + n * 22);
+        line = wd;
+        if (++n >= 2) return;
+      } else line = next;
+    }
+    g.fillText(line, x, y + n * 22);
+  }
+  /** ECS: the power, the air, the scrubbers; the failures under way. */
+  private eecom(g: OffscreenCanvasRenderingContext2D, d: ScreenData) {
+    const S = d.systems;
+    this.frame(g, "ECS · POWER · AIR");
+    if (!S) return this.none(g, "ECS · POWER · AIR", "— an aircraft —");
+    const share = S.battery / Math.max(S.batteryKWh, 1e-9);
+    this.bar(g, 30, 96, 70, 260, share, share < 0.1 ? RED : share < 0.25 ? AMBER : GREEN, "BATT");
+    const o2 = Math.min(1, S.o2Hours / (24 * 14));
+    this.bar(g, 130, 96, 70, 260, o2, S.o2Hours < 24 ? RED : S.o2Hours < 72 ? AMBER : GREEN, "O2");
+    const sc = Math.min(1, S.scrubDays / 14);
+    this.bar(g, 230, 96, 70, 260, sc, S.scrubDays < 1 ? RED : S.scrubDays < 3 ? AMBER : GREEN, "CO2");
+    const h = S.o2Hours;
+    this.rows(
+      g,
+      [
+        ["BATTERY", `${Math.round(share * 100)} % · ${Math.round(S.batteryKWh)} kWh`],
+        ["BALANCE", `${S.balanceKW >= 0 ? "+" : ""}${S.balanceKW.toFixed(1)} kW`, S.balanceKW < 0 ? AMBER : GREEN],
+        ["OXYGEN", !Number.isFinite(h) ? "∞" : h >= 48 ? `${(h / 24).toFixed(0)} d` : `${h.toFixed(1)} h`, h < 24 ? RED : TEXT],
+        ["SCRUBBERS", `${S.scrubDays.toFixed(1)} d`],
+        ["CREW", String(S.crew)],
+      ],
+      420,
+      TEXT,
+      34,
+      18,
+      22,
+    );
+    g.font = `700 20px ${FONT}`;
+    S.failures.slice(0, 2).forEach((f, k) => {
+      g.fillStyle = f.fixing ? AMBER : RED;
+      g.fillText(`${f.fixing ? "◐" : "▲"} ${tx(CHECKLISTS[f.kind].title)}`, 330, 120 + k * 30, SLOT - 340);
+    });
   }
 
   // ---------------------------------------------------------------------------------- 4 DOCKING
@@ -1338,6 +1507,15 @@ export class CockpitScreens {
     g.fillText(date.toISOString().slice(0, 10), 22, 226);
     g.fillText("SHIP τ", 22, 299);
     big(fmtDur(d.info.properTime * M_SECONDS), 356, "#fff4dc");
+    // (the Earth's clock ahead of the ship's — Gargantua's hours: the years gone by there — X8)
+    const gap = d.time * M_SECONDS - d.info.properTime * M_SECONDS;
+    if (gap > 60) {
+      g.font = `700 20px ${FONT}`;
+      g.fillStyle = gap > 86400 ? "#ff7a5c" : AMBER;
+      g.textAlign = "right";
+      g.fillText(`EARTH +${fmtDur(gap)}`, SLOT - 22, 299);
+      g.textAlign = "left";
+    }
     g.fillStyle = "rgba(255, 220, 160, 0.6)";
     g.font = `600 20px ${FONT}`;
     g.fillText("WARP", 22, 423);
@@ -1359,6 +1537,16 @@ export class CockpitScreens {
     ) {
       g.fillText("dτ/dt · THE SHIP'S CLOCK RATE", 22, 547);
       big(dt!.toFixed(4), 604, dt! < 0.5 ? "#ff7a5c" : dt! < 0.9 ? AMBER : "#fff4dc");
+    } else if (d.met != null) {
+      // (a spacecraft's mission elapsed time — X8)
+      g.fillText("MET", 22, 547);
+      const m = d.met;
+      const days = Math.floor(m / 86400);
+      big(
+        `${days ? `${days}d ` : ""}${String(Math.floor((m % 86400) / 3600)).padStart(2, "0")}:${String(Math.floor((m % 3600) / 60)).padStart(2, "0")}:${String(Math.floor(m % 60)).padStart(2, "0")}`,
+        604,
+        "#fff4dc",
+      );
     } else {
       g.fillText("LOCAL", 22, 547);
       const loc = new Date();

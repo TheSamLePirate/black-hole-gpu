@@ -88,6 +88,46 @@ right from any mount); points (the future path, the runway, the docking gates) w
 |---|---|
 | Relativity box | dτ/dt and its bar; the speed against the local observer, γ, the sky ahead's Doppler factor; E per unit mass — bound and the margin to escape, or escaping; the radius against the ISCO, the photon orbit and the horizon (red inside, or in the ergosphere); the tide per metre of the craft. The radial-in marker named GARGANTUA. |
 
+## The spacecraft's panels, docking aids and protections
+
+The Ranger, the Lander and the Endurance (PLAN-VAISSEAUX X0–X4, N1; the reference: [VAISSEAUX.md](VAISSEAUX.md)).
+Each craft's own panel (`VESSELS.*.space.panel`, `game/craftpanel.ts`, `controller/craftpanel.ts`,
+`ui/hud/symbology.ts drawCraftPanel`) is placed by the HUD's layout manager — left, under the top cards (it was
+first hidden under the *Target* card).
+
+| Aid | What |
+|---|---|
+| DESCENT (Lander) | The Apollo LM's: the height H and its rate, the forward · lateral speeds over the ground (`FWD · LAT`), the **hover seconds** left (the tank's Δv over the local gravity: green, amber under 60 s, red under 30 s; "> 1 h" with a scene's fictional engine), the propellant; the calls "Sixty seconds of hover left" and "Thirty seconds of hover left — land or abort". Below 15 km, not landed. |
+| The mothership (Endurance, titled ENDURANCE) | The ring (rpm, g), **each port** (free, or the craft docked: "hub, fore: Ranger"), the assembly's MASS, each docked craft's propellant. |
+| Ring | "RING 2.4 RPM → 5 · 0.20 G" while it spins up, then "RING 5.0 RPM · 0.84 G"; amber past 7 rpm ("past its structure's comfort"), its explanation (5 rpm = 0.84 g, 1 g = 5.5 rpm; match its turn to dock at the hub). The alerts go **under the docking panel** when it shows. |
+| COAS | The last 60 m of a docking: a cross on the craft's port axis, the target port a circle — green within 1°, amber within 5° (in the view looking down the axis: the hatch camera). |
+| Docking card | The **zone** — outside, in the **approach ellipsoid** (4 × 2 × 2 km in the target's orbital frame), in the **keep-out sphere** (200 m) —; the closing profile with its WP1 (220 m) and WP2 (20 m) marks; by Gargantua its lines too (range, axis · across, closing, ports' axes, rotation); ports named (hub fore · aft, rear · dorsal hatch). By a docked craft of the fleet: each one's propellant and **REFUEL · n %**. |
+| Station keeping | The **KEEP** button in the autopilots' ring (greyed with no craft within 5 km), its card: the offset from the held point, the drift, the frame (orbital LVLH, or the target's own). |
+| LPD | During the automatic landing (F7): the designated point, a cross in a circle on the ground, "LPD 2.8 km" — green while the autopilot's, amber once moved by the stick. |
+| SAS chip | The assistance level: `SAS`, `MANUAL`, `SAS · ASSISTED`, `SAS · BEGINNER`, `SAS · DRIFT HELD`; `RCS TRANSL.` in the RCS translation mode. |
+| Airless worlds | Over a world without air the automatic HUD is Space, and Approach below 5 km (no Atmosphere HUD over the Moon). |
+
+**The protections' alerts** (`game/spaceguard.ts`, `controller/spaceguard.ts`), each with its *why* and *what to do*
+(a tooltip; a click opens it), the stick or ⇧X taking back the controls:
+
+- **The ground**: amber `SINK RATE · 105 M/S · STOP 600 M` when the engines can barely still stop the craft above
+  the ground; red `AUTO-PROTECTION · GROUND · HOVER · n M/S` while the protection hovers; red too, not armed (Manual:
+  the alert only).
+- **The keep-out sphere**: amber `CLOSING n M/S · LIMIT n M/S · n M` at 1.5× the limit (0.05 m/s + 0.5 % of the
+  range); red `AUTO-PROTECTION · KEEP-OUT · HOLDING · n M/S` when station keeping takes over at 2×. A slow approach
+  on a port's axis (≤ 0.5 m/s, off by under 15 % of the range, ports facing within 15°) raises nothing: the docking
+  corridor is exempt.
+- **The systems** (X3): each failure its alarm — a red warning, then an amber `… · FIXING` during the repair — with
+  **WHY / WHAT TO DO** (its checklist's steps); `BATTERY n %`, `BATTERY FLAT · NO THRUSTERS, NO WHEELS`,
+  `O₂ n H LEFT`, `NO OXYGEN LEFT`, `CO₂ SCRUBBERS n H`.
+- **In a room** (N1): `PROXIMITY — Ben: 180 m, closing 1.5 m/s` under 200 m faster than 1 m/s (or under 1 km and a
+  minute from impact), `Traffic — …` under 2 km and 3 min; never between docked craft nor for a passenger.
+
+**The navball**: the HUD keeps its attitude ball and its radial, normal and node markers in the view; the
+"AAA" navball (prograde, normal, radial, target and node with the director and the errors in figures) is the crew
+console's *Navball* view ([CREW.md](CREW.md)) — on the HUD it is not yet made, nor the spacecraft HUD's colour and
+brightness.
+
 ## The hub's card
 
 Beside the ring of the autopilots (bottom centre), while one flies: what it does now, its figures, and what
@@ -315,8 +355,12 @@ closes.
   end the fight) · Radar ▸ (next lock, mode, drop the lock, intercept, formation on the lock) · Flight ▸ (a
   room player's wingman, AI wingmen, rejoin, formation ▸, breaks, combat orders ▸, more orders ▸) ·
   Navigation ▸ (flight plan, ILS approach, autopilot modes ▸ — orbit, hold, terrain following, tanker, fly
-  to…, aerobatics —, map, mission map, prepare a flight) · Lessons & challenges ▸ · Camera ▸. The spacecraft's
-  wheel is grouped the same way; on foot or out of a craft, the camera's.
+  to…, aerobatics —, map, mission map, prepare a flight) · Lessons & challenges ▸ · Camera ▸.
+- **The spacecraft's wheel** (`ui/spacewheel.ts`, eleven sectors, built from the craft and its state): SAS ·
+  Holds ▸ · Autopilots ▸ · Flight computer ▸ · Systems ▸ (with the Endurance's ring) · Docking ▸ · Fleet ▸ (in a
+  room, its orders) · Navigation ▸ · School & challenges ▸ · Camera ▸ · Craft ▸ (the assistance) — the aircraft's
+  entries only while the Ranger flies as a plane ([VAISSEAUX.md](VAISSEAUX.md)). On foot or out of a craft, the
+  camera's.
 
 ![The wheel, 800 px across](progress/aviation/reseau-roue.jpg)
 

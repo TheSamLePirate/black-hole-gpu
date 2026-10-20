@@ -19,4 +19,22 @@ export default {
   "View · Menu": "View · Menu",
   "Tap: the camera's view — hold: the head locked on the target · tap: the autopilot's holds — hold: the settings":
     "Appui : la vue de la caméra — maintenu : la tête verrouillée sur la cible · appui : les tenues du pilote automatique — maintenu : les réglages",
+  "A spacecraft on a controller (Ranger · Lander · Endurance)": "Un vaisseau à la manette (Ranger · Lander · Endurance)",
+  "Pitch (back: nose up) · yaw — in RCS translation: up · down · left · right":
+    "Tangage (tiré : nez en haut) · lacet — en translation RCS : haut · bas · gauche · droite",
+  "Look about — the wheel open: aims its sectors": "Regarder autour — la roue ouverte : vise ses secteurs",
+  "Throttle up · down — in RCS translation: forward · back": "Gaz plus · moins — en translation RCS : avant · arrière",
+  "Roll left · right": "Roulis gauche · droite",
+  "L3 · R3": "L3 · R3",
+  "RCS mode: rotation ⟷ translation · look ahead": "Mode RCS : rotation ⟷ translation · regard devant",
+  "SAS — the wheel open: do the sector": "SAS — la roue ouverte : faire le secteur",
+  "Tap: acknowledge · hold: stop the tumble — the wheel open: back":
+    "Appui : acquitter · maintenu : stopper la rotation — la roue ouverte : retour",
+  "Tap: dock (the rendezvous beyond 3 km) · hold: station keeping":
+    "Appui : amarrer (le rendez-vous au-delà de 3 km) · maintenu : maintien à poste",
+  "Tap: next target · hold: the wheel (let go: does the sector)": "Appui : cible suivante · maintenu : la roue (relâché : fait le secteur)",
+  "Hold prograde · retrograde · to the target · radial and normal in turn":
+    "Maintien prograde · rétrograde · vers la cible · radial et normal tour à tour",
+  "Tap: the camera's view — hold: the map · tap: the pause menu — hold: the mission plan":
+    "Appui : la vue de la caméra — maintenu : la carte · appui : le menu pause — maintenu : le plan de mission",
 } satisfies Record<string, string>;

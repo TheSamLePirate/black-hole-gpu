@@ -1686,7 +1686,8 @@ function thrustMax(this: CameraController) {
   // assembly's mass now: the craft docked to it pushed along, the propellant burnt lightening it; in the
   // air, the ambient pressure on the nozzle's exit taken off)
   const V = VESSELS[fleet.active];
-  const a = (engineThrust(s) * V.accel * V.mass * this.pressureThrust()) / fleet.massProps().mass;
+  // (its engine failed or relit on half its chambers — controller/systems.ts)
+  const a = (engineThrust(s) * V.accel * V.mass * this.pressureThrust() * this.systemsEffects().engine) / fleet.massProps().mass;
   // (and no more than its structure bears — 85 % of its load limit, the engine throttled back as the
   // propellant burnt lightens the craft: a long low-thrust transfer at 2 g once reached 9.7 g, the
   // Ranger broken up; the Cinema engine's fictional thousands of g are borne by nothing — engine.ts)

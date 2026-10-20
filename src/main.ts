@@ -1,3 +1,6 @@
+import { SystemsPage } from "./ui/systemspage";
+import type { FailureKind } from "./game/systems";
+import { holeFleet } from "./holefleet";
 import { SceneryHitboxes } from "./ui/scenery-hitboxes";
 import { planetFrame, toLocal } from "./landing";
 import { cartToGeodetic, flatteningOf, WGS84_A, WGS84_F } from "./system/ellipsoid";
@@ -64,6 +67,7 @@ import type { TitleGame } from "./ui/title/activities";
 import { TitleScreen } from "./ui/title/title";
 import { MissionSelect } from "./ui/missions";
 import { PlacePanel } from "./ui/placepanel";
+import { MissionPlanPanel } from "./ui/missionplan";
 import { RoutePanel } from "./ui/routepanel";
 import { CHALLENGES } from "./game/challenges";
 import { SCENARIOS } from "./game/scenarios";
@@ -117,6 +121,15 @@ import { skyNow } from "./system/sky-now";
 import { MISSIONS } from "./game/missions";
 import { KeyHints } from "./ui/keyhints";
 import { MenuPad } from "./ui/padnav";
+import { spaceWheel } from "./ui/spacewheel";
+import { SPACE_LESSONS, type SpaceLessonId, type SpaceStart } from "./game/spacecourse";
+import { SPACE_CHALLENGES, type SpaceChallengeId } from "./game/spacechallenges";
+import { SPACE_MISSIONS, type SpaceMission, type SpaceMissionId, spaceMissionFromHash, spaceMissionToHash } from "./game/spacemissions";
+import { spaceChallengePanel } from "./ui/spacechallenges";
+import { type SpaceMissionHost, spaceMissionPanel } from "./ui/spacemissions";
+import { netAsk } from "./ui/netask";
+import { COOP_MISSIONS, roleMission } from "./game/coopmissions";
+import { SIDE_HOLDS } from "./input/spacepad";
 import { RadialWheel, type WheelItem } from "./ui/wheel";
 import { Tablet } from "./ui/tablet";
 import { PhotoMode } from "./ui/photo";
@@ -128,14 +141,14 @@ import { POSE_KEYS } from "./controller/util";
 import { readPrefs, writePrefs } from "./game/prefs";
 import { events } from "./game/events";
 import { phaseOf, phaseText, PhaseWatcher } from "./game/phase";
-import { BODY_NAMES, bodyLook, craftRadius, isCraft, onOurSide, type Body } from "./targeting";
+import { BODY_NAMES, bodyLook, craftRadius, isCraft, isNetTarget, netTargets, onOurSide, type Body } from "./targeting";
 import { HidPads } from "./gamepad";
 import { MOUNT_KEYS, MOUNTS, mountPose, setMountVessel, shipToCamera, type Mount } from "./mounts";
 import { fleet, fleetSpinStart, fleetStart } from "./fleet";
 import { recorder } from "./game/recorder";
 import { shownSpeed } from "./ui/hud/model";
 import { CockpitScreens, tabAt } from "./ui/cockpitscreens";
-import { VESSELS } from "./vessels";
+import { VESSEL_IDS, VESSELS, type VesselId } from "./vessels";
 import { FlightHud } from "./ui/flighthud";
 import { AUTO_NAMES, HOLD_NAMES, type Auto, type Hold } from "./pilot";
 import { Mission } from "./mission";
@@ -418,7 +431,7 @@ async function main() {
   {
     const p = new URLSearchParams(location.hash.slice(1));
     const sc = p.get("scene");
-    const linked = (sc && presets[sc]) || /[#&](save|mission)=/.test(location.hash) || benchPage || (p.get("join") && settings.netMenu);
+    const linked = (sc && presets[sc]) || /[#&](save|s?mission)=/.test(location.hash) || benchPage || (p.get("join") && settings.netMenu);
     if (!linked) {
       titleScreen.open();
       bootMark("title");
@@ -1849,7 +1862,7 @@ async function main() {
         camera.setRotation("tripod");
       }
       void aimAt(pose.look ?? null, pose.off ?? [0, 0]);
-    } else if (pose) {
+    } else if (pose && pose !== "enduranceHole") {
       // (the station: at the real time now, unless the scene has its own)
       const now = pose === "iss" || pose === "fleet" || pose === "fleetSpin";
       const t = time ?? (now ? gameTimeOf(dateNow()) : sim.time);
@@ -1875,6 +1888,19 @@ async function main() {
     setMountVessel(settings.vessel);
     const starts = pose === "fleetSpin" ? fleetSpinStart(sim.time) : fleetStart(sim.time, settings.vessel);
     if ((pose === "fleet" || pose === "fleetSpin") && settings.ship && settings.vessel !== "f35") camera.flyFrom(starts[settings.vessel]);
+    // (by Gargantua, the Ranger beside the Endurance: 150 m off its fore port — controller/holeendurance.ts)
+    if (pose === "enduranceHole" && settings.ship) {
+      camera.placeByHoleEndurance(150, sim.time);
+      // (again two frames on, on the view's clock: the scene's first frames settle the flight's clock — a few
+      // hundredths of a second off it are thousands of km at a quarter of light's speed)
+      requestAnimationFrame(() => requestAnimationFrame(() => camera.placeByHoleEndurance(150)));
+      const rpm = 60 / (settings.enduranceSpin * M_SECONDS);
+      panel.toast(
+        rpm > 0.5
+          ? tf("The Endurance tumbles at {0} rpm: match its turn about its hub's axis, then dock (B: auto-dock)", rpm.toFixed(0))
+          : t("By Gargantua, 150 m off the Endurance's fore port: dock to it — its ports on the HUD's docking panel"),
+      );
+    }
     if (pose === "iss" && settings.ship) {
       // (the station's start gives the ship's own axes — its nose to the port's axis — not the view's:
       // the camera then where its mount is)
@@ -2574,6 +2600,11 @@ async function main() {
     }
     if (a === "dock" && camera.docked)
       return panel.toast(camera.netDocked ? t("Docked to another's craft — UNDOCK first") : t("Docked to the ISS — UNDOCK first"));
+    // (the station or a craft targeted beyond 3 km: the whole rendezvous, planned and flown, then docked)
+    if (a === "dock" && camera.pilot.auto !== "dock") {
+      const said = camera.rendezvousStart();
+      if (said) return panel.toast(said);
+    }
     camera.pilot.setAuto(a);
     panel.toast(camera.pilot.auto === "none" ? t("Autopilot off") : tf("Autopilot: {0}", AUTO_NAMES[a]));
   }
@@ -2591,6 +2622,10 @@ async function main() {
   }
   function pilotSas() {
     camera.pilot.sas = !camera.pilot.sas;
+    // (a spacecraft's level that imposes it: said so — Settings › Spacecraft)
+    const lv = fleet.active === "f35" ? "realistic" : settings.spaceAssist;
+    if (lv === "manual") return panel.toast(t("Manual assistance: no SAS — the turn kept until stopped by hand (Settings › Spacecraft)"));
+    if (lv === "assisted" || lv === "beginner") return panel.toast(t("SAS always on at this assistance (Settings › Spacecraft)"));
     panel.toast(camera.pilot.sas ? t("SAS on") : t("SAS off"));
   }
   function pilotRoll() {
@@ -2695,6 +2730,7 @@ async function main() {
       refreshGui();
     },
     undock: () => camera.undock(),
+    refuel: () => panel.toast(camera.refuelFromDocked()),
     throttle: (t) => {
       if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto); // taking the throttle ends the autopilot
       camera.pilot.throttle = t;
@@ -2856,6 +2892,14 @@ async function main() {
   // sky's and the log's pages
   const tablet = new Tablet(flightComputer.panel, {
     ship: () => rangerView(tools),
+    // (a spacecraft's systems — ui/systemspage.ts, controller/systems.ts)
+    systems: () =>
+      new SystemsPage({
+        info: () => camera.systemsInfo(),
+        fix: (k) => camera.systemsFix(k),
+        toast: (s) => panel.toast(s),
+        ticks: camera.sysTicks,
+      }),
     camera: camPanel!,
     sky: skyPanel,
     log: gameLog,
@@ -2932,6 +2976,8 @@ async function main() {
     }
     if (!r) return;
     gameLog.add("info", `${r.title} — ${r.letter} (${r.score.toFixed(1)} / 20)`, sim.time);
+    // (told to the room — PLAN-VAISSEAUX N4: its board)
+    netSession.shareReport(r);
   };
   events.on("pilotMessage", ({ text, t }) => {
     panel.toast(text);
@@ -3333,7 +3379,17 @@ async function main() {
               ? camera.navToggle()
               : camera.jetToggle(a === "ab" ? "ab" : a === "athr" ? "athr" : "ap"),
       ),
-    route: () => routePanel.open(),
+    spaceSystem: (_, a) =>
+      panel.toast(
+        a === "rcsMode"
+          ? camera.rcsModeToggle()
+          : a === "ringUp"
+            ? camera.ringSet(1)
+            : a === "ringDown"
+              ? camera.ringSet(-1)
+              : camera.keepKey(),
+      ),
+    route: () => openPlan(),
     airBrake: () => {
       camera.airBrake = camera.airBrake > 0 ? 0 : 1;
       panel.toast(camera.airBrake > 0 ? t("Air brake out") : t("Air brake in"));
@@ -3454,6 +3510,23 @@ async function main() {
     else if (a === "settings") (pauseMenu ??= makePauseMenu()).open();
     else keyActions[a as KeyAction]?.(new KeyboardEvent("keydown"), arg);
   };
+  // a spacecraft's pad layout (input/spacepad.ts — PLAN-VAISSEAUX X5): its keymap actions, and its own — the D-pad ▶'s
+  // holds in turn, Y held the wheel (the stick aims it, A does it, B goes back), Menu tapped the pause menu
+  camera.onSpacePadAction = (a, arg) => {
+    if (renderer.offlineActive) return;
+    if (a === "wheelOpen") {
+      wheel.open(wheelItems(), { fr: "Pilotage", en: "Flight" });
+      camera.pad.rumble(0.05, 0.2, 30);
+    } else if (a === "wheelDo") wheel.activate();
+    else if (a === "wheelBack") wheel.back();
+    else if (a === "nextTarget") nextTarget(1);
+    else if (a === "settings") (pauseMenu ??= makePauseMenu()).open();
+    else if (a === "sideHold") {
+      const i = SIDE_HOLDS.indexOf(camera.pilot.hold as (typeof SIDE_HOLDS)[number]);
+      pilotHold(SIDE_HOLDS[(i + 1) % SIDE_HOLDS.length]!);
+    } else keyActions[a as KeyAction]?.(new KeyboardEvent("keydown"), arg);
+  };
+  camera.padWheel = { isOpen: () => wheel.isOpen, aim: (v) => wheel.aim(v) };
   // the cockpit's controls under the pointer (PLAN-COCKPIT K2): the same actions as the keys', the lights'
   // settings, the chronometer; a tip beside the pointer
   const cockpitDeps: CockpitDeps = {
@@ -3494,8 +3567,24 @@ async function main() {
     act: (id, v) => cockpitAct(cockpitDeps, id, v),
     // (the screens' pages: their tabs over the screen under the pointer — PLAN-COCKPIT K3)
     screenHover: (slot, u, v) => cockpitScreens.hoverScreen(slot, u, v),
-    screenTab: (_, u, v) => tabAt(u, v) !== null,
+    // (a tab, or a page's touch button — PLAN-VAISSEAUX X6a)
+    screenTab: (slot, u, v) => tabAt(u, v) !== null || cockpitScreens.actAt(slot, u, v) !== null,
     screenClick: (slot, u, v) => {
+      // (a page's touch button: its act — the checklists ticked as the tablet's, the SAS, the RCS, a hold)
+      const a = cockpitScreens.actAt(slot, u, v);
+      if (a) {
+        if (a.kind === "tick") {
+          const done = camera.sysTicks.get(a.key) ?? new Set<number>();
+          camera.sysTicks.set(a.key, done);
+          if (done.has(a.step)) done.delete(a.step);
+          else done.add(a.step);
+        } else if (a.kind === "fix") panel.toast(camera.systemsFixChecked(a.fail as FailureKind));
+        else if (a.kind === "nextList") cockpitScreens.normal++;
+        else if (a.kind === "sas") pilotSas();
+        else if (a.kind === "rcs") panel.toast(camera.rcsModeToggle());
+        else if (a.kind === "hold") pilotHold(camera.pilot.hold === a.dir ? "none" : a.dir);
+        return;
+      }
       const p = cockpitScreens.clickScreen(slot, u, v);
       if (p === undefined) return;
       settings.cockpitPages = cockpitScreens.pagesSetting();
@@ -4069,62 +4158,122 @@ async function main() {
       },
     ];
   };
-  const wheelItems = (): WheelItem[] => {
+  /** The spacecraft's wheel (PLAN-VAISSEAUX X5 — ui/spacewheel.ts): the craft's holds, autopilots, systems, docking,
+   *  fleet; the Ranger's aircraft entries only while it flies as a plane. */
+  const spaceWheelNow = (): WheelItem[] => {
     const P = camera.pilot;
+    const V = VESSELS[fleet.active];
+    const say = (m: string | null | undefined) => m && panel.toast(m);
+    const ring = fleet.active === "endurance" ? camera.ringInfo() : null;
+    const hole = cameraFrame(settings).region === "hole";
+    const near = hole ? new Set(camera.holeCrafts(camera.viewTime()).map((q) => q.id)) : null;
+    const vessels = VESSEL_IDS.filter(
+      (v) => v !== "f35" && (!near || v === fleet.active || fleet.assembly(fleet.active).includes(v) || near.has(v)),
+    ).map((id) => ({ id, name: VESSELS[id].name }));
+    const flipSetting = (k: "navLights" | "landingLights") => {
+      settings[k] = !settings[k];
+      onSettingsChange([k]);
+      refreshGui();
+    };
+    return spaceWheel(
+      {
+        vessel: fleet.active as Exclude<VesselId, "f35">,
+        planeMode: !!V.flies && settings.flightMode === "plane",
+        lands: V.lands,
+        sas: P.sas,
+        hold: P.hold,
+        auto: P.auto,
+        docked: camera.docked,
+        rcsTranslate: camera.rcsMode === "translate",
+        gearDown: camera.gearDown,
+        navLights: settings.navLights,
+        landingLights: settings.landingLights,
+        nodes: camera.plan.nodes.length,
+        mapOpen: flightHud.mapView,
+        ringRpm: ring ? ring.rpm : null,
+        vessels,
+        assist: settings.spaceAssist,
+        failures: camera.systemsInfo()?.failures.length ?? 0,
+        course: !!camera.course,
+        challenge: camera.chal?.status === "run",
+        mission: !!camera.mission || !!camera.spaceMission,
+        route: camera.nav.on.l,
+        ils: !!camera.ilsRun,
+        room: !!netPanel.net?.room,
+        netTarget: isNetTarget(settings.target) ? netTargets.name(settings.target as never) : null,
+      },
+      {
+        sas: pilotSas,
+        hold: pilotHold,
+        auto: pilotAuto,
+        keep: () => say(camera.keepKey()),
+        undock: () => camera.undock(),
+        refuel: () => say(camera.refuelFromDocked()),
+        recover: () => say(camera.recoverStart()),
+        computer: (tab) => {
+          if (!flightHud.mapView) flightHud.toggleMapView();
+          flightComputer.show(true);
+          tablet.setPage("computer");
+          flightComputer.openTab(tab);
+        },
+        missionPlan: () => missionPlan.open(),
+        execute: () => pilotAuto(camera.transfer || camera.pilot.auto === "transfer" ? "transfer" : "node"),
+        gear: () => setGear(!camera.gearDown),
+        lights: (w) => flipSetting(w === "nav" ? "navLights" : "landingLights"),
+        rcsMode: () => say(camera.rcsModeToggle()),
+        systems: () => {
+          if (!flightHud.mapView) flightHud.toggleMapView();
+          tablet.setPage("systems");
+        },
+        ack: () => flightHud.acknowledge(),
+        ring: (d) => say(camera.ringSet(d)),
+        nextTarget: () => nextTarget(1),
+        vessel: (id) => {
+          settings.vessel = id;
+          refreshGui();
+          scheduleUrlSave();
+        },
+        map: () => flightHud.toggleMapView(),
+        place: () => placePanel.open(),
+        assist: (lv) => {
+          settings.spaceAssist = lv;
+          onSettingsChange(["spaceAssist"]);
+          refreshGui();
+          panel.toast(
+            tf("Assistance: {0}", { manual: t("Manual"), realistic: t("Realistic"), assisted: t("Assisted"), beginner: t("Beginner") }[lv]),
+          );
+        },
+        flightMode: () => keyActions.flightMode(new KeyboardEvent("keydown")),
+        hudKind: () => keyActions.hudKind(new KeyboardEvent("keydown")),
+        precision: () => keyActions.precision(new KeyboardEvent("keydown")),
+        school: () => flightSchool(instrHost),
+        // (a spacecraft's challenges — X10)
+        challenges: () =>
+          spaceChallengePanel(
+            (id) => panel.toast(spaceChallengePlace(id)),
+            netPanel.net?.room ? (id) => panel.toast(netSession.proposeChallenge(id)) : undefined,
+          ),
+        // (a spacecraft's missions and the Interstellar campaign — X11)
+        missions: () => spaceMissionPanel(spaceMissionHost),
+        // (the room's fleet — N1: its panel, an order to the pilot targeted)
+        roomFleet: () => netPanel.openTab("fleet"),
+        fleetOrder: (o) => {
+          const slot = isNetTarget(settings.target) ? Number(String(settings.target).slice(4)) : -1;
+          panel.toast(slot >= 0 ? netSession.spaceOrder(slot, o) : t("Target another pilot's craft first"));
+        },
+        nextView: () => keyActions.mount(new KeyboardEvent("keydown")),
+        photo: openPhoto,
+        replay: (trailer) => replayOpen(trailer),
+        route: () => routePanel.open(),
+        missionMap: () => missionMap.open(),
+        ilsToggle: () => panel.toast(camera.ilsRun ? (camera.ilsOff(), t("ILS approach off")) : camera.ilsStart()),
+        hub: () => flightHub.open(),
+      },
+    );
+  };
+  const wheelItems = (): WheelItem[] => {
     if (flying() && fleet.active === "f35") return jetWheel();
-    if (flying())
-      return [
-        { label: { fr: "SAS", en: "SAS" }, key: "T", on: P.sas, run: pilotSas },
-        { label: { fr: "Prograde", en: "Prograde" }, key: "1", on: P.hold === "prograde", run: () => pilotHold("prograde") },
-        { label: { fr: "Rétrograde", en: "Retrograde" }, key: "2", on: P.hold === "retrograde", run: () => pilotHold("retrograde") },
-        { label: { fr: "Vers la cible", en: "To the target" }, key: "7", on: P.hold === "target", run: () => pilotHold("target") },
-        {
-          label: { fr: "Autopilote", en: "Autopilot" },
-          on: P.auto !== "none",
-          sub: (
-            [
-              ["hover", { fr: "Stationnaire", en: "Hover" }, "8"],
-              ["circularize", { fr: "Circulariser", en: "Circularize" }, "9"],
-              ["approach", { fr: "Approche", en: "Approach" }, "0"],
-              ["land", { fr: "Atterrir", en: "Land" }, "F7"],
-              ["takeoff", { fr: "Décoller", en: "Take off" }, "U"],
-              ["dock", { fr: "Amarrer", en: "Dock" }, "B"],
-              ["entry", { fr: "Rentrée", en: "Entry" }, "⇧G"],
-            ] as const
-          ).map(([a, label, key]) => ({ label, key, on: P.auto === a, run: () => pilotAuto(a) })),
-        },
-        // (the ways flown and the places, then the camera: wheels of their own — the main one kept to a glance)
-        {
-          label: { fr: "Navigation", en: "Navigation" },
-          on: flightHud.mapView || camera.nav.on.l || !!camera.ilsRun,
-          sub: [
-            { label: { fr: "Carte", en: "Map" }, key: "M", on: flightHud.mapView, run: () => flightHud.toggleMapView() },
-            { label: { fr: "Placer", en: "Place" }, run: () => placePanel.open() },
-            ...(VESSELS[fleet.active].flies
-              ? [
-                  { label: { fr: "Plan de vol", en: "Flight plan" }, key: "⇧O", on: camera.nav.on.l, run: () => routePanel.open() },
-                  { label: { fr: "Carte de mission", en: "Mission map" }, on: !!camera.mission, run: () => missionMap.open() },
-                  {
-                    label: { fr: "Approche ILS", en: "ILS approach" },
-                    on: !!camera.ilsRun,
-                    run: () => panel.toast(camera.ilsRun ? (camera.ilsOff(), t("ILS approach off")) : camera.ilsStart()),
-                  },
-                  { label: { fr: "Préparer un vol", en: "Prepare a flight" }, run: () => flightHub.open() },
-                  { label: { fr: "Défis", en: "Challenges" }, on: camera.chal?.status === "run", run: () => challengePanel.open() },
-                ]
-              : []),
-          ],
-        },
-        {
-          label: { fr: "Caméra", en: "Camera" },
-          sub: [
-            { label: { fr: "Vue suivante", en: "Next view" }, key: "V", run: () => keyActions.mount(new KeyboardEvent("keydown")) },
-            { label: { fr: "Photo", en: "Photo" }, run: openPhoto },
-            { label: { fr: "Replay", en: "Replay" }, run: () => replayOpen(false) },
-            { label: { fr: "Bande-annonce", en: "Trailer" }, run: () => replayOpen(true) },
-          ],
-        },
-      ];
+    if (flying()) return spaceWheelNow();
     return [
       { label: { fr: "Vue", en: "View" }, key: "V", run: () => nextView(1) },
       { label: { fr: "Regarder la cible", en: "Look at target" }, key: "C", on: settings.lookAt, run: toggleLookAt },
@@ -4505,6 +4654,13 @@ async function main() {
   flightHud.onPlace = () => placePanel.open();
   // a plane's flight plan (ui/routepanel.ts, PLAN-F35 F8): its waypoints on the map, NAV flying it
   const routePanel = new RoutePanel({ camera, toast: (s) => panel.toast(s) });
+  // (the fleet's Endurance on Gargantua's side, near: drawn at its true size — controller/holeendurance.ts)
+  holeFleet.source = () => camera.holeCraft();
+  // a spacecraft's mission plan (ui/missionplan.ts, PLAN-VAISSEAUX X1e): its timeline, its Δv, executed from it
+  const missionPlan = new MissionPlanPanel({ camera, toast: (s) => panel.toast(s), planner: () => openMissions() });
+  /** ⇧O: the F-35's — or a craft flown as a plane in the air — flight plan; a spacecraft's mission plan */
+  const openPlan = () =>
+    fleet.active === "f35" || (camera.jetFigures() && camera.airFlight.inAir) ? routePanel.open() : missionPlan.open();
   // a flight prepared (ui/flighthub.ts): the F-35 at an airfield, its hour, its weather, its fuel, its plan
   const hubHost: HubHost = {
     tools,
@@ -4653,6 +4809,106 @@ async function main() {
     demo: (id) => lessonPlace(id, true),
     tryIt: (id) => lessonPlace(id, false),
     guided: (id) => lessonPlace(id, "guided"),
+    spaceLesson: (id, mode) => spaceLessonPlace(id, mode),
+  };
+  /** A spacecraft's start set up (PLAN-VAISSEAUX X9–X10: a lesson's, a challenge's): its scene, its craft, its orbit,
+   *  ground or hover, its target. */
+  const placeSpaceStart = async (S: SpaceStart) => {
+    const wait = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
+    camera.spaceCourseOff();
+    camera.spaceChal = null;
+    camera.spaceMission = null;
+    // (a flight saved — a mission made where one flew: just that)
+    if (S.save) {
+      tools.load(S.save, { quiet: true });
+      await wait(1200);
+      return;
+    }
+    if (S.preset) {
+      // (the ISS's distance a scene's own: lent to it for this start)
+      const P = presets[S.preset] as (Preset & { issDistance?: number }) | undefined;
+      const was = P?.issDistance;
+      if (P && S.iss !== undefined) P.issDistance = S.iss;
+      try {
+        tools.preset(S.preset);
+      } finally {
+        if (P && S.iss !== undefined) P.issDistance = was;
+      }
+      await wait(1500);
+    }
+    if (settings.vessel !== S.vessel) {
+      settings.vessel = S.vessel;
+      refreshGui();
+      await wait(900);
+    }
+    if (!settings.ship) actions["btn-ship"]?.();
+    if (S.orbit) tools.orbit(S.orbit.body, { altKm: S.orbit.altKm, inc: S.orbit.inc ?? 0 });
+    if (S.land) tools.land(S.land.body, S.land.lat, S.land.lon);
+    if (S.hover) tools.hoverOver(S.hover.body, S.hover.lat, S.hover.lon, S.hover.altKm);
+    if (S.near) tools.near(S.near.body, { altKm: S.near.altKm, rM: S.near.rM });
+    if (S.wormhole) tools.wormhole(S.wormhole);
+    if (S.target) tools.target(S.target);
+    await wait(1200);
+  };
+  /** A space lesson's scene set up (PLAN-VAISSEAUX X9 — game/spacecourse.ts), then its run begun on the controller. */
+  const spaceLessonPlace = (id: SpaceLessonId, mode: "guided" | "demo" | "try"): string => {
+    const L = SPACE_LESSONS.find((x) => x.id === id);
+    if (!L) return t("No such lesson");
+    void placeSpaceStart(L.start).then(() => panel.toast(camera.spaceCourseBegin(id, mode)));
+    return tf("Lesson: {0}", t(L.title));
+  };
+  /** A spacecraft's challenge set up (X10), then measured. */
+  const spaceChallengePlace = (id: SpaceChallengeId): string => {
+    const C = SPACE_CHALLENGES.find((x) => x.id === id);
+    if (!C) return t("No such challenge");
+    void placeSpaceStart(C.start).then(() => panel.toast(camera.spaceChallengeBegin(id)));
+    return tf("Challenge: {0}", t(C.title));
+  };
+  /** A spacecraft's mission set up (X11) — one of ours by its id, one made —, then its objectives watched. */
+  const spaceMissionPlace = (id: SpaceMissionId | SpaceMission): string => {
+    const M = typeof id === "string" ? SPACE_MISSIONS.find((x) => x.id === id) : id;
+    if (!M) return t("No such mission");
+    void placeSpaceStart(M.start).then(() => panel.toast(camera.spaceMissionBegin(M)));
+    return tf("Mission: {0}", t(M.title));
+  };
+  const spaceMissionLink = (M: SpaceMission) => `${location.origin}${location.pathname}${spaceMissionToHash(M)}`;
+  const spaceMissionHost: SpaceMissionHost = {
+    go: (id) => panel.toast(spaceMissionPlace(id)),
+    fly: (M) => panel.toast(spaceMissionPlace(M)),
+    here: () => {
+      const v = settings.vessel;
+      if (!settings.ship || (v !== "ranger" && v !== "lander" && v !== "endurance")) {
+        panel.toast(t("A mission is made in a spacecraft"));
+        return null;
+      }
+      return { vessel: v, save: tools.snapshot("mission start") };
+    },
+    // (in a room — N5: the co-op missions, a role chosen)
+    coop: (id, role) => (netPanel.net?.room ? panel.toast(netSession.proposeCoop(id, role)) : panel.toast(t("Co-op missions: in a room"))),
+    inRoom: () => !!netPanel.net?.room,
+    share: (M) => {
+      const url = spaceMissionLink(M);
+      void navigator.clipboard
+        ?.writeText(url)
+        .then(() => panel.toast(t("The mission's link copied")))
+        .catch(() => panel.toast(url));
+    },
+  };
+  // (a space lesson's acts that need the game's tools: a manoeuvre planned, a mission, the plan executed, the warp)
+  camera.onSpaceCourseAct = (a) => {
+    const run = (name: string, args: Record<string, unknown>) => {
+      const tool = tarsTools.find((x) => x.name === name);
+      if (tool) void Promise.resolve(tool.run(args as never, new AbortController().signal)).catch((e) => panel.toast(String(e)));
+    };
+    if ("maneuver" in a) run("plan_maneuver", { ...a.maneuver, where: a.maneuver.where ?? "now", execute: false });
+    else if ("mission" in a) run("plan_mission", { target: a.mission.target, arrival: a.mission.arrival, execute: false });
+    else if ("execute" in a) setTimeout(() => pilotAuto(camera.transfer || camera.pilot.auto === "transfer" ? "transfer" : "node"), 600);
+    else if ("warp" in a) setTimeout(() => run("time", { warp: a.warp }), 1500);
+    else if ("launchGoal" in a) camera.launchGoal = { altKm: a.launchGoal.altKm, incDeg: a.launchGoal.incDeg };
+  };
+  camera.onLessonSay = (text) => {
+    panel.toast(text);
+    voice.say({ text, speaker: "tars", priority: 2, ttl: 20_000 });
   };
   const instructorPanel = new InstructorPanel(instrHost);
   camera.onInstrCall = (text, fix) => {
@@ -4759,6 +5015,16 @@ async function main() {
     toast: (s) => panel.toast(s),
     jetIn: () => jetIn,
     sceneTime: () => sim.time * M_SECONDS,
+    // (a co-op mission's role — PLAN-VAISSEAUX N5: flown as a mission of its own)
+    coopStart: (id, role) => {
+      const M = COOP_MISSIONS.find((m) => m.id === id);
+      const R = M ? roleMission(M, role) : null;
+      return R ? spaceMissionPlace(R) : t("No such mission");
+    },
+    // (a room challenge accepted — PLAN-VAISSEAUX N4: its start set up here)
+    spaceChallenge: (id) => spaceChallengePlace(id as SpaceChallengeId),
+    // (another's order, his request — PLAN-VAISSEAUX N: a card to accept or refuse)
+    ask: (text, answer, testid) => netAsk(text, answer, testid),
     // (the crew's orders: through the game's tools, called directly — docs/PLAN-CREW-ACTIONS.md)
     crewTools: () => tarsTools,
     // (a mid-air collision: in a match's fight, shot down; else the craft destroyed — the room's way: craftLost)
@@ -6583,6 +6849,26 @@ async function main() {
         guided: (id: LessonId) => lessonPlace(id, "guided"),
         /** the lesson flown now: its step, its time, what is left of it, how long stalled; the last one's end */
         state: () => camera.courseState(),
+        /** the space school's lesson set up and begun (PLAN-VAISSEAUX X9) */
+        space: (id: SpaceLessonId, mode: "guided" | "demo" | "try") => spaceLessonPlace(id, mode),
+      },
+      /** the spacecraft's challenges (PLAN-VAISSEAUX X10): their panel, one set up and begun */
+      spaceChallenges: {
+        open: () =>
+          spaceChallengePanel(
+            (id) => panel.toast(spaceChallengePlace(id)),
+            netPanel.net?.room ? (id) => panel.toast(netSession.proposeChallenge(id)) : undefined,
+          ),
+        go: (id: SpaceChallengeId) => spaceChallengePlace(id),
+      },
+      /** the spacecraft's missions and the Interstellar campaign (PLAN-VAISSEAUX X11): their panel, one set up and begun */
+      spaceMissions: {
+        open: () => spaceMissionPanel(spaceMissionHost),
+        go: (id: SpaceMissionId) => spaceMissionPlace(id),
+        /** one made (the editor's, a link's) set up and begun */
+        fly: (M: SpaceMission) => spaceMissionPlace(M),
+        /** a mission's link (#smission=…) */
+        link: (M: SpaceMission) => spaceMissionLink(M),
       },
     },
     net: netPanel,
@@ -7166,6 +7452,10 @@ async function main() {
           runway: camera.runwayView(),
           chrono:
             cockpitChrono.running || cockpitChrono.seconds() > 0 ? { s: cockpitChrono.seconds(), running: cockpitChrono.running } : null,
+          systems: camera.systemsInfo(),
+          ticks: camera.sysTicks,
+          rcs: camera.rcsMode ?? "rotate",
+          met: fleet.active !== "f35" && Number.isFinite(camera.metT0) ? sim.time * M_SECONDS - camera.metT0 : null,
         })
       ) {
         renderer.ship.updateScreens(cockpitScreens.canvas);
@@ -7465,8 +7755,31 @@ async function main() {
           throttle: info.throttle,
           dv: camera.spent * C_MPS,
           fuel: info.engine.fuel ? info.engine.fuel.fraction : null,
+          // (a spacecraft's channels — PLAN-VAISSEAUX X8)
+          ...(fleet.active === "f35"
+            ? {}
+            : (() => {
+                const Y = info.systems;
+                const dk = info.dock;
+                const b = camera.fcBudget().dv;
+                return {
+                  dvLeft: Number.isFinite(b) ? b : null,
+                  dvPlan: (info.plan?.nodes ?? []).reduce((a, n) => a + Math.hypot(...n.dv), 0) * C_MPS,
+                  battery: Y ? Y.battery / Math.max(Y.batteryKWh, 1e-9) : null,
+                  o2: Y && Number.isFinite(Y.o2Hours) ? Y.o2Hours : null,
+                  dockRange: dk ? dk.range : null,
+                  dockClosing: dk ? dk.closing : null,
+                  earthGap: Math.max(0, sim.time * M_SECONDS - camera.properTime * M_SECONDS),
+                };
+              })()),
         });
       }
+      // (a spacecraft's phases reported as they end — PLAN-VAISSEAUX X8: ascent, insertion, rendezvous, entry)
+      camera.phaseReportStep(status ?? null);
+      // (a space lesson's frame — X9 —, a challenge's — X10)
+      camera.spaceCourseFrame(dt, status ?? null);
+      camera.spaceChallengeFrame(dt, status ?? null);
+      camera.spaceMissionFrame(dt, status ?? null);
       netSession.instruments(info, status ?? null);
       flightComputer.show(flightHud.mapView);
       tablet.setVisible(flightHud.mapView);
@@ -7561,13 +7874,24 @@ async function main() {
     } catch (e) {
       panel.toast(tf("That link's mission could not be read: {0}", (e as Error).message));
     }
+    // (a shared spacecraft's mission — X11: #smission=…, flown once the title is gone)
+    let spaceLinked: SpaceMission | null = null;
+    try {
+      spaceLinked = spaceMissionFromHash(hash);
+    } catch (e) {
+      panel.toast(tf("That link's mission could not be read: {0}", (e as Error).message));
+    }
     const last = autosave.get();
     // (the flight saved last loaded behind the title screen: Continue only lifts it — not when a launch was chosen
     // while the game loaded: its own scene then the only one placed and compiled)
     const pendingLaunch = titleScreen.pending;
     try {
       if (shared) panel.toast(tf("Shared flight: {0}", tools.load(shared)));
-      else if (linked) {
+      else if (spaceLinked) {
+        applyPreset(scene && presets[scene] ? scene : "game:artemis");
+        const M = spaceLinked;
+        void splash.gone.then(() => panel.toast(spaceMissionPlace(M)));
+      } else if (linked) {
         applyPreset(scene && presets[scene] ? scene : "game:artemis");
         const spec = linked;
         void splash.gone.then(() => briefMission(spec, () => airMissions.fly(spec)));

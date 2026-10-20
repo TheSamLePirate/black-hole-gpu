@@ -52,6 +52,13 @@ const NAMES: Record<RecKey, { fr: string; en: string }> = {
   throttle: { fr: "Gaz", en: "Throttle" },
   dv: { fr: "Δv dépensé", en: "Δv spent" },
   fuel: { fr: "Propergol", en: "Propellant" },
+  dvLeft: { fr: "Δv restant", en: "Δv left" },
+  dvPlan: { fr: "Δv du plan", en: "Δv of the plan" },
+  battery: { fr: "Batterie", en: "Battery" },
+  o2: { fr: "Oxygène", en: "Oxygen" },
+  dockRange: { fr: "Distance d'amarrage", en: "Docking range" },
+  dockClosing: { fr: "Vitesse de rapprochement", en: "Closing rate" },
+  earthGap: { fr: "Temps écoulé sur Terre", en: "Time gone by on Earth" },
 };
 
 /** The flight's recorded channels as series, over the last `seconds` (x: seconds ago). */

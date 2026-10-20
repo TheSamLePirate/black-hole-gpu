@@ -18,7 +18,9 @@ reste entier : rien ne se connecte tant que le joueur ne demande pas une salle, 
    rôle — **Pilote**, **Spectateur** ou **Instruments** ; ou simplement en ouvrant le lien. Un téléphone ou une
    tablette : l'onglet **Écrans** affiche un **QR code** à scanner.
 5. **En salle**, le badge en haut à gauche (● CODE · joueurs · latence) rouvre le panneau : onglets **Équipage**
-   (Suivre, À côté, volumes), **Match** (combats, courses, atterrissages), **Voix** (micro), **Écrans**.
+   (Suivre, À côté, volumes), **Match** (combats, courses, atterrissages), **Voix** (micro), **Écrans**, et pour les
+   vaisseaux **Flotte** (les vaisseaux de la salle, les ordres, le partage, monter à bord) et **Résultats** (le
+   classement de la salle).
 6. **Quitter la salle** en bas du panneau ; **Reprendre mon engin** au retour dans une salle.
 
 ## Les salles (R0)
@@ -200,7 +202,8 @@ monte dans le F-35 de l'autre (sa vue à moins de 0,1 m de lui, posé : aucun fa
 8 m de lui, son propre F-35 retrouvé à 14 km à 0,1 m près.
 
 Pas encore : l'herbe désactivée, les autres à pied ne sont dessinés que si vous marchez aussi ; le passager a
-la vue du pilote (pas de second siège modélisé).
+la vue du pilote (pas de second siège modélisé). En orbite, monter à bord d'un vaisseau amarré, les commandes de
+copilote et la passation du manche sont venus avec PLAN-VAISSEAUX N3 (plus bas, *Les vaisseaux ensemble*).
 
 ## Ensemble dans l'espace (R6)
 
@@ -227,8 +230,9 @@ le ×100 d'Ana tenu à ×1 jusqu'à ce que Ben accepte, puis 500 s de scène à 
 deux, les deux à moins d'une seconde ; Ben ciblé : les 168 m du HUD = ceux de la vue ; à un quart d'orbite : un
 marqueur à 6 400 km.
 
-Pas encore : un pas qui suive le temps propre (la dilatation de Gargantua : R8) ; un changement de date en
-salle.
+Tranché (PLAN-VAISSEAUX N6) : une seule horloge de salle, pas de pas qui suive le temps propre — le τ de chacun
+sur son étiquette (R8) ; un pilote en poussée retient le warp, et le panneau dit qui. Pas encore : un changement de
+date en salle.
 
 ## S'amarrer ensemble, le monde persistant (R7)
 
@@ -250,8 +254,9 @@ l'Endurance d'Ana : accroché, tenu à moins d'un millimètre de là où son eng
 l'autopilote DOCK de 25 m à la capture ; hors de l'axe à 0,5 m/s : « Contact avec l'Endurance d'Ana · 0,42 m/s »,
 sa part reçue ; Ana partie : son Endurance sur son orbite, Ben s'y amarre ; Ana revenue dessus, à 3,6 m de Ben.
 
-Pas encore : un engin libre partagé (l'Endurance de la salle) avec des baux ; la masse de l'assemblage pour
-l'hôte ; le train et les feux d'un Ranger distant.
+Pas encore (toujours après PLAN-VAISSEAUX N) : un engin libre partagé (l'Endurance de la salle) avec des baux —
+il faut des identifiants de vaisseau plutôt qu'un vaisseau par joueur ; la masse de l'assemblage pour l'hôte ; le
+dessin du train et des feux d'un Ranger distant (le drapeau `F_LIGHTS` est envoyé).
 
 ## Près de Gargantua (R8)
 
@@ -269,6 +274,80 @@ Ben revenu près de la Terre : Ana signalée sur la bouche avec le rythme de son
 
 Pas encore : les marqueurs déviés par la lentille au loin (ils pointent en ligne droite) ; le train et les feux
 d'un Ranger distant.
+
+## Les vaisseaux ensemble (PLAN-VAISSEAUX N1–N6)
+
+Le jeu propre aux vaisseaux en salle ([VAISSEAUX.fr.md](VAISSEAUX.fr.md), *Jouer ensemble* ; les planches
+`docs/progress/vaisseaux/N1.md` … `N6.md`). Ce qui est vérifié à la réception : l'état de la flotte (`stel` : un
+champ faux, et le message est ignoré), les quantités données (finies, positives), les comptes rendus (`rpt`), les
+ordres du copilote (leur schéma, comme ceux de l'équipage) et le bloc `others` des instruments (borné, sa couleur
+vérifiée).
+
+- **La flotte** (N1, `net/spacefleet.ts`) : chaque pilote aux commandes d'un vaisseau envoie **`stel`** une fois
+  par seconde — le vaisseau, le corps de sa sphère, son altitude et son état de vol (orbite, posé, échappement, trou
+  de ver…), son Δv restant, ses pannes non réparées, son amarrage, son O₂ et sa batterie, son côté du trou de ver.
+  L'onglet **Flotte** du panneau les liste, soi d'abord, puis du plus proche au plus loin : où, Δv (en km/s pour les
+  réservoirs du jeu), consommables, pannes, distance, vitesse de rapprochement ▼ ou d'éloignement ▲ (un
+  déplacement instantané ne compte pas comme une vitesse).
+- **Les ordres** (`sorder` / `sorder-ack`) : « Rejoins-moi », « Maintiens-toi sur moi », « Amarre-toi à moi »,
+  depuis l'onglet Flotte ou la roue du vaisseau (Flotte › Flotte de la salle, puis le pilote ciblé). L'autre reçoit
+  une carte (Accepter / Refuser, 30 s) ; accepté, son vaisseau cible le nôtre et son autopilote s'amarre ou maintient
+  à poste s'il est à sa portée (3 km), sinon il cible et dit de planifier le rendez-vous ; la réponse revient dans
+  le panneau de celui qui a donné l'ordre.
+- **La proximité** : « PROXIMITÉ » sous 200 m à plus de 1 m/s, ou sous 1 km et moins d'une minute de l'impact ;
+  « Trafic » sous 2 km et 3 min ; jamais entre vaisseaux amarrés ni pour un passager ; une alerte par vaisseau et
+  par 15 s au plus.
+- **Le partage entre vaisseaux amarrés l'un à l'autre** (N2, `net/spaceshare.ts`) : **`xask` / `xgive`** — des
+  ergols, de l'électricité, de l'oxygène demandés depuis l'onglet Flotte, autant que son réservoir peut encore en
+  contenir ; la carte chez l'autre ; accepté, il donne sans jamais descendre sous **25 % de sa propre capacité** —
+  son client retire, celui du receveur ajoute dans la limite de ce qu'il contient ; les quantités doivent être
+  finies et positives, dites dans leur unité (t ou kg, kWh, kg d'O₂) ; les ergols seulement dans les scènes qui les
+  comptent. **`xtgt`** envoie sa cible (si l'on visait son vaisseau, il vise le nôtre) ; **`xplan`** son plan de
+  mission (12 poussées au plus, à leurs heures sur l'horloge de la salle, les passées écartées). Mesuré
+  (`net-share`) : Ben à 10 kWh en demande 50, Ana 2 000 → 1 950 kWh, Ben 60.
+- **À bord, le copilote, les commandes** (N3) : amarré au vaisseau d'un autre en orbite, **Monter à bord** (l'onglet
+  Flotte, ou ⇧K) — son passager, toutes ses vues et ses instruments, son propre vaisseau laissé amarré (⇧K pour y
+  revenir) ; les onglets Flotte disent « à bord : Ben ». Les boutons de **copilote** du passager — SAS, prograde,
+  rétrograde, tenue coupée, maintien à poste, autopilote coupé, anneau + et −, exécuter le plan — passent par le
+  chemin des écrans d'équipage (**`crew-cmd`**, validés par leur schéma, au rythme de l'équipage), sous le verrou
+  d'équipage du pilote ; la réponse revient (« Copilote : Anneau : 5 tr/min demandés »). **`helm-ask` /
+  `helm`** : le passager demande les commandes, le pilote accepte (un refus : `helm-no`) ; le passager prend le
+  vaisseau là où il le voyait (la trace du pilote, relative à son corps et à l'horloge de la salle) avec ses ergols,
+  sa batterie et son oxygène ; l'ancien pilote devient son passager, un événement **`board`** avec `gone: true`
+  disant à la salle que son ancien vaisseau a disparu (plus dessiné, plus amarrable ni heurtable). Dans notre
+  univers seulement. Mesuré (`net-crew`) : Ben pilote l'Endurance à 80 m de là où serait celle d'Ana (≈ 10 ms de
+  Kepler à 7,7 km/s).
+- **Comptes rendus et défis de salle** (N4, `net/roomboard.ts`) : tout compte rendu volé en salle — leçon, défi,
+  mission, compte rendu de phase — part à tous en **`rpt`** (un toast chez chacun), avec une référence stable
+  (`challenge:dock-clock`, `mission:iss`, `lesson:holds`) lue dans la langue de chacun, la médaille et le résultat
+  brut d'un défi ; vérifiés : type, note de 0 à 20, référence, médaille, mesure. L'onglet **Résultats** classe le
+  meilleur de chaque pilote par chose volée (un défi par son résultat, le plus bas devant ; le reste par la note ;
+  sa propre ligne en bleu). **Proposer à la salle** sur la carte d'un défi (**`rchal`** / **`rchal-in`**) : ceux
+  qui acceptent sont placés au même départ et sont des **fantômes** l'un pour l'autre tant qu'ils le volent tous
+  deux — un nom, jamais un vaisseau à heurter ni à amarrer ; un pilote qui a fini cesse d'en être un ; la bannière
+  de l'onglet dit qui le vole.
+- **Les missions coopératives à rôles** (N5, `game/coopmissions.ts`) : « La Lune ensemble » (Endurance — l'orbite
+  · Lander — la descente) et « Le sauvetage ensemble » (Endurance — arrêter la vrille · Ranger — l'amarrage),
+  proposées depuis la section « En coopération, dans la salle » du panneau des missions (**`coop`** /
+  **`coop-in`**, un pilote par rôle, le premier qui accepte) ; chaque objectif et la fin de chaque rôle partent en
+  **`coopst`** ; l'onglet Résultats montre chaque rôle, son pilote et sa progression (« 2/2 ✓ »). Gagnée quand tous
+  les rôles sont finis, perdue dès que l'un finit sans ses objectifs ; le compte rendu de la mission va au tableau
+  de la salle ; un pilote qui part libère son rôle (« libre », « Prendre le rôle »).
+- **Le temps, le son, la carte du crew** (N6) : la salle tourne au warp du pilote le plus lent et un pilote en
+  poussée le retient — « ×10 demandé — en attente de Ben (en poussée) » sous l'horloge, « retenu par Ben (en
+  poussée) » dans le panneau (la poussée lue dans sa télémétrie) ; le vaisseau le plus proche qui pousse à moins de
+  3 km s'entend comme un grondement à sa place (le volume suit sa manette ; plus clair dans l'air, sourd dans le
+  vide) ; le bloc **`others`** des instruments (8 vaisseaux au plus autour du même corps, en km, vérifiés couleur
+  comprise) met les autres vaisseaux de la salle sur la vue ORBITE de la console crew.
+
+Mesuré à deux navigateurs (`net-fleet`, `net-share`, `net-crew`, `net-board`, `net-coop`, `net-time` ; trois pour
+`net-time`, avec un écran crew) : les ordres, les transferts, le copilote et la passation, un défi de salle classé
+(« 1. Ben 20,0/20 · 🥇 2,9 s »), une mission coopérative gagnée sur les deux écrans et un rôle libéré, Ana qui
+entend Ben pousser à 400 m.
+
+Pas encore : l'Endurance de salle avec bail, monter à bord depuis le vaisseau hôte vers l'invité amarré, le
+contrôle de mission comme rôle compté, la reprise d'un rôle après une reconnexion, les autres vaisseaux sur la
+carte 3D du crew, les messages vocaux enregistrés derrière le trou de ver.
 
 ## Comment ça marche
 
@@ -295,7 +374,8 @@ deux pages à 0,3 ms près.
 
 ## Tests
 
-De bout en bout aussi : `tests/e2e/net-gargantua` (près de Gargantua, par le trou de ver), `tests/e2e/net-dock` (s'amarrer ensemble, les contacts, le monde persistant), `tests/e2e/net-space` (en orbite ensemble, le warp de la salle, les cibles), `tests/e2e/net-walk` (à pied ensemble, un passager), `tests/e2e/net-moon` (à pied sur la Lune, À côté à pied), `tests/e2e/net-formation` (deux Mac en patrouille, la dérive), `tests/e2e/net-formation-ap` (le pilote automatique de formation : rejoindre, virer, accélérer, couper, de loin), `tests/e2e/net-flight` (deux F-35 : vus à 8 km, sur le radar, le lien direct, À côté —
+De bout en bout aussi : `tests/e2e/net-fleet`, `net-share`, `net-crew`, `net-board`, `net-coop`, `net-time` (les
+vaisseaux ensemble, PLAN-VAISSEAUX N1–N6), `tests/e2e/net-gargantua` (près de Gargantua, par le trou de ver), `tests/e2e/net-dock` (s'amarrer ensemble, les contacts, le monde persistant), `tests/e2e/net-space` (en orbite ensemble, le warp de la salle, les cibles), `tests/e2e/net-walk` (à pied ensemble, un passager), `tests/e2e/net-moon` (à pied sur la Lune, À côté à pied), `tests/e2e/net-formation` (deux Mac en patrouille, la dérive), `tests/e2e/net-formation-ap` (le pilote automatique de formation : rejoindre, virer, accélérer, couper, de loin), `tests/e2e/net-flight` (deux F-35 : vus à 8 km, sur le radar, le lien direct, À côté —
 la patrouille, le même écart vu des deux côtés —, la postcombustion vue). Unitaires : `tests/net-core.test.ts` (les échantillons, l'horloge sous 200 ms et 5 % de pertes, Hermite au
 centimètre, le lissage, le vol du robot), `tests/net-rooms.test.ts` (un vrai serveur : salles, limites, mots
 de passe, la place reprise à la reconnexion, la suppression par le propriétaire, les salles gardées après un

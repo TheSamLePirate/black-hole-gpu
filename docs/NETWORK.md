@@ -18,7 +18,8 @@ loaded only then.
    **Spectator** or **Instruments**; or just open the link. A phone or a tablet: the **Screens** tab shows a **QR
    code** to scan.
 5. **In a room**, the badge at the top left (● CODE · players · latency) opens the panel again: tabs **Crew**
-   (Follow, Beside, volumes), **Match** (fights, races, landings), **Voice** (microphone), **Screens**.
+   (Follow, Beside, volumes), **Match** (fights, races, landings), **Voice** (microphone), **Screens**, and for the
+   spacecraft **Fleet** (the room's craft, orders, sharing, going aboard) and **Results** (the room's board).
 6. **Leave the room** at the panel's foot; **Back to my craft** when you come back to a room.
 
 ## Rooms (R0)
@@ -196,7 +197,8 @@ on it within 0.1 m, landed: no false lift-off called), gets off 8 m from it, his
 within 0.1 m.
 
 Not yet: with the grass turned off, the others on foot are drawn only while you walk too; a passenger's
-seat is the pilot's view (no second seat modelled).
+seat is the pilot's view (no second seat modelled). In orbit, going aboard a docked craft, the copilot's controls
+and the controls handed over came with PLAN-VAISSEAUX N3 (below, *Spacecraft together*).
 
 ## Together in space (R6)
 
@@ -220,7 +222,8 @@ Measured on kerr-mini (`tests/e2e/net-space`): two Rangers 200 m apart in a 400 
 formation kept (169 m); Ben slows to ×10 then ×1: at once for both, both within 1 s; Ben targeted: the HUD's
 168 m = the view's; a quarter orbit away: a marker 6 400 km off.
 
-Not yet: a pace following the proper time (Gargantua's dilation: R8); a date change in a room.
+Decided (PLAN-VAISSEAUX N6): one room clock, no pace following the proper time — each one's τ shown on his tag
+(R8); a pilot burning holds the warp, and the panel says who. Not yet: a date change in a room.
 
 ## Docking together, the persistent world (R7)
 
@@ -241,8 +244,9 @@ Ana moved 1 km: Ben with her (1.5 cm); undocked: 0.2 m apart 4 s on; the DOCK au
 capture; off the axis at 0.5 m/s: "Contact with Ana's Endurance · 0.42 m/s", her share received; Ana gone:
 her Endurance on its orbit, Ben docks to it; Ana back on it, 3.6 m from Ben.
 
-Not yet: a shared free craft (the room's own Endurance) with leases; the assembly's mass for the host; a
-remote Ranger's gear and lamps.
+Not yet (still after PLAN-VAISSEAUX N): a shared free craft (the room's own Endurance) with leases — it needs
+craft ids rather than one craft a player; the assembly's mass for the host; a remote Ranger's gear and lamps drawn
+(the `F_LIGHTS` flag is sent).
 
 ## By Gargantua (R8)
 
@@ -258,6 +262,69 @@ Measured on kerr-mini (`tests/e2e/net-gargantua`): two Rangers about Miller, eac
 back by the Earth: Ana tagged on the mouth with her clock's rate.
 
 Not yet: the markers bent by the lens far off (they point straight); a remote Ranger's gear and lamps.
+
+## Spacecraft together (PLAN-VAISSEAUX N1–N6)
+
+The spacecraft's own play in a room ([VAISSEAUX.md](VAISSEAUX.md), *Playing together*; the sheets
+`docs/progress/vaisseaux/N1.md` … `N6.md`). What is validated on receipt: the fleet's state (`stel`: a wrong field
+and the message is dropped), the amounts given (finite, positive), the reports (`rpt`), the copilot's orders (their
+schema, as the crew's) and the instruments' `others` block (bounded, its colour checked).
+
+- **The fleet** (N1, `net/spacefleet.ts`): each pilot in a spacecraft sends **`stel`** once a second — the craft,
+  the body of its sphere, its altitude and flight state (orbit, landed, escape, wormhole…), its Δv left, its
+  unrepaired failures, its docking, its O₂ and battery, its side of the wormhole. The panel's **Fleet** tab lists
+  them, oneself first, then nearest first: where, Δv (km/s for the game's tanks), consumables, failures, range and
+  closing ▼ or opening ▲ speed (a jump does not count as a speed).
+- **Orders** (`sorder` / `sorder-ack`): *Come to me*, *Hold on me*, *Dock to me*, from the Fleet tab or the craft's
+  wheel (Fleet › Room fleet, then the pilot targeted). The other gets a card (Accept / Refuse, 30 s); accepted, his
+  craft targets ours and his autopilot docks or keeps station when within its reach (3 km), else it targets and
+  says to plan the rendezvous; the answer comes back to the giver's panel.
+- **Proximity**: "PROXIMITY" under 200 m closing faster than 1 m/s, or under 1 km and less than a minute from
+  impact; "Traffic" under 2 km and 3 min; never between docked craft nor for a passenger; once a craft per 15 s.
+- **Sharing between craft docked to each other** (N2, `net/spaceshare.ts`): **`xask` / `xgive`** — propellant,
+  power, oxygen asked from the Fleet tab, as much as one's tank can still hold; the other's card; accepted, he
+  gives without ever going under **25 % of his own capacity** — his client takes out, the receiver's adds within
+  what it holds; the amounts must be finite and positive, told in their unit (t or kg, kWh, kg of O₂); propellant
+  only in the scenes that count it. **`xtgt`** sends one's target (aiming at his craft, he aims at ours);
+  **`xplan`** one's mission plan (up to 12 burns, at their times on the room's clock, the past ones dropped).
+  Measured (`net-share`): Ben at 10 kWh asks 50, Ana 2 000 → 1 950 kWh, Ben 60.
+- **Aboard, the copilot, the controls** (N3): docked to another's craft in orbit, **Go aboard** (the Fleet tab, or
+  ⇧K) — his passenger, every view and instrument his, one's own craft left docked (⇧K back to it); the Fleet tabs
+  say "aboard: Ben". The passenger's **copilot** buttons — SAS, prograde, retrograde, hold off, station keeping,
+  autopilot off, ring + and −, execute the plan — go by the crew screens' path (**`crew-cmd`**, checked by their
+  schema, at the crew's rate), under the pilot's crew lock; the answer comes back ("Copilot: Ring: 5 rpm asked").
+  **`helm-ask` / `helm`**: the passenger asks for the controls, the pilot accepts; the passenger takes the craft
+  where he saw it (the pilot's track, relative to his body and the room's clock) with its propellant, battery and
+  oxygen (a refusal is `helm-no`); the former pilot rides as his passenger, a **`board`** event with `gone: true`
+  telling the room his old craft is gone (no longer drawn, dockable nor struck). In our universe only. Measured
+  (`net-crew`): Ben flies the Endurance 80 m from where Ana's would be (≈ 10 ms of Kepler at 7.7 km/s).
+- **Reports and room challenges** (N4, `net/roomboard.ts`): every report flown in a room — lesson, challenge,
+  mission, phase report — goes to all as **`rpt`** (a toast at each), with a stable reference
+  (`challenge:dock-clock`, `mission:iss`, `lesson:holds`) read in each one's language, a challenge's medal and raw
+  result; checked: kind, grade 0–20, reference, medal, measure. The **Results** tab ranks each pilot's best per
+  thing flown (a challenge by its result, lowest first; the rest by the grade; one's row in blue). **Propose to
+  the room** on a challenge's card (**`rchal`** / **`rchal-in`**): those who accept are put at the same start and
+  are **ghosts** to each other while both fly it — a name, never a craft to strike or dock to; a pilot done stops
+  being one; the tab's banner says who flies it.
+- **Co-op missions with roles** (N5, `game/coopmissions.ts`): *The Moon together* (Endurance — the orbit · Lander
+  — the descent) and *The rescue together* (Endurance — stop the tumble · Ranger — the docking), proposed from the
+  missions panel's *Co-op, in the room* (**`coop`** / **`coop-in`**, one pilot a role, the first who accepts);
+  each objective and each role's end sent as **`coopst`**; the Results tab shows each role, its pilot and its
+  progress ("2/2 ✓"). Won when every role is done, lost as soon as one ends without its objectives; the mission's
+  report to the room's board; a pilot leaving frees his role ("free", *Take the role*).
+- **Time, sound, the crew's map** (N6): the room runs at the slowest pilot's warp and a pilot burning holds it —
+  "×10 asked — waiting for Ben (burning)" under the clock, "held by Ben (burning)" in the panel (burning read from
+  his telemetry); the nearest craft burning within 3 km is heard as a rumble at its place (its throttle the
+  volume; clearer in air, dull in vacuum); the instruments' **`others`** block (up to 8 craft about the same body,
+  in km, checked colour included) puts the room's other craft on the crew console's ORBIT view.
+
+Measured on two browsers (`net-fleet`, `net-share`, `net-crew`, `net-board`, `net-coop`, `net-time`; three for
+`net-time` with a crew screen): the orders, the transfers, the copilot and the handover, a room challenge ranked
+("1. Ben 20.0/20 · 🥇 2.9 s"), a co-op mission won on both screens and a role freed, Ana hearing Ben burn 400 m off.
+
+Not yet: the room's own Endurance on a lease, boarding from the host to its docked guest, mission control as a
+counted co-op role, a role taken back after reconnecting, the other craft on the crew's 3D map, recorded voice
+messages behind the wormhole.
 
 ## How it works
 
@@ -283,7 +350,8 @@ late (95 %: 27 ms), the others shown 60–75 ms late, the two pages' clocks with
 
 ## Tests
 
-End to end too: `tests/e2e/net-gargantua` (by Gargantua, through the wormhole), `tests/e2e/net-dock` (docking together, contacts, the persistent world), `tests/e2e/net-space` (in orbit together, the room's warp, targets), `tests/e2e/net-walk` (on foot together, a passenger's ride), `tests/e2e/net-moon` (on foot on the Moon, Beside on foot), `tests/e2e/net-formation` (two Macs in formation, the drift), `tests/e2e/net-formation-ap` (the formation's autopilot: rejoin, turn, speed-up, let go, from afar), `tests/e2e/net-flight` (two F-35s: seen 8 km off, on the radar, the direct link, Beside —
+End to end too: `tests/e2e/net-fleet`, `net-share`, `net-crew`, `net-board`, `net-coop`, `net-time` (spacecraft
+together, PLAN-VAISSEAUX N1–N6), `tests/e2e/net-gargantua` (by Gargantua, through the wormhole), `tests/e2e/net-dock` (docking together, contacts, the persistent world), `tests/e2e/net-space` (in orbit together, the room's warp, targets), `tests/e2e/net-walk` (on foot together, a passenger's ride), `tests/e2e/net-moon` (on foot on the Moon, Beside on foot), `tests/e2e/net-formation` (two Macs in formation, the drift), `tests/e2e/net-formation-ap` (the formation's autopilot: rejoin, turn, speed-up, let go, from afar), `tests/e2e/net-flight` (two F-35s: seen 8 km off, on the radar, the direct link, Beside —
 formation, the same gap seen by both —, the afterburner seen). Unit: `tests/net-core.test.ts` (the samples, the clock under 200 ms and 5 % lost, the Hermite within a
 centimetre, the smoothing, the bot's flight), `tests/net-rooms.test.ts` (a real server: rooms, limits,
 passwords, a reconnection's slot, the owner's delete, the rooms kept across a restart). End to end:

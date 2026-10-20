@@ -108,7 +108,7 @@ function fcContext(
       mu: b.mass * M_METRES * c * c,
       R: b.radius * M_METRES,
       ...rel(nav.X, nav.V),
-      pole: unitV(spinAxis(id)) as KV3,
+      pole: unitV(spinAxis(id, nav.t)) as KV3,
     };
     const T = s.target as string;
     let st: { X: Vec3; V: Vec3 } | null = null;
@@ -717,7 +717,7 @@ function approach(
   const tu = fr.env.normal?.(T) ?? unitV(T);
   // (the site's north: the body's pole on it — ours: the spin axis; Gargantua's worlds: their z)
   const nav = this.ourNav(cam);
-  const pole: Vec3 = nav ? unitV(spinAxis(fr.body)) : [0, 0, 1];
+  const pole: Vec3 = nav ? unitV(spinAxis(fr.body, nav.t)) : [0, 0, 1];
   const north = unitV(lin(pole, 1, tu, -dot3(pole, tu)));
   const east = cross(north, tu);
   const hd = (site.rwy ?? 0) * D;
@@ -1107,7 +1107,7 @@ function rolloutSteer(this: CameraController, upL: Vec3, dt: number, yawIn: numb
   const D = Math.PI / 180;
   const T = fr.place(site);
   const tu = fr.env.normal?.(T) ?? unitV(T);
-  const pole = unitV(spinAxis(fr.body));
+  const pole = unitV(spinAxis(fr.body, this.nowTime()));
   const north = unitV(lin(pole, 1, tu, -dot3(pole, tu)));
   const east = cross(north, tu);
   const hd = (site.rwy ?? 0) * D;

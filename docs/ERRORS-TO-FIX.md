@@ -7,6 +7,10 @@ et la correction proposée. Une entrée corrigée est retirée (ou marquée corr
 
 ## E1 — `heightAt` : « Cannot read properties of undefined (reading 'NaN') » après chaque poussée
 
+**Corrigée** (2026-10-18, branche `vaisseaux-aaa`, PLAN-VAISSEAUX X0) : la correction 1 était déjà en place
+(`pilot.ts` ramène le régime à 0 sous 10⁻⁶) ; la 2 est faite — `controller/motion.ts` `unitOf` met la poussée à
+l'échelle avant d'en prendre la longueur (aux deux endroits), test `tests/spaceassist.test.ts`.
+
 **Constatée le 2026-10-04**, sur le Mac mini (scripts/remote.ts), dans les vols réels orbite → piste
 (`scripts/live-entry.ts`) : 4 vols sur 4 (Edwards ×1, Le Bourget ×3), toujours **2 erreurs**, toujours
 **à la fin de la poussée de désorbitation** (1 min 27–29 de vol réel). Code concerné inchangé depuis HEAD

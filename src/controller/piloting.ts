@@ -1,3 +1,4 @@
+import { RING } from "./ring";
 import { tunnelEntrySide } from "../system/wormhole-map";
 import { ASSIST } from "./assistlevel";
 import { timeRate } from "../clock";
@@ -157,6 +158,7 @@ function setPilot(this: CameraController, on: boolean) {
  * caches). Before, a second glide began as the first had ended — mid-approach, gear up, braking.
  */
 function newFlight(this: CameraController) {
+  this.metT0 = Number.NaN;
   this.gStrain.reset();
   this.character.stop();
   // (the view the new flight's own: a spectator out — walking or not — let go, its glide with it)
@@ -689,7 +691,8 @@ function stepMount(this: CameraController, dt: number) {
   // (a teleport's view carried back to where it was, blended away)
   if (this.viewCarry) pose = this.applyCarry(pose ?? to, dt);
   // (a plane's flight shakes its views — the seat's, the chase's: camshake.ts)
-  if (isPlane(fleet.active) && s.flightShake > 0 && !this.cinematic && this.piloting) pose = this.shakePose(pose ?? to, dt);
+  // (and every spacecraft's — its rocket, the plasma, a contact, the ring: PLAN-VAISSEAUX X7)
+  if (s.flightShake > 0 && !this.cinematic && this.piloting) pose = this.shakePose(pose ?? to, dt);
   this.mountEff = pose;
   if (s.ship && !this.cinematic) this.reorient(S0, this.shipMatrix());
   this.lastPose = this.shipPose();
@@ -809,6 +812,14 @@ function pilotInput(this: CameraController, pad: ReturnType<GamepadInput["poll"]
     i.roll = clamp(i.roll + J.roll, -1, 1);
     i.yaw = clamp(i.yaw + J.yaw, -1, 1);
     i.throttle = clamp(i.throttle + J.throttle, -1, 1);
+  } else if (this.spacePadOut) {
+    // a spacecraft's pad (input/spacepad.ts): the left stick pitch and yaw, the bumpers the roll, the triggers the
+    // throttle — in the RCS's translation mode, they translate as the keys do (spaceassist.ts translateKeys)
+    const SP = this.spacePadOut;
+    i.pitch = clamp(i.pitch + SP.pitch, -1, 1);
+    i.yaw = clamp(i.yaw + SP.yaw, -1, 1);
+    i.roll = clamp(i.roll + SP.roll, -1, 1);
+    i.throttle = clamp(i.throttle + SP.throttle, -1, 1);
   } else if (pad && !this.padControls.flightOwned(pad.id)) {
     // left stick: pitch (pull back = nose up) and yaw; LB/RB: roll; RT/LT: throttle — the built-in mapping (a
     // player's own profile for this pad flies it instead: PLAN-HOTAS)
@@ -1029,6 +1040,10 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   this.radarStep(dtPilot);
   // (the Auto-GCAS and the Auto-ACAS: the ground and the others foreseen — controller/gcas.ts)
   this.gcasStep(dtPilot);
+  // (a spacecraft's level of assistance: its SAS law, the recovery, the drift held near a craft — controller/spaceassist.ts)
+  this.spaceAssistStep(inp, dtPilot);
+  // (its protections: the ground, the keep-out sphere — controller/spaceguard.ts)
+  this.spaceGuardStep();
   // (the F-35B's STOVL mode — controller/stovl.ts —: the thrust's direction, the hover law; its input the stick's
   // left to the pilot — none when the hover law takes it)
   const vt = this.stovlStep(cam, inp, dtPilot);
@@ -1097,6 +1112,10 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   }
   const out = this.pilot.step(
     {
+      rate: this.spaceRate,
+      // (the Endurance's ring: its turn held about its axis — controller/ring.ts)
+      spinHold: VESSELS[fleet.active].ring && this.ringRpm != null ? (this.ringRpm * 2 * Math.PI) / 60 : null,
+      spinAcc: RING.accel,
       air: airCtx,
       sf: sfCtx,
       thrustDir: vt.thrustDir,
@@ -1149,7 +1168,15 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
         return unitV(nv.toRep(figureUp(nv.ref, nv.X, nv.t))) as [number, number, number];
       })(),
       // (a turbofan's spool always: its own lag, whatever the scene's engine)
-      rcs: VESSELS[fleet.active].turbofan ? 0 : 1,
+      // (its thrusters: none on an aircraft; a quad isolated, a flat battery — controller/systems.ts)
+      ...(() => {
+        const e = this.systemsEffects();
+        return {
+          rcs: VESSELS[fleet.active].turbofan ? 0 : e.powerOut ? 0 : e.rcs,
+          wheelsOff: e.powerOut,
+          drift: e.drift.some((x) => x !== 0) ? e.drift : null,
+        };
+      })(),
       spoolK:
         s.engine === "crew" || VESSELS[fleet.active].turbofan
           ? 1 - Math.exp(-((s.animate ? timeRate(s) * dt : 0) * Msec) / VESSELS[fleet.active].spool)
@@ -1276,7 +1303,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
     // (the F-35's tanks never empty, the setting on)
     if (e.sigma > 0 && !(fleet.active === "f35" && s.f35InfiniteFuel))
       fleet.fuel[fleet.active] = Math.max(0, left - fuelFlow(TF, thrust, dry, e.sigma, e.mach) * dTau * Msec);
-  } else if (fuelOn(s)) this.spent += (w / Math.max(this.pressureThrust(), 0.05)) * (this.jetModes.ab ? JET.abFlow / JET.abThrust : 1);
+  } else if (fuelOn(s) && !(fleet.active !== "f35" && s.spaceInfinitePropellant))
+    this.spent += (w / Math.max(this.pressureThrust(), 0.05)) * (this.jetModes.ab ? JET.abFlow / JET.abThrust : 1);
   if (burn && this.nodeBurning) this.nodeDone = Math.max(this.nodeDone + along(burn.dir), 0);
   this.dockCheck();
   this.measureSpin();
@@ -1348,7 +1376,7 @@ function horizonAxes(this: CameraController, cam: ReturnType<typeof cameraFrame>
     const id = nav.ref;
     if (id === "sun" || !solarBody(id)) return null;
     const up = figureUp(id, nav.X, nav.t);
-    const ax = spinAxis(id);
+    const ax = spinAxis(id, nav.t);
     let north = lin(ax, 1, up, -dot3(ax, up));
     if (Math.hypot(...north) < 1e-9) north = lin([0, 0, 1], 1, up, -up[2]);
     return { up: unitV(nav.toRep(up)), north: unitV(nav.toRep(unitV(north))) };
@@ -1373,7 +1401,7 @@ function sfFrame(this: CameraController, cam: ReturnType<typeof cameraFrame>) {
     if (id === "sun" || !b) return null;
     const P = nav.refPos;
     const up = figureUp(id, nav.X, nav.t);
-    const ax = spinAxis(id);
+    const ax = spinAxis(id, nav.t);
     let north = lin(ax, 1, up, -dot3(ax, up));
     if (Math.hypot(...north) < 1e-9) north = lin([0, 0, 1], 1, up, -up[2]);
     north = unitV(north);

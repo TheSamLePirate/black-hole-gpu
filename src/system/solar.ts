@@ -926,6 +926,17 @@ export function spinAngle(b: SolarBody, t: number): number {
  */
 const spinMemo = new Map<string, Vec3>();
 const EARTH_RATE = (2 * Math.PI) / ((23.9344696 * 3600) / M_SECONDS);
+/** A body's pole of the date (unit, the frame's), kept a day of the scene's time: the precession's and the IAU's slow
+ *  turn — not recomputed each frame (the Earth's precession-nutation is costly). */
+const poleMemo = new Map<string, { t: number; N: Vec3 }>();
+export function poleOfDate(b: SolarBody, t: number): Vec3 {
+  const m = poleMemo.get(b.id);
+  if (m && Math.abs(t - m.t) < 86400 / M_SECONDS) return m.N;
+  const N = bodyAxes(b, t)[2];
+  poleMemo.set(b.id, { t, N });
+  return N;
+}
+
 export function spinVector(b: SolarBody, t?: number): Vec3 {
   if (t !== undefined) {
     const N = bodyAxes(b, t)[2];

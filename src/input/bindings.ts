@@ -267,6 +267,10 @@ const ACTION_LABELS: Partial<Record<KeyAction, Text>> = {
     fr: "Systèmes du jet (postcombustion, pilote automatique, auto-manette)",
     en: "Jet systems (afterburner, autopilot, autothrottle)",
   },
+  spaceSystem: {
+    fr: "Systèmes du vaisseau (maintien de position, mode RCS)",
+    en: "Spacecraft systems (station keeping, RCS mode)",
+  },
   route: { fr: "Plan de vol", en: "Flight plan" },
   combat: { fr: "Combat (arme, leurres)", en: "Combat (weapon, decoys)" },
   gear: { fr: "Train d'atterrissage", en: "Landing gear" },

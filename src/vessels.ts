@@ -62,6 +62,19 @@ export interface VesselDef {
   centre: V3;
   viewDist: number;
   ports: Port[];
+  /** a craft turned about its long axis for its crew's weight (the Endurance — the whole of it turns, as in the film):
+   *  its ring's radius [m] (PLAN-VAISSEAUX X2a) */
+  ring?: { radius: number };
+  /** a spacecraft's own HUD (docs/PLAN-VAISSEAUX-AAA.md, X4; game/craftpanel.ts): its panel — the Lander's descent, the
+   *  Endurance's mothership's */
+  space?: { panel?: "descent" | "mothership" };
+  /** the cabin drawn from inside (PLAN-VAISSEAUX X6b–c): the Ranger's own (scripts/build-cockpit.ts — "the endurance
+   *  lander cockpit": the film's three craft share it), placed in this craft's frame by its offset [m] (the
+   *  Ranger's: none); none: its hull seen from within */
+  cabin?: { offset: V3 };
+  /** its voice (PLAN-VAISSEAUX X7): the main engine's pitch, the thrusters' tone, the structure's rumble (× the
+   *  Ranger's: a lively one; the Lander heavy and low; the Endurance deep and slow) */
+  sound?: { pitch: number; rcs: number; sub: number };
   /** a ground under it: its gear (the Endurance has none — it never lands) */
   lands: boolean;
   jets: JetDef[];
@@ -280,7 +293,12 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     viewDist: 62,
     // the round hatch on its back, amidships (scripts/build-lander.ts)
     ports: [{ name: "dorsal hatch", centre: [0, 5.55, 0.58], axis: [0, 1, 0] }],
+    space: { panel: "descent" },
     lands: true,
+    // (the Ranger's cabin behind its nose's windows: the pilot's eye at its cockpit's — X6b)
+    cabin: { offset: [-1.0, 1.95, 7.3] },
+    // (a descent stage's heavy throttled engine, its thrusters' deeper hiss)
+    sound: { pitch: 0.72, rcs: 0.8, sub: 0.8 },
     jets: LANDER_JETS,
     flame: 1.6,
     flies: true,
@@ -305,9 +323,9 @@ export const VESSELS: Record<VesselId, VesselDef> = {
       ctrl: [0.08, 0.04, 0.15],
     },
     mounts: {
-      // (behind the nose's windows — the Lander's cabin is not modelled: the hull seen from within)
-      cockpit: { eye: [0, 3.4, 10.4], aim: [0, 3.1, 30] },
-      cabin: { eye: [0, 3.4, 10.4], aim: [0, 3.4, 30] },
+      // (behind the nose's windows: the Ranger's cabin placed there — its pilot's eye on the Lander's)
+      cockpit: { eye: [0, 3.4, 10.4], aim: [0, 3.17, 20.3] },
+      cabin: { eye: [0, 3.4, 10.4], aim: [0, 3.4, 20.3] },
       quarter: { eye: [10.5, 8.5, -19], aim: [-5, 3.5, 22] },
       chase: { eye: [0, 9.5, -24], aim: [0, 3, 20] },
       dorsal: { eye: [0, 7.6, -7.5], aim: [0, 5, 30] },
@@ -339,7 +357,14 @@ export const VESSELS: Record<VesselId, VesselDef> = {
       { name: "hub, fore", centre: [0, 0, 9.3], axis: [0, 0, 1] },
       { name: "hub, aft", centre: [0, 0, -10.7], axis: [0, 0, -1] },
     ],
+    // (its modules' ring about the hub: the radius of gyration about the axis)
+    space: { panel: "mothership" },
+    ring: { radius: 30 },
     lands: false,
+    // (the Ranger's cabin in its command module: the pilot's eye at its cockpit's — X6c)
+    cabin: { offset: [-1.0, -0.25, 4.4] },
+    // (a ship of a hundred metres: its engines' voice an octave down, its thrusters a low roar, its frame groaning)
+    sound: { pitch: 0.48, rcs: 0.6, sub: 0.6 },
     jets: ENDURANCE_JETS,
     flame: 2.2,
     flies: false,
@@ -363,9 +388,9 @@ export const VESSELS: Record<VesselId, VesselDef> = {
       ctrl: [0, 0, 0],
     },
     mounts: {
-      // (in the hub, looking ahead along it)
-      cockpit: { eye: [0, 1.2, 7.5], aim: [0, 1.0, 40] },
-      cabin: { eye: [0, 1.2, 7.5], aim: [0, 1.2, 40] },
+      // (in the hub's command module, looking ahead along it: the Ranger's cabin placed there)
+      cockpit: { eye: [0, 1.2, 7.5], aim: [0, 0.97, 17.4] },
+      cabin: { eye: [0, 1.2, 7.5], aim: [0, 1.2, 17.4] },
       quarter: { eye: [46, 26, -62], aim: [-10, 0, 40] },
       chase: { eye: [0, 30, -80], aim: [0, 0, 40] },
       dorsal: { eye: [0, 38, -12], aim: [0, 30, 60] },

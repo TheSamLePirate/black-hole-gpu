@@ -158,7 +158,7 @@ export function rangerStatus(s: Settings, cam: CameraController, info: Info, t: 
     const B = solarState(ref, t);
     const r = sub(info.X as V3, B.pos as V3),
       v = sub(info.V as V3, B.vel as V3);
-    const el = elements(b.mass, r, v, equatorAxes(ref));
+    const el = elements(b.mass, r, v, equatorAxes(ref, t));
     const soi = soiOf(ref, t);
     const f = flatteningOf(ref);
     const altitude = altitudeOver(ref, info.X as V3, t);

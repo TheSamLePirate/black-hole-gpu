@@ -1,4 +1,6 @@
-// TARS's aviation knowledge (docs/PLAN-AVIATION-AAA.md, I1): the pages written for him (docs/aviation/en, fr — the
+// TARS's aviation and spaceflight knowledge (docs/PLAN-AVIATION-AAA.md, I1; PLAN-VAISSEAUX X9 — docs/spatial: orbits,
+// manoeuvres, rendezvous and docking, entry and landing, systems and emergencies, relativity): the pages written for
+// him (docs/aviation/en, fr — the
 // F-35's systems and limits, basic flying, energy, the dogfight, formation flying, the carrier, the ILS, the
 // emergencies, the radar, the weapons, the traffic), cut into their sections, searched by their words (accents and
 // case aside, the rarer words weighing more, a section's title thrice, a word's start enough) and read. Bundled with
@@ -26,6 +28,18 @@ import fr_ils from "../../docs/aviation/fr/ils.md" with { type: "text" };
 import fr_radar from "../../docs/aviation/fr/radar.md" with { type: "text" };
 import fr_traffic from "../../docs/aviation/fr/traffic.md" with { type: "text" };
 import fr_weapons from "../../docs/aviation/fr/weapons.md" with { type: "text" };
+import en_sp_orbits from "../../docs/spatial/en/orbits.md" with { type: "text" };
+import en_sp_maneuvers from "../../docs/spatial/en/maneuvers.md" with { type: "text" };
+import en_sp_docking from "../../docs/spatial/en/rendezvous-docking.md" with { type: "text" };
+import en_sp_entry from "../../docs/spatial/en/entry-landing.md" with { type: "text" };
+import en_sp_systems from "../../docs/spatial/en/systems-emergencies.md" with { type: "text" };
+import en_sp_relativity from "../../docs/spatial/en/relativity.md" with { type: "text" };
+import fr_sp_orbits from "../../docs/spatial/fr/orbits.md" with { type: "text" };
+import fr_sp_maneuvers from "../../docs/spatial/fr/maneuvers.md" with { type: "text" };
+import fr_sp_docking from "../../docs/spatial/fr/rendezvous-docking.md" with { type: "text" };
+import fr_sp_entry from "../../docs/spatial/fr/entry-landing.md" with { type: "text" };
+import fr_sp_systems from "../../docs/spatial/fr/systems-emergencies.md" with { type: "text" };
+import fr_sp_relativity from "../../docs/spatial/fr/relativity.md" with { type: "text" };
 
 export type KnowledgeLang = "en" | "fr";
 export const KNOWLEDGE_PAGES = [
@@ -40,6 +54,13 @@ export const KNOWLEDGE_PAGES = [
   "radar",
   "weapons",
   "traffic",
+  // (the spacecraft's — docs/spatial: PLAN-VAISSEAUX X9)
+  "orbits",
+  "maneuvers",
+  "docking",
+  "entry",
+  "systems",
+  "relativity",
 ] as const;
 export type KnowledgePage = (typeof KNOWLEDGE_PAGES)[number];
 
@@ -56,6 +77,12 @@ const PAGES: Record<KnowledgeLang, Record<KnowledgePage, string>> = {
     radar: en_radar,
     weapons: en_weapons,
     traffic: en_traffic,
+    orbits: en_sp_orbits,
+    maneuvers: en_sp_maneuvers,
+    docking: en_sp_docking,
+    entry: en_sp_entry,
+    systems: en_sp_systems,
+    relativity: en_sp_relativity,
   },
   fr: {
     f35: fr_f35,
@@ -69,6 +96,12 @@ const PAGES: Record<KnowledgeLang, Record<KnowledgePage, string>> = {
     radar: fr_radar,
     weapons: fr_weapons,
     traffic: fr_traffic,
+    orbits: fr_sp_orbits,
+    maneuvers: fr_sp_maneuvers,
+    docking: fr_sp_docking,
+    entry: fr_sp_entry,
+    systems: fr_sp_systems,
+    relativity: fr_sp_relativity,
   },
 };
 
