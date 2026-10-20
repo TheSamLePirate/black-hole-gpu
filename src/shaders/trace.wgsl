@@ -162,7 +162,8 @@ struct Params {
 override QUALITY_PIPELINE: bool = false;
 // Experimental surface cache, compiled out of default and scientific/reference kernels.
 override HAS_TERRAIN_CACHE: bool = false;
-override HAS_TERRAIN_RASTER: bool = false; // the raster patch's distances (system/terrain-raster-hint.ts): the ground march starts from them
+override HAS_TERRAIN_RASTER: bool = false;
+override HAS_DETAIL_CACHE: bool = false; // the relief's detail read from its cache round the camera (system/detail-cache.ts) // the raster patch's distances (system/terrain-raster-hint.ts): the ground march starts from them
 
 // Kernel specialisation (renderer.ts: traceVariant): a feature the scene does not use compiled out —
 // the uber-kernel's branches and their registers, on the scenes that have none of them (the Gargantua
@@ -4746,6 +4747,12 @@ fn earthWarp(q: vec3f) -> vec3f {
 }
 fn earthDetail(q: vec3f, h0: f32, foot: f32, res: f32) -> f32 {
   if (TUNE_DETAIL == 0u) { return 0.0; }
+  // (round the camera, read from its cache — system/detail-cache.ts: the same detail on a grid of 2 m, its finest wavelength
+  // ~8 m; a footprint coarser than 8 m fades octaves the cache holds: evaluated)
+  if (foot <= 8.0) {
+    let dc = detailCacheRead(q);
+    if (dc.y > 0.5) { return dc.x; }
+  }
   let mount = smoothstep(300.0, 2500.0, h0);
   let land = smoothstep(0.0, 40.0, h0);
   var h = 0.0;
@@ -5530,6 +5537,11 @@ fn terrainRasterHint(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterId(px: vec2f) -> u32 { return 0u; }
 fn terrainRasterDepth(px: vec2f) -> f32 { return 0.0; }
 // END_TERRAIN_RASTER
+// BEGIN_DETAIL_CACHE (system/detail-cache.ts supplies the texture's lookup where the device takes it)
+fn detailCacheRead(q: vec3f) -> vec2f { return vec2f(0.0); }
+// END_DETAIL_CACHE
+// (the kernel writing the cache evaluates the detail itself)
+var<private> DC_BYPASS: bool = false;
 // the raster patch's distance [m] along this sample's ray, 0 where it does not cover it (main sets it)
 var<private> RHINT: f32 = 0.0;
 // The raster's primary visibility (earthPipeline "raster", docs/PLAN-RENDU-RASTER-AAA.md étape 1): the pixels the patch
@@ -8605,6 +8617,30 @@ fn shadeMark(@builtin(global_invocation_id) gid: vec3u) {
   if (moments[idx].x < -0.5 && moments[idx].x > -1.5) { return; }
   let k = u32(P.near1.w);
   moments[idx] = vec2f(RASTER_STALE, d / EARTH_RM * bodyRadius(k));
+}
+
+// The relief's detail cache's texels (system/detail-cache.ts): a rectangle of global indices on its epoch's tangent plane,
+// each texel's direction from its east and north metres, its detail as earthDetail evaluates it at 2 m (the elevation
+// tiles' resolution there fading the octaves they hold), into its slot modulo the texture's side.
+@group(1) @binding(9) var dcOut: texture_storage_2d<r32float, write>;
+// at: the first global index (i, j) and the size; f0: the epoch's centre q0, a texel's side [m]; f1: its east, a [m];
+// f2: its north, the texture's side
+struct DcRect { at: vec4i, f0: vec4f, f1: vec4f, f2: vec4f };
+@group(1) @binding(10) var<uniform> DCR: DcRect;
+@compute @workgroup_size(8, 8)
+fn detailBuild(@builtin(global_invocation_id) gid: vec3u) {
+  let r = DCR.at;
+  if (i32(gid.x) >= r.z || i32(gid.y) >= r.w) { return; }
+  let gi = r.x + i32(gid.x);
+  let gj = r.y + i32(gid.y);
+  let M = DCR.f0.w;
+  let a = DCR.f1.w;
+  let n = i32(DCR.f2.w);
+  let q = normalize(DCR.f0.xyz + DCR.f1.xyz * ((f32(gi) + 0.5) * M / a) + DCR.f2.xyz * ((f32(gj) + 0.5) * M / a));
+  DC_BYPASS = true;
+  let hr = earthH(q, M, false);
+  let d = earthDetail(q, hr.x, M, hr.y);
+  textureStore(dcOut, vec2i(((gi % n) + n) % n, ((gj % n) + n) % n), vec4f(d, 0.0, 0.0, 0.0));
 }
 
 // ---------------------------------------------------------------------------------------------

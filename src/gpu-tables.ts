@@ -7,6 +7,8 @@ import { BB_LUT_SIZE, SYNC_LUT_SIZE } from "./physics";
 import { BODY_VEC4, MAX_BODIES } from "./system/scene-bodies";
 import { WARP_LEVELS, WARP_N } from "./system/warp-grid";
 import { TERRAIN_CACHE_VEC4S } from "./system/terrain-cache-layout";
+/** (system/detail-cache.ts DETAIL_CACHE_VEC4S — not imported: that module imports this one) */
+const DETAIL_CACHE_VEC4S = 4;
 
 /** the probe's harmonics: 9 × rgb, then the dominant direction */
 export const SH_VEC4S = 10;
@@ -22,4 +24,6 @@ export const TABLE_WALK = TABLE_PATH + PATH_MAX + PATH_MAX / PATH_CHUNK;
 /** the mountains' warp's grids (system/warp-grid.ts): their levels' nodes, one vec4 each */
 export const TABLE_WARP = TABLE_WALK + Math.ceil((65 * 65) / 4);
 export const TABLE_TERRAIN = TABLE_WARP + WARP_LEVELS * WARP_N * WARP_N;
-export const TABLE_VEC4S = TABLE_TERRAIN + TERRAIN_CACHE_VEC4S;
+/** the relief's detail cache's window (system/detail-cache.ts): its epoch's frame and valid rectangle */
+export const TABLE_DETAIL = TABLE_TERRAIN + TERRAIN_CACHE_VEC4S;
+export const TABLE_VEC4S = TABLE_DETAIL + DETAIL_CACHE_VEC4S;

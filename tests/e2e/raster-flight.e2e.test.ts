@@ -26,6 +26,9 @@ const MODE_SET: Record<string, string> = {
   rasterhalf: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "half"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4);`,
   rasterquarter: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4);`,
   // (the trees' proxies' detail at the ¼ rate — renderer.sceneryRasterLod: the near ones' reach, their round crown's faces, the far ones')
+  // (the relief's detail cache — system/detail-cache.ts — on, the default, and off)
+  detail: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.detailCacheOn = true;`,
+  nodetail: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.detailCacheOn = false;`,
   lod300: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sceneryRasterLod = { nearM: 300, near: "ico80", far: "ico20" };`,
   lod150: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sceneryRasterLod = { nearM: 150, near: "ico80", far: "ico20" };`,
   lod150light: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sceneryRasterLod = { nearM: 150, near: "ico20", far: "octa" };`,
@@ -117,7 +120,7 @@ describe.skipIf(!E2E)("the raster's primary visibility in flight: frame rate and
           let done = 0, last = r.lastDoneAt; const sum = {}; let gpu = 0;
           while (done < ${FRAMES}) { await frame(); if (r.lastDoneAt !== last) { last = r.lastDoneAt; done++; gpu += r.lastGpuMs;
             for (const p of r.prof.table()) sum[p.label] = (sum[p.label] ?? 0) + p.last; } }
-          window.__m = { gpuMs: +(gpu / done).toFixed(1), raster: { ...r.terrainRasterStats },
+          window.__m = { gpuMs: +(gpu / done).toFixed(1), raster: { ...r.terrainRasterStats }, detail: r.detailCacheStats,
             passes: Object.fromEntries(Object.entries(sum).map(([k, v]) => [k, +(v / done).toFixed(2)])) };
           return 1; })()`);
         measured[run] = await app.js("window.__m");
@@ -147,6 +150,7 @@ describe.skipIf(!E2E)("the raster's primary visibility in flight: frame rate and
           psnrVsConverged: psnr(png(shots[run]!), ref),
           primary: m.raster.primary,
           trees: (m.raster.scenery as { active?: boolean } | null)?.active ?? false,
+          detail: (m as { detail?: { on?: boolean; rows?: number } }).detail,
           passes: m.passes,
         };
         rows.push(row);
