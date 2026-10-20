@@ -4,6 +4,7 @@
 // E4–E6 will give each mode its launch screen; these are its first, direct entries.
 
 import type { Text } from "../../i18n";
+import type { WeatherPreset } from "../../weather";
 import type { FigureHow, FlightChoice, LessonHow } from "./plane";
 
 /** The game, as the title screen launches things in it (main.ts implements it once the game is built). */
@@ -12,6 +13,9 @@ export interface TitleGame {
   resume(): void;
   /** on foot, there (the ship set down beside) */
   walk(body: string, lat: number, lon: number): void;
+  /** on foot, there, at that hour of its own day [h, local mean solar; null: the clock as it is], under that weather
+   *  (the Earth's; null: as it is) */
+  stroll(c: { world: string; lat: number; lon: number; hour: number | null; weather: WeatherPreset | null }): void;
   /** the F-35B lined up on a runway */
   jet(): void;
   /** a free flight set up (the Flight hub's prepareFlight): the field, the start, the hour, the weather, the fuel */
@@ -36,6 +40,8 @@ export interface TitleGame {
   missions(): void;
   /** a scene of the gallery */
   scene(name: string): void;
+  /** a scene of the gallery, seen by the free camera */
+  freeScene(name: string): void;
   /** the craft chosen, in a circular orbit about a body */
   orbit(body: string, altKm: number): void;
   /** the craft chosen, landed there (latitude, east longitude [°]) */

@@ -1,9 +1,13 @@
 // The title's pictures (PLAN-TITRE-AAA E3), every one made by the game itself (scripts/title-art.ts renders them,
 // scripts/build-title-art.py crops them): each way to play's card and wide picture, and the hangar's turntables —
-// each craft from 36 sides, one sheet of 6 × 6 views (16:9) — turned by a drag, slowly on their own.
+// each craft from 36 sides, one sheet of 6 × 6 views (16:9) — turned by a drag, slowly on their own; On foot's
+// planispheres (E6).
 
 import footCard from "../../../assets/title/mode-foot-card.webp";
 import footWide from "../../../assets/title/mode-foot-wide.webp";
+import mapEarth from "../../../assets/title/map-earth.webp";
+import mapMars from "../../../assets/title/map-mars.webp";
+import mapMoon from "../../../assets/title/map-moon.webp";
 import freeCard from "../../../assets/title/mode-free-card.webp";
 import freeWide from "../../../assets/title/mode-free-wide.webp";
 import planeCard from "../../../assets/title/mode-plane-card.webp";
@@ -21,6 +25,9 @@ export const MODE_ART: Record<ModeId, { card: string; wide: string }> = {
   ship: { card: shipCard, wide: shipWide },
   free: { card: freeCard, wide: freeWide },
 };
+
+/** On foot's planispheres (scripts/build-title-maps.py: the game's day textures, −180° at the left) */
+export const WORLD_MAPS: Record<"earth" | "moon" | "mars", string> = { earth: mapEarth, moon: mapMoon, mars: mapMars };
 
 export const TURNTABLES: Record<VesselChoice, string> = { ranger: turnRanger, lander: turnLander, endurance: turnEndurance };
 

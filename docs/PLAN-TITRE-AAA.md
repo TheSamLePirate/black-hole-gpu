@@ -521,7 +521,7 @@ Chaque phase : un commit, une planche de captures (`docs/progress/title-aaa/`), 
 - Le hangar (les rotations), les fiches, les missions par vaisseau, les destinations libres compatibles.
 - Corrige le constat 7 (les libellés des missions).
 
-### E6 — À pied et caméra libre (M)
+### E6 — À pied et caméra libre (M) — FAIT ([fiche](progress/title-aaa/E6.md), [planche](progress/title-aaa/E6.jpg) : le monde, le lieu sur son planisphère — POI, adresse, coordonnées, Atlas —, l'heure de son propre jour, la météo ; la galerie plein écran par onglets)
 
 - Monde, lieu (POI, choix sur l'Atlas, adresse), heure et météo.
 - Les destinations de la caméra libre (la galerie en plein écran).

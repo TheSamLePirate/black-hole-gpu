@@ -13,8 +13,24 @@ import type { MenuAction } from "../menu/actions";
 import { glyph, onInputChange, watchInput } from "../menu/glyphs";
 import { type MenuScreen, MenuRouter } from "../menu/router";
 import { SCENE_THUMBS } from "../scene-thumbs";
-import { type Activity, MODES, MORE, type Mode, type TitleGame, VESSELS, type VesselChoice } from "./activities";
-import { MODE_ART, TURNTABLES, turntable } from "./art";
+import { type Activity, MODES, MORE, type Mode, type TitleGame, type VesselChoice } from "./activities";
+import { geocode, parseCoords } from "../../game/geocode";
+import { MODE_ART, TURNTABLES, turntable, WORLD_MAPS } from "./art";
+import {
+  type FootChoice,
+  type FootPlace,
+  footLine,
+  HOUR_OF,
+  keepFoot,
+  kindName,
+  lastFoot,
+  mapPoint,
+  placeCoords,
+  placesOf,
+  WORLDS,
+  type World,
+} from "./foot";
+import { FREE_TABS, type FreeTab, freeScenes, sceneSlug } from "./free";
 import {
   challengeItems,
   combatItems,
@@ -61,6 +77,27 @@ const P = {
     fr: "Le F-35B à l'aérodrome choisi, aligné sur sa piste en service, en finale ou en croisière, à l'heure de son propre jour, sous la météo choisie.",
     en: "The F-35B at the airfield chosen, lined up on its runway in use, on final or cruising, at the hour of its own day, under the weather chosen.",
   },
+} satisfies Record<string, Text>;
+
+/** On foot's and the free camera's words (E6) */
+const F = {
+  world: { fr: "Monde", en: "World" },
+  place: { fr: "Lieu", en: "Place" },
+  hour: { fr: "Heure", en: "Hour" },
+  weather: { fr: "Météo", en: "Weather" },
+  go: { fr: "Marcher", en: "Walk" },
+  goHint: { fr: "Le vaisseau posé à côté, l'astronaute dehors", en: "The ship set down beside, the astronaut outside" },
+  atlas: { fr: "Choisir sur l'Atlas…", en: "Choose on the Atlas…" },
+  atlasHint: { fr: "La carte du monde : n'importe où, n'importe quelle adresse", en: "The world's map: anywhere, any address" },
+  search: { fr: "Un lieu, une adresse, des coordonnées…", en: "A place, an address, coordinates…" },
+  searchOff: { fr: "Un lieu, des coordonnées…", en: "A place, coordinates…" },
+  placeTitle: { fr: "Le lieu", en: "The place" },
+  addresses: { fr: "Adresses", en: "Addresses" },
+  searching: { fr: "Recherche des adresses…", en: "Searching the addresses…" },
+  noAddress: { fr: "Aucune adresse trouvée", en: "No address found" },
+  point: { fr: "Ces coordonnées", en: "These coordinates" },
+  view: { fr: "Voir", en: "View" },
+  tab: { fr: "Onglet", en: "Tab" },
 } satisfies Record<string, Text>;
 
 /** By ship's words (E5) */
@@ -284,7 +321,15 @@ export class TitleScreen {
         b.addEventListener("click", () => {
           this.lastMode = m;
           img.style.viewTransitionName = "tt-art";
-          this.router?.push(m.id === "plane" ? this.planeScreen() : m.id === "ship" ? this.shipScreen() : this.modeScreen(m));
+          this.router?.push(
+            m.id === "plane"
+              ? this.planeScreen()
+              : m.id === "ship"
+                ? this.shipScreen()
+                : m.id === "foot"
+                  ? this.footScreen()
+                  : this.freeScreen(),
+          );
         });
         return b;
       }),
@@ -353,7 +398,7 @@ export class TitleScreen {
   /** the craft's turntable on the page shown (by ship), when there is one */
   private turn: (HTMLElement & { set(url: string): void }) | null = null;
 
-  /** A list of entries and, beside it, the one focused shown large (a craft's: its turntable). */
+  /** A list of entries and, beside it, the one focused shown large. */
   private listPage(id: string, title: string, art: string | undefined, items: Activity[], extra?: HTMLElement): HTMLElement {
     const page = h("div", { class: "tt-page tt-list", "data-mode": id });
     const preview = h("aside", { class: "tt-preview" });
@@ -362,14 +407,10 @@ export class TitleScreen {
     const pTitle = el("h3", "tt-preview-title", title);
     const pText = el("p", "tt-preview-text", "");
     const frame = h("div", { class: "tt-preview-frame" }, pImg);
-    const crafts = items.some((a) => a.craft);
-    this.turn = crafts ? turntable(TURNTABLES[this.vessel]) : null;
-    if (this.turn) frame.append(this.turn);
     preview.append(frame, pTitle, pText);
-    const show = (a: Activity | null, craft = !!a?.craft) => {
+    const show = (a: Activity | null) => {
       const src = (a?.art && SCENE_THUMBS[a.art]) || art;
       if (src && pImg.getAttribute("src") !== src) pImg.src = src;
-      frame.classList.toggle("turning", craft && !!this.turn);
       pTitle.textContent = a ? tr(a.title) : title;
       pText.textContent = a ? tr(a.hint) : "";
     };
@@ -401,48 +442,342 @@ export class TitleScreen {
     return page;
   }
 
-  private modeScreen(m: Mode): MenuScreen {
+  // ------------------------------------------------------------------ on foot (E6)
+
+  private foot0: FootChoice = lastFoot();
+
+  /** On foot: the world (a tab: LB / RB, Q / E), the place on it, the hour of its day, the weather (the Earth's). */
+  private footScreen(): MenuScreen {
     return {
-      id: `mode:${m.id}`,
-      build: () => {
-        let chips: HTMLElement | undefined;
-        if (m.vessels) {
-          chips = h("div", { class: "tt-vessels", role: "group", "aria-label": tr(T.vessel) });
-          for (const v of VESSELS) {
-            const b = button({ label: v.title, on: this.vessel === v.id, testid: `title-vessel-${v.id}`, title: tr(v.hint) });
-            b.classList.add("tt-vessel");
-            b.dataset.focusId = `vessel-${v.id}`;
-            b.addEventListener("click", () => {
-              this.vessel = v.id;
-              for (const c of chips!.querySelectorAll<HTMLElement>(".tt-vessel")) c.classList.toggle("on", c === b);
-              this.turn?.set(TURNTABLES[v.id]);
-            });
-            chips.append(b);
-          }
-        }
-        const page = this.listPage(m.id, tr(m.title), MODE_ART[m.id].wide, m.activities, chips);
-        // (a craft's chip focused: its turntable, its name and what it is)
-        for (const v of VESSELS) {
-          const b = page.querySelector<HTMLElement>(`[data-testid=title-vessel-${v.id}]`);
-          const showV = () => {
-            page.querySelector(".tt-preview-frame")?.classList.add("turning");
-            page.querySelector(".tt-preview-title")!.textContent = v.title;
-            page.querySelector(".tt-preview-text")!.textContent = tr(v.hint);
-          };
-          b?.addEventListener("focus", showV);
-          b?.addEventListener("pointerenter", showV);
-        }
-        return page;
-      },
-      // (the shoulder buttons: the craft before, after)
+      id: "mode:foot",
+      build: () => this.buildFoot(),
       action: (a) => {
-        if (!m.vessels || (a !== "tabPrev" && a !== "tabNext")) return false;
-        const i = VESSELS.findIndex((v) => v.id === this.vessel);
-        this.vessel = VESSELS[(i + (a === "tabNext" ? 1 : VESSELS.length - 1)) % VESSELS.length]!.id;
+        if (a !== "tabPrev" && a !== "tabNext") return false;
+        const i = WORLDS.findIndex((w) => w.id === this.foot0.world);
+        this.foot0.world = WORLDS[(i + (a === "tabNext" ? 1 : WORLDS.length - 1)) % WORLDS.length]!.id;
+        keepFoot(this.foot0);
         this.router?.refresh();
         return true;
       },
     };
+  }
+
+  private buildFoot(): HTMLElement {
+    const c = this.foot0;
+    const mode = MODES.find((x) => x.id === "foot")!;
+    const page = h("div", { class: "tt-page tt-list tt-plane tt-walk", "data-mode": "foot", "data-world": c.world });
+    const tabs = h(
+      "div",
+      { class: "tt-tabs", role: "tablist", "aria-label": tr(F.world), "data-nav-skip": "" },
+      ...WORLDS.map((w) => {
+        const b = button({ label: tr(w.name), on: c.world === w.id, testid: `title-world-${w.id}`, title: tr(w.hint) });
+        b.classList.add("tt-tab");
+        b.setAttribute("role", "tab");
+        b.setAttribute("aria-selected", String(c.world === w.id));
+        b.addEventListener("click", () => {
+          c.world = w.id;
+          keepFoot(c);
+          this.router?.refresh();
+        });
+        return b;
+      }),
+    );
+    // the preview: the world's planisphere, the place marked on it; its name, why go there, where it is, the line
+    const map = h("img", { class: "tt-preview-art tt-map-art", src: WORLD_MAPS[c.world], alt: "" });
+    const pin = h("span", { class: "tt-map-pin", "aria-hidden": "true" });
+    const frame = h("div", { class: "tt-preview-frame tt-map", "data-testid": "title-foot-map" }, map, pin);
+    const pTitle = el("h3", "tt-preview-title", "");
+    const pKind = el("p", "tt-preview-kind", "");
+    const pText = el("p", "tt-preview-text", "");
+    const pMark = el("p", "tt-preview-mark", "");
+    const preview = h("aside", { class: "tt-preview" }, frame, pTitle, pKind, pText, pMark);
+    const show = () => {
+      const p = c.place[c.world];
+      const m = mapPoint(p);
+      pin.style.left = `${(m.x * 100).toFixed(2)}%`;
+      pin.style.top = `${(m.y * 100).toFixed(2)}%`;
+      pTitle.textContent = tr(p.name);
+      pKind.textContent = [kindName(p), placeCoords(p)].filter(Boolean).join(" · ");
+      pText.textContent = p.about ? tr(p.about) : "";
+      pMark.textContent = footLine(c);
+    };
+    const changed = () => {
+      keepFoot(c);
+      show();
+    };
+    const pick = <T>(xs: { id: T; label: Text }[], id: T) => tr(xs.find((x) => x.id === id)?.label ?? xs[0]!.label);
+    const places = () => placesOf(c.world).map((x) => x.place);
+    const side = h("div", { class: "tt-list-side" });
+    side.append(
+      this.selector(
+        tr(F.place),
+        "title-foot-place",
+        () => tr(c.place[c.world].name),
+        (d) => {
+          const xs = places();
+          c.place[c.world] = cycle(xs, xs.find((x) => x.id === c.place[c.world].id) ?? xs[0]!, d);
+        },
+        changed,
+        () => this.router?.push(this.placePicker()),
+      ),
+      this.selector(
+        tr(F.hour),
+        "title-foot-hour",
+        () => pick(HOURS, c.hour),
+        (d) => (c.hour = cycle(HOURS, HOURS.find((x) => x.id === c.hour)!, d).id),
+        changed,
+      ),
+    );
+    if (c.world === "earth")
+      side.append(
+        this.selector(
+          tr(F.weather),
+          "title-foot-weather",
+          () => pick(WEATHERS, c.weather),
+          (d) => (c.weather = cycle(WEATHERS, WEATHERS.find((x) => x.id === c.weather)!, d).id),
+          changed,
+        ),
+      );
+    const go = h(
+      "button",
+      { class: "m-item tt-launch", type: "button", "data-testid": "title-foot-go", "data-focus-id": "go", "data-autofocus": "" },
+      el("span", "", tr(F.go)),
+      el("small", "", tr(F.goHint)),
+    );
+    go.addEventListener("click", () => {
+      const p = c.place[c.world];
+      const s = { world: c.world, lat: p.lat, lon: p.lon, hour: c.hour === "now" ? null : HOUR_OF[c.hour], weather: c.weather };
+      this.choose({ id: "foot-walk", title: p.name, hint: F.goHint, run: (g) => g.stroll(s) });
+    });
+    const atlas = h(
+      "button",
+      { class: "m-item tt-act", type: "button", "data-testid": "title-foot-atlas", "data-focus-id": "atlas" },
+      el("span", "", tr(F.atlas)),
+      el("small", "", tr(F.atlasHint)),
+    );
+    atlas.addEventListener("click", () => this.choose(mode.activities.find((a) => a.id === "foot-atlas")!));
+    side.append(go, atlas);
+    page.append(
+      this.crumb(tr(mode.title)),
+      tabs,
+      h("div", { class: "tt-list-body" }, side, preview),
+      this.foot([
+        ["confirm", T.launch],
+        ["tabNext", F.world],
+      ]),
+    );
+    show();
+    return page;
+  }
+
+  /** The places of the world chosen: its destinations by kind, a search (a name, coordinates — and on the Earth an
+   *  address, asked of the address service as one types). */
+  private placePicker(): MenuScreen {
+    const c = this.foot0;
+    const world: World = c.world;
+    let asked: AbortController | null = null;
+    let timer = 0;
+    return {
+      id: "foot:place",
+      build: () => {
+        const page = h("div", { class: "tt-page tt-list tt-picker" });
+        const ph = tr(world === "earth" ? F.search : F.searchOff);
+        const input = h("input", {
+          class: "tt-search",
+          type: "search",
+          placeholder: ph,
+          "aria-label": ph,
+          "data-testid": "title-place-search",
+          "data-autofocus": "",
+        }) as HTMLInputElement;
+        const list = h("nav", { class: "tt-acts tt-fields", "aria-label": tr(F.placeTitle) });
+        const status = el("p", "tt-empty", "");
+        const entry = (p: FootPlace, sub: string, testid: string) => {
+          const b = h(
+            "button",
+            { class: "m-item tt-act", type: "button", "data-testid": testid, "data-focus-id": `place-${p.id}` },
+            el("span", "", tr(p.name)),
+            el("small", "", sub),
+          );
+          if (p.id === c.place[world].id) b.classList.add("on");
+          b.addEventListener("click", () => {
+            c.place[world] = p;
+            keepFoot(c);
+            this.router?.back();
+          });
+          return b;
+        };
+        const fill = () => {
+          const q = input.value.trim();
+          const rows: HTMLElement[] = [];
+          const at = parseCoords(q);
+          if (at)
+            rows.push(
+              entry(
+                { id: `pt:${at.lat.toFixed(4)},${at.lon.toFixed(4)}`, name: F.point, lat: at.lat, lon: at.lon, kind: "point" },
+                placeCoords({ id: "", name: F.point, ...at }),
+                "title-place-point",
+              ),
+            );
+          for (const x of placesOf(world, q).slice(0, 80)) {
+            if (x.group) rows.push(el("h4", "tt-group", x.group));
+            rows.push(entry(x.place, tr(x.place.about ?? { fr: "", en: "" }), `title-place-${x.place.id}`));
+          }
+          list.replaceChildren(...rows);
+          status.textContent = "";
+          // (the Earth's addresses: asked once the typing pauses — the newer search supersedes the older)
+          asked?.abort();
+          clearTimeout(timer);
+          if (world !== "earth" || at || q.length < 3) return;
+          status.textContent = tr(F.searching);
+          timer = window.setTimeout(() => {
+            const ctl = new AbortController();
+            asked = ctl;
+            const near = { lat: c.place[world].lat, lon: c.place[world].lon };
+            void geocode(q, { lang, near, signal: ctl.signal })
+              .then((found) => {
+                if (ctl.signal.aborted || !page.isConnected) return;
+                status.textContent = found.length ? "" : tr(F.noAddress);
+                if (!found.length) return;
+                list.append(
+                  el("h4", "tt-group", tr(F.addresses)),
+                  ...found.map((g, i) =>
+                    entry(
+                      {
+                        id: `addr:${g.lat.toFixed(4)},${g.lon.toFixed(4)}`,
+                        name: { fr: g.name, en: g.name },
+                        lat: g.lat,
+                        lon: g.lon,
+                        kind: "address",
+                        about: { fr: g.detail, en: g.detail },
+                      },
+                      g.detail,
+                      `title-place-address-${i}`,
+                    ),
+                  ),
+                );
+              })
+              .catch(() => {
+                if (!ctl.signal.aborted && page.isConnected) status.textContent = tr(F.noAddress);
+              });
+          }, 450);
+        };
+        input.addEventListener("input", fill);
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            list.querySelector<HTMLElement>("button")?.focus();
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            list.querySelector<HTMLElement>("button")?.click();
+          }
+        });
+        fill();
+        page.append(
+          this.crumb(`${tr(WORLDS.find((w) => w.id === world)!.name)} · ${tr(F.placeTitle)}`),
+          h("div", { class: "tt-list-side tt-picker-body" }, input, status, list),
+          this.foot([["confirm", T.choose]]),
+        );
+        return page;
+      },
+      // (gone: the address asked meanwhile dropped)
+      leave: () => {
+        clearTimeout(timer);
+        asked?.abort();
+      },
+    };
+  }
+
+  // ------------------------------------------------------------------ the free camera (E6)
+
+  private freeTab: FreeTab = "gargantua";
+
+  /** The free camera: the gallery full screen — a tab per kind (LB / RB, Q / E), the scenes as pictures, the one
+   *  focused large behind them. */
+  private freeScreen(): MenuScreen {
+    return {
+      id: "mode:free",
+      build: () => this.buildFree(),
+      action: (a) => {
+        if (a !== "tabPrev" && a !== "tabNext") return false;
+        const i = FREE_TABS.findIndex((x) => x.id === this.freeTab);
+        this.freeTab = FREE_TABS[(i + (a === "tabNext" ? 1 : FREE_TABS.length - 1)) % FREE_TABS.length]!.id;
+        this.router?.refresh();
+        return true;
+      },
+    };
+  }
+
+  private buildFree(): HTMLElement {
+    const mode = MODES.find((x) => x.id === "free")!;
+    const page = h("div", { class: "tt-page tt-free", "data-mode": "free", "data-tab": this.freeTab });
+    const bg = h("img", { class: "tt-free-bg", src: MODE_ART.free.wide, alt: "" }) as HTMLImageElement;
+    bg.style.viewTransitionName = "tt-art";
+    const tabs = h(
+      "div",
+      { class: "tt-tabs", role: "tablist", "data-nav-skip": "" },
+      ...FREE_TABS.map((x) => {
+        const b = button({ label: tr(x.label), on: this.freeTab === x.id, testid: `title-free-tab-${x.id}`, title: tr(x.hint) });
+        b.classList.add("tt-tab");
+        b.setAttribute("role", "tab");
+        b.setAttribute("aria-selected", String(this.freeTab === x.id));
+        b.addEventListener("click", () => {
+          this.freeTab = x.id;
+          this.router?.refresh();
+        });
+        return b;
+      }),
+    );
+    const cTitle = el("h3", "tt-preview-title", "");
+    const cText = el("p", "tt-preview-text", "");
+    const caption = h("div", { class: "tt-free-caption", "aria-live": "polite" }, cTitle, cText);
+    const grid = h("nav", { class: "tt-free-grid", "aria-label": tr(FREE_TABS.find((x) => x.id === this.freeTab)!.label) });
+    const scenes = freeScenes(this.freeTab);
+    const show = (x: (typeof scenes)[number]) => {
+      if (x.art && bg.getAttribute("src") !== x.art) bg.src = x.art;
+      cTitle.textContent = x.title;
+      cText.textContent = x.text;
+    };
+    scenes.forEach((x, i) => {
+      const b = h(
+        "button",
+        {
+          class: "m-item tt-scene",
+          type: "button",
+          "data-testid": `title-free-${sceneSlug(x.name)}`,
+          "data-focus-id": x.name,
+          ...(i === 0 ? { "data-autofocus": "" } : {}),
+        },
+        x.art ? h("img", { src: x.art, alt: "", loading: "lazy" }) : h("span", { class: "tt-scene-none" }),
+        el("span", "tt-scene-title", x.title),
+      );
+      b.addEventListener("focus", () => show(x));
+      b.addEventListener("pointerenter", () => show(x));
+      b.addEventListener("click", () =>
+        this.choose({
+          id: `free:${x.name}`,
+          title: { fr: x.title, en: x.title },
+          hint: { fr: x.text, en: x.text },
+          art: x.name,
+          run: (g) => g.freeScene(x.name),
+        }),
+      );
+      grid.append(b);
+    });
+    if (scenes[0]) show(scenes[0]);
+    page.append(
+      bg,
+      h("div", { class: "tt-free-veil" }),
+      this.crumb(tr(mode.title)),
+      tabs,
+      caption,
+      grid,
+      this.foot([
+        ["confirm", F.view],
+        ["tabNext", F.tab],
+      ]),
+    );
+    return page;
   }
 
   // ------------------------------------------------------------------ by ship (E5)

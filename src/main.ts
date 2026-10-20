@@ -7463,6 +7463,26 @@ async function main() {
       settings.vessel = v;
       onSettingsChange(["vessel"]);
     };
+    /**
+     * The clock set to that hour of a place's own (mean solar) day [h], the Sun's hour angle there found from the
+     * subsolar point — forward, within one of its days (a month on the Moon, a sol on Mars), then refined.
+     */
+    const setLocalHour = (world: string, lon: number, hour: number) => {
+      const DAY_S: Record<string, number> = { earth: 86400, moon: 29.530589 * 86400, mars: 88775.244 };
+      const day = DAY_S[world];
+      if (!day) return;
+      let t = camera.nowTime();
+      for (let k = 0; k < 4; k++) {
+        const q = toBodyFixed(world, ourState("sun", t).pos, t);
+        const sub = (Math.atan2(q[1], q[0]) * 180) / Math.PI;
+        // (the local hour: noon where the Sun is overhead, an hour for each 15° east of it)
+        const now = ((((lon - sub + 180) % 360) + 360) % 360) / 15;
+        let d = (((hour - now) % 24) + 24) % 24;
+        if (k > 0 && d > 12) d -= 24;
+        t += ((d / 24) * day) / M_SECONDS;
+      }
+      tools.setDate(t);
+    };
     /** the craft chosen on the title (by ship): set again once the game's world is loaded — a scene sets its own */
     let shipChoice: Settings["vessel"] | null = null;
     /** a placement in the craft chosen, in ship mode */
@@ -7483,6 +7503,15 @@ async function main() {
     const titleGame: TitleGame = {
       resume: () => {},
       walk: (body, lat, lon) => void placeShip(() => tools.walk(body, lat, lon)),
+      stroll: (c) =>
+        void placeShip(() => {
+          if (c.hour !== null) setLocalHour(c.world, c.lon, c.hour);
+          if (c.world === "earth" && c.weather && c.weather !== settings.weather) {
+            settings.weather = c.weather;
+            hubHost.weatherChanged();
+          }
+          return tools.walk(c.world, c.lat, c.lon);
+        }),
       jet: () =>
         void placeShip(() => {
           setGameMode("ship", true);
@@ -7519,6 +7548,10 @@ async function main() {
         missionSelect.open();
       },
       scene: (name) => panel.applyScene(name),
+      freeScene: (name) => {
+        panel.applyScene(name);
+        setGameMode("free", true);
+      },
       orbit: (body, altKm) => inShip(() => tools.orbit(body, { altKm })),
       land: (body, lat, lon) => inShip(() => tools.land(body, lat, lon)),
       near: (body, altKm) => inShip(() => tools.near(body, { altKm })),
