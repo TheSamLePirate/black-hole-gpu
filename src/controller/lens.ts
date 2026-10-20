@@ -428,6 +428,8 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   if (this.tracking && !flying && !this.inThroat() && !travelling) this.track(dt);
   // (tracking resumes from the orientation the flight left: offset recomputed, no jump)
   else this.offset = null;
+  // (the view walked off where a scene set it down: that rest dropped — controller/motion.ts)
+  this.releaseRest(travelling);
   // the spectator, after the ship (its frame's pose): its own flight
   const viewMoved = this.character.active
     ? this.character.step(s.animate ? dt : 0, this.shipClock() ?? this.time + (s.animate ? dt * timeRate(s) : 0), pad)

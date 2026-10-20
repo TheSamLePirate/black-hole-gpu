@@ -64,6 +64,8 @@ declare module "../controls" {
     ourSurfaceInfo: typeof ourSurfaceInfo;
     terrainAheadNow: typeof terrainAheadNow;
     setOurLanded: typeof setOurLanded;
+    groundChanged: typeof groundChanged;
+    releaseRest: typeof releaseRest;
     reportLanding: typeof reportLanding;
     reportLandingDue: typeof reportLandingDue;
   }
@@ -885,6 +887,44 @@ function setOurLanded(this: CameraController, l: Landed | null) {
   this.landed = !!l;
 }
 
+/**
+ * Finer heights came in under what rests on the ground (main.ts, at each change of the relief drawn): a craft flown —
+ * or the camera falling freely — set down there raised or lowered onto them at once, the clock held or not (a step of
+ * no time). Not a view the rig holds — a tripod, the free camera —: the rig keeps its own floor and its height over
+ * the ground (controller/rig.ts); a rest left from a scene's start, set back on, took it back where it was set down.
+ */
+function groundChanged(this: CameraController) {
+  if (this.ourLanded && !this.character.active && (this.piloting || this.gravity)) this.fall(0, [0, 0, 0], false);
+}
+
+/** How far a view may stand off the place it was set down on and still be resting there [m]. */
+const REST_SLIP_M = 1;
+
+/**
+ * The view, no craft flown and not falling, moved off where it was set down (a scene's start on the ground, a craft
+ * left): that rest no longer its own — dropped. Kept, a fall's step put the view back on it: gravity turned on, a
+ * craft boarded, the relief's tiles come in — the tripod walked 500 m away and back to its start at a tile's load.
+ * travelling: a travel moves the view this frame (controller/travel.ts).
+ */
+function releaseRest(this: CameraController, travelling: boolean) {
+  const L = this.ourLanded;
+  if (!L || this.piloting || this.gravity || this.character.active) return;
+  const R = this.rig;
+  let away = travelling;
+  if (!away && R.on) {
+    // (the rig's place on the body's own axes — the rest's —: off it along the ground; none — around a body,
+    // following it, high —: not standing there)
+    const q = R.ref === L.body ? R.fixed : null;
+    if (!q) away = true;
+    else {
+      const u = unitV(L.q);
+      const d = sub3(q, L.q);
+      away = Math.hypot(...lin(d, 1, u, -dot3(d, u))) * M_METRES > REST_SLIP_M;
+    }
+  }
+  if (away) this.setOurLanded(null);
+}
+
 /** Puts these methods on the controller's prototype (controls.ts, once). */
 /**
  * The landing's report (game/report.ts): at the gear's verdict, its figures — the sink and the speed along,
@@ -971,6 +1011,8 @@ export function installMotion(C: { prototype: CameraController }) {
     ourSurfaceInfo,
     terrainAheadNow,
     setOurLanded,
+    groundChanged,
+    releaseRest,
     reportLanding,
     reportLandingDue,
   });
