@@ -526,7 +526,7 @@ Chaque phase : un commit, une planche de captures (`docs/progress/title-aaa/`), 
 - Monde, lieu (POI, choix sur l'Atlas, adresse), heure et météo.
 - Les destinations de la caméra libre (la galerie en plein écran).
 
-### E7 — Plus… et Crédits (S)
+### E7 — Plus… et Crédits (S) — FAIT ([fiche](progress/title-aaa/E7.md), [planche](progress/title-aaa/E7.jpg) : Plus… en six groupes, la langue, Kerr Bench confirmé ; le générique déroulant ; `CREDITS.md` généré d'une source unique vérifiée contre les README)
 
 - Scènes, Charger, Photo et rendus, Jouer ensemble, Éditeur, Kerr Bench (avec confirmation), Comment jouer,
   Langue.

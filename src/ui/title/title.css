@@ -449,6 +449,40 @@
 .m-item.tt-scene:is(:focus, :hover) { transform: scale(1.04); border-color: rgba(255, 179, 92, 0.75); box-shadow: 0 0 0 1px rgba(255, 179, 92, 0.5), 0 14px 40px rgba(0, 0, 0, 0.6); outline: none; z-index: 1; }
 .m-item.tt-scene:is(:focus, :hover) .tt-scene-title { color: var(--m-warm); }
 
+/* ---- More… (E7): the emblem as a preview, the Kerr Bench's confirmation */
+/* (no tabs over it: its list takes the height down to the foot) */
+.tt-more .tt-acts { max-height: calc(100vh - var(--m-safe-y) * 2 - 190px); }
+.tt-preview-frame.tt-mark-frame { background: radial-gradient(circle at 50% 50%, #120c05, #03050a 70%); }
+.tt-preview-frame.tt-mark-frame .tt-preview-art { object-fit: contain; padding: 12%; box-sizing: border-box; }
+.tt-confirm-body { margin-top: clamp(24px, 8vh, 90px); max-width: 640px; display: flex; flex-direction: column; gap: 26px; }
+.tt-confirm-body .tt-preview-text { font-size: 17px; color: var(--m-ink); opacity: 0.85; }
+.tt-confirm-acts { display: flex; flex-direction: column; gap: 6px; max-width: 420px; }
+
+/* ---- the credits (E7): a slow roll, centred, fading in at the bottom and out at the top */
+.tt-credits { background: radial-gradient(ellipse at 50% 120%, rgba(255, 150, 60, 0.08), rgba(2, 4, 9, 0) 60%), #020409; }
+.tt-roll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  outline: none;
+  mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 82%, transparent 100%);
+}
+.tt-roll::-webkit-scrollbar { display: none; }
+.tt-roll-inner { max-width: 760px; margin: 0 auto; padding: 42vh 16px 60vh; text-align: center; }
+.tt-roll-mark { width: clamp(120px, 16vw, 220px); height: auto; display: block; margin: 0 auto; }
+.tt-roll-name { margin: 18px 0 6px; font: 700 clamp(30px, 4vw, 52px) var(--m-f-title); letter-spacing: 0.5em; padding-left: 0.5em; color: var(--m-ink); }
+.tt-roll-tag { margin: 0 0 16vh; font: 400 15px var(--m-f-text); color: var(--m-dim); }
+.tt-roll-sec { margin: 0 0 12vh; }
+.tt-roll-title { margin: 0 0 30px; font: 600 12px var(--m-f-title); letter-spacing: 0.34em; text-transform: uppercase; color: var(--m-amber); }
+.tt-roll-item { margin: 0 0 22px; }
+.tt-roll-what { margin: 0; font: 500 14px / 1.45 var(--m-f-text); color: var(--m-dim); }
+.tt-roll-who { margin: 4px 0 0; font: 600 18px / 1.35 var(--m-f-title); letter-spacing: 0.06em; color: var(--m-ink); }
+.tt-roll-lic { margin: 3px 0 0; font: 500 11px var(--m-f-value); letter-spacing: 0.08em; color: var(--m-faint); }
+.tt-roll-game .tt-roll-who { font-size: clamp(30px, 3.6vw, 46px); letter-spacing: 0.24em; color: var(--m-warm); }
+.tt-roll-end { margin-top: 10vh; width: clamp(80px, 9vw, 130px); opacity: 0.9; }
+.tt-roll-thanks { margin: 22px 0 0; font: 600 16px var(--m-f-title); letter-spacing: 0.3em; text-transform: uppercase; color: var(--m-ink); }
+
 /* ---- narrow screens: the cards two by two, the list over its picture */
 @media (max-width: 760px) {
   .tt-modes { display: grid; grid-template-columns: 1fr 1fr; }

@@ -51,6 +51,7 @@ import {
   STARTS,
   WEATHERS,
 } from "./plane";
+import { CREDITS, whoOf } from "./credits";
 import { CRAFT, launchShip, type ShipItem, sheetLines, shipItems } from "./ship";
 
 /** By plane's tabs (E4) */
@@ -98,6 +99,36 @@ const F = {
   point: { fr: "Ces coordonnées", en: "These coordinates" },
   view: { fr: "Voir", en: "View" },
   tab: { fr: "Onglet", en: "Tab" },
+} satisfies Record<string, Text>;
+
+/** More…'s and the credits' words (E7) */
+const M = {
+  play: { fr: "Jouer", en: "Play" },
+  make: { fr: "Créer", en: "Create" },
+  together: { fr: "Ensemble", en: "Together" },
+  learn: { fr: "Apprendre", en: "Learn" },
+  measure: { fr: "Mesurer", en: "Measure" },
+  game: { fr: "Le jeu", en: "The game" },
+  howTo: { fr: "Comment jouer", en: "How to play" },
+  howToHint: { fr: "Le guide, mode par mode (une page à part)", en: "The guide, mode by mode (a page of its own)" },
+  discover: { fr: "Découvrir", en: "Discover" },
+  discoverHint: {
+    fr: "La physique derrière les images : Kerr, le disque, le trou de ver",
+    en: "The physics behind the pictures: Kerr, the disk, the wormhole",
+  },
+  credits: { fr: "Crédits", en: "Credits" },
+  creditsHint: { fr: "Qui a fait le jeu, et tout ce sur quoi il repose", en: "Who made the game, and everything it is built on" },
+  language: { fr: "Langue", en: "Language" },
+  languageHint: { fr: "La page se recharge dans l'autre langue", en: "The page reloads in the other language" },
+  benchTitle: { fr: "Kerr Bench", en: "Kerr Bench" },
+  benchText: {
+    fr: "La page va se recharger pour mesurer cette machine : le tracé de rayons à chaque profondeur, puis les mondes, les vaisseaux, la météo et les vols. La partie en cours est sauvegardée.",
+    en: "The page will reload to measure this machine: the ray tracer at each depth, then the worlds, the craft, the weather and the flights. The game in progress is saved.",
+  },
+  benchGo: { fr: "Lancer la mesure", en: "Start measuring" },
+  cancel: { fr: "Annuler", en: "Cancel" },
+  thanks: { fr: "Merci d'avoir joué", en: "Thank you for playing" },
+  skip: { fr: "Passer", en: "Skip" },
 } satisfies Record<string, Text>;
 
 /** By ship's words (E5) */
@@ -1218,25 +1249,239 @@ export class TitleScreen {
     };
   }
 
+  /** More…: the rest of the game, in groups — play (every scene, load a game), create (photos, missions), together,
+   *  learn (how to play, discover, the controls), measure (the Kerr Bench, confirmed: the page reloads), the game
+   *  (the credits, the language). */
   private moreScreen(): MenuScreen {
-    return {
-      id: "more",
-      build: () => {
-        const items: Activity[] = [
-          { id: "more-load", title: T.load, hint: T.loadHint, opens: true, run: () => {} },
-          ...MORE.filter((a) => a.id !== "more-network" || !this.game || this.game.networkShown()),
-        ];
-        const page = this.listPage("more", tr(T.more), MODE_ART.free.wide, items);
-        // (Load: a screen of its own, not a launch)
-        page.querySelector<HTMLElement>("[data-testid=title-act-more-load]")?.addEventListener(
-          "click",
-          (e) => {
-            e.stopImmediatePropagation();
-            this.router?.push(this.loadScreen());
+    return { id: "more", build: () => this.buildMore() };
+  }
+
+  private buildMore(): HTMLElement {
+    const page = h("div", { class: "tt-page tt-list tt-plane tt-more", "data-mode": "more" });
+    const a = (id: string) => MORE.find((x) => x.id === id)!;
+    const docs = (file: string) => () => window.open(new URL(`docs/${file}`, location.href).href, "_blank", "noopener");
+    type Row = { id: string; title: Text; hint: Text; art: string; go: () => void };
+    const run =
+      (x: Activity): (() => void) =>
+      () =>
+        this.choose(x);
+    const thumb = (scene: string) => SCENE_THUMBS[scene] ?? MODE_ART.free.wide;
+    const groups: [Text, Row[]][] = [
+      [
+        M.play,
+        [
+          { ...a("more-scenes"), art: thumb("Interstellar: along the disk (the film's close pass)"), go: run(a("more-scenes")) },
+          {
+            id: "more-load",
+            title: T.load,
+            hint: T.loadHint,
+            art: thumb("Gargantua under the distant galaxy"),
+            go: () => this.router?.push(this.loadScreen()),
           },
-          true,
+        ],
+      ],
+      [
+        M.make,
+        [
+          { ...a("more-photo"), art: thumb("Earth: Mont Blanc from the Lac Blanc"), go: run(a("more-photo")) },
+          { ...a("more-editor"), art: MODE_ART.plane.wide, go: run(a("more-editor")) },
+        ],
+      ],
+      [
+        M.together,
+        !this.game || this.game.networkShown() ? [{ ...a("more-network"), art: MODE_ART.ship.wide, go: run(a("more-network")) }] : [],
+      ],
+      [
+        M.learn,
+        [
+          { id: "more-howto", title: M.howTo, hint: M.howToHint, art: MODE_ART.foot.wide, go: docs("comment-jouer.html") },
+          {
+            id: "more-discover",
+            title: M.discover,
+            hint: M.discoverHint,
+            art: thumb("Kerr a=0.94, near edge-on"),
+            go: docs("decouvrir.html"),
+          },
+          { ...a("more-controls"), art: MODE_ART.plane.wide, go: run(a("more-controls")) },
+        ],
+      ],
+      [M.measure, [{ ...a("more-bench"), art: MODE_ART.free.wide, go: () => this.router?.push(this.benchScreen()) }]],
+      [
+        M.game,
+        [{ id: "more-credits", title: M.credits, hint: M.creditsHint, art: markUrl, go: () => this.router?.push(this.creditsScreen()) }],
+      ],
+    ];
+    const pImg = h("img", { class: "tt-preview-art", src: MODE_ART.free.wide, alt: "" }) as HTMLImageElement;
+    pImg.style.viewTransitionName = "tt-art";
+    const pTitle = el("h3", "tt-preview-title", "");
+    const pText = el("p", "tt-preview-text", "");
+    const frame = h("div", { class: "tt-preview-frame" }, pImg);
+    const preview = h("aside", { class: "tt-preview" }, frame, pTitle, pText);
+    const show = (r: Pick<Row, "title" | "hint" | "art">) => {
+      if (pImg.getAttribute("src") !== r.art) pImg.src = r.art;
+      frame.classList.toggle("tt-mark-frame", r.art === markUrl);
+      pTitle.textContent = tr(r.title);
+      pText.textContent = tr(r.hint);
+    };
+    const list = h("nav", { class: "tt-acts", "aria-label": tr(T.more) });
+    let first = true;
+    for (const [g, rows] of groups) {
+      if (!rows.length) continue;
+      list.append(el("h4", "tt-group", tr(g)));
+      for (const r of rows) {
+        const b = h(
+          "button",
+          {
+            class: "m-item tt-act",
+            type: "button",
+            "data-testid": `title-act-${r.id}`,
+            "data-focus-id": r.id,
+            ...(first ? { "data-autofocus": "" } : {}),
+          },
+          el("span", "", tr(r.title)),
+          el("small", "", tr(r.hint)),
         );
-        return page;
+        first = false;
+        b.addEventListener("focus", () => show(r));
+        b.addEventListener("pointerenter", () => show(r));
+        b.addEventListener("click", r.go);
+        list.append(b);
+      }
+    }
+    // (the language: a row of its own — the page reloads in the other one)
+    const langs = [
+      { id: "fr" as const, label: { fr: "Français", en: "Français" } },
+      { id: "en" as const, label: { fr: "English", en: "English" } },
+    ];
+    const langRow = this.selector(
+      tr(M.language),
+      "title-more-language",
+      () => tr(langs.find((x) => x.id === lang)!.label),
+      () => {
+        setLang(lang === "fr" ? "en" : "fr");
+        location.reload();
+      },
+      () => {},
+    );
+    const showLang = () => show({ title: M.language, hint: M.languageHint, art: markUrl });
+    langRow.addEventListener("focus", showLang);
+    langRow.addEventListener("pointerenter", showLang);
+    list.append(langRow);
+    show(groups[0]![1][0]!);
+    page.append(
+      this.crumb(tr(T.more)),
+      h("div", { class: "tt-list-body" }, h("div", { class: "tt-list-side" }, list), preview),
+      this.foot([["confirm", T.choose]]),
+    );
+    return page;
+  }
+
+  /** The Kerr Bench confirmed: the page reloads for it. */
+  private benchScreen(): MenuScreen {
+    return {
+      id: "more:bench",
+      build: () => {
+        const go = button({ label: tr(M.benchGo), kind: "primary", testid: "title-bench-go" });
+        go.classList.add("m-item", "tt-launch");
+        go.dataset.autofocus = "";
+        go.addEventListener("click", () => this.choose(MORE.find((x) => x.id === "more-bench")!));
+        const no = button({ label: tr(M.cancel), testid: "title-bench-cancel", onClick: () => this.router?.back() });
+        no.classList.add("m-item", "tt-act");
+        return h(
+          "div",
+          { class: "tt-page tt-list tt-confirm", "data-mode": "bench" },
+          this.crumb(tr(M.benchTitle)),
+          h(
+            "div",
+            { class: "tt-confirm-body" },
+            el("p", "tt-preview-text", tr(M.benchText)),
+            h("div", { class: "tt-confirm-acts" }, go, no),
+          ),
+          this.foot([["confirm", T.choose]]),
+        );
+      },
+    };
+  }
+
+  /** The credits: a slow roll — the emblem, who made the game, then every work it is built on, by kind; ↑ ↓, the
+   *  wheel or a drag take it over (it goes on by itself after a few seconds), Escape / B leave. */
+  private creditsScreen(): MenuScreen {
+    return {
+      id: "credits",
+      build: () => {
+        const roll = h("div", {
+          class: "tt-roll",
+          tabindex: "0",
+          "data-testid": "title-credits",
+          "data-autofocus": "",
+          "aria-label": tr(M.credits),
+        });
+        const inner = h("div", { class: "tt-roll-inner" });
+        inner.append(
+          h("img", { class: "tt-roll-mark", src: markUrl, alt: "" }),
+          el("p", "tt-roll-name", "KERR"),
+          el("p", "tt-roll-tag", tr(T.tagline)),
+        );
+        for (const sec of CREDITS) {
+          const s = h(
+            "section",
+            { class: `tt-roll-sec tt-roll-${sec.id}`, "data-section": sec.id },
+            el("h4", "tt-roll-title", tr(sec.title)),
+          );
+          for (const c of sec.items)
+            s.append(
+              h(
+                "div",
+                { class: "tt-roll-item" },
+                el("p", "tt-roll-what", tr(c.what)),
+                el("p", "tt-roll-who", whoOf(c)),
+                c.licence ? el("p", "tt-roll-lic", c.licence) : null,
+              ),
+            );
+          inner.append(s);
+        }
+        inner.append(h("img", { class: "tt-roll-mark tt-roll-end", src: markUrl, alt: "" }), el("p", "tt-roll-thanks", tr(M.thanks)));
+        roll.append(inner);
+        // (by itself: ~38 px a second; a hand on it holds it 3 s; the reduced motion: still)
+        const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        let heldUntil = 0;
+        let pos = 0;
+        let last = performance.now();
+        const hold = () => {
+          heldUntil = performance.now() + 3000;
+        };
+        roll.addEventListener("wheel", hold, { passive: true });
+        roll.addEventListener("pointerdown", hold);
+        roll.addEventListener("keydown", (e) => {
+          const d =
+            e.key === "ArrowDown"
+              ? 60
+              : e.key === "ArrowUp"
+                ? -60
+                : e.key === "PageDown" || e.key === " "
+                  ? roll.clientHeight * 0.8
+                  : e.key === "PageUp"
+                    ? -roll.clientHeight * 0.8
+                    : 0;
+          if (!d) return;
+          e.preventDefault();
+          e.stopPropagation();
+          hold();
+          roll.scrollBy({ top: d, behavior: "smooth" });
+        });
+        const step = (now: number) => {
+          if (!roll.isConnected) return;
+          const dt = Math.min(now - last, 100) / 1000;
+          last = now;
+          if (now < heldUntil || still) pos = roll.scrollTop;
+          else {
+            pos += 38 * dt;
+            roll.scrollTop = pos;
+          }
+          requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+        return h("div", { class: "tt-page tt-credits", "data-mode": "credits" }, roll, this.foot([], true));
       },
     };
   }
