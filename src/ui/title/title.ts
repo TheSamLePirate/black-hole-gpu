@@ -14,6 +14,7 @@ import { glyph, onInputChange, watchInput } from "../menu/glyphs";
 import { type MenuScreen, MenuRouter } from "../menu/router";
 import { SCENE_THUMBS } from "../scene-thumbs";
 import { type Activity, MODES, MORE, type Mode, type TitleGame, VESSELS, type VesselChoice } from "./activities";
+import { MODE_ART, TURNTABLES, turntable } from "./art";
 
 const T = {
   tagline: { fr: "Un vol à travers l'espace-temps de Kerr — jusqu'à Gargantua", en: "A flight through Kerr spacetime — on to Gargantua" },
@@ -205,8 +206,7 @@ export class TitleScreen {
       "nav",
       { class: "tt-modes", "aria-label": tr(T.menu) },
       ...MODES.map((m, i) => {
-        const art = SCENE_THUMBS[m.art];
-        const img = h("img", { class: "tt-card-art", src: art ?? "", alt: "", loading: "eager" }) as HTMLImageElement;
+        const img = h("img", { class: "tt-card-art", src: MODE_ART[m.id].card, alt: "", loading: "eager" }) as HTMLImageElement;
         if (this.lastMode === m) img.style.viewTransitionName = "tt-art";
         const b = h(
           "button",
@@ -286,7 +286,10 @@ export class TitleScreen {
     );
   }
 
-  /** A list of entries and, beside it, the one focused shown large. */
+  /** the craft's turntable on the page shown (by ship), when there is one */
+  private turn: (HTMLElement & { set(url: string): void }) | null = null;
+
+  /** A list of entries and, beside it, the one focused shown large (a craft's: its turntable). */
   private listPage(id: string, title: string, art: string | undefined, items: Activity[], extra?: HTMLElement): HTMLElement {
     const page = h("div", { class: "tt-page tt-list", "data-mode": id });
     const preview = h("aside", { class: "tt-preview" });
@@ -294,10 +297,15 @@ export class TitleScreen {
     pImg.style.viewTransitionName = "tt-art";
     const pTitle = el("h3", "tt-preview-title", title);
     const pText = el("p", "tt-preview-text", "");
-    preview.append(h("div", { class: "tt-preview-frame" }, pImg), pTitle, pText);
-    const show = (a: Activity | null) => {
+    const frame = h("div", { class: "tt-preview-frame" }, pImg);
+    const crafts = items.some((a) => a.craft);
+    this.turn = crafts ? turntable(TURNTABLES[this.vessel]) : null;
+    if (this.turn) frame.append(this.turn);
+    preview.append(frame, pTitle, pText);
+    const show = (a: Activity | null, craft = !!a?.craft) => {
       const src = (a?.art && SCENE_THUMBS[a.art]) || art;
       if (src && pImg.getAttribute("src") !== src) pImg.src = src;
+      frame.classList.toggle("turning", craft && !!this.turn);
       pTitle.textContent = a ? tr(a.title) : title;
       pText.textContent = a ? tr(a.hint) : "";
     };
@@ -343,11 +351,24 @@ export class TitleScreen {
             b.addEventListener("click", () => {
               this.vessel = v.id;
               for (const c of chips!.querySelectorAll<HTMLElement>(".tt-vessel")) c.classList.toggle("on", c === b);
+              this.turn?.set(TURNTABLES[v.id]);
             });
             chips.append(b);
           }
         }
-        return this.listPage(m.id, tr(m.title), SCENE_THUMBS[m.art], m.activities, chips);
+        const page = this.listPage(m.id, tr(m.title), MODE_ART[m.id].wide, m.activities, chips);
+        // (a craft's chip focused: its turntable, its name and what it is)
+        for (const v of VESSELS) {
+          const b = page.querySelector<HTMLElement>(`[data-testid=title-vessel-${v.id}]`);
+          const showV = () => {
+            page.querySelector(".tt-preview-frame")?.classList.add("turning");
+            page.querySelector(".tt-preview-title")!.textContent = v.title;
+            page.querySelector(".tt-preview-text")!.textContent = tr(v.hint);
+          };
+          b?.addEventListener("focus", showV);
+          b?.addEventListener("pointerenter", showV);
+        }
+        return page;
       },
       // (the shoulder buttons: the craft before, after)
       action: (a) => {
@@ -368,7 +389,7 @@ export class TitleScreen {
           { id: "more-load", title: T.load, hint: T.loadHint, opens: true, run: () => {} },
           ...MORE.filter((a) => a.id !== "more-network" || !this.game || this.game.networkShown()),
         ];
-        const page = this.listPage("more", tr(T.more), SCENE_THUMBS["Gargantua under the distant galaxy"], items);
+        const page = this.listPage("more", tr(T.more), MODE_ART.free.wide, items);
         // (Load: a screen of its own, not a launch)
         page.querySelector<HTMLElement>("[data-testid=title-act-more-load]")?.addEventListener(
           "click",

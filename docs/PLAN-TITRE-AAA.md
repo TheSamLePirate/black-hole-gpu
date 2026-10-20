@@ -504,7 +504,7 @@ Chaque phase : un commit, une planche de captures (`docs/progress/title-aaa/`), 
   est abandonnée, pas une déjà lancée — fiche E0).
 - Corrige les constats 2, 3 et 8.
 
-### E3 — Les illustrations (M)
+### E3 — Les illustrations (M) — FAIT ([fiche](progress/title-aaa/E3.md), [planche](progress/title-aaa/E3.jpg) : 4 illustrations et 3 rotations de 36 vues, toutes rendues par le jeu)
 
 - 4 key arts de mode et 3 rotations de vaisseau, rendus par le jeu (script `__bh`, rendu convergé), puis
   compressés.

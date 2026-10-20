@@ -58,6 +58,8 @@ export interface Activity {
   art?: string;
   /** a panel opened rather than a place reached (no "launching" said meanwhile) */
   opens?: boolean;
+  /** flown in the craft chosen (by ship): its turntable shown, not a picture */
+  craft?: boolean;
   run(g: TitleGame, o: { vessel: VesselChoice }): void;
 }
 
@@ -65,7 +67,6 @@ export interface Mode {
   id: ModeId;
   title: Text;
   pitch: Text;
-  art: string;
   /** the craft is chosen here (by ship) */
   vessels?: boolean;
   activities: Activity[];
@@ -76,7 +77,6 @@ export const MODES: Mode[] = [
     id: "foot",
     title: { fr: "À pied", en: "On foot" },
     pitch: { fr: "Marcher sur la Lune, la Terre, Mars", en: "Walk the Moon, the Earth, Mars" },
-    art: "Moon: Earthrise",
     activities: [
       {
         id: "foot-moon",
@@ -112,13 +112,11 @@ export const MODES: Mode[] = [
     id: "plane",
     title: { fr: "En avion", en: "By plane" },
     pitch: { fr: "F-35B : vol libre, combat, leçons, défis", en: "F-35B: free flight, combat, lessons, challenges" },
-    art: "Earth: Everest at sunset from Kala Patthar",
     activities: [
       {
         id: "plane-takeoff",
         title: { fr: "Décoller maintenant", en: "Take off now" },
         hint: { fr: "Le F-35B aligné sur la piste, moteur en route", en: "The F-35B lined up on the runway, engine running" },
-        art: "Earth: Everest at sunset from Kala Patthar",
         run: (g) => g.jet(),
       },
       {
@@ -148,14 +146,13 @@ export const MODES: Mode[] = [
     id: "ship",
     title: { fr: "En vaisseau", en: "By ship" },
     pitch: { fr: "Ranger, Lander, Endurance : l'orbite, la Lune, Gargantua", en: "Ranger, Lander, Endurance: orbit, the Moon, Gargantua" },
-    art: "game:artemis",
     vessels: true,
     activities: [
       {
         id: "ship-orbit",
         title: { fr: "Orbite basse terrestre", en: "Low Earth orbit" },
         hint: { fr: "400 km au-dessus de la Terre, avec le vaisseau choisi", en: "400 km above the Earth, in the craft chosen" },
-        art: "Earth: low orbit over the Amazon",
+        craft: true,
         run: (g, o) => {
           g.vessel(o.vessel);
           g.orbit("earth", 400);
@@ -194,6 +191,7 @@ export const MODES: Mode[] = [
         title: { fr: "Placer le vaisseau…", en: "Place the ship…" },
         hint: { fr: "En orbite, au sol, près d'un corps, au trou de ver", en: "In orbit, on the ground, near a body, at the wormhole" },
         opens: true,
+        craft: true,
         run: (g, o) => {
           g.vessel(o.vessel);
           g.place();
@@ -205,7 +203,6 @@ export const MODES: Mode[] = [
     id: "free",
     title: { fr: "Caméra libre", en: "Free camera" },
     pitch: { fr: "Les trous noirs, le trou de ver, Gargantua", en: "The black holes, the wormhole, Gargantua" },
-    art: "Interstellar: along the disk (the film's close pass)",
     activities: [
       {
         id: "free-film",

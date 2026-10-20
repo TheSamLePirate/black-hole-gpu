@@ -232,6 +232,21 @@
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
 }
 .tt-preview-art { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* the hangar's turntable (ui/title/art.ts): over the picture when a craft is shown, turned by a drag */
+.tt-preview-frame { position: relative; }
+.tt-turn {
+  position: absolute;
+  inset: 0;
+  background-size: 600% 600%;
+  background-repeat: no-repeat;
+  opacity: 0;
+  pointer-events: none;
+  cursor: grab;
+  transition: opacity var(--m-mid) var(--m-ease);
+  touch-action: none;
+}
+.tt-preview-frame.turning .tt-turn { opacity: 1; pointer-events: auto; }
+.tt-preview-frame.turning .tt-turn:active { cursor: grabbing; }
 .tt-preview-title { margin: 6px 0 0; font: 700 clamp(22px, 2.2vw, 32px) var(--m-f-title); letter-spacing: 0.06em; color: var(--m-ink); }
 .tt-preview-text { margin: 0; max-width: 62ch; font: 400 15px / 1.55 var(--m-f-text); color: var(--m-dim); }
 

@@ -58,8 +58,14 @@ describe.skipIf(!E2E)("the title screen", () => {
     await Bun.sleep(400);
     expect(await focused()).toBe("title-act-ship-orbit");
     // (the craft by the shoulder buttons' keys: Q/E — A/E on AZERTY)
+    // (a launch in the craft chosen: its turntable shown — E3 —, turning)
+    expect(await app.js<boolean>(`document.querySelector(".tt-preview-frame").classList.contains("turning")`)).toBe(true);
+    const pos0 = await app.js<string>(`document.querySelector(".tt-turn").style.backgroundPosition`);
+    await Bun.sleep(700);
+    expect(await app.js<string>(`document.querySelector(".tt-turn").style.backgroundPosition`)).not.toBe(pos0);
     await app.press("KeyE", "e");
     expect(await app.js<boolean>(`document.querySelector("[data-testid=title-vessel-lander]").classList.contains("on")`)).toBe(true);
+    expect(await app.js<string>(`document.querySelector(".tt-turn").style.backgroundImage`)).toContain("turn-lander");
     await shot("E2-3-vaisseau");
     await app.press("Escape");
     await app.waitFor(`document.querySelector("[data-screen='title']")`, 3000);
