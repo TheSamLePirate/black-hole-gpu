@@ -60,11 +60,21 @@ les axes du repère du jeu :
   - `time` : facteur de temps, horloge de salle, dτ/dt et temps propre ;
   - `link` : temps de la lumière vers la Terre, coupé derrière le trou de ver ;
   - `ring`, `ports` : l'anneau et les ports de l'Endurance ;
-  - `kerr` : du côté de Gargantua, r, E et L.
+  - `kerr` : du côté de Gargantua, r, E et L ;
+  - `att` (nez et haut du vaisseau, axes de sa pose), `dock` (géométrie d'amarrage à moins de 5 km d'un port),
+    `land` (le site visé ou le point du LPD, en latitude et longitude sur son corps), `time.met` (temps de
+    mission) — PLAN-VAISSEAUX K4.
 - une fois par seconde :
   - `traj` : la trajectoire libre (96 points) et la trajectoire planifiée (72 points), découpées par sphère
     d'influence (6 morceaux au plus), avec leur sort (continue, impact, trou de ver) ;
-  - `bodies` : le Soleil, les planètes et les lunes du corps visité, depuis la bouche du trou de ver.
+  - `bodies` : le Soleil, les planètes et les lunes du corps visité, depuis la bouche du trou de ver (leur vitesse et
+    leur GM : la console en tire leurs orbites) ;
+  - `hole` : le côté Gargantua (le trou noir, son spin, Miller et Mann, la bouche, l'Endurance) pour la carte
+    système (K3) ;
+  - `others` (PLAN-VAISSEAUX N6) : les autres vaisseaux de la salle autour du même corps, en km, 8 au plus, leur nom,
+    leur vaisseau et leur couleur (vérifiée à la lecture, remplacée si fautive).
+- Les blocs envoyés une fois par seconde sont gardés par la console et remis dans les instantanés suivants (K7 : ils
+  se perdaient trois images sur quatre).
 - Un instantané lourd tient sous 16 Ko (Endurance en orbite : 8,8 Ko).
 
 Le contrat est `src/net/instruments.ts`. Les tableaux et les textes reçus sont bornés, les valeurs non finies
@@ -130,7 +140,9 @@ de sa pose), `dock`, `land` et `time.met` de l'instantané.
 **Orbite** : la conique autour du corps de la sphère, vue de dessus de son plan (périapside en haut), reconstruite à
 partir de l'état reçu (`src/crew/orbitmath.ts`) ; le corps à l'échelle, Pe et Ap avec leurs hauteurs, le vaisseau,
 les poussées du plan là où elles tombent (Kepler), la branche d'une hyperbole et la trajectoire libre dans la
-sphère ; les éléments à côté.
+sphère ; les éléments à côté. **Les autres vaisseaux de la salle** autour du même corps (bloc `others`, N6) y sont
+dessinés dans le plan de l'orbite suivie, à leur couleur, avec leur nom et leur vaisseau (pas encore sur la carte
+système 3D).
 
 | vue | contenu |
 |---|---|
@@ -203,6 +215,9 @@ salle (« Brand · FIDO ») et la console vaisseau s'ouvre sur la vue de son pos
   bord, en différé depuis le sol. Le pilote le reçoit en toast (`crew-msg`).
 - Le badge indique le poste et la liaison (« VAISSEAU · RANGER — FIDO · SOL +2 S », en rouge quand la liaison est
   coupée). La ligne d'état indique les mesures différées.
+- Un poste au sol reconnaît un vaisseau déjà derrière le trou de ver à son dernier mot (son profil, son badge, sa
+  carte) : « Liaison coupée — derrière le trou de ver : son dernier mot » (K7).
+- Les messages vocaux enregistrés ne sont pas encore faits : le texte seulement.
 
 ## Les actions vaisseau (K6)
 
@@ -282,6 +297,14 @@ jeu, appelées directement — aucun agent, aucun modèle — et par trois appel
 (sélecteurs du pilote automatique), `navSet` (LNAV/VNAV), `routeSetPoint` (un point du plan modifié). Un toucher
 sur le ND redevient un lieu par le problème direct de WGS84 (`wgs84Direct`).
 
+**Le copilote à bord** (PLAN-VAISSEAUX N3) : un joueur passé dans le vaisseau d'un autre par le sas (amarré en orbite,
+onglet Flotte › Monter à bord, ou ⇧K) en devient le passager et reçoit dans l'onglet Flotte du panneau Réseau les
+commandes de copilote — SAS, prograde, rétrograde, tenue coupée, maintien à poste, autopilote coupé, anneau + et −,
+exécuter le plan. Elles partent par ce même chemin (`crew-cmd`, validées par leur schéma, au rythme de l'équipage) :
+le pilote les accepte d'un passager à bord comme d'un écran d'équipage, sous le même verrou, et la réponse revient au
+copilote (« Copilote : Anneau : 5 tr/min demandés »). Le passager peut aussi demander les commandes (`helm-ask`) ;
+voir [`NETWORK.fr.md`](NETWORK.fr.md), *Les vaisseaux ensemble*.
+
 La console n'a plus de TARS : elle agit par ses propres contrôles. Dans l'application classique, TARS peut
 toujours ouvrir le partage et son QR via `show_screen(crew_console)`.
 
@@ -324,8 +347,11 @@ trois vaisseaux scénarisés (une salle accueille quatre pilotes) :
 
 Chacun répond aux ordres de l'équipage. Les e2e vaisseau : `crew-space` (profils, vues, carte 3D), `crew-stations`
 (postes, délai, liaison coupée), `crew-space-actions` (ordres sur le vrai simulateur), `crew-demo-space` (la salle
-de démonstration sans WebGPU : le repli 2D de la carte). Captures : `remote-results/crew-*.png`. Le WebGPU est rendu inaccessible dans la console
-pendant ce test. Safari/iPadOS et les chemins TURN réels demandent une validation sur appareil/réseau réel.
+de démonstration sans WebGPU : le repli 2D de la carte). Captures : `remote-results/crew-*.png`. Le WebGPU est rendu
+inaccessible dans la console pendant ce test. Safari/iPadOS et les chemins TURN réels demandent une validation sur
+appareil/réseau réel. Côté réseau : `net-time` (un écran crew reçoit l'autre pilote dans le bloc `others`, la vue
+ORBITE le dessine) et `net-crew` (le copilote à bord). La référence des vaisseaux :
+[`VAISSEAUX.fr.md`](VAISSEAUX.fr.md).
 
 Fond vectoriel : Natural Earth, domaine public, `ne_110m_coastline.geojson`, issu de
 https://github.com/nvkelso/natural-earth-vector/blob/master/geojson/ne_110m_coastline.geojson ; un point sur deux

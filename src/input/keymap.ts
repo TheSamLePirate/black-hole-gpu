@@ -309,7 +309,7 @@ export const KEYMAP: KeySection[] = [
       },
       {
         keys: "8 · 9 · 0 · ⇧0 · F7 · U · B",
-        text: "Autopilot: hold position · circularize · approach · orbit the target · land · take off · dock (the ISS within 3 km)",
+        text: "Autopilot: hold position · circularize · approach · orbit the target · land · take off · dock (within 3 km; farther, the whole rendezvous)",
         bind: [
           fly("Digit8", "auto", { arg: "hover", shift: false }),
           fly("Digit9", "auto", { arg: "circularize", shift: false }),
