@@ -12,6 +12,7 @@ import { netRadar } from "./hud/symbology";
 import type { NetMatch } from "./netmatch";
 import type { NetSession } from "./netsession";
 import { fleetRows, orderName, rangeText, SPACE_ORDERS } from "../net/spacefleet";
+import { SHARE_WHATS, shareName } from "../net/spaceshare";
 import type { NetVoice } from "./netvoice";
 
 type Client = InstanceType<NetModule["NetClient"]>;
@@ -138,8 +139,13 @@ export class NetPanel {
     this.render();
     // (the link's figures kept fresh while the panel is open)
     // (not while one types: the field would be made again under the caret)
+    // (nor while a button is held: made again between its press and its release, the click was lost)
+    let pressing = false;
+    this.body.addEventListener("pointerdown", () => (pressing = true));
+    window.addEventListener("pointerup", () => setTimeout(() => (pressing = false), 0));
     this.pulse = setInterval(() => {
       const f = document.activeElement;
+      if (pressing) return;
       if (this.net?.room && !((f instanceof HTMLInputElement || f instanceof HTMLSelectElement) && this.body?.contains(f))) this.render();
     }, 1000);
   }
@@ -624,7 +630,9 @@ export class NetPanel {
     const wrap = h("div", "netp-fleet");
     wrap.dataset.testid = "net-fleet";
     if (!S) return wrap;
-    const rows = fleetRows(room.members, S.spaceTel, room.slot, S.near);
+    // (riding in another's craft — N3: his copilot's controls)
+    if (S.follow?.why === "passenger") wrap.append(this.copilotCard(S, room.members.find((m) => m.slot === S.follow!.slot)?.name ?? "—"));
+    const rows = fleetRows(room.members, S.spaceTel, room.slot, S.near).filter((r) => !S.aboard.has(r.slot) && !(r.me && S.follow));
     if (!rows.length) {
       wrap.append(
         h("p", "netp-stat", t("No spacecraft in the room — the fleet lists the pilots flying a Ranger, a Lander or the Endurance")),
@@ -661,7 +669,24 @@ export class NetPanel {
       who.append(line, sub);
       li.append(dot, h("i", ""), who);
       const acts = h("div", "netp-acts");
+      const riders = [...S.aboard]
+        .filter(([, host]) => host === r.slot)
+        .map(([p]) => room.members.find((m) => m.slot === p)?.name ?? `#${p}`);
+      if (riders.length) sub.append(h("em", "netp-aboard", tf("aboard: {0}", riders.join(", "))));
       if (!r.me && mine) {
+        // (our craft docked to his — N3: through the hatch)
+        if (S.dockedWith(r.slot))
+          acts.append(
+            button({
+              label: t("Go aboard"),
+              kind: "primary",
+              testid: `net-board-${r.slot}`,
+              onClick: () => {
+                this.host.toast(S.boardSpace(r.slot));
+                this.render();
+              },
+            }),
+          );
         acts.append(
           button({
             label: t("Target"),
@@ -671,6 +696,27 @@ export class NetPanel {
               this.render();
             },
           }),
+        );
+        // (docked together — N2: what one asks of the other)
+        if (S.dockedWith(r.slot))
+          for (const w of SHARE_WHATS)
+            acts.append(
+              button({
+                label: shareName(w),
+                testid: `net-share-${w}-${r.slot}`,
+                onClick: () => {
+                  this.host.toast(S.shareAsk(r.slot, w));
+                  this.render();
+                },
+              }),
+            );
+        acts.append(
+          button({
+            label: t("Send my target"),
+            testid: `net-send-target-${r.slot}`,
+            onClick: () => this.host.toast(S.shareTarget(r.slot)),
+          }),
+          button({ label: t("Send my plan"), testid: `net-send-plan-${r.slot}`, onClick: () => this.host.toast(S.sharePlan(r.slot)) }),
         );
         for (const o of SPACE_ORDERS)
           acts.append(
@@ -689,6 +735,50 @@ export class NetPanel {
     }
     wrap.append(list);
     return wrap;
+  }
+
+  /** aboard another's craft (N3): his copilot's controls — SAS, holds, station keeping, the ring, the plan —, the
+   *  controls asked, back to one's own craft */
+  private copilotCard(S: NetSession, pilot: string) {
+    const card = h("div", "netp-copilot");
+    card.dataset.testid = "net-copilot";
+    card.append(h("b", "netp-lab", tf("Copilot aboard {0}'s craft", pilot)));
+    const row = h("div", "netp-acts");
+    const go = (label: string, testid: string, f: () => string) =>
+      button({
+        label,
+        testid,
+        onClick: () => {
+          this.host.toast(f());
+          this.render();
+        },
+      });
+    row.append(
+      go(t("SAS on"), "net-cp-sas", () => S.copilot("cfg.sas", { on: true })),
+      go(t("Prograde"), "net-cp-pro", () => S.copilot("sp.hold", { direction: "prograde" })),
+      go(t("Retrograde"), "net-cp-retro", () => S.copilot("sp.hold", { direction: "retrograde" })),
+      go(t("Hold off"), "net-cp-hold-off", () => S.copilot("sp.hold", { direction: "none" })),
+      go(t("Station keeping"), "net-cp-keep", () => S.copilot("sp.auto", { mode: "keep" })),
+      go(t("Autopilot off"), "net-cp-auto-off", () => S.copilot("sp.auto", { mode: "none" })),
+      go(t("Ring +"), "net-cp-ring-up", () => S.copilot("sp.ring", { dir: 1 })),
+      go(t("Ring −"), "net-cp-ring-down", () => S.copilot("sp.ring", { dir: -1 })),
+      go(t("Execute the plan"), "net-cp-exec", () => S.copilot("sp.plan", { action: "execute" })),
+    );
+    const own = h("div", "netp-acts");
+    own.append(
+      button({
+        label: t("Take the controls"),
+        kind: "primary",
+        testid: "net-helm-ask",
+        onClick: () => {
+          this.host.toast(S.helmAsk());
+          this.render();
+        },
+      }),
+      go(t("Back to my craft"), "net-alight", () => S.boardToggle() ?? ""),
+    );
+    card.append(row, own);
+    return card;
   }
 
   /** the crew: each member — his colour, his voice, his name, his role, how his samples come; his volume, and

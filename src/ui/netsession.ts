@@ -26,7 +26,7 @@ import {
 } from "../controller/netcraft";
 import { netDock } from "../controller/docking";
 import { bankAccel, formationBank } from "../game/formation";
-import { type Body, isNetTarget, netTargetId, netTargets } from "../targeting";
+import { BODY_NAMES, type Body, isNetTarget, netTargetId, netTargets } from "../targeting";
 import { fleet } from "../fleet";
 import type { JetInputs } from "../f35/pose";
 import type { GameTools } from "../game/tools";
@@ -50,6 +50,13 @@ import { checkMission, type MissionSpec } from "../game/mission";
 import type { MissionShared } from "../controller/mission";
 import { type RemoteWing, wingsOut } from "../controller/wingmen";
 import { type RadioRole, SHARED_ROLES } from "../game/radio";
+import { amountOf, amountText, giveAmount, isShareWhat, roomFor, type ShareWhat } from "../net/spaceshare";
+import { SYSTEMS } from "../game/systems";
+import { propellantKg, spentFor } from "../game/propellant";
+import { fuelOn } from "../engine";
+import type { ManeuverNode } from "../maneuver";
+import { type Act, readCrewAck, sayOf } from "../net/crewcmd";
+import { lang } from "../i18n";
 import {
   isSpaceOrder,
   orderAsk,
@@ -173,6 +180,7 @@ export class NetSession {
       toast: (s) => d.toast(s),
       nameOf: (slot) => this.nameOf(slot),
       families: () => crewFamilies(d.camera),
+      aboard: (slot) => this.aboard.get(slot) === this.net?.room?.slot,
     });
     return this.crewExecOf;
   }
@@ -502,6 +510,9 @@ export class NetSession {
           if (o.id === "rejoin" && cam.form?.slot !== from && VESSELS[fleet.active].flies) this.formation(from);
         } else if (e.kind === "board" && typeof e.to === "number") {
           this.aboard.set(from, e.to);
+          // (his craft handed over — N3: gone, his last samples no craft any more; the one he boards flown again)
+          if ((ev as unknown as { gone?: unknown }).gone === true) this.handed.add(from);
+          this.handed.delete(e.to);
           if (e.to === net.room?.slot) this.d.toast(tf("{0} is aboard", this.nameOf(from)));
         } else if (e.kind === "dock" && typeof e.to === "number") {
           const d = ev as unknown as { port: number; ownPort: number; c: Vec3; ax: [Vec3, Vec3, Vec3] };
@@ -537,6 +548,87 @@ export class NetSession {
           if (!isSpaceOrder(a.o)) return;
           this.orderAnswers.set(from, { o: a.o, yes: !!a.yes });
           this.d.toast(a.yes ? tf("{0} accepts: on the way", this.nameOf(from)) : tf("{0} refuses", this.nameOf(from)));
+        } else if (e.kind === "xask" && e.to === net.room?.slot) {
+          // (a craft docked to ours short of something — N2: ours to give, as much as we can spare)
+          const a = ev as unknown as { what?: unknown; need?: unknown };
+          const need = amountOf(a.need);
+          if (!isShareWhat(a.what) || need === null) return;
+          const what = a.what;
+          const who = this.nameOf(from);
+          const reply = (amt: number, why?: string) => this.net?.event({ kind: "xgive", to: from, what, amt, why });
+          if (!this.dockedWith(from)) return reply(0, "not docked");
+          const ask = tf("{0} asks for {1}", who, amountText(what, need));
+          const answer = (yes: boolean) => {
+            if (!yes) return reply(0, "refused");
+            const C = this.consumable(what);
+            const amt = C ? giveAmount(C.have, C.cap, need) : 0;
+            if (amt <= 0) {
+              this.d.toast(tf("Nothing to spare for {0}", who));
+              return reply(0, "none to spare");
+            }
+            this.setConsumable(what, C!.have - amt);
+            this.shared.gave += amt;
+            this.d.toast(tf("Given to {0}: {1}", who, amountText(what, amt)));
+            reply(amt);
+          };
+          if (this.d.ask) this.d.ask(ask, answer, "net-share");
+          else answer(true);
+        } else if (e.kind === "xgive" && e.to === net.room?.slot) {
+          const g = ev as unknown as { what?: unknown; amt?: unknown; why?: unknown };
+          if (!isShareWhat(g.what)) return;
+          const amt = amountOf(g.amt);
+          const who = this.nameOf(from);
+          if (amt === null) {
+            this.d.toast(tf("{0} gives nothing ({1})", who, t(typeof g.why === "string" ? g.why.slice(0, 40) : "refused")));
+            return;
+          }
+          const C = this.consumable(g.what);
+          if (C) this.setConsumable(g.what, Math.min(C.cap, C.have + amt));
+          this.shared.got += amt;
+          this.d.toast(tf("Received from {0}: {1}", who, amountText(g.what, amt)));
+        } else if (e.kind === "xtgt" && e.to === net.room?.slot) {
+          // (another's target sent — N2: ours too; his own craft when he aimed at ours)
+          const id = (ev as unknown as { id?: unknown }).id;
+          if (typeof id !== "string" || id.length > 40) return;
+          const mine = id === String(netTargetId(net.room!.slot)) ? String(netTargetId(from)) : id;
+          this.d.camera.selectTarget(mine as never);
+          const named = isNetTarget(mine) ? netTargets.name(mine as never) : (BODY_NAMES[mine as Body] ?? mine);
+          this.d.toast(tf("{0} sent their target: {1}", this.nameOf(from), named));
+        } else if (e.kind === "xplan" && e.to === net.room?.slot) {
+          // (another's mission plan sent — N2: its burns, on the room's clock, ours to fly)
+          const nodes = (ev as unknown as { nodes?: unknown }).nodes;
+          if (!Array.isArray(nodes) || !nodes.length || nodes.length > 12) return;
+          const ok = (n: { t?: unknown; dv?: unknown }) =>
+            Number.isFinite(n?.t) && Array.isArray(n.dv) && n.dv.length === 3 && n.dv.every((x) => Number.isFinite(x));
+          if (!nodes.every(ok)) return;
+          const c = this.d.camera;
+          const now = c.nowTime();
+          const ahead = (nodes as ManeuverNode[]).filter((n) => n.t > now).map((n) => ({ t: n.t, dv: [...n.dv] as Vec3 }));
+          if (!ahead.length) return this.d.toast(tf("{0}'s plan: its burns are past", this.nameOf(from)));
+          c.clearPlan();
+          c.plan = { nodes: ahead, path: null, at: now, note: tf("{0}'s plan", this.nameOf(from)) };
+          c.refreshPlan(true);
+          this.d.toast(tf("{0} sent their plan: {1} burn(s)", this.nameOf(from), ahead.length));
+        } else if (e.kind === "crew-ack" && e.to === net.room?.slot && this.follow?.why === "passenger") {
+          // (our copilot's order answered by the pilot — N3)
+          const A = readCrewAck(ev);
+          if (!A) return;
+          const said = sayOf(A.act, {})[lang === "fr" ? "fr" : "en"];
+          this.d.toast(A.ok ? tf("Copilot: {0}", A.msg || said) : tf("Copilot refused: {0}", A.msg || said));
+        } else if (e.kind === "helm-ask" && e.to === net.room?.slot) {
+          // (our passenger asks for the controls — N3: ours to hand over, then we ride with him)
+          if (this.aboard.get(from) !== net.room!.slot) return;
+          const who = this.nameOf(from);
+          const answer = (yes: boolean) => {
+            if (!yes) return this.net?.event({ kind: "helm-no", to: from });
+            this.d.toast(this.handOver(from));
+          };
+          if (this.d.ask) this.d.ask(tf("{0} asks to take the controls", who), answer, "net-helm");
+          else answer(false);
+        } else if (e.kind === "helm-no" && e.to === net.room?.slot) {
+          this.d.toast(tf("{0} keeps the controls", this.nameOf(from)));
+        } else if (e.kind === "helm" && e.to === net.room?.slot && this.follow?.why === "passenger" && this.follow.slot === from) {
+          this.d.toast(this.takeHelm(from, (ev as unknown as { st?: unknown }).st));
         } else if (e.kind === "alight") {
           if (this.aboard.get(from) === net.room?.slot) this.d.toast(tf("{0} got off", this.nameOf(from)));
           this.aboard.delete(from);
@@ -562,7 +654,7 @@ export class NetSession {
     // (those docked to our craft: held on it)
     const attached = new Map([...this.links].filter(([, l]) => l.host === net.room!.slot).map(([g, l]) => [g, { c: l.c, ax: l.ax }]));
     const all = c.netShips(
-      states.filter((s) => !this.hidden.has(s.slot) || s.slot === this.follow?.slot),
+      states.filter((s) => (!this.hidden.has(s.slot) && !this.handed.has(s.slot)) || s.slot === this.follow?.slot),
       dt,
       Infinity,
       attached,
@@ -911,6 +1003,12 @@ export class NetSession {
   /** The others' range and closing from ours this frame; a craft closing in near, not docked: the proximity warning. */
   private nearStep(all: NetShip[], me: number) {
     const now = performance.now() / 1000;
+    // (riding in another's craft: not ours to measure from)
+    if (this.follow) {
+      this.near.clear();
+      this.nearPrev.clear();
+      return;
+    }
     const seen = new Set<number>();
     for (const s of all) {
       if (s.ghost || s.slot >= 200 || !Number.isFinite(s.dist)) continue;
@@ -951,6 +1049,73 @@ export class NetSession {
   target(slot: number): string {
     this.d.camera.selectTarget(netTargetId(slot) as never);
     return tf("Target: {0}", this.nameOf(slot));
+  }
+
+  /** what was given and received this session (N2: the e2e's counts, in the unit of each) */
+  shared = { gave: 0, got: 0 };
+
+  /** Whether our craft and another's are docked together (either on the other). */
+  dockedWith(slot: number): boolean {
+    const me = this.net?.room?.slot;
+    if (me === undefined) return false;
+    return this.links.get(slot)?.host === me || this.links.get(me)?.host === slot || this.d.camera.netDocked?.id === `net:${slot}`;
+  }
+
+  /** The flown craft's store of a consumable: what it has, what it holds (null: not counted — an aircraft, the
+   *  propellant not counted in the scene). */
+  private consumable(what: ShareWhat): { have: number; cap: number } | null {
+    const c = this.d.camera;
+    const v = fleet.active;
+    if (!SPACE_VESSELS.includes(v as never)) return null;
+    if (what === "prop") {
+      if (!fuelOn(this.d.settings) || !fleet.tanks) return null;
+      const p = propellantKg(VESSELS[v].mass, fleet.tanks, fleet.spent[v] ?? 0);
+      return { have: p.kg, cap: p.full };
+    }
+    const S = c.systemsOf(v);
+    if (!S) return null;
+    const spec = SYSTEMS[v as keyof typeof SYSTEMS];
+    return what === "power" ? { have: S.battery, cap: spec.batteryKWh } : { have: S.o2, cap: spec.o2Kg };
+  }
+  private setConsumable(what: ShareWhat, x: number) {
+    const v = fleet.active;
+    if (what === "prop") {
+      if (fleet.tanks) fleet.spent[v] = spentFor(VESSELS[v].mass, fleet.tanks, Math.max(0, x));
+      return;
+    }
+    const S = this.d.camera.systemsOf(v);
+    if (!S) return;
+    if (what === "power") S.battery = Math.max(0, x);
+    else S.o2 = Math.max(0, x);
+  }
+
+  /** Something asked of the craft docked to ours (N2): as much as ours can hold. What to say. */
+  shareAsk(slot: number, what: ShareWhat): string {
+    if (!this.net?.room) return t("Not in a room");
+    if (!this.dockedWith(slot)) return t("Docked together first");
+    const C = this.consumable(what);
+    if (!C) return what === "prop" ? t("The propellant is not counted in this scene") : t("Systems: a spacecraft's");
+    const need = roomFor(C.have, C.cap);
+    if (need < (what === "prop" ? 1 : 0.1)) return t("Already full");
+    this.net.event({ kind: "xask", to: slot, what, need });
+    return tf("Asked {0} for {1}", this.nameOf(slot), amountText(what, need));
+  }
+
+  /** Our target sent to another (N2). What to say. */
+  shareTarget(slot: number): string {
+    if (!this.net?.room) return t("Not in a room");
+    const id = String(this.d.settings.target);
+    this.net.event({ kind: "xtgt", to: slot, id });
+    return tf("Target sent to {0}", this.nameOf(slot));
+  }
+
+  /** Our mission plan sent to another (N2): its burns, his to fly. What to say. */
+  sharePlan(slot: number): string {
+    if (!this.net?.room) return t("Not in a room");
+    const nodes = this.d.camera.plan.nodes.filter((n) => !n.goal).map((n) => ({ t: n.t, dv: n.dv }));
+    if (!nodes.length) return t("No plan to send (the map, MISSION)");
+    this.net.event({ kind: "xplan", to: slot, nodes: nodes.slice(0, 12) });
+    return tf("Plan sent to {0}: {1} burn(s)", this.nameOf(slot), nodes.length);
   }
 
   /** An order to another pilot's spacecraft (N1): sent, his answer heard later. What to say. */
@@ -1139,6 +1304,9 @@ export class NetSession {
     if (!net?.room) return undefined;
     if (this.follow?.why === "passenger") return this.alight();
     const c = this.d.camera;
+    // (docked to another's craft in space — N3: through the hatch, aboard it)
+    const host = c.netDocked ? Number(String(c.netDocked.id).slice(4)) : -1;
+    if (host >= 0 && host < AWAY_SLOT) return this.boardSpace(host);
     const near = this.craftNear();
     if (!near) return undefined;
     // (our own hatch nearer: ours)
@@ -1153,10 +1321,149 @@ export class NetSession {
     return tf("Aboard {0}'s craft — ⇧K to get off once landed", name);
   }
 
+  /** boarded from our craft docked to his (N3): getting off is back through the hatch, whenever */
+  private spaceBoard = false;
+  /** those whose craft was handed over (N3): their last samples no craft — not drawn, not docked to, not struck */
+  handed = new Set<number>();
+  /** riding in the craft we handed over (N3): ours is his now — no craft of our own to get back to */
+  private handedOver = false;
+
+  /** Aboard another's craft our own is docked to (N3): his passenger — every view his —, his copilot. What to say. */
+  boardSpace(slot: number): string {
+    const net = this.net;
+    if (!net?.room) return t("Not in a room");
+    const c = this.d.camera;
+    if (c.netDocked?.id !== `net:${slot}`) return t("Docked to their craft first");
+    this.spaceBoard = true;
+    this.setFollow(slot, "passenger");
+    net.event({ kind: "board", to: slot });
+    return tf("Aboard {0}'s craft — their copilot (the Fleet tab); ⇧K back to yours", this.nameOf(slot));
+  }
+
+  /** An order to the craft we ride in, as its copilot (N3): sent as a crew screen's, its answer heard. */
+  copilot(act: Act, args: Record<string, unknown> = {}): string {
+    const net = this.net;
+    const F = this.follow;
+    if (!net?.room || F?.why !== "passenger") return t("Aboard another's craft first");
+    const id = `cp-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4)}`;
+    net.event({ kind: "crew-cmd", v: 1, id, to: F.slot, act, args });
+    return tf("To {0}: {1}", this.nameOf(F.slot), sayOf(act, args)[lang === "fr" ? "fr" : "en"]);
+  }
+
+  /** The controls asked of the pilot we ride with (N3). What to say. */
+  helmAsk(): string {
+    const net = this.net;
+    const F = this.follow;
+    if (!net?.room || F?.why !== "passenger") return t("Aboard another's craft first");
+    net.event({ kind: "helm-ask", to: F.slot });
+    return tf("Asked {0} for the controls", this.nameOf(F.slot));
+  }
+
+  /** Our craft handed over to our passenger (N3): its state sent to him — he flies it from now —, we ride with him. */
+  private handOver(slot: number): string {
+    const net = this.net!;
+    const c = this.d.camera;
+    const P = c.activePoseNow();
+    const v = fleet.active;
+    if (!P || !SPACE_VESSELS.includes(v as never) || this.lastStatus?.side === "gargantua")
+      return t("The controls change hands in our universe, in a spacecraft");
+    const S = c.systemsOf(v);
+    net.event({
+      kind: "helm",
+      to: slot,
+      st: {
+        vessel: v,
+        X: [...P.X],
+        V: [...P.V],
+        fwd: [...P.ax[2]],
+        up: [...P.ax[1]],
+        spent: fleet.spent[v] ?? 0,
+        battery: S?.battery ?? null,
+        o2: S?.o2 ?? null,
+      },
+    });
+    c.pilot.setAuto("none");
+    c.pilot.throttle = 0;
+    this.aboard.delete(slot);
+    this.spaceBoard = true;
+    this.handedOver = true;
+    this.setFollow(slot, "passenger");
+    net.event({ kind: "board", to: slot, gone: true });
+    return tf("Controls handed to {0} — you ride as their copilot", this.nameOf(slot));
+  }
+
+  /** The craft we ride in taken over (N3): ours set to it — its kind, its state —, the pilot now our passenger. */
+  private takeHelm(from: number, x: unknown): string {
+    const st = x as {
+      vessel?: unknown;
+      X?: unknown;
+      V?: unknown;
+      fwd?: unknown;
+      up?: unknown;
+      spent?: unknown;
+      battery?: unknown;
+      o2?: unknown;
+    } | null;
+    const v3 = (a: unknown) => Array.isArray(a) && a.length === 3 && a.every((k) => Number.isFinite(k));
+    if (!st || !SPACE_VESSELS.includes(st.vessel as never) || !v3(st.X) || !v3(st.V) || !v3(st.fwd) || !v3(st.up))
+      return t("The controls could not be taken");
+    const c = this.d.camera;
+    // (riding no more — no "off" told: he rides with us now)
+    this.follow = null;
+    this.followJet = null;
+    this.followThrust = null;
+    c.puppet = null;
+    this.spaceBoard = false;
+    this.handedOver = false;
+    if (c.netDocked) c.netUndock();
+    const v = st.vessel as VesselId;
+    if (fleet.active !== v) this.d.tools.set("vessel", v);
+    // (where we rode: his craft as his samples have it — relative to its body, on the room's clock: what we saw —;
+    // else the state he sent. Placed once the craft switched to has taken its own place: a moment later)
+    const place = () => {
+      const tr = this.net?.remotes.track(from)?.at(this.d.sceneTime());
+      const P = tr && !tr.ghost ? c.netPlaceBeside(tr, 0) : null;
+      if (P) this.d.tools.placeAt({ frame: "ours", ...P, note: t("Controls taken") });
+      else
+        this.d.tools.placeAt({
+          frame: "ours",
+          X: st.X as Vec3,
+          vel: st.V as Vec3,
+          fwd: st.fwd as Vec3,
+          up: st.up as Vec3,
+          note: t("Controls taken"),
+        });
+      c.pilot.setAuto("none");
+      c.pilot.throttle = 0;
+      this.prev = null;
+    };
+    place();
+    setTimeout(place, 250);
+    if (Number.isFinite(st.spent)) fleet.spent[v] = st.spent as number;
+    const S = c.systemsOf(v);
+    if (S && Number.isFinite(st.battery)) S.battery = st.battery as number;
+    if (S && Number.isFinite(st.o2)) S.o2 = st.o2 as number;
+    c.pilot.setAuto("none");
+    c.pilot.throttle = 0;
+    this.aboard.set(from, this.net!.room!.slot);
+    this.helmTaken++;
+    return tf("You have the controls of the {0} — {1} rides with you", VESSELS[v].name, this.nameOf(from));
+  }
+  /** the controls taken (the e2e's count) */
+  helmTaken = 0;
+
   /** Off the craft we ride in, at its door — landed and still —; our own craft back where we left it. */
   private alight(): string {
     const net = this.net!;
     const F = this.follow!;
+    // (boarded in space from our docked craft: back through the hatch, our craft still docked)
+    if (this.handedOver) return t("Your craft is theirs now: take the controls back to fly it");
+    if (this.spaceBoard) {
+      this.spaceBoard = false;
+      const name = this.nameOf(F.slot);
+      this.unfollow();
+      return tf("Back aboard your craft, docked to {0}'s", name);
+    }
     const s = net.remotes.track(F.slot)?.at(this.d.sceneTime());
     const name = this.nameOf(F.slot);
     const id = s ? kindOf(s.kind) : null;

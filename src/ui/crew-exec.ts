@@ -24,6 +24,8 @@ export interface CrewExecDeps {
   nameOf(slot: number): string;
   /** the families open now (ui/crew-feed.ts crewFamilies) */
   families(): Family[];
+  /** whether a player rides aboard our craft (PLAN-VAISSEAUX N3: our copilot — his orders as a crew screen's) */
+  aboard?(slot: number): boolean;
 }
 
 /** what an act does aboard: the game tool and its arguments, or the controller's own call; its words back */
@@ -198,7 +200,7 @@ export class CrewExec {
     };
     // (the console's own words for the gates' refusals: it speaks French)
     const sender = room.members.find((m) => m.slot === from);
-    if (sender?.role !== "instruments") return answer(false, "Seul un écran d'équipage donne des ordres");
+    if (sender?.role !== "instruments" && !this.d.aboard?.(from)) return answer(false, "Seul un écran d'équipage donne des ordres");
     if (this.d.settings.netCrewActions === false) return answer(false, "Le pilote a verrouillé les actions de l'équipage");
     if (!p.ok) return answer(false, p.error);
     const pace = this.gate.pass(from, p.cmd.id, performance.now());

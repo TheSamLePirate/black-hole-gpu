@@ -118,3 +118,6 @@ body.hide-ui .net-badge, body.title-open .net-badge { display: none; }
 .netp-fail { color: var(--k-red, #ff6b5b); border-color: currentColor; }
 .netp-near { color: var(--k-amber, #ffb84d); }
 .netp-no { color: var(--k-red, #ff6b5b); }
+/* the copilot aboard another's craft (PLAN-VAISSEAUX N3) */
+.netp-copilot { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid rgba(111, 210, 255, 0.45); border-radius: var(--k-r); background: rgba(111, 210, 255, 0.06); }
+.netp-copilot .netp-acts { flex-wrap: wrap; }

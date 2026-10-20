@@ -65,3 +65,21 @@ test("proximity: near and closing warned, the further and slower a caution, movi
   expect(proximity(5000, 30)).toBe("none");
   expect(proximity(150, 0.5)).toBe("none");
 });
+
+test("sharing (N2): the giver keeps his reserve, gives no more than asked; amounts said in their units", async () => {
+  const { amountOf, amountText, giveAmount, roomFor } = await import("../src/net/spaceshare");
+  expect(giveAmount(2000, 2000, 50)).toBe(50);
+  expect(giveAmount(600, 2000, 300)).toBe(100);
+  expect(giveAmount(400, 2000, 300)).toBe(0);
+  expect(giveAmount(400, 2000, -3)).toBe(0);
+  expect(roomFor(10, 60)).toBe(50);
+  expect(roomFor(70, 60)).toBe(0);
+  expect(amountText("prop", 3240)).toBe("3.2 t of propellant");
+  expect(amountText("prop", 420)).toBe("420 kg of propellant");
+  expect(amountText("power", 50)).toBe("50 kWh");
+  expect(amountText("o2", 4.25)).toBe("4.3 kg of oxygen");
+  expect(amountOf(12)).toBe(12);
+  expect(amountOf(-1)).toBeNull();
+  expect(amountOf("12")).toBeNull();
+  expect(amountOf(Number.POSITIVE_INFINITY)).toBeNull();
+});
