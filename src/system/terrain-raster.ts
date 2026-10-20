@@ -250,10 +250,12 @@ export class TerrainRaster {
     return true;
   }
 
-  encode(
+  /**
+   * The patch's visibility pass: its metric distances in a texture the tracer's ground march can start from, and
+   * the inspector's. False: nothing was drawn (compiling, no room, a target retiring), the texture not to be read.
+   */
+  encodeVisibility(
     enc: GPUCommandEncoder,
-    output: GPUTexture,
-    sceneDepth: GPUBuffer,
     sources: TerrainCacheSources,
     frame: Float32Array<ArrayBuffer>,
     level: number,
@@ -263,8 +265,7 @@ export class TerrainRaster {
   ): boolean {
     this.idle("compiling");
     if (this.disposed || this.error) return false;
-    const overlay = this.overlay(output.format);
-    if (!this.mesh || !overlay) return false;
+    if (!this.mesh) return false;
     if (!this.resize(frame[24]!, frame[25]!)) return false;
     if (!this.uniform) {
       this.uniform = this.device.createBuffer({
@@ -327,6 +328,28 @@ export class TerrainRaster {
     pass.setVertexBuffer(0, this.vertex!);
     pass.drawIndexed(this.indexCount);
     pass.end();
+    this.active = true;
+    this.reason = "pilot";
+    this.level = level;
+    this.encodedFrames++;
+    return true;
+  }
+
+  /** The distances drawn this frame (r32float, metres from the camera, 0 where no triangle covers a pixel), else null. */
+  distanceTexture(): GPUTexture | null {
+    return this.active && !this.error ? (this.attachments?.distance ?? null) : null;
+  }
+
+  /** The inspector's overlay over the final image, after the patch was drawn this frame. */
+  encodeInspector(
+    enc: GPUCommandEncoder,
+    output: GPUTexture,
+    sceneDepth: GPUBuffer,
+    profile: (label: string, descriptor: GPURenderPassDescriptor) => GPURenderPassDescriptor,
+  ): boolean {
+    const overlay = this.overlay(output.format);
+    const a = this.attachments;
+    if (!this.active || !overlay || !a || !this.uniform) return false;
     const bind = this.device.createBindGroup({
       layout: overlay.getBindGroupLayout(0),
       entries: [
@@ -344,10 +367,6 @@ export class TerrainRaster {
     inspect.setBindGroup(0, bind);
     inspect.draw(3);
     inspect.end();
-    this.active = true;
-    this.reason = "pilot";
-    this.level = level;
-    this.encodedFrames++;
     return true;
   }
 

@@ -310,6 +310,7 @@ export interface Settings {
   earthTerrainCache: boolean; // experimental filtered surface cache, realtime Earth only; exact fallback otherwise
   earthTerrainRasterView: "off" | "depth" | "normals" | "difference"; // diagnostic raster patch; no replacement of physical rendering
   earthTerrainRasterLevel: number; // diagnostic cache level 0…5; single patch, no automatic LOD yet
+  earthTerrainRasterUse: boolean; // experimental: the tracer's ground rays start from the raster patch's distance (verified, else marched as before)
   earthSurface: "off" | "satellite" | "materials"; // regional Sentinel-2 / WorldCover pilot; independent of physical relief
   earthScenery: "off" | "balanced" | "high";
   earthSceneryShadows: boolean;
@@ -665,6 +666,7 @@ export function defaultSettings(): Settings {
     earthTerrainCache: false,
     earthTerrainRasterView: "off",
     earthTerrainRasterLevel: 2,
+    earthTerrainRasterUse: false,
     earthSurface: "satellite",
     earthScenery: "balanced",
     earthSceneryShadows: true,
@@ -1995,6 +1997,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   earthTerrainCache: "pref",
   earthTerrainRasterView: "pref",
   earthTerrainRasterLevel: "pref",
+  earthTerrainRasterUse: "pref",
   earthSurface: "scene",
   earthScenery: "scene",
   detailReach: "pref",

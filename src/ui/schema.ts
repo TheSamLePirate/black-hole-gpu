@@ -2042,6 +2042,17 @@ export const SCHEMA: ControlDef[] = [
     keywords: "terrain raster pilot diagnostics depth normals aaa triangles comparison",
   },
   {
+    key: "earthTerrainRasterUse",
+    type: "toggle",
+    section: "sky",
+    group: "The Earth",
+    label: "Terrain raster hints (experimental)",
+    effect: "scene",
+    advanced: true,
+    help: "Draw the terrain patch as triangles first, and start each camera ray's ground search where the patch says it lands: the exact relief is evaluated there and the search is kept as it was wherever the hint does not bracket the ground. Realtime views only; runways, walking, offline images, probes and relativistic views keep the reference march. The patch is one level (see the pilot level) and covers about 20 km at level 2. Needs real terrain and a GPU with 22 sampled textures per stage; compare image and frame time before keeping it.",
+    keywords: "terrain raster hint march visibility aaa triangles performance experimental",
+  },
+  {
     key: "earthTerrainRasterLevel",
     type: "number",
     section: "sky",

@@ -1,5 +1,6 @@
 import { streamingLead, aheadFocus, gazeLead } from "./system/streaming-focus";
 import { TerrainCache, withTerrainCache } from "./system/terrain-cache";
+import { RASTER_HINT_BINDING, RASTER_HINT_TEXTURE_LIMIT, withTerrainRaster } from "./system/terrain-raster-hint";
 import { TERRAIN_CACHE_MAX_LAT, TERRAIN_CACHE_VEC4S } from "./system/terrain-cache-layout";
 import { TerrainRaster } from "./system/terrain-raster";
 import { TERRAIN_RASTER_MAX_PIXELS, terrainRasterFrame } from "./system/terrain-raster-frame";
@@ -192,6 +193,8 @@ const GROUND_DENSE_OUT = 9;
 /** every feature of the tracer kept (the general pipelines) */
 const FEATURES_ALL = 16383;
 const FEATURE_TERRAIN_CACHE = 1 << 15;
+// the realtime kernel's ground march starts from the raster patch's distances (bits 16–27: the cost view and the tune)
+const FEATURE_TERRAIN_RASTER = 1 << 30;
 /** how long a block size's measured frame time is remembered [ms] (then tried again) */
 const BLOCK_MEMORY = 20000;
 /** the camera held after moving: the refinement's full passes over which the history hands over to it (at most its samples) */
@@ -395,6 +398,8 @@ interface Target {
   sceneDepth: GPUBuffer;
   /** its pass's bind group (made on first use) */
   sceneDepthBind: GPUBindGroup | null;
+  /** the main trace pass's bind group holding the raster patch's distance texture of this frame (made when it changes) */
+  hintBind?: { tex: GPUTexture; bind: GPUBindGroup };
   stamps: GPUBuffer;
   gather: GPUBuffer;
   hdr: GPUTexture;
@@ -487,6 +492,8 @@ export class Renderer {
   private tracePipeline: GPUComputePipeline | null = null; // realtime kernel, every feature (the general one: compiled after the scene's own)
   private qualityPipeline: GPUComputePipeline | null = null; // + error-controlled integrator (compiled in the background)
   private traceLayout: GPUBindGroupLayout;
+  private rasterHint = false;
+  private rasterDummy: GPUTexture | null = null;
   private displayPipeline!: GPURenderPipeline; // SDR canvas (preferred format) — set from the async compile (auxCompiled)
   private sdrFormat: GPUTextureFormat;
   private hdrActive = false;
@@ -890,6 +897,16 @@ export class Renderer {
     // (kept on the instance: read back at start-up for their compilation messages, not re-parsed)
     const displayModule = (this.displayModule = device.createShaderModule({ code: src.display, label: "display" }));
     const postModule = (this.postModule = device.createShaderModule({ code: src.post, label: "post" }));
+    // (the raster patch's distances for the ground march: where the device takes the one more texture; an empty one — no
+    // hint, 0 — bound otherwise)
+    this.rasterHint = device.limits.maxSampledTexturesPerShaderStage >= RASTER_HINT_TEXTURE_LIMIT;
+    if (this.rasterHint)
+      this.rasterDummy = device.createTexture({
+        label: "raster hint: none",
+        size: [1, 1],
+        format: "r32float",
+        usage: GPUTextureUsage.TEXTURE_BINDING,
+      });
     // explicit layout shared by the realtime and quality variants of the tracer
     const C = GPUShaderStage.COMPUTE;
     this.traceLayout = device.createBindGroupLayout({
@@ -919,6 +936,9 @@ export class Renderer {
         { binding: 25, visibility: C, sampler: { type: "filtering" } },
         { binding: 26, visibility: C, texture: { sampleType: "depth" } },
         { binding: 28, visibility: C, texture: { sampleType: "uint", viewDimension: "2d-array" } },
+        ...(device.limits.maxSampledTexturesPerShaderStage >= RASTER_HINT_TEXTURE_LIMIT
+          ? [{ binding: RASTER_HINT_BINDING, visibility: C, texture: { sampleType: "unfilterable-float" } as GPUTextureBindingLayout }]
+          : []),
         ...(device.limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT
           ? [{ binding: 32, visibility: C, buffer: { type: "read-only-storage" } as GPUBufferBindingLayout }]
           : []),
@@ -1554,7 +1574,10 @@ export class Renderer {
         maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
         maxBufferSize: adapter.limits.maxBufferSize,
         maxTextureDimension2D: adapter.limits.maxTextureDimension2D,
-        maxSampledTexturesPerShaderStage: Math.min(AERIAL_TEXTURE_LIMIT, adapter.limits.maxSampledTexturesPerShaderStage),
+        maxSampledTexturesPerShaderStage: Math.min(
+          Math.max(AERIAL_TEXTURE_LIMIT, RASTER_HINT_TEXTURE_LIMIT),
+          adapter.limits.maxSampledTexturesPerShaderStage,
+        ),
         maxStorageBuffersPerShaderStage: Math.min(SCENERY_STORAGE_LIMIT, adapter.limits.maxStorageBuffersPerShaderStage),
       },
     });
@@ -1583,7 +1606,10 @@ export class Renderer {
         seaShader(
           sceneryShader(
             surfaceShader(
-              withTerrainCache(withForest(await wgsl(traceWGSL), await wgsl(forestSource))),
+              withTerrainRaster(
+                withTerrainCache(withForest(await wgsl(traceWGSL), await wgsl(forestSource))),
+                device.limits.maxSampledTexturesPerShaderStage >= RASTER_HINT_TEXTURE_LIMIT,
+              ),
               device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT,
             ),
             device.limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT,
@@ -1959,97 +1985,58 @@ export class Renderer {
     t.temporal?.buf.destroy();
   }
 
+  /** The trace kernels' bind group entries for a target; `binding14` is the buffer of the probe or of the light probe. */
+  private traceEntries(t: Target, binding14: GPUBuffer, raster?: GPUTexture): GPUBindGroupEntry[] {
+    return [
+      { binding: 0, resource: { buffer: this.paramBuf } },
+      { binding: 1, resource: { buffer: t.accum } },
+      { binding: 3, resource: this.bgTexture.createView() },
+      { binding: 4, resource: this.sampler },
+      { binding: 5, resource: { buffer: t.moments } },
+      { binding: 6, resource: { buffer: t.stamps } },
+      { binding: 7, resource: { buffer: t.stars } },
+      { binding: 8, resource: this.mwTexture.createView() },
+      { binding: 9, resource: this.starLodTexture.createView() },
+      { binding: 10, resource: { buffer: this.catalogue } },
+      { binding: 11, resource: { buffer: t.polAcc } },
+      { binding: 14, resource: { buffer: binding14 } },
+      { binding: 15, resource: { buffer: this.bodyBuf } },
+      { binding: 16, resource: srgbView(this.planetMaps.hi, "2d-array") },
+      { binding: 17, resource: this.planetMaps.rings.createView({ dimension: "2d", format: SRGB }) },
+      { binding: 18, resource: srgbView(this.planetMaps.lo, "2d-array") },
+      { binding: 19, resource: srgbView(this.earthMaps.cube, "cube") },
+      { binding: 20, resource: this.earthMaps.night.createView({ dimension: "cube" }) },
+      { binding: 21, resource: this.earthMaps.elev.createView() },
+      { binding: 22, resource: this.hdMap.color.createView({ format: hdColorFormat(this.hdMap.color) }) },
+      { binding: 23, resource: this.hdMap.relief.createView() },
+      { binding: 24, resource: this.noise3d.createView({ dimension: "3d" }) },
+      { binding: 25, resource: this.noiseSampler },
+      { binding: 26, resource: this.ship.shadowView },
+      { binding: 28, resource: this.earthTiles.texture.createView({ dimension: "2d-array" }) },
+      ...(this.earthScenery.supported ? [{ binding: 32, resource: { buffer: this.earthScenery.buffer } }] : []),
+      ...(this.seaFft
+        ? [
+            { binding: 33, resource: this.seaFft.texture.createView({ dimension: "2d-array" }) },
+            { binding: 34, resource: this.seaSampler },
+          ]
+        : []),
+      ...(this.earthSurface.supported
+        ? [
+            { binding: 29, resource: this.earthSurface.colorView() },
+            { binding: 30, resource: this.earthSurface.cover.createView({ dimension: "2d-array" }) },
+            { binding: 31, resource: this.surfaceSampler },
+          ]
+        : []),
+      ...(this.rasterHint ? [{ binding: RASTER_HINT_BINDING, resource: (raster ?? this.rasterDummy!).createView() }] : []),
+    ];
+  }
+
   private bindTarget(t: Target) {
     this.eventFrames = 3; // (new resources: the next frames' times are not the scene's)
     const d = this.device;
-    t.traceBind = d.createBindGroup({
-      layout: this.traceLayout,
-      entries: [
-        { binding: 0, resource: { buffer: this.paramBuf } },
-        { binding: 1, resource: { buffer: t.accum } },
-        { binding: 3, resource: this.bgTexture.createView() },
-        { binding: 4, resource: this.sampler },
-        { binding: 5, resource: { buffer: t.moments } },
-        { binding: 6, resource: { buffer: t.stamps } },
-        { binding: 7, resource: { buffer: t.stars } },
-        { binding: 8, resource: this.mwTexture.createView() },
-        { binding: 9, resource: this.starLodTexture.createView() },
-        { binding: 10, resource: { buffer: this.catalogue } },
-        { binding: 11, resource: { buffer: t.polAcc } },
-        { binding: 14, resource: { buffer: this.ship.envBuf } },
-        { binding: 15, resource: { buffer: this.bodyBuf } },
-        { binding: 16, resource: srgbView(this.planetMaps.hi, "2d-array") },
-        { binding: 17, resource: this.planetMaps.rings.createView({ dimension: "2d", format: SRGB }) },
-        { binding: 18, resource: srgbView(this.planetMaps.lo, "2d-array") },
-        { binding: 19, resource: srgbView(this.earthMaps.cube, "cube") },
-        { binding: 20, resource: this.earthMaps.night.createView({ dimension: "cube" }) },
-        { binding: 21, resource: this.earthMaps.elev.createView() },
-        { binding: 22, resource: this.hdMap.color.createView({ format: hdColorFormat(this.hdMap.color) }) },
-        { binding: 23, resource: this.hdMap.relief.createView() },
-        { binding: 24, resource: this.noise3d.createView({ dimension: "3d" }) },
-        { binding: 25, resource: this.noiseSampler },
-        { binding: 26, resource: this.ship.shadowView },
-        { binding: 28, resource: this.earthTiles.texture.createView({ dimension: "2d-array" }) },
-        ...(this.earthScenery.supported ? [{ binding: 32, resource: { buffer: this.earthScenery.buffer } }] : []),
-        ...(this.seaFft
-          ? [
-              { binding: 33, resource: this.seaFft.texture.createView({ dimension: "2d-array" }) },
-              { binding: 34, resource: this.seaSampler },
-            ]
-          : []),
-        ...(this.earthSurface.supported
-          ? [
-              { binding: 29, resource: this.earthSurface.colorView() },
-              { binding: 30, resource: this.earthSurface.cover.createView({ dimension: "2d-array" }) },
-              { binding: 31, resource: this.surfaceSampler },
-            ]
-          : []),
-      ],
-    });
-    t.probeBind = d.createBindGroup({
-      layout: this.traceLayout,
-      entries: [
-        { binding: 0, resource: { buffer: this.paramBuf } },
-        { binding: 1, resource: { buffer: t.accum } },
-        { binding: 3, resource: this.bgTexture.createView() },
-        { binding: 4, resource: this.sampler },
-        { binding: 5, resource: { buffer: t.moments } },
-        { binding: 6, resource: { buffer: t.stamps } },
-        { binding: 7, resource: { buffer: t.stars } },
-        { binding: 8, resource: this.mwTexture.createView() },
-        { binding: 9, resource: this.starLodTexture.createView() },
-        { binding: 10, resource: { buffer: this.catalogue } },
-        { binding: 11, resource: { buffer: t.polAcc } },
-        { binding: 14, resource: { buffer: this.probeBuf } },
-        { binding: 15, resource: { buffer: this.bodyBuf } },
-        { binding: 16, resource: srgbView(this.planetMaps.hi, "2d-array") },
-        { binding: 17, resource: this.planetMaps.rings.createView({ dimension: "2d", format: SRGB }) },
-        { binding: 18, resource: srgbView(this.planetMaps.lo, "2d-array") },
-        { binding: 19, resource: srgbView(this.earthMaps.cube, "cube") },
-        { binding: 20, resource: this.earthMaps.night.createView({ dimension: "cube" }) },
-        { binding: 21, resource: this.earthMaps.elev.createView() },
-        { binding: 22, resource: this.hdMap.color.createView({ format: hdColorFormat(this.hdMap.color) }) },
-        { binding: 23, resource: this.hdMap.relief.createView() },
-        { binding: 24, resource: this.noise3d.createView({ dimension: "3d" }) },
-        { binding: 25, resource: this.noiseSampler },
-        { binding: 26, resource: this.ship.shadowView },
-        { binding: 28, resource: this.earthTiles.texture.createView({ dimension: "2d-array" }) },
-        ...(this.earthScenery.supported ? [{ binding: 32, resource: { buffer: this.earthScenery.buffer } }] : []),
-        ...(this.seaFft
-          ? [
-              { binding: 33, resource: this.seaFft.texture.createView({ dimension: "2d-array" }) },
-              { binding: 34, resource: this.seaSampler },
-            ]
-          : []),
-        ...(this.earthSurface.supported
-          ? [
-              { binding: 29, resource: this.earthSurface.colorView() },
-              { binding: 30, resource: this.earthSurface.cover.createView({ dimension: "2d-array" }) },
-              { binding: 31, resource: this.surfaceSampler },
-            ]
-          : []),
-      ],
-    });
+    t.hintBind = undefined;
+    t.traceBind = d.createBindGroup({ layout: this.traceLayout, entries: this.traceEntries(t, this.ship.envBuf) });
+    t.probeBind = d.createBindGroup({ layout: this.traceLayout, entries: this.traceEntries(t, this.probeBuf) });
     t.polGridPass = d.createBindGroup({
       layout: this.postPolGrid.getBindGroupLayout(0),
       entries: [
@@ -2909,7 +2896,7 @@ export class Renderer {
     // (the raster inspector draws its own patch and reads the cache itself; it does not need the tracer to be free of the
     // wormhole's metric, which the Earth scenes always carry: only the tracer's *use* of the cache does)
     const terrainRasterEligible = !!(
-      (s.earthTerrainCache || s.earthTerrainRasterView !== "off") &&
+      (s.earthTerrainCache || s.earthTerrainRasterView !== "off" || s.earthTerrainRasterUse) &&
       s.earthTerrain &&
       this.earthMaps.tier &&
       t === this.live &&
@@ -2925,11 +2912,15 @@ export class Renderer {
     );
     const terrainCacheEligible = terrainRasterEligible && (this.featureKey & 512) === 0;
     const inspecting = terrainRasterEligible && s.earthTerrainRasterView !== "off";
+    // (the realtime kernel's ground march from the patch's distances: only where the device takes the texture, and in the
+    // interleaved realtime frames — a still view converges on the quality kernel, which keeps the reference march)
+    const hinting = terrainRasterEligible && s.earthTerrainRasterUse && this.rasterHint && (o.flags & FLAG_INTERLEAVED) !== 0;
     // Keep a stable key when a still frame starts refining; its quality kernel compiles the cache out.
     if (terrainCacheEligible) this.featureKey |= FEATURE_TERRAIN_CACHE;
-    this.terrainCacheWanted = (terrainCacheEligible || inspecting) && (o.flags & FLAG_INTERLEAVED) !== 0;
+    if (hinting) this.featureKey |= FEATURE_TERRAIN_RASTER;
+    this.terrainCacheWanted = (terrainCacheEligible || inspecting || hinting) && (o.flags & FLAG_INTERLEAVED) !== 0;
     if (!o.probe) {
-      this.terrainRasterRequested = inspecting;
+      this.terrainRasterRequested = inspecting || hinting;
       this.terrainRasterLevel = Number.isFinite(s.earthTerrainRasterLevel)
         ? Math.max(0, Math.min(5, Math.round(s.earthTerrainRasterLevel)))
         : 2;
@@ -3728,6 +3719,7 @@ export class Renderer {
           HAS_SCENERY: has(8192),
           HAS_AURORA: has(16384),
           HAS_TERRAIN_CACHE: entryPoint === "main" && !quality ? has(FEATURE_TERRAIN_CACHE) : 0,
+          HAS_TERRAIN_RASTER: entryPoint === "main" && !quality && this.rasterHint ? has(FEATURE_TERRAIN_RASTER) : 0,
           COST_VIEW: (key >> 16) & 15,
           ...(this.tunes.get((key >> 20) & 255) ?? {}),
           QUALITY_PIPELINE: quality ? 1 : 0,
@@ -3831,7 +3823,7 @@ export class Renderer {
   }
 
   /** the trace's passes encoded; false: no kernel for the scene yet (still compiling) — nothing traced */
-  private dispatchTrace(enc: GPUCommandEncoder, t: Target, x: number, y: number, quality: boolean): boolean {
+  private dispatchTrace(enc: GPUCommandEncoder, t: Target, x: number, y: number, quality: boolean, s?: Settings): boolean {
     this.cameraKey = this.featureKey;
     // (the sea's FFT waves of this frame first: the tracer samples them)
     if (this.seaFftDue && this.seaFft) {
@@ -3884,6 +3876,9 @@ export class Renderer {
         if (t.temporal) t.temporal.valid = false;
       }
     }
+    // The raster patch's visibility, after the cache it reads and before the rays that start from it.
+    if (!quality && s) this.encodeTerrainRasterVisibility(enc, t, s);
+    const hint = !quality && this.rasterHint ? (this.terrainRaster?.distanceTexture() ?? null) : null;
     // (the aerial perspective's table before the rays that read it)
     if (!quality && this.aerialPipe) {
       const ap = enc.beginComputePass(this.prof.pass("aerial perspective"));
@@ -3898,7 +3893,7 @@ export class Renderer {
     if (!pipeline) return false;
     const pass = enc.beginComputePass(this.prof.pass(quality ? "trace (converging)" : "trace"));
     pass.setPipeline(pipeline);
-    pass.setBindGroup(0, t.traceBind);
+    pass.setBindGroup(0, hint ? this.hintBindFor(t, hint) : t.traceBind);
     pass.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
     pass.dispatchWorkgroups(Math.max(1, Math.ceil(x / 8)), Math.max(1, Math.ceil(y / 8)));
     pass.end();
@@ -5796,8 +5791,21 @@ export class Renderer {
     return { requested: this.terrainRasterRequested, ...this.terrainRaster?.stats() };
   }
 
-  private encodeTerrainRaster(enc: GPUCommandEncoder, target: Target, output: GPUTexture, s: Settings) {
-    if (!this.terrainRasterRequested || s.earthTerrainRasterView === "off" || !this.lastNear || !this.lastCam) {
+  /**
+   * The main trace pass's bind group with the patch's distance texture drawn this frame. The other passes keep the
+   * group with the empty one: a texture retired by a resize is never in a group they use.
+   */
+  private hintBindFor(t: Target, tex: GPUTexture): GPUBindGroup {
+    if (t.hintBind?.tex !== tex)
+      t.hintBind = {
+        tex,
+        bind: this.device.createBindGroup({ layout: this.traceLayout, entries: this.traceEntries(t, this.ship.envBuf, tex) }),
+      };
+    return t.hintBind.bind;
+  }
+
+  private encodeTerrainRasterVisibility(enc: GPUCommandEncoder, target: Target, s: Settings) {
+    if (!this.terrainRasterRequested || !this.lastNear || !this.lastCam) {
       this.terrainRaster?.suspend();
       return;
     }
@@ -5812,21 +5820,20 @@ export class Renderer {
       this.terrainRaster.idle("cache-not-ready");
       return;
     }
+    const cv = this.context.canvas as HTMLCanvasElement;
     const frame = terrainRasterFrame(
       this.lastNear,
       this.lastCam,
       window,
       level,
       target,
-      output,
-      s.earthTerrainRasterView,
+      { width: cv.width, height: cv.height },
+      s.earthTerrainRasterView === "off" ? "difference" : s.earthTerrainRasterView,
       s.fov,
       1476.625 * s.massSolar,
     );
-    this.terrainRaster.encode(
+    this.terrainRaster.encodeVisibility(
       enc,
-      output,
-      target.sceneDepth,
       {
         params: this.paramBuf,
         table: this.bodyBuf,
@@ -5840,6 +5847,12 @@ export class Renderer {
       this.paramsF.subarray((69 + TILE_PARAM_VEC4S) * 4, (69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S) * 4),
       (label, descriptor) => this.prof.pass(label, descriptor),
     );
+  }
+
+  /** The inspector's overlay on the final image, after the patch's visibility of this frame. */
+  private encodeTerrainRasterInspector(enc: GPUCommandEncoder, target: Target, output: GPUTexture, s: Settings) {
+    if (s.earthTerrainRasterView === "off" || !this.terrainRasterRequested) return;
+    this.terrainRaster?.encodeInspector(enc, output, target.sceneDepth, (label, descriptor) => this.prof.pass(label, descriptor));
   }
   /** Experimental height-cache diagnostics, accessible through __bh.renderer. */
   get terrainCacheStats() {
@@ -5953,7 +5966,7 @@ export class Renderer {
   frame(s: Settings, time: number, sceneChanged: boolean, timeChanged: boolean, displayChanged: boolean): FrameStats | null {
     if (this.lost) return null;
     if (this.busy) return null;
-    if (s.earthTerrainRasterView === "off") this.terrainRaster?.suspend();
+    if (s.earthTerrainRasterView === "off" && !s.earthTerrainRasterUse) this.terrainRaster?.suspend();
     else this.terrainRaster?.idle("waiting");
     // (polarization turned on or off: the live target remade with or without its buffer)
     this.wantPol = !!s.polarization;
@@ -6043,7 +6056,7 @@ export class Renderer {
         stars: this.starsSplat ? preExposure(this.ev(s)) * 65536 : 0,
       });
       this.encodeCockpitMask(enc, t, s, block);
-      traced = this.dispatchTrace(enc, t, Math.ceil(t.width / block), Math.ceil(t.height / block), false);
+      traced = this.dispatchTrace(enc, t, Math.ceil(t.width / block), Math.ceil(t.height / block), false, s);
       this.dispatchEnv(enc, t, s);
       this.lastBlock = block;
       this.lastOffset = offset;
@@ -6095,7 +6108,7 @@ export class Renderer {
     this.encodePost(enc, t, s);
     const outTex = this.context.getCurrentTexture();
     this.encodeDisplay(enc, t, this.canvasPipeline, outTex.createView());
-    this.encodeTerrainRaster(enc, t, outTex, s);
+    this.encodeTerrainRasterInspector(enc, t, outTex, s);
     this.encodeChart(enc, s, t, outTex.createView(), outTex.format, outTex.width, outTex.height, false);
     this.chartDirty = false;
     const auto = s.realtimeSubsampling === "auto";
