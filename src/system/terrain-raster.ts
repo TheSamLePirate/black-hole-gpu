@@ -121,6 +121,9 @@ export class TerrainRaster {
   private columns = 0;
   private rows = 0;
   private meshBuilds = 0;
+  private conforming = false;
+  private cutVertices = 0;
+  private cutTriangles = 0;
   private meshBind: GPUBindGroup | null = null;
   private table: GPUBuffer | null = null;
   private heightSources: TerrainCacheSources | null = null;
@@ -279,6 +282,9 @@ export class TerrainRaster {
       this.indexCount = mesh.indices.length;
       this.columns = mesh.columns;
       this.rows = mesh.rows;
+      this.conforming = mesh.conforming;
+      this.cutVertices = mesh.cutVertices;
+      this.cutTriangles = mesh.cutTriangles;
       this.meshKey = key;
       this.meshBuilds++;
     }
@@ -358,6 +364,9 @@ export class TerrainRaster {
       columns: this.columns,
       rows: this.rows,
       meshBuilds: this.meshBuilds,
+      conforming: this.conforming,
+      cutVertices: this.cutVertices,
+      cutTriangles: this.cutTriangles,
       width: a?.width ?? 0,
       height: a?.height ?? 0,
       targetBytes: a ? a.width * a.height * 8 : 0,

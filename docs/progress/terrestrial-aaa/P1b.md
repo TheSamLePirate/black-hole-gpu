@@ -10,11 +10,29 @@ de gain sur le M1 Max. Aucun test, vol ou benchmark de jeu n'a été lancé.
 ## Géométrie et données réutilisées
 
 - Une grille indexée part de 129 × 129 sommets, 32 768 triangles, et lit les hauteurs float32 du cache P1a.
-  Des lignes supplémentaires sont insérées près des seuils, des bords du ruban et de la zone nivelée des
-  quatre pistes au maximum. Le plafond est 193 × 193 sommets, 73 728 triangles. Les lignes traversent la
-  portion : aucune jonction en T, mais pas encore un maillage explicitement aligné sur une piste oblique.
-  Les sommets ajoutés lisent le cache bilinéairement hors nivellement ; dans sa zone, ils utilisent la
-  fonction de référence avec une empreinte adaptée à leurs intervalles. Chaque sommet est partagé.
+  Pour chaque piste (quatre au maximum), deux contours sont suivis : le ruban revêtu (0 → longueur,
+  ± 30 m) et la zone nivelée (300 m avant/après, ± 320 m). Leurs huit coins reçoivent chacun une ligne de
+  la grille, donc un sommet ; **les cellules traversées par un côté de contour sont ensuite coupées le long
+  de ce côté**, quel que soit le cap de la piste. Seuils et bords sont ainsi de vraies arêtes du maillage,
+  y compris pour une piste oblique. Chaque cellule coupée est découpée en pièces convexes, puis triangulée
+  sans perdre de sommet (une pièce garde tous les points posés sur ses côtés).
+  Les raccords sont sans fissure : un point de coupe sur un côté partagé se calcule à partir du contour et de ce
+  côté seulement, les deux cellules voisines reçoivent donc le même sommet, y compris quand l'une d'elles n'a
+  pas de segment à couper ; un point sur une arête interne se calcule depuis ses deux extrémités triées.
+  Les coins de contour à moins de 2·10⁻³ cellule d'un nœud (0,3 m au niveau 2, 1 cm au niveau 0) et les
+  coupes à moins de cette distance d'un coin sont ramenés à ce nœud : une piste presque alignée sur les axes ne
+  fabrique pas de lamelle plus fine que les tolérances. Aux niveaux grossiers (cellules de plusieurs centaines
+  de mètres) ce décalage atteint quelques mètres : sans conséquence tant que le ruban fait moins d'une cellule
+  de large, mais à revoir si ces niveaux servent un jour de chemin d'atterrissage.
+  Les contours sont des segments droits dans les coordonnées de la grille (longitude/latitude), pas des
+  géodésiques : l'écart est de l'ordre du centimètre sur 4,5 km.
+  Budget : au plus 12 288 sommets et 24 576 triangles ajoutés par les coupes. Mesures CPU de construction
+  (une fois par fenêtre, niveau ou géométrie de pistes, jamais par image) : une piste au niveau 0, 583
+  sommets/1 162 triangles ajoutés, 18 ms ; quatre pistes sécantes au niveau 0, 2 242 sommets/4 468 triangles,
+  22 ms. Au-delà du budget, ou sans contour dans la fenêtre, le maillage retombe sur l'ancienne grille
+  rectiligne (lignes à travers la portion : aucune jonction en T, mais pas d'arêtes alignées) ; `conforming`
+  le dit dans les statistiques. Les sommets lisent le cache bilinéairement hors nivellement ; dans la zone, ils
+  utilisent la fonction de référence avec une empreinte adaptée à leurs intervalles. Chaque sommet est partagé.
   La topologie ne change qu'avec la fenêtre, le niveau ou la géométrie des pistes, pas avec caméra/vent/horloge.
   Un seul niveau est dessiné à la fois, choisi explicitement entre 0 et 5 ; le niveau demandé est préparé
   en priorité. Il n'y a pas de nouvelle copie des hauteurs vers le CPU, ni de tableau de sommets par image.
@@ -33,8 +51,10 @@ et suppression du détail procédural suivent le modèle existant, à l'empreint
 tampon de hauteurs supplémentaire n'est ajouté. Les paramètres et textures sont partagés ; les valeurs
 de piste sont relues à chaque dessin, sans dépendre d'une invalidation du cache naturel.
 
-Cela ne garantit pas une piste plane entre les sommets : une grille grossière peut manquer ses bords ou
-interpoler au travers. Un maillage conforme aux pistes reste nécessaire avant la bascule du rendu final.
+Les sommets des triangles qui touchent le ruban sont dans la zone plane de nivellement tant que les cellules
+restent plus petites que sa marge (environ 290 m) : jusqu'au niveau 2, le ruban est donc plan par
+construction. Aux niveaux plus grossiers, la planéité du ruban n'est pas garantie. La zone nivelée n'est cependant pas encore
+validée en rendu : la hauteur vient de la fonction de référence, mais son accord avec le contact n'a pas été mesuré.
 Le pilote ne dessine ni végétation, ni bâtiments, ni vagues et ne raccorde pas plusieurs fenêtres. Il utilise des
 triangles à deux faces pour l'inspection. Aucun de ces choix n'est validé pour la visibilité finale.
 
@@ -87,8 +107,8 @@ Au-delà, le pilote rapporte `pixel-budget` et conserve la vue actuelle. Pas de 
 
 Un redimensionnement garde au plus deux paires de textures, actuelle et retirée. La paire retirée attend
 la fin des soumissions qui l'utilisent ; une nouvelle allocation de taille différente attend sa libération.
-La désactivation retire aussi les textures. Les buffers de sommets/index sont plafonnés à **1 331 724 octets**
-(446 988 + 884 736), plus l'uniforme de **128 octets**. Ces buffers et les
+La désactivation retire aussi les textures. Les buffers de sommets/index sont plafonnés à **1 774 092 octets**
+(594 444 + 1 179 648), plus l'uniforme de **128 octets**. Ces buffers et les
 pipelines restent réutilisables après première activation. La perte ou libération du device libère le tout.
 Les compteurs distinguent les textures actuelles et retirées, sans prétendre mesurer les allocations internes du driver.
 
@@ -123,11 +143,17 @@ Vérifications effectuées, sans exécuter de passe de jeu :
   préexistants dans `main.ts`, hors des lignes modifiées (`useOptionalChain`, `useLiteralKeys`).
 - `bun scripts/check-wgsl.ts` : **24/24 modules/compositions WGSL compilent**, adaptateur `apple`, Chrome headless local.
 - `git diff --check` : réussi.
-- Aucun `bun test`, e2e, vol, capture comparative ou benchmark de jeu lancé.
+- Maillage conforme : `bun test ./tests/terrain-raster-mesh.test.ts`, test géométrique **purement CPU** (aucun
+  GPU, aucun jeu, aucun Chrome) : 8/8. Il vérifie, pour chaque site à piste (niveaux 0, 2, 4), pour une piste
+  oblique (niveaux 0 à 3) et pour quatre pistes sécantes au même point : surface totale = celle de la portion,
+  aucun triangle retourné au-delà de la résolution float32, chaque côté utilisé une fois dans chaque sens
+  (hors bord de portion) donc sans jonction en T, budget de coupes respecté, et qu'**aucun triangle n'enjambe**
+  un côté de contour. Deux sommets à un pas float32 l'un de l'autre sont tolérés (pistes superposées par le test).
+- Aucun autre `bun test`, e2e, vol, capture comparative ou benchmark de jeu lancé.
 
-Ces vérifications ne valident pas les bind groups, les dessins, la précision numérique ou le rendu en mouvement.
+Ces vérifications ne valident pas la géométrie une fois sur le GPU (hauteurs des sommets coupés), les bind groups, les dessins, la précision numérique ou le rendu en mouvement.
 
-Suite nécessaire : références P0, accord numérique WGS84 des sommets et de la profondeur, maillage conforme aux pistes,
-bords/raccords et bornes d'erreur, sélection multi-patches par erreur projetée, mouvement, puis consommation
+Suite nécessaire : références P0, accord numérique WGS84 des sommets et de la profondeur, hauteur réelle aux sommets coupés,
+raccords entre fenêtres/niveaux et bornes d'erreur, sélection multi-patches par erreur projetée, mouvement, puis consommation
 de la visibilité raster par le rendu final en conservant éclairage et optique. Les forêts et nuages restent
 des lots distincts ; aucun gain de FPS ou de qualité AAA n'est déclaré acquis ici.
