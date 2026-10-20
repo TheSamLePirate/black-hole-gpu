@@ -55,6 +55,7 @@ import { installPwa } from "./pwa";
 import { PauseMenu } from "./ui/pause";
 import type { PauseContext } from "./ui/pausemenu";
 import { PlayerSettings } from "./ui/settings/player";
+import type { PlayerTab } from "./ui/settings/menu";
 import { GameEntry } from "./ui/entry";
 import { ControlsScreen } from "./ui/controls-screen";
 import { PadsScreen } from "./ui/pads-screen";
@@ -6521,6 +6522,17 @@ async function main() {
         return true;
       },
     },
+    menu: {
+      state: () => ({
+        title: titleScreen.screen,
+        pause: pauseMenu?.screen ?? null,
+        settings: playerSettings.tabNow,
+        entry: gameEntry.busy,
+      }),
+      title: (mode) => (mode ? titleScreen.openMode(mode, () => (pauseMenu ??= makePauseMenu()).open()) : titleScreen.open()),
+      pause: () => (pauseMenu ??= makePauseMenu()).open(),
+      settings: (tab) => playerSettings.open(undefined, { tab: tab as PlayerTab | undefined }),
+    },
     settings,
     renderer,
     camera,
@@ -7626,16 +7638,21 @@ async function main() {
           }
           return tools.walk(c.world, c.lat, c.lon);
         }),
-      jet: () =>
-        void placeShip(() => {
+      // (a flight from the title starts in the pilot's seat — PLAN-TITRE-AAA E11)
+      jet: () => {
+        placeShip(() => {
           setGameMode("ship", true);
           setVessel("f35");
           return tools.lineUp();
-        }),
+        });
+        setMount("cockpit");
+      },
       flightHub: () => flightHub.open(),
       // (By plane — E4: the same paths as the Flight hub's card and TARS's tools)
-      flight: (c) =>
-        void placeShip(() => prepareFlight(hubHost, { field: c.field, start: c.start, hour: c.hour, weather: c.weather, fuel: c.fuel })),
+      flight: (c) => {
+        placeShip(() => prepareFlight(hubHost, { field: c.field, start: c.start, hour: c.hour, weather: c.weather, fuel: c.fuel }));
+        setMount("cockpit");
+      },
       mission: (id) => airMissions.brief(id),
       fight: (id) => {
         const f = SCENARIOS.find((d) => d.id === id);

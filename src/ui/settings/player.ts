@@ -119,6 +119,10 @@ export class PlayerSettings {
   get isOpen() {
     return !!this.root;
   }
+  /** the tab shown, null when closed */
+  get tabNow(): PlayerTab | null {
+    return this.root ? this.tab : null;
+  }
 
   /** Opened (from the title, the pause, the top bar); `back`: where its Escape goes once closed. */
   open(back?: () => void, o: { tab?: PlayerTab; search?: string } = {}) {

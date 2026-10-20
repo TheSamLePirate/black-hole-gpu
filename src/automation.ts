@@ -62,6 +62,13 @@ export interface BhContext {
   intro(): unknown;
   /** the way into the game (ui/entry.ts, PLAN-TITRE-AAA E10): its veil up; a scene tracer's compile held `ms` */
   entry: { readonly busy: boolean; compile(ms: number): boolean };
+  /** the menus (PLAN-TITRE-AAA): which is up, on which screen — and opened by the tests */
+  menu: {
+    state(): { title: string | null; pause: string | null; settings: string | null; entry: boolean };
+    title(mode?: "foot" | "plane" | "ship" | "free"): void;
+    pause(): void;
+    settings(tab?: string): void;
+  };
   settings: Settings;
   renderer: Renderer;
   camera: CameraController;
@@ -273,6 +280,7 @@ export function installBh(c: BhContext) {
       /** the intro: what drew its background, the orb's state, its sequence played / passed, docked, lifted */
       intro: () => c.intro(),
       entry: c.entry,
+      menu: c.menu,
       /** the game's tools: __bh.game.help() */
       game: tools,
       /** the Kerr Bench: __bh.bench.run({ mode: "quick" }) → its report; scene(name) one scene's */

@@ -552,7 +552,7 @@ Chaque phase : un commit, une planche de captures (`docs/progress/title-aaa/`), 
 - Le démarrage du HUD.
 - L'orbe à la place de la pastille d'assets.
 
-### E11 — Clôture (M)
+### E11 — Clôture (M) — FAIT ([fiche](progress/title-aaa/E11.md), [planche finale](progress/title-aaa/FINAL.jpg) : la campagne d'un joueur en 8 temps sur kerr-mini ; la première image en A/B contre e664e0aa — rien de perdu ; MENUS.md / MENUS.fr.md, `__bh.menu`)
 
 - **Campagne e2e**, en vrais événements CDP :
   - passer l'intro ;

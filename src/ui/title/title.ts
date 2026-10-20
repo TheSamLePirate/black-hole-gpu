@@ -256,6 +256,11 @@ export class TitleScreen {
     if (this.game) this.d.hold(false);
   }
 
+  /** the screen shown (its router's: "title", "mode:ship", "plane:field"…), null when closed */
+  get screen(): string | null {
+    return this.router?.current ?? null;
+  }
+
   /** where the back of a mode's screen opened alone goes (the pause) */
   private onBack: (() => void) | null = null;
 

@@ -347,6 +347,17 @@ __bh.graphicsDiagnostic().events.filter((e) => e.message.includes("after the fir
 ```
 *Used in:* `tests/e2e/gpu-startup.e2e.test.ts` (4 lines use it).
 
+### `__bh.menu` → object
+
+The menus (PLAN-TITRE-AAA; [MENUS.md](MENUS.md)): which is up, on which screen — and opened by the tests.
+
+| member | what it is |
+|---|---|
+| `state()` | `{ title, pause, settings, entry }`: the title's screen (`"title"`, `"mode:ship"`, `"plane:field"`, `"credits"`…), the pause's (`"pause"`, `"pause:save"`, `"pause:load"`, `"pause:leave"`), the player's settings' tab (`"game"`, `"graphics"`…), the entry's veil up (boolean) — each null when closed |
+| `title(mode?)` | the title opened; with a mode (`"foot"`, `"plane"`, `"ship"`, `"free"`), that mode's launch screen alone — its back the pause |
+| `pause()` | the pause opened |
+| `settings(tab?)` | the player's settings opened, on a tab |
+
 ### `__bh.entry` → object
 
 The way into the game from the menus (`src/ui/entry.ts`, PLAN-TITRE-AAA E10): a fade to black, the launch under it,

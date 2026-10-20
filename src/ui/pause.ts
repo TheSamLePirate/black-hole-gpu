@@ -124,6 +124,10 @@ export class PauseMenu {
   get isOpen() {
     return !!this.root;
   }
+  /** the screen shown ("pause", "pause:save", "pause:load", "pause:leave"), null when closed */
+  get screen(): string | null {
+    return this.router?.current ?? null;
+  }
 
   open() {
     if (this.root) return;

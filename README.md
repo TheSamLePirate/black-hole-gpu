@@ -49,6 +49,9 @@ How the code works:
   added since the first reading** (11).
 
 Guides per feature:
+- [`docs/MENUS.md`](docs/MENUS.md) ([français](docs/MENUS.fr.md)) — **the menus**: the intro, the title by way of
+  playing and its launch screens, the way into the game, the pause, the player's settings and the Lab, their keys
+  and pad; the credits in [`CREDITS.md`](CREDITS.md).
 - [`docs/F35.md`](docs/F35.md) ([français](docs/F35.fr.md)) — **the F-35B and F-35C**: keys, the Tab wheel, the
   pad, the control law and the assistance, Auto-GCAS/ACAS, the autopilot's modes and the ILS, the radar, the
   intercept and the gun sight, weapons and fights, formations and wingmen, the carriers, missions, the flight school.
