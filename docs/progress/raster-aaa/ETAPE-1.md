@@ -188,3 +188,23 @@ des proxys proches (150 ou 300 m) ne change presque rien. Aucun effet dans les A
 Configuration par défaut vérifiée : Tarifa 33,4 ms · 42,0 dB (tracé ×4 : 15,0 ms · 34,8 dB), Alpes 16,6 ms · 32,0 dB
 (tracé ×4 : 11,5 ms · 30,2 dB). Le test de vol attend désormais le noyau `shade` pour tout mode raster (les premières
 lignes invalides venaient de là) et garde un mode répété comme une mesure à part.
+
+## L'ombrage du sol au taux ¼ — décomposition (Tarifa bas, détail high/veryFar)
+
+Mesures alternées sur un démarrage neuf (la base dérive de 20 à 32 ms au fil d'une longue campagne : le M1 Max d'un
+portable ralentit sous charge soutenue — comparer les paires d'un même passage, pas les passages entre eux) :
+
+| Retiré | gain |
+|---|---|
+| détail procédural du relief (`TUNE_DETAIL` 0) | −5,4 à −7,4 ms |
+| ombres du relief (`TUNE_GSKIP` 2) | −2,4 ms |
+| marche des rayons rasants (`TUNE_HINT_GRAZE` 0) | −2,4 ms |
+| affinement de l'indice réduit à 2 pas (`TUNE_HINT_ITER`) | −2,2 ms (précision perdue) |
+| marche d'ombre plafonnée à 12 pas | ≈ 0 (elle s'arrête déjà tôt) |
+| empreinte d'un pixel au lieu du carré 2 × 2 (`TUNE_RASTER_FOOT`) | ≈ 0,6 ms |
+| normale, matériaux proches, bruit fin, ombres des nuages, imagerie, textures, mer | ≈ 0–1 ms chacun (bruit) |
+
+Le détail procédural (trois couches de bruit, la crête déformée) est évalué à chaque lecture du relief : l'affinement
+depuis la distance raster (2 à 14 lectures), la normale (3), les ombres (pas `earthHeightStep`). Plus aucun poste unique
+ne domine : le reste de `shade` est réparti. L'empreinte de l'échantillon ombré suit désormais le carré qu'il représente
+(√ du taux : 2 au taux ¼), plus juste pour son filtrage, sans gain notable.

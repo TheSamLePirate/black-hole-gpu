@@ -36,6 +36,10 @@ const ABLATIONS: { name: string; tune?: Record<string, number>; settings?: strin
   { name: "ground detail", tune: { TUNE_DETAIL: 0 } },
   { name: "scenery shadows off", settings: `{ earthSceneryShadows: false }` },
   { name: "crown carving off", tune: { TUNE_FOREST_DETAIL: 0 } },
+  // (the shaded sample's footprint a pixel's own rather than its square's: the drop is negative — what that costs)
+  { name: "pixel footprint", tune: { TUNE_RASTER_FOOT: 1 } },
+  { name: "relief shadow steps 12", tune: { TUNE_SHADOW_N: 12 } },
+  { name: "hint refinement 2 steps", tune: { TUNE_HINT_ITER: 2 } },
   { name: "scenery balanced", settings: `{ earthScenery: "balanced" }` },
   { name: "detail reach normal", settings: `{ detailReach: "normal" }` },
 ];

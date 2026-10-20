@@ -231,6 +231,9 @@ override TUNE_CHEAP: u32 = 0u;
 // (the camera rays' crowns carved by their leaves within this many metres — forestQuery's detail; 0: the plain shapes, a
 // measure of what the carving's sphere tracing costs)
 override TUNE_FOREST_DETAIL: f32 = 220.0;
+// (the raster's shaded sample's footprint [px]: 0 the square it stands for — √ of its shading rate: 2 at one pixel in 2 × 2,
+// its detail filtered to the area it is spread over —; 1 a pixel's own, a measure)
+override TUNE_RASTER_FOOT: f32 = 0.0;
 // (1: the raster's pixels shade drew coloured by the way their scenery was found — red the tree the instance named, hit;
 // blue that tree missed, the grid walked; green no instance, no walk; white the walk as before (no raster scenery) — a measure)
 override TUNE_RASTER_PATHS: u32 = 0u;
@@ -238,6 +241,8 @@ var<private> RASTER_PATH: u32 = 0u;
 // (the raster hint's grazing limit: a ray lower than this sine over the ground below the hint is marched as before — 0: never,
 // a measure of what the grazing rays' marches cost, the thin ridges then missed)
 override TUNE_HINT_GRAZE: f32 = 0.15;
+// (the raster hint's refinement: its Illinois steps at most — 10; fewer, a measure of what they cost)
+override TUNE_HINT_ITER: u32 = 10u;
 // (1: Gargantua's bodies far from a step rejected before their place at its end — 0: each worked out, a measure)
 override TUNE_BODY_REJECT: u32 = 1u;
 // (measures — the Earth's ground shading, a part of it left out: 1 the relief's own normal near, 2 its shadows, 4 the
@@ -5584,7 +5589,7 @@ fn earthMarchHinted(ro: vec3f, rd: vec3f, fpK: f32, tM: f32, kM: f32) -> f32 {
   // the distance and refined three times)
   let tol = max(0.05, 0.1 * tM * fpK) / kM;
   var side = 0;
-  for (var j = 0u; j < 10u; j++) {
+  for (var j = 0u; j < TUNE_HINT_ITER; j++) {
     if (hi - lo < tol) { break; }
     let m = clamp(lo + (hi - lo) * flo / (flo - fhi), lo + 0.02 * (hi - lo), hi - 0.02 * (hi - lo));
     let fm = marchClear(A, o, e, rd, m, fpK);
@@ -8547,10 +8552,12 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   let flags = P.frame.z;
   let frameStamp = P.frame.x;
   let temporal = (flags & FLAG_TEMPORAL) != 0u;
-  // (a pixel's own footprint: the detail of a sample a pixel, not a block's)
-  FOOT_NEAR = 1.0;
-  FOOT_FAR = 1.0;
-  FOOT = 1.0;
+  // (the footprint of the square the sample stands for — a pixel at every pixel, 2 × 2 at one in four: its detail filtered to
+  // the area its colour is spread over, not a block's)
+  let foot = select(sqrt(f32(rate)), TUNE_RASTER_FOOT, TUNE_RASTER_FOOT > 0.0);
+  FOOT_NEAR = foot;
+  FOOT_FAR = foot;
+  FOOT = foot;
   var jit = vec2f(0.0);
   if (temporal) { jit = gaussJitter(hash4(vec3u(px, frameStamp)).xy); }
   let rnd = fract(ign(vec2f(px)) + f32(frameStamp % 1024u) * 0.6180339887);
