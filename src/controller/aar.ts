@@ -170,6 +170,9 @@ function aarOff(this: CameraController, why?: string) {
   const A = this.aar;
   if (!A) return;
   this.aar = null;
+  // (its racetrack taken up again)
+  const q = this.combat?.world.targets.find((x) => x.id === A.tanker);
+  if (q?.ai) q.ai.straight = false;
   const m = this.jetModes;
   m.icpt = undefined;
   m.formDist = undefined;
@@ -292,6 +295,9 @@ function aarJet(
     if (e === "depart") A.leftAt = A.t;
   }
   A.offLine = gapOf(tip, S.basket).off;
+  // (the tanker flies straight and level while it refuels us — behind its hose until cleared to depart —: its
+  // racetrack's turn put off, rolled out of if it was in one)
+  if (T.q.ai) T.q.ai.straight = A.stage === "hose" && A.leftAt === null;
   // (its turns told as it rolls into them — and out)
   const tb = formationBank([0, 0, 1], T.u, T.r);
   if (Math.abs(tb) > 2 * (Math.PI / 180) && !A.turning) {

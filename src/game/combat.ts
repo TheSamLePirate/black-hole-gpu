@@ -224,6 +224,8 @@ export interface Target {
      *  at most [rad/s] (a tanker's gentle 3°/s: its pods 11 m out rise and fall with its bank) */
     bankMax?: number;
     rollMax?: number;
+    /** its course held straight and level, its route left aside until let go (a tanker while it refuels) */
+    straight?: boolean;
     /** the lift's part across the path flown now [m/s²]; its bank [rad, + right], its vertical pull [m/s²] (eased
      *  towards the turn asked at its roll and pull rates) */
     lat?: V3;
@@ -1125,9 +1127,13 @@ export class CombatWorld {
         A.mode = threat ? "defend" : d < (A.mode === "engage" ? 45_000 : 40_000) ? "engage" : "patrol";
       let want: V3;
       if (A.mode === "course") {
-        // (a course: its heading and height — or its route's next point, the last held —, no fight)
+        // (a course: its heading and height — or its route's next point, the last held —, no fight; held straight
+        // and level when asked — a tanker refuelling: its route's turns put off)
         const R = A.route;
-        if (R && R.next < R.pts.length) {
+        if (A.straight) {
+          const h = Math.hypot(q.fwd[0], q.fwd[1]) || 1;
+          want = [q.fwd[0] / h, q.fwd[1] / h, 0];
+        } else if (R && R.next < R.pts.length) {
           const to = sub(R.pts[R.next]!, q.p);
           if (len([to[0], to[1], 0]) < 1500) R.next++;
           if (R.next >= R.pts.length && R.loop) R.next = 0;

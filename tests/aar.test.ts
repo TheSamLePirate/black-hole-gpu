@@ -75,7 +75,9 @@ function refuel(
   expect(c.tankerStart({ near: true })).toMatch(/TEXACO 11/);
   const seen = new Set<string>();
   let tMax = 0,
-    worst = 0;
+    worst = 0,
+    bank = 0,
+    hoseT = 0;
   const pin = c.pilotInput.bind(c);
   let t = 0;
   c.pilotInput = (pad) => ({ ...pin(pad), ...(input?.(t, c) ?? {}) });
@@ -84,6 +86,11 @@ function refuel(
     const A = c.aar;
     if (A) {
       seen.add(`${A.stage}:${A.s.phase}`);
+      // (the tanker's bank while it refuels us — its roll-out given 10 s, if it was in a turn)
+      if (A.stage === "hose" && A.leftAt === null && (hoseT += 1 / 30) > 10) {
+        const q = c.combat!.world.targets.find((x) => x.id === A.tanker)!;
+        bank = Math.max(bank, Math.acos(Math.min(1, q.up[2])) * (180 / Math.PI));
+      }
       if (A.s.phase === "contact") {
         tMax = Math.max(tMax, A.s.takeup);
         worst = Math.max(worst, A.s.closure);
@@ -92,11 +99,11 @@ function refuel(
     return !c.aar && seen.size > 1;
   });
   c.pilotInput = pin;
-  return { c, said, seen, tMax, full };
+  return { c, said, seen, tMax, full, bank };
 }
 
 test("auto: the jet's systems fly it — pre-contact, the contact, the fuel taken, back out, cleared to depart", () => {
-  const { c, said, seen, full } = refuel("auto", 400);
+  const { c, said, seen, full, bank } = refuel("auto", 400);
   console.log(`  ${[...seen].join(" → ")} · ${said.filter((s) => /TEXACO|Refuel/.test(s)).join(" · ")}`);
   expect(seen.has("hose:contact")).toBe(true);
   expect(said.some((s) => /fuel flowing/.test(s))).toBe(true);
@@ -106,11 +113,13 @@ test("auto: the jet's systems fly it — pre-contact, the contact, the fuel take
   // (the 800 kg taken, less what was burnt flying to it and back)
   expect(fleet.fuel.f35!).toBeGreaterThan(full - 400);
   expect(c.gcas?.escape ?? null).toBeNull();
+  // (the tanker held straight and level while it refuels: no turn, no disconnect for it)
+  expect(bank).toBeLessThan(1);
 }, 300_000);
 
 test("assisted: held on the basket's line, the throttle closes — forward in, back out once full", () => {
   // (the pilot: forward once cleared until locked and the hose some 2 m in; then nothing; back once full)
-  const { said, seen } = refuel("assisted", 400, (_t, c) => {
+  const { said, seen, bank } = refuel("assisted", 400, (_t, c) => {
     const A = c.aar as (NonNullable<typeof c.aar> & { backing?: boolean }) | null | undefined;
     if (!A || A.stage !== "hose") return {};
     if (A.s.full || A.leftAt !== null) return { throttle: -1 };
@@ -126,4 +135,6 @@ test("assisted: held on the basket's line, the throttle closes — forward in, b
   expect(seen.has("hose:contact")).toBe(true);
   expect(said.some((s) => /transfer complete/.test(s))).toBe(true);
   expect(said.some((s) => /breakaway/.test(s))).toBe(false);
+  expect(bank).toBeLessThan(1);
+  expect(said.some((s) => /turning/.test(s))).toBe(false);
 }, 300_000);
