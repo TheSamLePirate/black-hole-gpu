@@ -96,7 +96,10 @@ describe.skipIf(!E2E)("docking together", () => {
   test("off the axis, his Ranger strikes her hull: a bounce; her share sent to her", async () => {
     await b.js(`(() => { __bh.camera.undock(); return 1; })()`);
     await Bun.sleep(1000);
-    // (beside her hub, 2.5 m off its axis, coming in at 0.5 m/s: into the hull, not the port)
+    // (beside her hub, 2.5 m off its axis, coming in at 0.5 m/s: into the hull, not the port — both flown manual: the
+    // keep-out guard — PLAN-VAISSEAUX X1b — armed on either craft would hold them apart)
+    await b.js(`(() => { __bh.settings.spaceAssist = "manual"; return 1; })()`);
+    await a.js(`(() => { __bh.settings.spaceAssist = "manual"; return 1; })()`);
     await b.js(`__bh.net.session.placeAtPort(${sa}, 6, 0.5)`);
     await b.js(
       `(() => { const c = __bh.camera, P = c.activePoseNow(); const r = P.ax[0]; __bh.game.placeAt({ frame: "ours", X: P.X.map((x, k) => x + r[k] * 2.5 / ${M_METRES}), vel: P.V, fwd: P.ax[2], up: P.ax[1], note: "off the axis" }); return 1; })()`,
@@ -107,6 +110,8 @@ describe.skipIf(!E2E)("docking together", () => {
       .then(() => true)
       .catch(() => false);
     console.log(`  Ben's log: ${await b.js<string>(`__bh.game.log.text().split(String.fromCharCode(10)).slice(-6).join(" | ")`)}`);
+    await b.js(`(() => { __bh.settings.spaceAssist = "realistic"; return 1; })()`);
+    await a.js(`(() => { __bh.settings.spaceAssist = "realistic"; return 1; })()`);
     expect(struck).toBe(true);
     console.log(`  Ana struck — ${await a.js<number>(`__bh.net.session.bumped`)} blow(s) from Ben`);
   }, 60_000);

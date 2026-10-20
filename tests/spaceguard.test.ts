@@ -150,3 +150,12 @@ test("closing on the Endurance at 2 m/s inside 200 m: held by itself, short of i
   expect(minRange).toBeGreaterThan(50);
   expect(Math.hypot(...g.vrel)).toBeLessThan(0.05);
 }, 180_000);
+
+test("the keep-out sphere leaves a docking be: on the port's axis, ports facing, slow (N2's regression)", async () => {
+  const { kosCorridor } = await import("../src/controller/spaceguard");
+  expect(kosCorridor({ along: 3, lateral: 0.01, angle: 0.1, closing: 0.15 })).toBe(true);
+  expect(kosCorridor({ along: 25, lateral: 2, angle: 3, closing: 0.3 })).toBe(true);
+  expect(kosCorridor({ along: 3, lateral: 1.2, angle: 0.1, closing: 0.15 })).toBe(false);
+  expect(kosCorridor({ along: 3, lateral: 0.01, angle: 40, closing: 0.15 })).toBe(false);
+  expect(kosCorridor({ along: 30, lateral: 0.1, angle: 1, closing: 2 })).toBe(false);
+});

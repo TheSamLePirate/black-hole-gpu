@@ -79,13 +79,21 @@ function spaceGuardStep(this: CameraController) {
   const closing = dl > 0 ? -dot3(g.vrel, d) / dl : 0;
   const k = kosGuard(g.range, closing);
   if (k.level === "none") return;
+  // (on a port's axis, its ports facing, coming in slow — a docking: warned at most, never taken over)
+  const corridor = kosCorridor(g);
   this.spaceGuard = { kind: "kos", level: k.level, armed, rate: closing, dist: g.range, limit: k.limit };
-  if (k.level === "act" && armed) {
+  if (k.level === "act" && armed && !corridor) {
     this.guardTook = this.spaceGuard;
     this.keepRun = null;
     P.setAuto("keep");
     this.onPilotMessage?.(tf("Auto-protection: closing at {0} m/s inside 200 m — holding", closing.toFixed(1)));
   }
+}
+
+/** A docking's approach: on the port's axis (within 15 % of the way, half a metre near), the ports facing within 15°,
+ *  closing no faster than the capture allows (0.5 m/s) — the keep-out sphere's guard leaves it be. */
+export function kosCorridor(g: { along: number; lateral: number; angle: number; closing: number }): boolean {
+  return g.along > -0.6 && g.lateral < Math.max(0.5, 0.15 * g.along) && g.angle < 15 && g.closing < 0.5;
 }
 
 export function installSpaceGuard(C: { prototype: CameraController }) {
