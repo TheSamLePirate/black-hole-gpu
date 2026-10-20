@@ -208,3 +208,15 @@ Le détail procédural (trois couches de bruit, la crête déformée) est évalu
 depuis la distance raster (2 à 14 lectures), la normale (3), les ombres (pas `earthHeightStep`). Plus aucun poste unique
 ne domine : le reste de `shade` est réparti. L'empreinte de l'échantillon ombré suit désormais le carré qu'il représente
 (√ du taux : 2 au taux ¼), plus juste pour son filtrage, sans gain notable.
+
+## Essai : le cache du détail du relief autour de la caméra — annulé
+
+`ee0028e6` (annulé par `7d02b9ea`, gardé dans l'historique) : le détail procédural (`earthDetail`) sur une grille de 2 m,
+2048² texels (±2 km), sur le plan tangent d'une époque, torique (des bandes à chaque mouvement), écrit par un noyau
+`detailBuild` avec les fonctions du traceur et relu (bilinéaire) par `earthDetail` là où l'empreinte est fine.
+
+Mesuré en vol, alterné (raster ¼, détail high/veryFar) : rempli et actif, image identique, **`shade` 19,0 → 18,3–18,9 ms à
+Tarifa, rien dans les Alpes** ; les rafraîchissements à l'arrivée des tuiles coûtent jusqu'à 5 ms certaines images. La
+fenêtre de ±2 km ne couvre guère que le sol caché par le cockpit à 700 m d'altitude : le sol visible est presque tout
+au-delà, où l'empreinte dépasse 8 m et le cache ne s'applique pas. Une cascade de niveaux (8 m, 32 m… jusqu'à des
+dizaines de km), au gain incertain, serait la suite si ce poste redevient le premier.
