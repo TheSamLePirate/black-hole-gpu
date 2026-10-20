@@ -1,5 +1,8 @@
 // French for the settings, the scenes and the keyboard sheet (keyed by the English: see src/i18n.ts).
 export default {
+  "Terrain cache (experimental)": "Cache du relief (expérimental)",
+  "Prepare filtered terrain heights on the GPU and reuse them while flying. Experimental: compare image quality and frame time before enabling permanently. Runways, walking, offline images and relativistic views keep the reference terrain. Requires real terrain.":
+    "Prépare les hauteurs filtrées du relief sur le GPU et les réutilise en vol. Expérimental : comparez l’image et le temps de rendu avant une activation permanente. Les pistes, la marche, les images hors ligne et les vues relativistes conservent le relief de référence. Nécessite le relief réel.",
   "Local source unavailable": "Source locale indisponible",
   Centre: "Centrer",
   "Walking speed": "Vitesse de marche",

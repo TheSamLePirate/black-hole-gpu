@@ -977,6 +977,7 @@ export class GameTools {
       renderScale: this.ctx.renderScale(),
       quality: s.quality,
       budgetMs: s.realtimeBudget,
+      terrainCache: r.terrainCacheStats,
       earthSurface: r.earthSurface.stats(),
       earthScenery: r.earthScenery.stats(),
       streaming: r.streamingState,

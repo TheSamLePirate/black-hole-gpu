@@ -1,4 +1,6 @@
 import { streamingLead, aheadFocus, gazeLead } from "./system/streaming-focus";
+import { TerrainCache, withTerrainCache } from "./system/terrain-cache";
+import { TERRAIN_CACHE_MAX_LAT, TERRAIN_CACHE_VEC4S } from "./system/terrain-cache-layout";
 import type { NetWalkerHome } from "./controller/netcraft";
 import { CharacterRenderer, type GrassView } from "./character-renderer";
 import type { PlanetCharacter } from "./controller/character";
@@ -187,6 +189,7 @@ const GROUND_DENSE_IN = 12;
 const GROUND_DENSE_OUT = 9;
 /** every feature of the tracer kept (the general pipelines) */
 const FEATURES_ALL = 16383;
+const FEATURE_TERRAIN_CACHE = 1 << 15;
 /** how long a block size's measured frame time is remembered [ms] (then tried again) */
 const BLOCK_MEMORY = 20000;
 /** the camera held after moving: the refinement's full passes over which the history hands over to it (at most its samples) */
@@ -1420,6 +1423,7 @@ export class Renderer {
   release() {
     this.earthScenery.dispose();
     this.earthSurface.dispose();
+    this.terrainSurfaceCache?.dispose();
     this.device.destroy();
   }
 
@@ -1576,7 +1580,7 @@ export class Renderer {
         seaShader(
           sceneryShader(
             surfaceShader(
-              withForest(await wgsl(traceWGSL), await wgsl(forestSource)),
+              withTerrainCache(withForest(await wgsl(traceWGSL), await wgsl(forestSource))),
               device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT,
             ),
             device.limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT,
@@ -1629,6 +1633,7 @@ export class Renderer {
     void lost.then((info) => {
       r.earthScenery.dispose();
       r.earthSurface.dispose();
+      r.terrainSurfaceCache?.dispose();
       // (a loss simulated — the e2e's, __bh.gpu.lose(): the device destroyed — told as a real one)
       r.lost = r.simulatedLoss ? "simulated" : info.reason === "destroyed" ? "released" : info.message || t("the GPU was reset");
       if (r.offline) r.offline.error = r.lost;
@@ -2896,6 +2901,27 @@ export class Renderer {
     f[41 * 4 + 2] = kp;
     f[41 * 4 + 3] = kp > 0 ? ((tSec % 900) + 900) % 900 : 0;
     if (kp > 0) this.featureKey |= 16384;
+    // Keep reference rendering for optical/scientific kernels and contact with the walking patch.
+    const terrainCacheEligible = !!(
+      s.earthTerrainCache &&
+      s.earthTerrain &&
+      this.earthMaps.tier &&
+      t === this.live &&
+      !o.probe &&
+      (this.featureKey & 512) === 0 &&
+      !s.polarization &&
+      s.band === "visible" &&
+      s.renderMode === "physical" &&
+      this.tuneKey === 0 &&
+      !walking &&
+      earthSurface &&
+      Math.abs(earthSurface.lat) <= TERRAIN_CACHE_MAX_LAT &&
+      earthSurface.h * WGS84_A < 100_000
+    );
+    // Keep a stable key when a still frame starts refining; its quality kernel compiles the cache out.
+    if (terrainCacheEligible) this.featureKey |= FEATURE_TERRAIN_CACHE;
+    this.terrainCacheWanted = terrainCacheEligible && (o.flags & FLAG_INTERLEAVED) !== 0;
+    f[MOUTH_LIST_AT + 7] = this.terrainCacheWanted ? 1 : 0;
     if (!o.probe) this.marsDustNow = f[61 * 4 + 2]!;
     // (the storm's diffuse light in the kernel's weather code: compiled in only then)
     if (f[61 * 4 + 2]! > 0) this.featureKey |= 1024;
@@ -3688,6 +3714,7 @@ export class Renderer {
           HAS_SURFACE: has(4096),
           HAS_SCENERY: has(8192),
           HAS_AURORA: has(16384),
+          HAS_TERRAIN_CACHE: entryPoint === "main" && !quality ? has(FEATURE_TERRAIN_CACHE) : 0,
           COST_VIEW: (key >> 16) & 15,
           ...(this.tunes.get((key >> 20) & 255) ?? {}),
           QUALITY_PIPELINE: quality ? 1 : 0,
@@ -3813,6 +3840,33 @@ export class Renderer {
         lp.end();
       }
     }
+    // A bounded surface level, prepared before the rays; all atmosphere/optics remain in their existing path.
+    // Wait for the specialised kernel: the general fallback draws the reference surface.
+    const pipeline = this.traceVariant(quality ? "q" : "rt");
+    if (!quality && this.terrainCacheWanted && pipeline && pipeline !== this.tracePipeline) {
+      this.terrainSurfaceCache ??= TerrainCache.create(this.device, this.traceSource);
+      this.terrainSurfaceCache.setSources({
+        params: this.paramBuf,
+        table: this.bodyBuf,
+        elevation: this.earthMaps.elev,
+        tiles: this.earthTiles.texture,
+        sampler: this.sampler,
+      });
+      const near = this.lastNear;
+      const geo = near ? patchGeodetic(near, WGS84_F) : null;
+      const at = geo && geo.h * WGS84_A < 100_000 ? geo : null;
+      const changed = this.terrainSurfaceCache.encode(enc, at, `${this.earthTiles.stamp}:${this.earthMaps.tier}`, () =>
+        this.prof.pass("terrain surface cache"),
+      );
+      if (changed) {
+        // The level affects this submission: reject older samples/history in this very frame.
+        this.frameTimes.length = 0;
+        this.epoch = this.validFrom = this.frameStamp;
+        this.paramsU[17 * 4 + 1] = this.validFrom;
+        this.device.queue.writeBuffer(this.paramBuf, 17 * 16, this.paramsU.subarray(17 * 4, 18 * 4));
+        if (t.temporal) t.temporal.valid = false;
+      }
+    }
     // (the aerial perspective's table before the rays that read it)
     if (!quality && this.aerialPipe) {
       const ap = enc.beginComputePass(this.prof.pass("aerial perspective"));
@@ -3822,7 +3876,6 @@ export class Renderer {
       ap.dispatchWorkgroups(Math.ceil(AERIAL_SIZE[0] / 8), Math.ceil(AERIAL_SIZE[1] / 8));
       ap.end();
     }
-    const pipeline = this.traceVariant(quality ? "q" : "rt");
     // (the quality kernel still compiling — frame() keeps a still view on the realtime path until then;
     // the scene's realtime kernel still compiling at the start: no image yet)
     if (!pipeline) return false;
@@ -5711,6 +5764,21 @@ export class Renderer {
   }
   private warpGridOn = true;
   private warpOut: WarpGrid;
+  private terrainSurfaceCache: TerrainCache | null = null;
+  private terrainCacheWanted = false;
+  /** Experimental height-cache diagnostics, accessible through __bh.renderer. */
+  get terrainCacheStats() {
+    const stats = this.terrainSurfaceCache?.stats() ?? {
+      compiled: false,
+      error: null,
+      levelsReady: 0,
+      builds: 0,
+      invalidations: 0,
+      stagingBytes: 0,
+      uniformBytes: 0,
+    };
+    return { requested: this.terrainCacheWanted, tableBytes: TERRAIN_CACHE_VEC4S * 16, ...stats };
+  }
   /** The warp's grids kept round the camera near the Earth (its geodetic place), before any pass of the frame. */
   private updateWarp(s: Settings, time: number) {
     let at: { lon: number; lat: number } | null = null;
@@ -5770,6 +5838,7 @@ export class Renderer {
     this.earthScenery.dispose();
     this.simulatedLoss = true;
     this.earthSurface.dispose();
+    this.terrainSurfaceCache?.dispose();
     this.device.destroy();
   }
 

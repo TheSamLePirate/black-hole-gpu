@@ -152,13 +152,16 @@ struct Params {
   // on it in nodes (u east, v north), nodes a radian, on (0/1)
   warp: array<vec4f, 4>,
   // our universe's bodies a ray leaving the mouth's region may meet (renderer: the mouth's list; ourSegment): [0] their
-  // indices, 6 bits each, 4 a value (as path.w's list); [1].x their count + 0.5 (0: every body)
+  // indices, 6 bits each, 4 a value (as path.w's list); [1].x their count + 0.5 (0: every body),
+  // [1].w: experimental terrestrial height-cache lookup allowed in this realtime frame (0 otherwise)
   mouthList: array<vec4f, 2>,
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
 // pipeline, keeping the realtime kernel small (register pressure / occupancy).
 override QUALITY_PIPELINE: bool = false;
+// Experimental surface cache, compiled out of default and scientific/reference kernels.
+override HAS_TERRAIN_CACHE: bool = false;
 
 // Kernel specialisation (renderer.ts: traceVariant): a feature the scene does not use compiled out —
 // the uber-kernel's branches and their registers, on the scenes that have none of them (the Gargantua
@@ -5368,7 +5371,7 @@ fn earthH(q: vec3f, foot: f32, cheap: bool) -> vec2f {
   }
   return vec2f(h, res);
 }
-fn earthHeightG(q: vec3f, foot: f32) -> f32 {
+fn earthHeightExactG(q: vec3f, foot: f32) -> f32 {
   let hr = earthH(q, foot, false);
   // (a runway's airfield graded: at its level, its detail off — the gear's ground the same)
   var g = vec3f(0.0);
@@ -5376,6 +5379,18 @@ fn earthHeightG(q: vec3f, foot: f32) -> f32 {
   let h0 = mix(hr.x, g.z, g.y);
   if (g.x >= 1.0) { return max(h0, 0.0); }
   return max(h0 + (1.0 - g.x) * earthDetail(q, h0, foot, hr.y), 0.0);
+}
+// BEGIN_TERRAIN_CACHE (system/terrain-cache.ts supplies the existing table lookup)
+fn terrainCachedHeight(q: vec3f, foot: f32) -> f32 { return -1.0; }
+// END_TERRAIN_CACHE
+fn earthHeightG(q: vec3f, foot: f32) -> f32 {
+  if (HAS_TERRAIN_CACHE) {
+    if (!HAS_RWY || runwayGrade(q).x <= 0.0) {
+      let h = terrainCachedHeight(q, foot);
+      if (h >= 0.0) { return h; }
+    }
+  }
+  return earthHeightExactG(q, foot);
 }
 // The ground's height at a unit direction q of the squashed space, as a radial height there [m of a]: the
 // relief read at its geodetic direction (src/terrain.ts: earthHeightSampler, the same), over the scale

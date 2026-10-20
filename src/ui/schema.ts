@@ -2015,6 +2015,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "terrain relief elevation dem srtm mountains tiles earth ground",
   },
   {
+    key: "earthTerrainCache",
+    type: "toggle",
+    section: "sky",
+    group: "The Earth",
+    label: "Terrain cache (experimental)",
+    effect: "scene",
+    help: "Prepare filtered terrain heights on the GPU and reuse them while flying. Experimental: compare image quality and frame time before enabling permanently. Runways, walking, offline images and relativistic views keep the reference terrain. Requires real terrain.",
+    keywords: "terrain cache experimental performance rendering earth aaa relief",
+  },
+  {
     key: "earthSurface",
     type: "choice",
     section: "sky",
