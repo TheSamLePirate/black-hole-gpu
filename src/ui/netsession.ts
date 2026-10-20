@@ -51,6 +51,7 @@ import type { MissionShared } from "../controller/mission";
 import { type RemoteWing, wingsOut } from "../controller/wingmen";
 import { type RadioRole, SHARED_ROLES } from "../game/radio";
 import { type RoomResult, refTitle, resultOf, resultText } from "../net/roomboard";
+import { COOP_MISSIONS, coopVerdict, type RoleState } from "../game/coopmissions";
 import type { FlightReport } from "../game/report";
 import { amountOf, amountText, giveAmount, isShareWhat, roomFor, type ShareWhat } from "../net/spaceshare";
 import { SYSTEMS } from "../game/systems";
@@ -139,6 +140,8 @@ export interface NetSessionDeps {
   crewTools?(): Tool[];
   /** another's radio line (I4: his wingmen, his carrier, his LSO) heard on the flight's radio */
   radioHeard?(role: RadioRole, text: string, name: string): void;
+  /** a co-op mission's role set up and begun (PLAN-VAISSEAUX N5); what to say */
+  coopStart?(missionId: string, roleId: string): string;
   /** a spacecraft's challenge set up and begun (PLAN-VAISSEAUX N4: a room challenge accepted); what to say */
   spaceChallenge?(id: string): string;
   /** a question to the pilot (PLAN-VAISSEAUX N: another's order, his request): accepted or refused, or let lapse */
@@ -360,6 +363,8 @@ export class NetSession {
     }
     const c = this.d.camera;
     const now = performance.now() / 1000;
+    // (our co-op role's progress told to the room — N5)
+    c.onMissionProgress ??= (p) => this.coopProgress(p);
     // (TARS's "join <name>" on a room player: his wing — controller/copilot.ts)
     c.netFormation ??= (name) => {
       const n = name.trim().toLowerCase();
@@ -655,6 +660,41 @@ export class NetSession {
         } else if (e.kind === "rchal-in") {
           const id = (ev as unknown as { id?: unknown }).id;
           if (this.roomChal && this.roomChal.id === id) this.roomChal.slots.add(from);
+        } else if (e.kind === "coop") {
+          // (a co-op mission proposed — N5: a role for us, if one is free)
+          const c0 = ev as unknown as { id?: unknown; role?: unknown };
+          const M = COOP_MISSIONS.find((m) => m.id === c0.id);
+          if (!M || !M.roles.some((r) => r.id === c0.role) || !this.d.coopStart) return;
+          this.coop = {
+            id: M.id,
+            roles: new Map(M.roles.map((r) => [r.id, { slot: null, i: 0, n: r.objectives.length, ended: false, ok: false }])),
+            mine: null,
+            told: false,
+          };
+          this.coop.roles.get(c0.role as string)!.slot = from;
+          const free = M.roles.find((r) => r.id !== c0.role);
+          if (!free) return;
+          const answer = (yes: boolean) => {
+            if (yes) this.d.toast(this.takeRole(free.id));
+          };
+          if (this.d.ask)
+            this.d.ask(
+              tf("{0} proposes a co-op mission: {1} — your role: {2}", this.nameOf(from), t(M.title), t(free.title)),
+              answer,
+              "net-coop",
+            );
+        } else if (e.kind === "coop-in") {
+          const c1 = ev as unknown as { id?: unknown; role?: unknown };
+          const r = this.coop?.id === c1.id ? this.coop?.roles.get(c1.role as string) : undefined;
+          if (r && (r.slot === null || r.slot === from)) r.slot = from;
+        } else if (e.kind === "coopst") {
+          const c2 = ev as unknown as { id?: unknown; role?: unknown; i?: unknown; ended?: unknown; ok?: unknown };
+          const r = this.coop?.id === c2.id ? this.coop?.roles.get(c2.role as string) : undefined;
+          if (!r || r.slot !== from || typeof c2.i !== "number") return;
+          r.i = Math.max(0, Math.min(r.n, c2.i));
+          r.ended = !!c2.ended;
+          r.ok = !!c2.ok;
+          this.coopCheck();
         } else if (e.kind === "alight") {
           if (this.aboard.get(from) === net.room?.slot) this.d.toast(tf("{0} got off", this.nameOf(from)));
           this.aboard.delete(from);
@@ -663,6 +703,13 @@ export class NetSession {
     }
     const F = this.follow;
     if (F && !net.room.members.some((m) => m.slot === F.slot)) this.unfollow();
+    // (a co-op role's pilot gone — N5: the role free for another)
+    if (this.coop)
+      for (const [k, r] of this.coop.roles)
+        if (r.slot !== null && !net.room.members.some((m) => m.slot === r.slot)) {
+          r.slot = null;
+          this.d.toast(tf("A pilot left: the role {0} is free (Network › Results)", this.roleTitle(k)));
+        }
     if (isNetTarget(this.d.settings.target) && !net.room.members.some((m) => netTargetId(m.slot) === this.d.settings.target))
       this.d.settings.target = "earth";
     for (const [g, l] of this.links)
@@ -1079,6 +1126,82 @@ export class NetSession {
     return tf("Target: {0}", this.nameOf(slot));
   }
 
+  /** the co-op mission under way (N5): which, each role's pilot and progress, ours, whether its end was told */
+  coop: { id: string; roles: Map<string, RoleState>; mine: string | null; told: boolean } | null = null;
+
+  private roleTitle(k: string): string {
+    const M = COOP_MISSIONS.find((m) => m.id === this.coop?.id);
+    return t(M?.roles.find((r) => r.id === k)?.title ?? k);
+  }
+
+  /** A co-op mission proposed to the room (N5): our role taken and begun, the others offered. What to say. */
+  proposeCoop(id: string, roleId: string): string {
+    const net = this.net;
+    const M = COOP_MISSIONS.find((m) => m.id === id);
+    if (!net?.room || !M || !this.d.coopStart) return t("Not in a room");
+    this.coop = {
+      id,
+      roles: new Map(M.roles.map((r) => [r.id, { slot: null, i: 0, n: r.objectives.length, ended: false, ok: false }])),
+      mine: null,
+      told: false,
+    };
+    net.event({ kind: "coop", id, role: roleId });
+    this.takeRole(roleId, false);
+    return tf("Co-op mission proposed: {0}", t(M.title));
+  }
+
+  /** A role of the co-op mission taken (N5): ours if free, told to the room, begun. What to say. */
+  takeRole(roleId: string, tell = true): string {
+    const net = this.net;
+    const C = this.coop;
+    const r = C?.roles.get(roleId);
+    if (!net?.room || !C || !r) return t("No co-op mission here");
+    if (r.slot !== null && r.slot !== net.room.slot) return tf("The role {0} is taken", this.roleTitle(roleId));
+    r.slot = net.room.slot;
+    C.mine = roleId;
+    net.event({ kind: "coop-in", id: C.id, role: roleId });
+    const said = this.d.coopStart!(C.id, roleId);
+    if (tell) this.d.toast(said);
+    return tf("Your role: {0}", this.roleTitle(roleId));
+  }
+
+  /** Our role's progress (the mission controller's): ours updated, told to the room. */
+  private coopProgress(p: { id: string; i: number; n: number; ended: boolean; ok: boolean }) {
+    const C = this.coop;
+    if (!C?.mine || p.id !== `coop:${C.id}:${C.mine}`) return;
+    const r = C.roles.get(C.mine)!;
+    Object.assign(r, { i: p.i, n: p.n, ended: p.ended, ok: p.ok });
+    this.net?.event({ kind: "coopst", id: C.id, role: C.mine, i: p.i, ended: p.ended, ok: p.ok });
+    this.coopCheck();
+  }
+
+  /** The co-op mission won or lost: said once, its report (every role's line) — shared as any. */
+  private coopCheck() {
+    const C = this.coop;
+    if (!C || C.told) return;
+    const v = coopVerdict(C.roles);
+    if (v === "on") return;
+    C.told = true;
+    const M = COOP_MISSIONS.find((m) => m.id === C.id)!;
+    const roles = [...C.roles];
+    const done = roles.reduce((a, [, r]) => a + r.i, 0);
+    const all = roles.reduce((a, [, r]) => a + r.n, 0);
+    const score = v === "won" ? 20 : Math.round((200 * done) / Math.max(all, 1)) / 10;
+    this.d.camera.onFlightReport?.({
+      kind: "mission",
+      ref: `mission:${M.id}`,
+      title: tf("Co-op · {0}", t(M.title)),
+      score,
+      letter: score >= 17 ? "A" : score >= 14 ? "B" : score >= 10 ? "C" : score >= 6 ? "D" : "F",
+      lines: roles.map(([k, r]) => ({
+        label: `${this.roleTitle(k)} · ${r.slot === null ? "—" : this.nameOf(r.slot)}`,
+        value: `${r.i}/${r.n}${r.ended ? (r.ok ? " ✓" : " ✗") : ""}`,
+        q: (r.ok ? "good" : "bad") as "good" | "bad",
+      })),
+    });
+    this.d.toast(v === "won" ? tf("Co-op mission accomplished: {0}", t(M.title)) : tf("Co-op mission failed: {0}", t(M.title)));
+  }
+
   /** the room's results heard and ours (N4: its board), the latest 120 */
   results: RoomResult[] = [];
   /** the room challenge under way (N4): which, who proposed it, who took it */
@@ -1102,6 +1225,8 @@ export class NetSession {
   shareReport(r: FlightReport | null) {
     const net = this.net;
     if (!r || !net?.room) return;
+    // (a co-op role's own debrief: the room hears the mission's, every role's line in it)
+    if (r.ref?.startsWith("mission:coop:")) return;
     const v = {
       kind: r.kind,
       title: r.title,

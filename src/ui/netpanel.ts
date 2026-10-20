@@ -14,6 +14,7 @@ import type { NetSession } from "./netsession";
 import { fleetRows, orderName, rangeText, SPACE_ORDERS } from "../net/spacefleet";
 import { SHARE_WHATS, shareName } from "../net/spaceshare";
 import { board, refTitle, resultText } from "../net/roomboard";
+import { COOP_MISSIONS, coopVerdict } from "../game/coopmissions";
 import type { NetVoice } from "./netvoice";
 
 type Client = InstanceType<NetModule["NetClient"]>;
@@ -805,6 +806,42 @@ export class NetPanel {
       );
       b.dataset.testid = "net-roomchal";
       wrap.append(b);
+    }
+    // (the co-op mission under way — N5: each role, its pilot, how far; a free role to take)
+    const C = S.coop;
+    const CM = C ? COOP_MISSIONS.find((m) => m.id === C.id) : null;
+    if (C && CM) {
+      const box = h("div", "netp-boardsec netp-coop");
+      box.dataset.testid = "net-coop";
+      const v = coopVerdict(C.roles);
+      box.append(h("b", "netp-lab", `${tf("Co-op · {0}", t(CM.title))}${v === "won" ? " — ✓" : v === "lost" ? " — ✗" : ""}`));
+      const ol = h("ol", "netp-boardlist");
+      for (const R of CM.roles) {
+        const st = C.roles.get(R.id)!;
+        const li = h("li", st.slot === net.room!.slot ? "netp-mine" : "");
+        li.dataset.testid = `net-coop-${R.id}`;
+        const who = st.slot === null ? t("free") : (net.room!.members.find((m) => m.slot === st.slot)?.name ?? `#${st.slot}`);
+        li.append(
+          h("span", "", t(R.title)),
+          h("span", "netp-grow"),
+          h("span", "", who),
+          h("b", "", `${st.i}/${st.n}${st.ended ? (st.ok ? " ✓" : " ✗") : ""}`),
+        );
+        if (st.slot === null && !st.ended && !C.mine)
+          li.append(
+            button({
+              label: t("Take the role"),
+              testid: `net-coop-take-${R.id}`,
+              onClick: () => {
+                this.host.toast(S.takeRole(R.id));
+                this.render();
+              },
+            }),
+          );
+        ol.append(li);
+      }
+      box.append(ol);
+      wrap.append(box);
     }
     const B = board(S.results);
     if (!B.length) {

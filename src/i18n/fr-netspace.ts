@@ -112,4 +112,39 @@ export default {
   "No results yet — each lesson, challenge, mission and report flown in the room comes here":
     "Aucun résultat pour l'instant — chaque leçon, défi, mission et compte rendu volé dans la salle arrive ici",
   "{0} — {1}: {2}": "{0} — {1} : {2}",
+  // co-op missions (N5)
+  "Co-op missions: in a room": "Les missions coopératives se jouent dans une salle",
+  "{0} proposes a co-op mission: {1} — your role: {2}": "{0} propose une mission coopérative : {1} — votre rôle : {2}",
+  "A pilot left: the role {0} is free (Network › Results)": "Un pilote est parti : le rôle {0} est libre (Réseau › Résultats)",
+  "Co-op mission proposed: {0}": "Mission coopérative proposée : {0}",
+  "No co-op mission here": "Pas de mission coopérative ici",
+  "The role {0} is taken": "Le rôle {0} est déjà pris",
+  "Your role: {0}": "Votre rôle : {0}",
+  "Co-op · {0}": "Coop · {0}",
+  "Co-op mission accomplished: {0}": "Mission coopérative accomplie : {0}",
+  "Co-op mission failed: {0}": "Mission coopérative échouée : {0}",
+  "Co-op, in the room": "En coopération, dans la salle",
+  "Fly as {0}": "Voler en {0}",
+  "Take the role": "Prendre le rôle",
+  free: "libre",
+  "The Moon together": "La Lune ensemble",
+  "The Endurance holds orbit above the Moon, its ring spun up for the crew; the Lander goes down to the surface.":
+    "L'Endurance tient son orbite au-dessus de la Lune, son anneau en rotation pour l'équipage ; le Lander descend jusqu'à la surface.",
+  "Endurance — the orbit": "Endurance — l'orbite",
+  "Keep the mothership in a high lunar orbit, the ring spun up past 2 rpm.":
+    "Garder le vaisseau-mère sur une haute orbite lunaire, l'anneau au-delà de 2 tr/min.",
+  "Spin the ring up past 2 rpm (⇧])": "Faire tourner l'anneau au-delà de 2 tr/min (⇧])",
+  "Hold the orbit above 100 km": "Tenir l'orbite au-dessus de 100 km",
+  "Lander — the descent": "Lander — la descente",
+  "From a 50 km orbit, down to the Moon's surface.": "D'une orbite de 50 km jusqu'à la surface de la Lune.",
+  "The rescue together": "Le sauvetage ensemble",
+  "The Endurance tumbling 300 km up: one stops its spin from its own controls, the other docks a Ranger to it.":
+    "L'Endurance en vrille à 300 km : l'un arrête sa rotation depuis ses propres commandes, l'autre y amarre un Ranger.",
+  "Endurance — stop the tumble": "Endurance — arrêter la vrille",
+  "Aboard the tumbling mothership: stop its spin (⇧X), then hold it steady.":
+    "À bord du vaisseau-mère en vrille : arrêter sa rotation (⇧X), puis le tenir stable.",
+  "Stop the tumble": "Arrêter la vrille",
+  "Ranger — the docking": "Ranger — l'amarrage",
+  "Close in on the Endurance and dock once it is steady.": "S'approcher de l'Endurance et s'y amarrer une fois stable.",
+  "Within a kilometre of the Endurance": "À moins d'un kilomètre de l'Endurance",
 } satisfies Record<string, string>;

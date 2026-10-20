@@ -120,6 +120,7 @@ import { SPACE_MISSIONS, type SpaceMission, type SpaceMissionId, spaceMissionFro
 import { spaceChallengePanel } from "./ui/spacechallenges";
 import { type SpaceMissionHost, spaceMissionPanel } from "./ui/spacemissions";
 import { netAsk } from "./ui/netask";
+import { COOP_MISSIONS, roleMission } from "./game/coopmissions";
 import { SIDE_HOLDS } from "./input/spacepad";
 import { RadialWheel, type WheelItem } from "./ui/wheel";
 import { Tablet } from "./ui/tablet";
@@ -4657,6 +4658,9 @@ async function main() {
       }
       return { vessel: v, save: tools.snapshot("mission start") };
     },
+    // (in a room — N5: the co-op missions, a role chosen)
+    coop: (id, role) => (netPanel.net?.room ? panel.toast(netSession.proposeCoop(id, role)) : panel.toast(t("Co-op missions: in a room"))),
+    inRoom: () => !!netPanel.net?.room,
     share: (M) => {
       const url = spaceMissionLink(M);
       void navigator.clipboard
@@ -4786,6 +4790,12 @@ async function main() {
     toast: (s) => panel.toast(s),
     jetIn: () => jetIn,
     sceneTime: () => sim.time * M_SECONDS,
+    // (a co-op mission's role — PLAN-VAISSEAUX N5: flown as a mission of its own)
+    coopStart: (id, role) => {
+      const M = COOP_MISSIONS.find((m) => m.id === id);
+      const R = M ? roleMission(M, role) : null;
+      return R ? spaceMissionPlace(R) : t("No such mission");
+    },
     // (a room challenge accepted — PLAN-VAISSEAUX N4: its start set up here)
     spaceChallenge: (id) => spaceChallengePlace(id as SpaceChallengeId),
     // (another's order, his request — PLAN-VAISSEAUX N: a card to accept or refuse)

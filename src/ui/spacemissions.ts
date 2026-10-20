@@ -17,6 +17,7 @@ import {
   type SpaceMissionId,
 } from "../game/spacemissions";
 import { t, tf } from "../i18n";
+import { COOP_MISSIONS } from "../game/coopmissions";
 import { button, el as h, modal } from "./kit";
 
 export interface SpaceMissionHost {
@@ -28,6 +29,9 @@ export interface SpaceMissionHost {
   here(): SpaceStart | null;
   /** its link copied (said) */
   share(M: SpaceMission): void;
+  /** a co-op mission proposed to the room, our role chosen (PLAN-VAISSEAUX N5); whether we are in a room */
+  coop?(id: string, role: string): void;
+  inRoom?(): boolean;
 }
 
 export function spaceMissionPanel(host: SpaceMissionHost) {
@@ -64,6 +68,29 @@ export function spaceMissionPanel(host: SpaceMissionHost) {
   for (const M of CAMPAIGN) root.append(card(M));
   root.append(h("h3", "chp-h", t("Library")));
   for (const M of SPACE_MISSIONS.filter((x) => !x.chapter)) root.append(card(M));
+  // (in a room: the co-op missions, a role each — N5)
+  if (host.coop && host.inRoom?.()) {
+    root.append(h("h3", "chp-h", t("Co-op, in the room")));
+    for (const C of COOP_MISSIONS) {
+      const c = h("div", "chp-card");
+      const roles = h("ol", "chp-goals");
+      for (const R of C.roles) roles.append(h("li", "", `${t(R.title)} — ${t(R.brief)}`));
+      c.append(h("b", "chp-name", t(C.title)), h("p", "chp-brief", t(C.brief)), roles);
+      for (const R of C.roles)
+        c.append(
+          button({
+            label: tf("Fly as {0}", t(R.title)),
+            kind: "primary",
+            testid: `space-coop-${C.id}-${R.id}`,
+            onClick: () => {
+              m.close();
+              host.coop!(C.id, R.id);
+            },
+          }),
+        );
+      root.append(c);
+    }
+  }
   root.append(
     button({
       label: t("Make a mission from here…"),

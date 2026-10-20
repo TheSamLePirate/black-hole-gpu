@@ -103,4 +103,49 @@ test("the room's board (N4): results checked; each pilot's best per thing flown;
   expect(B[1]!.rows.map((r) => `${r.rank} ${r.name} ${r.metric?.text}`)).toEqual(["1 Ana 1 min 30", "2 Ben 1 min 35"]);
   expect(resultText(B[1]!.rows[0]!)).toBe("20.0/20 · 🥇 1 min 30");
   expect(refTitle({ ref: "mission:iss", title: "x" })).toBe("Mission · To the ISS");
+  expect(refTitle({ ref: "mission:coop-moon", title: "x" })).toBe("Co-op · The Moon together");
+});
+
+test("co-op missions (N5): each role a mission of its own; won when every role is done, lost when one ends short", async () => {
+  const { COOP_MISSIONS, coopVerdict, freeRoles, roleMission } = await import("../src/game/coopmissions");
+  const M = COOP_MISSIONS.find((m) => m.id === "coop-moon")!;
+  const L = roleMission(M, "lander")!;
+  expect(L.id).toBe("coop:coop-moon:lander");
+  expect(L.start.vessel).toBe("lander");
+  expect(L.budget).toEqual({ timeS: 3600 });
+  expect(roleMission(M, "nobody")).toBeNull();
+  const st = (slot: number | null, i: number, n: number, ended = false, ok = false) => ({ slot, i, n, ended, ok });
+  expect(
+    coopVerdict(
+      new Map([
+        ["a", st(0, 1, 2)],
+        ["b", st(1, 2, 2, true, true)],
+      ]),
+    ),
+  ).toBe("on");
+  expect(
+    coopVerdict(
+      new Map([
+        ["a", st(0, 2, 2, true, true)],
+        ["b", st(1, 2, 2, true, true)],
+      ]),
+    ),
+  ).toBe("won");
+  expect(
+    coopVerdict(
+      new Map([
+        ["a", st(0, 1, 2, true, false)],
+        ["b", st(1, 2, 2, true, true)],
+      ]),
+    ),
+  ).toBe("lost");
+  expect(
+    freeRoles(
+      new Map([
+        ["a", st(null, 0, 2)],
+        ["b", st(1, 0, 2)],
+        ["c", st(null, 2, 2, true, true)],
+      ]),
+    ),
+  ).toEqual(["a"]);
 });

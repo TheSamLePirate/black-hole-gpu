@@ -6,6 +6,7 @@
 import { SPACE_CHALLENGES } from "../game/spacechallenges";
 import { SPACE_LESSONS } from "../game/spacecourse";
 import { SPACE_MISSIONS } from "../game/spacemissions";
+import { COOP_MISSIONS } from "../game/coopmissions";
 import { t, tf } from "../i18n";
 
 export interface RoomResult {
@@ -63,6 +64,8 @@ export function refTitle(r: Pick<RoomResult, "ref" | "title">): string {
   } else if (kind === "mission") {
     const M = SPACE_MISSIONS.find((x) => x.id === id);
     if (M) return tf("Mission · {0}", t(M.title));
+    const C = COOP_MISSIONS.find((x) => x.id === id);
+    if (C) return tf("Co-op · {0}", t(C.title));
   } else if (kind === "lesson") {
     const L = SPACE_LESSONS.find((x) => x.id === id);
     if (L) return tf("Lesson · {0}", t(L.title));

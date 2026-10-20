@@ -17,6 +17,8 @@ declare module "../controls" {
   interface CameraController {
     spaceMissionBegin: typeof spaceMissionBegin;
     spaceMissionFrame: typeof spaceMissionFrame;
+    /** a mission's progress — an objective reached, its end (PLAN-VAISSEAUX N5: a co-op role's, told to the room) */
+    onMissionProgress?: (p: { id: string; i: number; n: number; ended: boolean; ok: boolean }) => void;
   }
 }
 
@@ -66,6 +68,7 @@ function spaceMissionFrame(this: CameraController, dt: number, st: RangerStatus 
     for (let k = R.results.length; k < M.objectives.length; k++) R.results.push({ text: objText(M.objectives[k]!), ok: false, t: R.t });
     const done = R.results.filter((r) => r.ok).length;
     const whole = done === M.objectives.length;
+    this.onMissionProgress?.({ id: M.id, i: done, n: M.objectives.length, ended: true, ok: whole });
     if (whole && M.chapter && M.chapter > campaignDone()) store.setJSON(KEY, M.chapter);
     const score = (20 * done) / M.objectives.length;
     const lines = R.results.map((r) => ({
@@ -99,6 +102,7 @@ function spaceMissionFrame(this: CameraController, dt: number, st: RangerStatus 
     this.onPilotMessage?.(tf("✓ {0}", objText(O)));
     R.i++;
     R.held = 0;
+    if (R.i < M.objectives.length) this.onMissionProgress?.({ id: M.id, i: R.i, n: M.objectives.length, ended: false, ok: false });
     const next = M.objectives[R.i];
     if (next) this.onLessonSay?.(tf("Objective: {0}", objText(next)));
     else end(null);
