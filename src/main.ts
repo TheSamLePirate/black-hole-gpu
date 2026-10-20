@@ -3030,7 +3030,9 @@ async function main() {
       touch();
       return;
     }
-    if (a === "rotation" && (camera.ourLanded || camera.landed)) {
+    // (out of the craft only when one is flown and set down: a scene's tripod on the ground keeps a rest too — Y
+    // turns its view there, as anywhere)
+    if (a === "rotation" && camera.piloting && (camera.ourLanded || camera.landed)) {
       const error = camera.character.disembark();
       if (error) panel.toast(error);
       touch();
