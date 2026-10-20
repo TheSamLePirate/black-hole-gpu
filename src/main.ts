@@ -53,6 +53,7 @@ import { NetVoice } from "./ui/netvoice";
 import type { JetInputs } from "./f35/pose";
 import { installPwa } from "./pwa";
 import { PauseMenu } from "./ui/pause";
+import type { PauseContext } from "./ui/pausemenu";
 import { ControlsScreen } from "./ui/controls-screen";
 import { PadsScreen } from "./ui/pads-screen";
 import type { SceneGroup } from "./ui/schema";
@@ -3106,6 +3107,59 @@ async function main() {
       weather: () => weatherPanel.open(),
       eclipses: () => eclipses.open(),
       titleScreen: () => titleScreen?.open(),
+      modes: (id) => titleScreen.openMode(id, () => pauseMenu?.open()),
+      context: (): PauseContext => {
+        const mode = gameMode();
+        const u = unitsFor(settings);
+        // the mission: an air mission flown (its objectives' states), or a space mission's scene (its list)
+        const M = camera.mission;
+        const space = MISSIONS.find((q) => q.scene === currentScene);
+        const mission = M
+          ? {
+              title: M.run.spec.title,
+              objectives: M.run.spec.objectives.map((o) => ({ text: o.text, state: M.run.state[o.id] ?? ("waiting" as const) })),
+            }
+          : space
+            ? { title: tr(space.title), objectives: space.objectives.map((o) => ({ text: tr(o), state: "todo" as const })) }
+            : null;
+        const figures: [string, string][] = [];
+        const walker = camera.character.place();
+        if (mode === "foot" && walker)
+          figures.push([
+            tr({ fr: "Lieu", en: "Place" }),
+            `${BODY_NAMES[walker.body as Target] ?? walker.body} · ${fmtLatLon(walker.lat, walker.lon, 3)}`,
+          ]);
+        else if (camera.piloting)
+          try {
+            const st = tools.status();
+            // (a distance in the units shown, its thousands grouped: "400 km", "147 094 163 km")
+            const far = (m: number) => `${Math.round(u.dist(m)).toLocaleString(lang)} ${u.distName.toLowerCase()}`;
+            figures.push(
+              [tr({ fr: "État", en: "Status" }), st.label],
+              [tr({ fr: "Altitude", en: "Altitude" }), st.altKm > 20 ? far(st.altKm * 1000) : u.fAlt(st.altKm * 1000)],
+              [tr({ fr: "Vitesse", en: "Speed" }), u.fSpd(st.speed)],
+            );
+            if (st.target) figures.push([tr({ fr: "Cible", en: "Target" }), `${st.target.name} · ${far(st.target.distKm * 1000)}`]);
+          } catch {
+            // (no flight figures here: the line says where)
+          }
+        let line = "";
+        try {
+          line = tools.snapshot("now").summary;
+        } catch {
+          line = tools.date();
+        }
+        return {
+          line,
+          mode,
+          mission,
+          figures,
+          played: playedMs,
+          savedAt: tools.savedAt,
+          room: netPanel.net?.room?.code ?? null,
+          tips: mode === "ship" && settings.vessel === "f35" ? "jet" : mode,
+        };
+      },
       toast: (t) => panel.toast(t),
     });
   const quickSave = () => {
@@ -6554,6 +6608,8 @@ async function main() {
   let groundSeen = "";
   /** the pause menu (or the title screen) open: the simulation holds, the image refines */
   let paused = false;
+  /** the time played this visit — the game running, no menu over it [ms] (the pause's context) */
+  let playedMs = 0;
   const menuPad = new MenuPad();
   let lastStats: FrameStats | null = null;
   let saveTimer = 0;
@@ -6565,6 +6621,7 @@ async function main() {
     const dt = Math.min(0.1, (now - last) / 1000);
     // (the flight's clock: the frame's time while it runs — frozen, only the steps move it)
     if (!frozen && !paused && !replay.active) advanceFrameClock(dt * 1000);
+    if (!paused && firstFrame) playedMs += dt * 1000;
     // (the rain's: only while the time runs — paused, the drops stand still)
     if (!frozen && !paused && settings.animate) renderer.rainClock += dt;
     // (the display's refresh: the median of the loop's last intervals — the frame budget is fitted to it)
@@ -6586,7 +6643,11 @@ async function main() {
     // scene held, or stepped by the video itself)
     // (a menu holding the game — the title, the pause, the missions: the pad moves in it, the flight
     // does not read it meanwhile)
-    if (paused) menuPad.tick(camera.pad.poll(), now, titleScreen.isOpen);
+    // (in a room the pause does not hold the game — its clock is the room's —: the pad moves in the menu all the
+    // same, and the craft reads none of it meanwhile)
+    const pauseUp = !!pauseMenu?.isOpen;
+    if (paused || pauseUp) menuPad.tick(camera.pad.poll(), now, titleScreen.isOpen || pauseUp);
+    camera.padFrame = !paused && pauseUp ? null : undefined;
     if (!frozen && !paused && !renderer.offlineActive && !replay.active) {
       // (the flight plan's guidance speaking: a waypoint passed, its end, the bingo)
       if (camera.nav.say) {

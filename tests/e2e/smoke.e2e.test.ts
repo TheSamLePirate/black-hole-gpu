@@ -95,11 +95,16 @@ describe.skipIf(!E2E)("smoke: in flight (Artemis, low Earth orbit)", () => {
   test("the pause menu saves a game by name, and loads it back", async () => {
     await app.press("Escape");
     await app.click("[data-testid=pause-save]");
-    await app.js(`(document.querySelector(".pm-input").value = "e2e flight", 1)`);
+    // (the pause's screens change by a View Transition — PLAN-TITRE-AAA E8 —: each one there before the next click)
+    await app.waitFor(`!!document.querySelector(".pz-input")`, 5000);
+    await Bun.sleep(500);
+    await app.js(`(document.querySelector(".pz-input").value = "e2e flight", 1)`);
     await app.click("[data-testid=pause-save-new]");
     expect(await app.js<string[]>(`__bh.game.saves().map((g) => g.name)`)).toContain("e2e flight");
+    await app.waitFor(`!!document.querySelector("[data-testid=pause-load]")`, 5000);
+    await Bun.sleep(500);
     await app.click("[data-testid=pause-load]");
-    await app.waitFor(`[...document.querySelectorAll(".pm-save b")].some((b) => b.textContent === "e2e flight")`);
+    await app.waitFor(`[...document.querySelectorAll(".pz-save b")].some((b) => b.textContent === "e2e flight")`);
     await app.press("Escape"); // (back to the menu)
     await app.press("Escape"); // (resumed)
     expect(await app.js<boolean>(`!!document.querySelector("[data-testid=pause]")`)).toBe(false);
@@ -157,6 +162,9 @@ describe.skipIf(!E2E)("smoke: in flight (Artemis, low Earth orbit)", () => {
 
   test("photo mode from the pause menu: the HUD away, the time held, the exposure set; Escape puts it back", async () => {
     await app.press("Escape");
+    // (since PLAN-TITRE-AAA E8 the entry is in its group's drawer)
+    await app.waitFor(`!!document.querySelector("[data-testid=pause-group-capture]")`, 5000);
+    await app.click("[data-testid=pause-group-capture]");
     await app.click("[data-testid=pause-photo]");
     await app.waitFor(`!!document.querySelector("[data-testid=photo]")`);
     expect(await app.js<string>(`getComputedStyle(document.querySelector(".fl-root")).display`)).toBe("none");
@@ -184,6 +192,9 @@ describe.skipIf(!E2E)("smoke: in flight (Artemis, low Earth orbit)", () => {
 
   test("the controls screen: SAS moved onto V (swapping with the next view), flown so, then reset", async () => {
     await app.press("Escape");
+    // (since PLAN-TITRE-AAA E8 the entry is in its group's drawer)
+    await app.waitFor(`!!document.querySelector("[data-testid=pause-group-settings]")`, 5000);
+    await app.click("[data-testid=pause-group-settings]");
     await app.click("[data-testid=pause-controls]");
     await app.waitFor(`!!document.querySelector("[data-testid=controls]")`);
     await app.click('[data-testid="bind-flight:sas::KeyT"]');
@@ -197,6 +208,9 @@ describe.skipIf(!E2E)("smoke: in flight (Artemis, low Earth orbit)", () => {
     expect(await app.js<boolean>("__bh.camera.pilot.sas")).toBe(!sas);
     await app.press("KeyV"); // (as it was)
     await app.press("Escape");
+    // (since PLAN-TITRE-AAA E8 the entry is in its group's drawer)
+    await app.waitFor(`!!document.querySelector("[data-testid=pause-group-settings]")`, 5000);
+    await app.click("[data-testid=pause-group-settings]");
     await app.click("[data-testid=pause-controls]");
     await app.click("[data-testid=controls-reset]");
     expect(await app.js<string>(`document.querySelector('[data-testid="bind-flight:sas::KeyT"]').textContent`)).toMatch(/^T$/);

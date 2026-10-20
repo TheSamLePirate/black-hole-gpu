@@ -919,6 +919,7 @@ export class GameTools {
   save(name?: string) {
     const g = this.snapshot(name?.trim() || `Save ${new Date().toLocaleString()}`);
     if (!slots.put(g)) throw new Error("the browser refused to store it (storage full or private mode)");
+    this.savedAt = Date.now();
     this.log.add("save", `Saved "${g.name}" — ${g.summary}`, g.time);
     return g.name;
   }
@@ -945,8 +946,12 @@ export class GameTools {
     return `${location.origin}${location.pathname}${saveToHash(this.snapshot("shared"))}`;
   }
   autosaveNow() {
-    return autosave.set(this.snapshot("autosave"));
+    const ok = autosave.set(this.snapshot("autosave"));
+    if (ok) this.savedAt = Date.now();
+    return ok;
   }
+  /** this visit's last save — the autosave or one's own — [ms since 1970] (null: none yet) */
+  savedAt: number | null = null;
 
   // ------------------------------------------------------------------------------ performance
   /**

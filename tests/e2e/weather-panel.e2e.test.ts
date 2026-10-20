@@ -51,6 +51,9 @@ describe.skipIf(!E2E)("the weather's panel", () => {
 
   test("the pause menu opens it", async () => {
     await app.press("Escape");
+    // (since PLAN-TITRE-AAA E8 the entry is in its group's drawer)
+    await app.waitFor(`!!document.querySelector("[data-testid=pause-group-world]")`, 5000);
+    await app.click("[data-testid=pause-group-world]");
     await app.waitFor(`!!document.querySelector("[data-testid=pause-weather]")`, 5000);
     await app.click("[data-testid=pause-weather]");
     await app.waitFor(`!!document.querySelector("[data-testid=weather-panel]")`, 5000);

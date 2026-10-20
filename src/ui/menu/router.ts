@@ -76,7 +76,7 @@ export class MenuRouter {
 
   constructor(
     private host: HTMLElement,
-    private o: { onEmpty?(): void; onShow?(id: string): void } = {},
+    private o: { onEmpty?(): void; onShow?(id: string): void /** every change a cut (the pause: at once) */; cut?: boolean } = {},
   ) {}
 
   get isOpen() {
@@ -106,10 +106,11 @@ export class MenuRouter {
     if (!this.stack.ids().includes(id) || this.current === id) return;
     this.swap("back", () => this.stack.popTo(id));
   }
-  /** Every screen closed at once (into the game). */
-  close() {
+  /** Every screen closed at once (into the game); `cut`: no transition (another surface opens in its place, at once
+   *  clickable — a View Transition's snapshot would take the clicks meanwhile). */
+  close(cut = false) {
     if (!this.isOpen) return;
-    this.swap("back", () => this.stack.clear());
+    this.swap("back", () => this.stack.clear(), cut);
   }
   /** The screen shown built again (its data changed), its focus kept. */
   refresh() {
@@ -121,7 +122,7 @@ export class MenuRouter {
   }
 
   /** The stack changed now (isOpen, current: at once); the page swapped in a View Transition where there is one. */
-  private swap(dir: "forward" | "back", change: () => void) {
+  private swap(dir: "forward" | "back", change: () => void, cut = false) {
     this.rememberFocus();
     const old = this.stack.top;
     change();
@@ -133,7 +134,7 @@ export class MenuRouter {
       this.show(old !== top);
     };
     const doc = document as ViewTransitionDoc;
-    if (!this.page || !doc.startViewTransition || reducedMotion()) return render();
+    if (cut || this.o.cut || !this.page || !doc.startViewTransition || reducedMotion()) return render();
     document.documentElement.dataset.menuDir = dir;
     // (a transition can be aborted — its snapshot not taken, another one started, the page hidden —: the change
     // made once all the same, its promises' rejections caught)

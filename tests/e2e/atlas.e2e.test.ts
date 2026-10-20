@@ -57,6 +57,9 @@ describe.skipIf(!E2E)("the Atlas", () => {
     );
     expect(r.found[0]!.lat).toBeCloseTo(45.83, 1);
     await app.press("Escape", "Escape");
+    // (since PLAN-TITRE-AAA E8 the entry is in its group's drawer)
+    await app.waitFor(`!!document.querySelector("[data-testid=pause-group-world]")`, 5000);
+    await app.click("[data-testid=pause-group-world]");
     await app.waitFor(`!!document.querySelector("[data-testid=pause-atlas]")`, 3_000);
     await app.press("Escape", "Escape");
     expect(app.cdp.errors).toEqual([]);

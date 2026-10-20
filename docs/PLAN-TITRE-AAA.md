@@ -532,7 +532,7 @@ Chaque phase : un commit, une planche de captures (`docs/progress/title-aaa/`), 
   Langue.
 - **Crédits** : `CREDITS.md` généré depuis les README des assets, et l'écran déroulant.
 
-### E8 — Le menu pause (M)
+### E8 — Le menu pause (M) — FAIT ([fiche](progress/title-aaa/E8.md), [planche](progress/title-aaa/E8.jpg) : la colonne pleine hauteur, cinq tiroirs, la colonne de contexte, Changer de mode ; en salle le jeu continue ; constats 4 et 5 corrigés)
 
 - La colonne pleine hauteur, les groupes et leurs sous-menus, la colonne de contexte, Changer de mode.
 - Le cas réseau ; le diagnostic déplacé.

@@ -119,6 +119,9 @@ describe.skipIf(!E2E)("a HOTAS in three pieces", () => {
 
   test("the controllers screen: listed, a source detected, inverted, kept as mine; back to the known profile", async () => {
     await app.press("Escape");
+    // (since PLAN-TITRE-AAA E8 the entry is in its group's drawer)
+    await app.waitFor(`!!document.querySelector("[data-testid=pause-group-settings]")`, 5000);
+    await app.click("[data-testid=pause-group-settings]");
     await app.click("[data-testid=pause-controls]");
     await app.waitFor(`!!document.querySelector("[data-testid=controls]")`);
     await app.click("[data-testid=controls-pads]");

@@ -8,6 +8,8 @@
   --m-warm: #fff6e8;
   --m-dim: rgba(214, 224, 238, 0.62);
   --m-faint: rgba(214, 224, 238, 0.32);
+  /* an item's line under it: the faintest a text may be and still read (WCAG AA, 4.5:1 over the menus' black) */
+  --m-hint: rgba(214, 224, 238, 0.56);
   --m-line: rgba(214, 224, 238, 0.12);
   --m-amber: var(--k-amber, #ffb35c);
   --m-amber-glow: rgba(255, 179, 92, 0.32);
@@ -84,7 +86,7 @@
   font: 500 var(--m-t-caption) / 1.35 var(--m-f-text);
   letter-spacing: 0.02em;
   text-transform: none;
-  color: var(--m-faint);
+  color: var(--m-hint);
 }
 .m-item:is(:focus, :hover) small {
   color: var(--m-dim);

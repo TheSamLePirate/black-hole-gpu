@@ -22,6 +22,9 @@ describe.skipIf(!E2E)("the multiple exposure", () => {
 
   test("the analemma from the photo mode: a figure of Suns over the landscape, labelled, the game restored", async () => {
     await app.press("Escape");
+    // (since PLAN-TITRE-AAA E8 the entry is in its group's drawer)
+    await app.waitFor(`!!document.querySelector("[data-testid=pause-group-capture]")`, 5000);
+    await app.click("[data-testid=pause-group-capture]");
     await app.click("[data-testid=pause-photo]");
     await app.waitFor(`!!document.querySelector("[data-testid=photo]")`, 3_000);
     // (the photo mode holds the time: the series must give it back)

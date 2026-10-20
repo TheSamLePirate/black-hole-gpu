@@ -13,7 +13,7 @@ import type { MenuAction } from "../menu/actions";
 import { glyph, onInputChange, watchInput } from "../menu/glyphs";
 import { type MenuScreen, MenuRouter } from "../menu/router";
 import { SCENE_THUMBS } from "../scene-thumbs";
-import { type Activity, MODES, MORE, type Mode, type TitleGame, type VesselChoice } from "./activities";
+import { type Activity, MODES, type ModeId, MORE, type Mode, type TitleGame, type VesselChoice } from "./activities";
 import { geocode, parseCoords } from "../../game/geocode";
 import { MODE_ART, TURNTABLES, turntable, WORLD_MAPS } from "./art";
 import {
@@ -216,7 +216,15 @@ export class TitleScreen {
     document.body.classList.add("title-open");
     this.root = h("div", { class: "tt-root", role: "dialog", "aria-modal": "true", "aria-label": "KERR", "data-testid": "title" });
     document.body.append(this.root);
-    this.router = new MenuRouter(this.root);
+    // (a mode's screen opened alone — the pause's Change mode ›: its back closes the title, then goes back there)
+    this.router = new MenuRouter(this.root, {
+      onEmpty: () => {
+        const back = this.onBack;
+        this.onBack = null;
+        this.close();
+        back?.();
+      },
+    });
     this.router.push(this.mainScreen());
     // (the prompts follow the device: a screen redrawn when it changes)
     // (the prompts follow the device: redrawn in place — never the whole page: a page rebuilt between a press and its
@@ -228,6 +236,7 @@ export class TitleScreen {
 
   close() {
     if (!this.root) return;
+    this.onBack = null;
     this.unInput?.();
     this.unInput = null;
     const r = this.router;
@@ -237,6 +246,21 @@ export class TitleScreen {
     this.root = null;
     document.body.classList.remove("title-open");
     if (this.game) this.d.hold(false);
+  }
+
+  /** where the back of a mode's screen opened alone goes (the pause) */
+  private onBack: (() => void) | null = null;
+
+  /** A way to play's launch screen alone, over the game (the pause's Change mode ›): its back closes the title,
+   *  then `back` (the pause again). */
+  openMode(id: ModeId, back?: () => void) {
+    this.open();
+    this.onBack = back ?? null;
+    const m = MODES.find((x) => x.id === id)!;
+    this.lastMode = m;
+    this.router?.replace(
+      id === "plane" ? this.planeScreen() : id === "ship" ? this.shipScreen() : id === "foot" ? this.footScreen() : this.freeScreen(),
+    );
   }
 
   /** The keyboard's focus on the screen's first item (again: the intro, lifting, may have taken it). */
