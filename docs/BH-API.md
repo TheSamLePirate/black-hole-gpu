@@ -1050,6 +1050,15 @@ __bh.game.save("before TMI");
 ```
 *Used in:* none under tests/e2e or scripts.
 
+### `__bh.game.savedAt` → number | null
+
+When the game was last saved or loaded in this page (`Date.now()` ms; null: not yet) — the pause menu's "last save" and
+its question before going back to the title unsaved (docs/MENUS.md, E8).
+
+```js
+__bh.game.save("before"); __bh.game.savedAt !== null   // true
+```
+
 ### `__bh.game.saves()` → `{ name, summary, savedAt }[]`
 
 The named slots, newest first. `summary` is the one-line state (`"Earth · IN ORBIT 400 km · 2026-10-10 12:00"`); `savedAt` a locale string.
