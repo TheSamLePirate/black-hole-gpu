@@ -3,7 +3,8 @@
 // the craft is flown until the ground is in, then the clock is stopped and the same view drawn with the near Earth traced
 // at ×6, at ×4, then shaded by the raster (`earthPipeline: "raster"`, the sky at ×4), the view touched every frame (fresh
 // rays, no history: a fast turn's worst); each mode's GPU passes and image, against the same view converged.
-// PLACES=tarifa-low,tarifa,alps (default all); FRAMES: frames flown a mode (90); MODES=trace6,trace4,rasterwalk,raster (rasterwalk: the raster without the trees' instances); RF_DETAIL (below).
+// PLACES=tarifa-low,tarifa,alps (default all); FRAMES: frames flown a mode (90); MODES=trace6,trace4,rasterwalk,raster,rasterhalf,rasterquarter (rasterwalk: the raster without the trees' instances; half, quarter:
+// its shading rate); RF_DETAIL (below).
 // Captures remote-results/rf-<place>-<mode>[-ref].png; measures remote-results/raster-flight.json.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
@@ -20,12 +21,15 @@ const PLACES: Record<string, string> = {
 const MODE_SET: Record<string, string> = {
   trace6: `__bh.settings.earthPipeline = "trace"; __bh.game.set("realtimeSubsampling", 6);`,
   trace4: `__bh.settings.earthPipeline = "trace"; __bh.game.set("realtimeSubsampling", 4);`,
-  raster: `__bh.settings.earthPipeline = "raster"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4);`,
+  raster: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "every"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4);`,
+  // (the raster's shading rate: one pixel in two, one in 2 × 2 a frame — the rest rebuilt, then the history)
+  rasterhalf: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "half"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4);`,
+  rasterquarter: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4);`,
   // (the raster without the trees' instances: the grid walked from every pixel, as étape 1a had it)
-  rasterwalk: `__bh.settings.earthPipeline = "raster"; __bh.renderer.sceneryRasterOn = false; __bh.game.set("realtimeSubsampling", 4);`,
+  rasterwalk: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "every"; __bh.renderer.sceneryRasterOn = false; __bh.game.set("realtimeSubsampling", 4);`,
 };
 const places = (process.env.PLACES ?? "tarifa-low,tarifa,alps").split(",");
-const modes = (process.env.MODES ?? "trace6,trace4,rasterwalk,raster").split(",");
+const modes = (process.env.MODES ?? "trace6,trace4,rasterwalk,raster,rasterhalf,rasterquarter").split(",");
 const FRAMES = Number(process.env.FRAMES ?? 90);
 // (RF_DETAIL=max, the default: the scenery's trees and buildings at their most, drawn farthest, with their shadows and the
 // satellite surface — the image aimed at; RF_DETAIL=game: the game's own settings)

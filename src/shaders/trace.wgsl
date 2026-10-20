@@ -5520,6 +5520,7 @@ fn earthTop() -> f32 { return select(9600.0, P.radio2.w, P.radio2.w > 0.0); }
 // BEGIN_TERRAIN_RASTER (system/terrain-raster-hint.ts supplies the lookup where the device takes its texture)
 fn terrainRasterHint(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterId(px: vec2f) -> u32 { return 0u; }
+fn terrainRasterDepth(px: vec2f) -> f32 { return 0.0; }
 // END_TERRAIN_RASTER
 // the raster patch's distance [m] along this sample's ray, 0 where it does not cover it (main sets it)
 var<private> RHINT: f32 = 0.0;
@@ -8496,6 +8497,23 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
   stamps[idx] = frameStamp;
 }
 
+// The raster's shading rate (earthRasterShading — renderer: mouthList[1].y, 1 every pixel, 2 one in two — a checkerboard —,
+// 4 one in 2 × 2) and its pattern, turned each frame: the pixel a packed thread shades, and whether a pixel is shaded.
+fn rasterRate() -> u32 { return u32(P.mouthList[1].y + 0.5); }
+fn rasterPixel(g: vec2u, rate: u32, f: u32) -> vec2u {
+  if (rate >= 4u) { return g * 2u + array<vec2u, 4>(vec2u(0u, 0u), vec2u(1u, 1u), vec2u(1u, 0u), vec2u(0u, 1u))[f % 4u]; }
+  if (rate >= 2u) { return vec2u(g.x * 2u + ((g.y + f) & 1u), g.y); }
+  return g;
+}
+fn rasterShaded(p: vec2u, rate: u32, f: u32) -> bool {
+  if (rate >= 4u) { return all(p % 2u == array<vec2u, 4>(vec2u(0u, 0u), vec2u(1u, 1u), vec2u(1u, 0u), vec2u(0u, 1u))[f % 4u]); }
+  if (rate >= 2u) { return (p.x & 1u) == ((p.y + f) & 1u); }
+  return true;
+}
+// moments.x of a pixel the raster covers and shade left this frame: shadeMark's — post.wgsl resolve rebuilds it from the
+// fresh shaded pixels round it on the same surface (their depths alike), moments.y its nearest surface's depth [M]
+const RASTER_STALE = -3.0;
+
 // The raster's primary visibility (docs/PLAN-RENDU-RASTER-AAA.md étape 1): one thread a pixel — not one a block —, for
 // the pixels the terrain patch covers (its distance, terrainRasterHint), main having left them. The Earth near the
 // camera only (earthNear: its ground found from the patch's distance by two reads and a refinement, its air, clouds,
@@ -8504,16 +8522,20 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
 // reprojection and the light meter read it as they read the rays; moments.x RASTER_MARK keeps it out of gatherH.
 // A pixel whose ground the refinement does not find (the hint off the relief, or the sky through a gap) is left
 // unwritten: stale, it is rebuilt from the fresh samples round it as main's skipped rays are.
+// At a shading rate above 1 (earthRasterShading), a thread a pixel of the frame's pattern only — the threads packed, no
+// lane idle beside a shaded one —; the others are shadeMark's.
 @compute @workgroup_size(8, 8)
 fn shade(@builtin(global_invocation_id) gid: vec3u) {
   let W = u32(P.res.x);
   let H = u32(P.res.y);
-  if (!rasterPrimary() || !HAS_BODIES || P.near0.w < 0.5 || gid.x >= W || gid.y >= H) { return; }
+  let rate = rasterRate();
+  let px = rasterPixel(gid.xy, rate, P.frame.x);
+  if (!rasterPrimary() || !HAS_BODIES || P.near0.w < 0.5 || px.x >= W || px.y >= H) { return; }
   let k = u32(P.near1.w);
   if (!isEarth(k) || !hasAir(k) || !earthOn()) { return; }
-  let idx = gid.y * W + gid.x;
+  let idx = px.y * W + px.x;
   // (the terrain's pixels and the scenery's — a tree against the sky too)
-  let centre = vec2f(gid.xy) + 0.5;
+  let centre = vec2f(px) + 0.5;
   RASTER_ID = terrainRasterId(centre);
   if (terrainRasterHint(centre) <= 0.0 && RASTER_ID == 0u) { return; }
   RASTER_SCENERY = P.mouthList[1].z > 0.5;
@@ -8527,9 +8549,9 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   FOOT_FAR = 1.0;
   FOOT = 1.0;
   var jit = vec2f(0.0);
-  if (temporal) { jit = gaussJitter(hash4(vec3u(gid.xy, frameStamp)).xy); }
-  let rnd = fract(ign(vec2f(gid.xy)) + f32(frameStamp % 1024u) * 0.6180339887);
-  let pos = vec2f(gid.xy) + 0.5 + jit;
+  if (temporal) { jit = gaussJitter(hash4(vec3u(px, frameStamp)).xy); }
+  let rnd = fract(ign(vec2f(px)) + f32(frameStamp % 1024u) * 0.6180339887);
+  let pos = vec2f(px) + 0.5 + jit;
   let ndc = vec2f(2.0 * pos.x / P.res.x - 1.0, 1.0 - 2.0 * pos.y / P.res.y);
   let look = normalize(P.camFwd.xyz + ndc.x * P.cam.w * P.camRight.w * P.camRight.xyz + ndc.y * P.cam.w * P.camUp.xyz);
   if ((flags & FLAG_AERIAL) != 0u) { AP_UV = pos / P.res.xy; }
@@ -8553,6 +8575,26 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   accum[idx] = vec4f(col, 1.0);
   moments[idx] = vec2f(RASTER_MARK, e.t * bodyRadius(k));
   stamps[idx] = frameStamp;
+}
+
+
+// The pixels the raster covers that shade leaves this frame (a shading rate above 1): their nearest surface's depth (the
+// visibility target's b, the ground's or a tree's proxy) and the mark that has resolve rebuild them, their colour and stamp
+// left as they were. One cheap thread a pixel.
+@compute @workgroup_size(8, 8)
+fn shadeMark(@builtin(global_invocation_id) gid: vec3u) {
+  let W = u32(P.res.x);
+  let H = u32(P.res.y);
+  let rate = rasterRate();
+  if (rate <= 1u || !rasterPrimary() || !HAS_BODIES || P.near0.w < 0.5 || gid.x >= W || gid.y >= H) { return; }
+  if (rasterShaded(gid.xy, rate, P.frame.x)) { return; }
+  let centre = vec2f(gid.xy) + 0.5;
+  let d = terrainRasterDepth(centre);
+  if (d <= 0.0) { return; }
+  let idx = gid.y * W + gid.x;
+  if (moments[idx].x < -0.5 && moments[idx].x > -1.5) { return; }
+  let k = u32(P.near1.w);
+  moments[idx] = vec2f(RASTER_STALE, d / EARTH_RM * bodyRadius(k));
 }
 
 // ---------------------------------------------------------------------------------------------

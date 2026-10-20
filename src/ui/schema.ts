@@ -2068,6 +2068,23 @@ export const SCHEMA: ControlDef[] = [
     keywords: "terrain raster pipeline visibility aaa triangles sharp pixel performance experimental",
   },
   {
+    key: "earthRasterShading",
+    type: "choice",
+    section: "sky",
+    group: "The Earth",
+    label: "Raster terrain shading",
+    effect: "scene",
+    advanced: true,
+    visible: (s) => s.earthPipeline === "raster",
+    options: [
+      { value: "every", label: "Every pixel" },
+      { value: "half", label: "One pixel in two" },
+      { value: "quarter", label: "One pixel in four" },
+    ],
+    help: "With the raster terrain, how many of its pixels are shaded each frame: all of them, one in two (a checkerboard), or one in each 2 × 2 square, the pattern turned each frame. The outlines stay exact at every pixel; a pixel left this frame is rebuilt from its freshly shaded neighbours on the same surface, then refined by the image's history. Fewer shaded pixels: a faster image, a little softer in fast turns.",
+    keywords: "raster terrain shading checkerboard rate performance pixels quality",
+  },
+  {
     key: "earthTerrainRasterLevel",
     type: "number",
     section: "sky",

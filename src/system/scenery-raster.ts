@@ -7,7 +7,7 @@
 // lists: near or far (NEAR_M), a round crown (an ellipsoid) or a conifer's (a cone). Four indirect draws then put a
 // proxy round each — wider than the shape it stands for, never narrower (a polyhedron circumscribed: a proxy too wide
 // costs a missed exact test, never a lost tree) — in the terrain raster's pass, against its depth, their id in the
-// visibility target's g (the cell + 1, exact in a float below 2²⁴).
+// visibility target's g (the cell + 1, exact in a float below 2²⁴), the proxy's distance in its b.
 
 import { TERRAIN_RASTER_FORMAT } from "./terrain-raster";
 import { TERRAIN_RASTER_UNIFORM_BYTES } from "./terrain-raster-frame";
@@ -245,7 +245,7 @@ fn clampDraws(@builtin(local_invocation_index) i: u32) {
 }
 
 override LIST: u32 = 0u;
-struct V { @builtin(position) clip: vec4f, @location(0) @interpolate(flat) id: f32 };
+struct V { @builtin(position) clip: vec4f, @location(0) @interpolate(flat) id: f32, @location(1) p: vec3f };
 @vertex fn proxyVs(@location(0) m: vec4f, @builtin(instance_index) ii: u32) -> V {
   var o: V;
   let k = listsIn[LIST * CAP + ii];
@@ -270,9 +270,11 @@ struct V { @builtin(position) clip: vec4f, @location(0) @interpolate(flat) id: f
   // (the terrain's projection: infinite reversed-Z, its near plane)
   o.clip = select(vec4f(v.x / u.right.w, v.y / u.up.w, u.forward.w, v.z), vec4f(2.0, 2.0, 0.5, 1.0), none);
   o.id = f32(k + 1u);
+  o.p = v;
   return o;
 }
-@fragment fn proxyFs(v: V) -> @location(0) vec4f { return vec4f(0.0, v.id, 0.0, 0.0); }
+// (g the tree's id, b its proxy's distance — the ground's in r stays)
+@fragment fn proxyFs(v: V) -> @location(0) vec4f { return vec4f(0.0, v.id, length(v.p), 0.0); }
 `;
 }
 
@@ -373,7 +375,7 @@ export class SceneryRaster {
           fragment: {
             module: this.module,
             entryPoint: "proxyFs",
-            targets: [{ format: TERRAIN_RASTER_FORMAT, writeMask: GPUColorWrite.GREEN }],
+            targets: [{ format: TERRAIN_RASTER_FORMAT, writeMask: GPUColorWrite.GREEN | GPUColorWrite.BLUE }],
           },
           primitive: { topology: "triangle-list", cullMode: "none" },
           depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },

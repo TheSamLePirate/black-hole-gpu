@@ -1,7 +1,8 @@
 import { TERRAIN_CACHE_N } from "./terrain-cache-layout";
 
-/** The visibility target: r the ground's distance [m], g the scenery's instance drawn nearest (system/scenery-raster.ts). */
-export const TERRAIN_RASTER_FORMAT: GPUTextureFormat = "rg32float";
+/** The visibility target: r the ground's distance [m], g the scenery's instance drawn nearest (system/scenery-raster.ts),
+ *  b the nearest surface's distance [m] (the ground's, or the instance's proxy in front of it). */
+export const TERRAIN_RASTER_FORMAT: GPUTextureFormat = "rgba32float";
 import { terrainHeightLibrary, type TerrainCacheSources } from "./terrain-cache";
 import { TERRAIN_RASTER_MAX_PIXELS, TERRAIN_RASTER_UNIFORM_BYTES } from "./terrain-raster-frame";
 import { RASTER_MESH_INDEX_BYTES, RASTER_MESH_VERTEX_BYTES, runwayMeshKey, terrainRasterMesh } from "./terrain-raster-mesh";
@@ -62,8 +63,9 @@ struct Vertex { @builtin(position) clip: vec4f, @location(0) p: vec3f };
   v.clip = vec4f(v.p.x / u.right.w, v.p.y / u.up.w, u.forward.w, v.p.z);
   return v;
 }
-// (r: the ground's distance [m]; g: the scenery's instance drawn there — none here, the scenery's draw writes it alone)
-@fragment fn terrainFs(v: Vertex) -> @location(0) vec4f { return vec4f(length(v.p), 0.0, 0.0, 1.0); }
+// (r: the ground's distance [m]; g: the scenery's instance drawn there — none here, the scenery's draw writes it alone, and
+// its proxy's distance over b)
+@fragment fn terrainFs(v: Vertex) -> @location(0) vec4f { let d = length(v.p); return vec4f(d, 0.0, d, 1.0); }
 
 @vertex fn screenVs(@builtin(vertex_index) k: u32) -> @builtin(position) vec4f {
   let p = array<vec2f, 3>(vec2f(-1,-1), vec2f(3,-1), vec2f(-1,3));
@@ -342,8 +344,8 @@ export class TerrainRaster {
     return true;
   }
 
-  /** The distances drawn this frame (rg32float: r metres from the camera, 0 where no triangle covers a pixel; g the scenery's
-   *  instance), else null. */
+  /** The distances drawn this frame (rgba32float: r the ground's metres from the camera, 0 where no triangle covers a pixel;
+   *  g the scenery's instance; b the nearest surface's metres), else null. */
   distanceTexture(): GPUTexture | null {
     return this.active && !this.error ? (this.attachments?.distance ?? null) : null;
   }
@@ -396,8 +398,8 @@ export class TerrainRaster {
       cutTriangles: this.cutTriangles,
       width: a?.width ?? 0,
       height: a?.height ?? 0,
-      targetBytes: a ? a.width * a.height * 12 : 0,
-      retiredBytes: [...this.retired].reduce((s, p) => s + p.width * p.height * 12, 0),
+      targetBytes: a ? a.width * a.height * 20 : 0,
+      retiredBytes: [...this.retired].reduce((s, p) => s + p.width * p.height * 20, 0),
       indexBytes: this.index?.size ?? 0,
       vertexBytes: this.vertex?.size ?? 0,
       uniformBytes: this.uniform?.size ?? 0,

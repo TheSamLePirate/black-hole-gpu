@@ -17,9 +17,11 @@ export function withTerrainRaster(trace: string, supported: boolean): string {
     marker,
     `
 @group(0) @binding(${RASTER_HINT_BINDING}) var terrainDist: texture_2d<f32>;
-// The patch's distance [m] at this ray's pixel (rg32float r, 0 where no triangle covers it; out of range reads 0).
+// The patch's distance [m] at this ray's pixel (rgba32float r, 0 where no triangle covers it; out of range reads 0).
 fn terrainRasterHint(px: vec2f) -> f32 { return textureLoad(terrainDist, vec2i(floor(px)), 0).r; }
 // The scenery's instance drawn nearest at this pixel (g: a tree's cell + 1, exact in a float below 2²⁴; 0 none).
-fn terrainRasterId(px: vec2f) -> u32 { return u32(textureLoad(terrainDist, vec2i(floor(px)), 0).g); }`,
+fn terrainRasterId(px: vec2f) -> u32 { return u32(textureLoad(terrainDist, vec2i(floor(px)), 0).g); }
+// The nearest surface's distance [m] at this pixel (b: the ground's, or an instance's proxy before it; 0 none).
+fn terrainRasterDepth(px: vec2f) -> f32 { return textureLoad(terrainDist, vec2i(floor(px)), 0).b; }`,
   );
 }

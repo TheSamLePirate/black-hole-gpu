@@ -2929,7 +2929,9 @@ export class Renderer {
     // the kernel shade after the trace, which leaves them; trace.wgsl rasterPrimary reads it)
     const rasterPrimary = hinting && s.earthPipeline === "raster";
     if (!o.probe) this.rasterPrimaryOn = rasterPrimary;
-    f[MOUTH_LIST_AT + 5] = rasterPrimary ? 1 : 0;
+    // (… and its shading rate: 1 every pixel, 2 one in two, 4 one in 2 × 2 — trace.wgsl rasterRate)
+    this.rasterRate = s.earthRasterShading === "quarter" ? 4 : s.earthRasterShading === "half" ? 2 : 1;
+    f[MOUTH_LIST_AT + 5] = rasterPrimary ? this.rasterRate : 0;
     // (the trees drawn as raster instances this frame: set once they are — encodeTerrainRasterVisibility)
     f[MOUTH_LIST_AT + 6] = 0;
     // Keep a stable key when a still frame starts refining; its quality kernel compiles the cache out.
@@ -3528,6 +3530,8 @@ export class Renderer {
       air: GPUComputePipeline | null;
       /** the raster's primary visibility, its pixels shaded one a pixel (trace.wgsl shade; a key with the raster's bit) */
       shade: GPUComputePipeline | null;
+      /** the pixels its shading rate leaves this frame marked for resolve (trace.wgsl shadeMark) */
+      shadeMark: GPUComputePipeline | null;
       /** a still view asked for the quality cascade (q, lutq) */
       qWanted: boolean;
       /** a cascade under way (realtime: rt, env, lut; quality: q, lutq) — stopped, its queued compiles
@@ -3565,7 +3569,7 @@ export class Renderer {
    * compiling is drawn by an earlier scene's covering its features, else not drawn (null).
    */
   private traceVariant(
-    kind: "rt" | "q" | "env" | "lut" | "lutq" | "air" | "shade",
+    kind: "rt" | "q" | "env" | "lut" | "lutq" | "air" | "shade" | "shadeMark",
     key = this.featureKey,
     create = true,
   ): GPUComputePipeline | null {
@@ -3577,6 +3581,7 @@ export class Renderer {
       lutq: this.lutQPipeline,
       air: null,
       shade: null,
+      shadeMark: null,
     }[kind];
     if (key === FEATURES_ALL) {
       void this.generalCompile.start();
@@ -3598,6 +3603,7 @@ export class Renderer {
         lutq: null,
         air: null,
         shade: null,
+        shadeMark: null,
         qWanted: false,
         busy: false,
         qBusy: false,
@@ -3611,7 +3617,12 @@ export class Renderer {
     const lutOk = (key & LUT_BLOCKERS) === 0;
     const airOk = (key & 128) !== 0 && this.aerialOK;
     const shadeOk = (key & FEATURE_TERRAIN_RASTER) !== 0;
-    if (create && !v.busy && !v.failed && (!v.rt || !v.env || (lutOk && !v.lut) || (airOk && !v.air) || (shadeOk && !v.shade)))
+    if (
+      create &&
+      !v.busy &&
+      !v.failed &&
+      (!v.rt || !v.env || (lutOk && !v.lut) || (airOk && !v.air) || (shadeOk && (!v.shade || !v.shadeMark)))
+    )
       this.realtimeCascade(key, v);
     if (kind === "q" || kind === "lutq") v.qWanted = true;
     if (create && v.qWanted && !v.qBusy && !v.qFailed && (!v.q || (lutOk && !v.lutq))) this.qualityCascade(key, v);
@@ -3642,7 +3653,7 @@ export class Renderer {
   private realtimeCascade(key: number, slot: NonNullable<ReturnType<Renderer["variants"]["get"]>>) {
     slot.busy = true;
     const current = this.wanted(key, slot);
-    const compile = (entry: "main" | "env" | "lut" | "aerial" | "shade", onStall?: () => void) =>
+    const compile = (entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark", onStall?: () => void) =>
       this.variantQueue.run(current, () => this.timedVariant(key, entry), onStall);
     const run = async () => {
       if (!slot.rt) {
@@ -3651,6 +3662,7 @@ export class Renderer {
       }
       // (the raster's primary visibility: its kernel right after the image's — the trace leaves the patch's pixels to it)
       if (!slot.shade && (key & FEATURE_TERRAIN_RASTER) !== 0) slot.shade = await compile("shade");
+      if (!slot.shadeMark && (key & FEATURE_TERRAIN_RASTER) !== 0) slot.shadeMark = await compile("shadeMark");
       if (!slot.env) {
         slot.env = await compile("env");
         if (!slot.env) return;
@@ -3696,7 +3708,10 @@ export class Renderer {
 
   /** An earlier scene's kernel with every feature of this key compiled in (the general one is the widest
    *  of them): it draws this scene as it would — the extra features are switched off by the params. */
-  private coveringVariant(key: number, kind: "rt" | "q" | "env" | "lut" | "lutq" | "air" | "shade"): GPUComputePipeline | null {
+  private coveringVariant(
+    key: number,
+    kind: "rt" | "q" | "env" | "lut" | "lutq" | "air" | "shade" | "shadeMark",
+  ): GPUComputePipeline | null {
     // (the same debug views and tuning — the bits from 16 on are ids, not features: none other's constants)
     for (const [k, v] of this.variants) if ((k & key) === key && k >>> 16 === key >>> 16 && v[kind]) return v[kind];
     return null;
@@ -3704,7 +3719,7 @@ export class Renderer {
 
   /** mkVariant, its key and compile time in the diagnostic — every one, not only those the first image
    *  waits for: a scene's feature bit switching on in flight (the scenery's 8192) recompiles for seconds (R-M4) */
-  private async timedVariant(key: number, entry: "main" | "env" | "lut" | "aerial" | "shade", quality = false) {
+  private async timedVariant(key: number, entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark", quality = false) {
     const t0 = performance.now();
     const p = await this.mkVariant(key, entry, quality);
     const s = ((performance.now() - t0) / 1000).toFixed(1);
@@ -3717,11 +3732,15 @@ export class Renderer {
   }
 
   /** A specialised pipeline of the tracer for a features key (the unused ones compiled out). */
-  private mkVariant(key: number, entryPoint: "main" | "env" | "lut" | "aerial" | "shade", quality: boolean): Promise<GPUComputePipeline> {
+  private mkVariant(
+    key: number,
+    entryPoint: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark",
+    quality: boolean,
+  ): Promise<GPUComputePipeline> {
     const has = (bit: number) => ((key & bit) !== 0 ? 1 : 0);
     return this.device.createComputePipelineAsync({
       layout:
-        entryPoint === "main" || entryPoint === "shade"
+        entryPoint === "main" || entryPoint === "shade" || entryPoint === "shadeMark"
           ? this.mainLayout
           : entryPoint === "lut"
             ? this.lutLayout
@@ -3747,9 +3766,12 @@ export class Renderer {
           HAS_SURFACE: has(4096),
           HAS_SCENERY: has(8192),
           HAS_AURORA: has(16384),
-          HAS_TERRAIN_CACHE: (entryPoint === "main" || entryPoint === "shade") && !quality ? has(FEATURE_TERRAIN_CACHE) : 0,
+          HAS_TERRAIN_CACHE:
+            (entryPoint === "main" || entryPoint === "shade" || entryPoint === "shadeMark") && !quality ? has(FEATURE_TERRAIN_CACHE) : 0,
           HAS_TERRAIN_RASTER:
-            (entryPoint === "main" || entryPoint === "shade") && !quality && this.rasterHint ? has(FEATURE_TERRAIN_RASTER) : 0,
+            (entryPoint === "main" || entryPoint === "shade" || entryPoint === "shadeMark") && !quality && this.rasterHint
+              ? has(FEATURE_TERRAIN_RASTER)
+              : 0,
           COST_VIEW: (key >> 16) & 15,
           ...(this.tunes.get((key >> 20) & 255) ?? {}),
           QUALITY_PIPELINE: quality ? 1 : 0,
@@ -3929,13 +3951,21 @@ export class Renderer {
     pass.end();
     // The raster's primary visibility (docs/PLAN-RENDU-RASTER-AAA.md étape 1): the patch's pixels, left by the trace,
     // shaded one a pixel at the image's full size — after it, before the reconstruction that reads both.
+    // (a rate above 1: the frame's pattern alone, its threads packed — and the pixels it leaves marked for resolve)
     const shade = !quality && hint && this.rasterPrimaryOn ? this.traceVariant("shade") : null;
-    if (shade && hint) {
+    const mark = shade && this.rasterRate > 1 ? this.traceVariant("shadeMark") : null;
+    if (shade && hint && (this.rasterRate === 1 || mark)) {
+      const sx = this.rasterRate > 1 ? Math.ceil(t.width / 2) : t.width;
+      const sy = this.rasterRate > 2 ? Math.ceil(t.height / 2) : t.height;
       const sp = enc.beginComputePass(this.prof.pass("earth shade (raster)"));
       sp.setPipeline(shade);
       sp.setBindGroup(0, this.hintBindFor(t, hint));
       sp.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
-      sp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+      sp.dispatchWorkgroups(Math.ceil(sx / 8), Math.ceil(sy / 8));
+      if (mark) {
+        sp.setPipeline(mark);
+        sp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+      }
       sp.end();
     }
     return true;
@@ -5840,6 +5870,8 @@ export class Renderer {
   private terrainRasterLevel = 2;
   /** the last camera frame shades the raster patch's pixels one a pixel (earthPipeline "raster", trace.wgsl shade) */
   private rasterPrimaryOn = false;
+  /** the raster's shading rate (earthRasterShading): pixels a shaded one stands for, 1, 2 or 4 */
+  private rasterRate = 1;
   /** the world's trees as raster instances (system/scenery-raster.ts), made the first time the raster pipeline has them */
   private sceneryRaster: SceneryRaster | null = null;
   /** the trees drawn as raster instances under earthPipeline "raster" (a switch for comparisons: off, the grid walked) */

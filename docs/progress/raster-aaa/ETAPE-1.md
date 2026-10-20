@@ -129,3 +129,31 @@ Réutiliser les fonctions du traceur pixel par pixel donne l'image de référenc
 détail maximal : dix fois le budget d'un rendu à 60 images/s. Le gain viendra de **matériaux et formes pensés pour le
 raster** plutôt que de la visibilité seule : couronnes sculptées en géométrie (le même champ `forestCarve` appliqué aux
 sommets) pour supprimer le sphere tracing, ombres en cartes (étape 2), ombrage simplifié des surfaces lointaines.
+
+## 1c — l'ombrage en damier sur tampon d'identifiants (`earthRasterShading`) — fait
+
+Au lieu d'un TAAU à résolution interne réduite (toute la chaîne d'après — reconstruction, reprojection, cockpit, bloom,
+profondeur de champ — travaille à une seule résolution : la scinder serait une réécriture du rendu), la méthode des
+consoles en *checkerboard rendering* : **la visibilité reste à pleine résolution** (profondeur et objet par pixel, les
+contours exacts), **un pixel sur 2 × 2 (ou sur 2) est ombré par image**, le motif tournant à chaque image ; les autres
+sont reconstruits par `resolve` (post.wgsl) à partir de leurs voisins ombrés à l'instant **sur la même surface** (5 × 5,
+profondeurs à 5 % près — la profondeur de la surface la plus proche, canal b de la cible, désormais `rgba32float`), puis
+affinés par la reprojection temporelle existante.
+
+- `trace.wgsl` : `shade` ne lance qu'un fil par pixel du motif (fils regroupés : aucune voie de calcul inactive à côté
+  d'une voie qui ombre) ; `shadeMark` (un fil léger par pixel) marque les pixels laissés (`RASTER_STALE`) avec leur
+  profondeur. `rasterRate`, `rasterPixel`, `rasterShaded`.
+- Réglage `earthRasterShading` : `"every"`, `"half"`, `"quarter"` (défaut), schéma, français.
+
+Mesure (même vue figée, rayons neufs à chaque image, détail high/veryFar, 1600 × 1000) :
+
+| | Tarifa bas | Alpes |
+|---|---|---|
+| tracé ×4 | 6,0 ms · 28,4 dB | 7,4 ms · 30,2 dB |
+| raster, chaque pixel | 67,8 ms · 43,1 dB | 24,9 ms · 32,0 dB |
+| raster ½ | 42,5 ms · 43,0 dB | 15,3 ms · 32,0 dB |
+| raster ¼ | **29,3 ms · 42,0 dB** | **10,4 ms · 32,0 dB** |
+
+`shade` divisé par 3,3 (55 → 16,5 ms à Tarifa, 20,6 → 6,2 ms dans les Alpes) pour 1 dB perdu ; l'image reste 14 dB
+au-dessus du ×4 à Tarifa, sans défaut de reconstruction visible. Reste dans le budget : la visibilité raster (≈ 8 ms à
+Tarifa, chronométrage peu fiable des passes raster sur Apple), le ciel tracé (≈ 4,5 ms).

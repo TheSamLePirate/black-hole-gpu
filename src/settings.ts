@@ -311,6 +311,7 @@ export interface Settings {
   earthTerrainRasterView: "off" | "depth" | "normals" | "difference"; // diagnostic raster patch; no replacement of physical rendering
   earthTerrainRasterLevel: number; // diagnostic cache level 0…5; single patch, no automatic LOD yet
   earthTerrainRasterUse: boolean; // experimental: the tracer's ground rays start from the raster patch's distance (verified, else marched as before)
+  earthRasterShading: "every" | "half" | "quarter"; // the raster pipeline's shading: every pixel a frame, one in two (a checkerboard turned each frame), or one in 2 × 2 — the others rebuilt from their fresh neighbours on the same surface, then by the history
   earthPipeline: "trace" | "raster"; // the near Earth's primary visibility: traced (one ray a block), or the raster patch's pixels shaded one a pixel (docs/PLAN-RENDU-RASTER-AAA.md étape 1)
   earthSurface: "off" | "satellite" | "materials"; // regional Sentinel-2 / WorldCover pilot; independent of physical relief
   earthScenery: "off" | "balanced" | "high";
@@ -675,6 +676,7 @@ export function defaultSettings(): Settings {
     earthTerrainRasterLevel: 2,
     earthTerrainRasterUse: false,
     earthPipeline: "trace",
+    earthRasterShading: "quarter",
     earthSurface: "satellite",
     earthScenery: "balanced",
     earthSceneryShadows: true,
@@ -2047,6 +2049,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   earthTerrainRasterLevel: "pref",
   earthTerrainRasterUse: "pref",
   earthPipeline: "pref",
+  earthRasterShading: "pref",
   earthSurface: "scene",
   earthScenery: "scene",
   detailReach: "pref",

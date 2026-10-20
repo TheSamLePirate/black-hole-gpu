@@ -155,7 +155,27 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
   let idx = gid.y * W + gid.x;
   var c: vec3f;
   var variance = -1.0; // variance of the pixel's estimate (−1: unknown)
-  if (block <= 1u || stamps[idx] >= R.u.w) {
+  let mx = moments[idx].x;
+  if (mx < -2.5 && mx > -3.5) {
+    // A pixel the raster covers and its shading left this frame (trace.wgsl shadeMark, RASTER_STALE — the rate of
+    // earthRasterShading above 1): rebuilt from the fresh shaded pixels round it (RASTER_MARK) on the same surface — their
+    // depths within a few per cent of its own nearest surface's, so a crown does not bleed into the ground behind it nor
+    // the ground into a trunk —, Gaussian in the distance; none such: its own last colour (the history holds it).
+    let dp = moments[idx].y;
+    var acc = vec4f(0.0);
+    for (var j = -2; j <= 2; j++) {
+      for (var i = -2; i <= 2; i++) {
+        let q = vec2i(gid.xy) + vec2i(i, j);
+        if (any(q < vec2i(0)) || q.x >= i32(W) || q.y >= i32(size.y)) { continue; }
+        let qi = u32(q.y) * W + u32(q.x);
+        let m = moments[qi];
+        if (m.x < 1e29 || stamps[qi] < R.u.w) { continue; }
+        let rel = (m.y - dp) / (0.05 * dp + 1e-12);
+        acc += exp(-0.5 * f32(i * i + j * j) - rel * rel) * vec4f(loadAvg(u32(q.x), u32(q.y), W), 1.0);
+      }
+    }
+    c = select(loadAvg(gid.x, gid.y, W), acc.rgb / acc.w, acc.w > 1e-3);
+  } else if (block <= 1u || stamps[idx] >= R.u.w) {
     // sample taken with the current camera (possibly a few frames old while animating)
     c = loadAvg(gid.x, gid.y, W);
     let n = accum[idx].a;
