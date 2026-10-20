@@ -157,3 +157,15 @@ Mesure (même vue figée, rayons neufs à chaque image, détail high/veryFar, 16
 `shade` divisé par 3,3 (55 → 16,5 ms à Tarifa, 20,6 → 6,2 ms dans les Alpes) pour 1 dB perdu ; l'image reste 14 dB
 au-dessus du ×4 à Tarifa, sans défaut de reconstruction visible. Reste dans le budget : la visibilité raster (≈ 8 ms à
 Tarifa, chronométrage peu fiable des passes raster sur Apple), le ciel tracé (≈ 4,5 ms).
+
+## Plafonds mesurés après 1c (raster ¼, Tarifa bas, détail high/veryFar, `shade` ≈ 19–25 ms)
+
+| Retiré | gain |
+|---|---|
+| tout le décor | −8,2 ms |
+| ombres du décor seules | −1,8 ms |
+| sculpture des couronnes (`TUNE_FOREST_DETAIL` 0) | −0,6 ms (bruit) |
+
+La sculpture des couronnes ne vaut presque rien à ce stade : la remplacer par de la géométrie (l'étape prévue en 2) ne
+gagnerait pas sa peine. Les ombres du décor valent ≈ 2 ms. Le reste de `shade` (≈ 11 ms sans décor) est l'ombrage du sol ;
+hors `shade`, la passe de visibilité raster (≈ 8 ms, chronométrage peu fiable sur Apple) et le ciel tracé (≈ 4,5 ms).

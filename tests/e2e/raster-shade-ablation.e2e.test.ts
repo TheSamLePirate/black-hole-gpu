@@ -35,6 +35,7 @@ const ABLATIONS: { name: string; tune?: Record<string, number>; settings?: strin
   { name: "scenery surfaces", tune: { TUNE_GSKIP: 256 } },
   { name: "ground detail", tune: { TUNE_DETAIL: 0 } },
   { name: "scenery shadows off", settings: `{ earthSceneryShadows: false }` },
+  { name: "crown carving off", tune: { TUNE_FOREST_DETAIL: 0 } },
   { name: "scenery balanced", settings: `{ earthScenery: "balanced" }` },
   { name: "detail reach normal", settings: `{ detailReach: "normal" }` },
 ];
@@ -81,6 +82,8 @@ test.skipIf(!E2E)(
           r.prof.reset(); let done = 0, last = r.lastDoneAt, sum = 0, n = 0;
           while (done < 40) { await frame(); if (r.lastDoneAt !== last) { last = r.lastDoneAt; done++;
             const s = r.prof.table().find((p) => p.label === "earth shade (raster)"); if (s) { sum += s.last; n++; } } }
+          if (r.terrainRasterStats.rate !== window.__rate) console.warn('rate', r.terrainRasterStats.rate);
+          window.__rates = [...(window.__rates ?? []), r.terrainRasterStats.rate];
           return n >= 30 ? +(sum / n).toFixed(2) : Number.NaN; })()`);
       };
       const initial = await app.js<string>(
@@ -96,7 +99,8 @@ test.skipIf(!E2E)(
           b.push(await measure({}, initial));
           w.push(await measure(a.tune ?? {}, a.settings ?? initial));
         }
-        const row = { name: a.name, base: b, without: w, drop: +(med(b) - med(w)).toFixed(2) };
+        const row = { name: a.name, base: b, without: w, drop: +(med(b) - med(w)).toFixed(2), rates: await app.js("window.__rates") };
+        await app.js("(() => { window.__rates = []; return 1; })()");
         rows.push(row);
         console.log(JSON.stringify(row));
       }

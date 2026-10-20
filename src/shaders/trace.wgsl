@@ -228,6 +228,9 @@ override TUNE_MERGE: u32 = 1u;
 override TUNE_DETAIL: u32 = 1u;
 // (1: the tiles' heights always bilinear, never their cubic B-spline — a measure)
 override TUNE_CHEAP: u32 = 0u;
+// (the camera rays' crowns carved by their leaves within this many metres — forestQuery's detail; 0: the plain shapes, a
+// measure of what the carving's sphere tracing costs)
+override TUNE_FOREST_DETAIL: f32 = 220.0;
 // (1: the raster's pixels shade drew coloured by the way their scenery was found — red the tree the instance named, hit;
 // blue that tree missed, the grid walked; green no instance, no walk; white the walk as before (no raster scenery) — a measure)
 override TUNE_RASTER_PATHS: u32 = 0u;
@@ -6441,12 +6444,12 @@ fn worldScenery(dW:vec3f,tMax:f32,rnd:f32)->f32 {
       let F=u32(forestData(2u).x);
       if(F>0u){
         let hd=forestHead(F);let k=i32(RASTER_ID-1u);
-        let c=forestCandidate(o,d,k%max(hd.w,1),k/max(hd.w,1),220.0,hd);
+        let c=forestCandidate(o,d,k%max(hd.w,1),k/max(hd.w,1),TUNE_FOREST_DETAIL,hd);
         if(c.t>0.0 && c.t<hit.t){tree=c;RASTER_PATH=0u;}
-        else{tree=forestQueryFrom(o,d,forestCandidateStart(o,d,k%max(hd.w,1),k/max(hd.w,1),hd),hit.t,false,220.0);RASTER_PATH=1u;}
+        else{tree=forestQueryFrom(o,d,forestCandidateStart(o,d,k%max(hd.w,1),k/max(hd.w,1),hd),hit.t,false,TUNE_FOREST_DETAIL);RASTER_PATH=1u;}
       }
     }
-  }else{tree=forestQuery(o,d,hit.t,false,220.0);}
+  }else{tree=forestQuery(o,d,hit.t,false,TUNE_FOREST_DETAIL);}
   if(tree.kind>0u){
     let p=o+d*tree.t;
     SC_POINT=p;SC_DISTANCE=tree.t;

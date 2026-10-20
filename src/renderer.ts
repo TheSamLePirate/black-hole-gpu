@@ -5885,6 +5885,7 @@ export class Renderer {
     return {
       requested: this.terrainRasterRequested,
       primary: this.rasterPrimaryOn,
+      rate: this.rasterRate,
       scenery: this.sceneryRaster?.stats() ?? null,
       ...this.terrainRaster?.stats(),
     };
