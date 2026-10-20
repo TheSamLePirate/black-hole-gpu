@@ -1,0 +1,292 @@
+[
+  {
+    "pose": "valley-2km",
+    "level": 2,
+    "traceOff": [
+      59.537191072452984,
+      54.53551286808599
+    ],
+    "traceOn": [
+      30.81225881065886,
+      34.00134713910255
+    ],
+    "medianOff": 59.537191072452984,
+    "medianOn": 34.00134713910255,
+    "meanAbsDiff": 1.2186031539351851,
+    "maxDiff": 80,
+    "share24": 0.00046151620370370373,
+    "noise": {
+      "mean": 1.2235828993055555,
+      "max": 67,
+      "share24": 0.00046151620370370373
+    },
+    "work": {
+      "off": [
+        21.2,
+        64.5,
+        36.3
+      ],
+      "on": [
+        16.6,
+        45.9,
+        36.3
+      ]
+    },
+    "stats": {
+      "requested": true,
+      "compiled": true,
+      "error": null,
+      "active": true,
+      "reason": "pilot",
+      "encodedFrames": 515,
+      "level": 2,
+      "triangles": 32768,
+      "columns": 129,
+      "rows": 129,
+      "meshBuilds": 1,
+      "conforming": false,
+      "cutVertices": 0,
+      "cutTriangles": 0,
+      "width": 960,
+      "height": 540,
+      "targetBytes": 4147200,
+      "retiredBytes": 0,
+      "indexBytes": 1179648,
+      "vertexBytes": 594444,
+      "uniformBytes": 128,
+      "key": 1073742560
+    }
+  },
+  {
+    "pose": "valley-4km",
+    "level": 2,
+    "traceOff": [
+      47.82362074983411,
+      56.57827879444808
+    ],
+    "traceOn": [
+      30.3815581340574,
+      36.5305187106366
+    ],
+    "medianOff": 56.57827879444808,
+    "medianOn": 36.5305187106366,
+    "meanAbsDiff": 2.43568431712963,
+    "maxDiff": 88,
+    "share24": 0.0029144965277777776,
+    "noise": {
+      "mean": 2.4283405671296294,
+      "max": 81,
+      "share24": 0.002818287037037037
+    },
+    "work": {
+      "off": [
+        19.9,
+        55.8,
+        28.7
+      ],
+      "on": [
+        17,
+        38.7,
+        28.7
+      ]
+    },
+    "stats": {
+      "requested": true,
+      "compiled": true,
+      "error": null,
+      "active": true,
+      "reason": "pilot",
+      "encodedFrames": 1055,
+      "level": 2,
+      "triangles": 32768,
+      "columns": 129,
+      "rows": 129,
+      "meshBuilds": 1,
+      "conforming": false,
+      "cutVertices": 0,
+      "cutTriangles": 0,
+      "width": 960,
+      "height": 540,
+      "targetBytes": 4147200,
+      "retiredBytes": 0,
+      "indexBytes": 1179648,
+      "vertexBytes": 594444,
+      "uniformBytes": 128,
+      "key": 1073742560
+    }
+  },
+  {
+    "pose": "high-8km",
+    "level": 2,
+    "traceOff": [
+      47.07543127885578,
+      46.71895520242593
+    ],
+    "traceOn": [
+      34.9676046600567,
+      40.12513030408703
+    ],
+    "medianOff": 47.07543127885578,
+    "medianOn": 40.12513030408703,
+    "meanAbsDiff": 2.649474826388889,
+    "maxDiff": 150,
+    "share24": 0.008977864583333333,
+    "noise": {
+      "mean": 2.6470732060185185,
+      "max": 149,
+      "share24": 0.008914207175925925
+    },
+    "work": {
+      "off": [
+        20.9,
+        55.3,
+        27.4
+      ],
+      "on": [
+        22.7,
+        44.2,
+        27.4
+      ]
+    },
+    "stats": {
+      "requested": true,
+      "compiled": true,
+      "error": null,
+      "active": true,
+      "reason": "pilot",
+      "encodedFrames": 1617,
+      "level": 2,
+      "triangles": 32768,
+      "columns": 129,
+      "rows": 129,
+      "meshBuilds": 1,
+      "conforming": false,
+      "cutVertices": 0,
+      "cutTriangles": 0,
+      "width": 960,
+      "height": 540,
+      "targetBytes": 4147200,
+      "retiredBytes": 0,
+      "indexBytes": 1179648,
+      "vertexBytes": 594444,
+      "uniformBytes": 128,
+      "key": 1073742560
+    }
+  },
+  {
+    "pose": "ridges-3km",
+    "level": 2,
+    "traceOff": [
+      62.75246543568224,
+      58.05806663544286
+    ],
+    "traceOn": [
+      35.13415956445471,
+      36.700030161645046
+    ],
+    "medianOff": 62.75246543568224,
+    "medianOn": 36.700030161645046,
+    "meanAbsDiff": 1.8548169849537037,
+    "maxDiff": 123,
+    "share24": 0.007253327546296296,
+    "noise": {
+      "mean": 1.6626352719907407,
+      "max": 123,
+      "share24": 0.003650173611111111
+    },
+    "work": {
+      "off": [
+        24,
+        49.9,
+        25.1
+      ],
+      "on": [
+        28.8,
+        34.9,
+        25.1
+      ]
+    },
+    "stats": {
+      "requested": true,
+      "compiled": true,
+      "error": null,
+      "active": true,
+      "reason": "pilot",
+      "encodedFrames": 2180,
+      "level": 2,
+      "triangles": 32768,
+      "columns": 129,
+      "rows": 129,
+      "meshBuilds": 1,
+      "conforming": false,
+      "cutVertices": 0,
+      "cutTriangles": 0,
+      "width": 960,
+      "height": 540,
+      "targetBytes": 4147200,
+      "retiredBytes": 0,
+      "indexBytes": 1179648,
+      "vertexBytes": 594444,
+      "uniformBytes": 128,
+      "key": 1073742560
+    }
+  },
+  {
+    "pose": "ridges-6km",
+    "level": 2,
+    "traceOff": [
+      42.92323209400954,
+      40.57263931726255
+    ],
+    "traceOn": [
+      33.09244500429677,
+      36.704349828763895
+    ],
+    "medianOff": 42.92323209400954,
+    "medianOn": 36.704349828763895,
+    "meanAbsDiff": 1.4783716724537037,
+    "maxDiff": 114,
+    "share24": 0.006050347222222223,
+    "noise": {
+      "mean": 1.4467332175925927,
+      "max": 118,
+      "share24": 0.005493344907407408
+    },
+    "work": {
+      "off": [
+        16.4,
+        32.7,
+        24.2
+      ],
+      "on": [
+        14,
+        26.6,
+        24.2
+      ]
+    },
+    "stats": {
+      "requested": true,
+      "compiled": true,
+      "error": null,
+      "active": true,
+      "reason": "pilot",
+      "encodedFrames": 2719,
+      "level": 2,
+      "triangles": 32768,
+      "columns": 129,
+      "rows": 129,
+      "meshBuilds": 1,
+      "conforming": false,
+      "cutVertices": 0,
+      "cutTriangles": 0,
+      "width": 960,
+      "height": 540,
+      "targetBytes": 4147200,
+      "retiredBytes": 0,
+      "indexBytes": 1179648,
+      "vertexBytes": 594444,
+      "uniformBytes": 128,
+      "key": 1073742560
+    }
+  }
+]

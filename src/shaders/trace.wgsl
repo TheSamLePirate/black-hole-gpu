@@ -5536,9 +5536,12 @@ fn earthMarchHinted(ro: vec3f, rd: vec3f, fpK: f32, tM: f32, kM: f32) -> f32 {
   let tH = tM / kM;
   let pH = A + o + rd * tH;
   let sinG = abs(dot(rd, normalize(pH)));
+  // (a grazing ray crosses the ground over a long stretch, and the patch's cells — a hundred metres and more — miss the ridges
+  // it could pass between: the march keeps those)
+  if (sinG < 0.15) { return -3.0; }
   // (a pixel's footprint there, the patch's own few metres: the vertical band the hint is trusted within)
   let eps = 5.0 + 2.0 * tM * fpK;
-  let dm = clamp(eps / max(sinG, 0.04), 3.0, 0.15 * tM);
+  let dm = clamp(eps / sinG, 3.0, 0.02 * tM + 3.0);
   let dt = dm / kM;
   var lo = tH - dt;
   if (lo <= 0.0) { return -3.0; }
@@ -5554,10 +5557,26 @@ fn earthMarchHinted(ro: vec3f, rd: vec3f, fpK: f32, tM: f32, kM: f32) -> f32 {
     fhi = marchClear(A, o, e, rd, hi, fpK);
     if (fhi >= 0.0) { return -3.0; }
   }
-  for (var j = 0u; j < 4u; j++) {
-    let m = clamp(lo + (hi - lo) * flo / (flo - fhi), lo + 0.05 * (hi - lo), hi - 0.05 * (hi - lo));
+  // (Illinois' regula falsi: the retained end's f halved when it stays twice, so a curved ground does not leave one end behind;
+  // until the bracket is a tenth of the ray's footprint there — the march's own crossing is bracketed by a step of 0.4 % of
+  // the distance and refined three times)
+  let tol = max(0.05, 0.1 * tM * fpK) / kM;
+  var side = 0;
+  for (var j = 0u; j < 10u; j++) {
+    if (hi - lo < tol) { break; }
+    let m = clamp(lo + (hi - lo) * flo / (flo - fhi), lo + 0.02 * (hi - lo), hi - 0.02 * (hi - lo));
     let fm = marchClear(A, o, e, rd, m, fpK);
-    if (fm < 0.0) { hi = m; fhi = fm; } else { lo = m; flo = fm; }
+    if (fm < 0.0) {
+      hi = m;
+      fhi = fm;
+      if (side == -1) { flo *= 0.5; }
+      side = -1;
+    } else {
+      lo = m;
+      flo = fm;
+      if (side == 1) { fhi *= 0.5; }
+      side = 1;
+    }
   }
   return clamp(lo + (hi - lo) * flo / (flo - fhi), lo, hi);
 }

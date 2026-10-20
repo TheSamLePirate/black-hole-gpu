@@ -9,18 +9,53 @@ import { readPng } from "./lib/png";
 
 afterAll(stopServer);
 
-const POSES = [
-  { name: "nadir-900m", altKm: 0.9, off: [0, 0] },
-  { name: "oblique-900m", altKm: 0.9, off: [0, 35] },
-  { name: "oblique-3km", altKm: 3, off: [0, 55] },
-  { name: "oblique-10km", altKm: 10, off: [0, 65] },
-];
+// (HINT_PLACE=alps|canyon: rugged ground with the live elevation tiles — needs the network —; the default is Kennedy, flat)
+const PLACES: Record<string, { at: [number, number]; poses: { name: string; altKm: number; off: number[] }[]; tiles: boolean }> = {
+  kennedy: {
+    at: [28.6155, -80.6945],
+    tiles: false,
+    poses: [
+      { name: "nadir-900m", altKm: 0.9, off: [0, 0] },
+      { name: "oblique-900m", altKm: 0.9, off: [0, 35] },
+      { name: "oblique-3km", altKm: 3, off: [0, 55] },
+      { name: "oblique-10km", altKm: 10, off: [0, 65] },
+    ],
+  },
+  alps: {
+    at: [45.9, 6.95],
+    tiles: true,
+    poses: [
+      { name: "valley-2km", altKm: 2, off: [0, 15] },
+      { name: "valley-4km", altKm: 4, off: [0, 30] },
+      { name: "high-8km", altKm: 8, off: [0, 50] },
+      { name: "ridges-3km", altKm: 3, off: [0, 78] },
+      { name: "ridges-6km", altKm: 6, off: [60, 80] },
+    ],
+  },
+  canyon: {
+    at: [36.1, -112.1],
+    tiles: true,
+    poses: [
+      { name: "rim-2km", altKm: 2.2, off: [0, 20] },
+      { name: "rim-4km", altKm: 4, off: [0, 35] },
+      { name: "rim-horizon", altKm: 2.2, off: [0, 80] },
+    ],
+  },
+};
+const PLACE = PLACES[process.env.HINT_PLACE ?? "kennedy"]!;
+const PLACE_NAME = process.env.HINT_PLACE ?? "kennedy";
+const POSES = PLACE.poses;
 const LEVEL = Number(process.env.HINT_LEVEL ?? 2);
 
 test.skipIf(!E2E)(
   "the raster hint: the same image, the ground found from the patch",
   async () => {
-    const app = await App.boot({ hash: `scene=${encodeURIComponent("Earth: the Blue Marble")}`, width: 960, height: 540 });
+    const app = await App.boot({
+      hash: `scene=${encodeURIComponent("Earth: the Blue Marble")}`,
+      width: 960,
+      height: 540,
+      tiles: PLACE.tiles,
+    });
     try {
       await app.js(
         `(() => { window.__t = true; const tick = () => { if (!window.__t) return; __bh.touch(); requestAnimationFrame(tick); }; requestAnimationFrame(tick); return true; })()`,
@@ -31,7 +66,7 @@ test.skipIf(!E2E)(
           __bh.presets["Hint"] = {...__bh.presets["Earth: the Blue Marble"], animate:false, ship:false, time:__bh.sim.time, earthClouds:0, volumetricClouds:false,
             earthSurface:"off", earthScenery:"off", dynamicResolution:false, realtimeSubsampling:1, pixelRatio:1, temporalReprojection:false, fpsCap:0,
             earthTerrainCache:false, earthTerrainRasterLevel:${LEVEL}, earthTerrainRasterView:"off", earthTerrainRasterUse:false,
-            pose:{body:"earth", at:[28.6155,-80.6945], altKm:${pose.altKm}, look:"earth", off:${JSON.stringify(pose.off)}}};
+            pose:{body:"earth", at:[${PLACE.at[0]},${PLACE.at[1]}], altKm:${pose.altKm}, look:"earth", off:${JSON.stringify(pose.off)}}};
           __bh.preset("Hint"); __bh.resize(); return true; })()`);
         const trace: Record<string, number[]> = { off: [], on: [] };
         const images: Record<string, ReturnType<typeof readPng>> = {};
@@ -40,6 +75,7 @@ test.skipIf(!E2E)(
           for (const mode of ["off", "on"]) {
             await app.js(`(() => { __bh.settings.earthTerrainRasterUse=${mode === "on"}; __bh.touch(); return true; })()`);
             await app.waitFor("__bh.renderer.variantReady", 300_000);
+            if (PLACE.tiles) await app.waitFor("__bh.renderer.earthTiles.pending === 0", 120_000).catch(() => {});
             if (mode === "on")
               await app.waitFor(
                 `__bh.renderer.terrainRasterStats.reason === "pilot" && __bh.renderer.terrainRasterStats.encodedFrames > 5`,
@@ -52,7 +88,7 @@ test.skipIf(!E2E)(
             const ms = await app.js<number>(`__bh.renderer.prof.table().find((p) => p.label === "trace")?.ms`);
             if (round > 0) trace[mode]!.push(ms);
             if (round === 2) {
-              const f = `remote-results/hint-${pose.name}-L${LEVEL}-${mode}.png`;
+              const f = `remote-results/hint-${PLACE_NAME}-${pose.name}-L${LEVEL}-${mode}.png`;
               await app.shot(f);
               images[mode] = readPng(new Uint8Array(require("node:fs").readFileSync(f)));
               if (mode === "on") stats = await app.js("({ ...__bh.renderer.terrainRasterStats, key: __bh.renderer.featureKey })");
@@ -64,7 +100,7 @@ test.skipIf(!E2E)(
         await app.waitFor("__bh.renderer.variantReady", 300_000);
         const w2 = await app.js<number>("__bh.renderer.completedFrames");
         await app.waitFor(`__bh.renderer.completedFrames >= ${w2 + 40}`, 120_000);
-        const f2 = `remote-results/hint-${pose.name}-L${LEVEL}-off2.png`;
+        const f2 = `remote-results/hint-${PLACE_NAME}-${pose.name}-L${LEVEL}-off2.png`;
         await app.shot(f2);
         images.off2 = readPng(new Uint8Array(require("node:fs").readFileSync(f2)));
         // (ground march steps and heights read per pixel, each way: the share of rays the hint saved the march)
@@ -119,7 +155,7 @@ test.skipIf(!E2E)(
         rows.push(row);
         console.log(JSON.stringify({ ...row, stats: undefined }));
       }
-      await Bun.write(`remote-results/terrain-raster-hint-L${LEVEL}.json`, JSON.stringify(rows, null, 2));
+      await Bun.write(`remote-results/terrain-raster-hint-${PLACE_NAME}-L${LEVEL}.json`, JSON.stringify(rows, null, 2));
       for (const r of rows as { stats: Record<string, unknown>; meanAbsDiff: number }[]) {
         expect(r.stats.error).toBeFalsy();
         expect(r.stats.reason).toBe("pilot");
