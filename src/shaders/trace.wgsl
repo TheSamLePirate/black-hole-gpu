@@ -5515,6 +5515,12 @@ fn terrainRasterHint(px: vec2f) -> f32 { return 0.0; }
 // END_TERRAIN_RASTER
 // the raster patch's distance [m] along this sample's ray, 0 where it does not cover it (main sets it)
 var<private> RHINT: f32 = 0.0;
+// The raster's primary visibility (earthPipeline "raster", docs/PLAN-RENDU-RASTER-AAA.md étape 1): the pixels the patch
+// covers are shaded one a pixel by the kernel shade, not traced by main (renderer: mouthList[1].y)
+fn rasterPrimary() -> bool { return HAS_TERRAIN_RASTER && P.mouthList[1].y > 0.5 && P.walk[0].w < 0.5; }
+// moments.x of a pixel shade wrote (post.wgsl gatherH leaves it out of the stale pixels' reconstruction: the ground's
+// dense samples bled into the sky's sparse ones at the horizon); above any Σ luminance² a realtime frame writes there
+const RASTER_MARK = 1e30;
 
 // The ground's clearance (as the march's f) at t along the ray from ro: the full relief, as the crossing's refinement reads it.
 fn marchClear(A: vec3f, o: vec3f, e: f32, rd: vec3f, t: f32, fpK: f32) -> f32 {
@@ -8343,12 +8349,14 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
   // (realtime, the cockpit's mask — mask.wgsl: moments.x < 0 — over this ray: the cabin hides it, not traced)
   // (−1: under the cockpit's mask, not traced; −2: the cabin there but traced — mask.wgsl)
   let masked = interleaved && inRange && moments[idx].x < -0.5 && moments[idx].x > -1.5;
+  // (the raster's primary visibility: a ray whose pixel the patch covers is shade's, not traced here)
+  let rasterSkip = interleaved && inRange && rasterPrimary() && terrainRasterHint(vec2f(f32(px), f32(py)) + 0.5) > 0.0;
 
   // Adaptive sampling, per 8×8 tile: the tile keeps sampling while any of its pixels has a relative
   // standard error of the mean (luminance) above the threshold (keeps ray differentials available).
   if (li == 0u) { atomicStore(&wgActive, 0u); }
   workgroupBarrier();
-  var need = inRange && !masked;
+  var need = inRange && !masked && !rasterSkip;
   if (inRange && !interleaved && accumulate && (flags & FLAG_ADAPTIVE_SPP) != 0u && si >= f32(P.frame.w)) {
     let acc = accum[idx];
     let n = max(acc.a, 1.0);
@@ -8358,7 +8366,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
   }
   if (need) { atomicAdd(&wgActive, 1u); }
   workgroupBarrier();
-  let sampling = inRange && !masked && atomicLoad(&wgActive) > 0u;
+  let sampling = inRange && !masked && !rasterSkip && atomicLoad(&wgActive) > 0u;
 
   var tr: TraceOut;
   var pos = vec2f(0.0);
@@ -8452,6 +8460,56 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     moments[idx] = vec2f(l * l, tr.depth);
     if (polOn) { polAcc[idx] = qu; }
   }
+  stamps[idx] = frameStamp;
+}
+
+// The raster's primary visibility (docs/PLAN-RENDU-RASTER-AAA.md étape 1): one thread a pixel — not one a block —, for
+// the pixels the terrain patch covers (its distance, terrainRasterHint), main having left them. The Earth near the
+// camera only (earthNear: its ground found from the patch's distance by two reads and a refinement, its air, clouds,
+// sea and scenery as main has them), none of the relativistic integrator: the kernel compiles what earthNear calls and
+// no more. Written as main writes a realtime ray (accum, moments, stamps), so the reconstruction, the temporal
+// reprojection and the light meter read it as they read the rays; moments.x RASTER_MARK keeps it out of gatherH.
+// A pixel whose ground the refinement does not find (the hint off the relief, or the sky through a gap) is left
+// unwritten: stale, it is rebuilt from the fresh samples round it as main's skipped rays are.
+@compute @workgroup_size(8, 8)
+fn shade(@builtin(global_invocation_id) gid: vec3u) {
+  let W = u32(P.res.x);
+  let H = u32(P.res.y);
+  if (!rasterPrimary() || !HAS_BODIES || P.near0.w < 0.5 || gid.x >= W || gid.y >= H) { return; }
+  let k = u32(P.near1.w);
+  if (!isEarth(k) || !hasAir(k) || !earthOn()) { return; }
+  let idx = gid.y * W + gid.x;
+  if (terrainRasterHint(vec2f(gid.xy) + 0.5) <= 0.0) { return; }
+  // (under the cockpit's mask: the cabin there)
+  if (moments[idx].x < -0.5 && moments[idx].x > -1.5) { return; }
+  let flags = P.frame.z;
+  let frameStamp = P.frame.x;
+  let temporal = (flags & FLAG_TEMPORAL) != 0u;
+  // (a pixel's own footprint: the detail of a sample a pixel, not a block's)
+  FOOT_NEAR = 1.0;
+  FOOT_FAR = 1.0;
+  FOOT = 1.0;
+  var jit = vec2f(0.0);
+  if (temporal) { jit = gaussJitter(hash4(vec3u(gid.xy, frameStamp)).xy); }
+  let rnd = fract(ign(vec2f(gid.xy)) + f32(frameStamp % 1024u) * 0.6180339887);
+  let pos = vec2f(gid.xy) + 0.5 + jit;
+  let ndc = vec2f(2.0 * pos.x / P.res.x - 1.0, 1.0 - 2.0 * pos.y / P.res.y);
+  let look = normalize(P.camFwd.xyz + ndc.x * P.cam.w * P.camRight.w * P.camRight.xyz + ndc.y * P.cam.w * P.camUp.xyz);
+  if ((flags & FLAG_AERIAL) != 0u) { AP_UV = pos / P.res.xy; }
+  RHINT = terrainRasterHint(pos);
+  RND = fract(rnd * 7.31 + 0.13);
+  REFR_DELTA = 0.0;
+  let e = earthNear(look, rnd, k);
+  RHINT = 0.0;
+  AP_UV = vec2f(-1.0);
+  if (e.t <= 0.0) { return; }
+  var col = e.col;
+  if (COST_VIEW > 0u) { col = costHeat(); }
+  if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
+  let old = accum[idx];
+  if (temporal && stamps[idx] >= P.frame.y && old.a > 0.0) { col = mix(old.rgb / old.a, col, P.ext.w); }
+  accum[idx] = vec4f(col, 1.0);
+  moments[idx] = vec2f(RASTER_MARK, e.t * bodyRadius(k));
   stamps[idx] = frameStamp;
 }
 

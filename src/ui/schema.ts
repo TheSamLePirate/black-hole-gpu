@@ -2053,6 +2053,21 @@ export const SCHEMA: ControlDef[] = [
     keywords: "terrain raster hint march visibility aaa triangles performance experimental",
   },
   {
+    key: "earthPipeline",
+    type: "choice",
+    section: "sky",
+    group: "The Earth",
+    label: "Near Earth pipeline (experimental)",
+    effect: "scene",
+    advanced: true,
+    options: [
+      { value: "trace", label: "Traced" },
+      { value: "raster", label: "Raster terrain" },
+    ],
+    help: "How the ground near the camera is found. Traced: one ray a block of pixels, the rest rebuilt between them (the realtime subsampling). Raster terrain: the terrain patch is drawn as triangles, and every pixel it covers is shaded on its own — the same ground, air, clouds, sea and scenery, a sample a pixel instead of one a block; beyond the patch (about 20 km at level 2) and in the sky, the rays as before. Realtime views only; walking, offline images, probes and relativistic views stay traced. Needs real terrain and a GPU with 22 sampled textures per stage; compare image and frame time before keeping it.",
+    keywords: "terrain raster pipeline visibility aaa triangles sharp pixel performance experimental",
+  },
+  {
     key: "earthTerrainRasterLevel",
     type: "number",
     section: "sky",

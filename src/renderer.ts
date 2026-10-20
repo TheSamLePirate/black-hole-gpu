@@ -2136,6 +2136,7 @@ export class Renderer {
             { binding: 4, resource: { buffer: t.accum } },
             { binding: 5, resource: { buffer: t.resolveBuf } },
             { binding: 6, resource: { buffer: t.stamps } },
+            { binding: 11, resource: { buffer: t.moments } },
             { binding: 13, resource: { buffer: t.gather } },
           ],
         }),
@@ -2897,7 +2898,7 @@ export class Renderer {
     // (the raster inspector draws its own patch and reads the cache itself; it does not need the tracer to be free of the
     // wormhole's metric, which the Earth scenes always carry: only the tracer's *use* of the cache does)
     const terrainRasterEligible = !!(
-      (s.earthTerrainCache || s.earthTerrainRasterView !== "off" || s.earthTerrainRasterUse) &&
+      (s.earthTerrainCache || s.earthTerrainRasterView !== "off" || s.earthTerrainRasterUse || s.earthPipeline === "raster") &&
       s.earthTerrain &&
       this.earthMaps.tier &&
       t === this.live &&
@@ -2905,17 +2906,27 @@ export class Renderer {
       !s.polarization &&
       s.band === "visible" &&
       s.renderMode === "physical" &&
-      this.tuneKey === 0 &&
+      (this.tuneKey === 0 || s.earthPipeline === "raster") &&
       !walking &&
       earthSurface &&
       Math.abs(earthSurface.lat) <= TERRAIN_CACHE_MAX_LAT &&
       earthSurface.h * WGS84_A < 100_000
     );
-    const terrainCacheEligible = terrainRasterEligible && (this.featureKey & 512) === 0;
+    // (the raster's primary visibility keeps its path under the debug tunings — renderer.tune: what each part of its shading costs)
+    const terrainCacheEligible = terrainRasterEligible && this.tuneKey === 0 && (this.featureKey & 512) === 0;
     const inspecting = terrainRasterEligible && s.earthTerrainRasterView !== "off";
     // (the realtime kernel's ground march from the patch's distances: only where the device takes the texture, and in the
     // interleaved realtime frames — a still view converges on the quality kernel, which keeps the reference march)
-    const hinting = terrainRasterEligible && s.earthTerrainRasterUse && this.rasterHint && (o.flags & FLAG_INTERLEAVED) !== 0;
+    const hinting =
+      terrainRasterEligible &&
+      (s.earthTerrainRasterUse || s.earthPipeline === "raster") &&
+      this.rasterHint &&
+      (o.flags & FLAG_INTERLEAVED) !== 0;
+    // (the raster's primary visibility — docs/PLAN-RENDU-RASTER-AAA.md étape 1 —: the patch's pixels shaded one a pixel by
+    // the kernel shade after the trace, which leaves them; trace.wgsl rasterPrimary reads it)
+    const rasterPrimary = hinting && s.earthPipeline === "raster";
+    if (!o.probe) this.rasterPrimaryOn = rasterPrimary;
+    f[MOUTH_LIST_AT + 5] = rasterPrimary ? 1 : 0;
     // Keep a stable key when a still frame starts refining; its quality kernel compiles the cache out.
     if (terrainCacheEligible) this.featureKey |= FEATURE_TERRAIN_CACHE;
     if (hinting) this.featureKey |= FEATURE_TERRAIN_RASTER;
@@ -3510,6 +3521,8 @@ export class Renderer {
       lutq: GPUComputePipeline | null;
       /** the aerial perspective's table's pass (trace.wgsl aerial) */
       air: GPUComputePipeline | null;
+      /** the raster's primary visibility, its pixels shaded one a pixel (trace.wgsl shade; a key with the raster's bit) */
+      shade: GPUComputePipeline | null;
       /** a still view asked for the quality cascade (q, lutq) */
       qWanted: boolean;
       /** a cascade under way (realtime: rt, env, lut; quality: q, lutq) — stopped, its queued compiles
@@ -3546,7 +3559,11 @@ export class Renderer {
    * inlined): the general one is compiled after it, and until it lands a scene whose kernel is still
    * compiling is drawn by an earlier scene's covering its features, else not drawn (null).
    */
-  private traceVariant(kind: "rt" | "q" | "env" | "lut" | "lutq" | "air", key = this.featureKey, create = true): GPUComputePipeline | null {
+  private traceVariant(
+    kind: "rt" | "q" | "env" | "lut" | "lutq" | "air" | "shade",
+    key = this.featureKey,
+    create = true,
+  ): GPUComputePipeline | null {
     const general = {
       rt: this.tracePipeline,
       q: this.qualityPipeline,
@@ -3554,6 +3571,7 @@ export class Renderer {
       lut: this.lutPipeline,
       lutq: this.lutQPipeline,
       air: null,
+      shade: null,
     }[kind];
     if (key === FEATURES_ALL) {
       void this.generalCompile.start();
@@ -3574,6 +3592,7 @@ export class Renderer {
         lut: null,
         lutq: null,
         air: null,
+        shade: null,
         qWanted: false,
         busy: false,
         qBusy: false,
@@ -3586,7 +3605,14 @@ export class Renderer {
     }
     const lutOk = (key & LUT_BLOCKERS) === 0;
     const airOk = (key & 128) !== 0 && this.aerialOK;
-    if (create && !v.busy && !v.failed && (!v.rt || !v.env || (lutOk && !v.lut) || (airOk && !v.air))) this.realtimeCascade(key, v);
+    const shadeOk = (key & FEATURE_TERRAIN_RASTER) !== 0;
+    if (
+      create &&
+      !v.busy &&
+      !v.failed &&
+      (!v.rt || !v.env || (lutOk && !v.lut) || (airOk && !v.air) || (shadeOk && !v.shade))
+    )
+      this.realtimeCascade(key, v);
     if (kind === "q" || kind === "lutq") v.qWanted = true;
     if (create && v.qWanted && !v.qBusy && !v.qFailed && (!v.q || (lutOk && !v.lutq))) this.qualityCascade(key, v);
     return v[kind] ?? general ?? this.coveringVariant(key, kind);
@@ -3616,13 +3642,15 @@ export class Renderer {
   private realtimeCascade(key: number, slot: NonNullable<ReturnType<Renderer["variants"]["get"]>>) {
     slot.busy = true;
     const current = this.wanted(key, slot);
-    const compile = (entry: "main" | "env" | "lut" | "aerial", onStall?: () => void) =>
+    const compile = (entry: "main" | "env" | "lut" | "aerial" | "shade", onStall?: () => void) =>
       this.variantQueue.run(current, () => this.timedVariant(key, entry), onStall);
     const run = async () => {
       if (!slot.rt) {
         slot.rt = await compile("main", () => (slot.rtGivenUp = true));
         if (!slot.rt) return;
       }
+      // (the raster's primary visibility: its kernel right after the image's — the trace leaves the patch's pixels to it)
+      if (!slot.shade && (key & FEATURE_TERRAIN_RASTER) !== 0) slot.shade = await compile("shade");
       if (!slot.env) {
         slot.env = await compile("env");
         if (!slot.env) return;
@@ -3668,7 +3696,7 @@ export class Renderer {
 
   /** An earlier scene's kernel with every feature of this key compiled in (the general one is the widest
    *  of them): it draws this scene as it would — the extra features are switched off by the params. */
-  private coveringVariant(key: number, kind: "rt" | "q" | "env" | "lut" | "lutq" | "air"): GPUComputePipeline | null {
+  private coveringVariant(key: number, kind: "rt" | "q" | "env" | "lut" | "lutq" | "air" | "shade"): GPUComputePipeline | null {
     // (the same debug views and tuning — the bits from 16 on are ids, not features: none other's constants)
     for (const [k, v] of this.variants) if ((k & key) === key && k >>> 16 === key >>> 16 && v[kind]) return v[kind];
     return null;
@@ -3676,7 +3704,7 @@ export class Renderer {
 
   /** mkVariant, its key and compile time in the diagnostic — every one, not only those the first image
    *  waits for: a scene's feature bit switching on in flight (the scenery's 8192) recompiles for seconds (R-M4) */
-  private async timedVariant(key: number, entry: "main" | "env" | "lut" | "aerial", quality = false) {
+  private async timedVariant(key: number, entry: "main" | "env" | "lut" | "aerial" | "shade", quality = false) {
     const t0 = performance.now();
     const p = await this.mkVariant(key, entry, quality);
     const s = ((performance.now() - t0) / 1000).toFixed(1);
@@ -3689,11 +3717,11 @@ export class Renderer {
   }
 
   /** A specialised pipeline of the tracer for a features key (the unused ones compiled out). */
-  private mkVariant(key: number, entryPoint: "main" | "env" | "lut" | "aerial", quality: boolean): Promise<GPUComputePipeline> {
+  private mkVariant(key: number, entryPoint: "main" | "env" | "lut" | "aerial" | "shade", quality: boolean): Promise<GPUComputePipeline> {
     const has = (bit: number) => ((key & bit) !== 0 ? 1 : 0);
     return this.device.createComputePipelineAsync({
       layout:
-        entryPoint === "main"
+        entryPoint === "main" || entryPoint === "shade"
           ? this.mainLayout
           : entryPoint === "lut"
             ? this.lutLayout
@@ -3719,8 +3747,8 @@ export class Renderer {
           HAS_SURFACE: has(4096),
           HAS_SCENERY: has(8192),
           HAS_AURORA: has(16384),
-          HAS_TERRAIN_CACHE: entryPoint === "main" && !quality ? has(FEATURE_TERRAIN_CACHE) : 0,
-          HAS_TERRAIN_RASTER: entryPoint === "main" && !quality && this.rasterHint ? has(FEATURE_TERRAIN_RASTER) : 0,
+          HAS_TERRAIN_CACHE: (entryPoint === "main" || entryPoint === "shade") && !quality ? has(FEATURE_TERRAIN_CACHE) : 0,
+          HAS_TERRAIN_RASTER: (entryPoint === "main" || entryPoint === "shade") && !quality && this.rasterHint ? has(FEATURE_TERRAIN_RASTER) : 0,
           COST_VIEW: (key >> 16) & 15,
           ...(this.tunes.get((key >> 20) & 255) ?? {}),
           QUALITY_PIPELINE: quality ? 1 : 0,
@@ -3898,6 +3926,17 @@ export class Renderer {
     pass.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
     pass.dispatchWorkgroups(Math.max(1, Math.ceil(x / 8)), Math.max(1, Math.ceil(y / 8)));
     pass.end();
+    // The raster's primary visibility (docs/PLAN-RENDU-RASTER-AAA.md étape 1): the patch's pixels, left by the trace,
+    // shaded one a pixel at the image's full size — after it, before the reconstruction that reads both.
+    const shade = !quality && hint && this.rasterPrimaryOn ? this.traceVariant("shade") : null;
+    if (shade && hint) {
+      const sp = enc.beginComputePass(this.prof.pass("earth shade (raster)"));
+      sp.setPipeline(shade);
+      sp.setBindGroup(0, this.hintBindFor(t, hint));
+      sp.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
+      sp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+      sp.end();
+    }
     return true;
   }
 
@@ -5798,13 +5837,15 @@ export class Renderer {
   private terrainRaster: TerrainRaster | null = null;
   private terrainRasterRequested = false;
   private terrainRasterLevel = 2;
+  /** the last camera frame shades the raster patch's pixels one a pixel (earthPipeline "raster", trace.wgsl shade) */
+  private rasterPrimaryOn = false;
   /** Freeze automatic quality policy while a diagnostic adds its own GPU work. */
   get terrainRasterInspecting() {
     return this.terrainRasterRequested;
   }
   /** Geometry inspector only; its metric depth does not yet replace the scene's occlusion depth. */
   get terrainRasterStats() {
-    return { requested: this.terrainRasterRequested, ...this.terrainRaster?.stats() };
+    return { requested: this.terrainRasterRequested, primary: this.rasterPrimaryOn, ...this.terrainRaster?.stats() };
   }
 
   /**
@@ -5982,7 +6023,7 @@ export class Renderer {
   frame(s: Settings, time: number, sceneChanged: boolean, timeChanged: boolean, displayChanged: boolean): FrameStats | null {
     if (this.lost) return null;
     if (this.busy) return null;
-    if (s.earthTerrainRasterView === "off" && !s.earthTerrainRasterUse) this.terrainRaster?.suspend();
+    if (s.earthTerrainRasterView === "off" && !s.earthTerrainRasterUse && s.earthPipeline !== "raster") this.terrainRaster?.suspend();
     else this.terrainRaster?.idle("waiting");
     // (polarization turned on or off: the live target remade with or without its buffer)
     this.wantPol = !!s.polarization;

@@ -44,6 +44,9 @@ fn gatherH(@builtin(global_invocation_id) gid: vec3u) {
     if (x < 0 || x >= i32(W)) { continue; }
     let qi = gid.y * W + u32(x);
     if (stamps[qi] < R.u.w) { continue; }
+    // (a pixel the raster's primary visibility shaded — trace.wgsl shade, RASTER_MARK —: fresh itself, never rebuilt,
+    // and kept out of the sky's pixels rebuilt round it — its dense samples outweighed the sky's one a block)
+    if (moments[qi].x > 1e29) { continue; }
     let a = accum[qi];
     acc += gatherWeight(dx, block) * vec4f(a.rgb / max(a.a, 1e-6), 1.0);
   }
