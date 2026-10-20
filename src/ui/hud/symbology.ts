@@ -1602,7 +1602,9 @@ function drawLpd(
     col,
     1.6,
   );
-  const d = L.dist >= 1000 ? `${(L.dist / 1000).toFixed(1)} km` : `${Math.round(L.dist)} m`;
+  // (the units shown — metric, or imperial: ui/unitsys.ts)
+  const U = unitsFor(F.s);
+  const d = L.dist >= 1000 ? U.fDist(L.dist) : U.fAlt(L.dist);
   text(`LPD ${d}`, p[0] + r * 1.9, p[1] - r * 0.4, col, 11, "left", true);
 }
 

@@ -38,6 +38,12 @@ export interface TitleGame {
   school(): void;
   /** the space missions' briefings */
   missions(): void;
+  /** a spacecraft's missions and the Interstellar campaign (PLAN-VAISSEAUX X11) */
+  spaceMissions(): void;
+  /** a spacecraft's challenges (X10) */
+  spaceChallenges(): void;
+  /** the flight school, its space school first (X9) */
+  spaceSchool(): void;
   /** a scene of the gallery */
   scene(name: string): void;
   /** a scene of the gallery, seen by the free camera */
@@ -203,6 +209,27 @@ export const MODES: Mode[] = [
         hint: { fr: "Le Ranger en orbite au bord du disque", en: "The Ranger orbiting at the disk's edge" },
         art: "Ranger: approaching Gargantua",
         run: (g) => g.scene("Ranger: approaching Gargantua"),
+      },
+      {
+        id: "ship-campaign",
+        title: { fr: "Missions et campagne Interstellar", en: "Missions and the Interstellar campaign" },
+        hint: { fr: "Briefings, objectifs, la campagne de Cooper", en: "Briefings, objectives, Cooper's campaign" },
+        opens: true,
+        run: (g) => g.spaceMissions(),
+      },
+      {
+        id: "ship-challenges",
+        title: { fr: "Défis spatiaux", en: "Spacecraft challenges" },
+        hint: { fr: "Amarrages, atterrissages, rendez-vous notés", en: "Dockings, landings, rendezvous, graded" },
+        opens: true,
+        run: (g) => g.spaceChallenges(),
+      },
+      {
+        id: "ship-school",
+        title: { fr: "École spatiale", en: "Space school" },
+        hint: { fr: "Leçons guidées, démonstrations, essais", en: "Guided lessons, demonstrations, tries" },
+        opens: true,
+        run: (g) => g.spaceSchool(),
       },
       {
         id: "ship-missions",

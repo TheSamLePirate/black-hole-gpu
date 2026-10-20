@@ -38,7 +38,7 @@ export const PLAYER_MENU: PlayerGroup[] = [
   { tab: "game", title: { fr: "À pied", en: "On foot" }, keys: ["walkSpeed", "runSpeed", "jumpSpeed", "characterDistance"] },
   {
     tab: "game",
-    title: { fr: "Vaisseaux", en: "Spacecraft" },
+    title: { fr: "Engins spatiaux", en: "Spacecraft" },
     keys: [
       "vessel",
       "shipMount",

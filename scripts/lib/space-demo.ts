@@ -13,6 +13,7 @@ const MU_E = 398600.4418,
   MU_M = 4902.8,
   MU_S = 1.32712440018e11;
 const AU = 1.495978707e8;
+// (a demo room's stand-in craft on circular orbits — mean radii, not the WGS84 figure: orbits, no place on the ground)
 const R_E = 6371,
   R_M = 1737.4;
 const D = Math.PI / 180;

@@ -8031,6 +8031,14 @@ async function main() {
       },
       challenges: () => challengePanel.open(),
       school: () => flightSchool(instrHost),
+      // (By ship — what the flight's wheel opens: X9–X11)
+      spaceMissions: () => spaceMissionPanel(spaceMissionHost),
+      spaceChallenges: () =>
+        spaceChallengePanel(
+          (id) => panel.toast(spaceChallengePlace(id)),
+          netPanel.net?.room ? (id) => panel.toast(netSession.proposeChallenge(id)) : undefined,
+        ),
+      spaceSchool: () => flightSchool(instrHost, { spaceFirst: true }),
       missions: () => {
         paused = true; // (the scene behind held while one chooses)
         missionSelect.open();
