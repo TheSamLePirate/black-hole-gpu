@@ -2906,13 +2906,14 @@ export class Renderer {
     f[41 * 4 + 3] = kp > 0 ? ((tSec % 900) + 900) % 900 : 0;
     if (kp > 0) this.featureKey |= 16384;
     // Keep reference rendering for optical/scientific kernels and contact with the walking patch.
-    const terrainCacheEligible = !!(
+    // (the raster inspector draws its own patch and reads the cache itself; it does not need the tracer to be free of the
+    // wormhole's metric, which the Earth scenes always carry: only the tracer's *use* of the cache does)
+    const terrainRasterEligible = !!(
       (s.earthTerrainCache || s.earthTerrainRasterView !== "off") &&
       s.earthTerrain &&
       this.earthMaps.tier &&
       t === this.live &&
       !o.probe &&
-      (this.featureKey & 512) === 0 &&
       !s.polarization &&
       s.band === "visible" &&
       s.renderMode === "physical" &&
@@ -2922,16 +2923,18 @@ export class Renderer {
       Math.abs(earthSurface.lat) <= TERRAIN_CACHE_MAX_LAT &&
       earthSurface.h * WGS84_A < 100_000
     );
+    const terrainCacheEligible = terrainRasterEligible && (this.featureKey & 512) === 0;
+    const inspecting = terrainRasterEligible && s.earthTerrainRasterView !== "off";
     // Keep a stable key when a still frame starts refining; its quality kernel compiles the cache out.
     if (terrainCacheEligible) this.featureKey |= FEATURE_TERRAIN_CACHE;
-    this.terrainCacheWanted = terrainCacheEligible && (o.flags & FLAG_INTERLEAVED) !== 0;
+    this.terrainCacheWanted = (terrainCacheEligible || inspecting) && (o.flags & FLAG_INTERLEAVED) !== 0;
     if (!o.probe) {
-      this.terrainRasterRequested = terrainCacheEligible && s.earthTerrainRasterView !== "off";
+      this.terrainRasterRequested = inspecting;
       this.terrainRasterLevel = Number.isFinite(s.earthTerrainRasterLevel)
         ? Math.max(0, Math.min(5, Math.round(s.earthTerrainRasterLevel)))
         : 2;
     }
-    f[MOUTH_LIST_AT + 7] = this.terrainCacheWanted && s.earthTerrainCache ? 1 : 0;
+    f[MOUTH_LIST_AT + 7] = terrainCacheEligible && this.terrainCacheWanted && s.earthTerrainCache ? 1 : 0;
     if (!o.probe) this.marsDustNow = f[61 * 4 + 2]!;
     // (the storm's diffuse light in the kernel's weather code: compiled in only then)
     if (f[61 * 4 + 2]! > 0) this.featureKey |= 1024;

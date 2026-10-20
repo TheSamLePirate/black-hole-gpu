@@ -2,7 +2,7 @@
 
 Date : **20 octobre 2026**. Branche de conception : **`codex/aaa-terrestrial-renderer`**, créée depuis **`a9380bfe69d8b40a26bc4ed158934338624646c1`**, dernier `origin/main` récupéré à sa création.
 
-Statut : **implémentation commencée — cache de hauteurs P1a et terrain raster diagnostique P1b, désactivés par défaut**. Les suivis [P1a](progress/terrestrial-aaa/P1a.md) et [P1b](progress/terrestrial-aaa/P1b.md) décrivent le code, les vérifications et leurs limites. Aucun jalon de qualité/performance n'est validé : les mesures P0, le raster dans le rendu final et la comparaison en mouvement restent à faire. Aucun test ou benchmark de jeu n'a été lancé ; les vérifications TypeScript et de compilation WGSL sont distinguées des validations futures ci-dessous.
+Statut : **implémentation commencée — cache de hauteurs P1a et terrain raster diagnostique P1b, désactivés par défaut**. Les suivis [P1a](progress/terrestrial-aaa/P1a.md) et [P1b](progress/terrestrial-aaa/P1b.md) décrivent le code, les vérifications et leurs limites. Première exécution GPU et mesures dans [P1c](progress/terrestrial-aaa/P1c.md) : le pilote tourne, mais le gain de coût n'est pas établi (cache de hauteurs sans effet sur le tracé) et la condition de poursuite de P1 n'est pas remplie. Aucun jalon de qualité/performance n'est validé : les mesures P0, le raster dans le rendu final et la comparaison en mouvement restent à faire. Aucun test ou benchmark de jeu n'a été lancé ; les vérifications TypeScript et de compilation WGSL sont distinguées des validations futures ci-dessous.
 
 Lire d'abord [l'analyse technique](ANALYSE-PIPELINE-TERRE-AAA.md). Les règles de référence restent [CLAUDE.md](../CLAUDE.md), [E2E.md](E2E.md), [BH-API.md](BH-API.md) et [E2E-CATALOGUE.md](E2E-CATALOGUE.md).
 

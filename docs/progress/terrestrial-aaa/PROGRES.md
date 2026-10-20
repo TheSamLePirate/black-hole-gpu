@@ -1,16 +1,21 @@
 # Pipeline terrestre AAA — progression et validation
 
-Mise à jour : **20 octobre 2026**. État du code : **`c67f5709`** plus le maillage conforme aux pistes (commit à suivre).
+Mise à jour : **20 octobre 2026**. État du code : **`70db3c4e`** plus la première exécution GPU ([P1c](P1c.md)).
 Branche : `codex/aaa-terrestrial-renderer`, base main `a9380bfe`.
 
 ## État réel
 
-Le socle expérimental comprend un cache GPU de relief et un pilote de terrain raster WGS84 avec
-inspecteur. Ils sont **désactivés par défaut**. La marche des rayons du rendu principal est toujours
-présente : aucun gain de cadence, de netteté ou de qualité AAA n'est encore démontré.
+Le pilote raster **s'exécute maintenant sur le GPU** (P1c) : compilation, dessin, trois vues, maillage conforme,
+libération. Avant cela, il n'était pas éligible dans les scènes Terre (condition sur le noyau Kerr, corrigée pour
+l'inspecteur seul). Il reste **désactivé par défaut**. La marche des rayons du rendu principal est toujours présente.
+
+Mesures P1c (une machine, 960 × 540) : écart raster/scène 0,2 à 1 m (p50 à p99) à 900 m, 1 à 4 m à 3 km avec la
+cellule de 38 m, jusqu'à 14 m (p90) à 3 km avec celle de 153 m ; **le cache de hauteurs dans le tracé ne fait pas
+gagner de temps** (A/B alterné). La condition de poursuite de P1 n'est **pas remplie** : voir
+[P1c §5](P1c.md). Aucun gain de cadence ni de netteté n'est démontré ; P2–P6 ne sont pas commencés.
 
 La référence utilisateur reste le M1 Max, environ 24 images/s en temps réel ×4, avec une image trop
-pixellisée. Ce constat n'est pas une mesure instrumentée de la branche.
+pixellisée (non instrumentée sur cette branche).
 
 ## Livré
 
@@ -23,7 +28,7 @@ pixellisée. Ce constat n'est pas une mesure instrumentée de la branche.
 | `fe5f591f` | Création du dossier SQLite en développement dans un worktree neuf | Correction de la cause du démarrage signalée ; lancement utilisateur à confirmer |
 | `541838c2` | Nivellement de référence réutilisé aux sommets près des pistes | Interpolation des triangles encore susceptible de traverser les bords |
 | `c67f5709` | Raffinement de grille près des seuils et bords des pistes, budget borné | Lignes rectilignes seulement |
-| à suivre | Cellules coupées le long des contours des pistes (ruban et zone nivelée), toutes orientations ; raccords sans jonction en T ; repli sur la grille au-delà du budget | Vérifié en géométrie CPU seulement ; rendu GPU et hauteur aux sommets coupés non vus |
+| `70db3c4e` | Cellules coupées le long des contours des pistes (ruban et zone nivelée), toutes orientations ; raccords sans jonction en T ; repli sur la grille au-delà du budget | Vérifié en géométrie CPU seulement ; rendu GPU et hauteur aux sommets coupés non vus |
 
 Détails techniques, budgets et commandes de diagnostic : [P1a](P1a.md) et [P1b](P1b.md).
 
@@ -40,6 +45,8 @@ du maillage conforme (lignes marquées « nouveau »).
 | `git diff --check` | Réussi | Vérification de forme uniquement |
 | `bun test ./tests/terrain-raster-mesh.test.ts` (nouveau) | 8/8 ; géométrie CPU : surface, orientation, étanchéité, aucun triangle sur un côté de contour, budget | Pas de GPU ni de jeu ; hauteurs des sommets non testées |
 | `bun run typecheck`, Biome ciblé (nouveau) | Réussis sur le maillage, le pilote et le test | Ne valide pas le rendu |
+| `tests/e2e/terrain-raster.e2e.test.ts` (nouveau, headless local) | Réussi : pilote compilé, dessiné, conforme, libéré ; écart mesuré sur 3 vues × 2 niveaux | Une machine ; timestamps par passe peu fiables ; écart ≠ erreur bornée |
+| A/B cache de hauteurs dans le tracé (nouveau) | Aucun gain ; 3 tours alternés par vue | Mesuré avec la condition Kerr levée pour l'essai, puis rétablie |
 | Autres tests unitaires et e2e | Non lancés | Aucune couverture d'exécution revendiquée |
 | Vols, captures comparatives, benchmarks | Non lancés | Aucun FPS ni résultat visuel acquis |
 
@@ -48,17 +55,16 @@ sans lancement du jeu. Une future campagne suivra les règles de [E2E](../../E2E
 
 ## Prochaine étape de code
 
-Exécuter le pilote (ressources, bind groups, dessin, redimensionnement, désactivation) et vérifier à l'image que
-les sommets coupés prennent la bonne hauteur sur une piste oblique ; puis sélection multi-patches par erreur
-projetée et raccords entre fenêtres et niveaux. Le maillage conforme aux pistes est implémenté ; son rendu n'a
-pas été vu.
+Un tracé qui **consomme la distance raster** sur un domaine sûr (relief naturel hors piste, mer et nuages exclus), avec
+mesure de `trace` avant/après à image comparable ; sinon abandonner la voie raster-visibilité et ne garder que les
+outils de diagnostic. Voir [P1c §5](P1c.md). Pas de niveau ni de sélection multi-patches avant cette preuve.
 
 ## Validations restant à faire avant la bascule
 
 - [ ] Mesurer une référence reproductible sur M1 Max : scène, résolution interne/sortie, bloc temps réel,
   temps GPU/CPU et mémoire ; distinguer chargement et état résident.
-- [ ] Vérifier numériquement WGS84, distances et accord avec le relief/contact existant.
-- [ ] Exécuter le pilote : ressources, bind groups, dessin, redimensionnement et désactivation.
+- [ ] Vérifier numériquement WGS84, distances et accord avec le relief/contact existant (écart à la scène mesuré en P1c, pas contre le contact CPU).
+- [x] Exécuter le pilote : ressources, bind groups, dessin, redimensionnement et désactivation (P1c, headless local).
 - [ ] Comparer pistes obliques, approches et roulage à l'image ; contrôler seuils, transitions et fissures
   (étanchéité du maillage démontrée en CPU, pas en rendu).
 - [ ] Valider raccords entre fenêtres/niveaux, sélection par erreur projetée et découvertes en mouvement.
