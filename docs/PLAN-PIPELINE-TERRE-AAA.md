@@ -37,6 +37,7 @@ Ni nouveau moteur physique, ni portage natif, ni remplacement du framework de l'
 8. **Le mode spatial conserve sa physique et son intention visuelle.** Une région à lumière courbe ne reçoit pas un simple fond raster de géométrie finie.
 9. **Toute fonction produit atteint TARS.** Réglages documentés dans le schéma et les outils de commande ; diagnostics agents via `__bh`/CLI, sans dépendance à une UI cachée.
 10. **Une étape utile à la fois.** Chaque changement comporte son budget, sa preuve et son repli. Éviter de migrer terrain, végétation, nuages et exposition dans un seul changement indivisible.
+11. **Aucun phénomène physique ou optique existant supprimé.** Éclipses, réfraction, diffusion/absorption, réflexion/transmission et transport relativiste/scientifique restent opérationnels dans leur domaine actuel. Une approximation accélérée exige un domaine de validité et une erreur contrôlés ; conserver un chemin spécialisé lorsque les buffers du raster ne décrivent pas le phénomène. La généralisation attend les preuves de non-régression.
 
 ## 3. Décisions de pipeline à formaliser
 
@@ -92,6 +93,25 @@ Le cockpit nécessite une composition dédiée : coque opaque proche, vitrage et
 
 Les noms et frontières des futurs fichiers doivent découler de ces responsabilités ; ce tableau n'impose pas une réorganisation générale préalable.
 
+### 3.4 Contrat de conservation de l'optique
+
+Ce tableau est le minimum à inventorier, puis à compléter à partir des fonctionnalités effectivement présentes. Il protège les modèles existants ; il n'annonce pas de nouveaux phénomènes ni une précision supérieure déjà acquise.
+
+| Phénomène | Intégration à préserver | Vérification future avant bascule |
+|---|---|---|
+| Éclipse solaire, pénombre et totalité | Même visibilité solaire dans sol, objets, nuages et atmosphère ; réponse diffuse existante | Positions/contacts et progression d'ombre cohérents, ciel et nuages réagissant à la totalité |
+| Éclipse lunaire et ombres entre corps | Modèles de `eclipse/shadows-gpu.ts`, lumière transmise par l'atmosphère et réponses des corps | Géométrie de l'ombre et aspects colorés conservés dans les scènes de référence |
+| Réfraction atmosphérique | `airBend`, `REFR_DELTA`, `system/refraction.ts`, pointage et directions apparentes | Hauteur apparente Soleil/Lune/étoiles, horizon, zoom et télescope cohérents ; effets chromatiques existants préservés |
+| Diffusion et absorption atmosphériques | Rayleigh/Mie, absorption, phases, Soleil/Lune et perspective aérienne | Jour, nuit, crépuscule, altitude, direction du Soleil et éclipse ; pas de double atmosphère |
+| Nuages, brume et transmission | Densité, extinction, lumière et diffusion multiple approximée cohérentes | Contre-jour, ombres, traversée et couches superposées ; couverture opaque/transparente correcte |
+| Réflexion, Fresnel et vitrages | Matériaux, eau, sondes/reflets et transparences avec leurs replis | Angles rasants, rugosité, verre, eau et objets hors écran sans perte silencieuse de fonction |
+| Lentilles et propagation relativiste | Intégrateurs Kerr/Dneg et traitement des objets à distance finie | Anneau, ombre, images multiples et traversée du trou de ver, y compris zoom |
+| Fréquences, aberration et modes scientifiques | Doppler/redshift, transport de polarisation/Stokes, radio et fonctions spécialisées existantes | Signaux et images de référence conservés ; retour au chemin spécialisé si le raster ne porte pas les grandeurs |
+
+La réfraction actuelle du fond astronomique ne signifie pas une réfraction complète de toutes les surfaces proches : conserver cette portée sans annoncer des mirages nouveaux. Inversement, dessiner directement les astres dans un nouveau ciel ne doit pas contourner leur correction de direction. Les masques d'éclipse sont des données d'éclairage, pas une simple couche sombre posée après composition.
+
+Position réelle, position apparente, visibilité et radiance doivent être distinguées et raccordées entre image, ombres, sondes et instruments. Le choix du chemin ne doit pas dépendre seulement de l'altitude : utiliser les conditions physiques et l'erreur projetée, avec hystérésis et prise en compte du zoom.
+
 ## 4. Jalons de réalisation
 
 Toutes les cases d'implémentation sont volontairement non cochées.
@@ -104,6 +124,7 @@ Toutes les cases d'implémentation sont volontairement non cochées.
 - [ ] Relever sur M1 Max : GPU exact, navigateur, fenêtre/sortie, DPR, résolution interne, bloc, réglages, état de chargement et variante compilée.
 - [ ] Enregistrer cadence réellement terminée, p50/p95/p99, temps de passes interprétables, pics CPU/GPU et mémoire ; aucune extrapolation à partir du seul rAF.
 - [ ] Spécifier les conventions de la section 3 et les adaptateurs nécessaires aux consommateurs actuels.
+- [ ] Compléter l'inventaire optique de §3.4 et attribuer chaque phénomène à ses sources, consommateurs, références et chemin de repli ; aucun ne peut être abandonné pour atteindre le budget.
 - [ ] Séparer rendu terrestre droit, régions relativistes, et transitions selon erreur projetée/hystérésis.
 - [ ] Prévoir les invalidations locales et globales : contenu, LOD, déplacement d'origine, saut, date, météo, changement de profil.
 - [ ] Exposer l'état du pipeline et les métriques dans les diagnostics existants ; contrôles produit accessibles à TARS si ajoutés.
@@ -268,6 +289,7 @@ Ajouter des tests ciblés lorsque l'implémentation le justifie : transformation
 - N'activer par défaut le nouveau chemin qu'après validation en vol, au proche, à l'horizon et lors du raccord orbital.
 - Retirer les adaptateurs et données redondantes une fois la migration stable, pas avant ; ne pas laisser deux mondes résidents sans budget.
 - Ne jamais activer le raster de géométrie finie dans une région relativiste uniquement pour améliorer une statistique de performance.
+- Ne pas généraliser le nouveau chemin tant que l'inventaire optique de §3.4 comporte une régression non résolue ; conserver le chemin spécialisé nécessaire, y compris pour les modes scientifiques et le télescope.
 
 Les mesures et décisions futures seront ajoutées ici avec date, commit, matériel, scénario, réglages et liens vers leurs rapports. Marquer une case faite exige son résultat concret, pas seulement la présence de code.
 

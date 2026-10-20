@@ -151,6 +151,22 @@ Sorties minimales : couleur HDR et profondeur ; mouvement lorsque le traitement 
 
 Le choix doit rester implémentable dans le WebGPU utilisé par le projet, sans supposer les tile shaders Metal, les mesh shaders, une accélération matérielle de rayons ou un ordonnanceur multi-draw natif. Les commandes indirectes déjà utilisées par le projet fournissent un socle, pas une garantie de coût nul.
 
+### Exigence transversale : conserver les phénomènes physiques et optiques
+
+**Le changement de pipeline ne doit supprimer aucun phénomène physique ou optique déjà implémenté.** Cette exigence porte sur le domaine et la précision actuels des modèles, pas sur une promesse de simulation optique exacte ou sur des phénomènes absents du jeu. La conservation est une condition de généralisation, pas une propriété automatique du raster.
+
+La rasterisation remplace la recherche de visibilité des surfaces dans les régions où la trajectoire droite convient. Les calculs de transmission, de diffusion, de réfraction, d'occultation, d'éclairage et de transport relativiste restent des responsabilités explicites du pipeline. Une table ou un cache ne peut remplacer un calcul qu'avec un domaine de validité et une erreur contrôlés.
+
+Points à traiter expressément :
+
+- **Éclipses et occultations :** transmettre la visibilité du Soleil aux surfaces, nuages et volumes, et conserver les réponses existantes de la lumière diffuse (`sunSeenPhysical`, `sunSeen`, `skySeen`, `airShade`, `eclipse/shadows-gpu.ts`). Les éclipses lunaires et celles des autres corps font aussi partie de l'inventaire.
+- **Réfraction atmosphérique :** préserver la direction apparente et son accord avec les positions/pointages astronomiques (`airBend`, `REFR_DELTA`, `system/refraction.ts`), ainsi que les effets chromatiques existants. Le chemin actuel infléchit notamment le fond astronomique ; cette migration ne promet pas de nouveaux mirages ou une réfraction complète du terrain proche. Un ciel astronomique directement rasterisé doit recevoir la transformation correspondante avant son affichage et son évaluation.
+- **Diffusion et absorption :** conserver Rayleigh/Mie, absorption, phases, lumière solaire/lunaire, brume, nuages et perspective aérienne dans leur domaine actuel. L'éclipse doit aussi affecter les volumes, pas seulement la couleur finale du sol.
+- **Réflexion et transmission :** conserver les réponses de Fresnel, matériaux, eau et vitrages ; une sonde ou un reflet écran doit avoir un repli valide lorsque son approximation ne convient plus.
+- **Relativité et modes scientifiques :** conserver géodésiques Kerr/Dneg, lentilles, décalages de fréquence, aberration, transport de polarisation et fonctions spectrales/radio existantes. Lorsque les sorties du raster ne portent pas les grandeurs nécessaires (par exemple Stokes), garder le chemin spécialisé plutôt que supprimer silencieusement le phénomène.
+
+Le tableau de non-régression du plan doit être complété à partir du code avant la bascule. La position réelle des corps, leur position apparente, leur visibilité et leur radiance doivent rester cohérentes dans l'image principale, les sondes et le télescope.
+
 ### 5.3 Contrat de scène
 
 - **Géométrie :** même source de hauteur et nivellement que la physique ; détail graphique filtré et erreur de simplification explicite.
