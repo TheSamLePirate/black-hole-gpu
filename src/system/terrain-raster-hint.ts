@@ -56,21 +56,25 @@ export function withSunShadow(trace: string, supported: boolean): string {
 const SS_OFF = ${TABLE_SUN}u;
 // A ground point's light past the near march (rel: from the camera, the Earth's axes [m]): x the share of a 3 × 3 of the
 // map's texels with no relief more than the near reach (c.y) before it towards the Sun; y where its ray leaves the patch
-// (m along it — the march resumed there); z the near reach [m]; x −1: no map here (off, out of it).
-fn sunShadowFar(rel: vec3f) -> vec3f {
+// (m along it — the march resumed there); z the near reach [m]; w how far along it the nearest of those texels' relief
+// stands [m] (the map orthographic along the Sun: a texel is the ray's own column), 3e38 none; x −1: no map here.
+fn sunShadowFar(rel: vec3f) -> vec4f {
   let c = bodies[SS_OFF + 3u];
-  if (c.x < 0.5) { return vec3f(-1.0, 0.0, 0.0); }
+  if (c.x < 0.5) { return vec4f(-1.0, 0.0, 0.0, 3e38); }
   let R = bodies[SS_OFF]; let U = bodies[SS_OFF + 1u]; let L = bodies[SS_OFF + 2u]; let up = bodies[SS_OFF + 4u].xyz;
   let uv = vec2f(dot(rel, R.xyz) / R.w * 0.5 + 0.5, 0.5 - dot(rel, U.xyz) / U.w * 0.5);
-  if (any(uv <= vec2f(0.0)) || any(uv >= vec2f(1.0))) { return vec3f(-1.0, 0.0, 0.0); }
+  if (any(uv <= vec2f(0.0)) || any(uv >= vec2f(1.0))) { return vec4f(-1.0, 0.0, 0.0, 3e38); }
   let n = vec2i(textureDimensions(sunShadowMap));
   let at = vec2i(uv * vec2f(n));
   let dz = 0.5 - dot(rel, L.xyz) / (2.0 * L.w);
   var lit = 0.0;
+  var occ = 3e38;
   for (var j = -1; j <= 1; j++) {
     for (var i = -1; i <= 1; i++) {
       let d = textureLoad(sunShadowMap, clamp(at + vec2i(i, j), vec2i(0), n - 1), 0);
-      lit += select(1.0, 0.0, (dz - d) * 2.0 * L.w > c.y);
+      let ahead = (dz - d) * 2.0 * L.w;
+      lit += select(1.0, 0.0, ahead > c.y);
+      if (ahead > c.y) { occ = min(occ, ahead); }
     }
   }
   // (the ray's way out of the patch — a disc of radius c.z round the camera — on its horizontal, back along it)
@@ -81,7 +85,7 @@ fn sunShadowFar(rel: vec3f) -> vec3f {
     let ln = lh / lhl; let b = dot(ph, ln); let cc = dot(ph, ph) - c.z * c.z;
     exit = (-b + sqrt(max(b * b - cc, 0.0))) / lhl;
   }
-  return vec3f(lit / 9.0, exit, c.y);
+  return vec4f(lit / 9.0, exit, c.y, occ);
 }`,
   );
 }

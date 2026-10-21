@@ -28,6 +28,8 @@ const LISTS = 4;
 /** the trees' and buildings' shadow map: its texels a side, its half-extent [m] (~0.9 m a texel) — trace.wgsl treeShadowAt */
 export const TREE_SHADOW_N = 2048;
 export const TREE_SHADOW_HALF_M = 900;
+/** the map's depth half-range along the Sun [m] (renderer.treeShadowFrame) */
+export const TREE_SHADOW_DEPTH_M = 3000;
 
 // ---- the proxies (unit shapes; xyz and the part in w: 0 a round crown, 1 a cone, 2 the trunk)
 

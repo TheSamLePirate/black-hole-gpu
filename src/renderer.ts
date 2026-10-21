@@ -17,7 +17,14 @@ import {
   type TerrainWindow,
 } from "./system/terrain-cache-layout";
 import { TerrainRaster, type TerrainRing } from "./system/terrain-raster";
-import { SCENERY_RASTER_LOD, SceneryRaster, type SceneryRasterLod, TREE_SHADOW_HALF_M, TREE_SHADOW_N } from "./system/scenery-raster";
+import {
+  SCENERY_RASTER_LOD,
+  SceneryRaster,
+  type SceneryRasterLod,
+  TREE_SHADOW_DEPTH_M,
+  TREE_SHADOW_HALF_M,
+  TREE_SHADOW_N,
+} from "./system/scenery-raster";
 import { CLOUD_PASS_BINDINGS, CLOUD_PASS_FLAG, CLOUD_PASS_TEXTURE_LIMIT, withCloudPass } from "./system/cloud-pass";
 import { Lightning } from "./system/lightning";
 import { TREE_SHADOW_BINDING, TREE_SHADOW_TEXTURE_LIMIT, withTreeShadow } from "./system/tree-shadow";
@@ -6561,7 +6568,9 @@ export class Renderer {
     const sr = Math.round(cr / texel) * texel - cr,
       su = Math.round(cu / texel) * texel - cu;
     const c = cam.map((x, i) => x + r[i]! * sr + u[i]! * su);
-    f.set([...r, H, ...u, H, ...L, 700, ...c, 1]);
+    // (its depth ±3 km about the camera along the Sun: the ground below a mesa's rim, a low Sun's long reach — depth32float
+    // keeps a millimetre over it)
+    f.set([...r, H, ...u, H, ...L, TREE_SHADOW_DEPTH_M, ...c, 1]);
     return f;
   }
   /** the trees drawn as raster instances under earthPipeline "raster" (a switch for comparisons: off, the grid walked) */

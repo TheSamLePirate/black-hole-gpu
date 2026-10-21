@@ -232,6 +232,8 @@ override TUNE_MERGE: u32 = 1u;
 override TUNE_DETAIL: u32 = 1u;
 // (1: the tiles' heights always bilinear, never their cubic B-spline — a measure)
 override TUNE_CHEAP: u32 = 0u;
+// (the relief's tiles magnified: 0 a cubic B-spline over their texels, 1 an interpolating one — Catmull–Rom)
+override TUNE_TILE_CR: u32 = 0u;
 // (the camera rays' crowns carved by their leaves within this many metres — forestQuery's detail; 0: the plain shapes, a
 // measure of what the carving's sphere tracing costs)
 override TUNE_FOREST_DETAIL: f32 = 220.0;
@@ -5336,6 +5338,12 @@ fn bspline4(t: f32) -> vec4f {
   let t3 = t2 * t;
   return vec4f(1.0 - 3.0 * t + 3.0 * t2 - t3, 4.0 - 6.0 * t2 + 3.0 * t3, 1.0 + 3.0 * t + 3.0 * t2 - 3.0 * t3, t3) / 6.0;
 }
+// an interpolating cubic's weights (Catmull–Rom): through the texels themselves — a cliff kept a cliff, its top its height
+fn catmullRom4(t: f32) -> vec4f {
+  let t2 = t * t;
+  let t3 = t2 * t;
+  return vec4f(-0.5 * t + t2 - 0.5 * t3, 1.0 - 2.5 * t2 + 1.5 * t3, 0.5 * t + 2.0 * t2 - 1.5 * t3, -0.5 * t2 + 0.5 * t3);
+}
 // the map's height: near, a cubic B-spline over its texels; from afar, its mip level from the footprint
 fn earthH0(q: vec3f, foot: f32) -> f32 {
   let dim = vec2i(textureDimensions(earthElev));
@@ -5438,8 +5446,11 @@ fn tileSample(l: u32, p: vec2f, mag: f32) -> f32 {
     lin = mix(mix(tileTexel(l, i0), tileTexel(l, i0 + vec2i(1, 0)), f.x), mix(tileTexel(l, i0 + vec2i(0, 1)), tileTexel(l, i0 + vec2i(1, 1)), f.x), f.y);
   }
   if (k <= 0.0) { return lin; }
-  let wx = bspline4(f.x);
-  let wy = bspline4(f.y);
+  // (magnified: a cubic over 4 × 4 texels — the B-spline smooth but approximating: a butte's 150 m wall spread into a slope of
+  // two or three texels, its top lowered; Catmull–Rom, TUNE_TILE_CR, through the data)
+  let cr = TUNE_TILE_CR > 0u;
+  let wx = select(bspline4(f.x), catmullRom4(f.x), cr);
+  let wy = select(bspline4(f.y), catmullRom4(f.y), cr);
   var b = 0.0;
   for (var j = 0; j < 4; j++) {
     var row = 0.0;
@@ -5601,16 +5612,35 @@ fn earthNormalAt(q: vec3f, foot: f32) -> vec3f {
 fn earthTerrainShadow(p: vec3f, Ls: vec3f, foot: f32) -> f32 {
   // (the raster's pixels — shade —: the march to the near reach, the relief's shadow map past it, the march resumed where
   // the Sun's ray leaves the map's patch — terrain-raster-hint.ts withSunShadow)
-  var far = vec3f(-1.0, 0.0, 0.0);
+  var far = vec4f(-1.0, 0.0, 0.0, 3e38);
   if (SHADOW_REL_ON) { far = sunShadowFar(SHADOW_REL); }
-  if (far.x == 0.0) { return 0.0; }
-  let reach = select(1e30, far.z, far.x > 0.0);
-  var resumed = far.x < 0.0;
   let p0 = p * (1.0 + 2.0 / EARTH_RM);
   // (the march's heights are coarser than the ground drawn: measured from their own ground here — else
   // where they stand a metre above it the point is inside its own relief, black patches under a high sun)
   let rp = length(p);
   let bias = earthHeightStep(p / rp, foot) - (rp - 1.0) * EARTH_RM;
+  // (the map's shadow, a hint: its relief is the patch's — 150 m cells, a butte a broad mound there, a needle gone —; where it
+  // says the Sun is hidden, the exact relief read over a window about the place it stands along the ray (far.w — its cells'
+  // error, a little more farther), the shadow its: Monument Valley's buttes had shadows a cell wider than themselves across
+  // the plain. TUNE_SC_SKIP 128: trusted as it was)
+  if (far.x >= 0.0 && far.x < 1.0 && far.w < 1e37 && (TUNE_SC_SKIP & 128u) == 0u) {
+    let W = 200.0 + 0.01 * far.w;
+    let ta = max(far.z, far.w - W);
+    let tb = far.w + W;
+    var sw = 1.0;
+    for (var i = 0; i < 12; i++) {
+      let t = mix(ta, tb, (f32(i) + 0.5) / 12.0);
+      let x = p0 + Ls * (t / EARTH_RM);
+      let r = length(x);
+      let clear = (r - 1.0) * EARTH_RM - earthHeightStep(x / r, max(0.02 * t, foot)) + bias;
+      sw = min(sw, clamp((clear + 0.005 * t) / (0.04 * t) + 0.5, 0.0, 1.0));
+      if (sw <= 0.0) { break; }
+    }
+    far.x = sw;
+  }
+  if (far.x == 0.0) { return 0.0; }
+  let reach = select(1e30, far.z, far.x > 0.0);
+  var resumed = far.x < 0.0;
   var t = max(foot, 20.0);
   var sh = 1.0;
   for (var i = 0; i < i32(TUNE_SHADOW_N); i++) {
@@ -5697,7 +5727,7 @@ fn cloudsAtPixel(px: vec2f) -> vec4f { return vec4f(-1.0); }
 fn cloudDepthAtPixel(px: vec2f) -> f32 { return -1.0; }
 // END_CLOUD_PASS
 // BEGIN_SUN_SHADOW (system/terrain-raster-hint.ts withSunShadow supplies the relief's shadow map's lookup)
-fn sunShadowFar(rel: vec3f) -> vec3f { return vec3f(-1.0, 0.0, 0.0); }
+fn sunShadowFar(rel: vec3f) -> vec4f { return vec4f(-1.0, 0.0, 0.0, 3e38); }
 // END_SUN_SHADOW
 // BEGIN_CLOUD_SHADOW (system/cloud-shadow.ts withCloudShadow supplies the clouds' transmittance map's lookup — N3)
 // (the sunlight's share the clouds let through to a point p of the squashed space: −1 where the map has nothing)

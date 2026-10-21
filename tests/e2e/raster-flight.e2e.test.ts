@@ -16,6 +16,10 @@ const PLACES: Record<string, string> = {
     __bh.game.flyAt(36.08, -5.6, 700, 20, 240);`,
   tarifa: `__bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set("weather", "cloudy"); __bh.game.set("earthClouds", 0.3);
     __bh.game.flyAt(36.1, -5.55, 900, 200, 210);`,
+  // (Monument Valley: its buttes and mesas, 150 to 300 m of near-vertical cliffs over the plain — the relief a coarse patch
+  // smooths away — seen from the south-west, low, the morning Sun on their faces)
+  monument: `__bh.game.setDate("2026-07-10T15:30:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0.1);
+    __bh.game.flyAt(36.955, -110.135, 350, 35, 200);`,
   alps: `__bh.game.setDate("2026-07-10T11:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
     __bh.game.flyAt(45.85, 6.75, 2500, 110, 200);`,
   // (the weather's clouds — docs/PLAN-NUAGES-AAA.md N0 —: cumulus over the craft, the same deck seen from above, an overcast
@@ -151,6 +155,10 @@ const MODE_SET: Record<string, string> = {
   trees12: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "eighth"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {}; __bh.renderer.treeMinPx = 1.2;`,
   // (the far raster rings — the relief's cache's coarser levels about the patch — off, on (the default); their tolerance over
   // the patch's 4 or 1.6 times a level, against tunectl)
+  // (the raster's defaults — a quarter shaded, 75 % in motion — and at the full scale, an eighth)
+  rasterdefault: `__bh.settings.earthPipeline = "raster"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {}; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.rasterRingsOn = true; __bh.forceScale(0.75);`,
+  rasterfull: `__bh.settings.earthPipeline = "raster"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {}; __bh.settings.earthRasterShading = "eighth"; __bh.renderer.rasterRingsOn = true; __bh.forceScale(null);`,
+  tracefull: `__bh.settings.earthPipeline = "trace"; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {}; __bh.forceScale(null);`,
   ringsoff: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "eighth"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {}; __bh.renderer.rasterRingsOn = false;`,
   rings: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "eighth"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {}; __bh.renderer.rasterRingsOn = true;`,
   // (the far rings' pixels shaded at the patch's rate — against tunectl —; TAAU: the render at 75 % — the temporal upsampling —,

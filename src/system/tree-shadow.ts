@@ -33,6 +33,9 @@ fn treeShadowAt(p: vec3f) -> f32 {
   let n = vec2i(textureDimensions(tsmTex));
   let at = vec2i(uv * vec2f(n));
   let z = 0.5 - dot(q, L.xyz) / (2.0 * L.w) - (1.5 + 2.0 * R.w / f32(n.x)) / (2.0 * L.w);
+  // (past either end of the map's depth range — a valley below a mesa's rim, the Sun low —: nothing known there, not a
+  // shadow — beyond the far end the cleared map compared as an occluder, a whole plain shaded to a straight line; the rays)
+  if (z <= 0.0 || z >= 1.0) { return -1.0; }
   var lit = 0.0;
   for (var j = -1; j <= 1; j++) {
     for (var i = -1; i <= 1; i++) {
