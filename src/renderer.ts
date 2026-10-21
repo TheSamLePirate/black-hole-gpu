@@ -4824,8 +4824,10 @@ export class Renderer {
     return true;
   }
 
-  /** the temporal upsampling (post.wgsl taau): on where the live image is rendered under the canvas, moving */
-  taauOn = true;
+  /** the temporal upsampling (post.wgsl taau): on where the live image is rendered under the canvas, moving — off by
+   *  default: in a turn at ⅛ or ¼ shading its samples are too few to beat the display's Catmull–Rom, for 2–3 ms more
+   *  (docs/progress/raster-aaa/PERF-2026-10-21.md) */
+  taauOn = false;
   /** its samples' kernel σ [output px] (×scale: render px) */
   taauSigma = 0.5;
   /** the native result's weight in its history each frame (post.wgsl taau: no drift where few samples land) */

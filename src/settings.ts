@@ -311,7 +311,7 @@ export interface Settings {
   earthTerrainRasterView: "off" | "depth" | "normals" | "difference"; // diagnostic raster patch; no replacement of physical rendering
   earthTerrainRasterLevel: number; // diagnostic cache level 0…5; single patch, no automatic LOD yet
   earthTerrainRasterUse: boolean; // experimental: the tracer's ground rays start from the raster patch's distance (verified, else marched as before)
-  earthRasterScale: number; // the raster pipeline's render scale in motion (1: the canvas's; under it, the temporal upsampling — post.wgsl taau — brings the image back to the canvas's pixels; the camera held, the full scale to refine)
+  earthRasterScale: number; // the raster pipeline's render scale in motion (1: the canvas's; under it, upscaled by the display — renderer.taauOn: the temporal upsampling instead —; the camera held, the full scale to refine)
   earthRasterShading: "every" | "half" | "quarter" | "eighth" | "sixteenth"; // the raster pipeline's shading: every pixel a frame, one in two (a checkerboard turned each frame), one in 2 × 2, in 4 × 2 (the default: half the shading of a quarter for ~0.5 dB in a turn), in 4 × 4 — the others rebuilt from their fresh neighbours on the same surface, the history first
   earthPipeline: "trace" | "raster"; // the near Earth's primary visibility: traced (one ray a block), or the raster patch's pixels shaded one a pixel (docs/PLAN-RENDU-RASTER-AAA.md étape 1)
   earthSurface: "off" | "satellite" | "materials"; // regional Sentinel-2 / WorldCover pilot; independent of physical relief

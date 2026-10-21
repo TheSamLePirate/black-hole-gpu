@@ -1059,7 +1059,7 @@ export class SoundEngine {
     if (!this.running || !this.enabled) return;
     const d = Math.max(distM, 300);
     const at = d / 343;
-    const level = clamp(1.2 * Math.pow(1000 / d, 0.8));
+    const level = clamp(1.2 * (1000 / d) ** 0.8);
     const near = clamp(1 - (d - 1500) / 3500);
     if (near > 0) {
       this.burst(this.busses.master, 0.9 * level * near, 2400, 0.35, 0.7, at);
