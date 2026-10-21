@@ -562,6 +562,13 @@ Fiche : [`progress/aviation/ECOLE-RESEAU.md`](progress/aviation/ECOLE-RESEAU.md)
 - **En salle** : l'ailier d'un joueur par la roue, à la première place libre (l'événement `fml`) ; l'Auto-ACAS qui ne fuit plus son ailier ; le combat libre en F-35 (tout appareil est une cible, tir ami) ; la coopération dans un seul camp ; le verrou radar demandé avant le premier contact.
 - Mesuré : 1 321 tests unitaires ; `net-wing-fight`, `net-formation-ap` 4/4, `net-orders`, `net-coop`, `net-battle` 4/4 deux fois sur kerr-mini.
 
+## PLAN-A320 : l'avion de ligne sur Terre (commencé le 22/10/2026)
+
+Plan : [`PLAN-A320.md`](PLAN-A320.md), étapes A0 à A19, d'après l'A320-family de FlightGear (GPL v2).
+
+- **Décisions** : livrée maison par défaut et les 12 réelles en option ; les sons enregistrés de FlightGear ; l'A320-214
+  CFM56 d'abord, puis IAE et neo ; tout le métier autour (vols de ligne et ATC, sol, école et pannes, équipage à deux).
+
 ## Ce qui reste pour l'AAA (au 10/10/2026)
 
 Par ordre de gain :
