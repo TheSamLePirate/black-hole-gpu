@@ -10,8 +10,12 @@ describe.skipIf(!E2E)("flying together", () => {
   let a: App;
   let b: App;
   let code = "";
+  // (the protections off: the Auto-ACAS took the other — set beside, 2 m off the wing — for a conflict and escaped,
+  // its hands on the throttle — no afterburner lit, no collision —; the room's free fight off too: in it a collision
+  // is a shot-down's fall to the ground, not the crash put back on a runway this file checks — it is the network's,
+  // not the protections' nor the fight's)
   const fly = (app: App, lat: number, lon: number, hdg: number) =>
-    app.js(`(() => { __bh.settings.vessel = "f35"; for (let i = 0; i < 5; i++) __bh.step(1 / 30);
+    app.js(`(() => { __bh.settings.vessel = "f35"; __bh.settings.f35AutoProtect = false; __bh.settings.netFreeFight = false; for (let i = 0; i < 5; i++) __bh.step(1 / 30);
       __bh.game.flyAt(${lat}, ${lon}, 2500, ${hdg}, 220); __bh.settings.shipMount = "chase"; return 1; })()`);
   beforeAll(async () => {
     a = await App.boot({ width: 1280, height: 800, hash: "scene=game:artemis", tiles: false });
@@ -146,7 +150,15 @@ describe.skipIf(!E2E)("flying together", () => {
 
   test("a mid-air collision (B put 2 m off A's wing): both destroyed, back on a runway, no pause", async () => {
     const slotA = await a.js<number>(`__bh.net.net.room.slot`);
+    // (both held level on the same heading at the same speed — A's afterburner out —: side by side long enough for the
+    // touch to be found, 2 s after the placing and on steady samples; free, they drifted apart within 3 s)
+    const hold = `(() => { const c = __bh.camera; c.jetModes.ab = false; c.pilot.throttle = 0.6;
+      Object.assign(c.jetModes, { alt: Math.round(c.geoNow().alt), hdg: c.attitudeNow().heading, spd: 200 }); return 1; })()`;
+    await a.js(hold);
+    await Bun.sleep(1500);
     await b.js(`(() => { __bh.net.teleport(${slotA}, 2); return 1; })()`);
+    await Bun.sleep(300);
+    await b.js(hold);
     // (both destroyed — whoever found it first —, both back on a runway: low, at rest)
     for (const p of [a, b])
       await p.waitFor(`(() => { const g = __bh.camera.geoNow(); return !!g && g.alt < 1500 && g.gs < 5; })()`, 20_000);
