@@ -147,7 +147,20 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
     mobile: false,
   });
   return {
-    send,
+    // (a screenshot on a Chrome one sees: the e2e's banner — lib/banner.ts — hidden for it, put back after)
+    send: async <T>(method: string, params?: object, timeoutS?: number) => {
+      if (method !== "Page.captureScreenshot" || SHOW === "headless") return send<T>(method, params, timeoutS);
+      const vis = (v: string) =>
+        send("Runtime.evaluate", {
+          expression: `(() => { const b = document.getElementById("e2e-banner"); if (b) b.style.visibility = "${v}"; return 1; })()`,
+        }).catch(() => {});
+      await vis("hidden");
+      try {
+        return await send<T>(method, params, timeoutS);
+      } finally {
+        await vis("visible");
+      }
+    },
     errors,
     on: (method, fn) => {
       if (!listeners.has(method)) listeners.set(method, new Set());
