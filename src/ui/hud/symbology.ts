@@ -2721,6 +2721,9 @@ function radarRelief(R: NonNullable<SymInfo["relief"]>, range: number): HTMLCanv
   return canvas;
 }
 
+/** The HUD's scope's range drawn last [m] (its automatic choice too): the crew's picture says it (RD5). */
+export const scopeRange: { m: number; disc: { x: number; y: number; r: number; at: number } | null } = { m: 0, disc: null };
+
 function drawRadar(
   F: SymFrame,
   R: RadarData | null,
@@ -2760,6 +2763,9 @@ function drawRadar(
         );
     range = [10_000, 20_000, 40_000, 80_000, 160_000].find((r) => r > Math.max(need, far) * 1.1) ?? 160_000;
   }
+  scopeRange.m = range;
+  // (its disc where the wheel finds it — CSS px, P11)
+  scopeRange.disc = { x: cx / dpr, y: cy / dpr, r: rad / dpr, at: performance.now() };
   const k = rad / range;
   // the scope: its disc, its rings, its compass ticks, the scan's limits
   ctx.save();

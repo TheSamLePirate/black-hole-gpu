@@ -4,6 +4,7 @@
 // between sampled along the line of sight (the Earth's curve in); a fight's lock and seen kept by it; what the HUD
 // and the PCD draw.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { l16Key } from "../net/link16";
 import { tcasAdvise } from "../radar/tcas";
 import { worldIdOf } from "./fightproxy";
 import { cameraFrame } from "../camera";
@@ -152,6 +153,16 @@ function radarStep(this: CameraController, dt: number) {
   }
   const objects: RadarObject[] = [];
   for (const src of this.radarSources.values()) for (const o of src(any)) objects.push(o);
+  // (the Link 16 — RD12 —: what a teammate's radar holds, held here by the datalink: its place known, its IFF too)
+  if (this.l16In.size) {
+    const now = performance.now();
+    for (const o of objects) {
+      const k = l16Key(o.id, this.l16Me, this.l16InMatch);
+      const e = k ? this.l16In.get(k) : undefined;
+      if (e && now - e.at < 3000 && !o.offboard) o.offboard = true;
+    }
+    for (const [k, e] of this.l16In) if (now - e.at > 10_000) this.l16In.delete(k);
+  }
   this.radarObjects = objects;
   if (!fix) {
     // (on the ground, another craft: off — its tracks gone)

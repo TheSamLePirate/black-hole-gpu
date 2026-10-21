@@ -62,6 +62,9 @@ export default {
   "Missiles' trails": "Traînées des missiles",
   "A missile's last five seconds always drawn behind it on the radars and the maps, its smoke's way.":
     "Les cinq dernières secondes d'un missile toujours dessinées derrière lui sur les radars et les cartes, le chemin de sa fumée.",
+  // (the match's rules — RD12)
+  "The crew sees everything: its « Shared » view is the truth — the pilots, their sensors and their team's datalink":
+    "Le crew voit tout : sa vue « Partagé » est la vérité — les pilotes, leurs capteurs et le datalink de leur équipe",
   // (the TCAS — RD4)
   TCAS: "TCAS",
   'The traffic collision avoidance for every craft in the air: the transponders about graded as TCAS II does — proximate, a traffic advisory 40 s from the closest approach ("Traffic, traffic"), a resolution advisory at 25 s ("Climb, climb!", "Descend, descend!") —, on the radars, the maps and the HUD. No resolution advisory under 300 m over the ground.':

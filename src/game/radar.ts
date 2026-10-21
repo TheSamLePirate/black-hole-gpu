@@ -37,6 +37,8 @@ export interface RadarObject {
   offboard?: boolean;
   /** its own colour (a player's) */
   colour?: string;
+  /** what it is (an airliner's type, the tanker's A330 MRTT…): the picture's and the crew's */
+  type?: string;
   /** its height over the ground [m] (a craft low over it: in the clutter) */
   agl?: number;
 }
@@ -228,7 +230,8 @@ export class Radar {
     }
     // the tracks the radar no longer refreshes: dropped (the datalink's when it no longer sends them)
     for (const [id, T] of this.tracks) {
-      const stale = T.datalink ? !byId.has(id) : t - T.seenAt > this.spec.keep;
+      // (the datalink's: dropped when it no longer sends it — the thing gone, or no one sharing it any more)
+      const stale = T.datalink ? !byId.get(id)?.offboard : t - T.seenAt > this.spec.keep;
       if (stale) {
         this.tracks.delete(id);
         if (this.lock === id) this.unlock();

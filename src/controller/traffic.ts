@@ -392,6 +392,8 @@ function trafficStep(this: CameraController, dt = 0) {
         kind: c.gnd ? "ground" : "air",
         iff: "neutral",
         name: c.cs || c.reg || c.id.toUpperCase(),
+        // (its type — the crew's lists; on the ground: said)
+        type: c.gnd ? `${c.type} SOL` : c.type,
         squawk: true,
       }),
     ),

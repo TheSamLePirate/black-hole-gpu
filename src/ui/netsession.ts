@@ -5,7 +5,7 @@
 // (src/net/) is the network module's, loaded when a room was asked for.
 
 import { fmtFactor, realTimeSpeed, roomPace } from "../clock";
-import { crewFamilies, fitSnapshot, crewSnapshot } from "./crew-feed";
+import { crewFamilies, fitSnapshot, crewSnapshot, picCatchUp } from "./crew-feed";
 import { store } from "../util/storage";
 
 /** the light delay to the crew's ground stations (settings.netLightDelay's values) */
@@ -204,6 +204,8 @@ export class NetSession {
   private crewAround = -Infinity;
   /** the snapshots lightened to fit the room's limit (RD1: a long one would be dropped by the server) */
   crewCut = 0;
+  /** the crew screens met (a new one: the picture's catch-up — RD5) */
+  private crewsSeen = new Set<number>();
   /** the crew screens' stations aboard, as we answered them (AUDIT-CREW priority 6: aboard on the pilot's agreement) */
   crewAboard = new Map<number, boolean>();
   /** the light's link to the ground now (the last snapshot's): the ground stations' orders and messages held by it */
@@ -259,6 +261,10 @@ export class NetSession {
     if (!net?.room || net.room.role !== "pilot" || this.follow || !this.d.camera.piloting || now - this.crewSent < 250) return;
     if (!net.room.members.some((m) => m.role === "instruments")) return;
     this.crewSent = now;
+    // (a crew come: the picture's dictionary and histories sent again — RD5)
+    const crews = net.room.members.filter((m) => m.role === "instruments").map((m) => m.slot);
+    if (crews.some((s) => !this.crewsSeen.has(s))) picCatchUp(this.d.camera);
+    this.crewsSeen = new Set(crews);
     // (the surroundings — the traffic, the units, the ships — once a second: the heavier part)
     const around = now - this.crewAround >= 1000;
     if (around) this.crewAround = now;

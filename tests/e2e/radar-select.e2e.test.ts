@@ -90,6 +90,40 @@ describe.skipIf(!E2E)("selecting a track by a click", () => {
     expect(on).toBeGreaterThanOrEqual(3);
   }, 60_000);
 
+  test("P11 — the wheel: over the HUD's scope its range a step a notch, over the TSD its own; the camera's field untouched", async () => {
+    await app.js(`(() => { __bh.settings.f35RadarRange = "40"; return 1; })()`);
+    await Bun.sleep(400);
+    const S = await app.js<{ range: number; disc: { x: number; y: number; r: number } }>(`__bh.radar.scope()`);
+    const fov0 = await app.js<number>(`__bh.settings.fov`);
+    await app.mouse("move", S.disc.x, S.disc.y);
+    // (two notches out: 40 → 80 → 160 km)
+    await app.mouse("wheel", S.disc.x, S.disc.y, { deltaY: 100 });
+    await Bun.sleep(300);
+    const r1 = await app.js<string>(`__bh.settings.f35RadarRange`);
+    console.log(`  the scope: 40 → ${r1} km`);
+    expect(r1).toBe("160");
+    expect(await app.js<number>(`__bh.settings.fov`)).toBe(fov0);
+    // (a point of the screen over a TSD page in the cockpit: its range a step in)
+    const pt = await app.js<{ x: number; y: number } | null>(`(() => {
+      const R = __bh.renderer, p = __bh.pcd.pcd, b = __bh.camera.canvas.getBoundingClientRect();
+      for (let j = 0; j < 50; j++) for (let i = 0; i < 80; i++) {
+        const x = b.left + ((i + 0.5) / 80) * b.width, y = b.top + b.height * 0.45 + ((j + 0.5) / 50) * b.height * 0.55;
+        const h = R.ship.jetPick(((x - b.left) / b.width) * 2 - 1, 1 - ((y - b.top) / b.height) * 2);
+        if (h?.screen && p.pageAt(h.screen.u, h.screen.v) === "TSD") return { x, y };
+      }
+      return null; })()`);
+    expect(pt).not.toBeNull();
+    const t0 = await app.js<number>(`__bh.pcd.pcd.range`);
+    await app.mouse("move", pt!.x, pt!.y);
+    await app.mouse("wheel", pt!.x, pt!.y, { deltaY: -50 });
+    await Bun.sleep(300);
+    const t1 = await app.js<number>(`__bh.pcd.pcd.range`);
+    console.log(`  the TSD: ${t0} → ${t1}`);
+    expect(t1).toBeLessThan(t0);
+    expect(await app.js<number>(`__bh.settings.fov`)).toBe(fov0);
+    await app.js(`(() => { __bh.settings.f35RadarRange = "80"; return 1; })()`);
+  }, 60_000);
+
   test("a track touched on the panoramic display's TSD: selected", async () => {
     await app.waitFor(`__bh.pcd.pcd.hits && [...__bh.pcd.pcd.hits.values()].flat().some((b) => b.r.w === 40)`, 15_000);
     const r = await app.js<{ u: number; v: number } | null>(`(() => { const p = __bh.pcd.pcd;

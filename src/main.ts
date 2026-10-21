@@ -1,3 +1,4 @@
+import { scopeRange } from "./ui/hud/symbology";
 import { SystemsPage } from "./ui/systemspage";
 import { fieldByCode } from "./world/runways";
 import type { FailureKind } from "./game/systems";
@@ -4659,6 +4660,27 @@ async function main() {
     const what = jetPcd.touch(h.screen.u, h.screen.v);
     if (what) panel.toast(`PCD · ${what}`);
     return true;
+  };
+  // (the wheel over a radar — PLAN-RADAR-AAA P11 —: the HUD's scope's range a step, the PCD's TSD's or FCR's; the
+  // camera's field untouched; `dir` 0 only asks whether it is over one)
+  camera.onRadarWheel = (x, y, nx, ny, dir) => {
+    const D = scopeRange.disc;
+    if (D && performance.now() - D.at < 500 && Math.hypot(x - D.x, y - D.y) <= D.r) {
+      if (dir) {
+        const steps = ["10", "20", "40", "80", "160"] as const;
+        const cur = settings.f35RadarRange === "auto" ? String(Math.round(scopeRange.m / 1000)) : settings.f35RadarRange;
+        const i = Math.max(0, steps.indexOf(cur as (typeof steps)[number]));
+        settings.f35RadarRange = steps[Math.min(Math.max(i + dir, 0), steps.length - 1)]!;
+        panel.toast(`RADAR ${settings.f35RadarRange} km`);
+      }
+      return true;
+    }
+    if (settings.vessel !== "f35" || !(settings.shipMount === "cockpit" || settings.shipMount === "cabin")) return false;
+    const h = renderer.ship.jetPick(nx, ny);
+    if (!h?.screen) return false;
+    const said = jetPcd.wheel(h.screen.u, h.screen.v, dir);
+    if (said && dir) panel.toast(`PCD · ${said}`);
+    return said !== null;
   };
   // (a click in the view, flying in the air: a track selected — on the HUD's scope, in the view —, never a body; the
   // void: the selection let go — PLAN-RADAR-AAA RD9)

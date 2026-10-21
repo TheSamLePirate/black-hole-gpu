@@ -26,6 +26,7 @@ import { SystemRenderer } from "./sys3d/gpu";
 import { drawAirStatus, drawSpaceStatus } from "./draw/spacestat";
 import type { CrewView } from "./profile";
 import { L } from "./lang";
+import { store } from "../util/storage";
 
 export type { CrewView } from "./profile";
 const VIEW_WORDS: Record<CrewView, [string, string]> = {
@@ -57,15 +58,41 @@ const wrap = (a: number) => ((((a + 180) % 360) + 360) % 360) - 180;
 type Pick = { point: Point; slot?: number; contact?: string; wp?: number; view?: CrewView; r?: Rect };
 type Where = { lat: number; lon: number };
 
+/** The scopes' ranges [m]: the game's radars' steps (2 … 320 km), then the space's (1 000, 10 000 km) — PLAN-RADAR-AAA P11. */
+export const RANGE_STEPS = [1_000, 2_000, 5_000, 10_000, 20_000, 40_000, 80_000, 160_000, 320_000, 1_000_000, 10_000_000];
+
 export class CrewViews {
   view: CrewView = "dash";
   zoom = 1;
   follow = true;
   lat = 20;
   lon = 0;
-  range = 50_000;
-  north = false;
-  sensor = false;
+  // (the scopes' range, north up, the sensor's view: kept across the visits — PLAN-RADAR-AAA RD6)
+  private _range = Number(store.get("kerr.crew.range")) || 50_000;
+  private _north = store.get("kerr.crew.north") === "1";
+  private _sensor = store.get("kerr.crew.sensor") === "1";
+  get range() {
+    return this._range;
+  }
+  set range(v: number) {
+    if (v === this._range) return;
+    this._range = v;
+    store.set("kerr.crew.range", String(Math.round(v)));
+  }
+  get north() {
+    return this._north;
+  }
+  set north(v: boolean) {
+    this._north = v;
+    store.set("kerr.crew.north", v ? "1" : "0");
+  }
+  get sensor() {
+    return this._sensor;
+  }
+  set sensor(v: boolean) {
+    this._sensor = v;
+    store.set("kerr.crew.sensor", v ? "1" : "0");
+  }
   /** the tracks' trails (PLAN-RADAR-AAA RD7): none, 30 s, 3 min — kept */
   trails: "off" | "short" | "long" = (() => {
     try {
@@ -263,7 +290,9 @@ export class CrewViews {
         }
       }
       this.pointers.delete(e.pointerId);
+      const was = this.pinch;
       this.pinch = this.spread();
+      if (was > 0 && this.pinch === 0) this.snapRange();
     });
     for (const ev of ["pointercancel", "lostpointercapture"] as const)
       canvas.addEventListener(ev, (e) => {
@@ -275,7 +304,14 @@ export class CrewViews {
       (e) => {
         e.preventDefault();
         if (this.view === "schematic" || this.view === "plan") this.scrollBy(e.deltaY);
-        else this.zoomBy(Math.exp(-e.deltaY * 0.002));
+        else if (this.scoped()) {
+          // (the scopes by the game's own steps — PLAN-RADAR-AAA P11 —: a notch a step, 50 px a notch)
+          this.wheelAcc += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+          while (Math.abs(this.wheelAcc) >= 50) {
+            this.stepRange(Math.sign(this.wheelAcc));
+            this.wheelAcc -= 50 * Math.sign(this.wheelAcc);
+          }
+        } else this.zoomBy(Math.exp(-e.deltaY * 0.002));
       },
       { passive: false },
     );
@@ -347,6 +383,26 @@ export class CrewViews {
   togglePause() {
     this.paused = !this.paused;
     this.pausedAt = this.model.history.get(this.model.selected ?? -1)?.at(-1)?.t ?? 0;
+    this.request();
+  }
+  private wheelAcc = 0;
+  /** a scope's view (the radar, the ND, the dash, the air status): its range by steps */
+  private scoped() {
+    return this.view === "radar" || this.view === "nd" || this.view === "dash" || this.view === "air";
+  }
+  /** The scope's range a step out (dir > 0) or in — the game's steps (2 … 320 km, then the space's 1 000 and 10 000 km). */
+  stepRange(dir: number) {
+    const i = RANGE_STEPS.reduce(
+      (b, r, k) => (Math.abs(Math.log(r / this.range)) < Math.abs(Math.log(RANGE_STEPS[b]! / this.range)) ? k : b),
+      0,
+    );
+    this.range = RANGE_STEPS[clamp(i + Math.sign(dir), 0, RANGE_STEPS.length - 1)]!;
+    this.request();
+  }
+  /** A pinch let go: its range settled on the nearest step. */
+  snapRange() {
+    if (!this.scoped()) return;
+    this.range = RANGE_STEPS.reduce((b, r) => (Math.abs(Math.log(r / this.range)) < Math.abs(Math.log(b / this.range)) ? r : b));
     this.request();
   }
   zoomBy(k: number) {

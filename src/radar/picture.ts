@@ -56,8 +56,10 @@ export interface PicTrack {
   /** where the sensors put it (the truth when none): from the craft, local east, north, up [m]; its velocity [m/s] */
   r: V3;
   v: V3;
-  /** where it truly is, from the craft [m] (the crew's « Partagé ») */
+  /** where it truly is, from the craft [m] (the crew's « Partagé »), its true velocity [m/s] (its place carried on by
+   *  the crew between two blocks — RD5: an RWS track's own velocity is none) */
   rt: V3;
+  vt?: V3;
   /** its true place: latitude, longitude [°], height over the WGS84 ellipsoid [m] */
   lat: number;
   lon: number;
@@ -329,6 +331,7 @@ export function buildPicture(inp: PictureInput): Picture {
       r: T ? [...T.r] : [...o.r],
       v: T ? [...T.v] : [...o.v],
       rt: [...o.r],
+      vt: [...o.v],
       ...g,
       colour: o.colour,
     });

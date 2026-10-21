@@ -44,6 +44,19 @@ export interface ExecCtx {
 }
 type Run = (a: Args, x: ExecCtx) => unknown | Promise<unknown>;
 
+/** A crew's contact id as the picture's (RD6): a fight's f:N is cmb:N, the traffic's t:X trf:X — the others the same. */
+function picId(v: unknown): string | null {
+  const id = typeof v === "string" ? v : "";
+  if (!id) return null;
+  return id.startsWith("f:") ? `cmb:${id.slice(2)}` : id.startsWith("t:") ? `trf:${id.slice(2)}` : id;
+}
+/** The name an order names: its track's in the picture now when its id is given (the right one of two of a name). */
+function nameOf(a: Args, x: ExecCtx): string | undefined {
+  const pid = picId(a.id);
+  const T = pid ? x.camera.picture?.byId.get(pid) : undefined;
+  return T?.name ?? (typeof a.name === "string" ? a.name : undefined);
+}
+
 const RUN: Record<Act, Run> = {
   "cfg.ack": (_a, x) => x.tool("flight_action", { action: "acknowledge" }),
   // (the controls tool for its switches alone)
@@ -77,7 +90,7 @@ const RUN: Record<Act, Run> = {
     }),
   "nav.direct": (a, x) => x.tool("flight_plan", { action: "direct", index: a.index }),
   "nav.procedures": (_a, x) => x.tool("approach", { action: "procedures" }),
-  "nav.target": (a, x) => x.tool("set_target", { name: a.name }),
+  "nav.target": (a, x) => x.tool("set_target", { name: nameOf(a, x) }),
   // (the aircraft's autopilot: its selectors, its modes, its approaches — never the afterburner or the throttle)
   "ap.set": (a, x) =>
     x.camera.apSet({
@@ -108,7 +121,10 @@ const RUN: Record<Act, Run> = {
     if (mode === "refuelMode" && !rest.refuelMode) return { ok: false, note: "refuelMode: which way" };
     return x.tool("jet_mode", { action: mode, ...rest });
   },
-  "ap.traffic": (a, x) => x.tool("traffic", { action: a.action, ...(a.name ? { name: a.name } : {}) }),
+  "ap.traffic": (a, x) => {
+    const name = nameOf(a, x);
+    return x.tool("traffic", { action: a.action, ...(name ? { name } : {}) });
+  },
   "ap.goAround": (_a, x) => x.tool("flight_action", { action: "go_around" }),
   // (the spacecraft's flight computer: its tools, a manoeuvre or a mission previewed (execute: false) or flown)
   "sp.hold": (a, x) => x.tool("hold", { direction: a.direction }),
@@ -189,11 +205,15 @@ const RUN: Record<Act, Run> = {
   // (the F-35's weapons: the backseater's — the weapons tool's actions)
   "wp.radar": (a, x) => x.tool("weapons", { action: "radar", mode: a.mode }),
   "wp.select": (a, x) => x.tool("weapons", { action: "select", weapon: a.weapon }),
-  "wp.lock": (a, x) => x.tool("weapons", { action: "lock", ...(a.target ? { target: a.target } : {}) }),
+  // (by its id first — RD6: the track itself selected, the lock taking the selection —; its name the fallback)
+  "wp.lock": (a, x) => {
+    const pid = picId(a.id);
+    if (pid && x.camera.picture?.byId.has(pid)) x.camera.pictureSelect(pid, "order");
+    return x.tool("weapons", { action: "lock", ...(!pid && a.target ? { target: a.target } : {}) });
+  },
   // (the crew's ids to the picture's: a fight's f:N is cmb:N, the traffic's t:X trf:X — the others the same)
   "wp.designate": (a, x) => {
-    const id = String(a.id ?? "");
-    const pid = id.startsWith("f:") ? `cmb:${id.slice(2)}` : id.startsWith("t:") ? `trf:${id.slice(2)}` : id;
+    const pid = picId(a.id) ?? "";
     const said = x.camera.pictureSelect(pid || null, "order");
     return { ok: !!x.camera.picture?.byId.has(pid), note: `CREW ▸ ${said}` };
   },

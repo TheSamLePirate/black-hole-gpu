@@ -684,10 +684,12 @@ Chaque phase : un commit, une fiche et une planche de captures (`docs/progress/r
 | RD15 | **fait** 2026-10-21 ([fiche](progress/radar/RD15.md)) : la carte tactique du panneau de droite, trace et prédiction |
 | RD10, RD11 | **faits** 2026-10-21 ([RD10](progress/radar/RD10.md), [RD11](progress/radar/RD11.md)) : la base mondiale (OurAirports), les terrains sur tous les radars et cartes |
 | RD13 | **fait** 2026-10-21 ([fiche](progress/radar/RD13.md)) : les pistes du monde en 3D aplanies, l'ILS et l'autopilote, partout |
-| RD7 | **fait** 2026-10-21 ([fiche](progress/radar/RD7.md)) : les traînées, pilote et crew, trois réglages. **Reste** le rattrapage d'un crew qui arrive (avec RD5) |
+| RD7 | **fait** 2026-10-21 ([fiche](progress/radar/RD7.md)) : les traînées, pilote et crew, trois réglages ; le rattrapage d'un crew qui arrive fait avec RD5 |
 | RD8 | **fait** 2026-10-21 ([fiche](progress/radar/RD8.md)) : les missiles (cible, temps, PITBULL, A/F-pole, LEURRÉ, SPLASH/RATÉ) partout, la fausse piste des paillettes, l'autodestruction, solo et salle (repère du tireur), salle de démo |
-| RD4 | **fait** 2026-10-21 ([fiche](progress/radar/RD4.md)) : la spec radar, le DAS et l'EOTS capteurs, le TCAS (TA/RA, annonces, Auto-ACAS) pour tous, les capteurs et le scope LVLH des vaisseaux. **Reste** le radar de nez du Ranger, le radar d'atterrissage du Lander, l'image spatiale au crew (RD5) |
-| RD5, RD6, RD12, RD14 | à faire, dans l'ordre retenu ci-dessus |
+| RD4 | **fait** 2026-10-21 ([fiche](progress/radar/RD4.md)) : la spec radar, le DAS et l'EOTS capteurs, le TCAS (TA/RA, annonces, Auto-ACAS) pour tous, les capteurs et le scope LVLH des vaisseaux. **Reste** le radar de nez du Ranger, le radar d'atterrissage du Lander, l'image spatiale au crew |
+| RD5, RD6 | **faits** 2026-10-21 ([fiche](progress/radar/RD5-RD6.md)) : l'image compacte au crew (dictionnaire, priorités, disparitions, faisceau, rattrapage des traînées), le magasin de pistes, Capteur et Partagé filtres d'une liste, le vrai faisceau, les ordres par id, les options gardées, la molette par pas |
+| RD12 | **fait** 2026-10-21 ([fiche](progress/radar/RD12.md)) : le Link 16 entre F-35 selon les règles du match, les règles annoncées à la salle |
+| RD14 | **fait** 2026-10-21 ([fiche](progress/radar/RD14.md)) : la campagne P1–P11, les docs `RADAR.md` et `RADAR.fr.md`, les anciens blocs retirés du flux. **P7** (l'A/B de l'image du pilote contre le commit de départ) **écarté à la demande du 2026-10-21** |
 
 ## Risques
 

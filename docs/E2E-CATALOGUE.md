@@ -153,6 +153,20 @@ Every e2e file (`tests/e2e/*.e2e.test.ts`), by theme: what it proves, the scene 
 | tars-eval.e2e.test.ts | Live TARS directs a Moon landing from a hover, a docking, the interface, a teleport undone, a plan proposed then accepted; judged by game state; per-turn JSON in `remote-results/`. | per-task scenes (Moon, ISS, Earth), game:artemis boot | ? | `OPENROUTER_API_KEY`, `TARS_LIVE=1`; `TARS_LONG=1` for the long flights; `TARS_MODEL=`; `--timeout 7200000`; about a cent per run |
 | tars-ear.e2e.test.ts | Chrome's fake microphone plays a French phrase; the relay sends it to Deepgram; the words show as spoken; asked on release. | game:artemis, 1280×800 (production server with the relay) | ? | `DEEPGRAM_API_KEY` in `.env`; fake mic file `tests/data/tars-phrase-fr.wav`; `AudioServiceSandbox` off |
 
+### The radar and the tactical picture (PLAN-RADAR-AAA, docs/RADAR.md)
+
+| file | what it proves | scene(s) booted | ~s on the mini | needs |
+|---|---|---|---|---|
+| radar-sync.e2e.test.ts | The plan's criteria, pilot and crew in one page during the drone hunt: P1 the crew's « Sensor » list the pilot's scope's (< 2 % apart), P2 each crew contact within 25 m + 0.05 s × v of the pilot's place (> 95 %), P3 no jump, P4 still in a pause and ×4 at ×4, P8 the events ≤ 16 KB and < 48 KB/s, P9 a missile and decoys at the crew, P5/P6/P11 the symbology, the world's base, the crew's range steps. Writes remote-results/radar-sync.json. | game:artemis | ~55 | crew frame |
+| radar-select.e2e.test.ts | Real clicks: a symbol on the HUD's scope selected then locked, the void lets go, a body never selected; the trails off/30 s; P11 the wheel over the scope (40 → 160 km) and over a TSD in the cockpit, the camera's field untouched; a TSD symbol touched. | game:artemis (drone hunt, cockpit) | ~25 | tiles |
+| jetmap.e2e.test.ts | The tactical map: the tab by itself in the air, the trace and the path ahead, the wheel's steps, the corner dragged, the world's airfields (LFPG card, KSFO by code), and in a room Ben's F-35 clicked on Ana's map. | game:artemis; a room | ~30–70 | second page |
+| decoys.e2e.test.ts | Flares and chaff seen: burning stars and smoke in the view, on the scope, the TSD, the FCR and the DAS; gone after 5 s. | game:artemis (drone hunt) | ~20 | tiles |
+| missile-cues.e2e.test.ts | The missiles' cues: an AIM-120 at a drone (line, time to go, PITBULL + A-pole, SPLASH + F-pole), an SA-6 at us (at us, time, decoys, its end or lost by the sensors), and in a room Ana's missile at Ben — his warning, her crew's cues. | game:artemis; a room + crew | ~75 | second page, crew frame |
+| tcas.e2e.test.ts | An airliner head-on: proximate, TA at 40 s, RA « descend » at 25 s, on the HUD and the scope, the three voice lines, then proximate going away. | game:artemis | ~55 | — |
+| space-sensors.e2e.test.ts | The Ranger 300 km from the ISS holds it on its rendezvous radar; the Lander in lunar orbit holds the Endurance 150 km ahead (radar + datalink); the LVLH scope (E2E_SHOTS). | game:artemis, Earth: docking to the ISS | ~10 | — |
+| link16.e2e.test.ts | Two F-35s: an airliner Ana's radar holds and Ben's cannot is on Ben's picture by the datalink, one track; in the free fight, shared no more. | game:artemis; a room | ~30 | second page |
+| world-runway.e2e.test.ts | LFBO (OurAirports): its runways flattened to their measured level, the ILS by its code, the approach flown to a stop on the centreline, the map after landing. | game:artemis | ~6 min | tiles |
+
 ### Saves, PWA, misc
 
 | file | what it proves | scene(s) booted | ~s on the mini | needs |

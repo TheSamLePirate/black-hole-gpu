@@ -204,10 +204,11 @@ describe.skipIf(!E2E)("crew actions", () => {
     expect((await lastBoard()).ok).toBe(true);
     expect(await app.js<boolean>("__bh.camera.combat.world.lock !== null")).toBe(true);
     await app.waitFor(`!!${crew("__crew.model.own()?.snapshot?.arms?.lock")}`, 3000);
-    await app.waitFor(`${crew("__crew.model.own()?.snapshot?.radar?.contacts[0]?.locked")} === true`, 3000);
-    // (the drones on the crew's map: the fight's own side, hostile — sent every snapshot with their speed, RD1)
+    // (the lock in the crew's picture — RD6 —, the pilot's own)
+    await app.waitFor(`${crew("__crew.model.contacts().some((c) => c.locked)")} === true`, 3000);
+    // (the drones on the crew's map: the fight's own side, hostile — the pilot's picture, with their speed, RD5)
     await app.waitFor(
-      `${crew("__crew.model.own()?.snapshot?.tracks?.filter((t) => t.id.startsWith('f:') && t.side === 'hostile' && t.spd > 0).length")} >= 4`,
+      `${crew("__crew.model.contacts().filter((t) => /^cmb:/.test(t.id) && t.side === 'hostile' && t.spd > 0).length")} >= 4`,
       5000,
     );
     await press("#wp-cm");
@@ -241,8 +242,10 @@ describe.skipIf(!E2E)("crew actions", () => {
   }, 120_000);
 
   test("A6 — a track designated to the pilot from the crew's radar: selected on his screens, ringed on the crew's (RD9)", async () => {
-    await app.waitFor(`!!${crew("__crew.model.own()?.snapshot?.radar?.contacts.find((c) => !c.locked)")}`, 10_000);
-    const id = await app.js<string>(crew("__crew.model.own().snapshot.radar.contacts.find((c) => !c.locked).id"));
+    // (a radar track not locked, from the crew's « Capteur » — the picture's)
+    const free = "__crew.model.contacts().find((c) => (c.sensors & 1) && !c.locked && c.kind === 'air')";
+    await app.waitFor(`!!${crew(free)}`, 10_000);
+    const id = await app.js<string>(crew(`${free}.id`));
     await app.js(crew(`__crew.views.onContact(${JSON.stringify(id)})`));
     await app.waitFor(`!!document.querySelector('#crew-frame').contentDocument.querySelector('#ctx-designate')`, 3000);
     await press("#ctx-designate");

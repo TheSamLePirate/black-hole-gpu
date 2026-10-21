@@ -45,8 +45,14 @@ pour ce qu'un ancien pilote n'envoie pas.
   quand les réservoirs ne le prennent pas), l'écart de la sonde au panier le long du tuyau et hors de son axe, la vitesse
   de rapprochement, le tuyau enfoncé contre sa plage de transfert et son dégagement, les feux du pod, les contacts et les
   ratés, la distance au ravitailleur ;
-- les pistes du radar du pilote, leur identification et le verrouillage : 24 au plus, la piste verrouillée
-  d'abord, puis les plus proches ;
+- **l'image tactique du pilote** (`pic`, PLAN-RADAR-AAA RD5 — [RADAR.fr.md](RADAR.fr.md)), quatre fois par seconde :
+  - chaque piste, la vérité et ce qu'en tiennent ses capteurs, en lignes compactes avec un dictionnaire des noms ;
+  - d'abord le verrou, la sélection, les hostiles, les missiles et les leurres ; le reste à tour de rôle ;
+  - le faisceau du radar et sa portée ;
+  - les deux dernières minutes de chaque traînée pour un crew qui arrive.
+
+  Elle remplace les anciens blocs (la liste radar, `tracks` et le trafic de `traffic`). Ceux-ci ne sont plus envoyés
+  que sans image ;
 - la route (32 points, avec contraintes d'altitude et de vitesse) et la trajectoire prévue (48 points, avec
   leur temps et leur hauteur géodésique) : pour un avion en vol, son virage actuel prolongé sur 3 minutes
   (pas à pas sur l'ellipsoïde WGS84), sinon la trajectoire de chute libre ou planifiée ;
@@ -197,7 +203,7 @@ système 3D).
 | Navigation (ND) | arc cap en haut ou rose nord en haut, route (branche active magenta), T/D, prédiction, vent, trafic façon TCAS (hauteur relative), navires, unités, zones, joueurs, pistes radar |
 | Carte | OpenStreetMap de nuit, Web Mercator, zoom continu ; traînée colorée par l'altitude, prédiction minutée, plan, zones, tous les contacts, joueurs ; étiquettes sans chevauchement |
 | Globe | la Terre photographiée : NASA Blue Marble (relief ombré et bathymétrie) le jour, Black Marble (lumières des villes) la nuit, terminateur à l'heure du simulateur du pilote (`sun` dans l'instantané), limbe assombri, halo de l'atmosphère, étoiles — en WebGPU (textures 4 096 px avec leurs mipmaps), sinon sur le processeur (2 048 px, une image par changement de vue), sinon (hors ligne) le globe vectoriel |
-| Radar | balayage et rémanence ; positions partagées (joueurs + trafic + unités) ou capteur du pilote ; **missiles** (un dard dans l'axe, le nôtre cyan, l'ennemi rouge) et **leurres** (fusée : étoile orange ; paillettes : nuage de points) dans les deux vues ; liste triée par distance |
+| Radar | deux filtres de l'image du pilote (RD6). **Capteur** : ce que tiennent ses capteurs, aux couleurs de leur IFF, son vrai secteur de ±60° et son faisceau. **Partagé** : toute la vérité, estompée hors de ses capteurs, sans faux balayage. Les **missiles** (trait, temps, LEURRÉ, SPLASH/RATÉ), les **leurres**, les avis TCAS ; la liste par menace puis distance ; la portée par les pas du jeu (molette ; le pincement se cale sur le plus proche), gardée avec le nord et la vue |
 | Systèmes | moteur, carburant (bingo, autonomie, rayon, à l'arrivée), **ravitaillement en vol** (phase, conduite, feux du pod, sonde → panier, hors axe, rapprochement, tuyau enfoncé sur sa plage, carburant transféré, contacts et ratés), configuration, charge/incidence, structure, pilote automatique et assistance, orbite, alertes |
 | Plan de vol | profil vertical (niveaux, contraintes, T/D, hauteurs prévues) et branches (distance, ETE, ETA, altitude, vitesse), carburant à l'arrivée |
 | Télémétrie | une mesure (min/moy/max, curseur) ou quatre empilées |

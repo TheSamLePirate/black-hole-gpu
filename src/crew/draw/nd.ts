@@ -177,13 +177,27 @@ export function drawNd(p: Pen, r: Rect, sc: Scene, o: NdOpts): { cx: number; cy:
   }
   // everything about
   const myAlt = s.alt;
+  // (the pilot's picture — RD6: « Capteur » what his sensors hold, by their IFF; « Partagé » the truth, the rest faded)
+  const pic = !!snap?.pic;
   for (const t of sc.contacts) {
+    const sensed = (t.sensors ?? 0) !== 0 && t.state !== "truth";
+    if (pic && o.sensor && !sensed) continue;
     const q = at(t.lat, t.lon);
     if (!q || Math.hypot(q[0] - cx, q[1] - cy) > R * 1.15) continue;
     trailDots(p, t, sc.trails, at);
     if (missileCue(p, q[0], q[1], t)) continue;
-    unitSymbol(p, q[0], q[1], t.kind, t.kind === "decoy" ? t.type : t.side, t.hdg, up, 6, { tcas: t.adv });
-    const col = SIDE[t.side] ?? C.white;
+    const side =
+      pic && o.sensor && t.kind !== "missile" && t.kind !== "decoy" && t.side !== "dead"
+        ? (t.side === "traffic" || t.side === "player") && t.iff !== "hostile"
+          ? t.side
+          : (t.iff ?? "unknown")
+        : t.side;
+    unitSymbol(p, q[0], q[1], t.kind, t.kind === "decoy" ? t.type : side, t.hdg, up, 6, {
+      tcas: t.adv,
+      ...(pic && !sensed ? { state: "truth" as const } : {}),
+      ...(t.locked ? { locked: true } : {}),
+    });
+    const col = SIDE[side] ?? C.white;
     if (t.kind === "air" && t.alt !== null && Number.isFinite(myAlt)) {
       const dh = Math.round(u.alt(t.alt - myAlt) / 100);
       p.text(`${dh > 0 ? "+" : dh < 0 ? "−" : ""}${String(Math.abs(dh)).padStart(2, "0")}`, q[0], dh >= 0 ? q[1] - 11 : q[1] + 19, {
@@ -196,8 +210,8 @@ export function drawNd(p: Pen, r: Rect, sc: Scene, o: NdOpts): { cx: number; cy:
     if ((o.range < 160_000 && r.w > 420) || t.side !== "traffic") labels.put(t.name, q[0] + 10, q[1] + 4, { col: `${col}cc`, size: 9 });
     o.pick?.(q, { contact: t.id });
   }
-  // the pilot's own radar tracks
-  if (o.sensor && own)
+  // the pilot's own radar tracks (his older block: no picture)
+  if (o.sensor && own && !pic)
     for (const t of snap?.radar?.contacts ?? []) {
       const d = Math.hypot(t.e, t.n);
       if (d > o.range * 1.1) continue;

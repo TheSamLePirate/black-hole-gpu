@@ -120,21 +120,29 @@ describe.skipIf(!E2E)("the tactical map", () => {
     const isBen = `(t) => t.id.startsWith("net:") || /Ben/.test(t.name)`;
     await a.waitFor(`__bh.radar.picture()?.tracks.some(${isBen})`, 30_000);
     const benId = await a.js<string>(`__bh.radar.picture().tracks.find(${isBen}).id`);
-    await a.js(`(() => { const m = __bh.flight.hud.tacMap; m.range = 2; return 1; })()`);
+    // (20 km: Ben, 8 km ahead, well inside — at 10 km he stood at the map's top edge, under its buttons)
+    await a.js(`(() => { const m = __bh.flight.hud.tacMap; m.range = 3; return 1; })()`);
     // (the free fight's Ben a foe: on the map once Ana's radar has swept him — a sweep, two seconds)
     console.log(
       `  Ben in Ana's picture: ${await a.js<string>(`(() => { const t = __bh.radar.track(${JSON.stringify(benId)}); return JSON.stringify({ id: t.id, side: t.side, sensors: t.sensors, state: t.state, r: t.r.map(Math.round) }); })()`)}`,
     );
     await a.waitFor(`__bh.flight.hud.tacMap.hitsNow().some((h) => h.id === ${JSON.stringify(benId)})`, 15_000);
-    const h = await a.js<{ id: string; x: number; y: number }>(
-      `__bh.flight.hud.tacMap.hitsNow().find((h) => h.id === ${JSON.stringify(benId)})`,
-    );
-    const m = (await box(a, "[data-testid=jetmap] canvas"))!;
-    await a.mouse("move", m.x + h.x, m.y + h.y);
-    await a.mouse("down", m.x + h.x, m.y + h.y);
-    await a.mouse("up", m.x + h.x, m.y + h.y);
-    await Bun.sleep(300);
-    console.log(`  Ben's track ${h.id} clicked on Ana's map`);
+    // (his place read again just before each click: the map redrawn ten times a second)
+    let h = { id: benId, x: 0, y: 0 };
+    for (let k = 0; k < 3 && (await a.js<string | null>(`__bh.camera.pictureSelected`)) !== benId; k++) {
+      h = await a.js<{ id: string; x: number; y: number }>(
+        `__bh.flight.hud.tacMap.hitsNow().find((h) => h.id === ${JSON.stringify(benId)})`,
+      );
+      const m = (await box(a, "[data-testid=jetmap] canvas"))!;
+      const under = await a.js<string>(
+        `(() => { const e = document.elementFromPoint(${m.x + h.x}, ${m.y + h.y}); return e ? e.tagName + "." + e.className : "none"; })()`,
+      );
+      await a.mouse("move", m.x + h.x, m.y + h.y);
+      await a.mouse("down", m.x + h.x, m.y + h.y);
+      await a.mouse("up", m.x + h.x, m.y + h.y);
+      await Bun.sleep(300);
+      console.log(`  Ben's track ${h.id} clicked on Ana's map at ${Math.round(h.x)}, ${Math.round(h.y)} (under the pointer: ${under})`);
+    }
     expect(await a.js<string | null>(`__bh.camera.pictureSelected`)).toBe(h.id);
     if (shots) await a.shot(`${shots}/jetmap-room.png`);
   }, 300_000);

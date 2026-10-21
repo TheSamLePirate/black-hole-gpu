@@ -213,6 +213,7 @@ function carrierStep(this: CameraController) {
         kind: "sea",
         iff: "friend",
         name: CARRIER[sp.kind].name,
+        type: sp.kind,
         squawk: true,
       },
       ...escortsOf(sp, P, secOf(this.nowTime()), this.seaHs ?? 1).map(

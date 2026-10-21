@@ -323,7 +323,12 @@ export function drawGeo(p: Pen, r: Rect, sc: Scene, v: GeoView) {
     if (!q || q[0] < r.x - 20 || q[0] > r.x + W + 20 || q[1] < r.y - 20 || q[1] > r.y + H + 20) continue;
     trailDots(p, t, sc.trails, at);
     if (missileCue(p, q[0], q[1], t)) continue;
-    unitSymbol(p, q[0], q[1], t.kind, t.kind === "decoy" ? t.type : t.side, t.hdg, 0, t.kind === "sea" ? 6 : 5, { tcas: t.adv });
+    // (the truth on the map; what the pilot's sensors do not hold faded — RD6)
+    unitSymbol(p, q[0], q[1], t.kind, t.kind === "decoy" ? t.type : t.side, t.hdg, 0, t.kind === "sea" ? 6 : 5, {
+      tcas: t.adv,
+      ...(t.sensors === 0 || t.state === "truth" ? { state: "truth" as const } : {}),
+      ...(t.locked ? { locked: true } : {}),
+    });
     const col = SIDE[t.side] ?? C.white;
     if (nameZoom || t.side !== "traffic") {
       const alt = t.kind === "air" && t.alt !== null && v.zoom >= 9 && !v.globe ? ` ${fmt(u.alt(t.alt) / 100)}` : "";

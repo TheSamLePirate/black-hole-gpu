@@ -1952,8 +1952,18 @@ function refresh() {
     const near = g
       ? [...contacts].sort((x, y) => Math.hypot(x.lat - g.lat, x.lon - g.lon) - Math.hypot(y.lat - g.lat, y.lon - g.lon)).slice(0, 24)
       : [];
+    // (« Capteur »: the pilot's picture's tracks his sensors hold — RD6 —, by threat then distance; an older pilot's
+    // radar list without one)
+    const rank = (c: (typeof contacts)[number]) =>
+      c.locked ? 0 : c.msl?.target === "own" ? 1 : c.kind === "missile" ? 2 : c.side === "hostile" || c.iff === "hostile" ? 3 : 4;
+    const sensed = contacts
+      .filter((c) => (c.sensors ?? 0) !== 0 && c.state !== "truth")
+      .sort((a, b) => rank(a) - rank(b) || (g ? Math.hypot(a.lat - g.lat, a.lon - g.lon) - Math.hypot(b.lat - g.lat, b.lon - g.lon) : 0))
+      .slice(0, 24);
     const items = sensor
-      ? (own?.snapshot?.radar?.contacts ?? []).map((p) => ({ id: p.id, name: p.name, slot: -1 }))
+      ? own?.snapshot?.pic
+        ? sensed.map((c) => ({ id: c.id, name: `${c.locked ? "◉ " : ""}${c.name}`, slot: -1 }))
+        : (own?.snapshot?.radar?.contacts ?? []).map((p) => ({ id: p.id, name: p.name, slot: -1 }))
       : [
           ...crafts.filter((c) => c !== own).map((c) => ({ id: "", name: `✈ ${c.member.name}`, slot: c.member.slot })),
           ...near.map((c) => ({
@@ -2221,18 +2231,24 @@ views.onContact = (id, x = stage.clientWidth / 2, y = stage.clientHeight / 2) =>
   menu(x, y, name, info, [
     // (designated to the pilot: selected on all his screens — PLAN-RADAR-AAA RD9)
     actButton(L("Désigner au pilote", "Designate to the pilot"), "wp.designate", { id }, "ctx-designate", (ok) => ok && closeMenu()),
-    actButton(L("Cibler", "Target"), "nav.target", { name }, "ctx-target", (ok) => ok && closeMenu()),
+    actButton(L("Cibler", "Target"), "nav.target", { name, id }, "ctx-target", (ok) => ok && closeMenu()),
     ...(air
       ? [
-          actButton(L("Intercepter", "Intercept"), "ap.traffic", { action: "intercept", name }, "ctx-intercept", (ok) => ok && closeMenu()),
+          actButton(
+            L("Intercepter", "Intercept"),
+            "ap.traffic",
+            { action: "intercept", name, id },
+            "ctx-intercept",
+            (ok) => ok && closeMenu(),
+          ),
           actButton(
             L("Rejoindre en formation", "Join in formation"),
             "ap.traffic",
-            { action: "join", name },
+            { action: "join", name, id },
             "ctx-join",
             (ok) => ok && closeMenu(),
           ),
-          actButton(L("Verrouiller", "Lock"), "wp.lock", { target: name }, "ctx-lock", (ok) => ok && closeMenu()),
+          actButton(L("Verrouiller", "Lock"), "wp.lock", { target: name, id }, "ctx-lock", (ok) => ok && closeMenu()),
         ]
       : []),
   ]);

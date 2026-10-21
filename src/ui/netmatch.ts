@@ -7,6 +7,7 @@
 // his countermeasures drawing our missiles too, shot down: said to all, flown again a few seconds later. Its score
 // sheet built from what is said; its end the host's; a bar, a kill feed, the big words and the end screen.
 
+import { IFF16, l16Key, l16Shares, readL16 } from "../net/link16";
 import "./netmatch.css";
 import type { CameraController } from "../controls";
 import type { MissileKind, V3 } from "../game/combat";
@@ -254,6 +255,13 @@ export class NetMatch {
 
   private onEvent(from: number, ev: Record<string, unknown>) {
     const kind = ev.kind;
+    // (a teammate's Link 16 — RD12 —: his radar's tracks held here by the datalink, when the rules share them)
+    if (kind === "l16") {
+      if (!l16Shares(this.match?.mode ?? null, this.sameTeam(this.me, from))) return;
+      const now = performance.now();
+      for (const x of readL16(ev)) this.d.camera.l16In.set(x.key, { iff: x.iff, from, at: now });
+      return;
+    }
     if (kind === "match") return this.begin(ev.m as Match);
     // (another's craft destroyed out of a match: said, hidden until it is set down again)
     if (kind === "crash") {
@@ -458,6 +466,9 @@ export class NetMatch {
     this.endEl.hidden = true;
     this.root.hidden = false;
     this.d.toast(tf("Match: {0} — {1}", MODE_NAMES[m.mode](), this.titleOf(m)));
+    // (the rules told — PLAN-RADAR-AAA RD12 —: a pilot his sensors and his team's datalink; a crew screen the whole truth)
+    if (this.net?.room?.members.some((x) => x.role === "instruments"))
+      this.d.toast(t("The crew sees everything: its « Shared » view is the truth — the pilots, their sensors and their team's datalink"));
   }
 
   private titleOf(m: Match) {
@@ -588,6 +599,7 @@ export class NetMatch {
     const net = this.net;
     if (net !== this.bound) this.bind(net);
     this.freeStep(net);
+    this.l16Step(net);
     const m = this.match;
     if (!net?.room || !m) {
       if (!this.root.hidden && this.phase !== "over") this.root.hidden = true;
@@ -606,6 +618,26 @@ export class NetMatch {
     for (const [s, until] of this.down) if (now > until) this.down.delete(s), this.d.session.hidden.delete(s);
     this.drawUi(now);
   }
+
+  /** Our Link 16 (RD12): twice a second, in a room with another pilot, the F-35's radar's own tracks — their shared
+   *  key, the IFF known — sent to the room (each page takes them as its rules say: net/link16.ts l16Shares). */
+  private l16Step(net: Client | null) {
+    const c = this.d.camera;
+    c.l16Me = this.me;
+    c.l16InMatch = !!this.match;
+    const now = performance.now();
+    if (!net?.room || now - this.l16At < 500 || fleet.active !== "f35") return;
+    if (net.room.members.filter((m) => m.role === "pilot").length < 2) return;
+    this.l16At = now;
+    const tr: [string, number][] = [];
+    for (const T of c.radar.tracks.values()) {
+      if (T.datalink) continue;
+      const k = l16Key(T.id, this.me, !!this.match);
+      if (k) tr.push([k, Math.max(0, IFF16.indexOf(T.iff))]);
+    }
+    if (tr.length) net.event({ kind: "l16", tr: tr.slice(0, 120) });
+  }
+  private l16At = 0;
 
   // ---------------------------------------------------------------------------------- the free fight
 

@@ -1516,6 +1516,11 @@ Selects a track on all the pilot's screens (`null`: none).
 What a click in the view may select this frame (RD9): the HUD's scope's symbols and the tracks seen in the view, their
 place and reach in CSS px.
 
+### `__bh.radar.scope()` → `{range, disc}`
+
+The HUD's scope as drawn last: its range [m] (the automatic choice too) and its disc (`{x, y, r}` CSS px, `at` when
+drawn) — where the wheel steps its range (P11). *Used in:* `tests/e2e/radar-select.e2e.test.ts`.
+
 ### The TCAS and the spacecraft's sensors (RD4) — on `__bh.camera`
 
 - `__bh.camera.tcas` → `TcasAdvisory[]` (src/radar/tcas.ts): the transponders heard, graded as TCAS II does —

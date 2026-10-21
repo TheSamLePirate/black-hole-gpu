@@ -48,7 +48,7 @@ describe.skipIf(!E2E)("RD0 — the radar's picture, pilot and crew", () => {
       `(() => { const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr"); return 1; })()`,
     );
     await app.waitFor("__bh.camera.radar.tracks.size > 0", 15_000);
-    await app.waitFor(crew.w("__crew.model.contacts().some((c) => c.id.startsWith('f:'))"), 10_000);
+    await app.waitFor(crew.w("__crew.model.contacts().some((c) => /^(f|cmb):/.test(c.id))"), 10_000);
     await crew.js("__crew.setView('radar')");
   }, 300_000);
   afterAll(async () => {
@@ -72,6 +72,8 @@ describe.skipIf(!E2E)("RD0 — the radar's picture, pilot and crew", () => {
         crew: { id: string; name: string; lat: number; lon: number; spd: number | null }[];
         radar: string[];
         crewRadar: string[];
+        picBytes: number;
+        pilotPic: { id: string; lat: number; lon: number; v: number }[];
       }[]
     >(`new Promise((done) => {
       const c = __bh.camera, w = document.querySelector('#crew-frame').contentWindow, rows = [], t0 = performance.now();
@@ -88,7 +90,13 @@ describe.skipIf(!E2E)("RD0 — the radar's picture, pilot and crew", () => {
           raw: (own?.snapshot?.tracks ?? []).slice(0, 2).map((k) => ({ name: k.name, lat: k.lat, lon: k.lon, spd: k.spd, hdg: k.hdg })),
           crew: w.__crew.model.contacts().map((k) => ({ id: k.id, name: k.name, lat: k.lat, lon: k.lon, spd: k.spd })),
           radar: (c.flightInfo().radar?.contacts ?? []).map((k) => k.id),
-          crewRadar: (own?.snapshot?.radar?.contacts ?? []).map((k) => k.id),
+          // (the pilot's picture's fight tracks: their places on his screens — P2's reference, the plan's own)
+          pilotPic: (c.picture?.tracks ?? []).filter((T) => T.id.startsWith("cmb:")).map((T) => ({ id: T.id, lat: T.lat, lon: T.lon, v: Math.hypot(T.vt?.[0] ?? T.v[0], T.vt?.[1] ?? T.v[1]) })),
+          // (the crew's « Capteur »: the picture's tracks the pilot's radar or datalink holds — RD6 —, as his scope lists them)
+          crewRadar: own?.snapshot?.pic
+            ? w.__crew.model.contacts().filter((k) => (k.sensors & 3) && k.state !== "truth" && k.kind !== "missile" && k.kind !== "decoy").map((k) => k.id)
+            : (own?.snapshot?.radar?.contacts ?? []).map((k) => k.id),
+          picBytes: own?.snapshot?.pic ? JSON.stringify(own.snapshot.pic).length : 0,
         });
         if (performance.now() - t0 < ${ms}) requestAnimationFrame(step); else done(rows);
       };
@@ -120,7 +128,7 @@ describe.skipIf(!E2E)("RD0 — the radar's picture, pilot and crew", () => {
     let p2ok = 0;
     for (const r of rows) {
       if (!r.crewOwn) continue;
-      for (const k of r.crew.filter((x) => x.id.startsWith("f:"))) {
+      for (const k of r.crew.filter((x) => /^(f|cmb):/.test(x.id))) {
         const tr = r.truth.find((x) => x.name === k.name);
         if (!tr) continue;
         const [e, n] = en(r.crewOwn, k);
@@ -136,12 +144,25 @@ describe.skipIf(!E2E)("RD0 — the radar's picture, pilot and crew", () => {
     }
     errs.sort((x, y) => x - y);
     const p95 = errs[Math.floor(errs.length * 0.95)] ?? Number.NaN;
+    // (P2 as the plan defines it: each crew contact against the same track on the pilot's screens, the same instant —
+    // the flat frame above is the fight's own geometry, 0.3 % off the ellipsoid's)
+    const perr: number[] = [];
+    let pok = 0;
+    for (const r of rows)
+      for (const k of r.crew.filter((x) => x.id.startsWith("cmb:"))) {
+        const T = r.pilotPic.find((x) => x.id === k.id);
+        if (!T) continue;
+        const d = wgs84Inverse(T.lat, T.lon, k.lat, k.lon).d;
+        perr.push(d);
+        if (d <= 25 + 0.05 * T.v) pok++;
+      }
+    perr.sort((x, y) => x - y);
     // P3: a contact moving between two frames more than twice its speed allows (1 m of slack; its first frame aside)
     let jumps = 0,
       steps = 0;
     for (let i = 1; i < rows.length; i++) {
       const dt = (rows[i]!.t - rows[i - 1]!.t) / 1000;
-      for (const k of rows[i]!.crew.filter((x) => x.id.startsWith("f:"))) {
+      for (const k of rows[i]!.crew.filter((x) => /^(f|cmb):/.test(x.id))) {
         const was = rows[i - 1]!.crew.find((x) => x.id === k.id);
         if (!was) continue;
         const d = wgs84Inverse(was.lat, was.lon, k.lat, k.lon).d;
@@ -170,8 +191,18 @@ describe.skipIf(!E2E)("RD0 — the radar's picture, pilot and crew", () => {
         }),
       );
     console.log(`  raw ${JSON.stringify(out.raw)}`);
-    out.P1 = { frames: rows.length, tracks: p1n, mismatches: p1diff, share: p1n ? p1diff / p1n : null };
+    out.P1 = {
+      frames: rows.length,
+      tracks: p1n,
+      mismatches: p1diff,
+      share: p1n ? p1diff / p1n : null,
+      picBytesMax: Math.max(...rows.map((r) => r.picBytes)),
+    };
     out.P2 = {
+      pilotSamples: perr.length,
+      pilotP50: perr[Math.floor(perr.length / 2)] ?? null,
+      pilotP95: perr[Math.floor(perr.length * 0.95)] ?? null,
+      pilotWithin: perr.length ? pok / perr.length : null,
       samples: errs.length,
       p50: errs[Math.floor(errs.length / 2)] ?? null,
       p95,
@@ -186,6 +217,12 @@ describe.skipIf(!E2E)("RD0 — the radar's picture, pilot and crew", () => {
     console.log(`  P1 ${JSON.stringify(out.P1)}\n  P2 ${JSON.stringify(out.P2)}\n  P3 ${JSON.stringify(out.P3)}`);
     expect(rows.length).toBeGreaterThan(100);
     expect(errs.length).toBeGreaterThan(50);
+    // (the plan's criteria — RD14: P1 the same tracks, but the ones born or lost within a block; P2 within 25 m +
+    // 0.05 s × v of the pilot's place; P3 no jump)
+    expect(p1diff / Math.max(p1n, 1)).toBeLessThan(0.02);
+    expect(perr.length).toBeGreaterThan(50);
+    expect(pok / perr.length).toBeGreaterThan(0.95);
+    expect(jumps / Math.max(steps, 1)).toBeLessThan(0.001);
     await app.shot(`${shots}/radar-sync-radar.png`);
   }, 90_000);
 
@@ -197,7 +234,7 @@ describe.skipIf(!E2E)("RD0 — the radar's picture, pilot and crew", () => {
       const a = rows[0]!,
         b = rows.at(-1)!;
       let m = 0;
-      for (const k of b.crew.filter((x) => x.id.startsWith("f:"))) {
+      for (const k of b.crew.filter((x) => /^(f|cmb):/.test(x.id))) {
         const was = a.crew.find((x) => x.id === k.id);
         if (was) m = Math.max(m, wgs84Inverse(was.lat, was.lon, k.lat, k.lon).d);
       }
@@ -214,7 +251,7 @@ describe.skipIf(!E2E)("RD0 — the radar's picture, pilot and crew", () => {
         b = fast.at(-1)!;
       const dt = (b.t - a.t) / 1000;
       const rs: number[] = [];
-      for (const k of b.crew.filter((x) => x.id.startsWith("f:") && (x.spd ?? 0) > 5)) {
+      for (const k of b.crew.filter((x) => /^(f|cmb):/.test(x.id) && (x.spd ?? 0) > 5)) {
         const was = a.crew.find((x) => x.id === k.id);
         if (was) rs.push(wgs84Inverse(was.lat, was.lon, k.lat, k.lon).d / dt / k.spd!);
       }
@@ -224,6 +261,8 @@ describe.skipIf(!E2E)("RD0 — the radar's picture, pilot and crew", () => {
     await app.js("(__bh.game.warp(1), 1)");
     out.P4 = { pausedDriftM: paused, warp4SpeedRatio: ratio };
     console.log(`  P4 ${JSON.stringify(out.P4)}`);
+    expect(paused).toBeLessThan(1);
+    expect(Math.abs(ratio - 4)).toBeLessThan(0.25);
   }, 60_000);
 
   test("P8 — the events: the largest instruments event, the bytes a second; P9 — a missile and decoys at the crew", async () => {
@@ -247,29 +286,32 @@ describe.skipIf(!E2E)("RD0 — the radar's picture, pilot and crew", () => {
     out.P8 = { maxChars: max, limit: 16_384, bytesPerSecond: Math.round(rate), events: ev.length };
     out.P9 = { fired: shot, flying, atCrew };
     console.log(`  P8 ${JSON.stringify(out.P8)}\n  P9 ${JSON.stringify(out.P9)}`);
-    expect(max).toBeGreaterThan(0);
+    expect(max).toBeLessThanOrEqual(16_384);
+    expect(rate).toBeLessThan(48_000);
+    expect(atCrew).toBeGreaterThanOrEqual(flying.missiles + flying.decoys);
   }, 30_000);
 
-  test("P5, P6, P7, P10, P11 — as they stand", async () => {
+  test("P5, P6, P10, P11 — the symbology one module; the world's runways; the clicks and the wheel (radar-select, jetmap)", async () => {
     const src = async (f: string) => Bun.file(f).text();
-    // P5: the IFF palettes written apart (the plan's six); one shared symbology module or not
-    const files = ["src/ui/hud/symbology.ts", "src/f35/pcd.ts", "src/crew/draw/kit.ts", "src/crew/draw/radar.ts", "src/ui/missionmap.ts"];
-    const palettes = (await Promise.all(files.map(src))).filter((s) => /hostile|IFF|iff/.test(s) && /#[0-9a-f]{6}|rgba?\(/i.test(s)).length;
-    const symbols = await Bun.file("src/radar/symbols.ts").exists();
-    // P6: the runways known
-    const sites = ((await src("src/game/sites.ts")).match(/runway: true/g) ?? []).length;
-    // P10, P11: the crew's click selects (a menu) — the pilot's radars none; the crew's wheel continuous, no common steps
-    const range0 = await crew.js<number>("__crew.views.range");
-    await crew.js("__crew.views.zoomBy(1.1)");
-    const range1 = await crew.js<number>("__crew.views.range");
-    out.P5 = { palettesFiles: palettes, sharedSymbols: symbols };
-    out.P6 = { runwaysInGameSites: sites, worldBase: await Bun.file("assets/runways/index.json").exists() };
-    out.P7 = { note: "cost: measured by trace-ab, not in this probe" };
-    out.P10 = { crewTouchOpensMenu: true, pilotRadarClick: false };
-    out.P11 = { crewWheelStep: range1 / range0, commonSteps: false };
-    console.log(
-      `  P5 ${JSON.stringify(out.P5)}\n  P6 ${JSON.stringify(out.P6)}\n  P10 ${JSON.stringify(out.P10)}\n  P11 ${JSON.stringify(out.P11)}`,
-    );
+    // P5: every screen draws its tracks through the common symbology (radar/symbols.ts drawSym)
+    const screens = ["src/ui/hud/symbology.ts", "src/f35/pcd.ts", "src/ui/jetmap.ts", "src/crew/draw/kit.ts"];
+    const through = (await Promise.all(screens.map(src))).filter((s) => /drawSym\(/.test(s)).length;
+    // P6: the world's base and its tiles
+    const index = await Bun.file("assets/runways/v1/index.json").exists();
+    // P11: the crew's wheel by the game's steps (a notch a step)
+    await crew.js("__crew.setView('radar')");
+    await crew.js("__crew.views.range = 40000");
+    await crew.js("__crew.views.stepRange(1)");
+    const stepped = await crew.js<number>("__crew.views.range");
+    out.P5 = { screensThroughDrawSym: `${through}/${screens.length}` };
+    out.P6 = { worldBase: index };
+    out.P7 = { note: "the A/B of the pilot's image left out (the user's decision, 2026-10-21)" };
+    out.P10 = { note: "tests/e2e/radar-select (the scope, the view, the TSD), jetmap (the tactical map, a room), crew-actions A6" };
+    out.P11 = { crewStep: `40 → ${stepped / 1000} km`, note: "the scope's and the TSD's wheel: tests/e2e/radar-select" };
+    console.log(`  P5 ${JSON.stringify(out.P5)}\n  P6 ${JSON.stringify(out.P6)}\n  P11 ${JSON.stringify(out.P11)}`);
+    expect(through).toBe(screens.length);
+    expect(index).toBe(true);
+    expect(stepped).toBe(80_000);
     expect(app.cdp.errors).toEqual([]);
   }, 30_000);
 });

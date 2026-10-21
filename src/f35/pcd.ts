@@ -463,6 +463,46 @@ export class Pcd {
     return null;
   }
 
+  /** The page shown at (u, v) on the display (its body, under its title; null: none) — the tests' and the wheel's. */
+  pageAt(u: number, v: number): PcdPage | null {
+    const x = u * PCD_W,
+      y = v * PCD_H;
+    for (const P of this.portals()) {
+      const f = P.frame;
+      if (x >= f.x && x <= f.x + f.w && y >= f.y + HEAD && y <= f.y + f.h - FOOT) return this.pages[P.slot]!;
+    }
+    return null;
+  }
+
+  /** The wheel at (u, v) on the display (PLAN-RADAR-AAA P11): over a TSD or an FCR, its range a step out (dir > 0)
+   *  or in; what it did (null: no range there — the wheel left to the rest). */
+  wheel(u: number, v: number, dir: number): string | null {
+    const x = u * PCD_W,
+      y = v * PCD_H;
+    for (const P of this.portals()) {
+      const f = P.frame;
+      if (x < f.x || x > f.x + f.w || y < f.y || y > f.y + f.h) continue;
+      const page = this.pages[P.slot]!;
+      const s = Math.sign(dir);
+      let said: string | null = null;
+      if (page === "TSD") {
+        const j = Math.max(0, RANGES.indexOf(this.range));
+        this.range = RANGES[Math.min(Math.max(j + s, 0), RANGES.length - 1)]!;
+        said = `RNG ${this.range}`;
+      } else if (page === "FCR") {
+        const j = Math.max(0, FCR_RANGES.indexOf(this.fcrRange));
+        this.fcrRange = FCR_RANGES[Math.min(Math.max(j + s, 0), FCR_RANGES.length - 1)]!;
+        said = `FCR ${this.fcrRange}`;
+      }
+      if (said) {
+        this.forced.add(P.key);
+        this.lastChange = { rect: P.region, at: performance.now() };
+      }
+      return said;
+    }
+    return null;
+  }
+
   /** A page's keys at its portal's foot. */
   private keys(page: PcdPage): PcdKey[] {
     const step = (s: number) => () => {

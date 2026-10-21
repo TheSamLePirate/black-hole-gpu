@@ -256,7 +256,8 @@ export const ACTS = {
   },
   "nav.target": {
     fam: "nav",
-    params: { name: { type: "string" } },
+    // (its picture's id beside its name — PLAN-RADAR-AAA RD6: two craft of one name, the right one)
+    params: { name: { type: "string" }, id: { type: "string" } },
     required: ["name"],
     say: (a) => ({ fr: `cible : ${String(a.name).slice(0, 24)}`, en: `target: ${String(a.name).slice(0, 24)}` }),
   },
@@ -351,7 +352,7 @@ export const ACTS = {
   },
   "ap.traffic": {
     fam: "jet",
-    params: { action: { type: "string", enum: ["intercept", "join", "stop"] }, name: { type: "string" } },
+    params: { action: { type: "string", enum: ["intercept", "join", "stop"] }, name: { type: "string" }, id: { type: "string" } },
     required: ["action"],
     say: (a) => {
       const n = typeof a.name === "string" ? ` ${a.name.slice(0, 16)}` : "";
@@ -547,7 +548,7 @@ export const ACTS = {
   },
   "wp.lock": {
     fam: "weapons",
-    params: { target: { type: "string" } },
+    params: { target: { type: "string" }, id: { type: "string" } },
     say: (a) => ({
       fr: a.target ? `verrouillage ${String(a.target).slice(0, 20)}` : "verrouillage de la piste suivante",
       en: a.target ? `lock ${String(a.target).slice(0, 20)}` : "lock the next track",

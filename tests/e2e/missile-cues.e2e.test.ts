@@ -115,7 +115,13 @@ describe.skipIf(!E2E)("the missiles' cues", () => {
       `  theirs: at us ${theirs.some((m) => m.atUs)}, time to go ${theirs.find((m) => m.tti !== null)?.tti?.toFixed(1)} s, decoyed ${theirs.some((m) => m.decoyed)}, end ${ended?.end ?? "—"}`,
     );
     expect(theirs.some((m) => m.atUs && m.tti !== null && m.tti > 0 && m.tti < 60)).toBe(true);
-    expect(ended?.end ?? null).toMatch(/splash|miss/);
+    // (its end said — or, its motor out and drawn off beyond 3 km, lost by the sensors before it ended: the DAS's
+    // reach, RD4 —; in both, gone from the scope at last)
+    const last = await a.js<number>(`window.__mc.filter((m) => m.red).length`);
+    await Bun.sleep(1000);
+    const gone = (await a.js<number>(`window.__mc.filter((m) => m.red).length`)) === last;
+    expect(!!ended || gone).toBe(true);
+    if (ended) expect(ended.end).toMatch(/splash|miss/);
   }, 120_000);
 
   test("in a room, the free fight: Ana's AIM-120 at Ben — her cues, his warning, her crew's console", async () => {

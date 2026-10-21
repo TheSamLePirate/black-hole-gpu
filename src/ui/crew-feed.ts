@@ -19,6 +19,29 @@ import { enuAt } from "../controller/traffic";
 import { TANKER } from "../controller/jetmodes";
 import { isGround, MISSILES } from "../game/combat";
 import { WGS84_A, WGS84_F, wgs84Direct, wgs84Inverse, wgs84Offset } from "../system/ellipsoid";
+import { type PicBlock, PicEncoder } from "../net/picture";
+import { scopeRange } from "./hud/symbology";
+
+/** The tactical picture's encoder for the crew (PLAN-RADAR-AAA RD5): its numbers and its turns kept across the blocks. */
+const picEncoder = new PicEncoder();
+/** A crew came: the dictionary and every track's history sent again over the next blocks. */
+export function picCatchUp(c: CameraController) {
+  picEncoder.catchUp((c.picture?.tracks ?? []).map((T) => T.id));
+}
+/** The pilot's picture as the crew's block (RD5): Earth's air only (the picture's own reach). */
+function picOf(c: CameraController, g: { lat: number; lon: number } | null): PicBlock | null {
+  const P = c.picture;
+  if (!P || !g) return null;
+  return picEncoder.encode(P.tracks, {
+    lat: g.lat,
+    lon: g.lon,
+    mode: P.mode,
+    beam: P.beam,
+    range: scopeRange.m,
+    t: c.radarT,
+    trailT: c.trailT,
+  });
+}
 
 const D = Math.PI / 180;
 
@@ -281,6 +304,8 @@ export function fitSnapshot(s: InstrumentSnapshot, max = 16_384 - 600): { data: 
     ["route/2", (d) => ({ ...d, route: d.route.slice(0, 16) })],
     ["traffic", (d) => ({ ...d, traffic: undefined })],
     ["tracks/2", (d) => (d.tracks ? { ...d, tracks: d.tracks.slice(0, 16) } : d)],
+    // (the picture: its rows by turns lightened last — the priority's first in the list, kept)
+    ["pic/2", (d) => (d.pic ? { ...d, pic: { ...d.pic, r: d.pic.r.slice(0, Math.ceil(d.pic.r.length / 2)), h: undefined } } : d)],
   ];
   for (const [name, f] of steps) {
     if (size(data) <= max) break;
@@ -345,6 +370,13 @@ export function crewSnapshot(
   const L = N.last.l;
   const V = N.last.v;
   const routed = body === "earth" && N.route.wps.length > 0;
+  const pics: { pic?: PicBlock } = (() => {
+    const pic = picOf(c, g);
+    return pic ? { pic } : {};
+  })();
+  // (with the picture, the surroundings keep a mission's units and its zones — the rest is in it)
+  const aroundOf = (a: { traffic: NonNullable<InstrumentSnapshot["traffic"]>; zones: NonNullable<InstrumentSnapshot["zones"]> }) =>
+    pics.pic ? { traffic: a.traffic.filter((x) => x.id.startsWith("m:")), zones: a.zones } : a;
   const bingo = av ? fin(av.bingo) : null;
   const fuelKg = av ? av.fuel : (i.engine.jet?.kg ?? null);
   // the plan's rest, from the active point on (the F-35's cruise model; the leg flown at its flow now)
@@ -473,16 +505,19 @@ export function crewSnapshot(
     arms: fleet.active === "f35" ? armsOf(c) : null,
     // (the refuelling behind TEXACO: its phase, the way it is flown, the fuel given, the gap to the basket)
     aar: fleet.active === "f35" ? c.aarCrew() : null,
-    ...(around && body === "earth" ? surroundings(c, i, g ? { lat: g.lat, lon: g.lon, alt: g.alt } : null) : {}),
-    // (the fight's targets, missiles and decoys: every snapshot — RD1)
-    ...(c.combat && g ? { tracks: tracksOf(c, { lat: g.lat, lon: g.lon, alt: g.alt }) } : {}),
+    // (the tactical picture — RD5 —: every track, the truth and what the sensors hold, compact; with it, the older
+    // blocks it replaces left out — RD14: the fight's tracks, the traffic but a mission's units, the radar's list)
+    ...pics,
+    ...(around && body === "earth" ? aroundOf(surroundings(c, i, g ? { lat: g.lat, lon: g.lon, alt: g.alt } : null)) : {}),
+    // (the fight's targets, missiles and decoys: every snapshot — RD1; without a picture only)
+    ...(c.combat && g && !pics.pic ? { tracks: tracksOf(c, { lat: g.lat, lon: g.lon, alt: g.alt }) } : {}),
     radar: i.radar
       ? {
           mode: i.radar.mode,
           // (the pilot's selection — PLAN-RADAR-AAA RD9: shown on the crew's radar too)
           selected: c.pictureSelected,
-          // (the lock first, then the nearest: the 24 kept never lose it)
-          contacts: [...i.radar.contacts]
+          // (the lock first, then the nearest: the 24 kept never lose it — none with the picture: it holds them)
+          contacts: [...(pics.pic ? [] : i.radar.contacts)]
             .sort((a, b) => Number(b.locked) - Number(a.locked) || Math.hypot(a.e, a.n, a.dz) - Math.hypot(b.e, b.n, b.dz))
             .slice(0, 24)
             .map((p) => ({ id: p.id.slice(0, 64), name: p.name.slice(0, 64), e: p.e, n: p.n, dz: p.dz, iff: p.iff, locked: p.locked })),

@@ -5,6 +5,7 @@
 // every target destroyed; lost: shot down, out of time). For the renderer: the aircraft as F-35 instances; for
 // the HUD: the targets, the lock, the missiles, the gun's lead, the launch zone, the warnings.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { TANKER } from "./jetmodes";
 import { cameraFrame } from "../camera";
 import { fleet } from "../fleet";
 import { restPose, type F35Pose } from "../f35/model";
@@ -172,6 +173,8 @@ function combatStart(this: CameraController, def: Scenario, net: { host: boolean
         kind: q.kind === "ship" ? ("sea" as const) : isGround(q) ? ("ground" as const) : ("air" as const),
         iff: q.friendly ? ("friend" as const) : q.neutral ? ("neutral" as const) : ("hostile" as const),
         name: q.name,
+        // (what it is — the crew's lists: the tanker an A330 MRTT, the others their kind)
+        type: q.name === TANKER ? "A330 MRTT" : String(q.kind ?? "").slice(0, 16),
         squawk: (!!q.friendly || q.kind === "airliner") && !q.squawkOff,
         known: true,
         offboard: !!q.friendly,

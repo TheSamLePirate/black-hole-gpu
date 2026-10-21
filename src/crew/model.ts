@@ -10,6 +10,7 @@ import {
 import { cartToGeodetic, WGS84_A, WGS84_F, wgs84Inverse, wgs84Offset } from "../system/ellipsoid";
 import { DelayLine } from "./station";
 import { L, locale } from "./lang";
+import { type PicContactFields, TrackStore } from "./tracks";
 
 export const D = Math.PI / 180;
 export const wrap = (a: number) => ((((a + 180) % 360) + 360) % 360) - 180;
@@ -84,7 +85,7 @@ export function relative(own: CrewCraft, other: CrewCraft): { e: number; n: numb
 }
 
 /** a unit about, moved on along its heading since it was heard; `age` [s] */
-export interface Contact extends InstrumentTraffic {
+export interface Contact extends InstrumentTraffic, PicContactFields {
   age: number;
   /** its history (PLAN-RADAR-AAA RD7): its past places, the oldest first, their age [s] */
   trail?: { lat: number; lon: number; age: number }[];
@@ -92,6 +93,8 @@ export interface Contact extends InstrumentTraffic {
 
 export class CrewModel {
   selected: number | null = null;
+  /** every pilot's tactical picture, merged by id (PLAN-RADAR-AAA RD6 — crew/tracks.ts) */
+  readonly store = new TrackStore();
   readonly history = new Map<number, HistoryPoint[]>();
   /** each pilot's surroundings, as last sent (once a second): their snapshot's room time `t`, our clock's `at` */
   private around = new Map<number, { traffic: InstrumentTraffic[]; zones: InstrumentZone[]; at: number; t: number }>();
@@ -243,6 +246,7 @@ export class CrewModel {
       if (data.traffic || data.zones)
         this.around.set(from, { traffic: data.traffic ?? [], zones: data.zones ?? [], at: performance.now(), t: data.t });
       if (data.tracks) this.fast.set(from, { list: data.tracks, at: performance.now(), t: data.t });
+      if (data.pic) this.store.ingest(from, data.pic, data.t);
       let h = this.history.get(from) ?? [];
       if (h.length && (data.t < h[h.length - 1]!.t || data.body !== h[h.length - 1]!.body)) h = [];
       if (!h.length || data.t > h[h.length - 1]!.t) h.push({ t: data.t, metrics: data.metrics, geo: data.geo, body: data.body });
@@ -310,16 +314,19 @@ export class CrewModel {
         by.set(x.id, { t: x, srcT: t, age });
       }
     };
+    // (the pilots' pictures first — RD6: every track, the truth and what their sensors hold —; a pilot whose picture is
+    // fresh: his older blocks left, but his mission's units, which are not in it)
+    for (const S of this.store.tracks(now)) take([S.traffic], S.srcT, S.at);
     for (const [slot, f] of this.fast) {
       if ((now - f.at) / 1000 > 8) this.fast.delete(slot);
-      else take(f.list, f.t, f.at);
+      else if (!this.store.fresh(slot, now)) take(f.list, f.t, f.at);
     }
     for (const [slot, a] of this.around) {
       if ((now - a.at) / 1000 > 8) {
         this.around.delete(slot);
         continue;
       }
-      take(a.traffic, a.t, a.at);
+      take(this.store.fresh(slot, now) ? a.traffic.filter((x) => x.id.startsWith("m:")) : a.traffic, a.t, a.at);
     }
     const out: Contact[] = [];
     for (const [id, { t, srcT, age }] of by) {
@@ -359,8 +366,13 @@ export class CrewModel {
       const f = Math.exp(-(now - at0) / 200);
       const shownAt = f > 1e-3 && (offE || offN) ? wgs84Offset(lat, lon, offE * f, offN * f) : { lat, lon };
       this.shown.set(id, { lat: shownAt.lat, lon: shownAt.lon, srcT, offE, offN, at: at0 });
-      // (its history: the places sent — RD7 —, 120 at most)
+      // (its history: the places sent — RD7 —, 120 at most; a crew come: the pilot's last two minutes first — RD5)
       let tr = this.trails.get(id);
+      const back = this.store.hist.get(id);
+      if (back) {
+        this.store.hist.delete(id);
+        if (!tr || tr.length < back.length) this.trails.set(id, (tr = back.slice(-120)));
+      }
       if (!tr) this.trails.set(id, (tr = []));
       const lastT = tr.length ? tr[tr.length - 1]!.t : -1e9;
       if (srcT > lastT && srcT - lastT >= (t.kind === "missile" ? 0.2 : 2)) {

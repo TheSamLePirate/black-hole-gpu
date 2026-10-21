@@ -124,8 +124,10 @@ test("crew build stays independent: one small JS, no shader files, workers, imag
   const scripts = build.outputs.filter((o) => o.path.endsWith(".js"));
   expect(scripts).toHaveLength(1);
   // (its budget: the instruments, the actions, the globe's renderer, the coasts — 197 KB minified; the spacecraft
-  // console, its 3D map, its views and stations (PLAN-VAISSEAUX K2–K5) — 257 KB on 2026-10-18, ~70 KB gzipped)
-  expect(scripts[0]!.size).toBeLessThan(320_000);
+  // console, its 3D map, its views and stations (PLAN-VAISSEAUX K2–K5) — 257 KB on 2026-10-18, ~70 KB gzipped; the
+  // tactical picture (PLAN-RADAR-AAA: the common symbology, the world's airfields, the compact picture's decoder and
+  // the track store) — 326 KB on 2026-10-21)
+  expect(scripts[0]!.size).toBeLessThan(360_000);
   // (WebGPU only for the globe's photographed Earth, its shader inline — asked once the globe is shown: the e2e counts it)
   expect(await scripts[0]!.text()).not.toMatch(/audio-worklet|basis_transcoder|\.wgsl|ktx2|scenery-worker|plan-worker/);
 });

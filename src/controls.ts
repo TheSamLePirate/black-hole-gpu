@@ -351,6 +351,10 @@ export class CameraController {
   onPilotMessage?: (text: string) => void;
   /** a click in the F-35's cockpit (ndc): on its panoramic display, a touch — true: taken (main.ts) */
   onJetTouch?: (nx: number, ny: number) => boolean;
+  /** the wheel over a radar (PLAN-RADAR-AAA P11 — main.ts: the HUD's scope, the PCD's TSD and FCR): its range a step;
+   *  true: taken (the camera's field untouched). (x, y) CSS px in the canvas, (nx, ny) its NDC, `dir` the notch's sign */
+  onRadarWheel?: (x: number, y: number, nx: number, ny: number, dir: number) => boolean;
+  private radarWheelAcc = 0;
   /** the F-35 chosen where it is not: put it on a runway (main.ts: GameTools.lineUp) */
   onJetStart?: () => void;
   /** the flown craft entering the air (the last moment before an entry: a point to resume from) */
@@ -897,6 +901,21 @@ export class CameraController {
         return;
       }
     }
+    // (over a radar — the HUD's scope, the PCD's TSD or FCR —: a step of its range a notch, 50 px; the field untouched)
+    if (e.deltaY && this.onRadarWheel) {
+      const r = this.canvas.getBoundingClientRect();
+      const [nx, ny] = this.ndcOf(e);
+      const x = e.clientX - r.left,
+        y = e.clientY - r.top;
+      if (this.onRadarWheel(x, y, nx, ny, 0)) {
+        this.radarWheelAcc += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+        while (Math.abs(this.radarWheelAcc) >= 50) {
+          this.onRadarWheel(x, y, nx, ny, Math.sign(this.radarWheelAcc));
+          this.radarWheelAcc -= 50 * Math.sign(this.radarWheelAcc);
+        }
+        return;
+      }
+    }
     this.zoomStep(e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY, e.altKey);
   };
 
@@ -1119,6 +1138,11 @@ export class CameraController {
   trails = new TrailStore();
   /** the TCAS's advisories now (PLAN-RADAR-AAA RD4 — radar/tcas.ts): the most urgent first */
   tcas: TcasAdvisory[] = [];
+  /** the Link 16 heard (PLAN-RADAR-AAA RD12 — net/link16.ts): the things the room's teammates' radars hold, by their
+   *  shared key — their IFF, who said it, when [ms]; our slot and whether a match runs (the keys' own reading) */
+  readonly l16In = new Map<string, { iff: string; from: number; at: number }>();
+  l16Me = -1;
+  l16InMatch = false;
   spacePic: import("./controller/spacepic").SpacePic | null = null;
   trailT = 0;
   /** the craft's own trace over the Earth and its track's rate (controller/owntrack.ts — PLAN-RADAR-AAA RD15) */

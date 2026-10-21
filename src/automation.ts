@@ -3,7 +3,7 @@
 // simulation frozen and stepped, offline renders and videos posted to the dev server, the bench.
 //   __bh.settings.spin = 0.5; __bh.touch()
 //   __bh.game.help()
-import { hudHits } from "./ui/hud/symbology";
+import { hudHits, scopeRange } from "./ui/hud/symbology";
 import type { BootReport } from "./boot-timeline";
 import { bodyFixedOf, GEAR, gearHeight, groundRelief, toBodyFixed } from "./system/our-surface";
 import { EARTH_RUNWAYS } from "./game/sites";
@@ -340,6 +340,8 @@ export function installBh(c: BhContext) {
           const k = 1 / devicePixelRatio;
           return hudHits.map((h) => ({ id: h.id, x: h.x * k, y: h.y * k, r: h.r * k }));
         },
+        /** the HUD's scope as drawn last: its range [m], its disc (centre and radius, CSS px) — the wheel's (P11) */
+        scope: () => ({ range: scopeRange.m, disc: scopeRange.disc }),
         stats: () => {
           const P = camera.picture;
           const by: Record<string, number> = {};

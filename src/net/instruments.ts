@@ -2,6 +2,7 @@
 // radians for angles (heading, attitude, track); radar offsets east/north/up in metres. No dependency on the simulator.
 // Version 1 grows only by optional blocks: an older console ignores them, a newer one shows what an older pilot sends.
 import { type InstrumentSpace, readSpace } from "./instruments-space";
+import { type PicBlock, readPicBlock } from "./picture";
 export const INSTRUMENT_KEYS = ["alt", "speed", "vz", "g", "q", "mach", "heat", "throttle", "fuel", "tau"] as const;
 export type InstrumentKey = (typeof INSTRUMENT_KEYS)[number];
 export interface InstrumentContact {
@@ -202,6 +203,9 @@ export interface InstrumentSnapshot extends InstrumentSpace {
   traffic?: InstrumentTraffic[];
   /** the fight about the pilot every snapshot (RD1): its targets, its missiles, its decoys — newer than `traffic` */
   tracks?: InstrumentTraffic[];
+  /** the pilot's tactical picture, compact (PLAN-RADAR-AAA RD5 — net/picture.ts): every track, the truth and what his
+   *  sensors hold, four times a second */
+  pic?: PicBlock;
   zones?: InstrumentZone[];
 }
 
@@ -461,6 +465,10 @@ export function readInstruments(x: unknown): InstrumentSnapshot | null {
         : null,
     ...(Array.isArray(x.traffic) ? { traffic: readTraffic(x.traffic) } : {}),
     ...(Array.isArray(x.tracks) ? { tracks: readTraffic(x.tracks.slice(0, 64)) } : {}),
+    ...(() => {
+      const pic = readPicBlock(x.pic);
+      return pic ? { pic } : {};
+    })(),
     ...(Array.isArray(x.zones)
       ? {
           zones: x.zones
