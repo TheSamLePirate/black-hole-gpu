@@ -7560,15 +7560,73 @@ fn wxDensity(p: vec3f, i: u32, cheap: bool) -> vec2f {
   if (hn <= 0.0 || hn >= 1.0) { return vec2f(0.0, hn); }
   let w = wxNear(q);
   if (w <= 0.0) { return vec2f(0.0, hn); }
-  let a = wxLayerA(q, i) * w;
-  if (a <= 0.01) { return vec2f(0.0, hn); }
-  let x = wxAt(q, 1600.0) + vec3f(f32(i) * 11.3, f32(i) * 5.9, 0.0) + vec3f(0.0, 0.0, hn * 1.5);
+  let s = wxShape(q, i, hn, w, cheap);
+  return vec2f(s.x * L.w / ((ht - hb) * EARTH_RM * max(s.y, 0.3)), hn);
+}
+// A weather layer's clouds at q (unit), its height in it hn (0 base … 1 top), its weight there w (wxNear): their density (x,
+// 0…1), the height their tops reach (y) and their cover (z) — N4, the types, told from the layer's own shape (no type is
+// given: a thin whole deck is a stratus, a thick one a nimbostratus, kilometres deep a cumulonimbus, the rest cumulus):
+// - cumulus: a flat base, domes rising with the cover and the noise, their edges eroded by billows — cauliflowers;
+// - stratus, stratocumulus, nimbostratus: a slab, its base ragged, its top heaving gently;
+// - cumulonimbus: towers on cells of ~9 km (the cover setting how many), to ~0.85 of the layer, their tops rounded; the
+//   anvil spread at the top — wider, flat, drawn downwind by the shear —; the rain shield low round and under them.
+// Their shapes evolve slowly (the noise drifting upward: a noise cell a quarter of an hour), the weather's drift carrying them.
+fn wxShape(q: vec3f, i: u32, hn: f32, w: f32, cheap: bool) -> vec3f {
+  let L = P.wx[1u + i];
+  let thick = L.y - L.x;
+  let cb = smoothstep(4500.0, 7000.0, thick);
+  let st = (1.0 - cb) * smoothstep(0.75, 0.95, L.z);
+  let cu = max(1.0 - cb - st, 0.0);
+  let tev = P.time.x * P.near5.w / 900.0;
+  let x = wxAt(q, 1600.0) + vec3f(f32(i) * 11.3, f32(i) * 5.9, 0.0) + vec3f(0.0, 0.0, hn * 1.5 + 0.25 * tev);
   var sh = 0.6 * dnoise(x);
   if (!cheap) { sh += 0.3 * dnoise(x * 2.0 + vec3f(5.1)) + 0.1 * dnoise(x * 4.0 + vec3f(1.7)); }
-  let top = clamp(0.55 + 0.35 * a + 0.3 * sh, 0.3, 1.0);
-  let hp = smoothstep(0.0, 0.04 + 0.1 * max(sh, 0.0), hn) * (1.0 - smoothstep(0.5 * top, top, hn));
-  let rho = hp * clamp(1.4 * (a * (0.7 + 0.6 * sh) - 0.15), 0.0, 1.0);
-  return vec2f(rho * L.w / ((ht - hb) * EARTH_RM * max(top, 0.3)), hn);
+  var rho = 0.0;
+  var top = 1.0;
+  var a = 0.0;
+  if (cu + st > 0.0) {
+    let aC = wxLayerA(q, i) * w;
+    let topC = clamp(0.55 + 0.35 * aC + 0.3 * sh, 0.3, 1.0);
+    let hpC = smoothstep(0.0, 0.04 + 0.1 * max(sh, 0.0), hn) * (1.0 - smoothstep(0.5 * topC, topC, hn));
+    let rC = hpC * clamp(1.4 * (aC * (0.7 + 0.6 * sh) - 0.15), 0.0, 1.0);
+    let topS = clamp(0.85 + 0.15 * sh, 0.6, 1.0);
+    let hpS = smoothstep(0.0, 0.12 + 0.15 * abs(sh), hn) * (1.0 - smoothstep(topS - 0.25, topS, hn));
+    let rS = hpS * clamp(1.6 * (aC * (0.85 + 0.3 * sh) - 0.1), 0.0, 1.0);
+    let k = 1.0 / max(cu + st, 1e-3);
+    rho = (cu * rC + st * rS) * k;
+    top = (cu * topC + st * topS) * k;
+    a = aC;
+  }
+  if (cb > 0.0) {
+    let cellAt = vec3f(f32(i) * 3.7, 1.3, 0.05 * tev);
+    let c0 = wxAt(q, 9000.0) + cellAt;
+    let cell = 0.5 + 0.5 * (0.7 * dnoise(c0) + 0.3 * dnoise(c0 * 2.3 + vec3f(4.1)));
+    // (a stormy sky's towers a quarter of it at most — gaps between them, their sides seen —, fewer as the cover falls)
+    let tower = smoothstep(0.62 + 0.2 * (1.0 - L.z), 0.7 + 0.2 * (1.0 - L.z), cell) * w;
+    // (the anvil: the cells' field drawn downwind with the height — the shear: the weather's drift's way —, wider)
+    let dl = length(P.wx[4].yzw);
+    let dw = select(vec3f(0.0), P.wx[4].yzw / max(dl, 1e-3), dl > 1.0);
+    let ca = (q * EARTH_RM - P.wx[4].yzw - dw * (hn * hn * 15000.0)) * (1.0 / 9000.0) + cellAt;
+    let cellA = 0.5 + 0.5 * (0.7 * dnoise(ca) + 0.3 * dnoise(ca * 2.3 + vec3f(4.1)));
+    let anvil = smoothstep(0.52 + 0.15 * (1.0 - L.z), 0.62 + 0.15 * (1.0 - L.z), cellA) * w;
+    let hT = smoothstep(0.0, 0.03 + 0.05 * abs(sh), hn) * (1.0 - smoothstep(0.8 + 0.08 * sh, 0.92, hn));
+    let towerR = hT * clamp(1.5 * (tower * (0.8 + 0.5 * sh) - 0.1), 0.0, 1.0);
+    let hA = smoothstep(0.72, 0.82, hn) * (1.0 - smoothstep(0.94, 0.99, hn));
+    let anvR = 0.7 * hA * clamp(1.4 * (anvil * (0.75 + 0.4 * sh) - 0.15), 0.0, 1.0);
+    let hS = smoothstep(0.0, 0.08, hn) * (1.0 - smoothstep(0.15, 0.3 + 0.08 * sh, hn));
+    let shield = hS * clamp(L.z * (0.55 + 0.4 * sh), 0.0, 1.0) * smoothstep(0.45, 0.6, cell) * w;
+    rho = mix(rho, max(max(towerR, anvR), shield), cb);
+    top = mix(top, 1.0, cb);
+    a = mix(a, max(tower, max(0.6 * anvil, shield)), cb);
+  }
+  // (a layer above ~7 km: ice — cirrostratus, a storm's spread anvil beyond its own —, a thin veil, not a deck)
+  rho *= 1.0 - 0.65 * smoothstep(6500.0, 8000.0, L.x);
+  // (the billows: the edges eaten by a finer ridged noise — thin parts the most, the cores kept)
+  if (!cheap && rho > 0.0) {
+    let bil = 1.0 - abs(dnoise(x * 3.1 + vec3f(2.3, 7.1, 0.5 * tev)));
+    rho = clamp(rho - (1.0 - bil) * 0.3 * (1.0 - rho), 0.0, 1.0);
+  }
+  return vec3f(rho, top, a);
 }
 // (the cloud pass — trace.wgsl clouds —: the sunlight marched through the clouds themselves rather than a column of their cover)
 var<private> CLOUD_LIGHT_MARCH: bool = false;
@@ -7616,7 +7674,6 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
   let ms1 = cloudPhase(ct, 0.5) * 4.0 * PI;
   let ms2 = cloudPhase(ct, 0.25) * 4.0 * PI;
   let ms3 = cloudPhase(ct, 0.125) * 4.0 * PI;
-  let dz = vec3f(f32(i) * 11.3, f32(i) * 5.9, 0.0);
   var Tv = 1.0;
   var col = vec3f(0.0);
   var tPrev = t0;
@@ -7632,15 +7689,12 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
     let q = p / r;
     let w = wxNear(q);
     if (w <= 0.0) { continue; }
-    let a = wxLayerA(q, i) * w;
-    if (a <= 0.01) { continue; }
     let hn = (r - 1.0 - hb) / (ht - hb);
-    let x = wxAt(q, 1600.0) + dz + vec3f(0.0, 0.0, hn * 1.5);
-    let sh = 0.6 * dnoise(x) + 0.3 * dnoise(x * 2.0 + vec3f(5.1)) + 0.1 * dnoise(x * 4.0 + vec3f(1.7));
-    // (a deck's top near its own, heaving; a scattered sky's domes rising with the noise)
-    let top = clamp(0.55 + 0.35 * a + 0.3 * sh, 0.3, 1.0);
-    let hp = smoothstep(0.0, 0.04 + 0.1 * max(sh, 0.0), hn) * (1.0 - smoothstep(0.5 * top, top, hn));
-    let rho = hp * clamp(1.4 * (a * (0.7 + 0.6 * sh) - 0.15), 0.0, 1.0);
+    // (the layer's clouds by their type — wxShape, N4)
+    let shp = wxShape(q, i, hn, w, false);
+    let a = shp.z;
+    let top = shp.y;
+    let rho = shp.x;
     if (rho <= 0.0) { continue; }
     let sigma = rho * L.w / ((ht - hb) * EARTH_RM * max(top, 0.3));
     let mu0 = dot(geoQ(q), physicalLs);

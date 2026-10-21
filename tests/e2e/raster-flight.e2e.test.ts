@@ -65,6 +65,11 @@ const PLACES: Record<string, string> = {
   "ship-wake": `__bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0.2);
     __bh.camera.carrierSpawn("ford", { lat: 35.97, lon: -5.52, heading: 90, speed: 14 });
     __bh.game.flyAt(35.975, -5.533, 80, 115, 150); __bh.settings.shipMount = "cockpit";`,
+  // (N4: the storm's cumulonimbus seen from 3 km — their towers, anvils, the rain shield under them)
+  "storm-high": `__bh.game.setDate("2026-07-10T15:00:00Z"); __bh.game.set("weather", "storm"); __bh.game.set("earthClouds", 1);
+    __bh.game.flyAt(36.08, -5.6, 5500, 20, 220);`,
+  "storm-top": `__bh.game.setDate("2026-07-10T15:00:00Z"); __bh.game.set("weather", "storm"); __bh.game.set("earthClouds", 1);
+    __bh.game.flyAt(36.08, -5.6, 12500, 20, 230);`,
 };
 const MODE_SET: Record<string, string> = {
   trace6: `__bh.settings.earthPipeline = "trace"; __bh.game.set("realtimeSubsampling", 6);`,
