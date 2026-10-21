@@ -8,9 +8,13 @@ import { worldIdOf } from "./fightproxy";
 import { cameraFrame } from "../camera";
 import { fleet } from "../fleet";
 import { interceptCues } from "../game/intercept";
-import { Radar, type RadarObject, type RadarOwn, type Track, type V3 } from "../game/radar";
+import { Radar, type RadarObject, type RadarOwn, type V3 } from "../game/radar";
 import { t, tf } from "../i18n";
 import { bodyFixedOf, groundRelief } from "../system/our-surface";
+import { geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
+import { MISSILES } from "../game/combat";
+import { R_EARTH as R_CHAL } from "../game/challenges";
+import { buildPicture, type Picture, type PicWeapon, SENSOR } from "../radar/picture";
 import type { CameraController } from "../controls";
 
 declare module "../controls" {
@@ -22,6 +26,13 @@ declare module "../controls" {
     radarMode: typeof radarMode;
     /** a lock asked with no contact yet: until when [the radar's s] the first one is locked as it comes */
     radarLockWant?: number;
+    /** the tactical picture this frame (src/radar/picture.ts — PLAN-RADAR-AAA RD2): null away from the Earth's air */
+    picture: Picture | null;
+    /** the track selected (one for all the pilot's screens — RD9): its id */
+    pictureSelected: string | null;
+    combatToLocal: typeof combatToLocal;
+    pictureStep: typeof pictureStep;
+    pictureSelect: typeof pictureSelect;
   }
 }
 
@@ -51,9 +62,10 @@ const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[
 const D = Math.PI / 180;
 const R_EARTH = 6.371e6;
 
-/** The craft's fix for the radar (null: not an F-35 flying in the Earth's air). */
-function radarFix(this: CameraController): RadarFix | null {
-  if (fleet.active !== "f35" || !this.airFlight.inAir) return null;
+/** The craft's fix for the radar (null: not an F-35 flying in the Earth's air; `any`: any craft over the Earth — the
+ *  picture's). */
+function radarFix(this: CameraController, any = false): RadarFix | null {
+  if (!any && (fleet.active !== "f35" || !this.airFlight.inAir)) return null;
   const o = this.netOwn();
   const g = this.geoNow();
   const fr = this.sfFrame(cameraFrame(this.s));
@@ -111,19 +123,41 @@ function maskedBy(fix: RadarFix): (r: V3) => boolean {
   };
 }
 
-/** A frame of the radar: its sources read, its beam swept, a fight's lock and seen kept by it. */
+/**
+ * A point of a fight's flat frame (east, north of its anchor; up over the ellipsoid [m] — controller/combat.ts
+ * combatPlayer) from the craft in the local frame: back to its latitude and longitude by the same flat map the fight
+ * uses (game/challenges.ts enu), its Earth-fixed point, then the fix's frame — the fight's own truth, exact here
+ * (PLAN-RADAR-AAA constat 11: its flat east, north taken for ours turned by the meridians' convergence).
+ */
+function combatToLocal(this: CameraController, fix: RadarFix, p: readonly number[]): V3 {
+  const a = this.combat?.def.anchor;
+  if (!a) return [0, 0, 0];
+  const lat = a.lat + p[1]! / (D * R_CHAL),
+    lon = a.lon + p[0]! / (D * R_CHAL * Math.cos(a.lat * D));
+  return fix.toLocal(geodeticToCart(WGS84_A, WGS84_F, lat * D, lon * D, p[2]!) as V3);
+}
+
+/** A frame of the radar: its sources read, its beam swept, a fight's lock and seen kept by it; then the picture. */
 function radarStep(this: CameraController, dt: number) {
-  const fix = this.radarFix();
+  // (the sources read over the Earth whatever the craft — the picture's truth —; the radar itself the F-35's in the air)
+  const any = this.radarFix(true);
+  const fix = any && fleet.active === "f35" && this.airFlight.inAir ? any : null;
+  if (!any) {
+    if (this.radar.tracks.size || this.radar.lock) this.radar.reset();
+    this.radarObjects = [];
+    this.picture = null;
+    return;
+  }
+  const objects: RadarObject[] = [];
+  for (const src of this.radarSources.values()) for (const o of src(any)) objects.push(o);
+  this.radarObjects = objects;
   if (!fix) {
     // (on the ground, another craft: off — its tracks gone)
     if (this.radar.tracks.size || this.radar.lock) this.radar.reset();
-    this.radarObjects = [];
+    this.pictureStep(any, false);
     return;
   }
   this.radarT += dt;
-  const objects: RadarObject[] = [];
-  for (const src of this.radarSources.values()) for (const o of src(fix)) objects.push(o);
-  this.radarObjects = objects;
   const masked = maskedBy(fix);
   // (a fight begun: its targets swept at once)
   if (this.radarSweep && objects.length) {
@@ -157,11 +191,119 @@ function radarStep(this: CameraController, dt: number) {
     const L = this.radar.lock;
     W.lock = free ? worldIdOf(this, L) : L?.startsWith("cmb:") ? Number(L.slice(4)) : null;
   }
+  this.pictureStep(fix, true);
 }
 
-/** The radar's next lock (Tab): what to say. */
+/** The picture this frame (src/radar/picture.ts): the sources' truth, the radar's tracks, a fight's missiles and
+ *  decoys, merged by id; its place and heading the fix's. */
+function pictureStep(this: CameraController, fix: RadarFix, radarOn: boolean) {
+  const g = this.geoNow();
+  if (!g) {
+    this.picture = null;
+    return;
+  }
+  const weapons: PicWeapon[] = [];
+  const C = this.combat;
+  const W = C?.world;
+  if (W && C?.last && C.def.anchor) {
+    const tgtId = (k: number | null): string | null => (k === null ? null : k === -1 ? "own" : k <= -2 ? `cm:${-2 - k}` : `cmb:${k}`);
+    for (const m of W.missiles) {
+      if (!m.alive) continue;
+      const M = MISSILES[m.kind];
+      weapons.push({
+        id: m.remote ? `msl:${m.remote}` : `msl:${m.id}`,
+        name: M?.name ?? m.kind,
+        kind: "missile",
+        r: this.combatToLocal(fix, m.p),
+        v: [...m.v] as V3,
+        ours: m.owner === "blue",
+        seeker: M?.seeker ?? "radar",
+        target: tgtId(m.target),
+        motor: m.t < (M?.burn ?? 0),
+        decoyed: m.target !== null && m.target <= -2,
+      });
+    }
+    for (const d of W.decoys)
+      weapons.push({
+        id: `cm:${d.id}`,
+        name: d.kind === "flare" ? "FLARE" : "CHAFF",
+        kind: d.kind,
+        r: this.combatToLocal(fix, d.p),
+        v: [...d.v] as V3,
+        ours: true,
+        life: Math.max(0, 5 - d.t),
+      });
+  }
+  const R = this.radar;
+  const t0 = performance.now();
+  this.picture = buildPicture({
+    t: this.radarT,
+    fix: {
+      p: fix.p,
+      E: fix.E,
+      N: fix.N,
+      U: fix.U,
+      lat: g.lat,
+      lon: g.lon,
+      alt: g.alt,
+      heading: Math.atan2(fix.own.fwd[0], fix.own.fwd[1]),
+    },
+    objects: this.radarObjects,
+    tracks: radarOn ? [...R.tracks.values()] : [],
+    lock: radarOn ? R.lock : null,
+    selected: this.pictureSelected ?? null,
+    weapons,
+    mode: radarOn ? R.mode : null,
+    beam: radarOn ? R.beam : null,
+  });
+  this.pictureMs += (performance.now() - t0 - this.pictureMs) * 0.05;
+  // (the selection let go when its track has been gone 3 s — a splash, a contact lost)
+  const sel = this.pictureSelected;
+  if (sel) {
+    if (this.picture.byId.has(sel)) this.pictureSelectedSeen = this.radarT;
+    else if (this.radarT - (this.pictureSelectedSeen ?? this.radarT) > 3) this.pictureSelected = null;
+  }
+}
+
+/**
+ * A track selected (PLAN-RADAR-AAA RD9 — a click on any radar, on the view; the crew's, TARS's): the one target of all
+ * the pilot's screens, designated — its card, its BRAA —, not locked. A second click on the one selected locks it (a
+ * radar track: TWS, the beam sweeping on); a click in the void lets the selection go (the lock stays). What to say.
+ */
+function pictureSelect(this: CameraController, id: string | null, how: "click" | "order" = "click"): string {
+  const P = this.picture;
+  if (id === null) {
+    if (this.pictureSelected === null) return "";
+    this.pictureSelected = null;
+    return t("Selection cleared");
+  }
+  const T = P?.byId.get(id);
+  if (!T) return t("No such track");
+  const km = (Math.hypot(...T.r) / 1000).toFixed(1);
+  if (this.pictureSelected === id && how === "click") {
+    const R = this.radar;
+    if (R.lock === id) return tf("Locked: {0} · {1} km", T.name, km);
+    if (R.tracks.has(id) && R.lockOn(id)) {
+      if (R.mode === "RWS") R.mode = "TWS";
+      return tf("Locked: {0} · {1} km", T.name, km);
+    }
+    return tf("{0}: not a radar track — the radar cannot lock it", T.name);
+  }
+  this.pictureSelected = id;
+  this.pictureSelectedSeen = this.radarT;
+  return tf("Selected: {0} · {1} km", T.name, km);
+}
+
+/** The radar's next lock (Tab): the track selected if the radar holds it, else the next; what to say. */
 function radarLockNext(this: CameraController): string {
   if (!this.radarFix()) return t("The radar: in the F-35, in the air");
+  // (a track selected — a click, the crew's —: locked first)
+  const sel = this.pictureSelected;
+  if (sel && this.radar.lock !== sel && this.radar.tracks.has(sel) && this.radar.lockOn(sel)) {
+    if (this.radar.mode === "RWS") this.radar.mode = "TWS";
+    const T = this.radar.tracks.get(sel)!;
+    return tf("Locked: {0} · {1} km", T.name, (Math.hypot(...T.r) / 1000).toFixed(1));
+  }
   const had = this.radar.lock;
   const id = this.radar.lockNext();
   const T = id ? this.radar.tracks.get(id) : null;
@@ -191,19 +333,21 @@ const IFF_COLOUR: Record<string, string> = {
 };
 
 /** The radar's picture for the HUD's scope and the PCD's TSD: each track heading up (x right, y ahead [m]), its
- *  height's difference, its way off the nose, its IFF's colour; the mode, the beam; the lock's figures. */
+ *  height's difference, its way off the nose, its IFF's colour; the mode, the beam; the lock's figures — read from the
+ *  tactical picture (PLAN-RADAR-AAA RD2: the tracks the radar and the datalink hold, the same ids the crew gets). */
 function radarHud(this: CameraController) {
   const R = this.radar;
   const fix = this.radarFix();
-  if (!fix) return null;
+  const P = this.picture;
+  if (!fix || !P) return null;
   const f = fix.own.fwd;
   const psi = Math.atan2(f[0], f[1]);
   const cs = Math.cos(psi),
     sn = Math.sin(psi);
   const hu = (r: V3) => ({ x: r[0] * cs - r[1] * sn, y: r[0] * sn + r[1] * cs });
-  const trk = (T: Track) => (Math.hypot(T.v[0], T.v[1]) > 3 ? Math.atan2(T.v[0], T.v[1]) - psi : null);
-  const lockT = R.lock ? R.tracks.get(R.lock) : undefined;
-  const closure = (T: Track) => {
+  const trk = (T: { v: V3 }) => (Math.hypot(T.v[0], T.v[1]) > 3 ? Math.atan2(T.v[0], T.v[1]) - psi : null);
+  const lockT = R.lock ? P.byId.get(R.lock) : undefined;
+  const closure = (T: { r: V3; v: V3 }) => {
     const d = Math.hypot(...T.r) || 1;
     return -dot([T.v[0] - fix.own.v[0], T.v[1] - fix.own.v[1], T.v[2] - fix.own.v[2]], [T.r[0] / d, T.r[1] / d, T.r[2] / d]);
   };
@@ -212,23 +356,31 @@ function radarHud(this: CameraController) {
     beam: R.beam,
     /** the nose's heading [rad] (the picture is turned by it) */
     heading: psi,
-    contacts: [...R.tracks.values()].map((T) => ({
-      ...hu(T.r),
-      dz: T.r[2],
-      trk: R.mode === "RWS" && !T.datalink ? null : trk(T),
-      air: T.kind === "air",
-      alive: true,
-      locked: T.id === R.lock,
-      seen: !T.datalink,
-      name: T.name,
-      colour: T.colour ?? IFF_COLOUR[T.iff],
-      iff: T.iff,
-      datalink: T.datalink,
-      id: T.id,
-      /** east, north [m] (the TSD's map) */
-      e: T.r[0],
-      n: T.r[1],
-    })),
+    contacts: P.tracks
+      .filter((T) => T.sensors & (SENSOR.RADAR | SENSOR.DATALINK) && T.kind !== "missile" && T.kind !== "flare" && T.kind !== "chaff")
+      .map((T) => {
+        const dl = !(T.sensors & SENSOR.RADAR);
+        return {
+          ...hu(T.r),
+          dz: T.r[2],
+          trk: R.mode === "RWS" && !dl ? null : trk(T),
+          air: T.kind === "air",
+          alive: true,
+          // (the lock and the selection as they are now — a lock taken since the picture was built shows at once)
+          locked: T.id === R.lock,
+          selected: T.id === this.pictureSelected,
+          seen: !dl,
+          name: T.name,
+          colour: T.colour ?? IFF_COLOUR[T.iff],
+          iff: T.iff,
+          datalink: dl,
+          state: T.state,
+          id: T.id,
+          /** east, north [m] (the TSD's map) */
+          e: T.r[0],
+          n: T.r[1],
+        };
+      }),
     lock: lockT
       ? {
           id: lockT.id,
@@ -251,7 +403,7 @@ function radarHud(this: CameraController) {
 }
 
 export function installRadar(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { radarFix, radarStep, radarHud, radarLockNext, radarMode });
+  Object.assign(C.prototype, { radarFix, radarStep, radarHud, radarLockNext, radarMode, combatToLocal, pictureStep, pictureSelect });
 }
 
 export { Radar };

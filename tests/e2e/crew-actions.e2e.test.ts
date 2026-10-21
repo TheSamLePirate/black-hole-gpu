@@ -239,4 +239,20 @@ describe.skipIf(!E2E)("crew actions", () => {
     expect(await app.js<number>(`__bh.camera.combat.world.missiles.filter((m) => m.owner === "blue").length`)).toBeGreaterThan(0);
     await app.shot(`${process.env.E2E_SHOTS ?? "remote-results"}/crew-actions-a5.png`);
   }, 120_000);
+
+  test("A6 — a track designated to the pilot from the crew's radar: selected on his screens, ringed on the crew's (RD9)", async () => {
+    await app.waitFor(`!!${crew("__crew.model.own()?.snapshot?.radar?.contacts.find((c) => !c.locked)")}`, 10_000);
+    const id = await app.js<string>(crew("__crew.model.own().snapshot.radar.contacts.find((c) => !c.locked).id"));
+    await app.js(crew(`__crew.views.onContact(${JSON.stringify(id)})`));
+    await app.waitFor(`!!document.querySelector('#crew-frame').contentDocument.querySelector('#ctx-designate')`, 3000);
+    await press("#ctx-designate");
+    await app.waitFor(`!${crew("__crew.actions.busy")}`, 5000);
+    const b = await lastBoard();
+    console.log(`  designated ${id}: ${JSON.stringify(b)}`);
+    expect(b.ok).toBe(true);
+    expect(await app.js<string | null>("__bh.camera.pictureSelected")).toBe(id);
+    // (not locked by it: a designation)
+    expect(await app.js<string | null>("__bh.camera.radar.lock")).not.toBe(id);
+    await app.waitFor(`${crew("__crew.model.own()?.snapshot?.radar?.selected")} === ${JSON.stringify(id)}`, 3000);
+  }, 60_000);
 });

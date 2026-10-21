@@ -40,7 +40,8 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
   const R = Math.max(20, Math.min(area.w, area.h) * 0.42);
   const up = o.north || !Number.isFinite(s.hdg) ? 0 : s.hdg;
   const k = R / o.range;
-  // the blips
+  // the blips (the pilot's selection ringed as the crew's — PLAN-RADAR-AAA RD9)
+  const pilotSel = sc.snap?.radar?.selected ?? null;
   const blips: Blip[] = [];
   if (own && o.sensor)
     for (const t of sc.snap?.radar?.contacts ?? [])
@@ -49,9 +50,10 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
         n: t.n,
         dz: t.dz,
         name: t.name,
-        col: t.iff === "hostile" ? C.red : t.iff === "friend" ? C.cyan : C.amber,
+        // (the IFF as the pilot's sensors know it — the common palette, the pilot's screens' own: PLAN-RADAR-AAA RD3)
+        col: SIDE[t.iff] ?? SIDE.unknown!,
         kind: "air",
-        side: t.iff === "hostile" ? "hostile" : t.iff === "friend" ? "friend" : "neutral",
+        side: t.iff in SIDE ? t.iff : "unknown",
         hdg: null,
         locked: t.locked,
         id: t.id,
@@ -179,21 +181,9 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
       c.rotate((b.hdg ?? 0) - up);
       p.aircraft(16, b.col);
       c.restore();
-    } else if (b.kind === "missile" || b.kind === "decoy") unitSymbol(p, x, y, b.kind, b.side, b.hdg, up, 6);
-    else if (o.sensor) {
-      p.round(x - 6, y - 6, 12, 12, 2);
-      p.fill(`${b.col}33`);
-      p.stroke(b.col, 1.8);
-    } else unitSymbol(p, x, y, b.kind, b.side, b.hdg, up, 6);
-    if (b.locked) {
-      p.round(x - 11, y - 11, 22, 22, 3);
-      p.stroke(b.col, 2);
-      p.seg(cx, cy, x, y, `${b.col}99`, 1, [3, 4]);
-    }
-    if (b.id === o.selected) {
-      p.circle(x, y, 15);
-      p.stroke(C.amber, 2, [4, 3]);
-    }
+    } else unitSymbol(p, x, y, b.kind, b.side, b.hdg, up, 6, { locked: b.locked, selected: b.id === o.selected || b.id === pilotSel });
+    // (the lock joined to us, as on the TSD)
+    if (b.locked) p.seg(cx, cy, x, y, `${b.col}99`, 1, [3, 4]);
     c.globalAlpha = 1;
     p.text(b.name, x + 12, y - 1, { col: b.col, size: 10, weight: 700 });
     if (b.dz !== null) {

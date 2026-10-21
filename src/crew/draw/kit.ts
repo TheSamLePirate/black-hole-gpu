@@ -1,3 +1,4 @@
+import { drawSym, PAL, type SymKind, type SymSide, type SymState } from "../../radar/symbols";
 import { wgs84Inverse } from "../../system/ellipsoid";
 import { L, locale } from "../lang";
 
@@ -227,99 +228,37 @@ export function polar(lat0: number, lon0: number, lat: number, lon: number): { d
   return { d: q.d, b: q.az };
 }
 
-/** the symbol of a unit about: a ship's hull, an aircraft's TCAS diamond or NATO shape, a ground unit's */
-export function unitSymbol(p: Pen, x: number, y: number, kind: string, side: string, hdg: number | null, rot: number, k = 7) {
-  const c = p.c;
-  const col = SIDE[side] ?? C.white;
-  c.save();
-  c.translate(x, y);
-  // (a missile: a dart along its path, its colour its side's — ours cyan, the enemy's red; a decoy: an orange star for
-  // a flare, a grey cloud of dots for chaff — PLAN-RADAR-AAA §4)
-  if (kind === "missile") {
-    c.rotate((hdg ?? 0) - rot);
-    p.seg(0, k * 1.6, 0, -k * 1.6, col, 2.2);
-    c.beginPath();
-    c.moveTo(0, -k * 2.2);
-    c.lineTo(k * 0.6, -k * 1.2);
-    c.lineTo(-k * 0.6, -k * 1.2);
-    c.closePath();
-    p.fill(col);
-    c.restore();
-    return;
-  }
-  if (kind === "decoy") {
-    if (side === "chaff") {
-      for (const [dx, dy] of [
-        [0, 0],
-        [k * 0.7, k * 0.3],
-        [-k * 0.6, k * 0.5],
-        [k * 0.2, -k * 0.7],
-        [-k * 0.5, -k * 0.4],
-      ] as const) {
-        p.circle(dx, dy, 1.4);
-        p.fill("#b8c2c8");
-      }
-    } else p.star(0, 0, k * 0.9, C.amber, true);
-    c.restore();
-    return;
-  }
-  if (kind === "sea") {
-    c.rotate((hdg ?? 0) - rot);
-    c.beginPath();
-    c.moveTo(0, -k * 1.7);
-    c.quadraticCurveTo(k * 0.9, -k * 0.6, k * 0.7, k * 1.3);
-    c.lineTo(-k * 0.7, k * 1.3);
-    c.quadraticCurveTo(-k * 0.9, -k * 0.6, 0, -k * 1.7);
-    c.closePath();
-    p.fill(`${col}55`);
-    p.stroke(col, 1.6);
-    c.restore();
-    return;
-  }
-  c.beginPath();
-  if (side === "dead") {
-    c.moveTo(-k, -k);
-    c.lineTo(k, k);
-    c.moveTo(k, -k);
-    c.lineTo(-k, k);
-    p.stroke(col, 2);
-  } else if (side === "friend") {
-    c.arc(0, 0, k, 0, TAU);
-    p.stroke(col, 2);
-  } else if (side === "neutral") {
-    c.rect(-k * 0.8, -k * 0.8, k * 1.6, k * 1.6);
-    p.stroke(col, 2);
-  } else if (side === "hostile") {
-    c.moveTo(0, -k * 1.2);
-    c.lineTo(k * 1.2, 0);
-    c.lineTo(0, k * 1.2);
-    c.lineTo(-k * 1.2, 0);
-    c.closePath();
-    p.fill(`${col}44`);
-    p.stroke(col, 2);
-  } else {
-    // the real traffic: TCAS's open diamond
-    c.moveTo(0, -k);
-    c.lineTo(k * 0.8, 0);
-    c.lineTo(0, k);
-    c.lineTo(-k * 0.8, 0);
-    c.closePath();
-    p.stroke(col, 1.5);
-  }
-  if (hdg !== null && kind !== "ground" && side !== "dead") {
-    const a = hdg - rot;
-    p.seg(Math.sin(a) * k, -Math.cos(a) * k, Math.sin(a) * k * 2.6, -Math.cos(a) * k * 2.6, col, 1.5);
-  }
-  c.restore();
+/** the symbol of a unit about — the common symbology (radar/symbols.ts — PLAN-RADAR-AAA RD3), the pilot's screens' own:
+ *  an aircraft's NATO shape (the traffic's TCAS diamond), a ship's or a ground unit's whole one, a missile a dart, a
+ *  flare a star, chaff a cloud of dots; `hdg` its way [rad from north], `rot` the screen's up [rad from north] */
+export function unitSymbol(
+  p: Pen,
+  x: number,
+  y: number,
+  kind: string,
+  side: string,
+  hdg: number | null,
+  rot: number,
+  k = 7,
+  o: { state?: SymState; locked?: boolean; selected?: boolean; age?: number } = {},
+) {
+  const sk: SymKind =
+    kind === "decoy"
+      ? side === "chaff"
+        ? "chaff"
+        : "flare"
+      : kind === "missile"
+        ? "missile"
+        : kind === "sea"
+          ? "sea"
+          : kind === "ground"
+            ? "ground"
+            : "air";
+  const ss: SymSide = kind === "decoy" ? "friend" : side in PAL ? (side as SymSide) : "unknown";
+  drawSym(p.c, x, y, { kind: sk, side: ss, trk: hdg === null || kind === "ground" ? null : hdg - rot, ...o }, k, 1.6);
 }
-export const SIDE: Record<string, string> = {
-  traffic: "#c9d7df",
-  hostile: C.red,
-  friend: C.cyan,
-  neutral: C.green,
-  dead: "#7d8890",
-  carrier: "#5b9dff",
-};
+/** each side's colour — the common palette's (radar/symbols.ts PAL) */
+export const SIDE: Record<string, string> = { ...PAL };
 
 /** the labels placed this frame: one is drawn only where it does not cover another */
 export class Labels {

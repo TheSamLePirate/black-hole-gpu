@@ -5,6 +5,7 @@ import { ground } from "./gcas";
 import { distM } from "../game/mission";
 import { avionicsData } from "../f35/cockpit";
 import { enuToCam } from "./combat";
+import { sensed } from "../radar/picture";
 import type { JetModes } from "../game/jet";
 import { blToCartesian, cameraFrame } from "../camera";
 import { horizon, isco, photonOrbits, type Vec3 } from "../physics";
@@ -45,6 +46,26 @@ type Dir = Vec3 | null;
  * sound, the renderer's re-entry glow, the game's status and tools). Directions are in camera
  * coordinates; distances in M (the hole's mass) unless said otherwise.
  */
+/** A track of the picture in the view (PLAN-RADAR-AAA RD9): on the camera's axes, its figures for the selection's card. */
+export interface PicView {
+  id: string;
+  name: string;
+  type: string;
+  kind: string;
+  iff: string;
+  side: string;
+  cam: Vec3 | null;
+  /** its range [m], its altitude [m over the sea], its bearing [rad from north], its aspect [rad: 0 its tail to us, + its
+   *  right side], the closing speed [m/s] */
+  dist: number;
+  alt: number;
+  brg: number;
+  aspect: number | null;
+  closing: number;
+  locked: boolean;
+  selected: boolean;
+}
+
 export interface FlightInfo {
   // ---- where, and the spacetime there
   region: "hole" | "throat";
@@ -222,6 +243,9 @@ export interface FlightInfo {
   chal: ReturnType<CameraController["challengeHud"]>;
   /** the F-35's radar: its picture and its lock (controller/radar.ts) */
   radar: (ReturnType<CameraController["radarHud"]> & { lock?: { cam?: Vec3 | null; collCam?: Vec3 | null } | null }) | null;
+  /** the tactical picture's tracks the sensors hold, on the camera's axes — what a click in the view selects; the one
+   *  selected with its BRAA (PLAN-RADAR-AAA RD9) */
+  pic: PicView[] | null;
   /** the pilot's eyes and body (game/gstrain.ts) */
   body: { grey: number; black: number; red: number; strain: number; gloc: boolean; felt: number };
   /** an aerobatic figure flown: its banner, its cue, its entry, its guide, its result (controller/aerobatics.ts) */
@@ -426,6 +450,45 @@ function flightInfo(this: CameraController): FlightInfo {
         ...R,
         lock: { ...R.lock, cam: M ? M(R.lock.r) : null, collCam: M && k ? M([k[0]! * 5000, k[1]! * 5000, k[2]! * 5000]) : null },
       };
+    })(),
+    // (the picture's tracks in the view: clicked to select — PLAN-RADAR-AAA RD9 —, the selected one's figures)
+    pic: (() => {
+      const P = this.picture;
+      if (!P || !this.airFlight.inAir) return null;
+      const M = enuToCam(this, C);
+      if (!M) return null;
+      const out: PicView[] = [];
+      const ov = P.fix;
+      for (const T of P.tracks) {
+        if (!sensed(T) || T.kind === "flare" || T.kind === "chaff") continue;
+        const d = Math.hypot(...T.r);
+        if (d > 120_000 && T.id !== this.pictureSelected) continue;
+        const sel = T.id === this.pictureSelected;
+        // (its bearing, its aspect — the angle off its tail to us —, the closing speed)
+        const brg = (Math.atan2(T.r[0], T.r[1]) + 2 * Math.PI) % (2 * Math.PI);
+        const sp = Math.hypot(T.v[0], T.v[1]);
+        const aspect = sp > 3 ? Math.atan2(-T.r[0] * T.v[1] + T.r[1] * T.v[0], -(T.r[0] * T.v[0] + T.r[1] * T.v[1])) : null;
+        const own = this.radarFix(true)?.own.v ?? [0, 0, 0];
+        const closing = -((T.v[0] - own[0]) * T.r[0] + (T.v[1] - own[1]) * T.r[1] + (T.v[2] - own[2]) * T.r[2]) / Math.max(d, 1);
+        out.push({
+          id: T.id,
+          name: T.name,
+          type: T.type,
+          kind: T.kind,
+          iff: T.iff,
+          side: T.side,
+          cam: M(T.r),
+          dist: d,
+          alt: ov.alt + T.r[2],
+          brg,
+          aspect,
+          closing,
+          locked: T.locked,
+          selected: sel,
+        });
+        if (out.length >= 64 && !sel) break;
+      }
+      return out;
     })(),
     // (the pilot's eyes and body: the grey-out, the black-out, the red-out, the straining, G-LOC)
     body: (() => {

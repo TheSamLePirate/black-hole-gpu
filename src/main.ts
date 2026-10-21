@@ -4616,6 +4616,14 @@ async function main() {
     if (what) panel.toast(`PCD · ${what}`);
     return true;
   };
+  // (a click in the view, flying in the air: a track selected — on the HUD's scope, in the view —, never a body; the
+  // void: the selection let go — PLAN-RADAR-AAA RD9)
+  camera.onTrackPick = (x, y) => {
+    if (!camera.piloting || !camera.airFlight.inAir || !camera.picture) return false;
+    const said = camera.pictureSelect(flightHud.pickTrack(x, y));
+    if (said) panel.toast(said);
+    return true;
+  };
   // (what the panoramic display's keys ask of the craft — never a shot: the weapon, the radar's mode, its lock, the
   // countermeasures — through the controller's own calls, as the crew's backseater's)
   // (and the autopilot's: its selectors and LNAV / VNAV by the controller's calls, its modes by the game's tools —
@@ -4638,6 +4646,8 @@ async function main() {
   };
   jetPcd.act = (a) => {
     switch (a.kind) {
+      case "select":
+        return camera.pictureSelect(a.id) || null;
       case "weapon":
         return camera.weaponSelect(a.w);
       case "radar":

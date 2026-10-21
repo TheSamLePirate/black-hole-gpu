@@ -1488,6 +1488,38 @@ unit vectors, `vel` [c]. No settings argument (the settings are captured). Write
 __bh.sys.setHomePose([M0 + r, M1, M2], [-1, 0, 0], [0, 0, 1], [-0.01, 0, 0]);
 ```
 
+### `__bh.radar` (the tactical picture)
+
+The tactical picture (src/radar/picture.ts, PLAN-RADAR-AAA RD2). The pilot's radar screens, the crew's console and the
+network all read this one list of tracks, built once a frame. Each track carries:
+
+- the truth (`side`, `rt`, `lat`, `lon`, `h` over the WGS84 ellipsoid);
+- what the sensors know (`sensors` bits RADAR 1, DATALINK 2, TCAS 4, AIS 8, DAS 16, EOTS 32, BRIEF 64; `iff`, `state`
+  firm | coast | datalink | truth, `r` the sensors' estimate).
+
+Missiles (`msl:`) and decoys (`cm:`) are tracks too.
+
+### `__bh.radar.picture()` → `Picture \| null`
+
+The picture this frame: `{t, fix, mode, beam, lock, selected, tracks, byId}`. Null away from the Earth's air.
+
+### `__bh.radar.track(id)` → `PicTrack \| null`
+
+One track by its id (`cmb:3`, `trf:4ca7b2`, `msl:12`, `cm:40`…).
+
+### `__bh.radar.select(id)` → `id`
+
+Selects a track on all the pilot's screens (`null`: none).
+
+### `__bh.radar.hits()` → `{id, x, y, r}[]`
+
+What a click in the view may select this frame (RD9): the HUD's scope's symbols and the tracks seen in the view, their
+place and reach in CSS px.
+
+### `__bh.radar.stats()` → `{n, bySource, ms}`
+
+The track count, the count per source prefix, and the building time [ms, smoothed].
+
 ### `__bh.iss` (the space station)
 
 The station's orbit (SGP4 from the latest elements), the tracker the game flies it with, its geometry, and the start beside it.

@@ -108,7 +108,9 @@ test("a tanker: set 25 km ahead on its racetrack, the rendezvous behind its hose
   );
   expect(c.aar?.stage).toBe("hose");
   expect(c.icpt ?? null).toBeNull();
-  expect(Math.hypot(...d)).toBeLessThan(100);
+  // (the hose's stage begins within 70 m behind its basket — controller/aar.ts —, the basket some 35 m behind the
+  // tanker's centre: within 110 m of it)
+  expect(Math.hypot(...d)).toBeLessThan(110);
   expect(P.p[2] - q.p[2]).toBeLessThan(0);
   expect(c.gcas?.escape ?? null).toBeNull();
   // (again: the refuelling off; once more — the same tanker joined again, not a second one)

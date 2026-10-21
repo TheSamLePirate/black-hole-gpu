@@ -16,6 +16,7 @@
 //
 // N cycles the density: full · minimal (tapes, cockpit, mission bar) · clean (markers only).
 
+import { JetMap } from "./jetmap";
 import { isMobile } from "./mobile";
 import type { Settings, Target } from "../settings";
 import type { CameraController } from "../controls";
@@ -31,7 +32,7 @@ import type { RangerStatus } from "../game/status";
 import { fmtS } from "./gametools";
 import { blinkOn } from "./clock";
 import { cpuProf } from "../perf";
-import { drawSymbology, paintBoom, paintMotor } from "./hud/symbology";
+import { drawSymbology, hudHits, paintBoom, paintMotor } from "./hud/symbology";
 import { cameraInWorld, SpeedFx, speedFxLevel } from "./speedfx";
 import { Map3D } from "./map3d/map3d";
 import type { WeatherState } from "../weather";
@@ -203,6 +204,10 @@ const GLYPH: Record<string, string> = {
 export interface FlightHudActions {
   /** the game tools' window */
   tools(): void;
+  /** the tactical map's picture (ui/jetmap.ts — PLAN-RADAR-AAA RD15): null away from the Earth's air */
+  jetMap?(): import("./jetmap").JetMapData | null;
+  /** a track clicked on the tactical map: selected (null: the selection let go) */
+  selectTrack?(id: string | null): void;
   /** the flown craft's tank filled from a docked craft (controller/refuel.ts) */
   refuel?(): void;
   /** the HUD's kind: the next of automatic, atmosphere, space, approach (⇧²) */
@@ -346,6 +351,21 @@ export class FlightHud {
   mapGpu: { device: GPUDevice; textures(): import("./map3d/gpu").MapTextures | null } | null = null;
 
   /** Why an autopilot cannot be engaged now (the hub's own reason), "" when it can. */
+  /** The track drawn under a click (CSS px on the view — PLAN-RADAR-AAA RD9): on the HUD's scope, in the view; the
+   *  nearest within its reach, else null. */
+  pickTrack(x: number, y: number): string | null {
+    const dpr = devicePixelRatio;
+    const px = x * dpr,
+      py = y * dpr;
+    let best: string | null = null,
+      bd = Infinity;
+    for (const h of hudHits) {
+      const d = Math.hypot(h.x - px, h.y - py);
+      if (d <= h.r && d < bd) (bd = d), (best = h.id);
+    }
+    return best;
+  }
+
   autoWhy(a: Auto): string {
     return this.buttons.get(a)?.dataset.why ?? "";
   }
@@ -427,7 +447,11 @@ export class FlightHud {
     at: (lat: number, lon: number) => WeatherState | null;
   } = { real: () => null, mosaic: () => null, at: () => null };
   private wasLocalGround = false;
-  private mapTab: "orbit" | "globe" | "map" = "orbit";
+  private mapTab: "orbit" | "globe" | "map" | "tac" = "orbit";
+  /** the tactical map (ui/jetmap.ts — PLAN-RADAR-AAA RD15): the right panel's in the air */
+  private jetMap!: JetMap;
+  /** the tactical tab taken by itself once this flight in the air (the pilot's choice kept after) */
+  private tacAuto = false;
   private tabBtns: Record<string, HTMLButtonElement> = {};
   private mapBody: HTMLElement | null = null;
   private buttons = new Map<string, HTMLButtonElement>();
@@ -771,9 +795,9 @@ export class FlightHud {
     return this.insetVal;
   }
   /** The map's tab: the 3D system, or the ground track (a globe, a planisphere). */
-  setMapTab(t: "orbit" | "globe" | "map") {
+  setMapTab(t: "orbit" | "globe" | "map" | "tac") {
     this.mapTab = t;
-    if (t !== "orbit") this.ground.mode = t;
+    if (t === "globe" || t === "map") this.ground.mode = t;
     store.set("kerr.map-tab", t);
     this.syncMapTab();
     this.drawnAt.map = -1e9;
@@ -782,13 +806,17 @@ export class FlightHud {
   private syncMapTab() {
     const i = this.lastInfo;
     const world = this.ground.localPlace()?.body ?? (i ? this.ground.worldOf(i) : null);
-    const ground = this.mapTab !== "orbit" && !!world;
+    // (the tactical map: over the Earth in its air — its picture given)
+    const tacOk = !!this.act.jetMap?.();
+    const tac = this.mapTab === "tac" && tacOk;
+    const ground = !tac && this.mapTab !== "orbit" && this.mapTab !== "tac" && !!world;
     this.mapBody?.classList.toggle("ground", ground);
+    this.mapBody?.classList.toggle("tac", tac);
     for (const [id, b] of Object.entries(this.tabBtns)) {
-      b.classList.toggle("on", id === (ground ? this.mapTab : "orbit"));
-      const off = id !== "orbit" && !world;
+      b.classList.toggle("on", id === (tac ? "tac" : ground ? this.mapTab : "orbit"));
+      const off = id === "tac" ? !tacOk : id !== "orbit" && !world;
       b.classList.toggle("off", off);
-      b.dataset.why = off ? t("Near a planet or a moon: in its sphere of influence") : "";
+      b.dataset.why = off ? (id === "tac" ? t("In the Earth's air") : t("Near a planet or a moon: in its sphere of influence")) : "";
     }
     return ground;
   }
@@ -1322,7 +1350,9 @@ export class FlightHud {
     const mapBody = h("div", "fl-body fl-mapbody");
     // (the map's tabs: the system in 3D, the globe and the planisphere of the world the ship orbits)
     const tab = store.get("kerr.map-tab");
-    if (tab === "globe" || tab === "map") this.mapTab = tab;
+    if (tab === "globe" || tab === "map" || tab === "tac") this.mapTab = tab;
+    this.jetMap = new JetMap(this.s);
+    this.jetMap.onSelect = (id) => this.act.selectTrack?.(id);
     this.ground = new GroundTrack(this.s);
     this.ground.realWeather = () => this.mapWeather.real();
     this.ground.dayMosaic = () => this.mapWeather.mosaic();
@@ -1339,6 +1369,13 @@ export class FlightHud {
         ),
       ],
       ["map", t("Planisphere"), t("The world the ship orbits, flat: the ground track, the day and the night")],
+      [
+        "tac",
+        t("Tactical"),
+        t(
+          "The tactical map about the craft: its trace and the path ahead, the flight plan, the airfields, the radar's picture (wheel: the range; click: select a track)",
+        ),
+      ],
     ] as const) {
       const b = h("button", "", label) as HTMLButtonElement;
       b.dataset.tip = tip;
@@ -1364,7 +1401,45 @@ export class FlightHud {
     };
     syncWx();
     tabs.append(wx);
-    mapBody.append(tabs, this.map3d.bar, this.map3d.stage, this.ground.stage);
+    mapBody.append(tabs, this.map3d.bar, this.map3d.stage, this.ground.stage, this.jetMap.stage);
+    // (the panel's size: its top-left corner dragged — kept — PLAN-RADAR-AAA RD15)
+    const grip = h("div", "fl-grip");
+    grip.dataset.testid = "map-grip";
+    grip.dataset.tip = t("Drag: the map's size");
+    this.right.append(grip);
+    const applySize = (w: number, hh: number) => {
+      const W = Math.round(Math.min(Math.max(w, 220), innerWidth * 0.7)),
+        H = Math.round(Math.min(Math.max(hh, 180), innerHeight * 0.75));
+      this.right.style.setProperty("--map-w", `${W}px`);
+      this.right.style.setProperty("--map-h", `${H}px`);
+      return [W, H];
+    };
+    const size = (store.get("kerr.map-size") ?? "").split("x").map(Number);
+    if (size.length === 2 && size.every((x) => Number.isFinite(x) && x > 0)) applySize(size[0]!, size[1]!);
+    grip.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      grip.setPointerCapture(e.pointerId);
+      const r = this.right.getBoundingClientRect();
+      const st = this.jetMap.stage.getBoundingClientRect();
+      const x0 = e.clientX,
+        y0 = e.clientY;
+      const w0 = r.width,
+        h0 = st.height || r.height * 0.8;
+      const move = (ev: PointerEvent) => {
+        applySize(w0 + (x0 - ev.clientX), h0 + (y0 - ev.clientY));
+        this.drawnAt.map = -1e9;
+      };
+      const up = (ev: PointerEvent) => {
+        grip.releasePointerCapture(ev.pointerId);
+        grip.removeEventListener("pointermove", move);
+        grip.removeEventListener("pointerup", up);
+        const [W, H] = applySize(w0 + (x0 - ev.clientX), h0 + (y0 - ev.clientY));
+        store.set("kerr.map-size", `${W}x${H}`);
+      };
+      grip.addEventListener("pointermove", move);
+      grip.addEventListener("pointerup", up);
+    });
     this.mapBody = mapBody;
     this.right.append(mapHead.head, mapBody);
     this.setMapTab(this.mapTab);
@@ -1803,6 +1878,11 @@ export class FlightHud {
     this.lastInfo = info;
     const local = this.ground.localPlace();
     if (local && !this.wasLocalGround) this.setMapTab("map");
+    // (the F-35 in the air: the tactical map taken once by itself — the pilot's own choice kept after)
+    if (info.vessel === "f35" && !this.tacAuto && this.act.jetMap?.()) {
+      this.tacAuto = true;
+      if (this.mapTab !== "tac") this.setMapTab("tac");
+    }
     this.wasLocalGround = !!local;
     const now = performance.now();
     // (the markers follow the view every frame; the instruments at their own pace — the map 20 times
@@ -1833,6 +1913,9 @@ export class FlightHud {
       // (the full-screen map, or its animation, every frame; the ground track: the globe dragged)
       if (bare) {
         // (the mini-map's panel hidden: nothing to draw)
+      } else if (this.mapBody?.classList.contains("tac") || (this.syncMapTab(), this.mapBody?.classList.contains("tac"))) {
+        // (the tactical map: ten times a second — PLAN-RADAR-AAA RD15)
+        tasks.push(["map", 10, () => cpuProf.time("HUD: tactical map", () => this.jetMap.draw(this.act.jetMap?.() ?? null))]);
       } else if (this.syncMapTab()) {
         if (this.ground.animating) cpuProf.time("HUD: ground track", () => this.ground.draw(info, time));
         else tasks.push(["map", this.mapView ? 30 : 15, () => cpuProf.time("HUD: ground track", () => this.ground.draw(info, time))]);

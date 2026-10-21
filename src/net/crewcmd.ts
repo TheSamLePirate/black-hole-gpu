@@ -553,6 +553,12 @@ export const ACTS = {
       en: a.target ? `lock ${String(a.target).slice(0, 20)}` : "lock the next track",
     }),
   },
+  /** a track designated to the pilot — selected on all his screens, not locked (PLAN-RADAR-AAA RD9) */
+  "wp.designate": {
+    fam: "weapons",
+    params: { id: { type: "string" } },
+    say: (a) => ({ fr: `désignation ${String(a.id ?? "").slice(0, 24)}`, en: `designate ${String(a.id ?? "").slice(0, 24)}` }),
+  },
   "wp.fire": { fam: "weapons", say: () => ({ fr: "tir", en: "fire" }) },
   "wp.gun": {
     fam: "weapons",

@@ -5,6 +5,7 @@
 // flight controls (the surfaces as they stand), the engine, the fuel, the STOVL, the navigation, the standby
 // attitude, the checklists. Pure drawing from a PcdData — no state of the flight read here.
 
+import { drawSym, PAL, type SymSide, symColour } from "../radar/symbols";
 import { PCD_H, PCD_W } from "./pcd-size";
 import { type Units, type UnitSys, unitsOf } from "../ui/unitsys";
 
@@ -18,6 +19,8 @@ export type PcdAction =
   | { kind: "weapon"; w: "aim120" | "aim9x" | "jdam" | "jsm" }
   | { kind: "radar"; mode: "RWS" | "TWS" | "STT" }
   | { kind: "lock" }
+  /** a track touched on the TSD or the FCR: selected (a second touch locks it — PLAN-RADAR-AAA RD9) */
+  | { kind: "select"; id: string }
   | { kind: "cm" }
   /** the autopilot: its selectors (SI, radians), AP and A/THR engaged or let go */
   | { kind: "ap"; set: { alt?: number; hdg?: number; spd?: number; ap?: boolean; athr?: boolean } }
@@ -113,6 +116,10 @@ export interface PcdData {
     datalink: boolean;
     name: string;
     colour?: string;
+    /** selected on the pilot's screens (RD9); carried on since its last measure (RD2); its picture's id */
+    selected?: boolean;
+    state?: string;
+    id?: string;
   }[];
   /** a mission's places (controller/mission.ts missionMarks — P2): its zones to reach (amber), the SAMs' reach (red) */
   marks?: { kind: "zone" | "threat"; lat: number; lon: number; r: number; label: string; active: boolean }[];
@@ -135,7 +142,7 @@ export interface PcdData {
   lesson?: { id: string; mode: string; steps: { name: string; who: "tars" | "you" }[]; i: number; said: string } | null;
   /** the missiles in flight (a fight's — the DAS sees their motors): heading up as the radar's contacts (x right, y
    *  ahead, dz above [m]), the ones at us */
-  missiles?: { x: number; y: number; dz: number; atUs: boolean }[];
+  missiles?: { x: number; y: number; dz: number; atUs: boolean; trk?: number | null }[];
   /** the decoys in the air (a fight's flares and chaff — PLAN-RADAR-AAA RD8a): heading up as the missiles, their age [s] */
   decoys?: { x: number; y: number; dz: number; kind: "flare" | "chaff"; age: number }[];
   /** the ground's height at a place [m over the ellipsoid; the sea 0] (the TSD's relief; none: not drawn) */
@@ -156,6 +163,8 @@ export interface PcdData {
       locked: boolean;
       datalink: boolean;
       name: string;
+      selected?: boolean;
+      id?: string;
     }[];
     lock: { name: string; iff: string; range: number; closure: number; alt: number; hdg: number; gs: number } | null;
   } | null;
@@ -288,6 +297,15 @@ export class Pcd {
   private grain: OffscreenCanvas | null = null;
   /** each slot's buttons inside its page (the AP's), as last drawn: where, what they do */
   private hits = new Map<number, { r: PcdRect; act: () => string | null }[]>();
+  /** the portal being drawn (its symbols' touch targets go to its hits) */
+  private drawSlot = 0;
+  /** A track's symbol a touch selects (PLAN-RADAR-AAA RD9). */
+  private symHit(x: number, y: number, id: string | undefined) {
+    if (!id) return;
+    this.hits
+      .get(this.drawSlot)
+      ?.push({ r: { x: x - 20, y: y - 20, w: 40, h: 40 }, act: () => this.act?.({ kind: "select", id }) ?? null });
+  }
   /** the TSD's relief shown (north up, centred at lat, lon, ±half [m]) and the one being built (its rows so far) */
   private relief: { canvas: OffscreenCanvas; lat: number; lon: number; half: number; key: string } | null = null;
   private reliefJob: { im: ImageData; row: number; lat: number; lon: number; half: number; alt: number; key: string } | null = null;
@@ -810,6 +828,7 @@ export class Pcd {
     if (menu) g.fillRect(f.x + f.w / 2 - 40, f.y + HEAD - 4, 128, 3);
     const r = this.content(P);
     this.hits.set(P.slot, []);
+    this.drawSlot = P.slot;
     g.save();
     g.beginPath();
     g.rect(f.x + 2, r.y, f.w - 4, r.h);
@@ -1050,12 +1069,10 @@ export class Pcd {
       const x = cx + (T.e * c0 - T.n * s0) * px,
         y = cy - (T.e * s0 + T.n * c0) * px;
       if (x < r.x || x > r.x + r.w || y < r.y || y > r.y + r.h) continue;
-      const col = T.colour ?? (T.iff === "friend" ? C.cyan : T.iff === "hostile" ? "#ff5a46" : T.iff === "neutral" ? C.white : "#ffd23f");
-      g.strokeStyle = col;
-      g.fillStyle = col;
-      g.lineWidth = 3;
-      const k = 13;
+      const side: SymSide = T.colour && T.iff !== "hostile" ? "player" : (T.iff as SymSide);
+      const col = symColour({ kind: T.air ? "air" : "sea", side, colour: side === "player" ? T.colour : undefined });
       if (T.locked) {
+        g.strokeStyle = col;
         g.setLineDash([6, 6]);
         g.lineWidth = 1.5;
         g.beginPath();
@@ -1063,56 +1080,33 @@ export class Pcd {
         g.lineTo(x, y);
         g.stroke();
         g.setLineDash([]);
-        g.lineWidth = 3;
       }
-      g.beginPath();
-      if (T.air) {
-        if (T.iff === "friend") g.arc(x, y + k * 0.4, k, Math.PI, 2 * Math.PI);
-        else if (T.iff === "hostile") {
-          g.moveTo(x - k, y + k * 0.5);
-          g.lineTo(x, y - k * 0.6);
-          g.lineTo(x + k, y + k * 0.5);
-        } else {
-          g.moveTo(x - k * 0.8, y + k * 0.6);
-          g.lineTo(x - k * 0.8, y - k * 0.6);
-          g.lineTo(x + k * 0.8, y - k * 0.6);
-          g.lineTo(x + k * 0.8, y + k * 0.6);
-        }
-      } else if (T.iff === "friend") g.arc(x, y, k * 0.8, 0, 2 * Math.PI);
-      else if (T.iff === "hostile") {
-        g.moveTo(x, y - k);
-        g.lineTo(x + k, y);
-        g.lineTo(x, y + k);
-        g.lineTo(x - k, y);
-        g.closePath();
-      } else g.rect(x - k * 0.75, y - k * 0.75, k * 1.5, k * 1.5);
-      if (T.datalink) g.setLineDash([5, 4]);
-      g.stroke();
-      g.setLineDash([]);
-      if (T.hdg !== null) {
-        const a = T.hdg - d.heading;
-        g.beginPath();
-        g.moveTo(x, y);
-        g.lineTo(x + Math.sin(a) * 34, y - Math.cos(a) * 34);
-        g.stroke();
-      }
-      if (T.locked) {
-        g.lineWidth = 2;
-        g.beginPath();
-        g.arc(x, y, k + 9, 0, 2 * Math.PI);
-        g.stroke();
-      }
-      if (!this.declutter || T.locked) this.text(T.name.slice(0, 10), x + 18, y - 14, col, 20);
+      // (the common symbology — radar/symbols.ts, PLAN-RADAR-AAA RD3)
+      drawSym(
+        g,
+        x,
+        y,
+        {
+          kind: T.air ? "air" : "sea",
+          side,
+          colour: side === "player" ? T.colour : undefined,
+          state: T.datalink ? "datalink" : T.state === "coast" ? "coast" : "firm",
+          trk: T.hdg !== null ? T.hdg - d.heading : null,
+          locked: T.locked,
+          selected: T.selected,
+        },
+        13,
+        3,
+      );
+      this.symHit(x, y, T.id);
+      if (!this.declutter || T.locked || T.selected) this.text(T.name.slice(0, 10), x + 18, y - 14, col, 20);
     }
     // the missiles in flight (red: at us) and the decoys (PLAN-RADAR-AAA RD8a): heading up already
     for (const M of d.missiles ?? []) {
       const x = cx + M.x * px,
         y = cy - M.y * px;
       if (x < r.x || x > r.x + r.w || y < r.y || y > r.y + r.h) continue;
-      g.fillStyle = M.atUs ? C.red : C.amber;
-      g.beginPath();
-      g.arc(x, y, M.atUs ? 7 : 5, 0, 2 * Math.PI);
-      g.fill();
+      drawSym(g, x, y, { kind: "missile", side: M.atUs ? "hostile" : "friend", trk: M.trk ?? null, atUs: M.atUs }, 12, 3);
     }
     for (const q of d.decoys ?? []) {
       const x = cx + q.x * px,
@@ -1234,41 +1228,31 @@ export class Pcd {
       if (Math.abs(az) > AZ || rg > range || K.y < 0) continue;
       const x = X(az),
         y = Y(rg);
-      const col = K.iff === "friend" ? C.cyan : K.iff === "hostile" ? "#ff5a46" : K.iff === "neutral" ? C.white : C.yellow;
+      const col = symColour({ kind: "air", side: K.iff as SymSide });
       const dim = F.mode === "STT" && !K.locked;
       g.globalAlpha = dim ? 0.35 : 1;
-      g.strokeStyle = col;
       g.fillStyle = col;
-      g.lineWidth = 3;
+      // (RWS: the raw hits, bricks — no way known; else the common symbology — radar/symbols.ts, RD3)
       if (F.mode === "RWS" && !K.locked && !K.datalink) g.fillRect(x - 9, y - 5, 18, 10);
       else {
-        const k = 12;
-        g.beginPath();
-        if (K.iff === "friend") g.arc(x, y, k, Math.PI, 2 * Math.PI);
-        else if (K.iff === "hostile") {
-          g.moveTo(x, y - k);
-          g.lineTo(x + k, y);
-          g.lineTo(x, y + k);
-          g.lineTo(x - k, y);
-          g.closePath();
-        } else g.rect(x - k * 0.8, y - k * 0.8, k * 1.6, k * 1.6);
-        if (K.datalink) g.setLineDash([5, 4]);
-        g.stroke();
-        g.setLineDash([]);
-        if (K.trk !== null) {
-          g.beginPath();
-          g.moveTo(x, y);
-          g.lineTo(x + Math.sin(K.trk) * 30, y - Math.cos(K.trk) * 30);
-          g.stroke();
-        }
+        drawSym(
+          g,
+          x,
+          y,
+          {
+            kind: "air",
+            side: K.iff as SymSide,
+            state: K.datalink ? "datalink" : "firm",
+            trk: K.trk,
+            locked: K.locked,
+            selected: K.selected,
+          },
+          12,
+          3,
+        );
+        this.symHit(x, y, K.id);
         // (its altitude, in thousands of the altitude's unit — as a real scope)
         this.text(`${(this.u.alt(d.alt + K.dz) / 1000).toFixed(0)}`, x, y + 24, col, 18, "center");
-      }
-      if (K.locked) {
-        g.lineWidth = 2;
-        g.beginPath();
-        g.arc(x, y, 22, 0, 2 * Math.PI);
-        g.stroke();
       }
       if (!this.declutter && (K.locked || F.mode !== "RWS")) this.text(K.name.slice(0, 10), x + 18, y - 16, col, 18);
       g.globalAlpha = 1;
@@ -1282,7 +1266,7 @@ export class Pcd {
         `${this.u.dist(lk.range).toFixed(1)} ${this.u.distName}  VC ${Math.round(vc)}`,
         `${Math.round(this.u.alt(lk.alt)).toLocaleString("en")} ${this.u.altName}  ${String(Math.round(lk.hdg / D)).padStart(3, "0")}°  ${Math.round(this.u.spd(lk.gs))}`,
       ];
-      this.text(rows[0]!, r.x + r.w - 20, r.y + 20, lk.iff === "hostile" ? "#ff5a46" : C.yellow, 24, "right", true);
+      this.text(rows[0]!, r.x + r.w - 20, r.y + 20, symColour({ kind: "air", side: lk.iff as SymSide }), 24, "right", true);
       this.text(`${rows[1]}  ·  ${rows[2]}`, r.x + r.w - 20, r.y + 44, C.white, 18, "right");
     }
   }
@@ -1559,7 +1543,7 @@ export class Pcd {
       g.arc(b.x + b.w / 2 + az * bk, Math.max(b.y + 6, Math.min(b.y + b.h - 6, by - el * elK)), size, 0, 2 * Math.PI);
       g.fill();
     };
-    for (const K of d.fcr?.contacts ?? []) dot(K.x, K.y, K.dz, K.iff === "hostile" ? "#ff5a46" : K.iff === "friend" ? C.cyan : C.white, 3);
+    for (const K of d.fcr?.contacts ?? []) dot(K.x, K.y, K.dz, symColour({ kind: "air", side: K.iff as SymSide }), 3);
     for (const M of d.missiles ?? []) {
       dot(M.x, M.y, M.dz, M.atUs ? C.red : C.amber, M.atUs ? 6 : 4);
       if (M.atUs) {
@@ -1568,33 +1552,14 @@ export class Pcd {
       }
     }
     // (the flares: hot points the DAS sees all round — PLAN-RADAR-AAA RD8a)
-    for (const q of d.decoys ?? []) if (q.kind === "flare" && q.age < 5) dot(q.x, q.y, q.dz, "#ffaa3c", 3.5);
+    for (const q of d.decoys ?? []) if (q.kind === "flare" && q.age < 5) dot(q.x, q.y, q.dz, PAL.flare, 3.5);
     this.text("DAS", b.x + 8, b.y + 14, C.grey, 16, "left", true);
   }
 
   /** A decoy's mark (PLAN-RADAR-AAA RD8a): a flare an orange star dying in its last two seconds, chaff a cloud of grey
    *  dots spreading as it blooms. */
   private decoyMark(x: number, y: number, kind: "flare" | "chaff", age: number, k: number) {
-    const g = this.g;
-    const fade = Math.max(0, 1 - Math.max(age - 3, 0) / 2);
-    if (fade <= 0) return;
-    g.globalAlpha = fade;
-    if (kind === "flare") {
-      g.strokeStyle = "#ffaa3c";
-      g.lineWidth = 2;
-      g.beginPath();
-      for (let j = 0; j < 4; j++) {
-        const a = (j * Math.PI) / 4;
-        g.moveTo(x - Math.cos(a) * 5 * k, y - Math.sin(a) * 5 * k);
-        g.lineTo(x + Math.cos(a) * 5 * k, y + Math.sin(a) * 5 * k);
-      }
-      g.stroke();
-    } else {
-      g.fillStyle = "#c8ccd6";
-      const sp = (2 + Math.min(age, 3) * 1.6) * k;
-      for (let j = 0; j < 7; j++) g.fillRect(x + Math.cos(j * 2.1 + 0.4) * sp - k, y + Math.sin(j * 2.1 + 0.4) * sp - k, 2 * k, 2 * k);
-    }
-    g.globalAlpha = 1;
+    drawSym(this.g, x, y, { kind, side: "friend", age }, 7 * k, 1.4 * k);
   }
 
   /** A button inside a page (lit: its colour; dim: nothing to do now), kept for the touch. */

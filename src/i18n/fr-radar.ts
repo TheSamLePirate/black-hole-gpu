@@ -16,4 +16,22 @@ export default {
   "Relief on the radar": "Relief sur le radar",
   "The ground under the radar's scope, heading up: above our height red, within 300 m below amber, lower green (brighter higher), the sea dark blue — the ridges ahead seen at a glance. Redrawn twice a second at most.":
     "Le sol sous l'écran du radar, cap en haut : au-dessus de notre altitude en rouge, à moins de 300 m dessous en orange, plus bas en vert (plus clair plus haut), la mer en bleu nuit — les crêtes devant vues d'un coup d'œil. Redessiné deux fois par seconde au plus.",
+  // (the selection — PLAN-RADAR-AAA RD9)
+  "Selection cleared": "Sélection annulée",
+  "No such track": "Piste inconnue",
+  "{0}: not a radar track — the radar cannot lock it": "{0} : pas une piste radar — le radar ne peut pas la verrouiller",
+  "Selected: {0} · {1} km": "Sélectionné : {0} · {1} km",
+  SEL: "SÉL",
+  // (the tactical map — PLAN-RADAR-AAA RD15)
+  Tactical: "Tactique",
+  "The tactical map about the craft: its trace and the path ahead, the flight plan, the airfields, the radar's picture (wheel: the range; click: select a track)":
+    "La carte tactique autour de l'appareil : sa trace et sa trajectoire prévue, le plan de vol, les terrains, l'image radar (molette : la portée ; clic : sélectionner une piste)",
+  "In the Earth's air": "Dans l'air de la Terre",
+  "Drag: the map's size": "Glisser : la taille de la carte",
+  "Range: closer": "Portée : plus près",
+  "Range: farther": "Portée : plus loin",
+  HDG: "CAP",
+  "Heading up or north up": "Cap en haut ou nord en haut",
+  "NORTH UP": "NORD EN HAUT",
+  "HDG UP": "CAP EN HAUT",
 } satisfies Record<string, string>;

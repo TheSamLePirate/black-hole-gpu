@@ -177,6 +177,21 @@ function tracksOf(c: CameraController, here: { lat: number; lon: number; alt: nu
   const P = C ? c.combatPlayer() : null;
   if (!C || !P || !here) return out;
   const W = C.world;
+  // (the tactical picture's place first — PLAN-RADAR-AAA RD2: exact over the ellipsoid, the same the pilot's screens
+  // and the radar hold —, else from ours)
+  const Pic = c.picture;
+  const pic = (id: string, v: readonly number[]) => {
+    const T = Pic?.byId.get(id);
+    if (!T) return null;
+    const sp = Math.hypot(v[0]!, v[1]!);
+    return {
+      lat: r5(T.lat),
+      lon: r5(T.lon),
+      alt: Math.round(T.h),
+      hdg: sp > 1 ? Math.round(Math.atan2(v[0]!, v[1]!) * 1000) / 1000 : null,
+      spd: Math.round(sp),
+    };
+  };
   const at = (p: readonly number[], v: readonly number[]) => {
     // (our tangent plane's east and north to the ellipsoid by the geodesic's direct problem — its azimuth and its length:
     // a flat offset in latitude and longitude turns by half the meridians' convergence, 89 m at 37 km over the Alps)
@@ -200,7 +215,7 @@ function tracksOf(c: CameraController, here: { lat: number; lon: number; alt: nu
       kind: isGround(q) ? (q.kind === "ship" ? "sea" : "ground") : "air",
       side: !q.alive ? "dead" : q.friendly ? "friend" : q.neutral ? "neutral" : "hostile",
       type: q.name === TANKER ? "A330 MRTT" : String(q.kind ?? "").slice(0, 16),
-      ...at(q.p, q.v),
+      ...(pic(`cmb:${q.id}`, q.v) ?? at(q.p, q.v)),
     });
   }
   for (const m of W.missiles) {
@@ -211,7 +226,7 @@ function tracksOf(c: CameraController, here: { lat: number; lon: number; alt: nu
       kind: "missile",
       side: m.owner === "blue" ? "friend" : "hostile",
       type: m.target === -1 ? "→ US" : m.target !== null && m.target <= -2 ? "DECOYED" : "",
-      ...at(m.p, m.v),
+      ...(pic(m.remote ? `msl:${m.remote}` : `msl:${m.id}`, m.v) ?? at(m.p, m.v)),
     });
   }
   for (const d of W.decoys ?? [])
@@ -221,7 +236,7 @@ function tracksOf(c: CameraController, here: { lat: number; lon: number; alt: nu
       kind: "decoy",
       side: "friend",
       type: d.kind,
-      ...at(d.p, d.v),
+      ...(pic(`cm:${d.id}`, d.v) ?? at(d.p, d.v)),
     });
   // (the most telling first — missiles, the hostiles, the nearest — within the bound)
   const rank = (t: (typeof out)[number]) => (t.kind === "missile" ? 0 : t.side === "hostile" ? 1 : t.kind === "decoy" ? 3 : 2);
@@ -445,6 +460,8 @@ export function crewSnapshot(
     radar: i.radar
       ? {
           mode: i.radar.mode,
+          // (the pilot's selection — PLAN-RADAR-AAA RD9: shown on the crew's radar too)
+          selected: c.pictureSelected,
           // (the lock first, then the nearest: the 24 kept never lose it)
           contacts: [...i.radar.contacts]
             .sort((a, b) => Number(b.locked) - Number(a.locked) || Math.hypot(a.e, a.n, a.dz) - Math.hypot(b.e, b.n, b.dz))

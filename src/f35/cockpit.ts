@@ -122,6 +122,9 @@ export function pcdData(
       datalink: !!T.datalink,
       name: T.name,
       colour: T.datalink ? T.colour : undefined,
+      selected: !!T.selected,
+      state: T.state,
+      id: T.id,
     })),
     // (the radar's own page, FCR: its mode, its beam, its contacts heading up, the lock's figures)
     fcr: RH
@@ -138,6 +141,8 @@ export function pcdData(
             locked: T.locked,
             datalink: !!T.datalink,
             name: T.name,
+            selected: !!T.selected,
+            id: T.id,
           })),
           lock: RH.lock
             ? {
@@ -184,7 +189,14 @@ export function pcdData(
         .map((M) => {
           const e = M.p[0] - P.p[0],
             n = M.p[1] - P.p[1];
-          return { x: e * cs - n * sn, y: e * sn + n * cs, dz: M.p[2] - P.p[2], atUs: M.owner === "red" && M.target === -1 };
+          const sp = Math.hypot(M.v[0], M.v[1]);
+          return {
+            x: e * cs - n * sn,
+            y: e * sn + n * cs,
+            dz: M.p[2] - P.p[2],
+            atUs: M.owner === "red" && M.target === -1,
+            trk: sp > 3 ? Math.atan2(M.v[0], M.v[1]) - psi : null,
+          };
         });
     })(),
     // (its decoys and the others' — PLAN-RADAR-AAA RD8a —: heading up as the missiles, a flare or chaff, its age)

@@ -156,7 +156,7 @@ function combatStart(this: CameraController, def: Scenario, net: { host: boolean
   // (the stores' mass on the jet — fleet.ts: the payload)
   fleet.payload.f35 = loadoutMass(L);
   // (its targets on the radar — controller/radar.ts —, briefed: hostile from the start, swept at once)
-  this.radarSources.set("cmb", () => {
+  this.radarSources.set("cmb", (fix) => {
     const C = this.combat;
     const P = C?.last;
     if (!C || !P) return [];
@@ -165,7 +165,8 @@ function combatStart(this: CameraController, def: Scenario, net: { host: boolean
       .filter((q) => q.alive && !q.proxy)
       .map((q) => ({
         id: `cmb:${q.id}`,
-        r: [q.p[0] - P.p[0], q.p[1] - P.p[1], q.p[2] - P.p[2]] as V3,
+        // (from the fight's flat frame to ours, exactly — PLAN-RADAR-AAA constat 11)
+        r: this.combatToLocal(fix, q.p) as V3,
         v: [...q.v] as V3,
         rcs: q.rcs,
         kind: q.kind === "ship" ? ("sea" as const) : isGround(q) ? ("ground" as const) : ("air" as const),

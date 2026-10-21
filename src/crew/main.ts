@@ -2201,6 +2201,8 @@ views.onContact = (id, x = stage.clientWidth / 2, y = stage.clientHeight / 2) =>
       : "";
   const air = !!c || t?.kind === "air";
   menu(x, y, name, info, [
+    // (designated to the pilot: selected on all his screens — PLAN-RADAR-AAA RD9)
+    actButton(L("Désigner au pilote", "Designate to the pilot"), "wp.designate", { id }, "ctx-designate", (ok) => ok && closeMenu()),
     actButton(L("Cibler", "Target"), "nav.target", { name }, "ctx-target", (ok) => ok && closeMenu()),
     ...(air
       ? [

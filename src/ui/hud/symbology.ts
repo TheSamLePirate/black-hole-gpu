@@ -22,6 +22,7 @@ import { alertsOf, type AlertInput } from "./alerts";
 import type { HudKind } from "../../game/hudkind";
 import type { InterceptCues } from "../../game/intercept";
 import { unitsFor } from "../unitsys";
+import { drawSym, PAL, type SymSide, symColour } from "../../radar/symbols";
 import { drawApproachHud, drawSpaceHud, type ApproachHudInfo, type SpaceHudInfo } from "./kindhud";
 import { t, tf } from "../../i18n";
 
@@ -54,6 +55,10 @@ export interface RadarData {
     datalink?: boolean;
     /** a fight's target's side (game/combat.ts: a team-mate, a neutral, else a foe) — the crew's map's */
     side?: "friend" | "neutral" | "hostile";
+    /** selected on the pilot's screens (PLAN-RADAR-AAA RD9); how the sensors hold it (RD2); its picture's id */
+    selected?: boolean;
+    state?: string;
+    id?: string;
   }[];
   missiles: { x: number; y: number; trk: number | null; red: boolean }[];
   /** a fight's decoys (PLAN-RADAR-AAA RD8a): heading up as the contacts [m], a flare or chaff, its age [s] */
@@ -137,6 +142,8 @@ export interface SymInfo {
   } | null;
   /** the F-35's radar (controller/radar.ts) */
   radar?: RadarPicture | null;
+  /** the picture's tracks in the view (controller/telemetry.ts — PLAN-RADAR-AAA RD9): clicked to select */
+  pic?: import("../../controller/telemetry").PicView[] | null;
   /** a fight flown (controller/combat.ts): every vector on the camera's axes from the craft [m] */
   combat?: {
     title: string;
@@ -325,8 +332,13 @@ const comb = (a: V3, ka: number, b: V3, kb: number): V3 => [a[0] * ka + b[0] * k
 const crossW = (a: V3, b: V3): V3 => [-(a[1] * b[2] - a[2] * b[1]), -(a[2] * b[0] - a[0] * b[2]), -(a[0] * b[1] - a[1] * b[0])];
 const wrap360 = (a: number) => ((a % 360) + 360) % 360;
 
+/** What the HUD drew a click may select (PLAN-RADAR-AAA RD9): a track's id, its place [device px], its reach [device
+ *  px] — the scope's symbols, the tracks in the view. Refilled at each drawing. */
+export const hudHits: { id: string; x: number; y: number; r: number }[] = [];
+
 export function drawSymbology(F: SymFrame) {
   drawn.length = 0;
+  hudHits.length = 0;
   const { ctx, W, H, dpr, s, i } = F;
   F.compact = W / dpr < 1000 || H / dpr < 560;
   const tanH = Math.tan((F.fov * D) / 2);
@@ -707,6 +719,7 @@ export function drawSymbology(F: SymFrame) {
       i.radar,
     );
   if (i.radar?.lock && !i.combat) drawLockBox(F, pr, stroke, text, i.radar.lock);
+  if (i.pic) drawPicked(F, pr, stroke, text, i.pic);
   if (i.radar?.lock?.icpt && !i.aar) drawIntercept(F, pr, stroke, text, i.radar.lock, i.radar.lock.icpt);
   // (the air refuelling: the basket, the probe, the gap, the hose's range, the pod's lights)
   if (i.aar && pilotView) drawAar(F, i.aar, pr, stroke, text, fpx, hmdRgb);
@@ -2771,105 +2784,45 @@ function drawRadar(
     );
     if (g.gate) text(String(g.gate), px + 9 * dpr, py - 8 * dpr, col, 10, "left", true);
   }
-  // the targets
+  // the targets — the common symbology (radar/symbols.ts — PLAN-RADAR-AAA RD3): the IFF's shape and colour, the
+  // datalink's dashed, the lock ringed, the selection; the relative height in hundreds (the altitude's unit), the name
+  // for the lock, the selection and the players
   for (const c of R?.contacts ?? []) {
     const [px, py, out] = at(c.x, c.y);
-    const col = c.colour
-      ? c.colour
-      : !c.alive
-        ? "rgba(160, 160, 160, 0.7)"
-        : c.locked
-          ? "rgba(255, 70, 60, 1)"
-          : c.seen
-            ? "rgba(255, 120, 90, 0.95)"
-            : "rgba(255, 120, 90, 0.5)";
-    ctx.fillStyle = col;
-    // (a track from the datalink alone: drawn hollow — known, not the radar's own)
-    if (c.datalink) {
-      ctx.strokeStyle = col;
-      ctx.lineWidth = 1.4 * dpr;
-      ctx.beginPath();
-      ctx.arc(px, py, 5.5 * dpr, 0, 2 * Math.PI);
-      ctx.stroke();
-      if (c.trk !== null) {
-        ctx.beginPath();
-        ctx.moveTo(px + Math.sin(c.trk) * 5.5 * dpr, py - Math.cos(c.trk) * 5.5 * dpr);
-        ctx.lineTo(px + Math.sin(c.trk) * 15 * dpr, py - Math.cos(c.trk) * 15 * dpr);
-        ctx.stroke();
-      }
-      text(c.name, px, py - 13 * dpr, col, 9.5, "center", true);
-      continue;
+    const side: SymSide = !c.alive ? "dead" : c.colour && c.iff !== "hostile" ? "player" : ((c.iff as SymSide | undefined) ?? "hostile");
+    drawSym(
+      ctx,
+      px,
+      py,
+      {
+        kind: c.air ? "air" : "sea",
+        side,
+        colour: c.colour && side === "player" ? c.colour : undefined,
+        state: c.datalink ? "datalink" : c.state === "coast" ? "coast" : "firm",
+        trk: c.trk,
+        locked: c.locked,
+        selected: c.selected,
+      },
+      6 * dpr,
+      1.4 * dpr,
+    );
+    if (c.id && !out) hudHits.push({ id: c.id, x: px, y: py, r: 12 * dpr });
+    const col = symColour({ kind: c.air ? "air" : "sea", side, colour: c.colour && side === "player" ? c.colour : undefined });
+    if (c.air && !out && c.alive) {
+      const dz = Math.round(unitsFor(s).alt(c.dz) / 100);
+      text(`${dz >= 0 ? "+" : ""}${dz}`, px + 9 * dpr, py + 8 * dpr, col, 9.5, "left", true);
     }
-    if (c.air) {
-      // (a chevron along its track)
-      const a = c.trk ?? 0;
-      ctx.save();
-      ctx.translate(px, py);
-      ctx.rotate(a);
-      ctx.beginPath();
-      ctx.moveTo(0, -8 * dpr);
-      ctx.lineTo(5.5 * dpr, 6 * dpr);
-      ctx.lineTo(0, 2.5 * dpr);
-      ctx.lineTo(-5.5 * dpr, 6 * dpr);
-      ctx.closePath();
-      ctx.fill();
-      // (its speed vector: a tick ahead)
-      if (c.trk !== null) {
-        ctx.strokeStyle = col;
-        ctx.lineWidth = 1.2 * dpr;
-        ctx.beginPath();
-        ctx.moveTo(0, -8 * dpr);
-        ctx.lineTo(0, -18 * dpr);
-        ctx.stroke();
-      }
-      ctx.restore();
-      if (!out && c.alive) {
-        const dz = Math.round(c.dz / 100);
-        text(`${dz >= 0 ? "+" : ""}${dz}`, px + 9 * dpr, py + 8 * dpr, col, 9.5, "left", true);
-      }
-    } else ctx.fillRect(px - 4.5 * dpr, py - 4.5 * dpr, 9 * dpr, 9 * dpr);
-    if (c.locked) stroke(() => ctx.arc(px, py, 11 * dpr, 0, 2 * Math.PI), col, 1.6);
-    if (c.locked || c.colour) text(c.name, px, py - 16 * dpr, col, 10, "center", true);
+    if (c.locked || c.selected || c.colour) text(c.name, px, py - 16 * dpr, col, 10, "center", true);
   }
-  // the decoys (PLAN-RADAR-AAA RD8a): a flare an orange star dying in its 5 s, a chaff bundle a spreading cloud of
-  // grey dots
+  // the decoys (PLAN-RADAR-AAA RD8a) and the missiles — the common symbology: a flare a star, chaff a cloud, a missile
+  // a dart along its way (the one at us red, blinking)
   for (const q of R?.decoys ?? []) {
     const [px, py] = at(q.x, q.y);
-    const fade = Math.max(0, 1 - Math.max(q.age - 3, 0) / 2);
-    if (fade <= 0) continue;
-    if (q.kind === "flare") {
-      ctx.strokeStyle = `rgba(255, 170, 60, ${fade})`;
-      ctx.lineWidth = 1.3 * dpr;
-      ctx.beginPath();
-      for (let k = 0; k < 4; k++) {
-        const a = (k * Math.PI) / 4;
-        ctx.moveTo(px - Math.cos(a) * 4 * dpr, py - Math.sin(a) * 4 * dpr);
-        ctx.lineTo(px + Math.cos(a) * 4 * dpr, py + Math.sin(a) * 4 * dpr);
-      }
-      ctx.stroke();
-    } else {
-      ctx.fillStyle = `rgba(200, 205, 215, ${0.8 * fade})`;
-      const sp = (2 + Math.min(q.age, 3) * 1.5) * dpr;
-      for (let k = 0; k < 6; k++)
-        ctx.fillRect(px + Math.cos(k * 2.1 + 0.4) * sp - dpr * 0.7, py + Math.sin(k * 2.1 + 0.4) * sp - dpr * 0.7, 1.4 * dpr, 1.4 * dpr);
-    }
+    drawSym(ctx, px, py, { kind: q.kind, side: "friend", age: q.age }, 6 * dpr, 1.3 * dpr);
   }
-  // the missiles: a dot and its way
   for (const m of R?.missiles ?? []) {
     const [px, py] = at(m.x, m.y);
-    const col = m.red ? "rgba(255, 50, 40, 1)" : "rgba(120, 225, 255, 1)";
-    ctx.fillStyle = col;
-    ctx.beginPath();
-    ctx.arc(px, py, 3 * dpr, 0, 2 * Math.PI);
-    ctx.fill();
-    if (m.trk !== null) {
-      ctx.strokeStyle = col;
-      ctx.lineWidth = 1.2 * dpr;
-      ctx.beginPath();
-      ctx.moveTo(px, py);
-      ctx.lineTo(px + Math.sin(m.trk) * 12 * dpr, py - Math.cos(m.trk) * 12 * dpr);
-      ctx.stroke();
-    }
+    drawSym(ctx, px, py, { kind: "missile", side: m.red ? "hostile" : "friend", trk: m.trk, atUs: m.red }, 6 * dpr, 1.4 * dpr);
   }
   // the craft: at the centre, its nose up
   ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
@@ -2885,6 +2838,70 @@ function drawRadar(
 
 /** The radar's lock in the view (its target designation box): a square on it, its name, range, closure and
  *  altitude; out of the view, an arrow at the edge towards it. */
+/**
+ * The picture's tracks in the view (PLAN-RADAR-AAA RD9): each one a click's target where it is seen (registered in
+ * hudHits); the selected one marked — an amber diamond about it, its card under it (its name and type, its bearing,
+ * range, altitude, aspect, closing speed) —, or an amber arrow at the edge when out of the view.
+ */
+function drawPicked(
+  F: SymFrame,
+  pr: (d: V3 | null | undefined) => [number, number] | null,
+  stroke: (draw: () => void, col: string, lw: number, dash?: number[]) => void,
+  text: (t: string, x: number, y: number, col: string, size: number, align?: CanvasTextAlign, mono?: boolean) => void,
+  list: NonNullable<SymInfo["pic"]>,
+) {
+  const { ctx, W, H, dpr } = F;
+  const U = unitsFor(F.s);
+  for (const T of list) {
+    const p = T.cam ? pr(T.cam as V3) : null;
+    const inView = !!p && p[0] > 0 && p[0] < W && p[1] > 0 && p[1] < H;
+    if (inView) hudHits.push({ id: T.id, x: p![0], y: p![1], r: 16 * dpr });
+    if (!T.selected) continue;
+    const col = PAL.select;
+    const brg = String(Math.round((T.brg * 180) / Math.PI + 360) % 360).padStart(3, "0");
+    const asp = T.aspect === null ? "" : ` · ASP ${Math.round(Math.abs((T.aspect * 180) / Math.PI))}${T.aspect >= 0 ? "R" : "L"}`;
+    const cl = U.spd(T.closing);
+    const line1 = `${t("SEL")} ${T.name.toUpperCase()}${T.type ? ` · ${T.type}` : ""}`;
+    const line2 = `${brg}° ${U.dist(T.dist).toFixed(1)} ${U.distName} · ${Math.round(U.alt(T.alt) / 100) * 100} ${U.altName}${asp} · ${cl >= 0 ? "+" : ""}${Math.round(cl)} ${U.spdName}`;
+    if (inView) {
+      const s = 17 * dpr;
+      stroke(
+        () => {
+          ctx.moveTo(p![0], p![1] - s);
+          ctx.lineTo(p![0] + s, p![1]);
+          ctx.lineTo(p![0], p![1] + s);
+          ctx.lineTo(p![0] - s, p![1]);
+          ctx.closePath();
+        },
+        col,
+        1.8,
+        [5, 3],
+      );
+      text(line1, p![0], p![1] + s + 14 * dpr, col, 11, "center", true);
+      text(line2, p![0], p![1] + s + 28 * dpr, col, 10.5, "center", true);
+    } else if (T.cam) {
+      const a = Math.atan2(-T.cam[1], T.cam[0]);
+      const r = Math.min(W, H) * 0.3;
+      const x = W / 2 + Math.cos(a) * r,
+        y = H / 2 + Math.sin(a) * r;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(a);
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(14 * dpr, 0);
+      ctx.lineTo(-6 * dpr, -9 * dpr);
+      ctx.lineTo(-6 * dpr, 9 * dpr);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+      text(line1, x, y + 20 * dpr, col, 10.5, "center", true);
+      text(line2, x, y + 34 * dpr, col, 10, "center", true);
+    }
+  }
+}
+
 function drawLockBox(
   F: SymFrame,
   pr: (d: V3 | null | undefined) => [number, number] | null,

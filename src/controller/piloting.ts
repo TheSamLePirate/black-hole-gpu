@@ -1050,6 +1050,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   this.carrierStep?.();
   // (the F-35's radar: its sweep, its tracks — controller/radar.ts)
   this.radarStep(dtPilot);
+  // (the craft's own trace and its track's rate — the maps' — controller/owntrack.ts)
+  this.ownTrackStep(dtPilot);
   // (the Auto-GCAS and the Auto-ACAS: the ground and the others foreseen — controller/gcas.ts)
   this.gcasStep(dtPilot);
   // (a spacecraft's level of assistance: its SAS law, the recovery, the drift held near a craft — controller/spaceassist.ts)

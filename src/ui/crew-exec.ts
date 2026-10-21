@@ -190,6 +190,13 @@ const RUN: Record<Act, Run> = {
   "wp.radar": (a, x) => x.tool("weapons", { action: "radar", mode: a.mode }),
   "wp.select": (a, x) => x.tool("weapons", { action: "select", weapon: a.weapon }),
   "wp.lock": (a, x) => x.tool("weapons", { action: "lock", ...(a.target ? { target: a.target } : {}) }),
+  // (the crew's ids to the picture's: a fight's f:N is cmb:N, the traffic's t:X trf:X — the others the same)
+  "wp.designate": (a, x) => {
+    const id = String(a.id ?? "");
+    const pid = id.startsWith("f:") ? `cmb:${id.slice(2)}` : id.startsWith("t:") ? `trf:${id.slice(2)}` : id;
+    const said = x.camera.pictureSelect(pid || null, "order");
+    return { ok: !!x.camera.picture?.byId.has(pid), note: `CREW ▸ ${said}` };
+  },
   "wp.fire": (_a, x) => x.tool("weapons", { action: "fire" }),
   "wp.gun": (a, x) => x.tool("weapons", { action: "gun", seconds: a.seconds ?? 1 }),
   "wp.cm": (_a, x) => x.tool("weapons", { action: "countermeasures" }),

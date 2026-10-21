@@ -150,7 +150,8 @@ export interface InstrumentSnapshot extends InstrumentSpace {
   body: string;
   metrics: Partial<Record<InstrumentKey, number>>;
   geo: { lat: number; lon: number; heading: number } | null;
-  radar: { mode: string; contacts: InstrumentContact[] } | null;
+  /** the radar: its mode, its contacts; the track the pilot selected (its picture's id — PLAN-RADAR-AAA RD9) */
+  radar: { mode: string; contacts: InstrumentContact[]; selected?: string | null } | null;
   route: { lat: number; lon: number; name: string; alt?: number; spd?: number }[];
   /** the predicted path; t its seconds from now, h its height [m] when sent */
   ahead: { lat: number; lon: number; t?: number; h?: number }[];
@@ -364,7 +365,7 @@ export function readInstruments(x: unknown): InstrumentSnapshot | null {
   const geo = place(rawGeo) && finite(heading) ? { lat: rawGeo.lat, lon: rawGeo.lon, heading } : null;
   let radar: InstrumentSnapshot["radar"] = null;
   if (record(x.radar) && Array.isArray(x.radar.contacts)) {
-    radar = { mode: label(x.radar.mode), contacts: [] };
+    radar = { mode: label(x.radar.mode), contacts: [], selected: typeof x.radar.selected === "string" ? label(x.radar.selected) : null };
     for (const c of x.radar.contacts.slice(0, 48)) {
       if (!record(c) || !finite(c.e) || !finite(c.n) || !finite(c.dz)) continue;
       radar.contacts.push({ id: label(c.id), name: label(c.name), e: c.e, n: c.n, dz: c.dz, iff: label(c.iff), locked: c.locked === true });

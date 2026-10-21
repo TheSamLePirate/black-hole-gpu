@@ -54,6 +54,7 @@ import { type AeroRun, installAerobatics } from "./controller/aerobatics";
 import type { FigureId } from "./game/aerobatics";
 import { GStrain } from "./game/gstrain";
 import { installRadar, Radar, type RadarSource } from "./controller/radar";
+import { installOwnTrack, type TrackPoint } from "./controller/owntrack";
 import type { RadarObject } from "./game/radar";
 import { type FormState, installFormation } from "./controller/formation";
 import { type IcptState, installIntercept } from "./controller/intercept";
@@ -742,6 +743,8 @@ export class CameraController {
       const [nx, ny] = this.ndcOf(e);
       // (the F-35's cockpit: a touch on its panoramic display — main.ts)
       if (this.onJetTouch?.(nx, ny)) return;
+      // (flying in the air: a click selects a track — in the view, on the HUD's scope —, never a body: PLAN-RADAR-AAA RD9)
+      if (this.onTrackPick?.(e.clientX - r.left, e.clientY - r.top)) return;
       const inside = this.cockpit?.active() ? this.cockpit.input.move(nx, ny) : null;
       if (inside) {
         // (nothing: the cabin hides the sky there)
@@ -1101,6 +1104,18 @@ export class CameraController {
   radarT = 0;
   /** a whole sweep asked (a fight begun) */
   radarSweep = false;
+  /** the tactical picture (controller/radar.ts pictureStep — PLAN-RADAR-AAA RD2) */
+  picture: import("./radar/picture").Picture | null = null;
+  /** the track selected on the pilot's screens (RD9) */
+  pictureSelected: string | null = null;
+  /** the picture's building time, smoothed [ms] */
+  pictureMs = 0;
+  /** the craft's own trace over the Earth and its track's rate (controller/owntrack.ts — PLAN-RADAR-AAA RD15) */
+  ownTrack: { pts: TrackPoint[]; clock: number; lastTrack: number | null; rate: number } = { pts: [], clock: 0, lastTrack: null, rate: 0 };
+  /** the selected track last in the picture [the radar's s] */
+  pictureSelectedSeen: number | null = null;
+  /** a click in the view (CSS px on the canvas): a track picked there (main.ts — PLAN-RADAR-AAA RD9) — true: taken */
+  onTrackPick?: (x: number, y: number) => boolean;
   readonly radarSources = new Map<string, RadarSource>();
   /** the sources' things at the radar's last frame (the picture shared: an intercept's target out of the beam) */
   radarObjects: RadarObject[] = [];
@@ -1536,6 +1551,7 @@ installTrap(CameraController);
 installQuals(CameraController);
 installAerobatics(CameraController);
 installRadar(CameraController);
+installOwnTrack(CameraController);
 installFplan(CameraController);
 installChallenge(CameraController);
 installCombat(CameraController);

@@ -3,6 +3,7 @@
 // simulation frozen and stepped, offline renders and videos posted to the dev server, the bench.
 //   __bh.settings.spin = 0.5; __bh.touch()
 //   __bh.game.help()
+import { hudHits } from "./ui/hud/symbology";
 import type { BootReport } from "./boot-timeline";
 import { bodyFixedOf, GEAR, gearHeight, groundRelief, toBodyFixed } from "./system/our-surface";
 import { EARTH_RUNWAYS } from "./game/sites";
@@ -322,6 +323,31 @@ export function installBh(c: BhContext) {
       refresh: refreshGui,
       skyLoading,
       mx: c.mx,
+      /** the tactical picture (src/radar/picture.ts — PLAN-RADAR-AAA RD2): the tracks this frame, one by id, the
+       *  selection; its cost */
+      radar: {
+        picture: () => camera.picture,
+        track: (id: string) => camera.picture?.byId.get(id) ?? null,
+        select: (id: string | null) => {
+          camera.pictureSelected = id;
+          return id;
+        },
+        /** what a click in the view may select this frame (the HUD's scope's symbols, the tracks seen): their id and
+         *  place [CSS px], their reach [CSS px] */
+        hits: () => {
+          const k = 1 / devicePixelRatio;
+          return hudHits.map((h) => ({ id: h.id, x: h.x * k, y: h.y * k, r: h.r * k }));
+        },
+        stats: () => {
+          const P = camera.picture;
+          const by: Record<string, number> = {};
+          for (const T of P?.tracks ?? []) {
+            const k = T.id.slice(0, T.id.indexOf(":"));
+            by[k] = (by[k] ?? 0) + 1;
+          }
+          return { n: P?.tracks.length ?? 0, bySource: by, ms: camera.pictureMs };
+        },
+      },
       /** the space station: its orbit (SGP4), the tracker the game flies it with, its elements, its geometry */
       iss: {
         orbit: issOrbit,
