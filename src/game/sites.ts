@@ -22,6 +22,8 @@ export interface Site {
   /** a runway's level [m above the sea]: the strip and its airfield graded flat there (the median of the real
    * relief under them — Terrarium's tiles, which carry the trees and the roofs: never a runway's own figure) */
   elev?: number;
+  /** a world runway's length [m] (OurAirports' — PLAN-RADAR-AAA RD13; the sites': RUNWAY_LENGTH) */
+  len?: number;
 }
 
 export const SITES: Site[] = [
@@ -80,13 +82,23 @@ export interface RunwayFrame {
   across: [number, number, number];
   /** threshold on the WGS84 surface, body-fixed metres */
   origin: [number, number, number];
-  /** its level [m above the sea] (Site.elev) */
+  /** its level [m above the sea] (Site.elev; a world runway's: the median of the relief under it, measured) */
   elev: number;
+  /** its length [m] (threshold to threshold) and half its width [m] */
+  len: number;
+  halfWidth: number;
+  /** the shader's flags beyond the landing end (trace.wgsl runwayFlags): its surface's class << 1 (0 paved, 1 grass,
+   *  2 dirt, 4 snow), 16 a world runway (OurAirports: no made-up taxiway, apron, terminal), 32 lit */
+  flags: number;
+  /** a world runway (src/world/runways3d.ts — PLAN-RADAR-AAA RD13): its airfield's code; its level being measured
+   *  (left out of the grading meanwhile: the relief under it read bare) */
+  world?: { field: string; measuring: boolean };
 }
 /** A runway as drawn [m] (trace.wgsl: runwayShade): the graded strip's paved middle, 4.5 km from its threshold. */
 export const RUNWAY_LENGTH = 4500;
 export const RUNWAY_HALF_WIDTH = 30;
-export const EARTH_RUNWAYS: RunwayFrame[] = SITES.filter((s) => s.body === "earth" && s.runway).map((s) => {
+/** A runway's frame from its threshold's place and landing heading (its site's), its length, half width, flags. */
+export function runwayFrame(s: Site, len = RUNWAY_LENGTH, halfWidth = RUNWAY_HALF_WIDTH, flags = 0): RunwayFrame {
   const D = Math.PI / 180;
   const la = s.lat * D,
     lo = s.lon * D;
@@ -96,8 +108,19 @@ export const EARTH_RUNWAYS: RunwayFrame[] = SITES.filter((s) => s.body === "eart
   const h = (s.rwy ?? 0) * D;
   const along = north.map((n, i) => n * Math.cos(h) + east[i]! * Math.sin(h)) as [number, number, number];
   const across = north.map((n, i) => -n * Math.sin(h) + east[i]! * Math.cos(h)) as [number, number, number];
-  return { site: s, p, along, across, origin: geodeticToCart(WGS84_A, WGS84_F, la, lo, 0), elev: s.elev ?? 0 };
-});
+  return { site: s, p, along, across, origin: geodeticToCart(WGS84_A, WGS84_F, la, lo, 0), elev: s.elev ?? 0, len, halfWidth, flags };
+}
+/** The game's own runways (the eight sites — their lights, ILS, procedures, buildings): fixed. */
+const SITE_RUNWAYS: RunwayFrame[] = SITES.filter((s) => s.body === "earth" && s.runway).map((s) =>
+  runwayFrame(s, RUNWAY_LENGTH, RUNWAY_HALF_WIDTH, 32),
+);
+/** The Earth's runways graded and drawn: the sites', then the world's near the eye (setWorldRunways). */
+export const EARTH_RUNWAYS: RunwayFrame[] = [...SITE_RUNWAYS];
+/** The world's runways near the eye (src/world/runways3d.ts — PLAN-RADAR-AAA RD13) put after the sites'. */
+export function setWorldRunways(frames: RunwayFrame[]) {
+  EARTH_RUNWAYS.length = SITE_RUNWAYS.length;
+  EARTH_RUNWAYS.push(...frames);
+}
 /**
  * A ground point [m, body-fixed] on a runway's pavement or its shoulders (45 m either side of its axis, 60 m past
  * its ends): nothing grows there — the grass round it does (an airfield's).
@@ -108,7 +131,7 @@ export function runwayPaved(q: [number, number, number]): boolean {
     if (Math.abs(d[0]) > 6000 || Math.abs(d[1]) > 6000 || Math.abs(d[2]) > 6000) continue;
     const a = d[0] * r.along[0] + d[1] * r.along[1] + d[2] * r.along[2];
     const c = d[0] * r.across[0] + d[1] * r.across[1] + d[2] * r.across[2];
-    if (a > -60 && a < RUNWAY_LENGTH + 60 && Math.abs(c) < RUNWAY_HALF_WIDTH + 15) return true;
+    if (a > -60 && a < r.len + 60 && Math.abs(c) < r.halfWidth + 15) return true;
   }
   return false;
 }
@@ -126,19 +149,24 @@ export function runwayGrade(q: [number, number, number]): Grade {
   const g: Grade = { flat: 0, level: 0, elev: 0 };
   const G = RUNWAY_GRADE;
   for (const r of EARTH_RUNWAYS) {
+    // (a world runway whose level is being measured: the relief under it read bare)
+    if (r.world?.measuring) continue;
     const d = point.map((v, i) => v - r.origin[i]!) as [number, number, number];
-    if (Math.hypot(...d) > 8000) continue;
+    if (Math.abs(d[0]) > 8000 || Math.abs(d[1]) > 8000 || Math.abs(d[2]) > 8000 || Math.hypot(...d) > 8000) continue;
     const a = d[0] * r.along[0] + d[1] * r.along[1] + d[2] * r.along[2];
     const c = Math.abs(d[0] * r.across[0] + d[1] * r.across[1] + d[2] * r.across[2]);
     // (the clear zone 3 km before either threshold: a runway lands both ways — W4)
-    const wa = a < -3000 ? Math.max(0, 1 + (a + 3000) / 300) : a > 7500 ? Math.max(0, 1 - (a - 7500) / 300) : 1;
+    const wa = a < -3000 ? Math.max(0, 1 + (a + 3000) / 300) : a > r.len + 3000 ? Math.max(0, 1 - (a - r.len - 3000) / 300) : 1;
     // (the strip, the taxiway beside it, the apron and the buildings — PLAN-AEROPORTS A2, A3 —: 280 m out of
-    // the axis, faded by 340)
-    const wc = c < 280 ? 1 : Math.max(0, 1 - (c - 280) / 60);
-    // (the level: the strip and its airfield, eased back to the relief)
-    const out = Math.max(-G.levelPast - a, a - RUNWAY_LENGTH - G.levelPast, 0);
+    // the axis, faded by 340; a world runway's — no made-up apron by it —: its own width and 80 m)
+    const world = (r.flags & 16) !== 0;
+    const side = world ? r.halfWidth + 80 : 280;
+    const wc = c < side ? 1 : Math.max(0, 1 - (c - side) / 60);
+    // (the level: the strip and its airfield, eased back to the relief — a world runway's its own width and 100 m,
+    // eased over 200: its town, its trees kept by it)
+    const out = Math.max(-G.levelPast - a, a - r.len - G.levelPast, 0);
     const la = 1 - ease(out / G.levelEase);
-    const lc = 1 - ease((c - G.levelSide) / G.levelSideEase);
+    const lc = 1 - ease((c - (world ? r.halfWidth + 100 : G.levelSide)) / (world ? 200 : G.levelSideEase));
     const level = la * lc;
     if (level > g.level) {
       g.level = level;
@@ -170,7 +198,7 @@ export function reciprocal(s: Site): Site {
   // end at the same angle as on the Earth's, the heading's turn over 4.5 km negligible there too)
   const R = earth ? 1 : WGS84_A;
   const A = earth ? geodeticToCart(WGS84_A, WGS84_F, la, lo, 0) : geodeticToCart(R, 0, la, lo, 0);
-  const B = A.map((v, i) => v + along[i]! * RUNWAY_LENGTH) as [number, number, number];
+  const B = A.map((v, i) => v + along[i]! * (s.len ?? RUNWAY_LENGTH)) as [number, number, number];
   const g = earth ? cartToGeodetic(WGS84_A, WGS84_F, B) : cartToGeodetic(R, 0, B);
   // (the heading back: the strip's direction at the far end, on its own north and east)
   const nB = [-Math.sin(g.lat) * Math.cos(g.lon), -Math.sin(g.lat) * Math.sin(g.lon), Math.cos(g.lat)];

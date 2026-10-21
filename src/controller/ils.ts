@@ -4,6 +4,9 @@
 // only shown (the stick taken: the needles stay); its calls; its grade. The arrival's and departure's fixes for a
 // flight plan, and its end: the approach engaged as the plan reaches its runway.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { fieldCached, fieldsNear } from "../world/runways";
+import { worldSite } from "../world/fieldsite";
+import { worldRunwaysNow } from "../world/runways3d";
 import { approachSpeed } from "../game/trap";
 import { arrivalFixes, departureFix, ilsGrade, ilsReading, type IlsRun, type IlsRunway, ilsStep, newIlsRun, runwayId } from "../game/ils";
 import { gcDist } from "../game/flightplan";
@@ -44,7 +47,15 @@ const SAY: Record<string, () => string> = {
 /** A site's runway as the ILS's (its end landed now: into the wind). */
 export function runwayOf(c: CameraController, s: Site): IlsRunway {
   const end = landingEnd(s, c.s, daysOf(c.nowTime()), c.weatherReal);
-  return { name: end.name, icao: end.icao, lat: end.lat, lon: end.lon, hdg: end.rwy ?? 0, elev: end.elev ?? 0, len: RUNWAY_LENGTH };
+  return {
+    name: end.name,
+    icao: end.icao,
+    lat: end.lat,
+    lon: end.lon,
+    hdg: end.rwy ?? 0,
+    elev: end.elev ?? 0,
+    len: s.len ?? RUNWAY_LENGTH,
+  };
 }
 
 /** The runway named (ICAO or name), else the nearest within 150 km. */
@@ -52,11 +63,14 @@ export function findRunway(c: CameraController, name?: string): Site | null {
   const fields = SITES.filter((x) => x.body === "earth" && x.runway && x.rwy !== undefined);
   if (name) {
     const n = name.trim().toLowerCase();
-    return (
+    const site =
       fields.find((x) => x.icao?.toLowerCase() === n || x.name.toLowerCase() === n) ??
       fields.find((x) => x.name.toLowerCase().includes(n)) ??
-      null
-    );
+      null;
+    if (site) return site;
+    // (any airfield of the world by its code — its tile in: the flight plan's, the maps' —, its longest paved runway)
+    const f = fieldCached(name);
+    return f ? worldSite(f) : null;
   }
   const g = c.geoNow();
   if (!g) return null;
@@ -65,6 +79,13 @@ export function findRunway(c: CameraController, name?: string): Site | null {
   for (const x of fields) {
     const d = gcDist(g, x);
     if (d < bd) (bd = d), (best = x);
+  }
+  // (the world's airfields with a paved runway of 1 800 m nearer)
+  for (const f of fieldsNear(g.lat, g.lon, Math.min(bd, 150_000), (x) => x.runways.some((w) => w.surface === "paved" && w.len >= 1800))) {
+    const s = worldSite(f);
+    if (!s) continue;
+    const d = gcDist(g, s);
+    if (d < bd) (bd = d), (best = s);
   }
   return best;
 }
@@ -159,6 +180,12 @@ function ilsFrame(this: CameraController) {
   const R = this.ilsRun;
   if (!R) return;
   if (fleet.active !== "f35") return this.ilsOff();
+  // (a world runway's level measured as the relief came — src/world/runways3d.ts —: the ILS's own followed, its
+  // heights read over the ground the gear meets)
+  if (R.rwy.icao) {
+    const W = worldRunwaysNow().find((r) => r.world?.field === R.rwy.icao && gcDist(r.site, R.rwy) < r.len + 200);
+    if (W && Math.abs(W.elev - R.rwy.elev) > 0.05) R.rwy.elev = W.elev;
+  }
   const out = R.manual ? (guide(this, R), null) : guide(this, R);
   if (out?.idle || R.phase === "rollout" || R.phase === "done") {
     if (!R.manual) this.pilot.throttle = 0;
@@ -210,10 +237,16 @@ function routeProcedures(this: CameraController): string {
   const strip = (name: string) => /^(IAF|FAF|DEP)\d\d$/.test(name);
   this.nav.route.wps = W.filter((w) => !strip(w.name));
   const P = this.nav.route.wps;
-  const siteOf = (w: (typeof P)[number]) =>
-    w.field
-      ? SITES.find((s) => s.body === "earth" && s.runway && (s.icao === w.field!.icao || Math.hypot(s.lat - w.lat, s.lon - w.lon) < 0.02))
-      : undefined;
+  // (the game's own field, else a world airfield's by its code — its tile in: PLAN-RADAR-AAA RD13)
+  const siteOf = (w: (typeof P)[number]) => {
+    if (!w.field) return undefined;
+    const own = SITES.find(
+      (s) => s.body === "earth" && s.runway && (s.icao === w.field!.icao || Math.hypot(s.lat - w.lat, s.lon - w.lon) < 0.02),
+    );
+    if (own) return own;
+    const f = w.field.icao ? fieldCached(w.field.icao) : null;
+    return (f && worldSite(f)) || undefined;
+  };
   const first = siteOf(P[0]!);
   if (first) {
     const d = departureFix(runwayOf(this, first));

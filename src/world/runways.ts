@@ -134,6 +134,7 @@ export async function loadTile(key: string): Promise<Airfield[]> {
           const old = [...tiles.entries()].sort((a, b) => a[1].used - b[1].used)[0]!;
           tiles.delete(old[0]);
         }
+        loadedCount++;
         runwaysEvents.onLoad(key);
         return fields;
       })
@@ -191,10 +192,46 @@ export function fieldsNear(lat: number, lon: number, r: number, filter?: (f: Air
   return out.sort((a, b) => a.d - b.d).map((x) => x.f);
 }
 
+/** The answers kept a moment (fieldsNearCached): by the caller's key, the place to 0.01°, the reach. */
+const answers = new Map<string, { at: number; fields: Airfield[]; loaded: number }>();
+let loadedCount = 0;
+/**
+ * fieldsNear for a screen drawn often (the HUD's scope every frame, the maps, the panoramic display): the answer kept
+ * `ms` [ms] while the place moves less than 0.01° and no tile came — a search through thousands of strips a frame
+ * cost the frame rate (PLAN-RADAR-AAA RD13). `key` names the caller (its filter).
+ */
+export function fieldsNearCached(
+  key: string,
+  lat: number,
+  lon: number,
+  r: number,
+  filter?: (f: Airfield) => boolean,
+  ms = 500,
+): Airfield[] {
+  const k = `${key}|${lat.toFixed(2)}|${lon.toFixed(2)}|${Math.round(r)}`;
+  const now = performance.now();
+  const hit = answers.get(k);
+  if (hit && now - hit.at < ms && hit.loaded === loadedCount) return hit.fields;
+  const fields = fieldsNear(lat, lon, r, filter);
+  if (answers.size > 64) answers.clear();
+  answers.set(k, { at: now, fields, loaded: loadedCount });
+  return fields;
+}
+
 /** The same, awaited: every tile in first (tests, a search). */
 export async function fieldsNearAsync(lat: number, lon: number, r: number, filter?: (f: Airfield) => boolean): Promise<Airfield[]> {
   await Promise.all(tilesAround(lat, lon, r).map(loadTile));
   return fieldsNear(lat, lon, r, filter);
+}
+
+/** An airfield by its code among the tiles already in (null: not there — fieldByCode fetches it). */
+export function fieldCached(code: string): Airfield | null {
+  const c = code.trim().toUpperCase();
+  for (const t of tiles.values()) {
+    const f = t.fields.find((x) => x.icao === c || x.ident === c || x.iata === c);
+    if (f) return f;
+  }
+  return null;
 }
 
 let idents: Record<string, [number, number]> | null = null;

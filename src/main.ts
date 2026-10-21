@@ -1,4 +1,5 @@
 import { SystemsPage } from "./ui/systemspage";
+import { fieldByCode } from "./world/runways";
 import type { FailureKind } from "./game/systems";
 import { holeFleet } from "./holefleet";
 import { SceneryHitboxes } from "./ui/scenery-hitboxes";
@@ -2719,13 +2720,6 @@ async function main() {
         pred: camera.ownPrediction(ahead, ahead > 120 ? 10 : 5),
         tracks: camera.picture?.tracks ?? [],
         route: N.route.wps.map((p, k) => ({ lat: p.lat, lon: p.lon, name: p.name, active: k === active })),
-        fields: SITES.filter((s) => s.body === "earth" && s.runway).map((s) => ({
-          lat: s.lat,
-          lon: s.lon,
-          rwy: s.rwy,
-          name: s.icao ?? s.name,
-          len: 4500,
-        })),
       };
     },
     selectTrack: (id) => {
@@ -6483,6 +6477,19 @@ async function main() {
         for (const x of SITES)
           if ((!body || x.body === body) && x.name.toLowerCase().includes(q.toLowerCase()))
             out.push({ name: x.name, body: x.body, lat: x.lat, lon: x.lon, kind: "site" });
+        // (an airfield of the world by its code — PLAN-RADAR-AAA RD13)
+        if ((!body || body === "earth") && !c && /^[A-Za-z0-9-]{3,7}$/.test(q.trim())) {
+          const f = await fieldByCode(q).catch(() => null);
+          if (f)
+            out.unshift({
+              name: `${f.name} (${f.icao || f.ident})`,
+              body: "earth",
+              lat: f.lat,
+              lon: f.lon,
+              kind: "airfield",
+              detail: f.city,
+            });
+        }
         if ((!body || body === "earth") && !c && out.length < 3)
           for (const g of await geocode(q, { lang, fallback: true }).catch(() => []))
             out.push({ name: g.name, body: "earth", lat: g.lat, lon: g.lon, kind: g.kind || "address", detail: g.detail });

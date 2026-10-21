@@ -5,6 +5,7 @@
 // destination, a runway, coordinates typed, an address on the Earth (game/geocode.ts — WGS84 latitudes, as
 // the ground and the orbit over it take them).
 
+import { fieldByCode } from "../world/runways";
 import "./placepanel.css";
 import type { GameTools } from "../game/tools";
 import { defaultAltKm, THEIR_IDS } from "../game/place";
@@ -277,6 +278,12 @@ export class PlacePanel {
         }
       };
       show([]);
+      // (an airfield of the world by its code — OurAirports', PLAN-RADAR-AAA RD13 —: its place, then the others)
+      if (id === "earth" && /^[A-Za-z0-9-]{3,7}$/.test(q))
+        void fieldByCode(q).then((f) => {
+          if (f) rows.unshift({ name: `${f.icao || f.ident} · ${f.name}`, sub: t("Airfield"), lat: f.lat, lon: f.lon });
+          if (f) show([]);
+        });
       findStatus.textContent = q && !rows.length && (id !== "earth" || q.length < 3 || c) ? t("Nothing by that name here") : "";
       if (id !== "earth" || q.length < 3 || c) return;
       const ctl = new AbortController();

@@ -10,6 +10,8 @@
 //   __bh.game.save("before TMI"); __bh.game.load("before TMI")
 //   await __bh.game.audit({ planner: true })
 
+import { runwaySitesNear, siteByName } from "../world/fieldsite";
+import { worldRunwaysUpdate } from "../world/runways3d";
 import { fleet } from "../fleet";
 import { VESSEL_IDS } from "../vessels";
 import { GEARS } from "../gear";
@@ -24,7 +26,7 @@ import { betaToCoord, planetFrame, toGlobal, toLocal, zamoBeta } from "../landin
 import { BODY_NAMES } from "../targeting";
 import { bodyAxes, EPOCH_DATE, M_METRES, M_SECONDS, SOLAR_BODIES, solarBody, solarState, spinVector, utcOf } from "../system/solar";
 import { bodyFixedOf, fromBodyFixed, GEAR, gearHeight, groundVelocity, solidBody, toBodyFixed } from "../system/our-surface";
-import { EARTH_RUNWAYS, RUNWAY_LENGTH, SITES } from "./sites";
+import { EARTH_RUNWAYS, RUNWAY_LENGTH, runwayFrame, SITES, type Site } from "./sites";
 import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
 import { ourState, soiOf } from "../system/our-side";
 import { GARGANTUA_SYSTEM } from "../system/bodies";
@@ -270,11 +272,23 @@ export class GameTools {
    * the wind), at rest on its gear — a take-off's start (the F-35's: docs/PLAN-F35.md). `name` matched as
    * glideTo's; none: the runway nearest the flown craft (Edwards when it is not near the Earth).
    */
-  lineUp(name?: string, alongM = 60) {
+  lineUp(name?: string | Site, alongM = 60) {
     const runways = SITES.filter((q) => q.body === "earth" && q.runway);
     const t = this.ctx.time();
-    let found = name ? runways.find((q) => q.name.toLowerCase().includes(name.toLowerCase())) : undefined;
-    if (name && !found) throw new Error(`no runway "${name}" — ${runways.map((q) => q.name).join(", ")}`);
+    // (a site given, or by its name or code — the game's eight, or any airfield of the world whose tile is in:
+    // PLAN-RADAR-AAA RD13)
+    let found = typeof name === "object" ? name : name ? (siteByName(name) ?? undefined) : undefined;
+    if (found && found.body !== "earth") found = undefined;
+    if (name && !found)
+      throw new Error(
+        `no runway "${typeof name === "string" ? name : name.name}" — ${runways.map((q) => q.name).join(", ")}, or an airfield's code`,
+      );
+    if (!found) {
+      // (the nearest of the world's a jet takes off from, within 60 km; else the game's)
+      const g = this.ctx.camera.geoNow();
+      const w = g ? runwaySitesNear(g.lat, g.lon, 60_000, 1200)[0] : undefined;
+      if (w) found = w;
+    }
     if (!found) {
       const here = fleet.pose(fleet.active, t)?.X;
       const E = solarState("earth", t).pos;
@@ -293,10 +307,16 @@ export class GameTools {
     // (a point along the runway as it is drawn — its WGS84 frame, sites.ts EARTH_RUNWAYS: the threshold, the
     // landing direction —, alongM past the end in use; the nose down its axis: a sphere's lat/lon steps put it
     // 0.3° off, 24 m from the axis at the far end)
-    const R = EARTH_RUNWAYS.find((r) => r.site.name === found.name)!;
+    // (the world's: its frame here — and the world's runways about it brought in now: graded under the gear at once)
+    if (found.len) worldRunwaysUpdate(found.lat, found.lon, performance.now(), true);
+    const R =
+      EARTH_RUNWAYS.find(
+        (r) => r.site.name === found.name || (Math.abs(r.site.lat - found.lat) < 1e-5 && Math.abs(r.site.lon - found.lon) < 1e-5),
+      ) ?? runwayFrame(found, found.len ?? RUNWAY_LENGTH);
+    const L = R.len;
     const rev = !!site.reverse;
     const pt = (m: number): [number, number] => {
-      const k = rev ? RUNWAY_LENGTH - m : m;
+      const k = rev ? L - m : m;
       const q = R.origin.map((o, i) => o + R.along[i]! * k) as V3;
       const geo = cartToGeodetic(WGS84_A, WGS84_F, q);
       return [(geo.lat * 180) / Math.PI, (geo.lon * 180) / Math.PI];
@@ -313,7 +333,7 @@ export class GameTools {
         const q = fleet.pose(v, t);
         return !!q && Math.hypot(q.X[0] - P[0], q.X[1] - P[1], q.X[2] - P[2]) * M_METRES < 60;
       });
-      if (!near || alongM > RUNWAY_LENGTH - 300) break;
+      if (!near || alongM > L - 300) break;
       alongM += 90;
     }
     const [lat, lon] = pt(alongM);
@@ -337,8 +357,8 @@ export class GameTools {
    * line (> 0 to its right), `o.headingDeg` turns its course off the runway's (> 0 clockwise).
    */
   glideTo(name: string, distKm = 80, altKm = 25, speed = 750, o: { acrossKm?: number; headingDeg?: number } = {}) {
-    const found = SITES.find((q) => q.name.toLowerCase().includes(name.toLowerCase()));
-    if (!found) throw new Error(`no site "${name}" — ${SITES.map((q) => q.name).join(", ")}`);
+    const found = SITES.find((q) => q.name.toLowerCase().includes(name.toLowerCase())) ?? siteByName(name);
+    if (!found) throw new Error(`no site "${name}" — ${SITES.map((q) => q.name).join(", ")}, or an airfield's code`);
     if (universeOf(found.body) !== "ours") throw new Error("glideTo: our worlds' sites");
     // (a runway's final into the wind: its far end's when the wind blows down it — W4)
     const site = this.ctx.camera.runwayInUse(found);
@@ -506,12 +526,13 @@ export class GameTools {
         const d = q.map((x, i) => x - R.origin[i]!);
         const a = d[0]! * R.along[0] + d[1]! * R.along[1] + d[2]! * R.along[2];
         const c = d[0]! * R.across[0] + d[1]! * R.across[1] + d[2]! * R.across[2];
-        if (a < -200 || a > RUNWAY_LENGTH + 200 || Math.abs(c) > 150) continue;
+        const L = R.len;
+        if (a < -200 || a > L + 200 || Math.abs(c) > Math.max(150, R.halfWidth + 60)) continue;
         const rev = !!this.ctx.camera.runwayInUse(R.site).reverse;
         // (near either end — the site's own place is its published threshold —: at the start of the end in use,
         // ready to take off; elsewhere on the strip, where it was set)
-        const along = a < 400 || a > RUNWAY_LENGTH - 400 ? 60 : Math.min(Math.max(rev ? RUNWAY_LENGTH - a : a, 60), RUNWAY_LENGTH - 60);
-        return this.lineUp(R.site.name, along);
+        const along = a < 400 || a > L - 400 ? 60 : Math.min(Math.max(rev ? L - a : a, 60), L - 60);
+        return this.lineUp(R.world ? { ...R.site, len: R.len } : R.site.name, along);
       }
     }
     // (on its gear, as the ground under each leg has it — a slope tilts it —, its nose where it pointed)

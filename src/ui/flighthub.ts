@@ -3,6 +3,8 @@
 // day (dawn, morning, noon, dusk, night — or the clock as it is), the weather (weather.ts's presets, the real
 // one), the fuel aboard, a flight plan to an arrival field (game/flightplan.ts) — then flown at once.
 
+import { siteByName, worldSite } from "../world/fieldsite";
+import { fieldByCode } from "../world/runways";
 import "./flighthub.css";
 import type { CameraController } from "../controls";
 import { fleet } from "../fleet";
@@ -46,7 +48,7 @@ const WX_NAMES: Record<string, { fr: string; en: string }> = {
 
 export class FlightHub {
   private close: (() => void) | null = null;
-  private field = FIELDS.find((f) => f.icao === "KEDW") ?? FIELDS[0]!;
+  private field: (typeof FIELDS)[number] = FIELDS.find((f) => f.icao === "KEDW") ?? FIELDS[0]!;
   private start: Start = "runway";
   private hour: Hour = "now";
   private wx: WeatherPreset | null = null;
@@ -91,6 +93,33 @@ export class FlightHub {
     return box;
   }
 
+  /** Any airfield of the world by its code (PLAN-RADAR-AAA RD13): its longest paved runway the start's. */
+  private codeBox() {
+    const box = h("div", "fhb-block fhb-code");
+    const inp = h("input", "fhb-icao") as HTMLInputElement;
+    inp.placeholder = t("Any airfield: its ICAO code");
+    inp.dataset.testid = "fhb-icao";
+    inp.maxLength = 8;
+    const said = h("span", "k-label fhb-code-said", "");
+    inp.onchange = () => {
+      const q = inp.value.trim();
+      if (!q) return;
+      said.textContent = "…";
+      void fieldByCode(q).then((f) => {
+        const s = f ? worldSite(f, 1200) : null;
+        if (!s) {
+          said.textContent = f ? tf("{0}: no paved runway of 1 200 m", f.icao || f.ident) : tf("{0}: unknown", q.toUpperCase());
+          return;
+        }
+        this.field = s;
+        said.textContent = s.name;
+        this.host.toast(tf("Airfield: {0}", s.name));
+      });
+    };
+    box.append(h("span", "k-label", t("Airfield code")), inp, said);
+    return box;
+  }
+
   private build(root: HTMLElement) {
     const fieldItems = FIELDS.map((f) => [f.icao ?? f.name, f.icao ?? f.name, f.name] as [string, string, string]);
     root.append(
@@ -101,6 +130,7 @@ export class FlightHub {
         (v) => (this.field = FIELDS.find((f) => (f.icao ?? f.name) === v)!),
         "fhb-field",
       ),
+      this.codeBox(),
       this.seg<Start>(
         t("Start"),
         [
@@ -205,7 +235,8 @@ const fieldOf = (q: string) => {
   return (
     FIELDS.find((f) => f.icao?.toLowerCase() === n || f.name.toLowerCase() === n) ??
     FIELDS.find((f) => f.name.toLowerCase().includes(n)) ??
-    null
+    // (any airfield of the world by its code, its tile in — PLAN-RADAR-AAA RD13)
+    siteByName(q)
   );
 };
 
@@ -233,8 +264,8 @@ export function prepareFlight(H: HubHost, o: FlightSetup): string {
     H.settings.weather = o.weather;
     H.weatherChanged();
   }
-  const name = F.name;
-  if (start === "runway") T.lineUp(name);
+  const name = F.len ? (F.icao ?? F.name) : F.name;
+  if (start === "runway") T.lineUp(F.len ? F : name);
   else if (start === "final") T.glideTo(name, 15, 0.9, 110);
   else T.glideTo(name, 40, 6, 230);
   // (the fuel after the placing: it fills the tanks)

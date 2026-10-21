@@ -1,5 +1,6 @@
 // The CameraController — low thrust, and the views of the flight the interface reads (telemetry, runway, hub, future).
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { worldRunwaysNow } from "../world/runways3d";
 import { nearWormhole, type WormholePath } from "../system/wormhole-predict";
 import { tunnelEntrySide, wormholeMapPose } from "../system/wormhole-map";
 import { blToCartesian, cameraFrame } from "../camera";
@@ -2695,10 +2696,23 @@ function runwayCompute(this: CameraController): RunwayView | null {
   const R = this.entryRun;
   let site: Site | null = R?.site?.runway ? R.site : null;
   const agl = this.aglNow(cam, Math.hypot(...x) - fr.env.R);
+  // (the F-35's ILS flown: its runway — a world one's too, PLAN-RADAR-AAA RD13 —, its end landed, its length)
+  const I = this.ilsRun?.rwy;
+  if (!site && I && fr.body === "earth")
+    site = { body: "earth", name: I.name, lat: I.lat, lon: I.lon, runway: true, rwy: I.hdg, icao: I.icao, elev: I.elev, len: I.len };
   if (!site) {
     if (agl > 20e3) return null;
     let best = 80e3;
-    for (const st of SITES) {
+    // (the game's sites, and the world's runways near — graded and drawn: src/world/runways3d.ts —, the paved ones)
+    const cands: Site[] = [
+      ...SITES,
+      ...(fr.body === "earth"
+        ? worldRunwaysNow()
+            .filter((r) => (r.flags & 14) === 0 && r.len >= 800)
+            .map((r) => ({ ...r.site, len: r.len }))
+        : []),
+    ];
+    for (const st of cands) {
       if (st.body !== fr.body || !st.runway) continue;
       const T = fr.place(st);
       const ang = Math.acos(clamp(dot3(unitV(T), unitV(x)), -1, 1));
@@ -2722,10 +2736,13 @@ function runwayCompute(this: CameraController): RunwayView | null {
   const rgt = cross(along, tu);
   const see = (P: Vec3) => {
     const d = sub3(P, x);
-    return { d: C(fr.toLocal(d)), r: Math.hypot(...d) };
+    return {
+      d: C(fr.toLocal(d)),
+      r: Math.hypot(...d),
+    };
   };
-  const L = 4500,
-    Wd = 90;
+  const L = site.len ?? 4500,
+    Wd = site.len ? 60 : 90;
   const at = (a: number, b: number) => lin(lin(T, 1, along, a), 1, rgt, b);
   const rel = sub3(x, T);
   const sAl = dot3(rel, along),
@@ -2798,6 +2815,7 @@ function runwayCompute(this: CameraController): RunwayView | null {
   return {
     papi,
     gates,
+    len: L,
     name: site.name.split(",")[0]!,
     rwy: site.rwy ?? 0,
     along: sAl,

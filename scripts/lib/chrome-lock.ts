@@ -9,7 +9,7 @@
 // all of it, here and on the other Mac.
 //
 // KERR_CHROME_LOCK=0 skips it (a deliberate exception, e.g. a GPU-free Linux CI runner of its own).
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { join } from "node:path";
 
@@ -91,8 +91,16 @@ export function orphanChromes(kill = false): { pid: number; elapsed: string; pro
 export function holder(): Holder | null {
   if (!existsSync(LOCK)) return null;
   const h = read(join(LOCK, "owner.json"));
-  // (made but not yet written: being taken — a holder, not a free lock)
-  if (!h) return { pid: 0, label: "(being taken)", cwd: "", host: hostname(), since: Date.now() };
+  // (made but not yet written: being taken — a holder, not a free lock; left so more than 30 s — its taker killed between
+  // the two steps, a job cancelled —: abandoned, cleared)
+  if (!h) {
+    const age = Date.now() - (statSync(LOCK, { throwIfNoEntry: false })?.mtimeMs ?? Date.now());
+    if (age > 30_000) {
+      rmSync(LOCK, { recursive: true, force: true });
+      return null;
+    }
+    return { pid: 0, label: "(being taken)", cwd: "", host: hostname(), since: Date.now() };
+  }
   if (!alive(h.pid)) {
     rmSync(LOCK, { recursive: true, force: true });
     return null;

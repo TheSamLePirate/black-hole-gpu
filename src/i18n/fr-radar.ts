@@ -45,4 +45,10 @@ export default {
   "unknown surface": "surface inconnue",
   "Direct {0}": "Direct {0}",
   "{0} added to the flight plan": "{0} ajouté au plan de vol",
+  "Any airfield: its ICAO code": "N'importe quel terrain : son code OACI",
+  "{0}: no paved runway of 1 200 m": "{0} : pas de piste revêtue de 1 200 m",
+  "{0}: unknown": "{0} : inconnu",
+  "Airfield: {0}": "Terrain : {0}",
+  "Airfield code": "Code du terrain",
+  "ICAO code": "Code OACI",
 } satisfies Record<string, string>;

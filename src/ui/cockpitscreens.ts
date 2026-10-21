@@ -892,7 +892,7 @@ export class CockpitScreens {
   // ---------------------------------------------------------------------------------- 2 NAV
   private nav(g: OffscreenCanvasRenderingContext2D, d: ScreenData, auto = true) {
     const rw = d.runway;
-    if (auto && rw && d.settings.cockpitAids && d.settings.hudRunway && -rw.along < 40e3 && rw.along < 4500)
+    if (auto && rw && d.settings.cockpitAids && d.settings.hudRunway && -rw.along < 40e3 && rw.along < (rw.len ?? 4500))
       return this.approachScreen(g, rw);
     const st = d.status;
     const tg = st?.target;
@@ -947,7 +947,7 @@ export class CockpitScreens {
       ty = 330,
       span = Math.max(-rw.along, 2000) * 1.15,
       k = 240 / span;
-    const L = 4500;
+    const L = rw.len ?? 4500;
     g.save();
     g.beginPath();
     g.rect(0, 56, SLOT, SH - 56);

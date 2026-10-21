@@ -4,6 +4,7 @@
 // break, the hold over his fix stacked by our place, the way home), and the break's and the hold's own flying
 // in the jet's step.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { runwaySitesNear } from "../world/fieldsite";
 import { formReshape, formationLabel } from "./formation";
 import { spacingStep } from "../game/formations";
 import { gcCourse, gcDist, newPlan } from "../game/flightplan";
@@ -146,7 +147,8 @@ function rtbStart(this: CameraController): string {
   this.brk = null;
   this.holdPat = null;
   this.jetModes.bankMax = undefined;
-  const fields = SITES.filter((x) => x.body === "earth" && x.runway);
+  // (the nearest a jet lands on: the game's sites, the world's within 300 km — PLAN-RADAR-AAA RD13)
+  const fields = [...SITES.filter((x) => x.body === "earth" && x.runway), ...runwaySitesNear(g.lat, g.lon, 300_000)];
   let best = fields[0]!,
     bd = Infinity;
   for (const x of fields) {

@@ -195,6 +195,8 @@ export interface DockInfo {
 export interface RunwayView {
   name: string;
   rwy: number;
+  /** its length [m] (a world runway's own — PLAN-RADAR-AAA RD13 —; the sites' 4 500) */
+  len?: number;
   along: number;
   across: number;
   agl: number;

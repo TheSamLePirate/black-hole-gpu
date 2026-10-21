@@ -1,4 +1,5 @@
 import { holeFleet } from "./holefleet";
+import { worldRunwaysNow, worldRunwaysUpdate } from "./world/runways3d";
 import { streamingLead, aheadFocus, gazeLead } from "./system/streaming-focus";
 import type { NetWalkerHome } from "./controller/netcraft";
 import { CharacterRenderer, type GrassView } from "./character-renderer";
@@ -12,7 +13,7 @@ import { normalQuantile, seaCascades, seaSystems } from "./sea/spectrum";
 import { MarineFeed, type SeaState, windSea } from "./sea/marine";
 import { forestSource, withForest } from "./forest-shader";
 import { lampsOf } from "./cockpit/lights";
-import { EARTH_RUNWAYS, landingEnd, RUNWAY_HALF_WIDTH, RUNWAY_LENGTH, runwayGrade, runwayPaved } from "./game/sites";
+import { EARTH_RUNWAYS, landingEnd, RUNWAY_LENGTH, runwayGrade, runwayPaved } from "./game/sites";
 import {
   bodyAxes,
   daysOf,
@@ -2827,7 +2828,7 @@ export class Renderer {
         s.earthScenery,
         s.earthSurface !== "off",
         s.earthTerrain,
-        SCENERY_EXCLUSIONS,
+        this.sceneryExclusions,
         eye ? aheadFocus(eye, Math.hypot(...gazeS) > 0 ? gazeS : lead) : null,
         reach,
       );
@@ -3077,6 +3078,24 @@ export class Renderer {
    * [m/s, the Earth's axes] — the windsocks'.
    */
   private nearRunways(c: Vec3, s: Settings, time: number): Float32Array {
+    // (the world's runways about the eye brought in — src/world/runways3d.ts, PLAN-RADAR-AAA RD13 —: graded, drawn;
+    // the scenery kept off them)
+    {
+      const g = cartToGeodetic(WGS84_A, WGS84_F, [c[0] * WGS84_A, c[1] * WGS84_A, c[2] * (1 - WGS84_F) * WGS84_A]);
+      if (worldRunwaysUpdate((g.lat * 180) / Math.PI, (g.lon * 180) / Math.PI, performance.now())) {
+        this.sceneryExclusions = [
+          ...SCENERY_EXCLUSIONS,
+          ...worldRunwaysNow().map((r) => ({
+            lat: r.site.lat,
+            lon: r.site.lon,
+            heading: r.site.rwy ?? 0,
+            length: r.len,
+            halfWidth: r.halfWidth + 40,
+          })),
+        ];
+        this.invalidate();
+      }
+    }
     const out = new Float32Array(RUNWAY_VEC4S * 4);
     const near = EARTH_RUNWAYS.map((r) => {
       const d: Vec3 = [c[0] * WGS84_A - r.origin[0], c[1] * WGS84_A - r.origin[1], c[2] * (1 - WGS84_F) * WGS84_A - r.origin[2]];
@@ -3091,7 +3110,8 @@ export class Renderer {
       const rev = landingEnd(r.site, s, days, this.weatherReal).reverse ? 1 : 0;
       // (w: the runway's level [m] — its airfield graded to it (sites.ts runwayGrade), the windsocks' and the
       // buildings' feet)
-      out.set([...r.p, RUNWAY_LENGTH, ...r.along, RUNWAY_HALF_WIDTH, ...r.across, rev, ...d, r.elev], 4 + 16 * k);
+      // (its across's w: the landing end and its flags — trace.wgsl runwayFlags)
+      out.set([...r.p, r.len, ...r.along, r.halfWidth, ...r.across, rev | (r.flags & ~1), ...d, r.elev], 4 + 16 * k);
     });
     if (near.length) {
       const st = near[0]!.r.site;
@@ -4927,6 +4947,8 @@ export class Renderer {
     big?: boolean;
     mirror?: boolean;
   }[] = [];
+  /** the scenery's exclusions: the sites' runways, the landscapes' viewpoints, the world's runways near (RD13) */
+  private sceneryExclusions: SceneryExclusion[] = SCENERY_EXCLUSIONS;
   /** a fight's flares burning (controller/combat.ts combatGlares — PLAN-RADAR-AAA RD8a): each from the flown craft's
    *  origin on the camera's axes [m], its size [m], its colour (display-referred) */
   combatGlares: { rel: Vec3; r: number; rgb: Vec3 }[] = [];

@@ -14,7 +14,7 @@ import { drawSym, PAL, type SymSide, sideFor } from "../radar/symbols";
 import type { Settings } from "../settings";
 import { unitsFor } from "./unitsys";
 import { drawFields } from "../world/runwaydraw";
-import { type Airfield, fieldShown, fieldsNear, RUNWAYS_CREDIT, runwaysEvents } from "../world/runways";
+import { type Airfield, fieldShown, fieldsNearCached, RUNWAYS_CREDIT, runwaysEvents } from "../world/runways";
 
 /** What the map draws (main.ts gathers it from the controller). */
 export interface JetMapData {
@@ -30,7 +30,6 @@ export interface JetMapData {
   /** the tactical picture's tracks */
   tracks: PicTrack[];
   route: { lat: number; lon: number; name: string; active: boolean }[];
-  fields: { lat: number; lon: number; rwy?: number; name: string; len?: number }[];
 }
 
 /** The range's steps: the centre to the nearer edge [km]. */
@@ -298,19 +297,6 @@ export class JetMap {
     c.font = "700 11px Rajdhani, sans-serif";
     c.textAlign = "center";
     c.fillText("N", nx, ny + 4);
-    // the world's airfields (src/world/runways.ts — RD11): by the range's level of detail, the nearest first; the
-    // flight plan's magenta
-    const marked = new Set(d.route.map((p) => p.name.toUpperCase()));
-    this.fieldHits = [];
-    const fields = fieldsNear(d.lat, d.lon, R * 1.5, (f) => fieldShown(f, R));
-    drawFields(c, fields.slice(0, 400), {
-      at: (la, lo) => at(la, lo),
-      mpp,
-      labels: true,
-      marked,
-      box: { x: 0, y: 0, w, h },
-      hit: (f, x, y) => this.fieldHits.push({ f, x, y }),
-    });
     // the flight plan: its legs in magenta, the active point ringed
     if (d.route.length) {
       c.strokeStyle = "rgba(255, 92, 225, 0.85)";
@@ -375,6 +361,20 @@ export class JetMap {
       c.textAlign = "left";
       c.fillText(e.t >= 60 ? `+${Math.round(e.t / 60)} min` : `+${Math.round(e.t)} s`, ex + 5, ey - 4);
     }
+    // the world's airfields (src/world/runways.ts — RD11): by the range's level of detail, the nearest first; the
+    // flight plan's magenta — over the trace and the path ahead: the runway under the craft never hidden by its own
+    // approach's trace
+    const marked = new Set(d.route.map((p) => p.name.toUpperCase()));
+    this.fieldHits = [];
+    const fields = fieldsNearCached(`tac${R}`, d.lat, d.lon, R * 1.5, (f) => fieldShown(f, R), 1000);
+    drawFields(c, fields.slice(0, 400), {
+      at: (la, lo) => at(la, lo),
+      mpp,
+      labels: true,
+      marked,
+      box: { x: 0, y: 0, w, h },
+      hit: (f, x, y) => this.fieldHits.push({ f, x, y }),
+    });
     // the tracks: the common symbology — the IFF as the sensors know it (the truth's faded where they hold nothing)
     this.hits = [];
     for (const P of d.tracks) {

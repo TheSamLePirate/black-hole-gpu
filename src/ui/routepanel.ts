@@ -5,6 +5,9 @@
 // name, its altitude and speed constraints, its leg's course and distance, moved, removed, flown direct to; the
 // cruise level and speed, the reserve; the plan's distance, time, fuel, what is left on arrival, the bingo now.
 
+import { drawFields } from "../world/runwaydraw";
+import { type Airfield, fieldByCode, fieldShown, fieldsNearCached } from "../world/runways";
+import { worldSite } from "../world/fieldsite";
 import "./routepanel.css";
 import type { CameraController } from "../controls";
 import { fleet } from "../fleet";
@@ -29,6 +32,8 @@ const hms = (s: number) => (Number.isFinite(s) ? `${Math.floor(s / 3600)}:${Stri
 
 export class RoutePanel {
   private map: MapView | null = null;
+  /** the world's airfields drawn on the map last (for the clicks) */
+  private worldDrawn: Airfield[] = [];
   private close: (() => void) | null = null;
   private list: HTMLElement | null = null;
   private sum: HTMLElement | null = null;
@@ -96,7 +101,35 @@ export class RoutePanel {
     const W = this.route.wps;
     ctx.save();
     ctx.lineCap = ctx.lineJoin = "round";
-    // the airfields: a runway bar, their ICAO
+    // the world's airfields (src/world/runways.ts — PLAN-RADAR-AAA RD13): the map's level of detail about its centre,
+    // the plan's in magenta; kept for the clicks
+    const cv = ctx.canvas;
+    const c0 = this.map?.placeAt(cv.clientWidth / 2, cv.clientHeight / 2);
+    const c1 = this.map?.placeAt(cv.clientWidth / 2 + 100, cv.clientHeight / 2);
+    this.worldDrawn = [];
+    if (c0 && c1 && (this.map?.body ?? "earth") === "earth") {
+      const mpp = (Math.hypot((c1[0] - c0[0]) * 111_195, (c1[1] - c0[1]) * 111_195 * Math.cos((c0[0] * Math.PI) / 180)) || 1) / 100;
+      const reach = (Math.max(cv.clientWidth, cv.clientHeight) / 2) * mpp;
+      if (reach < 1_500_000) {
+        const own = new Set(FIELDS.map((f) => f.icao));
+        const list = fieldsNearCached(
+          `route${Math.round(reach)}`,
+          c0[0],
+          c0[1],
+          reach * 1.2,
+          (f) => fieldShown(f, reach) && !own.has(f.icao || f.ident),
+          1000,
+        ).slice(0, 300);
+        this.worldDrawn = list;
+        drawFields(ctx, list, {
+          at: (la, lo) => toScreen(la, lo),
+          mpp,
+          labels: true,
+          marked: new Set(this.route.wps.map((w) => w.name.toUpperCase())),
+        });
+      }
+    }
+    // the game's airfields: a runway bar, their ICAO
     ctx.font = "600 11px var(--mono, monospace)";
     for (const f of FIELDS) {
       const [x, y] = toScreen(f.lat, f.lon);
@@ -199,7 +232,20 @@ export class RoutePanel {
       this.refresh();
       return;
     }
-    const f = FIELDS.find(near);
+    // (a game's airfield, else a world one drawn there — its longest paved runway the field's: PLAN-RADAR-AAA RD13)
+    const wf = this.worldDrawn.find(near);
+    const f =
+      FIELDS.find(near) ??
+      (wf
+        ? (worldSite(wf, 600) ?? {
+            body: "earth",
+            name: wf.icao || wf.ident,
+            lat: wf.lat,
+            lon: wf.lon,
+            icao: wf.icao || wf.ident,
+            elev: wf.elev,
+          })
+        : undefined);
     // (the next free number: WP01, WP02… — the ones removed not reused while higher ones remain)
     const n = Math.max(0, ...W.map((w) => (/^WP(\d+)$/.exec(w.name) ? Number(/^WP(\d+)$/.exec(w.name)![1]) : 0))) + 1;
     const w: Waypoint = f
@@ -259,6 +305,31 @@ export class RoutePanel {
       o.value = f.name;
       fieldSel.append(o);
     }
+    // (any airfield of the world by its code — PLAN-RADAR-AAA RD13)
+    const codeIn = h("input", "rp-in rp-code") as HTMLInputElement;
+    codeIn.placeholder = t("ICAO code");
+    codeIn.maxLength = 8;
+    codeIn.dataset.testid = "rp-code";
+    codeIn.onchange = () => {
+      const q = codeIn.value.trim();
+      if (!q) return;
+      void fieldByCode(q).then((wf) => {
+        if (!wf) return this.host.toast(tf("{0}: unknown", q.toUpperCase()));
+        const s = worldSite(wf, 600);
+        const code = wf.icao || wf.ident;
+        const at = this.sel >= 0 ? this.sel + 1 : R.wps.length;
+        R.wps.splice(at, 0, {
+          name: code,
+          lat: s?.lat ?? wf.lat,
+          lon: s?.lon ?? wf.lon,
+          ...(s ? { field: { icao: code, elev: s.elev ?? wf.elev, rwy: s.rwy } } : {}),
+        });
+        this.sel = at;
+        this.map?.flyTo(wf.lat, wf.lon, this.map.zoom);
+        codeIn.value = "";
+        this.changed();
+      });
+    };
     const addField = () => {
       const f = FIELDS.find((x) => x.name === fieldSel.value)!;
       const at = this.sel >= 0 ? this.sel + 1 : R.wps.length;
@@ -284,6 +355,7 @@ export class RoutePanel {
       }),
       fieldSel,
       button({ label: t("Add airfield"), testid: "rp-addfield", onClick: addField }),
+      codeIn,
       button({
         label: t("Reverse"),
         title: t("The route flown back"),

@@ -24,7 +24,7 @@ import type { InterceptCues } from "../../game/intercept";
 import { unitsFor } from "../unitsys";
 import { drawSym, PAL, type SymSide, symColour } from "../../radar/symbols";
 import { drawFields } from "../../world/runwaydraw";
-import { fieldShown, fieldsNear } from "../../world/runways";
+import { fieldShown, fieldsNearCached } from "../../world/runways";
 import { drawApproachHud, drawSpaceHud, type ApproachHudInfo, type SpaceHudInfo } from "./kindhud";
 import { t, tf } from "../../i18n";
 
@@ -2790,7 +2790,7 @@ function drawRadar(
     ctx.beginPath();
     ctx.arc(cx, cy, rad, 0, 2 * Math.PI);
     ctx.clip();
-    drawFields(ctx, fieldsNear(RL.lat, RL.lon, range, (f) => fieldShown(f, range * 2.5)).slice(0, 60), {
+    drawFields(ctx, fieldsNearCached(`scope${range}`, RL.lat, RL.lon, range, (f) => fieldShown(f, range * 2.5)).slice(0, 60), {
       at: toScope,
       mpp: 1 / k,
       k: dpr * 0.9,

@@ -2205,7 +2205,12 @@ export class Pcd {
 /** The nearest airfield: its distance [m] and bearing [°]. */
 function nearest(d: PcdData): { f: PcdField; dist: number; brg: number } | null {
   let best: { f: PcdField; dist: number; brg: number } | null = null;
-  for (const f of d.fields) {
+  // (the game's sites and the world's airfields a jet lands on — a paved runway of 1 200 m: PLAN-RADAR-AAA RD13)
+  const world: PcdField[] = (d.world ?? [])
+    .map((f) => ({ f, w: f.runways.filter((x) => x.surface === "paved" && x.len >= 1200).sort((a, b) => b.len - a.len)[0] }))
+    .filter((x) => x.w)
+    .map(({ f, w }) => ({ name: f.name, icao: f.icao || f.ident, lat: f.lat, lon: f.lon, rwy: w!.hdg }));
+  for (const f of [...d.fields, ...world]) {
     const p1 = d.lat * D,
       p2 = f.lat * D,
       dl = (f.lon - d.lon) * D;

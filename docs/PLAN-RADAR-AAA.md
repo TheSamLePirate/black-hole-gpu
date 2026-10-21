@@ -682,7 +682,9 @@ Chaque phase : un commit, une fiche et une planche de captures (`docs/progress/r
 | RD8a | **fait** 2026-10-21 ([fiche](progress/radar/RD8a.md)) : les leurres visibles dans la vue et sur tous les radars |
 | RD2, RD3, RD9 | **faits** 2026-10-21 ([fiche](progress/radar/RD2-RD3-RD9.md)) : l'image unique, la symbologie commune, la sélection par clic (vue, scope, PCD, crew) |
 | RD15 | **fait** 2026-10-21 ([fiche](progress/radar/RD15.md)) : la carte tactique du panneau de droite, trace et prédiction |
-| RD4 – RD8, RD10 – RD14 | en cours, dans l'ordre retenu ci-dessus. RD10 : accord donné pour OurAirports |
+| RD10, RD11 | **faits** 2026-10-21 ([RD10](progress/radar/RD10.md), [RD11](progress/radar/RD11.md)) : la base mondiale (OurAirports), les terrains sur tous les radars et cartes |
+| RD13 | **fait** 2026-10-21 ([fiche](progress/radar/RD13.md)) : les pistes du monde en 3D aplanies, l'ILS et l'autopilote, partout |
+| RD4 – RD8, RD12, RD14 | à faire, dans l'ordre retenu ci-dessus |
 
 ## Risques
 

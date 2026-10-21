@@ -4,7 +4,7 @@
 // minutes, the plan, every unit about (the real traffic, a mission's, the ships) and the players — their labels never
 // covering one another.
 import { drawFields } from "../../world/runwaydraw";
-import { fieldShown, fieldsNear } from "../../world/runways";
+import { fieldShown, fieldsNearCached } from "../../world/runways";
 import coastlines from "../coastlines.json";
 import { C, D, fmt, Labels, type Pen, ramp, SIDE, unitSymbol, type Point, type Rect } from "./kit";
 import { LAND } from "./land";
@@ -205,7 +205,7 @@ export function drawGeo(p: Pen, r: Rect, sc: Scene, v: GeoView) {
   // the world's airfields (src/world/runways.ts — PLAN-RADAR-AAA RD11): the map's level of detail, about its centre
   if (earth && !v.globe) {
     const reach = (Math.max(W, H) / 2) * mpp;
-    drawFields(c, fieldsNear(v.lat, v.lon, reach * 1.2, (f) => fieldShown(f, reach)).slice(0, 300), {
+    drawFields(c, fieldsNearCached(`geo${Math.round(reach)}`, v.lat, v.lon, reach * 1.2, (f) => fieldShown(f, reach)).slice(0, 300), {
       at,
       mpp,
       labels: true,
@@ -213,7 +213,7 @@ export function drawGeo(p: Pen, r: Rect, sc: Scene, v: GeoView) {
       box: r,
     });
   } else if (earth && v.globe && R > 3000) {
-    drawFields(c, fieldsNear(v.lat, v.lon, (6.371e6 * 2) / Math.max(R / 400, 1), (f) => f.kind === "large").slice(0, 200), {
+    drawFields(c, fieldsNearCached("globe", v.lat, v.lon, (6.371e6 * 2) / Math.max(R / 400, 1), (f) => f.kind === "large").slice(0, 200), {
       at,
       mpp,
       labels: false,

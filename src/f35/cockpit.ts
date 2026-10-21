@@ -2,7 +2,7 @@
 // read off the controller each time the display is drawn — where it is, how it flies, its engine, its fuel,
 // its surfaces, its STOVL mode, the airfields near it.
 
-import { fieldsNear } from "../world/runways";
+import { fieldsNearCached } from "../world/runways";
 import { cameraFrame } from "../camera";
 import { azAltAt } from "../eclipse/earth-moon";
 import type { CameraController } from "../controls";
@@ -201,7 +201,7 @@ export function pcdData(
         });
     })(),
     // (the world's airfields within 200 km — PLAN-RADAR-AAA RD11 —, the TSD's level of detail its own)
-    world: fieldsNear((geo.lat * 180) / Math.PI, (geo.lon * 180) / Math.PI, 200_000).slice(0, 400),
+    world: fieldsNearCached("pcd", (geo.lat * 180) / Math.PI, (geo.lon * 180) / Math.PI, 200_000, undefined, 1000).slice(0, 400),
     // (its trace, the last five minutes, and its path ahead, three minutes — PLAN-RADAR-AAA RD15)
     trail: c.ownTrack.pts.slice(-300),
     pred: c.ownPrediction(180, 10),

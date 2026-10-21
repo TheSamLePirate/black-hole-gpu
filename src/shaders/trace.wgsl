@@ -4751,6 +4751,9 @@ fn earthDetail(q: vec3f, h0: f32, foot: f32, res: f32) -> f32 {
 // gear and for the eye)
 const RWY_MAX = 4u;
 fn rwyCount() -> u32 { return select(0u, min(u32(P.runways[0].x), RWY_MAX), HAS_RWY); }
+// A runway's flags (sites.ts RunwayFrame.flags, packed with the landing end in across's w): 1 landed the other way,
+// its surface's class << 1 (0 paved, 1 grass, 2 dirt, 4 snow), 16 a world runway, 32 lit
+fn runwayFlags(k: u32) -> u32 { return u32(P.runways[3u + 4u * k].w + 0.5); }
 // How a geodetic direction is graded by the runways near (sites.ts runwayGrade, the same figures): x, flat
 // (0…1: the drawn detail off) — from 3 km before a threshold to 3 km past the far end, 280 m either side,
 // faded over 300 m along, 60 m across —; y, level (0…1: the relief brought to the runway's level) — the
@@ -4771,14 +4774,19 @@ fn runwayGrade(g: vec3f) -> vec3f {
     if (dot(d, d) > 8000.0 * 8000.0) { continue; }
     let a = dot(d, P.runways[2u + 4u * k].xyz);
     let c = abs(dot(d, P.runways[3u + 4u * k].xyz));
-    // (the clear zone 3 km before either threshold: a runway lands both ways — sites.ts runwayWeight)
-    let wa = select(select(1.0, max(0.0, 1.0 - (a - 7500.0) / 300.0), a > 7500.0), max(0.0, 1.0 + (a + 3000.0) / 300.0), a < -3000.0);
-    // (the strip, the taxiway beside it, the apron and the buildings — A2, A3 —: 280 m out of the axis, faded by 340)
-    let wc = select(max(0.0, 1.0 - (c - 280.0) / 60.0), 1.0, c < 280.0);
-    // (the level: the strip and its airfield, eased back to the relief)
     let L = P.runways[1u + 4u * k].w;
+    let hw = P.runways[2u + 4u * k].w;
+    // (a world runway — OurAirports', PLAN-RADAR-AAA RD13: runwayFlags 16 —: its own width, no made-up apron)
+    let world = (runwayFlags(k) & 16u) != 0u;
+    // (the clear zone 3 km before either threshold: a runway lands both ways — sites.ts runwayWeight)
+    let wa = select(select(1.0, max(0.0, 1.0 - (a - L - 3000.0) / 300.0), a > L + 3000.0), max(0.0, 1.0 + (a + 3000.0) / 300.0), a < -3000.0);
+    // (the strip, the taxiway beside it, the apron and the buildings — A2, A3 —: 280 m out of the axis, faded by 340;
+    // a world runway's own width and 80 m)
+    let side = select(280.0, hw + 80.0, world);
+    let wc = select(max(0.0, 1.0 - (c - side) / 60.0), 1.0, c < side);
+    // (the level: the strip and its airfield, eased back to the relief — a world runway's width and 100 m, over 200)
     let la = 1.0 - smoothstep(0.0, 1.0, max(max(-300.0 - a, a - L - 300.0), 0.0) / 600.0);
-    let lc = 1.0 - smoothstep(0.0, 1.0, (c - 320.0) / 300.0);
+    let lc = 1.0 - smoothstep(0.0, 1.0, (c - select(320.0, hw + 100.0, world)) / select(300.0, 200.0, world));
     if (la * lc > lv) {
       lv = la * lc;
       el = P.runways[4u + 4u * k].w;
@@ -4901,12 +4909,27 @@ fn designation(n: u32, a: f32, c: f32, fA: f32, fC: f32) -> f32 {
   return max(digitPaint(tens, c + 4.5, a - 45.0, fC, fA), digitPaint(ones, c - 1.5, a - 45.0, fC, fA));
 }
 
-fn runwayShade(a0: f32, c0: f32, L: f32, hw: f32, fw: vec2f, el: f32, rev: bool, lit: bool, n0: u32) -> RunwayLook {
+fn runwayShade(a0: f32, c0: f32, L: f32, hw: f32, fw: vec2f, el: f32, rev: bool, lit0: bool, n0: u32, fl: u32) -> RunwayLook {
   var o: RunwayLook;
   // (the pixel's footprint along the runway and across it [m]: seen down a final, the first a hundred times
   // the second — one figure for both had the width thinner than a pixel, the strip gone into the grass)
   let fA = fw.x;
   let fC = fw.y;
+  // (a world runway's surface — runwayFlags —: grass, earth or snow, a plain strip, mown or rolled, its ends
+  // marked by no paint; lit only where it is — PLAN-RADAR-AAA RD13)
+  let surf = (fl >> 1u) & 7u;
+  let world = (fl & 16u) != 0u;
+  let lit = lit0 && (!world || (fl & 32u) != 0u);
+  if (surf != 0u) {
+    let aa = select(a0, L - a0, rev);
+    let strip = bandCover(aa, 0.0, L, fA) * bandCover(abs(c0), -1.0, hw, fC);
+    o.cover = strip * select(0.85, 0.7, surf == 2u);
+    // (mown in bands along it; rolled earth; packed snow)
+    let band = stripeCover(c0 + 100.0, 12.0, 6.0, fC);
+    o.albedo = select(select(vec3f(0.62, 0.64, 0.66), vec3f(0.3, 0.24, 0.16), surf == 2u), mix(vec3f(0.11, 0.17, 0.06), vec3f(0.15, 0.22, 0.08), band), surf == 1u);
+    o.lamps = select(vec3f(0.0), runwayLights(aa, select(c0, -c0, rev), L, hw, P.runways[17].x), lit);
+    return o;
+  }
   // (landed the other way — PLAN-METEO W4 —: the lights and the PAPI from the far end; the markings both ways)
   let a = select(a0, L - a0, rev);
   let c = select(c0, -c0, rev);
@@ -4943,7 +4966,7 @@ fn runwayShade(a0: f32, c0: f32, L: f32, hw: f32, fw: vec2f, el: f32, rev: bool,
   let kl = clamp(round(a0 / (0.5 * L)), 0.0, 2.0);
   let al = a0 - 0.5 * L * kl;
   let onLink = bandCover(abs(al), -1.0, 11.5, fA) * bandCover(c0, -120.0, -hw, fC);
-  let twy = max(onTwy, onLink) * (1.0 - paved);
+  let twy = max(onTwy, onLink) * (1.0 - paved) * select(1.0, 0.0, world);
   if (twy > 0.0) {
     var ta = vec3f(0.105, 0.1, 0.095);
     let yl = max(bandCover(tc, -0.15, 0.15, fC) * bandCover(a0, 0.0, L, fA), bandCover(al, -0.15, 0.15, fA) * bandCover(c0, -120.0, -hw - 6.0, fC));
@@ -4953,7 +4976,7 @@ fn runwayShade(a0: f32, c0: f32, L: f32, hw: f32, fw: vec2f, el: f32, rev: bool,
     o.cover = max(o.cover, twy);
   }
   // the apron (A3): concrete beyond the taxiway, before the terminal; a yellow lead-in line to each stand
-  let apron = bandCover(c0, -205.0, -143.0, fC) * bandCover(a0, 0.36 * L, 0.4 * L + 175.0, fA) * (1.0 - paved);
+  let apron = bandCover(c0, -205.0, -143.0, fC) * bandCover(a0, 0.36 * L, 0.4 * L + 175.0, fA) * (1.0 - paved) * select(1.0, 0.0, world);
   if (apron > 0.0) {
     let ks = clamp(round((a0 - 0.4 * L) / 70.0), 0.0, 2.0);
     let lead = bandCover(a0 - 0.4 * L - 70.0 * ks, -0.15, 0.15, fA) * bandCover(c0, -200.0, -143.0, fC);
@@ -4965,6 +4988,8 @@ fn runwayShade(a0: f32, c0: f32, L: f32, hw: f32, fw: vec2f, el: f32, rev: bool,
   var lmp = vec3f(0.0);
   if (lit) {
     lmp = runwayLights(a, c, L, hw, P.runways[17].x);
+  }
+  if (lit && !world) {
     // (the taxiway's: blue at its edges, green down its middle and its links')
     let B = vec3f(0.15, 0.35, 1.0);
     let Gt = vec3f(0.25, 1.0, 0.45);
@@ -4981,7 +5006,8 @@ fn runwayShade(a0: f32, c0: f32, L: f32, hw: f32, fw: vec2f, el: f32, rev: bool,
     lmp += 1e-4 * vec3f(1.0, 0.78, 0.5) * bandCover(c0, -205.0, -143.0, fC) * bandCover(a0, 0.36 * L, 0.4 * L + 175.0, fA);
   }
   let elDeg = el * 57.29578;
-  for (var i = 0u; i < 4u; i++) {
+  // (the PAPI: a lit runway's — a world one unlit has none)
+  for (var i = 0u; i < select(4u, 0u, world && (fl & 32u) == 0u); i++) {
     // (from the runway outwards: white above 2.0°, 1.67°, 1.33°, 1.0°)
     let th = 2.0 - 0.3333 * f32(i);
     let col = select(vec3f(1.0, 0.1, 0.06), vec3f(1.0, 0.97, 0.92), elDeg > th);
@@ -5027,6 +5053,8 @@ fn windsocks(d: vec3f, tMax: f32) -> f32 {
   let wv = P.runways[0].yzw;
   let U = length(wv);
   for (var k = 0u; k < rwyCount(); k++) {
+    // (the game's own airfields' alone: a world runway has none made up — PLAN-RADAR-AAA RD13)
+    if ((runwayFlags(k) & 16u) != 0u) { continue; }
     let up = P.runways[1u + 4u * k].xyz;
     let along = P.runways[2u + 4u * k].xyz;
     let across = P.runways[3u + 4u * k].xyz;
@@ -5107,6 +5135,8 @@ fn airportScenery(dW: vec3f, tMax: f32) -> f32 {
   WS_E = vec3f(0.0);
   let t = P.runways[17].x;
   for (var k = 0u; k < rwyCount(); k++) {
+    // (the game's own airfields' buildings alone: a world runway's are its scenery's)
+    if ((runwayFlags(k) & 16u) != 0u) { continue; }
     let up = P.runways[1u + 4u * k].xyz;
     let al = P.runways[2u + 4u * k].xyz;
     let ac = P.runways[3u + 4u * k].xyz;
@@ -6565,16 +6595,17 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
       let ak = P.runways[2u + 4u * k].xyz;
       let ck = P.runways[3u + 4u * k].xyz;
       LAMP_F = vec4f(dot(fx, ak), dot(fx, ck), dot(fy, ak), dot(fy, ck)) * EARTH_RM;
-      let rev = P.runways[3u + 4u * k].w > 0.5;
+      let fl = runwayFlags(k);
+      let rev = (fl & 1u) != 0u;
       if (!onStrip) {
-        rwyLamps += runwayLights(select(ra, L - ra, rev), select(rc, -rc, rev), L, hw, P.runways[17].x);
+        if ((fl & 16u) == 0u || (fl & 32u) != 0u) { rwyLamps += runwayLights(select(ra, L - ra, rev), select(rc, -rc, rev), L, hw, P.runways[17].x); }
         continue;
       }
       // (its published end's designation: packed by fours in runways[17].zw — 37 to a place)
       let pk = select(P.runways[17].z, P.runways[17].w, k >= 2u);
       let n0 = u32(pk / select(1.0, 37.0, (k & 1u) == 1u)) % 37u;
       let fw = max(vec2f(max(abs(LAMP_F.x), abs(LAMP_F.z)), max(abs(LAMP_F.y), abs(LAMP_F.w))), vec2f(0.02));
-      let rl = runwayShade(ra, rc, L, hw, fw, asin(clamp(dot(-rd, q), -1.0, 1.0)), rev, lit, n0);
+      let rl = runwayShade(ra, rc, L, hw, fw, asin(clamp(dot(-rd, q), -1.0, 1.0)), rev, lit, n0, fl);
       A = mix(A, rl.albedo, rl.cover);
       n = normalize(mix(n, q, rl.cover));
       rwyLamps += rl.lamps;

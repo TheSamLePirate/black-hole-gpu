@@ -13,6 +13,7 @@
 // Every result is short, and carries what the game said (its toasts) since the call.
 
 import { type Airfield, fieldByCode } from "../world/runways";
+import { runwaySitesNear, siteByName, worldSite } from "../world/fieldsite";
 import { KNOWLEDGE_PAGES, type KnowledgeLang, type KnowledgePage, readKnowledge, searchKnowledge } from "./knowledge";
 import type { MissionSpec } from "../game/mission";
 import { completeMission, type MissionPatch, patchMission, type Resolver, type Sketch } from "../game/missionedit";
@@ -407,7 +408,10 @@ export function resolveBody(name: string): Target | null {
 export function resolveSite(name: string, body?: string): Site | null {
   const n = fold(name);
   const pool = body ? SITES.filter((s) => s.body === body) : SITES;
-  return pool.find((s) => fold(s.name) === n || s.icao?.toLowerCase() === n) ?? pool.find((s) => fold(s.name).includes(n)) ?? null;
+  const own = pool.find((s) => fold(s.name) === n || s.icao?.toLowerCase() === n) ?? pool.find((s) => fold(s.name).includes(n)) ?? null;
+  if (own || (body && body !== "earth")) return own;
+  // (any airfield of the world by its code — its tile in — PLAN-RADAR-AAA RD13)
+  return siteByName(name);
 }
 
 /** Every key's action, from the keymap: its id ("auto:land", "gear"), its key and what it does. */
@@ -509,6 +513,14 @@ export function gameTools(h: GameHost): Tool[] {
       const n = fold(q);
       const site = SITES.find((s) => (!on || s.body === on) && (fold(s.name) === n || s.icao?.toLowerCase() === n));
       if (site) return { body: site.body, lat: site.lat, lon: site.lon, name: site.name, site };
+      // (any airfield of the world by its code — OurAirports', PLAN-RADAR-AAA RD13)
+      if ((!on || on === "earth") && /^[A-Za-z0-9-]{3,7}$/.test(q.trim())) {
+        const f = await fieldByCode(q);
+        if (f) {
+          const ws = worldSite(f, 600) ?? undefined;
+          return { body: "earth", lat: ws?.lat ?? f.lat, lon: ws?.lon ?? f.lon, name: `${f.name} (${f.icao || f.ident})`, site: ws };
+        }
+      }
       const world = on === "earth" || on === "moon" || on === "mars" ? on : undefined;
       if (on && !world) throw new Error(`places by name are on the Earth, the Moon and Mars — on ${on}, give lat/lon`);
       const hit = (await h.atlas?.search(q, world))?.[0];
@@ -651,11 +663,12 @@ export function gameTools(h: GameHost): Tool[] {
     },
     {
       name: "list_places",
-      description: "Landing sites and runways (name, body, lat/lon, runway heading, ICAO). Optional body filter.",
+      description:
+        "Landing sites and runways (name, body, lat/lon, runway heading, ICAO): the game's own, and on the Earth the world's airfields within 300 km of the craft with a paved runway of 1 800 m (OurAirports; any other by its code in flight_plan, the ILS, lineUp). Optional body filter.",
       params: { body: { type: "string", description: "a body (Earth, Moon, Mars…), any language" } },
       run: (a) => {
         const b = a.body ? body(a.body) : null;
-        return SITES.filter((s) => !b || s.body === b).map((s) => ({
+        const own = SITES.filter((s) => !b || s.body === b).map((s) => ({
           name: s.name,
           body: s.body,
           lat: s.lat,
@@ -663,6 +676,14 @@ export function gameTools(h: GameHost): Tool[] {
           runway: s.runway ? s.rwy : undefined,
           icao: s.icao,
         }));
+        const g = !b || b === "earth" ? h.camera.geoNow() : null;
+        const world = g
+          ? runwaySitesNear(g.lat, g.lon, 300_000)
+              .filter((s) => s.len)
+              .slice(0, 30)
+              .map((s) => ({ name: s.name, body: "earth", lat: s.lat, lon: s.lon, runway: s.rwy, icao: s.icao, lengthM: s.len }))
+          : [];
+        return [...own, ...world];
       },
     },
     {
@@ -1707,14 +1728,19 @@ export function gameTools(h: GameHost): Tool[] {
           case "prepare":
             if (!a.field) throw new Error("prepare needs a field (f35 fields lists them)");
             net();
-            return F.prepare({
-              field: String(a.field),
-              start: a.start as string | undefined,
-              hour: a.hour as string | undefined,
-              weather: a.weather as string | undefined,
-              fuel: a.fuel as number | undefined,
-              dest: a.dest as string | undefined,
-            });
+            // (an airfield of the world by its code: its tile fetched first — then found at once: PLAN-RADAR-AAA RD13)
+            return Promise.resolve(
+              /^[A-Za-z0-9-]{3,7}$/.test(String(a.field).trim()) ? fieldByCode(String(a.field)).catch(() => null) : null,
+            ).then(() =>
+              F.prepare({
+                field: String(a.field),
+                start: a.start as string | undefined,
+                hour: a.hour as string | undefined,
+                weather: a.weather as string | undefined,
+                fuel: a.fuel as number | undefined,
+                dest: a.dest as string | undefined,
+              }),
+            );
           case "fly":
             if (!a.id) throw new Error("fly needs an id (f35 challenges lists them)");
             net();
@@ -2020,6 +2046,9 @@ export function gameTools(h: GameHost): Tool[] {
           const n = fold(name);
           const site = SITES.find((s) => s.body === "earth" && (fold(s.name) === n || s.icao?.toLowerCase() === n));
           if (site) return { lat: site.lat, lon: site.lon, name: site.icao ?? site.name };
+          // (any airfield of the world by its code — PLAN-RADAR-AAA RD13)
+          const f = /^[A-Za-z0-9-]{3,7}$/.test(name.trim()) ? await fieldByCode(name) : null;
+          if (f) return { lat: f.lat, lon: f.lon, name: f.icao || f.ident };
           const hit = (await h.atlas?.search(name, "earth"))?.[0];
           return hit ? { lat: hit.lat, lon: hit.lon, name: hit.name.split(",")[0]! } : null;
         };
@@ -2399,7 +2428,7 @@ export function gameTools(h: GameHost): Tool[] {
               return tools.walk(b(), lat(), lon());
             case "lineup":
               if (!site?.runway) throw new Error("lineup needs a runway (site or query naming one) — list_places lists them");
-              return tools.lineUp(site.name, (a.alongM as number) ?? 60);
+              return tools.lineUp(site.len ? site : site.name, (a.alongM as number) ?? 60);
             case "fly":
               return tools.flyAt(lat(), lon(), (a.aglM as number) ?? 600, (a.headingDeg as number) ?? 0, (a.speedMs as number) ?? 200, b());
             case "near":
@@ -2408,7 +2437,12 @@ export function gameTools(h: GameHost): Tool[] {
               return tools.wormhole((a.side as "ours") ?? "ours");
             case "glide":
               if (!site?.runway) throw new Error("glide needs a runway site");
-              return tools.glideTo(site.name, (a.distKm as number) ?? 80, (a.altKm as number) ?? 25, (a.speedMs as number) ?? 750);
+              return tools.glideTo(
+                site.len ? (site.icao ?? site.name) : site.name,
+                (a.distKm as number) ?? 80,
+                (a.altKm as number) ?? 25,
+                (a.speedMs as number) ?? 750,
+              );
             default:
               return tools.hoverOver(b(), lat(), lon(), (a.altKm as number) ?? 1.5);
           }
