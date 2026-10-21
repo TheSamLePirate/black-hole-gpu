@@ -8,9 +8,9 @@ export class CrewFrame {
     readonly app: App,
     readonly id = "crew-frame",
   ) {}
-  /** an expression on the console's window */
+  /** an expression evaluated in the console's window (any: \`!x\`, \`[...y]\`, \`a || b\`) */
   w(js: string) {
-    return `document.querySelector('#${this.id}').contentWindow.${js}`;
+    return `document.querySelector('#${this.id}').contentWindow.eval(${JSON.stringify(`(${js})`)})`;
   }
   /** an expression on the console's document */
   d(js: string) {
@@ -56,6 +56,18 @@ export class CrewFrame {
     await this.app.mouse("down", x, y);
     await this.app.mouse("up", x, y);
     await Bun.sleep(80);
+  }
+  /** a real click at a point of an element (its fraction across and down: 0.5, 0.5 its centre) — a canvas's place */
+  async clickAt(selector: string, fx: number, fy: number) {
+    const r = await this.app.js<{ x: number; y: number }>(`(() => {
+      const f = document.querySelector('#${this.id}'), el = f.contentDocument.querySelector(${JSON.stringify(selector)});
+      const b = el.getBoundingClientRect(), fb = f.getBoundingClientRect();
+      return { x: fb.left + b.left + b.width * ${fx}, y: fb.top + b.top + b.height * ${fy} };
+    })()`);
+    await this.app.mouse("move", r.x, r.y);
+    await this.app.mouse("down", r.x, r.y);
+    await this.app.mouse("up", r.x, r.y);
+    await Bun.sleep(120);
   }
   /** an ordering control clicked, its answer waited for; the journal's newest line */
   async order(selector: string) {

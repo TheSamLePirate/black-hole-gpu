@@ -4,6 +4,7 @@
 import { type Conic, conicOf, conicPoints, inPlane, nuAfter, radiusAt, timeBetween } from "../orbitmath";
 import { C, dur, fmt, type Pen, type Rect } from "./kit";
 import type { Scene } from "./scene";
+import { drawKerrOrbit, onHoleSide } from "./kerr";
 import { L, lang } from "../lang";
 
 export const BODY_FR: Record<string, string> = {
@@ -57,8 +58,21 @@ export function drawOrbit(
   compact = false,
   drag?: { i: number; x: number; y: number } | null,
 ): OrbitPicks | null {
+  // (Gargantua's side: its Kerr orbit, or a world's figures — not "no orbit received")
+  if (onHoleSide(sc)) {
+    drawKerrOrbit(p, r, sc, compact);
+    return null;
+  }
   p.panel(r, compact ? L("ORBITE", "ORBIT") : undefined);
   const st = sc.snap?.state;
+  // (landed: no conic to draw — a suborbital ellipse through the ground would say otherwise)
+  if (st && sc.snap?.craft?.status === "landed") {
+    const name = bodyName(sc.snap.craft.where || st.body).toUpperCase();
+    p.text(L(`POSÉ · ${name}`, `LANDED · ${name}`), r.x + r.w / 2, r.y + r.h / 2, { col: C.green, size: 18, align: "center", weight: 800 });
+    const g = sc.snap.geo;
+    if (g) p.text(`${fmt(g.lat, 4)}° ${fmt(g.lon, 4)}°`, r.x + r.w / 2, r.y + r.h / 2 + 22, { col: C.text, size: 12, align: "center" });
+    return null;
+  }
   if (!st) {
     p.text(L("Pas d’orbite reçue", "No orbit received"), r.x + r.w / 2, r.y + r.h / 2, { col: C.dim, size: 13, align: "center" });
     p.text(

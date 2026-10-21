@@ -20,6 +20,7 @@ import { drawOrbit, type OrbitPicks } from "./draw/orbit";
 import { timeBetween } from "./orbitmath";
 import { drawNavball } from "./draw/navball";
 import { drawBudget, drawDock, drawEecom, drawGround, drawRelativity, drawTimeline } from "./draw/spaceviews";
+import { drawDescent } from "./draw/descent";
 import { defaultMapState, drawSystemMap } from "./draw/system";
 import { SystemRenderer } from "./sys3d/gpu";
 import { drawAirStatus, drawSpaceStatus } from "./draw/spacestat";
@@ -39,6 +40,7 @@ const VIEW_WORDS: Record<CrewView, [string, string]> = {
   timeline: ["Chronologie", "Timeline"],
   rel: ["Relativité", "Relativity"],
   ground: ["Sol", "Ground"],
+  descent: ["Descente", "Descent"],
   dash: ["Tableau", "Dashboard"],
   pfd: ["Vol", "Flight"],
   nd: ["Navigation", "Navigation"],
@@ -246,7 +248,7 @@ export class CrewViews {
         else if (near?.contact) this.onContact(near.contact, x, y);
         else if (near?.wp !== undefined) this.onWp(near.wp, x, y);
         else if (panel?.view) this.onOpen(panel.view);
-        else if (this.view === "map" || this.view === "nd") {
+        else if (this.view === "map" || this.view === "nd" || this.view === "ground") {
           const at = this.unproject?.(x, y);
           if (at) this.onGround(at, x, y);
         }
@@ -463,7 +465,11 @@ export class CrewViews {
         drawRelativity(p, r, sc);
         break;
       case "ground":
-        drawGround(p, r, sc);
+        // (its projection back to the body: a place touched — the landing point designated from here)
+        this.unproject = drawGround(p, r, sc);
+        break;
+      case "descent":
+        drawDescent(p, r, sc);
         break;
       case "pfd":
         p.panel(r);

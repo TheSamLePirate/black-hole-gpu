@@ -13,7 +13,7 @@ import { bodyName } from "./draw/orbit";
 import { eventName } from "./draw/spacestat";
 import { linkFor, Outbox, type Station, type StationId, STATIONS, stationOf } from "./station";
 import { checklistOf } from "./checklists";
-import { type CrewProfile, PROFILE_TILES, PROFILE_VIEWS, profileOf, type TileKey, viewIn } from "./profile";
+import { craftTiles, craftViews, type CrewProfile, profileOf, type TileKey, viewIn } from "./profile";
 import { CrewActions, type Done } from "./actions";
 import { ACTS, type Act, AUTOS, autoWords, HOLDS, holdWords, MANEUVERS, maneuverWords } from "../net/crewcmd";
 import type { Args } from "../ai/tool-schema";
@@ -327,6 +327,10 @@ const NOTES: Record<CrewView, [string, string]> = {
   ground: [
     "Le corps survolé : la trace au sol, le point d’atterrissage, la nuit",
     "The body flown over: the ground track, the landing point, the night",
+  ],
+  descent: [
+    "La hauteur, les vitesses, le stationnaire, le point d’atterrissage et sa portée",
+    "The height, the speeds, the hover, the landing point and its reach",
   ],
   dash: ["Toucher un panneau pour l’ouvrir · pincer pour la portée", "Tap a panel to open it · pinch for the range"],
   pfd: [
@@ -643,6 +647,7 @@ function setView(view: CrewView) {
     "timeline",
     "rel",
     "ground",
+    "descent",
   ].includes(view);
   if (view === "system") views.map3d.ahead = 0;
   // (the spacecraft's flight computer under every view of its console — K6: each station acts from its own)
@@ -663,6 +668,7 @@ const ICONS: Record<CrewView, string> = {
   timeline: '<path d="M3 12h18"/><circle cx="7" cy="12" r="2"/><circle cx="14" cy="12" r="2"/><path d="M19 9v6"/>',
   rel: '<circle cx="8" cy="12" r="5"/><circle cx="17" cy="12" r="4"/><path d="M8 12V9M17 12l2-2"/>',
   ground: '<circle cx="12" cy="12" r="9"/><path d="M5 15c4-6 10-6 14-3"/><circle cx="16" cy="11" r="1.5"/>',
+  descent: '<path d="M12 3v11M8 10l4 4 4-4"/><path d="M4 20h16"/><path d="M8 17l-2 3M16 17l2 3"/>',
   system:
     '<circle cx="12" cy="12" r="2.5"/><ellipse cx="12" cy="12" rx="9.5" ry="4"/><ellipse cx="12" cy="12" rx="5.5" ry="2.3"/><circle cx="21" cy="12" r="1.2"/>',
   orbit:
@@ -700,13 +706,19 @@ function syncBadge() {
 }
 /** the console's profile now (PLAN-VAISSEAUX K2 — profile.ts): the craft followed's — its views, its tiles, its theme */
 let profile: CrewProfile | null = null;
+/** the craft followed (its own views and tiles — AUDIT-CREW priority 4: the Lander's descent, the Endurance's ring) */
+let craftKey = "";
 function setProfile(p: CrewProfile) {
-  if (p === profile) return;
+  const craft = snapNow()?.craft;
+  const key = `${craft?.id ?? ""}:${!!craft?.lands}:${!!craft?.ring}`;
+  if (p === profile && key === craftKey) return;
   profile = p;
+  craftKey = key;
   document.body.dataset.profile = p;
   syncBadge();
   $("views").replaceChildren();
-  for (const view of PROFILE_VIEWS[p]) {
+  const list = craftViews(p, craft);
+  for (const view of list) {
     const b = button("", () => setView(view));
     b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[view]}</svg><span>${viewName(view)}</span>`;
     b.dataset.view = view;
@@ -714,7 +726,9 @@ function setProfile(p: CrewProfile) {
   }
   $("metrics").replaceChildren();
   // (the view kept when the other profile has it — the globe, the telemetry —, else the station's, the profile's first)
-  setView(PROFILE_VIEWS[p].includes(views.view) ? views.view : p === "space" ? station.view : viewIn(p, views.view));
+  const keep = list.includes(views.view) ? views.view : p === "space" && list.includes(station.view) ? station.view : viewIn(p, views.view);
+  setView(list.includes(keep) ? keep : list[0]!);
+  delete mcp.dataset.sig;
 }
 views.onOpen = setView;
 $("zoom-in").addEventListener("click", () => views.zoomBy(1.333));
@@ -756,11 +770,13 @@ const TILES: Record<TileKey, { name: () => string; unit: (u: ReturnType<typeof u
   next: { name: () => L("Prochain", "Next"), unit: () => "" },
   dtau: { name: () => "dτ/dt", unit: () => "" },
   link: { name: () => L("Liaison", "Link"), unit: () => "" },
+  hs: { name: () => L("Vitesse horiz.", "Horiz. speed"), unit: (u) => u.spdName.toLowerCase() },
+  ring: { name: () => L("Anneau", "Ring"), unit: () => L("tr/min", "rpm") },
 };
 function tiles(own: ReturnType<typeof model.own>) {
   const box = $("metrics");
   const u = unitsOf(views.units);
-  const keys = PROFILE_TILES[profile ?? "jet"];
+  const keys = craftTiles(profile ?? "jet", snapNow()?.craft);
   if (!box.childElementCount)
     for (const k of keys) {
       const e = el("div", "", "metric");
@@ -823,9 +839,19 @@ function tiles(own: ReturnType<typeof model.own>) {
             state = frac === undefined ? "" : frac < 0.1 ? "alarm" : frac < 0.25 ? "warn" : "ok";
           }
           break;
-        case "agl":
-          text = f?.agl !== undefined && f.agl < 30_000 ? fmt0(u.alt(f.agl)) : "—";
-          state = f?.agl !== undefined && f.agl < 150 && (m.vz ?? 0) < -3 ? "warn" : "";
+        case "agl": {
+          // (a spacecraft's descent block first — the flight's radio altimeter else)
+          const h = snap?.desc?.agl ?? f?.agl;
+          text = snap?.craft?.status === "landed" ? L("posé", "landed") : h != null && h < 30_000 ? fmt0(u.alt(h)) : "—";
+          state = h != null && h < 150 && (m.vz ?? 0) < -3 ? "warn" : "";
+          break;
+        }
+        case "hs":
+          text = snap?.desc ? fmt0(u.spd(snap.desc.vh), snap.desc.vh < 10 ? 1 : 0) : "—";
+          state = snap?.desc && snap.desc.vh > 2 && (snap.desc.agl ?? 1e9) < 50 ? "warn" : "";
+          break;
+        case "ring":
+          text = snap?.ring ? fmt0(snap.ring.rpm, 1) : "—";
           break;
         case "dv": {
           const dv = snap?.budget?.dv;
@@ -842,6 +868,11 @@ function tiles(own: ReturnType<typeof model.own>) {
           break;
         }
         case "pe":
+          if (snap?.craft?.status === "landed") {
+            text = L("posé", "landed");
+            unit = "";
+            break;
+          }
           text = fmt0(snap?.orbit?.pe, Math.abs(snap?.orbit?.pe ?? 0) < 100 ? 1 : 0);
           state = snap?.orbit && snap.orbit.pe < 0 ? "alarm" : "";
           break;
@@ -1098,7 +1129,8 @@ function syncMcpKind() {
   if (mcp.hidden) return;
   const kind = views.view === "radar" || views.view === "air" ? "arms" : fam.includes("space") && !fam.includes("jet") ? "space" : "jet";
   // (the spacecraft's panel rebuilt for another station or craft — its pops' order, the Endurance's ring)
-  const sig = kind === "space" ? `space:${station.id}:${!!snapNow()?.craft?.ring}` : kind;
+  const sig =
+    kind === "space" ? `space:${station.id}:${snapNow()?.craft?.id ?? ""}:${!!snapNow()?.craft?.ring}:${!!snapNow()?.desc}` : kind;
   if ((mcp.dataset.sig ?? mcp.dataset.kind) === sig && mcp.childElementCount) return;
   // (its kind said plainly — "arms", "space", "jet" —, its signature beside it)
   if (kind === "arms") buildArms();
@@ -1351,7 +1383,10 @@ function buildFc() {
     "prograde",
   );
   // the autopilot (a site to land on or enter for, an orbit to take off to)
-  const auto = choices(AUTOS, (k) => (k === "none" ? L("Aucun", "None") : Lp(autoWords(k))), L("Autopilote", "Autopilot"), "circularize");
+  // (a craft that never lands — the Endurance —: no landing, no take-off, no entry, no hover)
+  const lands = snapNow()?.craft?.lands !== false;
+  const autos = AUTOS.filter((k) => lands || !["land", "takeoff", "entry", "hover"].includes(k));
+  const auto = choices(autos, (k) => (k === "none" ? L("Aucun", "None") : Lp(autoWords(k))), L("Autopilote", "Autopilot"), "circularize");
   const site = field(L("Site d'atterrissage ou de rentrée", "Landing or entry site"), L("site (atterrir, rentrée)", "site (land, entry)"));
   const upAlt = field(
     L("Altitude d'orbite au décollage (km)", "Orbit altitude for the take-off (km)"),
@@ -1392,6 +1427,9 @@ function buildFc() {
   // all are — rebuilt as the pilot's figures change (syncSys)
   const sys = el("div", "", "fc-sys");
   sys.id = "fc-sys";
+  // the fleet: the room's other pilots, three orders each (rebuilt as the roster changes — syncFleet)
+  const fleetBox = el("div", "", "fc-fleet");
+  fleetBox.id = "fc-fleet";
   const pops: Record<string, HTMLElement> = {
     hold: fcPop(L("Tenue", "Hold"), [hold, actButton(L("Tenir", "Hold"), "sp.hold", () => ({ direction: hold.value }), "fc-hold")]),
     auto: fcPop(L("Autopilote", "Autopilot"), [
@@ -1464,6 +1502,22 @@ function buildFc() {
       actButton(L("Mode RCS", "RCS mode"), "sp.dock", { action: "rcs" }, "fc-rcs"),
     ]),
     systems: fcPop(L("Systèmes", "Systems"), [sys]),
+    // (the room's fleet — N1: another pilot's spacecraft asked to come to ours, hold on it, dock to it)
+    fleet: fcPop(L("Flotte", "Fleet"), [fleetBox]),
+    ...(lands
+      ? {
+          // (the powered descent: the hover, the landing to a point, the point moved 100 m at a time — the LPD)
+          descent: fcPop(L("Descente", "Descent"), [
+            actButton(L("Stationnaire", "Hover"), "sp.auto", { mode: "hover" }, "fc-hover"),
+            actButton(L("Atterrir ici", "Land here"), "sp.auto", { mode: "land" }, "fc-land"),
+            el("span", L("Point d’atterrissage (LPD) :", "Landing point (LPD):"), "seg-title"),
+            actButton(L("▲ 100 m devant", "▲ 100 m ahead"), "sp.lpd", { fwd: 100, right: 0 }, "fc-lpd-fwd"),
+            actButton(L("▼ 100 m derrière", "▼ 100 m back"), "sp.lpd", { fwd: -100, right: 0 }, "fc-lpd-back"),
+            actButton(L("◄ 100 m à gauche", "◄ 100 m left"), "sp.lpd", { fwd: 0, right: -100 }, "fc-lpd-left"),
+            actButton(L("► 100 m à droite", "► 100 m right"), "sp.lpd", { fwd: 0, right: 100 }, "fc-lpd-right"),
+          ]),
+        }
+      : {}),
     ...(snapNow()?.craft?.ring
       ? {
           ring: fcPop(L("Anneau", "Ring"), [
@@ -1475,25 +1529,66 @@ function buildFc() {
   };
   // (the station's own first — PLAN-VAISSEAUX K6: FIDO the trajectory's, GUIDO the attitude's, EECOM the systems')
   const order: Record<StationId, string[]> = {
-    copilot: ["hold", "auto", "maneuver", "plan", "dock", "target", "mission", "systems", "ring"],
-    nav: ["maneuver", "mission", "plan", "target", "hold", "auto", "dock", "systems", "ring"],
-    engineer: ["systems", "ring", "dock", "hold", "auto", "maneuver", "plan", "target", "mission"],
-    flight: ["auto", "hold", "maneuver", "mission", "plan", "dock", "systems", "target", "ring"],
-    fido: ["maneuver", "mission", "plan", "target", "auto", "hold", "dock", "systems", "ring"],
-    guido: ["hold", "auto", "dock", "target", "maneuver", "plan", "mission", "systems", "ring"],
-    eecom: ["systems", "ring", "dock", "hold", "auto", "maneuver", "plan", "mission", "target"],
-    capcom: ["hold", "auto", "plan", "dock", "systems", "maneuver", "mission", "target", "ring"],
+    copilot: ["hold", "auto", "descent", "maneuver", "plan", "dock", "target", "mission", "systems", "ring", "fleet"],
+    nav: ["maneuver", "mission", "plan", "target", "hold", "auto", "descent", "dock", "systems", "ring", "fleet"],
+    engineer: ["systems", "ring", "dock", "hold", "auto", "descent", "maneuver", "plan", "target", "mission", "fleet"],
+    flight: ["auto", "descent", "hold", "maneuver", "mission", "plan", "dock", "fleet", "systems", "target", "ring"],
+    fido: ["maneuver", "mission", "plan", "target", "auto", "descent", "hold", "dock", "systems", "ring", "fleet"],
+    guido: ["hold", "auto", "descent", "dock", "target", "fleet", "maneuver", "plan", "mission", "systems", "ring"],
+    eecom: ["systems", "ring", "dock", "hold", "auto", "descent", "maneuver", "plan", "mission", "target", "fleet"],
+    capcom: ["hold", "auto", "descent", "plan", "dock", "fleet", "systems", "maneuver", "mission", "target", "ring"],
   };
+  // (a Lander low over a ground: its descent first, whatever the station)
+  const desc = !!snapNow()?.desc && snapNow()?.craft?.id === "lander";
   const sw = el("div", "", "mcp-sw");
-  const keys = order[station.id].filter((k) => pops[k]);
+  const keys = (desc ? ["descent", ...order[station.id].filter((k) => k !== "descent")] : order[station.id]).filter((k) => pops[k]);
   keys.forEach((k, i) => {
     if (i === 0) pops[k]!.classList.add("featured");
     sw.append(pops[k]!);
   });
   sw.append(actButton(L("Relâcher", "Release"), "sp.release", {}, "fc-release"));
   mcp.append(sw);
-  sysKey = "";
+  sysKey = fleetKey = "";
   syncSys();
+  syncFleet();
+  syncActs();
+}
+
+/** the Fleet pop's pilots (N1): every other pilot of the room, its craft, the three orders to it — said from ours */
+let fleetKey = "";
+function syncFleet() {
+  const box = document.getElementById("fc-fleet");
+  if (!box) return;
+  const me = model.selected;
+  const others = model.crafts().filter((c) => c.member.slot !== me);
+  const key = JSON.stringify([lang(), others.map((c) => [c.member.slot, c.member.name, c.snapshot?.craft?.id])]);
+  if (key === fleetKey) return;
+  fleetKey = key;
+  if (!others.length) {
+    box.replaceChildren(el("p", L("Aucun autre pilote dans la salle.", "No other pilot in the room."), "muted small"));
+    return;
+  }
+  const W: [string, string, string][] = [
+    ["come", "Rejoins-moi", "Come to me"],
+    ["hold", "Maintiens-toi sur moi", "Hold on me"],
+    ["dock", "Amarre-toi à moi", "Dock to me"],
+  ];
+  box.replaceChildren(
+    ...others.map((c) => {
+      const card = el("div", "", "fc-card");
+      card.append(el("strong", `${c.member.name}${c.snapshot?.craft ? ` · ${c.snapshot.craft.name}` : ""}`));
+      for (const [o, fr, en] of W)
+        card.append(
+          actButton(
+            L(fr, en),
+            "sp.fleet",
+            { order: o, slot: c.member.slot, name: c.member.name.slice(0, 16) },
+            `fleet-${o}-${c.member.slot}`,
+          ),
+        );
+      return card;
+    }),
+  );
   syncActs();
 }
 
@@ -1699,6 +1794,7 @@ function refresh() {
   syncMcpKind();
   syncMcp();
   syncSys();
+  syncFleet();
   const followed = room?.members.find((m) => m.slot === model.selected);
   $("pilot-dot").style.background = followed?.colour ?? "#4d606b";
   $("freshness").textContent =
@@ -2002,6 +2098,22 @@ views.onBody = (id, x, y) => {
 views.onNodeMove = (i, dtS) => void fire(null, "sp.node", { action: "shift", index: i, dtS });
 views.onGround = (at, x, y) => {
   const snap = snapNow();
+  // (the Ground view of a spacecraft: the landing point designated where the finger touched — the LPD)
+  if (views.view === "ground") {
+    const q = { lat: Math.round(at.lat * 1e5) / 1e5, lon: Math.round(at.lon * 1e5) / 1e5 };
+    views.marker = [x, y];
+    views.request();
+    menu(x, y, L("Point choisi", "Point chosen"), `${q.lat.toFixed(4)}° ${q.lon.toFixed(4)}°`, [
+      actButton(
+        L("Désigner pour l’atterrissage (LPD)", "Designate for the landing (LPD)"),
+        "sp.lpd",
+        q,
+        "ctx-lpd",
+        (ok) => ok && closeMenu(),
+      ),
+    ]);
+    return;
+  }
   const own = model.own();
   const route = snap?.route ?? [];
   const active = snap?.nav?.active ?? route.length;
@@ -2113,7 +2225,7 @@ function relabel() {
   delete $("traffic-summary").dataset.key;
   const list = document.getElementById("contact-list");
   if (list) delete list.dataset.signature;
-  rosterKey = pilotKey = alertKey = sysKey = "";
+  rosterKey = pilotKey = alertKey = sysKey = fleetKey = "";
   closeMenu();
   setUnits(views.units);
   controls();

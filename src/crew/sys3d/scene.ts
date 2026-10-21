@@ -28,7 +28,7 @@ export interface SceneMark {
   pos: V3;
   label: string;
   colour: string;
-  kind: "craft" | "node" | "target" | "body" | "ghost";
+  kind: "craft" | "node" | "target" | "body" | "ghost" | "other";
 }
 export interface SystemScene {
   side: "ours" | "hole";
@@ -202,6 +202,11 @@ export function systemScene(s: InstrumentSnapshot | null, focus: Focus = "body",
     // the craft's own conic (bound): its orbit about the body
     if (o && o.e < 1) lines.push({ pts: conicRing(o, Infinity).map((q) => add(home, q)), colour: [0.25, 0.85, 1, 0.55], width: 1.4 });
     marks.push({ pos: add(home, st.r), label: s.craft?.name ?? L("vaisseau", "craft"), colour: "#f6fbff", kind: "craft" });
+    // the room's other spacecraft about the same body (N6), at their colour (AUDIT-CREW priority 4)
+    for (const q of s.others ?? []) marks.push({ pos: add(home, q.r), label: `${q.name} · ${q.vessel}`, colour: q.colour, kind: "other" });
+    // a station's, a craft's target where it is (a body's below)
+    if (s.target?.r && !byId.has(s.target.id))
+      marks.push({ pos: add(home, s.target.r), label: s.target.name, colour: "#ffb43c", kind: "target" });
     // the craft ahead: along its free path, else its conic
     if (ahead > 0) {
       const seg = (s.traj?.free ?? []).find((q) => q.t.length && ahead >= q.t[0]! && ahead <= q.t.at(-1)!);

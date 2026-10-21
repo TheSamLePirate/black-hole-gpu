@@ -46,6 +46,16 @@ const m = (x: number) => (Math.abs(x) >= 1000 ? `${fmt(x / 1000, 2)} km` : `${fm
 export function drawDock(p: Pen, r: Rect, sc: Scene) {
   p.panel(r);
   const d = sc.snap?.dock;
+  // (docked where there is no geometry — Gargantua's side —: said so, and to whom)
+  if (d?.docked && !d.port) {
+    p.text(L(`AMARRÉ · ${d.target.toUpperCase()}`, `DOCKED · ${d.target.toUpperCase()}`), r.x + r.w / 2, r.y + r.h / 2, {
+      col: C.green,
+      size: 18,
+      align: "center",
+      weight: 800,
+    });
+    return;
+  }
   if (!d)
     return none(
       p,
@@ -360,8 +370,18 @@ export function drawRelativity(p: Pen, r: Rect, sc: Scene) {
     [L("Vitesse · β", "Speed · β"), `${fmt(v / 1000, 3)} km/s · ${beta < 1e-3 ? beta.toExponential(2) : fmt(beta, 4)}`],
     [L("Facteur de Lorentz γ", "Lorentz factor γ"), gamma < 1.0001 ? `1 + ${((gamma - 1) * 1e9).toFixed(2)}×10⁻⁹` : fmt(gamma, 4)],
     [L("Horloge de la salle (Terre)", "The room's clock (Earth)"), dur(T.room)],
-    [L("Temps propre du vaisseau", "The craft's proper time"), dur(T.tau)],
-    [L("Écart (Terre en avance)", "Gap (Earth ahead)"), dur(Math.max(0, T.room - T.tau)), T.room - T.tau > 60 ? C.amber : C.text],
+    [L("Temps propre du vaisseau (ce vol)", "The craft's proper time (this flight)"), dur(T.tau)],
+    // (since the flight began: the proper time starts again at each flight — room − tau would be the scene's age)
+    ...(T.lag !== undefined && T.since !== undefined
+      ? ([
+          [L("Depuis le départ (Terre)", "Since the start (Earth)"), dur(T.since)],
+          [
+            L("Temps écoulé en plus sur Terre", "Extra time gone by on Earth"),
+            T.lag < 1 ? `${fmt(T.lag * 1000, 1)} ms` : dur(T.lag),
+            T.lag > 60 ? C.amber : C.text,
+          ],
+        ] as [string, string, string?][])
+      : []),
     [L("Facteur de temps", "Time warp"), `×${fmt(T.warp, T.warp < 10 ? 1 : 0)}`],
   ];
   const K = s?.kerr;
@@ -378,18 +398,28 @@ export function drawRelativity(p: Pen, r: Rect, sc: Scene) {
 }
 
 /** GROUND: the body flown about, orthographic about the craft's point — its grid, its night, the ground track ahead,
- *  the craft, the landing point. */
-export function drawGround(p: Pen, r: Rect, sc: Scene) {
+ *  the craft, the landing point. Its projection back: a point of the view to its place on the body (null: off it). */
+export function drawGround(p: Pen, r: Rect, sc: Scene): ((x: number, y: number) => { lat: number; lon: number } | null) | null {
   p.panel(r);
   const s = sc.snap;
   const g = s?.geo;
-  if (!s || !g)
-    return none(
-      p,
-      r,
-      L("Position au sol non reçue", "No ground position received"),
-      L("(loin de tout corps solide)", "(far from any solid body)"),
-    );
+  if (!s || !g) {
+    // (Gargantua's side: landed on a world there, or in its sky — said so, not "far from any solid body")
+    const st = s?.craft?.status,
+      at = s?.craft?.where;
+    if (st === "landed" && at)
+      none(p, r, L(`Posé sur ${bodyName(at)}`, `Landed on ${bodyName(at)}`), L("(pas de carte de ce monde)", "(no map of this world)"));
+    else if (at && at !== "gargantua" && s?.orbit)
+      none(p, r, L(`Autour de ${bodyName(at)}`, `About ${bodyName(at)}`), L("(pas de carte de ce monde)", "(no map of this world)"));
+    else
+      none(
+        p,
+        r,
+        L("Position au sol non reçue", "No ground position received"),
+        L("(loin de tout corps solide)", "(far from any solid body)"),
+      );
+    return null;
+  }
   const lat0 = g.lat * D,
     lon0 = g.lon * D;
   const R = Math.min(r.w, r.h) * 0.42;
@@ -464,4 +494,20 @@ export function drawGround(p: Pen, r: Rect, sc: Scene) {
     weight: 700,
   });
   if (s.metrics.alt !== undefined) p.text(`altitude ${fmt(s.metrics.alt / 1000, 1)} km`, r.x + 14, r.y + 38, { col: C.text, size: 11 });
+  // (a powered landing to a point: the place touched is the new one)
+  if (s.desc?.auto === "land")
+    p.text(L("Toucher pour désigner le point d’atterrissage", "Tap to designate the landing point"), r.x + 14, r.y + r.h - 12, {
+      col: C.amber,
+      size: 11,
+    });
+  return (x, y) => {
+    const X = (x - cx) / R,
+      Yv = (cy - y) / R;
+    const rho = Math.hypot(X, Yv);
+    if (rho > 1) return null;
+    const c = Math.asin(rho);
+    const lat = rho < 1e-9 ? lat0 : Math.asin(Math.cos(c) * Math.sin(lat0) + (Yv * Math.sin(c) * Math.cos(lat0)) / rho);
+    const lon = lon0 + Math.atan2(X * Math.sin(c), rho * Math.cos(c) * Math.cos(lat0) - Yv * Math.sin(c) * Math.sin(lat0));
+    return { lat: lat / D, lon: ((((lon / D + 180) % 360) + 360) % 360) - 180 };
+  };
 }

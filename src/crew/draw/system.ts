@@ -86,6 +86,14 @@ export function drawSystemMap(
       c.strokeStyle = m.colour;
       c.lineWidth = 2;
       c.stroke();
+    } else if (m.kind === "other") {
+      c.beginPath();
+      c.arc(m.x, m.y, 5, 0, Math.PI * 2);
+      c.fillStyle = `${m.colour}88`;
+      c.fill();
+      c.strokeStyle = m.colour;
+      c.lineWidth = 2;
+      c.stroke();
     } else if (m.kind === "node") p.star(m.x, m.y, 6, C.magenta, true);
     else if (m.kind === "target") {
       c.beginPath();

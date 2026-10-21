@@ -44,7 +44,15 @@ test("in flight: the Endurance's space blocks, read back from JSON; the heavy ti
   console.log(`  the heavy snapshot: ${(json.length / 1024).toFixed(1)} KB, free path ${info.ourFree?.pts.length ?? "none"}`);
   expect(json.length).toBeLessThan(16 * 1024);
   const r = readInstruments(JSON.parse(json))!;
-  expect(r.craft).toEqual({ id: "endurance", kind: "spacecraft", name: "Endurance", lands: false, ring: true });
+  expect(r.craft).toEqual({
+    id: "endurance",
+    kind: "spacecraft",
+    name: "Endurance",
+    lands: false,
+    ring: true,
+    status: "orbit",
+    where: "earth",
+  });
   // (its state about the Earth: 800 km up, ~7.45 km/s; GM 398 600 km³/s²)
   expect(r.state!.body).toBe("earth");
   const rr = Math.hypot(...r.state!.r);

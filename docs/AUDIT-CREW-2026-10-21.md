@@ -11,8 +11,8 @@ Il manque :
 - ~~le **ravitaillement en vol** (absent du crew)~~ — fait (priorité 2) ;
 - l'**image tactique** (PLAN-RADAR-AAA RD0–RD14 non commencé) ;
 - ~~l'**anglais** (toute la console est en français)~~ — fait (priorité 3) ;
-- une **console propre au Lander** ;
-- des vues justes **côté Gargantua**.
+- ~~une **console propre au Lander**~~ — faite (priorité 4) ;
+- ~~des vues justes **côté Gargantua**~~ — faites (priorité 4).
 
 Il y a aussi un **bug d'ordre dangereux** : depuis le crew, « Maintien à poste » désamarre un vaisseau amarré.
 
@@ -76,7 +76,7 @@ Jamais testés depuis le crew sur le vrai jeu :
 |---|---|---|---|
 | Contrat `space` K1 | ✅ | `src/ui/crew-space.ts:84-256`, `src/net/instruments-space.ts:190-337` | durée des poussées ; angle de phase ; position LVLH au-delà de 5 km |
 | Profil vaisseau / F-35 | ✅ | `src/crew/profile.ts:30-65` | — |
-| Console propre à Ranger, Lander, Endurance | 🟡 | seul `craft.ring` est lu (`main.ts:1038,1336`, `spacestat.ts:92`) | `craft.lands` ignoré. Les mêmes onglets et actions pour les trois vaisseaux : amarrage proposé au Lander, atterrissage à l'Endurance. **Aucune vue de descente** pour le Lander (hauteur, vz, stationnaire). |
+| Console propre à Ranger, Lander, Endurance | ✅ (2026-10-21) | `profile.ts craftViews/craftTiles`, `draw/descent.ts`, `sp.lpd` | — ([fiche](progress/crew/P4-vaisseaux.md)) |
 | Postes à bord (3) et au sol (5) | 🟡 | `src/crew/station.ts:20-71` | un poste ne change que la vue d'accueil et l'ordre des panneaux : mêmes droits partout ; « à bord » se déclare librement et échappe au délai |
 | Délai lumière (données, ordres, réponses, messages) | ✅ | `src/crew/model.ts:100-118`, `src/crew/actions.ts:41-44,99-115` | réglage du pilote, pas de la salle (`src/settings.ts:789`) |
 | Liaison coupée derrière le trou de ver | 🟡 | `station.ts:118-129` | la **voix** n'est ni retardée ni coupée (`src/crew/radio.ts`) ; Quindar joué en local seulement |
@@ -86,15 +86,15 @@ Jamais testés depuis le crew sur le vrai jeu :
 | EECOM, consommables | 🟡 | `spaceviews.ts:158-213` | ni eau ni vivres ; cases cochées absentes de la vue EECOM |
 | Pannes et checklists partagées | ✅ | `crewcmd.ts:408-429`, `crew-exec.ts:121-131` | — (checklists FR + EN depuis la priorité 3) |
 | Rendez-vous et amarrage | 🟡 | `spaceviews.ts:29-92`, bloc < 5 km (`crew-space.ts:181`) | phases de l'autopilote en anglais brut (`docking.ts` : APPROACH, FINAL, HOLD 10 m) ; l'ISS et les vaisseaux cibles absents de la carte 3D (`sys3d/scene.ts:224`) |
-| Carte système 3D WebGPU et repli 2D | 🟡 | `src/crew/sys3d/*`, `draw/system.ts` | pas les autres joueurs ; poussées non déplaçables en 3D |
+| Carte système 3D WebGPU et repli 2D | 🟡 | `src/crew/sys3d/*`, `draw/system.ts` | les autres joueurs et la cible ISS/vaisseau y sont depuis la priorité 4 ; poussées non déplaçables en 3D |
 | Chronologie | 🟡 | `spaceviews.ts:217-272` | fenêtres de lancement |
-| Relativité | 🟡 | `spaceviews.ts:275-316` | « Terre en avance » = `room − tau`, alors que le temps propre repart de 0 à chaque vol (`rotation.ts:840`) : mesure l'âge de la scène, pas la dilatation — **à vérifier** |
-| Vue Sol | 🟡 | `spaceviews.ts:320-399` | affichage seul : pas de redésignation du point (LPD) depuis le crew, pas de liste de sites |
+| Relativité | ✅ corrigé (2026-10-21) | `crew-space.ts clocksStep`, `time.since/lag` | le chiffre était bien faux (âge de la scène) |
+| Vue Sol | ✅ (2026-10-21) | toucher → `sp.lpd` | pas de liste de sites |
 | Actions (tenues, autopilotes, manœuvres, mission, plan, cible, amarrage, anneau, poussées) | ✅ | `crewcmd.ts:301-406`, `crew-exec.ts:93-119` | — |
 | **« Maintien à poste »** | ❌ **bug** | `crew-exec.ts:106` → `keepKey()` (`stationkeep.ts:105-113`) | c'est le ⇧8 du pilote : amarré, il **désamarre** et recule de 30 m. Il faut des ordres `keep` et `undock` explicites. |
-| Ordres de flotte | ❌ | aucune occurrence dans `src/crew/` | promis en K6 et N |
-| Côté Gargantua | 🟡 | carte 3D et liaison coupée justes | Orbite : « pas d'orbite reçue (pilote plus ancien) », trompeur, sans r · E · L (`orbit.ts:59-65`) ; Boule : message générique ; Amarrage : « aucun port » même amarré (`crew-space.ts:180`) ; Sol : « loin de tout corps solide » posé sur Miller (`crew-feed.ts:220`) |
-| Vaisseau posé | 🟡 | — | aucun état « posé » : l'orbite reste dessinée comme une conique suborbitale |
+| Ordres de flotte | ✅ (2026-10-21) | `sp.fleet`, panneau Flotte | — |
+| Côté Gargantua | ✅ (2026-10-21) | `draw/kerr.ts`, `craft.status/where`, amarrage côté Gargantua | pas de carte au sol des mondes de Gargantua |
+| Vaisseau posé | ✅ (2026-10-21) | `craft.status`, Orbite et Descente « POSÉ » | — |
 
 ## Image tactique et réseau (PLAN-RADAR-AAA)
 
@@ -151,7 +151,7 @@ Réseau :
 **3. Console EN** — ✅ fait le 2026-10-21 ([fiche](progress/crew/P3-console-en.md)) : l'i18n de `src/crew/` (vues, panneaux, checklists, phases d'amarrage), et les réponses du jeu dans
 la langue de la console.
 
-**4. Vaisseaux par appareil** :
+**4. Vaisseaux par appareil** — ✅ fait le 2026-10-21 ([fiche](progress/crew/P4-vaisseaux.md)) :
 - Lander : une vue de descente et le LPD depuis le crew ;
 - Endurance : l'anneau et la flotte, des ordres de flotte ;
 - côté Gargantua : une orbite de Kerr (r · E · L), des messages justes, l'état posé ;

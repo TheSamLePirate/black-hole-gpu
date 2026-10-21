@@ -190,6 +190,7 @@ export class NetSession {
       nameOf: (slot) => this.nameOf(slot),
       families: () => crewFamilies(d.camera),
       aboard: (slot) => this.aboard.get(slot) === this.net?.room?.slot,
+      spaceOrder: (slot, o) => this.spaceOrder(slot, o),
     });
     return this.crewExecOf;
   }

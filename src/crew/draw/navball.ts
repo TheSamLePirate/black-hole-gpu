@@ -5,6 +5,7 @@
 import type { V3 } from "../orbitmath";
 import { C, fmt, type Pen, type Rect } from "./kit";
 import type { Scene } from "./scene";
+import { onHoleSide } from "./kerr";
 import { L, Lp } from "../lang";
 import { autoWords, holdWords } from "../../net/crewcmd";
 
@@ -71,6 +72,24 @@ export function drawNavball(p: Pen, r: Rect, sc: Scene, compact = false) {
   const st = s?.state,
     at = s?.att;
   if (!st || !at) {
+    // (Gargantua's side: no Kepler orbit to set the ball against — the Kerr figures are on the Orbit view)
+    if (s && onHoleSide(sc)) {
+      p.text(L("Côté Gargantua : pas de boule orbitale", "Gargantua's side: no orbital ball"), r.x + r.w / 2, r.y + r.h / 2, {
+        col: C.amber,
+        size: 13,
+        align: "center",
+      });
+      const K = s.kerr;
+      p.text(
+        K
+          ? `r ${fmt(K.r, 2)} M · E ${fmt(K.E, 4)} · L ${fmt(K.L, 3)} — ${L("voir la vue Orbite", "see the Orbit view")}`
+          : L("(les figures de Kerr sont sur la vue Orbite)", "(the Kerr figures are on the Orbit view)"),
+        r.x + r.w / 2,
+        r.y + r.h / 2 + 20,
+        { col: C.dim, size: 11, align: "center" },
+      );
+      return;
+    }
     p.text(L("Attitude ou état orbital non reçus", "Attitude or orbital state not received"), r.x + r.w / 2, r.y + r.h / 2, {
       col: C.dim,
       size: 13,

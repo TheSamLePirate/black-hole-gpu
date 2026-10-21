@@ -15,6 +15,22 @@ export interface InstrumentCraft {
   /** it lands (its descent's views), it has a ring (the Endurance) */
   lands: boolean;
   ring: boolean;
+  /** what it does where (game/status.ts): its state — landed, flight (in the air), suborbital, orbit, escape, hyperbolic, bound,
+   *  unbound, plunge, throat —, the body of its sphere (miller, gargantua…); absent from an older pilot */
+  status?: string;
+  where?: string;
+}
+/** A powered descent (a craft that lands, near a solid ground): its height over the ground [m], vertical and horizontal
+ *  speeds [m/s], hovering, the autopilot flying it, the time to the ground at this rate [s]; the landing point
+ *  designated: its distance [m] and how far it can still be moved (the LPD's reach) [m]. */
+export interface InstrumentDescent {
+  agl: number | null;
+  vz: number;
+  vh: number;
+  hover: boolean;
+  auto: string;
+  ttg: number | null;
+  lpd: { dist: number; reach: number } | null;
 }
 /** The craft's state about its body: position [km], velocity [km/s], the body's GM [km³/s²], radius and sphere [km]. */
 export interface InstrumentState {
@@ -65,6 +81,8 @@ export interface InstrumentHole {
 }
 /** The target: distance [m], closing rate [m/s, + closing], the closest approach [m] and its time [s]. */
 export interface InstrumentTarget {
+  /** a station's, a craft's place about the state's body [km] (the map draws it; a body's is in `bodies`) */
+  r?: V3;
   id: string;
   name: string;
   dist: number;
@@ -93,6 +111,10 @@ export interface InstrumentTime {
   tau: number;
   /** the mission's elapsed time [s] (since the flight began) */
   met?: number;
+  /** since the flight began: the far-away clock's time [s] and how far it is ahead of the craft's own (the time gone by
+   *  on the Earth beyond the crew's) [s] — the proper time starts again at each flight: `room − tau` is not it */
+  since?: number;
+  lag?: number;
 }
 /** The link to the Earth: the light's time one way [s]; the delay the room plays for its ground stations [s] (the
  *  pilot's setting: real, a tenth, none — K5); cut (behind the wormhole: no live link). */
@@ -133,6 +155,8 @@ export interface InstrumentSpace {
   dock?: InstrumentDock | null;
   /** the landing point: its name, its place [°] on its body, redesignated by the pilot (the LPD) */
   land?: { body: string; name: string; lat: number; lon: number; moved: boolean } | null;
+  /** the powered descent (a craft that lands, near the ground) */
+  desc?: InstrumentDescent | null;
   state?: InstrumentState | null;
   traj?: InstrumentTraj | null;
   nodes?: InstrumentNode[];
@@ -197,6 +221,19 @@ export function readSpace(x: Record<string, unknown>): InstrumentSpace {
       name: label(c.name),
       lands: c.lands === true,
       ring: c.ring === true,
+      ...(typeof c.status === "string" ? { status: label(c.status, 16) } : {}),
+      ...(typeof c.where === "string" ? { where: label(c.where, 16) } : {}),
+    };
+  const ds = x.desc;
+  if (record(ds) && finite(ds.vz))
+    out.desc = {
+      agl: finite(ds.agl) ? ds.agl : null,
+      vz: ds.vz,
+      vh: Math.max(0, num(ds.vh)),
+      hover: ds.hover === true,
+      auto: label(ds.auto, 16),
+      ttg: finite(ds.ttg) ? Math.max(0, ds.ttg) : null,
+      lpd: record(ds.lpd) && finite(ds.lpd.dist) ? { dist: Math.max(0, ds.lpd.dist), reach: Math.max(0, num(ds.lpd.reach)) } : null,
     };
   const s = x.state;
   if (record(s) && v3(s.r) && v3(s.v) && finite(s.mu))
@@ -260,6 +297,7 @@ export function readSpace(x: Record<string, unknown>): InstrumentSpace {
   const g = x.target;
   if (record(g) && finite(g.dist))
     out.target = {
+      ...(v3(g.r) ? { r: [...g.r] as V3 } : {}),
       id: label(g.id, 16),
       name: label(g.name),
       dist: g.dist,
@@ -297,6 +335,8 @@ export function readSpace(x: Record<string, unknown>): InstrumentSpace {
       dtau: num(ti.dtau, 1),
       tau: num(ti.tau, ti.room),
       ...(finite(ti.met) ? { met: Math.max(0, ti.met) } : {}),
+      ...(finite(ti.since) ? { since: Math.max(0, ti.since) } : {}),
+      ...(finite(ti.lag) ? { lag: ti.lag } : {}),
     };
   const l = x.link;
   if (record(l) && finite(l.light))

@@ -60,14 +60,21 @@ pour ce qu'un ancien pilote n'envoie pas.
 Les blocs « espace » (PLAN-VAISSEAUX K1, `src/net/instruments-space.ts`), en km et km/s autour de chaque corps, sur
 les axes du repère du jeu :
 - à chaque envoi :
-  - `craft` : l'appareil suivi (avion ou vaisseau, s'il se pose, s'il a un anneau) ; la console choisit son profil
-    d'après lui ;
+  - `craft` : l'appareil suivi (avion ou vaisseau, s'il se pose, s'il a un anneau, son état — posé, en vol, suborbital,
+    en orbite, orbite de Kerr liée ou non… — et le corps de sa sphère) ; la console choisit son profil, ses vues et ses
+    tuiles d'après lui ;
+  - `desc` : la descente motorisée d'un vaisseau qui se pose, près d'un sol (sous 60 km, ou posé) : hauteur sol, vitesses
+    verticale et horizontale, stationnaire, autopilote, temps avant le sol, point d'atterrissage (distance, portée du
+    LPD) ;
   - `state` : position et vitesse autour du corps de la sphère d'influence, son GM, son rayon, sa sphère ;
   - `nodes` : les poussées du plan (dans combien de secondes, Δv prograde · normal · radial en m/s, rôle) ; `burn`
     (Δv restant de la poussée en cours) ;
-  - `target` : distance, rapprochement, approche minimale et sa date ;
+  - `target` : distance, rapprochement, approche minimale et sa date ; la place d'une station ou d'un vaisseau ciblé
+    (la carte système la dessine) ;
   - `sysx` : batterie, bilan, oxygène, épurateurs, équipage, pannes (X3) ;
-  - `time` : facteur de temps, horloge de salle, dτ/dt et temps propre ;
+  - `time` : facteur de temps, horloge de salle, dτ/dt et temps propre ; depuis le départ du vol, le temps de la salle
+    et son avance sur celui du vaisseau (`since`, `lag` : le temps propre repart de zéro à chaque vol, l'écart
+    « salle − temps propre » n'était que l'âge de la scène) ;
   - `link` : temps de la lumière vers la Terre, coupé derrière le trou de ver ;
   - `ring`, `ports` : l'anneau et les ports de l'Endurance ;
   - `kerr` : du côté de Gargantua, r, E et L ;
@@ -141,11 +148,29 @@ console s'ouvre sur la première vue du profil.
 | Δv | les poussées du plan bout à bout contre le Δv des ergols, la marge, le réservoir, la poussée en cours |
 | EECOM | batterie, oxygène, épurateurs, bilan et autonomie ; chaque panne avec sa checklist (le français du jeu) |
 | Chronologie | le temps de mission (MET) ; les poussées, apsides, changements de sphère, approches minimales des 24 h à venir sur un axe en racine carrée |
-| Relativité | dτ/dt, « une heure à bord = … sur Terre », β, γ, horloge de salle contre temps propre, r · E · L côté Gargantua, liaison |
-| Sol | le corps survolé en projection orthographique autour du vaisseau : grille, terminateur, trace au sol, point d'atterrissage (et sa redésignation au LPD) |
+| Relativité | dτ/dt, « une heure à bord = … sur Terre », β, γ, horloge de salle, temps propre du vol, depuis le départ (Terre) et le temps écoulé en plus sur Terre (`time.lag`), r · E · L côté Gargantua, liaison |
+| Sol | le corps survolé en projection orthographique autour du vaisseau : grille, terminateur, trace au sol, point d'atterrissage (et sa redésignation au LPD). **Toucher un point le désigne pour l'atterrissage** (`sp.lpd`, pendant un atterrissage motorisé sous 5 km). Côté Gargantua : « Posé sur Miller », « Autour de Mann » |
+| Descente | (vaisseaux qui se posent ; la deuxième vue du Lander) la hauteur sol sur un ruban, sa tendance, les vitesses verticale et horizontale, le temps avant le sol, le stationnaire ou l'atterrissage piloté, ergols et Δv ; le point d'atterrissage vu de dessus autour du vaisseau et la portée du LPD ; posé : « POSÉ · LUNE » |
 
 Le Tableau vaisseau montre la boule à la place du PFD. Il faut pour cela les blocs `att` (nez et haut du vaisseau, axes
 de sa pose), `dock`, `land` et `time.met` de l'instantané.
+
+**Une console par vaisseau** (AUDIT-CREW priorité 4, `profile.ts craftViews/craftTiles`) :
+- le **Lander** : Tableau, **Descente**, Sol en tête ; tuiles hauteur sol, vario, vitesse horizontale, ergols, Δv ; dans
+  l'ordinateur de vol, le panneau **Descente** passe en premier quand il est bas au-dessus d'un sol (stationnaire,
+  « Atterrir ici », le point d'atterrissage déplacé de 100 m devant, derrière, à gauche, à droite) ;
+- le **Ranger** (il se pose aussi) : la Descente après le Sol ;
+- l'**Endurance** (elle ne se pose jamais) : ni Descente ni panneau Descente, ni atterrissage, décollage, rentrée ou
+  stationnaire dans ses autopilotes ; une tuile Anneau (tr/min) ;
+- tous : le panneau **Flotte** (N1) — chaque autre pilote de la salle et trois ordres (« Rejoins-moi », « Maintiens-toi
+  sur moi », « Amarre-toi à moi », `sp.fleet`) que le pilote suivi lui envoie ; l'autre reçoit sa carte Accepter / Refuser.
+- **Posé** : l'Orbite et la Descente disent « POSÉ » et où, les tuiles Périapside et Hauteur sol « posé ».
+- **Côté Gargantua** : l'Orbite dessine le trou de dessus (horizon, ergosphère, orbite des photons, ISCO pour son spin),
+  ses mondes, la chute du vaisseau, et r · E · L (orbite liée si E < 1, non liée, chute dans l'horizon) ; autour d'un
+  monde (Miller, Mann…), son orbite d'après ses apsides. La Boule le dit (« pas de boule orbitale »), l'Amarrage dit
+  « AMARRÉ · ENDURANCE » quand c'est le cas.
+- **Carte système** : les autres vaisseaux de la salle (à leur couleur) et une cible station ou vaisseau (l'ISS) y sont
+  dessinés.
 
 **Orbite** : la conique autour du corps de la sphère, vue de dessus de son plan (périapside en haut), reconstruite à
 partir de l'état reçu (`src/crew/orbitmath.ts`) ; le corps à l'échelle, Pe et Ap avec leurs hauteurs, le vaisseau,
@@ -259,6 +284,8 @@ FLIGHT.
 | **Amarrage** | `sp.dock` : maintien à poste (`keep` : l'engage seulement, jamais un désamarrage — amarré, refusé avec sa raison, contrairement au ⇧8 du pilote), désamarrer (`undock`), faire le plein, mode RCS |
 | **Systèmes** | chaque panne en cours avec sa checklist. Les cases sont **partagées** avec la tablette du pilote (`sys.step`) ; l'action (isoler le bloc, rallumer, passer sur la centrale de secours…) n'est permise qu'une fois toutes les étapes cochées (`sys.fix`) |
 | **Anneau** | `sp.ring` : l'anneau de l'Endurance plus ou moins vite |
+| **Descente** | (vaisseaux qui se posent) stationnaire, atterrir ici, le point d'atterrissage déplacé de 100 m (`sp.lpd {fwd, right}`) ; sur la vue Sol, un point touché (`sp.lpd {lat, lon}`) |
+| **Flotte** | `sp.fleet {order, slot}` : un ordre de flotte à un autre pilote de la salle (rejoindre, maintien, amarrage) |
 
 - **Carte système** : toucher un corps ouvre un menu : « Prendre pour cible », « Mission vers … — aperçu ».
 - **Orbite** : on fait glisser une poussée du plan le long de l'orbite. Son nouveau temps s'affiche pendant le geste

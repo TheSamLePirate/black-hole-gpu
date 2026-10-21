@@ -15,6 +15,7 @@ import { type Lang, tf, tr, translateTo } from "../i18n";
 import { CHECKLISTS, type FailureKind } from "../game/systems";
 import { M_SECONDS } from "../units";
 import { unitsFor } from "./unitsys";
+import { LPD } from "../controller/lowthrust";
 
 export interface CrewExecDeps {
   camera: CameraController;
@@ -27,11 +28,15 @@ export interface CrewExecDeps {
   families(): Family[];
   /** whether a player rides aboard our craft (PLAN-VAISSEAUX N3: our copilot — his orders as a crew screen's) */
   aboard?(slot: number): boolean;
+  /** an order to another pilot's spacecraft (N1 — ui/netsession.ts spaceOrder): what to say */
+  spaceOrder?(slot: number, order: "come" | "hold" | "dock"): string;
 }
 
 /** what an act does aboard: the game tool and its arguments, or the controller's own call; its words back */
 export interface ExecCtx {
   camera: CameraController;
+  /** the room's fleet orders (N1) */
+  spaceOrder?(slot: number, order: "come" | "hold" | "dock"): string;
   /** the asking console's language: its own words for a refusal here */
   lang: Lang;
   /** a game tool run with its arguments checked against its own schema; its result (short), or throws */
@@ -144,6 +149,25 @@ const RUN: Record<Act, Run> = {
     C.nudgeNode(i, [0, 0, 0], Number(a.dtS ?? 0) / M_SECONDS);
     return x.lang === "fr" ? "Poussée déplacée" : "Burn moved";
   },
+  // (the landing point: taken at the landing's next step — only flying the powered landing to a point, under 5 km)
+  "sp.lpd": (a, x) => {
+    const C = x.camera;
+    const L = C.landRun;
+    if (C.pilot.auto !== "land" || !L || !(L.q || L.site))
+      return {
+        ok: false,
+        note:
+          x.lang === "fr" ? "Le point d'atterrissage : l'atterrissage motorisé d'abord" : "The landing point: the powered landing first",
+      };
+    const h = C.surfaceInfo()?.alt ?? Number.POSITIVE_INFINITY;
+    if (!(h < LPD.below))
+      return { ok: false, note: x.lang === "fr" ? "Le point d'atterrissage : sous 5 km" : "The landing point: below 5 km" };
+    if (a.lat !== undefined && a.lon !== undefined) C.lpdOrder = { lat: Number(a.lat), lon: Number(a.lon) };
+    else C.lpdOrder = { fwd: Number(a.fwd ?? 0), right: Number(a.right ?? 0) };
+    return x.lang === "fr" ? "Point d'atterrissage redésigné" : "Landing point redesignated";
+  },
+  "sp.fleet": (a, x) =>
+    x.spaceOrder ? x.spaceOrder(Number(a.slot), a.order as "come" | "hold" | "dock") : { ok: false, note: "Not in a room" },
   // (the refusals said as such, whatever the pilot's language: the console's)
   "sys.step": (a, x) => {
     const k = a.kind as FailureKind;
@@ -207,7 +231,7 @@ function readResult(r: unknown): { line: string; refused: boolean; data: Record<
 }
 /** the tools' refusals come back as words, not throws: the usual ones read as a refusal */
 const REFUSED =
-  /^(no |not |nothing to fix|the checklist first|cannot|can't|unknown|only |the jet's systems: in|the autopilot's holds: in|in the air|nav: (no|in the air)|out of|nothing |the radar: in|stt: no)/i;
+  /^(no |not |orders to the fleet|nothing to fix|the checklist first|cannot|can't|unknown|only |the jet's systems: in|the autopilot's holds: in|in the air|nav: (no|in the air)|out of|nothing |the radar: in|stt: no)/i;
 
 export class CrewExec {
   private gate = new CrewGate(4);
@@ -262,6 +286,7 @@ export class CrewExec {
       return answer(false, say("Indisponible sur cet appareil ou dans ce mode", "Unavailable on this craft or in this mode"));
     const ctx: ExecCtx = {
       camera: this.d.camera,
+      ...(this.d.spaceOrder ? { spaceOrder: this.d.spaceOrder } : {}),
       lang,
       tool: async (name, args) => {
         const tool = this.d.tools().find((x) => x.name === name);

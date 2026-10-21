@@ -288,7 +288,25 @@ export async function spacePilots(url: string, code: string) {
           next: phase < 0.95 ? { kind: "impact", name: "Tranquillité", in: (600 - (t % 600)) * 0.9 } : null,
           warn: [],
           caps: { on: true, fam: ["space"] },
-          craft: { id: "lander", kind: "spacecraft", name: "Lander", lands: true, ring: false },
+          craft: {
+            id: "lander",
+            kind: "spacecraft",
+            name: "Lander",
+            lands: true,
+            ring: false,
+            status: phase < 0.995 ? "suborbital" : "landed",
+            where: "moon",
+          },
+          // (the descent block: its height, its rates, the landing flown, the point and its reach)
+          desc: {
+            agl: Math.round(h),
+            vz: Math.round((-h / 100 - 1) * 10) / 10,
+            vh: Math.round(vh * 10) / 10,
+            hover: false,
+            auto: "land",
+            ttg: Math.round(h / (h / 100 + 1)),
+            lpd: { dist: Math.round(Math.max(h * 1.3, 50)), reach: Math.round(Math.max(250, h)) },
+          },
           state: { body: "moon", r: rr, v: [0, vh / 1000, -h / 1e5], mu: MU_M, radius: R_M, soi: 66_000 },
           budget: { dv: Math.round(900 * (1 - phase) + 200), prop: 0.4 * (1 - phase) + 0.1 },
           land: { body: "moon", name: "Tranquillité", lat: 0.674, lon: 23.473, moved: false },
@@ -317,7 +335,7 @@ export async function spacePilots(url: string, code: string) {
           route: [],
           ahead: [],
           caps: { on: true, fam: ["space"] },
-          craft: { id: "endurance", kind: "spacecraft", name: "Endurance", lands: false, ring: true },
+          craft: { id: "endurance", kind: "spacecraft", name: "Endurance", lands: false, ring: true, status: "bound", where: "gargantua" },
           kerr: { r: 12, E: 0.93, L: 3.4 },
           ring: { rpm: romilly.ringRpm, g: (romilly.ringRpm / 5) ** 2 * 0.84 },
           ports: [
@@ -325,7 +343,15 @@ export async function spacePilots(url: string, code: string) {
             { name: "moyeu arrière", docked: "" },
           ],
           sysx: romilly.sysx(0.99, 12, (8000 / 0.84 / 12) * 24),
-          time: { warp: 1, room: 86400 * 23 * 365 + t, dtau: 0.62, tau: 86400 * 2 + t * 0.62, met: 86400 * 2 + t },
+          time: {
+            warp: 1,
+            room: 86400 * 23 * 365 + t,
+            dtau: 0.62,
+            tau: 86400 * 2 + t * 0.62,
+            met: 86400 * 2 + t,
+            since: Math.round((86400 * 2) / 0.62 + t),
+            lag: Math.round((86400 * 2) / 0.62 - 86400 * 2 + t * 0.38),
+          },
           link: { light: 0, cut: true },
           ...(heavy
             ? {

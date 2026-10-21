@@ -819,6 +819,27 @@ function landWant(
     L.moved = true;
     padX = to;
   }
+  // (a crew's redesignation — the console's LPD: a place touched on its Ground view, or a step forward, back, left, right —:
+  // the same reach as the stick's, at once)
+  const O = this.lpdOrder;
+  this.lpdOrder = null;
+  if (padX && O && h < LPD.below) {
+    const hz = (v: Vec3) => unitV(lin(v, 1, up, -dot3(v, up)));
+    const vh = lin(va, 1, up, -dot3(va, up));
+    const fwd = Math.hypot(...vh) * C > 2 ? hz(vh) : hz(L.heading ?? this.levelHeading(up));
+    const right = cross(fwd, up);
+    L.q0 ??= toBodyFixed(id, padX, t0);
+    let to = "lat" in O ? sitePlace(O) : lin(padX, 1, lin(fwd, O.fwd, right, O.right), 1 / M_METRES);
+    const o = fromBodyFixed(id, L.q0, t0);
+    const off = lin(sub3(to, o), M_METRES, to, 0);
+    const lim = Math.max(LPD.minReach, h);
+    const ol = Math.hypot(...off);
+    if (ol > lim) to = lin(o, 1, off, lim / ol / M_METRES);
+    L.q = toBodyFixed(id, to, t0);
+    if (L.site) L.site = null;
+    L.moved = true;
+    padX = to;
+  }
   this.lpdPad = padX;
   // the weight the engine holds: gravity less the centrifugal of the motion over the body (an orbit's
   // speed holds itself up)

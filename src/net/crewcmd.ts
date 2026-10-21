@@ -468,6 +468,44 @@ export const ACTS = {
             en: `burn ${Number(a.index) + 1} moved ${Math.round(Number(a.dtS ?? 0))} s`,
           },
   },
+  // (the powered landing's point redesignated from the console — PLAN-VAISSEAUX K4/K6, the Lander's LPD: a place on
+  // the body, or a step over the ground forward and right [m])
+  "sp.lpd": {
+    fam: "space",
+    params: {
+      lat: { type: "number", minimum: -90, maximum: 90 },
+      lon: { type: "number", minimum: -180, maximum: 180 },
+      fwd: { type: "number", minimum: -5000, maximum: 5000 },
+      right: { type: "number", minimum: -5000, maximum: 5000 },
+    },
+    say: (a) =>
+      a.lat !== undefined
+        ? { fr: "point d'atterrissage désigné", en: "landing point designated" }
+        : {
+            fr: `point d'atterrissage déplacé de ${Math.round(Number(a.fwd ?? 0))} m devant, ${Math.round(Number(a.right ?? 0))} m à droite`,
+            en: `landing point moved ${Math.round(Number(a.fwd ?? 0))} m ahead, ${Math.round(Number(a.right ?? 0))} m right`,
+          },
+  },
+  // (the room's fleet — N1: the pilot followed asks another pilot's spacecraft to come to him, hold on him, dock to him)
+  "sp.fleet": {
+    fam: "space",
+    params: {
+      order: { type: "string", enum: ["come", "hold", "dock"] },
+      slot: { type: "number", minimum: 0, maximum: 15, integer: true },
+      name: { type: "string" },
+    },
+    required: ["order", "slot"],
+    say: (a) => {
+      const who = typeof a.name === "string" ? a.name.slice(0, 16) : `#${a.slot}`;
+      const W: Record<string, [string, string]> = {
+        come: [`${who} : rejoins-moi`, `${who}: come to me`],
+        hold: [`${who} : maintiens-toi sur moi`, `${who}: hold on me`],
+        dock: [`${who} : amarre-toi à moi`, `${who}: dock to me`],
+      };
+      const w = W[String(a.order)] ?? [who, who];
+      return { fr: `ordre de flotte — ${w[0]}`, en: `fleet order — ${w[1]}` };
+    },
+  },
   // (the failures' short names, the console's French and the pilot's English)
   "sys.step": {
     fam: "space",

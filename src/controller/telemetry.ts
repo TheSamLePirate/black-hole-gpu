@@ -241,6 +241,8 @@ export interface FlightInfo {
   target: Target;
   targetDist: number;
   targetRate: number;
+  /** our universe's target: its place [M, home frame] (the crew's map draws a station, a craft — ui/crew-space.ts) */
+  targetPos?: Vec3 | null;
   /** our universe: the body of the sphere of influence, the altitude above it [M], the radial speed,
    *  the closest approach to the target on straight lines (distance over its surface, in) */
   ref: string | null;
@@ -591,6 +593,7 @@ function flightInfo(this: CameraController): FlightInfo {
     info.X = nav.X;
     info.V = nav.V;
     const T = ourTarget(s, s.target, nav.t);
+    info.targetPos = T.pos;
     // (the autopilot's wanted velocity — absolute, home frame — in the tape's own frames: relative to the
     // reference body, over the ground, to the target. Its absolute size, the heliocentric ~30 km/s, once set
     // the tape's bug next to a 7.8 km/s orbital speed)

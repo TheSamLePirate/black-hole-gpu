@@ -1406,6 +1406,11 @@ export class CameraController {
   } | null = null;
   /** the stick's redesignation of the landing point this frame (the LPD): forward, right (−1 … 1) */
   lpdIn: { fwd: number; right: number } | null = null;
+  /** a crew's redesignation of the landing point (PLAN-VAISSEAUX K6 · ui/crew-exec.ts sp.lpd), taken at the landing's
+   *  next step: a place on the body [°], or a shift over the ground (forward along the track, right) [m] */
+  lpdOrder: { lat: number; lon: number } | { fwd: number; right: number } | null = null;
+  /** the crew's two clocks taken together at the flight's start (ui/crew-space.ts: the time gone by on the Earth) */
+  crewClock0: { t: number; tau: number; lastT: number; lastTau: number } | null = null;
   /** the powered landing's point this frame (home frame [M]), for the HUD's LPD marker */
   lpdPad: Vec3 | null = null;
 
