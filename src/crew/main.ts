@@ -10,6 +10,7 @@ import { bindTalk } from "./ptt";
 import { CrewViews, VIEW_NAMES, type CrewView } from "./views";
 import { dur } from "./draw/kit";
 import { bodyName } from "./draw/orbit";
+import { eventName } from "./draw/spacestat";
 import { linkFor, Outbox, type Station, type StationId, STATIONS, stationOf } from "./station";
 import { CHECKLISTS_FR } from "./checklists";
 import { type CrewProfile, PROFILE_TILES, PROFILE_VIEWS, profileOf, type TileKey, viewIn } from "./profile";
@@ -802,7 +803,7 @@ function tiles(own: ReturnType<typeof model.own>) {
           // (short: the tile is narrow — 15 min, not 14 min 57)
           text = !snap?.next ? "—" : snap.next.in < 60 || snap.next.in >= 3600 ? dur(snap.next.in) : `${Math.round(snap.next.in / 60)} min`;
           unit = "";
-          e.title = snap?.next ? `${snap.next.name || snap.next.kind} dans ${dur(snap.next.in)}` : "";
+          e.title = snap?.next ? `${eventName(snap.next)} dans ${dur(snap.next.in)}` : "";
           state = snap?.next?.kind === "impact" ? "alarm" : "";
           break;
         case "dtau":

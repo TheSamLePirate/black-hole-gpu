@@ -7,7 +7,7 @@ import { CHECKLISTS_FR } from "../checklists";
 import { C, D, dur, fmt, type Pen, type Rect } from "./kit";
 import { bodyName } from "./orbit";
 import type { Scene } from "./scene";
-import { failureName, roleName } from "./spacestat";
+import { eventName, failureName, roleName } from "./spacestat";
 
 const none = (p: Pen, r: Rect, what: string, why: string) => {
   p.text(what, r.x + r.w / 2, r.y + r.h / 2, { col: C.dim, size: 13, align: "center" });
@@ -234,10 +234,9 @@ export function drawTimeline(p: Pen, r: Rect, sc: Scene) {
   if (s.orbit?.tPe != null) ev.push({ in: s.orbit.tPe, name: `Périapside · ${fmt(s.orbit.pe)} km`, col: C.green });
   if (s.orbit?.tAp != null && s.orbit.ecc < 1) ev.push({ in: s.orbit.tAp, name: `Apoapside · ${fmt(s.orbit.ap)} km`, col: C.green });
   if (s.next) {
-    const kind = { impact: "Impact", exit: "Sortie de sphère", enter: "Entrée en sphère", mouth: "Bouche du trou de ver" }[s.next.kind];
     ev.push({
       in: s.next.in,
-      name: kind ? `${kind}${s.next.name ? ` · ${s.next.name}` : ""}` : s.next.name || s.next.kind,
+      name: eventName(s.next),
       col: s.next.kind === "impact" ? C.red : C.amber,
     });
   }

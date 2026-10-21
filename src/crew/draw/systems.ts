@@ -297,7 +297,8 @@ export function drawSystems(p: Pen, r: Rect, sc: Scene) {
       draw: (q) => {
         const cx = q.x + q.w * 0.3,
           cy = q.y + 104;
-        const Rb = 6371,
+        // (the body's radius sent with the orbit; an older pilot's none: the Earth's mean)
+        const Rb = orb.radius != null && orb.radius > 0 ? orb.radius : 6371,
           rp = Rb + orb.pe,
           ra = orb.ap > 0 ? Rb + orb.ap : rp * 3;
         const aa = (rp + ra) / 2,

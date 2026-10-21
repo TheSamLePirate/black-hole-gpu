@@ -25,6 +25,19 @@ const ROLE_FR: Record<string, string> = {
 };
 /** a burn's part in a mission, in French ("nœud" when it has none) */
 export const roleName = (r: string) => (r ? (ROLE_FR[r] ?? r) : "nœud");
+const EVENT_FR: Record<string, string> = {
+  impact: "Impact",
+  exit: "Sortie de sphère",
+  enter: "Entrée en sphère",
+  mouth: "Bouche du trou de ver",
+};
+/** the next event on the free-fall path, in French: its kind, its body by the console's name (the pilot's word for it
+ *  from an older pilot sending no body) */
+export function eventName(n: { kind: string; name: string; body?: string }): string {
+  const kind = EVENT_FR[n.kind];
+  const where = n.kind === "mouth" ? "" : n.body ? bodyName(n.body) : n.name;
+  return kind ? `${kind}${where ? ` · ${where}` : ""}` : where || n.kind;
+}
 
 /** a bar: its share filled, toned by thresholds */
 function bar(p: Pen, x: number, y: number, w: number, share: number | null, warn = 0.25, alarm = 0.1) {
@@ -67,9 +80,9 @@ export function drawSpaceStatus(p: Pen, r: Rect, sc: Scene) {
   const nodes = s.nodes ?? [];
   if (nodes.length) {
     head(`PLAN · ${nodes.length} POUSSÉE${nodes.length > 1 ? "S" : ""}`);
-    for (const n of nodes.slice(0, 4)) line(`${n.role || "nœud"} · dans ${dur(n.in)}`, `${fmt(Math.hypot(...n.dv), 1)} m/s`, C.magenta);
+    for (const n of nodes.slice(0, 4)) line(`${roleName(n.role)} · dans ${dur(n.in)}`, `${fmt(Math.hypot(...n.dv), 1)} m/s`, C.magenta);
   }
-  if (s.next) line("Prochain événement", `${s.next.name || s.next.kind} · ${dur(s.next.in)}`, C.amber);
+  if (s.next) line("Prochain événement", `${eventName(s.next)} · ${dur(s.next.in)}`, C.amber);
   const T = s.target;
   if (T) {
     head(`CIBLE · ${T.name.toUpperCase()}`);

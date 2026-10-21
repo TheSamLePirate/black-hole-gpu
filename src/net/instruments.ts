@@ -143,7 +143,7 @@ export interface InstrumentSnapshot extends InstrumentSpace {
     a?: number;
   } | null;
   /** the next event on the free-fall path, and the mission's objective */
-  next?: { kind: string; name: string; in: number } | null;
+  next?: { kind: string; name: string; in: number; body?: string } | null;
   msn?: { name: string; brg: number; dist: number; dz: number } | null;
   /** the alerts lit (STALL, GEAR, PULL UP, BINGO…) */
   warn?: string[];
@@ -341,7 +341,14 @@ export function readInstruments(x: unknown): InstrumentSnapshot | null {
           ...numbers<{ radius: number; a: number }>(orbit, ["radius", "a"]),
         }
       : null,
-    next: next ? { kind: label(next.kind, 16), name: label(next.name), in: next.in as number } : null,
+    next: next
+      ? {
+          kind: label(next.kind, 16),
+          name: label(next.name),
+          in: next.in as number,
+          ...(typeof next.body === "string" ? { body: label(next.body, 24) } : {}),
+        }
+      : null,
     msn: msn ? { name: label(msn.name), brg: msn.brg as number, dist: msn.dist as number, dz: num(msn.dz) ?? 0 } : null,
     arms: record(x.arms)
       ? {

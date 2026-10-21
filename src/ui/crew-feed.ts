@@ -350,7 +350,7 @@ export function crewSnapshot(c: CameraController, i: Info, status: RangerStatus 
           ...(Number.isFinite(status.orbit.aKm) ? { a: status.orbit.aKm } : {}),
         }
       : null,
-    next: status?.next ? { kind: status.next.kind, name: status.next.name, in: status.next.inS } : null,
+    next: status?.next ? { kind: status.next.kind, name: status.next.name, in: status.next.inS, body: status.next.body } : null,
     msn: i.msn ? { name: i.msn.name, brg: i.msn.brg * D, dist: i.msn.dist, dz: i.msn.dz } : null,
     warn: warnings(i, status, fuelKg, bingo),
     caps: { on: c.s.netCrewActions !== false, fam: crewFamilies(c) },
