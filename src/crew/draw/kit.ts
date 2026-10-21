@@ -1,4 +1,5 @@
 import { wgs84Inverse } from "../../system/ellipsoid";
+import { L, locale } from "../lang";
 
 // The crew console's drawing kit: the avionics palette, a rectangle, and a pen over a 2D context with the few
 // strokes every display shares. Glows are wide translucent strokes under the line, never shadowBlur (slow on phones).
@@ -206,10 +207,10 @@ export function ramp(t: number): string {
   return `rgb(${Math.round(a[0] + (b[0] - a[0]) * u)},${Math.round(a[1] + (b[1] - a[1]) * u)},${Math.round(a[2] + (b[2] - a[2]) * u)})`;
 }
 
-/** French grouping, a fixed number of decimals; "—" when unknown */
+/** the console language's grouping (1 234,5 · 1,234.5), a fixed number of decimals; "—" when unknown */
 export function fmt(v: number | null | undefined, digits = 0): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return "—";
-  return v.toLocaleString("fr-FR", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return v.toLocaleString(locale(), { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }
 /** a duration: 45 s, 12 min 05, 2 h 14 */
 export function dur(s: number | null | undefined): string {
@@ -217,7 +218,7 @@ export function dur(s: number | null | undefined): string {
   if (s < 60) return `${Math.round(s)} s`;
   if (s < 3600) return `${Math.floor(s / 60)} min ${String(Math.floor(s % 60)).padStart(2, "0")}`;
   if (s < 86400 * 3) return `${Math.floor(s / 3600)} h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}`;
-  return `${fmt(s / 86400, 1)} j`;
+  return `${fmt(s / 86400, 1)} ${L("j", "d")}`;
 }
 
 /** the distance [m] and initial bearing [rad] from a to b over the WGS84 ellipsoid */

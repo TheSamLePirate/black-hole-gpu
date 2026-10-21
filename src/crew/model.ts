@@ -9,26 +9,28 @@ import {
 } from "../net/instruments";
 import { cartToGeodetic, WGS84_A, WGS84_F, wgs84Offset } from "../system/ellipsoid";
 import { DelayLine } from "./station";
+import { L, locale } from "./lang";
 
 export const D = Math.PI / 180;
 export const wrap = (a: number) => ((((a + 180) % 360) + 360) % 360) - 180;
 export const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
-export const METRICS: { key: InstrumentKey; name: string; unit: string; k: number }[] = [
-  { key: "alt", name: "Altitude", unit: "km", k: 0.001 },
-  { key: "speed", name: "Vitesse", unit: "m/s", k: 1 },
-  { key: "vz", name: "Vitesse verticale", unit: "m/s", k: 1 },
-  { key: "mach", name: "Mach", unit: "", k: 1 },
-  { key: "g", name: "Charge", unit: "g", k: 1 },
-  { key: "fuel", name: "Carburant", unit: "%", k: 100 },
-  { key: "throttle", name: "Gaz", unit: "%", k: 100 },
-  { key: "q", name: "Pression dynamique", unit: "kPa", k: 0.001 },
-  { key: "heat", name: "Flux thermique", unit: "W/cm²", k: 0.0001 },
-  { key: "tau", name: "Temps propre", unit: "τ/t", k: 1 },
+/** the telemetry's measures: their names in the console's language (`name()`), their SI unit and factor */
+export const METRICS: { key: InstrumentKey; name: () => string; unit: string; k: number }[] = [
+  { key: "alt", name: () => "Altitude", unit: "km", k: 0.001 },
+  { key: "speed", name: () => L("Vitesse", "Speed"), unit: "m/s", k: 1 },
+  { key: "vz", name: () => L("Vitesse verticale", "Vertical speed"), unit: "m/s", k: 1 },
+  { key: "mach", name: () => "Mach", unit: "", k: 1 },
+  { key: "g", name: () => L("Charge", "Load"), unit: "g", k: 1 },
+  { key: "fuel", name: () => L("Carburant", "Fuel"), unit: "%", k: 100 },
+  { key: "throttle", name: () => L("Gaz", "Throttle"), unit: "%", k: 100 },
+  { key: "q", name: () => L("Pression dynamique", "Dynamic pressure"), unit: "kPa", k: 0.001 },
+  { key: "heat", name: () => L("Flux thermique", "Heat flux"), unit: "W/cm²", k: 0.0001 },
+  { key: "tau", name: () => L("Temps propre", "Proper time"), unit: "τ/t", k: 1 },
 ];
 export const valueText = (value: number | undefined, k = 1) =>
   value === undefined || !Number.isFinite(value)
     ? "—"
-    : (value * k).toLocaleString("fr-FR", { maximumFractionDigits: Math.abs(value * k) < 10 ? 2 : 1 });
+    : (value * k).toLocaleString(locale(), { maximumFractionDigits: Math.abs(value * k) < 10 ? 2 : 1 });
 
 export interface CrewCraft {
   member: Member;

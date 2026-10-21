@@ -8,6 +8,7 @@ import { type Focus, systemScene } from "../sys3d/scene";
 import { C, dur, fmt, type Pen, type Rect } from "./kit";
 import { bodyName } from "./orbit";
 import type { Scene } from "./scene";
+import { L } from "../lang";
 
 export interface SystemMapState {
   cam: MapCamera;
@@ -21,7 +22,7 @@ const lengthLabel = (x: number, unit: "km" | "M") =>
   unit === "M"
     ? `${fmt(x, x < 10 ? 1 : 0)} M`
     : x >= 1.496e8 * 0.5
-      ? `${fmt(x / 1.496e8, x < 1.496e9 ? 2 : 1)} ua`
+      ? `${fmt(x / 1.496e8, x < 1.496e9 ? 2 : 1)} ${L("ua", "AU")}`
       : x >= 1e6
         ? `${fmt(x / 1e6, 1)} Mkm`
         : `${fmt(x)} km`;
@@ -39,9 +40,16 @@ export function drawSystemMap(
   p.panel(r);
   const scene = systemScene(sc.snap, st.focus, st.ahead);
   if (!scene) {
-    p.text("Pas de carte du système reçue", r.x + r.w / 2, r.y + r.h / 2, { col: C.dim, size: 13, align: "center" });
+    p.text(L("Pas de carte du système reçue", "No system map received"), r.x + r.w / 2, r.y + r.h / 2, {
+      col: C.dim,
+      size: 13,
+      align: "center",
+    });
     p.text(
-      "(le pilote suit un avion, ou un pilote plus ancien — les corps arrivent une fois par seconde)",
+      L(
+        "(le pilote suit un avion, ou un pilote plus ancien — les corps arrivent une fois par seconde)",
+        "(the pilot flies an aircraft, or an older pilot — the bodies arrive once a second)",
+      ),
       r.x + r.w / 2,
       r.y + r.h / 2 + 18,
       {
@@ -107,35 +115,41 @@ export function drawSystemMap(
     p.seg(14, r.h - 16, 14 + px, r.h - 16, C.white, 2);
     p.text(lengthLabel(nice, scene.unit), 14 + px / 2, r.h - 22, { col: C.white, size: 10, align: "center" });
   }
-  const side = scene.side === "hole" ? "GARGANTUA" : "SYSTÈME SOLAIRE";
+  const side = scene.side === "hole" ? "GARGANTUA" : L("SYSTÈME SOLAIRE", "SOLAR SYSTEM");
   const focus =
     scene.side === "hole"
       ? "Gargantua"
       : st.focus === "sun"
-        ? "Soleil"
+        ? L("Soleil", "Sun")
         : st.focus === "craft"
-          ? "vaisseau"
+          ? L("vaisseau", "craft")
           : bodyName(sc.snap?.state?.body ?? "");
-  p.text(`${side} · ${st.cam.log ? "échelle log" : "échelle vraie"} · centre ${focus}`, 12, 18, { col: C.cyan, size: 11, weight: 700 });
-  p.text(R.kind === "webgpu" ? "WebGPU" : R.kind === "canvas" ? "canvas (sans WebGPU)" : "…", r.w - 12, 18, {
+  p.text(
+    `${side} · ${st.cam.log ? L("échelle log", "log scale") : L("échelle vraie", "true scale")} · ${L("centre", "centre")} ${focus}`,
+    12,
+    18,
+    { col: C.cyan, size: 11, weight: 700 },
+  );
+  p.text(R.kind === "webgpu" ? "WebGPU" : R.kind === "canvas" ? L("canvas (sans WebGPU)", "canvas (no WebGPU)") : "…", r.w - 12, 18, {
     col: C.dim,
     size: 10,
     align: "right",
   });
-  if (st.ahead > 0 && scene.side === "ours") p.text(`prédiction +${dur(st.ahead)}`, 12, 34, { col: C.cyan, size: 11 });
+  if (st.ahead > 0 && scene.side === "ours")
+    p.text(`${L("prédiction", "prediction")} +${dur(st.ahead)}`, 12, 34, { col: C.cyan, size: 11 });
   // the legend
   const legend: [string, string][] =
     scene.side === "hole"
       ? [
-          ["#ffbf4d", "orbite des photons"],
+          ["#ffbf4d", L("orbite des photons", "photon orbit")],
           ["#ff5c4d", "ISCO"],
-          ["#9a73ff", "ergosphère"],
-          ["#3fd8ff", "chute libre"],
+          ["#9a73ff", L("ergosphère", "ergosphere")],
+          ["#3fd8ff", L("chute libre", "free fall")],
         ]
       : [
-          ["#3fd8ff", "trajectoire libre"],
-          ["#ff5ce1", "trajectoire planifiée · poussées"],
-          ["#8cb3cc", "sphère d’influence"],
+          ["#3fd8ff", L("trajectoire libre", "free path")],
+          ["#ff5ce1", L("trajectoire planifiée · poussées", "planned path · burns")],
+          ["#8cb3cc", L("sphère d’influence", "sphere of influence")],
         ];
   // (top right, under the renderer's name: the zoom's buttons hold the bottom right)
   let ly = 36;

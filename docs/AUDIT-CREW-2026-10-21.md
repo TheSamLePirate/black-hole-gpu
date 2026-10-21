@@ -10,7 +10,7 @@ Il manque :
 
 - ~~le **ravitaillement en vol** (absent du crew)~~ — fait (priorité 2) ;
 - l'**image tactique** (PLAN-RADAR-AAA RD0–RD14 non commencé) ;
-- l'**anglais** (toute la console est en français) ;
+- ~~l'**anglais** (toute la console est en français)~~ — fait (priorité 3) ;
 - une **console propre au Lander** ;
 - des vues justes **côté Gargantua**.
 
@@ -84,7 +84,7 @@ Jamais testés depuis le crew sur le vrai jeu :
 | Prochaine poussée | 🟡 | `spacestat.ts:70` | pas de tuile ni de compte à rebours dédiés ; rôles et événements bruts en anglais (`depart`, `mcc`, `exit`) au lieu de `roleName` |
 | Δv, ergols | ✅ | `spaceviews.ts:95-155` | RCS séparé |
 | EECOM, consommables | 🟡 | `spaceviews.ts:158-213` | ni eau ni vivres ; cases cochées absentes de la vue EECOM |
-| Pannes et checklists partagées | ✅ | `crewcmd.ts:408-429`, `crew-exec.ts:121-131` | checklists en français seulement |
+| Pannes et checklists partagées | ✅ | `crewcmd.ts:408-429`, `crew-exec.ts:121-131` | — (checklists FR + EN depuis la priorité 3) |
 | Rendez-vous et amarrage | 🟡 | `spaceviews.ts:29-92`, bloc < 5 km (`crew-space.ts:181`) | phases de l'autopilote en anglais brut (`docking.ts` : APPROACH, FINAL, HOLD 10 m) ; l'ISS et les vaisseaux cibles absents de la carte 3D (`sys3d/scene.ts:224`) |
 | Carte système 3D WebGPU et repli 2D | 🟡 | `src/crew/sys3d/*`, `draw/system.ts` | pas les autres joueurs ; poussées non déplaçables en 3D |
 | Chronologie | 🟡 | `spaceviews.ts:217-272` | fenêtres de lancement |
@@ -122,7 +122,8 @@ Réseau :
 
 ## Partout
 
-- **Langue** : la console est **uniquement en français**. `crew/index.html` a `lang="fr"`, aucun fichier de
+- **Langue** — ✅ corrigé le 2026-10-21 (priorité 3 : console FR/EN, réponses dans la langue de la console). Constat
+  d'origine : la console est **uniquement en français**. `crew/index.html` a `lang="fr"`, aucun fichier de
   `src/crew/` n'importe l'i18n, et les accusés renvoient `sayOf().fr` (`crew-exec.ts:165`). Les réponses des outils du
   jeu arrivent, elles, dans la langue du pilote : la console mélange les deux langues. C'est contraire à la règle FR+EN.
 - Aucun TODO, FIXME ni bouchon dans le code crew.
@@ -147,7 +148,7 @@ Réseau :
 - `ap.mode` accepte `tanker` et `refuelMode` ;
 - un e2e.
 
-**3. Console EN** : l'i18n de `src/crew/` (vues, panneaux, checklists, phases d'amarrage), et les réponses du jeu dans
+**3. Console EN** — ✅ fait le 2026-10-21 ([fiche](progress/crew/P3-console-en.md)) : l'i18n de `src/crew/` (vues, panneaux, checklists, phases d'amarrage), et les réponses du jeu dans
 la langue de la console.
 
 **4. Vaisseaux par appareil** :

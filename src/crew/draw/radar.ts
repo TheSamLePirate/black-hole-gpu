@@ -4,6 +4,7 @@
 import { relative } from "../model";
 import { C, deg360, fmt, type Pen, polar, SIDE, TAU, unitSymbol, type Point, type Rect } from "./kit";
 import type { Scene } from "./scene";
+import { L } from "../lang";
 
 export interface RadarOpts {
   range: number;
@@ -139,7 +140,7 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
   for (let d = 0; d < 360; d += 30) {
     const a = d * (Math.PI / 180) - up;
     p.seg(cx, cy, cx + Math.sin(a) * R, cy - Math.cos(a) * R, "#123a34", 1);
-    const name = { 0: "N", 90: "E", 180: "S", 270: "O" }[d] ?? String(d).padStart(3, "0");
+    const name = { 0: "N", 90: "E", 180: "S", 270: L("O", "W") }[d] ?? String(d).padStart(3, "0");
     p.text(name, cx + Math.sin(a) * (R + 14), cy - Math.cos(a) * (R + 14) + 4, {
       col: d % 90 ? "#5fb3a3" : C.cyan,
       size: 11,
@@ -190,18 +191,28 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
   p.aircraft(18, C.amber, "#000");
   c.restore();
   c.restore();
-  p.text(o.sensor ? `CAPTEUR · ${sc.snap?.radar?.mode || "—"}` : "PARTAGÉ · JOUEURS + TRAFIC", r.x + 12, r.y + 20, {
-    col: C.green,
-    size: 11,
-    weight: 700,
-  });
   p.text(
-    `${o.north ? "NORD" : "CAP"} EN HAUT · ${fmt(o.range / u.distM, o.range / u.distM < 10 ? 1 : 0)} ${u.distName}`,
+    o.sensor ? `${L("CAPTEUR", "SENSOR")} · ${sc.snap?.radar?.mode || "—"}` : L("PARTAGÉ · JOUEURS + TRAFIC", "SHARED · PLAYERS + TRAFFIC"),
+    r.x + 12,
+    r.y + 20,
+    {
+      col: C.green,
+      size: 11,
+      weight: 700,
+    },
+  );
+  p.text(
+    `${o.north ? L("NORD EN HAUT", "NORTH UP") : L("CAP EN HAUT", "HEADING UP")} · ${fmt(o.range / u.distM, o.range / u.distM < 10 ? 1 : 0)} ${u.distName}`,
     r.x + 12,
     r.y + 36,
     { col: C.dim, size: 10 },
   );
-  if (o.sensor && !sc.snap?.radar) p.text("Radar du pilote indisponible", cx, r.y + r.h - 18, { col: C.amber, size: 12, align: "center" });
+  if (o.sensor && !sc.snap?.radar)
+    p.text(L("Radar du pilote indisponible", "The pilot's radar is unavailable"), cx, r.y + r.h - 18, {
+      col: C.amber,
+      size: 12,
+      align: "center",
+    });
   // the nearest, listed
   if (list) {
     const x0 = r.x + r.w - 240,
@@ -223,6 +234,7 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
         p.text(`${b.dz >= 0 ? "+" : "−"}${fmt(u.alt(Math.abs(b.dz)))}`, x0 + 218, y, { col: C.dim, size: 10, align: "right" });
       o.pick?.([x0 + 110, y - 2], b.slot !== undefined ? { slot: b.slot } : { contact: b.id });
     });
-    if (!rows.length) p.text("Aucun contact dans la portée", x0 + 114, y0 + 60, { col: C.dim, size: 11, align: "center" });
+    if (!rows.length)
+      p.text(L("Aucun contact dans la portée", "No contact in range"), x0 + 114, y0 + 60, { col: C.dim, size: 11, align: "center" });
   }
 }

@@ -20,8 +20,9 @@ export class CrewFrame {
     return this.app.js<T>(this.w(js));
   }
   /** the frame opened (size, place), the console loaded, joined to the room `code` as `name` (its station's) */
-  async open(code: string, name = "Ben", o: { w?: number; h?: number; hash?: string; lang?: "fr" | "en" } = {}) {
-    await this.app.js(`(() => { ${o.lang ? `localStorage.setItem('kerr.crew.lang', '${o.lang}');` : ""}
+  async open(code: string, name = "Ben", o: { w?: number; h?: number; hash?: string } = {}) {
+    // (its language: App.boot's crewLang)
+    await this.app.js(`(() => {
       const f = document.createElement('iframe'); f.id = '${this.id}'; f.src = '/crew/${o.hash ?? ""}';
       f.style.cssText = 'position:fixed;right:0;bottom:0;width:${o.w ?? 1100}px;height:${o.h ?? 760}px;border:0;z-index:99999';
       document.body.append(f); return true; })()`);

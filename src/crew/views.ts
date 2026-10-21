@@ -24,30 +24,33 @@ import { defaultMapState, drawSystemMap } from "./draw/system";
 import { SystemRenderer } from "./sys3d/gpu";
 import { drawAirStatus, drawSpaceStatus } from "./draw/spacestat";
 import type { CrewView } from "./profile";
+import { L } from "./lang";
 
 export type { CrewView } from "./profile";
-export const VIEW_NAMES: Record<CrewView, string> = {
-  air: "Mission aérienne",
-  sdash: "Tableau",
-  orbit: "Orbite",
-  system: "Carte système",
-  navball: "Boule",
-  dock: "Amarrage",
-  budget: "Δv",
-  eecom: "EECOM",
-  timeline: "Chronologie",
-  rel: "Relativité",
-  ground: "Sol",
-  dash: "Tableau",
-  pfd: "Vol",
-  nd: "Navigation",
-  map: "Carte",
-  globe: "Globe",
-  radar: "Radar",
-  schematic: "Systèmes",
-  plan: "Plan de vol",
-  telemetry: "Télémétrie",
+const VIEW_WORDS: Record<CrewView, [string, string]> = {
+  air: ["Mission aérienne", "Air mission"],
+  sdash: ["Tableau", "Dashboard"],
+  orbit: ["Orbite", "Orbit"],
+  system: ["Carte système", "System map"],
+  navball: ["Boule", "Navball"],
+  dock: ["Amarrage", "Docking"],
+  budget: ["Δv", "Δv"],
+  eecom: ["EECOM", "EECOM"],
+  timeline: ["Chronologie", "Timeline"],
+  rel: ["Relativité", "Relativity"],
+  ground: ["Sol", "Ground"],
+  dash: ["Tableau", "Dashboard"],
+  pfd: ["Vol", "Flight"],
+  nd: ["Navigation", "Navigation"],
+  map: ["Carte", "Map"],
+  globe: ["Globe", "Globe"],
+  radar: ["Radar", "Radar"],
+  schematic: ["Systèmes", "Systems"],
+  plan: ["Plan de vol", "Flight plan"],
+  telemetry: ["Télémétrie", "Telemetry"],
 };
+/** a view's name in the console's language */
+export const viewName = (v: CrewView) => L(...VIEW_WORDS[v]);
 const wrap = (a: number) => ((((a + 180) % 360) + 360) % 360) - 180;
 type Pick = { point: Point; slot?: number; contact?: string; wp?: number; view?: CrewView; r?: Rect };
 type Where = { lat: number; lon: number };
@@ -557,18 +560,31 @@ export class CrewViews {
       p.fill("#ff5ce122");
       p.stroke(C.magenta, 1.5, [4, 4]);
       p.star(d.x, d.y, 9, C.magenta, true);
-      p.text(`${name} → ici`, d.x + 22, d.y - 14, { col: C.white, size: 12, weight: 700, bg: "#050a0ee0" });
+      p.text(`${name} → ${L("ici", "here")}`, d.x + 22, d.y - 14, { col: C.white, size: 12, weight: 700, bg: "#050a0ee0" });
       animate = true;
     }
     if (!sc.own) {
       c.fillStyle = "#05090ecc";
       c.fillRect(0, this.H / 2 - 34, this.W, 68);
-      p.text("En attente d’un pilote connecté…", this.W / 2, this.H / 2 - 4, { col: C.white, size: 15, align: "center", weight: 700 });
-      p.text("Les instruments s’afficheront dès qu’un pilote vole dans la salle.", this.W / 2, this.H / 2 + 18, {
-        col: C.dim,
-        size: 11,
+      p.text(L("En attente d’un pilote connecté…", "Waiting for a pilot to connect…"), this.W / 2, this.H / 2 - 4, {
+        col: C.white,
+        size: 15,
         align: "center",
+        weight: 700,
       });
+      p.text(
+        L(
+          "Les instruments s’afficheront dès qu’un pilote vole dans la salle.",
+          "The instruments will show as soon as a pilot flies in the room.",
+        ),
+        this.W / 2,
+        this.H / 2 + 18,
+        {
+          col: C.dim,
+          size: 11,
+          align: "center",
+        },
+      );
     }
     return animate || ((this.view === "dash" || this.view === "sdash") && blink);
   }

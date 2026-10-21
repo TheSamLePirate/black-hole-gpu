@@ -105,6 +105,49 @@ export const MANEUVER_FR: Record<string, string> = {
   fine_tune: "ajustement fin",
   align_over_site: "passage au-dessus d'un site",
 };
+export const HOLD_EN: Record<string, string> = {
+  prograde: "prograde",
+  retrograde: "retrograde",
+  radialOut: "radial out",
+  radialIn: "radial in",
+  normal: "normal",
+  antinormal: "anti-normal",
+  target: "to the target",
+  antiTarget: "away from the target",
+  maneuver: "on the node",
+};
+export const AUTO_EN: Record<string, string> = {
+  hover: "hover",
+  circularize: "circularize",
+  approach: "approach the target",
+  orbit: "orbit the target",
+  node: "execute the node",
+  transfer: "transfer",
+  land: "landing",
+  takeoff: "take-off to orbit",
+  dock: "docking",
+  entry: "entry",
+  burns: "the plan's burns",
+  keep: "station keeping",
+};
+export const MANEUVER_EN: Record<string, string> = {
+  circularize: "circularization",
+  apoapsis: "apoapsis",
+  periapsis: "periapsis",
+  hohmann: "Hohmann",
+  inclination: "inclination",
+  match_planes: "planes matched",
+  resonant: "resonant orbit",
+  rendezvous: "rendezvous",
+  intercept: "intercept",
+  match_velocities: "velocities matched",
+  fine_tune: "fine tuning",
+  align_over_site: "pass over a site",
+};
+/** a hold's, an autopilot's, a manoeuvre's words in both languages (an unknown one: its own name) */
+export const holdWords = (k: string) => ({ fr: HOLD_FR[k] ?? k, en: HOLD_EN[k] ?? k });
+export const autoWords = (k: string) => ({ fr: AUTO_FR[k] ?? k, en: AUTO_EN[k] ?? k });
+export const maneuverWords = (k: string) => ({ fr: MANEUVER_FR[k] ?? k, en: MANEUVER_EN[k] ?? k });
 export interface ActSpec {
   fam: Family;
   params?: Record<string, Param>;
@@ -325,7 +368,7 @@ export const ACTS = {
     required: ["direction"],
     say: (a) => ({
       fr: a.direction === "none" ? "tenue d'attitude coupée" : `tenue ${HOLD_FR[String(a.direction)] ?? a.direction}`,
-      en: `hold ${a.direction}`,
+      en: a.direction === "none" ? "attitude hold off" : `hold ${HOLD_EN[String(a.direction)] ?? a.direction}`,
     }),
   },
   "sp.auto": {
@@ -339,7 +382,7 @@ export const ACTS = {
     required: ["mode"],
     say: (a) => ({
       fr: a.mode === "none" ? "autopilote coupé" : `autopilote ${AUTO_FR[String(a.mode)] ?? a.mode}`,
-      en: `autopilot ${a.mode}`,
+      en: a.mode === "none" ? "autopilot off" : `autopilot ${AUTO_EN[String(a.mode)] ?? a.mode}`,
     }),
   },
   "sp.maneuver": {
@@ -358,7 +401,7 @@ export const ACTS = {
       const op = MANEUVER_FR[String(a.op)] ?? String(a.op);
       return {
         fr: a.execute ? `manœuvre ${op} exécutée` : `manœuvre ${op} — aperçu`,
-        en: `${a.op} ${a.execute ? "executed" : "previewed"}`,
+        en: `${MANEUVER_EN[String(a.op)] ?? a.op} ${a.execute ? "executed" : "— preview"}`,
       };
     },
   },

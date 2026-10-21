@@ -1,5 +1,6 @@
 import type { NetClient } from "../net/client";
 import { TalkGate } from "./ptt";
+import { L } from "./lang";
 
 /** A voice-only bus: no engines, worklets, radio synthesis or simulator imports. */
 export class CrewRadio {
@@ -74,9 +75,9 @@ export class CrewRadio {
       this.listening = this.ctx.state === "running";
       for (const [slot, stream] of this.incoming) if (!this.peers.has(slot)) this.attach(slot, stream);
       for (const peer of this.peers.values()) await peer.el.play().catch(() => {});
-      this.error = this.listening ? "" : "Touchez Écouter pour reprendre le son.";
+      this.error = this.listening ? "" : L("Touchez Écouter pour reprendre le son.", "Tap Listen to get the sound back.");
     } catch {
-      this.error = "Le son est bloqué. Touchez Écouter pour réessayer.";
+      this.error = L("Le son est bloqué. Touchez Écouter pour réessayer.", "The sound is blocked. Tap Listen to try again.");
     }
     this.changed();
   }
@@ -85,7 +86,10 @@ export class CrewRadio {
     if (this.mic || this.pending || !this.net.room) return;
     this.pending = true;
     const generation = ++this.generation;
-    this.error = "Autorisez le microphone dans votre navigateur, ou annulez la demande.";
+    this.error = L(
+      "Autorisez le microphone dans votre navigateur, ou annulez la demande.",
+      "Allow the microphone in your browser, or cancel the request.",
+    );
     this.changed();
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error("https");
@@ -111,8 +115,11 @@ export class CrewRadio {
       if (generation !== this.generation) return;
       this.error =
         error instanceof Error && error.message === "https"
-          ? "Le microphone nécessite HTTPS (ou localhost)."
-          : "Microphone indisponible ou permission refusée. L’écoute reste possible.";
+          ? L("Le microphone nécessite HTTPS (ou localhost).", "The microphone needs HTTPS (or localhost).")
+          : L(
+              "Microphone indisponible ou permission refusée. L’écoute reste possible.",
+              "Microphone unavailable or permission refused. Listening still works.",
+            );
     } finally {
       if (generation === this.generation) this.pending = false;
       this.changed();

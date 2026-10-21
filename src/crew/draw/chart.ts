@@ -3,6 +3,7 @@
 import { METRICS, type HistoryPoint } from "../model";
 import type { InstrumentKey } from "../../net/instruments";
 import { C, clamp, fmt, type Pen, type Rect } from "./kit";
+import { L } from "../lang";
 
 const COLOURS: Partial<Record<InstrumentKey, string>> = {
   alt: C.cyan,
@@ -37,13 +38,17 @@ function one(
   const pts = hist.filter((h) => h.t >= start && h.t <= end && h.metrics[key] !== undefined);
   p.panel(r);
   const pad = compact ? 8 : 12;
-  p.text(`${metric.name.toUpperCase()}${metric.unit ? ` · ${metric.unit}` : ""}`, r.x + pad + 4, r.y + 18, {
+  p.text(`${metric.name().toUpperCase()}${metric.unit ? ` · ${metric.unit}` : ""}`, r.x + pad + 4, r.y + 18, {
     col,
     size: compact ? 10 : 11,
     weight: 700,
   });
   if (pts.length < 2) {
-    p.text("Les mesures reçues apparaîtront ici", r.x + r.w / 2, r.y + r.h / 2 + 4, { col: C.dim, size: 11, align: "center" });
+    p.text(L("Les mesures reçues apparaîtront ici", "The measures received will show here"), r.x + r.w / 2, r.y + r.h / 2 + 4, {
+      col: C.dim,
+      size: 11,
+      align: "center",
+    });
     return "—";
   }
   const vals = pts.map((h) => h.metrics[key]! * metric.k);
@@ -98,7 +103,7 @@ function one(
     weight: 700,
   });
   if (!compact) {
-    const stats = `min ${fmt(Math.min(...vals), 1)} · moy ${fmt(mean, 1)} · max ${fmt(Math.max(...vals), 1)}`;
+    const stats = `min ${fmt(Math.min(...vals), 1)} · ${L("moy", "avg")} ${fmt(mean, 1)} · max ${fmt(Math.max(...vals), 1)}`;
     p.text(stats, r.x + r.w / 2, r.y + 20, { col: C.dim, size: 10, align: "center" });
     p.text(readout, clamp(x, g.x + 90, g.x + g.w - 90), g.y + 14, {
       col: C.amber,

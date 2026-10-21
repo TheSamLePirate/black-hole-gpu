@@ -353,7 +353,7 @@ export function drawGeo(p: Pen, r: Rect, sc: Scene, v: GeoView) {
   if (v.globe) c.restore();
   c.restore();
   if (photo)
-    p.text(EARTH_CREDIT, r.x + W - 8, r.y + H - 6, {
+    p.text(EARTH_CREDIT(), r.x + W - 8, r.y + H - 6, {
       col: "#9fb3bdcc",
       size: 9,
       align: "right",

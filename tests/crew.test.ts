@@ -209,6 +209,8 @@ test("the map: Web Mercator round trips, the land's rings closed and Antarctica 
 
 test("the AP and A/THR lamps and the next event's body: optional, read when sent, absent from an older pilot", async () => {
   const { eventName } = await import("../src/crew/draw/spacestat");
+  const { setLang } = await import("../src/crew/lang");
+  setLang("fr");
   const now = readInstruments({
     v: 1,
     t: 1,
@@ -219,7 +221,11 @@ test("the AP and A/THR lamps and the next event's body: optional, read when sent
   expect(now.auto?.ap).toBe(true);
   expect(now.auto?.athr).toBeUndefined();
   expect(now.next?.body).toBe("moon");
+  // (in the console's language: French, English)
   expect(eventName(now.next!)).toBe("Impact · Lune");
+  setLang("en");
+  expect(eventName(now.next!)).toBe("Impact · Moon");
+  setLang("fr");
   const old = readInstruments({ v: 1, t: 1, metrics: {}, auto: { mode: "plane" }, next: { kind: "exit", name: "Earth", in: 9 } })!;
   expect(old.auto?.ap).toBeUndefined();
   expect(eventName(old.next!)).toBe("Sortie de sphère · Earth");

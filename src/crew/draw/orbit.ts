@@ -4,6 +4,7 @@
 import { type Conic, conicOf, conicPoints, inPlane, nuAfter, radiusAt, timeBetween } from "../orbitmath";
 import { C, dur, fmt, type Pen, type Rect } from "./kit";
 import type { Scene } from "./scene";
+import { L, lang } from "../lang";
 
 export const BODY_FR: Record<string, string> = {
   sun: "Soleil",
@@ -34,7 +35,9 @@ export const BODY_FR: Record<string, string> = {
   edmunds: "Edmunds",
   k2: "K2 (étoile)",
 };
-export const bodyName = (id: string) => BODY_FR[id] ?? (id ? id[0]!.toUpperCase() + id.slice(1) : "—");
+const BODY_EN: Record<string, string> = { wormhole: "Wormhole", mouth: "Wormhole mouth", k2: "K2 (star)" };
+/** a body's name in the console's language (English: its own name, capitalised) */
+export const bodyName = (id: string) => (lang() === "fr" ? BODY_FR[id] : BODY_EN[id]) ?? (id ? id[0]!.toUpperCase() + id.slice(1) : "—");
 
 const km = (x: number) => (Math.abs(x) >= 1e6 ? `${fmt(x / 1e6, 2)} Mkm` : `${fmt(x)} km`);
 
@@ -54,15 +57,23 @@ export function drawOrbit(
   compact = false,
   drag?: { i: number; x: number; y: number } | null,
 ): OrbitPicks | null {
-  p.panel(r, compact ? "ORBITE" : undefined);
+  p.panel(r, compact ? L("ORBITE", "ORBIT") : undefined);
   const st = sc.snap?.state;
   if (!st) {
-    p.text("Pas d’orbite reçue", r.x + r.w / 2, r.y + r.h / 2, { col: C.dim, size: 13, align: "center" });
-    p.text("(le pilote suit un appareil sans état orbital, ou un pilote plus ancien)", r.x + r.w / 2, r.y + r.h / 2 + 18, {
-      col: C.dim,
-      size: 10,
-      align: "center",
-    });
+    p.text(L("Pas d’orbite reçue", "No orbit received"), r.x + r.w / 2, r.y + r.h / 2, { col: C.dim, size: 13, align: "center" });
+    p.text(
+      L(
+        "(le pilote suit un appareil sans état orbital, ou un pilote plus ancien)",
+        "(the pilot flies a craft without an orbital state, or an older pilot)",
+      ),
+      r.x + r.w / 2,
+      r.y + r.h / 2 + 18,
+      {
+        col: C.dim,
+        size: 10,
+        align: "center",
+      },
+    );
     return null;
   }
   const o = conicOf(st.r, st.v, st.mu);
@@ -159,18 +170,18 @@ export function drawOrbit(
       p.text(value, r.x + r.w - 14, y, { col, size: 13, weight: 700, align: "right" });
       y += 24;
     };
-    p.text(`ORBITE · ${bodyName(st.body).toUpperCase()}`, x0, r.y + 16, { col: C.cyan, size: 11, weight: 700 });
-    row("Périapside", km(o.rp - R), o.rp < R ? C.red : C.text);
-    row("Apoapside", o.e < 1 ? km(o.ra - R) : "libre", o.e >= 1 ? C.amber : C.text);
-    row("Excentricité", fmt(o.e, 4));
-    row("Inclinaison", `${fmt((o.inc * 180) / Math.PI, 2)}°`);
-    row("Demi-grand axe", Number.isFinite(o.a) ? km(Math.abs(o.a)) : "∞");
-    row("Période", dur(o.period));
+    p.text(`${L("ORBITE", "ORBIT")} · ${bodyName(st.body).toUpperCase()}`, x0, r.y + 16, { col: C.cyan, size: 11, weight: 700 });
+    row(L("Périapside", "Periapsis"), km(o.rp - R), o.rp < R ? C.red : C.text);
+    row(L("Apoapside", "Apoapsis"), o.e < 1 ? km(o.ra - R) : L("libre", "escape"), o.e >= 1 ? C.amber : C.text);
+    row(L("Excentricité", "Eccentricity"), fmt(o.e, 4));
+    row(L("Inclinaison", "Inclination"), `${fmt((o.inc * 180) / Math.PI, 2)}°`);
+    row(L("Demi-grand axe", "Semi-major axis"), Number.isFinite(o.a) ? km(Math.abs(o.a)) : "∞");
+    row(L("Période", "Period"), dur(o.period));
     row("Altitude", km(rNow - R));
-    row("Vitesse", `${fmt(Math.hypot(...st.v), 3)} km/s`);
+    row(L("Vitesse", "Speed"), `${fmt(Math.hypot(...st.v), 3)} km/s`);
     const nx = sc.snap?.next;
-    if (nx) row("Prochain", `${nx.name || nx.kind} · ${dur(nx.in)}`, C.amber);
-    if (sc.snap?.traj?.fate === "impact") row("Sort", `impact · ${bodyName(sc.snap.traj.hit)}`, C.red);
+    if (nx) row(L("Prochain", "Next"), `${nx.name || nx.kind} · ${dur(nx.in)}`, C.amber);
+    if (sc.snap?.traj?.fate === "impact") row(L("Sort", "Fate"), `impact · ${bodyName(sc.snap.traj.hit)}`, C.red);
   }
   return { o, nodes, toNu };
 }

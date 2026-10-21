@@ -7,8 +7,9 @@
 
 /** the imagery at two sizes: 2 048 pixels first (quick: the server draws them on demand), 4 096 then for WebGPU */
 export const EARTH_DAY = (w: number) => wms("BlueMarble_ShadedRelief_Bathymetry", w, w / 2);
+import { L } from "../lang";
 export const EARTH_NIGHT = (w: number) => wms("VIIRS_Black_Marble", w, w / 2);
-export const EARTH_CREDIT = "Imagerie NASA Blue Marble · Black Marble (GIBS)";
+export const EARTH_CREDIT = () => L("Imagerie NASA Blue Marble · Black Marble (GIBS)", "NASA Blue Marble · Black Marble imagery (GIBS)");
 
 function wms(layer: string, w: number, h: number) {
   return `https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&LAYERS=${layer}&STYLES=&CRS=EPSG:4326&BBOX=-90,-180,90,180&WIDTH=${w}&HEIGHT=${h}&FORMAT=image/jpeg`;

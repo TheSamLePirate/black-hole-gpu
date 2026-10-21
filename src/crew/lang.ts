@@ -36,3 +36,20 @@ export const L = (fr: string, en: string) => (cur === "fr" ? fr : en);
 export const Lp = (t: { fr: string; en: string }) => t[cur];
 /** the locale of the figures (1 234,5 or 1,234.5) */
 export const locale = () => (cur === "fr" ? "fr-FR" : "en-GB");
+
+/** The page's own texts (crew/index.html) in the console's language: an element's French is its content as written,
+ *  its English its `data-en`; an attribute's English its `data-en-<attribute>` (aria-label, placeholder, title). */
+export function applyStatic(root: ParentNode = document) {
+  for (const e of root.querySelectorAll<HTMLElement>("[data-en]")) {
+    e.dataset.fr ??= e.textContent ?? "";
+    e.textContent = cur === "fr" ? e.dataset.fr : (e.dataset.en ?? "");
+  }
+  for (const a of ["aria-label", "placeholder", "title"]) {
+    const en = `data-en-${a}`,
+      fr = `data-fr-${a}`;
+    for (const e of root.querySelectorAll<HTMLElement>(`[${en}]`)) {
+      if (!e.hasAttribute(fr)) e.setAttribute(fr, e.getAttribute(a) ?? "");
+      e.setAttribute(a, (cur === "fr" ? e.getAttribute(fr) : e.getAttribute(en)) ?? "");
+    }
+  }
+}

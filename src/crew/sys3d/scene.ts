@@ -7,6 +7,7 @@
 
 import type { InstrumentSnapshot } from "../../net/instruments";
 import { type Conic, conicOf, nuAfter, radiusAt, type V3 } from "../orbitmath";
+import { L } from "../lang";
 
 export interface SceneSphere {
   id: string;
@@ -200,7 +201,7 @@ export function systemScene(s: InstrumentSnapshot | null, focus: Focus = "body",
     }
     // the craft's own conic (bound): its orbit about the body
     if (o && o.e < 1) lines.push({ pts: conicRing(o, Infinity).map((q) => add(home, q)), colour: [0.25, 0.85, 1, 0.55], width: 1.4 });
-    marks.push({ pos: add(home, st.r), label: s.craft?.name ?? "vaisseau", colour: "#f6fbff", kind: "craft" });
+    marks.push({ pos: add(home, st.r), label: s.craft?.name ?? L("vaisseau", "craft"), colour: "#f6fbff", kind: "craft" });
     // the craft ahead: along its free path, else its conic
     if (ahead > 0) {
       const seg = (s.traj?.free ?? []).find((q) => q.t.length && ahead >= q.t[0]! && ahead <= q.t.at(-1)!);
@@ -267,7 +268,7 @@ function holeScene(s: InstrumentSnapshot, ahead: number): SystemScene {
     }
   }
   if (H.path.length > 1) lines.push({ pts: H.path, colour: [0.25, 0.85, 1, 0.95], width: 2 });
-  if (H.craft) marks.push({ pos: H.craft, label: s.craft?.name ?? "vaisseau", colour: "#f6fbff", kind: "craft" });
+  if (H.craft) marks.push({ pos: H.craft, label: s.craft?.name ?? L("vaisseau", "craft"), colour: "#f6fbff", kind: "craft" });
   const rc = H.craft ? len(H.craft) : 0;
   return {
     side: "hole",

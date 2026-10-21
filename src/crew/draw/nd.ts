@@ -4,6 +4,7 @@
 import { relative } from "../model";
 import { C, clamp, D, deg360, dur, fmt, Labels, type Pen, polar, SIDE, TAU, unitSymbol, type Point, type Rect } from "./kit";
 import type { Scene } from "./scene";
+import { L } from "../lang";
 
 export interface NdOpts {
   range: number;
@@ -224,7 +225,7 @@ export function drawNd(p: Pen, r: Rect, sc: Scene, o: NdOpts): { cx: number; cy:
     if (y0 < r.y || y0 > r.y + r.h) continue;
     p.seg(x0, y0, cx + Math.cos(a) * (R - l), cy + Math.sin(a) * (R - l), C.white, 1.2);
     if (d % 30 === 0) {
-      const name = { 0: "N", 90: "E", 180: "S", 270: "O" }[d] ?? String(d / 10);
+      const name = { 0: "N", 90: "E", 180: "S", 270: L("O", "W") }[d] ?? String(d / 10);
       p.text(name, cx + Math.cos(a) * (R - 22), cy + Math.sin(a) * (R - 22) + 4, {
         col: d % 90 === 0 ? C.cyan : C.white,
         size: 12,
@@ -279,7 +280,7 @@ export function drawNd(p: Pen, r: Rect, sc: Scene, o: NdOpts): { cx: number; cy:
   const by = o.arc ? cy - R - 30 : r.y + 10;
   p.box(cx - 30, by, 60, 24);
   p.text(hdg === null ? "—" : String(hdg).padStart(3, "0"), cx, by + 18, { col: C.white, size: 16, align: "center", weight: 700 });
-  p.text(o.north ? "NORD" : "CAP", cx + 38, by + 17, { col: C.green, size: 10, weight: 700 });
+  p.text(o.north ? L("NORD", "NORTH") : L("CAP", "HDG"), cx + 38, by + 17, { col: C.green, size: 10, weight: 700 });
   // the corners: speeds and wind; the active point; the range
   const fs = clamp(r.w / 34, 10, 13);
   p.text(`GS ${fmt(u.spd(s.gs))}  TAS ${fmt(u.spd(s.spd))}`, r.x + 10, r.y + 20, { col: C.white, size: fs, weight: 700 });
@@ -307,7 +308,7 @@ export function drawNd(p: Pen, r: Rect, sc: Scene, o: NdOpts): { cx: number; cy:
     p.text(`${fmt(u.dist(nav.dist), 1)} ${u.distName}`, x, r.y + 20 + fs * 1.4, { col: C.white, size: fs, align: "right" });
     p.text(`ETE ${dur(nav.ete)}`, x, r.y + 20 + fs * 2.8, { col: C.white, size: fs, align: "right" });
     if (Math.abs(nav.xtk) > 30)
-      p.text(`XTK ${fmt(u.dist(Math.abs(nav.xtk)), 2)}${nav.xtk > 0 ? "D" : "G"}`, x, r.y + 20 + fs * 4.2, {
+      p.text(`XTK ${fmt(u.dist(Math.abs(nav.xtk)), 2)}${nav.xtk > 0 ? L("D", "R") : L("G", "L")}`, x, r.y + 20 + fs * 4.2, {
         col: C.amber,
         size: fs,
         align: "right",
@@ -322,6 +323,10 @@ export function drawNd(p: Pen, r: Rect, sc: Scene, o: NdOpts): { cx: number; cy:
   const n = sc.contacts.length;
   if (n) p.text(`${n} contact${n > 1 ? "s" : ""}`, r.x + 10, r.y + 20 + fs * (w ? 5.2 : 1.5), { col: C.dim, size: fs - 1 });
   if (!geo && own && own.sample.frame === 2)
-    p.text("Repère Gargantua · positions locales indisponibles", cx, r.y + r.h - 34, { col: C.amber, size: 11, align: "center" });
+    p.text(L("Repère Gargantua · positions locales indisponibles", "Gargantua's frame · local positions unavailable"), cx, r.y + r.h - 34, {
+      col: C.amber,
+      size: 11,
+      align: "center",
+    });
   return { cx, cy, k, up };
 }

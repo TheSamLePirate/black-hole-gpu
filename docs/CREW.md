@@ -168,6 +168,23 @@ système 3D).
 
 Unités : métrique par défaut, impérial en option (bouton de l'en-tête ou TARS) ; seul l'affichage change.
 
+### Langue : français ou anglais
+
+La console parle français ou anglais (`src/crew/lang.ts`). Par défaut, elle prend la langue du navigateur ; on la
+change au lobby (« Langue ») ou par le bouton FR/EN de l'en-tête, et le choix est gardé (`kerr.crew.lang`). Tout est
+redessiné aussitôt : la page, les vues et leurs notes, les tuiles, les panneaux, le MCP et l'ordinateur de vol, les
+checklists de panne (celles du jeu, en anglais et dans leur traduction française), les phases de l'autopilote
+d'amarrage, le journal de bord, les nombres (1 234,5 ou 1,234.5).
+
+- La console garde son propre petit module de langue : les dictionnaires du simulateur alourdiraient son bundle.
+  Chaque texte est une paire écrite là où il sert, `L("…", "…")`. Un test (`tests/crew-lang.test.ts`) refuse tout texte
+  français hors d'une paire dans `src/crew/`.
+- **Les réponses du pilote arrivent dans la langue de la console**, quelle que soit celle du pilote. L'ordre porte la
+  langue de la console (`crew-cmd.lang`). Le pilote y répond : ce qui a été demandé, les refus de ses contrôles, et les
+  mots de ses outils, traduits par ses dictionnaires (`translateTo` dans `src/i18n.ts`, gabarits `{0}` compris).
+- L'accusé porte aussi les arguments de l'ordre (`crew-ack.args`). Chaque autre écran redit donc la ligne du journal
+  dans sa propre langue et ses propres unités.
+
 ### Géodésie
 
 Tout ce qui touche la Terre passe par WGS84 (`src/system/ellipsoid.ts`) : distances et azimuts par
@@ -247,7 +264,7 @@ FLIGHT.
 - **Orbite** : on fait glisser une poussée du plan le long de l'orbite. Son nouveau temps s'affiche pendant le geste
   (Kepler) et la poussée est déplacée d'autant (`sp.node`).
 - Comme toujours, « tout sauf piloter » : liste blanche, verrou du pilote, 4 ordres par seconde. Un ordre refusé l'est
-  avec sa raison, dans la langue de la console.
+  avec sa raison, dans la langue de la console (français ou anglais).
 
 ## Commandes tactiles et radio
 
@@ -298,7 +315,8 @@ l'attente de la réponse (3 s au plus), puis clignote vert ou rouge avec la rais
 bord** (panneau Équipage) liste qui a demandé quoi, sur tous les écrans.
 
 Le contrat est `src/net/crewcmd.ts` : `crew-cmd { v: 1, id, to, act, args }` vers le pilote suivi,
-`crew-ack { v: 1, id, to, act, ok, msg, what, data? }` entendu par tous. Chaque acte du catalogue a sa famille et
+`crew-ack { v: 1, id, to, act, ok, msg, what, data?, args? }` entendu par tous (l'ordre porte aussi `lang`, la langue
+de la console : la réponse vient dans celle-ci). Chaque acte du catalogue a sa famille et
 le schéma de ses arguments (le vérificateur des outils du jeu). À bord (`src/ui/crew-exec.ts`), l'ordre n'est
 exécuté que s'il vient d'un membre `instruments` (rôle de la liste, numéro estampillé par le serveur), qu'il
 vise ce pilote, que le verrou est ouvert, que sa famille est ouverte sur cet appareil et dans ce mode
@@ -329,6 +347,7 @@ L'interface d'automatisation est `window.__crew`, indépendante de `__bh` :
 | `radio` | `listen()`, `enableMic()`, `disableMic()`, `gate`, `speaking(slot)`, `volume(slot, value?)`, `mute(slot)` |
 | `join(code, name, password?)` | rejoindre comme instruments (Promise) |
 | `setView(view)` | `dash`, `pfd`, `nd`, `map`, `globe`, `radar`, `schematic` (systèmes), `plan`, `telemetry` |
+| `lang()`, `setLang("fr" \| "en")` | la langue de la console |
 
 ## Vérification
 
