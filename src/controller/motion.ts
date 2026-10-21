@@ -894,7 +894,13 @@ function setOurLanded(this: CameraController, l: Landed | null) {
  * the ground (controller/rig.ts); a rest left from a scene's start, set back on, took it back where it was set down.
  */
 function groundChanged(this: CameraController) {
-  if (this.ourLanded && !this.character.active && (this.piloting || this.gravity)) this.fall(0, [0, 0, 0], false);
+  if (!this.ourLanded || this.character.active) return;
+  if (this.piloting || this.gravity) return this.fall(0, [0, 0, 0], false);
+  // (a view a scene set down and that has not moved since — its rest still its own: releaseRest drops it once the view
+  // moves — set on the relief that came in: a frozen view's rig does not step to do it — a landscape's tripod stood
+  // in the Vosges' rock)
+  this.releaseRest(false);
+  if (this.ourLanded) this.fall(0, [0, 0, 0], false);
 }
 
 /** How far a view may stand off the place it was set down on and still be resting there [m]. */

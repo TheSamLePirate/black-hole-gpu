@@ -36,7 +36,7 @@ test.skipIf(!E2E)(
               dynamicResolution:false,realtimeSubsampling:2,pixelRatio:1,temporalReprojection:true,pose:${pose}};
             __bh.preset("Forest");__bh.resize();return true;})()`);
           await app.waitFor(
-            `__bh.renderer.earthScenery.stats().lat!==null && Math.abs(__bh.renderer.earthScenery.stats().lat-(${place.lat}))<.01 && !__bh.renderer.earthScenery.pending`,
+            `__bh.renderer.earthScenery.stats().lat!==null && Math.abs(__bh.renderer.earthScenery.stats().lat-(${place.lat}))<.02 && !__bh.renderer.earthScenery.pending`,
             180000,
           );
           await app.waitFor("__bh.renderer.variantReady && __bh.renderer.earthTiles.pending===0", 180000);

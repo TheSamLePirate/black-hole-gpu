@@ -84,6 +84,32 @@ async function serve() {
   return server;
 }
 
+/** The page's daylight (App.load): __bh.game.flyAt and walk on the Earth first set the clock to the place's late morning
+ *  when it is night or the sun is low there (local solar time outside 8:30–16:00), unless the test set a date itself
+ *  or the page is in a network room (the room's one clock). */
+const DAYLIGHT = `(() => {
+  const G = __bh.game;
+  if (!G || G.__e2eDaylight) return 1;
+  G.__e2eDaylight = true;
+  let chosen = false;
+  const setDate = G.setDate.bind(G);
+  G.setDate = (d) => ((chosen = true), setDate(d));
+  const day = (lon) => {
+    // (in a network room the clock is the room's — one for every page —: left alone)
+    if (chosen || window.__e2eKeepTime || !Number.isFinite(lon) || __bh.net?.net?.room) return;
+    const d = new Date(G.date().replace(" ", "T") + ":00Z");
+    if (!Number.isFinite(d.getTime())) return;
+    const solar = (((d.getUTCHours() + d.getUTCMinutes() / 60 + lon / 15) % 24) + 24) % 24;
+    if (solar >= 8.5 && solar <= 16) return;
+    setDate(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) + (11 - lon / 15) * 3600e3).toISOString());
+  };
+  const fly = G.flyAt.bind(G);
+  G.flyAt = (lat, lon, ...a) => ((a[3] ?? "earth") === "earth" && day(lon), fly(lat, lon, ...a));
+  const walk = G.walk.bind(G);
+  G.walk = (body, lat = 0, lon = 0) => (body === "earth" && day(lon), walk(body, lat, lon));
+  return 1;
+})()`;
+
 export class App {
   private constructor(
     readonly cdp: Cdp,
@@ -171,6 +197,10 @@ export class App {
     // (the frame rate shown in its corner, the game's own meter — on every run, the screenshots too: who watches
     // sees how the test runs; a player's preference, kept across scenes. Not when the page failed to start)
     if (!startupFailure) await this.js("(__bh.settings.showFps = true, true)").catch(() => {});
+    // (in the sun: a craft put over the Earth or someone set on foot there by a test that chose no date — at night or
+    // with the sun low there — is put there at 11:00 local solar time of the same day; a date the test sets is its own
+    // from then on. E2E_DAYLIGHT=0: the scene's clock as it is)
+    if (!startupFailure && process.env.E2E_DAYLIGHT !== "0") await this.js(DAYLIGHT).catch(() => {});
     if (this.recorded && !startupFailure) await recorder.attach(this, this.file).catch((e) => console.error(`e2e telemetry: ${e}`));
     // (the scene's own ray tracer compiled before the test begins — not its stale first image)
     if (!startupFailure) await this.settled(120_000);
@@ -237,8 +267,22 @@ export class App {
     await Bun.sleep(60);
   }
 
-  /** The element's centre, proven to receive the pointer there (else: the elements in the way). */
+  /** The element's centre, proven to receive the pointer there (else: the elements in the way) — tried again for up to
+   *  3 s: a page still sliding in (a menu's transition, 9 frames a second on the mini) is not yet under the pointer; an
+   *  overlay that swallows it for good still fails. */
   async hit(selector: string): Promise<{ x: number; y: number }> {
+    const until = performance.now() + 3000;
+    for (;;) {
+      try {
+        return await this.hitOnce(selector);
+      } catch (e) {
+        if (performance.now() > until) throw e;
+        await Bun.sleep(150);
+      }
+    }
+  }
+
+  private async hitOnce(selector: string): Promise<{ x: number; y: number }> {
     const r = await this.js<{ ok: boolean; x: number; y: number; stack: string[] }>(`(() => {
       const el = document.querySelector(${JSON.stringify(selector)});
       if (!el) return { ok: false, x: 0, y: 0, stack: ["(absent)"] };
