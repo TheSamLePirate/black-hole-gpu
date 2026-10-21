@@ -53,6 +53,10 @@ test("in flight: the Endurance's space blocks, read back from JSON; the heavy ti
     status: "orbit",
     where: "earth",
   });
+  // (its sensors' picture — PLAN-RADAR-AAA RD4 —: about the Earth, bounded, each track on the LVLH axes)
+  expect(r.spacePic?.ref).toBe("earth");
+  expect(r.spacePic!.tracks.length).toBeLessThanOrEqual(SPACE_BOUNDS.tracks);
+  for (const T of r.spacePic!.tracks) expect(Math.abs(Math.hypot(...T.lvlh) - T.range)).toBeLessThan(2);
   // (its state about the Earth: 800 km up, ~7.45 km/s; GM 398 600 km³/s²)
   expect(r.state!.body).toBe("earth");
   const rr = Math.hypot(...r.state!.r);
@@ -124,6 +128,33 @@ test("an untrusted event: the space blocks bounded, their garbage dropped; an ol
   expect(r.sysx!.crew).toBe(99);
   expect(r.sysx!.failures).toEqual([{ kind: "engine", fixing: false }]);
   expect(r.link!.light).toBe(0);
+  // (the sensors' picture: bounded, garbage dropped, the bits kept to three)
+  const sp = readInstruments({
+    v: 1,
+    t: 0,
+    metrics: {},
+    spacePic: {
+      ref: "earth",
+      tracks: [
+        ...Array.from({ length: 30 }, (_, k) => ({ id: `c${k}`, name: "ISS", kind: "station", lvlh: [k, 0, 0], range: k, sensors: 255 })),
+      ],
+    },
+  })!;
+  expect(sp.spacePic!.tracks.length).toBe(SPACE_BOUNDS.tracks);
+  expect(sp.spacePic!.tracks[0]).toMatchObject({ kind: "station", sensors: 7, hidden: false, ca: null, vlvlh: [0, 0, 0] });
+  const bad = readInstruments({
+    v: 1,
+    t: 0,
+    metrics: {},
+    spacePic: {
+      ref: "x",
+      tracks: [
+        { id: "a", lvlh: [1, "2", 3], range: 1 },
+        { id: "b", lvlh: [1, 2, 3], range: -4 },
+      ],
+    },
+  })!;
+  expect(bad.spacePic!.tracks).toEqual([]);
   const old = readInstruments({ v: 1, t: 0, metrics: { alt: 1 } })!;
   expect(old.craft).toBeUndefined();
   expect(old.traj).toBeUndefined();

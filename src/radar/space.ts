@@ -125,3 +125,20 @@ export function buildSpacePicture(own: { p: V3; v: V3 }, objects: SpaceObject[],
   }
   return out.sort((a, b) => a.range - b.range);
 }
+
+/** The space scope's reach [m] (the HUD's and the crew's — PLAN-RADAR-AAA RD4): its centre's 100 m to its edge's
+ *  1 000 km, a decade a ring. */
+export const SCOPE_MIN = 100,
+  SCOPE_MAX = 1_000_000;
+
+/** A range on the space scope: its share of the radius (0 the centre … 1 the edge), by its logarithm. */
+export const scopeRadius = (m: number) =>
+  Math.min(1, Math.max(0, Math.log10(Math.max(m, SCOPE_MIN) / SCOPE_MIN) / Math.log10(SCOPE_MAX / SCOPE_MIN)));
+
+/** A track's place on the space scope, in shares of its radius: the H-bar right (x), the V-bar up (y), its range by
+ *  scopeRadius; straight above or below us (no V-bar nor H-bar part): at the top. */
+export function scopeXY(lvlh: readonly number[], range: number): [number, number] {
+  const h = Math.hypot(lvlh[0]!, lvlh[1]!);
+  const r = scopeRadius(range);
+  return h > 1 ? [(lvlh[1]! / h) * r, (lvlh[0]! / h) * r] : [0, r];
+}

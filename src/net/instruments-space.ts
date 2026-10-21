@@ -148,6 +148,23 @@ export interface InstrumentOther {
   r: V3;
 }
 
+/** A track of the craft's sensors (PLAN-RADAR-AAA RD4 — radar/space.ts, controller/spacepic.ts): its place on our
+ *  LVLH axes [m] (V-bar along our way, H-bar our orbit's normal, R-bar up), its velocity on them [m/s], its range [m],
+ *  its rate [m/s, + opening], the sensors holding it (bits: 1 the radar, 2 the lidar, 4 the datalink), hidden by the
+ *  body, the closest approach on straight lines [m] and when [s] (null: opening). */
+export interface InstrumentSpaceTrack {
+  id: string;
+  name: string;
+  kind: "station" | "craft" | "player";
+  lvlh: V3;
+  vlvlh: V3;
+  range: number;
+  rate: number;
+  sensors: number;
+  hidden: boolean;
+  ca: { d: number; t: number } | null;
+}
+
 export interface InstrumentSpace {
   craft?: InstrumentCraft | null;
   /** the craft's attitude: its nose and its up on the home frame's axes (the navball's) */
@@ -165,6 +182,8 @@ export interface InstrumentSpace {
   /** the propellant: the Δv it still holds [m/s] (null: not counted), the tank's share */
   budget?: { dv: number | null; prop: number | null } | null;
   bodies?: InstrumentBody[];
+  /** the craft's sensors' picture (PLAN-RADAR-AAA RD4): the body it is about, its tracks the nearest first */
+  spacePic?: { ref: string; tracks: InstrumentSpaceTrack[] } | null;
   /** the room's other spacecraft about the same body (N6) */
   others?: InstrumentOther[] | null;
   target?: InstrumentTarget | null;
@@ -178,8 +197,8 @@ export interface InstrumentSpace {
   hole?: InstrumentHole | null;
 }
 
-/** the bounds: segments, points a segment, nodes, bodies, failures, ports */
-export const SPACE_BOUNDS = { segs: 6, pts: 96, nodes: 16, bodies: 32, failures: 8, ports: 6, others: 8 };
+/** the bounds: segments, points a segment, nodes, bodies, failures, ports, others, the sensors' tracks */
+export const SPACE_BOUNDS = { segs: 6, pts: 96, nodes: 16, bodies: 32, failures: 8, ports: 6, others: 8, tracks: 12 };
 
 const record = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object" && !Array.isArray(x);
 const finite = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
@@ -261,6 +280,26 @@ export function readSpace(x: Record<string, unknown>): InstrumentSpace {
         vessel: label(o.vessel, 16),
         r: [...(o.r as V3)],
       }));
+  const sp = x.spacePic;
+  if (record(sp) && Array.isArray(sp.tracks))
+    out.spacePic = {
+      ref: label(sp.ref, 16),
+      tracks: sp.tracks
+        .slice(0, SPACE_BOUNDS.tracks)
+        .filter((T): T is Record<string, unknown> => record(T) && v3(T.lvlh) && finite(T.range) && T.range >= 0)
+        .map((T) => ({
+          id: label(T.id, 24),
+          name: label(T.name, 24),
+          kind: T.kind === "station" || T.kind === "player" ? T.kind : "craft",
+          lvlh: [...(T.lvlh as V3)],
+          vlvlh: v3(T.vlvlh) ? [...T.vlvlh] : [0, 0, 0],
+          range: T.range as number,
+          rate: num(T.rate),
+          sensors: Number.isInteger(T.sensors) ? (T.sensors as number) & 7 : 0,
+          hidden: T.hidden === true,
+          ca: record(T.ca) && finite(T.ca.d) && finite(T.ca.t) ? { d: Math.max(0, T.ca.d), t: Math.max(0, T.ca.t) } : null,
+        })),
+    };
   if (Array.isArray(x.bodies))
     out.bodies = x.bodies
       .slice(0, SPACE_BOUNDS.bodies)

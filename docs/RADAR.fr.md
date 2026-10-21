@@ -124,6 +124,11 @@ radar. Un clic dans le vide désélectionne, et le verrou reste.
 
 Les ordres du crew visent une piste par son id. La portée, le nord en haut et la vue sont gardés.
 
+**L'image du vaisseau** au crew, à chaque instantané (12 pistes au plus) : les pistes des capteurs de l'engin dans son
+repère LVLH. La vue **Amarrage** les dessine loin d'un port comme le scope spatial du pilote (la même échelle
+logarithmique), avec leur liste : distance, vitesse d'approche, écart sur le R-bar, point de rapprochement, RDR / LID /
+LIAISON, CACHÉ. Près d'un port, la liste passe sous les chiffres. Une piste touchée ouvre son menu : **Cibler**.
+
 **Le Link 16** entre F-35, deux fois par seconde :
 
 - **qui partage** : toute la salle hors match et dans les matchs qui ne sont pas des combats ; son équipe en combat

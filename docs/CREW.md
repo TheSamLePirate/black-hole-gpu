@@ -161,7 +161,7 @@ console s'ouvre sur la première vue du profil.
 | vue | contenu |
 |---|---|
 | Boule | la boule de navigation : l'attitude contre l'orbite (ciel du côté radial extérieur), marqueurs prograde, rétrograde, normal, anti-normal, radial, nœud de manœuvre ; SAS, maintien, autopilote, assiette, vitesses |
-| Amarrage | le couloir d'approche vu de côté (cône ±0,3 m + 10 % de la distance), le réticule de face (COAS), distance, rapprochement et sa limite, dérive, axes écartés, rotation relative, phase de l'autopilote |
+| Amarrage | le couloir d'approche vu de côté (cône ±0,3 m + 10 % de la distance), le réticule de face (COAS), distance, rapprochement et sa limite, dérive, axes écartés, rotation relative, phase de l'autopilote ; les pistes des capteurs de l'engin (radar, lidar, liaison) sous les chiffres — et, à plus de 5 km de tout port, leur scope LVLH (V-bar en haut, H-bar à droite, 100 m à 1 000 km) avec leur liste ; une piste touchée : **Cibler** |
 | Δv | les poussées du plan bout à bout contre le Δv des ergols, la marge, le réservoir, la poussée en cours |
 | EECOM | batterie, oxygène, épurateurs, bilan et autonomie ; chaque panne avec sa checklist (le français du jeu) |
 | Chronologie | le temps de mission (MET) ; les poussées, apsides, changements de sphère, approches minimales des 24 h à venir sur un axe en racine carrée |

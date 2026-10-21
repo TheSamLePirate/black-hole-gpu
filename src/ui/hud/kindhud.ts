@@ -14,7 +14,7 @@ import { drawn, fit, type Box } from "./layout";
 import { jetUnits, type JetUnits } from "./jethud";
 import { MONO } from "../hudkit";
 import { drawSym, type SymSide } from "../../radar/symbols";
-import type { SpaceTrack } from "../../radar/space";
+import { scopeRadius, scopeXY, type SpaceTrack } from "../../radar/space";
 
 type Text = (t: string, x: number, y: number, col: string, size: number, align?: CanvasTextAlign, mono?: boolean) => void;
 
@@ -253,14 +253,6 @@ export function drawApproachHud(
   }
 }
 
-/** The space scope's reach [m]: its centre's 100 m to its edge's 1 000 km, a decade a ring. */
-const SCOPE_MIN = 100,
-  SCOPE_MAX = 1_000_000;
-
-/** A range on the space scope: its share of the radius (0 the centre … 1 the edge), by its logarithm. */
-export const scopeRadius = (m: number) =>
-  Math.min(1, Math.max(0, Math.log10(Math.max(m, SCOPE_MIN) / SCOPE_MIN) / Math.log10(SCOPE_MAX / SCOPE_MIN)));
-
 /**
  * The spacecraft's scope (PLAN-RADAR-AAA RD4), right of the centre where no panel stands (hud/layout.ts fit): its sensors' tracks on its LVLH axes — the V-bar (along
  * our way) up, the H-bar (our orbit's normal) right, the range on a logarithmic scale (rings at 1, 10, 100 km) —; each
@@ -325,13 +317,10 @@ export function drawSpaceScope(
   // (the labels: each moved down past those already written — two craft side by side both read)
   const taken: [number, number, number, number][] = [];
   for (const T of tracks) {
-    const h = Math.hypot(T.lvlh[0], T.lvlh[1]);
-    const r = scopeRadius(T.range) * R;
-    // (its bearing in our orbit's plane and across it; straight above or below us: at the top)
-    const ux = h > 1 ? T.lvlh[1] / h : 0,
-      uy = h > 1 ? T.lvlh[0] / h : 1;
-    const x = cx + ux * r,
-      y = cy - uy * r;
+    // (its bearing in our orbit's plane and across it, its range by its logarithm)
+    const [sx, sy] = scopeXY(T.lvlh, T.range);
+    const x = cx + sx * R,
+      y = cy - sy * R;
     const side: SymSide = T.kind === "station" ? "neutral" : T.kind === "player" ? "player" : "friend";
     const dl = T.sensors === 4;
     drawSym(

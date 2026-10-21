@@ -10,6 +10,7 @@ import { CrewRadio } from "./radio";
 import { bindTalk } from "./ptt";
 import { CrewViews, viewName, type CrewView } from "./views";
 import { dur } from "./draw/kit";
+import { sensorWords } from "./draw/lvlh";
 import { bodyName } from "./draw/orbit";
 import { eventName } from "./draw/spacestat";
 import { linkFor, Outbox, type Station, type StationId, STATIONS, stationOf } from "./station";
@@ -2213,24 +2214,30 @@ views.onContact = (id, x = stage.clientWidth / 2, y = stage.clientHeight / 2) =>
   const own = model.own();
   const c = own?.snapshot?.radar?.contacts.find((c) => c.id === id);
   const t = model.contacts().find((t) => t.id === id);
-  const name = c?.name ?? t?.name ?? id;
-  const info = c
-    ? `${u.fDist(Math.hypot(c.e, c.n))} · Δh ${u.fAlt(c.dz)} · ${c.iff}`
-    : t
-      ? [
-          t.type,
-          SIDES[t.side] ? L(...SIDES[t.side]!) : t.side,
-          t.alt !== null ? u.fAlt(t.alt) : "",
-          t.spd !== null ? u.fSpd(t.spd) : "",
-          fromCraft(t),
-        ]
-          .filter(Boolean)
-          .join(" · ")
-      : "";
+  // (a track of the spacecraft's sensors — PLAN-RADAR-AAA RD4 —: its range, its rate, who holds it; targeted only)
+  const sp = c || t ? undefined : own?.snapshot?.spacePic?.tracks.find((q) => q.id === id);
+  const name = c?.name ?? t?.name ?? sp?.name ?? id;
+  const info = sp
+    ? `${u.fDist(sp.range)} · ${sp.rate <= 0 ? "▼" : "▲"}${Math.abs(sp.rate).toFixed(1)} m/s · ${sp.hidden ? L("caché", "hidden") : sensorWords(sp.sensors)}`
+    : c
+      ? `${u.fDist(Math.hypot(c.e, c.n))} · Δh ${u.fAlt(c.dz)} · ${c.iff}`
+      : t
+        ? [
+            t.type,
+            SIDES[t.side] ? L(...SIDES[t.side]!) : t.side,
+            t.alt !== null ? u.fAlt(t.alt) : "",
+            t.spd !== null ? u.fSpd(t.spd) : "",
+            fromCraft(t),
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        : "";
   const air = !!c || t?.kind === "air";
   menu(x, y, name, info, [
     // (designated to the pilot: selected on all his screens — PLAN-RADAR-AAA RD9)
-    actButton(L("Désigner au pilote", "Designate to the pilot"), "wp.designate", { id }, "ctx-designate", (ok) => ok && closeMenu()),
+    ...(sp
+      ? []
+      : [actButton(L("Désigner au pilote", "Designate to the pilot"), "wp.designate", { id }, "ctx-designate", (ok) => ok && closeMenu())]),
     actButton(L("Cibler", "Target"), "nav.target", { name, id }, "ctx-target", (ok) => ok && closeMenu()),
     ...(air
       ? [

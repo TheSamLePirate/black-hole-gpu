@@ -515,7 +515,8 @@ export class CrewViews {
         drawNavball(p, r, sc);
         break;
       case "dock":
-        drawDock(p, r, sc);
+        // (the sensors' tracks touched: the contact's menu — PLAN-RADAR-AAA RD4)
+        drawDock(p, r, sc, (point, contact) => pick(point, { contact }));
         break;
       case "budget":
         drawBudget(p, r, sc);

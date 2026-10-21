@@ -167,6 +167,11 @@ Where the runways appear:
 - **« Shared »**: the whole truth — also in a match, as the room is told. What the sensors do not hold is faded, and
   there is no false sweep.
 - **Orders**: they name a contact by its id (`wp.lock`, `ap.traffic`, `nav.target`, `wp.designate`).
+- **The spacecraft's picture** (`spacePic` of the space blocks, `net/instruments-space.ts`, every snapshot, at most 12
+  tracks): the craft's sensors' tracks on its LVLH axes. The **Docking** view (`crew/draw/lvlh.ts`) draws them far from a
+  port as the pilot's space scope does (the same logarithmic reach, `radar/space.ts scopeXY`) with their list — range,
+  rate, R-bar, closest approach, RDR / LID / DL, HIDDEN —, and the list under its figures near one. A track touched: its
+  menu, **Target** (`nav.target`).
 - **Saved**: the range, north up and the view are kept.
 
 ### Link 16
@@ -205,6 +210,7 @@ Where the runways appear:
 - `space-picture`;
 - `landing-radar`, `craftpanel` — the Lander's landing radar, its LR row;
 - `net-picture` — round trip, size, priorities, gone, catch-up;
+- `crew-space` — the spacecraft's picture sent, bounded on reading;
 - `link16`;
 - `runways`, `runway-parity`;
 - `callouts` — the TCAS's lines.
@@ -219,6 +225,7 @@ Where the runways appear:
 - `missile-cues`;
 - `tcas`;
 - `space-sensors`;
+- `crew-lvlh` — the spacecraft's picture at the crew: the Docking view's scope, a click, Target;
 - `lander-radar` — the landing radar's locks at 10 km, 3 km, 400 m;
 - `link16`;
 - `world-runway`;

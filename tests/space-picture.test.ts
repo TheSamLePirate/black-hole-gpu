@@ -1,5 +1,15 @@
 import { expect, test } from "bun:test";
-import { bodyBetween, buildSpacePicture, lvlhAxes, SPACE_SENSOR, SPACE_SENSORS, type SpaceObject, type V3 } from "../src/radar/space";
+import {
+  bodyBetween,
+  buildSpacePicture,
+  lvlhAxes,
+  SPACE_SENSOR,
+  SPACE_SENSORS,
+  scopeRadius,
+  scopeXY,
+  type SpaceObject,
+  type V3,
+} from "../src/radar/space";
 
 // The spacecraft's sensors (PLAN-RADAR-AAA RD4): LVLH, the rendezvous radar's reach, the lidar, the datalink, the body
 // between.
@@ -77,4 +87,18 @@ test("the Lander about the Moon: the Endurance 150 km ahead in lunar orbit held 
   const [T] = buildSpacePicture(us, [{ id: "endurance", name: "Endurance", ...end, rcs: 800, kind: "craft" }], SPACE_SENSORS.lander!, RM);
   expect(T!.sensors & SPACE_SENSOR.RADAR).toBeTruthy();
   expect(T!.rate).toBeLessThan(5);
+});
+
+test("the space scope's places (the HUD's and the crew's): the V-bar up, the H-bar right, the range by its logarithm", () => {
+  expect(scopeRadius(100)).toBe(0);
+  expect(scopeRadius(10_000)).toBeCloseTo(0.5, 9);
+  expect(scopeRadius(5e6)).toBe(1);
+  const [x1, y1] = scopeXY([1000, 0, 0], 1000);
+  expect(x1).toBeCloseTo(0, 9);
+  expect(y1).toBeCloseTo(0.25, 9);
+  const [x2, y2] = scopeXY([0, 100_000, 0], 100_000);
+  expect(x2).toBeCloseTo(0.75, 9);
+  expect(y2).toBeCloseTo(0, 9);
+  // (straight above us: at the top)
+  expect(scopeXY([0, 0, 1000], 1000)).toEqual([0, 0.25]);
 });

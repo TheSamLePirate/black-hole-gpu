@@ -158,6 +158,26 @@ export function crewSpace(
         .slice(0, SPACE_BOUNDS.others);
     }
   }
+  // (the craft's sensors' picture — PLAN-RADAR-AAA RD4 —: its tracks on its LVLH axes, at each snapshot — a rendezvous
+  // moves fast —, the nearest first)
+  const P = i.region !== "hole" ? c.spacePic : null;
+  out.spacePic = P
+    ? {
+        ref: P.ref,
+        tracks: P.tracks.slice(0, SPACE_BOUNDS.tracks).map((T) => ({
+          id: T.id,
+          name: T.name,
+          kind: T.kind,
+          lvlh: [Math.round(T.lvlh[0]), Math.round(T.lvlh[1]), Math.round(T.lvlh[2])] as V3,
+          vlvlh: [r1(T.vlvlh[0]), r1(T.vlvlh[1]), r1(T.vlvlh[2])] as V3,
+          range: Math.round(T.range),
+          rate: r1(T.rate),
+          sensors: T.sensors,
+          hidden: T.hidden,
+          ca: T.ca ? { d: Math.round(T.ca.d), t: Math.round(T.ca.t) } : null,
+        })),
+      }
+    : null;
   const nodes = i.plan?.nodes ?? [];
   out.nodes = nodes.slice(0, SPACE_BOUNDS.nodes).map((n) => ({
     in: Math.round(n.t * M_SECONDS - t),

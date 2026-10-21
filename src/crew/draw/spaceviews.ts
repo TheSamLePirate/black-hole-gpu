@@ -4,7 +4,8 @@
 // dτ/dt, γ, the time gone by on the Earth), GROUND (the body flown about, its ground track, the landing point). From the
 // K1/K4 blocks.
 import { checklistOf } from "../checklists";
-import { C, D, dur, fmt, type Pen, type Rect } from "./kit";
+import { C, D, dur, fmt, type Pen, type Point, type Rect } from "./kit";
+import { drawLvlh, drawLvlhList } from "./lvlh";
 import { bodyName } from "./orbit";
 import type { Scene } from "./scene";
 import { eventName, failureName, roleName } from "./spacestat";
@@ -42,10 +43,14 @@ export function dockPhase(ph: string): string {
 }
 const m = (x: number) => (Math.abs(x) >= 1000 ? `${fmt(x / 1000, 2)} km` : `${fmt(x, Math.abs(x) < 10 ? 2 : 1)} m`);
 
-/** DOCKING: the corridor from aside (along the axis, across), the target's port head-on (the COAS's), the figures. */
-export function drawDock(p: Pen, r: Rect, sc: Scene) {
+/** DOCKING: the corridor from aside (along the axis, across), the target's port head-on (the COAS's), the figures; the
+ *  craft's sensors' picture (PLAN-RADAR-AAA RD4: its LVLH scope and its tracks) — the whole view far from a port, its list
+ *  under the figures near one. A track touched: `pick`. */
+export function drawDock(p: Pen, r: Rect, sc: Scene, pick?: (point: Point, id: string) => void) {
   p.panel(r);
   const d = sc.snap?.dock;
+  const pic = sc.snap?.spacePic ?? null;
+  const tgt = sc.snap?.target?.id ?? null;
   // (docked where there is no geometry — Gargantua's side —: said so, and to whom)
   if (d?.docked && !d.port) {
     p.text(L(`AMARRÉ · ${d.target.toUpperCase()}`, `DOCKED · ${d.target.toUpperCase()}`), r.x + r.w / 2, r.y + r.h / 2, {
@@ -56,13 +61,24 @@ export function drawDock(p: Pen, r: Rect, sc: Scene) {
     });
     return;
   }
-  if (!d)
+  if (!d) {
+    // (far from a port: the rendezvous — the sensors' picture —, the docking's geometry to come said above it)
+    if (pic) {
+      p.text(L("Aucun port à moins de 5 km — le rendez-vous", "No port within 5 km — the rendezvous"), r.x + r.w - 12, r.y + 18, {
+        col: C.dim,
+        size: 10,
+        align: "right",
+      });
+      drawLvlh(p, { x: r.x + 10, y: r.y + 10, w: r.w - 20, h: r.h - 20 }, pic, tgt, pick);
+      return;
+    }
     return none(
       p,
       r,
       L("Aucun port à moins de 5 km", "No port within 5 km"),
       L("(la géométrie d’amarrage arrive près d’une station ou d’un vaisseau)", "(the docking geometry comes near a station or a craft)"),
     );
+  }
   const figW = Math.min(280, r.w * 0.34);
   const W = r.w - figW - 30;
   // aside: the axis horizontal (the port on the right), the corridor's cone (±(0.3 m + 10 %) of the distance)
@@ -112,7 +128,7 @@ export function drawDock(p: Pen, r: Rect, sc: Scene) {
   const x0 = r.x + r.w - figW - 6;
   p.text(`${L("AMARRAGE", "DOCKING")} · ${d.target.toUpperCase()}`, x0, r.y + 18, { col: C.cyan, size: 11, weight: 700 });
   const closingOk = d.closing <= Math.max(0.1, Math.min(0.5, 0.02 * Math.max(d.along, 0) + 0.05));
-  column(p, x0, r.y + 42, figW - 8, [
+  const yEnd = column(p, x0, r.y + 42, figW - 8, [
     [L("Port visé", "Port"), d.port],
     ["Distance", m(d.range)],
     [L("Sur l’axe · travers", "Along · across"), `${m(d.along)} · ${m(Math.hypot(d.latX, d.latY))}`, inCone ? C.green : C.amber],
@@ -126,6 +142,12 @@ export function drawDock(p: Pen, r: Rect, sc: Scene) {
       d.docked ? C.green : C.amber,
     ],
   ]);
+  // (the sensors' tracks under the figures, as many as there is room for)
+  const rows = Math.floor((r.y + r.h - yEnd - 30) / 34);
+  if (pic && rows > 0) {
+    p.text(L("CAPTEURS · LVLH", "SENSORS · LVLH"), x0, yEnd + 14, { col: C.cyan, size: 10, weight: 700 });
+    drawLvlhList(p, x0, yEnd + 34, figW - 8, pic.tracks, tgt, rows);
+  }
 }
 
 /** Δv: the propellant's Δv left against the plan's burns one after the other; the margin; the tank. */
