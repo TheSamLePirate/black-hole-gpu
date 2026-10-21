@@ -129,7 +129,9 @@ export class CrewActions {
       this.pending.set(id, { act, args, resolve, timer });
       // (the console's language: the pilot's answer comes back in it)
       const go = () => this.net.event({ kind: "crew-cmd", v: 1, id, to, act, args, lang: lang() });
-      if (link.delay > 0) setTimeout(go, link.delay * 1000);
+      // (a pilot who holds the ground's orders himself — AUDIT-CREW priority 6 —: sent at once, he waits the light's
+      // time; an older one: delayed here)
+      if (link.delay > 0 && !this.model.holds(to)) setTimeout(go, link.delay * 1000);
       else go();
       this.changed();
     });

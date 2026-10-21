@@ -98,7 +98,15 @@ export function clocksStep(
 }
 
 /** The space blocks now; `heavy` the once-a-second tick (the paths, the bodies). */
-export function crewSpace(c: CameraController, i: Info, status: RangerStatus | null, t: number, heavy: boolean): InstrumentSpace {
+export function crewSpace(
+  c: CameraController,
+  i: Info,
+  status: RangerStatus | null,
+  t: number,
+  heavy: boolean,
+  /** the light delay played for the ground stations: the room's, its owner's (AUDIT-CREW priority 6) */
+  lightDelay: "real" | "tenth" | "off" = c.s.netLightDelay,
+): InstrumentSpace {
   const id = fleet.active as VesselId;
   const V = VESSELS[id];
   const out: InstrumentSpace = {
@@ -289,7 +297,7 @@ export function crewSpace(c: CameraController, i: Info, status: RangerStatus | n
       : i.X
         ? (() => {
             const light = (Math.hypot(i.X[0] - earth[0], i.X[1] - earth[1], i.X[2] - earth[2]) * M_METRES) / C_MPS;
-            const k = c.s.netLightDelay === "off" ? 0 : c.s.netLightDelay === "tenth" ? 0.1 : 1;
+            const k = lightDelay === "off" ? 0 : lightDelay === "tenth" ? 0.1 : 1;
             return { light: r1(light), delay: Math.round(light * k * 100) / 100, cut: false };
           })()
         : null;

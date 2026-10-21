@@ -5104,6 +5104,8 @@ async function main() {
   // the players' voices (ui/netvoice.ts — docs/PLAN-RESEAU.md R2)
   const netVoice = new NetVoice(netPanel, (s) => panel.toast(s));
   netPanel.voice = netVoice;
+  // (a crew's ground station while we are behind the wormhole: no voice, as no text — AUDIT-CREW priority 6)
+  netVoice.cut = (slot) => !!netSession.groundOf(slot)?.cut;
   // the Atlas (ui/atlas.ts, PLAN-MODES-AAA M6): the Earth, the Moon and Mars as maps, their destinations, the
   // addresses — the game put there (in orbit, landed, on foot, the free camera, a tripod)
   const ATLAS_ORBIT_KM: Record<MapBody, number> = { earth: 400, moon: 100, mars: 300 };

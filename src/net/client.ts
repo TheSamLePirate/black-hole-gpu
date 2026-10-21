@@ -82,7 +82,7 @@ export class NetClient {
   readonly clock = new NetClock();
   readonly remotes = new RemoteRegistry();
   /** the server's version once welcomed */
-  server = { v: 0, build: "" };
+  server: { v: number; build: string; f: string[] } = { v: 0, build: "", f: [] };
   /** the direct links to the room's others (WebRTC), null: none */
   mesh: PeerMesh | null = null;
   /** the ICE servers the room server gave (STUN, its TURN) */
@@ -238,7 +238,7 @@ export class NetClient {
     }
     switch (m.type) {
       case "welcome":
-        this.server = { v: m.v, build: m.build };
+        this.server = { v: m.v, build: m.build, f: Array.isArray(m.f) ? m.f.filter((x) => typeof x === "string").slice(0, 16) : [] };
         this.retry = 0;
         this.setStatus("online");
         this.ping();

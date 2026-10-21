@@ -85,12 +85,15 @@ export const STATIONS: Station[] = [
 ];
 export const stationOf = (id: string | null | undefined): Station => STATIONS.find((s) => s.id === id) ?? STATIONS[0]!;
 
-/** The link now for a station: its one-way delay [s] (0 aboard), cut (behind the wormhole, for the ground). */
+/** The link now for a station: its one-way delay [s] (0 aboard, accepted), cut (behind the wormhole, for the ground). */
 export function linkFor(
   st: Station,
   link: { delay?: number; light: number; cut: boolean } | null | undefined,
+  /** aboard on the pilot's agreement (AUDIT-CREW priority 6): not accepted yet, or refused, a station aboard is on the
+   *  ground — its light's time, its link cut behind the wormhole */
+  accepted = true,
 ): { delay: number; cut: boolean } {
-  if (st.place === "aboard" || !link) return { delay: 0, cut: false };
+  if ((st.place === "aboard" && accepted) || !link) return { delay: 0, cut: false };
   if (link.cut) return { delay: 0, cut: true };
   return { delay: Math.max(0, link.delay ?? link.light), cut: false };
 }

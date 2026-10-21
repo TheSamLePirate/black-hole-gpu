@@ -261,26 +261,40 @@ salle (« Brand · FIDO ») et la console vaisseau s'ouvre sur la vue de son pos
 | FIDO — dynamique de vol | sol | Orbite |
 | GUIDO — guidage | sol | Boule |
 | EECOM — systèmes | sol | EECOM |
-| CAPCOM — communications | sol | Chronologie (et les tonalités Quindar à chaque prise de parole : 2 525 Hz à l'ouverture, 2 475 Hz à la fermeture) |
+| CAPCOM — communications | sol | Chronologie ; les tonalités Quindar à chaque prise de parole (2 525 Hz à l'ouverture, 2 475 Hz à la fermeture) **mêlées à sa voix** : toute la salle les entend |
 
-- **À bord**, tout est en direct.
+- **Les droits** : tous les postes peuvent tout ordonner (décision du 2026-10-21) ; le poste choisit la vue d'accueil et
+  l'ordre des panneaux.
+- **À bord, sur accord du pilote** (2026-10-21) : une console à un poste de bord qui suit un vaisseau demande au pilote
+  (`crew-aboard`). Sa carte : Accepter / Refuser (`crew-aboard-ok`). Acceptée, elle est en direct ; en attente ou refusée,
+  elle est au sol. L'instantané porte les consoles acceptées (`caps.aboard`). Un avion n'a pas de délai : rien à
+  demander.
 - **Au sol**, la console reçoit les instantanés en retard du délai de la lumière ; ses ordres et leurs réponses
   partent en retard de la même façon.
-  - Le délai se règle dans la salle : c'est un réglage du pilote, *Réseau → Délai lumière vers le sol* (réel, un
-    dixième, aucun). L'instantané en porte la valeur (`link.delay`).
+  - **Le délai est tenu par le jeu du pilote** (`caps.hold`) : il retient les ordres et les messages d'une console non
+    acceptée à bord du temps de la lumière, quoi qu'elle ait fait (elle les lui envoie donc tout de suite ; à un pilote
+    plus ancien, elle les retarde elle-même).
+  - **Le délai est un réglage de salle, celui de son créateur** : *Réseau › Délai lumière vers le sol* (réel, un
+    dixième, aucun) chez celui qui a créé la salle part en `room-delay`. Le serveur vérifie son jeton de création, le
+    retire, et rejoue la valeur aux arrivants. Sans valeur de salle (ou un serveur plus ancien), chaque pilote garde la
+    sienne. L'instantané en porte la valeur (`link.delay`).
   - Exemples : la Lune 1,3 s, Mars plusieurs minutes. Pour les longs délais, la file ne garde qu'un instantané par
     seconde.
 - **Derrière le trou de ver**, la liaison est coupée pour le sol.
-  - Plus rien de neuf n'arrive et les ordres sont refusés.
+  - Plus rien de neuf n'arrive. Les ordres sont refusés : par la console, et par le jeu du pilote s'ils lui arrivent
+    quand même.
   - Les messages sont enregistrés ; ils partent au retour de la liaison, avec leur âge (« Message enregistré de Brand ·
     CAPCOM (il y a 2 h 10) : … »).
+  - **La voix** est coupée entre le sol et ce vaisseau, des deux côtés. Elle n'est **jamais retardée** (décision du
+    2026-10-21).
 - **Message à l'équipage** (panneau Équipage) : un texte de 280 caractères au plus pour le pilote suivi. En direct à
   bord, en différé depuis le sol. Le pilote le reçoit en toast (`crew-msg`).
 - Le badge indique le poste et la liaison (« VAISSEAU · RANGER — FIDO · SOL +2 S », en rouge quand la liaison est
   coupée). La ligne d'état indique les mesures différées.
 - Un poste au sol reconnaît un vaisseau déjà derrière le trou de ver à son dernier mot (son profil, son badge, sa
   carte) : « Liaison coupée — derrière le trou de ver : son dernier mot » (K7).
-- Les messages vocaux enregistrés ne sont pas encore faits : le texte seulement.
+- Pas de messages vocaux enregistrés : la voix n'a pas de délai (décision du 2026-10-21) ; derrière le trou de ver, le texte
+  seulement.
 
 ## Les actions vaisseau (K6)
 

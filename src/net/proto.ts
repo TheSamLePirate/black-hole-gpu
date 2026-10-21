@@ -60,7 +60,7 @@ export type ClientMsg =
 
 // ---- the server → the page
 export type ServerMsg =
-  | { type: "welcome"; v: number; build: string; s: number }
+  | { type: "welcome"; v: number; build: string; s: number; f?: string[] }
   | { type: "pong"; c: number; s: number }
   | { type: "created"; re: number; code: string; owner: string }
   | { type: "joined"; re: number; code: string; name: string; slot: number; clock: RoomClock; members: Member[] }

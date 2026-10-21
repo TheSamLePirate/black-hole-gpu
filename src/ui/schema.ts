@@ -4592,7 +4592,7 @@ export const SCHEMA: ControlDef[] = [
     label: "Light delay to the ground",
     style: "segmented",
     effect: "none",
-    help: "The crew's ground stations (mission control) see the craft late and their orders arrive late by the light's time from the Earth — the Moon 1.3 s, Mars minutes; behind the wormhole, no live link: only recorded messages, delivered when it comes back. The stations aboard are always live.",
+    help: "The crew's ground stations (mission control) see the craft late and their orders arrive late by the light's time from the Earth — the Moon 1.3 s, Mars minutes; behind the wormhole, no live link: only recorded messages, delivered when it comes back. The stations aboard (once the pilot has accepted them) are always live; the voice is never delayed. The room's setting: its creator's — in another's room, theirs applies.",
     keywords: "network crew ground mission control light delay capcom latency mars moon wormhole",
     options: [
       { value: "real", label: "Real", hint: "The light's own time" },

@@ -26,6 +26,10 @@ describe.skipIf(!E2E)("crew — a console for each craft", () => {
     crew = new CrewFrame(a);
     await crew.open(code, "Doyle", { w: 1200, h: 820 });
     await a.waitFor(crew.w("__crew.model.own()?.snapshot?.craft?.id === 'lander'"), 30_000);
+    // (the copilot's station aboard on Ana's agreement — AUDIT-CREW priority 6: her card, accepted)
+    await a.waitFor(`!!document.querySelector('[data-testid="net-crew-aboard"]')`, 15_000);
+    await a.click('[data-testid="net-crew-aboard-yes"]');
+    await a.waitFor(crew.w("__crew.model.aboardWith(__crew.model.selected)"), 10_000);
   }, 300_000);
   afterAll(() => {
     b?.close();

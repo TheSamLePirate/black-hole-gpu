@@ -151,6 +151,10 @@ export class NetVoice {
     return !!this.peers.get(slot)?.speaking;
   }
 
+  /** whether a slot's voice cannot reach us (AUDIT-CREW priority 6: a ground station while we are behind the wormhole —
+   *  no live link, as for its text; never delayed otherwise — the user's choice) */
+  cut: (slot: number) => boolean = () => false;
+
   volume(slot: number) {
     return this.prefs.volumes[this.panel.net?.room?.members.find((m) => m.slot === slot)?.device ?? String(slot)] ?? 1;
   }
@@ -270,7 +274,7 @@ export class NetVoice {
     for (const [slot, P] of this.peers) {
       const L = net?.mesh?.peers.get(slot);
       // (on one network: in one room — not heard, unless asked)
-      const silenced = this.prefs.sameRoomMute && L?.route === "host";
+      const silenced = (this.prefs.sameRoomMute && L?.route === "host") || this.cut(slot);
       const level = rms(P.an, this.buf);
       if (level > -55) P.loudAt = now;
       const speaking = !silenced && now - P.loudAt < 400;

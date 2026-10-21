@@ -77,9 +77,9 @@ Jamais testés depuis le crew sur le vrai jeu :
 | Contrat `space` K1 | ✅ | `src/ui/crew-space.ts:84-256`, `src/net/instruments-space.ts:190-337` | durée des poussées ; angle de phase ; position LVLH au-delà de 5 km |
 | Profil vaisseau / F-35 | ✅ | `src/crew/profile.ts:30-65` | — |
 | Console propre à Ranger, Lander, Endurance | ✅ (2026-10-21) | `profile.ts craftViews/craftTiles`, `draw/descent.ts`, `sp.lpd` | — ([fiche](progress/crew/P4-vaisseaux.md)) |
-| Postes à bord (3) et au sol (5) | 🟡 | `src/crew/station.ts:20-71` | un poste ne change que la vue d'accueil et l'ordre des panneaux : mêmes droits partout ; « à bord » se déclare librement et échappe au délai |
-| Délai lumière (données, ordres, réponses, messages) | ✅ | `src/crew/model.ts:100-118`, `src/crew/actions.ts:41-44,99-115` | réglage du pilote, pas de la salle (`src/settings.ts:789`) |
-| Liaison coupée derrière le trou de ver | 🟡 | `station.ts:118-129` | la **voix** n'est ni retardée ni coupée (`src/crew/radio.ts`) ; Quindar joué en local seulement |
+| Postes à bord (3) et au sol (5) | ✅ (2026-10-21) | `station.ts linkFor(accepted)`, `crew-aboard`, `netsession.groundOf` | droits : tous les postes, tout (décision) ; à bord sur accord du pilote ; le délai tenu par le jeu du pilote |
+| Délai lumière (données, ordres, réponses, messages) | ✅ | `room-delay` (serveur : jeton du créateur), `caps.hold` | réglé par le créateur de la salle ; les instantanés restent retardés par la console |
+| Liaison coupée derrière le trou de ver | ✅ (2026-10-21) | `radio.cut`, `netVoice.cut`, Quindar mêlé à la voix du CAPCOM | la voix jamais retardée (décision), coupée derrière le trou de ver |
 | Orbite (Pe/Ap, poussées déplaçables, autres vaisseaux) | ✅ | `src/crew/draw/orbit.ts`, `views.ts:131-136` | — |
 | Prochaine poussée | 🟡 | `spacestat.ts:70` | pas de tuile ni de compte à rebours dédiés ; rôles et événements bruts en anglais (`depart`, `mcc`, `exit`) au lieu de `roleName` |
 | Δv, ergols | ✅ | `spaceviews.ts:95-155` | RCS séparé |
@@ -160,5 +160,5 @@ la langue de la console.
 **5. PLAN-RADAR-AAA** — 🟡 RD0, RD1 et le minimum faits le 2026-10-21 ([fiche](progress/crew/P5-radar.md)) ; RD2–RD14 restent : RD0 (la sonde et les mesures P1–P11), puis RD1, puis la suite. Reconnexion et passage des
 commandes suivis par le crew.
 
-**6. Postes** : des droits par poste, l'emplacement à bord ou au sol vérifié, le délai réglé par la salle, la voix
+**6. Postes** — ✅ fait le 2026-10-21 ([fiche](progress/crew/P6-postes.md)) ; décisions de l'utilisateur : tous les postes gardent tous les droits, à bord sur accord du pilote, délai réglé par le créateur de la salle, pas de délai pour la voix : des droits par poste, l'emplacement à bord ou au sol vérifié, le délai réglé par la salle, la voix
 retardée ou coupée comme le texte.

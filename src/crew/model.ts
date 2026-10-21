@@ -123,6 +123,7 @@ export class CrewModel {
       if (!data) return;
       // (a ground station — PLAN-VAISSEAUX K5: the light's time late; behind the wormhole, nothing new at all)
       this.rawLink.set(from, data.link ?? null);
+      this.rawCaps.set(from, data.caps ?? null);
       const L = this.linkOf(from);
       // (cut: nothing new — but a craft never seen yet is known, its last word: the console's profile, its badge; and
       // what its once-a-second blocks bring until they have come)
@@ -149,6 +150,7 @@ export class CrewModel {
       this.history.clear();
       this.lines.clear();
       this.rawLink.clear();
+      this.rawCaps.clear();
       this.heavy.clear();
       // (a reconnection to the same room: the pilot followed found again by his device; another room: none)
       if (!room || room.code !== this.roomCode) this.followDevice = null;
@@ -172,13 +174,29 @@ export class CrewModel {
   private roomCode: string | null = null;
   /** told when the console follows another pilot by itself (the controls handed over) */
   handedTo: ((slot: number) => void) | null = null;
-  /** the station's link to a pilot (K5): its delay [s] and whether it is cut — set by the console (0 aboard) */
-  linkFor: (link: InstrumentSnapshot["link"] | null | undefined) => { delay: number; cut: boolean } = () => ({ delay: 0, cut: false });
+  /** the station's link to a pilot (K5): its delay [s] and whether it is cut — set by the console (0 aboard, accepted) */
+  linkFor: (link: InstrumentSnapshot["link"] | null | undefined, accepted: boolean) => { delay: number; cut: boolean } = () => ({
+    delay: 0,
+    cut: false,
+  });
+  /** each pilot's newest caps (not the delayed snapshot's): whether he holds the ground's orders, whom he took aboard */
+  private rawCaps = new Map<number, InstrumentSnapshot["caps"] | null>();
+  /** whether a pilot has taken this screen aboard (AUDIT-CREW priority 6) — an older pilot, who asks for no agreement:
+   *  yes; none said yet: no */
+  aboardWith(slot: number): boolean {
+    const caps = this.rawCaps.get(slot);
+    if (!caps?.hold) return true;
+    return !!this.net.room && !!caps.aboard?.includes(this.net.room.slot);
+  }
+  /** whether a pilot holds the ground's orders and messages the light's time himself (the console then sends at once) */
+  holds(slot: number): boolean {
+    return this.rawCaps.get(slot)?.hold === true;
+  }
   private lines = new Map<number, DelayLine<InstrumentSnapshot>>();
   private rawLink = new Map<number, InstrumentSnapshot["link"] | null>();
   /** a pilot's link as the station has it now (from his newest snapshot, not the delayed one) */
   linkOf(slot: number) {
-    return this.linkFor(this.rawLink.get(slot));
+    return this.linkFor(this.rawLink.get(slot), this.aboardWith(slot));
   }
   /** the delayed snapshots now due, shown */
   private pump() {

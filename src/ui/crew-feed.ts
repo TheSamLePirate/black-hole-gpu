@@ -256,7 +256,16 @@ export function fitSnapshot(s: InstrumentSnapshot, max = 16_384 - 600): { data: 
   return { data, cut };
 }
 
-export function crewSnapshot(c: CameraController, i: Info, status: RangerStatus | null, t: number, around = false): InstrumentSnapshot {
+export function crewSnapshot(
+  c: CameraController,
+  i: Info,
+  status: RangerStatus | null,
+  t: number,
+  around = false,
+  lightDelay: "real" | "tenth" | "off" = c.s.netLightDelay,
+  /** the crew screens accepted aboard (their slots — netsession): live; the pilot holds the others' orders */
+  aboard: number[] = [],
+): InstrumentSnapshot {
   const g = c.geoNow();
   const body = status?.soi ?? i.ref ?? (i.region === "hole" ? "gargantua" : "unknown");
   const b = solarBody(body);
@@ -315,7 +324,7 @@ export function crewSnapshot(c: CameraController, i: Info, status: RangerStatus 
   }
   return {
     // (the spacecraft's blocks — PLAN-VAISSEAUX K1: the craft, its state, paths, burns, bodies, target, systems, clocks)
-    ...crewSpace(c, i, status, t, around),
+    ...crewSpace(c, i, status, t, around, lightDelay),
     v: 1,
     t,
     body,
@@ -425,7 +434,7 @@ export function crewSnapshot(c: CameraController, i: Info, status: RangerStatus 
     next: status?.next ? { kind: status.next.kind, name: status.next.name, in: status.next.inS, body: status.next.body } : null,
     msn: i.msn ? { name: i.msn.name, brg: i.msn.brg * D, dist: i.msn.dist, dz: i.msn.dz } : null,
     warn: warnings(i, status, fuelKg, bingo),
-    caps: { on: c.s.netCrewActions !== false, fam: crewFamilies(c) },
+    caps: { on: c.s.netCrewActions !== false, fam: crewFamilies(c), hold: true, aboard },
     sun: sunOver(body, t),
     arms: fleet.active === "f35" ? armsOf(c) : null,
     // (the refuelling behind TEXACO: its phase, the way it is flown, the fuel given, the gap to the basket)

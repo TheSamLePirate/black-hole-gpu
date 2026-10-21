@@ -150,4 +150,7 @@ export default {
   // time (N6)
   "{0} (burning)": "{0} (en poussée)",
   "held by {0}": "retenu par {0}",
+  // the crew's stations aboard, on the pilot's agreement (AUDIT-CREW priority 6)
+  "{0} asks to be aboard ({1})": "{0} demande à être à bord ({1})",
+  "{0} stays on the ground": "{0} reste au sol",
 } satisfies Record<string, string>;

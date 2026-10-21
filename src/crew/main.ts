@@ -51,28 +51,16 @@ const net = new NetClient({
 const model = new CrewModel(net);
 /** the station chosen at the lobby (PLAN-VAISSEAUX K5): aboard, live; on the ground, the light's time late */
 let station: Station = stationOf(store.get("kerr.crew.station"));
-model.linkFor = (link) => linkFor(station, link);
+model.linkFor = (link, accepted) => linkFor(station, link, accepted);
+/** the pilots asked to take this screen aboard, their answer (AUDIT-CREW priority 6: aboard on the pilot's agreement) */
+const aboardAsked = new Map<number, "asked" | "yes" | "no">();
 const outbox = new Outbox();
 const views = new CrewViews($<HTMLCanvasElement>("instruments"), model);
 const radio = new CrewRadio(net, () => syncRadio());
-// (the CAPCOM's Quindar tones: 2 525 Hz as the voice opens, 2 475 Hz as it closes — 250 ms, the Apollo loops')
-let quindarCtx: AudioContext | null = null;
-radio.onTalk = (active) => {
-  if (station.id !== "capcom") return;
-  try {
-    quindarCtx ??= new AudioContext();
-    const c = quindarCtx;
-    const o = c.createOscillator(),
-      g = c.createGain();
-    o.frequency.value = active ? 2525 : 2475;
-    g.gain.value = 0.12;
-    o.connect(g).connect(c.destination);
-    o.start();
-    o.stop(c.currentTime + 0.25);
-  } catch {
-    // (no audio: no tone)
-  }
-};
+// (the CAPCOM's Quindar tones, on the radio — in the voice it sends: everyone hears them — AUDIT-CREW priority 6)
+radio.quindar = () => station.id === "capcom";
+// (a pilot behind the wormhole, this screen on the ground: his voice cut, as his text — never delayed)
+radio.cut = (slot) => net.room?.members.find((m) => m.slot === slot)?.role === "pilot" && model.linkOf(slot).cut;
 const actions = new CrewActions(net, model, () => unitsOf(views.units));
 actions.onChange(() => {
   board();
@@ -694,21 +682,26 @@ function syncBadge() {
   const c = snapNow()?.craft;
   // (a spacecraft's console: the station, aboard or on the ground — and the light's time from there)
   const link = model.selected !== null ? model.linkOf(model.selected) : { delay: 0, cut: false };
+  // (aboard on the pilot's agreement: waiting for it, or refused — then on the ground, its light's time)
+  const asked = model.selected !== null ? aboardAsked.get(model.selected) : undefined;
+  const accepted = model.selected === null || model.aboardWith(model.selected);
   const where =
-    station.place === "aboard"
+    station.place === "aboard" && accepted
       ? L("à bord", "aboard")
-      : link.cut
-        ? L("sol · liaison coupée", "ground · link cut")
-        : link.delay >= 0.5
-          ? `${L("sol", "ground")} +${dur(link.delay)}`
-          : L("sol", "ground");
+      : station.place === "aboard" && asked !== "no"
+        ? L("à bord · en attente du pilote", "aboard · waiting for the pilot")
+        : link.cut
+          ? L("sol · liaison coupée", "ground · link cut")
+          : link.delay >= 0.5
+            ? `${L("sol", "ground")} +${dur(link.delay)}`
+            : L("sol", "ground");
   $("profile-badge").textContent =
     profile === "jet"
       ? `${c?.name ?? "F-35"} · ${L("TACTIQUE", "TACTICAL")}`.toUpperCase()
       : profile === "space"
         ? `${L("VAISSEAU", "SPACECRAFT")} · ${c?.name ?? ""} — ${station.call} · ${where}`.toUpperCase()
         : "";
-  $("profile-badge").classList.toggle("cut", station.place === "ground" && link.cut);
+  $("profile-badge").classList.toggle("cut", link.cut);
 }
 /** the console's profile now (PLAN-VAISSEAUX K2 — profile.ts): the craft followed's — its views, its tiles, its theme */
 let profile: CrewProfile | null = null;
@@ -1711,6 +1704,29 @@ function board() {
   syncActs();
 }
 
+/** a station aboard: the pilot followed asked once for his agreement (a pilot who asks for it — caps.hold) */
+function askAboard() {
+  const to = model.selected;
+  // (a spacecraft's alone — an aircraft has no light's time to the ground: nothing to agree to)
+  if (station.place !== "aboard" || to === null || !net.room || !model.holds(to) || model.aboardWith(to) || aboardAsked.has(to)) return;
+  if (model.crafts().find((c) => c.member.slot === to)?.snapshot?.craft?.kind !== "spacecraft") return;
+  aboardAsked.set(to, "asked");
+  net.event({ kind: "crew-aboard", v: 1, to, station: `${station.call} · ${Lp(station.title)}` });
+  notice(L("Demande au pilote : à bord", "Asked the pilot: aboard"));
+}
+net.on("event", ({ from, ev }) => {
+  if (ev.kind !== "crew-aboard-ok" || (ev as { to?: unknown }).to !== net.room?.slot) return;
+  const ok = (ev as { ok?: unknown }).ok === true;
+  aboardAsked.set(from, ok ? "yes" : "no");
+  notice(
+    ok
+      ? L("Le pilote vous prend à bord : en direct", "The pilot takes you aboard: live")
+      : L("Le pilote refuse : vous restez au sol", "The pilot refuses: you stay on the ground"),
+  );
+  syncBadge();
+});
+net.on("room", () => aboardAsked.clear());
+
 /** the message to the pilot (K5): live aboard; the light's time late from the ground; behind the wormhole recorded,
  *  delivered (its age with it) when the link comes back */
 function sendMessage(text: string) {
@@ -1722,7 +1738,8 @@ function sendMessage(text: string) {
     notice(L("Message enregistré : il partira au retour de la liaison.", "Message recorded: it will go when the link comes back."));
   } else {
     const go = () => net.event({ kind: "crew-msg", v: 1, to, text, rec: 0 });
-    if (link.delay > 0) setTimeout(go, link.delay * 1000);
+    // (a pilot who holds the ground's messages himself: sent at once — an older one: delayed here)
+    if (link.delay > 0 && !model.holds(to)) setTimeout(go, link.delay * 1000);
     else go();
     notice(
       link.delay > 0
@@ -1792,6 +1809,7 @@ function refresh() {
     }
   }
   setProfile(profileOf(own?.snapshot));
+  askAboard();
   syncBadge();
   syncMessages();
   tiles(own);
@@ -1908,6 +1926,7 @@ function refresh() {
       )
     : "";
   syncRadio();
+  radio.sync();
   const listBox = $("contact-list");
   if (listBox) {
     const sensor = views.sensor && views.view !== "dash";

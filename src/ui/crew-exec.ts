@@ -237,6 +237,23 @@ export class CrewExec {
   private gate = new CrewGate(4);
   constructor(private d: CrewExecDeps) {}
 
+  /** an order from a ground station behind the wormhole: no live link — refused, said why in the console's language */
+  refuseCut(net: NetClient, from: number, raw: unknown) {
+    const r = raw as { id?: unknown; act?: unknown; to?: unknown; lang?: unknown };
+    if (r.to !== net.room?.slot || typeof r.id !== "string") return;
+    const lang = r.lang === "en" ? "en" : "fr";
+    net.event({
+      kind: "crew-ack",
+      v: 1,
+      id: r.id.slice(0, 40),
+      to: from,
+      act: String(r.act ?? "").slice(0, 32),
+      ok: false,
+      msg: lang === "fr" ? "Liaison coupée (trou de ver) : enregistrez un message" : "Link cut (wormhole): record a message",
+      what: String(r.act ?? "").slice(0, 32),
+    } satisfies CrewAck & { kind: string });
+  }
+
   /** an order heard in the room (from: the server's stamp) */
   async handle(net: NetClient, from: number, raw: unknown) {
     const room = net.room;

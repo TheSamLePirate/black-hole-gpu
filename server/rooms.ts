@@ -61,7 +61,12 @@ interface Live {
   peers: Map<number, ServerWebSocket<Peer>>;
   /** the match running, as its last start or end was said (docs/PLAN-RESEAU.md R3): a newcomer told at once */
   match?: { from: number; ev: Record<string, unknown> };
+  /** the room's light delay to its crew's ground stations, set by its owner (AUDIT-CREW priority 6): a newcomer told */
+  delay?: { from: number; ev: Record<string, unknown> };
 }
+
+/** what this server does beyond its protocol's version (the welcome's `f`): a newer page asks before it uses them */
+export const FEATURES = ["room-delay"];
 
 export interface RoomsOptions {
   /** the SQLite file (":memory:" in tests) */
@@ -245,7 +250,7 @@ export function createRooms(o: RoomsOptions) {
       P.device = clean(m.device, 64) || crypto.randomUUID();
       P.name = clean(m.name, 24) || "Pilot";
       P.colour = colour(m.colour);
-      return send(ws, { type: "welcome", v: PROTO_VERSION, build, s: now() });
+      return send(ws, { type: "welcome", v: PROTO_VERSION, build, s: now(), f: FEATURES });
     }
     if (m.type === "ping") return send(ws, { type: "pong", c: m.c, s: now() });
     if (!P.hello) return fail(ws, "bad", "hello first");
@@ -320,6 +325,7 @@ export function createRooms(o: RoomsOptions) {
         send(ws, { type: "joined", re: m.id, code, name: l.rec.name, slot, clock: l.rec.clock, members: members(l) });
         roster(l);
         if (l.match) send(ws, { type: "event", from: l.match.from, ev: l.match.ev as never });
+        if (l.delay) send(ws, { type: "event", from: l.delay.from, ev: l.delay.ev as never });
         rewarp(l, true);
         world(l, ws);
         return;
@@ -385,8 +391,18 @@ export function createRooms(o: RoomsOptions) {
       }
       case "event": {
         if (!P.room) return fail(ws, "not-in-room", "Not in a room");
-        const ev = m.ev && typeof m.ev === "object" ? m.ev : null;
+        let ev = m.ev && typeof m.ev === "object" ? m.ev : null;
         if (!ev || typeof ev.kind !== "string") return;
+        // (the room's light delay: its owner's alone — his token checked here, never passed on —, kept for newcomers)
+        if (ev.kind === "room-delay") {
+          const l = live.get(P.room);
+          if (!l) return;
+          if (sha256(String((ev as { owner?: unknown }).owner ?? "")) !== l.rec.owner)
+            return fail(ws, "owner", "Only its owner sets the room's light delay");
+          const value = (ev as { value?: unknown }).value;
+          ev = { kind: "room-delay", value: value === "tenth" || value === "off" ? value : "real" } as typeof ev;
+          l.delay = { from: P.slot, ev };
+        }
         const msg = JSON.stringify({ type: "event", from: P.slot, ev } satisfies ServerMsg);
         if (msg.length > 16_384) return;
         // (a match's start or end: kept for those who come in later)

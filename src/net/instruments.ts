@@ -186,7 +186,15 @@ export interface InstrumentSnapshot extends InstrumentSpace {
   /** the air-to-air refuelling engaged (absent: none, or an older pilot) */
   aar?: InstrumentAar | null;
   /** the crew's orders (net/crewcmd.ts): the pilot's lock open, the families that can be done now */
-  caps?: { on: boolean; fam: string[] } | null;
+  caps?: {
+    on: boolean;
+    fam: string[];
+    /** the pilot holds the ground stations' orders and messages the light's time himself (AUDIT-CREW priority 6): a
+     *  console sends them at once — absent (an older pilot): the console delays them */
+    hold?: boolean;
+    /** the crew screens the pilot has accepted aboard (their slots): live; the others are on the ground */
+    aboard?: number[];
+  } | null;
   /** sent once a second at most: absent, the last list stands */
   traffic?: InstrumentTraffic[];
   /** the fight about the pilot every snapshot (RD1): its targets, its missiles, its decoys — newer than `traffic` */
@@ -441,6 +449,10 @@ export function readInstruments(x: unknown): InstrumentSnapshot | null {
               .slice(0, 8)
               .filter((f): f is string => typeof f === "string")
               .map((f) => f.slice(0, 12)),
+            ...(x.caps.hold === true ? { hold: true } : {}),
+            ...(Array.isArray(x.caps.aboard)
+              ? { aboard: x.caps.aboard.slice(0, 8).filter((k): k is number => Number.isInteger(k) && k >= 0 && k < 64) }
+              : {}),
           }
         : null,
     ...(Array.isArray(x.traffic) ? { traffic: readTraffic(x.traffic) } : {}),
