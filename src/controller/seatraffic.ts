@@ -278,7 +278,7 @@ function seaWakes(this: CameraController): { p: Vec3; fwd: Vec3; U: number; len:
 }
 /**
  * The flown craft's own mark on the sea (renderer.seaWakes' first; trace.wgsl seaWake: its downwash, its trail, its spray):
- * its place fixed to the Earth [m], its course and speed over the ground (geoNow's track and ground speed), its span as the
+ * its place fixed to the Earth [m] (the eye's — the shader takes the craft's own where it is drawn), its course and speed over the ground (geoNow's track and ground speed), its span as the
  * beam, and — a negative length, the marker of a craft — how much of its weight its jets hold up straight down (−1 − share:
  * slow, an F-35B in the hover, its lift fan and nozzle on the water). None when it is not low over the Earth.
  */

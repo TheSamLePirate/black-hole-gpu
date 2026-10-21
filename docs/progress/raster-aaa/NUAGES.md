@@ -160,3 +160,15 @@ l'ombre des nuages sur l'eau (N3), le sable mouillé au rivage, le bruit du SSR 
 - Scènes : `wake-low` (12 m, 130 m/s, vue du nez vers l'arrière, pilote automatique tenant l'altitude), `wake-hover`
   (vue extérieure), `ship-wake` (le Ford à 14 m/s à 1,3 km) ; le harnais laisse désormais une scène choisir sa vue. Vue de
   débogage des sillages : `TUNE_GSKIP` 32768 (écume rouge, ride verte, bulles bleues).
+
+### N6b — la traînée du F-35 à 15 m (test `f35-sea-trail`)
+
+- Le panache du réacteur : son bord, à ~11° plus l'incidence, touche l'eau ~3,7 h derrière la tuyère, sa vitesse sur l'axe
+  tombée comme u₀ 6 D / x (~30 m/s à 15 m) — une voie étroite d'embruns arrachés et d'eau brassée, aérée ; au-dessus de ~40 m
+  trop faible pour se voir. S'ajoute au souffle de l'aile (plus loin derrière, plus large).
+- L'avion pris où il est dessiné (sa sphère dans les axes de la caméra, `ship.shadowBound`) : la vue extérieure n'a plus
+  d'écart entre l'œil et l'appareil.
+- Test e2e `tests/e2e/f35-sea-trail.e2e.test.ts` : F-35 à 15 m et 150 m/s au-dessus du détroit (horloge arrêtée dix images
+  après, à sa hauteur et sa vitesse), vue de passage ; l'image et la vue de débogage des sillages ; vérifie l'état de
+  l'avion (> 100 m/s, 5–40 m, pas en stationnaire) et qu'une voie d'eau marquée s'étire dans l'image (> 1500 pixels, > 10 %
+  de la largeur) — passé : ~11 000–14 000 pixels sur ~50 % de la largeur.

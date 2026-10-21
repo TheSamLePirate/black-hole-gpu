@@ -3029,8 +3029,12 @@ export class Renderer {
       {
         const list = this.seaWakes.slice(0, 8);
         f[wat] = list.length;
+        // (the flown craft's — a negative length —: where it is drawn, its centre in the camera's axes, marked by 10 more
+        // below — an outside view's eye is metres to hundreds of metres off it, and the controller's place is the eye's)
+        const sb = this.ship.ready ? this.ship.shadowBound : null;
         list.forEach((w, i) => {
-          f.set([w.p[0] - q[0]!, w.p[1] - q[1]!, w.p[2] - q[2]!, w.len], wat + 4 + 8 * i);
+          if (w.len < 0 && sb) f.set([sb.c[0], sb.c[1], sb.c[2], w.len - 10], wat + 4 + 8 * i);
+          else f.set([w.p[0] - q[0]!, w.p[1] - q[1]!, w.p[2] - q[2]!, w.len], wat + 4 + 8 * i);
           f.set([w.fwd[0] * w.beam, w.fwd[1] * w.beam, w.fwd[2] * w.beam, w.U], wat + 8 + 8 * i);
         });
       }

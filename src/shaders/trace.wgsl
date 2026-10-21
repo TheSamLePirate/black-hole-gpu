@@ -6129,8 +6129,12 @@ fn seaCraftWake(o: ptr<function, SeaWake>, A: vec4f, B: vec4f, up: vec3f, footM:
   let span = max(length(B.xyz), 1.0);
   let f = B.xyz / span;
   let U = B.w;
-  let hover = clamp(-A.w - 1.0, 0.0, 1.0);
-  let rel = SEA_D - A.xyz;
+  // (the craft where it is drawn — w under −9.5: its centre in the camera's axes, renderer; an outside view's eye is metres to
+  // hundreds of metres off it —, else its place from the eye on the Earth's axes)
+  let cam = A.w < -9.5;
+  let hover = clamp(-A.w - select(1.0, 11.0, cam), 0.0, 1.0);
+  let at = select(A.xyz, toBody(A.x * P.camRight.xyz + A.y * P.camUp.xyz + A.z * P.camFwd.xyz), cam);
+  let rel = SEA_D - at;
   let h = -dot(rel, up);
   if (h < -2.0 || h > 4.0 * span + 20.0) { return; }
   let hh = max(h, 0.5);
@@ -6162,6 +6166,23 @@ fn seaCraftWake(o: ptr<function, SeaWake>, A: vec4f, B: vec4f, up: vec3f, footM:
     let pn = noise01(anchor + vec3i(0, 0, 8), vec3f(x / 3.0, y / 2.0, tclock * 0.6));
     (*o).foam = max((*o).foam, spray * clamp(0.4 + 0.8 * pn, 0.0, 1.0));
     (*o).bub = max((*o).bub, lane * s0 * smoothstep(1.2 * span, 0.3 * span, hh));
+  }
+  // (the engine's exhaust: its plume — aimed down by the angle of attack, its edge spreading at ~11° — reaches the water some
+  // 3.7 h behind the tail, its centreline speed fallen as u₀ 6 D / x (a turbulent jet: ~400 m/s, D 1.2 m): at 15 m still ~30 m/s —
+  // a narrow lane of torn spray and churned, aerated water, the trail a fast low pass leaves; above ~40 m too weak to show)
+  if (hover < 1.0) {
+    let dEx = 3.7 * hh;
+    let jet = smoothstep(12.0, 40.0, 2900.0 / max(dEx, 1.0)) * (1.0 - hover);
+    if (jet > 0.0 && x > dEx - 15.0) {
+      let ageE = max(x - dEx, 0.0) / max(U, 1.0);
+      let halfE = 0.12 * dEx + 1.0 + 1.2 * ageE;
+      let laneE = smoothstep(1.4 * halfE, 0.35 * halfE, abs(y)) * smoothstep(dEx - 15.0, dEx + 10.0, x) * exp(-ageE / 5.0);
+      let pe = 0.6 * noise01(anchor + vec3i(0, 0, 14), vec3f(x / 4.0 - tclock * 3.0, y / 1.5, tclock * 0.8))
+        + 0.4 * noise01(anchor + vec3i(0, 0, 15), vec3f(x / 1.2, y / 0.7, tclock * 2.0));
+      (*o).rough = max((*o).rough, 0.2 * jet * laneE);
+      (*o).foam = max((*o).foam, clamp(jet * laneE * exp(-ageE / 1.5) * (0.2 + 1.1 * pe), 0.0, 1.0));
+      (*o).bub = max((*o).bub, jet * laneE * 0.8);
+    }
   }
   // (the hover: the jet's foot, a ring of spray thrown out — at 1–3 heights —, the surface flattened then ruffled within,
   // the ripples racing outwards)
