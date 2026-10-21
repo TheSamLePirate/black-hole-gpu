@@ -135,23 +135,29 @@ describe("the recovery on the wires", () => {
     expect(s.c.landed).toBe(true);
   }, 120_000);
 
-  test("its hook up: a bolter — off, round again —; down, trapped on the next pass", async () => {
-    const s = await setUp(1, 3000);
-    s.c.hookUp = true;
-    s.c.trapLand("ford", { case: "straight" });
-    let t = 0;
-    while (t < 300 && s.c.trapRun?.phase !== "bolter") s.fly(0.25), (t += 0.25);
-    const bolter = s.c.trapRun?.phase === "bolter";
-    s.c.hookUp = false;
-    const r = fly(s.c, s.fly, 500);
-    const last = s.c.trapLast!;
-    console.log(
-      `  a bolter after ${t} s; round again, trapped ${r.t} s later — the ${last.wire}-wire, ${last.grade}\n    ${s.radio.join("\n    ")}`,
-    );
-    expect(bolter).toBe(true);
-    expect(s.radio.some((x) => /bolter/i.test(x))).toBe(true);
-    expect(last.wire).toBeGreaterThan(0);
-  }, 180_000);
+  // (left out of the CI — the user's decision, 2026-10-21: on its x86 runners the round again after the bolter, a
+  // chaotic flight, misses its pass now and then; it passes on Apple silicon)
+  test.skipIf(!!process.env.CI)(
+    "its hook up: a bolter — off, round again —; down, trapped on the next pass",
+    async () => {
+      const s = await setUp(1, 3000);
+      s.c.hookUp = true;
+      s.c.trapLand("ford", { case: "straight" });
+      let t = 0;
+      while (t < 300 && s.c.trapRun?.phase !== "bolter") s.fly(0.25), (t += 0.25);
+      const bolter = s.c.trapRun?.phase === "bolter";
+      s.c.hookUp = false;
+      const r = fly(s.c, s.fly, 500);
+      const last = s.c.trapLast!;
+      console.log(
+        `  a bolter after ${t} s; round again, trapped ${r.t} s later — the ${last.wire}-wire, ${last.grade}\n    ${s.radio.join("\n    ")}`,
+      );
+      expect(bolter).toBe(true);
+      expect(s.radio.some((x) => /bolter/i.test(x))).toBe(true);
+      expect(last.wire).toBeGreaterThan(0);
+    },
+    180_000,
+  );
 
   /** A recovery by its case from `ahead` m off: the legs flown in order, trapped. */
   async function byCase(cs: "I" | "II" | "III", ahead: number, tMax: number, turn = 40) {
