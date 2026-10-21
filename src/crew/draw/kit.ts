@@ -233,6 +233,36 @@ export function unitSymbol(p: Pen, x: number, y: number, kind: string, side: str
   const col = SIDE[side] ?? C.white;
   c.save();
   c.translate(x, y);
+  // (a missile: a dart along its path, its colour its side's — ours cyan, the enemy's red; a decoy: an orange star for
+  // a flare, a grey cloud of dots for chaff — PLAN-RADAR-AAA §4)
+  if (kind === "missile") {
+    c.rotate((hdg ?? 0) - rot);
+    p.seg(0, k * 1.6, 0, -k * 1.6, col, 2.2);
+    c.beginPath();
+    c.moveTo(0, -k * 2.2);
+    c.lineTo(k * 0.6, -k * 1.2);
+    c.lineTo(-k * 0.6, -k * 1.2);
+    c.closePath();
+    p.fill(col);
+    c.restore();
+    return;
+  }
+  if (kind === "decoy") {
+    if (side === "chaff") {
+      for (const [dx, dy] of [
+        [0, 0],
+        [k * 0.7, k * 0.3],
+        [-k * 0.6, k * 0.5],
+        [k * 0.2, -k * 0.7],
+        [-k * 0.5, -k * 0.4],
+      ] as const) {
+        p.circle(dx, dy, 1.4);
+        p.fill("#b8c2c8");
+      }
+    } else p.star(0, 0, k * 0.9, C.amber, true);
+    c.restore();
+    return;
+  }
   if (kind === "sea") {
     c.rotate((hdg ?? 0) - rot);
     c.beginPath();

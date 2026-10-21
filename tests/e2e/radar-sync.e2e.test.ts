@@ -66,6 +66,9 @@ describe.skipIf(!E2E)("RD0 — the radar's picture, pilot and crew", () => {
         own: { lat: number; lon: number } | null;
         truth: { name: string; e: number; n: number; v: number }[];
         crewOwn: { lat: number; lon: number } | null;
+        frame: number | null;
+        clocks: { crewRoom: number; pilotRoom: number; scene: number; snapT: number | null };
+        raw: { name: string; lat: number; lon: number; spd: number | null; hdg: number | null }[];
         crew: { id: string; name: string; lat: number; lon: number; spd: number | null }[];
         radar: string[];
         crewRadar: string[];
@@ -80,6 +83,9 @@ describe.skipIf(!E2E)("RD0 — the radar's picture, pilot and crew", () => {
           own: g ? { lat: g.lat, lon: g.lon } : null,
           truth: P && W ? W.targets.filter((q) => q.alive).map((q) => ({ name: q.name, e: q.p[0] - P.p[0], n: q.p[1] - P.p[1], v: Math.hypot(q.v[0], q.v[1]) })) : [],
           crewOwn: own?.geo ? { lat: own.geo.lat, lon: own.geo.lon } : null,
+          frame: own?.sample?.frame ?? null,
+          clocks: { crewRoom: w.__crew.net.roomNow(), pilotRoom: __bh.net.net.roomNow(), scene: __bh.sim.time * 492.5490947, snapT: own?.snapshot?.t ?? null },
+          raw: (own?.snapshot?.tracks ?? []).slice(0, 2).map((k) => ({ name: k.name, lat: k.lat, lon: k.lon, spd: k.spd, hdg: k.hdg })),
           crew: w.__crew.model.contacts().map((k) => ({ id: k.id, name: k.name, lat: k.lat, lon: k.lon, spd: k.spd })),
           radar: (c.flightInfo().radar?.contacts ?? []).map((k) => k.id),
           crewRadar: (own?.snapshot?.radar?.contacts ?? []).map((k) => k.id),
@@ -106,8 +112,11 @@ describe.skipIf(!E2E)("RD0 — the radar's picture, pilot and crew", () => {
       p1diff += [...a].filter((x) => !b.has(x)).length + [...b].filter((x) => !a.has(x)).length;
       p1n += a.size;
     }
-    // P2: each crew contact of the fight (by name) against the pilot's truth, both about their own craft
+    // P2: each crew contact of the fight (by name) against the pilot's truth, both about their own craft — and its two
+    // parts: the crew's own place against the pilot's, the contact's against its true place (over the pilot's)
     const errs: number[] = [];
+    const ownErr: number[] = [];
+    const absErr: number[] = [];
     let p2ok = 0;
     for (const r of rows) {
       if (!r.crewOwn) continue;
@@ -116,6 +125,11 @@ describe.skipIf(!E2E)("RD0 — the radar's picture, pilot and crew", () => {
         if (!tr) continue;
         const [e, n] = en(r.crewOwn, k);
         const err = Math.hypot(e - tr.e, n - tr.n);
+        if (r.own) {
+          ownErr.push(wgs84Inverse(r.own.lat, r.own.lon, r.crewOwn.lat, r.crewOwn.lon).d);
+          const [e2, n2] = en(r.own, k);
+          absErr.push(Math.hypot(e2 - tr.e, n2 - tr.n));
+        }
         errs.push(err);
         if (err <= 25 + 0.05 * tr.v) p2ok++;
       }
@@ -135,14 +149,40 @@ describe.skipIf(!E2E)("RD0 — the radar's picture, pilot and crew", () => {
         if (d > 2 * (k.spd ?? 0) * dt + 1) jumps++;
       }
     }
+    out.ownFrame = rows.at(-1)?.frame;
+    out.clocks = rows.slice(-3).map((r) => r.clocks);
+    // (the raw track at its sending against the truth of that frame: the conversion's own error)
+    out.raw = rows
+      .filter((r) => r.own && r.clocks.snapT !== null && Math.abs(r.clocks.scene - r.clocks.snapT) < 0.02)
+      .slice(0, 6)
+      .flatMap((r) =>
+        r.raw.map((k) => {
+          const tr = r.truth.find((x) => x.name === k.name);
+          if (!tr) return null;
+          const [e, n] = en(r.own!, k);
+          return {
+            name: k.name,
+            de: Math.round(e - tr.e),
+            dn: Math.round(n - tr.n),
+            dist: Math.round(Math.hypot(tr.e, tr.n)),
+            brg: Math.round((Math.atan2(tr.e, tr.n) * 180) / Math.PI),
+          };
+        }),
+      );
+    console.log(`  raw ${JSON.stringify(out.raw)}`);
     out.P1 = { frames: rows.length, tracks: p1n, mismatches: p1diff, share: p1n ? p1diff / p1n : null };
     out.P2 = {
       samples: errs.length,
       p50: errs[Math.floor(errs.length / 2)] ?? null,
       p95,
       withinShare: errs.length ? p2ok / errs.length : null,
+      // (its parts: the crew's own place off the pilot's, the contacts' off their true places)
+      ownPlaceP50: [...ownErr].sort((a, b) => a - b)[Math.floor(ownErr.length / 2)] ?? null,
+      contactPlaceP50: [...absErr].sort((a, b) => a - b)[Math.floor(absErr.length / 2)] ?? null,
+      ownFrame: out.ownFrame,
     };
     out.P3 = { steps, jumps, share: steps ? jumps / steps : null };
+    console.log(`  clocks ${JSON.stringify(out.clocks)}`);
     console.log(`  P1 ${JSON.stringify(out.P1)}\n  P2 ${JSON.stringify(out.P2)}\n  P3 ${JSON.stringify(out.P3)}`);
     expect(rows.length).toBeGreaterThan(100);
     expect(errs.length).toBeGreaterThan(50);

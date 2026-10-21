@@ -99,7 +99,8 @@ export interface InstrumentSystems {
 export interface InstrumentTraffic {
   id: string;
   name: string;
-  kind: "air" | "sea" | "ground";
+  /** a missile, a decoy (a flare, chaff — PLAN-RADAR-AAA RD8's first step: on the crew's screens) */
+  kind: "air" | "sea" | "ground" | "missile" | "decoy";
   side: string;
   lat: number;
   lon: number;
@@ -188,6 +189,8 @@ export interface InstrumentSnapshot extends InstrumentSpace {
   caps?: { on: boolean; fam: string[] } | null;
   /** sent once a second at most: absent, the last list stands */
   traffic?: InstrumentTraffic[];
+  /** the fight about the pilot every snapshot (RD1): its targets, its missiles, its decoys — newer than `traffic` */
+  tracks?: InstrumentTraffic[];
   zones?: InstrumentZone[];
 }
 
@@ -321,7 +324,7 @@ function readAar(x: unknown): InstrumentAar | null {
   };
 }
 
-const KINDS = new Set(["air", "sea", "ground"]);
+const KINDS = new Set(["air", "sea", "ground", "missile", "decoy"]);
 function readTraffic(list: unknown[]): InstrumentTraffic[] {
   const out: InstrumentTraffic[] = [];
   for (const t of list.slice(0, 128)) {
@@ -441,6 +444,7 @@ export function readInstruments(x: unknown): InstrumentSnapshot | null {
           }
         : null,
     ...(Array.isArray(x.traffic) ? { traffic: readTraffic(x.traffic) } : {}),
+    ...(Array.isArray(x.tracks) ? { tracks: readTraffic(x.tracks.slice(0, 64)) } : {}),
     ...(Array.isArray(x.zones)
       ? {
           zones: x.zones

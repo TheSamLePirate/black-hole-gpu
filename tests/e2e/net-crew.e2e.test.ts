@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { CrewFrame } from "./lib/crew";
 
 // PLAN-VAISSEAUX N3: aboard another's spacecraft, two browsers — Ben's Ranger docked to Ana's Endurance (400 km orbit):
 // from the Fleet tab (real clicks) he goes aboard — his view hers, her fleet shows him aboard —; as her copilot he
@@ -12,6 +13,8 @@ describe.skipIf(!E2E)("aboard another's spacecraft (N3)", () => {
   let b: App;
   let sa = 0;
   let sb = 0;
+  /** a crew console on Ana's page, following her (AUDIT-CREW priority 5: the handover and a reconnection) */
+  let crew: CrewFrame;
   const shots = process.env.NET_SHOTS;
   const shot = async (p: App, name: string) => {
     if (!shots) return;
@@ -40,6 +43,11 @@ describe.skipIf(!E2E)("aboard another's spacecraft (N3)", () => {
     console.log(`  ${await b.js<string>(`__bh.net.session.placeAtPort(${sa}, 3, 0.15)`)}`);
     await b.waitFor(`!!__bh.camera.netDocked`, 60_000);
     await a.waitFor(`__bh.net.session.links.get(${sb})?.host === ${sa}`, 10_000);
+    crew = new CrewFrame(a);
+    await crew.open(code, "Case", { w: 700, h: 500 });
+    await a.waitFor(crew.w(`__crew.model.crafts().length === 2`), 20_000);
+    await crew.js(`(__crew.model.selected = ${sa}, 1)`);
+    await a.waitFor(crew.w(`__crew.model.own()?.member.slot === ${sa} && __crew.model.own()?.snapshot?.craft?.id === "endurance"`), 20_000);
   }, 360_000);
   afterAll(() => {
     b?.close();
@@ -93,6 +101,14 @@ describe.skipIf(!E2E)("aboard another's spacecraft (N3)", () => {
     // (her old craft no more in his world: not drawn, nothing to strike)
     await b.waitFor(`__bh.net.session.handed.has(${sa}) && !__bh.net.session.ships.some((s) => s.slot === ${sa})`, 5000);
     await shot(b, "n3-helm");
+    // (the crew console followed the craft, not Ana: Ben flies the Endurance now — RD1)
+    await a.waitFor(crew.w(`__crew.model.selected === ${sb}`), 10_000);
+    await a.waitFor(crew.w(`__crew.model.own()?.snapshot?.craft?.id === "endurance" && __crew.model.own()?.age < 3`), 10_000);
+    // (its own link dropped and taken again: still on Ben, found by his device)
+    await crew.js("(__crew.net.link?.close?.(), 1)");
+    await a.waitFor(crew.w(`__crew.net.status !== "online"`), 5000);
+    await a.waitFor(crew.w(`__crew.net.status === "online" && !!__crew.net.room`), 20_000);
+    await a.waitFor(crew.w(`__crew.model.own()?.member.slot === ${sb}`), 10_000);
     expect(a.cdp.errors).toEqual([]);
     expect(b.cdp.errors).toEqual([]);
   }, 60_000);

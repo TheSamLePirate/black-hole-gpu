@@ -260,6 +260,12 @@ function select(slot: number) {
   refresh();
 }
 pilot.addEventListener("change", () => select(Number(pilot.value)));
+// (the controls handed over — N3: the console follows the craft, flown now by the one who took them — RD1)
+model.handedTo = (slot) => {
+  const who = net.room?.members.find((m) => m.slot === slot)?.name ?? "?";
+  notice(L(`Les commandes passent à ${who} : la console suit le vaisseau`, `The controls go to ${who}: the console follows the craft`));
+  select(slot);
+};
 views.onSelect = select;
 const showCrew = (show: boolean) => {
   $("crew-panel").classList.toggle("open", show);
@@ -1913,7 +1919,11 @@ function refresh() {
       ? (own?.snapshot?.radar?.contacts ?? []).map((p) => ({ id: p.id, name: p.name, slot: -1 }))
       : [
           ...crafts.filter((c) => c !== own).map((c) => ({ id: "", name: `✈ ${c.member.name}`, slot: c.member.slot })),
-          ...near.map((c) => ({ id: c.id, name: `${c.kind === "sea" ? "⛴" : c.kind === "ground" ? "◆" : "◇"} ${c.name}`, slot: -1 })),
+          ...near.map((c) => ({
+            id: c.id,
+            name: `${c.kind === "sea" ? "⛴" : c.kind === "ground" ? "◆" : c.kind === "missile" ? "➶" : c.kind === "decoy" ? "✶" : "◇"} ${c.name}`,
+            slot: -1,
+          })),
         ];
     const signature = JSON.stringify([sensor, items]);
     if (listBox.dataset.signature !== signature) {

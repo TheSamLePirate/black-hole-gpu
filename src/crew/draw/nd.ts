@@ -153,7 +153,7 @@ export function drawNd(p: Pen, r: Rect, sc: Scene, o: NdOpts): { cx: number; cy:
   for (const t of sc.contacts) {
     const q = at(t.lat, t.lon);
     if (!q || Math.hypot(q[0] - cx, q[1] - cy) > R * 1.15) continue;
-    unitSymbol(p, q[0], q[1], t.kind, t.side, t.hdg, up, t.kind === "sea" ? 6 : 6);
+    unitSymbol(p, q[0], q[1], t.kind, t.kind === "decoy" ? t.type : t.side, t.hdg, up, 6);
     const col = SIDE[t.side] ?? C.white;
     if (t.kind === "air" && t.alt !== null && Number.isFinite(myAlt)) {
       const dh = Math.round(u.alt(t.alt - myAlt) / 100);

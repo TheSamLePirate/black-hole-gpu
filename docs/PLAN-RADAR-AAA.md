@@ -632,6 +632,14 @@ Chaque phase : un commit, une fiche et une planche de captures (`docs/progress/r
   `E2E-CATALOGUE`.
 - La suppression des anciens blocs `radar.contacts` et `traffic` du flux. La planche finale.
 
+## Suivi
+
+| phase | état |
+|---|---|
+| RD0 | **fait** 2026-10-21 ([fiche](progress/radar/RD0.md)) : la sonde `radar-sync`, le point de départ mesuré |
+| RD1 | **fait côté crew** 2026-10-21 ([fiche](progress/radar/RD1.md)) : combat à 4 Hz avec vitesses et ids stables, place juste (problème direct WGS84), heure de salle, virages, convergence sans saut, joueurs prédits, événements sous 16 Ko comptés, reconnexion, passage des commandes, missiles et leurres au crew. **Reste** : les constats côté pilote 15, 18, 19 (laissés à RD2) |
+| RD2 – RD14 | pas commencées. RD10 (OurAirports) demandera l'accord de l'utilisateur avant tout téléchargement |
+
 ## Risques
 
 - **Le trafic dense** (des centaines d'avions au-dessus du Mojave ou de Paris) : la construction de l'image et

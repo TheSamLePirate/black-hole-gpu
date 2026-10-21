@@ -17,7 +17,8 @@ import { cruiseBurn } from "../f35/cruise";
 import { CARRIER } from "../game/carrier";
 import { enuAt } from "../controller/traffic";
 import { TANKER } from "../controller/jetmodes";
-import { WGS84_A, WGS84_F, wgs84Inverse, wgs84Offset } from "../system/ellipsoid";
+import { isGround, MISSILES } from "../game/combat";
+import { WGS84_A, WGS84_F, wgs84Direct, wgs84Inverse, wgs84Offset } from "../system/ellipsoid";
 
 const D = Math.PI / 180;
 
@@ -95,7 +96,10 @@ function surroundings(c: CameraController, i: Info, here: { lat: number; lon: nu
   const zones: NonNullable<InstrumentSnapshot["zones"]> = [];
   if (!here) return { traffic, zones };
   const marks = c.missionMarks();
+  // (a mission's units flying in the fight: sent four times a second with their speed — tracksOf —, not here)
+  const flying = new Set((c.combat?.world.targets ?? []).filter((q) => q.alive).map((q) => q.name));
   for (const m of marks) {
+    if (m.kind !== "zone" && m.kind !== "threat" && m.kind !== "dead" && m.kind !== "carrier" && flying.has(m.label)) continue;
     if (m.kind === "zone" || m.kind === "threat") {
       if (m.r)
         zones.push({ lat: r5(m.lat), lon: r5(m.lon), r: Math.round(m.r), name: m.label, kind: m.kind, waiting: m.state === "waiting" });
@@ -128,34 +132,6 @@ function surroundings(c: CameraController, i: Info, here: { lat: number; lon: nu
         spd: k.sp.speed,
         type: k.sp.kind,
       });
-  // a fight's targets from the radar's picture (heading up → east/north), their side the fight's own; in a mission,
-  // those its marks do not already show (its units carry their targets' names)
-  const cb = i.combat;
-  if (cb) {
-    const psi = (c.attitudeNow() as { heading?: number }).heading ?? 0;
-    const cs = Math.cos(psi),
-      sn = Math.sin(psi);
-    const shown = new Set(marks.filter((m) => m.kind !== "zone" && m.kind !== "threat").map((m) => m.label));
-    cb.radar.contacts.forEach((q, j) => {
-      if (shown.has(q.name)) return;
-      const e = q.x * cs + q.y * sn,
-        n = -q.x * sn + q.y * cs;
-      const at = wgs84Offset(here.lat, here.lon, e, n);
-      traffic.push({
-        id: `f:${j}`,
-        name: q.name,
-        kind: q.air ? "air" : "ground",
-        side: !q.alive ? "dead" : (q.side ?? "hostile"),
-        lat: r5(at.lat),
-        lon: r5(at.lon),
-        alt: Math.round(here.alt + q.dz),
-        hdg: q.trk !== null ? q.trk + psi : null,
-        spd: q.spd ?? null,
-        // (the tanker: its airframe named — the crew's traffic shows TEXACO for what it is)
-        type: q.name === TANKER ? "A330 MRTT" : "",
-      });
-    });
-  }
   if (c.s.traffic) {
     const near = c
       .trafficNow()
@@ -187,6 +163,97 @@ function surroundings(c: CameraController, i: Info, here: { lat: number; lon: nu
     }
   }
   return { traffic, zones };
+}
+
+/**
+ * The fight about us, four times a second (PLAN-RADAR-AAA RD1 · AUDIT-CREW priority 5): its targets — a mission's units
+ * among them —, the missiles flying, the decoys alive; each with its speed and heading (the console carries them on in
+ * the room's time), its id stable (the fight's own), its side the fight's. Their places from ours in the fight's flat
+ * frame (east, north, up), over the WGS84 ellipsoid (radii of curvature: flat over a few tens of km).
+ */
+function tracksOf(c: CameraController, here: { lat: number; lon: number; alt: number } | null): NonNullable<InstrumentSnapshot["tracks"]> {
+  const out: NonNullable<InstrumentSnapshot["tracks"]> = [];
+  const C = c.combat;
+  const P = C ? c.combatPlayer() : null;
+  if (!C || !P || !here) return out;
+  const W = C.world;
+  const at = (p: readonly number[], v: readonly number[]) => {
+    // (our tangent plane's east and north to the ellipsoid by the geodesic's direct problem — its azimuth and its length:
+    // a flat offset in latitude and longitude turns by half the meridians' convergence, 89 m at 37 km over the Alps)
+    const e = p[0]! - P.p[0],
+      n = p[1]! - P.p[1];
+    const g = wgs84Direct(here.lat, here.lon, Math.atan2(e, n), Math.hypot(e, n));
+    const sp = Math.hypot(v[0]!, v[1]!);
+    return {
+      lat: r5(g.lat),
+      lon: r5(g.lon),
+      alt: Math.round(here.alt + p[2]! - P.p[2]),
+      hdg: sp > 1 ? Math.round(Math.atan2(v[0]!, v[1]!) * 1000) / 1000 : null,
+      spd: Math.round(sp),
+    };
+  };
+  for (const q of W.targets) {
+    if (!q.alive && W.t - q.diedAt > 3) continue;
+    out.push({
+      id: `f:${q.id}`,
+      name: q.name.slice(0, 32),
+      kind: isGround(q) ? (q.kind === "ship" ? "sea" : "ground") : "air",
+      side: !q.alive ? "dead" : q.friendly ? "friend" : q.neutral ? "neutral" : "hostile",
+      type: q.name === TANKER ? "A330 MRTT" : String(q.kind ?? "").slice(0, 16),
+      ...at(q.p, q.v),
+    });
+  }
+  for (const m of W.missiles) {
+    if (!m.alive) continue;
+    out.push({
+      id: m.remote ? `msl:${m.remote}`.slice(0, 32) : `msl:${m.id}`,
+      name: MISSILES[m.kind]?.name ?? m.kind,
+      kind: "missile",
+      side: m.owner === "blue" ? "friend" : "hostile",
+      type: m.target === -1 ? "→ US" : m.target !== null && m.target <= -2 ? "DECOYED" : "",
+      ...at(m.p, m.v),
+    });
+  }
+  for (const d of W.decoys ?? [])
+    out.push({
+      id: `cm:${d.id}`,
+      name: d.kind === "flare" ? "FLARE" : "CHAFF",
+      kind: "decoy",
+      side: "friend",
+      type: d.kind,
+      ...at(d.p, d.v),
+    });
+  // (the most telling first — missiles, the hostiles, the nearest — within the bound)
+  const rank = (t: (typeof out)[number]) => (t.kind === "missile" ? 0 : t.side === "hostile" ? 1 : t.kind === "decoy" ? 3 : 2);
+  return out.sort((a, b) => rank(a) - rank(b)).slice(0, 48);
+}
+
+/**
+ * A snapshot brought under the room's limit on an event (RD1: the server drops a longer one silently): its heaviest
+ * optional parts lightened, then let go one after the other — the real traffic halved, the bodies, the paths, the other
+ * craft, the plan's route and path — until it fits. What was cut is said (`cut`).
+ */
+export function fitSnapshot(s: InstrumentSnapshot, max = 16_384 - 600): { data: InstrumentSnapshot; cut: string[] } {
+  const size = (x: unknown) => JSON.stringify({ type: "event", ev: { kind: "instruments", data: x } }).length;
+  let data = s;
+  const cut: string[] = [];
+  const steps: [string, (d: InstrumentSnapshot) => InstrumentSnapshot][] = [
+    ["traffic/2", (d) => (d.traffic ? { ...d, traffic: d.traffic.slice(0, Math.ceil(d.traffic.length / 2)) } : d)],
+    ["bodies", (d) => ({ ...d, bodies: undefined })],
+    ["traj", (d) => ({ ...d, traj: undefined })],
+    ["others", (d) => ({ ...d, others: undefined })],
+    ["hole.path", (d) => (d.hole ? { ...d, hole: { ...d.hole, path: [] } } : d)],
+    ["ahead/2", (d) => ({ ...d, ahead: d.ahead.filter((_, i) => i % 2 === 0) })],
+    ["route/2", (d) => ({ ...d, route: d.route.slice(0, 16) })],
+    ["traffic", (d) => ({ ...d, traffic: undefined })],
+    ["tracks/2", (d) => (d.tracks ? { ...d, tracks: d.tracks.slice(0, 16) } : d)],
+  ];
+  for (const [name, f] of steps) {
+    if (size(data) <= max) break;
+    data = f(data);
+    cut.push(name);
+  }
+  return { data, cut };
 }
 
 export function crewSnapshot(c: CameraController, i: Info, status: RangerStatus | null, t: number, around = false): InstrumentSnapshot {
@@ -364,6 +431,8 @@ export function crewSnapshot(c: CameraController, i: Info, status: RangerStatus 
     // (the refuelling behind TEXACO: its phase, the way it is flown, the fuel given, the gap to the basket)
     aar: fleet.active === "f35" ? c.aarCrew() : null,
     ...(around && body === "earth" ? surroundings(c, i, g ? { lat: g.lat, lon: g.lon, alt: g.alt } : null) : {}),
+    // (the fight's targets, missiles and decoys: every snapshot — RD1)
+    ...(c.combat && g ? { tracks: tracksOf(c, { lat: g.lat, lon: g.lon, alt: g.alt }) } : {}),
     radar: i.radar
       ? {
           mode: i.radar.mode,

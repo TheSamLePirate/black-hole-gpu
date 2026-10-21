@@ -5,7 +5,7 @@
 // (src/net/) is the network module's, loaded when a room was asked for.
 
 import { fmtFactor, realTimeSpeed, roomPace } from "../clock";
-import { crewFamilies, crewSnapshot } from "./crew-feed";
+import { crewFamilies, fitSnapshot, crewSnapshot } from "./crew-feed";
 import { CrewExec } from "./crew-exec";
 import type { Tool } from "../ai/agent";
 import type { Info } from "./flighthud";
@@ -195,6 +195,8 @@ export class NetSession {
     return this.crewExecOf;
   }
   private crewAround = -Infinity;
+  /** the snapshots lightened to fit the room's limit (RD1: a long one would be dropped by the server) */
+  crewCut = 0;
 
   /** At most 4 Hz, only while an instruments screen is present. No simulator on that screen. */
   instruments(info: Info, status: RangerStatus | null) {
@@ -207,7 +209,10 @@ export class NetSession {
     // (the surroundings — the traffic, the units, the ships — once a second: the heavier part)
     const around = now - this.crewAround >= 1000;
     if (around) this.crewAround = now;
-    net.event({ kind: "instruments", data: crewSnapshot(this.d.camera, info, status, this.d.sceneTime(), around) });
+    // (under the room's limit on an event: the heaviest parts lightened first — what was cut counted, RD1)
+    const fit = fitSnapshot(crewSnapshot(this.d.camera, info, status, this.d.sceneTime(), around));
+    if (fit.cut.length) this.crewCut++;
+    net.event({ kind: "instruments", data: fit.data });
   }
   /** the flight's status last told (main.ts, each frame: instruments) */
   private lastStatus: RangerStatus | null = null;
@@ -569,7 +574,7 @@ export class NetSession {
           if (!isShareWhat(a.what) || need === null) return;
           const what = a.what;
           const who = this.nameOf(from);
-          const reply = (amt: number, why?: string) => this.net?.event({ kind: "xgive", to: from, what, amt, why });
+          const reply = (amt: number, why?: string) => void this.net?.event({ kind: "xgive", to: from, what, amt, why });
           if (!this.dockedWith(from)) return reply(0, "not docked");
           const ask = tf("{0} asks for {1}", who, amountText(what, need));
           const answer = (yes: boolean) => {
@@ -634,7 +639,7 @@ export class NetSession {
           if (this.aboard.get(from) !== net.room!.slot) return;
           const who = this.nameOf(from);
           const answer = (yes: boolean) => {
-            if (!yes) return this.net?.event({ kind: "helm-no", to: from });
+            if (!yes) return void this.net?.event({ kind: "helm-no", to: from });
             this.d.toast(this.handOver(from));
           };
           if (this.d.ask) this.d.ask(tf("{0} asks to take the controls", who), answer, "net-helm");

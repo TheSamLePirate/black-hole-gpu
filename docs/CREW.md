@@ -50,12 +50,23 @@ pour ce qu'un ancien pilote n'envoie pas.
 - la route (32 points, avec contraintes d'altitude et de vitesse) et la trajectoire prévue (48 points, avec
   leur temps et leur hauteur géodésique) : pour un avion en vol, son virage actuel prolongé sur 3 minutes
   (pas à pas sur l'ellipsoïde WGS84), sinon la trajectoire de chute libre ou planifiée ;
+- à chaque envoi, `tracks` (PLAN-RADAR-AAA RD1) : le combat autour du pilote — ses cibles, unités de mission comprises,
+  avec vitesse, cap et id stable (`f:<id>` du combat), **les missiles en vol** (`msl:`) et **les leurres vivants**
+  (`cm:`, fusée ou paillettes) —, 48 au plus, les plus menaçants d'abord, placés depuis le plan tangent du pilote par le
+  problème direct de la géodésique (`wgs84Direct`) ;
 - une fois par seconde, `traffic` et `zones` : le trafic réel (les 64 avions ADS-B les plus proches), les
   unités d'une mission (hostiles, amies, neutres, détruites), les porte-avions, les cibles d'un combat (leur camp
   réel, celui du monde de combat, et leur vitesse ; en mission, celles que ses unités ne montrent pas déjà ; le
   ravitailleur TEXACO 11 y figure en ami, nommé « A330 MRTT »), les
-  zones d'objectif et la portée des SAM. La console fusionne les listes de tous les pilotes (sans doublon) et
-  les extrapole entre deux envois le long de leur cap (rayons de courbure WGS84).
+  zones d'objectif et la portée des SAM. La console fusionne les listes de tous les pilotes (sans doublon, la mesure la
+  plus fraîche gagnant) et les prolonge **en heure de salle** depuis leur envoi (`net.roomNow() − t` : en pause rien ne
+  bouge, en accéléré tout va plus vite d'autant), le long de leur cap et de leur virage (le taux tiré de leurs deux
+  derniers caps). Une nouvelle place est prise en 0,2 s, sans saut.
+- Les joueurs, dont celui qu'on suit, sont placés par la prédiction de leur piste à l'heure de salle
+  (`remotes.track(slot).at`), comme sur les pages des pilotes.
+- Un événement de plus de 16 384 caractères serait jeté en silence par le serveur : le client le refuse et le compte
+  (`net.sent.oversize`), et l'instantané est allégé avant l'envoi (`fitSnapshot` : le trafic, les corps, les
+  trajectoires… ; `netsession.crewCut`).
 
 Les blocs « espace » (PLAN-VAISSEAUX K1, `src/net/instruments-space.ts`), en km et km/s autour de chaque corps, sur
 les axes du repère du jeu :
@@ -186,7 +197,7 @@ système 3D).
 | Navigation (ND) | arc cap en haut ou rose nord en haut, route (branche active magenta), T/D, prédiction, vent, trafic façon TCAS (hauteur relative), navires, unités, zones, joueurs, pistes radar |
 | Carte | OpenStreetMap de nuit, Web Mercator, zoom continu ; traînée colorée par l'altitude, prédiction minutée, plan, zones, tous les contacts, joueurs ; étiquettes sans chevauchement |
 | Globe | la Terre photographiée : NASA Blue Marble (relief ombré et bathymétrie) le jour, Black Marble (lumières des villes) la nuit, terminateur à l'heure du simulateur du pilote (`sun` dans l'instantané), limbe assombri, halo de l'atmosphère, étoiles — en WebGPU (textures 4 096 px avec leurs mipmaps), sinon sur le processeur (2 048 px, une image par changement de vue), sinon (hors ligne) le globe vectoriel |
-| Radar | balayage et rémanence ; positions partagées (joueurs + trafic + unités) ou capteur du pilote ; liste triée par distance |
+| Radar | balayage et rémanence ; positions partagées (joueurs + trafic + unités) ou capteur du pilote ; **missiles** (un dard dans l'axe, le nôtre cyan, l'ennemi rouge) et **leurres** (fusée : étoile orange ; paillettes : nuage de points) dans les deux vues ; liste triée par distance |
 | Systèmes | moteur, carburant (bingo, autonomie, rayon, à l'arrivée), **ravitaillement en vol** (phase, conduite, feux du pod, sonde → panier, hors axe, rapprochement, tuyau enfoncé sur sa plage, carburant transféré, contacts et ratés), configuration, charge/incidence, structure, pilote automatique et assistance, orbite, alertes |
 | Plan de vol | profil vertical (niveaux, contraintes, T/D, hauteurs prévues) et branches (distance, ETE, ETA, altitude, vitesse), carburant à l'arrivée |
 | Télémétrie | une mesure (min/moy/max, curseur) ou quatre empilées |
@@ -368,7 +379,7 @@ L'interface d'automatisation est `window.__crew`, indépendante de `__bh` :
 | membre | usage |
 |---|---|
 | `net` | `NetClient` : salle, membres, état, horloge, mesh, microphone |
-| `model` | `crafts()`, `own()`, `selected`, `history`, `csv()` |
+| `model` | `crafts()`, `own()`, `selected`, `contacts()` (en heure de salle), `history`, `csv()` ; le pilote suivi retrouvé par son appareil après une reconnexion, et suivi d'un vaisseau à l'autre lors d'un passage des commandes (`helm`) |
 | `views` | vue, zoom, portée en mètres, orientation, suivi, canal, fenêtre en secondes, inspection ; `onGround`, `onWp`, `onMoveWp` (les touchers de la carte, du ND et du plan) |
 | `actions` | `send(act, args)` (Promise : `ok`, `msg`, `data`), `can(famille)`, `board` (journal), `busy` |
 | `radio` | `listen()`, `enableMic()`, `disableMic()`, `gate`, `speaking(slot)`, `volume(slot, value?)`, `mute(slot)` |

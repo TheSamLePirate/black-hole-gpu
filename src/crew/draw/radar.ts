@@ -56,7 +56,24 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
         locked: t.locked,
         id: t.id,
       });
-  else if (own) {
+  // (the missiles and decoys in the air: on the Sensor view too — the pilot's DAS sees them)
+  if (own?.geo && o.sensor)
+    for (const t of sc.contacts.filter((x) => x.kind === "missile" || x.kind === "decoy")) {
+      const q = polar(own.geo.lat, own.geo.lon, t.lat, t.lon);
+      blips.push({
+        e: Math.sin(q.b) * q.d,
+        n: Math.cos(q.b) * q.d,
+        dz: t.alt !== null && Number.isFinite(s.alt) ? t.alt - s.alt : null,
+        name: t.name,
+        col: SIDE[t.side] ?? C.white,
+        kind: t.kind,
+        side: t.kind === "decoy" ? t.type : t.side,
+        hdg: t.hdg,
+        locked: false,
+        id: t.id,
+      });
+    }
+  if (own && !o.sensor) {
     for (const cr of sc.crafts) {
       if (cr === own) continue;
       const rel = cr.geo && own.geo ? null : relative(own, cr);
@@ -92,7 +109,7 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
           name: t.name,
           col: SIDE[t.side] ?? C.white,
           kind: t.kind,
-          side: t.side,
+          side: t.kind === "decoy" ? t.type : t.side,
           hdg: t.hdg,
           locked: false,
           id: t.id,
@@ -162,7 +179,8 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
       c.rotate((b.hdg ?? 0) - up);
       p.aircraft(16, b.col);
       c.restore();
-    } else if (o.sensor) {
+    } else if (b.kind === "missile" || b.kind === "decoy") unitSymbol(p, x, y, b.kind, b.side, b.hdg, up, 6);
+    else if (o.sensor) {
       p.round(x - 6, y - 6, 12, 12, 2);
       p.fill(`${b.col}33`);
       p.stroke(b.col, 1.8);

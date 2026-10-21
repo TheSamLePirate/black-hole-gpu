@@ -205,9 +205,9 @@ describe.skipIf(!E2E)("crew actions", () => {
     expect(await app.js<boolean>("__bh.camera.combat.world.lock !== null")).toBe(true);
     await app.waitFor(`!!${crew("__crew.model.own()?.snapshot?.arms?.lock")}`, 3000);
     await app.waitFor(`${crew("__crew.model.own()?.snapshot?.radar?.contacts[0]?.locked")} === true`, 3000);
-    // (the drones on the crew's map: the fight's own side, hostile)
+    // (the drones on the crew's map: the fight's own side, hostile — sent every snapshot with their speed, RD1)
     await app.waitFor(
-      `${crew("__crew.model.own()?.snapshot?.traffic?.filter((t) => t.id.startsWith('f:') && t.side === 'hostile').length")} >= 4`,
+      `${crew("__crew.model.own()?.snapshot?.tracks?.filter((t) => t.id.startsWith('f:') && t.side === 'hostile' && t.spd > 0).length")} >= 4`,
       5000,
     );
     await press("#wp-cm");

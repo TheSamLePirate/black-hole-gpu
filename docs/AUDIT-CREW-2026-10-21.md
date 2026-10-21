@@ -9,7 +9,7 @@ tout ce qui est promis :
 Il manque :
 
 - ~~le **ravitaillement en vol** (absent du crew)~~ — fait (priorité 2) ;
-- l'**image tactique** (PLAN-RADAR-AAA RD0–RD14 non commencé) ;
+- l'**image tactique** (PLAN-RADAR-AAA) — RD0 et RD1 faits (priorité 5), RD2–RD14 restent ;
 - ~~l'**anglais** (toute la console est en français)~~ — fait (priorité 3) ;
 - ~~une **console propre au Lander**~~ — faite (priorité 4) ;
 - ~~des vues justes **côté Gargantua**~~ — faites (priorité 4).
@@ -61,7 +61,7 @@ Jamais testés depuis le crew sur le vrai jeu :
 | Porte-avions (récupération, LSO) | 🟡 | navires dans le trafic (`crew-feed.ts:115-128`) | phase de récupération, qualification, note LSO absentes |
 | **Ravitaillement en vol** | ✅ (2026-10-21) | bloc `aar` (`controller/aar.ts aarCrew`, `crew-feed.ts`), `ap.mode` `tanker`/`refuelMode`/`tankerOff`, MCP « AAR », PFD, Systèmes, Mission aérienne ; e2e `crew-aar` 3/3 ([fiche](progress/crew/P2-ravitaillement.md)) | ni ravitailleur ni panier en 3D côté crew |
 | Armes, radar, verrou | 🟡 | `crew-feed.ts:38-49`, `crew-exec.ts:128-133` | canon et leurres hors bandeau ; panneau visible seulement en Radar et Mission aérienne ; verrou désigné **par nom** |
-| Menaces, missiles, leurres, bogey dope | ❌ | alerte `MISSILE` seule (`crew-feed.ts:71`) | rien sur les écrans crew (A5 les promettait) |
+| Menaces, missiles, leurres, bogey dope | 🟡 missiles et leurres au crew (2026-10-21) | alerte `MISSILE` seule (`crew-feed.ts:71`) | rien sur les écrans crew (A5 les promettait) |
 | Auto-GCAS / Auto-ACAS | 🟡 | FLY UP / PULL UP / TERRAIN (`crew-feed.ts:67-69`) | l'évitement ACAS (`gcas.escape`) n'est pas envoyé : l'équipier ne sait pas pourquoi l'avion manœuvre |
 | Carburant, bingo, carburant à l'arrivée | ✅ | `crew-feed.ts:232-242, 318-335` | — |
 | Pannes et dommages | ✅ | `crew-feed.ts:76`, `systems.ts:244` | — |
@@ -98,26 +98,26 @@ Jamais testés depuis le crew sur le vrai jeu :
 
 ## Image tactique et réseau (PLAN-RADAR-AAA)
 
-**Aucune des phases RD0–RD14 n'est faite.** Le plan date du 2026-10-18 et aucun commit ne l'a suivi. Les défauts
+**Mise à jour du 2026-10-21 : RD0 et RD1 sont faits ([RD0](progress/radar/RD0.md), [RD1](progress/radar/RD1.md)) ; ce qui suit est le constat d'origine, chaque défaut corrigé est marqué ✅.** Aucune des phases RD0–RD14 n'était faite. Le plan date du 2026-10-18 et aucun commit ne l'a suivi. Les défauts
 qu'il listait sont tous encore là :
 
-- **coupe à 24 contacts sans tri** : le verrou peut sortir de la liste (`crew-feed.ts:361`) ;
-- **IFF deviné par la couleur** (`crew-feed.ts:143`) : en combat, les amis et neutres IA paraissent hostiles ;
-- **cibles de combat absentes en mission** (`crew-feed.ts:131`) ;
-- **unités et cibles sans vitesse** (`crew-feed.ts:111,148`) : elles restent figées 1 s puis sautent ;
-- **extrapolation en temps réel**, pas en heure de salle (`src/crew/model.ts:236-252`) : en pause ou en accéléré, les
+- ✅ **coupe à 24 contacts sans tri** : le verrou peut sortir de la liste (`crew-feed.ts:361`) ;
+- ✅ **IFF deviné par la couleur** (`crew-feed.ts:143`) : en combat, les amis et neutres IA paraissent hostiles ;
+- ✅ **cibles de combat absentes en mission** (`crew-feed.ts:131`) ;
+- ✅ **unités et cibles sans vitesse** (`crew-feed.ts:111,148`) : elles restent figées 1 s puis sautent ;
+- ✅ **extrapolation en temps réel**, pas en heure de salle (`src/crew/model.ts:236-252`) : en pause ou en accéléré, les
   contacts dérivent ;
-- **joueurs placés sur le dernier échantillon brut** (`model.ts:203`, `remotes.track().latest`) au lieu de la
+- ✅ **joueurs placés sur le dernier échantillon brut** (`model.ts:203`, `remotes.track().latest`) au lieu de la
   prédiction ;
-- **événements de plus de 16 384 caractères jetés en silence** par le serveur (`server/rooms.ts:391`), sans aucune
+- ✅ **événements de plus de 16 384 caractères jetés en silence** par le serveur (`server/rooms.ts:391`), sans aucune
   mesure côté client ;
 - **8 pistes seulement** au monde (`src/game/sites.ts`) ; ni radar pour les vaisseaux, ni TCAS (TA/RA) ;
-- **Rien sur les radars** : ni traînées, ni missiles ou leurres, ni clic pour sélectionner, ni molette pour zoomer.
+- 🟡 **Rien sur les radars** : ni traînées, ni ~~missiles ou leurres~~ (✅ au crew), ni clic pour sélectionner, ni molette pour zoomer.
 
 Réseau :
-- **reconnexion** : `setRoom` remet le pilote suivi à zéro (`model.ts:128`), et le crew retombe sur le premier
+- ✅ **reconnexion** : `setRoom` remet le pilote suivi à zéro (`model.ts:128`), et le crew retombe sur le premier
   pilote ;
-- **passage des commandes** : le crew suit un slot, pas un vaisseau. Le pilote devenu passager n'envoie plus
+- ✅ **passage des commandes** : le crew suit un slot, pas un vaisseau. Le pilote devenu passager n'envoie plus
   d'instruments (`netsession.ts:203`), et le crew reste sur des données périmées. Déduit du code, à vérifier.
 
 ## Partout
@@ -157,7 +157,7 @@ la langue de la console.
 - côté Gargantua : une orbite de Kerr (r · E · L), des messages justes, l'état posé ;
 - vérifier le chiffre de dilatation.
 
-**5. PLAN-RADAR-AAA** : RD0 (la sonde et les mesures P1–P11), puis RD1, puis la suite. Reconnexion et passage des
+**5. PLAN-RADAR-AAA** — 🟡 RD0, RD1 et le minimum faits le 2026-10-21 ([fiche](progress/crew/P5-radar.md)) ; RD2–RD14 restent : RD0 (la sonde et les mesures P1–P11), puis RD1, puis la suite. Reconnexion et passage des
 commandes suivis par le crew.
 
 **6. Postes** : des droits par poste, l'emplacement à bord ou au sol vérifié, le délai réglé par la salle, la voix
