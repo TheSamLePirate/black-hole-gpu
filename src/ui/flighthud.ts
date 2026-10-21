@@ -1879,10 +1879,13 @@ export class FlightHud {
     // (the craft flown: the F-35's HUD without the rocket's panels — the target among the planets, the orbit's
     // potential, the attitude ball and its holds —: flighthud.css)
     const jet = info.vessel === "f35" ? "jet" : "";
-    if (this.root.dataset.craft !== jet) {
-      this.root.dataset.craft = jet;
+    // (the Ranger's nose radar on in the air — PLAN-RADAR-AAA, RD4's leftover —: its scope where the orbit's panel
+    // stood, out of the space HUD: symbology.ts)
+    const nose = !jet && info.radar?.name === "NOSE" && this.kind !== "space" && this.s.f35Radar !== false ? "nose" : "";
+    if (this.root.dataset.craft !== (jet || nose)) {
+      this.root.dataset.craft = jet || nose;
       // (the key hints stand above the radar scope: menus.css)
-      document.body.classList.toggle("jet-hud", !!jet);
+      document.body.classList.toggle("jet-hud", !!(jet || nose));
     }
     this.lastTime = time;
     if (!this.start) this.start = { t: time, tau: info.properTime };

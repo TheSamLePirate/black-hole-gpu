@@ -1501,6 +1501,8 @@ body.hide-ui .fl-root > :not(.fl-warn) { display: none; }
 /* the F-35 flown: no rocket's panels — the target among the planets, the orbit's potential, the attitude ball
    and its holds (its helmet carries the attitude) */
 .fl-root[data-craft="jet"] :is(.fl-target, .fl-orbit), .fl-root[data-craft="jet"] .fl-cockpit > :not(.fl-hubcard) { display: none !important; }
+/* the Ranger's nose radar on in the air: its scope in the orbit panel's corner */
+.fl-root[data-craft="nose"] .fl-orbit { display: none !important; }
 .fl-root[data-view="bare"]:not(.mapview) .fl-cockpit > :not(.fl-hubcard) { display: none !important; }
 
 /* smaller screens: the least needed go first, the rest shrinks */

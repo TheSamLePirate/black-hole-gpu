@@ -10,7 +10,7 @@ import { worldIdOf } from "./fightproxy";
 import { cameraFrame } from "../camera";
 import { fleet } from "../fleet";
 import { interceptCues } from "../game/intercept";
-import { Radar, type RadarObject, type RadarOwn, type V3 } from "../game/radar";
+import { AIR_RADARS, Radar, type RadarObject, type RadarOwn, type RadarSpec, type V3 } from "../game/radar";
 import { t, tf } from "../i18n";
 import { bodyFixedOf, groundRelief } from "../system/our-surface";
 import { geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
@@ -22,6 +22,7 @@ import type { CameraController } from "../controls";
 declare module "../controls" {
   interface CameraController {
     radarFix: typeof radarFix;
+    airRadar: typeof airRadar;
     radarStep: typeof radarStep;
     radarHud: typeof radarHud;
     radarLockNext: typeof radarLockNext;
@@ -63,6 +64,15 @@ const unit = (a: V3): V3 => {
 const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const D = Math.PI / 180;
 const R_EARTH = 6.371e6;
+
+/** The radar the craft flown carries, on in the air (game/radar.ts AIR_RADARS — the F-35's APG-81, the Ranger's nose
+ *  radar): its spec, or null (another craft, on the ground, out of the air, too fast for it — an entry's plasma). */
+function airRadar(this: CameraController): RadarSpec | null {
+  const spec = (this.airFlight.inAir && AIR_RADARS[fleet.active]) || null;
+  // (the Ranger's in an entry's plasma: off)
+  if (spec?.maxSpeed && (this.airFlight.last?.speed ?? 0) > spec.maxSpeed) return null;
+  return spec;
+}
 
 /** The craft's fix for the radar (null: not an F-35 flying in the Earth's air; `any`: any craft over the Earth — the
  *  picture's). */
@@ -142,9 +152,15 @@ function combatToLocal(this: CameraController, fix: RadarFix, p: readonly number
 /** A frame of the radar: its sources read, its beam swept, a fight's lock and seen kept by it; then the picture. */
 function radarStep(this: CameraController, dt: number) {
   if (dt > 0) this.trailT += dt;
-  // (the sources read over the Earth whatever the craft — the picture's truth —; the radar itself the F-35's in the air)
+  // (the sources read over the Earth whatever the craft — the picture's truth —; the radar itself the craft's own in
+  // the air — the F-35's APG-81, the Ranger's nose radar —, its spec changed with the craft: its tracks gone)
   const any = this.radarFix(true);
-  const fix = any && fleet.active === "f35" && this.airFlight.inAir ? any : null;
+  const spec = any ? this.airRadar() : null;
+  const fix = spec ? any : null;
+  if (spec && this.radar.spec !== spec) {
+    this.radar.spec = spec;
+    this.radar.reset();
+  }
   if (!any) {
     if (this.radar.tracks.size || this.radar.lock) this.radar.reset();
     this.radarObjects = [];
@@ -338,7 +354,7 @@ function pictureSelect(this: CameraController, id: string | null, how: "click" |
 
 /** The radar's next lock (Tab): the track selected if the radar holds it, else the next; what to say. */
 function radarLockNext(this: CameraController): string {
-  if (!this.radarFix()) return t("The radar: in the F-35, in the air");
+  if (!this.airRadar() || !this.radarFix(true)) return t("The radar: in the air, in the F-35 or the Ranger");
   // (a track selected — a click, the crew's —: locked first)
   const sel = this.pictureSelected;
   if (sel && this.radar.lock !== sel && this.radar.tracks.has(sel) && this.radar.lockOn(sel)) {
@@ -379,9 +395,10 @@ const IFF_COLOUR: Record<string, string> = {
  *  tactical picture (PLAN-RADAR-AAA RD2: the tracks the radar and the datalink hold, the same ids the crew gets). */
 function radarHud(this: CameraController) {
   const R = this.radar;
-  const fix = this.radarFix();
+  const spec = this.airRadar();
+  const fix = spec ? this.radarFix(true) : null;
   const P = this.picture;
-  if (!fix || !P) return null;
+  if (!fix || !P || !spec) return null;
   const f = fix.own.fwd;
   const psi = Math.atan2(f[0], f[1]);
   const cs = Math.cos(psi),
@@ -402,6 +419,9 @@ function radarHud(this: CameraController) {
     !!(T.sensors & SENSOR.RADAR) &&
     5 - (T.cm?.life ?? 0) < 2.5;
   return {
+    /** the radar's name (APG-81, NOSE), its scan's half-width [rad] */
+    name: spec.name ?? "",
+    az: spec.az,
     mode: R.mode,
     beam: R.beam,
     /** the nose's heading [rad] (the picture is turned by it) */
@@ -521,7 +541,17 @@ function radarHud(this: CameraController) {
 }
 
 export function installRadar(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { radarFix, radarStep, radarHud, radarLockNext, radarMode, combatToLocal, pictureStep, pictureSelect });
+  Object.assign(C.prototype, {
+    radarFix,
+    airRadar,
+    radarStep,
+    radarHud,
+    radarLockNext,
+    radarMode,
+    combatToLocal,
+    pictureStep,
+    pictureSelect,
+  });
 }
 
 export { Radar };

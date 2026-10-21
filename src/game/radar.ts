@@ -71,6 +71,8 @@ export interface Track {
 
 /** A radar's figures (PLAN-RADAR-AAA RD4 — one engine, a spec per craft: the F-35's APG-81, a spacecraft's). */
 export interface RadarSpec {
+  /** its name (the scope's label) */
+  name?: string;
   /** the range on a 5 m² fighter [m] (∝ σ^¼) */
   range5: number;
   /** the scan's half-width and half-height [rad] (π: all about), its sweep's time [s] (one way) */
@@ -86,9 +88,12 @@ export interface RadarSpec {
   eyes: number;
   /** the radar's horizon's radius [m] (0: none — the caller hides what a body hides) */
   earth43: number;
+  /** off above this speed through the air [m/s] (an entry's plasma about the nose); none: always on */
+  maxSpeed?: number;
 }
 
 export const APG81: RadarSpec = {
+  name: "APG-81",
   /** the range on a 5 m² fighter [m] (∝ σ^¼) */
   range5: 150_000,
   /** the scan's half-width [rad] and its sweep's time [s] (one way) */
@@ -105,6 +110,29 @@ export const APG81: RadarSpec = {
   /** the radar's horizon: the Earth's radius ×4/3 (the air's refraction) [m] */
   earth43: (4 / 3) * 6.371e6,
 };
+
+/**
+ * The Ranger's nose radar (PLAN-RADAR-AAA, RD4's leftover): a smaller set in a spaceplane's nose — its weather and
+ * traffic radar, an X band antenna of ≈ 60 % the APG-81's reach (90 km on a 5 m² fighter, ≈ 180 km on an airliner),
+ * the same ±60° scan, a narrower ±30° in elevation (a nose shorter than a fighter's), a slower sweep; the transponders'
+ * IFF only (no NCTR): an unknown stays so until seen. Off in an entry's plasma (above 1 500 m/s through the air).
+ */
+export const RANGER_NOSE: RadarSpec = {
+  name: "NOSE",
+  range5: 90_000,
+  az: 60 * D,
+  el: 30 * D,
+  sweep: 2.5,
+  keep: 6,
+  notch: 30,
+  iffRange: 80_000,
+  eyes: 3_000,
+  earth43: (4 / 3) * 6.371e6,
+  maxSpeed: 1500,
+};
+
+/** The radar each craft carries in the air, by its id (none: no air radar — the Lander, the Endurance). */
+export const AIR_RADARS: Readonly<Record<string, RadarSpec>> = { f35: APG81, ranger: RANGER_NOSE };
 
 /** The detection range [m] on a cross-section σ [m²]. */
 export const detectRange = (rcs: number, spec: RadarSpec = APG81) => spec.range5 * (Math.max(rcs, 1e-4) / 5) ** 0.25;

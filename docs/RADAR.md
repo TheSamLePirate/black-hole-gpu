@@ -37,6 +37,7 @@ thing the screens, the tools and the network read.
 | sensor | who | what |
 |---|---|---|
 | **APG-81** (`game/radar.ts`, a `RadarSpec`) | the F-35 in the air | ±60° in 2 s, range ∝ σ^¼ (150 km on 5 m²), the radar horizon, the relief's mask, the Doppler notch looking down; RWS, TWS, STT; IFF within 120 km, eyes within 3 km |
+| **Nose radar** (`RANGER_NOSE`, the same engine) | the Ranger in the air | ±60° in 2.5 s, ±30° in elevation, 90 km on 5 m² (60 % of the APG-81's); off above 1 500 m/s (an entry's plasma); the transponders' IFF within 80 km, eyes within 3 km |
 | **DAS** | the F-35 | heat, all round: aircraft within 30 km, a missile's motor within 20 km (3 km burnt out), flares within 10 km; no IFF |
 | **EOTS** | the F-35 | ±30° off the nose, 60 km; no IFF |
 | **Datalink** | everyone | our friends' craft, our missiles (their guidance link), the room's teammates' radar tracks (Link 16) |
@@ -103,7 +104,7 @@ What each screen draws:
 
 | screen | file | what |
 |---|---|---|
-| HUD scope | `ui/hud/symbology.ts drawRadar` | the radar's and datalink's tracks, the TCAS traffic that matters, missiles (line to target, time to go, PITBULL + A-pole, SPLASH/MISS + F-pole, DECOYED), decoys, trails, the world's airfields; a click selects, the wheel steps the range |
+| HUD scope (the Ranger's: labelled NOSE, its ±60°, in the orbit panel's corner out of the space HUD) | `ui/hud/symbology.ts drawRadar` | the radar's and datalink's tracks, the TCAS traffic that matters, missiles (line to target, time to go, PITBULL + A-pole, SPLASH/MISS + F-pole, DECOYED), decoys, trails, the world's airfields; a click selects, the wheel steps the range |
 | PCD TSD, FCR, DAS, EOTS | `f35/pcd.ts`, data `f35/cockpit.ts` | the same; the FCR the radar's own (RWS bricks); the DAS band what the DAS holds; a touch selects, the wheel steps the TSD's and FCR's range |
 | Tactical map (right panel, M) | `ui/jetmap.ts`, `ui/flighthud.ts` | OSM by night, the trace and the predicted path, the plan, the airfields, the picture; the wheel steps 2 … 320 km, a click selects, its top-left corner resizes it |
 | The view | `controller/telemetry.ts pic`, `drawPicked` | a click on an aircraft selects it (never a body); the selected one's card |
@@ -196,7 +197,7 @@ Where the runways appear:
 
 **Unit tests**:
 
-- `radar` — the APG-81;
+- `radar` — the APG-81, the Ranger's nose radar (`AIR_RADARS`);
 - `radar-picture` — the merging, places, trails, DAS and EOTS;
 - `radar-symbols`;
 - `tcas`;
@@ -210,6 +211,7 @@ Where the runways appear:
 
 - `radar-sync` — the P1–P11 probe;
 - `radar-select`;
+- `ranger-radar` — the nose radar's reach against the APG-81's, its scope;
 - `jetmap`;
 - `decoys`;
 - `missile-cues`;

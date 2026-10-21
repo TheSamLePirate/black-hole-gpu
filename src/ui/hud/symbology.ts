@@ -92,6 +92,9 @@ export interface RadarData {
 /** The F-35's radar as the HUD draws it (controller/radar.ts): its mode, its beam off the nose [rad], its picture,
  *  its lock (on the camera's axes: its designation box; its range [m], closure [m/s], altitude [m]). */
 export interface RadarPicture {
+  /** the radar's name (APG-81, NOSE — the Ranger's), its scan's half-width [rad] */
+  name?: string;
+  az?: number;
   mode: string;
   beam: number;
   contacts: RadarData["contacts"];
@@ -748,7 +751,8 @@ export function drawSymbology(F: SymFrame) {
   if (i.combat) drawCombat(F, pr, stroke, text);
   // (flying together, out of a fight or a course: the others on the scope, each in his colour — ui/netsession.ts)
   // (the F-35's radar — always on in the air: its scope, a fight's missiles on it, a course's gates; its lock's box)
-  if (i.avionics && s.f35Radar && i.radar)
+  // (the Ranger's nose radar in the air — RD4's leftover —: the same scope, its narrower reach, out of space's HUD)
+  if ((i.avionics || (i.radar?.name === "NOSE" && F.kind !== "space")) && s.f35Radar && i.radar)
     drawRadar(
       F,
       { contacts: i.radar.contacts, missiles: i.radar.missiles ?? i.combat?.radar.missiles ?? [], decoys: i.combat?.radar.decoys ?? [] },
@@ -2787,7 +2791,7 @@ function drawRadar(
     ctx.restore();
   }
   for (const f of [1 / 3, 2 / 3, 1]) stroke(() => ctx.arc(cx, cy, rad * f, 0, 2 * Math.PI), `${GR}${f === 1 ? 0.6 : 0.3})`, 1);
-  const scan = (60 * Math.PI) / 180;
+  const scan = P?.az ?? (60 * Math.PI) / 180;
   stroke(
     () => {
       ctx.moveTo(cx, cy);
@@ -2800,7 +2804,15 @@ function drawRadar(
     [4, 4],
   );
   text(`${Math.round(range / 1000)} KM`, cx + rad, cy + rad + 2 * dpr, `${GR}0.9)`, 10.5, "right", true);
-  text(P ? P.mode : "RDR", cx - rad, cy + rad + 2 * dpr, `${GR}0.9)`, 10.5, "left", true);
+  text(
+    P ? (P.name && P.name !== "APG-81" ? `${P.name} ${P.mode}` : P.mode) : "RDR",
+    cx - rad,
+    cy + rad + 2 * dpr,
+    `${GR}0.9)`,
+    10.5,
+    "left",
+    true,
+  );
   // (the beam: where it sweeps now — on the lock in STT)
   if (P)
     stroke(

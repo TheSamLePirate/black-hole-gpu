@@ -540,7 +540,8 @@ function flightInfo(this: CameraController): FlightInfo {
     ils: this.ilsRun ? this.ilsInfo() : null,
     aimRing: this.aimRing ? { ...this.aimRing } : null,
     relief: (() => {
-      if (fleet.active !== "f35" || !this.airFlight.inAir) return null;
+      // (under a radar's scope in the air: the F-35's, the Ranger's nose radar's)
+      if (!this.airRadar()) return null;
       const g = this.geoNow();
       const hd = (this.attitudeNow() as { heading?: number }).heading;
       return g ? { lat: g.lat, lon: g.lon, hdg: hd !== undefined && Number.isFinite(hd) ? hd : g.track, alt: g.alt, at: ground } : null;

@@ -24,6 +24,7 @@ la lisent. Ce qui se voit sur un écran est donc vrai sur les autres.
 | capteur | sur | ce qu'il voit |
 |---|---|---|
 | **Radar APG-81** | le F-35 en vol | ±60° en 2 s, jusqu'à 150 km sur un chasseur ; l'horizon radar, le relief qui masque, l'encoche Doppler en visée basse ; modes RWS, TWS, STT ; IFF à 120 km, identification à vue à 3 km |
+| **Radar de nez** | le Ranger en vol | le même moteur : ±60° en 2,5 s, ±30° en site, 90 km sur un chasseur (60 % de l'APG-81) ; coupé au-dessus de 1 500 m/s (le plasma d'une rentrée) ; IFF des transpondeurs à 80 km, identification à vue à 3 km |
 | **DAS** | le F-35 | à la chaleur, tout autour : les avions à 30 km, un moteur de missile à 20 km (3 km éteint), les fusées à 10 km ; pas d'IFF |
 | **EOTS** | le F-35 | ±30° devant le nez, 60 km ; pas d'IFF |
 | **Datalink** | tous | les appareils amis, nos missiles (leur liaison de guidage), les pistes radar des équipiers (Link 16) |
@@ -82,7 +83,7 @@ Un astre entre deux cache l'autre au radar, jamais au datalink. Le scope spatial
 
 | écran | ce qu'il montre |
 |---|---|
-| **Scope du HUD** | les pistes radar et datalink, le trafic TCAS qui compte, les missiles (trait vers la cible, temps, PITBULL avec l'A-pole, SPLASH ou RATÉ avec le F-pole, LEURRÉ), les leurres, les traînées, les terrains. Un clic sélectionne, la molette change la portée |
+| **Scope du HUD** (celui du Ranger : marqué NOSE, ses ±60°, à la place du panneau d'orbite hors du HUD spatial) | les pistes radar et datalink, le trafic TCAS qui compte, les missiles (trait vers la cible, temps, PITBULL avec l'A-pole, SPLASH ou RATÉ avec le F-pole, LEURRÉ), les leurres, les traînées, les terrains. Un clic sélectionne, la molette change la portée |
 | **PCD** : TSD, FCR, DAS, EOTS | la même chose. Le FCR montre les échos du radar seul, la bande DAS ce que tient le DAS. Un toucher sélectionne ; la molette change la portée du TSD et du FCR |
 | **Carte tactique** (panneau de droite, M) | OSM de nuit, la trace et la prédiction de l'avion, le plan, les terrains, l'image tactique. La molette va de 2 à 320 km, un clic sélectionne, le coin haut-gauche se tire pour la taille |
 | **La vue 3D** | un clic sur un avion le sélectionne (jamais un astre), avec sa fiche |
