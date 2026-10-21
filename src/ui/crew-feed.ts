@@ -126,13 +126,16 @@ function surroundings(c: CameraController, i: Info, here: { lat: number; lon: nu
         spd: k.sp.speed,
         type: k.sp.kind,
       });
-  // a fight without a mission: its targets from the radar's picture (heading up → east/north)
+  // a fight's targets from the radar's picture (heading up → east/north), their side the fight's own; in a mission,
+  // those its marks do not already show (its units carry their targets' names)
   const cb = i.combat;
-  if (cb && !marks.length) {
+  if (cb) {
     const psi = (c.attitudeNow() as { heading?: number }).heading ?? 0;
     const cs = Math.cos(psi),
       sn = Math.sin(psi);
+    const shown = new Set(marks.filter((m) => m.kind !== "zone" && m.kind !== "threat").map((m) => m.label));
     cb.radar.contacts.forEach((q, j) => {
+      if (shown.has(q.name)) return;
       const e = q.x * cs + q.y * sn,
         n = -q.x * sn + q.y * cs;
       const at = wgs84Offset(here.lat, here.lon, e, n);
@@ -140,7 +143,7 @@ function surroundings(c: CameraController, i: Info, here: { lat: number; lon: nu
         id: `f:${j}`,
         name: q.name,
         kind: q.air ? "air" : "ground",
-        side: !q.alive ? "dead" : q.colour?.startsWith("rgba(110") ? "friend" : "hostile",
+        side: !q.alive ? "dead" : (q.side ?? "hostile"),
         lat: r5(at.lat),
         lon: r5(at.lon),
         alt: Math.round(here.alt + q.dz),
@@ -357,7 +360,9 @@ export function crewSnapshot(c: CameraController, i: Info, status: RangerStatus 
     radar: i.radar
       ? {
           mode: i.radar.mode,
-          contacts: i.radar.contacts
+          // (the lock first, then the nearest: the 24 kept never lose it)
+          contacts: [...i.radar.contacts]
+            .sort((a, b) => Number(b.locked) - Number(a.locked) || Math.hypot(a.e, a.n, a.dz) - Math.hypot(b.e, b.n, b.dz))
             .slice(0, 24)
             .map((p) => ({ id: p.id.slice(0, 64), name: p.name.slice(0, 64), e: p.e, n: p.n, dz: p.dz, iff: p.iff, locked: p.locked })),
         }

@@ -474,6 +474,7 @@ function combatHud(this: CameraController, Cm: (v: Vec3 | null) => Vec3 | null) 
             locked: q.id === W.lock,
             seen: W.seen.includes(q.id),
             name: q.name,
+            side: q.friendly ? ("friend" as const) : q.neutral ? ("neutral" as const) : ("hostile" as const),
             // (another player: a team-mate's blue, an enemy's red)
             colour:
               q.peer === undefined

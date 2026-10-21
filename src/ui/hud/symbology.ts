@@ -52,6 +52,8 @@ export interface RadarData {
     /** the IFF known (game/radar.ts); a track from the datalink only (drawn hollow) */
     iff?: string;
     datalink?: boolean;
+    /** a fight's target's side (game/combat.ts: a team-mate, a neutral, else a foe) — the crew's map's */
+    side?: "friend" | "neutral" | "hostile";
   }[];
   missiles: { x: number; y: number; trk: number | null; red: boolean }[];
 }
