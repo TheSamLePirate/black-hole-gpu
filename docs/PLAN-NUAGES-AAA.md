@@ -41,8 +41,9 @@ Flight Simulator. Leurs principes, adaptés à ce moteur :
    profondeur ; la gigue en bruit bleu spatio-temporel. Les noyaux d'ombrage lisent ce tampon (remonté en résolution selon
    la profondeur) au lieu de marcher.
 2. **Une vraie lumière** — rendue abordable par (1) : une marche vers le Soleil (quelques échantillons en cône, pas
-   croissants), la diffusion multiple en octaves, l'effet « powder », une ambiante tirée du ciel réel (harmoniques de la
-   sonde) en gradient de hauteur, la lumière renvoyée par le sol (neige, mer) sous les bases.
+   croissants), la diffusion multiple en octaves, l'effet « powder », **une ambiante physique du ciel partagée** par le sol, le
+   décor et les nuages (le ciel clair calculé chaque image par le modèle de l'air, en harmoniques sphériques, à plusieurs
+   altitudes — demande du 21/10), la lumière renvoyée par le sol sous les bases.
 3. **Une carte de transmittance des nuages vue du Soleil** — une seule source d'ombre pour tout : le sol, les arbres,
    l'avion et la lumière clé, le cockpit, **les rayons crépusculaires** (la table de perspective aérienne la lit par tranche),
    l'ombre lointaine des nuages sur eux-mêmes.
@@ -61,6 +62,7 @@ Flight Simulator. Leurs principes, adaptés à ce moteur :
 | N3 | **La carte d'ombres des nuages** | transmittance vue du Soleil ; sol, décor, avion, lumière clé, rayons crépusculaires | ombres au bon endroit au Soleil bas ; l'avion à l'ombre sous un couvert |
 | N4 | **Formes et types** | types de nuages, profils, bruits cuits, évolution | cumulus bourgeonnants, stratus, cumulonimbus et enclume |
 | N5 | **Orage, pluie, brouillard** | rideaux, éclairs et tonnerre, brouillard de vallée ombré, mouillage progressif | une cellule orageuse lisible au loin, le brouillard dans les vallées |
+| N6 | **La mer** (demande du 21/10) | la mer en raster (FFT existantes), son reflet du ciel physique et des nuages, l'écume, la transmission et la couleur de l'eau selon la profondeur, l'état de la mer selon le vent de la météo ; au meilleur coût | une mer crédible au Soleil bas, sous un couvert, par vent fort |
 
 Invariants du dépôt : WGS84 partout, aucun phénomène existant supprimé (éclipses dans les nuages, nuages du jour, METAR),
 réglages accessibles à TARS, le chemin tracé gardé comme référence.

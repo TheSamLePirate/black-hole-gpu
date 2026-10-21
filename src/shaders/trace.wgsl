@@ -334,6 +334,8 @@ const LUT_OFF = 250u; // SH_BASE + 10 harmonics
 const PATH_OFF = 1786u; // LUT_OFF + LUT_N + SYNC_N
 // the mountains' warp's grids (system/warp-grid.ts: TABLE_WARP — after the walking grid), their levels and nodes a side
 const WARP_OFF = 3115u;
+// the clear sky's light, physical (gpu-tables.ts TABLE_SKY; kernel skyAmbient writes it, skyIrradiance reads it)
+const SKY_OFF = 814530u;
 const WARP_LEVELS = 3u;
 const WARP_N = 512u;
 // The solar system's maps (equirectangular, sRGB) and Saturn's rings' radial profile (sRGB + opacity,
@@ -4022,6 +4024,47 @@ const EARTH_NIGHT = vec3f(0.06, 0.075, 0.11);
 // The night's light on the ground as the eye sees it (EARTH_NIGHT) — none in the Moon's shadow by day:
 // there the sky's own light, the sky seen (sk: skySeen), a ten-thousandth of the day's at the umbra's
 // heart (the floor, 6 % of the sunlight, lit the totality's ground above the partial phase's)
+// The clear sky's irradiance [the scene's units] on a surface of normal n (the Earth's axes) at a height h [m over the
+// sea] — the frame's own sky (kernel skyAmbient: its radiance from the air's model — Rayleigh, Mie, ozone, the haze, an
+// eclipse — over the hemisphere, at 0, 2, 5 and 10 km above the camera's place, second-order spherical harmonics): its
+// colour and its strength with the Sun's height, the altitude and the haze. x < 0: none this frame (the old constant then).
+fn skyIrradiance(h: f32, n: vec3f) -> vec3f {
+  let f0 = bodies[SKY_OFF];
+  if (f0.w < 0.5) { return vec3f(-1.0); }
+  let e = bodies[SKY_OFF + 1u].xyz;
+  let no = bodies[SKY_OFF + 2u].xyz;
+  let hs = bodies[SKY_OFF + 3u];
+  let d = normalize(vec3f(dot(n, e), dot(n, no), dot(n, f0.xyz)));
+  let y = array<f32, 9>(0.282095, 0.488603 * d.y, 0.488603 * d.z, 0.488603 * d.x, 1.092548 * d.x * d.y, 1.092548 * d.y * d.z,
+    0.315392 * (3.0 * d.z * d.z - 1.0), 1.092548 * d.x * d.z, 0.546274 * (d.x * d.x - d.y * d.y));
+  let a = array<f32, 9>(PI, 2.0943951, 2.0943951, 2.0943951, 0.7853982, 0.7853982, 0.7853982, 0.7853982, 0.7853982);
+  // (between the two altitudes round h)
+  var l0 = 0u;
+  var w = 0.0;
+  if (h >= hs.w) { l0 = 3u; } else if (h > hs.x) {
+    l0 = select(select(0u, 1u, h > hs.y), 2u, h > hs.z);
+    let lo = select(select(hs.x, hs.y, l0 == 1u), hs.z, l0 == 2u);
+    let hi = select(select(hs.y, hs.z, l0 == 1u), hs.w, l0 == 2u);
+    w = (h - lo) / max(hi - lo, 1.0);
+  }
+  let l1 = min(l0 + 1u, 3u);
+  var irr = vec3f(0.0);
+  for (var i = 0u; i < 9u; i++) {
+    let c = mix(bodies[SKY_OFF + 4u + l0 * 9u + i].xyz, bodies[SKY_OFF + 4u + l1 * 9u + i].xyz, w);
+    irr += a[i] * y[i] * c;
+  }
+  return max(irr, vec3f(0.0));
+}
+// the clear sky's light on the flat at a point q (its geodetic direction) and height h, physical when the frame has it, else
+// the old bluish tenth of the sun's (E: the sun's irradiance, mu0 its cosine there, sk the eclipse's share of the sky)
+fn skyFlat(q: vec3f, h: f32, E: vec3f, mu0: f32, sk: f32) -> vec3f {
+  let s = skyIrradiance(h, q);
+  return select(s, E * vec3f(0.06, 0.1, 0.19) * smoothstep(-0.18, 0.25, mu0) * sk, s.x < 0.0);
+}
+// the same over the sun's irradiance E (the clouds' light is written as E × factors)
+fn skyFlatFactor(q: vec3f, h: f32, E: vec3f, mu0: f32, sk: f32) -> vec3f {
+  return skyFlat(q, h, E, mu0, sk) / max(E, vec3f(1e-30));
+}
 fn nightFloor(sk: f32, mu0: f32) -> vec3f {
   return EARTH_NIGHT * P.earth4.x * (1.0 - smoothstep(-0.05, 0.1, mu0) * (1.0 - sk));
 }
@@ -5096,7 +5139,7 @@ fn windsockShade(q: vec3f, Ls: vec3f, E: vec3f, h: f32, view: vec3f) -> vec3f {
   let mu0 = dot(geoQ(q), Lp);
   let vl = wxVeil(h, wxNear(q), 3u);
   let Ts = sunThrough(h, mu0);
-  let sky = E * max(vec3f(0.06, 0.1, 0.19) * smoothstep(-0.18, 0.25, mu0), nightFloor(1.0, mu0));
+  let sky = max(skyFlat(q, h, E, mu0, 1.0), E * nightFloor(1.0, mu0));
   let lit = E * Ts * max(dot(WS.xyz, Lp), 0.0) * vl.x * sceneryShadow(Lp,WS.xyz) + sky * 0.6 * vl.x + E * Ts * max(mu0, 0.0) * (vl.y - vl.x) * 0.6;
   // leaves against the Sun: the light through the crown's thin edge, brightest looking into the Sun
   let rim = 1.0 - abs(dot(WS.xyz, view));
@@ -5802,7 +5845,7 @@ fn earthCloudLight(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, below: bool, lit: f
   let ct = dot(airPhysicalDirection(rd), airPhysicalDirection(Ls));
   let fwd = 0.25 * pow(max(ct, 0.0), 8.0);
   let sk = skySeen(q, Ls);
-  let amb = max(vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0) * sk, nightFloor(sk, mu0));
+  let amb = max(0.7 * skyFlatFactor(q, hc, E, mu0, sk), nightFloor(sk, mu0));
   let top = 0.85 / PI * (E * Ts * (wrap * lit * select(cloudLongShadow(q, Ls), 1.0, below) + fwd) + E * amb + E * earthMoonlight(q, q, hc, mu0));
   return select(top, top * 0.35, below);
 }
@@ -6833,7 +6876,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   // (at night, the stars' and the airglow's: EARTH_NIGHT; on the slopes, less of the sky seen)
   let sk = skySeen(q, Ls);
   // (a clear sky's light on the flat: ~a tenth of the sun's — bluish)
-  var sky = E * max(vec3f(0.06, 0.1, 0.19) * smoothstep(-0.18, 0.25, mu0) * sk, nightFloor(sk, mu0));
+  var sky = max(skyFlat(q, hG, E, mu0, sk), E * nightFloor(sk, mu0));
   // (under the weather's decks: the blue sky hidden by their cover, their own grey light instead — what
   // comes through them, and for a broken sky what their sunlit sides and bases send down, most at half
   // cover: a cloud's shadow on the ground ~3 times darker than the sun beside it, not black)
@@ -6968,7 +7011,7 @@ fn cirrusLight(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f) -> vec3f {
   let ct = dot(airPhysicalDirection(rd), airPhysicalDirection(Ls));
   let ph = min(0.75 * hgPhase(0.85, ct) + 0.25 * hgPhase(-0.1, ct), 1.0);
   let sk = skySeen(q, Ls);
-  let amb = max(vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0) * sk, nightFloor(sk, mu0));
+  let amb = max(0.7 * skyFlatFactor(q, 9000.0, E, mu0, sk), nightFloor(sk, mu0));
   return E * (Ts * ph * 4.0 + 0.6 / PI * amb);
 }
 
@@ -7083,7 +7126,7 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
     // (the sky's and the moon's light from above, dimmed by the cloud over it: a grey base, a bright top)
     let over = 0.3 + 0.7 * exp(-0.25 * tauUp);
     let sk = skySeen(q, Ls);
-    let amb = max(vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0) * sk, nightFloor(sk, mu0));
+    let amb = max(0.7 * skyFlatFactor(q, airHeight(p), E, mu0, sk), nightFloor(sk, mu0));
     // (the octaves' dimming from one exponential: e^(−0.04 τ), its square, its cube)
     let e1 = exp(-0.04 * tauSun);
     let e2 = e1 * e1;
@@ -7216,13 +7259,15 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
     let powder = 1.0 - exp(-2.0 * sigma * 400.0 - 0.15);
     let over = 0.3 + 0.7 * exp(-0.25 * tauUp);
     let sk = skySeen(q, Ls);
-    let amb = max(vec3f(0.05, 0.07, 0.11) * smoothstep(-0.2, 0.2, mu0) * sk, nightFloor(sk, mu0));
+    let amb = max(0.7 * skyFlatFactor(q, hM, E, mu0, sk), nightFloor(sk, mu0));
     let e1 = exp(-0.04 * tauSun);
     let e2 = e1 * e1;
     let ms = (ms1 * e2 * e1 + 0.5 * ms2 * e2 + 0.25 * ms3 * e1) / 1.75;
-    let skyTop = vec3f(0.06, 0.1, 0.19) * smoothstep(-0.18, 0.25, mu0) * sk * (0.25 + 0.75 * exp(-0.03 * tauUp));
+    let skyTop = skyFlatFactor(q, hM, E, mu0, sk) * (0.25 + 0.75 * exp(-0.03 * tauUp));
+    // (the light the ground sends up onto the base — the sun's and the sky's on it, an albedo of 0.18 —, through the cloud below)
+    let bounce = 0.18 * (sunThrough(0.0, mu0) * max(mu0, 0.0) + skyFlatFactor(q, 0.0, E, mu0, sk)) * exp(-0.25 * a * L.w * hn);
     let Lin = E * Ts * (hg * beer * powder * 2.5 + 0.25 * ms * smoothstep(-0.1, 0.1, mu0))
-      + 0.85 / PI * (over * (E * amb + E * earthMoonlight(q, q, airHeight(p), mu0)) + E * skyTop * wxVeil(hM, w, i).y);
+      + 0.85 / PI * (over * (E * amb + E * earthMoonlight(q, q, airHeight(p), mu0)) + E * skyTop * wxVeil(hM, w, i).y + 0.5 * E * bounce);
     let dT = exp(-sigma * dm);
     col += Tv * Lin * (1.0 - dT);
     if (o.t < 0.0) { o.t = t; }
@@ -8783,6 +8828,66 @@ fn clouds(@builtin(global_invocation_id) gid: vec3u) {
   }
   textureStore(cloudOutA, gid.xy, vec4f(cs.cl, cs.alpha));
   textureStore(cloudOutB, gid.xy, vec4f(cs.tc, bound, depthM, 0.0));
+}
+
+// The clear sky's light (docs/PLAN-NUAGES-AAA.md N2b, read by skyIrradiance: the ground, the scenery, the clouds): at four
+// heights over the sea round the camera's place (a workgroup each: 0, 2, 5 and 10 km), the sky's radiance from the air's own
+// model (earthAir — the weather's decks left out: their light is their own) along 64 directions of the hemisphere (a
+// thread each, a Fibonacci spiral), projected on the second-order spherical harmonics; written with its frame (the place's
+// up, east, north) into skyOut, copied into the tracer's table (renderer: TABLE_SKY).
+// (a 40 × 1 texture, not a buffer: the tracer's layout already binds every storage buffer a stage may have)
+@group(1) @binding(13) var skyOut: texture_storage_2d<rgba32float, write>;
+var<workgroup> skyAcc: array<array<vec3f, 9>, 64>;
+@compute @workgroup_size(64)
+fn skyAmbient(@builtin(local_invocation_index) li: u32, @builtin(workgroup_id) wid: vec3u) {
+  let hs = vec4f(0.0, 2000.0, 5000.0, 10000.0);
+  let lv = wid.x;
+  var on = false;
+  var c = array<vec3f, 9>();
+  var up = vec3f(0.0, 0.0, 1.0);
+  var east = vec3f(1.0, 0.0, 0.0);
+  var north = vec3f(0.0, 1.0, 0.0);
+  if (HAS_BODIES && P.near0.w > 0.5) {
+    let k = u32(P.near1.w);
+    if (isEarth(k) && hasAir(k) && earthOn()) {
+      on = true;
+      setAir(k);
+      let ab = squashOf(k);
+      up = normalize(nearCam());
+      east = normalize(cross(vec3f(0.0, 0.0, 1.0), up));
+      if (length(cross(vec3f(0.0, 0.0, 1.0), up)) < 1e-4) { east = vec3f(1.0, 0.0, 0.0); }
+      north = cross(up, east);
+      let lt = nearLight(k);
+      let Ls = normalize(squashed(toBody(lt.dir), ab));
+      // (the direction: z up, the spiral over the hemisphere — equal solid angles)
+      let z = (f32(li) + 0.5) / 64.0;
+      let rr = sqrt(max(1.0 - z * z, 0.0));
+      let ph = f32(li) * 2.399963;
+      let dl = vec3f(rr * cos(ph), rr * sin(ph), z);
+      let rd = normalize(east * dl.x + north * dl.y + up * dl.z);
+      let p = up * (1.0 + hs[lv] / EARTH_RM);
+      WX_W = 0.0;
+      let L = earthAir(p, rd, 3e38, Ls, lt.e, 0.5, 3e38).L;
+      let y = array<f32, 9>(0.282095, 0.488603 * dl.y, 0.488603 * dl.z, 0.488603 * dl.x, 1.092548 * dl.x * dl.y,
+        1.092548 * dl.y * dl.z, 0.315392 * (3.0 * dl.z * dl.z - 1.0), 1.092548 * dl.x * dl.z, 0.546274 * (dl.x * dl.x - dl.y * dl.y));
+      for (var i = 0u; i < 9u; i++) { c[i] = L * y[i] * (2.0 * PI / 64.0); }
+    }
+  }
+  for (var i = 0u; i < 9u; i++) { skyAcc[li][i] = c[i]; }
+  workgroupBarrier();
+  if (li == 0u) {
+    for (var i = 0u; i < 9u; i++) {
+      var sum = vec3f(0.0);
+      for (var j = 0u; j < 64u; j++) { sum += skyAcc[j][i]; }
+      textureStore(skyOut, vec2i(i32(4u + lv * 9u + i), 0), vec4f(sum, 0.0));
+    }
+    if (lv == 0u) {
+      textureStore(skyOut, vec2i(0, 0), vec4f(up, select(0.0, 1.0, on)));
+      textureStore(skyOut, vec2i(1, 0), vec4f(east, 0.0));
+      textureStore(skyOut, vec2i(2, 0), vec4f(north, 0.0));
+      textureStore(skyOut, vec2i(3, 0), hs);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------------------------

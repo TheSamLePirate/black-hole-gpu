@@ -6,7 +6,9 @@ import {
   TABLE_PATH,
   TABLE_SH,
   TABLE_TERRAIN,
+  TABLE_SKY,
   SUN_SHADOW_VEC4S,
+  SKY_AMBIENT_VEC4S,
   TABLE_VEC4S,
   TABLE_WALK,
   TABLE_WARP,
@@ -31,10 +33,11 @@ test("the tables' offsets: the renderer's and the shader's the same", () => {
   expect(TABLE_WALK).toBe(TABLE_PATH + PATH_MAX + PATH_MAX / PATH_CHUNK);
   expect(TABLE_WARP).toBe(TABLE_WALK + Math.ceil((65 * 65) / 4));
   expect(constU("WARP_OFF")).toBe(TABLE_WARP);
+  expect(constU("SKY_OFF")).toBe(TABLE_SKY);
   expect(constU("WARP_LEVELS")).toBe(WARP_LEVELS);
   expect(constU("WARP_N")).toBe(WARP_N);
   expect(TABLE_TERRAIN).toBe(TABLE_WARP + WARP_LEVELS * WARP_N * WARP_N);
-  expect(TABLE_VEC4S).toBe(TABLE_TERRAIN + TERRAIN_CACHE_VEC4S + SUN_SHADOW_VEC4S);
+  expect(TABLE_VEC4S).toBe(TABLE_TERRAIN + TERRAIN_CACHE_VEC4S + SUN_SHADOW_VEC4S + SKY_AMBIENT_VEC4S);
 });
 
 test("the trace stage retains eight-buffer compatibility and requires only one optional scenery buffer", () => {

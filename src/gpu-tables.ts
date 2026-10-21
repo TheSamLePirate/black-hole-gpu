@@ -26,4 +26,7 @@ export const TABLE_TERRAIN = TABLE_WARP + WARP_LEVELS * WARP_N * WARP_N;
  *  march's split (on, near reach, the patch's radius), the camera's vertical */
 export const TABLE_SUN = TABLE_TERRAIN + TERRAIN_CACHE_VEC4S;
 export const SUN_SHADOW_VEC4S = 5;
-export const TABLE_VEC4S = TABLE_SUN + SUN_SHADOW_VEC4S;
+/** the clear sky's light, physical (trace.wgsl skyAmbient): its frame, four altitudes' second-order spherical harmonics */
+export const TABLE_SKY = TABLE_SUN + SUN_SHADOW_VEC4S;
+export const SKY_AMBIENT_VEC4S = 4 + 4 * 9;
+export const TABLE_VEC4S = TABLE_SKY + SKY_AMBIENT_VEC4S;

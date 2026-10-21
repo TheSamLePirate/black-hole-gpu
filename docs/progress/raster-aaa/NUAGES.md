@@ -54,3 +54,23 @@ demi-résolution adoucit les sommets qui remplissent l'écran) ; coût égal.
 Coût de la passe (A/B alterné, lignes valides) : cumulus dessous 0,8 → 2,1 ms, dessus 1,1 → 1,7, couvert 1,8 → 3,9, orage
 2,1 → 5,4. Les sommets gagnent leur modelé ; l'ensemble reste gris-beige et plat — l'ambiante constante et les faibles poids de
 la diffusion multiple : l'étape suivante (N2b, l'ambiante physique du ciel partagée).
+
+## N2b — l'ambiante physique du ciel, partagée — fait
+
+- Noyau `skyAmbient` (trace.wgsl) : à chaque image, le ciel clair intégré par le modèle de l'air (`earthAir`, le Soleil
+  du moment, la météo) sur 64 directions de Fibonacci par hémisphère, à quatre altitudes (0, 2, 5, 10 km), projeté en
+  harmoniques sphériques L2 dans le repère local (haut, est, nord) ; 4 groupes de 64, écrits dans une texture 40 × 1 et
+  copiés dans la table du traceur (`TABLE_SKY`).
+- `skyIrradiance(h, n)` / `skyFlat` / `skyFlatFactor` : l'éclairement du ciel pour une normale et une altitude
+  (interpolé entre les niveaux), lu par le sol, la manche à air et les quatre sites de nuages (passe, couches météo, carte,
+  cirrus) ; `wxCloud` ajoute la lumière renvoyée par le sol sous les bases. Repli sur l'ancienne constante quand la table
+  est vide (orbite, réglage coupé : `renderer.skyAmbientOn`).
+- Deux pièges : le pipeline compilé avec les constantes par défaut (toutes les fonctions du trou noir, Kerr compris) ne
+  finissait jamais — désormais seules celles de l'air ; et un tampon de stockage de plus dépassait ceux qu'un étage peut
+  lier — une texture de stockage à la place. Diagnostic : `tests/e2e/raster-diagnose.e2e.test.ts` (passes, avertissements,
+  variantes).
+
+A/B alterné (deuxième paire) : coût dans le bruit (passe de 4 groupes) ; image plus proche de la convergée — Tarifa bas
+38,75 → 38,98 dB, sous les cumulus 36,5 → 38,7 dB, Alpes au soir 32,0 → 32,6 dB. Au soir, les ombres de la neige prennent
+la teinte chaude du ciel côté Soleil au lieu du bleu constant (bleu −4,5/255, rouge +1,7 en moyenne sur le sol) ; à midi
+presque neutre.

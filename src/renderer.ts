@@ -51,7 +51,19 @@ import { visibleTimeout } from "./util/visible-timeout";
 import { automaticQuality, effectiveQuality, earthMapQuality } from "./quality-policy";
 import { adapterId, guessTier, rememberedLevel, tierAt, type Tier } from "./tier";
 import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
-import { PATH_CHUNK, PATH_MAX, SH_VEC4S, TABLE_LUT, TABLE_PATH, TABLE_SUN, TABLE_VEC4S, TABLE_WALK, TABLE_WARP } from "./gpu-tables";
+import {
+  PATH_CHUNK,
+  PATH_MAX,
+  SH_VEC4S,
+  SKY_AMBIENT_VEC4S,
+  TABLE_LUT,
+  TABLE_PATH,
+  TABLE_SKY,
+  TABLE_SUN,
+  TABLE_VEC4S,
+  TABLE_WALK,
+  TABLE_WARP,
+} from "./gpu-tables";
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
 import maskWGSL from "./shaders/mask.wgsl" with { type: "text" };
 import { AERIAL_TEXTURE_LIMIT, aerialShader } from "./system/aerial";
@@ -4045,6 +4057,8 @@ export class Renderer {
     // The raster patch's visibility, after the cache it reads and before the rays that start from it.
     if (!quality && s) this.encodeTerrainRasterVisibility(enc, t, s);
     const hint = !quality && this.rasterHint ? (this.terrainRaster?.distanceTexture() ?? null) : null;
+    // (the clear sky's light — trace.wgsl skyAmbient — before every kernel that reads it: the ground's, the clouds')
+    this.encodeSkyAmbient(enc, t);
     // (the aerial perspective's table before the rays that read it)
     if (!quality && this.aerialPipe) {
       const ap = enc.beginComputePass(this.prof.pass("aerial perspective"));
@@ -6006,6 +6020,73 @@ export class Renderer {
   private terrainRasterLevel = 2;
   /** the last camera frame shades the raster patch's pixels one a pixel (earthPipeline "raster", trace.wgsl shade) */
   private rasterPrimaryOn = false;
+  /** the clear sky's light, physical and shared (trace.wgsl skyAmbient → skyIrradiance — docs/PLAN-NUAGES-AAA.md N2b): a
+   *  switch for comparisons (off: the old constant bluish tenth of the sun's) */
+  skyAmbientOn = true;
+  private skyPipe: GPUComputePipeline | null = null;
+  private skyWanted = false;
+  private skyOut: GPUTexture | null = null;
+  private skyBind: GPUBindGroup | null = null;
+  private skyTableOn = false;
+  private encodeSkyAmbient(enc: GPUCommandEncoder, t: Target) {
+    const d = this.device;
+    if (!this.skyAmbientOn || !this.lastNear) {
+      if (this.skyTableOn) d.queue.writeBuffer(this.bodyBuf, TABLE_SKY * 16, new Float32Array(4));
+      this.skyTableOn = false;
+      return;
+    }
+    if (!this.skyPipe) {
+      if (!this.skyWanted) {
+        this.skyWanted = true;
+        const layout = d.createBindGroupLayout({
+          label: "sky ambient write",
+          entries: [{ binding: 13, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: "write-only", format: "rgba32float" } }],
+        });
+        // (a texture, not a buffer: the tracer's layout already takes the storage buffers a stage may have)
+        this.skyOut = d.createTexture({
+          label: "sky ambient",
+          size: [SKY_AMBIENT_VEC4S, 1],
+          format: "rgba32float",
+          usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
+        });
+        this.skyBind = d.createBindGroup({ layout, entries: [{ binding: 13, resource: this.skyOut.createView() }] });
+        // (every feature the air does not need compiled out — the overrides' defaults are all on: the black hole's, the
+        // disk's, the Kerr metric's code with it, a compile that never ended)
+        const off = ["RADIO", "POL", "JET", "SPOT", "VOL", "WH", "THICK", "RWY", "KERR", "SHADE", "SURFACE", "SCENERY", "AURORA"];
+        const t0 = performance.now();
+        void d
+          .createComputePipelineAsync({
+            layout: d.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, layout] }),
+            compute: {
+              module: this.traceModule,
+              entryPoint: "skyAmbient",
+              constants: {
+                ...Object.fromEntries(off.map((f) => [`HAS_${f}`, 0])),
+                HAS_BODIES: 1,
+                HAS_WX: (this.featureKey & 1024) !== 0 ? 1 : 0,
+                QUALITY_PIPELINE: 0,
+              },
+            },
+          })
+          .then(
+            (p) => {
+              this.skyPipe = p;
+              gpuDiagnostics.record("pipeline-compiled", `sky ambient: ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+            },
+            (e) => console.warn("Sky ambient unavailable:", e),
+          );
+      }
+      return;
+    }
+    const p = enc.beginComputePass(this.prof.pass("sky ambient"));
+    p.setPipeline(this.skyPipe);
+    p.setBindGroup(0, t.traceBind);
+    p.setBindGroup(1, this.skyBind!);
+    p.dispatchWorkgroups(4);
+    p.end();
+    enc.copyTextureToBuffer({ texture: this.skyOut! }, { buffer: this.bodyBuf, offset: TABLE_SKY * 16 }, [SKY_AMBIENT_VEC4S, 1]);
+    this.skyTableOn = true;
+  }
   /** the cloud pass (trace.wgsl clouds — docs/PLAN-NUAGES-AAA.md N1): the device binds its buffers; a switch */
   private cloudPass = false;
   cloudPassOn = true;
