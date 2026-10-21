@@ -68,3 +68,11 @@
   d'envoyer un événement à un seul membre. Une console modifiée verrait donc le vaisseau sans retard, mais ne pourrait
   pas agir plus tôt.
 - Les messages vocaux enregistrés ne sont pas faits : la voix n'a pas de délai, par décision.
+
+## La campagne finale (2026-10-21, kerr-mini)
+
+Les 33 fichiers e2e `crew-*`, `net-*` et `radar-sync` ont été passés en 2 112 s : 31 verts du premier coup.
+- `crew-craft` lisait les vues de l'Endurance avant le rafraîchissement de la console (toutes les 250 ms). Il attend
+  désormais, et passe 4/4.
+- `net-formation-ap` a fini à 35,6 m de l'aile pour 25 m de tolérance, pendant le virage d'Ana à 250 m/s. Il est repassé
+  4/4 seul : c'est une instabilité du test de formation, dans un code que cette campagne n'a pas touché.

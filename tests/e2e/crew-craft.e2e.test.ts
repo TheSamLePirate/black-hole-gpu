@@ -99,6 +99,8 @@ describe.skipIf(!E2E)("crew — a console for each craft", () => {
     await b.waitFor(`__bh.net.net.clock.synced && !__bh.net.session.teleport(-1).includes("clock")`, 30_000);
     await b.js(`__bh.net.session.placeAtPort(${sa}, 2000, 0)`);
     await a.waitFor(`__bh.net.session.spaceTel.has(${sb})`, 20_000);
+    // (the console's views rebuilt for the Endurance at its next refresh — a quarter second)
+    await a.waitFor(crew.w(`![...document.querySelectorAll('#views button')].some((b) => b.dataset.view === "descent")`), 5000);
     expect(await views()).not.toContain("descent");
     await a.waitFor(crew.d("querySelector('#metrics [data-key=ring]') !== null"), 5000);
     const autos = await crew.js<string[]>(
