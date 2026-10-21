@@ -163,8 +163,12 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
     // the ground into a trunk —, Gaussian in the distance; no fresh pixel round it at all: its own last colour.
     let dp = moments[idx].y;
     var acc = vec4f(0.0);
-    for (var j = -2; j <= 2; j++) {
-      for (var i = -2; i <= 2; i++) {
+    // (1 in 8 or 16 — R.f.y the rate —: the fresh samples two to four pixels apart: a window of 7 × 7, a wider Gaussian)
+    let wide = R.f.y > 6.0;
+    let rr = select(2, 3, wide);
+    let gk = select(0.5, 0.22, wide);
+    for (var j = -rr; j <= rr; j++) {
+      for (var i = -rr; i <= rr; i++) {
         let q = vec2i(gid.xy) + vec2i(i, j);
         if (any(q < vec2i(0)) || q.x >= i32(W) || q.y >= i32(size.y)) { continue; }
         let qi = u32(q.y) * W + u32(q.x);
@@ -174,7 +178,7 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
         // (a floor under the depths' likeness: where none is alike — a grazing ground's depth changes by more than 5 % a
         // row, a silhouette —, the nearest fresh samples still decide; the pixel's own old colour, the camera turned since,
         // put the sky's colour on the ground and the history's clamp then let its ghosts through)
-        acc += exp(-0.5 * f32(i * i + j * j)) * max(exp(-rel * rel), 0.002) * vec4f(loadAvg(u32(q.x), u32(q.y), W), 1.0);
+        acc += exp(-gk * f32(i * i + j * j)) * max(exp(-rel * rel), 0.002) * vec4f(loadAvg(u32(q.x), u32(q.y), W), 1.0);
       }
     }
     c = select(loadAvg(gid.x, gid.y, W), acc.rgb / acc.w, acc.w > 0.0);
@@ -725,7 +729,30 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
         }
       }
       m1 /= ws;
-      let sd = sqrt(max(m2 / ws - m1 * m1, vec3f(0.0)));
+      var sd = sqrt(max(m2 / ws - m1 * m1, vec3f(0.0)));
+      // (a raster pixel left this frame at 1 in 8 or 16: its range from the fresh samples alone round it — this frame's
+      // shading, not the blur rebuilt between them, which would pull a sharp history towards itself —, a little wider for
+      // their fewness; none fresh enough near: the box above)
+      if (rasterPx && mxp < -2.5 && R.f.y > 6.0) {
+        var f1 = vec3f(0.0);
+        var f2 = vec3f(0.0);
+        var fc = 0.0;
+        for (var j = -2; j <= 2; j++) {
+          for (var i = -2; i <= 2; i++) {
+            let qp = clamp(vec2i(gid.xy) + vec2i(i, j), vec2i(0), hi);
+            let qi = u32(qp.y) * W + u32(qp.x);
+            if (moments[qi].x < 1e29 || stamps[qi] < R.u.w) { continue; }
+            let q = rgbToYcocg(tmFwd(textureLoad(src, qp, 0).rgb));
+            f1 += q;
+            f2 += q * q;
+            fc += 1.0;
+          }
+        }
+        if (fc >= 2.0) {
+          m1 = f1 / fc;
+          sd = sqrt(max(f2 / fc - m1 * m1, vec3f(0.0))) * 1.25 + vec3f(0.01);
+        }
+      }
       let h = rgbToYcocg(tmFwd(hist));
       let g = TA.fwd.w;
       // a ray landed on this pixel this frame, or it was reconstructed between rays

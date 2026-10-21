@@ -9345,7 +9345,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
 
 // The raster's shading rate (earthRasterShading — renderer: mouthList[1].y, 1 every pixel, 2 one in two — a checkerboard —,
 // 4 one in 2 × 2) and its pattern, turned each frame: the pixel a packed thread shades, and whether a pixel is shaded.
-fn rasterRate() -> u32 { return u32(P.mouthList[1].y + 0.5) & 15u; }
+fn rasterRate() -> u32 { let c = u32(P.mouthList[1].y + 0.5) & 15u; return select(c, 16u, c == 15u); }
 // The raster's sub-pixel jitter (renderer.rasterJitter "halton", mouthList[1].y + 16): the same offset for every pixel of a
 // frame — the raster's projection moved by it too (renderer: terrainRasterFrame's output.zw) —, Halton (2, 3) over 16
 // frames: the visibility and the rays agree at every pixel, and the history gathers the outlines' sub-pixel coverage
@@ -9367,12 +9367,27 @@ fn rasterJitter(frame: u32) -> vec2f {
   let i = frame % 16u + 1u;
   return vec2f(halton(i, 2u), halton(i, 3u)) - 0.5;
 }
+// (1 in 8, 1 in 16 — earthRasterShading "eighth", "sixteenth": blocks of 4 × 2 and 4 × 4, their pixels in an order that puts
+// each frame's far from the last's — Bayer's —: every pixel shaded once in 8 or 16 frames, the gaps between a frame's samples
+// filled evenly as they come)
+fn rasterOffset(rate: u32, f: u32) -> vec2u {
+  if (rate >= 16u) {
+    return array<vec2u, 16>(vec2u(0u, 0u), vec2u(2u, 2u), vec2u(2u, 0u), vec2u(0u, 2u), vec2u(1u, 1u), vec2u(3u, 3u), vec2u(3u, 1u),
+      vec2u(1u, 3u), vec2u(1u, 0u), vec2u(3u, 2u), vec2u(3u, 0u), vec2u(1u, 2u), vec2u(0u, 1u), vec2u(2u, 3u), vec2u(2u, 1u),
+      vec2u(0u, 3u))[f % 16u];
+  }
+  return array<vec2u, 8>(vec2u(0u, 0u), vec2u(2u, 1u), vec2u(2u, 0u), vec2u(0u, 1u), vec2u(1u, 1u), vec2u(3u, 0u), vec2u(3u, 1u),
+    vec2u(1u, 0u))[f % 8u];
+}
+fn rasterBlock(rate: u32) -> vec2u { return select(vec2u(4u, 2u), vec2u(4u, 4u), rate >= 16u); }
 fn rasterPixel(g: vec2u, rate: u32, f: u32) -> vec2u {
+  if (rate >= 8u) { return g * rasterBlock(rate) + rasterOffset(rate, f); }
   if (rate >= 4u) { return g * 2u + array<vec2u, 4>(vec2u(0u, 0u), vec2u(1u, 1u), vec2u(1u, 0u), vec2u(0u, 1u))[f % 4u]; }
   if (rate >= 2u) { return vec2u(g.x * 2u + ((g.y + f) & 1u), g.y); }
   return g;
 }
 fn rasterShaded(p: vec2u, rate: u32, f: u32) -> bool {
+  if (rate >= 8u) { return all(p % rasterBlock(rate) == rasterOffset(rate, f)); }
   if (rate >= 4u) { return all(p % 2u == array<vec2u, 4>(vec2u(0u, 0u), vec2u(1u, 1u), vec2u(1u, 0u), vec2u(0u, 1u))[f % 4u]); }
   if (rate >= 2u) { return (p.x & 1u) == ((p.y + f) & 1u); }
   return true;

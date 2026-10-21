@@ -33,6 +33,10 @@ const MODES: Record<string, string> = {
   rasterdefault: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.sharpen = 0.3; __bh.renderer.taParams = [1 / 16, 0.05, 2];`,
   // (the cloud pass — trace.wgsl clouds — and its history off: each pixel marches its clouds)
   rasternopass: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.sharpen = 0.3; __bh.renderer.taParams = [1 / 16, 0.05, 2]; __bh.renderer.cloudPassOn = false;`,
+  // (the raster's shading rate — one pixel in four, eight, sixteen a frame — and its reconstruction: the history first)
+  rquarter: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.sharpen = 0.3; __bh.renderer.taParams = [1 / 16, 0.05, 2]; __bh.settings.earthRasterShading = "quarter";`,
+  reighth: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.sharpen = 0.3; __bh.renderer.taParams = [1 / 16, 0.05, 2]; __bh.settings.earthRasterShading = "eighth";`,
+  rsixteenth: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.sharpen = 0.3; __bh.renderer.taParams = [1 / 16, 0.05, 2]; __bh.settings.earthRasterShading = "sixteenth";`,
   rasterpass: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.sharpen = 0.3; __bh.renderer.taParams = [1 / 16, 0.05, 2]; __bh.renderer.cloudPassOn = true;`,
 };
 const DETAIL = `Object.assign(__bh.settings, { earthScenery: "high", detailReach: "veryFar", earthSceneryShadows: true, earthSurface: "satellite" });`;

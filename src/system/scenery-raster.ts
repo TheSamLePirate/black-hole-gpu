@@ -551,9 +551,10 @@ export class SceneryRaster {
     }
     for (let l = 0; l < LISTS; l++) this.reset[l * 4] = this.meshCounts[l]!;
     this.reset[LISTS * 4] = 36;
-    // (the shadow lists: the near round crown's and the near cone's meshes)
-    this.reset[(LISTS + 1) * 4] = this.meshCounts[0]!;
-    this.reset[(LISTS + 2) * 4] = this.meshCounts[1]!;
+    // (the shadow lists: the far round crown's and the far cone's meshes — an octahedron, a plain cone: the map's texels ~0.9 m,
+    // a near proxy's 80 faces and trunk ten times the triangles for a shadow it cannot resolve)
+    this.reset[(LISTS + 1) * 4] = this.meshCounts[2]!;
+    this.reset[(LISTS + 2) * 4] = this.meshCounts[3]!;
     this.lod = { ...lod };
   }
   getLod(): SceneryRasterLod {
@@ -658,7 +659,7 @@ export class SceneryRaster {
     for (let l = 0; l < 2; l++) {
       pass.setPipeline(this.shadowPipes[l]!);
       pass.setBindGroup(0, this.drawBind);
-      pass.setVertexBuffer(0, this.meshes[l]!);
+      pass.setVertexBuffer(0, this.meshes[2 + l]!);
       pass.drawIndirect(this.draws, (LISTS + 1 + l) * 16);
     }
     pass.setPipeline(this.boxShadowPipe!);

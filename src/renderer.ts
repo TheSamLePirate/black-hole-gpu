@@ -3107,10 +3107,11 @@ export class Renderer {
     const rasterPrimary = hinting && s.earthPipeline === "raster";
     if (!o.probe) this.rasterPrimaryOn = rasterPrimary;
     // (… and its shading rate: 1 every pixel, 2 one in two, 4 one in 2 × 2 — trace.wgsl rasterRate)
-    this.rasterRate = s.earthRasterShading === "quarter" ? 4 : s.earthRasterShading === "half" ? 2 : 1;
+    this.rasterRate = { every: 1, half: 2, quarter: 4, eighth: 8, sixteenth: 16 }[s.earthRasterShading] ?? 1;
     // (the cloud pass's bit — CLOUD_PASS_FLAG — set once it is drawn this frame: dispatchTrace, when the frame's key is whole)
     this.cloudPassDrawn = false;
-    f[MOUTH_LIST_AT + 5] = rasterPrimary ? this.rasterRate + (this.rasterJitter === "halton" ? 16 : 0) : 0;
+    // (16 written 15: the rate's four bits — trace.wgsl rasterRate)
+    f[MOUTH_LIST_AT + 5] = rasterPrimary ? Math.min(this.rasterRate, 15) + (this.rasterJitter === "halton" ? 16 : 0) : 0;
     // (the trees drawn as raster instances this frame: set once they are — encodeTerrainRasterVisibility)
     f[MOUTH_LIST_AT + 6] = 0;
     // Keep a stable key when a still frame starts refining; its quality kernel compiles the cache out.
@@ -3367,7 +3368,12 @@ export class Renderer {
         : [1 | view | (t.width << 16), 0, 0, 0];
     this.device.queue.writeBuffer(t.resolveBuf, 0, new Uint32Array(r));
     // (the cost view shown as it is: its heat map neither exposed nor tone-mapped — the display's bypass)
-    this.device.queue.writeBuffer(t.resolveBuf, 16, new Float32Array([this.costViewMode ? 1 : preExposure(this.ev(s)), 0, 0, 0]));
+    // (y: the raster's shading rate — post.wgsl resolve and temporal: its wider reconstruction at 1 in 8 or 16)
+    this.device.queue.writeBuffer(
+      t.resolveBuf,
+      16,
+      new Float32Array([this.costViewMode ? 1 : preExposure(this.ev(s)), this.rasterPrimaryOn ? this.rasterRate : 1, 0, 0]),
+    );
     if (s.polarization) {
       const { cs, gw, gh } = this.polCells(s, t);
       this.device.queue.writeBuffer(t.polGridBuf, 0, new Uint32Array([cs, gw, gh, t.width]));
@@ -4244,8 +4250,11 @@ export class Renderer {
     const shade = !quality && hint && this.rasterPrimaryOn ? this.traceVariant("shade") : null;
     const mark = shade && this.rasterRate > 1 ? this.traceVariant("shadeMark") : null;
     if (shade && hint && (this.rasterRate === 1 || mark)) {
-      const sx = this.rasterRate > 1 ? Math.ceil(t.width / 2) : t.width;
-      const sy = this.rasterRate > 2 ? Math.ceil(t.height / 2) : t.height;
+      // (the frame's pattern's block — trace.wgsl rasterPixel: 2 × 1, 2 × 2, 4 × 2, 4 × 4 —: a thread a block)
+      const bw = this.rasterRate >= 8 ? 4 : this.rasterRate > 1 ? 2 : 1;
+      const bh = this.rasterRate >= 16 ? 4 : this.rasterRate > 2 ? 2 : 1;
+      const sx = Math.ceil(t.width / bw);
+      const sy = Math.ceil(t.height / bh);
       const sp = enc.beginComputePass(this.prof.pass("earth shade (raster)"));
       sp.setPipeline(shade);
       sp.setBindGroup(0, this.hintBindFor(t, hint));
@@ -6340,7 +6349,15 @@ export class Renderer {
   private treeShadow = false;
   treeShadowOn = true;
   private tsmTex: GPUTexture | null = null;
+  /** the map's frame as drawn (its content's), the next one asked, the scenery's revision it was drawn from */
   private tsmFrame = new Float32Array(16);
+  private tsmNext = new Float32Array(16);
+  private tsmOff = new Float32Array(16);
+  private tsmAsk = new Float32Array(16);
+  private tsmValid = false;
+  private tsmRedraw = false;
+  private tsmRevision = -1;
+  private tsmRevisionNext = -1;
   private tsmTableOn = false;
   private tsmDrawn = false;
   /** the relief's shadow map drawn this frame (encodeSunShadow): its frame cleared otherwise — not the last one's read */
@@ -6350,7 +6367,7 @@ export class Renderer {
    *  moves), drawn or not (the Sun up). */
   private treeShadowFrame(scp: Float32Array): Float32Array {
     const near = this.lastNear;
-    const f = this.tsmFrame;
+    const f = this.tsmAsk;
     f.fill(0);
     if (!near || !this.treeShadow || !this.treeShadowOn) return f;
     const Le = near.axes.map((a) => a[0]! * near.light[0]! + a[1]! * near.light[1]! + a[2]! * near.light[2]!);
@@ -6364,7 +6381,10 @@ export class Renderer {
     r = rl < 1e-6 ? [1, 0, 0] : r.map((x) => x / rl);
     const u = [r[1]! * L[2]! - r[2]! * L[1]!, r[2]! * L[0]! - r[0]! * L[2]!, r[0]! * L[1]! - r[1]! * L[0]!];
     const H = TREE_SHADOW_HALF_M;
-    const texel = (2 * H) / TREE_SHADOW_N;
+    // (the centre on a grid of 128 m in the Sun's plane: the frame steady while the camera moves within it — drawn again
+    // when it jumps, kept between)
+    // (a whole number of the map's texels: after a jump its texels on the same lattice — no shadow's edge moving)
+    const texel = Math.round(128 / ((2 * H) / TREE_SHADOW_N)) * ((2 * H) / TREE_SHADOW_N);
     const cam = [scp[12]!, scp[13]!, scp[14]!];
     const cr = cam[0]! * r[0]! + cam[1]! * r[1]! + cam[2]! * r[2]!;
     const cu = cam[0]! * u[0]! + cam[1]! * u[1]! + cam[2]! * u[2]!;
@@ -6559,6 +6579,20 @@ export class Renderer {
         if (this.pendingSceneryLod) this.sceneryRaster.setLod(this.pendingSceneryLod);
       }
       const scp = sc.params();
+      // (the shadow map drawn again only when its frame has moved — the camera 128 m in the Sun's plane, the Sun turned —, or
+      // the scenery changed: the trees stand still, the Sun moves slowly; else the last one kept, read as it is)
+      const fr = this.treeShadowFrame(scp);
+      const moved =
+        fr[15]! > 0.5 &&
+        (!this.tsmValid ||
+          this.tsmRevision !== sc.revision ||
+          fr.some((x, i) => i !== 15 && Math.abs(x - this.tsmFrame[i]!) > (i >= 12 ? 1 : 1e-3)));
+      this.tsmRedraw = moved;
+      if (fr[15]! < 0.5) this.tsmValid = false;
+      if (moved) {
+        this.tsmNext.set(fr);
+        this.tsmRevisionNext = sc.revision;
+      }
       trees = this.sceneryRaster.encodeCull(
         enc,
         this.prof.pass("scenery raster cull"),
@@ -6566,7 +6600,7 @@ export class Renderer {
         scp,
         sc.buffer,
         sc.forestCells,
-        this.treeShadowFrame(scp),
+        moved ? fr : this.tsmOff,
       );
     }
     const drawn = this.terrainRaster.encodeVisibility(
@@ -6587,13 +6621,21 @@ export class Renderer {
     );
     this.encodeSunShadow(enc, drawn);
     // (the trees' and buildings' shadow map, from the Sun — its frame into the table where drawn; else off: the rays)
-    const tsm =
-      drawn && trees && this.treeShadow && this.treeShadowOn
-        ? this.sceneryRaster!.encodeShadow(enc, this.prof.pass("trees' shadow map").timestampWrites)
-        : false;
-    if (tsm) this.device.queue.writeBuffer(this.bodyBuf, TABLE_TSM * 16, this.tsmFrame);
-    else if (this.tsmTableOn) this.device.queue.writeBuffer(this.bodyBuf, (TABLE_TSM + 3) * 16, new Float32Array(4));
-    this.tsmTableOn = tsm;
+    if (drawn && trees && this.treeShadow && this.treeShadowOn && this.tsmRedraw) {
+      if (this.sceneryRaster!.encodeShadow(enc, this.prof.pass("trees' shadow map").timestampWrites)) {
+        this.tsmFrame.set(this.tsmNext);
+        this.tsmRevision = this.tsmRevisionNext;
+        this.tsmValid = true;
+        this.device.queue.writeBuffer(this.bodyBuf, TABLE_TSM * 16, this.tsmFrame);
+        this.tsmTableOn = true;
+      }
+    }
+    // (the map valid and the raster on this frame: read — its frame put back if it was cleared —; else cleared after)
+    const tsm = drawn && trees && this.treeShadow && this.treeShadowOn && this.tsmValid;
+    if (tsm && !this.tsmTableOn) {
+      this.device.queue.writeBuffer(this.bodyBuf, TABLE_TSM * 16, this.tsmFrame);
+      this.tsmTableOn = true;
+    }
     this.tsmDrawn = tsm;
     if (drawn && trees) {
       this.paramsF[MOUTH_LIST_AT + 6] = 1;

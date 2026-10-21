@@ -100,6 +100,8 @@ const MODE_SET: Record<string, string> = {
   // (the raster's shading rate: one pixel in two, one in 2 × 2 a frame — the rest rebuilt, then the history)
   rasterhalf: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "half"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4);`,
   rasterquarter: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4);`,
+  rastereighth: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "eighth"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4);`,
+  rastersixteenth: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "sixteenth"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4);`,
   // (the trees' proxies' detail at the ¼ rate — renderer.sceneryRasterLod: the near ones' reach, their round crown's faces, the far ones')
   // (the relief's shadow map — terrain-raster.ts encodeSunShadow — on, the default, and off: the march alone)
   sun: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sunShadowOn = true;`,

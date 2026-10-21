@@ -18,6 +18,8 @@ export default {
   "Every pixel": "Chaque pixel",
   "One pixel in two": "Un pixel sur deux",
   "One pixel in four": "Un pixel sur quatre",
+  "One pixel in eight": "Un pixel sur huit",
+  "One pixel in sixteen": "Un pixel sur seize",
   "With the raster terrain, how many of its pixels are shaded each frame: all of them, one in two (a checkerboard), or one in each 2 × 2 square, the pattern turned each frame. The outlines stay exact at every pixel; a pixel left this frame is rebuilt from its freshly shaded neighbours on the same surface, then refined by the image's history. Fewer shaded pixels: a faster image, a little softer in fast turns.":
     "Avec le terrain par triangles, combien de ses pixels sont ombrés à chaque image : tous, un sur deux (un damier) ou un par carré de 2 × 2, le motif tournant à chaque image. Les contours restent exacts à chaque pixel ; un pixel laissé dans l’image est reconstruit à partir de ses voisins ombrés à l’instant sur la même surface, puis affiné par l’historique de l’image. Moins de pixels ombrés : une image plus rapide, un peu plus douce dans les virages rapides.",
   "Terrain raster hints (experimental)": "Indices raster du relief (expérimental)",

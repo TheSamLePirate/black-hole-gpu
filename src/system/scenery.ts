@@ -33,6 +33,9 @@ export class EarthScenery {
   readonly supported: boolean;
   private worker: Worker | null = null;
   private data: SceneryReply | null = null;
+  /** bumped whenever the buffer's contents change (a new upload, the season's trees): what is drawn from it — the trees'
+   *  shadow map — drawn again */
+  revision = 0;
   private camera: Vec3 | null = null;
   private allocated = false;
   /** the drawn buffer's size (the placeholder's 64 bytes, else a scene's budget) */
@@ -233,6 +236,7 @@ export class EarthScenery {
         }
         const t = performance.now();
         this.device.queue.writeBuffer(this.buffer, 0, r.buffer);
+        this.revision++;
         this.forestAt = new Float32Array(r.buffer, 0, 16)[8] ?? 0;
         this.seasonKey = "";
         this.contact = new SceneryContact(r, r.buffer);
@@ -284,6 +288,7 @@ export class EarthScenery {
     if (key === this.seasonKey) return;
     this.seasonKey = key;
     this.device.queue.writeBuffer(this.buffer, (this.forestAt + 7) * 16, forestKindTable(forestSeason(utcMs, this.data.lat)));
+    this.revision++;
   }
   /** the wait before trying again after a failure [ms]: 30 s, doubled each time, 5 min at most (never given up) */
   private backoff() {
