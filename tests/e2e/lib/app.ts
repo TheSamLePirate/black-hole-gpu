@@ -86,7 +86,8 @@ async function serve() {
 
 /** The page's daylight (App.load): __bh.game.flyAt and walk on the Earth first set the clock to the place's late morning
  *  when it is night or the sun is low there (local solar time outside 8:30–16:00), unless the test set a date itself
- *  or the page is in a network room (the room's one clock). */
+ *  or the page is in a network room (the room's one clock); the station's scene at a "now" it stays sunlit (a test's
+ *  own now kept). */
 const DAYLIGHT = `(() => {
   const G = __bh.game;
   if (!G || G.__e2eDaylight) return 1;
@@ -107,6 +108,44 @@ const DAYLIGHT = `(() => {
   G.flyAt = (lat, lon, ...a) => ((a[3] ?? "earth") === "earth" && day(lon), fly(lat, lon, ...a));
   const walk = G.walk.bind(G);
   G.walk = (body, lat = 0, lon = 0) => (body === "earth" && day(lon), walk(body, lat, lon));
+  // (the station's scene — it takes the calendar's "now" — in the sun: a now when the station stays out of the Earth's
+  // shadow 25 minutes at least, the first in the next two hours; a "now" or a date the test fixed, its own)
+  const fixNow = __bh.setDate;
+  __bh.setDate = (ms) => ((chosen = true), fixNow(ms));
+  const ISS = "Earth: docking to the ISS";
+  window.__e2eSunlitIss = () => {
+    if (chosen || window.__e2eKeepTime || __bh.net?.net?.room) return null;
+    const M = 1476.625 * __bh.settings.massSolar, Ms = 4.925490947e-6 * __bh.settings.massSolar;
+    const d0 = Date.parse(G.date().replace(" ", "T") + ":00Z"), t0 = G.now();
+    const tOf = (ms) => t0 + (ms - d0) / 1000 / Ms;
+    const lit = (t) => {
+      const o = __bh.iss.orbit(t);
+      if (!o) return true;
+      const S = __bh.ourState("sun", t).pos, E = __bh.ourState("earth", t).pos;
+      const s = [0, 1, 2].map((k) => S[k] - E[k]), l = Math.hypot(...s), u = s.map((x) => x / l);
+      const X = [0, 1, 2].map((k) => o.X[k] - E[k]);
+      const a = X[0] * u[0] + X[1] * u[1] + X[2] * u[2];
+      return a > 0 || Math.hypot(...X.map((x, k) => x - u[k] * a)) * M > 6378137;
+    };
+    const now = Date.now();
+    for (let m = 0; m < 120; m += 2) {
+      const ms = now + m * 60e3;
+      let ok = true;
+      for (let k = 0; k <= 25 && ok; k += 5) ok = lit(tOf(ms + k * 60e3));
+      if (ok) return ms;
+    }
+    return null;
+  };
+  const sunlit = (name) => {
+    if (name !== ISS) return;
+    const ms = window.__e2eSunlitIss();
+    if (ms !== null) fixNow(ms);
+  };
+  for (const host of [__bh, G])
+    if (typeof host.preset === "function") {
+      const p = host.preset.bind(host);
+      host.preset = (name, ...a) => (sunlit(name), p(name, ...a));
+    }
   return 1;
 })()`;
 
@@ -200,7 +239,14 @@ export class App {
     // (in the sun: a craft put over the Earth or someone set on foot there by a test that chose no date — at night or
     // with the sun low there — is put there at 11:00 local solar time of the same day; a date the test sets is its own
     // from then on. E2E_DAYLIGHT=0: the scene's clock as it is)
-    if (!startupFailure && process.env.E2E_DAYLIGHT !== "0") await this.js(DAYLIGHT).catch(() => {});
+    if (!startupFailure && process.env.E2E_DAYLIGHT !== "0") {
+      await this.js(DAYLIGHT).catch(() => {});
+      // (a page booted on the station's scene: set again at a sunlit now — its first image in the Earth's shadow else
+      // one time in three)
+      if (/docking to the ISS/.test(decodeURIComponent(hash)))
+        await this.js(`(() => { const ms = window.__e2eSunlitIss?.(); if (ms === null || ms === undefined || ms - Date.now() < 60e3) return 0;
+          __bh.preset("Earth: docking to the ISS"); return 1; })()`).catch(() => {});
+    }
     if (this.recorded && !startupFailure) await recorder.attach(this, this.file).catch((e) => console.error(`e2e telemetry: ${e}`));
     // (the scene's own ray tracer compiled before the test begins — not its stale first image)
     if (!startupFailure) await this.settled(120_000);

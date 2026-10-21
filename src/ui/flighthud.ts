@@ -2504,7 +2504,24 @@ export class FlightHud {
       return [((x + 1) / 2) * W, ((1 - y) / 2) * H] as const;
     };
     if (this.view === "bare" && !helmet) {
-      // (no symbology in this view, but what a fight shows in the world: its explosions — they are not the HUD's)
+      // (no symbology in this view but the docking's aid — the docking camera: its guide, the COAS, as its card stays —
+      // and what a fight shows in the world: its explosions — they are not the HUD's)
+      if ((i.dock && i.dockGuide && !i.dock.docked) || i.dockBore)
+        drawSymbology({
+          ctx,
+          W,
+          H,
+          dpr,
+          fov: this.s.fov,
+          s: this.s,
+          i,
+          density: this.density,
+          show: hudShownFor(this.phase, this.kind),
+          kind: this.kind,
+          outside: false,
+          top: (safeFrame().top - 16) * dpr,
+          only: "dock",
+        });
       const K = i.combat;
       if (K) {
         const fpx = H / (2 * tanH);

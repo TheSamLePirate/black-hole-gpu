@@ -7011,7 +7011,10 @@ async function main() {
     if (startupFailed) return;
     requestAnimationFrame(loop);
     cpuProf.begin();
-    const dt = Math.min(0.1, (now - last) / 1000);
+    // (never back: the first frame's stamp — its vsync's — may precede the performance.now() taken as the loop
+    // began; a negative step put the clock 0.06 s back with the ship's place left where it was — at 7.7 km/s,
+    // the station's scene started a kilometre off it, drifting away at a metre a second)
+    const dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
     // (the flight's clock: the frame's time while it runs — frozen, only the steps move it)
     if (!frozen && !paused && !replay.active) advanceFrameClock(dt * 1000);
     if (!paused && firstFrame) playedMs += dt * 1000;

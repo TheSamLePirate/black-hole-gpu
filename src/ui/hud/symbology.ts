@@ -296,6 +296,9 @@ export interface SymFrame {
   kind?: HudKind;
   /** what the flight's phase lets the HUD draw (hud/declutter.ts; absent: everything) */
   show?: Record<HudItem, boolean>;
+  /** only the docking's aid — its guide and the COAS —: a view the whole HUD does not show in (the docking camera:
+   *  game/hudkind.ts hudInView "bare") */
+  only?: "dock";
   /** a small screen (a phone): the symbology in the view kept, the boxes, scopes, heading tape and bank
    *  scale left to the HUD's panels (set here) */
   compact?: boolean;
@@ -364,6 +367,13 @@ export function drawSymbology(F: SymFrame) {
   };
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
+
+  // (a bare view — the docking camera —: the docking's aid alone, as the style keeps its card)
+  if (F.only === "dock") {
+    if (i.dock && i.dockGuide && !i.dock.docked && s.hudDock && on(F, "dock")) drawDock(F, pr, stroke, text, inside);
+    if (i.dockBore && i.dirs.dock && s.hudDock) drawCoas(F, i.dockBore as V3, i.dirs.dock as V3, pr, stroke, text, inside);
+    return;
+  }
 
   const up = i.dirs.up ?? null;
   const north = i.dirs.north ?? null;
