@@ -30,6 +30,9 @@ const CONFIGS: Record<string, string> = {
   "raster sky x6 quarter": raster(6, "quarter"),
   "raster sky x4 half": raster(4, "half"),
   "raster sky x4 every": raster(4, "every"),
+  // (the raster's defaults: its render scale, 75 %, and shading, a quarter)
+  "raster defaults": `Object.assign(__bh.settings, { earthPipeline: "raster", earthRasterShading: "quarter", earthRasterScale: 0.75 }); __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4);`,
+  "raster native eighth": `Object.assign(__bh.settings, { earthPipeline: "raster", earthRasterShading: "eighth", earthRasterScale: 1 }); __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4);`,
 };
 const places = (process.env.PERF_PLACES ?? Object.keys(PLACES).join(",")).split(",");
 const configs = (process.env.PERF_CONFIGS ?? Object.keys(CONFIGS).join(",")).split(",");
@@ -81,7 +84,7 @@ for (const pl of places)
           const s = (performance.now() - t0) / 1000; iv.sort((a, b) => a - b);
           const g = __bh.camera.geoNow();
           return { fps: +(done / s).toFixed(1), rafFps: +(raf / s).toFixed(1), gpuMs: +(gpu / Math.max(done, 1)).toFixed(1),
-            p95Ms: +iv[Math.floor(iv.length * 0.95)].toFixed(1), alt: g ? Math.round(g.alt) : null }; })()`);
+            p95Ms: +iv[Math.floor(iv.length * 0.95)].toFixed(1), alt: g ? Math.round(g.alt) : null, renderW: r.live.width }; })()`);
         const row = { place: pl, config: cf, ...m };
         rows.push(row);
         console.log(JSON.stringify(row));

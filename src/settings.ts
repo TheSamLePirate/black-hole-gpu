@@ -311,8 +311,8 @@ export interface Settings {
   earthTerrainRasterView: "off" | "depth" | "normals" | "difference"; // diagnostic raster patch; no replacement of physical rendering
   earthTerrainRasterLevel: number; // diagnostic cache level 0…5; single patch, no automatic LOD yet
   earthTerrainRasterUse: boolean; // experimental: the tracer's ground rays start from the raster patch's distance (verified, else marched as before)
-  earthRasterScale: number; // the raster pipeline's render scale in motion (1: the canvas's; under it, upscaled by the display — renderer.taauOn: the temporal upsampling instead —; the camera held, the full scale to refine)
-  earthRasterShading: "every" | "half" | "quarter" | "eighth" | "sixteenth"; // the raster pipeline's shading: every pixel a frame, one in two (a checkerboard turned each frame), one in 2 × 2, in 4 × 2 (the default: half the shading of a quarter for ~0.5 dB in a turn), in 4 × 4 — the others rebuilt from their fresh neighbours on the same surface, the history first
+  earthRasterScale: number; // the raster pipeline's render scale in motion (0.75 by default — with a quarter shaded: 8 to 11 ms less than the full scale at an eighth, as sharp over the Alps, ~1.5 dB softer at Tarifa; 1: the canvas's; under it, upscaled by the display — renderer.taauOn: the temporal upsampling instead —; the camera held, the full scale to refine)
+  earthRasterShading: "every" | "half" | "quarter" | "eighth" | "sixteenth"; // the raster pipeline's shading: every pixel a frame, one in two (a checkerboard turned each frame), one in 2 × 2 (the default, with the render scale at 75 %: as many shaded samples as one in eight at the full scale), in 4 × 2, in 4 × 4 — the others rebuilt from their fresh neighbours on the same surface, the history first
   earthPipeline: "trace" | "raster"; // the near Earth's primary visibility: traced (one ray a block), or the raster patch's pixels shaded one a pixel (docs/PLAN-RENDU-RASTER-AAA.md étape 1)
   earthSurface: "off" | "satellite" | "materials"; // regional Sentinel-2 / WorldCover pilot; independent of physical relief
   earthScenery: "off" | "balanced" | "high";
@@ -677,8 +677,8 @@ export function defaultSettings(): Settings {
     earthTerrainRasterLevel: 2,
     earthTerrainRasterUse: false,
     earthPipeline: "trace",
-    earthRasterShading: "eighth",
-    earthRasterScale: 1,
+    earthRasterShading: "quarter",
+    earthRasterScale: 0.75,
     earthSurface: "satellite",
     earthScenery: "balanced",
     earthSceneryShadows: true,

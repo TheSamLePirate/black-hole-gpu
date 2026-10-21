@@ -4519,8 +4519,8 @@ async function main() {
   let idleAtCap = 0; // (how long the GPU has idled with the image at the tier's pixel cap [s])
   let overAtFloor = 0; // (how long the GPU has been over budget at the coarsest block and smallest scale [s])
   let demotedAt = -Infinity; // (the last demotion [performance.now() ms]: no promotion for a minute after)
-  // (the raster pipeline's own scale in motion — earthRasterScale, its temporal upsampling bringing the image back to the
-  // canvas —; the camera held, the full one: the refinement's; null: not the raster's, the scale as the rest has it)
+  // (the raster pipeline's own scale in motion — earthRasterScale, 75 % by default, upscaled by the display —; the camera
+  // held, the full one: the refinement's; null: not the raster's, the scale as the rest has it)
   const rasterScale = (): number | null =>
     forcedScale === null && renderer.terrainRasterInspecting && settings.earthPipeline === "raster" && settings.earthRasterScale < 1
       ? heldFor > 0.4
