@@ -1,7 +1,14 @@
 import { holeFleet } from "./holefleet";
 import { streamingLead, aheadFocus, gazeLead } from "./system/streaming-focus";
 import { TerrainCache, withTerrainCache } from "./system/terrain-cache";
-import { RASTER_HINT_BINDING, RASTER_HINT_TEXTURE_LIMIT, withTerrainRaster } from "./system/terrain-raster-hint";
+import {
+  RASTER_HINT_BINDING,
+  RASTER_HINT_TEXTURE_LIMIT,
+  SUN_SHADOW_BINDING,
+  SUN_SHADOW_TEXTURE_LIMIT,
+  withSunShadow,
+  withTerrainRaster,
+} from "./system/terrain-raster-hint";
 import { TERRAIN_CACHE_MAX_LAT, TERRAIN_CACHE_VEC4S } from "./system/terrain-cache-layout";
 import { TerrainRaster } from "./system/terrain-raster";
 import { SCENERY_RASTER_LOD, SceneryRaster, type SceneryRasterLod } from "./system/scenery-raster";
@@ -43,7 +50,7 @@ import { visibleTimeout } from "./util/visible-timeout";
 import { automaticQuality, effectiveQuality, earthMapQuality } from "./quality-policy";
 import { adapterId, guessTier, rememberedLevel, tierAt, type Tier } from "./tier";
 import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
-import { PATH_CHUNK, PATH_MAX, SH_VEC4S, TABLE_LUT, TABLE_PATH, TABLE_VEC4S, TABLE_WALK, TABLE_WARP } from "./gpu-tables";
+import { PATH_CHUNK, PATH_MAX, SH_VEC4S, TABLE_LUT, TABLE_PATH, TABLE_SUN, TABLE_VEC4S, TABLE_WALK, TABLE_WARP } from "./gpu-tables";
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
 import maskWGSL from "./shaders/mask.wgsl" with { type: "text" };
 import { AERIAL_TEXTURE_LIMIT, aerialShader } from "./system/aerial";
@@ -902,6 +909,14 @@ export class Renderer {
     // (the raster patch's distances for the ground march: where the device takes the one more texture; an empty one — no
     // hint, 0 — bound otherwise)
     this.rasterHint = device.limits.maxSampledTexturesPerShaderStage >= RASTER_HINT_TEXTURE_LIMIT;
+    this.sunShadow = device.limits.maxSampledTexturesPerShaderStage >= SUN_SHADOW_TEXTURE_LIMIT;
+    if (this.sunShadow)
+      this.sunDummy = device.createTexture({
+        label: "relief shadow map: none",
+        size: [1, 1],
+        format: "depth32float",
+        usage: GPUTextureUsage.TEXTURE_BINDING,
+      });
     if (this.rasterHint)
       this.rasterDummy = device.createTexture({
         label: "raster hint: none",
@@ -940,6 +955,9 @@ export class Renderer {
         { binding: 28, visibility: C, texture: { sampleType: "uint", viewDimension: "2d-array" } },
         ...(device.limits.maxSampledTexturesPerShaderStage >= RASTER_HINT_TEXTURE_LIMIT
           ? [{ binding: RASTER_HINT_BINDING, visibility: C, texture: { sampleType: "unfilterable-float" } as GPUTextureBindingLayout }]
+          : []),
+        ...(device.limits.maxSampledTexturesPerShaderStage >= SUN_SHADOW_TEXTURE_LIMIT
+          ? [{ binding: SUN_SHADOW_BINDING, visibility: C, texture: { sampleType: "depth" } as GPUTextureBindingLayout }]
           : []),
         ...(device.limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT
           ? [{ binding: 32, visibility: C, buffer: { type: "read-only-storage" } as GPUBufferBindingLayout }]
@@ -1578,7 +1596,7 @@ export class Renderer {
         maxBufferSize: adapter.limits.maxBufferSize,
         maxTextureDimension2D: adapter.limits.maxTextureDimension2D,
         maxSampledTexturesPerShaderStage: Math.min(
-          Math.max(AERIAL_TEXTURE_LIMIT, RASTER_HINT_TEXTURE_LIMIT),
+          Math.max(AERIAL_TEXTURE_LIMIT, RASTER_HINT_TEXTURE_LIMIT, SUN_SHADOW_TEXTURE_LIMIT),
           adapter.limits.maxSampledTexturesPerShaderStage,
         ),
         maxStorageBuffersPerShaderStage: Math.min(SCENERY_STORAGE_LIMIT, adapter.limits.maxStorageBuffersPerShaderStage),
@@ -1609,9 +1627,12 @@ export class Renderer {
         seaShader(
           sceneryShader(
             surfaceShader(
-              withTerrainRaster(
-                withTerrainCache(withForest(await wgsl(traceWGSL), await wgsl(forestSource))),
-                device.limits.maxSampledTexturesPerShaderStage >= RASTER_HINT_TEXTURE_LIMIT,
+              withSunShadow(
+                withTerrainRaster(
+                  withTerrainCache(withForest(await wgsl(traceWGSL), await wgsl(forestSource))),
+                  device.limits.maxSampledTexturesPerShaderStage >= RASTER_HINT_TEXTURE_LIMIT,
+                ),
+                device.limits.maxSampledTexturesPerShaderStage >= SUN_SHADOW_TEXTURE_LIMIT,
               ),
               device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT,
             ),
@@ -2032,6 +2053,10 @@ export class Renderer {
           ]
         : []),
       ...(this.rasterHint ? [{ binding: RASTER_HINT_BINDING, resource: (raster ?? this.rasterDummy!).createView() }] : []),
+      // (the relief's shadow map: the raster's own, with its distances; a stand-in elsewhere)
+      ...(this.sunShadow
+        ? [{ binding: SUN_SHADOW_BINDING, resource: ((raster && this.terrainRaster?.sunDepth) || this.sunDummy!).createView() }]
+        : []),
     ];
   }
 
@@ -5870,6 +5895,13 @@ export class Renderer {
   private terrainRasterLevel = 2;
   /** the last camera frame shades the raster patch's pixels one a pixel (earthPipeline "raster", trace.wgsl shade) */
   private rasterPrimaryOn = false;
+  /** the relief's shadow map (terrain-raster.ts encodeSunShadow, trace.wgsl sunShadowFar): the device binds it; a switch */
+  private sunShadow = false;
+  private sunDummy: GPUTexture | null = null;
+  sunShadowOn = true;
+  private sunTableOn = false;
+  private sunOut = new Float32Array(12);
+  private sunTable = new Float32Array(20);
   /** the raster's shading rate (earthRasterShading): pixels a shaded one stands for, 1, 2 or 4 */
   private rasterRate = 1;
   /** the world's trees as raster instances (system/scenery-raster.ts), made the first time the raster pipeline has them */
@@ -5911,6 +5943,55 @@ export class Renderer {
         bind: this.device.createBindGroup({ layout: this.traceLayout, entries: this.traceEntries(t, this.ship.envBuf, tex) }),
       };
     return t.hintBind.bind;
+  }
+
+  /** half the relief's shadow map's width [m], the depth's half-range [m], the near march's reach [m] */
+  static readonly SUN_HALF_M = 10_000;
+  static readonly SUN_DEPTH_M = 20_000;
+  static readonly SUN_NEAR_M = 300;
+  /**
+   * The relief seen from the Sun (its shadow map), after this frame's patch: an orthographic view centred on the camera,
+   * the Earth's axes — the Sun's direction near.light (camera rest frame) on the body's axes — and its table entries
+   * (TABLE_SUN); off where it is not drawn.
+   */
+  private encodeSunShadow(enc: GPUCommandEncoder, drawn: boolean) {
+    const near = this.lastNear;
+    const tr = this.terrainRaster;
+    let on = false;
+    if (drawn && this.sunShadow && this.sunShadowOn && this.rasterPrimaryOn && near && tr) {
+      const L = near.axes.map((a) => a[0]! * near.light[0]! + a[1]! * near.light[1]! + a[2]! * near.light[2]!) as [number, number, number];
+      const up = patchGeodetic(near, WGS84_F).normal;
+      // (right: across the Sun and the vertical — any perpendicular when the Sun stands overhead)
+      let r = [L[1] * up[2] - L[2] * up[1], L[2] * up[0] - L[0] * up[2], L[0] * up[1] - L[1] * up[0]];
+      let rl = Math.hypot(...r);
+      if (rl < 1e-6) {
+        r = [L[1], -L[0], 0];
+        rl = Math.hypot(...r) || 1;
+      }
+      r = r.map((x) => x / rl);
+      const u = [r[1]! * L[2] - r[2]! * L[1], r[2]! * L[0] - r[0]! * L[2], r[0]! * L[1] - r[1]! * L[0]];
+      const H = Renderer.SUN_HALF_M,
+        D = Renderer.SUN_DEPTH_M;
+      this.sunOut.set([...r, H, ...u, H, ...L, D]);
+      on = tr.encodeSunShadow(
+        enc,
+        {
+          params: this.paramBuf,
+          table: this.bodyBuf,
+          elevation: this.earthMaps.elev,
+          tiles: this.earthTiles.texture,
+          sampler: this.sampler,
+        },
+        this.sunOut,
+        (label, descriptor) => this.prof.pass(label, descriptor),
+      );
+      if (on) {
+        this.sunTable.set([...r, H, ...u, H, ...L, D, 1, Renderer.SUN_NEAR_M, H * 0.98, 0, ...up, 0]);
+        this.device.queue.writeBuffer(this.bodyBuf, TABLE_SUN * 16, this.sunTable);
+      }
+    }
+    if (!on && this.sunTableOn) this.device.queue.writeBuffer(this.bodyBuf, (TABLE_SUN + 3) * 16, new Float32Array(4));
+    this.sunTableOn = on;
   }
 
   private encodeTerrainRasterVisibility(enc: GPUCommandEncoder, target: Target, s: Settings) {
@@ -5969,6 +6050,7 @@ export class Renderer {
       (label, descriptor) => this.prof.pass(label, descriptor),
       trees ? (pass) => this.sceneryRaster!.draw(pass) : undefined,
     );
+    this.encodeSunShadow(enc, drawn);
     if (drawn && trees) {
       this.paramsF[MOUTH_LIST_AT + 6] = 1;
       this.device.queue.writeBuffer(this.paramBuf, (MOUTH_LIST_AT + 4) * 4, this.paramsF.subarray(MOUTH_LIST_AT + 4, MOUTH_LIST_AT + 8));

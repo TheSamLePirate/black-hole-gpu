@@ -220,3 +220,18 @@ Tarifa, rien dans les Alpes** ; les rafraîchissements à l'arrivée des tuiles 
 fenêtre de ±2 km ne couvre guère que le sol caché par le cockpit à 700 m d'altitude : le sol visible est presque tout
 au-delà, où l'empreinte dépasse 8 m et le cache ne s'applique pas. Une cascade de niveaux (8 m, 32 m… jusqu'à des
 dizaines de km), au gain incertain, serait la suite si ce poste redevient le premier.
+
+## La carte d'ombres du relief (vue du Soleil) — fait
+
+- `terrain-raster.ts` : la portion de terrain dessinée une seconde fois **depuis le Soleil**, orthographique, dans une carte de
+  profondeur 2048² (±10 km autour de la caméra, ≈ 10 m le texel) — `terrainPoint` factorisé, `terrainSunVs`,
+  `encodeSunShadow`.
+- `trace.wgsl` : `earthTerrainShadow` marche jusqu'à 300 m (le petit relief, comme avant), lit la carte au-delà (PCF 3 × 3 ;
+  une occultation ne compte que si le relief est à plus de 300 m avant le point vers le Soleil — pas d'« acné » ni de biais à
+  régler), puis **reprend la marche là où le rayon quitte la portion** (les grandes ombres d'un Soleil bas venues de plus
+  loin). Seuls les pixels de `shade` l'utilisent ; les ombres des arbres restent tracées.
+- `withSunShadow` (`terrain-raster-hint.ts`), liaison 37, table `TABLE_SUN` (5 vec4), `renderer.sunShadowOn`.
+
+Mesuré (alterné, raster ¼, détail high/veryFar) : **Alpes au coucher du Soleil, `shade` 11,3 → 9,4 ms (−1,9 ms)**, la passe
+de la carte 0,2 ms, l'image égale (32,5 → 32,6 dB), les ombres visuellement identiques à la marche seule et à la convergée ;
+Tarifa : `shade` −1,3 ms, mais la passe raster y lit 0,9–1,3 ms (chronométrage raster peu fiable sur Apple) : net ≈ 0.

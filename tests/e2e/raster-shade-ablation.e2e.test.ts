@@ -40,6 +40,7 @@ const ABLATIONS: { name: string; tune?: Record<string, number>; settings?: strin
   { name: "pixel footprint", tune: { TUNE_RASTER_FOOT: 1 } },
   { name: "relief shadow steps 12", tune: { TUNE_SHADOW_N: 12 } },
   { name: "hint refinement 2 steps", tune: { TUNE_HINT_ITER: 2 } },
+  { name: "relief shadow reach 300 m", tune: { TUNE_SHADOW_FAR: 300 } },
   { name: "scenery balanced", settings: `{ earthScenery: "balanced" }` },
   { name: "detail reach normal", settings: `{ detailReach: "normal" }` },
 ];

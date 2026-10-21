@@ -1,5 +1,7 @@
 import { TERRAIN_CACHE_N } from "./terrain-cache-layout";
 
+/** The relief's shadow map's side [texels] (system/terrain-raster.ts encodeSunShadow, trace.wgsl sunShadowFar). */
+export const TERRAIN_SUN_N = 2048;
 /** The visibility target: r the ground's distance [m], g the scenery's instance drawn nearest (system/scenery-raster.ts),
  *  b the nearest surface's distance [m] (the ground's, or the instance's proxy in front of it). */
 export const TERRAIN_RASTER_FORMAT: GPUTextureFormat = "rgba32float";
@@ -24,7 +26,8 @@ struct U {
 @group(0) @binding(3) var<storage, read> referenceDepth: array<f32>;
 struct Vertex { @builtin(position) clip: vec4f, @location(0) p: vec3f };
 
-@vertex fn terrainVs(@location(0) vertex: vec3f) -> Vertex {
+// A grid vertex's point, camera-relative on the Earth's axes [m]
+fn terrainPoint(vertex: vec3f) -> vec3f {
   let ij = vertex.xy;
   let d = (ij - vec2f(f32(GRID_N - 1u) * 0.5)) / u.figure.w;
   // Exact trigonometric sums, with cos(d)-1 evaluated without cancellation.
@@ -56,12 +59,24 @@ struct Vertex { @builtin(position) clip: vec4f, @location(0) p: vec3f };
     h = earthHeightExactG(normal, vertex.z);
   }
   let delta = vec3f(x * u.reference.x - y * u.reference.y, x * u.reference.y + y * u.reference.x, z);
-  let p = u.origin.xyz + delta + vec3f(ca * cl, ca * sl, sa) * h;
+  return u.origin.xyz + delta + vec3f(ca * cl, ca * sl, sa) * h;
+}
+@vertex fn terrainVs(@location(0) vertex: vec3f) -> Vertex {
+  let p = terrainPoint(vertex);
   var v: Vertex;
   v.p = vec3f(dot(p, u.right.xyz), dot(p, u.up.xyz), dot(p, u.forward.xyz));
   // Infinite reversed-Z, near plane in metres, WebGPU clip depth [0,1].
   v.clip = vec4f(v.p.x / u.right.w, v.p.y / u.up.w, u.forward.w, v.p.z);
   return v;
+}
+// The relief seen from the Sun (its shadow map — trace.wgsl sunShadowFar): an orthographic view along its direction,
+// right and up over half-widths [m], the depth the distance towards the Sun over twice its half-range, nearer the Sun less
+struct Sun { right: vec4f, up: vec4f, toward: vec4f };
+@group(0) @binding(5) var<uniform> sun: Sun;
+@vertex fn terrainSunVs(@location(0) vertex: vec3f) -> @builtin(position) vec4f {
+  let p = terrainPoint(vertex);
+  let z = clamp(0.5 - dot(p, sun.toward.xyz) / (2.0 * sun.toward.w), 0.0, 1.0);
+  return vec4f(dot(p, sun.right.xyz) / sun.right.w, dot(p, sun.up.xyz) / sun.up.w, z, 1.0);
 }
 // (r: the ground's distance [m]; g: the scenery's instance drawn there — none here, the scenery's draw writes it alone, and
 // its proxy's distance over b)
@@ -142,12 +157,44 @@ export class TerrainRaster {
   private active = false;
   private reason = "compiling";
   private level = -1;
+  // the relief seen from the Sun: its depth map (trace.wgsl sunShadowFar), its pipeline, uniform and bind groups
+  readonly sunDepth: GPUTexture;
+  private sunPipe: GPURenderPipeline | null = null;
+  private sunUniform: GPUBuffer;
+  private sunBind: GPUBindGroup | null = null;
+  private sunHeightBind: GPUBindGroup | null = null;
+  private sunSources: TerrainCacheSources | null = null;
+  sunFrames = 0;
 
   constructor(
     private device: GPUDevice,
     trace: string,
   ) {
     this.module = device.createShaderModule({ code: terrainRasterShader(trace), label: "terrain raster pilot" });
+    this.sunDepth = device.createTexture({
+      label: "relief seen from the Sun",
+      size: [TERRAIN_SUN_N, TERRAIN_SUN_N],
+      format: "depth32float",
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    this.sunUniform = device.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    void device
+      .createRenderPipelineAsync({
+        layout: "auto",
+        vertex: {
+          module: this.module,
+          entryPoint: "terrainSunVs",
+          buffers: [{ arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] }],
+        },
+        primitive: { topology: "triangle-list", cullMode: "none" },
+        depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "less" },
+      })
+      .then(
+        (p) => {
+          if (!this.disposed) this.sunPipe = p;
+        },
+        (e) => this.failed(e),
+      );
     this.inspectLayout = device.createBindGroupLayout({
       entries: [
         { binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
@@ -344,6 +391,57 @@ export class TerrainRaster {
     return true;
   }
 
+  /**
+   * The patch seen from the Sun, after this frame's visibility (its mesh and heights): `sun` its orthographic view —
+   * right, up over their half-widths, the Sun's direction over the depth's half-range (vec4s; the Earth's axes, camera-
+   * relative metres). False: not drawn (compiling, nothing drawn this frame) — the shadows then marched as before.
+   */
+  encodeSunShadow(
+    enc: GPUCommandEncoder,
+    sources: TerrainCacheSources,
+    sun: Float32Array,
+    profile: (label: string, descriptor: GPURenderPassDescriptor) => GPURenderPassDescriptor,
+  ): boolean {
+    if (!this.active || !this.sunPipe || !this.uniform || !this.table || this.disposed) return false;
+    const old = this.sunSources;
+    if (!this.sunBind || !old || !(Object.keys(sources) as (keyof TerrainCacheSources)[]).every((k) => old[k] === sources[k])) {
+      this.sunBind = this.device.createBindGroup({
+        layout: this.sunPipe.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: this.uniform } },
+          { binding: 1, resource: { buffer: this.table } },
+          { binding: 5, resource: { buffer: this.sunUniform } },
+        ],
+      });
+      this.sunHeightBind = this.device.createBindGroup({
+        layout: this.sunPipe.getBindGroupLayout(1),
+        entries: [
+          { binding: 0, resource: { buffer: sources.params } },
+          { binding: 4, resource: sources.sampler },
+          { binding: 21, resource: sources.elevation.createView() },
+          { binding: 28, resource: sources.tiles.createView({ dimension: "2d-array" }) },
+        ],
+      });
+      this.sunSources = sources;
+    }
+    this.device.queue.writeBuffer(this.sunUniform, 0, sun as Float32Array<ArrayBuffer>);
+    const pass = enc.beginRenderPass(
+      profile("terrain from the Sun", {
+        colorAttachments: [],
+        depthStencilAttachment: { view: this.sunDepth.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" },
+      }),
+    );
+    pass.setPipeline(this.sunPipe);
+    pass.setBindGroup(0, this.sunBind);
+    pass.setBindGroup(1, this.sunHeightBind!);
+    pass.setIndexBuffer(this.index!, "uint32");
+    pass.setVertexBuffer(0, this.vertex!);
+    pass.drawIndexed(this.indexCount);
+    pass.end();
+    this.sunFrames++;
+    return true;
+  }
+
   /** The distances drawn this frame (rgba32float: r the ground's metres from the camera, 0 where no triangle covers a pixel;
    *  g the scenery's instance; b the nearest surface's metres), else null. */
   distanceTexture(): GPUTexture | null {
@@ -410,6 +508,8 @@ export class TerrainRaster {
     this.disposed = true;
     this.idle("disposed");
     this.uniform?.destroy();
+    this.sunDepth.destroy();
+    this.sunUniform.destroy();
     this.index?.destroy();
     this.vertex?.destroy();
     for (const a of [...this.retired, ...(this.attachments ? [this.attachments] : [])]) {

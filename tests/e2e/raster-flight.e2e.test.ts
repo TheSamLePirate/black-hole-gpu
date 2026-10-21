@@ -17,6 +17,9 @@ const PLACES: Record<string, string> = {
     __bh.game.flyAt(36.1, -5.55, 900, 200, 210);`,
   alps: `__bh.game.setDate("2026-07-10T11:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
     __bh.game.flyAt(45.85, 6.75, 2500, 110, 200);`,
+  // (a low Sun: the relief's long shadows — the shadow map's and the march's)
+  "alps-evening": `__bh.game.setDate("2026-07-10T17:45:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
+    __bh.game.flyAt(45.85, 6.75, 2500, 110, 200);`,
 };
 const MODE_SET: Record<string, string> = {
   trace6: `__bh.settings.earthPipeline = "trace"; __bh.game.set("realtimeSubsampling", 6);`,
@@ -26,6 +29,9 @@ const MODE_SET: Record<string, string> = {
   rasterhalf: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "half"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4);`,
   rasterquarter: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4);`,
   // (the trees' proxies' detail at the ¼ rate — renderer.sceneryRasterLod: the near ones' reach, their round crown's faces, the far ones')
+  // (the relief's shadow map — terrain-raster.ts encodeSunShadow — on, the default, and off: the march alone)
+  sun: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sunShadowOn = true;`,
+  nosun: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sunShadowOn = false;`,
   lod300: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sceneryRasterLod = { nearM: 300, near: "ico80", far: "ico20" };`,
   lod150: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sceneryRasterLod = { nearM: 150, near: "ico80", far: "ico20" };`,
   lod150light: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sceneryRasterLod = { nearM: 150, near: "ico20", far: "octa" };`,

@@ -22,4 +22,8 @@ export const TABLE_WALK = TABLE_PATH + PATH_MAX + PATH_MAX / PATH_CHUNK;
 /** the mountains' warp's grids (system/warp-grid.ts): their levels' nodes, one vec4 each */
 export const TABLE_WARP = TABLE_WALK + Math.ceil((65 * 65) / 4);
 export const TABLE_TERRAIN = TABLE_WARP + WARP_LEVELS * WARP_N * WARP_N;
-export const TABLE_VEC4S = TABLE_TERRAIN + TERRAIN_CACHE_VEC4S;
+/** the relief's shadow map's view from the Sun (system/terrain-raster-hint.ts withSunShadow): right, up, the Sun, the
+ *  march's split (on, near reach, the patch's radius), the camera's vertical */
+export const TABLE_SUN = TABLE_TERRAIN + TERRAIN_CACHE_VEC4S;
+export const SUN_SHADOW_VEC4S = 5;
+export const TABLE_VEC4S = TABLE_SUN + SUN_SHADOW_VEC4S;

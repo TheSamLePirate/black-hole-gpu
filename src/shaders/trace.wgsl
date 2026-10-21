@@ -196,6 +196,8 @@ override COST_VIEW: u32 = 0u;
 override TUNE_AIR_N: u32 = 32u;
 override TUNE_SHADOW_N: u32 = 48u;
 override TUNE_SHADOW_K: f32 = 1.18;
+// (the relief's shadow march's reach [m]: beyond it, the ground is taken as lit — a measure of what its far steps cost)
+override TUNE_SHADOW_FAR: f32 = 1e9;
 // (the relief's shadows: a step at least this share of the ray's clearance over the ground — 0: the growth alone)
 override TUNE_SHADOW_RELAX: f32 = 0.3;
 // (the realtime geodesics' tolerance far from the hole: × this beyond 20 M, × 1 within 10 M — the photon sphere's rays
@@ -5451,6 +5453,13 @@ fn earthNormalAt(q: vec3f, foot: f32) -> vec3f {
 // steps growing by a sixth (by a third, a grazing Sun's ray stepped over the crests between them: lit lines
 // across the shade), softened by how close the ray passes over the ground (a penumbra); foot [m]
 fn earthTerrainShadow(p: vec3f, Ls: vec3f, foot: f32) -> f32 {
+  // (the raster's pixels — shade —: the march to the near reach, the relief's shadow map past it, the march resumed where
+  // the Sun's ray leaves the map's patch — terrain-raster-hint.ts withSunShadow)
+  var far = vec3f(-1.0, 0.0, 0.0);
+  if (SHADOW_REL_ON) { far = sunShadowFar(SHADOW_REL); }
+  if (far.x == 0.0) { return 0.0; }
+  let reach = select(1e30, far.z, far.x > 0.0);
+  var resumed = far.x < 0.0;
   let p0 = p * (1.0 + 2.0 / EARTH_RM);
   // (the march's heights are coarser than the ground drawn: measured from their own ground here — else
   // where they stand a metre above it the point is inside its own relief, black patches under a high sun)
@@ -5463,7 +5472,11 @@ fn earthTerrainShadow(p: vec3f, Ls: vec3f, foot: f32) -> f32 {
     let x = p0 + Ls * (t / EARTH_RM);
     let r = length(x);
     let hr = (r - 1.0) * EARTH_RM;
-    if (hr > earthTop()) { break; }
+    if (hr > earthTop() || t > TUNE_SHADOW_FAR) { break; }
+    if (!resumed && t > reach) {
+      resumed = true;
+      if (far.y > t) { t = far.y; continue; }
+    }
     // (+0.5 % of the distance: the march's heights, from coarser levels farther, a few metres off the
     // ground drawn)
     let clear = hr - earthHeightStep(x / r, max(0.05 * t, foot)) + bias;
@@ -5475,7 +5488,7 @@ fn earthTerrainShadow(p: vec3f, Ls: vec3f, foot: f32) -> f32 {
     // growth's small steps over it; the penumbra's least ratio taken where the ground comes near)
     t = max(t * TUNE_SHADOW_K, t + TUNE_SHADOW_RELAX * clear);
   }
-  return sh;
+  return select(sh, min(sh, far.x), far.x >= 0.0);
 }
 
 // The ray (its axes, radii) against the relief: marched from the relief's bounding shell, steps a
@@ -5530,6 +5543,14 @@ fn terrainRasterHint(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterId(px: vec2f) -> u32 { return 0u; }
 fn terrainRasterDepth(px: vec2f) -> f32 { return 0.0; }
 // END_TERRAIN_RASTER
+// BEGIN_SUN_SHADOW (system/terrain-raster-hint.ts withSunShadow supplies the relief's shadow map's lookup)
+fn sunShadowFar(rel: vec3f) -> vec3f { return vec3f(-1.0, 0.0, 0.0); }
+// END_SUN_SHADOW
+// (shade's ground point from the camera, the Earth's axes [m] — the relief's shadow map's lookup —, set by earthNear)
+var<private> SHADOW_REL: vec3f = vec3f(0.0);
+var<private> SHADOW_REL_ON: bool = false;
+// (shade's own rays: their ground point handed to the relief's shadow map)
+var<private> RASTER_SHADE: bool = false;
 // the raster patch's distance [m] along this sample's ray, 0 where it does not cover it (main sets it)
 var<private> RHINT: f32 = 0.0;
 // The raster's primary visibility (earthPipeline "raster", docs/PLAN-RENDU-RASTER-AAA.md étape 1): the pixels the patch
@@ -7474,9 +7495,12 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   WX_Q = normalize(ro);
   EARTH_SHADOW_POINT=look*(max(t,0.0)/m*P.near4.w);
   EARTH_SHADOW_ON = true;
+  SHADOW_REL = toBody(look) * (max(t, 0.0) / m * P.near4.w);
+  SHADOW_REL_ON = RASTER_SHADE && t > 0.0;
   let e = earthLook(k, ro, rd, t, normalize(squashed(toBody(lt.dir), ab)), lt.e, squashed(toBody(P.camRight.xyz), ab), squashed(toBody(P.camUp.xyz), ab),
     0.0, pixFoot(), fract(rnd * 7.31 + 0.37), P.earth4.w > 0.5);
   EARTH_SHADOW_ON = false;
+  SHADOW_REL_ON = false;
   AP_UV = vec2f(-1.0);
   SEA_ON = false;
   WX_W = 0.0;
@@ -8547,6 +8571,7 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   RASTER_ID = terrainRasterId(centre);
   if (terrainRasterHint(centre) <= 0.0 && RASTER_ID == 0u) { return; }
   RASTER_SCENERY = P.mouthList[1].z > 0.5;
+  RASTER_SHADE = true;
   // (under the cockpit's mask: the cabin there)
   if (moments[idx].x < -0.5 && moments[idx].x > -1.5) { return; }
   let flags = P.frame.z;
@@ -8572,6 +8597,7 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   RHINT = 0.0;
   RASTER_ID = 0u;
   RASTER_SCENERY = false;
+  RASTER_SHADE = false;
   AP_UV = vec2f(-1.0);
   if (e.t <= 0.0) { return; }
   var col = e.col;
