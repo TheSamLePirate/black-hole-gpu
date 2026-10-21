@@ -3,6 +3,8 @@
 // atmosphere's rim, the stars behind. Over both: the zones, the trail coloured by height, the path predicted with its
 // minutes, the plan, every unit about (the real traffic, a mission's, the ships) and the players — their labels never
 // covering one another.
+import { drawFields } from "../../world/runwaydraw";
+import { fieldShown, fieldsNear } from "../../world/runways";
 import coastlines from "../coastlines.json";
 import { C, D, fmt, Labels, type Pen, ramp, SIDE, unitSymbol, type Point, type Rect } from "./kit";
 import { LAND } from "./land";
@@ -199,6 +201,23 @@ export function drawGeo(p: Pen, r: Rect, sc: Scene, v: GeoView) {
     vg.addColorStop(1, "#000000a0");
     c.fillStyle = vg;
     c.fillRect(r.x, r.y, W, H);
+  }
+  // the world's airfields (src/world/runways.ts — PLAN-RADAR-AAA RD11): the map's level of detail, about its centre
+  if (earth && !v.globe) {
+    const reach = (Math.max(W, H) / 2) * mpp;
+    drawFields(c, fieldsNear(v.lat, v.lon, reach * 1.2, (f) => fieldShown(f, reach)).slice(0, 300), {
+      at,
+      mpp,
+      labels: true,
+      marked: new Set((sc.snap?.route ?? []).map((q) => q.name.toUpperCase())),
+      box: r,
+    });
+  } else if (earth && v.globe && R > 3000) {
+    drawFields(c, fieldsNear(v.lat, v.lon, (6.371e6 * 2) / Math.max(R / 400, 1), (f) => f.kind === "large").slice(0, 200), {
+      at,
+      mpp,
+      labels: false,
+    });
   }
   // the zones
   for (const z of sc.zones) {

@@ -5,6 +5,8 @@
 // flight controls (the surfaces as they stand), the engine, the fuel, the STOVL, the navigation, the standby
 // attitude, the checklists. Pure drawing from a PcdData — no state of the flight read here.
 
+import { drawFields } from "../world/runwaydraw";
+import { type Airfield, fieldShown } from "../world/runways";
 import { drawSym, PAL, type SymSide, symColour } from "../radar/symbols";
 import { PCD_H, PCD_W } from "./pcd-size";
 import { type Units, type UnitSys, unitsOf } from "../ui/unitsys";
@@ -143,6 +145,8 @@ export interface PcdData {
   /** the missiles in flight (a fight's — the DAS sees their motors): heading up as the radar's contacts (x right, y
    *  ahead, dz above [m]), the ones at us */
   missiles?: { x: number; y: number; dz: number; atUs: boolean; trk?: number | null }[];
+  /** the world's airfields about the craft (src/world/runways.ts — PLAN-RADAR-AAA RD11), the nearest first */
+  world?: Airfield[];
   /** the craft's trace and the path ahead (controller/owntrack.ts — PLAN-RADAR-AAA RD15) */
   trail?: { lat: number; lon: number }[];
   pred?: { lat: number; lon: number; t: number }[];
@@ -1006,23 +1010,20 @@ export class Pcd {
           "center",
         );
     }
-    // the airfields: their runway (4.5 km) and their names
-    for (const f of d.fields) {
-      const [x, y] = where(f.lat, f.lon);
-      if (Math.abs(x - cx) > r.w || Math.abs(y - cy) > r.h * 1.4) continue;
-      g.strokeStyle = C.cyan;
-      g.lineWidth = 4;
-      const h = (f.rwy ?? 0) * D - d.heading;
-      const L = Math.max(4500 * px, 8);
-      g.beginPath();
-      g.moveTo(x, y);
-      g.lineTo(x + Math.sin(h) * L, y - Math.cos(h) * L);
-      g.stroke();
-      g.beginPath();
-      g.arc(x, y, 7, 0, 2 * Math.PI);
-      g.stroke();
-      if (!this.declutter) this.text(f.icao ?? f.name.slice(0, 6), x + 14, y + 18, C.cyan, 22);
-    }
+    // the world's airfields (src/world/runways.ts — PLAN-RADAR-AAA RD11): by the range's level of detail — their
+    // runways at scale where they show, a dot farther —, the codes but decluttered
+    const R0 = this.range * this.u.distM;
+    drawFields(
+      g,
+      (d.world ?? []).filter((f) => fieldShown(f, R0)),
+      {
+        at: (la, lo) => where(la, lo),
+        mpp: 1 / px,
+        k: 2,
+        labels: !this.declutter,
+        box: { x: r.x, y: r.y, w: r.w, h: r.h },
+      },
+    );
     // a mission's places: the zones to reach (amber, the waiting dashed), the SAMs' reach (red, dashed)
     for (const m of d.marks ?? []) {
       const [x, y] = where(m.lat, m.lon);

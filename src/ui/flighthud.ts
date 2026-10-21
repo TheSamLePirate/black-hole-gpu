@@ -208,6 +208,8 @@ export interface FlightHudActions {
   jetMap?(): import("./jetmap").JetMapData | null;
   /** a track clicked on the tactical map: selected (null: the selection let go) */
   selectTrack?(id: string | null): void;
+  /** an airfield's card on the tactical map: flown direct, added to the flight plan (RD11) */
+  fieldAction?(action: "direct" | "add", f: import("../world/runways").Airfield): void;
   /** the flown craft's tank filled from a docked craft (controller/refuel.ts) */
   refuel?(): void;
   /** the HUD's kind: the next of automatic, atmosphere, space, approach (⇧²) */
@@ -1363,6 +1365,7 @@ export class FlightHud {
     if (tab === "globe" || tab === "map" || tab === "tac") this.mapTab = tab;
     this.jetMap = new JetMap(this.s);
     this.jetMap.onSelect = (id) => this.act.selectTrack?.(id);
+    this.jetMap.onField = (a, f) => this.act.fieldAction?.(a, f);
     this.ground = new GroundTrack(this.s);
     this.ground.realWeather = () => this.mapWeather.real();
     this.ground.dayMosaic = () => this.mapWeather.mosaic();

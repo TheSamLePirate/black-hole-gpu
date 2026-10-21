@@ -1018,6 +1018,20 @@ body.mobile.portrait .fl-hubcard { left: 50%; bottom: calc(100% + 4px); transfor
   border: 1px solid rgba(160, 210, 255, 0.2);
 }
 .jm-bar button:hover { border-color: var(--hud-amber); color: #fff; }
+.jm-card {
+  position: absolute; left: 6px; top: 6px; max-width: calc(100% - 50px); z-index: 3; padding: 6px 8px; border-radius: 6px;
+  background: rgba(6, 12, 22, 0.92); border: 1px solid rgba(160, 210, 255, 0.35); color: #e6f2fb; font: 600 11px var(--hud-font);
+}
+.jm-card[hidden] { display: none; }
+.jm-card-code { font: 700 13px var(--hud-font); letter-spacing: 0.08em; color: #9fe6ff; }
+.jm-card-name { font-size: 11px; color: #d6e6f2; margin-bottom: 3px; }
+.jm-card-row { font: 500 10px "JetBrains Mono", monospace; color: #b9cad8; }
+.jm-card-acts { display: flex; gap: 4px; margin-top: 5px; }
+.jm-card-acts button {
+  all: unset; cursor: pointer; padding: 2px 7px; border-radius: 4px; font: 700 10px var(--hud-font); letter-spacing: 0.08em;
+  border: 1px solid rgba(255, 92, 225, 0.6); color: #ffd6f6; background: rgba(60, 10, 50, 0.6);
+}
+.jm-card-acts .jm-card-x { border-color: rgba(160, 210, 255, 0.3); color: #cfe3f2; background: transparent; margin-left: auto; }
 .jm-credit { position: absolute; right: 4px; bottom: 2px; font: 9px var(--hud-font); color: rgba(200, 215, 230, 0.6); pointer-events: none; }
 /* (the F-35's cockpit — a bare view —: its tactical map kept, the rest of the panels hidden) */
 .fl-root[data-view="bare"][data-craft="jet"]:not(.mapview) > .fl-right:has(.fl-mapbody.tac) { display: flex !important; }

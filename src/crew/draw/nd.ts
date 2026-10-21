@@ -1,6 +1,8 @@
 // The navigation display: the compass's arc (heading up) or rose (north up), the plan's legs and points, the path
 // predicted, the descent's top, the wind, and everything about — the players, the real traffic (TCAS's diamonds and
 // their relative heights), a mission's units, the ships, the zones, the pilot's own radar tracks.
+import { drawFields } from "../../world/runwaydraw";
+import { fieldShown, fieldsNear } from "../../world/runways";
 import { relative } from "../model";
 import { C, clamp, D, deg360, dur, fmt, Labels, type Pen, polar, SIDE, TAU, unitSymbol, type Point, type Rect } from "./kit";
 import type { Scene } from "./scene";
@@ -58,6 +60,14 @@ export function drawNd(p: Pen, r: Rect, sc: Scene, o: NdOpts): { cx: number; cy:
       align: "right",
     });
   }
+  // the world's airfields (src/world/runways.ts — RD11): the ND's range's level of detail
+  if (geo)
+    drawFields(c, fieldsNear(geo.lat, geo.lon, o.range * 1.1, (f) => fieldShown(f, o.range)).slice(0, 80), {
+      at,
+      mpp: 1 / k,
+      labels: true,
+      marked: new Set((snap?.route ?? []).map((q) => q.name.toUpperCase())),
+    });
   // the mission's zones, the SAMs' reach
   for (const z of sc.zones) {
     const q = at(z.lat, z.lon);

@@ -69,6 +69,33 @@ describe.skipIf(!E2E)("the tactical map", () => {
     expect(await a.js<string | null>(`localStorage.getItem("kerr.map-size")`)).not.toBeNull();
   }, 30_000);
 
+  test("the world's airfields: over Paris, LFPG and LFPB on the map; LFPG's card, added to the plan; KSFO by its code (RD11, RD13)", async () => {
+    await a.js(`(() => { __bh.game.flyAt(48.95, 2.45, 2000, 90, 200); const c = __bh.camera;
+      if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr"); const m = __bh.flight.hud.tacMap; m.range = 3; return 1; })()`);
+    await a.waitFor(`["LFPG", "LFPB"].every((k) => __bh.flight.hud.tacMap.fieldHitsNow().some((h) => h.code === k))`, 30_000);
+    const h = await a.js<{ code: string; x: number; y: number }>(`__bh.flight.hud.tacMap.fieldHitsNow().find((h) => h.code === "LFPG")`);
+    const m = (await box(a, "[data-testid=jetmap] canvas"))!;
+    await a.js(`(() => { __bh.camera.nav.route.wps.length = 0; return 1; })()`);
+    await a.mouse("move", m.x + h.x, m.y + h.y);
+    await a.mouse("down", m.x + h.x, m.y + h.y);
+    await a.mouse("up", m.x + h.x, m.y + h.y);
+    await a.waitFor(`!document.querySelector("[data-testid=jm-card]").hidden`, 3000);
+    const card = await a.js<string>(`document.querySelector("[data-testid=jm-card]").textContent`);
+    console.log(`  LFPG's card: ${card.slice(0, 160)}`);
+    expect(card).toContain("LFPG");
+    expect(card).toMatch(/09L|08L|27R|26R/);
+    await a.click(`[data-testid=jm-add]`);
+    await a.waitFor(`__bh.camera.nav.route.wps.some((w) => w.name === "LFPG")`, 10_000);
+    // (any airfield of the world by its code: San Francisco)
+    const r = await a.js<{ name: string; lat: number; lon: number } | null>(`(async () => {
+      const T = __bh.tars.tools().find((x) => x.name === "flight_plan"); await T.run({ action: "add", query: "KSFO" });
+      const w = __bh.camera.nav.route.wps.find((w) => w.name === "KSFO"); return w ? { name: w.name, lat: w.lat, lon: w.lon, field: w.field } : null; })()`);
+    console.log(`  KSFO: ${JSON.stringify(r)}`);
+    expect(r).not.toBeNull();
+    expect(Math.abs(r!.lat - 37.62)).toBeLessThan(0.05);
+    if (shots) await a.shot(`${shots}/jetmap-paris.png`);
+  }, 120_000);
+
   test("in a room: Ben's F-35 on Ana's tactical map, clicked there: selected", async () => {
     await a.js(`__bh.net.create("Map")`);
     await a.waitFor(`!!__bh.net.net?.room`, 20_000);

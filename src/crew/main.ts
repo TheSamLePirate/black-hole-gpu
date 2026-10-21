@@ -1,3 +1,4 @@
+import { runwaysEvents, setRunwaysBase } from "../world/runways";
 import { NetClient } from "../net/client";
 import { isCode, normCode } from "../net/proto";
 import { serverUrl } from "../net/load";
@@ -2269,6 +2270,9 @@ langPick.addEventListener("change", () => setLang(langPick.value === "en" ? "en"
 applyStatic();
 langButton.textContent = lang() === "fr" ? "EN" : "FR";
 langPick.value = lang();
+// (the world's runways — PLAN-RADAR-AAA RD11 —: from the simulator's site, one level up; a tile in, the views redrawn)
+setRunwaysBase(new URL("../runways/v1/", location.href).href);
+runwaysEvents.onLoad = () => views.request();
 Object.assign(window, { __crew: { net, model, views, radio, actions, join, setView, lang, setLang } });
 setUnits(views.units);
 setProfile("jet");

@@ -2732,6 +2732,20 @@ async function main() {
       const said = camera.pictureSelect(id);
       if (said) panel.toast(said);
     },
+    // (an airfield's card on the tactical map: to the flight plan — the tool's add, by its code anywhere in the
+    // world —, flown direct to it at once if asked)
+    fieldAction: (action, f) => {
+      const T = tarsTools.find((x) => x.name === "flight_plan");
+      if (!T) return;
+      const code = f.icao || f.ident;
+      const at = action === "direct" ? (camera.nav.last.l?.active ?? 0) : undefined;
+      void Promise.resolve(
+        T.run({ action: "add", query: code, ...(at !== undefined ? { index: at } : {}) } as never, new AbortController().signal),
+      )
+        .then(() => (action === "direct" ? T.run({ action: "direct", index: at } as never, new AbortController().signal) : null))
+        .then(() => panel.toast(action === "direct" ? tf("Direct {0}", code) : tf("{0} added to the flight plan", code)))
+        .catch((e) => panel.toast(String((e as Error).message ?? e)));
+    },
     hold: pilotHold,
     auto: pilotAuto,
     sas: pilotSas,

@@ -13,6 +13,8 @@ import type { PicTrack } from "../radar/picture";
 import { drawSym, PAL, type SymSide, sideFor } from "../radar/symbols";
 import type { Settings } from "../settings";
 import { unitsFor } from "./unitsys";
+import { drawFields } from "../world/runwaydraw";
+import { type Airfield, fieldShown, fieldsNear, RUNWAYS_CREDIT, runwaysEvents } from "../world/runways";
 
 /** What the map draws (main.ts gathers it from the controller). */
 export interface JetMapData {
@@ -34,8 +36,6 @@ export interface JetMapData {
 /** The range's steps: the centre to the nearer edge [km]. */
 export const JETMAP_RANGES = [2, 5, 10, 20, 40, 80, 160, 320] as const;
 
-const D = Math.PI / 180;
-
 /** The altitude's colour on the trace [m]: low warm, high cold. */
 function altColour(h: number): string {
   const k = Math.max(0, Math.min(1, h / 12_000));
@@ -44,6 +44,16 @@ function altColour(h: number): string {
     b = Math.round(70 + 185 * k);
   return `rgb(${r}, ${g}, ${b})`;
 }
+
+/** A runway's surface, said. */
+const SURF: Record<string, () => string> = {
+  paved: () => t("paved"),
+  grass: () => t("grass"),
+  dirt: () => t("dirt"),
+  water: () => t("water"),
+  snow: () => t("snow"),
+  unknown: () => t("unknown surface"),
+};
 
 export class JetMap {
   readonly stage: HTMLDivElement;
@@ -57,6 +67,11 @@ export class JetMap {
   private hits: { id: string; x: number; y: number }[] = [];
   /** a track clicked (PLAN-RADAR-AAA RD9): null, the void */
   onSelect: (id: string | null) => void = () => {};
+  /** an airfield's card's action (RD11): flown direct, added to the plan */
+  onField: (action: "direct" | "add", f: Airfield) => void = () => {};
+  /** where each airfield was drawn [CSS px], for the clicks */
+  private fieldHits: { f: Airfield; x: number; y: number }[] = [];
+  private card: HTMLDivElement;
   private last: JetMapData | null = null;
   private wheelAcc = 0;
 
@@ -68,7 +83,11 @@ export class JetMap {
     this.cv.className = "jm-cv";
     this.credit = document.createElement("div");
     this.credit.className = "jm-credit";
-    this.credit.textContent = TILE_CREDIT;
+    this.credit.textContent = `${TILE_CREDIT} · ${RUNWAYS_CREDIT}`;
+    this.card = document.createElement("div");
+    this.card.className = "jm-card";
+    this.card.dataset.testid = "jm-card";
+    this.card.hidden = true;
     const bar = document.createElement("div");
     bar.className = "jm-bar";
     const btn = (label: string, tip: string, id: string, f: () => void) => {
@@ -99,8 +118,13 @@ export class JetMap {
       if (Number.isInteger(r) && r >= 0 && r < JETMAP_RANGES.length) this.range = r;
     } catch {}
     up.textContent = this.northUp ? "N" : t("HDG");
-    this.stage.append(this.cv, bar, this.credit);
+    this.stage.append(this.cv, bar, this.credit, this.card);
     this.tiles.onLoad = () => this.draw(this.last);
+    const was = runwaysEvents.onLoad;
+    runwaysEvents.onLoad = (k) => {
+      was(k);
+      this.draw(this.last);
+    };
     // (the wheel: the range's steps — the event kept from the view: the camera's field never moves under the map)
     this.stage.addEventListener(
       "wheel",
@@ -131,9 +155,72 @@ export class JetMap {
         const d = Math.hypot(h.x - x, h.y - y);
         if (d < bd) (bd = d), (best = h.id);
       }
+      // (no track there: an airfield's card — RD11)
+      if (!best) {
+        let bf: Airfield | null = null,
+          df = 14;
+        for (const h of this.fieldHits) {
+          const d = Math.hypot(h.x - x, h.y - y);
+          if (d < df) (df = d), (bf = h.f);
+        }
+        if (bf) return this.showCard(bf);
+      }
+      this.card.hidden = true;
       this.onSelect(best);
     });
     this.cv.addEventListener("pointerdown", (e) => e.stopPropagation());
+  }
+
+  /** An airfield's card: its codes, name, town, elevation, runways (their names, lengths, surfaces), its actions. */
+  private showCard(f: Airfield) {
+    const U = unitsFor(this.s);
+    const c = this.card;
+    c.replaceChildren();
+    const row = (t: string, cls: string) => {
+      const d = document.createElement("div");
+      d.className = cls;
+      d.textContent = t;
+      c.append(d);
+    };
+    row(`${f.icao || f.ident}${f.iata ? ` · ${f.iata}` : ""}`, "jm-card-code");
+    row(`${f.name}${f.city ? ` — ${f.city}` : ""}`, "jm-card-name");
+    row(`${t("Elevation")} ${Math.round(U.alt(f.elev))} ${U.altName}`, "jm-card-row");
+    for (const w of f.runways.slice(0, 6))
+      row(
+        `${w.le}/${w.he} · ${Math.round(U.alt(w.len))} ${U.altName} · ${(SURF[w.surface] ?? SURF.unknown!)()}${w.lit ? " · ☼" : ""}${w.approx ? " ≈" : ""}`,
+        "jm-card-row",
+      );
+    const acts = document.createElement("div");
+    acts.className = "jm-card-acts";
+    for (const [a, label] of [
+      ["direct", t("Direct")],
+      ["add", t("Add to the plan")],
+    ] as const) {
+      const b = document.createElement("button");
+      b.textContent = label;
+      b.dataset.testid = `jm-${a}`;
+      b.onclick = (e) => {
+        e.stopPropagation();
+        this.onField(a, f);
+        c.hidden = true;
+      };
+      acts.append(b);
+    }
+    const x = document.createElement("button");
+    x.textContent = "×";
+    x.className = "jm-card-x";
+    x.onclick = (e) => {
+      e.stopPropagation();
+      c.hidden = true;
+    };
+    acts.append(x);
+    c.append(acts);
+    c.hidden = false;
+  }
+
+  /** Where each airfield was drawn [CSS px] (tests). */
+  fieldHitsNow() {
+    return this.fieldHits.map((h) => ({ code: h.f.icao || h.f.ident, x: h.x, y: h.y }));
   }
 
   /** Where a track would be clicked [CSS px on the canvas] (tests). */
@@ -211,25 +298,19 @@ export class JetMap {
     c.font = "700 11px Rajdhani, sans-serif";
     c.textAlign = "center";
     c.fillText("N", nx, ny + 4);
-    // the airfields: their runways at scale (a short bar at least), their names near
-    for (const f of d.fields) {
-      const [x, y] = at(f.lat, f.lon);
-      if (x < -20 || x > w + 20 || y < -20 || y > h + 20) continue;
-      const L = Math.max((f.len ?? 3000) / mpp, 8);
-      const a = (f.rwy ?? 0) * D + rot;
-      c.strokeStyle = "#5fd2ff";
-      c.lineWidth = 3;
-      c.beginPath();
-      c.moveTo(x - (Math.sin(a) * L) / 2, y + (Math.cos(a) * L) / 2);
-      c.lineTo(x + (Math.sin(a) * L) / 2, y - (Math.cos(a) * L) / 2);
-      c.stroke();
-      if (this.range >= 2) {
-        c.fillStyle = "rgba(150, 220, 255, 0.85)";
-        c.font = "600 10px Rajdhani, sans-serif";
-        c.textAlign = "left";
-        c.fillText(f.name.slice(0, 14), x + 7, y - 6);
-      }
-    }
+    // the world's airfields (src/world/runways.ts — RD11): by the range's level of detail, the nearest first; the
+    // flight plan's magenta
+    const marked = new Set(d.route.map((p) => p.name.toUpperCase()));
+    this.fieldHits = [];
+    const fields = fieldsNear(d.lat, d.lon, R * 1.5, (f) => fieldShown(f, R));
+    drawFields(c, fields.slice(0, 400), {
+      at: (la, lo) => at(la, lo),
+      mpp,
+      labels: true,
+      marked,
+      box: { x: 0, y: 0, w, h },
+      hit: (f, x, y) => this.fieldHits.push({ f, x, y }),
+    });
     // the flight plan: its legs in magenta, the active point ringed
     if (d.route.length) {
       c.strokeStyle = "rgba(255, 92, 225, 0.85)";

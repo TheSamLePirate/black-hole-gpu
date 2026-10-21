@@ -23,6 +23,8 @@ import type { HudKind } from "../../game/hudkind";
 import type { InterceptCues } from "../../game/intercept";
 import { unitsFor } from "../unitsys";
 import { drawSym, PAL, type SymSide, symColour } from "../../radar/symbols";
+import { drawFields } from "../../world/runwaydraw";
+import { fieldShown, fieldsNear } from "../../world/runways";
 import { drawApproachHud, drawSpaceHud, type ApproachHudInfo, type SpaceHudInfo } from "./kindhud";
 import { t, tf } from "../../i18n";
 
@@ -2769,6 +2771,33 @@ function drawRadar(
     const f = out ? rad / d : 1;
     return [cx + x * k * f, cy - y * k * f, out];
   };
+  // the world's airfields (PLAN-RADAR-AAA RD11): the scope's level of detail — at its ranges the big ones, their
+  // runways at scale once they show —, heading up as the tracks
+  const RL = F.i.relief;
+  if (RL) {
+    const D0 = Math.PI / 180;
+    const ch = Math.cos(RL.hdg),
+      sh = Math.sin(RL.hdg);
+    const toScope = (la: number, lo: number): [number, number] | null => {
+      const e = (lo - RL.lon) * 111_195 * Math.cos(RL.lat * D0),
+        n = (la - RL.lat) * 111_195;
+      const x = e * ch - n * sh,
+        y = e * sh + n * ch;
+      const [px, py, out] = at(x, y);
+      return out ? null : [px, py];
+    };
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad, 0, 2 * Math.PI);
+    ctx.clip();
+    drawFields(ctx, fieldsNear(RL.lat, RL.lon, range, (f) => fieldShown(f, range * 2.5)).slice(0, 60), {
+      at: toScope,
+      mpp: 1 / k,
+      k: dpr * 0.9,
+      labels: range <= 40_000,
+    });
+    ctx.restore();
+  }
   // gates: a bar across the way they are flown, numbered
   for (const g of gates ?? []) {
     const [px, py] = at(g.x, g.y);

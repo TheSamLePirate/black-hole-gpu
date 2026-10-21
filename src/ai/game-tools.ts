@@ -12,6 +12,7 @@
 // a load, a deletion, a teleport, the date, a scene — the game is saved as "Before TARS"; undo goes back.
 // Every result is short, and carries what the game said (its toasts) since the call.
 
+import { type Airfield, fieldByCode } from "../world/runways";
 import { KNOWLEDGE_PAGES, type KnowledgeLang, type KnowledgePage, readKnowledge, searchKnowledge } from "./knowledge";
 import type { MissionSpec } from "../game/mission";
 import { completeMission, type MissionPatch, patchMission, type Resolver, type Sketch } from "../game/missionedit";
@@ -2199,11 +2200,17 @@ export function gameTools(h: GameHost): Tool[] {
             return view();
           case "add": {
             let p: { name: string; lat: number; lon: number } | null = null;
+            let worldField: Airfield | null = null;
             if (a.query !== undefined) {
               const q = String(a.query);
               const site = SITES.find((s) => s.body === "earth" && (s.icao?.toLowerCase() === q.toLowerCase() || fold(s.name) === fold(q)));
+              // (any airfield of the world by its code — OurAirports', PLAN-RADAR-AAA RD13)
+              const world = site || !/^[A-Za-z0-9-]{2,7}$/.test(q.trim()) ? null : await fieldByCode(q);
               if (site) p = { name: site.icao ?? site.name, lat: site.lat, lon: site.lon };
-              else {
+              else if (world) {
+                p = { name: world.icao || world.ident, lat: world.lat, lon: world.lon };
+                worldField = world;
+              } else {
                 const hit = (await h.atlas?.search(q, "earth"))?.[0];
                 if (!hit) throw new Error(`nothing found for "${q}"`);
                 p = { name: hit.name.slice(0, 12), lat: hit.lat, lon: hit.lon };
@@ -2211,7 +2218,11 @@ export function gameTools(h: GameHost): Tool[] {
             } else if (a.lat !== undefined && a.lon !== undefined)
               p = { name: `WP${String(R.wps.length + 1).padStart(2, "0")}`, lat: Number(a.lat), lon: Number(a.lon) };
             if (!p) throw new Error("add needs a query or lat/lon");
-            const field = SITES.find((s) => s.body === "earth" && s.runway && Math.hypot(s.lat - p!.lat, s.lon - p!.lon) < 0.02);
+            const site = SITES.find((s) => s.body === "earth" && s.runway && Math.hypot(s.lat - p!.lat, s.lon - p!.lon) < 0.02);
+            // (a world airfield: its longest paved runway's — the approach's, the descent's)
+            const wr = worldField?.runways.filter((w) => w.surface === "paved").sort((x, y) => y.len - x.len)[0];
+            const field =
+              site ?? (worldField && wr ? { icao: worldField.icao || worldField.ident, elev: worldField.elev, rwy: wr.hdg } : null);
             const wp = {
               ...p,
               ...(a.altM !== undefined ? { alt: Number(a.altM) } : {}),

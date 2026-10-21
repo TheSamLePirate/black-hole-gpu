@@ -34,4 +34,15 @@ export default {
   "Heading up or north up": "Cap en haut ou nord en haut",
   "NORTH UP": "NORD EN HAUT",
   "HDG UP": "CAP EN HAUT",
+  // (the world's airfields — RD11)
+  Elevation: "Altitude",
+  "Add to the plan": "Ajouter au plan",
+  paved: "revêtue",
+  grass: "herbe",
+  dirt: "terre",
+  water: "eau",
+  snow: "neige",
+  "unknown surface": "surface inconnue",
+  "Direct {0}": "Direct {0}",
+  "{0} added to the flight plan": "{0} ajouté au plan de vol",
 } satisfies Record<string, string>;
