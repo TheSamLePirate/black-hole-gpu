@@ -351,6 +351,16 @@ export class FlightHud {
   mapGpu: { device: GPUDevice; textures(): import("./map3d/gpu").MapTextures | null } | null = null;
 
   /** Why an autopilot cannot be engaged now (the hub's own reason), "" when it can. */
+  /** The tactical map's range now [km] (its path ahead fitted to it). */
+  tacRangeKm(): number {
+    return this.jetMap?.rangeKm ?? 20;
+  }
+
+  /** The tactical map (tests: its hits, its range). */
+  get tacMap() {
+    return this.jetMap;
+  }
+
   /** The track drawn under a click (CSS px on the view — PLAN-RADAR-AAA RD9): on the HUD's scope, in the view; the
    *  nearest within its reach, else null. */
   pickTrack(x: number, y: number): string | null {
@@ -1911,9 +1921,11 @@ export class FlightHud {
         if (!jet) tasks.push(["orbit", 10, () => cpuProf.time("HUD: orbit panel", () => this.drawPotential(info))]);
       }
       // (the full-screen map, or its animation, every frame; the ground track: the globe dragged)
-      if (bare) {
+      // (the F-35's cockpit — a bare view —: its tactical map drawn still)
+      const tacShown = this.mapBody?.classList.contains("tac") || (this.syncMapTab(), this.mapBody?.classList.contains("tac"));
+      if (bare && !(jet && tacShown)) {
         // (the mini-map's panel hidden: nothing to draw)
-      } else if (this.mapBody?.classList.contains("tac") || (this.syncMapTab(), this.mapBody?.classList.contains("tac"))) {
+      } else if (tacShown) {
         // (the tactical map: ten times a second — PLAN-RADAR-AAA RD15)
         tasks.push(["map", 10, () => cpuProf.time("HUD: tactical map", () => this.jetMap.draw(this.act.jetMap?.() ?? null))]);
       } else if (this.syncMapTab()) {

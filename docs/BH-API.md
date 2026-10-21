@@ -1516,6 +1516,12 @@ Selects a track on all the pilot's screens (`null`: none).
 What a click in the view may select this frame (RD9): the HUD's scope's symbols and the tracks seen in the view, their
 place and reach in CSS px.
 
+### `__bh.flight.hud` → FlightHud
+
+The flight HUD (ui/flighthud.ts). `tacMap` is its tactical map (ui/jetmap.ts, PLAN-RADAR-AAA RD15): `rangeKm`, `range`
+(the step), `northUp`, `hitsNow()` (where each track was drawn, in CSS px on its canvas), `draw(data)`. `tacRangeKm()`
+gives the range, `pickTrack(x, y)` the track under a click in the view.
+
 ### `__bh.radar.stats()` → `{n, bySource, ms}`
 
 The track count, the count per source prefix, and the building time [ms, smoothed].

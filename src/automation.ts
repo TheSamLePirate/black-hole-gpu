@@ -94,6 +94,8 @@ export interface BhContext {
     spaceChallenges?: unknown;
     spaceMissions?: unknown;
     replay?: unknown;
+    /** the flight HUD (ui/flighthud.ts): its tactical map (tacMap — PLAN-RADAR-AAA RD15) */
+    hud?: unknown;
   };
   /** playing together (ui/netpanel.ts): the panel, its client once a room was asked for */
   net?: import("./ui/netpanel").NetPanel;

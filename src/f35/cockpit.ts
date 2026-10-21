@@ -199,6 +199,9 @@ export function pcdData(
           };
         });
     })(),
+    // (its trace, the last five minutes, and its path ahead, three minutes — PLAN-RADAR-AAA RD15)
+    trail: c.ownTrack.pts.slice(-300),
+    pred: c.ownPrediction(180, 10),
     // (its decoys and the others' — PLAN-RADAR-AAA RD8a —: heading up as the missiles, a flare or chaff, its age)
     decoys: (() => {
       const C = c.combat;

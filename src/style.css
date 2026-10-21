@@ -997,7 +997,32 @@ body.mobile.portrait .fl-hubcard { left: 50%; bottom: calc(100% + 4px); transfor
 .fl-glyph { width: 13px; height: 13px; flex: none; }
 
 /* ---- the map (bottom right): the map alone, its bar showing on hover */
-.fl-right { right: 14px; bottom: 14px; width: 282px; padding: 5px; display: flex; flex-direction: column; }
+.fl-right { right: 14px; bottom: 14px; width: var(--map-w, 282px); padding: 5px; display: flex; flex-direction: column; }
+/* the panel's size: its top-left corner dragged (PLAN-RADAR-AAA RD15) — its stages as tall as asked */
+.fl-root:not(.mapview) .fl-right .gt-stage, .fl-root:not(.mapview) .fl-right .jm-stage { height: var(--map-h, 196px); }
+.fl-root:not(.mapview) .fl-right .m3-stage { height: var(--map-h, 160px); }
+.fl-grip {
+  position: absolute; left: -3px; top: -3px; width: 18px; height: 18px; z-index: 6; cursor: nwse-resize; touch-action: none;
+  border-left: 2px solid rgba(160, 210, 255, 0.55); border-top: 2px solid rgba(160, 210, 255, 0.55); border-top-left-radius: 6px;
+}
+.fl-grip:hover { border-color: var(--hud-amber); }
+.fl-root.mapview .fl-grip { display: none; }
+/* the tactical map (ui/jetmap.ts): its canvas, its few buttons, the tiles' credit */
+.jm-stage { position: relative; width: 100%; border-radius: 5px; overflow: hidden; background: #05090e; }
+.fl-root.mapview .jm-stage { flex: 1; height: auto; }
+.jm-cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+.jm-bar { position: absolute; right: 4px; top: 4px; display: flex; gap: 3px; z-index: 2; }
+.jm-bar button {
+  all: unset; box-sizing: border-box; cursor: pointer; min-width: 24px; height: 22px; padding: 0 6px; border-radius: 4px; text-align: center;
+  font: 700 11px var(--hud-font); letter-spacing: 0.08em; color: rgba(230, 238, 249, 0.9); background: rgba(8, 13, 24, 0.75);
+  border: 1px solid rgba(160, 210, 255, 0.2);
+}
+.jm-bar button:hover { border-color: var(--hud-amber); color: #fff; }
+.jm-credit { position: absolute; right: 4px; bottom: 2px; font: 9px var(--hud-font); color: rgba(200, 215, 230, 0.6); pointer-events: none; }
+/* (the F-35's cockpit — a bare view —: its tactical map kept, the rest of the panels hidden) */
+.fl-root[data-view="bare"][data-craft="jet"]:not(.mapview) > .fl-right:has(.fl-mapbody.tac) { display: flex !important; }
+.fl-mapbody.tac .fl-mapwx { display: none; }
+.fl-mapbody:not(.tac) .jm-stage, .fl-mapbody.tac .m3-bar, .fl-mapbody.tac .m3-stage, .fl-mapbody.tac .gt-stage { display: none !important; }
 .fl-right > .fl-title { display: none; }
 .fl-mapbody { display: flex; flex-direction: column; gap: 4px; min-height: 0; }
 .fl-root.mapview .fl-mapbody { flex: 1; }

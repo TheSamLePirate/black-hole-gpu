@@ -21,7 +21,7 @@ describe.skipIf(!E2E)("selecting a track by a click", () => {
     app = await App.boot({ width: 1600, height: 1000, hash: "scene=game:artemis", tiles: true });
     await app.js(`(() => { __bh.settings.vessel = "f35"; __bh.settings.traffic = false; return 1; })()`);
     await app.waitFor(`__bh.fleet.active === "f35"`, 30_000);
-    await app.js(`(() => { __bh.game.flyAt(45.9, 6.9, 4500, 230, 90); const c = __bh.camera; c.jetModes.alt = Math.round(c.geoNow().alt);
+    await app.js(`(() => { __bh.game.flyAt(45.9, 6.9, 4500, 90, 230); const c = __bh.camera; c.jetModes.alt = Math.round(c.geoNow().alt);
       c.jetModes.hdg = c.attitudeNow().heading; c.jetToggle("ap"); c.jetToggle("athr"); __bh.settings.shipMount = "cockpit";
       __bh.settings.f35Radar = true; __bh.settings.f35RadarRange = "80"; return 1; })()`);
     await Bun.sleep(1500);

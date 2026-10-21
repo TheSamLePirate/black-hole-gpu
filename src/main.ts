@@ -2697,6 +2697,41 @@ async function main() {
     },
   };
   const flightHud = new FlightHud(settings, {
+    // (the tactical map — ui/jetmap.ts, PLAN-RADAR-AAA RD15: the craft over the Earth in its air, its trace, its path
+    // ahead, its plan, the airfields, the picture)
+    jetMap: () => {
+      if (!camera.piloting || !camera.airFlight.inAir) return null;
+      const g = camera.geoNow();
+      if (!g) return null;
+      const att = camera.attitudeNow() as { heading?: number };
+      const N = camera.nav;
+      const active = N.last.l?.active ?? -1;
+      // (the path ahead: some 1.5 times the range's crossing, 30 s at least, 10 min at most)
+      const R = flightHud.tacRangeKm() * 1000;
+      const ahead = Math.min(600, Math.max(30, (1.5 * R) / Math.max(g.gs, 60)));
+      return {
+        lat: g.lat,
+        lon: g.lon,
+        alt: g.alt,
+        hdg: att.heading !== undefined && Number.isFinite(att.heading) ? att.heading : g.track,
+        gs: g.gs,
+        trail: camera.ownTrack.pts,
+        pred: camera.ownPrediction(ahead, ahead > 120 ? 10 : 5),
+        tracks: camera.picture?.tracks ?? [],
+        route: N.route.wps.map((p, k) => ({ lat: p.lat, lon: p.lon, name: p.name, active: k === active })),
+        fields: SITES.filter((s) => s.body === "earth" && s.runway).map((s) => ({
+          lat: s.lat,
+          lon: s.lon,
+          rwy: s.rwy,
+          name: s.icao ?? s.name,
+          len: 4500,
+        })),
+      };
+    },
+    selectTrack: (id) => {
+      const said = camera.pictureSelect(id);
+      if (said) panel.toast(said);
+    },
     hold: pilotHold,
     auto: pilotAuto,
     sas: pilotSas,
@@ -6863,6 +6898,7 @@ async function main() {
     pcd: { pcd: jetPcd, stats: pcdStats },
     flight: {
       hub: flightHub,
+      hud: flightHud,
       route: routePanel,
       challenges: challengePanel,
       missions: airMissions,

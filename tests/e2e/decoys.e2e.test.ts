@@ -19,7 +19,7 @@ describe.skipIf(!E2E)("the decoys seen", () => {
     await app.js(`(() => { __bh.settings.vessel = "f35"; __bh.settings.traffic = false; return 1; })()`);
     await app.waitFor(`__bh.fleet.active === "f35"`, 30_000);
     await app.js(`(() => { Object.assign(__bh.settings, { weather: "fair", earthClouds: 0, f35InfiniteAmmo: true });
-      __bh.game.flyAt(45.9, 6.9, 4500, 230, 90); const c = __bh.camera; c.jetModes.alt = Math.round(c.geoNow().alt);
+      __bh.game.flyAt(45.9, 6.9, 4500, 90, 230); const c = __bh.camera; c.jetModes.alt = Math.round(c.geoNow().alt);
       c.jetModes.hdg = c.attitudeNow().heading; c.jetToggle("ap"); c.jetToggle("athr"); __bh.settings.shipMount = "cockpit"; return 1; })()`);
     await Bun.sleep(1500);
     await app.js(`(() => { __bh.flight.challenges.open(); return 1; })()`);

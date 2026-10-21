@@ -679,7 +679,10 @@ Chaque phase : un commit, une fiche et une planche de captures (`docs/progress/r
 |---|---|
 | RD0 | **fait** 2026-10-21 ([fiche](progress/radar/RD0.md)) : la sonde `radar-sync`, le point de départ mesuré |
 | RD1 | **fait côté crew** 2026-10-21 ([fiche](progress/radar/RD1.md)) : combat à 4 Hz avec vitesses et ids stables, place juste (problème direct WGS84), heure de salle, virages, convergence sans saut, joueurs prédits, événements sous 16 Ko comptés, reconnexion, passage des commandes, missiles et leurres au crew. **Reste** : les constats côté pilote 15, 18, 19 (laissés à RD2) |
-| RD2 – RD15 | lancées le 2026-10-21 dans l'ordre retenu ci-dessus. RD10 : accord donné pour OurAirports |
+| RD8a | **fait** 2026-10-21 ([fiche](progress/radar/RD8a.md)) : les leurres visibles dans la vue et sur tous les radars |
+| RD2, RD3, RD9 | **faits** 2026-10-21 ([fiche](progress/radar/RD2-RD3-RD9.md)) : l'image unique, la symbologie commune, la sélection par clic (vue, scope, PCD, crew) |
+| RD15 | **fait** 2026-10-21 ([fiche](progress/radar/RD15.md)) : la carte tactique du panneau de droite, trace et prédiction |
+| RD4 – RD8, RD10 – RD14 | en cours, dans l'ordre retenu ci-dessus. RD10 : accord donné pour OurAirports |
 
 ## Risques
 

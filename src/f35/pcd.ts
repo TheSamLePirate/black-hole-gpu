@@ -143,6 +143,9 @@ export interface PcdData {
   /** the missiles in flight (a fight's — the DAS sees their motors): heading up as the radar's contacts (x right, y
    *  ahead, dz above [m]), the ones at us */
   missiles?: { x: number; y: number; dz: number; atUs: boolean; trk?: number | null }[];
+  /** the craft's trace and the path ahead (controller/owntrack.ts — PLAN-RADAR-AAA RD15) */
+  trail?: { lat: number; lon: number }[];
+  pred?: { lat: number; lon: number; t: number }[];
   /** the decoys in the air (a fight's flares and chaff — PLAN-RADAR-AAA RD8a): heading up as the missiles, their age [s] */
   decoys?: { x: number; y: number; dz: number; kind: "flare" | "chaff"; age: number }[];
   /** the ground's height at a place [m over the ellipsoid; the sea 0] (the TSD's relief; none: not drawn) */
@@ -943,6 +946,39 @@ export class Pcd {
         s = Math.sin(d.heading);
       return [cx + (e * c - n * s) * px, cy - (e * s + n * c) * px];
     };
+    // the craft's trace (the last minutes) and the path ahead, its minutes ticked (PLAN-RADAR-AAA RD15)
+    if (d.trail && d.trail.length > 1) {
+      g.strokeStyle = "rgba(95, 210, 255, 0.55)";
+      g.lineWidth = 3;
+      g.beginPath();
+      d.trail.forEach((p, k) => {
+        const [x, y] = where(p.lat, p.lon);
+        if (k) g.lineTo(x, y);
+        else g.moveTo(x, y);
+      });
+      g.stroke();
+    }
+    if (d.pred && d.pred.length > 1) {
+      g.strokeStyle = "rgba(255, 255, 255, 0.8)";
+      g.lineWidth = 2.5;
+      g.setLineDash([12, 8]);
+      g.beginPath();
+      d.pred.forEach((p, k) => {
+        const [x, y] = where(p.lat, p.lon);
+        if (k) g.lineTo(x, y);
+        else g.moveTo(x, y);
+      });
+      g.stroke();
+      g.setLineDash([]);
+      g.fillStyle = "#ffffff";
+      for (const p of d.pred)
+        if (p.t > 0 && p.t % 60 === 0) {
+          const [x, y] = where(p.lat, p.lon);
+          g.beginPath();
+          g.arc(x, y, 4, 0, 2 * Math.PI);
+          g.fill();
+        }
+    }
     // range rings and the compass
     g.strokeStyle = C.dim;
     g.lineWidth = 2;
