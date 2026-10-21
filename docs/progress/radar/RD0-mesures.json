@@ -1,0 +1,60 @@
+{
+  "P1": {
+    "frames": 1340,
+    "tracks": 6064,
+    "mismatches": 26,
+    "share": 0.004287598944591029
+  },
+  "P2": {
+    "samples": 6700,
+    "p50": 94.49602705803615,
+    "p95": 169.96549674886052,
+    "withinShare": 0.0016417910447761193
+  },
+  "P3": {
+    "steps": 6695,
+    "jumps": 60,
+    "share": 0.008961911874533234
+  },
+  "P4": {
+    "pausedDriftM": 18.815978350429887,
+    "warp4SpeedRatio": 4.030077823113666
+  },
+  "P8": {
+    "maxChars": 7785,
+    "limit": 16384,
+    "bytesPerSecond": 21949,
+    "events": 160
+  },
+  "P9": {
+    "fired": {
+      "ok": true,
+      "msg": "AIM-120: lock a target first (Tab) (4 AIM120 left)",
+      "data": {}
+    },
+    "flying": {
+      "missiles": 0,
+      "decoys": 2
+    },
+    "atCrew": 0
+  },
+  "P5": {
+    "palettesFiles": 5,
+    "sharedSymbols": false
+  },
+  "P6": {
+    "runwaysInGameSites": 8,
+    "worldBase": false
+  },
+  "P7": {
+    "note": "cost: measured by trace-ab, not in this probe"
+  },
+  "P10": {
+    "crewTouchOpensMenu": true,
+    "pilotRadarClick": false
+  },
+  "P11": {
+    "crewWheelStep": 0.909090909090909,
+    "commonSteps": false
+  }
+}
