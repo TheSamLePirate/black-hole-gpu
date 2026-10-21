@@ -4180,7 +4180,19 @@ export class Renderer {
       }
     }
     // The raster patch's visibility, after the cache it reads and before the rays that start from it.
+    this.tsmDrawn = false;
+    this.sunDrawn = false;
     if (!quality && s) this.encodeTerrainRasterVisibility(enc, t, s);
+    // (the same for the relief's shadow map)
+    if (!quality && !this.sunDrawn && this.sunTableOn) {
+      this.device.queue.writeBuffer(this.bodyBuf, (TABLE_SUN + 3) * 16, new Float32Array(4));
+      this.sunTableOn = false;
+    }
+    // (no shadow map this frame — the raster off, the traced pipeline —: its frame cleared, not the last one's read)
+    if (!quality && !this.tsmDrawn && this.tsmTableOn) {
+      this.device.queue.writeBuffer(this.bodyBuf, (TABLE_TSM + 3) * 16, new Float32Array(4));
+      this.tsmTableOn = false;
+    }
     const hint = !quality && this.rasterHint ? (this.terrainRaster?.distanceTexture() ?? null) : null;
     // (the clouds' shadow map — trace.wgsl cloudShadow — before every kernel that reads it)
     if (!quality) this.encodeCloudShadow(enc, t);
@@ -6330,6 +6342,9 @@ export class Renderer {
   private tsmTex: GPUTexture | null = null;
   private tsmFrame = new Float32Array(16);
   private tsmTableOn = false;
+  private tsmDrawn = false;
+  /** the relief's shadow map drawn this frame (encodeSunShadow): its frame cleared otherwise — not the last one's read */
+  private sunDrawn = false;
   /** The Sun's view for the trees' shadow map in the scenery's frame (its axes and the camera in it: `scp`, P.scenery): right,
    *  up, towards the Sun — each with its half-extent —, the centre (the camera, snapped to the map's texels: no shimmer as it
    *  moves), drawn or not (the Sun up). */
@@ -6445,6 +6460,7 @@ export class Renderer {
     }
     if (!on && this.sunTableOn) this.device.queue.writeBuffer(this.bodyBuf, (TABLE_SUN + 3) * 16, new Float32Array(4));
     this.sunTableOn = on;
+    this.sunDrawn = on;
   }
 
   /**
@@ -6578,6 +6594,7 @@ export class Renderer {
     if (tsm) this.device.queue.writeBuffer(this.bodyBuf, TABLE_TSM * 16, this.tsmFrame);
     else if (this.tsmTableOn) this.device.queue.writeBuffer(this.bodyBuf, (TABLE_TSM + 3) * 16, new Float32Array(4));
     this.tsmTableOn = tsm;
+    this.tsmDrawn = tsm;
     if (drawn && trees) {
       this.paramsF[MOUTH_LIST_AT + 6] = 1;
       this.device.queue.writeBuffer(this.paramBuf, (MOUTH_LIST_AT + 4) * 4, this.paramsF.subarray(MOUTH_LIST_AT + 4, MOUTH_LIST_AT + 8));
