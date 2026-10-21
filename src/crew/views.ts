@@ -66,6 +66,15 @@ export class CrewViews {
   range = 50_000;
   north = false;
   sensor = false;
+  /** the tracks' trails (PLAN-RADAR-AAA RD7): none, 30 s, 3 min — kept */
+  trails: "off" | "short" | "long" = (() => {
+    try {
+      const v = localStorage.getItem("crew.trails");
+      return v === "short" || v === "long" ? v : "off";
+    } catch {
+      return "off";
+    }
+  })();
   channel: InstrumentKey | "multi" = "alt";
   window = 60;
   paused = false;
@@ -389,6 +398,7 @@ export class CrewViews {
       u: unitsOf(this.units),
       history: this.model.history.get(own?.member.slot ?? -1) ?? [],
       contacts: this.model.contacts(),
+      trails: this.trails === "long" ? 180 : this.trails === "short" ? 30 : 0,
       zones: this.model.zones(),
       now: performance.now() / 1000,
       stale: !own || own.age > 3,

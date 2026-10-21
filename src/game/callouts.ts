@@ -34,6 +34,8 @@ export interface CalloutInput {
   /** the ground's warnings (game/gpws.ts gpwsOf): the pull-up from the flight path's look-ahead, the sink
    *  rate and the heights only when its level says (a fighter's: set to land) — absent, the landing's own */
   gpws?: { pullUp: boolean; sinkRate: boolean; heights: boolean };
+  /** the TCAS (PLAN-RADAR-AAA RD4 — radar/tcas.ts): a traffic advisory now, a resolution advisory's sense */
+  tcas?: { ta: boolean; ra: "climb" | "descend" | null };
 }
 
 /** The radio heights called going down [m]. */
@@ -96,6 +98,9 @@ export class Callouts {
   private warned = new Set<string>();
   /** when each warning was last said [ms] */
   private saidAt = new Map<string, number>();
+  /** the TCAS's last state: a TA, an RA's sense */
+  private ta = false;
+  private ra: "climb" | "descend" | null = null;
 
   /** A new flight: everything armed again. */
   reset() {
@@ -104,6 +109,8 @@ export class Callouts {
     this.sinking = this.pulling = false;
     this.warned.clear();
     this.saidAt.clear();
+    this.ta = false;
+    this.ra = null;
   }
 
   update(i: CalloutInput): VoiceLine[] {
@@ -121,6 +128,14 @@ export class Callouts {
         out.push({ id: `alert-${id}`, text: SPOKEN[id]!(), speaker: "callout", priority: 0 });
       }
     this.warned = new Set([...now].filter((id) => SPOKEN[id]));
+    // the TCAS: "traffic, traffic" on a TA, the RA's order (again when it reverses), "clear of conflict" at its end
+    const tc = i.tcas ?? { ta: false, ra: null };
+    if (tc.ra && tc.ra !== this.ra)
+      out.push({ id: "tcas-ra", text: tc.ra === "climb" ? t("Climb, climb!") : t("Descend, descend!"), speaker: "callout", priority: 0 });
+    else if (!tc.ra && this.ra) out.push({ id: "tcas-clear", text: t("Clear of conflict"), speaker: "callout", priority: 1 });
+    else if (tc.ta && !this.ta && !tc.ra) out.push({ id: "tcas-ta", text: t("Traffic, traffic"), speaker: "callout", priority: 1 });
+    this.ta = tc.ta || !!tc.ra;
+    this.ra = tc.ra;
     if (!i.inAir || !Number.isFinite(i.agl)) {
       if (!i.inAir) {
         this.armed = new Set(HEIGHTS);

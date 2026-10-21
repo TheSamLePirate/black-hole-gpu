@@ -1,3 +1,4 @@
+import type { TcasAdvisory } from "./radar/tcas";
 import type { MlsReading } from "./game/mls";
 import { JetPad, type JetPadOut } from "./input/jetpad";
 import { SpacePad, type SpacePadOut } from "./input/spacepad";
@@ -54,7 +55,9 @@ import { type AeroRun, installAerobatics } from "./controller/aerobatics";
 import type { FigureId } from "./game/aerobatics";
 import { GStrain } from "./game/gstrain";
 import { installRadar, Radar, type RadarSource } from "./controller/radar";
+import { installSpacePic } from "./controller/spacepic";
 import { installOwnTrack, type TrackPoint } from "./controller/owntrack";
+import { TrailStore } from "./radar/picture";
 import type { RadarObject } from "./game/radar";
 import { type FormState, installFormation } from "./controller/formation";
 import { type IcptState, installIntercept } from "./controller/intercept";
@@ -1112,6 +1115,12 @@ export class CameraController {
   pictureSelected: string | null = null;
   /** the picture's building time, smoothed [ms] */
   pictureMs = 0;
+  /** the tracks' histories and their clock [s] (radar/picture.ts TrailStore — PLAN-RADAR-AAA RD7) */
+  trails = new TrailStore();
+  /** the TCAS's advisories now (PLAN-RADAR-AAA RD4 — radar/tcas.ts): the most urgent first */
+  tcas: TcasAdvisory[] = [];
+  spacePic: import("./controller/spacepic").SpacePic | null = null;
+  trailT = 0;
   /** the craft's own trace over the Earth and its track's rate (controller/owntrack.ts — PLAN-RADAR-AAA RD15) */
   ownTrack: { pts: TrackPoint[]; clock: number; lastTrack: number | null; rate: number } = { pts: [], clock: 0, lastTrack: null, rate: 0 };
   /** the selected track last in the picture [the radar's s] */
@@ -1553,6 +1562,7 @@ installTrap(CameraController);
 installQuals(CameraController);
 installAerobatics(CameraController);
 installRadar(CameraController);
+installSpacePic(CameraController);
 installOwnTrack(CameraController);
 installFplan(CameraController);
 installChallenge(CameraController);

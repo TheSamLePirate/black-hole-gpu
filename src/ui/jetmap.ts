@@ -9,8 +9,8 @@
 import { mercX, mercY, metresPerPx, night, TILE_CREDIT, Tiles } from "../crew/draw/tiles";
 import type { TrackPoint } from "../controller/owntrack";
 import { t } from "../i18n";
-import type { PicTrack } from "../radar/picture";
-import { drawSym, PAL, type SymSide, sideFor } from "../radar/symbols";
+import { type PicTrack, trailSpan } from "../radar/picture";
+import { drawSym, PAL, type SymSide, sideFor, symColour } from "../radar/symbols";
 import type { Settings } from "../settings";
 import { unitsFor } from "./unitsys";
 import { drawFields } from "../world/runwaydraw";
@@ -30,6 +30,8 @@ export interface JetMapData {
   /** the tactical picture's tracks */
   tracks: PicTrack[];
   route: { lat: number; lon: number; name: string; active: boolean }[];
+  /** the trails' clock now [s] (the tracks' histories' — RD7) */
+  trailT?: number;
 }
 
 /** The range's steps: the centre to the nearer edge [km]. */
@@ -383,6 +385,31 @@ export class JetMap {
       const sensed = P.sensors !== 0 && P.state !== "truth";
       if (!sensed && P.kind !== "missile") continue;
       const side: SymSide = P.kind === "missile" ? (P.msl?.ours ? "friend" : "hostile") : sideFor(P, false);
+      // (its trail — RD7 —: a line fading into the past, the map's style; a missile's its smoke's way)
+      const span = trailSpan(P, this.s);
+      if (span > 0 && P.hist && P.hist.length > 1 && d.trailT !== undefined) {
+        const pts = P.hist.filter((q) => d.trailT! - q.t <= span);
+        c.strokeStyle = symColour({ kind: P.kind, side, colour: side === "player" ? P.colour : undefined });
+        c.lineWidth = P.kind === "missile" ? 2 : 1.6;
+        for (let k = 1; k < pts.length; k++) {
+          const [x0, y0] = at(pts[k - 1]!.lat, pts[k - 1]!.lon),
+            [x1, y1] = at(pts[k]!.lat, pts[k]!.lon);
+          c.globalAlpha = 0.15 + 0.65 * (1 - (d.trailT - pts[k]!.t) / span);
+          c.beginPath();
+          c.moveTo(x0, y0);
+          c.lineTo(x1, y1);
+          c.stroke();
+        }
+        c.globalAlpha = 1;
+      }
+      // (a missile ended — RD8 —: SPLASH or MISS where it did, three seconds)
+      if (P.msl?.end) {
+        c.fillStyle = P.msl.ours ? PAL.friend : PAL.hostile;
+        c.font = "700 10px Rajdhani, sans-serif";
+        c.textAlign = "center";
+        c.fillText(t(P.msl.end === "splash" ? "SPLASH" : "MISS"), x, y + 3);
+        continue;
+      }
       const trk = Math.hypot(P.v[0], P.v[1]) > 3 ? Math.atan2(P.v[0], P.v[1]) + rot : null;
       drawSym(
         c,
@@ -398,6 +425,7 @@ export class JetMap {
           selected: P.selected,
           age: P.cm ? 5 - P.cm.life : undefined,
           atUs: P.msl?.target === "own",
+          tcas: P.tcas,
         },
         P.kind === "flare" || P.kind === "chaff" ? 5 : 6.5,
         1.5,
@@ -424,6 +452,12 @@ export class JetMap {
         c.fillStyle = c.strokeStyle;
         c.font = "600 9px JetBrains Mono, monospace";
         c.fillText(`${Math.round(P.msl.tti)} s`, (x + tx) / 2 + 4, (y + ty) / 2);
+      }
+      if (P.msl?.decoyed) {
+        c.fillStyle = P.msl.ours ? PAL.friend : PAL.hostile;
+        c.font = "700 9px Rajdhani, sans-serif";
+        c.textAlign = "center";
+        c.fillText(t("DECOYED"), x, y + 16);
       }
     }
     // the craft: at the centre, its nose its heading

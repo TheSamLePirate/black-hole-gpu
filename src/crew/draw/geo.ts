@@ -6,7 +6,7 @@
 import { drawFields } from "../../world/runwaydraw";
 import { fieldShown, fieldsNearCached } from "../../world/runways";
 import coastlines from "../coastlines.json";
-import { C, D, fmt, Labels, type Pen, ramp, SIDE, unitSymbol, type Point, type Rect } from "./kit";
+import { C, D, fmt, Labels, missileCue, type Pen, ramp, SIDE, trailDots, unitSymbol, type Point, type Rect } from "./kit";
 import { LAND } from "./land";
 import { mercX, mercY, metresPerPx, night, TILE_CREDIT, type Tiles } from "./tiles";
 import { EARTH_CREDIT, type EarthGlobe } from "./earth";
@@ -321,7 +321,9 @@ export function drawGeo(p: Pen, r: Rect, sc: Scene, v: GeoView) {
   for (const t of sc.contacts) {
     const q = at(t.lat, t.lon);
     if (!q || q[0] < r.x - 20 || q[0] > r.x + W + 20 || q[1] < r.y - 20 || q[1] > r.y + H + 20) continue;
-    unitSymbol(p, q[0], q[1], t.kind, t.kind === "decoy" ? t.type : t.side, t.hdg, 0, t.kind === "sea" ? 6 : 5);
+    trailDots(p, t, sc.trails, at);
+    if (missileCue(p, q[0], q[1], t)) continue;
+    unitSymbol(p, q[0], q[1], t.kind, t.kind === "decoy" ? t.type : t.side, t.hdg, 0, t.kind === "sea" ? 6 : 5, { tcas: t.adv });
     const col = SIDE[t.side] ?? C.white;
     if (nameZoom || t.side !== "traffic") {
       const alt = t.kind === "air" && t.alt !== null && v.zoom >= 9 && !v.globe ? ` ${fmt(u.alt(t.alt) / 100)}` : "";

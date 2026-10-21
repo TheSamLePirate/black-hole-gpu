@@ -159,10 +159,17 @@ function surroundings(c: CameraController, i: Info, here: { lat: number; lon: nu
         hdg: Math.round(Math.atan2(ve, vn) * 1000) / 1000,
         spd: Math.round(Math.hypot(ve, vn)),
         type: a.gnd ? `${a.type} SOL` : a.type,
+        ...advOf(c, `trf:${a.id}`),
       });
     }
   }
   return { traffic, zones };
+}
+
+/** The pilot's TCAS's grading of a picture's track (PLAN-RADAR-AAA RD4): sent when it matters. */
+function advOf(c: CameraController, id: string): { adv?: "proximate" | "TA" | "RA" } {
+  const a = c.picture?.byId.get(id)?.tcas;
+  return a && a !== "other" ? { adv: a } : {};
 }
 
 /**
@@ -219,14 +226,26 @@ function tracksOf(c: CameraController, here: { lat: number; lon: number; alt: nu
     });
   }
   for (const m of W.missiles) {
-    if (!m.alive) continue;
+    // (an ended one three seconds — RD8 —: SPLASH or MISS where it did)
+    const ended = !m.alive && m.end && m.diedAt !== undefined && W.t - m.diedAt < 3;
+    if (!m.alive && !ended) continue;
+    const id = m.remote ? `msl:${m.remote}` : `msl:${m.id}`;
+    // (its cue: at us, decoyed, its time to go — the picture's)
+    const tti = Pic?.byId.get(id)?.msl?.tti ?? null;
+    const cue = [
+      m.target === -1 ? "→ US" : "",
+      m.target !== null && m.target <= -2 ? "DECOYED" : "",
+      tti !== null && tti < 600 ? `${Math.round(tti)}s` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
     out.push({
-      id: m.remote ? `msl:${m.remote}`.slice(0, 32) : `msl:${m.id}`,
+      id: id.slice(0, 32),
       name: MISSILES[m.kind]?.name ?? m.kind,
       kind: "missile",
-      side: m.owner === "blue" ? "friend" : "hostile",
-      type: m.target === -1 ? "→ US" : m.target !== null && m.target <= -2 ? "DECOYED" : "",
-      ...(pic(m.remote ? `msl:${m.remote}` : `msl:${m.id}`, m.v) ?? at(m.p, m.v)),
+      side: m.owner === "blue" && m.target !== -1 && !(m.remote && C.free) ? "friend" : "hostile",
+      type: ended ? (m.end === "splash" ? "SPLASH" : "MISS") : cue,
+      ...(pic(id, m.v) ?? at(m.p, m.v)),
     });
   }
   for (const d of W.decoys ?? [])

@@ -7,6 +7,7 @@
 // from the craft's fix, its latitude, longitude and height over the WGS84 ellipsoid. Pure: no import of the simulator
 // (the crew's bundle may take it).
 
+import type { RaSense, TcasLevel } from "./tcas";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "../system/ellipsoid";
 
 export type V3 = [number, number, number];
@@ -64,9 +65,79 @@ export interface PicTrack {
   /** a player's own colour */
   colour?: string;
   /** a missile: its seeker, its target's id (a track, a decoy, us: "own"), its time to go [s], ours, drawn off */
-  msl?: { seeker: "ir" | "radar"; target: string | null; tti: number | null; ours: boolean; decoyed: boolean; motor: boolean };
+  msl?: {
+    seeker: "ir" | "radar";
+    target: string | null;
+    tti: number | null;
+    ours: boolean;
+    decoyed: boolean;
+    motor: boolean;
+    end?: "splash" | "miss";
+  };
   /** a decoy: its life left [s] */
   cm?: { life: number };
+  /** its history (PLAN-RADAR-AAA RD7): its places, the oldest first — t [s of the trails' clock] */
+  hist?: TrailPoint[];
+  /** the TCAS's grading of it (RD4 — radar/tcas.ts), an RA's sense */
+  tcas?: TcasLevel;
+  ra?: RaSense;
+}
+
+/** A track's past place (RD7). */
+export interface TrailPoint {
+  lat: number;
+  lon: number;
+  h: number;
+  t: number;
+}
+
+/**
+ * The tracks' histories (PLAN-RADAR-AAA RD7): kept across the frames, by id — a point at each radar measure (a real
+ * radar's echoes), each 0.25 s for a missile (its smoke's way), each 2 s for the others; 120 points a track, 400 tracks,
+ * a track gone three minutes forgotten.
+ */
+export class TrailStore {
+  private m = new Map<string, { pts: TrailPoint[]; seen: number | null; last: number }>();
+  static readonly MAX_PTS = 120;
+  static readonly MAX_TRACKS = 400;
+
+  /** The picture's tracks taken at the clock t [s]: their histories grown, given them (T.hist). */
+  record(P: Picture, t: number) {
+    for (const T of P.tracks) {
+      let e = this.m.get(T.id);
+      if (!e) {
+        if (this.m.size >= TrailStore.MAX_TRACKS) continue;
+        e = { pts: [], seen: null, last: -1e9 };
+        this.m.set(T.id, e);
+      }
+      const radar = (T.sensors & SENSOR.RADAR) !== 0 && T.seenAt !== null;
+      const due = radar ? T.seenAt !== e.seen : t - e.last >= (T.kind === "missile" ? 0.25 : 2);
+      if (due) {
+        e.pts.push({ lat: T.lat, lon: T.lon, h: T.h, t });
+        if (e.pts.length > TrailStore.MAX_PTS) e.pts.shift();
+        e.seen = T.seenAt;
+        e.last = t;
+      }
+      T.hist = e.pts;
+    }
+    // (the gone: forgotten three minutes after their last point)
+    for (const [id, e] of this.m) if (!P.byId.has(id) && t - e.last > 180) this.m.delete(id);
+  }
+
+  clear() {
+    this.m.clear();
+  }
+}
+
+/** The span of a track's trail shown now [s] (0: none): the setting's, the lock's and selection's, a missile's. */
+export function trailSpan(
+  T: Pick<PicTrack, "kind" | "locked" | "selected">,
+  s: { radarTrails?: "off" | "short" | "long"; radarTrailLock?: boolean; radarTrailMissiles?: boolean },
+): number {
+  const base = s.radarTrails === "long" ? 180 : s.radarTrails === "short" ? 30 : 0;
+  if (T.kind === "missile" && s.radarTrailMissiles !== false) return Math.max(base, 5);
+  if ((T.locked || T.selected) && s.radarTrailLock !== false) return Math.max(base, 30);
+  return T.kind === "flare" || T.kind === "chaff" ? 0 : base;
 }
 
 /** The craft's fix: its Earth-fixed place [m] and the local frame's axes there, its geodetic place, its heading [rad]. */
@@ -79,6 +150,8 @@ export interface PicFix {
   lon: number;
   alt: number;
   heading: number;
+  /** its velocity over the ground (local east, north, up [m/s]): a missile's closing on us */
+  v?: V3;
 }
 
 /** A thing the game knows (a radar source's object — game/radar.ts RadarObject's fields the picture needs). */
@@ -122,6 +195,8 @@ export interface PicWeapon {
   decoyed?: boolean;
   /** a decoy's life left [s] */
   life?: number;
+  /** a missile's end (RD8): its last place, shown 3 s */
+  end?: "splash" | "miss";
 }
 
 export interface PictureInput {
@@ -136,6 +211,8 @@ export interface PictureInput {
   /** the radar's mode and beam (off the nose [rad]) — none off the F-35 */
   mode: string | null;
   beam: number | null;
+  /** the infrared sensors fitted (the F-35's DAS and EOTS — RD4): the craft about seen by their heat */
+  irst?: boolean;
 }
 
 export interface Picture {
@@ -156,6 +233,10 @@ export const TCAS_HEIGHT = 3_000;
 export const DAS_MOTOR = 20_000;
 export const DAS_COLD = 3_000;
 export const DAS_FLARE = 10_000;
+/** The DAS on aircraft: all round, within 30 km (their engines' heat); the EOTS: ±30° off the nose, 60 km (RD4). */
+export const DAS_AIR = 30_000;
+export const EOTS_RANGE = 60_000;
+export const EOTS_HALF = (30 * Math.PI) / 180;
 /** The radar's chaff: a strong echo within ±60° off the nose and 47 km (σ ≈ 50 m², its bloom). */
 export const RADAR_CHAFF = 47_000;
 /** A radar track fresh this long after its last measure [s] (a sweep and a little); then carried on (coast). */
@@ -210,6 +291,16 @@ export function buildPicture(inp: PictureInput): Picture {
     const d = len(o.r);
     if (o.squawk && o.kind === "air" && d < TCAS_RANGE && Math.abs(o.r[2]) < TCAS_HEIGHT) sensors |= SENSOR.TCAS;
     if (o.id.startsWith("ais:") || o.id.startsWith("cv:")) sensors |= SENSOR.AIS;
+    // (the infrared: the DAS all round, the EOTS before the nose — their heat, no IFF)
+    if (inp.irst && o.kind === "air" && !o.dead) {
+      if (d < DAS_AIR) sensors |= SENSOR.DAS;
+      if (
+        d < EOTS_RANGE &&
+        Math.abs(offHeading(fix, o.r)) < EOTS_HALF &&
+        Math.abs(Math.atan2(o.r[2], Math.hypot(o.r[0], o.r[1]))) < EOTS_HALF
+      )
+        sensors |= SENSOR.EOTS;
+    }
     const g = geoOf(fix, o.r);
     const state: PicState = T
       ? T.datalink
@@ -217,9 +308,11 @@ export function buildPicture(inp: PictureInput): Picture {
         : t - T.seenAt < FIRM
           ? "firm"
           : "coast"
-      : sensors & (SENSOR.DATALINK | SENSOR.TCAS | SENSOR.AIS)
-        ? "datalink"
-        : "truth";
+      : sensors & (SENSOR.DAS | SENSOR.EOTS)
+        ? "firm"
+        : sensors & (SENSOR.DATALINK | SENSOR.TCAS | SENSOR.AIS)
+          ? "datalink"
+          : "truth";
     byId.set(o.id, {
       id: o.id,
       name: o.name,
@@ -276,12 +369,13 @@ export function buildPicture(inp: PictureInput): Picture {
     const tgt = w.target ? (w.target === "own" ? null : byId.get(w.target)) : undefined;
     const rel: V3 | null =
       w.target === "own" ? [-w.r[0], -w.r[1], -w.r[2]] : tgt ? [tgt.rt[0] - w.r[0], tgt.rt[1] - w.r[1], tgt.rt[2] - w.r[2]] : null;
-    const tv: V3 = w.target === "own" ? [0, 0, 0] : tgt ? tgt.v : [0, 0, 0];
+    const tv: V3 = w.target === "own" ? (fix.v ?? [0, 0, 0]) : tgt ? tgt.v : [0, 0, 0];
     let tti: number | null = null;
     if (rel) {
       const rl = len(rel) || 1;
       const closing = ((w.v[0] - tv[0]) * rel[0] + (w.v[1] - tv[1]) * rel[1] + (w.v[2] - tv[2]) * rel[2]) / rl;
-      tti = closing > 1 ? rl / closing : null;
+      // (its motor still pushing: some 700 m/s on average to come — the launch's slow first second no 4-minute promise)
+      tti = closing > 1 ? rl / Math.max(closing, w.motor ? 700 : 0) : null;
     }
     byId.set(w.id, {
       id: w.id,
@@ -300,7 +394,17 @@ export function buildPicture(inp: PictureInput): Picture {
       rt: [...w.r],
       ...g,
       ...(w.kind === "missile"
-        ? { msl: { seeker: w.seeker ?? "radar", target: w.target ?? null, tti, ours: w.ours, decoyed: !!w.decoyed, motor: !!w.motor } }
+        ? {
+            msl: {
+              seeker: w.seeker ?? "radar",
+              target: w.target ?? null,
+              tti: w.end ? null : tti,
+              ours: w.ours,
+              decoyed: !!w.decoyed,
+              motor: !!w.motor,
+              end: w.end,
+            },
+          }
         : { cm: { life: w.life ?? 0 } }),
     });
   }

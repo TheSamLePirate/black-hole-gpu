@@ -415,11 +415,15 @@ export interface Settings {
   wingmen: number; // the AI wingmen flying with the F-35 (controller/wingmen.ts): 0 to 3
   traffic: boolean; // the real air and sea traffic about the craft (traffic/feed.ts, the relay server/traffic.ts)
   seaFft: boolean; // the sea's waves by FFT (sea/fft-gpu.ts: three cascades, their foam and relief) — off: the twelve trains
+  tcas: boolean; // the TCAS for every craft in the air (PLAN-RADAR-AAA RD4): the transponders about graded, TA and RA shown and said
   trafficDelay: number; // the real aircraft drawn this far behind the real time [s] (0: live, carried on from their last report; a minute: on their smoothed path)
   f35EnemyMissiles: boolean; // the aggressors' and the SAM's missiles fired
   f35Radar: boolean; // the radar's scope on the helmet in a fight
   f35RadarRange: "auto" | "10" | "20" | "40" | "80" | "160"; // its range [km]
   f35RadarRelief: boolean; // the relief under the radar's scope: the ground above us red, near amber, below green, the sea
+  radarTrails: "off" | "short" | "long"; // each track's history on the radars and maps (PLAN-RADAR-AAA RD7): none, 30 s, 3 min
+  radarTrailLock: boolean; // the lock's and the selection's history kept even when the trails are off
+  radarTrailMissiles: boolean; // a missile's last 5 s always drawn (its smoke on the screens)
   f35ThreatCalls: boolean; // TARS calls the threats in a fight: the missiles at us (break, flares, notch), the bandits by their BRAA, a hit, a kill
   f35RadioRoles: boolean; // the flight's radio in its roles' voices: the wingmen, the AWACS Darkstar (the picture), the carrier Mother and its LSO Paddles — shared with the room
   f35WeaponPanel: boolean; // the weapons' panel in a fight
@@ -769,11 +773,15 @@ export function defaultSettings(): Settings {
     wingmen: 0,
     traffic: true,
     trafficDelay: 60,
+    tcas: true,
     seaFft: true,
     f35EnemyMissiles: true,
     f35Radar: true,
     f35RadarRange: "auto",
     f35RadarRelief: true,
+    radarTrails: "off",
+    radarTrailLock: true,
+    radarTrailMissiles: true,
     f35ThreatCalls: true,
     f35RadioRoles: true,
     f35WeaponPanel: true,
@@ -2137,11 +2145,15 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   wingmen: "pref",
   traffic: "pref",
   trafficDelay: "pref",
+  tcas: "pref",
   seaFft: "pref",
   f35EnemyMissiles: "pref",
   f35Radar: "pref",
   f35RadarRange: "pref",
   f35RadarRelief: "pref",
+  radarTrails: "pref",
+  radarTrailLock: "pref",
+  radarTrailMissiles: "pref",
   f35ThreatCalls: "pref",
   f35RadioRoles: "pref",
   f35WeaponPanel: "pref",

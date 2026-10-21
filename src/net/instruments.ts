@@ -108,6 +108,8 @@ export interface InstrumentTraffic {
   hdg: number | null;
   spd: number | null;
   type: string;
+  /** the pilot's TCAS's grading of it (PLAN-RADAR-AAA RD4): proximate, a traffic or resolution advisory */
+  adv?: "proximate" | "TA" | "RA";
 }
 /** The air-to-air refuelling (game/aar.ts, controller/aar.ts): the stage (the rendezvous `join`, behind the `hose`),
  *  the HUD's word (JOIN, PRE-CONTACT, CLEARED, CONTACT, FUEL FLOW, FULL, BREAKAWAY, DEPART), the way it is flown (auto,
@@ -350,6 +352,7 @@ function readTraffic(list: unknown[]): InstrumentTraffic[] {
       hdg: opt(r.hdg),
       spd: opt(r.spd),
       type: label(r.type, 16),
+      ...(r.adv === "proximate" || r.adv === "TA" || r.adv === "RA" ? { adv: r.adv } : {}),
     });
   }
   return out;

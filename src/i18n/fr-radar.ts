@@ -51,4 +51,31 @@ export default {
   "Airfield: {0}": "Terrain : {0}",
   "Airfield code": "Code du terrain",
   "ICAO code": "Code OACI",
+  // (the trails — RD7)
+  "Radar trails": "Traînées radar",
+  "Each track's history on the radars and the maps — the scope, the TSD, the tactical map, the crew's: none, the last 30 s, the last 3 minutes (fading into the past).":
+    "L'historique de chaque piste sur les radars et les cartes — le scope, le TSD, la carte tactique, celles du crew : aucun, les 30 dernières secondes, les 3 dernières minutes (qui pâlissent dans le passé).",
+  "3 min": "3 min",
+  "Trail of the lock": "Traînée du verrou",
+  "The lock's and the selected track's history kept on the radars and the maps even with the trails off.":
+    "L'historique du verrou et de la piste sélectionnée gardé sur les radars et les cartes, même traînées coupées.",
+  "Missiles' trails": "Traînées des missiles",
+  "A missile's last five seconds always drawn behind it on the radars and the maps, its smoke's way.":
+    "Les cinq dernières secondes d'un missile toujours dessinées derrière lui sur les radars et les cartes, le chemin de sa fumée.",
+  // (the TCAS — RD4)
+  TCAS: "TCAS",
+  'The traffic collision avoidance for every craft in the air: the transponders about graded as TCAS II does — proximate, a traffic advisory 40 s from the closest approach ("Traffic, traffic"), a resolution advisory at 25 s ("Climb, climb!", "Descend, descend!") —, on the radars, the maps and the HUD. No resolution advisory under 300 m over the ground.':
+    "L'anticollision pour tout appareil en vol : les transpondeurs alentour classés comme le fait le TCAS II — proche, avis de trafic à 40 s du point de rapprochement maximal (« Trafic, trafic »), avis de résolution à 25 s (« Montez, montez ! », « Descendez, descendez ! ») —, sur les radars, les cartes et le HUD. Aucun avis de résolution sous 300 m sol.",
+  "Traffic, traffic": "Trafic, trafic",
+  "Climb, climb!": "Montez, montez !",
+  "Descend, descend!": "Descendez, descendez !",
+  "Clear of conflict": "Fin de conflit",
+  TRAFFIC: "TRAFIC",
+  "LVLH · RNDZ": "LVLH · RDV",
+  CLIMB: "MONTEZ",
+  DESCEND: "DESCENDEZ",
+  // (the missiles' ends and cues — RD8)
+  SPLASH: "SPLASH",
+  MISS: "RATÉ",
+  DECOYED: "LEURRÉ",
 } satisfies Record<string, string>;

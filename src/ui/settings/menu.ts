@@ -77,12 +77,15 @@ export const PLAYER_MENU: PlayerGroup[] = [
       "f35Invulnerable",
       "f35Radar",
       "f35RadarRange",
+      "radarTrails",
+      "radarTrailLock",
+      "radarTrailMissiles",
       "f35ThreatCalls",
       "f35RadioRoles",
     ],
   },
   { tab: "game", title: { fr: "Formation", en: "Formation" }, keys: ["wingmen", "formShape", "formSpacing", "formPos"] },
-  { tab: "game", title: { fr: "Trafic réel", en: "Live traffic" }, keys: ["traffic", "trafficDelay"] },
+  { tab: "game", title: { fr: "Trafic réel", en: "Live traffic" }, keys: ["traffic", "trafficDelay", "tcas"] },
   { tab: "game", title: { fr: "Sauvegardes", en: "Saved games" }, keys: ["autosave", "autosaveEvery"] },
   // ---- graphics
   {

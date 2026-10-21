@@ -13,6 +13,8 @@ import { t, tf } from "../../i18n";
 import { drawn, fit, type Box } from "./layout";
 import { jetUnits, type JetUnits } from "./jethud";
 import { MONO } from "../hudkit";
+import { drawSym, type SymSide } from "../../radar/symbols";
+import type { SpaceTrack } from "../../radar/space";
 
 type Text = (t: string, x: number, y: number, col: string, size: number, align?: CanvasTextAlign, mono?: boolean) => void;
 
@@ -242,5 +244,119 @@ export function drawApproachHud(
       text(it.t, x, y, it.col, 11, "left", true);
       x += widths[k]! + gap;
     });
+  }
+}
+
+/** The space scope's reach [m]: its centre's 100 m to its edge's 1 000 km, a decade a ring. */
+const SCOPE_MIN = 100,
+  SCOPE_MAX = 1_000_000;
+
+/** A range on the space scope: its share of the radius (0 the centre … 1 the edge), by its logarithm. */
+export const scopeRadius = (m: number) =>
+  Math.min(1, Math.max(0, Math.log10(Math.max(m, SCOPE_MIN) / SCOPE_MIN) / Math.log10(SCOPE_MAX / SCOPE_MIN)));
+
+/**
+ * The spacecraft's scope (PLAN-RADAR-AAA RD4), right of the centre where no panel stands (hud/layout.ts fit): its sensors' tracks on its LVLH axes — the V-bar (along
+ * our way) up, the H-bar (our orbit's normal) right, the range on a logarithmic scale (rings at 1, 10, 100 km) —; each
+ * one's name, its range, its closing rate, its height over us along the R-bar; held by the datalink only: dashed;
+ * hidden by the body: dimmed; the target ringed. `sel` the target's id.
+ */
+export function drawSpaceScope(
+  o: { ctx: CanvasRenderingContext2D; W: number; H: number; dpr: number },
+  tracks: SpaceTrack[],
+  sel: string,
+  text: Text,
+) {
+  const { ctx, W, H, dpr } = o;
+  // (its room: the ring, its labels to the right — clear of the panels and of the boxes already drawn)
+  const Rc = 92;
+  const want: Box = { x: (W / dpr) * 0.66, y: (H / dpr) * 0.58, w: 2 * Rc + 130, h: 2 * Rc + 40, id: "space-scope" };
+  const at = fit(want, "down", { reach: 300, others: [...drawn] }) ?? fit(want, "up", { reach: 400, others: [...drawn] });
+  if (!at) return;
+  drawn.push(at);
+  const R = Rc * dpr;
+  const cx = (at.x + 14 + Rc) * dpr,
+    cy = (at.y + 14 + Rc) * dpr;
+  const col = `rgba(${CYAN}, 0.8)`;
+  ctx.save();
+  ctx.fillStyle = "rgba(4, 16, 26, 0.45)";
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 1.2 * dpr;
+  ctx.stroke();
+  // (the rings: 1, 10, 100 km)
+  ctx.setLineDash([2 * dpr, 4 * dpr]);
+  ctx.strokeStyle = `rgba(${CYAN}, 0.35)`;
+  for (const km of [1, 10, 100]) {
+    const r = scopeRadius(km * 1000) * R;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+    ctx.stroke();
+    text(`${km}`, cx + r * 0.71 + 2 * dpr, cy - r * 0.71, `rgba(${CYAN}, 0.55)`, 8.5, "left", true);
+  }
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - R);
+  ctx.lineTo(cx, cy + R);
+  ctx.moveTo(cx - R, cy);
+  ctx.lineTo(cx + R, cy);
+  ctx.strokeStyle = `rgba(${CYAN}, 0.2)`;
+  ctx.stroke();
+  ctx.restore();
+  text("+V", cx, cy - R - 6 * dpr, col, 9.5, "center", true);
+  text("+H", cx + R + 4 * dpr, cy + 3 * dpr, col, 9.5, "left", true);
+  text(t("LVLH · RNDZ"), cx - R, cy + R + 16 * dpr, col, 9.5, "left", true);
+  // the craft: at the centre
+  ctx.fillStyle = WHITE;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 6 * dpr);
+  ctx.lineTo(cx + 4 * dpr, cy + 5 * dpr);
+  ctx.lineTo(cx - 4 * dpr, cy + 5 * dpr);
+  ctx.closePath();
+  ctx.fill();
+  // (the labels: each moved down past those already written — two craft side by side both read)
+  const taken: [number, number, number, number][] = [];
+  for (const T of tracks) {
+    const h = Math.hypot(T.lvlh[0], T.lvlh[1]);
+    const r = scopeRadius(T.range) * R;
+    // (its bearing in our orbit's plane and across it; straight above or below us: at the top)
+    const ux = h > 1 ? T.lvlh[1] / h : 0,
+      uy = h > 1 ? T.lvlh[0] / h : 1;
+    const x = cx + ux * r,
+      y = cy - uy * r;
+    const side: SymSide = T.kind === "station" ? "neutral" : T.kind === "player" ? "player" : "friend";
+    const dl = T.sensors === 4;
+    drawSym(
+      ctx,
+      x,
+      y,
+      { kind: "air", side, state: T.hidden ? "coast" : dl ? "datalink" : "firm", trk: null, selected: T.id === sel },
+      6 * dpr,
+      1.4 * dpr,
+    );
+    const km = T.range / 1000;
+    const dist = km < 10 ? `${km.toFixed(2)} km` : `${Math.round(km)} km`;
+    const dz = T.lvlh[2] / 1000;
+    const c2 = T.id === sel ? AMBER : WHITE;
+    let ly = y;
+    for (
+      let k = 0;
+      k < 6 && taken.some((q) => x + 9 * dpr < q[2] && q[0] < x + 130 * dpr && ly - 12 * dpr < q[3] && q[1] < ly + 12 * dpr);
+      k++
+    )
+      ly += 24 * dpr;
+    taken.push([x + 9 * dpr, ly - 12 * dpr, x + 130 * dpr, ly + 12 * dpr]);
+    text(`${T.name}`, x + 9 * dpr, ly - 3 * dpr, c2, 9.5, "left", true);
+    text(
+      `${dist} ${T.rate <= 0 ? "▼" : "▲"}${Math.abs(T.rate) < 10 ? Math.abs(T.rate).toFixed(1) : Math.round(Math.abs(T.rate))} R${dz >= 0 ? "+" : "−"}${Math.abs(dz) < 10 ? Math.abs(dz).toFixed(1) : Math.round(Math.abs(dz))}`,
+      x + 9 * dpr,
+      ly + 9 * dpr,
+      `rgba(${CYAN}, 0.85)`,
+      8.5,
+      "left",
+      true,
+    );
   }
 }

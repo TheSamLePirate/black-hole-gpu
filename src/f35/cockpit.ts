@@ -126,25 +126,31 @@ export function pcdData(
       selected: !!T.selected,
       state: T.state,
       id: T.id,
+      hist: T.hist?.map((q) => ({ e: q.e, n: q.n, f: 1 - q.age / q.span })),
+      tcas: T.tcas,
+      traffic: T.traffic,
     })),
     // (the radar's own page, FCR: its mode, its beam, its contacts heading up, the lock's figures)
     fcr: RH
       ? {
           mode: RH.mode,
           beam: RH.beam,
-          contacts: RH.contacts.map((T) => ({
-            x: T.x,
-            y: T.y,
-            dz: T.dz,
-            trk: T.trk,
-            iff: T.iff ?? "unknown",
-            air: T.air,
-            locked: T.locked,
-            datalink: !!T.datalink,
-            name: T.name,
-            selected: !!T.selected,
-            id: T.id,
-          })),
+          // (the radar's own: not the TCAS's traffic it never measured)
+          contacts: RH.contacts
+            .filter((T) => !T.tcasOnly)
+            .map((T) => ({
+              x: T.x,
+              y: T.y,
+              dz: T.dz,
+              trk: T.trk,
+              iff: T.iff ?? "unknown",
+              air: T.air,
+              locked: T.locked,
+              datalink: !!T.datalink,
+              name: T.name,
+              selected: !!T.selected,
+              id: T.id,
+            })),
           lock: RH.lock
             ? {
                 name: RH.lock.name,
@@ -177,31 +183,14 @@ export function pcdData(
     alerts,
     damage: (c.combat?.world.damage ?? 0) / 100,
     ground,
-    // (the missiles in flight — the DAS sees their motors —: heading up as the radar's contacts)
-    missiles: (() => {
-      const C = c.combat;
-      const P = C?.last;
-      if (!C || !P) return [];
-      const psi = Math.atan2(P.fwd[0], P.fwd[1]);
-      const cs = Math.cos(psi),
-        sn = Math.sin(psi);
-      return C.world.missiles
-        .filter((M) => M.alive)
-        .map((M) => {
-          const e = M.p[0] - P.p[0],
-            n = M.p[1] - P.p[1];
-          const sp = Math.hypot(M.v[0], M.v[1]);
-          return {
-            x: e * cs - n * sn,
-            y: e * sn + n * cs,
-            dz: M.p[2] - P.p[2],
-            atUs: M.owner === "red" && M.target === -1,
-            trk: sp > 3 ? Math.atan2(M.v[0], M.v[1]) - psi : null,
-          };
-        });
-    })(),
+    // (the DAS's — RD4 —: what it holds by their heat, heading up as the radar's contacts — the aircraft about, the
+    // missiles' motors, the flares; no longer the fight's truth)
+    das: (RH?.das ?? []).filter((k) => k.kind === "air").map((k) => ({ x: k.x, y: k.y, dz: k.dz, iff: k.iff })),
+    missiles: (RH?.das ?? []).filter((k) => k.kind === "missile").map((k) => ({ x: k.x, y: k.y, dz: k.dz, atUs: k.atUs, trk: k.trk })),
     // (the world's airfields within 200 km — PLAN-RADAR-AAA RD11 —, the TSD's level of detail its own)
     world: fieldsNearCached("pcd", (geo.lat * 180) / Math.PI, (geo.lon * 180) / Math.PI, 200_000, undefined, 1000).slice(0, 400),
+    // (the picture's missiles — RD8 —: the TSD's, their targets and their ends)
+    msls: RH?.missiles ?? [],
     // (its trace, the last five minutes, and its path ahead, three minutes — PLAN-RADAR-AAA RD15)
     trail: c.ownTrack.pts.slice(-300),
     pred: c.ownPrediction(180, 10),

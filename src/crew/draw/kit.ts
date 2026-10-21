@@ -240,7 +240,7 @@ export function unitSymbol(
   hdg: number | null,
   rot: number,
   k = 7,
-  o: { state?: SymState; locked?: boolean; selected?: boolean; age?: number } = {},
+  o: { state?: SymState; locked?: boolean; selected?: boolean; age?: number; tcas?: "proximate" | "TA" | "RA" } = {},
 ) {
   const sk: SymKind =
     kind === "decoy"
@@ -256,6 +256,40 @@ export function unitSymbol(
             : "air";
   const ss: SymSide = kind === "decoy" ? "friend" : side in PAL ? (side as SymSide) : "unknown";
   drawSym(p.c, x, y, { kind: sk, side: ss, trk: hdg === null || kind === "ground" ? null : hdg - rot, ...o }, k, 1.6);
+}
+/** A missile's cue under it (PLAN-RADAR-AAA RD8): its end where it ended (SPLASH, MISS — true: no symbol then), at
+ *  us, decoyed, its time to go. */
+export function missileCue(p: Pen, x: number, y: number, t: { kind: string; side: string; type: string }): boolean {
+  if (t.kind !== "missile" || !t.type) return false;
+  const col = t.side === "friend" ? PAL.friend : PAL.hostile;
+  if (t.type === "SPLASH" || t.type === "MISS") {
+    p.text(t.type === "SPLASH" ? "SPLASH" : L("RATÉ", "MISS"), x, y + 4, { col, size: 11, weight: 700, align: "center" });
+    return true;
+  }
+  const s = t.type.replace("→ US", L("→ NOUS", "→ US")).replace("DECOYED", L("LEURRÉ", "DECOYED"));
+  p.text(s, x, y + 17, { col, size: 9, weight: 700, align: "center" });
+  return false;
+}
+/** A contact's trail (PLAN-RADAR-AAA RD7): its past places within the span [s] (a missile's 5 s at least), dots fading
+ *  into the past; `at` the display's place of a latitude, longitude. */
+export function trailDots(
+  p: Pen,
+  t: { trail?: { lat: number; lon: number; age: number }[]; kind: string; side: string },
+  span: number,
+  at: (lat: number, lon: number) => Point | null,
+) {
+  const sp = t.kind === "missile" ? Math.max(span, 5) : t.kind === "decoy" ? 0 : span;
+  if (!sp || !t.trail?.length) return;
+  const c = p.c;
+  c.fillStyle = SIDE[t.side] ?? C.white;
+  for (const q of t.trail) {
+    if (q.age > sp) continue;
+    const xy = at(q.lat, q.lon);
+    if (!xy) continue;
+    c.globalAlpha = 0.15 + 0.6 * (1 - q.age / sp);
+    c.fillRect(xy[0] - 1.3, xy[1] - 1.3, 2.6, 2.6);
+  }
+  c.globalAlpha = 1;
 }
 /** each side's colour — the common palette's (radar/symbols.ts PAL) */
 export const SIDE: Record<string, string> = { ...PAL };

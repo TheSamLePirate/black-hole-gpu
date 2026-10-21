@@ -74,6 +74,22 @@ describe.skipIf(!E2E)("selecting a track by a click", () => {
     expect(await app.js<string>(`__bh.settings.target`)).toBe(target0);
   }, 30_000);
 
+  test("the trails (RD7): off — the lock's alone —; 30 s — every track's past echoes on the scope, the TSD, the map", async () => {
+    await app.js(`(() => { __bh.settings.radarTrails = "off"; __bh.settings.radarTrailLock = true; return 1; })()`);
+    await Bun.sleep(4500);
+    const off = await app.js<{ lock: number; others: number }>(`(() => { const R = __bh.camera.flightInfo().radar;
+      return { lock: R.contacts.filter((c) => c.locked).reduce((m, c) => Math.max(m, c.hist?.length ?? 0), 0),
+        others: R.contacts.filter((c) => !c.locked && !c.selected).reduce((m, c) => m + (c.hist?.length ?? 0), 0) }; })()`);
+    console.log(`  trails off: the lock's ${off.lock} points, the others' ${off.others}`);
+    expect(off.lock).toBeGreaterThanOrEqual(2);
+    expect(off.others).toBe(0);
+    await app.js(`(() => { __bh.settings.radarTrails = "short"; return 1; })()`);
+    await Bun.sleep(4500);
+    const on = await app.js<number>(`__bh.camera.flightInfo().radar.contacts.filter((c) => (c.hist?.length ?? 0) >= 2).length`);
+    console.log(`  trails 30 s: ${on} tracks with a trail`);
+    expect(on).toBeGreaterThanOrEqual(3);
+  }, 60_000);
+
   test("a track touched on the panoramic display's TSD: selected", async () => {
     await app.waitFor(`__bh.pcd.pcd.hits && [...__bh.pcd.pcd.hits.values()].flat().some((b) => b.r.w === 40)`, 15_000);
     const r = await app.js<{ u: number; v: number } | null>(`(() => { const p = __bh.pcd.pcd;

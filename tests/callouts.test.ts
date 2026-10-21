@@ -101,3 +101,16 @@ test("the HUD's warnings: said as they come, once while they last, the shown-onl
     w.update({ ...base, agl: 3000, vz: -5, now, alerts: on ? [{ id: "shield", level: "warning" }] : [] }).length;
   expect([sayAt(0, true), sayAt(5000, false), sayAt(9000, true), sayAt(20000, false), sayAt(45000, true)]).toEqual([1, 0, 0, 0, 1]);
 });
+
+test("the TCAS (PLAN-RADAR-AAA RD4): traffic once, the RA's order, again when it reverses, clear of conflict", () => {
+  const c = new Callouts();
+  const say = (tcas: CalloutInput["tcas"]) => c.update({ ...base, agl: 3000, vz: 0, final: false, tcas }).map((l) => l.id);
+  expect(say({ ta: false, ra: null })).toEqual([]);
+  expect(say({ ta: true, ra: null })).toEqual(["tcas-ta"]);
+  expect(say({ ta: true, ra: null })).toEqual([]);
+  expect(say({ ta: true, ra: "climb" })).toEqual(["tcas-ra"]);
+  expect(say({ ta: true, ra: "climb" })).toEqual([]);
+  expect(say({ ta: true, ra: "descend" })).toEqual(["tcas-ra"]);
+  expect(say({ ta: true, ra: null })).toEqual(["tcas-clear"]);
+  expect(say({ ta: false, ra: null })).toEqual([]);
+});

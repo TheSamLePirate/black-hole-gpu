@@ -59,6 +59,9 @@ interface CombatState {
   ms: [number, MissileKind, number, number, number, number, number, number, string, 0 | 1][];
   /** [id, e, n, u, ve, vn, vu, fe, fn, fu, ue, un, uu, alive] */
   ai?: number[][];
+  /** the sender's own place in his world (PLAN-RADAR-AAA RD8: each page's free fight anchored where it began — his
+   *  missiles placed from him, as his craft is) */
+  o?: [number, number, number];
 }
 
 const r1 = (x: number) => Math.round(x * 10) / 10;
@@ -321,7 +324,8 @@ export class NetMatch {
       case "impact":
         return this.onImpact(from, !!ev.broke, Array.isArray(ev.p) ? (ev.p as [number, number, number]) : null);
       case "cm":
-        if (W) W.addDecoys(ev.p as V3, ev.v as V3, ev.up as V3);
+        // (dropped where he is: his place here — each page's world its own anchor)
+        if (W) W.addDecoys(this.fromHere(from, ev.p as V3, ev.p as V3), ev.v as V3, ev.up as V3);
         return;
       case "result":
         this.sheet?.apply({ kind: "result", slot: from, value: Number(ev.value), medal: (ev.medal as string) ?? null });
@@ -661,6 +665,17 @@ export class NetMatch {
     if (!C || (far && C.downAt === null && !C.world.ownMissiles().length)) this.freeCombat();
   }
 
+  /**
+   * A point of another pilot's world in ours (`o`: his own place there): from his craft as the network places it about
+   * ours — each page's fight anchored where it began. Unknown (no craft of his, no place of ours): as sent.
+   */
+  private fromHere(from: number, p: V3, o?: V3 | number[]): V3 {
+    const P = this.d.camera.combat?.last;
+    const ship = this.d.session.ships.find((s) => s.slot === from);
+    if (!P || !ship || !o) return p;
+    return [P.p[0] + ship.enu.r[0] + p[0] - o[0]!, P.p[1] + ship.enu.r[1] + p[1] - o[1]!, P.p[2] + ship.enu.r[2] + p[2] - o[2]!];
+  }
+
   /** The free fight's world, anchored where we are. */
   private freeCombat() {
     const c = this.d.camera;
@@ -745,7 +760,7 @@ export class NetMatch {
           ms.push({
             key: `${from}:${x[0]}`,
             kind: x[1],
-            p: [x[2] + x[5] * age, x[3] + x[6] * age, x[4] + x[7] * age],
+            p: this.fromHere(from, [x[2] + x[5] * age, x[3] + x[6] * age, x[4] + x[7] * age], s.o),
             v: [x[5], x[6], x[7]],
             atMe: x[8] === `s${me}`,
             red: x[9] === 1 || !this.sameTeam(from, me),
@@ -781,6 +796,7 @@ export class NetMatch {
         this.csAt = now;
         const tgt = (q: number | null) => (q === null ? "" : q === -1 ? `s${me}` : q >= 10_000 ? `s${q - 10_000}` : `a${q}`);
         const s: CombatState = {
+          o: [r1(P.p[0]), r1(P.p[1]), r1(P.p[2])],
           ms: W.ownMissiles().map((x) => [
             x.id,
             x.kind,

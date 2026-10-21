@@ -246,6 +246,10 @@ export interface FlightInfo {
   /** the tactical picture's tracks the sensors hold, on the camera's axes — what a click in the view selects; the one
    *  selected with its BRAA (PLAN-RADAR-AAA RD9) */
   pic: PicView[] | null;
+  /** a spacecraft's sensors' tracks (PLAN-RADAR-AAA RD4 — controller/spacepic.ts) */
+  spacePic: import("../radar/space").SpaceTrack[] | null;
+  /** the TCAS's most urgent advisory (PLAN-RADAR-AAA RD4 — ui/hud/symbology.ts drawTcas) */
+  tcas: import("../ui/hud/symbology").SymInfo["tcas"];
   /** the pilot's eyes and body (game/gstrain.ts) */
   body: { grey: number; black: number; red: number; strain: number; gloc: boolean; felt: number };
   /** an aerobatic figure flown: its banner, its cue, its entry, its guide, its result (controller/aerobatics.ts) */
@@ -449,6 +453,24 @@ function flightInfo(this: CameraController): FlightInfo {
       return {
         ...R,
         lock: { ...R.lock, cam: M ? M(R.lock.r) : null, collCam: M && k ? M([k[0]! * 5000, k[1]! * 5000, k[2]! * 5000]) : null },
+      };
+    })(),
+    // (a spacecraft's sensors — RD4 —: its tracks on its LVLH axes)
+    spacePic: this.spacePic?.tracks ?? null,
+    // (the TCAS's most urgent advisory — RD4 —: every craft in the air; the intruder's place on the camera's axes)
+    tcas: (() => {
+      const a = this.tcas.find((x) => x.level === "TA" || x.level === "RA");
+      const T = a ? this.picture?.byId.get(a.id) : undefined;
+      if (!a || !T) return null;
+      const M = enuToCam(this, C);
+      return {
+        level: a.level as "TA" | "RA",
+        sense: a.sense,
+        name: T.name,
+        dist: Math.hypot(...T.rt),
+        dh: T.rt[2],
+        tau: a.tau,
+        cam: M ? M(T.rt) : null,
       };
     })(),
     // (the picture's tracks in the view: clicked to select — PLAN-RADAR-AAA RD9 —, the selected one's figures)

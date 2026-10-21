@@ -1516,6 +1516,20 @@ Selects a track on all the pilot's screens (`null`: none).
 What a click in the view may select this frame (RD9): the HUD's scope's symbols and the tracks seen in the view, their
 place and reach in CSS px.
 
+### The TCAS and the spacecraft's sensors (RD4) — on `__bh.camera`
+
+- `__bh.camera.tcas` → `TcasAdvisory[]` (src/radar/tcas.ts): the transponders heard, graded as TCAS II does —
+  `{id, level: "other" | "proximate" | "TA" | "RA", tau, missD, missH, sense?: "climb" | "descend"}` —, the most urgent
+  first. Each picture track also carries `tcas` and `ra`. `settings.tcas` off: empty.
+- `__bh.camera.spacePic` → `SpacePic \| null` (controller/spacepic.ts): flying the Ranger, the Lander or the Endurance in
+  our universe, `{ref, refPos, refVel, own: {p, v}, tracks, at}` — the body it is about and that body's state (home
+  frame [M, c]), our place about it [m, m/s], the tracks on our LVLH axes (`lvlh` V-bar, H-bar, R-bar [m], `vlvlh`,
+  `range`, `rate`, `sensors` RADAR 1 · LIDAR 2 · DATALINK 4, `hidden`, `ca`). Refreshed five times a second.
+- `__bh.camera.radarSources` → `Map<string, (fix) => RadarObject[]>`: the radar's sources; a test may add its own
+  (`tests/e2e/tcas.e2e.test.ts` puts an airliner head-on).
+
+*Used in:* `tests/e2e/tcas.e2e.test.ts`, `tests/e2e/space-sensors.e2e.test.ts`, `tests/e2e/missile-cues.e2e.test.ts`.
+
 ### `__bh.flight.hud` → FlightHud
 
 The flight HUD (ui/flighthud.ts). `tacMap` is its tactical map (ui/jetmap.ts, PLAN-RADAR-AAA RD15): `rangeKm`, `range`

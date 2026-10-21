@@ -26,6 +26,9 @@ export const PAL = {
   flare: "#ffaa3c",
   chaff: "#c8ccd6",
   select: "#ffb43c",
+  /** the TCAS's traffic advisory (amber) and resolution advisory (red) — RD4 */
+  ta: "#ffb000",
+  ra: "#ff3030",
 } as const;
 
 export interface Sym {
@@ -43,6 +46,9 @@ export interface Sym {
   age?: number;
   /** a missile at us: drawn blinking */
   atUs?: boolean;
+  /** the TCAS's grading (RD4): the civil traffic's diamond filled when proximate, an amber disc for a TA, a red
+   *  square for an RA (TCAS II's own); another side's shape ringed so */
+  tcas?: "proximate" | "TA" | "RA" | "other";
 }
 
 /** A track's colour. */
@@ -115,12 +121,25 @@ export function drawSym(g: Ctx2D, x: number, y: number, s: Sym, k: number, lw: n
     g.moveTo(k * 0.8, -k * 0.8);
     g.lineTo(-k * 0.8, k * 0.8);
   } else if (s.side === "traffic") {
-    // (the TCAS's open diamond)
-    g.moveTo(0, -k * 0.85);
-    g.lineTo(k * 0.85, 0);
-    g.lineTo(0, k * 0.85);
-    g.lineTo(-k * 0.85, 0);
-    g.closePath();
+    // (the TCAS's diamond — open, filled when proximate —, its TA's amber disc, its RA's red square)
+    if (s.tcas === "TA") {
+      g.fillStyle = PAL.ta;
+      g.strokeStyle = PAL.ta;
+      g.arc(0, 0, k * 0.8, 0, 2 * Math.PI);
+      g.fill();
+    } else if (s.tcas === "RA") {
+      g.fillStyle = PAL.ra;
+      g.strokeStyle = PAL.ra;
+      g.rect(-k * 0.75, -k * 0.75, k * 1.5, k * 1.5);
+      g.fill();
+    } else {
+      g.moveTo(0, -k * 0.85);
+      g.lineTo(k * 0.85, 0);
+      g.lineTo(0, k * 0.85);
+      g.lineTo(-k * 0.85, 0);
+      g.closePath();
+      if (s.tcas === "proximate") g.fill();
+    }
   } else if (air) {
     if (s.side === "friend" || s.side === "player" || s.side === "carrier") g.arc(0, k * 0.35, k, Math.PI, 2 * Math.PI);
     else if (s.side === "hostile") {
@@ -151,6 +170,16 @@ export function drawSym(g: Ctx2D, x: number, y: number, s: Sym, k: number, lw: n
     g.stroke();
   }
   g.globalAlpha = 1;
+  // (another side's craft graded by the TCAS: ringed in the advisory's colour)
+  if (s.side !== "traffic" && (s.tcas === "TA" || s.tcas === "RA")) {
+    g.strokeStyle = s.tcas === "TA" ? PAL.ta : PAL.ra;
+    g.lineWidth = lw * 1.2;
+    g.beginPath();
+    if (s.tcas === "TA") g.arc(0, 0, k * 1.35, 0, 2 * Math.PI);
+    else g.rect(-k * 1.3, -k * 1.3, k * 2.6, k * 2.6);
+    g.stroke();
+    g.strokeStyle = col;
+  }
   if (s.locked) {
     g.lineWidth = lw * 0.9;
     g.beginPath();

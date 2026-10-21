@@ -25,7 +25,7 @@ import { unitsFor } from "../unitsys";
 import { drawSym, PAL, type SymSide, symColour } from "../../radar/symbols";
 import { drawFields } from "../../world/runwaydraw";
 import { fieldShown, fieldsNearCached } from "../../world/runways";
-import { drawApproachHud, drawSpaceHud, type ApproachHudInfo, type SpaceHudInfo } from "./kindhud";
+import { drawApproachHud, drawSpaceHud, drawSpaceScope, type ApproachHudInfo, type SpaceHudInfo } from "./kindhud";
 import { t, tf } from "../../i18n";
 
 /** The phase lets this element show (hud/declutter.ts — none given: all). */
@@ -61,8 +61,30 @@ export interface RadarData {
     selected?: boolean;
     state?: string;
     id?: string;
+    /** its history (RD7): heading up as it [m], its age and the span shown [s] */
+    hist?: { x: number; y: number; age: number; span: number }[];
+    /** the TCAS's grading (RD4); the civil traffic (its diamond) */
+    tcas?: "other" | "proximate" | "TA" | "RA";
+    traffic?: boolean;
   }[];
-  missiles: { x: number; y: number; trk: number | null; red: boolean }[];
+  /** the missiles: heading up as the contacts [m], their way; at us, drawn off by a decoy, how they ended, their
+   *  target's place and time to go (RD8 — the picture's; a fight's own without them) */
+  missiles: {
+    x: number;
+    y: number;
+    trk: number | null;
+    red: boolean;
+    atUs?: boolean;
+    decoyed?: boolean;
+    end?: "splash" | "miss";
+    tti?: number | null;
+    tx?: number | null;
+    ty?: number | null;
+    /** ours by radar: its own radar on (its last 15 km); our distance to the target then (A-pole), to its end (F-pole) [m] */
+    pitbull?: boolean;
+    apole?: number | null;
+    fpole?: number | null;
+  }[];
   /** a fight's decoys (PLAN-RADAR-AAA RD8a): heading up as the contacts [m], a flare or chaff, its age [s] */
   decoys?: { x: number; y: number; kind: "flare" | "chaff"; age: number }[];
 }
@@ -73,6 +95,8 @@ export interface RadarPicture {
   mode: string;
   beam: number;
   contacts: RadarData["contacts"];
+  /** the picture's missiles (RD8) */
+  missiles?: RadarData["missiles"];
   lock: {
     name: string;
     iff: string;
@@ -144,6 +168,19 @@ export interface SymInfo {
   } | null;
   /** the F-35's radar (controller/radar.ts) */
   radar?: RadarPicture | null;
+  /** a spacecraft's sensors' tracks (PLAN-RADAR-AAA RD4 — controller/spacepic.ts) */
+  spacePic?: import("../../radar/space").SpaceTrack[] | null;
+  /** the TCAS's most urgent advisory (PLAN-RADAR-AAA RD4): its level, an RA's sense, the intruder's name, distance
+   *  and height above us [m], its time to the closest approach [s], its place on the camera's axes */
+  tcas?: {
+    level: "TA" | "RA";
+    sense?: "climb" | "descend";
+    name: string;
+    dist: number;
+    dh: number;
+    tau: number;
+    cam: number[] | null;
+  } | null;
   /** the picture's tracks in the view (controller/telemetry.ts — PLAN-RADAR-AAA RD9): clicked to select */
   pic?: import("../../controller/telemetry").PicView[] | null;
   /** a fight flown (controller/combat.ts): every vector on the camera's axes from the craft [m] */
@@ -714,7 +751,7 @@ export function drawSymbology(F: SymFrame) {
   if (i.avionics && s.f35Radar && i.radar)
     drawRadar(
       F,
-      { contacts: i.radar.contacts, missiles: i.combat?.radar.missiles ?? [], decoys: i.combat?.radar.decoys ?? [] },
+      { contacts: i.radar.contacts, missiles: i.radar.missiles ?? i.combat?.radar.missiles ?? [], decoys: i.combat?.radar.decoys ?? [] },
       i.chal?.radar?.contacts ?? null,
       text,
       stroke,
@@ -722,6 +759,7 @@ export function drawSymbology(F: SymFrame) {
     );
   if (i.radar?.lock && !i.combat) drawLockBox(F, pr, stroke, text, i.radar.lock);
   if (i.pic) drawPicked(F, pr, stroke, text, i.pic);
+  if (i.tcas && pilotView) drawTcas(F, pr, stroke, text, i.tcas);
   if (i.radar?.lock?.icpt && !i.aar) drawIntercept(F, pr, stroke, text, i.radar.lock, i.radar.lock.icpt);
   // (the air refuelling: the basket, the probe, the gap, the hose's range, the pod's lights)
   if (i.aar && pilotView) drawAar(F, i.aar, pr, stroke, text, fpx, hmdRgb);
@@ -804,6 +842,9 @@ export function drawSymbology(F: SymFrame) {
   // deviations, its gear and flaps (the Atmosphere's: the fighter's, above)
   if (F.kind === "space" && pilotView && !F.compact && i.status && !i.status.kerr && i.region !== "hole")
     drawSpaceHud({ ctx, W, H, dpr }, { body: i.status.soiName, orbit: i.status.orbit, next: i.status.next, target: i.status.target }, text);
+  // (the spacecraft's sensors — PLAN-RADAR-AAA RD4 —: its scope on its LVLH axes)
+  if (F.kind === "space" && pilotView && !F.compact && i.spacePic && s.f35Radar !== false)
+    drawSpaceScope({ ctx, W, H, dpr }, i.spacePic, String(s.target), text);
   if (F.kind === "approach" && pilotView && i.surface && !(helmet && jet)) {
     const mls = F.runway?.mls;
     drawApproachHud(
@@ -2818,7 +2859,24 @@ function drawRadar(
   // for the lock, the selection and the players
   for (const c of R?.contacts ?? []) {
     const [px, py, out] = at(c.x, c.y);
-    const side: SymSide = !c.alive ? "dead" : c.colour && c.iff !== "hostile" ? "player" : ((c.iff as SymSide | undefined) ?? "hostile");
+    // (its trail — RD7 —: the past echoes, dots fading into the past)
+    if (c.hist?.length) {
+      ctx.fillStyle = symColour({ kind: c.air ? "air" : "sea", side: (c.iff as SymSide) ?? "unknown", colour: c.colour });
+      for (const q of c.hist) {
+        const [hx, hy, ho] = at(q.x, q.y);
+        if (ho) continue;
+        ctx.globalAlpha = 0.15 + 0.6 * (1 - q.age / q.span);
+        ctx.fillRect(hx - 1.2 * dpr, hy - 1.2 * dpr, 2.4 * dpr, 2.4 * dpr);
+      }
+      ctx.globalAlpha = 1;
+    }
+    const side: SymSide = !c.alive
+      ? "dead"
+      : c.traffic && c.iff !== "hostile"
+        ? "traffic"
+        : c.colour && c.iff !== "hostile"
+          ? "player"
+          : ((c.iff as SymSide | undefined) ?? "hostile");
     drawSym(
       ctx,
       px,
@@ -2831,6 +2889,7 @@ function drawRadar(
         trk: c.trk,
         locked: c.locked,
         selected: c.selected,
+        tcas: c.tcas,
       },
       6 * dpr,
       1.4 * dpr,
@@ -2851,7 +2910,45 @@ function drawRadar(
   }
   for (const m of R?.missiles ?? []) {
     const [px, py] = at(m.x, m.y);
-    drawSym(ctx, px, py, { kind: "missile", side: m.red ? "hostile" : "friend", trk: m.trk, atUs: m.red }, 6 * dpr, 1.4 * dpr);
+    const col = symColour({ kind: "missile", side: m.red ? "hostile" : "friend" });
+    // (its end — RD8 —: SPLASH or MISS 3 s where it did)
+    if (m.end) {
+      text(m.end === "splash" ? t("SPLASH") : t("MISS"), px, py - 4 * dpr, col, 10, "center", true);
+      if (m.fpole !== null && m.fpole !== undefined) {
+        const U = unitsFor(s);
+        text(`F-POLE ${U.dist(m.fpole).toFixed(1)}`, px, py + 9 * dpr, col, 8.5, "center", true);
+      }
+      continue;
+    }
+    // (its target: a dotted line to it, the time to go at its end; drawn off: DECOYED)
+    if (m.tx !== null && m.tx !== undefined && m.ty !== null && m.ty !== undefined) {
+      const [qx, qy] = at(m.tx, m.ty);
+      stroke(
+        () => {
+          ctx.moveTo(px, py);
+          ctx.lineTo(qx, qy);
+        },
+        col,
+        0.9,
+        [2, 3],
+      );
+      if (m.tti !== null && m.tti !== undefined && m.tti < 600)
+        text(`${Math.round(m.tti)}s`, (px + qx) / 2 + 5 * dpr, (py + qy) / 2, col, 9, "left", true);
+    }
+    drawSym(ctx, px, py, { kind: "missile", side: m.red ? "hostile" : "friend", trk: m.trk, atUs: m.atUs ?? m.red }, 6 * dpr, 1.4 * dpr);
+    if (m.decoyed) text(t("DECOYED"), px, py + 13 * dpr, col, 9, "center", true);
+    else if (m.pitbull) {
+      const U = unitsFor(s);
+      text(
+        `PITBULL${m.apole !== null && m.apole !== undefined ? ` A ${U.dist(m.apole).toFixed(1)}` : ""}`,
+        px,
+        py + 13 * dpr,
+        col,
+        8.5,
+        "center",
+        true,
+      );
+    }
   }
   // the craft: at the centre, its nose up
   ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
@@ -2872,6 +2969,43 @@ function drawRadar(
  * hudHits); the selected one marked — an amber diamond about it, its card under it (its name and type, its bearing,
  * range, altitude, aspect, closing speed) —, or an amber arrow at the edge when out of the view.
  */
+/**
+ * The TCAS's advisory (PLAN-RADAR-AAA RD4), every craft in the air: under the banner, TRAFFIC (amber: the intruder's
+ * distance, its height above or below, its time to the closest approach) or the RA's order (red: CLIMB or DESCEND,
+ * its arrow); the intruder in the view marked as the TCAS's own symbols are — an amber disc's ring, a red square.
+ */
+function drawTcas(
+  F: SymFrame,
+  pr: (d: V3 | null | undefined) => [number, number] | null,
+  stroke: (draw: () => void, col: string, lw: number, dash?: number[]) => void,
+  text: (t: string, x: number, y: number, col: string, size: number, align?: CanvasTextAlign, mono?: boolean) => void,
+  a: NonNullable<SymInfo["tcas"]>,
+) {
+  const { W, dpr } = F;
+  const U = unitsFor(F.s);
+  const ra = a.level === "RA";
+  const col = ra ? PAL.ra : PAL.ta;
+  const y = 150 * dpr;
+  const dh = Math.round(U.alt(a.dh) / 100);
+  const fig = `${U.dist(a.dist).toFixed(1)} ${U.distName} · ${dh >= 0 ? "+" : "−"}${String(Math.abs(dh)).padStart(2, "0")}${Number.isFinite(a.tau) ? ` · ${Math.round(a.tau)} s` : ""}`;
+  if (ra) {
+    text(a.sense === "climb" ? `${t("CLIMB")} ↑` : `${t("DESCEND")} ↓`, W / 2, y, col, 22, "center", true);
+    text(`TCAS RA · ${a.name.toUpperCase()} · ${fig}`, W / 2, y + 22 * dpr, col, 11, "center", true);
+  } else text(`TCAS · ${t("TRAFFIC")} · ${a.name.toUpperCase()} · ${fig}`, W / 2, y, col, 13, "center", true);
+  const p = a.cam ? pr(a.cam as V3) : null;
+  if (p) {
+    const k = 14 * dpr;
+    stroke(
+      () => {
+        if (ra) F.ctx.rect(p[0] - k, p[1] - k, 2 * k, 2 * k);
+        else F.ctx.arc(p[0], p[1], k, 0, 2 * Math.PI);
+      },
+      col,
+      2,
+    );
+  }
+}
+
 function drawPicked(
   F: SymFrame,
   pr: (d: V3 | null | undefined) => [number, number] | null,

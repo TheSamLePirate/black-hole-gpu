@@ -471,6 +471,23 @@ function controls() {
           views.request();
         },
       ),
+      // (the tracks' trails — PLAN-RADAR-AAA RD7 —: kept on this console)
+      segmented(
+        [
+          ["off", L("Sans traînée", "No trails")],
+          ["short", "30 s"],
+          ["long", "3 min"],
+        ],
+        views.trails,
+        L("Traînées", "Trails"),
+        (o) => {
+          views.trails = o as "off" | "short" | "long";
+          try {
+            localStorage.setItem("crew.trails", views.trails);
+          } catch {}
+          views.request();
+        },
+      ),
       button(L("Ajuster", "Fit"), () => {
         views.fit();
         controls();

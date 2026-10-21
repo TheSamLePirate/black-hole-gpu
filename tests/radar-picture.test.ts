@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { buildPicture, geoOf, type PicFix, type PicObject, SENSOR, sensed } from "../src/radar/picture";
+import { buildPicture, geoOf, type PicFix, type PicObject, SENSOR, sensed, TrailStore, trailSpan } from "../src/radar/picture";
 import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
 
 // The tactical picture (PLAN-RADAR-AAA RD2): one track per id — the truth and what the sensors know merged —, the
@@ -145,4 +145,69 @@ test("places exact over the ellipsoid: a point's height and latitude round-trip"
   expect(back.lat / D).toBeCloseTo(n.lat, 9);
   expect(n.lat - 45.9).toBeGreaterThan(0.26);
   expect(n.lat - 45.9).toBeLessThan(0.28);
+});
+
+test("the trails (RD7): a point at each radar measure, every 2 s otherwise; the span the settings show", () => {
+  const fix = fixAt(45.9, 6.9, 6000);
+  const S = new TrailStore();
+  for (let k = 0; k < 10; k++) {
+    const t = k * 0.5;
+    const P = buildPicture({
+      t,
+      fix,
+      objects: [
+        obj({ id: "cmb:1", r: [0, 20_000 - 100 * k, 0] }),
+        obj({ id: "trf:a", r: [5000, 30_000, 0], squawk: true, iff: "neutral" }),
+      ],
+      // (the radar's measure each second: seenAt steps)
+      tracks: [{ id: "cmb:1", r: [0, 20_000 - 100 * k, 0], v: [0, -200, 0], iff: "hostile", seenAt: Math.floor(t), datalink: false }],
+      lock: null,
+      selected: null,
+      weapons: [],
+      mode: "TWS",
+      beam: 0,
+    });
+    S.record(P, t);
+    if (k === 9) {
+      expect(P.byId.get("cmb:1")!.hist!.length).toBe(5);
+      expect(P.byId.get("trf:a")!.hist!.length).toBe(3);
+    }
+  }
+  expect(trailSpan({ kind: "air", locked: false, selected: false }, { radarTrails: "off" })).toBe(0);
+  expect(trailSpan({ kind: "air", locked: true, selected: false }, { radarTrails: "off", radarTrailLock: true })).toBe(30);
+  expect(trailSpan({ kind: "missile", locked: false, selected: false }, { radarTrails: "off" })).toBe(5);
+  expect(trailSpan({ kind: "air", locked: false, selected: false }, { radarTrails: "long" })).toBe(180);
+  expect(trailSpan({ kind: "flare", locked: false, selected: false }, { radarTrails: "long" })).toBe(0);
+});
+
+test("the DAS and the EOTS (RD4): aircraft by their heat — all round within 30 km, before the nose within 60 km; none unfitted", () => {
+  const fix = fixAt(45.9, 6.9, 6000);
+  const input = (irst: boolean) =>
+    buildPicture({
+      t: 10,
+      fix,
+      objects: [
+        obj({ id: "cmb:1", r: [0, -20_000, 0] }),
+        obj({ id: "cmb:2", r: [2000, 45_000, 1000] }),
+        obj({ id: "cmb:3", r: [0, 90_000, 0] }),
+      ],
+      tracks: [],
+      lock: null,
+      selected: null,
+      weapons: [],
+      mode: null,
+      beam: null,
+      irst,
+    });
+  const P = input(true);
+  const [behind, ahead, far] = ["cmb:1", "cmb:2", "cmb:3"].map((id) => P.byId.get(id)!);
+  expect(behind!.sensors & SENSOR.DAS).toBeTruthy();
+  expect(behind!.sensors & SENSOR.EOTS).toBe(0);
+  expect(behind!.state).toBe("firm");
+  // (no IFF in the heat)
+  expect(behind!.iff).toBe("unknown");
+  expect(ahead!.sensors & SENSOR.EOTS).toBeTruthy();
+  expect(ahead!.sensors & SENSOR.DAS).toBe(0);
+  expect(far!.sensors).toBe(0);
+  expect(input(false).byId.get("cmb:1")!.sensors).toBe(0);
 });

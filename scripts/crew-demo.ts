@@ -91,6 +91,92 @@ function subSolar(d: Date) {
   return { lat: decl / D, lon: -((minutes + eot) / 4 - 180) };
 }
 
+/**
+ * The fight about the leader (PLAN-RADAR-AAA RD8 — the crew's missiles and decoys), a 30 s loop: an AIM-120 at a bandit
+ * 25 km ahead (its time to go, PITBULL's last 15 km, SPLASH); an SA-6 at us from the left at 10 s, flares and chaff
+ * dropped at 14 s, the missile DECOYED, then a MISS behind us. Their places along great circles from ours (WGS84
+ * enough at these ranges for a display).
+ */
+function fight(t: number, at: { lat: number; lon: number }, alt: number, hdg: number) {
+  const k = t % 30;
+  const out: {
+    id: string;
+    name: string;
+    kind: string;
+    side: string;
+    lat: number;
+    lon: number;
+    alt: number;
+    hdg: number | null;
+    spd: number;
+    type: string;
+  }[] = [];
+  const bandit = gcDest(at, hdg, 25_000 - k * 200);
+  out.push({
+    id: "f:demo-bandit",
+    name: "BANDIT 2",
+    kind: "air",
+    side: k < 13 ? "hostile" : k < 16 ? "dead" : "hostile",
+    ...bandit,
+    alt: alt + 800,
+    hdg: hdg + Math.PI,
+    spd: 200,
+    type: "Su-35",
+  });
+  if (k < 16) {
+    // (ours: launched at 0 s, 1 200 m/s, splash at 13 s)
+    const run = Math.min(k, 13) * 1200 + 600;
+    const p = gcDest(at, hdg, Math.min(run, 25_000 - Math.min(k, 13) * 200));
+    const tti = Math.max(0, 13 - k);
+    out.push({
+      id: "msl:demo-120",
+      name: "AIM-120C",
+      kind: "missile",
+      side: "friend",
+      ...p,
+      alt: alt + 400,
+      hdg,
+      spd: 1200,
+      type: k >= 13 ? "SPLASH" : `${Math.round(tti)}s`,
+    });
+  }
+  if (k >= 10 && k < 24) {
+    // (theirs: from 18 km on our left, 900 m/s; drawn off by the flares at 15 s, gone by at 21 s: MISS)
+    const from = gcDest(at, hdg - Math.PI / 2, 18_000);
+    const run = (k - 10) * 900;
+    const decoyed = k >= 15;
+    const p = gcDest(from, hdg + Math.PI / 2 + (decoyed ? 0.25 : 0), Math.min(run, 19_000));
+    const tti = (18_000 - run) / 900;
+    out.push({
+      id: "msl:demo-sa6",
+      name: "3M9",
+      kind: "missile",
+      side: "hostile",
+      ...p,
+      alt,
+      hdg: hdg + Math.PI / 2,
+      spd: 900,
+      type: k >= 21 ? "MISS" : decoyed ? "→ US DECOYED" : `→ US ${Math.round(tti)}s`,
+    });
+  }
+  if (k >= 14 && k < 19)
+    for (let i = 0; i < 3; i++) {
+      const p = gcDest(at, hdg + Math.PI + (i - 1) * 0.3, 150 + (k - 14) * 60);
+      out.push({
+        id: `cm:demo-${i}`,
+        name: i === 1 ? "CHAFF" : "FLARE",
+        kind: "decoy",
+        side: "friend",
+        ...p,
+        alt: alt - (k - 14) * 30,
+        hdg: null,
+        spd: 0,
+        type: i === 1 ? "chaff" : "flare",
+      });
+    }
+  return out;
+}
+
 function sample(lat0: number, lon0: number, h: number, heading: number, v: number) {
   const p = geodeticToCart(WGS84_A, WGS84_F, lat0 * D, lon0 * D, h);
   const E = [-Math.sin(lon0 * D), Math.cos(lon0 * D), 0];
@@ -469,6 +555,7 @@ setInterval(() => {
       caps: { on: true, fam: ["nav", "config", "jet", "weapons"] },
       sun: subSolar(new Date()),
       arms: { live: true, sel: arms.sel, stores: arms.stores, mode: arms.mode, lock: arms.lock },
+      tracks: fight(t, { lat, lon }, alt, hdg),
       ...(around
         ? {
             traffic: [

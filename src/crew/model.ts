@@ -86,6 +86,8 @@ export function relative(own: CrewCraft, other: CrewCraft): { e: number; n: numb
 /** a unit about, moved on along its heading since it was heard; `age` [s] */
 export interface Contact extends InstrumentTraffic {
   age: number;
+  /** its history (PLAN-RADAR-AAA RD7): its past places, the oldest first, their age [s] */
+  trail?: { lat: number; lon: number; age: number }[];
 }
 
 export class CrewModel {
@@ -97,6 +99,8 @@ export class CrewModel {
   private fast = new Map<number, { list: InstrumentTraffic[]; at: number; t: number }>();
   /** each contact as last drawn: its place, the room's time, the offset still being taken in (RD1: no jump) */
   private shown = new Map<string, { lat: number; lon: number; srcT: number; offE: number; offN: number; at: number }>();
+  /** each contact's history (RD7): its places as sent, their room time [s] — a point each 2 s (a missile's each one) */
+  private trails = new Map<string, { lat: number; lon: number; t: number }[]>();
   /** each contact's turn rate [rad/s] from its last two headings sent, their room time */
   private turns = new Map<string, { hdg: number; srcT: number; w: number }>();
   /** the pilot followed by his device (kept across a reconnection, ours or his — RD1) */
@@ -355,10 +359,20 @@ export class CrewModel {
       const f = Math.exp(-(now - at0) / 200);
       const shownAt = f > 1e-3 && (offE || offN) ? wgs84Offset(lat, lon, offE * f, offN * f) : { lat, lon };
       this.shown.set(id, { lat: shownAt.lat, lon: shownAt.lon, srcT, offE, offN, at: at0 });
-      out.push({ ...t, lat: shownAt.lat, lon: shownAt.lon, age });
+      // (its history: the places sent — RD7 —, 120 at most)
+      let tr = this.trails.get(id);
+      if (!tr) this.trails.set(id, (tr = []));
+      const lastT = tr.length ? tr[tr.length - 1]!.t : -1e9;
+      if (srcT > lastT && srcT - lastT >= (t.kind === "missile" ? 0.2 : 2)) {
+        tr.push({ lat: t.lat, lon: t.lon, t: srcT });
+        if (tr.length > 120) tr.shift();
+      }
+      const nowT = Number.isFinite(room) ? room : srcT + age;
+      out.push({ ...t, lat: shownAt.lat, lon: shownAt.lon, age, trail: tr.map((q) => ({ lat: q.lat, lon: q.lon, age: nowT - q.t })) });
     }
     for (const id of this.shown.keys()) if (!by.has(id)) this.shown.delete(id);
     for (const id of this.turns.keys()) if (!by.has(id)) this.turns.delete(id);
+    for (const id of this.trails.keys()) if (!by.has(id)) this.trails.delete(id);
     return out;
   }
   /** the mission's zones (the followed pilot's first) */

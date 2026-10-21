@@ -2,7 +2,7 @@
 // everything shared — the players, the real traffic, a mission's units, the ships — with their bearings, distances and
 // heights; the nearest listed beside it when there is room.
 import { relative } from "../model";
-import { C, deg360, fmt, type Pen, polar, SIDE, TAU, unitSymbol, type Point, type Rect } from "./kit";
+import { C, deg360, fmt, missileCue, type Pen, polar, SIDE, TAU, trailDots, unitSymbol, type Point, type Rect } from "./kit";
 import type { Scene } from "./scene";
 import { L } from "../lang";
 
@@ -17,6 +17,8 @@ export interface RadarOpts {
 interface Blip {
   e: number;
   n: number;
+  /** its past places (RD7) */
+  trail?: { lat: number; lon: number; age: number }[];
   dz: number | null;
   name: string;
   col: string;
@@ -26,6 +28,8 @@ interface Blip {
   locked: boolean;
   id: string;
   slot?: number;
+  /** a missile's cue (RD8): its end, at us, decoyed, its time to go */
+  cue?: string;
 }
 
 export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
@@ -73,6 +77,7 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
         hdg: t.hdg,
         locked: false,
         id: t.id,
+        cue: t.kind === "missile" ? t.type : undefined,
       });
     }
   if (own && !o.sensor) {
@@ -113,6 +118,7 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
           kind: t.kind,
           side: t.kind === "decoy" ? t.type : t.side,
           hdg: t.hdg,
+          trail: t.trail,
           locked: false,
           id: t.id,
         });
@@ -181,7 +187,19 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
       c.rotate((b.hdg ?? 0) - up);
       p.aircraft(16, b.col);
       c.restore();
-    } else unitSymbol(p, x, y, b.kind, b.side, b.hdg, up, 6, { locked: b.locked, selected: b.id === o.selected || b.id === pilotSel });
+    } else {
+      // (its trail — RD7 —: the echoes before it)
+      const g0 = own?.geo;
+      if (b.trail && g0)
+        trailDots(p, { trail: b.trail, kind: b.kind, side: SIDE[b.side] ? b.side : "traffic" }, sc.trails, (la, lo) => {
+          const qq = polar(g0.lat, g0.lon, la, lo);
+          if (qq.d > o.range * 1.05) return null;
+          const a = qq.b - up;
+          return [cx + Math.sin(a) * qq.d * k, cy - Math.cos(a) * qq.d * k];
+        });
+      if (!missileCue(p, x, y, { kind: b.kind, side: b.side, type: b.cue ?? "" }))
+        unitSymbol(p, x, y, b.kind, b.side, b.hdg, up, 6, { locked: b.locked, selected: b.id === o.selected || b.id === pilotSel });
+    }
     // (the lock joined to us, as on the TSD)
     if (b.locked) p.seg(cx, cy, x, y, `${b.col}99`, 1, [3, 4]);
     c.globalAlpha = 1;

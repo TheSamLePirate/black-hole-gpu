@@ -4,6 +4,7 @@
 // between sampled along the line of sight (the Earth's curve in); a fight's lock and seen kept by it; what the HUD
 // and the PCD draw.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { tcasAdvise } from "../radar/tcas";
 import { worldIdOf } from "./fightproxy";
 import { cameraFrame } from "../camera";
 import { fleet } from "../fleet";
@@ -14,7 +15,7 @@ import { bodyFixedOf, groundRelief } from "../system/our-surface";
 import { geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
 import { MISSILES } from "../game/combat";
 import { R_EARTH as R_CHAL } from "../game/challenges";
-import { buildPicture, type Picture, type PicWeapon, SENSOR } from "../radar/picture";
+import { buildPicture, type Picture, type PicWeapon, SENSOR, trailSpan } from "../radar/picture";
 import type { CameraController } from "../controls";
 
 declare module "../controls" {
@@ -139,6 +140,7 @@ function combatToLocal(this: CameraController, fix: RadarFix, p: readonly number
 
 /** A frame of the radar: its sources read, its beam swept, a fight's lock and seen kept by it; then the picture. */
 function radarStep(this: CameraController, dt: number) {
+  if (dt > 0) this.trailT += dt;
   // (the sources read over the Earth whatever the craft — the picture's truth —; the radar itself the F-35's in the air)
   const any = this.radarFix(true);
   const fix = any && fleet.active === "f35" && this.airFlight.inAir ? any : null;
@@ -194,6 +196,11 @@ function radarStep(this: CameraController, dt: number) {
   this.pictureStep(fix, true);
 }
 
+/** An AMRAAM's own radar on in its last 15 km (PITBULL — the jet's support no longer needed) [m]. */
+const PITBULL = 15_000;
+/** Our missiles' poles by their id (RD8): our distance to the target at PITBULL (the A-pole), to the splash (the F-pole) [m]. */
+const poles = new Map<string, { a?: number; f?: number }>();
+
 /** The picture this frame (src/radar/picture.ts): the sources' truth, the radar's tracks, a fight's missiles and
  *  decoys, merged by id; its place and heading the fix's. */
 function pictureStep(this: CameraController, fix: RadarFix, radarOn: boolean) {
@@ -208,7 +215,9 @@ function pictureStep(this: CameraController, fix: RadarFix, radarOn: boolean) {
   if (W && C?.last && C.def.anchor) {
     const tgtId = (k: number | null): string | null => (k === null ? null : k === -1 ? "own" : k <= -2 ? `cm:${-2 - k}` : `cmb:${k}`);
     for (const m of W.missiles) {
-      if (!m.alive) continue;
+      // (the living, and the ended these 3 s: their SPLASH or MISS where they did — RD8)
+      const ended = !m.alive && m.end && m.diedAt !== undefined && W.t - m.diedAt < 3;
+      if (!m.alive && !ended) continue;
       const M = MISSILES[m.kind];
       weapons.push({
         id: m.remote ? `msl:${m.remote}` : `msl:${m.id}`,
@@ -216,11 +225,13 @@ function pictureStep(this: CameraController, fix: RadarFix, radarOn: boolean) {
         kind: "missile",
         r: this.combatToLocal(fix, m.p),
         v: [...m.v] as V3,
-        ours: m.owner === "blue",
+        // (another player's in the free fight, or one at us: never ours)
+        ours: m.owner === "blue" && m.target !== -1 && !(m.remote && C.free),
         seeker: M?.seeker ?? "radar",
         target: tgtId(m.target),
-        motor: m.t < (M?.burn ?? 0),
+        motor: m.alive && m.t < (M?.burn ?? 0),
         decoyed: m.target !== null && m.target <= -2,
+        ...(ended ? { end: m.end } : {}),
       });
     }
     for (const d of W.decoys)
@@ -247,6 +258,7 @@ function pictureStep(this: CameraController, fix: RadarFix, radarOn: boolean) {
       lon: g.lon,
       alt: g.alt,
       heading: Math.atan2(fix.own.fwd[0], fix.own.fwd[1]),
+      v: fix.own.v,
     },
     objects: this.radarObjects,
     tracks: radarOn ? [...R.tracks.values()] : [],
@@ -255,7 +267,26 @@ function pictureStep(this: CameraController, fix: RadarFix, radarOn: boolean) {
     weapons,
     mode: radarOn ? R.mode : null,
     beam: radarOn ? R.beam : null,
+    irst: fleet.active === "f35",
   });
+  // (the TCAS — RD4 —: the transponders heard graded, TCAS II's way; the RAs inhibited low)
+  const heard = this.picture.tracks.filter((T) => T.sensors & SENSOR.TCAS && T.side !== "dead");
+  this.tcas =
+    this.s.tcas === false
+      ? []
+      : tcasAdvise(
+          fix.own.v,
+          fix.own.agl,
+          heard.map((T) => ({ id: T.id, r: T.rt, v: T.v })),
+        );
+  for (const a of this.tcas) {
+    const T = this.picture.byId.get(a.id)!;
+    T.tcas = a.level;
+    if (a.sense) T.ra = a.sense;
+  }
+  // (each track's history — RD7 —, on the trails' own clock)
+  this.trails.record(this.picture, this.trailT);
+  for (const k of poles.keys()) if (!this.picture.byId.has(k)) poles.delete(k);
   this.pictureMs += (performance.now() - t0 - this.pictureMs) * 0.05;
   // (the selection let go when its track has been gone 3 s — a splash, a contact lost)
   const sel = this.pictureSelected;
@@ -351,16 +382,45 @@ function radarHud(this: CameraController) {
     const d = Math.hypot(...T.r) || 1;
     return -dot([T.v[0] - fix.own.v[0], T.v[1] - fix.own.v[1], T.v[2] - fix.own.v[2]], [T.r[0] / d, T.r[1] / d, T.r[2] / d]);
   };
+  // (a chaff bloom its first 2.5 s, in RWS and the real assistance or none: a false track — an unknown echo, as a
+  // jet's —, RD8)
+  const falseChaff = (T: (typeof P.tracks)[number]) =>
+    T.kind === "chaff" &&
+    R.mode === "RWS" &&
+    (this.s.f35Assist === "realistic" || this.s.f35Assist === "manual") &&
+    !!(T.sensors & SENSOR.RADAR) &&
+    5 - (T.cm?.life ?? 0) < 2.5;
   return {
     mode: R.mode,
     beam: R.beam,
     /** the nose's heading [rad] (the picture is turned by it) */
     heading: psi,
     contacts: P.tracks
-      .filter((T) => T.sensors & (SENSOR.RADAR | SENSOR.DATALINK) && T.kind !== "missile" && T.kind !== "flare" && T.kind !== "chaff")
+      .filter(
+        (T) =>
+          (T.sensors & (SENSOR.RADAR | SENSOR.DATALINK) && T.kind !== "missile" && T.kind !== "flare" && T.kind !== "chaff") ||
+          falseChaff(T) ||
+          // (the TCAS's traffic, close enough to matter — RD4 —: on the scope too, its diamond)
+          (!!T.tcas && T.tcas !== "other"),
+      )
       .map((T) => {
-        const dl = !(T.sensors & SENSOR.RADAR);
+        if (T.kind === "chaff") T = { ...T, kind: "air", iff: "unknown", name: "", colour: undefined };
+        const tcasOnly = !(T.sensors & (SENSOR.RADAR | SENSOR.DATALINK));
+        const dl = !tcasOnly && !(T.sensors & SENSOR.RADAR);
+        // (its history — RD7 —: east, north of us [m], the span the settings show, its age [s])
+        const span = trailSpan({ kind: T.kind, locked: T.id === R.lock, selected: T.id === this.pictureSelected }, this.s);
+        const hist =
+          span > 0 && T.hist
+            ? T.hist
+                .filter((q) => this.trailT - q.t <= span)
+                .map((q) => {
+                  const e = (q.lon - P.fix.lon) * 111_195 * Math.cos((P.fix.lat * Math.PI) / 180),
+                    n = (q.lat - P.fix.lat) * 111_195;
+                  return { ...hu([e, n, 0]), e, n, age: this.trailT - q.t, span };
+                })
+            : undefined;
         return {
+          hist,
           ...hu(T.r),
           dz: T.r[2],
           trk: R.mode === "RWS" && !dl ? null : trk(T),
@@ -376,9 +436,56 @@ function radarHud(this: CameraController) {
           datalink: dl,
           state: T.state,
           id: T.id,
+          /** the TCAS's grading (RD4); heard by it alone (no radar's track: not on the FCR); the civil traffic */
+          tcas: T.tcas,
+          tcasOnly,
+          traffic: T.side === "traffic",
           /** east, north [m] (the TSD's map) */
           e: T.r[0],
           n: T.r[1],
+        };
+      }),
+    // (the missiles — RD8 —: heading up as the tracks, their way, the one at us, their target's place and time to go,
+    // drawn off by a decoy, how they ended)
+    // (what the DAS holds — RD4 —: the aircraft, the missiles, the flares about, by their heat; the band's)
+    das: P.tracks
+      .filter((T) => T.sensors & SENSOR.DAS && T.kind !== "chaff")
+      .map((T) => ({ ...hu(T.r), dz: T.r[2], kind: T.kind, iff: T.iff, atUs: T.msl?.target === "own", trk: trk(T), id: T.id })),
+    // (ours always — their own datalink —, the others' only as a sensor holds them: the DAS's motor, the radar)
+    missiles: P.tracks
+      .filter((T) => T.kind === "missile" && T.msl && (T.msl.ours || T.sensors !== 0))
+      .map((T) => {
+        const M = T.msl!;
+        const tg = M.target === "own" ? null : M.target ? P.byId.get(M.target) : undefined;
+        const tp = M.target === "own" ? { x: 0, y: 0 } : tg ? hu(tg.rt) : null;
+        // (ours by radar: PITBULL in its last 15 km, the A-pole then, the F-pole where it ended)
+        let pole = poles.get(T.id);
+        const pitbull =
+          M.ours &&
+          M.seeker === "radar" &&
+          !M.end &&
+          !!tg &&
+          Math.hypot(T.rt[0] - tg.rt[0], T.rt[1] - tg.rt[1], T.rt[2] - tg.rt[2]) < PITBULL;
+        if (M.ours && (pitbull || M.end)) {
+          if (!pole) poles.set(T.id, (pole = {}));
+          if (pitbull && pole.a === undefined && tg) pole.a = Math.hypot(...tg.rt);
+          if (M.end && pole.f === undefined) pole.f = Math.hypot(...T.rt);
+        }
+        return {
+          pitbull,
+          apole: pole?.a ?? null,
+          fpole: pole?.f ?? null,
+          ...hu(T.r),
+          id: T.id,
+          trk: trk(T),
+          red: !M.ours,
+          atUs: M.target === "own",
+          decoyed: M.decoyed,
+          end: M.end,
+          tti: M.tti,
+          tx: tp?.x ?? null,
+          ty: tp?.y ?? null,
+          name: T.name,
         };
       }),
     lock: lockT

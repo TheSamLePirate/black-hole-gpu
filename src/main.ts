@@ -2719,6 +2719,7 @@ async function main() {
         trail: camera.ownTrack.pts,
         pred: camera.ownPrediction(ahead, ahead > 120 ? 10 : 5),
         tracks: camera.picture?.tracks ?? [],
+        trailT: camera.trailT,
         route: N.route.wps.map((p, k) => ({ lat: p.lat, lon: p.lon, name: p.name, active: k === active })),
       };
     },
@@ -7711,6 +7712,10 @@ async function main() {
           now: performance.now(),
           auto: camera.pilot.auto,
           gpws: gpwsOf(info, settings.groundAlerts),
+          tcas:
+            settings.tcas === false
+              ? undefined
+              : { ta: camera.tcas.some((a) => a.level === "TA"), ra: camera.tcas.find((a) => a.sense)?.sense ?? null },
         }))
           voice.say(l);
       }

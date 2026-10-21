@@ -67,7 +67,26 @@ export interface Track {
   datalink: boolean;
 }
 
-export const APG81 = {
+/** A radar's figures (PLAN-RADAR-AAA RD4 — one engine, a spec per craft: the F-35's APG-81, a spacecraft's). */
+export interface RadarSpec {
+  /** the range on a 5 m² fighter [m] (∝ σ^¼) */
+  range5: number;
+  /** the scan's half-width and half-height [rad] (π: all about), its sweep's time [s] (one way) */
+  az: number;
+  el: number;
+  sweep: number;
+  /** a track dropped when not refreshed this long [s] */
+  keep: number;
+  /** the Doppler notch [m/s] (0: none — in space, no ground's clutter) */
+  notch: number;
+  /** the IFF's range [m]; the eyes' (an unknown identified) [m] */
+  iffRange: number;
+  eyes: number;
+  /** the radar's horizon's radius [m] (0: none — the caller hides what a body hides) */
+  earth43: number;
+}
+
+export const APG81: RadarSpec = {
   /** the range on a 5 m² fighter [m] (∝ σ^¼) */
   range5: 150_000,
   /** the scan's half-width [rad] and its sweep's time [s] (one way) */
@@ -83,14 +102,14 @@ export const APG81 = {
   eyes: 3_000,
   /** the radar's horizon: the Earth's radius ×4/3 (the air's refraction) [m] */
   earth43: (4 / 3) * 6.371e6,
-} as const;
+};
 
 /** The detection range [m] on a cross-section σ [m²]. */
-export const detectRange = (rcs: number) => APG81.range5 * (Math.max(rcs, 1e-4) / 5) ** 0.25;
+export const detectRange = (rcs: number, spec: RadarSpec = APG81) => spec.range5 * (Math.max(rcs, 1e-4) / 5) ** 0.25;
 
 /** The radar's horizon [m] between two heights over the ground [m]: beyond, the Earth's bulge hides it. */
-export const radarHorizon = (h1: number, h2: number) =>
-  Math.sqrt(2 * APG81.earth43 * Math.max(h1, 0)) + Math.sqrt(2 * APG81.earth43 * Math.max(h2, 0));
+export const radarHorizon = (h1: number, h2: number, spec: RadarSpec = APG81) =>
+  spec.earth43 > 0 ? Math.sqrt(2 * spec.earth43 * Math.max(h1, 0)) + Math.sqrt(2 * spec.earth43 * Math.max(h2, 0)) : Infinity;
 
 /** The angles of a direction off the nose [rad]: across (right +), up (+). */
 export function offNose(own: RadarOwn, r: V3): { az: number; el: number } {
@@ -103,7 +122,7 @@ export function offNose(own: RadarOwn, r: V3): { az: number; el: number } {
 export class Radar {
   mode: RadarMode = "TWS";
   /** the beam's azimuth off the nose [rad], its way */
-  beam = -APG81.az;
+  beam: number;
   private dir = 1;
   tracks = new Map<string, Track>();
   lock: string | null = null;
@@ -114,25 +133,29 @@ export class Radar {
   /** the lock's last measure [s] (lost a second after) */
   private lockAt = 0;
 
+  constructor(public spec: RadarSpec = APG81) {
+    this.beam = -spec.az;
+  }
+
   /** Back to its start: no tracks, no lock. */
   reset() {
     this.tracks.clear();
     this.known.clear();
     this.lock = null;
-    this.beam = -APG81.az;
+    this.beam = -this.spec.az;
     this.dir = 1;
   }
 
   /** Whether the radar sees this object now (its range, its horizon, the ground between, the notch). */
   sees(own: RadarOwn, o: RadarObject, masked: (r: V3) => boolean): boolean {
     const d = len(o.r);
-    if (d > detectRange(o.rcs)) return false;
-    if (d > radarHorizon(own.agl, o.agl ?? Math.max(own.agl + o.r[2], 0))) return false;
+    if (d > detectRange(o.rcs, this.spec)) return false;
+    if (d > radarHorizon(own.agl, o.agl ?? Math.max(own.agl + o.r[2], 0), this.spec)) return false;
     // (the notch: looking down — the ground behind it — at a craft whose speed along the beam is the ground's)
     if (o.kind === "air") {
       const u: V3 = [o.r[0] / d, o.r[1] / d, o.r[2] / d];
       const lookDown = u[2] < 0 || (o.agl ?? Infinity) < 300;
-      if (lookDown && Math.abs(dot(o.v, u)) < APG81.notch) return false;
+      if (lookDown && this.spec.notch > 0 && Math.abs(dot(o.v, u)) < this.spec.notch) return false;
     }
     return !masked(o.r);
   }
@@ -178,7 +201,7 @@ export class Radar {
       // (the beam on the lock: measured each frame while it is in the scan's cone and seen)
       const o = byId.get(this.lock);
       const a = o ? offNose(own, o.r) : null;
-      if (o && a && Math.abs(a.az) <= APG81.az && Math.abs(a.el) <= APG81.el && this.sees(own, o, masked)) {
+      if (o && a && Math.abs(a.az) <= this.spec.az && Math.abs(a.el) <= this.spec.el && this.sees(own, o, masked)) {
         measure(o, false);
         this.lockAt = t;
         this.beam = a.az;
@@ -186,9 +209,9 @@ export class Radar {
     } else {
       // (the beam swept across: the objects whose azimuth it passed this frame measured)
       const b0 = this.beam;
-      let b1 = b0 + ((this.dir * (2 * APG81.az)) / APG81.sweep) * dt;
-      if (b1 > APG81.az || b1 < -APG81.az) {
-        b1 = clamp(b1, -APG81.az, APG81.az);
+      let b1 = b0 + ((this.dir * (2 * this.spec.az)) / this.spec.sweep) * dt;
+      if (b1 > this.spec.az || b1 < -this.spec.az) {
+        b1 = clamp(b1, -this.spec.az, this.spec.az);
         this.dir = -this.dir;
       }
       this.beam = b1;
@@ -197,7 +220,7 @@ export class Radar {
       for (const o of objects) {
         if (o.offboard) continue;
         const a = offNose(own, o.r);
-        if (a.az < lo || a.az > hi || Math.abs(a.el) > APG81.el) continue;
+        if (a.az < lo || a.az > hi || Math.abs(a.el) > this.spec.el) continue;
         if (this.sees(own, o, masked)) measure(o, false);
       }
       // (the lock kept by its track in TWS: lost with it)
@@ -205,7 +228,7 @@ export class Radar {
     }
     // the tracks the radar no longer refreshes: dropped (the datalink's when it no longer sends them)
     for (const [id, T] of this.tracks) {
-      const stale = T.datalink ? !byId.has(id) : t - T.seenAt > APG81.keep;
+      const stale = T.datalink ? !byId.has(id) : t - T.seenAt > this.spec.keep;
       if (stale) {
         this.tracks.delete(id);
         if (this.lock === id) this.unlock();
@@ -217,9 +240,9 @@ export class Radar {
   sweepAll(t: number, own: RadarOwn, objects: RadarObject[], masked: (r: V3) => boolean) {
     const b = this.beam,
       d = this.dir;
-    this.beam = -APG81.az;
+    this.beam = -this.spec.az;
     this.dir = 1;
-    this.step(APG81.sweep, t, own, objects, masked);
+    this.step(this.spec.sweep, t, own, objects, masked);
     this.beam = b;
     this.dir = d;
   }
@@ -230,8 +253,8 @@ export class Radar {
     const was = this.known.get(o.id);
     if (was) return was;
     const d = len(o.r);
-    const seen = d < APG81.eyes && dot(o.r, own.fwd) / Math.max(d, 1) > Math.cos(40 * D);
-    const answered = o.squawk && d < APG81.iffRange && (o.iff === "friend" || o.iff === "neutral");
+    const seen = d < this.spec.eyes && dot(o.r, own.fwd) / Math.max(d, 1) > Math.cos(40 * D);
+    const answered = o.squawk && d < this.spec.iffRange && (o.iff === "friend" || o.iff === "neutral");
     if (o.known || o.offboard || answered || seen) {
       this.known.set(o.id, o.iff);
       return o.iff;

@@ -122,6 +122,11 @@ export interface PcdData {
     selected?: boolean;
     state?: string;
     id?: string;
+    /** its history (RD7): east, north of us [m], its freshness (1 new … 0 the span's end) */
+    hist?: { e: number; n: number; f: number }[];
+    /** the TCAS's grading (RD4); the civil traffic */
+    tcas?: "other" | "proximate" | "TA" | "RA";
+    traffic?: boolean;
   }[];
   /** a mission's places (controller/mission.ts missionMarks — P2): its zones to reach (amber), the SAMs' reach (red) */
   marks?: { kind: "zone" | "threat"; lat: number; lon: number; r: number; label: string; active: boolean }[];
@@ -142,9 +147,27 @@ export interface PcdData {
   } | null;
   /** a lesson flown (controller/course.ts): its id, how, its steps (whose), the step now, the instructor's last words */
   lesson?: { id: string; mode: string; steps: { name: string; who: "tars" | "you" }[]; i: number; said: string } | null;
+  /** what the DAS holds of the aircraft about (RD4 — their heat, all round): heading up as the radar's contacts [m] */
+  das?: { x: number; y: number; dz: number; iff: string }[];
   /** the missiles in flight (a fight's — the DAS sees their motors): heading up as the radar's contacts (x right, y
    *  ahead, dz above [m]), the ones at us */
   missiles?: { x: number; y: number; dz: number; atUs: boolean; trk?: number | null }[];
+  /** the picture's missiles (RD8 — the TSD's): heading up [m], their way, target's place and time to go, decoyed, end */
+  msls?: {
+    x: number;
+    y: number;
+    trk: number | null;
+    red: boolean;
+    atUs: boolean;
+    decoyed: boolean;
+    end?: "splash" | "miss";
+    tti: number | null;
+    tx: number | null;
+    ty: number | null;
+    pitbull?: boolean;
+    apole?: number | null;
+    fpole?: number | null;
+  }[];
   /** the world's airfields about the craft (src/world/runways.ts — PLAN-RADAR-AAA RD11), the nearest first */
   world?: Airfield[];
   /** the craft's trace and the path ahead (controller/owntrack.ts — PLAN-RADAR-AAA RD15) */
@@ -1106,8 +1129,17 @@ export class Pcd {
       const x = cx + (T.e * c0 - T.n * s0) * px,
         y = cy - (T.e * s0 + T.n * c0) * px;
       if (x < r.x || x > r.x + r.w || y < r.y || y > r.y + r.h) continue;
-      const side: SymSide = T.colour && T.iff !== "hostile" ? "player" : (T.iff as SymSide);
+      const side: SymSide = T.traffic && T.iff !== "hostile" ? "traffic" : T.colour && T.iff !== "hostile" ? "player" : (T.iff as SymSide);
       const col = symColour({ kind: T.air ? "air" : "sea", side, colour: side === "player" ? T.colour : undefined });
+      // (its trail — RD7 —: its past places, dots fading)
+      if (T.hist?.length) {
+        g.fillStyle = col;
+        for (const q of T.hist) {
+          g.globalAlpha = 0.15 + 0.6 * q.f;
+          g.fillRect(cx + (q.e * c0 - q.n * s0) * px - 2.5, cy - (q.e * s0 + q.n * c0) * px - 2.5, 5, 5);
+        }
+        g.globalAlpha = 1;
+      }
       if (T.locked) {
         g.strokeStyle = col;
         g.setLineDash([6, 6]);
@@ -1131,6 +1163,7 @@ export class Pcd {
           trk: T.hdg !== null ? T.hdg - d.heading : null,
           locked: T.locked,
           selected: T.selected,
+          tcas: T.tcas,
         },
         13,
         3,
@@ -1139,11 +1172,41 @@ export class Pcd {
       if (!this.declutter || T.locked || T.selected) this.text(T.name.slice(0, 10), x + 18, y - 14, col, 20);
     }
     // the missiles in flight (red: at us) and the decoys (PLAN-RADAR-AAA RD8a): heading up already
-    for (const M of d.missiles ?? []) {
+    // (the picture's — RD8 —: their line to their target, the time to go, DECOYED, SPLASH or MISS where they ended)
+    for (const M of d.msls ?? []) {
       const x = cx + M.x * px,
         y = cy - M.y * px;
       if (x < r.x || x > r.x + r.w || y < r.y || y > r.y + r.h) continue;
-      drawSym(g, x, y, { kind: "missile", side: M.atUs ? "hostile" : "friend", trk: M.trk ?? null, atUs: M.atUs }, 12, 3);
+      const col = symColour({ kind: "missile", side: M.red ? "hostile" : "friend" });
+      if (M.end) {
+        this.text(M.end === "splash" ? "SPLASH" : "MISS", x, y, col, 20, "center", true);
+        if (M.fpole !== null && M.fpole !== undefined) this.text(`F-POLE ${this.u.dist(M.fpole).toFixed(1)}`, x, y + 22, col, 15, "center");
+        continue;
+      }
+      if (M.tx !== null && M.ty !== null) {
+        const tx = cx + M.tx * px,
+          ty = cy - M.ty * px;
+        g.strokeStyle = col;
+        g.lineWidth = 1.5;
+        g.setLineDash([5, 6]);
+        g.beginPath();
+        g.moveTo(x, y);
+        g.lineTo(tx, ty);
+        g.stroke();
+        g.setLineDash([]);
+        if (M.tti !== null && M.tti < 600) this.text(`${Math.round(M.tti)}s`, (x + tx) / 2 + 10, (y + ty) / 2, col, 18);
+      }
+      drawSym(g, x, y, { kind: "missile", side: M.red ? "hostile" : "friend", trk: M.trk, atUs: M.atUs }, 12, 3);
+      if (M.decoyed) this.text("DECOYED", x, y + 26, col, 16, "center", true);
+      else if (M.pitbull)
+        this.text(
+          `PITBULL${M.apole !== null && M.apole !== undefined ? ` A ${this.u.dist(M.apole).toFixed(1)}` : ""}`,
+          x,
+          y + 26,
+          col,
+          15,
+          "center",
+        );
     }
     for (const q of d.decoys ?? []) {
       const x = cx + q.x * px,
@@ -1580,7 +1643,7 @@ export class Pcd {
       g.arc(b.x + b.w / 2 + az * bk, Math.max(b.y + 6, Math.min(b.y + b.h - 6, by - el * elK)), size, 0, 2 * Math.PI);
       g.fill();
     };
-    for (const K of d.fcr?.contacts ?? []) dot(K.x, K.y, K.dz, symColour({ kind: "air", side: K.iff as SymSide }), 3);
+    for (const K of d.das ?? []) dot(K.x, K.y, K.dz, symColour({ kind: "air", side: K.iff as SymSide }), 3);
     for (const M of d.missiles ?? []) {
       dot(M.x, M.y, M.dz, M.atUs ? C.red : C.amber, M.atUs ? 6 : 4);
       if (M.atUs) {

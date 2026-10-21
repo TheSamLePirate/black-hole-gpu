@@ -275,6 +275,11 @@ export interface Missile {
   seen: Set<number>;
   /** another's (docs/PLAN-RESEAU.md R3): placed from the network, not stepped; its key there */
   remote?: string;
+  /** how it ended (PLAN-RADAR-AAA RD8: SPLASH or MISS shown 3 s where it did), the world's time then [s] */
+  end?: "splash" | "miss";
+  diedAt?: number;
+  /** its own time when it lost its target [s] (its self-destruct 6 s on) */
+  lostAt?: number;
 }
 
 export interface Bomb {
@@ -981,6 +986,9 @@ export class CombatWorld {
         }
       }
       const tg = this.aimOf(m, P);
+      // (its target lost — out of its cone, its decoy burnt out —: it destroys itself 6 s on, a MISS)
+      if (tg) m.lostAt = undefined;
+      else m.lostAt ??= m.t;
       let a: V3 = [0, 0, 0];
       if (tg) {
         // proportional navigation: a = N Vc (Ω × u) — the line of sight's turn rate, the closing speed
@@ -996,6 +1004,8 @@ export class CombatWorld {
         const close = segDist(m.p, add(m.p, mul(sub(m.v, tg.v), dt)), tg.p);
         if (close < M.fuze) {
           m.alive = false;
+          m.end = "splash";
+          m.diedAt = this.t;
           ev.push({ kind: "explode", p: [...m.p], size: 0.6 });
           if (m.target === -1) this.hurtPlayer(M.damage * (1 - (close / M.fuze) * 0.4), m.kind, ev);
           else if (m.target !== null && m.target > 0) {
@@ -1021,8 +1031,15 @@ export class CombatWorld {
       const acc = add(add(a, mul(u, thrust - M.drag * sp * sp)), [0, 0, tg ? 0 : -G]);
       m.v = add(m.v, mul(acc, dt));
       m.p = add(m.p, mul(m.v, dt));
-      if (m.t > M.life || (m.t > M.burn && len(m.v) < 200) || m.p[2] < this.groundZ(m.p[0], m.p[1])) {
+      if (
+        m.t > M.life ||
+        (m.t > M.burn && len(m.v) < 200) ||
+        (m.lostAt !== undefined && m.t - m.lostAt > LOST_DESTRUCT) ||
+        m.p[2] < this.groundZ(m.p[0], m.p[1])
+      ) {
         m.alive = false;
+        m.end = "miss";
+        m.diedAt = this.t;
         ev.push({ kind: "miss", missile: m.id });
         if (m.p[2] < this.groundZ(m.p[0], m.p[1]) + 5) ev.push({ kind: "explode", p: [...m.p], size: 0.5 });
       }
@@ -1248,6 +1265,8 @@ export class CombatWorld {
 }
 
 const M_KEEP = 120;
+/** A missile with no target this long destroys itself [s]. */
+const LOST_DESTRUCT = 6;
 
 /** Whether a target sits on the ground (a site, a vehicle, a building). */
 export const isGround = (q: Target) => !q.ai && q.peer === undefined;
