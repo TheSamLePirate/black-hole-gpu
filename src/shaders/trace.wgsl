@@ -5543,6 +5543,9 @@ fn terrainRasterHint(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterId(px: vec2f) -> u32 { return 0u; }
 fn terrainRasterDepth(px: vec2f) -> f32 { return 0.0; }
 // END_TERRAIN_RASTER
+// BEGIN_CLOUD_PASS (system/cloud-pass.ts withCloudPass supplies the cloud pass's texture reads)
+fn cloudsBuffered(px: vec2f, boundM: f32) -> EarthClouds { return EarthClouds(-1.0, vec3f(0.0), -1.0); }
+// END_CLOUD_PASS
 // BEGIN_SUN_SHADOW (system/terrain-raster-hint.ts withSunShadow supplies the relief's shadow map's lookup)
 fn sunShadowFar(rel: vec3f) -> vec3f { return vec3f(-1.0, 0.0, 0.0); }
 // END_SUN_SHADOW
@@ -7300,8 +7303,13 @@ fn aerial(@builtin(global_invocation_id) gid: vec3u) {
   AP_N = 0u;
 }
 
-fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32, volume: bool) -> EarthLook {
-  var o: EarthLook;
+// The clouds along a camera ray before tHit (the volume's — the map's —, the weather's layers, the cirrus): their cover, their
+// light (premultiplied by nothing: their own radiance) and the distance of the nearest; earthLook's, or the cloud pass's
+// (the kernel clouds: once a texel of half the image's size, read back by the pixels — docs/PLAN-NUAGES-AAA.md N1)
+struct EarthClouds { alpha: f32, cl: vec3f, tc: f32 };
+// (the clouds of this pixel already found by the cloud pass — alpha ≥ 0 —: earthLook takes them instead of marching)
+var<private> CLOUDS_BUFFERED: EarthClouds = EarthClouds(-1.0, vec3f(0.0), -1.0);
+fn earthClouds(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32, volume: bool) -> EarthClouds {
   let earth = isEarth(k) && earthOn();
   // the cloud layer: met from above (on the way to the ground), or from below (in the sky)
   let rc = 1.0 + P.earth2.x;
@@ -7369,6 +7377,17 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
       }
     }
   }
+  return EarthClouds(alpha, cl, tc);
+}
+
+fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32, volume: bool) -> EarthLook {
+  var o: EarthLook;
+  let earth = isEarth(k) && earthOn();
+  var cs: EarthClouds;
+  if (CLOUDS_BUFFERED.alpha >= 0.0) { cs = CLOUDS_BUFFERED; } else { cs = earthClouds(k, ro, rd, tHit, Ls, E, gx, gy, fp0, fpK, jit, volume); }
+  let alpha = cs.alpha;
+  let cl = cs.cl;
+  let tc = cs.tc;
   // the air: to the ground (or out), and to the cloud — seen through the air before it only
   // (the camera's ray, the aerial perspective's table there: read at the ground's distance and the cloud's)
   var air: EarthAir;
@@ -7501,6 +7520,8 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
     0.0, pixFoot(), fract(rnd * 7.31 + 0.37), P.earth4.w > 0.5);
   EARTH_SHADOW_ON = false;
   SHADOW_REL_ON = false;
+  // (the cloud pass's clouds are this camera ray's alone: a reflection's or a probe's march their own)
+  CLOUDS_BUFFERED.alpha = -1.0;
   AP_UV = vec2f(-1.0);
   SEA_ON = false;
   WX_W = 0.0;
@@ -8461,7 +8482,10 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     // (the aerial perspective's table for the air before the near world's ground — earthNear's)
     if ((flags & FLAG_AERIAL) != 0u) { AP_UV = pos / P.res.xy; }
     if (HAS_TERRAIN_RASTER) { RHINT = terrainRasterHint(pos); }
+    // (the clouds of the cloud pass at this ray's pixel — the raster's frames —, read back instead of marched)
+    if (interleaved) { CLOUDS_BUFFERED = cloudsBuffered(rasterAt, terrainRasterDepth(rasterAt)); }
     if ((flags & FLAG_LUT) == 0u || !farLut(pos, &tr)) { tr = trace(ndc, rnd, tSample); }
+    CLOUDS_BUFFERED.alpha = -1.0;
     RHINT = 0.0;
     AP_UV = vec2f(-1.0);
   }
@@ -8593,6 +8617,8 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   if (terrainRasterHint(centre) <= 0.0 && RASTER_ID == 0u) { return; }
   RASTER_SCENERY = P.mouthList[1].z > 0.5;
   RASTER_SHADE = true;
+  // (the clouds before this pixel's surface: the cloud pass's, read back, not marched again)
+  CLOUDS_BUFFERED = cloudsBuffered(centre, terrainRasterDepth(centre));
   // (under the cockpit's mask: the cabin there)
   if (moments[idx].x < -0.5 && moments[idx].x > -1.5) { return; }
   let flags = P.frame.z;
@@ -8653,6 +8679,64 @@ fn shadeMark(@builtin(global_invocation_id) gid: vec3u) {
   if (moments[idx].x < -0.5 && moments[idx].x > -1.5) { return; }
   let k = u32(P.near1.w);
   moments[idx] = vec2f(RASTER_STALE, d / EARTH_RM * bodyRadius(k));
+}
+
+// The cloud pass (docs/PLAN-NUAGES-AAA.md N1): the clouds along each camera ray marched once a texel of half the image's
+// size — a 2 × 2 block of pixels —, before the nearest surface among the block's (the raster's visibility, b), else before
+// the ellipsoid: their cover and light (cloudOutA), the nearest's distance along the ray, the bound [m] (−1: the sky) and
+// the nearest's depth [M] (cloudOutB). The raster's frames only; shade and main read it back (cloudsBuffered), weighted by the bounds' likeness.
+@group(1) @binding(11) var cloudOutA: texture_storage_2d<rgba32float, write>;
+@group(1) @binding(12) var cloudOutB: texture_storage_2d<rgba32float, write>;
+@compute @workgroup_size(8, 8)
+fn clouds(@builtin(global_invocation_id) gid: vec3u) {
+  let W = u32(P.res.x);
+  let H = u32(P.res.y);
+  if (gid.x >= (W + 1u) / 2u || gid.y >= (H + 1u) / 2u) { return; }
+  var cs = EarthClouds(0.0, vec3f(0.0), -1.0);
+  var bound = -1.0;
+  var depthM = -1.0;
+  if (HAS_BODIES && P.near0.w > 0.5) {
+    let k = u32(P.near1.w);
+    if (isEarth(k) && hasAir(k) && earthOn()) {
+      let p0 = vec2f(gid.xy * 2u);
+      var dmin = 3e38;
+      for (var j = 0u; j < 4u; j++) {
+        let d = terrainRasterDepth(p0 + vec2f(f32(j & 1u), f32(j >> 1u)) + 0.5);
+        if (d > 0.0) { dmin = min(dmin, d); }
+      }
+      // (a texel's footprint: two pixels)
+      FOOT_NEAR = 2.0;
+      FOOT_FAR = 2.0;
+      FOOT = 2.0;
+      let frameStamp = P.frame.x;
+      let pos = p0 + 1.0 + gaussJitter(hash4(vec3u(gid.xy, frameStamp)).xy);
+      let ndc = vec2f(2.0 * pos.x / P.res.x - 1.0, 1.0 - 2.0 * pos.y / P.res.y);
+      let look = normalize(P.camFwd.xyz + ndc.x * P.cam.w * P.camRight.w * P.camRight.xyz + ndc.y * P.cam.w * P.camUp.xyz);
+      setAir(k);
+      let ab = squashOf(k);
+      let ro = nearCam();
+      let rs = squashed(toBody(look), ab);
+      let m = length(rs);
+      let rd = rs / m;
+      var tHit = unitHit(ro, rd);
+      if (dmin < 3e38) {
+        tHit = dmin * m / P.near4.w;
+        bound = dmin;
+      }
+      let lt = nearLight(k);
+      WX_W = select(0.0, P.wx[0].x, HAS_WX && earthOn());
+      WX_Q = normalize(ro);
+      let rnd = fract(ign(vec2f(gid.xy)) + f32(frameStamp % 1024u) * 0.6180339887);
+      RND = fract(rnd * 7.31 + 0.13);
+      cs = earthClouds(k, ro, rd, tHit, normalize(squashed(toBody(lt.dir), ab)), lt.e, squashed(toBody(P.camRight.xyz), ab),
+        squashed(toBody(P.camUp.xyz), ab), 0.0, pixFoot(), fract(rnd * 7.31 + 0.37), P.earth4.w > 0.5);
+      WX_W = 0.0;
+      // (the cloud's distance as the image's depths have it [M] — the history's reprojection, post.wgsl cloudTemporal)
+      if (cs.tc > 0.0) { depthM = cs.tc / m * bodyRadius(k); }
+    }
+  }
+  textureStore(cloudOutA, gid.xy, vec4f(cs.cl, cs.alpha));
+  textureStore(cloudOutB, gid.xy, vec4f(cs.tc, bound, depthM, 0.0));
 }
 
 // ---------------------------------------------------------------------------------------------

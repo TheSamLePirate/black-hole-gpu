@@ -17,6 +17,16 @@ const PLACES: Record<string, string> = {
     __bh.game.flyAt(36.1, -5.55, 900, 200, 210);`,
   alps: `__bh.game.setDate("2026-07-10T11:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
     __bh.game.flyAt(45.85, 6.75, 2500, 110, 200);`,
+  // (the weather's clouds — docs/PLAN-NUAGES-AAA.md N0 —: cumulus over the craft, the same deck seen from above, an overcast
+  // over the Alps, a storm)
+  "tarifa-cumulus": `__bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set("weather", "cloudy"); __bh.game.set("earthClouds", 1);
+    __bh.game.flyAt(36.08, -5.6, 700, 20, 240);`,
+  "cumulus-above": `__bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set("weather", "cloudy"); __bh.game.set("earthClouds", 1);
+    __bh.game.flyAt(36.08, -5.6, 3400, 20, 240);`,
+  "alps-overcast": `__bh.game.setDate("2026-07-10T11:00:00Z"); __bh.game.set("weather", "overcast"); __bh.game.set("earthClouds", 1);
+    __bh.game.flyAt(45.85, 6.75, 2500, 110, 200);`,
+  storm: `__bh.game.setDate("2026-07-10T15:00:00Z"); __bh.game.set("weather", "storm"); __bh.game.set("earthClouds", 1);
+    __bh.game.flyAt(36.08, -5.6, 900, 20, 220);`,
   // (a low Sun: the relief's long shadows — the shadow map's and the march's)
   "alps-evening": `__bh.game.setDate("2026-07-10T17:45:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
     __bh.game.flyAt(45.85, 6.75, 2500, 110, 200);`,
@@ -32,6 +42,9 @@ const MODE_SET: Record<string, string> = {
   // (the relief's shadow map — terrain-raster.ts encodeSunShadow — on, the default, and off: the march alone)
   sun: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sunShadowOn = true;`,
   nosun: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sunShadowOn = false;`,
+  // (the cloud pass — trace.wgsl clouds, docs/PLAN-NUAGES-AAA.md N1 — on, the default, and off: each pixel marches its clouds)
+  cloudpass: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.cloudPassOn = true;`,
+  nocloudpass: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.cloudPassOn = false;`,
   lod300: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sceneryRasterLod = { nearM: 300, near: "ico80", far: "ico20" };`,
   lod150: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sceneryRasterLod = { nearM: 150, near: "ico80", far: "ico20" };`,
   lod150light: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sceneryRasterLod = { nearM: 150, near: "ico20", far: "octa" };`,

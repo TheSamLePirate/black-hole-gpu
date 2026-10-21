@@ -18,6 +18,7 @@ import { terrainCacheShader, withTerrainCache } from "../src/system/terrain-cach
 import { terrainRasterShader } from "../src/system/terrain-raster";
 import { forestModuleOf, sceneryRasterShader } from "../src/system/scenery-raster";
 import { withSunShadow, withTerrainRaster } from "../src/system/terrain-raster-hint";
+import { withCloudPass } from "../src/system/cloud-pass";
 import { CHROME, withGpuPage } from "./lib/headless-gpu";
 
 const shaders: Record<string, string> = {};
@@ -31,7 +32,10 @@ shaders["terrain raster pilot (system/terrain-raster.ts)"] = terrainRasterShader
 shaders["scenery raster instances (system/scenery-raster.ts)"] = sceneryRasterShader(forestModuleOf(traced));
 // (the tracer as the full device builds it: the raster patch's distances read by the ground march)
 shaders["trace.wgsl with the raster hint"] = withTerrainRaster(traced, true);
-shaders["trace.wgsl with the raster hint and the relief's shadow map"] = withSunShadow(withTerrainRaster(traced, true), true);
+shaders["trace.wgsl with the raster hint, the relief's shadow map, the cloud pass"] = withCloudPass(
+  withSunShadow(withTerrainRaster(traced, true), true),
+  true,
+);
 shaders["trace.wgsl without scenery"] = sceneryShader(surfaceShader(traced, true), false);
 shaders["trace.wgsl without surface textures"] = sceneryShader(surfaceShader(traced, false), true);
 shaders["trace.wgsl without the aerial table"] = aerialShader(traced, false);

@@ -12,6 +12,7 @@ import {
 import { TERRAIN_CACHE_MAX_LAT, TERRAIN_CACHE_VEC4S } from "./system/terrain-cache-layout";
 import { TerrainRaster } from "./system/terrain-raster";
 import { SCENERY_RASTER_LOD, SceneryRaster, type SceneryRasterLod } from "./system/scenery-raster";
+import { CLOUD_PASS_BINDINGS, CLOUD_PASS_FLAG, CLOUD_PASS_TEXTURE_LIMIT, withCloudPass } from "./system/cloud-pass";
 import { TERRAIN_RASTER_MAX_PIXELS, terrainRasterFrame } from "./system/terrain-raster-frame";
 import type { NetWalkerHome } from "./controller/netcraft";
 import { CharacterRenderer, type GrassView } from "./character-renderer";
@@ -409,6 +410,18 @@ interface Target {
   sceneDepthBind: GPUBindGroup | null;
   /** the main trace pass's bind group holding the raster patch's distance texture of this frame (made when it changes) */
   hintBind?: { tex: GPUTexture; bind: GPUBindGroup };
+  /** the cloud pass's buffers (half the target's size), their write bind group, and the tracer's bind group for the pass
+   *  itself (the raster's distances bound, the buffers' stand-ins) — trace.wgsl clouds, system/cloud-pass.ts */
+  cloudA?: GPUTexture;
+  cloudB?: GPUTexture;
+  cloudWrite?: GPUBindGroup;
+  cloudBind?: { tex: GPUTexture; bind: GPUBindGroup };
+  /** this frame's march (the pass writes it), the history kept, whether it holds a frame, its pass's bind group */
+  cloudCurA?: GPUTexture;
+  cloudCurB?: GPUTexture;
+  cloudHistA?: GPUTexture;
+  cloudHistValid?: boolean;
+  cloudTemporalBind?: { buf: GPUBuffer; bind: GPUBindGroup };
   stamps: GPUBuffer;
   gather: GPUBuffer;
   hdr: GPUTexture;
@@ -522,6 +535,9 @@ export class Renderer {
   private postBeamH!: GPUComputePipeline;
   private postAtrous!: GPUComputePipeline;
   private postTemporal!: GPUComputePipeline;
+  /** the cloud pass's history (post.wgsl cloudTemporal — docs/PLAN-NUAGES-AAA.md N1b) */
+  private postCloudTemporal: GPUComputePipeline | null = null;
+  private cloudCT: GPUBuffer | null = null;
   private postMotion!: GPUComputePipeline;
   private postOcclusion!: GPUComputePipeline;
   private postStars!: GPUComputePipeline;
@@ -910,6 +926,20 @@ export class Renderer {
     // hint, 0 — bound otherwise)
     this.rasterHint = device.limits.maxSampledTexturesPerShaderStage >= RASTER_HINT_TEXTURE_LIMIT;
     this.sunShadow = device.limits.maxSampledTexturesPerShaderStage >= SUN_SHADOW_TEXTURE_LIMIT;
+    // (the cloud pass's buffers — docs/PLAN-NUAGES-AAA.md N1 —: per target, half its size; stand-ins where it writes them)
+    this.cloudPass = device.limits.maxSampledTexturesPerShaderStage >= CLOUD_PASS_TEXTURE_LIMIT;
+    if (this.cloudPass) {
+      this.cloudDummies = (["rgba32float", "rgba32float"] as const).map((format) =>
+        device.createTexture({ label: "cloud pass: none", size: [1, 1], format, usage: GPUTextureUsage.TEXTURE_BINDING }),
+      );
+      this.cloudWriteLayout = device.createBindGroupLayout({
+        label: "cloud pass write",
+        entries: [
+          { binding: 11, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: "write-only", format: "rgba32float" } },
+          { binding: 12, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: "write-only", format: "rgba32float" } },
+        ],
+      });
+    }
     if (this.sunShadow)
       this.sunDummy = device.createTexture({
         label: "relief shadow map: none",
@@ -958,6 +988,13 @@ export class Renderer {
           : []),
         ...(device.limits.maxSampledTexturesPerShaderStage >= SUN_SHADOW_TEXTURE_LIMIT
           ? [{ binding: SUN_SHADOW_BINDING, visibility: C, texture: { sampleType: "depth" } as GPUTextureBindingLayout }]
+          : []),
+        ...(device.limits.maxSampledTexturesPerShaderStage >= CLOUD_PASS_TEXTURE_LIMIT
+          ? CLOUD_PASS_BINDINGS.map((binding) => ({
+              binding,
+              visibility: C,
+              texture: { sampleType: "unfilterable-float" } as GPUTextureBindingLayout,
+            }))
           : []),
         ...(device.limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT
           ? [{ binding: 32, visibility: C, buffer: { type: "read-only-storage" } as GPUBufferBindingLayout }]
@@ -1033,6 +1070,8 @@ export class Renderer {
     });
 
     this.mainLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.lutReadLayout] });
+    if (this.cloudWriteLayout)
+      this.cloudsLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.cloudWriteLayout] });
     this.lutLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.lutWriteLayout] });
     // (compiled asynchronously: the tracer is a huge shader — on Windows (D3D12) one takes a
     // minute or more, and a synchronous compile stalls the GPU process until the browser's watchdog kills it)
@@ -1203,6 +1242,7 @@ export class Renderer {
       mkPost("beamH").then((p) => (this.postBeamH = p)),
       mkPost("atrous").then((p) => (this.postAtrous = p)),
       mkPost("temporal").then((p) => (this.postTemporal = p)),
+      mkPost("cloudTemporal").then((p) => (this.postCloudTemporal = p)),
       mkPost("motionBlur").then((p) => (this.postMotion = p)),
       mkPost("occlusion").then((p) => (this.postOcclusion = p)),
       mkPost("stars").then((p) => (this.postStars = p)),
@@ -1596,7 +1636,7 @@ export class Renderer {
         maxBufferSize: adapter.limits.maxBufferSize,
         maxTextureDimension2D: adapter.limits.maxTextureDimension2D,
         maxSampledTexturesPerShaderStage: Math.min(
-          Math.max(AERIAL_TEXTURE_LIMIT, RASTER_HINT_TEXTURE_LIMIT, SUN_SHADOW_TEXTURE_LIMIT),
+          Math.max(AERIAL_TEXTURE_LIMIT, RASTER_HINT_TEXTURE_LIMIT, SUN_SHADOW_TEXTURE_LIMIT, CLOUD_PASS_TEXTURE_LIMIT),
           adapter.limits.maxSampledTexturesPerShaderStage,
         ),
         maxStorageBuffersPerShaderStage: Math.min(SCENERY_STORAGE_LIMIT, adapter.limits.maxStorageBuffersPerShaderStage),
@@ -1627,12 +1667,15 @@ export class Renderer {
         seaShader(
           sceneryShader(
             surfaceShader(
-              withSunShadow(
-                withTerrainRaster(
-                  withTerrainCache(withForest(await wgsl(traceWGSL), await wgsl(forestSource))),
-                  device.limits.maxSampledTexturesPerShaderStage >= RASTER_HINT_TEXTURE_LIMIT,
+              withCloudPass(
+                withSunShadow(
+                  withTerrainRaster(
+                    withTerrainCache(withForest(await wgsl(traceWGSL), await wgsl(forestSource))),
+                    device.limits.maxSampledTexturesPerShaderStage >= RASTER_HINT_TEXTURE_LIMIT,
+                  ),
+                  device.limits.maxSampledTexturesPerShaderStage >= SUN_SHADOW_TEXTURE_LIMIT,
                 ),
-                device.limits.maxSampledTexturesPerShaderStage >= SUN_SHADOW_TEXTURE_LIMIT,
+                device.limits.maxSampledTexturesPerShaderStage >= CLOUD_PASS_TEXTURE_LIMIT,
               ),
               device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT,
             ),
@@ -2011,7 +2054,7 @@ export class Renderer {
   }
 
   /** The trace kernels' bind group entries for a target; `binding14` is the buffer of the probe or of the light probe. */
-  private traceEntries(t: Target, binding14: GPUBuffer, raster?: GPUTexture): GPUBindGroupEntry[] {
+  private traceEntries(t: Target, binding14: GPUBuffer, raster?: GPUTexture, clouds = true): GPUBindGroupEntry[] {
     return [
       { binding: 0, resource: { buffer: this.paramBuf } },
       { binding: 1, resource: { buffer: t.accum } },
@@ -2057,6 +2100,13 @@ export class Renderer {
       ...(this.sunShadow
         ? [{ binding: SUN_SHADOW_BINDING, resource: ((raster && this.terrainRaster?.sunDepth) || this.sunDummy!).createView() }]
         : []),
+      // (the cloud pass's buffers: read by the kernels; stand-ins where the pass writes them, and before they exist)
+      ...(this.cloudPass
+        ? CLOUD_PASS_BINDINGS.map((binding, i) => ({
+            binding,
+            resource: ((clouds && (i === 0 ? t.cloudA : t.cloudB)) || this.cloudDummies[i]!).createView(),
+          }))
+        : []),
     ];
   }
 
@@ -2064,6 +2114,28 @@ export class Renderer {
     this.eventFrames = 3; // (new resources: the next frames' times are not the scene's)
     const d = this.device;
     t.hintBind = undefined;
+    t.cloudBind = undefined;
+    if (this.cloudPass && this.cloudWriteLayout) {
+      for (const x of [t.cloudA, t.cloudB, t.cloudCurA, t.cloudCurB, t.cloudHistA]) x?.destroy();
+      const size = [Math.ceil(t.width / 2), Math.ceil(t.height / 2)];
+      const U = GPUTextureUsage;
+      const mk = (label: string, usage: number) => d.createTexture({ label, size, format: "rgba32float", usage });
+      // (this frame's march, the history's result the kernels read, the history kept for the next frame)
+      t.cloudCurA = mk("cloud pass: light, cover", U.STORAGE_BINDING | U.TEXTURE_BINDING | U.COPY_SRC);
+      t.cloudCurB = mk("cloud pass: distance, bound, depth", U.STORAGE_BINDING | U.TEXTURE_BINDING | U.COPY_SRC);
+      t.cloudA = mk("clouds: light, cover", U.STORAGE_BINDING | U.TEXTURE_BINDING | U.COPY_SRC | U.COPY_DST);
+      t.cloudB = mk("clouds: distance, bound, depth", U.STORAGE_BINDING | U.TEXTURE_BINDING | U.COPY_DST);
+      t.cloudHistA = mk("clouds' history", U.TEXTURE_BINDING | U.COPY_DST);
+      t.cloudHistValid = false;
+      t.cloudTemporalBind = undefined;
+      t.cloudWrite = d.createBindGroup({
+        layout: this.cloudWriteLayout,
+        entries: [
+          { binding: 11, resource: t.cloudCurA.createView() },
+          { binding: 12, resource: t.cloudCurB.createView() },
+        ],
+      });
+    }
     t.traceBind = d.createBindGroup({ layout: this.traceLayout, entries: this.traceEntries(t, this.ship.envBuf) });
     t.probeBind = d.createBindGroup({ layout: this.traceLayout, entries: this.traceEntries(t, this.probeBuf) });
     t.polGridPass = d.createBindGroup({
@@ -2956,6 +3028,8 @@ export class Renderer {
     if (!o.probe) this.rasterPrimaryOn = rasterPrimary;
     // (… and its shading rate: 1 every pixel, 2 one in two, 4 one in 2 × 2 — trace.wgsl rasterRate)
     this.rasterRate = s.earthRasterShading === "quarter" ? 4 : s.earthRasterShading === "half" ? 2 : 1;
+    // (the cloud pass's bit — CLOUD_PASS_FLAG — set once it is drawn this frame: dispatchTrace, when the frame's key is whole)
+    this.cloudPassDrawn = false;
     f[MOUTH_LIST_AT + 5] = rasterPrimary ? this.rasterRate + (this.rasterJitter === "halton" ? 16 : 0) : 0;
     // (the trees drawn as raster instances this frame: set once they are — encodeTerrainRasterVisibility)
     f[MOUTH_LIST_AT + 6] = 0;
@@ -3557,6 +3631,8 @@ export class Renderer {
       shade: GPUComputePipeline | null;
       /** the pixels its shading rate leaves this frame marked for resolve (trace.wgsl shadeMark) */
       shadeMark: GPUComputePipeline | null;
+      /** the cloud pass (trace.wgsl clouds) */
+      clouds: GPUComputePipeline | null;
       /** a still view asked for the quality cascade (q, lutq) */
       qWanted: boolean;
       /** a cascade under way (realtime: rt, env, lut; quality: q, lutq) — stopped, its queued compiles
@@ -3594,7 +3670,7 @@ export class Renderer {
    * compiling is drawn by an earlier scene's covering its features, else not drawn (null).
    */
   private traceVariant(
-    kind: "rt" | "q" | "env" | "lut" | "lutq" | "air" | "shade" | "shadeMark",
+    kind: "rt" | "q" | "env" | "lut" | "lutq" | "air" | "shade" | "shadeMark" | "clouds",
     key = this.featureKey,
     create = true,
   ): GPUComputePipeline | null {
@@ -3607,6 +3683,7 @@ export class Renderer {
       air: null,
       shade: null,
       shadeMark: null,
+      clouds: null,
     }[kind];
     if (key === FEATURES_ALL) {
       void this.generalCompile.start();
@@ -3629,6 +3706,7 @@ export class Renderer {
         air: null,
         shade: null,
         shadeMark: null,
+        clouds: null,
         qWanted: false,
         busy: false,
         qBusy: false,
@@ -3646,7 +3724,11 @@ export class Renderer {
       create &&
       !v.busy &&
       !v.failed &&
-      (!v.rt || !v.env || (lutOk && !v.lut) || (airOk && !v.air) || (shadeOk && (!v.shade || !v.shadeMark)))
+      (!v.rt ||
+        !v.env ||
+        (lutOk && !v.lut) ||
+        (airOk && !v.air) ||
+        (shadeOk && (!v.shade || !v.shadeMark || (this.cloudPass && !v.clouds))))
     )
       this.realtimeCascade(key, v);
     if (kind === "q" || kind === "lutq") v.qWanted = true;
@@ -3678,7 +3760,7 @@ export class Renderer {
   private realtimeCascade(key: number, slot: NonNullable<ReturnType<Renderer["variants"]["get"]>>) {
     slot.busy = true;
     const current = this.wanted(key, slot);
-    const compile = (entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark", onStall?: () => void) =>
+    const compile = (entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "clouds", onStall?: () => void) =>
       this.variantQueue.run(current, () => this.timedVariant(key, entry), onStall);
     const run = async () => {
       if (!slot.rt) {
@@ -3688,6 +3770,7 @@ export class Renderer {
       // (the raster's primary visibility: its kernel right after the image's — the trace leaves the patch's pixels to it)
       if (!slot.shade && (key & FEATURE_TERRAIN_RASTER) !== 0) slot.shade = await compile("shade");
       if (!slot.shadeMark && (key & FEATURE_TERRAIN_RASTER) !== 0) slot.shadeMark = await compile("shadeMark");
+      if (!slot.clouds && (key & FEATURE_TERRAIN_RASTER) !== 0 && this.cloudPass) slot.clouds = await compile("clouds");
       if (!slot.env) {
         slot.env = await compile("env");
         if (!slot.env) return;
@@ -3735,7 +3818,7 @@ export class Renderer {
    *  of them): it draws this scene as it would — the extra features are switched off by the params. */
   private coveringVariant(
     key: number,
-    kind: "rt" | "q" | "env" | "lut" | "lutq" | "air" | "shade" | "shadeMark",
+    kind: "rt" | "q" | "env" | "lut" | "lutq" | "air" | "shade" | "shadeMark" | "clouds",
   ): GPUComputePipeline | null {
     // (the same debug views and tuning — the bits from 16 on are ids, not features: none other's constants)
     for (const [k, v] of this.variants) if ((k & key) === key && k >>> 16 === key >>> 16 && v[kind]) return v[kind];
@@ -3744,7 +3827,7 @@ export class Renderer {
 
   /** mkVariant, its key and compile time in the diagnostic — every one, not only those the first image
    *  waits for: a scene's feature bit switching on in flight (the scenery's 8192) recompiles for seconds (R-M4) */
-  private async timedVariant(key: number, entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark", quality = false) {
+  private async timedVariant(key: number, entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "clouds", quality = false) {
     const t0 = performance.now();
     const p = await this.mkVariant(key, entry, quality);
     const s = ((performance.now() - t0) / 1000).toFixed(1);
@@ -3759,19 +3842,21 @@ export class Renderer {
   /** A specialised pipeline of the tracer for a features key (the unused ones compiled out). */
   private mkVariant(
     key: number,
-    entryPoint: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark",
+    entryPoint: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "clouds",
     quality: boolean,
   ): Promise<GPUComputePipeline> {
     const has = (bit: number) => ((key & bit) !== 0 ? 1 : 0);
     return this.device.createComputePipelineAsync({
       layout:
-        entryPoint === "main" || entryPoint === "shade" || entryPoint === "shadeMark"
-          ? this.mainLayout
-          : entryPoint === "lut"
-            ? this.lutLayout
-            : entryPoint === "aerial"
-              ? this.aerialLayout
-              : this.tracePipeLayout,
+        entryPoint === "clouds"
+          ? this.cloudsLayout!
+          : entryPoint === "main" || entryPoint === "shade" || entryPoint === "shadeMark"
+            ? this.mainLayout
+            : entryPoint === "lut"
+              ? this.lutLayout
+              : entryPoint === "aerial"
+                ? this.aerialLayout
+                : this.tracePipeLayout,
       compute: {
         module: this.traceModule,
         entryPoint,
@@ -3792,9 +3877,13 @@ export class Renderer {
           HAS_SCENERY: has(8192),
           HAS_AURORA: has(16384),
           HAS_TERRAIN_CACHE:
-            (entryPoint === "main" || entryPoint === "shade" || entryPoint === "shadeMark") && !quality ? has(FEATURE_TERRAIN_CACHE) : 0,
+            (entryPoint === "main" || entryPoint === "shade" || entryPoint === "shadeMark" || entryPoint === "clouds") && !quality
+              ? has(FEATURE_TERRAIN_CACHE)
+              : 0,
           HAS_TERRAIN_RASTER:
-            (entryPoint === "main" || entryPoint === "shade" || entryPoint === "shadeMark") && !quality && this.rasterHint
+            (entryPoint === "main" || entryPoint === "shade" || entryPoint === "shadeMark" || entryPoint === "clouds") &&
+            !quality &&
+            this.rasterHint
               ? has(FEATURE_TERRAIN_RASTER)
               : 0,
           COST_VIEW: (key >> 16) & 15,
@@ -3964,6 +4053,28 @@ export class Renderer {
       ap.setBindGroup(1, this.aerialWrite);
       ap.dispatchWorkgroups(Math.ceil(AERIAL_SIZE[0] / 8), Math.ceil(AERIAL_SIZE[1] / 8));
       ap.end();
+    }
+    // (the cloud pass: the clouds marched once a texel of half the image, before the rays that read them)
+    if (!quality && hint && this.rasterPrimaryOn && this.cloudPass && this.cloudPassOn) {
+      const cp = this.traceVariant("clouds");
+      if (cp && t.cloudWrite) {
+        if (t.cloudBind?.tex !== hint)
+          t.cloudBind = {
+            tex: hint,
+            bind: this.device.createBindGroup({ layout: this.traceLayout, entries: this.traceEntries(t, this.ship.envBuf, hint, false) }),
+          };
+        const c = enc.beginComputePass(this.prof.pass("clouds (half)"));
+        c.setPipeline(cp);
+        c.setBindGroup(0, t.cloudBind.bind);
+        c.setBindGroup(1, t.cloudWrite);
+        c.dispatchWorkgroups(Math.ceil(t.width / 16), Math.ceil(t.height / 16));
+        c.end();
+        this.encodeCloudHistory(enc, t);
+        // (drawn: the kernels read it — the parameters' bit written for this submission)
+        this.cloudPassDrawn = true;
+        this.paramsF[MOUTH_LIST_AT + 5] = this.paramsF[MOUTH_LIST_AT + 5]! + CLOUD_PASS_FLAG;
+        this.device.queue.writeBuffer(this.paramBuf, (MOUTH_LIST_AT + 4) * 4, this.paramsF.subarray(MOUTH_LIST_AT + 4, MOUTH_LIST_AT + 8));
+      }
     }
     // (the quality kernel still compiling — frame() keeps a still view on the realtime path until then;
     // the scene's realtime kernel still compiling at the start: no image yet)
@@ -5895,6 +6006,19 @@ export class Renderer {
   private terrainRasterLevel = 2;
   /** the last camera frame shades the raster patch's pixels one a pixel (earthPipeline "raster", trace.wgsl shade) */
   private rasterPrimaryOn = false;
+  /** the cloud pass (trace.wgsl clouds — docs/PLAN-NUAGES-AAA.md N1): the device binds its buffers; a switch */
+  private cloudPass = false;
+  cloudPassOn = true;
+  /** the cloud pass's own history (post.wgsl cloudTemporal; a switch for comparisons: off, each frame's march as it is) */
+  cloudHistoryOn = true;
+  private cloudDummies: GPUTexture[] = [];
+  private cloudWriteLayout: GPUBindGroupLayout | null = null;
+  private cloudPassDrawn = false;
+  /** the cloud pass this frame: drawn, its history kept (tests, TARS) */
+  get cloudPassStats() {
+    return { drawn: this.cloudPassDrawn, history: !!this.live?.cloudHistValid, supported: this.cloudPass, on: this.cloudPassOn };
+  }
+  private cloudsLayout: GPUPipelineLayout | null = null;
   /** the relief's shadow map (terrain-raster.ts encodeSunShadow, trace.wgsl sunShadowFar): the device binds it; a switch */
   private sunShadow = false;
   private sunDummy: GPUTexture | null = null;
@@ -5997,6 +6121,47 @@ export class Renderer {
     }
     if (!on && this.sunTableOn) this.device.queue.writeBuffer(this.bodyBuf, (TABLE_SUN + 3) * 16, new Float32Array(4));
     this.sunTableOn = on;
+  }
+
+  /**
+   * The cloud pass's history (post.wgsl cloudTemporal): this frame's march reprojected against the last frame's result with
+   * the clouds' own depth, into the buffers the kernels read, then kept as the next frame's history. No temporal pass yet
+   * (its camera uniform is the image's history's): this frame's march copied as it is.
+   */
+  private encodeCloudHistory(enc: GPUCommandEncoder, t: Target) {
+    const size = { width: Math.ceil(t.width / 2), height: Math.ceil(t.height / 2) };
+    const ta = t.temporal;
+    if (!this.postCloudTemporal || !ta || !this.cloudHistoryOn) {
+      enc.copyTextureToTexture({ texture: t.cloudCurA! }, { texture: t.cloudA! }, size);
+      enc.copyTextureToTexture({ texture: t.cloudCurB! }, { texture: t.cloudB! }, size);
+      t.cloudHistValid = false;
+      return;
+    }
+    this.cloudCT ??= this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    if (t.cloudTemporalBind?.buf !== ta.buf)
+      t.cloudTemporalBind = {
+        buf: ta.buf,
+        bind: this.device.createBindGroup({
+          layout: this.postCloudTemporal.getBindGroupLayout(0),
+          entries: [
+            { binding: 21, resource: { buffer: ta.buf } },
+            { binding: 40, resource: t.cloudCurA!.createView() },
+            { binding: 41, resource: t.cloudCurB!.createView() },
+            { binding: 42, resource: t.cloudHistA!.createView() },
+            { binding: 44, resource: t.cloudA!.createView() },
+            { binding: 45, resource: t.cloudB!.createView() },
+            { binding: 46, resource: { buffer: this.cloudCT } },
+          ],
+        }),
+      };
+    this.device.queue.writeBuffer(this.cloudCT, 0, new Float32Array([t.cloudHistValid && ta.valid ? 1 : 0, 0, 0, 0]));
+    const p = enc.beginComputePass(this.prof.pass("clouds' history"));
+    p.setPipeline(this.postCloudTemporal);
+    p.setBindGroup(0, t.cloudTemporalBind.bind);
+    p.dispatchWorkgroups(Math.ceil(size.width / 8), Math.ceil(size.height / 8));
+    p.end();
+    enc.copyTextureToTexture({ texture: t.cloudA! }, { texture: t.cloudHistA! }, size);
+    t.cloudHistValid = true;
   }
 
   private encodeTerrainRasterVisibility(enc: GPUCommandEncoder, target: Target, s: Settings) {

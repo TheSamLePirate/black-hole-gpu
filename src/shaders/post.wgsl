@@ -798,3 +798,57 @@ fn occlusion(@builtin(global_invocation_id) gid: vec3u) {
   }
   sceneDepth[idx] = depth;
 }
+
+// The cloud pass's history (docs/PLAN-NUAGES-AAA.md N1b — trace.wgsl clouds writes cloudCur, its half-size buffers): each
+// texel's clouds where they were in the previous frame — reprojected with **their own** distance (the cloud's, not the
+// ground's: no smear of a cumulus over the valley behind it under parallax), the history clamped to the 3 × 3 of this
+// frame's texels round it (premultiplied light and cover: a cloud uncovered or gone is not dragged), 15 % of this frame's
+// mixed in. Light and cover premultiplied; the distances, this frame's. CT.x: the history valid (0: this frame copied).
+@group(0) @binding(40) var cloudCurA: texture_2d<f32>;
+@group(0) @binding(41) var cloudCurB: texture_2d<f32>;
+@group(0) @binding(42) var cloudHistA: texture_2d<f32>;
+@group(0) @binding(44) var cloudDstA: texture_storage_2d<rgba32float, write>;
+@group(0) @binding(45) var cloudDstB: texture_storage_2d<rgba32float, write>;
+@group(0) @binding(46) var<uniform> CT: vec4f;
+fn cloudPremul(q: vec2i) -> vec4f {
+  let a = textureLoad(cloudCurA, q, 0);
+  return vec4f(a.rgb * a.a, a.a);
+}
+@compute @workgroup_size(8, 8)
+fn cloudTemporal(@builtin(global_invocation_id) gid: vec3u) {
+  let size = textureDimensions(cloudCurA);
+  if (gid.x >= size.x || gid.y >= size.y) { return; }
+  let p = vec2i(gid.xy);
+  let cur = cloudPremul(p);
+  let b = textureLoad(cloudCurB, p, 0);
+  textureStore(cloudDstB, p, b);
+  var out = cur;
+  if (CT.x > 0.5 && TA.k.y > 0.5) {
+    // (the cloud's distance [M], else far: the sky's turn alone)
+    let depth = select(1e9, b.z, b.z > 0.0 && cur.a > 0.0);
+    let uv = prevUv(reprojDir(pixelDir(vec2f(gid.xy) + 0.5, size), depth));
+    if (all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0))) {
+      let h = uv * vec2f(size) - 0.5;
+      let i0 = vec2i(floor(h));
+      let f = h - floor(h);
+      let hi = vec2i(size) - 1;
+      var hist = vec4f(0.0);
+      for (var j = 0; j < 4; j++) {
+        let o = vec2i(j & 1, j >> 1);
+        let a = textureLoad(cloudHistA, clamp(i0 + o, vec2i(0), hi), 0);
+        hist += select(1.0 - f.x, f.x, o.x == 1) * select(1.0 - f.y, f.y, o.y == 1) * vec4f(a.rgb * a.a, a.a);
+      }
+      var lo = cur;
+      var up = cur;
+      for (var j = -1; j <= 1; j++) {
+        for (var i = -1; i <= 1; i++) {
+          let q = cloudPremul(clamp(p + vec2i(i, j), vec2i(0), hi));
+          lo = min(lo, q);
+          up = max(up, q);
+        }
+      }
+      out = mix(clamp(hist, lo, up), cur, 0.15);
+    }
+  }
+  textureStore(cloudDstA, p, vec4f(select(vec3f(0.0), out.rgb / out.a, out.a > 1e-6), out.a));
+}
