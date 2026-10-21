@@ -65,6 +65,30 @@ describe.skipIf(!E2E)("the spacecraft's crew orders (K6)", () => {
     await app.js(`(__bh.camera.pilot.setAuto("none"), true)`);
   }, 60_000);
 
+  test("Docking: docked, station keeping from the console refused with its reason — never an undocking; undocked by its own order", async () => {
+    // (docked by the docking autopilot, the world stepped)
+    const docked = await app.js<boolean>(`(() => {
+      const c = __bh.camera; __bh.freeze(true);
+      c.pilot.auto = "none"; c.pilot.setAuto("dock");
+      for (let i = 0; i < 30 * 600 && !c.docked; i++) __bh.step(1 / 30);
+      __bh.freeze(false);
+      return !!c.docked;
+    })()`);
+    expect(docked).toBe(true);
+    await app.waitFor(crew("__crew.actions.can('space').ok"), 10_000);
+    await app.js(`(${doc(`querySelector('#fc-keep')`)}.closest('details').open = true, true)`);
+    await click("#fc-keep");
+    const keep = await lastBoard();
+    console.log(`  keep docked: ${JSON.stringify(keep)}`);
+    expect(keep.ok).toBe(false);
+    expect(keep.msg).toMatch(/Désamarrer d'abord/);
+    expect(await app.js<boolean>("!!__bh.camera.docked")).toBe(true);
+    expect(await app.js<string>("__bh.camera.pilot.auto")).not.toBe("keep");
+    await click("#fc-undock");
+    expect((await lastBoard()).ok).toBe(true);
+    expect(await app.js<boolean>("!!__bh.camera.docked")).toBe(false);
+  }, 180_000);
+
   test("the system map: the Moon touched — its menu — taken for the target", async () => {
     await app.js(crew(`__crew.setView("system")`));
     await app.waitFor(`${crew("__crew.views.mapSpan")} >= 0`, 3000);

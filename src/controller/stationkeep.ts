@@ -27,6 +27,7 @@ declare module "../controls" {
     keepAway?: number;
     keepWant: typeof keepWant;
     keepKey: typeof keepKey;
+    keepHold: typeof keepHold;
     rendezvousStart: typeof rendezvousStart;
     inApproachEllipsoid: typeof inApproachEllipsoid;
   }
@@ -119,6 +120,18 @@ function keepKey(this: CameraController): string {
   return this.pilot.auto === "keep" ? t("Autopilot: station keeping") : t("Autopilot off");
 }
 
+/** Station keeping engaged, never let go nor an undocking (the crew's order — ⇧8 toggles and undocks): already on,
+ *  kept; docked (to anything), null — the caller says why. What to say. */
+function keepHold(this: CameraController): string | null {
+  const me = fleet.active;
+  if (this.docked || fleet.links.some((l) => l.a === me || l.b === me)) return null;
+  if (this.pilot.auto !== "keep") {
+    this.keepRun = null;
+    this.pilot.setAuto("keep");
+  }
+  return t("Autopilot: station keeping");
+}
+
 /**
  * Station keeping's command (lowthrust.ts ourWant): the velocity that brings the craft back to its held point — the
  * target's centre plus the held offset turned with the target's orbital frame — and the acceleration fed forward (the
@@ -170,5 +183,5 @@ function keepWant(
 }
 
 export function installStationKeep(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { keepWant, keepKey, rendezvousStart, inApproachEllipsoid });
+  Object.assign(C.prototype, { keepWant, keepKey, keepHold, rendezvousStart, inApproachEllipsoid });
 }

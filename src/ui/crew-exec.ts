@@ -103,7 +103,10 @@ const RUN: Record<Act, Run> = {
     if (a.action === "undock") return C.docked ? (C.undock(), "Désamarré") : "Not docked";
     if (a.action === "refuel") return C.refuelFromDocked();
     if (a.action === "rcs") return C.rcsModeToggle();
-    return C.keepKey();
+    // (station keeping alone — never the pilot's ⇧8, which undocks a docked craft: docked, refused, said why)
+    if (a.action === "keep")
+      return C.keepHold() ?? { ok: false, note: "Amarré : le maintien à poste ne désamarre pas — Désamarrer d'abord" };
+    return { ok: false, note: "Ordre d'amarrage inconnu" };
   },
   "sp.ring": (a, x) => (a.dir === 0 ? "No such direction" : x.camera.ringSet(Number(a.dir) > 0 ? 1 : -1)),
   "sp.node": (a, x) => {

@@ -229,7 +229,7 @@ FLIGHT.
 |---|---|
 | Tenue · Autopilote · Manœuvre · Mission · Plan | comme avant (PLAN-CREW-ACTIONS) |
 | **Cible** | `sp.target` : un corps, la station, un vaisseau par son nom |
-| **Amarrage** | `sp.dock` : maintien à poste, désamarrer, faire le plein, mode RCS |
+| **Amarrage** | `sp.dock` : maintien à poste (`keep` : l'engage seulement, jamais un désamarrage — amarré, refusé avec sa raison, contrairement au ⇧8 du pilote), désamarrer (`undock`), faire le plein, mode RCS |
 | **Systèmes** | chaque panne en cours avec sa checklist. Les cases sont **partagées** avec la tablette du pilote (`sys.step`) ; l'action (isoler le bloc, rallumer, passer sur la centrale de secours…) n'est permise qu'une fois toutes les étapes cochées (`sys.fix`) |
 | **Anneau** | `sp.ring` : l'anneau de l'Endurance plus ou moins vite |
 
