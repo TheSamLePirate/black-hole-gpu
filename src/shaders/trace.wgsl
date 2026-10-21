@@ -1953,6 +1953,9 @@ fn gnoise(p: vec3f) -> f32 {
 // gnoise read from the baked texture (trilinear, a quarter-unit lattice): the disk's 20–36 noises a
 // sample, one fetch each instead of 8 hashed gradients
 fn dnoise(p: vec3f) -> f32 { return textureSampleLevel(noiseTex, noiseSamp, p * (1.0 / 32.0), 0.0).r; }
+// the clouds' baked noises at p (src/noise3d.ts): r the gradient noise (signed), g the Perlin–Worley, b and a the inverted
+// Worley fBms twice and four times finer (0…1) — one fetch
+fn cloudNoise(p: vec3f) -> vec4f { return textureSampleLevel(noiseTex, noiseSamp, p * (1.0 / 32.0), 0.0); }
 
 // The disk's gas (the look of Interstellar's Gargantua: hair-thin hot strands drawn out along the
 // orbits, breaking up into turbulent clouds, with dense cool smoke that darkens what lies behind it,
@@ -7544,7 +7547,10 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
     if (a <= 0.01) { continue; }
     let qd = rotZ(q, P.earth.y);
     let x = qd * (EARTH_RM / 2600.0) + vec3f(0.0, 0.0, hn * 2.0);
-    let sh = 0.6 * dnoise(x) + 0.3 * dnoise(x * 2.3 + vec3f(5.1)) + 0.1 * dnoise(x * 5.3 + vec3f(1.7));
+    // (the Perlin–Worley's domes for the two fine octaves — wxShape's —; TUNE_SC_SKIP 64: the old)
+    var sh = 0.6 * dnoise(x);
+    if ((TUNE_SC_SKIP & 64u) == 0u) { sh += 0.55 * (2.0 * cloudNoise(x * 2.3 + vec3f(5.1)).g - 1.0); }
+    else { sh += 0.3 * dnoise(x * 2.3 + vec3f(5.1)) + 0.1 * dnoise(x * 5.3 + vec3f(1.7)); }
     // (the tops follow the cover smoothed over ~16 texels — tens of km —: gentle domes where the map's
     // cover ends sharply, not walls rising from its edge)
     let qc = rotZ(geoQ(q), P.earth.y);
@@ -7650,8 +7656,13 @@ fn wxShape(q: vec3f, i: u32, hn: f32, w: f32, cheap: bool) -> vec3f {
   }
   if ((cu + st) * aC <= 0.01 && cb * max(max(tower, anvil), shieldM) <= 0.0 && (TUNE_GSKIP & 8388608u) == 0u) { return vec3f(0.0, 1.0, 0.0); }
   let x = wxAt(q, 1600.0) + vec3f(f32(i) * 11.3, f32(i) * 5.9, 0.0) + vec3f(0.0, 0.0, hn * 1.5 + 0.25 * tev);
+  // (the shape: the coarse gradient noise, and — the eye's samples, not the light march's — the Perlin–Worley's domes
+  // twice finer in place of two more octaves: the cauliflower's lobes; TUNE_SC_SKIP 64: the old octaves)
   var sh = 0.6 * dnoise(x);
-  if (!cheap) { sh += 0.3 * dnoise(x * 2.0 + vec3f(5.1)) + 0.1 * dnoise(x * 4.0 + vec3f(1.7)); }
+  if (!cheap) {
+    if ((TUNE_SC_SKIP & 64u) == 0u) { sh += 0.55 * (2.0 * cloudNoise(x * 2.0 + vec3f(5.1)).g - 1.0); }
+    else { sh += 0.3 * dnoise(x * 2.0 + vec3f(5.1)) + 0.1 * dnoise(x * 4.0 + vec3f(1.7)); }
+  }
   var rho = 0.0;
   var top = 1.0;
   var a = 0.0;
@@ -7681,9 +7692,17 @@ fn wxShape(q: vec3f, i: u32, hn: f32, w: f32, cheap: bool) -> vec3f {
   // (a layer above ~7 km: ice — cirrostratus, a storm's spread anvil beyond its own —, a thin veil, not a deck)
   rho *= 1.0 - 0.65 * smoothstep(6500.0, 8000.0, L.x);
   // (the billows: the edges eaten by a finer ridged noise — thin parts the most, the cores kept)
+  // (the Worley detail — Nubis's erosion —: the thin edges eaten into wisps and curls, the dense cores kept; finer near the
+  // top — billows —, wispier under the base)
   if (!cheap && rho > 0.0) {
-    let bil = 1.0 - abs(dnoise(x * 3.1 + vec3f(2.3, 7.1, 0.5 * tev)));
-    rho = clamp(rho - (1.0 - bil) * 0.3 * (1.0 - rho), 0.0, 1.0);
+    if ((TUNE_SC_SKIP & 64u) == 0u) {
+      let dn = cloudNoise(x * 4.0 + vec3f(2.3, 7.1, 0.5 * tev));
+      let det = mix(dn.b, dn.a, smoothstep(0.2, 0.8, hn));
+      rho = clamp((rho - (1.0 - det) * 0.35 * (1.0 - rho)) / max(1.0 - (1.0 - det) * 0.35, 0.3), 0.0, 1.0);
+    } else {
+      let bil = 1.0 - abs(dnoise(x * 3.1 + vec3f(2.3, 7.1, 0.5 * tev)));
+      rho = clamp(rho - (1.0 - bil) * 0.3 * (1.0 - rho), 0.0, 1.0);
+    }
   }
   return vec3f(rho, top, a);
 }

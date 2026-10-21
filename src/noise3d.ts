@@ -1,6 +1,8 @@
-// A tiling 3D gradient noise baked once into a texture (128³ r16float, 4 texels per lattice unit,
-// period 32): the volumetric disk's turbulence reads it — a trilinear fetch instead of 8 hashed
-// gradients a call (its 20–36 noises a sample were half the cost of the thick disk).
+// Tiling 3D noises baked once into a texture (128³ rgba16float, 4 texels per lattice unit, period 32): r a gradient
+// noise — the volumetric disk's turbulence reads it, a trilinear fetch instead of 8 hashed gradients a call (its 20–36
+// noises a sample were half the cost of the thick disk) —; for the clouds (docs/PLAN-NUAGES-AAA.md N4: Nubis's noises),
+// g a Perlin–Worley — a Perlin fBm remapped by an inverted Worley fBm: billowing domes, the cauliflower's —, b and a two
+// inverted Worley fBms twice and four times finer — the detail that erodes a cloud's edges into wisps.
 
 const N = 128;
 export const NOISE_PERIOD = 32;
@@ -39,6 +41,27 @@ fn gnoiseP(p: vec3f) -> f32 {
   let n7 = grad(pcg(b1.x ^ y11), f - vec3f(1.0, 1.0, 1.0));
   return 1.6 * mix(mix(mix(n0, n1, u.x), mix(n2, n3, u.x), u.y), mix(mix(n4, n5, u.x), mix(n6, n7, u.x), u.y), u.z);
 }
+// (Worley: the distance to the nearest of one point a cell — C cells over the period, wrapped —, inverted: 1 at a point, 0
+// a cell's width off)
+fn worley(p: vec3f, C: u32) -> f32 {
+  let q = p * (f32(C) / f32(${NOISE_PERIOD}u));
+  let i = vec3i(floor(q));
+  let f = q - floor(q);
+  var d = 9.0;
+  for (var z = -1; z <= 1; z++) {
+    for (var y = -1; y <= 1; y++) {
+      for (var x = -1; x <= 1; x++) {
+        let o = vec3i(x, y, z);
+        let c = vec3u((i + o + vec3i(i32(C) * 64)) % vec3i(i32(C)));
+        let h = pcg(c.x ^ pcg(c.y ^ pcg(c.z ^ (C * 7919u))));
+        let pt = vec3f(f32(h & 1023u), f32((h >> 10u) & 1023u), f32((h >> 20u) & 1023u)) / 1023.0;
+        d = min(d, length(vec3f(o) + pt - f));
+      }
+    }
+  }
+  return clamp(1.0 - d, 0.0, 1.0);
+}
+fn worleyFbm(p: vec3f, C: u32) -> f32 { return 0.625 * worley(p, C) + 0.25 * worley(p, C * 2u) + 0.125 * worley(p, C * 4u); }
 struct Slice { z: f32 };
 @group(0) @binding(0) var<uniform> S: Slice;
 @vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
@@ -48,21 +71,26 @@ struct Slice { z: f32 };
 @fragment fn fs(@builtin(position) q: vec4f) -> @location(0) vec4f {
   // (texel centres: the lattice sampled at a quarter unit)
   let p = vec3f(q.xy, S.z + 0.5) * ${NOISE_PERIOD / N};
-  return vec4f(gnoiseP(p), 0.0, 0.0, 1.0);
+  // (the Perlin fBm brought to 0…1, remapped by the Worley's — remap(perlin, worley − 1, 1, 0, 1): the Worley's cells cut
+  // it into round domes)
+  let perlin = clamp(0.5 + 0.5 * (0.6 * gnoiseP(p) + 0.3 * gnoiseP(p * 2.0) + 0.1 * gnoiseP(p * 4.0)), 0.0, 1.0);
+  let w0 = worleyFbm(p, 8u);
+  let pw = clamp((perlin - (w0 - 1.0)) / (2.0 - w0), 0.0, 1.0);
+  return vec4f(gnoiseP(p), pw, worleyFbm(p, 16u), worleyFbm(p, 32u));
 }`;
 
 export function bakeNoise3d(device: GPUDevice): GPUTexture {
   const tex = device.createTexture({
     size: [N, N, N],
     dimension: "3d",
-    format: "r16float",
+    format: "rgba16float",
     usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
   });
   const mod = device.createShaderModule({ code: BAKE, label: "noise bake" });
   const pipe = device.createRenderPipeline({
     layout: "auto",
     vertex: { module: mod, entryPoint: "vs" },
-    fragment: { module: mod, entryPoint: "fs", targets: [{ format: "r16float" }] },
+    fragment: { module: mod, entryPoint: "fs", targets: [{ format: "rgba16float" }] },
     primitive: { topology: "triangle-list" },
   });
   const bufs: GPUBuffer[] = [];

@@ -128,7 +128,7 @@ const MODE_SET: Record<string, string> = {
   // (the far clouds mirrored in the sea from the cloud pass's image — N6b — off)
   nocloudrefl: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 16384 };`,
   // (a tune that turns nothing off — an unread bit —: the control for the tuned A/B, a tune itself costing the terrain cache)
-  tunectl: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 4194304 };`,
+  tunectl: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "eighth"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 4194304 };`,
   // (the weather clouds' empty-space exit — wxShape — off: the optimisation's A/B, against tunectl)
   cloudslow: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 4194304 | 8388608 };`,
   // (the weather clouds' sky light computed at every sample, as before the hoisting — the A/B, against tunectl)
@@ -139,6 +139,8 @@ const MODE_SET: Record<string, string> = {
   grazeold: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 4194304, TUNE_GRAZE_WINDOW: 0 };`,
   // (the trees' and buildings' shadow map off: the rays towards the Sun, as before — against tunectl)
   tsmoff: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 4194304, TUNE_SC_SKIP: 32 };`,
+  // (the clouds' baked Perlin–Worley and Worley noises off: the gradient noise's octaves, as before — against tunectl)
+  pwoff: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "eighth"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 4194304, TUNE_SC_SKIP: 64 };`,
   // (the rain's shafts — N5 — off)
   norain: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 65536 };`,
   bolt: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {}; __bh.renderer.lightning.strike(855, 2349, true);`,
