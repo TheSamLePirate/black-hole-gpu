@@ -206,3 +206,22 @@ test("the map: Web Mercator round trips, the land's rings closed and Antarctica 
     for (let k = 1; k < r.pts.length; k++)
       if (Math.abs(r.pts[k]![1]) !== 90) expect(Math.abs(r.pts[k]![0] - r.pts[k - 1]![0])).toBeLessThanOrEqual(180);
 });
+
+test("the AP and A/THR lamps and the next event's body: optional, read when sent, absent from an older pilot", async () => {
+  const { eventName } = await import("../src/crew/draw/spacestat");
+  const now = readInstruments({
+    v: 1,
+    t: 1,
+    metrics: {},
+    auto: { mode: "plane", alt: 9000, hdg: null, spd: null, ap: true, athr: "yes" },
+    next: { kind: "impact", name: "Moon", in: 60, body: "moon" },
+  })!;
+  expect(now.auto?.ap).toBe(true);
+  expect(now.auto?.athr).toBeUndefined();
+  expect(now.next?.body).toBe("moon");
+  expect(eventName(now.next!)).toBe("Impact · Lune");
+  const old = readInstruments({ v: 1, t: 1, metrics: {}, auto: { mode: "plane" }, next: { kind: "exit", name: "Earth", in: 9 } })!;
+  expect(old.auto?.ap).toBeUndefined();
+  expect(eventName(old.next!)).toBe("Sortie de sphère · Earth");
+  expect(eventName({ kind: "mouth", name: "Wormhole", body: "wormhole" })).toBe("Bouche du trou de ver");
+});

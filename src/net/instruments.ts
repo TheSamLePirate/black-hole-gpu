@@ -51,6 +51,10 @@ export interface InstrumentAuto {
   sas: boolean;
   order: string;
   hub: { title: string; phase: string; next: string; bar: number | null } | null;
+  /** the jet's holds (AP: its altitude or heading held) and autothrottle (its speed held) engaged — the game's own
+   *  lamps, its PCD's; absent from an older pilot (the console then reads them off the selectors) */
+  ap?: boolean;
+  athr?: boolean;
 }
 /** The flight plan's guidance: to the active waypoint and the vertical profile. */
 export interface InstrumentNav {
@@ -215,6 +219,8 @@ function readAuto(x: unknown): InstrumentAuto | null {
     sas: x.sas === true,
     order: label(x.order, 16),
     hub: h ? { title: label(h.title), phase: label(h.phase), next: label(h.next, 96), bar: opt(h.bar) } : null,
+    ...(typeof x.ap === "boolean" ? { ap: x.ap } : {}),
+    ...(typeof x.athr === "boolean" ? { athr: x.athr } : {}),
   };
 }
 function readNav(x: unknown): InstrumentNav | null {

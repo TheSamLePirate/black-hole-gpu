@@ -5,12 +5,14 @@
 // The sender is the server's stamp (`from`), its role the room's roster's: neither can be forged. Every act is in
 // the catalogue below with its arguments' schema (the game tools' own checker), checked again where it runs.
 import { checkArgs, type Args, type Param } from "../ai/tool-schema";
+import { type Units, unitsOf } from "../ui/unitsys";
 
 /** the families a pilot opens (the instruments' `caps`): what can be done now, on this craft, in this mode */
 export const FAMILIES = ["nav", "config", "jet", "space", "weapons"] as const;
 export type Family = (typeof FAMILIES)[number];
 
-type Say = (a: Args) => { fr: string; en: string };
+/** an act's words, its figures in the units of who reads them (the pilot's settings, the console's switch) */
+type Say = (a: Args, u: Units) => { fr: string; en: string };
 
 /** the spacecraft's holds, autopilots and manoeuvres (the game's own lists — src/ai/game-tools.ts) */
 export const HOLDS = [
@@ -223,11 +225,11 @@ export const ACTS = {
       hdgDeg: { type: "number", minimum: 0, maximum: 360 },
       spd: { type: "number", minimum: 30, maximum: 700 },
     },
-    say: (a) => {
+    say: (a, u) => {
       const parts: string[] = [];
-      if (a.alt !== undefined) parts.push(`ALT ${Math.round(Number(a.alt))} m`);
+      if (a.alt !== undefined) parts.push(`ALT ${u.fAlt(Number(a.alt))}`);
       if (a.hdgDeg !== undefined) parts.push(`CAP ${String(Math.round(Number(a.hdgDeg)) % 360).padStart(3, "0")}°`);
-      if (a.spd !== undefined) parts.push(`VIT ${Math.round(Number(a.spd))} m/s`);
+      if (a.spd !== undefined) parts.push(`VIT ${u.fSpd(Number(a.spd))}`);
       const s = parts.join(" · ") || "—";
       return { fr: `consigne ${s}`, en: `selected ${s.replace("CAP", "HDG").replace("VIT", "SPD")}` };
     },
@@ -536,7 +538,7 @@ export function readCrewAck(x: unknown): CrewAck | null {
 }
 
 export const familyOf = (act: string): Family | null => SPECS[act]?.fam ?? null;
-export const sayOf = (act: string, args: Args) => SPECS[act]?.say(args) ?? { fr: act, en: act };
+export const sayOf = (act: string, args: Args, u: Units = unitsOf("metric")) => SPECS[act]?.say(args, u) ?? { fr: act, en: act };
 export { onOff };
 
 /** a sender's pace: at most `n` orders a second (a burst of 2n), each id once */

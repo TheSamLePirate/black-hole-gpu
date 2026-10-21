@@ -72,7 +72,7 @@ radio.onTalk = (active) => {
     // (no audio: no tone)
   }
 };
-const actions = new CrewActions(net, model);
+const actions = new CrewActions(net, model, () => unitsOf(views.units));
 actions.onChange(() => {
   board();
   views.request();
@@ -1115,10 +1115,15 @@ function buildMcp() {
   modes.className = "pan-controls mcp-pop";
   modes.append(el("summary", "Modes"));
   const modeBox = el("div");
+  // (the terrain following's height: shown in the console's units, kept in metres — syncMcp follows a units switch)
   const agl = document.createElement("input");
   agl.type = "number";
-  agl.value = "150";
-  agl.setAttribute("aria-label", "Hauteur du suivi de terrain en mètres");
+  agl.className = "mcp-agl";
+  agl.dataset.si = "150";
+  agl.addEventListener("input", () => {
+    const v = agl.valueAsNumber / unitsOf(views.units).alt(1);
+    if (Number.isFinite(v)) agl.dataset.si = String(Math.max(0, Math.min(1000, v)));
+  });
   const here = () => {
     const g = model.own()?.geo;
     return g ? { lat: Math.round(g.lat * 1e5) / 1e5, lon: Math.round(g.lon * 1e5) / 1e5 } : {};
@@ -1127,7 +1132,7 @@ function buildMcp() {
     actButton("Orbite ici", "ap.mode", () => ({ mode: "orbit", ...here() }), "mcp-orbit"),
     actButton("Circuit d'attente", "ap.mode", () => ({ mode: "hold", inboundDeg: Math.round(mcpNow().hdg) % 360 }), "mcp-hold"),
     agl,
-    actButton("Suivi de terrain", "ap.mode", () => ({ mode: "tf", aglM: Math.max(0, Math.min(1000, Number(agl.value) || 150)) }), "mcp-tf"),
+    actButton("Suivi de terrain", "ap.mode", () => ({ mode: "tf", aglM: Math.round(Number(agl.dataset.si) || 150) }), "mcp-tf"),
     actButton("Arrêter l'interception", "ap.traffic", { action: "stop" }, "mcp-stop"),
     actButton("Couper le mode", "ap.mode", { mode: "off" }, "mcp-mode-off"),
   );
@@ -1141,14 +1146,15 @@ function buildMcp() {
       "AP",
       "ap.engage",
       (w) => ({ ap: w }),
-      () => a()?.alt != null || a()?.hdg != null,
+      // (the game's lamp; an older pilot's none: read off the selectors held)
+      () => a()?.ap ?? (a()?.alt != null || a()?.hdg != null),
       "mcp-ap",
     ),
     toggle(
       "A/THR",
       "ap.engage",
       (w) => ({ athr: w }),
-      () => a()?.spd != null,
+      () => a()?.athr ?? a()?.spd != null,
       "mcp-athr",
     ),
     toggle(
@@ -1411,6 +1417,13 @@ function syncSys() {
 function syncMcp() {
   if (mcp.hidden) return;
   const u = unitsOf(views.units);
+  const agl = mcp.querySelector<HTMLInputElement>(".mcp-agl");
+  if (agl && agl.dataset.sys !== u.sys && document.activeElement !== agl) {
+    agl.dataset.sys = u.sys;
+    agl.value = String(Math.round(u.alt(Number(agl.dataset.si) || 150)));
+    agl.title = `Hauteur du suivi de terrain (${u.altName.toLowerCase()})`;
+    agl.setAttribute("aria-label", agl.title);
+  }
   const now = mcpNow();
   const a = snapNow()?.auto;
   const recent = performance.now() - pend.at < 2500;

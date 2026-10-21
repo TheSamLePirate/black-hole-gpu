@@ -297,6 +297,8 @@ export function crewSnapshot(c: CameraController, i: Info, status: RangerStatus 
       sas: i.sas,
       order: m?.order ?? (c.orbitMode ? "ORBIT" : m?.icpt ? "ICPT" : m?.form ? "FORM" : m?.tf !== undefined ? "TF" : ""),
       hub: i.hub ? { title: i.hub.title, phase: i.hub.phase, next: i.hub.next ?? "", bar: i.hub.bar } : null,
+      // (the jet's lamps as its PCD lights them — controller/jet.ts: the holds cleared whenever they do not fly)
+      ...(m ? { ap: m.alt !== null || m.hdg !== null, athr: m.spd !== null } : {}),
     },
     nav:
       routed && L

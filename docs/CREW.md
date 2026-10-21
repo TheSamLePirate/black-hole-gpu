@@ -30,20 +30,23 @@ pour ce qu'un ancien pilote n'envoie pas.
 - `flight` : assiette, inclinaison, cap, route, pente, incidence, dérapage, TAS/EAS/GS, hauteur sol, facteur
   de charge et sa limite, buffeting, incidence de décrochage, vent, secondes avant le sol (GPWS) ;
 - `auto` : mode de vol, niveau d'assistance, consignes ALT/CAP/VIT, PC, LNAV/VNAV, tenue, ordre, assistant
-  (hub : titre, phase, prochaine étape, progression) ;
+  (hub : titre, phase, prochaine étape, progression), voyants AP et A/THR du jeu (`ap`, `athr`, ceux du PCD ;
+  absents d'un pilote plus ancien, la console les déduit alors des consignes) ;
 - `nav` : point actif, distance, relèvement, ETE, écart latéral, phase VNAV, T/D, consignes, croisière, bingo,
   carburant et temps restants du plan ;
 - `sys` : moteur (régime, poussée, PC, débit), carburant (kg, plein), train, volets, aérofrein, STOVL,
   température de coque, bouclier, dommages, masse ;
 - `ils`, `orbit` (apogée, périgée, inclinaison, période, temps aux apsides, rayon du corps, demi-grand axe),
-  `next` (prochain événement),
+  `next` (prochain événement, avec son corps `body` : la console le nomme en français),
   `msn` (objectif de mission), `warn` (alertes : FLY UP, PULL UP, STALL, GEAR, BINGO, MISSILE…) ;
-- les pistes du radar du pilote, leur identification et le verrouillage ;
+- les pistes du radar du pilote, leur identification et le verrouillage : 24 au plus, la piste verrouillée
+  d'abord, puis les plus proches ;
 - la route (32 points, avec contraintes d'altitude et de vitesse) et la trajectoire prévue (48 points, avec
   leur temps et leur hauteur géodésique) : pour un avion en vol, son virage actuel prolongé sur 3 minutes
   (pas à pas sur l'ellipsoïde WGS84), sinon la trajectoire de chute libre ou planifiée ;
 - une fois par seconde, `traffic` et `zones` : le trafic réel (les 64 avions ADS-B les plus proches), les
-  unités d'une mission (hostiles, amies, neutres, détruites), les porte-avions, les cibles d'un combat, les
+  unités d'une mission (hostiles, amies, neutres, détruites), les porte-avions, les cibles d'un combat (leur camp
+  réel, celui du monde de combat ; en mission, celles que ses unités ne montrent pas déjà), les
   zones d'objectif et la portée des SAM. La console fusionne les listes de tous les pilotes (sans doublon) et
   les extrapole entre deux envois le long de leur cap (rayons de courbure WGS84).
 

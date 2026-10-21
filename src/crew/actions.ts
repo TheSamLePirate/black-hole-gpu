@@ -6,6 +6,7 @@ import type { NetClient } from "../net/client";
 import { type Act, ACTS, type Family, readCrewAck, sayOf } from "../net/crewcmd";
 import type { Args } from "../ai/tool-schema";
 import type { CrewModel } from "./model";
+import { type Units, unitsOf } from "../ui/unitsys";
 
 export interface Done {
   ok: boolean;
@@ -27,11 +28,13 @@ const newId = () => `${Date.now().toString(36)}-${(seq++).toString(36)}-${Math.r
 export class CrewActions {
   /** the board's journal: the followed pilot's answers, newest first */
   readonly board: BoardLine[] = [];
-  private pending = new Map<string, { act: Act; resolve: (d: Done) => void; timer: ReturnType<typeof setTimeout> }>();
+  private pending = new Map<string, { act: Act; args: Args; resolve: (d: Done) => void; timer: ReturnType<typeof setTimeout> }>();
   private listeners = new Set<() => void>();
   constructor(
     readonly net: NetClient,
     readonly model: CrewModel,
+    /** the console's units (its switch): an order's figures said in them */
+    readonly units: () => Units = () => unitsOf("metric"),
   ) {
     net.on("event", ({ from, ev }) => {
       if (ev.kind !== "crew-ack") return;
@@ -62,7 +65,9 @@ export class CrewActions {
       // (any answer of the pilot followed: the board's journal)
       if (from === this.model.selected && Object.hasOwn(ACTS, a.act)) {
         const who = room.members.find((m) => m.slot === a.to)?.name ?? "?";
-        this.board.unshift({ at: Date.now(), who, what: a.what || sayOf(a.act, {}).fr, ok: a.ok, msg: a.msg });
+        // (ours: said again in the console's units — the pilot's words in his)
+        const what = mine ? sayOf(mine.act, mine.args, this.units()).fr : a.what || sayOf(a.act, {}).fr;
+        this.board.unshift({ at: Date.now(), who, what, ok: a.ok, msg: a.msg });
         if (this.board.length > 40) this.board.pop();
       }
       this.changed();
@@ -109,7 +114,7 @@ export class CrewActions {
         },
         3000 + 2000 * L.delay,
       );
-      this.pending.set(id, { act, resolve, timer });
+      this.pending.set(id, { act, args, resolve, timer });
       const go = () => this.net.event({ kind: "crew-cmd", v: 1, id, to, act, args });
       if (L.delay > 0) setTimeout(go, L.delay * 1000);
       else go();
@@ -118,6 +123,6 @@ export class CrewActions {
   }
   /** what an order says (French: the console's language) */
   label(act: Act, args: Args = {}) {
-    return sayOf(act, args).fr;
+    return sayOf(act, args, this.units()).fr;
   }
 }

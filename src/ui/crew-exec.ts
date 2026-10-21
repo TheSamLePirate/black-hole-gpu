@@ -14,6 +14,7 @@ import type { Settings } from "../settings";
 import { tf, tr } from "../i18n";
 import { CHECKLISTS, type FailureKind } from "../game/systems";
 import { M_SECONDS } from "../units";
+import { unitsFor } from "./unitsys";
 
 export interface CrewExecDeps {
   camera: CameraController;
@@ -234,7 +235,7 @@ export class CrewExec {
       msg = (e instanceof Error ? e.message : String(e)).slice(0, 160);
     }
     const who = this.d.nameOf(from);
-    const what = tr(sayOf(p.cmd.act, p.cmd.args));
+    const what = tr(sayOf(p.cmd.act, p.cmd.args, unitsFor(this.d.settings)));
     this.d.toast(ok ? tf("{0} (crew): {1}", who, what) : tf("{0} (crew): {1} — refused: {2}", who, what, msg));
     answer(ok, msg, data);
   }
