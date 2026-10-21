@@ -172,3 +172,44 @@ l'ombre des nuages sur l'eau (N3), le sable mouillé au rivage, le bruit du SSR 
   après, à sa hauteur et sa vitesse), vue de passage ; l'image et la vue de débogage des sillages ; vérifie l'état de
   l'avion (> 100 m/s, 5–40 m, pas en stationnaire) et qu'une voie d'eau marquée s'étire dans l'image (> 1500 pixels, > 10 %
   de la largeur) — passé : ~11 000–14 000 pixels sur ~50 % de la largeur.
+
+## N4 — types et formes de nuages — fait
+
+- `wxShape(q, i, hn, w, cheap)` : la densité des couches météo, une seule (avant : copiée dans `wxDensity` et `wxCloud`),
+  par type — déduit de la forme de la couche (aucun type n'est donné) : mince et couverte → stratus, stratocumulus,
+  nimbostratus (une dalle, la base déchiquetée, le sommet qui ondule) ; épaisse de kilomètres → cumulonimbus (tours sur des
+  cellules de ~9 km — un quart du ciel au plus, des trouées —, jusqu'à ~0,85 de la couche, sommets arrondis ; l'enclume en
+  haut, plus large, plate, tirée sous le vent par le cisaillement ; le bouclier de pluie bas sous et autour d'elles) ; le
+  reste cumulus (dômes, bords rongés par des « billows » — choux-fleurs). Au-dessus de ~7 km : un voile de glace
+  (cirrostratus). Évolution lente (le bruit qui monte : une cellule par quart d'heure). Lumière, ombres (N3), passe de
+  nuages : la même densité.
+- Bruits cuits Perlin-Worley (prévus) : non faits — `noiseTex` n'a qu'un canal de bruit de gradient ; les formes ci-dessus
+  s'en servent.
+- Scènes : `storm-high` (5,5 km : les tours, leurs flancs, les trouées), `storm-top` (12,5 km).
+
+## N5 — orage, pluie, éclairs, brouillard de vallée, mouillage progressif — fait
+
+- **Rideaux de pluie** (`wxRainShafts`) : sous la couche la plus basse, du sol à sa base, la pluie comme un milieu (~1/km
+  d'extinction par forte pluie) — en colonnes sous les tours d'un cumulonimbus, en rideau plus égal sous un nimbostratus —,
+  striée par un bruit fin penché sous le vent ; éclairée par le Soleil à travers les nuages (leur carte d'ombres : les rayons
+  crépusculaires dans la pluie) et la lumière sous la couche ; fusionnée comme une couche de plus.
+- **Arcs-en-ciel** (`rainbowPhase`) : la fonction de phase des gouttes — l'arc primaire à 40,6° (violet) – 42,3° (rouge) de
+  l'anti-Soleil, son intérieur plus clair ; le secondaire à 50,3–52,6°, plus pâle, couleurs inversées ; la bande sombre
+  d'Alexandre entre eux. Visible là où de la pluie au soleil se trouve à ~42° de l'anti-Soleil (le Soleil derrière, une averse
+  devant) ; vue de débogage `TUNE_GSKIP` 262144 (toute la pluie au soleil : les deux arcs entiers — vérifié).
+- **La pluie à l'écran** : les traînées radiales en vitesse (un « hyperespace » de lignes) bien plus discrètes — la pluie est
+  désormais dans l'air (son voile, ses colonnes, ses arcs).
+- **Éclairs** (system/lightning.ts) : des éclairs au hasard (plus fréquents dans le cœur d'un orage : 5–20 s en moyenne), à
+  3–25 km, un tiers au sol ; 1 à 4 arcs en retour de 40 ms, le courant continu entre eux. Le traceur : la lueur dans les
+  nuages et la pluie (sur ~3 km), la lumière sur le sol, le canal d'un éclair au sol (six segments brisés, cœur et halo),
+  atténué par la pluie et les nuages devant lui. `Params.wx[6]`, `wx[7]` (`WX_VEC4S` 6 → 8). `lightning.strike()` pour les
+  tests.
+- **Tonnerre** (`sound.thunderAt`, `audio.thunder`) : après le vol du son (distance / 343 m/s) — le claquement de près, le
+  canal qui roule (une suite de grondements graves sur des secondes), le grondement de fond ; plus doux et plus sourd au loin.
+- **Brouillard de vallée** : le sommet du brouillard au-dessus du fond des vallées alentour (le relief le plus bas sur des
+  anneaux de 2 à 18 km), non du sol sous la caméra — sur une crête, les vallées noyées de la hauteur de la crête.
+- **Mouillage progressif** : le sol trempé en ~5 min de pluie soutenue (plus vite sous une averse), séché en ~30 min après.
+- Correctif : `tests/e2e/near-air.e2e.test.ts` (cassé depuis avant cette branche : `AP_N`, `cost`, puis N3) — ses
+  substituts complétés ; il passe.
+- Scènes : `storm-bolt` + mode `bolt` (un éclair au sol à 2,5 km, tenu à son premier arc), `showers` (averses isolées, Soleil
+  bas derrière — l'état météo posé comme le temps réel), `rainbow`, `alps-fog`. Sonde : `tests/e2e/lightning-probe.e2e.test.ts`.

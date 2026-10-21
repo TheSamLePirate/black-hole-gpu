@@ -76,12 +76,16 @@ test.skipIf(!E2E)(
       .join("\n");
     const shader = `
     const PI=3.14159265358979; const EARTH_RM=6378137.0; const EARTH_MOON=vec3f(0.07,0.085,0.11);
-    struct Params {near0:vec4f,near4:vec4f,near5:vec4f,earth3:vec4f,eclipse:vec4f,earth4:vec4f,wx:array<vec4f,5>,shade:array<vec4f,9>}; var<private> P:Params; var<private> AIR_K:u32=0u;
+    struct Params {near0:vec4f,near4:vec4f,near5:vec4f,earth3:vec4f,eclipse:vec4f,earth4:vec4f,wx:array<vec4f,8>,shade:array<vec4f,9>}; var<private> P:Params; var<private> AIR_K:u32=0u;
     // (the Earth's weather — W3 — out: earthAir's terms of it compiled away, as in fair weather)
     const HAS_WX=false; var<private> WX_W:f32=0.0; var<private> AIR_DUST:f32=0.0;
     fn wxFog(ro:vec3f,rd:vec3f)->vec2f{return vec2f(0.0);} fn wxNear(q:vec3f)->f32{return 0.0;}
     fn wxVeil(h:f32,w:f32,s:u32)->vec2f{return vec2f(1.0);} fn wxHaze(h:f32,w:f32)->f32{return 0.0;}
     fn hgPhase(g:f32,ct:f32)->f32{return 0.0;}
+    // (the clouds' shadow map — N3 — out: none)
+    fn cloudShadowAt(p:vec3f)->f32{return -1.0;} var<private> AIR_NO_CSM:bool=false; const TUNE_GSKIP:u32=0u;
+    // (the aerial table's slice samples — earthAir's own count when 0)
+    var<private> AP_N:u32=0u; fn cost(k:u32){} const TUNE_AIR_N:u32=32u;
     ${shaderStruct("AirSpec")} var<private> AIR:AirSpec;
     ${shaderStruct("Air")} ${shaderStruct("EarthAir")}
     struct NearLight {dir:vec3f,e:vec3f};

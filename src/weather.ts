@@ -277,13 +277,15 @@ export function layerTau(l: CloudLayer): number {
  * transmission of each, 1 / (1 + 0.75 τ (1 − g)), g 0.85), in the fog half again — the light meter opens to
  * it; a storm's gloom ~4 stops, no darker than 1/20.
  */
-export function weatherGpu(w: WeatherState, ground: number, altKm: number): { params: number[]; light: number } {
+export function weatherGpu(w: WeatherState, ground: number, altKm: number, fogGround = ground): { params: number[]; light: number } {
   const params = new Array<number>(16).fill(0);
   if (!(altKm < 30) || (w.layers.length === 0 && w.fogTop <= 0 && w.visibility >= 30e3)) return { params, light: 1 };
   const weight = Math.min(Math.max((30 - altKm) / 15, 0), 1);
   const ext = (v: number) => Math.max(3.912 / v - 3.5e-5, 0);
   const fog = w.fogTop > 0;
-  params.splice(0, 4, weight, ext(fog ? 8000 : w.visibility), fog ? 3.912 / w.visibility : 0, fog ? ground + w.fogTop : 0);
+  // (the fog's top over the valleys' floor about the camera — fogGround, renderer: a valley fog filling them, the ridges
+  // above it —, not over the ground under the camera: on a ridge, it drowned the valleys a ridge's height deep)
+  params.splice(0, 4, weight, ext(fog ? 8000 : w.visibility), fog ? 3.912 / w.visibility : 0, fog ? fogGround + w.fogTop : 0);
   const layers = [...w.layers].sort((a, b) => a.base - b.base).slice(0, 3);
   layers.forEach((l, i) => params.splice(4 * (1 + i), 4, ground + l.base, ground + l.top, l.cover, layerTau(l)));
   const hCam = altKm * 1e3 - ground;

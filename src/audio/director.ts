@@ -172,6 +172,11 @@ export class SoundDirector {
     if (this.s.sound) sound.play(c, arg);
   }
 
+  /** A lightning flash `distM` metres off: its thunder, after the sound's flight (N5). */
+  thunder(distM: number) {
+    if (this.s.sound) sound.thunderAt(distM);
+  }
+
   /** Where the main engine is from the ear: its nozzles placed by the camera's pose on the ship (or a
    *  spectator's view of it), the air between, the Doppler of a passing ship (S1). */
   private engineSpace(pose: ShipPose | null, air: number, dt: number, warp: number): EngineSpace | null {

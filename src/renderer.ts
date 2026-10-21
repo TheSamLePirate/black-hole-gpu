@@ -13,6 +13,7 @@ import { TERRAIN_CACHE_MAX_LAT, TERRAIN_CACHE_VEC4S } from "./system/terrain-cac
 import { TerrainRaster } from "./system/terrain-raster";
 import { SCENERY_RASTER_LOD, SceneryRaster, type SceneryRasterLod } from "./system/scenery-raster";
 import { CLOUD_PASS_BINDINGS, CLOUD_PASS_FLAG, CLOUD_PASS_TEXTURE_LIMIT, withCloudPass } from "./system/cloud-pass";
+import { Lightning } from "./system/lightning";
 import { CLOUD_SHADOW_BINDING, CLOUD_SHADOW_TEXTURE_LIMIT, CSM_HALF_M, CSM_N, withCloudShadow } from "./system/cloud-shadow";
 import { TERRAIN_RASTER_MAX_PIXELS, terrainRasterFrame } from "./system/terrain-raster-frame";
 import type { NetWalkerHome } from "./controller/netcraft";
@@ -229,7 +230,7 @@ const RUNWAY_VEC4S = 18;
 /** the sea's resolved waves after the runways (trace.wgsl: Params.sea) */
 const SEA_VEC4S = 15;
 /** the weather near the camera, last (trace.wgsl: Params.wx) */
-const WX_VEC4S = 6;
+const WX_VEC4S = 8;
 /** the Earth's shadow on the Moon as Danjon draws it: its radius at 45° of latitude, grown by its air */
 const DANJON_SCALE = 0.99834 * (1 + 1 / 85);
 /** the weather's clouds drift on a noise of this period [m] (trace.wgsl: wxAt) */
@@ -3372,6 +3373,13 @@ export class Renderer {
 
   /** the weather's clouds' drift with the wind [m, the Earth's axes] and the clock it was last moved at [s] */
   private wxDrift: [number, number, number] = [0, 0, 0];
+  /** a storm's lightning about the camera (system/lightning.ts; N5): its flashes, the thunder's (main.ts drains them) */
+  readonly lightning = new Lightning();
+  /** the ground's wetness, accumulated in the rain and dried after it (N5), and the clock it was last stepped at */
+  private wetness = 0;
+  private wetAt = Number.NaN;
+  /** the valleys' floor about the camera [m] (the fog's — N5: a valley fog), and where it was found */
+  private fogFloor: { lat: number; lon: number; h: number } | null = null;
   private wxDriftAt = Number.NaN;
 
   /**
@@ -3398,7 +3406,22 @@ export class Renderer {
     const w = weatherAt(s, { body: "earth", lat, lon }, daysOf(time), this.weatherReal);
     if (w.layers.length === 0 && w.fogTop <= 0 && w.visibility >= 30e3) return out;
     const ground = Math.max(groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)), 0);
-    const g = weatherGpu(w, ground, altKm);
+    // (a fog's valleys' floor: the relief's lowest on rings 2–18 km about the camera, found again every 2 km)
+    if (
+      w.fogTop > 0 &&
+      (!this.fogFloor || Math.hypot(this.fogFloor.lat - lat, (this.fogFloor.lon - lon) * Math.cos((lat * Math.PI) / 180)) > 0.02)
+    ) {
+      let h = ground;
+      for (const km of [2, 5, 10, 18])
+        for (let k = 0; k < 8; k++) {
+          const a = (k / 8) * 2 * Math.PI;
+          const la = lat + (km / 111.2) * Math.cos(a),
+            lo = lon + ((km / 111.2) * Math.sin(a)) / Math.max(Math.cos((lat * Math.PI) / 180), 0.1);
+          h = Math.min(h, Math.max(groundRelief("earth", bodyFixedOf("earth", la, lo, 0)), 0));
+        }
+      this.fogFloor = { lat, lon, h };
+    }
+    const g = weatherGpu(w, ground, altKm, w.fogTop > 0 && this.fogFloor ? this.fogFloor.h : ground);
     if (live) this.wxLight = g.light;
     out.set(g.params, 0);
     // the drift: the wind at the clouds' height, blowing from `from` — on the place's east and north
@@ -3419,8 +3442,36 @@ export class Renderer {
       }
     }
     out.set([ground, ...this.wxDrift], 16);
-    // (the rain — PLAN-PLUIE P4 —: the ground's wetness, the rain now, its clock — the drops' rings)
-    if (w.rain > 0) out.set([Math.min(1, w.rain * 1.6), w.rain, this.rainClock % 3600, 0], 20);
+    // (the rain — PLAN-PLUIE P4 —: the ground's wetness, the rain now, its clock — the drops' rings. The wetness grows in the
+    // rain — soaked in some 5 minutes of a steady rain, faster in a downpour — and dries after it in ~30 minutes, not at once)
+    if (live) {
+      const dt = tSec - this.wetAt;
+      this.wetAt = tSec;
+      if (dt > 0 && dt < 600) {
+        const target = Math.min(1, w.rain * 1.6);
+        this.wetness =
+          this.wetness < target ? Math.min(target, this.wetness + (dt * w.rain) / 200) : Math.max(target, this.wetness - dt / 1800);
+      } else if (!(dt >= 0)) this.wetness = Math.min(1, w.rain * 1.6);
+    }
+    if (w.rain > 0 || this.wetness > 1e-3) out.set([this.wetness, w.rain, this.rainClock % 3600, 0], 20);
+    // (a storm's lightning — N5 —: the flash now, its place from the camera on the Earth's axes [m] and its light; the ground
+    // under it, to the ground or not, its seed, its light's reach)
+    if (live) {
+      const deck = g.params.slice(4, 16);
+      const storm = w.kind === "storm" ? 1 : w.rain > 0.7 && deck[1]! - deck[0]! > 4500 ? 0.5 : 0;
+      this.lightning.step(tSec, storm, deck[0]! || 1000, deck[1]! || 8000);
+    }
+    const fl = this.lightning.light(tSec);
+    if (fl) {
+      const n = surface.normal;
+      const eh = Math.hypot(n[0], n[1]) || 1;
+      const east = [-n[1] / eh, n[0] / eh, 0];
+      const north = [-n[2] * east[1]!, n[2] * east[0]!, n[0] * east[1]! - n[1] * east[0]!];
+      const up = fl.f.h - altKm * 1e3;
+      const at = [0, 1, 2].map((i) => east[i]! * fl.f.east + north[i]! * fl.f.north + n[i]! * up);
+      out.set([...at, fl.i], 24);
+      out.set([ground, fl.f.ground ? 1 : 0, fl.f.seed, 3000], 28);
+    }
     // (the kernel with the weather's code: fair weather — every scene but these — without it, +20 % before)
     if (g.params[0]! > 0) this.featureKey |= 1024;
     return out;

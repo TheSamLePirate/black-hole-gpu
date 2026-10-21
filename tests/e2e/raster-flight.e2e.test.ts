@@ -70,6 +70,21 @@ const PLACES: Record<string, string> = {
     __bh.game.flyAt(36.08, -5.6, 5500, 20, 220);`,
   "storm-top": `__bh.game.setDate("2026-07-10T15:00:00Z"); __bh.game.set("weather", "storm"); __bh.game.set("earthClouds", 1);
     __bh.game.flyAt(36.08, -5.6, 12500, 20, 230);`,
+  // (N5: a flash to the ground 2.5 km ahead under the storm — the mode bolt, struck once the clock stands: held at its first stroke —; the storm in the evening, the Sun low
+  // behind the camera: the rain lit, its rainbow)
+  "storm-bolt": `__bh.game.setDate("2026-07-10T15:00:00Z"); __bh.game.set("weather", "storm"); __bh.game.set("earthClouds", 1);
+    __bh.game.flyAt(36.08, -5.6, 250, 20, 220);`,
+  rainbow: `__bh.game.setDate("2026-07-10T18:40:00Z"); __bh.game.set("weather", "storm"); __bh.game.set("earthClouds", 1);
+    __bh.game.flyAt(36.08, -5.6, 600, 150, 200);`,
+  // (isolated showers — cumulonimbus at a third of the sky, the Sun low behind the camera between them: their rain lit, its
+  // rainbow — a state set as the real weather's)
+  showers: `__bh.game.setDate("2026-07-10T18:40:00Z"); const w = { source: "model", kind: "storm", rain: 0.9, dust: 0, fogTop: 0,
+    visibility: 25000, wind: { u10: 6, from: 270, gust: 4, turb: 1, shear: 3 }, layers: [{ base: 900, top: 8500, cover: 0.35 }] };
+    __bh.camera.weatherReal = __bh.renderer.weatherReal = w; __bh.settings.weather = "real"; __bh.game.set("earthClouds", 0.2);
+    __bh.game.flyAt(36.08, -5.6, 600, 150, 200);`,
+  // (N5: a valley fog in the Alps in the morning — its top over the valleys' floor about the camera, the ridges above it)
+  "alps-fog": `__bh.game.setDate("2026-07-10T07:30:00Z"); __bh.game.set("weather", "fog"); __bh.game.set("earthClouds", 0);
+    __bh.game.flyAt(45.85, 6.75, 2500, 110, 200);`,
 };
 const MODE_SET: Record<string, string> = {
   trace6: `__bh.settings.earthPipeline = "trace"; __bh.game.set("realtimeSubsampling", 6);`,
@@ -101,6 +116,8 @@ const MODE_SET: Record<string, string> = {
   nocsm: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 8192 };`,
   // (the far clouds mirrored in the sea from the cloud pass's image — N6b — off)
   nocloudrefl: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 16384 };`,
+  bolt: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {}; __bh.renderer.lightning.strike(855, 2349, true);`,
+  raindebug: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 262144 };`,
   wakedebug: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 32768 };`,
   lod300: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sceneryRasterLod = { nearM: 300, near: "ico80", far: "ico20" };`,
   lod150: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sceneryRasterLod = { nearM: 150, near: "ico80", far: "ico20" };`,

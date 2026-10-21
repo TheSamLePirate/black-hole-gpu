@@ -132,8 +132,10 @@ struct Params {
   // [1…3] its cloud layers, the lowest first: base, top [m above the sea], cover (0: none), optical
   // thickness; [4] the ground's height there [m], the clouds' drift with the wind [m, the Earth's axes,
   // modulo the noise's period]; [5] the rain (PLAN-PLUIE P4): the ground's wetness (0…1), the rain now (0…1.3),
-  // its clock [s] (held while the time is), unused
-  wx: array<vec4f, 6>,
+  // its clock [s] (held while the time is), unused; [6] a storm's lightning flash (N5, system/lightning.ts): its place from the
+  // camera [m, the Earth's axes], its light now (0: none); [7] the ground under it [m], to the ground (1) or in the cloud (0),
+  // its seed, its light's reach in the cloud [m]
+  wx: array<vec4f, 8>,
   // regional Sentinel-2 / WorldCover: bounds and residency, page grid and gutter, materials and metre scale
   surface: array<vec4f, 7>,
   scenery: array<vec4f, 6>,
@@ -7278,6 +7280,11 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
     let side = 0.5 * wxVl.x * (1.0 - wxVl.x);
     sky = sky * wxVl.x + (E * sunThrough(hG, mu0) * max(mu0, 0.0) * sk + sky) * (wxVl.y - wxVl.x + side);
   }
+  // (a lightning flash — N5 —: the clouds' undersides lit, their light on the ground for kilometres round)
+  if (HAS_WX && P.wx[6].w > 0.0) {
+    let f = flashAt();
+    sky += FLASH_TINT * luminance(E) * 0.05 * f.w * exp(-length(q * (1.0 + hG / EARTH_RM) - f.xyz) * EARTH_RM / 10000.0);
+  }
   // (a face sees the sky over it and the ground round it — a plane's shares, ½(1 + n·up) and ½(1 − n·up)
   // —: on the steep faces in the shade, the sky's light halved and the light the ground sends back — the
   // sun's and the sky's on it, at an albedo of 0.18: a cliff's shadow 2–3 stops under the sunlit ground,
@@ -7528,7 +7535,7 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
     let e1 = exp(-0.04 * tauSun);
     let e2 = e1 * e1;
     let ms = (ms1 * e2 * e1 + 0.5 * ms2 * e2 + 0.25 * ms3 * e1) / 1.75;
-    let Lin = E * Ts * (hg * beer * powder * 2.5 + 0.25 * ms * smoothstep(-0.1, 0.1, mu0))
+    let Lin = FLASH_TINT * luminance(E) * 0.25 * flashGlow(p) + E * Ts * (hg * beer * powder * 2.5 + 0.25 * ms * smoothstep(-0.1, 0.1, mu0))
       + 0.85 / PI * over * (E * amb + E * earthMoonlight(q, q, airHeight(p), mu0));
     let dT = exp(-sigma * dm);
     col += Tv * Lin * (1.0 - dT);
@@ -7717,8 +7724,164 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
     let skyTop = skyFlatFactor(q, hM, E, mu0, sk) * (0.25 + 0.75 * exp(-0.03 * tauUp));
     // (the light the ground sends up onto the base — the sun's and the sky's on it, an albedo of 0.18 —, through the cloud below)
     let bounce = 0.18 * (sunThrough(0.0, mu0) * max(mu0, 0.0) + skyFlatFactor(q, 0.0, E, mu0, sk)) * exp(-0.25 * a * L.w * hn);
-    let Lin = E * Ts * (hg * beer * powder * 2.5 + 0.25 * ms * smoothstep(-0.1, 0.1, mu0))
+    let Lin = FLASH_TINT * luminance(E) * 0.25 * flashGlow(p) + E * Ts * (hg * beer * powder * 2.5 + 0.25 * ms * smoothstep(-0.1, 0.1, mu0))
       + 0.85 / PI * (over * (E * amb + E * earthMoonlight(q, q, airHeight(p), mu0)) + E * skyTop * wxVeil(hM, w, i).y + 0.5 * E * bounce);
+    let dT = exp(-sigma * dm);
+    col += Tv * Lin * (1.0 - dT);
+    if (o.t < 0.0) { o.t = t; }
+    Tv *= dT;
+    if (Tv < 0.01) { break; }
+  }
+  o.alpha = 1.0 - Tv;
+  o.cl = col / max(1.0 - Tv, 1e-4);
+  return o;
+}
+
+// A lightning flash (N5): its light now and its place (the squashed space), 0 none; its light reaching p inside the clouds
+// and the rain — spread by their many scatterings over its reach, a few km —, as a share of the Sun's irradiance (a flash
+// in a cloud by night as bright as the day's clouds, a blue-white).
+const FLASH_TINT = vec3f(0.78, 0.84, 1.0);
+fn flashAt() -> vec4f {
+  if (!HAS_WX || P.wx[6].w <= 0.0) { return vec4f(0.0); }
+  return vec4f(nearCam() + P.wx[6].xyz / EARTH_RM, P.wx[6].w);
+}
+fn flashGlow(p: vec3f) -> f32 {
+  let f = flashAt();
+  if (f.w <= 0.0) { return 0.0; }
+  let d = length(p - f.xyz) * EARTH_RM;
+  return f.w * exp(-d / max(P.wx[7].w, 500.0));
+}
+// The channel of a flash to the ground, seen along the ray (ro, rd; met at tEnd — < 0: nothing): six segments down from the
+// cloud's base to the ground, jagged by the seed (each kink some hundreds of metres aside); a core metres wide, its glow
+// tens — the radiance it adds, a share of the Sun's irradiance per steradian.
+fn boltRadiance(ro: vec3f, rd: vec3f, tEnd: f32, E: vec3f) -> vec3f {
+  let f = flashAt();
+  if (f.w <= 0.0 || P.wx[7].y < 0.5) { return vec3f(0.0); }
+  let up = normalize(f.xyz);
+  let h0 = (length(f.xyz) - 1.0) * EARTH_RM;
+  let hg = P.wx[7].x;
+  let east = normalize(cross(vec3f(0.0, 0.0, 1.0), up));
+  let north = cross(up, east);
+  let seed = u32(P.wx[7].z);
+  var prev = f.xyz;
+  var glow = 0.0;
+  for (var i = 1u; i <= 6u; i++) {
+    let k = f32(i) / 6.0;
+    let hr = hash3u(vec3u(seed, i, 7u));
+    let jx = (f32(hr & 0xffffu) / 65535.0 - 0.5) * 500.0 * (1.0 - k * 0.5);
+    let jy = (f32(hr >> 16u) / 65535.0 - 0.5) * 500.0 * (1.0 - k * 0.5);
+    let h = mix(h0, hg, k);
+    var pt = up * (1.0 + h / EARTH_RM) + (east * jx + north * jy) / EARTH_RM;
+    if (i == 6u) { pt = up * (1.0 + hg / EARTH_RM); }
+    // (the closest approach of the ray and the segment prev → pt)
+    let u = pt - prev;
+    let w0 = ro - prev;
+    let a = dot(rd, rd);
+    let b = dot(rd, u);
+    let c = dot(u, u);
+    let d = dot(rd, w0);
+    let e = dot(u, w0);
+    let den = max(a * c - b * b, 1e-20);
+    let sc = clamp((b * e - c * d) / den, 0.0, 1e9);
+    let tc = clamp((a * e - b * d) / den, 0.0, 1.0);
+    if (tEnd < 0.0 || sc < tEnd) {
+      let dist = length(w0 + rd * sc - u * tc) * EARTH_RM;
+      glow += exp(-dist * dist / 9.0) + 0.06 * exp(-dist / 40.0);
+    }
+    prev = pt;
+  }
+  return FLASH_TINT * luminance(E) * f.w * glow * 25.0;
+}
+// The rain's drops' light by the angle from the antisolar point (cos of the angle between the ray and the Sun: ct) — the
+// rainbows: the primary at 40.6° (violet) – 42.3° (red), its inside brighter; the secondary at 50.3° (red) – 52.6°
+// (violet), fainter, its colours reversed; Alexander's dark band between — over the drops' own phase.
+fn rainbowPhase(ct: f32) -> vec3f {
+  let a = degrees(acos(clamp(-ct, -1.0, 1.0)));
+  let g = vec3f(a) - vec3f(42.3, 41.5, 40.6);
+  let p1 = exp(-g * g / vec3f(0.3, 0.3, 0.36));
+  let g2 = vec3f(a) - vec3f(50.3, 51.2, 52.6);
+  let p2 = 0.43 * exp(-g2 * g2 / vec3f(0.64, 0.64, 0.8));
+  let inside = 0.25 * (1.0 - smoothstep(38.5, 41.5, a)) * smoothstep(5.0, 30.0, a);
+  return (p1 + p2) * 0.16 + vec3f(inside * 0.04);
+}
+
+// The rain under the lowest deck (N5): between the ground and that deck's base, where it rains (P.wx[5].y), the falling
+// rain as a medium — heavy rain's ~1/km of extinction (a few km of sight), grey —: in shafts under a cumulonimbus's towers
+// (the same cells as wxShape's), a nimbostratus's curtain more even; streaked by a finer noise leaning with the wind (the
+// drops blown aside as they fall: their streaks slanting downwind); lit by the sun through the clouds — their shadow map —
+// and the dim light under the deck. Ten samples, out to 60 km.
+fn wxRainShafts(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, jit: f32) -> CloudVol {
+  var o: CloudVol;
+  o.t = -1.0;
+  let L = P.wx[1];
+  if (L.z <= 0.3) { return o; }
+  let rain = P.wx[5].y;
+  let hg0 = P.wx[4].x;
+  let hb = (hg0 - 50.0) / EARTH_RM;
+  let ht = L.x / EARTH_RM;
+  if (ht <= hb) { return o; }
+  let b = dot(ro, rd);
+  let off2 = dot(ro, ro) - b * b;
+  let hT = (1.0 + ht) * (1.0 + ht) - off2;
+  if (hT <= 0.0) { return o; }
+  var t0 = max(-b - sqrt(hT), 0.0);
+  var t1 = -b + sqrt(hT);
+  let hB = (1.0 + hb) * (1.0 + hb) - off2;
+  if (hB > 0.0) {
+    let b0 = -b - sqrt(hB);
+    let b1 = -b + sqrt(hB);
+    if (b0 > t0) { t1 = min(t1, b0); } else if (b1 > t0) { t0 = b1; }
+  }
+  if (tHit > 0.0) { t1 = min(t1, tHit); }
+  t1 = min(t1, t0 + 60000.0 / EARTH_RM);
+  if (t1 <= t0) { return o; }
+  let cb = smoothstep(4500.0, 7000.0, L.y - L.x);
+  let tev = P.time.x * P.near5.w / 900.0;
+  let dl = length(P.wx[4].yzw);
+  let dw = select(vec3f(0.0), P.wx[4].yzw / max(dl, 1e-3), dl > 1.0);
+  let physicalLs = airPhysicalDirection(Ls);
+  let stepM = EARTH_RM * airRayScale(rd);
+  let ct = dot(airPhysicalDirection(rd), physicalLs);
+  let N = 10u;
+  var Tv = 1.0;
+  var col = vec3f(0.0);
+  var tPrev = t0;
+  for (var j = 0u; j < N; j++) {
+    cost(3u);
+    let u1 = (f32(j) + 1.0) / f32(N);
+    let tn = t0 + (t1 - t0) * u1 * u1;
+    let t = mix(tPrev, tn, jit);
+    let dm = (tn - tPrev) * stepM;
+    tPrev = tn;
+    let p = ro + rd * t;
+    let r = length(p);
+    let q = p / r;
+    let hM = (r - 1.0) * EARTH_RM;
+    let w = wxNear(q);
+    if (w <= 0.0) { continue; }
+    // (where it rains: under the towers' cells — wider than their cores —, or a deck's curtain)
+    let c0 = wxAt(q, 9000.0) + vec3f(0.0, 1.3, 0.05 * tev);
+    let cell = 0.5 + 0.5 * (0.7 * dnoise(c0) + 0.3 * dnoise(c0 * 2.3 + vec3f(4.1)));
+    let curtain = 0.55 + 0.45 * dnoise(wxAt(q, 3000.0) + vec3f(7.7, 2.1, 0.1 * tev));
+    var mask = mix(curtain, smoothstep(0.56 + 0.2 * (1.0 - L.z), 0.68 + 0.2 * (1.0 - L.z), cell), cb);
+    // (debug — TUNE_GSKIP 262144 —: the rain everywhere, all in the sun: its rainbows whole)
+    let dbgRain = (TUNE_GSKIP & 262144u) != 0u;
+    if (dbgRain) { mask = 0.5; }
+    // (the streaks: a fine noise, its places slanting downwind with the fall — 0.3 m aside for each metre down)
+    let fall = max(L.x - hM, 0.0);
+    let sx = (q * EARTH_RM - P.wx[4].yzw - dw * (0.3 * fall)) * (1.0 / 400.0);
+    let streak = clamp(0.55 + 0.6 * dnoise(vec3f(sx.x, sx.y, sx.z) + vec3f(0.0, 0.0, hM / 4000.0)), 0.0, 1.0);
+    let sigma = rain * 1.2e-3 * mask * streak * w * smoothstep(L.x, L.x - 300.0, hM);
+    if (sigma <= 1e-7) { continue; }
+    let mu0 = dot(geoQ(q), physicalLs);
+    let csT = cloudShadowAt(p);
+    let Ts = sunThrough(airHeight(p), mu0) * select(select(wxVeil(hM, w, 3u).x, csT, csT >= 0.0), 1.0, dbgRain);
+    let sk = skySeen(q, Ls);
+    let amb = max(0.7 * skyFlatFactor(q, hM, E, mu0, sk), nightFloor(sk, mu0)) * wxVeil(hM, w, 3u).y;
+    // (the drops: a forward lobe — the sun's glow through a shaft against it —, half spread; the rainbows where the Sun is
+    // behind — rainbowPhase —; a flash's light)
+    let ph = vec3f(0.5 * hgPhase(0.7, ct) + 0.5 / (4.0 * PI)) + select(vec3f(0.0), rainbowPhase(ct), (TUNE_GSKIP & 131072u) == 0u);
+    let Lin = E * (Ts * ph * 0.9 + 0.75 / PI * amb) + FLASH_TINT * luminance(E) * 0.15 * flashGlow(p);
     let dT = exp(-sigma * dm);
     col += Tv * Lin * (1.0 - dT);
     if (o.t < 0.0) { o.t = t; }
@@ -7891,6 +8054,20 @@ fn earthClouds(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx:
       }
     }
   }
+  // (N5: the rain falling from the lowest deck — its shafts, merged as one more layer)
+  if (HAS_WX && volume && earth && WX_W > 0.0 && P.wx[5].y > 0.02 && (TUNE_GSKIP & 65536u) == 0u) {
+    let lv = wxRainShafts(ro, rd, tHit, Ls, E, jit);
+    if (lv.alpha > 0.0) {
+      if (alpha <= 0.0 || lv.t < tc) {
+        cl = (lv.alpha * lv.cl + (1.0 - lv.alpha) * alpha * cl) / max(lv.alpha + (1.0 - lv.alpha) * alpha, 1e-5);
+        alpha = lv.alpha + (1.0 - lv.alpha) * alpha;
+        tc = lv.t;
+      } else {
+        cl = (alpha * cl + (1.0 - alpha) * lv.alpha * lv.cl) / max(alpha + (1.0 - alpha) * lv.alpha, 1e-5);
+        alpha = alpha + (1.0 - alpha) * lv.alpha;
+      }
+    }
+  }
   // the cirrus at 9 km (from far above, a third: the cloud map's own already holds them), before the
   // clouds or behind them
   if (earth && P.earth2.y > 0.0) {
@@ -7966,6 +8143,8 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
     }
   }
   o.col = (1.0 - alpha) * (air.L + air.T * G) + alpha * (air.Lc + air.Tc * cl);
+  // (a flash's channel to the ground — N5 —, dimmed by the clouds before it)
+  if (HAS_WX && earth && P.wx[6].w > 0.0) { o.col += boltRadiance(ro, rd, tHit, E) * air.T * (1.0 - 0.7 * alpha); }
   // the auroras (S2): above the air and the clouds — from under them, hidden by a cloud; from above, before it
   if (HAS_AURORA && earth && P.bary.z > 0.0) {
     let aur = auroraLight(ro, rd, select(3e38, tHit, tHit > 0.0), jit);

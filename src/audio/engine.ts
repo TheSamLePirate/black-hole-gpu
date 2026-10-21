@@ -1049,6 +1049,32 @@ export class SoundEngine {
     this.counts.booms++;
   }
 
+  /**
+   * Thunder from a flash `distM` metres off (docs/PLAN-NUAGES-AAA.md N5), heard after the sound's flight (distance / 343 m/s):
+   * near, its crack — the channel's shock, a sharp tearing —; then the channel's length rolling in, its kilometres arriving one
+   * after the other — a train of low bursts over seconds —; the deep rumble under them. Farther, softer, and duller: the air
+   * eats the highs (the crack gone past ~5 km, the rumble alone at 15).
+   */
+  thunderAt(distM: number) {
+    if (!this.running || !this.enabled) return;
+    const d = Math.max(distM, 300);
+    const at = d / 343;
+    const level = clamp(1.2 * Math.pow(1000 / d, 0.8));
+    const near = clamp(1 - (d - 1500) / 3500);
+    if (near > 0) {
+      this.burst(this.busses.master, 0.9 * level * near, 2400, 0.35, 0.7, at);
+      this.burst(this.busses.master, 0.6 * level * near, 900, 0.6, 0.6, at + 0.05);
+    }
+    const n = 4 + Math.floor(Math.random() * 4);
+    let t = at + 0.1;
+    for (let i = 0; i < n; i++) {
+      const f = (60 + Math.random() * 90) * (0.6 + 0.4 * near);
+      this.burst(this.busses.master, level * (0.55 + 0.45 * Math.random()) * (1 - i / (n + 2)), f, 1.2 + Math.random() * 1.8, 0.5, t);
+      t += 0.25 + Math.random() * 0.9;
+    }
+    this.burst(this.busses.master, 0.7 * level, 45, 4 + 3 * Math.random(), 0.4, at + 0.2);
+  }
+
   /** A boom's N-wave, `dur` [s] long: the pressure leaping up, falling linearly below, leaping back; a low
    *  rumble after it (the ground's echo). */
   private nwave(out: AudioNode, level: number, at: number, dur: number) {

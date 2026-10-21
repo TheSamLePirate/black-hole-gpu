@@ -294,8 +294,9 @@ fn rainStreaks(uv: vec2f, shipA: f32) -> vec2f {
     veil = smoothstep(0.6, 1.0, max(s1, s2)) * sheet * (1.0 - radial) * 0.22;
   }
   let kk = min(k, 1.0) * (0.85 + 0.25 * max(k - 1.0, 0.0) / 0.3);
-  // (rushing at the camera, the streaks long and many: fainter — as a camera sees them, not a tunnel)
-  let cv = clamp((cover * 0.95 * kk + veil * kk) * (1.0 - 0.45 * radial), 0.0, mix(0.75, 0.4, radial));
+  // (rushing at the camera, the streaks long and many: much fainter — as a camera sees them, a shimmer, not a tunnel of lines;
+  // the rain itself is in the air — trace.wgsl wxRainShafts: its veil, its shafts, its rainbows)
+  let cv = clamp((cover * 0.95 * kk + veil * kk) * (1.0 - 0.75 * radial), 0.0, mix(0.75, 0.22, radial));
   return vec2f(cv, sheen / max(cover, 1e-4));
 }
 // ---- The drops on the glass (PLAN-PLUIE P3): a height field of water on the canopy (or the lens) — its

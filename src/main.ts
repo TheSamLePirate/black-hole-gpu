@@ -7164,6 +7164,8 @@ async function main() {
     const viewer = camera.viewController();
     viewer.weatherReal = camera.weatherReal;
     renderer.rain = viewer.rainView();
+    // (a storm's lightning — N5 —: each new flash's thunder, after its sound's flight)
+    for (const f of renderer.lightning.drain()) audio.thunder(Math.hypot(f.east, f.north, f.h));
     renderer.meterSpot = telescopeSpot();
     // (the replay — S3 —: its frame drawn again under its camera; else the flight kept on the tape, while it runs)
     if (replay.active && !renderer.offlineActive) {
