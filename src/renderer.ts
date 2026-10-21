@@ -3483,7 +3483,9 @@ export class Renderer {
     const st = this.seaFft.stats;
     const cmU = 0.00316 * H.U,
       cmC = 0.003 + 0.00192 * H.U;
-    out.set([1, this.seaLambda, Math.sqrt(st.height), 0], 0);
+    // (w: the dominant system's peak period [s] — the surf's bands, trace.wgsl seaShade)
+    const tp = state.swell.hs > state.wind.hs ? state.swell.tp : state.wind.tp;
+    out.set([1, this.seaLambda, Math.sqrt(st.height), tp], 0);
     out.set([1024, 128, 16, 256], 4);
     // (the whitecaps' threshold on the Jacobian: its spread from the long cascades' slopes — J ≈ 1 + λ k h —, the
     // level under which lies Monahan's cover at this wind)
@@ -6082,7 +6084,7 @@ export class Renderer {
     p.setPipeline(this.skyPipe);
     p.setBindGroup(0, t.traceBind);
     p.setBindGroup(1, this.skyBind!);
-    p.dispatchWorkgroups(4);
+    p.dispatchWorkgroups(5);
     p.end();
     enc.copyTextureToBuffer({ texture: this.skyOut! }, { buffer: this.bodyBuf, offset: TABLE_SKY * 16 }, [SKY_AMBIENT_VEC4S, 1]);
     this.skyTableOn = true;

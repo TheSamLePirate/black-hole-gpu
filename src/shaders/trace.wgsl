@@ -811,7 +811,9 @@ var<private> FOOT_FAR: f32 = 1.0;
 var<private> SEA_ON: bool = false;
 var<private> SEA_D: vec3f;
 // the sea's depth under the point shaded [m] (earthGround: ETOPO's height, negative at sea)
-var<private> SEA_DEPTH: f32 = 50.0; // (none yet: build-earth-relief.py clips the seas' depths at 0)
+// (the sea's depth under the pixel [m] and how sure — earthGround: seaDepthAt, the near tiles' bathymetry; 0: deep assumed)
+var<private> SEA_DEPTH: f32 = 1e4;
+var<private> SEA_DEPTH_W: f32 = 0.0;
 var<private> SPLAT: bool = false;
 var<private> SPLAT_POS: vec2f;
 var<private> SPLAT_CELL: vec2f;
@@ -4055,6 +4057,26 @@ fn skyIrradiance(h: f32, n: vec3f) -> vec3f {
   }
   return max(irr, vec3f(0.0));
 }
+// The clear sky's radiance at the sea's level towards d (a unit direction over the horizon), from skyAmbient's 8 × 8 grid —
+// the azimuth in eighths, the elevation's sine in squares (denser at the horizon, its bright band) —, bilinear; −1: off.
+// The sea's mirror: the harmonics hold the light a surface receives, not the horizon's band a grazing mirror shows.
+fn skyMirror(d: vec3f) -> vec3f {
+  let f0 = bodies[SKY_OFF];
+  if (f0.w < 0.5) { return vec3f(-1.0); }
+  let l = vec3f(dot(d, bodies[SKY_OFF + 1u].xyz), dot(d, bodies[SKY_OFF + 2u].xyz), dot(d, f0.xyz));
+  let jf = clamp(sqrt(max(l.z, 0.0)) * 8.0 - 0.5, 0.0, 7.0);
+  let az = fract(atan2(l.y, l.x) / TAU + 1.0) * 8.0;
+  let j0 = u32(floor(jf));
+  let j1 = min(j0 + 1u, 7u);
+  let i0 = u32(floor(az)) % 8u;
+  let i1 = (i0 + 1u) % 8u;
+  let fj = jf - f32(j0);
+  let fi = az - floor(az);
+  let g = SKY_OFF + 40u;
+  let a = mix(bodies[g + j0 * 8u + i0].xyz, bodies[g + j0 * 8u + i1].xyz, fi);
+  let b = mix(bodies[g + j1 * 8u + i0].xyz, bodies[g + j1 * 8u + i1].xyz, fi);
+  return mix(a, b, fj);
+}
 // the clear sky's light on the flat at a point q (its geodetic direction) and height h, physical when the frame has it, else
 // the old bluish tenth of the sun's (E: the sun's irradiance, mu0 its cosine there, sk the eclipse's share of the sky)
 fn skyFlat(q: vec3f, h: f32, E: vec3f, mu0: f32, sk: f32) -> vec3f {
@@ -5434,6 +5456,52 @@ fn earthH(q: vec3f, foot: f32, cheap: bool) -> vec2f {
   }
   return vec2f(h, res);
 }
+// The sea's depth at q [m] (geodetic; foot its footprint, unused: the depths are smooth) and how sure it is (0: no tile here —
+// the deep sea assumed). Terrarium's bathymetry (ETOPO1, GEBCO) goes up to z 10 alone — finer, SRTM's, the sea a flat 0 —:
+// read from the z 10 level's window (~120 m a texel at 36°), else z 9's, z 8's. Its texels at 0 or over are SRTM's sea there
+// too, or land — no depth —: the bilinear weights over the others alone; a level without enough of them, or near its window's
+// rim, leaves its share to the coarser one (as earthH: no seam where a window ends).
+fn seaDepthAt(q: vec3f, foot: f32) -> vec2f {
+  if (P.tiles.w < 0.5) { return vec2f(1e4, 0.0); }
+  let dlon = atan2(-q.x * P.tiles.y + q.y * P.tiles.x, q.x * P.tiles.x + q.y * P.tiles.y);
+  let sz = clamp(q.z, -0.999999, 0.999999);
+  let dM = atanh((sz - P.tiles.z) / (1.0 - sz * P.tiles.z));
+  var acc = 0.0;
+  var wsum = 0.0;
+  var rem = 1.0;
+  for (var li = 0u; li < 3u; li++) {
+    let l = 10u - TILE_Z0 - li;
+    let a = P.tileL[2u * l];
+    let b = P.tileL[2u * l + 1u];
+    if (b.w < 0.5) { continue; }
+    let p = a.xy + vec2f(dlon, -dM) * b.z;
+    let edge = smoothstep(2.0, 48.0, min(min(p.x, p.y), min(b.x - p.x, b.y - p.y)));
+    if (edge <= 0.0) { continue; }
+    let x = p - 0.5;
+    let i0 = vec2i(floor(x));
+    let f = x - floor(x);
+    var hv = 0.0;
+    var wv = 0.0;
+    for (var k = 0; k < 4; k++) {
+      let o = vec2i(k & 1, k >> 1);
+      let h = tileTexel(l, i0 + o);
+      let w = select(1.0 - f.x, f.x, o.x == 1) * select(1.0 - f.y, f.y, o.y == 1);
+      if (h < -0.5) {
+        hv += w * h;
+        wv += w;
+      }
+    }
+    let c = edge * smoothstep(0.25, 0.6, wv);
+    if (c > 0.0) {
+      acc += rem * c * (-hv / wv);
+      wsum += rem * c;
+      rem *= 1.0 - c;
+      if (rem < 1e-3) { break; }
+    }
+  }
+  if (wsum < 0.05) { return vec2f(1e4, 0.0); }
+  return vec2f(acc / wsum, smoothstep(0.05, 0.6, wsum));
+}
 fn earthHeightExactG(q: vec3f, foot: f32) -> f32 {
   let hr = earthH(q, foot, false);
   // (a runway's airfield graded: at its level, its detail off — the gear's ground the same)
@@ -6272,26 +6340,83 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   let m2v = 2.0 * (su2 * vvu * vvu + sc2 * vvc * vvc) / max(vvu * vvu + vvc * vvc, 1e-6);
   let G = smithBeckmann(nl, m2l) * smithBeckmann(nv, m2v);
   let F = 0.02 + 0.98 * pow(1.0 - max(dot(V, H), 0.0), 5.0);
-  let Fv = 0.02 + 0.98 * pow(1.0 - nv, 5.0);
+  var Fv = 0.02 + 0.98 * pow(1.0 - nv, 5.0);
+  // (the mirror over the slopes the pixel does not resolve — Bruneton, Neyret & Holzschuch 2010 —: their Fresnel averaged, not
+  // the mean facet's — the grazing sea no mirror, darker than the sky over its horizon, as seen —; and the facets the eye sees
+  // most, turned towards it — those turned away hidden behind the crests —, mirror a higher sky: the mirrored direction lifted
+  // by their mean slope towards the eye, a Gaussian's cut at the view's grazing, σ φ(a)/Φ(a))
+  let sigV = sqrt(max(0.5 * m2v, 0.0));
+  var lift = 0.0;
+  if ((TUNE_GSKIP & 2048u) == 0u) {
+    Fv = 0.02 + 0.98 * pow(1.0 - nv, 5.0 * exp(-2.69 * sigV)) / (1.0 + 22.7 * pow(sigV, 1.5));
+    let cg = clamp(dot(normal, V), 0.0, 1.0);
+    let a = cg / max(sqrt(1.0 - cg * cg), 1e-3) / max(sigV, 1e-3);
+    lift = 2.0 * atan(sigV * 0.39894 * exp(-0.5 * a * a) * (1.0 + exp(-1.702 * a)));
+  }
   // (grazing, capped — no sparks along the limb)
   let glint = Eg * min(D * G * F / (4.0 * nv), 8.0);
   // (the sky it mirrors brighter towards the horizon than overhead — some three times on a clear day —: a wave's
   // face turned to the horizon shines, its back mirrors the darker zenith — what shows the waves from above)
   let rr = reflect(-V, n);
+  // (a ray the waves send under the horizon mirrors the horizon's sky; lifted by the unresolved slopes — lift above)
+  var rUp = normalize(rr + normal * max(0.02 - dot(rr, normal), 0.0));
+  if (lift > 0.0) {
+    let e = min(asin(clamp(dot(rUp, normal), -1.0, 1.0)) + lift, 1.5);
+    let hz = rUp - normal * dot(rUp, normal);
+    rUp = normalize(hz) * cos(e) + normal * sin(e);
+  }
   var skyR = sky * (1.5 / PI) * (1.75 - 1.15 * sqrt(clamp(dot(rr, normal), 0.0, 1.0)));
+  // (the clear sky's own radiance there — skyMirror: its horizon's band, the glow on the Sun's side, the blue overhead —, in
+  // the colour of the sky's light here: under the weather's decks their grey, the clear sky's shape kept)
+  let clearM = skyMirror(rUp);
+  if (clearM.x >= 0.0 && (TUNE_GSKIP & 512u) == 0u) {
+    let clearE = skyIrradiance(0.0, normal);
+    skyR = clearM * clamp(sky / max(clearE, vec3f(1e-30)), vec3f(0.0), vec3f(2.0));
+  }
   var water = under;
   if (SEA_ON) {
     let b = P.sea[1].w;
-    // (near: the real sky mirrored — the light probe about the craft, its clouds; a ray the waves send under the
-    // horizon mirrors the horizon's sky)
-    let rUp = normalize(rr + normal * max(0.02 - dot(rr, normal), 0.0));
+    // (near: the real sky mirrored — the light probe about the craft, its clouds)
     skyR = mix(skyR, probeRadiance(camAxes(fromBody(rUp))), b);
-    // (the water's own colour, from the light into it: the open sea's dark blue — its depth not in the relief
-    // map, the bed's turquoise not drawn)
+    // (the water's own colour, from the light into it: the open sea's dark blue, its scattering; over a shallow bed —
+    // SEA_DEPTH, the tiles' bathymetry — the bed seen through it, the light down to it and back attenuated by the water's
+    // absorption — clear coastal water's, the red gone in a few metres, the blue and green in tens —: sand turquoise,
+    // rock and weed darker, the deep blue as the bed sinks)
     let Ein = Eg * max(dot(normal, Ls), 0.0) + sky;
-    water = mix(under, Ein * vec3f(0.004, 0.017, 0.040) / PI, b);
+    let deep = Ein * vec3f(0.004, 0.017, 0.040) / PI;
+    water = mix(under, deep, b);
+    if (SEA_DEPTH_W > 0.0 && SEA_DEPTH < 60.0 && (TUNE_GSKIP & 1024u) == 0u) {
+      let u = dot(SEA_D, P.sea[0].xyz) + P.sea[2].x;
+      let c = dot(SEA_D, P.sea[1].xyz) + P.sea[2].y;
+      let anchor = vec3i(i32(P.sea[2].z) * 32, i32(P.sea[2].w) * 32, 17);
+      let patchy = smoothstep(0.35, 0.75, gnoiseI(anchor, vec3f(u, c, 0.0) / 40.0) * 0.7 + gnoiseI(anchor + vec3i(0, 0, 2), vec3f(u, c, 0.0) / 9.0) * 0.3);
+      let bed = mix(vec3f(0.42, 0.38, 0.28), vec3f(0.07, 0.09, 0.05), patchy * smoothstep(1.5, 6.0, SEA_DEPTH));
+      // (the paths in the water: refracted — Snell, n 1.33 —, down from the Sun and the sky, up to the eye)
+      let cv = sqrt(max(1.0 - (1.0 - nv * nv) / 1.77, 0.05));
+      let cs = sqrt(max(1.0 - (1.0 - nl * nl) / 1.77, 0.3));
+      let Kd = vec3f(0.40, 0.065, 0.045);
+      let T = exp(-Kd * SEA_DEPTH * (1.0 / cv + 1.0 / cs));
+      let Tv = exp(-Kd * SEA_DEPTH * 2.0 / cv);
+      let shallow = deep * (1.0 - Tv) + bed / PI * Ein * T;
+      water = mix(water, shallow, b * SEA_DEPTH_W);
+    }
   }
-  var sea = water * (1.0 - Fv) + glint + Fv * mix(skyR, mirror.rgb, mirror.w);
+  var refl = mix(skyR, mirror.rgb, mirror.w);
+  // (near, in the raster's image: the world itself mirrored — seaSSR, the cliffs, the coast, the trees, the mountains with
+  // their parallax —, along a facet drawn from the unresolved slopes' distribution — the frames' history sums their lobe:
+  // sharp on a calm sea, smeared into long streaks under the wind)
+  if (SEA_ON && RASTER_SHADE && (TUNE_GSKIP & 4096u) == 0u) {
+    let r1 = max(RND, 1e-4);
+    let r2 = fract(RND * 91.7 + 0.31);
+    let g = sqrt(-2.0 * log(r1)) * vec2f(cos(TAU * r2), sin(TAU * r2));
+    let nS = normalize(n - g.x * sqrt(su2) * tun - g.y * sqrt(sc2) * tcn);
+    let rS = reflect(-V, nS);
+    if (dot(rS, normal) > 0.005) {
+      let ssr = seaSSR(SEA_D, normalize(vec3f(rS.xy, rS.z * AIR.ab)));
+      refl = mix(refl, ssr.rgb, ssr.w * P.sea[1].w);
+    }
+  }
+  var sea = water * (1.0 - Fv) + glint + Fv * refl;
   // (the light through a wave's crest, green-blue, seen against the Sun: the crest's height over the sea's spread)
   if (tailU >= 0.0 && P.seafft[0].z > 0.0) {
     let back = pow(clamp(dot(V, -Ls) * 0.5 + 0.5, 0.0, 1.0), 4.0);
@@ -6313,9 +6438,84 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
       W = mix(W, spots, smoothstep(16.0, 4.0, footM) * P.sea[1].w) * (1.0 - calm);
     }
     W = max(W, wk.foam * P.sea[1].w);
+    // (the surf: where the bed rises to some 1.3 significant heights the waves break — depth-limited, γ ≈ 0.78 —, their
+    // crests white bands running in at the shallow water's celerity √(g d): on a beach of slope s, a crest reaches the
+    // shore from depth d in 2√d / (s √g) — the bands follow the depth's contours, spaced as the period has them, the
+    // foam trailing seaward of each front, broken along it; the inner surf, the swash a lasting white)
+    if (SEA_DEPTH_W > 0.0 && (TUNE_GSKIP & 1024u) == 0u) {
+      let Hs = select(0.021 * U * U, 4.0 * P.seafft[0].z, P.seafft[0].x > 0.5);
+      let Tp = select(0.73 * U + 2.0, P.seafft[0].w, P.seafft[0].w > 0.5);
+      let dB = 1.3 * Hs + 0.25;
+      if (SEA_DEPTH < dB && Hs > 0.05) {
+        let tclock = P.time.x * P.near5.w;
+        let u = dot(SEA_D, P.sea[0].xyz) + P.sea[2].x;
+        let c = dot(SEA_D, P.sea[1].xyz) + P.sea[2].y;
+        let anchor = vec3i(i32(P.sea[2].z) * 32, i32(P.sea[2].w) * 32, 19);
+        let brk = gnoiseI(anchor, vec3f(u, c, tclock * 0.08) / 7.0);
+        let ph = tclock / Tp + 2.0 * sqrt(SEA_DEPTH) / (0.03 * 3.13 * Tp) + 0.35 * gnoiseI(anchor + vec3i(0, 0, 3), vec3f(u, c, 0.0) / 60.0);
+        let band = exp(-fract(ph) * 4.0) * clamp(0.35 + 0.9 * brk, 0.0, 1.0);
+        let inner = smoothstep(0.45 * dB, 0.1 * dB, SEA_DEPTH) * clamp(0.5 + 0.8 * brk, 0.0, 1.0);
+        // (resolved where the bands are a few footprints apart — Tp √(g d) metres —, their mean white beyond)
+        let res = smoothstep(0.5, 0.15, footM / max(Tp * sqrt(9.81 * max(SEA_DEPTH, 0.3)), 1.0));
+        let surf = max(mix(0.3, band, res), inner) * smoothstep(dB, 0.6 * dB, SEA_DEPTH) * min(Hs / 0.4, 1.0);
+        W = max(W, surf * P.sea[1].w * SEA_DEPTH_W * (1.0 - calm));
+      }
+    }
   }
   let foam = 0.6 / PI * (Eg * nl + sky);
   return mix(sea, foam, W);
+}
+
+// The world mirrored in the sea from the raster's own image (screen-space reflections — the realtime raster pipeline's shade
+// kernel alone): from the sea's point D (from the camera, the Earth's axes [m]) along r (the squashed space's), 20 steps
+// growing from a metre to 8 km, each projected into the image and met against the raster's nearest surface there
+// (terrainRasterDepth); a crossing just behind it — within 8 % or 15 m: not behind a ridge's silhouette — bisected, its
+// pixel's colour taken from the image as it stands (accum: this frame's or the last's) where the raster shaded it — not the
+// cockpit's, not the sky's —, faded at the image's rim. w 0: nothing met in the image (the sky's mirror, the probe's).
+fn seaScreen(X: vec3f) -> vec3f {
+  let l = fromBody(X);
+  let z = dot(l, P.camFwd.xyz);
+  if (z <= 1e-3) { return vec3f(-1.0); }
+  let nx = dot(l, P.camRight.xyz) / (z * P.cam.w * P.camRight.w);
+  let ny = dot(l, P.camUp.xyz) / (z * P.cam.w);
+  return vec3f((nx + 1.0) * 0.5 * P.res.x, (1.0 - ny) * 0.5 * P.res.y, length(X));
+}
+fn seaSSR(D: vec3f, r: vec3f) -> vec4f {
+  let d0 = length(D);
+  let s0 = 1.0 + 0.004 * d0;
+  let k = pow(8000.0 / s0, 1.0 / 19.0);
+  var s = s0;
+  var sPrev = 0.0;
+  for (var i = 0; i < 20; i++) {
+    cost(5u);
+    let sc = seaScreen(D + r * s);
+    if (sc.x < 0.0 || sc.x >= P.res.x || sc.y < 0.0 || sc.y >= P.res.y) { return vec4f(0.0); }
+    let dz = terrainRasterDepth(sc.xy);
+    if (dz > 0.0 && sc.z > dz) {
+      if (sc.z - dz > max(0.08 * dz, 15.0)) { return vec4f(0.0); }
+      var lo = sPrev;
+      var hi = s;
+      for (var j = 0; j < 4; j++) {
+        let m = 0.5 * (lo + hi);
+        let sm = seaScreen(D + r * m);
+        let dm = terrainRasterDepth(sm.xy);
+        if (dm > 0.0 && sm.z > dm) { hi = m; } else { lo = m; }
+      }
+      let sh = seaScreen(D + r * hi);
+      let px = vec2u(clamp(sh.xy, vec2f(0.0), P.res.xy - 1.0));
+      let idx = px.y * u32(P.res.x) + px.x;
+      let mk = moments[idx].x;
+      if (mk != RASTER_MARK && mk != RASTER_STALE) { return vec4f(0.0); }
+      let c = accum[idx];
+      if (c.a <= 0.0) { return vec4f(0.0); }
+      let uv = sh.xy / P.res.xy;
+      let rim = smoothstep(0.0, 0.06, min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y)));
+      return vec4f(c.rgb / c.a, rim);
+    }
+    sPrev = s;
+    s *= k;
+  }
+  return vec4f(0.0);
 }
 
 // The world mirrored in calm water at q (a unit point of the squashed space; rd the camera's ray there): the
@@ -6914,7 +7114,10 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
     // view, every wave then averaged away —, and of the full image the realtime tiles fill over frames, not of a
     // whole tile)
     let footSea = sqrt(length(fx) * length(fy)) * EARTH_RM / sqrt(max(FOOT, 1.0));
-    SEA_DEPTH = max(-rel.w, 0.0);
+    // (inland water: its depth not in the relief — the lake's surface is —, deep assumed)
+    let dw = select(seaDepthAt(gq, footSea), vec2f(1e4, 0.0), calm > 0.0 || !SEA_ON);
+    SEA_DEPTH = dw.x;
+    SEA_DEPTH_W = dw.y;
     col = mix(col, seaShade(q, V, Ls, Eg, sky, col, footSea, calm, mirror), ocean);
   }
   // the cities at night (sodium's orange, whiter at their hearts), fading into the twilight
@@ -8841,7 +9044,10 @@ var<workgroup> skyAcc: array<array<vec3f, 9>, 64>;
 @compute @workgroup_size(64)
 fn skyAmbient(@builtin(local_invocation_index) li: u32, @builtin(workgroup_id) wid: vec3u) {
   let hs = vec4f(0.0, 2000.0, 5000.0, 10000.0);
-  let lv = wid.x;
+  // (the fifth workgroup: the sea level's radiance on an 8 × 8 grid — skyMirror —, a texel a thread)
+  let grid = wid.x == 4u;
+  let lv = min(wid.x, 3u);
+  var Lg = vec3f(0.0);
   var on = false;
   var c = array<vec3f, 9>();
   var up = vec3f(0.0, 0.0, 1.0);
@@ -8860,18 +9066,28 @@ fn skyAmbient(@builtin(local_invocation_index) li: u32, @builtin(workgroup_id) w
       let lt = nearLight(k);
       let Ls = normalize(squashed(toBody(lt.dir), ab));
       // (the direction: z up, the spiral over the hemisphere — equal solid angles)
-      let z = (f32(li) + 0.5) / 64.0;
+      var z = (f32(li) + 0.5) / 64.0;
+      var ph = f32(li) * 2.399963;
+      if (grid) {
+        z = (f32(li / 8u) + 0.5) / 8.0;
+        z *= z;
+        ph = f32(li % 8u) * (TAU / 8.0);
+      }
       let rr = sqrt(max(1.0 - z * z, 0.0));
-      let ph = f32(li) * 2.399963;
       let dl = vec3f(rr * cos(ph), rr * sin(ph), z);
       let rd = normalize(east * dl.x + north * dl.y + up * dl.z);
-      let p = up * (1.0 + hs[lv] / EARTH_RM);
+      let p = up * (1.0 + select(hs[lv], 0.0, grid) / EARTH_RM);
       WX_W = 0.0;
       let L = earthAir(p, rd, 3e38, Ls, lt.e, 0.5, 3e38).L;
+      Lg = L;
       let y = array<f32, 9>(0.282095, 0.488603 * dl.y, 0.488603 * dl.z, 0.488603 * dl.x, 1.092548 * dl.x * dl.y,
         1.092548 * dl.y * dl.z, 0.315392 * (3.0 * dl.z * dl.z - 1.0), 1.092548 * dl.x * dl.z, 0.546274 * (dl.x * dl.x - dl.y * dl.y));
       for (var i = 0u; i < 9u; i++) { c[i] = L * y[i] * (2.0 * PI / 64.0); }
     }
+  }
+  if (grid) {
+    textureStore(skyOut, vec2i(i32(40u + li), 0), vec4f(Lg, 0.0));
+    return;
   }
   for (var i = 0u; i < 9u; i++) { skyAcc[li][i] = c[i]; }
   workgroupBarrier();

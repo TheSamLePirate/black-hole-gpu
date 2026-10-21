@@ -30,6 +30,30 @@ const PLACES: Record<string, string> = {
   // (a low Sun: the relief's long shadows — the shadow map's and the march's)
   "alps-evening": `__bh.game.setDate("2026-07-10T17:45:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
     __bh.game.flyAt(45.85, 6.75, 2500, 110, 200);`,
+  // (the sea — N6 —: low over the Atlantic off Tarifa into the evening Sun's glint, the coast's shallows by day, the strait
+  // under a strong wind, the same under an overcast)
+  "sea-glint": `__bh.game.setDate("2026-07-10T18:40:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
+    __bh.game.flyAt(36.0, -5.75, 300, 285, 220);`,
+  "sea-coast": `__bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
+    __bh.game.flyAt(36.06, -5.74, 250, 115, 200);`,
+  "sea-windy": `__bh.game.setDate("2026-07-10T12:00:00Z"); __bh.game.set("weather", "windy"); __bh.game.set("earthClouds", 0.2);
+    __bh.game.flyAt(35.99, -5.52, 300, 190, 220);`,
+  "sea-overcast": `__bh.game.setDate("2026-07-10T12:00:00Z"); __bh.game.set("weather", "overcast"); __bh.game.set("earthClouds", 1);
+    __bh.game.flyAt(35.99, -5.52, 300, 190, 220);`,
+  // (showcases: relief, the sea, a few clouds, the Sun — the strait at dawn into the Sun's glint, Jebel Musa ahead, the Rock
+  // on the left; the Gulf of Porto's 2000 m ridges falling into the sea in the evening Sun; Jebel Musa from Spain at dusk)
+  "show-strait": `__bh.game.setDate("2026-07-10T06:15:00Z"); __bh.game.set("weather", "cloudy"); __bh.game.set("earthClouds", 0.35);
+    __bh.game.flyAt(35.95, -5.66, 450, 95, 220);`,
+  "show-corsica": `__bh.game.setDate("2026-07-10T17:20:00Z"); __bh.game.set("weather", "cloudy"); __bh.game.set("earthClouds", 0.3);
+    __bh.game.flyAt(42.24, 8.50, 400, 65, 220);`,
+  "show-musa": `__bh.game.setDate("2026-07-10T18:30:00Z"); __bh.game.set("weather", "cloudy"); __bh.game.set("earthClouds", 0.3);
+    __bh.game.flyAt(36.04, -5.52, 450, 165, 220);`,
+  "show-porto": `__bh.game.setDate("2026-07-10T17:00:00Z"); __bh.game.set("weather", "cloudy"); __bh.game.set("earthClouds", 0.3);
+    __bh.game.flyAt(42.26, 8.58, 500, 80, 220);`,
+  "show-porto-fair": `__bh.game.setDate("2026-07-10T17:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0.4);
+    __bh.game.flyAt(42.26, 8.58, 500, 80, 220);`,
+  "show-rock": `__bh.game.setDate("2026-07-10T07:30:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0.35);
+    __bh.game.flyAt(36.08, -5.43, 400, 55, 220);`,
 };
 const MODE_SET: Record<string, string> = {
   trace6: `__bh.settings.earthPipeline = "trace"; __bh.game.set("realtimeSubsampling", 6);`,
@@ -51,6 +75,11 @@ const MODE_SET: Record<string, string> = {
   // (the clear sky's light, physical and shared — N2b — on, the default, and off: the old constant)
   sky: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {}; __bh.renderer.skyAmbientOn = true;`,
   nosky: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {}; __bh.renderer.skyAmbientOn = false;`,
+  // (the sea's N6 — the shallows over the bathymetry, the surf, the clear sky's own radiance mirrored — on, and off)
+  sea: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {};`,
+  nosea: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 1536 };`,
+  // (the sea's reflections — the slopes' mean Fresnel, the lifted mirror, the screen-space reflections — off: the rest of N6 on)
+  norefl: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 6144 };`,
   lod300: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sceneryRasterLod = { nearM: 300, near: "ico80", far: "ico20" };`,
   lod150: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sceneryRasterLod = { nearM: 150, near: "ico80", far: "ico20" };`,
   lod150light: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sceneryRasterLod = { nearM: 150, near: "ico20", far: "octa" };`,

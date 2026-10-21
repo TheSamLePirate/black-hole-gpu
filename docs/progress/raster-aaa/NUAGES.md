@@ -74,3 +74,42 @@ A/B alterné (deuxième paire) : coût dans le bruit (passe de 4 groupes) ; imag
 38,75 → 38,98 dB, sous les cumulus 36,5 → 38,7 dB, Alpes au soir 32,0 → 32,6 dB. Au soir, les ombres de la neige prennent
 la teinte chaude du ciel côté Soleil au lieu du bleu constant (bleu −4,5/255, rouge +1,7 en moyenne sur le sol) ; à midi
 presque neutre.
+
+## N6a — la mer : hauts-fonds, ressac, reflets — fait
+
+Scènes ajoutées aux tests de vol (`raster-flight`) : `sea-glint` (reflet du Soleil du soir, Atlantique au large de Tarifa),
+`sea-coast` (la côte de Tarifa, ses hauts-fonds), `sea-windy`, `sea-overcast`, et des vues de démonstration — `show-porto-fair`
+(golfe de Porto, Corse, 17 h Z : le relief, la mer, le Soleil bas — la vue retenue), `show-rock` (le rocher de Gibraltar à
+l'aube, reflet et hauts-fonds), `show-strait`, `show-corsica`, `show-musa`, `show-porto`.
+
+- **La profondeur** (`seaDepthAt`) : Terrarium ne porte la bathymétrie (ETOPO1, GEBCO) que jusqu'au niveau z 10 — au-delà,
+  SRTM, la mer à 0 (vérifié : −593 m au milieu du détroit à z 10, 0 à z 11–13) ; le relief global la coupe à 0. Lue sur les
+  fenêtres z 10, 9, 8 déjà chargées (~120 m le texel), les texels à 0 ou plus écartés (la mer de SRTM, la terre), les niveaux
+  mêlés par poids comme `earthH` (sans couture au bord d'une fenêtre). Les eaux intérieures : profondes (leur fond inconnu).
+- **La couleur de l'eau** : le fond vu à travers (Beer–Lambert, eau côtière claire : 0,40 / 0,065 / 0,045 m⁻¹ ; chemins
+  réfractés, Snell), le sable, la roche et l'herbier en taches ; le bleu profond quand le fond s'enfonce — le turquoise des
+  plages de Tarifa.
+- **Le ressac** : déferlement limité par la profondeur (γ ≈ 0,78 : sous 1,3 Hs), des bandes d'écume qui arrivent à la
+  célérité √(g d) (2√d / (s √g) jusqu'au rivage, la période du système dominant — `seafft[0].w`), la zone interne blanche ;
+  leur moyenne là où le pixel ne les résout pas.
+- **Les reflets** :
+  - le ciel clair réel au loin (`skyMirror` : une grille 8 × 8 de la radiance au niveau de la mer, plus dense à l'horizon,
+    cinquième groupe de `skyAmbient`), dans la couleur de la lumière du ciel ici (sous un couvert, son gris) ;
+  - le Fresnel moyen sur les pentes non résolues (Bruneton, Neyret & Holzschuch 2010) : la mer rasante n'est plus un miroir,
+    plus sombre que le ciel à l'horizon ;
+  - la direction réfléchie relevée par la pente moyenne des facettes vues (σ φ(a)/Φ(a)) ;
+  - **les reflets en espace écran** (`seaSSR`, noyau `shade` du raster) : 20 pas de 1 m à 8 km projetés dans l'image, contre
+    la profondeur raster, bissection, la couleur lue dans l'image en cours (`accum`) là où le raster l'a ombrée (ni le cockpit,
+    ni le ciel) ; la facette tirée dans la distribution des pentes non résolues — l'historique en somme le lobe : net par mer
+    calme, étiré par vent fort. Les falaises, la côte, les arbres, les montagnes s'y reflètent avec leur parallaxe ; la sonde
+    et le ciel au-delà.
+- Interrupteurs (`TUNE_GSKIP`) : 512 le ciel physique reflété, 1024 hauts-fonds et ressac, 2048 Fresnel moyen et relèvement,
+  4096 les reflets en espace écran ; modes de test `sea`, `nosea`, `norefl`.
+
+A/B alterné (deuxième paire) : coût dans le bruit thermique (+0,7 à +2 ms sur 26–46 ms). Accord avec la convergée — reflets
+neufs contre anciens : Porto 35,4 → 37,8 dB, reflet du soir 27,1 → 34,7, vent fort 32,9 → 35,7 ; côte de Tarifa 23,7 → 43,4
+(la convergée a les hauts-fonds). Images : `img/vue-porto-soir.png`, `img/vue-gibraltar-matin.png`,
+`img/mer-tarifa-hauts-fonds.png`.
+
+Reste pour la mer : l'écume texturée (traînées le long du vent), les reflets des nuages au loin depuis la passe de nuages,
+l'ombre des nuages sur l'eau (N3), le sable mouillé au rivage, le bruit du SSR stochastique en mouvement à mesurer.
