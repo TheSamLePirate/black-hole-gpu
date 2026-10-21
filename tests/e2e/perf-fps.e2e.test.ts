@@ -60,14 +60,17 @@ for (const pl of places)
           earthSceneryShadows: true, earthSurface: "satellite", shipMount: "cockpit" });
         ${PLACES[pl]}
         const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
-        c.jetModes.alt = c.last?.alt ?? c.jetModes.alt; return 1; })()`);
+        return 1; })()`);
       // (the ground's tiles in before the first measure)
       await app.js(`(async () => { const r = __bh.renderer, t0 = performance.now(); let calm = 0;
         while (performance.now() - t0 < 90000) { const ok = r.earthTiles.pending === 0; calm = ok ? calm || performance.now() : 0;
           if (calm && performance.now() - calm > 3000) break; await new Promise((q) => requestAnimationFrame(q)); } return 1; })()`);
       for (const cf of configs) {
         // (the craft put back where it was for each setting: the same view measured, not a drift)
-        await app.js(`(() => { ${PLACES[pl]} ${CONFIGS[cf]} const c = __bh.camera; c.jetModes.alt = c.last?.alt ?? c.jetModes.alt; __bh.touch(); return 1; })()`);
+        // (the height held: the craft's own once put there — not the last place's, which the autopilot climbed back to)
+        await app.js(`(async () => { ${PLACES[pl]} ${CONFIGS[cf]} __bh.touch();
+          for (let i = 0; i < 3; i++) await new Promise((q) => requestAnimationFrame(q));
+          const c = __bh.camera, g = c.geoNow(); if (g) c.jetModes.alt = g.alt; return 1; })()`);
         await app.waitFor(`!!__bh.renderer.variantReady`, 300_000).catch(() => {});
         // (settled: the new kernels in, the history refilled)
         await Bun.sleep(4000);
