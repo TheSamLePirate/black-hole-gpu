@@ -24,6 +24,11 @@ const ABLATIONS: { name: string; tune?: Record<string, number>; settings?: strin
   { name: "grazing rays not marched", tune: { TUNE_HINT_GRAZE: 0 } },
   { name: "scenery off", settings: `{ earthScenery: "off" }` },
   { name: "clouds off", settings: `{ earthClouds: 0, volumetricClouds: false }` },
+  { name: "scenery: camera ray's buildings", tune: { TUNE_SC_SKIP: 1 } },
+  { name: "scenery: trees' look", tune: { TUNE_SC_SKIP: 2 } },
+  { name: "scenery: OSM surfaces", tune: { TUNE_SC_SKIP: 4 } },
+  { name: "scenery: buildings' raster boxes ignored", tune: { TUNE_SC_SKIP: 8 } },
+  { name: "scenery shadows: full range (as before)", tune: { TUNE_SC_SKIP: 16 } },
   { name: "relief normal", tune: { TUNE_GSKIP: 1 } },
   { name: "relief shadows", tune: { TUNE_GSKIP: 2 } },
   { name: "near materials", tune: { TUNE_GSKIP: 4 } },
@@ -56,6 +61,8 @@ test.skipIf(!E2E)(
         `(() => { Object.assign(__bh.settings, { vessel: "f35", traffic: false, showFps: false, autosave: false, f35AutoProtect: true, f35Invulnerable: true }); return 1; })()`,
       );
       await app.waitFor(`__bh.fleet.active === "f35"`, 30_000);
+      // (every tuning's variant kept: each compiled once, its second measure and the base's reuse it)
+      await app.js(`(() => { __bh.renderer.variantCacheMax = 64; return 1; })()`);
       await app.js(`(() => { __bh.game.quality("realtime"); Object.assign(__bh.settings, { dynamicResolution: false, animate: true, targetSpp: 0 });
         ${PLACES[PLACE]} __bh.settings.shipMount = "cockpit"; Object.assign(__bh.settings, ${DETAIL});
         __bh.settings.earthPipeline = "raster"; __bh.game.set("realtimeSubsampling", 4);
@@ -100,8 +107,11 @@ test.skipIf(!E2E)(
       for (const a of CHOSEN) {
         const b: number[] = [];
         const w: number[] = [];
+        // (a tuning's base a tuning that turns nothing off — an unread bit —: any renderer.tune leaves the relief's height cache
+        // out, 6–8 ms of its own, not the part's)
+        const base: Record<string, number> = a.tune ? { TUNE_GSKIP: 4194304 } : {};
         for (let r = 0; r < 2; r++) {
-          b.push(await measure({}, initial));
+          b.push(await measure(base, initial));
           w.push(await measure(a.tune ?? {}, a.settings ?? initial));
         }
         const row = { name: a.name, base: b, without: w, drop: +(med(b) - med(w)).toFixed(2), rates: await app.js("window.__rates") };

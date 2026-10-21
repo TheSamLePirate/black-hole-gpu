@@ -24,7 +24,9 @@ fn terrainRasterHint(px: vec2f) -> f32 { return textureLoad(terrainDist, vec2i(f
 // The scenery's instance drawn nearest at this pixel (g: a tree's cell + 1, exact in a float below 2²⁴; 0 none).
 fn terrainRasterId(px: vec2f) -> u32 { return u32(textureLoad(terrainDist, vec2i(floor(px)), 0).g); }
 // The nearest surface's distance [m] at this pixel (b: the ground's, or an instance's proxy before it; 0 none).
-fn terrainRasterDepth(px: vec2f) -> f32 { return textureLoad(terrainDist, vec2i(floor(px)), 0).b; }`,
+fn terrainRasterDepth(px: vec2f) -> f32 { return textureLoad(terrainDist, vec2i(floor(px)), 0).b; }
+// A building's box before the ground and the trees at this pixel (a: 2 — system/scenery-raster.ts boxFs).
+fn terrainRasterBuilding(px: vec2f) -> bool { return textureLoad(terrainDist, vec2i(floor(px)), 0).a > 1.5; }`,
   );
 }
 

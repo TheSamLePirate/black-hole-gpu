@@ -255,6 +255,9 @@ override TUNE_BODY_REJECT: u32 = 1u;
 // near materials (snow, rock), 8 the fine noise's colour and light, 16 the clouds' and the weather's shadows, 32 the
 // tiles' imagery, 64 the surface textures, 128 the sea's shading, 256 the scenery's surfaces)
 override TUNE_GSKIP: u32 = 0u;
+// (the scenery's parts left out, to measure them — tests/e2e/raster-shade-ablation: 1 the camera ray's buildings, 2 the trees'
+// look, 4 the OSM surfaces under the ground; 8 the buildings' raster boxes ignored — every ray its BVH, as before)
+override TUNE_SC_SKIP: u32 = 0u;
 // (the ray's work by kind: 0 the ground's march steps (the Earth's, a world's), 1 the ground's heights read (earthH,
 // relief), 2 its shadows' steps, 3 the clouds' steps (the volume's, the weather's), 4 the air's (the auroras'), 5 the
 // water's (the sea's surface search, the mirror's march), 6 the scenery's boxes visited, 7 the geodesic integrator's
@@ -5674,6 +5677,7 @@ fn earthTop() -> f32 { return select(9600.0, P.radio2.w, P.radio2.w > 0.0); }
 fn terrainRasterHint(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterId(px: vec2f) -> u32 { return 0u; }
 fn terrainRasterDepth(px: vec2f) -> f32 { return 0.0; }
+fn terrainRasterBuilding(px: vec2f) -> bool { return true; }
 // END_TERRAIN_RASTER
 // BEGIN_CLOUD_PASS (system/cloud-pass.ts withCloudPass supplies the cloud pass's texture reads)
 fn cloudsBuffered(px: vec2f, boundM: f32) -> EarthClouds { return EarthClouds(-1.0, vec3f(0.0), -1.0); }
@@ -5703,6 +5707,8 @@ const RASTER_MARK = 1e30;
 // The scenery's instance the raster drew at the pixel shade works on (terrainRasterId: a tree, its cell + 1; 0 none) and
 // whether the raster drew the scenery at all this frame (then a pixel with none has no tree before its ground — étape 1b)
 var<private> RASTER_ID: u32 = 0u;
+// (a building's raster box covers this pixel — terrainRasterBuilding —: its BVH tested there alone)
+var<private> RASTER_BLD: bool = true;
 var<private> RASTER_SCENERY: bool = false;
 
 // The ground's clearance (as the march's f) at t along the ray from ro: the full relief, as the crossing's refinement reads it.
@@ -6899,7 +6905,12 @@ fn worldScenery(dW:vec3f,tMax:f32,rnd:f32)->f32 {
   if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5){return tMax;}
   let d=sceneryLocal(dW);let o=P.scenery[3].xyz;
   SC_SAMPLE=rnd;SC_POINT=o+d*tMax;SC_DISTANCE=tMax;
-  let hit=sceneryQuery(o,d,min(tMax,P.scenery[1].w),false);
+  // (the raster's buildings — their boxes: a pixel none covers has no building before its ground —; else the BVH walked)
+  let bld=!RASTER_SCENERY || RASTER_BLD || (TUNE_SC_SKIP&8u)!=0u;
+  // (no building here: a miss at the full reach — the trees' bound —, no BVH walked)
+  let lim=min(tMax,P.scenery[1].w);
+  var hit=SceneryHit(lim,vec3f(0.0),vec3f(0.0),-1.0,0.0);
+  if((TUNE_SC_SKIP&1u)==0u && bld){hit=sceneryQuery(o,d,lim,false);}
   // (the raster's scenery — étape 1b —: the tree its instance drew at this pixel tested alone; a pixel it drew none at has
   // no tree before its ground; the instance's proxy wider than its tree there — a carved crown's gap —: the grid walked)
   var tree=ForestHit(hit.t,vec3f(0.0),0u,0u,vec3f(0.0),0.0,0.0,1.0);
@@ -6920,7 +6931,8 @@ fn worldScenery(dW:vec3f,tMax:f32,rnd:f32)->f32 {
     let p=o+d*tree.t;
     SC_POINT=p;SC_DISTANCE=tree.t;
     var n=tree.n;var alb:vec3f;
-    let look=forestLook(tree,n,p,sceneryColourAt(tree.base.xy));
+    var look=ForestLook(vec3f(0.12,0.16,0.08),vec3f(0.0));
+    if((TUNE_SC_SKIP&2u)==0u){look=forestLook(tree,n,p,sceneryColourAt(tree.base.xy));}
     WS_T=look.through;
     if(tree.part==1u){
       // bark: furrowed along the trunk
@@ -6965,9 +6977,14 @@ fn sceneryShadow(light:vec3f,normal:vec3f)->f32 {
   let radius=.00465*sqrt(fract(SC_SAMPLE*7.31+.17));let phase=TAU*fract(SC_SAMPLE*13.73+.41);
   let d=normalize(sun+radius*(axis*cos(phase)+cross(sun,axis)*sin(phase)));
   let start=SC_POINT+n*.35+d*.15;let range=select(500.0,900.0,P.scenery[5].x>.5);
-  let h=sceneryQuery(start,d,range,true);
+  // (past the tallest blocker's height above the ground — a tree's ~35 m, 60 with a slope's margin; a tower's 300 — the ray
+  // meets nothing more: its walk no longer than that height over the Sun's sine — tens of metres at midday, not hundreds;
+  // TUNE_SC_SKIP 16: the full range, as before)
+  let full=(TUNE_SC_SKIP&16u)!=0u;
+  let sz=max(d.z,0.06);
+  let h=sceneryQuery(start,d,select(min(range,300.0/sz),range,full),true);
   var blocked=h.kind>=0.0;
-  if(!blocked){blocked=forestQuery(start,d,range,true,select(0.0,60.0,SC_DISTANCE<180.0)).kind>0u;}
+  if(!blocked){blocked=forestQuery(start,d,select(min(range,60.0/sz),range,full),true,select(0.0,60.0,SC_DISTANCE<180.0)).kind>0u;}
   let fade=smoothstep(reach-200.0,reach,SC_DISTANCE);
   return mix(select(1.0,0.0,blocked),1.0,fade);
 }
@@ -7093,6 +7110,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   // level — 0 there, its noise off below 40 m — is land whatever it says, and so is what the scenery draws on land —
   // the coast's hills and cliffs, a seaside town's low streets were shaded as the sea)
   var osm=scenerySurface(max(length(fx),length(fy))*EARTH_RM);
+  if ((TUNE_SC_SKIP & 4u) != 0u) { osm.cover = 0.0; }
   if ((TUNE_GSKIP & 256u) != 0u) { osm.cover = 0.0; }
   let osmWater=select(0.0,osm.cover,osm.kind==3.0 || osm.kind==4.0);
   let osmLand=select(osm.cover,0.0,osm.kind==3.0 || osm.kind==4.0);
@@ -7585,14 +7603,40 @@ fn wxShape(q: vec3f, i: u32, hn: f32, w: f32, cheap: bool) -> vec3f {
   let st = (1.0 - cb) * smoothstep(0.75, 0.95, L.z);
   let cu = max(1.0 - cb - st, 0.0);
   let tev = P.time.x * P.near5.w / 900.0;
+  // (first what may be here — the coarse cover, the storm's cells at this height —: empty, out before the fine noise; most
+  // of a stormy sky's samples are between its towers, most of a light march's too)
+  var aC = 0.0;
+  if (cu + st > 0.0) { aC = wxLayerA(q, i) * w; }
+  var cell = 0.0;
+  var tower = 0.0;
+  var shieldM = 0.0;
+  var anvil = 0.0;
+  let cellAt = vec3f(f32(i) * 3.7, 1.3, 0.05 * tev);
+  if (cb > 0.0) {
+    if (hn < 0.92) {
+      let c0 = wxAt(q, 9000.0) + cellAt;
+      cell = 0.5 + 0.5 * (0.7 * dnoise(c0) + 0.3 * dnoise(c0 * 2.3 + vec3f(4.1)));
+      // (a stormy sky's towers a quarter of it at most — gaps between them, their sides seen —, fewer as the cover falls)
+      tower = smoothstep(0.62 + 0.2 * (1.0 - L.z), 0.7 + 0.2 * (1.0 - L.z), cell) * w;
+      if (hn < 0.4) { shieldM = smoothstep(0.45, 0.6, cell) * w; }
+    }
+    if (hn > 0.72) {
+      // (the anvil: the cells' field drawn downwind with the height — the shear: the weather's drift's way —, wider)
+      let dl = length(P.wx[4].yzw);
+      let dw = select(vec3f(0.0), P.wx[4].yzw / max(dl, 1e-3), dl > 1.0);
+      let ca = (q * EARTH_RM - P.wx[4].yzw - dw * (hn * hn * 15000.0)) * (1.0 / 9000.0) + cellAt;
+      let cellA = 0.5 + 0.5 * (0.7 * dnoise(ca) + 0.3 * dnoise(ca * 2.3 + vec3f(4.1)));
+      anvil = smoothstep(0.52 + 0.15 * (1.0 - L.z), 0.62 + 0.15 * (1.0 - L.z), cellA) * w;
+    }
+  }
+  if ((cu + st) * aC <= 0.01 && cb * max(max(tower, anvil), shieldM) <= 0.0 && (TUNE_GSKIP & 8388608u) == 0u) { return vec3f(0.0, 1.0, 0.0); }
   let x = wxAt(q, 1600.0) + vec3f(f32(i) * 11.3, f32(i) * 5.9, 0.0) + vec3f(0.0, 0.0, hn * 1.5 + 0.25 * tev);
   var sh = 0.6 * dnoise(x);
   if (!cheap) { sh += 0.3 * dnoise(x * 2.0 + vec3f(5.1)) + 0.1 * dnoise(x * 4.0 + vec3f(1.7)); }
   var rho = 0.0;
   var top = 1.0;
   var a = 0.0;
-  if (cu + st > 0.0) {
-    let aC = wxLayerA(q, i) * w;
+  if (cu + st > 0.0 && aC > 0.01) {
     let topC = clamp(0.55 + 0.35 * aC + 0.3 * sh, 0.3, 1.0);
     let hpC = smoothstep(0.0, 0.04 + 0.1 * max(sh, 0.0), hn) * (1.0 - smoothstep(0.5 * topC, topC, hn));
     let rC = hpC * clamp(1.4 * (aC * (0.7 + 0.6 * sh) - 0.15), 0.0, 1.0);
@@ -7605,23 +7649,12 @@ fn wxShape(q: vec3f, i: u32, hn: f32, w: f32, cheap: bool) -> vec3f {
     a = aC;
   }
   if (cb > 0.0) {
-    let cellAt = vec3f(f32(i) * 3.7, 1.3, 0.05 * tev);
-    let c0 = wxAt(q, 9000.0) + cellAt;
-    let cell = 0.5 + 0.5 * (0.7 * dnoise(c0) + 0.3 * dnoise(c0 * 2.3 + vec3f(4.1)));
-    // (a stormy sky's towers a quarter of it at most — gaps between them, their sides seen —, fewer as the cover falls)
-    let tower = smoothstep(0.62 + 0.2 * (1.0 - L.z), 0.7 + 0.2 * (1.0 - L.z), cell) * w;
-    // (the anvil: the cells' field drawn downwind with the height — the shear: the weather's drift's way —, wider)
-    let dl = length(P.wx[4].yzw);
-    let dw = select(vec3f(0.0), P.wx[4].yzw / max(dl, 1e-3), dl > 1.0);
-    let ca = (q * EARTH_RM - P.wx[4].yzw - dw * (hn * hn * 15000.0)) * (1.0 / 9000.0) + cellAt;
-    let cellA = 0.5 + 0.5 * (0.7 * dnoise(ca) + 0.3 * dnoise(ca * 2.3 + vec3f(4.1)));
-    let anvil = smoothstep(0.52 + 0.15 * (1.0 - L.z), 0.62 + 0.15 * (1.0 - L.z), cellA) * w;
     let hT = smoothstep(0.0, 0.03 + 0.05 * abs(sh), hn) * (1.0 - smoothstep(0.8 + 0.08 * sh, 0.92, hn));
     let towerR = hT * clamp(1.5 * (tower * (0.8 + 0.5 * sh) - 0.1), 0.0, 1.0);
     let hA = smoothstep(0.72, 0.82, hn) * (1.0 - smoothstep(0.94, 0.99, hn));
     let anvR = 0.7 * hA * clamp(1.4 * (anvil * (0.75 + 0.4 * sh) - 0.15), 0.0, 1.0);
     let hS = smoothstep(0.0, 0.08, hn) * (1.0 - smoothstep(0.15, 0.3 + 0.08 * sh, hn));
-    let shield = hS * clamp(L.z * (0.55 + 0.4 * sh), 0.0, 1.0) * smoothstep(0.45, 0.6, cell) * w;
+    let shield = hS * clamp(L.z * (0.55 + 0.4 * sh), 0.0, 1.0) * shieldM;
     rho = mix(rho, max(max(towerR, anvR), shield), cb);
     top = mix(top, 1.0, cb);
     a = mix(a, max(tower, max(0.6 * anvil, shield)), cb);
@@ -7681,6 +7714,16 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
   let ms1 = cloudPhase(ct, 0.5) * 4.0 * PI;
   let ms2 = cloudPhase(ct, 0.25) * 4.0 * PI;
   let ms3 = cloudPhase(ct, 0.125) * 4.0 * PI;
+  // (the sky's light on the layer, the ground's under it, the eclipse's share: once a ray — at the layer's middle where the ray
+  // enters it —, not a sample: the sky's harmonics barely change over the kilometres a ray crosses; TUNE_GSKIP 16777216: each
+  // sample its own, as before — the A/B)
+  let perSample = (TUNE_GSKIP & 16777216u) != 0u;
+  let qE = normalize(ro + rd * t0);
+  let mu0E = dot(geoQ(qE), physicalLs);
+  let skE = skySeen(qE, Ls);
+  let skyLayerE = skyFlatFactor(qE, 0.5 * (L.x + L.y), E, mu0E, skE);
+  let skyGroundE = skyFlatFactor(qE, 0.0, E, mu0E, skE);
+  let nightE = nightFloor(skE, mu0E);
   var Tv = 1.0;
   var col = vec3f(0.0);
   var tPrev = t0;
@@ -7706,7 +7749,8 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
     let sigma = rho * L.w / ((ht - hb) * EARTH_RM * max(top, 0.3));
     let mu0 = dot(geoQ(q), physicalLs);
     let hM = (r - 1.0) * EARTH_RM;
-    let Ts = sunThrough(airHeight(p), mu0) * sunSeen(p, Ls) * wxVeil(hM, w, i).y;
+    let veil = wxVeil(hM, w, i).y;
+    let Ts = sunThrough(airHeight(p), mu0) * sunSeen(p, Ls) * veil;
     let tauUp = a * L.w * max(top - hn, 0.0) / max(top, 0.3);
     // (the cloud pass: the sunlight's optical depth marched through the layer's own density — cores dark, the gaps between
     // cumulus lit, a tower's shadow on its neighbour; else the column of its cover over the point)
@@ -7716,16 +7760,24 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
     let beer = select(exp(-tauSun), 0.0, mu0 < -0.1);
     let powder = 1.0 - exp(-2.0 * sigma * 400.0 - 0.15);
     let over = 0.3 + 0.7 * exp(-0.25 * tauUp);
-    let sk = skySeen(q, Ls);
-    let amb = max(0.7 * skyFlatFactor(q, hM, E, mu0, sk), nightFloor(sk, mu0));
+    var skyL = skyLayerE;
+    var skyG = skyGroundE;
+    var night = nightE;
+    if (perSample) {
+      let sk = skySeen(q, Ls);
+      skyL = skyFlatFactor(q, hM, E, mu0, sk);
+      skyG = skyFlatFactor(q, 0.0, E, mu0, sk);
+      night = nightFloor(sk, mu0);
+    }
+    let amb = max(0.7 * skyL, night);
     let e1 = exp(-0.04 * tauSun);
     let e2 = e1 * e1;
     let ms = (ms1 * e2 * e1 + 0.5 * ms2 * e2 + 0.25 * ms3 * e1) / 1.75;
-    let skyTop = skyFlatFactor(q, hM, E, mu0, sk) * (0.25 + 0.75 * exp(-0.03 * tauUp));
+    let skyTop = skyL * (0.25 + 0.75 * exp(-0.03 * tauUp));
     // (the light the ground sends up onto the base — the sun's and the sky's on it, an albedo of 0.18 —, through the cloud below)
-    let bounce = 0.18 * (sunThrough(0.0, mu0) * max(mu0, 0.0) + skyFlatFactor(q, 0.0, E, mu0, sk)) * exp(-0.25 * a * L.w * hn);
+    let bounce = 0.18 * (sunThrough(0.0, mu0) * max(mu0, 0.0) + skyG) * exp(-0.25 * a * L.w * hn);
     let Lin = FLASH_TINT * luminance(E) * 0.25 * flashGlow(p) + E * Ts * (hg * beer * powder * 2.5 + 0.25 * ms * smoothstep(-0.1, 0.1, mu0))
-      + 0.85 / PI * (over * (E * amb + E * earthMoonlight(q, q, airHeight(p), mu0)) + E * skyTop * wxVeil(hM, w, i).y + 0.5 * E * bounce);
+      + 0.85 / PI * (over * (E * amb + E * earthMoonlight(q, q, airHeight(p), mu0)) + E * skyTop * veil + 0.5 * E * bounce);
     let dT = exp(-sigma * dm);
     col += Tv * Lin * (1.0 - dT);
     if (o.t < 0.0) { o.t = t; }
@@ -9333,6 +9385,7 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   // (the terrain's pixels and the scenery's — a tree against the sky too)
   let centre = vec2f(px) + 0.5;
   RASTER_ID = terrainRasterId(centre);
+  RASTER_BLD = terrainRasterBuilding(centre);
   if (terrainRasterHint(centre) <= 0.0 && RASTER_ID == 0u) { return; }
   RASTER_SCENERY = P.mouthList[1].z > 0.5;
   RASTER_SHADE = true;
@@ -9363,6 +9416,7 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   let e = earthNear(look, rnd, k);
   RHINT = 0.0;
   RASTER_ID = 0u;
+  RASTER_BLD = true;
   RASTER_SCENERY = false;
   RASTER_SHADE = false;
   AP_UV = vec2f(-1.0);

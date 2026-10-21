@@ -4015,8 +4015,11 @@ export class Renderer {
    *  key is up to five specialised compiles — and the browser's shader disk cache has a budget (plan §2.2-F). */
   private evictVariants() {
     const keys = [...this.variants.keys()];
-    for (const k of keys.slice(0, Math.max(0, keys.length - 4))) this.variants.delete(k);
+    for (const k of keys.slice(0, Math.max(0, keys.length - this.variantCacheMax))) this.variants.delete(k);
   }
+  /** how many keys' variants are kept (four in play; a measuring bench that goes back and forth between many tunings keeps
+   *  them all: each compiled once — tests/e2e/raster-shade-ablation.e2e.test.ts) */
+  variantCacheMax = 4;
 
   /**
    * The cockpit's mask (mask.wgsl), before a realtime frame's trace: the tiles the flown craft's own opaque parts

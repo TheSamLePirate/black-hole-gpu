@@ -201,7 +201,8 @@ fn forestData(i: u32) -> vec4f { return scenery[i]; }
 ${forest}
 const CAP = ${SCENERY_RASTER_CAP}u;
 struct Draw { vertices: u32, instances: atomic<u32>, first: u32, base: u32 };
-@group(0) @binding(3) var<storage, read_write> draws: array<Draw, ${LISTS}>;
+// (the four lists' draws, then the buildings' boxes': one a node of the scenery's BVH)
+@group(0) @binding(3) var<storage, read_write> draws: array<Draw, ${LISTS + 1}>;
 @group(0) @binding(4) var<storage, read_write> listsOut: array<u32>;
 @group(0) @binding(5) var<storage, read> listsIn: array<u32>;
 
@@ -274,6 +275,7 @@ fn cull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: vec
 @compute @workgroup_size(${LISTS})
 fn clampDraws(@builtin(local_invocation_index) i: u32) {
   atomicStore(&draws[i].instances, min(atomicLoad(&draws[i].instances), CAP));
+  if (i == 0u) { atomicStore(&draws[${LISTS}].instances, u32(scenery[0].x)); }
 }
 
 override LIST: u32 = 0u;
@@ -307,6 +309,22 @@ struct V { @builtin(position) clip: vec4f, @location(0) @interpolate(flat) id: f
 }
 // (g the tree's id, b its proxy's distance — the ground's in r stays)
 @fragment fn proxyFs(v: V) -> @location(0) vec4f { return vec4f(0.0, v.id, length(v.p), 0.0); }
+
+// The buildings' boxes (a node of the scenery's BVH an instance: its leaves — a building each — drawn, its inner nodes at one
+// point): where one is before the ground and the trees, the pixel's alpha 2 — the tracer's kernel shade tests the buildings
+// there alone (trace.wgsl worldScenery), not along every camera ray. Depth tested, not written; a box a little wider.
+const BOX = array<u32, 36>(0u, 1u, 3u, 0u, 3u, 2u, 4u, 6u, 7u, 4u, 7u, 5u, 0u, 4u, 5u, 0u, 5u, 1u, 2u, 3u, 7u, 2u, 7u, 6u,
+  0u, 2u, 6u, 0u, 6u, 4u, 1u, 5u, 7u, 1u, 7u, 3u);
+@vertex fn boxVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> @builtin(position) vec4f {
+  let lo = scenery[4u + ii * 2u];
+  let hi = scenery[5u + ii * 2u];
+  if (hi.w < 0.0) { return vec4f(2.0, 2.0, 0.5, 1.0); }
+  let c = BOX[vi];
+  let k = vec3f(f32(c & 1u), f32((c >> 1u) & 1u), f32((c >> 2u) & 1u));
+  let v = view(mix(lo.xyz - vec3f(0.5), hi.xyz + vec3f(0.5), k));
+  return vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
+}
+@fragment fn boxFs() -> @location(0) vec4f { return vec4f(0.0, 0.0, 0.0, 2.0); }
 `;
 }
 
@@ -322,13 +340,14 @@ export class SceneryRaster {
   private cullPipe: GPUComputePipeline | null = null;
   private clampPipe: GPUComputePipeline | null = null;
   private drawPipes: (GPURenderPipeline | null)[] = [null, null, null, null];
+  private boxPipe: GPURenderPipeline | null = null;
   private meshes: GPUBuffer[] = [];
   private meshCounts: number[] = [];
   private frameU: GPUBuffer;
   private sceneryU: GPUBuffer;
   private draws: GPUBuffer;
   private lists: GPUBuffer;
-  private reset = new Uint32Array(LISTS * 4);
+  private reset = new Uint32Array((LISTS + 1) * 4);
   private sceneryBuf: GPUBuffer | null = null;
   private cullLayout: GPUBindGroupLayout;
   private drawLayout: GPUBindGroupLayout;
@@ -349,7 +368,7 @@ export class SceneryRaster {
     this.frameU = device.createBuffer({ size: TERRAIN_RASTER_UNIFORM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.sceneryU = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.draws = device.createBuffer({
-      size: LISTS * 16,
+      size: (LISTS + 1) * 16,
       usage: S | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST,
       label: "scenery raster draws",
     });
@@ -407,6 +426,20 @@ export class SceneryRaster {
           depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
         })
         .then((p) => (this.drawPipes[l] = p), fail);
+    // (the buildings' boxes: the alpha alone, depth tested — before the ground and the trees —, not written)
+    void device
+      .createRenderPipelineAsync({
+        layout: drawPipeLayout,
+        vertex: { module: this.module, entryPoint: "boxVs" },
+        fragment: {
+          module: this.module,
+          entryPoint: "boxFs",
+          targets: [{ format: TERRAIN_RASTER_FORMAT, writeMask: GPUColorWrite.ALPHA }],
+        },
+        primitive: { topology: "triangle-list", cullMode: "none" },
+        depthStencil: { format: "depth32float", depthWriteEnabled: false, depthCompare: "greater" },
+      })
+      .then((p) => (this.boxPipe = p), fail);
   }
 
   private lod: SceneryRasterLod = SCENERY_RASTER_LOD;
@@ -423,6 +456,7 @@ export class SceneryRaster {
       this.meshCounts.push(m.length / 4);
     }
     for (let l = 0; l < LISTS; l++) this.reset[l * 4] = this.meshCounts[l]!;
+    this.reset[LISTS * 4] = 36;
     this.lod = { ...lod };
   }
   getLod(): SceneryRasterLod {
@@ -430,7 +464,7 @@ export class SceneryRaster {
   }
 
   get ready() {
-    return !this.error && !!this.cullPipe && !!this.clampPipe && this.drawPipes.every((p) => !!p);
+    return !this.error && !!this.cullPipe && !!this.clampPipe && !!this.boxPipe && this.drawPipes.every((p) => !!p);
   }
 
   /**
@@ -500,6 +534,9 @@ export class SceneryRaster {
       pass.setVertexBuffer(0, this.meshes[l]!);
       pass.drawIndirect(this.draws, l * 16);
     }
+    pass.setPipeline(this.boxPipe!);
+    pass.setBindGroup(0, this.drawBind);
+    pass.drawIndirect(this.draws, LISTS * 16);
   }
 
   stats() {
