@@ -160,7 +160,7 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
     // A pixel the raster covers and its shading left this frame (trace.wgsl shadeMark, RASTER_STALE — the rate of
     // earthRasterShading above 1): rebuilt from the fresh shaded pixels round it (RASTER_MARK) on the same surface — their
     // depths within a few per cent of its own nearest surface's, so a crown does not bleed into the ground behind it nor
-    // the ground into a trunk —, Gaussian in the distance; none such: its own last colour (the history holds it).
+    // the ground into a trunk —, Gaussian in the distance; no fresh pixel round it at all: its own last colour.
     let dp = moments[idx].y;
     var acc = vec4f(0.0);
     for (var j = -2; j <= 2; j++) {
@@ -171,10 +171,13 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
         let m = moments[qi];
         if (m.x < 1e29 || stamps[qi] < R.u.w) { continue; }
         let rel = (m.y - dp) / (0.05 * dp + 1e-12);
-        acc += exp(-0.5 * f32(i * i + j * j) - rel * rel) * vec4f(loadAvg(u32(q.x), u32(q.y), W), 1.0);
+        // (a floor under the depths' likeness: where none is alike — a grazing ground's depth changes by more than 5 % a
+        // row, a silhouette —, the nearest fresh samples still decide; the pixel's own old colour, the camera turned since,
+        // put the sky's colour on the ground and the history's clamp then let its ghosts through)
+        acc += exp(-0.5 * f32(i * i + j * j)) * max(exp(-rel * rel), 0.002) * vec4f(loadAvg(u32(q.x), u32(q.y), W), 1.0);
       }
     }
-    c = select(loadAvg(gid.x, gid.y, W), acc.rgb / acc.w, acc.w > 1e-3);
+    c = select(loadAvg(gid.x, gid.y, W), acc.rgb / acc.w, acc.w > 0.0);
   } else if (block <= 1u || stamps[idx] >= R.u.w) {
     // sample taken with the current camera (possibly a few frames old while animating)
     c = loadAvg(gid.x, gid.y, W);
@@ -657,7 +660,11 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
   // where a near body's ground is reprojected)
   let isFresh = block <= 1u || stamps[gid.y * W + gid.x] >= R.u.w;
   var depth = moments[gid.y * W + gid.x].y;
-  if (!isFresh && TA.cc.w > 0.5) {
+  // (a pixel of the raster's — shaded this frame, RASTER_MARK, or left and rebuilt, RASTER_STALE —: its depth is its own,
+  // exact at every pixel, and its outline a pixel's; the block's scale is the traced rays')
+  let mxp = moments[gid.y * W + gid.x].x;
+  let rasterPx = mxp > 1e29 || (mxp < -2.5 && mxp > -3.5);
+  if (!isFresh && TA.cc.w > 0.5 && !rasterPx) {
     let stp = i32(max(block / 2u, 1u));
     let hiD = vec2i(size) - 1;
     var dn = 3e38;
@@ -703,7 +710,7 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
       // the range of the current frame around the pixel, at the block's scale (mean ± g σ, YCoCg of the
       // tone-mapped values; the fresh samples' alone, R2's suggestion, read the stamps nine times more for
       // +0.3 ms and nothing measurable)
-      let st = i32(max(block / 2u, 1u));
+      let st = select(i32(max(block / 2u, 1u)), 1, rasterPx);
       let hi = vec2i(size) - 1;
       var m1 = vec3f(0.0);
       var m2 = vec3f(0.0);

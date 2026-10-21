@@ -8531,7 +8531,28 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
 
 // The raster's shading rate (earthRasterShading — renderer: mouthList[1].y, 1 every pixel, 2 one in two — a checkerboard —,
 // 4 one in 2 × 2) and its pattern, turned each frame: the pixel a packed thread shades, and whether a pixel is shaded.
-fn rasterRate() -> u32 { return u32(P.mouthList[1].y + 0.5); }
+fn rasterRate() -> u32 { return u32(P.mouthList[1].y + 0.5) & 15u; }
+// The raster's sub-pixel jitter (renderer.rasterJitter "halton", mouthList[1].y + 16): the same offset for every pixel of a
+// frame — the raster's projection moved by it too (renderer: terrainRasterFrame's output.zw) —, Halton (2, 3) over 16
+// frames: the visibility and the rays agree at every pixel, and the history gathers the outlines' sub-pixel coverage
+// (the image's antialiasing); else each pixel's own random offset, the visibility the pixel's centre's.
+fn rasterHalton() -> bool { return (u32(P.mouthList[1].y + 0.5) & 16u) != 0u; }
+fn halton(i: u32, b: u32) -> f32 {
+  var f = 1.0;
+  var r = 0.0;
+  var n = i;
+  loop {
+    if (n == 0u) { break; }
+    f /= f32(b);
+    r += f * f32(n % b);
+    n /= b;
+  }
+  return r;
+}
+fn rasterJitter(frame: u32) -> vec2f {
+  let i = frame % 16u + 1u;
+  return vec2f(halton(i, 2u), halton(i, 3u)) - 0.5;
+}
 fn rasterPixel(g: vec2u, rate: u32, f: u32) -> vec2u {
   if (rate >= 4u) { return g * 2u + array<vec2u, 4>(vec2u(0u, 0u), vec2u(1u, 1u), vec2u(1u, 0u), vec2u(0u, 1u))[f % 4u]; }
   if (rate >= 2u) { return vec2u(g.x * 2u + ((g.y + f) & 1u), g.y); }
@@ -8584,13 +8605,14 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   FOOT_FAR = foot;
   FOOT = foot;
   var jit = vec2f(0.0);
-  if (temporal) { jit = gaussJitter(hash4(vec3u(px, frameStamp)).xy); }
+  if (temporal) { jit = select(gaussJitter(hash4(vec3u(px, frameStamp)).xy), rasterJitter(frameStamp), rasterHalton()); }
   let rnd = fract(ign(vec2f(px)) + f32(frameStamp % 1024u) * 0.6180339887);
   let pos = vec2f(px) + 0.5 + jit;
   let ndc = vec2f(2.0 * pos.x / P.res.x - 1.0, 1.0 - 2.0 * pos.y / P.res.y);
   let look = normalize(P.camFwd.xyz + ndc.x * P.cam.w * P.camRight.w * P.camRight.xyz + ndc.y * P.cam.w * P.camUp.xyz);
   if ((flags & FLAG_AERIAL) != 0u) { AP_UV = pos / P.res.xy; }
-  RHINT = terrainRasterHint(pos);
+  // (the patch's distance at the pixel's own texel: drawn along this very ray when the raster is jittered with it)
+  RHINT = terrainRasterHint(select(pos, centre, rasterHalton()));
   RND = fract(rnd * 7.31 + 0.13);
   REFR_DELTA = 0.0;
   let e = earthNear(look, rnd, k);

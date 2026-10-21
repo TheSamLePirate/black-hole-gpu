@@ -66,7 +66,8 @@ fn terrainPoint(vertex: vec3f) -> vec3f {
   var v: Vertex;
   v.p = vec3f(dot(p, u.right.xyz), dot(p, u.up.xyz), dot(p, u.forward.xyz));
   // Infinite reversed-Z, near plane in metres, WebGPU clip depth [0,1].
-  v.clip = vec4f(v.p.x / u.right.w, v.p.y / u.up.w, u.forward.w, v.p.z);
+  // (the frame's sub-pixel jitter in NDC — output.zw, renderer.rasterJitter — the rays' own)
+  v.clip = vec4f(v.p.x / u.right.w + u.output.z * v.p.z, v.p.y / u.up.w + u.output.w * v.p.z, u.forward.w, v.p.z);
   return v;
 }
 // The relief seen from the Sun (its shadow map — trace.wgsl sunShadowFar): an orthographic view along its direction,

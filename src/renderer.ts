@@ -2956,7 +2956,7 @@ export class Renderer {
     if (!o.probe) this.rasterPrimaryOn = rasterPrimary;
     // (… and its shading rate: 1 every pixel, 2 one in two, 4 one in 2 × 2 — trace.wgsl rasterRate)
     this.rasterRate = s.earthRasterShading === "quarter" ? 4 : s.earthRasterShading === "half" ? 2 : 1;
-    f[MOUTH_LIST_AT + 5] = rasterPrimary ? this.rasterRate : 0;
+    f[MOUTH_LIST_AT + 5] = rasterPrimary ? this.rasterRate + (this.rasterJitter === "halton" ? 16 : 0) : 0;
     // (the trees drawn as raster instances this frame: set once they are — encodeTerrainRasterVisibility)
     f[MOUTH_LIST_AT + 6] = 0;
     // Keep a stable key when a still frame starts refining; its quality kernel compiles the cache out.
@@ -5904,6 +5904,11 @@ export class Renderer {
   private sunTable = new Float32Array(20);
   /** the raster's shading rate (earthRasterShading): pixels a shaded one stands for, 1, 2 or 4 */
   private rasterRate = 1;
+  /** the raster's sub-pixel jitter: "gauss" — each ray its own, the raster unjittered —, or "halton" — one offset a frame
+   *  for the raster's projection and its rays (trace.wgsl rasterJitter). Measured in motion (tests/e2e/raster-motion): the
+   *  whole image moved half a pixel a frame and the history, reprojecting the pixels' centres, blurred it — 32.2 → 27.1 dB
+   *  in the Alps, 38.5 → 37.4 at Tarifa —; kept as a switch for comparisons */
+  rasterJitter: "halton" | "gauss" = "gauss";
   /** the world's trees as raster instances (system/scenery-raster.ts), made the first time the raster pipeline has them */
   private sceneryRaster: SceneryRaster | null = null;
   /** the trees drawn as raster instances under earthPipeline "raster" (a switch for comparisons: off, the grid walked) */
@@ -6022,6 +6027,22 @@ export class Renderer {
       s.fov,
       1476.625 * s.massSolar,
     );
+    // (the frame's sub-pixel jitter, the rays' own — trace.wgsl rasterJitter, the same Halton index —, in NDC: output.zw)
+    if (this.rasterJitter === "halton" && this.rasterPrimaryOn) {
+      const i = (this.frameStamp % 16) + 1;
+      const halton = (n: number, b: number) => {
+        let f = 1,
+          r = 0;
+        while (n > 0) {
+          f /= b;
+          r += f * (n % b);
+          n = Math.floor(n / b);
+        }
+        return r;
+      };
+      frame[30] = (2 * (halton(i, 2) - 0.5)) / target.width;
+      frame[31] = (-2 * (halton(i, 3) - 0.5)) / target.height;
+    }
     // The world's trees as raster instances (docs/PLAN-RENDU-RASTER-AAA.md étape 1b): culled before the pass, drawn in it
     // after the ground; the tracer told whether they were (mouthList[1].z — trace.wgsl RASTER_SCENERY), else it walks the
     // forest's grid as before.

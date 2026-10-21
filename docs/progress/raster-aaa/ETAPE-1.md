@@ -235,3 +235,31 @@ dizaines de km), au gain incertain, serait la suite si ce poste redevient le pre
 Mesuré (alterné, raster ¼, détail high/veryFar) : **Alpes au coucher du Soleil, `shade` 11,3 → 9,4 ms (−1,9 ms)**, la passe
 de la carte 0,2 ms, l'image égale (32,5 → 32,6 dB), les ombres visuellement identiques à la marche seule et à la convergée ;
 Tarifa : `shade` −1,3 ms, mais la passe raster y lit 0,9–1,3 ms (chronométrage raster peu fiable sur Apple) : net ≈ 0.
+
+## Étape 4 (avancée) — la stabilisation temporelle en mouvement
+
+Nouveau test : `tests/e2e/raster-motion.e2e.test.ts` — le F-35 en cockpit vole 120 images dans un virage de 60° (relief
+réel, décor high/veryFar), puis la dernière image temps réel est figée (horloge arrêtée, historique gardé) et comparée à
+la même vue convergée. Les mesures sur vue figée cachaient un défaut grave :
+
+| En mouvement (PSNR contre la convergée) | Tarifa bas | Alpes |
+|---|---|---|
+| tracé ×6 | 35,0 dB | 25,8 dB |
+| tracé ×4 | 35,3–36,3 dB | 30,4–31,0 dB |
+| raster ¼ **avant** | **21,5 dB** | 31,9 dB |
+| raster ¼ **après** (défaut) | **38,3–38,5 dB** | **32,2–32,8 dB** |
+
+- **Le défaut** : un pixel laissé par l'ombrage en damier était reconstruit à partir de voisins frais « à la même
+  profondeur » (5 %). Vers l'horizon, en rasant, la profondeur change de plus de 5 % d'une ligne à l'autre : aucun voisin
+  ne convenait, et la reconstruction reprenait **la vieille couleur du pixel** (souvent le ciel, l'avion ayant tourné) —
+  la trame courante polluée, le *clamp* temporel laissait passer les fantômes (un voile en traînées vers l'horizon).
+  Désormais la ressemblance des profondeurs est un poids avec un plancher : les échantillons frais les plus proches
+  décident toujours.
+- **La passe temporelle** (`post.wgsl temporal`) : pour les pixels du raster, leur propre profondeur (exacte) pour la
+  reprojection, et le voisinage du *clamp* à l'échelle du pixel (non du bloc ×4).
+- **Gigue sous-pixel de Halton cohérente** (projection raster et rayons décalés ensemble, `renderer.rasterJitter =
+  "halton"`) : essayée, **moins bonne** en mouvement (Alpes 32,2 → 27,1 dB, Tarifa 38,5 → 37,4) — toute l'image se
+  déplace d'un demi-pixel par image et l'historique, qui reprojette les centres des pixels, la floute. Gardée en option ;
+  défaut : la gigue propre à chaque rayon.
+- Affûtage RCAS 0,6 au lieu de 0,3 (33,7 dB à Tarifa) et poids 0,15 des pixels reconstruits dans l'historique (36,7 à
+  Tarifa, 33,7 dans les Alpes) : sans gain net — réglages par défaut gardés (les vols diffèrent un peu : ±1 dB).

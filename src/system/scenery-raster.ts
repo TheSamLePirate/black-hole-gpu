@@ -300,7 +300,7 @@ struct V { @builtin(position) clip: vec4f, @location(0) @interpolate(flat) id: f
   }
   let v = view(p);
   // (the terrain's projection: infinite reversed-Z, its near plane)
-  o.clip = select(vec4f(v.x / u.right.w, v.y / u.up.w, u.forward.w, v.z), vec4f(2.0, 2.0, 0.5, 1.0), none);
+  o.clip = select(vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z), vec4f(2.0, 2.0, 0.5, 1.0), none);
   o.id = f32(k + 1u);
   o.p = v;
   return o;
