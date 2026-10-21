@@ -71,6 +71,7 @@ declare module "../controls" {
     orbitBy: typeof orbitBy;
     track: typeof track;
     levelOnGround: typeof levelOnGround;
+    lookAheadLevel: typeof lookAheadLevel;
     followMin: typeof followMin;
     followBody: typeof followBody;
     baryRest: typeof baryRest;
@@ -630,6 +631,31 @@ function levelOnGround(this: CameraController): boolean {
   return true;
 }
 
+/**
+ * The free camera looking ahead (a view chosen): near a world, its gaze laid level on the horizon the way it faces — its
+ * heading kept, its pitch and roll taken off —; true when it turned. (Straight up or down: no way ahead — as it is.)
+ */
+function lookAheadLevel(this: CameraController): boolean {
+  const s = this.s;
+  const w = this.rigWorld();
+  const t = this.nowTime();
+  const ref = w ? (this.rigBody(this.rig.ref ?? null, w.ours, t) ?? this.rigNearest(w.ours, w.X, t)) : null;
+  if (!w || !ref) return false;
+  // (low over it — within half its radius —: in space a horizon to face is no "ahead")
+  const r = Math.hypot(...sub3(w.X, ref.C));
+  if (r > 1.5 * ref.R) return false;
+  const V = unitV(sub3(w.X, ref.C));
+  const ahead = sub3(w.fwd, lin(V, dot3(w.fwd, V), V, 0));
+  if (Math.hypot(...ahead) < 1e-3) return false;
+  const f = unitV(ahead);
+  const vel: Vec3 = [s.velR, s.velT, s.velP];
+  if (w.ours) setHomePose(s, w.X, f, V);
+  else setHolePose(s, w.X, f, V);
+  [s.velR, s.velT, s.velP] = vel;
+  this.rig.placed = [s.anchor, s.whL, s.distance, s.inclination, s.azimuth].join();
+  return true;
+}
+
 /** Closest the camera may orbit the followed body. */
 function followMin(this: CameraController) {
   const s = this.s;
@@ -961,6 +987,7 @@ export function installRotation(C: { prototype: CameraController }) {
     orbitBy,
     track,
     levelOnGround,
+    lookAheadLevel,
     followMin,
     followBody,
     baryRest,

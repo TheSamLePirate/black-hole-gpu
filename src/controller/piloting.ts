@@ -67,6 +67,7 @@ declare module "../controls" {
     syncLook: typeof syncLook;
     setLook: typeof setLook;
     resetShipView: typeof resetShipView;
+    viewReset: typeof viewReset;
     cycleMount: typeof cycleMount;
     shipPose: typeof shipPose;
     outsideView: typeof outsideView;
@@ -442,6 +443,19 @@ function setLook(this: CameraController, yaw: number, pitch: number) {
  */
 function resetShipView(this: CameraController): string {
   const s = this.s;
+  this.viewReset();
+  const wasOut = !!this.outsideView();
+  if (wasOut) s.shipMount = this.hullMount;
+  return tf("Camera reset · {0}", MOUNTS[s.shipMount as Mount]?.label ?? s.shipMount);
+}
+
+/**
+ * A view chosen (setMount, V, the camera panel): it starts afresh, looking ahead — the look straight along the mount's
+ * axis, no lock on the target, the outside views' own places again (around: behind and above at the craft's distance;
+ * free: off its quarter; the fly-by afresh), the cabin's own camera back at the seat. The ship keeps its attitude.
+ */
+function viewReset(this: CameraController) {
+  const s = this.s;
   const V = VESSELS[fleet.active];
   const k = V.viewDist / 42;
   s.lookAt = false;
@@ -458,11 +472,8 @@ function resetShipView(this: CameraController): string {
   });
   this.flyby.E = null;
   this.cabinCam = { eye: null, vel: [0, 0, 0] };
-  const wasOut = !!this.outsideView();
-  if (wasOut) s.shipMount = this.hullMount;
   // (the look recentred: the ship keeps its attitude — the camera turns back with the mount)
   this.setLook(0, 0);
-  return tf("Camera reset · {0}", MOUNTS[s.shipMount as Mount]?.label ?? s.shipMount);
 }
 
 /** Next / previous attach point (the view travels there; the ship keeps its attitude). */
@@ -470,6 +481,7 @@ function cycleMount(this: CameraController, dir: 1 | -1) {
   const s = this.s;
   const i = MOUNT_KEYS.indexOf(s.shipMount as Mount);
   s.shipMount = MOUNT_KEYS[(i + dir + MOUNT_KEYS.length) % MOUNT_KEYS.length]!;
+  this.viewReset();
   return s.shipMount as Mount;
 }
 
@@ -2081,6 +2093,7 @@ export function installPiloting(C: { prototype: CameraController }) {
     syncLook,
     setLook,
     resetShipView,
+    viewReset,
     cycleMount,
     shipPose,
     outsideView,

@@ -2027,6 +2027,10 @@ async function main() {
       if (camera.gravity) camera.setGravity(false);
       camera.setRotation(v);
     }
+    // (a view chosen starts afresh, looking ahead: no lock on the target — around one, its own aim —, and on or near
+    // a ground the gaze laid level on the horizon the way it faces)
+    if (v !== "orbit" && settings.lookAt) camera.setLookAt(false);
+    if (v === "free" || v === "tripod") camera.lookAheadLevel();
     if (say)
       panel.toast(
         tf("Camera: {0} — {1}", VIEW_LABEL[v], VIEW_HELP[v]) +
@@ -2643,8 +2647,11 @@ async function main() {
   function setMount(m: Mount) {
     // (a view on the ship: the spectator back)
     if (camera.spectating) setSpectator(false);
-    if (settings.shipMount === m) return;
+    // (a view chosen starts afresh, looking ahead — the same one chosen again too: its reset)
+    const same = settings.shipMount === m;
     settings.shipMount = m;
+    camera.viewReset();
+    if (same) return void refreshGui();
     refreshGui();
     scheduleUrlSave();
     const help = m === "around" ? t("drag to turn around the ship") : m === "free" ? t("fly the camera, the ship flies on") : "";

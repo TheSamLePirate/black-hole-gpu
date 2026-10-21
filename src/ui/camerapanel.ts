@@ -273,8 +273,9 @@ export class CameraPanel {
     return sec;
   }
 
-  private tile(icon: string, name: string, desc: string, active: boolean, on: () => void, key = "") {
+  private tile(icon: string, name: string, desc: string, active: boolean, on: () => void, key = "", testid = "") {
     const b = h("button", "cp-tile");
+    if (testid) b.dataset.testid = testid;
     b.classList.toggle("active", active);
     const i = h("span", "cp-ti");
     i.innerHTML = svg(icon);
@@ -308,7 +309,8 @@ export class CameraPanel {
     const sec = this.section(t("Placement"), "V · ⇧V");
     const tiles = h("div", "cp-tiles cp-tiles-5");
     const now = this.d.view();
-    for (const v of VIEWS) tiles.append(this.tile(VIEW_ICON[v], VIEW_LABEL[v], VIEW_HELP[v], now === v, () => this.d.setView(v)));
+    for (const v of VIEWS)
+      tiles.append(this.tile(VIEW_ICON[v], VIEW_LABEL[v], VIEW_HELP[v], now === v, () => this.d.setView(v), "", `cp-view-${v}`));
     const row = h("div", "cp-chips");
     row.append(
       this.chip(
@@ -338,7 +340,15 @@ export class CameraPanel {
         const o = (MOUNTS[m] as { outside?: "around" | "free" | "flyby" | "station" | "director" }).outside;
         if (!!o !== outside) continue;
         tiles.append(
-          this.tile(o ? MOUNT_ICON[o] : MOUNT_ICON.on, MOUNTS[m].short, MOUNTS[m].label, s.shipMount === m, () => this.d.setMount(m)),
+          this.tile(
+            o ? MOUNT_ICON[o] : MOUNT_ICON.on,
+            MOUNTS[m].short,
+            MOUNTS[m].label,
+            s.shipMount === m,
+            () => this.d.setMount(m),
+            "",
+            `cp-mount-${m}`,
+          ),
         );
       }
       sec.append(tiles);
