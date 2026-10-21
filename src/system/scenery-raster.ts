@@ -284,6 +284,9 @@ fn cull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: vec
   if (v.z < -R) { return; }
   if (abs(v.x) - tx * v.z > R * sqrt(1.0 + tx * tx)) { return; }
   if (abs(v.y) - ty * v.z > R * sqrt(1.0 + ty * ty)) { return; }
+  // (a tree under ~1.2 px of radius — sc.east.w — not drawn: no shape at that size, the forest's colour the ground's imagery
+  // there; hundreds of thousands of micro-triangles, stacked deep at a grazing view, were most of the pass)
+  if (R / max(v.z, 1.0) / ty * (0.5 * u.image.y) < sc.east.w) { return; }
   let list = select(0u, 1u, t.cone) + select(2u, 0u, length(v) < sc.cam.w);
   let at = atomicAdd(&draws[list].instances, 1u);
   if (at < CAP) { listsOut[list * CAP + at] = k; }
@@ -613,6 +616,8 @@ export class SceneryRaster {
     q.writeBuffer(this.frameU, 0, frame as Float32Array<ArrayBuffer>);
     this.sceneryOut.set(scenery.subarray(0, 16));
     this.sceneryOut[15] = this.lod.nearM;
+    // (east.w: the least projected radius drawn [px] — the raster's own copy of P.scenery, that w unread here)
+    this.sceneryOut[3] = this.minPx;
     q.writeBuffer(this.sceneryU, 0, this.sceneryOut);
     q.writeBuffer(this.draws, 0, this.reset);
     // (the Sun's view: its trees culled into the shadow lists when it is to be drawn — encodeShadow —; else none)
@@ -633,15 +638,21 @@ export class SceneryRaster {
     return true;
   }
 
+  /** the least projected radius of a tree drawn [px] (renderer.treeMinPx) */
+  minPx = 1.2;
+  /** parts left out of the visibility pass, to measure them (1 the trees, 2 the buildings' boxes) — the image then wrong */
+  debugSkip = 0;
   /** The culled trees' proxies, in the terrain raster's pass (after the ground: its depth already there). */
   draw(pass: GPURenderPassEncoder) {
     if (!this.active || !this.drawBind) return;
     for (let l = 0; l < LISTS; l++) {
+      if (this.debugSkip & 1) break;
       pass.setPipeline(this.drawPipes[l]!);
       pass.setBindGroup(0, this.drawBind);
       pass.setVertexBuffer(0, this.meshes[l]!);
       pass.drawIndirect(this.draws, l * 16);
     }
+    if (this.debugSkip & 2) return;
     pass.setPipeline(this.boxPipe!);
     pass.setBindGroup(0, this.drawBind);
     pass.drawIndirect(this.draws, LISTS * 16);

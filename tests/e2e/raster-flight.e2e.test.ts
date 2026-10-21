@@ -141,6 +141,14 @@ const MODE_SET: Record<string, string> = {
   tsmoff: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 4194304, TUNE_SC_SKIP: 32 };`,
   // (the clouds' baked Perlin–Worley and Worley noises off: the gradient noise's octaves, as before — against tunectl)
   pwoff: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "eighth"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 4194304, TUNE_SC_SKIP: 64 };`,
+  // (the visibility pass's parts left out, to weigh them — the image then wrong: the trees' proxies, the buildings' boxes)
+  vistrees: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "eighth"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {}; __bh.renderer.sceneryRaster && (__bh.renderer.sceneryRaster.debugSkip = 1);`,
+  visboxes: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "eighth"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {}; __bh.renderer.sceneryRaster && (__bh.renderer.sceneryRaster.debugSkip = 2);`,
+  visall: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "eighth"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {}; __bh.renderer.sceneryRaster && (__bh.renderer.sceneryRaster.debugSkip = 0);`,
+  // (the trees the raster draws by their projected size: every one, under 0.6 px left out, under 1.2 px (the default))
+  treesall: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "eighth"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {}; __bh.renderer.treeMinPx = 0;`,
+  trees06: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "eighth"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {}; __bh.renderer.treeMinPx = 0.6;`,
+  trees12: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "eighth"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {}; __bh.renderer.treeMinPx = 1.2;`,
   // (the rain's shafts — N5 — off)
   norain: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 65536 };`,
   bolt: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {}; __bh.renderer.lightning.strike(855, 2349, true);`,

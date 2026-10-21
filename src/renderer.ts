@@ -6348,6 +6348,14 @@ export class Renderer {
    *  for comparisons (off: the rays towards the Sun, as before) */
   private treeShadow = false;
   treeShadowOn = true;
+  /** the least projected radius [px] of a tree the raster draws (system/scenery-raster.ts: smaller ones left to the ground's
+   *  imagery — micro-triangles); 0 every one */
+  get treeMinPx() {
+    return this.sceneryRaster?.minPx ?? 1.2;
+  }
+  set treeMinPx(px: number) {
+    if (this.sceneryRaster) this.sceneryRaster.minPx = px;
+  }
   private tsmTex: GPUTexture | null = null;
   /** the map's frame as drawn (its content's), the next one asked, the scenery's revision it was drawn from */
   private tsmFrame = new Float32Array(16);
