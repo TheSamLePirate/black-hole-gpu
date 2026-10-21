@@ -66,6 +66,14 @@ test("the Lander 3 km over the Moon: its DESCENT panel; the Endurance flown with
   const d = c.flightInfo().craftPanel!;
   expect(d.title).toBe("DESCENT");
   expect(d.rows[0]!.label).toBe("H");
+  // (its landing radar — PLAN-RADAR-AAA, RD4's leftover —: 3 km up, level: both locks, its height the probes')
+  const lr = c.flightInfo().landRadar!;
+  expect(lr.alt && lr.vel).toBe(true);
+  expect(lr.h!).toBeGreaterThan(2500);
+  expect(lr.h!).toBeLessThan(3500);
+  // (level: the belly down — the slant along it the height)
+  expect(lr.slant! / lr.h!).toBeLessThan(1.02);
+  expect(d.rows.find((r) => r.label === "LR")?.value).toBe("ALT · VEL");
   // the Endurance: its own panel (the Ranger on its fore port)
   setSceneTime(0);
   const starts = fleetStart(0, "endurance");

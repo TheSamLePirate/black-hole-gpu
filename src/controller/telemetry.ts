@@ -118,6 +118,8 @@ export interface FlightInfo {
   dockBore?: Vec3 | null;
   /** the spacecraft's own panel (game/craftpanel.ts): the Lander's descent, the Endurance's mothership's */
   craftPanel?: CraftPanel | null;
+  /** the Lander's landing radar (radar/landing.ts — PLAN-RADAR-AAA, RD4's leftover): its locks, its figures */
+  landRadar?: import("../radar/landing").LandingRadarOut | null;
   /** the Endurance's ring: its turn [rpm], the weight in its modules [g], the turn asked (controller/ring.ts) */
   ring?: { rpm: number; g: number; asked: number | null } | null;
   /** the powered landing's point (the LPD): seen from the eye (camera coordinates), its distance [m], redesignated */
@@ -729,6 +731,7 @@ function flightInfo(this: CameraController): FlightInfo {
       };
     });
   // the spacecraft's own panel (X4): the Lander's descent over an airless world (or low), the Endurance's mothership's
+  info.landRadar = this.landingRadarNow(info);
   info.craftPanel = this.craftPanelNow(info);
   // the powered landing's point, as the eye sees it (the HUD's LPD)
   if (nav && this.pilot.auto === "land" && this.lpdPad) {

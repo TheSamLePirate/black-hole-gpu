@@ -43,6 +43,7 @@ thing the screens, the tools and the network read.
 | **Datalink** | everyone | our friends' craft, our missiles (their guidance link), the room's teammates' radar tracks (Link 16) |
 | **TCAS** (`radar/tcas.ts`) | every craft in the air | the transponders within 30 NM and ±9 900 ft, graded as TCAS II (sensitivity level 5) |
 | **AIS** | everyone | the ships |
+| **Landing radar** (`radar/landing.ts`, `LANDER_LR`) | the Lander over a world's ground | Apollo's LM's way: the altitude locked from 12 km, the velocities from 7.5 km, the belly within 50° of the vertical; its figures the craft's probes' (`descentFigures`) — the sensor is their validity. The DESCENT panel's **LR** row (ALT · VEL, ALT, NO LOCK · NAV), the Approach HUD's height **LR** (else **NAV**) |
 | **Rendezvous radar, docking lidar** (`radar/space.ts`) | the Ranger, the Lander, the Endurance | the station, the fleet's craft, the room's players in orbit, on the craft's LVLH axes |
 
 **Chaff**: in RWS, at the realistic or manual assistance, a bloom is a false unknown track for its first 2.5 s.
@@ -202,6 +203,7 @@ Where the runways appear:
 - `radar-symbols`;
 - `tcas`;
 - `space-picture`;
+- `landing-radar`, `craftpanel` — the Lander's landing radar, its LR row;
 - `net-picture` — round trip, size, priorities, gone, catch-up;
 - `link16`;
 - `runways`, `runway-parity`;
@@ -217,6 +219,7 @@ Where the runways appear:
 - `missile-cues`;
 - `tcas`;
 - `space-sensors`;
+- `lander-radar` — the landing radar's locks at 10 km, 3 km, 400 m;
 - `link16`;
 - `world-runway`;
 - `net-wing-fight`.

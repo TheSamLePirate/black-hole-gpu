@@ -1,6 +1,7 @@
 // The spacecraft's own HUD panels (docs/PLAN-VAISSEAUX-AAA.md, X4), each craft its own, as the F-35 has its avionics:
 //  - the Lander's DESCENT (Apollo's LM): the height H and its rate Ḣ, the speeds forward and across over the ground,
 //    the hover's seconds left (the propellant's Δv over the local weight) — the « 60 » and « 30 » calls —, the tank;
+//    its landing radar's lock (radar/landing.ts: ALT, VEL — the figures it holds, else the navigation's: NAV);
 //  - the Endurance's MOTHERSHIP: its ring's turn and weight, its hub's ports (free, or who is docked), its assembly's
 //    mass, the propellant of each craft docked.
 // Pure: the figures in, the rows out (ui/hud/symbology.ts draws them).
@@ -21,6 +22,8 @@ export interface DescentIn {
   dvLeft: number;
   g: number;
   tank: number | null;
+  /** the landing radar's locks (radar/landing.ts); none: no such radar */
+  lr?: { alt: boolean; vel: boolean } | null;
 }
 
 /** The hover's seconds left: the Δv the tank still holds spent holding the weight. */
@@ -38,6 +41,16 @@ export function descentPanel(d: DescentIn, loc: (s: string) => string): CraftPan
       { label: "H", value: m(d.h) },
       { label: "V/S", value: ms(d.hDot), tone: d.hDot < -Math.max(3, 0.1 * d.h) ? "warn" : "norm" },
       { label: loc("FWD · LAT"), value: `${ms(d.vFwd)} · ${ms(d.vLat)}`, tone: Math.abs(d.vLat) > 2 && d.h < 50 ? "warn" : "norm" },
+      // (the landing radar: its locks — ALT·VEL, ALT —, or the navigation's figures alone)
+      ...(d.lr
+        ? [
+            {
+              label: "LR",
+              value: d.lr.alt && d.lr.vel ? "ALT · VEL" : d.lr.alt ? "ALT" : loc("NO LOCK · NAV"),
+              tone: (d.lr.alt && d.lr.vel ? "good" : d.lr.alt ? "warn" : d.h < 3000 ? "bad" : "dim") as PanelTone,
+            },
+          ]
+        : []),
       {
         label: loc("HOVER"),
         // (a scene's fictional engine — 0.29 c of Δv — leaves years of hover: past an hour, said so)

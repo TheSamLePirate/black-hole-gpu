@@ -147,6 +147,9 @@ export interface ApproachHudInfo {
   az: number | null;
   /** the craft is landed */
   landed: boolean;
+  /** a landing radar's altitude lock (the Lander's — radar/landing.ts): its height LR, else the navigation's NAV;
+   *  none: the radar altimeter's RA */
+  lr?: boolean | null;
 }
 
 /** The glide's and the axis's deviations as dots (±2 at full scale, an ILS's): the glide 0.35° a dot, the axis 1.25°. */
@@ -180,7 +183,10 @@ export function drawApproachHud(
   linesBox(
     o,
     [
-      { t: `RA ${raTxt} ${U.altName}`, col: A.radar < 30 && !A.landed ? AMBER : WHITE },
+      {
+        t: `${A.lr === undefined || A.lr === null ? "RA" : A.lr ? "LR" : "NAV"} ${raTxt} ${U.altName}`,
+        col: (A.radar < 30 && !A.landed) || A.lr === false ? AMBER : WHITE,
+      },
       { t: `VS ${vsTxt} ${o.units === "aviation" ? "FPM" : "M/S"}`, col: sink ? (blink ? RED : AMBER) : WHITE },
     ],
     { x: cx + Math.min(W, H) * 0.3, y: cy - 30 * dpr },

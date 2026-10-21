@@ -30,6 +30,7 @@ la lisent. Ce qui se voit sur un écran est donc vrai sur les autres.
 | **Datalink** | tous | les appareils amis, nos missiles (leur liaison de guidage), les pistes radar des équipiers (Link 16) |
 | **TCAS** | tout appareil en vol | les transpondeurs à 30 NM et ±9 900 ft |
 | **AIS** | tous | les navires |
+| **Radar d'atterrissage** | le Lander au-dessus d'un sol | comme celui du LM d'Apollo : l'altitude accrochée sous 12 km, les vitesses sous 7,5 km, le ventre à moins de 50° de la verticale ; ses chiffres sont ceux des sondes de l'engin, le capteur dit s'ils sont mesurés. La ligne **LR** du panneau DESCENTE (ALT · VEL, ALT, PAS D'ACCROCHE · NAV), la hauteur **LR** du HUD d'approche (sinon **NAV**) |
 | **Radar de rendez-vous et lidar d'amarrage** | Ranger, Lander, Endurance | la station, les engins de la flotte, les joueurs en orbite, dans le repère LVLH |
 
 **Les paillettes** : en RWS, à l'assistance réaliste ou manuelle, une gerbe fait une fausse piste inconnue pendant 2,5 s.

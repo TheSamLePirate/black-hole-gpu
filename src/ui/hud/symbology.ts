@@ -118,6 +118,8 @@ export interface SymInfo {
   dockBore?: number[] | null;
   /** a spacecraft's own panel (game/craftpanel.ts) */
   craftPanel?: import("../../game/craftpanel").CraftPanel | null;
+  /** the Lander's landing radar (radar/landing.ts) */
+  landRadar?: import("../../radar/landing").LandingRadarOut | null;
   /** the powered landing's point (the LPD, controller/telemetry.ts) */
   lpd?: { dir: number[] | null; dist: number; moved: boolean } | null;
   /** the F-35's avionics (f35/cockpit.ts): its status block on the helmet */
@@ -860,6 +862,7 @@ export function drawSymbology(F: SymFrame) {
         el: mls?.elIn ? mls.el : null,
         az: mls?.azIn ? mls.az : null,
         landed: !!i.surface.landed,
+        lr: i.landRadar ? i.landRadar.alt : null,
       },
       text,
       blinkOn(),

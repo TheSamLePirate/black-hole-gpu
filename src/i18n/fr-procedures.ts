@@ -194,6 +194,7 @@ export default {
   DESCENT: "DESCENTE",
   "FWD · LAT": "AV · LAT",
   HOVER: "STATIONNAIRE",
+  "NO LOCK · NAV": "PAS D'ACCROCHE · NAV",
   PROPELLANT: "ERGOLS",
   RING: "ANNEAU",
   free: "libre",
