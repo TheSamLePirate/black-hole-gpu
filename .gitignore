@@ -86,3 +86,6 @@ assets/porte-avion/
 # the F-35's source model as supplied (128 MB) and its build's working files (scripts/build-f35.py); the app
 # uses assets/f35
 assets/airplanes/
+
+# OurAirports raw CSVs (public domain, ~17 MB): scripts/build-runways.ts turns them into assets/runways/v1/
+assets/runways/raw/
