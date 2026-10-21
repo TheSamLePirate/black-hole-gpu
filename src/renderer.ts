@@ -11,9 +11,10 @@ import {
 } from "./system/terrain-raster-hint";
 import { TERRAIN_CACHE_MAX_LAT, TERRAIN_CACHE_VEC4S } from "./system/terrain-cache-layout";
 import { TerrainRaster } from "./system/terrain-raster";
-import { SCENERY_RASTER_LOD, SceneryRaster, type SceneryRasterLod } from "./system/scenery-raster";
+import { SCENERY_RASTER_LOD, SceneryRaster, type SceneryRasterLod, TREE_SHADOW_HALF_M, TREE_SHADOW_N } from "./system/scenery-raster";
 import { CLOUD_PASS_BINDINGS, CLOUD_PASS_FLAG, CLOUD_PASS_TEXTURE_LIMIT, withCloudPass } from "./system/cloud-pass";
 import { Lightning } from "./system/lightning";
+import { TREE_SHADOW_BINDING, TREE_SHADOW_TEXTURE_LIMIT, withTreeShadow } from "./system/tree-shadow";
 import { CLOUD_SHADOW_BINDING, CLOUD_SHADOW_TEXTURE_LIMIT, CSM_HALF_M, CSM_N, withCloudShadow } from "./system/cloud-shadow";
 import { TERRAIN_RASTER_MAX_PIXELS, terrainRasterFrame } from "./system/terrain-raster-frame";
 import type { NetWalkerHome } from "./controller/netcraft";
@@ -60,6 +61,7 @@ import {
   SKY_AMBIENT_VEC4S,
   CSM_VEC4S,
   TABLE_CSM,
+  TABLE_TSM,
   TABLE_LUT,
   TABLE_PATH,
   TABLE_SKY,
@@ -982,6 +984,15 @@ export class Renderer {
         usage: U.TEXTURE_BINDING,
       });
     }
+    // (the trees' and buildings' shadow map — drawn by the scenery raster, bound to the tracer from the start)
+    this.treeShadow = device.limits.maxSampledTexturesPerShaderStage >= TREE_SHADOW_TEXTURE_LIMIT;
+    if (this.treeShadow)
+      this.tsmTex = device.createTexture({
+        label: "trees' shadow map",
+        size: [TREE_SHADOW_N, TREE_SHADOW_N],
+        format: "depth32float",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      });
     if (this.sunShadow)
       this.sunDummy = device.createTexture({
         label: "relief shadow map: none",
@@ -1040,6 +1051,9 @@ export class Renderer {
           : []),
         ...(device.limits.maxSampledTexturesPerShaderStage >= CLOUD_SHADOW_TEXTURE_LIMIT
           ? [{ binding: CLOUD_SHADOW_BINDING, visibility: C, texture: { sampleType: "unfilterable-float" } as GPUTextureBindingLayout }]
+          : []),
+        ...(device.limits.maxSampledTexturesPerShaderStage >= TREE_SHADOW_TEXTURE_LIMIT
+          ? [{ binding: TREE_SHADOW_BINDING, visibility: C, texture: { sampleType: "depth" } as GPUTextureBindingLayout }]
           : []),
         ...(device.limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT
           ? [{ binding: 32, visibility: C, buffer: { type: "read-only-storage" } as GPUBufferBindingLayout }]
@@ -1687,6 +1701,7 @@ export class Renderer {
             SUN_SHADOW_TEXTURE_LIMIT,
             CLOUD_PASS_TEXTURE_LIMIT,
             CLOUD_SHADOW_TEXTURE_LIMIT,
+            TREE_SHADOW_TEXTURE_LIMIT,
           ),
           adapter.limits.maxSampledTexturesPerShaderStage,
         ),
@@ -1718,18 +1733,21 @@ export class Renderer {
         seaShader(
           sceneryShader(
             surfaceShader(
-              withCloudShadow(
-                withCloudPass(
-                  withSunShadow(
-                    withTerrainRaster(
-                      withTerrainCache(withForest(await wgsl(traceWGSL), await wgsl(forestSource))),
-                      device.limits.maxSampledTexturesPerShaderStage >= RASTER_HINT_TEXTURE_LIMIT,
+              withTreeShadow(
+                withCloudShadow(
+                  withCloudPass(
+                    withSunShadow(
+                      withTerrainRaster(
+                        withTerrainCache(withForest(await wgsl(traceWGSL), await wgsl(forestSource))),
+                        device.limits.maxSampledTexturesPerShaderStage >= RASTER_HINT_TEXTURE_LIMIT,
+                      ),
+                      device.limits.maxSampledTexturesPerShaderStage >= SUN_SHADOW_TEXTURE_LIMIT,
                     ),
-                    device.limits.maxSampledTexturesPerShaderStage >= SUN_SHADOW_TEXTURE_LIMIT,
+                    device.limits.maxSampledTexturesPerShaderStage >= CLOUD_PASS_TEXTURE_LIMIT,
                   ),
-                  device.limits.maxSampledTexturesPerShaderStage >= CLOUD_PASS_TEXTURE_LIMIT,
+                  device.limits.maxSampledTexturesPerShaderStage >= CLOUD_SHADOW_TEXTURE_LIMIT,
                 ),
-                device.limits.maxSampledTexturesPerShaderStage >= CLOUD_SHADOW_TEXTURE_LIMIT,
+                device.limits.maxSampledTexturesPerShaderStage >= TREE_SHADOW_TEXTURE_LIMIT,
               ),
               device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT,
             ),
@@ -2163,6 +2181,7 @@ export class Renderer {
         : []),
       // (the clouds' shadow map: the stand-in for its own kernel, which writes it)
       ...(this.cloudShadow ? [{ binding: CLOUD_SHADOW_BINDING, resource: ((csm && this.csmTex) || this.csmDummy!).createView() }] : []),
+      ...(this.treeShadow ? [{ binding: TREE_SHADOW_BINDING, resource: this.tsmTex!.createView() }] : []),
     ];
   }
 
@@ -6304,6 +6323,42 @@ export class Renderer {
   rasterJitter: "halton" | "gauss" = "gauss";
   /** the world's trees as raster instances (system/scenery-raster.ts), made the first time the raster pipeline has them */
   private sceneryRaster: SceneryRaster | null = null;
+  /** the trees' and buildings' shadow map (system/tree-shadow.ts, drawn by the scenery raster): the device binds it; a switch
+   *  for comparisons (off: the rays towards the Sun, as before) */
+  private treeShadow = false;
+  treeShadowOn = true;
+  private tsmTex: GPUTexture | null = null;
+  private tsmFrame = new Float32Array(16);
+  private tsmTableOn = false;
+  /** The Sun's view for the trees' shadow map in the scenery's frame (its axes and the camera in it: `scp`, P.scenery): right,
+   *  up, towards the Sun — each with its half-extent —, the centre (the camera, snapped to the map's texels: no shimmer as it
+   *  moves), drawn or not (the Sun up). */
+  private treeShadowFrame(scp: Float32Array): Float32Array {
+    const near = this.lastNear;
+    const f = this.tsmFrame;
+    f.fill(0);
+    if (!near || !this.treeShadow || !this.treeShadowOn) return f;
+    const Le = near.axes.map((a) => a[0]! * near.light[0]! + a[1]! * near.light[1]! + a[2]! * near.light[2]!);
+    const dot = (o: number) => Le[0]! * scp[o]! + Le[1]! * scp[o + 1]! + Le[2]! * scp[o + 2]!;
+    let L = [dot(0), dot(4), dot(8)];
+    const ll = Math.hypot(...L) || 1;
+    L = L.map((x) => x / ll);
+    if (L[2]! < 0.03) return f;
+    let r = [L[1]!, -L[0]!, 0];
+    const rl = Math.hypot(...r);
+    r = rl < 1e-6 ? [1, 0, 0] : r.map((x) => x / rl);
+    const u = [r[1]! * L[2]! - r[2]! * L[1]!, r[2]! * L[0]! - r[0]! * L[2]!, r[0]! * L[1]! - r[1]! * L[0]!];
+    const H = TREE_SHADOW_HALF_M;
+    const texel = (2 * H) / TREE_SHADOW_N;
+    const cam = [scp[12]!, scp[13]!, scp[14]!];
+    const cr = cam[0]! * r[0]! + cam[1]! * r[1]! + cam[2]! * r[2]!;
+    const cu = cam[0]! * u[0]! + cam[1]! * u[1]! + cam[2]! * u[2]!;
+    const sr = Math.round(cr / texel) * texel - cr,
+      su = Math.round(cu / texel) * texel - cu;
+    const c = cam.map((x, i) => x + r[i]! * sr + u[i]! * su);
+    f.set([...r, H, ...u, H, ...L, 700, ...c, 1]);
+    return f;
+  }
   /** the trees drawn as raster instances under earthPipeline "raster" (a switch for comparisons: off, the grid walked) */
   sceneryRasterOn = true;
   /** the trees' proxies' detail (system/scenery-raster.ts SceneryRasterLod; a switch for comparisons) */
@@ -6484,10 +6539,19 @@ export class Renderer {
     let trees = false;
     if (this.sceneryRasterOn && this.rasterPrimaryOn && s.earthScenery !== "off" && sc.supported && sc.forestCells > 0) {
       if (!this.sceneryRaster) {
-        this.sceneryRaster = new SceneryRaster(this.device, this.traceSource);
+        this.sceneryRaster = new SceneryRaster(this.device, this.traceSource, this.tsmTex);
         if (this.pendingSceneryLod) this.sceneryRaster.setLod(this.pendingSceneryLod);
       }
-      trees = this.sceneryRaster.encodeCull(enc, this.prof.pass("scenery raster cull"), frame, sc.params(), sc.buffer, sc.forestCells);
+      const scp = sc.params();
+      trees = this.sceneryRaster.encodeCull(
+        enc,
+        this.prof.pass("scenery raster cull"),
+        frame,
+        scp,
+        sc.buffer,
+        sc.forestCells,
+        this.treeShadowFrame(scp),
+      );
     }
     const drawn = this.terrainRaster.encodeVisibility(
       enc,
@@ -6506,6 +6570,14 @@ export class Renderer {
       trees ? (pass) => this.sceneryRaster!.draw(pass) : undefined,
     );
     this.encodeSunShadow(enc, drawn);
+    // (the trees' and buildings' shadow map, from the Sun — its frame into the table where drawn; else off: the rays)
+    const tsm =
+      drawn && trees && this.treeShadow && this.treeShadowOn
+        ? this.sceneryRaster!.encodeShadow(enc, this.prof.pass("trees' shadow map").timestampWrites)
+        : false;
+    if (tsm) this.device.queue.writeBuffer(this.bodyBuf, TABLE_TSM * 16, this.tsmFrame);
+    else if (this.tsmTableOn) this.device.queue.writeBuffer(this.bodyBuf, (TABLE_TSM + 3) * 16, new Float32Array(4));
+    this.tsmTableOn = tsm;
     if (drawn && trees) {
       this.paramsF[MOUTH_LIST_AT + 6] = 1;
       this.device.queue.writeBuffer(this.paramBuf, (MOUTH_LIST_AT + 4) * 4, this.paramsF.subarray(MOUTH_LIST_AT + 4, MOUTH_LIST_AT + 8));

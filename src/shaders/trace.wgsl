@@ -245,6 +245,8 @@ var<private> RASTER_PATH: u32 = 0u;
 // (the raster hint's grazing limit: a ray lower than this sine over the ground below the hint is marched as before — 0: never,
 // a measure of what the grazing rays' marches cost, the thin ridges then missed)
 override TUNE_HINT_GRAZE: f32 = 0.15;
+// (a grazing ray marched over a window before the hint only — earthMarchHinted —; 0: from the camera, as before)
+override TUNE_GRAZE_WINDOW: f32 = 1.0;
 // (the cloud pass's light marched through the clouds — 1; 0: the column of their cover, as the pixels' own marches have it)
 override TUNE_CLOUD_LIGHT: u32 = 1u;
 // (the raster hint's refinement: its Illinois steps at most — 10; fewer, a measure of what they cost)
@@ -5691,6 +5693,10 @@ fn sunShadowFar(rel: vec3f) -> vec3f { return vec3f(-1.0, 0.0, 0.0); }
 // (the sunlight's share the clouds let through to a point p of the squashed space: −1 where the map has nothing)
 fn cloudShadowAt(p: vec3f) -> f32 { return -1.0; }
 // END_CLOUD_SHADOW
+// BEGIN_TREE_SHADOW (system/tree-shadow.ts withTreeShadow supplies the trees' and buildings' shadow map's lookup)
+// (the share of the Sun a scenery-frame point sees past them: −1 where the map has nothing — the rays then, as before)
+fn treeShadowAt(p: vec3f) -> f32 { return -1.0; }
+// END_TREE_SHADOW
 // (shade's ground point from the camera, the Earth's axes [m] — the relief's shadow map's lookup —, set by earthNear)
 var<private> SHADOW_REL: vec3f = vec3f(0.0);
 var<private> SHADOW_REL_ON: bool = false;
@@ -5732,8 +5738,17 @@ fn earthMarchHinted(ro: vec3f, rd: vec3f, fpK: f32, tM: f32, kM: f32) -> f32 {
   let pH = A + o + rd * tH;
   let sinG = abs(dot(rd, normalize(pH)));
   // (a grazing ray crosses the ground over a long stretch, and the patch's cells — a hundred metres and more — miss the ridges
-  // it could pass between: the march keeps those)
-  if (sinG < TUNE_HINT_GRAZE) { return -3.0; }
+  // it could pass between: the march keeps those — but only where such a ridge can stand: where the ray is within the patch's
+  // error of its surface, h_tol / sinG before the hint (25 m and 0.4 % of the distance: the cells coarsening out); before
+  // that it flies higher above the patch than the relief the patch left out can rise. The ray clear at the window's start —
+  // else, a ridge there after all: the whole march, as before)
+  if (sinG < TUNE_HINT_GRAZE) {
+    if (TUNE_GRAZE_WINDOW <= 0.0) { return -3.0; }
+    let W = (25.0 + 0.004 * tM) / max(sinG, 0.01) * TUNE_GRAZE_WINDOW / kM;
+    let ts = tH - W;
+    if (ts <= 0.0 || marchClear(A, o, e, rd, ts, fpK) <= 0.0) { return -3.0; }
+    return earthMarchFrom(ro, rd, fpK, ts);
+  }
   // (a pixel's footprint there, the patch's own few metres: the vertical band the hint is trusted within)
   let eps = 5.0 + 2.0 * tM * fpK;
   let dm = clamp(eps / sinG, 3.0, 0.02 * tM + 3.0);
@@ -5776,7 +5791,9 @@ fn earthMarchHinted(ro: vec3f, rd: vec3f, fpK: f32, tM: f32, kM: f32) -> f32 {
   return clamp(lo + (hi - lo) * flo / (flo - fhi), lo, hi);
 }
 
-fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
+fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 { return earthMarchFrom(ro, rd, fpK, 0.0); }
+// the same from tStart along the ray (earthMarchHinted's grazing window: what lies before it known clear)
+fn earthMarchFrom(ro: vec3f, rd: vec3f, fpK: f32, tStart: f32) -> f32 {
   WALK_AT=vec3f(0);
   let Rs = 1.0 + earthTop() / EARTH_RM;
   let b = dot(ro, rd);
@@ -5786,7 +5803,7 @@ fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 {
   let sq = sqrt(Rs * Rs - d2);
   let t1 = -b + sq;
   if (t1 <= 0.0) { return -1.0; }
-  var t = max(-b - sq, 0.0);
+  var t = max(max(-b - sq, 0.0), tStart);
   var tPrev = t;
   // (the height above the sphere near the camera, r − 1, where float32 keeps 0.8 m of it: from the anchor
   // A and the ray from it v — (|A|² − 1 + 2 A·v + v²) / (r + 1), to the millimetre)
@@ -6973,6 +6990,9 @@ fn sceneryShadow(light:vec3f,normal:vec3f)->f32 {
   let reach=select(1200.0,2000.0,P.scenery[5].x>.5);
   if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5 || P.scenery[5].w<.5 || SC_DISTANCE>reach || dot(light,P.scenery[2].xyz)<=.015){return 1.0;}
   let sun=sceneryLocal(light);let n=sceneryLocal(normal);
+  let fade=smoothstep(reach-200.0,reach,SC_DISTANCE);
+  // (the trees' and buildings' shadow map where it reaches — one read, no ray —; TUNE_SC_SKIP 32: the rays, as before)
+  if((TUNE_SC_SKIP&32u)==0u){let m=treeShadowAt(SC_POINT+n*.35);if(m>=0.0){return mix(m,1.0,fade);}}
   let axis=normalize(cross(sun,select(vec3f(0.0,0.0,1.0),vec3f(0.0,1.0,0.0),abs(sun.z)>.9)));
   let radius=.00465*sqrt(fract(SC_SAMPLE*7.31+.17));let phase=TAU*fract(SC_SAMPLE*13.73+.41);
   let d=normalize(sun+radius*(axis*cos(phase)+cross(sun,axis)*sin(phase)));
@@ -6985,7 +7005,6 @@ fn sceneryShadow(light:vec3f,normal:vec3f)->f32 {
   let h=sceneryQuery(start,d,select(min(range,300.0/sz),range,full),true);
   var blocked=h.kind>=0.0;
   if(!blocked){blocked=forestQuery(start,d,select(min(range,60.0/sz),range,full),true,select(0.0,60.0,SC_DISTANCE<180.0)).kind>0u;}
-  let fade=smoothstep(reach-200.0,reach,SC_DISTANCE);
   return mix(select(1.0,0.0,blocked),1.0,fade);
 }
 struct ScenerySurface { color:vec3f, cover:f32, kind:f32 };

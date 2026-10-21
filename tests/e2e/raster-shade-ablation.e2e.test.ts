@@ -3,7 +3,7 @@
 // stopped on one view, `earthPipeline: "raster"`; the kernel shade's GPU time with each part left out in turn —
 // a tuning of the kernel (renderer.tune: trace.wgsl TUNE_GSKIP's bits, TUNE_DETAIL, TUNE_HINT_GRAZE) or a setting
 // (the scenery, the clouds) —, alternated with the untouched view: a part's cost is the drop it leaves. A measure: the
-// images then differ, on purpose. RP_PLACE=tarifa-low (default) | tarifa | alps.
+// images then differ, on purpose. RP_PLACE=tarifa-low (default) | tarifa | alps | forest-low.
 // Measures remote-results/raster-shade-ablation-<place>.json.
 import { afterAll, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
@@ -17,6 +17,8 @@ const PLACES: Record<string, string> = {
     __bh.game.flyAt(36.1, -5.55, 900, 200, 210);`,
   alps: `__bh.game.setDate("2026-07-10T11:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
     __bh.game.flyAt(45.85, 6.75, 2500, 110, 200);`,
+  "forest-low": `__bh.game.setDate("2026-07-10T17:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0.1);
+    __bh.game.flyAt(36.30, -5.55, 150, 200, 120);`,
 };
 const PLACE = process.env.RP_PLACE ?? "tarifa-low";
 const DETAIL = `{ earthScenery: "high", detailReach: "veryFar", earthSceneryShadows: true, earthSurface: "satellite" }`;
@@ -29,6 +31,8 @@ const ABLATIONS: { name: string; tune?: Record<string, number>; settings?: strin
   { name: "scenery: OSM surfaces", tune: { TUNE_SC_SKIP: 4 } },
   { name: "scenery: buildings' raster boxes ignored", tune: { TUNE_SC_SKIP: 8 } },
   { name: "scenery shadows: full range (as before)", tune: { TUNE_SC_SKIP: 16 } },
+  { name: "grazing window off (as before)", tune: { TUNE_GRAZE_WINDOW: 0 } },
+  { name: "trees' shadow map off (rays)", tune: { TUNE_SC_SKIP: 32 } },
   { name: "relief normal", tune: { TUNE_GSKIP: 1 } },
   { name: "relief shadows", tune: { TUNE_GSKIP: 2 } },
   { name: "near materials", tune: { TUNE_GSKIP: 4 } },

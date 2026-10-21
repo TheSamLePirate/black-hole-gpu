@@ -89,6 +89,9 @@ const PLACES: Record<string, string> = {
   // (the town of Tarifa from 200 m, 2 km off: its buildings — the raster's boxes' check)
   "tarifa-town": `__bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0.1);
     __bh.game.flyAt(36.016, -5.632, 200, 100, 150);`,
+  // (low over the Alcornocales' cork oaks in the afternoon: the trees' long shadows — their shadow map's check)
+  "forest-low": `__bh.game.setDate("2026-07-10T17:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0.1);
+    __bh.game.flyAt(36.30, -5.55, 150, 200, 120);`,
 };
 const MODE_SET: Record<string, string> = {
   trace6: `__bh.settings.earthPipeline = "trace"; __bh.game.set("realtimeSubsampling", 6);`,
@@ -130,6 +133,10 @@ const MODE_SET: Record<string, string> = {
   cloudsky: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 4194304 | 16777216 };`,
   // (the buildings' raster boxes ignored: every ray its BVH, as before — the check, against tunectl)
   bldold: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 4194304, TUNE_SC_SKIP: 8 };`,
+  // (the grazing rays marched from the camera, as before the window — against tunectl)
+  grazeold: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 4194304, TUNE_GRAZE_WINDOW: 0 };`,
+  // (the trees' and buildings' shadow map off: the rays towards the Sun, as before — against tunectl)
+  tsmoff: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 4194304, TUNE_SC_SKIP: 32 };`,
   // (the rain's shafts — N5 — off)
   norain: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 65536 };`,
   bolt: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {}; __bh.renderer.lightning.strike(855, 2349, true);`,

@@ -34,4 +34,8 @@ export const SKY_AMBIENT_VEC4S = 4 + 4 * 9 + 64;
  *  half-width, right, up, towards the Sun and whether it is drawn */
 export const TABLE_CSM = TABLE_SKY + SKY_AMBIENT_VEC4S;
 export const CSM_VEC4S = 4;
-export const TABLE_VEC4S = TABLE_CSM + CSM_VEC4S;
+/** the trees' and buildings' shadow map's frame (system/scenery-raster.ts encodeShadow; system/tree-shadow.ts): right, up,
+ *  towards the Sun (each with its half-extent), its centre in the scenery's frame and whether it is drawn */
+export const TABLE_TSM = TABLE_CSM + CSM_VEC4S;
+export const TSM_VEC4S = 4;
+export const TABLE_VEC4S = TABLE_TSM + TSM_VEC4S;
