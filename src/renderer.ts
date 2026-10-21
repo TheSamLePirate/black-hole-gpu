@@ -4541,6 +4541,7 @@ export class Renderer {
             cabin: lampsOf(s, this.cockpitGlow),
             pcd: s.vessel === "f35" ? this.pcdLook : null,
             lamps: { navLights: s.navLights, strobeLights: s.strobeLights, landingLights: s.landingLights, t: performance.now() / 1000 },
+            glares: this.glaresNow(s),
             mount: this.shipPose ?? (s.shipMount as Mount),
             look: [s.shipLookYaw, s.shipLookPitch],
             fov: s.fov,
@@ -4926,6 +4927,9 @@ export class Renderer {
     big?: boolean;
     mirror?: boolean;
   }[] = [];
+  /** a fight's flares burning (controller/combat.ts combatGlares — PLAN-RADAR-AAA RD8a): each from the flown craft's
+   *  origin on the camera's axes [m], its size [m], its colour (display-referred) */
+  combatGlares: { rel: Vec3; r: number; rgb: Vec3 }[] = [];
   /** the ships under way near the camera, for their wakes (controller/seatraffic.ts seaWakes) */
   seaWakes: { p: Vec3; fwd: Vec3; U: number; len: number; beam: number }[] = [];
 
@@ -5028,6 +5032,13 @@ export class Renderer {
     // (the flown craft's image under 500 m — higher, the waves have scattered it)
     const flown = h < 500 && groundRelief("earth", toBodyFixed("earth", Xc, time)) < 0.5;
     return { n, d: dot3(n, eye) - h, hs: this.seaHs, t: (performance.now() / 1000) % 3600, flown };
+  }
+
+  /** The fight's flares as the lamps' glares: their place from the eye (as the fight's aircraft's). */
+  private glaresNow(s: Settings): { c: Vec3; r: number; rgb: Vec3 }[] {
+    if (!this.combatGlares.length || !s.ship || !this.shipPose) return [];
+    const eye = shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t;
+    return this.combatGlares.map((g) => ({ c: [g.rel[0] + eye[0], g.rel[1] + eye[1], g.rel[2] + eye[2]] as Vec3, r: g.r, rgb: g.rgb }));
   }
 
   /** The fight's aircraft as instances: their place from the eye, their axes. */

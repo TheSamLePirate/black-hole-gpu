@@ -40,6 +40,10 @@ complète » aux assistances élevées (1) ; pas d'AWACS (4) ; traînées `off` 
 sous 20 km (6) ; le clic du crew désigne au pilote, par défaut quand ses actions sont ouvertes — une désignation, pas
 un verrou, comme le clic du pilote (8) ; paillettes en fausse piste au niveau « réaliste » seulement (9).
 
+**Solo et multijoueur** (consigne du 2026-10-21) : chaque système de ce plan doit marcher **aussi bien en solo qu'en
+salle** : leurres, image tactique, sélection, mini-carte, pistes du monde, ILS. Chaque phase se vérifie donc aussi
+dans un e2e réseau à deux navigateurs sur kerr-mini.
+
 **Ordre d'exécution retenu** (2026-10-21) : RD8a (les leurres visibles, tout de suite) → RD2 → RD3 → RD8 → RD9 (avec
 le clic dans la vue 3D) → RD15 (la mini-carte, trace et prédiction) → RD7 → RD10 → RD11 → RD13 (avec la 3D) → RD4 →
 RD5 → RD6 → RD12 → RD14.

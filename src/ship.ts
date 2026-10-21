@@ -29,7 +29,17 @@ import { shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
 import { controlMesh, MAX_CONTROLS, POSE_VEC4, poseData } from "./cockpit/controls";
 import { placardLevels } from "./cockpit/placards";
 import { cabinUniform, screenLights, type ScreenLight } from "./cockpit/lights";
-import { F35_LAMPS, lampLevels, lampUniform, MAX_LAMPS, placeLamps, RANGER_LAMPS, type PlacedLamp } from "./ship-lights";
+import {
+  F35_LAMPS,
+  type Glare,
+  lampLevels,
+  lampUniform,
+  MAX_GLARES,
+  MAX_LAMPS,
+  placeLamps,
+  RANGER_LAMPS,
+  type PlacedLamp,
+} from "./ship-lights";
 import { GEAR_HINGES, gearMesh } from "./gear-mesh";
 import type { GpuProfiler } from "./gpuprof";
 import { cockpitHull, samplePoints, TriBVH, vesselHulls } from "./system/collide";
@@ -157,6 +167,8 @@ export interface ShipView {
   cabin?: { level: number; red: number; colours: Float32Array | null };
   /** the Ranger's lamps switched on (the cockpit's switches — ship-lights.ts), a clock for the strobes [s] */
   lamps?: { navLights: boolean; strobeLights: boolean; landingLights: boolean; t: number };
+  /** glares out in the scene, drawn as the lamps' (a fight's flares — PLAN-RADAR-AAA RD8a): on the camera's axes */
+  glares?: Glare[];
   mount: Mount | MountPose;
   /** the flown ship placed in the view directly (a spectator's): its axes in the camera's, its origin
    *  there [m] — instead of the mount's */
@@ -237,7 +249,7 @@ const MAX_INST = 24;
 /** where the lamps start in it (S.lampN) */
 const LAMPS_AT = 512 + 16 + 8 * 3 * 16;
 /** after them: the carrier's shadow sphere, the sea's plane and state (S.bound2, S.sea, S.seaK) */
-const SEA_AT = LAMPS_AT + 16 + MAX_LAMPS * 3 * 16;
+const SEA_AT = LAMPS_AT + 16 + (MAX_LAMPS + MAX_GLARES) * 3 * 16;
 /** then the F-35's panoramic display's look (S.pcd0–2) */
 const PCD_AT = SEA_AT + 3 * 16;
 const SHIP_UNIFORM_BYTES = PCD_AT + 3 * 16;
@@ -1507,8 +1519,8 @@ export class ShipRenderer {
           const k = Math.max(d - 0.6, 0) / d;
           if (H.segment(e, [e[0] + (L.p[0] - e[0]) * k, e[1] + (L.p[1] - e[1]) * k, e[2] + (L.p[2] - e[2]) * k])) levels[i] = 0;
         });
-      const u = on ? lampUniform(placed!, levels) : new Float32Array(4);
-      this.lampCount = u[0]!;
+      const u = lampUniform(on ? placed! : [], levels, v.glares ?? []);
+      this.lampCount = u[0]! + u[1]!;
       this.device.queue.writeBuffer(this.uniform, LAMPS_AT, u);
     }
     // (the cabin's light: the lamps, the screens — ship.wgsl S.cab, S.scr)

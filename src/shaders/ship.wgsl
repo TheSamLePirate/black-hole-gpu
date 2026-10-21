@@ -77,9 +77,10 @@ struct Ship {
   scr: array<vec4f, 24>,
   // the flown Ranger's lamps (ship-lights.ts — K6): how many lit; each one's place (ship frame) and lens
   // radius [m], its colour × level (display-referred), its beam (ship frame) and the cone's cosine (−2: all
-  // round)
+  // round); after the 8 lamps' slots, the glares out in the scene (a fight's flares — ship-lights.ts Glare): their
+  // place on the camera's axes (beam's w −3), their count in lampN.y
   lampN: vec4f,
-  lamp: array<vec4f, 24>,
+  lamp: array<vec4f, 96>,
   // the second shadow map's sphere (the nearest carrier's: its own half of the map — writeUniform), in C
   bound2: vec4f,
   // the sea under the craft, for their reflections in it (C: n·p = d its plane — the ellipsoid's h = 0 —, n up;
@@ -1428,7 +1429,8 @@ struct Seg {
   a: vec4f, // end a (ship frame), its width [m]
   b: vec4f,
   k: vec4f, // optical depths at a and b, distances along the trail [m]
-  m: vec4f, // kind (0 an engine's, 1 a wingtip's, 2 a wing's vapour sheet, 3 a fighter's wingtip thread, 4 a missile's smoke)
+  m: vec4f, // kind (0 an engine's, 1 a wingtip's, 2 a wing's vapour sheet, 3 a fighter's wingtip thread, 4 a missile's smoke,
+            // 5 a flare's, 6 a chaff bundle's cloud — contrails.ts TrailKind)
 };
 @group(0) @binding(19) var<storage, read> segs: array<Seg>;
 
@@ -1487,7 +1489,9 @@ fn trailFs(in: TOut) -> @location(0) vec4f {
   let tip = in.kind > 0.5;
   // (a vapour sheet's: finer, more ragged — it is torn off the wing in tatters)
   // (a missile's smoke: puffs a dozen metres apart, billowing)
-  let sc = select(45.0, select(select(6.0, 2.2, in.kind > 1.5 && in.kind < 2.5), 12.0, in.kind > 3.5), tip);
+  // (a flare's rope: tight puffs a couple of metres apart; a chaff bundle's cloud: clumps of four)
+  var sc = select(45.0, select(select(6.0, 2.2, in.kind > 1.5 && in.kind < 2.5), 12.0, in.kind > 3.5), tip);
+  if (in.kind > 4.5) { sc = select(2.0, 4.0, in.kind > 5.5); }
   let nz = vnoise(vec3f(in.s / sc, x * 1.7, in.kind * 7.3)) * 0.65 + vnoise(vec3f(in.s / (0.3 * sc), x * 4.1, 3.1)) * 0.35;
   let edge = smoothstep(0.0, 0.35, chord - 0.25 * (nz - 0.5));
   var tau = in.tau * chord * edge * (0.55 + 0.9 * nz);
@@ -1527,14 +1531,18 @@ struct LOut {
 
 @vertex
 fn lampVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> LOut {
-  let L = S.lamp[3u * ii];
-  let c = (S.model * vec4f(L.xyz, 1.0)).xyz;
+  // (the lamps first, then the glares from their own slots on)
+  let si = select(8u + ii - u32(S.lampN.x), ii, ii < u32(S.lampN.x));
+  let L = S.lamp[3u * si];
+  let glare = S.lamp[3u * si + 2u].w < -2.5;
+  let c = select((S.model * vec4f(L.xyz, 1.0)).xyz, L.xyz, glare);
   let CX = array<f32, 6>(-1.0, 1.0, -1.0, -1.0, 1.0, 1.0);
   let CY = array<f32, 6>(-1.0, -1.0, 1.0, 1.0, -1.0, 1.0);
   // (a pixel's size there; the glare 20 cm — a landing light's 35 — or 12 px, whichever is more: close by,
   // the lens itself shows on the hull)
   let mpx = 2.0 * max(c.z, 0.05) * S.proj.y / max(S.img.y, 1.0);
-  let r = max(select(0.2, 0.35, S.lamp[3u * ii + 2u].w > -1.5), 12.0 * mpx);
+  // (a glare: its own size, or 16 px — a flare a burning star at any range)
+  let r = select(max(select(0.2, 0.35, S.lamp[3u * si + 2u].w > -1.5), 12.0 * mpx), max(L.w, 16.0 * mpx), glare);
   var o: LOut;
   // (hidden where the traced image holds something nearer — the lamp's own pixel, read here, once a corner:
   // read by each of the glare's fragments it cost 5 ms; a depth not traced yet — the image starting over as
@@ -1554,7 +1562,7 @@ fn lampVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> L
   if (o.clip.w > 0.0) { o.clip.z = clamp(o.clip.z, 1e-6 * o.clip.w, 0.99999 * o.clip.w); }
   o.c = c;
   o.uv = vec2f(CX[vi], CY[vi]);
-  o.i = ii;
+  o.i = si;
   o.rpx = r / mpx;
   return o;
 }

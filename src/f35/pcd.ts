@@ -136,6 +136,8 @@ export interface PcdData {
   /** the missiles in flight (a fight's — the DAS sees their motors): heading up as the radar's contacts (x right, y
    *  ahead, dz above [m]), the ones at us */
   missiles?: { x: number; y: number; dz: number; atUs: boolean }[];
+  /** the decoys in the air (a fight's flares and chaff — PLAN-RADAR-AAA RD8a): heading up as the missiles, their age [s] */
+  decoys?: { x: number; y: number; dz: number; kind: "flare" | "chaff"; age: number }[];
   /** the ground's height at a place [m over the ellipsoid; the sea 0] (the TSD's relief; none: not drawn) */
   ground?: (lat: number, lon: number) => number;
   /** the radar (controller/radar.ts radarHud): its mode, its beam's azimuth off the nose [rad], its contacts heading
@@ -1102,6 +1104,22 @@ export class Pcd {
       }
       if (!this.declutter || T.locked) this.text(T.name.slice(0, 10), x + 18, y - 14, col, 20);
     }
+    // the missiles in flight (red: at us) and the decoys (PLAN-RADAR-AAA RD8a): heading up already
+    for (const M of d.missiles ?? []) {
+      const x = cx + M.x * px,
+        y = cy - M.y * px;
+      if (x < r.x || x > r.x + r.w || y < r.y || y > r.y + r.h) continue;
+      g.fillStyle = M.atUs ? C.red : C.amber;
+      g.beginPath();
+      g.arc(x, y, M.atUs ? 7 : 5, 0, 2 * Math.PI);
+      g.fill();
+    }
+    for (const q of d.decoys ?? []) {
+      const x = cx + q.x * px,
+        y = cy - q.y * px;
+      if (x < r.x || x > r.x + r.w || y < r.y || y > r.y + r.h) continue;
+      this.decoyMark(x, y, q.kind, q.age, 1.6);
+    }
     // the bingo's reach: how far we fly before the fuel left is the bingo (at this flow and ground speed)
     if (d.flow > 1e-3 && d.gs > 20) {
       const bingo = d.bingo ?? 0.2 * d.fuelFull;
@@ -1201,6 +1219,14 @@ export class Pcd {
     g.moveTo(bx, T);
     g.lineTo(bx, B);
     g.stroke();
+    // (chaff: a bright echo blooming where it was cut — PLAN-RADAR-AAA RD8a —; a flare is no echo)
+    for (const q of d.decoys ?? []) {
+      if (q.kind !== "chaff") continue;
+      const rg = Math.hypot(q.x, q.y),
+        az = Math.atan2(q.x, q.y);
+      if (Math.abs(az) > AZ || rg > range || q.y < 0) continue;
+      this.decoyMark(X(az), Y(rg), "chaff", q.age, 1.8);
+    }
     // the contacts
     for (const K of F.contacts) {
       const rg = Math.hypot(K.x, K.y);
@@ -1541,7 +1567,34 @@ export class Pcd {
         this.text("MSL", b.x + b.w / 2 + az * bk, b.y + 12, C.red, 16, "center", true);
       }
     }
+    // (the flares: hot points the DAS sees all round — PLAN-RADAR-AAA RD8a)
+    for (const q of d.decoys ?? []) if (q.kind === "flare" && q.age < 5) dot(q.x, q.y, q.dz, "#ffaa3c", 3.5);
     this.text("DAS", b.x + 8, b.y + 14, C.grey, 16, "left", true);
+  }
+
+  /** A decoy's mark (PLAN-RADAR-AAA RD8a): a flare an orange star dying in its last two seconds, chaff a cloud of grey
+   *  dots spreading as it blooms. */
+  private decoyMark(x: number, y: number, kind: "flare" | "chaff", age: number, k: number) {
+    const g = this.g;
+    const fade = Math.max(0, 1 - Math.max(age - 3, 0) / 2);
+    if (fade <= 0) return;
+    g.globalAlpha = fade;
+    if (kind === "flare") {
+      g.strokeStyle = "#ffaa3c";
+      g.lineWidth = 2;
+      g.beginPath();
+      for (let j = 0; j < 4; j++) {
+        const a = (j * Math.PI) / 4;
+        g.moveTo(x - Math.cos(a) * 5 * k, y - Math.sin(a) * 5 * k);
+        g.lineTo(x + Math.cos(a) * 5 * k, y + Math.sin(a) * 5 * k);
+      }
+      g.stroke();
+    } else {
+      g.fillStyle = "#c8ccd6";
+      const sp = (2 + Math.min(age, 3) * 1.6) * k;
+      for (let j = 0; j < 7; j++) g.fillRect(x + Math.cos(j * 2.1 + 0.4) * sp - k, y + Math.sin(j * 2.1 + 0.4) * sp - k, 2 * k, 2 * k);
+    }
+    g.globalAlpha = 1;
   }
 
   /** A button inside a page (lit: its colour; dim: nothing to do now), kept for the touch. */

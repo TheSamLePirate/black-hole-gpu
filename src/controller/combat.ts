@@ -49,6 +49,7 @@ declare module "../controls" {
     combatFocus: typeof combatFocus;
     focusShip: typeof focusShip;
     combatShips: typeof combatShips;
+    combatGlares: typeof combatGlares;
     combatHud: typeof combatHud;
   }
 }
@@ -420,6 +421,42 @@ function combatShips(this: CameraController): { id: ShipMeshId; rel: Vec3; axes:
   return out.slice(0, 12);
 }
 
+/**
+ * A fight's decoys as the eye sees them (PLAN-RADAR-AAA RD8a — the renderer's lamps' glare, ship.wgsl lampVs): each
+ * flare a burning star — lit in a tenth of a second, white-hot, flickering, dying over its last second and a half —,
+ * each chaff bundle's first seconds a silver glint as it blooms; the nearest first, within 30 km, ours, the
+ * aggressors', the others' in a room alike (game/combat.ts decoys). Their smoke: the trails (computer.ts).
+ */
+function combatGlares(this: CameraController): { rel: Vec3; r: number; rgb: Vec3 }[] {
+  const C = this.combat;
+  const P = C?.last;
+  if (!C || !P || !C.world.decoys.length) return [];
+  const M = enuToCam(this, camMap(this));
+  if (!M) return [];
+  const out: { rel: Vec3; r: number; rgb: Vec3; d: number }[] = [];
+  const t = C.world.t;
+  for (const q of C.world.decoys) {
+    const r: V3 = [q.p[0] - P.p[0], q.p[1] - P.p[1], q.p[2] - P.p[2]];
+    const d = Math.hypot(...r);
+    if (d > 30_000) continue;
+    if (q.kind === "flare") {
+      const k = Math.min(q.t / 0.1, 1) * (1 - Math.min(Math.max((q.t - 3.5) / 1.5, 0), 1));
+      if (k <= 0) continue;
+      const fl = 0.8 + 0.2 * Math.sin(37 * t + q.id * 1.7) * Math.sin(23 * t + q.id);
+      const w = k * fl;
+      out.push({ rel: M(r), r: 0.6, rgb: [26 * w, 20 * w, 11 * w], d });
+    } else if (q.t < 2) {
+      const tw = 0.5 + 0.5 * Math.sin(53 * t + q.id * 2.3);
+      const w = (1 - q.t / 2) * tw;
+      out.push({ rel: M(r), r: 0.3, rgb: [2.2 * w, 2.3 * w, 2.6 * w], d });
+    }
+  }
+  return out
+    .sort((a, b) => a.d - b.d)
+    .slice(0, 24)
+    .map(({ rel, r, rgb }) => ({ rel, r, rgb }));
+}
+
 /** What the HUD draws of the fight: the targets (their place on the camera's axes, their kind, locked,
  *  seen), the missiles, the gun's lead, the launch zone, the bomb's fall point, the warnings, the stores. */
 function combatHud(this: CameraController, Cm: (v: Vec3 | null) => Vec3 | null) {
@@ -489,6 +526,7 @@ function combatHud(this: CameraController, Cm: (v: Vec3 | null) => Vec3 | null) 
           };
         }),
       missiles: W.missiles.filter((m) => m.alive).map((m) => ({ ...hu(rel(m.p)), trk: trk(m.v), red: m.owner === "red" })),
+      decoys: W.decoys.map((d) => ({ ...hu(rel(d.p)), kind: d.kind, age: d.t })),
     },
     title: tr(C.def.title),
     t: C.t,
@@ -599,6 +637,7 @@ export function installCombat(Ctl: { prototype: CameraController }) {
     combatTrigger,
     combatPlayer,
     combatShips,
+    combatGlares,
     combatHud,
     combatFocus,
     focusShip,

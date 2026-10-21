@@ -187,6 +187,20 @@ export function pcdData(
           return { x: e * cs - n * sn, y: e * sn + n * cs, dz: M.p[2] - P.p[2], atUs: M.owner === "red" && M.target === -1 };
         });
     })(),
+    // (its decoys and the others' — PLAN-RADAR-AAA RD8a —: heading up as the missiles, a flare or chaff, its age)
+    decoys: (() => {
+      const C = c.combat;
+      const P = C?.last;
+      if (!C || !P || !C.world.decoys.length) return [];
+      const psi = Math.atan2(P.fwd[0], P.fwd[1]);
+      const cs = Math.cos(psi),
+        sn = Math.sin(psi);
+      return C.world.decoys.map((q) => {
+        const e = q.p[0] - P.p[0],
+          n = q.p[1] - P.p[1];
+        return { x: e * cs - n * sn, y: e * sn + n * cs, dz: q.p[2] - P.p[2], kind: q.kind, age: q.t };
+      });
+    })(),
     // (the autopilot's mode beyond its holds — as the crew's instruments read it —, the ILS)
     apMode: {
       order: m.order ?? (c.orbitMode ? "ORBIT" : m.icpt ? "ICPT" : m.form ? "FORM" : m.tf !== undefined ? "TF" : ""),

@@ -24,7 +24,7 @@ export type V3 = [number, number, number];
 export interface ContrailSource {
   key: string;
   p: V3;
-  kind: 0 | 1 | 2 | 3 | 4;
+  kind: TrailKind;
   str: number;
 }
 
@@ -39,7 +39,7 @@ interface Pt {
 
 export interface Trail {
   key: string;
-  kind: 0 | 1 | 2 | 3 | 4;
+  kind: TrailKind;
   pts: Pt[];
   /** still drawn out by its source */
   open: boolean;
@@ -54,7 +54,16 @@ const KIND = [
   { life: 2.2, w0: 0.22, spread: 0.35, tau: 0.9, wRef: 0.3, form: 0.03 },
   // (a missile's motor smoke: dense, white, spreading, gone in half a minute)
   { life: 30, w0: 1.4, spread: 3.2, tau: 2.2, wRef: 1.6, form: 0.04 },
+  // (a flare's smoke — PLAN-RADAR-AAA RD8a —: a thick white rope behind the burning magnesium, curling down, a dozen
+  // seconds)
+  { life: 12, w0: 0.5, spread: 2.4, tau: 2.6, wRef: 1, form: 0.03 },
+  // (a chaff bundle blooming: a grey-silver puff that spreads fast and thins out in a few seconds)
+  { life: 4, w0: 2.5, spread: 9, tau: 1.8, wRef: 3, form: 0.02 },
 ] as const;
+
+/** The trails' kinds: 0 an engine's, 1 a wingtip's, 2 a wing's vapour sheet, 3 a fighter's wingtip thread, 4 a
+ *  missile's (or a fire's) smoke, 5 a flare's smoke, 6 a chaff bundle's cloud. */
+export type TrailKind = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 /** The most points a trail keeps, the most segments drawn. */
 const MAX_PTS = 700;
@@ -64,7 +73,7 @@ export const MAX_SEGMENTS = 4096;
 export const SEG_FLOATS = 16;
 
 /** A trail point's width [m] and optical depth across its middle, at an age [s]. */
-export function trailLook(kind: 0 | 1 | 2 | 3 | 4, age: number, str: number): { w: number; tau: number } {
+export function trailLook(kind: TrailKind, age: number, str: number): { w: number; tau: number } {
   const K = KIND[kind];
   const w = K.w0 + K.spread * Math.max(age, 0) ** 0.7;
   const form = Math.min(Math.max(age / K.form, 0), 1);
@@ -176,7 +185,7 @@ export class Contrails {
       const head = P[P.length - 1];
       const prev = P[P.length - 2];
       // (a new point when the head is far enough from the one before it — else the head moved on)
-      const step = s.kind === 0 ? 12 : s.kind === 2 ? 0.8 : s.kind === 4 ? 8 : 1.5;
+      const step = s.kind === 0 ? 12 : s.kind === 2 ? 0.8 : s.kind === 4 ? 8 : s.kind === 5 ? 2 : 1.5;
       if (!head || !prev || dist(head.p, prev.p) > step || now - prev.t > 0.5)
         P.push({ p: s.p, t: now, str: s.str, s: head ? head.s + dist(head.p, s.p) : 0 });
       else {

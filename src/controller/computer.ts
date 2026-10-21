@@ -1442,6 +1442,15 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
       const q = [0, 1, 2].map((k) => x[k]! + E[k]! * r[0]! + N[k]! * r[1]! + U[k]! * r[2]!) as Vec3;
       src.push({ key: `m${m.id}`, p: q, kind: 4, str: 1 });
     }
+    // (the decoys — PLAN-RADAR-AAA RD8a —: a flare's white rope while it burns, a chaff bundle's puff as it blooms)
+    for (const d of CB.world.decoys) {
+      const burning = d.kind === "flare" ? d.t < 4.6 : d.t < 1.2;
+      if (!burning) continue;
+      const r = [d.p[0] - P.p[0], d.p[1] - P.p[1], d.p[2] - P.p[2]];
+      if (Math.hypot(r[0]!, r[1]!, r[2]!) > 30_000) continue;
+      const q = [0, 1, 2].map((k) => x[k]! + E[k]! * r[0]! + N[k]! * r[1]! + U[k]! * r[2]!) as Vec3;
+      src.push({ key: `d${d.id}`, p: q, kind: d.kind === "flare" ? 5 : 6, str: 1 });
+    }
     // (an aircraft hit: its smoke, thicker the worse it is; destroyed, burning as it falls; crashed, a column of
     // smoke rising from where it hit for 45 s)
     const at = (w: [number, number, number]): Vec3 => {

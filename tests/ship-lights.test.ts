@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { lampLevels, lampUniform, MAX_LAMPS, placeLamps, RANGER_LAMPS, strobeAt } from "../src/ship-lights";
+import { lampLevels, lampUniform, MAX_GLARES, MAX_LAMPS, placeLamps, RANGER_LAMPS, strobeAt } from "../src/ship-lights";
 import { TriBVH } from "../src/system/collide";
 
 // PLAN-COCKPIT K6: the Ranger's own lights — set on its hull (its mesh), lit by the cockpit's switches, the
@@ -52,7 +52,8 @@ test("the switches, the strobes' double flash, the uniform: those lit only", () 
   expect(nav).toEqual([1, 1, 1, 0, 0, 0, 0]);
   const P = placeLamps(null);
   const u = lampUniform(P, nav);
-  expect(u.length).toBe(4 + MAX_LAMPS * 12);
+  expect(u.length).toBe(4 + (MAX_LAMPS + MAX_GLARES) * 12);
+  expect(u[1]).toBe(0);
   expect(u[0]).toBe(3);
   // (the first lit: the red one, all round; then the landing lights' beams when on)
   expect([...u.subarray(4, 8)]).toEqual([...P[0]!.p.map((x) => Math.fround(x)), Math.fround(0.05)]);
@@ -61,4 +62,11 @@ test("the switches, the strobes' double flash, the uniform: those lit only", () 
   expect(land[0]).toBe(2);
   expect(land[4 + 11]).toBeGreaterThan(0.9);
   expect(land[4 + 10]).toBeGreaterThan(0.9);
+  // (a fight's flares after the lamps' slots — PLAN-RADAR-AAA RD8a —: on the camera's axes, −3, counted apart)
+  const g = lampUniform(P, nav, [{ c: [1, 2, -300], r: 0.6, rgb: [26, 20, 11] }]);
+  expect(g[0]).toBe(3);
+  expect(g[1]).toBe(1);
+  const at = 4 + MAX_LAMPS * 12;
+  expect([...g.subarray(at, at + 4)]).toEqual([1, 2, -300, Math.fround(0.6)]);
+  expect(g[at + 11]).toBe(-3);
 });

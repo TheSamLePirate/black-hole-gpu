@@ -56,6 +56,8 @@ export interface RadarData {
     side?: "friend" | "neutral" | "hostile";
   }[];
   missiles: { x: number; y: number; trk: number | null; red: boolean }[];
+  /** a fight's decoys (PLAN-RADAR-AAA RD8a): heading up as the contacts [m], a flare or chaff, its age [s] */
+  decoys?: { x: number; y: number; kind: "flare" | "chaff"; age: number }[];
 }
 
 /** The F-35's radar as the HUD draws it (controller/radar.ts): its mode, its beam off the nose [rad], its picture,
@@ -698,7 +700,7 @@ export function drawSymbology(F: SymFrame) {
   if (i.avionics && s.f35Radar && i.radar)
     drawRadar(
       F,
-      { contacts: i.radar.contacts, missiles: i.combat?.radar.missiles ?? [] },
+      { contacts: i.radar.contacts, missiles: i.combat?.radar.missiles ?? [], decoys: i.combat?.radar.decoys ?? [] },
       i.chal?.radar?.contacts ?? null,
       text,
       stroke,
@@ -2828,6 +2830,29 @@ function drawRadar(
     } else ctx.fillRect(px - 4.5 * dpr, py - 4.5 * dpr, 9 * dpr, 9 * dpr);
     if (c.locked) stroke(() => ctx.arc(px, py, 11 * dpr, 0, 2 * Math.PI), col, 1.6);
     if (c.locked || c.colour) text(c.name, px, py - 16 * dpr, col, 10, "center", true);
+  }
+  // the decoys (PLAN-RADAR-AAA RD8a): a flare an orange star dying in its 5 s, a chaff bundle a spreading cloud of
+  // grey dots
+  for (const q of R?.decoys ?? []) {
+    const [px, py] = at(q.x, q.y);
+    const fade = Math.max(0, 1 - Math.max(q.age - 3, 0) / 2);
+    if (fade <= 0) continue;
+    if (q.kind === "flare") {
+      ctx.strokeStyle = `rgba(255, 170, 60, ${fade})`;
+      ctx.lineWidth = 1.3 * dpr;
+      ctx.beginPath();
+      for (let k = 0; k < 4; k++) {
+        const a = (k * Math.PI) / 4;
+        ctx.moveTo(px - Math.cos(a) * 4 * dpr, py - Math.sin(a) * 4 * dpr);
+        ctx.lineTo(px + Math.cos(a) * 4 * dpr, py + Math.sin(a) * 4 * dpr);
+      }
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = `rgba(200, 205, 215, ${0.8 * fade})`;
+      const sp = (2 + Math.min(q.age, 3) * 1.5) * dpr;
+      for (let k = 0; k < 6; k++)
+        ctx.fillRect(px + Math.cos(k * 2.1 + 0.4) * sp - dpr * 0.7, py + Math.sin(k * 2.1 + 0.4) * sp - dpr * 0.7, 1.4 * dpr, 1.4 * dpr);
+    }
   }
   // the missiles: a dot and its way
   for (const m of R?.missiles ?? []) {

@@ -134,6 +134,8 @@ export class Simulation {
     r.shipContrails = c.contrailsFrame();
     // a fight's aircraft (controller/combat.ts)
     r.combatOthers = [...c.carrierShips(), ...c.combatShips(), ...c.wingShips(), ...c.trafficShips(), ...c.seaShips()];
+    // (its flares burning, its chaff's glints — PLAN-RADAR-AAA RD8a)
+    r.combatGlares = c.combatGlares();
     // the ships' wakes on the sea (controller/seatraffic.ts; trace.wgsl seaWake)
     r.seaWakes = [...c.carrierWakes(), ...c.seaWakes()];
     // (the sea's height about us — the renderer's, from the marine model or the wind —: the ships' motion)

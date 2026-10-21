@@ -77,6 +77,16 @@ export const F35_LAMPS: LampDef[] = [
 
 /** The lamps the shader takes (ship.wgsl S.lamp: three vec4s each). */
 export const MAX_LAMPS = 8;
+/** After them, the glares out in the scene the same pass draws (a fight's flares — PLAN-RADAR-AAA RD8a): at most. */
+export const MAX_GLARES = 24;
+
+/** A glare out in the scene: where it is on the camera's axes [m] (the view's frame), its size [m], its colour
+ *  (display-referred, as the lamps'). */
+export interface Glare {
+  c: V3;
+  r: number;
+  rgb: V3;
+}
 
 /** A lamp set on the hull: its place [m], the hull's normal there. */
 export interface PlacedLamp extends LampDef {
@@ -124,8 +134,8 @@ export function lampLevels(
 
 /** The lamps' uniform (ship.wgsl S.lampN then S.lamp): the count; per lamp its place and lens radius, its
  *  colour × level, its beam and cone's cosine (−2: all round). Those off left out. */
-export function lampUniform(lamps: PlacedLamp[], levels: number[]): Float32Array<ArrayBuffer> {
-  const u = new Float32Array(4 + MAX_LAMPS * 12);
+export function lampUniform(lamps: PlacedLamp[], levels: number[], glares: Glare[] = []): Float32Array<ArrayBuffer> {
+  const u = new Float32Array(4 + (MAX_LAMPS + MAX_GLARES) * 12);
   let n = 0;
   lamps.forEach((L, i) => {
     const k = levels[i] ?? 0;
@@ -136,5 +146,13 @@ export function lampUniform(lamps: PlacedLamp[], levels: number[]): Float32Array
     n++;
   });
   u[0] = n;
+  // (the glares after the lamps' slots — their place already the view's: −3 says so —, their count apart: the hull's
+  // lenses are lit by the lamps alone)
+  const g = Math.min(glares.length, MAX_GLARES);
+  for (let j = 0; j < g; j++) {
+    const G = glares[j]!;
+    u.set([...G.c, G.r, ...G.rgb, 0, 0, 0, 0, -3], 4 + (MAX_LAMPS + j) * 12);
+  }
+  u[1] = g;
   return u;
 }
