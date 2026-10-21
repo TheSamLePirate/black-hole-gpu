@@ -131,7 +131,7 @@ describe.skipIf(!E2E)("the raster's image in motion, against the converged one",
         rows.push(row);
         console.log(JSON.stringify(row));
         await app.js(
-          `(() => { __bh.settings.animate = true; __bh.settings.earthPipeline = "trace"; __bh.renderer.taauOn = true; return 1; })()`,
+          `(() => { __bh.settings.animate = true; __bh.settings.earthPipeline = "trace"; __bh.renderer.taauOn = false; __bh.renderer.taauNative = 0.02; __bh.renderer.taauSigma = 0.5; return 1; })()`,
         );
         expect(Number.isFinite(row.psnrInMotion)).toBe(true);
       }, 600_000);
