@@ -3821,6 +3821,8 @@ fn nearShadow(surf: u32, q: vec3f, h: f32, L: vec3f, foot: f32, tSec: f32) -> f3
 }
 
 // Gradient noise on an integer lattice (base) plus a small offset f: exact far from the body's centre
+// (gnoiseI's signed noise brought to [0, 1], about ½)
+fn noise01(base: vec3i, f0: vec3f) -> f32 { return clamp(0.5 + 0.5 * gnoiseI(base, f0), 0.0, 1.0); }
 fn gnoiseI(base: vec3i, f0: vec3f) -> f32 {
   let i = floor(f0);
   let f = f0 - i;
@@ -4521,7 +4523,11 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
     // placed on its own axes)
     let s1 = select(1.0, sunSeen(p, Ls), AIR.moon > 0.5);
     let sM = select(max(s1, skySeen(p, Ls)), 1.0, s1 >= 1.0);
-    var sc = AIR.br * dR * (pR * s1 + 0.8 / (4.0 * PI) * sM) + AIR.bms * dM * (pM * s1 + 0.3 / (4.0 * PI) * sM);
+    // (N3: the shafts of light — the clouds' shadows in the air, from their map: the single scattering where the Sun
+    // reaches through them, the many-times scattered light left to the decks' veil)
+    let csT = select(-1.0, cloudShadowAt(p), (TUNE_GSKIP & 8192u) == 0u && !AIR_NO_CSM);
+    let s1c = s1 * select(1.0, csT, csT >= 0.0);
+    var sc = AIR.br * dR * (pR * s1c + 0.8 / (4.0 * PI) * sM) + AIR.bms * dM * (pM * s1c + 0.3 / (4.0 * PI) * sM);
     var Tv = exp(-(tau + 0.5 * ext * ds)) * ds;
     if (HAS_WX && WX_W > 0.0) {
       // the weather: under its decks the sunlight dimmed and spread (the air's own scattering with it);
@@ -4535,7 +4541,13 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
       Ts *= exp(-w * P.wx[0].y * 1500.0 * exp(-max(h - P.wx[4].x, 0.0) / 1500.0) / max(mu0, 0.05));
       let pW = 0.5 * hgPhase(0.75, mu) + 0.5 / (4.0 * PI);
       // (the diffuse share carries the blue sky's light that fell on the decks: a grey, not the sun's tint)
-      sc = sc * vl.y + 0.95 * ew * (vec3f(pW * s1 * vl.x) + vec3f(0.88, 0.97, 1.12) * ((vl.y - vl.x + 0.3 * sM * vl.y) / (4.0 * PI)));
+      if (csT >= 0.0) {
+        // (the map's shadow already in the single scattering: the decks' veil on the diffuse share alone)
+        sc = AIR.br * dR * (pR * s1c + 0.8 / (4.0 * PI) * sM * vl.y) + AIR.bms * dM * (pM * s1c + 0.3 / (4.0 * PI) * sM * vl.y)
+          + 0.95 * ew * (vec3f(pW * s1c) + vec3f(0.88, 0.97, 1.12) * ((vl.y - vl.x + 0.3 * sM * vl.y) / (4.0 * PI)));
+      } else {
+        sc = sc * vl.y + 0.95 * ew * (vec3f(pW * s1 * vl.x) + vec3f(0.88, 0.97, 1.12) * ((vl.y - vl.x + 0.3 * sM * vl.y) / (4.0 * PI)));
+      }
       ext += vec3f(ew);
       let x = ext * ds;
       Tv = exp(-tau) * select(ds * (1.0 - 0.5 * x), (1.0 - exp(-x)) / max(ext, vec3f(1e-30)), x > vec3f(1e-3));
@@ -4583,6 +4595,8 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
 // the image as before) and where it is centred: the camera's place (unit, the Earth's squashed axes).
 var<private> WX_W: f32 = 0.0;
 var<private> WX_Q: vec3f = vec3f(0.0, 0.0, 1.0);
+// (the clear sky's light — skyAmbient —: the air without the clouds' shadows, as without their decks)
+var<private> AIR_NO_CSM: bool = false;
 // (it holds round the camera to 250 km — beyond the horizon seen from under a deck —, fading into the
 // Earth's own by 450 km)
 fn wxNear(q: vec3f) -> f32 {
@@ -5159,7 +5173,10 @@ fn windsocks(d: vec3f, tMax: f32) -> f32 {
 fn windsockShade(q: vec3f, Ls: vec3f, E: vec3f, h: f32, view: vec3f) -> vec3f {
   let Lp = airPhysicalDirection(Ls);
   let mu0 = dot(geoQ(q), Lp);
-  let vl = wxVeil(h, wxNear(q), 3u);
+  var vl = wxVeil(h, wxNear(q), 3u);
+  // (N3: the sunlight through the clouds as the map has it — the trees in a cloud's shadow, beside one in the sun)
+  let csT = select(-1.0, cloudShadowAt(q * (1.0 + h / EARTH_RM)), (TUNE_GSKIP & 8192u) == 0u);
+  if (csT >= 0.0) { vl.x = csT * vl.y; }
   let Ts = sunThrough(h, mu0);
   let sky = max(skyFlat(q, h, E, mu0, 1.0), E * nightFloor(1.0, mu0));
   let lit = E * Ts * max(dot(WS.xyz, Lp), 0.0) * vl.x * sceneryShadow(Lp,WS.xyz) + sky * 0.6 * vl.x + E * Ts * max(mu0, 0.0) * (vl.y - vl.x) * 0.6;
@@ -5658,10 +5675,16 @@ fn terrainRasterDepth(px: vec2f) -> f32 { return 0.0; }
 // END_TERRAIN_RASTER
 // BEGIN_CLOUD_PASS (system/cloud-pass.ts withCloudPass supplies the cloud pass's texture reads)
 fn cloudsBuffered(px: vec2f, boundM: f32) -> EarthClouds { return EarthClouds(-1.0, vec3f(0.0), -1.0); }
+fn cloudsAtPixel(px: vec2f) -> vec4f { return vec4f(-1.0); }
+fn cloudDepthAtPixel(px: vec2f) -> f32 { return -1.0; }
 // END_CLOUD_PASS
 // BEGIN_SUN_SHADOW (system/terrain-raster-hint.ts withSunShadow supplies the relief's shadow map's lookup)
 fn sunShadowFar(rel: vec3f) -> vec3f { return vec3f(-1.0, 0.0, 0.0); }
 // END_SUN_SHADOW
+// BEGIN_CLOUD_SHADOW (system/cloud-shadow.ts withCloudShadow supplies the clouds' transmittance map's lookup — N3)
+// (the sunlight's share the clouds let through to a point p of the squashed space: −1 where the map has nothing)
+fn cloudShadowAt(p: vec3f) -> f32 { return -1.0; }
+// END_CLOUD_SHADOW
 // (shade's ground point from the camera, the Earth's axes [m] — the relief's shadow map's lookup —, set by earthNear)
 var<private> SHADOW_REL: vec3f = vec3f(0.0);
 var<private> SHADOW_REL_ON: bool = false;
@@ -6048,7 +6071,8 @@ fn smithBeckmann(c: f32, m2: f32) -> f32 {
 // pixels drawn — the surface's normal — and the rest of their slopes' variance left to the glint's (LEAN):
 // the same sea, resolved where it can be.
 // (foam: the FFT's surface's Jacobian there — 1 the flat sea, under ~0.5 folding —; h its height [m])
-struct SeaWaves { n: vec3f, vu: f32, vc: f32, m: f32, foam: f32, h: f32 };
+// (res: the foam lying on the surface — the FFT's, left by the crests that broke: 0 none, 1 a white sheet)
+struct SeaWaves { n: vec3f, vu: f32, vc: f32, m: f32, foam: f32, h: f32, res: f32 };
 // The resolved waves at the point SEA_D: twelve trains (P.sea), their slopes summed where the pixel
 // resolves them (longer than ~4 footprints, faded from 6 to 2), their variance kept where it does not.
 // Crossing trains alone draw a lattice: their crests bent (the point displaced ±10 m over ~128 m), their
@@ -6092,7 +6116,72 @@ fn seaWaves(q: vec3f, tu: vec3f, tc: vec3f, footM: f32) -> SeaWaves {
 // 1/√(distance), raised along the cusps; faded where the pixel does not resolve them. Behind its stern its
 // turbulent wake — a band of foam a beam or two wide, broadening and fading over some lengths — and a smoothed
 // strip wider and longer; its bow wave's foam along its sides forward.
-struct SeaWake { g: vec3f, foam: f32, calm: f32 };
+// (rough: the slopes' variance a craft's downwash adds — the water ruffled; bub: the air churned into the water by a hull, a
+// screw, a jet — the aerated water's pale turquoise under the surface)
+struct SeaWake { g: vec3f, foam: f32, calm: f32, rough: f32, bub: f32 };
+// A craft low over the sea at the point SEA_D (A: its place from the eye [m], −1 − the share of its weight its jets hold up
+// straight down; B: its course × its span, its ground speed): its downwash — the wing's, its trailing vortices', sinking at
+// a few m/s; a jet's straight down, fast — meets the water behind it (U h / w), ruffles it in a lane the vortices widen as
+// they spread along the surface, the ruffle fading over seconds; ripples running out from its edges; within a span or so
+// of the water the spray thrown up — white water, a rooster's tail —; in the hover a ring of spray round the jet's foot and
+// the ripples racing out from it.
+fn seaCraftWake(o: ptr<function, SeaWake>, A: vec4f, B: vec4f, up: vec3f, footM: f32, anchor: vec3i, tclock: f32, u: f32, c: f32) {
+  let span = max(length(B.xyz), 1.0);
+  let f = B.xyz / span;
+  let U = B.w;
+  let hover = clamp(-A.w - 1.0, 0.0, 1.0);
+  let rel = SEA_D - A.xyz;
+  let h = -dot(rel, up);
+  if (h < -2.0 || h > 4.0 * span + 20.0) { return; }
+  let hh = max(h, 0.5);
+  let side = normalize(cross(up, f));
+  let rh = rel + up * h;
+  let x = -dot(rh, f);
+  let y = dot(rh, side);
+  // (how hard it presses on the water: its downwash's reach, a span or so; the jets' in the hover, farther)
+  let s0 = exp(-hh / mix(0.9 * span, 2.5 * span, hover));
+  if (s0 < 0.01) { return; }
+  // (where it meets the water: behind by the time its downwash takes to sink there — the wing's, ε V = 2 C_L V / (π AR), as
+  // 1/V: ~14 m/s for a fighter at 130 m/s —; a jet's in the hover, fast)
+  let w = mix(clamp(1800.0 / max(U, 1.0), 8.0, 40.0), 40.0, hover);
+  let aft = U * hh / w;
+  let age = max(x - aft, 0.0) / max(U, 1.0);
+  let r = length(vec2f(x - aft, y));
+  // (the lane: the vortices' pair spreading out along the water at ~1.5 m/s, the ruffle fading over ~8 s)
+  if (x > aft - span) {
+    let half = 0.45 * span + 0.6 * hh + 1.5 * age;
+    let lane = smoothstep(half * 1.25, half * 0.6, abs(y)) * smoothstep(aft - span, aft, x) * exp(-age / 8.0) * (1.0 - hover);
+    (*o).rough = max((*o).rough, 0.15 * s0 * lane);
+    // (the ripples run out from its edges: capillary-gravity waves of ~1.5 m, faded where the pixel does not resolve them)
+    let edge = abs(abs(y) - half);
+    let k = TAU / 1.5;
+    let ripple = sin(k * edge - TAU * 1.0 * tclock) * exp(-edge / 6.0) * smoothstep(3.0, 0.75, footM) * lane;
+    (*o).g += 0.08 * s0 * ripple * sign(y) * side;
+    // (the spray: within ~0.6 span the sheet thrown up behind it, whitest where the downwash first strikes)
+    let spray = smoothstep(1.4 * span, 0.2 * span, hh) * smoothstep(half * 1.1, half * 0.3, abs(y)) * exp(-age / 1.5) * smoothstep(aft - 0.5 * span, aft + span, x);
+    let pn = noise01(anchor + vec3i(0, 0, 8), vec3f(x / 3.0, y / 2.0, tclock * 0.6));
+    (*o).foam = max((*o).foam, spray * clamp(0.4 + 0.8 * pn, 0.0, 1.0));
+    (*o).bub = max((*o).bub, lane * s0 * smoothstep(1.2 * span, 0.3 * span, hh));
+  }
+  // (the hover: the jet's foot, a ring of spray thrown out — at 1–3 heights —, the surface flattened then ruffled within,
+  // the ripples racing outwards)
+  if (hover > 0.0) {
+    let rr = length(rh);
+    let ring = smoothstep(0.25 * hh, 0.8 * hh, rr) * smoothstep(3.2 * hh + 12.0, 1.3 * hh, rr);
+    // (the sheet torn into radial jets of spray, flickering)
+    // (its angle as a direction — no seam where atan2 wraps —, the jets running outwards)
+    let dir = vec2f(x, y) / max(rr, 0.1);
+    let pn = 0.65 * noise01(anchor + vec3i(0, 0, 10), vec3f(rr / 1.5 - tclock * 2.0, 2.5 * dir.x, 2.5 * dir.y + tclock * 0.7))
+      + 0.35 * noise01(anchor + vec3i(0, 0, 12), vec3f(x / 0.8, y / 0.8, tclock * 3.0));
+    let foot = smoothstep(0.6 * hh, 0.1 * hh, rr) * clamp(0.5 + 0.7 * pn, 0.0, 1.0);
+    (*o).foam = max((*o).foam, clamp(hover * s0 * 1.7 * max(ring * clamp(0.25 + pn, 0.0, 1.0), foot), 0.0, 1.0));
+    (*o).rough = max((*o).rough, hover * s0 * 0.1 * smoothstep(3.0 * hh + 10.0, 0.5 * hh, rr));
+    (*o).bub = max((*o).bub, hover * s0 * smoothstep(2.0 * hh, 0.3 * hh, rr));
+    let k = TAU / 2.0;
+    let wave = sin(k * rr - TAU * 1.4 * tclock) * exp(-rr / (3.0 * hh + 10.0)) * smoothstep(3.0, 0.75, footM);
+    (*o).g += 0.03 * hover * s0 * wave * rh / max(rr, 0.1);
+  }
+}
 fn seaWake(up: vec3f, footM: f32) -> SeaWake {
   var o: SeaWake;
   let n = u32(P.wake[0].x + 0.5);
@@ -6104,6 +6193,11 @@ fn seaWake(up: vec3f, footM: f32) -> SeaWake {
   for (var i = 0u; i < min(n, 8u); i++) {
     let A = P.wake[1u + 2u * i];
     let B = P.wake[2u + 2u * i];
+    // (a negative length: a craft low over the sea — seaCraftWake)
+    if (A.w < 0.0) {
+      seaCraftWake(&o, A, B, up, footM, anchor, tclock, u, c);
+      continue;
+    }
     let L = A.w;
     let beam = max(length(B.xyz), 1.0);
     let f = B.xyz / beam;
@@ -6151,7 +6245,13 @@ fn seaWake(up: vec3f, footM: f32) -> SeaWake {
       let life = 3.0 * L + 80.0;
       let pn = gnoiseI(anchor, vec3f(u, c, tclock * 0.05) / 5.0);
       let band = smoothstep(w, 0.45 * w, ay) * exp(-xw / life) * churn;
-      o.foam = max(o.foam, band * clamp(0.5 + 0.6 * pn, 0.0, 1.0) * 0.75);
+      // (its white water a lace drawn out along the course — the cells a metre or two, stretched aft — where the pixel
+      // resolves it, its mean beyond; the bubbles under it outlast the foam: the wake's pale turquoise lane)
+      let lace = noise01(anchor + vec3i(0, 0, 6), vec3f(x / 4.5, y / 1.2, tclock * 0.03));
+      let fine = smoothstep(1.5, 0.5, footM);
+      let white = band * clamp(0.5 + 0.6 * pn, 0.0, 1.0);
+      o.foam = max(o.foam, mix(white * 0.75, white * smoothstep(0.55 - 0.4 * white, 0.9 - 0.3 * white, lace), fine));
+      o.bub = max(o.bub, smoothstep(1.3 * w, 0.5 * w, ay) * exp(-xw / (2.5 * life)) * churn);
       o.calm = max(o.calm, smoothstep(1.8 * w, w, ay) * exp(-xw / (2.0 * life)) * churn * 0.7);
     }
     if (x > 0.0 && x < 0.6 * L) {
@@ -6206,6 +6306,19 @@ fn seaWavesFft(q: vec3f, tu: vec3f, tc: vec3f, footM: f32) -> SeaWaves {
   o.vc *= o.m * o.m;
   o.foam = 1.0 + (J - 1.0) * o.m;
   o.h = h * o.m;
+  // (the foam the two long cascades' crests left — sea/fft-gpu.ts, their third layers —, drawn out upwind of where it was
+  // made: the crest runs on downwind, its foam stays behind in streaks along the wind — three taps back along it)
+  for (var i = 0u; i < 2u; i++) {
+    let L = P.seafft[1][i];
+    let lod = max(log2(foot * 256.0 / L), 0.0);
+    let st = max(2.0, 1.5 * foot);
+    var f = 0.0;
+    for (var k = 0; k < 3; k++) {
+      f += array<f32, 3>(0.5, 0.3, 0.2)[k] * textureSampleLevel(seaFft, seaSamp, (x - vec2f(st * f32(k * k + k), 0.0)) / L, i32(6u + i), lod).x;
+    }
+    o.res = max(o.res, f * select(0.7, 1.0, i == 0u));
+  }
+  o.res *= o.m;
   return o;
 }
 // The sea's height [m] at d from the camera (the Earth's axes [m]), seen from s metres: the two long cascades'.
@@ -6275,6 +6388,7 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   var tailC = -1.0;
   var crest = 0.0;
   var crestH = 0.0;
+  var lying = 0.0;
   if (SEA_ON) {
     // (near: the flight's own wind — the waves and the glint as the pilot feels it —, the trains drawn)
     let b = P.sea[1].w;
@@ -6292,6 +6406,14 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
       let c = dot(SEA_D, P.sea[1].xyz) + P.sea[2].y;
       let st = gnoiseI(vec3i(i32(P.sea[2].z) * 32, i32(P.sea[2].w) * 32, 13), vec3f(u / 9.0, c / 2.5, 0.0));
       crest = smoothstep(Jt + 0.1, Jt - 0.18, sw.foam) * clamp(0.55 + 0.9 * st, 0.0, 1.0) * (1.0 - calm);
+      // (the foam left lying: a lace — bubbles gathered in cells and threads a metre or so across, drawn out along the
+      // wind — thinning as it fades, its holes opening first)
+      let fa = vec3i(i32(P.sea[2].z) * 32, i32(P.sea[2].w) * 32, 21);
+      let lace = 0.65 * noise01(fa, vec3f(u / 3.5, c / 0.9, 0.0)) + 0.35 * noise01(fa + vec3i(0, 0, 3), vec3f(u / 1.1, c / 0.45, 0.0));
+      let thin = clamp(sw.res * 1.4, 0.0, 1.0);
+      // (the lace where a pixel resolves its cells — under ~1 m —, its mean beyond: no grain)
+      let fine = smoothstep(1.2, 0.4, footM);
+      lying = (smoothstep(1.0 - thin, 1.15 - 0.6 * thin, lace) * thin * fine + sw.res * 0.45 * (1.0 - fine)) * (1.0 - calm);
       crestH = sw.h;
     } else {
       sw = seaWaves(normal, tu, P.sea[1].xyz, footM);
@@ -6307,6 +6429,9 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     fine *= sm;
     vu *= sm;
     vc *= sm;
+    // (a craft's downwash: the water ruffled — its slopes' variance raised, the glint scattered, the lane darker)
+    vu += wk.rough * b;
+    vc += wk.rough * b;
   }
   // (a lake's wind: the fetch's — a few hundred metres to kilometres — keeps its waves a ripple; cat's paws
   // over it, a breath of wind here and not there — the open sea, calm 0, without its noise; no lakes without
@@ -6374,9 +6499,11 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     skyR = clearM * clamp(sky / max(clearE, vec3f(1e-30)), vec3f(0.0), vec3f(2.0));
   }
   var water = under;
+  var skyClear = skyR;
   if (SEA_ON) {
     let b = P.sea[1].w;
     // (near: the real sky mirrored — the light probe about the craft, its clouds)
+    skyClear = skyR;
     skyR = mix(skyR, probeRadiance(camAxes(fromBody(rUp))), b);
     // (the water's own colour, from the light into it: the open sea's dark blue, its scattering; over a shallow bed —
     // SEA_DEPTH, the tiles' bathymetry — the bed seen through it, the light down to it and back attenuated by the water's
@@ -6389,7 +6516,7 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
       let u = dot(SEA_D, P.sea[0].xyz) + P.sea[2].x;
       let c = dot(SEA_D, P.sea[1].xyz) + P.sea[2].y;
       let anchor = vec3i(i32(P.sea[2].z) * 32, i32(P.sea[2].w) * 32, 17);
-      let patchy = smoothstep(0.35, 0.75, gnoiseI(anchor, vec3f(u, c, 0.0) / 40.0) * 0.7 + gnoiseI(anchor + vec3i(0, 0, 2), vec3f(u, c, 0.0) / 9.0) * 0.3);
+      let patchy = smoothstep(0.45, 0.7, noise01(anchor, vec3f(u, c, 0.0) / 40.0) * 0.7 + noise01(anchor + vec3i(0, 0, 2), vec3f(u, c, 0.0) / 9.0) * 0.3);
       let bed = mix(vec3f(0.42, 0.38, 0.28), vec3f(0.07, 0.09, 0.05), patchy * smoothstep(1.5, 6.0, SEA_DEPTH));
       // (the paths in the water: refracted — Snell, n 1.33 —, down from the Sun and the sky, up to the eye)
       let cv = sqrt(max(1.0 - (1.0 - nv * nv) / 1.77, 0.05));
@@ -6400,8 +6527,11 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
       let shallow = deep * (1.0 - Tv) + bed / PI * Ein * T;
       water = mix(water, shallow, b * SEA_DEPTH_W);
     }
+    // (the aerated water of a wake: the bubbles under the surface scatter the light back — pale turquoise)
+    water = mix(water, Ein * vec3f(0.02, 0.075, 0.085) / PI, clamp(wk.bub * b, 0.0, 1.0) * 0.8);
   }
   var refl = mix(skyR, mirror.rgb, mirror.w);
+  var ssrW = 0.0;
   // (near, in the raster's image: the world itself mirrored — seaSSR, the cliffs, the coast, the trees, the mountains with
   // their parallax —, along a facet drawn from the unresolved slopes' distribution — the frames' history sums their lobe:
   // sharp on a calm sea, smeared into long streaks under the wind)
@@ -6414,6 +6544,43 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     if (dot(rS, normal) > 0.005) {
       let ssr = seaSSR(SEA_D, normalize(vec3f(rS.xy, rS.z * AIR.ab)));
       refl = mix(refl, ssr.rgb, ssr.w * P.sea[1].w);
+      ssrW = ssr.w * P.sea[1].w;
+    }
+  }
+  // (the far clouds mirrored — the probe sees them from the craft, not from the sea kilometres off: their parallax wrong
+  // there —: the mirrored ray met at each layer's height — the map's at 3 km, the weather's at their middles —, that point
+  // found in the cloud pass's image, its clouds taken where they lie that far along the camera's ray; front to back over
+  // the clear sky's mirror; the world's own mirror — seaSSR — first)
+  if (SEA_ON && (TUNE_GSKIP & 16384u) == 0u) {
+    let wss = max(smoothstep(800.0, 4000.0, length(SEA_D)), 1.0 - P.sea[1].w) * (1.0 - ssrW);
+    let upq = normalize(q);
+    let rq = normalize(vec3f(rUp.xy, rUp.z * AIR.ab));
+    let sinE = max(dot(rq, upq), 0.02);
+    if (wss > 0.0) {
+      var Tr = 1.0;
+      var cc = vec3f(0.0);
+      var met = false;
+      for (var i = 0u; i < 4u; i++) {
+        var hc = 3000.0;
+        if (i == 0u) {
+          if (P.earth2.y <= 0.0) { continue; }
+        } else {
+          let L = P.wx[i];
+          if (!HAS_WX || P.wx[0].x <= 0.0 || L.z <= 0.0) { continue; }
+          hc = 0.5 * (L.x + L.y);
+        }
+        let sM = hc / sinE;
+        if (sM > 150000.0) { continue; }
+        let sc = seaScreen(SEA_D + rq * sM);
+        if (sc.x < 0.0 || sc.x >= P.res.x || sc.y < 0.0 || sc.y >= P.res.y) { continue; }
+        let ca = cloudsAtPixel(sc.xy);
+        if (ca.a <= 0.02) { continue; }
+        if (abs(cloudDepthAtPixel(sc.xy) - sc.z) > 0.35 * sc.z + 500.0) { continue; }
+        cc += Tr * ca.a * ca.rgb;
+        Tr *= 1.0 - ca.a;
+        met = true;
+      }
+      if (met) { refl = mix(refl, skyClear * Tr + cc, wss); }
     }
   }
   var sea = water * (1.0 - Fv) + glint + Fv * refl;
@@ -6433,7 +6600,7 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     let spots = clamp(W * 5.0 * smoothstep(0.35, 0.8, pn), 0.0, 1.0);
     if (tailU >= 0.0) {
       // (the FFT's breaking crests where it resolves them — Monahan's mean cover beyond)
-      W = mix(W, crest, smoothstep(30.0, 6.0, footM) * P.sea[1].w);
+      W = mix(W, max(crest, 0.8 * lying), smoothstep(30.0, 6.0, footM) * P.sea[1].w);
     } else {
       W = mix(W, spots, smoothstep(16.0, 4.0, footM) * P.sea[1].w) * (1.0 - calm);
     }
@@ -6451,7 +6618,7 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
         let u = dot(SEA_D, P.sea[0].xyz) + P.sea[2].x;
         let c = dot(SEA_D, P.sea[1].xyz) + P.sea[2].y;
         let anchor = vec3i(i32(P.sea[2].z) * 32, i32(P.sea[2].w) * 32, 19);
-        let brk = gnoiseI(anchor, vec3f(u, c, tclock * 0.08) / 7.0);
+        let brk = noise01(anchor, vec3f(u, c, tclock * 0.08) / 7.0);
         let ph = tclock / Tp + 2.0 * sqrt(SEA_DEPTH) / (0.03 * 3.13 * Tp) + 0.35 * gnoiseI(anchor + vec3i(0, 0, 3), vec3f(u, c, 0.0) / 60.0);
         let band = exp(-fract(ph) * 4.0) * clamp(0.35 + 0.9 * brk, 0.0, 1.0);
         let inner = smoothstep(0.45 * dB, 0.1 * dB, SEA_DEPTH) * clamp(0.5 + 0.8 * brk, 0.0, 1.0);
@@ -6463,6 +6630,8 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     }
   }
   let foam = 0.6 / PI * (Eg * nl + sky);
+  // (a debug view of the wakes: their foam red, their ruffle green, their bubbles blue — TUNE_GSKIP 32768)
+  if ((TUNE_GSKIP & 32768u) != 0u) { return vec3f(wk.foam, wk.rough * 10.0, wk.bub) * luminance(Eg) / PI; }
   return mix(sea, foam, W);
 }
 
@@ -7050,6 +7219,10 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
     }
     wxVl = wxVeil(hG, wg, 3u);
   }
+  // (N3: the clouds' transmittance map where it reaches — every layer's own shadow, where this Sun casts it —, the 2D
+  // covers above beyond it)
+  let csT = select(-1.0, cloudShadowAt(q * (1.0 + hG / EARTH_RM)), (TUNE_GSKIP & 8192u) == 0u);
+  if (csT >= 0.0) { shade = csT; }
   var Eg = E * sunThrough(hG, mu0) * shade * sunSeen(q * (1.0 + hG / (EARTH_RM * earthSq(q))), Ls);
   Eg *= sceneryShadow(physicalLs,physicalNormal);
   if (EARTH_SHADOW_ON) { Eg *= shipShadow(EARTH_SHADOW_POINT); }
@@ -9078,6 +9251,7 @@ fn skyAmbient(@builtin(local_invocation_index) li: u32, @builtin(workgroup_id) w
       let rd = normalize(east * dl.x + north * dl.y + up * dl.z);
       let p = up * (1.0 + select(hs[lv], 0.0, grid) / EARTH_RM);
       WX_W = 0.0;
+      AIR_NO_CSM = true;
       let L = earthAir(p, rd, 3e38, Ls, lt.e, 0.5, 3e38).L;
       Lg = L;
       let y = array<f32, 9>(0.282095, 0.488603 * dl.y, 0.488603 * dl.z, 0.488603 * dl.x, 1.092548 * dl.x * dl.y,
@@ -9103,6 +9277,123 @@ fn skyAmbient(@builtin(local_invocation_index) li: u32, @builtin(workgroup_id) w
       textureStore(skyOut, vec2i(2, 0), vec4f(north, 0.0));
       textureStore(skyOut, vec2i(3, 0), hs);
     }
+  }
+}
+
+// The clouds' extinction at a point p of the squashed space [1/m] (docs/PLAN-NUAGES-AAA.md N3: their shadows' one source):
+// the map's layer as its volume shapes it (cloudVolume's — its cover at the level lod, without the fine noise: a shadow map's
+// texel is hundreds of metres), scaled by the clouds' opacity setting; the weather's layers (wxDensity, cheap).
+fn cloudSigmaAt(p: vec3f, lod: f32) -> f32 {
+  let r = length(p);
+  let q = p / r;
+  var sigma = 0.0;
+  let hb = 1500.0 / EARTH_RM;
+  let ht = 4500.0 / EARTH_RM;
+  let hn = (r - 1.0 - hb) / (ht - hb);
+  if (hn > 0.0 && hn < 1.0 && P.earth2.y > 0.0) {
+    let a = cloudCoverAt(q, lod) * (1.0 - wxNear(q));
+    if (a > 0.01) {
+      let x = rotZ(q, P.earth.y) * (EARTH_RM / 2600.0) + vec3f(0.0, 0.0, hn * 2.0);
+      let sh = 0.6 * dnoise(x) + 0.3 * dnoise(x * 2.3 + vec3f(5.1));
+      let top = (0.15 + 0.85 * a) * (0.7 + 0.6 * sh);
+      let hp = smoothstep(0.0, 0.05 + 0.12 * sh, hn) * (1.0 - smoothstep(0.45 * top, top, hn));
+      let rho = hp * clamp(1.6 * (a * (0.4 + sh) - 0.2), 0.0, 1.0);
+      sigma += P.earth2.y * rho * 25.0 / ((ht - hb) * EARTH_RM * max(top, 0.2));
+    }
+  }
+  if (HAS_WX && WX_W > 0.0) {
+    for (var i = 0u; i < 3u; i++) {
+      if (P.wx[1u + i].z > 0.0) { sigma += wxDensity(p, i, true).x; }
+    }
+  }
+  return sigma;
+}
+
+// The clouds' transmittance map seen from the Sun (N3 — a "Beer shadow map", Frostbite: Hillaire 2016): an orthographic
+// view along the sunlight, ±CSM half-width round the ground under the camera (its centre snapped to the texels: no
+// shimmer as it moves), a texel a ray from the Sun through the cloud shell (300 m – 13 km) to the ground, 40 steps: the depth
+// along the light where the clouds begin (z: towards the Sun, from the plane through the centre [m]), their mean extinction
+// over their depth, their whole optical depth — a point's sunlight exp(−min(τ, σ̄ (z_front − z))). Its frame — the centre,
+// right, up, towards the Sun, the half-width — into csmHead, copied into the tracer's table (renderer: TABLE_CSM).
+@group(1) @binding(14) var csmOut: texture_storage_2d<rgba32float, write>;
+@group(1) @binding(15) var csmHead: texture_storage_2d<rgba32float, write>;
+override CSM_HALF_M: f32 = 40000.0;
+@compute @workgroup_size(8, 8)
+fn cloudShadow(@builtin(global_invocation_id) gid: vec3u) {
+  let n = textureDimensions(csmOut);
+  if (gid.x >= n.x || gid.y >= n.y) { return; }
+  var on = false;
+  var C = vec3f(0.0, 0.0, 1.0);
+  var right = vec3f(1.0, 0.0, 0.0);
+  var upP = vec3f(0.0, 1.0, 0.0);
+  var toward = vec3f(0.0, 0.0, 1.0);
+  let half = CSM_HALF_M / EARTH_RM;
+  var outv = vec4f(0.0, 0.0, 0.0, 0.0);
+  if (HAS_BODIES && P.near0.w > 0.5) {
+    let k = u32(P.near1.w);
+    let cam = nearCam();
+    if (isEarth(k) && earthOn() && length(cam) - 1.0 < 25000.0 / EARTH_RM) {
+      let lt = nearLight(k);
+      toward = normalize(squashed(toBody(lt.dir), squashOf(k)));
+      let up = normalize(cam);
+      if (dot(up, toward) > -0.05) {
+        on = true;
+        setAir(k);
+        WX_W = select(0.0, P.wx[0].x, HAS_WX);
+        WX_Q = up;
+        right = normalize(cross(toward, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(toward.z) > 0.9)));
+        upP = cross(right, toward);
+        // (the centre: the ground under the camera, snapped to the map's texels in its plane)
+        let texel = 2.0 * half / f32(n.x);
+        let cx = dot(up, right);
+        let cy = dot(up, upP);
+        C = up + right * (round(cx / texel) * texel - cx) + upP * (round(cy / texel) * texel - cy);
+        C -= toward * dot(C - up, toward);
+        let x = (2.0 * (f32(gid.x) + 0.5) / f32(n.x) - 1.0) * half;
+        let y = (1.0 - 2.0 * (f32(gid.y) + 0.5) / f32(n.y)) * half;
+        let O = C + right * x + upP * y;
+        // (the line O + toward s through the shell: from the top's sphere on the Sun's side down to the ground's or the
+        // top's far side)
+        let rTop = 1.0 + 13000.0 / EARTH_RM;
+        let rBot = 1.0 + 300.0 / EARTH_RM;
+        let b = dot(O, toward);
+        let c2 = dot(O, O);
+        let dT = b * b - (c2 - rTop * rTop);
+        if (dT > 0.0) {
+          let s1 = -b + sqrt(dT);
+          var s0 = -b - sqrt(dT);
+          let dB = b * b - (c2 - rBot * rBot);
+          if (dB > 0.0) { s0 = max(s0, -b + sqrt(dB)); }
+          if (s1 > s0) {
+            let lod = max(log2(texel * EARTH_RM / (EARTH_RM * 1.5707963 / f32(textureDimensions(earthCube).x))), 0.0);
+            let N = 40u;
+            let ds = (s1 - s0) / f32(N);
+            let dsM = ds * EARTH_RM;
+            var od = 0.0;
+            var zF = -1e9;
+            var zB = 0.0;
+            for (var i = 0u; i < N; i++) {
+              let sm = s1 - (f32(i) + 0.5) * ds;
+              let sg = cloudSigmaAt(O + toward * sm, lod);
+              if (sg > 1e-6) {
+                if (zF < -1e8) { zF = (sm + 0.5 * ds) * EARTH_RM; }
+                zB = (sm - 0.5 * ds) * EARTH_RM;
+                od += sg * dsM;
+              }
+            }
+            if (od > 1e-3) { outv = vec4f(zF, od / max(zF - zB, dsM), od, 1.0); }
+          }
+        }
+        WX_W = 0.0;
+      }
+    }
+  }
+  textureStore(csmOut, vec2i(gid.xy), outv);
+  if (gid.x == 0u && gid.y == 0u) {
+    textureStore(csmHead, vec2i(0, 0), vec4f(C, half));
+    textureStore(csmHead, vec2i(1, 0), vec4f(right, 0.0));
+    textureStore(csmHead, vec2i(2, 0), vec4f(upP, 0.0));
+    textureStore(csmHead, vec2i(3, 0), vec4f(toward, select(0.0, 1.0, on)));
   }
 }
 
@@ -9189,8 +9480,13 @@ fn keyLight() {
     setAir(kn);
     let rd = normalize(squashed(toBody(L), squashOf(kn)));
     let g1 = normalize(cross(rd, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(rd.z) > 0.9)));
+    // (N3: the clouds between the craft and the Sun from their map — every layer, the weather's too —, the air's own
+    // dimming from the look along the ray with no cloud — CLOUDS_BUFFERED: none —; the map's shell beyond it)
+    let csT = select(-1.0, cloudShadowAt(nearCam()), isEarth(kn) && (TUNE_GSKIP & 8192u) == 0u);
+    if (csT >= 0.0) { CLOUDS_BUFFERED = EarthClouds(0.0, vec3f(0.0), -1.0); }
     let e = earthLook(kn, nearCam(), rd, -1.0, rd, lt.e, g1, cross(rd, g1), 0.0, rs, 0.5, false);
-    E *= e.T;
+    CLOUDS_BUFFERED = EarthClouds(-1.0, vec3f(0.0), -1.0);
+    E *= e.T * select(1.0, csT, csT >= 0.0);
     // (the Moon's shadow — a solar eclipse —: the Sun's share it leaves where the craft is; in totality none —
     // the hull lit by the dark sky's light alone)
     if (isEarth(kn) && P.eclipse.w > 0.0) { E *= sunSeen(nearCam(), rd); }

@@ -54,6 +54,17 @@ const PLACES: Record<string, string> = {
     __bh.game.flyAt(42.26, 8.58, 500, 80, 220);`,
   "show-rock": `__bh.game.setDate("2026-07-10T07:30:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0.35);
     __bh.game.flyAt(36.08, -5.43, 400, 55, 220);`,
+  // (the marks on the water — N6b —: the F-35 at 8 m over the strait at 130 m/s seen from its nose looking back, its downwash and
+  // spray behind it; slow at 15 m, its jets on the water; a carrier at 14 m/s, its wake, from 120 m)
+  "wake-low": `__bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0.2);
+    __bh.game.flyAt(35.99, -5.52, 12, 190, 130); { const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap");
+    if (c.jetModes.spd === null) c.jetToggle("athr"); c.jetModes.alt = 12; c.jetModes.spd = 130; c.jetModes.hdg = 190 * Math.PI / 180; }
+    __bh.settings.shipMount = "rear";`,
+  "wake-hover": `__bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0.2);
+    __bh.game.flyAt(35.99, -5.52, 15, 190, 15); __bh.settings.shipMount = "around";`,
+  "ship-wake": `__bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0.2);
+    __bh.camera.carrierSpawn("ford", { lat: 35.97, lon: -5.52, heading: 90, speed: 14 });
+    __bh.game.flyAt(35.975, -5.533, 80, 115, 150); __bh.settings.shipMount = "cockpit";`,
 };
 const MODE_SET: Record<string, string> = {
   trace6: `__bh.settings.earthPipeline = "trace"; __bh.game.set("realtimeSubsampling", 6);`,
@@ -80,6 +91,12 @@ const MODE_SET: Record<string, string> = {
   nosea: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 1536 };`,
   // (the sea's reflections — the slopes' mean Fresnel, the lifted mirror, the screen-space reflections — off: the rest of N6 on)
   norefl: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 6144 };`,
+  // (the clouds' shadow map — N3: the ground's, the scenery's, the craft's, the shafts in the air — on, and off: the old 2D covers)
+  csm: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {};`,
+  nocsm: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 8192 };`,
+  // (the far clouds mirrored in the sea from the cloud pass's image — N6b — off)
+  nocloudrefl: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 16384 };`,
+  wakedebug: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 32768 };`,
   lod300: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sceneryRasterLod = { nearM: 300, near: "ico80", far: "ico20" };`,
   lod150: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sceneryRasterLod = { nearM: 150, near: "ico80", far: "ico20" };`,
   lod150light: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.sceneryRasterLod = { nearM: 150, near: "ico20", far: "octa" };`,
@@ -134,7 +151,7 @@ describe.skipIf(!E2E)("the raster's primary visibility in flight: frame rate and
       // (the craft put there and flown until the ground's tiles and the scenery are in; then the clock stopped — every
       // mode draws the same view —, the view touched every frame: fresh rays, no history, the worst of a fast turn)
       await app.js(`(() => { __bh.game.quality("realtime"); Object.assign(__bh.settings, { dynamicResolution: false, animate: true, targetSpp: 0 });
-        ${PLACES[pl]} __bh.settings.shipMount = "cockpit"; ${DETAIL} __bh.settings.earthPipeline = "trace";
+        __bh.settings.shipMount = "cockpit"; ${PLACES[pl]} ${DETAIL} __bh.settings.earthPipeline = "trace";
         const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
         c.jetModes.alt = c.last?.alt ?? c.jetModes.alt; return 1; })()`);
       // (the clock stopped a few frames after the craft is put there: every run sees the same view, however long the

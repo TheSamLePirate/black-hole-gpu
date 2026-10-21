@@ -15,6 +15,7 @@ import { setSceneTime } from "./wormhole";
 import { applyF35Variant } from "./f35/variant";
 import { fleet } from "./fleet";
 import { VESSELS } from "./vessels";
+import { ourWake } from "./controller/seatraffic";
 
 /** The flight figures the renderer takes from (controller/telemetry.ts): the re-entry glow. */
 type FlightInfo = Pick<FullFlightInfo, "surface" | "air"> | null;
@@ -135,7 +136,8 @@ export class Simulation {
     // a fight's aircraft (controller/combat.ts)
     r.combatOthers = [...c.carrierShips(), ...c.combatShips(), ...c.wingShips(), ...c.trafficShips(), ...c.seaShips()];
     // the ships' wakes on the sea (controller/seatraffic.ts; trace.wgsl seaWake)
-    r.seaWakes = [...c.carrierWakes(), ...c.seaWakes()];
+    // (the flown craft's own mark first — low over the sea: its downwash, its spray — N6b)
+    r.seaWakes = [...ourWake(c), ...c.carrierWakes(), ...c.seaWakes()];
     // (the sea's height about us — the renderer's, from the marine model or the wind —: the ships' motion)
     r.seaSwell = c.seaSwell ?? null;
     c.seaHs = r.seaHs;

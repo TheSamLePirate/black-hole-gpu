@@ -276,6 +276,25 @@ function seaWakes(this: CameraController): { p: Vec3; fwd: Vec3; U: number; len:
       return { p: c.p as Vec3, fwd: unit(f) as Vec3, U: c.sog, len: c.len, beam: c.beam };
     });
 }
+/**
+ * The flown craft's own mark on the sea (renderer.seaWakes' first; trace.wgsl seaWake: its downwash, its trail, its spray):
+ * its place fixed to the Earth [m], its course and speed over the ground (geoNow's track and ground speed), its span as the
+ * beam, and — a negative length, the marker of a craft — how much of its weight its jets hold up straight down (−1 − share:
+ * slow, an F-35B in the hover, its lift fan and nozzle on the water). None when it is not low over the Earth.
+ */
+export function ourWake(c: CameraController): { p: Vec3; fwd: Vec3; U: number; len: number; beam: number }[] {
+  const g = c.geoNow();
+  if (!g || g.alt > 150) return [];
+  const E = earthView(c);
+  if (!E) return [];
+  const p = E.p0 as number[];
+  const up = unit(p);
+  const east = unit([-up[1]!, up[0]!, 0]);
+  const north = [up[1]! * east[2]! - up[2]! * east[1]!, up[2]! * east[0]! - up[0]! * east[2]!, up[0]! * east[1]! - up[1]! * east[0]!];
+  const fwd = [0, 1, 2].map((k) => east[k]! * Math.sin(g.track) + north[k]! * Math.cos(g.track)) as Vec3;
+  const hover = Math.min(Math.max((60 - g.gs) / 45, 0), 1);
+  return [{ p: [...p] as Vec3, fwd, U: g.gs, len: -1 - hover, beam: 10.7 }];
+}
 const unit = (a: readonly number[]) => {
   const l = Math.hypot(a[0]!, a[1]!, a[2]!) || 1;
   return [a[0]! / l, a[1]! / l, a[2]! / l];

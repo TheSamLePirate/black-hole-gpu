@@ -50,6 +50,17 @@ fn cloudsBuffered(px: vec2f, boundM: f32) -> EarthClouds {
     }
   }
   return EarthClouds(a / wa, select(vec3f(0.0), c / a, a > 0.0), select(-1.0, t / wt, wt > 0.0));
+}
+// The cloud pass's texel at an image's pixel px: its clouds' light and cover (alpha −1: the pass not drawn), and how far
+// along the camera's ray they are [m] — the sea's mirror of the far clouds (trace.wgsl seaShade).
+fn cloudsAtPixel(px: vec2f) -> vec4f {
+  if ((u32(P.mouthList[1].y + 0.5) & ${CLOUD_PASS_FLAG}u) == 0u) { return vec4f(-1.0); }
+  let n = vec2i(textureDimensions(cloudInA));
+  return textureLoad(cloudInA, clamp(vec2i(px * 0.5), vec2i(0), n - 1), 0);
+}
+fn cloudDepthAtPixel(px: vec2f) -> f32 {
+  let n = vec2i(textureDimensions(cloudInB));
+  return textureLoad(cloudInB, clamp(vec2i(px * 0.5), vec2i(0), n - 1), 0).z;
 }`,
   );
 }

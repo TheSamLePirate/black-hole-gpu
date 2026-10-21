@@ -30,4 +30,8 @@ export const SUN_SHADOW_VEC4S = 5;
 export const TABLE_SKY = TABLE_SUN + SUN_SHADOW_VEC4S;
 // (its frame, the harmonics at four heights, the sea level's radiance on an 8 × 8 grid: trace.wgsl skyAmbient, skyMirror)
 export const SKY_AMBIENT_VEC4S = 4 + 4 * 9 + 64;
-export const TABLE_VEC4S = TABLE_SKY + SKY_AMBIENT_VEC4S;
+/** the clouds' transmittance map's frame (trace.wgsl cloudShadow → csmHead; system/cloud-shadow.ts): its centre and
+ *  half-width, right, up, towards the Sun and whether it is drawn */
+export const TABLE_CSM = TABLE_SKY + SKY_AMBIENT_VEC4S;
+export const CSM_VEC4S = 4;
+export const TABLE_VEC4S = TABLE_CSM + CSM_VEC4S;

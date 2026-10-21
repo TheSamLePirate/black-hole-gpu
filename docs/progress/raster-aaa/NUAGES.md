@@ -113,3 +113,50 @@ neufs contre anciens : Porto 35,4 → 37,8 dB, reflet du soir 27,1 → 34,7, ven
 
 Reste pour la mer : l'écume texturée (traînées le long du vent), les reflets des nuages au loin depuis la passe de nuages,
 l'ombre des nuages sur l'eau (N3), le sable mouillé au rivage, le bruit du SSR stochastique en mouvement à mesurer.
+
+## N3 — la carte de transmittance des nuages vue du Soleil — fait
+
+- `cloudSigmaAt(p, lod)` : l'extinction des nuages en un point, toutes couches — la couche de la carte comme son volume la
+  façonne (`cloudVolume`, sa couverture sans le bruit fin), les trois couches météo (`wxDensity`, bon marché). La première
+  densité commune : jusque-là chaque couche avait son ombre à part.
+- Noyau `cloudShadow` : une carte orthographique 384² sur ±40 km (~210 m le texel) le long de la lumière, centrée sur le sol
+  sous la caméra et calée sur ses texels (pas de scintillement), 40 pas de 300 m à 13 km d'altitude ; chaque texel garde
+  (front des nuages le long de la lumière, extinction moyenne, épaisseur optique totale) — une « Beer shadow map »
+  (Frostbite, Hillaire 2016) : `T = exp(−min(τ, σ̄ (z_front − z)))`. Son repère dans la table (`TABLE_CSM`) ; lue par
+  `cloudShadowAt` (system/cloud-shadow.ts : la transmittance de chacun des quatre texels, puis bilinéaire — pas leurs fronts).
+- Une seule source d'ombre :
+  - le sol et la mer (`earthGround`) : l'ombre de chaque couche à sa place pour ce Soleil, au lieu des couvertures 2D
+    projetées depuis 6 km et du milieu des couches ;
+  - le décor (`windsockShade`) : les arbres et les bâtiments à l'ombre d'un nuage, à côté d'autres au soleil (avant : un
+    facteur uniforme selon l'altitude) ;
+  - l'avion (`keyLight`) : la lumière clé et donc la coque à l'ombre sous un nuage — toutes les couches, météo comprise
+    (avant : la seule coquille de la carte) ;
+  - **l'air** (`earthAir`, la table de perspective aérienne) : la diffusion simple seulement où le Soleil passe — les rayons
+    crépusculaires ; la diffusion multiple laissée au voile des couches. Pas dans l'ambiante du ciel clair (`skyAmbient`).
+- Interrupteur `TUNE_GSKIP` 8192, modes `csm`/`nocsm`. Coût : 0,33–0,62 ms (GPU partagé avec un autre agent pendant la
+  mesure). Accord avec la convergée : cumulus sur Tarifa 34,5 → 38,8 dB, le détroit à l'aube face au Soleil 21,0 → 23,5 dB
+  (le reflet du Soleil coupé par les nuages devant lui, une tache de soleil sur l'eau par une trouée).
+
+## N6b — la mer : écume persistante, sillages, reflets des nuages lointains — fait
+
+- **Écume persistante** (seafft.wgsl, sea/fft-gpu.ts) : un troisième calque par cascade, accumulé d'une image à l'autre
+  (`foam = max(foam·e^{−dt/τ}, faite)`, τ 5 / 3 / 1,5 s), faite là où le jacobien de la cascade passe sous son seuil — celui
+  de la couverture de Monahan pour ce vent, la bande proportionnelle à son propre écart (une bande fixe la faisait mousser
+  partout par vent faible). Le traceur la lit étirée vers l'amont du vent (trois prises) : les traînées que laissent les
+  crêtes ; en dentelle étirée sous ~1 m de pied de pixel, sa moyenne au-delà (sans grain).
+- **La trace de l'avion sur l'eau** (`seaCraftWake`, `ourWake`) : l'avion volé en premier sillage (longueur négative : un
+  appareil ; sa part de poids portée par ses jets vers le bas — le vol stationnaire du F-35B). Le souffle de l'aile descend à
+  ε V = 2 C_L V / (π AR) (~14 m/s à 130 m/s, en 1/V) : il touche l'eau derrière (U h / w), une voie ridée que les tourbillons
+  élargissent en s'étalant (~1,5 m/s), qui s'efface en ~8 s, des rides qui partent de ses bords ; sous ~1,4 envergure la
+  gerbe (queue de coq) ; en stationnaire, un anneau de gerbes en jets radiaux, l'eau blanche au pied du jet, la surface
+  ridée, les rides qui courent vers l'extérieur.
+- **Les navires** : l'eau aérée de leur sillage turbulent (turquoise pâle, plus durable que l'écume), l'écume en dentelle
+  étirée le long de la route.
+- **Les nuages lointains reflétés** : le rayon réfléchi rencontré à la hauteur de chaque couche (la carte à 3 km, les couches
+  météo à leur milieu), ce point retrouvé dans l'image de la passe de nuages, ses nuages pris s'ils y sont à cette distance
+  le long du rayon de la caméra — l'avant-arrière sur le ciel clair ; la sonde voit les nuages depuis l'avion, pas depuis la
+  mer à des kilomètres (sa parallaxe fausse au loin). Interrupteur `TUNE_GSKIP` 16384, mode `nocloudrefl`.
+- Correctif : `gnoiseI` est signé (±1) — les nouveaux motifs l'avaient pris pour [0, 1] (`noise01`).
+- Scènes : `wake-low` (12 m, 130 m/s, vue du nez vers l'arrière, pilote automatique tenant l'altitude), `wake-hover`
+  (vue extérieure), `ship-wake` (le Ford à 14 m/s à 1,3 km) ; le harnais laisse désormais une scène choisir sa vue. Vue de
+  débogage des sillages : `TUNE_GSKIP` 32768 (écume rouge, ride verte, bulles bleues).

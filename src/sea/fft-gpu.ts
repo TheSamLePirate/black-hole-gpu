@@ -1,7 +1,7 @@
 // The sea's waves by FFT on the GPU (docs/PLAN-AVIATION-AAA.md, M1; shaders/seafft.wgsl): the cascades' initial
 // amplitudes (sea/spectrum.ts) uploaded when the sea changes; each frame their modes now, their fields, the
-// inverse FFTs, the texture array the tracer samples (six layers: a cascade's displacement-and-Jacobian, its
-// slopes-and-their-squares) and its mips. A few tenths of a millisecond of the GPU.
+// inverse FFTs, the texture array the tracer samples (nine layers: a cascade's displacement-and-Jacobian, its
+// slopes-and-their-squares; after the six, each cascade's foam — N6b, kept from frame to frame) and its mips. A few tenths of a millisecond of the GPU.
 
 import { CASCADES, SEA_N, type SeaCascades } from "./spectrum";
 
@@ -27,12 +27,13 @@ export class SeaFft {
   private uniform: GPUBuffer;
   private h0: GPUBuffer;
   private fld: GPUBuffer;
+  private foam: GPUBuffer;
   private pipes: Record<"spectrum" | "rows" | "cols" | "assemble" | "mip", GPUComputePipeline>;
   private binds: { spectrum: GPUBindGroup; rows: GPUBindGroup; cols: GPUBindGroup; assemble: GPUBindGroup; mips: GPUBindGroup[] };
   /** whether a spectrum is there to animate */
   ready = false;
   /** what the spectrum holds: the height's and the slopes' variance over all cascades */
-  stats = { height: 0, slopeX: 0, slopeZ: 0, slope01: 0 };
+  stats = { height: 0, slopeX: 0, slopeZ: 0, slope01: 0, slopeC: [0, 0, 0] as number[] };
 
   constructor(
     private device: GPUDevice,
@@ -40,12 +41,13 @@ export class SeaFft {
   ) {
     const d = device;
     this.texture = d.createTexture({
-      size: [N, N, 2 * C],
+      size: [N, N, 3 * C],
       format: "rgba16float",
       mipLevelCount: SEA_LEVELS,
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
     });
-    this.uniform = d.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.uniform = d.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.foam = d.createBuffer({ size: C * N * N * 4, usage: GPUBufferUsage.STORAGE });
     this.h0 = d.createBuffer({ size: C * N * N * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.fld = d.createBuffer({ size: C * 4 * N * N * 8, usage: GPUBufferUsage.STORAGE });
     const module = d.createShaderModule({ code, label: "seafft" });
@@ -65,8 +67,10 @@ export class SeaFft {
       rows: bg(this.pipes.rows, [{ binding: 2, resource: { buffer: this.fld } }]),
       cols: bg(this.pipes.cols, [{ binding: 2, resource: { buffer: this.fld } }]),
       assemble: bg(this.pipes.assemble, [
+        { binding: 0, resource: { buffer: this.uniform } },
         { binding: 2, resource: { buffer: this.fld } },
         { binding: 3, resource: level(0) },
+        { binding: 5, resource: { buffer: this.foam } },
       ]),
       mips: Array.from({ length: SEA_LEVELS - 1 }, (_, i) =>
         bg(this.pipes.mip, [
@@ -86,21 +90,29 @@ export class SeaFft {
       slopeX: sum(s.slopeX),
       slopeZ: sum(s.slopeZ),
       slope01: s.slopeX[0]! + s.slopeZ[0]! + s.slopeX[1]! + s.slopeZ[1]!,
+      slopeC: s.slopeX.map((x, c) => x + s.slopeZ[c]!),
     };
     this.ready = true;
   }
 
-  /** A frame's waves at time `t` [s], choppiness `lambda`, into the texture array. */
+  /** A frame's waves at time `t` [s], choppiness `lambda`, into the texture array; `foamJ`: each cascade's Jacobian under
+   *  which its crests break into foam (none: no foam made). */
   /** (the frames' runs, the last clock: a test's view of it) */
   runs = 0;
   lastT = 0;
-  encode(enc: GPUCommandEncoder, t: number, lambda: number, desc: GPUComputePassDescriptor = { label: "sea fft" }) {
+  encode(enc: GPUCommandEncoder, t: number, lambda: number, desc: GPUComputePassDescriptor = { label: "sea fft" }, foamJ = [-9, -9, -9]) {
     if (!this.ready) return;
     this.runs++;
+    // (the foam's time step: the clock's, a frame's at most — a jump, a pause: nothing faded or made twice)
+    const dt = Math.min(Math.max(t - this.lastT, 0), 0.1);
     this.lastT = t;
     // (the clock modulo the sea's repeat time — seafft.wgsl REPEAT — in float64: its phases exact in float32)
     const tm = ((t % 1024) + 1024) % 1024;
-    this.device.queue.writeBuffer(this.uniform, 0, new Float32Array([tm, lambda, C, N, ...CASCADES, 0]));
+    this.device.queue.writeBuffer(
+      this.uniform,
+      0,
+      new Float32Array([tm, lambda, C, N, ...CASCADES, 0, foamJ[0]!, foamJ[1]!, foamJ[2]!, dt]),
+    );
     const p = enc.beginComputePass(desc);
     p.setPipeline(this.pipes.spectrum);
     p.setBindGroup(0, this.binds.spectrum);
@@ -118,7 +130,7 @@ export class SeaFft {
     for (let l = 1; l < SEA_LEVELS; l++) {
       const w = Math.max(1, N >> l);
       p.setBindGroup(0, this.binds.mips[l - 1]!);
-      p.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(w / 8), 2 * C);
+      p.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(w / 8), 3 * C);
     }
     p.end();
   }
@@ -171,5 +183,6 @@ export class SeaFft {
     this.uniform.destroy();
     this.h0.destroy();
     this.fld.destroy();
+    this.foam.destroy();
   }
 }

@@ -13,6 +13,7 @@ import { TERRAIN_CACHE_MAX_LAT, TERRAIN_CACHE_VEC4S } from "./system/terrain-cac
 import { TerrainRaster } from "./system/terrain-raster";
 import { SCENERY_RASTER_LOD, SceneryRaster, type SceneryRasterLod } from "./system/scenery-raster";
 import { CLOUD_PASS_BINDINGS, CLOUD_PASS_FLAG, CLOUD_PASS_TEXTURE_LIMIT, withCloudPass } from "./system/cloud-pass";
+import { CLOUD_SHADOW_BINDING, CLOUD_SHADOW_TEXTURE_LIMIT, CSM_HALF_M, CSM_N, withCloudShadow } from "./system/cloud-shadow";
 import { TERRAIN_RASTER_MAX_PIXELS, terrainRasterFrame } from "./system/terrain-raster-frame";
 import type { NetWalkerHome } from "./controller/netcraft";
 import { CharacterRenderer, type GrassView } from "./character-renderer";
@@ -56,6 +57,8 @@ import {
   PATH_MAX,
   SH_VEC4S,
   SKY_AMBIENT_VEC4S,
+  CSM_VEC4S,
+  TABLE_CSM,
   TABLE_LUT,
   TABLE_PATH,
   TABLE_SKY,
@@ -712,6 +715,8 @@ export class Renderer {
   private seaFftDue = false;
   /** the choppiness of the FFT's crests */
   private seaLambda = 0.9;
+  /** each FFT cascade's Jacobian under which its crests leave foam (seaFftParams; sea/fft-gpu.ts) */
+  private seaFoamJ = [-9, -9, -9];
   /** the sea's significant height about the camera [m] (the ships' motion — controller/seatraffic.ts) */
   seaHs = 1;
   private earthWant: EarthTier | null = null;
@@ -952,6 +957,30 @@ export class Renderer {
         ],
       });
     }
+    // (the clouds' transmittance map — N3 —: one for all the targets, written by its kernel, read by the others; a
+    // stand-in bound where it is written)
+    this.cloudShadow = device.limits.maxSampledTexturesPerShaderStage >= CLOUD_SHADOW_TEXTURE_LIMIT;
+    if (this.cloudShadow) {
+      const U = GPUTextureUsage;
+      this.csmTex = device.createTexture({
+        label: "clouds' shadow map",
+        size: [CSM_N, CSM_N],
+        format: "rgba32float",
+        usage: U.STORAGE_BINDING | U.TEXTURE_BINDING,
+      });
+      this.csmHead = device.createTexture({
+        label: "clouds' shadow map: frame",
+        size: [CSM_VEC4S, 1],
+        format: "rgba32float",
+        usage: U.STORAGE_BINDING | U.COPY_SRC,
+      });
+      this.csmDummy = device.createTexture({
+        label: "clouds' shadow map: none",
+        size: [1, 1],
+        format: "rgba32float",
+        usage: U.TEXTURE_BINDING,
+      });
+    }
     if (this.sunShadow)
       this.sunDummy = device.createTexture({
         label: "relief shadow map: none",
@@ -1007,6 +1036,9 @@ export class Renderer {
               visibility: C,
               texture: { sampleType: "unfilterable-float" } as GPUTextureBindingLayout,
             }))
+          : []),
+        ...(device.limits.maxSampledTexturesPerShaderStage >= CLOUD_SHADOW_TEXTURE_LIMIT
+          ? [{ binding: CLOUD_SHADOW_BINDING, visibility: C, texture: { sampleType: "unfilterable-float" } as GPUTextureBindingLayout }]
           : []),
         ...(device.limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT
           ? [{ binding: 32, visibility: C, buffer: { type: "read-only-storage" } as GPUBufferBindingLayout }]
@@ -1648,7 +1680,13 @@ export class Renderer {
         maxBufferSize: adapter.limits.maxBufferSize,
         maxTextureDimension2D: adapter.limits.maxTextureDimension2D,
         maxSampledTexturesPerShaderStage: Math.min(
-          Math.max(AERIAL_TEXTURE_LIMIT, RASTER_HINT_TEXTURE_LIMIT, SUN_SHADOW_TEXTURE_LIMIT, CLOUD_PASS_TEXTURE_LIMIT),
+          Math.max(
+            AERIAL_TEXTURE_LIMIT,
+            RASTER_HINT_TEXTURE_LIMIT,
+            SUN_SHADOW_TEXTURE_LIMIT,
+            CLOUD_PASS_TEXTURE_LIMIT,
+            CLOUD_SHADOW_TEXTURE_LIMIT,
+          ),
           adapter.limits.maxSampledTexturesPerShaderStage,
         ),
         maxStorageBuffersPerShaderStage: Math.min(SCENERY_STORAGE_LIMIT, adapter.limits.maxStorageBuffersPerShaderStage),
@@ -1679,15 +1717,18 @@ export class Renderer {
         seaShader(
           sceneryShader(
             surfaceShader(
-              withCloudPass(
-                withSunShadow(
-                  withTerrainRaster(
-                    withTerrainCache(withForest(await wgsl(traceWGSL), await wgsl(forestSource))),
-                    device.limits.maxSampledTexturesPerShaderStage >= RASTER_HINT_TEXTURE_LIMIT,
+              withCloudShadow(
+                withCloudPass(
+                  withSunShadow(
+                    withTerrainRaster(
+                      withTerrainCache(withForest(await wgsl(traceWGSL), await wgsl(forestSource))),
+                      device.limits.maxSampledTexturesPerShaderStage >= RASTER_HINT_TEXTURE_LIMIT,
+                    ),
+                    device.limits.maxSampledTexturesPerShaderStage >= SUN_SHADOW_TEXTURE_LIMIT,
                   ),
-                  device.limits.maxSampledTexturesPerShaderStage >= SUN_SHADOW_TEXTURE_LIMIT,
+                  device.limits.maxSampledTexturesPerShaderStage >= CLOUD_PASS_TEXTURE_LIMIT,
                 ),
-                device.limits.maxSampledTexturesPerShaderStage >= CLOUD_PASS_TEXTURE_LIMIT,
+                device.limits.maxSampledTexturesPerShaderStage >= CLOUD_SHADOW_TEXTURE_LIMIT,
               ),
               device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT,
             ),
@@ -2066,7 +2107,7 @@ export class Renderer {
   }
 
   /** The trace kernels' bind group entries for a target; `binding14` is the buffer of the probe or of the light probe. */
-  private traceEntries(t: Target, binding14: GPUBuffer, raster?: GPUTexture, clouds = true): GPUBindGroupEntry[] {
+  private traceEntries(t: Target, binding14: GPUBuffer, raster?: GPUTexture, clouds = true, csm = true): GPUBindGroupEntry[] {
     return [
       { binding: 0, resource: { buffer: this.paramBuf } },
       { binding: 1, resource: { buffer: t.accum } },
@@ -2119,6 +2160,8 @@ export class Renderer {
             resource: ((clouds && (i === 0 ? t.cloudA : t.cloudB)) || this.cloudDummies[i]!).createView(),
           }))
         : []),
+      // (the clouds' shadow map: the stand-in for its own kernel, which writes it)
+      ...(this.cloudShadow ? [{ binding: CLOUD_SHADOW_BINDING, resource: ((csm && this.csmTex) || this.csmDummy!).createView() }] : []),
     ];
   }
 
@@ -2127,6 +2170,7 @@ export class Renderer {
     const d = this.device;
     t.hintBind = undefined;
     t.cloudBind = undefined;
+    this.csmBind0 = undefined;
     if (this.cloudPass && this.cloudWriteLayout) {
       for (const x of [t.cloudA, t.cloudB, t.cloudCurA, t.cloudCurB, t.cloudHistA]) x?.destroy();
       const size = [Math.ceil(t.width / 2), Math.ceil(t.height / 2)];
@@ -3492,6 +3536,8 @@ export class Renderer {
     const sJ = this.seaLambda * Math.sqrt(st.slope01);
     const W = Math.min(Math.max(3.84e-6 * H.U ** 3.41, 1e-5), 0.1);
     out.set([Math.max(cmU - st.slopeX, 0.25 * cmU), Math.max(cmC - st.slopeZ, 0.25 * cmC), 1 + sJ * normalQuantile(W), sJ], 8);
+    // (the foam each cascade makes — sea/fft-gpu.ts: where its own Jacobian falls under the level of Monahan's cover)
+    this.seaFoamJ = st.slopeC.map((v) => 1 + this.seaLambda * Math.sqrt(v) * normalQuantile(W));
     return out;
   }
 
@@ -4007,7 +4053,7 @@ export class Renderer {
     this.cameraKey = this.featureKey;
     // (the sea's FFT waves of this frame first: the tracer samples them)
     if (this.seaFftDue && this.seaFft) {
-      this.seaFft.encode(enc, this.seaFftT, this.seaLambda, this.prof.pass("sea fft"));
+      this.seaFft.encode(enc, this.seaFftT, this.seaLambda, this.prof.pass("sea fft"), this.seaFoamJ);
       this.seaFftDue = false;
     }
     // (the far field's LUT first: every realtime frame, once an epoch while a still view refines —
@@ -4059,6 +4105,8 @@ export class Renderer {
     // The raster patch's visibility, after the cache it reads and before the rays that start from it.
     if (!quality && s) this.encodeTerrainRasterVisibility(enc, t, s);
     const hint = !quality && this.rasterHint ? (this.terrainRaster?.distanceTexture() ?? null) : null;
+    // (the clouds' shadow map — trace.wgsl cloudShadow — before every kernel that reads it)
+    if (!quality) this.encodeCloudShadow(enc, t);
     // (the clear sky's light — trace.wgsl skyAmbient — before every kernel that reads it: the ground's, the clouds')
     this.encodeSkyAmbient(enc, t);
     // (the aerial perspective's table before the rays that read it)
@@ -6022,6 +6070,86 @@ export class Renderer {
   private terrainRasterLevel = 2;
   /** the last camera frame shades the raster patch's pixels one a pixel (earthPipeline "raster", trace.wgsl shade) */
   private rasterPrimaryOn = false;
+  /** the clouds' transmittance map seen from the Sun (trace.wgsl cloudShadow — docs/PLAN-NUAGES-AAA.md N3; read by
+   *  cloudShadowAt): the device binds it; a switch for comparisons (off: the old shadows, the 2D covers) */
+  private cloudShadow = false;
+  cloudShadowOn = true;
+  private csmTex: GPUTexture | null = null;
+  private csmHead: GPUTexture | null = null;
+  private csmDummy: GPUTexture | null = null;
+  private csmPipe: GPUComputePipeline | null = null;
+  private csmWanted = false;
+  private csmWrite: GPUBindGroup | null = null;
+  private csmTableOn = false;
+  private csmBind0?: { t: Target; bind: GPUBindGroup };
+  private encodeCloudShadow(enc: GPUCommandEncoder, t: Target) {
+    const d = this.device;
+    if (!this.cloudShadow || !this.cloudShadowOn || !this.lastNear) {
+      if (this.csmTableOn) d.queue.writeBuffer(this.bodyBuf, TABLE_CSM * 16, new Float32Array(CSM_VEC4S * 4));
+      this.csmTableOn = false;
+      return;
+    }
+    if (!this.csmPipe) {
+      if (!this.csmWanted) {
+        this.csmWanted = true;
+        const st = { access: "write-only", format: "rgba32float" } as const;
+        const layout = d.createBindGroupLayout({
+          label: "clouds' shadow map write",
+          entries: [
+            { binding: 14, visibility: GPUShaderStage.COMPUTE, storageTexture: st },
+            { binding: 15, visibility: GPUShaderStage.COMPUTE, storageTexture: st },
+          ],
+        });
+        this.csmWrite = d.createBindGroup({
+          layout,
+          entries: [
+            { binding: 14, resource: this.csmTex!.createView() },
+            { binding: 15, resource: this.csmHead!.createView() },
+          ],
+        });
+        // (the features the clouds need alone: the bodies, the weather — the rest compiled out, as the sky's ambient)
+        const off = ["RADIO", "POL", "JET", "SPOT", "VOL", "WH", "THICK", "RWY", "KERR", "SHADE", "SURFACE", "SCENERY", "AURORA"];
+        const t0 = performance.now();
+        void d
+          .createComputePipelineAsync({
+            layout: d.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, layout] }),
+            compute: {
+              module: this.traceModule,
+              entryPoint: "cloudShadow",
+              constants: {
+                ...Object.fromEntries(off.map((f) => [`HAS_${f}`, 0])),
+                HAS_BODIES: 1,
+                HAS_WX: 1,
+                QUALITY_PIPELINE: 0,
+                CSM_HALF_M,
+              },
+            },
+          })
+          .then(
+            (p) => {
+              this.csmPipe = p;
+              gpuDiagnostics.record("pipeline-compiled", `clouds' shadow map: ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+            },
+            (e) => console.warn("Clouds' shadow map unavailable:", e),
+          );
+      }
+      return;
+    }
+    // (its own group 0: the stand-in where the map is written)
+    if (this.csmBind0?.t !== t)
+      this.csmBind0 = {
+        t,
+        bind: d.createBindGroup({ layout: this.traceLayout, entries: this.traceEntries(t, this.ship.envBuf, undefined, false, false) }),
+      };
+    const p = enc.beginComputePass(this.prof.pass("clouds' shadow map"));
+    p.setPipeline(this.csmPipe);
+    p.setBindGroup(0, this.csmBind0.bind);
+    p.setBindGroup(1, this.csmWrite!);
+    p.dispatchWorkgroups(CSM_N / 8, CSM_N / 8);
+    p.end();
+    enc.copyTextureToBuffer({ texture: this.csmHead! }, { buffer: this.bodyBuf, offset: TABLE_CSM * 16 }, [CSM_VEC4S, 1]);
+    this.csmTableOn = true;
+  }
   /** the clear sky's light, physical and shared (trace.wgsl skyAmbient → skyIrradiance — docs/PLAN-NUAGES-AAA.md N2b): a
    *  switch for comparisons (off: the old constant bluish tenth of the sun's) */
   skyAmbientOn = true;
