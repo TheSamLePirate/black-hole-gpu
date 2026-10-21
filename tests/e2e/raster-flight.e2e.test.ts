@@ -5,7 +5,8 @@
 // rays, no history: a fast turn's worst); each mode's GPU passes and image, against the same view converged.
 // PLACES=tarifa-low,tarifa,alps (default all); FRAMES: frames flown a mode (90); MODES=trace6,trace4,rasterwalk,raster,rasterhalf,rasterquarter (rasterwalk: the raster without the trees' instances; half, quarter:
 // its shading rate); RF_DETAIL (below).
-// Captures remote-results/rf-<place>-<mode>[-ref].png; measures remote-results/raster-flight.json.
+// Captures remote-results/rf-<place>-<mode>[-ref].png; measures remote-results/raster-flight.json. RF_NOREF=1: no converged
+// reference (a timing run: no PSNR).
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 import { readPng } from "./lib/png";
@@ -107,7 +108,9 @@ const MODE_SET: Record<string, string> = {
   sky: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {}; __bh.renderer.skyAmbientOn = true;`,
   nosky: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {}; __bh.renderer.skyAmbientOn = false;`,
   // (the sea's N6 — the shallows over the bathymetry, the surf, the clear sky's own radiance mirrored — on, and off)
-  sea: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {};`,
+  // (everything on, as shipped — every switch the other modes turn off set back: the A/B's reference)
+  sea: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {};
+    Object.assign(__bh.renderer, { skyAmbientOn: true, cloudPassOn: true, cloudShadowOn: true, sunShadowOn: true });`,
   nosea: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 1536 };`,
   // (the sea's reflections — the slopes' mean Fresnel, the lifted mirror, the screen-space reflections — off: the rest of N6 on)
   norefl: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 6144 };`,
@@ -116,6 +119,10 @@ const MODE_SET: Record<string, string> = {
   nocsm: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 8192 };`,
   // (the far clouds mirrored in the sea from the cloud pass's image — N6b — off)
   nocloudrefl: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 16384 };`,
+  // (a tune that turns nothing off — an unread bit —: the control for the tuned A/B, a tune itself costing the terrain cache)
+  tunectl: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 4194304 };`,
+  // (the rain's shafts — N5 — off)
+  norain: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 65536 };`,
   bolt: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = {}; __bh.renderer.lightning.strike(855, 2349, true);`,
   raindebug: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 262144 };`,
   wakedebug: `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.sceneryRasterOn = true; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.tune = { TUNE_GSKIP: 32768 };`,
@@ -129,6 +136,7 @@ const MODE_SET: Record<string, string> = {
 const places = (process.env.PLACES ?? "tarifa-low,tarifa,alps").split(",");
 const modes = (process.env.MODES ?? "trace6,trace4,rasterwalk,raster,rasterhalf,rasterquarter").split(",");
 const FRAMES = Number(process.env.FRAMES ?? 90);
+const NOREF = process.env.RF_NOREF === "1";
 // (RF_DETAIL=max, the default: the scenery's trees and buildings at their most, drawn farthest, with their shadows and the
 // satellite surface — the image aimed at; RF_DETAIL=game: the game's own settings)
 const DETAIL =
@@ -201,6 +209,7 @@ describe.skipIf(!E2E)("the raster's primary visibility in flight: frame rate and
         if (MODE_SET[md]!.includes(`earthPipeline = "raster"`))
           await app.waitFor(
             `__bh.renderer.terrainRasterStats.primary && __bh.renderer.prof.table().some((p) => p.label === "earth shade (raster)") &&
+              (() => { const r = __bh.renderer, v = r.variants.get(r.featureKey); return !!(v && v.shade); })() &&
               (!__bh.renderer.sceneryRasterOn || __bh.settings.earthScenery === "off" || !!__bh.renderer.terrainRasterStats.scenery?.active)`,
             300_000,
           );
@@ -217,17 +226,19 @@ describe.skipIf(!E2E)("the raster's primary visibility in flight: frame rate and
         shots[run] = `remote-results/rf-${pl}-${run.replace("#", "-")}.png`;
         await app.shot(shots[run]!);
       }
-      // (the reference: the same view, the touching stopped, converged)
-      await app.js(
-        `(() => { window.__t = false; __bh.settings.earthPipeline = "trace"; __bh.settings.targetSpp = 64; __bh.touch(); return 1; })()`,
-      );
-      for (let i = 0; i < 180; i++) {
-        await Bun.sleep(500);
-        if (await app.js<boolean>(`__bh.renderer.lastPhase === "converged"`)) break;
-      }
+      // (the reference: the same view, the touching stopped, converged — RF_NOREF=1: none, a timing run)
       const fr = `remote-results/rf-${pl}-ref.png`;
-      await app.shot(fr);
-      const ref = png(fr);
+      if (!NOREF) {
+        await app.js(
+          `(() => { window.__t = false; __bh.settings.earthPipeline = "trace"; __bh.settings.targetSpp = 64; __bh.touch(); return 1; })()`,
+        );
+        for (let i = 0; i < 180; i++) {
+          await Bun.sleep(500);
+          if (await app.js<boolean>(`__bh.renderer.lastPhase === "converged"`)) break;
+        }
+        await app.shot(fr);
+      }
+      const ref = NOREF ? null : png(fr);
       for (const [i, md] of modes.entries()) {
         const run = runs[i]!;
         const m = measured[run]!;
@@ -237,7 +248,7 @@ describe.skipIf(!E2E)("the raster's primary visibility in flight: frame rate and
           mode: run,
           gpuMs: m.gpuMs,
           raysMs: +rays.toFixed(1),
-          psnrVsConverged: psnr(png(shots[run]!), ref),
+          psnrVsConverged: ref ? psnr(png(shots[run]!), ref) : null,
           primary: m.raster.primary,
           trees: (m.raster.scenery as { active?: boolean } | null)?.active ?? false,
           passes: m.passes,
