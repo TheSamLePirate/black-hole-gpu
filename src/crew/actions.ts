@@ -7,6 +7,7 @@ import { type Act, ACTS, type Family, readCrewAck, sayOf } from "../net/crewcmd"
 import type { Args } from "../ai/tool-schema";
 import type { CrewModel } from "./model";
 import { type Units, unitsOf } from "../ui/unitsys";
+import { L, lang, Lp } from "./lang";
 
 export interface Done {
   ok: boolean;
@@ -65,8 +66,13 @@ export class CrewActions {
       // (any answer of the pilot followed: the board's journal)
       if (from === this.model.selected && Object.hasOwn(ACTS, a.act)) {
         const who = room.members.find((m) => m.slot === a.to)?.name ?? "?";
-        // (ours: said again in the console's units — the pilot's words in his)
-        const what = mine ? sayOf(mine.act, mine.args, this.units()).fr : a.what || sayOf(a.act, {}).fr;
+        // (said in the console's language and units: ours from what we asked, another screen's from the arguments its
+        // answer carries — an older pilot's none: its words as they came)
+        const what = mine
+          ? Lp(sayOf(mine.act, mine.args, this.units()))
+          : a.args
+            ? Lp(sayOf(a.act, a.args, this.units()))
+            : a.what || Lp(sayOf(a.act, {}));
         this.board.unshift({ at: Date.now(), who, what, ok: a.ok, msg: a.msg });
         if (this.board.length > 40) this.board.pop();
       }
@@ -82,13 +88,15 @@ export class CrewActions {
   /** whether an act's family can be asked of the pilot followed now — or why not */
   can(fam: Family): { ok: boolean; why: string } {
     const own = this.model.own();
-    if (!this.net.room) return { ok: false, why: "Rejoignez une salle" };
-    if (!own) return { ok: false, why: "Aucun pilote suivi" };
-    if (own.age > 3) return { ok: false, why: "Signal du pilote ancien" };
+    if (!this.net.room) return { ok: false, why: L("Rejoignez une salle", "Join a room") };
+    if (!own) return { ok: false, why: L("Aucun pilote suivi", "No pilot followed") };
+    if (own.age > 3) return { ok: false, why: L("Signal du pilote ancien", "The pilot's signal is old") };
     const caps = own.snapshot?.caps;
-    if (!caps) return { ok: false, why: "Ce simulateur ne reçoit pas d'ordres" };
-    if (!caps.on) return { ok: false, why: "Le pilote a verrouillé les actions de l'équipage" };
-    if (!caps.fam.includes(fam)) return { ok: false, why: "Indisponible sur cet appareil ou dans ce mode" };
+    if (!caps) return { ok: false, why: L("Ce simulateur ne reçoit pas d'ordres", "This simulator takes no orders") };
+    if (!caps.on)
+      return { ok: false, why: L("Le pilote a verrouillé les actions de l'équipage", "The pilot has locked the crew's actions") };
+    if (!caps.fam.includes(fam))
+      return { ok: false, why: L("Indisponible sur cet appareil ou dans ce mode", "Unavailable on this craft or in this mode") };
     return { ok: true, why: "" };
   }
   /** whether any order is waiting for its answer */
@@ -100,29 +108,34 @@ export class CrewActions {
     const fam = ACTS[act].fam;
     const can = this.can(fam);
     const to = this.model.selected;
-    if (!can.ok || to === null) return Promise.resolve({ ok: false, msg: can.why || "Aucun pilote suivi" });
+    if (!can.ok || to === null) return Promise.resolve({ ok: false, msg: can.why || L("Aucun pilote suivi", "No pilot followed") });
     // (a ground station — K5: behind the wormhole no order goes; else it goes the light's time late, its answer too)
-    const L = this.model.linkOf(to);
-    if (L.cut) return Promise.resolve({ ok: false, msg: "Liaison coupée (trou de ver) : enregistrez un message" });
+    const link = this.model.linkOf(to);
+    if (link.cut)
+      return Promise.resolve({
+        ok: false,
+        msg: L("Liaison coupée (trou de ver) : enregistrez un message", "Link cut (wormhole): record a message"),
+      });
     const id = newId();
     return new Promise<Done>((resolve) => {
       const timer = setTimeout(
         () => {
           this.pending.delete(id);
-          resolve({ ok: false, msg: "Pas de réponse du pilote" });
+          resolve({ ok: false, msg: L("Pas de réponse du pilote", "No answer from the pilot") });
           this.changed();
         },
-        3000 + 2000 * L.delay,
+        3000 + 2000 * link.delay,
       );
       this.pending.set(id, { act, args, resolve, timer });
-      const go = () => this.net.event({ kind: "crew-cmd", v: 1, id, to, act, args });
-      if (L.delay > 0) setTimeout(go, L.delay * 1000);
+      // (the console's language: the pilot's answer comes back in it)
+      const go = () => this.net.event({ kind: "crew-cmd", v: 1, id, to, act, args, lang: lang() });
+      if (link.delay > 0) setTimeout(go, link.delay * 1000);
       else go();
       this.changed();
     });
   }
-  /** what an order says (French: the console's language) */
+  /** what an order says, in the console's language and units */
   label(act: Act, args: Args = {}) {
-    return sayOf(act, args, this.units()).fr;
+    return Lp(sayOf(act, args, this.units()));
   }
 }

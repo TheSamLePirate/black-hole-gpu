@@ -3,7 +3,7 @@
 // and their checklists), TIMELINE (the mission's clock, what comes in the hours ahead), RELATIVITY (the clocks apart:
 // dτ/dt, γ, the time gone by on the Earth), GROUND (the body flown about, its ground track, the landing point). From the
 // K1/K4 blocks.
-import { CHECKLISTS_FR } from "../checklists";
+import { checklistOf } from "../checklists";
 import { C, D, dur, fmt, type Pen, type Rect } from "./kit";
 import { bodyName } from "./orbit";
 import type { Scene } from "./scene";
@@ -191,7 +191,7 @@ export function drawEecom(p: Pen, r: Rect, sc: Scene) {
   }
   let fy = r.y + 46;
   for (const f of Y.failures) {
-    const L = CHECKLISTS_FR[f.kind];
+    const L = checklistOf(f.kind);
     const h = 34 + (L?.steps.length ?? 0) * 18 + 22;
     p.round(fx, fy - 14, fw, h, 6);
     p.fill(f.fixing ? "#2a1e08" : "#2a0c0c");

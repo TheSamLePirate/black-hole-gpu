@@ -108,6 +108,32 @@ export interface InstrumentTraffic {
   spd: number | null;
   type: string;
 }
+/** The air-to-air refuelling (game/aar.ts, controller/aar.ts): the stage (the rendezvous `join`, behind the `hose`),
+ *  the HUD's word (JOIN, PRE-CONTACT, CLEARED, CONTACT, FUEL FLOW, FULL, BREAKAWAY, DEPART), the way it is flown (auto,
+ *  assisted, manual), the tanker's callsign and the hose's side; the fuel given and asked [kg], a practice's (the tanks
+ *  not taking it); the probe's gap to the basket along the hose and off it [m], the closing speed [m/s], the hose
+ *  pushed in [m] (locked) and its flow range and breakaway [m]; the pod's lights; the contacts and the misses; the
+ *  tanker's distance [m]. */
+export interface InstrumentAar {
+  stage: "join" | "hose";
+  phase: string;
+  mode: "auto" | "assisted" | "manual";
+  tanker: string;
+  side: "left" | "right";
+  given: number;
+  want: number;
+  practice: boolean;
+  along: number | null;
+  off: number | null;
+  closure: number | null;
+  takeup: number | null;
+  flow: [number, number];
+  whip: number;
+  lights: "off" | "amber" | "green" | "red";
+  contacts: number;
+  misses: number;
+  dist: number | null;
+}
 /** A mission's places: the zones to reach, a SAM's reach [m]. */
 export interface InstrumentZone {
   lat: number;
@@ -156,6 +182,8 @@ export interface InstrumentSnapshot extends InstrumentSpace {
   arms?: { live: boolean; sel: string; stores: Record<string, number>; mode: string; lock: string } | null;
   /** the Sun seen from the body flown about: the point under it [°] on the body's own axes (the globe's day and night) */
   sun?: { lat: number; lon: number } | null;
+  /** the air-to-air refuelling engaged (absent: none, or an older pilot) */
+  aar?: InstrumentAar | null;
   /** the crew's orders (net/crewcmd.ts): the pilot's lock open, the families that can be done now */
   caps?: { on: boolean; fam: string[] } | null;
   /** sent once a second at most: absent, the last list stands */
@@ -262,6 +290,34 @@ function readSystems(x: unknown): InstrumentSystems | null {
     shield: opt(x.shield),
     damage: opt(x.damage),
     mass: opt(x.mass),
+  };
+}
+
+const AAR_MODES = new Set(["auto", "assisted", "manual"]);
+const LIGHTS = new Set(["off", "amber", "green", "red"]);
+function readAar(x: unknown): InstrumentAar | null {
+  if (!record(x) || !finite(x.given) || !finite(x.want)) return null;
+  const fl =
+    Array.isArray(x.flow) && finite(x.flow[0]) && finite(x.flow[1]) ? (x.flow as [number, number]) : ([0.9, 4.6] as [number, number]);
+  return {
+    stage: x.stage === "join" ? "join" : "hose",
+    phase: label(x.phase, 16),
+    mode: AAR_MODES.has(x.mode as string) ? (x.mode as InstrumentAar["mode"]) : "manual",
+    tanker: label(x.tanker, 24),
+    side: x.side === "left" ? "left" : "right",
+    given: Math.max(0, x.given),
+    want: Math.max(0, x.want),
+    practice: x.practice === true,
+    along: opt(x.along),
+    off: opt(x.off),
+    closure: opt(x.closure),
+    takeup: opt(x.takeup),
+    flow: [fl[0], fl[1]],
+    whip: num(x.whip) ?? 6.5,
+    lights: LIGHTS.has(x.lights as string) ? (x.lights as InstrumentAar["lights"]) : "off",
+    contacts: Math.max(0, Math.round(num(x.contacts) ?? 0)),
+    misses: Math.max(0, Math.round(num(x.misses) ?? 0)),
+    dist: opt(x.dist),
   };
 }
 
@@ -372,6 +428,7 @@ export function readInstruments(x: unknown): InstrumentSnapshot | null {
           lock: label(x.arms.lock, 32),
         }
       : null,
+    ...(x.aar !== undefined ? { aar: readAar(x.aar) } : {}),
     sun: place(x.sun) ? { lat: (x.sun as { lat: number }).lat, lon: (x.sun as { lon: number }).lon } : null,
     caps:
       record(x.caps) && Array.isArray(x.caps.fam)

@@ -8,7 +8,7 @@ tout ce qui est promis :
 
 Il manque :
 
-- le **ravitaillement en vol** (absent du crew) ;
+- ~~le **ravitaillement en vol** (absent du crew)~~ — fait (priorité 2) ;
 - l'**image tactique** (PLAN-RADAR-AAA RD0–RD14 non commencé) ;
 - l'**anglais** (toute la console est en français) ;
 - une **console propre au Lander** ;
@@ -59,7 +59,7 @@ Jamais testés depuis le crew sur le vrai jeu :
 | ILS, atterrissage automatique | 🟡 | `crewcmd.ts:256`, `crew-exec.ts:84` | ni attente, ni clear, ni statut, ni note ; drapeau `auto` de l'ILS non envoyé (`crew-feed.ts:336`) ; aucun e2e |
 | STOVL (stationnaire, atterrissage vertical) | ❌ | lampe seule (`systems.ts:171`) | conv, swivel, hover, vz connus du jeu (`telemetry.ts:235`), ni envoyés ni commandables |
 | Porte-avions (récupération, LSO) | 🟡 | navires dans le trafic (`crew-feed.ts:115-128`) | phase de récupération, qualification, note LSO absentes |
-| **Ravitaillement en vol** | ❌ | rien dans `src/crew`, `crew-feed`, `instruments` | aucune phase (PRE-CONTACT, CONTACT, FUEL), ni carburant transféré, ni panier, ni TEXACO au trafic ; `ap.mode` limité à orbit/hold/tf/off (`crewcmd.ts:268`) alors que `jet_mode` accepte `tanker` et `refuelMode` (`src/ai/game-tools.ts:1930`) |
+| **Ravitaillement en vol** | ✅ (2026-10-21) | bloc `aar` (`controller/aar.ts aarCrew`, `crew-feed.ts`), `ap.mode` `tanker`/`refuelMode`/`tankerOff`, MCP « AAR », PFD, Systèmes, Mission aérienne ; e2e `crew-aar` 3/3 ([fiche](progress/crew/P2-ravitaillement.md)) | ni ravitailleur ni panier en 3D côté crew |
 | Armes, radar, verrou | 🟡 | `crew-feed.ts:38-49`, `crew-exec.ts:128-133` | canon et leurres hors bandeau ; panneau visible seulement en Radar et Mission aérienne ; verrou désigné **par nom** |
 | Menaces, missiles, leurres, bogey dope | ❌ | alerte `MISSILE` seule (`crew-feed.ts:71`) | rien sur les écrans crew (A5 les promettait) |
 | Auto-GCAS / Auto-ACAS | 🟡 | FLY UP / PULL UP / TERRAIN (`crew-feed.ts:67-69`) | l'évitement ACAS (`gcas.escape`) n'est pas envoyé : l'équipier ne sait pas pourquoi l'avion manœuvre |
@@ -141,7 +141,7 @@ Réseau :
 8. passer les mètres codés par `unitsFor` ;
 9. resserrer les e2e A5 et EECOM (exiger `ok`, le verrou, le missile).
 
-**2. Ravitaillement en vol au crew** :
+**2. Ravitaillement en vol au crew** — ✅ fait le 2026-10-21 ([fiche](progress/crew/P2-ravitaillement.md)) :
 - un bloc `aar` : phase, mode, carburant transféré, écart au panier ;
 - TEXACO au trafic ;
 - `ap.mode` accepte `tanker` et `refuelMode` ;

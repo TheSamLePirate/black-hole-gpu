@@ -86,6 +86,19 @@ const RUN: Record<Act, Run> = {
   "ap.ilsOff": (_a, x) => x.tool("approach", { action: "off" }),
   "ap.mode": (a, x) => {
     const { mode, ...rest } = a;
+    // (the refuelling let go alone — jet_mode's off would drop the orbit and the terrain following with it)
+    if (mode === "tankerOff") {
+      const C = x.camera;
+      if (!C.aar && C.tankerPending == null) return { ok: false, note: "No refuelling engaged" };
+      C.tankerPending = null;
+      if (C.icpt) C.icptOff();
+      C.aarOff();
+      return "Refuelling off";
+    }
+    // (the tanker always asked with its side: jet_mode's tanker alone toggles a refuelling off — a crew's order
+    // repeated across the light's delay never undoes itself)
+    if (mode === "tanker") return x.tool("jet_mode", { action: "tanker", side: rest.side ?? "right", ...rest });
+    if (mode === "refuelMode" && !rest.refuelMode) return { ok: false, note: "refuelMode: which way" };
     return x.tool("jet_mode", { action: mode, ...rest });
   },
   "ap.traffic": (a, x) => x.tool("traffic", { action: a.action, ...(a.name ? { name: a.name } : {}) }),

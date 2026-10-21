@@ -2,6 +2,7 @@
 // bugs and trends, the vertical speed, the heading, the mode annunciator, the ILS needles and the radio altitude.
 import { C, clamp, D, deg360, fmt, MONO, type Pen, wrapPi, type Rect } from "./kit";
 import type { Scene } from "./scene";
+import { aarColour, aarPhaseName, drawAar } from "./aar";
 
 const ok = Number.isFinite;
 
@@ -32,7 +33,10 @@ function fma(p: Pen, r: Rect, sc: Scene) {
     ["VERT", vert[0]!, vert[1]!],
     ["ASSIST", assist, a?.assist ? C.cyan : C.dim],
   );
-  if (r.w > 520) cells.push(["MODE", (a?.mode || sc.own?.kind || "—").toUpperCase(), C.text]);
+  // (the refuelling: its phase in place of the flight's mode — the pilot's HUD says it so)
+  const aar = sc.snap?.aar;
+  if (aar) cells.push(["AAR", aarPhaseName(aar.phase), aarColour(aar)]);
+  else if (r.w > 520) cells.push(["MODE", (a?.mode || sc.own?.kind || "—").toUpperCase(), C.text]);
   const w = r.w / cells.length;
   const fs = clamp(r.h * 0.42, 9, 14);
   cells.forEach(([k, v, col], i) => {
@@ -489,6 +493,16 @@ export function drawPfd(p: Pen, r: Rect, sc: Scene) {
   );
   vsi(p, { x: ax + aw + 6, y: mid.y + mid.h * 0.12, w: vw, h: mid.h * 0.76 }, s.vz, u.vsName, u.vs, null);
   headingTape(p, { x: mid.x, y: r.y + r.h - hh - 8, w: mid.w, h: hh }, sc);
+  // the refuelling's panel over the attitude's lower left (behind the hose: the gap, the hose, the fuel)
+  const aar = sc.snap?.aar;
+  if (aar && mid.w > 300 && mid.h > 150) {
+    const bh = Math.min(188, mid.h - 8);
+    const box = { x: mid.x + 6, y: mid.y + mid.h - bh - 4, w: Math.min(230, mid.w * 0.42), h: bh };
+    p.round(box.x, box.y, box.w, box.h, 8);
+    p.fill("#050c12d9");
+    p.stroke(aarColour(aar), 1.2);
+    drawAar(p, box, aar, u);
+  }
   // the next point, low right
   if (nav && sc.snap?.route[nav.active]) {
     const wp = sc.snap.route[nav.active]!;

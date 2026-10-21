@@ -267,23 +267,42 @@ export const ACTS = {
   "ap.mode": {
     fam: "jet",
     params: {
-      mode: { type: "string", enum: ["orbit", "hold", "tf", "off"] },
+      // (the refuelling too — jet_mode's: the tanker set and joined, the way it is flown, let go)
+      mode: { type: "string", enum: ["orbit", "hold", "tf", "tanker", "tankerOff", "refuelMode", "off"] },
       lat: { type: "number", minimum: -90, maximum: 90 },
       lon: { type: "number", minimum: -180, maximum: 180 },
       radiusKm: { type: "number", minimum: 1, maximum: 50 },
       dir: { type: "string", enum: ["right", "left"] },
       inboundDeg: { type: "number", minimum: 0, maximum: 360 },
       aglM: { type: "number", minimum: 0, maximum: 1000 },
+      near: { type: "boolean" },
+      side: { type: "string", enum: ["right", "left"] },
+      refuelMode: { type: "string", enum: ["auto", "assisted", "manual"] },
     },
     required: ["mode"],
     say: (a) => {
+      const how = { auto: ["automatique", "automatic"], assisted: ["assisté", "assisted"], manual: ["manuel", "manual"] }[
+        String(a.refuelMode)
+      ];
+      const side = a.side === "left" ? ["tuyau gauche", "left hose"] : ["tuyau droit", "right hose"];
       const fr: Record<string, string> = {
         orbit: "orbite",
         hold: "circuit d'attente",
         tf: "suivi de terrain",
+        tanker: `ravitailleur TEXACO, ${side[0]}${how ? ` — ${how[0]}` : ""}`,
+        tankerOff: "ravitaillement arrêté",
+        refuelMode: `ravitaillement ${how?.[0] ?? ""}`.trim(),
         off: "mode du pilote automatique coupé",
       };
-      const en: Record<string, string> = { orbit: "orbit", hold: "holding pattern", tf: "terrain following", off: "autopilot mode off" };
+      const en: Record<string, string> = {
+        orbit: "orbit",
+        hold: "holding pattern",
+        tf: "terrain following",
+        tanker: `tanker TEXACO, ${side[1]}${how ? ` — ${how[1]}` : ""}`,
+        tankerOff: "refuelling stopped",
+        refuelMode: `refuelling ${how?.[1] ?? ""}`.trim(),
+        off: "autopilot mode off",
+      };
       return { fr: fr[String(a.mode)] ?? "mode", en: en[String(a.mode)] ?? "mode" };
     },
   },
@@ -495,6 +514,8 @@ export interface CrewCmd {
   to: number;
   act: Act;
   args: Args;
+  /** the console's language: the pilot answers in it (absent: an older console's — French) */
+  lang?: "fr" | "en";
 }
 export interface CrewAck {
   v: 1;
@@ -503,8 +524,10 @@ export interface CrewAck {
   act: string;
   ok: boolean;
   msg: string;
-  /** what was asked, in the crew console's words (French: its language) */
+  /** what was asked, in the asking console's language */
   what: string;
+  /** what was asked's arguments (primitives): every screen says it again in its own language and units */
+  args?: Record<string, string | number | boolean>;
   /** a few figures back (a manoeuvre previewed: its Δv, its burns…), primitives only */
   data?: Record<string, string | number | boolean>;
 }
@@ -521,7 +544,10 @@ export function readCrewCmd(x: unknown): { ok: true; cmd: CrewCmd } | { ok: fals
   const spec = SPECS[x.act]!;
   const chk = checkArgs({ name: x.act, description: "", params: spec.params ?? {}, required: spec.required }, x.args ?? {});
   if (!chk.ok) return { ok: false, error: chk.error, id };
-  return { ok: true, cmd: { v: 1, id, to: x.to, act: x.act as Act, args: chk.args } };
+  return {
+    ok: true,
+    cmd: { v: 1, id, to: x.to, act: x.act as Act, args: chk.args, ...(x.lang === "en" || x.lang === "fr" ? { lang: x.lang } : {}) },
+  };
 }
 
 /** An answer heard (untrusted, bounded). */
@@ -534,7 +560,25 @@ export function readCrewAck(x: unknown): CrewAck | null {
       if (typeof v === "string") data[k.slice(0, 24)] = v.slice(0, 120);
       else if ((typeof v === "number" && Number.isFinite(v)) || typeof v === "boolean") data[k.slice(0, 24)] = v;
     }
-  return { v: 1, id: x.id.slice(0, 40), to: x.to, act: s(x.act, 32), ok: x.ok, msg: s(x.msg, 200), what: s(x.what, 80), data };
+  let args: CrewAck["args"];
+  if (record(x.args)) {
+    args = {};
+    for (const [k, v] of Object.entries(x.args).slice(0, 12)) {
+      if (typeof v === "string") args[k.slice(0, 24)] = v.slice(0, 64);
+      else if ((typeof v === "number" && Number.isFinite(v)) || typeof v === "boolean") args[k.slice(0, 24)] = v;
+    }
+  }
+  return {
+    v: 1,
+    id: x.id.slice(0, 40),
+    to: x.to,
+    act: s(x.act, 32),
+    ok: x.ok,
+    msg: s(x.msg, 200),
+    what: s(x.what, 80),
+    data,
+    ...(args ? { args } : {}),
+  };
 }
 
 export const familyOf = (act: string): Family | null => SPECS[act]?.fam ?? null;

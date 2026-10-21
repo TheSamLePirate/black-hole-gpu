@@ -469,6 +469,8 @@ function combatHud(this: CameraController, Cm: (v: Vec3 | null) => Vec3 | null) 
             ...hu(r),
             dz: r[2],
             trk: trk(q.v),
+            // (its speed over the ground [m/s]: a crew's picture carries it on between two snapshots)
+            spd: Math.round(Math.hypot(q.v[0], q.v[1])),
             air: !isGround(q),
             alive: q.alive,
             locked: q.id === W.lock,

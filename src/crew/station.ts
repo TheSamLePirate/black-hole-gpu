@@ -9,64 +9,78 @@ export interface Station {
   id: StationId;
   /** its call in the room (the name's suffix) and its title */
   call: string;
-  title: string;
+  title: { fr: string; en: string };
   place: "aboard" | "ground";
   /** the spacecraft console's view it opens on */
   view: "sdash" | "orbit" | "system" | "navball" | "dock" | "budget" | "eecom" | "timeline" | "rel" | "ground";
   /** what it is for (the lobby's line) */
-  role: string;
+  role: { fr: string; en: string };
 }
 
 export const STATIONS: Station[] = [
   {
     id: "copilot",
     call: "CDR-2",
-    title: "Copilote",
+    title: { fr: "Copilote", en: "Copilot" },
     place: "aboard",
     view: "sdash",
-    role: "à bord : l’ordinateur de vol, les maintiens, le plan",
+    role: { fr: "à bord : l’ordinateur de vol, les maintiens, le plan", en: "aboard: the flight computer, the holds, the plan" },
   },
-  { id: "nav", call: "NAV", title: "Navigateur", place: "aboard", view: "system", role: "à bord : la trajectoire, les poussées, la carte" },
+  {
+    id: "nav",
+    call: "NAV",
+    title: { fr: "Navigateur", en: "Navigator" },
+    place: "aboard",
+    view: "system",
+    role: { fr: "à bord : la trajectoire, les poussées, la carte", en: "aboard: the trajectory, the burns, the map" },
+  },
   {
     id: "engineer",
     call: "ING",
-    title: "Ingénieur de bord",
+    title: { fr: "Ingénieur de bord", en: "Flight engineer" },
     place: "aboard",
     view: "eecom",
-    role: "à bord : l’énergie, l’air, les pannes",
+    role: { fr: "à bord : l’énergie, l’air, les pannes", en: "aboard: the power, the air, the failures" },
   },
   {
     id: "flight",
     call: "FLIGHT",
-    title: "Directeur de vol",
+    title: { fr: "Directeur de vol", en: "Flight director" },
     place: "ground",
     view: "sdash",
-    role: "au sol : la mission entière, la décision",
+    role: { fr: "au sol : la mission entière, la décision", en: "ground: the whole mission, the decision" },
   },
-  { id: "fido", call: "FIDO", title: "Dynamique de vol", place: "ground", view: "orbit", role: "au sol : l’orbite, les poussées, le Δv" },
+  {
+    id: "fido",
+    call: "FIDO",
+    title: { fr: "Dynamique de vol", en: "Flight dynamics" },
+    place: "ground",
+    view: "orbit",
+    role: { fr: "au sol : l’orbite, les poussées, le Δv", en: "ground: the orbit, the burns, the Δv" },
+  },
   {
     id: "guido",
     call: "GUIDO",
-    title: "Guidage",
+    title: { fr: "Guidage", en: "Guidance" },
     place: "ground",
     view: "navball",
-    role: "au sol : l’attitude, les rendez-vous, l’amarrage",
+    role: { fr: "au sol : l’attitude, les rendez-vous, l’amarrage", en: "ground: the attitude, the rendezvous, the docking" },
   },
   {
     id: "eecom",
     call: "EECOM",
-    title: "Systèmes",
+    title: { fr: "Systèmes", en: "Systems" },
     place: "ground",
     view: "eecom",
-    role: "au sol : électricité, environnement, consommables",
+    role: { fr: "au sol : électricité, environnement, consommables", en: "ground: electrics, environment, consumables" },
   },
   {
     id: "capcom",
     call: "CAPCOM",
-    title: "Communications",
+    title: { fr: "Communications", en: "Communications" },
     place: "ground",
     view: "timeline",
-    role: "au sol : la voix vers l’équipage (tonalités Quindar)",
+    role: { fr: "au sol : la voix vers l’équipage (tonalités Quindar)", en: "ground: the voice to the crew (Quindar tones)" },
   },
 ];
 export const stationOf = (id: string | null | undefined): Station => STATIONS.find((s) => s.id === id) ?? STATIONS[0]!;

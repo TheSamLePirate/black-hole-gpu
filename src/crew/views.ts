@@ -304,7 +304,7 @@ export class CrewViews {
     this.onInspect();
   }
   private contentHeight() {
-    if (this.view === "schematic") return Math.max(this.H, systemsHeight(this.W - 16) + 16);
+    if (this.view === "schematic") return Math.max(this.H, systemsHeight(this.W - 16, this.model.own()?.snapshot?.aar ? 9 : 8) + 16);
     if (this.view === "plan") return planHeight(this.scene(false), this.W - 16, this.H - 16) + 16;
     return this.H;
   }

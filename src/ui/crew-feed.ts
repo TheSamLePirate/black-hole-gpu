@@ -16,6 +16,7 @@ import { VESSELS } from "../vessels";
 import { cruiseBurn } from "../f35/cruise";
 import { CARRIER } from "../game/carrier";
 import { enuAt } from "../controller/traffic";
+import { TANKER } from "../controller/jetmodes";
 import { WGS84_A, WGS84_F, wgs84Inverse, wgs84Offset } from "../system/ellipsoid";
 
 const D = Math.PI / 180;
@@ -76,6 +77,7 @@ function warnings(i: Info, status: RangerStatus | null, fuelKg: number | null, b
   if (A?.failure) w.push("FAILURE");
   if (fuelKg !== null && bingo !== null && fuelKg < bingo) w.push("BINGO");
   if (i.engine.fuel && i.engine.fuel.fraction < 0.1) w.push("FUEL LOW");
+  if (i.aar?.phase === "BREAKAWAY") w.push("BREAKAWAY");
   // (the free-fall path's impact: a rocket's, a glider's out of the air — an aircraft flying always "hits" on it)
   if (status?.next?.kind === "impact" && status.next.inS < 120 && !(A?.inAir && A.mode !== "rocket")) w.push("IMPACT");
   return w;
@@ -148,8 +150,9 @@ function surroundings(c: CameraController, i: Info, here: { lat: number; lon: nu
         lon: r5(at.lon),
         alt: Math.round(here.alt + q.dz),
         hdg: q.trk !== null ? q.trk + psi : null,
-        spd: null,
-        type: "",
+        spd: q.spd ?? null,
+        // (the tanker: its airframe named — the crew's traffic shows TEXACO for what it is)
+        type: q.name === TANKER ? "A330 MRTT" : "",
       });
     });
   }
@@ -358,6 +361,8 @@ export function crewSnapshot(c: CameraController, i: Info, status: RangerStatus 
     caps: { on: c.s.netCrewActions !== false, fam: crewFamilies(c) },
     sun: sunOver(body, t),
     arms: fleet.active === "f35" ? armsOf(c) : null,
+    // (the refuelling behind TEXACO: its phase, the way it is flown, the fuel given, the gap to the basket)
+    aar: fleet.active === "f35" ? c.aarCrew() : null,
     ...(around && body === "earth" ? surroundings(c, i, g ? { lat: g.lat, lon: g.lon, alt: g.alt } : null) : {}),
     radar: i.radar
       ? {

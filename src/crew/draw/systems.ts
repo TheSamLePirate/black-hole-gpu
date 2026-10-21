@@ -3,6 +3,8 @@
 // heat, the orbit drawn, the autopilot's and the assistance's modes, the alerts — cards laid out to the width.
 import { C, clamp, D, deg360, dur, fmt, type Pen, TAU, type Rect } from "./kit";
 import type { Scene } from "./scene";
+import { drawAar } from "./aar";
+import { L } from "../lang";
 
 const ok = (x: number | null | undefined): x is number => typeof x === "number" && Number.isFinite(x);
 
@@ -137,6 +139,10 @@ export function drawSystems(p: Pen, r: Rect, sc: Scene) {
       } else if (ok(frac)) row(q.y + 124, "NIVEAU", `${fmt(frac * 100)} %`);
     },
   });
+  // the refuelling behind the tanker (its phase, the gap, the hose, the fuel taken)
+  const aar = snap?.aar;
+  if (aar)
+    cards.push({ title: L("RAVITAILLEMENT EN VOL", "AIR REFUELLING"), h: 190, draw: (q) => drawAar(p, { ...q, y: q.y + 14 }, aar, u) });
   // the configuration
   cards.push({
     title: "CONFIGURATION",
@@ -344,7 +350,7 @@ export function drawSystems(p: Pen, r: Rect, sc: Scene) {
       if (!warn.length) p.text("AUCUNE ALERTE", q.x + q.w / 2, q.y + 70, { col: C.green, size: 13, align: "center", weight: 700 });
       const gw = (q.w - 34) / 2;
       warn.slice(0, 8).forEach((w, i) => {
-        const red = /PULL|FLY|STALL|G-LOC|MISSILE|OVER|IMPACT|FAIL/.test(w);
+        const red = /PULL|FLY|STALL|G-LOC|MISSILE|OVER|IMPACT|FAIL|BREAKAWAY/.test(w);
         const blink = red && Math.floor(sc.now * 2.5) % 2 === 0;
         lamp(p, q.x + 14 + (i % 2) * (gw + 6), q.y + 34 + Math.floor(i / 2) * 28, gw, !blink || !red, w, red ? C.red : C.amber);
       });

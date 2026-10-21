@@ -12,11 +12,12 @@ import { dur } from "./draw/kit";
 import { bodyName } from "./draw/orbit";
 import { eventName } from "./draw/spacestat";
 import { linkFor, Outbox, type Station, type StationId, STATIONS, stationOf } from "./station";
-import { CHECKLISTS_FR } from "./checklists";
+import { checklistOf } from "./checklists";
 import { type CrewProfile, PROFILE_TILES, PROFILE_VIEWS, profileOf, type TileKey, viewIn } from "./profile";
 import { CrewActions, type Done } from "./actions";
 import { ACTS, type Act, AUTO_FR, AUTOS, HOLD_FR, HOLDS, MANEUVER_FR, MANEUVERS } from "../net/crewcmd";
 import type { Args } from "../ai/tool-schema";
+import { L, Lp } from "./lang";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const button = (text: string, action: () => void, id?: string) => {
@@ -104,13 +105,13 @@ name.value = store.get("kerr.crew.name") || net.o.id.name;
     for (const st of STATIONS.filter((x) => x.place === place)) {
       const o = document.createElement("option");
       o.value = st.id;
-      o.textContent = st.place === "ground" ? `${st.call} — ${st.title}` : st.title;
+      o.textContent = st.place === "ground" ? `${st.call} — ${Lp(st.title)}` : Lp(st.title);
       o.selected = st.id === station.id;
       g.append(o);
     }
     sel.append(g);
   }
-  const role = () => ($("station-role").textContent = stationOf(sel.value).role);
+  const role = () => ($("station-role").textContent = Lp(stationOf(sel.value).role));
   sel.addEventListener("change", role);
   role();
 }
@@ -830,7 +831,7 @@ function alerts(own: ReturnType<typeof model.own>) {
   if (key === alertKey) return;
   alertKey = key;
   $("alerts").replaceChildren(
-    ...list.map((w) => el("span", w, `alert${/PULL|FLY|STALL|G-LOC|MISSILE|OVER|IMPACT|FAIL/.test(w) ? " warning" : ""}`)),
+    ...list.map((w) => el("span", w, `alert${/PULL|FLY|STALL|G-LOC|MISSILE|OVER|IMPACT|FAIL|BREAKAWAY/.test(w) ? " warning" : ""}`)),
     ...(list.length ? [actButton("Acquitter", "cfg.ack", {}, "ack-alarm")] : []),
   );
   syncActs();
@@ -1137,6 +1138,42 @@ function buildMcp() {
     actButton("Couper le mode", "ap.mode", { mode: "off" }, "mcp-mode-off"),
   );
   modes.append(modeBox);
+  // the refuelling (jet_mode's tanker): TEXACO set and joined behind a hose, the way it is flown, let go
+  const aar = () => snapNow()?.aar ?? null;
+  const fuel = document.createElement("details");
+  fuel.className = "pan-controls mcp-pop";
+  fuel.append(el("summary", "AAR"));
+  const fuelBox = el("div");
+  const near = document.createElement("label");
+  near.className = "mcp-check";
+  const nearBox = document.createElement("input");
+  nearBox.type = "checkbox";
+  nearBox.id = "mcp-tanker-near";
+  near.append(nearBox, L("à 1,5 km, à notre altitude", "1.5 km ahead, at our height"));
+  const aarModes = actGroup(L("Conduite", "Flown"), [
+    [L("Auto", "Auto"), "ap.mode", { mode: "refuelMode", refuelMode: "auto" }, () => aar()?.mode === "auto"],
+    [L("Assisté", "Assisted"), "ap.mode", { mode: "refuelMode", refuelMode: "assisted" }, () => aar()?.mode === "assisted"],
+    [L("Manuel", "Manual"), "ap.mode", { mode: "refuelMode", refuelMode: "manual" }, () => aar()?.mode === "manual"],
+  ]);
+  aarModes.id = "mcp-aar-mode";
+  fuelBox.append(
+    actButton(
+      L("Ravitailleur · tuyau droit", "Tanker · right hose"),
+      "ap.mode",
+      () => ({ mode: "tanker", side: "right", ...(nearBox.checked ? { near: true } : {}) }),
+      "mcp-tanker",
+    ),
+    actButton(
+      L("Tuyau gauche", "Left hose"),
+      "ap.mode",
+      () => ({ mode: "tanker", side: "left", ...(nearBox.checked ? { near: true } : {}) }),
+      "mcp-tanker-left",
+    ),
+    near,
+    aarModes,
+    actButton(L("Arrêter le ravitaillement", "Stop the refuelling"), "ap.mode", { mode: "tankerOff" }, "mcp-tanker-off"),
+  );
+  fuel.append(fuelBox);
   const go = actButton("Remise de gaz", "ap.goAround", {}, "mcp-ga");
   go.classList.add("mcp-ga");
   // the switches on one row (a phone scrolls it), the three selectors on the other
@@ -1173,6 +1210,7 @@ function buildMcp() {
     ),
     app,
     modes,
+    fuel,
     go,
   );
   const kn = el("div", "", "mcp-knobs");
@@ -1388,7 +1426,7 @@ function syncSys() {
   }
   box.replaceChildren(
     ...F.map((f) => {
-      const L = CHECKLISTS_FR[f.kind];
+      const L = checklistOf(f.kind);
       const card = el("div", "", "fc-card");
       card.append(el("strong", L?.title ?? f.kind));
       const ticks = new Set(f.ticks ?? []);

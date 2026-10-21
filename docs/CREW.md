@@ -38,7 +38,13 @@ pour ce qu'un ancien pilote n'envoie pas.
   température de coque, bouclier, dommages, masse ;
 - `ils`, `orbit` (apogée, périgée, inclinaison, période, temps aux apsides, rayon du corps, demi-grand axe),
   `next` (prochain événement, avec son corps `body` : la console le nomme en français),
-  `msn` (objectif de mission), `warn` (alertes : FLY UP, PULL UP, STALL, GEAR, BINGO, MISSILE…) ;
+  `msn` (objectif de mission), `warn` (alertes : FLY UP, PULL UP, STALL, GEAR, BINGO, MISSILE, BREAKAWAY…) ;
+- `aar` (le ravitaillement en vol derrière TEXACO 11, `controller/aar.ts aarCrew`) : l'étape (rendez-vous ou derrière
+  le tuyau), la phase du HUD (PRE-CONTACT, CLEARED, CONTACT, FUEL FLOW, FULL, BREAKAWAY, DEPART), la conduite
+  (automatique, assistée, manuelle), le ravitailleur et le côté du tuyau, le carburant transféré et demandé (un exercice
+  quand les réservoirs ne le prennent pas), l'écart de la sonde au panier le long du tuyau et hors de son axe, la vitesse
+  de rapprochement, le tuyau enfoncé contre sa plage de transfert et son dégagement, les feux du pod, les contacts et les
+  ratés, la distance au ravitailleur ;
 - les pistes du radar du pilote, leur identification et le verrouillage : 24 au plus, la piste verrouillée
   d'abord, puis les plus proches ;
 - la route (32 points, avec contraintes d'altitude et de vitesse) et la trajectoire prévue (48 points, avec
@@ -46,7 +52,8 @@ pour ce qu'un ancien pilote n'envoie pas.
   (pas à pas sur l'ellipsoïde WGS84), sinon la trajectoire de chute libre ou planifiée ;
 - une fois par seconde, `traffic` et `zones` : le trafic réel (les 64 avions ADS-B les plus proches), les
   unités d'une mission (hostiles, amies, neutres, détruites), les porte-avions, les cibles d'un combat (leur camp
-  réel, celui du monde de combat ; en mission, celles que ses unités ne montrent pas déjà), les
+  réel, celui du monde de combat, et leur vitesse ; en mission, celles que ses unités ne montrent pas déjà ; le
+  ravitailleur TEXACO 11 y figure en ami, nommé « A330 MRTT »), les
   zones d'objectif et la portée des SAM. La console fusionne les listes de tous les pilotes (sans doublon) et
   les extrapole entre deux envois le long de leur cap (rayons de courbure WGS84).
 
@@ -150,12 +157,12 @@ système 3D).
 | vue | contenu |
 |---|---|
 | Tableau | PFD + ND ; sur grand écran aussi la carte et le plan de vol. Toucher un panneau l'ouvre |
-| Vol (PFD) | horizon, échelle de tangage, inclinaison et dérapage, vecteur vitesse, rubans vitesse (consigne, tendance) et altitude (consigne, sol), vario, cap (consigne, route, point actif, objectif), FMA, ILS, hauteur radio, G, α |
+| Vol (PFD) | horizon, échelle de tangage, inclinaison et dérapage, vecteur vitesse, rubans vitesse (consigne, tendance) et altitude (consigne, sol), vario, cap (consigne, route, point actif, objectif), FMA (la phase AAR à la place du mode pendant un ravitaillement), ILS, hauteur radio, G, α ; derrière le ravitailleur, le panneau AAR sur l'horizon |
 | Navigation (ND) | arc cap en haut ou rose nord en haut, route (branche active magenta), T/D, prédiction, vent, trafic façon TCAS (hauteur relative), navires, unités, zones, joueurs, pistes radar |
 | Carte | OpenStreetMap de nuit, Web Mercator, zoom continu ; traînée colorée par l'altitude, prédiction minutée, plan, zones, tous les contacts, joueurs ; étiquettes sans chevauchement |
 | Globe | la Terre photographiée : NASA Blue Marble (relief ombré et bathymétrie) le jour, Black Marble (lumières des villes) la nuit, terminateur à l'heure du simulateur du pilote (`sun` dans l'instantané), limbe assombri, halo de l'atmosphère, étoiles — en WebGPU (textures 4 096 px avec leurs mipmaps), sinon sur le processeur (2 048 px, une image par changement de vue), sinon (hors ligne) le globe vectoriel |
 | Radar | balayage et rémanence ; positions partagées (joueurs + trafic + unités) ou capteur du pilote ; liste triée par distance |
-| Systèmes | moteur, carburant (bingo, autonomie, rayon, à l'arrivée), configuration, charge/incidence, structure, pilote automatique et assistance, orbite, alertes |
+| Systèmes | moteur, carburant (bingo, autonomie, rayon, à l'arrivée), **ravitaillement en vol** (phase, conduite, feux du pod, sonde → panier, hors axe, rapprochement, tuyau enfoncé sur sa plage, carburant transféré, contacts et ratés), configuration, charge/incidence, structure, pilote automatique et assistance, orbite, alertes |
 | Plan de vol | profil vertical (niveaux, contraintes, T/D, hauteurs prévues) et branches (distance, ETE, ETA, altitude, vitesse), carburant à l'arrivée |
 | Télémétrie | une mesure (min/moy/max, curseur) ou quatre empilées |
 
@@ -282,7 +289,7 @@ du pilote ; le pilote voit un toast « Ben (équipage) : train sorti » et garde
 |---|---|---|
 | navigation (sur Terre) | Plan de vol (barre), Carte et ND (toucher, glisser un point), menu d'un contact | ajouter un terrain ou un lieu, un point touché (à la fin, avant le point actif, « Direct ici »), contraintes d'altitude et de vitesse, déplacer, supprimer, direct, croisière, procédures, vider (second appui), cibler |
 | configuration (appareil qui vole) | Systèmes (barre), bandeau des alertes | train, volets 0/½/plein, aérofrein, SAS, acquitter l'alarme |
-| pilote automatique avion | MCP sous le PFD et le Tableau | AP, A/THR, sélecteurs VIT/CAP/ALT (maintenir : plus vite), LNAV, VNAV, approche ILS, orbite ici, attente, suivi de terrain, interception et formation (menu d'un contact), remise de gaz |
+| pilote automatique avion | MCP sous le PFD et le Tableau | AP, A/THR, sélecteurs VIT/CAP/ALT (maintenir : plus vite), LNAV, VNAV, approche ILS, orbite ici, attente, suivi de terrain, interception et formation (menu d'un contact), remise de gaz ; **AAR** : le ravitailleur TEXACO posé et rejoint derrière le tuyau droit ou gauche (à 25 km et 7 000 m, ou à 1,5 km à notre altitude), la conduite automatique, assistée ou manuelle, l'arrêt du ravitaillement (`ap.mode` `tanker`, `refuelMode`, `tankerOff`) |
 | ordinateur de vol (vaisseau) | le même bandeau, hors de l'air | tenue d'attitude, autopilotes (atterrir, décoller vers une orbite…), manœuvres et missions en **aperçu** chiffré puis exécutées, plan, relâcher |
 | armement (F-35) | bandeau sous le Radar, menu d'un contact | mode radar, arme, verrouillage, **TIR** et canon à maintenir 0,6 s (au clavier : deux appuis), leurres |
 

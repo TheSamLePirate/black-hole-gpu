@@ -1,7 +1,10 @@
-// The failures' checklists in French for the crew's EECOM view (PLAN-VAISSEAUX K4): the game's own (game/systems.ts
-// CHECKLISTS) as its French dictionary has them — the console is French and loads no dictionary; a test keeps the two
-// in step.
-export const CHECKLISTS_FR: Record<string, { title: string; steps: string[]; action: string }> = {
+// The failures' checklists for the crew's EECOM view (PLAN-VAISSEAUX K4), in the console's two languages: the game's
+// own (game/systems.ts CHECKLISTS) in English, and as its French dictionary has them — the console loads neither the
+// game's systems nor its dictionaries; a test keeps the three in step.
+import { lang } from "./lang";
+
+type Checklist = { title: string; steps: string[]; action: string };
+export const CHECKLISTS_FR: Record<string, Checklist> = {
   engine: {
     title: "MOTEUR PRINCIPAL ÉTEINT",
     steps: ["Gaz à zéro", "Vérifier la pression d'alimentation en ergols", "Attendre 30 s que la chambre refroidisse", "Allumeurs armés"],
@@ -41,3 +44,38 @@ export const CHECKLISTS_FR: Record<string, { title: string; steps: string[]; act
     action: "MONTER LA CARTOUCHE DE SECOURS",
   },
 };
+
+export const CHECKLISTS_EN: Record<string, Checklist> = {
+  engine: {
+    title: "MAIN ENGINE OUT",
+    steps: ["Throttle to zero", "Check propellant feed pressure", "Wait 30 s for the chamber to cool", "Igniters armed"],
+    action: "RELIGHT",
+  },
+  rcsStuck: {
+    title: "RCS THRUSTER STUCK OPEN",
+    steps: ["Identify the quad by the drift", "Hold the attitude with the SAS", "Close the quad's isolation valves"],
+    action: "ISOLATE THE QUAD",
+  },
+  gyro: {
+    title: "IMU DRIFT",
+    steps: ["Compare the attitude with the star tracker", "Release the holds", "Select the backup IMU"],
+    action: "SWITCH TO THE BACKUP IMU",
+  },
+  bus: {
+    title: "MAIN BUS SHORT",
+    steps: ["Shed the non-essential loads", "Open the faulty bus's breaker", "Tie the essential loads to bus B"],
+    action: "BUS TIE",
+  },
+  o2Leak: {
+    title: "CABIN OXYGEN LEAK",
+    steps: ["Suits on, helmets closed", "Find the leak by the pressure drop", "Close the tank's cross-feed valve"],
+    action: "CLOSE THE VALVE",
+  },
+  scrubber: {
+    title: "CO₂ SCRUBBER FAILED",
+    steps: ["Check the CO₂ partial pressure", "Fit the spare cartridge's adapter", "Restart the fan"],
+    action: "FIT THE SPARE CARTRIDGE",
+  },
+};
+/** a failure's checklist in the console's language (none: an unknown failure, a newer pilot's) */
+export const checklistOf = (kind: string): Checklist | undefined => (lang() === "fr" ? CHECKLISTS_FR : CHECKLISTS_EN)[kind];

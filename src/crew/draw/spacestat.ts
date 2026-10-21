@@ -4,6 +4,8 @@
 import { bodyName } from "./orbit";
 import { C, dur, fmt, type Pen, type Rect } from "./kit";
 import type { Scene } from "./scene";
+import { aarColour, aarPhaseName } from "./aar";
+import { L } from "../lang";
 
 const FAILURE_FR: Record<string, string> = {
   engine: "MOTEUR PRINCIPAL ÉTEINT",
@@ -143,6 +145,8 @@ export function drawAirStatus(p: Pen, r: Rect, sc: Scene) {
       .join(" · ");
     cell("Emports", st || "—");
   }
+  // (the refuelling: its phase and the fuel taken)
+  if (s.aar) cell(L("Ravitaillement", "Refuelling"), `${aarPhaseName(s.aar.phase)} · ${fmt(s.aar.given)} kg`, aarColour(s.aar));
   const w = s.warn ?? [];
   cell("Alertes", w.length ? w.join(" · ") : "aucune", w.length ? C.red : C.green);
 }

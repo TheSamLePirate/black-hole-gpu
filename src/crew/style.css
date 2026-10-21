@@ -1393,6 +1393,18 @@ dialog input {
 .mcp-pop input {
   min-height: 40px;
 }
+/* (a checkbox's line in a pop: the box and its words side by side — the tanker set close by) */
+.mcp-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.mcp-pop .mcp-check input {
+  min-height: 0;
+  width: 18px;
+  height: 18px;
+}
 .mcp-ga {
   border-color: #5a4422 !important;
   color: var(--amber);

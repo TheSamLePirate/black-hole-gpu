@@ -102,6 +102,7 @@ declare module "../controls" {
     aarModeSet: typeof aarModeSet;
     aarHud: typeof aarHud;
     aarShips: typeof aarShips;
+    aarCrew: typeof aarCrew;
   }
 }
 
@@ -510,6 +511,40 @@ function aarHud(this: CameraController, Cm: (v: V3 | null) => V3 | null) {
   };
 }
 
+/** The refuelling for a crew console (ui/crew-feed.ts, the `aar` block): the stage, the HUD's word, the way it is flown,
+ *  the tanker, the hose's side; the fuel given and asked [kg]; the probe's gap to the basket along its hose and off it
+ *  [m], the closing speed [m/s], the hose pushed in and its flow range [m] (locked); the pod's lights; the contacts and
+ *  misses; the tanker's distance [m]. Null when none is engaged. */
+function aarCrew(this: CameraController) {
+  const A = this.aar;
+  if (!A) return null;
+  const S = A.s;
+  const T = tankerOf(this, A);
+  const P = this.combatPlayer();
+  const hose = A.stage === "hose" && !!T && !!P;
+  const g = hose ? gapOf(wToT(T!, tipOf(P!, A.probe)), S.basket) : null;
+  return {
+    stage: A.stage,
+    phase: A.stage === "join" ? "JOIN" : annunciator(S, A),
+    mode: A.mode,
+    tanker: A.name,
+    side: A.side,
+    given: S.given,
+    want: S.want,
+    practice: A.practice,
+    along: g ? g.along : null,
+    off: g ? g.off : null,
+    closure: hose ? S.closure : null,
+    takeup: S.phase === "contact" ? S.takeup : null,
+    flow: [AAR.flow[0], AAR.flow[1]] as [number, number],
+    whip: AAR.whip,
+    lights: (A.stage === "hose" ? lightsOf(S) : "off") as AarLights,
+    contacts: S.contacts,
+    misses: S.misses,
+    dist: T && P ? Math.hypot(...sub(T.p, P.p)) : null,
+  };
+}
+
 /** The tanker's hoses and lights, our probe, for the renderer (controller/combat.ts combatShips): each from the flown
  *  craft's origin on the camera's axes (M), its axes. */
 function aarShips(
@@ -553,5 +588,5 @@ function aarShips(
 }
 
 export function installAar(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { aarBegin, aarJet, aarOff, aarModeSet, aarHud, aarShips });
+  Object.assign(C.prototype, { aarBegin, aarJet, aarOff, aarModeSet, aarHud, aarShips, aarCrew });
 }
