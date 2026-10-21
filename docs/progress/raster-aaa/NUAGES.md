@@ -37,3 +37,20 @@ Gain modeste : à l'ombrage ¼, un quart des pixels marchaient déjà leurs nuag
 touchée à chaque image (l'historique ne s'accumule pas), l'image perd 1 à 5 dB (bords adoucis par la demi-résolution). La
 valeur de la passe : un historique reprojeté avec la profondeur des nuages (en mouvement), le ciel ombré à la demi-résolution
 plutôt qu'à un rayon par bloc 4 × 4, et un budget propre pour la lumière (N2).
+
+En mouvement (virage de 60°, image figée contre la convergée) : sous les cumulus, la passe améliore un peu l'image
+(36,5–37,1 dB contre 35,9–36,1) ; au-dessus de la couche, elle la dégrade un peu (41,9–42,2 contre 43,5–43,6 : la
+demi-résolution adoucit les sommets qui remplissent l'écran) ; coût égal.
+
+## N2a — la lumière marchée à travers les nuages — fait
+
+- `wxDensity(p, i, cheap)` : la densité d'une couche météo factorisée de `wxCloud` (la version « bon marché » : la couverture
+  et une octave de forme — les échantillons de lumière de Nubis, sans le détail fin que l'œil résout).
+- `wxLightTau` : la profondeur optique vers le Soleil marchée dans la couche elle-même, 6 échantillons à pas doublés (60 m …
+  1,9 km, ≈ 3,8 km), au lieu de la colonne verticale de la couverture : cœurs sombres, flancs à l'ombre, ombre d'une tour sur
+  sa voisine. Dans la passe de nuages et le noyau de convergence (la référence) ; les marches par pixel gardent la colonne.
+- `TUNE_CLOUD_LIGHT` (0 : la colonne, pour comparer).
+
+Coût de la passe (A/B alterné, lignes valides) : cumulus dessous 0,8 → 2,1 ms, dessus 1,1 → 1,7, couvert 1,8 → 3,9, orage
+2,1 → 5,4. Les sommets gagnent leur modelé ; l'ensemble reste gris-beige et plat — l'ambiante constante et les faibles poids de
+la diffusion multiple : l'étape suivante (N2b, l'ambiante physique du ciel partagée).

@@ -13,6 +13,11 @@ const PLACES: Record<string, string> = {
     __bh.game.flyAt(36.08, -5.6, 700, 20, 240);`,
   alps: `__bh.game.setDate("2026-07-10T11:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
     __bh.game.flyAt(45.85, 6.75, 2500, 110, 200);`,
+  // (the weather's clouds — docs/PLAN-NUAGES-AAA.md —: under a cumulus deck, over it)
+  "tarifa-cumulus": `__bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set("weather", "cloudy"); __bh.game.set("earthClouds", 1);
+    __bh.game.flyAt(36.08, -5.6, 700, 20, 240);`,
+  "cumulus-above": `__bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set("weather", "cloudy"); __bh.game.set("earthClouds", 1);
+    __bh.game.flyAt(36.08, -5.6, 3400, 20, 240);`,
 };
 const RASTER = `__bh.settings.earthPipeline = "raster"; __bh.settings.earthRasterShading = "quarter"; __bh.game.set("realtimeSubsampling", 4);`;
 const MODES: Record<string, string> = {
@@ -26,6 +31,9 @@ const MODES: Record<string, string> = {
   rastersharp: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.sharpen = 0.6; __bh.renderer.taParams = [1 / 16, 0.05, 2];`,
   rasterw15: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.sharpen = 0.3; __bh.renderer.taParams = [1 / 16, 0.15, 2];`,
   rasterdefault: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.sharpen = 0.3; __bh.renderer.taParams = [1 / 16, 0.05, 2];`,
+  // (the cloud pass — trace.wgsl clouds — and its history off: each pixel marches its clouds)
+  rasternopass: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.sharpen = 0.3; __bh.renderer.taParams = [1 / 16, 0.05, 2]; __bh.renderer.cloudPassOn = false;`,
+  rasterpass: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.sharpen = 0.3; __bh.renderer.taParams = [1 / 16, 0.05, 2]; __bh.renderer.cloudPassOn = true;`,
 };
 const DETAIL = `Object.assign(__bh.settings, { earthScenery: "high", detailReach: "veryFar", earthSceneryShadows: true, earthSurface: "satellite" });`;
 const places = (process.env.PLACES ?? "tarifa-low,alps").split(",");

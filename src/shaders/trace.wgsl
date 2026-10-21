@@ -243,6 +243,8 @@ var<private> RASTER_PATH: u32 = 0u;
 // (the raster hint's grazing limit: a ray lower than this sine over the ground below the hint is marched as before — 0: never,
 // a measure of what the grazing rays' marches cost, the thin ridges then missed)
 override TUNE_HINT_GRAZE: f32 = 0.15;
+// (the cloud pass's light marched through the clouds — 1; 0: the column of their cover, as the pixels' own marches have it)
+override TUNE_CLOUD_LIGHT: u32 = 1u;
 // (the raster hint's refinement: its Illinois steps at most — 10; fewer, a measure of what they cost)
 override TUNE_HINT_ITER: u32 = 10u;
 // (1: Gargantua's bodies far from a step rejected before their place at its end — 0: each worked out, a measure)
@@ -7106,6 +7108,44 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
 // tower ~150: a dark base); the sunlight dimmed by the layers over it too, the blue sky's light on its
 // tops spread through it (a deck's base grey, not the sun's own warm tint). Out to 480 km: the weather's
 // reach round the camera.
+// A weather layer's density at p (its axes, radii): its extinction [1/m] (x) and its height in the layer (y); cheap: the cover
+// and one octave of its shape — the light march's (Nubis: the light's samples without the fine detail the eye resolves)
+fn wxDensity(p: vec3f, i: u32, cheap: bool) -> vec2f {
+  let L = P.wx[1u + i];
+  let hb = L.x / EARTH_RM;
+  let ht = L.y / EARTH_RM;
+  let r = length(p);
+  let q = p / r;
+  let hn = (r - 1.0 - hb) / (ht - hb);
+  if (hn <= 0.0 || hn >= 1.0) { return vec2f(0.0, hn); }
+  let w = wxNear(q);
+  if (w <= 0.0) { return vec2f(0.0, hn); }
+  let a = wxLayerA(q, i) * w;
+  if (a <= 0.01) { return vec2f(0.0, hn); }
+  let x = wxAt(q, 1600.0) + vec3f(f32(i) * 11.3, f32(i) * 5.9, 0.0) + vec3f(0.0, 0.0, hn * 1.5);
+  var sh = 0.6 * dnoise(x);
+  if (!cheap) { sh += 0.3 * dnoise(x * 2.0 + vec3f(5.1)) + 0.1 * dnoise(x * 4.0 + vec3f(1.7)); }
+  let top = clamp(0.55 + 0.35 * a + 0.3 * sh, 0.3, 1.0);
+  let hp = smoothstep(0.0, 0.04 + 0.1 * max(sh, 0.0), hn) * (1.0 - smoothstep(0.5 * top, top, hn));
+  let rho = hp * clamp(1.4 * (a * (0.7 + 0.6 * sh) - 0.15), 0.0, 1.0);
+  return vec2f(rho * L.w / ((ht - hb) * EARTH_RM * max(top, 0.3)), hn);
+}
+// (the cloud pass — trace.wgsl clouds —: the sunlight marched through the clouds themselves rather than a column of their cover)
+var<private> CLOUD_LIGHT_MARCH: bool = false;
+// The optical depth towards the Sun from p through layer i's own density: 6 samples, each step twice the last (60 m … 1.9 km,
+// ~3.8 km in all — a deck's depth at a low Sun), the cheap density (docs/PLAN-NUAGES-AAA.md N2)
+fn wxLightTau(p: vec3f, i: u32, Ls: vec3f, rnd: f32) -> f32 {
+  var tau = 0.0;
+  var d = 0.0;
+  var st = 60.0;
+  for (var k = 0u; k < 6u; k++) {
+    let x = p + Ls * ((d + st * (0.35 + 0.3 * rnd)) / EARTH_RM);
+    tau += wxDensity(x, i, true).x * st;
+    d += st;
+    st *= 2.0;
+  }
+  return tau;
+}
 fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f32) -> CloudVol {
   var o: CloudVol;
   o.t = -1.0;
@@ -7167,7 +7207,11 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
     let hM = (r - 1.0) * EARTH_RM;
     let Ts = sunThrough(airHeight(p), mu0) * sunSeen(p, Ls) * wxVeil(hM, w, i).y;
     let tauUp = a * L.w * max(top - hn, 0.0) / max(top, 0.3);
-    let tauSun = 0.4 * tauUp / max(mu0, 0.12);
+    // (the cloud pass: the sunlight's optical depth marched through the layer's own density — cores dark, the gaps between
+    // cumulus lit, a tower's shadow on its neighbour; else the column of its cover over the point)
+    var tauSun = 0.4 * tauUp / max(mu0, 0.12);
+    // (and the converging kernel, the reference the realtime image is held to)
+    if (CLOUD_LIGHT_MARCH || (QUALITY_PIPELINE && TUNE_CLOUD_LIGHT > 0u)) { tauSun = wxLightTau(p, i, Ls, fract(jit * 13.7 + f32(j) * 0.618)); }
     let beer = select(exp(-tauSun), 0.0, mu0 < -0.1);
     let powder = 1.0 - exp(-2.0 * sigma * 400.0 - 0.15);
     let over = 0.3 + 0.7 * exp(-0.25 * tauUp);
@@ -8728,8 +8772,10 @@ fn clouds(@builtin(global_invocation_id) gid: vec3u) {
       WX_Q = normalize(ro);
       let rnd = fract(ign(vec2f(gid.xy)) + f32(frameStamp % 1024u) * 0.6180339887);
       RND = fract(rnd * 7.31 + 0.13);
+      CLOUD_LIGHT_MARCH = TUNE_CLOUD_LIGHT > 0u;
       cs = earthClouds(k, ro, rd, tHit, normalize(squashed(toBody(lt.dir), ab)), lt.e, squashed(toBody(P.camRight.xyz), ab),
         squashed(toBody(P.camUp.xyz), ab), 0.0, pixFoot(), fract(rnd * 7.31 + 0.37), P.earth4.w > 0.5);
+      CLOUD_LIGHT_MARCH = false;
       WX_W = 0.0;
       // (the cloud's distance as the image's depths have it [M] — the history's reprojection, post.wgsl cloudTemporal)
       if (cs.tc > 0.0) { depthM = cs.tc / m * bodyRadius(k); }
