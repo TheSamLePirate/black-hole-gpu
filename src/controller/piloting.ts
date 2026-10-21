@@ -809,8 +809,11 @@ function pilotInput(this: CameraController, pad: ReturnType<GamepadInput["poll"]
   i.ty = h("rcsUp") - h("rcsDown");
   i.tz = h("rcsForward") - h("rcsBack");
   // (Shift and Alt on either side while they are the defaults)
-  const up = h("throttleUp") || (heldCode("throttleUp") === "ShiftLeft" && k("ShiftRight")) || (this.keys.has("ArrowUp") ? 1 : 0);
-  const down = h("throttleDown") || (heldCode("throttleDown") === "AltLeft" && k("AltRight")) || (this.keys.has("ArrowDown") ? 1 : 0);
+  // (the arrows: the throttle — the designation cursor's slew while it is held)
+  const arrows = !this.tdc.on;
+  const up = h("throttleUp") || (heldCode("throttleUp") === "ShiftLeft" && k("ShiftRight")) || (arrows && this.keys.has("ArrowUp") ? 1 : 0);
+  const down =
+    h("throttleDown") || (heldCode("throttleDown") === "AltLeft" && k("AltRight")) || (arrows && this.keys.has("ArrowDown") ? 1 : 0);
   i.throttle = up - down;
   const t = this.touchInput;
   i.pitch = clamp(i.pitch + t.pitch, -1, 1);

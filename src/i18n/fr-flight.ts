@@ -22,6 +22,9 @@ export default {
   "The flight's leader: the orders' wheel (rejoin, formation, tighten, loosen, attack my target, engage, cover me, hold here, RTB, break) — to the room's wingmen and the AI wingmen; its key (F13) given another in the controls, or a HOTAS button":
     "Le leader de la patrouille : la roue des ordres (rejoindre, formation, serrer, s'écarter, attaquer ma cible, engager, me couvrir, tenir ici, rentrer, dégagement) — aux ailiers du salon et aux ailiers IA ; sa touche (F13) à réassigner dans les commandes, ou un bouton du HOTAS",
   "Tab held › Flight · F13": "Tab maintenu › Patrouille · F13",
+  "F15 held · F14 · LB + RB held, A": "F15 maintenu · F14 · LB + RB maintenus, A",
+  "The designation cursor (TDC — without a mouse): held, a cursor on the HUD's radar scope, or in the F-35's cockpit on the PCD page looked at; the arrows, a HOTAS's slew or hat, the pad's right stick move it; designate selects what is under it (again: locks it) — the keys given a HOTAS's buttons in the controls; on the pad, both bumpers held and A":
+    "Le curseur de désignation (TDC — sans souris) : maintenu, un curseur sur le scope radar du HUD, ou dans le cockpit du F-35 sur la page du PCD regardée ; les flèches, le slew ou le chapeau d'un HOTAS, le stick droit de la manette le déplacent ; désigner sélectionne ce qui est dessous (une seconde fois : le verrouille) — les touches données à des boutons du HOTAS dans les commandes ; à la manette, les deux gâchettes hautes maintenues et A",
   "Attack: lock a target first (Tab)": "Attaque : verrouillez d'abord une cible (Tab)",
   "Hold: in the air": "Attente : en vol",
   "The break: in the air": "Le dégagement : en vol",

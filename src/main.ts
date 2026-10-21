@@ -3343,6 +3343,11 @@ async function main() {
     return true;
   };
   const keyActions: Record<KeyAction, (e: KeyboardEvent, arg?: string) => void> = {
+    // (the designation cursor's « designate » — F14, a HOTAS's trigger: controller/tdc.ts)
+    designate: () => {
+      const said = camera.tdcDesignate();
+      if (said) panel.toast(said);
+    },
     // (the flight's leader: the orders' wheel — F2)
     orders: (e) => {
       if (!e.repeat && flying()) wheel.open(orderItems(), { fr: "Patrouille", en: "Flight" });
@@ -3569,7 +3574,10 @@ async function main() {
       else panel.toast(camera.radarLockNext());
       camera.pad.rumble(0.05, 0.25, 40);
     } else if (a === "intercept") panel.toast(camera.icptStart());
-    else if (a === "settings") (pauseMenu ??= makePauseMenu()).open();
+    else if (a === "designate") {
+      const said = camera.tdcDesignate();
+      if (said) panel.toast(said);
+    } else if (a === "settings") (pauseMenu ??= makePauseMenu()).open();
     else keyActions[a as KeyAction]?.(new KeyboardEvent("keydown"), arg);
   };
   // a spacecraft's pad layout (input/spacepad.ts — PLAN-VAISSEAUX X5): its keymap actions, and its own — the D-pad ▶'s
@@ -4681,6 +4689,26 @@ async function main() {
     const said = jetPcd.wheel(h.screen.u, h.screen.v, dir);
     if (said && dir) panel.toast(`PCD · ${said}`);
     return said !== null;
+  };
+  // (the designation cursor — PLAN-RADAR-AAA constat 29, controller/tdc.ts —: in the F-35's cockpit the PCD's page
+  // looked at — the view's centre on it —, else the HUD's scope while it is drawn; what is under it picked as a click)
+  camera.tdcWhere = () => {
+    if (settings.vessel === "f35" && (settings.shipMount === "cockpit" || settings.shipMount === "cabin")) {
+      const h = renderer.ship.jetPick(0, 0);
+      const page = h?.screen ? jetPcd.pageRect(h.screen.u, h.screen.v) : null;
+      if (page) return { kind: "pcd", page: page.page, rect: page.rect };
+    }
+    const D = scopeRange.disc;
+    return D && performance.now() - D.at < 500 ? { kind: "scope" } : null;
+  };
+  camera.tdcPick = (w, x, y) => {
+    if (w.kind === "pcd") {
+      const what = jetPcd.touch(x, y);
+      return what ? `PCD · ${what}` : null;
+    }
+    const D = scopeRange.disc;
+    if (!D) return null;
+    return camera.pictureSelect(flightHud.pickTrack(D.x + x * D.r, D.y - y * D.r)) || null;
   };
   // (a click in the view, flying in the air: a track selected — on the HUD's scope, in the view —, never a body; the
   // void: the selection let go — PLAN-RADAR-AAA RD9)
@@ -7664,6 +7692,9 @@ async function main() {
         if (settings.vessel === "f35" && (settings.shipMount === "cockpit" || settings.shipMount === "cabin")) {
           const t0 = performance.now();
           // (its data read every 100 ms, its parts drawn in turn — one a frame —, only those uploaded)
+          // (the designation cursor on a page of it: drawn there — PLAN-RADAR-AAA constat 29)
+          const T = camera.tdc;
+          jetPcd.tdc = T.on && T.screen?.kind === "pcd" ? { u: T.x, v: T.y } : null;
           const parts = jetPcd.frame(t0, () => {
             const al = alertsOf({ ...info, status, animate: settings.animate, fmtM: () => "" }).map((a) => ({
               text: a.text,

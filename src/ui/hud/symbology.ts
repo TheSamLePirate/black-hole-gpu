@@ -118,6 +118,8 @@ export interface SymInfo {
   dockBore?: number[] | null;
   /** a spacecraft's own panel (game/craftpanel.ts) */
   craftPanel?: import("../../game/craftpanel").CraftPanel | null;
+  /** the designation cursor on the HUD's scope (input/tdc.ts): its place, a share of the scope's radius (x right, y up) */
+  tdc?: { x: number; y: number } | null;
   /** the Lander's landing radar (radar/landing.ts) */
   landRadar?: import("../../radar/landing").LandingRadarOut | null;
   /** the powered landing's point (the LPD, controller/telemetry.ts) */
@@ -2980,6 +2982,25 @@ function drawRadar(
   ctx.lineTo(cx - 6 * dpr, cy + 6 * dpr);
   ctx.closePath();
   ctx.fill();
+  // the designation cursor (TDC — PLAN-RADAR-AAA constat 29): two bars and a dot where it stands, « TDC » by the mode
+  const tdc = F.i.tdc;
+  if (tdc) {
+    const x = cx + tdc.x * rad,
+      y = cy - tdc.y * rad;
+    stroke(
+      () => {
+        ctx.moveTo(x - 7 * dpr, y - 9 * dpr);
+        ctx.lineTo(x - 7 * dpr, y + 9 * dpr);
+        ctx.moveTo(x + 7 * dpr, y - 9 * dpr);
+        ctx.lineTo(x + 7 * dpr, y + 9 * dpr);
+      },
+      "rgba(255, 255, 255, 0.95)",
+      1.8,
+    );
+    ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+    ctx.fillRect(x - 1.2 * dpr, y - 1.2 * dpr, 2.4 * dpr, 2.4 * dpr);
+    text("TDC", cx - rad, cy + rad + 16 * dpr, "rgba(255, 255, 255, 0.9)", 10.5, "left", true);
+  }
   ctx.restore();
 }
 

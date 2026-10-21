@@ -250,6 +250,8 @@ export interface FlightInfo {
   pic: PicView[] | null;
   /** a spacecraft's sensors' tracks (PLAN-RADAR-AAA RD4 — controller/spacepic.ts) */
   spacePic: import("../radar/space").SpaceTrack[] | null;
+  /** the designation cursor on the HUD's scope (input/tdc.ts) */
+  tdc: { x: number; y: number } | null;
   /** the TCAS's most urgent advisory (PLAN-RADAR-AAA RD4 — ui/hud/symbology.ts drawTcas) */
   tcas: import("../ui/hud/symbology").SymInfo["tcas"];
   /** the pilot's eyes and body (game/gstrain.ts) */
@@ -459,6 +461,8 @@ function flightInfo(this: CameraController): FlightInfo {
     })(),
     // (a spacecraft's sensors — RD4 —: its tracks on its LVLH axes)
     spacePic: this.spacePic?.tracks ?? null,
+    // (the designation cursor on the HUD's scope — constat 29)
+    tdc: this.tdc.on && this.tdc.screen?.kind === "scope" ? { x: this.tdc.x, y: this.tdc.y } : null,
     // (the TCAS's most urgent advisory — RD4 —: every craft in the air; the intruder's place on the camera's axes)
     tcas: (() => {
       const a = this.tcas.find((x) => x.level === "TA" || x.level === "RA");

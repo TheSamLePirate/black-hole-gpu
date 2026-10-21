@@ -79,6 +79,9 @@ sont les écrans du cockpit qui informent.
 - **L'image spatiale côté crew** : elle passera par le flux compact de RD5 (le crew a déjà la cible, l'amarrage et les
   autres joueurs).
 
+*Suite du 2026-10-21* : les trois sont faits — [le radar de nez du Ranger](RD4-ranger-nose.md), [le radar
+d'atterrissage du Lander](RD4-lander-lr.md), [l'image spatiale au crew](RD4-crew-lvlh.md).
+
 ## Vérification
 
 **Unitaires** :

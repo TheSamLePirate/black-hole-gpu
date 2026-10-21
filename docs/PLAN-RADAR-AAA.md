@@ -689,7 +689,7 @@ Chaque phase : un commit, une fiche et une planche de captures (`docs/progress/r
 | RD4 | **fait** 2026-10-21 ([fiche](progress/radar/RD4.md)) : la spec radar, le DAS et l'EOTS capteurs, le TCAS (TA/RA, annonces, Auto-ACAS) pour tous, les capteurs et le scope LVLH des vaisseaux. **Suites** : le radar de nez du Ranger fait 2026-10-21 ([fiche](progress/radar/RD4-ranger-nose.md)), le radar d'atterrissage du Lander fait ([fiche](progress/radar/RD4-lander-lr.md)), l'image spatiale au crew faite ([fiche](progress/radar/RD4-crew-lvlh.md)) |
 | RD5, RD6 | **faits** 2026-10-21 ([fiche](progress/radar/RD5-RD6.md)) : l'image compacte au crew (dictionnaire, priorités, disparitions, faisceau, rattrapage des traînées), le magasin de pistes, Capteur et Partagé filtres d'une liste, le vrai faisceau, les ordres par id, les options gardées, la molette par pas |
 | RD12 | **fait** 2026-10-21 ([fiche](progress/radar/RD12.md)) : le Link 16 entre F-35 selon les règles du match, les règles annoncées à la salle |
-| RD14 | **fait** 2026-10-21 ([fiche](progress/radar/RD14.md)) : la campagne P1–P11, les docs `RADAR.md` et `RADAR.fr.md`, les anciens blocs retirés du flux. **P7** (l'A/B de l'image du pilote contre le commit de départ) **écarté à la demande du 2026-10-21** |
+| RD14 | **fait** 2026-10-21 ([fiche](progress/radar/RD14.md)) : la campagne P1–P11, les docs `RADAR.md` et `RADAR.fr.md`, les anciens blocs retirés du flux. **P7** (l'A/B de l'image du pilote contre le commit de départ) **écarté à la demande du 2026-10-21**. **Suite** : le curseur de désignation (TDC) à la manette et au HOTAS fait 2026-10-21 ([fiche](progress/radar/TDC.md)) — constat 29 |
 
 ## Risques
 

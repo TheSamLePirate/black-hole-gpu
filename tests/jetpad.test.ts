@@ -85,3 +85,22 @@ test("the buttons: their actions on the press; Y tapped the lock, held the inter
   expect(J.step(pad({ held: [0] }), 1 / 60).gun).toBe(true);
   expect(J.step(pad(), 1 / 60).gun).toBe(false);
 });
+
+test("both bumpers held: the TDC — the right stick its slew, the head still, A designates instead of the gun, no rudder", () => {
+  const J = new JetPad();
+  // (the head turned first, then the TDC taken: the head stays where it was)
+  run(J, pad({ rx: 1 }), 0.5);
+  const yaw0 = J.lookYaw;
+  const r = run(J, pad({ held: [4, 5], rx: 0.6, ry: -0.4 }), 0.5);
+  expect(r.out.tdc).toBe(true);
+  expect(r.out.tdcSlew).toEqual([0.6, -0.4]);
+  expect(J.lookYaw).toBeCloseTo(yaw0, 6);
+  expect(Math.abs(r.out.yaw)).toBeLessThan(0.05);
+  const a = run(J, pad({ held: [4, 5, 0] }), 0.05);
+  expect(a.acts).toContain("designate");
+  expect(a.out.gun).toBe(false);
+  // (let go: the gun A's again, no TDC)
+  const g = run(J, pad({ held: [0] }), 0.05);
+  expect(g.out.tdc).toBe(false);
+  expect(g.out.gun).toBe(true);
+});

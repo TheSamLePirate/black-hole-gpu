@@ -115,6 +115,11 @@ What each screen draws:
 - **A click on a symbol** (within 12 px) selects it on every screen: its card and its BRAA. A **second click** on the
   same symbol locks it, if it is a radar track. A click in the void lets the selection go (the lock stays).
 - **The crew's « Designate to the pilot »** does the same as the pilot's click.
+- **Without a mouse: the designation cursor (TDC)** (`input/tdc.ts`, `controller/tdc.ts`, finding 29). Held — the F-35
+  pad's two bumpers together, a HOTAS button given the held `tdc`, a key (F15 by default) —, a cursor stands on the HUD's
+  scope, or in the F-35's cockpit on the PCD page at the view's centre. The pad's right stick (the head then stays), a
+  throttle's slew (the RCS translation axes), a look hat or the arrows move it. **A**, or the `designate` action (F14, a
+  HOTAS trigger), picks what is under it as a click: selected, again locked; on the PCD, a touch there.
 - **The wheel over a radar** steps its range (a notch every 50 px) and is consumed: the camera's field never moves. The
   common steps are 2 … 320 km for the air, 1 000 and 10 000 km for space; the crew's scopes use them too (a pinch settles
   on the nearest).
@@ -204,6 +209,7 @@ Where the runways appear:
 **Unit tests**:
 
 - `radar` — the APG-81, the Ranger's nose radar (`AIR_RADARS`);
+- `tdc`, `jetpad` — the designation cursor, the pad's bumpers;
 - `radar-picture` — the merging, places, trails, DAS and EOTS;
 - `radar-symbols`;
 - `tcas`;
@@ -219,6 +225,7 @@ Where the runways appear:
 
 - `radar-sync` — the P1–P11 probe;
 - `radar-select`;
+- `tdc` — the designation cursor with a fake pad: the scope (select, lock, no gun), a PCD page in the cockpit, a HOTAS;
 - `ranger-radar` — the nose radar's reach against the APG-81's, its scope;
 - `jetmap`;
 - `decoys`;

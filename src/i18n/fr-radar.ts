@@ -2,6 +2,8 @@
 export default {
   "The radar: in the F-35, in the air": "Le radar : en F-35, en vol",
   "The radar: in the air, in the F-35 or the Ranger": "Le radar : en vol, en F-35 ou en Ranger",
+  "Designate: hold the cursor (TDC) first — the pad's bumpers, its HOTAS button":
+    "Désigner : maintenez d'abord le curseur (TDC) — les gâchettes hautes de la manette, son bouton du HOTAS",
   "Radar: {0}": "Radar : {0}",
   "Radar: searching — the first contact locked": "Radar : recherche — le premier contact sera verrouillé",
   "Intercept off — altitude, heading and speed held": "Interception coupée — altitude, cap et vitesse tenus",

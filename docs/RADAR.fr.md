@@ -92,6 +92,11 @@ Un astre entre deux cache l'autre au radar, jamais au datalink. Le scope spatial
 **Sélectionner** : un clic sur un symbole le sélectionne partout. Un second clic le verrouille, si c'est une piste
 radar. Un clic dans le vide désélectionne, et le verrou reste.
 
+**Sans souris** : le curseur de désignation (TDC). On le maintient (les deux gâchettes hautes de la manette du F-35, un
+bouton du HOTAS, F15 au clavier) ; il se pose sur le scope du HUD, ou dans le cockpit du F-35 sur la page du PCD
+regardée. Le stick droit (la tête reste), le mini-manche d'une manette des gaz, un chapeau ou les flèches le déplacent.
+**A**, ou « Désigner » (F14, la détente du HOTAS), fait ce qu'un clic ferait dessous.
+
 **Zoomer** : la molette au-dessus d'un radar change sa portée d'un pas. Elle ne touche jamais au champ de la caméra.
 
 ## Les pistes du monde

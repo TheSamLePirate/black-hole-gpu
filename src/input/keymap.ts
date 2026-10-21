@@ -31,6 +31,7 @@ export type KeyAction =
   | "resetShipView"
   | "hold"
   | "orders"
+  | "designate"
   | "auto"
   | "map"
   | "mount"
@@ -293,6 +294,11 @@ export const KEYMAP: KeySection[] = [
         keys: "Tab held › Flight · F13",
         text: "The flight's leader: the orders' wheel (rejoin, formation, tighten, loosen, attack my target, engage, cover me, hold here, RTB, break) — to the room's wingmen and the AI wingmen; its key (F13) given another in the controls, or a HOTAS button",
         bind: [fly("F13", "orders")],
+      },
+      {
+        keys: "F15 held · F14 · LB + RB held, A",
+        text: "The designation cursor (TDC — without a mouse): held, a cursor on the HUD's radar scope, or in the F-35's cockpit on the PCD page looked at; the arrows, a HOTAS's slew or hat, the pad's right stick move it; designate selects what is under it (again: locks it) — the keys given a HOTAS's buttons in the controls; on the pad, both bumpers held and A",
+        bind: [fly("F14", "designate")],
       },
       {
         keys: "I K · J L · H N",

@@ -56,6 +56,8 @@ import type { FigureId } from "./game/aerobatics";
 import { GStrain } from "./game/gstrain";
 import { installRadar, Radar, type RadarSource } from "./controller/radar";
 import { installSpacePic } from "./controller/spacepic";
+import { installTdc } from "./controller/tdc";
+import { Tdc } from "./input/tdc";
 import { installOwnTrack, type TrackPoint } from "./controller/owntrack";
 import { TrailStore } from "./radar/picture";
 import type { RadarObject } from "./game/radar";
@@ -1125,6 +1127,8 @@ export class CameraController {
   readonly gStrain = new GStrain();
   /** the F-35's radar (game/radar.ts, controller/radar.ts), its clock [s], its sources by name */
   readonly radar = new Radar();
+  /** the designation cursor (input/tdc.ts, controller/tdc.ts — constat 29) */
+  readonly tdc = new Tdc();
   radarT = 0;
   /** a whole sweep asked (a fight begun) */
   radarSweep = false;
@@ -1587,6 +1591,7 @@ installQuals(CameraController);
 installAerobatics(CameraController);
 installRadar(CameraController);
 installSpacePic(CameraController);
+installTdc(CameraController);
 installOwnTrack(CameraController);
 installFplan(CameraController);
 installChallenge(CameraController);

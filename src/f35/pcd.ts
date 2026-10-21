@@ -357,6 +357,10 @@ export class Pcd {
   /** the last touch on the display (u, v; when [ms]) and the last page changed (its part [px]; when [ms]) — the
    *  shader's ring and sweep (ship.wgsl pcdLight) */
   lastTouch: { u: number; v: number; at: number } | null = null;
+  /** the designation cursor on the display (u, v — PLAN-RADAR-AAA constat 29: input/tdc.ts), null: none; its portal
+   *  drawn each frame while it is */
+  tdc: { u: number; v: number } | null = null;
+  private tdcKey: string | null = null;
   lastChange: { rect: PcdRect; at: number } | null = null;
   /** the touch's and the page change's age held [s] (a capture, a test: the ring and the sweep caught mid-way) */
   ageHeld: number | null = null;
@@ -459,6 +463,21 @@ export class Pcd {
         return said;
       }
       return null;
+    }
+    return null;
+  }
+
+  /** The page shown at (u, v) on the display and its body's place there (u, v from its corners — the TDC's room). */
+  pageRect(u: number, v: number): { page: PcdPage; rect: { u0: number; v0: number; u1: number; v1: number } } | null {
+    const x = u * PCD_W,
+      y = v * PCD_H;
+    for (const P of this.portals()) {
+      const f = P.frame;
+      if (x < f.x || x > f.x + f.w || y < f.y || y > f.y + f.h || this.menu === P.slot) continue;
+      return {
+        page: this.pages[P.slot]!,
+        rect: { u0: f.x / PCD_W, v0: (f.y + HEAD) / PCD_H, u1: (f.x + f.w) / PCD_W, v1: (f.y + f.h - FOOT) / PCD_H },
+      };
     }
     return null;
   }
@@ -604,6 +623,11 @@ export class Pcd {
     if (d.ground && shown("TSD")) this.reliefStep(d, d.ground);
     if (d.ground && shown("EOTS")) this.ridgeStep(d, d.ground);
     const regions = this.regions();
+    // (the designation cursor: its portal drawn each frame — and the one it left, once)
+    const tk = this.tdc ? (this.portals().find((P) => this.inFrame(P, this.tdc!.u, this.tdc!.v))?.key ?? null) : null;
+    if (this.tdcKey && this.tdcKey !== tk) this.forced.add(this.tdcKey);
+    if (tk) this.forced.add(tk);
+    this.tdcKey = tk;
     const when = (key: string) => this.drawn.get(key) ?? -Infinity;
     let out = regions.filter((R) => this.forced.has(R.key));
     this.forced.clear();
@@ -784,7 +808,30 @@ export class Pcd {
     if (P) this.portal(P, d);
     else if (key === "top") this.topStrip(d);
     else this.bottomStrip(d);
+    if (P && this.tdc && this.inFrame(P, this.tdc.u, this.tdc.v)) this.tdcCursor(this.tdc.u * PCD_W, this.tdc.v * PCD_H);
     g.restore();
+  }
+
+  private inFrame(P: Portal, u: number, v: number) {
+    const f = P.frame,
+      x = u * PCD_W,
+      y = v * PCD_H;
+    return x >= f.x && x <= f.x + f.w && y >= f.y && y <= f.y + f.h;
+  }
+
+  /** The designation cursor: the F-35's two bars, a dot between (PLAN-RADAR-AAA constat 29). */
+  private tdcCursor(x: number, y: number) {
+    const g = this.g;
+    g.strokeStyle = C.white;
+    g.lineWidth = 4;
+    g.beginPath();
+    g.moveTo(x - 14, y - 18);
+    g.lineTo(x - 14, y + 18);
+    g.moveTo(x + 14, y - 18);
+    g.lineTo(x + 14, y + 18);
+    g.stroke();
+    g.fillStyle = C.white;
+    g.fillRect(x - 2, y - 2, 4, 4);
   }
 
   // ---- the frame
