@@ -251,6 +251,12 @@ override TUNE_GRAZE_WINDOW: f32 = 1.0;
 override TUNE_CLOUD_LIGHT: u32 = 1u;
 // (the raster hint's refinement: its Illinois steps at most — 10; fewer, a measure of what they cost)
 override TUNE_HINT_ITER: u32 = 10u;
+// (the far rings' hints — the relief's cache a level coarser each, its cells four times wider: their error over the near
+// patch's this many times a level — the bands the hint is trusted within widened as much)
+override TUNE_RING_TOL: f32 = 2.5;
+// (the far rings' pixels shaded at the raster's rate over this — 2: one cycle of its pattern in two, as sparse as the sky's
+// rays at ×4 that found that ground before; 1: as the patch's)
+override TUNE_RING_RATE: u32 = 2u;
 // (1: Gargantua's bodies far from a step rejected before their place at its end — 0: each worked out, a measure)
 override TUNE_BODY_REJECT: u32 = 1u;
 // (measures — the Earth's ground shading, a part of it left out: 1 the relief's own normal near, 2 its shadows, 4 the
@@ -5683,6 +5689,7 @@ fn terrainRasterHint(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterId(px: vec2f) -> u32 { return 0u; }
 fn terrainRasterDepth(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterBuilding(px: vec2f) -> bool { return true; }
+fn terrainRasterLevelStep(px: vec2f) -> f32 { return 0.0; }
 // END_TERRAIN_RASTER
 // BEGIN_CLOUD_PASS (system/cloud-pass.ts withCloudPass supplies the cloud pass's texture reads)
 fn cloudsBuffered(px: vec2f, boundM: f32) -> EarthClouds { return EarthClouds(-1.0, vec3f(0.0), -1.0); }
@@ -5707,6 +5714,9 @@ var<private> SHADOW_REL_ON: bool = false;
 var<private> RASTER_SHADE: bool = false;
 // the raster patch's distance [m] along this sample's ray, 0 where it does not cover it (main sets it)
 var<private> RHINT: f32 = 0.0;
+// the hint's error over the near patch's (1; its far rings', coarser by 4 a level: TUNE_RING_TOL a level — main and shade set it)
+var<private> RHINT_TOL: f32 = 1.0;
+fn rasterHintTol(px: vec2f) -> f32 { return pow(TUNE_RING_TOL, terrainRasterLevelStep(px)); }
 // The raster's primary visibility (earthPipeline "raster", docs/PLAN-RENDU-RASTER-AAA.md étape 1): the pixels the patch
 // covers are shaded one a pixel by the kernel shade, not traced by main (renderer: mouthList[1].y)
 fn rasterPrimary() -> bool { return HAS_TERRAIN_RASTER && P.mouthList[1].y > 0.5 && P.walk[0].w < 0.5; }
@@ -5747,14 +5757,14 @@ fn earthMarchHinted(ro: vec3f, rd: vec3f, fpK: f32, tM: f32, kM: f32) -> f32 {
   // else, a ridge there after all: the whole march, as before)
   if (sinG < TUNE_HINT_GRAZE) {
     if (TUNE_GRAZE_WINDOW <= 0.0) { return -3.0; }
-    let W = (25.0 + 0.004 * tM) / max(sinG, 0.01) * TUNE_GRAZE_WINDOW / kM;
+    let W = (25.0 + 0.004 * tM) * RHINT_TOL / max(sinG, 0.01) * TUNE_GRAZE_WINDOW / kM;
     let ts = tH - W;
     if (ts <= 0.0 || marchClear(A, o, e, rd, ts, fpK) <= 0.0) { return -3.0; }
     return earthMarchFrom(ro, rd, fpK, ts);
   }
   // (a pixel's footprint there, the patch's own few metres: the vertical band the hint is trusted within)
-  let eps = 5.0 + 2.0 * tM * fpK;
-  let dm = clamp(eps / sinG, 3.0, 0.02 * tM + 3.0);
+  let eps = (5.0 + 2.0 * tM * fpK) * RHINT_TOL;
+  let dm = clamp(eps / sinG, 3.0, (0.02 * tM + 3.0) * RHINT_TOL);
   let dt = dm / kM;
   var lo = tH - dt;
   if (lo <= 0.0) { return -3.0; }
@@ -9290,7 +9300,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     let ndc = vec2f(2.0 * pos.x / P.res.x - 1.0, 1.0 - 2.0 * pos.y / P.res.y);
     // (the aerial perspective's table for the air before the near world's ground — earthNear's)
     if ((flags & FLAG_AERIAL) != 0u) { AP_UV = pos / P.res.xy; }
-    if (HAS_TERRAIN_RASTER) { RHINT = terrainRasterHint(pos); }
+    if (HAS_TERRAIN_RASTER) { RHINT = terrainRasterHint(pos); RHINT_TOL = rasterHintTol(pos); }
     // (the clouds of the cloud pass at this ray's pixel — the raster's frames —, read back instead of marched)
     if (interleaved) { CLOUDS_BUFFERED = cloudsBuffered(rasterAt, terrainRasterDepth(rasterAt)); }
     if ((flags & FLAG_LUT) == 0u || !farLut(pos, &tr)) { tr = trace(ndc, rnd, tSample); }
@@ -9448,6 +9458,15 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   if (moments[idx].x < -0.5 && moments[idx].x > -1.5) { return; }
   let flags = P.frame.z;
   let frameStamp = P.frame.x;
+  // (a far ring's pixel — the ground there coarse, far, small —: shaded one cycle of the pattern in TUNE_RING_RATE, its 4 × 4
+  // cells taking turns — a checkerboard turned each cycle: as many shaded every frame —, left as shadeMark leaves the
+  // others the rest)
+  let cell = px / 4u;
+  if (TUNE_RING_RATE > 1u && rate > 1u && terrainRasterLevelStep(centre) > 0.5 && RASTER_ID == 0u &&
+      (cell.x + cell.y + frameStamp / rate) % TUNE_RING_RATE != 0u) {
+    moments[idx] = vec2f(RASTER_STALE, terrainRasterDepth(centre) / EARTH_RM * bodyRadius(k));
+    return;
+  }
   let temporal = (flags & FLAG_TEMPORAL) != 0u;
   // (the footprint of the square the sample stands for — a pixel at every pixel, 2 × 2 at one in four: its detail filtered to
   // the area its colour is spread over, not a block's)
@@ -9464,6 +9483,7 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   if ((flags & FLAG_AERIAL) != 0u) { AP_UV = pos / P.res.xy; }
   // (the patch's distance at the pixel's own texel: drawn along this very ray when the raster is jittered with it)
   RHINT = terrainRasterHint(select(pos, centre, rasterHalton()));
+  RHINT_TOL = rasterHintTol(select(pos, centre, rasterHalton()));
   RND = fract(rnd * 7.31 + 0.13);
   REFR_DELTA = 0.0;
   let e = earthNear(look, rnd, k);

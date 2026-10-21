@@ -602,8 +602,11 @@ fn fs(in: VSOut) -> @location(0) vec4f {
   // than the browser's bilinear; at the canvas's size, RCAS's sharpening instead — per image texel, it
   // would draw that texel's blocks once upscaled)
   let up = D.lod.x == 0.0 && (D.size.x > D.img.x * 1.01 || D.size.y > D.img.y * 1.01);
+  // (the image itself may be at the canvas's size though rendered under it: the temporal upsampling's — post.wgsl taau)
+  let isz = vec2f(textureDimensions(hdr, 0));
+  let upImg = D.lod.x == 0.0 && (D.size.x > isz.x * 1.01 || D.size.y > isz.y * 1.01);
   var c: vec3f;
-  if (up) {
+  if (upImg) {
     c = catmullRom(uv);
   } else {
     c = textureSampleLevel(hdr, samp, uv, D.lod.x).rgb;

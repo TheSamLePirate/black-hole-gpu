@@ -879,3 +879,160 @@ fn cloudTemporal(@builtin(global_invocation_id) gid: vec3u) {
   }
   textureStore(cloudDstA, p, vec4f(select(vec3f(0.0), out.rgb / out.a, out.a > 1e-6), out.a));
 }
+
+// Temporal upsampling (TAAU): the realtime image rendered under the canvas (its render scale) accumulated at the canvas's
+// own resolution — each of this frame's samples put where its ray went (the raster's Halton jitter, the rays' Gaussian —
+// trace.wgsl rasterJitter, gaussJitter: the same hashes), weighed by its distance to the output pixel's centre, into a
+// canvas-sized history reprojected as the native one is (reprojDir); that history clipped to the range of the native
+// temporal result about it (lowTex: its 3 × 3 — what the reconstruction trusts, so no ghost outlives it). The native
+// result upscaled where there is no history (a jump, a disocclusion, the cockpit's mask). dst: the history (no stars);
+// upOut: the image the display shows (the stars splatted over it).
+struct Taau {
+  s: vec4f, // x: the native result's weight a frame, y: unused, z: the samples' kernel σ [render px], w: the history valid (1)
+  u: vec4u, // x: this frame's stamp, y: the raster's jitter Halton's (1), z: the stars splatted this frame (1), w: unused
+};
+@group(0) @binding(25) var lowTex: texture_2d<f32>;
+@group(0) @binding(26) var upOut: texture_storage_2d<rgba16float, write>;
+@group(0) @binding(27) var<uniform> TU: Taau;
+fn taauPcg(v: u32) -> u32 {
+  let s = v * 747796405u + 2891336453u;
+  let w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
+  return (w >> 22u) ^ w;
+}
+fn taauHalton(i: u32, b: u32) -> f32 {
+  var f = 1.0;
+  var r = 0.0;
+  var n = i;
+  while (n > 0u) {
+    f /= f32(b);
+    r += f * f32(n % b);
+    n /= b;
+  }
+  return r;
+}
+// where this frame's ray through render pixel q went, from its centre [render px] (trace.wgsl: main, shade)
+fn taauJitter(q: vec2u, raster: bool) -> vec2f {
+  if (raster && TU.u.y != 0u) {
+    let i = TU.u.x % 16u + 1u;
+    return vec2f(taauHalton(i, 2u), taauHalton(i, 3u)) - 0.5;
+  }
+  let h = taauPcg(q.x ^ taauPcg(q.y ^ taauPcg(TU.u.x)));
+  let u = vec2f(f32(h >> 8u), f32(taauPcg(h) >> 8u)) * (1.0 / 16777216.0);
+  let rad = 0.42 * sqrt(-2.0 * log(max(u.x, 1e-7)));
+  return rad * vec2f(cos(6.28318531 * u.y), sin(6.28318531 * u.y));
+}
+// the native result upscaled (Catmull–Rom, 9 bilinear taps)
+fn lowAt(uv: vec2f, size: vec2f) -> vec3f {
+  let sp = uv * size;
+  let t1 = floor(sp - 0.5) + 0.5;
+  let f = sp - t1;
+  let w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
+  let w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+  let w2 = f * (0.5 + f * (2.0 - 1.5 * f));
+  let w3 = f * f * (-0.5 + 0.5 * f);
+  let w12 = w1 + w2;
+  let t0 = (t1 - 1.0) / size;
+  let t3 = (t1 + 2.0) / size;
+  let t12 = (t1 + w2 / w12) / size;
+  var c = vec3f(0.0);
+  c += textureSampleLevel(lowTex, samp, vec2f(t0.x, t0.y), 0.0).rgb * w0.x * w0.y;
+  c += textureSampleLevel(lowTex, samp, vec2f(t12.x, t0.y), 0.0).rgb * w12.x * w0.y;
+  c += textureSampleLevel(lowTex, samp, vec2f(t3.x, t0.y), 0.0).rgb * w3.x * w0.y;
+  c += textureSampleLevel(lowTex, samp, vec2f(t0.x, t12.y), 0.0).rgb * w0.x * w12.y;
+  c += textureSampleLevel(lowTex, samp, vec2f(t12.x, t12.y), 0.0).rgb * w12.x * w12.y;
+  c += textureSampleLevel(lowTex, samp, vec2f(t3.x, t12.y), 0.0).rgb * w3.x * w12.y;
+  c += textureSampleLevel(lowTex, samp, vec2f(t0.x, t3.y), 0.0).rgb * w0.x * w3.y;
+  c += textureSampleLevel(lowTex, samp, vec2f(t12.x, t3.y), 0.0).rgb * w12.x * w3.y;
+  c += textureSampleLevel(lowTex, samp, vec2f(t3.x, t3.y), 0.0).rgb * w3.x * w3.y;
+  return max(c, vec3f(0.0));
+}
+@compute @workgroup_size(8, 8)
+fn taau(@builtin(global_invocation_id) gid: vec3u) {
+  let size = textureDimensions(upOut);
+  if (gid.x >= size.x || gid.y >= size.y) { return; }
+  let rs = textureDimensions(src);
+  let W = rs.x;
+  let o = vec2f(gid.xy) + 0.5;
+  let uvO = o / vec2f(size);
+  // (the output pixel's centre on the render grid)
+  let c = uvO * vec2f(rs);
+  let base = clamp(vec2i(floor(c)), vec2i(0), vec2i(rs) - 1);
+  let hi = vec2i(rs) - 1;
+  // this frame's samples about it, each where its ray went; the native result's range there
+  var sum = vec3f(0.0);
+  var wsum = 0.0;
+  var m1 = vec3f(0.0);
+  var m2 = vec3f(0.0);
+  let inv2s2 = 0.5 / (TU.s.z * TU.s.z);
+  var dn = 3e38;
+  for (var j = -1; j <= 1; j++) {
+    for (var i = -1; i <= 1; i++) {
+      let q = clamp(base + vec2i(i, j), vec2i(0), hi);
+      let n = rgbToYcocg(tmFwd(textureLoad(lowTex, q, 0).rgb));
+      m1 += n;
+      m2 += n * n;
+      let qi = u32(q.y) * W + u32(q.x);
+      dn = min(dn, moments[qi].y);
+      if (stamps[qi] == TU.u.x) {
+        let pos = vec2f(q) + 0.5 + taauJitter(vec2u(q), moments[qi].x > 1e29);
+        let d = pos - c;
+        let w = exp(-dot(d, d) * inv2s2);
+        let s = textureLoad(src, q, 0).rgb;
+        sum += w * s;
+        wsum += w;
+      }
+    }
+  }
+  let bi = u32(base.y) * W + u32(base.x);
+  // (the nearest depth about it — UE4's closest depth —: an outline's pixel carried with the ridge, not the far ground behind)
+  let depth = dn;
+  let mx = moments[bi].x;
+  let underCabin = mx < -0.5 && mx > -1.5;
+  // (the history where this pixel's point was: as the native pass finds it — the near body's ground drawn afresh has none)
+  let ground = TA.drift.w != 0.0 && depth < abs(TA.drift.w) && TA.cc.w < 0.5;
+  let carried = TA.drift.w < 0.0 && ground;
+  var uv = vec2f(-1.0);
+  if (carried) {
+    uv = uvO;
+  } else if (!ground) {
+    let d = reprojDir(pixelDir(o, size), depth);
+    if (dot(d, TA.pFwd.xyz) > 1e-3) { uv = prevUv(d); }
+  }
+  var outc: vec3f;
+  var nOut: f32;
+  let nMax = 1.0 / max(TA.k.z, 1e-3) - 1.0;
+  if (TU.s.w > 0.5 && !underCabin && all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0))) {
+    let hist = historyAt(uv, vec2f(size)) * TA.k.x;
+    var nPrev = clamp(textureSampleLevel(addTex, samp, uv, 0.0).a, 0.0, nMax);
+    // (clipped towards the native result's mean about it, within g of its standard deviations — Salvi, as the native pass
+    // does —: far outside it, a change, the history's weight cut)
+    let h = rgbToYcocg(tmFwd(hist));
+    let m = m1 / 9.0;
+    let ext = max(TA.fwd.w * sqrt(max(m2 / 9.0 - m * m, vec3f(0.0))), vec3f(1e-4));
+    let dv = h - m;
+    let k = max(max(abs(dv.x) / ext.x, abs(dv.y) / ext.y), abs(dv.z) / ext.z);
+    let hc = select(h, m + dv / k, k > 1.0);
+    if (k > 2.0) { nPrev *= 0.25; }
+    // (and pulled a little towards the native result each frame — TU.s.x —: where few samples land, the history cannot drift
+    // from it however long the turn)
+    let hcl = mix(tmInv(ycocgToRgb(hc)), lowAt(uvO, vec2f(rs)), TU.s.x);
+    if (wsum > 1e-4) {
+      let a = wsum / (nPrev + wsum);
+      outc = mix(hcl, sum / wsum, a);
+      nOut = min(nPrev + wsum, nMax);
+    } else {
+      outc = hcl;
+      nOut = nPrev;
+    }
+  } else {
+    // (no history: the native result upscaled, this frame's samples over it as far as they reach)
+    let l = lowAt(uvO, vec2f(rs));
+    outc = select(l, mix(l, sum / max(wsum, 1e-6), wsum / (1.0 + wsum)), wsum > 1e-4);
+    nOut = 1.0 + wsum;
+  }
+  outc = max(outc, vec3f(0.0));
+  textureStore(dst, gid.xy, vec4f(outc, nOut));
+  // (the stars splatted on the render grid: the nearest's, its flux kept over the canvas's smaller pixels)
+  let sc = f32(rs.x * rs.y) / f32(size.x * size.y);
+  textureStore(upOut, gid.xy, vec4f(outc + starsAt(bi) * sc * f32(TU.u.z), 1.0));
+}

@@ -9,8 +9,14 @@ import {
   withSunShadow,
   withTerrainRaster,
 } from "./system/terrain-raster-hint";
-import { TERRAIN_CACHE_MAX_LAT, TERRAIN_CACHE_VEC4S } from "./system/terrain-cache-layout";
-import { TerrainRaster } from "./system/terrain-raster";
+import {
+  TERRAIN_CACHE_LEVELS,
+  TERRAIN_CACHE_MAX_LAT,
+  TERRAIN_CACHE_ROUNDS,
+  TERRAIN_CACHE_VEC4S,
+  type TerrainWindow,
+} from "./system/terrain-cache-layout";
+import { TerrainRaster, type TerrainRing } from "./system/terrain-raster";
 import { SCENERY_RASTER_LOD, SceneryRaster, type SceneryRasterLod, TREE_SHADOW_HALF_M, TREE_SHADOW_N } from "./system/scenery-raster";
 import { CLOUD_PASS_BINDINGS, CLOUD_PASS_FLAG, CLOUD_PASS_TEXTURE_LIMIT, withCloudPass } from "./system/cloud-pass";
 import { Lightning } from "./system/lightning";
@@ -482,6 +488,23 @@ interface Target {
   } | null;
   /** the camera's motion blur: its image and pass (on first use) — post.wgsl motionBlur */
   blur: { tex: GPUTexture; bind: GPUBindGroup } | null;
+  /**
+   * the temporal upsampling (post.wgsl taau — live, rendered under the canvas): its history at the canvas's size (ping-
+   * pong: idx the latest), the image the display shows, its uniform, bind groups (by history and the native one read),
+   * the display's bind groups on its image; on: drawn this frame (the display reads it)
+   */
+  taau: {
+    w: number;
+    h: number;
+    hist: GPUTexture[];
+    out: GPUTexture;
+    buf: GPUBuffer;
+    binds: Map<string, GPUBindGroup>;
+    idx: number;
+    valid: boolean;
+    on: boolean;
+    displayBinds: Map<GPURenderPipeline, GPUBindGroup>;
+  } | null;
   /** the far field's LUT (live target): a ray every 8 pixels — directions + shift, clean flags */
   lut: { tex: GPUTexture[]; w: number; h: number; write: GPUBindGroup; read: GPUBindGroup } | null;
   traceBind: GPUBindGroup;
@@ -553,6 +576,7 @@ export class Renderer {
   private postBeamH!: GPUComputePipeline;
   private postAtrous!: GPUComputePipeline;
   private postTemporal!: GPUComputePipeline;
+  private postTaau!: GPUComputePipeline;
   /** the cloud pass's history (post.wgsl cloudTemporal — docs/PLAN-NUAGES-AAA.md N1b) */
   private postCloudTemporal: GPUComputePipeline | null = null;
   private cloudCT: GPUBuffer | null = null;
@@ -1301,6 +1325,7 @@ export class Renderer {
       mkPost("beamH").then((p) => (this.postBeamH = p)),
       mkPost("atrous").then((p) => (this.postAtrous = p)),
       mkPost("temporal").then((p) => (this.postTemporal = p)),
+      mkPost("taau").then((p) => (this.postTaau = p)),
       mkPost("cloudTemporal").then((p) => (this.postCloudTemporal = p)),
       mkPost("motionBlur").then((p) => (this.postMotion = p)),
       mkPost("occlusion").then((p) => (this.postOcclusion = p)),
@@ -2082,6 +2107,7 @@ export class Renderer {
       denoise: null,
       temporal: null,
       blur: null,
+      taau: null,
       lut: live ? this.makeLut(width, height) : null,
       traceBind: null as unknown as GPUBindGroup,
       probeBind: null as unknown as GPUBindGroup,
@@ -2121,6 +2147,7 @@ export class Renderer {
     t.denoise?.bufs.forEach((b) => b.destroy());
     t.temporal?.hist.forEach((h) => h.destroy());
     t.blur?.tex.destroy();
+    this.dropTaau(t);
     t.lut?.tex.forEach((x) => x.destroy());
     t.temporal?.buf.destroy();
   }
@@ -2232,6 +2259,7 @@ export class Renderer {
   private bindDisplay(t: Target) {
     const d = this.device;
     t.displayBinds.clear();
+    t.taau?.displayBinds.clear();
     for (const p of [this.displayPipeline, this.export8Pipeline, this.export16Pipeline]) {
       if (!p) continue;
       t.displayBinds.set(
@@ -3112,6 +3140,7 @@ export class Renderer {
     this.cloudPassDrawn = false;
     // (16 written 15: the rate's four bits — trace.wgsl rasterRate)
     f[MOUTH_LIST_AT + 5] = rasterPrimary ? Math.min(this.rasterRate, 15) + (this.rasterJitter === "halton" ? 16 : 0) : 0;
+    if (!o.probe) this.rasterHaltonNow = rasterPrimary && this.rasterJitter === "halton";
     // (the trees drawn as raster instances this frame: set once they are — encodeTerrainRasterVisibility)
     f[MOUTH_LIST_AT + 6] = 0;
     // Keep a stable key when a still frame starts refining; its quality kernel compiles the cache out.
@@ -4788,9 +4817,130 @@ export class Renderer {
     pass.end();
     ta.idx = 1 - ta.idx;
     ta.pre = pre;
+    // (the canvas's own image from it and this frame's samples, before the image is overwritten by the native result)
+    this.encodeTaau(enc, t, stars);
     if (stars) this.encodeStars(enc, t, ta.idx);
     else enc.copyTextureToTexture({ texture: ta.hist[ta.idx]! }, { texture: t.hdr, mipLevel: 0 }, [t.width, t.height]);
     return true;
+  }
+
+  /** the temporal upsampling (post.wgsl taau): on where the live image is rendered under the canvas, moving */
+  taauOn = true;
+  /** its samples' kernel σ [output px] (×scale: render px) */
+  taauSigma = 0.5;
+  /** the native result's weight in its history each frame (post.wgsl taau: no drift where few samples land) */
+  taauNative = 0.02;
+
+  private dropTaau(t: Target) {
+    const u = t.taau;
+    if (!u) return;
+    u.hist.forEach((h) => h.destroy());
+    u.out.destroy();
+    u.buf.destroy();
+    t.taau = null;
+  }
+
+  /**
+   * The temporal upsampling's pass, after the native temporal one (ta.idx its result): at the canvas's size where the live
+   * image is rendered under it — else off, the display upscaling the render as before.
+   */
+  private encodeTaau(enc: GPUCommandEncoder, t: Target, stars: boolean) {
+    const cv = this.context.canvas as HTMLCanvasElement;
+    const W = cv.width,
+      H = cv.height;
+    const want =
+      this.taauOn && !!this.postTaau && t === this.live && !!t.temporal && W > t.width * 1.01 && H > t.height * 1.01 && !this.costViewMode;
+    if (!want) {
+      if (t.taau) t.taau.on = false;
+      return;
+    }
+    const d = this.device;
+    if (!t.taau || t.taau.w !== W || t.taau.h !== H) {
+      this.dropTaau(t);
+      const mk = (label: string) =>
+        d.createTexture({
+          label,
+          size: [W, H],
+          format: "rgba16float",
+          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING,
+        });
+      t.taau = {
+        w: W,
+        h: H,
+        hist: [mk("taau history 0"), mk("taau history 1")],
+        out: mk("taau image"),
+        buf: d.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }),
+        binds: new Map(),
+        idx: 0,
+        valid: false,
+        on: false,
+        displayBinds: new Map(),
+      };
+    }
+    const u = t.taau;
+    const ta = t.temporal!;
+    const key = `${u.idx}:${ta.idx}`;
+    let bind = u.binds.get(key);
+    if (!bind) {
+      bind = d.createBindGroup({
+        layout: this.postTaau.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: t.hdr.createView({ baseMipLevel: 0, mipLevelCount: 1 }) },
+          { binding: 1, resource: this.clampSampler },
+          { binding: 2, resource: u.hist[1 - u.idx]!.createView() },
+          { binding: 3, resource: u.hist[u.idx]!.createView() },
+          { binding: 6, resource: { buffer: t.stamps } },
+          { binding: 11, resource: { buffer: t.moments } },
+          { binding: 21, resource: { buffer: ta.buf } },
+          { binding: 23, resource: { buffer: t.stars } },
+          { binding: 25, resource: ta.hist[ta.idx]!.createView() },
+          { binding: 26, resource: u.out.createView() },
+          { binding: 27, resource: { buffer: u.buf } },
+        ],
+      });
+      u.binds.set(key, bind);
+    }
+    const scale = t.width / W;
+    const f = new Float32Array(8);
+    f.set([this.taauNative, 0, Math.max(this.taauSigma * scale, 0.3), u.valid ? 1 : 0]);
+    new Uint32Array(f.buffer).set([this.frameStamp, this.rasterHaltonNow ? 1 : 0, stars ? 1 : 0, 0], 4);
+    d.queue.writeBuffer(u.buf, 0, f);
+    const pass = enc.beginComputePass(this.prof.pass("taau"));
+    pass.setPipeline(this.postTaau);
+    pass.setBindGroup(0, bind);
+    pass.dispatchWorkgroups(Math.ceil(W / 8), Math.ceil(H / 8));
+    pass.end();
+    u.idx = 1 - u.idx;
+    u.valid = true;
+    u.on = true;
+  }
+
+  /** the display's bind group with the temporal upsampling's image in the render's place */
+  private taauDisplayBind(t: Target, pipeline: GPURenderPipeline): GPUBindGroup | null {
+    const u = t.taau!;
+    let b = u.displayBinds.get(pipeline);
+    if (!b) {
+      const base = t.displayBinds.get(pipeline);
+      if (!base) return null;
+      b = this.device.createBindGroup({
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: u.out.createView() },
+          { binding: 1, resource: { buffer: this.displayBuf } },
+          { binding: 2, resource: t.bloomTex.createView({ baseMipLevel: 0, mipLevelCount: 1 }) },
+          { binding: 3, resource: this.clampSampler },
+          { binding: 4, resource: { buffer: t.polGrid } },
+          { binding: 5, resource: this.ship.target(t.hdr).resolved.createView() },
+          { binding: 6, resource: this.ship.target(t.hdr).plume.createView() },
+          { binding: 7, resource: (t.dof?.tex ?? this.dofDummy).createView() },
+          { binding: 8, resource: t.bloomTex.createView() },
+          { binding: 9, resource: { buffer: t.flare.out } },
+          { binding: 10, resource: this.lensDirt.createView() },
+        ],
+      });
+      u.displayBinds.set(pipeline, b);
+    }
+    return b;
   }
 
   /** The image: history k with the realtime frame's splatted stars over it (R8; it keeps none itself). */
@@ -4913,6 +5063,12 @@ export class Renderer {
   }
 
   private encodePost(enc: GPUCommandEncoder, t: Target, s?: Settings) {
+    // (the temporal upsampling's image shown only where its pass ran this frame — encodeTaau —; its history only if it ran the
+    // last one too: a held camera's frames refine the native image alone, the history then a view ago)
+    if (t.taau) {
+      if (!t.taau.on) t.taau.valid = false;
+      t.taau.on = false;
+    }
     if (s?.polarization) {
       const { gw, gh } = this.polCells(s, t);
       const pass = enc.beginComputePass(this.prof.pass("polarization"));
@@ -6003,7 +6159,9 @@ export class Renderer {
       }),
     );
     rp.setPipeline(pipeline);
-    rp.setBindGroup(0, t.displayBinds.get(pipeline)!);
+    // (the temporal upsampling's image where it was drawn this frame — at the canvas's size —, else the render's)
+    const up = t.taau?.on ? this.taauDisplayBind(t, pipeline) : null;
+    rp.setBindGroup(0, up ?? t.displayBinds.get(pipeline)!);
     rp.draw(3);
     rp.end();
   }
@@ -6342,6 +6500,8 @@ export class Renderer {
    *  whole image moved half a pixel a frame and the history, reprojecting the pixels' centres, blurred it — 32.2 → 27.1 dB
    *  in the Alps, 38.5 → 37.4 at Tarifa —; kept as a switch for comparisons */
   rasterJitter: "halton" | "gauss" = "gauss";
+  /** the raster's shading rays jittered by the Halton sequence this frame (post.wgsl taau: where they went) */
+  private rasterHaltonNow = false;
   /** the world's trees as raster instances (system/scenery-raster.ts), made the first time the raster pipeline has them */
   private sceneryRaster: SceneryRaster | null = null;
   /** the trees' and buildings' shadow map (system/tree-shadow.ts, drawn by the scenery raster): the device binds it; a switch
@@ -6532,6 +6692,34 @@ export class Renderer {
     t.cloudHistValid = true;
   }
 
+  /** the far raster rings about the patch (the relief's cache two levels coarser, each about the next finer): their ground
+   *  drawn too, its hint the tracer's instead of a march from the camera (off: those pixels marched as before) */
+  rasterRingsOn = true;
+  /** The far rings to draw this frame: the cache's next coarser levels that are ready, each with its hole over the finer. */
+  private terrainRings(frame: Float32Array, level: number, window: TerrainWindow, target: Target, s: Settings): TerrainRing[] {
+    const out: TerrainRing[] = [];
+    if (!this.rasterRingsOn || !this.lastNear || !this.lastCam) return out;
+    const cv = this.context.canvas as HTMLCanvasElement;
+    let finer = window;
+    for (let step = 1; step <= 2 && level + step < TERRAIN_CACHE_LEVELS; step++) {
+      const lv = level + step;
+      const w = this.terrainSurfaceCache?.levelWindow(lv);
+      // (a level not baked yet: none past it either — a ring's hole is the next finer one's)
+      if (!w) break;
+      const f = terrainRasterFrame(this.lastNear, this.lastCam, w, lv, target, { width: cv.width, height: cv.height }, "depth", s.fov, 1);
+      f[30] = frame[30]!;
+      f[31] = frame[31]!;
+      // (its nodes on the finer grid: four times its own index, less the finer window's — longitudes unwrapped, so modulo
+      // the finer level's round)
+      const round = TERRAIN_CACHE_ROUNDS[lv - 1]!;
+      let dx = 4 * w.i - finer.i;
+      dx -= Math.round(dx / round) * round;
+      out.push({ frame: f, level: lv, window: w, hole: [dx, 4 * w.j - finer.j], step });
+      finer = w;
+    }
+    return out;
+  }
+
   private encodeTerrainRasterVisibility(enc: GPUCommandEncoder, target: Target, s: Settings) {
     if (!this.terrainRasterRequested || !this.lastNear || !this.lastCam) {
       this.terrainRaster?.suspend();
@@ -6626,6 +6814,7 @@ export class Renderer {
       this.paramsF.subarray((69 + TILE_PARAM_VEC4S) * 4, (69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S) * 4),
       (label, descriptor) => this.prof.pass(label, descriptor),
       trees ? (pass) => this.sceneryRaster!.draw(pass) : undefined,
+      this.terrainRings(frame, level, window, target, s),
     );
     this.encodeSunShadow(enc, drawn);
     // (the trees' and buildings' shadow map, from the Sun — its frame into the table where drawn; else off: the rays)

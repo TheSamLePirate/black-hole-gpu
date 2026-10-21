@@ -37,6 +37,18 @@ const MODES: Record<string, string> = {
   rquarter: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.sharpen = 0.3; __bh.renderer.taParams = [1 / 16, 0.05, 2]; __bh.settings.earthRasterShading = "quarter";`,
   reighth: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.sharpen = 0.3; __bh.renderer.taParams = [1 / 16, 0.05, 2]; __bh.settings.earthRasterShading = "eighth";`,
   rsixteenth: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.sharpen = 0.3; __bh.renderer.taParams = [1 / 16, 0.05, 2]; __bh.settings.earthRasterShading = "sixteenth";`,
+  // (rendered at 75 % of the canvas: the temporal upsampling — post.wgsl taau —, the display's spatial upscale alone; the
+  // reference always converged at the canvas's full scale)
+  taau75: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.earthRasterShading = "eighth"; __bh.renderer.taauOn = true; __bh.forceScale(0.75);`,
+  taau67: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.earthRasterShading = "eighth"; __bh.renderer.taauOn = true; __bh.forceScale(0.667);`,
+  // (its history's pull towards the native result a frame — renderer.taauNative, 0.1 —, its samples' kernel — taauSigma, 0.5)
+  taauN02: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.earthRasterShading = "eighth"; __bh.renderer.taauOn = true; __bh.renderer.taauNative = 0.02; __bh.renderer.taauSigma = 0.5; __bh.forceScale(0.75);`,
+  taauN05: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.earthRasterShading = "eighth"; __bh.renderer.taauOn = true; __bh.renderer.taauNative = 0.05; __bh.renderer.taauSigma = 0.5; __bh.forceScale(0.75);`,
+  taauS7: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.earthRasterShading = "eighth"; __bh.renderer.taauOn = true; __bh.renderer.taauNative = 0.05; __bh.renderer.taauSigma = 0.7; __bh.forceScale(0.75);`,
+  // (at 75 % shaded one pixel in four: as many shaded samples as the native one in eight, the visibility on fewer pixels)
+  taau75q: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = true; __bh.forceScale(0.75);`,
+  spatial75q: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = false; __bh.forceScale(0.75);`,
+  spatial75: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.earthRasterShading = "eighth"; __bh.renderer.taauOn = false; __bh.forceScale(0.75);`,
   rasterpass: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.sharpen = 0.3; __bh.renderer.taParams = [1 / 16, 0.05, 2]; __bh.renderer.cloudPassOn = true;`,
 };
 const DETAIL = `Object.assign(__bh.settings, { earthScenery: "high", detailReach: "veryFar", earthSceneryShadows: true, earthSurface: "satellite" });`;
@@ -108,7 +120,7 @@ describe.skipIf(!E2E)("the raster's image in motion, against the converged one",
         await Bun.sleep(600);
         const f = `remote-results/rm-${pl}-${md}.png`;
         await app.shot(f);
-        await app.js(`(() => { __bh.settings.targetSpp = 64; __bh.touch(); return 1; })()`);
+        await app.js(`(() => { __bh.forceScale(null); __bh.settings.targetSpp = 64; __bh.touch(); return 1; })()`);
         for (let i = 0; i < 180; i++) {
           await Bun.sleep(500);
           if (await app.js<boolean>(`__bh.renderer.lastPhase === "converged"`)) break;
@@ -118,7 +130,9 @@ describe.skipIf(!E2E)("the raster's image in motion, against the converged one",
         const row = { place: pl, mode: md, gpuMs: fl.gpuMs, psnrInMotion: psnr(png(f), png(fr)), turnPx: fl.turn, groundPx: fl.ground };
         rows.push(row);
         console.log(JSON.stringify(row));
-        await app.js(`(() => { __bh.settings.animate = true; __bh.settings.earthPipeline = "trace"; return 1; })()`);
+        await app.js(
+          `(() => { __bh.settings.animate = true; __bh.settings.earthPipeline = "trace"; __bh.renderer.taauOn = true; return 1; })()`,
+        );
         expect(Number.isFinite(row.psnrInMotion)).toBe(true);
       }, 600_000);
 });

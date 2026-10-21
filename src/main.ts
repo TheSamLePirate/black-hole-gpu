@@ -4519,8 +4519,18 @@ async function main() {
   let idleAtCap = 0; // (how long the GPU has idled with the image at the tier's pixel cap [s])
   let overAtFloor = 0; // (how long the GPU has been over budget at the coarsest block and smallest scale [s])
   let demotedAt = -Infinity; // (the last demotion [performance.now() ms]: no promotion for a minute after)
+  // (the raster pipeline's own scale in motion — earthRasterScale, its temporal upsampling bringing the image back to the
+  // canvas —; the camera held, the full one: the refinement's; null: not the raster's, the scale as the rest has it)
+  const rasterScale = (): number | null =>
+    forcedScale === null && renderer.terrainRasterInspecting && settings.earthPipeline === "raster" && settings.earthRasterScale < 1
+      ? heldFor > 0.4
+        ? 1
+        : Math.max(0.5, settings.earthRasterScale)
+      : null;
   function resize() {
-    if (!dynamicResolutionOn(settings) && forcedScale === null) renderScale = 1;
+    const rs = rasterScale();
+    if (rs !== null) renderScale = rs;
+    else if (!dynamicResolutionOn(settings) && forcedScale === null) renderScale = 1;
     // (with the dynamic resolution — the Game quality turns it on, any quality may —, the image within
     // the hardware tier's pixel budget, then its scale; without it the ratio asked for: the still image
     // is the point)
@@ -7262,6 +7272,15 @@ async function main() {
     const terrainInspecting = renderer.terrainRasterInspecting;
     if (forcedScale !== null && renderScale !== forcedScale) {
       renderScale = forcedScale;
+      resize();
+    }
+    const rs = rasterScale();
+    if (rs !== null && Math.abs(rs - renderScale) > 1e-3) {
+      gpuEma = 0;
+      scaleHeld = 0;
+      resize();
+    } else if (rs === null && terrainInspecting && forcedScale === null && !dynOn && renderScale !== 1) {
+      // (the raster's scale let go: the canvas's again)
       resize();
     }
     if (!terrainInspecting && dynOn && heldFor > 0.4 && renderScale < 1) {

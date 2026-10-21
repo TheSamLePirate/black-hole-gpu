@@ -82,6 +82,15 @@ struct Sun { right: vec4f, up: vec4f, toward: vec4f };
 // (r: the ground's distance [m]; g: the scenery's instance drawn there — none here, the scenery's draw writes it alone, and
 // its proxy's distance over b)
 @fragment fn terrainFs(v: Vertex) -> @location(0) vec4f { let d = length(v.p); return vec4f(d, 0.0, d, 1.0); }
+// A far ring: a coarser level's grid (its cells four times the next finer one's), its triangles under that finer one left out
+// of its mesh (system/terrain-raster.ts drawRing) — xy its nodes' place on the finer one's grid (×4 and this offset), z the
+// overlap kept along the finer one's edge [its nodes] —; w its mark in a (½ a level coarser than the patch, ¼ two: the
+// tracer's tolerance — trace.wgsl RHINT_TOL)
+@group(0) @binding(6) var<uniform> ring: vec4f;
+@fragment fn ringFs(v: Vertex) -> @location(0) vec4f {
+  let d = length(v.p);
+  return vec4f(d, 0.0, d, ring.w);
+}
 
 @vertex fn screenVs(@builtin(vertex_index) k: u32) -> @builtin(position) vec4f {
   let p = array<vec2f, 3>(vec2f(-1,-1), vec2f(3,-1), vec2f(-1,3));
@@ -120,6 +129,30 @@ fn pixelPoint(i: vec2i) -> vec3f {
   return vec4f(mix(vec3f(0.05,0.7,0.1), color, amount), 1);
 }
 `;
+}
+
+/** the band along a finer level's edge [its nodes] a ring's triangles overlap it by: both drawn there, no crack */
+const RING_OVERLAP = 4;
+/** A far ring to draw about the patch: its level's frame (terrainRasterFrame), level and window, its nodes' offset on the next
+ *  finer level's grid (×4 and this: its hole), how many levels coarser than the patch it is. */
+export interface TerrainRing {
+  frame: Float32Array<ArrayBuffer>;
+  level: number;
+  window: TerrainWindow;
+  hole: [number, number];
+  step: number;
+}
+interface RingState {
+  key: string;
+  indexCount: number;
+  vertex: GPUBuffer;
+  index: GPUBuffer;
+  uniform: GPUBuffer;
+  hole: GPUBuffer;
+  bind: GPUBindGroup | null;
+  heightBind: GPUBindGroup | null;
+  table: GPUBuffer | null;
+  sources: TerrainCacheSources | null;
 }
 
 interface Attachments {
@@ -166,6 +199,10 @@ export class TerrainRaster {
   private sunHeightBind: GPUBindGroup | null = null;
   private sunSources: TerrainCacheSources | null = null;
   sunFrames = 0;
+  // the far rings (levels coarser than the patch's, each about the next finer): their pipeline and each one's mesh and bindings
+  private ringPipe: GPURenderPipeline | null = null;
+  private rings: RingState[] = [];
+  ringsDrawn = 0;
 
   constructor(
     private device: GPUDevice,
@@ -221,6 +258,45 @@ export class TerrainRaster {
         },
         (e) => this.failed(e),
       );
+    void device
+      .createRenderPipelineAsync({
+        layout: "auto",
+        vertex: {
+          module: this.module,
+          entryPoint: "terrainVs",
+          buffers: [{ arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] }],
+        },
+        fragment: { module: this.module, entryPoint: "ringFs", targets: [{ format: TERRAIN_RASTER_FORMAT }] },
+        primitive: { topology: "triangle-list", cullMode: "none" },
+        depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
+      })
+      .then(
+        (p) => {
+          if (!this.disposed) this.ringPipe = p;
+        },
+        (e) => this.failed(e),
+      );
+  }
+
+  private ringState(k: number): RingState {
+    let r = this.rings[k];
+    if (!r) {
+      const d = this.device;
+      r = {
+        key: "",
+        indexCount: 0,
+        vertex: d.createBuffer({ size: RASTER_MESH_VERTEX_BYTES, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST }),
+        index: d.createBuffer({ size: RASTER_MESH_INDEX_BYTES, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST }),
+        uniform: d.createBuffer({ size: TERRAIN_RASTER_UNIFORM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }),
+        hole: d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }),
+        bind: null,
+        heightBind: null,
+        table: null,
+        sources: null,
+      };
+      this.rings[k] = r;
+    }
+    return r;
   }
 
   private failed(e: unknown) {
@@ -317,6 +393,7 @@ export class TerrainRaster {
     runways: Float32Array,
     profile: (label: string, descriptor: GPURenderPassDescriptor) => GPURenderPassDescriptor,
     scenery?: (pass: GPURenderPassEncoder) => void,
+    rings: TerrainRing[] = [],
   ): boolean {
     this.idle("compiling");
     if (this.disposed || this.error) return false;
@@ -382,6 +459,12 @@ export class TerrainRaster {
     pass.setIndexBuffer(this.index!, "uint32");
     pass.setVertexBuffer(0, this.vertex!);
     pass.drawIndexed(this.indexCount);
+    // (the far rings beyond it: the farther ground found from them too, not marched from the camera)
+    this.ringsDrawn = 0;
+    if (this.ringPipe)
+      for (let k = 0; k < rings.length; k++) {
+        if (this.drawRing(pass, this.ringPipe, this.ringState(k), rings[k]!, sources)) this.ringsDrawn++;
+      }
     // (the scenery's instances after the ground, against its depth, their ids in g alone — system/scenery-raster.ts)
     scenery?.(pass);
     pass.end();
@@ -389,6 +472,70 @@ export class TerrainRaster {
     this.reason = "pilot";
     this.level = level;
     this.encodedFrames++;
+    return true;
+  }
+
+  private drawRing(pass: GPURenderPassEncoder, pipe: GPURenderPipeline, r: RingState, ring: TerrainRing, sources: TerrainCacheSources) {
+    const d = this.device;
+    const key = `${ring.level}:${ring.window.i}:${ring.window.j}:${ring.hole[0]}:${ring.hole[1]}`;
+    if (key !== r.key) {
+      // (a plain grid — the runways' cuts are the patch's, near —, its cells under the finer level left out: the triangles
+      // whose corners all fall inside it, its edge's band of RING_OVERLAP nodes kept — drawn both, the nearer kept, no crack;
+      // cut out of the mesh, not discarded: the depth test early, no hidden ground shaded twice)
+      const mesh = terrainRasterMesh(ring.window, ring.level, new Float32Array(4));
+      const v = mesh.vertices;
+      const last = TERRAIN_CACHE_N - 1;
+      const inside = (k: number) => {
+        const x = v[3 * k]! * 4 + ring.hole[0],
+          y = v[3 * k + 1]! * 4 + ring.hole[1];
+        return x > RING_OVERLAP && x < last - RING_OVERLAP && y > RING_OVERLAP && y < last - RING_OVERLAP;
+      };
+      const ix = mesh.indices;
+      const kept = new Uint32Array(ix.length);
+      let n = 0;
+      for (let i = 0; i < ix.length; i += 3)
+        if (!(inside(ix[i]!) && inside(ix[i + 1]!) && inside(ix[i + 2]!))) {
+          kept[n++] = ix[i]!;
+          kept[n++] = ix[i + 1]!;
+          kept[n++] = ix[i + 2]!;
+        }
+      d.queue.writeBuffer(r.vertex, 0, v);
+      d.queue.writeBuffer(r.index, 0, kept, 0, n);
+      r.indexCount = n;
+      r.key = key;
+    }
+    const old = r.sources;
+    if (!r.heightBind || !old || !(Object.keys(sources) as (keyof TerrainCacheSources)[]).every((k) => old[k] === sources[k])) {
+      r.heightBind = d.createBindGroup({
+        layout: pipe.getBindGroupLayout(1),
+        entries: [
+          { binding: 0, resource: { buffer: sources.params } },
+          { binding: 4, resource: sources.sampler },
+          { binding: 21, resource: sources.elevation.createView() },
+          { binding: 28, resource: sources.tiles.createView({ dimension: "2d-array" }) },
+        ],
+      });
+      r.sources = sources;
+    }
+    if (r.table !== sources.table || !r.bind) {
+      r.table = sources.table;
+      r.bind = d.createBindGroup({
+        layout: pipe.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: r.uniform } },
+          { binding: 1, resource: { buffer: sources.table } },
+          { binding: 6, resource: { buffer: r.hole } },
+        ],
+      });
+    }
+    d.queue.writeBuffer(r.uniform, 0, ring.frame);
+    d.queue.writeBuffer(r.hole, 0, new Float32Array([ring.hole[0], ring.hole[1], RING_OVERLAP, 0.5 ** ring.step]));
+    pass.setPipeline(pipe);
+    pass.setBindGroup(0, r.bind);
+    pass.setBindGroup(1, r.heightBind);
+    pass.setIndexBuffer(r.index, "uint32");
+    pass.setVertexBuffer(0, r.vertex);
+    pass.drawIndexed(r.indexCount);
     return true;
   }
 
@@ -488,6 +635,7 @@ export class TerrainRaster {
       reason: this.reason,
       encodedFrames: this.encodedFrames,
       level: this.level,
+      rings: this.ringsDrawn,
       triangles: this.indexCount / 3,
       columns: this.columns,
       rows: this.rows,
@@ -513,6 +661,8 @@ export class TerrainRaster {
     this.sunUniform.destroy();
     this.index?.destroy();
     this.vertex?.destroy();
+    for (const r of this.rings) for (const b of [r.vertex, r.index, r.uniform, r.hole]) b.destroy();
+    this.rings = [];
     for (const a of [...this.retired, ...(this.attachments ? [this.attachments] : [])]) {
       a.distance.destroy();
       a.depth.destroy();
