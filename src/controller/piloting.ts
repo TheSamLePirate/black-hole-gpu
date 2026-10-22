@@ -212,6 +212,7 @@ function newFlight(this: CameraController) {
   // (the A320's systems made again with its next frame: its fuel the fleet's)
   this.a320 = null;
   this.a320Reverse = 0;
+  this.a320Park = false;
   this.hubCache = this.runwayCache = this.futureCache = this.kerrInfoCache = this.aimCache = null;
   this.contrails.clear();
   this.rigidMount();

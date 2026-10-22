@@ -45,6 +45,9 @@ export interface DeckMesh extends A320Mesh {
   /** the displays' cells in their atlas (u0, v0, w, h — 0…1) by name: PFD1, ND1, UECAM, LECAM, ND2, PFD2, MCDU1, MCDU2,
    *  IESI, DCDU1, DCDU2 */
   screens: Record<string, [number, number, number, number]>;
+  /** FlightGear's Systems/a320-cockpit.xml: an animation's property eased from a system's — [output, input, rate
+   *  (1/s: a first-order lag), rate limit (/s, 0: none)] */
+  lags: [string, string, number, number][];
 }
 
 export function parseDeck(buf: ArrayBuffer): DeckMesh {
@@ -59,6 +62,7 @@ export function parseDeck(buf: ArrayBuffer): DeckMesh {
     controls: DeckControl[];
     objects: string[];
     screens: Record<string, [number, number, number, number]>;
+    lags?: [string, string, number, number][];
   };
   off += 4 + n;
   const verts = new Float32Array(buf.slice(off, off + nv * 40));
@@ -77,6 +81,7 @@ export function parseDeck(buf: ArrayBuffer): DeckMesh {
     objects: meta.objects,
     triObj,
     screens: meta.screens,
+    lags: meta.lags ?? [],
   };
 }
 
@@ -103,7 +108,10 @@ export interface DeckInputs {
 
 const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
 
-/** The deck's properties from the flight (FlightGear's Systems/a320-cockpit.xml's, eased as its lag filters ease them). */
+/** The deck's properties from the flight, as FlightGear's systems write them (their paths without a leading "/" nor
+ *  an index [0]: scripts/build-a320-cockpit.py), and the animations' eased from them by the lags of
+ *  Systems/a320-cockpit.xml (the deck's: DeckMesh.lags). The switches' own properties are the controls'
+ *  (deckctl.ts), in the same bag. */
 export class DeckPoser {
   props: Props = {
     // (the aircraft's options: the CFM56's overhead plugs, no head-up display, the displays drawn inside)
@@ -112,34 +120,37 @@ export class DeckPoser {
     "options/hide-canvas-outside": 0,
     "sim/current-view/internal": 1,
     "controls/switches/annun-test": 0,
+    // (the EFIS: the ND in ARC at 40 NM, as FlightGear starts it)
+    "instrumentation/efis/nd/display-mode": "ARC",
+    "instrumentation/efis/mfd/pnl_mode-num": 3,
+    "instrumentation/efis/inputs/range-nm": 40,
+    "instrumentation/efis[1]/nd/display-mode": "ARC",
+    "instrumentation/efis[1]/mfd/pnl_mode-num": 3,
+    "instrumentation/efis[1]/inputs/range-nm": 40,
   };
-  private gear = 0;
+  /** the lags (the deck's, once loaded) */
+  lags: DeckMesh["lags"] = [];
 
   step(i: DeckInputs): Props {
     const P = this.props;
-    const k = Math.min(i.dt * 20, 1);
-    const ease = (key: string, to: number, kk = k) => {
-      const v = Number(P[key] ?? to);
-      P[key] = v + (to - v) * kk;
-    };
-    // (FlightGear's: elevator > 0 is the stick forward; aileron > 0 to the right)
-    ease("controls/cockpit/elevator-sidestick-capt", -clamp(i.stick[0], -1, 1));
-    ease("controls/cockpit/aileron-sidestick-capt", clamp(i.stick[1], -1, 1));
-    ease("controls/cockpit/rudder-pedal", clamp(i.pedals, -1, 1));
-    ease("controls/cockpit/tiller-handle", clamp(i.tiller, -1, 1));
+    // (FlightGear's: the elevator > 0 the stick forward; the aileron > 0 to the right)
+    P["controls/flight/elevator"] = -clamp(i.stick[0], -1, 1);
+    P["controls/flight/aileron"] = clamp(i.stick[1], -1, 1);
+    P["systems/fbw/sidestick/yaw-input-cmd"] = clamp(i.pedals, -1, 1);
+    P["systems/fbw/tiller-handle-cmd"] = clamp(i.tiller, -1, 1);
+    // (the thrust levers at their angles — a function, not a lag —, the reversers' levers lifted)
     const ang = leverAngle(i.lever) / 45;
-    ease("controls/cockpit/throttle-lever[0]", ang, 1);
-    ease("controls/cockpit/throttle-lever[1]", ang, 1);
-    ease("controls/cockpit/reverse-lever[0]", clamp(i.reverse, 0, 1));
-    ease("controls/cockpit/reverse-lever[1]", clamp(i.reverse, 0, 1));
-    ease("controls/cockpit/flaps-lever-rotate", clamp(i.flapLever, 0, 4));
-    ease("controls/cockpit/spoilers-lever-rotate", clamp(i.speedBrake, 0, 1));
-    ease("controls/cockpit/spoilers-lever-translate", i.spoilersArmed ? 1 : 0);
-    ease("controls/cockpit/park-brk-rotate", i.parkBrake ? 1 : 0, Math.min(i.dt * 10, 1));
-    // (the gear lever: pulled out, moved down, pushed in — FlightGear's 0 … 3, 4.5 a second)
-    this.gear += clamp((i.gearDown ? 3 : 0) - this.gear, -4.5 * i.dt, 4.5 * i.dt);
-    P["controls/cockpit/gear-lever"] = this.gear;
-    // (the autobrake's buttons, pressed in)
+    P["controls/cockpit/throttle-lever"] = ang;
+    P["controls/cockpit/throttle-lever[1]"] = ang;
+    P["controls/engines/engine/throttle"] = P["controls/engines/engine[1]/throttle"] = i.lever;
+    P["systems/fadec/reverse-1/throttle-lever"] = P["systems/fadec/reverse-2/throttle-lever"] = clamp(i.reverse, 0, 1);
+    P["controls/flight/flaps-input"] = clamp(i.flapLever, 0, 4);
+    P["fdm/jsbsim/spoilers/lever-cmd"] = clamp(i.speedBrake, 0, 1);
+    P["controls/flight/speedbrake-arm"] = i.spoilersArmed ? 1 : 0;
+    P["controls/gear/brake-parking"] = i.parkBrake ? 1 : 0;
+    // (the gear lever: pulled out, moved, pushed in — FlightGear's 0 … 3)
+    P["controls/gear/lever-cockpit"] = i.gearDown ? 3 : 0;
+    // (the autobrake's buttons, pressed in, and their lights)
     const ab = i.fcs?.autobrake ?? 0;
     P["controls/cockpit/autobrake-lo-translate"] = ab === 1 ? 1 : 0;
     P["controls/cockpit/autobrake-med-translate"] = ab === 2 ? 1 : 0;
@@ -150,6 +161,21 @@ export class DeckPoser {
     // (the essential bus: the lights may show)
     P["systems/electrical/bus/dc-ess"] = i.powered ? 28 : 0;
     P["systems/electrical/bus/ac-ess-shed"] = i.powered ? 115 : 0;
+    // (the animations eased after their systems: a first-order lag, a rate limit first where there is one; the first
+    // frame where they are)
+    for (const [out, src, c1, rate] of this.lags) {
+      const x = P[src];
+      if (typeof x !== "number") continue;
+      const v = P[out];
+      if (typeof v !== "number") {
+        P[out] = x;
+        continue;
+      }
+      let w = v;
+      if (rate > 0) w += clamp(x - w, -rate * i.dt, rate * i.dt);
+      else w += (x - w) * (1 - Math.exp(-c1 * i.dt));
+      P[out] = w;
+    }
     return P;
   }
 }

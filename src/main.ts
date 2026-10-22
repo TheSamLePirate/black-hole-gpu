@@ -26,6 +26,9 @@ import { GEARS } from "./gear";
 import { JetPoser } from "./f35/pose";
 import { A320Poser, CONF, confOf } from "./a320/pose";
 import { DeckPoser } from "./a320/deck";
+import { DeckControls } from "./a320/deckctl";
+import { DeckPicker } from "./a320/deckpick";
+import { type DeckGame, deckCall, deckChanged, deckExterior, deckSync, deckTip, deckWired } from "./a320/deckgame";
 import { Pcd } from "./f35/pcd";
 import { pcdData } from "./f35/cockpit";
 import { alertsOf } from "./ui/hud/alerts";
@@ -3685,10 +3688,97 @@ async function main() {
     },
   });
   const cockpitTip = new CockpitTip();
+  // the A320's flight deck under the pointer (docs/PLAN-A320.md, A6): its controls as FlightGear's — made with the deck's
+  // first look —, the game answering them (src/a320/deckgame.ts)
+  const deckGame: DeckGame = {
+    settings,
+    craft: {
+      get gearDown() {
+        return camera.gearDown;
+      },
+      get pilot() {
+        return camera.pilot;
+      },
+      get airBrake() {
+        return camera.airBrake;
+      },
+      set airBrake(v) {
+        camera.airBrake = v;
+      },
+      get groundSpoilers() {
+        return camera.groundSpoilers;
+      },
+      set groundSpoilers(v) {
+        camera.groundSpoilers = v;
+      },
+      get a320Reverse() {
+        return camera.a320Reverse;
+      },
+      set a320Reverse(v) {
+        camera.a320Reverse = v;
+      },
+      get a320Park() {
+        return camera.a320Park;
+      },
+      set a320Park(v) {
+        camera.a320Park = v;
+      },
+      get a320() {
+        return camera.a320;
+      },
+      onWheels: () => !!camera.rolling || !!camera.ourLanded,
+    },
+    setGear: (down) => setGear(down),
+    flaps: (step) => {
+      const cfg = camera.airFlight.cfg;
+      const lever = Math.min(Math.max(Math.round((cfg.flaps ?? 0) * 4) + step, 0), 4);
+      if (lever === Math.round((cfg.flaps ?? 0) * 4)) return;
+      cfg.flaps = lever / 4;
+      const ias = Math.sqrt((2 * (camera.airFlight.last?.out.q ?? 0)) / 1.225) * 1.9438;
+      panel.toast(tf("Flaps {0}", CONF[confOf(lever, ias, !!camera.rolling || !!camera.ourLanded)]!.name));
+    },
+    toast: (m) => panel.toast(m),
+    changed: (keys) => {
+      onSettingsChange(keys);
+      refreshGui();
+      scheduleUrlSave();
+    },
+  };
+  let deckCtl: DeckControls | null = null;
+  let deckPick: DeckPicker | null = null;
+  const deckWire = new Map<number, boolean>();
+  /** the deck's controls, once its mesh is there */
+  const deckControls = () => {
+    const mesh = renderer.ship.a320DeckMesh;
+    if (!deckCtl && mesh) {
+      deckPoser.lags = mesh.lags;
+      deckCtl = new DeckControls(mesh, deckPoser.props, {
+        ray: (x, y) => renderer.ship.cabinRay(x, y),
+        mats: () => renderer.ship.deckMats,
+        picker: () => (deckPick ??= new DeckPicker(mesh)),
+        call: (c) => deckCall(deckGame, deckPoser.props, c),
+        changed: (p, v) => deckChanged(deckGame, deckPoser.props, p, v),
+      });
+    }
+    return deckCtl;
+  };
+  const onDeck = () => settings.vessel === "a320" && !!renderer.ship.deckMats;
   camera.cockpit = {
-    input: cockpitInput,
-    active: () => camera.piloting && renderer.ship.cabinShown && !camera.spectating,
-    tip: (id, x, y) => cockpitTip.show(id ? controlTip(id, controlStates(camera, settings, cockpitChrono)[id], cockpitDeps) : null, x, y),
+    get input() {
+      return (onDeck() && deckControls()) || cockpitInput;
+    },
+    active: () => camera.piloting && (renderer.ship.cabinShown || onDeck()) && !camera.spectating,
+    tip: (id, x, y) => {
+      const D = onDeck() ? deckControls() : null;
+      if (D) {
+        const c = D.control(id);
+        if (!c || id === null) return cockpitTip.show(null);
+        const k = Number(id);
+        if (!deckWire.has(k)) deckWire.set(k, deckWired(c));
+        return cockpitTip.show(deckTip(c, deckWire.get(k)!), x, y);
+      }
+      cockpitTip.show(id ? controlTip(id, controlStates(camera, settings, cockpitChrono)[id], cockpitDeps) : null, x, y);
+    },
   };
   // photo mode (ui/photo.ts): the view alone, one bar for the picture
   let photoMode: PhotoMode | null = null;
@@ -7716,6 +7806,7 @@ async function main() {
             Math.min(Math.max(sgn * (0.55 * (th?.torque[k] ?? 0) + (0.75 * camera.pilot.omega[k]!) / r[k]!), -1, 1), 1);
           const F = camera.a320;
           const n1s: [number, number] = F ? [F.engines[0].n1, F.engines[1].n1] : [0, 0];
+          const deckOut = deckExterior(deckPoser.props);
           renderer.a320Pose = a320Poser.step({
             dt,
             pitch: cmd(0, 1),
@@ -7736,13 +7827,22 @@ async function main() {
             reverser: F ? [F.engines[0].rev, F.engines[1].rev] : [0, 0],
             fcs: F,
             alpha: ((L?.out.alpha ?? 0) * 180) / Math.PI,
-            landingLights: settings.landingLights,
+            landingLights: settings.landingLights || deckOut.landingOut,
+            wipers: deckOut.wipers,
           });
-          // (its flight deck, from inside: the side stick as the pilot moves it, the levers, the pedals — src/a320/deck.ts)
-          if (settings.shipMount === "cockpit" || settings.shipMount === "cabin") {
+          // (the lights its switches turn off: the taxi, turn-off and wing lights — ship.ts)
+          Object.assign(renderer.a320Pose.props, {
+            "deck/taxi": deckOut.taxi ? 1 : 0,
+            "deck/turnoff": deckOut.turnoff ? 1 : 0,
+            "deck/wing": deckOut.wing ? 1 : 0,
+          });
+          // (its flight deck — from inside, its switches all the time: the side stick as the pilot moves it, the levers,
+          // the pedals; the game's state on its switches — src/a320/deck.ts, deckgame.ts)
+          deckSync(deckGame, deckPoser.props);
+          {
             const tq = th?.torque ?? [0, 0, 0];
             const c1 = (x: number) => Math.min(Math.max(x, -1), 1);
-            renderer.a320Deck = deckPoser.step({
+            const deckProps = deckPoser.step({
               dt,
               stick: [c1(tq[0]!), c1(-tq[2]!)],
               pedals: onGround ? 0 : c1(tq[1]!),
@@ -7754,9 +7854,10 @@ async function main() {
               flapLever: Math.round((camera.airFlight.cfg.flaps ?? 0) * 4),
               speedBrake: camera.airBrake,
               spoilersArmed: !!camera.groundSpoilers,
-              parkBrake: onGround && speed < 0.5 && camera.pilot.throttle <= 0.02,
+              parkBrake: camera.a320Park,
               powered: true,
             });
+            renderer.a320Deck = settings.shipMount === "cockpit" || settings.shipMount === "cabin" ? deckProps : null;
           }
         }
         // (the F-35 chosen: its display's fonts, canvas and mips readied while the browser idles — no stall at the

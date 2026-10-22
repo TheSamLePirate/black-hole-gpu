@@ -451,8 +451,13 @@ export class ShipRenderer {
   private deckMesh: Mesh | null = null;
   private deckLoading = false;
   private deckLayers = false;
-  /** the deck drawn this frame (the hull's glass then left out) */
+  /** the deck drawn this frame (the hull's glass then left out), its parts' maps (the pointer's picks: deckpick.ts) */
   private deckDrawn = false;
+  private deckMatsNow: Float32Array<ArrayBuffer> | null = null;
+  /** The A320's flight deck drawn last frame: its parts' maps (rows of 3 × 4); null: not drawn. */
+  get deckMats(): Float32Array | null {
+    return this.deckDrawn ? this.deckMatsNow : null;
+  }
   /** What a pixel (ndc) of the F-35's cockpit view meets on its mesh (as built — the parts at rest): the
    *  distance, the material, the part, on its panoramic display the point (u, v). Null: nothing. */
   jetPick(
@@ -1239,7 +1244,8 @@ export class ShipRenderer {
       d.queue.submit([enc.finish()]);
       imgs.forEach((im, k) => writeLevels(d, tex, im.levels, im.width, im.height, target, 3 + k));
       this.a320Maps = { ...this.a320Maps, albedo: tex };
-      old.destroy();
+      // (a livery written meanwhile went to the old array: painted again on the new one — paintA320 sees it)
+      this.device.queue.onSubmittedWorkDone().then(() => old.destroy());
       this.bind();
       this.onLoaded?.();
     } catch (e) {
@@ -1297,6 +1303,8 @@ export class ShipRenderer {
       await this.paintA320();
       this.bind();
       this.onLoaded?.();
+      // (the deck seen first — from the seat, at once —: its layers waited for these)
+      if (this.a320Deck) void this.loadDeckLayers();
     } catch (e) {
       console.error("A320 maps:", e);
     }
@@ -1319,7 +1327,8 @@ export class ShipRenderer {
       const tex = this.a320Maps.albedo;
       writeLevels(this.device, tex, F.levels, F.width, F.height, target, 0);
       writeLevels(this.device, tex, E.levels, E.width, E.height, target, 2, [0, 0]);
-      this.a320Livery = want;
+      // (the array made again meanwhile — the deck's layers added —: painted again)
+      this.a320Livery = tex === this.a320Maps.albedo ? want : "";
       this.onLoaded?.();
     } catch (e) {
       console.error("A320 livery:", e);
@@ -1832,9 +1841,12 @@ export class ShipRenderer {
         const P = this.a320Now?.props ?? {};
         const gear = Number(P["gear/gear[0]/position-norm"] ?? 1);
         const ext = Number(P["controls/lighting/landing-light-pos-l"] ?? 0);
+        // (and the deck's switches: the taxi, turn-off and wing lights off — main.ts deck/…, 1 when never set)
+        const sw = (k: string) => Number(P[`deck/${k}`] ?? 1) > 0.5;
         defs!.forEach((L, i) => {
           if ((L.kind === "taxi" || L.kind === "turnoff") && gear < 0.97) levels[i] = 0;
           if (L.kind === "landing" && ext < 0.9) levels[i] = 0;
+          if ((L.kind === "taxi" || L.kind === "turnoff" || L.kind === "wing") && !sw(L.kind)) levels[i] = 0;
         });
       }
       if (on && H)
@@ -2019,7 +2031,8 @@ export class ShipRenderer {
       if (dm && deck && nInst < MAX_INST && partCount(deck) <= DECK_PARTS) {
         const at = MAX_INST + JET_SLOTS * MAX_PARTS;
         model(R, t, this.instData, nInst * INST_FLOATS);
-        const mats = rigMatrices(deck, v.a320Deck ?? {}, {});
+        const mats = rigMatrices(deck, v.a320Deck ?? {}, {}, this.deckMatsNow ?? undefined);
+        this.deckMatsNow = mats;
         this.writeParts(mats, at, DECK_PARTS);
         this.instData.set([kind.a320, 1, v.place ? 1 : 0, at], nInst * INST_FLOATS + 16);
         this.draws.push({ mesh: dm, shadow: true, inst: nInst++ });

@@ -24,7 +24,7 @@ UV), 127 the windows' glass, 128 the HUD's combiner, 129 the ECAM's bezel glass,
 131 the INOP placards (emissive), 132 the FCU's and the radios' displays (emissive: their texture's), 133 the rest of
 the atlas (the checklist, the carpet, the pedestal's details, the glare switches).
 """
-import gzip, json, math, os, struct, sys, time
+import gzip, json, math, os, re, struct, sys, time
 import xml.etree.ElementTree as ET
 
 import numpy as np
@@ -372,6 +372,42 @@ AO, baked = bake_ao(V_P, V_N, tris[solid], rays=24, reach=0.6)
 log("ambient occlusion", "baked" if baked else "left out (no Blender)")
 
 screens = {k: [x / 4096 for x in v] for k, v in DU.items()}
+
+
+# ---------------------------------------------------------------------------- the properties' paths, the lags
+def norm_path(q):
+    """A property's path as the game keys it: no leading "/", an index [0] dropped (FlightGear's efis is efis[0])."""
+    return re.sub(r"\[0\]", "", q.lstrip("/"))
+
+
+def norm(x, key=None):
+    """Every path in the rig's nodes, the controls' bindings and conditions (and the setprop()s of their scripts)."""
+    if isinstance(x, dict):
+        return {k: norm(v, k) for k, v in x.items()}
+    if isinstance(x, list):
+        if len(x) == 2 and x[0] == "prop" and isinstance(x[1], str):
+            return ["prop", norm_path(x[1])]
+        return [norm(v, key) for v in x]
+    if isinstance(x, str) and key in ("prop", "property", "labelProp"):
+        return norm_path(x)
+    if isinstance(x, str) and key == "script":
+        return re.sub(r'(setprop|getprop)\("([^"]*)"', lambda m: f'{m.group(1)}("{norm_path(m.group(2))}"', x)
+    return x
+
+
+nodes = norm(nodes)
+controls = norm(controls)
+# (Systems/a320-cockpit.xml: the animations' properties eased from the systems' — lag filters, the gear lever's
+# actuator; an input relative to JSBSim's tree kept under fdm/jsbsim/)
+lags = []
+for e in ET.parse(FG + "/Systems/a320-cockpit.xml").getroot().iter():
+    if e.tag not in ("lag_filter", "actuator") or not e.findtext("input"):
+        continue
+    src = e.findtext("input").strip()
+    src = norm_path(src) if src.startswith("/") else "fdm/jsbsim/" + src
+    c1 = float(e.findtext("c1") or e.findtext("lag") or 20)
+    lags.append([norm_path(e.get("name")), src, c1, float(e.findtext("rate_limit") or 0)])
+log("lags", len(lags))
 meta = {
     "source": "FlightGear A320-family (legoboyvdlp/A320-family, GPL v2), Models/FlightDeck/res/fd_complete.ac, Models/Instruments/*/res/*.ac, Models/FlightDeck/a320.flightdeck.xml",
     "frame": "ship: x left, y up, z nose (as a320.bin's)",
@@ -379,6 +415,7 @@ meta = {
     "controls": controls,
     "objects": names,
     "screens": screens,
+    "lags": lags,
     "atlas": {k: [x / 4096 for x in v] for k, v in ATLAS.items()},
 }
 lo, hi = V_P.min(0), V_P.max(0)

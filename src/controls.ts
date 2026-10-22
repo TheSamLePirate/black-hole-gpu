@@ -5,7 +5,7 @@ import { SpacePad, type SpacePadOut } from "./input/spacepad";
 import { Autothrottle, type JetModes, noJetModes } from "./game/jet";
 import { CineBrain } from "./cine/brain";
 import { Follow } from "./cine/follow";
-import type { CockpitInput } from "./cockpit/input";
+import type { CockpitPointer } from "./cockpit/input";
 import { setHomePose, type cameraFrame } from "./camera";
 import type { RealInfo } from "./realweather";
 import type { WeatherState } from "./weather";
@@ -666,7 +666,7 @@ export class CameraController {
 
   /** The cockpit's controls under the pointer (PLAN-COCKPIT — main.ts sets it): their input, whether the
    *  cabin is what the view shows, the tip shown (a control's id, or none) */
-  cockpit: { input: CockpitInput; active(): boolean; tip(id: string | null, x: number, y: number): void } | null = null;
+  cockpit: { input: CockpitPointer; active(): boolean; tip(id: string | null, x: number, y: number): void } | null = null;
   /** a control held by the pointer: which pointer, where it was pressed and when, where it is */
   private ckHeld: { id: number; x0: number; y0: number; t: number; x: number; y: number } | null = null;
   private ckWheel = 0;
@@ -691,9 +691,11 @@ export class CameraController {
     // (in the cabin: pressed on a control, the control is held — the look's drags stay the right button's
     // and Shift's)
     const ck = this.cockpit;
-    if (ck && e.button === 0 && !e.shiftKey && this.pointers.size === 0 && ck.active()) {
+    // (the A320's: the middle button — or Alt with the left — pulls FlightGear's knobs)
+    const middle = !!ck?.input.middle && (e.button === 1 || (e.button === 0 && e.altKey));
+    if (ck && (e.button === 0 || middle) && !e.shiftKey && this.pointers.size === 0 && ck.active()) {
       const [nx, ny] = this.ndcOf(e);
-      if (ck.input.down(nx, ny)) {
+      if (ck.input.down(nx, ny, middle ? 1 : 0)) {
         this.canvas.setPointerCapture(e.pointerId);
         this.ckHeld = { id: e.pointerId, x0: e.clientX, y0: e.clientY, t: performance.now(), x: e.clientX, y: e.clientY };
         this.setHover(null);
@@ -1101,6 +1103,8 @@ export class CameraController {
   a320: A320Fcs | null = null;
   /** the A320's reverse lever 0…1 (its thrust reversers: on the ground, the levers at idle) */
   a320Reverse = 0;
+  /** the A320's parking brake (its deck's handle — src/a320/deckgame.ts) */
+  a320Park = false;
   readonly jetAthr = new Autothrottle();
   jetCws = { pitch: false, roll: false, thr: Number.NaN };
   /** a formation flown on another's craft (game/formation.ts — controller/formation.ts), null: none */

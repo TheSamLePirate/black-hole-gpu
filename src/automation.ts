@@ -404,6 +404,33 @@ export function installBh(c: BhContext) {
       /** what a pixel shows in the Ranger's cabin (ndc −1…1, y up): the face hit — point, normal, material,
        *  a screen's display and uv — or null (cockpit/pick.ts) */
       /** where a cockpit control is in the view (its box's centre): ndc (y up), or null (cockpit/controls.ts ids) */
+      /** The A320's flight deck (A6): a control (its FlightGear label, or an object of it) — the middle of its object as
+       *  posed now, in the ship's frame, and that point in the view (ndc; null behind the eye) */
+      a320DeckAt: (what: string) => {
+        const m = renderer.ship.a320DeckMesh;
+        const mats = renderer.ship.deckMats;
+        if (!m || !mats) return null;
+        const c = m.controls.find((x) => x.label === what || x.objects.includes(what));
+        if (!c) return null;
+        const o = m.objects.indexOf(c.objects.find((x) => m.objects.includes(x)) ?? "");
+        const p = [0, 0, 0];
+        let n = 0;
+        for (let t = 0; t < m.triObj.length; t++)
+          if (m.triObj[t] === o)
+            for (let k = 0; k < 3; k++) {
+              const v = m.idx[3 * t + k]!;
+              const r = 12 * Math.floor(m.verts[10 * v + 7]!);
+              const x = m.verts[10 * v]!,
+                y = m.verts[10 * v + 1]!,
+                z = m.verts[10 * v + 2]!;
+              for (let j = 0; j < 3; j++)
+                p[j]! += mats[r + 4 * j]! * x + mats[r + 4 * j + 1]! * y + mats[r + 4 * j + 2]! * z + mats[r + 4 * j + 3]!;
+              n++;
+            }
+        if (!n) return null;
+        const q = p.map((x) => x / n) as [number, number, number];
+        return { p: q, ndc: renderer.ship.cabinProject(q) };
+      },
       cockpitControlAt: (id: string) => {
         const c = CONTROLS.find((x) => x.id === id);
         return c ? renderer.ship.cabinProject(controlBox(c).c) : null;

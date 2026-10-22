@@ -453,7 +453,9 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
   const ab = fleet.active === "a320" ? this.a320 : null;
   const idleBrake =
     this.pilot.throttle <= 0 && this.pilot.auto === "none" && allDown && !(ab && (ab.autobrake > 0 || this.a320Reverse > 0)) ? 1 : 0;
-  const brake = Math.max(idleBrake, allDown ? this.toeBrake : 0, ab && allDown ? ab.brake : 0);
+  // (its parking brake set: braked hard)
+  const park = ab && this.a320Park ? 1 : 0;
+  const brake = Math.max(idleBrake, allDown ? this.toeBrake : 0, ab && allDown ? ab.brake : 0, park);
   const steer = this.noseSteer;
   // (the craft's turn in the home frame: the camera's basis — right = fwd × up — is left-handed there,
   // the pilot's rates turn the other way: ω = −Σ ωᵢ axisᵢ [rad/s])

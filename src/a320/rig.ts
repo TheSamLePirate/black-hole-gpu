@@ -233,9 +233,9 @@ export function rigMatrices(
   m: A320Mesh,
   props: Props,
   spins: Props = {},
-  out = new Float32Array(partCount(m) * 12),
+  out: Float32Array<ArrayBuffer> = new Float32Array(partCount(m) * 12),
   passes = 3,
-): Float32Array {
+): Float32Array<ArrayBuffer> {
   const N = m.nodes;
   const local: M34[] = N.map(() => ident());
   const world: M34[] = N.map(() => ident());
