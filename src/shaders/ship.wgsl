@@ -449,7 +449,7 @@ fn depthVs(v: VIn, @builtin(instance_index) ii: u32) -> DOut {
   if (abs(v.mat - 71.0) < 0.5) { o.clip = vec4f(2.0, 2.0, 2.0, 1.0); }
   // (the A320's flight deck's overlays — FlightGear's fd_glare, the atlas's cut-out cells —: their holes cut by the
   // shading, not here)
-  if (abs(v.mat - 122.0) < 0.5 || abs(v.mat - 133.0) < 0.5) { o.clip = vec4f(2.0, 2.0, 2.0, 1.0); }
+  if (abs(v.mat - 122.0) < 0.5 || abs(v.mat - 133.0) < 0.5 || abs(v.mat - 134.0) < 0.5) { o.clip = vec4f(2.0, 2.0, 2.0, 1.0); }
   return o;
 }
 
@@ -964,6 +964,17 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
       metal = 0.0;
       rough = 0.55;
       coat = 0.0;
+    }
+    // (the deck's texts — the FCU's windows, the radios, the clock: src/a320/du/texts.ts —, their segments lit, cut out
+    // of their quad where unlit)
+    case 134u: {
+      let tx = textureSampleGrad(jetScreen, mapSamp, in.uv, duvx, duvy);
+      if (tx.a < 0.08) { discard; }
+      albedo = vec3f(0.01);
+      metal = 0.0;
+      rough = 0.3;
+      coat = 0.0;
+      emit = tx.rgb / max(tx.a, 0.08) * tx.a * 1.4;
     }
     // the real traffic's airliners (ship.ts AIRLINERS): their livery's colour (a layer each), a glossy painted
     // skin; their lights' lenses a clear glass

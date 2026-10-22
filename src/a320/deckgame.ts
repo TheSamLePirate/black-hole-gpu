@@ -11,6 +11,7 @@ import type { A320Fcs } from "./fcs";
 import type { DeckBinding, DeckControl } from "./deck";
 import { nasalCalls, type NasalCall } from "./deckctl";
 import type { Props } from "./rig";
+import type { Fmgc, FmgcIn } from "./fmgc/fmgc";
 
 /** The game the deck works on (main.ts: the camera, the settings, the actions the keys share). */
 export interface DeckGame {
@@ -26,6 +27,8 @@ export interface DeckGame {
     onWheels(): boolean;
   };
   setGear(down: boolean): void;
+  /** the flight guidance (controller/a320ap.ts): its FCU, and the figures it read last */
+  fmgc(): { F: Fmgc; i: FmgcIn | null } | null;
   /** the flap lever a notch (+1: more flaps) */
   flaps(step: number): void;
   toast(m: string): void;
@@ -71,7 +74,12 @@ const CALLS = new Set([
   "core.rFootrest",
   "core.triggerDoor",
   "fcu.FCUController.MetricAlt",
+  "core.toggleSTD",
+  "core.toggleSTDIESI",
 ]);
+/** the FCU's (FlightGear's FCU.nas): its knobs pushed, pulled, turned; its buttons */
+const FCU =
+  /^fcu\.FCUController\.(SPD|HDG|ALT|VS)(Push|Pull|Adjust)$|^fcu\.FCUController\.(AP1|AP2|ATHR|ATDisc|FD1|FD2|IASMach|LOCButton|APPRButton|TRKFPA)$/;
 /** the properties the game follows */
 const FOLLOWED = new Set([
   "controls/engines/engine/throttle",
@@ -93,6 +101,8 @@ const FOLLOWED = new Set([
   "controls/switches/wiperRspd",
   "controls/cockpit/captain-visor",
   "controls/cockpit/fo-visor",
+  "it-autoflight/config/altitude-dial-mode",
+  "instrumentation/altimeter/inhg-left",
 ]);
 
 /** A Nasal call done on the game: true if done. */
@@ -100,7 +110,62 @@ export function deckCall(g: DeckGame, P: Props, c: NasalCall): boolean {
   const C = g.craft;
   const a0 = c.args[0],
     a1 = c.args[1];
+  // (the FCU)
+  const fm = FCU.exec(c.fn);
+  if (fm) {
+    const G = g.fmgc();
+    if (!G) return true;
+    const { F, i } = G;
+    const n = Number(a0) || 1;
+    const fi = i ?? undefined;
+    if (fm[1]) {
+      const knob = fm[1] as "SPD" | "HDG" | "ALT" | "VS";
+      const act = fm[2]!;
+      const turn = { SPD: () => F.spdTurn(n), HDG: () => F.hdgTurn(n), ALT: () => F.altTurn(n), VS: () => F.vsTurn(n) };
+      const push = { SPD: () => F.spdPush(), HDG: () => F.hdgPush(), ALT: () => F.altPush(fi), VS: () => F.vsPush(fi) };
+      const pull = { SPD: () => F.spdPull(fi), HDG: () => F.hdgPull(fi), ALT: () => F.altPull(fi), VS: () => F.vsPull(fi) };
+      (act === "Adjust" ? turn : act === "Push" ? push : pull)[knob]();
+      return true;
+    }
+    switch (fm[3]) {
+      case "AP1":
+        F.ap1Toggle(fi);
+        break;
+      case "AP2":
+        F.ap2Toggle(fi);
+        break;
+      case "ATHR":
+        F.athrToggle();
+        break;
+      case "ATDisc":
+        F.athrDisc();
+        break;
+      case "FD1":
+        F.fd1 = !F.fd1;
+        break;
+      case "FD2":
+        F.fd2 = !F.fd2;
+        break;
+      case "IASMach":
+        F.spdMachToggle(fi);
+        break;
+      case "LOCButton":
+        F.locToggle();
+        break;
+      case "APPRButton":
+        F.apprToggle();
+        break;
+      case "TRKFPA":
+        F.trkFpaToggle();
+        break;
+    }
+    return true;
+  }
   switch (c.fn) {
+    case "core.toggleSTD":
+    case "core.toggleSTDIESI":
+      P["instrumentation/altimeter/std"] = Number(P["instrumentation/altimeter/std"] ?? 0) > 0.5 ? 0 : 1;
+      return true;
     case "controls.gearDownSmart":
       // (pressed: 1 — the lever pulled and moved; let go: 0, nothing)
       if (a0 === 1) g.setGear(!C.gearDown);
@@ -238,6 +303,12 @@ export function deckChanged(g: DeckGame, P: Props, prop: string, v: number | str
       // (the panels' integral lighting: the cabin's level — ship.wgsl S.cab)
       set("cabinLight", Math.min(Math.max(n, 0), 1));
       return true;
+    case "it-autoflight/config/altitude-dial-mode": {
+      // (the FCU's altitude knob's step: 100 or 1000 ft)
+      const G = g.fmgc();
+      if (G) G.F.altStep = n > 0.5 ? 1000 : 100;
+      return true;
+    }
     case "controls/cockpit/captain-visor":
     case "controls/cockpit/fo-visor":
       return true;
@@ -259,6 +330,11 @@ export function deckSync(g: DeckGame, P: Props) {
   if (S.navLights !== nav) P["controls/lighting/nav-lights-switch"] = P["controls/switches/beacon"] = S.navLights ? 1 : 0;
   if (Math.abs(Number(P["controls/lighting/main-panel-knb"] ?? -1) - S.cabinLight) > 1e-3)
     P["controls/lighting/main-panel-knb"] = S.cabinLight;
+  // (the FCU's windows, its lights: the flight guidance's state — fmgc.ts deckProps)
+  const G = g.fmgc();
+  if (G) Object.assign(P, G.F.deckProps(G.i));
+  P["instrumentation/altimeter/setting-hpa"] ??= 1013;
+  P["instrumentation/altimeter/setting-inhg"] ??= 29.92;
   // (the sliding windows: eased to where they were sent)
   for (const side of ["windowLeft", "windowRight"]) {
     const k = `sim/model/door-positions/${side}/position-norm`;
@@ -286,7 +362,7 @@ export function deckWired(c: DeckControl): boolean {
   const all: DeckBinding[] = c.actions.flatMap((a) => [...a.bindings, ...(a.up ?? [])]);
   return all.some((b) =>
     b.command === "nasal"
-      ? nasalCalls(b.script ?? "").some((x) => CALLS.has(x.fn) || (x.fn === "setprop" && FOLLOWED.has(String(x.args[0]))))
+      ? nasalCalls(b.script ?? "").some((x) => CALLS.has(x.fn) || FCU.test(x.fn) || (x.fn === "setprop" && FOLLOWED.has(String(x.args[0]))))
       : !!b.property && FOLLOWED.has(b.property.replace(/^\//, "").replace(/\[0\]/g, "")),
   );
 }

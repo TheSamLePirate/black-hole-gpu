@@ -12,6 +12,8 @@ import { Isis } from "./isis";
 import { Nd } from "./nd";
 import { Pfd } from "./pfd";
 import { Sd } from "./sd";
+import { DeckTexts } from "./texts";
+import type { DeckText } from "../deck";
 
 const SIZE = 1024;
 
@@ -48,7 +50,7 @@ export class DuSet {
   /** each display its name, its top marked, its corners coloured (the cells' orientation checked: captures) */
   testPattern = false;
 
-  constructor(cells: Record<string, [number, number, number, number]>, atlas = 4096) {
+  constructor(cells: Record<string, [number, number, number, number]>, texts: DeckText[] = [], atlas = 4096) {
     const make: Record<string, () => Display> = {
       PFD1: () => new Pfd(0),
       PFD2: () => new Pfd(1),
@@ -71,6 +73,18 @@ export class DuSet {
         canvas,
         ctx,
         cell: [Math.round(c[0] * atlas), Math.round(c[1] * atlas), Math.round(c[2] * atlas), Math.round(c[3] * atlas)],
+        due: 0,
+      });
+    }
+    // (the deck's texts — the FCU's windows, the radios, the clock —: their slots' cell)
+    if (texts.length) {
+      const canvas = new OffscreenCanvas(SIZE, SIZE);
+      this.units.push({
+        name: "TEXTS",
+        d: new DeckTexts(texts, [3072, 2048]),
+        canvas,
+        ctx: canvas.getContext("2d")!,
+        cell: [3072, 2048, SIZE, SIZE],
         due: 0,
       });
     }

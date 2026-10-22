@@ -98,6 +98,8 @@ function apSet(this: CameraController, want: { alt?: number; hdg?: number; spd?:
  * "athr" the autothrottle (the speed now), "ab" the afterburner (the throttle full). Returns what to say.
  */
 function jetToggle(this: CameraController, what: "ap" | "athr" | "ab"): string {
+  // (the A320's own: its FMGC — controller/a320ap.ts)
+  if (fleet.active === "a320" && what !== "ab") return this.a320ApKey(what);
   if (!jetReady(this)) return t("The jet's systems: in plane mode (F)");
   const m = this.jetModes;
   // (the holds or the autothrottle taken while in formation: the formation let go, them on as they are)

@@ -64,4 +64,12 @@ export default {
   "Cargo hot air": "Air chaud de la soute",
   "MCDU 1": "MCDU 1",
   "MCDU 2": "MCDU 2",
+  // (the flight guidance's keys: controller/a320ap.ts — A8)
+  "A/THR on": "A/THR engagée",
+  "A/THR off": "A/THR déconnectée",
+  "AP1 engaged": "AP1 engagé",
+  "AP off": "Pilote automatique déconnecté",
+  "NAV engaged": "NAV engagé",
+  "NAV armed": "NAV armé",
+  "AP1: 100 ft up, 5 s after the lift-off": "AP1 : à 100 ft, 5 s après le décollage",
 };

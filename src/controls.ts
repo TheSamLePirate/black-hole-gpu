@@ -105,6 +105,7 @@ import { installNetcraft } from "./controller/netcraft";
 import { installStovl, noStovl, type StovlState } from "./controller/stovl";
 import type { A320Fcs } from "./a320/fcs";
 import { installA320 } from "./controller/a320";
+import { installA320Ap } from "./controller/a320ap";
 import { CamShake } from "./camshake";
 import { installCine } from "./controller/cine";
 import { installCamRig } from "./controller/camrig";
@@ -1101,6 +1102,12 @@ export class CameraController {
   stovl: StovlState = noStovl();
   /** the A320's systems, flown (src/a320/fcs.ts): made with its first frame */
   a320: A320Fcs | null = null;
+  /** its flight guidance (src/a320/fmgc — controller/a320ap.ts): made with its first frame; its last inputs and orders;
+   *  the ILS it tunes */
+  a320Fmgc: import("./a320/fmgc/fmgc").Fmgc | null = null;
+  a320FmgcIn: import("./a320/fmgc/fmgc").FmgcIn | null = null;
+  a320FmgcOut: import("./a320/fmgc/fmgc").FmgcOut | null = null;
+  a320Ils: import("./game/ils").IlsRunway | null = null;
   /** the A320's reverse lever 0…1 (its thrust reversers: on the ground, the levers at idle) */
   a320Reverse = 0;
   /** the A320's parking brake (its deck's handle — src/a320/deckgame.ts) */
@@ -1631,6 +1638,7 @@ installInstructor(CameraController);
 installNetcraft(CameraController);
 installStovl(CameraController);
 installA320(CameraController);
+installA320Ap(CameraController);
 installCine(CameraController);
 installCamRig(CameraController);
 installTravel(CameraController);

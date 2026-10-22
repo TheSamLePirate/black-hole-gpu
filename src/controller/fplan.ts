@@ -122,6 +122,7 @@ function routeFlyTo(this: CameraController, name: string, lat: number, lon: numb
 
 /** NAV engaged or let go (the key, the display's button): LNAV and VNAV, the autopilot and the autothrottle with them. */
 function navToggle(this: CameraController, what: "both" | "l" | "v" = "both"): string {
+  if (fleet.active === "a320") return this.a320ApKey("nav");
   const N = this.nav;
   if (!N.route.wps.length) return t("NAV: no flight plan — make one (the plan's panel)");
   const m = this.jetModes;

@@ -44,6 +44,8 @@ function a320Step(this: CameraController, dt: number, onWheels: boolean): A320Fc
     alphaFloor: !!this.pilot.airbusOut?.alphaFloor,
     onGround: onWheels,
     lever: this.pilot.throttle,
+    // (the autothrust's N1 — the FMGC's last frame's: controller/a320ap.ts)
+    n1Cmd: this.a320FmgcOut?.n1Cmd ?? null,
     reverse,
     flapLever: Math.round((this.airFlight.cfg.flaps ?? 0) * 4),
     speedBrake: this.airBrake,

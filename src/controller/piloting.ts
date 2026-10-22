@@ -213,6 +213,7 @@ function newFlight(this: CameraController) {
   this.a320 = null;
   this.a320Reverse = 0;
   this.a320Park = false;
+  this.a320Fmgc = this.a320FmgcIn = this.a320FmgcOut = this.a320Ils = null;
   this.hubCache = this.runwayCache = this.futureCache = this.kerrInfoCache = this.aimCache = null;
   this.contrails.clear();
   this.rigidMount();
@@ -1039,7 +1040,12 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   // (the A320's systems this frame — src/a320/fcs.ts —: its surfaces, slats, flaps, spoilers, engines, fuel)
   const a320 = fleet.active === "a320" ? this.a320Step(dtPilot, onWheels0) : null;
   // (the jet's systems — controller/jet.ts —: the autopilot's holds as the plane law's, the autothrottle)
-  const jetCmd = this.jetStep(inp, dtPilot);
+  let jetCmd = this.jetStep(inp, dtPilot);
+  // (the A320's flight guidance — controller/a320ap.ts —: its autopilot's orders to its law)
+  if (a320) {
+    const fo = this.a320FmgcStep(inp, dtPilot, onWheels0);
+    if (fo && (fo.gammaCmd !== null || fo.bankCmd !== null)) jetCmd = { gamma: fo.gammaCmd, bank: fo.bankCmd };
+  }
   // (a challenge's clock, its gates, its touchdown, its figures — controller/challenge.ts)
   this.challengeStep(dtPilot);
   // (a fight: its world stepped with the player — controller/combat.ts)
@@ -1249,7 +1255,9 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
       const sp = nav ? Math.hypot(...sub3(nav.V, groundVelocity(nav.ref, nav.X, nav.t))) * C_MPS : 0;
       const lock = Math.min((60 * Math.PI) / 180, 5.2 / Math.max(sp, 1));
       // (a positive yaw turns right: the wheel, + to the left, the other way)
-      this.noseSteer = -inp.yaw * lock;
+      // (the A320's ROLL OUT: its FMGC steering — controller/a320ap.ts)
+      const yaw = this.a320FmgcOut?.steer ?? inp.yaw;
+      this.noseSteer = -yaw * lock;
       if (nav && this.rollSite) this.rolloutSteer(nav.radial, dt, inp.yaw, lock);
     } else {
       if (nav) this.groundAttitude(nav.radial);

@@ -54,6 +54,8 @@ export interface FcsInputs {
   groundSpeed: number;
   air: EngineAir;
   alphaDot: number;
+  /** the autothrust's N1 [%] (the FMGC's — its orders under the levers' limit): the levers' own when null */
+  n1Cmd?: number | null;
 }
 
 const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
@@ -165,7 +167,11 @@ export class A320Fcs {
     if (i.alphaFloor && !i.onGround) this.alphaFloor = true;
     if (this.alphaFloor && (i.onGround || (!i.alphaFloor && i.lever > 0.9))) this.alphaFloor = false;
     const lever = this.alphaFloor ? 1 : i.lever;
-    const want = rev > 0 ? { n1: L1.idle + rev * (L1.mrev - L1.idle), reverse: rev } : { n1: leverN1(lever, L1, flex), reverse: 0 };
+    const auto = i.n1Cmd !== null && i.n1Cmd !== undefined && !this.alphaFloor;
+    const want =
+      rev > 0
+        ? { n1: L1.idle + rev * (L1.mrev - L1.idle), reverse: rev }
+        : { n1: auto ? Math.min(i.n1Cmd!, Math.max(leverN1(lever, L1, flex), i.n1Cmd!)) : leverN1(lever, L1, flex), reverse: 0 };
     this.engines = this.engines.map((e) => stepEngine(e, want, i.air, dt)) as [Engine, Engine];
     this.thrust = this.engines.reduce((a, e) => a + e.thrust, 0);
     this.thrustMax = Math.max(2 * thrustAt(n2Of(L1.toga), i.air), 1);

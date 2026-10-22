@@ -210,9 +210,14 @@ export class Pfd extends Display {
     e("AI_bank_lim_X").setVisible(!normal);
     e("AI_pitch_lim_X").setVisible(!normal);
     // (the flight directors: shown with the FD on and the attitude within their limits)
-    const fd = !!d.fma.fd && d.pitch < 25 && d.pitch > -13 && Math.abs(roll) < 45;
+    const fd = !!d.fma.fd && !!d.fdBars && d.pitch < 25 && d.pitch > -13 && Math.abs(roll) < 45;
     e("FD_roll").setVisible(fd);
     e("FD_pitch").setVisible(fd);
+    // (their orders: PFD.nas's 2.2 px a degree of roll, 11.825 px a degree of pitch)
+    if (fd) {
+      e("FD_roll").setTranslation(clamp(d.fdBars!.roll, -30, 30) * 2.2, 0);
+      e("FD_pitch").setTranslation(0, clamp(d.fdBars!.pitch, -10, 10) * -11.825);
+    }
     // (the side stick's place, on the ground: the deck's sidestick)
     const stick = d.onGround && d.eng.some((x) => x.running);
     e("AI_stick").setVisible(stick);
@@ -415,19 +420,29 @@ export class Pfd extends Display {
       .setVisible(f.thrust === "MAN FLX" && d.flexTemp !== null)
       .setText(d.flexTemp !== null ? `+${d.flexTemp}` : "");
     set("FMA_thrust", manual ? "" : f.thrust, f.thrust === "A.FLOOR" ? AMBER : GREEN);
-    e("FMA_thrust_box").setVisible(f.thrust === "A.FLOOR");
+    const B = f.boxed;
+    e("FMA_thrust_box").setVisible(f.thrust === "A.FLOOR" || (!!B?.thrust && !manual));
     const modes = !!(f.fd || f.ap);
-    set("FMA_pitch", modes ? f.vert : "");
-    set("FMA_roll", modes ? f.lat : "");
+    // (LAND, FLARE, ROLL OUT: one mode across the vertical and lateral columns — the FMA's combined)
+    const combined = modes && (f.lat === "LAND" || f.lat === "FLARE" || f.lat === "ROLL OUT") && f.lat === f.vert;
+    set("FMA_pitch", modes && !combined ? f.vert : "");
+    set("FMA_roll", modes && !combined ? f.lat : "");
     set("FMA_pitcharm", modes ? f.vertArmed : "", CYAN);
     set("FMA_pitcharm2", "", CYAN);
     set("FMA_rollarm", modes ? f.latArmed : "", CYAN);
-    e("FMA_combined").hide();
-    for (const id of ["FMA_pitch_box", "FMA_roll_box", "FMA_pitcharm_box", "FMA_rollarm_box", "FMA_combined_box"]) e(id).hide();
+    e("FMA_combined")
+      .setVisible(combined)
+      .setText(combined ? f.lat : "");
+    e("FMA_combined_box").setVisible(combined && !!B?.lat);
+    e("FMA_pitch_box").setVisible(modes && !combined && !!f.vert && !!B?.vert);
+    e("FMA_roll_box").setVisible(modes && !combined && !!f.lat && !!B?.lat);
+    for (const id of ["FMA_pitcharm_box", "FMA_rollarm_box"]) e(id).hide();
     set("FMA_ap", f.ap, WHITE);
     set("FMA_fd", f.fd, WHITE);
-    set("FMA_athr", f.athr, f.athr ? WHITE : CYAN);
-    for (const id of ["FMA_ap_box", "FMA_fd_box", "FMA_athr_box"]) e(id).hide();
+    set("FMA_athr", f.athr, f.athrState === "armed" ? CYAN : WHITE);
+    e("FMA_ap_box").setVisible(!!f.ap && !!B?.ap);
+    e("FMA_athr_box").setVisible(!!f.athr && !!B?.athr);
+    e("FMA_fd_box").hide();
     e("FMA_Middle1").show();
     doc.draw(ctx, 1024, 1024, fontOf);
   }

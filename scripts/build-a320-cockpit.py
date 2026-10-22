@@ -88,6 +88,29 @@ for name, path in SCREENS:
 world = {"name": "", "kind": "world", "verts": np.zeros((0, 3)), "texture": None, "crease": 61.0, "surfs": [], "kids": [deck, *subs]}
 G = fgrig.graph_from_ac(world)
 XML = MOD + "/FlightDeck/a320.flightdeck.xml"
+
+# ---- the texts (a320.flightdeck.xml's osgText: the FCU's windows, the radios, the clock, the transponder, the rudder
+# trim's): a quad each where FlightGear places it, in the deck's tree (its select animations show or hide it), its
+# characters drawn by the game in a slot of the displays' atlas (src/a320/du/texts.ts)
+TEXT_SLOT = (256, 48)  # px: 4 columns × 21 rows in the atlas's cell at (3072, 2048)
+TEXTS = []
+for t in ET.parse(XML).getroot().findall("text"):
+    g = lambda k: (t.findtext(k) or "").strip()  # noqa: E731
+    o = t.find("offsets")
+    off = [float((o.findtext(k) if o is not None else None) or 0) for k in ("x-m", "y-m", "z-m", "heading-deg", "pitch-deg", "roll-deg")]
+    node = fgrig.Node(g("name"))
+    G.kids[0].add(node)
+    TEXTS.append((node, {
+        "name": g("name"),
+        "kind": g("type"),
+        "format": g("format"),
+        "prop": g("property"),
+        "text": g("text"),
+        "align": g("alignment").split("-")[0] or "center",
+        "font": "14seg" if "DSEG14" in g("font") else "rmp" if "RMP" in g("font") else "7seg",
+        "size": float(g("character-size") or 0.008),
+        "off": off,
+    }))
 ALL = fgrig.read_animations(XML)
 # (the axes given by line objects — 223 of them: the sticks, the levers, the knobs —, as SimGear reads them)
 AXES = fgrig.resolve_axes(G, ALL)
@@ -353,6 +376,43 @@ def walk(n, mats_of):
 
 g_deck = G.kids[0]
 walk(g_deck, mats)
+
+
+def rot(h, p, r):
+    """FlightGear's <offsets>: the roll about x, then the pitch about y, then the heading about z (degrees)."""
+    h, p, r = (math.radians(x) for x in (h, p, r))
+    Rz = np.array([[math.cos(h), -math.sin(h), 0], [math.sin(h), math.cos(h), 0], [0, 0, 1]])
+    Ry = np.array([[math.cos(p), 0, math.sin(p)], [0, 1, 0], [-math.sin(p), 0, math.cos(p)]])
+    Rx = np.array([[1, 0, 0], [0, math.cos(r), -math.sin(r)], [0, math.sin(r), math.cos(r)]])
+    return Rz @ Ry @ Rx
+
+
+text_meta = []
+for i, (node, T) in enumerate(TEXTS):
+    cs = T["size"]
+    W = cs * TEXT_SLOT[0] / TEXT_SLOT[1]
+    x0 = {"left": 0.0, "right": -W}.get(T["align"], -W / 2)
+    R = rot(*T["off"][3:])
+    at = np.array(T["off"][:3])
+    # (the quad in the text's own plane — x its line, y up, z out of it —, its corners bottom-left, bottom-right,
+    # top-right, top-left; its slot's corners in the atlas, its top the slot's)
+    loc = np.array([[x0, -cs / 2, 0], [x0 + W, -cs / 2, 0], [x0 + W, cs / 2, 0], [x0, cs / 2, 0]])
+    pos = (loc @ R.T) + at
+    col, row = i % 4, i // 4
+    u0, v0 = (3072 + col * TEXT_SLOT[0]) / 4096, (2048 + row * TEXT_SLOT[1]) / 4096
+    du, dv = TEXT_SLOT[0] / 4096, TEXT_SLOT[1] / 4096
+    uvs = np.array([[u0, v0 + dv], [u0 + du, v0 + dv], [u0 + du, v0], [u0, v0]])
+    nrm = R @ np.array([0.0, 0.0, 1.0])
+    tri = np.array([[0, 1, 2], [0, 2, 3]])
+    P.append(to_ship(pos[tri]))
+    N.append(np.repeat(dir_to_ship(nrm)[None, None, :], 2, 0).repeat(3, 1))
+    UV.append(uvs[tri])
+    M.append(np.full(2, 134))
+    PT.append(np.full(2, node.id + 1))
+    OB.append(np.full(2, len(names)))
+    names.append(T["name"])
+    text_meta.append({k: T[k] for k in ("name", "kind", "format", "prop", "text", "align", "font")} | {"slot": [u0, v0, du, dv]})
+log("texts", len(text_meta))
 for k, (name, _) in zip(G.kids[1:], SCREENS):
     walk(k, sub_mats[name])
 P = np.concatenate(P)
@@ -397,6 +457,7 @@ def norm(x, key=None):
 
 nodes = norm(nodes)
 controls = norm(controls)
+text_meta = norm(text_meta)
 # (Systems/a320-cockpit.xml: the animations' properties eased from the systems' — lag filters, the gear lever's
 # actuator; an input relative to JSBSim's tree kept under fdm/jsbsim/)
 lags = []
@@ -416,6 +477,7 @@ meta = {
     "objects": names,
     "screens": screens,
     "lags": lags,
+    "texts": text_meta,
     "atlas": {k: [x / 4096 for x in v] for k, v in ATLAS.items()},
 }
 lo, hi = V_P.min(0), V_P.max(0)

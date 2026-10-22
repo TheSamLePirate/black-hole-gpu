@@ -149,4 +149,23 @@ describe.skipIf(!E2E)("the A320's flight deck by the mouse", () => {
     await Bun.sleep(1500);
     await shot(app, "a320-deck-displays");
   }, 60_000);
+
+  test("the FCU (A8): the A/THR button, the speed knob turned then pulled, its window", async () => {
+    // (on the ground: the A/THR armed by its button; the speed knob's wheel preselects, its pull selects)
+    await app.js(`(__bh.camera.a320Fmgc && (__bh.camera.a320Fmgc.athr = false), true)`);
+    await click(await aim("a-thr"));
+    expect(await app.js<boolean>(`__bh.camera.a320Fmgc.athr`)).toBeTrue();
+    const k = await aim("spd-sel");
+    await app.mouse("move", k.x, k.y);
+    await Bun.sleep(150);
+    const s0 = await app.js<number>(`__bh.camera.a320Fmgc.spd`);
+    for (let n = 0; n < 4; n++) await app.mouse("wheel", k.x, k.y, { deltaY: -50 });
+    await Bun.sleep(200);
+    expect(await app.js<number>(`__bh.camera.a320Fmgc.spd`)).toBe(s0 + 4);
+    // (the window shows it: the deck's property)
+    await Bun.sleep(600);
+    expect(await app.js<number>(`__bh.renderer.a320Deck["it-autoflight/input/kts-display"]`)).toBe(s0 + 4);
+    expect(await app.js<number>(`__bh.renderer.a320Deck["it-autoflight/custom/show-spd"]`)).toBe(1);
+    await shot(app, "a320-deck-fcu");
+  }, 60_000);
 });

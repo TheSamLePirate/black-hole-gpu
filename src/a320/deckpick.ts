@@ -20,8 +20,9 @@ export interface DeckHit {
   screen?: { name: string; u: number; v: number };
 }
 
-/** the materials the pointer goes through: the windows, the HUD's combiner, the displays' glass, the overlay */
-const CLEAR = new Set([122, 127, 128, 129]);
+/** the materials the pointer goes through: the windows, the HUD's combiner, the displays' glass, the overlay, the
+ *  texts' quads */
+const CLEAR = new Set([122, 127, 128, 129, 134]);
 
 export class DeckPicker {
   private parts: { bvh: TriBVH; tris: Uint32Array }[] | null = null;

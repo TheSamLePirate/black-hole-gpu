@@ -48,6 +48,22 @@ export interface DeckMesh extends A320Mesh {
   /** FlightGear's Systems/a320-cockpit.xml: an animation's property eased from a system's — [output, input, rate
    *  (1/s: a first-order lag), rate limit (/s, 0: none)] */
   lags: [string, string, number, number][];
+  /** the texts (FlightGear's osgText: the FCU's windows, the radios, the clock…): a quad each in the deck, its characters
+   *  drawn in its slot of the displays' atlas (du/texts.ts) */
+  texts: DeckText[];
+}
+
+/** An osgText of the deck: its value (a property by a printf format, or a literal), its alignment, its font's kind,
+ *  its slot in the atlas (u0, v0, w, h — 0…1). */
+export interface DeckText {
+  name: string;
+  kind: string;
+  format: string;
+  prop: string;
+  text: string;
+  align: string;
+  font: string;
+  slot: [number, number, number, number];
 }
 
 export function parseDeck(buf: ArrayBuffer): DeckMesh {
@@ -63,6 +79,7 @@ export function parseDeck(buf: ArrayBuffer): DeckMesh {
     objects: string[];
     screens: Record<string, [number, number, number, number]>;
     lags?: [string, string, number, number][];
+    texts?: DeckText[];
   };
   off += 4 + n;
   const verts = new Float32Array(buf.slice(off, off + nv * 40));
@@ -82,6 +99,7 @@ export function parseDeck(buf: ArrayBuffer): DeckMesh {
     triObj,
     screens: meta.screens,
     lags: meta.lags ?? [],
+    texts: meta.texts ?? [],
   };
 }
 

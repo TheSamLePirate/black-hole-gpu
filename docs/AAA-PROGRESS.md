@@ -573,7 +573,8 @@ Plan : [`PLAN-A320.md`](PLAN-A320.md), étapes A0 à A19, d'après l'A320-family
   pilotage** (`fd_complete` de FlightGear : 442 k triangles, 1 194 nœuds animés, 583 commandes, éclairage intégré de nuit —
   planche `docs/progress/a320/a5-cockpit.jpg`), **A6 tout le poste cliquable** (583 commandes jouées comme FlightGear,
   reliées au jeu là où son système existe — planche `a6-cliquable.jpg`), **A7 les écrans** (PFD, ND, E/WD, SD et ses 13
-  pages, ISIS, DCDU redessinés depuis FlightGear — planche `a7-ecrans.jpg`). Suit A8 (FCU, autopilote, A/THR).
+  pages, ISIS, DCDU redessinés depuis FlightGear — planche `a7-ecrans.jpg`), **A8 le FCU et le pilote automatique**
+  (modes Airbus, A/THR, autoland mesuré — planche `a8-fcu-ap.jpg`). Suit A9 (MCDU et FMGC).
 
 ## Ce qui reste pour l'AAA (au 10/10/2026)
 

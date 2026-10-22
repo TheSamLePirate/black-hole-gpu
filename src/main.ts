@@ -28,6 +28,7 @@ import { A320Poser, CONF, confOf } from "./a320/pose";
 import { DeckPoser } from "./a320/deck";
 import { DeckControls } from "./a320/deckctl";
 import { DuSet } from "./a320/du";
+import { Fmgc } from "./a320/fmgc/fmgc";
 import { duData } from "./a320/du/data";
 import { DeckPicker } from "./a320/deckpick";
 import { type DeckGame, deckCall, deckChanged, deckExterior, deckSync, deckTip, deckWired } from "./a320/deckgame";
@@ -3733,6 +3734,7 @@ async function main() {
       onWheels: () => !!camera.rolling || !!camera.ourLanded,
     },
     setGear: (down) => setGear(down),
+    fmgc: () => (fleet.active === "a320" ? { F: (camera.a320Fmgc ??= new Fmgc()), i: camera.a320FmgcIn } : null),
     flaps: (step) => {
       const cfg = camera.airFlight.cfg;
       const lever = Math.min(Math.max(Math.round((cfg.flaps ?? 0) * 4) + step, 0), 4);
@@ -7869,7 +7871,7 @@ async function main() {
             // (its displays — src/a320/du —, drawn while the deck is: two a frame at most, into the atlas)
             const deckMesh = renderer.ship.a320DeckMesh;
             if (renderer.a320Deck && deckMesh && renderer.ship.deckMats) {
-              duSet ??= renderer.a320Du = new DuSet(deckMesh.screens);
+              duSet ??= renderer.a320Du = new DuSet(deckMesh.screens, deckMesh.texts);
               renderer.ship.updateDu(duSet.frame(performance.now() / 1000, duData(camera, settings, deckProps, dateOf(sim.time))));
             }
           }

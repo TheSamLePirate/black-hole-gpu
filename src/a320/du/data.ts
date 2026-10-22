@@ -80,7 +80,24 @@ export interface DuData {
   alphaProt: boolean;
   alphaFloor: boolean;
   // ---- autoflight (A8: the FCU and the FMGC; until then what the game flies)
-  fma: { thrust: string; vert: string; lat: string; vertArmed: string; latArmed: string; ap: string; fd: string; athr: string };
+  fma: {
+    thrust: string;
+    vert: string;
+    lat: string;
+    vertArmed: string;
+    latArmed: string;
+    ap: string;
+    fd: string;
+    athr: string;
+    /** the A/THR's: armed (blue), active (white) */
+    athrState?: "" | "armed" | "active";
+    /** the modes engaged in the last 10 s: boxed */
+    boxed?: { thrust: boolean; vert: boolean; lat: boolean; ap: boolean; athr: boolean };
+  };
+  /** the flight directors' bars: the pitch [deg] and the roll [deg, right +] they ask more (null: off) */
+  fdBars: { pitch: number; roll: number } | null;
+  /** the speed target managed (magenta) or selected (blue) */
+  targetManaged: boolean;
   targetSpeed: number | null;
   targetAlt: number | null;
   // ---- the ILS: the deviations [dots], its name, the DME [NM]
@@ -148,6 +165,10 @@ export function duData(c: CameraController, s: Settings, deck: Props, date: Date
   const att = c.attitudeNow() as { pitch?: number; bank?: number; heading?: number };
   const L = c.airFlight.last;
   const F = c.a320;
+  // (the flight guidance — controller/a320ap.ts —: its modes, its targets, its directors' orders)
+  const G = c.a320Fmgc,
+    GI = c.a320FmgcIn,
+    fo = c.a320FmgcOut;
   const mass = fleet.massProps().mass;
   const q0 = L?.out.q ?? 0;
   const ias = Math.sqrt((2 * q0) / 1.225) * KT;
@@ -219,7 +240,10 @@ export function duData(c: CameraController, s: Settings, deck: Props, date: Date
     alt: geo.h * FT,
     vs: vz * FT * 60,
     ra: ra < 2500 ? Math.max(ra - 6, 0) : null,
-    baro: { std: Number(deck["deck/baro-std"] ?? 0) > 0.5, hpa: 1013 },
+    baro: {
+      std: Number(deck["instrumentation/altimeter/std"] ?? 0) > 0.5,
+      hpa: Number(deck["instrumentation/altimeter/setting-hpa"] ?? 1013),
+    },
     sat,
     tat,
     wind: wind ? { dir: wind.from, kt: wind.speed * KT } : null,
@@ -235,18 +259,22 @@ export function duData(c: CameraController, s: Settings, deck: Props, date: Date
     law: F?.law ?? "normal",
     alphaProt: !!c.pilot.airbusOut?.alphaProt,
     alphaFloor: !!F?.alphaFloor,
-    fma: {
-      thrust: F?.alphaFloor ? "A.FLOOR" : onGround && c.pilot.throttle > 0.9 ? "MAN TOGA" : "",
-      vert: "",
-      lat: "",
-      vertArmed: "",
-      latArmed: "",
-      ap: "",
-      fd: "",
-      athr: "",
-    },
-    targetSpeed: null,
-    targetAlt: null,
+    fma: G
+      ? G.fma()
+      : {
+          thrust: F?.alphaFloor ? "A.FLOOR" : onGround && c.pilot.throttle > 0.9 ? "MAN TOGA" : "",
+          vert: "",
+          lat: "",
+          vertArmed: "",
+          latArmed: "",
+          ap: "",
+          fd: "",
+          athr: "",
+        },
+    fdBars: fo?.fd ? { pitch: fo.fd.pitch, roll: fo.fd.bank - (att.bank ?? 0) * D } : null,
+    targetManaged: G ? G.spdManaged : true,
+    targetSpeed: G && GI ? G.targetSpeed(GI) : null,
+    targetAlt: G ? G.alt : null,
     ils: ils ? { id: ils.id, loc: ils.loc, gs: ils.gs, dme: ils.dme / 1.852 } : null,
     eng: [eng(0), eng(1)],
     thrLimit,
