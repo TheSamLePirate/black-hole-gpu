@@ -13,6 +13,7 @@ import type { SiteTrack } from "../fc/land-ops";
 import { elements as kepElements, fromPNR, propagate as kepProp, type V3 as KV3 } from "../fc/kepler";
 import type { Burn, FcContext, OpResult } from "../fc/ops";
 import { engineTrail, sheetTrail, tipTrail, type ContrailSource } from "../contrails";
+import { A320Fx, humidityOf } from "../a320/effects";
 import { MISSILES } from "../game/combat";
 import {
   kApoapsis,
@@ -1304,7 +1305,38 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
     // (from a little behind each exit: the exhaust condenses as it mixes)
     if (e > 0) V.jets.forEach((J, i) => J.main && src.push({ key: `e${i}`, p: at(lin(J.p, 1, J.d, 2)), kind: 0, str: e }));
     const wing = V.aero.wing;
-    const tip = V.wingtip;
+    // (the A320's own — src/a320/effects.ts: its wing's vapour, its vortices in humid air, its inlets', its tyres',
+    // a wet runway's spray —, in place of the generic wingtips')
+    const tip = fleet.active === "a320" ? null : V.wingtip;
+    if (fleet.active === "a320" && wing && this.s.a320Effects !== false) {
+      const A = this.a320;
+      const g = this.geoNow();
+      const onGround = !!this.rolling || !!this.ourLanded;
+      for (const f of (this.a320Fx ??= new A320Fx()).step({
+        dt: Math.min(Math.max(fr.now - (this.a320FxAt ?? fr.now), 0), 0.25),
+        cl: LA.out.q > 0 ? Math.abs(LA.out.L) / (LA.out.q * wing.S) : 0,
+        rho: LA.air.rho,
+        T: LA.air.T,
+        speed: LA.speed,
+        humidity: humidityOf(this.weatherNow),
+        flap: A?.surfaces.flap ?? 0,
+        onGround,
+        gs: g?.gs ?? LA.speed,
+        vz: g?.vs ?? 0,
+        engines: A ? A.engines.map((e) => ({ n1: e.n1, rev: e.rev })) : [],
+        wet: this.weatherNow?.rain ?? 0,
+        legs: this.gearLast?.legs.map((l) => l.load) ?? null,
+      }))
+        src.push({
+          key: f.key,
+          p: at(f.q),
+          kind: f.kind,
+          str: f.str,
+          ...(f.to ? { to: at(f.to) } : {}),
+          ...(f.mid ? { mid: at(f.mid) } : {}),
+        });
+      this.a320FxAt = fr.now;
+    }
     if (tip && wing && LA.out.q > 0) {
       const cl = Math.abs(LA.out.L) / (LA.out.q * wing.S);
       const t = tipTrail(cl, LA.air.rho, LA.air.T, LA.speed);

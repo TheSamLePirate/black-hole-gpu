@@ -1118,6 +1118,11 @@ export class CameraController {
   a320Adr: import("./a320/failures").AdrSet | null = null;
   a320AdrOut: ReturnType<import("./a320/failures").AdrSet["step"]> | null = null;
   a320Failed: ((id: string) => void) | null = null;
+  /** its wings' bend under their load (src/a320/flex.ts — controller/a320.ts): the spring, the tip's rise now [m] */
+  a320Flex: import("./a320/flex").WingFlex | null = null;
+  a320WingTip = 0;
+  /** the tip's rise forced (captures, tests: the bend at a load shown at rest), null: the flight's */
+  a320WingTipForce: number | null = null;
   /** its ECAM (src/a320/ecam — controller/a320.ts): the E/WD's messages, the master lights, the SD's pages */
   a320Ecam: import("./a320/ecam").Ecam | null = null;
   /** what its hydraulics still move (failures.ts surfacesPowered: the gear, the steering, the brakes…); its gear's
@@ -1277,6 +1282,10 @@ export class CameraController {
   /** The runway an autopilot's landing rolls out on (its nose wheel steered along it), until stopped. */
   rollSite: Site | null = null;
 
+  /** the A320's air and ground effects (src/a320/effects.ts: its vapour, its vortices, its tyres' smoke, the spray),
+   *  the scene's time of their last step */
+  a320Fx: import("./a320/effects").A320Fx | null = null;
+  a320FxAt: number | null = null;
   /** the engines' and the wingtips' condensation trails (contrails.ts), kept in the air */
   readonly contrails = new Contrails();
   contrailBuf = new Float32Array(MAX_SEGMENTS * SEG_FLOATS);

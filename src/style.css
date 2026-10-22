@@ -2623,3 +2623,16 @@ body.topbar-hidden .fh-compass { top: 26px; }
     opacity: 0.6;
   }
 }
+
+/* the A320's cabin window round a passenger's view (main.ts: mounts.ts passenger) — its rounded pane, the dark wall */
+.a320-window {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  background: radial-gradient(ellipse 34% 44% at 50% 50%, transparent 92%, rgba(18, 20, 24, 0.55) 96%, rgba(30, 32, 36, 0.97) 100%);
+  box-shadow: inset 0 0 120px 60px rgba(14, 15, 18, 0.95);
+}
+.a320-window[hidden] {
+  display: none;
+}

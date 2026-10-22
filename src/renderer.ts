@@ -1195,7 +1195,7 @@ export class Renderer {
     this.paramBuf = device.createBuffer({ size: this.params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.probeBuf = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     this.probeStage = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
-    this.displayBuf = device.createBuffer({ size: 224, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.displayBuf = device.createBuffer({ size: 256, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.chart = new ChartOverlay(device, src.overlay);
     // (trace.wgsl: the colours' LUTs at LUT_OFF — the synchrotron's from LUT_N = BB_LUT_SIZE)
     const lut = buildBlackbodyLUT();
@@ -3048,17 +3048,18 @@ export class Renderer {
         r?.gust ?? 0,
         // (outside, the camera's lens wet: a few soft drops — PLAN-PLUIE, the owner's choice)
         r && !r.dust && !inside ? 1 : 0,
-        0,
+        // (inside the A320: its windows' own drops, wiped — ship.wgsl a320Wet —, not the canopy's)
+        inside && s.vessel === "a320" && this.a320Deck ? 1 : 0,
       ]),
     );
     // (the F-35's heat haze — display.wgsl haze —: its exhaust's column in the image, its radii, its strength,
     // a clock)
-    const hz = target === this.live && s.ship && s.heatHaze ? this.ship.hazeView() : null;
-    this.device.queue.writeBuffer(
-      this.displayBuf,
-      192,
-      new Float32Array(hz ? [...hz, (performance.now() / 1000) % 3600] : [0, 0, 0, 0, 0, 0, 0, 0]),
-    );
+    // (the A320's: its two engines' columns)
+    const clock = (performance.now() / 1000) % 3600;
+    for (const k of [0, 1]) {
+      const hz = target === this.live && s.ship && s.heatHaze ? this.ship.hazeView(k) : null;
+      this.device.queue.writeBuffer(this.displayBuf, 192 + 32 * k, new Float32Array(hz ? [...hz, clock] : [0, 0, 0, 0, 0, 0, 0, 0]));
+    }
   }
 
   /** the rain round the camera (main.ts, from the controller's rainView): its strength and the drops'
@@ -4565,6 +4566,7 @@ export class Renderer {
             a320Deck: s.vessel === "a320" && this.a320Deck ? { ...this.a320Deck, ...this.a320Force } : null,
             cabin: lampsOf(s, this.cockpitGlow),
             pcd: s.vessel === "f35" ? this.pcdLook : null,
+            a320Glass: s.vessel === "a320" && this.a320Deck ? this.a320Glass : null,
             lamps: { navLights: s.navLights, strobeLights: s.strobeLights, landingLights: s.landingLights, t: performance.now() / 1000 },
             glares: this.glaresNow(s),
             mount: this.shipPose ?? (s.shipMount as Mount),
@@ -4727,6 +4729,8 @@ export class Renderer {
   a320Du: import("./a320/du").DuSet | null = null;
   /** its flight deck's (src/a320/deck.ts — set each frame from inside by main.ts) */
   a320Deck: import("./a320/rig").Props | null = null;
+  /** its windshield from inside (src/a320/glass.ts — main.ts): the rain on it, the wipers, the frost */
+  a320Glass: import("./ship").ShipView["a320Glass"] = null;
   /** the cockpit's displays' mean colours (cockpit/lights.ts displayColours): the screens' light in the cabin */
   cockpitGlow: Float32Array | null = null;
   /** the F-35's panoramic display's look (set each frame its cockpit is seen — src/f35/pcd.ts look) */

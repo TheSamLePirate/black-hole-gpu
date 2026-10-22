@@ -193,4 +193,14 @@ export default {
   "Normal brakes (green)": "Freins normaux (vert)",
   "Anti-skid": "Anti-patinage",
   "APU fault (auto shutdown)": "Panne APU (arrêt automatique)",
+  // (the air and the ground's effects: A13 — src/a320/effects.ts)
+  "Air and ground effects": "Effets dans l'air et au sol",
+  "What the A320's flight shows: the air condensing over its wing and in its vortices on a humid approach, the engines' inlet vortices at power on the ground, the tyres' smoke at the touchdown, the spray off a wet runway.":
+    "Ce que montre le vol de l'A320 : l'air qui se condense sur son aile et dans ses tourbillons lors d'une approche humide, les vortex d'entrée d'air des moteurs à pleine puissance au sol, la fumée des pneus au toucher, les gerbes d'eau d'une piste mouillée.",
+  // (the cameras: A13 — mounts.ts)
+  "Passenger, at a window over the wing": "Passager, à un hublot au-dessus de l'aile",
+  "Window seat": "Hublot",
+  "Main gear, from under the belly": "Train principal, sous le ventre",
+  "Fin top, looking forward": "Haut de la dérive, vers l'avant",
+  "Fin top": "Dérive",
 };

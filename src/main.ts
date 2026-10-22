@@ -1,6 +1,7 @@
 import { scopeRange } from "./ui/hud/symbology";
 import { SystemsPage } from "./ui/systemspage";
 import { A320Page, type FailureWhen } from "./ui/a320page";
+import { Frost, Wiper } from "./a320/glass";
 import { A320Sound } from "./a320/sound/model";
 import { SoundInputs } from "./a320/sound/soundinputs";
 import { A320Callouts } from "./a320/sound/callouts";
@@ -162,7 +163,7 @@ import { events } from "./game/events";
 import { phaseOf, phaseText, PhaseWatcher } from "./game/phase";
 import { BODY_NAMES, bodyLook, craftRadius, isCraft, isNetTarget, netTargets, onOurSide, type Body } from "./targeting";
 import { HidPads } from "./gamepad";
-import { MOUNT_KEYS, MOUNTS, mountPose, setMountVessel, shipToCamera, type Mount } from "./mounts";
+import { MOUNTS, mountKeys, mountPose, setMountVessel, shipToCamera, type Mount } from "./mounts";
 import { fleet, fleetSpinStart, fleetStart } from "./fleet";
 import { recorder } from "./game/recorder";
 import { shownSpeed } from "./ui/hud/model";
@@ -2063,7 +2064,7 @@ async function main() {
   /** The next view (V): the ship's attach points, else the placements. */
   function nextView(dir: 1 | -1) {
     if (settings.ship) {
-      const keys = Object.keys(MOUNTS) as Mount[];
+      const keys = mountKeys();
       return setMount(keys[(keys.indexOf(settings.shipMount as Mount) + dir + keys.length) % keys.length]!);
     }
     setView(VIEWS[(VIEWS.indexOf(view()) + dir + VIEWS.length) % VIEWS.length]!);
@@ -2699,12 +2700,18 @@ async function main() {
   /** the A320's moving parts (src/a320/pose.ts): FlightGear's properties its rig reads */
   const a320Poser = new A320Poser();
   const deckPoser = new DeckPoser();
+  /** the A320's windshield (src/a320/glass.ts): its wipers as FlightGear moves them, the frost on it */
+  const a320GlassSim = { wipers: [new Wiper(), new Wiper()] as [Wiper, Wiper], frost: new Frost() };
   /** a checklist item's control shown on the A320's deck (ui/a320page.ts): its place in the ship's frame, its ring */
   const deckMarker = {
     at: null as [number, number, number] | null,
     el: Object.assign(document.createElement("div"), { className: "deck-marker" }),
   };
   deckMarker.el.dataset.testid = "deck-marker";
+  /** the A320's cabin window round a passenger's view (mounts.ts passenger: no cabin modelled — its frame implied) */
+  const windowFrame = Object.assign(document.createElement("div"), { className: "a320-window", hidden: true });
+  windowFrame.dataset.testid = "a320-window";
+  document.body.append(windowFrame);
   /** the A320's sound (src/a320/sound: FlightGear's sound files on the systems' bag, its EGPWS warnings), made anew with
    *  its systems */
   const URL_NAME = new Map(Object.entries(SOUND_URL).map(([k, u]) => [u, k]));
@@ -3271,9 +3278,9 @@ async function main() {
         auto: () => pilotHold("prograde"),
         rotation: () => pilotHold("retrograde"),
         recentre: () => camera.setLook(0, 0),
-        dpadUp: () => setMount(MOUNT_KEYS[(MOUNT_KEYS.indexOf(settings.shipMount as Mount) + 1) % MOUNT_KEYS.length]!),
+        dpadUp: () => setMount(mountKeys()[(mountKeys().indexOf(settings.shipMount as Mount) + 1) % mountKeys().length]!),
         dpadDown: () =>
-          setMount(MOUNT_KEYS[(MOUNT_KEYS.indexOf(settings.shipMount as Mount) + MOUNT_KEYS.length - 1) % MOUNT_KEYS.length]!),
+          setMount(mountKeys()[(mountKeys().indexOf(settings.shipMount as Mount) + mountKeys().length - 1) % mountKeys().length]!),
       };
       if (pa[a]) {
         pa[a]!();
@@ -7932,7 +7939,7 @@ async function main() {
         ? phaseWatch.current
         : null,
       now,
-      isAircraft(fleet.active) ? (camera.combat?.status === "run" ? "fight" : "plane") : null,
+      fleet.active === "a320" ? "airliner" : isAircraft(fleet.active) ? (camera.combat?.status === "run" ? "fight" : "plane") : null,
     );
     if (pil && info) {
       // the cockpit's screens: the telemetry, drawn (a few times a second, while the cabin is seen)
@@ -8058,7 +8065,53 @@ async function main() {
             "deck/taxi": deckOut.taxi ? 1 : 0,
             "deck/turnoff": deckOut.turnoff ? 1 : 0,
             "deck/wing": deckOut.wing ? 1 : 0,
+            // (its wings' bend under their load — src/a320/flex.ts —: the tip's rise [m])
+            "sim/wing-flex": camera.a320WingTip,
           });
+          // (its windshield — src/a320/glass.ts —: the wipers by their knobs on DC 1, the arms posed outside by them; the
+          // frost in icing, the window heat clearing it; the rain on the glass, seen from inside)
+          {
+            const P = deckPoser.props;
+            const G = a320GlassSim;
+            // (reached by the e2e: its frost laid, its wipers read)
+            (renderer as unknown as { a320GlassSim: typeof G }).a320GlassSim = G;
+            const num = (k: string, d = 0) => Number(P[k] ?? d) || 0;
+            const dc1 = num("systems/electrical/bus/dc-1", 28) >= 25;
+            const wp = G.wipers.map((w, k) => w.step(num(`controls/switches/wiper${k ? "R" : "L"}spd`), dc1, dt)) as [number, number];
+            renderer.a320Pose.props["fdm/jsbsim/fcs/left-wiper-pos-norm"] = wp[0];
+            renderer.a320Pose.props["fdm/jsbsim/fcs/right-wiper-pos-norm"] = wp[1];
+            const ac = Math.max(
+              num("systems/electrical/bus/ac-1"),
+              num("systems/electrical/bus/ac-2"),
+              num("systems/electrical/bus/ac-ess"),
+            );
+            const rain = renderer.rain && !renderer.rain.dust ? Math.min(renderer.rain.rain, 1.3) : 0;
+            const oatC = (L?.air?.T ?? 288.15) - 273.15;
+            const frost = G.frost.step(
+              {
+                oatC,
+                // (the moisture: the rain, or a cloud layer the craft is in — the weather's)
+                wet: Math.max(
+                  rain,
+                  ...(camera.weatherNow?.layers ?? []).map((l) => {
+                    const h = camera.airFlight.cfg.agl ?? 0;
+                    return h >= l.base && h <= l.top ? l.cover : 0;
+                  }),
+                ),
+                heat: num("controls/ice-protection/windowprobeheat-output") > 0.5 && ac >= 110,
+                onGround,
+              },
+              settings.animate && !frozen ? dt : 0,
+            );
+            renderer.a320Glass = {
+              rain,
+              clock: renderer.rainClock,
+              airspeed: L?.speed ?? 0,
+              frost,
+              wipers: wp,
+              rates: [G.wipers[0].shaderRate, G.wipers[1].shaderRate],
+            };
+          }
           // (its flight deck — from inside, its switches all the time: the side stick as the pilot moves it, the levers,
           // the pedals; the game's state on its switches — src/a320/deck.ts, deckgame.ts)
           deckSync(deckGame, deckPoser.props);
@@ -8377,6 +8430,8 @@ async function main() {
       tablet.setVisible(flightHud.mapView);
       tablet.tick(now);
       flightComputer.update();
+      // (the A320's passenger at his window: its frame round the view — PLAN-A320 A13)
+      windowFrame.hidden = !(fleet.active === "a320" && settings.shipMount === "passenger" && !camera.spectating);
       // (the camera's pose on the ship — or the spectator's view of it —: the engine placed, S1)
       const earPose = camera.spectating
         ? renderer.shipPlace
@@ -8416,6 +8471,7 @@ async function main() {
     } else {
       flightComputer.show(false);
       tablet.setVisible(false);
+      windowFrame.hidden = true;
       audio.update(dt, {
         flying: false,
         live: false,

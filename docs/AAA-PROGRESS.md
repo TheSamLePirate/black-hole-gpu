@@ -580,7 +580,9 @@ Plan : [`PLAN-A320.md`](PLAN-A320.md), étapes A0 à A19, d'après l'A320-family
   leurs procédures, 76 pannes injectables à V1/au décollage/au hasard et leurs effets sur les lois, l'hydraulique, les
   ADR ; les 13 pages SD réelles ; les check-lists montrées dans le poste — planche `a11-ecam.jpg`), **A12 le son** (les fichiers son de FlightGear joués tels quels : 205 sons, 131
   enregistrements Opus, le CFM56 par couches, APU, PTU, alarmes de l'ECAM, annonces et EGPWS, clics ; le moteur audio
-  joue désormais des échantillons — planche `a12-son.jpg`). Suit A13 : les effets.
+  joue désormais des échantillons — planche `a12-son.jpg`), **A13 les effets** (condensation, tourbillons, vortex d'entrée d'air, fumée des pneus,
+  gerbes et inverseurs, chaleur ; flexion des ailes ; tremblements ; caméras aile, passager, train, dérive ; pluie,
+  essuie-glaces et givre sur le pare-brise — planche `a13-effets.jpg`). Suit A14 : le sol et les aéroports.
 
 ## Ce qui reste pour l'AAA (au 10/10/2026)
 

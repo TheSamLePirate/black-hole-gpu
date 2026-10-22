@@ -20,12 +20,16 @@ export type V3 = [number, number, number];
 
 /** A source this step: where it is (body frame [m]), what kind (0: an engine, 1: a wingtip, 2: a wing's
  *  vapour sheet, 3: a fighter's wingtip — a thread, 4: a missile's smoke), how
- *  strongly it makes a trail (0 … 1). The key names it from step to step (one trail per key). */
+ *  strongly it makes a trail (0 … 1). The key names it from step to step (one trail per key). A column — `to`, its
+ *  other end: an engine's inlet vortex standing from the ground — drawn whole each step, not left behind. */
 export interface ContrailSource {
   key: string;
   p: V3;
   kind: TrailKind;
   str: number;
+  to?: V3;
+  /** a column's bend: the curve's control point (none: straight) */
+  mid?: V3;
 }
 
 interface Pt {
@@ -59,11 +63,18 @@ const KIND = [
   { life: 12, w0: 0.5, spread: 2.4, tau: 2.6, wRef: 1, form: 0.03 },
   // (a chaff bundle blooming: a grey-silver puff that spreads fast and thins out in a few seconds)
   { life: 4, w0: 2.5, spread: 9, tau: 1.8, wRef: 3, form: 0.02 },
+  // (the spray a wet runway throws up — PLAN-A320 A13 —: a low white mist, dense, gone in a second or two)
+  { life: 1.6, w0: 0.7, spread: 3.2, tau: 1.6, wRef: 1.2, form: 0.04 },
+  // (a tyre's smoke as it spins up at the touchdown: a grey puff spreading, drifting off in a few seconds)
+  { life: 1.5, w0: 0.6, spread: 2.2, tau: 1.2, wRef: 1.2, form: 0.03 },
+  // (an airliner's wing condensing over its flaps on a humid approach: a white veil, torn off within a second)
+  { life: 0.3, w0: 0.7, spread: 1.3, tau: 0.3, wRef: 1.2, form: 0.03 },
 ] as const;
 
 /** The trails' kinds: 0 an engine's, 1 a wingtip's, 2 a wing's vapour sheet, 3 a fighter's wingtip thread, 4 a
- *  missile's (or a fire's) smoke, 5 a flare's smoke, 6 a chaff bundle's cloud. */
-export type TrailKind = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+ *  missile's (or a fire's) smoke, 5 a flare's smoke, 6 a chaff bundle's cloud, 7 a wet runway's spray, 8 a tyre's
+ *  smoke, 9 an airliner's wing's veil. */
+export type TrailKind = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 /** The most points a trail keeps, the most segments drawn. */
 const MAX_PTS = 700;
@@ -181,11 +192,28 @@ export class Contrails {
       live.add(s.key);
       let tr = this.trails.find((x) => x.key === s.key && x.open);
       if (!tr) this.trails.push((tr = { key: s.key, kind: s.kind, pts: [], open: true }));
+      // (a column: its points from one end to the other, formed — a little wavering, by the step's clock)
+      if (s.to) {
+        const N = 10;
+        const form = KIND[s.kind].form * 1.5;
+        const L = dist(s.p, s.to);
+        const M = s.mid ?? ([0, 1, 2].map((c) => (s.p[c]! + s.to![c]!) / 2) as V3);
+        tr.pts = Array.from({ length: N }, (_, k) => {
+          const f = k / (N - 1);
+          return {
+            p: [0, 1, 2].map((c) => (1 - f) * (1 - f) * s.p[c]! + 2 * f * (1 - f) * M[c]! + f * f * s.to![c]!) as V3,
+            t: now - form - 0.002 * k,
+            str: s.str * (0.6 + 0.4 * f) * (0.85 + 0.15 * Math.sin(now * 7 + k * 1.3)),
+            s: L * f,
+          };
+        });
+        continue;
+      }
       const P = tr.pts;
       const head = P[P.length - 1];
       const prev = P[P.length - 2];
       // (a new point when the head is far enough from the one before it — else the head moved on)
-      const step = s.kind === 0 ? 12 : s.kind === 2 ? 0.8 : s.kind === 4 ? 8 : s.kind === 5 ? 2 : 1.5;
+      const step = s.kind === 0 ? 12 : s.kind === 2 || s.kind === 9 ? 0.8 : s.kind === 4 ? 8 : s.kind === 5 ? 2 : s.kind === 8 ? 1 : 1.5;
       if (!head || !prev || dist(head.p, prev.p) > step || now - prev.t > 0.5)
         P.push({ p: s.p, t: now, str: s.str, s: head ? head.s + dist(head.p, s.p) : 0 });
       else {

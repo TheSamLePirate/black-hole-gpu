@@ -22,7 +22,7 @@ import { aeroForces, airAt, airTop, entryInterface, highAlphaAuthority } from ".
 import { GEAR, groundR, localAccel, localToZamo, planetFrame, toGlobal, toLocal, zamoBeta, zamoToLocal } from "../landing";
 import { circularSpeed, type FlightMode, type PilotInput } from "../pilot";
 import { JET } from "../game/jet";
-import { MOUNT_KEYS, MOUNTS, mountPose, shipToCamera, type M3, type Mount, type MountPose, type OutsideView } from "../mounts";
+import { MOUNTS, mountKeys, mountPose, shipToCamera, type M3, type Mount, type MountPose, type OutsideView } from "../mounts";
 import { blendCurve, blendPose } from "../cine/follow";
 import type { V3 } from "../cine/rig";
 import { upOf, viewBlend } from "./camrig";
@@ -214,12 +214,14 @@ function newFlight(this: CameraController) {
   this.a320Sys = null;
   this.a320Pw = null;
   this.a320Ecam = null;
+  this.a320Flex = null;
   this.a320Gravity = false;
   this.a320Reverse = 0;
   this.a320Park = false;
   this.a320Fmgc = this.a320FmgcIn = this.a320FmgcOut = this.a320Ils = null;
   this.hubCache = this.runwayCache = this.futureCache = this.kerrInfoCache = this.aimCache = null;
   this.contrails.clear();
+  this.a320Fx?.reset();
   this.rigidMount();
 }
 
@@ -489,8 +491,9 @@ function viewReset(this: CameraController) {
 /** Next / previous attach point (the view travels there; the ship keeps its attitude). */
 function cycleMount(this: CameraController, dir: 1 | -1) {
   const s = this.s;
-  const i = MOUNT_KEYS.indexOf(s.shipMount as Mount);
-  s.shipMount = MOUNT_KEYS[(i + dir + MOUNT_KEYS.length) % MOUNT_KEYS.length]!;
+  const keys = mountKeys();
+  const i = keys.indexOf(s.shipMount as Mount);
+  s.shipMount = keys[(i + dir + keys.length) % keys.length]!;
   this.viewReset();
   return s.shipMount as Mount;
 }

@@ -21,7 +21,7 @@ import { isMobile } from "./mobile";
 import type { Settings, Target } from "../settings";
 import type { CameraController } from "../controls";
 import { AUTO_NAMES, HOLD_NAMES, type Auto, type Hold } from "../pilot";
-import { MOUNT_KEYS, MOUNTS, type Mount } from "../mounts";
+import { MOUNT_KEYS, MOUNTS, mountKeys, type Mount } from "../mounts";
 import { isAircraft, VESSEL_IDS, VESSELS, type VesselId } from "../vessels";
 import { fleet } from "../fleet";
 import { bodyCentre, BODY_NAMES, starOrbitRadius } from "../targeting";
@@ -2291,7 +2291,13 @@ export class FlightHud {
       b.setAttribute("aria-label", b.dataset.label);
       b.setAttribute("aria-pressed", String(i.speedMode === "target"));
     }
-    for (const m of MOUNT_KEYS) this.buttons.get(`mount:${m}`)!.classList.toggle("on", !this.spectating && i.mount === m);
+    const own = mountKeys();
+    for (const m of MOUNT_KEYS) {
+      const b = this.buttons.get(`mount:${m}`)!;
+      b.classList.toggle("on", !this.spectating && i.mount === m);
+      // (a craft's own views: the A320's window, gear, tail — hidden for the others)
+      b.hidden = !own.includes(m);
+    }
     this.buttons.get("spectator")!.classList.toggle("on", !!this.spectating);
     this.buttons.get("ahead")!.classList.toggle("on", s.shipLookYaw !== 0 || s.shipLookPitch !== 0);
   }

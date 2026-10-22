@@ -20,6 +20,17 @@ export const MOUNTS = {
   wing: { label: t("Wingtip"), short: t("Wing"), eye: [-6.2, 2.3, -6.5], aim: [-0.5, 1.0, 14] },
   belly: { label: t("Belly"), short: t("Belly"), eye: [0.6, -0.55, -4.5], aim: [0.2, -0.1, 20] },
   rear: { label: t("Nose, looking back"), short: t("Rear"), eye: [0, 2.0, 11.2], aim: [0, 1.5, -6] },
+  // (an airliner's own — the A320's, PLAN-A320 A13: a passenger at a window over the wing, the main gear from under the
+  // belly, the top of the fin looking forward)
+  passenger: {
+    label: t("Passenger, at a window over the wing"),
+    short: t("Window seat"),
+    eye: [2.2, 3.14, 1.69],
+    aim: [20.9, 0.5, -5.5],
+    only: ["a320"],
+  },
+  gear: { label: t("Main gear, from under the belly"), short: t("Gear"), eye: [0.6, -0.4, 6], aim: [4.3, -1.1, 0.5], only: ["a320"] },
+  tail: { label: t("Fin top, looking forward"), short: t("Fin top"), eye: [0, 12.3, -17.5], aim: [0, 3.5, 25], only: ["a320"] },
   // (the docking camera: in the rear hatch, on its axis, looking out — the port to back onto)
   dock: { label: t("Docking camera, rear hatch"), short: t("Dock"), eye: [0.04, 1.11, -5.5], aim: [0.04, 1.11, -40] },
   // outside the ship (controls.ts: their poses move — around it: drag turns about it, the wheel its
@@ -57,7 +68,7 @@ export const MOUNTS = {
     aim: [0, 1.5, 0],
     outside: "station",
   },
-} satisfies Record<string, { label: string; short: string; eye: V3; aim: V3; outside?: OutsideView }>;
+} satisfies Record<string, { label: string; short: string; eye: V3; aim: V3; outside?: OutsideView; only?: VesselId[] }>;
 /** The views from outside the ship: around it, free, a fly-by. */
 export type OutsideView = "around" | "free" | "flyby" | "station" | "director" | "target";
 export type Mount = keyof typeof MOUNTS;
@@ -76,8 +87,18 @@ let mountVessel: VesselId = "ranger";
 export function setMountVessel(id: VesselId) {
   mountVessel = id;
 }
+/** The attach points of the craft flown (some are one craft's own: the A320's window, gear and tail). */
+export function mountKeys(): Mount[] {
+  return MOUNT_KEYS.filter((m) => {
+    const only = (MOUNTS[m] as { only?: VesselId[] }).only;
+    return !only || only.includes(mountVessel);
+  });
+}
 /** An attach point on the craft flown: its eye and aim (the outside views: the table's defaults). */
 export function mountPose(m: Mount): MountPose {
+  // (another craft's own view kept from it — the A320's window on the Ranger —: the chase)
+  const only = (MOUNTS[m] as { only?: VesselId[] }).only;
+  if (only && !only.includes(mountVessel)) m = "chase";
   const own = (VESSELS[mountVessel].mounts as Record<string, MountPose | undefined>)[m];
   return own ?? (MOUNTS[m] as MountPose);
 }

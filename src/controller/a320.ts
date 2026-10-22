@@ -4,6 +4,7 @@
 
 import { detentOf, type EngineCtl } from "../a320/fadec";
 import { A320Fcs } from "../a320/fcs";
+import { WingFlex } from "../a320/flex";
 import { AdrSet, engineFault, FailureSet, fuelLeak, lawOf, surfacesPowered, thrustYaw } from "../a320/failures";
 import { A320Systems, type StartState, type SysFrame } from "../a320/systems";
 import { Ecam, ecamInputs } from "../a320/ecam";
@@ -138,6 +139,10 @@ function a320Step(this: CameraController, dt: number, onWheels: boolean): A320Fc
     // (the angle of attack's rate: the pitch's less the flight path's)
     alphaDot: this.pilot.omega[0] + this.airFlight.pathRate[0],
   });
+  // (its wings' bend: the lift they carry over the weight, the air's turbulence — src/a320/flex.ts)
+  const lw = (this.airFlight.last?.out.L ?? 0) / (fleet.massProps().mass * 9.80665);
+  this.a320WingTip = (this.a320Flex ??= new WingFlex()).step(dt, lw, this.weatherNow?.wind.turb ?? 0);
+  if (this.a320WingTipForce !== null) this.a320WingTip = this.a320WingTipForce;
   // (an engine failed: the thrust's yawing moment — failures.ts)
   A.surfaces.thrustYaw = thrustYaw(A.engines[0].thrust, A.engines[1].thrust);
   this.airFlight.cfg.a320 = A.surfaces;

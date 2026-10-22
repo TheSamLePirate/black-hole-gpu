@@ -9,7 +9,7 @@ import type { CameraController } from "../controls";
 import { TELE_MIN } from "../controls";
 import { onEscape } from "./keys";
 import { cameraFrame } from "../camera";
-import { MOUNTS, type Mount } from "../mounts";
+import { MOUNTS, mountKeys, type Mount } from "../mounts";
 import type { Settings, Target } from "../settings";
 import { BODY_NAMES } from "../targeting";
 import { SOLAR_BODIES } from "../system/solar";
@@ -337,7 +337,7 @@ export class CameraPanel {
     ] as const) {
       const sec = this.section(g, outside ? "" : "V · ⇧V");
       const tiles = h("div", "cp-tiles cp-tiles-3");
-      for (const m of Object.keys(MOUNTS) as Mount[]) {
+      for (const m of mountKeys()) {
         const o = (MOUNTS[m] as { outside?: "around" | "free" | "flyby" | "station" | "director" }).outside;
         if (!!o !== outside) continue;
         tiles.append(

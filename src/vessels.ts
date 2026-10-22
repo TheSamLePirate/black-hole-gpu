@@ -602,7 +602,9 @@ export const VESSELS: Record<VesselId, VesselDef> = {
       quarter: { eye: [22, 9, -26], aim: [-2, 2.4, 8] },
       chase: { eye: [0, 8.5, -48], aim: [0, 2.6, 10] },
       dorsal: { eye: [0, 5.2, 6], aim: [0, 4.6, 40] },
-      wing: { eye: [-9.5, 4.6, -3], aim: [-14, 2.4, 0] },
+      // (along the left wing from the fuselage's window line, aft of its trailing edge: the flaps, the spoilers, the
+      // engine — PLAN-A320 A13)
+      wing: { eye: [2.5, 3.6, -3.5], aim: [9.5, 0.9, 6] },
       belly: { eye: [0.4, -0.5, 2], aim: [0.1, -0.2, 30] },
       rear: { eye: [0, 4.5, 30], aim: [0, 2.6, -10] },
       dock: { eye: [0.45, 3.22, 16.193], aim: [0.45, -6.13, 60.193] },

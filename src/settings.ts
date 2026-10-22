@@ -446,6 +446,7 @@ export interface Settings {
   f35PcdStyle: "realistic" | "cinematic"; // the panoramic display's look: a real PCD's, or with glow, rings and sweeps
   f35PcdBrightness: "auto" | "day" | "night" | "nvg"; // its brightness: the light's, or its knob's
   a320Livery: "kerr" | "white" | "SWR" | "AUA" | "DAL" | "AAL"; // the A320's livery: the house's, white, or a real airline's (docs/PLAN-A320.md)
+  a320Effects: boolean; // the A320: the air and the ground it shows — the wing's vapour, its vortices, the inlets', the tyres' smoke, a wet runway's spray (A13)
   a320Start: "cold" | "apu" | "ready"; // the A320 placed on the ground: cold and dark, the APU running, or ready for take-off (A10)
   netMenu: boolean; // the network's menu and buttons (docs/PLAN-RESEAU.md): off, the game shows no trace of it
   netFreeFight: boolean; // in a room, in the F-35, no match: the free fight — every craft a target, friendly fire on
@@ -806,6 +807,7 @@ export function defaultSettings(): Settings {
     f35PcdStyle: "realistic",
     a320Livery: "kerr",
     a320Start: "ready",
+    a320Effects: true,
     f35PcdBrightness: "auto",
     netMenu: true,
     netFreeFight: true,
@@ -2180,6 +2182,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   f35PcdStyle: "pref",
   a320Livery: "pref",
   a320Start: "pref",
+  a320Effects: "pref",
   f35PcdBrightness: "pref",
   netMenu: "pref",
   netFreeFight: "pref",

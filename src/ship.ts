@@ -244,6 +244,9 @@ export interface ShipView {
    *  cinematic), the last touch (u, v on the display; its age [s]), the last page changed (its part, u0 v0 u1 v1;
    *  its age [s]) */
   pcd?: PcdLook | null;
+  /** the A320's windshield seen from its flight deck (src/a320/glass.ts): the rain on it, a clock [s], the airspeed
+   *  [m/s], the frost 0…1, each wiper's place on its sweep and rate [travel / s]; none: dry, the wipers at rest */
+  a320Glass?: { rain: number; clock: number; airspeed: number; frost: number; wipers: [number, number]; rates: [number, number] } | null;
   /** display-referred emission scale: pre-exposure / 2^EV (a flame as bright whatever the exposure) */
   glow?: number;
 }
@@ -297,7 +300,9 @@ const LAMPS_AT = 512 + 16 + 8 * 3 * 16;
 const SEA_AT = LAMPS_AT + 16 + (MAX_LAMPS + MAX_GLARES) * 3 * 16;
 /** then the F-35's panoramic display's look (S.pcd0–2) */
 const PCD_AT = SEA_AT + 3 * 16;
-const SHIP_UNIFORM_BYTES = PCD_AT + 3 * 16;
+/** then the A320's windshield (S.wg0, S.wg1 — src/a320/glass.ts) */
+const GLASS_AT = PCD_AT + 3 * 16;
+const SHIP_UNIFORM_BYTES = GLASS_AT + 2 * 16;
 const INST_FLOATS = 20;
 /** the posed aircraft's parts at most (the F-35's 119 — src/f35/model.ts —, the A320's 172 — src/a320/rig.ts), and how
  *  many aircraft drawn with their parts posed */
@@ -489,16 +494,17 @@ export class ShipRenderer {
   get jetVerts(): Float32Array | null {
     return this.jetMesh?.verts ?? null;
   }
-  /** the flown F-35's exhaust now (ship frame): its exit, its way, its radius [m], how strongly it shimmers */
-  private haze: { p: V3; d: V3; r: number; k: number } | null = null;
+  /** the flown F-35's exhaust now (ship frame): its exit, its way, its radius [m], how strongly it shimmers — the
+   *  A320's two CFM56s' (A13) */
+  private haze: { p: V3; d: V3; r: number; k: number }[] = [];
 
   /**
    * The heat haze behind the F-35's nozzle in the last frame's view (display.wgsl haze): the exhaust's
    * column from its exit to some 18 m downstream, in the image's uv, its radii there [uv of the height], its
    * strength (0: none). The hot gas bends the light behind it: the background seen through it shimmers.
    */
-  hazeView(): [number, number, number, number, number, number, number] | null {
-    const H = this.haze,
+  hazeView(k = 0): [number, number, number, number, number, number, number] | null {
+    const H = this.haze[k],
       C = this.lastCam;
     if (!H || !C || H.k <= 0.01) return null;
     const len = 18;
@@ -1722,7 +1728,7 @@ export class ShipRenderer {
   private writeJets(th: Thrust | null | undefined) {
     const out = this.jetData;
     let n = 0;
-    let haze: ShipRenderer["haze"] = null;
+    const haze: ShipRenderer["haze"] = [];
     if (th) {
       const air = Math.min(Math.max(th.air, 0), 1);
       const V = VESSELS[this.vessel];
@@ -1739,7 +1745,13 @@ export class ShipRenderer {
         const ex = jet && this.vessel === "f35" ? this.jetExit : null;
         if (ex) J = { ...J, p: ex.p, d: ex.d };
         const ab = jet ? Math.min(Math.max(((th.boost ?? 1) - 1) / 0.5, 0), 1) : 0;
-        if (jet) haze = { p: J.p, d: J.d, r: J.half[0], k: air * Math.min(0.35 + 0.65 * level + 0.8 * ab, 1.4) };
+        // (the A320's: each CFM56's, its hot core within the bypass's cooler flow — a wider, gentler column)
+        if (jet)
+          haze.push(
+            this.vessel === "a320"
+              ? { p: J.p, d: J.d, r: J.half[0] * 1.6, k: air * Math.min(0.2 + 0.85 * level, 1.05) }
+              : { p: J.p, d: J.d, r: J.half[0], k: air * Math.min(0.35 + 0.65 * level + 0.8 * ab, 1.4) },
+          );
         const len = jet ? 2.5 + 8 * ab : J.main ? (4 + 20 * level) * (1 - 0.45 * air) * V.flame : 1.2 + 1.6 * level;
         out.set([...J.p, level, ...J.d, jet ? 2 : J.main ? 0 : 1, J.half[0], J.half[1], len, (i * 0.618) % 1, ...J.u, ab], n * JET_FLOATS);
         // (the camera inside its proxy — the shader's frustum, a margin for the near plane)
@@ -1986,6 +1998,8 @@ export class ShipRenderer {
         const R = i === 0 && this.flown ? v.a320 : it.a320;
         const mats = rigMatrices(this.a320Mesh, R?.props ?? A320_REST.props, R?.spins ?? {});
         this.writeParts(mats, parts);
+        // (its wings' bend: the tip's rise in its first part's record — ship.wgsl a320Flex, src/a320/flex.ts)
+        this.instData[parts * INST_FLOATS + 16] = Number(R?.props?.["sim/wing-flex"] ?? 0) || 0;
         if (i === 0 && this.flown) this.a320Now = { mats, props: R?.props ?? A320_REST.props };
         if (i > 0 && it.thrust) lit.push({ id: "a320", R: it.R, t: it.t, thrust: it.thrust, exit: null });
       } else if (i > 0 && it.thrust && !isTraffic(it.id)) lit.push({ id: it.id, R: it.R, t: it.t, thrust: it.thrust, exit: null });
@@ -2104,6 +2118,12 @@ export class ShipRenderer {
         0,
         ...(P?.change ? P.change.rect : [0, 0, 0, 0]),
       ]),
+    );
+    const G = v.a320Glass;
+    this.device.queue.writeBuffer(
+      this.uniform,
+      GLASS_AT,
+      new Float32Array(G ? [G.rain, G.clock, G.airspeed, G.frost, ...G.wipers, ...G.rates] : [0, 0, 0, 0, 0, 0, 0, 0]),
     );
     this.writeReentry(v.reentry, mesh);
     const tr = this.flown ? v.contrails : null;
@@ -2523,10 +2543,9 @@ export class ShipRenderer {
       }
     }
     // the F-35's glass, over all that (its canopy, the helmet's visor)
-    // (inside the A320: its flight deck's windows, not its hull's — tinted, they would hide the view)
-    const glassy = this.draws.filter(
-      (dr) => !dr.cabin && dr.mesh.solid !== undefined && dr.mesh.solid < dr.mesh.count && !(dr.inst === 0 && this.deckDrawn),
-    );
+    // (inside the A320: its hull's glass too — its windshield's water and frost only, ship.wgsl a320Glass: tinted, it
+    // would hide the view)
+    const glassy = this.draws.filter((dr) => !dr.cabin && dr.mesh.solid !== undefined && dr.mesh.solid < dr.mesh.count);
     if (glassy.length && !this.debugSkip.has("glass")) {
       if (!res.jetGlassBind || res.jetGlassGen !== this.bindGen || res.jetGlassHdr !== hdr) {
         const keep = [0, 1, 2, 3, 12, 16, 22, 27];

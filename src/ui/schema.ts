@@ -4657,6 +4657,17 @@ export const SCHEMA: ControlDef[] = [
     ],
   },
   {
+    key: "a320Effects",
+    type: "toggle",
+    section: "game",
+    group: "A320",
+    label: "Air and ground effects",
+    effect: "none",
+    enabled: (s) => s.ship && s.vessel === "a320",
+    help: "What the A320's flight shows: the air condensing over its wing and in its vortices on a humid approach, the engines' inlet vortices at power on the ground, the tyres' smoke at the touchdown, the spray off a wet runway.",
+    keywords: "a320 vapour condensation vortex inlet tyre smoke spray wet runway effects",
+  },
+  {
     key: "netMenu",
     type: "toggle",
     section: "game",

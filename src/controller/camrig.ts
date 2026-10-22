@@ -254,7 +254,10 @@ function shakePose(this: CameraController, pose: MountPose, dt: number): MountPo
   const mach = L ? L.speed / Math.max(L.air.a, 1) : 0;
   const dense = L ? clamp(L.air.rho / 0.4, 0, 1) : 0;
   const contact = this.gearLast?.contact ?? 0;
-  let jolt = contact > 0 && this.shakeContact === 0 && L && L.speed > 20 ? 1.4 : 0;
+  // (an airliner's touchdown: its sink's thump — a greaser's a nudge, a firm one a jolt —, a fighter's a fixed one)
+  const airliner = fleet.active === "a320";
+  const touch = contact > 0 && this.shakeContact === 0 && !!L && L.speed > 20;
+  let jolt = touch ? (airliner ? Math.max(-(this.geoNow()?.vs ?? 0), 0) * 1.6 : 1.4) : 0;
   this.shakeContact = contact;
   // (a spacecraft's touchdown — the Lander's on the Moon —: its sink's jolt, once — X7)
   const T = this.lastTouch;
@@ -277,13 +280,22 @@ function shakePose(this: CameraController, pose: MountPose, dt: number): MountPo
       // (a spacecraft: its rocket — the heavier the craft, the harder —, the plasma, the ring changing its turn)
       ...(fleet.active === "f35"
         ? {}
-        : {
-            rocket: clamp(this.pilot.engineNow / (V.sound?.sub ?? 1) ** 0.5, 0, 1.4),
-            plasma: L?.air ? clamp((Math.log10(Math.max(this.airInfo().heat, 1)) - 4.6) / 1.7, 0, 1) : 0,
-            ring: V.ring
-              ? clamp(Math.abs((this.ringInfo()?.asked ?? this.ringInfo()?.rpm ?? 0) - (this.ringInfo()?.rpm ?? 0)) / 2, 0, 1)
-              : 0,
-          }),
+        : airliner
+          ? {
+              // (the A320 — PLAN-A320 A13: the runway's 5 m slabs, its speed brakes by the air's pressure, the
+              // turbulence; its roll softer, no rocket)
+              joints: 5,
+              soft: 0.6,
+              brakes: clamp(this.airBrake, 0, 1) * clamp((L?.out.q ?? 0) / 6000, 0, 1),
+              turb: L && !this.rolling ? clamp((this.weatherNow?.wind.turb ?? 0) / 3, 0, 1) : 0,
+            }
+          : {
+              rocket: clamp(this.pilot.engineNow / (V.sound?.sub ?? 1) ** 0.5, 0, 1.4),
+              plasma: L?.air ? clamp((Math.log10(Math.max(this.airInfo().heat, 1)) - 4.6) / 1.7, 0, 1) : 0,
+              ring: V.ring
+                ? clamp(Math.abs((this.ringInfo()?.asked ?? this.ringInfo()?.rpm ?? 0) - (this.ringInfo()?.rpm ?? 0)) / 2, 0, 1)
+                : 0,
+            }),
     },
     this.s.flightShake * (this.s.shipMount === "cockpit" || this.s.shipMount === "cabin" ? 1 : 0.55),
   );
