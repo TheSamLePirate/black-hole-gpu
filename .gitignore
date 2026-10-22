@@ -89,3 +89,6 @@ assets/airplanes/
 
 # OurAirports raw CSVs (public domain, ~17 MB): scripts/build-runways.ts turns them into assets/runways/v1/
 assets/runways/raw/
+
+# Python bytecode (the asset builders)
+__pycache__/

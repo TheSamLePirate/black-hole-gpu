@@ -56,9 +56,13 @@ def _condition(e):
     if e.tag == "not":
         return ["not", _condition(kids[0])]
     if e.tag == "property":
-        return ["prop", e.text.strip()]
+        return ["prop", e.text.strip().lstrip("/")]
     if e.tag == "value":
-        return ["val", float(e.text)]
+        # (a number, or a string — an option's name: "IAE")
+        try:
+            return ["val", float(e.text)]
+        except ValueError:
+            return ["val", e.text.strip()]
     if e.tag in ("greater-than", "less-than", "greater-than-equals", "less-than-equals", "equals", "not-equals"):
         a, b = [_condition(k) for k in kids[:2]]
         return [e.tag, a, b]
@@ -90,7 +94,13 @@ def read_animations(path):
         if cond is not None:
             an["condition"] = _condition(cond)
         ax = a.find("axis")
-        if ax is not None and ax.find("x1-m") is not None:
+        if ax is not None and ax.findtext("object-name"):
+            # (the axis a line object's: resolved in the model by resolve_axes)
+            an["axis_object"] = ax.findtext("object-name").strip()
+            an["axis_order_xyz"] = ax.find("order-by-xyz") is not None
+            an["axis_swap"] = ax.find("swap-axis-direction") is not None
+            an["axis"] = an["center"] = None
+        elif ax is not None and ax.find("x1-m") is not None:
             p1 = np.array([_f(ax, "x1-m"), _f(ax, "y1-m"), _f(ax, "z1-m")])
             p2 = np.array([_f(ax, "x2-m"), _f(ax, "y2-m"), _f(ax, "z2-m")])
             an["center"], an["axis"] = p1, p2 - p1
@@ -110,6 +120,41 @@ def read_animations(path):
                 an["slave"] = sn.strip()
         out.append(an)
     return out
+
+
+def _greater(v1, v2, xyz):
+    """SimGear's LineCollector: whether v1 comes first — the larger x (then y, then z: order-by-xyz)."""
+    if not xyz:
+        return v1[0] > v2[0]
+    for k in range(3):
+        if abs(v1[k] - v2[k]) > 1e-5:
+            return v1[k] > v2[k]
+    return False
+
+
+def resolve_axes(root, anims, order_xyz=False):
+    """The animations whose <axis> names a line object (SGAnimation::setCenterAndAxisFromObject): its first segment's
+    vertices ordered as SimGear's LineCollector orders them (the larger x first; x, y then z with order-by-xyz —
+    `order_xyz` the default), reversed by swap-axis-direction; the centre its middle, the axis from start to end (an
+    explicit <center> ignored). → the axis objects' names (hidden in FlightGear). Unresolved: left without an axis."""
+    names = set()
+    for a in anims:
+        nm = a.get("axis_object")
+        if not nm:
+            continue
+        nodes = [n for n in find(root, nm) if n.geom is not None and len(n.geom["verts"]) >= 2]
+        if not nodes:
+            continue
+        g = nodes[0].geom
+        V = g["verts"]
+        seg = next(((V[r[0][0]], V[r[1][0]]) for _, _, r in g["surfs"] if len(r) >= 2), (V[0], V[1]))
+        v1, v2 = np.asarray(seg[0], float), np.asarray(seg[1], float)
+        s, e = (v1, v2) if _greater(v1, v2, a.get("axis_order_xyz") or order_xyz) else (v2, v1)
+        if a.get("axis_swap"):
+            s, e = e, s
+        a["center"], a["axis"] = 0.5 * (s + e), e - s
+        names.add(nm)
+    return names
 
 
 # ---------------------------------------------------------------------------------------------------- the graph
@@ -257,6 +302,8 @@ def cond(c, props):
     if op == "or":
         return any(cond(k, props) for k in c[1:])
     a, b = cond(c[1], props), cond(c[2], props)
+    if isinstance(a, str) or isinstance(b, str):
+        return {"equals": a == b, "not-equals": a != b}.get(op, False)
     return {"greater-than": a > b, "less-than": a < b, "greater-than-equals": a >= b, "less-than-equals": a <= b, "equals": a == b, "not-equals": a != b}[op]
 
 

@@ -595,16 +595,17 @@ export const VESSELS: Record<VesselId, VesselDef> = {
       ctrl: [0.05, 0.07, 0.3],
     },
     mounts: {
-      // (the captain's eyes: FlightGear's "Captain View")
-      cockpit: { eye: [0.45, 3.4, 16.0], aim: [0.45, 3.1, 60] },
-      cabin: { eye: [0.45, 3.4, 16.0], aim: [0.45, 3.4, 60] },
+      // (the captain's eyes: FlightGear's "Captain View" — 0.45 m left, 1.403 m up, 16.193 m ahead of its origin —, the
+      // look 12° down: the PFD, the ND and the runway together — FlightGear's 16°, the panel's)
+      cockpit: { eye: [0.45, 3.22, 16.193], aim: [0.45, -6.13, 60.193] },
+      cabin: { eye: [0.45, 3.22, 16.193], aim: [0.45, 3.22, 60.193] },
       quarter: { eye: [22, 9, -26], aim: [-2, 2.4, 8] },
       chase: { eye: [0, 8.5, -48], aim: [0, 2.6, 10] },
       dorsal: { eye: [0, 5.2, 6], aim: [0, 4.6, 40] },
       wing: { eye: [-9.5, 4.6, -3], aim: [-14, 2.4, 0] },
       belly: { eye: [0.4, -0.5, 2], aim: [0.1, -0.2, 30] },
       rear: { eye: [0, 4.5, 30], aim: [0, 2.6, -10] },
-      dock: { eye: [0.45, 3.4, 16.0], aim: [0.45, 3.1, 60] },
+      dock: { eye: [0.45, 3.22, 16.193], aim: [0.45, -6.13, 60.193] },
     },
   },
 };

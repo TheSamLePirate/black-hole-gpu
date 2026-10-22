@@ -22,6 +22,8 @@ interface View {
   /** a script run before the frames are stepped */
   js?: string;
   frames?: number;
+  /** the wait before the shot [ms] (a flight deck's first look: its mesh and maps loaded) */
+  wait?: number;
   log?: string;
 }
 
@@ -95,7 +97,7 @@ try {
       __bh.renderer.ship.setA320Livery(s.a320Livery);
       s.shipMount = ${JSON.stringify(v.mount)};
       ${v.fov ? `s.fov = ${v.fov};` : ""}
-      ${v.look ? `s.shipLookYaw = ${v.look[0]}; s.shipLookPitch = ${v.look[1]};` : ""}
+      s.shipLookYaw = ${v.look?.[0] ?? 0}; s.shipLookPitch = ${v.look?.[1] ?? 0};
       { ${v.js ?? ""} }
       __bh.renderer.a320Force = ${JSON.stringify(v.props ?? {})};
       for (let i = 0; i < ${v.frames ?? 90}; i++) {
@@ -108,7 +110,7 @@ try {
       return true;
     })()`);
     // (a livery changed: its maps transcoded and written)
-    await Bun.sleep(v.livery ? 5000 : 1500);
+    await Bun.sleep(v.wait ?? (v.livery ? 5000 : 1500));
     await app.js(`(async () => { for (let i = 0; i < 4; i++) { __bh.touch(); await new Promise((r) => requestAnimationFrame(r)); } })()`);
     await app.shot(`${out}/${v.name}.png`);
     console.log(`${out}/${v.name}.png${v.log ? ` — ${v.log}: ${JSON.stringify(await app.js(v.log))}` : ""}`);

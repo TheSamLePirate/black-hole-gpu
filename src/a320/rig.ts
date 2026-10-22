@@ -10,7 +10,7 @@ type V3 = [number, number, number];
 /** A condition (FlightGear's <condition>, as build-a320.py writes it). */
 export type Cond =
   | ["prop", string]
-  | ["val", number]
+  | ["val", number | string]
   | ["not", Cond]
   | ["and" | "or", ...Cond[]]
   | ["greater-than" | "less-than" | "greater-than-equals" | "less-than-equals" | "equals" | "not-equals", Cond, Cond];
@@ -83,8 +83,9 @@ export function parseA320(buf: ArrayBuffer): A320Mesh {
 /** The parts: the still airframe and each rig node. */
 export const partCount = (m: A320Mesh) => m.nodes.length + 1;
 
-/** Property values by FlightGear's path (without the leading "/"), and the spins' angles [rad] by path. */
-export type Props = Record<string, number>;
+/** Property values by FlightGear's path (without the leading "/") — numbers, or an option's name ("IAE") —, and the
+ *  spins' angles [rad] by path. */
+export type Props = Record<string, number | string>;
 
 /** 3 × 4 affine maps (rows) */
 type M34 = Float64Array;
@@ -153,14 +154,14 @@ function lookup(tab: [number, number][], x: number): number {
 
 /** A node's value from its property: its table, or factor × value + offset; clamped. */
 export function nodeValue(n: RigNode, props: Props): number {
-  const v = props[n.prop ?? ""] ?? 0;
+  const v = Number(props[n.prop ?? ""] ?? 0) || 0;
   let r = n.table ? lookup(n.table, v) : v * (n.factor ?? 1) + (n.offset ?? 0);
   if (n.min !== undefined) r = Math.max(r, n.min);
   if (n.max !== undefined) r = Math.min(r, n.max);
   return r;
 }
 
-export function condition(c: Cond | null | undefined, props: Props): number | boolean {
+export function condition(c: Cond | null | undefined, props: Props): number | string | boolean {
   if (!c) return true;
   switch (c[0]) {
     case "prop":
@@ -174,8 +175,13 @@ export function condition(c: Cond | null | undefined, props: Props): number | bo
     case "or":
       return (c.slice(1) as Cond[]).some((k) => condition(k, props));
     default: {
-      const a = Number(condition(c[1], props));
-      const b = Number(condition(c[2], props));
+      const ra = condition(c[1], props);
+      const rb = condition(c[2], props);
+      // (an option's name: compared as it is)
+      if (typeof ra === "string" || typeof rb === "string")
+        return c[0] === "equals" ? ra === rb : c[0] === "not-equals" ? ra !== rb : false;
+      const a = Number(ra);
+      const b = Number(rb);
       return c[0] === "greater-than"
         ? a > b
         : c[0] === "less-than"
@@ -248,7 +254,7 @@ export function rigMatrices(
         return o;
       }
       case "spin":
-        return turnAbout(n.center!, n.axis!, spins[n.prop ?? ""] ?? 0);
+        return turnAbout(n.center!, n.axis!, Number(spins[n.prop ?? ""] ?? 0));
       case "select":
         return condition(n.cond, props) ? ident() : zero();
       case "locked-track":

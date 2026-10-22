@@ -158,7 +158,7 @@ export class A320Poser {
       // (the wheels: rolling on the ground, braked to a stop after lift-off)
       const w = i.onGround ? i.groundSpeed / WHEEL_R[k]! : 0;
       const sp = `gear/gear[${k}]/rollspeed-ms`;
-      this.spins[sp] = ((this.spins[sp] ?? 0) + w * dt) % (2 * Math.PI);
+      this.spins[sp] = (Number(this.spins[sp] ?? 0) + w * dt) % (2 * Math.PI);
     }
     P["systems/hydraulic/gear/door-left"] = s.door[1]!;
     P["systems/hydraulic/gear/door-right"] = s.door[2]!;
@@ -187,7 +187,7 @@ export class A320Poser {
       const sp = `engines/engine[${k + 3}]/n1`;
       // (FlightGear's two spins share the property: the slow blades' factor 50, the blur's 5 — one angle here,
       // the blades' — the blur turning a tenth as fast reads as its own)
-      this.spins[sp] = ((this.spins[sp] ?? 0) + ((50 * n1) / 60) * 2 * Math.PI * dt) % (2 * Math.PI);
+      this.spins[sp] = (Number(this.spins[sp] ?? 0) + ((50 * n1) / 60) * 2 * Math.PI * dt) % (2 * Math.PI);
     }
     // ---- the rest: landing lights, wipers, AoA vanes, doors, RAT, APU, wingtips
     s.light = toward(s.light, i.landingLights ? 1 : 0, RATE.light, dt);

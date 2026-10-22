@@ -25,6 +25,7 @@ import { poseData } from "./cockpit/controls";
 import { GEARS } from "./gear";
 import { JetPoser } from "./f35/pose";
 import { A320Poser, CONF, confOf } from "./a320/pose";
+import { DeckPoser } from "./a320/deck";
 import { Pcd } from "./f35/pcd";
 import { pcdData } from "./f35/cockpit";
 import { alertsOf } from "./ui/hud/alerts";
@@ -2682,6 +2683,7 @@ async function main() {
   const jetPoser = new JetPoser();
   /** the A320's moving parts (src/a320/pose.ts): FlightGear's properties its rig reads */
   const a320Poser = new A320Poser();
+  const deckPoser = new DeckPoser();
   /** the F-35's flight controls' inputs this frame (the network sends its commands — ui/netsession.ts) */
   let jetIn: JetInputs | null = null;
   /** the F-35's panoramic cockpit display (src/f35/pcd.ts) */
@@ -7736,6 +7738,26 @@ async function main() {
             alpha: ((L?.out.alpha ?? 0) * 180) / Math.PI,
             landingLights: settings.landingLights,
           });
+          // (its flight deck, from inside: the side stick as the pilot moves it, the levers, the pedals — src/a320/deck.ts)
+          if (settings.shipMount === "cockpit" || settings.shipMount === "cabin") {
+            const tq = th?.torque ?? [0, 0, 0];
+            const c1 = (x: number) => Math.min(Math.max(x, -1), 1);
+            renderer.a320Deck = deckPoser.step({
+              dt,
+              stick: [c1(tq[0]!), c1(-tq[2]!)],
+              pedals: onGround ? 0 : c1(tq[1]!),
+              tiller: onGround ? c1(tq[1]!) : 0,
+              gearDown: camera.gearDown,
+              fcs: F,
+              lever: camera.pilot.throttle,
+              reverse: camera.a320Reverse && onGround && camera.pilot.throttle <= 0.01 ? 1 : 0,
+              flapLever: Math.round((camera.airFlight.cfg.flaps ?? 0) * 4),
+              speedBrake: camera.airBrake,
+              spoilersArmed: !!camera.groundSpoilers,
+              parkBrake: onGround && speed < 0.5 && camera.pilot.throttle <= 0.02,
+              powered: true,
+            });
+          }
         }
         // (the F-35 chosen: its display's fonts, canvas and mips readied while the browser idles — no stall at the
         // cockpit's first look)

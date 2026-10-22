@@ -568,6 +568,10 @@ Plan : [`PLAN-A320.md`](PLAN-A320.md), étapes A0 à A19, d'après l'A320-family
 
 - **Décisions** : livrée maison par défaut et les 12 réelles en option ; les sons enregistrés de FlightGear ; l'A320-214
   CFM56 d'abord, puis IAE et neo ; tout le métier autour (vols de ligne et ATC, sol, école et pannes, équipage à deux).
+- **Fait** (22/10) : A0–A2 l'avion dans le jeu (extérieur, 171 pièces mobiles rejouées comme SimGear, livrées), A3 le vol
+  (FDM JSBSim évalué tel quel, FADEC, carburant, freinage automatique, inverseurs), A4 les lois Airbus, **A5 le poste de
+  pilotage** (`fd_complete` de FlightGear : 442 k triangles, 1 194 nœuds animés, 583 commandes, éclairage intégré de nuit —
+  planche `docs/progress/a320/a5-cockpit.jpg`). Suivent A6 (tout cliquable) et A7 (les écrans).
 
 ## Ce qui reste pour l'AAA (au 10/10/2026)
 

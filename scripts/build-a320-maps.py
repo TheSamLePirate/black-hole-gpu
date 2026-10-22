@@ -87,6 +87,24 @@ if want("layers"):
     for k in (0, 1, 2):
         ktx(f"{WORK}/normal-{k}.png", f"{OUT}/a320-normal-{k}.ktx2", "normal", "2.0")
 
+# ------------------------------------------------------------------------------------------------- the flight deck
+# four layers (build-a320-cockpit.py's materials 120–133): fd_main, fd_other, fd_glare, and an atlas of the others (its
+# ATLAS: their places in it, the same table)
+if want("cockpit"):
+    FD = FG + "/Models/FlightDeck/res"
+    sys.path.insert(0, ROOT + "/scripts")
+    src = open(ROOT + "/scripts/build-a320-cockpit.py").read()
+    atlas = eval(src[src.index("ATLAS = {") + len("ATLAS = ") : src.index("}", src.index("ATLAS = {")) + 1])
+    for k, name in enumerate(("fd_main.png", "fd_other.png", "fd_glare.png")):
+        rgba(f"{FD}/{name}", N).save(f"{WORK}/cockpit-{k}.png")
+    at = Image.new("RGBA", (N, N), (40, 42, 46, 255))
+    for name, (x, y, w, h) in atlas.items():
+        im = Image.open(f"{FD}/{name}").convert("RGBA").resize((w, h), Image.LANCZOS)
+        at.paste(im, (x, y))
+    at.save(f"{WORK}/cockpit-3.png")
+    for k in range(4):
+        ktx(f"{WORK}/cockpit-{k}.png", f"{OUT}/a320-cockpit-{k}.ktx2", "albedo", "1.5")
+
 # ------------------------------------------------------------------------------------------------- the liveries
 swr = np.asarray(Image.open(f"{LIV}/4k/SWR-fuselage.png").convert("RGB")).astype(np.float32)
 redness = swr[:, :, 0] - np.maximum(swr[:, :, 1], swr[:, :, 2])
