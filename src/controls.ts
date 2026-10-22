@@ -1112,6 +1112,18 @@ export class CameraController {
    *  stays across flights (main.ts shares it with the deck's controls and displays) */
   a320Sys: import("./a320/systems").A320Systems | null = null;
   a320Props: import("./a320/rig").Props = {};
+  /** its failures (src/a320/failures.ts — controller/a320.ts), kept across flights (cleared at each), its ADRs and
+   *  what they read last; a failure happening told (main.ts: the toast, the log) */
+  a320Fail: import("./a320/failures").FailureSet | null = null;
+  a320Adr: import("./a320/failures").AdrSet | null = null;
+  a320AdrOut: ReturnType<import("./a320/failures").AdrSet["step"]> | null = null;
+  a320Failed: ((id: string) => void) | null = null;
+  /** its ECAM (src/a320/ecam — controller/a320.ts): the E/WD's messages, the master lights, the SD's pages */
+  a320Ecam: import("./a320/ecam").Ecam | null = null;
+  /** what its hydraulics still move (failures.ts surfacesPowered: the gear, the steering, the brakes…); its gear's
+   *  gravity extension pulled (the green system lost: the gear falls by its own weight — ui/a320page.ts) */
+  a320Pw: import("./a320/failures").Powered | null = null;
+  a320Gravity = false;
   /** the A320's reverse lever 0…1 (its thrust reversers: on the ground, the levers at idle) */
   a320Reverse = 0;
   /** the A320's parking brake (its deck's handle — src/a320/deckgame.ts) */

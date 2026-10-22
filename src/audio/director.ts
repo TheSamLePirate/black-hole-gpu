@@ -6,7 +6,7 @@
 import type { Settings } from "../settings";
 import { t } from "../i18n";
 import type { RangerStatus } from "../game/status";
-import { type GpwsFlight, gpwsOf } from "../game/gpws";
+import { alertsOf, type GpwsFlight, gpwsOf } from "../game/gpws";
 import { gameLog } from "../game/log";
 import { fleet } from "../fleet";
 import { GEARS, type GearOut } from "../gear";
@@ -455,7 +455,7 @@ export class SoundDirector {
     // closure. Higher, the free fall's impact within 45 s.
     const impact = status?.next?.kind === "impact" ? status.next.inS : Infinity;
     const horizon = info.path?.fate === "horizon";
-    const g = gpwsOf(info as GpwsFlight, s.groundAlerts ?? "reduced");
+    const g = gpwsOf(info as GpwsFlight, alertsOf(s.vessel, s.groundAlerts ?? "reduced"));
     sound.alarm("collision", s.sound && !info.landed && (horizon || (g.low ? g.pullUp : impact < 45)), "warning");
     sound.alarm("terrain", s.sound && !info.landed && g.terrain && !g.pullUp, "caution");
   }

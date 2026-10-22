@@ -16,10 +16,27 @@ export type { StartState } from "./types";
 export type { SysFrame } from "./sysinputs";
 
 const n = (v: number | string | undefined) => Number(v ?? 0) || 0;
+
+/** FlightGear's files as they are, but for one quirk mended: the green reservoir's 2.1 l the gear's extension gives back
+ *  (a320-hydraulic.xml green-qty-cmd) came back even with the green system leaking — its gravity extension refilled
+ *  it: none with the leak. */
+function mended(d: SysData): SysData {
+  for (const s of d.systems)
+    for (const ch of s.channels)
+      for (const c of ch.comps as { out?: string[]; expr?: unknown }[])
+        if (c.out?.[0] === "systems/hydraulic/green-qty-cmd" && Array.isArray(c.expr) && !JSON.stringify(c.expr).includes("green-leak"))
+          (c.expr as unknown[])[2] = [
+            "product",
+            c.expr[2],
+            ["difference", ["value", 1], ["prop", "systems/failures/hydraulic/green-leak"]],
+          ];
+  return d;
+}
+const DATA = mended(data as unknown as SysData);
 const ENG = ["controls/engines/engine", "controls/engines/engine[1]"] as const;
 
 export class A320Systems {
-  readonly jsb = new JsbSystems(data as unknown as SysData);
+  readonly jsb = new JsbSystems(DATA);
   readonly nasal: NasalModule[];
   /** the time since the flight began [s] */
   elapsed = 0;
@@ -51,11 +68,36 @@ export class A320Systems {
     P["controls/ignition/start-sw"] = 1;
     // (the flight control computers' pushbuttons: in, but cold and dark — FlightGear's -set file's 0)
     for (const c of ["elac1", "elac2", "sec1", "sec2", "sec3", "fac1", "fac2"]) P[`controls/fctl/switches/${c}`] = state === "cold" ? 0 : 1;
+    // (the batteries' charge and voltage: FlightGear gives the charge's computed value only — its first frame, cold and
+    // dark, copies it —, a warm start would read 0 and its current formula divide by a 0 V)
+    for (const b of ["bat-1", "bat-2"]) {
+      const S = `systems/electrical/sources/${b}/`;
+      P[`${S}percent`] = n(P[`${S}percent-calc`]) || 80;
+      P[`${S}volt`] = 27.36;
+    }
+    // (warm: the DC BAT bus up from the first frame — the APU's power-loss watch, an actuator following its input at
+    // once after a reset, would latch on a bus not yet computed)
+    if (state !== "cold") P["systems/electrical/bus/dc-bat"] = 28;
+    // (the APU running: its oil's pressure and temperature as a320-apu.xml's tables give them at 100 % — read by its
+    // Nasal before the files' first frame, a 0 psi would stop it)
+    if (state === "apu") Object.assign(P, { "systems/apu/oil/oil-pressure-psi": 55, "systems/apu/oil/oil-temperature-degC": 100 });
     // (FlightGear's -set file starts the ditching pushbutton at 14.7: its typo — Nasal sets it 0)
     P["systems/pressurization/ditchingpb"] = 0;
     this.elapsed = state === "cold" ? 0 : 60;
     this.used = [0, 0];
     if (f) for (let k = 0; k < 120; k++) this.step(1 / 30, f);
+    // (the APU's: started again once the network has settled — its generator's coming on line drops the DC BAT bus a
+    // fraction of a second, which its power-loss watch would take for a loss)
+    if (state === "apu") {
+      for (const m of this.nasal) if (m.name === "APU") m.reset?.(P, state);
+      Object.assign(P, {
+        "systems/apu/oil/oil-pressure-psi": 55,
+        "systems/apu/oil/oil-temperature-degC": 100,
+        "systems/apu/shutdown-power-loss-timer": 0,
+        "systems/apu/shutdown-power-loss": 0,
+      });
+      if (f) for (let k = 0; k < 30; k++) this.step(1 / 30, f);
+    }
     this.used = [0, 0];
   }
 

@@ -2,9 +2,11 @@
 // tanks the fleet's fuel), their configuration given to its aerodynamics; the pilot's own A320 controls — the thrust
 // reversers (⇧Z: the afterburner's key on the F-35), the autobrake (⇧B: the STOVL's), the brakes it applies.
 
-import { detentOf } from "../a320/fadec";
+import { detentOf, type EngineCtl } from "../a320/fadec";
 import { A320Fcs } from "../a320/fcs";
+import { AdrSet, engineFault, FailureSet, fuelLeak, lawOf, surfacesPowered, thrustYaw } from "../a320/failures";
 import { A320Systems, type StartState, type SysFrame } from "../a320/systems";
+import { Ecam, ecamInputs } from "../a320/ecam";
 import { fleet } from "../fleet";
 import { t, tf } from "../i18n";
 import { VESSELS } from "../vessels";
@@ -37,8 +39,58 @@ function a320Step(this: CameraController, dt: number, onWheels: boolean): A320Fc
     A.setEngines(state === "ready" || state === "air");
     this.a320Sys = new A320Systems(this.a320Props);
     this.a320Sys.reset(state, sysFrame(this, A, onWheels));
+    // (no failure carried from the last flight; the ADRs' pitots clear)
+    this.a320Fail ??= new FailureSet();
+    this.a320Fail.clearAll(this.a320Props);
+    this.a320Adr = new AdrSet();
+    // (its ECAM — src/a320/ecam: FlightGear's FWC —, made anew on the bag, its detectors the systems')
+    this.a320Ecam = new Ecam();
+    this.a320Ecam.reset(this.a320Props);
+    this.a320Ecam.bind(this.a320Sys.nasal);
   }
+  const P = this.a320Props;
   this.a320Sys.step(dt, sysFrame(this, A, onWheels));
+  const ias = Math.sqrt((2 * (this.airFlight.last?.out.q ?? 0)) / 1.225) * 1.9438;
+  // (the failures armed — now, at V1, at the lift-off, at random —: those due happen, told; the ADRs' readings, the
+  // pitots iced or not — failures.ts)
+  const F = this.a320Fail!;
+  const altFt = (this.geoNow()?.alt ?? 0) / 0.3048;
+  for (const id of F.step(P, dt, { ias, onGround: onWheels, v1: this.a320Fmgc?.fms.v1 ?? null, altFt })) this.a320Failed?.(id);
+  this.a320AdrOut = this.a320Adr!.step(P, ias, altFt);
+  // (the flight control law Airbus's reconfiguration gives: the hydraulics, the computers, the ADRs)
+  A.law = lawOf(P, this.gearDown).law;
+  // (the ECAM: its inputs from the game — the law, the levers' detents, the reversers, FLEX, the autobrake; the flight
+  // guidance's state, the FMS's data —, its frame)
+  const G = this.a320Fmgc;
+  if (G) {
+    const M = G.fms;
+    Object.assign(P, {
+      "it-autoflight/output/ap1": G.ap1 ? 1 : 0,
+      "it-autoflight/output/ap2": G.ap2 ? 1 : 0,
+      "it-autoflight/output/athr": G.athr ? 1 : 0,
+      "it-autoflight/output/fd1": G.fd1 ? 1 : 0,
+      "it-autoflight/output/fd2": G.fd2 ? 1 : 0,
+      "@fmgc.FMGCInternal.flightNumSet": M.fltNbr ? 1 : 0,
+      "@fmgc.FMGCInternal.zfwSet": M.zfw !== null ? 1 : 0,
+      "@fmgc.FMGCInternal.blockSet": M.block !== null ? 1 : 0,
+      "@fmgc.FMGCInternal.v1": M.v1 ?? 0,
+      "@fmgc.FMGCInternal.vr": M.vr ?? 0,
+      "@fmgc.FMGCInternal.v2": M.v2 ?? 0,
+      "@fmgc.FMGCInternal.v1set": M.v1 !== null ? 1 : 0,
+      "@fmgc.FMGCInternal.vrset": M.vr !== null ? 1 : 0,
+      "@fmgc.FMGCInternal.v2set": M.v2 !== null ? 1 : 0,
+      "@fmgc.FMGCInternal.toFlap": M.toConf ?? 0,
+      "@fmgc.FMGCInternal.toThs": M.ths,
+      "@fmgc.FMGCInternal.toFlapThsSet": M.toConf !== null && M.ths ? 1 : 0,
+    });
+  }
+  ecamInputs(P, {
+    law: A.law === "normal" ? 0 : A.law === "alternate" ? 1 : 2,
+    reversers: [A.engines[0].rev, A.engines[1].rev],
+    flex: A.flexTemp,
+    autobrake: A.autobrake,
+  });
+  this.a320Ecam!.step(P, dt);
   // (the FLEX temperature: the MCDU's PERF TAKE OFF — fmgc/fms.ts)
   A.flexTemp = this.a320Fmgc?.fms.flex ?? null;
   // (the fuel changed by another — a refuelling, a flight prepared —: the tanks filled again)
@@ -62,7 +114,10 @@ function a320Step(this: CameraController, dt: number, onWheels: boolean): A320Fc
     // (the autothrust's N1 — the FMGC's last frame's: controller/a320ap.ts)
     n1Cmd: this.a320FmgcOut?.n1Cmd ?? null,
     // (the engines' starters and fuel: the ignition's — its ENG MASTERs, ENG MODE)
-    engineCtl: this.a320Sys.engineCtl(),
+    engineCtl: this.a320Sys.engineCtl().map((c, k) => ({ ...c, ...engineFault(P, k) })) as [EngineCtl, EngineCtl],
+    // (what the hydraulics still move; a wing's fuel leaking — failures.ts)
+    powered: (this.a320Pw = surfacesPowered(P)),
+    fuelLeak: fuelLeak(P),
     reverse,
     flapLever: Math.round((this.airFlight.cfg.flaps ?? 0) * 4),
     speedBrake: this.airBrake,
@@ -83,6 +138,8 @@ function a320Step(this: CameraController, dt: number, onWheels: boolean): A320Fc
     // (the angle of attack's rate: the pitch's less the flight path's)
     alphaDot: this.pilot.omega[0] + this.airFlight.pathRate[0],
   });
+  // (an engine failed: the thrust's yawing moment — failures.ts)
+  A.surfaces.thrustYaw = thrustYaw(A.engines[0].thrust, A.engines[1].thrust);
   this.airFlight.cfg.a320 = A.surfaces;
   return A;
 }

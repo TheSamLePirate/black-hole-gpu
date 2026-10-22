@@ -139,6 +139,12 @@ export interface DuData {
   deck: Props;
   /** the NDs' own (nd-data.ts: the route, the airfields, the navaids, the traffic) */
   nd: NdExtra | null;
+  /** the ECAM's STATUS lines (src/a320/ecam: the limitations and procedures, the inoperative systems — the SD's
+   *  STATUS page; none: NORMAL) */
+  ecamStatus?: { left: { text: string; colour: string }[]; right: { text: string; colour: string }[] };
+  /** the ECAM's E/WD message area (its warnings and procedures on the left, its memos on the right), the STS reminder,
+   *  the SD page it asks (FlightGear's name; null: automatic) — none: the displays' own simple FWC */
+  ecam?: { left: { text: string; colour: string }[]; right: { text: string; colour: string }[]; sts: boolean; sd: string | null };
 }
 
 /** The speeds' tables (Airbus's: VFE by configuration [kt]; VMO 350 kt, MMO 0.82). */
@@ -174,7 +180,9 @@ export function duData(c: CameraController, s: Settings, deck: Props, date: Date
     fo = c.a320FmgcOut;
   const mass = fleet.massProps().mass;
   const q0 = L?.out.q ?? 0;
-  const ias = Math.sqrt((2 * q0) / 1.225) * KT;
+  // (the speed the captain's ADR reads — a pitot iced: wrong, as it would be — failures.ts AdrSet)
+  const adr = c.a320AdrOut?.cpt;
+  const ias = adr?.valid ? adr.ias : Math.sqrt((2 * q0) / 1.225) * KT;
   const mach = L ? L.speed / Math.max(L.air.a, 1) : 0;
   const onGround = !!c.rolling || !!c.ourLanded;
   const lever = Math.round((c.airFlight.cfg.flaps ?? 0) * 4);
@@ -311,6 +319,12 @@ export function duData(c: CameraController, s: Settings, deck: Props, date: Date
     lon: (geo.lon * 180) / Math.PI,
     onGround,
     deck,
+    ...(c.a320Ecam
+      ? {
+          ecam: { left: c.a320Ecam.left(), right: c.a320Ecam.right(), sts: c.a320Ecam.status().sts, sd: c.a320Ecam.sdPage },
+          ecamStatus: c.a320Ecam.status(),
+        }
+      : {}),
     nd: ndExtra(c),
   };
 }

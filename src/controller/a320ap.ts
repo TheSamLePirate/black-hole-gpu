@@ -53,7 +53,9 @@ function a320FmgcStep(this: CameraController, inp: PilotInput, dt: number, onWhe
   if (!A || !g) return null;
   const F = (this.a320Fmgc ??= new Fmgc());
   const att = this.attitudeNow() as { heading?: number };
-  const ias = Math.sqrt((2 * (L?.out.q ?? 0)) / 1.225) * KT;
+  // (the speed its ADRs give — a pitot iced: the FMGC flies what it reads — failures.ts AdrSet)
+  const adr = this.a320AdrOut?.cpt;
+  const ias = adr?.valid ? adr.ias : Math.sqrt((2 * (L?.out.q ?? 0)) / 1.225) * KT;
   const mach = L?.out.mach ?? 0;
   const lever = this.pilot.throttle;
   const flapLever = Math.round((this.airFlight.cfg.flaps ?? 0) * 4);

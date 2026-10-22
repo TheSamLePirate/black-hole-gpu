@@ -135,6 +135,8 @@ export interface Engine {
    *  starting (the fuel lit, spooling up to idle) */
   running: boolean;
   starting?: boolean;
+  /** flamed out by a failure (failures.ts): no relight until its MASTER is cycled — OFF, then ON */
+  flamedOut?: boolean;
   n1: number;
   n2: number;
   egt: number;
@@ -143,11 +145,26 @@ export interface Engine {
   rev: number;
 }
 
+/** FlightGear's EGT over the total air's temperature [°C] by N2 [%] at sea level and at 50 000 ft of density altitude
+ *  (a320-cfm56-5b4-engine-fadec.xml egt-cmd, the engine running) */
+const EGT_N2 = [10, 45, 50, 59.4, 105];
+const EGT_SL = [0, 390, 385, 330, 650];
+const EGT_HI = [0, 345, 340, 290, 550];
+export function egtTable(n2: number, densFt: number): number {
+  const x = Math.min(Math.max(n2, EGT_N2[0]!), EGT_N2.at(-1)!);
+  let k = 0;
+  while (k < EGT_N2.length - 2 && x > EGT_N2[k + 1]!) k++;
+  const u = (x - EGT_N2[k]!) / (EGT_N2[k + 1]! - EGT_N2[k]!);
+  const at = (t: number[]) => t[k]! + (t[k + 1]! - t[k]!) * u;
+  const h = Math.min(Math.max(densFt / 50_000, 0), 1);
+  return at(EGT_SL) + (at(EGT_HI) - at(EGT_SL)) * h;
+}
+
 export const newEngine = (running = true): Engine => ({
   running,
   n1: running ? IDLE_N1 : 0,
   n2: running ? IDLE_N2 : 0,
-  egt: running ? 390 : 15,
+  egt: running ? 345 : 15,
   ff: 0,
   thrust: 0,
   rev: 0,
@@ -196,6 +213,10 @@ export const n2Of = (n1: number) => IDLE_N2 + ((n1 - IDLE_N1) * N2F) / N1F;
 export interface EngineCtl {
   starter: boolean;
   cutoff: boolean;
+  /** a failure (failures.ts): flamed out — windmilling, relit once cleared and its MASTER cycled —, seized — its spools
+   *  stopped */
+  failed?: boolean;
+  seized?: boolean;
 }
 
 const START = {
@@ -216,8 +237,24 @@ export function stepEngine(e: Engine, want: { n1: number; reverse: number }, a: 
     if (ctl.cutoff) {
       out.running = false;
       out.starting = false;
+      out.flamedOut = false;
     }
-    if (!out.running && !ctl.cutoff && e.n2 > 15) {
+    // (a failure: the flame out — or the core seized, the spools braked to a stop within seconds)
+    if (ctl.failed || ctl.seized) {
+      if (out.running || out.starting) out.flamedOut = true;
+      out.running = false;
+      out.starting = false;
+    }
+    if (ctl.seized) {
+      out.n1 = Math.max(e.n1 - 25 * dt, 0);
+      out.n2 = Math.max(e.n2 - 30 * dt, 0);
+      out.thrust = 0;
+      out.ff = 0;
+      out.egt = e.egt + (Math.max(a.tatC, 15) - e.egt) * Math.min(dt / 20, 1);
+      out.rev = Math.max(e.rev - dt / 2, 0);
+      return out;
+    }
+    if (!out.running && !ctl.cutoff && !ctl.failed && !out.flamedOut && e.n2 > 15) {
       out.starting = true;
       out.n1 = seekTo(e.n1, IDLE_N1, START.rateN1, 1);
       out.n2 = seekTo(e.n2, IDLE_N2, START.rateN2, 1);
@@ -232,7 +269,7 @@ export function stepEngine(e: Engine, want: { n1: number; reverse: number }, a: 
         out.starting = false;
       }
       return out;
-    } else if (!out.running && ctl.starter) {
+    } else if (!out.running && ctl.starter && !ctl.failed) {
       out.n1 = seekTo(e.n1, START.ignN1, START.spinN1, 1);
       out.n2 = seekTo(e.n2, START.ignN2, START.spinN2, 1);
       out.thrust = 0;
@@ -242,9 +279,12 @@ export function stepEngine(e: Engine, want: { n1: number; reverse: number }, a: 
     }
   }
   if (!out.running) {
-    // (spooling down — windmilling: N1 about a tenth of the airspeed's share)
-    out.n1 = Math.max(e.n1 - 9.5 * dt, Math.min(a.mach * 30, e.n1));
-    out.n2 = Math.max(e.n2 - 9.5 * dt, 0);
+    // (spooling down — windmilling in flight: N1 about 30 % of the Mach number, N2 some 40 % — 30 % of N2 at M 0.75,
+    // enough for a windmill relight —; to rest on the ground)
+    const wind = a.onGround ? 0 : a.mach;
+    const mill = (x: number, w: number) => (x > w ? Math.max(x - 9.5 * dt, w) : Math.min(x + 2 * dt, w));
+    out.n1 = mill(e.n1, wind * 30);
+    out.n2 = mill(e.n2, wind * 40);
     out.thrust = 0;
     out.ff = 0;
     out.egt = e.egt + (Math.max(a.tatC, 15) - e.egt) * Math.min(dt / 30, 1);
@@ -264,9 +304,9 @@ export function stepEngine(e: Engine, want: { n1: number; reverse: number }, a: 
   // (the fuel: thrust × TSFC [lb/h], at least the idle's — FGTurbine's 107 × milthrust^0.2)
   const pph = Math.max(Math.abs(T / LBF) * TSFC, 107 * MIL_LBF ** 0.2);
   out.ff = (pph * LB) / 3600;
-  // (EGT: some 400 °C at idle to 900 at take-off power, with the outside air)
-  const egtWant = 380 + 5.6 * Math.max(out.n1 - IDLE_N1, 0) + 0.8 * a.tatC;
-  out.egt = e.egt + (egtWant - e.egt) * Math.min(dt / 3, 1);
+  // (EGT: FlightGear's FADEC's — Systems/a320-cfm56-5b4-engine-fadec.xml egt-cmd: the total air's temperature and a
+  // table of N2 by the density altitude, eased by its lag (c1 0.35) —, the one its bleed's precoolers are set for)
+  out.egt = e.egt + (a.tatC + egtTable(out.n2, a.densFt) - e.egt) * Math.min(dt * 0.35, 1);
   return out;
 }
 

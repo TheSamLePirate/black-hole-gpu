@@ -34,6 +34,8 @@ export interface A320Surfaces {
   gear: number;
   lights: [number, number];
   alphaDot: number;
+  /** the engines' unequal thrust's yawing moment [N·m, nose right > 0 — failures.ts thrustYaw] */
+  thrustYaw?: number;
 }
 
 export const restSurfaces = (): A320Surfaces => ({
@@ -173,7 +175,7 @@ export function a320Forces(v: V3, air: Air, w: V3, s: A320Surfaces, agl: number 
   const zw = unit(cross(xw, [0, 1, 0]));
   const yw = cross(zw, xw);
   const Fb: V3 = [0, 1, 2].map((i) => (-Dr * xw[i]! + Y * yw[i]! - L * zw[i]!) * LBF) as V3;
-  const Mb: V3 = [sum(AXES.ROLL, b) * FTLBF, sum(AXES.PITCH, b) * FTLBF, sum(AXES.YAW, b) * FTLBF];
+  const Mb: V3 = [sum(AXES.ROLL, b) * FTLBF, sum(AXES.PITCH, b) * FTLBF, sum(AXES.YAW, b) * FTLBF + (s.thrustYaw ?? 0)];
   // (carried from the reference point to the centre of gravity)
   const t = cross(ARM, Fb);
   const Mcg: V3 = [Mb[0] + t[0], Mb[1] + t[1], Mb[2] + t[2]];

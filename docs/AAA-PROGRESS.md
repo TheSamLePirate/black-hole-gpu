@@ -576,8 +576,9 @@ Plan : [`PLAN-A320.md`](PLAN-A320.md), étapes A0 à A19, d'après l'A320-family
   pages, ISIS, DCDU redessinés depuis FlightGear — planche `a7-ecrans.jpg`), **A8 le FCU et le pilote automatique**
   (modes Airbus, A/THR, autoland mesuré — planche `a8-fcu-ap.jpg`), **A9 les MCDU et le FMS** (planche `a9-mcdu.jpg`),
   **A10 les systèmes** (les 13 fichiers JSBSim de FlightGear exécutés tels quels, son Nasal APU/ADIRS/feu porté, le
-  démarrage moteur, cold & dark jusqu'aux deux moteurs à la souris — planche `a10-systemes.jpg`). Suit A11 : l'ECAM et
-  les pannes.
+  démarrage moteur, cold & dark jusqu'aux deux moteurs à la souris — planche `a10-systemes.jpg`), **A11 l'ECAM et les pannes** (l'ECAM de FlightGear porté : 759 messages et
+  leurs procédures, 76 pannes injectables à V1/au décollage/au hasard et leurs effets sur les lois, l'hydraulique, les
+  ADR ; les 13 pages SD réelles ; les check-lists montrées dans le poste — planche `a11-ecam.jpg`). Suit A12 : le son.
 
 ## Ce qui reste pour l'AAA (au 10/10/2026)
 

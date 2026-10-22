@@ -81,6 +81,9 @@ const SLAT_YT = [
 
 /** a memo line: its text and colour */
 type Line = [string, EcColour];
+const EC_OF: Record<string, EcColour> = { r: "red", a: "amber", g: "green", c: "cyan", w: "white", m: "magenta" };
+/** an ECAM line (src/a320/ecam) as the E/WD draws it */
+const ecLine = (l: { text: string; colour: string }): Line => [l.text, EC_OF[l.colour] ?? (l.colour as EcColour)];
 
 export class Ewd extends Display {
   private svg = new EcamSvg(ewdSvg);
@@ -186,7 +189,10 @@ export class Ewd extends Display {
     const now = t;
     if (d.eng.every((e) => e.running)) this.enginesSince ??= now;
     else this.enginesSince = null;
-    const [left, right] = this.memos(d, now);
+    // (the ECAM's — src/a320/ecam: FlightGear's FWC, its warnings, procedures and memos —, else the simple one here)
+    const [left, right] = d.ecam ? [d.ecam.left.map(ecLine), d.ecam.right.map(ecLine)] : this.memos(d, now);
+    // (STATUS has lines: its reminder, the right column's last)
+    if (d.ecam?.sts && !right.some((l) => l[0] === "STS")) right.splice(7, 0, ["STS", "white"]);
     for (let i = 0; i < 8; i++) {
       const L = left[i],
         R = right[i];

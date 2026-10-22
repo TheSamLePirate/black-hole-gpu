@@ -25,7 +25,8 @@ export class Sd extends Display {
 
   /** The page wanted now: the panel's, else the FWC's. */
   pageFor(d: DuData, t: number): string {
-    const asked = String(d.deck["ecam/sd-page"] ?? "");
+    // (the ECAM's — its control panel's button, a failure's page, STATUS —, else the panel's own without it)
+    const asked = d.ecam ? (d.ecam.sd ?? "") : String(d.deck["ecam/sd-page"] ?? "");
     if (asked && this.pages.has(asked)) return asked;
     const S = this.state;
     // (a flight controls' check on the ground: the surfaces moved past a third of their travel)

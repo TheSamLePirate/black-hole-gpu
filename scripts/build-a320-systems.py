@@ -126,7 +126,8 @@ def cond_lines(text):
         if not l:
             continue
         a, op, b = l.split()
-        op = {"==": "eq", "!=": "ne", "<": "lt", "<=": "le", ">": "gt", ">=": "ge"}.get(op, op)
+        # (JSBSim's words in either case: the FWC's file has an "NE")
+        op = {"==": "eq", "!=": "ne", "<": "lt", "<=": "le", ">": "gt", ">=": "ge"}.get(op, op.lower())
         out.append(["cmp", op, num_or_prop(a), num_or_prop(b)])
     return out
 
@@ -413,3 +414,22 @@ with open(OUT, "w") as fo:
     json.dump(data, fo, separators=(",", ":"))
 n = sum(len(c["comps"]) for s in systems for c in s["channels"])
 print(f"{OUT}: {len(systems)} systems, {n} components, {len(props)} properties, {os.path.getsize(OUT) // 1024} kB; {n_ext} inputs")
+
+# ---- The FWC's own system files (A11 — src/a320/ecam/): its phases and its warnings' logic, timers and flip-flops,
+# converted alike into their own file — the ECAM runs them (src/a320/ecam/index.ts) after the systems, on the same bag;
+# FlightGear's FDE runs them before the electrics, a frame's lag here (their execrates 4 to 16 frames)
+FWC_OUT = ROOT + "/src/a320/ecam/fwcdata.json"
+fwc = []
+fwc_props = []
+for name in ("fwc", "fwc-phases"):
+    f = f"{FG}/Systems/a320-{name}.xml"
+    r = ET.parse(f).getroot()
+    for p in r.findall("property"):
+        v = p.get("value")
+        fwc_props.append([path(p.text), float(v) if v is not None else 0.0])
+    chans = [{"name": ch.get("name", ""), "rate": int(ch.get("execrate", "1")), "comps": [component(c) for c in ch]} for ch in r.findall("channel")]
+    fwc.append({"name": r.get("name", name), "file": f"Systems/a320-{name}.xml", "channels": chans})
+with open(FWC_OUT, "w") as fo:
+    json.dump({"source": "FlightGear A320-family (legoboyvdlp/A320-family, GPL v2): Systems/a320-{fwc,fwc-phases}.xml", "props": fwc_props, "systems": fwc}, fo, separators=(",", ":"))
+n = sum(len(c["comps"]) for s in fwc for c in s["channels"])
+print(f"{FWC_OUT}: {len(fwc)} systems, {n} components, {os.path.getsize(FWC_OUT) // 1024} kB")

@@ -11,6 +11,7 @@ import type { A320Fcs } from "./fcs";
 import type { DeckBinding, DeckControl } from "./deck";
 import { nasalCalls, type NasalCall } from "./deckctl";
 import { SYS_CALLS, sysProp } from "./systems";
+import { type Ecam, ecamCall } from "./ecam";
 import type { Props } from "./rig";
 import type { Fmgc, FmgcIn } from "./fmgc/fmgc";
 import type { McduApi } from "./mcdu/types";
@@ -28,6 +29,8 @@ export interface DeckGame {
     a320: A320Fcs | null;
     /** its systems (src/a320/systems): the Nasal calls the game does not answer go to them */
     a320Sys?: { call(fn: string, args: (number | string)[]): boolean } | null;
+    /** its ECAM (src/a320/ecam): its control panel's buttons */
+    a320Ecam?: Ecam | null;
     onWheels(): boolean;
   };
   setGear(down: boolean): void;
@@ -116,6 +119,8 @@ const FOLLOWED = new Set([
 /** A Nasal call done on the game: true if done. */
 export function deckCall(g: DeckGame, P: Props, c: NasalCall): boolean {
   const C = g.craft;
+  // (the ECAM's — its control panel, CLR, RCL, STS, the pages —, once it runs)
+  if (C.a320Ecam && c.fn.startsWith("ecam.") && ecamCall(C.a320Ecam, c.fn, c.args, P)) return true;
   const a0 = c.args[0],
     a1 = c.args[1];
   // (the MCDUs' keys: FlightGear's mcdu.button("A", side), lskbutton("1", side), rskbutton, pagebutton("f-pln", side),

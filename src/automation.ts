@@ -442,24 +442,32 @@ export function installBh(c: BhContext) {
           const h = (deckPick ??= new DeckPicker(m)).pick(eye, d.map((v) => v / l) as [number, number, number], mats);
           return !!h && c.objects.includes(h.object);
         };
-        if (!seen(q))
-          for (let t = 0; t < m.triObj.length; t++) {
-            if (m.triObj[t] !== o) continue;
-            const v = m.idx[3 * t]!;
+        if (!seen(q)) {
+          // (its faces' middles, the nearest the eye first — an object holding the captain's and the first officer's
+          // twin lights has its middle between them)
+          const pose = (v: number) => {
             const r = 12 * Math.floor(m.verts[10 * v + 7]!);
-            const w = [0, 1, 2].map(
+            return [0, 1, 2].map(
               (j) =>
                 mats[r + 4 * j]! * m.verts[10 * v]! +
                 mats[r + 4 * j + 1]! * m.verts[10 * v + 1]! +
                 mats[r + 4 * j + 2]! * m.verts[10 * v + 2]! +
                 mats[r + 4 * j + 3]!,
             );
-            const x = q.map((u, k) => 0.4 * u + 0.6 * w[k]!) as [number, number, number];
-            if (seen(x)) {
-              q = x;
-              break;
-            }
+          };
+          const mids: [number, number, number][] = [];
+          for (let t = 0; t < m.triObj.length; t++) {
+            if (m.triObj[t] !== o) continue;
+            const a = pose(m.idx[3 * t]!),
+              b = pose(m.idx[3 * t + 1]!),
+              c3 = pose(m.idx[3 * t + 2]!);
+            mids.push([0, 1, 2].map((k) => (a[k]! + b[k]! + c3[k]!) / 3) as [number, number, number]);
           }
+          const dist = (x: number[]) => Math.hypot(x[0]! - eye[0], x[1]! - eye[1], x[2]! - eye[2]);
+          mids.sort((a, b) => dist(a) - dist(b));
+          const x = mids.find(seen);
+          if (x) q = x;
+        }
         return { p: q, ndc: renderer.ship.cabinProject(q) };
       },
       cockpitControlAt: (id: string) => {

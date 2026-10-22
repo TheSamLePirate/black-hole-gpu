@@ -212,6 +212,9 @@ function newFlight(this: CameraController) {
   // (the A320's systems made again with its next frame: its fuel the fleet's)
   this.a320 = null;
   this.a320Sys = null;
+  this.a320Pw = null;
+  this.a320Ecam = null;
+  this.a320Gravity = false;
   this.a320Reverse = 0;
   this.a320Park = false;
   this.a320Fmgc = this.a320FmgcIn = this.a320FmgcOut = this.a320Ils = null;
@@ -1309,7 +1312,14 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   const P = this.pilot;
   const byItself = s.autoGear || P.auto === "entry" || P.auto === "land" || P.auto === "takeoff";
   if (byItself && !this.onBelly) this.gearDown = gearByItself(onGround, hGround(), LA?.speed);
-  if (s.animate && dtPilot > 0) this.gearExt = stepGear(this.gearExt, this.gearDown, dtPilot);
+  // (the A320's gear without its green system: it holds where it is — down by its gravity extension, some 25 s)
+  const pw = fleet.active === "a320" ? this.a320Pw : null;
+  if (fleet.active === "a320" && this.a320Gravity) {
+    // (pulled: down and locked for good)
+    if (dtPilot > 0) this.gearExt = Math.min(this.gearExt + dtPilot / 25, 1);
+    this.gearDown = true;
+  } else if (pw && !pw.gear) this.gearDown = this.gearExt >= 1;
+  else if (s.animate && dtPilot > 0) this.gearExt = stepGear(this.gearExt, this.gearDown, dtPilot);
   this.airFlight.cfg.gear = this.gearExt >= 1;
   // (the control surfaces as deflected: the attitude's effort where the air answers — their drag)
   this.airFlight.cfg.deflect = airCtx ? this.pilot.fired.torque : undefined;

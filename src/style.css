@@ -2602,3 +2602,24 @@ body.topbar-hidden .fh-compass { top: 26px; }
 .scenery-hitboxes canvas { width:100%; height:100%; display:block; }
 .scenery-hitboxes > div { position:absolute; top:185px; left:16px; color:#ff68c8; background:#07131ddd; padding:7px 10px; font:12px monospace; }
 .fl-chip[hidden] { display: none !important; }
+
+/* a checklist item's control on the A320's deck (ui/a320page.ts — main.ts places it): a pulsing ring over it */
+.deck-marker {
+  display: none;
+  position: fixed;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  border: 2px solid #5fffd0;
+  border-radius: 50%;
+  box-shadow: 0 0 12px rgba(95, 255, 208, 0.6);
+  pointer-events: none;
+  z-index: 40;
+  animation: deck-marker 1.2s ease-in-out infinite;
+}
+@keyframes deck-marker {
+  50% {
+    transform: scale(1.25);
+    opacity: 0.6;
+  }
+}

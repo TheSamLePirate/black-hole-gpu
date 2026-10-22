@@ -455,8 +455,13 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     this.pilot.throttle <= 0 && this.pilot.auto === "none" && allDown && !(ab && (ab.autobrake > 0 || this.a320Reverse > 0)) ? 1 : 0;
   // (its parking brake set: braked hard)
   const park = ab && this.a320Park ? 1 : 0;
-  const brake = Math.max(idleBrake, allDown ? this.toeBrake : 0, ab && allDown ? ab.brake : 0, park);
-  const steer = this.noseSteer;
+  // (the A320's brakes by its hydraulics: the green's normal ones, the yellow's alternate without the anti-skid — some
+  // 60 % —, none without either; the parking brake on its accumulator; the nose wheel steered by the yellow —
+  // failures.ts surfacesPowered)
+  const pw = ab ? this.a320Pw : null;
+  const brakeK = !pw || pw.brakes.normal ? 1 : pw.brakes.altn ? 0.6 : 0;
+  const brake = Math.max(brakeK * Math.max(idleBrake, allDown ? this.toeBrake : 0, ab && allDown ? ab.brake : 0), park);
+  const steer = pw && !pw.nws ? 0 : this.noseSteer;
   // (the craft's turn in the home frame: the camera's basis — right = fwd × up — is left-handed there,
   // the pilot's rates turn the other way: ω = −Σ ωᵢ axisᵢ [rad/s])
   const wWorld = (): Vec3 =>

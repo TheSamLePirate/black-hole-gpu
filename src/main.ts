@@ -1,5 +1,7 @@
 import { scopeRange } from "./ui/hud/symbology";
 import { SystemsPage } from "./ui/systemspage";
+import { A320Page, type FailureWhen } from "./ui/a320page";
+import { FAILURES, failureById } from "./a320/failures";
 import { fieldByCode, fieldCached } from "./world/runways";
 import type { FailureKind } from "./game/systems";
 import { holeFleet } from "./holefleet";
@@ -214,7 +216,7 @@ import { synthesize } from "./audio/formant";
 import { phonemes } from "./audio/g2p";
 import { Subtitles } from "./ui/subtitles";
 import { Callouts } from "./game/callouts";
-import { gpwsOf } from "./game/gpws";
+import { alertsOf as groundAlertsOf, gpwsOf } from "./game/gpws";
 import { Capcom } from "./game/capcom";
 import { Music } from "./audio/music";
 import { MusicPanel } from "./ui/musicpanel";
@@ -2692,6 +2694,13 @@ async function main() {
   /** the A320's moving parts (src/a320/pose.ts): FlightGear's properties its rig reads */
   const a320Poser = new A320Poser();
   const deckPoser = new DeckPoser();
+  /** a checklist item's control shown on the A320's deck (ui/a320page.ts): its place in the ship's frame, its ring */
+  const deckMarker = {
+    at: null as [number, number, number] | null,
+    el: Object.assign(document.createElement("div"), { className: "deck-marker" }),
+  };
+  deckMarker.el.dataset.testid = "deck-marker";
+  document.body.append(deckMarker.el);
   // (one bag for the deck and the systems: its switches, the systems' buses, its displays — controller/a320.ts)
   deckPoser.props = Object.assign(camera.a320Props, deckPoser.props);
   /** the A320's displays (src/a320/du), made with the deck's first look */
@@ -2969,16 +2978,64 @@ async function main() {
   };
   // the tablet (ui/tablet.ts): the map's left panel, the computer's and the ship's, the camera's, the
   // sky's and the log's pages
+  // (an A320 failure happening — armed at V1, at the take-off, at random —: told; the ECAM shows it)
+  camera.a320Failed = (id) => {
+    const m = tf("Failure: {0}", t(failureById(id)?.name ?? id));
+    panel.toast(m);
+    gameLog.add("warn", m, sim.time);
+  };
   const tablet = new Tablet(flightComputer.panel, {
     ship: () => rangerView(tools),
-    // (a spacecraft's systems — ui/systemspage.ts, controller/systems.ts)
-    systems: () =>
-      new SystemsPage({
+    // (a spacecraft's systems — ui/systemspage.ts, controller/systems.ts —; the A320's, its failures and checklists —
+    // ui/a320page.ts)
+    systems: () => {
+      const space = new SystemsPage({
         info: () => camera.systemsInfo(),
         fix: (k) => camera.systemsFix(k),
         toast: (s) => panel.toast(s),
         ticks: camera.sysTicks,
-      }),
+      });
+      const airliner = new A320Page({
+        failures: () =>
+          fleet.active === "a320" && camera.a320Fail
+            ? {
+                list: FAILURES.map((f) => ({ id: f.id, name: f.name, cat: f.cat })),
+                active: [...camera.a320Fail.active],
+                armed: [...camera.a320Fail.armed].map(([id, a]) => ({ id, when: (a.when.at ?? "now") as FailureWhen })),
+              }
+            : null,
+        arm: (id, when) => {
+          const F = camera.a320Fail;
+          if (!F) return t("The A320's systems: fly the A320.");
+          F.arm(id, when === "random" ? { at: "random", from: 30, to: 600 } : { at: when });
+          return when === "now" ? tf("Failure: {0}", t(failureById(id)?.name ?? id)) : tf("Armed: {0}", t(failureById(id)?.name ?? id));
+        },
+        clear: (id) => {
+          camera.a320Fail?.clear(camera.a320Props, id);
+          return tf("Cleared: {0}", t(failureById(id)?.name ?? id));
+        },
+        clearAll: () => {
+          camera.a320Fail?.clearAll(camera.a320Props);
+          camera.a320Gravity = false;
+          return t("Every failure cleared");
+        },
+        gravity: () => {
+          camera.a320Gravity = true;
+          return t("Gear gravity extension: the gear falls by its own weight");
+        },
+        marker: (p) => (deckMarker.at = p),
+        toast: (s) => panel.toast(s),
+      });
+      const root = document.createElement("div");
+      return {
+        el: root,
+        live() {
+          const v = fleet.active === "a320" ? airliner : space;
+          if (root.firstChild !== v.el) root.replaceChildren(v.el);
+          v.live();
+        },
+      };
+    },
     camera: camPanel!,
     sky: skyPanel,
     log: gameLog,
@@ -3737,6 +3794,9 @@ async function main() {
       },
       get a320Sys() {
         return camera.a320Sys;
+      },
+      get a320Ecam() {
+        return camera.a320Ecam;
       },
       onWheels: () => !!camera.rolling || !!camera.ourLanded,
     },
@@ -7905,6 +7965,12 @@ async function main() {
           // (its flight deck — from inside, its switches all the time: the side stick as the pilot moves it, the levers,
           // the pedals; the game's state on its switches — src/a320/deck.ts, deckgame.ts)
           deckSync(deckGame, deckPoser.props);
+          // (the ECAM's sounds until A12's: the master warning's repetitive chime as the game's warning, a caution's single
+          // chime as its notice)
+          if (camera.a320Ecam) {
+            for (const a of camera.a320Ecam.takeAurals()) if (a === "chime" && settings.sound) sound.play("notify");
+            sound.alarm("a320-master-warning", settings.sound && camera.a320Ecam.masterWarning, "warning");
+          }
           {
             const tq = th?.torque ?? [0, 0, 0];
             const c1 = (x: number) => Math.min(Math.max(x, -1), 1);
@@ -7935,6 +8001,14 @@ async function main() {
               duSet ??= renderer.a320Du = new DuSet(deckMesh.screens, deckMesh.texts, a320Mcdus());
               renderer.ship.updateDu(duSet.frame(performance.now() / 1000, duData(camera, settings, deckProps, dateOf(sim.time))));
             }
+            // (a checklist's item shown: a ring over its control — ui/a320page.ts)
+            const mk = renderer.a320Deck && deckMarker.at ? renderer.ship.cabinProject(deckMarker.at) : null;
+            if (mk && Math.abs(mk[0]) < 1.1 && Math.abs(mk[1]) < 1.1) {
+              const b = canvas.getBoundingClientRect();
+              deckMarker.el.style.display = "block";
+              deckMarker.el.style.left = `${b.left + ((mk[0] + 1) / 2) * b.width}px`;
+              deckMarker.el.style.top = `${b.top + ((1 - mk[1]) / 2) * b.height}px`;
+            } else deckMarker.el.style.display = "none";
           }
         }
         // (the F-35 chosen: its display's fonts, canvas and mips readied while the browser idles — no stall at the
@@ -8022,7 +8096,7 @@ async function main() {
           alerts: flightHud.alerts,
           now: performance.now(),
           auto: camera.pilot.auto,
-          gpws: gpwsOf(info, settings.groundAlerts),
+          gpws: gpwsOf(info, groundAlertsOf(settings.vessel, settings.groundAlerts)),
           tcas:
             settings.tcas === false
               ? undefined
