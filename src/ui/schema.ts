@@ -4641,6 +4641,22 @@ export const SCHEMA: ControlDef[] = [
     ],
   },
   {
+    key: "a320Start",
+    type: "choice",
+    section: "game",
+    group: "A320",
+    label: "On the ground: its state",
+    effect: "none",
+    enabled: (s) => s.ship && s.vessel === "a320",
+    help: "How the A320 waits when placed on the ground: cold and dark (everything off — the batteries, the APU, the IRS' alignment, the engines' start: the whole procedure), the APU running (the IRS aligned, the engines to start), or ready for take-off (the engines running).",
+    keywords: "a320 cold dark start apu engines procedure systems",
+    options: [
+      { value: "cold", label: "Cold and dark", hint: "Everything off: the whole procedure from the batteries" },
+      { value: "apu", label: "APU running", hint: "The APU and the IRS on: the engines to start" },
+      { value: "ready", label: "Ready for take-off", hint: "The engines running, the systems set" },
+    ],
+  },
+  {
     key: "netMenu",
     type: "toggle",
     section: "game",

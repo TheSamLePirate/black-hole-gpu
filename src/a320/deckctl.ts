@@ -13,7 +13,8 @@ import type { DeckHit, DeckPicker } from "./deckpick";
 
 type V3 = [number, number, number];
 
-/** A Nasal call of a binding's script: its function's path, its arguments (numbers, strings; NaN: not a literal). */
+/** A Nasal call of a binding's script: its function's path, its arguments (numbers, strings; an expression, not a
+ *  literal: its text after "=" — "=getprop(…) + 1", a knob turned: systems/nasal/util.ts knobArg). */
 export interface NasalCall {
   fn: string;
   args: (number | string)[];
@@ -50,7 +51,7 @@ export function nasalCalls(script: string): NasalCall[] {
           const t = a.trim();
           if (/^"[^"]*"$/.test(t)) return t.slice(1, -1);
           const n = Number(t);
-          return t !== "" && Number.isFinite(n) ? n : Number.NaN;
+          return t !== "" && Number.isFinite(n) ? n : `=${t}`;
         })
       : [];
     out.push({ fn, args });
@@ -142,7 +143,7 @@ export function runBindings(
         for (const c of nasalCalls(b.script ?? "")) {
           if (c.fn === "setprop") {
             const p = clean(String(c.args[0] ?? ""));
-            if (p && !p.startsWith("sim/sound/") && c.args[1] !== undefined && !Number.isNaN(c.args[1])) {
+            if (p && !p.startsWith("sim/sound/") && c.args[1] !== undefined && !String(c.args[1]).startsWith("=")) {
               P[p] = c.args[1]!;
               if (host.changed?.(p, P[p]!)) live = true;
             }

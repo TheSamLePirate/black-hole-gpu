@@ -6,7 +6,19 @@
 // and the moving parts (src/a320/pose.ts) read. Pure.
 
 import { type A320Surfaces, restSurfaces, rudderTravel } from "./aero";
-import { detentOf, type Engine, type EngineAir, leverN1, type Limits, limits, newEngine, stepEngine, thrustAt, n2Of } from "./fadec";
+import {
+  detentOf,
+  type Engine,
+  type EngineAir,
+  type EngineCtl,
+  leverN1,
+  type Limits,
+  limits,
+  newEngine,
+  stepEngine,
+  thrustAt,
+  n2Of,
+} from "./fadec";
 import { CONF, confOf } from "./pose";
 
 /** The tanks (FDE/A320-200-CFM.xml): the left outer and inner, the centre, the right inner and outer [kg]. */
@@ -56,6 +68,8 @@ export interface FcsInputs {
   alphaDot: number;
   /** the autothrust's N1 [%] (the FMGC's — its orders under the levers' limit): the levers' own when null */
   n1Cmd?: number | null;
+  /** each engine's starter and fuel cutoff (the systems' ignition — systems/index.ts); none: running as they are */
+  engineCtl?: [EngineCtl, EngineCtl] | null;
 }
 
 const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
@@ -97,6 +111,10 @@ export class A320Fcs {
   }
   setFuel(kg: number) {
     this.tanks = fillTanks(kg);
+  }
+  /** the engines running or stopped (a start state: cold and dark, the APU's — systems/index.ts) */
+  setEngines(running: boolean) {
+    this.engines = [newEngine(running), newEngine(running)];
   }
 
   step(i: FcsInputs) {
@@ -177,7 +195,7 @@ export class A320Fcs {
       rev > 0
         ? { n1: L1.idle + rev * (L1.mrev - L1.idle), reverse: rev }
         : { n1: auto ? Math.min(i.n1Cmd!, Math.max(leverN1(lever, L1, flex), i.n1Cmd!)) : leverN1(lever, L1, flex), reverse: 0 };
-    this.engines = this.engines.map((e) => stepEngine(e, want, i.air, dt)) as [Engine, Engine];
+    this.engines = this.engines.map((e, k) => stepEngine(e, want, i.air, dt, i.engineCtl?.[k])) as [Engine, Engine];
     this.thrust = this.engines.reduce((a, e) => a + e.thrust, 0);
     this.thrustMax = Math.max(2 * thrustAt(n2Of(L1.toga), i.air), 1);
     // ---- the fuel: each engine fed from its side (the centre's first, the inner's after; the outer's flowing into the

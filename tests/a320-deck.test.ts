@@ -247,6 +247,10 @@ describe("A320 flight deck's controls (A6)", () => {
     expect(deckWired(by("Landing gear"))).toBeTrue();
     expect(deckWired(by("Flaps"))).toBeTrue();
     expect(deckWired(by("Parking brake"))).toBeTrue();
-    expect(deckWired(by("ADR1 pushbutton"))).toBeFalse();
+    // (A10: the systems answer the overhead — the ADIRS, the APU, the batteries)
+    expect(deckWired(by("ADR1 pushbutton"))).toBeTrue();
+    expect(deckWired(by("APU master switch"))).toBeTrue();
+    expect(deckWired(by("Connect battery 1 to busses"))).toBeTrue();
+    expect(deckWired(by("Weather radar mode selector"))).toBeFalse();
   });
 });

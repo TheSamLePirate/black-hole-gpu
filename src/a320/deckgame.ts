@@ -10,6 +10,7 @@ import { t, tf } from "../i18n";
 import type { A320Fcs } from "./fcs";
 import type { DeckBinding, DeckControl } from "./deck";
 import { nasalCalls, type NasalCall } from "./deckctl";
+import { SYS_CALLS, sysProp } from "./systems";
 import type { Props } from "./rig";
 import type { Fmgc, FmgcIn } from "./fmgc/fmgc";
 import type { McduApi } from "./mcdu/types";
@@ -25,6 +26,8 @@ export interface DeckGame {
     a320Reverse: number;
     a320Park: boolean;
     a320: A320Fcs | null;
+    /** its systems (src/a320/systems): the Nasal calls the game does not answer go to them */
+    a320Sys?: { call(fn: string, args: (number | string)[]): boolean } | null;
     onWheels(): boolean;
   };
   setGear(down: boolean): void;
@@ -273,7 +276,8 @@ export function deckCall(g: DeckGame, P: Props, c: NasalCall): boolean {
       return true;
     }
   }
-  return false;
+  // (the systems' own: the APU's START, the ADIRS's knobs, the fire's buttons…)
+  return C.a320Sys?.call(c.fn, c.args) ?? false;
 }
 
 /** A property set by the deck: true if the game follows it. */
@@ -381,14 +385,21 @@ export function deckExterior(P: Props) {
 }
 
 /** Whether the game answers a control (one of its bindings: a call it does, a property it follows). */
+const norm = (p: string) => p.replace(/^\//, "").replace(/\[0\]/g, "");
+
 export function deckWired(c: DeckControl): boolean {
   const all: DeckBinding[] = c.actions.flatMap((a) => [...a.bindings, ...(a.up ?? [])]);
   return all.some((b) =>
     b.command === "nasal"
       ? nasalCalls(b.script ?? "").some(
-          (x) => CALLS.has(x.fn) || FCU.test(x.fn) || x.fn.startsWith("mcdu.") || (x.fn === "setprop" && FOLLOWED.has(String(x.args[0]))),
+          (x) =>
+            CALLS.has(x.fn) ||
+            FCU.test(x.fn) ||
+            x.fn.startsWith("mcdu.") ||
+            SYS_CALLS.test(x.fn) ||
+            (x.fn === "setprop" && (FOLLOWED.has(String(x.args[0])) || sysProp(String(x.args[0])))),
         )
-      : !!b.property && FOLLOWED.has(b.property.replace(/^\//, "").replace(/\[0\]/g, "")),
+      : !!b.property && (FOLLOWED.has(norm(b.property)) || sysProp(norm(b.property))),
   );
 }
 

@@ -16,6 +16,7 @@ import { DeckTexts } from "./texts";
 import { McduDisplay } from "./mcdu";
 import type { Mcdu } from "../mcdu/mcdu";
 import type { DeckText } from "../deck";
+import type { Props } from "../rig";
 
 const SIZE = 1024;
 
@@ -39,6 +40,30 @@ function loadFont(): Promise<void> {
       console.error("A320 ECAM font:", e);
     }
   })());
+}
+
+/** Each display's bus (the A320's: the captain's PFD and the E/WD on AC ESS, the first officer's and the SD on AC 2, the
+ *  ISIS on DC ESS, the FCU's windows on DC ESS — src/a320/systems): dark while it is not powered. */
+const BUS: Record<string, string> = {
+  PFD1: "ac-ess",
+  ND1: "ac-1",
+  UECAM: "ac-ess",
+  LECAM: "ac-2",
+  ND2: "ac-2",
+  PFD2: "ac-2",
+  IESI: "dc-ess",
+  DCDU1: "dc-1",
+  DCDU2: "dc-2",
+  MCDU1: "ac-ess-shed",
+  MCDU2: "ac-2",
+  TEXTS: "dc-ess",
+};
+
+/** a display's bus powered (none given — no systems run —: powered) */
+export function duPowered(P: Props | undefined, name: string): boolean {
+  const b = BUS[name];
+  const v = b ? P?.[`systems/electrical/bus/${b}`] : undefined;
+  return v === undefined || Number(v) > (b!.startsWith("dc") ? 20 : 100);
 }
 
 export class DuSet {
@@ -119,7 +144,7 @@ export class DuSet {
       ctx.fillStyle = "#000";
       ctx.fillRect(0, 0, SIZE, SIZE);
       if (this.testPattern) testPattern(ctx, u.name);
-      else if (data?.powered) {
+      else if (data?.powered && duPowered(data.deck, u.name)) {
         try {
           const t0 = performance.now();
           u.d.draw(ctx, data, now);

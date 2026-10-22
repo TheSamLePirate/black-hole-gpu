@@ -26,6 +26,7 @@ const CLEAR = new Set([122, 127, 128, 129, 134]);
 
 export class DeckPicker {
   private parts: { bvh: TriBVH; tris: Uint32Array }[] | null = null;
+  private ctlObj: Set<number> | null = null;
 
   constructor(private m: DeckMesh) {}
 
@@ -81,7 +82,12 @@ export class DeckPicker {
     if (!this.parts) this.build();
     const m = this.m;
     const e: V3 = [o[0] + d[0] * far, o[1] + d[1] * far, o[2] + d[2] * far];
-    let best: { t: number; tri: number; u: number; v: number } | null = null;
+    type Hit = { t: number; tri: number; u: number; v: number };
+    let best = null as Hit | null;
+    // (the nearest control's face too: a button flush with its panel — FlightGear's APU MASTER and START sit 0.6 mm
+    // under the overhead's face — is the one seen and clicked when within 3 mm behind a face no control's)
+    let ctl = null as Hit | null;
+    const ctlObj = (this.ctlObj ??= new Set(m.controls.flatMap((c) => c.objects.map((o) => m.objects.indexOf(o)))));
     this.parts!.forEach((P, p) => {
       if (!P) return;
       let a = o,
@@ -93,10 +99,15 @@ export class DeckPicker {
         b = apply(inv, e);
       }
       const h = P.bvh.segment(a, b);
-      if (h && (!best || h.t < best.t)) best = { t: h.t, tri: P.tris[h.tri]!, u: h.u, v: h.v };
+      if (!h) return;
+      const hit = { t: h.t, tri: P.tris[h.tri]!, u: h.u, v: h.v };
+      if (!best || h.t < best.t) best = hit;
+      if (ctlObj.has(m.triObj[hit.tri]!) && (!ctl || h.t < ctl.t)) ctl = hit;
     });
     if (!best) return null;
-    const B = best as { t: number; tri: number; u: number; v: number };
+    let B: Hit = best;
+    const C = ctl as Hit | null;
+    if (C && !ctlObj.has(m.triObj[B.tri]!) && (C.t - B.t) * far < 0.003) B = C;
     const t = B.t * far;
     const i0 = m.idx[3 * B.tri]!,
       i1 = m.idx[3 * B.tri + 1]!,

@@ -74,4 +74,14 @@ export default {
   "AP1: 100 ft up, 5 s after the lift-off": "AP1 : à 100 ft, 5 s après le décollage",
   "MCDU: keyboard mode off": "MCDU : saisie au clavier coupée",
   "MCDU: keyboard mode — type into it, Escape to leave": "MCDU : saisie au clavier — tapez, Échap pour en sortir",
+  // (the systems: A10)
+  "On the ground: its state": "Au sol : son état",
+  "How the A320 waits when placed on the ground: cold and dark (everything off — the batteries, the APU, the IRS' alignment, the engines' start: the whole procedure), the APU running (the IRS aligned, the engines to start), or ready for take-off (the engines running).":
+    "Comment l'A320 attend une fois posé au sol : froid et éteint (tout coupé — les batteries, l'APU, l'alignement des IRS, le démarrage des moteurs : toute la procédure), l'APU en marche (les IRS alignées, les moteurs à démarrer), ou prêt au décollage (les moteurs tournent).",
+  "Cold and dark": "Froid et éteint",
+  "Everything off: the whole procedure from the batteries": "Tout coupé : toute la procédure depuis les batteries",
+  "APU running": "APU en marche",
+  "The APU and the IRS on: the engines to start": "L'APU et les IRS en marche : les moteurs à démarrer",
+  "Ready for take-off": "Prêt au décollage",
+  "The engines running, the systems set": "Les moteurs tournent, les systèmes réglés",
 };

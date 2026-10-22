@@ -56,6 +56,10 @@ import { advanceFrameClock } from "./frameclock";
 import type { FlightPhase } from "./game/phase";
 import type { Pwa } from "./pwa";
 import type { GameMode, ModeState } from "./game/modes";
+import { DeckPicker } from "./a320/deckpick";
+
+/** the A320 deck's picker (a320DeckAt: the controls seen from the seat) */
+let deckPick: DeckPicker | null = null;
 
 export interface BhContext {
   /** the boot's timeline (boot-timeline.ts): its stages, the main thread's long tasks and frame gaps */
@@ -428,7 +432,34 @@ export function installBh(c: BhContext) {
               n++;
             }
         if (!n) return null;
-        const q = p.map((x) => x / n) as [number, number, number];
+        let q = p.map((x) => x / n) as [number, number, number];
+        // (its middle hidden from the captain's eye — a button sunk in its bezel, seen aslant —: a point of its face
+        // that is seen, toward one of its corners)
+        const eye: [number, number, number] = [0.45, 3.22, 16.193];
+        const seen = (x: [number, number, number]) => {
+          const d = x.map((v, k) => v - eye[k]!) as [number, number, number];
+          const l = Math.hypot(...d);
+          const h = (deckPick ??= new DeckPicker(m)).pick(eye, d.map((v) => v / l) as [number, number, number], mats);
+          return !!h && c.objects.includes(h.object);
+        };
+        if (!seen(q))
+          for (let t = 0; t < m.triObj.length; t++) {
+            if (m.triObj[t] !== o) continue;
+            const v = m.idx[3 * t]!;
+            const r = 12 * Math.floor(m.verts[10 * v + 7]!);
+            const w = [0, 1, 2].map(
+              (j) =>
+                mats[r + 4 * j]! * m.verts[10 * v]! +
+                mats[r + 4 * j + 1]! * m.verts[10 * v + 1]! +
+                mats[r + 4 * j + 2]! * m.verts[10 * v + 2]! +
+                mats[r + 4 * j + 3]!,
+            );
+            const x = q.map((u, k) => 0.4 * u + 0.6 * w[k]!) as [number, number, number];
+            if (seen(x)) {
+              q = x;
+              break;
+            }
+          }
         return { p: q, ndc: renderer.ship.cabinProject(q) };
       },
       cockpitControlAt: (id: string) => {

@@ -2692,6 +2692,8 @@ async function main() {
   /** the A320's moving parts (src/a320/pose.ts): FlightGear's properties its rig reads */
   const a320Poser = new A320Poser();
   const deckPoser = new DeckPoser();
+  // (one bag for the deck and the systems: its switches, the systems' buses, its displays — controller/a320.ts)
+  deckPoser.props = Object.assign(camera.a320Props, deckPoser.props);
   /** the A320's displays (src/a320/du), made with the deck's first look */
   let duSet: DuSet | null = null;
   /** the F-35's flight controls' inputs this frame (the network sends its commands — ui/netsession.ts) */
@@ -3732,6 +3734,9 @@ async function main() {
       },
       get a320() {
         return camera.a320;
+      },
+      get a320Sys() {
+        return camera.a320Sys;
       },
       onWheels: () => !!camera.rolling || !!camera.ourLanded,
     },
@@ -7916,7 +7921,8 @@ async function main() {
               speedBrake: camera.airBrake,
               spoilersArmed: !!camera.groundSpoilers,
               parkBrake: camera.a320Park,
-              powered: true,
+              // (the buses: the systems', once they run)
+              powered: camera.a320Sys ? undefined : true,
             });
             renderer.a320Deck = settings.shipMount === "cockpit" || settings.shipMount === "cabin" ? deckProps : null;
             // (the control under the pointer lit: its objects — ship.ts deckHover)

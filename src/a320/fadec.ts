@@ -131,8 +131,10 @@ export function leverN1(lever: number, L: Limits, flex = false): number {
 
 /** One engine's state. */
 export interface Engine {
-  /** running (lit), its N1 and N2 [%], EGT [°C], fuel flow [kg/s], thrust [N] (< 0 reversed), the reverser's doors 0…1 */
+  /** running (lit), its N1 and N2 [%], EGT [°C], fuel flow [kg/s], thrust [N] (< 0 reversed), the reverser's doors 0…1;
+   *  starting (the fuel lit, spooling up to idle) */
   running: boolean;
+  starting?: boolean;
   n1: number;
   n2: number;
   egt: number;
@@ -189,9 +191,57 @@ export const n2Of = (n1: number) => IDLE_N2 + ((n1 - IDLE_N1) * N2F) / N1F;
  * reverse N1, once the doors are open), its doors, its thrust (reversed: its reverse flow's share against the motion),
  * EGT, its fuel flow.
  */
-export function stepEngine(e: Engine, want: { n1: number; reverse: number }, a: EngineAir, dt: number): Engine {
+/** The engine's start and stop (FGTurbine's phases): the starter (its air valve open) and the fuel's cutoff, as
+ *  FlightGear's ignition system sets them (Systems/a320-ignition.xml: systems/ignition/starter-jsb-1, cutoff-jsb-1). */
+export interface EngineCtl {
+  starter: boolean;
+  cutoff: boolean;
+}
+
+const START = {
+  ignN1: E.ignitionn1 as unknown as number,
+  ignN2: E.ignitionn2 as unknown as number,
+  spinN1: E.n1spinup as unknown as number,
+  spinN2: E.n2spinup as unknown as number,
+  rateN1: E.n1startrate as unknown as number,
+  rateN2: E.n2startrate as unknown as number,
+};
+
+export function stepEngine(e: Engine, want: { n1: number; reverse: number }, a: EngineAir, dt: number, ctl?: EngineCtl): Engine {
   const out = { ...e };
-  if (!e.running) {
+  const seekTo = (x: number, to: number, up: number, down: number) => (x < to ? Math.min(x + up * dt, to) : Math.max(x - down * dt, to));
+  // (the fuel cut: the engine stops — spooling down —; a start: FGTurbine's — the starter spins N2 to its ignition's 28.5 %,
+  // the fuel lit past 15 % of N2 then both spools up to idle at their start rates, the EGT up to TAT + 363 °C)
+  if (ctl) {
+    if (ctl.cutoff) {
+      out.running = false;
+      out.starting = false;
+    }
+    if (!out.running && !ctl.cutoff && e.n2 > 15) {
+      out.starting = true;
+      out.n1 = seekTo(e.n1, IDLE_N1, START.rateN1, 1);
+      out.n2 = seekTo(e.n2, IDLE_N2, START.rateN2, 1);
+      // (the EGT's start peak — some 650 °C on a CFM56-5B, about 42 % of N2 —, then back to idle's: lit, it rises fast)
+      const hump = 300 * Math.exp(-(((out.n2 - 42) / 11) ** 2));
+      out.egt = seekTo(e.egt, a.tatC + 363.1 + hump, 50, 7.3);
+      out.ff = ((107 * MIL_LBF ** 0.2 * LB) / 3600) * Math.min(e.n2 / IDLE_N2, 1);
+      out.thrust = thrustAt(out.n2, a, 0) * Math.max((out.n2 - 40) / (IDLE_N2 - 40), 0);
+      out.rev = Math.max(e.rev - dt / 2, 0);
+      if (out.n2 >= IDLE_N2 - 0.05 && out.n1 >= IDLE_N1 - 0.05) {
+        out.running = true;
+        out.starting = false;
+      }
+      return out;
+    } else if (!out.running && ctl.starter) {
+      out.n1 = seekTo(e.n1, START.ignN1, START.spinN1, 1);
+      out.n2 = seekTo(e.n2, START.ignN2, START.spinN2, 1);
+      out.thrust = 0;
+      out.ff = 0;
+      out.egt = e.egt + (Math.max(a.tatC, 15) - e.egt) * Math.min(dt / 30, 1);
+      return out;
+    }
+  }
+  if (!out.running) {
     // (spooling down — windmilling: N1 about a tenth of the airspeed's share)
     out.n1 = Math.max(e.n1 - 9.5 * dt, Math.min(a.mach * 30, e.n1));
     out.n2 = Math.max(e.n2 - 9.5 * dt, 0);

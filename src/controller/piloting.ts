@@ -211,6 +211,7 @@ function newFlight(this: CameraController) {
   this.pilot.newFlight();
   // (the A320's systems made again with its next frame: its fuel the fleet's)
   this.a320 = null;
+  this.a320Sys = null;
   this.a320Reverse = 0;
   this.a320Park = false;
   this.a320Fmgc = this.a320FmgcIn = this.a320FmgcOut = this.a320Ils = null;

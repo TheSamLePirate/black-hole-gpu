@@ -1108,6 +1108,10 @@ export class CameraController {
   a320FmgcIn: import("./a320/fmgc/fmgc").FmgcIn | null = null;
   a320FmgcOut: import("./a320/fmgc/fmgc").FmgcOut | null = null;
   a320Ils: import("./game/ils").IlsRunway | null = null;
+  /** the A320's systems (src/a320/systems — controller/a320.ts): made with its first frame on its deck's bag, which
+   *  stays across flights (main.ts shares it with the deck's controls and displays) */
+  a320Sys: import("./a320/systems").A320Systems | null = null;
+  a320Props: import("./a320/rig").Props = {};
   /** the A320's reverse lever 0…1 (its thrust reversers: on the ground, the levers at idle) */
   a320Reverse = 0;
   /** the A320's parking brake (its deck's handle — src/a320/deckgame.ts) */

@@ -2,7 +2,9 @@
 // tanks the fleet's fuel), their configuration given to its aerodynamics; the pilot's own A320 controls — the thrust
 // reversers (⇧Z: the afterburner's key on the F-35), the autobrake (⇧B: the STOVL's), the brakes it applies.
 
+import { detentOf } from "../a320/fadec";
 import { A320Fcs } from "../a320/fcs";
+import { A320Systems, type StartState, type SysFrame } from "../a320/systems";
 import { fleet } from "../fleet";
 import { t, tf } from "../i18n";
 import { VESSELS } from "../vessels";
@@ -21,11 +23,22 @@ const AB_NAMES = ["OFF", "LO", "MED", "MAX"];
 /** The systems over a frame of flight time dt [s]: the effort the computer asked last frame, the levers, the flaps,
  *  the speed brakes, the gear; their configuration given to the aerodynamics. */
 function a320Step(this: CameraController, dt: number, onWheels: boolean): A320Fcs {
+  let fresh = false;
   if (!this.a320) {
     this.a320 = new A320Fcs();
     this.a320.setFuel(fleet.fuel.a320 ?? VESSELS.a320.fuelKg ?? 8000);
+    fresh = true;
   }
   const A = this.a320;
+  // (its systems — src/a320/systems —, made with it: on the ground as the settings start it — cold and dark, the
+  // APU's, ready —, in flight running; the engines the FADEC's as they are)
+  if (!this.a320Sys || fresh) {
+    const state: StartState = onWheels ? (this.s.a320Start ?? "ready") : "air";
+    A.setEngines(state === "ready" || state === "air");
+    this.a320Sys = new A320Systems(this.a320Props);
+    this.a320Sys.reset(state, sysFrame(this, A, onWheels));
+  }
+  this.a320Sys.step(dt, sysFrame(this, A, onWheels));
   // (the FLEX temperature: the MCDU's PERF TAKE OFF — fmgc/fms.ts)
   A.flexTemp = this.a320Fmgc?.fms.flex ?? null;
   // (the fuel changed by another — a refuelling, a flight prepared —: the tanks filled again)
@@ -48,6 +61,8 @@ function a320Step(this: CameraController, dt: number, onWheels: boolean): A320Fc
     lever: this.pilot.throttle,
     // (the autothrust's N1 — the FMGC's last frame's: controller/a320ap.ts)
     n1Cmd: this.a320FmgcOut?.n1Cmd ?? null,
+    // (the engines' starters and fuel: the ignition's — its ENG MASTERs, ENG MODE)
+    engineCtl: this.a320Sys.engineCtl(),
     reverse,
     flapLever: Math.round((this.airFlight.cfg.flaps ?? 0) * 4),
     speedBrake: this.airBrake,
@@ -70,6 +85,40 @@ function a320Step(this: CameraController, dt: number, onWheels: boolean): A320Fc
   });
   this.airFlight.cfg.a320 = A.surfaces;
   return A;
+}
+
+const DETENT = ["IDLE", "MAN", "CL", "MAN", "MCT", "MAN", "TOGA"];
+
+/** The flight's figures for the systems (src/a320/systems/sysinputs.ts). */
+function sysFrame(c: CameraController, A: A320Fcs, onWheels: boolean): SysFrame {
+  const L = c.airFlight.last;
+  const g = c.geoNow();
+  const air = L?.air;
+  const T = air?.T ?? 288.15;
+  const V = L?.speed ?? 0;
+  const agl = c.airFlight.cfg.agl !== undefined ? (c.airFlight.cfg.agl - 1.59) / 0.3048 : 10000;
+  return {
+    elapsed: 0,
+    lat: g?.lat ?? 0,
+    lon: g?.lon ?? 0,
+    altFt: (g?.alt ?? 0) / 0.3048,
+    aglFt: onWheels ? 0 : agl,
+    vsFpm: ((g?.vs ?? 0) / 0.3048) * 60,
+    onGround: onWheels,
+    gear: c.gearExt,
+    ias: Math.sqrt((2 * (L?.out.q ?? 0)) / 1.225) * 1.9438,
+    gs: (g?.gs ?? 0) * 1.9438,
+    mach: L?.out.mach ?? 0,
+    tatC: T + (V * V) / 2009 - 273.15,
+    oatC: T - 273.15,
+    staticInHg: ((air?.rho ?? 1.225) * 287.05 * T) / 3386.39,
+    alphaDeg: ((L?.out.alpha ?? 0) * 180) / Math.PI,
+    flapDeg: A.surfaces.flap,
+    slatDeg: A.surfaces.slat,
+    engines: A.engines,
+    tanks: A.tanks,
+    detent: DETENT[detentOf(c.pilot.throttle)]!,
+  };
 }
 
 /** ⇧Z: the reversers deployed (on the ground, the levers at idle: full reverse) or stowed. */
