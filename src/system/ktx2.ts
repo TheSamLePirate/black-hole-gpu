@@ -86,7 +86,9 @@ export function writeLevels(
   height: number,
   target: KtxTarget,
   layer = 0,
+  origin: [number, number] = [0, 0],
 ) {
+  // (written into a cell of the layer — its origin halved with each level —: the levels the cell holds)
   const n = Math.min(levels.length, tex.mipLevelCount);
   for (let l = 0; l < n; l++) {
     const w = Math.max(1, width >> l),
@@ -97,7 +99,7 @@ export function writeLevels(
     // (a level smaller than a block: the copy covers the whole block)
     const size = block ? [Math.ceil(w / 4) * 4, Math.ceil(h / 4) * 4] : [w, h];
     device.queue.writeTexture(
-      { texture: tex, mipLevel: l, origin: [0, 0, layer] },
+      { texture: tex, mipLevel: l, origin: [origin[0] >> l, origin[1] >> l, layer] },
       levels[l]! as Uint8Array<ArrayBuffer>,
       { bytesPerRow, rowsPerImage: rows },
       [size[0]!, size[1]!, 1],

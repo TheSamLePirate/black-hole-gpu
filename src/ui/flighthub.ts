@@ -13,7 +13,7 @@ import { newPlan } from "../game/flightplan";
 import { SITES } from "../game/sites";
 import { t, tf, tr } from "../i18n";
 import type { Settings } from "../settings";
-import { VESSELS } from "../vessels";
+import { isAircraft, VESSELS } from "../vessels";
 import type { WeatherPreset } from "../weather";
 import { button, el as h, modal } from "./kit";
 
@@ -251,7 +251,7 @@ export function prepareFlight(H: HubHost, o: FlightSetup): string {
   if (!F) throw new Error(`no airfield "${o.field}"`);
   const start = o.start ?? "runway",
     hour = o.hour ?? "now";
-  if (fleet.active !== "f35") T.set("vessel", "f35");
+  if (!isAircraft(fleet.active)) T.set("vessel", "f35");
   if (hour !== "now") {
     // (the airfield's mean solar hour → UTC, on the scene's day)
     const day = T.date().slice(0, 10);

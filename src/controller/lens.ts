@@ -11,6 +11,7 @@ import type { CameraController } from "../controls";
 import { TELE_MIN, clamp } from "./util";
 import { freeCameraKeys } from "../input/bindings";
 import { fleet } from "../fleet";
+import { isAircraft } from "../vessels";
 import { JETPAD } from "../input/jetpad";
 import { shipToCamera } from "../mounts";
 
@@ -179,7 +180,7 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   const spacePadOn =
     !!pad &&
     !!pad.held &&
-    fleet.active !== "f35" &&
+    !isAircraft(fleet.active) &&
     this.piloting &&
     !this.spectator &&
     !this.character.active &&

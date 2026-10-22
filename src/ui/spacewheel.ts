@@ -3,7 +3,7 @@
 // docking, its fleet), each craft its own: the Endurance's ring, the Lander's descent, the Ranger's aircraft entries
 // only while it flies as a plane. Pure: the state and the actions in, the wheel's items out (ui/wheel.ts draws them).
 
-import type { VesselId } from "../vessels";
+import type { SpacecraftId, VesselId } from "../vessels";
 import type { Auto, Hold } from "../pilot";
 import type { WheelItem } from "./wheel";
 
@@ -12,7 +12,7 @@ export type ComputerTab = "orbit" | "target" | "land" | "mission";
 
 /** What the wheel reads of the flight now. */
 export interface SpaceWheelState {
-  vessel: Exclude<VesselId, "f35">;
+  vessel: SpacecraftId;
   /** the Ranger flown as a plane in the air (its aircraft entries back) */
   planeMode: boolean;
   /** the craft lands (the Lander, the Ranger): its gear, its descent */

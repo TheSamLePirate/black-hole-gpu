@@ -452,7 +452,15 @@ export class PlanetCharacter {
     return !!h && capsuleInHull(h, q, this.up(q), radius, height);
   }
   private accessOffset() {
-    return this.c.s.vessel === "endurance" ? 75 : this.c.s.vessel === "lander" ? 13 : this.c.s.vessel === "f35" ? 8 : 9;
+    return this.c.s.vessel === "endurance"
+      ? 75
+      : this.c.s.vessel === "lander"
+        ? 13
+        : this.c.s.vessel === "f35"
+          ? 8
+          : this.c.s.vessel === "a320"
+            ? 12
+            : 9;
   }
   accessDistance() {
     if ((this.c.ourLanded?.body ?? this.c.local?.F.id) !== this.body) return Infinity;

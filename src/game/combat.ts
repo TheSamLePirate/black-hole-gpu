@@ -232,7 +232,7 @@ export interface Target {
     phi?: number;
     av?: number;
   };
-  /** the mesh it is drawn with (a mission's airliner: "a320"; else the F-35's) */
+  /** the mesh it is drawn with (a mission's airliner: "a320t"; else the F-35's) */
   mesh?: string;
   /** neither friend nor foe (a mission's airliner, until it turns hostile); its transponder off */
   neutral?: boolean;
@@ -429,7 +429,7 @@ export class CombatWorld {
       diedAt: NaN,
       rcs: S.rcs,
       friendly: s.friendly,
-      mesh: s.mesh ?? (airliner ? "a320" : undefined),
+      mesh: s.mesh ?? (airliner ? "a320t" : undefined),
       ai: air
         ? {
             mode: airliner ? "course" : "patrol",

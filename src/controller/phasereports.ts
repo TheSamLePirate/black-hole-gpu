@@ -64,7 +64,7 @@ function curveOf(key: RecKey, t0: number, k = 1): [number, number][] {
 /** One frame's watch (main.ts each frame, with the flight's status; a spacecraft's only). */
 function phaseReportStep(this: CameraController, st: RangerStatus | null) {
   const P = (this.phaseRep ??= { ascent: null, rdv: null, entry: null, circ: null, landed: false, auto: "none" });
-  if (fleet.active === "f35" || !this.piloting || cameraFrame(this.s).region === "hole") return;
+  if (fleet.active === "f35" || fleet.active === "a320" || !this.piloting || cameraFrame(this.s).region === "hole") return;
   const report = (r: NonNullable<Parameters<NonNullable<CameraController["onFlightReport"]>>[0]>, curve?: NonNullable<typeof r.curve>) =>
     this.onFlightReport?.(curve && curve.pts.length > 2 ? { ...r, curve } : r);
   const t = this.nowTime() * M_SECONDS;

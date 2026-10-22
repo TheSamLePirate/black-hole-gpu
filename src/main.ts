@@ -24,6 +24,7 @@ import type { MapBody } from "./ui/mapview";
 import { poseData } from "./cockpit/controls";
 import { GEARS } from "./gear";
 import { JetPoser } from "./f35/pose";
+import { A320Poser, CONF, confOf } from "./a320/pose";
 import { Pcd } from "./f35/pcd";
 import { pcdData } from "./f35/cockpit";
 import { alertsOf } from "./ui/hud/alerts";
@@ -150,7 +151,7 @@ import { fleet, fleetSpinStart, fleetStart } from "./fleet";
 import { recorder } from "./game/recorder";
 import { shownSpeed } from "./ui/hud/model";
 import { CockpitScreens, tabAt } from "./ui/cockpitscreens";
-import { VESSEL_IDS, VESSELS, type VesselId } from "./vessels";
+import { isAircraft, type SpacecraftId, VESSEL_IDS, VESSELS } from "./vessels";
 import { FlightHud } from "./ui/flighthud";
 import { AUTO_NAMES, HOLD_NAMES, type Auto, type Hold } from "./pilot";
 import { Mission } from "./mission";
@@ -817,6 +818,7 @@ async function main() {
       refreshGui();
     }
     if (keys.includes("rotation")) camera.setRotation(settings.rotation);
+    if (keys.includes("a320Livery")) renderer.ship.setA320Livery(settings.a320Livery);
     if (keys.includes("target")) {
       const want = settings.target;
       settings.target = previousTarget;
@@ -1897,7 +1899,8 @@ async function main() {
     // where the scene puts it — or, "fleet", where the fleet's start has it
     setMountVessel(settings.vessel);
     const starts = pose === "fleetSpin" ? fleetSpinStart(sim.time) : fleetStart(sim.time, settings.vessel);
-    if ((pose === "fleet" || pose === "fleetSpin") && settings.ship && settings.vessel !== "f35") camera.flyFrom(starts[settings.vessel]);
+    if ((pose === "fleet" || pose === "fleetSpin") && settings.ship && !isAircraft(settings.vessel))
+      camera.flyFrom(starts[settings.vessel]);
     // (by Gargantua, the Ranger beside the Endurance: 150 m off its fore port — controller/holeendurance.ts)
     if (pose === "enduranceHole" && settings.ship) {
       camera.placeByHoleEndurance(150, sim.time);
@@ -2637,7 +2640,7 @@ async function main() {
   function pilotSas() {
     camera.pilot.sas = !camera.pilot.sas;
     // (a spacecraft's level that imposes it: said so — Settings › Spacecraft)
-    const lv = fleet.active === "f35" ? "realistic" : settings.spaceAssist;
+    const lv = isAircraft(fleet.active) ? "realistic" : settings.spaceAssist;
     if (lv === "manual") return panel.toast(t("Manual assistance: no SAS — the turn kept until stopped by hand (Settings › Spacecraft)"));
     if (lv === "assisted" || lv === "beginner") return panel.toast(t("SAS always on at this assistance (Settings › Spacecraft)"));
     panel.toast(camera.pilot.sas ? t("SAS on") : t("SAS off"));
@@ -2677,6 +2680,8 @@ async function main() {
   const cockpitTravel = new ControlTravel();
   /** the F-35's moving parts, eased at their actuators' rates (src/f35/pose.ts) */
   const jetPoser = new JetPoser();
+  /** the A320's moving parts (src/a320/pose.ts): FlightGear's properties its rig reads */
+  const a320Poser = new A320Poser();
   /** the F-35's flight controls' inputs this frame (the network sends its commands — ui/netsession.ts) */
   let jetIn: JetInputs | null = null;
   /** the F-35's panoramic cockpit display (src/f35/pcd.ts) */
@@ -3314,7 +3319,7 @@ async function main() {
           played: playedMs,
           savedAt: tools.savedAt,
           room: netPanel.net?.room?.code ?? null,
-          tips: mode === "ship" && settings.vessel === "f35" ? "jet" : mode,
+          tips: mode === "ship" && isAircraft(settings.vessel) ? "jet" : mode,
         };
       },
       toast: (t) => panel.toast(t),
@@ -3335,11 +3340,11 @@ async function main() {
   };
 
   // the keyboard: input/keymap.ts says which key does what (and draws the help); here, what it does
-  /** The F-35 flown: a rocket's functions (orbital holds, roll alignment, the orbital autopilots, the
-   *  antigravity) are not its own — said, not done. */
+  /** An aircraft flown (the F-35, the A320): a rocket's functions (orbital holds, roll alignment, the orbital
+   *  autopilots, the antigravity) are not its own — said, not done. */
   const jetOnly = () => {
-    if (!camera.piloting || fleet.active !== "f35") return false;
-    panel.toast(t("Not on the F-35: a spacecraft's function"));
+    if (!camera.piloting || !isAircraft(fleet.active)) return false;
+    panel.toast(fleet.active === "f35" ? t("Not on the F-35: a spacecraft's function") : t("Not on the A320: a spacecraft's function"));
     return true;
   };
   const keyActions: Record<KeyAction, (e: KeyboardEvent, arg?: string) => void> = {
@@ -3402,13 +3407,15 @@ async function main() {
       // the flight law in the air: rocket → plane → the sci-fi flight computer
       const V = VESSELS[fleet.active];
       if (!V.flies) panel.toast(tf("The {0} is no aircraft: it flies as a rocket", V.name));
-      // (the F-35: a fighter, flown by its own flight control laws — no rocket's, no sci-fi computer's)
-      else if (fleet.active === "f35") {
+      // (an aircraft — the F-35, the A320 —: flown by its own flight control laws — no rocket's, no sci-fi computer's)
+      else if (isAircraft(fleet.active)) {
         if (settings.flightMode !== "plane") {
           settings.flightMode = "plane";
           onSettingsChange(["flightMode"]);
         }
-        panel.toast(t("The F-35 flies by its own flight control laws"));
+        panel.toast(
+          fleet.active === "f35" ? t("The F-35 flies by its own flight control laws") : t("The A320 flies by its own flight control laws"),
+        );
       } else {
         const order: Settings["flightMode"][] = ["rocket", "plane", "sf"];
         settings.flightMode = order[(order.indexOf(settings.flightMode) + 1) % 3]!;
@@ -3428,6 +3435,15 @@ async function main() {
     },
     flaps: () => {
       const cfg = camera.airFlight.cfg;
+      // (the A320's lever: 0, 1, 2, 3, FULL — 1 is 1+F on the ground —, each press a notch, FULL back to 0)
+      if (fleet.active === "a320") {
+        const lever = (Math.round((cfg.flaps ?? 0) * 4) + 1) % 5;
+        cfg.flaps = lever / 4;
+        // (the equivalent airspeed from the dynamic pressure [kt])
+        const ias = Math.sqrt((2 * (camera.airFlight.last?.out.q ?? 0)) / 1.225) * 1.9438;
+        const c = CONF[confOf(lever, ias, !!camera.rolling || !!camera.ourLanded)]!;
+        return panel.toast(tf("Flaps {0}", c.name));
+      }
       cfg.flaps = cfg.flaps === 0.5 ? 1 : cfg.flaps === 1 ? 0 : 0.5;
       panel.toast(cfg.flaps === 0 ? t("Flaps up") : cfg.flaps === 0.5 ? t("Flaps half") : t("Flaps full"));
     },
@@ -3528,7 +3544,7 @@ async function main() {
     target: (e) =>
       camera.combat?.status === "run"
         ? combatSay(camera.combatTrigger("lock"))
-        : camera.piloting && fleet.active === "f35"
+        : camera.piloting && isAircraft(fleet.active)
           ? undefined
           : nextTarget(e.shiftKey ? -1 : 1),
     png: () => savePNG(),
@@ -4256,7 +4272,7 @@ async function main() {
     const hole = cameraFrame(settings).region === "hole";
     const near = hole ? new Set(camera.holeCrafts(camera.viewTime()).map((q) => q.id)) : null;
     const vessels = VESSEL_IDS.filter(
-      (v) => v !== "f35" && (!near || v === fleet.active || fleet.assembly(fleet.active).includes(v) || near.has(v)),
+      (v) => !isAircraft(v) && (!near || v === fleet.active || fleet.assembly(fleet.active).includes(v) || near.has(v)),
     ).map((id) => ({ id, name: VESSELS[id].name }));
     const flipSetting = (k: "navLights" | "landingLights") => {
       settings[k] = !settings[k];
@@ -4265,7 +4281,7 @@ async function main() {
     };
     return spaceWheel(
       {
-        vessel: fleet.active as Exclude<VesselId, "f35">,
+        vessel: fleet.active as SpacecraftId,
         planeMode: !!V.flies && settings.flightMode === "plane",
         lands: V.lands,
         sas: P.sas,
@@ -4799,7 +4815,7 @@ async function main() {
   const missionPlan = new MissionPlanPanel({ camera, toast: (s) => panel.toast(s), planner: () => openMissions() });
   /** ⇧O: the F-35's — or a craft flown as a plane in the air — flight plan; a spacecraft's mission plan */
   const openPlan = () =>
-    fleet.active === "f35" || (camera.jetFigures() && camera.airFlight.inAir) ? routePanel.open() : missionPlan.open();
+    isAircraft(fleet.active) || (camera.jetFigures() && camera.airFlight.inAir) ? routePanel.open() : missionPlan.open();
   // a flight prepared (ui/flighthub.ts): the F-35 at an airfield, its hour, its weather, its fuel, its plan
   const hubHost: HubHost = {
     tools,
@@ -7597,7 +7613,7 @@ async function main() {
         ? phaseWatch.current
         : null,
       now,
-      fleet.active === "f35" ? (camera.combat?.status === "run" ? "fight" : "plane") : null,
+      isAircraft(fleet.active) ? (camera.combat?.status === "run" ? "fight" : "plane") : null,
     );
     if (pil && info) {
       // the cockpit's screens: the telemetry, drawn (a few times a second, while the cabin is seen)
@@ -7614,7 +7630,7 @@ async function main() {
           systems: camera.systemsInfo(),
           ticks: camera.sysTicks,
           rcs: camera.rcsMode ?? "rotate",
-          met: fleet.active !== "f35" && Number.isFinite(camera.metT0) ? sim.time * M_SECONDS - camera.metT0 : null,
+          met: !isAircraft(fleet.active) && Number.isFinite(camera.metT0) ? sim.time * M_SECONDS - camera.metT0 : null,
         })
       ) {
         renderer.ship.updateScreens(cockpitScreens.canvas);
@@ -7679,6 +7695,43 @@ async function main() {
           // (another player followed: his surfaces, his gear, his nozzle — ui/netsession.ts)
           if (netSession.followJet) renderer.jetPose = netSession.followJet;
         } else jetIn = null;
+        // (the A320's: its surfaces as its flight controls move them, its slats and flaps by configuration, its
+        // spoilers, its gear and doors, its fans, its lights — src/a320/pose.ts)
+        if (settings.vessel === "a320") {
+          renderer.ship.setA320Livery(settings.a320Livery);
+          const gl = camera.gearLast?.legs;
+          const legs = GEARS.a320!.legs;
+          const th = renderer.shipThrust;
+          const L = camera.airFlight.last;
+          const onGround = !!camera.gearLast && camera.gearLast.contact > 0;
+          const speed = status?.speed ?? 0;
+          const r = VESSELS.a320.fbw!.rates;
+          const cmd = (k: number, sgn: number) =>
+            Math.min(Math.max(sgn * (0.55 * (th?.torque[k] ?? 0) + (0.75 * camera.pilot.omega[k]!) / r[k]!), -1, 1), 1);
+          const running = camera.pilot.engineNow > 0 || camera.pilot.throttle > 0;
+          const n1 = running ? 19 + 81 * Math.min(Math.max(camera.pilot.engineNow, 0), 1) : 0;
+          renderer.a320Pose = a320Poser.step({
+            dt,
+            pitch: cmd(0, 1),
+            yaw: cmd(1, 1),
+            // (the pilot's roll left-positive — pilot.ts —; here right-positive)
+            roll: cmd(2, -1),
+            trim: 0,
+            flapLever: Math.round((camera.airFlight.cfg.flaps ?? 0) * 4),
+            ias: Math.sqrt((2 * (L?.out.q ?? 0)) / 1.225) * 1.9438,
+            speedBrake: camera.airBrake,
+            groundSpoilers: camera.groundSpoilers && onGround ? 1 : 0,
+            gear: camera.gearExt,
+            comp: legs.map((Lg, k) => Math.min(Math.max(gl?.[k]?.comp ?? 0, 0), Lg.stroke)) as [number, number, number],
+            onGround,
+            groundSpeed: speed,
+            steer: onGround ? (th?.torque[1] ?? 0) : 0,
+            n1: [n1, n1],
+            reverser: [0, 0],
+            alpha: ((L?.out.alpha ?? 0) * 180) / Math.PI,
+            landingLights: settings.landingLights,
+          });
+        }
         // (the F-35 chosen: its display's fonts, canvas and mips readied while the browser idles — no stall at the
         // cockpit's first look)
         if (settings.vessel === "f35" && !pcdWarm) {
@@ -7922,7 +7975,7 @@ async function main() {
           dv: camera.spent * C_MPS,
           fuel: info.engine.fuel ? info.engine.fuel.fraction : null,
           // (a spacecraft's channels — PLAN-VAISSEAUX X8)
-          ...(fleet.active === "f35"
+          ...(isAircraft(fleet.active)
             ? {}
             : (() => {
                 const Y = info.systems;

@@ -1,0 +1,38 @@
+[
+ {
+  "id": "kerr",
+  "name": "Kerr",
+  "reg": "F-KERR",
+  "real": false
+ },
+ {
+  "id": "white",
+  "name": "White",
+  "reg": "F-WWBA",
+  "real": false
+ },
+ {
+  "id": "SWR",
+  "name": "Swiss (HB-JLS)",
+  "reg": "HB-JLS",
+  "real": true
+ },
+ {
+  "id": "AUA",
+  "name": "Austrian",
+  "reg": "",
+  "real": true
+ },
+ {
+  "id": "DAL",
+  "name": "Delta",
+  "reg": "",
+  "real": true
+ },
+ {
+  "id": "AAL",
+  "name": "American",
+  "reg": "",
+  "real": true
+ }
+]

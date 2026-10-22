@@ -1181,7 +1181,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "set_craft",
       description: "The ship on or off (off: the free camera), and the craft flown: ranger, lander, endurance.",
-      params: { ship: { type: "boolean" }, vessel: { type: "string", enum: ["ranger", "lander", "endurance", "f35"] } },
+      params: { ship: { type: "boolean" }, vessel: { type: "string", enum: ["ranger", "lander", "endurance", "f35", "a320"] } },
       run: act((a) => {
         if (a.ship !== undefined && settings.ship !== a.ship) h.key("ship");
         if (a.vessel !== undefined && settings.vessel !== a.vessel) {

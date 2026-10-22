@@ -4558,6 +4558,10 @@ export class Renderer {
             controls: this.cockpitControls ?? undefined,
             gear: this.shipGear ?? undefined,
             jet: s.vessel === "f35" && this.jetPose ? { ...this.jetPose, ...this.jetForce } : null,
+            a320:
+              s.vessel === "a320" && this.a320Pose
+                ? { props: { ...this.a320Pose.props, ...this.a320Force }, spins: this.a320Pose.spins }
+                : null,
             cabin: lampsOf(s, this.cockpitGlow),
             pcd: s.vessel === "f35" ? this.pcdLook : null,
             lamps: { navLights: s.navLights, strobeLights: s.strobeLights, landingLights: s.landingLights, t: performance.now() / 1000 },
@@ -4714,6 +4718,10 @@ export class Renderer {
   jetPose: import("./f35/model").F35Pose | null = null;
   /** parts of it held where a test or a capture wants them (scripts/f35-shots.ts: __bh.renderer.jetForce) */
   jetForce: Partial<import("./f35/model").F35Pose> = {};
+  /** the flown A320's moving parts: its rig's properties and spins (src/a320/pose.ts), and properties held where a
+   *  test or a capture wants them (FlightGear's paths: __bh.renderer.a320Force) */
+  a320Pose: { props: import("./a320/rig").Props; spins: import("./a320/rig").Props } | null = null;
+  a320Force: import("./a320/rig").Props = {};
   /** the cockpit's displays' mean colours (cockpit/lights.ts displayColours): the screens' light in the cabin */
   cockpitGlow: Float32Array | null = null;
   /** the F-35's panoramic display's look (set each frame its cockpit is seen — src/f35/pcd.ts look) */
@@ -5841,6 +5849,7 @@ export class Renderer {
     this.cockpitControls = old.cockpitControls;
     this.shipGear = old.shipGear;
     this.jetPose = old.jetPose;
+    this.a320Pose = old.a320Pose;
     this.prof.enabled = old.prof.enabled;
     this.water = { ...old.water };
     this.weatherReal = old.weatherReal;

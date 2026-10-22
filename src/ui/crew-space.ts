@@ -15,7 +15,7 @@ import { bodyState } from "../system/ephemeris";
 import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
 import { SOLAR_BODIES, solarBody, solarState } from "../system/solar";
 import { C_MPS, M_METRES, M_SECONDS } from "../units";
-import { VESSELS, type VesselId } from "../vessels";
+import { isAircraft, VESSELS, type VesselId } from "../vessels";
 import type { Info } from "./flighthud";
 import { LPD } from "../controller/lowthrust";
 
@@ -112,7 +112,7 @@ export function crewSpace(
   const out: InstrumentSpace = {
     craft: {
       id,
-      kind: id === "f35" ? "jet" : "spacecraft",
+      kind: isAircraft(id) ? "jet" : "spacecraft",
       name: V.name,
       lands: V.lands,
       ring: !!V.ring,
@@ -186,8 +186,8 @@ export function crewSpace(
   }));
   out.burn = i.plan?.burning && nodes[0] ? { left: r1(Math.hypot(...nodes[0].dv) * C_MPS) } : null;
   {
-    const dv = id === "f35" ? Number.NaN : c.fcBudget().dv;
-    const prop = id === "f35" ? null : (c.propellantOf(id)?.share ?? null);
+    const dv = isAircraft(id) ? Number.NaN : c.fcBudget().dv;
+    const prop = isAircraft(id) ? null : (c.propellantOf(id)?.share ?? null);
     out.budget = { dv: Number.isFinite(dv) ? Math.round(dv) : null, prop: prop === null ? null : r3(prop) };
   }
   const tg = status?.target;

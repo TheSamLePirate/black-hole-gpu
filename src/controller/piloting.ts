@@ -28,7 +28,7 @@ import type { V3 } from "../cine/rig";
 import { upOf, viewBlend } from "./camrig";
 import { fleet } from "../fleet";
 import { fuelOn, loadShare } from "../engine";
-import { isPlane, VESSELS } from "../vessels";
+import { isAircraft, isPlane, VESSELS } from "../vessels";
 import { fuelFlow } from "../f35/engine";
 import type { GamepadInput } from "../gamepad";
 import { mouth } from "../wormhole";
@@ -1322,7 +1322,7 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
     // (the F-35's tanks never empty, the setting on)
     if (e.sigma > 0 && !(fleet.active === "f35" && s.f35InfiniteFuel))
       fleet.fuel[fleet.active] = Math.max(0, left - fuelFlow(TF, thrust, dry, e.sigma, e.mach) * dTau * Msec);
-  } else if (fuelOn(s) && !(fleet.active !== "f35" && s.spaceInfinitePropellant))
+  } else if (fuelOn(s) && !(!isAircraft(fleet.active) && s.spaceInfinitePropellant))
     this.spent += (w / Math.max(this.pressureThrust(), 0.05)) * (this.jetModes.ab ? JET.abFlow / JET.abThrust : 1);
   if (burn && this.nodeBurning) this.nodeDone = Math.max(this.nodeDone + along(burn.dir), 0);
   this.dockCheck();

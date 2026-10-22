@@ -49,7 +49,7 @@ import { keplerProp } from "../system/our-plan";
 import { zonalAccel } from "../system/geopotential";
 import { solarBody } from "../system/solar";
 import { vesselHulls } from "../system/collide";
-import { dockedFrame, type VesselId, VESSELS } from "../vessels";
+import { dockedFrame, isAircraft, type VesselId, VESSELS } from "../vessels";
 import type { NetPanel } from "./netpanel";
 import { formationLabel, formSlotFor } from "../controller/formation";
 import { orderOf } from "../game/orders";
@@ -88,7 +88,7 @@ type Vec3 = [number, number, number];
 const AWAY_SLOT = 200;
 
 /** a craft's door off its side [m] (controller/character.ts accessOffset) */
-const ACCESS: Record<VesselId, number> = { ranger: 9, lander: 13, endurance: 75, f35: 8 };
+const ACCESS: Record<VesselId, number> = { ranger: 9, lander: 13, endurance: 75, f35: 8, a320: 12 };
 
 /** an Earth-fixed place [m] and nose → geodetic latitude, longitude, heading [°] */
 function parkedAt(p: Vec3, fwd: Vec3) {
@@ -905,7 +905,7 @@ export class NetSession {
                 v[0] * fix.N[0] + v[1] * fix.N[1] + v[2] * fix.N[2],
                 v[0] * fix.U[0] + v[1] * fix.U[1] + v[2] * fix.U[2],
               ] as Vec3,
-              rcs: s.id === "f35" ? 0.005 : 20,
+              rcs: isAircraft(s.id) ? 0.005 : 20,
               kind: s.state.flags & 1 ? ("ground" as const) : ("air" as const),
               iff: "friend" as const,
               name: this.nameOf(s.slot),
@@ -1888,8 +1888,7 @@ export class NetSession {
       return;
     }
     if (!this.d.settings.ship) this.d.tools.set("ship", true);
-    const kinds = ["ranger", "lander", "endurance", "f35"] as const;
-    const kind = kinds[st.kind];
+    const kind = kindOf(st.kind);
     if (kind && fleet.active !== kind) {
       try {
         this.d.tools.set("vessel", kind);
@@ -1979,7 +1978,7 @@ export class NetSession {
     const body = NET_BODIES[W.body];
     if (!body) return tf("{0} walks where we cannot follow", name);
     if (craft && craft.body === W.body && craft.frame === 0 && craft.flags & 1) {
-      const half = (id: string) => (id === "f35" ? 5.4 : id === "ranger" ? 12 : id === "lander" ? 8 : 40);
+      const half = (id: string) => (id === "f35" ? 5.4 : id === "a320" ? 18 : id === "ranger" ? 12 : id === "lander" ? 8 : 40);
       const place = c.netPlaceBeside(craft, half(kindOf(craft.kind) ?? "f35") + half(fleet.active) + 8);
       if (place) {
         this.d.tools.placeAt({ ...place, frame: place.frame ?? "ours", note: tf("Parked by {0}'s craft", name) });
@@ -2054,8 +2053,8 @@ export class NetSession {
     if (!s || s.frame !== 0 || s.body !== 0 || (s.flags & 1) !== 0)
       return tf("{0} is not flying in the Earth's air — formation in the air only", p.name);
     if (!VESSELS[fleet.active].flies) return t("Formation: a craft that flies (the F-35, the Ranger)");
-    const half = (id: string) => (id === "f35" ? 5.4 : id === "ranger" ? 12 : id === "lander" ? 8 : 40);
-    const kinds = ["ranger", "lander", "endurance", "f35"];
+    const half = (id: string) => (id === "f35" ? 5.4 : id === "a320" ? 18 : id === "ranger" ? 12 : id === "lander" ? 8 : 40);
+    const kinds = ["ranger", "lander", "endurance", "f35", "walker", "a320"];
     // (an echelon: clear of both wingspans by 15 m, 15 m back — room for his roll into a turn, a gust)
     const gap = o.gap ?? half(kinds[s.kind] ?? "f35") + half(fleet.active) + 15;
     // (in his air, near enough to rejoin: from where we are — else Beside first)
@@ -2139,8 +2138,8 @@ export class NetSession {
     const c = this.d.camera;
     const s = o.state;
     // (clear of both wingspans: the other's half, ours, a margin)
-    const half = (id: string) => (id === "f35" ? 5.4 : id === "ranger" ? 12 : id === "lander" ? 8 : 40);
-    const kinds = ["ranger", "lander", "endurance", "f35"];
+    const half = (id: string) => (id === "f35" ? 5.4 : id === "a320" ? 18 : id === "ranger" ? 12 : id === "lander" ? 8 : 40);
+    const kinds = ["ranger", "lander", "endurance", "f35", "walker", "a320"];
     const g = gap ?? half(kinds[s.kind] ?? "f35") + half(fleet.active) + 8;
     const place = c.netPlaceBeside(s, g);
     if (!place) return t("The teleport needs your craft on our side of the wormhole");

@@ -528,7 +528,7 @@ export function flightSchool(host: InstructorHost, o: { spaceFirst?: boolean } =
     c.onclick = () => (m.close(), spaceLessonCard(host, L));
     space.append(c);
   }
-  const inSpace = o.spaceFirst ?? (host.camera.piloting && host.camera.s.vessel !== "f35");
+  const inSpace = o.spaceFirst ?? (host.camera.piloting && host.camera.s.vessel !== "f35" && host.camera.s.vessel !== "a320");
   const body = inSpace
     ? [h("h4", "ins-h", t("The space school")), space, h("h4", "ins-h", t("The aeroplane school")), grid]
     : [grid, h("h4", "ins-h", t("The space school")), space];

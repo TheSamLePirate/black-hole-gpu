@@ -284,11 +284,12 @@ export interface Hull {
 }
 const emptyHull = (): Hull => ({ points: [], bvh: null, radius: 0, lo: [0, 0, 0], hi: [0, 0, 0] });
 /** The craft's hulls (vessels.ts), filled as their meshes load (ship.ts). */
-export const vesselHulls: Record<"ranger" | "lander" | "endurance" | "f35", Hull> = {
+export const vesselHulls: Record<"ranger" | "lander" | "endurance" | "f35" | "a320", Hull> = {
   ranger: emptyHull(),
   lander: emptyHull(),
   endurance: emptyHull(),
   f35: emptyHull(),
+  a320: emptyHull(),
 };
 /** The Ranger's. */
 export const rangerHull = vesselHulls.ranger;

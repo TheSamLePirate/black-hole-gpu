@@ -107,7 +107,7 @@ export const FRAME_INERTIAL = 1;
 /** the bodies a sample can name (index on the wire; 255: another) */
 export const BODIES = ["earth", "moon", "sun", "mercury", "venus", "mars", "jupiter", "saturn", "uranus", "neptune"] as const;
 /** the crafts' kinds (vessels.ts VesselId) — and a player on foot (R5: his place, his heading, his speed) */
-export const KINDS = ["ranger", "lander", "endurance", "f35", "walker"] as const;
+export const KINDS = ["ranger", "lander", "endurance", "f35", "walker", "a320"] as const;
 export const WALKER = 4;
 
 /** flags of a sample */

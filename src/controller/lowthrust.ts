@@ -34,7 +34,7 @@ import { airTopKm } from "../game/place";
 import { airTop, entryInterface } from "../aero";
 import { AUTO_NAMES, circularSpeed, type Auto, type Want } from "../pilot";
 import { fleet } from "../fleet";
-import { VESSELS } from "../vessels";
+import { isAircraft, VESSELS } from "../vessels";
 import { mouth, sphericalFrame } from "../wormhole";
 import { circularVelocity } from "../system/geopotential";
 import { gravityHome, OUR_BODIES, ourState, repToHomeVec, soiOf } from "../system/our-side";
@@ -1665,7 +1665,7 @@ function descentCard(this: CameraController, sf: SurfaceLike): HubInfo {
  */
 function glideAssist(this: CameraController, rw: RunwayView): Pick<HubInfo, "graph" | "say"> {
   // (the F-35: the ILS's straight 3° — controller/util.ts jetProfile)
-  const prof0 = fleet.active === "f35" ? jetProfile : landingProfile;
+  const prof0 = isAircraft(fleet.active) ? jetProfile : landingProfile;
   const fix = rw.fix!;
   // (the height the profile reads — over the threshold on the autopilot's final — for the trace, the curve, the dot)
   const hRw = rw.hp ?? rw.agl;
@@ -2688,7 +2688,7 @@ function runwayView(this: CameraController): RunwayView | null {
 
 function runwayCompute(this: CameraController): RunwayView | null {
   // (the F-35: the ILS's straight 3° — controller/util.ts jetProfile)
-  const prof0 = fleet.active === "f35" ? jetProfile : landingProfile;
+  const prof0 = isAircraft(fleet.active) ? jetProfile : landingProfile;
   const cam = cameraFrame(this.s);
   const fr = this.entryFrame(cam);
   if (!fr) return null;

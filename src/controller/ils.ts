@@ -15,7 +15,7 @@ import { fleet } from "../fleet";
 import { t, tf } from "../i18n";
 import type { PilotInput } from "../pilot";
 import { daysOf } from "../system/solar";
-import { VESSELS } from "../vessels";
+import { isAircraft, VESSELS } from "../vessels";
 import type { CameraController } from "../controls";
 
 declare module "../controls" {
@@ -95,7 +95,7 @@ export function findRunway(c: CameraController, name?: string): Site | null {
  * wind; `hold`: laps in the hold at the initial fix first (Infinity: until cleared). What to say.
  */
 function ilsStart(this: CameraController, name?: string, o: { hold?: number; rwy?: IlsRunway; base?: boolean } = {}): string {
-  if (fleet.active !== "f35") return t("ILS: the F-35");
+  if (!isAircraft(fleet.active)) return t("ILS: the F-35, the A320");
   const g = this.geoNow();
   if (!g || this.rolling || this.ourLanded) return t("ILS: in the air");
   const site = o.rwy ? null : findRunway(this, name);
@@ -179,7 +179,7 @@ function ilsJet(this: CameraController, inp: PilotInput): { gamma: number; bank:
 function ilsFrame(this: CameraController) {
   const R = this.ilsRun;
   if (!R) return;
-  if (fleet.active !== "f35") return this.ilsOff();
+  if (!isAircraft(fleet.active)) return this.ilsOff();
   // (a world runway's level measured as the relief came — src/world/runways3d.ts —: the ILS's own followed, its
   // heights read over the ground the gear meets)
   if (R.rwy.icao) {

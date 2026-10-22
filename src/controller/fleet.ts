@@ -6,7 +6,7 @@ import type { Vec3 } from "../physics";
 import { type Body, onOurSide } from "../targeting";
 import { mountPose, setMountVessel, shipToCamera } from "../mounts";
 import { fleet, type Pose } from "../fleet";
-import { dockedFrame, VESSEL_IDS, VESSELS, type VesselId } from "../vessels";
+import { dockedFrame, isAircraft, isPlane, VESSEL_IDS, VESSELS, type VesselId } from "../vessels";
 import { mouth } from "../wormhole";
 import { repToHomeVec } from "../system/our-side";
 import { cockpitHull } from "../system/collide";
@@ -163,7 +163,7 @@ function switchVessel(this: CameraController, id: VesselId): string | null {
   const t = nav.t;
   const to = fleet.pose(id, t);
   // (the F-35 is where it is flown: chosen, it is put on a runway — the nearest — by the page's hook)
-  if (!to && id === "f35" && this.onJetStart) {
+  if (!to && isAircraft(id) && this.onJetStart) {
     // (the craft left — its assembly with it — coasts where it is, as any craft left: it can be flown again)
     const old = fleet.active;
     const me = this.activePoseNow();
@@ -199,7 +199,7 @@ function switchVessel(this: CameraController, id: VesselId): string | null {
   this.pilot.throttle = 0;
   this.pilot.omega = [0, 0, 0];
   // (its own way of flying the air: the Ranger as a plane, the Lander as a rocket)
-  s.flightMode = id === "ranger" || id === "f35" ? "plane" : "rocket";
+  s.flightMode = isPlane(id) ? "plane" : "rocket";
   this.sfCmd = null;
   this.plan = { nodes: [], path: null, at: 0, note: "" };
   this.issGoal = null;

@@ -22,7 +22,7 @@ import type { Settings, Target } from "../settings";
 import type { CameraController } from "../controls";
 import { AUTO_NAMES, HOLD_NAMES, type Auto, type Hold } from "../pilot";
 import { MOUNT_KEYS, MOUNTS, type Mount } from "../mounts";
-import { VESSEL_IDS, VESSELS, type VesselId } from "../vessels";
+import { isAircraft, VESSEL_IDS, VESSELS, type VesselId } from "../vessels";
 import { fleet } from "../fleet";
 import { bodyCentre, BODY_NAMES, starOrbitRadius } from "../targeting";
 import { EARTH_IRRADIANCE, type PlanetProbe } from "../system/planet-probe";
@@ -1878,7 +1878,7 @@ export class FlightHud {
     if (this.root.dataset.kind !== this.kind) this.root.dataset.kind = this.kind;
     // (the craft flown: the F-35's HUD without the rocket's panels — the target among the planets, the orbit's
     // potential, the attitude ball and its holds —: flighthud.css)
-    const jet = info.vessel === "f35" ? "jet" : "";
+    const jet = isAircraft(info.vessel) ? "jet" : "";
     // (the Ranger's nose radar on in the air — PLAN-RADAR-AAA, RD4's leftover —: its scope where the orbit's panel
     // stood, out of the space HUD: symbology.ts)
     const nose = !jet && info.radar?.name === "NOSE" && this.kind !== "space" && this.s.f35Radar !== false ? "nose" : "";
@@ -2082,7 +2082,7 @@ export class FlightHud {
     }
     setChip("auto", i.auto !== "none", auto);
     // (the F-35: no orbital hold, no rocket autopilot — its own AP modes are in its avionics)
-    M.hold!.hidden = M.auto!.hidden = i.vessel === "f35";
+    M.hold!.hidden = M.auto!.hidden = isAircraft(i.vessel);
     const st = this.start ?? { t: time, tau: i.properTime };
     const dt = time - st.t,
       dtau = i.properTime - st.tau;
@@ -2722,7 +2722,7 @@ export class FlightHud {
     // the assisted autopilot's director: where it would point the nose, its top, its throttle, its thrusters
     if (i.director) this.drawDirector(ctx, i, W, H, dpr, tanH, asp);
     // (the F-35's helmet: its own boxed figures — the game's tapes left out)
-    if (this.density < 2 && !helmet && i.vessel !== "f35") {
+    if (this.density < 2 && !helmet && !isAircraft(i.vessel)) {
       // each tape in the free band between the panels above and below it on its side (a phone: between
       // the mission bar and the touch controls, smaller)
       const phone = isMobile();
@@ -2766,7 +2766,7 @@ export class FlightHud {
     const show =
       !!A &&
       !parked &&
-      i.vessel !== "f35" &&
+      !isAircraft(i.vessel) &&
       (A.inAir || A.mode === "sf" || A.margins.shield > 0.4 || A.margins.hull > 0.4) &&
       this.density < 2;
     this.airData.hidden = !show;
@@ -3249,7 +3249,7 @@ export class FlightHud {
     const st = i.status;
     if (!st) return;
     // (the F-35: its height and speed — an orbit, its impact and its dials mean nothing to a fighter)
-    const o = i.vessel === "f35" ? null : st.orbit;
+    const o = isAircraft(i.vessel) ? null : st.orbit;
     const { ctx, dpr, W, reg } = this.instr(this.stCanvas, o ? (st.next ? 192 : 174) : 70);
     const S = (v: number) => v * dpr;
     const km = (x: number) =>

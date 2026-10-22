@@ -16,7 +16,7 @@ import { toU, type Auto, type Director } from "../pilot";
 import type { ManeuverNode } from "../maneuver";
 import { shipToCamera } from "../mounts";
 import { fleet } from "../fleet";
-import { VESSELS } from "../vessels";
+import { isAircraft, VESSELS } from "../vessels";
 import { sphericalFrame } from "../wormhole";
 import { OUR_BODIES, repToHomeVec } from "../system/our-side";
 import { groundVelocity } from "../system/our-surface";
@@ -356,9 +356,9 @@ function flightInfo(this: CameraController): FlightInfo {
           : this.pilot.throttle,
     // (the SAS flown: the level's when it imposes one)
     sas: this.spaceRate ? this.spaceRate.law === "damped" : this.pilot.sas,
-    spaceAssist: fleet.active === "f35" ? undefined : this.assistLevel(),
+    spaceAssist: isAircraft(fleet.active) ? undefined : this.assistLevel(),
     spaceDrift: this.spaceDrift,
-    rcsTranslate: this.rcsMode === "translate" && fleet.active !== "f35",
+    rcsTranslate: this.rcsMode === "translate" && !isAircraft(fleet.active),
     spaceGuard: this.spaceGuard ?? null,
     ring: this.ringInfo(),
     craftPanel: null,
@@ -385,7 +385,7 @@ function flightInfo(this: CameraController): FlightInfo {
       normal: C(normal),
       antinormal: C(normal && lin(normal, -1, normal, 0)),
       // (the F-35 flown: no planet to aim at — its targets are its radar's)
-      target: fleet.active === "f35" ? null : C(this.targetDir(cam)),
+      target: isAircraft(fleet.active) ? null : C(this.targetDir(cam)),
       burn: C(this.pilot.burn),
       maneuver: C(this.maneuverDir(cam)),
       // velocity relative to the target (approach, docking)

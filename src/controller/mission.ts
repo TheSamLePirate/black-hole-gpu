@@ -203,7 +203,7 @@ function spawnUnit(c: CameraController, u: MissionUnit, last = false) {
       // (its heights over the sea: the fight's routes over the ground)
       return [pe, pn, Math.max(300, (p.alt ?? at!.alt ?? 3000) - W.groundZ(pe, pn))] as [number, number, number];
     }),
-    mesh: kind === "airliner" ? (mesh ?? "a320") : undefined,
+    mesh: kind === "airliner" ? (mesh ?? "a320t") : undefined,
   });
   const q = W.targets.find((x) => x.id === live.target);
   if (q) q.neutral = u.side === "neutral" || (u.side === undefined && kind === "airliner");

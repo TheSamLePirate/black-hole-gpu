@@ -5,6 +5,7 @@
 // rolled level, the nose to a gentle climb, a safe speed —, the holds then left on.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import { fleet } from "../fleet";
+import { isAircraft } from "../vessels";
 import { t } from "../i18n";
 import type { PilotInput } from "../pilot";
 import type { Settings } from "../settings";
@@ -34,7 +35,11 @@ declare module "../controls" {
 
 /** The level flown now: the F-35's, any other craft's the spacecraft's (controller/spaceassist.ts). */
 function assistLevel(this: CameraController): AssistLevel {
-  return fleet.active === "f35" ? (this.s.f35Assist ?? "realistic") : (this.s.spaceAssist ?? "realistic");
+  return fleet.active === "f35"
+    ? (this.s.f35Assist ?? "realistic")
+    : isAircraft(fleet.active)
+      ? "realistic"
+      : (this.s.spaceAssist ?? "realistic");
 }
 
 /** The jet's flight path now [rad] (over the ground's — the air's is near it). */
@@ -47,7 +52,7 @@ function gammaNow(c: CameraController): number {
  *  altitude, the heading and the speed held. What to say. */
 function recoverStart(this: CameraController): string {
   // (a spacecraft out of a plane's flight: its own — the turn stopped, a hover, prograde: controller/spaceassist.ts)
-  if (!this.jetFigures()) return fleet.active === "f35" ? t("Recovery: in the air, flown as a plane") : this.spaceRecoverStart();
+  if (!this.jetFigures()) return isAircraft(fleet.active) ? t("Recovery: in the air, flown as a plane") : this.spaceRecoverStart();
   this.recovering = { t: 0, level: 0 };
   this.aimRing = null;
   return t("Recovery: wings level, climbing");

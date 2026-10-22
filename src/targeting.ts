@@ -78,7 +78,7 @@ export const isCraft = (b: Body): b is VesselId => (VESSEL_IDS as string[]).incl
 /** A target of our universe: a body of the solar system, the space station, a craft of the fleet */
 export const isOurs = (b: Body) => isOurBody(b) || b === "iss" || isCraft(b) || isNetTarget(b);
 /** A craft's half-size, for framing and picking [m] (its hull's sphere; before its mesh loads, a guess) */
-export const craftRadius = (b: VesselId) => vesselHulls[b].radius || { ranger: 10, lander: 16, endurance: 40, f35: 9 }[b];
+export const craftRadius = (b: VesselId) => vesselHulls[b].radius || { ranger: 10, lander: 16, endurance: 40, f35: 9, a320: 25 }[b];
 /** The craft that can be targeted: the fleet's, but the one flown (and those docked to it) */
 export function targetCrafts(s: Settings): Body[] {
   const mine = s.ship ? fleet.assembly(fleet.active) : [];

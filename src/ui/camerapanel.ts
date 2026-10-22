@@ -84,6 +84,7 @@ export const BODY_COLOURS: Record<Target, string> = {
   lander: "255, 160, 200",
   endurance: "200, 225, 255",
   f35: "190, 200, 210",
+  a320: "236, 238, 242",
   sun: "255, 236, 170",
   mercury: "190, 180, 170",
   venus: "240, 220, 170",

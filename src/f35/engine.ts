@@ -18,6 +18,9 @@ export interface TurbofanDef {
   /** its spool's time constant [s] (idle to military in some three of them) and the afterburner's light-up [s] */
   spool: number;
   light: number;
+  /** its dry thrust's change with Mach: 1 + a M + b M² (a low-bypass fighter's, none: −0.18, 0.32 — its ram's
+   *  rise; a high-bypass airliner's falls: its fan's momentum drag) */
+  ram?: [number, number];
 }
 
 /** The F135-PW-600 (the F-35B's: 191 kN wet is the A's; the B's ~176 kN, its dry ~120 kN). */
@@ -47,7 +50,8 @@ const lapse = (sigma: number) => {
 /** Its dry thrust available at full throttle [N]: the density's lapse, the ram's rise past Mach 0.6. */
 export function dryThrust(def: TurbofanDef, mach: number, sigma: number): number {
   const M = Math.max(mach, 0);
-  return def.dry * lapse(sigma) * (1 - 0.18 * M + 0.32 * M * M) * (M > 1.6 ? Math.max(0, 1 - (M - 1.6) * 0.8) : 1);
+  const [a, b] = def.ram ?? [-0.18, 0.32];
+  return def.dry * lapse(sigma) * (1 + a * M + b * M * M) * (M > 1.6 ? Math.max(0, 1 - (M - 1.6) * 0.8) : 1);
 }
 
 /** Its full afterburning thrust [N]: more of a rise with Mach (the afterburner's nozzle flow), past 2 falling. */

@@ -426,7 +426,7 @@ function trafficShips(this: CameraController): { id: AirlinerId; rel: Vec3; axes
     .sort((a, b) => a.d - b.d)
     .slice(0, 12)
     .map(({ t: c, rel }) => {
-      const s = c.len / (c.mesh === "a320" ? 37.7 : 36.2);
+      const s = c.len / (c.mesh === "a320t" ? 37.7 : 36.2);
       return {
         id: c.mesh!,
         rel,

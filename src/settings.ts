@@ -73,7 +73,19 @@ export const OUR_TARGETS: OurBody[] = [
 /** "iss": the International Space Station, on its real orbit around the Earth (system/iss.ts); "ranger",
  *  "lander", "endurance": the fleet's craft not flown (fleet.ts). (Another player's craft in a room, "net:<slot>",
  *  is one too at run time: targeting.ts netTargetId — docs/PLAN-RESEAU.md R6) */
-export type Target = "hole" | "star" | "wormhole" | "barycentre" | SystemBody | OurBody | "iss" | "ranger" | "lander" | "endurance" | "f35";
+export type Target =
+  | "hole"
+  | "star"
+  | "wormhole"
+  | "barycentre"
+  | SystemBody
+  | OurBody
+  | "iss"
+  | "ranger"
+  | "lander"
+  | "endurance"
+  | "f35"
+  | "a320";
 export type RenderMode = "physical" | "redshift" | "temperature" | "order" | "steps";
 export type ShiftMode = "full" | "gravitational" | "noBeaming" | "none";
 export type Background = "real" | "stars" | "alien" | "checker" | "image";
@@ -372,7 +384,7 @@ export interface Settings {
   // the spaceship carrying the camera (Interstellar's Ranger)
   ship: boolean;
   /** the craft flown (vessels.ts): the Ranger, the Lander, the Endurance */
-  vessel: "ranger" | "lander" | "endurance" | "f35";
+  vessel: "ranger" | "lander" | "endurance" | "f35" | "a320";
   shipMount: string; // attach point of the camera (ship.ts MOUNTS)
   camSoft: "off" | "chase" | "hull"; // the hull views softened (controller/camrig.ts): none, the chase and the dorsal, every outside attach point on the hull
   camBinding: "lockToTarget" | "lockNoRoll" | "worldUp" | "world"; // how the softened view's offset turns with the craft (Cinemachine's binding modes)
@@ -433,6 +445,7 @@ export interface Settings {
   f35HmdLook: "readable" | "realistic" | "cinematic"; // the helmet's symbology: outlined dark (the most readable), the light on a visor (a glow, a faint shade), or a wider glow
   f35PcdStyle: "realistic" | "cinematic"; // the panoramic display's look: a real PCD's, or with glow, rings and sweeps
   f35PcdBrightness: "auto" | "day" | "night" | "nvg"; // its brightness: the light's, or its knob's
+  a320Livery: "kerr" | "white" | "SWR" | "AUA" | "DAL" | "AAL"; // the A320's livery: the house's, white, or a real airline's (docs/PLAN-A320.md)
   netMenu: boolean; // the network's menu and buttons (docs/PLAN-RESEAU.md): off, the game shows no trace of it
   netFreeFight: boolean; // in a room, in the F-35, no match: the free fight — every craft a target, friendly fire on
   netCrewActions: boolean; // the crew screens (crew/) may act aboard — everything but flying (docs/PLAN-CREW-ACTIONS.md); off: the pilot's lock
@@ -790,6 +803,7 @@ export function defaultSettings(): Settings {
     f35HmdBrightness: 1,
     f35HmdLook: "realistic",
     f35PcdStyle: "realistic",
+    a320Livery: "kerr",
     f35PcdBrightness: "auto",
     netMenu: true,
     netFreeFight: true,
@@ -2162,6 +2176,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   f35HmdBrightness: "pref",
   f35HmdLook: "pref",
   f35PcdStyle: "pref",
+  a320Livery: "pref",
   f35PcdBrightness: "pref",
   netMenu: "pref",
   netFreeFight: "pref",
