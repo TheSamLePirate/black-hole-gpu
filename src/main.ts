@@ -1,6 +1,11 @@
 import { scopeRange } from "./ui/hud/symbology";
 import { SystemsPage } from "./ui/systemspage";
 import { A320Page, type FailureWhen } from "./ui/a320page";
+import { A320Sound } from "./a320/sound/model";
+import { SoundInputs } from "./a320/sound/soundinputs";
+import { A320Callouts } from "./a320/sound/callouts";
+import { SOUND_URL } from "./a320/sound/assets";
+import type { CraftVoice } from "./a320/sound/types";
 import { FAILURES, failureById } from "./a320/failures";
 import { fieldByCode, fieldCached } from "./world/runways";
 import type { FailureKind } from "./game/systems";
@@ -2700,6 +2705,98 @@ async function main() {
     el: Object.assign(document.createElement("div"), { className: "deck-marker" }),
   };
   deckMarker.el.dataset.testid = "deck-marker";
+  /** the A320's sound (src/a320/sound: FlightGear's sound files on the systems' bag, its EGPWS warnings), made anew with
+   *  its systems */
+  const URL_NAME = new Map(Object.entries(SOUND_URL).map(([k, u]) => [u, k]));
+  const a320Audio = {
+    sys: null as unknown,
+    model: new A320Sound(),
+    inputs: new SoundInputs(),
+    callouts: new A320Callouts(false),
+    t: 0,
+  };
+  /** Its voices this frame (none: not the A320, its systems not running). */
+  const a320Voices = (
+    dt: number,
+    inside: boolean,
+    info: Parameters<typeof gpwsOf>[0],
+    pose: { S: number[][]; t: number[] } | null | undefined,
+  ): CraftVoice[] | null => {
+    const P = camera.a320Props;
+    const A = camera.a320;
+    if (fleet.active !== "a320" || !camera.a320Sys || !A) return null;
+    if (a320Audio.sys !== camera.a320Sys) {
+      a320Audio.sys = camera.a320Sys;
+      a320Audio.model = new A320Sound();
+      a320Audio.inputs = new SoundInputs();
+      a320Audio.callouts.reset();
+      a320Audio.model.reset(P);
+    }
+    a320Audio.t += dt;
+    const G = camera.a320Fmgc;
+    const I = camera.a320FmgcIn;
+    const agl = Number(P["position/gear-agl-ft"] ?? 0);
+    a320Audio.inputs.step(P, dt, {
+      inside,
+      aglFt: agl,
+      flapLever: Math.round((camera.airFlight.cfg.flaps ?? 0) * 4),
+      flapNorm: A.surfaces.flap / 40,
+      rain: renderer.rain && !renderer.rain.dust ? renderer.rain.rain : 0,
+      minimums: G?.fms.dh ?? null,
+      v1: G?.fms.v1 ?? null,
+      takeoff: !!I?.onGround && (I?.detent ?? 0) >= 4,
+      reversers: [A.engines[0].rev, A.engines[1].rev],
+    });
+    // (the ear in the ship's frame — its sounds' cones, FlightGear's directional engines —: −Sᵀ t)
+    const ear = pose
+      ? ([0, 1, 2].map((k) => -(pose.S[0]![k]! * pose.t[0]! + pose.S[1]![k]! * pose.t[1]! + pose.S[2]![k]! * pose.t[2]!)) as [
+          number,
+          number,
+          number,
+        ])
+      : undefined;
+    // (the alarms, the callouts and the clicks on their busses — the cockpit's beeps, the interface's —, the engines
+    // and the air mixed under the game's other crafts: FlightGear's layers summed as OpenAL does, its listener's level)
+    const voices = a320Audio.model.step(P, dt, { inside, ear }).map((v) => {
+      const name = URL_NAME.get(v.url) ?? "";
+      const kind = /^gpws-/.test(name)
+        ? "gpws/"
+        : /^cockpit-(crc|cricket|chime|c-chord|cavalry|stall|1000hz|700hz|dual-input|elt|triplebelt|v1|cabin-chime|atc)/.test(name)
+          ? "alarm/"
+          : /^cockpit-(button|knob|switch|pushbutton|click|detent|relay|cockpitdoor)/.test(name)
+            ? "click/"
+            : "";
+      return kind ? { ...v, id: kind + v.id } : { ...v, gain: v.gain * (v.where === "outside" ? 0.45 : 0.6) };
+    });
+    // (the EGPWS's warnings — FlightGear's mk-viii's, said here: game/gpws.ts's ground ahead, the sink rate —)
+    if (I && settings.sound) {
+      const gp = gpwsOf(info, groundAlertsOf(settings.vessel, settings.groundAlerts));
+      for (const w of a320Audio.callouts.step({
+        ra: I.ra,
+        vs: I.vs,
+        onGround: I.onGround,
+        ias: I.ias,
+        v1: G?.fms.v1 ?? null,
+        detent: I.detent,
+        land: G?.lat === "LAND" || G?.lat === "FLARE" || G?.lat === "ROLL OUT",
+        dh: G?.fms.dh ?? null,
+        mda: G?.fms.mda ?? null,
+        baroFt: I.alt,
+        gearDown: camera.gearDown,
+        flapLever: I.flapLever,
+        gsDots: I.ils?.gs ?? null,
+        bank: (((camera.attitudeNow() as { bank?: number }).bank ?? 0) * 180) / Math.PI,
+        pullUp: gp.pullUp,
+        sinkRate: gp.sinkRate,
+        terrain: gp.terrain,
+        t: a320Audio.t,
+      })) {
+        const url = SOUND_URL[`gpws-${w}`];
+        if (url) sound.playSample(url, { bus: "beeps", id: "a320-egpws" });
+      }
+    }
+    return voices;
+  };
   document.body.append(deckMarker.el);
   // (one bag for the deck and the systems: its switches, the systems' buses, its displays — controller/a320.ts)
   deckPoser.props = Object.assign(camera.a320Props, deckPoser.props);
@@ -7965,12 +8062,9 @@ async function main() {
           // (its flight deck — from inside, its switches all the time: the side stick as the pilot moves it, the levers,
           // the pedals; the game's state on its switches — src/a320/deck.ts, deckgame.ts)
           deckSync(deckGame, deckPoser.props);
-          // (the ECAM's sounds until A12's: the master warning's repetitive chime as the game's warning, a caution's single
-          // chime as its notice)
-          if (camera.a320Ecam) {
-            for (const a of camera.a320Ecam.takeAurals()) if (a === "chime" && settings.sound) sound.play("notify");
-            sound.alarm("a320-master-warning", settings.sound && camera.a320Ecam.masterWarning, "warning");
-          }
+          // (the ECAM's aurals: FlightGear's recordings, played by its sound files on the warnings' properties the ECAM
+          // writes — src/a320/sound —; its queue emptied)
+          camera.a320Ecam?.takeAurals();
           {
             const tq = th?.torque ?? [0, 0, 0];
             const c1 = (x: number) => Math.min(Math.max(x, -1), 1);
@@ -8083,7 +8177,7 @@ async function main() {
           ),
         );
       // (the landing's callouts — PLAN-TARS T2 —: the radio heights, minimums, sink rate, the warnings said)
-      if (settings.ship && camera.piloting && !camera.spectating) {
+      if (settings.ship && camera.piloting && !camera.spectating && fleet.active !== "a320") {
         const sf = info.surface;
         const app = camera.entryRun?.app;
         for (const l of callouts.update({
@@ -8283,6 +8377,12 @@ async function main() {
       tablet.setVisible(flightHud.mapView);
       tablet.tick(now);
       flightComputer.update();
+      // (the camera's pose on the ship — or the spectator's view of it —: the engine placed, S1)
+      const earPose = camera.spectating
+        ? renderer.shipPlace
+        : renderer.shipPose
+          ? shipToCamera(renderer.shipPose, settings.shipLookYaw, settings.shipLookPitch)
+          : null;
       cpuProf.time("sound", () =>
         // (a spectator far from the ship: its engines, its air out of earshot — two kilometres)
         audio.update(dt, {
@@ -8291,17 +8391,14 @@ async function main() {
           info,
           status,
           fired: camera.pilot.fired,
-          // (the camera's pose on the ship — or the spectator's view of it —: the engine placed, S1)
-          pose: camera.spectating
-            ? renderer.shipPlace
-            : renderer.shipPose
-              ? shipToCamera(renderer.shipPose, settings.shipLookYaw, settings.shipLookPitch)
-              : null,
+          pose: earPose,
           spectator: camera.spectating,
           standing: camera.cine.shot === "pass" || camera.cine.shot === "tracking",
           thrust: renderer.shipThrust,
           gear: camera.gearLast,
           groundWind: camera.weatherNow?.wind.u10 ?? 0,
+          // (the A320's recordings — src/a320/sound —, heard in the cockpit or outside)
+          craft: a320Voices(dt, !camera.spectating && (settings.shipMount === "cockpit" || settings.shipMount === "cabin"), info, earPose),
           // (the F-35's turbofan: its spool, its thrust over its full wet thrust, its afterburner, its lift fan)
           jet:
             settings.vessel === "f35"

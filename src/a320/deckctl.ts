@@ -32,7 +32,7 @@ export interface DeckHost {
   changed?(prop: string, value: number | string): boolean;
 }
 
-/** the Nasal calls that only make a sound (A12) or nothing the game shows: done, silently */
+/** the Nasal calls that make nothing the game shows (a cabin call): done, silently — core.pushbutton is the click's */
 const QUIET = /^(core\.pushbutton|core\.CabinCallFunc)$/;
 
 /** A binding's script cut into its calls: setprop("p", v) and f(args); an if / else keeps its first branch (the
@@ -143,12 +143,16 @@ export function runBindings(
         for (const c of nasalCalls(b.script ?? "")) {
           if (c.fn === "setprop") {
             const p = clean(String(c.args[0] ?? ""));
-            if (p && !p.startsWith("sim/sound/") && c.args[1] !== undefined && !String(c.args[1]).startsWith("=")) {
+            // (the sound's triggers too — sim/sound/*: the A320's sound files play them, src/a320/sound —)
+            if (p && c.args[1] !== undefined && !String(c.args[1]).startsWith("=")) {
               P[p] = c.args[1]!;
               if (host.changed?.(p, P[p]!)) live = true;
             }
+          } else if (c.fn === "core.pushbutton") {
+            // (sounds.nas's pushbutton: its click's trigger — cleared by the sound's inputs, src/a320/sound/soundinputs.ts)
+            P["sim/sound/pushbutton"] = 1;
           } else if (QUIET.test(c.fn)) {
-            // (a sound: A12)
+            // (a cabin call: the game has no cabin crew)
           } else if (host.call(c)) live = true;
         }
         break;

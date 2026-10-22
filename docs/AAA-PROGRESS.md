@@ -578,7 +578,9 @@ Plan : [`PLAN-A320.md`](PLAN-A320.md), étapes A0 à A19, d'après l'A320-family
   **A10 les systèmes** (les 13 fichiers JSBSim de FlightGear exécutés tels quels, son Nasal APU/ADIRS/feu porté, le
   démarrage moteur, cold & dark jusqu'aux deux moteurs à la souris — planche `a10-systemes.jpg`), **A11 l'ECAM et les pannes** (l'ECAM de FlightGear porté : 759 messages et
   leurs procédures, 76 pannes injectables à V1/au décollage/au hasard et leurs effets sur les lois, l'hydraulique, les
-  ADR ; les 13 pages SD réelles ; les check-lists montrées dans le poste — planche `a11-ecam.jpg`). Suit A12 : le son.
+  ADR ; les 13 pages SD réelles ; les check-lists montrées dans le poste — planche `a11-ecam.jpg`), **A12 le son** (les fichiers son de FlightGear joués tels quels : 205 sons, 131
+  enregistrements Opus, le CFM56 par couches, APU, PTU, alarmes de l'ECAM, annonces et EGPWS, clics ; le moteur audio
+  joue désormais des échantillons — planche `a12-son.jpg`). Suit A13 : les effets.
 
 ## Ce qui reste pour l'AAA (au 10/10/2026)
 

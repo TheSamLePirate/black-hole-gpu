@@ -9,6 +9,7 @@ assets/f35/*.ktx2 filter=lfs diff=lfs merge=lfs -text
 assets/f35/*.bin filter=lfs diff=lfs merge=lfs -text
 assets/a320/*.ktx2 filter=lfs diff=lfs merge=lfs -text
 assets/a320/*.bin filter=lfs diff=lfs merge=lfs -text
+assets/a320/sounds/*.ogg filter=lfs diff=lfs merge=lfs -text
 docs/img/**/*.png filter=lfs diff=lfs merge=lfs -text
 docs/img/**/*.jpg filter=lfs diff=lfs merge=lfs -text
 docs/img/**/*.webp filter=lfs diff=lfs merge=lfs -text
