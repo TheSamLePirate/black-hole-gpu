@@ -1,11 +1,12 @@
 // The Earth's real ground near the camera: elevation tiles streamed in around it — Mapzen's "Terrarium"
 // tiles on AWS's open data (SRTM's 30 m and finer national surveys on land, GMTED, ETOPO1; Web Mercator,
-// 256² PNGs, height = R·256 + G + B/256 − 32 768 m) — in nested levels, z 6 to 13 (2.4 km down to 19 m a
-// texel at the equator), each a window of 4 × 4 tiles kept round the camera.
+// 256² PNGs, height = R·256 + G + B/256 − 32 768 m) — in nested levels, z 6 to 14 (2.4 km down to 9.6 m a
+// texel at the equator: the USGS's 3DEP at 10 m in the United States — Monument Valley's walls —, SRTM's 30 m
+// upsampled elsewhere), each a window of 4 × 4 tiles kept round the camera.
 //
 // Every level brings its imagery too: up to z 8 (611 m) from NASA's GIBS (Global Imagery Browse Services;
 // public domain, CORS open) — the Blue Marble Next Generation by day, VIIRS's city lights by night —, finer
-// (z 9 … 13, down to 19 m) from EOX's Sentinel-2 cloudless 2021 (10 m, CC BY-NC-SA 4.0, CORS open), its
+// (z 9 … 14, down to 10 m) from EOX's Sentinel-2 cloudless 2021 (10 m, CC BY-NC-SA 4.0, CORS open), its
 // colours brought into the Blue Marble's (eoxColour: a power law per channel fitted on nine places), its
 // nights the z 8 lights' parent tile, enlarged — the same Web Mercator tiles throughout.
 //
@@ -35,7 +36,7 @@ export const TILE_REACH = {
   veryFar: { span: 8, cache: 256, ring: 3 },
 } as const;
 export const Z0 = 6;
-export const Z1 = 13;
+export const Z1 = 14;
 export const LEVELS = Z1 - Z0 + 1;
 /** the floats the tracer's params take: 1 + 2 per level vec4s */
 export const TILE_PARAM_VEC4S = 1 + 2 * LEVELS;

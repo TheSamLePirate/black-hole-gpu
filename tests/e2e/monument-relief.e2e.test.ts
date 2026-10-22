@@ -58,9 +58,9 @@ test.skipIf(!E2E)(
       );
       console.log(`  ${JSON.stringify(info)}`);
       const modes: Record<string, string> = {
-        n256: `__bh.settings.earthPipeline = "raster"; __bh.renderer.tune = { TUNE_TILE_CR: 2 };`,
-        n512: `__bh.settings.earthPipeline = "raster"; __bh.renderer.tune = { TUNE_TILE_CR: 2, TUNE_MARCH_N: 512 };`,
-        n1024: `__bh.settings.earthPipeline = "raster"; __bh.renderer.tune = { TUNE_TILE_CR: 2, TUNE_MARCH_N: 1024 };`,
+        ctl: `__bh.settings.earthPipeline = "trace"; __bh.renderer.tune = { TUNE_GSKIP: 4194304 }; __bh.renderer.reliefCeiling = true;`,
+        noosm: `__bh.settings.earthPipeline = "trace"; __bh.renderer.tune = { TUNE_SC_SKIP: 4 };`,
+        noscenery: `__bh.settings.earthPipeline = "trace"; __bh.renderer.tune = {}; __bh.settings.earthScenery = "off";`,
       };
       for (const [name, set] of Object.entries(modes)) {
         await app.js(`(async () => { ${set} __bh.settings.targetSpp = 0; window.__t = true;
@@ -69,7 +69,7 @@ test.skipIf(!E2E)(
         await app.js(`new Promise((r) => setTimeout(r, 4000))`);
         await app.shot(`remote-results/monument-${name}.png`);
         console.log(
-          `  ${name}: cache ${JSON.stringify(await app.js("__bh.renderer.terrainCacheStats"))} tiles ${JSON.stringify(await app.js("({ stamp: __bh.renderer.earthTiles.stamp, pending: __bh.renderer.earthTiles.pending })"))}`,
+          `  ${name}: top ${await app.js("__bh.renderer.earthTiles.top()")} ceiling ${await app.js("__bh.renderer.paramsF[28 * 4 + 3]")} tiles ${JSON.stringify(await app.js("({ stamp: __bh.renderer.earthTiles.stamp, pending: __bh.renderer.earthTiles.pending })"))}`,
         );
         console.log(`  ${name}: at ${JSON.stringify(await geo())}`);
         await app.js(`(() => { window.__t = false; return 1; })()`);

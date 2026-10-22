@@ -98,11 +98,11 @@ struct Params {
                    // while the ground carries the camera); w: its |·|² − 1 (float64 on the CPU)
   nearCam1: vec4f, // the camera from that anchor [radii] (float64's remainder); w: on (0/1)
   // the Earth's terrain tiles near the camera (src/system/earth-tiles.ts): the reference — cos, sin of its
-  // longitude, the sine of its latitude, on (0/1) —; per level (z 6 … 13) the reference in its valid
+  // longitude, the sine of its latitude, on (0/1) —; per level (z 6 … 14) the reference in its valid
   // rectangle [px], the rectangle's corner in its layer [px]; the rectangle's size [px], the level's
   // pixels per radian, on
   tiles: vec4f,
-  tileL: array<vec4f, 16>,
+  tileL: array<vec4f, 18>,
   // the runways near the camera (src/game/sites.ts, at most RWY_MAX): [0].x their count; then each its
   // threshold's geodetic unit direction (w: its length [m]), its landing direction (w: its half width [m]),
   // its right, and the camera from its threshold on the Earth's squashed axes [m] (float64 on the CPU)
@@ -219,6 +219,9 @@ override TUNE_RISE: f32 = 0.05;
 // (the relief march's steps at most — 256; a ray out of them still rising is the sky's: one grazing a butte's rounded top
 // after its long way over the plain ran out of them, in bands)
 override TUNE_MARCH_N: u32 = 256u;
+// (the march's longest step: TUNE_STEP_CAP_M [m] or TUNE_STEP_CAP_K of the distance, the longer; 0: none)
+override TUNE_STEP_CAP_M: f32 = 0.0;
+override TUNE_STEP_CAP_K: f32 = 0.03;
 // (the ground's march over-relaxed — Keinert et al. 2014: a step this many times the safe one tried on the way in,
 // taken back to the safe one when the next point's clearance shows the two safe reaches leave a gap; 1: none)
 override TUNE_RELAX: f32 = 1.6;
@@ -5394,7 +5397,7 @@ fn earthH0(q: vec3f, foot: f32) -> f32 {
 }
 // ---- the terrain tiles (src/system/earth-tiles.ts: the same weights on the CPU, heightAt)
 const TILE_Z0 = 6u;
-const TILE_LEVELS = 8u;
+const TILE_LEVELS = 9u;
 const TILE_RES_MIN = 25.0;
 // a level's texel at i (from its valid rectangle's corner), in its layer (toroidal: modulo its window's side)
 fn tileTexel(l: u32, i: vec2i) -> f32 {
@@ -5408,7 +5411,7 @@ fn tileImage(l: u32, i: vec2i) -> u32 {
   let t = (vec2i(P.tileL[2u * l].zw) + i) & vec2i(i32(P.tileL[2u * l + 1u].w) - 1);
   return textureLoad(earthTiles, t, l, 0).g;
 }
-const TILE_IMG_LEVELS = 8u; // (z 6 … 13: src/system/earth-tiles.ts, IMG_Z1)
+const TILE_IMG_LEVELS = 9u; // (z 6 … 14: src/system/earth-tiles.ts, IMG_Z1)
 // The tiles' imagery at q for a footprint foot [m] (src/system/earth-tiles.ts: GIBS, EOX's Sentinel-2): the finest level
 // within the footprint and the next coarser, blended by the footprint and towards their windows' edges
 // (as earthH); rgb the day's colour (linear), a the night's lights; w its weight — the global maps' the rest
@@ -5977,6 +5980,9 @@ fn earthMarchFrom(ro: vec3f, rd: vec3f, fpK: f32, tStart: f32) -> f32 {
       if (fPrev > f) { step = max(step, min(0.5 * f * (t - tPrev) / (fPrev - f), 0.03 * t)); } else { step = max(step, TUNE_RISE * t); rising = true; }
     }
     // (relaxed only where the relaxation set the step: the foretold crossings and the rising rays' steps as before)
+    // (no step longer than TUNE_STEP_CAP_M or TUNE_STEP_CAP_K of the distance: a ray high over the plain — its clearance
+    // hundreds of metres — stepped by a share of it through a butte's top narrower than that, in bands of sky)
+    if (TUNE_STEP_CAP_M > 0.0) { step = min(step, max(TUNE_STEP_CAP_M / EARTH_RM, TUNE_STEP_CAP_K * t)); }
     relaxedPrev = tryRelax && step <= relax;
     safePrev = safe;
     prevFull = band;
