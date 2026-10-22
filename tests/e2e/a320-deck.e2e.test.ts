@@ -168,4 +168,25 @@ describe.skipIf(!E2E)("the A320's flight deck by the mouse", () => {
     expect(await app.js<number>(`__bh.renderer.a320Deck["it-autoflight/custom/show-spd"]`)).toBe(1);
     await shot(app, "a320-deck-fcu");
   }, 60_000);
+
+  test("the MCDU (A9): INIT, FROM/TO typed on its keys, the plan built", async () => {
+    await click(await aim("init.cpt"));
+    for (const k of "LFPG/EGLL") await click(await aim(k === "/" ? "/.cpt" : `${k.toLowerCase()}.cpt`));
+    await click(await aim("R1.cpt"));
+    await Bun.sleep(300);
+    const wps = await app.js<string[]>(`__bh.camera.nav.route.wps.map((w) => w.name)`);
+    expect(wps[0]).toBe("LFPG");
+    expect(wps.at(-1)).toBe("EGLL");
+    expect(await app.js<string | null>(`__bh.camera.a320Fmgc.fms.to`)).toBe("EGLL");
+    // (the MCDU's screen drawn: its canvas lit)
+    const lit = await app.js<number>(`(() => {
+      const x = __bh.renderer.a320Du.canvasOf("MCDU1").getContext("2d").getImageData(0, 0, 1024, 864).data;
+      let k = 0; for (let i = 0; i < x.length; i += 64) if (x[i] + x[i + 1] + x[i + 2] > 120) k++;
+      return k;
+    })()`);
+    expect(lit).toBeGreaterThan(300);
+    await app.js(`(__bh.camera.setLook(30, -38), __bh.settings.fov = 40, true)`);
+    await Bun.sleep(1500);
+    await shot(app, "a320-deck-mcdu");
+  }, 120_000);
 });

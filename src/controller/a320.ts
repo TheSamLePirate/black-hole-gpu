@@ -26,6 +26,8 @@ function a320Step(this: CameraController, dt: number, onWheels: boolean): A320Fc
     this.a320.setFuel(fleet.fuel.a320 ?? VESSELS.a320.fuelKg ?? 8000);
   }
   const A = this.a320;
+  // (the FLEX temperature: the MCDU's PERF TAKE OFF — fmgc/fms.ts)
+  A.flexTemp = this.a320Fmgc?.fms.flex ?? null;
   // (the fuel changed by another — a refuelling, a flight prepared —: the tanks filled again)
   if (Math.abs((fleet.fuel.a320 ?? A.fuel) - A.fuel) > 1) A.setFuel(fleet.fuel.a320!);
   const L = this.airFlight.last;

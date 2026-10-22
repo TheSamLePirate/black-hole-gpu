@@ -12,6 +12,7 @@ import type { DeckBinding, DeckControl } from "./deck";
 import { nasalCalls, type NasalCall } from "./deckctl";
 import type { Props } from "./rig";
 import type { Fmgc, FmgcIn } from "./fmgc/fmgc";
+import type { McduApi } from "./mcdu/types";
 
 /** The game the deck works on (main.ts: the camera, the settings, the actions the keys share). */
 export interface DeckGame {
@@ -29,6 +30,8 @@ export interface DeckGame {
   setGear(down: boolean): void;
   /** the flight guidance (controller/a320ap.ts): its FCU, and the figures it read last */
   fmgc(): { F: Fmgc; i: FmgcIn | null } | null;
+  /** a MCDU (0 the captain's, 1 the first officer's — src/a320/mcdu) */
+  mcdu(side: number): McduApi | null;
   /** the flap lever a notch (+1: more flaps) */
   flaps(step: number): void;
   toast(m: string): void;
@@ -102,6 +105,8 @@ const FOLLOWED = new Set([
   "controls/cockpit/captain-visor",
   "controls/cockpit/fo-visor",
   "it-autoflight/config/altitude-dial-mode",
+  "FMGC/keyboard-left",
+  "FMGC/keyboard-right",
   "instrumentation/altimeter/inhg-left",
 ]);
 
@@ -110,6 +115,20 @@ export function deckCall(g: DeckGame, P: Props, c: NasalCall): boolean {
   const C = g.craft;
   const a0 = c.args[0],
     a1 = c.args[1];
+  // (the MCDUs' keys: FlightGear's mcdu.button("A", side), lskbutton("1", side), rskbutton, pagebutton("f-pln", side),
+  // arrowbutton("up", side))
+  if (/^mcdu\.(button|lskbutton|rskbutton|pagebutton|arrowbutton)$/.test(c.fn)) {
+    const M = g.mcdu(Number(a1) || 0);
+    const k = String(a0 ?? "");
+    if (!M) return true;
+    // (FlightGear's names for the "/" and "." keys)
+    if (c.fn === "mcdu.button") M.button(k === "SLASH" ? "/" : k === "DOT" ? "." : k);
+    else if (c.fn === "mcdu.lskbutton") M.lsk("L", Number(k));
+    else if (c.fn === "mcdu.rskbutton") M.lsk("R", Number(k));
+    else if (c.fn === "mcdu.pagebutton") M.page(k);
+    else M.arrow(k as "left" | "right" | "up" | "down");
+    return true;
+  }
   // (the FCU)
   const fm = FCU.exec(c.fn);
   if (fm) {
@@ -303,6 +322,10 @@ export function deckChanged(g: DeckGame, P: Props, prop: string, v: number | str
       // (the panels' integral lighting: the cabin's level — ship.wgsl S.cab)
       set("cabinLight", Math.min(Math.max(n, 0), 1));
       return true;
+    case "FMGC/keyboard-left":
+    case "FMGC/keyboard-right":
+      if (n > 0.5) g.toast(t("MCDU: keyboard mode — type into it, Escape to leave"));
+      return true;
     case "it-autoflight/config/altitude-dial-mode": {
       // (the FCU's altitude knob's step: 100 or 1000 ft)
       const G = g.fmgc();
@@ -362,7 +385,9 @@ export function deckWired(c: DeckControl): boolean {
   const all: DeckBinding[] = c.actions.flatMap((a) => [...a.bindings, ...(a.up ?? [])]);
   return all.some((b) =>
     b.command === "nasal"
-      ? nasalCalls(b.script ?? "").some((x) => CALLS.has(x.fn) || FCU.test(x.fn) || (x.fn === "setprop" && FOLLOWED.has(String(x.args[0]))))
+      ? nasalCalls(b.script ?? "").some(
+          (x) => CALLS.has(x.fn) || FCU.test(x.fn) || x.fn.startsWith("mcdu.") || (x.fn === "setprop" && FOLLOWED.has(String(x.args[0]))),
+        )
       : !!b.property && FOLLOWED.has(b.property.replace(/^\//, "").replace(/\[0\]/g, "")),
   );
 }

@@ -7,6 +7,8 @@
 // asks (the FADEC's: under the levers' limit), the FMA, the flight directors' orders, and FlightGear's properties the
 // deck reads (the FCU's windows, its lights). Pure: a frame's figures in.
 
+import { Fms } from "./fms";
+
 const D = Math.PI / 180;
 const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
 const wrap180 = (a: number) => ((((a + 180) % 360) + 360) % 360) - 180;
@@ -79,9 +81,12 @@ export interface FmgcIn {
   cstr: number | null;
   /** the side sticks' deflections now (−1…1): an autopilot's instinctive disconnection past ½ */
   stick: [number, number];
-  /** the take-off's runway heading [deg] (RWY), the acceleration's height [ft over the field] */
+  /** the take-off's runway heading [deg] (RWY), the acceleration's height [ft over the field] (the FMS's PERF TO
+   *  overrides it) */
   rwyHdg: number | null;
   accelAgl: number;
+  /** the gross weight [kg] */
+  gw: number;
   /** the field's elevation [ft] (the take-off's, the landing's) */
   elev: number;
 }
@@ -119,6 +124,8 @@ export interface Fma {
 }
 
 export class Fmgc {
+  /** the flight management's data (the MCDUs': fms.ts) */
+  readonly fms = new Fms();
   // ---- the FCU's selections: the speed [kt] or Mach, managed or selected; the heading or track [deg], managed (dashes)
   // or selected; the altitude [ft] and its knob's step; the V/S [ft/min] or FPA [deg]; HDG-V/S or TRK-FPA
   spd = 160;
@@ -156,6 +163,7 @@ export class Fmgc {
   private airborneT = 0;
   private n1Cmd = 0;
   private spdI = 0;
+  private gRef = 0;
   private flareGamma = 0;
   private lastIas = 0;
   private iasRate = 0;
@@ -327,19 +335,32 @@ export class Fmgc {
     if (m === "ALT" || m === "ALT*") this.vertArmed = this.vertArmed.filter((x) => x !== "ALT");
   }
 
-  /** The managed speed [kt] by the phase and the configuration (the FMGC's: A9 refines it — the PERF pages). */
+  /** The managed speed [kt] by the phase and the configuration (the FMS's: V2 + 10 at the take-off, ECON by the cost
+   *  index, 250 kt under FL100, VAPP in the landing configuration — green dot, S, F before). */
   managedSpeed(i: FmgcIn): number {
+    const E = this.fms.econ();
+    const v2 = this.fms.v2 ?? i.v2;
+    const machKt = (m: number) => (m / Math.max(i.mach, 0.3)) * i.ias;
     switch (this.phase) {
       case "preflight":
       case "takeoff":
-        return i.v2 + 10;
+        return v2 + 10;
       case "go around":
-        return Math.max(i.v2, i.vls);
+        return Math.max(v2, i.vls);
       case "approach":
-        return i.flapLever >= 4 ? i.vls + 5 : i.flapLever >= 3 ? i.f : i.flapLever >= 2 ? i.f : i.flapLever >= 1 ? i.s : i.greenDot;
+        return i.flapLever >= 3 && i.flapLever >= (this.fms.ldgConf === 4 ? 4 : 3) - 0
+          ? this.fms.vapp(i.gw, i.ils?.course)
+          : i.flapLever >= 2
+            ? i.f
+            : i.flapLever >= 1
+              ? i.s
+              : i.greenDot;
+      case "cruise":
+        return i.alt < 10000 ? 250 : Math.min(machKt(E.crzMach), 300);
+      case "descent":
+        return i.alt < 10000 ? 250 : Math.min(E.des, machKt(E.crzMach));
       default:
-        // (250 kt below FL100; 290 kt then Mach 0.78 above)
-        return i.alt < 10000 ? 250 : Math.min(290, (0.78 / Math.max(i.mach, 0.3)) * i.ias);
+        return i.alt < 10000 ? 250 : Math.min(E.clb, machKt(E.crzMach));
     }
   }
 
@@ -372,7 +393,8 @@ export class Fmgc {
     if (this.phase === "preflight" && !i.onGround) this.phase = i.flapLever > 0 ? "approach" : "cruise";
     const take = i.onGround && i.detent >= 4;
     if (this.phase === "preflight" && take) this.phase = "takeoff";
-    if (this.phase === "takeoff" && !i.onGround && agl > i.accelAgl) this.phase = "climb";
+    const accel = this.fms.acc ?? i.accelAgl;
+    if (this.phase === "takeoff" && !i.onGround && agl > accel) this.phase = "climb";
     if (
       (this.phase === "climb" || this.phase === "descent") &&
       !i.onGround &&
@@ -384,7 +406,7 @@ export class Fmgc {
       this.phase = "descent";
     if ((this.phase === "descent" || this.phase === "cruise") && (i.flapLever > 0 || (this.apprArm && agl < 8000))) this.phase = "approach";
     if (this.phase !== "go around" && !i.onGround && i.detent >= 6 && (this.phase === "approach" || this.lat === "LAND")) this.goAround(i);
-    if (this.phase === "go around" && agl > i.accelAgl + 500) this.phase = "climb";
+    if (this.phase === "go around" && agl > accel + 500) this.phase = "climb";
     if (i.onGround && i.gs < 30 && (this.phase === "approach" || this.lat === "ROLL OUT")) this.phase = "done";
     if (this.phase === "done" && take) this.phase = "takeoff";
 
@@ -399,7 +421,7 @@ export class Fmgc {
     if (!i.onGround && this.lat === "RWY" && (i.ra ?? 1e9) > 30) this.setLat(this.latArmed === "NAV" && this.lnavOk ? "NAV" : "RWY TRK");
     if (!i.onGround && this.lat === "RWY TRK" && this.latArmed === "NAV" && this.lnavOk) this.setLat("NAV");
     // (SRS until the acceleration's height: CLB, the speed managed)
-    if (this.vert === "SRS" && !i.onGround && agl > i.accelAgl) {
+    if (this.vert === "SRS" && !i.onGround && agl > accel) {
       this.setVert(this.alt > i.alt + 200 ? "CLB" : "ALT*");
       this.vertArmed = [];
     }
@@ -506,10 +528,16 @@ export class Fmgc {
     let gamma: number | null = null;
     const tgtSpd = this.targetSpeed(i);
     // (the speed on the elevator: the path's angle more as the speed is above its target — OP CLB, CLB, SRS, DES)
-    const speedOnPitch = (base: number, lo: number, hi: number) => {
+    // (a degree of path ≈ 0.33 kt/s of acceleration: the path's reference — the one flown, slowly followed — moved by
+    // 0.15° a knot off, damped by 2° a knot a second of the speed's rate)
+    this.gRef += (i.fpa - this.gRef) * Math.min(dt / 4, 1);
+    const speedOnPitch = (_base: number, lo: number, hi: number) => {
       const err = i.ias - tgtSpd;
-      this.spdI = clamp(this.spdI + err * dt * 0.02, -3, 3);
-      return clamp(base + 0.35 * err + this.spdI + 4 * this.iasRate, lo, hi) * D;
+      this.spdI = clamp(this.spdI + err * dt * 0.01, -2, 2);
+      const g = clamp(this.gRef + 0.15 * err + this.spdI + 2 * this.iasRate, lo, hi);
+      // (its reference kept within the bounds: no wind-up)
+      this.gRef = clamp(this.gRef, lo - 2, hi + 2);
+      return g * D;
     };
     const vsGamma = (vs: number) => Math.asin(clamp((vs * FT) / 60 / V, -0.5, 0.5));
     switch (this.vert) {
@@ -600,15 +628,10 @@ export class Fmgc {
     } else {
       this.n1Cmd = i.n1.now;
       this.thrust =
-        i.detent >= 6
-          ? "MAN TOGA"
-          : i.detent >= 4
-            ? i.flex && i.onGround
-              ? "MAN FLX"
-              : "MAN MCT"
-            : this.athr && i.detent > 3
-              ? "MAN THR"
-              : "";
+        i.detent >= 6 ? "MAN TOGA" : i.detent >= 4 ? (i.flex ? "MAN FLX" : "MAN MCT") : this.athr && i.detent > 3 ? "MAN THR" : "";
+      // (past the thrust reduction's height with the levers still in FLX or TOGA: "LVR CLB" — the levers to CL)
+      const early = this.phase === "takeoff" || this.phase === "climb" || this.phase === "go around";
+      if (this.athr && !i.onGround && i.detent >= 4 && agl > this.fms.thrRed && early) this.thrust = "LVR CLB";
     }
     if (lim === null && !this.athrActive && this.athr && i.detent === 0 && !i.onGround) {
       // (the levers at idle in flight with the A/THR on: it stays armed, the thrust the levers' — idle)

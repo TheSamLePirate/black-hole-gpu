@@ -72,4 +72,6 @@ export default {
   "NAV engaged": "NAV engagé",
   "NAV armed": "NAV armé",
   "AP1: 100 ft up, 5 s after the lift-off": "AP1 : à 100 ft, 5 s après le décollage",
+  "MCDU: keyboard mode off": "MCDU : saisie au clavier coupée",
+  "MCDU: keyboard mode — type into it, Escape to leave": "MCDU : saisie au clavier — tapez, Échap pour en sortir",
 };

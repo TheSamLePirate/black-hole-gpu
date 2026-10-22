@@ -17,6 +17,7 @@ const D2R = Math.PI / 180;
 /** FlightGear's colours (PFD.nas's setColor): amber, green, cyan (selected), white */
 const AMBER = "rgb(187,97,0)";
 const GREEN = "rgb(13,192,75)";
+const MAGENTA = "#b055be";
 const CYAN = "rgb(23,154,183)";
 const WHITE = "rgb(255,255,255)";
 const GREY = "rgb(206,205,206)";
@@ -164,7 +165,7 @@ export class Pfd extends Display {
       doc.get(id).hide();
   }
 
-  draw(ctx: Ctx, d: DuData, _t: number) {
+  draw(ctx: Ctx, d: DuData, t: number) {
     const doc = this.doc;
     if (!doc) return;
     const e = this.e;
@@ -290,7 +291,17 @@ export class Pfd extends Display {
         .setText(Math.round(tgt).toString().padStart(3, " "));
       e("ASI_decimal_UP").hide();
       e("ASI_decimal_DN").hide();
-      for (const id of ["ASI_target", "ASI_digit_UP", "ASI_digit_DN"]) e(id).setColor(CYAN);
+      // (managed: magenta; selected: blue — PFD.nas's)
+      for (const id of ["ASI_target", "ASI_digit_UP", "ASI_digit_DN"]) e(id).setColor(d.targetManaged ? MAGENTA : CYAN);
+    }
+    // (V1: its mark on the tape within 42 kt, else its figure — on the ground and under 55 ft of the take-off)
+    const v1 = d.v1;
+    const v1On = v1 !== null && d.takeoff && agl < 55;
+    e("v1_group").setVisible(v1On && Math.abs(v1 - ias) <= 42);
+    e("v1_text").setVisible(v1On && Math.abs(v1 - ias) > 42);
+    if (v1On) {
+      e("v1_group").setTranslation(0, (v1 - ias) * -6.6);
+      e("v1_text").setText(String(Math.round(v1)).padStart(3, " "));
     }
     // (the trend arrow: 10 s ahead, shown past 2 kt — kept down to 1 kt)
     const trend = clamp(d.iasTrend, -50, 50);
@@ -419,7 +430,10 @@ export class Pfd extends Display {
     e("FMA_flxtemp")
       .setVisible(f.thrust === "MAN FLX" && d.flexTemp !== null)
       .setText(d.flexTemp !== null ? `+${d.flexTemp}` : "");
-    set("FMA_thrust", manual ? "" : f.thrust, f.thrust === "A.FLOOR" ? AMBER : GREEN);
+    // (LVR CLB: the levers to CL — white, flashing in the thrust's column; FlightGear's FMA_lvrclb)
+    const lvr = f.thrust === "LVR CLB";
+    e("FMA_lvrclb").setVisible(lvr && Math.floor(t * 2) % 2 === 0);
+    set("FMA_thrust", manual || lvr ? "" : f.thrust, f.thrust === "A.FLOOR" ? AMBER : GREEN);
     const B = f.boxed;
     e("FMA_thrust_box").setVisible(f.thrust === "A.FLOOR" || (!!B?.thrust && !manual));
     const modes = !!(f.fd || f.ap);

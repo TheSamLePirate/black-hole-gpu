@@ -1,6 +1,6 @@
 import { scopeRange } from "./ui/hud/symbology";
 import { SystemsPage } from "./ui/systemspage";
-import { fieldByCode } from "./world/runways";
+import { fieldByCode, fieldCached } from "./world/runways";
 import type { FailureKind } from "./game/systems";
 import { holeFleet } from "./holefleet";
 import { SceneryHitboxes } from "./ui/scenery-hitboxes";
@@ -29,6 +29,8 @@ import { DeckPoser } from "./a320/deck";
 import { DeckControls } from "./a320/deckctl";
 import { DuSet } from "./a320/du";
 import { Fmgc } from "./a320/fmgc/fmgc";
+import { Mcdu } from "./a320/mcdu/mcdu";
+import type { McduHost } from "./a320/mcdu/types";
 import { duData } from "./a320/du/data";
 import { DeckPicker } from "./a320/deckpick";
 import { type DeckGame, deckCall, deckChanged, deckExterior, deckSync, deckTip, deckWired } from "./a320/deckgame";
@@ -3735,6 +3737,7 @@ async function main() {
     },
     setGear: (down) => setGear(down),
     fmgc: () => (fleet.active === "a320" ? { F: (camera.a320Fmgc ??= new Fmgc()), i: camera.a320FmgcIn } : null),
+    mcdu: (side) => (fleet.active === "a320" ? (a320Mcdus()?.[side] ?? null) : null),
     flaps: (step) => {
       const cfg = camera.airFlight.cfg;
       const lever = Math.min(Math.max(Math.round((cfg.flaps ?? 0) * 4) + step, 0), 4);
@@ -3750,6 +3753,58 @@ async function main() {
       scheduleUrlSave();
     },
   };
+  // the A320's MCDUs (src/a320/mcdu — docs/PLAN-A320.md, A9): on the FMGC's FMS, the game's flight plan
+  const mcduHost: McduHost = {
+    get fms() {
+      return (camera.a320Fmgc ??= new Fmgc()).fms;
+    },
+    fmgc: () => camera.a320Fmgc,
+    route: () => camera.nav.route,
+    routeChanged: () => camera.routeChanged(),
+    activeWp: () => camera.nav.last.l?.active ?? 1,
+    directTo: (k) => {
+      const g = camera.geoNow();
+      if (!g) return;
+      if (!camera.nav.lnav) camera.routeChanged();
+      camera.nav.lnav?.directTo(k, g);
+      // (NAV: the FMGC's lateral mode on the plan)
+      camera.a320Fmgc?.hdgPush();
+    },
+    geo: () => camera.geoNow(),
+    onGround: () => !!camera.rolling || !!camera.ourLanded,
+    field: (code) => fieldCached(code),
+    gwKg: () => fleet.massProps().mass,
+    fobKg: () => camera.a320?.fuel ?? fleet.fuel.a320 ?? 0,
+    now: () => dateOf(sim.time),
+  };
+  let mcdus: [Mcdu, Mcdu] | null = null;
+  const a320Mcdus = () => (mcdus ??= [new Mcdu(0, mcduHost), new Mcdu(1, mcduHost)]);
+  // (a MCDU's keyboard mode — its KBD button on the deck: FMGC/keyboard-left, -right —: the computer's keys typed into
+  // it, not the flight's; Escape leaves it)
+  addEventListener(
+    "keydown",
+    (e: KeyboardEvent) => {
+      if (fleet.active !== "a320" || !camera.piloting || isTyping(e) || e.metaKey || e.ctrlKey) return;
+      const P = deckPoser.props;
+      const side = Number(P["FMGC/keyboard-left"] ?? 0) > 0.5 ? 0 : Number(P["FMGC/keyboard-right"] ?? 0) > 0.5 ? 1 : -1;
+      if (side < 0) return;
+      const M = a320Mcdus()[side as 0 | 1];
+      const k = e.key;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (k === "Escape") {
+        P["FMGC/keyboard-left"] = P["FMGC/keyboard-right"] = 0;
+        panel.toast(t("MCDU: keyboard mode off"));
+      } else if (k === "Backspace" || k === "Delete") M.button("CLR");
+      else if (k === " ") M.button("SP");
+      else if (k === "+" || k === "-") M.button("PLUSMINUS");
+      else if (k === "ArrowUp" || k === "ArrowDown" || k === "ArrowLeft" || k === "ArrowRight")
+        M.arrow(k.slice(5).toLowerCase() as "up" | "down" | "left" | "right");
+      else if (/^F([1-6])$/.test(k)) M.lsk(e.shiftKey ? "R" : "L", Number(k.slice(1)));
+      else if (/^[a-zA-Z0-9./]$/.test(k)) M.type(k.toUpperCase());
+    },
+    { capture: true },
+  );
   let deckCtl: DeckControls | null = null;
   let deckPick: DeckPicker | null = null;
   const deckWire = new Map<number, boolean>();
@@ -7871,7 +7926,7 @@ async function main() {
             // (its displays — src/a320/du —, drawn while the deck is: two a frame at most, into the atlas)
             const deckMesh = renderer.ship.a320DeckMesh;
             if (renderer.a320Deck && deckMesh && renderer.ship.deckMats) {
-              duSet ??= renderer.a320Du = new DuSet(deckMesh.screens, deckMesh.texts);
+              duSet ??= renderer.a320Du = new DuSet(deckMesh.screens, deckMesh.texts, a320Mcdus());
               renderer.ship.updateDu(duSet.frame(performance.now() / 1000, duData(camera, settings, deckProps, dateOf(sim.time))));
             }
           }

@@ -49,11 +49,12 @@ function a320FmgcStep(this: CameraController, inp: PilotInput, dt: number, onWhe
   const A = this.a320;
   const g = this.geoNow();
   const L = this.airFlight.last;
-  if (!A || !g || !L) return null;
+  // (at rest on the ground the air's figures may not be there yet: zero)
+  if (!A || !g) return null;
   const F = (this.a320Fmgc ??= new Fmgc());
   const att = this.attitudeNow() as { heading?: number };
-  const ias = Math.sqrt((2 * (L.out.q ?? 0)) / 1.225) * KT;
-  const mach = L.out.mach ?? 0;
+  const ias = Math.sqrt((2 * (L?.out.q ?? 0)) / 1.225) * KT;
+  const mach = L?.out.mach ?? 0;
   const lever = this.pilot.throttle;
   const flapLever = Math.round((this.airFlight.cfg.flaps ?? 0) * 4);
   const ci = confOf(flapLever, ias, onWheels);
@@ -74,7 +75,7 @@ function a320FmgcStep(this: CameraController, inp: PilotInput, dt: number, onWhe
     dt,
     ias,
     mach,
-    tas: L.speed * KT,
+    tas: (L?.speed ?? 0) * KT,
     alt: g.alt * FT,
     vs: g.vs * FT * 60,
     ra: agl !== null && agl < 2500 ? Math.max(agl, 0) : null,
@@ -85,7 +86,7 @@ function a320FmgcStep(this: CameraController, inp: PilotInput, dt: number, onWhe
     onGround: onWheels,
     lever,
     detent: detentOf(lever),
-    flex: A.flexTemp !== null,
+    flex: A.flexOn || (onWheels && A.flexTemp !== null),
     flapLever,
     gearDown: this.gearDown,
     vls: vs1 * (ci === 0 ? 1.28 : 1.23),
@@ -109,6 +110,7 @@ function a320FmgcStep(this: CameraController, inp: PilotInput, dt: number, onWhe
     stick: [inp.pitch, inp.roll],
     rwyHdg: takeoff.hdg,
     accelAgl: 1500,
+    gw: mass,
     elev: agl !== null ? g.alt * FT - agl : (R?.elev ?? 0) * FT,
   };
   this.a320FmgcIn = i;

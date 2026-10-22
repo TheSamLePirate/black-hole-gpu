@@ -6,7 +6,7 @@
 // and the moving parts (src/a320/pose.ts) read. Pure.
 
 import { type A320Surfaces, restSurfaces, rudderTravel } from "./aero";
-import { type Engine, type EngineAir, leverN1, type Limits, limits, newEngine, stepEngine, thrustAt, n2Of } from "./fadec";
+import { detentOf, type Engine, type EngineAir, leverN1, type Limits, limits, newEngine, stepEngine, thrustAt, n2Of } from "./fadec";
 import { CONF, confOf } from "./pose";
 
 /** The tanks (FDE/A320-200-CFM.xml): the left outer and inner, the centre, the right inner and outer [kg]. */
@@ -73,8 +73,9 @@ export class A320Fcs {
   alphaFloor = false;
   engines: [Engine, Engine] = [newEngine(), newEngine()];
   limits: Limits | null = null;
-  /** the FLEX temperature set for the take-off [°C] (none: TOGA) */
+  /** the FLEX temperature set for the take-off [°C] (none: TOGA), the FLEX thrust flown (the levers in FLX/MCT) */
   flexTemp: number | null = null;
+  flexOn = false;
   tanks = fillTanks(8000);
   /** the thrust both give [N] (reversed < 0), the most they could give now — TOGA's [N] */
   thrust = 0;
@@ -160,8 +161,12 @@ export class A320Fcs {
     s.lights = [i.lights ? 1 : 0, i.lights ? 1 : 0];
     s.alphaDot = i.alphaDot;
     // ---- the engines: the FADEC's limits, the N1 the levers ask (FLX/MCT with a FLEX temperature on the ground: FLEX)
-    const L1 = (this.limits = limits(i.air, i.onGround ? this.flexTemp : null));
-    const flex = this.flexTemp !== null && i.onGround;
+    // (FLEX: set on the ground with a FLEX temperature and the levers in FLX/MCT, kept after the lift-off until they move)
+    const inFlx = detentOf(i.lever) === 4;
+    if (this.flexTemp !== null && i.onGround && inFlx) this.flexOn = true;
+    if (!inFlx || this.flexTemp === null) this.flexOn = false;
+    const flex = this.flexOn;
+    const L1 = (this.limits = limits(i.air, flex || i.onGround ? this.flexTemp : null));
     const rev = clamp(i.reverse, 0, 1);
     // (α floor: TOGA whatever the levers, until the incidence is back below it and the levers moved)
     if (i.alphaFloor && !i.onGround) this.alphaFloor = true;

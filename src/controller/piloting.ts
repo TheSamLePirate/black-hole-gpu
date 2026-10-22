@@ -1038,12 +1038,12 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   const AV = VESSELS[fleet.active].aero;
   const onWheels0 = !!this.rolling || !!this.local?.L.rolling;
   // (the A320's systems this frame — src/a320/fcs.ts —: its surfaces, slats, flaps, spoilers, engines, fuel)
-  const a320 = fleet.active === "a320" ? this.a320Step(dtPilot, onWheels0) : null;
+  const a320 = fleet.active === "a320" ? this.a320Step(dtPilot, onWheels0 || !!this.ourLanded) : null;
   // (the jet's systems — controller/jet.ts —: the autopilot's holds as the plane law's, the autothrottle)
   let jetCmd = this.jetStep(inp, dtPilot);
   // (the A320's flight guidance — controller/a320ap.ts —: its autopilot's orders to its law)
   if (a320) {
-    const fo = this.a320FmgcStep(inp, dtPilot, onWheels0);
+    const fo = this.a320FmgcStep(inp, dtPilot, onWheels0 || !!this.ourLanded);
     if (fo && (fo.gammaCmd !== null || fo.bankCmd !== null)) jetCmd = { gamma: fo.gammaCmd, bank: fo.bankCmd };
   }
   // (a challenge's clock, its gates, its touchdown, its figures — controller/challenge.ts)

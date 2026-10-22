@@ -98,6 +98,9 @@ export interface DuData {
   fdBars: { pitch: number; roll: number } | null;
   /** the speed target managed (magenta) or selected (blue) */
   targetManaged: boolean;
+  /** the FMS's V1 [kt] (the MCDU's PERF TAKE OFF; null: none), the take-off still to fly (the V1 shown) */
+  v1: number | null;
+  takeoff: boolean;
   targetSpeed: number | null;
   targetAlt: number | null;
   // ---- the ILS: the deviations [dots], its name, the DME [NM]
@@ -273,6 +276,8 @@ export function duData(c: CameraController, s: Settings, deck: Props, date: Date
         },
     fdBars: fo?.fd ? { pitch: fo.fd.pitch, roll: fo.fd.bank - (att.bank ?? 0) * D } : null,
     targetManaged: G ? G.spdManaged : true,
+    v1: G?.fms.v1 ?? null,
+    takeoff: !G || G.phase === "preflight" || G.phase === "takeoff",
     targetSpeed: G && GI ? G.targetSpeed(GI) : null,
     targetAlt: G ? G.alt : null,
     ils: ils ? { id: ils.id, loc: ils.loc, gs: ils.gs, dme: ils.dme / 1.852 } : null,

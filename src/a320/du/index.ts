@@ -13,6 +13,8 @@ import { Nd } from "./nd";
 import { Pfd } from "./pfd";
 import { Sd } from "./sd";
 import { DeckTexts } from "./texts";
+import { McduDisplay } from "./mcdu";
+import type { Mcdu } from "../mcdu/mcdu";
 import type { DeckText } from "../deck";
 
 const SIZE = 1024;
@@ -50,7 +52,13 @@ export class DuSet {
   /** each display its name, its top marked, its corners coloured (the cells' orientation checked: captures) */
   testPattern = false;
 
-  constructor(cells: Record<string, [number, number, number, number]>, texts: DeckText[] = [], atlas = 4096) {
+  constructor(
+    cells: Record<string, [number, number, number, number]>,
+    texts: DeckText[] = [],
+    /** the MCDUs (src/a320/mcdu): the captain's, the first officer's — their screens drawn when given */
+    mcdus?: [Mcdu, Mcdu],
+    atlas = 4096,
+  ) {
     const make: Record<string, () => Display> = {
       PFD1: () => new Pfd(0),
       PFD2: () => new Pfd(1),
@@ -61,6 +69,7 @@ export class DuSet {
       IESI: () => new Isis(),
       DCDU1: () => new Dcdu(0),
       DCDU2: () => new Dcdu(1),
+      ...(mcdus ? { MCDU1: () => new McduDisplay(mcdus[0]), MCDU2: () => new McduDisplay(mcdus[1]) } : {}),
     };
     for (const [name, c] of Object.entries(cells)) {
       const f = make[name];

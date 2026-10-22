@@ -28,7 +28,7 @@ interface XNode {
 }
 
 const ENT: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
-const unescape = (s: string) =>
+const unentity = (s: string) =>
   s.replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (m, e: string) =>
     e[0] === "#" ? String.fromCodePoint(e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10)) : (ENT[e] ?? m),
   );
@@ -46,11 +46,11 @@ export function parseXml(src: string): XNode {
       if (stack.length > 1) stack.pop();
     } else if (m[3]) {
       const attrs: Record<string, string> = {};
-      for (const a of m[4]!.matchAll(/([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) attrs[a[1]!] = unescape(a[2] ?? a[3] ?? "");
+      for (const a of m[4]!.matchAll(/([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) attrs[a[1]!] = unentity(a[2] ?? a[3] ?? "");
       const n: XNode = { tag: m[3], attrs, kids: [], text: "" };
       top.kids.push(n);
       if (!m[5]) stack.push(n);
-    } else if (m[6]) top.text += unescape(m[6]);
+    } else if (m[6]) top.text += unentity(m[6]);
   }
   return root;
 }

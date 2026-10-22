@@ -176,9 +176,13 @@ export class DeckPoser {
     P["controls/indicators/autobrake-low-on"] = ab === 1 ? 1 : 0;
     P["controls/indicators/autobrake-med-on"] = ab === 2 ? 1 : 0;
     P["controls/indicators/autobrake-max-on"] = ab === 3 ? 1 : 0;
-    // (the essential bus: the lights may show)
-    P["systems/electrical/bus/dc-ess"] = i.powered ? 28 : 0;
-    P["systems/electrical/bus/ac-ess-shed"] = i.powered ? 115 : 0;
+    // (the buses powered — A10's electrics to come: all of them —, the lights may show, the displays and the MCDUs
+    // answer; the displays' brightness knobs at full until turned)
+    for (const b of ["ac-1", "ac-2", "ac-ess", "ac-ess-shed", "ac-si-bus"]) P[`systems/electrical/bus/${b}`] = i.powered ? 115 : 0;
+    for (const b of ["dc-1", "dc-2", "dc-bat", "dc-ess", "dc-ess-shed", "dc-hot-1", "dc-hot-2", "dc-service-bus"])
+      P[`systems/electrical/bus/${b}`] = i.powered ? 28 : 0;
+    for (const d of ["dcdul", "dcdur", "du1", "du2", "du3", "du4", "du5", "du6", "iesi", "mcdu1", "mcdu2"])
+      P[`controls/lighting/DU/${d}`] ??= 1;
     // (the animations eased after their systems: a first-order lag, a rate limit first where there is one; the first
     // frame where they are)
     for (const [out, src, c1, rate] of this.lags) {
