@@ -21,14 +21,27 @@ test.skipIf(!E2E)(
         const ready = r.variantReady && r.calibrationReady && !r.hdLoading && r.earthMaps.tier === 'high' && r.earthTiles.pending === 0 &&
           !r.earthSurface.pending && s.status === 'ready' && !s.pending && !g.pending && g.reason !== 'loading';
         return { ready }; })()`;
-      await app.waitFor(`(${readiness}).ready`, 300_000);
-      // (the tripod on the ground — the valley's floor ~1 700 m above the sea: until then the camera is under it)
-      await app.waitFor(`(() => { __bh.touch(); const g = __bh.camera.geoNow(); return !!g && g.alt > 1700; })()`, 300_000);
+      await app.waitFor(`(${readiness}).ready`, 240_000).catch(() => console.log("  (not all in: going on)"));
+      // (the camera — the renderer's, the tripod's: geoNow is the craft's, hidden here — standing over the ground drawn, not
+      // under it: set on the sea-level sphere until the relief is known)
+      const above = `(() => { __bh.touch(); const n = __bh.renderer.lastNear, T = __bh.renderer.earthTiles; if (!n) return false;
+        const b = n.axes.map((x) => -(n.centre[0] * x[0] + n.centre[1] * x[1] + n.centre[2] * x[2]));
+        const A = 6378137, F = 1 / 298.257223563, E2 = F * (2 - F), X = b[0] * A, Y = b[1] * A, Z = b[2] * A, P = Math.hypot(X, Y);
+        let la = Math.atan2(Z, P * (1 - E2)), h = 0;
+        for (let i = 0; i < 6; i++) { const N = A / Math.sqrt(1 - E2 * Math.sin(la) ** 2); h = P / Math.cos(la) - N; la = Math.atan2(Z, P * (1 - E2 * N / (N + h))); }
+        const lo = Math.atan2(Y, X), g = T.heightAt([Math.cos(la) * Math.cos(lo), Math.cos(la) * Math.sin(lo), Math.sin(la)], 2);
+        return g.rem < 0.5 && h > g.h - 2 && h < g.h + 200; })()`;
+      await app.waitFor(above, 600_000);
       // (then a while for the tripod to settle on the finest ground)
       for (let i = 0; i < 15; i++) await app.js("new Promise((r) => { __bh.touch(); setTimeout(r, 1000); })");
       // (the ground truth: the relief's profile seen from the camera — the tiles' heights on the CPU, as the tracer weighs them —
       // each azimuth's highest elevation angle out to 4 km and where it stands: a near hill hiding a butte's foot, or not)
-      const profile = await app.js<string[]>(`(() => { const g = __bh.camera.geoNow(), T = __bh.renderer.earthTiles, out = [];
+      const profile = await app.js<string[]>(`(() => { const n = __bh.renderer.lastNear, T = __bh.renderer.earthTiles, out = [];
+        const b = n.axes.map((x) => -(n.centre[0] * x[0] + n.centre[1] * x[1] + n.centre[2] * x[2]));
+        const A = 6378137, F = 1 / 298.257223563, E2 = F * (2 - F), X = b[0] * A, Y = b[1] * A, Z = b[2] * A, P = Math.hypot(X, Y);
+        let lat0 = Math.atan2(Z, P * (1 - E2)), hh = 0;
+        for (let i = 0; i < 6; i++) { const N = A / Math.sqrt(1 - E2 * Math.sin(lat0) ** 2); hh = P / Math.cos(lat0) - N; lat0 = Math.atan2(Z, P * (1 - E2 * N / (N + hh))); }
+        const g = { lat: lat0 * 180 / Math.PI, lon: Math.atan2(Y, X) * 180 / Math.PI, alt: hh };
         const R = 6371000, la = g.lat * Math.PI / 180, lo = g.lon * Math.PI / 180;
         for (let az = 20; az <= 120; az += 4) { let best = -90, at = 0, a = az * Math.PI / 180;
           for (let d = 30; d <= 4000; d += 15) {
@@ -37,7 +50,7 @@ test.skipIf(!E2E)(
             const h = T.heightAt(q, 2).h; const e = Math.atan2(h - g.alt, d) * 180 / Math.PI - d / (2 * R) * 180 / Math.PI;
             if (e > best) { best = e; at = d; } }
           out.push(az + '°: ' + best.toFixed(2) + '° at ' + at + ' m'); }
-        return [JSON.stringify({ alt: g.alt, here: T.heightAt([Math.cos(la) * Math.cos(lo), Math.cos(la) * Math.sin(lo), Math.sin(la)], 2) })].concat(out); })()`);
+        return [JSON.stringify({ cam: g, here: T.heightAt([Math.cos(la) * Math.cos(lo), Math.cos(la) * Math.sin(lo), Math.sin(la)], 2) })].concat(out); })()`);
       console.log(`  ${profile.join("\n  ")}`);
       const geo = () => app.js(`(() => { const g = __bh.camera.geoNow(); return g && [g.lat, g.lon, g.alt]; })()`);
       const info = await app.js(
@@ -45,8 +58,9 @@ test.skipIf(!E2E)(
       );
       console.log(`  ${JSON.stringify(info)}`);
       const modes: Record<string, string> = {
-        bspline: `__bh.settings.earthPipeline = "raster"; __bh.renderer.tune = { TUNE_GSKIP: 4194304 };`,
-        catmull: `__bh.settings.earthPipeline = "raster"; __bh.renderer.tune = { TUNE_TILE_CR: 1 };`,
+        n256: `__bh.settings.earthPipeline = "raster"; __bh.renderer.tune = { TUNE_TILE_CR: 2 };`,
+        n512: `__bh.settings.earthPipeline = "raster"; __bh.renderer.tune = { TUNE_TILE_CR: 2, TUNE_MARCH_N: 512 };`,
+        n1024: `__bh.settings.earthPipeline = "raster"; __bh.renderer.tune = { TUNE_TILE_CR: 2, TUNE_MARCH_N: 1024 };`,
       };
       for (const [name, set] of Object.entries(modes)) {
         await app.js(`(async () => { ${set} __bh.settings.targetSpp = 0; window.__t = true;

@@ -741,16 +741,23 @@ export function edge(px: number, py: number, w: number, h: number) {
   return t * t * (3 - 2 * t);
 }
 
-const bspline4 = (t: number) => {
-  const t2 = t * t,
-    t3 = t2 * t;
-  return [(1 - 3 * t + 3 * t2 - t3) / 6, (4 - 6 * t2 + 3 * t3) / 6, (1 + 3 * t + 3 * t2 - 3 * t3) / 6, t3 / 6];
+/** A monotone cubic through four samples, at f between the middle two (trace.wgsl monoCubic: Fritsch–Butland's slopes). */
+const monoCubic = (p0: number, p1: number, p2: number, p3: number, f: number) => {
+  const d0 = p1 - p0,
+    d1 = p2 - p1,
+    d2 = p3 - p2;
+  const m1 = d0 * d1 > 0 ? (2 * d0 * d1) / (d0 + d1) : 0;
+  const m2 = d1 * d2 > 0 ? (2 * d1 * d2) / (d1 + d2) : 0;
+  const f2 = f * f,
+    f3 = f2 * f;
+  return (2 * f3 - 3 * f2 + 1) * p1 + (f3 - 2 * f2 + f) * m1 + (-2 * f3 + 3 * f2) * p2 + (f3 - f2) * m2;
 };
 
 /**
  * A level's height at (px, py) [its pixels, from its rectangle's corner]: bilinear, or — its texel more
- * than twice the footprint (mag: by how many octaves larger) — a cubic B-spline over its texels, the two
- * blended over an octave (trace.wgsl: tileSample).
+ * than twice the footprint (mag: by how many octaves larger) — a monotone cubic through its texels (a cliff kept a
+ * cliff: the B-spline before rounded Monument Valley's buttes into domes), the two blended over an octave (trace.wgsl:
+ * tileSample).
  */
 export function sampleLevel(at: (i: number, j: number) => number, px: number, py: number, mag: number) {
   const x = px - 0.5,
@@ -763,13 +770,9 @@ export function sampleLevel(at: (i: number, j: number) => number, px: number, py
   let lin = 0;
   if (k < 1) lin = (at(x0, y0) * (1 - fx) + at(x0 + 1, y0) * fx) * (1 - fy) + (at(x0, y0 + 1) * (1 - fx) + at(x0 + 1, y0 + 1) * fx) * fy;
   if (k <= 0) return lin;
-  const wx = bspline4(fx),
-    wy = bspline4(fy);
-  let b = 0;
-  for (let j = 0; j < 4; j++) {
-    let row = 0;
-    for (let i = 0; i < 4; i++) row += wx[i]! * at(x0 + i - 1, y0 + j - 1);
-    b += wy[j]! * row;
-  }
+  const rows = [0, 1, 2, 3].map((j) =>
+    monoCubic(at(x0 - 1, y0 + j - 1), at(x0, y0 + j - 1), at(x0 + 1, y0 + j - 1), at(x0 + 2, y0 + j - 1), fx),
+  );
+  const b = monoCubic(rows[0]!, rows[1]!, rows[2]!, rows[3]!, fy);
   return lin + (b - lin) * k;
 }

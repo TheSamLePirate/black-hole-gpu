@@ -213,6 +213,12 @@ override TUNE_SMOKE_STEP: f32 = 0.5;
 override TUNE_STEP_BODIES: u32 = 1u;
 // (the ground's march: a step's share of the clearance — 0.5, safe for slopes to ~60°; more: a measure)
 override TUNE_MARCH_K: f32 = 0.5;
+// (a ray rising over the ground — its clearance growing —: its steps' share of the distance (5 %: the shell left in ~150 steps;
+// a butte's narrow top, Monument Valley's Mittens, stepped through in bands of sky)
+override TUNE_RISE: f32 = 0.05;
+// (the relief march's steps at most — 256; a ray out of them still rising is the sky's: one grazing a butte's rounded top
+// after its long way over the plain ran out of them, in bands)
+override TUNE_MARCH_N: u32 = 256u;
 // (the ground's march over-relaxed — Keinert et al. 2014: a step this many times the safe one tried on the way in,
 // taken back to the safe one when the next point's clearance shows the two safe reaches leave a gap; 1: none)
 override TUNE_RELAX: f32 = 1.6;
@@ -232,8 +238,10 @@ override TUNE_MERGE: u32 = 1u;
 override TUNE_DETAIL: u32 = 1u;
 // (1: the tiles' heights always bilinear, never their cubic B-spline — a measure)
 override TUNE_CHEAP: u32 = 0u;
-// (the relief's tiles magnified: 0 a cubic B-spline over their texels, 1 an interpolating one — Catmull–Rom)
-override TUNE_TILE_CR: u32 = 0u;
+// (the relief's tiles magnified: 0 a cubic B-spline over their texels — a butte's wall spread over three of them, its top
+// lowered —, 1 an interpolating one — Catmull–Rom: lips over the cliffs —, 2 a monotone one through them, the default and the
+// CPU's — earth-tiles.ts sampleLevel)
+override TUNE_TILE_CR: u32 = 2u;
 // (the camera rays' crowns carved by their leaves within this many metres — forestQuery's detail; 0: the plain shapes, a
 // measure of what the carving's sphere tracing costs)
 override TUNE_FOREST_DETAIL: f32 = 220.0;
@@ -244,6 +252,9 @@ override TUNE_RASTER_FOOT: f32 = 0.0;
 // blue that tree missed, the grid walked; green no instance, no walk; white the walk as before (no raster scenery) — a measure)
 override TUNE_RASTER_PATHS: u32 = 0u;
 var<private> RASTER_PATH: u32 = 0u;
+// (TUNE_RASTER_PATHS 2: the raster's pixels by how their ground was found — red the hint's bracket refined, green the march
+// over the grazing window before it, blue the whole march, the hint not bracketing; their light kept as shading)
+var<private> HINT_PATH: u32 = 0u;
 // (the raster hint's grazing limit: a ray lower than this sine over the ground below the hint is marched as before — 0: never,
 // a measure of what the grazing rays' marches cost, the thin ridges then missed)
 override TUNE_HINT_GRAZE: f32 = 0.15;
@@ -5344,6 +5355,18 @@ fn catmullRom4(t: f32) -> vec4f {
   let t3 = t2 * t;
   return vec4f(-0.5 * t + t2 - 0.5 * t3, 1.0 - 2.5 * t2 + 1.5 * t3, 0.5 * t + 2.0 * t2 - 1.5 * t3, -0.5 * t2 + 0.5 * t3);
 }
+// a monotone cubic through four samples at f in [0, 1] between the middle two (Fritsch–Butland's slopes: the harmonic mean of
+// the two sides', 0 at an extremum) — through the data, no overshoot: a cliff stays a cliff, no lip above its top
+fn monoCubic(p0: f32, p1: f32, p2: f32, p3: f32, f: f32) -> f32 {
+  let d0 = p1 - p0;
+  let d1 = p2 - p1;
+  let d2 = p3 - p2;
+  let m1 = select(0.0, 2.0 * d0 * d1 / (d0 + d1), d0 * d1 > 0.0);
+  let m2 = select(0.0, 2.0 * d1 * d2 / (d1 + d2), d1 * d2 > 0.0);
+  let f2 = f * f;
+  let f3 = f2 * f;
+  return (2.0 * f3 - 3.0 * f2 + 1.0) * p1 + (f3 - 2.0 * f2 + f) * m1 + (-2.0 * f3 + 3.0 * f2) * p2 + (f3 - f2) * m2;
+}
 // the map's height: near, a cubic B-spline over its texels; from afar, its mip level from the footprint
 fn earthH0(q: vec3f, foot: f32) -> f32 {
   let dim = vec2i(textureDimensions(earthElev));
@@ -5448,6 +5471,14 @@ fn tileSample(l: u32, p: vec2f, mag: f32) -> f32 {
   if (k <= 0.0) { return lin; }
   // (magnified: a cubic over 4 × 4 texels — the B-spline smooth but approximating: a butte's 150 m wall spread into a slope of
   // two or three texels, its top lowered; Catmull–Rom, TUNE_TILE_CR, through the data)
+  if (TUNE_TILE_CR == 2u) {
+    var rows: array<f32, 4>;
+    for (var j = 0; j < 4; j++) {
+      rows[j] = monoCubic(tileTexel(l, i0 + vec2i(-1, j - 1)), tileTexel(l, i0 + vec2i(0, j - 1)), tileTexel(l, i0 + vec2i(1, j - 1)),
+        tileTexel(l, i0 + vec2i(2, j - 1)), f.x);
+    }
+    return mix(lin, monoCubic(rows[0], rows[1], rows[2], rows[3], f.y), k);
+  }
   let cr = TUNE_TILE_CR > 0u;
   let wx = select(bspline4(f.x), catmullRom4(f.x), cr);
   let wy = select(bspline4(f.y), catmullRom4(f.y), cr);
@@ -5787,12 +5818,14 @@ fn earthMarchHinted(ro: vec3f, rd: vec3f, fpK: f32, tM: f32, kM: f32) -> f32 {
   // else, a ridge there after all: the whole march, as before)
   if (sinG < TUNE_HINT_GRAZE) {
     if (TUNE_GRAZE_WINDOW <= 0.0) { return -3.0; }
+    HINT_PATH = 2u;
     let W = (25.0 + 0.004 * tM) * RHINT_TOL / max(sinG, 0.01) * TUNE_GRAZE_WINDOW / kM;
     let ts = tH - W;
     if (ts <= 0.0 || marchClear(A, o, e, rd, ts, fpK) <= 0.0) { return -3.0; }
     return earthMarchFrom(ro, rd, fpK, ts);
   }
   // (a pixel's footprint there, the patch's own few metres: the vertical band the hint is trusted within)
+  HINT_PATH = 1u;
   let eps = (5.0 + 2.0 * tM * fpK) * RHINT_TOL;
   let dm = clamp(eps / sinG, 3.0, (0.02 * tM + 3.0) * RHINT_TOL);
   let dt = dm / kM;
@@ -5869,7 +5902,7 @@ fn earthMarchFrom(ro: vec3f, rd: vec3f, fpK: f32, tStart: f32) -> f32 {
   var relaxedPrev = false;
   var safePrev = 0.0;
   var noRelax = false;
-  for (var i = 0u; i < 256u; i++) {
+  for (var i = 0u; i < TUNE_MARCH_N; i++) {
     cost(0u);
     let v = o + rd * t;
     let p = A + v;
@@ -5941,7 +5974,7 @@ fn earthMarchFrom(ro: vec3f, rd: vec3f, fpK: f32, tStart: f32) -> f32 {
     noRelax = false;
     rising = false;
     if (i > 0u && prevFull == band) {
-      if (fPrev > f) { step = max(step, min(0.5 * f * (t - tPrev) / (fPrev - f), 0.03 * t)); } else { step = max(step, 0.05 * t); rising = true; }
+      if (fPrev > f) { step = max(step, min(0.5 * f * (t - tPrev) / (fPrev - f), 0.03 * t)); } else { step = max(step, TUNE_RISE * t); rising = true; }
     }
     // (relaxed only where the relaxation set the step: the foretold crossings and the rising rays' steps as before)
     relaxedPrev = tryRelax && step <= relax;
@@ -8335,7 +8368,7 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
     if (HAS_TERRAIN_RASTER && RHINT > 0.0 && P.walk[0].w < 0.5) {
       t = earthMarchHinted(ro, rd, pixFoot(), RHINT, length(vec3f(rd.xy, rd.z / ab)) * EARTH_RM);
     }
-    if (t < -2.5) { t = earthMarch(ro, rd, pixFoot()); }
+    if (t < -2.5) { HINT_PATH = 3u; t = earthMarch(ro, rd, pixFoot()); }
   }
   // (the windsocks beside the runways near: before the ground, they are what the ray meets)
   WS = vec4f(0.0);
@@ -9526,9 +9559,14 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   if (e.t <= 0.0) { return; }
   var col = e.col;
   if (COST_VIEW > 0u) { col = costHeat(); }
-  if (TUNE_RASTER_PATHS > 0u) {
+  if (TUNE_RASTER_PATHS == 1u) {
     col = array<vec3f, 4>(vec3f(1.0, 0.0, 0.0), vec3f(0.0, 0.0, 1.0), vec3f(0.0, 1.0, 0.0), vec3f(1.0))[min(RASTER_PATH, 3u)];
   }
+  if (TUNE_RASTER_PATHS == 2u) {
+    let tint = array<vec3f, 4>(vec3f(0.6), vec3f(1.0, 0.15, 0.1), vec3f(0.15, 1.0, 0.2), vec3f(0.2, 0.35, 1.0))[min(HINT_PATH, 3u)];
+    col = tint * (0.3 + luminance(col));
+  }
+  HINT_PATH = 0u;
   if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
   let old = accum[idx];
   if (temporal && stamps[idx] >= P.frame.y && old.a > 0.0) { col = mix(old.rgb / old.a, col, P.ext.w); }

@@ -102,7 +102,7 @@ test("a level moves with the camera: the part it keeps stays drawn", () => {
   expect(t.pending).toBe(0);
 });
 
-test("a level's samples: bilinear and B-spline exact on a ramp, the windows' edges faded", () => {
+test("a level's samples: bilinear and the monotone cubic exact on a ramp, the windows' edges faded", () => {
   const ramp = (i: number, j: number) => 3 * i + 5 * j;
   for (const [x, y] of [
     [10.3, 20.7],
