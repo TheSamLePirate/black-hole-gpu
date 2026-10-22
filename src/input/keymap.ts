@@ -263,7 +263,7 @@ export const KEYMAP: KeySection[] = [
       },
       {
         keys: "⇧Z · ' · ⇧'",
-        text: "Plane mode, the jet's systems: afterburner (the throttle full, thrust ×1.5) · autopilot: the altitude and heading held (the stick flies through it; let go, the new ones held) · autothrottle: the speed held (⇧ Alt then set it) (' is ù on AZERTY)",
+        text: "Plane mode, the jet's systems: afterburner (the throttle full, thrust ×1.5 — the A320: its thrust reversers, on the ground at idle) · autopilot: the altitude and heading held (the stick flies through it; let go, the new ones held) · autothrottle: the speed held (⇧ Alt then set it) (' is ù on AZERTY)",
         bind: [
           fly("KeyZ", "jetSystem", { arg: "ab", shift: true }),
           fly("Quote", "jetSystem", { arg: "ap", shift: false }),
@@ -272,7 +272,7 @@ export const KEYMAP: KeySection[] = [
       },
       {
         keys: "⇧B",
-        text: "F-35B: STOVL mode — the lift fan, the nozzle swivelled down; below 65 m/s the hover law: the stick a speed over the ground, ⇧ Alt a vertical speed, let go held in place",
+        text: "F-35B: STOVL mode — the lift fan, the nozzle swivelled down; below 65 m/s the hover law: the stick a speed over the ground, ⇧ Alt a vertical speed, let go held in place · A320: the autobrake, OFF · LO · MED · MAX",
         bind: [fly("KeyB", "jetSystem", { arg: "stovl", shift: true })],
       },
       {

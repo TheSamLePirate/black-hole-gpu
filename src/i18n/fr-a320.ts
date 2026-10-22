@@ -23,4 +23,10 @@ export default {
   American: "American",
   "American Airlines": "American Airlines",
   A320: "A320",
+  "Reversers: on the ground only": "Inverseurs : au sol seulement",
+  "Reversers stowed": "Inverseurs rentrés",
+  "Reverse thrust: full": "Inversion de poussée : pleine",
+  "Autobrake: the A320's": "Freinage automatique : celui de l'A320",
+  "Autobrake {0}": "Freinage automatique {0}",
+  "Autobrake off": "Freinage automatique coupé",
 };

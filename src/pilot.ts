@@ -167,6 +167,9 @@ export interface FlightContext {
   /** the main engine's answer this frame: the share of the way from its thrust to the throttle's
    *  (1 − e^(−dt/τ) over the frame's flight time; 1 or none: at once) */
   spoolK?: number;
+  /** the engines' thrust now as a share of `thrust` (the A320's FADEC — src/a320/fcs.ts —: its own spooling;
+   *  reversed < 0) — none: the throttle's, lagged by spoolK */
+  engineNow?: number;
   /** the thrust's direction on the ship's axes (x left, y up, z the nose; unit) — none: along the nose (the
    *  F-35B's swivelling nozzle and lift fan: controller/stovl.ts) */
   thrustDir?: V3;
@@ -768,6 +771,7 @@ export class FlightComputer {
     this.engineNow = c.thrust > 0 ? this.engineNow + (throttle - this.engineNow) * Math.min(Math.max(k, 0), 1) : 0;
     // (spooling down towards nothing: nothing below a millionth — not a denormal, read as 1e-283 g)
     if (throttle === 0 && this.engineNow < 1e-6) this.engineNow = 0;
+    if (c.engineNow !== undefined && c.thrust > 0) this.engineNow = c.engineNow;
     throttle = this.engineNow;
     const rcsAuth = TUNING.rcs * c.thrust;
     const rl = len(rcsC);

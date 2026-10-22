@@ -10,6 +10,8 @@ import type { V3 } from "./mounts";
 import type { VesselAero } from "./aero";
 import { F135, type TurbofanDef } from "./f35/engine";
 import { CFM56_PAIR } from "./a320/engine";
+// (the A320's JSBSim aerodynamics registered: VesselAero.model "a320")
+import "./a320/aero";
 
 export type VesselId = "ranger" | "lander" | "endurance" | "f35" | "a320";
 export const VESSEL_IDS: VesselId[] = ["ranger", "lander", "endurance", "f35", "a320"];
@@ -569,6 +571,9 @@ export const VESSELS: Record<VesselId, VesselDef> = {
     flies: true,
     wingtip: [17.0, 2.95, -2.0],
     aero: {
+      // (its own: FlightGear's JSBSim model — src/a320/aero.ts —; the rest below its heat's and limits', and the
+      // generic model's figures for what reads them — the map's drag, a stand-in's)
+      model: "a320",
       area: [90, 150, 0.5],
       // (C_D0 0.019 on 122.6 m²: the FDM's)
       cdA0: 2.33,

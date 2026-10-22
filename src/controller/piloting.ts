@@ -50,6 +50,7 @@ import { cross, dot as dot3, len as len3, lin, sub as sub3 } from "../math/vec3"
 import { t, tf } from "../i18n";
 
 import type { CameraController } from "../controls";
+import { a320Authority } from "../a320/aero";
 import { clamp, flareRef, fmtDur, normalize, smoothstep, spinAxis, unitV, wrapDeg, wrapYaw } from "./util";
 import { heldCode, type HeldAxis } from "../input/bindings";
 
@@ -208,6 +209,9 @@ function newFlight(this: CameraController) {
   this.windNow = null;
   this.weather.reset();
   this.pilot.newFlight();
+  // (the A320's systems made again with its next frame: its fuel the fleet's)
+  this.a320 = null;
+  this.a320Reverse = 0;
   this.hubCache = this.runwayCache = this.futureCache = this.kerrInfoCache = this.aimCache = null;
   this.contrails.clear();
   this.rigidMount();
@@ -1031,6 +1035,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   const LA0 = this.airFlight.last;
   const AV = VESSELS[fleet.active].aero;
   const onWheels0 = !!this.rolling || !!this.local?.L.rolling;
+  // (the A320's systems this frame — src/a320/fcs.ts —: its surfaces, slats, flaps, spoilers, engines, fuel)
+  const a320 = fleet.active === "a320" ? this.a320Step(dtPilot, onWheels0) : null;
   // (the jet's systems — controller/jet.ts —: the autopilot's holds as the plane law's, the autothrottle)
   const jetCmd = this.jetStep(inp, dtPilot);
   // (a challenge's clock, its gates, its touchdown, its figures — controller/challenge.ts)
@@ -1075,11 +1081,20 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
           // (a fighter's surfaces — the F-35's stabilators and flaperons —: authority to roll at 190°/s against
           // its wings' own damping, 14 rad/s² at most; a spacecraft's 4)
           // (at high incidence blanketed by the wing and the fuselage: aero.highAlpha's ctrl60 at 60°)
-          auth: AV.ctrl.map((k, i) => {
-            const HA = AV.highAlpha;
-            const kept = HA ? highAlphaAuthority(HA, LA0.out.alpha, LA0.out.mach)[i]! : 1;
-            return Math.min((k * LA0.out.q) / 1000, VESSELS[fleet.active].fbw ? 14 : 4) * kept;
-          }) as Vec3,
+          // (the A320: its surfaces' own authority — the FDM's control derivatives at full travel, src/a320/aero.ts)
+          auth: a320
+            ? a320Authority(
+                LA0.u.map((x) => x * LA0.speed) as Vec3,
+                LA0.air,
+                [mp.I[0]![0]!, mp.I[1]![1]!, mp.I[2]![2]!],
+                a320.surfaces,
+                Math.sqrt((2 * LA0.out.q) / 1.225) * 1.9438,
+              )
+            : (AV.ctrl.map((k, i) => {
+                const HA = AV.highAlpha;
+                const kept = HA ? highAlphaAuthority(HA, LA0.out.alpha, LA0.out.mach)[i]! : 1;
+                return Math.min((k * LA0.out.q) / 1000, VESSELS[fleet.active].fbw ? 14 : 4) * kept;
+              }) as Vec3),
           path: this.airFlight.pathRate.map((x) => -x) as Vec3,
           ground: onWheels0,
           stall: AV.wing?.stall ?? 0.35,
@@ -1196,6 +1211,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
           drift: e.drift.some((x) => x !== 0) ? e.drift : null,
         };
       })(),
+      // (the A320's engines: their FADEC's thrust, spooled by itself)
+      engineNow: a320 ? a320.thrust / a320.thrustMax : undefined,
       spoolK:
         s.engine === "crew" || VESSELS[fleet.active].turbofan
           ? 1 - Math.exp(-((s.animate ? timeRate(s) * dt : 0) * Msec) / VESSELS[fleet.active].spool)
@@ -1310,7 +1327,9 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   // (an aircraft's turbofan: its fuel by its consumption — the thrust it gives now, the dry share and the
   // afterburner's — in seconds of the flight)
   const TF = VESSELS[fleet.active].turbofan;
-  if (TF) {
+  // (the A320's fuel: burnt by its systems, tank by tank — src/a320/fcs.ts)
+  if (a320) fleet.fuel.a320 = a320.fuel;
+  else if (TF) {
     const e = this.jetAir();
     const mass = fleet.massProps().mass;
     const toMs2 = C_MPS ** 2 / (1476.625 * s.massSolar);

@@ -6,6 +6,7 @@
 // wipers — each at its actuator's rate. Pure.
 
 import type { Props } from "./rig";
+import type { A320Fcs } from "./fcs";
 
 type V3 = [number, number, number];
 
@@ -46,6 +47,9 @@ export interface A320Inputs {
   apu?: boolean;
   /** the sharklets (a neo's) instead of the wingtip fences */
   sharklets?: boolean;
+  /** the A320's systems flown (src/a320/fcs.ts): its surfaces, slats, flaps, spoilers, stabiliser, reversers and N1
+   *  as they are — instead of the commands' own easing here (FlightGear's properties are JSBSim's angles) */
+  fcs?: A320Fcs | null;
 }
 
 /** The slats' and flaps' angles for each configuration [deg] (FlightGear's SFCC, Systems/a320-fcs.xml; the
@@ -206,6 +210,25 @@ export class A320Poser {
     P["systems/hydraulic/sources/rat/arm-position"] = clamp(s.rat * 1.5 - 0.5, 0, 1);
     P["controls/apu/inlet-flap/position-norm"] = i.apu ? 1 : 0;
     P["sim/multiplay/generic/int[12]"] = i.sharklets ? 1 : 0;
+    // (the systems flown: their own angles — FlightGear's aliases of JSBSim's — and engines)
+    const F = i.fcs;
+    if (F) {
+      const u = F.surfaces;
+      P["sim/multiplay/generic/float[4]"] = P["sim/multiplay/generic/float[5]"] = u.elevator;
+      P["sim/multiplay/generic/float[6]"] = u.aileronL;
+      P["sim/multiplay/generic/float[7]"] = u.aileronR;
+      P["sim/multiplay/generic/float[8]"] = u.rudder;
+      P["sim/multiplay/generic/float[9]"] = u.stab;
+      P["sim/multiplay/generic/float[11]"] = u.slat / 27;
+      P["sim/multiplay/generic/float[12]"] = u.flap / 40;
+      for (let k = 0; k < 5; k++) {
+        P[`systems/fcs/spoiler-l${k + 1}/final-deg`] = F.spoilers[k]!;
+        P[`systems/fcs/spoiler-r${k + 1}/final-deg`] = F.spoilers[5 + k]!;
+      }
+      F.engines.forEach((e, k) => {
+        P[`engines/engine[${k}]/reverser-pos-norm`] = e.rev;
+      });
+    }
     return { props: P, spins: this.spins };
   }
 }

@@ -103,6 +103,8 @@ import { installReplay } from "./controller/replay";
 import { installInstructor } from "./controller/instructor";
 import { installNetcraft } from "./controller/netcraft";
 import { installStovl, noStovl, type StovlState } from "./controller/stovl";
+import type { A320Fcs } from "./a320/fcs";
+import { installA320 } from "./controller/a320";
 import { CamShake } from "./camshake";
 import { installCine } from "./controller/cine";
 import { installCamRig } from "./controller/camrig";
@@ -1095,6 +1097,10 @@ export class CameraController {
   shakeContact = 0;
   /** the F-35B's STOVL mode (controller/stovl.ts) */
   stovl: StovlState = noStovl();
+  /** the A320's systems, flown (src/a320/fcs.ts): made with its first frame */
+  a320: A320Fcs | null = null;
+  /** the A320's reverse lever 0…1 (its thrust reversers: on the ground, the levers at idle) */
+  a320Reverse = 0;
   readonly jetAthr = new Autothrottle();
   jetCws = { pitch: false, roll: false, thr: Number.NaN };
   /** a formation flown on another's craft (game/formation.ts — controller/formation.ts), null: none */
@@ -1620,6 +1626,7 @@ installReplay(CameraController);
 installInstructor(CameraController);
 installNetcraft(CameraController);
 installStovl(CameraController);
+installA320(CameraController);
 installCine(CameraController);
 installCamRig(CameraController);
 installTravel(CameraController);

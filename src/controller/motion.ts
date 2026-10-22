@@ -449,7 +449,11 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
   // on the mains alone at speed, the craft would slam its nose down)
   const allDown = !!gdef && this.gearLast?.contact === gdef.legs.length;
   // (and the pedals' toe brakes, as hard as pressed — PLAN-HOTAS)
-  const brake = Math.max(this.pilot.throttle <= 0 && this.pilot.auto === "none" && allDown ? 1 : 0, allDown ? this.toeBrake : 0);
+  // (the A320: its autobrake's pressure — src/a320/fcs.ts —, the levers at idle braking as the others' with it off)
+  const ab = fleet.active === "a320" ? this.a320 : null;
+  const idleBrake =
+    this.pilot.throttle <= 0 && this.pilot.auto === "none" && allDown && !(ab && (ab.autobrake > 0 || this.a320Reverse > 0)) ? 1 : 0;
+  const brake = Math.max(idleBrake, allDown ? this.toeBrake : 0, ab && allDown ? ab.brake : 0);
   const steer = this.noseSteer;
   // (the craft's turn in the home frame: the camera's basis — right = fwd × up — is left-handed there,
   // the pilot's rates turn the other way: ω = −Σ ωᵢ axisᵢ [rad/s])

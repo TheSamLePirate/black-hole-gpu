@@ -318,7 +318,13 @@ export interface VesselAero {
   ctrl: V3;
   /** a fighter's flight at high incidence (docs/PLAN-AVIATION-AAA.md, V2) — none: the wing's own stall alone */
   highAlpha?: HighAlpha;
+  /** a model of its own (AERO_MODELS: the A320's JSBSim aerodynamics — src/a320/aero.ts) instead of the box and the
+   *  wing — the rest (its heat, its limits) this table's */
+  model?: string;
 }
+
+/** The aircraft's own aerodynamic models (VesselAero.model), registered by their modules. */
+export const AERO_MODELS: Record<string, (v: V3, air: Air, w: V3, cfg: AeroConfig) => AeroOut> = {};
 
 /**
  * A fighter's aerodynamics at high incidence, subsonic (faded out through Mach 0.9–1.3): its whole lift past the
@@ -400,6 +406,8 @@ export interface AeroConfig {
   gear?: boolean;
   agl?: number;
   deflect?: V3;
+  /** the A320's configuration as its systems set it (src/a320/fcs.ts: the surfaces, the slats, the flaps…) */
+  a320?: import("./a320/aero").A320Surfaces;
 }
 
 export interface AeroOut {
@@ -489,6 +497,7 @@ export function freeMolecular(air: Air, L: number): number {
 export function aeroForces(A: VesselAero, v: V3, air: Air, w: V3 = [0, 0, 0], cfg: AeroConfig = {}): AeroOut {
   const V = Math.hypot(v[0], v[1], v[2]);
   if (air.rho <= 0 || V < 1e-3) return ZERO;
+  if (A.model && AERO_MODELS[A.model]) return AERO_MODELS[A.model]!(v, air, w, cfg);
   const u: V3 = [v[0] / V, v[1] / V, v[2] / V];
   const q = 0.5 * air.rho * V * V;
   const M = V / air.a;

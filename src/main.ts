@@ -3454,13 +3454,17 @@ async function main() {
     },
     jetSystem: (_, a) =>
       panel.toast(
-        a === "stovl"
-          ? camera.stovlToggle()
-          : a === "recover"
-            ? camera.recoverStart()
-            : a === "nav"
-              ? camera.navToggle()
-              : camera.jetToggle(a === "ab" ? "ab" : a === "athr" ? "athr" : "ap"),
+        fleet.active === "a320" && (a === "ab" || a === "stovl")
+          ? a === "ab"
+            ? camera.a320ReverseToggle()
+            : camera.a320AutobrakeCycle()
+          : a === "stovl"
+            ? camera.stovlToggle()
+            : a === "recover"
+              ? camera.recoverStart()
+              : a === "nav"
+                ? camera.navToggle()
+                : camera.jetToggle(a === "ab" ? "ab" : a === "athr" ? "athr" : "ap"),
       ),
     spaceSystem: (_, a) =>
       panel.toast(
@@ -7708,8 +7712,8 @@ async function main() {
           const r = VESSELS.a320.fbw!.rates;
           const cmd = (k: number, sgn: number) =>
             Math.min(Math.max(sgn * (0.55 * (th?.torque[k] ?? 0) + (0.75 * camera.pilot.omega[k]!) / r[k]!), -1, 1), 1);
-          const running = camera.pilot.engineNow > 0 || camera.pilot.throttle > 0;
-          const n1 = running ? 19 + 81 * Math.min(Math.max(camera.pilot.engineNow, 0), 1) : 0;
+          const F = camera.a320;
+          const n1s: [number, number] = F ? [F.engines[0].n1, F.engines[1].n1] : [0, 0];
           renderer.a320Pose = a320Poser.step({
             dt,
             pitch: cmd(0, 1),
@@ -7726,8 +7730,9 @@ async function main() {
             onGround,
             groundSpeed: speed,
             steer: onGround ? (th?.torque[1] ?? 0) : 0,
-            n1: [n1, n1],
-            reverser: [0, 0],
+            n1: n1s,
+            reverser: F ? [F.engines[0].rev, F.engines[1].rev] : [0, 0],
+            fcs: F,
             alpha: ((L?.out.alpha ?? 0) * 180) / Math.PI,
             landingLights: settings.landingLights,
           });

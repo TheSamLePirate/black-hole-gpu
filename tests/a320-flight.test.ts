@@ -39,11 +39,12 @@ test("a take-off at full thrust: airborne within 2.5 km, past 140 kt, climbing",
   expect(dist).toBeLessThan(2500);
   // (then the pitch held up 6 s — the pilot's rotation to the climb's attitude —, then 14 s released: climbing)
   const h0 = c.airFlight.last!.h;
-  withStick(c, { pitch: 0.5 }, () => fly(6));
-  fly(14);
+  withStick(c, { pitch: 0.3 }, () => fly(3));
+  fly(17);
   const h1 = c.airFlight.last!.h;
   console.log(`  20 s later: ${(h1 - h0).toFixed(0)} m higher, ${(c.airFlight.last!.speed / 0.5144).toFixed(0)} kt`);
   expect(h1 - h0).toBeGreaterThan(80);
+  expect(c.airFlight.last!.speed / 0.5144).toBeGreaterThan(140);
 }, 120_000);
 
 test("cruise: FL350 at Mach 0.78 held on the thrust it has", () => {
