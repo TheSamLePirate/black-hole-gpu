@@ -27,6 +27,8 @@ import { JetPoser } from "./f35/pose";
 import { A320Poser, CONF, confOf } from "./a320/pose";
 import { DeckPoser } from "./a320/deck";
 import { DeckControls } from "./a320/deckctl";
+import { DuSet } from "./a320/du";
+import { duData } from "./a320/du/data";
 import { DeckPicker } from "./a320/deckpick";
 import { type DeckGame, deckCall, deckChanged, deckExterior, deckSync, deckTip, deckWired } from "./a320/deckgame";
 import { Pcd } from "./f35/pcd";
@@ -2687,6 +2689,8 @@ async function main() {
   /** the A320's moving parts (src/a320/pose.ts): FlightGear's properties its rig reads */
   const a320Poser = new A320Poser();
   const deckPoser = new DeckPoser();
+  /** the A320's displays (src/a320/du), made with the deck's first look */
+  let duSet: DuSet | null = null;
   /** the F-35's flight controls' inputs this frame (the network sends its commands — ui/netsession.ts) */
   let jetIn: JetInputs | null = null;
   /** the F-35's panoramic cockpit display (src/f35/pcd.ts) */
@@ -7858,6 +7862,16 @@ async function main() {
               powered: true,
             });
             renderer.a320Deck = settings.shipMount === "cockpit" || settings.shipMount === "cabin" ? deckProps : null;
+            // (the control under the pointer lit: its objects — ship.ts deckHover)
+            const hc = renderer.a320Deck && deckCtl ? deckCtl.control(deckCtl.focus) : null;
+            const dm = renderer.ship.a320DeckMesh;
+            renderer.ship.deckHover = hc && dm ? hc.objects.map((o) => dm.objects.indexOf(o)).filter((k) => k >= 0) : null;
+            // (its displays — src/a320/du —, drawn while the deck is: two a frame at most, into the atlas)
+            const deckMesh = renderer.ship.a320DeckMesh;
+            if (renderer.a320Deck && deckMesh && renderer.ship.deckMats) {
+              duSet ??= renderer.a320Du = new DuSet(deckMesh.screens);
+              renderer.ship.updateDu(duSet.frame(performance.now() / 1000, duData(camera, settings, deckProps, dateOf(sim.time))));
+            }
           }
         }
         // (the F-35 chosen: its display's fonts, canvas and mips readied while the browser idles — no stall at the

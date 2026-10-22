@@ -4723,6 +4723,8 @@ export class Renderer {
    *  test or a capture wants them (FlightGear's paths: __bh.renderer.a320Force) */
   a320Pose: { props: import("./a320/rig").Props; spins: import("./a320/rig").Props } | null = null;
   a320Force: import("./a320/rig").Props = {};
+  /** its displays (src/a320/du — main.ts: captures and tests read their canvases) */
+  a320Du: import("./a320/du").DuSet | null = null;
   /** its flight deck's (src/a320/deck.ts — set each frame from inside by main.ts) */
   a320Deck: import("./a320/rig").Props | null = null;
   /** the cockpit's displays' mean colours (cockpit/lights.ts displayColours): the screens' light in the cabin */

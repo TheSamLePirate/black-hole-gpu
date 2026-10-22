@@ -451,6 +451,10 @@ export class ShipRenderer {
   private deckMesh: Mesh | null = null;
   private deckLoading = false;
   private deckLayers = false;
+  /** the objects of the deck under the pointer (their indices: DeckMesh.objects) — lit over (main.ts); their runs */
+  deckHover: number[] | null = null;
+  private deckRuns: Map<number, [number, number][]> | null = null;
+  private hoverBind: { g: GPUBindGroup; gen: number; hdr: GPUTexture } | null = null;
   /** the deck drawn this frame (the hull's glass then left out), its parts' maps (the pointer's picks: deckpick.ts) */
   private deckDrawn = false;
   private deckMatsNow: Float32Array<ArrayBuffer> | null = null;
@@ -1201,12 +1205,21 @@ export class ShipRenderer {
     const idx = new Uint32Array(m.idx.length);
     let o = 0,
       solid = 0;
+    // (each object's runs of triangles as drawn — the pointer's highlight draws them again: deckHover)
+    const runs = new Map<number, [number, number][]>();
     for (const g of [false, true])
       for (let t = 0; t < m.idx.length / 3; t++)
         if (glass(t) === g) {
+          const ob = m.triObj[t]!;
+          const list = runs.get(ob) ?? [];
+          const last = list[list.length - 1];
+          if (last && last[0] + last[1] === 3 * o) last[1] += 3;
+          else list.push([3 * o, 3]);
+          runs.set(ob, list);
           idx.set(m.idx.subarray(3 * t, 3 * t + 3), 3 * o++);
           if (!g) solid = 3 * o;
         }
+    this.deckRuns = runs;
     const c: V3 = [0, 1, 2].map((j) => (lo[j]! + hi[j]!) / 2) as V3;
     const r = Math.hypot(...sub(hi, lo)) / 2;
     const vbuf = d.createBuffer({ size: verts.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
@@ -1627,7 +1640,7 @@ export class ShipRenderer {
       { binding: 22, resource: jm.albedo.createView({ dimension: "2d-array" }) },
       { binding: 23, resource: jm.normal.createView({ dimension: "2d-array" }) },
       { binding: 24, resource: jm.mr.createView({ dimension: "2d-array" }) },
-      { binding: 25, resource: this.jetScreenTexture().createView() },
+      { binding: 25, resource: this.screenBinding().createView() },
       // (the airliners' paint: a light grey until it loads)
       {
         binding: 26,
@@ -2225,6 +2238,33 @@ export class ShipRenderer {
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
     }));
   }
+  /** The A320's displays' atlas (src/a320/du: 4096², each display a cell — deck.ts screens), mip-mapped: made with
+   *  the first picture; bound in the F-35's display's place while the A320 is flown. */
+  private duTex: GPUTexture | null = null;
+  private screenBound: "jet" | "du" = "jet";
+  private screenBinding(): GPUTexture {
+    this.screenBound = this.vessel === "a320" && this.duTex ? "du" : "jet";
+    return this.screenBound === "du" ? this.duTex! : this.jetScreenTexture();
+  }
+  /** The A320's displays' new pictures: each canvas into its cell [px], then the atlas's mips. */
+  updateDu(parts: { src: OffscreenCanvas | HTMLCanvasElement; x: number; y: number; w: number; h: number }[]) {
+    if (!parts.length) return;
+    const fresh = !this.duTex;
+    const tex = (this.duTex ??= this.device.createTexture({
+      size: [4096, 4096],
+      format: "rgba8unorm-srgb",
+      mipLevelCount: 9,
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+    }));
+    for (const p of parts)
+      this.device.queue.copyExternalImageToTexture({ source: p.src }, { texture: tex, mipLevel: 0, origin: { x: p.x, y: p.y } }, [
+        p.w,
+        p.h,
+      ]);
+    // (the cells redrawn alone: their mips — the whole atlas's at its first picture)
+    this.mips().run(tex, undefined, fresh ? undefined : parts.map((p) => [p.x, p.y, p.w, p.h] as [number, number, number, number]));
+    if (fresh) this.bind();
+  }
   /** The F-35's panoramic display's picture (src/f35/pcd.ts), mip-mapped: made at its first use. */
   private jetScreen: GPUTexture | null = null;
   private jetScreenTexture() {
@@ -2326,6 +2366,8 @@ export class ShipRenderer {
     // (none flown: only the others — the Ranger's mesh, always there, for the plumes' unused range)
     this.flown = !!v.vessel;
     this.vessel = v.vessel ?? "ranger";
+    // (the displays' texture bound: the A320's atlas while it is flown, else the F-35's)
+    if ((this.vessel === "a320" && this.duTex ? "du" : "jet") !== this.screenBound) this.bind();
     const mesh = this.meshes[this.vessel];
     if (!this.has(this.vessel) || !mesh) return;
     for (const o of v.others ?? []) this.has(o.id);
@@ -2516,6 +2558,30 @@ export class ShipRenderer {
         rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
         rp.drawIndexed(dr.mesh.count - dr.mesh.solid!, 1, dr.mesh.solid!, 0, dr.inst);
       }
+    }
+    // the deck's control under the pointer: its triangles again, lit (FlightGear's highlight — GLASS_MODE 3)
+    const hov = this.deckDrawn && this.deckHover?.length && this.deckRuns && this.deckMesh ? this.deckHover : null;
+    const deckDraw = hov ? this.draws.find((dr) => dr.mesh === this.deckMesh) : null;
+    if (hov && deckDraw) {
+      this.glassModes[3] ??= this.glassPipe!(3);
+      const gp = this.glassModes[3]!;
+      if (!this.hoverBind || this.hoverBind.gen !== this.bindGen || this.hoverBind.hdr !== hdr)
+        this.hoverBind = {
+          g: this.device.createBindGroup({
+            layout: gp.getBindGroupLayout(0),
+            entries: [
+              ...this.shipEntries!.filter((e) => [0, 1, 2, 3, 12, 16, 22, 27].includes(e.binding)),
+              { binding: 10, resource: hdr.createView() },
+            ],
+          }),
+          gen: this.bindGen,
+          hdr,
+        };
+      rp.setPipeline(gp);
+      rp.setBindGroup(0, this.hoverBind.g);
+      rp.setVertexBuffer(0, this.deckMesh!.vbuf);
+      rp.setIndexBuffer(this.deckMesh!.ibuf, "uint32");
+      for (const ob of hov) for (const [first, n] of this.deckRuns!.get(ob) ?? []) rp.drawIndexed(n, 1, first, 0, deckDraw.inst);
     }
     // the cabin (its own shader), then its glass, over the cabin and the view
     if (this.inCabin && this.cockpit) {

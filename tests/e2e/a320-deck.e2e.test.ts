@@ -123,4 +123,30 @@ describe.skipIf(!E2E)("the A320's flight deck by the mouse", () => {
     await Bun.sleep(1500);
     await shot(app, "a320-deck-annun-test");
   }, 60_000);
+
+  test("the displays (A7): each drawn, lit, the ND's range knob read", async () => {
+    // (every display drawn in the last seconds: its canvas's middle row not all black)
+    await Bun.sleep(3000);
+    const lit = await app.js<Record<string, number>>(`(() => {
+      const D = __bh.renderer.a320Du, out = {};
+      for (const n of ["PFD1", "PFD2", "ND1", "ND2", "UECAM", "LECAM", "IESI"]) {
+        const c = D.canvasOf(n), x = c.getContext("2d").getImageData(0, 400, 1024, 224).data;
+        let k = 0; for (let i = 0; i < x.length; i += 16) if (x[i] + x[i + 1] + x[i + 2] > 60) k++;
+        out[n] = k;
+      }
+      return out;
+    })()`);
+    for (const [n, k] of Object.entries(lit)) expect(k, n).toBeGreaterThan(200);
+    // (the ND's range a notch out by the deck's knob — fcu.setNDRange)
+    const r0 = await app.js<number>(`__bh.renderer.a320Deck["instrumentation/efis/inputs/range-nm"]`);
+    const k = await aim("ND range");
+    await app.mouse("move", k.x, k.y);
+    await Bun.sleep(150);
+    await app.mouse("wheel", k.x, k.y, { deltaY: -50 });
+    await Bun.sleep(300);
+    expect(await app.js<number>(`__bh.renderer.a320Deck["instrumentation/efis/inputs/range-nm"]`)).toBe(r0 * 2);
+    await app.js(`(__bh.camera.setLook(10, -12), true)`);
+    await Bun.sleep(1500);
+    await shot(app, "a320-deck-displays");
+  }, 60_000);
 });

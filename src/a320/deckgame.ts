@@ -70,6 +70,7 @@ const CALLS = new Set([
   "core.lFootrest",
   "core.rFootrest",
   "core.triggerDoor",
+  "fcu.FCUController.MetricAlt",
 ]);
 /** the properties the game follows */
 const FOLLOWED = new Set([
@@ -164,6 +165,10 @@ export function deckCall(g: DeckGame, P: Props, c: NasalCall): boolean {
       P[`${e}/nd/layer`] = P[`${e}/nd/layer`] === a0 ? "" : String(a0);
       return true;
     }
+    case "fcu.FCUController.MetricAlt":
+      // (the PFDs' metric altitude: the button's state — du/pfd.ts)
+      P["deck/metric-alt"] = Number(P["deck/metric-alt"] ?? 0) > 0.5 ? 0 : 1;
+      return true;
     case "core.lTray":
     case "core.rTray": {
       const k = c.fn === "core.lTray" ? "controls/tray/lefttrayext" : "controls/tray/righttrayext";

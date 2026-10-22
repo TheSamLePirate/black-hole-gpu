@@ -949,12 +949,13 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
         default: { rough = 0.6; }
       }
     }
-    // (a display's screen: dark glass until the displays light it — A7)
+    // (a display's screen: its picture — the displays' atlas, src/a320/du — as an LCD gives it, behind a dark glass)
     case 126u: {
-      albedo = vec3f(0.012, 0.013, 0.015);
+      albedo = vec3f(0.006, 0.007, 0.008);
       metal = 0.0;
       rough = 0.08;
       coat = 0.6;
+      emit = pcdLight(in.uv, duvx, duvy, abs(dot(ng, normalize(-pS)))) * 1.1;
     }
     case 130u: {
       let rg = in.uv.x;
@@ -2026,6 +2027,13 @@ override GLASS_MODE: u32 = 0u;
 @fragment
 fn fsJetGlass(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let base = textureSample(jetAlbedo, mapSamp, in.uv, 1);
+  // (the A320's deck: the control under the pointer lit over — a soft cyan added, its edges brighter)
+  if (GLASS_MODE == 3u) {
+    let gv = normalize(-in.p);
+    let rim = 1.0 - abs(dot(normalize(in.n), gv));
+    let c = vec3f(0.12, 0.3, 0.38) * (0.35 + 0.65 * rim * rim);
+    return vec4f(c / (1.0 + dot(c, vec3f(0.2126, 0.7152, 0.0722))), 0.0);
+  }
   // (the A320's fan disc: its blur, in the engines' cell)
   let fanUv = a320Map(115u, in.uv);
   let fan = textureSample(a320Albedo, mapSamp, fanUv.yz, 2);

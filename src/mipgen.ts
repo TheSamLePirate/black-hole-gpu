@@ -41,8 +41,9 @@ export class MipGen {
     if (!this.pipes.has(format)) this.pipes.set(format, p);
   }
 
-  /** Remakes tex's mips from its level 0 (a texture with RENDER_ATTACHMENT and TEXTURE_BINDING). */
-  run(tex: GPUTexture, enc?: GPUCommandEncoder) {
+  /** Remakes tex's mips from its level 0 (a texture with RENDER_ATTACHMENT and TEXTURE_BINDING) — within `rects` alone
+   *  when given ([x, y, w, h] of level 0, px: an atlas's cells redrawn — the rest of each level kept). */
+  run(tex: GPUTexture, enc?: GPUCommandEncoder, rects?: [number, number, number, number][]) {
     const pipe = this.pipe(tex.format);
     let lv = this.levels.get(tex);
     if (!lv) {
@@ -61,13 +62,30 @@ export class MipGen {
       this.levels.set(tex, lv);
     }
     const e = enc ?? this.device.createCommandEncoder({ label: "mips" });
-    for (const { target, bind } of lv) {
-      const pass = e.beginRenderPass({ colorAttachments: [{ view: target, loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }] });
+    lv.forEach(({ target, bind }, i) => {
+      const l = i + 1;
+      const W = Math.max(1, tex.width >> l),
+        H = Math.max(1, tex.height >> l);
+      const pass = e.beginRenderPass({
+        colorAttachments: [{ view: target, loadOp: rects ? "load" : "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }],
+      });
       pass.setPipeline(pipe);
       pass.setBindGroup(0, bind);
-      pass.draw(3);
+      if (!rects) pass.draw(3);
+      else
+        for (const [x, y, w, h] of rects) {
+          const x0 = Math.min(x >> l, W - 1),
+            y0 = Math.min(y >> l, H - 1);
+          pass.setScissorRect(
+            x0,
+            y0,
+            Math.max(1, Math.min(Math.ceil(w / 2 ** l), W - x0)),
+            Math.max(1, Math.min(Math.ceil(h / 2 ** l), H - y0)),
+          );
+          pass.draw(3);
+        }
       pass.end();
-    }
+    });
     if (!enc) this.device.queue.submit([e.finish()]);
   }
 }
