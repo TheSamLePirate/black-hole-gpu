@@ -10,6 +10,7 @@
 // Translation is physical: a proper acceleration (c²/M) on the Kerr geodesic (geodesic.ts), in the
 // scene's time. Attitude runs in the pilot's (wall-clock) seconds.
 
+import { AirbusLaw, type AirbusCtx, type AirbusOut } from "./a320/fbw";
 import { TUNING } from "./game/tuning";
 import { t } from "./i18n";
 import type { M3, V3 } from "./mounts";
@@ -144,6 +145,8 @@ export interface FlightContext {
     law?: "normal" | "direct";
     /** the normal load factor now [g]: the air's force up the craft's top over its weight */
     nz?: number;
+    /** an Airbus's laws (the A320's — src/a320/fbw.ts —: its pitch attitude, configuration, speed, height, law) */
+    airbus?: AirbusCtx;
   } | null;
   /** the sci-fi flight computer: the velocity it flies (local 3-velocity), the feed-forward against
    *  gravity and the air (local, proper acceleration), the attitude it holds (local), and the part of
@@ -360,6 +363,9 @@ export class FlightComputer {
   pitchTrim = 0;
   /** the load law's integral [g s]: the load the speed's bleed takes away, made up */
   nInt = 0;
+  /** an Airbus's laws (src/a320/fbw.ts) and what they asked last (their protections) */
+  airbus = new AirbusLaw();
+  airbusOut: AirbusOut | null = null;
   /** what fired last step (the sound follows it): the main engine's throttle as applied, the RCS
    *  (fraction of its authority, the push sideways in the ship's frame: + to its right), the
    *  attitude effort (angular acceleration / the most the wheels give, 0…1) */
@@ -383,6 +389,8 @@ export class FlightComputer {
     this.bankHold = null;
     this.pitchTrim = 0;
     this.nInt = 0;
+    this.airbus.reset();
+    this.airbusOut = null;
     this.fired = { throttle: 0, rcs: 0, rcsSide: 0, turn: 0, yaw: 0, at: 0, force: [0, 0, 0], torque: [0, 0, 0] };
   }
 
@@ -586,6 +594,31 @@ export class FlightComputer {
       // and departures; a slow trim takes the pitch the stick leaves (as a pilot's trim switch would)
       if (manual[0] === 0) this.pitchTrim = clamp(this.pitchTrim - 2.5 * this.omega[0] * dt, -acc3[0], acc3[0]);
       for (let i = 0; i < 3; i++) want[i] = this.omega[i]! + (manual[i]! * acc3[i]! + (i === 0 ? this.pitchTrim : 0)) * dt;
+      this.gammaHold = this.alphaHold = this.bankHold = null;
+    } else if (planeLaw && c.air!.airbus && !c.air!.ground) {
+      // an Airbus's normal or alternate law (src/a320/fbw.ts): the stick a load factor and a roll rate, the path and
+      // the bank held let go, its protections
+      const P = c.air!;
+      const o = this.airbus.step(
+        {
+          alpha: P.alpha,
+          beta: P.beta,
+          gamma: P.gamma,
+          bank: P.bank,
+          path: P.path,
+          speed: P.speed ?? 0,
+          mach: P.mach,
+          nz: P.nz ?? 1,
+          ground: P.ground,
+          gammaCmd: P.gammaCmd,
+          bankCmd: P.bankCmd,
+        },
+        P.airbus!,
+        { pitch: manual[0] / fine, roll: -manual[2] / fine, yaw: manual[1] / fine },
+        dt,
+      );
+      this.airbusOut = o;
+      for (let i = 0; i < 3; i++) want[i] = o.want[i]!;
       this.gammaHold = this.alphaHold = this.bankHold = null;
     } else if (planeLaw) {
       // the plane: the stick asks for rates (pitch 20°/s, yaw 8°/s, roll 70°/s); let go, the flight

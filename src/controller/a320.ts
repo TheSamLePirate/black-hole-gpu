@@ -40,6 +40,8 @@ function a320Step(this: CameraController, dt: number, onWheels: boolean): A320Fc
     dt,
     torque: [...this.pilot.fired.torque] as [number, number, number],
     airborne: !onWheels && this.airFlight.inAir,
+    trimFreeze: !!this.pilot.airbusOut && (this.pilot.airbusOut.alphaProt || this.pilot.airbusOut.highSpeed || this.pilot.airbusOut.flare),
+    alphaFloor: !!this.pilot.airbusOut?.alphaFloor,
     onGround: onWheels,
     lever: this.pilot.throttle,
     reverse,

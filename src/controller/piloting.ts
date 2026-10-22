@@ -1117,8 +1117,20 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
                       : VESSELS.f35.fbw.alphaMax,
                 }
               : VESSELS[fleet.active].fbw,
-          // (manual: the direct law)
-          law: fleet.active === "f35" ? (s.f35Assist === "manual" ? "direct" : s.f35Law) : "normal",
+          // (manual: the direct law; the A320's its computers' — src/a320/fcs.ts)
+          law: fleet.active === "f35" ? (s.f35Assist === "manual" ? "direct" : s.f35Law) : a320?.law === "direct" ? "direct" : "normal",
+          // (the A320: its Airbus laws' figures — src/a320/fbw.ts)
+          airbus: a320
+            ? {
+                pitch: (this.attitudeNow() as { pitch?: number }).pitch ?? 0,
+                slat: a320.surfaces.slat,
+                flap: a320.surfaces.flap,
+                ias: Math.sqrt((2 * LA0.out.q) / 1.225) * 1.9438,
+                agl: this.airFlight.cfg.agl !== undefined ? this.airFlight.cfg.agl - GEARS.a320!.height : undefined,
+                law: a320.law === "alternate" ? ("alternate" as const) : ("normal" as const),
+                ap: jetCmd.gamma != null || jetCmd.bank != null,
+              }
+            : undefined,
           nz: LA0.out.F[1] / (fleet.massProps().mass * 9.80665),
           gammaCmd: jetCmd.gamma,
           bankCmd: jetCmd.bank,

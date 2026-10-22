@@ -33,8 +33,11 @@ export interface FcsInputs {
   dt: number;
   /** the flight control computer's effort asked (pilot.ts fired.torque: pitch up, yaw right, roll LEFT — each −1…1) */
   torque: [number, number, number];
-  /** in normal flight (the auto-trim's: not on the ground, not in direct law) */
+  /** in normal flight (the auto-trim's: not on the ground, not in direct law); the trim frozen (the protections, the
+   *  flare); α floor asked by the law */
   airborne: boolean;
+  trimFreeze?: boolean;
+  alphaFloor?: boolean;
   onGround: boolean;
   /** the thrust levers 0…1 (both), the reverse lever 0…1, the flap lever 0–4, the speed brake lever 0…1, the ground
    *  spoilers deployed, the gear's extension 0…1, the landing lights */
@@ -62,6 +65,10 @@ export class A320Fcs {
   spoilers = new Array(10).fill(0) as number[];
   /** the configuration now (CONF's index: 0, 1, 1+F, 2, 3, FULL) */
   conf = 0;
+  /** the flight control law (src/a320/fbw.ts): normal, alternate (computers or hydraulics lost), direct */
+  law: "normal" | "alternate" | "direct" = "normal";
+  /** α floor's TOGA latched (the autothrust's TOGA LK — the levers' own once the incidence is back) */
+  alphaFloor = false;
   engines: [Engine, Engine] = [newEngine(), newEngine()];
   limits: Limits | null = null;
   /** the FLEX temperature set for the take-off [°C] (none: TOGA) */
@@ -122,7 +129,7 @@ export class A320Fcs {
     s.rudder = toward(s.rudder, clamp(yaw * rt, -rt, rt), 80, dt);
     // (the stabiliser trims by itself in flight: the elevator's steady deflection taken over, 0.3°/s at most — +4° nose
     // down … −13.5° nose up; on the ground left where it is)
-    if (i.airborne) s.stab = clamp(s.stab + clamp(0.08 * s.elevator, -0.3, 0.3) * dt, -13.5, 4);
+    if (i.airborne && !i.trimFreeze && this.law !== "direct") s.stab = clamp(s.stab + clamp(0.08 * s.elevator, -0.3, 0.3) * dt, -13.5, 4);
     // ---- the spoilers: the ground spoilers all out to 50°; the speed brakes 2–4 (40°, 25° above 300 kt is not an
     // A320's: its lever's travel); the roll spoilers 2–5 on the wing going down, up to 35°
     const gs = i.groundSpoilers && i.onGround ? 50 : 0;
@@ -154,7 +161,11 @@ export class A320Fcs {
     const L1 = (this.limits = limits(i.air, i.onGround ? this.flexTemp : null));
     const flex = this.flexTemp !== null && i.onGround;
     const rev = clamp(i.reverse, 0, 1);
-    const want = rev > 0 ? { n1: L1.idle + rev * (L1.mrev - L1.idle), reverse: rev } : { n1: leverN1(i.lever, L1, flex), reverse: 0 };
+    // (α floor: TOGA whatever the levers, until the incidence is back below it and the levers moved)
+    if (i.alphaFloor && !i.onGround) this.alphaFloor = true;
+    if (this.alphaFloor && (i.onGround || (!i.alphaFloor && i.lever > 0.9))) this.alphaFloor = false;
+    const lever = this.alphaFloor ? 1 : i.lever;
+    const want = rev > 0 ? { n1: L1.idle + rev * (L1.mrev - L1.idle), reverse: rev } : { n1: leverN1(lever, L1, flex), reverse: 0 };
     this.engines = this.engines.map((e) => stepEngine(e, want, i.air, dt)) as [Engine, Engine];
     this.thrust = this.engines.reduce((a, e) => a + e.thrust, 0);
     this.thrustMax = Math.max(2 * thrustAt(n2Of(L1.toga), i.air), 1);
