@@ -392,6 +392,21 @@ export function forestKind(cls: number, lat: number, altitude: number, present: 
   }
   return pick < 0.8 ? ForestKind.conifer : ForestKind.broadleaf;
 }
+// ---- what the survey says grows (I4: ign-canopy.ts — the IGN's canopy height model over France)
+/** the canopy that makes a tree [m] (lower: grass, crops, a wall) */
+export const CANOPY_MIN = 2;
+/** under it, a shrub [m] */
+export const CANOPY_SHRUB = 4;
+/** a canopy cell's share holding a tree (the rest its gaps) */
+export const CANOPY_FILL = 0.97;
+/** A tree's kind where the canopy stands `mnh` high: a shrub under CANOPY_SHRUB, else the climate's tree for a forest
+ *  there (forestKind of a forest's cell) — the survey's word over the tree line's (a shrub where it says none). */
+export function canopyKind(lat: number, altitude: number, mnh: number, pick: number): ForestKind {
+  if (mnh < CANOPY_SHRUB) return ForestKind.shrub;
+  const k = forestKind(10, lat, altitude, 0, pick);
+  return k === ForestKind.none ? ForestKind.shrub : k;
+}
+
 /** A tree's height [m] from its kind, the place and a draw in [0, 1) (lower towards the tree line, taller in the tropics). */
 export function forestHeight(kind: ForestKind, lat: number, altitude: number, draw: number): number {
   const [lo, hi] =
@@ -594,16 +609,23 @@ export interface ForestSources {
   local(lat: number, lon: number, h: number): Vec3;
   /** a source's failure (its trees left out) */
   error?(e: unknown): void;
+  /** the survey's canopy [m]: its top within `r` metres of a place (a crown's reach from its foot), NaN where it has none
+   *  — there, the land cover's draw (I4: ign-canopy.ts canopyNear) */
+  canopy?(lat: number, lon: number, r: number): number;
 }
 /**
- * The frame's cells, decided: 1. where a tree may stand (the cover's density by the cell's own draw, the
+ * The frame's cells, decided: 1. where a tree may stand (the cover's density by the cell's own draw — where the survey
+ * measured the canopy, wherever it stands CANOPY_MIN within the crown's reach, the water's class left bare —, the
  * exclusions); 2. the ground two cells apart in the grid's own coordinates, fetched together (the relief's
  * finest detail is ~25 m: a bilinear 14 m grid holds it to well under the trunk's sinking); 3. each tree's
- * kind and height from the climate, its foot on the ground sunk FOREST_SINK.
+ * kind and height from the climate (the survey's: its kind by the canopy's height, as tall as it), its foot on the ground
+ * sunk FOREST_SINK.
  */
-export async function growForest(f: ForestFrame, io: ForestSources): Promise<{ cells: Uint32Array; trees: number }> {
+export async function growForest(f: ForestFrame, io: ForestSources): Promise<{ cells: Uint32Array; trees: number; surveyed: number }> {
   const cells = new Uint32Array(f.w * f.h);
   const candidates: number[] = [];
+  // (the canopy measured over each candidate — NaN: the land cover's)
+  const canopies = io.canopy ? new Float32Array(f.w * f.h) : null;
   const nodesW = (f.w >> 1) + 2,
     nodesH = (f.h >> 1) + 2;
   const wanted = new Uint8Array(nodesW * nodesH);
@@ -611,15 +633,24 @@ export async function growForest(f: ForestFrame, io: ForestSources): Promise<{ c
     for (let i = 0; i < f.w; i++) {
       const gi = forestColumn(f, i),
         gj = f.j0 + j;
-      const [jx, jy] = forestJitter(gi, gj);
+      const [jx, jy, size] = forestJitter(gi, gj);
       const u = i + jx,
         v = j + jy;
       const x = f.c[0] + f.c[1] * u + f.c[2] * v,
         y = f.d[0] + f.d[1] * u + f.d[2] * v;
       if (x * x + y * y > f.reach * f.reach) continue;
       const [lat, lon] = forestPlaceOf(f.i0 + u, f.j0 + v, f.columns);
-      const cls = io.cover(lat, lon);
-      if (forestUnit(forestHash(gi, gj, 5)) >= (cls === 10 ? FOREST_UNDERSTORY : forestDensity(cls)) || io.excluded(lat, lon)) continue;
+      const cls = io.cover(lat, lon),
+        draw = forestUnit(forestHash(gi, gj, 5));
+      const mnh = io.canopy ? io.canopy(lat, lon, f.cell * (0.3 + 0.17 * size)) : Number.NaN;
+      if (
+        Number.isFinite(mnh)
+          ? mnh < CANOPY_MIN || draw >= CANOPY_FILL || cls === 80
+          : draw >= (cls === 10 ? FOREST_UNDERSTORY : forestDensity(cls))
+      )
+        continue;
+      if (io.excluded(lat, lon)) continue;
+      if (canopies) canopies[j * f.w + i] = mnh;
       candidates.push(j * f.w + i);
       const a = Math.floor(u / 2),
         b = Math.floor(v / 2);
@@ -633,7 +664,8 @@ export async function growForest(f: ForestFrame, io: ForestSources): Promise<{ c
       asked.push(io.ground(lat, lon).then((h) => void (nodes[k] = h), io.error ?? (() => {})));
     }
   await Promise.all(asked);
-  let trees = 0;
+  let trees = 0,
+    surveyed = 0;
   for (const c of candidates) {
     const i = c % f.w,
       j = Math.floor(c / f.w);
@@ -658,11 +690,17 @@ export async function growForest(f: ForestFrame, io: ForestSources): Promise<{ c
     if (gx * gx + gy * gy > FOREST_MAX_SLOPE * FOREST_MAX_SLOPE) continue;
     const [lat, lon] = forestPlaceOf(f.i0 + u, f.j0 + v, f.columns);
     const above = ground - (io.sea?.(lat, lon) ?? 0);
-    const kind = forestKind(io.cover(lat, lon), lat, above, forestUnit(forestHash(gi, gj, 5)), forestUnit(forestHash(gi, gj, 6)));
+    const mnh = canopies ? canopies[c]! : Number.NaN,
+      measured = Number.isFinite(mnh);
+    const pick = forestUnit(forestHash(gi, gj, 6));
+    const kind = measured
+      ? canopyKind(lat, above, mnh, pick)
+      : forestKind(io.cover(lat, lon), lat, above, forestUnit(forestHash(gi, gj, 5)), pick);
     if (kind === ForestKind.none) continue;
-    const tall = forestHeight(kind, lat, above, forestUnit(forestHash(gi, gj, 7)));
+    const tall = measured ? mnh : forestHeight(kind, lat, above, forestUnit(forestHash(gi, gj, 7)));
     cells[c] = packCell(io.local(lat, lon, ground - FOREST_SINK)[2], kind, tall);
     trees++;
+    if (measured) surveyed++;
   }
-  return { cells, trees };
+  return { cells, trees, surveyed };
 }

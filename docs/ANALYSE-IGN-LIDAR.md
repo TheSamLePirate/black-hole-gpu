@@ -144,6 +144,31 @@ présence : MNH > 2 m hors bâti BD TOPO et hors eau, comme le labo) au lieu du 
 haies du bocage, ripisylves, clairières à leur vraie place. Coût GPU nul (même mot de 32 bits) ; une requête MNH
 par tuile de forêt dans le worker.
 
+**Fait le 23/10 (I4).** En France (réglage « Relief IGN »), le worker de la scène lit le MNH du LiDAR HD par blocs
+— les tuiles z 14, une requête WMS-R chacune (`src/system/ign-canopy.ts`) — sur le seul disque de la forêt, les plus
+proches d'abord : à 512² (3,1 m le texel) dans les 2 premiers km, 256² au-delà ; le sol (MNT LiDAR, RGE ALTI là où ses
+trous passent 2 %) à 256² puis 128². Une cellule de 7 m porte un arbre là où la canopée atteint 2 m à portée de sa
+couronne (le pied et huit points à son rayon : la couronne déborde sur la haie), sauf dans une emprise de bâtiment OSM
+(à 1,5 m près — le MNH porte aussi les toits) ou en classe eau ; l'arbre a la hauteur mesurée, un arbuste sous 4 m,
+l'essence du climat au-dessus. Une canopée sous 5 m et plate à 1 m près est une **culture au moment du vol** (maïs, blé :
+1,6–2,5 m, 6 % des texels du bocage à Saint-Lô), pas une haie : écartée. Les pieds des arbres et des bâtiments sont sur le
+sol IGN — celui du traceur depuis I2 (ils restaient sur Terrarium jusqu'ici, à quelques mètres près). Là où l'IGN n'a
+rien, WorldCover comme avant.
+
+Volume mesuré : 13 blocs / 13 Mo pour une scène équilibrée, 41 / 22 Mo pour la plus grande (4,75 km), en cache
+navigateur 21 jours. **La limite de 40 req/s de la Géoplateforme se manifeste par des refus immédiats** (HTTP 400,
+« LayerNotDefined » : aucun à 8 req/s, 82 % à 75 req/s) — ce que les premiers essais prenaient pour des pannes au hasard. Un
+limiteur partagé (`RateGate`, `earth-tiles.ts`) donne 20 req/s aux tuiles de relief et 12 au relevé, avec trois nouvelles
+tentatives espacées de 1, 2, 4 s ; un bloc qui échoue quand même retombe sur WorldCover sans dégrader la scène
+(`surveyError`). Les tuiles de relief d'I2 retombaient sur Terrarium à chaque refus : corrigé du même coup.
+
+Mesuré au sud de Saint-Lô sur kerr-mini (e2e `ign-canopy`, en raster, comparé à l'ortho IGN z 17, une source à part — un
+point y est canopée s'il est sombre et vert) : 1 874 arbres dans 400 m au lieu de 1 008 ; 76 % sur la canopée de la photo
+(69 % sans le relevé), 36 % de la canopée de la photo sous un arbre (23 % sans). Le plafond de ce rappel est bas (ombres
+et prairies sombres comptées canopée, la photo et le vol LiDAR d'années différentes) : ce sont les écarts qui comptent.
+Limites : les arbres au-delà de la limite de bâtiments OSM de la scène (8 000) peuvent pousser sur des toits ; les ponts
+et autres ouvrages élevés que porte le MNH ne sont pas écartés.
+
 ### 4.4 Bâtiments → BD TOPO dans la scène
 
 `scenery-data.ts` prend OSM. En France, BD TOPO donne **les hauteurs mesurées** de presque tout le bâti (le labo :
@@ -313,7 +338,7 @@ le focus, la navigation à la manette, les invites et le français/anglais du me
 | **I1** — fait (23/10) | Ortho IGN z 15–18 dans `earth-tiles.ts`, recalage couleur, attribution — et l'imagerie des niveaux z 9–14 prise à l'IGN en France ; voir §4.1 | captures A/B Chamonix, CdG, Paris en cockpit ; FPS inchangé (`raster-flight`) |
 | **I2** — fait (23/10) | Hauteurs RGE ALTI + LiDAR HD (WMS-R 3857), `TILE_RES_MIN` par source, bruit effacé — voir §4.2 | `shade` −5 ms attendu en France ; aucune couture au bord |
 | **I3** — fait (23/10) | Niveaux fins du cache de surface (2,4/1,2 m) et normales à 0,5 m — voir §4.2 | passe de visibilité mesurée, cible ≤ +2 ms : +0,22 ms |
-| **I4** | MNH → forêts | captures de lisières/haies contre l'ortho |
+| **I4** — fait (23/10) | MNH → forêts, leurs pieds et ceux des bâtiments sur le sol IGN — voir §4.3 | captures de lisières/haies contre l'ortho : 76 % des arbres sur sa canopée (69 sans), 36 % de sa canopée sous un arbre (23 sans) |
 | **I5** | BD TOPO → bâtiments | hauteurs comparées au MNS sur un quartier |
 | **I6** | HLOD lointain par `MNS − MNT` | silhouette de Paris à 20 km ; coût d'une lecture |
 | **I7** | Interface de source nationale ; swisstopo ensuite | Alpes suisses au même niveau |

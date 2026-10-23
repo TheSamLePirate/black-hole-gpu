@@ -49,6 +49,8 @@ export class EarthScenery {
   private satellite = false;
   private terrain = false;
   shadows = true;
+  /** the IGN's survey over France for the trees and the buildings' ground (settings.earthIgnRelief — I4) */
+  ign = false;
   private started = 0;
   private attempted = -Infinity;
   private busy = false;
@@ -176,7 +178,7 @@ export class EarthScenery {
       // (the camera moved on: its new scene asked at once, not after the throttle)
       this.attempted = -Infinity;
     }
-    const key = `${c.key}:${mode}:${satellite}:${reach}`;
+    const key = `${c.key}:${mode}:${satellite}:${reach}:${this.ign}`;
     // (waited for — the settled frame, an offline render — until drawn, or failed and waiting to be tried again)
     this.wanted = key !== this.applied && !(key === this.requested && this.lastError);
     if (
@@ -274,6 +276,7 @@ export class EarthScenery {
         reach,
         budget: this.budget(),
         geoid: geoidPlane(c.lat, c.lon),
+        ign: this.ign,
       } satisfies SceneryRequest);
     } catch (e) {
       this.lastError = String(e);
@@ -362,6 +365,10 @@ export class EarthScenery {
       lat: d?.lat ?? null,
       lon: d?.lon ?? null,
       trees: d?.trees ?? 0,
+      /** of them, placed and sized by the IGN's canopy over France (I4), and the survey's requests */
+      surveyedTrees: d?.surveyedTrees ?? 0,
+      surveyRequests: d?.surveyRequests ?? 0,
+      surveyError: d?.surveyError ?? null,
       /** the procedural forest's grid: its cells (one tree at most each), a cell's side [m] */
       forestCells: d?.forestCells ?? 0,
       forestCellM: d?.forestCellM ?? 0,

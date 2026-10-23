@@ -98,13 +98,30 @@ export const orthoUrl = (z: number, x: number, y: number) =>
  *  Mercator: one request a tile, its 256² float32 heights above the sea (the IGN's normal heights) */
 export const IGN_HZ0 = 11;
 export const IGN_LIDAR_Z = 16;
-export const ignHeightUrl = (layer: string, z: number, x: number, y: number) => {
+export const ignHeightUrl = (layer: string, z: number, x: number, y: number, size = 256) => {
   const C = Math.PI * R,
     s = (2 * C) / 2 ** z;
   const box = [x * s - C, C - (y + 1) * s, (x + 1) * s - C, C - y * s].join(",");
-  return `https://data.geopf.fr/wms-r?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${layer}&STYLES=&CRS=EPSG:3857&BBOX=${box}&WIDTH=256&HEIGHT=256&FORMAT=image/x-bil;bits=32`;
+  return `https://data.geopf.fr/wms-r?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${layer}&STYLES=&CRS=EPSG:3857&BBOX=${box}&WIDTH=${size}&HEIGHT=${size}&FORMAT=image/x-bil;bits=32`;
 };
 export const IGN_RGEALTI = "ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES";
+/**
+ * Requests spaced to a rate: the Géoplateforme's WMS-R takes 40 a second from an address and refuses the rest at once —
+ * a 400, "LayerNotDefined" (measured: none at 8 a second, 82 % at 75) —, so each of its users here holds a share of it:
+ * the relief's tiles 20 a second (ignGate), the scenery worker's survey 12 (ign-canopy.ts).
+ */
+export class RateGate {
+  private next = 0;
+  constructor(private perSecond: number) {}
+  /** resolves when the next request may go */
+  take(): Promise<void> {
+    const now = performance.now(),
+      at = Math.max(now, this.next);
+    this.next = at + 1000 / this.perSecond;
+    return at > now ? new Promise((done) => setTimeout(done, at - now)) : Promise.resolve();
+  }
+}
+const ignGate = new RateGate(20);
 export const IGN_LIDAR = "IGNF_LIDAR-HD_MNT_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G";
 /** A height's source, in its float's last bit (the tracer's tiles the same: trace.wgsl tileFine): 1 a survey's (the IGN's —
  *  its resolution its texel's), 0 the global data's (Terrarium: SRTM's 25–30 m under its texel — whose k/256 values never
@@ -254,7 +271,16 @@ async function terrarium(z: number, x: number, y: number, signal: AbortSignal): 
 /** One of the IGN's height grids for a tile (null: refused, or none there at all); its no-data — out at sea, abroad,
  *  a gap in a survey — NaN. */
 async function ignGrid(layer: string, z: number, x: number, y: number, signal: AbortSignal): Promise<Float32Array | null> {
-  const res = await fetch(ignHeightUrl(layer, z, x, y), { signal });
+  // (within the relief's share of the rate, asked again on a refusal — over the rate, or a 502 now and then —, a second, two,
+  // four after: a tile left to Terrarium for it would show a seam)
+  await ignGate.take();
+  let res = await fetch(ignHeightUrl(layer, z, x, y), { signal });
+  const refused = (r: Response) => r.status === 400 || r.status === 429 || r.status >= 500;
+  for (let attempt = 1; refused(res) && attempt < 4; attempt++) {
+    await new Promise((done) => setTimeout(done, 1000 * 2 ** (attempt - 1)));
+    await ignGate.take();
+    res = await fetch(ignHeightUrl(layer, z, x, y), { signal });
+  }
   if (!res.ok) return null;
   const buf = await res.arrayBuffer();
   if (buf.byteLength !== TILE * TILE * 4) return null;

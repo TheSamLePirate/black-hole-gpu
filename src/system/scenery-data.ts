@@ -170,6 +170,9 @@ export interface SceneryRequest {
   /** the geoid round the centre (system/geoid.ts): N [m] there and its slopes [m per degree of latitude, of
    *  longitude] — the ground over the ellipsoid, as the tracer's (a plane: within a few centimetres over the reach) */
   geoid?: [number, number, number];
+  /** the IGN's survey over France (settings.earthIgnRelief — I4, ign-canopy.ts): the trees where its canopy stands, their
+   *  feet and the buildings' on its ground */
+  ign?: boolean;
 }
 export interface SceneryReply {
   id: number;
@@ -178,6 +181,11 @@ export interface SceneryReply {
   lon: number;
   bounds?: [number, number, number, number];
   trees?: number;
+  /** of them, placed and sized by the IGN's canopy (I4); the survey's requests */
+  surveyedTrees?: number;
+  surveyRequests?: number;
+  /** a survey block's failure (its trees the land cover's) */
+  surveyError?: string;
   forestCells?: number;
   forestCellM?: number;
   buildings?: number;

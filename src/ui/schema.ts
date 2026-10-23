@@ -2032,7 +2032,7 @@ export const SCHEMA: ControlDef[] = [
     group: "The Earth",
     label: "Relief survey (France)",
     effect: "scene",
-    help: "Over metropolitan France and Corsica, the IGN's relief (RGE ALTI, 1 m; the LiDAR HD's terrain, 0.5 m, where flown — Géoplateforme, Licence Ouverte 2.0) instead of the satellite radar's 30 m, and three levels finer near the ground (3 m down to 0.8 m): banks, embankments, cliffs and terraces where they are, the drawn detail left out where the survey says better. Where the IGN has none (at sea, abroad), the global data. Requires real terrain.",
+    help: "Over metropolitan France and Corsica, the IGN's relief (RGE ALTI, 1 m; the LiDAR HD's terrain, 0.5 m, where flown — Géoplateforme, Licence Ouverte 2.0) instead of the satellite radar's 30 m, and three levels finer near the ground (3 m down to 0.8 m): banks, embankments, cliffs and terraces where they are, the drawn detail left out where the survey says better. The world scenery's trees too: where the LiDAR's canopy height model stands 2 m or more — hedges, woods' edges, clearings where they are —, each as tall as measured; their feet and the buildings' on the IGN's ground. Where the IGN has none (at sea, abroad), the global data. Requires real terrain.",
     keywords: "ign relief lidar rge alti terrain elevation dem france survey ground",
   },
   {

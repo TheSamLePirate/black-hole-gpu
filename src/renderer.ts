@@ -3081,6 +3081,8 @@ export class Renderer {
       this.earthTiles.reliefOn = s.earthIgnRelief;
       this.earthTiles.update(focus, pixelAngle, lead, onEarth ? gazeT : [0, 0, 0], eye ? eyeH : undefined);
       this.earthSurface.update(eye, s.earthSurface, lead);
+      // (its trees and their ground over France by the IGN's survey — I4)
+      this.earthScenery.ign = s.earthIgnRelief;
       this.earthScenery.update(
         eye,
         detail.scenery,

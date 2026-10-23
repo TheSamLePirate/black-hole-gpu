@@ -3,6 +3,7 @@ import { VectorTile, classifyRings } from "@mapbox/vector-tile";
 import { PbfReader } from "pbf";
 import { earthDetail, toHalf } from "../terrain";
 import { forestFrame, forestVec4s, growForest } from "./forest";
+import { IgnLand, inIgnBox } from "./ign-canopy";
 import { roadWidth, surfaceSegment, polygonPrimitive, stripPolygon, surfaceContains } from "./scenery-geometry";
 import {
   D,
@@ -42,8 +43,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   let networkBytes = 0,
     rgbPixels = 0;
   const errors: string[] = [];
-  const fetchCount = async (url: string) => {
-    const r = await fetch(url, { signal });
+  const fetchCount = async (url: string, within = signal) => {
+    const r = await fetch(url, { signal: within });
     if (!r.ok) throw new Error(`HTTP ${r.status}: ${url}`);
     const b = await r.arrayBuffer();
     networkBytes += b.byteLength;
@@ -121,6 +122,20 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       errors.push(String(e).slice(0, 220));
     }
   }
+  // (over France, the IGN's survey — I4 —: its canopy and its ground over the forest's disc, fetched beside the land cover
+  // within its own time — the blocks late past it left to the land cover —, the scene's sources not held back by it)
+  const surveyed = AbortSignal.timeout(45_000);
+  const land =
+    q.ign && inIgnBox(q.lat, q.lon)
+      ? new IgnLand(async (url) => {
+          const r = await fetch(url, { signal: surveyed });
+          if (!r.ok) throw new Error(`HTTP ${r.status} (${(await r.text()).replace(/\s+/g, " ").slice(0, 160)}): ${url}`);
+          const b = await r.arrayBuffer();
+          networkBytes += b.byteLength;
+          return b;
+        })
+      : null;
+  const landReady = land?.prepare(q.lat, q.lon, radius + 250);
   await raster(false);
   if (q.satellite) await raster(true);
   // Keep each DEM tile at least 1.8 km wide at high latitudes, bounding root-data memory.
@@ -130,6 +145,12 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   const [n0, nLat, nLon] = q.geoid ?? [0, 0, 0];
   const sea = (lat: number, lon: number) => n0 + nLat * (lat - q.lat) + nLon * wrapLon(lon - q.lon);
   const height = async (lat: number, lon: number) => {
+    // (the IGN's ground where it has one: the tracer's over France since I2 — its normal heights over the sea's surface)
+    if (land) {
+      await landReady;
+      const h = land.ground(lat, lon);
+      if (Number.isFinite(h)) return Math.max(0, h) + sea(lat, lon);
+    }
     const xx = tx(wrapLon(lon), demZoom),
       yy = ty(lat, demZoom),
       x = Math.floor(xx),
@@ -486,12 +507,40 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   };
   // ---- the forests: at most one tree a cell of the world-fixed grid (forest.ts), decided here once —
   // the same tree at the same place whichever scenery holds it (the class, the roads, the ground at its foot)
+  // (the survey's canopy holds the buildings too — its surface less its ground —: none of its trees in an OSM footprint)
+  const houses = new Map<string, Primitive[]>();
+  if (land) {
+    await landReady;
+    for (const v of choices) {
+      const p = polygonPrimitive(
+        v.geo.map((r) => r.map((at) => localPoint(frame, at.lat, at.lon, 0))),
+        0,
+        1,
+        1,
+        [0, 0, 0],
+      );
+      if (!p) continue;
+      for (let y = Math.floor((p.min[1] - 2) / 32); y <= Math.floor((p.max[1] + 2) / 32); y++)
+        for (let x = Math.floor((p.min[0] - 2) / 32); x <= Math.floor((p.max[0] + 2) / 32); x++) {
+          const key = `${x}:${y}`;
+          const cell = houses.get(key) ?? [];
+          cell.push(p);
+          houses.set(key, cell);
+        }
+    }
+  }
+  const housed = (lat: number, lon: number) => {
+    if (!houses.size) return false;
+    const p = localPoint(frame, lat, lon, 0);
+    return houses.get(`${Math.floor(p[0] / 32)}:${Math.floor(p[1] / 32)}`)?.some((v) => surfaceContains(p, v, 1.5)) ?? false;
+  };
   const grown = await growForest(ff, {
     cover: (lat, lon) => {
       const k = index(lat, lon);
       return k < 0 ? 0 : classes[k]!;
     },
-    excluded: (lat, lon) => excluded(lat, lon) || networkExcluded(lat, lon),
+    excluded: (lat, lon) => excluded(lat, lon) || networkExcluded(lat, lon) || housed(lat, lon),
+    canopy: land ? (lat, lon, r) => land.canopyNear(lat, lon, r) : undefined,
     ground: height,
     sea,
     local: (lat, lon, h) => localPoint(frame, lat, lon, h),
@@ -499,6 +548,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   });
   const cells = grown.cells;
   trees = grown.trees;
+  const surveyedTrees = grown.surveyed;
   // Select individual buildings by distance, so a dense tile cannot consume the budget before closer neighbours.
   for (const v of choices) {
     try {
@@ -545,6 +595,10 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     bounds,
     buffer,
     trees,
+    surveyedTrees,
+    surveyRequests: land?.requests ?? 0,
+    // (a block failed: its trees the land cover's — the scene not degraded for it)
+    surveyError: land?.errors[0],
     forestCells: ff.w * ff.h,
     forestCellM: ff.cell,
     buildings,

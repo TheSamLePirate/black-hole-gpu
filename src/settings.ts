@@ -321,7 +321,7 @@ export interface Settings {
   earthTerrain: boolean; // the Earth's real ground near the camera: elevation tiles streamed in (else the global map)
   earthTerrainCache: boolean; // experimental filtered surface cache, realtime Earth only; exact fallback otherwise
   earthOrtho: boolean; // over France, the IGN's orthophotos (0.2–0.8 m) finer than the terrain tiles' imagery (I1)
-  earthIgnRelief: boolean; // over France, the IGN's relief (RGE ALTI 1 m, LiDAR HD 0.5 m) on the terrain tiles, three levels finer (I2)
+  earthIgnRelief: boolean; // over France, the IGN's relief (RGE ALTI 1 m, LiDAR HD 0.5 m) on the terrain tiles, three levels finer (I2); the scenery's trees by its LiDAR canopy, their ground its (I4)
   earthTerrainRasterView: "off" | "depth" | "normals" | "difference"; // diagnostic raster patch; no replacement of physical rendering
   earthTerrainRasterLevel: number; // the raster's patch: cache level 0…7 (0: 1.2 m, the finest), the coarser ones rings round it
   earthTerrainRasterUse: boolean; // experimental: the tracer's ground rays start from the raster patch's distance (verified, else marched as before)
