@@ -58,6 +58,8 @@ function a320Step(this: CameraController, dt: number, onWheels: boolean): A320Fc
   const altFt = (this.geoNow()?.alt ?? 0) / 0.3048;
   for (const id of F.step(P, dt, { ias, onGround: onWheels, v1: this.a320Fmgc?.fms.v1 ?? null, altFt })) this.a320Failed?.(id);
   this.a320AdrOut = this.a320Adr!.step(P, ias, altFt);
+  // (its ground services and its pushback — controller/a320ground.ts)
+  this.a320GroundStep(dt, onWheels);
   // (the flight control law Airbus's reconfiguration gives: the hydraulics, the computers, the ADRs)
   A.law = lawOf(P, this.gearDown).law;
   // (the ECAM: its inputs from the game — the law, the levers' detents, the reversers, FLEX, the autobrake; the flight
@@ -174,7 +176,8 @@ function sysFrame(c: CameraController, A: A320Fcs, onWheels: boolean): SysFrame 
     tatC: T + (V * V) / 2009 - 273.15,
     oatC: T - 273.15,
     staticInHg: ((air?.rho ?? 1.225) * 287.05 * T) / 3386.39,
-    alphaDeg: ((L?.out.alpha ?? 0) * 180) / Math.PI,
+    // (the vanes' incidence: none read on the ground below 40 kt — pushed back, the air from behind would read a stall)
+    alphaDeg: onWheels && Math.sqrt((2 * (L?.out.q ?? 0)) / 1.225) * 1.9438 < 40 ? 0 : ((L?.out.alpha ?? 0) * 180) / Math.PI,
     flapDeg: A.surfaces.flap,
     slatDeg: A.surfaces.slat,
     engines: A.engines,

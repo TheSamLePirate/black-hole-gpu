@@ -8,6 +8,7 @@ import { A320Callouts } from "./a320/sound/callouts";
 import { SOUND_URL } from "./a320/sound/assets";
 import type { CraftVoice } from "./a320/sound/types";
 import { FAILURES, failureById } from "./a320/failures";
+import { type ServiceId, tugVehicle } from "./a320/services";
 import { fieldByCode, fieldCached } from "./world/runways";
 import type { FailureKind } from "./game/systems";
 import { holeFleet } from "./holefleet";
@@ -140,6 +141,7 @@ import type { EclipseEvent } from "./eclipse/search";
 import { skyNow } from "./system/sky-now";
 import { MISSIONS } from "./game/missions";
 import { KeyHints } from "./ui/keyhints";
+import { TaxiGuide } from "./ui/taxiguide";
 import { MenuPad } from "./ui/padnav";
 import { spaceWheel } from "./ui/spacewheel";
 import { SPACE_LESSONS, type SpaceLessonId, type SpaceStart } from "./game/spacecourse";
@@ -2700,6 +2702,8 @@ async function main() {
   /** the A320's moving parts (src/a320/pose.ts): FlightGear's properties its rig reads */
   const a320Poser = new A320Poser();
   const deckPoser = new DeckPoser();
+  /** the A320's taxi guidance in the view (ui/taxiguide.ts) */
+  const taxiGuide = new TaxiGuide();
   /** the A320's windshield (src/a320/glass.ts): its wipers as FlightGear moves them, the frost on it */
   const a320GlassSim = { wipers: [new Wiper(), new Wiper()] as [Wiper, Wiper], frost: new Frost() };
   /** a checklist item's control shown on the A320's deck (ui/a320page.ts): its place in the ship's frame, its ring */
@@ -2854,6 +2858,8 @@ async function main() {
         tracks: camera.picture?.tracks ?? [],
         trailT: camera.trailT,
         route: N.route.wps.map((p, k) => ({ lat: p.lat, lon: p.lon, name: p.name, active: k === active })),
+        // (the A320's taxi route left — controller/a320taxi.ts)
+        taxi: camera.a320Taxi?.route?.pts.slice(camera.a320Taxi.cue?.i ?? 0),
       };
     },
     selectTrack: (id) => {
@@ -3083,6 +3089,8 @@ async function main() {
   // the tablet (ui/tablet.ts): the map's left panel, the computer's and the ship's, the camera's, the
   // sky's and the log's pages
   // (an A320 failure happening — armed at V1, at the take-off, at random —: told; the ECAM shows it)
+  // (its ground services and pushback's words — controller/a320ground.ts)
+  camera.a320Said = (m) => panel.toast(m);
   camera.a320Failed = (id) => {
     const m = tf("Failure: {0}", t(failureById(id)?.name ?? id));
     panel.toast(m);
@@ -3129,6 +3137,19 @@ async function main() {
         },
         marker: (p) => (deckMarker.at = p),
         toast: (s) => panel.toast(s),
+        // (on the ground: its services, its pushback — controller/a320ground.ts)
+        ground: () =>
+          fleet.active === "a320" && camera.a320 && (camera.rolling || camera.ourLanded)
+            ? {
+                on: [...(camera.a320Ground?.on ?? [])],
+                fuel: camera.a320.fuel,
+                target: camera.a320Ground?.fuelTarget ?? null,
+                push: camera.a320Push?.phase ?? "idle",
+              }
+            : null,
+        // (the fuel truck: to the FMS's block fuel, else full)
+        service: (id) => camera.a320Service(id as ServiceId, camera.a320Fmgc?.fms.block ? camera.a320Fmgc.fms.block * 1000 : null),
+        push: (c) => camera.a320PushCmd(c),
       });
       const root = document.createElement("div");
       return {
@@ -3627,6 +3648,8 @@ async function main() {
       if (settings.shipMount !== "director") setMount("director");
       else panel.toast(camera.cineNextShot());
     },
+    // (the A320's pushback — controller/a320ground.ts)
+    pushback: () => panel.toast(fleet.active === "a320" ? camera.a320PushCmd("cycle") : t("Pushback: the A320's")),
     jetSystem: (_, a) =>
       panel.toast(
         fleet.active === "a320" && (a === "ab" || a === "stovl")
@@ -8059,7 +8082,16 @@ async function main() {
             alpha: ((L?.out.alpha ?? 0) * 180) / Math.PI,
             landingLights: settings.landingLights || deckOut.landingOut,
             wipers: deckOut.wipers,
+            // (its doors opened by its ground services — src/a320/services.ts)
+            doors: camera.a320Ground?.doors(),
           });
+          // (its ground vehicles about it, the pushback's tug at its nose — controller/a320ground.ts)
+          {
+            const gv = camera.a320Ground?.vehicles() ?? [];
+            const po = camera.a320PushOut;
+            if (po && po.attach > 0) gv.push(tugVehicle(po.bar, po.attach));
+            renderer.a320Ground = gv.length ? gv : null;
+          }
           // (the lights its switches turn off: the taxi, turn-off and wing lights — ship.ts)
           Object.assign(renderer.a320Pose.props, {
             "deck/taxi": deckOut.taxi ? 1 : 0,
@@ -8087,6 +8119,8 @@ async function main() {
             );
             const rain = renderer.rain && !renderer.rain.dust ? Math.min(renderer.rain.rain, 1.3) : 0;
             const oatC = (L?.air?.T ?? 288.15) - 273.15;
+            // (the de-icing truck's fluid: the frost washed off the glass too — src/a320/services.ts)
+            if (camera.a320Ground?.on.has("deice") && camera.a320Ground.deiceLeft > 0) G.frost.ice = Math.max(G.frost.ice - dt / 30, 0);
             const frost = G.frost.step(
               {
                 oatC,
@@ -8158,6 +8192,13 @@ async function main() {
             } else deckMarker.el.style.display = "none";
           }
         }
+        // (the A320's taxi guidance in the view — ui/taxiguide.ts —: its route ahead on the ground, the next turn)
+        taxiGuide.frame(
+          camera,
+          fleet.active === "a320" && settings.ship ? (p) => renderer.ship.cabinProject(p) : null,
+          canvas.getBoundingClientRect(),
+          settings.units,
+        );
         // (the F-35 chosen: its display's fonts, canvas and mips readied while the browser idles — no stall at the
         // cockpit's first look)
         if (settings.vessel === "f35" && !pcdWarm) {

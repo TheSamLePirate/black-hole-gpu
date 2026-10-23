@@ -2636,3 +2636,27 @@ body.topbar-hidden .fh-compass { top: 26px; }
 .a320-window[hidden] {
   display: none;
 }
+
+/* the A320's taxi guidance (ui/taxiguide.ts): its route ahead painted over the view, the next turn's panel */
+.taxi-line {
+  display: none;
+  position: fixed;
+  pointer-events: none;
+  z-index: 30;
+}
+.taxi-panel {
+  display: none;
+  position: fixed;
+  top: 92px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: rgba(20, 8, 28, 0.72);
+  border: 1px solid rgba(255, 77, 255, 0.55);
+  color: #ffb3ff;
+  font: 600 15px/1.3 var(--k-font, system-ui), sans-serif;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  z-index: 31;
+}

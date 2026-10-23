@@ -30,6 +30,8 @@ export interface JetMapData {
   /** the tactical picture's tracks */
   tracks: PicTrack[];
   route: { lat: number; lon: number; name: string; active: boolean }[];
+  /** the taxi route left on the ground (the A320's — controller/a320taxi.ts: OpenStreetMap's taxiways) */
+  taxi?: { lat: number; lon: number }[];
   /** the trails' clock now [s] (the tracks' histories' — RD7) */
   trailT?: number;
 }
@@ -317,6 +319,19 @@ export class JetMap {
         c.fillStyle = p.active ? "#ff5ce1" : "rgba(255, 92, 225, 0.6)";
         c.fill();
       }
+    }
+    // the taxi route: a wide magenta band over the taxiways it rolls along
+    if (d.taxi && d.taxi.length > 1) {
+      c.strokeStyle = "rgba(255, 92, 225, 0.9)";
+      c.lineWidth = 4;
+      c.lineJoin = "round";
+      c.beginPath();
+      d.taxi.forEach((p, k) => {
+        const [x, y] = at(p.lat, p.lon);
+        if (k) c.lineTo(x, y);
+        else c.moveTo(x, y);
+      });
+      c.stroke();
     }
     // the trace: its segments coloured by the altitude, fading into the past
     const T = d.trail;

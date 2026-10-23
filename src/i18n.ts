@@ -33,6 +33,7 @@ import frSpaceMissions from "./i18n/fr-spacemissions";
 import frSpaceSchool from "./i18n/fr-spaceschool";
 import frA320 from "./i18n/fr-a320";
 import frA320Deck from "./i18n/fr-a320-deck";
+import frA320Ground from "./i18n/fr-a320-ground";
 
 export type Lang = "fr" | "en";
 export type Text = Record<Lang, string>;
@@ -139,6 +140,7 @@ addFrench(frSettings);
 addFrench(frSpaceSchool);
 addFrench(frA320);
 addFrench(frA320Deck);
+addFrench(frA320Ground);
 addFrench(frSpaceMissions);
 addFrench(frNetSpace);
 addFrench(frCockpit);

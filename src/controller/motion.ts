@@ -301,6 +301,55 @@ function landedAt(ground: string, X: Vec3, t: number): Landed {
 }
 
 /**
+ * A craft at rest on its gear set back on it where the ground has moved under it (its relief refined): its legs'
+ * heights over the ground against their sag at rest, a plane through them (least squares on the craft's axes — its
+ * left, its nose —); off by more than 5 cm, the craft tilted onto it (its top that plane's normal: the camera's
+ * axes turned with it) and its height made the legs' at rest. None (null) when it stands as it should.
+ */
+function seatOnGear(c: CameraController, L: Landed, fwd: Vec3, up: Vec3, t: number): { fwd: Vec3; up: Vec3 } | null {
+  const gd = GEARS[fleet.active];
+  if (!gd || L.deck || gd.legs.length < 3) return null;
+  const S = c.shipMatrix();
+  const right = cross(fwd, up);
+  const ax = [0, 1, 2].map((i) => unitV(lin(lin(right, S[0]![i]!, up, S[1]![i]!), 1, fwd, S[2]![i]!))) as [Vec3, Vec3, Vec3];
+  const X = fromBodyFixed(L.body, L.q, t);
+  const pts = gd.legs.map((g) => {
+    const P = lin(X, 1, lin(lin(ax[0], g.at[0], ax[1], g.at[1]), 1, ax[2], g.at[2]), 1 / M_METRES);
+    return { x: g.at[0], z: g.at[2], h: heightOverGround(L.body, toBodyFixed(L.body, P, t)) + gd.sag * g.stroke };
+  });
+  if (Math.max(...pts.map((p) => Math.abs(p.h))) < 0.05) return null;
+  // (h = a + b x + c z: the legs' excess over their rest; the ground's normal (b, 1, c) on the craft's axes)
+  const N = pts.length;
+  const m = (f: (p: (typeof pts)[number]) => number) => pts.reduce((s, p) => s + f(p), 0) / N;
+  const mx = m((p) => p.x),
+    mz = m((p) => p.z),
+    mh = m((p) => p.h);
+  const Cxx = m((p) => (p.x - mx) ** 2),
+    Czz = m((p) => (p.z - mz) ** 2),
+    Cxz = m((p) => (p.x - mx) * (p.z - mz));
+  const Cxh = m((p) => (p.x - mx) * (p.h - mh)),
+    Czh = m((p) => (p.z - mz) * (p.h - mh));
+  const det = Cxx * Czz - Cxz * Cxz;
+  if (Math.abs(det) < 1e-9) return null;
+  const bx = (Cxh * Czz - Czh * Cxz) / det,
+    cz = (Czh * Cxx - Cxh * Cxz) / det;
+  const a = mh - bx * mx - cz * mz;
+  // (turned about the reference point: the turn that takes its top onto the normal — Rodrigues —, the camera's with it)
+  const n = unitV(lin(lin(ax[0], bx, ax[1], 1), 1, ax[2], cz));
+  const k = cross(ax[1], n);
+  const s = Math.hypot(...k),
+    co = dot3(ax[1], n);
+  const turn = (v: Vec3): Vec3 => {
+    if (s < 1e-12) return v;
+    const u: Vec3 = [k[0] / s, k[1] / s, k[2] / s];
+    return unitV(lin(lin(v, co, cross(u, v), s), 1, u, dot3(u, v) * (1 - co)));
+  };
+  // (its height: the legs' excess at the reference point taken off)
+  L.h = heightOverGround(L.body, L.q) - a;
+  return { fwd: turn(fwd), up: turn(up) };
+}
+
+/**
  * Our universe far from the mouth (flat): velocity Verlet in the home frame's Cartesian
  * coordinates, the attitude fixed against the stars; a body met: the ship rests on it.
  */
@@ -376,6 +425,16 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
   } else if (this.ourLanded) {
     const L = this.ourLanded;
     const b = OUR_BODIES.find((q) => q.id === L.body)!;
+    // (standing on its gear: each leg kept on the ground as it comes — the relief's tiles refined under a craft set
+    // down on their first heights, an apron's roofs and bridges smoothed in them, left an A320 parked at a stand a
+    // wheel a metre in the ground, the other in the air: let go by its tug, flung onto its side)
+    if (!this.onBelly && flown && VESSELS[fleet.active].lands) {
+      const r = seatOnGear(this, L, fwd, up, t0);
+      if (r) {
+        fwd = r.fwd;
+        up = r.up;
+      }
+    }
     // (on the ground as it is known now: a scene placed before the Earth's relief was read back
     // stood at its sphere, inside the mountain — raised onto it once the heights are in)
     const qr = Math.hypot(...L.q);
@@ -451,10 +510,14 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
   // (and the pedals' toe brakes, as hard as pressed — PLAN-HOTAS)
   // (the A320: its autobrake's pressure — src/a320/fcs.ts —, the levers at idle braking as the others' with it off)
   const ab = fleet.active === "a320" ? this.a320 : null;
+  // (pushed back by its tug: not braked at idle — controller/a320ground.ts)
+  const pushed = !!ab && !!this.a320PushOut && this.a320Push?.phase !== "idle";
   const idleBrake =
-    this.pilot.throttle <= 0 && this.pilot.auto === "none" && allDown && !(ab && (ab.autobrake > 0 || this.a320Reverse > 0)) ? 1 : 0;
-  // (its parking brake set: braked hard)
-  const park = ab && this.a320Park ? 1 : 0;
+    this.pilot.throttle <= 0 && this.pilot.auto === "none" && allDown && !pushed && !(ab && (ab.autobrake > 0 || this.a320Reverse > 0))
+      ? 1
+      : 0;
+  // (its parking brake set, its chocks: braked hard)
+  const park = ab && (this.a320Park || this.a320Ground?.chocked) ? 1 : 0;
   // (the A320's brakes by its hydraulics: the green's normal ones, the yellow's alternate without the anti-skid — some
   // 60 % —, none without either; the parking brake on its accumulator; the nose wheel steered by the yellow —
   // failures.ts surfacesPowered)
@@ -730,7 +793,10 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
         // (at rest on all its legs, the engine idle, not turning: standing — carried by the ground)
         const still = Math.hypot(...vr) * C_MPS < 0.05 && Math.hypot(...wWorld()) < 0.003;
         // (on the belly, its underside not flat: still on two skids is at rest)
-        if (o.contact >= (belly ? 2 : gdef.legs.length) && still && this.pilot.throttle <= 0) {
+        // (the A320's tug pushing: not at rest — its pull a centimetre a second each frame from a stand —
+        // controller/a320ground.ts)
+        const towing = fleet.active === "a320" && (this.a320PushOut?.accel ?? 0) !== 0;
+        if (o.contact >= (belly ? 2 : gdef.legs.length) && still && this.pilot.throttle <= 0 && !towing) {
           this.rolling = null;
           this.rollSite = null;
           this.ourLanded = landedAt(ground, X, t);

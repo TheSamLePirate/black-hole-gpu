@@ -1336,6 +1336,15 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
           ...(f.mid ? { mid: at(f.mid) } : {}),
         });
       this.a320FxAt = fr.now;
+      // (the de-icing truck's boom spraying the wings — src/a320/services.ts —: its fluid's mist sweeping along the
+      // right wing's upper surface, then the left's)
+      const Gs = this.a320Ground;
+      if (Gs?.on.has("deice") && Gs.deiceLeft > 0) {
+        const u = (fr.now / 6) % 2;
+        const side = u < 1 ? -1 : 1;
+        const s = u % 1;
+        src.push({ key: "a320deice", p: at([side * (3 + 13 * s), 2.3 + 0.9 * s, -0.5 - 3.5 * s]), kind: 7, str: 0.9 });
+      }
     }
     if (tip && wing && LA.out.q > 0) {
       const cl = Math.abs(LA.out.L) / (LA.out.q * wing.S);

@@ -106,6 +106,8 @@ import { installStovl, noStovl, type StovlState } from "./controller/stovl";
 import type { A320Fcs } from "./a320/fcs";
 import { installA320 } from "./controller/a320";
 import { installA320Ap } from "./controller/a320ap";
+import { installA320Ground } from "./controller/a320ground";
+import { installA320Taxi } from "./controller/a320taxi";
 import { CamShake } from "./camshake";
 import { installCine } from "./controller/cine";
 import { installCamRig } from "./controller/camrig";
@@ -1118,6 +1120,13 @@ export class CameraController {
   a320Adr: import("./a320/failures").AdrSet | null = null;
   a320AdrOut: ReturnType<import("./a320/failures").AdrSet["step"]> | null = null;
   a320Failed: ((id: string) => void) | null = null;
+  /** its ground services and its pushback (src/a320/services.ts, pushback.ts — controller/a320ground.ts): made with
+   *  their first use; the push's frame's origin, the tug's last output; what they say (main.ts: the toast) */
+  a320Ground: import("./a320/services").GroundServices | null = null;
+  a320Push: import("./a320/pushback").Pushback | null = null;
+  a320PushOrigin: { lat: number; lon: number } | null = null;
+  a320PushOut: import("./a320/pushback").PushOut | null = null;
+  a320Said: ((m: string) => void) | null = null;
   /** its wings' bend under their load (src/a320/flex.ts — controller/a320.ts): the spring, the tip's rise now [m] */
   a320Flex: import("./a320/flex").WingFlex | null = null;
   a320WingTip = 0;
@@ -1125,6 +1134,8 @@ export class CameraController {
   a320WingTipForce: number | null = null;
   /** its ECAM (src/a320/ecam — controller/a320.ts): the E/WD's messages, the master lights, the SD's pages */
   a320Ecam: import("./a320/ecam").Ecam | null = null;
+  /** its taxi (controller/a320taxi.ts): the airport's network, the route, the clearance, the guidance */
+  a320Taxi: import("./controller/a320taxi").TaxiState | null = null;
   /** what its hydraulics still move (failures.ts surfacesPowered: the gear, the steering, the brakes…); its gear's
    *  gravity extension pulled (the green system lost: the gear falls by its own weight — ui/a320page.ts) */
   a320Pw: import("./a320/failures").Powered | null = null;
@@ -1664,6 +1675,8 @@ installNetcraft(CameraController);
 installStovl(CameraController);
 installA320(CameraController);
 installA320Ap(CameraController);
+installA320Ground(CameraController);
+installA320Taxi(CameraController);
 installCine(CameraController);
 installCamRig(CameraController);
 installTravel(CameraController);

@@ -4724,6 +4724,9 @@ export class Renderer {
   /** the flown A320's moving parts: its rig's properties and spins (src/a320/pose.ts), and properties held where a
    *  test or a capture wants them (FlightGear's paths: __bh.renderer.a320Force) */
   a320Pose: { props: import("./a320/rig").Props; spins: import("./a320/rig").Props } | null = null;
+  /** the A320's ground vehicles (src/a320/services.ts — main.ts each frame): their meshes, places in its frame [m] and
+   *  turns about its up axis [rad] — drawn with it while it is flown */
+  a320Ground: import("./a320/services").GroundVehicle[] | null = null;
   a320Force: import("./a320/rig").Props = {};
   /** its displays (src/a320/du — main.ts: captures and tests read their canvases) */
   a320Du: import("./a320/du").DuSet | null = null;
@@ -4988,8 +4991,35 @@ export class Renderer {
     thrust?: { throttle: number; boost: number; air: number };
   }[] = [];
 
+  /** The A320's ground vehicles as instances: placed in its frame, turned about its up axis — on its pose from the
+   *  camera. */
+  private groundShips(s: Settings): ShipInstance[] {
+    const G = this.a320Ground;
+    if (!G?.length || !s.ship || s.vessel !== "a320" || !this.shipPose) return [];
+    const P = shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch);
+    const S = P.S as unknown as [Vec3, Vec3, Vec3];
+    return G.filter((v) => this.ship.has(v.id)).map((v) => {
+      const c = Math.cos(v.yaw),
+        n = Math.sin(v.yaw);
+      // (its axes: the ship's turned about y — x' = x c + z n, z' = −x n + z c —, then to the camera's)
+      const Ry: [Vec3, Vec3, Vec3] = [
+        [c, 0, n],
+        [0, 1, 0],
+        [-n, 0, c],
+      ];
+      const M = [0, 1, 2].map((r) => [0, 1, 2].map((k) => S[r]![0]! * Ry[0]![k]! + S[r]![1]! * Ry[1]![k]! + S[r]![2]! * Ry[2]![k]!)) as [
+        Vec3,
+        Vec3,
+        Vec3,
+      ];
+      const t = [0, 1, 2].map((r) => S[r]![0]! * v.p[0] + S[r]![1]! * v.p[1] + S[r]![2]! * v.p[2] + P.t[r]!) as Vec3;
+      // (on the ground beside the craft: not hidden by the traced ground's coarse depth — as the craft itself)
+      return { id: v.id, S: M, t, shadow: true, far: false };
+    });
+  }
+
   private shipOthers(s: Settings): ShipInstance[] {
-    const extra = [...this.netShips(s), ...this.combatShips(s), ...this.holeShips(s)];
+    const extra = [...this.groundShips(s), ...this.netShips(s), ...this.combatShips(s), ...this.holeShips(s)];
     return extra.length ? [...extra, ...this.fleetOthers(s)] : this.fleetOthers(s);
   }
 

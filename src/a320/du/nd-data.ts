@@ -8,6 +8,7 @@ import type { CameraController } from "../../controls";
 import { gcCourse, gcDist } from "../../game/flightplan";
 import { SENSOR } from "../../radar/picture";
 import { fieldsNearCached } from "../../world/runways";
+import { edgesNear } from "../../game/airportnet";
 
 const NM = 1852;
 const FT = 3.28084;
@@ -52,6 +53,18 @@ export interface NdExtra {
   nav: boolean;
   fields: NdField[];
   traffic: NdTraffic[];
+  /** on the ground at an airport whose network is in (controller/a320taxi.ts — Airbus's OANS): its taxiways and
+   *  runways within 2.5 km (lat, lon of each end, its kind), the taxi route left, the stand, the next turn's taxiway */
+  taxi: NdTaxi | null;
+}
+
+export interface NdTaxi {
+  lines: [number, number, number, number, string][];
+  route: [number, number][];
+  stand: { lat: number; lon: number; ref: string | null } | null;
+  next: string | null;
+  /** the speed to roll at [kt] */
+  adviseKt: number;
 }
 
 let cache: { at: number; v: NdExtra | null } = { at: -1, v: null };
@@ -115,5 +128,17 @@ function build(c: CameraController): NdExtra | null {
       level: T.tcas ?? "other",
     }))
     .filter((t) => Math.hypot(t.e, t.n) < 40 && Math.abs(t.dz) < 9900);
-  return { route, active, dist, brg, ete, nav: N.on.l, fields, traffic };
+  // (the taxi: the network about, the route ahead of the leg rolled on)
+  const T = c.a320Taxi;
+  const at = { lat: g.lat, lon: g.lon };
+  const taxi: NdTaxi | null = T
+    ? {
+        lines: edgesNear(T.net, at, 2500),
+        route: (T.route?.pts.slice(T.cue?.i ?? 0) ?? []).map((p) => [p.lat, p.lon] as [number, number]),
+        stand: T.kind === "in" && T.stand ? { lat: T.stand.lat, lon: T.stand.lon, ref: T.stand.ref } : null,
+        next: T.cue?.next?.name ?? null,
+        adviseKt: T.cue?.adviseKt ?? 0,
+      }
+    : null;
+  return { route, active, dist, brg, ete, nav: N.on.l, fields, traffic, taxi };
 }

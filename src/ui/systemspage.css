@@ -22,3 +22,4 @@
 .sy-eye { margin-left: auto; background: none; border: 1px solid rgba(95, 255, 208, 0.35); border-radius: 50%; color: #5fffd0; width: 22px; height: 22px; cursor: pointer; font-size: 13px; line-height: 1; }
 .sy-step.shown span { color: #5fffd0; }
 .sy-fail.sy-list { border-color: rgba(95, 255, 208, 0.35); background: rgba(6, 40, 30, 0.3); }
+.sy-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }

@@ -89,6 +89,17 @@ import mrttUrl from "../assets/traffic/mrtt.bin";
 import drogueUrl from "../assets/traffic/drogue.bin";
 import probeUrl from "../assets/traffic/probe.bin";
 import lampRedUrl from "../assets/traffic/lamp-red.bin";
+import gsTugUrl from "../assets/traffic/gs-tug.bin";
+import gsStairsUrl from "../assets/traffic/gs-stairs.bin";
+import gsGpuUrl from "../assets/traffic/gs-gpu.bin";
+import gsFuelUrl from "../assets/traffic/gs-fuel.bin";
+import gsCateringUrl from "../assets/traffic/gs-catering.bin";
+import gsCateringBoxUrl from "../assets/traffic/gs-catering-box.bin";
+import gsChockNoseUrl from "../assets/traffic/gs-chock-nose.bin";
+import gsChockLeftUrl from "../assets/traffic/gs-chock-left.bin";
+import gsChockRightUrl from "../assets/traffic/gs-chock-right.bin";
+import gsDeiceUrl from "../assets/traffic/gs-deice.bin";
+import gsBeltUrl from "../assets/traffic/gs-belt.bin";
 import lampAmberUrl from "../assets/traffic/lamp-amber.bin";
 import lampGreenUrl from "../assets/traffic/lamp-green.bin";
 import cargoHullUrl from "../assets/traffic/cargo-hull.jpg";
@@ -114,7 +125,22 @@ export type CarrierId = "ford" | "kiev" | "implacable";
 /** The air refuelling's (scripts/build-tanker.ts, game/aar.ts): the tanker, its hose and drogue, the F-35's probe, the
  *  pods' lights. */
 export type AarMeshId = "mrtt" | "drogue" | "probe" | "lamp-red" | "lamp-amber" | "lamp-green";
-export type TrafficMeshId = AirlinerId | ShipTypeId | CarrierId | AarMeshId;
+/** The A320's ground vehicles (scripts/build-a320-services.py — FlightGear's Models/Services): the pushback tug, the
+ *  stairs, the external power box, the fuel truck, the catering loader and its box, the chocks, the de-icing
+ *  truck, the baggage belt — coloured per vertex (material 90, as the carriers' flat parts). */
+export type GroundMeshId =
+  | "gs-tug"
+  | "gs-stairs"
+  | "gs-gpu"
+  | "gs-fuel"
+  | "gs-catering"
+  | "gs-catering-box"
+  | "gs-chock-nose"
+  | "gs-chock-left"
+  | "gs-chock-right"
+  | "gs-deice"
+  | "gs-belt";
+export type TrafficMeshId = AirlinerId | ShipTypeId | CarrierId | AarMeshId | GroundMeshId;
 /** A mesh the craft's pass draws: a craft's, an airliner's, a ship's. */
 export type ShipMeshId = VesselId | TrafficMeshId;
 const TRAFFIC_MESHES: Record<TrafficMeshId, string> = {
@@ -135,6 +161,17 @@ const TRAFFIC_MESHES: Record<TrafficMeshId, string> = {
   "lamp-red": lampRedUrl,
   "lamp-amber": lampAmberUrl,
   "lamp-green": lampGreenUrl,
+  "gs-tug": gsTugUrl,
+  "gs-stairs": gsStairsUrl,
+  "gs-gpu": gsGpuUrl,
+  "gs-fuel": gsFuelUrl,
+  "gs-catering": gsCateringUrl,
+  "gs-catering-box": gsCateringBoxUrl,
+  "gs-chock-nose": gsChockNoseUrl,
+  "gs-chock-left": gsChockLeftUrl,
+  "gs-chock-right": gsChockRightUrl,
+  "gs-deice": gsDeiceUrl,
+  "gs-belt": gsBeltUrl,
 };
 /** The traffic's colour maps, a layer each (ship.wgsl: the materials 40, 41, 44–46); the carriers' after them
  *  (80–86), added with the first carrier drawn. */
@@ -1927,6 +1964,17 @@ export class ShipRenderer {
       "lamp-red": 18,
       "lamp-amber": 19,
       "lamp-green": 20,
+      "gs-tug": 22,
+      "gs-stairs": 22,
+      "gs-gpu": 22,
+      "gs-fuel": 22,
+      "gs-catering": 22,
+      "gs-catering-box": 22,
+      "gs-chock-nose": 22,
+      "gs-chock-left": 22,
+      "gs-chock-right": 22,
+      "gs-deice": 22,
+      "gs-belt": 22,
     } as const;
     let jetSlot = 0;
     // (inside the Ranger: its cabin instead of its hull — the Lander's and the Endurance's the same cabin placed at their

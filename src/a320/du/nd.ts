@@ -43,7 +43,11 @@ export class Nd extends Display {
 
   draw(ctx: Ctx, d: DuData, _t: number) {
     const mode = String(this.efis(d, "nd/display-mode") ?? "ARC") as Mode;
-    const range = Number(this.efis(d, "inputs/range-nm") ?? 40);
+    const X0 = d.nd;
+    // (on the ground at an airport whose network is in: the airport's map — Airbus's OANS —, its ranges a twentieth of
+    // the knob's: 10 NM the half mile)
+    const oans = d.onGround && !!X0?.taxi;
+    const range = Number(this.efis(d, "inputs/range-nm") ?? 40) / (oans ? 20 : 1);
     const layer = String(this.efis(d, "nd/layer") ?? "");
     const X = d.nd;
     const hdg = d.heading;
@@ -68,7 +72,8 @@ export class Nd extends Display {
       ctx.lineTo(0, 340);
     } else ctx.arc(F.cx, F.cy, F.R + 4, 0, Math.PI * 2);
     ctx.clip();
-    if (X) {
+    if (X?.taxi && oans) this.taxi(ctx, F, X.taxi);
+    else if (X) {
       if (layer === "arpt" || range <= 40) this.fields(ctx, F, X, d, layer === "arpt", range);
       this.route(ctx, F, X, d, layer === "cstr", layer === "wpt");
       if (!plan) this.traffic(ctx, F, X);
@@ -335,6 +340,47 @@ export class Nd extends Display {
     });
   }
 
+  /** The airport's map (OANS): its taxiways grey, its runways white, the taxi route left magenta, the stand going
+   *  to, the next taxiway's name and the speed to roll at. */
+  private taxi(ctx: Ctx, F: Frame, T: NonNullable<NdExtra["taxi"]>) {
+    for (const kind of ["taxiway", "runway"]) {
+      ctx.strokeStyle = kind === "runway" ? COL.white : "#8a8f96";
+      ctx.lineWidth = kind === "runway" ? 9 : 4;
+      ctx.beginPath();
+      for (const [la1, lo1, la2, lo2, k] of T.lines) {
+        if ((k === "runway") !== (kind === "runway")) continue;
+        const [x1, y1] = this.xy(F, la1, lo1),
+          [x2, y2] = this.xy(F, la2, lo2);
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+      }
+      ctx.stroke();
+    }
+    if (T.route.length > 1) {
+      ctx.strokeStyle = COL.magenta;
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      T.route.forEach(([la, lo], i) => {
+        const [x, y] = this.xy(F, la, lo);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      const [ex, ey] = this.xy(F, ...T.route.at(-1)!);
+      ctx.fillStyle = COL.magenta;
+      ctx.beginPath();
+      ctx.arc(ex, ey, 10, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (T.stand) {
+      const [x, y] = this.xy(F, T.stand.lat, T.stand.lon);
+      star(ctx, x, y, 16, COL.white);
+      if (T.stand.ref) text(ctx, T.stand.ref, x + 22, y - 12, 28, COL.white, "left");
+    }
+    if (T.next) text(ctx, `→ ${T.next}`, 512, 950, 34, COL.magenta, "center");
+    if (T.adviseKt) text(ctx, `GS ${T.adviseKt} KT`, 512, 990, 28, COL.cyan, "center");
+  }
+
   /** the TCAS's traffic: a white diamond (hollow: other; filled: proximate), the TA an amber circle, the RA a red
    *  square; its height over us in hundreds of feet, its vertical arrow */
   private traffic(ctx: Ctx, F: Frame, X: NdExtra) {
@@ -507,8 +553,8 @@ export class Nd extends Display {
   }
 }
 
-/** a range's figure as the ND writes it (5, 10, 20, 2.5…) */
-const rangeLabel = (r: number) => (r < 10 && r % 1 ? r.toFixed(1) : String(Math.round(r)));
+/** a range's figure as the ND writes it (5, 10, 20, 2.5…; on the airport's map 0.25, 0.13…) */
+const rangeLabel = (r: number) => (r < 1 ? String(+r.toFixed(2)) : r < 10 && r % 1 ? r.toFixed(1) : String(Math.round(r)));
 
 function text(
   ctx: Ctx,

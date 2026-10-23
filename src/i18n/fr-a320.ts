@@ -203,4 +203,23 @@ export default {
   "Main gear, from under the belly": "Train principal, sous le ventre",
   "Fin top, looking forward": "Haut de la dérive, vers l'avant",
   "Fin top": "Dérive",
+  // (the ground: the taxi, the stands — A14 —: controller/a320taxi.ts, ui/taxiguide.ts, ui/flighthub.ts)
+  "{0}, taxi to runway {1} at your discretion": "{0}, roulez jusqu'à la piste {1} à votre convenance",
+  ", cross runway {0}": ", traversez la piste {0}",
+  "{0}, taxi to holding point runway {1} via {2}{3}": "{0}, roulez jusqu'au point d'attente piste {1} via {2}{3}",
+  "the apron": "l'aire de trafic",
+  "{0}, taxi to stand {1} via {2}": "{0}, roulez jusqu'au poste {1} via {2}",
+  "on the apron": "sur l'aire de trafic",
+  "Holding point, runway {0}": "Point d'attente, piste {0}",
+  "Stand {0}: parking brake, engines off": "Poste {0} : frein de parc, moteurs coupés",
+  "{0} {1} in {2} onto {3} · {4}": "{0} {1} dans {2} vers {3} · {4}",
+  "{0} left · {1}": "encore {0} · {1}",
+  "Prepare a flight — A320": "Préparer un vol — A320",
+  "At a stand": "Au poste",
+  "At a stand of the airfield, the parking brake set: push back, taxi out":
+    "À un poste de stationnement de l'aérodrome, frein de parc serré : repoussage, roulage",
+  "Stand (its number; empty: the nearest)": "Poste (son numéro ; vide : le plus proche)",
+  Stand: "Poste",
+  "The airport's ground network: loading…": "Le réseau de roulage de l'aéroport : chargement…",
+  "{0} — lined up on the runway instead": "{0} — aligné sur la piste à la place",
 };

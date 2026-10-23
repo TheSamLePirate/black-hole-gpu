@@ -10,7 +10,10 @@
 //   __bh.game.save("before TMI"); __bh.game.load("before TMI")
 //   await __bh.game.audit({ planner: true })
 
-import { runwaySitesNear, siteByName } from "../world/fieldsite";
+import { runwaySitesNear, siteByName, worldSite } from "../world/fieldsite";
+import { fieldByCode } from "../world/runways";
+import { pushbackPath, standOf, standPlace } from "./airportnet";
+import { loadAirportNet } from "./airportfetch";
 import { worldRunwaysUpdate } from "../world/runways3d";
 import { fleet } from "../fleet";
 import { VESSEL_IDS } from "../vessels";
@@ -348,6 +351,60 @@ export class GameTools {
       fwd: [f[0] / l, f[1] / l, f[2] / l],
       note: `${site.name}: lined up, runway ${Math.round((site.rwy ?? 0) / 10)}${alongM > alongM0 + 1 ? ` — ${Math.round(alongM)} m down it, clear of a parked craft` : ""}`,
     });
+  }
+
+  /**
+   * At a stand of an Earth airfield (the A320's start at the gate — docs/PLAN-A320.md, A14): the airport's ground
+   * network fetched (OpenStreetMap: game/airportfetch.ts), the stand by its ref (none: the nearest the airfield's middle
+   * — a gate's first), the aircraft on its ground there, its nose wheel on the stop, its nose on the stand's heading in,
+   * the parking brake set; its route out to the runway in use made (controller/a320taxi.ts). Its line.
+   */
+  async atStand(airport: string, ref?: string | null): Promise<string> {
+    let site = siteByName(airport);
+    if (!site) {
+      const f = await fieldByCode(airport);
+      site = f ? worldSite(f, 1200) : null;
+    }
+    if (!site || site.body !== "earth") throw new Error(`no airfield "${airport}"`);
+    const code = (site.icao ?? airport).toUpperCase();
+    const net = await loadAirportNet(code, site.lat, site.lon);
+    if (!net) throw new Error(`${code}: no ground network (OpenStreetMap unreachable, or none mapped)`);
+    // (none asked: of the stands named or at a gate, the nearest the airfield's middle — all when none is)
+    const named = net.stands.filter((s) => s.gate || s.ref);
+    const stand = ref ? standOf(net, ref) : standOf({ ...net, stands: named.length ? named : net.stands }, null);
+    if (!stand) throw new Error(`${code}: no stand mapped`);
+    if (site.len) worldRunwaysUpdate(site.lat, site.lon, performance.now(), true);
+    const t = this.ctx.time();
+    // (the nose wheel on the stop: the A320's reference point 13.65 m behind it — gear.ts)
+    const noseZ = fleet.active === "a320" ? (GEARS.a320?.legs[0]?.at[2] ?? 13.65) : 0;
+    const P = standPlace(stand, noseZ);
+    // (set on its wheels as the apron's relief has them — not level on its reference point: its legs sunk to their
+    // stops by the relief's metre-high bumps, let go by the tug, flung up)
+    const g = ourGroundPoseOn("earth", P.lat, P.lon, t, GEARS[fleet.active]?.legs ?? null, P.hdg, GEAR);
+    const note = this.placeAt({ ...g, note: `${site.name}: stand ${stand.ref ?? "—"}` });
+    const c = this.ctx.camera;
+    c.a320Park = true;
+    if (fleet.active === "a320") c.a320TaxiOut(code, net, stand);
+    return note;
+  }
+
+  /**
+   * The A320 pushed back from its stand (the tug's work done at once — PART B's tug does it frame by frame): at the end
+   * of its pushback's path (game/airportnet.ts pushbackPath), its nose along the taxiway, the parking brake set, its
+   * route out kept. Its line.
+   */
+  pushedBack(): string {
+    const c = this.ctx.camera;
+    const T = c.a320Taxi;
+    if (!T?.stand) throw new Error("not at a stand (atStand first)");
+    const P = pushbackPath(T.stand, T.net, GEARS.a320?.legs[0]?.at[2] ?? 13.65, 45, T.route);
+    const end = P.pts.at(-1)!;
+    const t = this.ctx.time();
+    const g = ourGroundPoseOn("earth", end.lat, end.lon, t, GEARS[fleet.active]?.legs ?? null, P.hdgEnd, GEAR);
+    const note = this.placeAt({ ...g, note: `pushed back from stand ${T.stand.ref ?? "—"}` });
+    c.a320Park = true;
+    c.a320Taxi = { ...T, cue: null };
+    return note;
   }
 
   /**

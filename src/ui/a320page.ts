@@ -6,6 +6,7 @@
 import "./systemspage.css";
 import checklists from "../a320/checklists.json";
 import { t, tf } from "../i18n";
+import { SERVICES } from "../a320/services";
 import { button, el, h } from "./kit";
 
 type V3 = [number, number, number];
@@ -31,6 +32,11 @@ export interface A320PageDeps {
   clearAll(): string;
   /** the gear's gravity extension pulled (its green system lost) */
   gravity(): string;
+  /** the ground services (src/a320/services.ts): those on, the fuel aboard and the truck's target [kg], the pushback's
+   *  phase — null: not on the ground */
+  ground?(): { on: string[]; fuel: number; target: number | null; push: string } | null;
+  service?(id: string): string;
+  push?(cmd: "call" | "straight" | "left" | "right" | "stop" | "disconnect"): string;
   /** the control an item names, shown on the deck (null: none) */
   marker(p: V3 | null): void;
   toast(s: string): void;
@@ -59,8 +65,9 @@ export class A320Page {
 
   live() {
     const F = this.d.failures();
+    const Gd = this.d.ground?.() ?? null;
     const sig = F
-      ? `${F.active.join()}|${F.armed.map((a) => a.id + a.when).join()}|${this.cat}|${this.fail}|${this.when}|${this.list}|${this.shown}|${[...this.ticked].map(([k, v]) => k + [...v].join("")).join()}`
+      ? `${Gd ? `${Gd.on.join()}|${Math.round(Gd.fuel / 100)}|${Gd.target}|${Gd.push}` : "air"}|${F.active.join()}|${F.armed.map((a) => a.id + a.when).join()}|${this.cat}|${this.fail}|${this.when}|${this.list}|${this.shown}|${[...this.ticked].map(([k, v]) => k + [...v].join("")).join()}`
       : "none";
     if (sig === this.sig) return;
     this.sig = sig;
@@ -73,7 +80,37 @@ export class A320Page {
       this.live();
     };
     const name = (id: string) => F.list.find((f) => f.id === id)?.name ?? id;
-    const kids: HTMLElement[] = [el("div", "sy-h", t("Failures"))];
+    const kids: HTMLElement[] = [];
+    // (on the ground: its services — each a button lit when on — and the pushback)
+    if (Gd) {
+      kids.push(el("div", "sy-h", t("On the ground")));
+      const row = h("div", { class: "sy-grid" });
+      for (const s of SERVICES)
+        row.append(
+          button({
+            label: t(s.name),
+            on: Gd.on.includes(s.id),
+            testid: `a320-svc-${s.id}`,
+            onClick: () => (this.d.toast(this.d.service?.(s.id) ?? ""), redo()),
+          }),
+        );
+      kids.push(row);
+      if (Gd.target !== null)
+        kids.push(el("small", "sy-none", tf("Refuelling: {0} of {1} kg", Math.round(Gd.fuel), Math.round(Gd.target))));
+      const push = h("div", { class: "sy-row" });
+      const cmd = (c: "call" | "straight" | "left" | "right" | "stop" | "disconnect", label: string) =>
+        push.append(button({ label: t(label), testid: `a320-push-${c}`, onClick: () => (this.d.toast(this.d.push?.(c) ?? ""), redo()) }));
+      if (Gd.push === "idle") cmd("call", "Call the tug");
+      else {
+        cmd("straight", "Push straight");
+        cmd("left", "Tail left");
+        cmd("right", "Tail right");
+        cmd("stop", "Stop");
+        cmd("disconnect", "Disconnect");
+      }
+      kids.push(el("div", "sy-h", t("Pushback")), el("small", "sy-none", t(`Pushback: ${Gd.push}`)), push);
+    }
+    kids.push(el("div", "sy-h", t("Failures")));
     // (under way, armed: each cleared by its button)
     if (!F.active.length && !F.armed.length) kids.push(el("div", "sy-none", t("None — all systems nominal.")));
     for (const id of F.active) {

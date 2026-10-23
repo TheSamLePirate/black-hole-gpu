@@ -213,7 +213,12 @@ function newFlight(this: CameraController) {
   this.a320 = null;
   this.a320Sys = null;
   this.a320Pw = null;
+  this.a320Ground?.clear();
+  this.a320Push = null;
+  this.a320PushOut = null;
+  this.a320PushOrigin = null;
   this.a320Ecam = null;
+  this.a320Taxi = null;
   this.a320Flex = null;
   this.a320Gravity = false;
   this.a320Reverse = 0;
@@ -1050,6 +1055,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   let jetCmd = this.jetStep(inp, dtPilot);
   // (the A320's flight guidance — controller/a320ap.ts —: its autopilot's orders to its law)
   if (a320) {
+    // (its taxi on the ground — controller/a320taxi.ts —: the route, the clearance, the guidance)
+    this.a320TaxiStep(onWheels0 || !!this.ourLanded);
     const fo = this.a320FmgcStep(inp, dtPilot, onWheels0 || !!this.ourLanded);
     if (fo && (fo.gammaCmd !== null || fo.bankCmd !== null)) jetCmd = { gamma: fo.gammaCmd, bank: fo.bankCmd };
   }
@@ -1150,7 +1157,9 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
           bankCmd: jetCmd.bank,
         }
       : null;
-  const sfCtx = mode === "sf" && this.pilot.auto === "none" && this.pilot.hold === "none" ? this.sfWant(cam, inp, dtPilot) : null;
+  // (the A320 pushed back by its tug — controller/a320ground.ts —: its own thrust's path, never the sci-fi computer's hold)
+  const towed = fleet.active === "a320" && !!this.a320PushOut && this.a320Push?.phase !== "idle";
+  const sfCtx = mode === "sf" && !towed && this.pilot.auto === "none" && this.pilot.hold === "none" ? this.sfWant(cam, inp, dtPilot) : null;
   // (the circularization's run ended with its autopilots: off by the pilot, or another engaged)
   if (this.ourCirc && this.pilot.auto !== "node" && this.pilot.auto !== "circularize") this.ourCirc = null;
   // the entry autopilot: the deorbit, the guided entry, the glide (its attitude, its burn)
@@ -1238,7 +1247,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
         };
       })(),
       // (the A320's engines: their FADEC's thrust, spooled by itself)
-      engineNow: a320 ? a320.thrust / a320.thrustMax : undefined,
+      // (the pushback's tug: its push or pull along the nose — controller/a320ground.ts)
+      engineNow: a320 ? (a320.thrust + (this.a320PushOut?.accel ?? 0) * fleet.massProps().mass) / a320.thrustMax : undefined,
       spoolK:
         s.engine === "crew" || VESSELS[fleet.active].turbofan
           ? 1 - Math.exp(-((s.animate ? timeRate(s) * dt : 0) * Msec) / VESSELS[fleet.active].spool)
@@ -1263,7 +1273,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
       const lock = Math.min((60 * Math.PI) / 180, 5.2 / Math.max(sp, 1));
       // (a positive yaw turns right: the wheel, + to the left, the other way)
       // (the A320's ROLL OUT: its FMGC steering — controller/a320ap.ts)
-      const yaw = this.a320FmgcOut?.steer ?? inp.yaw;
+      // (pushed back: the tug's driver's — controller/a320ground.ts)
+      const yaw = this.a320PushOut?.steer ?? this.a320FmgcOut?.steer ?? inp.yaw;
       this.noseSteer = -yaw * lock;
       if (nav && this.rollSite) this.rolloutSteer(nav.radial, dt, inp.yaw, lock);
     } else {

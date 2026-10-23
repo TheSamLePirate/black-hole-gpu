@@ -38,6 +38,7 @@ export type KeyAction =
   | "spectator"
   | "assist"
   | "vessel"
+  | "pushback"
   | "flightMode"
   | "antigrav"
   | "flaps"
@@ -274,6 +275,11 @@ export const KEYMAP: KeySection[] = [
         keys: "⇧B",
         text: "F-35B: STOVL mode — the lift fan, the nozzle swivelled down; below 65 m/s the hover law: the stick a speed over the ground, ⇧ Alt a vertical speed, let go held in place · A320: the autobrake, OFF · LO · MED · MAX",
         bind: [fly("KeyB", "jetSystem", { arg: "stovl", shift: true })],
+      },
+      {
+        keys: "End",
+        text: "A320 on the ground: the pushback — the tug called, the push straight back (the tablet's Systems page: tail left or right), stopped, disconnected",
+        bind: [fly("End", "pushback")],
       },
       {
         keys: "⇧M · ⇧O",
