@@ -7,17 +7,33 @@
 // `__bh.pwa.zones` (automation): the tests', TARS's, the settings' tab's (I8b).
 
 import type { ZoneRecord } from "./pwa/rules";
-import { type ZoneChain, type ZoneProfileId, type ZoneSources, ZONE_PROFILES, zoneChains, zoneEstimate } from "./system/zones";
+import {
+  type ZoneChain,
+  type ZoneProfileId,
+  type ZoneSources,
+  ZONE_PROFILES,
+  zoneChains,
+  zoneDuration,
+  zoneEstimate,
+} from "./system/zones";
 
 export interface Zones {
-  /** what a zone would hold: its tiles' chains of fetches, their links, its size [bytes] by the kinds' means */
-  estimate(o: { lat: number; lon: number; radiusKm: number; profile: ZoneProfileId }): { chains: number; urls: number; bytes: number };
+  /** what a zone would hold: its tiles' chains of fetches, their links, its size [bytes] by the kinds' means, its download
+   *  time [s] */
+  estimate(o: { lat: number; lon: number; radiusKm: number; profile: ZoneProfileId }): {
+    chains: number;
+    urls: number;
+    bytes: number;
+    seconds: number;
+  };
   /** a zone added and its download started; its id */
   add(o: { name: string; lat: number; lon: number; radiusKm: number; profile: ZoneProfileId }): Promise<string | null>;
   list(): Promise<ZoneRecord[]>;
   /** resolves once its batch under way is in: nothing more asked from then */
   pause(id: string): Promise<void>;
   resume(id: string): Promise<void>;
+  /** a zone fetched again from its start, every tile asked anew (the sources' new vintage), the old kept where it fails */
+  update(id: string): Promise<void>;
   /** a zone dropped: its tiles no other zone holds deleted */
   remove(id: string): Promise<void>;
   /** the zone downloading, if any */
@@ -63,7 +79,7 @@ export function createZones(o: {
         if (paused.has(id)) break;
         const batch = urls.slice(zone.cursor, zone.cursor + BATCH);
         const r = await o.talk<{ done: number; bytes: number; none: number; failed: ZoneChain[] }>(
-          { type: "zone-fetch", id, chains: batch },
+          { type: "zone-fetch", id, chains: batch, fresh: !!zone.fresh },
           BATCH_MS,
         );
         if (!r) {
@@ -81,7 +97,7 @@ export function createZones(o: {
       // (the failed asked once more at the end; those still failing counted, asked again on a resume)
       if (zone.cursor >= urls.length && failed.length && !paused.has(id)) {
         const r = await o.talk<{ done: number; bytes: number; none: number; failed: ZoneChain[] }>(
-          { type: "zone-fetch", id, chains: failed },
+          { type: "zone-fetch", id, chains: failed, fresh: !!zone.fresh },
           BATCH_MS * Math.ceil(failed.length / BATCH),
         );
         if (r) {
@@ -92,6 +108,10 @@ export function createZones(o: {
         }
       }
       zone.state = paused.has(id) ? "paused" : zone.failed ? "paused" : "ready";
+      if (zone.state === "ready") {
+        zone.updated = Date.now();
+        zone.fresh = false;
+      }
       await save(zone);
       active = null;
     }
@@ -104,7 +124,12 @@ export function createZones(o: {
   return {
     estimate({ lat, lon, radiusKm, profile }) {
       const chains = zoneChains(lat, lon, radiusKm * 1000, ZONE_PROFILES[profile], o.sources());
-      return { chains: chains.length, urls: chains.reduce((s, c) => s + c.length, 0), bytes: zoneEstimate(chains) };
+      return {
+        chains: chains.length,
+        urls: chains.reduce((s, c) => s + c.length, 0),
+        bytes: zoneEstimate(chains),
+        seconds: zoneDuration(chains),
+      };
     },
     async add({ name, lat, lon, radiusKm, profile }) {
       try {
@@ -149,6 +174,17 @@ export function createZones(o: {
       if (!z) return;
       // (a finished zone's failed: its list asked again from the start — the tiles in only marked)
       await save({ ...z, state: "downloading", cursor: z.state === "ready" || z.cursor >= z.total ? 0 : z.cursor, failed: 0 });
+      if (!queue.includes(id)) queue.push(id);
+      void run();
+    },
+    async update(id) {
+      paused.add(id);
+      while (active === id) await new Promise((r) => setTimeout(r, 200));
+      paused.delete(id);
+      const z = await get(id);
+      if (!z) return;
+      // (from the start, its figures counted anew: the sources' now — the settings', the fine windows' side)
+      await save({ ...z, state: "downloading", cursor: 0, done: 0, bytes: 0, none: 0, failed: 0, fresh: true, sources: o.sources() });
       if (!queue.includes(id)) queue.push(id);
       void run();
     },

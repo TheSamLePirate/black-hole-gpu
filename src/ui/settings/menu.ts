@@ -9,7 +9,7 @@ import { lang, t, type Text, tr } from "../../i18n";
 import type { Settings } from "../../settings";
 import { type ControlDef, SCHEMA, SCHEMA_BY_KEY } from "../schema";
 
-export type PlayerTab = "game" | "graphics" | "display" | "audio" | "controls" | "access" | "interface" | "network";
+export type PlayerTab = "game" | "graphics" | "display" | "audio" | "controls" | "access" | "interface" | "network" | "offline";
 
 /** the screen's own rows: the quality's presets, the language */
 export type SpecialRow = "@quality" | "@language";
@@ -24,7 +24,10 @@ export const PLAYER_TABS: { id: PlayerTab; label: Text }[] = [
   { id: "access", label: { fr: "Accessibilité", en: "Accessibility" } },
   { id: "interface", label: { fr: "Interface", en: "Interface" } },
   { id: "network", label: { fr: "Réseau", en: "Network" } },
+  { id: "offline", label: { fr: "Hors ligne", en: "Offline" } },
 ];
+/** the tabs built by hand, not from the schema (Offline: ui/settings/offline.ts) */
+export const CUSTOM_TABS: PlayerTab[] = ["offline"];
 
 export interface PlayerGroup {
   tab: PlayerTab;

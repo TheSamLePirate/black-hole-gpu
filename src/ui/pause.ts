@@ -99,6 +99,8 @@ export interface PauseDeps {
   time(): void;
   /** the weather (ui/weatherpanel.ts) */
   weather(): void;
+  /** Settings › Offline's adding of a zone on the position now (I8b) — none: not over the Earth, or no worker */
+  keepOffline?: (() => void) | null;
   /** the eclipse calculator (ui/eclipses.ts) */
   eclipses?(): void;
   /** a way to play's launch screen (the title's), over the game — its back: this menu again */
@@ -308,6 +310,7 @@ export class PauseMenu {
           place: () => this.leaveFor(d.place),
           time: () => this.leaveFor(d.time),
           weather: () => this.leaveFor(d.weather),
+          offline: d.keepOffline ? () => this.leaveFor(() => d.keepOffline?.()) : undefined,
           sky: () => this.leaveFor(d.skyEvents),
           observe: d.observe ? () => this.leaveFor(() => d.observe?.()) : undefined,
           eclipses: d.eclipses ? () => this.leaveFor(() => d.eclipses?.()) : undefined,

@@ -27,6 +27,9 @@ export interface Pwa {
   stats(): Promise<PwaStats | null>;
   /** empties the tiles' cache (the tools and the tests: __bh.pwa.clearTiles) */
   clearTiles(): Promise<void>;
+  /** the tiles' cache's budget [bytes] (Settings › Offline): kept by the worker, its least recently served beyond it
+   *  evicted at once */
+  setBudget(bytes: number): Promise<void>;
   /** a new build installed and waiting: reload onto it */
   update(): void;
   readonly waiting: boolean;
@@ -147,6 +150,9 @@ export function installPwa(o: { toast: (msg: string) => void; dev?: boolean }): 
     stats: () => talk<PwaStats>({ type: "stats" }),
     clearTiles: async () => {
       await talk({ type: "clear-tiles" });
+    },
+    setBudget: async (bytes) => {
+      await talk({ type: "tile-budget", bytes }, 30_000);
     },
     update: () => pwa.waiting?.postMessage({ type: "skip-waiting" }),
     get waiting() {

@@ -15,7 +15,7 @@ import {
 } from "../src/system/earth-tiles";
 import { geodeticToCart, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
 import { swissimageUrl } from "../src/system/national";
-import { reliefChains, reliefUrls, ZONE_PROFILES, zoneChains, zoneEstimate, zoneTiles, zoneUrls } from "../src/system/zones";
+import { reliefChains, reliefUrls, ZONE_PROFILES, zoneChains, zoneDuration, zoneEstimate, zoneTiles, zoneUrls } from "../src/system/zones";
 
 // (no GPU: the textures a stub; the network a recorder refusing every request — the URLs the loads ask, kept)
 (globalThis as { GPUTextureUsage?: unknown }).GPUTextureUsage ??= { TEXTURE_BINDING: 4, COPY_DST: 2 };
@@ -169,4 +169,13 @@ test("a tile's chains: the next link asked only where the one before falls short
   expect(meshes.length).toBeGreaterThanOrEqual(1);
   for (const c of meshes) expect(c.length).toBe(1);
   expect(cs).toContainEqual([tileUrl(12, xs, ys)]);
+});
+
+test("a zone's download time: the WMS-R's grids 8 a second, the rest 35 chains a second, the two at once", () => {
+  expect(zoneDuration([])).toBe(0);
+  const wms = Array.from({ length: 80 }, () => ["https://data.geopf.fr/wms-r?REQUEST=GetMap"]);
+  const rest = Array.from({ length: 350 }, () => ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/14/1/2.png"]);
+  expect(zoneDuration(wms)).toBeCloseTo(10);
+  expect(zoneDuration(rest)).toBeCloseTo(10);
+  expect(zoneDuration([...wms, ...rest, ...rest])).toBeCloseTo(20);
 });

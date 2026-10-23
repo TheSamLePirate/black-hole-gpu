@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { defaultSettings } from "../src/settings";
 import { SCHEMA, SCHEMA_BY_KEY, type NumberDef } from "../src/ui/schema";
-import { LAB_ONLY, PLAYER_MENU, PLAYER_TABS, playerKeys, RISKY, rowsOf, searchSettings } from "../src/ui/settings/menu";
+import { CUSTOM_TABS, LAB_ONLY, PLAYER_MENU, PLAYER_TABS, playerKeys, RISKY, rowsOf, searchSettings } from "../src/ui/settings/menu";
 import { numberAt, stepNumber } from "../src/ui/settings/values";
 
 // The player's settings (PLAN-TITRE-AAA E9): every key the player's screen names is the schema's, placed once; every
@@ -23,7 +23,7 @@ test("every key placed once, every one the schema's; every game control ranked",
   // (the physics stays in the Lab)
   for (const k of ["spin", "massSolar", "diskTemp", "shiftMode"] as const) expect(keys).not.toContain(k);
   // (each tab has rows; the risky ones are on the screen)
-  for (const tab of PLAYER_TABS) expect(PLAYER_MENU.some((g) => g.tab === tab.id)).toBe(true);
+  for (const tab of PLAYER_TABS.filter((x) => !CUSTOM_TABS.includes(x.id))) expect(PLAYER_MENU.some((g) => g.tab === tab.id)).toBe(true);
   for (const k of RISKY) expect(PLAYER_MENU.some((g) => g.keys.includes(k))).toBe(true);
   expect(PLAYER_MENU.flatMap((g) => g.keys)).toContain("@quality");
   expect(PLAYER_MENU.flatMap((g) => g.keys)).toContain("@language");

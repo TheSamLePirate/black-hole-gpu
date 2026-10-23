@@ -77,6 +77,11 @@ export const DRAWERS: Record<DrawerId, { title: Text; hint: Text; items: { id: s
         title: { fr: "Météo", en: "Weather" },
         hint: { fr: "Le ciel de la Terre, réel ou choisi", en: "The Earth's sky, real or chosen" },
       },
+      {
+        id: "offline",
+        title: { fr: "Garder cette zone hors ligne", en: "Keep this zone offline" },
+        hint: { fr: "Ses tuiles téléchargées : la voler sans réseau", en: "Its tiles downloaded: fly it without a network" },
+      },
     ],
   },
   sky: {

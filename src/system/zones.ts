@@ -185,3 +185,10 @@ export function zoneEstimate(chains: readonly ZoneChain[]): number {
   for (const c of chains) for (let i = 0; i < c.length; i++) bytes += sizeOf(c[i]!) * (i ? 0.1 : 1);
   return bytes;
 }
+/** a zone's download time before it is fetched [s]: the WMS-R's grids spaced 8 a second (sw.ts gentle), the other
+ *  tiles ~35 chains a second (measured on kerr-mini, 2026-10-23: 4 190 chains in 2 min) — the two at once */
+export function zoneDuration(chains: readonly ZoneChain[]): number {
+  let wms = 0;
+  for (const c of chains) if (c[0]!.includes("wms-r")) wms++;
+  return Math.max((chains.length - wms) / 35, wms / 8);
+}

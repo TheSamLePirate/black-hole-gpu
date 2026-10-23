@@ -178,6 +178,12 @@
 .pls-cost { margin: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; font: 500 13.5px var(--m-f-text); color: var(--m-ink); }
 .pls-dots { font: 600 14px var(--m-f-value); letter-spacing: 0.18em; color: var(--m-amber); }
 .m-item.pls-lab { margin-top: 6px; border-top: 1px solid var(--m-line); padding-top: 14px; }
+/* Settings › Offline (ui/settings/offline.ts): the download, a deletion's confirmation */
+.m-item.pls-go { margin-top: 10px; border-top: 1px solid var(--m-line); padding-top: 14px; }
+.m-item.pls-go .tt-act-row span { color: var(--m-amber); }
+.m-item.pls-go.off { opacity: 0.45; cursor: default; }
+.m-item.pls-danger .tt-act-row span { color: #ff7a6b; }
+.pls-offline .pls-cost .pls-bar { width: clamp(120px, 14vw, 220px); }
 .pls-keep {
   position: absolute;
   left: 50%;

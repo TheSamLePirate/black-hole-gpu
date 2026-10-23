@@ -590,21 +590,27 @@ The cache's figures: the build's id, the shell's number of files, the tiles cach
 
 Empties the tiles' cache (the terrain tiles the worker kept). Used by a test that starts from an empty cache.
 
+### `__bh.pwa.setBudget(bytes)` → Promise<void>
+
+The tiles' cache's budget (Settings › Offline: 300 MB, 1 GB, 3 GB): kept by the worker across its restarts (its IndexedDB
+`meta` store), the least recently served tiles beyond it evicted at once; `stats().tileBudget` reads it back.
+
 ### `__bh.pwa.zones` → Zones \| null (`src/pwa-zones.ts`, I8a)
 
-The offline zones, once the worker is in (null before, or without one). A zone: every tile the game's windows would want with the camera anywhere in a disc, to its profile's levels (`system/zones.ts`: `airport` — relief z 17, orthophotos z 18 —, `low` 16/17, `valley` 15/16, `overflight` 14/15), as chains of fetches (a source's fallback asked only where the one before falls short), the sources and the detail's reach of the moment kept in its record. Fetched by the worker 24 chains a batch, waiting while the game streams its own tiles; resumed after a reload.
+The offline zones, once the worker is in (null before, or without one). A zone: every tile the game's windows would want with the camera anywhere in a disc, to its profile's levels (`system/zones.ts`: `airport` — relief z 17, orthophotos z 18 —, `low` 16/17, `valley` 15/16, `overflight` 14/15), as chains of fetches (a source's fallback asked only where the one before falls short), the sources and the detail's reach of the moment kept in its record. Fetched by the worker 64 chains a batch, 16 at once, waiting while the game streams its own tiles; resumed after a reload. The player's screen: Settings › Offline (`ui/settings/offline.ts`, I8b).
 
 | member | → | what |
 |---|---|---|
-| `estimate({ lat, lon, radiusKm, profile })` | `{ chains, urls, bytes }` | what it would hold, its size by the kinds' means |
+| `estimate({ lat, lon, radiusKm, profile })` | `{ chains, urls, bytes, seconds }` | what it would hold, its size by the kinds' means, its download time (`system/zones.ts` zoneDuration: the WMS-R's grids 8 a second, the rest 35 chains a second) |
 | `add({ name, lat, lon, radiusKm, profile })` | Promise<id \| null> | added (the storage asked to persist), its download started |
-| `list()` | Promise<ZoneRecord[]> | `{ id, name, lat, lon, radiusKm, profile, total, cursor, done, bytes, none, failed, state: "downloading" \| "paused" \| "ready", sources, created }` |
+| `list()` | Promise<ZoneRecord[]> | `{ id, name, lat, lon, radiusKm, profile, total, cursor, done, bytes, none, failed, state: "downloading" \| "paused" \| "ready", sources, created, updated?, fresh? }` |
 | `pause(id)` / `resume(id)` | Promise<void> | a pause resolves once its batch under way is in (nothing asked after); a ready zone's resume asks its failed again |
+| `update(id)` | Promise<void> | fetched again from its start, every tile asked anew (the sources' new vintage), the old one kept where the network fails; the sources the settings' now |
 | `remove(id)` | Promise<void> | its tiles no other zone holds deleted |
 | `active` | string \| null | the zone downloading |
 | `persisted()` | Promise<boolean> | `navigator.storage.persisted()` |
 
-*Used in:* `tests/e2e/zones.e2e.test.ts`.
+*Used in:* `tests/e2e/zones.e2e.test.ts`, `tests/e2e/offline-settings.e2e.test.ts`.
 
 ### `__bh.pwa.registration` → ServiceWorkerRegistration \| null
 

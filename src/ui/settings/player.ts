@@ -4,7 +4,8 @@
 // focused explained (what it does, its default, how it applies). A change applies at once; a risky one (the render
 // scale, the HDR display, the interface's size) comes back by itself after 15 s unless kept. R (Y) resets the
 // tab; ⌘K (or /) searches both screens; LAB › opens the drawer of every control. The controls' own screens (the
-// keys, the pads) from its Controls tab. Which settings it shows: ui/settings/menu.ts — the schema the one source.
+// keys, the pads) from its Controls tab; the Offline tab built by hand (ui/settings/offline.ts — I8b). Which settings
+// it shows: ui/settings/menu.ts — the schema the one source.
 
 import { lang, onLangChange, setLang, t, type Text, tr } from "../../i18n";
 import { QUALITY, type Quality, type Settings } from "../../settings";
@@ -27,6 +28,7 @@ import {
   searchSettings,
 } from "./menu";
 import { COSTS_MEASURED, SETTING_COSTS } from "./costs";
+import type { OfflineHost, OfflineTab } from "./offline";
 import { costDots, costShare, formatValue, numberAt, sameValue, sliderPercent, stepNumber } from "./values";
 
 const T = {
@@ -113,6 +115,8 @@ export interface PlayerDeps {
   connectController?(): void;
   /** the simulation held while the screen is up (out of a room) */
   hold(on: boolean): void;
+  /** the Offline tab (its storage, its cache, its zones) */
+  offline?: OfflineTab;
   toast(text: string): void;
 }
 
@@ -157,6 +161,26 @@ export class PlayerSettings {
     });
     // (the language changed — here, by its row —: these settings drawn again in it)
     this.unLang = onLangChange(() => this.router?.refresh());
+  }
+
+  /** Opened on the Offline tab's adding of a zone, on the position now (the pause's « Keep this zone offline »). */
+  openAddZone(back?: () => void, place?: Parameters<OfflineTab["startDraft"]>[0]) {
+    const off = this.d.offline;
+    if (!off) return;
+    this.open(back, { tab: "offline" });
+    off.startDraft(place);
+    this.router?.push(off.addScreen(this.offlineHost(this.root!.querySelector<HTMLElement>(".pls-explain")!)));
+  }
+
+  /** what the Offline tab borrows of this screen: its router, its explanation, its prompts */
+  private offlineHost(explain: HTMLElement): OfflineHost {
+    return {
+      push: (s) => this.router?.push(s),
+      back: () => this.router?.back(),
+      refresh: () => this.router?.refresh(),
+      explain: (title, text, extra) => this.explainText(explain, title, text, extra),
+      prompts: (list) => this.prompts(list),
+    };
   }
 
   /** The search, from ⌘K: the screen opened on it. */
@@ -334,6 +358,8 @@ export class PlayerSettings {
         }
       }
       if (!r.player.length && !r.lab.length) rows.push(el("p", "tt-empty", tr(T.noHit)));
+    } else if (this.tab === "offline" && this.d.offline) {
+      rows.push(...this.d.offline.rows(this.offlineHost(explain)));
     } else {
       if (this.tab === "controls") {
         const screen = (id: string, title: Text, hint: Text, go: () => void) => {
@@ -359,7 +385,7 @@ export class PlayerSettings {
     list.replaceChildren(...rows);
     // (the first row explained until another is focused)
     const k = list.querySelector<HTMLElement>("[data-key]")?.dataset.key as RowKey | undefined;
-    if (k) this.explain(explain, k);
+    if (k && !k.startsWith("offline-")) this.explain(explain, k);
   }
 
   // ------------------------------------------------------------------ a row

@@ -485,6 +485,38 @@ le focus, la navigation à la manette, les invites et le français/anglais du me
 - Distances en km ou en NM selon `unitsFor()`, tailles en Mo/Go ; textes en français et en anglais.
 - Automatisation : `__bh.pwa.zones` (liste, ajout, progression, suppression) pour les e2e et TARS.
 
+**Fait le 24/10 (I8b).** L'onglet est `src/ui/settings/offline.ts`, branché dans les Réglages comme neuvième onglet
+(`CUSTOM_TABS` dans `menu.ts` : construit à la main, pas depuis le schéma). Ses lignes sont les éléments des menus :
+← → changent une valeur, Entrée ou un clic agissent, la manette les envoie comme ces touches. Ses chiffres sont relus
+toutes les 1,5 s tant qu'il est affiché.
+
+- **Stockage** : l'espace utilisé sur le quota, le stockage persistant (Entrée le demande au navigateur) et le
+  conseil d'installer le jeu.
+- **Cache automatique** : sa taille sur son budget. ← → choisit 300 Mo, 1 Go ou 3 Go. Le service worker garde ce
+  budget dans IndexedDB (magasin `meta`, base en version 3) et évince aussitôt au-delà (`__bh.pwa.setBudget`). Un
+  bouton le vide sans toucher aux zones.
+- **Zones** : une ligne par zone avec sa barre de progression ou sa taille et sa date. Sa fiche donne son profil,
+  son rayon, ses sources et ses tuiles. Elle offre Suspendre ou Reprendre, Mettre à jour, Voir sur la carte (l'Atlas),
+  et Supprimer ou Annuler, qui demande une confirmation. La mise à jour reprend la zone depuis le début et redemande
+  chaque tuile : `zone-fetch` avec `fresh`, et l'ancienne tuile est gardée si le réseau échoue.
+- **Ajouter une zone** : le lieu (la position actuelle sous 50 km d'altitude, les destinations de l'Atlas, une
+  adresse ou des coordonnées), le profil (Aéroport, Vol bas, Vallée, Survol, chacun avec son rayon par défaut) et le
+  rayon de 1 à 100 km. L'estimation affiche les tuiles, la taille et la durée (`zoneDuration` : les grilles WMS-R à 8
+  par seconde, le reste à 35 chaînes par seconde), avec la place libre. Télécharger est grisé si la place manque. Une
+  zone prise à la position actuelle porte le nom de la destination la plus proche, à moins de 30 km (« Près de Mont
+  Blanc »).
+- **Raccourci** : pause › Monde › « Garder cette zone hors ligne ». Il n'apparaît qu'au-dessus de la Terre, sous
+  50 km d'altitude, et ouvre l'ajout sur la position actuelle. Échap revient à l'onglet, puis à la pause.
+- **e2e sur kerr-mini** (`tests/e2e/offline-settings.e2e.test.ts`, ~6 min), à la souris et à la manette, sur
+  Chamonix. Depuis la pause, une zone vol bas de 1 km (5 981 chaînes, 343 Mo) est suspendue puis reprise, et prête
+  sans échec. Le budget passe à 1 Go puis revient. La zone est supprimée, ses tuiles avec elle. L'onglet est vérifié
+  en anglais.
+- **Leçon de test** : sur le mini, les Réglages par-dessus une scène qui charge encore ses tuiles ont des images
+  lentes. Un appui de manette tenu 250 ms (`pad.e2e`) s'y perdait ; il est tenu 600 ms, sans risque puisqu'un bouton
+  n'agit que sur le front de son appui.
+
+![Réglages › Hors ligne : une zone en téléchargement](progress/offline/offline-tab.jpg)
+
 ## 10. Plan proposé
 
 | Étape | Contenu | Mesure de réussite |
@@ -498,7 +530,7 @@ le focus, la navigation à la manette, les invites et le français/anglais du me
 | **I6** — fait (23/10) | HLOD lointain par `MNS − MNT` sur z 11–13 (dessin seul, le CPU garde le sol nu) — voir §7 | silhouette de Paris à 20 km : Montparnasse à 262 m (LiDAR 264) ; coût mesuré 0 à +1,2 ms vers Paris ; dans une vue basse sur des forêts +12 ms, ramené à +0,2 / +1,2 ms (cache cuit sur les tuiles que lisent les pixels) |
 | **I7** — fait (23/10) | Interface de source nationale (`national.ts`) ; swisstopo : SWISSIMAGE, swissALTI3D par quantized-mesh — voir §7 | Alpes suisses au même niveau : voir le paragraphe |
 | **I8a** — fait (23/10) | Zones hors ligne, le socle : module pur `zoneTiles` (mêmes URL que le jeu, testé), cache `kerr-zones-v1` hors LRU dans le service worker, `storage.persist()`, téléchargement suspendable et repris, priorité au streaming du jeu, `__bh.pwa.zones` | test unitaire « URL de la zone = URL demandées en vol » ; e2e : zone pré-cachée, réseau coupé, vol sans aucune requête de tuile et sol complet — voir §9.4 : 529 tuiles de la zone, 0 du réseau |
-| **I8b** | Réglages › Hors ligne : stockage, cache automatique, liste des zones, ajout avec estimation, progression ; raccourci dans la pause ; FR/EN | e2e à la souris et à la manette ; captures de l'onglet |
+| **I8b** — fait (24/10) | Réglages › Hors ligne : stockage, cache automatique, liste des zones, ajout avec estimation, progression ; raccourci dans la pause ; FR/EN | e2e à la souris et à la manette ; captures de l'onglet — voir §9.5 |
 | **I8c** | Relief quantifié sur 16 bits et compressé dans le cache (en vol aussi) | taille par tuile mesurée (cible ≈ 80 Ko) ; hauteurs identiques au centimètre |
 
 I1 seul apporte déjà l'essentiel de ce qui frappe dans le labo (le sol photographié à 0,5 m) ; I2–I3 donnent le

@@ -131,6 +131,10 @@ export interface ZoneRecord {
   /** the sources its URLs followed (earth-tiles.ts orthoOn, reliefOn, hlodOn; the fine windows' side) */
   sources: { ortho: boolean; relief: boolean; hlod: boolean; span?: number };
   created: number;
+  /** its last download's end [ms since 1970] (an update's: the sources' vintage then) */
+  updated?: number;
+  /** an update under way: its tiles asked again (the worker's `fresh`) */
+  fresh?: boolean;
 }
 /** a tile of the zones' cache: the zones that hold it */
 export interface ZoneTile {

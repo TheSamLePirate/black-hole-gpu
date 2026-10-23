@@ -48,16 +48,19 @@ const SHELL = SHELL_CACHE(ROOT, BUILD);
 const DB = "kerr-sw",
   STORE = "tiles",
   ZONES = "zones",
-  ZONE_TILES = "zone-tiles";
+  ZONE_TILES = "zone-tiles",
+  META = "meta";
 let dbp: Promise<IDBDatabase> | null = null;
 function db(): Promise<IDBDatabase> {
   dbp ??= new Promise((res, rej) => {
-    const q = indexedDB.open(DB, 2);
+    const q = indexedDB.open(DB, 3);
     q.onupgradeneeded = () => {
       const names = q.result.objectStoreNames;
       if (!names.contains(STORE)) q.result.createObjectStore(STORE, { keyPath: "url" });
       if (!names.contains(ZONES)) q.result.createObjectStore(ZONES, { keyPath: "id" });
       if (!names.contains(ZONE_TILES)) q.result.createObjectStore(ZONE_TILES, { keyPath: "url" });
+      // (the worker's own choices, kept across its restarts: the tiles' budget — Settings › Offline, I8b)
+      if (!names.contains(META)) q.result.createObjectStore(META, { keyPath: "k" });
     };
     q.onsuccess = () => res(q.result);
     q.onerror = () => rej(q.error);
@@ -82,6 +85,19 @@ async function indexDelete(urls: string[]) {
   const d = await db();
   const st = d.transaction(STORE, "readwrite").objectStore(STORE);
   for (const u of urls) st.delete(u);
+}
+
+// ---- the tiles' budget: the player's (Settings › Offline), TILE_BUDGET until one is chosen
+let budgetNow: number | null = null;
+async function budget(): Promise<number> {
+  budgetNow ??= (await storeGet<{ k: string; v: number }>(META, "tileBudget"))?.v ?? TILE_BUDGET;
+  return budgetNow;
+}
+async function setBudget(bytes: number) {
+  budgetNow = Math.max(16 * 1024 * 1024, Math.round(bytes));
+  await storePut(META, { k: "tileBudget", v: budgetNow });
+  await enforceBudget();
+  return { ok: true, tileBudget: budgetNow };
 }
 
 // ---- the zones' index
@@ -147,13 +163,14 @@ self.addEventListener("activate", (ev) => {
 
 // ---- messages from the page: take over now; the caches' figures (the tests, the settings)
 self.addEventListener("message", (ev) => {
-  const m = ev.data as { type?: string; id?: string; chains?: string[][]; zone?: ZoneRecord } | null;
+  const m = ev.data as { type?: string; id?: string; chains?: string[][]; zone?: ZoneRecord; fresh?: boolean; bytes?: number } | null;
   const answer = (p: Promise<unknown>) => ev.waitUntil(p.then((v) => ev.ports[0]?.postMessage(v)));
   if (m?.type === "skip-waiting") void self.skipWaiting();
   if (m?.type === "stats") answer(stats());
   if (m?.type === "clear-tiles") answer(clearTiles().then(() => ({ ok: true })));
+  if (m?.type === "tile-budget" && typeof m.bytes === "number") answer(setBudget(m.bytes));
   // (the zones: a batch fetched in, a record kept, the list, one dropped)
-  if (m?.type === "zone-fetch" && m.id && m.chains) answer(zoneFetch(m.id, m.chains));
+  if (m?.type === "zone-fetch" && m.id && m.chains) answer(zoneFetch(m.id, m.chains, !!m.fresh));
   if (m?.type === "zone-save" && m.zone) answer(storePut(ZONES, m.zone).then(() => ({ ok: true })));
   if (m?.type === "zones") answer(storeAll<ZoneRecord>(ZONES));
   if (m?.type === "zone-delete" && m.id) answer(zoneDelete(m.id));
@@ -188,17 +205,18 @@ function shortOf(url: string, body: ArrayBuffer): boolean {
  * A batch of a zone's chains into the zones' cache, ZONE_PARALLEL at a time (the WMS-R's spaced apart all the same —
  * gentle): a chain's links one after the other while each falls
  * short or is refused (a 404 counted as none); a link already in (another zone's, or this one's before a pause) only
- * marked as this zone's too — its body read again to know whether the next is wanted. Answers the batch's tally, the
- * chains that failed after every try.
+ * marked as this zone's too — its body read again to know whether the next is wanted; `fresh` (an update): every link
+ * asked again, the one kept where the network fails. Answers the batch's tally, the chains that failed after every try.
  */
-async function zoneFetch(id: string, chains: string[][]) {
+async function zoneFetch(id: string, chains: string[][], fresh = false) {
   const cache = await caches.open(ZONE_CACHE);
   const out = { done: 0, bytes: 0, none: 0, failed: [] as string[][] };
   /** one link: its body (in, now or before), "none" (404), null (failed after every try) */
   const link = async (url: string): Promise<ArrayBuffer | "none" | null> => {
     const t = await storeGet<ZoneTile>(ZONE_TILES, url);
     const kept = t && (await cache.match(url));
-    if (t && kept) {
+    // (an update — the sources' new vintage —: asked again, the one kept if the network fails)
+    if (t && kept && !fresh) {
       if (!t.zones.includes(id)) await storePut(ZONE_TILES, { ...t, zones: [...t.zones, id] });
       out.bytes += t.size;
       return kept.arrayBuffer();
@@ -217,12 +235,19 @@ async function zoneFetch(id: string, chains: string[][]) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const body = await res.arrayBuffer();
         await cache.put(url, new Response(body, { status: 200, headers: res.headers }));
-        await storePut(ZONE_TILES, { url, zones: [...(t?.zones ?? []), id], size: body.byteLength } satisfies ZoneTile);
+        const zones = t?.zones.includes(id) ? t.zones : [...(t?.zones ?? []), id];
+        await storePut(ZONE_TILES, { url, zones, size: body.byteLength } satisfies ZoneTile);
         out.bytes += body.byteLength;
         return body;
       } catch {
         await new Promise((done) => setTimeout(done, 1000 * 2 ** attempt));
       }
+    }
+    // (an update failing: the tile kept as it was)
+    if (t && kept) {
+      if (!t.zones.includes(id)) await storePut(ZONE_TILES, { ...t, zones: [...t.zones, id] });
+      out.bytes += t.size;
+      return kept.arrayBuffer();
     }
     return null;
   };
@@ -273,7 +298,7 @@ async function stats() {
     shell: (await shell.keys()).length,
     tiles: tiles.length,
     tileBytes,
-    tileBudget: TILE_BUDGET,
+    tileBudget: await budget(),
     zoneTiles: zoned.length,
     zoneBytes,
     served: { ...served },
@@ -354,7 +379,7 @@ async function tile(request: Request): Promise<Response> {
 
 async function enforceBudget() {
   const all = await indexAll();
-  const out = evictions(all);
+  const out = evictions(all, await budget());
   if (!out.length) return;
   const cache = await caches.open(TILE_CACHE);
   await Promise.all(out.map((u) => cache.delete(u)));

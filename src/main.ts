@@ -79,6 +79,7 @@ import { installPwa } from "./pwa";
 import { createZones } from "./pwa-zones";
 import { PauseMenu } from "./ui/pause";
 import type { PauseContext } from "./ui/pausemenu";
+import { OfflineTab } from "./ui/settings/offline";
 import { PlayerSettings } from "./ui/settings/player";
 import type { PlayerTab } from "./ui/settings/menu";
 import { GameEntry } from "./ui/entry";
@@ -3408,7 +3409,22 @@ async function main() {
   });
   // the player's settings (ui/settings/player.ts, PLAN-TITRE-AAA E9): the screen of the settings a player changes —
   // the panel's drawer, every control, is the Lab now (⇧M, its LAB ›, the search)
+  // Settings › Offline (I8b): the storage, the automatic cache, the zones — the position now its adding's default
+  const offlineTab = new OfflineTab({
+    pwa: () => (pwa.registration ? pwa : null),
+    units: () => unitsFor(settings),
+    here: () => {
+      const g = camera.geoNow();
+      return g && g.alt < 50_000 ? { lat: g.lat, lon: g.lon } : null;
+    },
+    showOnMap: (p) => {
+      playerSettings.close();
+      atlas.open({ body: "earth", place: { body: "earth", lat: p.lat, lon: p.lon, name: p.name } });
+    },
+    toast: (s) => panel.toast(s),
+  });
   const playerSettings: PlayerSettings = new PlayerSettings({
+    offline: offlineTab,
     settings,
     defaults: defaultSettings,
     set: (key, value) => panel.setValue(key, value),
@@ -3481,6 +3497,11 @@ async function main() {
       place: () => placePanel.open(),
       time: () => timePanel.open(),
       weather: () => weatherPanel.open(),
+      // (over the Earth, the worker there: the zone around the position now added from Settings › Offline)
+      get keepOffline() {
+        const g = camera.geoNow();
+        return pwa.zones && g && g.alt < 50_000 ? () => playerSettings.openAddZone(() => pauseMenu?.open()) : null;
+      },
       eclipses: () => eclipses.open(),
       titleScreen: () => titleScreen?.open(),
       modes: (id) => titleScreen.openMode(id, () => pauseMenu?.open()),
