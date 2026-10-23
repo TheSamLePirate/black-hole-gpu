@@ -163,6 +163,16 @@ export const CREDITS: CreditSection[] = [
         readme: "assets/earth/README.md",
       },
       {
+        what: {
+          fr: "La France au plus près — photographies aériennes, relief, arbres et bâtiments",
+          en: "France up close — aerial photographs, relief, trees and buildings",
+        },
+        who: "IGN — Géoplateforme : BD ORTHO, RGE ALTI, LiDAR HD (MNT, MNH), BD TOPO",
+        licence: "Licence Ouverte 2.0",
+        url: "https://geoservices.ign.fr",
+        readme: "docs/ANALYSE-IGN-LIDAR.md",
+      },
+      {
         what: { fr: "Le sol au plus près — WorldCover 2021, Sentinel-2", en: "The ground up close — WorldCover 2021, Sentinel-2" },
         who: "ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021)",
         licence: CC_BY,

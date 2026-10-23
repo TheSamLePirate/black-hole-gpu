@@ -3,7 +3,8 @@ import { VectorTile, classifyRings } from "@mapbox/vector-tile";
 import { PbfReader } from "pbf";
 import { earthDetail, toHalf } from "../terrain";
 import { forestFrame, forestVec4s, growForest } from "./forest";
-import { IgnLand, inIgnBox } from "./ign-canopy";
+import { BDTOPO_Z, bdtopoHeight, bdtopoStands, bdtopoUrl, clipRing } from "./bdtopo";
+import { IgnLand, inIgnBox, tilesWithin } from "./ign-canopy";
 import { roadWidth, surfaceSegment, polygonPrimitive, stripPolygon, surfaceContains } from "./scenery-geometry";
 import {
   D,
@@ -339,7 +340,76 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   const tiles = Math.ceil(64 * k2);
   if (urls.length > tiles) budgetLimited = true;
   const limit = Math.round((q.mode === "high" ? 8000 : 5000) * k2);
-  const choices: { geo: { lat: number; lon: number }[][]; lat: number; lon: number; h: number; low: number; d: number }[] = [];
+  type Choice = { geo: { lat: number; lon: number }[][]; lat: number; lon: number; h: number; low: number; d: number };
+  const choices: Choice[] = [];
+  const distance = (lat: number, lon: number) => Math.hypot((lat - q.lat) * 111320, wrapLon(lon - q.lon) * 111320 * Math.cos(q.lat * D));
+  // ---- over France, the IGN's buildings (I5, bdtopo.ts): the BD TOPO's footprints and measured heights for OSM's, its z 15
+  // tiles nearest first until the nearest `limit` buildings are in; OSM's kept only where a BD TOPO tile failed
+  const bdKey = (lat: number, lon: number) => {
+    const t = 2 ** BDTOPO_Z;
+    return `${Math.floor(((lon + 180) / 360) * t)}/${Math.floor(((1 - Math.asinh(Math.tan(lat * D)) / Math.PI) / 2) * t)}`;
+  };
+  const surveyErrors: string[] = [];
+  const bdtopoTiles = async () => {
+    const out: Choice[] = [],
+      covered = new Set<string>();
+    let tileCount = 0;
+    const want = tilesWithin(BDTOPO_Z, q.lat, q.lon, radius).slice(0, Math.ceil(256 * k2));
+    const t = 2 ** BDTOPO_Z;
+    const one = async (x: number, y: number) => {
+      let raw: ArrayBuffer | null = null;
+      for (let attempt = 0; attempt < 3 && !raw; attempt++)
+        try {
+          raw = await fetchCount(bdtopoUrl(x, y), surveyed);
+        } catch (e) {
+          // (a tile failed: OSM's buildings there — the scene not degraded for it)
+          if (attempt === 2) {
+            if (surveyErrors.length < 4) surveyErrors.push(String(e).slice(0, 320));
+          } else await new Promise((done) => setTimeout(done, 1000 * 2 ** attempt));
+        }
+      if (!raw) return;
+      covered.add(`${x}/${y}`);
+      tileCount++;
+      const layer = new VectorTile(new PbfReader(raw)).layers.batiment;
+      if (!layer) return;
+      for (let i = 0; i < layer.length; i++) {
+        const feature = layer.feature(i);
+        if (feature.type !== 3 || !bdtopoStands(feature.properties)) continue;
+        const e = feature.extent,
+          h = bdtopoHeight(feature.properties);
+        for (const rings of classifyRings(feature.loadGeometry())) {
+          // (its part in this tile: the copy in the next one makes the rest)
+          const clipped = rings.map((r) => clipRing(r, e));
+          if (clipped[0]!.length < 4) continue;
+          const geo = clipped
+            .filter((r) => r.length >= 4)
+            .map((r) =>
+              r.map((v) => ({
+                lon: ((x + v.x / e) / t) * 360 - 180,
+                lat: Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + v.y / e)) / t))) / D,
+              })),
+            );
+          const outer = geo[0]!;
+          if (geo.reduce((s, r) => s + r.length, 0) > 256) continue;
+          const lat = outer.reduce((s, v) => s + v.lat, 0) / outer.length,
+            lon = outer.reduce((s, v) => s + v.lon, 0) / outer.length;
+          if (index(lat, lon) < 0 || excluded(lat, lon)) continue;
+          out.push({ geo, lat, lon, h, low: 0, d: distance(lat, lon) });
+        }
+      }
+    };
+    for (let k0 = 0; k0 < want.length; k0 += 4) {
+      // (enough: the nearest `limit` closer than every tile left)
+      if (out.length >= limit) {
+        out.sort((a, b) => a.d - b.d);
+        if (out[limit - 1]!.d < want[k0]!.d) break;
+      }
+      await Promise.all(want.slice(k0, k0 + 4).map((w) => one(w.x, w.y)));
+    }
+    return { out, covered, tileCount };
+  };
+  const bdtopo = q.ign && inIgnBox(q.lat, q.lon) ? bdtopoTiles() : null;
+  const osmChoices: Choice[] = [];
   for (const key of urls.slice(0, tiles)) {
     try {
       const [x, y] = key.split("/").map(Number) as [number, number];
@@ -348,6 +418,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       readNetworks(layers, x, y);
       const layer = layers.building;
       if (!layer) continue;
+      // (with the BD TOPO's, OSM's set aside: kept where it failed)
+      const into = bdtopo ? osmChoices : choices;
       for (let i = 0; i < layer.length; i++) {
         const feature = layer.feature(i);
         if (feature.type !== 3 || feature.properties.hide_3d === true) continue;
@@ -372,8 +444,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           if (index(lat, lon) < 0 || excluded(lat, lon)) continue;
           const h = Math.min(500, Math.max(2, Number(feature.properties.render_height) || 6));
           const low = Math.min(h - 1, Math.max(0, Number(feature.properties.render_min_height) || 0));
-          const d = Math.hypot((lat - q.lat) * 111320, wrapLon(lon - q.lon) * 111320 * Math.cos(q.lat * D));
-          choices.push({ geo, lat, lon, h, low, d });
+          into.push({ geo, lat, lon, h, low, d: distance(lat, lon) });
         }
       }
       choices.sort((a, b) => a.d - b.d);
@@ -384,6 +455,21 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     } catch (e) {
       errors.push(String(e).slice(0, 220));
     }
+  }
+  let bdtopoBuildings = 0,
+    bdtopoTileCount = 0;
+  if (bdtopo) {
+    const b = await bdtopo;
+    bdtopoTileCount = b.tileCount;
+    // (one by one: Paris's tens of thousands would overflow a spread's arguments)
+    for (const v of b.out) choices.push(v);
+    for (const v of osmChoices) if (!b.covered.has(bdKey(v.lat, v.lon))) choices.push(v);
+    choices.sort((a, b) => a.d - b.d);
+    if (choices.length > limit) {
+      choices.length = limit;
+      budgetLimited = true;
+    }
+    bdtopoBuildings = choices.filter((v) => b.covered.has(bdKey(v.lat, v.lon))).length;
   }
   // Estimated bridge elevation is explicit: tile data provides layer, not surveyed deck/pier geometry.
   bridgeLines.sort((a, b) => a.d - b.d);
@@ -596,9 +682,11 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     buffer,
     trees,
     surveyedTrees,
+    bdtopoBuildings,
+    bdtopoTiles: bdtopoTileCount,
     surveyRequests: land?.requests ?? 0,
     // (a block failed: its trees the land cover's — the scene not degraded for it)
-    surveyError: land?.errors[0],
+    surveyError: land?.errors[0] ?? surveyErrors[0],
     forestCells: ff.w * ff.h,
     forestCellM: ff.cell,
     buildings,

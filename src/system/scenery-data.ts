@@ -186,6 +186,9 @@ export interface SceneryReply {
   surveyRequests?: number;
   /** a survey block's failure (its trees the land cover's) */
   surveyError?: string;
+  /** of the buildings, the IGN's BD TOPO's over France (I5, bdtopo.ts); its tiles taken */
+  bdtopoBuildings?: number;
+  bdtopoTiles?: number;
   forestCells?: number;
   forestCellM?: number;
   buildings?: number;

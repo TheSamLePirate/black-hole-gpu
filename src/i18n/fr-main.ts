@@ -1,7 +1,7 @@
 // French for the app's messages, the map and the dialogs (keyed by the English: see src/i18n.ts).
 export default {
-  "© IGN — aerial photographs, relief (BD ORTHO, RGE ALTI, LiDAR HD) · ":
-    "© IGN — photographies aériennes, relief (BD ORTHO, RGE ALTI, LiDAR HD) · ",
+  "© IGN — aerial photographs, relief, buildings (BD ORTHO, RGE ALTI, LiDAR HD, BD TOPO) · ":
+    "© IGN — photographies aériennes, relief, bâtiments (BD ORTHO, RGE ALTI, LiDAR HD, BD TOPO) · ",
   "Licence Ouverte 2.0": "Licence Ouverte 2.0",
   "The menus are in this language now; the HUD and the panels already built follow at the next load":
     "Les menus sont maintenant dans cette langue ; le HUD et les panneaux déjà construits suivront au prochain chargement",

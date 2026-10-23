@@ -44,22 +44,25 @@ const D = Math.PI / 180;
 export const inIgnBox = (lat: number, lon: number) =>
   lon > ORTHO_BOX.west && lon < ORTHO_BOX.east && lat > ORTHO_BOX.south && lat < ORTHO_BOX.north;
 
-/** the blocks the disc of `reach` metres round a place touches, the nearest first, each with its distance [m] */
-export function blocksWithin(lat: number, lon: number, reach: number): { x: number; y: number; d: number }[] {
-  const t = 2 ** CANOPY_Z,
+/** the tiles of level `z` the disc of `reach` metres round a place touches, the nearest first, each with its distance [m] */
+export function tilesWithin(z: number, lat: number, lon: number, reach: number): { x: number; y: number; d: number }[] {
+  const t = 2 ** z,
     m = (2 * Math.PI * R * Math.cos(lat * D)) / t;
-  const c = blockOf(lat, lon, 1),
-    fx = c.x + c.u + 0.5,
-    fy = c.y + c.v + 0.5,
+  const fx = ((lon + 180) / 360) * t,
+    fy = ((1 - Math.asinh(Math.tan(lat * D)) / Math.PI) / 2) * t;
+  const cx = Math.floor(fx),
+    cy = Math.floor(fy),
     k = Math.ceil(reach / m) + 1;
   const out: { x: number; y: number; d: number }[] = [];
-  for (let y = c.y - k; y <= c.y + k; y++)
-    for (let x = c.x - k; x <= c.x + k; x++) {
+  for (let y = cy - k; y <= cy + k; y++)
+    for (let x = cx - k; x <= cx + k; x++) {
       const d = m * Math.hypot(Math.max(x - fx, 0, fx - x - 1), Math.max(y - fy, 0, fy - y - 1));
       if (d <= reach) out.push({ x, y, d });
     }
   return out.sort((a, b) => a.d - b.d);
 }
+/** the survey's blocks within `reach` metres of a place (tilesWithin at CANOPY_Z) */
+export const blocksWithin = (lat: number, lon: number, reach: number) => tilesWithin(CANOPY_Z, lat, lon, reach);
 
 /** a place's block and its fractional pixel there (n a side; row 0 the north) */
 export function blockOf(lat: number, lon: number, n: number): { x: number; y: number; u: number; v: number } {

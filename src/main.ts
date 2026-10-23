@@ -7489,7 +7489,7 @@ async function main() {
   const orthoCredit = Object.assign(document.createElement("div"), { className: "scenery-credit ortho-credit", hidden: true });
   orthoCredit.dataset.testid = "ortho-credit";
   orthoCredit.append(
-    t("© IGN — aerial photographs, relief (BD ORTHO, RGE ALTI, LiDAR HD) · "),
+    t("© IGN — aerial photographs, relief, buildings (BD ORTHO, RGE ALTI, LiDAR HD, BD TOPO) · "),
     creditLink(t("Licence Ouverte 2.0"), "https://www.etalab.gouv.fr/licence-ouverte-open-licence/"),
   );
   document.body.append(orthoCredit);

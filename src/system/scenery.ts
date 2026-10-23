@@ -369,6 +369,9 @@ export class EarthScenery {
       surveyedTrees: d?.surveyedTrees ?? 0,
       surveyRequests: d?.surveyRequests ?? 0,
       surveyError: d?.surveyError ?? null,
+      /** of the buildings, the IGN's BD TOPO's (I5), and its tiles */
+      bdtopoBuildings: d?.bdtopoBuildings ?? 0,
+      bdtopoTiles: d?.bdtopoTiles ?? 0,
       /** the procedural forest's grid: its cells (one tree at most each), a cell's side [m] */
       forestCells: d?.forestCells ?? 0,
       forestCellM: d?.forestCellM ?? 0,

@@ -175,6 +175,25 @@ et autres ouvrages élevés que porte le MNH ne sont pas écartés.
 26 675 parties sur 4 × 4 km à Paris) ; les tuiles vectorielles de la Géoplateforme évitent la limite du WFS. Les
 toits par MNS (le labo en fait 280 à Paris) sont un raffinement ultérieur, pas une priorité.
 
+**Fait le 23/10 (I5).** En France (réglage « Relevé IGN (France) », qui couvre désormais relief, arbres et bâtiments),
+le worker de la scène prend les bâtiments de la BD TOPO au lieu de ceux d'OSM (`src/system/bdtopo.ts`). Il lit les tuiles
+vectorielles de la Géoplateforme (`tms/1.0.0/BDTOPO/{z}/{x}/{y}.pbf` — en lignes XYZ malgré le nom —, couche `batiment` dès
+z 15), les plus proches d'abord, jusqu'à ce que les `limit` bâtiments les plus proches soient tous là. À Paris, une tuile
+fait ≈ 300 Ko pour 1 000 bâtiments, et une grande scène en prend 68. La hauteur est `hauteur` (mesurée, présente sur 92 %
+du bâti parisien), sinon `nombre_d_etages` × 3 m + 1, sinon les 6 m d'OSM. Les bâtiments détruits, en ruine ou en projet
+sont écartés. Un bâtiment à cheval sur deux tuiles arrive dans les deux, avec une marge : chaque copie est découpée au carré
+de sa tuile, et les deux prismes se rejoignent au bord. Les routes, l'eau et les pistes restent celles d'OSM ; là où une
+tuile BD TOPO échoue, les bâtiments d'OSM de cette tuile sont gardés, sans dégrader la scène (`surveyError`). Les emprises
+BD TOPO servent aussi à l'exclusion des arbres d'I4 : elles concordent avec le MNH, qui vient du même relevé.
+
+Mesuré avant le code, hors ligne, sur les mêmes emprises, contre le sursol médian du LiDAR (`MNS − MNT` à 0,76 m sur chaque
+emprise) : BD TOPO à 0,9–2,0 m d'écart médian, OSM à 2,7–5,6 m (Nantes centre, Saint-Lô, Front de Seine). Dans le jeu,
+sur kerr-mini (e2e `bdtopo`, en raster, Paris 16e/15e de part et d'autre de la Seine, les bâtiments de la scène dans 300 m
+de son centre, leur toit moins le sol du jeu) : **1,6 m d'écart médian et 74 % à 3 m près avec la BD TOPO** (257 bâtiments
+comparés), **3,8 m et 39 % avec OSM** (412). Limites : les deux mesures du jeu ne portent pas exactement sur les mêmes
+bâtiments, car le centre de la scène suit la caméra (550 m d'écart entre les deux arrivées) ; les toits restent des prismes
+plats (le MNS les donnerait, I6) ; un bâtiment de plus de 256 sommets est écarté, comme pour OSM.
+
 ## 5. Le préalable : le géoïde
 
 **Kerr n'a pas de géoïde** (`AAA-PROGRESS.md` 2.8 : « le niveau de la mer est l'ellipsoïde, à ±100 m près »).
@@ -339,7 +358,7 @@ le focus, la navigation à la manette, les invites et le français/anglais du me
 | **I2** — fait (23/10) | Hauteurs RGE ALTI + LiDAR HD (WMS-R 3857), `TILE_RES_MIN` par source, bruit effacé — voir §4.2 | `shade` −5 ms attendu en France ; aucune couture au bord |
 | **I3** — fait (23/10) | Niveaux fins du cache de surface (2,4/1,2 m) et normales à 0,5 m — voir §4.2 | passe de visibilité mesurée, cible ≤ +2 ms : +0,22 ms |
 | **I4** — fait (23/10) | MNH → forêts, leurs pieds et ceux des bâtiments sur le sol IGN — voir §4.3 | captures de lisières/haies contre l'ortho : 76 % des arbres sur sa canopée (69 sans), 36 % de sa canopée sous un arbre (23 sans) |
-| **I5** | BD TOPO → bâtiments | hauteurs comparées au MNS sur un quartier |
+| **I5** — fait (23/10) | BD TOPO → bâtiments (tuiles vectorielles z 15), OSM gardé pour les routes et l'eau — voir §4.4 | hauteurs comparées au MNS sur un quartier : 1,6 m d'écart médian, 74 % à 3 m près (OSM : 3,8 m, 39 %) |
 | **I6** | HLOD lointain par `MNS − MNT` | silhouette de Paris à 20 km ; coût d'une lecture |
 | **I7** | Interface de source nationale ; swisstopo ensuite | Alpes suisses au même niveau |
 | **I8a** | Zones hors ligne, le socle : module pur `zoneTiles` (mêmes URL que le jeu, testé), cache `kerr-zones-v1` hors LRU dans le service worker, `storage.persist()`, téléchargement suspendable et repris, priorité au streaming du jeu, `__bh.pwa.zones` | test unitaire « URL de la zone = URL demandées en vol » ; e2e : zone de 5 km pré-cachée, réseau coupé, vol sans aucune requête de tuile et sol complet |
