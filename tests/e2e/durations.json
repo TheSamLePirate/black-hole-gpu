@@ -1,0 +1,727 @@
+{
+ "a11y.e2e.test.ts": {
+  "mini": 17,
+  "here": 19,
+  "runs": 8
+ },
+ "aar.e2e.test.ts": {
+  "mini": 234,
+  "here": null,
+  "runs": 1
+ },
+ "approach-charts.e2e.test.ts": {
+  "mini": 32,
+  "here": 35,
+  "runs": 10
+ },
+ "assist-approach.e2e.test.ts": {
+  "mini": 12,
+  "here": 12,
+  "runs": 9
+ },
+ "assist-burn.e2e.test.ts": {
+  "mini": 49,
+  "here": 53,
+  "runs": 9
+ },
+ "assist-climb.e2e.test.ts": {
+  "mini": 56,
+  "here": 57,
+  "runs": 8
+ },
+ "assist-descent.e2e.test.ts": {
+  "mini": 7,
+  "here": 8,
+  "runs": 10
+ },
+ "assist-dock.e2e.test.ts": {
+  "mini": 28,
+  "here": 46,
+  "runs": 16
+ },
+ "assist-entry.e2e.test.ts": {
+  "mini": 12,
+  "here": 24,
+  "runs": 10
+ },
+ "assist-final.e2e.test.ts": {
+  "mini": 15,
+  "here": 15,
+  "runs": 10
+ },
+ "assist-handover.e2e.test.ts": {
+  "mini": 29,
+  "here": 34,
+  "runs": 9
+ },
+ "assist.e2e.test.ts": {
+  "mini": 11,
+  "here": 12,
+  "runs": 9
+ },
+ "atlas.e2e.test.ts": {
+  "mini": 10,
+  "here": 11,
+  "runs": 10
+ },
+ "audio-space.e2e.test.ts": {
+  "mini": 95,
+  "here": 109,
+  "runs": 10
+ },
+ "bh-api.e2e.test.ts": {
+  "mini": 8,
+  "here": 14,
+  "runs": 14
+ },
+ "callouts.e2e.test.ts": {
+  "mini": 29,
+  "here": 38,
+  "runs": 11
+ },
+ "camera-travel.e2e.test.ts": {
+  "mini": null,
+  "here": 39,
+  "runs": 5
+ },
+ "character-aaa.e2e.test.ts": {
+  "mini": 167,
+  "here": null,
+  "runs": 2
+ },
+ "character.e2e.test.ts": {
+  "mini": 395,
+  "here": 102,
+  "runs": 11
+ },
+ "cockpit-flight.e2e.test.ts": {
+  "mini": 23,
+  "here": 24,
+  "runs": 11
+ },
+ "cockpit.e2e.test.ts": {
+  "mini": 27,
+  "here": 33,
+  "runs": 11
+ },
+ "course.e2e.test.ts": {
+  "mini": 318,
+  "here": null,
+  "runs": 2
+ },
+ "crew-aar.e2e.test.ts": {
+  "mini": 142,
+  "here": null,
+  "runs": 7
+ },
+ "crew-actions.e2e.test.ts": {
+  "mini": 23,
+  "here": null,
+  "runs": 11
+ },
+ "crew-craft.e2e.test.ts": {
+  "mini": 197,
+  "here": null,
+  "runs": 3
+ },
+ "crew-demo-space.e2e.test.ts": {
+  "mini": 49,
+  "here": null,
+  "runs": 6
+ },
+ "crew-en.e2e.test.ts": {
+  "mini": 23,
+  "here": null,
+  "runs": 5
+ },
+ "crew-posts.e2e.test.ts": {
+  "mini": 19,
+  "here": null,
+  "runs": 3
+ },
+ "crew-space-actions.e2e.test.ts": {
+  "mini": 23,
+  "here": null,
+  "runs": 7
+ },
+ "crew-space.e2e.test.ts": {
+  "mini": 12,
+  "here": null,
+  "runs": 7
+ },
+ "crew-stations.e2e.test.ts": {
+  "mini": 10,
+  "here": null,
+  "runs": 5
+ },
+ "crew.e2e.test.ts": {
+  "mini": 17,
+  "here": null,
+  "runs": 13
+ },
+ "decoys.e2e.test.ts": {
+  "mini": 18,
+  "here": null,
+  "runs": 6
+ },
+ "dock-undock.e2e.test.ts": {
+  "mini": 14,
+  "here": 16,
+  "runs": 11
+ },
+ "earth-scenery.e2e.test.ts": {
+  "mini": 563,
+  "here": 294,
+  "runs": 6
+ },
+ "earth-surface.e2e.test.ts": {
+  "mini": 281,
+  "here": 250,
+  "runs": 3
+ },
+ "eclipse-atmosphere.e2e.test.ts": {
+  "mini": 4,
+  "here": 4,
+  "runs": 10
+ },
+ "eclipses.e2e.test.ts": {
+  "mini": 17,
+  "here": 24,
+  "runs": 9
+ },
+ "ellipsoid.e2e.test.ts": {
+  "mini": 12,
+  "here": 14,
+  "runs": 11
+ },
+ "f35-body.e2e.test.ts": {
+  "mini": 18,
+  "here": null,
+  "runs": 1
+ },
+ "f35-challenges.e2e.test.ts": {
+  "mini": null,
+  "here": 34,
+  "runs": 1
+ },
+ "f35-combat.e2e.test.ts": {
+  "mini": 18,
+  "here": 15,
+  "runs": 4
+ },
+ "f35-hud.e2e.test.ts": {
+  "mini": 11,
+  "here": null,
+  "runs": 4
+ },
+ "f35-nav.e2e.test.ts": {
+  "mini": null,
+  "here": 57,
+  "runs": 1
+ },
+ "f35-pcd.e2e.test.ts": {
+  "mini": 30,
+  "here": null,
+  "runs": 4
+ },
+ "f35-radar.e2e.test.ts": {
+  "mini": 15,
+  "here": null,
+  "runs": 2
+ },
+ "f35-wingmen.e2e.test.ts": {
+  "mini": 90,
+  "here": null,
+  "runs": 1
+ },
+ "first-image-downloads.e2e.test.ts": {
+  "mini": 10,
+  "here": 12,
+  "runs": 12
+ },
+ "forest-aaa.e2e.test.ts": {
+  "mini": 505,
+  "here": 428,
+  "runs": 6
+ },
+ "gargantua-ground.e2e.test.ts": {
+  "mini": 174,
+  "here": 44,
+  "runs": 11
+ },
+ "gear.e2e.test.ts": {
+  "mini": 21,
+  "here": 33,
+  "runs": 9
+ },
+ "gibraltar-shots.e2e.test.ts": {
+  "mini": 242,
+  "here": null,
+  "runs": 1
+ },
+ "golden.e2e.test.ts": {
+  "mini": 11,
+  "here": 12,
+  "runs": 11
+ },
+ "gpu-recovery.e2e.test.ts": {
+  "mini": 12,
+  "here": 14,
+  "runs": 10
+ },
+ "gpu-startup.e2e.test.ts": {
+  "mini": 71,
+  "here": 78,
+  "runs": 9
+ },
+ "grass-aaa.e2e.test.ts": {
+  "mini": 461,
+  "here": 266,
+  "runs": 3
+ },
+ "ground-camera-warp.e2e.test.ts": {
+  "mini": null,
+  "here": 48,
+  "runs": 3
+ },
+ "ground-details.e2e.test.ts": {
+  "mini": 99,
+  "here": 91,
+  "runs": 7
+ },
+ "ground-placement.e2e.test.ts": {
+  "mini": null,
+  "here": 15,
+  "runs": 2
+ },
+ "ground-planets.e2e.test.ts": {
+  "mini": 110,
+  "here": 34,
+  "runs": 9
+ },
+ "harness.e2e.test.ts": {
+  "mini": 4,
+  "here": 5,
+  "runs": 11
+ },
+ "hotas-flight.e2e.test.ts": {
+  "mini": 21,
+  "here": 29,
+  "runs": 11
+ },
+ "hotas.e2e.test.ts": {
+  "mini": 17,
+  "here": 22,
+  "runs": 10
+ },
+ "hub-card.e2e.test.ts": {
+  "mini": 16,
+  "here": 35,
+  "runs": 10
+ },
+ "hub-graph.e2e.test.ts": {
+  "mini": 8,
+  "here": 13,
+  "runs": 10
+ },
+ "hub-warp.e2e.test.ts": {
+  "mini": 9,
+  "here": 15,
+  "runs": 8
+ },
+ "hud-kinds.e2e.test.ts": {
+  "mini": 13,
+  "here": 18,
+  "runs": 8
+ },
+ "hud-layout.e2e.test.ts": {
+  "mini": 33,
+  "here": 43,
+  "runs": 9
+ },
+ "instructor.e2e.test.ts": {
+  "mini": 83,
+  "here": null,
+  "runs": 2
+ },
+ "jetmap.e2e.test.ts": {
+  "mini": 32,
+  "here": null,
+  "runs": 4
+ },
+ "jetmodes.e2e.test.ts": {
+  "mini": 167,
+  "here": null,
+  "runs": 2
+ },
+ "landing.e2e.test.ts": {
+  "mini": 33,
+  "here": 41,
+  "runs": 12
+ },
+ "landscapes.e2e.test.ts": {
+  "mini": 587,
+  "here": 394,
+  "runs": 6
+ },
+ "link16.e2e.test.ts": {
+  "mini": 27,
+  "here": null,
+  "runs": 2
+ },
+ "menus-campaign.e2e.test.ts": {
+  "mini": 104,
+  "here": null,
+  "runs": 1
+ },
+ "metar.e2e.test.ts": {
+  "mini": 16,
+  "here": 22,
+  "runs": 8
+ },
+ "missile-cues.e2e.test.ts": {
+  "mini": 77,
+  "here": null,
+  "runs": 4
+ },
+ "modes.e2e.test.ts": {
+  "mini": 11,
+  "here": 30,
+  "runs": 10
+ },
+ "multiexposure.e2e.test.ts": {
+  "mini": 232,
+  "here": 189,
+  "runs": 9
+ },
+ "music-panel.e2e.test.ts": {
+  "mini": 44,
+  "here": 47,
+  "runs": 9
+ },
+ "music.e2e.test.ts": {
+  "mini": 21,
+  "here": 21,
+  "runs": 9
+ },
+ "near-air.e2e.test.ts": {
+  "mini": 4,
+  "here": 4,
+  "runs": 10
+ },
+ "net-battle.e2e.test.ts": {
+  "mini": 78,
+  "here": null,
+  "runs": 1
+ },
+ "net-board.e2e.test.ts": {
+  "mini": 25,
+  "here": null,
+  "runs": 1
+ },
+ "net-coop.e2e.test.ts": {
+  "mini": 46,
+  "here": null,
+  "runs": 3
+ },
+ "net-crew.e2e.test.ts": {
+  "mini": 45,
+  "here": null,
+  "runs": 7
+ },
+ "net-dock.e2e.test.ts": {
+  "mini": 216,
+  "here": null,
+  "runs": 1
+ },
+ "net-fleet.e2e.test.ts": {
+  "mini": 25,
+  "here": null,
+  "runs": 1
+ },
+ "net-flight.e2e.test.ts": {
+  "mini": 33,
+  "here": null,
+  "runs": 2
+ },
+ "net-formation-ap.e2e.test.ts": {
+  "mini": 303,
+  "here": null,
+  "runs": 2
+ },
+ "net-gargantua.e2e.test.ts": {
+  "mini": 23,
+  "here": null,
+  "runs": 1
+ },
+ "net-moon.e2e.test.ts": {
+  "mini": 34,
+  "here": null,
+  "runs": 1
+ },
+ "net-orders.e2e.test.ts": {
+  "mini": 227,
+  "here": null,
+  "runs": 3
+ },
+ "net-rooms.e2e.test.ts": {
+  "mini": 28,
+  "here": null,
+  "runs": 1
+ },
+ "net-share.e2e.test.ts": {
+  "mini": 40,
+  "here": null,
+  "runs": 1
+ },
+ "net-shotdown.e2e.test.ts": {
+  "mini": 87,
+  "here": null,
+  "runs": 1
+ },
+ "net-space.e2e.test.ts": {
+  "mini": 33,
+  "here": null,
+  "runs": 1
+ },
+ "net-spectate.e2e.test.ts": {
+  "mini": 26,
+  "here": null,
+  "runs": 1
+ },
+ "net-time.e2e.test.ts": {
+  "mini": 27,
+  "here": null,
+  "runs": 1
+ },
+ "net-ui.e2e.test.ts": {
+  "mini": 42,
+  "here": null,
+  "runs": 1
+ },
+ "net-voice.e2e.test.ts": {
+  "mini": 26,
+  "here": null,
+  "runs": 1
+ },
+ "net-walk.e2e.test.ts": {
+  "mini": 31,
+  "here": null,
+  "runs": 1
+ },
+ "net-wing-fight.e2e.test.ts": {
+  "mini": 143,
+  "here": null,
+  "runs": 6
+ },
+ "observatory.e2e.test.ts": {
+  "mini": null,
+  "here": 30,
+  "runs": 1
+ },
+ "pad.e2e.test.ts": {
+  "mini": 6,
+  "here": 10,
+  "runs": 10
+ },
+ "photo-fps.e2e.test.ts": {
+  "mini": 7,
+  "here": 11,
+  "runs": 11
+ },
+ "photo-video.e2e.test.ts": {
+  "mini": 13,
+  "here": 17,
+  "runs": 9
+ },
+ "place-docked.e2e.test.ts": {
+  "mini": 137,
+  "here": 135,
+  "runs": 12
+ },
+ "place.e2e.test.ts": {
+  "mini": 10,
+  "here": 16,
+  "runs": 10
+ },
+ "planet-detail.e2e.test.ts": {
+  "mini": 14,
+  "here": 14,
+  "runs": 13
+ },
+ "prefs.e2e.test.ts": {
+  "mini": 11,
+  "here": 18,
+  "runs": 10
+ },
+ "pwa.e2e.test.ts": {
+  "mini": 12,
+  "here": 25,
+  "runs": 10
+ },
+ "radar-select.e2e.test.ts": {
+  "mini": 21,
+  "here": null,
+  "runs": 6
+ },
+ "radar-sync.e2e.test.ts": {
+  "mini": 52,
+  "here": null,
+  "runs": 16
+ },
+ "rain.e2e.test.ts": {
+  "mini": 55,
+  "here": 58,
+  "runs": 10
+ },
+ "raster-governor.e2e.test.ts": {
+  "mini": 70,
+  "here": null,
+  "runs": 1
+ },
+ "rates.e2e.test.ts": {
+  "mini": 30,
+  "here": 35,
+  "runs": 14
+ },
+ "reload.e2e.test.ts": {
+  "mini": 12,
+  "here": 20,
+  "runs": 10
+ },
+ "report.e2e.test.ts": {
+  "mini": 89,
+  "here": 97,
+  "runs": 10
+ },
+ "runway-wind.e2e.test.ts": {
+  "mini": 12,
+  "here": 16,
+  "runs": 11
+ },
+ "s5.e2e.test.ts": {
+  "mini": 41,
+  "here": 64,
+  "runs": 7
+ },
+ "saves.e2e.test.ts": {
+  "mini": 6,
+  "here": 8,
+  "runs": 10
+ },
+ "scenery-bench.e2e.test.ts": {
+  "mini": null,
+  "here": 1,
+  "runs": 2
+ },
+ "scenery-hitboxes.e2e.test.ts": {
+  "mini": 83,
+  "here": 36,
+  "runs": 5
+ },
+ "shootdown.e2e.test.ts": {
+  "mini": 227,
+  "here": null,
+  "runs": 1
+ },
+ "sky-events.e2e.test.ts": {
+  "mini": 26,
+  "here": 36,
+  "runs": 10
+ },
+ "smoke.e2e.test.ts": {
+  "mini": 28,
+  "here": 33,
+  "runs": 13
+ },
+ "space-sensors.e2e.test.ts": {
+  "mini": 17,
+  "here": null,
+  "runs": 2
+ },
+ "spectator.e2e.test.ts": {
+  "mini": 26,
+  "here": 26,
+  "runs": 13
+ },
+ "tars-agent-live.e2e.test.ts": {
+  "mini": null,
+  "here": 1,
+  "runs": 1
+ },
+ "tars-agent.e2e.test.ts": {
+  "mini": 30,
+  "here": 58,
+  "runs": 10
+ },
+ "tars-ear.e2e.test.ts": {
+  "mini": null,
+  "here": 33,
+  "runs": 2
+ },
+ "tars-online.e2e.test.ts": {
+  "mini": 9,
+  "here": 19,
+  "runs": 10
+ },
+ "tars-voice.e2e.test.ts": {
+  "mini": 14,
+  "here": 14,
+  "runs": 10
+ },
+ "tars.e2e.test.ts": {
+  "mini": 8,
+  "here": 8,
+  "runs": 14
+ },
+ "tcas.e2e.test.ts": {
+  "mini": 56,
+  "here": null,
+  "runs": 2
+ },
+ "telemetry.e2e.test.ts": {
+  "mini": 9,
+  "here": 14,
+  "runs": 10
+ },
+ "time.e2e.test.ts": {
+  "mini": 8,
+  "here": 10,
+  "runs": 11
+ },
+ "title.e2e.test.ts": {
+  "mini": 6,
+  "here": 13,
+  "runs": 11
+ },
+ "touch.e2e.test.ts": {
+  "mini": 15,
+  "here": 27,
+  "runs": 11
+ },
+ "voice.e2e.test.ts": {
+  "mini": 14,
+  "here": 16,
+  "runs": 11
+ },
+ "weather-panel.e2e.test.ts": {
+  "mini": 26,
+  "here": 43,
+  "runs": 8
+ },
+ "world-runway.e2e.test.ts": {
+  "mini": 247,
+  "here": null,
+  "runs": 2
+ },
+ "worlds.e2e.test.ts": {
+  "mini": 9,
+  "here": 12,
+  "runs": 10
+ },
+ "wormhole-map.e2e.test.ts": {
+  "mini": 20,
+  "here": 25,
+  "runs": 10
+ }
+}

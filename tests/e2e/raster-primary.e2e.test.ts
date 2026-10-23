@@ -3,9 +3,12 @@
 // pixel: the reference the raster's ground should match), then with the raster (the sky still one ray a ×4 block): each
 // mode's GPU passes, and its image against the ×1 one. The view is touched every frame — the realtime path, fresh rays,
 // no convergence of a still camera — so ×4 and ×6 show what a moving camera shows.
-// RP_PLACE=kennedy (default, flat, offline) | alps | canyon (live elevation tiles: the network); RP_FULL=1: clouds,
+// RP_PLACE=kennedy (default, flat, offline) | alps | chamonix | canyon (live elevation tiles: the network); RP_FULL=1: clouds,
 // regional surface and scenery on (the default leaves them off, as P1c/P1d did); RP_W, RP_H: the image (1280 × 800).
-// Captures remote-results/rp-<place>-<pose>-<mode>.png; measures remote-results/raster-primary-<place>.json.
+// RP_MODES=trace4,raster: some of the modes only. Captures remote-results/rp-<place>-<pose>-<mode>.png; measures
+// remote-results/raster-primary-<place>.json.
+// Duration: ~6 min a pose on kerr-mini (×1 with RP_FULL: longer).
+// Done when: the last pose's modes are all captured and the figures written.
 import { afterAll, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 import { readPng } from "./lib/png";
@@ -30,6 +33,13 @@ const PLACES: Record<string, { at: [number, number]; poses: { name: string; altK
       { name: "ridges-3km", altKm: 3, off: [0, 78] },
     ],
   },
+  // (over Chamonix's valley — its floor at ~1 035 m — at 3.5 km over the ellipsoid, looking out to the horizon and the
+  // Mont-Blanc massif: the ridges, the valley's clouds, the sky; "alps" above looks down at the slopes from close)
+  chamonix: {
+    at: [45.92, 6.87],
+    tiles: true,
+    poses: [{ name: "valley-3.5km", altKm: 3.5, off: [0, 78] }],
+  },
   canyon: {
     at: [36.1, -112.1],
     tiles: true,
@@ -44,12 +54,15 @@ const PLACE = PLACES[PLACE_NAME]!;
 const FULL = process.env.RP_FULL === "1";
 const W = Number(process.env.RP_W ?? 1280);
 const H = Number(process.env.RP_H ?? 800);
-const MODES = [
+const ALL_MODES = [
   { name: "trace6", pipeline: "trace", sub: 6 },
   { name: "trace4", pipeline: "trace", sub: 4 },
   { name: "trace1", pipeline: "trace", sub: 1 },
   { name: "raster", pipeline: "raster", sub: 4 },
 ] as const;
+// (RP_MODES=trace4,raster: some of them — the reference for the comparisons is trace1 when it is among them, else the first)
+const MODES = process.env.RP_MODES ? process.env.RP_MODES.split(",").flatMap((n) => ALL_MODES.filter((m) => m.name === n)) : ALL_MODES;
+const REF = MODES.some((m) => m.name === "trace1") ? "trace1" : MODES[0]!.name;
 
 type Png = ReturnType<typeof readPng>;
 /** mean absolute difference (0–255) and PSNR [dB] below the toolbar */
@@ -100,7 +113,12 @@ test.skipIf(!E2E)(
             `(() => { __bh.settings.earthPipeline=${JSON.stringify(mode.pipeline)}; __bh.settings.realtimeSubsampling=${mode.sub}; __bh.touch(); return true; })()`,
           );
           await app.waitFor("__bh.renderer.variantReady", 300_000);
-          if (PLACE.tiles) await app.waitFor("__bh.renderer.earthTiles.pending === 0", 120_000).catch(() => {});
+          // (the relief's tiles all in — none asked for 4 s on end: the finest levels come after the coarse ones; a capture
+          // before them shows a lower, smoother relief, its summits under the clouds' deck)
+          if (PLACE.tiles)
+            await app.js(`(async () => { const r = __bh.renderer, t0 = performance.now(); let calm = 0;
+              while (performance.now() - t0 < 180000) { const ok = r.earthTiles.pending === 0; calm = ok ? calm || performance.now() : 0;
+                if (calm && performance.now() - calm > 4000) break; await new Promise((q) => requestAnimationFrame(q)); } return 1; })()`);
           if (mode.pipeline === "raster")
             await app.waitFor(
               `__bh.renderer.terrainRasterStats.primary && __bh.renderer.terrainRasterStats.reason === "pilot" && __bh.renderer.terrainRasterStats.encodedFrames > 5`,
@@ -109,7 +127,12 @@ test.skipIf(!E2E)(
           const w = await app.js<number>("__bh.renderer.completedFrames");
           await app.waitFor(`__bh.renderer.completedFrames >= ${w + 40}`, 120_000);
           await app.js("(() => { __bh.game.perf(); __bh.renderer.prof.every = 1; __bh.renderer.prof.reset(); return true; })()");
-          await app.waitFor("__bh.renderer.prof.frames >= 50", 120_000);
+          // (50 frames timed, or — a slow mode: ×1 with the scenery on an M1 takes seconds a frame — 8 after a minute)
+          await app.js("(() => { window.__rpT0 = performance.now(); return 1; })()");
+          await app.waitFor(
+            "__bh.renderer.prof.frames >= 50 || (performance.now() - window.__rpT0 > 60000 && __bh.renderer.prof.frames >= 8)",
+            600_000,
+          );
           const table = await app.js<{ label: string; ms: number }[]>("__bh.renderer.prof.table()");
           passes[mode.name] = Object.fromEntries(table.map((p) => [p.label, +p.ms.toFixed(2)]));
           const f = `remote-results/rp-${PLACE_NAME}${FULL ? "-full" : ""}-${pose.name}-${mode.name}.png`;
@@ -123,12 +146,12 @@ test.skipIf(!E2E)(
           full: FULL,
           size: [W, H],
           rays: Object.fromEntries(MODES.map((m) => [m.name, +sumOf(m.name).toFixed(2)])),
-          vsTrace1: Object.fromEntries(MODES.map((m) => [m.name, compare(images[m.name]!, images.trace1!)])),
+          vsRef: { ref: REF, ...Object.fromEntries(MODES.map((m) => [m.name, compare(images[m.name]!, images[REF]!)])) },
           stats: await app.js("({ ...__bh.renderer.terrainRasterStats })"),
           passes,
         };
         rows.push(row);
-        console.log(JSON.stringify({ pose: row.pose, rays: row.rays, vsTrace1: row.vsTrace1 }));
+        console.log(JSON.stringify({ pose: row.pose, rays: row.rays, vsRef: row.vsRef }));
         await app.js(`(() => { __bh.settings.earthPipeline="trace"; return true; })()`);
       }
       await Bun.write(`remote-results/raster-primary-${PLACE_NAME}${FULL ? "-full" : ""}.json`, JSON.stringify(rows, null, 2));

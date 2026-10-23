@@ -7,7 +7,7 @@
 // its eclipse — the umbra as dark with it as with the old model (it was lit by the camera's day sky).
 // Every wait bounded, the renderer's state printed when one runs out. Captures remote-results/rg-*.png; figures
 // remote-results/raster-governor.json.
-// Duration: ~12 min on kerr-mini (the kernels' compiles 3–5 min of it).
+// Duration: ~70 s on kerr-mini, its shaders cached; ~12 min the first time (the kernels' compiles).
 // Done when: the Moon's shadow is captured twice (physical sky, old model) and its darkest compared.
 import { afterAll, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";

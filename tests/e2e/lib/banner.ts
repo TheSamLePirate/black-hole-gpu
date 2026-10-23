@@ -4,6 +4,7 @@
 // applied); shown by the recorder (telemetry.ts: a page attached, each test begun); see-through to the pointer (the
 // clicks' elementFromPoint pass through it) and hidden for every screenshot (cdp.ts). docs/E2E.md.
 import { readFileSync } from "node:fs";
+import { hostname } from "node:os";
 import { basename } from "node:path";
 import { SHOW } from "./cdp";
 
@@ -18,6 +19,26 @@ interface FileInfo {
 }
 
 const cache = new Map<string, FileInfo>();
+
+/** A duration [s] said as the banner says it: "~45 s", "~4 min". */
+const said = (s: number) => (s < 90 ? `~${Math.round(s)} s` : `~${Math.round(s / 60)} min`);
+/** The file's measured duration (tests/e2e/durations.json — scripts/e2e-durations.ts: the median of the runs that passed),
+ *  this machine's first (kerr-mini's, or this Mac's), else the other's; "" when never measured. */
+function measured(name: string): string {
+  let all: Record<string, { mini: number | null; here: number | null; runs: number }> = {};
+  try {
+    all = JSON.parse(readFileSync("tests/e2e/durations.json", "utf8"));
+  } catch {
+    return "";
+  }
+  const d = all[name];
+  if (!d) return "";
+  const mini = /mini/i.test(hostname());
+  const [mine, other] = mini ? [d.mini, d.here] : [d.here, d.mini];
+  const where = mine !== null ? (mini ? "on kerr-mini" : "on this Mac") : mini ? "on the MacBook" : "on kerr-mini";
+  const s = mine ?? other;
+  return s === null ? "" : `${said(s)} ${where} (median of ${d.runs} run${d.runs > 1 ? "s" : ""})`;
+}
 
 /** The -t filter bun test was given (null: none). */
 function filter(): RegExp | null {
@@ -69,8 +90,9 @@ export function fileInfo(path: string): FileInfo {
     suite: suite ? pick(suite) : "",
     about: join(about),
     tests,
-    duration: join(tagged.duration),
-    done: join(tagged.done),
+    // (no header line: the measured median; the file's last test's end)
+    duration: join(tagged.duration) || measured(basename(path)),
+    done: join(tagged.done) || (tests.length ? `its last test ends — “${tests[tests.length - 1]}”` : ""),
   };
   cache.set(path, info);
   return info;

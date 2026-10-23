@@ -66,7 +66,10 @@ How it shows, and how to override it:
   hidden for every screenshot; `E2E_BANNER=0` leaves it out. So every e2e file's header comment says what it proves.
   Two lines of the header are shown apart: `// Duration: ~12 min on kerr-mini …` (beside the time gone since the test
   began: `⏱ 3:12 / ~12 min`) and `// Done when: …` (what ends it — its last step); each runs on to the next tagged line
-  or the header's end. A test that boots its page inside itself (most) shows as that test, not as the file's setup.
+  or the header's end. Without them: the file's measured median (`tests/e2e/durations.json`, made by
+  `bun scripts/e2e-durations.ts [roots…]` from the `--each` summaries under remote-results, kerr-mini's and this Mac's
+  apart — run it again after a campaign) and its last test's end. A test that boots its page inside itself (most)
+  shows as that test, not as the file's setup.
   (`remote.ts run --hold 20` / `bun run e2e --remote --hold 20 …`).
 - Measurement scripts (`bench.ts`, `trace-ab.ts`, `gallery.ts`, `quality.ts`, `check-wgsl.ts`) are always
   headless: a window's frame rate follows the display. They still take the lock.
