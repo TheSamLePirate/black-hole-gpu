@@ -493,6 +493,8 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
   const lands = flown && ground && VESSELS[fleet.active].lands;
   const belly = lands && this.gearExt < 1 ? BELLY[fleet.active] : undefined;
   const gdef = lands ? (belly ?? GEARS[fleet.active]) : undefined;
+  // (the reference point found this far in the ground: set on it — on the belly it is the gear's whole height lower)
+  const deep = belly ? -GEAR - 0.4 : -1.5;
   const mass = fleet.massProps().mass;
   const secM = M_METRES / C_MPS;
   const Iw = gdef ? worldTensor(fleet.massProps().I, axes) : null;
@@ -537,7 +539,10 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
   const gearAt = (Xq: Vec3, Vq: Vec3, tq: number): Vec3 => {
     if (!gdef || !ground) return [0, 0, 0];
     // (cheap far off: the legs reach some metres below the reference point)
-    if (gearHeight(ground, Xq, tq) > 12) {
+    // (and deep in it — the relief come in over the craft between two frames —: no spring past its stop, metres
+    // down, flinging it out at Mach 40 to burn; the step sets it on the ground — below, "found deep in the ground")
+    const gh = gearHeight(ground, Xq, tq);
+    if (gh > 12 || gh < deep) {
       gearOut = null;
       return [0, 0, 0];
     }
@@ -633,7 +638,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     // (found deep in the ground — a scene placed before the relief was known, the relief come in under
     // it —: set on it, its fall stopped, no spring flung from metres down)
     // (on the belly the reference point is down to the ground: the gear's whole height lower)
-    if (gdef && ground && gearHeight(ground, X, t) < (belly ? -GEAR - 0.4 : -1.5)) {
+    if (gdef && ground && gearHeight(ground, X, t) < deep) {
       const n = unitV(sub3(X, ourState(ground, t).pos));
       X = lin(X, 1, n, -gearHeight(ground, X, t) / M_METRES);
       const vr = sub3(V, groundVelocity(ground, X, t));

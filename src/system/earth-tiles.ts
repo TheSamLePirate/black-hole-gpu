@@ -212,6 +212,8 @@ interface Level {
   data: (Float32Array | null)[];
   /** its imagery, held on the finest levels only (the ring's: kept past the window when it leaves it) */
   col: (Uint32Array | null)[];
+  /** its tiles drawn from the sources before a switch, taken again — drawn until each is in from the new one */
+  stale: boolean;
 }
 
 /** An orthophotos' level: its window (4 × 4 tiles), the tile in each slot (none: not in yet) — imagery alone. */
@@ -474,6 +476,8 @@ export class EarthTiles {
   private levels: Level[] = [];
   private inflight = new Map<string, AbortController>();
   private failures = new Map<string, { n: number; at: number }>();
+  /** bumped at a switch of the sources: a load begun before it is dropped */
+  private gen = 0;
   /** the reference (the camera's place) [rad]: the levels' coordinates measured from it */
   private lon = 0;
   private sinLat = 0;
@@ -523,6 +527,7 @@ export class EarthTiles {
         key: new Array(n * n).fill(null),
         data: new Array(n * n).fill(null),
         col: new Array(n * n).fill(null),
+        stale: false,
       });
     }
   }
@@ -675,14 +680,22 @@ export class EarthTiles {
   private prioritySinLat = 0;
   update(c: Vec3 | null, pixAngle: number, lead: Vec3 = [0, 0, 0], gaze: Vec3 = [0, 0, 0], agl?: number) {
     // (the orthophotos switched: the relief's tiles' imagery taken again — over France the IGN's or EOX's —, the tiles
-    // kept past the windows dropped)
+    // kept past the windows dropped. The tiles drawn stay drawn until each is in again: dropped at once, the ground fell
+    // back to the global map's — at Chamonix the valley filled, a jet flying 450 m over its floor hundreds of metres in
+    // the ground, flung out by its gear at Mach 40 and burnt)
     if (this.orthoOn !== this.orthoWas || this.reliefOn !== this.reliefWas || this.hlodOn !== this.hlodWas) {
       this.orthoWas = this.orthoOn;
       this.reliefWas = this.reliefOn;
       this.hlodWas = this.hlodOn;
+      this.gen++;
+      for (const c of this.inflight.values()) c.abort();
+      this.inflight.clear();
       this.cache.clear();
-      for (const L of this.levels) L.key.fill(null);
-      this.clear();
+      for (const L of this.levels) {
+        L.key.fill(null);
+        L.stale = !!L.valid;
+      }
+      this.clearOrtho();
     }
     if (!c) return this.clear();
     // (the camera's geodetic place: the tracer reads the tiles at the geodetic latitude)
@@ -758,8 +771,8 @@ export class EarthTiles {
     const now = performance.now();
     let pending = 0;
     for (const L of this.levels) {
-      // (a window drawn whole: nothing to look for — not its tiles' keys made again each frame)
-      if (!L.want || same(L.valid, L.want)) continue;
+      // (a window drawn whole: nothing to look for — not its tiles' keys made again each frame —, unless taken again)
+      if (!L.want || (same(L.valid, L.want) && !L.stale)) continue;
       const cx = lonT * L.n,
         cy = mercY(sinLat, L.n);
       const todo: [number, number, number][] = [];
@@ -818,6 +831,7 @@ export class EarthTiles {
   /** A tile loaded — into its window, or (ahead) into memory past it, drawn if its window has come to it meanwhile. */
   private async load(L: Level, x: number, y: number, ahead = false) {
     const key = this.keyOf(L, x, y);
+    const gen = this.gen;
     const ctl = new AbortController();
     this.inflight.set(key, ctl);
     const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
@@ -843,6 +857,8 @@ export class EarthTiles {
         this.reliefOn && src && L.z >= src.heightsFrom
           ? await nationalHeights(src, L.z, xw, y, ctl.signal, this.hlodOn)
           : await terrarium(L.z, xw, y, ctl.signal);
+      // (begun before a switch of the sources: the old source's — the slot waits for the new one's)
+      if (gen !== this.gen) return;
       h = heights;
       this.loaded++;
       if (ahead) {
@@ -850,17 +866,17 @@ export class EarthTiles {
         // onto the tile if drawn meanwhile)
         this.keep(key, heights, null);
         void img.then((col) => {
-          if (!col) return;
+          if (!col || gen !== this.gen) return;
           if (L.key[this.slotOf(L, x, y)] === key) this.put(L.z, x, y, heights, col);
           else if (this.cache.has(key)) this.keep(key, heights, col);
         });
         h = null;
       } else
         void img.then((col) => {
-          if (col && L.key[this.slotOf(L, x, y)] === key) this.put(L.z, x, y, heights, col);
+          if (col && gen === this.gen && L.key[this.slotOf(L, x, y)] === key) this.put(L.z, x, y, heights, col);
         });
     } catch (e) {
-      if (!this.inflight.has(key)) return; // (cleared)
+      if (gen !== this.gen || !this.inflight.has(key)) return; // (cleared, or the sources switched)
       const f = this.failures.get(key) ?? { n: 0, at: 0 };
       f.n++;
       f.at = performance.now() + 3000 * f.n;
@@ -960,6 +976,14 @@ export class EarthTiles {
     const w = L.want;
     if (!w) return;
     for (let y = w.y0; y < w.y1; y++) for (let x = w.x0; x < w.x1; x++) if (L.key[this.slotOf(L, x, y)] !== this.keyOf(L, x, y)) return;
+    // (taken again whole after a switch: its rectangle the same, its heights not — the ground built from them redone)
+    if (L.stale && same(L.valid, w)) {
+      L.stale = false;
+      this.stamp++;
+      this.onChange?.();
+      return;
+    }
+    L.stale = false;
     this.setValid(L, w);
   }
 

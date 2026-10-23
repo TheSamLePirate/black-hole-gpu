@@ -114,6 +114,34 @@ test("a level moves with the camera: the part it keeps stays drawn", () => {
   expect(t.pending).toBe(0);
 });
 
+test("the sources switched (the IGN's relief, the orthophotos): the tiles drawn stay the ground until each is in again", () => {
+  // (dropped at once, the ground fell to the global map's: at Chamonix the valley filled, a jet flying low in it
+  // hundreds of metres in the ground — flung out by its gear, burnt)
+  const t = new EarthTiles(fakeDevice());
+  const cam = camAt(45.912, 6.858, 2);
+  t.update(cam, 1e-3);
+  fill(t);
+  const at = dir(45.912, 6.858);
+  const before = t.heightAt(at, 1);
+  expect(before.rem).toBe(0);
+  for (const flip of [() => (t.reliefOn = false), () => (t.orthoOn = false), () => (t.reliefOn = true)]) {
+    flip();
+    t.update(cam, 1e-3);
+    const stamp = t.stamp;
+    // (every tile asked again — the finer levels off without the relief —, the ground the same meanwhile)
+    expect(t.pending).toBeGreaterThan(0);
+    const s = t.heightAt(at, 1);
+    expect(s.rem).toBe(0);
+    expect(Math.abs(s.h - before.h)).toBeLessThan(5);
+    fill(t);
+    expect(t.pending).toBe(0);
+    // (taken again whole: the ground built from the tiles redone)
+    expect(t.stamp).toBeGreaterThan(stamp);
+    expect(Math.abs(t.heightAt(at, 1).h - before.h)).toBeLessThan(5);
+  }
+  expect(t.finest).toBe(Z1);
+});
+
 test("a level's samples: bilinear and the monotone cubic exact on a ramp, the windows' edges faded", () => {
   const ramp = (i: number, j: number) => 3 * i + 5 * j;
   for (const [x, y] of [
