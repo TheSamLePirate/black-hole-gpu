@@ -3079,6 +3079,8 @@ export class Renderer {
       this.earthTiles.orthoOn = s.earthOrtho;
       // (and its relief — I2)
       this.earthTiles.reliefOn = s.earthIgnRelief;
+      // (its far levels' overground — I6)
+      this.earthTiles.hlodOn = s.earthIgnSilhouettes;
       this.earthTiles.update(focus, pixelAngle, lead, onEarth ? gazeT : [0, 0, 0], eye ? eyeH : undefined);
       this.earthSurface.update(eye, s.earthSurface, lead);
       // (its trees and their ground over France by the IGN's survey — I4)

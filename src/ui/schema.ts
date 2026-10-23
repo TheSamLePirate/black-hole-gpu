@@ -2036,6 +2036,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "ign relief lidar rge alti terrain elevation dem france survey ground trees canopy buildings bd topo heights",
   },
   {
+    key: "earthIgnSilhouettes",
+    type: "toggle",
+    section: "sky",
+    group: "The Earth",
+    label: "Far silhouettes (France)",
+    effect: "scene",
+    help: "Over metropolitan France and Corsica, with the IGN survey on, the far ground's levels (beyond about 3 km) carry the IGN's surface model less its ground (the LiDAR HD's, RGE ALTI's in its gaps): Paris's towers, the cities' roofs and the forests' tops stand on the horizon, where the world scenery's buildings and trees end. Each texel keeps the highest of four samples, so a tower is not averaged away. The near ground stays bare under the scenery's own buildings and trees. About 1 MB more per far tile.",
+    keywords: "ign hlod far silhouettes skyline horizon towers paris city forest surface mns lidar france",
+  },
+  {
     key: "earthTerrainCache",
     type: "toggle",
     section: "sky",

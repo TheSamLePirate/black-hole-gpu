@@ -270,20 +270,20 @@ async function terrarium(z: number, x: number, y: number, signal: AbortSignal): 
 
 /** One of the IGN's height grids for a tile (null: refused, or none there at all); its no-data — out at sea, abroad,
  *  a gap in a survey — NaN. */
-async function ignGrid(layer: string, z: number, x: number, y: number, signal: AbortSignal): Promise<Float32Array | null> {
+async function ignGrid(layer: string, z: number, x: number, y: number, signal: AbortSignal, size = TILE): Promise<Float32Array | null> {
   // (within the relief's share of the rate, asked again on a refusal — over the rate, or a 502 now and then —, a second, two,
   // four after: a tile left to Terrarium for it would show a seam)
   await ignGate.take();
-  let res = await fetch(ignHeightUrl(layer, z, x, y), { signal });
+  let res = await fetch(ignHeightUrl(layer, z, x, y, size), { signal });
   const refused = (r: Response) => r.status === 400 || r.status === 429 || r.status >= 500;
   for (let attempt = 1; refused(res) && attempt < 4; attempt++) {
     await new Promise((done) => setTimeout(done, 1000 * 2 ** (attempt - 1)));
     await ignGate.take();
-    res = await fetch(ignHeightUrl(layer, z, x, y), { signal });
+    res = await fetch(ignHeightUrl(layer, z, x, y, size), { signal });
   }
   if (!res.ok) return null;
   const buf = await res.arrayBuffer();
-  if (buf.byteLength !== TILE * TILE * 4) return null;
+  if (buf.byteLength !== size * size * 4) return null;
   const v = new Float32Array(buf);
   let any = false;
   for (let i = 0; i < v.length; i++) {
@@ -296,11 +296,64 @@ async function ignGrid(layer: string, z: number, x: number, y: number, signal: A
   return any ? v : null;
 }
 
+/** the far levels' overground over France (I6): up to this level, the ground the IGN's surface — its buildings and its
+ *  trees' tops —, beyond the scenery's reach (its z 14 window and finer keep the bare ground, under its own buildings and trees) */
+export const HLOD_Z1 = 13;
+/** the surface models: the LiDAR HD's (0.5 m — a tower's lattice in it), RGE ALTI's (photogrammetry) in its holes */
+export const IGN_MNS_LIDAR = "IGNF_LIDAR-HD_MNS_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G";
+export const IGN_MNS_RGE = "ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES.MNS";
+/** an overground under this [m]: the two surveys' own noise, a crop, a wall — the ground left bare */
+export const HLOD_MIN = 2;
+/** the surface's side asked for a tile: twice the texel's below z 13, its top kept — the WMS-R averages its samples (Tour
+ *  Montparnasse, 264 m: 156 m at z 11's 50 m, 262 m from 4 × 4 samples' top) */
+export const hlodSize = (z: number) => (z < HLOD_Z1 ? 2 * TILE : TILE);
+/**
+ * The overground over a tile's ground (TILE², 0 where none): the surface's samples (n² over the tile, n = k TILE) less the
+ * ground there (`ground`'s TILE² bilinear at each sample — never the surface's own top over a slope), the top of each k × k
+ * block, kept where it passes HLOD_MIN. A ground or a surface NaN there: none.
+ */
+export function overground(ground: Float32Array, surface: Float32Array, n: number): Float32Array {
+  const k = n / TILE,
+    top = new Float32Array(TILE * TILE).fill(Number.NEGATIVE_INFINITY);
+  for (let j = 0; j < n; j++)
+    for (let i = 0; i < n; i++) {
+      const s = surface[j * n + i]!;
+      if (Number.isNaN(s)) continue;
+      // (the ground at the sample's centre: ground texels' centres at (t + 0.5) / TILE)
+      const fx = Math.min(Math.max((i + 0.5) / k - 0.5, 0), TILE - 1),
+        fy = Math.min(Math.max((j + 0.5) / k - 0.5, 0), TILE - 1);
+      const x0 = Math.min(Math.floor(fx), TILE - 2),
+        y0 = Math.min(Math.floor(fy), TILE - 2),
+        tx = fx - x0,
+        ty = fy - y0;
+      const g00 = ground[y0 * TILE + x0]!,
+        g10 = ground[y0 * TILE + x0 + 1]!,
+        g01 = ground[(y0 + 1) * TILE + x0]!,
+        g11 = ground[(y0 + 1) * TILE + x0 + 1]!;
+      const g = (g00 * (1 - tx) + g10 * tx) * (1 - ty) + (g01 * (1 - tx) + g11 * tx) * ty;
+      if (Number.isNaN(g)) continue;
+      const o = Math.floor(j / k) * TILE + Math.floor(i / k);
+      if (s - g > top[o]!) top[o] = s - g;
+    }
+  const over = new Float32Array(TILE * TILE);
+  for (let i = 0; i < over.length; i++) if (top[i]! > HLOD_MIN && !Number.isNaN(ground[i]!)) over[i] = top[i]!;
+  return over;
+}
+/** the overground added on the ground, in place (the tests' and the tools' view of the drawn surface) */
+export function addOverground(ground: Float32Array, surface: Float32Array, n: number) {
+  const over = overground(ground, surface, n);
+  for (let i = 0; i < over.length; i++) ground[i] = ground[i]! + over[i]!;
+}
+/** a tile's heights drawn: its ground, and its overground where it has one — the second half of its array (the CPU's
+ *  contacts, the Auto-GCAS's terrain, the heights over the ground read the first alone: the bare ground) */
+export const drawnHeight = (h: Float32Array, i: number) => (h.length > TILE * TILE ? h[i]! + h[TILE * TILE + i]! : h[i]!);
+
 /**
  * A tile's heights over France (I2): the LiDAR HD's terrain from IGN_LIDAR_Z on, RGE ALTI under it and where the LiDAR has
- * none, marked as a survey's (markFine); where the IGN has none at all (the sea, the countries round), Terrarium's.
+ * none, marked as a survey's (markFine); where the IGN has none at all (the sea, the countries round), Terrarium's. Up to
+ * HLOD_Z1 with `hlod`, the overground on it (I6: addOverground).
  */
-async function ignHeights(z: number, x: number, y: number, signal: AbortSignal): Promise<Float32Array> {
+async function ignHeights(z: number, x: number, y: number, signal: AbortSignal, hlod = false): Promise<Float32Array> {
   let h = z >= IGN_LIDAR_Z ? await ignGrid(IGN_LIDAR, z, x, y, signal) : null;
   const holes = (v: Float32Array | null) => !v || v.some((e) => Number.isNaN(e));
   if (holes(h)) {
@@ -309,12 +362,30 @@ async function ignHeights(z: number, x: number, y: number, signal: AbortSignal):
     else if (r) for (let i = 0; i < h.length; i++) if (Number.isNaN(h[i]!)) h[i] = r[i]!;
   }
   if (!h) return terrarium(z, x, y, signal);
+  let over: Float32Array | null = null;
+  if (hlod && z <= HLOD_Z1) {
+    const n = hlodSize(z);
+    let s = await ignGrid(IGN_MNS_LIDAR, z, x, y, signal, n);
+    let holes = 0;
+    if (s) for (const v of s) if (Number.isNaN(v)) holes++;
+    if (!s || holes > 0.02 * s.length) {
+      const r = await ignGrid(IGN_MNS_RGE, z, x, y, signal, n);
+      if (!s) s = r;
+      else if (r) for (let i = 0; i < s.length; i++) if (Number.isNaN(s[i]!)) s[i] = r[i]!;
+    }
+    if (s) over = overground(h, s, n);
+  }
   markFine(h, true);
   if (holes(h)) {
     const t = await terrarium(z, x, y, signal);
     for (let i = 0; i < h.length; i++) if (Number.isNaN(h[i]!)) h[i] = t[i]!;
   }
-  return h;
+  if (!over) return h;
+  // (the ground, then its overground: one array through the loads, the memory's cache and the texture's writes)
+  const both = new Float32Array(2 * TILE * TILE);
+  both.set(h);
+  both.set(over, TILE * TILE);
+  return both;
 }
 
 /** The heights of a tile from its PNG (Terrarium's encoding). */
@@ -380,6 +451,10 @@ export class EarthTiles {
    *  finer than the global data's (z 15 … 17); switched: every tile taken again */
   reliefOn = true;
   private reliefWas = true;
+  /** with the relief, its far levels' overground (I6, settings.earthIgnSilhouettes): up to HLOD_Z1 the IGN's surface —
+   *  Paris's towers, the forests' tops — on the ground; switched: every tile taken again */
+  hlodOn = true;
+  private hlodWas = true;
   private ortho: OrthoLevel[] = [];
   private orthoInflight = new Map<string, AbortController>();
   private orthoNone = new Set<string>();
@@ -554,9 +629,10 @@ export class EarthTiles {
   update(c: Vec3 | null, pixAngle: number, lead: Vec3 = [0, 0, 0], gaze: Vec3 = [0, 0, 0], agl?: number) {
     // (the orthophotos switched: the relief's tiles' imagery taken again — over France the IGN's or EOX's —, the tiles
     // kept past the windows dropped)
-    if (this.orthoOn !== this.orthoWas || this.reliefOn !== this.reliefWas) {
+    if (this.orthoOn !== this.orthoWas || this.reliefOn !== this.reliefWas || this.hlodOn !== this.hlodWas) {
       this.orthoWas = this.orthoOn;
       this.reliefWas = this.reliefOn;
+      this.hlodWas = this.hlodOn;
       this.cache.clear();
       for (const L of this.levels) L.key.fill(null);
       this.clear();
@@ -716,7 +792,7 @@ export class EarthTiles {
       // (over France the IGN's heights — the global data's where it has none —; elsewhere Terrarium's)
       const heights =
         this.reliefOn && L.z >= IGN_HZ0 && inOrthoBox(L.n, xw, y)
-          ? await ignHeights(L.z, xw, y, ctl.signal)
+          ? await ignHeights(L.z, xw, y, ctl.signal, this.hlodOn)
           : await terrarium(L.z, xw, y, ctl.signal);
       h = heights;
       this.loaded++;
@@ -790,10 +866,15 @@ export class EarthTiles {
     if (col && inside(L.valid, x, y) && L.key[s] === this.keyOf(L, x, y)) this.imagery++;
     L.key[s] = this.keyOf(L, x, y);
     L.data[s] = h;
-    const hb = new Uint32Array(h.buffer, h.byteOffset, h.length);
+    const hb = new Uint32Array(h.buffer, h.byteOffset, TILE * TILE);
     const texels = new Uint32Array(2 * TILE * TILE);
+    // (an overground drawn on its ground — I6 —, the ground's source mark kept in the sum's last bit)
+    const over = h.length > TILE * TILE ? h.subarray(TILE * TILE) : null;
     for (let i = 0; i < hb.length; i++) {
-      texels[2 * i] = hb[i]!;
+      if (over && over[i]! > 0) {
+        BITS[0] = h[i]! + over[i]!;
+        texels[2 * i] = (BITS_U[0]! & ~1) | (hb[i]! & 1);
+      } else texels[2 * i] = hb[i]!;
       texels[2 * i + 1] = col ? col[i]! : 0;
     }
     this.device.queue.writeTexture(
@@ -1040,7 +1121,8 @@ export class EarthTiles {
    * (trace.wgsl: earthTiles): the finest level within the footprint and the next coarser, blended by the
    * footprint and towards the windows' edges; what is left to the global map in rem.
    */
-  heightAt(q: Vec3, foot: number): TileSample {
+  /** the ground under q at a footprint [m]: the bare ground (`drawn`: with the far levels' overground, as the tracer draws it) */
+  heightAt(q: Vec3, foot: number, drawn = false): TileSample {
     let h = 0,
       res = 0,
       rem = 1;
@@ -1073,7 +1155,9 @@ export class EarthTiles {
           gy = v.y0 * TILE + j;
         const tx = Math.floor(gx / TILE),
           ty = Math.floor(gy / TILE);
-        return L.data[this.slotOf(L, tx, ty)]![(gy - ty * TILE) * TILE + (gx - tx * TILE)]!;
+        const d = L.data[this.slotOf(L, tx, ty)]!,
+          k = (gy - ty * TILE) * TILE + (gx - tx * TILE);
+        return drawn ? drawnHeight(d, k) : d[k]!;
       };
       const hz = sampleLevel(at, px, py, zf - L.z);
       h += rem * w * hz;

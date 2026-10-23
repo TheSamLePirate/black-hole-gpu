@@ -242,6 +242,37 @@ la référence (`earthPipeline: "trace"`), sans travail spécifique.
    WMTS)** est exactement cette représentation : au-delà de la portée du décor, lire le sursol `MNS − MNT` comme un
    relief de plus (une hauteur par texel, déjà dans le chemin des tuiles) donne les silhouettes de Paris et des
    massifs forestiers jusqu'à l'horizon, pour le prix d'une lecture. Valable partout où un MNS existe.
+
+   **Fait le 23/10 (I6).** Sur la France (réglage « Silhouettes lointaines (France) », avec le relevé IGN), les niveaux
+   z 11–13 portent le sursol de l'IGN : le MNS du LiDAR HD (celui de la RGE ALTI dans ses trous) moins le MNT, au-dessus
+   de 2 m (`earth-tiles.ts` `overground`). Le WMS-R **moyenne** ses échantillons : demandée au texel de z 11 (50 m), la
+   tour Montparnasse ne monte qu'à 156 m au lieu de 264. Le MNS est donc demandé deux fois plus fin sous z 13 (512²), et
+   chaque texel garde le **plus haut** de ses quatre échantillons de sursol (tour Montparnasse : 262 m). On prend le
+   maximum du sursol, jamais celui du MNS brut : sur un coteau, le point haut d'un texel est son bord amont (+7 m sur une
+   pente de 30 %). Une tuile lointaine coûte environ 1 Mo de plus. Le z 14 et les niveaux plus fins gardent le sol nu,
+   sous les bâtiments et les arbres de la scène : le sursol commence au bord de la fenêtre z 14 (≈ 3 km), là où la scène
+   s'arrête.
+
+   **Le sursol n'est que dessiné.** Le tableau d'une tuile lointaine porte son sol nu puis son sursol (`drawnHeight`),
+   et la texture du traceur reçoit leur somme. Le CPU (contacts, terrain de l'Auto-GCAS, hauteur sol, `sys.groundAt`)
+   ne lit que le sol nu. Le premier essai faisait voir les toits et les cimes à l'Auto-GCAS, qui déclenchait une ressource
+   en vol bas au-dessus de la banlieue.
+
+   Mesuré sur kerr-mini (e2e `hlod`, en cockpit et en raster, à 20 km au nord-est de Montparnasse, au-dessus des champs
+   de Gonesse, à 100 m du sol, cap sur Paris) :
+   - sommets dessinés contre le MNS LiDAR : tour Montparnasse 262 m (264), tour First 197 m (215), tour Eiffel 246 m (326,
+     le treillis) ; sans le sursol, 36 à 54 m ; le sol de la physique reste nu (55 m sous Montparnasse) ;
+   - coût, médianes d'un A/B/A/B aux mêmes pixels, sur la trace, l'ombrage raster et la visibilité : de −0,5 à +0,2 ms
+     d'une passe à l'autre (dans le bruit), et +0,1 / +1,2 ms à une sur deux / une sur quatre dans une passe précédente ;
+   - mais **+12 ms (+10 %) d'ombrage raster** dans une vue basse vers l'ouest au-dessus de la vallée de la Marne, où la
+     plus grande part de l'image est un sol lointain boisé.
+
+   Ce n'est donc pas « le prix d'une lecture » : la cause probable est le repère de distance du raster. Ses anneaux
+   lointains sont cuits avec l'empreinte de leurs nœuds (610 m), donc depuis des niveaux plus grossiers que z 11, sans le
+   sursol ; la marche d'ombrage doit alors retrouver plus haut la surface relevée. Correction possible, non faite : cuire
+   ces anneaux sur le maximum du sursol à leur empreinte. Au téléobjectif (6°), la silhouette de Paris borde l'horizon
+   avec le sursol, et l'horizon est plat sans lui (`docs/progress/hlod/hlod-paris-skyline.jpg`). À 20 km, dans la brume
+   d'un soir d'été, elle reste discrète en vue normale.
 2. **Une interface « source nationale », pas un cas IGN.** Les mêmes trois couches existent ailleurs, ouvertes :
    **swisstopo** (swissALTI3D 0,5 m, SWISSIMAGE 0,1 m — les Alpes côté Suisse, là où Kerr teste d'abord),
    Espagne (PNOA 0,25 m, LiDAR 2 m — Tarifa), Pays-Bas (AHN 0,5 m), États-Unis (3DEP 1 m, NAIP 0,6 m — Kennedy,
@@ -359,7 +390,7 @@ le focus, la navigation à la manette, les invites et le français/anglais du me
 | **I3** — fait (23/10) | Niveaux fins du cache de surface (2,4/1,2 m) et normales à 0,5 m — voir §4.2 | passe de visibilité mesurée, cible ≤ +2 ms : +0,22 ms |
 | **I4** — fait (23/10) | MNH → forêts, leurs pieds et ceux des bâtiments sur le sol IGN — voir §4.3 | captures de lisières/haies contre l'ortho : 76 % des arbres sur sa canopée (69 sans), 36 % de sa canopée sous un arbre (23 sans) |
 | **I5** — fait (23/10) | BD TOPO → bâtiments (tuiles vectorielles z 15), OSM gardé pour les routes et l'eau — voir §4.4 | hauteurs comparées au MNS sur un quartier : 1,6 m d'écart médian, 74 % à 3 m près (OSM : 3,8 m, 39 %) |
-| **I6** | HLOD lointain par `MNS − MNT` | silhouette de Paris à 20 km ; coût d'une lecture |
+| **I6** — fait (23/10) | HLOD lointain par `MNS − MNT` sur z 11–13 (dessin seul, le CPU garde le sol nu) — voir §7 | silhouette de Paris à 20 km : Montparnasse à 262 m (LiDAR 264) ; coût mesuré 0 à +1,2 ms (Gonesse), +12 ms dans une vue basse sur des forêts |
 | **I7** | Interface de source nationale ; swisstopo ensuite | Alpes suisses au même niveau |
 | **I8a** | Zones hors ligne, le socle : module pur `zoneTiles` (mêmes URL que le jeu, testé), cache `kerr-zones-v1` hors LRU dans le service worker, `storage.persist()`, téléchargement suspendable et repris, priorité au streaming du jeu, `__bh.pwa.zones` | test unitaire « URL de la zone = URL demandées en vol » ; e2e : zone de 5 km pré-cachée, réseau coupé, vol sans aucune requête de tuile et sol complet |
 | **I8b** | Réglages › Hors ligne : stockage, cache automatique, liste des zones, ajout avec estimation, progression ; raccourci dans la pause ; FR/EN | e2e à la souris et à la manette ; captures de l'onglet |
