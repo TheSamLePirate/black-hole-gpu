@@ -13,6 +13,8 @@ import {
 import {
   TERRAIN_CACHE_LEVELS,
   TERRAIN_CACHE_MAX_LAT,
+  TERRAIN_CACHE_PATCH_REF,
+  TERRAIN_CACHE_RING_LAST,
   TERRAIN_CACHE_ROUNDS,
   TERRAIN_CACHE_VEC4S,
   type TerrainWindow,
@@ -3216,8 +3218,8 @@ export class Renderer {
       // runs; the raster pipeline is the image itself, governed as the traced one)
       this.terrainRasterDiagnostic = inspecting || (terrainCacheEligible && s.earthTerrainCache) || (hinting && !rasterPrimary);
       this.terrainRasterLevel = Number.isFinite(s.earthTerrainRasterLevel)
-        ? Math.max(0, Math.min(5, Math.round(s.earthTerrainRasterLevel)))
-        : 2;
+        ? Math.max(0, Math.min(TERRAIN_CACHE_LEVELS - 1, Math.round(s.earthTerrainRasterLevel)))
+        : 0;
     }
     f[MOUTH_LIST_AT + 7] = terrainCacheEligible && this.terrainCacheWanted && s.earthTerrainCache ? 1 : 0;
     if (!o.probe) this.marsDustNow = f[61 * 4 + 2]!;
@@ -6495,7 +6497,7 @@ export class Renderer {
   /** a terrain diagnostic adds its own GPU work this frame (the inspector, the cache, the hints without the raster
    *  pipeline): the automatic quality held — main.ts reads it as terrainRasterInspecting */
   private terrainRasterDiagnostic = false;
-  private terrainRasterLevel = 2;
+  private terrainRasterLevel = 0;
   /** the last camera frame shades the raster patch's pixels one a pixel (earthPipeline "raster", trace.wgsl shade) */
   private rasterPrimaryOn = false;
   /** the clouds' transmittance map seen from the Sun (trace.wgsl cloudShadow — docs/PLAN-NUAGES-AAA.md N3; read by
@@ -6881,20 +6883,24 @@ export class Renderer {
     if (!this.rasterRingsOn || !this.lastNear || !this.lastCam) return out;
     const cv = this.context.canvas as HTMLCanvasElement;
     let finer = window;
-    for (let step = 1; step <= 2 && level + step < TERRAIN_CACHE_LEVELS; step++) {
-      const lv = level + step;
+    // (every coarser level out to the far rings' last — 2.4 km nodes —, each about the next finer; its step — the tracer's
+    // tolerance and the rings' sparser shading — counted from the patch's level of before I3: the finer ones as that patch)
+    const last = Math.max(TERRAIN_CACHE_RING_LAST, level + 2);
+    for (let lv = level + 1; lv <= last && lv < TERRAIN_CACHE_LEVELS; lv++) {
       const w = this.terrainSurfaceCache?.levelWindow(lv);
       // (a level not baked yet: none past it either — a ring's hole is the next finer one's)
       if (!w) break;
       const f = terrainRasterFrame(this.lastNear, this.lastCam, w, lv, target, { width: cv.width, height: cv.height }, "depth", s.fov, 1);
       f[30] = frame[30]!;
       f[31] = frame[31]!;
-      // (its nodes on the finer grid: four times its own index, less the finer window's — longitudes unwrapped, so modulo
-      // the finer level's round)
+      // (its nodes on the finer grid: so many times its own index — the two rounds' ratio, 4 or 2 —, less the finer
+      // window's — longitudes unwrapped, so modulo the finer level's round)
       const round = TERRAIN_CACHE_ROUNDS[lv - 1]!;
-      let dx = 4 * w.i - finer.i;
+      const ratio = round / TERRAIN_CACHE_ROUNDS[lv]!;
+      let dx = ratio * w.i - finer.i;
       dx -= Math.round(dx / round) * round;
-      out.push({ frame: f, level: lv, window: w, hole: [dx, 4 * w.j - finer.j], step });
+      const step = Math.max(0, lv - Math.max(level, TERRAIN_CACHE_PATCH_REF));
+      out.push({ frame: f, level: lv, window: w, hole: [dx, ratio * w.j - finer.j], ratio, step });
       finer = w;
     }
     return out;

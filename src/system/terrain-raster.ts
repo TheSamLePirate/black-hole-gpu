@@ -144,6 +144,8 @@ export interface TerrainRing {
   level: number;
   window: TerrainWindow;
   hole: [number, number];
+  /** its nodes' spacing over the next finer level's (4, or 2 between the finest two) */
+  ratio: number;
   step: number;
 }
 interface RingState {
@@ -481,7 +483,7 @@ export class TerrainRaster {
 
   private drawRing(pass: GPURenderPassEncoder, pipe: GPURenderPipeline, r: RingState, ring: TerrainRing, sources: TerrainCacheSources) {
     const d = this.device;
-    const key = `${ring.level}:${ring.window.i}:${ring.window.j}:${ring.hole[0]}:${ring.hole[1]}`;
+    const key = `${ring.level}:${ring.window.i}:${ring.window.j}:${ring.hole[0]}:${ring.hole[1]}:${ring.ratio}`;
     if (key !== r.key) {
       // (a plain grid — the runways' cuts are the patch's, near —, its cells under the finer level left out: the triangles
       // whose corners all fall inside it, its edge's band of RING_OVERLAP nodes kept — drawn both, the nearer kept, no crack;
@@ -490,8 +492,8 @@ export class TerrainRaster {
       const v = mesh.vertices;
       const last = TERRAIN_CACHE_N - 1;
       const inside = (k: number) => {
-        const x = v[3 * k]! * 4 + ring.hole[0],
-          y = v[3 * k + 1]! * 4 + ring.hole[1];
+        const x = v[3 * k]! * ring.ratio + ring.hole[0],
+          y = v[3 * k + 1]! * ring.ratio + ring.hole[1];
         return x > RING_OVERLAP && x < last - RING_OVERLAP && y > RING_OVERLAP && y < last - RING_OVERLAP;
       };
       const ix = mesh.indices;

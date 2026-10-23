@@ -364,13 +364,13 @@ const PATH_OFF = 1786u; // LUT_OFF + LUT_N + SYNC_N
 // the mountains' warp's grids (system/warp-grid.ts: TABLE_WARP — after the walking grid), their levels and nodes a side
 const WARP_OFF = 3115u;
 // the clear sky's light, physical (gpu-tables.ts TABLE_SKY; kernel skyAmbient writes it, skyIrradiance reads it)
-const SKY_OFF = 814530u;
+const SKY_OFF = 822856u;
 // the geoid's map (gpu-tables.ts TABLE_GEOID, system/geoid-grid.ts): N [m], GEOID_W × GEOID_H nodes, four a vec4
-const GEOID_OFF = 814642u;
+const GEOID_OFF = 822968u;
 const GEOID_W = 1440u;
 const GEOID_H = 720u;
 // the orthophotos' levels (gpu-tables.ts TABLE_ORTHO, system/earth-tiles.ts orthoParams): three vec4s each
-const ORTHO_OFF = 1073842u;
+const ORTHO_OFF = 1082168u;
 const ORTHO_LEVELS = 4u;
 const WARP_LEVELS = 3u;
 const WARP_N = 512u;
@@ -5748,10 +5748,53 @@ fn earthHeightStepG(q: vec3f, foot: f32) -> f32 {
   return max(h0 + (1.0 - g.x) * earthDetail(q, h0, max(foot * 4.0, 1.0), texelM), 0.0);
 }
 // the relief's own normal at q, no finer than the footprint
+// The relief's slopes from a survey's tiles at q (geodetic, unit) for a footprint foot [m], measured in the finest level's
+// own grid — its pixels from the camera's place, no float32 point of the unit sphere (good to ~0.4 m only) between them —:
+// x −∂h/∂east, y −∂h/∂north, z the weight (0: no survey's texel there, or no level fine enough — earthNormalAt's own). Down
+// to half a metre: the IGN's LiDAR (I3); elsewhere the global data's normals keep their drawn detail.
+fn earthSlopeFine(q: vec3f, foot: f32) -> vec3f {
+  if (P.tiles.w < 0.5) { return vec3f(0.0); }
+  let cosLat = sqrt(max(1.0 - q.z * q.z, 1e-12));
+  let dlon = atan2(-q.x * P.tiles.y + q.y * P.tiles.x, q.x * P.tiles.x + q.y * P.tiles.y);
+  let sz = clamp(q.z, -0.999999, 0.999999);
+  let dM = atanh((sz - P.tiles.z) / (1.0 - sz * P.tiles.z));
+  for (var li = 0; li < i32(TILE_LEVELS); li++) {
+    let l = TILE_LEVELS - 1u - u32(li);
+    let a = P.tileL[2u * l];
+    let b = P.tileL[2u * l + 1u];
+    if (b.w < 0.5) { continue; }
+    let p = a.xy + vec2f(dlon, -dM) * b.z;
+    let edge = min(min(p.x, p.y), min(b.x - p.x, b.y - p.y));
+    if (edge < 4.0) { continue; }
+    let texel = EARTH_RM * cosLat / b.z;
+    // (the finest level holding q, its texel no coarser than 10 m — coarser, the sphere's three heights are as good)
+    if (texel > 10.0) { return vec3f(0.0); }
+    if (!tileFine(l, vec2i(floor(p)))) { return vec3f(0.0); }
+    // (central differences over the footprint — a texel at least —, bilinear: the pixels' own measure of the ground)
+    let k = max(foot / texel, 1.0);
+    let he = tileSample(l, p + vec2f(k, 0.0), 0.0) - tileSample(l, p - vec2f(k, 0.0), 0.0);
+    let hs = tileSample(l, p + vec2f(0.0, k), 0.0) - tileSample(l, p - vec2f(0.0, k), 0.0);
+    // (Mercator's pixels square on the ground: east the same as south — y grows southwards)
+    let m = 2.0 * k * texel;
+    return vec3f(-he / m, hs / m, smoothstep(4.0, 12.0, edge));
+  }
+  return vec3f(0.0);
+}
 fn earthNormalAt(q: vec3f, foot: f32) -> vec3f {
   // (on foot: the shared walking grid's own normal where the ground was met on it, blended out at its rim)
   let walk = walkNormal();
   if (walk.w >= 0.999) { return walk.xyz; }
+  // (finer than 10 m over a survey's relief: its slopes in its own grid, down to half a metre — I3)
+  if (foot < 10.0) {
+    let sf = earthSlopeFine(geoQ(q), foot);
+    if (sf.z >= 0.999) {
+      var east = vec3f(-q.y, q.x, 0.0);
+      east = select(normalize(east), vec3f(0.0, 1.0, 0.0), dot(east, east) < 1e-10);
+      let north = cross(q, east);
+      let fine = normalize(q + sf.x * east + sf.y * north);
+      return select(fine, normalize(mix(fine, walk.xyz, walk.w)), walk.w > 0.0);
+    }
+  }
   // (no finer than 10 m: a float32 point of the unit sphere is good to ~0.4 m — finer differences would
   // show its steps, a grid)
   let e = max(foot, 10.0) / EARTH_RM;

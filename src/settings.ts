@@ -323,7 +323,7 @@ export interface Settings {
   earthOrtho: boolean; // over France, the IGN's orthophotos (0.2–0.8 m) finer than the terrain tiles' imagery (I1)
   earthIgnRelief: boolean; // over France, the IGN's relief (RGE ALTI 1 m, LiDAR HD 0.5 m) on the terrain tiles, three levels finer (I2)
   earthTerrainRasterView: "off" | "depth" | "normals" | "difference"; // diagnostic raster patch; no replacement of physical rendering
-  earthTerrainRasterLevel: number; // diagnostic cache level 0…5; single patch, no automatic LOD yet
+  earthTerrainRasterLevel: number; // the raster's patch: cache level 0…7 (0: 1.2 m, the finest), the coarser ones rings round it
   earthTerrainRasterUse: boolean; // experimental: the tracer's ground rays start from the raster patch's distance (verified, else marched as before)
   earthRasterScale: number; // the raster pipeline's render scale in motion (0.75 by default — with a quarter shaded: 8 to 11 ms less than the full scale at an eighth, as sharp over the Alps, ~1.5 dB softer at Tarifa; 1: the canvas's; under it, upscaled by the display — renderer.taauOn: the temporal upsampling instead —; the camera held, the full scale to refine)
   earthRasterShading: "auto" | "every" | "half" | "quarter" | "eighth" | "sixteenth"; // the raster pipeline's shading: auto (the default: the renderer's choice by the device's tier and its measured frame time, one in two to one in sixteen — renderer adaptRasterRate), every pixel a frame, one in two (a checkerboard turned each frame), one in 2 × 2, in 4 × 2, in 4 × 4 — the others rebuilt from their fresh neighbours on the same surface, the history first
@@ -698,7 +698,7 @@ export function defaultSettings(): Settings {
     earthOrtho: true,
     earthIgnRelief: true,
     earthTerrainRasterView: "off",
-    earthTerrainRasterLevel: 2,
+    earthTerrainRasterLevel: 0,
     earthTerrainRasterUse: false,
     earthPipeline: "raster",
     earthRasterShading: "auto",

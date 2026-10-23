@@ -119,6 +119,19 @@ qui efface le détail procédural plus fin que le relevé. Mesuré à Étretat s
 au lieu de 59°, la résolution de 1,2 m au lieu de 25 m. Pas fait : le maillage raster garde ses niveaux à 9,5 m (le
 relief fin n'y est que dans l'ombrage et les intersections affinées, pas dans les silhouettes : I3).
 
+**Fait le 23/10 (I3).** Le cache de surface du raster a deux niveaux de plus, nœuds à 1,2 et 2,4 m
+(`TERRAIN_CACHE_ROUNDS` : 2²⁵, 2²⁴, puis 2²² … 2¹², pas par 4) ; le patch se pose sur le plus fin (réglage
+`earthTerrainRasterLevel`, 0 par défaut, 155 m de côté) et les niveaux plus grossiers l'entourent en anneaux jusqu'au
+niveau 6 (nœuds de 2,4 km) — le trou de chaque anneau au rapport de pas de son voisin (×2 entre 0 et 1, ×4 ensuite).
+La tolérance du repère de distance et la cadence réduite des anneaux restent comptées depuis le niveau 4 : les
+anneaux 1–4 sont traités comme l'ancien patch. Les normales lisent le relevé dans sa propre grille (`earthSlopeFine` :
+le niveau valide le plus fin, texel ≤ 10 m, différences centrées à l'empreinte du pixel, jusqu'au demi-mètre de z 17)
+là où l'empreinte passe sous 10 m. Mesuré à Étretat sur kerr-mini (e2e `raster-fine-relief`, vue tenue, mêmes pixels —
+échelle 0,75, ombrage un sur deux —, niveau 4 / 0 / 4) : passe de visibilité 1,39 → 1,61 ms (1,38 au retour, soit
+**+0,22 ms**), ombrage raster 108,3 → 105,0 ms (−3 % : le repère plus juste raccourcit la marche). Limites : les
+directions des nœuds cuites en f32 (≈ 0,4 m à la surface) bruitent un peu le niveau 1,2 m ; les découpes des pistes
+ne se font que dans le patch (155 m désormais), les anneaux sont des grilles simples.
+
 Débit *(estimation)* : 256 Ko par tuile non compressée en WMS-R, ≈ 1,5 Mo/s en vol bas à 150 m/s sur z 15–17 :
 acceptable sur fibre, lourd en 4G — quantifier à 16 bits (cm) dans le worker avant le cache PWA, et réserver
 z 17 au‑dessous de ≈ 1 500 m de hauteur sol. 40 req/s par IP : large pour un joueur (8–16 en vol), **pas pour un
@@ -299,7 +312,7 @@ le focus, la navigation à la manette, les invites et le français/anglais du me
 | **I0** — fait (23/10) | Géoïde EGM2008 (sol, mer, IGN) — `src/system/geoid.ts`, la table du traceur, `seaAltitudeOver` ; voir §5 | vols de référence et atterrissages inchangés à l'issue près ; trafic ADS-B posé sur les pistes |
 | **I1** — fait (23/10) | Ortho IGN z 15–18 dans `earth-tiles.ts`, recalage couleur, attribution — et l'imagerie des niveaux z 9–14 prise à l'IGN en France ; voir §4.1 | captures A/B Chamonix, CdG, Paris en cockpit ; FPS inchangé (`raster-flight`) |
 | **I2** — fait (23/10) | Hauteurs RGE ALTI + LiDAR HD (WMS-R 3857), `TILE_RES_MIN` par source, bruit effacé — voir §4.2 | `shade` −5 ms attendu en France ; aucune couture au bord |
-| **I3** | Niveaux fins du cache de surface (2,4/1,2 m) et normales à 0,5 m | passe de visibilité mesurée, cible ≤ +2 ms |
+| **I3** — fait (23/10) | Niveaux fins du cache de surface (2,4/1,2 m) et normales à 0,5 m — voir §4.2 | passe de visibilité mesurée, cible ≤ +2 ms : +0,22 ms |
 | **I4** | MNH → forêts | captures de lisières/haies contre l'ortho |
 | **I5** | BD TOPO → bâtiments | hauteurs comparées au MNS sur un quartier |
 | **I6** | HLOD lointain par `MNS − MNT` | silhouette de Paris à 20 km ; coût d'une lecture |
