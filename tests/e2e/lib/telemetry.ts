@@ -112,6 +112,8 @@ class Recorder {
   private page: Recordable | null = null;
   private file = "";
   private k = 0;
+  /** a test running (begun, not ended): a page booted inside it serves that test, not the file's setup */
+  private inTest = false;
   private dir = "";
   private wall0 = Date.now();
   private sim0: number | null = null;
@@ -136,7 +138,8 @@ class Recorder {
     this.page = page;
     if (file !== this.file) {
       this.file = file;
-      this.k = 0;
+      // (booted inside the file's first test — most of them —: that test's record, not a setup's)
+      this.k = this.inTest ? 1 : 0;
       this.open();
     }
     // (the banner on a Chrome one sees: the file, the test running, what it proves — lib/banner.ts)
@@ -165,6 +168,7 @@ class Recorder {
     if (!this.enabled) return;
     await this.pull();
     if (this.k === 0 && this.dir) this.summary();
+    this.inTest = true;
     this.k++;
     this.open();
     await showBanner(this.page, this.file, this.k);
@@ -173,6 +177,7 @@ class Recorder {
 
   /** A test ends (preload's afterEach): its last samples, its graphs, a picture, its summary. */
   async end() {
+    this.inTest = false;
     if (!this.enabled || !this.dir) return;
     await this.pull();
     const page = this.page;

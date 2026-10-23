@@ -12,6 +12,9 @@ interface FileInfo {
   suite: string;
   about: string;
   tests: string[];
+  /** its header's "Duration:" line — how long it takes (docs/E2E.md) —, and its "Done when:" line — what ends it */
+  duration: string;
+  done: string;
 }
 
 const cache = new Map<string, FileInfo>();
@@ -45,12 +48,30 @@ export function fileInfo(path: string): FileInfo {
   const tests = [...src.matchAll(new RegExp(String.raw`\btest(?:\.skipIf\([^)]*\)|\.if\([^)]*\))?\(\s*${title}`, "g"))]
     .map(pick)
     .filter((t) => !f || f.test(t) || f.test(full(t)));
-  // (the header: the first block of line comments — after the imports —, its lines joined)
+  // (the header: the first block of line comments — after the imports —, its lines joined; its "Duration:" and "Done when:"
+  // lines apart, each running on to the next tagged line or the header's end)
   const lines = src.split("\n");
   const start = lines.findIndex((l) => l.startsWith("//") && !l.includes("biome-ignore"));
   const about: string[] = [];
-  for (let k = start; k >= 0 && k < lines.length && lines[k]!.startsWith("//"); k++) about.push(lines[k]!.replace(/^\/\/\s?/, ""));
-  const info = { name: basename(path), suite: suite ? pick(suite) : "", about: about.join(" ").replace(/\s+/g, " ").trim(), tests };
+  const tagged: Record<"duration" | "done", string[]> = { duration: [], done: [] };
+  let into: string[] = about;
+  for (let k = start; k >= 0 && k < lines.length && lines[k]!.startsWith("//"); k++) {
+    const l = lines[k]!.replace(/^\/\/\s?/, "");
+    const m = l.match(/^(Duration|Done when):\s*(.*)$/i);
+    if (m) {
+      into = m[1]!.toLowerCase() === "duration" ? tagged.duration : tagged.done;
+      into.push(m[2]!);
+    } else into.push(l);
+  }
+  const join = (x: string[]) => x.join(" ").replace(/\s+/g, " ").trim();
+  const info = {
+    name: basename(path),
+    suite: suite ? pick(suite) : "",
+    about: join(about),
+    tests,
+    duration: join(tagged.duration),
+    done: join(tagged.done),
+  };
   cache.set(path, info);
   return info;
 }
@@ -61,7 +82,7 @@ function script(file: string, k: number): string {
   const head = k === 0 ? "setting up" : `test ${k}/${I.tests.length || "?"}`;
   const now = k === 0 ? I.suite || I.name : (I.tests[k - 1] ?? "");
   const about = I.about.length > 420 ? `${I.about.slice(0, 417)}…` : I.about;
-  const data = JSON.stringify({ file: I.name, head, now, about });
+  const data = JSON.stringify({ file: I.name, head, now, about, duration: I.duration, done: I.done });
   return `(() => { const d = ${data}; let el = document.getElementById("e2e-banner");
     if (!el) { el = document.createElement("div"); el.id = "e2e-banner"; el.setAttribute("aria-hidden", "true");
       el.style.cssText = "position:fixed;left:12px;bottom:12px;z-index:2147483647;max-width:min(560px,calc(100vw - 24px));padding:10px 14px;border-radius:10px;background:rgba(8,12,20,.82);border:1px solid rgba(255,200,90,.55);color:#e8eef6;font:13px/1.35 system-ui,-apple-system,sans-serif;pointer-events:none;box-shadow:0 6px 24px rgba(0,0,0,.45)";
@@ -71,6 +92,18 @@ function script(file: string, k: number): string {
     row("E2E · " + d.file + " — " + d.head, "font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#ffc85a;margin-bottom:3px");
     row(d.now, "font-weight:650;font-size:14px;margin-bottom:4px");
     if (d.about) row(d.about, "font-size:12px;color:#b9c4d2;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden");
+    // (how long it takes against the time gone — since this file's or test's banner first went up —, and what ends it)
+    const key = d.file + "|" + d.head;
+    if (window.__e2eBannerKey !== key) { window.__e2eBannerKey = key; window.__e2eBannerT0 = Date.now(); }
+    const clock = document.createElement("div");
+    clock.style.cssText = "font-size:12px;color:#ffc85a;margin-top:4px;font-variant-numeric:tabular-nums";
+    el.append(clock);
+    const tick = () => { const s = Math.round((Date.now() - window.__e2eBannerT0) / 1000);
+      clock.textContent = "⏱ " + Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") + (d.duration ? " / " + d.duration : ""); };
+    tick();
+    clearInterval(window.__e2eBannerTimer);
+    window.__e2eBannerTimer = setInterval(tick, 1000);
+    if (d.done) row("Done when: " + d.done, "font-size:12px;color:#9fe0a8;margin-top:2px");
     return 1; })()`;
 }
 

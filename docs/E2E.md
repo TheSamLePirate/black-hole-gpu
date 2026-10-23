@@ -64,6 +64,9 @@ How it shows, and how to override it:
   what is being tried: the file, the test (its place, its title — the `-t` filter applied) and what the file proves
   (its header comment), read from the test file itself (`tests/e2e/lib/banner.ts`). See-through to the pointer,
   hidden for every screenshot; `E2E_BANNER=0` leaves it out. So every e2e file's header comment says what it proves.
+  Two lines of the header are shown apart: `// Duration: ~12 min on kerr-mini …` (beside the time gone since the test
+  began: `⏱ 3:12 / ~12 min`) and `// Done when: …` (what ends it — its last step); each runs on to the next tagged line
+  or the header's end. A test that boots its page inside itself (most) shows as that test, not as the file's setup.
   (`remote.ts run --hold 20` / `bun run e2e --remote --hold 20 …`).
 - Measurement scripts (`bench.ts`, `trace-ab.ts`, `gallery.ts`, `quality.ts`, `check-wgsl.ts`) are always
   headless: a window's frame rate follows the display. They still take the lock.

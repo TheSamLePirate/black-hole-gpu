@@ -67,7 +67,9 @@ test.skipIf(!E2E)(
             earthSurface:"off", earthScenery:"off", dynamicResolution:false, realtimeSubsampling:1, pixelRatio:1, temporalReprojection:false, fpsCap:0,
             earthTerrainCache:false, earthTerrainRasterLevel:${LEVEL}, earthTerrainRasterView:"off", earthTerrainRasterUse:false,
             pose:{body:"earth", at:[${PLACE.at[0]},${PLACE.at[1]}], altKm:${pose.altKm}, look:"earth", off:${JSON.stringify(pose.off)}}};
-          __bh.preset("Hint"); __bh.resize(); return true; })()`);
+          __bh.preset("Hint");
+          // (the hints in the traced pipeline — the raster one, the default, a preference no scene sets, shades the patch itself)
+          __bh.settings.earthPipeline = "trace"; __bh.resize(); return true; })()`);
         const trace: Record<string, number[]> = { off: [], on: [] };
         const images: Record<string, ReturnType<typeof readPng>> = {};
         let stats: Record<string, unknown> = {};

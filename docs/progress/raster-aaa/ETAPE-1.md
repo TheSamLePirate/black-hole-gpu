@@ -263,3 +263,34 @@ la même vue convergée. Les mesures sur vue figée cachaient un défaut grave :
   défaut : la gigue propre à chaque rayon.
 - Affûtage RCAS 0,6 au lieu de 0,3 (33,7 dB à Tarifa) et poids 0,15 des pixels reconstruits dans l'historique (36,7 à
   Tarifa, 33,7 dans les Alpes) : sans gain net — réglages par défaut gardés (les vols diffèrent un peu : ±1 dB).
+
+## Audit du 23 octobre — avant la fusion dans main
+
+Relecture complète de la branche (pipeline TypeScript, shaders, météo/mer/réglages/tests), fusion à blanc avec main
+(A320, radar, crew : aucun conflit, `tsc`, WGSL et Biome verts). Décision du joueur : **le raster par défaut, adapté à
+chaque appareil, le tracé au choix** (Réglages ▸ Graphismes ▸ Rendu de la Terre).
+
+| Constat | Correction |
+|---|---|
+| **Bloquant** — les verrous écrits pour l'inspecteur (`terrainRasterRequested`) gelaient tout le régulateur dès que le raster tournait : bloc automatique, calibration, résolution dynamique | `terrainRasterDiagnostic` (inspecteur, cache, indices seuls) gèle ; le raster est gouverné comme le tracé ; avec la résolution dynamique, `earthRasterScale` plafonne l'échelle en mouvement |
+| **Bloquant** — la lumière physique du ciel (`skyFlat`) était celle du lieu de la caméra, sans la hauteur du Soleil ni l'éclipse du point : ombre de la Lune éclairée vue d'avion ou d'orbite, bande éclairée sur la face de nuit | la table porte `mu0` et la part d'éclipse au lieu de la caméra ; chaque point reçoit la lumière × ses rapports, l'ancien modèle là où ceux de la caméra sont trop faibles (sa nuit, sa totalité) |
+| **Bloquant** — les cinq textures `rgba32float` de la passe de nuages n'étaient jamais libérées (23–41 Mo à chaque redimensionnement en 1080p), et allouées aux rendus hors ligne (660 Mo en 8K) | libérées avec la cible ; vue en direct seulement ; refaites seulement quand leur taille change (l'historique des nuages gardé aux arrivées de tuiles) |
+| Le sol manquait tant que les noyaux `shade`/`shadeMark` compilaient | ces images-là, le raster retiré : le traceur prend ses pixels |
+| Marques `RASTER_STALE` jamais effacées (pixels de ciel reconstruits en sol hors cockpit) | `shadeMark` passe sur chaque pixel et efface les marques hors couverture ou sans sol ; `resolve`/`temporal` ne les lisent qu'au taux de l'image (`R.f.y`, 0 sans raster) |
+| Gerbe de vol stationnaire pour tout appareil lent sous 150 m (A320 à l'arrêt) | seulement le F-35B converti en STOVL (conversion × tuyère) ; envergure de l'A320 |
+| Nuages tamponnés dessinés devant un relief plus proche ; lecture SSR en course ; NaN possibles (éclair sous un pôle, reflet vertical) | recalculés derrière le sol ; voisin hors du motif de l'image ; normalisations gardées |
+| Tonnerre à la distance depuis le niveau de la mer ; rafales de tonnerres en accéléré | depuis la hauteur de la caméra ; quatre à la fois au plus |
+| Maillage raster découpé à 30 m pour les pistes du monde (RD13, fusion avec main) | leur vraie demi-largeur et leur zone nivelée (largeur + 100 m) |
+| Chaque tuile invalidait les six niveaux du cache de hauteurs (anneaux lointains perdus quelques images) | niveaux gardés pendant leur nouvelle cuisson ; la portion puis ses anneaux d'abord |
+| Ciel ambiant et ombre des nuages près de tout corps ; ciel ambiant compilé sans la météo si la session commençait par beau temps ; carte d'ombres des arbres (16 Mo) créée sur tout appareil | près de la Terre seulement ; météo compilée ; carte créée au premier besoin |
+| Défauts alourdis pour tous (décor élevé, détail très loin) | gardés sur un appareil capable ; équilibré/normale sur un appareil modeste (tier ≤ 1) avec le sous-échantillonnage auto |
+| Sondes sans assertion et longues campagnes dans `bun run e2e` ; BH-API incomplet ; 15 Mo de PNG ; docs « trace par défaut » | `E2E_PROBE=1` / `RASTER_BENCH=1` ; BH-API complet (174) ; JPEG (2,6 Mo) ; plan et aides à jour |
+
+**L'adaptation à l'appareil.** `earthRasterShading: "auto"` (défaut) : le taux part de la classe de l'appareil (logiciel 1/16,
+modeste 1/8, autres 1/4), puis le renderer le règle sur le temps d'image mesuré face au budget de la qualité
+(`adaptRasterRate`, entre 1/2 et 1/16 — le bloc du ciel d'abord, puis le taux, puis l'échelle). Au plancher (1/16, échelle
+minimale, blocs ×8) et encore à plus d'une fois et demie le budget pendant 12 s en mouvement, le jeu repasse au pipeline
+tracé pour la session et le dit (`renderer.rasterFellBack`) ; changer le réglage le réessaie. Un taux fixe reste au choix.
+
+Laissé : la carte d'ombres du relief redessinée à chaque image (0,2 ms mesuré — un cache de plus ne paie pas son risque) ;
+quelques petites allocations par image (négligeables).

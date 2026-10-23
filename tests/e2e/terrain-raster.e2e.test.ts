@@ -23,7 +23,9 @@ const scene = (app: App, pose: (typeof POSES)[number], level: number, view = "of
     dynamicResolution:false, realtimeSubsampling:1, pixelRatio:1, temporalReprojection:true, fpsCap:0,
     earthTerrainCache:true, earthTerrainRasterLevel:${level}, earthTerrainRasterView:${JSON.stringify(view)},
     pose:{body:"earth", at:[28.6155,-80.6945], altKm:${pose.altKm}, look:"earth", off:${JSON.stringify(pose.off)}}};
-  __bh.preset("Raster pilot"); __bh.resize();
+  __bh.preset("Raster pilot");
+  // (the inspector over the traced pipeline — its reference: the raster pipeline, the default, a preference no scene sets)
+  __bh.settings.earthPipeline = "trace"; __bh.resize();
   return true;
 })()`);
 
