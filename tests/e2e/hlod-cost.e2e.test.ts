@@ -3,13 +3,14 @@ import { App, E2E, stopServer } from "./lib/app";
 
 // The far silhouettes' cost where the far ground is most of the view (docs/ANALYSE-IGN-LIDAR.md I6): low over the Marne's
 // valley 20 km east of the Tour Montparnasse, heading west over the woods of the Île-de-France — where the overground once
-// costs the raster's shading 12 ms (+10 %), where toward Paris it costs nothing measurable. Baking the surface cache's far rings
-// on the overground's top over each node's footprint (the hint over the drawn ground) was tried on 2026-10-23 and did not
-// help (+14 ms after, +12 before): the cause is elsewhere — the guard kept until it is found. The GPU's passes with the silhouettes and without, on / off / on / off — their medians, at
+// cost the raster's shading 12 ms (+10 %): the surface cache's 9.5 and 38 m rings read, at their nodes' footprint, the far
+// levels and their overground, where the pixels see the bare ground of the windows z 14 and finer — the hint a forest's
+// height over the ground drawn, its bracket missed, the whole march redone. Now baked over the survey on the tiles as the
+// pixels read them (terrain-cache.ts SURVEY_RES): +0.2 / +1.2 ms. The GPU's passes with the silhouettes and without, on / off / on / off — their medians, at
 // one pixel in two and in four shaded —, the same pixels, in the cockpit, held, in the raster pipeline; a held view of each.
 // (E2E_SHOTS=<dir>: hlod-marne-on / -off.)
 // Duration: ~12 min on kerr-mini.
-// Done when: the earth's passes measured with the silhouettes and without, at both rates — within 15 % more (the known 10–12 %).
+// Done when: the earth's passes with the silhouettes within 5 % of without, at both rates.
 
 const D = Math.PI / 180;
 // (the eye: 20 km from the Tour Montparnasse on a bearing of 90°, heading 270° back at it, 80 m over the ground)
@@ -85,7 +86,7 @@ describe.skipIf(!E2E)("the far silhouettes' cost", () => {
     await loaded(on ? "with the silhouettes" : "without");
   };
 
-  test("low over the Marne, the woods to the horizon: the silhouettes' cost measured, within 15 %", async () => {
+  test("low over the Marne, the woods to the horizon: the silhouettes' cost within 5 %", async () => {
     // (the date set, a second for the clock to take it, then the jump — never in the same tick)
     await app.js(`(() => { __bh.game.setDate("2026-07-10T16:30:00Z"); return 1; })()`);
     await Bun.sleep(1000);
@@ -117,7 +118,7 @@ describe.skipIf(!E2E)("the far silhouettes' cost", () => {
       console.log(
         `  the silhouettes' cost at ${k ? "one in four" : "one in two"}: ${(on - off).toFixed(2)} ms on the earth's passes, ${((100 * (on - off)) / off).toFixed(1)} % (on ${earth(a[k]!).toFixed(2)} / ${earth(c[k]!).toFixed(2)}, off ${earth(b[k]!).toFixed(2)} / ${earth(d[k]!).toFixed(2)})`,
       );
-      expect(on - off).toBeLessThan(0.15 * off);
+      expect(on - off).toBeLessThan(0.05 * off);
     }
     expect(app.cdp.errors).toEqual([]);
   }, 900_000);

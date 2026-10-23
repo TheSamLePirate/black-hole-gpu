@@ -11,6 +11,10 @@ import {
   terrainWindowParams,
 } from "./terrain-cache-layout";
 
+/** a data resolution [m] under which the node's ground is a survey's (earth-tiles.ts TILE_RES_FINE: its texel's; the
+ *  global data's never under TILE_RES_MIN, 25 m) — there, the cache baked on the tiles the pixels read (I6) */
+export const SURVEY_RES = 20;
+
 /** Read-only lookup, injected in place of the tracer's standalone stub. No new binding or optical path. */
 export function withTerrainCache(trace: string): string {
   const marker = /\/\/ BEGIN_TERRAIN_CACHE[\s\S]*?\/\/ END_TERRAIN_CACHE/;
@@ -136,7 +140,16 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   let sl = U.reference.y * cos(d.x) + U.reference.x * sin(d.x);
   let sa = U.reference.z * cos(d.y) + U.reference.w * sin(d.y);
   let ca = U.reference.w * cos(d.y) - U.reference.z * sin(d.y);
-  outHeights[gid.y * ${TERRAIN_CACHE_N}u + gid.x] = earthHeightExactG(vec3f(ca * cl, ca * sl, sa), U.scale.y);
+  let q = vec3f(ca * cl, ca * sl, sa);
+  var h = earthHeightExactG(q, U.scale.y);
+  // (over a survey — France —: its tiles as the pixels read them, the finest held at the node, not at the node's footprint.
+  // A coarse node's footprint reads the far levels (z 11 … 13), their overground on them — I6 —, where the camera's pixels see
+  // the bare ground of the windows z 14 and finer: the 9.5 and 38 m rings stood a forest's height over the ground drawn, the
+  // hint's bracket missed it, the whole march redone (+10 % of the raster's shading low over the woods). Beyond those windows
+  // the finest held is a far level itself: its overground kept, as drawn)
+  let fine = earthH(q, 1.0, false);
+  if (fine.y < ${SURVEY_RES}) { h = max(h + fine.x - earthH(q, U.scale.y, false).x, 0.0); }
+  outHeights[gid.y * ${TERRAIN_CACHE_N}u + gid.x] = h;
 }`;
 }
 
