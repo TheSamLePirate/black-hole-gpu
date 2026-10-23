@@ -577,9 +577,9 @@ await __bh.pwa.ready()
 ```
 *Used in:* `tests/e2e/pwa.e2e.test.ts`.
 
-### `__bh.pwa.stats()` → Promise<{ build, shell, tiles, tileBytes, tileBudget } | null>
+### `__bh.pwa.stats()` → Promise<{ build, shell, tiles, tileBytes, tileBudget, zoneTiles, zoneBytes, served } | null>
 
-The cache's figures: the build's id, the shell's number of files, the tiles cached and their bytes against the budget. `null` when the worker does not answer (3 s).
+The cache's figures: the build's id, the shell's number of files, the tiles cached and their bytes against the budget; the offline zones' tiles and bytes (`kerr-zones-v1`, out of the budget); `served` — `{ zone, lru, network }`, the tiles the worker answered since it started from a zone, from the budgeted cache, from the network (a flight within a zone: `network` unchanged). `null` when the worker does not answer (3 s).
 
 ```js
 (await __bh.pwa.stats())?.tiles > 5
@@ -589,6 +589,22 @@ The cache's figures: the build's id, the shell's number of files, the tiles cach
 ### `__bh.pwa.clearTiles()` → Promise<void>
 
 Empties the tiles' cache (the terrain tiles the worker kept). Used by a test that starts from an empty cache.
+
+### `__bh.pwa.zones` → Zones \| null (`src/pwa-zones.ts`, I8a)
+
+The offline zones, once the worker is in (null before, or without one). A zone: every tile the game's windows would want with the camera anywhere in a disc, to its profile's levels (`system/zones.ts`: `airport` — relief z 17, orthophotos z 18 —, `low` 16/17, `valley` 15/16, `overflight` 14/15), as chains of fetches (a source's fallback asked only where the one before falls short), the sources and the detail's reach of the moment kept in its record. Fetched by the worker 24 chains a batch, waiting while the game streams its own tiles; resumed after a reload.
+
+| member | → | what |
+|---|---|---|
+| `estimate({ lat, lon, radiusKm, profile })` | `{ chains, urls, bytes }` | what it would hold, its size by the kinds' means |
+| `add({ name, lat, lon, radiusKm, profile })` | Promise<id \| null> | added (the storage asked to persist), its download started |
+| `list()` | Promise<ZoneRecord[]> | `{ id, name, lat, lon, radiusKm, profile, total, cursor, done, bytes, none, failed, state: "downloading" \| "paused" \| "ready", sources, created }` |
+| `pause(id)` / `resume(id)` | Promise<void> | a pause resolves once its batch under way is in (nothing asked after); a ready zone's resume asks its failed again |
+| `remove(id)` | Promise<void> | its tiles no other zone holds deleted |
+| `active` | string \| null | the zone downloading |
+| `persisted()` | Promise<boolean> | `navigator.storage.persisted()` |
+
+*Used in:* `tests/e2e/zones.e2e.test.ts`.
 
 ### `__bh.pwa.registration` → ServiceWorkerRegistration \| null
 

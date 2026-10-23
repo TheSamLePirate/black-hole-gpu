@@ -84,7 +84,7 @@ export const ORTHO_Z0 = 15;
 export const ORTHO_Z1 = 18;
 export const ORTHO_LEVELS = ORTHO_Z1 - ORTHO_Z0 + 1;
 /** their windows' tiles a side (always 4: 3.4 km at z 15 down to 425 m at z 18, at 48°) and its texels */
-const ORTHO_SPAN = 4;
+export const ORTHO_SPAN = 4;
 const ORTHO_CLIP = TILE * ORTHO_SPAN;
 /** the tracer's table for them (gpu-tables.ts TABLE_ORTHO): three vec4s a level, then the IGN's box [rad] and on */
 export const ORTHO_PARAM_VEC4S = 3 * ORTHO_LEVELS + 2;
@@ -394,6 +394,11 @@ export const IGN: NationalSource = {
   fit: ORTHO_FIT,
   heightsFrom: IGN_HZ0,
   heights: ignGround,
+  heightUrls: (z, x, y, hlod) => [
+    ...(z >= IGN_LIDAR_Z ? [ignHeightUrl(IGN_LIDAR, z, x, y)] : []),
+    ignHeightUrl(IGN_RGEALTI, z, x, y),
+    ...(hlod && z <= HLOD_Z1 ? [ignHeightUrl(IGN_MNS_LIDAR, z, x, y, hlodSize(z)), ignHeightUrl(IGN_MNS_RGE, z, x, y, hlodSize(z))] : []),
+  ],
 };
 /** the national sources, the more specific first (national.ts): swisstopo, then the IGN */
 export const NATIONAL: readonly NationalSource[] = [SWISSTOPO, IGN];
@@ -928,6 +933,16 @@ export class EarthTiles {
       [TILE, TILE, 1],
     );
     this.complete(L);
+  }
+
+  /** The tiles each orthophotos' level's window wants (z, x, y). */
+  orthoWanted(): [number, number, number][] {
+    const out: [number, number, number][] = [];
+    for (const O of this.ortho) {
+      if (!O.want) continue;
+      for (let y = O.want.y0; y < O.want.y1; y++) for (let x = O.want.x0; x < O.want.x1; x++) out.push([O.z, ((x % O.n) + O.n) % O.n, y]);
+    }
+    return out;
   }
 
   /** The tiles each level's window wants (z, x, y): what the loads fetch. */

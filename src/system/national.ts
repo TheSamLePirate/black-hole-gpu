@@ -34,6 +34,8 @@ export interface NationalSource {
     signal: AbortSignal,
     hlod: boolean,
   ): Promise<{ h: Float32Array; over: Float32Array | null } | null>;
+  /** every URL `heights` may fetch for a tile, its fallbacks included (the offline zones' — zones.ts) */
+  heightUrls(z: number, x: number, y: number, hlod: boolean): string[];
 }
 
 /** a point in an outline (longitude, latitude pairs) — even–odd */
@@ -129,6 +131,14 @@ export const SWISSTOPO: NationalSource = {
   orthoUrl: swissimageUrl,
   fit: SWISS_FIT,
   heightsFrom: 11,
+  heightUrls(z, x, y) {
+    const n = 2 ** z;
+    const lat = (t: number) => Math.atan(Math.sinh(Math.PI * (1 - (2 * t) / n))) / D;
+    const g = swissTerrainLevel(z);
+    return geodeticTilesOver(g, (x / n) * 360 - 180, lat(y + 1), ((x + 1) / n) * 360 - 180, lat(y)).map(([gx, gy]) =>
+      swissTerrainUrl(g, gx, gy),
+    );
+  },
   async heights(z, x, y, signal) {
     const n = 2 ** z;
     const lat = (t: number) => Math.atan(Math.sinh(Math.PI * (1 - (2 * t) / n))) / D;

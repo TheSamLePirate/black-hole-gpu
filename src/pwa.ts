@@ -12,6 +12,11 @@ export interface PwaStats {
   tiles: number;
   tileBytes: number;
   tileBudget: number;
+  /** the offline zones' tiles and bytes (I8a) */
+  zoneTiles: number;
+  zoneBytes: number;
+  /** the tiles served since the worker started: from a zone, from the budgeted cache, from the network */
+  served: { zone: number; lru: number; network: number };
 }
 
 export interface Pwa {
@@ -25,6 +30,10 @@ export interface Pwa {
   /** a new build installed and waiting: reload onto it */
   update(): void;
   readonly waiting: boolean;
+  /** a message to the worker, its answer (null: no worker, or none within `timeoutMs`) */
+  talk<T>(msg: object, timeoutMs?: number): Promise<T | null>;
+  /** the offline zones (src/pwa-zones.ts — I8a; main.ts sets them): null with no worker */
+  zones: import("./pwa-zones").Zones | null;
 }
 
 export function wantsPwa(loc: Location = location): boolean {
@@ -57,14 +66,14 @@ export function installPwa(o: { toast: (msg: string) => void; dev?: boolean }): 
   }
   const pwa: { registration: ServiceWorkerRegistration | null; waiting: ServiceWorker | null } = { registration: null, waiting: null };
   let readyP: Promise<boolean> = Promise.resolve(false);
-  const talk = <T>(msg: object): Promise<T | null> =>
+  const talk = <T>(msg: object, timeoutMs = 3000): Promise<T | null> =>
     new Promise((res) => {
       const w = navigator.serviceWorker.controller ?? pwa.registration?.active;
       if (!w) return res(null);
       const ch = new MessageChannel();
       ch.port1.onmessage = (e) => res(e.data as T);
       w.postMessage(msg, [ch.port2]);
-      setTimeout(() => res(null), 3000);
+      setTimeout(() => res(null), timeoutMs);
     });
   if (wantsPwa() && !o.dev) {
     readyP = (async () => {
@@ -143,5 +152,7 @@ export function installPwa(o: { toast: (msg: string) => void; dev?: boolean }): 
     get waiting() {
       return !!pwa.waiting;
     },
+    talk,
+    zones: null,
   };
 }

@@ -76,6 +76,7 @@ import { NetSession } from "./ui/netsession";
 import { NetVoice } from "./ui/netvoice";
 import type { JetInputs } from "./f35/pose";
 import { installPwa } from "./pwa";
+import { createZones } from "./pwa-zones";
 import { PauseMenu } from "./ui/pause";
 import type { PauseContext } from "./ui/pausemenu";
 import { PlayerSettings } from "./ui/settings/player";
@@ -203,7 +204,7 @@ import { fmtDate, GameTools } from "./game/tools";
 import { rangerStatus, type RangerStatus } from "./game/status";
 import { GameToolsWindow, rangerView } from "./ui/gametools";
 import { applyTuning } from "./game/tuning";
-import { demotionEligible, dynamicResolutionOn, promotionEligible } from "./quality-policy";
+import { demotionEligible, dynamicResolutionOn, earthDetailFor, promotionEligible } from "./quality-policy";
 import { adapterId, cappedRatio, demoted, promoted, rememberLevel } from "./tier";
 import { cpuProf } from "./perf";
 import { visibleTimeout } from "./util/visible-timeout";
@@ -289,7 +290,7 @@ import { ORDERS, type OrderId } from "./game/orders";
 import { FORMATION_IDS, FORMATIONS } from "./game/formations";
 import { TrafficFeed } from "./traffic/feed";
 import { unitsFor } from "./ui/unitsys";
-import { ZG1 } from "./system/earth-tiles";
+import { TILE_REACH, ZG1 } from "./system/earth-tiles";
 
 /** The craft lost to the air's screen (ui/craftlost.ts) — made at once: a placing hides it. */
 const craftLost = new CraftLost();
@@ -884,6 +885,20 @@ async function main() {
   });
   // the offline cache and the install (PLAN-MONDE M1): off on the dev server's hot reload
   const pwa = installPwa({ toast: (m) => panel.toast(m), dev: DEV && !/[?&]sw=1/.test(location.search) });
+  // (the offline zones — I8a —, once the worker is in: their downloads after the game's own tiles)
+  void pwa.ready().then((ok) => {
+    if (!ok) return;
+    pwa.zones = createZones({
+      talk: pwa.talk,
+      busy: () => renderer.earthTiles.pending > 0 || renderer.earthTiles.orthoPending > 0,
+      sources: () => ({
+        ortho: settings.earthOrtho,
+        relief: settings.earthIgnRelief,
+        hlod: settings.earthIgnSilhouettes,
+        span: (TILE_REACH[earthDetailFor(settings, renderer.tier).reach] ?? TILE_REACH.normal).span,
+      }),
+    });
+  });
   // (the flight's jolts felt by the camera too — Cinemachine's impulses: controller/camrig.ts)
   haptics.onImpulse = (kind, k) => {
     const J = {

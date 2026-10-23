@@ -415,6 +415,56 @@ fractions comparables une fois le stockage persistant. **La France entière n'es
 - **Les millésimes changent** : une zone garde la date de son téléchargement, et « Mettre à jour » la refait.
   L'ortho IGN se renouvelle par département tous les 3 ans environ.
 
+**Fait le 23/10 (I8a) : le socle.** Le module pur `src/system/zones.ts` liste les tuiles d'une zone (`zoneTiles`) pour un
+profil (`ZONE_PROFILES` : aéroport z 18/17, vol bas z 17/16, vallée z 16/15, survol z 15/14, image/relief) avec les
+fonctions d'URL du jeu. Sa marge couvre les fenêtres menées au plus loin : `span + 1,5` tuiles autour du disque pour le
+relief, `ORTHO_SPAN + 0,5` pour les orthophotos. Un test vérifie que chaque tuile que veulent les fenêtres, et chaque URL
+demandée en vol, est dans la liste (`tests/zones.test.ts`).
+
+- **Des chaînes, pas une liste** : une tuile de relief est une chaîne (LiDAR → RGE ALTI → Terrarium ; MNS LiDAR → MNS
+  RGE). Le maillon suivant n'est demandé que si le précédent manque (grille trouée, image refusée), comme en vol. Une
+  zone ne prend donc que ce que le jeu lirait.
+- **Le service worker** : un cache `kerr-zones-v1` hors LRU, indexé tuile → zones dans IndexedDB (`zone-tiles`). Une
+  tuile partagée par deux zones n'est stockée qu'une fois (`zoneRelease`). `tile()` le consulte en premier et marque sa
+  réponse (`x-kerr-zone: 1`).
+- **Le téléchargement** se fait par lots de 64 chaînes, 16 en parallèle, que la page pousse au worker (`zone-fetch`).
+  Le WMS-R reste espacé de 125 ms. Les lots attendent que le jeu n'ait plus de tuiles en attente. La pause attend la
+  fin du lot en cours. La reprise repart du curseur enregistré, même après un rechargement. Les chaînes en échec sont
+  redemandées une fois à la fin. `navigator.storage.persist()` est demandé à l'ajout. L'API : `__bh.pwa.zones`
+  (docs/BH-API.md).
+- **Mesuré sur kerr-mini** (`tests/e2e/zones.e2e.test.ts`). Zone de 1,5 km sur Chamonix, profil vol bas, relief IGN
+  coupé : 4 190 chaînes, estimées à 182 Mo, réelles 204 Mo, téléchargées en ≈ 2 min. Mise en pause à mi-course, puis
+  reprise : prête 60 s après la reprise, 0 échec. Puis le cache LRU est vidé, le réseau coupé et la page rechargée :
+  vol à 120 m/s, 400 m au-dessus du fond de la vallée. Résultat : **≈ 530 tuiles servies par la zone, 0 par le réseau, le
+  sol complet, l'ortho à z 17.** Une zone de 3 km en survol (311 Mo) avait donné le même résultat.
+- **Le sol dessiné, pas seulement chargé** : la vue est tenue immobile et chaque pixel ombré (la recette des captures de
+  `swisstopo.e2e`), puis le test mesure le détail du fond de vallée à l'écran (écart moyen de luminance entre pixels
+  voisins). Hors ligne, il doit valoir au moins 60 % de la même vue en ligne. Une vue en mouvement ne sert pas de
+  preuve : le gouverneur la dessine en blocs de 8 pixels, et le sol y paraît lisse.
+- **Le 404 passager de l'IGN** : le WMTS répond parfois 404 pour une tuile qu'il a. Le worker redemande donc une fois
+  avant de la tenir pour absente. Sans cela, 0 à 5 tuiles par zone manquaient, et le jeu les demandait au réseau en vol.
+- **Les volumes, refaits sur les chaînes** (Chamonix) :
+
+  | Profil | Rayon | Relief IGN | Taille |
+  |---|---|---|---|
+  | Vol bas | 1,5 km | coupé | ≈ 180 Mo |
+  | Vol bas | 1,5 km | LiDAR / RGE ALTI | ≈ 470 Mo |
+  | Aéroport | 5 km | coupé | ≈ 430 Mo |
+  | Aéroport | 5 km | LiDAR / RGE ALTI | **≈ 1,9 Go** |
+  | Vol bas | 20 km | LiDAR / RGE ALTI | **≈ 4,8 Go** |
+
+  Les grilles WMS-R en float32 brut (256 Ko, 1 Mo à 512²) font ¾ de la taille. **I8c est donc nécessaire** avant
+  d'offrir des zones de relief IGN au-delà de quelques km.
+- **Limites connues** :
+  - Sous ~1,5 km au-dessus du sol en plein écran, le jeu demande l'ortho z 18. Le profil vol bas s'arrête à z 17
+    (0,8 m) ; aller plus loin quadruplerait l'ortho à chaque niveau. Hors ligne, ces tuiles échouent et le jeu dessine
+    z 17 à la place. Le test les compte à part.
+  - Les décors du monde (`earthScenery`) ne sont pas encore dans les zones.
+  - L'émulation hors ligne de Chrome (CDP) ne coupe pas les requêtes du worker lui-même. La preuve du test est donc
+    l'en-tête `x-kerr-zone`, pas l'échec des requêtes.
+
+![Vol bas hors ligne dans la vallée de Chamonix, tout servi par la zone](progress/zones/zones-chamonix-offline.jpg)
+
 ### 9.5 L'écran : Réglages › Hors ligne
 
 Un neuvième onglet, **Hors ligne**. Il n'est pas construit depuis le schéma : c'est un panneau sur mesure, qui garde
@@ -447,7 +497,7 @@ le focus, la navigation à la manette, les invites et le français/anglais du me
 | **I5** — fait (23/10) | BD TOPO → bâtiments (tuiles vectorielles z 15), OSM gardé pour les routes et l'eau — voir §4.4 | hauteurs comparées au MNS sur un quartier : 1,6 m d'écart médian, 74 % à 3 m près (OSM : 3,8 m, 39 %) |
 | **I6** — fait (23/10) | HLOD lointain par `MNS − MNT` sur z 11–13 (dessin seul, le CPU garde le sol nu) — voir §7 | silhouette de Paris à 20 km : Montparnasse à 262 m (LiDAR 264) ; coût mesuré 0 à +1,2 ms vers Paris ; dans une vue basse sur des forêts +12 ms, ramené à +0,2 / +1,2 ms (cache cuit sur les tuiles que lisent les pixels) |
 | **I7** — fait (23/10) | Interface de source nationale (`national.ts`) ; swisstopo : SWISSIMAGE, swissALTI3D par quantized-mesh — voir §7 | Alpes suisses au même niveau : voir le paragraphe |
-| **I8a** | Zones hors ligne, le socle : module pur `zoneTiles` (mêmes URL que le jeu, testé), cache `kerr-zones-v1` hors LRU dans le service worker, `storage.persist()`, téléchargement suspendable et repris, priorité au streaming du jeu, `__bh.pwa.zones` | test unitaire « URL de la zone = URL demandées en vol » ; e2e : zone de 5 km pré-cachée, réseau coupé, vol sans aucune requête de tuile et sol complet |
+| **I8a** — fait (23/10) | Zones hors ligne, le socle : module pur `zoneTiles` (mêmes URL que le jeu, testé), cache `kerr-zones-v1` hors LRU dans le service worker, `storage.persist()`, téléchargement suspendable et repris, priorité au streaming du jeu, `__bh.pwa.zones` | test unitaire « URL de la zone = URL demandées en vol » ; e2e : zone pré-cachée, réseau coupé, vol sans aucune requête de tuile et sol complet — voir §9.4 : 529 tuiles de la zone, 0 du réseau |
 | **I8b** | Réglages › Hors ligne : stockage, cache automatique, liste des zones, ajout avec estimation, progression ; raccourci dans la pause ; FR/EN | e2e à la souris et à la manette ; captures de l'onglet |
 | **I8c** | Relief quantifié sur 16 bits et compressé dans le cache (en vol aussi) | taille par tuile mesurée (cible ≈ 80 Ko) ; hauteurs identiques au centimètre |
 

@@ -107,6 +107,49 @@ export function evictions(entries: TileEntry[], budget = TILE_BUDGET): string[] 
  */
 export const SHELL_CACHE = (scope: string, build: string) => `kerr-shell:${new URL(scope).pathname}:${build}`;
 export const TILE_CACHE = "kerr-tiles-v1";
+/** the offline zones' tiles (I8a — system/zones.ts): never evicted by TILE_BUDGET, a tile kept while a zone holds it */
+export const ZONE_CACHE = "kerr-zones-v1";
+/** a zone's record (the worker's index) */
+export interface ZoneRecord {
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  radiusKm: number;
+  profile: string;
+  /** its tiles' chains of fetches (system/zones.ts zoneChains), and how many of their links are in */
+  total: number;
+  done: number;
+  bytes: number;
+  /** its tiles the sources have none of (a 404: an orthophoto at sea) */
+  none: number;
+  /** its chains asked and failed after every try (left out: asked again with "resume") */
+  failed: number;
+  state: "downloading" | "paused" | "ready";
+  /** the next chain to ask (their list rebuilt from the record: system/zones.ts zoneChains) */
+  cursor: number;
+  /** the sources its URLs followed (earth-tiles.ts orthoOn, reliefOn, hlodOn; the fine windows' side) */
+  sources: { ortho: boolean; relief: boolean; hlod: boolean; span?: number };
+  created: number;
+}
+/** a tile of the zones' cache: the zones that hold it */
+export interface ZoneTile {
+  url: string;
+  zones: string[];
+  size: number;
+}
+/** A zone's tiles to drop with it: those no other zone holds; the others' lists without it. */
+export function zoneRelease(tiles: readonly ZoneTile[], id: string): { drop: string[]; keep: ZoneTile[] } {
+  const drop: string[] = [],
+    keep: ZoneTile[] = [];
+  for (const t of tiles) {
+    if (!t.zones.includes(id)) continue;
+    const zones = t.zones.filter((z) => z !== id);
+    if (zones.length) keep.push({ ...t, zones });
+    else drop.push(t.url);
+  }
+  return { drop, keep };
+}
 export const isOwnShellCache = (name: string, scope: string) => name.startsWith(`kerr-shell:${new URL(scope).pathname}:`);
 
 /** a shell named before the scope was in the name (`kerr-shell-<build>`: one worker per origin assumed) */
