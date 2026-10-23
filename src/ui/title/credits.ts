@@ -173,6 +173,16 @@ export const CREDITS: CreditSection[] = [
         readme: "docs/ANALYSE-IGN-LIDAR.md",
       },
       {
+        what: {
+          fr: "La Suisse au plus près — photographies aériennes et relief",
+          en: "Switzerland up close — aerial photographs and relief",
+        },
+        who: "swisstopo (Office fédéral de topographie) — geo.admin.ch : SWISSIMAGE, swissALTI3D",
+        licence: "Géodonnées libres (OGD)",
+        url: "https://www.swisstopo.admin.ch",
+        readme: "docs/ANALYSE-IGN-LIDAR.md",
+      },
+      {
         what: { fr: "Le sol au plus près — WorldCover 2021, Sentinel-2", en: "The ground up close — WorldCover 2021, Sentinel-2" },
         who: "ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021)",
         licence: CC_BY,

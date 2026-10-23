@@ -49,6 +49,12 @@ export function classify(url: string, scope: string, method = "GET", dirs: reado
   if (u.hostname === "data.geopf.fr" && u.pathname === "/wmts" && u.searchParams.get("REQUEST") === "GetTile") return "tile";
   // (and its heights — the IGN's relief, I2 —: the WMS-R's grids, one a tile)
   if (u.hostname === "data.geopf.fr" && u.pathname === "/wms-r" && u.searchParams.get("REQUEST") === "GetMap") return "tile";
+  // (and its buildings — the BD TOPO, I5 —: the vector tiles of its TMS)
+  if (u.hostname === "data.geopf.fr" && u.pathname.startsWith("/tms/1.0.0/BDTOPO/")) return "tile";
+  // (swisstopo's over Switzerland — I7 —: SWISSIMAGE's WMTS tiles, the terrain service's meshes)
+  if (u.hostname === "wmts.geo.admin.ch" && u.pathname.startsWith("/1.0.0/ch.swisstopo.swissimage/")) return "tile";
+  if (u.hostname === "3d.geo.admin.ch" && u.pathname.startsWith("/ch.swisstopo.terrain.3d/") && u.pathname.endsWith(".terrain"))
+    return "tile";
   if (u.hostname === "tiles.openfreemap.org" && u.pathname.startsWith("/planet/")) return "tile";
   if (u.hostname === "mapproxy.terrascope.be" && u.pathname === "/mapproxy/service" && u.searchParams.get("REQUEST") === "GetMap")
     return "tile";

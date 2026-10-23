@@ -305,6 +305,33 @@ la référence (`earthPipeline: "trace"`), sans travail spécifique.
    **swisstopo** (swissALTI3D 0,5 m, SWISSIMAGE 0,1 m — les Alpes côté Suisse, là où Kerr teste d'abord),
    Espagne (PNOA 0,25 m, LiDAR 2 m — Tarifa), Pays-Bas (AHN 0,5 m), États-Unis (3DEP 1 m, NAIP 0,6 m — Kennedy,
    Edwards). Une source = une emprise, des URL par niveau, une résolution native, un géoïde, une attribution.
+
+   **Fait le 23/10 (I7) : l'interface, et swisstopo.** `src/system/national.ts` définit une source nationale : son
+   emprise et sa terre (`holds`), l'URL de ses orthophotos et leur recalage (`OrthoFit`), le premier niveau de son relief,
+   les hauteurs d'une tuile Web Mercator au-dessus de la mer (NaN là où elle n'a rien), plus le sursol (I6) si elle a un MNS.
+   Chaque tuile prend la source de son **centre**, la plus précise d'abord : `[SWISSTOPO, IGN]`, parce que la boîte de
+   l'IGN contient la Suisse. `earth-tiles.ts` construit la source IGN à partir de son code d'I1–I6, et tout ce qui
+   supposait la France passe par la source de la tuile : ortho, imagerie des niveaux z 9–14, relief, boîte du traceur
+   (désormais l'union des sources).
+   - **swisstopo** (Office fédéral de topographie, geo.admin.ch, Géodonnées libres (OGD), CORS ouvert) :
+     - **SWISSIMAGE** (10–25 cm) par son WMTS en Web Mercator, z 15–18 et z 9–14 comme l'IGN. Recalage ajusté sur douze
+       lieux par la méthode de l'IGN : tonalité (0,867 ; 1,473), gains (0,760 ; 1,101 ; 0,357).
+     - **swissALTI3D** (0,5 m) par les maillages **quantized-mesh** du service de terrain, en EPSG:4326 et TMS, jusqu'à
+       g 18. `src/system/quantized-mesh.ts` les décode et les rastérise dans la grille de la tuile : la hauteur du
+       triangle sous chaque centre de cellule. Une tuile z prend les maillages g = z − 1, une ou deux tuiles dont la
+       maille vaut environ deux texels. Une tuile alpine pèse environ 0,6 Mo (non compressée au transfert) et coûte
+       13–20 ms de rastérisation, découpée en tranches de 2 ms pour ne pas bloquer le fil principal.
+     - Hauteurs au-dessus de la mer (LHN95) : sommet de la Jungfrau à 4 157,8 m pour 4 158 m de cote officielle, à 4 m près
+       dès z 12.
+   - **Le contour** : swisstopo sert aussi au-delà de la frontière (Chamonix, Annemasse, Aoste), avec une qualité qui n'y
+     est pas établie. La terre suisse est donc le contour Natural Earth 1:10 M de la Suisse et du Liechtenstein, simplifié
+     à ~300 m (`national-borders.ts`).
+   - **La scène** : ses arbres et bâtiments posent leurs pieds sur le sol swisstopo, celui du traceur (`SwissGround` :
+     maillages g 13, ~14 m). Le MNH et la BD TOPO de l'IGN n'y sont plus demandés. Les arbres restent ceux de WorldCover
+     et les bâtiments ceux d'OSM : swisstopo n'a pas de modèle de canopée en service, et swissBUILDINGS3D n'est pas branché.
+   - Réglages renommés « Photographies aériennes (France, Suisse) » et « Relevés nationaux (France, Suisse) » ; mention
+     « © swisstopo » quand la caméra est en Suisse ; crédits du titre et du panneau ; tuiles gardées par le PWA (et les
+     tuiles BD TOPO d'I5, oubliées jusque-là).
 3. **Des packs préparés pour les lieux joués** (aéroports, Chamonix, Paris) : LiDAR 0,5 m pré-tuilé, quantifié,
    compressé, hébergé avec le jeu — pour le hors-ligne PWA et pour ne pas dépendre de la latence du WMS-R au roulage.
    La France entière à 0,5 m ne s'héberge pas (≈ 2 × 10¹² points, plusieurs To même compressés *(estimation)*) : le
@@ -419,7 +446,7 @@ le focus, la navigation à la manette, les invites et le français/anglais du me
 | **I4** — fait (23/10) | MNH → forêts, leurs pieds et ceux des bâtiments sur le sol IGN — voir §4.3 | captures de lisières/haies contre l'ortho : 76 % des arbres sur sa canopée (69 sans), 36 % de sa canopée sous un arbre (23 sans) |
 | **I5** — fait (23/10) | BD TOPO → bâtiments (tuiles vectorielles z 15), OSM gardé pour les routes et l'eau — voir §4.4 | hauteurs comparées au MNS sur un quartier : 1,6 m d'écart médian, 74 % à 3 m près (OSM : 3,8 m, 39 %) |
 | **I6** — fait (23/10) | HLOD lointain par `MNS − MNT` sur z 11–13 (dessin seul, le CPU garde le sol nu) — voir §7 | silhouette de Paris à 20 km : Montparnasse à 262 m (LiDAR 264) ; coût mesuré 0 à +1,2 ms vers Paris ; dans une vue basse sur des forêts +12 ms, ramené à +0,2 / +1,2 ms (cache cuit sur les tuiles que lisent les pixels) |
-| **I7** | Interface de source nationale ; swisstopo ensuite | Alpes suisses au même niveau |
+| **I7** — fait (23/10) | Interface de source nationale (`national.ts`) ; swisstopo : SWISSIMAGE, swissALTI3D par quantized-mesh — voir §7 | Alpes suisses au même niveau : voir le paragraphe |
 | **I8a** | Zones hors ligne, le socle : module pur `zoneTiles` (mêmes URL que le jeu, testé), cache `kerr-zones-v1` hors LRU dans le service worker, `storage.persist()`, téléchargement suspendable et repris, priorité au streaming du jeu, `__bh.pwa.zones` | test unitaire « URL de la zone = URL demandées en vol » ; e2e : zone de 5 km pré-cachée, réseau coupé, vol sans aucune requête de tuile et sol complet |
 | **I8b** | Réglages › Hors ligne : stockage, cache automatique, liste des zones, ajout avec estimation, progression ; raccourci dans la pause ; FR/EN | e2e à la souris et à la manette ; captures de l'onglet |
 | **I8c** | Relief quantifié sur 16 bits et compressé dans le cache (en vol aussi) | taille par tuile mesurée (cible ≈ 80 Ko) ; hauteurs identiques au centimètre |

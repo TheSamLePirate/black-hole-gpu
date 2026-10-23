@@ -1,5 +1,8 @@
 // French for the app's messages, the map and the dialogs (keyed by the English: see src/i18n.ts).
 export default {
+  "© swisstopo — aerial photographs, relief (SWISSIMAGE, swissALTI3D) · ":
+    "© swisstopo — photographies aériennes, relief (SWISSIMAGE, swissALTI3D) · ",
+  "free geodata": "géodonnées libres",
   "© IGN — aerial photographs, relief, buildings (BD ORTHO, RGE ALTI, LiDAR HD, BD TOPO) · ":
     "© IGN — photographies aériennes, relief, bâtiments (BD ORTHO, RGE ALTI, LiDAR HD, BD TOPO) · ",
   "Licence Ouverte 2.0": "Licence Ouverte 2.0",

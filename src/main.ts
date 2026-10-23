@@ -7493,6 +7493,14 @@ async function main() {
     creditLink(t("Licence Ouverte 2.0"), "https://www.etalab.gouv.fr/licence-ouverte-open-licence/"),
   );
   document.body.append(orthoCredit);
+  // (swisstopo's over Switzerland — I7)
+  const swissCredit = Object.assign(document.createElement("div"), { className: "scenery-credit ortho-credit", hidden: true });
+  swissCredit.dataset.testid = "swiss-credit";
+  swissCredit.append(
+    t("© swisstopo — aerial photographs, relief (SWISSIMAGE, swissALTI3D) · "),
+    creditLink(t("free geodata"), "https://www.swisstopo.admin.ch/en/terms-of-use-free-geodata-and-geoservices"),
+  );
+  document.body.append(swissCredit);
   // (the real traffic — traffic/feed.ts, T1 —: asked of the relay about the flown craft, its sources credited)
   const trafficFeed = new TrafficFeed();
   camera.traffic = trafficFeed;
@@ -7967,8 +7975,12 @@ async function main() {
     cpuProf.time("overlay (guide, marker)", () => viewOverlay.draw(chart && !renderer.offlineActive ? chart : null, chartKey));
     const hideSceneryCredit = !renderer.earthScenery.active;
     if (sceneryCredit.hidden !== hideSceneryCredit) sceneryCredit.hidden = hideSceneryCredit;
-    const hideOrthoCredit = renderer.earthTiles.orthoFinest === 0 && renderer.earthTiles.finest <= ZG1;
+    // (a national source's tiles drawn — orthophotos, its relief's finer levels —: the one under the camera credited)
+    const nationalDrawn = renderer.earthTiles.orthoFinest > 0 || renderer.earthTiles.finest > ZG1;
+    const hideOrthoCredit = !nationalDrawn || renderer.earthTiles.nationalAt === "swisstopo";
     if (orthoCredit.hidden !== hideOrthoCredit) orthoCredit.hidden = hideOrthoCredit;
+    const hideSwissCredit = !nationalDrawn || renderer.earthTiles.nationalAt !== "swisstopo";
+    if (swissCredit.hidden !== hideSwissCredit) swissCredit.hidden = hideSwissCredit;
     applyTuning(settings);
     cpuProf.time("game tools window", () => toolsWin.tick());
     saveTimer += dt;

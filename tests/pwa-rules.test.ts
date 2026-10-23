@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { bdtopoUrl } from "../src/system/bdtopo";
+import { swissimageUrl, swissTerrainUrl } from "../src/system/national";
 import { orthoUrl } from "../src/system/earth-tiles";
 import {
   classify,
@@ -48,6 +50,11 @@ test("a request's kind: hashed assets, the shell, the tiles, the elements, the r
   expect(classify("https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetCapabilities", SITE)).toBe("pass");
   expect(classify("https://data.geopf.fr/wms-r?SERVICE=WMS&REQUEST=GetMap", SITE)).toBe("tile");
   expect(classify("https://data.geopf.fr/wms-r?SERVICE=WMS&REQUEST=GetCapabilities", SITE)).toBe("pass");
+  expect(classify(bdtopoUrl(16592, 11272), SITE)).toBe("tile");
+  // (swisstopo's: SWISSIMAGE's tiles and the terrain's meshes kept; its layer description not)
+  expect(classify(swissimageUrl(17, 68434, 46289), SITE)).toBe("tile");
+  expect(classify(swissTerrainUrl(16, 68435, 49711), SITE)).toBe("tile");
+  expect(classify("https://3d.geo.admin.ch/ch.swisstopo.terrain.3d/v1/layer.json", SITE)).toBe("pass");
   expect(classify("https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=json", SITE)).toBe("elements");
   expect(classify("https://openrouter.ai/api/v1/chat/completions", SITE)).toBe("pass");
   expect(classify(`${O}/__snapshot?name=x`, `${O}/`)).toBe("pass");

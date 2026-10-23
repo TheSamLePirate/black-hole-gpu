@@ -31,6 +31,7 @@ them in More… › Credits.
 - The Earth's relief — ETOPO 2022 — NOAA National Centers for Environmental Information
 - [The imagery near the ground — GIBS](https://gibs.earthdata.nasa.gov) — NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS)
 - [France up close — aerial photographs, relief, trees and buildings](https://geoservices.ign.fr) — IGN — Géoplateforme : BD ORTHO, RGE ALTI, LiDAR HD (MNT, MNH), BD TOPO · Licence Ouverte 2.0
+- [Switzerland up close — aerial photographs and relief](https://www.swisstopo.admin.ch) — swisstopo (Office fédéral de topographie) — geo.admin.ch : SWISSIMAGE, swissALTI3D · Géodonnées libres (OGD)
 - [The ground up close — WorldCover 2021, Sentinel-2](https://esa-worldcover.org/) — ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021) · CC BY 4.0
 - [The Earth from orbit — Sentinel-2 cloudless 2021](https://s2maps.eu) — EOX IT Services GmbH (modified Copernicus Sentinel data 2021) · CC BY-NC-SA 4.0
 - The relief tiles — Terrarium — Mapzen, AWS Open Data

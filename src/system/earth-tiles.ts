@@ -28,6 +28,7 @@
 
 import type { Vec3 } from "../physics";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "./ellipsoid";
+import { type NationalSource, type OrthoFit, SWISSTOPO, sourceAt, sourcesBox, tileSource } from "./national";
 
 export const TILE = 256;
 /** tiles along a level's window (the normal detail's reach; a farther one, EarthTiles.setReach: 8 on the fine levels) */
@@ -146,14 +147,14 @@ export const orthoLayers = (clip: number) => Math.ceil(ORTHO_LEVELS / (clip / OR
  * fit; sRGB 8-bit in and out.
  */
 export const ORTHO_FIT = { tone: [0.8112, 1.4753], chroma: [0.8232, 1.0999, 0.3872] } as const;
-export function orthoColour(r: number, g: number, b: number): [number, number, number] {
+export function orthoColour(r: number, g: number, b: number, fit: OrthoFit = ORTHO_FIT): [number, number, number] {
   const e = [LIN[r]!, LIN[g]!, LIN[b]!];
   const L = 0.2126 * e[0]! + 0.7152 * e[1]! + 0.0722 * e[2]!;
   if (L <= 0) return [0, 0, 0];
-  const Lo = ORTHO_FIT.tone[0] * L ** ORTHO_FIT.tone[1];
+  const Lo = fit.tone[0] * L ** fit.tone[1];
   const x = Math.min(1, Math.max(0, (Lo - 0.06) / 0.29)),
     t = x * x * (3 - 2 * x);
-  const out = (c: number) => TO_SRGB[Math.round(4095 * Math.min(1, ((e[c]! * Lo) / L) * (ORTHO_FIT.chroma[c]! * (1 - t) + t)))]!;
+  const out = (c: number) => TO_SRGB[Math.round(4095 * Math.min(1, ((e[c]! * Lo) / L) * (fit.chroma[c]! * (1 - t) + t)))]!;
   return [out(0), out(1), out(2)];
 }
 
@@ -349,11 +350,17 @@ export function addOverground(ground: Float32Array, surface: Float32Array, n: nu
 export const drawnHeight = (h: Float32Array, i: number) => (h.length > TILE * TILE ? h[i]! + h[TILE * TILE + i]! : h[i]!);
 
 /**
- * A tile's heights over France (I2): the LiDAR HD's terrain from IGN_LIDAR_Z on, RGE ALTI under it and where the LiDAR has
- * none, marked as a survey's (markFine); where the IGN has none at all (the sea, the countries round), Terrarium's. Up to
- * HLOD_Z1 with `hlod`, the overground on it (I6: addOverground).
+ * A tile's ground over France (I2): the LiDAR HD's terrain from IGN_LIDAR_Z on, RGE ALTI under it and where the LiDAR has
+ * none (NaN where the IGN has none at all — the sea, the countries round); up to HLOD_Z1 with `hlod`, its overground (I6:
+ * overground). The IGN's NationalSource's heights.
  */
-async function ignHeights(z: number, x: number, y: number, signal: AbortSignal, hlod = false): Promise<Float32Array> {
+async function ignGround(
+  z: number,
+  x: number,
+  y: number,
+  signal: AbortSignal,
+  hlod: boolean,
+): Promise<{ h: Float32Array; over: Float32Array | null } | null> {
   let h = z >= IGN_LIDAR_Z ? await ignGrid(IGN_LIDAR, z, x, y, signal) : null;
   const holes = (v: Float32Array | null) => !v || v.some((e) => Number.isNaN(e));
   if (holes(h)) {
@@ -361,7 +368,7 @@ async function ignHeights(z: number, x: number, y: number, signal: AbortSignal, 
     if (!h) h = r;
     else if (r) for (let i = 0; i < h.length; i++) if (Number.isNaN(h[i]!)) h[i] = r[i]!;
   }
-  if (!h) return terrarium(z, x, y, signal);
+  if (!h) return null;
   let over: Float32Array | null = null;
   if (hlod && z <= HLOD_Z1) {
     const n = hlodSize(z);
@@ -375,8 +382,41 @@ async function ignHeights(z: number, x: number, y: number, signal: AbortSignal, 
     }
     if (s) over = overground(h, s, n);
   }
+  return { h, over };
+}
+
+/** the IGN over France (I1, I2, I6): its box alone its land — it answers nothing beyond (NaN, 404) */
+export const IGN: NationalSource = {
+  id: "ign",
+  box: ORTHO_BOX,
+  holds: () => true,
+  orthoUrl,
+  fit: ORTHO_FIT,
+  heightsFrom: IGN_HZ0,
+  heights: ignGround,
+};
+/** the national sources, the more specific first (national.ts): swisstopo, then the IGN */
+export const NATIONAL: readonly NationalSource[] = [SWISSTOPO, IGN];
+/** their boxes as one */
+export const NATIONAL_BOX = sourcesBox(NATIONAL);
+
+/**
+ * A tile's heights from its national source (I2, I7): its ground marked as a survey's (markFine), the global data's
+ * (Terrarium) where it has none; its overground, when it has one, after them — one array (drawnHeight).
+ */
+async function nationalHeights(
+  src: NationalSource,
+  z: number,
+  x: number,
+  y: number,
+  signal: AbortSignal,
+  hlod = false,
+): Promise<Float32Array> {
+  const r = await src.heights(z, x, y, signal, hlod);
+  if (!r) return terrarium(z, x, y, signal);
+  const { h, over } = r;
   markFine(h, true);
-  if (holes(h)) {
+  if (h.some((e) => Number.isNaN(e))) {
     const t = await terrarium(z, x, y, signal);
     for (let i = 0; i < h.length; i++) if (Number.isNaN(h[i]!)) h[i] = t[i]!;
   }
@@ -455,6 +495,8 @@ export class EarthTiles {
    *  Paris's towers, the forests' tops — on the ground; switched: every tile taken again */
   hlodOn = true;
   private hlodWas = true;
+  /** the national source under the camera (I7: "ign", "swisstopo"; null none) — its credit shown while its tiles are */
+  nationalAt: NationalSource["id"] | null = null;
   private ortho: OrthoLevel[] = [];
   private orthoInflight = new Map<string, AbortController>();
   private orthoNone = new Set<string>();
@@ -650,10 +692,12 @@ export class EarthTiles {
     // (finer, the IGN's relief alone — in France, on: by the height over the ground, as the orthophotos —; else none)
     const latD = (g.lat * 180) / Math.PI,
       lonD = (g.lon * 180) / Math.PI,
-      B = ORTHO_BOX;
-    const inFrance = latD > B.south - 0.1 && latD < B.north + 0.1 && lonD > B.west - 0.1 && lonD < B.east + 0.1;
+      B = NATIONAL_BOX;
+    const inNational = latD > B.south - 0.1 && latD < B.north + 0.1 && lonD > B.west - 0.1 && lonD < B.east + 0.1;
+    // (the source under the camera: its credit on screen — main.ts)
+    this.nationalAt = sourceAt(NATIONAL, latD, lonD)?.id ?? null;
     const zFine =
-      this.reliefOn && inFrance
+      this.reliefOn && inNational
         ? Math.min(Math.ceil(Math.log2((TAU * R * cosLat) / (TILE * Math.max((agl ?? alt) * pixAngle, 0.5)))), Z1)
         : ZG1;
     // (each window centred ahead where the view looks — gaze: its offset, Earth-fixed —, by up to a tile and a quarter
@@ -781,18 +825,18 @@ export class EarthTiles {
     const imgTimer = setTimeout(() => imgCtl.abort(), TIMEOUT_MS);
     const relay = () => imgCtl.abort();
     ctl.signal.addEventListener("abort", relay, { once: true });
+    // (the tile's national source — its centre's: swisstopo's, the IGN's — or none)
+    const src = tileSource(NATIONAL, L.n, xw, y);
     // (the relay removed once the imagery is in or given up: none left on the tile's signal)
-    const img = (
-      L.z <= IMG_Z1 ? imagery(L.z, xw, y, imgCtl.signal, this.orthoOn && inOrthoBox(L.n, xw, y)) : Promise.resolve(null)
-    ).finally(() => {
+    const img = (L.z <= IMG_Z1 ? imagery(L.z, xw, y, imgCtl.signal, this.orthoOn ? src : null) : Promise.resolve(null)).finally(() => {
       clearTimeout(imgTimer);
       ctl.signal.removeEventListener("abort", relay);
     });
     try {
       // (over France the IGN's heights — the global data's where it has none —; elsewhere Terrarium's)
       const heights =
-        this.reliefOn && L.z >= IGN_HZ0 && inOrthoBox(L.n, xw, y)
-          ? await ignHeights(L.z, xw, y, ctl.signal, this.hlodOn)
+        this.reliefOn && src && L.z >= src.heightsFrom
+          ? await nationalHeights(src, L.z, xw, y, ctl.signal, this.hlodOn)
           : await terrarium(L.z, xw, y, ctl.signal);
       h = heights;
       this.loaded++;
@@ -954,7 +998,7 @@ export class EarthTiles {
   private updateOrtho(alt: number, pixAngle: number, cosLat: number, gLonT: number, gSinLat: number) {
     const lat = (Math.asin(this.sinLat) * 180) / Math.PI,
       lon = (this.lon * 180) / Math.PI;
-    const B = ORTHO_BOX;
+    const B = NATIONAL_BOX;
     if (!this.orthoOn || lat < B.south - 0.1 || lat > B.north + 0.1 || lon < B.west - 0.1 || lon > B.east + 0.1) {
       if (this.ortho.some((O) => O.want)) this.clearOrtho();
       return;
@@ -1007,8 +1051,8 @@ export class EarthTiles {
         for (let x = O.want.x0; x < O.want.x1; x++) {
           const key = this.orthoKey(O, x, y);
           if (O.key[orthoSlot(x, y)] === key || this.orthoInflight.has(key)) continue;
-          // (one the IGN has not, or out of its box: none there at once — the coarser levels' imagery)
-          if (this.orthoNone.has(key) || !inOrthoBox(O.n, x, y)) {
+          // (one its source has not, or no national source's: none there at once — the coarser levels' imagery)
+          if (this.orthoNone.has(key) || !tileSource(NATIONAL, O.n, x, y)) {
             this.putOrtho(O.z, x, y, null);
             continue;
           }
@@ -1028,17 +1072,20 @@ export class EarthTiles {
     this.orthoInflight.set(key, ctl);
     const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
     const xw = ((x % O.n) + O.n) % O.n;
+    const src = tileSource(NATIONAL, O.n, xw, y);
     let col: Uint32Array | null = null;
-    let none = false;
+    let none = !src;
     try {
-      const res = await fetch(orthoUrl(O.z, xw, y), { signal: ctl.signal });
-      if (res.status === 404) none = true;
+      const res = src ? await fetch(src.orthoUrl(O.z, xw, y), { signal: ctl.signal }) : null;
+      if (!res) {
+        // (no source: none)
+      } else if (res.status === 404) none = true;
       else if (!res.ok) throw new Error(`HTTP ${res.status}`);
       else {
         const px = await pixels(await res.blob());
         col = new Uint32Array(TILE * TILE);
         for (let i = 0; i < col.length; i++) {
-          const [r, g, b] = orthoColour(px[4 * i]!, px[4 * i + 1]!, px[4 * i + 2]!);
+          const [r, g, b] = orthoColour(px[4 * i]!, px[4 * i + 1]!, px[4 * i + 2]!, src!.fit);
           col[i] = (Math.max(r, 1) | (g << 8) | (b << 16) | (255 << 24)) >>> 0;
         }
       }
@@ -1109,7 +1156,7 @@ export class EarthTiles {
       f.set([(v.x1 - v.x0) * TILE, (v.y1 - v.y0) * TILE, S / TAU, 1], 12 * k + 4);
     }
     // (the box the relief's levels take the IGN's imagery in — z 9 … 14: theirs a photograph there too —, and whether)
-    const B = ORTHO_BOX,
+    const B = NATIONAL_BOX,
       rad = Math.PI / 180;
     f.set([B.west * rad, B.south * rad, B.east * rad, B.north * rad], 12 * ORTHO_LEVELS);
     f.set([this.orthoOn ? 1 : 0, 0, 0, 0], 12 * ORTHO_LEVELS + 4);
@@ -1193,7 +1240,13 @@ function parentBlob(url: string): Promise<Blob> {
   }
   return p;
 }
-async function imagery(z: number, x: number, y: number, signal: AbortSignal, ortho = false): Promise<Uint32Array | null> {
+async function imagery(
+  z: number,
+  x: number,
+  y: number,
+  signal: AbortSignal,
+  ortho: NationalSource | null = null,
+): Promise<Uint32Array | null> {
   try {
     const get = async (url: string, crop?: [number, number, number]) => {
       // (the shared parent raced against this tile's own abort: a stalled request never holds the tile — nor its
@@ -1216,26 +1269,26 @@ async function imagery(z: number, x: number, y: number, signal: AbortSignal, ort
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return pixels(await res.blob());
     };
-    // (finer than GIBS: EOX's day — over France the IGN's orthophotos instead, the same grid, EOX's where the IGN has
-    // none; the lights' z 8 parent, the tile's square of it enlarged)
+    // (finer than GIBS: EOX's day — over a national source's land its orthophotos instead (the IGN's, swisstopo's), the same
+    // grid, EOX's where it has none; the lights' z 8 parent, the tile's square of it enlarged)
     const fine = z > GIBS_Z1;
     const night = nightOf(z, x, y);
-    const day = async (): Promise<[Uint8ClampedArray, boolean]> => {
+    const day = async (): Promise<[Uint8ClampedArray, NationalSource | null]> => {
       if (fine && ortho)
         try {
-          return [await get(orthoUrl(z, x, y)), true];
+          return [await get(ortho.orthoUrl(z, x, y)), ortho];
         } catch {
           if (signal.aborted) throw new Error("aborted");
         }
-      return [await get(fine ? eoxUrl(z, x, y) : dayUrl(z, x, y)), false];
+      return [await get(fine ? eoxUrl(z, x, y) : dayUrl(z, x, y)), null];
     };
-    const [[d, ign], n] = await Promise.all([day(), get(nightUrl(night.z, night.x, night.y), night.crop ?? undefined)]);
+    const [[d, photo], n] = await Promise.all([day(), get(nightUrl(night.z, night.x, night.y), night.crop ?? undefined)]);
     const out = new Uint32Array(TILE * TILE);
     for (let i = 0; i < out.length; i++) {
       const v = (n[4 * i]! * n[4 * i + 3]!) / (255 * 255);
       const lights = v > 0 ? Math.round(255 * (0.07 + 0.93 * Math.min(1.06 * Math.sqrt(v), 1))) : 0;
-      const [r, g, b] = ign
-        ? orthoColour(d[4 * i]!, d[4 * i + 1]!, d[4 * i + 2]!)
+      const [r, g, b] = photo
+        ? orthoColour(d[4 * i]!, d[4 * i + 1]!, d[4 * i + 2]!, photo.fit)
         : fine
           ? eoxColour(d[4 * i]!, d[4 * i + 1]!, d[4 * i + 2]!)
           : [d[4 * i]!, d[4 * i + 1]!, d[4 * i + 2]!];
@@ -1269,16 +1322,6 @@ export function orthoQuadrant(k: number, clip: number): { layer: number; x: numb
   const q = k % per;
   return { layer: LEVELS + Math.floor(k / per), x: (q % side) * ORTHO_CLIP, y: Math.floor(q / side) * ORTHO_CLIP };
 }
-/** whether a tile (of a level of n a side) touches the IGN's box */
-function inOrthoBox(n: number, x: number, y: number) {
-  const xw = ((x % n) + n) % n;
-  const lon0 = (xw / n) * 360 - 180,
-    lon1 = ((xw + 1) / n) * 360 - 180;
-  const lat = (t: number) => (Math.atan(Math.sinh(Math.PI * (1 - (2 * t) / n))) * 180) / Math.PI;
-  const B = ORTHO_BOX;
-  return lon1 > B.west && lon0 < B.east && lat(y) > B.south && lat(y + 1) < B.north;
-}
-
 /** A level's weight towards its window's edges [px]: none within 2 px of it, full 48 px in. */
 export function edge(px: number, py: number, w: number, h: number) {
   const d = Math.min(px, py, w - px, h - py);

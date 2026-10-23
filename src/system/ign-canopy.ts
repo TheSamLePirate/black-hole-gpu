@@ -12,6 +12,7 @@
 // the nearest first. 1.25 MB a near block, 0.31 MB a far one: ~20 MB for a high scene's 4.75 km, measured at Saint-Lô.
 
 import { IGN_LIDAR, IGN_RGEALTI, ignHeightUrl, ORTHO_BOX, RateGate } from "./earth-tiles";
+import { SWISSTOPO } from "./national";
 
 /** the canopy height model's layer (LiDAR HD, 0.5 m where flown) */
 export const IGN_MNH = "IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G";
@@ -40,9 +41,9 @@ export const SURVEY_RATE = 12;
 const R = 6378137;
 const D = Math.PI / 180;
 
-/** whether a place is over the IGN's box (metropolitan France and Corsica) */
+/** whether a place is the IGN's (its box — metropolitan France and Corsica —, Switzerland swisstopo's: national.ts) */
 export const inIgnBox = (lat: number, lon: number) =>
-  lon > ORTHO_BOX.west && lon < ORTHO_BOX.east && lat > ORTHO_BOX.south && lat < ORTHO_BOX.north;
+  lon > ORTHO_BOX.west && lon < ORTHO_BOX.east && lat > ORTHO_BOX.south && lat < ORTHO_BOX.north && !SWISSTOPO.holds(lat, lon);
 
 /** the tiles of level `z` the disc of `reach` metres round a place touches, the nearest first, each with its distance [m] */
 export function tilesWithin(z: number, lat: number, lon: number, reach: number): { x: number; y: number; d: number }[] {

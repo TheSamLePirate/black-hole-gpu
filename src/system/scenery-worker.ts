@@ -5,6 +5,7 @@ import { earthDetail, toHalf } from "../terrain";
 import { forestFrame, forestVec4s, growForest } from "./forest";
 import { BDTOPO_Z, bdtopoHeight, bdtopoStands, bdtopoUrl, clipRing } from "./bdtopo";
 import { IgnLand, inIgnBox, tilesWithin } from "./ign-canopy";
+import { SWISSTOPO, SwissGround } from "./national";
 import { roadWidth, surfaceSegment, polygonPrimitive, stripPolygon, surfaceContains } from "./scenery-geometry";
 import {
   D,
@@ -126,16 +127,20 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // (over France, the IGN's survey — I4 —: its canopy and its ground over the forest's disc, fetched beside the land cover
   // within its own time — the blocks late past it left to the land cover —, the scene's sources not held back by it)
   const surveyed = AbortSignal.timeout(45_000);
-  const land =
+  const fetchSurvey = async (url: string) => {
+    const r = await fetch(url, { signal: surveyed });
+    if (!r.ok) throw new Error(`HTTP ${r.status} (${(await r.text()).replace(/\s+/g, " ").slice(0, 160)}): ${url}`);
+    const b = await r.arrayBuffer();
+    networkBytes += b.byteLength;
+    return b;
+  };
+  // (over Switzerland, swisstopo's ground under the trees and the buildings — I7 —, its canopy none: the land cover's)
+  const land: IgnLand | SwissGround | null =
     q.ign && inIgnBox(q.lat, q.lon)
-      ? new IgnLand(async (url) => {
-          const r = await fetch(url, { signal: surveyed });
-          if (!r.ok) throw new Error(`HTTP ${r.status} (${(await r.text()).replace(/\s+/g, " ").slice(0, 160)}): ${url}`);
-          const b = await r.arrayBuffer();
-          networkBytes += b.byteLength;
-          return b;
-        })
-      : null;
+      ? new IgnLand(fetchSurvey)
+      : q.ign && SWISSTOPO.holds(q.lat, q.lon)
+        ? new SwissGround(fetchSurvey)
+        : null;
   const landReady = land?.prepare(q.lat, q.lon, radius + 250);
   await raster(false);
   if (q.satellite) await raster(true);
@@ -626,7 +631,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       return k < 0 ? 0 : classes[k]!;
     },
     excluded: (lat, lon) => excluded(lat, lon) || networkExcluded(lat, lon) || housed(lat, lon),
-    canopy: land ? (lat, lon, r) => land.canopyNear(lat, lon, r) : undefined,
+    canopy: land instanceof IgnLand ? (lat, lon, r) => land.canopyNear(lat, lon, r) : undefined,
     ground: height,
     sea,
     local: (lat, lon, h) => localPoint(frame, lat, lon, h),
